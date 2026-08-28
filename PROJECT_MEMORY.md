@@ -1,0 +1,162 @@
+# Proteus 项目记忆（PROJECT_MEMORY.md）
+
+> **项目本地记忆文件**：记录当前进度、已落地文件、关键决策与偏差、验证状态。
+> 新会话的 LLM **必须先读本文件**，再读 `LLM_IMPLEMENTATION_GUIDE.md` 与 `proteus.config.ts`。
+> 每次阶段完成或产生关键决策后，由执行 LLM 更新本文件（保持与仓库一致）。
+
+---
+
+## 项目概览
+
+- **名称**：Proteus（普罗透斯）—— Vue 跨端编译框架（小程序 Skyline + Web）
+- **核心理念**：一份标准 Vue 源码，编译器化作 Web + 小程序两种形态（命名来源见指南"框架命名"章节）
+- **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
+- **文档**：`LLM_IMPLEMENTATION_GUIDE.md`（v2.2，6 阶段任务拆解；§0 痛点对照是设计决策依据）
+
+## 当前进度（更新于 2026-08-28）
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| P1 工程脚手架 | ✅ 完成 | 6 文件 + 配套脚手架，`build:web` 通过 |
+| P2 编译期路由表 | ✅ 完成 | `gen-routes.ts` 生成 auto-routes / app.json / page.json，含分包 |
+| P3 运行期路由 API | ✅ 完成 | 双端 adapter + Router + RouterView，15 个单测通过 |
+| P4 编译转换插件 | ✅ 完成 | `vite-plugin-mp-transform.ts`：三转换 + buildStart 产物输出，四件套结构成型 |
+| P5 运行时桥接 | ✅ 完成 | setDataBridge（路径合并+去重）/ pageLifecycle（createPage/createComponent）/ main.mp.ts 接入 |
+| P6 调试与验证 | ✅ 完成 | golden fixtures 快照 + 反黑盒机制 + Web E2E 实测（6 用例），**全阶段完成** |
+
+## 已落地文件
+
+**P1 工程脚手架**
+- `package.json`（name: `proteus-vue`）/ `tsconfig.json` / `proteus.config.ts` / `vite.config.ts`
+- `src/shims/mp.d.ts`（wx / Page / Component / RouteBuilder 全局类型）
+- `src/platform/adapter.ts`（PlatformAdapter 接口）
+- 配套：`index.html` / `src/main.ts` / `src/App.vue` / `src/main.mp.ts`（占位）
+
+**P2 编译期路由表**
+- `src/router/types.ts`（RouteRecord / RouteMeta / RouteParams / NavigateOptions）
+- `scripts/gen-routes.ts`（扫描 → auto-routes.ts + app.json + page.json，含分包与硬边界校验）
+- 示例页：`src/pages/index.vue`（Tab）/ `src/pages/user/index.vue` / `src/pages/user/profile.vue`（halfScreen）/ `src/subpackages/order/pages/list.vue`（分包）
+
+**P3 运行期路由 API**
+- `src/router/index.ts`（Router：push/back/replace + 守卫 + 栈深保护）
+- `src/router/guards.ts` / `src/router/skyline.ts` / `src/router/builders/`（halfScreen / slideUp / 注册表）
+- `src/platform/index.ts` + `mp-adapter.ts` + `web-adapter.ts`
+- `src/router/RouterView.vue`
+- `tests/router.test.ts`（15 用例，P6-3 提前落地）
+
+**P5 运行时桥接**
+- `src/runtime/setDataBridge.ts`（批量 + 数组/点号路径合并 + 值去重 + flushSync）
+- `src/runtime/pageLifecycle.ts`（onReady/onUnload 钩子 + createPage/createComponent + 参数 decode）
+- `src/runtime/renderer.ts`（可选扩展骨架，MVP 不做）
+- `src/main.mp.ts`（App() + registerRouteBuilders，产物 app.js）
+- `tests/runtime.test.ts`（11 用例）
+
+**P6 调试与验证**
+- `tests/fixtures/pages/`（basic / input / rich / tab 四个 golden fixture）
+- `tests/golden.test.ts` + `__snapshots__/golden.test.ts.snap`（快照锁定产物）
+- `tests/e2e-web.test.ts`（Playwright Web E2E：首页 / SPA 跳转 / 前进后退 / 刷新恢复 / 分包页 / 404）
+- `vitest.config.ts`（独立测试配置，避免加载 vite.config 触发 mp 构建副作用）
+- package.json 新增 `preview:web` / `verify` / `test:e2e:web` 脚本
+
+**P4 编译转换插件**
+- `src/compiler/`（★ 编译引擎模块，可独立开源为 `@proteus/compiler`）：`index.ts`（compileVueSfc 入口）/ `template.ts` / `script.ts` / `style.ts` / `validate.ts`（产物自校验）/ `types.ts` / `README.md`（模块边界契约）
+- `vite-plugin-mp-transform.ts`（薄适配层：扫描页面 → 传选项 → emitFile）
+- `tests/mp-transform.test.ts`（18 用例，P6-2 提前落地）
+- 产物：`dist/mp-weixin/pages/*.wxml|.js|.wxss`（与 gen-routes 的 .json 共同构成四件套）
+
+## 关键决策与文档偏差（新会话必读）
+
+1. **框架命名 Proteus**（指南 v2.1）：神话"变形 + 先知"对应"编译转换 + 编译期为主"；配置文件更名 `proteus.config.ts`
+2. **skyline.ts 弃用动态 `require`**：文档原方案 `require(modulePath)` 在 ESM + Vite 下不存在；改为静态 builders 注册表（`builders/index.ts`），类型安全可摇树
+3. **平台选择用 `import.meta.env.MODE` 优先**：文档原方案 `config.platform` 判断会导致 Web 构建误用 mp adapter；现按 vite mode（web / mp-weixin）选择，回退 config.platform
+4. **`routeBlocksPlugin`**（vite.config 内联）：plugin-vue v5.2.4 会把 `<route>` 自定义块提取为 `?vue&type=route` 虚拟模块且内容是 JSON，需包装为 `export default {...}` 才能构建；`<route>` 的真正消费者是编译期 gen-routes
+5. **`tsconfig` 的 `types` 相对路径**：`["vite/client", "./src/shims/mp.d.ts"]` 实测 vue-tsc 通过
+6. **新增 `@types/node`**：gen-routes（Node fs/path）类型检查需要
+7. **RouterView 用 `import.meta.glob('../**/pages/**/*.vue')`**：必须覆盖分包页（`subpackages/.../pages/`）
+8. **分包示例已启用**：`subPackages: [{ root: 'src/subpackages/order', name: 'order' }]`（文档默认是空数组）
+9. **`vite.config.ts` mp 模式 `emptyOutDir: false`**：保留 gen-routes 生成的 app.json / page.json
+10. **P5-2 renderer.ts 降级为可选扩展**：MVP 不做（glass-easel 运行时动态建节点能力有限，避免 Taro 3 式运行时 DOM 模拟）
+11. **mp 模式独占编译管线**：mp-weixin mode 不用 plugin-vue，由 mpTransform 独占处理 .vue（Web 零转换原则的对称实现）；routeBlocksPlugin 仅 web 用
+12. **buildStart 直接 emitFile**：小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发；改为 buildStart 扫描 pages 目录逐个输出 wxml/js/wxss
+13. **compiler-dom 运行时与类型不一致**：`@click.stop` 的 modifiers 运行时是 `{content}[]`（声明是 string[]）；`ExpressionNode` 是联合类型无统一 `.content` → 统一用 `exprContent()` 宽类型递归提取
+14. **产物方法用对象简写**：`handleTap() {...}`（不能输出裸 `function handleTap(){}`，对象字面量内是语法错误）
+15. **纯文本子节点紧凑单行**：`<text>hi</text>` 而非多行（产物可读性）
+16. **编译引擎模块化（★重要基建决策）**：编译逻辑从插件中拆出为 `src/compiler/`——零 Vite 依赖、零 proteus.config 依赖、纯函数、选项全入参；`vite-plugin-mp-transform.ts` 降为薄适配层；`src/compiler/README.md` 记录模块边界 + 独立开源提取路径（后期移动至 monorepo packages/compiler 发布 `@proteus/compiler`，附赠 CLI）
+17. **反编译黑盒机制（★规避 uni-app 核心痛点）**：产物自校验（`validate.ts`：js 语法 + wxml 标签配对，坏产物抛 `CompilerError` 指明文件，绝不静默输出）；`PROTEUS_DEBUG=1` 时 WXML 注入 `<!-- @行号 标签 -->` 注释 + 输出 `.transform-debug/<file>.json` 中间产物；buildEnd 打印 warnings 汇总摘要；默认产物无调试注释；mp 构建关闭压缩
+18. **路径合并支持数组下标**：`isChildPath` 用 `parent + '.'` 与 `parent + '['` 双前缀判断（`list[0].name` 是 `list` 的后代）
+19. **路由参数 decode 策略**：仅对 `{`/`[` 开头的结构化值做 JSON.parse；普通标量保持字符串（对齐 P3 契约 `options.id === '1'`）——runtime createPage 与编译产物默认 onLoad 行为一致
+20. **RouterView 两处缺陷修复（Web E2E 实测发现）**：空路由归一化（后退到 `/` 时 web-adapter emit 空路由 → 回退首页防 404）；routeMap 以 name 为键，RouterView 收到的是 path → 增加按 path 回退查找（同 guards.getCurrentFrom）
+21. **vitest 独立配置**：vitest 默认加载 vite.config.ts（mode=test 回退到 mp-weixin 平台）会触发 mpTransform 构建副作用；新增 `vitest.config.ts` 隔离，e2e 由 `test:e2e:web` 单独运行
+22. **方法内 ref 写入重写为 setData**：`name.value++`/`--`/`name.value = expr` → `this.setData(...)`，`name.value` 读取 → `this.data.name`；作用于方法体与生命周期体；复合赋值（`+=`）降级为 `this.data.name` 读写（不触发 setData）。demo 页 tap 按钮据此改为可见计数（用户实测反馈驱动）
+23. **示例项目独立化（★架构决策）**：示例应用（pages/subpackages/App/main 入口/RouterView）移入 `examples/`，`src/` 仅留框架本体（compiler/platform/router/runtime/shims）；gen-routes 与 mp 插件从 `pagesDir` 推导应用根目录（dirname）；`auto-routes.ts` 生成位置保持在 `src/router/`——因框架单例 router（index.ts/guards.ts）直接 import 它，后续若改工厂化 API（createRouter(routes)）再随应用移动；`RouterView` 是应用壳（glob 需指向应用页面目录），随示例存放；新增 `@proteus/*` 别名指向 src，示例代码以此访问框架（与未来 npm 包导入路径一致）
+24. **页面导航链接（<a href> / <router-link>）**：模板转换 → `view bindtap="__navigateTo" + data-url`（route-type 支持），script 转换按 `usesNavigate` 标志注入 `__navigateTo`（wx.navigateTo，仅 MP 产物；Web 端 <a href> 走浏览器导航）；⚠ 编译生成的正则转义在字符串传递中丢失（`/^\//` 变 `/^//`）——产物自校验当场捕获，改用字符类 `/^[/]/` 规避；跳转 Tab 页需 switchTab，导航链接仅指向非 Tab 页（注释已标注）
+25. **Web 端 SPA 导航**：web-adapter 全局拦截站内 `<a>` 点击（`preventDefault` + `pushState` + emit），外部链接（非 `/` 开头）/ `target=_blank` / 修饰键点击（新标签页）不拦截；E2E 用 window 标记验证点击后无整页刷新
+26. **tabBar ≥2 项（真机校验修复）**：微信要求 tabBar.list 至少 2 项，demo 原只有首页 1 个 Tab → 开发者工具报错；新增 `examples/pages/mine.vue`（我的）作为第二个 Tab；gen-routes 加守卫：tabRoutes < 2 时告警并忽略 tabBar（不再产出非法 app.json）
+27. **Skyline lazyCodeLoading（真机校验修复）**：页面 renderer=skyline 时微信要求 app.json 声明 `lazyCodeLoading: requiredComponents`；gen-routes 按 config.skyline 开关自动补齐
+28. **真机校验两处无效配置修复**：① `app.json window.renderer` 被判无效——移除，Skyline 改由页面级 `renderer: skyline` 声明（指南 v1.0 臆想的字段被真机否掉）；② `page.json customRouteKeyName` 被判无效——移除，自定义路由仅靠 `wx.navigateTo({ routeType })` + 注册的 builder 生效；demo 个人资料链接加 `route-type="halfScreen"`（handler 带 fail 降级到普通跳转）
+29. **小程序导航无效修复（__ 前缀方法名）**：微信保留 `_` 前缀（框架内部字段如 `__route__`），`bindtap="__navigateTo"` 绑定可能失效 → 自动 handler 改名 `proteusNavigateTo` / `proteusOnXxxInput`（避开下划线）；`PROTEUS_DEBUG=1` 时输出 `[proteus] navigate dataset/url` 调试日志（编译选项 `debug` 透传）；demo 链接 `/pages/user` → `/pages/user/index`（微信页面路径必须完整匹配 app.json pages 声明，不能省略 index）
+30. **小程序导航最终根因：微信 navigateTo 相对路径解析（★真机调试经验）**：日志 `navigateTo:fail page "pages/pages/user/index" is not found`——微信 navigateTo **不带前导 `/` 的 url 按相对当前页目录解析**（当前页 pages/index → 前缀 pages/ + url），导致双重前缀；修复：handler **保留前导 `/`**（`/pages/user/index` 为绝对路径）；调试日志无条件输出为临时手段，验证通过后需回收门控（PROTEUS_DEBUG）
+31. **Skyline 转场不生效（worklet 必须 function 关键字，★真机调试经验）**：真机日志 `routeType(halfScreen) handlePrimaryAnimation should be a worklet function`——注册成功、导航成功，但微信 **不识别箭头函数为 worklet**；修复：builder 的 worklet 方法（handlePrimaryAnimation/handleSecondaryAnimation）改用 `function () { 'worklet' ... }`；待验证后回收 registerRouteBuilders 的临时调试日志；demo 首页已移除不存在的 /logo.png（控制台 500）
+32. **微信 ES5 转译 babel helper 报错（★真机调试经验）**：`module '@babel/runtime/helpers/arrayWithHoles.js' is not defined`——微信开发者工具将页面 JS 转 ES5 时，数组解构（`for (const [k,v] of Object.entries())`）需要 `_slicedToArray`→`_arrayWithHoles` helper，但 helper 模块不在小程序包内；同类风险：对象展开 `{...}`、对象解构 `const {a} = ctx`。修复：生成代码全部改为无需 helper 的写法（索引循环 Object.keys、直接属性赋值、ctx.primaryAnimation）；golden 快照已更新
+33. **微信 worklet 静态分析（★真机调试经验）**：`addRouteBuilder` 必须直接传函数引用（`wx.router.addRouteBuilder('halfScreen', halfScreenBuilder)`），不能通过注册表动态取值（`builtinBuilders[name]`）——微信编译期静态分析无法穿透动态查值，报 should be a worklet function；builder 模块直接用 import 引用
+34. **全链路调试机制（★反"猜问题"）**：`npm run debug:mp`（PROTEUS_DEBUG=1）一键构建，统一 `[proteus][环节]` 日志 + Date.now 时间戳：App 启动 / builder 注册 / 页面 onLoad(参数)/onReady / 导航 tap/navigateTo 成功失败 / wx.onError 全局错误；页面日志由编译器注入（script.ts debug 门控），app 层走 `runtime/debug.ts` trace；vite define 注入 `__PROTEUS_DEBUG__`（mp.d.ts 声明），正式构建 rollup 常量折叠把调试代码连字符串全部摇掉（grep 验证零残留）；此前多轮真机排查靠手动加日志逐个猜，此机制一次构建看全链路
+35. **Skyline 自定义路由真机排查终局（★长线经验，最终定案环境问题）**：经历 8+ 轮真机调试：① worklet 必须局部具名 const 箭头函数+简写返回（内联对象方法报 should be a worklet function）② screenHeight 渲染线程全局逻辑层引用 ReferenceError → wx.getWindowInfo 逻辑层取值 + 闭包捕获 px（真机验证闭包捕获生效）③ rollup 打包的 app.js 中 worklet 响应式重执行失效（t 卡 0）→ **app.js 改插件直出纯文本**（esbuild 转译 + charset utf8 + 还原单引号 worklet + __PROTEUS_DEBUG__ 替换 + mp-entry-stub 占位）④ 移除页面透明配置后**微信官方预设 wx://bottom-sheet 仍报 `applyAnimatedStyle can not find corresponding nodes`（UI 线程）** → 定案：devtools Skyline 模拟器 + 灰度基础库 3.17.2 环境问题，非框架代码；建议：切稳定基础库 + 真机预览验证；半屏视觉列为待真机确认项（框架侧代码已按官方形态验证完备）
+36. **真机预览不支持 ?? 运算符（★真机经验）**：真机预览报 `invalid file: pages/index.js, 46:42 SyntaxError: Unexpected token ?`——`??`（ES2020）在真机/预览管线直接语法错误（开发者工具模拟器可容忍）；编译产物（ref 重写）统一改为显式 null 检查三元；MP 产物需保持 ES5 安全：无 `??` / 无 `?.` / 无数组解构 / 无对象展开（已全量 grep 扫描验证）
+37. **自定义路由根因确诊：不能从 tabBar 页面发起（★长线真机排查收官）**：8+ 轮排查终局——半屏/自定义路由从 tab 页发起报 `applyAnimatedStyle can not find corresponding nodes`（UI 线程，官方预设 wx://bottom-sheet 同样失败）；**从非 tab 页发起即正常**（真机对照确诊）。期间沉淀：worklet 局部具名 const 箭头函数+简写返回 / screenHeight 渲染线程全局→wx.getWindowInfo+闭包捕获 / rollup 打包对 worklet 不友好→app.js 插件直出纯文本 / glass-easel 为 Skyline 强制字段（真机校验）/ `??` 真机不支持；框架代码始终正确，demo 测试链接此前全部在 tab 页（首页）导致全失败；已归档平台硬边界：**自定义路由跳转必须从非 tab 页发起**
+38. **halfScreen 半屏视觉修复（canTransitionFrom: false）**：真机确认半屏打开后前页被挤开一部分 + 右侧黑屏——根因：builder 未声明 `canTransitionFrom: false`，微信默认给前页套压出动画（往左推开露出黑底）；修复后前页保持不动（与官方预设一致）；圆角改为仅上角（16px 16px 0 0，弹窗样式）；`RouteBuilderResult` 按官方 CustomRouteConfig 补全 14 字段（opaque/maintainState/transitionDuration/barrier*/canTransition*/handle*Animation/snapshot/fullscreenDrag/popGestureDirection）
+39. **自定义路由 builder 开放为框架能力（★架构决策）**：builder（动画曲线/遮罩/联动/时长）由**应用开发者在 main.mp.ts 编写注册**（该文件即应用入口，插件直出 app.js）；平台约束：必须与 addRouteBuilder 同文件静态可分析（官方形态 const fn + 直接引用）；已删除框架内配置驱动注册表（src/router/builders/ + registerRouteBuilders——真机验证不可行，保留会误导开发者）；指南 P3-3/P3-4 重写为开放能力文档（14 个可自定义项列表）
+40. **综合能力演示 builder（scaleDown 缩放转场）**：`examples/main.mp.ts` 新增 scaleDownBuilder + `examples/pages/showcase.vue` 演示页，一次覆盖全部开放能力：Easing 进出曲线（cubicBezier + `wx.worklet.derived`，按 primaryAnimationStatus 切换进入缓出/退出缓入）、遮罩 barrierColor、前后页联动（handleSecondaryAnimation 官方 Step-3 下沉缩放，px 由逻辑层 wx.getWindowInfo 计算闭包捕获）、时长 transitionDuration/reverseTransitionDuration、手势 fullscreenDrag + popGestureDirection vertical；`RouteContext` 按官方 CustomRouteContext 补全 primaryAnimationStatus/secondaryAnimationStatus/userGestureInProgress/startUserGesture/stopUserGesture/didPop（真机待验证）
+41. **转场能力验证终局（★长线）**：B 页动画/曲线/遮罩(0.8)/时长(400/360ms)/手势全部真机通过；**前后页联动**：① handlePreviousPageAnimation（≥3.0.0）生效但**掉帧且不跟踪手势**（慢慢拉看不到层叠）② 经典架构（A 页自带 builder 的 handleSecondaryAnimation）**完全不生效**（A 永远默认压出）③ 分包页不能作 A 页；最终采用 handlePreviousPageAnimation 作演示；**掉帧规避经验**：borderRadius 逐帧动画不可合成→静态化、Easing/derived 链提取不稳定→worklet 内联多项式（easeOutCubic/easeInCubic）、整页 scale 昂贵→避免、**物理引擎**（wx.worklet 的 spring/timing）用于手势驱动场景而非自定义路由进度（微信自驱 transitionDuration）
+42. **内置预设 builders（★架构决策）**：真机验证过的 halfScreen/slideUp/scaleDown 沉淀为 `src/router/presets/*.ts`（带全部真机经验注释）；开发者在 `proteus.config.ts` 的 `customRoute.builders` 声明即可——**vite-plugin-mp-transform 直出 app.js 时读取预设源码（esbuild 转译）+ 内联函数定义 + 生成注册块**（`if (wx.router) addRouteBuilder(name, fn)`，模块顶层执行），绕开"同文件静态可分析"平台约束，开发者零手写；main.mp.ts 精简为纯入口（自写 builder 仍支持，见指南 P3-4 ②）；`extractBuilderFnName`/`assembleAppJs` 纯函数独立可测
+43. **手写覆盖内置预设（filterOverriddenPresets）**：开发者可在 main.mp.ts 同名 `addRouteBuilder('<name>', fn)` 覆盖内置预设——插件检测 main 源码中已注册的同名预设并**跳过自动注册**（开发者优先）；demo 演示覆盖 halfScreen（改遮罩 0.6/高度 92%）；优先级：main 手写 > 配置预设
+44. **Web 端平台边界：自定义路由转场为 Skyline 专属（★架构澄清）**：routeType/worklet/barrier/路由容器均无 Web 对等机制——`router.push({ routeType })` 在 Web 由 `isSkyline()=false` 优雅忽略、导航一致；按"Web 原生"原则，Web 转场用 Vue `<Transition>`（Web 一等公民），API 层统一（routeType 双端同 API）、视觉机制各平台原生；已文档化进平台硬边界
+45. **Web 原生转场实现（routeType → Vue Transition，★架构落地）**：同一套 routeType 双端生效：链路 router.push 透传 routeType → web-adapter（navigateTo 携带 + `<a route-type>` 点击拦截读属性）→ RouterView `:name` 动态 Transition（out-in + :key 按路由重挂载）；映射：halfScreen/slideUp→slide-up（上滑 cubic-bezier 0.35,0.91,0.33,0.97）、scaleDown→scale（缩放+淡入）、默认 fade；mp-adapter.navigateTo 不再转发 routeType（自定义路由跳转专属 skyline.ts 的 navigateWithCustomRoute）
+46. **Web 层叠缩放（scaleDown 同屏层叠）**：CSS 层叠关键 = Transition `default` 模式（新旧同屏）+ 绝对定位重叠（.router-view 相对定位 + .page absolute inset 0 + overflow-y auto）；scaleDown：新页 translateY(100%)→0 滑入覆盖（z:2）、旧页 scale(0.92)+translateY(4%)+圆角+opacity 0.8 下沉（z:1）；`:mode="isLayered ? undefined : 'out-in'"` 动态切换；其余转场保持 out-in 避免布局堆叠
+47. **Web 页面纸片化（层叠转场基础）**：demo 页面根元素透明 → 层叠时只见内容不见页面；RouterView `.page` 基础样式 `background: #fff + min-height: 100vh`（全局样式 + class 透传到页面根）——每页为独立白色纸片，层叠缩放才有"两页叠动"的层次感
+48. **Web 转场全面层叠化 + 无障碍（★打磨）**：所有 routeType 转场层叠（Transition default 模式 + .router-view.layered .page 绝对定位重叠）：slideUp→新页 translateY(100%)推入(z:2)+旧页 translateY(-20%)淡出(z:1，对应 MP secondaryAnimation)；halfScreen→新页滑入(z:2)+旧页保持原位淡出（对应 MP 半屏前页保持）；scale→旧页下沉缩放；fade（普通导航/回退）out-in；`prefers-reduced-motion: reduce` 关闭全部转场；⚠ 教训：替换 CSS 块时 .router-view 基础样式被误删，需自检完整性（加 node 断言检查）
+49. **Web 遮罩层对齐 MP barrierColor（★打磨）**：层叠转场新增 `.route-barrier`（absolute inset 0 + z-index 1 + `--barrier-opacity` 变量 + barrier-in 淡入动画 0.3s + pointer-events none）——halfScreen 0.4 / scaleDown 0.8 与 MP 预设 rgba(0,0,0,0.4/0.8) 对齐；旧页 leave z-index 1→0 使遮罩位于旧页之上、新页(z:2)之下；slideUp（opaque）无遮罩
+50. **修复遮罩残留（★真机/浏览器调试）**：转场结束后新页 enter-active(z:2) 类被移除恢复 auto z-index，而遮罩(z:1) 常驻 → 遮罩盖在停留页上（"切换过去遮罩停留在当前页"）；v2.35 用 Transition 事件（after-enter 移除）修复但引入新问题：before-enter 在新元素入场才触发，遮罩重置不可靠（"进入又没遮罩"）
+51. **遮罩最终方案：纯 CSS z-index（★打磨终局）**：`.page` 基类恒 `z-index: 2`（停留页永远盖住遮罩 z:1）；旧页仅 leave-active 时降 z:0 暴露在遮罩下；遮罩常驻挂载（showBarrier 按 routeType），转场期间天然可见、结束后被停留页盖住——**零事件时序依赖**，最稳；halfScreen 0.4 / scaleDown 0.8
+52. **Web 反向转场（返回动画，★打磨）**：adapter 用 `history.state.proteusIndex` 记录栈深，popstate 时比较判断 back/forward（外部跳入无索引视为 forward）；RouterView 记录 `lastForwardName`（当前页进入时的转场名），后退时用 `${lastForwardName}-back` 反向转场：scale-back（B 滑出底部 z:2、A 从 scale(0.92) 恢复 z:1）、slide-up-back（B 滑出、A 从 translateY(-20%) 恢复）、halfscreen-back（B 滑出、A 轻微 8% 恢复）；replace（redirectTo/reLaunch/switchTab）视为前进；prefers-reduced-motion 覆盖全部 -back 类
+53. **Web 反向转场补遮罩（back 分层，★打磨）**：back 转场 A 页 enter z-index 1→0（低于遮罩 z:1），遮罩在 back 时由 barrier-in 切换为 **barrier-out 淡出**（from var(--barrier-opacity) → 0）——前页恢复过程中被压暗、B 滑出时分层清晰，对应 MP reverse 时遮罩随弹窗退出消失；isBack = transitionName endsWith('-back')；reduced-motion 下 barrier-out 直接 opacity 0
+54. **首次转场无动画（异步组件预热，★浏览器调试）**：现象——第一次进入/退出无下沉转场，第二次正常；根因：首次导航目标页为 defineAsyncComponent（chunk 加载中），Vue Transition 在异步首次挂载时跳过动画，第二次 chunk 缓存同步挂载才正常；修复：RouterView 启动时预热全部页面（import.meta.glob 逐个 load）+ `pageCache` Map 缓存已解析组件，view computed 优先返回缓存（同步挂载保证转场），未预热完才回退 defineAsyncComponent
+55. **刷新后首次后退无动画（historyIndex 恢复，★浏览器调试）**：现象——刷新后在转场页首次后退无反向动画，第二次正常；根因：web-adapter 的 historyIndex 初始化为 0，但刷新后浏览器 history 保留旧条目（state.proteusIndex 仍存在）→ 首次后退 stateIndex < historyIndex(0) 不成立 → 误判 forward → 走 fade；修复：初始化 `historyIndex = history.state?.proteusIndex ?? 0`（从当前条目恢复栈深）；redirectTo/reLaunch/switchTab 的 replaceState 也携带 proteusIndex 保持栈深一致（否则 replace 后索引丢失）
+56. **导航类型全转场（replace/reset/tab，★打磨）**：adapter onPageLoad 的 direction 扩展为导航类型 `'forward' | 'back' | 'replace' | 'reLaunch' | 'switchTab'`（web-adapter 各方法分别 emit）；RouterView 按类型选转场：forward+routeType→base 层叠、back→`-back` 反向、redirectTo→'replace'（旧页 scale(0.98) 淡出 + 新页淡入，out-in）、reLaunch→'reset'（淡入）、switchTab→'tab'（淡入淡出）；isLayered 从 `!== 'fade'` 改为显式名单（layeredNames）；replace/reLaunch/switchTab 置 lastForwardName='fade'（无堆叠语义）；reduced-motion 覆盖全部新类
+57. **样式标签选择器映射（★bug 修复）**：现象——小程序编译后 `<h1>/<p>/<a>` 样式丢失；根因——template 已把 h1/p/a → text/view 映射，但 WXSS 里的 `h1 {}` / `.links a {}` 选择器未重写，匹配不到元素；修复——新建 `src/compiler/tags.ts` 抽出共享 `TAG_MAP`+`EVENT_MAP`（template.ts 与 style.ts 共用），style.ts 的 `transformStyleToWxss` 增加选择器标签重写：仅重写每条规则选择器部分，命中条件=标签名位于选择器起始或组合器之后（空格 / `> + ~ , (` 之后，前面不能是 `\w - . # : [ *`），类名 `.a`/`#input`/`tag-a`/`data-input` 不误伤；属性选择器 `[..]` 先掩码后还原（引号内容不误伤），占位符 `\u0000` 加入 lookahead（`p[data-x]` 不漏）；`@media`/`@keyframes` 骨架原样保留；纯函数签名不变，Web 端不受影响（Vite 原生处理）；产物验证 `.links a → .links view`、`h1 → text` 对齐 wxml
+58. **标签语义基础样式注入（★h1/p/a 视觉还原）**：现象——小程序端 h1 映射为 text 后是普通小字号，而 Web 有浏览器 UA 默认样式（大标题/加粗/链接色），两端视觉不一致；根因——h1-h6/p/a 全映射为 text/view 后**无默认样式可注入**（text 标签选择器会命中所有 text 互相冲突，必须用类区分）；修复——`tags.ts` 新增 `SEMANTIC_CLASS`（h1-h6/p/a → proteus-h1~h6/proteus-p/proteus-a），template.ts 映射时自动附加基础类（与静态 class 合并前缀、与 `:class` 插值拼接 `class="proteus-p {{expr}}"`，rich-text/v-html 不附加），style.ts 注入 `BASE_SEMANTIC_WXSS`（对齐 Web UA：h1 64rpx/700 等，rpx 直接书写不过 px2rpx，注入在用户样式之前）；用户样式（`.home h1 → .home text` (0,2,0)）特异性高于基础类 (0,1,0) 正常覆盖；产物验证 `<text class="proteus-h1">` + `.proteus-h1 { font-size: 64rpx; font-weight: 700 }`
+59. **基础样式 margin 改单边 em（★p 换行高度对齐 Web 标准）**：现象——小程序段落间距明显小于 Web（.proteus-p 原 margin 8rpx=4px，Web UA 是 1em=16px，差 4 倍）；标准——HTML 附录 D：p 为 display:block + margin-block 1em + line-height normal，h1-h6 为 0.67/0.83/1/1.33/1.67/2.33em（相对自身字号），Web 相邻段落 margin 折叠取 max；关键约束——Skyline 是自研引擎类 flex 布局**不折叠 margin**（WebView 模式才折叠），双边 em 在 Skyline 下间距翻倍（2em）仍偏离 Web；修复——margin 全部改为**单边 bottom + em 相对自身字号**：Skyline 不折叠与 Web 折叠在主流组合（段落连续 p→p、标题后接段落 h1→p）下视觉间距恰好一致（p→p 均 1em、h1→p 均 0.67emₕ₁=21.4px）；p 不设 font-size（继承与 Web 一致），h1-h6 font-size 保持 rpx 固定（对齐 16px 基准的 2em/1.5em/…）；已知微差——p→h1（段落后接标题）16px vs Web 折叠 21.4px，可接受
+60. **多行字面量提取（★showcase v-for 内容丢失修复）**：现象——showcase 页小程序端 for 循环内容完全不渲染；根因——`extractData` 的 const 正则 `(.*)$` 无 dotAll 不跨行，`const cards = ref([\n {...},\n])` 只抓到首行 `ref([` → evalLiteral 失败 → data.cards=undefined → wx:for 遍历 undefined 无内容（首页 items 单行数组不受影响）；修复——`extractInitializer` 括号平衡扫描（追踪 ()[]{} 深度 + 跳过字符串/块注释/行注释，字符串内括号如 `rgba(0,0,0,0.8)` 不干扰深度，深度归零遇 ;/行尾结束）提取多行初始值；连带修复——① 只提取**零缩进行首**顶层 const（函数体/生命周期体/块内局部 const 不再误提取为 data，`trim()` 会吃掉缩进空格导致判断失效，须用严格空串判断）② ref 内层正则加 `s` 标志 + 可选尾分号（`ref(0);` 也支持）；验证——showcase.js data.cards 完整输出 5 项对象数组，77/77 单测
+61. **语义标签选择器重写为类选择器（★卡片 h3 被染灰修复）**：现象——showcase 卡片 h3 文字小程序端灰色、Web 端黑色；根因——`h3` 与 `p` 都映射为 text，`.card h3` 与 `.card p` 重写后都是 `.card text`（同特异性 (0,2,0)），后写的 `.card p`（含 color:#666）覆盖前一条 → h3 被染灰；`div/a → view` 同隐患；修复——选择器重写时**语义标签（h1-h6/p/a）映射为基础类选择器**（`.card h3 → .card .proteus-h3`、`.links a → .links .proteus-a`），模板侧已自动附加 proteus-* 类故精确匹配，多对一映射不再撞选择器；非语义标签仍映射为标签（div → view、img → image、input → input…）；验证——showcase.wxss 两条规则独立（.card .proteus-h3 无 color、.card .proteus-p color:#666），79/79 单测
+62. **文档体系落地（★README + 中文文档）**：根 `README.md`（门面：命名来源/痛点对照/核心特性/快速开始/目录/测试/路线图/已知限制）+ `docs/` 四篇中文文档——getting-started（环境/命令/首个页面/开发者工具导入/全链路调试/常见问题）、configuration（proteus.config.ts 全量字段）、compiler（编译管线/TAG_MAP/EVENT_MAP/指令映射/语义基础样式/选择器重写/反黑盒/MVP 限制/独立开源计划）、routing（路由生成/Router API/守卫/routeType 转场双端对照/平台硬边界）；文档内容全部基于真实代码与已归档决策（测试数 79、预设 builders、平台硬边界等）；后续文档更新随代码变更同步（版本号 62 起与决策同步）
+63. **开源协议 + 对标大厂路线图（★收尾）**：① LICENSE 选 **Apache-2.0**——宽松可商用（与 MIT 同等核心自由）+ 专利授权条款（对采用者/贡献者都友好），适合被嵌入商业项目的基建类框架；LICENSE 文件含版权行（Copyright 2026 Proteus Contributors）+ 官方全文，package.json 加 `license: "Apache-2.0"`，README 加协议章节；② docs/roadmap.md 对标 uni-app/Taro 3 的完整规划：九域能力矩阵（开发体验/编译能力/路由/状态管理/组件生态/原生能力/工程化/性能/多端覆盖，✅现状🟡部分❌缺失）+ 版本里程碑（v0.1 MVP✅ → v0.2 工程化基线=独立包@proteus/compiler+CLI+create-proteus+CI → v0.3 编译能力补全=computed/watch/组件系统/scoped CSS/sourcemap → v0.4 运行时性能=setData 深度/虚拟列表/Pinia/性能基准 → v0.5 多端=支付宝/抖音/鸿蒙 → v1.0 生产可用 → v2.0 生态）+ monorepo 拆分（packages/compiler·runtime·router·plugin-vite·cli·create-proteus·shared，单向依赖）+ 量化性能目标（主包≤1.2MB/setData≤60次每秒/冷启动≤1.5s/万条虚拟列表 60fps）+ 非目标（SSR/App 原生/初期组件库）+ 每里程碑验收清单
+64. **git 仓库关联（★首次提交推送）**：仓库 https://github.com/proteus-vue/proteus（组织 proteus-vue）；`git init -b main` + `remote add origin`；新增 `.gitignore`（node_modules/dist/.vite/覆盖率/日志/.env——AppID 敏感信息不入库，git check-ignore 验证生效）；package.json 补 repository/homepage/bugs 字段；getting-started clone 命令改真实地址；待提交 18 项全为源码与文档（node_modules/dist 已排除）；首次提交后按 docs/roadmap.md v0.2 推进（@proteus/compiler 独立包优先）
+
+## 验证状态（最近一次）
+
+- ✅ `npm run build:web`（vue-tsc 零错误 + vite 构建，页面 code-split 为独立 chunk）
+- ✅ `npm run build:mp`（gen-routes → vue-tsc → vite build 全链路，产出 app.js + 各页 wxml/js/wxss 四件套）
+- ✅ `npm test`（79/79：router 15 + mp-transform 45 + runtime 11 + golden 4 + plugin 3 + e2e-web 8 单独跑）
+- ✅ `npm run test:e2e:web`（8/8：含 tap 点击可见计数用例）
+- ✅ `npm run debug:mp` 全链路日志（正式构建零残留，grep 验证）
+- ✅ `npm run verify`（test + build:web + build:mp 一键全过）
+- ✅ `vite preview --mode web` 启动正常（4173）
+- ✅ `npx vue-tsc --noEmit` 单独通过
+
+## 待办 / 注意事项
+
+- ✅ **仓库目录重命名为 `proteus`**（用户本地执行）
+- ✅ **文档体系**：根 `README.md` + `docs/` 五篇（getting-started / configuration / compiler / routing / roadmap）
+- ✅ **开源协议**：Apache-2.0（LICENSE + package.json license 字段 + README 章节）
+- ✅ **git 仓库**：已关联 https://github.com/proteus-vue/proteus（main 分支，首次提交后按 roadmap v0.2 推进）
+- **小程序真机/开发者工具实测（唯一剩余验收项）**：`npm run build:mp` 后用微信开发者工具导入 `dist/mp-weixin`（需真实 AppID + 基础库 ≥2.29.2）；重点看 pages/index 渲染与 `customRouteKeyName: halfScreen` 转场
+- **后期可选**：按 `src/compiler/README.md` 提取路径把编译引擎独立开源为 `@proteus/compiler`；JS 产物方法级 sourcemap 接入微信开发者工具（P6-1 待办）；router 工厂化 API（`createRouter(routes)`）后 `auto-routes.ts` 可随应用移动至 `examples/`
+- **Skyline 自定义路由半屏视觉**：✅ 真机确诊可用（从非 tab 页发起）；⚠ 硬边界：不能从 tab 页发起（已文档化，demo 演示链接已移入非 tab 页）
+- **P4 MVP 限制**（已在插件注释标注）：computed/watch/跨模块引用、复杂事件表达式、:class 数组语法、v-show 暂不支持；方法内 ref 写入（`=`/`++`/`--`）已支持（重写为 setData），复合赋值 `+=` 与复杂读取仍不支持
+- 文档版本号已到 v2.49（git 仓库关联）
+
+## 会话恢复指引（新 LLM 按此顺序阅读）
+
+1. `PROJECT_MEMORY.md`（本文件）—— 进度 / 决策 / 偏差
+2. `LLM_IMPLEMENTATION_GUIDE.md` —— §0 痛点对照 + 当前阶段任务指令
+3. `proteus.config.ts` —— 当前配置
+4. `src/router/types.ts` + `src/platform/adapter.ts` —— 接口契约

@@ -1,0 +1,43 @@
+{
+  "name": "proteus-vue",
+  "version": "0.1.0",
+  "description": "Proteus：Vue 跨端编译框架（小程序 Skyline + Web）—— 一份 Vue 源码，编译器化作千端形态",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proteus-vue/proteus.git"
+  },
+  "homepage": "https://github.com/proteus-vue/proteus",
+  "bugs": {
+    "url": "https://github.com/proteus-vue/proteus/issues"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "vite --mode web",
+    "build:web": "vue-tsc --noEmit && vite build --mode web",
+    "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
+    "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin",
+    "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
+    "preview:web": "vite preview --mode web",
+    "verify": "npm test && npm run build:web && npm run build:mp",
+    "test": "vitest run --exclude tests/e2e-web.test.ts",
+    "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "@vue/compiler-dom": "^3.5.42",
+    "@vue/compiler-sfc": "^3.5.42",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.48.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

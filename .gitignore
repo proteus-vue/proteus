@@ -1,0 +1,19 @@
+# 依赖
+node_modules/
+
+# 构建产物（小程序 / Web 均为编译产物，不入库）
+dist/
+.vite/
+
+# 测试与覆盖率
+coverage/
+*.tsbuildinfo
+
+# 日志与系统文件
+*.log
+.DS_Store
+
+# 环境变量（含 AppID 等敏感信息）
+.env
+.env.*
+!.env.example
