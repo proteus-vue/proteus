@@ -12,6 +12,8 @@ import { PersistScheduler, type PersistSchedulerOptions } from './scheduler'
 import { isLazy, mountSharding, pickKeys, type ShardingOptions } from './sharding'
 import { QuotaManager, QuotaExceededError, type QuotaOptions } from './quota'
 import { parseVersioned, runMigrations, serializeWithVersion, type VersionedOptions } from './migrate'
+import { prepareForPersist, restoreFromPersist, type SecureOptions } from './secure'
+import { registerPageStore } from '../scope'
 
 // 类型扩充：pinia 的 DefineStoreOptions 声明自定义持久化字段（vue-router 同款 augmentation 模式）
 declare module 'pinia' {
@@ -24,7 +26,7 @@ declare module 'pinia' {
 }
 import type { StateTree } from 'pinia'
 
-export interface PersistenceOptions extends ShardingOptions, VersionedOptions {
+export interface PersistenceOptions extends ShardingOptions, VersionedOptions, SecureOptions {
   /** 白名单字段（支持嵌套路径 a.b.c，与持久化时的提取/恢复一致） */
   pick?: string[]
   /** 黑名单字段（与 pick 二选一） */
@@ -144,7 +146,7 @@ export function createPersistence(global: PersistenceGlobal) {
     const quota = opt.quota !== undefined ? new QuotaManager(storage, opt.quota) : sharedQuota
     const version = opt.version ?? 0
 
-    /** 从存储读取并恢复（版本迁移 → 过滤 → keys 限制） */
+    /** 从存储读取并恢复（版本迁移 → 敏感字段解密/剔 volatile → 过滤 → keys 限制） */
     const doHydrate = async (): Promise<Record<string, unknown> | null> => {
       const raw = await storage.getItem(key)
       if (raw === null) return null
@@ -152,7 +154,9 @@ export function createPersistence(global: PersistenceGlobal) {
       const parsed = parseVersioned(raw)
       const migrated = runMigrations(parsed, version, opt.migrations)
       if (!migrated) return null
-      let data = applyFilter(migrated.state, opt)
+      // M7.6：volatile 不恢复 + encrypted 解密
+      let data = restoreFromPersist(migrated.state, opt)
+      data = applyFilter(data, opt)
       if (opt.keys && opt.keys.length > 0) data = pickKeys(data, opt.keys)
       return data
     }
@@ -170,7 +174,12 @@ export function createPersistence(global: PersistenceGlobal) {
         })
     }
 
-    // Subscribe（写入调度：防抖 + maxWait + 高频合并 + 串行 flush + 版本标记）
+    // M7.5：scope: 'page' → 注册页面级（应用在页面 onUnload 调 disposePageStores(pageId) 批量销毁）
+    if (opt.scope === 'page') {
+      registerPageStore(ctx.store.$id, ctx.store)
+    }
+
+    // Subscribe（写入调度：防抖 + maxWait + 高频合并 + 串行 flush + 版本标记 + 敏感字段处理）
     // M7.3：配额检查挂在写盘完成后（flush → 淘汰真实数据，账本一致）
     scheduler.onAfterFlush = (written) => {
       if (!quota) return
@@ -188,7 +197,9 @@ export function createPersistence(global: PersistenceGlobal) {
     }
     ctx.store.$subscribe(
       (_m, state) => {
-        const data = serializeWithVersion(applyFilter(state, opt), version)
+        // M7.6：volatile 不落盘 + encrypted 加密
+        const safe = prepareForPersist(applyFilter(state, opt), opt)
+        const data = serializeWithVersion(safe, version)
         scheduler.schedule(key, data)
       },
       { detached: true },
