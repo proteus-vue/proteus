@@ -52,6 +52,12 @@
 - pinia-plan M1-M8（store 桥 connectPageStore ✅，runtime/src/store.ts）
 - 编译器 inline handler 机制（Batch B ✅ 基础上扩展 store 方法调用）
 
+## 3.5 进度
+
+- **P1 模板 store 绑定桥 ✅**（2026-08）：template.ts `rewriteStoreRefs`（`{{ store.<field> }}` → `{{ <field> }}` + storeBindings 收集，含 :prop 绑定）+ script.ts `storeBindingLine`（onLoad：初始 setData + `store.$subscribe` → setData，store 变量 = useXxxStore() runtimeInit 实例属性）；规则 script/store-binding；测试 tests/pinia-mp-compile.test.ts
+- **P3 放行 ✅**（体积惊喜）：plugin 共享模块第三方白名单加 pinia/vue-demi/@vue/reactivity 等——`stores/player.js` **仅 29.2KB**（esbuild tree-shaking 生效，此前 906KB 估测为未 tree-shake 口径）；主包 45→83KB（预算 1200KB 内）；pinia-demo MP 端 `const { usePlayerStore } = require('../stores/player.js')` + 状态显示可用
+- **P2 store 方法事件包装 ⬜**（下一步）：`@click="store.play(...)"` → proteusStoreXxx 包装（inline handler 扩展）
+
 ## 4. 验收标准
 
 - [ ] pinia-demo MP 端：`{{ store.current.title }}` 显示实时状态（P1）

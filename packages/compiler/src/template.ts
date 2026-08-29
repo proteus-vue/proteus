@@ -194,6 +194,20 @@ interface SerializeContext {
   transitionCtx?: { ref: string | undefined; tName: string; index: number }
   /** ★Batch 5：已启用的离开动画状态机列表（传给 script 生成 data/方法/写入点注入） */
   transitions: Array<{ ref: string; tName: string; index: number }>
+  /** ★pinia-plan 12 P1：模板 store.<field> 引用字段（script 生成 $subscribe → setData 同步） */
+  storeBindings: Set<string>
+}
+
+/**
+ * ★pinia-plan 12 P1：模板 store 引用剥离 + 字段收集
+ * `store.<field>` → `<field>`（剥离前缀；嵌套 store.current.title → current.title），并收集顶层字段
+ * 语义：store 经 useXxxStore() 编译为实例属性（runtimeInit），模板绑定经 onLoad 的 $subscribe → setData 同步
+ */
+function rewriteStoreRefs(expr: string, ctx: SerializeContext): string {
+  return expr.replace(/\bstore\.([A-Za-z_$][\w$]*)/g, (m, field: string) => {
+    ctx.storeBindings.add(field)
+    return field
+  })
 }
 
 /**
@@ -466,8 +480,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${exp}"` })
         } else {
           if (ctx.disabled.has('directive/v-bind')) break
-          attrs.push(`${arg}="{{${exp}}}"`)
-          ctx.trace?.add('directive/v-bind', { line: node.loc.start.line, before: `:${arg}`, after: `${arg}="{{${exp}}}"` })
+          // ★pinia-plan 12 P1：:prop="store.x" 同样剥离前缀
+          attrs.push(`${arg}="{{${rewriteStoreRefs(exp, ctx)}}}"`)
+          ctx.trace?.add('directive/v-bind', { line: node.loc.start.line, before: `:${arg}`, after: `${arg}="{{${rewriteStoreRefs(exp, ctx)}}}"` })
         }
         break
       }
@@ -555,7 +570,8 @@ function serializeNode(node: TemplateChildNode, ctx: SerializeContext): string {
       return escapeXml((node as unknown as { content: string }).content)
     case NodeTypes.INTERPOLATION:
       ctx.trace?.add('node/interpolation', { line: (node as unknown as { loc: { start: { line: number } } }).loc.start.line, before: '{{ expr }}', after: '{{ expr }}（原样保留）' })
-      return `{{ ${(node as unknown as { content: { content: string } }).content.content} }}`
+      // ★pinia-plan 12 P1：模板 store 引用 → 剥离前缀 + 收集字段（{{ store.current.title }} → {{ current.title }}）
+      return `{{ ${rewriteStoreRefs((node as unknown as { content: { content: string } }).content.content, ctx)} }}`
     case NodeTypes.COMMENT:
       return `<!-- ${(node as unknown as { content: string }).content} -->`
     default:
@@ -587,6 +603,7 @@ export function transformTemplateToWxml(
     inlineHandlers: [],
     usesTransition: false,
     transitions: [],
+    storeBindings: new Set<string>(),
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
@@ -601,6 +618,8 @@ export function transformTemplateToWxml(
     usesTransition: ctx.usesTransition,
     // ★Batch 5：离开动画状态机列表（裸 ref v-if 的 transition 子元素）
     transitions: ctx.transitions,
+    // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
+    storeBindings: [...ctx.storeBindings],
     warnings: ctx.warnings,
   }
 }

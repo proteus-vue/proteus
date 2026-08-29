@@ -285,13 +285,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           pending.push(resolved.file)
         }
       }
-      // ★B0 边界（★放行 @proteus/* 框架包）：含第三方裸依赖（pinia/vue 等非 @proteus/*）的共享模块树跳过编译
-      // （bundle 体积过大，MVP 仅支持纯逻辑 + 框架包共享模块；Pinia 等第三方接入为后续批次）
+      // ★B0 边界（★放行 @proteus/* 框架包 + pinia 白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
+      // （pinia 是框架默认状态库——P3 放行，bundle 体积由 bundle-report 监控；其余第三方保持跳过）
+      const THIRD_PARTY_ALLOW = new Set(['pinia', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
       const hasThirdParty = new Set<string>()
       for (const sharedFile of sharedModules) {
         for (const imp of scanImports(sharedFile)) {
           if (imp.typeOnly) continue
-          if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus/')) hasThirdParty.add(sharedFile)
+          if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus/') && !THIRD_PARTY_ALLOW.has(imp.source)) hasThirdParty.add(sharedFile)
         }
       }
       // 传递：被有第三方依赖模块 import 的共享模块也跳过（bundle 会把它们一起打进）

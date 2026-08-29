@@ -60,6 +60,8 @@ export interface TemplateTransformResult {
   usesTransition?: boolean
   /** ★vue-compat-advance Batch 5：离开动画状态机（裸 ref v-if 的 transition 子元素） */
   transitions?: Array<{ ref: string; tName: string; index: number }>
+  /** ★pinia-plan 12 P1：模板 store.<field> 引用字段（script 生成 $subscribe → setData 同步） */
+  storeBindings?: string[]
   warnings: string[]
 }
 
@@ -85,6 +87,8 @@ export interface ScriptTransformOptions {
   inlineHandlers?: Array<{ name: string; code: string }>
   /** ★vue-compat-advance Batch 5：离开动画状态机（来自 template；生成 __tv/__tl data + toggle 方法 + 写入点注入） */
   transitions?: Array<{ ref: string; tName: string; index: number }>
+  /** ★pinia-plan 12 P1：模板 store.<field> 引用字段（来自 template；生成 $subscribe 绑定） */
+  storeBindings?: string[]
   /** ★module-plan B0：跨模块引用映射（插件预计算：源码 import 路径 → 产物相对 require 路径）；命中 → import 转 require，未收录 → 剥离 + 警告 */
   moduleImports?: Array<{ source: string; requirePath: string }>
   /** 决策 trace 收集器（阶段二，可空） */

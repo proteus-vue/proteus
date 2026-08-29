@@ -80,6 +80,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     debug: options.debug,
     rules: options.rules,
     transitions: tplResult.transitions,
+    storeBindings: tplResult.storeBindings,
     moduleImports: options.moduleImports,
     trace: scriptTrace,
   })
