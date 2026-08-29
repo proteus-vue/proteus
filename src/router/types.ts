@@ -17,6 +17,8 @@ export interface RouteRecord {
   customRouteKeyName?: string
   /** 所属分包名（主包为 undefined） */
   subPackage?: string
+  /** 路由参数类型声明（<route> 块 params，类型提示全链路） */
+  params?: Record<string, string>
 }
 
 export interface RouteMeta {

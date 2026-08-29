@@ -18,3 +18,18 @@ export const routes: RouteRecord[] = [
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
 export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m[r.name] = r; return m }, {} as Record<string, RouteRecord>)
+
+// ★ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）
+export interface RouteParamsByName {
+  'components-demo': {  },
+  'config-demo': {  },
+  'forms': {  },
+  'index': {  },
+  'mine': {  },
+  'pinia-demo': {  },
+  'showcase': {  },
+  'user': {  },
+  'user-profile': { id?: string; from?: string },
+  'virtual-list-demo': {  },
+  'order-pages-list': {  },
+}

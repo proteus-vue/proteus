@@ -38,6 +38,8 @@ interface PageInfo {
   customRouteKeyName?: string
   /** <route> 块 pageJson 扩展：合并进页面 page.json（如半屏页透明背景） */
   pageJson?: Record<string, unknown>
+  /** <route> 块 params 声明：字段名 → 类型名（string/number/boolean），生成 RouteParamsByName */
+  params?: Record<string, string>
 }
 
 /** 递归收集目录下所有 .vue 文件（跳过隐藏目录） */
@@ -70,8 +72,8 @@ function toRouteName(relSrc: string): string {
   return stripped.replace(/\//g, '-')
 }
 
-/** 解析 .vue 的 <route> 块（JSON），提取 meta / customRouteKeyName / pageJson */
-function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyName' | 'pageJson'> {
+/** 解析 .vue 的 <route> 块（JSON），提取 meta / customRouteKeyName / pageJson / params */
+function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyName' | 'pageJson' | 'params'> {
   const src = fs.readFileSync(file, 'utf-8')
   const m = src.match(/<route\b[^>]*>([\s\S]*?)<\/route>/i)
   if (!m) return {}
@@ -80,8 +82,14 @@ function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyN
       meta?: RouteMeta
       customRouteKeyName?: string
       pageJson?: Record<string, unknown>
+      params?: Record<string, string>
     }
-    return { meta: block.meta, customRouteKeyName: block.customRouteKeyName, pageJson: block.pageJson }
+    return {
+      meta: block.meta,
+      customRouteKeyName: block.customRouteKeyName,
+      pageJson: block.pageJson,
+      params: block.params,
+    }
   } catch (err) {
     console.warn(`[gen-routes] ${file} 的 <route> 块不是合法 JSON，已忽略：${(err as Error).message}`)
     return {}
@@ -126,6 +134,7 @@ function buildRoutes(pages: PageInfo[]): RouteRecord[] {
     if (p.subPackage) r.subPackage = p.subPackage
     if (p.meta && Object.keys(p.meta).length > 0) r.meta = p.meta
     if (p.customRouteKeyName) r.customRouteKeyName = p.customRouteKeyName
+    if (p.params && Object.keys(p.params).length > 0) r.params = p.params
     return r
   })
 
@@ -186,10 +195,32 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
     "export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m[r.name] = r; return m }, {} as Record<string, RouteRecord>)",
     '',
   ]
+  // 类型提示全链路（步骤 1）：按路由名生成参数类型表（<route>.params 声明，未声明为 {}）
+  lines.push('// ★ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）')
+  lines.push('export interface RouteParamsByName {')
+  for (const r of routes) {
+    const params = (r as RouteRecord & { params?: Record<string, string> }).params ?? {}
+    const fields = Object.entries(params)
+    const body = fields.length
+      ? fields.map(([k, t]) => `${k}?: ${tsType(t)}`).join('; ')
+      : ''
+    lines.push(`  '${r.name}': { ${body} },`)
+  }
+  lines.push('}', '')
   const outFile = path.join(ROOT, config.routesOutput)
   fs.mkdirSync(path.dirname(outFile), { recursive: true })
   fs.writeFileSync(outFile, lines.join('\n'))
-  console.log(`[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（${routes.length} 条路由）`)
+  console.log(`[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（${routes.length} 条路由 + RouteParamsByName）`)
+}
+
+/** <route>.params 类型名 → TS 类型（string/number/boolean；其他 → string + 警告） */
+function tsType(t: string): string {
+  if (t === 'number') return 'number'
+  if (t === 'boolean') return 'boolean'
+  if (t !== 'string') {
+    console.warn(`[gen-routes] 未知参数类型 ${t}（支持 string/number/boolean），已按 string 处理`)
+  }
+  return 'string'
 }
 
 /** 生成 dist/mp-weixin/app.json */
