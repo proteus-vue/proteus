@@ -33,6 +33,7 @@ function handleTap() {
       <a href="/pages/config-demo">配置演示</a>
       <a href="/pages/components-demo">组件演示</a>
       <a href="/pages/virtual-list-demo">虚拟列表</a>
+      <a href="/pages/pinia-demo">状态管理</a>
       <a href="/pages/user/index">用户中心</a>
       <a href="/pages/user/profile">个人资料</a>
       <a href="/subpackages/order/pages/list">订单列表</a>

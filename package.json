@@ -35,6 +35,7 @@
     "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts"
   },
   "dependencies": {
+    "pinia": "^4.0.3",
     "vue": "^3.4.0"
   },
   "devDependencies": {

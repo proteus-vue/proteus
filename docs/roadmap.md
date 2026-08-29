@@ -90,7 +90,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | setData 深度优化（✅ 已实现，决策 #81） | `src/runtime/setDataBridge.ts` | 已有：批量合并（16ms 窗口）+ 路径合并 + 值去重 + **深层对象/数组 diff**（变更递归出叶路径补丁，只推送变化子路径——对象更新从整对象 → 变化字段；首次推送展开叶路径）+ reset（测试隔离） |
 | Vapor codegen 借鉴 | `src/runtime/setDataBridge.ts` | 研究 Vapor 的 reset/effect **命令式更新**：setData 从"路径合并"推进到"依赖追踪精确化"（v0.6 App/Vapor 兼容的前置研究） |
 | 虚拟列表（✅ 已实现并框架内置化，决策 #82/#83） | `src/components/virtual-list/`（★框架内置组件） | 已有：`<virtual-list :items :item-height :height>` 数据切片 + 占位（只渲染可视区，多 2 行缓冲）；双端同源码（scroll-view 模板 → MP 原生滚动 + bindscroll / Web 自定义元素 + CSS overflow）；onMounted 首屏计算 + scroll 联动；**框架内置**：产物 `proteus/<name>/index` 前缀（与应用组件 `/components/...` 隔离），gen-routes 组件解析应用优先、回退框架，demo 万条数据；通用插槽渲染待编译器支持作用域插槽 |
-| Pinia 状态管理适配 | `src/runtime/store/` | `defineStore` 编译/桥接到 MP（data 同步 + setData 联动）；Web 端原生 Pinia |
+| Pinia 状态管理适配（✅ Web 端完整 + MP 运行时桥，决策 #85） | `examples/stores/` + `src/runtime/store/` | 已有：Web 原生 Pinia（main.ts createPinia + counter store + pinia-demo 页）；MP 端框架级 store 桥 `createStore`（单例 + subscribe 广播）+ `connectPageStore`（订阅 → page.setData）；MP 端 Pinia 编译（跨模块内联）待跨模块编译能力 |
 | 包体积控制 | `build:mp` 链路 | 按需注入、`tree-shaking` 编译产物、主包 ≤ 2MB 预算仪表 |
 | 性能基准（✅ 已落地，决策 #81） | `tests/perf/` | 已有：setData 桥接基准（1000 次变更 → 1 次批量 / 对象 diff 全量 4 条 vs 变化 1 条 / 同值去重零推送）+ 编译引擎基准（典型页平均耗时报告 + 宽松阈值门禁），随 npm test 运行 |
 
@@ -185,7 +185,7 @@ proteus/                        # monorepo（v0.2 起）
 |---|---|
 | v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 全部落地，决策 #76-#80）；sourcemap 接入开发者工具（✅ 已实现：sourcemap v3 + 调试构建落盘） |
-| v0.4 | 虚拟列表 demo + 性能基准套件落地（✅ 两者已落地，决策 #81/#82）；Pinia 双端可用（待做） |
+| v0.4 | 虚拟列表 demo + 性能基准套件落地（✅ 已落地，决策 #81/#82/#83）；Pinia 双端可用（🟡 Web 完整 + MP 运行时桥，MP 编译待跨模块） |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |
 | v1.0 | 能力矩阵全 ✅；真实项目验证报告（含 iOS 真机 Skyline 白屏场景兜底验证）；性能指标达标；文档站上线 |
