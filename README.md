@@ -178,6 +178,7 @@ Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等�
 - `computed` / `watch` / 跨模块引用、`:class` 数组语法、`v-show`、复杂事件表达式暂不支持（编译期警告）
 - 自定义路由转场是 Skyline 平台能力：**不能从 tabBar 页发起**；Web 端用 Vue Transition 复刻同一套 API
 - 运行时禁止动态注册页面 / 路由（编译期静态声明）
+- **Skyline 在 iOS 真机偶发白屏**（微信平台已知问题）：降级兜底策略（能力兼容清单 + 页面级 WebView 降级通道）已规划在 [roadmap.md](docs/roadmap.md) v0.5，v1.0 真机验收覆盖
 
 ---
 
