@@ -26,6 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { eventScrollTop } from '../runtime/event'
+import { getVirtualWindow } from '../runtime/virtual-window'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -44,10 +45,17 @@ const visible = ref([{ title: '' }])
 const ready = ref(false)
 
 // 计算可视窗口（方法体内 props.x → this.data.x 改写 ✓）；lazy 模式下首次滚动（onScroll 置 ready）前不渲染
+// ★B7：窗口数学抽纯函数 getVirtualWindow（可单测：10k 数据 → 恒定行数），此处只做切片
 function calc() {
   if (props.lazy && !ready.value) return
-  const c = Math.ceil(props.height / props.itemHeight) + props.bufferSize
-  visible.value = props.items.slice(start.value, start.value + c)
+  const w = getVirtualWindow(
+    start.value * props.itemHeight,
+    props.itemHeight,
+    props.height,
+    props.bufferSize,
+    props.items.length,
+  )
+  visible.value = props.items.slice(w.start, w.start + w.count)
 }
 
 function onScroll(e: unknown) {

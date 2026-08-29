@@ -64,7 +64,7 @@ B7(性能加固) ← B3          B8(可观测 + CI 审计) ← B2-B6
 | B4 | `p-input` `p-textarea`（v-model 双向 + 事件归一）| B2 | ✅ 已落地（2026-08，8 用例）——事件契约 `:value` + `@input`（载荷 { value } 跨端归一，替代 v-model：MP 自定义组件 v-model 仅覆盖原生 input/textarea）；★runtime/event 事件归一 helper（e.detail.x / e.target.x 双端安全），p-list-view onScroll 同步接入（修复 Web 滚动崩溃隐患） |
 | B5 | `p-mask` `p-popup` `p-toast` `p-loading`（弹层体系）| B2 | ✅ 已落地（2026-08，5 用例 + demo 弹层区）——转场 = CSS animation（enter 自动 / leave 播完 setTimeout emit close），Worklet 标注 v0.6；★编译器修复 script/ref-write 多行 RHS（ref 赋值含箭头函数体截断 bug）+ 回归用例；visible 驱动用 B3 props 源 watch；Skyline position:fixed 编译期警告（保守，基础库 2.26+ 支持） |
 | B6 | `p-nav-bar`（普通态）`p-skeleton` `p-error-boundary` | B2 | ✅ 已落地（2026-08，6 用例 + demo 导航/骨架区）——nav-bar back 仅 emit（C3，A8 未实现）；skeleton lines 数组 prop（规避 MP range v-for）+ shimmer keyframes；error-boundary 用 Vue errorCaptured（Web），MP 无 Vue 运行时退化为透传（★编译器反黑盒：未映射 onXxx 钩子显式警告，不再静默剥离）；appBar 集成标注 v0.6 |
-| B7 | 性能加固：懒加载/长列表/内存/降级完整 warn | B3 | 对齐 06-m7-performance.md |
+| B7 | 性能加固：懒加载/长列表/内存/降级完整 warn | B3 | ✅ 已落地（2026-08，8 用例）——★编译器：组件 onUnmounted → detached（微信组件真实销毁钩子，此前 onUnload 无效 → 定时器泄漏）；弹层定时器清理 + 降级 warn-once（capabilityWarnOnce，C6 防刷屏）；★虚拟窗口纯函数 getVirtualWindow（10k → 恒定 12 行可单测，末尾截断/滚过末尾边界）；recycleManager/item-size-estimated/Worklet 标注 v0.6 |
 | B8 | 可观测 + `proteus audit component`（C3/C4/C8 审计门禁）| B2-B6 | 对齐 07/10；DRY：audit 复用 capabilities:check 基础设施 |
 
 **移出 P0 首期（依赖未就绪，标注后接）**：
@@ -119,7 +119,7 @@ export type CapabilityName =
 | B4 表单（input/textarea）| ✅ 已落地 | 2026-08，8 用例 + demo 表单区；事件归一 runtime/event + p-list-view 接入 |
 | B5 弹层（mask/popup/toast/loading）| ✅ 已落地 | 2026-08，5 用例 + demo 弹层区；CSS animation 转场 + 编译器多行 RHS 修复 |
 | B6 nav-bar/skeleton/error-boundary | ✅ 已落地 | 2026-08，6 用例 + demo 导航/骨架区；未映射钩子显式警告 |
-| B7 性能加固 | ⬜ | — |
+| B7 性能加固 | ✅ 已落地 | 2026-08，8 用例；detached 映射 + 定时器清理 + warn-once + 虚拟窗口纯函数 |
 | B8 可观测 + audit | ⬜ | — |
 
 ---

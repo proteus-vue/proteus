@@ -51,9 +51,10 @@ describe('p-list-view（虚拟长列表，virtual-list 通用化）', () => {
     expect(js).toContain('this.data.lazy && !this.data.ready')
   })
 
-  it('calc 方法内 props 改写为 this.data（MP 运行时安全）', () => {
+  it('calc 方法内 props 改写为 this.data + 窗口数学走纯函数 getVirtualWindow（MP 运行时安全）', () => {
     const { js } = compileComponent('p-list-view')
-    expect(js).toContain('this.data.items.slice(this.data.start, this.data.start + c)')
+    expect(js).toContain('this.data.items.slice(w.start, w.start + w.count)')
+    expect(js).toContain('getVirtualWindow(')
     expect(js).not.toContain('props.items.slice')
   })
 })

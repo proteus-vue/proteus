@@ -839,8 +839,9 @@ function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Se
   // 仅匹配「回调形态」调用 onXxx(() => / onXxx(function，排除方法定义（function onXxx(...)）与普通调用
   const mapped = new Set(['onMounted', 'onUnmounted', 'onLoad'])
   for (const hm of source.matchAll(/\bon([A-Z][A-Za-z0-9_]*)\s*\(\s*(?:(?:\([^)]*\)\s*=>)|function)/g)) {
-    if (!mapped.has(hm[1])) {
-      warnings.push(`未映射的生命周期钩子 on${hm[1]}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
+    const full = `on${hm[1]}`
+    if (!mapped.has(full)) {
+      warnings.push(`未映射的生命周期钩子 ${full}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
     }
   }
   for (const h of hooks) {
@@ -1132,9 +1133,12 @@ export function transformScriptToPage(
   const unsubLine = hasInjects ? 'this.proteusUnsubscribeProvide()' : ''
   if (lifecycles.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
+    // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
     const unloadBody = rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
-    const pre = [unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
-    lines.push(`  onUnload() {
+    const isComp = extra.isComponent
+    const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
+    const hook = isComp ? 'detached' : 'onUnload'
+    lines.push(`  ${hook}() {
 ${indentBody(pre ? `${pre}\n${unloadBody}` : unloadBody)}
   },`)
   } else if (needsPageCleanup && !extra.isComponent) {
@@ -1154,7 +1158,8 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }
     // ★Batch 4：组件级 inject 订阅取消（attached 订阅 → detached 移除，防全局注册表回调泄漏）
-    if (hasInjects) {
+    // ★B7：onUnmounted 已映射 detached 时不再重复生成（避免 Component 重复键覆盖）
+    if (hasInjects && !lifecycles.onUnload) {
       lines.push(`  detached() {\n    this.proteusUnsubscribeProvide()\n  },`)
     }
   } else if (lifecycles.onLoad) {

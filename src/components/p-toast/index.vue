@@ -11,7 +11,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -35,6 +35,11 @@ watch(() => props.visible, () => {
       emit('close')
     }, props.duration) as unknown as number
   }
+})
+
+// ★B7 内存：组件销毁清理定时器（MP 组件 onUnmounted → detached）
+onUnmounted(() => {
+  clearTimeout(timer.value)
 })
 </script>
 

@@ -16,7 +16,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
+import { capabilityWarnOnce } from '../runtime/capability'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -36,8 +37,10 @@ const phase = ref('')
 const timer = ref(0)
 
 // 可见性驱动：enter 动画自动播放；父级直接隐藏时立即移除（不播 leave——leave 只用于组件主动关闭的收尾）
+// ★B7 降级显式（C6）：Worklet 未实现 → CSS animation（warn 一次）
 watch(() => props.visible, () => {
   if (props.visible) {
+    capabilityWarnOnce('p-popup', 'worklet-animation', 'CSS animation（Worklet 未实现，v0.6 后接）')
     shown.value = true
     phase.value = 'enter'
   } else {
@@ -60,6 +63,11 @@ function requestClose() {
     emit('close')
   }, dur) as unknown as number
 }
+
+// ★B7 内存：组件销毁清理定时器（MP 组件 onUnmounted → detached）
+onUnmounted(() => {
+  clearTimeout(timer.value)
+})
 </script>
 
 <style scoped>

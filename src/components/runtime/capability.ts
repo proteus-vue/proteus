@@ -29,6 +29,15 @@ export function capabilityWarn(tag: string, feature: string, fallback: string): 
   }
 }
 
+/** 降级告警（同 key 只 warn 一次，弹层等可能高频触发的组件防刷屏；B7） */
+const warnedKeys: Record<string, boolean> = {}
+export function capabilityWarnOnce(tag: string, feature: string, fallback: string): void {
+  const key = tag + ':' + feature
+  if (warnedKeys[key]) return
+  warnedKeys[key] = true
+  capabilityWarn(tag, feature, fallback)
+}
+
 function detectBackend(): PlatformBackend {
   // MP 运行时：wx 存在（Skyline/WebView 均适用）；浏览器/SSR：无 wx 归 web；app 恒占位（v0.6）
   if (typeof wx !== 'undefined') return 'skyline'
