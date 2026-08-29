@@ -61,7 +61,7 @@
 
 ## 4. 验收标准
 
-- [ ] pinia-demo MP 端：`{{ store.current.title }}` 显示实时状态（P1）
-- [ ] `@click="store.toggle()"` 产物可运行（P2）
-- [ ] stores 编译产物 + 主包体积在预算内（P3）
-- [ ] 全量测试全绿 + 双端构建
+- [x] pinia-demo MP 端：`{{ store.current.title }}` 显示实时状态（P1 ✅：wxml 前缀剥离 + $subscribe → setData）
+- [x] `@click="store.toggle()"` 产物可运行（P2 ✅：proteusStoreXxx 包装）
+- [x] stores 编译产物 + 主包体积在预算内（P3 ✅：stores/player.js 29.2KB，主包 83KB/1200KB）
+- [x] 全量测试全绿 + 双端构建（495 测试）

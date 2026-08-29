@@ -220,7 +220,7 @@ Batch 6 (M6) ── 07-testing.md + 08-migration-guide.md
 | 8.1 | M8 协同引擎 | ✅ 完成（@proteus/pinia-sync） | — |
 | 8.2 + 8.3 | M8 快照 + 埋点 | ✅ 完成 | — |
 | 8.4 | M8 注册表 + AI 规范 + 门禁 | ✅ 完成 | — |
-| 9.x | ★MP 编译接入（P1 模板绑定 / P2 事件包装 / P3 放行+体积） | ⬜ 规划就绪（docs/12-mp-compile.md） | — |
+| 9.x | ★MP 编译接入（P1 模板绑定 / P2 事件包装 / P3 放行+体积） | ✅ 完成（P1+P2+P3，2026-08，docs/12-mp-compile.md） | — |
 
 ### 上下文预算（防撑爆）
 
