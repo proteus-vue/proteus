@@ -28,6 +28,16 @@ export function getCompilerVersion(): string {
   }
 }
 
+/** esbuild 版本（bundle 缓存键组成部分） */
+export function getEsbuildVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(require.resolve('esbuild/package.json'), 'utf-8')) as { version: string }
+    return pkg.version
+  } catch {
+    return 'unknown'
+  }
+}
+
 /** 计算缓存键：sha1(源码 + 全编译入参 JSON + 编译器版本) */
 export function compileCacheKey(
   source: string,
@@ -87,6 +97,103 @@ export function createCompileCache(cacheDir: string): {
         fs.writeFileSync(path.join(cacheDir, `${key}.json`), JSON.stringify(entry))
       } catch {
         // 磁盘写失败不阻塞构建（缓存尽力而为）
+      }
+    },
+    stats() {
+      return { hits, misses }
+    },
+  }
+}
+
+// ============ 共享模块 esbuild bundle 缓存（M8 第二批） ============
+
+/** 输入文件快照（mtime+size 指纹，对齐 webpack/babel-loader 持久化缓存实践） */
+export interface BundleInputSnapshot {
+  file: string
+  mtimeMs: number
+  size: number
+}
+
+export interface BundleCacheEntry {
+  output: string
+  inputs: BundleInputSnapshot[]
+}
+
+/** bundle 缓存键：sha1(入口文件 + esbuild 版本 + 构建选项) */
+export function bundleCacheKey(entryFile: string): string {
+  const h = crypto.createHash('sha1')
+  h.update(entryFile)
+  h.update('|')
+  h.update(
+    JSON.stringify({
+      esbuild: getEsbuildVersion(),
+      target: 'es2018',
+      format: 'cjs',
+      charset: 'utf8',
+      minify: true,
+      external: ['@proteus/*'],
+    }),
+  )
+  return h.digest('hex')
+}
+
+/** 校验输入快照仍有效（文件存在 + mtime/size 未变 → 可复用） */
+function inputsValid(inputs: BundleInputSnapshot[]): boolean {
+  for (let i = 0; i < inputs.length; i++) {
+    try {
+      const st = fs.statSync(inputs[i].file)
+      if (st.mtimeMs !== inputs[i].mtimeMs || st.size !== inputs[i].size) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * esbuild bundle 缓存：磁盘 + 内存双层
+ * 键 = sha1(入口文件 + esbuild 版本 + 构建选项)；命中需输入快照全部有效（mtime+size 一致）
+ * 注意：首次构建需 metafile 记录输入集（第一次必然未命中，后续命中）
+ */
+export function createBundleCache(cacheDir: string): {
+  get(key: string): BundleCacheEntry | null
+  set(key: string, entry: BundleCacheEntry): void
+  stats(): CompileCacheStats
+} {
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const memory = new Map<string, BundleCacheEntry>()
+  let hits = 0
+  let misses = 0
+
+  return {
+    get(key: string): BundleCacheEntry | null {
+      const mem = memory.get(key)
+      if (mem && inputsValid(mem.inputs)) {
+        hits++
+        return mem
+      }
+      const file = path.join(cacheDir, `${key}.json`)
+      if (fs.existsSync(file)) {
+        try {
+          const entry = JSON.parse(fs.readFileSync(file, 'utf-8')) as BundleCacheEntry
+          if (inputsValid(entry.inputs)) {
+            memory.set(key, entry)
+            hits++
+            return entry
+          }
+        } catch {
+          // 损坏/失效缓存 → 未命中
+        }
+      }
+      misses++
+      return null
+    },
+    set(key: string, entry: BundleCacheEntry): void {
+      memory.set(key, entry)
+      try {
+        fs.writeFileSync(path.join(cacheDir, `${key}.json`), JSON.stringify(entry))
+      } catch {
+        // 尽力而为
       }
     },
     stats() {

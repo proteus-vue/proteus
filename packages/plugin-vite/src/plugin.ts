@@ -20,7 +20,7 @@ import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
 import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
-import { createCompileCache, compileCacheKey } from './cache'
+import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
 /** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus/router/src/presets/x.ts' → 解析包根 + 子路径 */
 const require = createRequire(import.meta.url)
@@ -224,6 +224,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const appDir = path.join(projectRoot, path.dirname(cfg.pagesDir))
       // ★build-plan M8：编译缓存（磁盘 node_modules/.cache/proteus/compile；PROTEUS_NO_CACHE=1 关闭）
       const compileCache = createCompileCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'compile'))
+      const bundleCache = createBundleCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'bundle'))
       // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
       const files: Array<{ file: string; rel: string }> = []
       const pushRel = (dir: string) => {
@@ -338,39 +339,70 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
       }
       // 共享模块 → esbuild bundle（全内联 + @proteus/* external 映射，minify）→ CJS 单文件输出
+      // ★M8：bundle 缓存（输入快照 mtime+size 校验；PROTEUS_NO_CACHE=1 关闭）
+      const bundleCacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
       for (const sharedFile of sharedModules) {
         if (skipShared.has(sharedFile)) continue
         const relNoExt = sharedRelNoExt.get(sharedFile) ?? ''
-        const build = await esbuildBuild({
-          entryPoints: [sharedFile],
-          bundle: true,
-          format: 'cjs',
-          write: false,
-          target: 'es2018',
-          charset: 'utf8',
-          logLevel: 'silent',
-          minify: true,
-          // ★@proteus/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
-          external: ['@proteus/*'],
-          plugins: [
-            {
-              name: 'proteus-pkg-require-path',
-              setup(b) {
-                b.onResolve({ filter: /^@proteus\// }, (args) => {
-                  const pkgRel = `_proteus/${args.path.replace('@proteus/', '')}.js`
-                  const dir = path.posix.dirname(relNoExt)
-                  let rel = path.posix.relative(dir, pkgRel)
-                  if (!rel.startsWith('.')) rel = `./${rel}`
-                  return { path: rel, external: true }
-                })
-              },
-            },
-          ],
-        })
-        const code = build.outputFiles[0]?.text ?? ''
+        let code = ''
+        let bundleHit = false
+        if (bundleCacheEnabled) {
+          const bKey = bundleCacheKey(sharedFile)
+          const cachedBundle = bundleCache.get(bKey)
+          if (cachedBundle) {
+            code = cachedBundle.output
+            bundleHit = true
+            console.log(`[mp-transform] bundle 缓存命中：${relNoExt}`)
+          }
+        }
         if (!code) {
-          console.warn(`[mp-transform] 共享模块编译失败：${relNoExt}`)
-          continue
+          const build = await esbuildBuild({
+            entryPoints: [sharedFile],
+            bundle: true,
+            format: 'cjs',
+            write: false,
+            target: 'es2018',
+            charset: 'utf8',
+            logLevel: 'silent',
+            minify: true,
+            metafile: true,
+            // ★@proteus/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
+            external: ['@proteus/*'],
+            plugins: [
+              {
+                name: 'proteus-pkg-require-path',
+                setup(b) {
+                  b.onResolve({ filter: /^@proteus\// }, (args) => {
+                    const pkgRel = `_proteus/${args.path.replace('@proteus/', '')}.js`
+                    const dir = path.posix.dirname(relNoExt)
+                    let rel = path.posix.relative(dir, pkgRel)
+                    if (!rel.startsWith('.')) rel = `./${rel}`
+                    return { path: rel, external: true }
+                  })
+                },
+              },
+            ],
+          })
+          code = build.outputFiles[0]?.text ?? ''
+          if (!code) {
+            console.warn(`[mp-transform] 共享模块编译失败：${relNoExt}`)
+            continue
+          }
+          if (bundleCacheEnabled && build.metafile) {
+            // 记录输入集快照（mtime+size）——首次必然未命中（metafile 需要一次真实构建）
+            const inputFiles = Object.keys(build.metafile.inputs)
+            const inputs = inputFiles
+              .map((f) => {
+                try {
+                  const st = fs.statSync(f)
+                  return { file: f, mtimeMs: st.mtimeMs, size: st.size }
+                } catch {
+                  return null
+                }
+              })
+              .filter((x): x is { file: string; mtimeMs: number; size: number } => x !== null)
+            bundleCache.set(bundleCacheKey(sharedFile), { output: code, inputs })
+          }
         }
         this.emitFile({ type: 'asset', fileName: `${relNoExt}.js`, source: code })
         console.log(`[mp-transform] 共享模块 → ${relNoExt}.js（${(code.length / 1024).toFixed(1)}KB，bundle 内联）`)
@@ -485,7 +517,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       // ★build-plan M8：缓存统计（PROTEUS_NO_CACHE=1 或 debug 时无统计）
       if (!process.env.PROTEUS_NO_CACHE && !isDebug) {
         const st = compileCache.stats()
-        console.log(`[mp-transform] 编译缓存：${st.hits} 命中 / ${st.misses} 未命中（${files.length} 个文件）`)
+        const bs = bundleCache.stats()
+        console.log(`[mp-transform] 编译缓存：${st.hits} 命中 / ${st.misses} 未命中（${files.length} 个文件）；bundle 缓存：${bs.hits} 命中 / ${bs.misses} 未命中（${sharedModules.size} 个共享模块）`)
       }
     },
     buildEnd() {

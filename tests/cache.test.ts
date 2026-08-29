@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createCompileCache, compileCacheKey } from '../packages/plugin-vite/src/cache'
+import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from '../packages/plugin-vite/src/cache'
 import { compileVueSfc } from '../packages/compiler/src'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-cache-'))
@@ -78,6 +78,53 @@ describe('createCompileCache（磁盘 + 内存双层 + 统计）', () => {
     const cache = createCompileCache(dir)
     expect(cache.get('bad')).toBeNull()
     expect(cache.stats().misses).toBe(1)
+  })
+})
+
+describe('bundle 缓存（M8 第二批：esbuild bundle）', () => {
+  it('bundleCacheKey：入口变化 → 键变；同入口稳定', () => {
+    const a = bundleCacheKey('/x/stores/player.ts')
+    const b = bundleCacheKey('/x/stores/player.ts')
+    const c = bundleCacheKey('/x/stores/user.ts')
+    expect(a).toBe(b)
+    expect(a).not.toBe(c)
+  })
+
+  it('get 校验输入快照：mtime 变化 → 未命中（精确失效）', () => {
+    const dir = path.join(TMP, 'bc1')
+    const input = path.join(dir, 'src.ts')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(input, 'export const a = 1')
+    const st = fs.statSync(input)
+    const cache = createBundleCache(path.join(dir, 'cache'))
+    cache.set('bk', { output: 'OUT', inputs: [{ file: input, mtimeMs: st.mtimeMs, size: st.size }] })
+    // 未变 → 命中
+    expect(cache.get('bk')?.output).toBe('OUT')
+    // 修改输入（内容 + mtime）→ 未命中
+    fs.writeFileSync(input, 'export const a = 2')
+    const st2 = fs.statSync(input)
+    fs.utimesSync(input, new Date(st2.atimeMs + 1000), new Date(st2.mtimeMs + 1000))
+    expect(cache.get('bk')).toBeNull()
+  })
+
+  it('输入文件缺失 → 未命中（容错不抛错）', () => {
+    const dir = path.join(TMP, 'bc2')
+    fs.mkdirSync(dir, { recursive: true })
+    const cache = createBundleCache(path.join(dir, 'cache'))
+    cache.set('bk2', { output: 'X', inputs: [{ file: path.join(dir, 'gone.ts'), mtimeMs: 1, size: 1 }] })
+    expect(cache.get('bk2')).toBeNull()
+  })
+
+  it('磁盘持久化：新实例校验输入后命中', () => {
+    const dir = path.join(TMP, 'bc3')
+    fs.mkdirSync(dir, { recursive: true })
+    const input = path.join(dir, 'src.ts')
+    fs.writeFileSync(input, 'export const b = 1')
+    const st = fs.statSync(input)
+    const c1 = createBundleCache(path.join(dir, 'cache'))
+    c1.set('bk3', { output: 'Y', inputs: [{ file: input, mtimeMs: st.mtimeMs, size: st.size }] })
+    const c2 = createBundleCache(path.join(dir, 'cache'))
+    expect(c2.get('bk3')?.output).toBe('Y')
   })
 })
 
