@@ -19,18 +19,17 @@
 | 11 | pinia-plan | ✅ 已实现 | M1-M8 + MP P1-P3：多端工厂/持久化/分片/版本迁移/快照时间旅行/协同 @proteus/pinia-sync/可观测 + MP 模板绑定桥/事件包装/白名单放行 | DevTools 面板联动 |
 | 12 | platform-plan | ✅ 已实现 | B1-B5 + B8/B9：能力契约/Registry/编译期分叉/运行时降级/平台规范 + 矩阵测试 + CI 门禁 | B6/B7 ⏳ 延后（超级应用可靠性/可观测待 DevTools 基建） |
 | 13 | router-plan | ✅ 已实现 | B1-B11：scan/tree/codegen/guards/tabBar + Router M7.1 chunk + requiresAuth 自动守卫 + 透明化规则/决策链 | B5 app codegen（appBar）⬜ 待 v0.6 |
-| 14 | security-plan | 🟡 部分实现 | M2 凭证托管（createAuth：getToken/setToken/订阅/自动 Authorization） | M1 密钥存储/M3 权限/M4-M8（注入防护/网络安全/脱敏） |
+| 14 | security-plan | ✅ 已实现（M1-M3）| M1 SecretStorage 敏感字段加密存储（@proteus/security：WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级 / volatile 跳过 / redact / migrate）+ M2 凭证托管（@proteus/api createAuth）+ M3 PermissionRegistry 权限最小化（withPermission/PermissionDenied/持久化）| M4-M8（注入防护/网络安全/脱敏/audit security）标后续；Router 权限守卫自动生成 / PermissionGate 组件 / 编译期字段校验 transform |
 | 15 | testing-plan | ✅ 已实现 | 四层金字塔（L1 单测 587 + L2 集成快照 + 跨层契约 + e2e 8）+ CI 门禁（stores 铁律/能力门禁/模板快照/组件审计） | e2e 真机矩阵 |
 | 16 | types-plan | ✅ 已落地 | 类型体系（路由参数模块扩充/MpEvent 事件类型/跨层契约） | 独立 @proteus/types 包深化 |
 | 17 | website-plan | ⬜ 未实现 | — | 官网（文档系统/playground/showcase），v1.0+ |
 
 ## 汇总
 
-- ✅ 已实现 **14** 个板块（api/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/testing/types）
-- 🟡 部分实现 **1** 个（security：仅 M2 凭证托管）
+- ✅ 已实现 **15** 个板块（api/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/security/testing/types）
 - ⬜ 未实现 **2** 个（app 为 v0.6 明确排期；website 为远期）
 
-> devtools（面板 B3-B8）与 i18n（分包/完整 ICU）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
+> devtools（面板 B3-B8）、i18n（分包/完整 ICU）、security（M4-M8）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
 
 ## 交叉能力（编译器 4 增强，跨板块复用）
 
@@ -42,6 +41,6 @@
 
 ## 下一步候选
 
-1. **security-plan M1/M3**（密钥存储/权限门禁——板块内最近的可落地项）
-2. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 14 包）
+1. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 15 包）
+2. **security M4-M8 评估**（注入防护/网络安全/脱敏）或 **router 权限守卫自动生成**（meta.permissions → beforeEach，security M3 后续）
 3. **app-plan 启动**（v0.6：App 渲染器 createRenderer + Vapor——待 v0.5 稳定 + npm 发布）

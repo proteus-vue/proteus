@@ -25,6 +25,8 @@ export default defineConfig({
       { find: '@proteus/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
       // devtools-plan B1：@proteus/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
       { find: '@proteus/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
+      // security-plan B1-B2：@proteus/security 包（tests/security.test.ts 直接引用）
+      { find: '@proteus/security', replacement: fileURLToPath(new URL('./packages/security/src/index.ts', import.meta.url)) },
     ],
   },
 })

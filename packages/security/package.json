@@ -1,0 +1,23 @@
+{
+  "name": "@proteus/security",
+  "version": "0.1.0",
+  "description": "Proteus 安全基线（security-plan B1-B2）：M1 SecretStorage 敏感字段加密存储（WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级）+ M3 PermissionRegistry 权限最小化",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}
