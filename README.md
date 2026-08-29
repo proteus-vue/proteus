@@ -166,7 +166,7 @@ npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环�
 ## 开发状态与路线图
 
 - **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（49 条 AI 说明书）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）、114 单测 + 8 e2e
-- **规划**：编译引擎独立开源 `@proteus/compiler` + CLI、组件系统/computed/watch 补全、多端扩展、性能优化、生态建设——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
+- **规划**：编译引擎独立开源 `@proteus/compiler` + CLI、组件系统/computed/watch 补全、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via Vue 自定义渲染器**）、**Vapor 兼容**、性能优化、生态建设——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议
 

@@ -112,6 +112,8 @@
 
 - **支付宝/抖音/快手小程序**：非目标。仅保证 adapter + 映射表结构上可扩展。
 - **WebView 渲染**：Skyline 优先；WebView 降级仅保证可运行，不保证视觉/交互完全一致。
+- **App 原生端（iOS/Android）**：MVP 非目标；**规划 v0.6** 用 Vue 官方自定义渲染器（createRenderer）实现——走 Vue 官方渲染器而非自研 diff（见 docs/roadmap.md v0.6）。
+- **Vapor 兼容**：MVP 非目标；规划 v0.4 借鉴 codegen + v0.6 Web 端 Vapor 模式（业务代码双模式可编译，见 docs/roadmap.md v0.6）。
 - **运行时动态渲染完整方案**（`renderer.ts` 走 glass-easel 动态建节点）：MVP 不做，降级为可选扩展（见 §P5-2 说明）。动态内容一律走"模板 + 数据驱动 + WXS"。
 - **自研 UI 组件库**：不提供。Web 端直接用 Vue 生态组件；MP 端编译。
 - **SSR / 服务端渲染**：不做。
