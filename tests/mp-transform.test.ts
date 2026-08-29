@@ -179,15 +179,35 @@ function setN() {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('未在顶层 data 中定义'))
   })
 
-  it('同一 ref 多个 watch → 警告（MVP 仅一个，后者覆盖）', () => {
+  it('同一 ref 多个 watch → 警告（重名覆盖，MVP 每个 watch 源一个）', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     transformScriptToPage('const c = ref(0)\nwatch(c, (n) => { a(n) })\nwatch(c, (n) => { b(n) })', opts)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('存在多个'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('重名'))
   })
 
   it('rules.disabled 禁用 script/watch-to-methods → 不生成 watch 方法', () => {
     const { js } = transformScriptToPage('const c = ref(0)\nwatch(c, (n) => { a(n) })', opts, { rules: { disabled: ['script/watch-to-methods'] } })
     expect(js).not.toContain('proteusWatch')
+  })
+
+  it('数组源 watch([a, b]) → proteusWatchAAndB（多源回调数组，旧值逐个保存）', () => {
+    const src = 'const a = ref(1)\nconst b = ref(2)\nwatch([a, b], (ns, os) => {\n  console.log(ns, os)\n})\nfunction setA() {\n  a.value = 5\n}'
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusWatchAAndB(ns, os) {')
+    expect(js).toContain('const oldA = this.data.a, oldB = this.data.b; this.data.a = 5; this.setData({ a: this.data.a }); this.proteusWatchAAndB([this.data.a, this.data.b], [oldA, oldB])')
+  })
+
+  it('函数源 watch(() => expr) → 依赖从 getter 提取，回调收到求值结果', () => {
+    const src = 'const a = ref(1)\nwatch(() => a.value * 2, (n) => {\n  log(n)\n})\nfunction setA() {\n  a.value = 5\n}'
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusWatchA(n) {')
+    expect(js).toContain('this.proteusWatchA(this.data.a * 2, oldA)')
+  })
+
+  it('函数源依赖不在 data → 警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformScriptToPage('watch(() => other.value, (n) => { a(n) })', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('未在顶层 data 中定义'))
   })
 })
 

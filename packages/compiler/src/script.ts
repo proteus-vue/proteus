@@ -77,10 +77,12 @@ interface ComputedInfo {
   expr: string
 }
 
-/** watch 信息（v0.3：依赖 ref 写入后自动调用回调，模拟 Vue watch） */
+/** watch 信息（v0.3 起：单 ref / 数组源 / 函数源，依赖写入后自动调用回调） */
 interface WatchInfo {
-  /** 依赖的 ref 名 */
-  dep: string
+  /** 方法名后缀（deps 组合：count → Count、[a,b] → AAndB） */
+  id: string
+  /** 依赖的 ref 名列表 */
+  deps: string[]
   /** 回调参数（[newVal, oldVal]） */
   params: string[]
   /** 回调体（ref 访问已重写为 this.data 形式） */
@@ -89,6 +91,8 @@ interface WatchInfo {
   immediate: boolean
   /** 源码起始行（sourcemap / 行号注释） */
   line: number
+  /** 函数源 getter（转写后 this.data 形式；undefined = ref 直接源） */
+  expr?: string
 }
 
 /** 组件 prop 信息（v0.3 组件系统：defineProps → Component properties） */
@@ -145,8 +149,9 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
 }
 
 /**
- * 提取顶层 watch 调用：watch(refName, (newVal, oldVal) => { ... }[, { immediate: true }])
- * MVP：仅单 ref 直接引用 + 箭头函数回调；数组源 / 函数源 / function 回调警告不支持
+ * 提取顶层 watch 调用：watch(源, (newVal, oldVal) => { ... }[, { immediate: true }])
+ * 源：单 ref（count）| 数组（[a, b]）| 函数（() => expr，依赖从 expr 的 x.value 提取）
+ * MVP：箭头函数回调；function 回调警告
  */
 function extractWatch(
   source: string,
@@ -155,34 +160,55 @@ function extractWatch(
   trace?: TransformTrace,
 ): Record<string, WatchInfo> {
   const out: Record<string, WatchInfo> = {}
-  const re = /^watch\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*(?:\(([^)]*)\)\s*=>|function\s*\(([^)]*)\)\s*)\s*\{/gm
+  const re = /^watch\s*\(\s*([\s\S]*?)\s*,\s*(?:\(([^)]*)\)\s*=>|function\s*\(([^)]*)\)\s*)\s*\{/gm
   let m: RegExpExecArray | null
   while ((m = re.exec(source))) {
     const lineStart = source.lastIndexOf('\n', m.index) + 1
     if (source.slice(lineStart, m.index) !== '') continue
-    const dep = m[1]
+    const rawSrc = m[1].trim()
     const params = (m[2] ?? m[3] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    if (!(dep in data)) {
-      warnings.push(`watch 依赖 ${dep} 未在顶层 data 中定义（watch 的源必须是本文件顶层 ref/reactive）`)
+    // 解析源 → deps + 函数源 getter
+    let deps: string[] = []
+    let expr: string | undefined
+    if (rawSrc.startsWith('[')) {
+      // 数组源 [a, b]
+      deps = Array.from(rawSrc.matchAll(/\b([A-Za-z_$][\w$]*)\b/g), (mm) => mm[1])
+    } else if (rawSrc.startsWith('()')) {
+      // 函数源 () => expr：依赖从 expr 的 x.value 提取，getter 转写为 this.data 形式
+      const getter = rawSrc.replace(/^\(\)\s*=>\s*/, '')
+      deps = [...new Set(Array.from(getter.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+      expr = getter.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
+    } else {
+      // 单 ref
+      deps = [rawSrc]
+    }
+    const missing = deps.filter((d) => !(d in data))
+    if (missing.length) {
+      warnings.push(`watch 依赖 ${missing.join('/')} 未在顶层 data 中定义（watch 的源必须是本文件顶层 ref/reactive）`)
       continue
     }
+    if (!deps.length) {
+      warnings.push(`watch 源无法解析依赖（${rawSrc.slice(0, 40)}），已跳过`)
+      continue
+    }
+    const id = deps.map((d) => capitalize(d)).join('And')
     const braceIdx = m.index + m[0].length - 1
     const body = extractBracedBody(source, braceIdx)
     if (body === null) {
-      warnings.push(`watch ${dep} 回调体解析失败，已跳过`)
+      warnings.push(`watch ${rawSrc} 回调体解析失败，已跳过`)
       continue
     }
     const after = source.slice(braceIdx + body.length + 1, braceIdx + body.length + 120)
     const immediate = /immediate\s*:\s*true/.test(after)
-    if (out[dep]) {
-      warnings.push(`watch ${dep} 存在多个（MVP 仅支持一个），后者覆盖前者`)
+    if (out[id]) {
+      warnings.push(`watch ${rawSrc} 与已有 watch 重名（${id}），后者覆盖前者`)
     }
     trace?.add('script/watch-to-methods', {
       line: lineAt(source, m.index),
-      before: `watch(${dep}, (${params.join(', ')}) => ...)`,
-      after: `proteusWatch${capitalize(dep)}（${dep} 写入 setData 后自动调用${immediate ? '，immediate 初始化一次' : ''}）`,
+      before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
+      after: `proteusWatch${id}（${deps.join('/')} 写入 setData 后自动调用${immediate ? '，immediate 初始化一次' : ''}）`,
     })
-    out[dep] = { dep, params, body, immediate, line: lineAt(source, m.index) }
+    out[id] = { id, deps, params, body, immediate, line: lineAt(source, m.index), expr }
   }
   return out
 }
@@ -346,11 +372,16 @@ function computedInitLine(computeds: Record<string, ComputedInfo>): string {
   return `this.setData({ ${entries.map(([n, c]) => `${n}: ${c.expr}`).join(', ')} })`
 }
 
-/** immediate watch 初始化行：onLoad 时调用一次（newVal = 当前值，oldVal = undefined） */
+/** immediate watch 初始化行：onLoad 时调用一次（单源标量 / 多源数组，oldVal = undefined） */
 function immediateWatchLine(watches: Record<string, WatchInfo>): string {
   const lines = Object.entries(watches)
     .filter(([, w]) => w.immediate)
-    .map(([dep]) => `this.proteusWatch${capitalize(dep)}(this.data.${dep}, undefined)`)
+    .map(([, w]) => {
+      const single = w.deps.length === 1
+      const newVals = single ? (w.expr ?? `this.data.${w.deps[0]}`) : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
+      const oldVals = single ? 'undefined' : `[${w.deps.map(() => 'undefined').join(', ')}]`
+      return `this.proteusWatch${w.id}(${newVals}, ${oldVals})`
+    })
   return lines.join('\n')
 }
 
@@ -358,16 +389,19 @@ function immediateWatchLine(watches: Record<string, WatchInfo>): string {
  * setData 写入模板：有派生补丁 / watch 联动 / 前置写时先更新 this.data.name 再 setData——
  * 保证同一 setData 对象里的派生表达式读到该 ref 的**新值**（setData 异步批量，对象内求值用当前 this.data）
  */
-function writeSetData(name: string, valueExpr: string, patch: string, watchName?: string, forceWrite = false): string {
-  const needWrite = forceWrite || Boolean(patch) || Boolean(watchName)
+function writeSetData(name: string, valueExpr: string, patch: string, hasWatch = false, forceWrite = false): string {
+  const needWrite = forceWrite || Boolean(patch) || hasWatch
   if (!needWrite) return `this.setData({ ${name}: ${valueExpr} })`
   return `this.data.${name} = ${valueExpr}; this.setData({ ${name}: this.data.${name}${patch} })`
 }
 
-/** watch 联动调用：setData 后追加分号 + proteusWatchX(newVal, oldVal)（旧值由调用方在写入前保存） */
-function watchTail(name: string, watchName?: string): string {
-  if (!watchName) return ''
-  return `; this.proteusWatch${capitalize(name)}(this.data.${name}, old${capitalize(name)})`
+/** watch 联动调用：setData 后追加分号 + proteusWatch<id>（单源回调标量 / 多源回调数组，旧值由调用方在写入前保存） */
+function watchTail(w: WatchInfo | undefined): string {
+  if (!w) return ''
+  const single = w.deps.length === 1
+  const newVals = single ? (w.expr ?? `this.data.${w.deps[0]}`) : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
+  const oldVals = single ? `old${capitalize(w.deps[0])}` : `[${w.deps.map((d) => `old${capitalize(d)}`).join(', ')}]`
+  return `; this.proteusWatch${w.id}(${newVals}, ${oldVals})`
 }
 
 function rewriteRefAccess(
@@ -390,26 +424,30 @@ function rewriteRefAccess(
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
     const patch = computedPatch(name, computeds)
-    const watchName = name in watches && !skip('script/watch-to-methods') ? name : undefined
-    const oldSave = watchName ? `const old${capitalize(name)} = this.data.${name}; ` : ''
+    // 命中依赖此 ref 的 watch（多源/函数源 deps 匹配；MVP 每 ref 至多一个 watch）
+    const w = Object.values(watches).find((ww) => ww.deps.includes(name) && !skip('script/watch-to-methods'))
+    const oldSave = w
+      ? `const ${w.deps.map((d) => `old${capitalize(d)} = this.data.${d}`).join(', ')}; `
+      : ''
+    const tail = watchTail(w)
     // 自增/自减（含前置 ++name.value / --name.value：前置需先写 this.data，表达式值 = 新值）
     if (!skip('script/ref-incdec')) {
       if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
-        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch || watchName ? ' + 派生/联动' : ''} })` })
+        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch || w ? ' + 派生/联动' : ''} })` })
       }
-      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, watchName, true)}${watchTail(name, watchName)}`)
-      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, watchName, true)}${watchTail(name, watchName)}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, watchName)}${watchTail(name, watchName)}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, watchName)}${watchTail(name, watchName)}`)
+      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}`)
+      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w))}${tail}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}`)
     }
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
     if (!skip('script/ref-write')) {
       if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
-        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch || watchName ? ' + 派生/联动' : ''} })` })
+        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch || w ? ' + 派生/联动' : ''} })` })
       }
       out = out.replace(
         new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
-        (_m, expr) => `${oldSave}${writeSetData(name, expr.trim(), patch, watchName)}${watchTail(name, watchName)}`,
+        (_m, expr) => `${oldSave}${writeSetData(name, expr.trim(), patch, Boolean(w))}${tail}`,
       )
     }
     // 读取：name.value → this.data.name
@@ -666,9 +704,9 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     if (extra.debug) lines.push(`  // @${m.line} ${name}()`)
     pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)},`, m.line)
   }
-  // watch 回调方法：proteusWatchX(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
+  // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   for (const w of Object.values(watches)) {
-    const src = `proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
     pushMapped(`  ${src}`, w.line)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发
