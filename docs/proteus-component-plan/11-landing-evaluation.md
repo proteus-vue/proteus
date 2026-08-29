@@ -63,7 +63,7 @@ B7(性能加固) ← B3          B8(可观测 + CI 审计) ← B2-B6
 | B3 | `p-scroll-view` + `p-list-view`（virtual-list 通用化：item-key/虚拟开关/懒加载）| B2 | ✅ 已落地（2026-08，11 用例：watch-props 5 + b3 6）——★编译器增强 script/watch-props（watch props 源 → WeChat observers，items 变化即响应）；★性能：start 守卫跳过 intra-row setData + lazy 门控 + virtual 开关；virtual-list 改为转发兼容层（嵌套 usingComponents 解析 ✓） |
 | B4 | `p-input` `p-textarea`（v-model 双向 + 事件归一）| B2 | ✅ 已落地（2026-08，8 用例）——事件契约 `:value` + `@input`（载荷 { value } 跨端归一，替代 v-model：MP 自定义组件 v-model 仅覆盖原生 input/textarea）；★runtime/event 事件归一 helper（e.detail.x / e.target.x 双端安全），p-list-view onScroll 同步接入（修复 Web 滚动崩溃隐患） |
 | B5 | `p-mask` `p-popup` `p-toast` `p-loading`（弹层体系）| B2 | ✅ 已落地（2026-08，5 用例 + demo 弹层区）——转场 = CSS animation（enter 自动 / leave 播完 setTimeout emit close），Worklet 标注 v0.6；★编译器修复 script/ref-write 多行 RHS（ref 赋值含箭头函数体截断 bug）+ 回归用例；visible 驱动用 B3 props 源 watch；Skyline position:fixed 编译期警告（保守，基础库 2.26+ 支持） |
-| B6 | `p-nav-bar`（普通态）`p-skeleton` `p-error-boundary` | B2 | nav-bar appBar 集成标注 v0.6；error-boundary 用 Vue errorCaptured |
+| B6 | `p-nav-bar`（普通态）`p-skeleton` `p-error-boundary` | B2 | ✅ 已落地（2026-08，6 用例 + demo 导航/骨架区）——nav-bar back 仅 emit（C3，A8 未实现）；skeleton lines 数组 prop（规避 MP range v-for）+ shimmer keyframes；error-boundary 用 Vue errorCaptured（Web），MP 无 Vue 运行时退化为透传（★编译器反黑盒：未映射 onXxx 钩子显式警告，不再静默剥离）；appBar 集成标注 v0.6 |
 | B7 | 性能加固：懒加载/长列表/内存/降级完整 warn | B3 | 对齐 06-m7-performance.md |
 | B8 | 可观测 + `proteus audit component`（C3/C4/C8 审计门禁）| B2-B6 | 对齐 07/10；DRY：audit 复用 capabilities:check 基础设施 |
 
@@ -118,7 +118,7 @@ export type CapabilityName =
 | B3 scroll-view + list-view | ✅ 已落地 | 2026-08，11 用例（watch-props + b3）+ demo 万条长列表；virtual-list 转发兼容 |
 | B4 表单（input/textarea）| ✅ 已落地 | 2026-08，8 用例 + demo 表单区；事件归一 runtime/event + p-list-view 接入 |
 | B5 弹层（mask/popup/toast/loading）| ✅ 已落地 | 2026-08，5 用例 + demo 弹层区；CSS animation 转场 + 编译器多行 RHS 修复 |
-| B6 nav-bar/skeleton/error-boundary | ⬜ | — |
+| B6 nav-bar/skeleton/error-boundary | ✅ 已落地 | 2026-08，6 用例 + demo 导航/骨架区；未映射钩子显式警告 |
 | B7 性能加固 | ⬜ | — |
 | B8 可观测 + audit | ⬜ | — |
 

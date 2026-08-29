@@ -10,7 +10,7 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast } from '@proteus/components'
+import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast, PNavBar, PSkeleton } from '@proteus/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)
@@ -19,6 +19,7 @@ const name = ref('')
 const bio = ref('')
 const showPopup = ref(false)
 const showToast = ref(false)
+const loading = ref(true)
 
 // 万条数据：p-list-view 虚拟窗口只渲染可视区（行数恒定）
 const rows = ref([] as { title: string }[])
@@ -38,6 +39,9 @@ function onNameInput(e: { value: string }) {
 }
 function onBioInput(e: { value: string }) {
   bio.value = e.value
+}
+function toggleLoading() {
+  loading.value = !loading.value
 }
 </script>
 
@@ -90,6 +94,15 @@ function onBioInput(e: { value: string }) {
       </p-view>
     </p-popup>
     <p-toast :visible="showToast" text="操作成功" :duration="1500" @close="showToast = false" />
+
+    <h2>导航/骨架（B6）</h2>
+    <p class="sub">p-nav-bar（back 仅 emit，页面决定导航）+ p-skeleton（加载态）</p>
+    <p-nav-bar title="页面标题" back @back="showToast = true" />
+    <p-view class="box">
+      <p-button @click="toggleLoading">{{ loading ? '结束加载' : '开始加载' }}</p-button>
+      <p-skeleton :visible="loading" :avatar="true" />
+      <p-text v-if="!loading" class="row">数据已加载</p-text>
+    </p-view>
   </div>
 </template>
 

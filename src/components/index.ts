@@ -16,6 +16,9 @@ import PMask from './p-mask/index.vue'
 import PPopup from './p-popup/index.vue'
 import PToast from './p-toast/index.vue'
 import PLoading from './p-loading/index.vue'
+import PNavBar from './p-nav-bar/index.vue'
+import PSkeleton from './p-skeleton/index.vue'
+import PErrorBoundary from './p-error-boundary/index.vue'
 
 export {
   VirtualList,
@@ -31,6 +34,9 @@ export {
   PPopup,
   PToast,
   PLoading,
+  PNavBar,
+  PSkeleton,
+  PErrorBoundary,
 }
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'

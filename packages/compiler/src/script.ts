@@ -827,7 +827,7 @@ function rewriteRefAccess(
   return out
 }
 /** 生命周期映射：onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad */
-function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>): { onReady?: string; onUnload?: string; onLoad?: string } {
+function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>, warnings: string[] = []): { onReady?: string; onUnload?: string; onLoad?: string } {
   const out: { onReady?: string; onUnload?: string; onLoad?: string } = {}
   if (disabled?.has('script/lifecycle-map')) return out
   const hooks = [
@@ -835,6 +835,14 @@ function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Se
     { re: /onUnmounted\s*\(/g, key: 'onUnload' as const },
     { re: /onLoad\s*\(/g, key: 'onLoad' as const },
   ]
+  // ★B6 反黑盒：未映射的 onXxx 钩子显式警告（不再静默剥离）——如 onErrorCaptured（Web 能力，MP 无 Vue 运行时）
+  // 仅匹配「回调形态」调用 onXxx(() => / onXxx(function，排除方法定义（function onXxx(...)）与普通调用
+  const mapped = new Set(['onMounted', 'onUnmounted', 'onLoad'])
+  for (const hm of source.matchAll(/\bon([A-Z][A-Za-z0-9_]*)\s*\(\s*(?:(?:\([^)]*\)\s*=>)|function)/g)) {
+    if (!mapped.has(hm[1])) {
+      warnings.push(`未映射的生命周期钩子 on${hm[1]}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
+    }
+  }
   for (const h of hooks) {
     h.re.lastIndex = 0
     const m = h.re.exec(source)
@@ -990,7 +998,7 @@ export function transformScriptToPage(
   const methods = extractMethods(source, warnings, trace, disabled)
   // defineExpose（v0.3 尾）：no-op 校验（组件模式）
   if (extra.isComponent) checkDefineExpose(source, data, warnings, trace)
-  const lifecycles = extractLifecycles(source, trace, disabled)
+  const lifecycles = extractLifecycles(source, trace, disabled, warnings)
   const vModelBindings = extra.vModelBindings ?? []
   const refNames = new Set(Object.keys(data))
 
