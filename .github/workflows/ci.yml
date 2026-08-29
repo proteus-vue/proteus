@@ -23,8 +23,16 @@ jobs:
       - name: 类型检查（vue-tsc 全项目，含 packages/*）
         run: npx vue-tsc --noEmit
 
-      - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden）
+      - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: npm test
+
+      - name: stores 铁律门禁（M8.4：禁平台分支/直连存储）
+        run: |
+          if grep -rEn "wx\\.setStorage|localStorage\\.setItem|sessionStorage|if.*process\\.env" examples/stores/ 2>/dev/null; then
+            echo "::error::stores/ 违规：禁止平台分支与直连存储（见 docs/pinia-stores-conventions.md）"
+            exit 1
+          fi
+          echo "stores 纯净性 OK（注册表完整性由 vue-tsc + stores-registry.types.ts 校验）"
 
       - name: 小程序构建（gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
