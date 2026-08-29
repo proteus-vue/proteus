@@ -7,7 +7,7 @@ on:
 
 jobs:
   verify:
-    name: test + build（v0.2 工程化基线）
+    name: test + build（拆包完成：全部 @proteus/* 包独立构建）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,13 +17,13 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: 安装依赖
+      - name: 安装依赖（workspace 包 prepare 自动构建 dist）
         run: npm ci
 
-      - name: 类型检查（vue-tsc 全项目，含 packages/compiler）
+      - name: 类型检查（vue-tsc 全项目，含 packages/*）
         run: npx vue-tsc --noEmit
 
-      - name: 单元测试（router / mp-transform / runtime / transforms / explain / overrides / golden / plugin）
+      - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden）
         run: npm test
 
       - name: 小程序构建（gen-routes → vue-tsc → vite build:mp）
@@ -32,8 +32,13 @@ jobs:
       - name: Web 构建
         run: npm run build:web
 
-      - name: 编译引擎独立包构建（@proteus/compiler → dist/ .d.ts）
-        run: npm run build -w @proteus/compiler
+      - name: 全部 @proteus/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/create-proteus → dist）
+        run: npm run build --workspaces
+
+      - name: 模板快照一致性（快照后 git 无差异 → 模板与主仓同步）
+        run: |
+          npx tsx scripts/snapshot-template.ts
+          git diff --exit-code -- packages/create-proteus/templates
 
   e2e-web:
     name: Web E2E（Playwright，需 Chromium）

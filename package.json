@@ -30,7 +30,7 @@
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
     "preview:web": "vite preview --mode web",
-    "verify": "npm test && npm run build:web && npm run build:mp",
+    "verify": "npm test && npm run build:web && npm run build:mp && npm run build --workspaces",
     "test": "vitest run --exclude tests/e2e-web.test.ts",
     "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts"
   },

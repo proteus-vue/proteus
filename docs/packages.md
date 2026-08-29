@@ -1,6 +1,6 @@
 # 框架本体拆包（Monorepo Packages）—— 规划与实现
 
-> **状态**：📋 规划已落地，按分步骤执行中（roadmap v0.2 遗留结构性欠账 C 类）
+> **状态**：✅ 全部完成（8 步全落地，决策 #98-#105）——框架本体 `src/{platform,router,runtime,shims}` 全部移入 packages，create-proteus 模板依赖 npm 包、不再复制框架本体
 > **目标**：把框架本体 `src/{platform,router,runtime,shims}` + `vite-plugin-mp-transform.ts` + `scripts/gen-routes.ts`
 > 拆成 monorepo packages（`@proteus/router` / `@proteus/runtime` / `@proteus/plugin-vite` / `@proteus/shared`），
 > 应用工程不再复制框架本体（create-proteus 模板改为依赖 npm 包），对齐 roadmap §5 架构演进。
@@ -110,11 +110,12 @@ packages/
 - 决策：#104；踩坑：① 模板 App.vue 不能引 `@proteus/router/RouterView.vue`（npm 包 exports 无此子路径 → 应用壳相对导入）② 插件 `@proteus/plugin-vite` 命名导出（模板 default import 不匹配 → 统一命名导入）③ require.resolve('@proteus/router/package.json') 被 exports 拦截（补 ./package.json）④ node_modules 路径正则要处理 scoped 包（@proteus/router 两层）⑤ 模板构建走 workspace 链接 dist（plugin-vite 加 prepare 保新鲜）
 - 规模：~300 行；风险：中高（模板大改，端到端验证）
 
-### 步骤 8：CI/构建/文档收尾
+### 步骤 8：CI/构建/文档收尾（✅ 已落地）
 
-- [ ] CI 加各包构建；根 `verify` 全绿
-- [ ] docs/roadmap.md 拆包行 ✅、docs/packages.md 升级正式文档、PROJECT_MEMORY 决策
-- 规模：~100 行；风险：低
+- [x] CI（.github/workflows/ci.yml）：verify job 加 `npm run build --workspaces`（7 包独立构建，prepare 钩子 npm ci 自动构建 dist）+ 模板快照一致性检查（快照后 git diff 无差异 → 模板与主仓同步防漂移）
+- [x] 根 `verify` 脚本加 workspace 构建；本地验证 `npm run build --workspaces` 全包通过
+- [x] docs/roadmap.md 工程化行 ✅（拆包 8 步完成）、compiler/create-proteus 行描述更新（npm 包形态）；docs/packages.md 升级正式文档（状态 ✅）；PROJECT_MEMORY 决策 #105
+- 决策：#105；遗留：npm 发包待启用（用户暂不发布）——发布后验证 `npm create` 真实端到端
 
 ## 风险与对策
 
@@ -126,13 +127,13 @@ packages/
 | 模板依赖 npm 包未发布（步骤 7） | workspace 链接（node_modules/@proteus/* 指向 packages）；发布后切 npm |
 | create-proteus 快照脚本与主仓同步 | 步骤 7 重写 snapshot-template.ts（只快照应用壳） |
 
-## 验收清单
+## 验收清单（✅ 全部通过）
 
-- [ ] `src/{platform,router,runtime,shims}` 全部移入 packages（`src/` 仅剩 components）
-- [ ] `@proteus/*` 精确别名，业务代码零改动（import 路径不变）
-- [ ] 198 测试 + 双端构建 + e2e 全绿（每步）
-- [ ] create-proteus 生成的工程不再包含框架本体副本，双端构建通过
-- [ ] roadmap §5 架构演进对齐（packages/{compiler,runtime,router,plugin-vite,shared,cli,create-proteus}）
+- [x] `src/{platform,router,runtime,shims}` 全部移入 packages（`src/` 仅剩 components）
+- [x] `@proteus/*` 精确别名，业务代码零改动（import 路径不变）
+- [x] 222 测试 + 双端构建 + e2e 全绿（每步）
+- [x] create-proteus 生成的工程不再包含框架本体副本，双端构建通过（workspace 链接形态；真实 npm create 待发布后验证）
+- [x] roadmap §5 架构演进对齐（packages/{compiler,runtime,router,plugin-vite,shared,cli,create-proteus}）
 
 ## 文档版本
 
