@@ -128,7 +128,11 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
       warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
       type = 'String'
     }
-    // 无 default 时按类型给默认值（微信 properties.value）
+    // 无 default 时按类型给默认值（微信 properties.value）；函数默认值（如 () => []）不适用，跳过
+    if (typeof value === 'function') {
+      warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
+      value = undefined
+    }
     if (value === undefined) {
       if (type === 'String') value = ''
       else if (type === 'Number') value = 0

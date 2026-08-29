@@ -9,6 +9,8 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
+// Web 端注册组件（MP 端编译器忽略 import，标签走 usingComponents）
+import Counter from '../components/counter/index.vue'
 
 const total = ref(0)
 

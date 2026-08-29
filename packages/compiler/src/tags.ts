@@ -35,6 +35,7 @@ export const EVENT_MAP: Record<string, string> = {
   touchend: 'touchend',
   longpress: 'longpress',
   confirm: 'confirm',
+  scroll: 'scroll', // scroll-view 内置滚动事件（v0.4 虚拟列表）
 }
 
 // 语义标签 → 基础样式类名

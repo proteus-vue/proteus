@@ -11,6 +11,7 @@ export const routes: RouteRecord[] = [
   { name: "showcase", path: "pages/showcase", component: "../pages/showcase.vue", parent: "index", meta: {"title":"转场演示"} },
   { name: "user", path: "pages/user/index", component: "../pages/user/index.vue", meta: {"title":"用户中心"} },
   { name: "user-profile", path: "pages/user/profile", component: "../pages/user/profile.vue", parent: "user", meta: {"title":"个人资料","requiresAuth":true} },
+  { name: "virtual-list-demo", path: "pages/virtual-list-demo", component: "../pages/virtual-list-demo.vue", parent: "index", meta: {"title":"虚拟列表"} },
   { name: "order-pages-list", path: "subpackages/order/pages/list", component: "../subpackages/order/pages/list.vue", subPackage: "order", meta: {"title":"订单列表"} },
 ]
 

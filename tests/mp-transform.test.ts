@@ -1,6 +1,8 @@
 // tests/mp-transform.test.ts
 // P4 转换函数单测（文档 P6-2 提前落地）：直接调用三个纯转换函数，验证映射表
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   transformTemplateToWxml,
   transformScriptToPage,
@@ -283,6 +285,32 @@ describe('sourcemap（v0.3：方法级 JS 源码映射）', () => {
       return acc === 3
     })
     expect(hit).toBe(true)
+  })
+})
+
+describe('虚拟列表（v0.4）', () => {
+  it('scroll-view + @scroll → bindscroll（EVENT_MAP 新增 scroll）', () => {
+    const { wxml } = transformTemplateToWxml('<scroll-view scroll-y @scroll="onScroll" />', opts)
+    expect(wxml).toContain('bindscroll="onScroll"')
+  })
+
+  it('VirtualList 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染', () => {
+    const src = fs.readFileSync(path.resolve('examples/components/virtual-list/index.vue'), 'utf-8')
+    const r = compileVueSfc(src, { isComponent: true, filename: 'components/virtual-list/index.vue' })
+    // properties：函数默认值（() => []）忽略，仅 type
+    expect(r.js).toContain('items: { type: Array }')
+    // 切片逻辑：props 重写 + slice
+    expect(r.js).toContain('this.data.items.slice')
+    // onReady 首屏计算
+    expect(r.js).toContain('onReady()')
+    expect(r.js).toContain('calc(0)')
+    // 模板：scroll-view + bindscroll + 可视区 v-for
+    expect(r.wxml).toContain('<scroll-view')
+    expect(r.wxml).toContain('bindscroll="onScroll"')
+    expect(r.wxml).toContain('wx:for="{{visible}}"')
+    expect(r.wxml).toContain('wx:key="i"')
+    // 产物自校验通过（无坏产物）
+    expect(r.js).not.toContain('undefined undefined')
   })
 })
 
