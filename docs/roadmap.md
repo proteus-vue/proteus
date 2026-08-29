@@ -27,10 +27,10 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | 1 | **开发体验**：脚手架 / HMR / devtools / 错误定位 / 类型提示 | ✅ | ✅ | 🟡 HMR+devtools（Web 原生）；MP 无 devtools 插件 | v0.2 脚手架 + v1.0 devtools |
 | 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 / Vue 能力兼容 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、scss 预处理器、sourcemap（v0.3）；✅ vue-compat-advance 全批（provide/inject 值传递+响应式联动+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认+替代模式，Batch 1-7）；🟡 类型提示 / computed 写路径 | v0.3 + v0.3 尾 + vue-compat-advance ✅ |
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
-| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；🟡 跨模块引用已通（module-plan B0：纯逻辑共享模块 require；含第三方依赖如 pinia 的共享模块跳过编译——Pinia MP 编译待放行） | v0.4 + 跨模块接入 |
+| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | ✅ pinia-plan M1-M8 全批（Web 原生 Pinia + MP store 桥 + 四端工厂 + 持久化/分片/版本迁移/配额淘汰 + 快照时间旅行 + 协同 @proteus/pinia-sync + 可观测）+ MP 编译 P1-P3（模板 store 绑定桥 $subscribe→setData + 方法事件包装 proteusStoreXxx + pinia 白名单放行，主包 83KB） | v0.4 + pinia-plan ✅ |
 | 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list，框架内置化完成）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
-| 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底 + ★能力体系（platform-plan B1-B5：Capability 契约/Adapter Registry/降级/平台规范，MP 端 capability 可用）；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 485 单测 + CI（拆包完成：9 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）；🟡 npm 发包待启用 | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
+| 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底 + ★能力体系（platform-plan B1-B5：Capability 契约/Adapter Registry/降级/平台规范，MP 端 capability 可用）+ ✅ api-plan B1-B4（createApi 跨端请求抽象：wx/fetch adapter + 拦截器/重试/错误模型 + 设备信息 + createAuth 凭证托管，业务零平台分支）；❌ 插件体系 | v0.5 |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 522 单测 + CI（拆包完成：11 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）+ lifecycle-plan（defineApp 五阶段编排/超时降级/错误隔离/trace，B1-B6）+ security M2 凭证托管；🟡 npm 发包配置就绪（changesets 已配，待真实发布） | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
 | 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表 + 分包体积监控（B7a） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 

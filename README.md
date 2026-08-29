@@ -135,10 +135,16 @@ proteus/
 ├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 样式策略 / 规则覆盖）
 ├── vite-plugin-mp-transform.ts     # 小程序编译 Vite 插件（薄适配层，@proteus/plugin-vite 前身）
 ├── scripts/gen-routes.ts           # 编译期路由生成器（app.json / page.json / 路由表）
+├── packages/shared/               # ★ @proteus/shared 公共层（平台适配器 + 全局类型声明）
 ├── packages/compiler/              # ★ @proteus/compiler 编译引擎独立包（v0.2 起 monorepo）
 │   └── src/                        #   纯函数引擎 + transforms 规则注册表（69 条 AI 说明书，含 apply 分派层）
+├── packages/runtime/               # ★ @proteus/runtime 运行时（setData 桥接 / 生命周期 / store 桥 / app 骨架）
+├── packages/router/                # ★ @proteus/router 路由包（工厂化 createRouter + 守卫 + 预设 builders + 透明化规则）
+├── packages/plugin-vite/           # ★ @proteus/plugin-vite Vite 插件（mp-weixin 编译管线 + gen-routes 路由生成器）
 ├── packages/module/                # ★ @proteus/module 模块化包（module-plan B0-B9：契约/图谱/编排器/审计/Web 分包）
 ├── packages/capabilities/          # ★ @proteus/capabilities 能力体系（platform-plan B1-B5：契约/Registry/编译期分叉/降级/规范）
+├── packages/api/                   # ★ @proteus/api 跨端 API 抽象（createApi 请求 + 设备信息 + createAuth 凭证托管）
+├── packages/pinia-sync/            # ★ @proteus/pinia-sync 多端状态协同（LWW 零依赖默认 + CRDT 接口占位）
 ├── packages/cli/                   # ★ @proteus/cli（v0.2：build / explain / rules / module:check / audit / capabilities:*）
 ├── packages/create-proteus/        # ★ create-proteus（v0.2：npm create proteus 一键双端工程）
 ├── src/
@@ -148,7 +154,7 @@ proteus/
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
 ├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包 / capability）
-├── tests/                          # 485 个单元测试 + 8 个 Web e2e 测试
+├── tests/                          # 522 个单元测试 + 8 个 Web e2e 测试
 ├── .github/workflows/ci.yml        # CI：test / vue-tsc / build:web / build:mp / 独立包构建 / e2e
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
@@ -156,7 +162,7 @@ proteus/
 ## 测试与验证
 
 ```bash
-npm test                # 485 个单测（compiler / module / capabilities / runtime / router / plugin / cli / golden / pinia / storage / bundle-report / perf）
+npm test                # 522 个单测（compiler / module / capabilities / api / runtime / router / plugin / cli / golden / pinia / storage / bundle-report / perf）
 npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
@@ -176,8 +182,8 @@ npm run proteus -- explain <vue-file | rule-id>   # CLI：决策 trace / AI 说�
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接（深层 diff + 批量）、反黑盒调试、AI-native 规则注册表（69 条 AI 说明书 + apply 分派层）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ v0.3 编译能力（computed/watch/组件系统/scoped CSS/sourcemap）+ v0.4 运行时性能（虚拟列表/Pinia/store 桥/性能基准/包体积仪表）+ **vue-compat-advance 全批**（provide/inject 注入桥+响应式+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认）+ **module-plan 模块化 B0-B9**（跨模块引用 import→require、模块契约/图谱/编排器、Web/Skyline 分包、体积/去重/审计门禁）+ **platform-plan 能力体系 B1-B5**（Capability 契约/Adapter Registry/编译期分叉/运行时降级/平台原生模块规范，MP 端 capability 已可用）+ pinia-plan M1-M8（多端持久化/协同/可观测）、485 单测 + 8 e2e
-- **规划**：v0.3 尾项（CSS 预处理器/类型提示/computed 写路径）、框架本体拆包（@proteus/router/runtime/plugin-vite）、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via Vue 自定义渲染器**）、**Vapor 兼容**、npm 发布——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
+- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接（深层 diff + 批量）、反黑盒调试、AI-native 规则注册表（69 条 AI 说明书 + apply 分派层）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ v0.3 编译能力（computed/watch/组件系统/scoped CSS/sourcemap）+ v0.4 运行时性能（虚拟列表/Pinia/store 桥/性能基准/包体积仪表）+ **vue-compat-advance 全批**（provide/inject 注入桥+响应式+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认）+ **module-plan 模块化 B0-B9**（跨模块引用 import→require、模块契约/图谱/编排器、Web/Skyline 分包、体积/去重/审计门禁）+ **platform-plan 能力体系 B1-B5**（Capability 契约/Adapter Registry/编译期分叉/运行时降级/平台原生模块规范，MP 端 capability 已可用）+ pinia-plan M1-M8（多端持久化/协同/可观测）+ **lifecycle-plan B1-B6**（defineApp 五阶段编排 + 页面 onUnload 自动 $dispose）+ **api-plan B1-B4**（createApi 跨端请求抽象 + createAuth 凭证托管，业务零平台分支）、522 单测 + 8 e2e
+- **规划**：v0.3 尾项（CSS 预处理器/类型提示/computed 写路径）、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via Vue 自定义渲染器**）、**Vapor 兼容**、npm 发布（changesets 配置就绪，待真实发布）——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议
 

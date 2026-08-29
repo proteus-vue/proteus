@@ -150,14 +150,35 @@ packages/
 | 模板依赖 npm 包未发布（步骤 7） | workspace 链接（node_modules/@proteus/* 指向 packages）；发布后切 npm |
 | create-proteus 快照脚本与主仓同步 | 步骤 7 重写 snapshot-template.ts（只快照应用壳） |
 
+## npm 发布清单（★真实发布时按序执行；发布准备已就绪，未执行）
+
+> 发布配置已就绪：11 个 @proteus/* 包字段完整（main/types/exports 子路径/files）、包间依赖**精确版本**对齐（npm 404 教训）、cli 对 @proteus/{compiler,capabilities,module,router} 全部 external（运行时从 node_modules 解析）、changesets 已配（access: public / baseBranch: main / 7 个待发 changeset：router/runtime/shared/pinia-sync/plugin-vite minor + compiler minor + cli patch）。
+
+```bash
+# ① 应用 changeset：bump 版本 + 写 CHANGELOG + 自动对齐 workspace 包间精确依赖
+npm run changeset:version
+
+# ② ★手动同步 changesets 管不到的两处（否则首次发布即 404 / workspace 解析失败）：
+#   - examples/package.json：@proteus/* 范围同步到新版本（private 包不被 changesets 管理）
+#   - packages/create-proteus/templates/package.json：同上（模板工程按新版本装包）
+npm install   # ③ 更新 lockfile
+npm run verify   # ④ 全绿（522 单测 + 双端构建 + workspaces 构建）
+npx tsx scripts/snapshot-template.ts && git diff --exit-code -- packages/create-proteus/templates   # ⑤ 模板无漂移
+# ⑥ 提交（版本 bump + changelog + 依赖同步）→ ⑦ 再执行真实发布：
+npm run changeset:publish   # 按依赖拓扑自动发布全部包
+# ⑧ 发布后打 tag（如 @proteus/router@0.2.0）并 push
+```
+
+★注意：① 之后 examples/ 与 templates/ 的 `^0.x` 范围必须同步到新版本；版本若未同步，workspace 内 `npm install` 会因版本不匹配直接失败（发布时也会让 create-proteus 装到不存在的旧版本 → npm 404）。
+
 ## 验收清单（✅ 全部通过）
 
 - [x] `src/{platform,router,runtime,shims}` 全部移入 packages（`src/` 仅剩 components）
 - [x] `@proteus/*` 精确别名，业务代码零改动（import 路径不变）
-- [x] 222 测试 + 双端构建 + e2e 全绿（每步）
+- [x] 522 测试 + 双端构建 + e2e 全绿（每步）
 - [x] create-proteus 生成的工程不再包含框架本体副本，双端构建通过（workspace 链接形态；真实 npm create 待发布后验证）
-- [x] roadmap §5 架构演进对齐（packages/{compiler,runtime,router,plugin-vite,shared,cli,create-proteus}）
+- [x] roadmap §5 架构演进对齐（packages/{api,capabilities,cli,compiler,create-proteus,module,pinia-sync,plugin-vite,router,runtime,shared}）
 
 ## 文档版本
 
-v1.0（规划落地，roadmap v0.2 结构性欠账 C 类）
+v1.1（npm 发布准备：cli external 统一 + exports ./package.json 补全 + 发布清单）
