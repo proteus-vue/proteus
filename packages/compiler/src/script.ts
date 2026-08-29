@@ -1027,20 +1027,25 @@ export function transformScriptToPage(
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
   // ★Batch 6：页面级清理（provide 或 inject 时）——onUnload 删除当前页命名空间（防泄漏）
-  const needsPageCleanup = hasInjects || providedRefs.size > 0
+  // ★lifecycle B6：页面级 store $dispose（useXxxStore 实例属性 → onUnload 自动清理，防内存泄漏）
+  const storeDisposeLine =
+    storeVar && !extra.isComponent
+      ? `if (this.${storeVar} && this.${storeVar}.$dispose) { this.${storeVar}.$dispose(); this.${storeVar} = null }`
+      : ''
+  const needsPageCleanup = hasInjects || providedRefs.size > 0 || Boolean(storeDisposeLine)
   const pageCleanupLine = 'const __reg = getApp().__proteusProvides; if (__reg && this.__proteusPageId) delete __reg[this.__proteusPageId]'
   const unsubLine = hasInjects ? 'this.proteusUnsubscribeProvide()' : ''
   if (lifecycles.onUnload) {
-    // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理（前置；onUnload 显式存在时注入）
+    // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     const unloadBody = rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
-    const pre = [unsubLine, pageCleanupLine].filter(Boolean).join('\n')
+    const pre = [unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     lines.push(`  onUnload() {
 ${indentBody(pre ? `${pre}\n${unloadBody}` : unloadBody)}
   },`)
   } else if (needsPageCleanup && !extra.isComponent) {
-    // 页面级 provide/inject 但无显式 onUnload：生成承载清理的 onUnload（组件模式用 detached，见组件分支）
+    // 页面级 provide/inject/store 但无显式 onUnload：生成承载清理的 onUnload（组件模式用 detached，见组件分支）
     lines.push(`  onUnload() {
-${indentBody([unsubLine, pageCleanupLine].filter(Boolean).join('\n'))}
+${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
   },`)
   }
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()

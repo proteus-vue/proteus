@@ -77,6 +77,21 @@ const store = usePlayerStore()
   })
 })
 
+describe('B6：页面 onUnload 自动 $dispose store（lifecycle-plan）', () => {
+  it('useXxxStore 页面 → onUnload 注入 $dispose + 置空（防内存泄漏）', () => {
+    const { js } = compile(
+      `<template><p>{{ store.volume }}</p></template>\n  <script setup>\nimport { usePlayerStore } from '../stores/player'\nconst store = usePlayerStore()\n  </script>`,
+    )
+    expect(js).toContain('if (this.store && this.store.$dispose) { this.store.$dispose(); this.store = null }')
+    expect(js).toContain('onUnload() {')
+  })
+
+  it('无 store 变量 → 不注入 $dispose', () => {
+    const { js } = compile('<template><p>{{ count }}</p></template><script setup>const count = ref(1)</script>')
+    expect(js).not.toContain('$dispose')
+  })
+})
+
 describe('P3：共享模块放行（resolveSharedModule pinia 白名单）', () => {
   it('pinia 及其依赖链 → 解析（放行）', () => {
     const repoRoot = path.resolve(__dirname, '..')

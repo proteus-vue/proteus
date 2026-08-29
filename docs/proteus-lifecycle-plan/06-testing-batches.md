@@ -171,7 +171,7 @@ B1 ──→ B2 ──┬──→ B3 (Web)
 
 - [x] `defineApp` 五阶段按顺序执行（B1+B2 ✅：runtime/src/lifecycle.ts，2026-08）
 - [x] Skyline 端 `App.onShow` 正确映射（B4 ✅ 部分：appSkeleton 生成 App 级 onShow/onHide 调试钩子；★MP 端阶段化受 app.js 直出无模块约束——全量模式入口自定义 App() 手动编排）
-- [ ] 页面 `onUnload` 自动 `$dispose` store（B6）
+- [x] 页面 `onUnload` 自动 `$dispose` store（B6 ✅：编译器检测 useXxxStore 页面 → onUnload 注入 $dispose + 置空，2026-08）
 - [x] `--trace-lifecycle` 输出完整（B2 ✅：Orchestrator trace + 阶段超时降级链）
 - [ ] 冷启动 < 1s（中等机型）（B9）
 - [ ] 迁移工具可自动转换 `App()` → `defineApp()`（B9）
