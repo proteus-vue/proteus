@@ -161,10 +161,10 @@ B5/B6 内部（A2/A5/A6/A7/A9/A10/A11）互相独立，可拆分到子 PR 进一
 
 | 批 | 模块 | 档 | 状态 |
 |----|------|---|------|
-| B1 | A1 Request | P0 | ⬜ |
-| B2 | A3 Storage | P0 | ⬜ |
-| B3 | A4 Auth | P0 | ⬜ |
-| B4 | A8 Navigator | P0 | ⬜ |
+| B1 | A1 Request | P0 | ✅（@proteus/api：createApi + wx/fetch adapter + 拦截器/重试/错误模型，2026-08） |
+| B2 | A3 Storage | P0 | ✅ 已由 pinia-plan M1 覆盖（packages/shared/src/storage） |
+| B3 | A4 Auth | P0 | ⬜（依赖 security-plan useAuth） |
+| B4 | A8 Navigator | P0 | ✅ 部分：设备信息（getDeviceInfo）；导航已由 @proteus/shared PlatformAdapter 覆盖 |
 | B5 | A2/A5/A6/A9 | P1 | ⬜ |
 | B6 | A7/A10/A11 | P2 | ⬜ |
 | B7 | 测试/迁移/codemod | — | ⬜ |

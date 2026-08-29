@@ -1,0 +1,23 @@
+{
+  "name": "@proteus/api",
+  "version": "0.1.0",
+  "description": "Proteus API 层（api-plan A1/A8）：网络请求统一抽象（wx.request/fetch）+ 设备信息——业务零平台分支",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}
