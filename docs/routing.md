@@ -18,7 +18,8 @@
 |---|---|
 | `title` | 页面标题（写入 `app.json` 或 `page.json`） |
 | `isTab` | 是否为 tabBar 页面（**至少 2 个**，微信平台要求） |
-| `requiresAuth` | 是否需登录（配合守卫使用） |
+| `requiresAuth` | 是否需登录（配合 createRouter `options.auth` 守卫） |
+| `permissions` | 所需权限列表（security M3：配合 createRouter `options.permissions`，如 `["trade:create"]`） |
 | 任意扩展 | 透传到路由记录，守卫中读取 |
 
 目录结构推导命名路由：

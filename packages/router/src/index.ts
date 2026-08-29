@@ -16,7 +16,7 @@ class Router {
 
   constructor(
     private routeMap: Record<string, RouteRecord>,
-    private options: { auth?: () => boolean | Promise<boolean>; onAuthFail?: () => void } = {},
+    private options: RouterOptions = {},
   ) {}
 
   /**
@@ -42,6 +42,18 @@ class Router {
     return false
   }
 
+  /** ★security M3：meta.permissions 自动守卫——缺权限拦截（permissions 检查器未配置时放行；PermissionRegistry.hasAll 直接可传） */
+  private async permissionGuard(to: RouteRecord, trace: GuardTrace | undefined): Promise<boolean> {
+    const required = to.meta?.permissions
+    if (!required || !required.length || !this.options.permissions) return true
+    const ok = await this.options.permissions.hasAll(required)
+    if (ok) return true
+    const denied = required[0]
+    trace?.(`[guard] permissions → ${to.name ?? to.path} 被拦截（缺权限 ${denied}，createRouter permissions 检查器）`)
+    this.options.onPermissionFail?.(denied)
+    return false
+  }
+
   /** 命名路由跳转（推荐）——泛型 N 由 name 字面量推断，params 类型自动匹配（类型提示全链路） */
   async push<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     const target = this.resolve(options as NavigateOptions)
@@ -52,6 +64,8 @@ class Router {
     const trace = isDebug ? (msg: string) => console.log(msg) : undefined
     // ★B11：requiresAuth 自动守卫（先于用户守卫——框架层登录拦截）
     if (!(await this.authGuard(target, trace))) return
+    // ★security M3：permissions 自动守卫（requiresAuth 之后、用户守卫之前）
+    if (!(await this.permissionGuard(target, trace))) return
     const guardResult = await runBeforeEach(target, this.routeMap, trace)
     if (guardResult === false) return
 
@@ -118,14 +132,24 @@ class Router {
   }
 }
 
+export interface RouterOptions {
+  /** ★B11：登录检查器（requiresAuth 页面自动拦截；onAuthFail 可跳登录页/提示） */
+  auth?: () => boolean | Promise<boolean>
+  onAuthFail?: () => void
+  /** ★security M3：权限检查器（meta.permissions 页面自动拦截；PermissionRegistry.hasAll 签名兼容可直接传） */
+  permissions?: { hasAll: (perms: string[]) => boolean | Promise<boolean> }
+  onPermissionFail?: (permission: string) => void
+}
+
 /**
  * 创建 Router 实例（拆包步骤 4 工厂化）：路由表由调用方注入
  * 用法：const router = createRouter(routes)（routes 来自 gen-routes 生成的 auto-routes）
  * ★B11：options.auth——登录检查器（requiresAuth 页面自动拦截；onAuthFail 可跳登录页/提示）
+ * ★security M3：options.permissions——权限检查器（meta.permissions 页面自动拦截；onPermissionFail 可跳 forbidden/引导授权）
  */
 export function createRouter(
   routes: RouteRecord[],
-  options: { auth?: () => boolean | Promise<boolean>; onAuthFail?: () => void } = {},
+  options: RouterOptions = {},
 ): Router {
   const routeMap = routes.reduce((m, r) => {
     m[r.name] = r

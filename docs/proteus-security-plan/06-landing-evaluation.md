@@ -15,7 +15,7 @@
 | 3 | M1 迁移（明文 → 加密）| 无迁移基建 | ✅ `migrate()` 简单版（旧明文 → 加密写回 → 删旧，失败清除不崩溃）|
 | 4 | M1 脱敏（encrypted 字段 → `***`）| devtools TraceBus redact 已有（键名命中）| ✅ SecretStorage.redact() 按字段描述符脱敏（比键名更精准），可对接 trace |
 | 5 | M3 PermissionRegistry（granted set / request / has / hasAll）| 无权限基建 | ✅ 纯逻辑实现 + granted 持久化（storage 回调，键明文不存凭证）|
-| 6 | M3 Router 守卫自动生成（meta.permissions → beforeEach）| router 守卫工厂已存在（createRouter auth 检查器）| ⏸ 首期提供 `withPermission` + PermissionDenied（业务侧守卫）；Router 自动守卫标后续（对接 requiresAuth 检查器）|
+| 6 | Router 权限守卫自动生成（meta.permissions → beforeEach）| router 守卫工厂已存在（createRouter auth 检查器）| ✅ **已落地（B2.5）**：RouteMeta.permissions + createRouter options.permissions/onPermissionFail；`<PermissionGate>` 组件与编译期规则标后续 |
 | 7 | M3 `<PermissionGate>` 组件 | 组件库已有降级模式（p-error-boundary 等）| ⏸ 组件包装标后续（依赖组件库 + 权限注册表）；首期 API 层足够 |
 | 8 | M2 凭证托管归 @proteus/security | M2 已在 @proteus/api（createAuth，贴近请求层）| ✅ **维持现状**：createAuth 留在 api（请求自动 Authorization 同层）；security 包负责存储加密 + 权限 |
 | 9 | MP 编译 | 共享模块白名单 `@proteus/*` ✓ | ✅ 纯逻辑 ES5-safe → `_proteus/security` 可用（加密降级到 DemoCipher 或明文 null，文档标注）|
@@ -50,3 +50,4 @@
 |----|------|------|
 | B1 SecretStorage | ✅ 已落地 | 2026-08——cipher.ts（WebCipher AES-GCM+PBKDF2 / DemoCipher 降级 / hasWebCrypto 探测）+ secret-storage.ts（字段级加解密/volatile 跳过/redact/migrate/Function 检测），7 用例 |
 | B2 PermissionRegistry | ✅ 已落地 | 2026-08——permissions.ts（has/hasAll/grant/revoke/clear/request 持久化 + withPermission + PermissionDenied + permissionFor），4 用例 |
+| B2.5 Router 权限守卫自动生成 | ✅ 已落地 | 2026-08——RouteMeta.permissions + createRouter options.permissions（PermissionRegistry.hasAll 直接可传）/ onPermissionFail；requiresAuth 之后用户守卫之前自动拦截，6 用例 |

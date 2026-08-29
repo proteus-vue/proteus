@@ -24,6 +24,8 @@ export interface RouteRecord {
 export interface RouteMeta {
   /** 是否需要登录 */
   requiresAuth?: boolean
+  /** ★security M3：所需权限（permission = resource:action，如 'trade:create'）——createRouter permissions 检查器自动守卫 */
+  permissions?: string[]
   /** 页面标题 */
   title?: string
   /** 是否为 TabBar 页面 */
