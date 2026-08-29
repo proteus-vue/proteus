@@ -1,5 +1,5 @@
 // tests/runtime.test.ts
-// P5 运行时桥接单测：setDataBridge（批量/路径合并/值去重）+ pageLifecycle（createPage/createComponent）
+// P5 运行时桥接单测：setDataBridge（批量/路径合并/值去重/深层 diff）+ pageLifecycle（createPage/createComponent）
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockPage = { route: 'pages/index', setData: vi.fn() }
@@ -27,6 +27,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   mockPage.setData.mockClear()
   vi.mocked(mockPage.setData).mockClear()
+  // 单例状态隔离：避免 lastValues/dirty 跨测试泄漏
+  setDataBridge.reset()
 })
 
 afterEach(() => {
@@ -43,18 +45,18 @@ describe('setDataBridge 批量桥接', () => {
     expect(mockPage.setData).toHaveBeenCalledWith({ a: 1, b: 2 })
   })
 
-  it('路径合并：父路径已脏 → 子路径跳过', () => {
+  it('路径合并：父路径已脏 → 子路径覆盖（叶路径补丁语义）', () => {
     setDataBridge.markDirty('pages/index', 'a', { x: 1 })
-    setDataBridge.markDirty('pages/index', 'a.x', 99) // 子路径被父覆盖
+    setDataBridge.markDirty('pages/index', 'a.x', 99) // 同叶路径覆盖，最终值正确
     vi.advanceTimersByTime(16)
-    expect(mockPage.setData).toHaveBeenCalledWith({ a: { x: 1 } })
+    expect(mockPage.setData).toHaveBeenCalledWith({ 'a.x': 99 })
   })
 
-  it('路径合并：新路径为祖先 → 移除被覆盖的子路径', () => {
+  it('路径合并：新路径为祖先 → 移除被覆盖的子路径（叶路径补丁语义）', () => {
     setDataBridge.markDirty('pages/index', 'list[0].name', 'n')
     setDataBridge.markDirty('pages/index', 'list', [{ name: 'new' }])
     vi.advanceTimersByTime(16)
-    expect(mockPage.setData).toHaveBeenCalledWith({ list: [{ name: 'new' }] })
+    expect(mockPage.setData).toHaveBeenCalledWith({ 'list[0].name': 'new' })
   })
 
   it('值比较去重：与上次推送值相同 → 不触发 setData', () => {
@@ -81,6 +83,47 @@ describe('setDataBridge 批量桥接', () => {
     setDataBridge.markDirty('pages/not-exist', 'a', 1)
     vi.advanceTimersByTime(16)
     expect(mockPage.setData).not.toHaveBeenCalled()
+  })
+
+  // ★v0.4 深度优化：深层对象 diff（只推送变化的叶路径）
+  it('对象 diff：仅变化的字段推送（叶路径补丁，非整对象）', () => {
+    setDataBridge.markDirty('pages/index', 'user', { name: 'a', age: 1 })
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenLastCalledWith({ 'user.name': 'a', 'user.age': 1 })
+
+    mockPage.setData.mockClear()
+    setDataBridge.markDirty('pages/index', 'user', { name: 'b', age: 1 }) // 仅 name 变化
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenCalledTimes(1)
+    expect(mockPage.setData).toHaveBeenCalledWith({ 'user.name': 'b' })
+  })
+
+  it('数组 diff：仅变化的下标推送（list[0].x 而非整数组）', () => {
+    setDataBridge.markDirty('pages/index', 'list', [{ name: 'a' }, { name: 'b' }])
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenLastCalledWith({ 'list[0].name': 'a', 'list[1].name': 'b' })
+
+    mockPage.setData.mockClear()
+    setDataBridge.markDirty('pages/index', 'list', [{ name: 'a' }, { name: 'c' }])
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenCalledWith({ 'list[1].name': 'c' })
+  })
+
+  it('深层 diff 去重：对象未变 → 不触发 setData', () => {
+    setDataBridge.markDirty('pages/index', 'user', { name: 'a', age: 1 })
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenCalledTimes(1)
+    mockPage.setData.mockClear()
+    setDataBridge.markDirty('pages/index', 'user', { name: 'a', age: 1 }) // 深拷贝同值
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).not.toHaveBeenCalled()
+  })
+
+  it('深层 diff 与路径合并协同：整对象推送覆盖同帧叶路径', () => {
+    setDataBridge.markDirty('pages/index', 'user.name', 'x')
+    setDataBridge.markDirty('pages/index', 'user', { name: 'y', age: 2 })
+    vi.advanceTimersByTime(16)
+    expect(mockPage.setData).toHaveBeenCalledWith({ 'user.name': 'y', 'user.age': 2 })
   })
 })
 

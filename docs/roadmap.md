@@ -87,12 +87,12 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
-| setData 深度优化 | `src/runtime/setDataBridge.ts` | 脏路径 diff（对象路径级）+ 值比较去重 + 跨页合并窗口（现 16ms）+ **路径补丁而非整对象** |
+| setData 深度优化（✅ 已实现，决策 #81） | `src/runtime/setDataBridge.ts` | 已有：批量合并（16ms 窗口）+ 路径合并 + 值去重 + **深层对象/数组 diff**（变更递归出叶路径补丁，只推送变化子路径——对象更新从整对象 → 变化字段；首次推送展开叶路径）+ reset（测试隔离） |
 | Vapor codegen 借鉴 | `src/runtime/setDataBridge.ts` | 研究 Vapor 的 reset/effect **命令式更新**：setData 从"路径合并"推进到"依赖追踪精确化"（v0.6 App/Vapor 兼容的前置研究） |
 | 虚拟列表 | 新增 `src/components/`（框架内置） | 长列表只渲染可视区，对标 Taro 的 `VirtualList` / uni-app 的 list-view |
 | Pinia 状态管理适配 | `src/runtime/store/` | `defineStore` 编译/桥接到 MP（data 同步 + setData 联动）；Web 端原生 Pinia |
 | 包体积控制 | `build:mp` 链路 | 按需注入、`tree-shaking` 编译产物、主包 ≤ 2MB 预算仪表 |
-| 性能基准 | `tests/perf/` | 首屏渲染 / 更新帧率 / setData 大小与频率的基准套件 + CI 门禁 |
+| 性能基准（✅ 已落地，决策 #81） | `tests/perf/` | 已有：setData 桥接基准（1000 次变更 → 1 次批量 / 对象 diff 全量 4 条 vs 变化 1 条 / 同值去重零推送）+ 编译引擎基准（典型页平均耗时报告 + 宽松阈值门禁），随 npm test 运行 |
 
 ### v0.5 多端扩展（对标"多端覆盖"差距）
 
