@@ -1,0 +1,34 @@
+{
+  "name": "@proteus/module",
+  "version": "0.1.0",
+  "description": "Proteus 模块化（module-plan）：模块契约 defineModule + 校验（B1）——业务域声明式边界，编译期依赖图谱/分包的地基",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
+    "./scan": {
+      "types": "./dist/scan.d.ts",
+      "import": "./dist/scan.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/contract.ts src/scan.ts --bundle --format=esm --platform=node --outdir=dist --external:esbuild"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

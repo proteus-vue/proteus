@@ -2,11 +2,12 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
+import { checkModuleConfigs } from './module-check'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -39,6 +40,13 @@ async function main(): Promise<void> {
     case 'router:check': {
       const { pagesDir } = parseRouterCheckArgs(rest)
       console.log(formatRouterCheck(checkRoutes(pagesDir)))
+      break
+    }
+    case 'module:check': {
+      const { root } = parseModuleCheckArgs(rest)
+      const { text, result } = await checkModuleConfigs(root)
+      console.log(text)
+      if (!result.modules.every((m) => m.ok) || result.duplicateNames.length) process.exitCode = 1
       break
     }
     case 'version':

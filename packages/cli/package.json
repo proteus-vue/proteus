@@ -12,10 +12,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus/router --banner:js=\"#!/usr/bin/env node\""
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus/router --external:@proteus/module --external:esbuild --banner:js=\"#!/usr/bin/env node\""
   },
   "dependencies": {
     "@proteus/compiler": "0.2.0",
+    "@proteus/module": "0.1.0",
     "@proteus/router": "0.1.0"
   },
   "devDependencies": {

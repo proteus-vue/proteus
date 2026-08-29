@@ -86,6 +86,17 @@ export function parseRouterCheckArgs(argv: string[]): RouterCheckArgs {
   return { pagesDir: path.resolve(dir) }
 }
 
+export interface ModuleCheckArgs {
+  /** 项目根目录（递归扫描 proteus-module.config.ts；缺省当前目录） */
+  root: string
+}
+
+export function parseModuleCheckArgs(argv: string[]): ModuleCheckArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { root: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -100,6 +111,12 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
   proteus rules [template | script | style | validate]
       列出全部编译规则（AI 说明书目录）
+
+  proteus router:check [dir]
+      校验 <route> 块与集中式 meta（来源登记 + 父路由推导依据）
+
+  proteus module:check [dir]
+      校验 proteus-module.config.ts 模块契约（name/version/dependencies 缺失报错 + 重名检测）
 
   proteus version / help
 `
