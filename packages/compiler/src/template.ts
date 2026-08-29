@@ -90,6 +90,12 @@ function formatClassBinding(exp: string, warnings: string[]): string {
       }
       if (i.startsWith('{')) {
         const inner = i.slice(1, -1)
+        // 对象简写 { on } → 键即值（vue-compat Batch C）
+        const shorthand = inner.trim().match(/^([\w$]+)$/)
+        if (shorthand) {
+          parts.push(`(${shorthand[1]}?'${shorthand[1]} ':'')`)
+          continue
+        }
         const re = /(['"]?)([\w-]+)\1\s*:\s*([^,}]+)/g
         let m: RegExpExecArray | null
         let ok = false

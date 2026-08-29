@@ -95,3 +95,19 @@ describe('Batch B：事件内联表达式 → 包装方法（vue-compat）', () 
     expect(r.warnings).toHaveLength(0)
   })
 })
+
+describe('Batch C：收尾补全（vue-compat）', () => {
+  it(':class 数组对象简写 [a, { on }] → 支持（{ on } → on?"on "）', () => {
+    const r = compile('<template><div :class="[a, { on }]">X</div></template><script setup>const a = ref("x"); const on = ref(true)</script>')
+    expect(r.warnings).toHaveLength(0) // 不再警告
+    expect(r.wxml).toContain('(on?\'on \':\'\')')
+  })
+
+  it('函数调用初始化警告 actionable（跨模块/store 桥提示）', () => {
+    const r = compile('<template><view>{{ store }}</view></template>\n<script setup>\nconst store = useStore()\n</script>')
+    const w = r.warnings.find((x) => x.includes('const store'))
+    expect(w).toBeDefined()
+    expect(w).toContain('函数调用/跨模块引用')
+    expect(w).toContain('store 桥')
+  })
+})

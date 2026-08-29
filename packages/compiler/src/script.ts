@@ -319,8 +319,12 @@ function extractData(
     const raw = inner ? inner[1] : init
     const value = evalLiteral(raw)
     if (value === undefined && raw !== 'undefined') {
+      // vue-compat Batch C：函数调用初始化（跨模块/方法调用）补充 actionable 提示
+      const isCall = /^[\w$.]+\(/.test(raw.trim())
       warnings.push(
-        `const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`,
+        isCall
+          ? `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用/跨模块引用，data.${name} 将设为 undefined（小程序单文件产物无模块系统——请内联共享逻辑或改用框架 store 桥，见 docs/pinia-migration.md）`
+          : `const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`,
       )
     }
     data[name] = value
