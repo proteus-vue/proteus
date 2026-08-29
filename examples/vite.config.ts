@@ -38,12 +38,8 @@ export default defineConfig(({ mode }) => {
       : [vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
-        // ★monorepo 内示例：@proteus/* 精确映射到框架包源码（独立工程发布后走 npm 包）
-        { find: '@proteus/compiler', replacement: fileURLToPath(new URL('../packages/compiler/src/index.ts', import.meta.url)) },
-        { find: '@proteus/shared', replacement: fileURLToPath(new URL('../packages/shared/src/index.ts', import.meta.url)) },
-        { find: '@proteus/runtime', replacement: fileURLToPath(new URL('../packages/runtime/src/index.ts', import.meta.url)) },
-        { find: '@proteus/router', replacement: fileURLToPath(new URL('../packages/router/src', import.meta.url)) },
-        { find: '@proteus/plugin-vite', replacement: fileURLToPath(new URL('../packages/plugin-vite/src', import.meta.url)) },
+        // ★真实 npm 包使用方式（决策 #115）：@proteus/{router,runtime,shared,plugin-vite} 走 workspace 链接的
+        //   npm 包 dist（与 create-proteus 生成工程一致）；仅 @proteus/components 保留 alias（组件库未拆包，v2.0 方向）
         { find: '@proteus/components', replacement: fileURLToPath(new URL('../src/components', import.meta.url)) },
       ],
     },
