@@ -139,7 +139,7 @@ proteus/
 │   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
-├── examples/                       # 示例应用（pages / subpackages / router / main）
+├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包）
 ├── tests/                          # 114 个单元测试 + 8 个 Web e2e 测试
 ```
 

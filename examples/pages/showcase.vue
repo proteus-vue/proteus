@@ -29,9 +29,6 @@ const cards = ref([
     <div class="links">
       <a href="/pages/user/profile" route-type="scaleDown">→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）</a>
     </div>
-    <!-- 规则覆盖演示（★底线循环 ③）：config rules.customTags 取消注释 { 'demo-box': 'view' } 后，
-         此标签编译为 <view>（否则按未注册标签原样输出）；改配置重构建即可看到产物变化 -->
-    <demo-box>customTags 演示（config rules.customTags）</demo-box>
   </div>
 </template>
 

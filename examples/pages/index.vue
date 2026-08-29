@@ -29,6 +29,8 @@ function handleTap() {
     <div v-for="(item, idx) in items" :key="idx" class="item">{{ idx }}. {{ item }}</div>
     <button @click="handleTap">tap</button>
     <div class="links">
+      <a href="/pages/forms">表单与指令</a>
+      <a href="/pages/config-demo">配置演示</a>
       <a href="/pages/user/index">用户中心</a>
       <a href="/pages/user/profile">个人资料</a>
       <a href="/subpackages/order/pages/list">订单列表</a>

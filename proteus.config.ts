@@ -58,16 +58,16 @@ const config: ProteusConfig = {
       scaleDown: 'src/router/presets/scaleDown.ts',
     },
   },
-  // ★底线循环 ①③：规则覆盖开关（默认空 = 全用默认规则；改这里立即改变编译行为）
+  // ★底线循环 ①③：规则覆盖开关（改这里立即改变编译行为，演示页 examples/pages/config-demo.vue）
   // 示例：
-  //   disabled: ['directive/v-show-limit'],                    // 禁用某规则
-  //   mapping: { 'tag/link-to-view': { a: 'text' } },          // 改写映射（a → text 而非 view）
-  //   customTags: { 'my-widget': 'view' },                     // 新增标签映射
+  //   disabled: ['directive/v-if'],                               // 禁用规则（v-if 忽略 + 编译期警告）
+  //   mapping: { 'tag/link-to-view': { a: 'text' } },             // 改写映射（a → text 而非 view）
+  //   customTags: { 'my-widget': 'view' },                        // 新增标签映射
   rules: {
     disabled: [],
     mapping: {},
-    // customTags 演示：examples/pages/showcase.vue 的 <demo-box> 编译为 <view>（取消注释即生效）
-    // customTags: { 'demo-box': 'view' },
+    // 已启用：<demo-box> → <view>（config-demo 页演示）；删除此键即回到未注册标签原样输出
+    customTags: { 'demo-box': 'view' },
   },
   setDataBridge: {
     batchWindow: 16, // ~1 帧

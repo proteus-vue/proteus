@@ -3,6 +3,8 @@
 import type { RouteRecord } from './types'
 
 export const routes: RouteRecord[] = [
+  { name: "config-demo", path: "pages/config-demo", component: "../pages/config-demo.vue", parent: "index", meta: {"title":"配置演示"} },
+  { name: "forms", path: "pages/forms", component: "../pages/forms.vue", parent: "index", meta: {"title":"表单与指令"} },
   { name: "index", path: "pages/index", component: "../pages/index.vue", meta: {"title":"首页","isTab":true} },
   { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true} },
   { name: "showcase", path: "pages/showcase", component: "../pages/showcase.vue", parent: "index", meta: {"title":"转场演示"} },

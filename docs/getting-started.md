@@ -105,6 +105,22 @@ const count = ref(0)
 
 重新构建后，Web 与小程序两端都能看到新页面。导航方式见[路由与转场](routing.md)。
 
+## 示例应用（examples）覆盖的能力
+
+`examples/` 是按能力矩阵铺开的活文档，改代码/配置即可观察编译差异：
+
+| 示例页 | 演示能力 |
+|---|---|
+| `pages/index.vue` | 首页（Tab）：ref 读写 / v-if / v-for / 导航链接 |
+| `pages/mine.vue` | 第二个 Tab（微信要求 tabBar ≥ 2 项） |
+| `pages/forms.vue` | **表单与指令**：v-model（input/textarea）/ `:class` 对象语法 / `:style` 对象语法 / `v-if-v-else-if-v-else` 条件链 / `@click.stop` → catchtap / `v-html` → rich-text |
+| `pages/config-demo.vue` | **proteus.config 规则覆盖**：`customTags: { 'demo-box': 'view' }` 已启用——`<demo-box>` 编译为 `<view>`；试玩 disabled / mapping 开关（见 [配置参考](configuration.md) rules 段） |
+| `pages/showcase.vue` | 转场演示：`route-type="scaleDown"` 层叠缩放 + 卡片列表 |
+| `pages/user/*.vue` | 用户中心 / 个人资料（halfScreen 半屏转场目标页） |
+| `subpackages/order/pages/list.vue` | 分包页面 |
+
+> 提示：改动 `proteus.config.ts` 后重新 `npm run build:mp`，用 `dist/mp-weixin/.transform-debug/` 的决策链对比产物变化（底线循环 ③）。
+
 ## 调试
 
 ### 小程序全链路调试
