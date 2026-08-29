@@ -44,6 +44,39 @@ const store = usePlayerStore()
   })
 })
 
+describe('P2：store 方法事件包装（inline handler 扩展）', () => {
+  const SFC = `<template>
+    <button @click="store.toggle()">切换</button>
+    <button @click="store.play({ title: 'X', durationSec: 5 })">播放</button>
+    <button @click="store.setVolume(store.volume - 0.1)">音量-</button>
+    <button @click="store.setVolume(store.volume + 0.1)">音量+</button>
+  </template>
+  <script setup>
+import { usePlayerStore } from '../stores/player'
+const store = usePlayerStore()
+  </script>`
+
+  it('wxml：bindtap 指向包装方法；js：生成 proteusStoreXxx（this.store. 调用 + store. 引用改写）', () => {
+    const { wxml, js } = compile(SFC)
+    expect(wxml).toContain('bindtap="proteusStoreToggleNoArgs"')
+    expect(wxml).toContain('bindtap="proteusStorePlaytitleXdurationSec5"')
+    expect(js).toContain('this.store.toggle()')
+    expect(js).toContain("this.store.play({ title: 'X', durationSec: 5 })")
+    // ★+/- 区分（Minus/Plus 映射，避免同名方法冲突覆盖）
+    expect(js).toContain('this.store.setVolume(this.store.volume - 0.1)')
+    expect(js).toContain('this.store.setVolume(this.store.volume + 0.1)')
+    expect(js).toContain('proteusStoreSetVolumestorevolumeMinus01')
+    expect(js).toContain('proteusStoreSetVolumestorevolumePlus01')
+    // 不再警告复杂表达式
+    expect(js).not.toContain('proteusStoreSetVolumestorevolume01')
+  })
+
+  it('非 store 事件（复杂表达式）仍警告', () => {
+    const { js, warnings } = compile('<template><button @click="a.b()">x</button></template>')
+    expect(js).not.toContain('proteusStore')
+  })
+})
+
 describe('P3：共享模块放行（resolveSharedModule pinia 白名单）', () => {
   it('pinia 及其依赖链 → 解析（放行）', () => {
     const repoRoot = path.resolve(__dirname, '..')

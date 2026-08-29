@@ -56,7 +56,8 @@
 
 - **P1 模板 store 绑定桥 ✅**（2026-08）：template.ts `rewriteStoreRefs`（`{{ store.<field> }}` → `{{ <field> }}` + storeBindings 收集，含 :prop 绑定）+ script.ts `storeBindingLine`（onLoad：初始 setData + `store.$subscribe` → setData，store 变量 = useXxxStore() runtimeInit 实例属性）；规则 script/store-binding；测试 tests/pinia-mp-compile.test.ts
 - **P3 放行 ✅**（体积惊喜）：plugin 共享模块第三方白名单加 pinia/vue-demi/@vue/reactivity 等——`stores/player.js` **仅 29.2KB**（esbuild tree-shaking 生效，此前 906KB 估测为未 tree-shake 口径）；主包 45→83KB（预算 1200KB 内）；pinia-demo MP 端 `const { usePlayerStore } = require('../stores/player.js')` + 状态显示可用
-- **P2 store 方法事件包装 ⬜**（下一步）：`@click="store.play(...)"` → proteusStoreXxx 包装（inline handler 扩展）
+- **P2 store 方法事件包装 ✅**（2026-08）：tryInlineHandler 扩展 `store.method(args)`（无参/对象字面量/含 store. 表达式）→ `proteusStore<Method><Key>` 包装（`this.store.method(args)` + 事件内 `store.` → `this.store.` 改写）；★踩坑：音量 +/- 参数 `store.volume - 0.1 / + 0.1` 的 key 去符号后同名（proteusStoreSetVolume...01 冲突覆盖）→ key 保留 +/- 映射 Minus/Plus；pinia-demo **按钮 MP 端可用**（播放/暂停/音量±）；测试 tests/pinia-mp-compile.test.ts P2 用例
+- **Pinia MP 编译 P1-P3 全部完成**：pinia-demo MP 端状态显示 + 交互完整可用；主包 83KB
 
 ## 4. 验收标准
 

@@ -86,10 +86,11 @@ describe('Batch B：事件内联表达式 → 包装方法（vue-compat）', () 
     expect(r.js).toContain('this.fn(1)')
   })
 
-  it('复杂表达式（store.xxx 链式）仍警告原样', () => {
-    const r = compile('<template><button @click="store.toggle()">T</button></template><script setup>const store = { toggle: () => {} }</script>')
+  it('复杂表达式（a.b() 链式）仍警告原样', () => {
+    // ★P2（pinia-plan 12）：store.method() 已支持包装——链式改 a.b() 验证警告保留
+    const r = compile('<template><button @click="a.b()">T</button></template><script setup>const a = { b: () => {} }</script>')
     expect(r.warnings.some((w) => w.includes('不是简单方法引用'))).toBe(true)
-    expect(r.wxml).toContain('store.toggle()') // 原样
+    expect(r.wxml).toContain('bindtap="a.b()"')
   })
 
   it('规则 event/inline-expression 已登记且可禁用', () => {

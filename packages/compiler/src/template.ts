@@ -241,6 +241,19 @@ function tryInlineHandler(exp: string): { name: string; code: string } | null {
       code: `this.${m[1]}(${m[2]})`,
     }
   }
+  // ★pinia-plan 12 P2：store 方法调用——store.toggle() / store.play({...}) / store.setVolume(store.volume - 0.1)
+  //   store 是 useXxxStore() 编译的实例属性（this.store）；事件表达式中 store. 引用改写为 this.store.
+  m = t.match(/^store\.([A-Za-z_$][\w$]*)\s*\(([^()]*)\)$/)
+  if (m) {
+    const method = m[1]
+    const args = m[2].trim()
+    // key 保留 +/- 语义（store.volume - 0.1 vs + 0.1 区分；否则同名方法冲突覆盖）
+    const key = args.replace(/[^A-Za-z0-9_$+-]/g, '').replace(/-/g, 'Minus').replace(/\+/g, 'Plus') || 'NoArgs'
+    return {
+      name: `proteusStore${capitalize(method)}${key}`,
+      code: `this.store.${method}(${args.replace(/\bstore\./g, 'this.store.')})`,
+    }
+  }
   return null
 }
 
