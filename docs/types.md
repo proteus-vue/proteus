@@ -64,11 +64,12 @@ RouteParamsByName（按路由名索引的参数类型表，生成进 auto-routes
 
 ### 步骤 3：页面 `onLoad` 参数类型（PageOnLoad）
 
-- [ ] `src/router/types.ts` 加 `export type PageOnLoad<N extends keyof RouteParamsByName> = RouteParamsByName[N]`
-- [ ] 示例页标注（forms / components-demo 选一页 `onLoad(options: PageOnLoad<'...'>)`）
-- [ ] 验证：标注页 vue-tsc + 负例（多余字段报错）；产物无类型残留（stripParamTypes 剥离）
-- 改动：types.ts + 示例页 + 测试
-- 验收：类型推导生效 + 产物行为不变
+- [x] `src/router/types.ts` 加 `PageOnLoad<N extends keyof RouteParamsByName>`（N = 本页路由名，自动匹配参数）
+- [x] runtime 加 `onLoad` 导出（Web 端 no-op 兼容，`src/runtime/index.ts` 聚合入口新增）——源码 onLoad 在 Web 端不报错
+- [x] 示例页标注：user/profile.vue `onLoad((options: PageOnLoad<'user-profile'>) => ...)`（options.id 推导）
+- [x] 验证：vue-tsc（含 PageOnLoad 正/负例）+ 产物 onLoad 提取 + 无类型残留（stripParamTypes 剥离）
+- 改动：`src/router/types.ts`、`src/runtime/pageLifecycle.ts`（onLoad no-op + index.ts）、示例页、类型测试
+- 决策：#95；踩坑：① runtime onLoad 参数签名（hook 注册 vs 参数接收，用 (options?: any) 宽松）② demo 的 `??` 残留产物（真机不支持，改显式 null 检查）
 
 ### 步骤 4：事件处理器类型（shims）
 

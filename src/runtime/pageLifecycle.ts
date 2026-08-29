@@ -11,6 +11,16 @@ export function onReady(hook: () => void): void {
   ;(getCurrentPage() as any)?.__onReadyHooks?.push(hook)
 }
 
+/**
+ * 页面 onLoad 回调注册（类型提示全链路步骤 3）：
+ * MP 端由编译产物处理（extractLifecycles 把顶层 onLoad(cb) 提取进 Page().onLoad 并注入路由参数）；
+ * Web 端为 no-op 兼容（回调不执行，参数在 RouterView/路由层处理，MVP 不注入）——避免源码 onLoad 在 Web 端报错。
+ * 参数类型由调用方声明（如 onLoad((options: PageOnLoad<'user-profile'>) => ...)），此处宽松兼容
+ */
+export function onLoad(_hook: (options?: any) => void): void {
+  // Web 端 no-op
+}
+
 /** Vue onUnmounted → 小程序 onUnload（页面级） */
 export function onUnload(hook: () => void): void {
   ;(getCurrentPage() as any)?.__onUnloadHooks?.push(hook)

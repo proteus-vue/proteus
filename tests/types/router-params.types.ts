@@ -28,4 +28,21 @@ router.push({ name: 'user-profile', params: { extra: 'x' } })
 // @ts-expect-error 非路由名
 router.push({ name: 'not-a-route' })
 
+// ============ 步骤 3：页面 onLoad 参数类型（PageOnLoad） ============
+import type { PageOnLoad } from '../../src/router/types'
+
+// ✅ 正例：onLoad 参数匹配本路由声明
+const opts: PageOnLoad<'user-profile'> = { id: '1', from: 'index' }
+void opts
+
+// ❌ 负例：参数类型不匹配
+// @ts-expect-error user-profile 的 id 声明为 string
+const badOpts: PageOnLoad<'user-profile'> = { id: 42 }
+void badOpts
+
+// ❌ 负例：非路由名
+// @ts-expect-error 非路由名不能作为 PageOnLoad 泛型参数
+const badName: PageOnLoad<'not-a-route'> = {}
+void badName
+
 export {}

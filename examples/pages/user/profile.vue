@@ -14,6 +14,18 @@
 }
 </route>
 <script setup lang="ts">
+import { ref } from 'vue'
+import type { PageOnLoad } from '@proteus/router/types'
+import { onLoad } from '@proteus/runtime'
+
+// 类型提示全链路：onLoad 参数自动匹配本路由声明的 params（{ id?, from?, kw? }）
+// MP 端：编译产物注入路由参数 + 回调执行；Web 端：no-op 兼容（参数在路由层处理）
+const id = ref('')
+
+onLoad((options: PageOnLoad<'user-profile'>) => {
+  // 注意：不用 ?? 运算符（真机不支持，决策 #36），显式 null 检查
+  id.value = options.id === undefined || options.id === null ? '' : options.id
+})
 </script>
 
 <template>

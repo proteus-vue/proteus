@@ -39,6 +39,12 @@ export interface RouteParams {
   [key: string]: string | number | boolean | undefined
 }
 
+/**
+ * 页面 onLoad 参数类型（类型提示全链路步骤 3）：N = 本页路由名，自动匹配 RouteParamsByName[N]
+ * 用法：onLoad((options: PageOnLoad<'user-profile'>) => { ... })——options.id?: string 推导
+ */
+export type PageOnLoad<N extends keyof RouteParamsByName> = RouteParamsByName[N]
+
 /** 路由跳转基础选项（name/params 由 NavigateOptions<N> 泛型覆盖，类型提示全链路步骤 2） */
 export interface BaseNavigateOptions {
   /** 页面路径（命名路由优先） */
