@@ -443,12 +443,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       case 'bind': {
         const arg = exprContent(dir.arg)
         const exp = exprContent(dir.exp)
-        // ★vue-compat-advance Batch 1：作用域插槽 <slot :item> —— MP 无对等（父侧拿不到子数据），显式警告
+        // ★vue-compat-advance Batch 1/7：作用域插槽 <slot :item> —— MP/Skyline 平台限制（无模板传参机制），显式警告 + 替代模式
         if (node.tag === 'slot' && arg !== 'class' && arg !== 'style' && arg !== 'name') {
           ctx.warnings.push(
-            `作用域插槽 <slot :${arg}> 在小程序无对等机制（父侧拿不到子组件数据）——请改用 props 传子 + 自定义事件回调传数据（vue-compat-advance）`,
+            `作用域插槽 <slot :${arg}> 在小程序无对等机制（父侧拿不到子组件数据；MP/Skyline 无模板传参——vue-compat-advance Batch 7 平台限制）——替代模式：子组件 props 接收数据 + 自定义事件回调传数据，如 <MyList :items="items" @item-tap="onItemTap" />（props.items 内渲染 + triggerEvent 回传）`,
           )
-          ctx.trace?.add('slot/scoped-slot', { line: node.loc.start.line, before: `<slot :${arg}="${exp}">`, after: '（无效，MP 不传数据）' })
+          ctx.trace?.add('slot/scoped-slot', { line: node.loc.start.line, before: `<slot :${arg}="${exp}">`, after: '（无效，MP 不传数据）→ 替代：props 传子 + 事件回调' })
         }
         if (arg === 'class') {
           if (ctx.disabled.has('directive/v-bind-class')) break

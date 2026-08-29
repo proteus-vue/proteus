@@ -19,10 +19,12 @@ const compileComponent = (src: string, name = 'components/box.vue'): { warnings:
 }
 
 describe('Batch 1：作用域插槽警告（反黑盒）', () => {
-  it('<slot :item="x"> → 警告（MP 父侧拿不到子数据）', () => {
+  it('<slot :item="x"> → 警告（父侧拿不到子数据 + 平台限制 + 替代模式）', () => {
     const r = compile('<template><slot :item="item" /></template><script setup>const item = ref("x")</script>')
     expect(r.warnings.some((w) => w.includes('作用域插槽'))).toBe(true)
-    expect(r.warnings.some((w) => w.includes('props 传子'))).toBe(true)
+    expect(r.warnings.some((w) => w.includes('props'))).toBe(true)
+    expect(r.warnings.some((w) => w.includes('平台限制'))).toBe(true) // ★Batch 7：运行时等价受 MP 平台能力限制
+    expect(r.warnings.some((w) => w.includes('triggerEvent'))).toBe(true)
   })
 
   it('普通插槽不受影响（无绑定属性 → 零警告）', () => {

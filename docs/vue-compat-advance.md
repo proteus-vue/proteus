@@ -89,7 +89,7 @@
 | 4 | provide/inject **响应式联动**（裸 ref 订阅/通知，复用 store 桥模式） | 中 | ✅ |
 | 5 | Transition **离开动画**（状态机：__tvN 延迟移除 + __tlN 离开 class） | 中 | ✅ |
 | 6 | provide/inject **页面级隔离**（pageId 命名空间 + onUnload 清理） | 中 | ✅ |
-| 7 | 作用域插槽运行时等价（规划候选） | 中高 | ⬜ |
+| 7 | 作用域插槽**平台限制确认**（警告增强 + 替代模式，运行时等价受 MP 能力天花板） | 小 | ✅ |
 
 依赖：1 → 2 → 3 → 4 → 5 → 6（顺序按工程量递增，各自独立可测）
 
@@ -108,6 +108,28 @@
 6. **运行时桥**：`registerProvide/readInject/subscribeProvide/notifyProvide` 加可选 `pageId` 参数（缺省从 getCurrentPages 栈顶推导，无则 'global'）；新增 `nextPageId()`（__seq 递增，编译产物 onLoad 用）；`clearProvides/provideCount` 遍历全部命名空间
 
 **验收**：页面 A/B 各自命名空间（A 提供 key，B 组件 inject undefined）；onUnload 清理后注册表无残留；组件 provide/inject 落当前页；全量测试全绿 + 双端构建
+
+---
+
+## 9. Batch 7：作用域插槽平台限制确认（收尾）
+
+**目标**：确认作用域插槽运行时等价在 MP 的可达边界，提供完整替代路径，关闭遗留
+
+**平台调研结论**（2026-08）：
+1. **微信 webview 渲染**：`<template is>` 动态引用需静态 `<import>`；组件无法动态选择多父模板（List 被 pageA/pageB 用不同插槽内容 → import 冲突）；插槽内容引用父组件 data 时子侧无访问通道
+2. **Skyline（当前主渲染引擎，proteus.config skyline: true）**：不支持跨文件模板引用
+3. **行业对照**：uni-app / Taro 3 在 MP 端作用域插槽同样不完整（各自渲染器/编译期降级）
+
+**结论**：作用域插槽**运行时等价在 MP 无通用解**（模板内容跨文件 + 多父冲突 + 变量引用受限 + Skyline 天花板）——维持 Batch 1 编译期警告，**替代模式 props 传子 + triggerEvent 事件回调已由组件系统（v0.3）完整支持**
+
+**落地**：
+1. 警告增强（template.ts）：补「MP/Skyline 平台限制」定性 + 替代模式具体写法（`<MyList :items @item-tap />` + triggerEvent 回传）
+2. 规则 slot/scoped-slot 说明书更新（平台限制 + 替代模式）
+3. 测试断言更新（平台限制/triggerEvent）
+
+**验收**：警告 actionable（平台限制 + 替代写法）；vue-compat-advance 遗留清单关闭作用域插槽项；全量测试全绿
+
+---
 
 **已落地**（2026-08）：
 1. **注册表结构升级**（runtime/provide-inject.ts）：`__proteusProvides = { [pageId]: { key: value, __subs: {...} }, __seq: n }`；`nextPageId()`（__seq 递增）/ `destroyPage(pageId)` 新增；registerProvide/readInject/subscribeProvide/notifyProvide 加可选 pageId（缺省从 getCurrentPages 栈顶 `__proteusPageId` 推导，无则 'global'）；provideCount 遍历全部命名空间
@@ -160,7 +182,7 @@
 
 ## 5. 遗留（后续批次）
 
-- 作用域插槽**运行时等价**（props 传子 + 事件回调自动包装）——当前仅编译期警告
+- ~~作用域插槽**运行时等价**~~ → **Batch 7 已确认：MP 平台能力限制**（微信无模板传参机制——webview 的 template import 无法动态选择多父模板、插槽变量跨组件引用受限；Skyline 不支持跨文件模板；uni-app/Taro MP 端同样不完整）——运行时等价在 MP 无通用解，维持编译期警告 + 替代模式（props 传子 + triggerEvent 事件回调，组件系统 v0.3 完整支持）
 
 ---
 
