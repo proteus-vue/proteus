@@ -224,6 +224,51 @@ function setN() {
     expect(js).toContain('只读（无 setter），赋值已忽略')
     expect(js).not.toContain('ro.value = 5')
   })
+
+  it('defineExpose：方法暴露 no-op（methods 天然可访问）', () => {
+    const src = 'const props = defineProps({ label: String })\nfunction reset() {}\ndefineExpose({ reset })'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('reset() {')
+    // no-op：不额外生成代码
+    expect(js).not.toContain('defineExpose')
+  })
+
+  it('defineExpose 暴露 ref 值 → 警告（请用方法包装）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const src = 'const count = ref(0)\ndefineExpose({ count })'
+    transformScriptToPage(src, opts, { isComponent: true })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ref 值'))
+  })
+
+  it('defineExpose 不污染 data（组件宏跳过提取）', () => {
+    const src = 'const count = ref(0)\ndefineExpose({ count })\nfunction go() {}'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('count: 0')
+    expect(js).not.toContain('count: undefined')
+  })
+
+  it('TS 泛型 defineProps<{...}> → properties（类型映射 + 可选标记）', () => {
+    const src = 'const props = defineProps<{ label: string; count?: number; done: boolean }>()\nfunction log() {\n  console.log(props.label)\n}'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('label: { type: String, value: "" }')
+    expect(js).toContain('count: { type: Number, value: 0 }')
+    expect(js).toContain('done: { type: Boolean, value: false }')
+    // props 访问重写（泛型形式 propsVar 提取）
+    expect(js).toContain('console.log(this.data.label)')
+  })
+
+  it('TS 泛型 defineProps 数组/联合类型 → Array/String', () => {
+    const src = 'const props = defineProps<{ tags: string[]; kind: \'a\' | \'b\' }>()'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('tags: { type: Array }')
+    expect(js).toContain('kind: { type: String, value: "" }')
+  })
+
+  it('TS 泛型 defineProps 未知类型 → 警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformScriptToPage("const props = defineProps<{ x: CustomThing }>()", opts, { isComponent: true })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('无法映射'))
+  })
 })
 
 describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {

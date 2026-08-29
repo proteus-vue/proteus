@@ -105,47 +105,75 @@ interface PropInfo {
   value?: unknown
 }
 
-/** defineProps 对象形式 → Component properties 字段（仅组件模式；TS 泛型形式警告不支持） */
+/** TS 类型 → 微信 properties type + 默认值（泛型形式 defineProps<{...}>） */
+function mapTsType(t: string, warnings: string[], name: string): { type: string; value?: unknown } {
+  const s = t.trim()
+  if (s === 'string') return { type: 'String', value: '' }
+  if (s === 'number') return { type: 'Number', value: 0 }
+  if (s === 'boolean') return { type: 'Boolean', value: false }
+  if (s === 'object') return { type: 'Object' }
+  if (s.endsWith('[]') || s === 'Array') return { type: 'Array' }
+  if (s.includes('|') || s.startsWith("'")) return { type: 'String', value: '' } // 联合字面量 / 字面量类型
+  warnings.push(`prop ${name} 的类型 ${s} 无法映射（泛型形式支持 string/number/boolean/object/Array/联合），已按 String 处理`)
+  return { type: 'String', value: '' }
+}
+
+/** defineProps 对象形式 → Component properties 字段（仅组件模式；含 v0.3 尾 TS 泛型形式） */
 function extractProps(source: string, warnings: string[], trace?: TransformTrace): Record<string, PropInfo> {
   const out: Record<string, PropInfo> = {}
+  const add = (name: string, info: PropInfo, before: string): void => {
+    out[name] = info
+    trace?.add('script/define-props', { before, after: `properties.${name}（type: ${info.type}）` })
+  }
   const m = source.match(/\bdefineProps\s*\(\s*\{/)
-  if (!m) return out
-  const body = extractBracedBody(source, (m.index ?? 0) + m[0].length - 1)
-  if (body === null) {
-    warnings.push('defineProps 解析失败（MVP 仅支持对象形式 defineProps({...})），已忽略')
+  if (m) {
+    const body = extractBracedBody(source, (m.index ?? 0) + m[0].length - 1)
+    if (body === null) {
+      warnings.push('defineProps 解析失败（MVP 仅支持对象形式 defineProps({...})），已忽略')
+      return out
+    }
+    const re = /(['"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(\{[^}]*\}|[A-Za-z_$][\w$]*)/g
+    let pm: RegExpExecArray | null
+    while ((pm = re.exec(body))) {
+      const name = pm[2]
+      const spec = pm[3].trim()
+      let type = 'String'
+      let value: unknown
+      if (spec.startsWith('{')) {
+        const typeM = spec.match(/type\s*:\s*([A-Za-z_$][\w$]*)/)
+        if (typeM) type = typeM[1]
+        const defM = spec.match(/default\s*:\s*([^,}]+)/)
+        if (defM) value = evalLiteral(defM[1].trim())
+      } else {
+        type = spec
+      }
+      if (!['String', 'Number', 'Boolean', 'Object', 'Array', 'Function'].includes(type)) {
+        warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
+        type = 'String'
+      }
+      // 无 default 时按类型给默认值（微信 properties.value）；函数默认值（如 () => []）不适用，跳过
+      if (typeof value === 'function') {
+        warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
+        value = undefined
+      }
+      if (value === undefined) {
+        if (type === 'String') value = ''
+        else if (type === 'Number') value = 0
+        else if (type === 'Boolean') value = false
+      }
+      add(name, { type, value }, `defineProps({ ${name}: ... })`)
+    }
     return out
   }
-  const re = /(['"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(\{[^}]*\}|[A-Za-z_$][\w$]*)/g
+  // TS 泛型形式（v0.3 尾）：defineProps<{ label: string; count?: number }>()
+  const tsM = source.match(/\bdefineProps\s*<\{([\s\S]*?)\}\s*>/)
+  if (!tsM) return out
+  const re = /([A-Za-z_$][\w$]*)\s*(\?)?\s*:\s*([^;]+)/g
   let pm: RegExpExecArray | null
-  while ((pm = re.exec(body))) {
-    const name = pm[2]
-    const spec = pm[3].trim()
-    let type = 'String'
-    let value: unknown
-    if (spec.startsWith('{')) {
-      const typeM = spec.match(/type\s*:\s*([A-Za-z_$][\w$]*)/)
-      if (typeM) type = typeM[1]
-      const defM = spec.match(/default\s*:\s*([^,}]+)/)
-      if (defM) value = evalLiteral(defM[1].trim())
-    } else {
-      type = spec
-    }
-    if (!['String', 'Number', 'Boolean', 'Object', 'Array', 'Function'].includes(type)) {
-      warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
-      type = 'String'
-    }
-    // 无 default 时按类型给默认值（微信 properties.value）；函数默认值（如 () => []）不适用，跳过
-    if (typeof value === 'function') {
-      warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
-      value = undefined
-    }
-    if (value === undefined) {
-      if (type === 'String') value = ''
-      else if (type === 'Number') value = 0
-      else if (type === 'Boolean') value = false
-    }
-    out[name] = { type, value }
-    trace?.add('script/define-props', { before: `defineProps({ ${name}: ... })`, after: `properties.${name}（type: ${type}）` })
+  while ((pm = re.exec(tsM[1]))) {
+    const name = pm[1]
+    const info = mapTsType(pm[3], warnings, name)
+    add(name, info, `defineProps<{ ${name}${pm[2] ?? ''}: ${pm[3].trim()} }>()`)
   }
   return out
 }
@@ -326,6 +354,30 @@ interface MethodInfo {
 /** 剥离方法参数 TS 类型标注（产物是 JS；e: { detail?: number } → e） */
 function stripParamTypes(params: string): string {
   return params.replace(/:\s*[^,)]+/g, '').trim()
+}
+
+/**
+ * defineExpose 校验（v0.3 尾）：小程序组件 methods 天然可被 selectComponent 访问 → 编译期 no-op；
+ * 校验声明成员：方法 ✓；ref 值（data 字段）暴露无对等机制 → 警告（请用方法包装）
+ */
+function checkDefineExpose(
+  source: string,
+  data: Record<string, unknown>,
+  warnings: string[],
+  trace?: TransformTrace,
+): void {
+  const m = source.match(/\bdefineExpose\s*\(\s*\{([\s\S]*?)\}\s*\)/)
+  if (!m) return
+  const names = Array.from(m[1].matchAll(/([A-Za-z_$][\w$]*)/g), (mm) => mm[1])
+  trace?.add('script/define-expose', {
+    before: `defineExpose({ ${names.join(', ')} })`,
+    after: 'no-op（组件 methods 天然可被 selectComponent 访问）',
+  })
+  for (const n of names) {
+    if (n in data) {
+      warnings.push(`defineExpose 暴露的 ${n} 是 ref 值（小程序无对等机制，外部仅可访问 methods），已忽略——请用方法包装`)
+    }
+  }
 }
 
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
@@ -607,9 +659,11 @@ export function transformScriptToPage(
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace)
   // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
   const props = extra.isComponent && !disabled.has('script/define-props') ? extractProps(source, warnings, trace) : {}
-  const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*\(/)?.[1]
+  const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*[<(]/)?.[1]
   const emitEnabled = extra.isComponent && /defineEmits\s*\(/.test(source) && !disabled.has('script/define-emits')
   const methods = extractMethods(source, warnings, trace, disabled)
+  // defineExpose（v0.3 尾）：no-op 校验（组件模式）
+  if (extra.isComponent) checkDefineExpose(source, data, warnings, trace)
   const lifecycles = extractLifecycles(source, trace, disabled)
   const vModelBindings = extra.vModelBindings ?? []
   const refNames = new Set(Object.keys(data))
