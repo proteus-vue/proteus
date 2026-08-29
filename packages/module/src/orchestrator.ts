@@ -77,6 +77,8 @@ export interface ModuleSystem {
   destroy(): Promise<void>
   /** 已注册模块名 */
   modules(): string[]
+  /** ★B7c（M7.3 懒加载）：动态注册 + 初始化单个模块（依赖须已注册；重复加载返回已有实例） */
+  loadModule(def: ModuleDefinition): Promise<ModuleInstance>
 }
 
 /** ★版本冲突：依赖 range 与实际解析版本不匹配（含冲突链） */
@@ -143,12 +145,13 @@ export function createModuleSystem(options: { modules: ModuleDefinition[] }): Mo
   const reverseOrder = [...initOrder].reverse()
 
   const instances = new Map<string, ModuleInstance>()
-  for (const name of initOrder) {
-    const def = defs.get(name)!
+
+  /** 创建模块实例（初始注册 + loadModule 懒加载共用） */
+  const createInstance = (def: ModuleDefinition): ModuleInstance => {
     const events = createModuleEventBus()
     let services: Record<string, unknown> = {}
     const inst: ModuleInstance = {
-      name,
+      name: def.name,
       version: def.version,
       state: 'registered',
       services,
@@ -174,8 +177,9 @@ export function createModuleSystem(options: { modules: ModuleDefinition[] }): Mo
         await def.lifecycle?.onInactive?.()
       },
     }
-    instances.set(name, inst)
+    return inst
   }
+  for (const name of initOrder) instances.set(name, createInstance(defs.get(name)!))
 
   return {
     async init() {
@@ -196,10 +200,27 @@ export function createModuleSystem(options: { modules: ModuleDefinition[] }): Mo
       await instances.get(name)?.deactivate()
     },
     async destroy() {
-      for (const name of reverseOrder) await instances.get(name)!.destroy()
+      // 初始模块逆拓扑序（被依赖者后销毁）+ 懒加载模块逆注册序（loadModule 追加）
+      const lazy = [...defs.keys()].filter((n) => !reverseOrder.includes(n)).reverse()
+      for (const name of [...reverseOrder, ...lazy]) await instances.get(name)?.destroy()
     },
     modules() {
-      return [...initOrder]
+      return [...defs.keys()]
+    },
+    /** ★B7c（M7.3 懒加载）：动态注册 + 初始化单个模块（依赖须已注册；重复加载返回已有实例） */
+    async loadModule(def) {
+      const existing = instances.get(def.name)
+      if (existing) return existing
+      for (const [dep, range] of Object.entries(def.dependencies ?? {})) {
+        const depDef = defs.get(dep)
+        if (!depDef) throw new Error(`[proteus-module] 懒加载模块 "${def.name}" 依赖 "${dep}" 未注册（懒加载模块的依赖必须已在初始 modules 列表）`)
+        if (!satisfies(depDef.version, range)) throw new VersionMismatchError(def.name, dep, range, depDef.version)
+      }
+      defs.set(def.name, def)
+      const inst = createInstance(def)
+      instances.set(def.name, inst)
+      await inst.init()
+      return inst
     },
   }
 }

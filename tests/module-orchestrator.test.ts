@@ -135,3 +135,34 @@ describe('ModuleEventBus', () => {
     expect(seen).toEqual([{ id: 1 }])
   })
 })
+
+describe('★B7c：懒加载 loadModule（M7.3）', () => {
+  it('动态注册 + 初始化（钩子执行 + state ready + getModule 可用）', async () => {
+    const log: string[] = []
+    const ms = createModuleSystem({ modules: [mockModule('user', {}, log)] })
+    await ms.init()
+    const trade = await ms.loadModule(mockModule('trade', { user: '^1.0.0' }, log, { onInit: () => { log.push('init:trade') } }))
+    expect(log).toContain('init:trade')
+    expect(ms.getState('trade')).toBe('ready')
+    expect(ms.getModule('trade')).toBe(trade)
+    expect(ms.modules()).toContain('trade')
+  })
+
+  it('重复加载 → 返回已有实例（幂等，不二次 init）', async () => {
+    let initCount = 0
+    const ms = createModuleSystem({ modules: [] })
+    await ms.init()
+    const def = { name: 'a', version: '1.0.0', lifecycle: { onInit: () => { initCount++ } } }
+    const inst1 = await ms.loadModule(def)
+    const inst2 = await ms.loadModule(def)
+    expect(inst1).toBe(inst2)
+    expect(initCount).toBe(1)
+  })
+
+  it('依赖未注册 / 版本不匹配 → 报错（懒加载模块依赖须已注册）', async () => {
+    const ms = createModuleSystem({ modules: [{ name: 'b', version: '2.0.0' }] })
+    await ms.init()
+    await expect(ms.loadModule({ name: 'a', version: '1.0.0', dependencies: { ghost: '^1.0.0' } })).rejects.toThrow(/未注册/)
+    await expect(ms.loadModule({ name: 'a', version: '1.0.0', dependencies: { b: '^1.0.0' } })).rejects.toThrow(VersionMismatchError)
+  })
+})
