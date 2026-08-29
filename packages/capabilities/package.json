@@ -1,7 +1,7 @@
 {
   "name": "@proteus/capabilities",
   "version": "0.1.0",
-  "description": "Proteus 能力体系（platform-plan B1）：业务依赖能力不依赖平台——Capability 契约 + defineCapability + useCapability + 描述文件扫描",
+  "description": "Proteus 能力体系（platform-plan B1-B5）：Capability 契约/Registry/编译期分叉/运行时降级/平台规范",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -23,10 +23,11 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/check.ts --bundle --format=esm --platform=node --outdir=dist --external:esbuild"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/check.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus/types"
   },
   "dependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "@proteus/types": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"

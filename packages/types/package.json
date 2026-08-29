@@ -11,6 +11,30 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index-shared": {
+      "types": "./dist/index-shared.d.ts",
+      "import": "./dist/index-shared.js"
+    },
+    "./compiler-types": {
+      "types": "./dist/compiler-types.d.ts",
+      "import": "./dist/compiler-types.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "import": "./dist/capabilities.js"
+    },
+    "./router-types": {
+      "types": "./dist/router-types.d.ts",
+      "import": "./dist/router-types.js"
+    },
+    "./api-types": {
+      "types": "./dist/api-types.d.ts",
+      "import": "./dist/api-types.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
     "./config-schema": {
       "types": "./dist/config-schema.d.ts",
       "import": "./dist/config-schema.js"
@@ -20,7 +44,7 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/config-schema.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/config.ts src/config-schema.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"

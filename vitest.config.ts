@@ -28,6 +28,11 @@ export default defineConfig({
       // security-plan B1-B2：@proteus/security 包（tests/security.test.ts 直接引用）
       { find: '@proteus/security', replacement: fileURLToPath(new URL('./packages/security/src/index.ts', import.meta.url)) },
       // types-plan B3：@proteus/types 包（tests/generate-types.test.ts 直接引用）
+      { find: '@proteus/types/capabilities', replacement: fileURLToPath(new URL('./packages/types/src/capabilities.ts', import.meta.url)) },
+      { find: '@proteus/types/router-types', replacement: fileURLToPath(new URL('./packages/types/src/router-types.ts', import.meta.url)) },
+      { find: '@proteus/types/compiler-types', replacement: fileURLToPath(new URL('./packages/types/src/compiler-types.ts', import.meta.url)) },
+      { find: '@proteus/types/api-types', replacement: fileURLToPath(new URL('./packages/types/src/api-types.ts', import.meta.url)) },
+      { find: '@proteus/types/config', replacement: fileURLToPath(new URL('./packages/types/src/config.ts', import.meta.url)) },
       { find: '@proteus/types/config-schema', replacement: fileURLToPath(new URL('./packages/types/src/config-schema.ts', import.meta.url)) },
       { find: '@proteus/types', replacement: fileURLToPath(new URL('./packages/types/src/index.ts', import.meta.url)) },
     ],
