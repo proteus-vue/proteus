@@ -14,6 +14,7 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
+    "prepare": "npm run build",
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/compiler --external:@proteus/router --external:esbuild --external:sass --external:vite"
   },
   "dependencies": {

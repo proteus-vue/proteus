@@ -12,6 +12,7 @@
 // ============================================================
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { transform as esbuildTransform } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
@@ -19,6 +20,22 @@ import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
 import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
+
+/** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus/router/src/presets/x.ts' → 解析包根 + 子路径 */
+const require = createRequire(import.meta.url)
+export function resolvePkgPath(projectRoot: string, modPath: string): string {
+  // 支持 scoped 包（@proteus/router）与非 scoped 包
+  const m = modPath.match(/^node_modules\/((?:@[^/]+\/)?[^/]+)\/([\s\S]+)$/)
+  if (m) {
+    try {
+      const pkgRoot = path.dirname(require.resolve(`${m[1]}/package.json`))
+      return path.join(pkgRoot, m[2])
+    } catch {
+      // 包未安装（如模板构建前的预检）：回退 projectRoot 相对路径
+    }
+  }
+  return path.join(projectRoot, modPath)
+}
 
 /** CSS 预处理器（v0.3 尾）：<style lang="scss/sass/less"> → css（经 preprocessStyle 钩子注入编译器） */
 function preprocessStyle(lang: string, content: string): string {
@@ -94,7 +111,7 @@ async function loadPresetBuilders(
 ): Promise<Array<{ name: string; fnName: string; source: string }>> {
   const presets: Array<{ name: string; fnName: string; source: string }> = []
   for (const [name, modPath] of Object.entries(cfg.customRoute.builders)) {
-    const abs = path.join(projectRoot, modPath)
+    const abs = resolvePkgPath(projectRoot, modPath)
     if (!fs.existsSync(abs)) {
       console.warn(`[mp-transform] 预设 builder ${name} 不存在：${modPath}`)
       continue

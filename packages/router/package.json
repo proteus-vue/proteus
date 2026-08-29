@@ -10,9 +10,25 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./types": {
+      "types": "./dist/types.d.ts"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts"
+    },
+    "./scan": {
+      "types": "./dist/scan.d.ts"
+    },
+    "./tree": {
+      "types": "./dist/tree.d.ts"
+    },
+    "./merge": {
+      "types": "./dist/merge.d.ts"
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": ["dist", "src/presets", "README.md"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared"
   },

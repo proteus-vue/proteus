@@ -5,7 +5,7 @@ import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import config from './proteus.config'
-import mpTransform from './packages/plugin-vite/src/plugin'
+import { mpTransform } from './packages/plugin-vite/src'
 
 /**
  * 处理 <route> 自定义块虚拟模块（?vue&type=route）

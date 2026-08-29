@@ -7,16 +7,20 @@
   "scripts": {
     "dev:web": "vite --mode web",
     "build:web": "vue-tsc --noEmit && vite build --mode web",
-    "dev:mp": "tsx scripts/gen-routes-cli.ts && vite --mode mp-weixin",
-    "build:mp": "tsx scripts/gen-routes-cli.ts && vue-tsc --noEmit && vite build --mode mp-weixin",
+    "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
+    "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin",
     "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
     "proteus": "npx proteus"
   },
   "dependencies": {
+    "@proteus/router": "^0.1.0",
+    "@proteus/runtime": "^0.1.0",
+    "@proteus/shared": "^0.1.0",
     "vue": "^3.4.0"
   },
   "devDependencies": {
-    "@proteus/compiler": "^0.1.0",
+    "@proteus/compiler": "^0.2.0",
+    "@proteus/plugin-vite": "^0.1.0",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "tsx": "^4.0.0",

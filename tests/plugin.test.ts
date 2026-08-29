@@ -1,7 +1,8 @@
 // tests/plugin.test.ts
 // mp 插件内置预设内联逻辑单测（P4 适配层 + 拆包步骤 5：插件归 @proteus/plugin-vite）
 import { describe, it, expect } from 'vitest'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets } from '../packages/plugin-vite/src/plugin'
+import fs from 'node:fs'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
@@ -56,6 +57,28 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     expect(appJs).toContain("addRouteBuilder('slideUp', slideUpBuilder)")
     // 定义在注册之前（静态可分析）
     expect(appJs.indexOf('function slideUpBuilder')).toBeLessThan(appJs.indexOf("addRouteBuilder('slideUp'"))
+  })
+
+  // ★ 拆包步骤 7：npm 包内预设源码路径解析（模板 config.builders 指向 node_modules/@proteus/router/...）
+  describe('resolvePkgPath：node_modules 包内路径解析', () => {
+    it('scoped 包路径 → 解析包根 + 子路径', () => {
+      const abs = resolvePkgPath('/tmp/project', 'node_modules/@proteus/router/src/presets/halfScreen.ts')
+      // 从测试所在仓库解析 @proteus/router → packages/router，接 src/presets/...
+      expect(abs.endsWith('src/presets/halfScreen.ts')).toBe(true)
+      expect(fs.existsSync(abs)).toBe(true)
+    })
+
+    it('非 scoped 包路径 → 解析包根 + 子路径', () => {
+      const abs = resolvePkgPath('/tmp/project', 'node_modules/foo/src/x.ts')
+      // foo 未安装 → 回退 projectRoot 相对路径
+      expect(abs).toBe('/tmp/project/node_modules/foo/src/x.ts')
+    })
+
+    it('非 node_modules 路径（主仓相对路径）→ 原样 projectRoot 拼接', () => {
+      expect(resolvePkgPath('/tmp/project', 'packages/router/src/presets/halfScreen.ts')).toBe(
+        '/tmp/project/packages/router/src/presets/halfScreen.ts',
+      )
+    })
   })
 
   it('极简模式：无预设无自定义时生成纯骨架 app.js', () => {

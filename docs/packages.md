@@ -100,11 +100,14 @@ packages/
 - [x] 验证：vue-tsc 零错 + 219 测试 + 双端构建 + 模板快照
 - 决策：#103；风险收敛：引用面在步骤 2-5 已逐包精确化，本步只需删兜底，无存量 import 受影响
 
-### 步骤 7：create-proteus 模板重构
+### 步骤 7：create-proteus 模板重构（✅ 已落地）
 
-- [ ] 模板 package.json 依赖 `@proteus/{router,runtime,shared}`；删除模板中框架本体 src/ 副本
-- [ ] 模板应用侧 `src/`（main*/App.vue/pages）+ router 单例 + 路由表；snapshot-template.ts 调整（不再复制框架 src/）
-- [ ] 验证：`npm create` → 生成工程双端构建通过（端到端）
+- [x] 模板 package.json 依赖 `@proteus/{router,runtime,shared,plugin-vite,compiler}`（npm 包形态）；**删除模板中框架本体 src/ 副本**（platform/runtime/router 框架代码 + vite-plugin-mp-transform.ts）
+- [x] 模板应用侧 `src/`：main*/App.vue/pages + router 单例（index.ts）+ RouterView（应用壳）+ auto-routes（占位）+ shims（应用侧全局类型，自 shared 复制）+ scripts/gen-routes.ts 薄壳（runGenRoutes 来自包）
+- [x] snapshot-template.ts 重构：只快照应用壳（RouterView/index.ts/shim s/mp-entry-stub/index.html），手写模板（package.json/proteus.config/vite.config/tsconfig/main*/App/pages/auto-routes/gen-routes）
+- [x] router 包 exports 补子路径（./types 等纯类型 + ./package.json）+ files 加 src/presets（预设源码随包发布，插件内联需要）；插件 loadPresetBuilders 支持 node_modules 包内路径（resolvePkgPath，scoped 包正则）
+- [x] 验证：**模板目录内双端构建通过（workspace 链接形态）**——gen-routes → vue-tsc → vite build web/mp-weixin；app.js 内置预设 halfScreen/slideUp/scaleDown 全部内联注册；主仓 222 测试 + vue-tsc + 双端构建；真实 `npm create` 端到端待 npm 发布后验证（用户暂不发布）
+- 决策：#104；踩坑：① 模板 App.vue 不能引 `@proteus/router/RouterView.vue`（npm 包 exports 无此子路径 → 应用壳相对导入）② 插件 `@proteus/plugin-vite` 命名导出（模板 default import 不匹配 → 统一命名导入）③ require.resolve('@proteus/router/package.json') 被 exports 拦截（补 ./package.json）④ node_modules 路径正则要处理 scoped 包（@proteus/router 两层）⑤ 模板构建走 workspace 链接 dist（plugin-vite 加 prepare 保新鲜）
 - 规模：~300 行；风险：中高（模板大改，端到端验证）
 
 ### 步骤 8：CI/构建/文档收尾
