@@ -18,6 +18,7 @@ function nodeToRecord(node: RouteNode, indent: string): string {
     `${indent}{`,
     `${indent}  path: ${JSON.stringify(node.path)},`,
     node.name ? `${indent}  name: ${JSON.stringify(node.name)},` : '',
+    node.redirect ? `${indent}  redirect: ${JSON.stringify(node.redirect)},` : '',
     `${indent}  component: ${pad(comp)},`,
     Object.keys(meta).length > 0 ? `${indent}  meta: ${pad(JSON.stringify(meta))},` : '',
     node.children.length > 0

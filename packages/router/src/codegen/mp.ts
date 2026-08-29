@@ -11,6 +11,8 @@ export interface MpPageConfig {
   routeType?: string
   /** 嵌套父路由（降级保留：小程序无原生嵌套） */
   __parent?: string
+  /** M6：redirect 字段（小程序无原生 redirect——运行时 onLoad redirectTo 模拟；此处标注供 codegen/运行时消费） */
+  redirect?: string
   componentFramework: 'glass-easel'
   renderer: 'skyline'
   styleIsolation: 'isolated'
@@ -29,7 +31,7 @@ export function flattenNodes(nodes: RouteNode[], parent?: string): Array<{ node:
   return out
 }
 
-/** 单节点 → 页配置（path 由路由 path 去首斜杠；routeType 映射） */
+/** 单节点 → 页配置（path 由路由 path 去首斜杠；routeType 映射；redirect 标注） */
 export function toPageConfig(node: RouteNode, parent?: string): MpPageConfig {
   const cfg: MpPageConfig = {
     path: node.path.replace(/^\//, ''),
@@ -41,18 +43,59 @@ export function toPageConfig(node: RouteNode, parent?: string): MpPageConfig {
   const rt = mpRouteType(node.meta.transition)
   if (rt) cfg.routeType = rt
   if (parent) cfg.__parent = parent
+  if (node.redirect) cfg.redirect = node.redirect
   return cfg
 }
 
-/** 生成 app.json 的路由相关字段（pages 数组 + Skyline 全局配置） */
-export function generateMpConfig(nodes: RouteNode[]): { pages: MpPageConfig[]; componentFramework: string; renderer: string; lazyCodeLoading: string } {
+export interface MpTabBarItem {
+  name: string
+  text: string
+  icon?: string
+}
+
+export interface MpTabBarConfig {
+  color?: string
+  selectedColor?: string
+  list: MpTabBarItem[]
+}
+
+/** 小程序原生 tabBar 硬边界：仅首页级 + 最多 5 个（超出告警降级，见 M6 §3.3） */
+const MP_TAB_LIMIT = 5
+
+/**
+ * 生成 app.json 的路由相关字段（pages 数组 + Skyline 全局配置 + tabBar）
+ * @param tabBar M6：proteus.config router.tabBar（list[i].name 对应 RouteNode.name）；缺省时按 meta.isTab 推导
+ */
+export function generateMpConfig(
+  nodes: RouteNode[],
+  tabBar?: MpTabBarConfig,
+): { pages: MpPageConfig[]; componentFramework: string; renderer: string; lazyCodeLoading: string; tabBar?: unknown } {
   const pages = flattenNodes(nodes).map(({ node, parent }) => toPageConfig(node, parent))
-  return {
+  const out: { pages: MpPageConfig[]; componentFramework: string; renderer: string; lazyCodeLoading: string; tabBar?: unknown } = {
     pages,
     componentFramework: 'glass-easel',
     renderer: 'skyline',
     lazyCodeLoading: 'requiredComponents',
   }
+  const list = tabBar?.list ?? []
+  if (list.length > 0) {
+    if (list.length > MP_TAB_LIMIT) {
+      console.warn(`[proteus] tabBar 声明 ${list.length} 项超过小程序原生上限 ${MP_TAB_LIMIT}——多余 tab 需自定义底部栏（M6 §3.3 降级）`)
+    }
+    out.tabBar = {
+      color: tabBar?.color ?? '#999999',
+      selectedColor: tabBar?.selectedColor ?? '#007AFF',
+      list: list.map((item) => {
+        const entry: { pagePath: string; text: string; iconPath?: string } = {
+          pagePath: pages.find((p) => p.path === item.name)?.path ?? item.name,
+          text: item.text,
+        }
+        if (item.icon) entry.iconPath = item.icon
+        return entry
+      }),
+    }
+  }
+  return out
 }
 
 /**

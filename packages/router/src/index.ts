@@ -3,7 +3,8 @@
 // ★工厂化：createRouter(routes) 接收路由表（应用侧由 gen-routes 生成的 auto-routes 提供），
 //   不再全局单例 import——路由表由调用方注入（对齐 docs/proteus-router-plan M2）
 import type { NavigateOptions, RouteParams, RouteRecord, RouteParamsByName } from './types'
-import { runBeforeEach, runAfterEach } from './guards'
+import { runBeforeEach, runAfterEach, beforeEach as registerBeforeEach, afterEach as registerAfterEach } from './guards'
+import type { Guard, AfterGuard } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
 import { adapter } from '@proteus/shared'
 
@@ -15,13 +16,28 @@ class Router {
 
   constructor(private routeMap: Record<string, RouteRecord>) {}
 
+  /**
+   * 注册前置守卫（M6：实例级 API，三端一致——delegate 到全局守卫注册表）
+   * 用法：router.beforeEach((to, from) => { if (to.meta?.needLogin && !isLogin()) return false })
+   */
+  beforeEach(guard: Guard): void {
+    registerBeforeEach(guard)
+  }
+
+  /** 注册后置守卫（M6：实例级 API，三端一致） */
+  afterEach(guard: AfterGuard): void {
+    registerAfterEach(guard)
+  }
+
   /** 命名路由跳转（推荐）——泛型 N 由 name 字面量推断，params 类型自动匹配（类型提示全链路） */
   async push<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     const target = this.resolve(options as NavigateOptions)
     if (!target) throw new Error(`[router] route not found: ${JSON.stringify(options)}`)
 
-    // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化）
-    const guardResult = await runBeforeEach(target, this.routeMap)
+    // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化；trace 输出守卫链路 --trace-router）
+    const isDebug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
+    const trace = isDebug ? (msg: string) => console.log(msg) : undefined
+    const guardResult = await runBeforeEach(target, this.routeMap, trace)
     if (guardResult === false) return
 
     const url = this.buildUrl(target.path, { ...(options.params as RouteParams | undefined), ...options.query })
@@ -53,7 +69,7 @@ class Router {
       }
     }
 
-    await runAfterEach(target, this.routeMap)
+    await runAfterEach(target, this.routeMap, trace)
   }
 
   /** 后退 */

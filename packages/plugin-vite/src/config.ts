@@ -49,4 +49,13 @@ export interface ProteusConfig {
     /** 超预算是否让构建失败（默认警告不阻断） */
     strict: boolean
   }
+  /** 路由通用配置（docs/proteus-router-plan M6）：tabBar 唯一声明源（Web <TabBar> / MP app.json / App 原生栈） */
+  router?: {
+    tabBar?: {
+      color?: string
+      selectedColor?: string
+      /** list[i].name 对应路由 name（RouteNode.name），text/icon 供各端产物 */
+      list: Array<{ name: string; text: string; icon?: string }>
+    }
+  }
 }
