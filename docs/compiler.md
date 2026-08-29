@@ -264,6 +264,7 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 | 产物自校验 | 编译产物 JS 语法错误 / WXML 标签不配对 → **当场抛错指明文件**，绝不静默输出坏产物 |
 | `PROTEUS_DEBUG=1` | 注入 `[proteus][环节]` 全链路日志（app 启动 / builder 注册 / 页面 onLoad / 导航 tap / navigateTo 成功失败） |
 | 行号注释 | `annotateLines: true` 时 WXML 注入源码行号 `<!-- @3 h1 -->`，产物可反查源码 |
+| **方法级 sourcemap（v0.3）** | 调试构建产出 `<page>.js.map`（sourcemap v3，VLQ 编码：产物每行 ↔ 源码行，方法体/生命周期/watch 回调体映射）+ JS 尾部 `//# sourceMappingURL`；方法前注入 `// @行号 方法名` 注释——微信开发者工具可定位源码（对标 uni-app 自定义基座调试） |
 | 产物可读 | `build:mp` 不压缩、贴近手写小程序代码 |
 
 ## 产物契约

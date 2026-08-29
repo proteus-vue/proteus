@@ -73,6 +73,8 @@ export interface ScriptTransformOptions {
 export interface ScriptTransformResult {
   js: string
   warnings: string[]
+  /** sourcemap v3 JSON（v0.3：方法级 JS 源码映射，调试构建落盘） */
+  sourcemap?: string
 }
 
 /** 编译选项（compileVueSfc 入口） */
@@ -101,4 +103,6 @@ export interface CompileResult {
   warnings: string[]
   /** 决策 trace（阶段二：本次编译实际触发的规则，供产物侧调试定位——底线循环 ②） */
   trace?: TransformTraceEvent[]
+  /** sourcemap v3 JSON（v0.3：方法级 JS 源码映射） */
+  sourcemap?: string
 }

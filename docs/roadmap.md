@@ -78,7 +78,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | scoped CSS（✅ 已实现，决策 #77） | `packages/compiler/src/style.ts` + `template.ts` | 已有：`<style scoped>` → 模板元素附加 `data-v-xxx` + 选择器末尾追加 `[data-v-xxx]`（:deep 去包装、@media 骨架保留、scopeId 由文件名 djb2 哈希稳定生成）；MVP 简化：任一 scoped 全量作用域化 |
 | 指令补全（✅ v-show / :class 数组已实现，决策 #76/#77） | `packages/compiler/src/template.ts` | 已有：`v-show` → `hidden="{{!expr}}"`、`:class` 数组语法（字符串/对象/简单变量/三元逐项拼接，splitTopLevel 顶层逗号分割）；待做：事件修饰符（`.once/.self`）、`v-on` 键位 |
 | CSS 预处理器 | vite 链路 | `scss` / `less` 经 Vite 预处理后进入 `transformStyleToWxss` |
-| 方法级 sourcemap | `vite-plugin-mp-transform.ts` | 产物 JS 关联源码位置，接入微信开发者工具（P6-1 待办，对标 uni-app 的"自定义基座"调试体验） |
+| 方法级 sourcemap（✅ 已实现，决策 #80） | `packages/compiler/src/script.ts` + `vite-plugin-mp-transform.ts` | 已有：sourcemap v3（VLQ 编码，产物行 → 源码行：方法体 / watch 回调体）+ 调试构建落盘 .js.map + sourceMappingURL + 方法行号注释（微信开发者工具可定位源码） |
 | 类型提示全链路 | `src/shims/` + 编译器声明生成 | 路由参数、页面 `onLoad` 参数、事件处理器的 TS 推导（决策 §0.3 原则 6 补全） |
 
 ### v0.4 运行时与性能（对标"运行时性能"差距）
@@ -184,7 +184,7 @@ proteus/                        # monorepo（v0.2 起）
 | 里程碑 | 验收 |
 |---|---|
 | v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
-| v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 已全部落地，决策 #76-#79）；sourcemap 接入开发者工具 |
+| v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 全部落地，决策 #76-#80）；sourcemap 接入开发者工具（✅ 已实现：sourcemap v3 + 调试构建落盘） |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地；Pinia 双端可用 |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |

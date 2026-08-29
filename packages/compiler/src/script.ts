@@ -87,6 +87,8 @@ interface WatchInfo {
   body: string
   /** immediate: true → onLoad 初始化时调用一次 */
   immediate: boolean
+  /** 源码起始行（sourcemap / 行号注释） */
+  line: number
 }
 
 /** 组件 prop 信息（v0.3 组件系统：defineProps → Component properties） */
@@ -176,7 +178,7 @@ function extractWatch(
       before: `watch(${dep}, (${params.join(', ')}) => ...)`,
       after: `proteusWatch${capitalize(dep)}（${dep} 写入 setData 后自动调用${immediate ? '，immediate 初始化一次' : ''}）`,
     })
-    out[dep] = { dep, params, body, immediate }
+    out[dep] = { dep, params, body, immediate, line: lineAt(source, m.index) }
   }
   return out
 }
@@ -268,14 +270,22 @@ function extractData(
   return { data, computed }
 }
 
+/** 顶层方法（源码 + 起始行号，供 sourcemap / 行号注释） */
+interface MethodInfo {
+  /** 方法体源码（含参数，产物方法简写） */
+  src: string
+  /** 源码起始行（1-based） */
+  line: number
+}
+
 /** 剥离方法参数 TS 类型标注（产物是 JS；e: { detail?: number } → e） */
 function stripParamTypes(params: string): string {
   return params.replace(/:\s*[^,)]+/g, '').trim()
 }
 
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
-function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, string> {
-  const methods: Record<string, string> = {}
+function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, MethodInfo> {
+  const methods: Record<string, MethodInfo> = {}
   const fnRe = /function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g
   let m: RegExpExecArray | null
   if (!disabled?.has('script/function-to-methods')) {
@@ -283,9 +293,10 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
       const name = m[1]
       const params = stripParamTypes(m[2])
       const body = extractBracedBody(source, m.index + m[0].length - 1)
-      trace?.add('script/function-to-methods', { line: lineAt(source, m.index), before: `function ${name}(${m[2]})`, after: `${name}(${params})` })
+      const line = lineAt(source, m.index)
+      trace?.add('script/function-to-methods', { line, before: `function ${name}(${m[2]})`, after: `${name}(${params})` })
       // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明）
-      if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
+      if (body !== null) methods[name] = { src: `${name}(${params}) {\n${body}\n}`, line }
       else warnings.push(`函数 ${name} 体解析失败，已跳过`)
     }
   }
@@ -296,8 +307,9 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
       const params = stripParamTypes(m[2])
       const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
       const body = extractBracedBody(source, braceIdx)
-      trace?.add('script/arrow-to-methods', { line: lineAt(source, m.index), before: `const ${name} = (...) =>`, after: `${name}(...)` })
-      if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
+      const line = lineAt(source, m.index)
+      trace?.add('script/arrow-to-methods', { line, before: `const ${name} = (...) =>`, after: `${name}(...)` })
+      if (body !== null) methods[name] = { src: `${name}(${params}) {\n${body}\n}`, line }
     }
   }
   return methods
@@ -435,6 +447,77 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+// ============ sourcemap v3（v0.3：方法级 JS 源码映射，接入微信开发者工具调试） ============
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+/** base64 VLQ 编码（sourcemap mappings 字段） */
+export function vlqEncode(value: number): string {
+  let vlq = value < 0 ? (-value << 1) | 1 : value << 1
+  let out = ''
+  do {
+    let digit = vlq & 0x1f
+    vlq >>>= 5
+    if (vlq > 0) digit |= 0x20
+    out += B64[digit]
+  } while (vlq > 0)
+  return out
+}
+
+/** base64 VLQ 解码（测试验证用） */
+export function vlqDecode(str: string): number[] {
+  const out: number[] = []
+  let shift = 0
+  let value = 0
+  for (const ch of str) {
+    const digit = B64.indexOf(ch)
+    value |= (digit & 0x1f) << shift
+    if (digit & 0x20) {
+      shift += 5
+    } else {
+      const negate = value & 1
+      const decoded = value >>> 1
+      out.push(negate ? -decoded : decoded)
+      shift = 0
+      value = 0
+    }
+  }
+  return out
+}
+
+/**
+ * 生成 sourcemap v3 JSON：产物每行 → 源码行（lineMappings: 产物 0-based 行 → 源码 1-based 行）
+ * segment = [genCol=0, srcIdx=0, srcLine(delta), srcCol=0]；无映射行 → 空 segment
+ */
+export function buildSourceMap(
+  js: string,
+  file: string | undefined,
+  source: string,
+  lineMappings: Array<{ out: number; src: number }>,
+): string {
+  const byOut = new Map(lineMappings.map((m) => [m.out, m.src]))
+  const lineCount = js.split('\n').length
+  let prevSrc = 0
+  const segs: string[] = []
+  for (let i = 0; i < lineCount; i++) {
+    const srcLine = byOut.get(i)
+    if (srcLine == null) {
+      segs.push('')
+      continue
+    }
+    const src0 = srcLine - 1
+    segs.push(`AA${vlqEncode(src0 - prevSrc)}A`)
+    prevSrc = src0
+  }
+  return JSON.stringify({
+    version: 3,
+    file: file ? `${file}.js` : 'page.js',
+    sources: [file ?? 'anonymous.vue'],
+    sourcesContent: [source],
+    names: [],
+    mappings: segs.join(';'),
+  })
+}
+
 /** script 源码 → Page/Component 构造器 JS（纯函数，独立可测） */
 export function transformScriptToPage(
   source: string,
@@ -566,12 +649,23 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     }
   }
 
-  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)},`)
+  // ★sourcemap（v0.3）：产物行 → 源码行映射（方法体 / watch 回调体；生成代码无映射）
+  const lineMappings: Array<{ out: number; src: number }> = []
+  const pushMapped = (line: string, srcLine: number) => {
+    const start = lines.length
+    lines.push(line)
+    const sub = line.split('\n')
+    for (let i = 0; i < sub.length; i++) lineMappings.push({ out: start + i, src: srcLine + i })
+  }
+
+  for (const [name, m] of Object.entries(methods)) {
+    if (extra.debug) lines.push(`  // @${m.line} ${name}()`)
+    pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)},`, m.line)
+  }
   // watch 回调方法：proteusWatchX(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   for (const w of Object.values(watches)) {
-    lines.push(
-      `  proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`,
-    )
+    const src = `proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
+    pushMapped(`  ${src}`, w.line)
   }
   lines.push('})')
 
@@ -583,5 +677,8 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
   trace?.add('script/es5-safe', { before: '?? / ?. / 解构 / 展开', after: '显式 null 三元 / 索引循环 / 直接赋值' })
 
   for (const w of warnings) console.warn(`[mp-transform] ${w}`)
-  return { js: lines.join('\n') + '\n', warnings }
+  const js = lines.join('\n') + '\n'
+  // sourcemap v3（VLQ）：产物每行 → 源码行（无映射行为空 segment）
+  const sourcemap = buildSourceMap(js, extra.file, source, lineMappings)
+  return { js, warnings, sourcemap }
 }

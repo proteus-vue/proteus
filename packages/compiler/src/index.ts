@@ -92,6 +92,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     wxss,
     warnings: [...tplResult.warnings, ...scriptResult.warnings],
     trace: [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events],
+    sourcemap: scriptResult.sourcemap,
   }
 
   // 反黑盒：产物自校验，坏产物当场抛错并指明文件（绝不静默输出）

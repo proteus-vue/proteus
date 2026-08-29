@@ -9,6 +9,7 @@ import {
   validateJs,
   validateWxml,
 } from '../packages/compiler/src'
+import { vlqEncode, vlqDecode } from '../packages/compiler/src/script'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
@@ -254,6 +255,34 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     const result = compileVueSfc('<script setup lang="ts">const props = defineProps({ label: String })</script>\n<template><div>{{ label }}</div></template>', { isComponent: true, filename: 'components/x/index.vue' })
     expect(result.js).toContain('Component({')
     expect(result.js).toContain('label: { type: String, value: "" }')
+  })
+})
+
+describe('sourcemap（v0.3：方法级 JS 源码映射）', () => {
+  it('vlqEncode/vlqDecode 往返一致', () => {
+    for (const v of [0, 1, -1, 5, -5, 15, -16, 31, 63, 1000, -1000]) {
+      expect(vlqDecode(vlqEncode(v))[0]).toBe(v)
+    }
+  })
+
+  it('compileVueSfc 生成 sourcemap，方法体行映射到源码行', () => {
+    const src = '<script setup lang="ts">\nconst count = ref(0)\nfunction add() {\n  count.value++\n}\n</script>\n<template><div>x</div></template>'
+    const result = compileVueSfc(src, { filename: 'pages/sm.vue' })
+    expect(result.sourcemap).toBeTruthy()
+    const map = JSON.parse(result.sourcemap!)
+    expect(map.version).toBe(3)
+    expect(map.sources).toContain('pages/sm.vue')
+    expect(map.sourcesContent[0]).toContain('const count = ref(0)')
+    // 解码 mappings：sourceLine 是 delta，累加后应命中源码第 4 行（count.value++，0-based 3）
+    const rows = map.mappings.split(';')
+    let acc = 0
+    const hit = rows.some((r: string) => {
+      if (!r) return false
+      const d = vlqDecode(r)
+      acc += d[2] ?? 0
+      return acc === 3
+    })
+    expect(hit).toBe(true)
   })
 })
 

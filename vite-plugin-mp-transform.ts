@@ -158,7 +158,7 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         const source = fs.readFileSync(file, 'utf-8')
         const rel = path.relative(appDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
-        const { wxml, js, wxss, warnings, trace } = compileVueSfc(source, {
+        const { wxml, js, wxss, warnings, trace, sourcemap } = compileVueSfc(source, {
           filename: rel,
           isComponent,
           px2rpx,
@@ -169,9 +169,14 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
           debug: isDebug,
         })
 
+        // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
+        const jsWithMap = sourcemap && isDebug ? `${js}//# sourceMappingURL=${rel}.js.map\n` : js
         this.emitFile({ type: 'asset', fileName: `${rel}.wxml`, source: wxml })
-        this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: js })
+        this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: jsWithMap })
         this.emitFile({ type: 'asset', fileName: `${rel}.wxss`, source: wxss })
+        if (sourcemap && isDebug) {
+          this.emitFile({ type: 'asset', fileName: `${rel}.js.map`, source: sourcemap })
+        }
         if (isDebug) {
           // 反黑盒：中间产物转储，转换过程完全透明（★底线循环 ②：产物 + 决策链 一处定位）
           this.emitFile({
