@@ -1,9 +1,90 @@
-# 类型提示全链路（Types）—— 规划与实现
+# 类型提示全链路（Types）—— 正式文档
 
-> **状态**：📋 规划已落地，按分步骤执行中（roadmap v0.3「类型提示全链路」）
+> **状态**：✅ 已实现（roadmap v0.3「类型提示全链路」，决策 #93-#97）
 > **原则**：类型提示是**开发期资产**——`router.push` 跳转参数、页面 `onLoad` 参数、事件处理器参数全链路 TS 推导；
 > 产物（小程序 JS）由编译器 `stripParamTypes` 剥离标注，类型永不污染产物。
 > 类型来源：**页面声明（`<route>.params`）→ 编译器生成类型表 → API/页面消费**——写一处、处处推导。
+
+## 三处全链路用法（API 参考）
+
+```vue
+<!-- ① 页面声明参数（<route> 块 JSON，gen-routes 读取 → RouteParamsByName） -->
+<route>
+{
+  "meta": { "title": "个人资料" },
+  "params": { "id": "string", "from": "string", "kw": "string" }
+}
+</route>
+<script setup lang="ts">
+import { onLoad } from '@proteus/runtime'          // Web 端 no-op 兼容（MP 端编译产物处理）
+import type { PageOnLoad } from '@proteus/router/types'
+
+// ③ 页面 onLoad 参数类型（自动对应自己的路由 params）
+onLoad((options: PageOnLoad<'user-profile'>) => {
+  const id = options.id ?? ''                        // options.id?: string 推导
+})
+
+// ④ 事件处理器类型（全局声明，无需 import）
+function onChange(e: MpInputEvent) {                // e.detail.value: string
+  console.log(e.detail.value)
+}
+function onTap(e: TapEvent) {                       // e.currentTarget.dataset.url: string
+  console.log(e.currentTarget.dataset.url)
+}
+</script>
+```
+
+```ts
+// ② 跳转处自动推导（tests/types/router-params.types.ts 断言验证）
+router.push({ name: 'user-profile', params: { id: '1' } })  // ✅ 推导
+router.push({ name: 'user-profile', params: { id: 1 } })    // ❌ id 应为 string（编译期报错）
+router.push({ name: 'not-a-route' })                        // ❌ 非路由名（编译期报错）
+```
+
+## 类型生成链路
+
+```
+<route>.params（JSON 声明）
+      │ gen-routes 读取（build 链前置）
+      ▼
+RouteParamsByName（按路由名索引的参数类型表，生成进 auto-routes.ts）
+      │
+      ├─► router.push 泛型（NavigateOptions<N>：name 受限 + params 匹配 + 多余字段 EPC）
+      ├─► PageOnLoad<N>（页面 onLoad 参数类型）
+      └─► （可选）proteus types CLI 查看
+```
+
+## 公开类型（src/router/types.ts + src/shims/events.d.ts）
+
+| 类型 | 说明 |
+|---|---|
+| `RouteParamsByName` | 按路由名索引的参数类型表（生成，勿手改） |
+| `NavigateOptions<N>` | 路由跳转选项（`N extends keyof RouteParamsByName`，name 受限 + params 匹配） |
+| `PageOnLoad<N>` | 页面 onLoad 参数（N = 本页路由名） |
+| `MpEvent<TDetail>` | 通用微信事件（detail / target / currentTarget.dataset，全局） |
+| `MpInputEvent` | input/textarea 输入事件（detail.value: string，v-model handler） |
+| `TapEvent` | 点击事件（currentTarget.dataset 读取） |
+
+## 已知边界
+
+- **跨模块 import 是 MVP 限制**：示例页的 `router.push` 调用在 MP 产物中为未定义引用（产物单文件无模块系统）——类型推导在开发期（vue-tsc）完整可用，运行时导航用 `<a href>` / 页面内方法；跨模块编译在 roadmap 规划中
+- **产物安全**：`stripParamTypes` 剥离参数标注；`??` 运算符在方法体/产物中不可用（真机不支持，决策 #36）
+- **`<route>.params` 漂移**：改了 params 需重跑 gen-routes（build 链已含）；未声明 params 的路由为 `{}`
+
+## 分步骤实现记录（决策 #93-#97）
+
+| 步骤 | 内容 | 决策 |
+|---|---|---|
+| 1 | gen-routes 生成 RouteParamsByName（`<route>.params` 声明） | #93 |
+| 2 | router.push 泛型（name 受限 + params 匹配 + EPC） | #94 |
+| 3 | PageOnLoad 页面参数 + runtime onLoad（Web no-op） | #95 |
+| 4 | 事件类型 MpEvent / MpInputEvent / TapEvent（shims 全局） | #96 |
+| 5 | 端到端 + 本文档 | #97 |
+| 6（可选） | 生成器单测 + `proteus types` CLI | 待做 |
+
+## 文档版本
+
+v2.0（正式文档，roadmap v0.3 类型提示全链路 ✅）
 
 ## 目标形态（全链路闭环）
 

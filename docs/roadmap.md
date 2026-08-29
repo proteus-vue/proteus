@@ -79,7 +79,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 指令补全（✅ v-show / :class 数组 / .self / .once 已实现，决策 #76/#77/#88） | `packages/compiler/src/template.ts` + `script.ts` | 已有：`v-show` → `hidden="{{!expr}}"`、`:class` 数组（逐项拼接）、`.self/.once` 修饰符 → proteusSelf/Once 包装方法（target 判断 / data 标记）；`@keyup.enter` 等键位警告（无对等键盘事件，input 用 `@confirm`） |
 | CSS 预处理器（✅ scss 已实现，决策 #87） | 插件 `preprocessStyle` 钩子 + `sass` | 已有：编译器新增 `CompileOptions.preprocessStyle(lang, content)` 钩子（保持 @proteus/compiler 零依赖）；插件注入 sass 实现——`<style lang="scss">` 编译为 css 后进 WXSS（Web 端 Vite 原生处理 scss）；forms.vue 演示（变量 $brand + 嵌套）；less 待内置 |
 | 方法级 sourcemap（✅ 已实现，决策 #80） | `packages/compiler/src/script.ts` + `vite-plugin-mp-transform.ts` | 已有：sourcemap v3（VLQ 编码，产物行 → 源码行：方法体 / watch 回调体）+ 调试构建落盘 .js.map + sourceMappingURL + 方法行号注释（微信开发者工具可定位源码） |
-| 类型提示全链路 | `src/shims/` + 编译器声明生成 | 路由参数、页面 `onLoad` 参数、事件处理器的 TS 推导（决策 §0.3 原则 6 补全） |
+| 类型提示全链路（✅ 已实现，决策 #93-#97） | `src/router/types.ts` + `scripts/gen-routes.ts` + `src/shims/events.d.ts` | 已有：`<route>.params` 声明 → `RouteParamsByName` 类型表（gen-routes 生成）；`router.push` 泛型（name 受限 + params 匹配 + 多余字段 EPC）；`PageOnLoad<N>` 页面 onLoad 参数（runtime onLoad Web no-op）；事件类型 `MpEvent/MpInputEvent/TapEvent`（shims 全局）；类型测试 tests/types/；三处全链路用法见 docs/types.md |
 
 ### v0.4 运行时与性能（对标"运行时性能"差距）
 
