@@ -17,11 +17,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:web": "vite --mode web",
-    "build:web": "vue-tsc --noEmit && vite build --mode web",
-    "dev:mp": "tsx packages/plugin-vite/src/cli.ts && vite --mode mp-weixin",
-    "build:mp": "tsx packages/plugin-vite/src/cli.ts && vue-tsc --noEmit && vite build --mode mp-weixin && tsx scripts/bundle-report.ts",
-    "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
+    "dev:web": "npm --prefix examples run dev:web",
+    "build:web": "npm --prefix examples run build:web",
+    "dev:mp": "npm --prefix examples run dev:mp",
+    "build:mp": "npm --prefix examples run build:mp",
+    "debug:mp": "npm --prefix examples run debug:mp",
+    "preview:web": "npm --prefix examples run preview:web",
     "proteus": "tsx packages/cli/src/index.ts",
     "cli:build": "npm run build -w @proteus/cli",
     "create": "tsx packages/create-proteus/src/index.ts",
@@ -29,7 +30,6 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
-    "preview:web": "vite preview --mode web",
     "verify": "npm test && npm run build:web && npm run build:mp && npm run build --workspaces",
     "test": "vitest run --exclude tests/e2e-web.test.ts",
     "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts"

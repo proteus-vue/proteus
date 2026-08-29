@@ -1,0 +1,34 @@
+{
+  "name": "proteus-examples",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Proteus 示例工程：一份标准 Vue 源码 → Web + 微信小程序（Skyline）——完整工程形态（配置自包含）",
+  "scripts": {
+    "dev:web": "vite --mode web",
+    "build:web": "vue-tsc --noEmit && vite build --mode web",
+    "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
+    "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin && tsx scripts/bundle-report.ts",
+    "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
+    "preview:web": "vite preview --mode web",
+    "router:check": "tsx ../../packages/cli/src/index.ts router:check pages"
+  },
+  "dependencies": {
+    "@proteus/router": "^0.1.0",
+    "@proteus/runtime": "^0.1.0",
+    "@proteus/shared": "^0.1.0",
+    "pinia": "^4.0.3",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@proteus/cli": "^0.2.0",
+    "@proteus/compiler": "^0.2.0",
+    "@proteus/plugin-vite": "^0.1.0",
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

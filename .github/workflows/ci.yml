@@ -23,6 +23,9 @@ jobs:
       - name: 类型检查（vue-tsc 全项目，含 packages/*）
         run: npx vue-tsc --noEmit
 
+      - name: 示例工程类型检查（examples 独立 tsconfig，完整工程形态）
+        run: cd examples && npx vue-tsc --noEmit -p tsconfig.json
+
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: npm test
 
@@ -34,10 +37,10 @@ jobs:
           fi
           echo "stores 纯净性 OK（注册表完整性由 vue-tsc + stores-registry.types.ts 校验）"
 
-      - name: 小程序构建（gen-routes → vue-tsc → vite build:mp）
+      - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
 
-      - name: Web 构建
+      - name: Web 构建（示例工程）
         run: npm run build:web
 
       - name: 全部 @proteus/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/create-proteus → dist）

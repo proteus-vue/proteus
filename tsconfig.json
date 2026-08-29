@@ -40,8 +40,6 @@
     "packages/runtime/src/**/*.ts",
     "packages/router/src/**/*.ts",
     "packages/plugin-vite/src/**/*.ts",
-    "examples/**/*.ts",
-    "examples/**/*.vue",
     "vite.config.ts",
     "proteus.config.ts",
     "scripts/**/*.ts",

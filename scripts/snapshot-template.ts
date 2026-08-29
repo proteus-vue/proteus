@@ -80,7 +80,8 @@ copied.push(...copyDir(path.join(ROOT, 'packages', 'shared', 'src', 'shims'), pa
 fs.mkdirSync(path.join(TPL, 'scripts'), { recursive: true })
 copied.push(...copyDir(path.join(ROOT, 'scripts'), path.join(TPL, 'scripts'), ['snapshot-template.ts', 'bundle-report.ts', 'gen-routes.ts']))
 // 4. index.html（入口路径指向模板工程的 src/）
-copied.push(copyFile(path.join(ROOT, 'index.html'), path.join(TPL, 'index.html'), [[/\/examples\/main\.ts/g, '/src/main.ts']]))
+//    ★工程化重构（决策 #114）：根 index.html 移除（examples 自包含），模板从 examples 复制
+copied.push(copyFile(path.join(ROOT, 'examples', 'index.html'), path.join(TPL, 'index.html'), [[/\/main\.ts/g, '/src/main.ts']]))
 
 console.log(`[snapshot] 已快照 ${copied.length} 个文件到 packages/create-proteus/templates/`)
 console.log('提示：package.json / proteus.config.ts / vite.config.ts / tsconfig.json / src/main* / src/App.vue / src/pages/ / src/router/auto-routes.ts / scripts/gen-routes.ts 为手写模板，改主仓时记得同步')

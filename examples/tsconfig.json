@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "./shims/mp.d.ts", "./shims/events.d.ts", "./shims/vue.d.ts"],
+    "baseUrl": ".",
+    "paths": {
+      "@proteus/compiler": ["../packages/compiler/src/index.ts"],
+      "@proteus/shared": ["../packages/shared/src/index.ts"],
+      "@proteus/runtime": ["../packages/runtime/src/index.ts"],
+      "@proteus/router": ["../packages/router/src/index.ts"],
+      "@proteus/router/*": ["../packages/router/src/*"],
+      "@proteus/plugin-vite": ["../packages/plugin-vite/src/index.ts"],
+      "@proteus/plugin-vite/*": ["../packages/plugin-vite/src/*"],
+      "@proteus/components": ["../src/components/index.ts"],
+      "@proteus/components/*": ["../src/components/*"]
+    }
+  },
+  "include": [
+    "pages/**/*.ts",
+    "pages/**/*.vue",
+    "router/**/*.ts",
+    "router/**/*.vue",
+    "stores/**/*.ts",
+    "components/**/*.vue",
+    "ssr/**/*.ts",
+    "main.ts",
+    "main.mp.ts",
+    "App.vue",
+    "shims/**/*.d.ts",
+    "vite.config.ts",
+    "proteus.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "migration-from-vue"]
+}

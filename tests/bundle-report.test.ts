@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { scanMainPackage, formatBundleReport } from '../scripts/bundle-report'
+import { scanMainPackage, formatBundleReport } from '../examples/scripts/bundle-report'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-bundle-'))
 
