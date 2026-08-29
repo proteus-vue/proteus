@@ -101,6 +101,12 @@ export function createRouter(routes: RouteRecord[]): Router {
 
 export type RouterInstance = Router
 
+// ★路由规划 M3/M4：三端共享转场映射 + codegen（scan/tree 管线产物消费）
+export { WEB_TRANSITION_MAP, MP_ROUTE_TYPE_MAP, webTransitionName, mpRouteType, isTransition } from './transforms/transform-transition'
+export type { RouteTransition } from './transforms/transform-transition'
+export { generateWebRoutes, generateMpConfig, mergeAppJson, flattenNodes, toPageConfig } from './codegen'
+export type { MpPageConfig } from './codegen'
+
 // 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus/router' 即可，无需深路径）
 export type {
   RouteRecord,
