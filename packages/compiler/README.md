@@ -26,11 +26,15 @@ transformTemplateToWxml(templateSource, styleOpts): { wxml, vModelBindings, warn
 transformScriptToPage(scriptSource, styleOpts, { file, isComponent, vModelBindings }): { js, warnings }
 transformStyleToWxss(styleSource, styleOpts): string
 
-// ★ AI-native 透明：编译规则注册表（49 条规则，每条一份 AI 说明书）
+// ★ AI-native 透明：编译规则注册表（57 条规则，每条一份 AI 说明书）
 listTransformRules(phase?)    // 枚举规则（能力清单）
 getTransformRule(id)          // 查单条规则
 formatTransformRule(rule)     // 渲染单条 AI 说明书
 formatTransformCatalog()      // 渲染全量目录
+
+// ★ 阶段三分派层（底线循环 ① 完全形态）：AI 覆盖规则 apply 即获得新能力
+// （implemented 规则可携带 apply()；style/px-to-rpx、template/scope-attr 已登记示范）
+executeRule(id, ctx)          // 按规则 ID 执行（RuleContext：input → output）
 
 // ★ 决策 trace（底线循环 ②）：源码 → 实际触发的全部规则
 explainTransform(source, options?)  // → { events: [{ ruleId, phase, line, before, after }] }

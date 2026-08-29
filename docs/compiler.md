@@ -40,10 +40,14 @@ interface TransformRule {
 消费 API（经 `packages/compiler/src/index.ts` 导出）：
 
 ```typescript
-listTransformRules(phase?) // 枚举规则（能力清单）：template/script/style/validate 四阶段 49 条
+listTransformRules(phase?) // 枚举规则（能力清单）：template/script/style/validate 四阶段 57 条
 getTransformRule(id)       // 查单条规则
 formatTransformRule(rule)  // 渲染单条 AI 说明书
 formatTransformCatalog()   // 渲染全量目录
+
+// 阶段三分派层（★底线循环 ① 完全形态，已落地）：implemented 规则携带 apply()
+executeRule(id, ctx)       // 按规则 ID 执行（AI 覆盖规则 apply → 新能力即生效）
+                           // 示范：style/px-to-rpx、template/scope-attr 已登记 apply
 
 // 阶段二：决策 trace（对一份 Vue SFC 输出它实际触发的全部规则）
 explainTransform(source, options?)   // → { events: [{ ruleId, phase, line, before, after }] }
@@ -51,8 +55,8 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 ```
 
 - **AI 用法**：`listTransformRules()` 摸清编译器能力边界 → `getTransformRule('tag/div-to-view')` 查 why/when/verify → 按 `source` 跳读实现 → 改完跑对应单测；写完页面用 `explainTransform()` 验证转换链路。
-- **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析。
-- **演进**：阶段三每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `packages/compiler/README.md`。
+- **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析；`tests/registry-drift.test.ts` 反向校验实现引用的规则 ID 全部已登记（实现↔注册表永不脱节，CI 硬卡）。
+- **分派层（阶段三已落地）**：规则 `apply()` + `executeRule(id, ctx)` 分派入口——AI 覆盖规则实现（如改 px→rpx 换算公式）→ 编译输出即时变化，无需改框架代码；详见 `packages/compiler/README.md`。
 
 ## 组件系统（v0.3）
 
