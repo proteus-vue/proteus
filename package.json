@@ -20,6 +20,8 @@
     "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
     "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin",
     "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
+    "proteus": "tsx packages/cli/src/index.ts",
+    "cli:build": "npm run build -w @proteus/cli",
     "preview:web": "vite preview --mode web",
     "verify": "npm test && npm run build:web && npm run build:mp",
     "test": "vitest run --exclude tests/e2e-web.test.ts",
