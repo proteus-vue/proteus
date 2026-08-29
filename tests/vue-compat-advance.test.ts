@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src'
 import { getTransformRule } from '../packages/compiler/src/transforms/registry'
-import { registerProvide, readInject, clearProvides, provideCount, subscribeProvide, notifyProvide } from '../packages/runtime/src/provide-inject'
+import { registerProvide, readInject, clearProvides, provideCount, subscribeProvide, notifyProvide, nextPageId, destroyPage } from '../packages/runtime/src/provide-inject'
 
 const compile = (src: string, name = 'vca.vue'): { warnings: string[]; wxml: string; js: string; wxss: string } => {
   const r = compileVueSfc(src, { filename: name })
@@ -66,9 +66,11 @@ describe('Batch 2：<transition> 装饰式动画（运行时等价，进入动�
 describe('Batch 3：provide/inject 页面级注入桥（全局注册表）', () => {
   beforeEach(() => clearProvides())
 
-  it('页面 provide → onLoad 注入 getApp().__proteusProvides 注册（ref.value 重写为 this.data）', () => {
+  it('页面 provide → onLoad 注入页面命名空间注册（ref.value 重写为 this.data）', () => {
     const r = compile('<script setup>\nconst user = ref({ name: "a" })\nprovide("user", user.value)\n</script>')
-    expect(r.js).toContain('const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {}))')
+    // ★Batch 6：页面级隔离——__seq 生成 pageId + 页面命名空间（不再顶层直接存值）
+    expect(r.js).toContain('this.__proteusPageId = \'p\' + __reg.__seq')
+    expect(r.js).toContain('const provides = (__reg[this.__proteusPageId] || (__reg[this.__proteusPageId] = {}))')
     expect(r.js).toContain('provides["user"] = this.data.user')
   })
 
@@ -193,5 +195,50 @@ describe('Batch 5：<transition> 离开动画（延迟移除状态机）', () =>
     expect(r.wxss).toContain('.proteus-transition-scale-leave')
     expect(r.wxss).toContain('@keyframes proteus-scale-out')
     expect(r.wxss).toContain('forwards')
+  })
+})
+
+describe('Batch 6：provide/inject 页面级隔离（pageId 命名空间）', () => {
+  beforeEach(() => clearProvides())
+
+  it('页面 onLoad：__seq 生成 pageId + 命名空间解析 + onUnload 清理', () => {
+    const r = compile('<script setup>\nprovide("k", v)\nconst v = ref(1)\n</script>')
+    expect(r.js).toContain('__reg.__seq = (__reg.__seq || 0) + 1')
+    expect(r.js).toContain('const provides = (__reg[this.__proteusPageId] || (__reg[this.__proteusPageId] = {}))')
+    // onUnload：删除当前页命名空间（防泄漏）
+    expect(r.js).toContain('if (__reg && this.__proteusPageId) delete __reg[this.__proteusPageId]')
+    expect(r.js).toContain('onUnload() {')
+  })
+
+  it('组件 created/attached：从 getCurrentPages 栈顶解析所属页面 id（回退 global）', () => {
+    const r = compileComponent('<script setup>\nprovide("cfg", cfg)\nconst cfg = ref(1)\nconst x = inject("x")\n</script>')
+    expect(r.js).toContain('const __pid = __pages.length ? __pages[__pages.length - 1].__proteusPageId : \'\'')
+    expect(r.js).toContain("this.__proteusPageId = __pid || 'global'")
+    // created 与 attached 都落同一命名空间（provides = 当前页注册表）
+    expect(r.js).toContain('const provides = (__reg[this.__proteusPageId] || (__reg[this.__proteusPageId] = {}))')
+    expect(r.js).toContain('provides["cfg"] = this.data.cfg')
+    expect(r.js).toContain('this.setData({ x: provides["x"] })')
+  })
+
+  it('运行时桥：nextPageId 递增 + pageId 隔离（A 提供 B 读不到）+ destroyPage 清理', () => {
+    clearProvides()
+    expect(nextPageId()).toBe('p1')
+    expect(nextPageId()).toBe('p2')
+    registerProvide('user', 'alice', 'p1')
+    registerProvide('user', 'bob', 'p2')
+    expect(readInject('user', 'p1')).toBe('alice')
+    expect(readInject('user', 'p2')).toBe('bob')
+    expect(readInject('user', 'p3')).toBeUndefined() // 其他页面读不到（隔离）
+    destroyPage('p1')
+    expect(readInject('user', 'p1')).toBeUndefined() // 页面销毁清理
+    expect(readInject('user', 'p2')).toBe('bob')
+    expect(provideCount()).toBe(1)
+    clearProvides()
+    expect(provideCount()).toBe(0)
+  })
+
+  it('规则 script/provide-inject 说明书含页面级隔离语义', () => {
+    const rule = getTransformRule('script/provide-inject')
+    expect(rule!.description).toContain('页面级隔离')
   })
 })

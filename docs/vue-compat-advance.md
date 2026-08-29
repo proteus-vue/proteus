@@ -88,9 +88,37 @@
 | 3 | provide/inject 页面级桥（全局注册表，运行时 + 编译） | 中高 | ✅ |
 | 4 | provide/inject **响应式联动**（裸 ref 订阅/通知，复用 store 桥模式） | 中 | ✅ |
 | 5 | Transition **离开动画**（状态机：__tvN 延迟移除 + __tlN 离开 class） | 中 | ✅ |
-| 6 | 作用域插槽运行时等价 / provide 页面级隔离（规划候选） | 中高 | ⬜ |
+| 6 | provide/inject **页面级隔离**（pageId 命名空间 + onUnload 清理） | 中 | ✅ |
+| 7 | 作用域插槽运行时等价（规划候选） | 中高 | ⬜ |
 
-依赖：1 → 2 → 3 → 4 → 5（顺序按工程量递增，各自独立可测）
+依赖：1 → 2 → 3 → 4 → 5 → 6（顺序按工程量递增，各自独立可测）
+
+---
+
+## 8. Batch 6：provide/inject 页面级隔离（pageId 命名空间）
+
+**目标**：页面 A 的 provide 不再污染页面 B（当前全局注册表：A 提供 key，B 的组件 inject 读到 A 的值）
+
+**设计**（页面命名空间，编译产物与运行时桥共用）：
+1. **注册表结构升级**：`__proteusProvides = { [pageId]: { key: value, __subs: {...} }, __seq: n }`（pageId 为字符串，`__seq` 保留键避让）
+2. **页面 onLoad**：`__seq` 递增生成 `this.__proteusPageId = 'p' + __seq` → `const provides = (__reg[pid] || (__reg[pid] = {}))`（提供/注入/订阅都在这层）
+3. **组件 created/attached**：`getCurrentPages()` 栈顶页面的 `__proteusPageId`（组件 attached 期间栈顶 = 所属页面）→ 组件 provide/inject 也落在当前页命名空间（跨页隔离）；栈顶无 pid → 回退 `global` 命名空间（手写运行时路径）
+4. **辅助方法**：`proteusSyncProvide` / `proteusUnsubscribeProvide` 内按 `this.__proteusPageId`（created/onLoad 已存实例）定位命名空间
+5. **onUnload 清理**：`delete __reg[this.__proteusPageId]`（页面销毁防泄漏，与订阅取消同处注入）
+6. **运行时桥**：`registerProvide/readInject/subscribeProvide/notifyProvide` 加可选 `pageId` 参数（缺省从 getCurrentPages 栈顶推导，无则 'global'）；新增 `nextPageId()`（__seq 递增，编译产物 onLoad 用）；`clearProvides/provideCount` 遍历全部命名空间
+
+**验收**：页面 A/B 各自命名空间（A 提供 key，B 组件 inject undefined）；onUnload 清理后注册表无残留；组件 provide/inject 落当前页；全量测试全绿 + 双端构建
+
+**已落地**（2026-08）：
+1. **注册表结构升级**（runtime/provide-inject.ts）：`__proteusProvides = { [pageId]: { key: value, __subs: {...} }, __seq: n }`；`nextPageId()`（__seq 递增）/ `destroyPage(pageId)` 新增；registerProvide/readInject/subscribeProvide/notifyProvide 加可选 pageId（缺省从 getCurrentPages 栈顶 `__proteusPageId` 推导，无则 'global'）；provideCount 遍历全部命名空间
+2. **编译**（script.ts）：
+   - 页面 onLoad 打开段：`__reg.__seq = (__reg.__seq || 0) + 1` → `this.__proteusPageId = 'p' + __reg.__seq` → `const provides = (__reg[pid] || (__reg[pid] = {}))`
+   - 组件 created/attached 打开段：`getCurrentPages()` 栈顶页面 `__proteusPageId`（组件渲染期间栈顶 = 所属页面）→ `this.__proteusPageId = __pid || 'global'` → 同命名空间（跨页隔离）
+   - `proteusSyncProvide` / `proteusUnsubscribeProvide` 按 `this.__proteusPageId` 定位命名空间
+   - onUnload：有 provide 或 inject 时注入 `delete __reg[this.__proteusPageId]`（页面销毁清理防泄漏；与订阅取消同处）
+3. **验证**：测试 +4 → 390 全绿；demo 产物确认（页面 __seq/pageId/命名空间 + onUnload 清理；组件栈顶解析）；遗留：作用域插槽运行时等价
+
+---
 
 ---
 
@@ -133,7 +161,6 @@
 ## 5. 遗留（后续批次）
 
 - 作用域插槽**运行时等价**（props 传子 + 事件回调自动包装）——当前仅编译期警告
-- provide/inject **页面级隔离**（pageId：注册表按页面隔离、onUnload 清理）——当前全局注册表（响应式联动已在 Batch 4 完成）
 
 ---
 

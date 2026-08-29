@@ -269,7 +269,7 @@ export const SCRIPT_RULES: TransformRule[] = [
     phase: 'script',
     status: 'implemented',
     title: 'provide/inject → getApp().__proteusProvides 全局注册表桥（vue-compat-advance Batch 3/4）',
-    description: '顶层 provide("key", expr) / const x = inject("key"[, default]) 编译为注册表读写：页面 onLoad 单函数合并块（registry 声明一次 + provide 注册 + inject setData）；组件 provide 放 created（先于子组件 attached 注入）、inject 放 attached；provide 值表达式重写裸 ref 名 / ref.value → this.data.<name>；inject 支持默认值（undefined 时取默认）；★Batch 4 响应式联动：裸 ref 提供（provide("key", refName)）→ ref 写入点注入 proteusSyncProvide（同步注册表值 + 通知订阅者），inject 侧订阅 __subs[key]（值变化 setData 刷新）+ detached/onUnload 取消；.value/字面量提供保持静态快照（对齐 Vue 语义：传 ref 联动、传值快照）',
+    description: '顶层 provide("key", expr) / const x = inject("key"[, default]) 编译为注册表读写：页面 onLoad 单函数合并块（pageId 命名空间解析一次 + provide 注册 + inject setData）；组件 provide 放 created（先于子组件 attached 注入）、inject 放 attached；provide 值表达式重写裸 ref 名 / ref.value → this.data.<name>；inject 支持默认值（undefined 时取默认）；★Batch 4 响应式联动：裸 ref 提供（provide("key", refName)）→ ref 写入点注入 proteusSyncProvide（同步注册表值 + 通知订阅者），inject 侧订阅 __subs[key]（值变化 setData 刷新）+ detached/onUnload 取消；★Batch 6 页面级隔离：注册表按 pageId 命名空间（页面 onLoad __seq 生成 + 组件 getCurrentPages 栈顶解析，onUnload 删除命名空间防泄漏）；.value/字面量提供保持静态快照（对齐 Vue 语义：传 ref 联动、传值快照）',
     why: '小程序组件树无 provide/inject 机制（决策 #117）：全局注册表桥让页面向组件传值（含深层嵌套组件）；MVP 值快照（非响应式联动）+ 全局注册表（重名 key 后写覆盖），页面级隔离/响应式为后续',
     when: 'script 顶层出现 provide("key", value) 调用或 const x = inject("key")（仅零缩进单行；provide 值支持字面量/裸 ref/ref.value）',
     example: {
