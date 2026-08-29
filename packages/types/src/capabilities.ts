@@ -1,9 +1,10 @@
 // packages/types/src/capabilities.ts
 // ★类型收口（10-type-consolidation）：能力体系公共类型（原 @proteus/capabilities/types.ts）
 // runtime 值（CapabilityError class）留 @proteus/capabilities（types 包保持纯类型）
+import type { Platform } from './index-shared'
 
-/** 运行时平台（跨层契约：guard.ts / capabilities / app 渲染器共用） */
-export type CapabilityPlatform = 'web' | 'skyline' | 'app'
+/** 运行时平台（收口后 alias 到跨层契约 Platform——单一来源，新增平台只改一处） */
+export type CapabilityPlatform = Platform
 
 /** 能力等级：L1 通用 / L2 映射需适配 / L3 平台独占 / L4 实验 */
 export type CapabilityTier = 1 | 2 | 3 | 4

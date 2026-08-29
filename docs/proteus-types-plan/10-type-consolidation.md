@@ -1,5 +1,7 @@
 # 类型收口方案（2026-08 · 用户指示：类型统一收口到 @proteus/types）
 
+> **★状态：✅ 全部落地（T1-T4，2026-08）**——公共类型已收口，各实现包 types.ts 为 re-export 兼容层，消费方零改动，689 测试全绿。
+
 > 目标：所有**公共导出类型**定义统一放 `@proteus/types`（单一来源），各实现包 `types.ts` 保留原路径作 **re-export 兼容层**——包内 import 与包外消费方**零改动**。
 
 ## 1. 收口边界
@@ -24,12 +26,12 @@
 
 ## 3. 执行批次（每批全绿提交）
 
-| 批 | 内容 |
-|----|------|
-| T1 | @proteus/types 补全类型文件（platform/compiler/capabilities/router/api/config）→ 全绿 |
-| T2 | capabilities/router 两包 types.ts → re-export（CapabilityError 保留本地）→ 全绿 |
-| T3 | compiler/api/plugin-vite 三包 types.ts → re-export（ApiError 保留本地；config 的 ProteusConfig 移入，defineConfig 保留）→ 全绿 |
-| T4 | 收尾：重复联合清理（CapabilityPlatform = Platform alias）、README/board 状态、CI 验证 |
+| 批 | 内容 | 状态 |
+|----|------|------|
+| T1 | @proteus/types 补全类型文件（platform/compiler/capabilities/router/api/config）| ✅（e2c54d5）|
+| T2 | capabilities/router 两包 types.ts → re-export（CapabilityError 保留本地）| ✅（e2c54d5）|
+| T3 | compiler/api/plugin-vite 三包 types.ts → re-export（ApiError 保留本地；config 的 ProteusConfig 移入）| ✅（下个提交）|
+| T4 | 收尾：重复联合清理（CapabilityPlatform = Platform alias）、README/board 状态、CI 验证 | ✅ |
 
 ## 4. 风险与对策
 
