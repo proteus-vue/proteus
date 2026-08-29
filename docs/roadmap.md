@@ -29,8 +29,8 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
 | 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；🟡 跨模块引用已通（module-plan B0：纯逻辑共享模块 require；含第三方依赖如 pinia 的共享模块跳过编译——Pinia MP 编译待放行） | v0.4 + 跨模块接入 |
 | 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list，框架内置化完成）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
-| 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 447 单测 + CI（拆包完成：8 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）；🟡 npm 发包待启用 | v0.2 + 拆包尾 + module-plan ✅ |
+| 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底 + ★能力体系（platform-plan B1-B5：Capability 契约/Adapter Registry/降级/平台规范，MP 端 capability 可用）；❌ 插件体系 | v0.5 |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 485 单测 + CI（拆包完成：9 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）；🟡 npm 发包待启用 | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
 | 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表 + 分包体积监控（B7a） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 
@@ -151,6 +151,7 @@ proteus/                        # monorepo（v0.2 起）
 │   ├── router/                 # @proteus/router    路由 API / 守卫 / 转场
 │   ├── plugin-vite/            # @proteus/plugin-vite  小程序编译 Vite 插件 + gen-routes
 │   ├── module/                 # @proteus/module    ★模块化（module-plan B0-B9：契约/图谱/编排器/审计/分包）
+│   ├── capabilities/           # @proteus/capabilities ★能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
 │   ├── renderer-app/           # @proteus/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主，待建）
 │   ├── cli/                    # @proteus/cli       proteus build / explain / rules / module:check / audit
 │   ├── create-proteus/         # create-proteus     脚手架

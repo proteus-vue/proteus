@@ -20,11 +20,13 @@
 ```
 packages/
 ├── shared/        # @proteus/shared：平台 adapter + 全局类型（shims）+ 公共工具
-├── runtime/       # @proteus/runtime：setDataBridge / pageLifecycle / store 桥 / appSkeleton
+├── runtime/       # @proteus/runtime：setDataBridge / pageLifecycle / store 桥 / provide-inject / appSkeleton
 ├── router/        # @proteus/router：createRouter / guards / skyline / presets（依赖 shared）
-├── plugin-vite/   # @proteus/plugin-vite：vite 插件 + gen-routes（依赖 compiler + shared + config）
+├── plugin-vite/   # @proteus/plugin-vite：vite 插件 + gen-routes（依赖 compiler + shared + module + config）
+├── module/        # ★@proteus/module 模块化（module-plan B0-B9：契约/图谱/编排器/审计/Web 分包）
+├── capabilities/  # ★@proteus/capabilities 能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
 ├── compiler/      # ✅ 已有
-├── cli/           # ✅ 已有
+├── cli/           # ✅ 已有（build / explain / rules / module:* / audit / capabilities:*）
 └── create-proteus/# ✅ 已有（模板改依赖 @proteus/* npm 包）
 ```
 

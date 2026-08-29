@@ -47,6 +47,7 @@
 - **Web 零转换**：Web 端直接跑标准 Vite SPA（完整 devtools + HMR），不做二等公民
 - **Vue 能力渐进兼容（vue-compat-advance 全批）**：provide/inject 页面级注入桥（值传递 + 裸 ref 响应式联动 + pageId 隔离）、`<transition>` 进入+离开动画（编译注入 class + 状态机延迟移除）、作用域插槽平台限制确认（MP/Skyline 无模板传参机制，替代模式 props+事件）——三大运行期能力闭环
 - **模块化（module-plan B0-B9）**：跨模块引用编译期 import→require（共享模块独立产物）、`proteus-module.config.ts` 契约（defineModule + 校验）、依赖图谱（环检测/拓扑/chunk）、运行时编排器（createModuleSystem + 懒加载）、Web/Skyline 分包（manualChunks / subPackages 依赖 / preloadRule）、CI 审计门禁（`proteus audit module`：契约/图谱/体积/去重全硬卡）
+- **能力体系（platform-plan B1-B5）**：业务依赖能力不依赖平台——Capability 契约（defineCapability + 描述文件）、Adapter Registry（多实例 + 优先级选择 + fallback）、编译期分叉（`capabilities:manifest --platform` 能力缺失可见）、运行时降级（UnsupportedAPI / required 阻断）、平台原生模块规范（`capabilities:check` 禁止清单：业务零平台 API）；**MP 端 capability 已可用**（@proteus/* 框架包共享模块放行）
 - **Skyline 一等公民**：页面默认 `"renderer": "skyline"`，`wx.router` 自定义路由转场（半屏 / 上滑 / 层叠缩放）作为一等能力；Web 端用 Vue `<Transition>` 复刻同一套 `routeType` API
 - **反编译黑盒**：产物自校验 + 调试日志 + 源码行号注释 + 转换函数独立可单测，坏产物当场报错
 - **运行时极简**：只做数据桥接（setData 批量合并）与路由导航，无运行时 DOM 模拟
@@ -137,7 +138,8 @@ proteus/
 ├── packages/compiler/              # ★ @proteus/compiler 编译引擎独立包（v0.2 起 monorepo）
 │   └── src/                        #   纯函数引擎 + transforms 规则注册表（69 条 AI 说明书，含 apply 分派层）
 ├── packages/module/                # ★ @proteus/module 模块化包（module-plan B0-B9：契约/图谱/编排器/审计/Web 分包）
-├── packages/cli/                   # ★ @proteus/cli（v0.2：build / explain / rules / module:check / audit module）
+├── packages/capabilities/          # ★ @proteus/capabilities 能力体系（platform-plan B1-B5：契约/Registry/编译期分叉/降级/规范）
+├── packages/cli/                   # ★ @proteus/cli（v0.2：build / explain / rules / module:check / audit / capabilities:*）
 ├── packages/create-proteus/        # ★ create-proteus（v0.2：npm create proteus 一键双端工程）
 ├── src/
 │   ├── components/                   # ★ 框架内置组件（v0.4：virtual-list 等，聚合入口 index.ts + 产物 proteus/ 前缀）
@@ -145,8 +147,8 @@ proteus/
 │   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
-├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包）
-├── tests/                          # 181 个单元测试 + 8 个 Web e2e 测试
+├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包 / capability）
+├── tests/                          # 485 个单元测试 + 8 个 Web e2e 测试
 ├── .github/workflows/ci.yml        # CI：test / vue-tsc / build:web / build:mp / 独立包构建 / e2e
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
@@ -154,7 +156,7 @@ proteus/
 ## 测试与验证
 
 ```bash
-npm test                # 181 个单测（router / mp-transform / runtime / transforms / explain / overrides / golden / plugin / cli / create-proteus / store / bundle-report / perf）
+npm test                # 485 个单测（compiler / module / capabilities / runtime / router / plugin / cli / golden / pinia / storage / bundle-report / perf）
 npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
@@ -174,7 +176,7 @@ npm run proteus -- explain <vue-file | rule-id>   # CLI：决策 trace / AI 说�
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接（深层 diff + 批量）、反黑盒调试、AI-native 规则注册表（69 条 AI 说明书 + apply 分派层）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ v0.3 编译能力（computed/watch/组件系统/scoped CSS/sourcemap）+ v0.4 运行时性能（虚拟列表/Pinia/store 桥/性能基准/包体积仪表）+ **vue-compat-advance 全批**（provide/inject 注入桥+响应式+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认）+ **module-plan 模块化 B0-B9**（跨模块引用 import→require、模块契约/图谱/编排器、Web/Skyline 分包、体积/去重/审计门禁）+ pinia-plan M1-M8（多端持久化/协同/可观测）、447 单测 + 8 e2e
+- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接（深层 diff + 批量）、反黑盒调试、AI-native 规则注册表（69 条 AI 说明书 + apply 分派层）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ v0.3 编译能力（computed/watch/组件系统/scoped CSS/sourcemap）+ v0.4 运行时性能（虚拟列表/Pinia/store 桥/性能基准/包体积仪表）+ **vue-compat-advance 全批**（provide/inject 注入桥+响应式+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认）+ **module-plan 模块化 B0-B9**（跨模块引用 import→require、模块契约/图谱/编排器、Web/Skyline 分包、体积/去重/审计门禁）+ **platform-plan 能力体系 B1-B5**（Capability 契约/Adapter Registry/编译期分叉/运行时降级/平台原生模块规范，MP 端 capability 已可用）+ pinia-plan M1-M8（多端持久化/协同/可观测）、485 单测 + 8 e2e
 - **规划**：v0.3 尾项（CSS 预处理器/类型提示/computed 写路径）、框架本体拆包（@proteus/router/runtime/plugin-vite）、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via Vue 自定义渲染器**）、**Vapor 兼容**、npm 发布——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议
