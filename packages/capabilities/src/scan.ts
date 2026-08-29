@@ -15,6 +15,8 @@ export interface ManifestCapabilityEntry {
   name?: string
   platforms: CapabilityPlatform[]
   fallback?: string
+  /** 描述文件路径（相对扫描根；产物可追溯铁律） */
+  source: string
 }
 
 export interface CapabilityManifest {
@@ -73,6 +75,7 @@ export async function scanCapabilities(root: string): Promise<{ manifest: Capabi
         name: def.meta.name,
         platforms: Object.keys(def.adapters) as CapabilityPlatform[],
         fallback: def.fallback,
+        source: path.relative(root, file).replace(/\\/g, '/'),
       })
       fileReports.push({ file: path.relative(root, file).replace(/\\/g, '/'), ok: true })
     } catch (err) {

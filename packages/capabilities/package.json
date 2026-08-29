@@ -15,11 +15,15 @@
       "types": "./dist/scan.d.ts",
       "import": "./dist/scan.js"
     },
+    "./check": {
+      "types": "./dist/check.d.ts",
+      "import": "./dist/check.js"
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts --bundle --format=esm --platform=node --outdir=dist --external:esbuild"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/check.ts --bundle --format=esm --platform=node --outdir=dist --external:esbuild"
   },
   "dependencies": {
     "esbuild": "^0.28.2"

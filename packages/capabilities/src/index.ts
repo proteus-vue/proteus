@@ -7,9 +7,10 @@ import { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } fr
 import type { CapabilityAdapter } from './adapter'
 
 export * from './types'
-export { CapabilityRegistry, defineAdapter, validateAdapter } from './adapter'
+export { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
 export type { CapabilityAdapter } from './adapter'
-export { detectPlatform } from './adapter'
+
+// ★scan/check 为 node 工具（esbuild/fs），仅经子路径 '@proteus/capabilities/scan' / 'check' 导入——不进运行时入口（浏览器/MP 产物）
 
 /** 校验能力描述文件（纯函数；id kebab-case 必填 / tier 1-4 / adapters 非空 / fallback 引用合法） */
 export function validateCapabilityDefinition(input: unknown): { ok: true; value: CapabilityDefinition } | { ok: false; errors: Array<{ field: string; message: string }> } {

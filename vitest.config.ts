@@ -19,6 +19,7 @@ export default defineConfig({
       { find: '@proteus/module', replacement: fileURLToPath(new URL('./packages/module/src/index.ts', import.meta.url)) },
       // platform-plan B1：@proteus/capabilities 包（capabilities.test 经 CLI capability-manifest 引用）
       { find: '@proteus/capabilities/scan', replacement: fileURLToPath(new URL('./packages/capabilities/src/scan.ts', import.meta.url)) },
+      { find: '@proteus/capabilities/check', replacement: fileURLToPath(new URL('./packages/capabilities/src/check.ts', import.meta.url)) },
       { find: '@proteus/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
     ],
   },

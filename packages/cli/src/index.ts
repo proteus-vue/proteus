@@ -83,8 +83,8 @@ async function main(): Promise<void> {
       break
     }
     case 'capabilities:manifest': {
-      const { root } = parseCapabilityManifestArgs(rest)
-      const { text } = await runCapabilityScan(root)
+      const { root, platform } = parseCapabilityManifestArgs(rest)
+      const { text } = await runCapabilityScan(root, undefined, platform)
       console.log(text)
       break
     }

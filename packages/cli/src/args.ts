@@ -163,12 +163,26 @@ export function parseModuleInitArgs(argv: string[]): ModuleInitArgs {
 export interface CapabilityManifestArgs {
   /** 项目根目录（扫描 capabilities/*.capability.ts；缺省当前目录） */
   root: string
+  /** --platform <web|skyline|app>：能力缺失报告（B3 编译期分叉 §7） */
+  platform?: 'web' | 'skyline' | 'app'
 }
 
 export function parseCapabilityManifestArgs(argv: string[]): CapabilityManifestArgs {
   const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
-  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
-  return { root: path.resolve(dir) }
+  let platform: 'web' | 'skyline' | 'app' | undefined
+  let i = 0
+  while (i < argv.length) {
+    const a = argv[i]
+    if (a === '--platform') {
+      const p = argv[++i]
+      if (!['web', 'skyline', 'app'].includes(p ?? '')) throw new Error(`--platform 需要 web / skyline / app（收到 ${p ?? '空'}）`)
+      platform = p as 'web' | 'skyline' | 'app'
+    } else if (a.startsWith('-')) {
+      throw new Error(`未知参数：${a}`)
+    }
+    i++
+  }
+  return { root: path.resolve(dir), platform }
 }
 
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
@@ -204,8 +218,9 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
   proteus init module [dir]
       ★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）
 
-  proteus capabilities:manifest [dir]
-      ★扫描 capabilities/*.capability.ts → capability-manifest.json（platform-plan B1：能力清单审计）
+  proteus capabilities:manifest [dir] [--platform <web|skyline|app>]
+      ★扫描 capabilities/*.capability.ts → capability-manifest.json（B1 能力清单审计）
+      --platform   能力缺失报告（B3 编译期分叉：该平台无 adapter 的能力 + 业务引用警告）
 
   proteus version / help
 `
