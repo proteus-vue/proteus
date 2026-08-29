@@ -2,7 +2,7 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -11,7 +11,7 @@ import { checkModuleConfigs } from './module-check'
 import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
 import { runAuditModule } from './module-audit'
 import { writeModuleConfigSkeleton } from './module-init'
-import { runCapabilityScan } from './capability-manifest'
+import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -86,6 +86,13 @@ async function main(): Promise<void> {
       const { root, platform } = parseCapabilityManifestArgs(rest)
       const { text } = await runCapabilityScan(root, undefined, platform)
       console.log(text)
+      break
+    }
+    case 'capabilities:check': {
+      const { root } = parseCapabilityCheckArgs(rest)
+      const { text, violations } = runCapabilityCheck(root)
+      console.log(text)
+      if (violations.length) process.exitCode = 1
       break
     }
     case 'version':

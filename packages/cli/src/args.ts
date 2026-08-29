@@ -185,6 +185,17 @@ export function parseCapabilityManifestArgs(argv: string[]): CapabilityManifestA
   return { root: path.resolve(dir), platform }
 }
 
+export interface CapabilityCheckArgs {
+  /** 项目根目录（平台原生模块规范静态检查；缺省当前目录） */
+  root: string
+}
+
+export function parseCapabilityCheckArgs(argv: string[]): CapabilityCheckArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { root: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -221,6 +232,9 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
   proteus capabilities:manifest [dir] [--platform <web|skyline|app>]
       ★扫描 capabilities/*.capability.ts → capability-manifest.json（B1 能力清单审计）
       --platform   能力缺失报告（B3 编译期分叉：该平台无 adapter 的能力 + 业务引用警告）
+
+  proteus capabilities:check [dir]
+      ★平台原生模块规范静态检查（B5 §6 禁止清单：业务目录禁 wx.*/window.*，平台文件防 API 泄漏）
 
   proteus version / help
 `

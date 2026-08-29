@@ -65,3 +65,64 @@ export function checkCapabilityUsage(manifest: CapabilityManifest, usages: Capab
     gaps,
   }
 }
+
+// ==================== ★B5：平台原生模块规范（§6 禁止清单 + §7 静态检查） ====================
+
+/** 平台文件判定：文件名含 .web./.skyline./.app./.mp.（MP 入口）或位于 adapters/ platforms/ 目录 */
+const PLATFORM_FILE_RE = /\.(web|skyline|app|mp)\.|\/(adapters|platforms)\//
+
+/** 业务目录（禁止平台 API 裸调用）；capabilities/adapters/platforms/shims 除外 */
+const BUSINESS_EXCLUDE = ['capabilities', 'adapters', 'platforms', 'shims', 'node_modules', 'dist']
+
+/** 平台 API 裸调用（wx.setStorageSync( / window.location = 等；非 declare 类型声明） */
+const PLATFORM_API_RE = /\b(?:wx|window)\.[A-Za-z_$][\w$]*\s*(\(|=|;|\.)/g
+
+export interface PlatformViolation {
+  file: string
+  match: string
+  rule: string
+}
+
+/**
+ * ★B5 §7 静态检查：平台原生能力只能在指定目录（铁律）
+ * - 平台文件（*.skyline.ts / adapters/ 等）：skyline/app 文件禁 window.；web 文件禁 wx.
+ * - 业务目录（pages/components/stores 等）：禁 wx.* / window.* 裸调用（走 capability）
+ */
+export function scanPlatformViolations(root: string): PlatformViolation[] {
+  const out: PlatformViolation[] = []
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.(vue|ts)$/.test(entry.name)) continue
+      const rel = path.relative(root, full).replace(/\\/g, '/')
+      const src = fs.readFileSync(full, 'utf-8')
+      const script = entry.name.endsWith('.vue') ? (src.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '') : src
+      const isPlatformFile = PLATFORM_FILE_RE.test(rel)
+      if (isPlatformFile) {
+        // 平台文件：skyline/app 禁 window；web 禁 wx
+        if (/\.(skyline|app|mp)\./.test(rel) || rel.includes('/platforms/skyline') || rel.includes('/platforms/app')) {
+          for (const m of script.matchAll(/\bwindow\.[A-Za-z_$][\w$]*\s*(\(|=|;|\.)/g)) {
+            out.push({ file: rel, match: m[0].trim(), rule: '平台文件（skyline/app）禁止 window.*（web API 泄漏）' })
+          }
+        }
+        if (/\.web\./.test(rel) || rel.includes('/platforms/web')) {
+          for (const m of script.matchAll(/\bwx\.[A-Za-z_$][\w$]*\s*(\(|=|;|\.)/g)) {
+            out.push({ file: rel, match: m[0].trim(), rule: '平台文件（web）禁止 wx.*（MP API 泄漏）' })
+          }
+        }
+      } else if (!BUSINESS_EXCLUDE.some((seg) => rel.split('/').includes(seg))) {
+        // 业务目录：禁 wx.* / window.* 裸调用
+        for (const m of script.matchAll(PLATFORM_API_RE)) {
+          out.push({ file: rel, match: m[0].trim(), rule: '业务目录禁止平台 API 裸调用（走 capability/useCapability，platform-plan B5 §6）' })
+        }
+      }
+    }
+  }
+  walk(root)
+  return out
+}

@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { scanCapabilities } from '@proteus/capabilities/scan'
 import type { CapabilityManifest, ManifestCapabilityEntry } from '@proteus/capabilities/scan'
-import { scanCapabilityUsage, checkCapabilityUsage } from '@proteus/capabilities/check'
+import { scanCapabilityUsage, checkCapabilityUsage, scanPlatformViolations } from '@proteus/capabilities/check'
+import type { PlatformViolation } from '@proteus/capabilities/check'
 
 /** 渲染 manifest 报告（纯函数；--platform 时追加缺失报告） */
 export function formatCapabilityManifest(
@@ -52,4 +53,14 @@ export async function runCapabilityScan(root: string, outFile?: string, platform
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
   fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n')
   return { text, manifest, check }
+}
+
+/** ★B5 §7：平台原生模块静态检查（禁止清单）——业务目录禁 wx./window 平台 API，平台文件防 API 泄漏 */
+export function runCapabilityCheck(root: string): { text: string; violations: PlatformViolation[] } {
+  const violations = scanPlatformViolations(root)
+  if (!violations.length) return { text: '[proteus-capabilities] 平台原生模块规范检查：✅ 通过（业务零平台 API，wx.* 仅在平台文件）', violations }
+  const lines = [`[proteus-capabilities] ❌ 平台原生模块规范违规（${violations.length} 处，B5 §6 禁止清单）：`]
+  for (const v of violations) lines.push(`  - ${v.file}: ${v.match}（${v.rule}）`)
+  lines.push('修正：业务代码改用 capability/useCapability；平台 API 移到 adapters/*.skyline.ts / platforms/（见 docs/proteus-platform-plan/05-m5-platform-modules.md）')
+  return { text: lines.join('\n'), violations }
 }

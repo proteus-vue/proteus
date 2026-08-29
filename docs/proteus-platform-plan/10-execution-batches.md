@@ -121,7 +121,7 @@
 | B2 | ✅ | — |
 | B3 | ✅ | Web/Skyline |
 | B4 | ✅ | 全部 |
-| B5 | ⏳ | Web/Skyline/App |
+| B5 | ✅ | Web/Skyline/App |
 | B6-B9 | ⏳ | 超级应用 |
 
 ---
