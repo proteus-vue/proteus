@@ -1,7 +1,8 @@
 // src/compiler/transforms/style.ts
 // style 阶段编译规则注册表 —— 每条规则一份 AI 说明书
+// ★阶段三分派层示范：implemented 规则可携带 apply()——AI 覆盖 apply 即生效（底线循环 ①）
 import { TAG_MAP, SEMANTIC_CLASS } from '../tags'
-import type { TransformRule } from './types'
+import type { TransformRule, RuleContext } from './types'
 
 export const STYLE_RULES: TransformRule[] = [
   {
@@ -16,6 +17,12 @@ export const STYLE_RULES: TransformRule[] = [
     verify: 'tests/mp-transform.test.ts px→rpx 用例',
     source: 'src/compiler/style.ts → transformStyleToWxss（px2rpx 分支）',
     decision: '#9',
+    // ★分派层：AI 覆盖此实现（如改换算公式/单位映射）→ 编译输出即时变化，无需改 style.ts
+    apply: (ctx: RuleContext) => {
+      const input = ctx.input as string
+      const ratio = Number(ctx.options?.rpxRatio ?? 2)
+      ctx.output = input.replace(/(\d+(?:\.\d+)?)px\b/g, (_m: string, n: string) => `${Number(n) * ratio}rpx`)
+    },
   },
   {
     id: 'style/selector-tag',

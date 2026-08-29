@@ -11,6 +11,8 @@ import type {
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
+import { executeRule } from './transforms/registry'
+import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 
 function escapeXml(s: string): string {
@@ -210,10 +212,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const attrs: string[] = []
   let hasNavTarget = false
 
-  // scoped CSS（v0.3）：模板元素附加作用域属性（样式选择器 [data-v-xxx] 精确匹配）
+  // scoped CSS（v0.3）：模板元素附加作用域属性（★分派层：经注册表执行，AI 覆盖规则 apply 即生效）
   if (ctx.scopeId) {
-    attrs.push(ctx.scopeId)
-    ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} ${ctx.scopeId}>` })
+    const scopeCtx: RuleContext = { input: { tag: node.tag, scopeId: ctx.scopeId } }
+    executeRule('template/scope-attr', scopeCtx)
+    const attr = (scopeCtx.output as string | undefined) ?? ctx.scopeId
+    attrs.push(attr)
+    ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} ${attr}>` })
   }
 
   for (const prop of node.props) {

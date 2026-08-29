@@ -1,8 +1,9 @@
 // src/compiler/transforms/template.ts
 // template 阶段编译规则注册表 —— 每条规则一份 AI 说明书
 // 映射表与 src/compiler/tags.ts 同源引用（防漂移），registry 测试校验覆盖完整性
+// ★阶段三分派层示范：implemented 规则可携带 apply()——AI 覆盖 apply 即生效（底线循环 ①）
 import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from '../tags'
-import type { TransformRule } from './types'
+import type { TransformRule, RuleContext } from './types'
 
 /** 表驱动规则工厂：从 TAG_MAP 取同源映射（改 tags.ts 自动生效，测试防遗漏） */
 function tagRule(
@@ -405,6 +406,11 @@ export const TEMPLATE_RULES: TransformRule[] = [
     verify: 'tests/mp-transform.test.ts scoped CSS 用例',
     source: 'packages/compiler/src/template.ts → serializeElement（scopeId 分支）',
     decision: '#77（v0.3 scoped CSS）',
+    // ★分派层示范：输入 { tag, scopeId } → 输出作用域属性片段（AI 覆盖可改属性名/注入位置）
+    apply: (ctx: RuleContext) => {
+      const input = ctx.input as { tag: string; scopeId: string }
+      ctx.output = input.scopeId
+    },
   },
 ]
 

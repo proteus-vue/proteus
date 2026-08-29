@@ -6,6 +6,8 @@
 import type { StyleTransformOptions } from './types'
 import type { TransformTrace } from './trace'
 import { resolveOverrides } from './overrides'
+import { executeRule } from './transforms/registry'
+import type { RuleContext } from './transforms/types'
 import type { ResolvedOverrides } from './overrides'
 
 // 选择器中的标签名 → 小程序标签（.links a → .links view、h1 → text）
@@ -93,11 +95,16 @@ export function transformStyleToWxss(
   if (counts.tag > 0) trace?.add('style/selector-tag', { before: `选择器含 HTML 标签（${counts.tag} 处）`, after: '映射为小程序标签（div → view）' })
   if (counts.semantic > 0) trace?.add('style/selector-semantic', { before: `h1-h6/p/a 选择器（${counts.semantic} 处）`, after: '.proteus-* 类选择器（避免同特异性覆盖）' })
 
-  // 2. px → rpx
+  // 2. px → rpx（★阶段三分派层：经注册表 executeRule 执行，AI 覆盖规则 apply 即生效）
   const doPx2rpx = opts.px2rpx && !res.disabled.has('style/px-to-rpx')
   const pxCount = (css.match(/(\d+(?:\.\d+)?)px\b/g) ?? []).length
   if (doPx2rpx) {
-    css = css.replace(/(\d+(?:\.\d+)?)px\b/g, (_m, n: string) => `${Number(n) * opts.rpxRatio}rpx`)
+    const pxCtx: RuleContext = {
+      input: css,
+      options: { rpxRatio: opts.rpxRatio },
+    }
+    executeRule('style/px-to-rpx', pxCtx)
+    css = (pxCtx.output as string) ?? css
     if (pxCount > 0) trace?.add('style/px-to-rpx', { before: `${pxCount} 处 px`, after: `${pxCount} 处 rpx（rpxRatio=${opts.rpxRatio}）` })
   }
 
