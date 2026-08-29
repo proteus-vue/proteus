@@ -115,6 +115,8 @@ B1 ──┬── B2 ──┬── B6
 | B2 | ✅ | | 生命周期单测通过 |
 | B3 | ✅ | | 环检测 + 拓扑排序通过 |
 | B4 | ✅ | | Web 分包产物验证（manualChunks 生成） |
+| B7a | ✅ | | 分包体积监控（M7.6：扫描 + 阈值门禁） |
+| B7b-d | ⬜ | | 去重检测 / 懒加载 / 沙箱（B7 子项拆批） |
 | B5 | ✅ | | Skyline subPackages 生成（分包依赖 + preloadRule） |
 | B4 | ⬜ | | Web 分包产物验证 |
 | B5 | ⬜ | | Skyline subPackages 生成 |
