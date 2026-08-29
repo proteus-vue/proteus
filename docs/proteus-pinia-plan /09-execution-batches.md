@@ -208,12 +208,12 @@ Batch 6 (M6) ── 07-testing.md + 08-migration-guide.md
 
 | Batch | Milestone | 状态 | PR |
 |-------|-----------|------|-----|
-| 1 | M1 Storage | ⬜ 待开始 | — |
-| 2 | M2 Persistence | ⬜ 待开始 | — |
-| 3 | M3 Platforms | ⬜ 待开始 | — |
-| 4 | M4 SSR | ⬜ 待开始 | — |
-| 5 | M5 DevTools | ⬜ 待开始 | — |
-| 6 | M6 Testing + Migration | ⬜ 待开始 | — |
+| 1 | M1 Storage | ✅ 完成（决策 #106a） | — |
+| 2 | M2 Persistence | ✅ 完成 | — |
+| 3 | M3 Platforms | ✅ 完成 | — |
+| 4 | M4 SSR | ✅ 完成 | — |
+| 5 | M5 DevTools | ✅ 完成 | — |
+| 6 | M6 Testing + Migration | ✅ 完成 | — |
 | 7.1 - 7.6 | M7 可靠性 | ⬜ 按需 | — |
 | 8.1 - 8.4 | M8 协同 + 可观测 | ⬜ 按需 | — |
 
