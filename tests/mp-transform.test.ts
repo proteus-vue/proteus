@@ -741,6 +741,21 @@ describe('compileVueSfc（整包编译入口）', () => {
     const { js } = compileVueSfc(sfc, { isComponent: true })
     expect(js).toContain('Component({')
   })
+
+  it('★async 方法：async 修饰保留（方法体 await 合法，platform-plan B1 修复）', () => {
+    const sfc = '<script setup lang="ts">async function loadData() { const r = await fetchData() }</script><template><view>x</view></template>'
+    const { js } = compileVueSfc(sfc)
+    expect(js).toContain('async loadData() {')
+    expect(js).toContain('await fetchData()')
+  })
+
+  it('★方法体 TS 类型断言剥离（as unknown/泛型，platform-plan B1 修复）', () => {
+    const sfc = '<script setup lang="ts">function f() { const x = get() as unknown as Capability<Foo>; return x }</script><template><view>x</view></template>'
+    const { js } = compileVueSfc(sfc)
+    expect(js).toContain('const x = get()')
+    expect(js).not.toContain('as unknown')
+    expect(js).not.toContain('Capability<Foo>')
+  })
 })
 
 describe('transformStyleToWxss（style → wxss）', () => {

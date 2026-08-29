@@ -9,11 +9,30 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
+// ★platform-plan B1：Capability 能力（业务依赖能力不依赖平台）——Web 端 Vite ESM 可用；MP 端接入待能力包打包放行
+import clipboardCap from '../capabilities/clipboard.capability'
+import type { ClipboardAPI } from '../capabilities/clipboard.capability'
+import { registerCapability, useCapability } from '@proteus/capabilities'
+import type { Capability } from '@proteus/capabilities'
+
+registerCapability(clipboardCap)
 
 const clicked = ref(0)
+const copyStatus = ref('')
 
 function bump() {
   clicked.value++
+}
+
+async function copyText() {
+  // 方法体内避免 TS 泛型调用（MP 产物限制）——断言 as unknown as Capability<...>（编译期剥离）
+  const clipboard = useCapability('clipboard') as unknown as Capability<ClipboardAPI>
+  if (!(await clipboard.isSupported())) {
+    copyStatus.value = '当前环境不支持剪贴板（isSupported 探测）'
+    return
+  }
+  await clipboard.api.write('Proteus Capability ' + Date.now())
+  copyStatus.value = '已复制（Capability 抽象，无平台判断）'
 }
 </script>
 
@@ -27,6 +46,12 @@ function bump() {
     <demo-box class="demo-box">customTags：'demo-box' → view（config 启用）</demo-box>
 
     <button @click="bump">计数：{{ clicked }}</button>
+
+    <!-- ★platform-plan B1：Capability 能力 demo（web: navigator.clipboard / skyline: wx.setClipboardData） -->
+    <div class="box">
+      <button @click="copyText">复制（Capability）</button>
+      <p class="sub">{{ copyStatus }}</p>
+    </div>
 
     <div class="note">
       <p><b>试玩三个开关</b>（编辑 proteus.config.ts 的 rules 段后 <code>npm run build:mp</code>）：</p>
@@ -54,6 +79,12 @@ function bump() {
   background: #eef4ff;
   border-radius: 8px;
   margin: 12px 0;
+}
+.box {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f5f6f7;
+  border-radius: 8px;
 }
 .note {
   margin-top: 20px;

@@ -17,6 +17,9 @@ export default defineConfig({
       { find: '@proteus/compiler', replacement: fileURLToPath(new URL('./packages/compiler/src/index.ts', import.meta.url)) },
       // module-plan B1：@proteus/module 包（module-contract.test 经 CLI module-check 引用）
       { find: '@proteus/module', replacement: fileURLToPath(new URL('./packages/module/src/index.ts', import.meta.url)) },
+      // platform-plan B1：@proteus/capabilities 包（capabilities.test 经 CLI capability-manifest 引用）
+      { find: '@proteus/capabilities/scan', replacement: fileURLToPath(new URL('./packages/capabilities/src/scan.ts', import.meta.url)) },
+      { find: '@proteus/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
     ],
   },
 })

@@ -561,30 +561,32 @@ function checkDefineExpose(
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
 function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, MethodInfo> {
   const methods: Record<string, MethodInfo> = {}
-  const fnRe = /function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g
+  const fnRe = /(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g
   let m: RegExpExecArray | null
   if (!disabled?.has('script/function-to-methods')) {
     while ((m = fnRe.exec(source))) {
-      const name = m[1]
-      const params = stripParamTypes(m[2])
+      const name = m[2]
+      const isAsync = Boolean(m[1])
+      const params = stripParamTypes(m[3])
       const body = extractBracedBody(source, m.index + m[0].length - 1)
       const line = lineAt(source, m.index)
-      trace?.add('script/function-to-methods', { line, before: `function ${name}(${m[2]})`, after: `${name}(${params})` })
-      // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明）
-      if (body !== null) methods[name] = { src: `${name}(${params}) {\n${body}\n}`, line }
+      trace?.add('script/function-to-methods', { line, before: `function ${name}(${m[3]})`, after: `${name}(${params})` })
+      // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明；async 保留——方法体 await 合法）
+      if (body !== null) methods[name] = { src: `${isAsync ? 'async ' : ''}${name}(${params}) {\n${body}\n}`, line }
       else warnings.push(`函数 ${name} 体解析失败，已跳过`)
     }
   }
-  const arrowRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>\s*\{/g
+  const arrowRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(async\s*)?\(([^)]*)\)\s*=>\s*\{/g
   if (!disabled?.has('script/arrow-to-methods')) {
     while ((m = arrowRe.exec(source))) {
       const name = m[1]
-      const params = stripParamTypes(m[2])
+      const isAsync = Boolean(m[2])
+      const params = stripParamTypes(m[3])
       const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
       const body = extractBracedBody(source, braceIdx)
       const line = lineAt(source, m.index)
       trace?.add('script/arrow-to-methods', { line, before: `const ${name} = (...) =>`, after: `${name}(...)` })
-      if (body !== null) methods[name] = { src: `${name}(${params}) {\n${body}\n}`, line }
+      if (body !== null) methods[name] = { src: `${isAsync ? 'async ' : ''}${name}(${params}) {\n${body}\n}`, line }
     }
   }
   return methods
@@ -668,6 +670,9 @@ function rewriteRefAccess(
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
+  // ★platform-plan B1：方法体内 TS 类型断言剥离（as unknown/any/never/标识符/单层泛型——产物是 JS；复杂嵌套断言仍 MVP 限制）
+  out = out.replace(/\s+as\s+(?:unknown|any|never)\b/g, '')
+  out = out.replace(/\s+as\s+[A-Za-z_$][\w$]*(?:<[^;\n]*?>)?/g, '')
   // 组件事件（v0.3）：emit('xxx', payload) → this.triggerEvent('xxx', payload)（微信组件方法）
   if (emitEnabled) out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）

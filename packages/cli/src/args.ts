@@ -160,6 +160,17 @@ export function parseModuleInitArgs(argv: string[]): ModuleInitArgs {
   return { root: path.resolve(dir) }
 }
 
+export interface CapabilityManifestArgs {
+  /** 项目根目录（扫描 capabilities/*.capability.ts；缺省当前目录） */
+  root: string
+}
+
+export function parseCapabilityManifestArgs(argv: string[]): CapabilityManifestArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { root: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -192,6 +203,9 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
   proteus init module [dir]
       ★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）
+
+  proteus capabilities:manifest [dir]
+      ★扫描 capabilities/*.capability.ts → capability-manifest.json（platform-plan B1：能力清单审计）
 
   proteus version / help
 `
