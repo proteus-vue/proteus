@@ -139,6 +139,7 @@ export interface PluginOptions {
    * ★框架内置组件目录（@proteus/components 组件库拆包前的定位方式，决策 #115）：
    * 组件库未拆包，仓库在工程根之外（如 monorepo 根 src/components）时，工程显式传入绝对路径；
    * 缺省相对工程根 src/components（create-proteus 模板工程用）
+   * ★v2.0 退役：@proteus/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
    */
   frameworkComponentsDir?: string
 }

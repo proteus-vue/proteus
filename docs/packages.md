@@ -117,6 +117,27 @@ packages/
 - [x] docs/roadmap.md 工程化行 ✅（拆包 8 步完成）、compiler/create-proteus 行描述更新（npm 包形态）；docs/packages.md 升级正式文档（状态 ✅）；PROJECT_MEMORY 决策 #105
 - 决策：#105；遗留：npm 发包待启用（用户暂不发布）——发布后验证 `npm create` 真实端到端
 
+## 框架内置组件的定位与退役路径（v0.4 补充，★v2.0 完整规划）
+
+**现状**（决策 #115 + 修复 f674ba0）：组件库未拆包，框架内置组件（virtual-list 等）在**仓库根 `src/components/`**（monorepo 内）而非应用工程内。
+
+| 侧 | 定位方式 | 说明 |
+|---|---|---|
+| Web | vite alias `@proteus/components` → 仓库根 `src/components` | 组件库未拆包时的显式映射（examples/vite.config.ts） |
+| MP 编译（plugin-vite） | `PluginOptions.frameworkComponentsDir` 显式传入仓库根组件目录 | 缺省相对工程根 `src/components`（create-proteus 模板工程用）；产物 rel 规范化 `proteus/<name>/index` |
+| MP page.json（gen-routes） | `GenRoutesOptions.frameworkComponentsDir` 显式传入同一目录 | 与插件同源；缺省同样相对工程根；collectComponents / writeComponentJsons 共用 |
+
+★路径基准踩坑：examples/scripts/gen-routes.ts 在 `scripts/` 子目录，传仓库根组件目录需 `../../src/components`（vite.config.ts 在工程根用 `../`）。
+
+**退役条件（v2.0 组件库拆包，★本参数生命周期终点）**：组件库拆为独立 `@proteus/components` npm 包后：
+
+1. Web 侧删除 alias，业务代码直接 `import ... from '@proteus/components'`
+2. MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` 的 node_modules 包内路径机制，步骤 7 已有先例）——产物路径 `proteus/<name>/index` 保持不变（对外契约）
+3. `frameworkComponentsDir` 两个选项退役（删除），同时删除缺省相对工程根 `src/components` 的兜底路径
+4. create-proteus 模板的 `@proteus/components` 依赖（步骤 8 后模板已依赖 npm 包形态）自然升级为真实包
+
+组件库本身的架构规划见 docs/proteus-component-plan/（L3 @proteus/components：基础组件 + 业务组件，Web/Skyline 双端语义一致）。
+
 ## 风险与对策
 
 | 风险 | 对策 |

@@ -136,7 +136,8 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 说明 |
 |---|---|
 | 调试 devtools | 小程序端编译产物可读面板（转场 / setData / 路由时间线），对标 Taro devtools / uni-app HBuilderX 调试器 |
-| 组件库 | 首个由社区共建的跨端组件库（走"标准 Vue + 编译"路线，天然双端可用） |
+| 组件库拆包（★前置） | **@proteus/components 独立 npm 包**：框架内置组件（virtual-list 等）从仓库根 `src/components/` 迁入包内（含 src/components/index.ts 聚合入口）；Web 侧删除 alias 改直接 import；MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` node_modules 包内路径机制），**`frameworkComponentsDir` 两个选项退役**（含缺省相对工程根 `src/components` 兜底），产物路径 `proteus/<name>/index` 不变；详见 docs/packages.md「框架内置组件的定位与退役路径」 |
+| 组件库 | 首个由社区共建的跨端组件库（走"标准 Vue + 编译"路线，天然双端可用）——架构规划见 docs/proteus-component-plan/ |
 | 插件体系 | 编译期插件（自定义映射 / 自定义产物）、运行时插件（中间件） |
 | 社区设施 | 示例仓库、Gitter/Discord、贡献者指南、RFC 流程 |
 
@@ -189,7 +190,7 @@ proteus/                        # monorepo（v0.2 起）
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |
 | v1.0 | 能力矩阵全 ✅；真实项目验证报告（含 iOS 真机 Skyline 白屏场景兜底验证）；性能指标达标；文档站上线 |
-| v2.0 | devtools 可用；首个社区组件库发布；插件体系文档化 |
+| v2.0 | devtools 可用；**@proteus/components 独立包发布**（内置组件迁入包，frameworkComponentsDir 退役）；首个社区组件库发布；插件体系文档化 |
 
 ---
 
