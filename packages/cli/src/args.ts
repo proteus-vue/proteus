@@ -89,12 +89,15 @@ export function parseRouterCheckArgs(argv: string[]): RouterCheckArgs {
 export interface ModuleCheckArgs {
   /** 项目根目录（递归扫描 proteus-module.config.ts；缺省当前目录） */
   root: string
+  /** --graph：追加 Mermaid 依赖图输出 */
+  graph: boolean
 }
 
 export function parseModuleCheckArgs(argv: string[]): ModuleCheckArgs {
   const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
-  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
-  return { root: path.resolve(dir) }
+  const graph = argv.includes('--graph')
+  if (argv.filter((a) => !a.startsWith('-') && a !== dir).length) throw new Error('多余参数')
+  return { root: path.resolve(dir), graph }
 }
 
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架

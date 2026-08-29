@@ -43,10 +43,10 @@ async function main(): Promise<void> {
       break
     }
     case 'module:check': {
-      const { root } = parseModuleCheckArgs(rest)
-      const { text, result } = await checkModuleConfigs(root)
+      const { root, graph } = parseModuleCheckArgs(rest)
+      const { text, result, cycles, conflicts } = await checkModuleConfigs(root, graph)
       console.log(text)
-      if (!result.modules.every((m) => m.ok) || result.duplicateNames.length) process.exitCode = 1
+      if (!result.modules.every((m) => m.ok) || result.duplicateNames.length || cycles.length || conflicts.length) process.exitCode = 1
       break
     }
     case 'version':

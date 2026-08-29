@@ -15,6 +15,10 @@ export interface ModuleScanEntry {
   file: string
   name: string | undefined
   version: string | undefined
+  /** ★B3：模块依赖（构建依赖图/环检测用） */
+  dependencies?: Record<string, string>
+  /** ★B3：分包 chunk（对齐 Router M7.1） */
+  chunk?: string
   ok: boolean
   errors: ModuleValidationIssue[]
   warnings: ModuleValidationIssue[]
@@ -63,11 +67,13 @@ export async function scanModuleConfigs(root: string): Promise<ModuleScanResult>
     try {
       const value = await loadModuleConfig(file)
       const result = validateModuleConfig(value)
-      const raw = (value ?? {}) as { name?: string; version?: string }
+      const raw = (value ?? {}) as { name?: string; version?: string; dependencies?: Record<string, string>; chunk?: string }
       entry = {
         file: path.relative(root, file).replace(/\\/g, '/'),
         name: raw.name,
         version: raw.version,
+        dependencies: raw.dependencies,
+        chunk: raw.chunk,
         ok: result.ok,
         errors: result.ok ? [] : result.errors,
         warnings: 'warnings' in result ? result.warnings : [],
