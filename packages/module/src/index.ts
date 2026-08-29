@@ -6,3 +6,5 @@ export { walkModuleConfigs, loadModuleConfig, scanModuleConfigs, formatModuleChe
 export type { ModuleScanEntry, ModuleScanResult } from './scan'
 export { DependencyGraph, CycleError, buildModuleGraphManifest, moduleGraphToMermaid } from './graph'
 export type { ModuleNode, Cycle, VersionConflict } from './graph'
+export { createModuleSystem, createModuleEventBus, satisfies, parseSemver, VersionMismatchError } from './orchestrator'
+export type { ModuleDefinition, ModuleInstance, ModuleSystem, ModuleEventBus, ModuleState } from './orchestrator'

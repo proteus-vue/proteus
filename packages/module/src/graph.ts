@@ -150,6 +150,10 @@ export class DependencyGraph {
         }
       }
     }
+    if (result.length !== this.nodes.size) {
+      const missing = this.nodeNames().filter((n) => !result.includes(n))
+      throw new Error(`[proteus-module] 依赖图不完整（悬挂依赖无法拓扑）：${missing.join(', ')}——请检查模块依赖声明（proteus-module.config.ts）`)
+    }
     return result
   }
 
