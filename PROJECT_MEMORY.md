@@ -186,6 +186,7 @@
 - **Skyline iOS 真机白屏关注**：微信平台已知问题，已入 roadmap v0.5（能力兼容清单 + 页面级 WebView 降级通道）；真机实测时记录复现路径（决策 #69）
 - **后期可选**：按 `src/compiler/README.md` 提取路径把编译引擎独立开源为 `@proteus/compiler`；JS 产物方法级 sourcemap 接入微信开发者工具（P6-1 待办）；router 工厂化 API（`createRouter(routes)`）后 `auto-routes.ts` 可随应用移动至 `examples/`
 - **Skyline 自定义路由半屏视觉**：✅ 真机确诊可用（从非 tab 页发起）；⚠ 硬边界：不能从 tab 页发起（已文档化，demo 演示链接已移入非 tab 页）
+- **类型提示全链路（B 类最后一项）**：📋 规划已落地 `docs/types.md`（分 6 步：① gen-routes 生成 RouteParamsByName ② router.push 泛型 ③ PageOnLoad ④ 事件类型 shims ⑤ 端到端+文档 ⑥ 可选 CLI）；按步骤逐个提交执行
 - **P4 MVP 限制**（已在插件注释标注）：computed/watch/跨模块引用、复杂事件表达式、:class 数组语法、v-show 暂不支持；方法内 ref 写入（`=`/`++`/`--`）已支持（重写为 setData），复合赋值 `+=` 与复杂读取仍不支持
 - 文档版本号已到 v2.49（git 仓库关联）
 

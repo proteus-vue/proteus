@@ -174,6 +174,66 @@ Batch 6 (M6) ── 07-testing.md + 08-migration-guide.md
 
 ---
 
+---
+
+## 超级应用追加批次（M7 + M8）
+
+> 前置：M1-M6 已完成（骨架就绪）。M7/M8 追加式插入，不重构已有批次。
+
+### Batch 7.1 — 7.6（M7 可靠性）
+
+| 文件 | 产出 | 上下文（喂 LLM） |
+|------|------|------------------|
+| `10-m7-reliability.md` § M7.1 | `runtime/persist/sharding.ts` | overview + 10 + M2 文档 |
+| `10-m7-reliability.md` § M7.2 | `runtime/persist/scheduler.ts` | overview + 10 + M2 文档 |
+| `10-m7-reliability.md` § M7.3 | `runtime/persist/quota.ts` | overview + 10 + M1 文档 |
+| `10-m7-reliability.md` § M7.4 | `runtime/persist/migrate.ts` | overview + 10 + M2 文档 |
+| `10-m7-reliability.md` § M7.5 | `runtime/scope.ts` | overview + 10 + M3 文档 |
+| `10-m7-reliability.md` § M7.6 | `runtime/persist/secure.ts` | overview + 10 + M1 文档 |
+
+每批（7.1 / 7.2 / ... / 7.6）各一个 PR，复用 Batch 模板，上下文替换为 `overview + 10-m7-reliability.md + 对应直接依赖文档`。
+
+### Batch 8.1 — 8.4（M8 协同 + 可观测）
+
+| 文件 | 产出 | 上下文（喂 LLM） |
+|------|------|------------------|
+| `11-m8-sync-observability.md` § M8.1 | `packages/pinia-sync/`（LWW + CRDT 适配） | overview + 11 + M7.4, M7.6 |
+| `11-m8-sync-observability.md` § M8.2 | `runtime/devtools/snapshot.ts` | overview + 11 + M7.4 |
+| `11-m8-sync-observability.md` § M8.3 | `runtime/tracer.ts` | overview + 11 + M7.6 |
+| `11-m8-sync-observability.md` § M8.4 | `stores/registry.ts` + `CONVENTIONS.md` + CI workflow | overview + 11 + M6 |
+
+每批（8.1 / 8.2 / 8.3 / 8.4）各一个 PR。M8.1 为独立 package，可最后做或并行。
+
+### 更新后进度追踪
+
+| Batch | Milestone | 状态 | PR |
+|-------|-----------|------|-----|
+| 1 | M1 Storage | ⬜ 待开始 | — |
+| 2 | M2 Persistence | ⬜ 待开始 | — |
+| 3 | M3 Platforms | ⬜ 待开始 | — |
+| 4 | M4 SSR | ⬜ 待开始 | — |
+| 5 | M5 DevTools | ⬜ 待开始 | — |
+| 6 | M6 Testing + Migration | ⬜ 待开始 | — |
+| 7.1 - 7.6 | M7 可靠性 | ⬜ 按需 | — |
+| 8.1 - 8.4 | M8 协同 + 可观测 | ⬜ 按需 | — |
+
+### 上下文预算（防撑爆）
+
+- **企业级路径**（M1-M6）：6 批，每批 ≤ 3 文件，单批上下文 ≈ overview(~5k) + 1-2 模块文档(~8k) + 依赖文档(~5k) ≈ **18k tokens**
+- **超级应用路径**（M7-M8）：10 批追加，复用同一预算，每批不回头读 M1-M6 全文，只引用直接依赖文档（已在根目录，按需 `read`）
+- **新增铁律**：LLM 执行任何 Batch 前，先 `read` 该 Batch 对应的 `.md`（10 或 11）+ overview，再按需 `read` 依赖文档；**禁止一次性读入全部 11 份**
+
+### 追加风险与缓解
+
+| 风险 | 缓解 |
+|------|------|
+| M7 调度器与 M2 持久化插件冲突 | B7.2 直接改造 M2 的 flush 逻辑，单 PR 内完成，不改插件对外 API |
+| M8.1 CRDT 依赖 Yjs 体积过大 | 动态 import，仅 `strategy:'crgt'` 时加载；LWW 为零依赖默认 |
+| encrypted 字段参与协同导致密文冲突 | M8.1 自动跳过 `encrypted`/`volatile` 字段并 warn |
+| AI 绕过 CI 门禁 | B8.4 门禁跑在 PR 流水线强制步骤，fail 即 block merge |
+
+---
+
 ## 一句话总结
 
-> **每份 `.md` = 一个独立上下文单元，每批 = 一个可合并 PR。** LLM 一次只吃 "overview + 当前模块 + 直接依赖"，永远不把 9 份全塞进去。
+> **每份 `.md` = 一个独立上下文单元，每批 = 一个可合并 PR。** LLM 一次只吃 "overview + 当前模块 + 直接依赖"，永远不把 11 份全塞进去。企业级走 6 批（M1-M6），超级应用再加 10 批（M7.1-M7.6 + M8.1-M8.4），追加式插入不重构。

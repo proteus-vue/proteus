@@ -2,7 +2,17 @@
 
 > **版本**：v1.0（对应 Proteus v2.47 基线）
 > **目标**：让同一份 Pinia store 源码在 Web SPA / 微信小程序 Skyline / App（Custom Renderer）/ SSR 四端行为一致，持久化层统一可插拔。
+> **定位**：M1-M6 构成「企业级标准骨架」；M7-M8 在此基础上覆盖「超级应用」场景（千级 store / 长期运行 / 多端协同 / 千人千机调试）。
 > **核心原则**：延续 Proteus「透明编译 + AI-native + 规则可审计」哲学 —— 适配层**零黑盒**，每条适配规则独立模块、JSDoc 契约、产物可追溯。
+
+### 两档交付
+
+| 档位 | 里程碑 | 适用 | 状态 |
+|------|--------|------|------|
+| **企业级** | M1 - M6 | 中等规模 App、四端一致、长期维护 | ✅ 基础规划（01-09） |
+| **超级应用** | M7 - M8 | 千级 store、高频写入、配额/迁移/内存、多端协同、线上可观测 | 🔧 本文追加（10-11） |
+
+> 升级路径：先完成 M1-M6（骨架 + 测试 + 迁移），再按需插入 M7/M8。M7/M8 追加式依赖 M1-M6 已有接口，**不重构骨架**。
 
 ---
 
@@ -71,6 +81,8 @@ src/
 | `06-devtools.md` | DevTools 连接（Web only） | 04 |
 | `07-testing.md` | 单元测试 / 跨端矩阵测试 | 01-06 |
 | `08-migration-guide.md` | 从原生 Pinia 迁移到 Proteus 的步骤 | 全部 |
+| `10-m7-reliability.md` | 超级应用可靠性（分片/性能/配额/迁移/生命周期/敏感数据） | M1, M2, M3, M6 |
+| `11-m8-sync-observability.md` | 超级应用协同 + 可观测（sync/快照/埋点/类型/AI 规范） | M6, M7 |
 
 ---
 
@@ -85,7 +97,26 @@ M5 ── DevTools（Web）                               (06)
 M6 ── 测试矩阵 + 迁移文档                           (07, 08)
 ```
 
-**依赖关系**：M1 → M2 → M3 → {M4, M5} → M6
+### 超级应用加固（追加，可选按需）
+
+```
+M7 ── 超级应用可靠性                                  (10)
+  M7.1 状态分片 + 按需 hydrate
+  M7.2 持久化性能（防抖 / 分层 / 高频合并）
+  M7.3 存储配额 + eviction 策略
+  M7.4 状态版本迁移（migrations）
+  M7.5 store 生命周期 + dispose
+  M7.6 字段级敏感标记（volatile / encrypted）
+M8 ── 协同 + 可观测                                   (11)
+  M8.1 多端 sync engine（LWW + CRDT）
+  M8.2 快照 + 时间旅行（收回 M6 的「不做」）
+  M8.3 状态变更埋点 + 远程复现
+  M8.4 类型注册表 + AI 协作规范 + CI 门禁
+```
+
+**依赖关系**：M1 → M2 → M3 → {M4, M5} → M6 → {M7 → M8}
+
+> M7/M8 为追加里程碑；只做企业级可只走 M1-M6，超级应用再插入 M7/M8，无需回头改骨架。
 
 ---
 
@@ -120,9 +151,10 @@ interface StorageAdapter {
 ## 6. 不做的事（明确排除，防止 scope creep）
 
 - ❌ 不实现 Redux DevTools 协议（仅 Pinia 官方 DevTools）
-- ❌ 不实现时间旅行（SSR 下无意义）
+- ⚠️ 时间旅行：M6 基线**不内置**；由 M8.2（`@proteus/pinia-devtools` 快照/时间旅行）按需提供，仅开发/调试 + 灰度复现包启用，生产默认关闭
 - ❌ 不做跨 store 事务（保持 Pinia 原子性）
 - ❌ 不修改 Pinia 内部源码（全部走插件 / 适配器）
+- ❌ M8.1 sync engine 不作为核心依赖（可选子包 `@proteus/pinia-sync`）
 
 ---
 
@@ -135,7 +167,19 @@ interface StorageAdapter {
 - [ ] `--trace-storage` 可打印每次持久化读写（对齐 `--trace-transform`）
 - [ ] 迁移文档：原生 Pinia 项目 ≤ 10 行改动即可接入 Proteus
 
----
+### 超级应用追加验收（M7 + M8 完成后）
 
-## 下一步
+- [ ] 千级 store 冷启动 hydrate < 100ms（仅 eager）
+- [ ] 高频写入（1000 次/秒）实际落盘 ≤ 3 次/秒
+- [ ] 存储满时 protected key 保留、淘汰可观测
+- [ ] 跨版本迁移链自动执行、失败不崩溃
+- [ ] 页面级 store dispose 后内存回归基线
+- [ ] 敏感字段不在明文存储中出现
+- [ ] 三端（web + mp + app）购物车并发操作最终一致（LWW / CRDT）
+- [ ] capture → restore 完整还原，时间旅行按步撤销
+- [ ] 线上 trace 上报（采样、节流、敏感字段剔除）可用
+- [ ] `useStore('typo')` 编译期报错
+- [ ] CI 门禁拦截 `stores/` 下任意平台分支代码
+
+---## 下一步
 → 按顺序阅读 `01-storage-adapter.md` 起，每个模块独立实现、独立测试、独立 PR。
