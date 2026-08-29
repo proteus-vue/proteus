@@ -14,11 +14,14 @@ import clipboardCap from '../capabilities/clipboard.capability'
 import type { ClipboardAPI } from '../capabilities/clipboard.capability'
 import { registerCapability, useCapability } from '@proteus/capabilities'
 import type { Capability } from '@proteus/capabilities'
+// ★api-plan B1：设备信息（@proteus/api 框架包——MP 端经共享模块放行 _proteus/api.js）
+import { getDeviceInfo } from '@proteus/api'
 
 registerCapability(clipboardCap)
 
 const clicked = ref(0)
 const copyStatus = ref('')
+const device = ref({ platform: '', screenWidth: 0, screenHeight: 0, isSkyline: false })
 
 function bump() {
   clicked.value++
@@ -33,6 +36,11 @@ async function copyText() {
   }
   await clipboard.api.write('Proteus Capability ' + Date.now())
   copyStatus.value = '已复制（Capability 抽象，无平台判断）'
+}
+
+function showDevice() {
+  const info = getDeviceInfo()
+  device.value = { platform: info.platform, screenWidth: info.screenWidth, screenHeight: info.screenHeight, isSkyline: info.isSkyline }
 }
 </script>
 
@@ -51,6 +59,12 @@ async function copyText() {
     <div class="box">
       <button @click="copyText">复制（Capability）</button>
       <p class="sub">{{ copyStatus }}</p>
+    </div>
+
+    <!-- ★api-plan B1：设备信息（@proteus/api getDeviceInfo——业务零平台分支） -->
+    <div class="box">
+      <button @click="showDevice">设备信息（@proteus/api）</button>
+      <p class="sub">{{ device.platform }} {{ device.screenWidth }}×{{ device.screenHeight }}{{ device.isSkyline ? '（Skyline）' : '' }}</p>
     </div>
 
     <div class="note">
