@@ -115,3 +115,32 @@ steps:
 - source map 可正确定位到源码行（DevTools plan B1 TraceBus 消费）
 - 二次构建命中缓存，耗时下降 > 70%
 - 远程缓存跨机器命中率 > 90%
+
+---
+
+## ★M8 落地批次（2026-08 启动）
+
+### 状态：✅ 编译缓存已落地（2026-08）
+
+验证数据（examples 真实构建）：
+- 首次 build:mp：0 命中 / 33 未命中（填充）→ 二次：**33 命中 / 0 未命中（100%）**
+- 两次构建产物 **diff 逐字节一致**（正确性证明）
+- 单文件变更：32 命中 / 1 未命中（**精确失效**）；恢复后 33 命中 / 0 未命中
+- `PROTEUS_NO_CACHE=1` 关闭生效
+
+### 范围（首批）
+
+**编译缓存**（buildStart 每文件 `compileVueSfc` 结果）：
+- 缓存键 = **sha1(源码 + 全部编译入参 + 编译器版本)**（铁律 #4：配置哈希 + 源码哈希 + 依赖哈希）——入参含 px2rpx/rpxRatio/rules/moduleImports/isComponent/annotateLines/debug
+- 存储：磁盘 `node_modules/.cache/proteus/compile/<key>.json` + 进程内存 Map
+- 命中 → 跳过 compileVueSfc，直接复用 wxml/js/wxss/warnings；未命中 → 编译 + 写缓存
+- **debug 构建（PROTEUS_DEBUG=1）跳过缓存**（sourcemap/行号注入与缓存互斥，开发态无需缓存）
+- 门控：默认开启；`PROTEUS_NO_CACHE=1` 关闭；构建结束输出缓存命中统计
+- 正确性保证：全入参哈希 → 任一输入变化即失效；编译器 dist 重建（版本变化）→ 全局失效
+
+### 后续批次
+
+- 共享模块 esbuild bundle 缓存（体积大，命中收益高）
+- 增量构建（只重编受影响文件，跳过未变 chunk）
+- 远程缓存（CI 跨机器，turbo/nx）
+- 默认开启验证（多轮真实构建产物 diff 一致后，移除 PROTEUS_CACHE 门控考虑）

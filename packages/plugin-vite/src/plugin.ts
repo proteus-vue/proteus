@@ -20,6 +20,7 @@ import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
 import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
+import { createCompileCache, compileCacheKey } from './cache'
 
 /** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus/router/src/presets/x.ts' → 解析包根 + 子路径 */
 const require = createRequire(import.meta.url)
@@ -221,6 +222,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       // 小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发，
       // 故在 buildStart 扫描目录逐个编译并 emitFile 资产
       const appDir = path.join(projectRoot, path.dirname(cfg.pagesDir))
+      // ★build-plan M8：编译缓存（磁盘 node_modules/.cache/proteus/compile；PROTEUS_NO_CACHE=1 关闭）
+      const compileCache = createCompileCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'compile'))
       // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
       const files: Array<{ file: string; rel: string }> = []
       const pushRel = (dir: string) => {
@@ -389,19 +392,76 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       for (const { file, rel } of files) {
         const source = fs.readFileSync(file, 'utf-8')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
-        const { wxml, js, wxss, warnings, trace, sourcemap } = compileVueSfc(source, {
-          filename: rel,
-          isComponent,
-          px2rpx,
-          rpxRatio,
-          rules,
-          // ★module-plan B0：跨模块引用映射（共享模块 require 路径）
-          moduleImports: moduleImportsByFile.get(file),
-          // dev 调试：产物注入源码行号注释 + 自动 handler 调试日志（PROTEUS_DEBUG=1 时开启）
-          annotateLines: isDebug,
-          debug: isDebug,
-          preprocessStyle,
-        })
+        // ★build-plan M8：编译缓存（PROTEUS_NO_CACHE=1 关闭；debug 构建跳过——sourcemap/行号注入与缓存互斥）
+        const cacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
+        let wxml: string
+        let js: string
+        let wxss: string
+        let warnings: string[] = []
+        let trace: unknown
+        let sourcemap: string | undefined
+        let cached = false
+        if (cacheEnabled) {
+          const key = compileCacheKey(source, {
+            rel,
+            isComponent,
+            px2rpx,
+            rpxRatio,
+            rules: rules as Record<string, unknown> | undefined,
+            moduleImports: moduleImportsByFile.get(file),
+            annotateLines: isDebug,
+            debug: isDebug,
+          })
+          const entry = compileCache.get(key)
+          if (entry) {
+            wxml = entry.wxml
+            js = entry.js
+            wxss = entry.wxss
+            warnings = entry.warnings
+            cached = true
+          } else {
+            const result = compileVueSfc(source, {
+              filename: rel,
+              isComponent,
+              px2rpx,
+              rpxRatio,
+              rules,
+              moduleImports: moduleImportsByFile.get(file),
+              annotateLines: isDebug,
+              debug: isDebug,
+              preprocessStyle,
+            })
+            wxml = result.wxml
+            js = result.js
+            wxss = result.wxss
+            warnings = result.warnings
+            trace = result.trace
+            sourcemap = result.sourcemap
+            compileCache.set(key, { wxml, js, wxss, warnings })
+          }
+        } else {
+          const result = compileVueSfc(source, {
+            filename: rel,
+            isComponent,
+            px2rpx,
+            rpxRatio,
+            rules,
+            moduleImports: moduleImportsByFile.get(file),
+            annotateLines: isDebug,
+            debug: isDebug,
+            preprocessStyle,
+          })
+          wxml = result.wxml
+          js = result.js
+          wxss = result.wxss
+          warnings = result.warnings
+          trace = result.trace
+          sourcemap = result.sourcemap
+        }
+
+        if (cached) {
+          console.log(`[mp-transform] 编译缓存命中：${rel}`)
+        }
 
         // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
         const jsWithMap = sourcemap && isDebug ? `${js}//# sourceMappingURL=${rel}.js.map\n` : js
@@ -421,6 +481,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         if (warnings.length) warningReport.push({ file: rel, warnings })
         console.log(`[mp-transform] ${rel} → wxml/js/wxss 已输出`)
+      }
+      // ★build-plan M8：缓存统计（PROTEUS_NO_CACHE=1 或 debug 时无统计）
+      if (!process.env.PROTEUS_NO_CACHE && !isDebug) {
+        const st = compileCache.stats()
+        console.log(`[mp-transform] 编译缓存：${st.hits} 命中 / ${st.misses} 未命中（${files.length} 个文件）`)
       }
     },
     buildEnd() {
