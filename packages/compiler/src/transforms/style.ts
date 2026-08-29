@@ -93,4 +93,17 @@ export const STYLE_RULES: TransformRule[] = [
     source: 'packages/compiler/src/style.ts → transformStyleToWxss（scopeId 分支）',
     decision: '#77（v0.3 scoped CSS）',
   },
+  {
+    id: 'transition/animation-wxss',
+    phase: 'style',
+    status: 'implemented',
+    title: '<transition> 进入动画 keyframes 注入',
+    description: 'wxss 尾部注入 proteus-transition-* 进入动画（fade/slide-up/scale keyframes）——配合模板侧 transition 装饰 class',
+    why: 'vue-compat-advance Batch 2（决策 #117）：<transition> 进入动画运行时等价（元素 wx:if 重建时 animation 自动播放）；离开动画 MP 无钩子',
+    when: '任一页面使用 <transition>（默认注入；rules.disabled 可关）',
+    example: { before: '<transition name="fade">…', after: 'wxss 含 .proteus-transition-fade + @keyframes proteus-fade-in' },
+    verify: 'tests/vue-compat-advance.test.ts Transition 用例',
+    source: 'packages/compiler/src/style.ts → TRANSITION_WXSS 注入',
+    decision: '#117',
+  },
 ]

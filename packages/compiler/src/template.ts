@@ -183,6 +183,12 @@ interface SerializeContext {
   onceHandlers: Set<string>
   /** vue-compat Batch B：内联事件表达式包装方法集合（自增/自减/简单方法调用） */
   inlineHandlers: Array<{ name: string; code: string }>
+  /** vue-compat-advance Batch 2：transition 子元素 v-if 抑制标记（v-if 已提取为 visible） */
+  transitionChild: boolean
+  /** vue-compat-advance Batch 2：<transition> 子元素注入的动画 class（装饰式，过渡标签不输出） */
+  transitionClassName?: string
+  /** vue-compat-advance Batch 2：模板使用 <transition> 标记（style 按需注入动画） */
+  usesTransition: boolean
 }
 
 /**
@@ -227,9 +233,25 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     )
     ctx.trace?.add('template/is-component', { line: node.loc.start.line, before: '<component :is>', after: '（无效标签，请条件渲染）' })
   }
-  if (node.tag === 'transition' || node.tag === 'transition-group' || node.tag === 'teleport' || node.tag === 'suspense' || node.tag === 'keep-alive') {
+  // ★vue-compat-advance Batch 2：<transition> 装饰式——动画 class 注入子元素，过渡标签不输出（进入动画自动播放，离开立即移除）
+  const isTransition = node.tag === 'transition'
+  if (isTransition) {
+    const nameAttr = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && p.name === 'name') as AttributeNode | undefined
+    const tName = (nameAttr && nameAttr.value ? nameAttr.value.content : 'fade') || 'fade'
+    ctx.transitionClassName = `proteus-transition-${tName}`
+    ctx.transitionChild = true
+    ctx.usesTransition = true
+    ctx.trace?.add('transition/component', {
+      line: node.loc.start.line,
+      before: `<transition name="${tName}">`,
+      after: `子元素注入 class="proteus-transition-${tName}"（进入动画自动播放）`,
+    })
+    // 装饰语义：不输出过渡标签本身，直接序列化子元素（动画 class 由子元素注入）
+    return node.children.map((c) => serializeNode(c, ctx)).join('\n')
+  }
+  if ((node.tag === 'transition-group' || node.tag === 'teleport' || node.tag === 'suspense' || node.tag === 'keep-alive') && !isTransition) {
     ctx.warnings.push(
-      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——转场请用路由 routeType，缓存/传送请移除（vue-compat Batch A）`,
+      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——缓存/传送请移除；多元素转场请用路由 routeType（vue-compat Batch A）`,
     )
     ctx.trace?.add('template/no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（无对等，原样输出）' })
   }
@@ -470,6 +492,18 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (effectiveBaseClass && !attrs.some((a) => a.startsWith('class='))) {
     attrs.push(`class="${effectiveBaseClass}"`)
   }
+  // ★vue-compat-advance Batch 2：<transition> 子元素注入动画 class（首个元素；进入动画由重建自动播放）
+  if (ctx.transitionClassName) {
+    const animCls = ctx.transitionClassName
+    ctx.transitionClassName = undefined
+    ctx.transitionChild = false
+    const clsIdx = attrs.findIndex((a) => a.startsWith('class='))
+    if (clsIdx >= 0) {
+      attrs[clsIdx] = attrs[clsIdx].replace(/^class="/, `class="${animCls} `)
+    } else {
+      attrs.push(`class="${animCls}"`)
+    }
+  }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
   const lineNote = ctx.annotateLines ? `<!-- @${node.loc.start.line} ${node.tag} -->\n` : ''
@@ -526,6 +560,8 @@ export function transformTemplateToWxml(
     selfHandlers: new Set(),
     onceHandlers: new Set(),
     inlineHandlers: [],
+    transitionChild: false,
+    usesTransition: false,
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
@@ -537,6 +573,7 @@ export function transformTemplateToWxml(
     selfHandlers: [...ctx.selfHandlers],
     onceHandlers: [...ctx.onceHandlers],
     inlineHandlers: ctx.inlineHandlers,
+    usesTransition: ctx.usesTransition,
     warnings: ctx.warnings,
   }
 }

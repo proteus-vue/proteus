@@ -25,6 +25,8 @@ export interface StyleTransformOptions {
   px2rpx: boolean
   /** px→rpx 比例 */
   rpxRatio: number
+  /** vue-compat-advance Batch 2：页面使用 <transition> 时注入进入动画 keyframes（按需） */
+  usesTransition?: boolean
   /** 决策 trace 收集器（可选：透明定位阶段二，explainTransform 使用） */
   trace?: TransformTrace
   /** 规则覆盖（可选：底线循环 ①③） */
@@ -54,6 +56,8 @@ export interface TemplateTransformResult {
   onceHandlers?: string[]
   /** vue-compat Batch B：内联事件表达式包装方法（自增/自减/简单方法调用） */
   inlineHandlers?: Array<{ name: string; code: string }>
+  /** vue-compat-advance Batch 2：模板是否使用 <transition>（style 按需注入动画 keyframes） */
+  usesTransition?: boolean
   warnings: string[]
 }
 

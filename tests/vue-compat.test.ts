@@ -30,9 +30,11 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(r.warnings.some((w) => w.includes('selectComponent'))).toBe(true)
   })
 
-  it('Transition/Teleport 等无对等组件 → 警告', () => {
-    const r = compile('<template><transition name="fade"><view>x</view></transition></template>')
-    expect(r.warnings.some((w) => w.includes('<transition>'))).toBe(true)
+  it('Transition 已支持（不再警告），Teleport 等无对等组件 → 警告', () => {
+    const tr = compile('<template><transition name="fade"><view v-if="on">X</view></transition></template><script setup>const on = ref(true)</script>')
+    expect(tr.warnings.some((w) => w.includes('<transition>'))).toBe(false) // vue-compat-advance Batch 2 已支持
+    const r = compile('<template><teleport to="body"><view>x</view></teleport></template>')
+    expect(r.warnings.some((w) => w.includes('<teleport>'))).toBe(true)
     expect(r.warnings.some((w) => w.includes('routeType'))).toBe(true)
   })
 

@@ -61,6 +61,17 @@ const BASE_SEMANTIC_WXSS = [
   '.proteus-a { color: #1a7af8; text-decoration: underline; }',
 ].join('\n')
 
+// ★vue-compat-advance Batch 2：<transition> 进入动画（纯 CSS，元素经 wx:if 重建时 animation 自动播放）
+// 语义：fade 淡入 / slide-up 上滑 / scale 缩放；离开动画 MP 无钩子（wx:if 移除即消失）——文档说明差异
+const TRANSITION_WXSS = [
+  '.proteus-transition-fade { animation: proteus-fade-in 0.25s ease; }',
+  '.proteus-transition-slide-up { animation: proteus-slide-up-in 0.32s cubic-bezier(0.35, 0.91, 0.33, 0.97); }',
+  '.proteus-transition-scale { animation: proteus-scale-in 0.4s cubic-bezier(0.35, 0.91, 0.33, 0.97); }',
+  '@keyframes proteus-fade-in { from { opacity: 0; } to { opacity: 1; } }',
+  '@keyframes proteus-slide-up-in { from { transform: translateY(20%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }',
+  '@keyframes proteus-scale-in { from { transform: scale(0.92) translateY(4%); opacity: 0.8; } to { transform: scale(1) translateY(0); opacity: 1; } }',
+].join('\n')
+
 /** 统计选择器重写前源 CSS 中的标签选择器处数（语义标签与普通标签分开计数） */
 function countSelectorRewrites(css: string, res: ResolvedOverrides): { tag: number; semantic: number } {
   const semanticKeys = Object.keys(res.semanticClass)
@@ -87,6 +98,9 @@ export function transformStyleToWxss(
   const injectBase = !res.disabled.has('style/semantic-base-wxss')
   let css = injectBase ? `${BASE_SEMANTIC_WXSS}\n${source}` : source
   if (injectBase) trace?.add('style/semantic-base-wxss', { before: 'h1-h6/p/a 无 UA 样式', after: '.proteus-h1~h6/.proteus-p/.proteus-a 基础 WXSS（注入在用户样式之前）' })
+  // ★vue-compat-advance Batch 2：<transition> 进入动画 keyframes 注入（按需：仅页面使用 transition 时）
+  const injectTransition = opts.usesTransition === true && !res.disabled.has('transition/animation-wxss')
+  if (injectTransition) css = `${css}\n\n${TRANSITION_WXSS}`
 
   // 1. 标签选择器映射（与模板标签映射一一对应，避免元素已映射而样式匹配不到）
   const doSelectorRewrite = !res.disabled.has('style/selector-tag') && !res.disabled.has('style/selector-semantic')

@@ -90,6 +90,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const wxss = transformStyleToWxss(styles.join('\n'), {
     ...styleOpts,
     scopeId,
+    usesTransition: tplResult.usesTransition,
     trace: styleTrace,
   })
 
