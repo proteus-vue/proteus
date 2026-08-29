@@ -14,9 +14,15 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared --external:pinia"
   },
   "dependencies": {
     "@proteus/shared": "0.1.0"
+  },
+  "peerDependencies": {
+    "pinia": "^4.0.0"
+  },
+  "devDependencies": {
+    "pinia": "^4.0.3"
   }
 }
