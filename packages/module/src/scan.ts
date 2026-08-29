@@ -19,6 +19,8 @@ export interface ModuleScanEntry {
   dependencies?: Record<string, string>
   /** ★B3：分包 chunk（对齐 Router M7.1） */
   chunk?: string
+  /** ★B5：预加载声明（分包 preloadRule 的 packages） */
+  preload?: string[]
   ok: boolean
   errors: ModuleValidationIssue[]
   warnings: ModuleValidationIssue[]
@@ -67,13 +69,14 @@ export async function scanModuleConfigs(root: string): Promise<ModuleScanResult>
     try {
       const value = await loadModuleConfig(file)
       const result = validateModuleConfig(value)
-      const raw = (value ?? {}) as { name?: string; version?: string; dependencies?: Record<string, string>; chunk?: string }
+      const raw = (value ?? {}) as { name?: string; version?: string; dependencies?: Record<string, string>; chunk?: string; preload?: string[] }
       entry = {
         file: path.relative(root, file).replace(/\\/g, '/'),
         name: raw.name,
         version: raw.version,
         dependencies: raw.dependencies,
         chunk: raw.chunk,
+        preload: raw.preload,
         ok: result.ok,
         errors: result.ok ? [] : result.errors,
         warnings: 'warnings' in result ? result.warnings : [],

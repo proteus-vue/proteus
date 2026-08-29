@@ -114,6 +114,7 @@ B1 ──┬── B2 ──┬── B6
 | B1 | ✅ | | Schema 校验通过 |
 | B2 | ⬜ | | 生命周期单测通过 |
 | B3 | ✅ | | 环检测 + 拓扑排序通过 |
+| B5 | ✅ | | Skyline subPackages 生成（分包依赖 + preloadRule） |
 | B4 | ⬜ | | Web 分包产物验证 |
 | B5 | ⬜ | | Skyline subPackages 生成 |
 | B6 | ⬜ | | JSI 桥接骨架 |

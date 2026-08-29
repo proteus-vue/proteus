@@ -1,7 +1,7 @@
 // tests/gen-routes.test.ts
 // 路由表生成器冒烟测试（拆包步骤 5：gen-routes 归 @proteus/plugin-vite，改为 runGenRoutes 纯函数）
 // 验证：auto-routes / app.json（主包+分包）/ page.json 全链路生成
-import { describe, it, expect, afterAll } from 'vitest'
+import { describe, it, expect, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -69,6 +69,50 @@ describe('runGenRoutes：路由表生成全链路', () => {
     const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
     expect(appJson.pages).toEqual(['pages/index'])
     expect(appJson.subPackages).toEqual([{ root: 'subpackages/order', name: 'order', pages: ['pages/list'] }])
+  })
+
+  it('★module-plan B5：模块契约 → 分包依赖（dependencies）+ preloadRule 生成', () => {
+    const root = path.join(TMP, 'module-sub')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单列表" }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/user/pages/profile.vue', `<template><view>资料</view></template>\n<route>\n{\n  "meta": { "title": "资料" }\n}\n</route>\n`)
+
+    const moduleConfigs = [
+      // trade 分包模块：依赖 user 分包 + 预加载 user
+      { name: 'trade', chunk: 'trade', dependencies: { user: '^1.0.0', common: '^1.0.0' }, preload: ['user'] },
+      { name: 'user', chunk: 'user' },
+      // common 是主包模块（无分包）——不产生分包依赖
+      { name: 'common', chunk: 'common' },
+    ]
+    runGenRoutes({
+      config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }, { root: 'src/subpackages/user', name: 'user' }] }),
+      root,
+      moduleConfigs,
+    })
+
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    const trade = appJson.subPackages.find((sp: { name: string }) => sp.name === 'trade')
+    // 依赖 user 分包；common 是主包模块不产生依赖
+    expect(trade.dependencies).toEqual(['user'])
+    // preloadRule：trade 分包入口页 → 预加载 user 分包
+    expect(appJson.preloadRule).toEqual({ 'subpackages/trade/pages/list': { network: 'all', packages: ['user'] } })
+    expect(appJson.subPackages.find((sp: { name: string }) => sp.name === 'user').dependencies).toBeUndefined()
+  })
+
+  it('★module-plan B5：模块依赖引用未知模块 → 警告（透明化）', () => {
+    const root = path.join(TMP, 'module-missing')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      runGenRoutes({
+        config: makeConfig(),
+        root,
+        moduleConfigs: [{ name: 'trade', chunk: 'trade', dependencies: { ghost: '^1.0.0' } }],
+      })
+      expect(warnSpy.mock.calls.some((c) => c[0].includes('ghost') && c[0].includes('未找到对应模块契约'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 
   it('<route> 块非法 JSON → 报错（透明化：严格校验含 loc，不吞错——双管线统一后不再是警告跳过）', () => {

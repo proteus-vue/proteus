@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@proteus/compiler": "0.2.0",
+    "@proteus/module": "0.1.0",
     "@proteus/router": "0.1.0",
     "esbuild": "^0.28.2",
     "sass": "^1.103.1"

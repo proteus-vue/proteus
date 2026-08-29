@@ -34,6 +34,8 @@ export async function checkModuleConfigs(root: string, withGraph = false): Promi
     lines.push('', '依赖图（Mermaid）：', moduleGraphToMermaid(graph))
   }
   const initOrder = cycles.length ? '—（有环，无法拓扑）' : graph.topologicalSort().join(' → ') || '—'
+  const chunkMap = result.modules.filter((m) => m.ok && m.name).map((m) => `${m.name} → ${m.chunk ?? m.name}`).join('，') || '—'
+  lines.push(`分包映射：${chunkMap}（与 config.subPackages 的 name/root 匹配时生成 dependencies/preloadRule，module-plan B5）`)
   lines.push(`[proteus-module] 模块校验：${result.modules.filter((m) => m.ok).length}/${result.modules.length} 通过；拓扑序：${initOrder}`)
   return { text: lines.join('\n'), result, cycles, conflicts }
 }

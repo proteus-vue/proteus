@@ -31,6 +31,11 @@ export interface GenRoutesOptions {
    * ★v2.0 退役：@proteus/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
    */
   frameworkComponentsDir?: string
+  /**
+   * ★module-plan B5：模块契约（@proteus/module 扫描产物，调用方 async 扫描后传入）：
+   * 分包依赖（dependencies）与 preloadRule 生成——模块 chunk/name 与 config.subPackages 的 name/root 基名匹配
+   */
+  moduleConfigs?: Array<{ name: string; chunk?: string; dependencies?: Record<string, string>; preload?: string[] }>
 }
 
 /**
@@ -46,6 +51,24 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
   // ★框架内置组件目录（@proteus/components 未拆包时的定位方式，决策 #115）
   const FW_COMPONENTS = options.frameworkComponentsDir ?? path.join(ROOT, 'src', 'components')
+  // ★module-plan B5：模块契约（分包依赖 / preloadRule）——模块名→chunk 映射 + 分包→模块映射
+  const moduleChunks = new Map<string, string>() // 模块名 → chunk（缺省 = 模块名）
+  for (const mc of options.moduleConfigs ?? []) moduleChunks.set(mc.name, mc.chunk ?? mc.name)
+  const subPackageModules = new Map<string, { deps: string[]; preload: string[] }>() // 分包名 → 模块信息
+  for (const mc of options.moduleConfigs ?? []) {
+    const chunk = mc.chunk ?? mc.name
+    const matched = (config.subPackages ?? []).some((sp) => (sp.name ?? path.basename(sp.root)) === chunk)
+    if (matched) subPackageModules.set(chunk, { deps: Object.keys(mc.dependencies ?? {}), preload: mc.preload ?? [] })
+    // ★校验：模块依赖引用未知模块（透明化，反黑盒）
+    for (const dep of Object.keys(mc.dependencies ?? {})) {
+      if (!moduleChunks.has(dep)) console.warn(`[gen-routes] 模块 ${mc.name} 依赖 "${dep}" 未找到对应模块契约（proteus-module.config.ts）——依赖将不生效`)
+    }
+  }
+  // 依赖模块是否为分包（chunk 匹配分包名）→ 分包名；否则 undefined（主包模块不产生分包依赖）
+  const subPackageNameOf = (moduleName: string): string | undefined => {
+    const chunk = moduleChunks.get(moduleName)
+    return (config.subPackages ?? []).some((sp) => (sp.name ?? path.basename(sp.root)) === chunk) ? chunk : undefined
+  }
 
 /** 扫描到的页面 */
 interface PageInfo {
@@ -284,12 +307,29 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
     .filter(sp => pages.some(p => p.subPackage === (sp.name ?? path.basename(sp.root))))
     .map(sp => {
       const spName = sp.name ?? path.basename(sp.root)
-      return {
+      const out: Record<string, unknown> = {
         root: path.relative(APP_DIR, path.join(ROOT, sp.root)).replace(/\\/g, '/'),
         ...(sp.name ? { name: sp.name } : {}),
         pages: pages.filter(p => p.subPackage === spName && p.relInSub).map(p => p.relInSub!),
       }
+      // ★module-plan B5：分包依赖（模块 dependencies 中其他分包；微信非独立分包 dependencies 字段）
+      const mod = subPackageModules.get(spName)
+      if (mod) {
+        const depNames = mod.deps.map(subPackageNameOf).filter((n): n is string => Boolean(n))
+        if (depNames.length) out.dependencies = depNames
+      }
+      return out
     })
+
+  // ★module-plan B5：preloadRule——分包模块 preload 引用其他分包 → 分包入口页预加载（network all）
+  const preloadRule: Record<string, unknown> = {}
+  for (const [spName, mod] of subPackageModules) {
+    const targetPackages = mod.preload.map(subPackageNameOf).filter((n): n is string => Boolean(n))
+    if (!targetPackages.length) continue
+    const entryPage = pages.find((p) => p.subPackage === spName && p.relInSub)
+    if (!entryPage) continue
+    preloadRule[entryPage.mpPath] = { network: 'all', packages: targetPackages }
+  }
 
   const windowConfig: Record<string, unknown> = { navigationStyle: 'custom' }
   // 注意：不在此处声明 window.renderer —— 真机校验报"无效的 app.json window[renderer]"，
@@ -298,6 +338,7 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   const tabRoutes = routes.filter(r => r.meta?.isTab)
   const appJson: Record<string, unknown> = { pages: mainPages }
   if (subPackages.length) appJson.subPackages = subPackages
+  if (Object.keys(preloadRule).length) appJson.preloadRule = preloadRule
   appJson.window = windowConfig
   // Skyline 渲染前提（微信平台校验）：页面 renderer=skyline 时必须声明 requiredComponents
   if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
