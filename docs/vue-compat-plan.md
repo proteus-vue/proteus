@@ -91,9 +91,9 @@
 
 | Batch | 文件（LLM 输入） | 产出 | 状态 |
 |-------|------------------|------|------|
-| A | 本文件 + script.ts/template.ts 现状 | 警告清单 + 5 规则 + 测试 | ⬜ |
-| B | 本文件 + template.ts handler 段 + script.ts 方法生成 | 内联表达式包装 | ⬜ |
-| C | 本文件 | :class 简写 + 文案 | ⬜ |
+| A | 本文件 + script.ts/template.ts 现状 | 警告清单 + 6 规则 + 测试 | ✅（决策 #116）|
+| B | 本文件 + template.ts handler 段 + script.ts 方法生成 | 内联表达式包装（event/inline-expression） | ✅ |
+| C | 本文件 | :class 简写 + 文案 | ✅ |
 
 **依赖**：A → B → C（B 兜底警告复用 A 清单）
 
