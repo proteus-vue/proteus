@@ -1,6 +1,6 @@
 # Proteus Compiler Plan
 
-> **★实现状态（2026-08）**：✅ 已实现——@proteus/compiler 完整落地（parse/template/script/style/transforms 规则注册表 69 条 + explain + 产物自校验 + sourcemap），508 测试覆盖；本规划文档为设计蓝图（实现已超越批次）。
+> **★实现状态（2026-08）**：✅ 已实现——@proteus/compiler 完整落地（parse/template/script/style/transforms 规则注册表 69 条 + explain + 产物自校验 + sourcemap），587 测试覆盖（含组件库 B1-B8）；本规划文档为设计蓝图（实现已超越批次）。
 
 > 应用层多 main 架构下的**透明编译内核** —— AI-native、规则模块化、产物可审计。
 

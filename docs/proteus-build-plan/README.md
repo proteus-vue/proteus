@@ -1,6 +1,6 @@
 # proteus-build-plan
 
-> **★实现状态（2026-08）**：✅ 已实现——@proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线（.github/workflows/ci.yml 含测试/构建/模板快照/能力门禁），508 测试覆盖。
+> **★实现状态（2026-08）**：✅ 已实现——@proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线（.github/workflows/ci.yml 含测试/构建/模板快照/能力门禁），587 测试覆盖（2026-08 组件库 P0 收官后基线）。
 
 Proteus 构建与 CI/CD 流水线落地执行文档。
 

@@ -1,6 +1,6 @@
 # Proteus CLI 落地执行文档
 
-> **★实现状态（2026-08）**：✅ 已实现——@proteus/cli 完整落地（build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check），508 测试覆盖。
+> **★实现状态（2026-08）**：✅ 已实现——@proteus/cli 完整落地（build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check），587 测试覆盖（2026-08 组件库 P0 收官后基线）。
 
 > **一句话定位**：CLI 是 Compiler 与开发者（以及 AI）之间的唯一入口。它不发明编译逻辑，只负责**把 `proteus.config.ts` 的意图，确定性地转成 Compiler + 各层 plan 的执行动作**，且全程可观测、可审计。
 >
