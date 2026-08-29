@@ -183,12 +183,17 @@ interface SerializeContext {
   onceHandlers: Set<string>
   /** vue-compat Batch B：内联事件表达式包装方法集合（自增/自减/简单方法调用） */
   inlineHandlers: Array<{ name: string; code: string }>
-  /** vue-compat-advance Batch 2：transition 子元素 v-if 抑制标记（v-if 已提取为 visible） */
-  transitionChild: boolean
   /** vue-compat-advance Batch 2：<transition> 子元素注入的动画 class（装饰式，过渡标签不输出） */
   transitionClassName?: string
   /** vue-compat-advance Batch 2：模板使用 <transition> 标记（style 按需注入动画） */
   usesTransition: boolean
+  /**
+   * ★vue-compat-advance Batch 5：<transition> 离开动画状态机——子元素 v-if 为裸 ref 名时启用
+   * ref：v-if 表达式 ref 名（裸 ref 才启用；复杂表达式保持 Batch 2 现状）；index：状态机索引（__tv{i}/__tl{i}）
+   */
+  transitionCtx?: { ref: string | undefined; tName: string; index: number }
+  /** ★Batch 5：已启用的离开动画状态机列表（传给 script 生成 data/方法/写入点注入） */
+  transitions: Array<{ ref: string; tName: string; index: number }>
 }
 
 /**
@@ -239,12 +244,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     const nameAttr = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && p.name === 'name') as AttributeNode | undefined
     const tName = (nameAttr && nameAttr.value ? nameAttr.value.content : 'fade') || 'fade'
     ctx.transitionClassName = `proteus-transition-${tName}`
-    ctx.transitionChild = true
     ctx.usesTransition = true
+    // ★Batch 5：离开动画状态机——首个子元素 v-if 为裸 ref 名时启用（index 在启用时分配）
+    ctx.transitionCtx = { ref: undefined, tName, index: -1 }
     ctx.trace?.add('transition/component', {
       line: node.loc.start.line,
       before: `<transition name="${tName}">`,
-      after: `子元素注入 class="proteus-transition-${tName}"（进入动画自动播放）`,
+      after: `子元素注入 class="proteus-transition-${tName}"（进入动画自动播放；裸 ref v-if 子元素启用离开动画状态机 Batch 5）`,
     })
     // 装饰语义：不输出过渡标签本身，直接序列化子元素（动画 class 由子元素注入）
     return node.children.map((c) => serializeNode(c, ctx)).join('\n')
@@ -346,6 +352,22 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     switch (dir.name) {
       case 'if':
         if (ctx.disabled.has('directive/v-if')) { ctx.warnings.push('规则 directive/v-if 已被禁用（rules.disabled），v-if 已忽略'); break }
+        // ★Batch 5：transition 子元素 v-if 为裸 ref 名 → 离开动画状态机（显示由 __tv{i} 控制，ref 写入点联动）
+        if (ctx.transitionCtx && /^[A-Za-z_$][\w$]*$/.test(exprContent(dir.exp))) {
+          const ref = exprContent(dir.exp)
+          ctx.transitionCtx.ref = ref
+          ctx.transitionCtx.index = ctx.transitions.length
+          ctx.transitions.push({ ref, tName: ctx.transitionCtx.tName, index: ctx.transitionCtx.index })
+          attrs.push(`wx:if="{{__tv${ctx.transitionCtx.index}}}"`)
+          ctx.trace?.add('transition/leave-state', {
+            line: node.loc.start.line,
+            before: `v-if="${ref}"`,
+            after: `wx:if="{{__tv${ctx.transitionCtx.index}}}"（离开动画状态机：__tl${ctx.transitionCtx.index} 播离开动画 + 延迟移除）`,
+          })
+          break
+        }
+        // 非裸 ref（复杂表达式）或非 transition 子元素：Batch 2 现状（立即显隐）
+        if (ctx.transitionCtx) ctx.transitionCtx.ref = undefined // 复杂表达式不启用状态机
         attrs.push(`wx:if="{{${exprContent(dir.exp)}}}"`)
         ctx.trace?.add('directive/v-if', { line: node.loc.start.line, before: `v-if="${exprContent(dir.exp)}"`, after: `wx:if="{{${exprContent(dir.exp)}}}"` })
         break
@@ -492,16 +514,19 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (effectiveBaseClass && !attrs.some((a) => a.startsWith('class='))) {
     attrs.push(`class="${effectiveBaseClass}"`)
   }
-  // ★vue-compat-advance Batch 2：<transition> 子元素注入动画 class（首个元素；进入动画由重建自动播放）
+  // ★vue-compat-advance Batch 2/5：<transition> 子元素注入动画 class（首个元素；进入动画由重建自动播放）
+  // ★Batch 5：裸 ref v-if 状态机启用时，class 追加 __tl{i} 插值（离开中切换 leave 动画 class）
   if (ctx.transitionClassName) {
     const animCls = ctx.transitionClassName
     ctx.transitionClassName = undefined
-    ctx.transitionChild = false
+    const tctx = ctx.transitionCtx
+    ctx.transitionCtx = undefined // 首个元素消费后清空（多子元素场景后续元素不受影响）
+    const leaveExpr = tctx && tctx.ref !== undefined ? ` {{__tl${tctx.index} ? '${animCls}-leave' : ''}}` : ''
     const clsIdx = attrs.findIndex((a) => a.startsWith('class='))
     if (clsIdx >= 0) {
-      attrs[clsIdx] = attrs[clsIdx].replace(/^class="/, `class="${animCls} `)
+      attrs[clsIdx] = attrs[clsIdx].replace(/^class="/, `class="${animCls}${leaveExpr} `)
     } else {
-      attrs.push(`class="${animCls}"`)
+      attrs.push(`class="${animCls}${leaveExpr}"`)
     }
   }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
@@ -560,8 +585,8 @@ export function transformTemplateToWxml(
     selfHandlers: new Set(),
     onceHandlers: new Set(),
     inlineHandlers: [],
-    transitionChild: false,
     usesTransition: false,
+    transitions: [],
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
@@ -574,6 +599,8 @@ export function transformTemplateToWxml(
     onceHandlers: [...ctx.onceHandlers],
     inlineHandlers: ctx.inlineHandlers,
     usesTransition: ctx.usesTransition,
+    // ★Batch 5：离开动画状态机列表（裸 ref v-if 的 transition 子元素）
+    transitions: ctx.transitions,
     warnings: ctx.warnings,
   }
 }

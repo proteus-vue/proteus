@@ -79,6 +79,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     inlineHandlers: tplResult.inlineHandlers,
     debug: options.debug,
     rules: options.rules,
+    transitions: tplResult.transitions,
     trace: scriptTrace,
   })
 

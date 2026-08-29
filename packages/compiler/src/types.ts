@@ -58,6 +58,8 @@ export interface TemplateTransformResult {
   inlineHandlers?: Array<{ name: string; code: string }>
   /** vue-compat-advance Batch 2：模板是否使用 <transition>（style 按需注入动画 keyframes） */
   usesTransition?: boolean
+  /** ★vue-compat-advance Batch 5：离开动画状态机（裸 ref v-if 的 transition 子元素） */
+  transitions?: Array<{ ref: string; tName: string; index: number }>
   warnings: string[]
 }
 
@@ -81,6 +83,8 @@ export interface ScriptTransformOptions {
   onceHandlers?: string[]
   /** vue-compat Batch B：内联事件表达式包装方法（来自 template） */
   inlineHandlers?: Array<{ name: string; code: string }>
+  /** ★vue-compat-advance Batch 5：离开动画状态机（来自 template；生成 __tv/__tl data + toggle 方法 + 写入点注入） */
+  transitions?: Array<{ ref: string; tName: string; index: number }>
   /** 决策 trace 收集器（阶段二，可空） */
   trace?: TransformTrace
 }

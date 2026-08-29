@@ -87,9 +87,40 @@
 | 2 | Transition 装饰式进入动画（编译注入 class + 按需 keyframes） | 中 | ✅ |
 | 3 | provide/inject 页面级桥（全局注册表，运行时 + 编译） | 中高 | ✅ |
 | 4 | provide/inject **响应式联动**（裸 ref 订阅/通知，复用 store 桥模式） | 中 | ✅ |
-| 5 | Transition **离开动画** / 作用域插槽运行时等价（规划候选） | 中高 | ⬜ |
+| 5 | Transition **离开动画**（状态机：__tvN 延迟移除 + __tlN 离开 class） | 中 | ✅ |
+| 6 | 作用域插槽运行时等价 / provide 页面级隔离（规划候选） | 中高 | ⬜ |
 
-依赖：1 → 2 → 3（顺序按工程量递增，各自独立可测）
+依赖：1 → 2 → 3 → 4 → 5（顺序按工程量递增，各自独立可测）
+
+---
+
+## 7. Batch 5：Transition 离开动画（延迟移除状态机）
+
+**目标**：`<transition name="fade"><view v-if="on">X</view></transition>` — on 变 false 时先播离开动画再移除（不再立即消失）
+
+**设计**（编译期状态机，复用 Batch 2 装饰式模型）：
+1. **模板**（template.ts）：`<transition>` 直接子元素 v-if 表达式为**裸 ref 名**时：
+   - v-if 改写为 `wx:if="{{__tv{i}}}"`（显示状态，初始 = v-if 初始值）
+   - 动画 class 改插值：`class="proteus-transition-{name} {{__tl{i} ? 'proteus-transition-{name}-leave' : ''}}"`
+   - 收集 `ctx.transitions: [{ ref, tName, index }]`（index 从 0 递增）
+   - **范围限制**：复杂表达式 / 多子元素 / 无 v-if 保持 Batch 2 现状（进入动画 + 立即移除）
+2. **样式**（style.ts）：TRANSITION_WXSS 补 leave 动画 class + keyframes（fade-out 0.25s / slide-up-out 0.32s / scale-out 0.4s，`forwards` 保持末帧）
+3. **脚本**（script.ts）：
+   - data 加 `__tv{i}: <v-if 初始值>`、`__tl{i}: false`（离开中标记）
+   - 生成 `proteusTransitionToggle{i}()`：on 为 true → 取消定时器 + `__tv{i}=true, __tl{i}=false`（快速反向切换恢复进入动画）；on 为 false → `__tl{i}=true`（播离开动画）+ `setTimeout(时长)` 后 `__tv{i}=false`（定时器 id 存实例属性 `__tlTimer{i}`，重复进入防重）；时长按动画名映射（fade 250 / slide-up 320 / scale 400）
+   - ref 写入点（赋值/自增自减）追加 `; this.proteusTransitionToggle{i}()`（rewriteRefAccess 新增参数）
+4. **边界**：离开中 on 变 true → 取消定时器 + class 换回进入动画（animation 重触发进入动画，行为可接受）；多 transition 引用同一 ref 仅保留首个
+
+**验收**：on 变 false → 产物含离开动画 class + 延迟移除（setTimeout 时长对齐 keyframes）；wxml `wx:if="{{__tv0}}"` + class 插值；非裸 ref 表达式保持现状；全量测试全绿 + 双端构建
+
+**已落地**（2026-08）：
+1. **模板**（template.ts）：`<transition>` 直接子元素 v-if 为裸 ref 名 → `wx:if="{{__tv{i}}}"`（显示状态，初始 = ref 初始值）+ class 插值 `{{__tl{i} ? '...-leave' : ''}}`；`ctx.transitions`（ref/tName/index）传给 script；复杂表达式/多子元素保持 Batch 2 现状；trace 规则 `transition/leave-state`
+2. **样式**（style.ts）：TRANSITION_WXSS 补 leave class + keyframes（fade-out 0.25s / slide-up-out 0.32s / scale-out 0.4s，`forwards` 保持末帧）
+3. **脚本**（script.ts）：data 注入 `__tv{i}`（初始 = v-if ref 初始值）/ `__tl{i}: false`；生成 `proteusTransitionToggle{i}()`（on 为 true → clearTimeout + 恢复 `__tv{i}=true,__tl{i}=false`；on 为 false → `__tl{i}=true` + setTimeout（fade 250 / slide-up 320 / scale 400）后 `__tv{i}=false`；定时器 id 存实例属性 `__tlTimer{i}` 防重）；rewriteRefAccess 新参 `transitionToggle`（ref 写入点追加 `; this.proteusTransitionToggle{i}()`，与 provideSync 并存）
+4. **★gen-routes 修复**：`<transition>` 误判为自定义组件警告（编译器已消费、产物不输出）→ NATIVE_MP_TAGS 白名单加 transition
+5. **验证**：测试 +4 → 386 全绿；demo（forms.vue 过渡卡片：toggleCard 切换，产物确认 wx:if __tv0 + class 插值 + toggle 方法 + wxss leave scoped 匹配）；遗留：作用域插槽运行时等价、provide 页面级隔离（pageId）
+
+---
 
 ## 4. 验收标准
 
@@ -102,8 +133,7 @@
 ## 5. 遗留（后续批次）
 
 - 作用域插槽**运行时等价**（props 传子 + 事件回调自动包装）——当前仅编译期警告
-- Transition **离开动画**（transitionend 控制延迟移除）——当前仅进入动画
-- provide/inject **响应式联动**（注册表存 ref 引用，inject 读到同一 ref）与**页面级隔离**（pageId）——当前值快照 + 全局注册表
+- provide/inject **页面级隔离**（pageId：注册表按页面隔离、onUnload 清理）——当前全局注册表（响应式联动已在 Batch 4 完成）
 
 ---
 

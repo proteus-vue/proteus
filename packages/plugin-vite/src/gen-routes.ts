@@ -321,6 +321,8 @@ const NATIVE_MP_TAGS = new Set([
   'swiper', 'swiper-item', 'navigator', 'icon', 'progress', 'checkbox', 'radio', 'form', 'label', 'picker', 'slider',
   'switch', 'map', 'web-view', 'cover-view', 'cover-image', 'movable-area', 'movable-view', 'block', 'template', 'wxs',
   'audio', 'camera', 'live-player', 'ad', 'official-account', 'open-data', 'page-container', 'root-portal', 'match-media',
+  // ★vue-compat-advance Batch 2/5：<transition> 由编译器消费（装饰式，产物不输出该标签）——扫描跳过，非自定义组件
+  'transition',
 ])
 const HTML_TAGS = new Set([
   'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'br', 'ul', 'ol', 'li', 'section', 'header',

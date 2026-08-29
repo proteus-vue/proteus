@@ -217,6 +217,16 @@ Web 端浏览器有 UA 默认样式（大标题 / 段距 / 链接色），小程
 
 - **MVP 简化**：任一 `<style scoped>` 则全量作用域化（多块混用后续完善）；`:deep()` 部分同样作用域化（组件边界场景后续完善）；`rules.disabled: ['style/scoped-css', 'template/scope-attr']` 可关闭。
 
+## `<transition>` 动画（vue-compat-advance Batch 2/5）
+
+**进入动画**（Batch 2）：`<transition name="fade">` 装饰式处理——过渡标签不输出，子元素注入 `class="proteus-transition-{name}"`（fade 0.25s / slide-up 0.32s / scale 0.4s），进入动画由重建自动播放；wxss 按 `usesTransition` 按需注入 keyframes。
+
+**离开动画**（Batch 5，状态机延迟移除）：transition 直接子元素 **v-if 为裸 ref 名**时启用——
+- wxml：`wx:if="{{__tv{i}}}"`（显示状态，初始 = ref 初始值）+ class 插值 `{{__tl{i} ? 'proteus-transition-{name}-leave' : ''}}`
+- js：data 注入 `__tv{i}` / `__tl{i}`（离开中标记）；生成 `proteusTransitionToggle{i}()`——ref 写入点（赋值/自增自减，rewriteRefAccess 注入）驱动：on 变 false → `__tl{i}=true` 播离开动画（leave keyframes `forwards`）+ `setTimeout`（时长对齐 keyframes）后 `__tv{i}=false` 延迟移除；on 变 true（含离开中反向）→ 取消定时器 + 恢复进入动画
+- **范围**：仅裸 ref v-if 支持状态机；复杂表达式 / 多子元素保持 Batch 2 现状（进入动画 + 立即移除）
+- 规则：`transition/component`（进入，Batch 2）+ `transition/leave-state`（离开，Batch 5）
+
 ## 样式转换（Style → WXSS）
 
 ```typescript

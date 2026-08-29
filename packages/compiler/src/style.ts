@@ -64,12 +64,19 @@ const BASE_SEMANTIC_WXSS = [
 // ★vue-compat-advance Batch 2：<transition> 进入动画（纯 CSS，元素经 wx:if 重建时 animation 自动播放）
 // 语义：fade 淡入 / slide-up 上滑 / scale 缩放；离开动画 MP 无钩子（wx:if 移除即消失）——文档说明差异
 const TRANSITION_WXSS = [
+  // ★Batch 5：离开动画（__tl{i} 插值 class 切换；forwards 保持末帧直到延迟移除）
+  '.proteus-transition-fade-leave { animation: proteus-fade-out 0.25s ease forwards; }',
+  '.proteus-transition-slide-up-leave { animation: proteus-slide-up-out 0.32s cubic-bezier(0.35, 0.91, 0.33, 0.97) forwards; }',
+  '.proteus-transition-scale-leave { animation: proteus-scale-out 0.4s cubic-bezier(0.35, 0.91, 0.33, 0.97) forwards; }',
   '.proteus-transition-fade { animation: proteus-fade-in 0.25s ease; }',
   '.proteus-transition-slide-up { animation: proteus-slide-up-in 0.32s cubic-bezier(0.35, 0.91, 0.33, 0.97); }',
   '.proteus-transition-scale { animation: proteus-scale-in 0.4s cubic-bezier(0.35, 0.91, 0.33, 0.97); }',
   '@keyframes proteus-fade-in { from { opacity: 0; } to { opacity: 1; } }',
+  '@keyframes proteus-fade-out { from { opacity: 1; } to { opacity: 0; } }',
   '@keyframes proteus-slide-up-in { from { transform: translateY(20%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }',
+  '@keyframes proteus-slide-up-out { from { transform: translateY(0); opacity: 1; } to { transform: translateY(20%); opacity: 0; } }',
   '@keyframes proteus-scale-in { from { transform: scale(0.92) translateY(4%); opacity: 0.8; } to { transform: scale(1) translateY(0); opacity: 1; } }',
+  '@keyframes proteus-scale-out { from { transform: scale(1) translateY(0); opacity: 1; } to { transform: scale(0.92) translateY(4%); opacity: 0.8; } }',
 ].join('\n')
 
 /** 统计选择器重写前源 CSS 中的标签选择器处数（语义标签与普通标签分开计数） */

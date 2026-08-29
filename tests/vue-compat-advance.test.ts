@@ -38,11 +38,11 @@ describe('Batch 1：作用域插槽警告（反黑盒）', () => {
 })
 
 describe('Batch 2：<transition> 装饰式动画（运行时等价，进入动画）', () => {
-  it('子元素注入动画 class + wx:if 保留 + 不再警告', () => {
+  it('子元素注入动画 class + 裸 ref v-if 改写 __tv0 + 不再警告', () => {
     const r = compile('<template><transition name="fade"><view v-if="on">X</view></transition></template><script setup>const on = ref(true)</script>')
     expect(r.warnings.some((w) => w.includes('<transition>'))).toBe(false) // 不再 no-peer 警告
-    expect(r.wxml).toContain('class="proteus-transition-fade"')
-    expect(r.wxml).toContain('wx:if="{{on}}"') // v-if 保留（显隐 + 重建自动播动画）
+    expect(r.wxml).toContain('class="proteus-transition-fade')
+    expect(r.wxml).toContain('wx:if="{{__tv0}}"') // ★Batch 5：裸 ref v-if → 离开动画状态机（显示由 __tv0 控制）
     expect(r.wxml).not.toContain('<transition') // 装饰式：过渡标签不输出
   })
 
@@ -159,5 +159,39 @@ describe('Batch 4：provide/inject 响应式联动（裸 ref 订阅/通知）', 
     notifyProvide('n')
     expect(seen).toEqual([1, 2])
     clearProvides()
+  })
+})
+
+describe('Batch 5：<transition> 离开动画（延迟移除状态机）', () => {
+  it('裸 ref v-if → wxml 显示改 __tv0 + class 插值 __tl0（离开动画 class 切换）', () => {
+    const r = compile('<template><transition name="fade"><view v-if="on">X</view></transition></template><script setup>const on = ref(true)</script>')
+    expect(r.wxml).toContain('wx:if="{{__tv0}}"')
+    expect(r.wxml).toContain("{{__tl0 ? 'proteus-transition-fade-leave' : ''}}")
+    // 非状态机回归：不再直接绑定 on
+    expect(r.wxml).not.toContain('wx:if="{{on}}"')
+  })
+
+  it('js：data 注入 __tv0（初始 = ref 初始值）/__tl0 + toggle 方法 + ref 写入点注入', () => {
+    const r = compile('<template><transition name="slide-up"><view v-if="on">X</view></transition></template><script setup>const on = ref(false)\nfunction show() { on.value = true }\nfunction hide() { on.value = false }</script>')
+    expect(r.js).toContain('__tv0: false')
+    expect(r.js).toContain('__tl0: false')
+    expect(r.js).toContain('proteusTransitionToggle0() {')
+    expect(r.js).toContain('setTimeout(() => {')
+    expect(r.js).toContain('}, 320)') // slide-up 动画时长对齐 keyframes
+    expect(r.js).toContain('this.proteusTransitionToggle0()') // 写入点注入（show/hide 方法体）
+  })
+
+  it('复杂 v-if 表达式 → 保持 Batch 2 现状（无状态机）', () => {
+    const r = compile('<template><transition name="fade"><view v-if="count > 0">X</view></transition></template><script setup>const count = ref(1)</script>')
+    expect(r.wxml).toContain('wx:if="{{count > 0}}"')
+    expect(r.wxml).not.toContain('__tv0')
+    expect(r.js).not.toContain('proteusTransitionToggle')
+  })
+
+  it('wxss 注入离开动画 keyframes（fade-out/slide-up-out/scale-out）', () => {
+    const r = compile('<template><transition name="scale"><view v-if="on">X</view></transition></template><script setup>const on = ref(true)</script>')
+    expect(r.wxss).toContain('.proteus-transition-scale-leave')
+    expect(r.wxss).toContain('@keyframes proteus-scale-out')
+    expect(r.wxss).toContain('forwards')
   })
 })

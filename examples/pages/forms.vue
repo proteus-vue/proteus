@@ -26,6 +26,12 @@ watch(count, (n, o) => {
   watchLog.value = `watch: ${o} → ${n}`
 })
 
+// ★vue-compat-advance Batch 5：<transition> 离开动画（裸 ref v-if → 延迟移除状态机）
+const cardOn = ref(true)
+function toggleCard() {
+  cardOn.value = !cardOn.value
+}
+
 function bump() {
   count.value++
 }
@@ -62,6 +68,14 @@ function bump() {
 
     <!-- v-html → rich-text nodes -->
     <div class="html-box" v-html="html"></div>
+
+    <!-- <transition> 离开动画（vue-compat-advance Batch 5）：cardOn 变 false 先播离开动画再移除（MP 状态机延迟移除） -->
+    <div class="box">
+      <button @click="toggleCard">{{ cardOn ? '隐藏卡片（fade 离开动画）' : '显示卡片（fade 进入动画）' }}</button>
+      <transition name="fade">
+        <div v-if="cardOn" class="card">过渡卡片：切换时先播 fade 动画再移除（Web 原生 / MP 状态机）</div>
+      </transition>
+    </div>
   </div>
 </template>
 
@@ -101,5 +115,13 @@ $brand: #1a7af8;
   padding: 12px;
   border: 1px dashed #ddd;
   border-radius: 8px;
+}
+.card {
+  margin-top: 10px;
+  padding: 14px;
+  background: #e8f1fd;
+  border: 1px solid #1a7af8;
+  border-radius: 8px;
+  font-size: 14px;
 }
 </style>
