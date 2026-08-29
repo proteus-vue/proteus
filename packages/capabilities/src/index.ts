@@ -10,6 +10,9 @@ import type { CapabilityAdapter } from './adapter'
 export * from './types'
 export { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
 export type { CapabilityAdapter } from './adapter'
+// ★types-plan B4：平台守卫（铁律 #4：matchPlatform/assertPlatform/exhaustiveCheck 替代 #ifdef）
+export { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck } from './guard'
+export type { PlatformCases } from './guard'
 
 // ★scan/check 为 node 工具（esbuild/fs），仅经子路径 '@proteus/capabilities/scan' / 'check' 导入——不进运行时入口（浏览器/MP 产物）
 
