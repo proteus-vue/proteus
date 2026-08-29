@@ -196,6 +196,12 @@ export function parseCapabilityCheckArgs(argv: string[]): CapabilityCheckArgs {
   return { root: path.resolve(dir) }
 }
 
+export function parseComponentsAuditArgs(argv: string[]): { root: string } {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { root: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：

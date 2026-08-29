@@ -43,6 +43,9 @@ jobs:
           npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform skyline
           npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform web
 
+      - name: 组件库审计门禁（B8：no-platform-api / no-sync-storage / manifest-complete）
+        run: npx tsx packages/cli/src/index.ts components:audit src/components
+
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
 

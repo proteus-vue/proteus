@@ -27,6 +27,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { eventScrollTop } from '../runtime/event'
 import { getVirtualWindow } from '../runtime/virtual-window'
+import { componentRender } from '../runtime/observability'
 
 const props = defineProps({
   pid: { type: String, default: '' },
@@ -48,6 +49,7 @@ const ready = ref(false)
 // ★B7：窗口数学抽纯函数 getVirtualWindow（可单测：10k 数据 → 恒定行数），此处只做切片
 function calc() {
   if (props.lazy && !ready.value) return
+  const t0 = Date.now()
   const w = getVirtualWindow(
     start.value * props.itemHeight,
     props.itemHeight,
@@ -56,6 +58,8 @@ function calc() {
     props.items.length,
   )
   visible.value = props.items.slice(w.start, w.start + w.count)
+  // ★B8 渲染埋点（默认 no-op；开发开 setObservabilityEnabled(true) 后输出）
+  componentRender('p-list-view', { durationMs: Date.now() - t0, itemCount: w.count, strategy: 'virtual' })
 }
 
 function onScroll(e: unknown) {
