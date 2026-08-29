@@ -231,6 +231,48 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   console.log(`[gen-routes] 已生成 dist/mp-weixin/app.json（主包 ${mainPages.length} 页，分包 ${subPackages.length} 个）`)
 }
 
+/** 原生小程序标签 + HTML 标签（模板扫描时用于区分自定义组件标签） */
+const NATIVE_MP_TAGS = new Set([
+  'view', 'text', 'image', 'button', 'input', 'textarea', 'video', 'canvas', 'scroll-view', 'slot', 'rich-text',
+  'swiper', 'swiper-item', 'navigator', 'icon', 'progress', 'checkbox', 'radio', 'form', 'label', 'picker', 'slider',
+  'switch', 'map', 'web-view', 'cover-view', 'cover-image', 'movable-area', 'movable-view', 'block', 'template', 'wxs',
+  'audio', 'camera', 'live-player', 'ad', 'official-account', 'open-data', 'page-container', 'root-portal', 'match-media',
+])
+const HTML_TAGS = new Set([
+  'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'br', 'ul', 'ol', 'li', 'section', 'header',
+  'footer', 'main', 'aside', 'nav', 'article', 'strong', 'em', 'b', 'i', 'small', 'code', 'pre', 'select', 'option',
+  'table', 'tr', 'td', 'th', 'form', 'label', 'tbody', 'thead', 'caption', 'figure', 'figcaption', 'details', 'summary',
+])
+
+/**
+ * 扫描页面模板中的自定义组件标签（非原生/HTML 标签）→ usingComponents 映射
+ * 约定：<my-counter> → <appRoot>/components/my-counter/index(.vue)，路径以 /components/... 绝对形式（相对小程序根）
+ * config.rules.customTags 的标签是自定义映射（非组件），加入白名单
+ */
+function collectComponents(file: string): Record<string, string> {
+  const src = fs.readFileSync(file, 'utf-8')
+  const tpl = src.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] ?? ''
+  const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
+  const used = new Set<string>()
+  const tagRe = /<([a-z][\w-]*)/g
+  let m: RegExpExecArray | null
+  while ((m = tagRe.exec(tpl))) {
+    const tag = m[1]
+    if (tag.startsWith('!')) continue // 注释
+    if (NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag)) continue
+    used.add(tag)
+  }
+  const out: Record<string, string> = {}
+  for (const tag of used) {
+    // 组件文件约定：<appRoot>/components/<tag>/index.vue 或 <tag>.vue
+    const candidates = [path.join(APP_DIR, 'components', tag, 'index.vue'), path.join(APP_DIR, 'components', `${tag}.vue`)]
+    const found = candidates.find((c) => fs.existsSync(c))
+    if (found) out[tag] = `/components/${tag}/index`
+    else console.warn(`[gen-routes] ${file} 使用了组件 <${tag}>，但未找到 ${candidates.join(' 或 ')}（组件须放在 ${path.join(APP_DIR, 'components')}/）`)
+  }
+  return out
+}
+
 /** 生成每页 page.json（P2-3：Skyline 配置，renderer 随 skyline 开关） */
 function writePageJsons(pages: PageInfo[]): void {
   for (const p of pages) {
@@ -241,6 +283,9 @@ function writePageJsons(pages: PageInfo[]): void {
     }
     // <route> 块 pageJson 扩展（如半屏页透明背景 backgroundColorContent）
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
+    // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
+    const components = collectComponents(p.file)
+    if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
     const outFile = path.join(OUT_DIR, p.mpPath + '.json')

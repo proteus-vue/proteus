@@ -188,6 +188,75 @@ function setN() {
   })
 })
 
+describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
+  const COMP = `const props = defineProps({ initial: { type: Number, default: 0 }, label: String })\nconst emit = defineEmits(['change'])\nconst count = ref(0)\nfunction add() {\n  count.value++\n  emit('change', count.value)\n}`
+
+  it('defineProps → Component properties（type + 默认值）', () => {
+    const { js } = transformScriptToPage(COMP, opts, { isComponent: true })
+    expect(js).toContain('Component({')
+    expect(js).toContain('properties: {')
+    expect(js).toContain('initial: { type: Number, value: 0 }')
+    expect(js).toContain('label: { type: String, value: "" }')
+  })
+
+  it('defineProps/defineEmits 不作为 data 字段（组件宏跳过提取）', () => {
+    const { js } = transformScriptToPage(COMP, opts, { isComponent: true })
+    expect(js).not.toContain('props: undefined')
+    expect(js).not.toContain('emit: undefined')
+  })
+
+  it('emit(...) → this.triggerEvent(...)', () => {
+    const { js } = transformScriptToPage(COMP, opts, { isComponent: true })
+    expect(js).toContain('this.triggerEvent(\'change\', this.data.count)')
+    expect(js).not.toContain('emit(\'change')
+  })
+
+  it('组件模式不生成 onLoad（微信组件生命周期无 onLoad）；computed 初始化走 attached', () => {
+    const src = 'const c = ref(0)\nconst d = computed(() => c.value * 2)'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).not.toContain('onLoad(')
+    expect(js).toContain('attached() {')
+    expect(js).toContain('this.setData({ d: this.data.c * 2 })')
+  })
+
+  it('页面模式仍生成默认 onLoad（组件不影响页面）', () => {
+    const { js } = transformScriptToPage('const c = ref(0)', opts, { isComponent: false })
+    expect(js).toContain('onLoad(options)')
+  })
+
+  it('方法参数 TS 标注被剥离（产物纯 JS）', () => {
+    const src = 'function handle(e: { detail?: number }) {\n  const v = e.detail\n}'
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('handle(e) {')
+    expect(js).not.toContain('e: {')
+  })
+
+  it('props 访问重写：props.xxx → this.data.xxx', () => {
+    const src = 'const props = defineProps({ label: String })\nfunction log() {\n  console.log(props.label)\n}'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('console.log(this.data.label)')
+  })
+
+  it('<slot> 标签原样透传', () => {
+    const { wxml } = transformTemplateToWxml('<div><slot /></div>', opts)
+    expect(wxml).toContain('<slot />')
+  })
+
+  it('父组件自定义事件（非 EVENT_MAP）→ bind: 冒号形式', () => {
+    const { wxml } = transformTemplateToWxml('<counter @updated="onUpdated" />', opts)
+    expect(wxml).toContain('bind:updated="onUpdated"')
+    // EVENT_MAP 内事件保持 bindxxx 无冒号（兼容既有产物）
+    const w = transformTemplateToWxml('<button @click="go">x</button>', opts)
+    expect(w.wxml).toContain('bindtap="go"')
+  })
+
+  it('compileVueSfc 组件模式整包编译通过（含 properties）', () => {
+    const result = compileVueSfc('<script setup lang="ts">const props = defineProps({ label: String })</script>\n<template><div>{{ label }}</div></template>', { isComponent: true, filename: 'components/x/index.vue' })
+    expect(result.js).toContain('Component({')
+    expect(result.js).toContain('label: { type: String, value: "" }')
+  })
+})
+
 describe('transformTemplateToWxml（template → wxml）', () => {
   it('标准标签映射：div→view / span,p,h1→text / img→image', () => {
     const { wxml } = transformTemplateToWxml('<div><span>hi</span><p>p</p><h1>t</h1><img :src="url" /></div>', opts)

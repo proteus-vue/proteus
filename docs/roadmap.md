@@ -74,7 +74,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | `computed` / `watch` 编译支持（✅ 读路径 + watch 已实现，决策 #76/#78） | `packages/compiler/src/script.ts` | 已有：`computed(() => 表达式)` → data 派生字段（onLoad 初始化 + 依赖写入 setData 合并重算）；`watch(ref, cb)` → proteusWatchX 方法（写入 setData 后自动调用 + immediate 初始化）；依赖静态提取/缺失/块体警告；待做：computed 写路径（显式 setter）、多源/函数源 watch |
 | 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus/compiler 独立包 |
 | 规则覆盖（✅ 已实现：底线循环 ①③） | `src/compiler/overrides.ts` + `proteus.config.ts rules` 段 | 已有：disabled / mapping / customTags 贯通三转换函数（17 用例）；阶段三：规则 apply() 升级为完整插件体系（自定义 AST 转换，roadmap v2.0 编译期插件） |
-| 组件系统 | `src/compiler/` 新增组件编译 | `defineProps` / `defineEmits` / `slots` / `defineExpose` → 小程序 `Component({ properties, data, methods })`；`isComponent` 分支已存在（测试已覆盖构造器形态） |
+| 组件系统（✅ 已实现，决策 #79） | `packages/compiler/` + `scripts/gen-routes.ts` | 已有：defineProps → Component properties、defineEmits + emit() → triggerEvent、<slot> 透传、组件模式 attached 生命周期；父模板自定义标签 + 事件 bind: 冒号形式 + **usingComponents 自动注入 page.json**（gen-routes 扫描模板 + 组件目录约定）；TS 参数标注编译期剥离；待做：defineExpose、TS 泛型 defineProps、组件 usingComponents 嵌套 |
 | scoped CSS（✅ 已实现，决策 #77） | `packages/compiler/src/style.ts` + `template.ts` | 已有：`<style scoped>` → 模板元素附加 `data-v-xxx` + 选择器末尾追加 `[data-v-xxx]`（:deep 去包装、@media 骨架保留、scopeId 由文件名 djb2 哈希稳定生成）；MVP 简化：任一 scoped 全量作用域化 |
 | 指令补全（✅ v-show / :class 数组已实现，决策 #76/#77） | `packages/compiler/src/template.ts` | 已有：`v-show` → `hidden="{{!expr}}"`、`:class` 数组语法（字符串/对象/简单变量/三元逐项拼接，splitTopLevel 顶层逗号分割）；待做：事件修饰符（`.once/.self`）、`v-on` 键位 |
 | CSS 预处理器 | vite 链路 | `scss` / `less` 经 Vite 预处理后进入 `transformStyleToWxss` |
@@ -184,7 +184,7 @@ proteus/                        # monorepo（v0.2 起）
 | 里程碑 | 验收 |
 |---|---|
 | v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
-| v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo；sourcemap 接入开发者工具 |
+| v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 已全部落地，决策 #76-#79）；sourcemap 接入开发者工具 |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地；Pinia 双端可用 |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |

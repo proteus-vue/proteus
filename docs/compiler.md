@@ -54,6 +54,70 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 - **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析。
 - **演进**：阶段三每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `packages/compiler/README.md`。
 
+## 组件系统（v0.3）
+
+标准 Vue 组件体系编译为微信小程序组件（`Component()` 构造器 + `properties` + `triggerEvent`）。
+
+### 子组件（`<appRoot>/components/<name>/index.vue`，isComponent 自动判定）
+
+```vue
+<!-- examples/components/counter/index.vue -->
+<script setup lang="ts">
+const props = defineProps({ initial: { type: Number, default: 0 }, label: String })
+const emit = defineEmits(['change'])
+const count = ref(0)
+function add() {
+  count.value++
+  emit('change', count.value)   // → this.triggerEvent('change', ...)
+}
+</script>
+<template>
+  <div class="counter">
+    <text>{{ label }}: {{ count }}</text>
+    <button @click="add">+</button>
+  </div>
+</template>
+```
+
+编译产物：
+
+```js
+Component({
+  data: { count: 0 },
+  properties: {
+    initial: { type: Number, value: 0 },   // defineProps → properties（type + 默认值）
+    label: { type: String, value: "" },
+  },
+  add() {
+    this.setData({ count: ... })
+    this.triggerEvent('change', this.data.count)   // emit → triggerEvent
+  },
+})
+```
+
+- `defineProps` 对象形式 → `properties`（`{ type, default }` → `{ type, value }`，类型映射 String/Number/Boolean/Object/Array；无 default 按类型给默认值）；`props.xxx` 访问重写为 `this.data.xxx`
+- `defineEmits` + `emit('xxx', payload)` → `this.triggerEvent('xxx', payload)`（约定变量名 `emit`）
+- `<slot>` 原样透传（TAG_MAP 已有 slot）
+- **组件模式无 `onLoad`**（微信组件生命周期无此钩子）：computed 初始化 / immediate watch 走 `attached()`；`onMounted→onReady` 映射不变
+- MVP：仅对象形式 defineProps（TS 泛型形式警告）；`defineExpose` 忽略
+
+### 父页面使用
+
+```vue
+<!-- 父页面模板：props 传递 + 事件监听（usingComponents 由 gen-routes 自动注入 page.json） -->
+<counter :initial="5" label="计数" @change="onChange" />
+```
+
+编译产物：`<counter initial="{{5}}" label="计数" bindchange="onChange" />` + page.json 自动注入：
+
+```json
+{ "usingComponents": { "counter": "/components/counter/index" } }
+```
+
+- **自定义事件（非 EVENT_MAP）→ `bind:` 冒号形式**（`@updated` → `bind:updated`，微信自定义组件事件标准）；EVENT_MAP 内事件保持 `bindxxx` 无冒号
+- **usingComponents 自动注入**：gen-routes 扫描页面模板的自定义组件标签（原生小程序标签 / HTML 标签 / `rules.customTags` 白名单排除）→ 按约定 `components/<name>/index` 解析 → page.json 注入；组件缺失编译期警告
+- **组件目录约定**：`<appRoot>/components/<kebab-name>/index.vue`，插件自动扫描编译（产物 `dist/mp-weixin/components/<name>/index.*`）
+
 ## 底线三循环（框架的立身之本）
 
 框架存在的意义是这三条闭环**必须真实可跑**：

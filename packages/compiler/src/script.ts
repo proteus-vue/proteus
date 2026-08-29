@@ -89,6 +89,55 @@ interface WatchInfo {
   immediate: boolean
 }
 
+/** 组件 prop 信息（v0.3 组件系统：defineProps → Component properties） */
+interface PropInfo {
+  /** 微信 properties 类型 */
+  type: string
+  /** 默认值（微信 value） */
+  value?: unknown
+}
+
+/** defineProps 对象形式 → Component properties 字段（仅组件模式；TS 泛型形式警告不支持） */
+function extractProps(source: string, warnings: string[], trace?: TransformTrace): Record<string, PropInfo> {
+  const out: Record<string, PropInfo> = {}
+  const m = source.match(/\bdefineProps\s*\(\s*\{/)
+  if (!m) return out
+  const body = extractBracedBody(source, (m.index ?? 0) + m[0].length - 1)
+  if (body === null) {
+    warnings.push('defineProps 解析失败（MVP 仅支持对象形式 defineProps({...})），已忽略')
+    return out
+  }
+  const re = /(['"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(\{[^}]*\}|[A-Za-z_$][\w$]*)/g
+  let pm: RegExpExecArray | null
+  while ((pm = re.exec(body))) {
+    const name = pm[2]
+    const spec = pm[3].trim()
+    let type = 'String'
+    let value: unknown
+    if (spec.startsWith('{')) {
+      const typeM = spec.match(/type\s*:\s*([A-Za-z_$][\w$]*)/)
+      if (typeM) type = typeM[1]
+      const defM = spec.match(/default\s*:\s*([^,}]+)/)
+      if (defM) value = evalLiteral(defM[1].trim())
+    } else {
+      type = spec
+    }
+    if (!['String', 'Number', 'Boolean', 'Object', 'Array', 'Function'].includes(type)) {
+      warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
+      type = 'String'
+    }
+    // 无 default 时按类型给默认值（微信 properties.value）
+    if (value === undefined) {
+      if (type === 'String') value = ''
+      else if (type === 'Number') value = 0
+      else if (type === 'Boolean') value = false
+    }
+    out[name] = { type, value }
+    trace?.add('script/define-props', { before: `defineProps({ ${name}: ... })`, after: `properties.${name}（type: ${type}）` })
+  }
+  return out
+}
+
 /**
  * 提取顶层 watch 调用：watch(refName, (newVal, oldVal) => { ... }[, { immediate: true }])
  * MVP：仅单 ref 直接引用 + 箭头函数回调；数组源 / 函数源 / function 回调警告不支持
@@ -176,6 +225,8 @@ function extractData(
     const init = extractInitializer(source, m.index + m[0].length)
     if (!init) continue
     const line = lineAt(source, m.index)
+    // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data
+    if (/^(?:defineProps|defineEmits|defineExpose)\s*\(/.test(init)) continue
     // 跳过函数/箭头函数（属于 methods）
     if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
     // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
@@ -217,6 +268,11 @@ function extractData(
   return { data, computed }
 }
 
+/** 剥离方法参数 TS 类型标注（产物是 JS；e: { detail?: number } → e） */
+function stripParamTypes(params: string): string {
+  return params.replace(/:\s*[^,)]+/g, '').trim()
+}
+
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
 function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, string> {
   const methods: Record<string, string> = {}
@@ -225,9 +281,9 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
   if (!disabled?.has('script/function-to-methods')) {
     while ((m = fnRe.exec(source))) {
       const name = m[1]
-      const params = m[2]
+      const params = stripParamTypes(m[2])
       const body = extractBracedBody(source, m.index + m[0].length - 1)
-      trace?.add('script/function-to-methods', { line: lineAt(source, m.index), before: `function ${name}(${params})`, after: `${name}(${params})` })
+      trace?.add('script/function-to-methods', { line: lineAt(source, m.index), before: `function ${name}(${m[2]})`, after: `${name}(${params})` })
       // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明）
       if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
       else warnings.push(`函数 ${name} 体解析失败，已跳过`)
@@ -237,7 +293,7 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
   if (!disabled?.has('script/arrow-to-methods')) {
     while ((m = arrowRe.exec(source))) {
       const name = m[1]
-      const params = m[2]
+      const params = stripParamTypes(m[2])
       const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
       const body = extractBracedBody(source, braceIdx)
       trace?.add('script/arrow-to-methods', { line: lineAt(source, m.index), before: `const ${name} = (...) =>`, after: `${name}(...)` })
@@ -305,9 +361,15 @@ function rewriteRefAccess(
   disabled?: Set<string>,
   computeds: Record<string, ComputedInfo> = {},
   watches: Record<string, WatchInfo> = {},
+  emitEnabled = false,
+  propsVar?: string,
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
+  // 组件事件（v0.3）：emit('xxx', payload) → this.triggerEvent('xxx', payload)（微信组件方法）
+  if (emitEnabled) out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
+  // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
+  if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
@@ -388,6 +450,10 @@ export function transformScriptToPage(
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace)
+  // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
+  const props = extra.isComponent && !disabled.has('script/define-props') ? extractProps(source, warnings, trace) : {}
+  const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*\(/)?.[1]
+  const emitEnabled = extra.isComponent && /defineEmits\s*\(/.test(source) && !disabled.has('script/define-emits')
   const methods = extractMethods(source, warnings, trace, disabled)
   const lifecycles = extractLifecycles(source, trace, disabled)
   const vModelBindings = extra.vModelBindings ?? []
@@ -402,6 +468,16 @@ export function transformScriptToPage(
   if (dataEntries.length) {
     lines.push('  data: {')
     for (const [k, v] of dataEntries) lines.push(`    ${k}: ${JSON.stringify(v)},`)
+    lines.push('  },')
+  }
+
+  // 组件 properties（v0.3）：defineProps 对象形式 → 微信 properties（type + value 默认值）
+  const propEntries = Object.entries(props)
+  if (extra.isComponent && propEntries.length) {
+    lines.push('  properties: {')
+    for (const [k, p] of propEntries) {
+      lines.push(`    ${k}: { type: ${p.type}${p.value !== undefined ? `, value: ${JSON.stringify(p.value)}` : ''} },`)
+    }
     lines.push('  },')
   }
 
@@ -445,16 +521,24 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
-  if (lifecycles.onUnload) lines.push(`  onUnload() {\n${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches))}\n  },`)
-  if (lifecycles.onLoad) {
-    // 显式 onLoad：computed 初始化 + immediate watch 注入在方法体前
+  if (lifecycles.onUnload) lines.push(`  onUnload() {
+${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}
+  },`)
+  // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
+  if (extra.isComponent) {
     const initLines = [computedInitLine(computeds), immediateWatchLine(watches)].filter(Boolean)
-    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches)
+    if (initLines.length) {
+      lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
+    }
+  } else if (lifecycles.onLoad) {
+    // 显式 onLoad（页面）：computed 初始化 + immediate watch 注入在方法体前
+    const initLines = [computedInitLine(computeds), immediateWatchLine(watches)].filter(Boolean)
+    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -482,11 +566,11 @@ export function transformScriptToPage(
     }
   }
 
-  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled, computeds, watches)},`)
+  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)},`)
   // watch 回调方法：proteusWatchX(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   for (const w of Object.values(watches)) {
     lines.push(
-      `  proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches))}\n  },`,
+      `  proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`,
     )
   }
   lines.push('})')

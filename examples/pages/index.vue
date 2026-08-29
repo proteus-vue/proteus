@@ -31,6 +31,7 @@ function handleTap() {
     <div class="links">
       <a href="/pages/forms">表单与指令</a>
       <a href="/pages/config-demo">配置演示</a>
+      <a href="/pages/components-demo">组件演示</a>
       <a href="/pages/user/index">用户中心</a>
       <a href="/pages/user/profile">个人资料</a>
       <a href="/subpackages/order/pages/list">订单列表</a>

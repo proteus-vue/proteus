@@ -132,6 +132,12 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
       for (const sp of config.subPackages ?? []) {
         files.push(...walkVueFiles(path.join(projectRoot, sp.root)))
       }
+      // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）
+      // isComponent 判定依赖路径含 /components/（buildStart 已覆盖）
+      const appComponents = path.join(appDir, 'components')
+      if (fs.existsSync(appComponents)) {
+        files.push(...walkVueFiles(appComponents))
+      }
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
       // 调试开关 __PROTEUS_DEBUG__ 由本插件替换（vite define 不作用于直出资产）

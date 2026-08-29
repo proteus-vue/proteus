@@ -289,10 +289,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         )
         const isCatch = (mods.includes('stop') || mods.includes('prevent')) && !ctx.disabled.has('event/modifier-catch')
         const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
-        attrs.push(`${isCatch ? 'catch' : 'bind'}${mapped}="${handler}"`)
+        // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
+        const isCustomEvent = !(raw in ctx.eventMap)
+        const prefix = `${isCatch ? 'catch' : 'bind'}${isCustomEvent ? ':' : ''}`
+        attrs.push(`${prefix}${mapped}="${handler}"`)
         ctx.trace?.add(
           isCatch ? 'event/modifier-catch' : 'event/click-to-tap',
-          { line: node.loc.start.line, before: `@${raw}`, after: `${isCatch ? 'catch' : 'bind'}${mapped}` },
+          { line: node.loc.start.line, before: `@${raw}`, after: `${prefix}${mapped}` },
         )
         break
       }
