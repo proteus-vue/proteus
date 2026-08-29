@@ -62,7 +62,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | CLI `@proteus/cli`（✅ 已落地） | `packages/cli/` | ✅ `proteus build <dir> --out <dir> [--debug] [--rules]`（独立编译，esbuild 单文件 + shebang，`node_modules/.bin/proteus` 验证）；`proteus explain <vue-file | rule-id>`（决策 trace / AI 说明书）；`proteus rules`（能力目录）；核心逻辑纯函数可单测（tests/cli.test.ts 9 用例） |
 | 脚手架 `create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create proteus my-app` 生成 32 文件双端工程（模板快照 + 手写模板）；端到端验证：生成 → 安装（file: 指向仓库 compiler）→ build:web + build:mp 双端构建通过；模板同步脚本 `scripts/snapshot-template.ts` |
 | CI（✅ 已落地） | `.github/workflows/ci.yml` | ✅ `vue-tsc / test / build:mp / build:web / 独立包构建` + `e2e-web` 双 job 全绿 |
-| 发布流水线 | changesets + npm | 语义化版本、changelog、标签发布 |
+| 发布流水线（✅ 已就绪：changesets 配置 + 流程验证，npm 发布待启用） | `.changeset/` + 脚本 | ✅ `changeset`（写变更）/ `changeset version`（bump + CHANGELOG）/ `changeset publish`（发布，待 npm 登录）；实测：初始 changeset → version → 三包 0.1.0→0.2.0 + CHANGELOG.md 生成 + 内部依赖自动更新；CI 发布 job 待启用 |
 | 贡献设施（✅ 已落地） | `CONTRIBUTING.md` / Issue & PR 模板 / 行为准则 | ✅ 规则改动同步约定（实现/AI 说明书/映射表/测试四处一致） |
 
 ### v0.3 编译能力补全（对标"标准 Vue 能力"，最大差距域）
@@ -183,7 +183,7 @@ proteus/                        # monorepo（v0.2 起）
 
 | 里程碑 | 验收 |
 |---|---|
-| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）；`create-proteus` 一条命令跑起双端（✅ 已落地，npm 发布待流水线）；CI 全绿；`proteus explain` 可用（✅ CLI 已落地） |
+| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo；sourcemap 接入开发者工具 |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地；Pinia 双端可用 |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
@@ -193,4 +193,4 @@ proteus/                        # monorepo（v0.2 起）
 
 ---
 
-**文档版本**：v2.52（v0.2 独立包 / CI / 贡献设施落地）· 本路线图随能力落地持续更新，每完成一个里程碑在 [PROJECT_MEMORY.md](../PROJECT_MEMORY.md) 归档决策。
+**文档版本**：v2.53（v0.2 六项全部完成，发布流水线就绪）· 本路线图随能力落地持续更新，每完成一个里程碑在 [PROJECT_MEMORY.md](../PROJECT_MEMORY.md) 归档决策。
