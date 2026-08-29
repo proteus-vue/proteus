@@ -1,6 +1,9 @@
 // tests/router-rules.test.ts
 // 路由生成规则注册表 + --trace-router 闭环（底线整改 P1b：消除路由层"第二黑盒"）
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { listRouteRules, getRouteRule, formatRouteRule } from '../packages/router/src/rules'
 import { buildRouteTree } from '../packages/router/src/tree'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
@@ -59,22 +62,32 @@ describe('--trace-router 闭环（嵌套推导决策链）', () => {
 
   it('runGenRoutes trace 输出来源登记 + 父路由推导依据', () => {
     const logs: string[] = []
-    runGenRoutes({
-      config: {
-        platform: 'mp-weixin',
-        skyline: true,
-        appid: 'wx0000000000',
-        pagesDir: 'examples/pages',
-        routesOutput: 'examples/router/auto-routes.ts',
-        customRoute: { registerPresets: true, builders: {} },
-        setDataBridge: { batchWindow: 16, perComponent: true },
-        style: { px2rpx: true, rpxRatio: 2 },
-      },
-      root: process.cwd(),
-      trace: (msg) => logs.push(msg),
-    })
-    expect(logs.some((l) => l.includes('来源登记'))).toBe(true)
-    // 父路由推导依据（path 前缀推导 / 显式 parent）
-    expect(logs.some((l) => l.includes('前缀推导') || l.includes('显式 parent'))).toBe(true)
+    // ★测试隔离：临时目录（真实 cwd 会覆盖 examples 产物——含分包/不含分包 config 差异污染）
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-router-rules-'))
+    fs.mkdirSync(path.join(tmp, 'src/pages/user'), { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'src/pages/index.vue'), '<route>{"meta":{"title":"首页"}}</route>')
+    fs.writeFileSync(path.join(tmp, 'src/pages/user/index.vue'), '<route>{"meta":{"title":"用户"}}</route>')
+    fs.writeFileSync(path.join(tmp, 'src/pages/user/profile.vue'), '<route>{"meta":{"title":"资料"}}</route>')
+    try {
+      runGenRoutes({
+        config: {
+          platform: 'mp-weixin',
+          skyline: true,
+          appid: 'wx0000000000',
+          pagesDir: 'src/pages',
+          routesOutput: 'src/router/auto-routes.ts',
+          customRoute: { registerPresets: true, builders: {} },
+          setDataBridge: { batchWindow: 16, perComponent: true },
+          style: { px2rpx: true, rpxRatio: 2 },
+        },
+        root: tmp,
+        trace: (msg) => logs.push(msg),
+      })
+      expect(logs.some((l) => l.includes('来源登记'))).toBe(true)
+      // 父路由推导依据（path 前缀推导 / 显式 parent）
+      expect(logs.some((l) => l.includes('前缀推导') || l.includes('显式 parent'))).toBe(true)
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    }
   })
 })

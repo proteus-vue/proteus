@@ -78,4 +78,35 @@ describe('runGenRoutes：路由表生成全链路', () => {
 
     expect(() => runGenRoutes({ config: makeConfig(), root })).toThrow(/不是合法 JSON/)
   })
+
+  it('★决策 #113 集中式 meta：页面零 <route> 声明也收录，meta 从 config router.meta 注入（精确路径 > 目录前缀）', () => {
+    const root = path.join(TMP, 'config-meta')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/pages/user/list.vue', `<template><view>列表</view></template>`)
+    writeFixture(root, 'src/pages/user/profile.vue', `<template><view>资料</view></template>`)
+
+    runGenRoutes({
+      config: makeConfig({
+        router: {
+          meta: {
+            // 目录级前缀：user 下全部页面
+            'user': { requiresAuth: true, transition: 'slideUp' },
+            // 精确路径覆盖目录级
+            'user/profile': { title: '个人资料' },
+          },
+        },
+      }),
+      root,
+    })
+
+    const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
+    // 无 <route> 块页面：path/name 推导 + 目录级 meta 注入
+    expect(auto).toContain('name: "user-list"')
+    expect(auto).toContain('"requiresAuth":true')
+    // 精确路径覆盖目录级（meta 断言用 name 索引的 RouteParamsByName key）
+    expect(auto).toContain("'user-profile': {  }") // 无 params
+    const userProfile = auto.match(/name: "user-profile"[^}]*\}[^}]*\}/)?.[0] ?? ''
+    expect(userProfile).toContain('"title":"个人资料"')
+    expect(userProfile).toContain('"requiresAuth":true') // 目录级保留（精确只覆盖 title）
+  })
 })

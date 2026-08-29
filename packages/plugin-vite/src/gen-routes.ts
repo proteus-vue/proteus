@@ -13,6 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { RouteRecord, RouteMeta } from '@proteus/router'
+import { mergeMeta } from '@proteus/router/merge'
 import type { RouteBlock } from '@proteus/router/types'
 import { scanRoutes } from '@proteus/router/scan'
 import { buildRouteTree } from '@proteus/router/tree'
@@ -71,20 +72,43 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-/** 扫描页面集合（主包 + 分包）——★双管线统一：<route> 解析走 scanRoutes（schema 校验 + loc + derivePath） */
+/**
+ * 解析集中式 meta（决策 #113）：目录前缀（最长匹配）为基底 + 精确路径细化（mergeMeta 精确胜）
+ * 键 = pagesDir 相对路径去扩展名（'user/profile'；目录级 'user' 前缀匹配其下全部页面）
+ */
+function resolveConfigMeta(configMeta: Record<string, RouteMeta> | undefined, pageRel: string): RouteMeta | undefined {
+  if (!configMeta) return undefined
+  let dirMeta: RouteMeta | undefined
+  const segs = pageRel.split('/')
+  for (let i = segs.length - 1; i >= 1; i--) {
+    const prefix = segs.slice(0, i).join('/')
+    if (configMeta[prefix]) {
+      dirMeta = configMeta[prefix]
+      break
+    }
+  }
+  const exact = configMeta[pageRel]
+  if (dirMeta && exact) return mergeMeta(dirMeta, exact) // 精确细化目录（精确胜）
+  return dirMeta ?? exact
+}
+
+/** 扫描页面集合（主包 + 分包）——★决策 #113：全页面收录（无 <route> 块零声明）+ config 集中 meta 注入 */
 function scanPages(): PageInfo[] {
   const pages: PageInfo[] = []
+  const configMeta = config.router?.meta
 
   // 主包：pagesDir
-  const mainBlocks = scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true })
+  const mainBlocks = scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true, includeNoRoute: true })
   for (const b of mainBlocks) {
     const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+    const pageRel = relSrc.replace(/^pages\//, '')
     trace(`[route] ${relSrc} 来源登记（${b.loc.file}:${b.loc.line}，route/scan）`)
     pages.push({
       file: b.componentPath,
       relSrc,
       mpPath: relSrc,
-      meta: b.meta,
+      // ★集中 meta：config（精确/目录前缀）→ 页面 <route> 覆盖（mergeMeta 页面胜）
+      meta: mergeMeta(resolveConfigMeta(configMeta, pageRel), b.meta),
       params: b.params,
       pageJson: b.pageJson,
       customRouteKeyName: b.customRouteKeyName,
@@ -95,17 +119,18 @@ function scanPages(): PageInfo[] {
   for (const sp of config.subPackages ?? []) {
     const spRootAbs = path.join(ROOT, sp.root)
     const spName = sp.name ?? path.basename(sp.root)
-    const spBlocks = scanRoutes(spRootAbs, { derivePath: true, verbose: true })
+    const spBlocks = scanRoutes(spRootAbs, { derivePath: true, verbose: true, includeNoRoute: true })
     for (const b of spBlocks) {
       const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
       const relInSub = path.relative(spRootAbs, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+      const pageRel = relInSub.replace(/^pages\//, '')
       pages.push({
         file: b.componentPath,
         relSrc,
         mpPath: relSrc,
         subPackage: spName,
         relInSub,
-        meta: b.meta,
+        meta: mergeMeta(resolveConfigMeta(configMeta, pageRel), b.meta),
         params: b.params,
         pageJson: b.pageJson,
         customRouteKeyName: b.customRouteKeyName,

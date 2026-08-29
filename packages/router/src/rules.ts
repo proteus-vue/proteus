@@ -180,6 +180,17 @@ const ROUTE_RULES: RouteRule[] = [
     source: 'packages/router/src/scan.ts → derivePathFromFile',
     decision: '#112',
   },
+  {
+    id: 'route/config-meta',
+    title: '集中式 meta（<route> 块完全可选）',
+    description: 'proteus.config router.meta 按页面路径/目录前缀集中配置 meta——页面零 <route> 声明也能获得 meta；优先级：页面 <route>.meta > 精确路径 > 目录前缀 > 默认',
+    why: '上百页面逐页写 <route> 块是灾难（决策 #113）——meta 集中一处管理，页面只需写业务代码；<route> 块保留用于覆盖/补充',
+    when: '页面无 <route> 块（includeNoRoute 收录）或 config router.meta 声明',
+    example: { before: 'config.router.meta["user"] = { requiresAuth: true }', after: 'user 目录全部页面获得 requiresAuth（页面零声明）' },
+    verify: 'tests/gen-routes.test.ts 集中 meta 用例',
+    source: 'packages/plugin-vite/src/gen-routes.ts → resolveConfigMeta',
+    decision: '#113',
+  },
 ]
 
 const byId = new Map<string, RouteRule>(ROUTE_RULES.map((r) => [r.id, r]))

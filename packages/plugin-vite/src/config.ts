@@ -3,6 +3,7 @@
 // 应用侧写法：import type { ProteusConfig } from '@proteus/plugin-vite' + defineConfig 同款：
 //   const config: ProteusConfig = { platform: 'mp-weixin', ... }
 import type { TransformRuleOverrides } from '@proteus/compiler'
+import type { RouteMeta } from '@proteus/router'
 
 export interface ProteusConfig {
   /** 目标平台 */
@@ -49,7 +50,7 @@ export interface ProteusConfig {
     /** 超预算是否让构建失败（默认警告不阻断） */
     strict: boolean
   }
-  /** 路由通用配置（docs/proteus-router-plan M6）：tabBar 唯一声明源（Web <TabBar> / MP app.json / App 原生栈） */
+  /** 路由通用配置（docs/proteus-router-plan M6 + 决策 #113）：tabBar 唯一声明源 / 集中式 meta（页面 <route> 可选） */
   router?: {
     tabBar?: {
       color?: string
@@ -57,5 +58,11 @@ export interface ProteusConfig {
       /** list[i].name 对应路由 name（RouteNode.name），text/icon 供各端产物 */
       list: Array<{ name: string; text: string; icon?: string }>
     }
+    /**
+     * ★集中式页面 meta（决策 #113）：按页面路径配置——页面无需写 <route> 块也能获得 meta。
+     * 优先级：页面 <route>.meta > 精确路径 > 目录前缀（最长匹配）> 默认
+     * 键 = pagesDir 相对路径去扩展名：'user/profile'、目录级 'user'（前缀匹配其下全部页面）
+     */
+    meta?: Record<string, RouteMeta>
   }
 }

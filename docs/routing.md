@@ -33,6 +33,20 @@ examples/pages/
 
 > ★**单一真相源（决策 #112）**：路由的一切声明只写页面 `<route>` 块——`meta`（title/isTab/requiresAuth/transition…）及可选 `path`/`name`/`parent`/`redirect`/`params`。`path`/`name` 缺省时由扫描按文件位置推导（零样板）；`auto-routes.ts` / `app.json` 是**生成物**（AUTO-GENERATED，勿手动编辑），meta 从 `<route>` 单向流向产物，**不存在第二处手写 meta**。
 
+> ★★**`<route>` 块完全可选（决策 #113）**：上百页面无需逐页写 `<route>`——页面零声明也会被收录（path/name 按文件推导），meta 由 `proteus.config.ts` 的 `router.meta` **集中配置**（按页面路径，支持目录前缀）：
+>
+> ```ts
+> // proteus.config.ts
+> router: {
+>   meta: {
+>     'user': { requiresAuth: true, transition: 'slideUp' },  // 目录级：user 下全部页面
+>     'user/profile': { title: '个人资料' },                   // 精确路径：细化目录级（精确胜）
+>   }
+> }
+> ```
+>
+> 优先级：**页面 `<route>.meta` > 精确路径 > 目录前缀（最长匹配）> 默认**。`<route>` 块只在需要覆盖/补充时写。
+
 可选声明（推导的替代）：
 
 ```vue
