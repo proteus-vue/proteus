@@ -25,7 +25,7 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | # | 能力域 | uni-app | Taro 3 | Proteus 现状 | 规划版本 |
 |---|---|---|---|---|---|
 | 1 | **开发体验**：脚手架 / HMR / devtools / 错误定位 / 类型提示 | ✅ | ✅ | 🟡 HMR+devtools（Web 原生）；MP 无 devtools 插件 | v0.2 脚手架 + v1.0 devtools |
-| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、sourcemap（v0.3）；🟡 预处理器 / 类型提示 / computed 写路径 | v0.3 + v0.3 尾 |
+| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、scss 预处理器、sourcemap（v0.3）；🟡 类型提示 / computed 写路径 | v0.3 + v0.3 尾 |
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
 | 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；❌ MP 编译 / 持久化 | v0.4 + v0.4 尾 |
 | 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
@@ -77,7 +77,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 组件系统（✅ 已实现，决策 #79） | `packages/compiler/` + `scripts/gen-routes.ts` | 已有：defineProps → Component properties、defineEmits + emit() → triggerEvent、<slot> 透传、组件模式 attached 生命周期；父模板自定义标签 + 事件 bind: 冒号形式 + **usingComponents 自动注入 page.json**（gen-routes 扫描模板 + 组件目录约定）；TS 参数标注编译期剥离；待做：defineExpose、TS 泛型 defineProps、组件 usingComponents 嵌套 |
 | scoped CSS（✅ 已实现，决策 #77） | `packages/compiler/src/style.ts` + `template.ts` | 已有：`<style scoped>` → 模板元素附加 `data-v-xxx` + 选择器末尾追加 `[data-v-xxx]`（:deep 去包装、@media 骨架保留、scopeId 由文件名 djb2 哈希稳定生成）；MVP 简化：任一 scoped 全量作用域化 |
 | 指令补全（✅ v-show / :class 数组已实现，决策 #76/#77） | `packages/compiler/src/template.ts` | 已有：`v-show` → `hidden="{{!expr}}"`、`:class` 数组语法（字符串/对象/简单变量/三元逐项拼接，splitTopLevel 顶层逗号分割）；待做：事件修饰符（`.once/.self`）、`v-on` 键位 |
-| CSS 预处理器 | vite 链路 | `scss` / `less` 经 Vite 预处理后进入 `transformStyleToWxss` |
+| CSS 预处理器（✅ scss 已实现，决策 #87） | 插件 `preprocessStyle` 钩子 + `sass` | 已有：编译器新增 `CompileOptions.preprocessStyle(lang, content)` 钩子（保持 @proteus/compiler 零依赖）；插件注入 sass 实现——`<style lang="scss">` 编译为 css 后进 WXSS（Web 端 Vite 原生处理 scss）；forms.vue 演示（变量 $brand + 嵌套）；less 待内置 |
 | 方法级 sourcemap（✅ 已实现，决策 #80） | `packages/compiler/src/script.ts` + `vite-plugin-mp-transform.ts` | 已有：sourcemap v3（VLQ 编码，产物行 → 源码行：方法体 / watch 回调体）+ 调试构建落盘 .js.map + sourceMappingURL + 方法行号注释（微信开发者工具可定位源码） |
 | 类型提示全链路 | `src/shims/` + 编译器声明生成 | 路由参数、页面 `onLoad` 参数、事件处理器的 TS 推导（决策 §0.3 原则 6 补全） |
 

@@ -64,9 +64,17 @@ function bump() {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+// CSS 预处理器（v0.3 尾）：lang=scss → 插件 preprocessStyle 钩子编译为 css 后进 WXSS；Web 端 Vite 原生处理
+$brand: #1a7af8;
+
 .forms {
   padding: 24px;
+
+  .watch-log {
+    color: $brand;
+    font-size: 12px;
+  }
 }
 .field {
   display: block;

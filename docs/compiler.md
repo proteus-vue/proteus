@@ -216,6 +216,8 @@ Web 端浏览器有 UA 默认样式（大标题 / 段距 / 链接色），小程
 transformStyleToWxss(source, { px2rpx, rpxRatio })
 ```
 
+> **CSS 预处理器（v0.3 尾）**：`<style lang="scss">` 先经 `CompileOptions.preprocessStyle` 钩子转 css（插件注入 sass 实现，编译器零依赖；Web 端 Vite 原生处理 scss）——变量/嵌套在编译期展开，产物 WXSS 与手写 css 无异。less 待内置。
+
 依次执行：
 
 1. **语义标签选择器重写**：选择器中的标签映射为小程序目标。关键设计——**多对一映射用基础类隔离**：

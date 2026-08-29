@@ -80,7 +80,11 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   })
 
   const styleTrace = createTrace('style')
-  const wxss = transformStyleToWxss(descriptor.styles.map((s) => s.content).join('\n'), {
+  // CSS 预处理器（v0.3 尾）：lang=scss/less 的 style 块先经 preprocessStyle 钩子转 css（适配层注入，编译器零依赖）
+  const styles = descriptor.styles.map((s) =>
+    s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, s.content) : s.content,
+  )
+  const wxss = transformStyleToWxss(styles.join('\n'), {
     ...styleOpts,
     scopeId,
     trace: styleTrace,

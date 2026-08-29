@@ -93,6 +93,11 @@ export interface CompileOptions {
   debug?: boolean
   /** 规则覆盖（可选：底线循环 ①③）：AI/config 改写或禁用规则 */
   rules?: TransformRuleOverrides
+  /**
+   * style 预处理器钩子（v0.3 尾：CSS 预处理器）——lang=scss/less 的 style 块先经此转 css
+   * 由适配层注入（插件用 sass/less），保持编译器零依赖；未提供则原样传入
+   */
+  preprocessStyle?: (lang: string, content: string) => string
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */

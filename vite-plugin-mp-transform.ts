@@ -13,11 +13,29 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { transform as esbuildTransform } from 'esbuild'
+import * as sass from 'sass'
 import type { Plugin } from 'vite'
 import config from './proteus.config'
 import { compileVueSfc } from './packages/compiler/src'
 import type { TransformRuleOverrides } from './packages/compiler/src'
 import { APP_LAUNCH_SKELETON } from './src/runtime/appSkeleton'
+
+/** CSS 预处理器（v0.3 尾）：<style lang="scss/sass/less"> → css（经 preprocessStyle 钩子注入编译器） */
+function preprocessStyle(lang: string, content: string): string {
+  if (lang === 'scss' || lang === 'sass') {
+    try {
+      return sass.compileString(content).css
+    } catch (err) {
+      console.warn(`[mp-transform] scss 编译失败（原样输出）：${(err as Error).message}`)
+      return content
+    }
+  }
+  if (lang === 'less') {
+    console.warn('[mp-transform] less 预处理器暂未内置（MVP 仅 scss），已原样输出')
+    return content
+  }
+  return content
+}
 
 /**
  * 提取 builder 函数名：function xxxBuilder(...)
@@ -180,6 +198,7 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
           // dev 调试：产物注入源码行号注释 + 自动 handler 调试日志（PROTEUS_DEBUG=1 时开启）
           annotateLines: isDebug,
           debug: isDebug,
+          preprocessStyle,
         })
 
         // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）

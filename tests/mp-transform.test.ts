@@ -258,6 +258,22 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     expect(result.js).toContain('Component({')
     expect(result.js).toContain('label: { type: String, value: "" }')
   })
+
+  it('CSS 预处理器（v0.3 尾）：lang=scss 经 preprocessStyle 钩子转 css 进 WXSS', () => {
+    const src = '<template><div class="a">x</div></template>\n<style lang="scss">\n$c: red;\n.a { color: $c; }\n</style>'
+    const preprocessStyle = vi.fn((_lang: string, content: string) => content.replace('$c: red;\n', '').replace('$c', 'red'))
+    const result = compileVueSfc(src, { preprocessStyle })
+    expect(preprocessStyle).toHaveBeenCalledWith('scss', expect.stringContaining('$c'))
+    expect(result.wxss).toContain('.a { color: red; }')
+    expect(result.wxss).not.toContain('$c')
+  })
+
+  it('无 lang 的 style 不触发 preprocessStyle', () => {
+    const src = '<template><div>x</div></template>\n<style>.a { color: red; }</style>'
+    const preprocessStyle = vi.fn()
+    compileVueSfc(src, { preprocessStyle })
+    expect(preprocessStyle).not.toHaveBeenCalled()
+  })
 })
 
 describe('sourcemap（v0.3：方法级 JS 源码映射）', () => {
