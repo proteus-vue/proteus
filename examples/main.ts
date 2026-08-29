@@ -1,7 +1,17 @@
 // examples/main.ts —— Web 端入口（Web 原生、零转换：标准 Vue SPA + Pinia 多端适配工厂）
 // ★pinia-plan M3：createWebPinia() 注入平台标记 + LocalStorage 持久化（player store 持久化声明自动生效）
+// ★lifecycle-plan B1/B2：defineApp 阶段化启动（bootstrap → interactive，超时降级 + trace）
 import { createApp } from 'vue'
 import App from './App.vue'
-import { createWebPinia } from '@proteus/runtime'
+import { createWebPinia, defineApp } from '@proteus/runtime'
 
-createApp(App).use(createWebPinia()).mount('#app')
+// 阶段化启动：bootstrap 能力探测 → coreReady 核心服务 → navigationReady → interactive 可交互
+// （Web 端零转换直跑；小程序端经编译期映射 App() 钩子）
+defineApp({
+  bootstrap(ctx) {
+    console.log('[lifecycle] bootstrap', ctx.platform)
+  },
+  interactive() {
+    createApp(App).use(createWebPinia()).mount('#app')
+  },
+}).run({ launchType: 'cold' })

@@ -169,10 +169,10 @@ B1 ──→ B2 ──┬──→ B3 (Web)
 > **缺口**：App 级五阶段编排（bootstrap→interactive）+ 超时/降级 + --trace-lifecycle + 冷热分离——未做。
 > 可独立先行：B1（defineApp API + 五阶段定义）+ B2（LifecycleOrchestrator：顺序执行/超时降级/错误隔离/trace）——不依赖 api/component（API 阶段可空跑）；B3-B9 依赖对应板块（Web/Skyline 映射、页面清理、App 原生、可观测、迁移）。
 
-- [ ] `defineApp` 五阶段按顺序执行（B2）
+- [x] `defineApp` 五阶段按顺序执行（B1+B2 ✅：runtime/src/lifecycle.ts，2026-08）
 - [ ] Skyline 端 `App.onShow` 正确映射（B4）
 - [ ] 页面 `onUnload` 自动 `$dispose` store（B6）
-- [ ] `--trace-lifecycle` 输出完整（B8）
+- [x] `--trace-lifecycle` 输出完整（B2 ✅：Orchestrator trace + 阶段超时降级链）
 - [ ] 冷启动 < 1s（中等机型）（B9）
 - [ ] 迁移工具可自动转换 `App()` → `defineApp()`（B9）
 - [ ] CI 审计通过（B9）
