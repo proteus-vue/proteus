@@ -1,7 +1,7 @@
 // src/router/guards.ts
-// 全局路由守卫（P3-2）—— 支持 beforeEach / afterEach，经 adapter 获取当前路由
+// 全局路由守卫（P3-2 + 拆包步骤 4 工厂化）—— 支持 beforeEach / afterEach，经 adapter 获取当前路由
+// ★工厂化：routeMap 不再 import 自 auto-routes，由 Router.push 调用时注入（对齐 createRouter 设计）
 import type { RouteRecord } from './types'
-import { routeMap } from './auto-routes'
 import { adapter } from '@proteus/shared'
 
 type Guard = (to: RouteRecord, from: RouteRecord | null) => boolean | Promise<boolean> | void | Promise<void>
@@ -20,9 +20,9 @@ export function afterEach(guard: AfterGuard): void {
   afterGuards.push(guard)
 }
 
-/** 执行全部前置守卫（内部使用，由 router.push 调用） */
-export async function runBeforeEach(to: RouteRecord): Promise<boolean> {
-  const from = getCurrentFrom()
+/** 执行全部前置守卫（内部使用，由 router.push 调用；routeMap 用于反查当前页路由） */
+export async function runBeforeEach(to: RouteRecord, routeMap: Record<string, RouteRecord>): Promise<boolean> {
+  const from = getCurrentFrom(routeMap)
   for (const g of beforeGuards) {
     const result = await g(to, from)
     if (result === false) return false
@@ -30,14 +30,14 @@ export async function runBeforeEach(to: RouteRecord): Promise<boolean> {
   return true
 }
 
-/** 执行全部后置守卫（内部使用，由 router.push 调用） */
-export async function runAfterEach(to: RouteRecord): Promise<void> {
-  const from = getCurrentFrom()
+/** 执行全部后置守卫（内部使用，由 router.push 调用；routeMap 用于反查当前页路由） */
+export async function runAfterEach(to: RouteRecord, routeMap: Record<string, RouteRecord>): Promise<void> {
+  const from = getCurrentFrom(routeMap)
   for (const g of afterGuards) g(to, from)
 }
 
-/** 从页面栈顶反查路由记录 */
-function getCurrentFrom(): RouteRecord | null {
+/** 从页面栈顶反查路由记录（routeMap 以 name 为键，path 回退查找） */
+function getCurrentFrom(routeMap: Record<string, RouteRecord>): RouteRecord | null {
   const stack = adapter.getCurrentPages()
   if (stack.length === 0) return null
   const path = stack[stack.length - 1].route

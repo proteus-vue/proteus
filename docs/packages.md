@@ -70,13 +70,15 @@ packages/
 - [x] 验证：vue-tsc + 198 测试 + 双端构建 + runtime 包构建 + 模板快照 + workspace 链接
 - 决策：#100；踩坑：runtime 独立构建缺全局类型（__PROTEUS_DEBUG__/PageOptions/ComponentOptions 在 shared mp.d.ts）——tsconfig.build types 引 shared shims
 
-### 步骤 4：router 包 + 工厂化
+### 步骤 4：router 包 + 工厂化（✅ 已落地，另含 M1/M2 增量）
 
-- [ ] `git mv src/router → packages/router/src`（types/guards/skyline/presets；index.ts 改 createRouter 工厂，删单例）
-- [ ] `examples/router/index.ts` 新单例（`createRouter(routes)`，routes 来自应用侧 auto-routes）
-- [ ] gen-routes 的 `routesOutput` 指向 `examples/router/auto-routes.ts`；RouterView 引用同步
-- [ ] 验证：路由 15 用例（改为工厂实例）+ e2e
-- 规模：~250 行；风险：中（工厂化是行为变化，路由测试兜底）
+- [x] `git mv src/router → packages/router/src`（types/guards/skyline/presets；index.ts 改 createRouter 工厂，删单例；guards 工厂化——routeMap 由 push 注入）
+- [x] `packages/router/package.json`（依赖 @proteus/shared，peer @vue/compiler-sfc）+ tsconfig.build（types 引 shared shims + @types/node）
+- [x] `examples/router/index.ts` 新单例（`createRouter(routes)`，routes 来自应用侧 auto-routes）；`examples/router/auto-routes.ts` 随应用存放（模块扩充注入 `@proteus/router/types` 的 RouteParamsByName，vue-router 同款模式——push 泛型推导/PageOnLoad 负例零回归）
+- [x] gen-routes 的 `routesOutput` 指向 `examples/router/auto-routes.ts`（输出改 `declare module` 扩充）；RouterView 改 `./auto-routes` 相对导入（仓库与模板通用）
+- [x] 路由规划 M1/M2 增量（docs/proteus-router-plan）：`schema.ts`（手写校验 + RouteValidationError 含 loc）+ `scan.ts`（@vue/compiler-sfc 解析 + 行号定位）+ `tree.ts`（嵌套树：path 推导 + parent 显式优先 + 环检测 + sortByPath 稳定）+ `merge.ts`（meta 深合并限深 3）
+- [x] 验证：vue-tsc 零错 + 216 测试（新增 18 条 M1/M2 用例）+ 双端构建 + router 包构建 + 模板快照 + workspace 链接（@proteus/router）
+- 决策：#101；踩坑：lazy 默认值语义（scan 不强制置 true，交给 defaults 解析）；RouteNode.parent 保留（构建期使用）；auto-routes 模块扩充（空基接口保证 name 受限负例成立）
 
 ### 步骤 5：plugin-vite 包（插件 + gen-routes）
 

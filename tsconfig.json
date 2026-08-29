@@ -19,6 +19,8 @@
       "@proteus/compiler": ["packages/compiler/src/index.ts"],
       "@proteus/shared": ["packages/shared/src/index.ts"],
       "@proteus/runtime": ["packages/runtime/src/index.ts"],
+      "@proteus/router": ["packages/router/src/index.ts"],
+      "@proteus/router/*": ["packages/router/src/*"],
       "@proteus/*": ["src/*"]
     }
   },
@@ -32,6 +34,7 @@
     "packages/shared/src/**/*.ts",
     "packages/shared/src/**/*.d.ts",
     "packages/runtime/src/**/*.ts",
+    "packages/router/src/**/*.ts",
     "examples/**/*.ts",
     "examples/**/*.vue",
     "vite.config.ts",

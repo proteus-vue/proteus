@@ -18,7 +18,7 @@ import type { Plugin } from 'vite'
 import config from './proteus.config'
 import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
-import { APP_LAUNCH_SKELETON } from './src/runtime/appSkeleton'
+import { APP_LAUNCH_SKELETON } from './packages/runtime/src/appSkeleton'
 
 /** CSS 预处理器（v0.3 尾）：<style lang="scss/sass/less"> → css（经 preprocessStyle 钩子注入编译器） */
 function preprocessStyle(lang: string, content: string): string {

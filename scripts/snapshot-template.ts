@@ -6,6 +6,7 @@
 //              vite-plugin-mp-transform.ts（含路径替换） index.html tsconfig.json
 //   手写模板：package.json / proteus.config.ts / vite.config.ts / src/main.ts / src/main.mp.ts /
 //              src/App.vue / src/pages/index.vue / src/router/auto-routes.ts（精简占位）
+//   ★拆包后：router/runtime/shared 源码来自 packages/*/src，复制进模板 src/ 保持可用（步骤 7 重构）
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -63,12 +64,19 @@ for (const dir of ['platform', 'shims']) {
   copied.push(...copyDir(path.join(ROOT, 'packages', 'shared', 'src', dir), path.join(TPL, 'src', dir)))
 }
 // 2. router（排除 auto-routes.ts，模板用精简占位）+ RouterView（应用壳，随应用存放）
+//    ★拆包步骤 4：框架源码来自 packages/router/src；RouterView 与应用侧 auto-routes 同目录（相对导入 ./auto-routes）
 fs.mkdirSync(path.join(TPL, 'src', 'router'), { recursive: true })
-copied.push(...copyDir(path.join(ROOT, 'src', 'router'), path.join(TPL, 'src', 'router'), ['auto-routes.ts']))
+copied.push(...copyDir(path.join(ROOT, 'packages', 'router', 'src'), path.join(TPL, 'src', 'router'), ['auto-routes.ts']))
 copied.push(copyFile(path.join(ROOT, 'examples', 'router', 'RouterView.vue'), path.join(TPL, 'src', 'router', 'RouterView.vue')))
 // 3. gen-routes + 占位入口 + 插件（插件 import 路径替换为 npm 包）
 fs.mkdirSync(path.join(TPL, 'scripts'), { recursive: true })
-copied.push(...copyDir(path.join(ROOT, 'scripts'), path.join(TPL, 'scripts'), ['snapshot-template.ts']))
+copied.push(...copyDir(path.join(ROOT, 'scripts'), path.join(TPL, 'scripts'), ['snapshot-template.ts', 'gen-routes.ts']))
+copied.push(
+  // gen-routes 在模板工程内解析 src/router/types（模板把框架源码 vendored 进 src/）
+  copyFile(path.join(ROOT, 'scripts', 'gen-routes.ts'), path.join(TPL, 'scripts', 'gen-routes.ts'), [
+    [/\.\.\/packages\/router\/src/g, '../src/router'],
+  ]),
+)
 copied.push(
   copyFile(
     path.join(ROOT, 'vite-plugin-mp-transform.ts'),

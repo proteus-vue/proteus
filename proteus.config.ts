@@ -55,7 +55,7 @@ const config: ProteusConfig = {
   skyline: true,
   appid: 'wx0000000000', // 使用者替换为真实 AppID
   pagesDir: 'examples/pages',
-  routesOutput: 'src/router/auto-routes.ts',
+  routesOutput: 'examples/router/auto-routes.ts', // 拆包步骤 4：auto-routes 随应用存放（工厂化后路由表由应用注入）
   subPackages: [{ root: 'examples/subpackages/order', name: 'order' }], // 分包示例：订单模块
   customRoute: {
     registerPresets: true,

@@ -1,0 +1,28 @@
+{
+  "name": "@proteus/router",
+  "version": "0.1.0",
+  "description": "Proteus 路由：createRouter 工厂 + 守卫 + Skyline 转场 + <route> 扫描/校验/树构建（M1/M2）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared"
+  },
+  "dependencies": {
+    "@proteus/shared": "0.1.0"
+  },
+  "peerDependencies": {
+    "@vue/compiler-sfc": "^3.4"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^3.5.42"
+  }
+}

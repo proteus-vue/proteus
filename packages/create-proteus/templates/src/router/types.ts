@@ -28,11 +28,56 @@ export interface RouteMeta {
   title?: string
   /** 是否为 TabBar 页面 */
   isTab?: boolean
-  /** 任意扩展字段 */
+  /** 转场枚举（router-plan M1：Skyline routeType / Web Transition 映射） */
+  transition?: 'slideUp' | 'slideDown' | 'halfScreen' | 'scaleDown' | 'none'
+  /** 任意扩展字段（仅 JSON 可序列化） */
   [key: string]: unknown
 }
 
-import type { RouteParamsByName } from './auto-routes'
+// ============ 路由管理透明化（docs/proteus-router-plan M1/M2） ============
+
+/**
+ * 路由参数类型表（类型提示全链路）：基类为空接口，应用侧由 gen-routes 生成的 auto-routes.ts
+ * 用模块扩充注入具体路由（vue-router 同款模式）：
+ * ```
+ * // examples/router/auto-routes.ts（AUTO-GENERATED）
+ * declare module '@proteus/router/types' {
+ *   interface RouteParamsByName {
+ *     'user-profile': { id?: string }
+ *   }
+ * }
+ * ```
+ * 基类为空 → 无扩充时 keyof = never（name 受限负例成立）；扩充后 keyof = 全部路由名联合
+ */
+export interface RouteParamsByName {}
+
+/** M1：<route> 块扫描产物（scan.ts） */
+export interface RouteBlock {
+  /** 源码位置（--trace-router 报错定位） */
+  loc: { file: string; line: number; column: number }
+  path: string
+  name?: string
+  redirect?: string
+  /** 显式子父关系（覆盖 path 推导） */
+  parent?: string
+  meta: RouteMeta
+  /** 懒加载（默认 true；未声明时由全局 defaults 决定，M2 tree.ts 解析） */
+  lazy?: boolean
+  /** 对应 .vue 文件绝对路径（codegen 生成 import 用） */
+  componentPath: string
+}
+
+/** M2：嵌套路由树节点（tree.ts）——lazy 已解析为最终值；parent 保留（显式声明，children 反映实际嵌套） */
+export interface RouteNode extends Omit<RouteBlock, 'lazy'> {
+  children: RouteNode[]
+  lazy: boolean
+}
+
+/** M2：全局路由默认值（proteus.config router.defaults） */
+export interface GlobalRouteDefaults {
+  meta?: RouteMeta
+  lazy?: boolean
+}
 
 /** 路由参数（跳转时传入） */
 export interface RouteParams {

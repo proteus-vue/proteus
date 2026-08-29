@@ -1,5 +1,6 @@
 // tests/router.test.ts
-// router 单测（文档 P6-3）：mock platform/adapter + skyline，验证导航分发 / 守卫 / 栈深保护
+// router 单测（文档 P6-3 + 拆包步骤 4 工厂化）：mock platform/adapter + skyline，验证导航分发 / 守卫 / 栈深保护
+// ★工厂化：不再 import 全局单例，改用 createRouter(routes) 注入应用侧 auto-routes 路由表
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 
 vi.mock('@proteus/shared', () => ({
@@ -14,15 +15,18 @@ vi.mock('@proteus/shared', () => ({
   },
 }))
 
-vi.mock('../src/router/skyline', () => ({
+vi.mock('../packages/router/src/skyline', () => ({
   isSkyline: vi.fn(() => false),
   navigateWithCustomRoute: vi.fn(async () => {}),
 }))
 
 import { adapter } from '@proteus/shared'
-import { isSkyline, navigateWithCustomRoute } from '../src/router/skyline'
-import { router } from '../src/router/index'
-import { beforeEach as registerGuard } from '../src/router/guards'
+import { isSkyline, navigateWithCustomRoute } from '../packages/router/src/skyline'
+import { createRouter } from '../packages/router/src/index'
+import { routes } from '../examples/router/auto-routes'
+import { beforeEach as registerGuard } from '../packages/router/src/guards'
+
+const router = createRouter(routes)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -65,8 +69,8 @@ describe('router.push 导航分发', () => {
 
   it('不存在的命名路由 → 抛错（运行时负例；类型层已拦截，此处显式断言绕过）', async () => {
     // 类型提示：非路由名在编译期报错（tests/types/router-params.types.ts 负例），
-    // 此处用类型断言保留运行时行为验证
-    await expect(router.push({ name: 'not-exist' as keyof import('../src/router/auto-routes').RouteParamsByName })).rejects.toThrow('route not found')
+    // 工厂化后 RouteParamsByName 由模块扩充注入，此处 as never 保留运行时行为验证
+    await expect(router.push({ name: 'not-exist' } as never)).rejects.toThrow('route not found')
   })
 
   it('back → navigateBack', () => {

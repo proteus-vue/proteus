@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
         { find: '@proteus/compiler', replacement: fileURLToPath(new URL('./packages/compiler/src/index.ts', import.meta.url)) },
         { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
         { find: '@proteus/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
+        // router 指向包目录：'@proteus/router' 裸导入 → src/index.ts（目录索引），子路径 '@proteus/router/types' → src/types（前缀匹配）
+        { find: '@proteus/router', replacement: fileURLToPath(new URL('./packages/router/src', import.meta.url)) },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
         // 其余 @proteus/* 暂指向 src/（runtime/router 等拆包后逐一精确化）
         { find: '@proteus', replacement: fileURLToPath(new URL('./src', import.meta.url)) },

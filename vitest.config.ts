@@ -12,6 +12,7 @@ export default defineConfig({
       // 拆包后 src/runtime、src/router import @proteus/shared/runtime（vitest 不加载 vite.config，需独立别名）
       { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
       { find: '@proteus/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
+      { find: '@proteus/router', replacement: fileURLToPath(new URL('./packages/router/src', import.meta.url)) },
     ],
   },
 })

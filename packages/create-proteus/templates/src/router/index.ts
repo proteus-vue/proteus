@@ -1,8 +1,8 @@
-// src/router/index.ts
-// 统一路由 API（P3-1）—— 只依赖 platform/adapter 接口，禁止直连 wx（执行规则 4）
-import { routes, routeMap } from './auto-routes'
-import type { RouteParamsByName } from './auto-routes'
-import type { NavigateOptions, RouteParams, RouteRecord } from './types'
+// packages/router/src/index.ts
+// 统一路由 API（P3-1 + 拆包步骤 4 工厂化）—— 只依赖 @proteus/shared 接口，禁止直连 wx（执行规则 4）
+// ★工厂化：createRouter(routes) 接收路由表（应用侧由 gen-routes 生成的 auto-routes 提供），
+//   不再全局单例 import——路由表由调用方注入（对齐 docs/proteus-router-plan M2）
+import type { NavigateOptions, RouteParams, RouteRecord, RouteParamsByName } from './types'
 import { runBeforeEach, runAfterEach } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
 import { adapter } from '@proteus/shared'
@@ -13,16 +13,18 @@ class Router {
     return adapter.getCurrentPages().length
   }
 
+  constructor(private routeMap: Record<string, RouteRecord>) {}
+
   /** 命名路由跳转（推荐）——泛型 N 由 name 字面量推断，params 类型自动匹配（类型提示全链路） */
   async push<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     const target = this.resolve(options as NavigateOptions)
     if (!target) throw new Error(`[router] route not found: ${JSON.stringify(options)}`)
 
-    // 路由守卫：返回 false 取消导航
-    const guardResult = await runBeforeEach(target)
+    // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化）
+    const guardResult = await runBeforeEach(target, this.routeMap)
     if (guardResult === false) return
 
-    const url = this.buildUrl(target.path, { ...options.params, ...options.query })
+    const url = this.buildUrl(target.path, { ...(options.params as RouteParams | undefined), ...options.query })
 
     // Skyline 自定义路由（仅 MP + Skyline 环境）
     if (options.routeType && isSkyline()) {
@@ -51,7 +53,7 @@ class Router {
       }
     }
 
-    await runAfterEach(target)
+    await runAfterEach(target, this.routeMap)
   }
 
   /** 后退 */
@@ -66,9 +68,9 @@ class Router {
 
   /** 根据命名路由/路径解析目标 */
   private resolve(options: NavigateOptions): RouteRecord | null {
-    if (options.name && routeMap[options.name]) return routeMap[options.name]
+    if (options.name && this.routeMap[options.name]) return this.routeMap[options.name]
     if (options.path) {
-      const found = routes.find(r => r.path === options.path || r.name === options.path)
+      const found = Object.values(this.routeMap).find((r) => r.path === options.path || r.name === options.path)
       return found ?? null
     }
     return null
@@ -85,4 +87,30 @@ class Router {
   }
 }
 
-export const router = new Router()
+/**
+ * 创建 Router 实例（拆包步骤 4 工厂化）：路由表由调用方注入
+ * 用法：const router = createRouter(routes)（routes 来自 gen-routes 生成的 auto-routes）
+ */
+export function createRouter(routes: RouteRecord[]): Router {
+  const routeMap = routes.reduce((m, r) => {
+    m[r.name] = r
+    return m
+  }, {} as Record<string, RouteRecord>)
+  return new Router(routeMap)
+}
+
+export type RouterInstance = Router
+
+// 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus/router' 即可，无需深路径）
+export type {
+  RouteRecord,
+  RouteMeta,
+  RouteBlock,
+  RouteNode,
+  GlobalRouteDefaults,
+  RouteParams,
+  RouteParamsByName,
+  PageOnLoad,
+  BaseNavigateOptions,
+  NavigateOptions,
+} from './types'
