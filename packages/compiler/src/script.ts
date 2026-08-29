@@ -15,6 +15,80 @@ function evalLiteral(expr: string): unknown {
   }
 }
 
+/**
+ * vue-compat-advance Batch 3：提取 provide/inject 调用
+ * provide("key", expr) → 页面/组件初始化时注册（getApp().__proteusProvides）
+ * const x = inject("key"[, default]) → 初始化时读取 + setData（data.x 初始 undefined）
+ * 约束：仅零缩进顶层调用；provide 值支持字面量 / 裸 ref 名 / ref.value；inject 默认值支持字面量
+ */
+function extractProvideInject(
+  source: string,
+): {
+  provides: Array<{ key: string; expr: string; line: number }>
+  injects: Array<{ name: string; key: string; def?: string; line: number }>
+} {
+  const provides: Array<{ key: string; expr: string; line: number }> = []
+  const injects: Array<{ name: string; key: string; def?: string; line: number }> = []
+  // provide("key", expr)（顶层调用，单行）
+  const pRe = /^provide\s*\(\s*['"]([^'"]+)['"]\s*,\s*([^)]+)\)/gm
+  let m: RegExpExecArray | null
+  while ((m = pRe.exec(source))) {
+    const lineStart = source.lastIndexOf('\n', m.index) + 1
+    if (source.slice(lineStart, m.index) !== '') continue // 仅行首顶层调用
+    provides.push({ key: m[1], expr: m[2].trim(), line: lineAt(source, m.index) })
+  }
+  // const x = inject("key"[, default])（顶层 const，单行）
+  const iRe = /^const\s+([A-Za-z_$][\w$]*)\s*=\s*inject\s*\(\s*['"]([^'"]+)['"]\s*(?:,\s*([^)]+))?\)/gm
+  while ((m = iRe.exec(source))) {
+    const lineStart = source.lastIndexOf('\n', m.index) + 1
+    if (source.slice(lineStart, m.index) !== '') continue
+    const inj: { name: string; key: string; def?: string; line: number } = { name: m[1], key: m[2], line: lineAt(source, m.index) }
+    if (m[3] !== undefined) inj.def = m[3].trim()
+    injects.push(inj)
+  }
+  return { provides, injects }
+}
+
+/**
+ * 生成 provide/inject 运行时注入块（getApp().__proteusProvides 全局注册表，ES5 安全，无缩进由调用方 indentBody）
+ * - page：页面 onLoad 单函数合并块（registry 声明一次 + provide + inject）
+ * - provide：组件 created 块（先于子组件 attached 注册）
+ * - inject：组件 attached 块（computed/immediate-watch 之后 setData）
+ * provide 值表达式重写：裸 ref 名 / ref.value → this.data.<name>（ref 编译为 data 字段）
+ */
+function buildProvideInject(
+  provides: Array<{ key: string; expr: string }>,
+  injects: Array<{ name: string; key: string; def?: string }>,
+  data: Record<string, unknown>,
+  computeds: Record<string, ComputedInfo>,
+): { page: string; provide: string; inject: string } {
+  const registryLine = 'const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {}))'
+  const pLines: string[] = []
+  for (const p of provides) {
+    let expr = p.expr
+    // ref.value → this.data.ref（读取重写，与 rewriteRefAccess 读取分支一致）
+    const vm = expr.match(/^([A-Za-z_$][\w$]*)\.value$/)
+    if (vm && (vm[1] in data || vm[1] in computeds)) expr = `this.data.${vm[1]}`
+    else if (expr in data) expr = `this.data.${expr}` // 裸 ref 名 / data 字段
+    pLines.push(`provides[${JSON.stringify(p.key)}] = ${expr}`)
+  }
+  const iLines: string[] = []
+  for (const inj of injects) {
+    const read = `provides[${JSON.stringify(inj.key)}]`
+    const value = inj.def === undefined ? read : `(${read} === undefined ? ${inj.def} : ${read})`
+    iLines.push(`this.setData({ ${inj.name}: ${value} })`)
+  }
+  // 页面单函数合并：registry 仅声明一次
+  const pageLines: string[] = []
+  if (provides.length || injects.length) pageLines.push(registryLine)
+  pageLines.push(...pLines, ...iLines)
+  return {
+    page: pageLines.length ? pageLines.join('\n') : '',
+    provide: pLines.length ? `${registryLine}\n${pLines.join('\n')}` : '',
+    inject: iLines.length ? `${registryLine}\n${iLines.join('\n')}` : '',
+  }
+}
+
 /** 从 openBraceIndex 的 { 开始匹配闭合大括号，返回内部内容 */
 function extractBracedBody(source: string, openBraceIndex: number): string | null {
   let depth = 0
@@ -318,8 +392,9 @@ function extractData(
     const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
     const raw = inner ? inner[1] : init
     const value = evalLiteral(raw)
-    if (value === undefined && raw !== 'undefined') {
+    if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
       // vue-compat Batch C：函数调用初始化（跨模块/方法调用）补充 actionable 提示
+      // ★Batch 3：inject("key") 是 Vue 内置注入（data 初始 undefined，运行时 onLoad/attached setData 填充）——不提示
       const isCall = /^[\w$.]+\(/.test(raw.trim())
       warnings.push(
         isCall
@@ -694,6 +769,17 @@ export function transformScriptToPage(
   const vModelBindings = extra.vModelBindings ?? []
   const refNames = new Set(Object.keys(data))
 
+  // ★vue-compat-advance Batch 3：provide/inject 提取 + 注入块构建（禁用规则时整体跳过）
+  const piEnabled = !disabled.has('script/provide-inject')
+  const { provides, injects } = piEnabled ? extractProvideInject(source) : { provides: [], injects: [] }
+  const piBlocks = buildProvideInject(provides, injects, data, computeds)
+  if (piEnabled && (provides.length || injects.length)) {
+    trace?.add('script/provide-inject', {
+      before: `${provides.map((p) => `provide(${JSON.stringify(p.key)}, …)`).join('、')}${provides.length && injects.length ? '；' : ''}${injects.map((i) => `const ${i.name} = inject(${JSON.stringify(i.key)})`).join('、')}`,
+      after: '页面 onLoad / 组件 created+attached 注入 getApp().__proteusProvides 全局注册表读写（MVP 值快照，非响应式）',
+    })
+  }
+
   const lines: string[] = []
   if (extra.file) lines.push(`// ${extra.file}（Proteus mp-transform 编译产物）`)
   lines.push('// AUTO-GENERATED by vite-plugin-mp-transform.ts. DO NOT EDIT.', '')
@@ -765,14 +851,18 @@ export function transformScriptToPage(
 ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}
   },`)
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
+  // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
   if (extra.isComponent) {
-    const initLines = [computedInitLine(computeds), immediateWatchLine(watches)].filter(Boolean)
+    if (piBlocks.provide) {
+      lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
+    }
+    const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }
   } else if (lifecycles.onLoad) {
-    // 显式 onLoad（页面）：computed 初始化 + immediate watch 注入在方法体前
-    const initLines = [computedInitLine(computeds), immediateWatchLine(watches)].filter(Boolean)
+    // 显式 onLoad（页面）：computed 初始化 + immediate watch + provide/inject 注入在方法体前
+    const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
     const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
@@ -780,12 +870,12 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）
     if (!disabled.has('script/onload-params')) {
       trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
-      const initLines = [computedInitLine(computeds), immediateWatchLine(watches)].filter(Boolean)
+      const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
       lines.push(
         [
           '  onLoad(options) {',
           ...(extra.debug ? [`    console.log('[proteus][page] onLoad ${extra.file ?? ''}', JSON.stringify(options), Date.now())`] : []),
-          ...initLines.map((l) => `    ${l}`),
+          ...initLines.map((l) => l.split('\n').map((sl) => `    ${sl}`).join('\n')),
           '    const params = {}',
           '    const keys = Object.keys(options || {})',
           '    for (let i = 0; i < keys.length; i++) {',
@@ -798,6 +888,9 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
           '  },',
         ].join('\n'),
       )
+    } else if (piBlocks.page) {
+      // script/onload-params 禁用但存在 provide/inject：仍注入承载 onLoad（provide 注册 + inject setData）
+      lines.push(`  onLoad(options) {\n${indentBody(piBlocks.page)}\n  },`)
     }
   }
 

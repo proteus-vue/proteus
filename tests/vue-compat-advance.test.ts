@@ -1,12 +1,20 @@
 // tests/vue-compat-advance.test.ts
 // Vue 能力兼容进阶（docs/vue-compat-advance.md）：
 //   Batch 1：作用域插槽编译期警告（反黑盒）
-import { describe, it, expect } from 'vitest'
+//   Batch 2：<transition> 装饰式进入动画
+//   Batch 3：provide/inject 页面级注入桥（全局注册表）
+import { describe, it, expect, beforeEach } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src'
 import { getTransformRule } from '../packages/compiler/src/transforms/registry'
+import { registerProvide, readInject, clearProvides, provideCount } from '../packages/runtime/src/provide-inject'
 
 const compile = (src: string, name = 'vca.vue'): { warnings: string[]; wxml: string; js: string; wxss: string } => {
   const r = compileVueSfc(src, { filename: name })
+  return { warnings: r.warnings, wxml: r.wxml, js: r.js, wxss: r.wxss }
+}
+
+const compileComponent = (src: string, name = 'components/box.vue'): { warnings: string[]; wxml: string; js: string; wxss: string } => {
+  const r = compileVueSfc(src, { filename: name, isComponent: true })
   return { warnings: r.warnings, wxml: r.wxml, js: r.js, wxss: r.wxss }
 }
 
@@ -52,5 +60,51 @@ describe('Batch 2：<transition> 装饰式动画（运行时等价，进入动�
   it('规则 transition/component 与 transition/animation-wxss 已登记', () => {
     expect(getTransformRule('transition/component')).toBeDefined()
     expect(getTransformRule('transition/animation-wxss')).toBeDefined()
+  })
+})
+
+describe('Batch 3：provide/inject 页面级注入桥（全局注册表）', () => {
+  beforeEach(() => clearProvides())
+
+  it('页面 provide → onLoad 注入 getApp().__proteusProvides 注册（ref.value 重写为 this.data）', () => {
+    const r = compile('<script setup>\nconst user = ref({ name: "a" })\nprovide("user", user.value)\n</script>')
+    expect(r.js).toContain('const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {}))')
+    expect(r.js).toContain('provides["user"] = this.data.user')
+  })
+
+  it('页面 inject → onLoad setData 填充（无跨模块误导警告）', () => {
+    const r = compile('<script setup>\nconst theme = inject("theme")\n</script>')
+    expect(r.js).toContain('this.setData({ theme: provides["theme"] })')
+    expect(r.warnings).toHaveLength(0) // 不再提示“跨模块引用将 undefined”（Batch 3 合法用法）
+  })
+
+  it('inject 默认值：未注册时取默认（ES5 三元，非 ??）', () => {
+    const r = compile('<script setup>\nconst theme = inject("theme", "light")\n</script>')
+    expect(r.js).toContain('this.setData({ theme: (provides["theme"] === undefined ? "light" : provides["theme"]) })')
+  })
+
+  it('组件模式：provide 注册放 created，inject 读取放 attached（先于子组件注入）', () => {
+    const r = compileComponent('<script setup>\nprovide("cfg", cfg)\nconst cfg = ref(1)\nconst x = inject("x")\n</script>')
+    expect(r.js).toContain('created() {')
+    expect(r.js).toContain('provides["cfg"] = this.data.cfg')
+    expect(r.js).toContain('attached() {')
+    expect(r.js).toContain('this.setData({ x: provides["x"] })')
+    expect(r.js).not.toContain('onLoad(options)')
+  })
+
+  it('运行时桥与编译产物共享同一注册表（非小程序环境回退 globalThis）', () => {
+    expect(provideCount()).toBe(0)
+    registerProvide('key', 42)
+    expect(readInject('key')).toBe(42)
+    expect(readInject('missing')).toBeUndefined()
+    expect(provideCount()).toBe(1)
+    clearProvides()
+    expect(provideCount()).toBe(0)
+  })
+
+  it('规则 script/provide-inject 已登记', () => {
+    const rule = getTransformRule('script/provide-inject')
+    expect(rule).toBeDefined()
+    expect(rule!.why).toContain('#117')
   })
 })

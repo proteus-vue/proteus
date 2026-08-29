@@ -26,7 +26,7 @@ transformTemplateToWxml(templateSource, styleOpts): { wxml, vModelBindings, warn
 transformScriptToPage(scriptSource, styleOpts, { file, isComponent, vModelBindings }): { js, warnings }
 transformStyleToWxss(styleSource, styleOpts): string
 
-// ★ AI-native 透明：编译规则注册表（57 条规则，每条一份 AI 说明书）
+// ★ AI-native 透明：编译规则注册表（67 条规则，每条一份 AI 说明书）
 listTransformRules(phase?)    // 枚举规则（能力清单）
 getTransformRule(id)          // 查单条规则
 formatTransformRule(rule)     // 渲染单条 AI 说明书

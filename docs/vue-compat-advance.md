@@ -39,48 +39,43 @@
 
 ---
 
-### Batch 2：Transition 运行时等价（框架组件，工程量中）
+### Batch 2：Transition 装饰式进入动画（编译注入 + 按需 keyframes，工程量中）
 
-**目标**：`<transition name="fade">` → 框架内置 `proteus-transition` 组件（进入/离开动画）
+**目标**：`<transition name="fade">` → 运行时等价（进入动画）
 
-**设计**：
-1. **框架组件** `src/components/transition/index.vue`：
-   - props：`name`（fade/slide-up/scale，映射 CSS 动画）、`visible`（显隐切换触发动画）
-   - 内部：`wx:if` 控制显隐 + CSS `animation` class（enter：挂载时播放进入动画；leave：先播离开动画再延迟移除元素——定时器控制）
-   - 语义对齐 Vue transition：单元素包裹 + 条件切换
-2. **编译映射**（template.ts）：
-   - `<transition>` → `<transition>` 标签经 usingComponents 注入框架组件（proteus/transition）
-   - `v-if` 子元素 → 转 `visible` 驱动：`<transition :visible="on">`（编译读取 v-if 表达式）
-   - Batch A 的 `template/no-peer` 警告改为"已编译为框架组件"（transition 不再警告，teleport/suspense/keep-alive 保留警告）
-3. **规则**：`transition/component`（transition 编译为框架组件）
-4. **产物**：transition 子元素显隐 + 动画 class
+**实际实现**（2026-08）：
+1. **编译映射**（template.ts）：`<transition>` 装饰式处理——子元素注入 `class="proteus-transition-{name}"`（name 缺省 fade），过渡标签本身不输出；`v-if` 保留（显隐 + 重建自动播放进入动画）；不再报 no-peer 警告（transition-group/teleport/suspense 保留警告）
+2. **样式注入**（style.ts）：按需注入 `TRANSITION_WXSS`（`usesTransition` 标记 → 仅使用 transition 的页面注入，golden 不破坏）：`.proteus-transition-fade/slide-up/scale` + 对应 `@keyframes`（fade 0.25s ease / slide-up 0.32s cubic-bezier / scale 0.4s）
+3. **规则**：`transition/component`（模板映射）+ `transition/animation-wxss`（样式注入）
+4. **产物**：`<view class="proteus-transition-fade" wx:if="{{on}}">` + wxss 注入动画
 
-**范围**：单元素包裹 + 常见动画（fade/slide-up/scale）；leave 延迟移除用定时器（≈transition 时长）；多元素/多动画组合后续
+**范围**：进入动画（挂载即播放）；**离开动画为遗留**（无 transitionend 控制延迟移除，后续补）
 
-**验收**：`<transition name="fade"><view v-if="on">X</view></transition>` → 产物使用 proteus-transition + visible 绑定 + 动画；MP 构建通过
+**验收**：`<transition name="fade"><view v-if="on">X</view></transition>` → 子元素动画 class + wxss keyframes；5 个 golden 不破坏（按需注入）
 
 ---
 
-### Batch 3：provide/inject 页面级注入桥（运行时，工程量中高）
+### Batch 3：provide/inject 页面级注入桥（全局注册表，运行时 + 编译，工程量中高）
 
-**目标**：页面 provide → 组件/页面 inject（跨层级取值）
+**目标**：页面/组件 provide → 组件 inject（跨层级取值）
 
-**设计**：
+**实际实现**（2026-08）：
 1. **运行时桥** `@proteus/runtime`（runtime/src/provide-inject.ts）：
-   - `registerProvide(key, value, pageId?)` / `readInject(key)`：全局注册表（按页面隔离，页面 onUnload 清理）
-   - 页面 `provide(key, value)` → onLoad 注册；组件 `inject(key)` → attached 读取
-   - 响应式：注册表存 ref 引用，inject 侧读到同一 ref（读写联动）
+   - `registerProvide(key, value)` / `readInject(key)`：统一挂在 `getApp().__proteusProvides` 全局注册表（与编译产物共享同一存储；非小程序环境回退 globalThis，测试可用）
+   - `clearProvides()` / `provideCount()`：测试/诊断
 2. **编译**（script.ts）：
-   - `provide("key", val)` 调用 → 编译为运行时注册（onLoad 注入）+ 剥离原始调用
-   - `inject("key")` → 编译为运行时读取（attached/data 初始化）
-   - 产物：引用 @proteus/runtime 的桥（组件模式 attached、页面模式 onLoad）
+   - `extractProvideInject`：零缩进顶层 `provide("key", expr)` / `const x = inject("key"[, default])` 提取（单行）
+   - `buildProvideInject`：**页面 onLoad 单函数合并块**（registry 声明一次 + provide 注册 + inject setData）；**组件 provide 放 created**（先于子组件 attached 注入）、**inject 放 attached**（computed/immediate-watch 之后）
+   - provide 值表达式重写：裸 ref 名 / `ref.value` → `this.data.<name>`（ref 编译为 data 字段）；inject 默认值编译为 ES5 三元（`provides[k] === undefined ? def : provides[k]`）
+   - `extractData` 对 `const x = inject(...)` 跳过“跨模块引用”误导警告（合法用法，data 初始 undefined）
+   - 产物**直接读写 getApp().__proteusProvides**（MP 单文件产物无模块系统，不 import 运行时）
 3. **规则**：`script/provide-inject`（提供者注册 + 注入读取）
 4. **边界**：
-   - 仅支持**页面级 provide**（页面 → 其组件子树 inject）——组件间 provide（跨组件层级）后续
-   - inject 值非响应式快照或 ref 传递（MVP：ref 引用）
-   - 未 provide 的 key → 警告
+   - MVP 全局注册表（重名 key 后写覆盖）+ **值快照**（非响应式联动）；**页面级隔离（pageId）/ 响应式联动（ref 引用传递）为遗留**
+   - provide 值支持字面量 / 裸 ref / ref.value；多行/函数体/嵌套调用不提取（单行顶层约束）
+   - 组件 provide → 子组件 inject：created 先于子 attached，顺序正确
 
-**验收**：页面 provide + 组件 inject 编译产物调用运行时桥；单测覆盖注册/读取/清理/未注册警告
+**验收**：页面 provide + 组件 inject 产物读写 getApp().__proteusProvides（onLoad/created+attached）；inject 默认值；无误导警告；运行时桥与产物共享注册表；单测 + demo 页（examples/pages/provide-inject-demo.vue）
 
 ---
 
@@ -88,16 +83,22 @@
 
 | Batch | 内容 | 工程量 | 状态 |
 |-------|------|--------|------|
-| 1 | 作用域插槽警告 + 规则 + 文档 | 小 | ⬜ |
-| 2 | Transition 框架组件 + 编译映射 | 中 | ⬜ |
-| 3 | provide/inject 页面级桥（运行时 + 编译） | 中高 | ⬜ |
+| 1 | 作用域插槽警告 + 规则 + 文档 | 小 | ✅ |
+| 2 | Transition 装饰式进入动画（编译注入 class + 按需 keyframes） | 中 | ✅ |
+| 3 | provide/inject 页面级桥（全局注册表，运行时 + 编译） | 中高 | ✅ |
 
 依赖：1 → 2 → 3（顺序按工程量递增，各自独立可测）
 
 ## 4. 验收标准
 
-- [ ] 作用域插槽编译期显式警告（反黑盒）
-- [ ] `<transition>` 编译为框架组件，fade/slide-up/scale 动画可运行
-- [ ] 页面 provide + 组件 inject 运行时取值（ref 引用，页面级隔离）
-- [ ] 3 条新规则登记（slot/scoped-slot、transition/component、script/provide-inject），防漂移
-- [ ] 全量测试全绿 + 双端构建
+- [x] 作用域插槽编译期显式警告（反黑盒）
+- [x] `<transition>` 编译为装饰式动画（class + keyframes），fade/slide-up/scale 进入动画可运行
+- [x] 页面 provide + 组件 inject 运行时取值（getApp().__proteusProvides 全局注册表，MVP 值快照）
+- [x] 3 条新规则登记（slot/scoped-slot、transition/component、script/provide-inject），防漂移
+- [x] 全量测试全绿 + 双端构建
+
+## 5. 遗留（后续批次）
+
+- 作用域插槽**运行时等价**（props 传子 + 事件回调自动包装）——当前仅编译期警告
+- Transition **离开动画**（transitionend 控制延迟移除）——当前仅进入动画
+- provide/inject **响应式联动**（注册表存 ref 引用，inject 读到同一 ref）与**页面级隔离**（pageId）——当前值快照 + 全局注册表

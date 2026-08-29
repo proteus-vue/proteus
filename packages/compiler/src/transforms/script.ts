@@ -264,4 +264,20 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'src/compiler/script.ts 各处（numOrZero / onLoad 实现 / nav handler）',
     decision: '#32 / #36',
   },
+  {
+    id: 'script/provide-inject',
+    phase: 'script',
+    status: 'implemented',
+    title: 'provide/inject → getApp().__proteusProvides 全局注册表桥（vue-compat-advance Batch 3）',
+    description: '顶层 provide("key", expr) / const x = inject("key"[, default]) 编译为注册表读写：页面 onLoad 单函数合并块（registry 声明一次 + provide 注册 + inject setData）；组件 provide 放 created（先于子组件 attached 注入）、inject 放 attached；provide 值表达式重写裸 ref 名 / ref.value → this.data.<name>；inject 支持默认值（undefined 时取默认）',
+    why: '小程序组件树无 provide/inject 机制（决策 #117）：全局注册表桥让页面向组件传值（含深层嵌套组件）；MVP 值快照（非响应式联动）+ 全局注册表（重名 key 后写覆盖），页面级隔离/响应式为后续',
+    when: 'script 顶层出现 provide("key", value) 调用或 const x = inject("key")（仅零缩进单行；provide 值支持字面量/裸 ref/ref.value）',
+    example: {
+      before: 'provide("user", userInfo.value)\nconst theme = inject("theme", "light")',
+      after: 'onLoad: const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {})); provides["user"] = this.data.userInfo; this.setData({ theme: (provides["theme"] === undefined ? "light" : provides["theme"]) })',
+    },
+    verify: 'tests/vue-compat-advance.test.ts Batch 3 用例',
+    source: 'packages/compiler/src/script.ts → extractProvideInject + buildProvideInject + transformScriptToPage（created/attached/onLoad 注入点）',
+    decision: '#117',
+  },
 ]

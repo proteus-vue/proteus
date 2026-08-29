@@ -102,7 +102,7 @@ Component({
 - `defineProps` 对象形式 → `properties`（`{ type, default }` → `{ type, value }`，类型映射 String/Number/Boolean/Object/Array；无 default 按类型给默认值）；`props.xxx` 访问重写为 `this.data.xxx`
 - `defineEmits` + `emit('xxx', payload)` → `this.triggerEvent('xxx', payload)`（约定变量名 `emit`）
 - `<slot>` 原样透传（TAG_MAP 已有 slot）
-- **组件模式无 `onLoad`**（微信组件生命周期无此钩子）：computed 初始化 / immediate watch 走 `attached()`；`onMounted→onReady` 映射不变
+- **组件模式无 `onLoad`**（微信组件生命周期无此钩子）：computed 初始化 / immediate watch 走 `attached()`；`onMounted→onReady` 映射不变；`provide` 注册走 `created()`（先于子组件 attached 注入，vue-compat-advance Batch 3）
 - MVP：仅对象形式 defineProps（TS 泛型形式警告）；`defineExpose` 忽略
 
 ### 父页面使用
@@ -264,6 +264,7 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
   `++` / `--` / 赋值 / 读取（`this.data.count`）均重写；**不用 `??` 运算符**（真机预览报 `SyntaxError: Unexpected token ?`）。复合赋值（`+=`）暂不支持。
 - **默认 `onLoad`**：路由参数自动 decode 注入 `data`（query 中 JSON 字符串自动 `JSON.parse`）。
+- **`provide/inject`（vue-compat-advance Batch 3）**：零缩进顶层 `provide("key", expr)` / `const x = inject("key"[, default])` → 编译为 `getApp().__proteusProvides` 全局注册表读写（MP 单文件产物无模块系统，不 import 运行时；运行时桥 `@proteus/runtime` 的 `registerProvide/readInject` 与之共享同一注册表）：**页面 onLoad 单函数合并块**（registry 声明一次 + provide 注册 + inject setData）；**组件 provide 放 `created`**（先于子组件 attached 注入）、**inject 放 `attached`**（computed/immediate-watch 之后）；provide 值表达式重写裸 ref 名 / `ref.value` → `this.data.<name>`；inject 默认值编译为 ES5 三元（`provides[k] === undefined ? def : provides[k]`）。MVP 值快照（非响应式联动）+ 全局注册表；规则 `script/provide-inject`
 - **产物 ES5 安全**：数组解构 / 对象展开 / `??` / `?.` 一律规避（微信真机 babel 转译问题）。
 
 ## 反编译黑盒（产物自校验）

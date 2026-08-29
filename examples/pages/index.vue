@@ -32,6 +32,7 @@ function handleTap() {
       <a href="/pages/forms">表单与指令</a>
       <a href="/pages/config-demo">配置演示</a>
       <a href="/pages/components-demo">组件演示</a>
+      <a href="/pages/provide-inject-demo">注入演示</a>
       <a href="/pages/virtual-list-demo">虚拟列表</a>
       <a href="/pages/pinia-demo">状态管理</a>
       <a href="/pages/user/index">用户中心</a>
