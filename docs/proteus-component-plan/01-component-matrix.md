@@ -2,6 +2,7 @@
 
 > 本文是「兼容与原生映射」的**唯一真相源**：每个内置组件在这里逐条声明 Props / 事件 / 插槽在 Web 与 Skyline 下的映射及降级行为。
 > 新增组件必须同步追加本章节，否则 CI 阻断。
+> ★实现状态（2026-08）：**P0 全批收官（B1-B8）**——16 个组件已实现（p-view/p-text/p-image/p-button/p-scroll-view/p-list-view/p-input/p-textarea/p-mask/p-popup/p-toast/p-loading/p-nav-bar/p-skeleton/p-error-boundary + virtual-list 兼容别名），批次状态见 `11-landing-evaluation.md` §6；矩阵「状态」列为**映射语义**（✅ 双端一致 / 🔶 近似 / ⚠️ 降级 / ❌ 无对应），非实现状态。
 
 ---
 

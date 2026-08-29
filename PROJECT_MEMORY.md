@@ -244,28 +244,26 @@
 
 ## 验证状态（最近一次）
 
-- ✅ `npm run build:web`（vue-tsc 零错误 + vite 构建，页面 code-split 为独立 chunk）
-- ✅ `npm run build:mp`（gen-routes → vue-tsc → vite build 全链路，产出 app.js + 各页 wxml/js/wxss 四件套）
-- ✅ `npm test`（349/349：+13 路由 B7——integration 2 + purity 1 + matrix 7 + router-check 3；router-plan 09 批次 B1-B7 ✅）
-- ✅ `npx vue-tsc --noEmit` 单独通过
-- ✅ `npm run build -w @proteus/{compiler,router,runtime,shared,plugin-vite}`（各包独立构建，compiler/plugin-vite 带 prepare 钩子）
-- ✅ **模板端到端（workspace 链接形态）**：templates 目录内 gen-routes → vue-tsc → vite build web/mp-weixin 全链路通过，app.js 内置预设全注册
+- ✅ `npm run verify` 全绿：**616 单测 / 70 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
+- ✅ 双端构建：web（vue-tsc 零错误 + vite）+ mp（gen-routes → vue-tsc → vite，产出 app.js + 各页四件套 + proteus/ 组件产物 + 共享模块）
+- ✅ 各 @proteus/* 包独立构建（14 个包，prepare 钩子 + esbuild bundle）
+- ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / 模板快照一致性
+- ✅ 审计基线：`components:audit` 16 组件零违规；`i18n:check` examples 4/4 引用干净
 
 ## 待办 / 注意事项
 
 - ✅ **仓库目录重命名为 `proteus`**（用户本地执行）
-- ✅ **文档体系**：根 `README.md` + `docs/` 五篇（getting-started / configuration / compiler / routing / roadmap）
+- ✅ **文档体系**：根 `README.md` + `docs/`（getting-started / configuration / compiler / routing / roadmap / board-inventory）
 - ✅ **开源协议**：Apache-2.0（LICENSE + package.json license 字段 + README 章节）
-- ✅ **git 仓库**：已关联 https://github.com/proteus-vue/proteus（main 分支，首次提交后按 roadmap v0.2 推进）
-- **小程序真机/开发者工具实测（唯一剩余验收项）**：`npm run build:mp` 后用微信开发者工具导入 `dist/mp-weixin`（需真实 AppID + 基础库 ≥2.29.2）；重点看 pages/index 渲染与 `customRouteKeyName: halfScreen` 转场
-- **Skyline iOS 真机白屏关注**：微信平台已知问题，已入 roadmap v0.5（能力兼容清单 + 页面级 WebView 降级通道）；真机实测时记录复现路径（决策 #69）
-- **后期可选**：按 `src/compiler/README.md` 提取路径把编译引擎独立开源为 `@proteus/compiler`；JS 产物方法级 sourcemap 接入微信开发者工具（P6-1 待办）；✅ router 工厂化（createRouter(routes)）后 auto-routes.ts 已随应用移动至 examples/（决策 #101）
-- **Skyline 自定义路由半屏视觉**：✅ 真机确诊可用（从非 tab 页发起）；⚠ 硬边界：不能从 tab 页发起（已文档化，demo 演示链接已移入非 tab 页）
-- **类型提示全链路（B 类最后一项）**：✅ 已完成（决策 #93-#97，docs/types.md 正式文档）
-- **框架本体拆包（C 类）**：✅ 全部完成（决策 #98-#105，docs/packages.md 8 步）——`src/` 仅剩 components，7 个 @proteus/* 包 + create-proteus 模板 npm 化；遗留：npm 发包待启用（用户暂不发布），发布后验证 `npm create` 真实端到端 + `npm run changeset:publish` 流水线
-- **pinia-plan（M1-M8）**：✅ 全部实现（决策 #106/#107，docs/proteus-pinia-plan 09 进度表全 ✅）——企业级骨架 + 超级应用加固全落地；@proteus/pinia-sync 可选协同包 + stores 协作规范（docs/pinia-stores-conventions.md）
-- **P4 MVP 限制**（已在插件注释标注）：computed/watch/跨模块引用、复杂事件表达式、:class 数组语法、v-show 暂不支持；方法内 ref 写入（`=`/`++`/`--`）已支持（重写为 setData），复合赋值 `+=` 与复杂读取仍不支持
-- 文档版本号已到 v2.49（git 仓库关联）
+- ✅ **git 仓库**：已关联 https://github.com/proteus-vue/proteus（main 分支）
+- **小程序真机/开发者工具实测（唯一剩余验收项）**：`npm run build:mp` 后用微信开发者工具导入 `dist/mp-weixin`（需真实 AppID + 基础库 ≥2.29.2）
+- **Skyline iOS 真机白屏关注**：微信平台已知问题，已入 roadmap v0.5；真机实测时记录复现路径（决策 #69）
+- **框架本体拆包（C 类）**：✅ 全部完成（决策 #98-#105，docs/packages.md 8 步）——14 个 @proteus/* 包 + create-proteus 模板 npm 化；遗留：npm 发包待启用（用户暂不发布），发布清单见 docs/packages.md「npm 发布清单」（changesets:version → 同步 examples/templates 依赖 → publish）
+- **组件库 P0（component-plan B1-B8）**：✅ 2026-08 全批收官——16 组件 + 4 runtime 共享模块 + components:audit + 编译器 4 增强（script/watch-props props 源 watch→observers / ref-write 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射 onXxx 钩子警告）；业务组件（player-bar/payment-sheet/login-gate）标注依赖 appBar/支付（v0.6+）
+- **i18n-plan（B1-B3）**：✅ 2026-08——@proteus/i18n（ICU 子集：插值/复数/=N/select/#）+ i18n:check 门禁 + demo；分包加载/完整 ICU/Intl/RTL 标后续
+- **devtools-plan（B1-B2）**：✅ 2026-08——@proteus/devtools-runtime（TraceBus 协议/环形缓冲/脱敏/采样/零开销门控）+ lifecycle/component 两源接入（type-only 注入）；面板 B3-B8 标 v1.0+
+- **npm 发布准备**：✅ changesets 配置齐全（14 包字段完整 + 待发 changeset 7 个）；发布清单见 docs/packages.md（不真实发布）
+- 文档版本号已到 v2.50（git 仓库关联）
 
 ## 会话恢复指引（新 LLM 按此顺序阅读）
 

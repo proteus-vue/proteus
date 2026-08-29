@@ -39,9 +39,12 @@ README.md
 
 ## 进度
 
-- [ ] B1 消息清单
-- [ ] B2 分包加载
-- [ ] B3 运行时 API
+> ★v2 批次（落地评估 `03-landing-evaluation.md`）：B1-B3 为当前可落地批次，已全部完成（2026-08）；Draft 的 M1-M8 中依赖基建的部分（分包加载/完整 ICU/Intl/RTL 自动应用/AST 提取）标后续。
+
+- [x] **B1 @proteus/i18n 包**（catalog + ICU 子集 + 类型安全）——2026-08，11 用例
+- [x] **B2 CLI i18n:check**（缺失/多余/注释豁免）——2026-08，4 用例
+- [x] **B3 demo + CI**（双端共享模块链路验证 + i18n:check 门禁）——2026-08
+- [ ] M2 分包加载 / M3 Intl 日期货币 / 完整 ICU / RTL 自动应用 / AST 提取（标后续批次，见 03-landing-evaluation §2）
 - [ ] B4 编译期提取 + audit
 - [ ] B5/M7 性能
 - [ ] B8 可观测

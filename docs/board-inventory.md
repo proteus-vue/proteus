@@ -2,7 +2,7 @@
 
 > 本文是 17 个 `docs/proteus-*-plan/` 板块的**唯一状态源**（2026-08 全仓盘点）。
 > 每个板块 README 的 ★实现状态 与本表保持一致；新增/完成批次必须同步本表。
-> 测试基线：**587 单测 + 8 Web e2e**（`npm run verify` 全绿）。
+> 测试基线：**616 单测 + 8 Web e2e**（`npm run verify` 全绿）。
 
 | # | 板块 | 状态 | 已实现范围 | 未实现/延后 |
 |---|------|------|-----------|------------|
@@ -12,8 +12,8 @@
 | 4 | cli-plan | ✅ 已实现 | @proteus/cli：build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check/**components:audit** | dev/preview 命令（M2 规划） |
 | 5 | compiler-plan | ✅ 已实现 | 编译管线 + 69 条规则注册表 + explain/trace + 产物自校验 + sourcemap + **4 项增强**（props 源 watch→observers / ref 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射钩子显式警告） | computed 写路径/类型提示尾项 |
 | 6 | component-plan | ✅ P0 全批 | B1-B8：16 组件（15 个 p-* + virtual-list 兼容）+ 4 runtime 共享模块（capability/event/virtual-window/observability）+ `components:audit` 门禁（CI）+ demo 页 | 业务组件（player-bar/payment-sheet 依赖 appBar/支付）；Worklet 转场 v0.6；组件库拆包 v2.0 |
-| 7 | devtools-plan | ⬜ 未实现 | — | 面板（组件树/时间线/状态快照/路由回溯/性能火焰图），v1.0 方向 |
-| 8 | i18n-plan | ⬜ 未实现 | — | 国际化（M1-M8 批次） |
+| 7 | devtools-plan | ✅ 已实现（B1-B2）| TraceBus 统一事件协议（@proteus/devtools-runtime：环形缓冲/脱敏/采样/零开销门控）+ 六源接入两源示范（lifecycle + componentRender，type-only 注入）| 面板（时间轴/快照/火焰图/根因/设备）标 v1.0+；router/store/api/capability/compiler 四源同模式后续 |
+| 8 | i18n-plan | ✅ 已实现（B1-B3）| @proteus/i18n（类型安全 t() + ICU 子集：插值/复数/select/# 占位）+ CLI i18n:check 审计门禁 + demo（双端共享模块链路验证）| 分包加载/完整 ICU/Intl 日期货币/RTL 自动应用/AST 提取标后续批次 |
 | 9 | lifecycle-plan | ✅ 已实现 | B1-B6：defineApp 五阶段 + LifecycleOrchestrator（超时/降级/错误隔离/trace）+ Web demo + appSkeleton onShow/onHide + 页面 onUnload 自动 $dispose | B7-B9 尾项 |
 | 10 | module-plan | ✅ 已实现 | B0-B9：跨模块引用（import→require）+ @proteus/module（契约/图谱/编排器）+ Web manualChunks/分包 preload + 体积/去重/审计门禁 | 模块化 DevTools 联动 |
 | 11 | pinia-plan | ✅ 已实现 | M1-M8 + MP P1-P3：多端工厂/持久化/分片/版本迁移/快照时间旅行/协同 @proteus/pinia-sync/可观测 + MP 模板绑定桥/事件包装/白名单放行 | DevTools 面板联动 |
@@ -26,9 +26,11 @@
 
 ## 汇总
 
-- ✅ 已实现 **12** 个板块（api/build/cli/compiler/component/lifecycle/module/pinia/platform/router/testing/types）
+- ✅ 已实现 **14** 个板块（api/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/testing/types）
 - 🟡 部分实现 **1** 个（security：仅 M2 凭证托管）
-- ⬜ 未实现 **4** 个（app/devtools/i18n/website——app-plan 为 v0.6 明确排期，其余为远期方向）
+- ⬜ 未实现 **2** 个（app 为 v0.6 明确排期；website 为远期）
+
+> devtools（面板 B3-B8）与 i18n（分包/完整 ICU）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
 
 ## 交叉能力（编译器 4 增强，跨板块复用）
 
@@ -40,6 +42,6 @@
 
 ## 下一步候选
 
-1. **i18n-plan 评估/落地**（⬜ 板块中唯一贴近业务基线的）
-2. **devtools-plan 评估**（依赖 observable 基建已部分就绪：componentRender/pinia trace）
-3. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish）
+1. **security-plan M1/M3**（密钥存储/权限门禁——板块内最近的可落地项）
+2. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 14 包）
+3. **app-plan 启动**（v0.6：App 渲染器 createRenderer + Vapor——待 v0.5 稳定 + npm 发布）

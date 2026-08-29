@@ -162,7 +162,7 @@ npm run changeset:version
 #   - examples/package.json：@proteus/* 范围同步到新版本（private 包不被 changesets 管理）
 #   - packages/create-proteus/templates/package.json：同上（模板工程按新版本装包）
 npm install   # ③ 更新 lockfile
-npm run verify   # ④ 全绿（522 单测 + 双端构建 + workspaces 构建）
+npm run verify   # ④ 全绿（616 单测 + 双端构建 + workspaces 构建）
 npx tsx scripts/snapshot-template.ts && git diff --exit-code -- packages/create-proteus/templates   # ⑤ 模板无漂移
 # ⑥ 提交（版本 bump + changelog + 依赖同步）→ ⑦ 再执行真实发布：
 npm run changeset:publish   # 按依赖拓扑自动发布全部包
