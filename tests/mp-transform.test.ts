@@ -609,6 +609,25 @@ describe('transformScriptToPage（script → Page 构造器）', () => {
     expect(js).toContain('this.setData({ n: 5 })')
   })
 
+  it('多行 RHS ref 赋值（箭头函数体）→ 完整 setData（B5 修复：旧捕获 [^;\\n]+ 截断多行）', () => {
+    const src = [
+      'const timer = ref(0)',
+      'const emit = defineEmits(["close"])',
+      'function go() {',
+      '  timer.value = setTimeout(() => {',
+      "    emit('close')",
+      '  }, 100)',
+      '}',
+    ].join('\n')
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain("this.setData({ timer: setTimeout(() => {")
+    expect(js).toContain("this.triggerEvent('close')")
+    expect(js).toContain('}, 100) })')
+    // 不残留裸 .value 与孤立的 {}（旧产物：setTimeout(() => { }) 后悬挂 triggerEvent）
+    expect(js).not.toMatch(/\btimer\.value\b/)
+    expect(js).not.toContain('setTimeout(() => { })')
+  })
+
   it('v-model handler 注入：proteusOnXxxInput(e) { this.setData(...) }', () => {
     const { js } = transformScriptToPage('', opts, { vModelBindings: ['text'] })
     expect(js).toContain('proteusOnTextInput(e) { this.setData({ text: e.detail.value }) }')

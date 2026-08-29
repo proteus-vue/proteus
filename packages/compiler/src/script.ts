@@ -772,14 +772,49 @@ function rewriteRefAccess(
       out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}${sync}${tToggle}`)
     }
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
+    // ★B5 修复：RHS 支持多行表达式（箭头函数体/对象字面量含换行）——旧捕获 [^;\n]+ 遇多行箭头只截到首行
     if (!skip('script/ref-write')) {
       if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
         trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch || w ? ' + 派生/联动' : ''} })` })
       }
-      out = out.replace(
-        new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
-        (_m, expr) => `${oldSave}${writeSetData(name, expr.trim(), patch, Boolean(w))}${tail}${sync}${tToggle}`,
-      )
+      // 平衡扫描 RHS：花括号/括号/方括号配对 + 字符串跳过，深度 0 遇 ; 或行尾结束
+      const assignRe = new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`)
+      const chunks: string[] = []
+      let rest = out
+      while (true) {
+        const am = assignRe.exec(rest)
+        if (!am) {
+          chunks.push(rest)
+          break
+        }
+        chunks.push(rest.slice(0, am.index))
+        let i = am.index + am[0].length
+        let depth = 0
+        let inStr: string | null = null
+        while (i < rest.length) {
+          const ch = rest[i]
+          if (inStr) {
+            if (ch === '\\') {
+              i += 2
+              continue
+            }
+            if (ch === inStr) inStr = null
+          } else if (ch === '"' || ch === "'") {
+            inStr = ch
+          } else if (ch === '{' || ch === '(' || ch === '[') {
+            depth++
+          } else if (ch === '}' || ch === ')' || ch === ']') {
+            depth--
+          } else if (depth === 0 && (ch === ';' || ch === '\n')) {
+            break
+          }
+          i++
+        }
+        const expr = rest.slice(am.index + am[0].length, i).trim()
+        chunks.push(`${oldSave}${writeSetData(name, expr, patch, Boolean(w))}${tail}${sync}${tToggle}`)
+        rest = rest.slice(i)
+      }
+      out = chunks.join('')
     }
     // 读取：name.value → this.data.name
     if (!skip('script/ref-read')) {

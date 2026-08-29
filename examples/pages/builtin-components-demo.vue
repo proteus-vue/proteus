@@ -10,13 +10,15 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea } from '@proteus/components'
+import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast } from '@proteus/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)
 const imgErrors = ref(0)
 const name = ref('')
 const bio = ref('')
+const showPopup = ref(false)
+const showToast = ref(false)
 
 // 万条数据：p-list-view 虚拟窗口只渲染可视区（行数恒定）
 const rows = ref([] as { title: string }[])
@@ -74,6 +76,20 @@ function onBioInput(e: { value: string }) {
       <p-textarea :value="bio" placeholder="简介" @input="onBioInput" />
       <p-text class="row">name={{ name }} / bio={{ bio }}</p-text>
     </p-view>
+
+    <h2>弹层（B5）</h2>
+    <p class="sub">p-popup（转场动画）/ p-toast（自动关闭）/ p-loading / p-mask</p>
+    <p-view class="box">
+      <p-button @click="showPopup = true">打开弹层</p-button>
+      <p-button @click="showToast = true">弹出提示（1.5s 自动关）</p-button>
+    </p-view>
+    <p-popup :visible="showPopup" position="bottom" @close="showPopup = false">
+      <p-view class="pp-box">
+        <p-text class="row">弹层内容（bottom + slide 转场）</p-text>
+        <p-button @click="showPopup = false">关闭</p-button>
+      </p-view>
+    </p-popup>
+    <p-toast :visible="showToast" text="操作成功" :duration="1500" @close="showToast = false" />
   </div>
 </template>
 
@@ -95,5 +111,8 @@ function onBioInput(e: { value: string }) {
 .row {
   display: block;
   margin: 8px 0;
+}
+.pp-box {
+  padding: 16px;
 }
 </style>
