@@ -16,6 +16,40 @@ hello.vue
 
 Web 端**不走此管线**：标准 Vite + `@vitejs/plugin-vue` 原生渲染，零转换。
 
+## 编译规则注册表（transforms）—— AI-native 透明编译
+
+所有转换规则集中为**自描述的规则注册表**（`src/compiler/transforms/`），每条规则 = 一份结构化 AI 说明书：
+
+```typescript
+interface TransformRule {
+  id: string          // 稳定 ID，如 'tag/div-to-view'、'script/ref-incdec'
+  phase: 'template' | 'script' | 'style' | 'validate'
+  title: string       // 人类可读标题
+  description: string // what：输入 → 输出
+  why: string         // 为什么：平台约束 / 设计决策（关联 PROJECT_MEMORY 决策号）
+  when: string        // 触发条件
+  example: { before: string; after: string }  // 前后对照
+  verify: string      // 如何验证（对应单测 / golden fixture）
+  status: 'implemented' | 'planned' | 'limitation'
+  source: string      // 实现位置（文件:函数），可跳读源码
+  decision?: string   // 相关决策号
+  mapping?: Record<string, string>  // 表驱动映射（与 tags.ts 同源引用防漂移）
+}
+```
+
+消费 API（经 `src/compiler/index.ts` 导出）：
+
+```typescript
+listTransformRules(phase?) // 枚举规则（能力清单）：template/script/style/validate 四阶段 49 条
+getTransformRule(id)       // 查单条规则
+formatTransformRule(rule)  // 渲染单条 AI 说明书
+formatTransformCatalog()   // 渲染全量目录
+```
+
+- **AI 用法**：`listTransformRules()` 摸清编译器能力边界 → `getTransformRule('tag/div-to-view')` 查 why/when/verify → 按 `source` 跳读实现 → 改完跑对应单测。
+- **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错。
+- **演进**：阶段二（随 `@proteus/compiler` 独立包）每条规则增加 `apply()`，注册表升级为分派层，输出 `explainTransform(source)` 决策 trace；详见 `src/compiler/transforms/README.md`。
+
 ## 标签映射（TAG_MAP）
 
 业务代码写标准 HTML 标签，编译器统一映射到小程序标签：

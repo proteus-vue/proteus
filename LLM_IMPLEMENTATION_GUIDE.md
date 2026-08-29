@@ -116,6 +116,17 @@
 - **自研 UI 组件库**：不提供。Web 端直接用 Vue 生态组件；MP 端编译。
 - **SSR / 服务端渲染**：不做。
 
+### 0.5 定位：AI-native 透明跨端编译框架（★项目宪章，任何模块不得违背）
+
+框架的差异化定位不止于"跨端"，而是 **AI-native 透明编译**：
+
+1. **规则即文档**：所有转换规则集中为自描述的规则注册表 `src/compiler/transforms/`——每条规则 = 一份 AI 说明书（what/why/when/example/verify/决策号/source），`listTransformRules()` 可枚举、`getTransformRule(id)` 可查询。
+2. **防漂移**：规则的 `mapping` 与 `src/compiler/tags.ts` 常量同源引用，`tests/transforms.test.ts` 校验覆盖完整性——改映射表遗漏会当场报错。
+3. **LLM 生成新规则时必须同步注册**：在对应阶段文件（`transforms/template.ts` / `script.ts` / `style.ts` / `validate.ts`）登记规则 + AI 说明书，并更新 `tests/transforms.test.ts`（如涉及新映射表键）——**规则注册表与实现永不脱节**。
+4. **阶段二演进**（随 `@proteus/compiler` 独立包）：每条规则增加 `apply()` → 注册表升级为分派层 → `explainTransform(source)` 输出决策 trace。现阶段注册表只描述不执行。
+
+> 设计意图：编译器的每个决定都对 AI 代理与人类开发者透明（拒绝黑盒）；详见 `src/compiler/transforms/README.md`。
+
 ---
 
 ## 1. 框架定位与核心约束

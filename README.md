@@ -1,7 +1,11 @@
-# Proteus（普罗透斯）—— Vue 跨端编译框架
+# Proteus（普罗透斯）—— AI-native 透明跨端编译框架
 
 > **一份标准 Vue 源码，编译器化作千端形态。**
 > Web 端零转换直跑标准 SPA；微信小程序端编译为 Skyline 原生四件套（`.wxml` / `.wxss` / `.js` / `.json`）。
+>
+> **AI-native 透明编译**：所有转换规则集中为自描述的**规则注册表**（`src/compiler/transforms/`），
+> 每条规则自带一份 AI 说明书（what / why / when / example / verify / 决策号），
+> 产物可枚举、可查询、可反查源码——编译器对 AI 代理与人类开发者都是透明的，拒绝黑盒。
 
 [文档导航](#文档导航) · [快速开始](docs/getting-started.md) · [配置参考](docs/configuration.md) · [编译原理](docs/compiler.md) · [路由与转场](docs/routing.md)
 
@@ -17,6 +21,7 @@
 | **先知**：预知未来 | **编译期为主**：一切转换在 build-time 完成，运行期零虚拟 DOM |
 | **本质恒定**：变形后本体仍是普罗透斯 | **标准写法**：业务代码始终是标准 Vue + 标准 HTML，平台差异由编译器吸收 |
 | **通晓万物**：知过去、现在、未来 | **双端一致**：一套代码在 Web 与小程序两端行为一致 |
+| **化身为光**：变形即显形，无所遁形 | **透明编译**：所有转换规则自描述、可枚举、可查询（AI 说明书），产物可反查源码，拒绝黑盒 |
 
 ## 主流国产跨端框架的痛点，与 Proteus 的对策
 
@@ -37,6 +42,7 @@
 ## 核心特性
 
 - **标准 Vue 3 SFC 开发**：`<div>`/`<p>`/`<h1>`/`<a>` 照写不误，映射到小程序标签由编译器完成；`h1-h6/p/a` 自动注入对齐 Web UA 的语义基础样式（大标题/段距/链接色），两端视觉一致
+- **AI-native 透明编译**：编译引擎内置**规则注册表**（`src/compiler/transforms/`），49 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询，映射表与实现同源引用防漂移——AI 代理与开发者都可读懂编译器的每一个决定
 - **Web 零转换**：Web 端直接跑标准 Vite SPA（完整 devtools + HMR），不做二等公民
 - **Skyline 一等公民**：页面默认 `"renderer": "skyline"`，`wx.router` 自定义路由转场（半屏 / 上滑 / 层叠缩放）作为一等能力；Web 端用 Vue `<Transition>` 复刻同一套 `routeType` API
 - **反编译黑盒**：产物自校验 + 调试日志 + 源码行号注释 + 转换函数独立可单测，坏产物当场报错
@@ -127,18 +133,19 @@ proteus/
 ├── scripts/gen-routes.ts           # 编译期路由生成器（app.json / page.json / 路由表）
 ├── src/
 │   ├── compiler/                   # ★ 编译引擎（纯函数，可独立开源为 @proteus/compiler）
+│   │   └── transforms/             #   编译规则注册表（每条规则一份 AI 说明书，透明定位核心）
 │   ├── platform/                   # 平台适配层（adapter / web-adapter / mp-adapter）
 │   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
 ├── examples/                       # 示例应用（pages / subpackages / router / main）
-└── tests/                          # 79 个单元测试 + 8 个 Web e2e 测试
+├── tests/                          # 89 个单元测试 + 8 个 Web e2e 测试
 ```
 
 ## 测试与验证
 
 ```bash
-npm test                # 79 个单测（router / mp-transform / runtime / golden / plugin）
+npm test                # 89 个单测（router / mp-transform / runtime / transforms / golden / plugin）
 npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
@@ -157,7 +164,7 @@ npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环�
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、79 单测 + 8 e2e
+- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（49 条 AI 说明书）、89 单测 + 8 e2e
 - **规划**：编译引擎独立开源 `@proteus/compiler` + CLI、组件系统/computed/watch 补全、多端扩展、性能优化、生态建设——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议

@@ -23,6 +23,10 @@ export { transformScriptToPage } from './script'
 export { transformStyleToWxss } from './style'
 export { validateJs, validateWxml, CompilerError } from './validate'
 
+// AI-native 透明定位：编译规则注册表（每条规则一份 AI 说明书）
+export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog } from './transforms/registry'
+export type { TransformRule, TransformPhase, RuleStatus } from './transforms/types'
+
 /** 整包编译：标准 Vue SFC 源码 → { wxml, js, wxss }（.json 由路由生成器负责） */
 export function compileVueSfc(source: string, options: CompileOptions = {}): CompileResult {
   const { descriptor } = sfcParse(source, { filename: options.filename ?? 'anonymous.vue' })

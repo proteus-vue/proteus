@@ -13,6 +13,10 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | 编译策略 | 编译黑盒 | 长 babel 链 + 运行时 diff | **编译期为主**，产物贴近手写、自校验、可调试 |
 | Web 端 | 转换产物 | 转换产物 | **零转换**标准 Vite SPA |
 | 运行策略 | setData 全量 | 运行时 DOM 模拟 | 仅数据桥接 + 路由导航 |
+| 透明性 / AI 友好 | 黑盒，产物不可读 | 长链难追踪 | **规则注册表 + 每条规则 AI 说明书**（`transforms/`），产物可枚举、可查询、可反查源码 |
+
+> **定位主线**：AI-native 透明跨端编译框架。透明（规则注册表 + 自校验 + 全链路调试）既是差异化卖点，也是 AI 代理驱动编译器的前提——
+> AI 写标准 Vue → 编译 → 查规则说明书理解产物 → 改编译器 → 单测兜底，全程无黑盒。
 
 规划的全部能力建设都围绕这四条主线展开：**标准 Vue 能力补全 → 编译引擎工程化 → 运行时性能 → 多端扩展**。
 
@@ -54,7 +58,8 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 验收标准 |
 |---|---|---|
 | 编译引擎独立包 `@proteus/compiler` | `src/compiler/` → `packages/compiler/`（monorepo） | `npm publish` 后适配层改为 `import { compileVueSfc } from '@proteus/compiler'`；纯函数 API 不变（决策 #16 已铺垫） |
-| CLI `@proteus/cli` | `packages/cli/` | `proteus build <dir> --out <dir>` / `proteus dev`，核心调 `compileVueSfc` + gen-routes |
+| 规则注册表随包发布 | `packages/compiler/transforms/`（现有 `src/compiler/transforms/`） | `@proteus/compiler` 导出 `listTransformRules` / `getTransformRule` / `formatTransformRule`（49 条 AI 说明书随包携带） |
+| CLI `@proteus/cli` | `packages/cli/` | `proteus build <dir> --out <dir>` / `proteus dev`，核心调 `compileVueSfc` + gen-routes；`proteus explain <rule-id>` 输出单条 AI 说明书 |
 | 脚手架 `create-proteus` | `packages/create-proteus/` | `npm create proteus my-app` 生成可运行工程（对标 `create-taro` / `npx degit dcloudio`） |
 | CI（GitHub Actions） | `.github/workflows/` | `test / verify / build:mp / test:e2e:web` 全绿；PR 自动校验 |
 | 发布流水线 | changesets + npm | 语义化版本、changelog、标签发布 |
@@ -67,6 +72,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
 | `computed` / `watch` 编译支持 | `src/compiler/script.ts` | 编译期分析依赖 → data 派生 + `setData` 联动；先做读路径（`{{ computedX }}` 渲染），再做写路径 |
+| 转换决策 trace（阶段二） | `src/compiler/transforms/` | 每条规则增加 `apply()`，注册表升级为分派层；`explainTransform(source)` 输出逐节点决策 trace（`line 26: <h1> → <text class="proteus-h1">（tag/heading-to-text + semantic/base-class）`） |
 | 组件系统 | `src/compiler/` 新增组件编译 | `defineProps` / `defineEmits` / `slots` / `defineExpose` → 小程序 `Component({ properties, data, methods })`；`isComponent` 分支已存在（测试已覆盖构造器形态） |
 | scoped CSS | `src/compiler/style.ts` | `:deep()` / 属性选择器等价方案（小程序无 scoped 原生机制，编译期加 data 属性或类前缀） |
 | 指令补全 | `src/compiler/template.ts` | `v-show`（映射 `hidden` 属性/样式）、`:class` 数组语法、事件修饰符（`.once/.self`）、`v-on` 键位 |
@@ -158,7 +164,7 @@ proteus/                        # monorepo（v0.2 起）
 
 | 里程碑 | 验收 |
 |---|---|
-| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包；`create-proteus` 一条命令跑起双端；CI 全绿 |
+| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）；`create-proteus` 一条命令跑起双端；CI 全绿；`proteus explain` 可用 |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo；sourcemap 接入开发者工具 |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地；Pinia 双端可用 |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
