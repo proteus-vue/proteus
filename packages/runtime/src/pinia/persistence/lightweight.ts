@@ -1,10 +1,15 @@
 // packages/runtime/src/pinia/persistence/lightweight.ts
-// 自研轻量持久化（docs/proteus-pinia-plan M2 后半）—— 比社区插件更少样板、防抖写盘、类型安全
-// 与 createPersistedStatePlugin（兼容层）可共存：识别标记不同（__persisted vs persist）
+// 自研轻量持久化（docs/proteus-pinia-plan M2 后半 + M7.1/M7.2 增强）
+//   · M2：persisted() 标记 + pick/omit + 防抖写盘 + 零开销（未标记不挂订阅）
+//   · M7.1：eager/lazy/keys 分片（惰性 hydrate：$hydrated/$hydrate）
+//   · M7.2：调度器（防抖 + maxWait + 高频合并 + 串行 flush）
+// 与 createPersistedStatePlugin（兼容层）可共存：识别标记不同（__persisted__ vs persist）
 // ⚠ MP 产物安全（决策 #32/#36）：全文件无 ?? / ?. / 对象展开（用 Object.assign）/ 数组解构
-import type { PiniaPluginContext, StateTree } from 'pinia'
+import type { PiniaPluginContext } from 'pinia'
 import { serialize, deserialize, type StorageAdapter } from '@proteus/shared'
 import { getPlatform } from '@proteus/shared'
+import { PersistScheduler, type PersistSchedulerOptions } from './scheduler'
+import { isLazy, mountSharding, pickKeys, type ShardingOptions } from './sharding'
 
 // 类型扩充：pinia 的 DefineStoreOptions 声明自定义持久化字段（vue-router 同款 augmentation 模式）
 declare module 'pinia' {
@@ -15,8 +20,9 @@ declare module 'pinia' {
     persistence?: unknown
   }
 }
+import type { StateTree } from 'pinia'
 
-export interface PersistenceOptions {
+export interface PersistenceOptions extends ShardingOptions {
   /** 白名单字段（支持嵌套路径 a.b.c，与持久化时的提取/恢复一致） */
   pick?: string[]
   /** 黑名单字段（与 pick 二选一） */
@@ -25,8 +31,12 @@ export interface PersistenceOptions {
   storage?: StorageAdapter
   /** 存储 key（默认 store.$id） */
   key?: string
-  /** 写盘防抖窗口（ms，默认 50；传 0 关闭防抖） */
+  /** 写盘防抖窗口（ms，默认 50；M7.2 调度器 debounce，传 0 关闭防抖） */
   debounce?: number
+  /** M7.2：调度器配置（per-store 覆盖全局；maxWait/高频合并等） */
+  scheduler?: PersistSchedulerOptions
+  /** M7.5：生命周期作用域（'app' 默认 | 'page' 页面级，dispose 时清） */
+  scope?: 'app' | 'page'
 }
 
 /** 持久化标记（编译期/运行时识别：未标记的 store 零开销） */
@@ -73,7 +83,6 @@ function applyFilter(state: Record<string, unknown>, opt: PersistenceOptions): R
       if (segs.length === 1) {
         delete out[o]
       } else {
-        // 嵌套 omit：只删叶路径（简化：顶层段定位到父对象后 delete）
         let node = out
         for (let i = 0; i < segs.length - 1; i++) {
           const seg = segs[i]
@@ -89,11 +98,21 @@ function applyFilter(state: Record<string, unknown>, opt: PersistenceOptions): R
   return state
 }
 
+export interface PersistenceGlobal {
+  /** 全局默认 storage */
+  storage: StorageAdapter
+  /** M7.2：全局调度器配置（共享实例 → 串行 flush；per-store persisted({scheduler}) 覆盖） */
+  scheduler?: PersistSchedulerOptions
+}
+
 /**
  * 创建轻量持久化插件（全局默认 storage 由平台入口注入）
  * 用法：pinia.use(createPersistence({ storage: new WxStorageAdapter() }))
  */
-export function createPersistence(global: { storage: StorageAdapter }) {
+export function createPersistence(global: PersistenceGlobal) {
+  // 共享调度器：所有 store 的写入统一节奏 + 串行 flush（无显式配置也走调度——防抖语义与 M2 一致）
+  const sharedScheduler = new PersistScheduler(global.storage, global.scheduler ?? { debounce: 50 })
+
   return function persistencePlugin(ctx: PiniaPluginContext): void {
     const opt = ctx.options.persistence as (PersistenceOptions & { [PERSIST_MARK]?: boolean }) | undefined
     // 未声明 persisted() → 零开销（不挂订阅）
@@ -104,29 +123,39 @@ export function createPersistence(global: { storage: StorageAdapter }) {
 
     const storage = opt.storage === undefined ? global.storage : opt.storage
     const key = opt.key === undefined ? ctx.store.$id : opt.key
-    const debounce = opt.debounce === undefined ? 50 : opt.debounce
+    const scheduler =
+      opt.scheduler !== undefined || opt.debounce !== undefined
+        ? new PersistScheduler(storage, Object.assign({}, opt.scheduler, opt.debounce !== undefined ? { debounce: opt.debounce } : {}))
+        : sharedScheduler
 
-    // Hydrate（异步恢复；存储后端异常不阻断应用——如 App 端 NativeKV 未接入）
-    void storage.getItem(key).then((raw) => {
-      if (raw !== null) {
-        const saved = deserialize<Record<string, unknown>>(raw)
-        // as never：动态结构恢复（运行时无影响，类型断言剥离）
-        ctx.store.$patch(applyFilter(saved, opt) as never)
-      }
-    }).catch((err) => {
-      console.warn('[proteus] 持久化恢复失败（存储后端异常）', err)
-    })
+    /** 从存储读取并恢复（keys 限制只恢复指定字段） */
+    const doHydrate = async (): Promise<Record<string, unknown> | null> => {
+      const raw = await storage.getItem(key)
+      if (raw === null) return null
+      const saved = deserialize<Record<string, unknown>>(raw)
+      let data = applyFilter(saved, opt)
+      if (opt.keys && opt.keys.length > 0) data = pickKeys(data, opt.keys)
+      return data
+    }
 
-    // Subscribe（防抖写盘；高频变更合并为一次）
-    let timer: ReturnType<typeof setTimeout> | null = null
+    // M7.1：eager（默认）立即 hydrate；lazy → $hydrated/$hydrate 惰性
+    if (isLazy(opt)) {
+      mountSharding(ctx, opt, doHydrate)
+    } else {
+      void doHydrate()
+        .then((data) => {
+          if (data) ctx.store.$patch(data as never)
+        })
+        .catch((err) => {
+          console.warn('[proteus] 持久化恢复失败（存储后端异常）', err)
+        })
+    }
+
+    // Subscribe（写入调度：防抖 + maxWait + 高频合并 + 串行 flush）
     ctx.store.$subscribe(
       (_m, state) => {
         const data = serialize(applyFilter(state, opt))
-        if (timer !== null) clearTimeout(timer)
-        timer = setTimeout(() => {
-          timer = null
-          void storage.setItem(key, data)
-        }, debounce)
+        scheduler.schedule(key, data)
       },
       { detached: true },
     )
