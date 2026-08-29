@@ -18,7 +18,7 @@
 | 6 | `p-toast/p-loading` 走 Worklet 自定义组件（API A9） | API A9（反馈 UI）未实现 | ⏸ 降级 —— 首期复用 `p-popup` 渲染管线，API 层后接 |
 | 7 | `p-payment-sheet` 依赖 `api.payment`（A5） | API B1-B4 仅 request/device/auth；**A5 支付未实现** | ⏸ 移出 P0 首期，标注依赖 API P1 |
 | 8 | `p-login-gate` 读 `api.auth` + Router guard | `createAuth` 已实现（security M2）✓、Router requiresAuth 守卫已实现 ✓ | ✅ 依赖就绪，可进 P0（但排在基础组件后） |
-| 9 | 能力探测注入 `app.config.globalProperties.$capability` | runtime 已有 `debug-flag` / `setDataBridge` 等轻量机制 | ⚠️ 修正 —— 能力探测做成 runtime 轻量模块（`src/runtime/capability.ts`），组件内直接 import 使用，不走全局注入 |
+| 9 | 能力探测注入 `app.config.globalProperties.$capability` | runtime 已有 `debug-flag` / `setDataBridge` 等轻量机制 | ⚠️ 修正 —— 能力探测做成**组件层轻量模块**（`src/components/runtime/capability.ts`，惰性单例，MP 端走共享模块 B0 机制），组件内直接 import 使用，不走全局注入 |
 | 10 | 每组件一份 `IR → 双端产物` 文档 | 矩阵（01）已是唯一真相源，CI 校验 | ✅ 维持 —— 回填矩阵即可，不单独建 ir.md |
 
 **核心机制（已就绪，新增组件的完整路径）**：
@@ -58,7 +58,7 @@ B7(性能加固) ← B3          B8(可观测 + CI 审计) ← B2-B6
 
 | 批 | 交付物 | 依赖 | 关键降级/说明 |
 |----|--------|------|--------------|
-| B1 | 组件契约（`contracts`：BaseProps/事件命名/插槽规范）+ 能力探测 runtime（`capability.ts`：backend 探测 + has/detect + 降级 warn）+ 单测 | — | 对齐 02-platform-capability.md；不做渲染器目录 |
+| B1 | 组件契约（`src/components/contracts`：BaseProps/事件命名/插槽规范）+ 能力探测（`src/components/runtime/capability.ts`：backend 判定 + has/detect + capabilityWarn 降级告警）+ 单测 | — | ✅ 已落地（2026-08，8 用例）；对齐 02-platform-capability.md；不做渲染器目录 |
 | B2 | `p-view` `p-text` `p-image` `p-button` + 矩阵回填 + 快照测试 | B1 | `position:fixed` 编译期转换警告留 B5 一并评估（涉及 compiler transform）|
 | B3 | `p-scroll-view` + `p-list-view`（virtual-list 通用化：item-key/虚拟开关/懒加载）| B2 | Skyline 滚动容器必备；复用既有 virtual-list 实现抽 composable |
 | B4 | `p-input` `p-textarea`（v-model 双向 + 事件归一）| B2 | MP 原生 input/textarea 映射 |
@@ -77,9 +77,9 @@ B7(性能加固) ← B3          B8(可观测 + CI 审计) ← B2-B6
 ## 4. 能力探测（B1 核心交付物，对齐 02 文档修正）
 
 ```ts
-// src/runtime/capability.ts —— 轻量模块，组件内直接 import（不全局注入）
+// src/components/runtime/capability.ts —— 轻量模块，组件内直接 import（惰性单例，不全局注入）
 export interface PlatformCapability {
-  backend: 'web' | 'skyline' | 'app'        // 启动期确定（web=window 存在；skyline=typeof wx!=='undefined'）
+  backend: 'web' | 'skyline' | 'app'        // 启动期确定（web=无 wx；skyline=typeof wx!=='undefined'；app 占位 v0.6）
   has(name: CapabilityName): boolean        // 同步能力，setup() 求值一次缓存
   detect(name: DynamicCapability): Promise<boolean>  // 异步（基础库版本等）
 }
@@ -91,12 +91,11 @@ export type CapabilityName =
   | 'webp'                // 图片格式
   | 'passive-event'       // 被动事件监听（Web）
 
-// 降级铁律（C6）：⚠️/❌ 能力必须 console.warn('[Proteus][p-xxx] ...')，禁止静默失效
-// 探测实现：web → window/CSS.supports；skyline → wx.getRenderer 近似 / typeof wx
-// app → 恒 false（v0.6 渲染器注入）
+// 降级铁律（C6）：⚠️/❌ 能力必须 console.warn('[Proteus][p-xxx] ...')（capabilityWarn），禁止静默失效
+// 已实现（B1）：backend 判定 + has 能力表 + detect 兜底 + capabilityWarn；tests/component-capability.test.ts 8 用例
 ```
 
-> 说明：Skyline 的 `wx.getRenderer()` 等仅在真机/开发者工具可用，编译产物运行时探测用 `typeof wx !== 'undefined' && wx.getRenderer?.()` 判后端即可；能力表以「实现到哪、探测到哪」为准，避免为未实现能力写死分支。
+> 说明：Skyline 渲染器差异（Skyline vs WebView）由 `has('worklet-animation')` 等能力表承载，backend 只到平台级（wx 存在即 skyline）；`wx.getRenderer` 等真机 API 不作为组件判定依据。
 
 ---
 
@@ -114,7 +113,7 @@ export type CapabilityName =
 
 | 批 | 状态 | 说明 |
 |----|------|------|
-| B1 契约 + 能力探测 | ⬜ | 本文落地后开工 |
+| B1 契约 + 能力探测 | ✅ 已落地 | 2026-08，8 用例（contracts + capability.ts） |
 | B2 基础组件 a（view/text/image/button）| ⬜ | — |
 | B3 scroll-view + list-view | ⬜ | virtual-list 通用化 |
 | B4 表单（input/textarea）| ⬜ | — |
