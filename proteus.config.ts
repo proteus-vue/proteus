@@ -41,6 +41,13 @@ export interface ProteusConfig {
     /** px→rpx 比例，默认 2 */
     rpxRatio: number
   }
+  /** 包体积预算（v0.4：构建期仪表 + 门禁） */
+  budget: {
+    /** 主包体积上限 KB（微信 2MB=2048KB；roadmap 目标 ≤1.2MB≈1200KB） */
+    mainPackageKB: number
+    /** 超预算是否让构建失败（默认警告不阻断） */
+    strict: boolean
+  }
 }
 
 const config: ProteusConfig = {
@@ -76,6 +83,11 @@ const config: ProteusConfig = {
   style: {
     px2rpx: true,
     rpxRatio: 2,
+  },
+  // 包体积预算（v0.4）：主包 ≤1.2MB（roadmap 目标，微信上限 2MB）；strict 时超限构建失败
+  budget: {
+    mainPackageKB: 1200,
+    strict: false,
   },
 }
 

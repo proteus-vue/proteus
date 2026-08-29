@@ -88,10 +88,10 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
 | setData 深度优化（✅ 已实现，决策 #81） | `src/runtime/setDataBridge.ts` | 已有：批量合并（16ms 窗口）+ 路径合并 + 值去重 + **深层对象/数组 diff**（变更递归出叶路径补丁，只推送变化子路径——对象更新从整对象 → 变化字段；首次推送展开叶路径）+ reset（测试隔离） |
-| Vapor codegen 借鉴 | `src/runtime/setDataBridge.ts` | 研究 Vapor 的 reset/effect **命令式更新**：setData 从"路径合并"推进到"依赖追踪精确化"（v0.6 App/Vapor 兼容的前置研究） |
+| Vapor codegen 借鉴 | `src/runtime/setDataBridge.ts` | 对照已落地：setData 依赖追踪精确化 = 编译器路径化写入（ref/computed/watch 写入点合并）+ 运行时深层叶路径 diff——与 Vapor reset/effect 命令式更新同构；v0.6 再对照 Vapor 运行时做基准 |
 | 虚拟列表（✅ 已实现并框架内置化，决策 #82/#83） | `src/components/virtual-list/`（★框架内置组件） | 已有：`<virtual-list :items :item-height :height>` 数据切片 + 占位（只渲染可视区，多 2 行缓冲）；双端同源码（scroll-view 模板 → MP 原生滚动 + bindscroll / Web 自定义元素 + CSS overflow）；onMounted 首屏计算 + scroll 联动；**框架内置**：产物 `proteus/<name>/index` 前缀（与应用组件 `/components/...` 隔离），gen-routes 组件解析应用优先、回退框架，demo 万条数据；通用插槽渲染待编译器支持作用域插槽 |
 | Pinia 状态管理适配（✅ Web 端完整 + MP 运行时桥，决策 #85） | `examples/stores/` + `src/runtime/store/` | 已有：Web 原生 Pinia（main.ts createPinia + counter store + pinia-demo 页）；MP 端框架级 store 桥 `createStore`（单例 + subscribe 广播）+ `connectPageStore`（订阅 → page.setData）；MP 端 Pinia 编译（跨模块内联）待跨模块编译能力 |
-| 包体积控制 | `build:mp` 链路 | 按需注入、`tree-shaking` 编译产物、主包 ≤ 2MB 预算仪表 |
+| 包体积控制（✅ 已实现，决策 #86） | `scripts/bundle-report.ts` + `proteus.config.ts budget` | 已有：构建期主包体积仪表（扫描 dist/mp-weixin 排除分包/调试目录 + Top 大文件报告 + 预算门禁——config.budget.mainPackageKB 默认 1200KB，strict 时超限构建失败）；实测 32KB / 1200KB |
 | 性能基准（✅ 已落地，决策 #81） | `tests/perf/` | 已有：setData 桥接基准（1000 次变更 → 1 次批量 / 对象 diff 全量 4 条 vs 变化 1 条 / 同值去重零推送）+ 编译引擎基准（典型页平均耗时报告 + 宽松阈值门禁），随 npm test 运行 |
 
 ### v0.5 多端扩展（对标"多端覆盖"差距）
