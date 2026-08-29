@@ -114,6 +114,13 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     expect(appJs).not.toContain('addRouteBuilder')
   })
 
+  it('★lifecycle B4：骨架含 App 级 onShow/onHide 钩子（调试日志）', () => {
+    const appJs = assembleAppJs('', [])
+    expect(appJs).toContain('onShow() {')
+    expect(appJs).toContain("[proteus][app] onShow", Date.now())
+    expect(appJs).toContain('onHide() {')
+  })
+
   it('极简模式：无自定义但配置了预设时，预设定义 + 骨架注册齐全', () => {
     const appJs = assembleAppJs('', [{ name: 'halfScreen', fnName: 'halfScreenBuilder', source: 'function halfScreenBuilder() {}' }])
     expect(appJs).toContain('function halfScreenBuilder() {}')

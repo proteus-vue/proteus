@@ -22,5 +22,14 @@ export const APP_LAUNCH_SKELETON = `App({
 __PRESET_REGISTRATION__
     }
   },
+  // ★lifecycle-plan B4：App 级 onShow/onHide 钩子（调试日志；Web 端对应 visibilitychange）
+  onShow() {
+    const debug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
+    if (debug) console.log('[proteus][app] onShow', Date.now())
+  },
+  onHide() {
+    const debug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
+    if (debug) console.log('[proteus][app] onHide', Date.now())
+  },
 })
 `

@@ -170,7 +170,7 @@ B1 ──→ B2 ──┬──→ B3 (Web)
 > 可独立先行：B1（defineApp API + 五阶段定义）+ B2（LifecycleOrchestrator：顺序执行/超时降级/错误隔离/trace）——不依赖 api/component（API 阶段可空跑）；B3-B9 依赖对应板块（Web/Skyline 映射、页面清理、App 原生、可观测、迁移）。
 
 - [x] `defineApp` 五阶段按顺序执行（B1+B2 ✅：runtime/src/lifecycle.ts，2026-08）
-- [ ] Skyline 端 `App.onShow` 正确映射（B4）
+- [x] Skyline 端 `App.onShow` 正确映射（B4 ✅ 部分：appSkeleton 生成 App 级 onShow/onHide 调试钩子；★MP 端阶段化受 app.js 直出无模块约束——全量模式入口自定义 App() 手动编排）
 - [ ] 页面 `onUnload` 自动 `$dispose` store（B6）
 - [x] `--trace-lifecycle` 输出完整（B2 ✅：Orchestrator trace + 阶段超时降级链）
 - [ ] 冷启动 < 1s（中等机型）（B9）
