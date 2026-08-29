@@ -25,13 +25,13 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | # | 能力域 | uni-app | Taro 3 | Proteus 现状 | 规划版本 |
 |---|---|---|---|---|---|
 | 1 | **开发体验**：脚手架 / HMR / devtools / 错误定位 / 类型提示 | ✅ | ✅ | 🟡 HMR+devtools（Web 原生）；MP 无 devtools 插件 | v0.2 脚手架 + v1.0 devtools |
-| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 | ✅ | ✅ | 🟡 模板指令+ref 写入；❌ 组件 props/slots、computed/watch、scoped CSS | v0.3 |
+| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、sourcemap（v0.3）；🟡 预处理器 / 类型提示 / computed 写路径 | v0.3 + v0.3 尾 |
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
-| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | ❌ | v0.4 |
-| 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | ❌ 走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
+| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；❌ MP 编译 / 持久化 | v0.4 + v0.4 尾 |
+| 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
 | 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | 🟡 79 单测 + 8 e2e + verify；❌ CI、发包 | v0.2 |
-| 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | 🟡 setData 批量合并；❌ 虚拟列表、性能基准 | v0.4 |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 181 单测 + 8 e2e + CI + monorepo（compiler/cli/create-proteus）；🟡 框架本体拆包 / 发包待启用 | v0.2 + 拆包尾 |
+| 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表（v0.4） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 
 > ✅ 已具备 · 🟡 部分具备 · ❌ 缺失。**差距即路线**：以下里程碑按此矩阵排布。
@@ -193,4 +193,4 @@ proteus/                        # monorepo（v0.2 起）
 
 ---
 
-**文档版本**：v2.53（v0.2 六项全部完成，发布流水线就绪）· 本路线图随能力落地持续更新，每完成一个里程碑在 [PROJECT_MEMORY.md](../PROJECT_MEMORY.md) 归档决策。
+**文档版本**：v2.54（欠账清理：能力矩阵 v0.2-v0.4 同步）· 本路线图随能力落地持续更新，每完成一个里程碑在 [PROJECT_MEMORY.md](../PROJECT_MEMORY.md) 归档决策。
