@@ -2,7 +2,7 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseGenerateTypesArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -15,6 +15,7 @@ import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
 import { checkI18nUsage, formatI18nCheck } from './i18n-check'
 import { checkConfigFile } from './config-check'
+import { generateTypes, formatGenerateTypes } from './generate-types'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -127,6 +128,14 @@ async function main(): Promise<void> {
         console.error(`[proteus-i18n] ${(e as Error).message}`)
         process.exitCode = 1
       }
+      break
+    }
+    case 'generate': {
+      if (rest[0] !== 'types') throw new Error('proteus generate 目前仅支持 types（proteus generate types [--out <path>] [--check]）')
+      const { out, check } = parseGenerateTypesArgs(rest.slice(1))
+      const result = generateTypes({ out, check })
+      console.log(formatGenerateTypes(result))
+      if (!result.ok) process.exitCode = 1
       break
     }
     case 'version':

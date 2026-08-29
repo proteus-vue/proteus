@@ -227,6 +227,23 @@ export function parseConfigCheckArgs(argv: string[]): { file: string } {
   return { file: path.resolve(file) }
 }
 
+export function parseGenerateTypesArgs(argv: string[]): { out?: string; check?: boolean } {
+  let out: string | undefined
+  let check = false
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--out') {
+      out = argv[i + 1]
+      i++
+    } else if (a === '--check') {
+      check = true
+    } else {
+      throw new Error(`未知参数：${a}`)
+    }
+  }
+  return { out, check }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：

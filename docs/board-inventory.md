@@ -21,7 +21,7 @@
 | 13 | router-plan | ✅ 已实现 | B1-B11：scan/tree/codegen/guards/tabBar + Router M7.1 chunk + requiresAuth 自动守卫 + 透明化规则/决策链 | B5 app codegen（appBar）⬜ 待 v0.6 |
 | 14 | security-plan | ✅ 已实现（M1-M3）| M1 SecretStorage 敏感字段加密存储（@proteus/security：WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级 / volatile 跳过 / redact / migrate）+ M2 凭证托管（@proteus/api createAuth）+ M3 PermissionRegistry 权限最小化（withPermission/PermissionDenied/持久化）| M4-M8（注入防护/网络安全/脱敏/audit security）标后续；Router 权限守卫自动生成 / PermissionGate 组件 / 编译期字段校验 transform |
 | 15 | testing-plan | ✅ 已实现 | 四层金字塔（L1 单测 587 + L2 集成快照 + 跨层契约 + e2e 8）+ CI 门禁（stores 铁律/能力门禁/模板快照/组件审计） | e2e 真机矩阵 |
-| 16 | types-plan | ✅ 核心类型已落地（B4 平台守卫 + B5 校验器已落地；B3/B6/B7 待）| shims（wx/Page/事件/类型提示全链路：PageOnLoad/RouteParamsByName/MpEvent）+ 各包 IR 类型 + ProteusConfig TS interface + 平台守卫（铁律 #4）+ validateConfig（config:check CLI：错误码 + 字段路径）| B3 codegen（独立 @proteus/types 包 + JSON Schema）/ B6 超级应用加固 / B7 测试矩阵 |
+| 16 | types-plan | ✅ 核心类型已落地（B3/B4/B5 已落地；B6/B7 待）| shims + 各包 IR 类型 + ProteusConfig TS interface + 平台守卫（铁律 #4）+ validateConfig（config:check）+ **@proteus/types 独立包**（Platform 共享类型 + JSON Schema 单一来源 + generate types --check 防漂移）| B6 超级应用加固 / B7 测试矩阵 / codegen 四产物完整化（Registry .d.ts）|
 | 17 | website-plan | ⬜ 未实现 | — | 官网（文档系统/playground/showcase），v1.0+ |
 
 ## 汇总

@@ -18,7 +18,8 @@
     "@proteus/capabilities": "0.1.0",
     "@proteus/compiler": "0.2.0",
     "@proteus/module": "0.1.0",
-    "@proteus/router": "0.1.0"
+    "@proteus/router": "0.1.0",
+    "@proteus/types": "0.1.0"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",

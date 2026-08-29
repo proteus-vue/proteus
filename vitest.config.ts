@@ -27,6 +27,9 @@ export default defineConfig({
       { find: '@proteus/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
       // security-plan B1-B2：@proteus/security 包（tests/security.test.ts 直接引用）
       { find: '@proteus/security', replacement: fileURLToPath(new URL('./packages/security/src/index.ts', import.meta.url)) },
+      // types-plan B3：@proteus/types 包（tests/generate-types.test.ts 直接引用）
+      { find: '@proteus/types/config-schema', replacement: fileURLToPath(new URL('./packages/types/src/config-schema.ts', import.meta.url)) },
+      { find: '@proteus/types', replacement: fileURLToPath(new URL('./packages/types/src/index.ts', import.meta.url)) },
     ],
   },
 })
