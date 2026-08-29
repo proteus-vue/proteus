@@ -8,13 +8,13 @@
 
 | 批次 | 文件（LLM 输入） | 依赖 | 产出 PR | 状态 |
 |------|------------------|------|---------|------|
-| **B1** | `00-overview` + `01-m1-route-parser` | — | `scan.ts` 骨架 + Schema | 待执行 |
-| **B2** | `00-overview` + `01` + `02-m2-route-tree` | B1 | tree + merge + 扫描完成 | 待执行 |
-| **B3** | `00-overview` + `02` + `03-m3-web-codegen` | B2 | Web codegen + 快照 | 待执行 |
-| **B4** | `00-overview` + `02` + `04-m4-mp-codegen` | B2 | mp codegen + app.json | 待执行 |
-| **B5** | `00-overview` + `02` + `05-m5-app-codegen` | B2 | App codegen + 栈操作 | 待执行 |
-| **B6** | `00-overview` + `03/04/05` + `06-m6-guards-tabbar` | B1-B5 + Pinia M1-M2 | 守卫 + tabBar + redirect | 待执行 |
-| **B7** | `00-overview` + `07-testing` + `08-migration` | B1-B6 | 测试套件 + 迁移工具 | 待执行 |
+| **B1** | `00-overview` + `01-m1-route-parser` | — | `scan.ts` 骨架 + Schema | ✅（scan/schema/rules）|
+| **B2** | `00-overview` + `01` + `02-m2-route-tree` | B1 | tree + merge + 扫描完成 | ✅（tree/merge + trace）|
+| **B3** | `00-overview` + `02` + `03-m3-web-codegen` | B2 | Web codegen + 快照 | ✅（codegen/web）|
+| **B4** | `00-overview` + `02` + `04-m4-mp-codegen` | B2 | mp codegen + app.json | ✅（codegen/mp + 合并）|
+| **B5** | `00-overview` + `02` + `05-m5-app-codegen` | B2 | App codegen + 栈操作 | ⬜ 待 v0.6（NativeKV/渲染器同批）|
+| **B6** | `00-overview` + `03/04/05` + `06-m6-guards-tabbar` | B1-B5 + Pinia M1-M2 | 守卫 + tabBar + redirect | ⬜ 待执行（守卫已部分存在，tabBar/redirect 规划）|
+| **B7** | `00-overview` + `07-testing` + `08-migration` | B1-B6 | 测试套件 + 迁移工具 | ⬜ 待执行（router-codegen 等测试已先落地）|
 
 **顺序依赖（企业级）**：B1 → B2 → (B3 ∥ B4 ∥ B5) → B6 → B7
 
