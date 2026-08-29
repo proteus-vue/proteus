@@ -244,6 +244,19 @@ export function parseGenerateTypesArgs(argv: string[]): { out?: string; check?: 
   return { out, check }
 }
 
+export function parseMigrateTypesArgs(argv: string[]): { file: string; dryRun: boolean } {
+  const positional: string[] = []
+  let dryRun = false
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--dry-run') dryRun = true
+    else if (!a.startsWith('-')) positional.push(a)
+    else throw new Error(`未知参数：${a}`)
+  }
+  if (positional.length !== 1) throw new Error('参数：proteus migrate types <proteus.config.ts> [--dry-run]')
+  return { file: path.resolve(positional[0]), dryRun }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：

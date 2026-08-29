@@ -49,6 +49,12 @@ jobs:
       - name: 国际化消息审计（i18n-plan B2：缺失 key 阻断）
         run: npx tsx packages/cli/src/index.ts i18n:check examples --catalog examples/locales/zh-CN.json
 
+      - name: 类型单一来源门禁（types-plan B7：generate types --check 防 schema 漂移）
+        run: |
+          npx tsx packages/cli/src/index.ts generate types
+          npx tsx packages/cli/src/index.ts generate types --check
+          npx tsx packages/cli/src/index.ts config:check examples/proteus.config.ts
+
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
 
