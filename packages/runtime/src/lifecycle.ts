@@ -1,5 +1,7 @@
 // packages/runtime/src/lifecycle.ts
 // ★lifecycle-plan B1+B2：App 级阶段化生命周期——defineApp API + LifecycleOrchestrator（顺序执行/超时降级/错误隔离/trace）
+// ★devtools B2：可选 TraceBus 注入（type-only，运行时零依赖）——结构化事件（start/end/error/point）汇入统一协议
+import type { TraceBus } from '@proteus/devtools-runtime'
 // 五阶段：bootstrap → coreReady → navigationReady → beforeFirstPaint → interactive（顺序即契约，业务不可篡改）
 // 设计（docs/proteus-lifecycle-plan/01-m1-phases.md + 02-m2-orchestrator.md）
 // 产物 ES5 安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构
@@ -80,6 +82,8 @@ export interface OrchestratorOptions {
   onError?: (err: Error, phase: string) => void
   /** --trace-lifecycle 输出（对齐 trace 规范） */
   trace?: (msg: string) => void
+  /** ★devtools B2：可选 TraceBus（type-only 注入，运行时零依赖；enabled 由 bus 门控） */
+  traceBus?: TraceBus
 }
 
 /** ★B2：启动管线执行引擎（单例，全应用共享） */
@@ -106,8 +110,16 @@ export class LifecycleOrchestrator {
     return this.traces
   }
 
+  /** ★devtools B2：traceBus 结构化发射（bus 未注入/未启用 → noop） */
+  private emitBus(phase: 'start' | 'end' | 'error' | 'point', name: string, payload: Record<string, unknown>): void {
+    const bus = this.options.traceBus
+    if (!bus) return
+    bus.emit('lifecycle', phase, name, payload)
+  }
+
   /** ★超时降级应用（warn → console 提示；minimal → 标记；home/skeleton/lazy → trace 记录，UI 行为由调用方处理） */
   private applyFallback(strategy: FallbackStrategy, phase: string): void {
+    this.emitBus('point', 'lifecycle.fallback', { phase, strategy })
     if (strategy === 'warn') {
       console.warn(`[proteus-lifecycle] ${phase} 阶段降级：${strategy}（能力探测/初始化失败仅告警）`)
     } else if (strategy === 'minimal') {
@@ -125,12 +137,14 @@ export class LifecycleOrchestrator {
       const phase = this.phases.get(name)
       if (!phase) continue
       this.options.onPhaseStart?.(name)
+      this.emitBus('start', `lifecycle.${name}`, { phase: name })
       const start = Date.now()
       try {
         await withTimeout(Promise.resolve(phase.handler(this.ctx)), phase.timeout)
         const duration = Date.now() - start
         this.traces.push({ phase: name, startTime: start, duration, status: 'success' })
         this.options.onPhaseComplete?.(name, duration)
+        this.emitBus('end', `lifecycle.${name}`, { phase: name, duration })
         this.options.trace?.(`[lifecycle] [${name}] ${duration}ms ✓`)
       } catch (err) {
         const duration = Date.now() - start
@@ -138,12 +152,14 @@ export class LifecycleOrchestrator {
           this.options.onPhaseTimeout?.(name)
           this.applyFallback(phase.fallback, name)
           this.traces.push({ phase: name, startTime: start, duration, status: 'timeout', fallback: phase.fallback })
+          this.emitBus('error', `lifecycle.${name}`, { phase: name, duration, fallback: phase.fallback })
           this.options.trace?.(`[lifecycle] [${name}] ${duration}ms ⚠ fallback=${phase.fallback}（超时）`)
         } else {
           this.options.onError?.(err as Error, name)
           // ★错误隔离：coreReady 失败 → minimal 模式继续（不致命）
           if (name === 'coreReady') this.ctx.isMinimalMode = true
           this.traces.push({ phase: name, startTime: start, duration, status: 'error' })
+          this.emitBus('error', `lifecycle.${name}`, { phase: name, duration, message: (err as Error).message })
           this.options.trace?.(`[lifecycle] [${name}] ${duration}ms ✗ ${(err as Error).message}`)
         }
       }

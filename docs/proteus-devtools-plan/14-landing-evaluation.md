@@ -67,4 +67,4 @@ export interface TraceEvent<T = unknown> {
 | 批 | 状态 | 说明 |
 |----|------|------|
 | B1 TraceBus 包 | ✅ 已落地 | 2026-08，8 用例——协议/环形缓冲/订阅取消/flush/零开销门控/redact 递归脱敏/采样 error tail/createTraceId |
-| B2 六源接入 | ⬜ | lifecycle + component 两源示范 |
+| B2 六源接入 | ✅ 已落地 | 2026-08，6 用例——lifecycle orchestrator（start/end/error/point 结构化事件）+ componentRender（component.render）→ TraceBus；type-only 注入（runtime 产物零 devtools 依赖） |
