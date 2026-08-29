@@ -100,6 +100,17 @@ export function parseModuleCheckArgs(argv: string[]): ModuleCheckArgs {
   return { root: path.resolve(dir), graph }
 }
 
+export interface ModuleDuplicatesArgs {
+  /** 小程序产物目录（含 app.json；缺省 ./dist/mp-weixin） */
+  distDir: string
+}
+
+export function parseModuleDuplicatesArgs(argv: string[]): ModuleDuplicatesArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? './dist/mp-weixin'
+  if (argv.length > 1) throw new Error('多余参数')
+  return { distDir: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -118,8 +129,12 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
   proteus router:check [dir]
       校验 <route> 块与集中式 meta（来源登记 + 父路由推导依据）
 
-  proteus module:check [dir]
-      校验 proteus-module.config.ts 模块契约（name/version/dependencies 缺失报错 + 重名检测）
+  proteus module:check [dir] [--graph]
+      校验 proteus-module.config.ts 模块契约（缺失字段/环/重名/版本冲突）
+      --graph  追加 Mermaid 依赖图
+
+  proteus module:duplicates [distDir]
+      分包间共享依赖去重检测（读 dist/mp-weixin/app.json 的 subPackages，hash 相同文件 ≥2 分包 → 报告）
 
   proteus version / help
 `

@@ -2,12 +2,13 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
 import { checkModuleConfigs } from './module-check'
+import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -47,6 +48,18 @@ async function main(): Promise<void> {
       const { text, result, cycles, conflicts } = await checkModuleConfigs(root, graph)
       console.log(text)
       if (!result.modules.every((m) => m.ok) || result.duplicateNames.length || cycles.length || conflicts.length) process.exitCode = 1
+      break
+    }
+    case 'module:duplicates': {
+      const { distDir } = parseModuleDuplicatesArgs(rest)
+      const roots = readSubPackageRoots(distDir)
+      if (!roots.length) {
+        console.log('[proteus-module] 未找到分包（dist/mp-weixin/app.json 无 subPackages）——无需去重检测')
+        break
+      }
+      const duplicates = scanDuplicateModules(distDir, roots)
+      console.log(formatDuplicateReport(duplicates))
+      if (duplicates.length) process.exitCode = 1
       break
     }
     case 'version':
