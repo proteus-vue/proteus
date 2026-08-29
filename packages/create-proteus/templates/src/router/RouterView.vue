@@ -6,6 +6,7 @@ import { computed, ref, defineAsyncComponent } from 'vue'
 import type { Component } from 'vue'
 import { routeMap } from './auto-routes'
 import { adapter } from '@proteus/shared'
+import { webTransitionName } from '@proteus/router'
 
 // 懒加载全部页面（含分包页）：Web 端按页面自动 code-split
 // glob 相对本文件（examples/router/）→ examples/pages 与 examples/subpackages/*/pages
@@ -21,20 +22,10 @@ for (const [key, load] of Object.entries(modules)) {
 }
 const current = ref(adapter.getCurrentPages()[0]?.route || 'pages/index')
 
-// 路由变化 → 转场名（routeType 映射 CSS 过渡；popstate/普通导航回退 fade）
-// 导航类型：forward(navigateTo)+routeType→base 转场；back→反向('-back')；
-// replace(redirectTo)→'replace'（替换）/ reLaunch→'reset'（重置）/ switchTab→'tab'（tab 切换）
+// 路由变化 → 转场名（★透明化：routeType → Vue Transition 映射由框架共享表 webTransitionName 提供，
+//   不再 RouterView 私有硬编码；三端共用同一枚举见 packages/router/src/transforms/transform-transition.ts）
 const transitionName = ref('fade')
 let lastForwardName = 'fade' // 当前页进入时的转场名（后退时取其反向）
-function mapRouteType(routeType: string | undefined): string {
-  return routeType === 'halfScreen'
-    ? 'halfscreen'
-    : routeType === 'slideUp'
-      ? 'slide-up'
-      : routeType === 'scaleDown'
-        ? 'scale'
-        : 'fade'
-}
 adapter.onPageLoad?.((route, _query, routeType, nav) => {
   current.value = route || 'pages/index'
   if (nav === 'back') {
@@ -45,7 +36,7 @@ adapter.onPageLoad?.((route, _query, routeType, nav) => {
     lastForwardName = 'fade' // 无堆叠语义，后退按 fade
     transitionName.value = nav === 'replace' ? 'replace' : nav === 'reLaunch' ? 'reset' : 'tab'
   } else {
-    lastForwardName = mapRouteType(routeType)
+    lastForwardName = webTransitionName(routeType)
     transitionName.value = lastForwardName
   }
 })
