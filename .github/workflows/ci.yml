@@ -46,6 +46,9 @@ jobs:
       - name: 组件库审计门禁（B8：no-platform-api / no-sync-storage / manifest-complete）
         run: npx tsx packages/cli/src/index.ts components:audit src/components
 
+      - name: 国际化消息审计（i18n-plan B2：缺失 key 阻断）
+        run: npx tsx packages/cli/src/index.ts i18n:check examples --catalog examples/locales/zh-CN.json
+
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
 

@@ -79,7 +79,15 @@ export function resolveSharedModule(
   if (!source.startsWith('.')) return null // 其余裸模块（vue/pinia 等第三方）不参与
   const base = path.resolve(path.dirname(absFrom), source)
   for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
-    if (fs.existsSync(cand) && !cand.endsWith('.vue')) {
+    if (cand.endsWith('.vue')) continue
+    // ★B3 修复：必须是文件（existsSync 会把同名目录误匹配 → EISDIR）
+    let isFile = false
+    try {
+      isFile = fs.statSync(cand).isFile()
+    } catch {
+      isFile = false
+    }
+    if (isFile) {
       let relNoExt = path.relative(appDir, cand).replace(/\\/g, '/').replace(/\.(ts|js)$/, '')
       // ★框架资产越界（仓库根 src/components 在 appDir 之外，如框架组件引 runtime/event）：
       //   重定位到 proteus/ 前缀（与框架组件产物一致，emitFile 不允许 ../ 越界路径）
