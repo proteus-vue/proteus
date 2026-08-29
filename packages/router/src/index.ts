@@ -4,7 +4,7 @@
 //   不再全局单例 import——路由表由调用方注入（对齐 docs/proteus-router-plan M2）
 import type { NavigateOptions, RouteParams, RouteRecord, RouteParamsByName } from './types'
 import { runBeforeEach, runAfterEach, beforeEach as registerBeforeEach, afterEach as registerAfterEach } from './guards'
-import type { Guard, AfterGuard } from './guards'
+import type { Guard, AfterGuard, GuardTrace } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
 import { adapter } from '@proteus/shared'
 
@@ -14,7 +14,10 @@ class Router {
     return adapter.getCurrentPages().length
   }
 
-  constructor(private routeMap: Record<string, RouteRecord>) {}
+  constructor(
+    private routeMap: Record<string, RouteRecord>,
+    private options: { auth?: () => boolean | Promise<boolean>; onAuthFail?: () => void } = {},
+  ) {}
 
   /**
    * 注册前置守卫（M6：实例级 API，三端一致——delegate 到全局守卫注册表）
@@ -29,6 +32,16 @@ class Router {
     registerAfterEach(guard)
   }
 
+  /** ★B11（router-plan 超级应用）：requiresAuth 自动守卫——未登录拦截（auth 检查器未配置时放行） */
+  private async authGuard(to: RouteRecord, trace: GuardTrace | undefined): Promise<boolean> {
+    if (!to.meta?.requiresAuth || !this.options.auth) return true
+    const authed = await this.options.auth()
+    if (authed) return true
+    trace?.(`[guard] requiresAuth → ${to.name ?? to.path} 被拦截（未登录，createRouter auth 检查器）`)
+    this.options.onAuthFail?.()
+    return false
+  }
+
   /** 命名路由跳转（推荐）——泛型 N 由 name 字面量推断，params 类型自动匹配（类型提示全链路） */
   async push<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     const target = this.resolve(options as NavigateOptions)
@@ -37,6 +50,8 @@ class Router {
     // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化；trace 输出守卫链路 --trace-router）
     const isDebug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
     const trace = isDebug ? (msg: string) => console.log(msg) : undefined
+    // ★B11：requiresAuth 自动守卫（先于用户守卫——框架层登录拦截）
+    if (!(await this.authGuard(target, trace))) return
     const guardResult = await runBeforeEach(target, this.routeMap, trace)
     if (guardResult === false) return
 
@@ -106,13 +121,17 @@ class Router {
 /**
  * 创建 Router 实例（拆包步骤 4 工厂化）：路由表由调用方注入
  * 用法：const router = createRouter(routes)（routes 来自 gen-routes 生成的 auto-routes）
+ * ★B11：options.auth——登录检查器（requiresAuth 页面自动拦截；onAuthFail 可跳登录页/提示）
  */
-export function createRouter(routes: RouteRecord[]): Router {
+export function createRouter(
+  routes: RouteRecord[],
+  options: { auth?: () => boolean | Promise<boolean>; onAuthFail?: () => void } = {},
+): Router {
   const routeMap = routes.reduce((m, r) => {
     m[r.name] = r
     return m
   }, {} as Record<string, RouteRecord>)
-  return new Router(routeMap)
+  return new Router(routeMap, options)
 }
 
 export type RouterInstance = Router

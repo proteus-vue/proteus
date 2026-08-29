@@ -41,6 +41,31 @@ describe('M6 守卫：Router 实例 API + trace', () => {
     expect(vi.mocked(adapter.navigateTo)).not.toHaveBeenCalled()
   })
 
+  it('★B11：requiresAuth 自动守卫（createRouter auth 检查器——未登录拦截，onAuthFail 触发）', async () => {
+    // 现有 auto-routes 中 user 相关页面 requiresAuth: true
+    const authed = createRouter(routes, {
+      auth: async () => false,
+      onAuthFail: vi.fn(),
+    })
+    const { adapter } = await import('@proteus/shared')
+    await authed.push({ name: 'user' })
+    expect(vi.mocked(adapter.navigateTo)).not.toHaveBeenCalled() // 未登录拦截
+    expect((authed as unknown as { options: { onAuthFail: ReturnType<typeof vi.fn> } }).options.onAuthFail).toHaveBeenCalled()
+
+    // 已登录 → 放行
+    const loggedIn = createRouter(routes, { auth: async () => true })
+    await loggedIn.push({ name: 'user' })
+    expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalled()
+  })
+
+  it('★B11：无 auth 检查器 / 非 requiresAuth 页面 → 放行（默认行为不变）', async () => {
+    const { adapter } = await import('@proteus/shared')
+    await router.push({ name: 'forms' }) // 非 tab 非 requiresAuth → navigateTo
+    expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalled()
+    await router.push({ name: 'user' }) // requiresAuth 但无 auth 检查器 → 放行
+    expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalled()
+  })
+
   it('守卫放行 → 正常导航；afterEach 执行', async () => {
     const afterSpy = vi.fn()
     router.afterEach((to) => void afterSpy(to.name))

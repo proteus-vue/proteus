@@ -131,16 +131,23 @@ B1 → B2 → (B3 ∥ B4 ∥ B5) → B6 → B7    [企业级：路由可用]
 ## 5. 进度追踪
 
 ```
-[ ] B1 scan + schema
-[ ] B2 tree + merge
-[ ] B3 Web codegen
-[ ] B4 mp codegen
-[ ] B5 App codegen
-[ ] B6a guards
-[ ] B6b tabBar + redirect
-[ ] B7a tests
-[ ] B7b migration
+[x] B1 scan + schema            ✅（packages/router/src/scan.ts + schema.ts，决策 #101）
+[x] B2 tree + merge             ✅（tree.ts + merge.ts + --trace-router）
+[x] B3 Web codegen              ✅（codegen/web.ts）
+[x] B4 mp codegen               ✅（codegen/mp + app.json 合并）
+[ ] B5 App codegen              ⬜ 待 v0.6（NativeKV/渲染器同批，docs/proteus-app-plan/01）
+[x] B6a guards                  ✅（guards.ts：beforeEach/afterEach 工厂化 + trace）
+[x] B6b tabBar + redirect       ✅（tabBar config + redirect 跨端）
+[x] B7a tests                   ✅（L2 集成快照 + L4 矩阵 + 纯净性门禁）
+[x] B7b migration               ✅（router:check CLI + 迁移）
+[x] B8 chunk 分块               ✅ 部分（Router M7.1 <route> chunk 字段 + module-plan B5 分包依赖/preloadRule）
+[x] B9 预加载 + 层级降级         ✅ 部分（gen-routes preloadRule + 分包依赖）
+[x] B10 转场调度器 + 栈管理      ✅ 部分（routeType 转场 MVP：showcase 验证）
+[x] B11 权限树 + 自动守卫      ✅（createRouter auth 检查器：requiresAuth 自动拦截 + onAuthFail，2026-08）
+[ ] B12 trace/DevTools/CI 审计  ⬜ 部分（--trace-router ✅；DevTools 面板/CI 审计待）
 ```
+
+> ★内部一致性修正（2026-08）：总览表 B1-B7 ✅ 与本节旧 [ ] 矛盾——以总览表为准，本节同步。
 
 ## 6. 验收（全部完成 = 路由管理透明化达成）
 
