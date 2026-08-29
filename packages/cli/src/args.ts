@@ -220,6 +220,13 @@ export function parseI18nCheckArgs(argv: string[]): { root: string; catalog?: st
   return { root: path.resolve(positional[0] ?? '.'), catalog: catalog ? path.resolve(catalog) : undefined }
 }
 
+export function parseConfigCheckArgs(argv: string[]): { file: string } {
+  const file = argv.find((a) => !a.startsWith('-'))
+  if (!file) throw new Error('缺少参数：proteus config:check <proteus.config.ts>')
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { file: path.resolve(file) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
