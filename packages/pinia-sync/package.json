@@ -1,0 +1,27 @@
+{
+  "name": "@proteus/pinia-sync",
+  "version": "0.1.0",
+  "description": "Proteus × Pinia 多端状态协同（docs/proteus-pinia-plan M8.1）：LWW 零依赖默认 + CRDT 接口占位",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:pinia --external:vue"
+  },
+  "peerDependencies": {
+    "pinia": "^4.0.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "pinia": "^4.0.3",
+    "vue": "^3.4.0"
+  }
+}
