@@ -1,6 +1,6 @@
 # proteus-build-plan
 
-> **★实现状态（2026-08）**：✅ 已实现——@proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线（.github/workflows/ci.yml 含测试/构建/模板快照/能力门禁），587 测试覆盖（2026-08 组件库 P0 收官后基线）。
+> **★实现状态（2026-08）**：✅ 已实现——@proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线（.github/workflows/ci.yml 含测试/构建/模板快照/能力门禁/组件审计/i18n 审计/体积预算 strict 门禁）+ build 产物契约测试（contract-build），638 测试覆盖。
 
 Proteus 构建与 CI/CD 流水线落地执行文档。
 
@@ -14,23 +14,16 @@ Proteus 构建与 CI/CD 流水线落地执行文档。
 Source → Compile → Bundle → Optimize → Package → Publish
 ```
 
-## 文档清单
+## 文档清单（实际文档 vs Draft 目录）
 
-- `00-overview.md` 架构 + 铁律 + 里程碑
-- `01-m1-vite-plugin.md` Vite 插件骨架
-- `02-m2-rollup-entries.md` 多入口 + 依赖图
-- `03-m3-code-splitting.md` 代码分割 + 分包
-- `04-m4-minify-bundle.md` 压缩 + treeshake
-- `05-m5-sourcemap-asset.md` source map + assets
-- `06-m6-ci-matrix.md` CI 矩阵
-- `07-m7-release-publish.md` changeset 发布
-- `08-m8-cache-optimization.md` 缓存策略
-- `09-m7-super-app.md` 超级应用（并行/分布式/预算）
-- `10-m8-observability.md` 可观测（--measure）
-- `11-migration.md` 迁移
-- `12-security.md` 供应链安全
-- `13-testing-validation.md` 产物测试
-- `14-execution-batches.md` 分批策略
+- `00-overview.md` 架构 + 铁律 + 里程碑 ✅
+- `01-m1-vite-plugin.md` Vite 插件骨架 + 多入口 + 代码分割（M1-M3）✅
+- `02-optimize-cache.md` 压缩/treeshake/sourcemap/assets + 缓存（M4/M5/M8）✅（实现标注：压缩/treeshake/sourcemap 已落地；M8 缓存标后续）
+- `03-ci-pipeline.md` CI 矩阵 + 发布（M6/M7）✅（ci.yml 已落地；发布走 changesets）
+- `04-super-app-observability.md` 超级应用 + 可观测（M7/M8）⏸（分包并行/分布式构建标后续）
+- `05-testing-batches.md` 测试 + 迁移 + 分批（Testing B5 产物契约 ✅ contract-build.test.ts）
+
+> Draft 的 `06-m6-ci-matrix ~ 14-execution-batches` 已并入上述精简文档（01/02/03/04 覆盖 M1-M8 内容）。
 
 ## 防止上下文撑爆
 

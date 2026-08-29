@@ -8,7 +8,7 @@
 |---|------|------|-----------|------------|
 | 1 | api-plan | ✅ 已实现 | B1-B4：createApi 请求抽象（wx/fetch adapter + 拦截器/重试/错误模型）+ getDeviceInfo + createAuth 凭证托管（自动 Authorization/skipAuth/登录态订阅） | P1 业务模块（文件/支付/UI，A5 支付标注依赖） |
 | 2 | app-plan | ✅ B1 核心已落地（B2-B5 标 v0.6 正式启动）| @proteus/renderer-app：NativeAdapter 抽象 + createRenderer host config + mock adapter——Vue 官方渲染器接线可测（无需真机）；标准 Vue SFC 三端复用的 App 运行时通道 | B2-B5（iOS/Android 原生视图/样式 rpx→dp/路由桥/能力桥/demo）需 npm 发布 + 原生工程；Vapor 双模式（B6）依赖 @vue/vapor 实验版 |
-| 3 | build-plan | ✅ 已实现 | @proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线 | 增量 HMR/缓存深化（06/07 规划） |
+| 3 | build-plan | ✅ 已实现 | @proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线 + 体积预算门禁（bundle-report strict，随 build:mp 进 CI）+ build 产物契约测试（contract-build：subPackages 一致性/组件产物存在性） | 增量 HMR/磁盘远程缓存（M8）/分包并行构建（04 文档标注后续） |
 | 4 | cli-plan | ✅ 已实现 | @proteus/cli：build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check/**components:audit** | dev/preview 命令（M2 规划） |
 | 5 | compiler-plan | ✅ 已实现 | 编译管线 + 69 条规则注册表 + explain/trace + 产物自校验 + sourcemap + **4 项增强**（props 源 watch→observers / ref 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射钩子显式警告） | computed 写路径/类型提示尾项 |
 | 6 | component-plan | ✅ P0 全批 | B1-B8：16 组件（15 个 p-* + virtual-list 兼容）+ 4 runtime 共享模块（capability/event/virtual-window/observability）+ `components:audit` 门禁（CI）+ demo 页 | 业务组件（player-bar/payment-sheet 依赖 appBar/支付）；Worklet 转场 v0.6；组件库拆包 v2.0 |
