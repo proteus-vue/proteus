@@ -3,6 +3,7 @@
 //   业务代码只使用 capability / useCapability()，无任何平台判断（铁律 1）
 //   B2 升级：注册中心以 adapter 为单位（CapabilityRegistry，多实例隔离工厂）；B1 描述文件的 adapters 展开为 adapter 注册
 import type { Capability, CapabilityAPI, CapabilityDefinition, CapabilityPlatform } from './types'
+import { CapabilityError } from './types'
 import { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
 import type { CapabilityAdapter } from './adapter'
 
@@ -38,6 +39,26 @@ export function validateCapabilityDefinition(input: unknown): { ok: true; value:
   return { ok: true, value: def }
 }
 
+/** ★B4 UnsupportedAPI（§2）：能力缺失的显式包装——isSupported false + 任意方法调用抛 CapabilityError（防 await 误用 thenable） */
+export function unsupported(capability: string, platform: CapabilityPlatform, reason?: string): CapabilityAPI {
+  const api = {
+    isSupported: () => false,
+  } as CapabilityAPI & { then: () => never }
+  api.then = () => {
+    throw new CapabilityError('UNSUPPORTED', capability, platform, reason)
+  }
+  return api
+}
+
+/** ★B4：构造降级 Capability（isSupported false + unsupported api）——缺失但不 required */
+export function unsupportedCapability(id: string, platform: CapabilityPlatform, reason?: string): Capability {
+  return {
+    meta: { id, tier: 3, name: id },
+    api: unsupported(id, platform, reason),
+    isSupported: () => false,
+  }
+}
+
 /** 声明能力描述文件（编译期校验：不合法当场抛错，透明化铁律） */
 export function defineCapability<C extends CapabilityAPI>(def: CapabilityDefinition<C>): CapabilityDefinition<C> {
   const result = validateCapabilityDefinition(def)
@@ -67,6 +88,7 @@ export function registerCapability(def: CapabilityDefinition): void {
       create: () => factory().create(),
     })
   }
+  globalRegistry.registerRequired(def.meta.id, def.meta.required ?? false)
   globalRegistry.registerFallback(def.meta.id, def.fallback)
 }
 
@@ -95,13 +117,15 @@ export function getCapability<C extends CapabilityAPI = CapabilityAPI>(id: strin
   return globalRegistry.resolveSync<C>(id, platform)
 }
 
-/** 组合式 API（推荐）：业务用 useCapability('share') —— 无平台判断；缺失 → 显式失败 */
+/** 组合式 API（推荐）：业务用 useCapability('share') —— 无平台判断
+ * ★B4 降级：无命中时——required 能力抛 CapabilityError（阻断流程 §4）；非 required 返回 unsupported 包装（isSupported false，不崩溃 §7） */
 export function useCapability<C extends CapabilityAPI = CapabilityAPI>(id: string, platform: CapabilityPlatform = detectPlatform()): Capability<C> {
   const cap = getCapability<C>(id, platform)
-  if (!cap) {
-    throw new Error(`[proteus-capabilities] 能力 "${id}" 在当前平台（${platform}）不可用：未注册、缺少 adapter 或探测失败（Skyline 限制见 platform-plan 01 §5）`)
+  if (cap) return cap
+  if (globalRegistry.isRequired(id)) {
+    throw new CapabilityError('UNSUPPORTED', id, platform, 'required 能力缺失（阻断流程）')
   }
-  return cap
+  return unsupportedCapability(id, platform) as Capability<C>
 }
 
 /** 异步完整解析（B2 选择策略：异步 isSupported 探测 + fallback 递归） */

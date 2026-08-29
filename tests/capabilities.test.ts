@@ -45,15 +45,20 @@ describe('defineCapability / validateCapabilityDefinition', () => {
     expect(validateCapabilityDefinition({ meta: { id: 'x', tier: 2 }, adapters: { ios: () => ({}) } }).ok).toBe(false)
   })
 
-  it('重复注册 → 报错；useCapability 未注册/无 adapter → 显式失败', () => {
+  it('重复注册 → 报错；useCapability 未注册/无 adapter → unsupported 降级；required → CapabilityError', () => {
     clearCapabilities()
     registerCapabilities([
       defineCapability({ meta: { id: 'a', tier: 1 }, adapters: { web: () => ({ platform: 'web' as const, create: () => ({ isSupported: () => true }) }) } }),
     ])
     expect(() => registerCapability(defineCapability({ meta: { id: 'a', tier: 1 }, adapters: { web: () => ({ platform: 'web' as const, create: () => ({ isSupported: () => true }) }) } }))).toThrow(/重复注册/)
-    expect(() => useCapability('ghost', 'web')).toThrow(/不可用/)
-    // skyline 无 adapter → 显式失败
-    expect(() => useCapability('a', 'skyline')).toThrow(/不可用/)
+    // ★B4：未注册/无 adapter → 非 required 返回 unsupported（isSupported false，不崩溃）；required → 抛 CapabilityError（阻断）
+    expect(useCapability('ghost', 'web').isSupported()).toBe(false)
+    expect(useCapability('a', 'skyline').isSupported()).toBe(false)
+    clearCapabilities()
+    registerCapabilities([
+      defineCapability({ meta: { id: 'req', tier: 3, required: true }, adapters: { web: () => ({ platform: 'web' as const, create: () => ({ isSupported: () => true }) }) } }),
+    ])
+    expect(() => useCapability('req', 'skyline')).toThrow(/UNSUPPORTED/)
   })
 
   it('getCapability：无 adapter 平台 → undefined（探测降级）；fallback 解析', () => {

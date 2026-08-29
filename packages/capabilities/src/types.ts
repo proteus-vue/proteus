@@ -19,11 +19,28 @@ export interface CapabilityMeta {
   since?: string
   /** 需要的权限（平台权限声明） */
   permissions?: string[]
+  /** ★B4：required——缺失时阻断流程（抛 CapabilityError）而非降级（缺省 false） */
+  required?: boolean
 }
 
 /** 能力 API 基类：所有能力必须可探测（feature detection > platform detection） */
 export interface CapabilityAPI {
   isSupported(): boolean | Promise<boolean>
+}
+
+/** ★B4 错误模型（§6）：缺失/权限/不可用的显式错误——不静默 */
+export type CapabilityErrorCode = 'UNSUPPORTED' | 'PERMISSION_DENIED' | 'UNAVAILABLE'
+
+export class CapabilityError extends Error {
+  constructor(
+    public readonly code: CapabilityErrorCode,
+    public readonly capability: string,
+    public readonly platform: string,
+    public readonly reason?: string,
+  ) {
+    super(`[proteus-capabilities] ${code}: ${capability}@${platform}${reason ? `（${reason}）` : ''}`)
+    this.name = 'CapabilityError'
+  }
 }
 
 /** 平台 adapter：capability 在某平台的实现 + 探测 */

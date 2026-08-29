@@ -95,7 +95,8 @@ describe('全局注册中心（B1 兼容 + B2）', () => {
     const cap = useCapability('share', 'web')
     expect((cap.api as unknown as { tag: string }).tag).toBe('share:web')
     clearCapabilities()
-    expect(() => useCapability('share', 'web')).toThrow(/不可用/)
+    // ★B4：清除后缺失 → unsupported 降级（isSupported false，不崩溃）
+    expect(useCapability('share', 'web').isSupported()).toBe(false)
   })
 
   it('resolveCapability（异步完整解析）', async () => {

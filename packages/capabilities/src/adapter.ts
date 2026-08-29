@@ -44,10 +44,21 @@ export function defineAdapter<C extends CapabilityAPI>(adapter: CapabilityAdapte
 export class CapabilityRegistry {
   private adapters = new Map<string, CapabilityAdapter[]>()
   private fallbacks = new Map<string, string>() // capability id → fallback id
+  private requireds = new Map<string, boolean>() // ★B4：required——缺失阻断（§4）
 
   /** 注册 fallback 关系（capability 描述文件） */
   registerFallback(capability: string, fallback: string | undefined): void {
     if (fallback) this.fallbacks.set(capability, fallback)
+  }
+
+  /** ★B4：注册 required 标记（§4 降级级别——required 缺失阻断流程） */
+  registerRequired(capability: string, required: boolean): void {
+    this.requireds.set(capability, required)
+  }
+
+  /** ★B4：是否 required */
+  isRequired(capability: string): boolean {
+    return this.requireds.get(capability) ?? false
   }
 
   /** 注册 adapter（同 capability+platform 重复 → 报错，编译期约束 §7；按 priority 降序排序） */
@@ -77,6 +88,7 @@ export class CapabilityRegistry {
   clear(): void {
     this.adapters.clear()
     this.fallbacks.clear()
+    this.requireds.clear()
   }
 
   /**
