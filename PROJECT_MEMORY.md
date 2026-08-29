@@ -244,7 +244,7 @@
 
 ## 验证状态（最近一次）
 
-- ✅ `npm run verify` 全绿：**616 单测 / 70 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
+- ✅ `npm run verify` 全绿：**633 单测 / 72 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
 - ✅ 双端构建：web（vue-tsc 零错误 + vite）+ mp（gen-routes → vue-tsc → vite，产出 app.js + 各页四件套 + proteus/ 组件产物 + 共享模块）
 - ✅ 各 @proteus/* 包独立构建（14 个包，prepare 钩子 + esbuild bundle）
 - ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / 模板快照一致性
@@ -262,8 +262,9 @@
 - **组件库 P0（component-plan B1-B8）**：✅ 2026-08 全批收官——16 组件 + 4 runtime 共享模块 + components:audit + 编译器 4 增强（script/watch-props props 源 watch→observers / ref-write 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射 onXxx 钩子警告）；业务组件（player-bar/payment-sheet/login-gate）标注依赖 appBar/支付（v0.6+）
 - **i18n-plan（B1-B3）**：✅ 2026-08——@proteus/i18n（ICU 子集：插值/复数/=N/select/#）+ i18n:check 门禁 + demo；分包加载/完整 ICU/Intl/RTL 标后续
 - **devtools-plan（B1-B2）**：✅ 2026-08——@proteus/devtools-runtime（TraceBus 协议/环形缓冲/脱敏/采样/零开销门控）+ lifecycle/component 两源接入（type-only 注入）；面板 B3-B8 标 v1.0+
-- **npm 发布准备**：✅ changesets 配置齐全（14 包字段完整 + 待发 changeset 7 个）；发布清单见 docs/packages.md（不真实发布）
-- 文档版本号已到 v2.50（git 仓库关联）
+- **npm 发布准备**：✅ changesets 配置齐全（15 包字段完整 + 待发 changeset 7 个）；发布清单见 docs/packages.md（不真实发布）
+- **security-plan（M1-M3）**：✅ 2026-08——@proteus/security（M1 SecretStorage 加密存储：WebCipher/DemoCipher/volatile/redact/migrate；M3 PermissionRegistry + withPermission + PermissionDenied）+ M3 §3 Router 权限守卫自动生成（RouteMeta.permissions + createRouter options.permissions，与 requiresAuth 守卫同层）；M4-M8 标后续
+- 文档版本号已到 v2.51（git 仓库关联）
 
 ## 会话恢复指引（新 LLM 按此顺序阅读）
 
