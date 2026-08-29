@@ -55,6 +55,33 @@ function preprocessStyle(lang: string, content: string): string {
 }
 
 /**
+ * ★module-plan B0 + platform-plan B5 尾：共享模块解析（纯函数可测）
+ * - 相对路径（本地 .ts/.js）→ 产物相对 appDir 路径
+ * - @proteus/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
+ * - 其余裸模块（vue/pinia 等第三方）→ null（不参与）
+ */
+export function resolveSharedModule(appDir: string, absFrom: string, source: string): { file: string; relNoExt: string } | null {
+  if (source.startsWith('@proteus/')) {
+    try {
+      const pkgRoot = path.dirname(require.resolve(`${source}/package.json`))
+      const entry = path.join(pkgRoot, 'dist', 'index.js')
+      if (!fs.existsSync(entry)) return null
+      return { file: entry, relNoExt: `_proteus/${source.replace('@proteus/', '')}` }
+    } catch {
+      return null
+    }
+  }
+  if (!source.startsWith('.')) return null // 其余裸模块（vue/pinia 等第三方）不参与
+  const base = path.resolve(path.dirname(absFrom), source)
+  for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
+    if (fs.existsSync(cand) && !cand.endsWith('.vue')) {
+      return { file: cand, relNoExt: path.relative(appDir, cand).replace(/\\/g, '/').replace(/\.(ts|js)$/, '') }
+    }
+  }
+  return null
+}
+
+/**
  * 提取 builder 函数名：function xxxBuilder(...)
  */
 export function extractBuilderFnName(code: string): string | null {
@@ -215,18 +242,13 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
       }
-      // ★module-plan B0：跨模块引用——扫描页面/组件 import 的相对路径共享模块（.ts/.js，非 .vue）→ esbuild bundle 为 CJS 独立产物；
-      //   页面/组件产物 import → require（相对产物路径）；vue/@proteus/*/npm/.vue 不参与（编译器静态 / usingComponents / 无产物）
+      // ★module-plan B0 + platform-plan B5 尾：跨模块引用——扫描页面/组件 import 的共享模块（相对路径 .ts/.js + @proteus/* 框架包）→ esbuild bundle 为 CJS 独立产物；
+      //   页面/组件产物 import → require（相对产物路径）；vue/第三方 npm/.vue 不参与（编译器静态 / 体积过大跳过 / usingComponents）
       const moduleImportsByFile = new Map<string, Array<{ source: string; requirePath: string }>>()
       const sharedModules = new Set<string>()
-      const resolveShared = (absFrom: string, source: string): string | null => {
-        if (!source.startsWith('.')) return null // 仅相对路径（本地共享模块）
-        const base = path.resolve(path.dirname(absFrom), source)
-        for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
-          if (fs.existsSync(cand) && !cand.endsWith('.vue')) return cand
-        }
-        return null
-      }
+      const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus/* → _proteus/<name>）
+      /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
+      const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null => resolveSharedModule(appDir, absFrom, source)
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
@@ -244,30 +266,32 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           if (imp.typeOnly) continue
           const resolved = resolveShared(file, imp.source)
           if (!resolved) continue
-          sharedModules.add(resolved)
+          sharedModules.add(resolved.file)
+          sharedRelNoExt.set(resolved.file, resolved.relNoExt)
           list.push({ source: imp.source, requirePath: '' }) // requirePath 待 BFS 后回填
         }
         if (list.length) moduleImportsByFile.set(file, list)
       }
-      // BFS：共享模块内部 import（相对路径）继续收集
+      // BFS：共享模块内部 import（相对路径 + @proteus/*）继续收集
       const pending = [...sharedModules]
       while (pending.length) {
         const cur = pending.pop()!
         for (const imp of scanImports(cur)) {
           if (imp.typeOnly) continue
           const resolved = resolveShared(cur, imp.source)
-          if (!resolved || sharedModules.has(resolved)) continue
-          sharedModules.add(resolved)
-          pending.push(resolved)
+          if (!resolved || sharedModules.has(resolved.file)) continue
+          sharedModules.add(resolved.file)
+          sharedRelNoExt.set(resolved.file, resolved.relNoExt)
+          pending.push(resolved.file)
         }
       }
-      // ★B0 边界：含第三方依赖（裸模块 import，如 pinia/vue/@proteus/*）的共享模块树跳过编译
-      // （bundle 体积过大，MVP 仅支持纯逻辑共享模块；Pinia 接入为后续批次，届时配合分包/去重）
+      // ★B0 边界（★放行 @proteus/* 框架包）：含第三方裸依赖（pinia/vue 等非 @proteus/*）的共享模块树跳过编译
+      // （bundle 体积过大，MVP 仅支持纯逻辑 + 框架包共享模块；Pinia 等第三方接入为后续批次）
       const hasThirdParty = new Set<string>()
       for (const sharedFile of sharedModules) {
         for (const imp of scanImports(sharedFile)) {
           if (imp.typeOnly) continue
-          if (!imp.source.startsWith('.')) hasThirdParty.add(sharedFile)
+          if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus/')) hasThirdParty.add(sharedFile)
         }
       }
       // 传递：被有第三方依赖模块 import 的共享模块也跳过（bundle 会把它们一起打进）
@@ -277,23 +301,48 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         skipShared.add(f)
         for (const other of sharedModules) {
           if (other === f) continue
-          const deps = scanImports(other).map((i) => resolveShared(other, i.source)).filter(Boolean)
+          const deps = scanImports(other).map((i) => resolveShared(other, i.source)?.file).filter(Boolean)
           if (deps.includes(f)) markSkip(other)
         }
       }
       for (const f of hasThirdParty) markSkip(f)
       if (skipShared.size) {
-        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑共享模块，bundle 体积过大）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
+        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑 + @proteus/* 框架包共享模块）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
         // 页面侧回退：被跳过模块的 import 移出 moduleImports（compiler 走剥离 + 警告）
         for (const [file, list] of moduleImportsByFile) {
-          moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source) ?? '')))
+          moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source)?.file ?? '')))
         }
       }
-      // 共享模块 → esbuild bundle（全内联，产物自包含，minify）→ CJS 单文件输出
+      // 共享模块 → esbuild bundle（全内联 + @proteus/* external 映射，minify）→ CJS 单文件输出
       for (const sharedFile of sharedModules) {
         if (skipShared.has(sharedFile)) continue
-        const relNoExt = path.relative(appDir, sharedFile).replace(/\\/g, '/').replace(/\.(ts|js)$/, '')
-        const build = await esbuildBuild({ entryPoints: [sharedFile], bundle: true, format: 'cjs', write: false, target: 'es2018', charset: 'utf8', logLevel: 'silent', minify: true })
+        const relNoExt = sharedRelNoExt.get(sharedFile) ?? ''
+        const build = await esbuildBuild({
+          entryPoints: [sharedFile],
+          bundle: true,
+          format: 'cjs',
+          write: false,
+          target: 'es2018',
+          charset: 'utf8',
+          logLevel: 'silent',
+          minify: true,
+          // ★@proteus/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
+          external: ['@proteus/*'],
+          plugins: [
+            {
+              name: 'proteus-pkg-require-path',
+              setup(b) {
+                b.onResolve({ filter: /^@proteus\// }, (args) => {
+                  const pkgRel = `_proteus/${args.path.replace('@proteus/', '')}.js`
+                  const dir = path.posix.dirname(relNoExt)
+                  let rel = path.posix.relative(dir, pkgRel)
+                  if (!rel.startsWith('.')) rel = `./${rel}`
+                  return { path: rel, external: true }
+                })
+              },
+            },
+          ],
+        })
         const code = build.outputFiles[0]?.text ?? ''
         if (!code) {
           console.warn(`[mp-transform] 共享模块编译失败：${relNoExt}`)
@@ -308,9 +357,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         if (!entry) continue
         const pageDir = path.posix.dirname(entry.rel)
         for (const item of list) {
-          const sharedFile = resolveShared(file, item.source)
-          if (!sharedFile) continue
-          const sharedRel = path.relative(appDir, sharedFile).replace(/\\/g, '/').replace(/\.(ts|js)$/, '') + '.js'
+          const shared = resolveShared(file, item.source)
+          if (!shared) continue
+          const sharedRel = `${shared.relNoExt}.js`
           let rel = path.posix.relative(pageDir, sharedRel)
           if (!rel.startsWith('.')) rel = `./${rel}`
           item.requirePath = rel

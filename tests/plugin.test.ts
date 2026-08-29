@@ -2,7 +2,8 @@
 // mp 插件内置预设内联逻辑单测（P4 适配层 + 拆包步骤 5：插件归 @proteus/plugin-vite）
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath } from '../packages/plugin-vite/src/plugin'
+import path from 'node:path'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
@@ -78,6 +79,31 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
       expect(resolvePkgPath('/tmp/project', 'packages/router/src/presets/halfScreen.ts')).toBe(
         '/tmp/project/packages/router/src/presets/halfScreen.ts',
       )
+    })
+  })
+
+  describe('★共享模块解析（resolveSharedModule：@proteus/* 放行 + 第三方跳过）', () => {
+    it('@proteus/* 框架包 → 产物 _proteus/<name>（白名单放行，platform-plan B5 尾）', () => {
+      const r = resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus/capabilities')
+      expect(r?.relNoExt).toBe('_proteus/capabilities')
+      expect(r?.file).toContain('packages/capabilities/dist/index.js')
+    })
+
+    it('相对路径本地共享模块 → 产物相对 appDir 路径', () => {
+      const repoRoot = path.resolve(__dirname, '..')
+      const r = resolveSharedModule(repoRoot, path.join(repoRoot, 'examples/pages/forms.vue'), '../utils/format')
+      expect(r?.relNoExt).toBe('examples/utils/format')
+      expect(fs.existsSync(r?.file ?? '')).toBe(true)
+    })
+
+    it('第三方裸模块（pinia/vue/lodash）→ null（不参与，B0 边界）', () => {
+      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', 'pinia')).toBeNull()
+      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', 'vue')).toBeNull()
+      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', 'lodash')).toBeNull()
+    })
+
+    it('@proteus/* 未构建（无 dist）→ null', () => {
+      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus/ghost')).toBeNull()
     })
   })
 
