@@ -107,3 +107,6 @@ declare const windowWidth: number
 
 /** 调试开关（PROTEUS_DEBUG=1 构建时由 vite define 注入为 true） */
 declare const __PROTEUS_DEBUG__: boolean
+
+/** Skyline 渲染开关（mp 构建时由 vite define 注入 proteus.config.skyline） */
+declare const __PROTEUS_SKYLINE__: boolean

@@ -48,11 +48,11 @@ packages/
 
 ### 步骤 1：config 解耦（前置，不动目录）
 
-- [ ] `setDataBridge` 改工厂 `createSetDataBridge({ batchWindow })`（默认 16，单例保持导出兼容）
-- [ ] `isSkyline()` 改读 `__PROTEUS_SKYLINE__`（mp.d.ts 声明 + vite define 注入）
-- [ ] `platform/index` 改 `createAdapter(isMP)` 工厂（`import.meta.env.MODE` 判断）
-- [ ] 验证：vue-tsc + 198 测试 + 双端构建全绿（行为不变）
-- 规模：~120 行；风险：中（运行时行为，测试兜底）
+- [x] `setDataBridge` 改工厂 `createSetDataBridge({ batchWindow: 16 })`（默认 16，单例导出兼容）
+- [x] `isSkyline()` 改读 `__PROTEUS_SKYLINE__`（mp.d.ts 声明 + vite define 注入 config.skyline）
+- [x] `platform/index` 删 config 依赖：`import.meta.env.MODE === 'mp-weixin'` 直接选择 adapter
+- [x] 验证：vue-tsc + 198 测试 + 双端构建全绿（行为不变）；产物无 define 残留
+- 规模：~120 行；决策：#98；踩坑：测试环境无 vite define → isSkyline 的 `typeof __PROTEUS_SKYLINE__ !== 'undefined'` 守卫（vitest 独立 config 不加载 vite define）
 
 ### 步骤 2：shared 包（adapter + shims）
 

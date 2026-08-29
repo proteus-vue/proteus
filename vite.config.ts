@@ -33,8 +33,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     // 调试开关注入：PROTEUS_DEBUG=1 构建时 __PROTEUS_DEBUG__ = true（runtime/debug 与页面日志共用）
+    // Skyline 开关注入：mp 构建时 __PROTEUS_SKYLINE__ = config.skyline（router/skyline 解耦 config，拆包步骤 1）
     define: {
       __PROTEUS_DEBUG__: process.env.PROTEUS_DEBUG === '1',
+      __PROTEUS_SKYLINE__: isMp && config.skyline,
     },
     plugins: isMp
       ? [
