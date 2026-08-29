@@ -62,6 +62,7 @@
 - `src/compiler/`（★ 编译引擎模块，可独立开源为 `@proteus/compiler`）：`index.ts`（compileVueSfc 入口）/ `template.ts` / `script.ts` / `style.ts` / `validate.ts`（产物自校验）/ `types.ts` / `README.md`（模块边界契约）
 - `src/compiler/transforms/`（★ AI-native 透明定位落地，决策 #65）：编译规则注册表——`types.ts`（TransformRule AI 说明书接口）/ `template.ts`（30 规则）/ `script.ts`（12 规则）/ `style.ts`（5 规则）/ `validate.ts`（3 规则）/ `registry.ts`（list/get/format 查询 API）/ `README.md`（模块契约 + 阶段三演进）；`tests/transforms.test.ts`（10 用例：ID 唯一、字段齐全、映射表覆盖防漂移、API 行为）
 - 决策 trace（★ 决策 #66）：`src/compiler/trace.ts`（收集器 + lineAt）+ `src/compiler/explain.ts`（explainTransform / formatTransformTrace）+ template.ts 的 `TAG_RULE_BY_TAG` 追踪键；`tests/explain.test.ts`（8 用例：ruleId 可解析防漂移 + 典型 SFC 触发预期规则）
+- 底线三循环（★ 决策 #67）：`src/compiler/overrides.ts`（resolveOverrides 生效配置）+ `TransformRuleOverrides`（disabled/mapping/customTags）贯通三转换函数 + proteus.config.ts rules 段（demo-box 演示）+ `.transform-debug/` 转储携带 trace（决策链落盘）；`tests/overrides.test.ts`（17 用例）
 - `vite-plugin-mp-transform.ts`（薄适配层：扫描页面 → 传选项 → emitFile）
 - `tests/mp-transform.test.ts`（18 用例，P6-2 提前落地）
 - 产物：`dist/mp-weixin/pages/*.wxml|.js|.wxss`（与 gen-routes 的 .json 共同构成四件套）
@@ -134,12 +135,13 @@
 64. **git 仓库关联（★首次提交推送）**：仓库 https://github.com/proteus-vue/proteus（组织 proteus-vue）；`git init -b main` + `remote add origin`；新增 `.gitignore`（node_modules/dist/.vite/覆盖率/日志/.env——AppID 敏感信息不入库，git check-ignore 验证生效）；package.json 补 repository/homepage/bugs 字段；getting-started clone 命令改真实地址；待提交 18 项全为源码与文档（node_modules/dist 已排除）；首次提交后按 docs/roadmap.md v0.2 推进（@proteus/compiler 独立包优先）
 65. **项目定位升级：AI-native 透明跨端编译框架（★宪章级决策）**：定位从"跨端框架"升级为 "AI-native 透明"——差异点不再是"跨端"（uni-app/Taro 都在做），而是**编译器对 AI 代理与人类开发者完全透明**。落地：新增 `src/compiler/transforms/` 编译规则注册表——把散落在 template/script/style/validate 的所有转换规则抽为自描述规则（49 条），每条 = 一份 AI 说明书（id/phase/title/what/why/when/example/verify/status/source/决策号）；API：`listTransformRules(phase?)` / `getTransformRule(id)` / `formatTransformRule(rule)` / `formatTransformCatalog()`（经 compiler/index.ts 导出）；防漂移：规则 `mapping` 与 tags.ts 常量（TAG_MAP/EVENT_MAP/SEMANTIC_CLASS）同源引用，`tests/transforms.test.ts`（10 用例）校验键全覆盖 + 值一致 + ID 唯一；README/GUIDE §0.5/compiler.md/roadmap.md 同步定位；阶段二（随 @proteus/compiler 独立包）：规则增加 apply() → 注册表升级为分派层 → explainTransform(source) 决策 trace（详见 src/compiler/transforms/README.md）；本阶段注册表只描述不执行，不动摇 79 单测锁定的编译管线；测试 79 → 89
 66. **决策 trace 落地（★阶段二提前实现）**：explainTransform(source) 输出一份 Vue SFC 实际触发的全部转换规则（决策链路）——透明定位从"静态注册表"升级为"转换过程可观察"。落地：`src/compiler/trace.ts`（TransformTrace 收集器 + lineAt）注入 template/script/style 三个转换函数（`options.trace` 可选，默认零开销，产物与既有单测行为完全一致）；`src/compiler/explain.ts`（explainTransform + formatTransformTrace 按阶段分组渲染）；template 侧 trace 键引用 `TAG_RULE_BY_TAG`（由规则 mapping 反推，只取 tag/ 前缀规则——semantic/base-class 与 event/click-to-tap 的 mapping 键是另一维度，混入会污染标签追踪）；`tests/explain.test.ts`（8 用例：所有 trace ruleId 可解析防漂移 + 典型 SFC 触发预期规则 + v-model 链路成对 + Component/Page 模式 + 渲染）；示例：真实 index.vue 输出 27 template + 10 script + 3 style 决策；README/compiler.md/roadmap v0.3 同步；阶段三：规则 apply() 分派层（随 @proteus/compiler 独立包）；测试 89 → 97
+67. **底线三循环落地（★框架立身之本，宪章级）**：框架的底线 = 三条闭环真实可跑——① AI 能力涨 → AI 写更复杂的 transform → 框架获得新能力；② 编译出问题 → AI 看 dist/ → 定位到哪条 transform → 改规则 → 重编译；③ 用户需求变 → proteus.config.ts 开关 → 行为即时变化。落地：`src/compiler/overrides.ts`（resolveOverrides：TAG_MAP/EVENT_MAP/SEMANTIC_CLASS 常量 + 覆盖补丁合并 + 禁用集；未知规则 ID 编译期警告防笔误）；`TransformRuleOverrides`（disabled / mapping / customTags）加入 CompileOptions + 三转换函数全部改走生效配置（template 的 tagMap/eventMap/semanticClass/disabled 进 SerializeContext；style 的选择器重写正则按生效映射生成；script 的 data/methods/lifecycle/ref/自动 handler/onload 均支持禁用）；`proteus.config.ts` 新增 rules 段（演示 customTags: demo-box → view，showcase.vue 已加 <demo-box> 演示元素）；循环 ② 闭环：`.transform-debug/<file>.json` 转储新增 trace 字段（compileVueSfc 三阶段 trace 合并入 CompileResult.trace），debug 构建 dist 产物 + 决策链一处定位；`tests/overrides.test.ts`（17 用例：customTags/mapping/disabled 各阶段 + trace 反映生效行为 + 未知 ID 警告）；测试 97 → 114
 
 ## 验证状态（最近一次）
 
 - ✅ `npm run build:web`（vue-tsc 零错误 + vite 构建，页面 code-split 为独立 chunk）
 - ✅ `npm run build:mp`（gen-routes → vue-tsc → vite build 全链路，产出 app.js + 各页 wxml/js/wxss 四件套）
-- ✅ `npm test`（97/97：router 15 + mp-transform 45 + runtime 11 + golden 4 + plugin 3 + transforms 10 + explain 8 + e2e-web 8 单独跑）
+- ✅ `npm test`（114/114：router 15 + mp-transform 45 + runtime 11 + golden 4 + plugin 3 + transforms 10 + explain 8 + overrides 17 + e2e-web 8 单独跑）
 - ✅ `npm run test:e2e:web`（8/8：含 tap 点击可见计数用例）
 - ✅ `npm run debug:mp` 全链路日志（正式构建零残留，grep 验证）
 - ✅ `npm run verify`（test + build:web + build:mp 一键全过）

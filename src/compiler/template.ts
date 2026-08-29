@@ -8,10 +8,10 @@ import type {
   ElementNode,
   TemplateChildNode,
 } from '@vue/compiler-dom'
-import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from './tags'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
+import { resolveOverrides } from './overrides'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -103,6 +103,14 @@ interface SerializeContext {
   trace?: TransformTrace
   /** 行号注释 trace 已记录标记（避免每个元素都记一条） */
   lineNoteTraced?: boolean
+  /** 生效的标签映射（tags.ts 常量 + config 覆盖，★底线循环 ①③） */
+  tagMap: Record<string, string>
+  /** 生效的事件映射 */
+  eventMap: Record<string, string>
+  /** 生效的语义基础类 */
+  semanticClass: Record<string, string>
+  /** 被禁用的规则 ID 集合 */
+  disabled: Set<string>
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
@@ -110,17 +118,31 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const hasClick = node.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'on')
   // 导航链接：<a href> / <router-link to>（元素上有 @click 时不作为导航链接，交给事件映射）
   const isNavLink = (node.tag === 'a' || node.tag === 'router-link') && !hasClick
-  let tag = hasVHtml ? 'rich-text' : (TAG_MAP[node.tag] ?? kebabCase(node.tag))
+  // 标签映射（★生效配置：tags.ts 常量 + config 覆盖；规则被禁用则按未注册标签原样输出）
+  const tagRuleId = TAG_RULE_BY_TAG[node.tag]
+  let tag = hasVHtml ? 'rich-text' : (ctx.tagMap[node.tag] ?? kebabCase(node.tag))
   if (node.tag === 'router-link') tag = 'view'
+  if (tagRuleId && ctx.disabled.has(tagRuleId)) {
+    tag = kebabCase(node.tag)
+    ctx.warnings.push(`规则 ${tagRuleId} 已被禁用（rules.disabled），<${node.tag}> 按未注册标签原样输出`)
+  }
   // 决策 trace：标签映射
-  ctx.trace?.add(
-    hasVHtml ? 'tag/rich-text' : node.tag === 'router-link' ? 'tag/router-link' : (TAG_RULE_BY_TAG[node.tag] ?? 'tag/unknown-kebab'),
-    { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${tag}>` },
-  )
+  if (!ctx.disabled.has('tag/unknown-kebab') && !(tagRuleId && ctx.disabled.has(tagRuleId))) {
+    ctx.trace?.add(
+      hasVHtml ? 'tag/rich-text' : node.tag === 'router-link' ? 'tag/router-link' : (TAG_RULE_BY_TAG[node.tag] ?? 'tag/unknown-kebab'),
+      { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${tag}>` },
+    )
+  }
   // 语义标签基础类（h1-h6/p/a → proteus-*，样式侧注入 Web UA 等价默认样式；rich-text 不附加）
-  const baseClass = hasVHtml ? '' : (SEMANTIC_CLASS[node.tag] ?? '')
-  if (baseClass) {
-    ctx.trace?.add('semantic/base-class', { line: node.loc.start.line, before: node.tag, after: baseClass })
+  const baseClass = hasVHtml ? '' : (ctx.semanticClass[node.tag] ?? '')
+  // 语义类随标签规则联动：tag/* 规则被禁用时标签保持原样，基础类也一并取消（避免 class 无意义）
+  const tagDisabled = Boolean(tagRuleId) && ctx.disabled.has(tagRuleId)
+  if (baseClass && (ctx.disabled.has('semantic/base-class') || tagDisabled)) {
+    ctx.warnings.push(`语义基础类已被禁用（${tagDisabled ? `${tagRuleId} 被禁用` : 'semantic/base-class 被禁用'}，rules.disabled），不再附加`)
+  }
+  const effectiveBaseClass = baseClass && !ctx.disabled.has('semantic/base-class') && !tagDisabled ? baseClass : ''
+  if (effectiveBaseClass) {
+    ctx.trace?.add('semantic/base-class', { line: node.loc.start.line, before: node.tag, after: effectiveBaseClass })
   }
   const isInputLike = tag === 'input' || tag === 'textarea'
   const attrs: string[] = []
@@ -130,6 +152,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     if (prop.type === NodeTypes.ATTRIBUTE) {
       const attr = prop as AttributeNode
       if (isNavLink && (attr.name === 'href' || attr.name === 'to' || attr.name === 'route-type')) {
+        if (ctx.disabled.has('nav/navigate-link')) {
+          ctx.warnings.push('规则 nav/navigate-link 已被禁用（rules.disabled），<a> 按普通 view 输出（无导航语义）')
+          break
+        }
         if (attr.name === 'route-type' && attr.value) {
           attrs.push(`data-route-type="${escapeXml(attr.value.content)}"`)
           ctx.trace?.add('nav/route-type', { line: node.loc.start.line, before: `route-type="${attr.value.content}"`, after: `data-route-type="${attr.value.content}"` })
@@ -139,8 +165,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         continue
       }
-      if (attr.name === 'class' && baseClass) {
-        attrs.push(`class="${baseClass}${attr.value ? ' ' + escapeXml(attr.value.content) : ''}"`)
+      if (attr.name === 'class' && effectiveBaseClass) {
+        attrs.push(`class="${effectiveBaseClass}${attr.value ? ' ' + escapeXml(attr.value.content) : ''}"`)
         continue
       }
       attrs.push(attr.value ? `${attr.name}="${escapeXml(attr.value.content)}"` : attr.name)
@@ -151,26 +177,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       const exp = exprContent(dir.exp)
       if (exp.trim().startsWith('{')) {
         ctx.warnings.push('路由链接 :to/:href 对象形式暂不支持（MVP），请改用字符串路径')
-      } else {
+      } else if (!ctx.disabled.has('nav/navigate-link')) {
         attrs.push(`data-url="{{${exp}}}"`)
         hasNavTarget = true
+      } else {
+        ctx.warnings.push('规则 nav/navigate-link 已被禁用（rules.disabled），<a> 按普通 view 输出（无导航语义）')
       }
       continue
     }
     switch (dir.name) {
       case 'if':
+        if (ctx.disabled.has('directive/v-if')) { ctx.warnings.push('规则 directive/v-if 已被禁用（rules.disabled），v-if 已忽略'); break }
         attrs.push(`wx:if="{{${exprContent(dir.exp)}}}"`)
         ctx.trace?.add('directive/v-if', { line: node.loc.start.line, before: `v-if="${exprContent(dir.exp)}"`, after: `wx:if="{{${exprContent(dir.exp)}}}"` })
         break
       case 'else-if':
+        if (ctx.disabled.has('directive/v-else-if')) break
         attrs.push(`wx:elif="{{${exprContent(dir.exp)}}}"`)
         ctx.trace?.add('directive/v-else-if', { line: node.loc.start.line, before: 'v-else-if', after: 'wx:elif' })
         break
       case 'else':
+        if (ctx.disabled.has('directive/v-else')) break
         attrs.push('wx:else')
         ctx.trace?.add('directive/v-else', { line: node.loc.start.line, before: 'v-else', after: 'wx:else' })
         break
       case 'for': {
+        if (ctx.disabled.has('directive/v-for')) { ctx.warnings.push('规则 directive/v-for 已被禁用（rules.disabled），v-for 已忽略'); break }
         const f = parseForExpr(exprContent(dir.exp))
         attrs.push(`wx:for="{{${f.list}}}"`)
         if (f.item) attrs.push(`wx:for-item="${f.item}"`)
@@ -179,13 +211,19 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         break
       }
       case 'on': {
+        if (ctx.disabled.has('event/click-to-tap') && ctx.disabled.has('event/modifier-catch')) {
+          ctx.warnings.push('事件映射规则已全部禁用（rules.disabled），@事件 原样输出')
+          const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
+          attrs.push(`bind${exprContent(dir.arg)}="${handler}"`)
+          break
+        }
         const raw = exprContent(dir.arg)
-        const mapped = EVENT_MAP[raw] ?? raw
+        const mapped = ctx.eventMap[raw] ?? raw
         // 修饰符：运行时 modifiers 是 { content }[]（与声明类型 string[] 不一致，做兼容）
         const mods = (dir.modifiers as unknown as Array<{ content?: string } | string>).map((m) =>
           typeof m === 'string' ? m : (m?.content ?? ''),
         )
-        const isCatch = mods.includes('stop') || mods.includes('prevent')
+        const isCatch = (mods.includes('stop') || mods.includes('prevent')) && !ctx.disabled.has('event/modifier-catch')
         const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
         attrs.push(`${isCatch ? 'catch' : 'bind'}${mapped}="${handler}"`)
         ctx.trace?.add(
@@ -198,23 +236,28 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         const arg = exprContent(dir.arg)
         const exp = exprContent(dir.exp)
         if (arg === 'class') {
+          if (ctx.disabled.has('directive/v-bind-class')) break
           const cls = formatClassBinding(exp, ctx.warnings)
-          attrs.push(`class="${baseClass ? `${baseClass} ` : ''}${cls}"`)
+          attrs.push(`class="${effectiveBaseClass ? `${effectiveBaseClass} ` : ''}${cls}"`)
           ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: cls })
         } else if (arg === 'style') {
+          if (ctx.disabled.has('directive/v-bind-style')) break
           attrs.push(`style="${formatStyleBinding(exp)}"`)
           ctx.trace?.add('directive/v-bind-style', { line: node.loc.start.line, before: `:style="${exp}"`, after: formatStyleBinding(exp) })
         } else if (arg === 'key') {
+          if (ctx.disabled.has('directive/v-bind-key')) break
           if (/^[\w$]+$/.test(exp)) attrs.push(`wx:key="${exp}"`)
           else ctx.warnings.push(`:key="${exp}" 不是简单标识符（MVP），wx:key 已忽略`)
           ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${exp}"` })
         } else {
+          if (ctx.disabled.has('directive/v-bind')) break
           attrs.push(`${arg}="{{${exp}}}"`)
           ctx.trace?.add('directive/v-bind', { line: node.loc.start.line, before: `:${arg}`, after: `${arg}="{{${exp}}}"` })
         }
         break
       }
       case 'model': {
+        if (ctx.disabled.has('directive/v-model')) { ctx.warnings.push('规则 directive/v-model 已被禁用（rules.disabled），v-model 已忽略'); break }
         const model = exprContent(dir.exp)
         if (model && !ctx.vModelBindings.includes(model)) ctx.vModelBindings.push(model)
         if (isInputLike) attrs.push(`value="{{${model}}}"`)
@@ -224,10 +267,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         break
       }
       case 'html':
+        if (ctx.disabled.has('directive/v-html')) { ctx.warnings.push('规则 directive/v-html 已被禁用（rules.disabled），v-html 已忽略'); break }
         attrs.push(`nodes="{{${exprContent(dir.exp)}}}"`)
         ctx.trace?.add('directive/v-html', { line: node.loc.start.line, before: 'v-html', after: 'rich-text nodes' })
         break
       case 'show':
+        if (ctx.disabled.has('directive/v-show-limit')) break
         ctx.warnings.push('v-show 暂不支持（MVP），已忽略，请改用 v-if')
         ctx.trace?.add('directive/v-show-limit', { line: node.loc.start.line, before: 'v-show', after: '（忽略 + 编译期警告）' })
         break
@@ -236,14 +281,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     }
   }
 
-  if (hasNavTarget) {
+  if (hasNavTarget && !ctx.disabled.has('nav/navigate-link')) {
     // 导航链接：绑定点击跳转（handler 由 script 转换自动注入；方法名避免 __ 前缀）
     attrs.push('bindtap="proteusNavigateTo"')
     ctx.usesNavigate = true
     ctx.trace?.add('nav/navigate-link', { line: node.loc.start.line, before: `<${node.tag}>` + (node.tag === 'a' ? ' href/to' : ' to'), after: 'data-url + bindtap="proteusNavigateTo"' })
   }
-  if (baseClass && !attrs.some((a) => a.startsWith('class='))) {
-    attrs.push(`class="${baseClass}"`)
+  if (effectiveBaseClass && !attrs.some((a) => a.startsWith('class='))) {
+    attrs.push(`class="${effectiveBaseClass}"`)
   }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
@@ -295,6 +340,8 @@ export function transformTemplateToWxml(
     filename: opts.filename,
     usesNavigate: false,
     trace: opts.trace,
+    // ★底线循环 ①③：生效配置 = tags.ts 常量 + config 覆盖（规则改写/禁用即时生效）
+    ...resolveOverrides(opts.rules),
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')

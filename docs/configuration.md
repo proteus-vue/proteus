@@ -128,6 +128,23 @@ customRoute: {
 - `rpxRatio: 2`：px→rpx 比例，默认 2（对应 iPhone6 375px = 750rpx 基准）。
 - 注意：`h1-h6/p/a` 的语义基础样式直接以 rpx / em 书写，不受此换算影响。
 
+### rules（★规则覆盖：底线循环 ①③）
+
+> **这是框架的底线能力之一**：改配置即改变编译行为，无需改框架代码。可用规则 ID 由 `listTransformRules()` 枚举（或见 `src/compiler/transforms/`）。
+
+```typescript
+rules: {
+  disabled: ['directive/v-show-limit'],              // 禁用规则（对应输出退化为无转换 + 编译期警告）
+  mapping: { 'tag/link-to-view': { a: 'text' } },    // 改写映射（a → text 而非默认 view）
+  customTags: { 'my-widget': 'view' },               // 新增标签映射（AI 扩展新标签的入口）
+}
+```
+
+- `disabled`：规则 ID 列表。支持 template（`tag/*` / `directive/*` / `event/*` / `nav/*` / `semantic/base-class`）、style（`style/*`）、script（`script/const-to-data` / `script/*-to-methods` / `script/lifecycle-map` / `script/ref-*` / `script/vmodel-handler` / `script/nav-handler` / `script/onload-params`）。
+- `mapping`：按规则 ID 覆盖映射表——`tag/*` → 标签映射；`event/click-to-tap` → 事件映射；`semantic/base-class` → 语义基础类。值合并进 `tags.ts` 常量（customTags 优先级最高）。未知规则 ID 编译期警告（防笔误）。
+- `customTags`：新增 HTML 标签 → 小程序标签。配合 `tag/unknown-kebab` 的逃生舱语义，AI 可随时扩展新标签而不动框架源码。
+- 示例页配套：`examples/pages/showcase.vue` 的 `<demo-box>` 标签演示（config 中取消注释 `customTags: { 'demo-box': 'view' }` 即生效，重新 `npm run build:mp` 即可看到 WXML 变为 `<view>`）。
+
 ## 修改配置后
 
 ```bash

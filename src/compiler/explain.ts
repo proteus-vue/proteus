@@ -7,6 +7,7 @@ import { transformScriptToPage } from './script'
 import { transformStyleToWxss } from './style'
 import { createTrace } from './trace'
 import type { TransformTraceEvent } from './trace'
+import type { TransformRuleOverrides } from './types'
 
 export interface ExplainOptions {
   /** 源文件名（写入 trace 注释） */
@@ -19,6 +20,8 @@ export interface ExplainOptions {
   rpxRatio?: number
   /** 是否启用行号注释（默认 false） */
   annotateLines?: boolean
+  /** 规则覆盖（可选：★底线循环 ①③，与 proteus.config.ts rules 同构） */
+  rules?: TransformRuleOverrides
 }
 
 export interface ExplainResult {
@@ -40,6 +43,7 @@ export function explainTransform(source: string, options: ExplainOptions = {}): 
     ...styleOpts,
     filename: options.filename,
     annotateLines: options.annotateLines,
+    rules: options.rules,
     trace: tplTrace,
   })
   events.push(...tplTrace.events)
@@ -52,6 +56,7 @@ export function explainTransform(source: string, options: ExplainOptions = {}): 
     isComponent: options.isComponent,
     vModelBindings: tplResult.vModelBindings,
     usesNavigate: tplResult.usesNavigate,
+    rules: options.rules,
     trace: scriptTrace,
   })
   events.push(...scriptTrace.events)
@@ -60,7 +65,7 @@ export function explainTransform(source: string, options: ExplainOptions = {}): 
   const styleTrace = createTrace('style')
   transformStyleToWxss(
     descriptor.styles.map((s) => s.content).join('\n'),
-    { ...styleOpts, trace: styleTrace },
+    { ...styleOpts, rules: options.rules, trace: styleTrace },
   )
   events.push(...styleTrace.events)
 

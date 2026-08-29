@@ -2,7 +2,22 @@
 // 编译引擎公共类型 —— 未来独立包 @proteus/compiler 的公开 API 类型
 // 约束：本目录所有代码不得 import vite / proteus.config（保持可独立分发）
 
-import type { TransformTrace } from './trace'
+import type { TransformTrace, TransformTraceEvent } from './trace'
+
+/**
+ * 规则覆盖（★底线循环 ①③）：AI 或 proteus.config.ts 改写 / 禁用编译规则，编译器即时生效
+ * 生效范围：template（标签/事件/语义类映射 + 指令开关）、style（选择器重写/px2rpx/基础样式）、
+ * script（data 提取 / 自动 handler / onload 注入 / ref 重写）
+ */
+export interface TransformRuleOverrides {
+  /** 禁用的规则 ID 列表（如 ['directive/v-show-limit']）：规则不生效，对应输出退化为无转换 + 编译期警告 */
+  disabled?: string[]
+  /** 覆盖映射：规则 ID → 映射补丁（合并进 tags.ts 常量 / 规则自带 mapping）
+   *  tag/*（如 'tag/link-to-view'）→ 标签映射；'event/click-to-tap' → 事件映射；'semantic/base-class' → 语义基础类 */
+  mapping?: Record<string, Record<string, string>>
+  /** 自定义标签映射：新增 HTML 标签 → 小程序标签（如 { 'my-widget': 'view' }）——AI 扩展新标签的入口 */
+  customTags?: Record<string, string>
+}
 
 /** 样式转换选项 */
 export interface StyleTransformOptions {
@@ -12,6 +27,8 @@ export interface StyleTransformOptions {
   rpxRatio: number
   /** 决策 trace 收集器（可选：透明定位阶段二，explainTransform 使用） */
   trace?: TransformTrace
+  /** 规则覆盖（可选：底线循环 ①③） */
+  rules?: TransformRuleOverrides
 }
 
 /** template 转换选项（含反黑盒调试能力） */
@@ -42,8 +59,10 @@ export interface ScriptTransformOptions {
   vModelBindings?: string[]
   /** 模板中是否出现导航链接（生成自动 __navigateTo handler） */
   usesNavigate?: boolean
-  /** 生成的自动 handler 是否附带调试日志（PROTEUS_DEBUG） */
+  /** 自动生成的 handler 是否附带调试日志（PROTEUS_DEBUG，默认 false） */
   debug?: boolean
+  /** 规则覆盖（可选：底线循环 ①③） */
+  rules?: TransformRuleOverrides
   /** 决策 trace 收集器（阶段二，可空） */
   trace?: TransformTrace
 }
@@ -68,6 +87,8 @@ export interface CompileOptions {
   annotateLines?: boolean
   /** 自动生成的 handler 是否附带调试日志（PROTEUS_DEBUG，默认 false） */
   debug?: boolean
+  /** 规则覆盖（可选：底线循环 ①③）：AI/config 改写或禁用规则 */
+  rules?: TransformRuleOverrides
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */
@@ -76,4 +97,6 @@ export interface CompileResult {
   js: string
   wxss: string
   warnings: string[]
+  /** 决策 trace（阶段二：本次编译实际触发的规则，供产物侧调试定位——底线循环 ②） */
+  trace?: TransformTraceEvent[]
 }

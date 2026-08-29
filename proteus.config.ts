@@ -1,5 +1,7 @@
 // proteus.config.ts
 // Proteus 框架统一配置 —— LLM 生成任何模块前必须先读此文件，理解 platform / skyline / pagesDir 等约束
+import type { TransformRuleOverrides } from './src/compiler'
+
 export interface ProteusConfig {
   /** 目标平台 */
   platform: 'mp-weixin' | 'web'
@@ -20,6 +22,11 @@ export interface ProteusConfig {
     /** 内置预设 builders 注册表：name → 预设源码文件（由 mp-transform 插件内联进 app.js 注册） */
     builders: Record<string, string>
   }
+  /**
+   * ★底线循环 ①③：规则覆盖——AI / 开发者按规则 ID 改写或禁用编译规则，改配置即生效、无需改框架代码
+   * 可用规则 ID 见 src/compiler/transforms/（或运行 listTransformRules() 枚举）
+   */
+  rules?: TransformRuleOverrides
   /** 响应式 → setData 桥接策略 */
   setDataBridge: {
     /** 批量合并窗口（ms），防止高频更新风暴 */
@@ -50,6 +57,17 @@ const config: ProteusConfig = {
       slideUp: 'src/router/presets/slideUp.ts',
       scaleDown: 'src/router/presets/scaleDown.ts',
     },
+  },
+  // ★底线循环 ①③：规则覆盖开关（默认空 = 全用默认规则；改这里立即改变编译行为）
+  // 示例：
+  //   disabled: ['directive/v-show-limit'],                    // 禁用某规则
+  //   mapping: { 'tag/link-to-view': { a: 'text' } },          // 改写映射（a → text 而非 view）
+  //   customTags: { 'my-widget': 'view' },                     // 新增标签映射
+  rules: {
+    disabled: [],
+    mapping: {},
+    // customTags 演示：examples/pages/showcase.vue 的 <demo-box> 编译为 <view>（取消注释即生效）
+    // customTags: { 'demo-box': 'view' },
   },
   setDataBridge: {
     batchWindow: 16, // ~1 帧

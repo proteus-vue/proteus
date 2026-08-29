@@ -4,6 +4,7 @@
 import type { ScriptTransformOptions, ScriptTransformResult, StyleTransformOptions } from './types'
 import type { TransformTrace } from './trace'
 import { lineAt } from './trace'
+import { resolveOverrides } from './overrides'
 
 /** 构建期求值开发者自身源码中的字面量表达式（与 babel 插件同信任域） */
 function evalLiteral(expr: string): unknown {
@@ -102,27 +103,31 @@ function extractData(source: string, warnings: string[], trace?: TransformTrace)
 }
 
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
-function extractMethods(source: string, warnings: string[], trace?: TransformTrace): Record<string, string> {
+function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, string> {
   const methods: Record<string, string> = {}
   const fnRe = /function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g
   let m: RegExpExecArray | null
-  while ((m = fnRe.exec(source))) {
-    const name = m[1]
-    const params = m[2]
-    const body = extractBracedBody(source, m.index + m[0].length - 1)
-    trace?.add('script/function-to-methods', { line: lineAt(source, m.index), before: `function ${name}(${params})`, after: `${name}(${params})` })
-    // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明）
-    if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
-    else warnings.push(`函数 ${name} 体解析失败，已跳过`)
+  if (!disabled?.has('script/function-to-methods')) {
+    while ((m = fnRe.exec(source))) {
+      const name = m[1]
+      const params = m[2]
+      const body = extractBracedBody(source, m.index + m[0].length - 1)
+      trace?.add('script/function-to-methods', { line: lineAt(source, m.index), before: `function ${name}(${params})`, after: `${name}(${params})` })
+      // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明）
+      if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
+      else warnings.push(`函数 ${name} 体解析失败，已跳过`)
+    }
   }
   const arrowRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>\s*\{/g
-  while ((m = arrowRe.exec(source))) {
-    const name = m[1]
-    const params = m[2]
-    const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
-    const body = extractBracedBody(source, braceIdx)
-    trace?.add('script/arrow-to-methods', { line: lineAt(source, m.index), before: `const ${name} = (...) =>`, after: `${name}(...)` })
-    if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
+  if (!disabled?.has('script/arrow-to-methods')) {
+    while ((m = arrowRe.exec(source))) {
+      const name = m[1]
+      const params = m[2]
+      const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
+      const body = extractBracedBody(source, braceIdx)
+      trace?.add('script/arrow-to-methods', { line: lineAt(source, m.index), before: `const ${name} = (...) =>`, after: `${name}(...)` })
+      if (body !== null) methods[name] = `${name}(${params}) {\n${body}\n}`
+    }
   }
   return methods
 }
@@ -139,38 +144,46 @@ function numOrZero(expr: string): string {
   return `(${expr} === undefined || ${expr} === null ? 0 : ${expr})`
 }
 
-function rewriteRefAccess(body: string, refNames: Set<string>, trace?: TransformTrace): string {
+function rewriteRefAccess(body: string, refNames: Set<string>, trace?: TransformTrace, disabled?: Set<string>): string {
+  const skip = (id: string) => disabled?.has(id)
   let out = body
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
     // 自增/自减（含前置 ++name.value / --name.value）
-    if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
-      trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ... })` })
+    if (!skip('script/ref-incdec')) {
+      if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
+        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ... })` })
+      }
+      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} + 1; this.setData({ ${name}: ${prop} })`)
+      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} - 1; this.setData({ ${name}: ${prop} })`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} + 1 })`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} - 1 })`)
     }
-    out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} + 1; this.setData({ ${name}: ${prop} })`)
-    out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} - 1; this.setData({ ${name}: ${prop} })`)
-    out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} + 1 })`)
-    out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} - 1 })`)
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
-    if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
-      trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr })` })
+    if (!skip('script/ref-write')) {
+      if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
+        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr })` })
+      }
+      out = out.replace(
+        new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
+        (_m, expr) => `this.setData({ ${name}: ${expr.trim()} })`,
+      )
     }
-    out = out.replace(
-      new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
-      (_m, expr) => `this.setData({ ${name}: ${expr.trim()} })`,
-    )
     // 读取：name.value → this.data.name
-    if (new RegExp(`\\b${name}\\.value\\b`).test(out)) {
-      trace?.add('script/ref-read', { line, before: `${name}.value`, after: `this.data.${name}` })
+    if (!skip('script/ref-read')) {
+      if (new RegExp(`\\b${name}\\.value\\b`).test(out)) {
+        trace?.add('script/ref-read', { line, before: `${name}.value`, after: `this.data.${name}` })
+      }
+      out = out.replace(new RegExp(`\\b${name}\\.value\\b`, 'g'), prop)
     }
-    out = out.replace(new RegExp(`\\b${name}\\.value\\b`, 'g'), prop)
   }
   return out
 }
 /** 生命周期映射：onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad */
-function extractLifecycles(source: string, trace?: TransformTrace): { onReady?: string; onUnload?: string; onLoad?: string } {
+function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>): { onReady?: string; onUnload?: string; onLoad?: string } {
   const out: { onReady?: string; onUnload?: string; onLoad?: string } = {}
+  if (disabled?.has('script/lifecycle-map')) return out
   const hooks = [
     { re: /onMounted\s*\(/g, key: 'onReady' as const },
     { re: /onUnmounted\s*\(/g, key: 'onUnload' as const },
@@ -204,9 +217,11 @@ export function transformScriptToPage(
 ): ScriptTransformResult {
   const warnings: string[] = []
   const trace = extra.trace
-  const data = extractData(source, warnings, trace)
-  const methods = extractMethods(source, warnings, trace)
-  const lifecycles = extractLifecycles(source, trace)
+  // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
+  const disabled = resolveOverrides(extra.rules).disabled
+  const data = disabled.has('script/const-to-data') ? {} : extractData(source, warnings, trace)
+  const methods = extractMethods(source, warnings, trace, disabled)
+  const lifecycles = extractLifecycles(source, trace, disabled)
   const vModelBindings = extra.vModelBindings ?? []
   const refNames = new Set(Object.keys(data))
 
@@ -223,10 +238,11 @@ export function transformScriptToPage(
   }
 
   // v-model 自动 handler：proteusOnXxxInput(e) { this.setData({ xxx: e.detail.value }) }
+  const vmodelDisabled = disabled.has('script/vmodel-handler')
   for (const name of vModelBindings) {
-    lines.push(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
+    if (!vmodelDisabled) lines.push(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
   }
-  if (vModelBindings.length) {
+  if (vModelBindings.length && !vmodelDisabled) {
     trace?.add('script/vmodel-handler', {
       before: `v-model="${vModelBindings.join('", "')}"`,
       after: `proteusOn${vModelBindings.map(capitalize).join(' / proteusOn')}Input（setData 回写）`,
@@ -235,7 +251,7 @@ export function transformScriptToPage(
 
   // 导航链接自动 handler（模板出现 <a href> / <router-link> 时注入，仅 MP 产物存在）
   // 方法名避免 __ 前缀（微信保留前缀）；当前为临时调试版：无条件输出日志（验证通过后回收门控）
-  if (extra.usesNavigate) {
+  if (extra.usesNavigate && !disabled.has('script/nav-handler')) {
     trace?.add('script/nav-handler', { before: '<a href> / <router-link>', after: 'proteusNavigateTo(e)（data-url → wx.navigateTo）' })
     // 注意：生成代码避免数组解构/对象展开（微信 ES5 转译依赖 babel helper 模块）
     // 调试日志统一 [proteus][环节] 格式，仅 debug 构建注入
@@ -261,37 +277,39 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
-  if (lifecycles.onUnload) lines.push(`  onUnload() {\n${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames))}\n  },`)
+  if (lifecycles.onUnload) lines.push(`  onUnload() {\n${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled))}\n  },`)
   if (lifecycles.onLoad) {
-    lines.push(`  onLoad(options) {\n${indentBody(rewriteRefAccess(lifecycles.onLoad, refNames))}\n  },`)
+    lines.push(`  onLoad(options) {\n${indentBody(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled))}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）
-    trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
-    lines.push(
-      [
-        '  onLoad(options) {',
-        ...(extra.debug ? [`    console.log('[proteus][page] onLoad ${extra.file ?? ''}', JSON.stringify(options), Date.now())`] : []),
-        '    const params = {}',
-        '    const keys = Object.keys(options || {})',
-        '    for (let i = 0; i < keys.length; i++) {',
-        '      const k = keys[i]',
-        '      const v = options[k]',
-        '      const s = decodeURIComponent(v)',
-        '      try { params[k] = (s.startsWith("{") || s.startsWith("[")) ? JSON.parse(s) : s } catch { params[k] = s }',
-        '    }',
-        '    this.setData(params)',
-        '  },',
-      ].join('\n'),
-    )
+    if (!disabled.has('script/onload-params')) {
+      trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
+      lines.push(
+        [
+          '  onLoad(options) {',
+          ...(extra.debug ? [`    console.log('[proteus][page] onLoad ${extra.file ?? ''}', JSON.stringify(options), Date.now())`] : []),
+          '    const params = {}',
+          '    const keys = Object.keys(options || {})',
+          '    for (let i = 0; i < keys.length; i++) {',
+          '      const k = keys[i]',
+          '      const v = options[k]',
+          '      const s = decodeURIComponent(v)',
+          '      try { params[k] = (s.startsWith("{") || s.startsWith("[")) ? JSON.parse(s) : s } catch { params[k] = s }',
+          '    }',
+          '    this.setData(params)',
+          '  },',
+        ].join('\n'),
+      )
+    }
   }
 
-  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace)},`)
+  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled)},`)
   lines.push('})')
 
   // 产物级约束（es5-safe 贯穿全部生成代码；component-mode 决定构造器）

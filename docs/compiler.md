@@ -54,6 +54,18 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 - **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析。
 - **演进**：阶段三（随 `@proteus/compiler` 独立包）每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `src/compiler/transforms/README.md`。
 
+## 底线三循环（框架的立身之本）
+
+框架存在的意义是这三条闭环**必须真实可跑**：
+
+| # | 循环 | 机制 | 验证方式 |
+|---|---|---|---|
+| ① | **AI 能力涨 → AI 写更复杂的 transform → 框架自动获得新能力** | 规则注册表（纯数据、AI 说明书、source 指向实现）+ `rules.customTags/mapping` 覆盖 + 纯函数实现（AI 可直接改） | `tests/transforms.test.ts`（覆盖完整性）+ `tests/overrides.test.ts`（覆盖即时生效）+ golden fixtures（回归） |
+| ② | **编译出问题 → AI 看 dist/ → 定位到哪条 transform → 改规则 → 重编译** | `npm run debug:mp`：产物注入源码行号注释 + `.transform-debug/<file>.json` 携带**完整决策链**（ruleId/line/before/after，来自 explainTransform 同源 trace）；产物行号 → 决策链 ruleId → 注册表 AI 说明书 → 改规则/源码 → 重编译 | `tests/explain.test.ts`（trace 可解析）+ 产物自校验（坏产物当场报错） |
+| ③ | **用户需求变 → proteus.config.ts 开关 → 框架行为即时变化** | `rules` 段（disabled / mapping / customTags）由 `resolveOverrides` 解析为生效配置，template/style/script 三转换函数全部走生效配置 | `tests/overrides.test.ts`（17 用例：改写映射 / 禁用规则 / 新增标签 / 决策链反映生效行为） |
+
+三循环的公共底座：**规则注册表 = 编译器能力清单 + AI 说明书 + trace 键**，改动任何一环都有测试兜底，AI 与人类开发者看到的是同一份规则数据。
+
 ## 标签映射（TAG_MAP）
 
 业务代码写标准 HTML 标签，编译器统一映射到小程序标签：

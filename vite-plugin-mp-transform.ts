@@ -16,6 +16,7 @@ import { transform as esbuildTransform } from 'esbuild'
 import type { Plugin } from 'vite'
 import config from './proteus.config'
 import { compileVueSfc } from './src/compiler'
+import type { TransformRuleOverrides } from './src/compiler'
 
 /**
  * 提取 builder 函数名：function xxxBuilder(...)
@@ -77,6 +78,8 @@ async function loadPresetBuilders(
 export interface PluginOptions {
   px2rpx?: boolean
   rpxRatio?: number
+  /** ★底线循环 ①③：规则覆盖（proteus.config.ts rules 段） */
+  rules?: TransformRuleOverrides
 }
 
 function walkVueFiles(dir: string, acc: string[] = []): string[] {
@@ -93,6 +96,7 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
 export default function mpTransform(opts: PluginOptions = {}): Plugin {
   const px2rpx = opts.px2rpx ?? config.style.px2rpx
   const rpxRatio = opts.rpxRatio ?? config.style.rpxRatio
+  const rules = opts.rules ?? config.rules
   const isDebug = process.env.PROTEUS_DEBUG === '1'
   let projectRoot = process.cwd()
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
@@ -132,11 +136,12 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         const source = fs.readFileSync(file, 'utf-8')
         const rel = path.relative(appDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
-        const { wxml, js, wxss, warnings } = compileVueSfc(source, {
+        const { wxml, js, wxss, warnings, trace } = compileVueSfc(source, {
           filename: rel,
           isComponent,
           px2rpx,
           rpxRatio,
+          rules,
           // dev 调试：产物注入源码行号注释 + 自动 handler 调试日志（PROTEUS_DEBUG=1 时开启）
           annotateLines: isDebug,
           debug: isDebug,
@@ -146,11 +151,11 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: js })
         this.emitFile({ type: 'asset', fileName: `${rel}.wxss`, source: wxss })
         if (isDebug) {
-          // 反黑盒：中间产物转储，转换过程完全透明
+          // 反黑盒：中间产物转储，转换过程完全透明（★底线循环 ②：产物 + 决策链 一处定位）
           this.emitFile({
             type: 'asset',
             fileName: `.transform-debug/${rel}.json`,
-            source: JSON.stringify({ file: rel, wxml, js, wxss, warnings }, null, 2),
+            source: JSON.stringify({ file: rel, wxml, js, wxss, warnings, trace }, null, 2),
           })
         }
         if (warnings.length) warningReport.push({ file: rel, warnings })

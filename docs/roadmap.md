@@ -72,7 +72,8 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
 | `computed` / `watch` 编译支持 | `src/compiler/script.ts` | 编译期分析依赖 → data 派生 + `setData` 联动；先做读路径（`{{ computedX }}` 渲染），再做写路径 |
-| 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；阶段三：规则增加 `apply()` 后升级为分派即 trace（随 @proteus/compiler 独立包） |
+| 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus/compiler 独立包 |
+| 规则覆盖（✅ 已实现：底线循环 ①③） | `src/compiler/overrides.ts` + `proteus.config.ts rules` 段 | 已有：disabled / mapping / customTags 贯通三转换函数（17 用例）；阶段三：规则 apply() 升级为完整插件体系（自定义 AST 转换，roadmap v2.0 编译期插件） |
 | 组件系统 | `src/compiler/` 新增组件编译 | `defineProps` / `defineEmits` / `slots` / `defineExpose` → 小程序 `Component({ properties, data, methods })`；`isComponent` 分支已存在（测试已覆盖构造器形态） |
 | scoped CSS | `src/compiler/style.ts` | `:deep()` / 属性选择器等价方案（小程序无 scoped 原生机制，编译期加 data 属性或类前缀） |
 | 指令补全 | `src/compiler/template.ts` | `v-show`（映射 `hidden` 属性/样式）、`:class` 数组语法、事件修饰符（`.once/.self`）、`v-on` 键位 |
