@@ -15,10 +15,9 @@ import Panel from '../components/panel/index.vue'
 
 const total = ref(0)
 
-// 注意：事件处理器不用 ?? 运算符（产物是 JS，真机不支持 ??）；
-// TS 参数标注由编译器剥离（e: {...} → e），可放心写类型
-function onChange(e: { detail?: number }) {
-  const val = e.detail
+// 类型提示全链路：事件处理器参数用 MpEvent<TDetail>（e.detail.value 推导；产物剥离标注）
+function onChange(e: MpEvent<{ value?: number }>) {
+  const val = e.detail.value
   total.value = val === undefined || val === null ? 0 : Number(val)
 }
 </script>

@@ -45,4 +45,30 @@ void badOpts
 const badName: PageOnLoad<'not-a-route'> = {}
 void badName
 
+// ============ 步骤 4：事件处理器类型（MpEvent / MpInputEvent / TapEvent） ============
+// MpEvent/MpInputEvent/TapEvent 是全局声明（src/shims/events.d.ts），无需 import
+
+// ✅ 正例：MpInputEvent → e.detail.value: string
+function onInput(e: MpInputEvent): string {
+  return e.detail.value
+}
+void onInput
+
+// ✅ 正例：TapEvent → e.currentTarget.dataset.url
+function onTap(e: TapEvent): string {
+  return e.currentTarget.dataset.url
+}
+void onTap
+
+// ✅ 正例：泛型 MpEvent<TDetail> 自定义 detail
+function onCustom(e: MpEvent<{ value?: number }>): number | undefined {
+  return e.detail.value
+}
+void onCustom
+
+// ❌ 负例：MpInputEvent 的 detail.value 是 string，赋 number 报错
+// @ts-expect-error detail.value 是 string
+const badInput: number = (null as unknown as MpInputEvent).detail.value
+void badInput
+
 export {}

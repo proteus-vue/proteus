@@ -73,11 +73,11 @@ RouteParamsByName（按路由名索引的参数类型表，生成进 auto-routes
 
 ### 步骤 4：事件处理器类型（shims）
 
-- [ ] `src/shims/events.d.ts`：`MpEvent<TDetail>`（detail / currentTarget.dataset）、`InputEvent = MpEvent<{ value: string }>`（v-model handler）、`TapEvent`
-- [ ] 示例页事件处理器标注 `e: InputEvent` / `e: MpEvent<...>`
-- [ ] 验证：vue-tsc + 误用负例
-- 改动：shims + 示例页
-- 验收：事件参数有类型提示
+- [x] `src/shims/events.d.ts`（全局声明，无 export）：`MpEvent<TDetail>`（detail / target / currentTarget.dataset）、`MpInputEvent`（v-model handler，detail.value: string）、`TapEvent`
+- [x] 示例页标注：components-demo.vue `onChange(e: MpEvent<{ value?: number }>)`（e.detail.value 推导）
+- [x] 验证：vue-tsc（正例 + 单行负例）+ 产物标注剥离零残留（grep 验证）
+- 改动：`src/shims/events.d.ts`、示例页、类型测试
+- 决策：#96；踩坑：① d.ts 用 export 变模块（非全局）——去掉 export ② `InputEvent` 撞 DOM 内置（声明合并灾难）——改名 `MpInputEvent` ③ `@ts-expect-error` 只覆盖紧邻行（多行函数 body 错误漏）——单行负例
 
 ### 步骤 5：端到端验证 + 文档（全链路收官）
 
