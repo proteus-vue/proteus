@@ -43,7 +43,8 @@
     "vite.config.ts",
     "proteus.config.ts",
     "scripts/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "tests/**/*.vue"
   ],
   "exclude": ["node_modules", "dist"]
 }

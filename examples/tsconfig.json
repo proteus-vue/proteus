@@ -32,6 +32,7 @@
     "main.mp.ts",
     "App.vue",
     "shims/**/*.d.ts",
+    "../src/components/**/*.d.ts",
     "vite.config.ts",
     "proteus.config.ts"
   ],
