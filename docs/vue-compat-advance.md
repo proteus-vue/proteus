@@ -86,6 +86,8 @@
 | 1 | 作用域插槽警告 + 规则 + 文档 | 小 | ✅ |
 | 2 | Transition 装饰式进入动画（编译注入 class + 按需 keyframes） | 中 | ✅ |
 | 3 | provide/inject 页面级桥（全局注册表，运行时 + 编译） | 中高 | ✅ |
+| 4 | provide/inject **响应式联动**（裸 ref 订阅/通知，复用 store 桥模式） | 中 | ✅ |
+| 5 | Transition **离开动画** / 作用域插槽运行时等价（规划候选） | 中高 | ⬜ |
 
 依赖：1 → 2 → 3（顺序按工程量递增，各自独立可测）
 
@@ -102,3 +104,47 @@
 - 作用域插槽**运行时等价**（props 传子 + 事件回调自动包装）——当前仅编译期警告
 - Transition **离开动画**（transitionend 控制延迟移除）——当前仅进入动画
 - provide/inject **响应式联动**（注册表存 ref 引用，inject 读到同一 ref）与**页面级隔离**（pageId）——当前值快照 + 全局注册表
+
+---
+
+## 6. Batch 4：provide/inject 响应式联动（★首批，复用 store 桥模式）
+
+**目标**：`provide("key", refName)` 裸 ref 形式 → 值变化自动同步到所有 inject 侧组件（不再手动刷新）
+
+**Vue 语义对齐**（★关键区分）：
+- `provide("user", userInfo)`（传 ref）→ **响应式**：inject 侧模板解包、值联动 → 本批编译为订阅/通知
+- `provide("user", userInfo.value)`（传值）→ **静态快照**：不联动（与 Vue 行为一致，保持 Batch 3 现状）
+- `provide("user", "literal")` → 字面量快照：不联动
+
+**设计**：
+1. **运行时桥升级**（runtime/src/provide-inject.ts）：
+   - 注册表条目升级为 `{ value, subs?: Array<fn> }`（订阅集合内联在 getApp().__proteusProvides 数据结构上，产物可直接操作）
+   - `registerProvide(key, value)`：注册（保留现有语义）；`readInject(key)` 不变
+   - 新增 `subscribeProvide(key, cb)`（返回取消函数）与 `notifyProvide(key)`（遍历执行订阅者）——手写运行时路径用；**编译产物直接操作注册表结构，不 import 本模块**（单文件产物约束，Batch 3 已定）
+2. **编译侧 provide**（script.ts）：
+   - `extractProvideInject` 记录 provide 的 **key ↔ ref 名**（expr 为裸 ref 名时）
+   - 提供裸 ref 时：① onLoad 注册后初始化 `provides.__subs[key] = []`；② **该 ref 的每次写入点**（rewriteRefAccess 的 setData 注入处）追加 `this.proteusNotifyProvide("key")` + `provides["key"] = this.data.<ref>`（ref 名 → 注册表同步，通知前先更新值）；`.value`/字面量形式不注入
+   - 生成方法 `proteusNotifyProvide(key)`：读 `provides.__subs[key]` → 遍历执行（ES5：索引循环）
+3. **编译侧 inject**（script.ts）：
+   - attached 里从快照 setData 升级为**订阅**：`provides.__subs[key].push(function(){ this.setData({ x: provides[key] }) })`（闭包捕获 that，ES5）
+   - 组件 `detached` 注入取消订阅（索引移除，防泄漏）；页面 onUnload 同理（页面 inject 场景）
+   - 订阅回调内的 `this` 用外层 `var self = this` 捕获（ES5 安全）
+4. **规则**：`script/provide-inject` 说明书补响应式联动语义（why/when/example 更新）
+5. **边界**：
+   - 仅**裸 ref** 触发联动；**页面级隔离（pageId）继续遗留**（本批不做）
+   - 联动通知发生在 ref 写入点（编译期已知），与 computed/watch 联动共用注入点模式
+   - 组件间 provide（跨组件层级）保持 Batch 3 现状（created/attached 顺序正确）
+
+**验收**：页面 `provide("user", userInfo)` + 组件 `inject` → ref 写入后组件 setData 自动更新（产物含 proteusSyncProvide + 订阅）；`.value` 形式零联动（回归）；运行时桥 subscribeProvide/notifyProvide 单测；全量测试全绿 + 双端构建；demo 页加联动按钮验证
+
+**已落地**（2026-08）：
+1. **运行时桥**（runtime/src/provide-inject.ts）：注册表加 `__subs` 保留键（订阅集合 `{ k, fn }[]`）；`subscribeProvide(key, cb)`（返回幂等取消）/ `notifyProvide(key)`；`provideCount()` 过滤 `__subs` 保留键；结构向后兼容 Batch 3（值仍直接存 `provides[key]`，静态提供零改动）
+2. **编译**（script.ts）：
+   - `buildProvideInject`：裸 ref 提供（expr 在 data 中）→ `provideRefs`（ref→key）+ 注册块后初始化 `provides.__subs[key] = []`；inject 块追加订阅（`const __self = this` + 每个 key 守卫块：仅订阅已初始化 `__subs` 的 key，静态/未注册 key 保持快照；`__proteusSubs` 记录订阅供取消）
+   - `rewriteRefAccess` 新增 `providedRefs` 参数：ref 写入点（赋值 + 4 种自增/自减）追加 `; this.proteusSyncProvide("key", "ref")`（setData/watch 之后，`this.data[ref]` 已同步）
+   - 生成 `proteusSyncProvide(key, ref)`（同步 `p[key] = this.data[ref]` + 遍历 `__subs[key]` 通知，ES5 索引循环）与 `proteusUnsubscribeProvide()`（按引用 indexOf/splice 移除，防泄漏）
+   - 挂载：组件 inject → `detached()` 取消；页面 inject → 显式 onUnload 前置取消 / 无则生成承载 onUnload；组件模式不生成 onUnload（生命周期差异）
+3. **语义对齐 Vue**：`provide("k", refName)` 传 ref → 响应式联动；`provide("k", refName.value)` / 字面量 → 静态快照（`.value` 形式零联动回归测试）
+4. **验证**：测试 +5 → 382 全绿；demo（provide-inject-demo）改裸 ref 联动 + 切换按钮，产物确认（onLoad __subs 初始化 + changeUser 写入点 proteusSyncProvide + 组件 attached 订阅/detached 取消）
+
+---

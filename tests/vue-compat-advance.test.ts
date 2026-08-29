@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src'
 import { getTransformRule } from '../packages/compiler/src/transforms/registry'
-import { registerProvide, readInject, clearProvides, provideCount } from '../packages/runtime/src/provide-inject'
+import { registerProvide, readInject, clearProvides, provideCount, subscribeProvide, notifyProvide } from '../packages/runtime/src/provide-inject'
 
 const compile = (src: string, name = 'vca.vue'): { warnings: string[]; wxml: string; js: string; wxss: string } => {
   const r = compileVueSfc(src, { filename: name })
@@ -106,5 +106,58 @@ describe('Batch 3：provide/inject 页面级注入桥（全局注册表）', () 
     const rule = getTransformRule('script/provide-inject')
     expect(rule).toBeDefined()
     expect(rule!.why).toContain('#117')
+  })
+})
+
+describe('Batch 4：provide/inject 响应式联动（裸 ref 订阅/通知）', () => {
+  beforeEach(() => clearProvides())
+
+  it('页面提供裸 ref → __subs 初始化 + ref 写入点注入 proteusSyncProvide（值同步 + 通知）', () => {
+    const r = compile('<script setup>\nconst user = ref({ name: "a" })\nprovide("user", user)\nfunction change() { user.value = { name: "b" } }\n</script>')
+    // 注册 + 订阅集合初始化
+    expect(r.js).toContain('provides["user"] = this.data.user')
+    expect(r.js).toContain('if (!provides.__subs) provides.__subs = {}; if (!provides.__subs["user"]) provides.__subs["user"] = []')
+    // ref 写入点联动（setData 后同步注册表 + 通知）
+    expect(r.js).toContain('this.proteusSyncProvide("user", "user")')
+    expect(r.js).toContain('proteusSyncProvide(key, ref) {')
+  })
+
+  it('provide .value / 字面量 → 静态快照零联动（Vue 语义回归）', () => {
+    const r = compile('<script setup>\nconst user = ref({ name: "a" })\nprovide("user", user.value)\nprovide("ver", 1)\n</script>')
+    expect(r.js).not.toContain('__subs')
+    expect(r.js).not.toContain('proteusSyncProvide')
+  })
+
+  it('页面 inject → 订阅 __subs[key]（值变化 setData 刷新）+ onUnload 取消', () => {
+    const r = compile('<script setup>\nconst x = inject("x")\n</script>')
+    expect(r.js).toContain('const __self = this')
+    expect(r.js).toContain('if (provides.__subs && provides.__subs["x"]) {')
+    expect(r.js).toContain('fn: function () { __self.setData({ x: provides["x"] }) }')
+    expect(r.js).toContain('proteusUnsubscribeProvide() {')
+    expect(r.js).toContain('onUnload() {')
+  })
+
+  it('组件 inject → attached 订阅 + detached 取消（防全局注册表回调泄漏）', () => {
+    const r = compileComponent('<script setup>\nconst x = inject("x")\n</script>')
+    expect(r.js).toContain('detached() {')
+    expect(r.js).toContain('this.proteusUnsubscribeProvide()')
+    expect(r.js).not.toContain('onUnload(options)')
+  })
+
+  it('运行时桥：subscribeProvide 订阅 + notifyProvide 通知 + 取消幂等', () => {
+    clearProvides()
+    registerProvide('n', 1)
+    const seen: number[] = []
+    const cancel = subscribeProvide('n', () => seen.push(readInject('n') as number))
+    notifyProvide('n')
+    expect(seen).toEqual([1])
+    registerProvide('n', 2)
+    notifyProvide('n')
+    expect(seen).toEqual([1, 2])
+    cancel()
+    cancel() // 幂等
+    notifyProvide('n')
+    expect(seen).toEqual([1, 2])
+    clearProvides()
   })
 })

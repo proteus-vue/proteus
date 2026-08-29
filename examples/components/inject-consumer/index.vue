@@ -4,6 +4,7 @@
 import { ref, inject } from 'vue'
 
 // 页面 provide → 组件 inject（深层嵌套组件同样生效：全局注册表桥）
+// ★Batch 4：订阅 __subs[key]——提供侧 ref 写入 → 本组件自动 setData（裸 ref 提供才联动）
 const user = inject('demo-user')
 // inject 默认值：未注册时取默认（编译为 ES5 三元：provides[k] === undefined ? def : provides[k]）
 const greeting = inject('demo-greeting', '默认问候语')

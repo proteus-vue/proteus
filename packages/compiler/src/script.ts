@@ -53,30 +53,55 @@ function extractProvideInject(
  * 生成 provide/inject 运行时注入块（getApp().__proteusProvides 全局注册表，ES5 安全，无缩进由调用方 indentBody）
  * - page：页面 onLoad 单函数合并块（registry 声明一次 + provide + inject）
  * - provide：组件 created 块（先于子组件 attached 注册）
- * - inject：组件 attached 块（computed/immediate-watch 之后 setData）
+ * - inject：组件 attached 块（computed/immediate-watch 之后 setData + 订阅）
  * provide 值表达式重写：裸 ref 名 / ref.value → this.data.<name>（ref 编译为 data 字段）
+ * ★Batch 4：裸 ref 提供 → provideRefs（ref→key）+ 注册表 __subs 初始化（写入点联动通知）；
+ *   inject → 订阅 __subs[key]（值变化 setData 刷新）；.value/字面量保持静态快照（Vue 语义）
  */
 function buildProvideInject(
   provides: Array<{ key: string; expr: string }>,
   injects: Array<{ name: string; key: string; def?: string }>,
   data: Record<string, unknown>,
   computeds: Record<string, ComputedInfo>,
-): { page: string; provide: string; inject: string } {
+): { page: string; provide: string; inject: string; provideRefs: Map<string, string> } {
   const registryLine = 'const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {}))'
+  const provideRefs = new Map<string, string>() // 裸 ref 名 → key（写入点联动通知用）
   const pLines: string[] = []
   for (const p of provides) {
     let expr = p.expr
     // ref.value → this.data.ref（读取重写，与 rewriteRefAccess 读取分支一致）
     const vm = expr.match(/^([A-Za-z_$][\w$]*)\.value$/)
     if (vm && (vm[1] in data || vm[1] in computeds)) expr = `this.data.${vm[1]}`
-    else if (expr in data) expr = `this.data.${expr}` // 裸 ref 名 / data 字段
+    else if (expr in data) {
+      expr = `this.data.${expr}` // 裸 ref 名 / data 字段
+      // ★Batch 4：裸 ref 提供 → 响应式联动（Vue 语义：传 ref 引用联动；.value 是静态快照不联动）
+      provideRefs.set(p.expr, p.key)
+    }
     pLines.push(`provides[${JSON.stringify(p.key)}] = ${expr}`)
+    if (provideRefs.has(p.expr)) {
+      // 初始化订阅集合（proteusSyncProvide 通知 / inject 订阅读写此结构）
+      pLines.push(`if (!provides.__subs) provides.__subs = {}; if (!provides.__subs[${JSON.stringify(p.key)}]) provides.__subs[${JSON.stringify(p.key)}] = []`)
+    }
   }
   const iLines: string[] = []
   for (const inj of injects) {
     const read = `provides[${JSON.stringify(inj.key)}]`
     const value = inj.def === undefined ? read : `(${read} === undefined ? ${inj.def} : ${read})`
     iLines.push(`this.setData({ ${inj.name}: ${value} })`)
+  }
+  if (injects.length) {
+    // ★Batch 4：订阅响应式联动——提供侧 ref 写入（proteusSyncProvide 通知）→ setData 刷新；
+    // 仅订阅已初始化 __subs 的 key（静态提供 / 未注册 key 保持快照）；__proteusSubs 供 detached/onUnload 取消
+    iLines.push('const __self = this')
+    for (const inj of injects) {
+      const read = `provides[${JSON.stringify(inj.key)}]`
+      iLines.push(`if (provides.__subs && provides.__subs[${JSON.stringify(inj.key)}]) {`)
+      iLines.push(`  const __sub = { k: ${JSON.stringify(inj.key)}, fn: function () { __self.setData({ ${inj.name}: ${read} }) } }`)
+      iLines.push('  if (!this.__proteusSubs) this.__proteusSubs = []')
+      iLines.push('  this.__proteusSubs.push(__sub)')
+      iLines.push(`  provides.__subs[${JSON.stringify(inj.key)}].push(__sub)`)
+      iLines.push('}')
+    }
   }
   // 页面单函数合并：registry 仅声明一次
   const pageLines: string[] = []
@@ -86,6 +111,7 @@ function buildProvideInject(
     page: pageLines.length ? pageLines.join('\n') : '',
     provide: pLines.length ? `${registryLine}\n${pLines.join('\n')}` : '',
     inject: iLines.length ? `${registryLine}\n${iLines.join('\n')}` : '',
+    provideRefs,
   }
 }
 
@@ -559,6 +585,7 @@ function rewriteRefAccess(
   watches: Record<string, WatchInfo> = {},
   emitEnabled = false,
   propsVar?: string,
+  providedRefs?: Map<string, string>,
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
@@ -591,15 +618,19 @@ function rewriteRefAccess(
       ? `const ${w.deps.map((d) => `old${capitalize(d)} = this.data.${d}`).join(', ')}; `
       : ''
     const tail = watchTail(w)
+    // ★Batch 4：裸 ref 被 provide → 写入后同步注册表值 + 通知订阅者（proteusSyncProvide 由 transformScriptToPage 生成）
+    const sync = providedRefs && providedRefs.get(name)
+      ? `; this.proteusSyncProvide(${JSON.stringify(providedRefs.get(name))}, ${JSON.stringify(name)})`
+      : ''
     // 自增/自减（含前置 ++name.value / --name.value：前置需先写 this.data，表达式值 = 新值）
     if (!skip('script/ref-incdec')) {
       if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
         trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch || w ? ' + 派生/联动' : ''} })` })
       }
-      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}`)
-      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w))}${tail}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}`)
+      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}${sync}`)
+      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}${sync}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w))}${tail}${sync}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}${sync}`)
     }
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
     if (!skip('script/ref-write')) {
@@ -608,7 +639,7 @@ function rewriteRefAccess(
       }
       out = out.replace(
         new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
-        (_m, expr) => `${oldSave}${writeSetData(name, expr.trim(), patch, Boolean(w))}${tail}`,
+        (_m, expr) => `${oldSave}${writeSetData(name, expr.trim(), patch, Boolean(w))}${tail}${sync}`,
       )
     }
     // 读取：name.value → this.data.name
@@ -770,6 +801,7 @@ export function transformScriptToPage(
   const refNames = new Set(Object.keys(data))
 
   // ★vue-compat-advance Batch 3：provide/inject 提取 + 注入块构建（禁用规则时整体跳过）
+  // ★Batch 4：裸 ref 提供 → provideRefs（ref→key），ref 写入点同步注册表 + 通知订阅者；inject 侧订阅 __subs
   const piEnabled = !disabled.has('script/provide-inject')
   const { provides, injects } = piEnabled ? extractProvideInject(source) : { provides: [], injects: [] }
   const piBlocks = buildProvideInject(provides, injects, data, computeds)
@@ -779,6 +811,9 @@ export function transformScriptToPage(
       after: '页面 onLoad / 组件 created+attached 注入 getApp().__proteusProvides 全局注册表读写（MVP 值快照，非响应式）',
     })
   }
+  // ★Batch 4：提供侧联动（proteusSyncProvide 生成 + ref 写入点注入）与 inject 侧取消订阅（proteusUnsubscribeProvide）
+  const providedRefs = piEnabled ? piBlocks.provideRefs : new Map<string, string>()
+  const hasInjects = piEnabled && injects.length > 0
 
   const lines: string[] = []
   if (extra.file) lines.push(`// ${extra.file}（Proteus mp-transform 编译产物）`)
@@ -842,14 +877,23 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
-  if (lifecycles.onUnload) lines.push(`  onUnload() {
-${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}
+  if (lifecycles.onUnload) {
+    // ★Batch 4：页面级 inject 订阅取消（前置；onUnload 显式存在时注入取消调用）
+    const unloadBody = rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs)
+    lines.push(`  onUnload() {
+${indentBody(hasInjects ? `this.proteusUnsubscribeProvide()\n${unloadBody}` : unloadBody)}
   },`)
+  } else if (hasInjects && !extra.isComponent) {
+    // 页面级 inject 订阅但无显式 onUnload：生成承载取消的 onUnload（组件模式用 detached，见组件分支）
+    lines.push(`  onUnload() {
+    this.proteusUnsubscribeProvide()
+  },`)
+  }
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
   if (extra.isComponent) {
@@ -860,10 +904,14 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }
+    // ★Batch 4：组件级 inject 订阅取消（attached 订阅 → detached 移除，防全局注册表回调泄漏）
+    if (hasInjects) {
+      lines.push(`  detached() {\n    this.proteusUnsubscribeProvide()\n  },`)
+    }
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：computed 初始化 + immediate watch + provide/inject 注入在方法体前
     const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
-    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)
+    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -905,17 +953,17 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
 
   for (const [name, m] of Object.entries(methods)) {
     if (extra.debug) lines.push(`  // @${m.line} ${name}()`)
-    pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar)},`, m.line)
+    pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs)},`, m.line)
   }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   for (const w of Object.values(watches)) {
-    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs))}\n  },`
     pushMapped(`  ${src}`, w.line)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {
     if (!c.setter) continue
-    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs))}\n  },`
     pushMapped(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发
@@ -940,6 +988,38 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     pushMapped(`  ${ih.name}(e) {`, 1)
     pushMapped(`    ${ih.code}`, 1)
     pushMapped(`  },`, 1)
+  }
+  // ★vue-compat-advance Batch 4：provide/inject 响应式联动辅助方法
+  if (providedRefs.size > 0) {
+    // 提供侧：ref 写入点（rewriteRefAccess 注入）调用——同步注册表值 + 通知订阅者（inject 侧 setData 刷新）
+    lines.push(
+      '  proteusSyncProvide(key, ref) {',
+      '    const p = getApp().__proteusProvides',
+      '    if (!p) return',
+      '    p[key] = this.data[ref]',
+      '    const subs = p.__subs && p.__subs[key]',
+      '    if (!subs) return',
+      '    for (let i = 0; i < subs.length; i++) subs[i]()',
+      '  },',
+    )
+  }
+  if (hasInjects) {
+    // inject 侧：取消订阅（组件 detached / 页面 onUnload 调用；按引用索引移除防泄漏）
+    lines.push(
+      '  proteusUnsubscribeProvide() {',
+      '    const p = getApp().__proteusProvides',
+      '    if (!p || !p.__subs || !this.__proteusSubs) return',
+      '    for (let i = 0; i < this.__proteusSubs.length; i++) {',
+      '      const s = this.__proteusSubs[i]',
+      '      const list = p.__subs[s.k]',
+      '      if (list) {',
+      '        const idx = list.indexOf(s.fn)',
+      '        if (idx >= 0) list.splice(idx, 1)',
+      '      }',
+      '    }',
+      '    this.__proteusSubs = null',
+      '  },',
+    )
   }
   lines.push('})')
 
