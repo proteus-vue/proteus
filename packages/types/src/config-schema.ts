@@ -67,7 +67,31 @@ export const proteusConfigSchema = {
 
 export type ProteusConfigSchema = typeof proteusConfigSchema
 
-/** 序列化 JSON（generate 命令落盘内容） */
+/** 序列化 JSON（generate 命令落盘内容；含扩展字段） */
 export function proteusConfigSchemaJson(): string {
-  return JSON.stringify(proteusConfigSchema, null, 2)
+  return JSON.stringify(getConfigSchema(), null, 2)
+}
+
+// ============ B6 Schema Registry（可扩展，零 zod） ============
+
+/** 注册的扩展字段：key → JSON Schema 片段（插件/业务扩展配置，不修改核心 schema） */
+const schemaExtensions: Record<string, unknown> = {}
+
+/**
+ * 注册自定义配置字段（B6：插件/业务扩展 ProteusConfig，不修改核心 schema）
+ * fragment 为 JSON Schema 片段（如 { type: 'string' }）；generate types 输出时自动合并
+ */
+export function extendConfigSchema(key: string, fragment: unknown): void {
+  schemaExtensions[key] = fragment
+}
+
+/** 合并后的完整 schema（基础 + 扩展）；generate types / 校验消费 */
+export function getConfigSchema(): Record<string, unknown> {
+  return {
+    ...proteusConfigSchema,
+    properties: {
+      ...proteusConfigSchema.properties,
+      ...schemaExtensions,
+    },
+  }
 }

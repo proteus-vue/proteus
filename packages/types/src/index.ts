@@ -17,3 +17,9 @@ export type RouteTransition = 'slideUp' | 'slideDown' | 'halfScreen' | 'scaleDow
 
 export { proteusConfigSchema } from './config-schema'
 export type { ProteusConfigSchema } from './config-schema'
+export { proteusConfigSchemaJson, extendConfigSchema, getConfigSchema } from './config-schema'
+export { Brand } from './brand'
+export type { StoreId, ModuleDomain, RouteName, CapabilityId } from './brand'
+export { asStoreId, asModuleDomain, asRouteName, asCapabilityId } from './brand'
+export { CONFIG_VERSION, configMigrations, migrateConfig, configNeedsMigration } from './migration'
+export type { Migration } from './migration'
