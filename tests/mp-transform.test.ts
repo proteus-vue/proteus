@@ -209,6 +209,21 @@ function setN() {
     transformScriptToPage('watch(() => other.value, (n) => { a(n) })', opts)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('未在顶层 data 中定义'))
   })
+
+  it('computed 写路径：对象形式 get/set → proteusSetX 方法（setter 内 ref 写入照常重写）', () => {
+    const src = 'const count = ref(0)\nconst double = computed({\n  get: () => count.value * 2,\n  set: (v) => { count.value = v / 2 },\n})\nfunction setD() {\n  double.value = 10\n}'
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusSetDouble(v) {')
+    expect(js).toContain('this.data.count = v / 2; this.setData({ count: this.data.count, double: this.data.count * 2 })')
+    expect(js).toContain('this.proteusSetDouble(10)')
+  })
+
+  it('computed 写路径：只读（无 setter）赋值 → 注释忽略（产物无副作用）', () => {
+    const src = 'const count = ref(0)\nconst ro = computed(() => count.value + 1)\nfunction bad() {\n  ro.value = 5\n}'
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('只读（无 setter），赋值已忽略')
+    expect(js).not.toContain('ro.value = 5')
+  })
 })
 
 describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {

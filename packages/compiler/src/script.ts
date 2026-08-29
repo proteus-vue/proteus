@@ -68,13 +68,15 @@ function extractInitializer(source: string, valueStart: number): string {
   return source.slice(valueStart, i).trim()
 }
 
-/** computed 派生字段信息（v0.3 读路径：编译期把 getter 转 data 派生） */
+/** computed 派生字段信息（v0.3 读路径 + v0.3 尾写路径：编译期把 getter 转 data 派生） */
 interface ComputedInfo {
   name: string
   /** getter 表达式中依赖的 ref 名（x.value → x） */
   deps: string[]
   /** 转写后表达式（x.value → this.data.x），供 setData 合并重算 */
   expr: string
+  /** 显式 setter（对象形式 computed({ get, set }) → proteusSetX 方法；无 = 只读） */
+  setter?: { param: string; body: string }
 }
 
 /** watch 信息（v0.3 起：单 ref / 数组源 / 函数源，依赖写入后自动调用回调） */
@@ -220,12 +222,25 @@ function extractComputedFromInit(
   data: Record<string, unknown>,
   warnings: string[],
 ): ComputedInfo | null {
-  // 仅支持 computed(() => 表达式) 箭头简写 + 表达式体（块体/function 形式警告不支持）
-  const m = init.match(/^computed\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
-  if (!m) return null
-  const rawExpr = m[1]
-  // 块体（() => { return ... }）不是表达式体：{ 开头需拦截（否则生成 { return ... } 坏表达式）
-  if (rawExpr.trim().startsWith('{')) return null
+  // 箭头简写：computed(() => 表达式)（表达式体；块体拦截）
+  const arrow = init.match(/^computed\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
+  // 对象形式（v0.3 尾写路径）：computed({ get: () => expr[, set: (v) => { body }] })
+  let rawExpr: string | undefined
+  let setter: { param: string; body: string } | undefined
+  if (arrow) {
+    rawExpr = arrow[1]
+    if (rawExpr.trim().startsWith('{')) return null // 块体拦截
+  } else {
+    const objM = init.match(/^computed\s*\(\s*\{/)
+    if (!objM) return null
+    const body = extractBracedBody(init, (objM.index ?? 0) + objM[0].length - 1)
+    if (body === null) return null
+    const getM = body.match(/\bget\s*:\s*\(\)\s*=>\s*([\s\S]*?)(?=,\s*\bset\s*:|$)/)
+    rawExpr = getM?.[1]?.trim()
+    if (!rawExpr || rawExpr.startsWith('{')) return null
+    const setM = body.match(/\bset\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\}/)
+    if (setM) setter = { param: setM[1].trim(), body: setM[2] }
+  }
   const deps = [...new Set(Array.from(rawExpr.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
   const missing = deps.filter((d) => !(d in data))
   if (missing.length) {
@@ -235,7 +250,7 @@ function extractComputedFromInit(
   }
   // 转写：x.value → this.data.x（与 ref 读取重写一致）
   const expr = rawExpr.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
-  return { name, deps, expr }
+  return { name, deps, expr, setter }
 }
 
 /** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 */
@@ -420,6 +435,21 @@ function rewriteRefAccess(
   if (emitEnabled) out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
   if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
+  // computed 写路径（v0.3 尾）：x.value = v → setter 方法调用；只读（无 setter）→ 注释忽略
+  for (const [cname, c] of Object.entries(computeds)) {
+    if (!new RegExp(`\\b${cname}\\.value\\s*=`).test(out)) continue
+    if (c.setter) {
+      out = out.replace(
+        new RegExp(`\\b${cname}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
+        (_m, expr) => `this.proteusSet${capitalize(cname)}(${expr.trim()})`,
+      )
+    } else {
+      out = out.replace(
+        new RegExp(`\\b${cname}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
+        () => `/* computed ${cname} 只读（无 setter），赋值已忽略 */`,
+      )
+    }
+  }
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
@@ -708,6 +738,12 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
   for (const w of Object.values(watches)) {
     const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
     pushMapped(`  ${src}`, w.line)
+  }
+  // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
+  for (const [cname, c] of Object.entries(computeds)) {
+    if (!c.setter) continue
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
+    pushMapped(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发
   for (const h of extra.selfHandlers ?? []) {

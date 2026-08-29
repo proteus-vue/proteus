@@ -71,7 +71,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
-| `computed` / `watch` 编译支持（✅ 读路径 + watch 全源，决策 #76/#78/#89） | `packages/compiler/src/script.ts` | 已有：`computed(() => 表达式)` → data 派生字段（onLoad 初始化 + 依赖写入 setData 合并重算）；`watch` 单 ref / 数组源 `[a,b]` / 函数源 `() => expr` → proteusWatch 方法（写入 setData 后自动调用 + immediate 初始化；多源回调数组 + 旧值逐个保存）；待做：computed 写路径（显式 setter） |
+| `computed` / `watch` 编译支持（✅ 读路径 + 写路径 + watch 全源，决策 #76/#78/#89/#90） | `packages/compiler/src/script.ts` | 已有：`computed(() => 表达式)` / `computed({ get, set })` → data 派生字段 + proteusSetX setter 方法（只读赋值注释忽略）；`watch` 单 ref / 数组源 / 函数源 → proteusWatch 方法（写入联动 + immediate；多源回调数组） |
 | 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus/compiler 独立包 |
 | 规则覆盖（✅ 已实现：底线循环 ①③） | `src/compiler/overrides.ts` + `proteus.config.ts rules` 段 | 已有：disabled / mapping / customTags 贯通三转换函数（17 用例）；阶段三：规则 apply() 升级为完整插件体系（自定义 AST 转换，roadmap v2.0 编译期插件） |
 | 组件系统（✅ 已实现，决策 #79） | `packages/compiler/` + `scripts/gen-routes.ts` | 已有：defineProps → Component properties、defineEmits + emit() → triggerEvent、<slot> 透传、组件模式 attached 生命周期；父模板自定义标签 + 事件 bind: 冒号形式 + **usingComponents 自动注入 page.json**（gen-routes 扫描模板 + 组件目录约定）；TS 参数标注编译期剥离；待做：defineExpose、TS 泛型 defineProps、组件 usingComponents 嵌套 |
