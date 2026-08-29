@@ -157,12 +157,15 @@ Component({
 |---|---|
 | `@click` | `bindtap` |
 | `@click.stop` / `.prevent` | `catchtap` |
+| `@click.self` | `bindtap="proteusSelfXxx"`（包装：`e.target === e.currentTarget` 才触发；v0.3 尾） |
+| `@click.once` | `bindtap="proteusOnceXxx"`（包装：`data` 标记首次触发后不再触发；v0.3 尾） |
 | `@input` / `@change` / `@focus` / `@blur` | 同名 |
 | `@touchstart` / `@touchmove` / `@touchend` | 同名 |
-| `@longpress` / `@confirm` / `@submit` | 同名 |
+| `@longpress` / `@confirm` / `@submit` / `@scroll` | 同名 |
 
 - 事件处理器仅支持**简单方法引用**（`handleTap` / `handleTap($event)`），复杂表达式编译期警告。
 - `v-model` → `value="{{x}}"` + `bindinput="proteusOnXInput"`（自动 handler 注入 `this.setData({ x: e.detail.value })`）。
+- 键位修饰符（`@keyup.enter` 等）：小程序无对等键盘事件，编译期警告（input 键盘行为请用 `@confirm`）。
 
 ## 指令映射
 

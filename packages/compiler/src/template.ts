@@ -169,6 +169,10 @@ interface SerializeContext {
   disabled: Set<string>
   /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
   scopeId?: string
+  /** .self 修饰符 handler 名集合（script 生成 proteusSelfXxx 包装） */
+  selfHandlers: Set<string>
+  /** .once 修饰符 handler 名集合（script 生成 proteusOnceXxx 包装） */
+  onceHandlers: Set<string>
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
@@ -289,12 +293,27 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         )
         const isCatch = (mods.includes('stop') || mods.includes('prevent')) && !ctx.disabled.has('event/modifier-catch')
         const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
+        // 键位修饰符（@keyup.enter 等）：小程序无键盘事件对等，警告
+        if (raw === 'keyup' || raw === 'keydown' || raw === 'keypress') {
+          const keyMods = mods.filter((m) => !['stop', 'prevent', 'self', 'once'].includes(m))
+          ctx.warnings.push(`@${raw}${keyMods.length ? '.' + keyMods.join('.') : ''} 在小程序无对等键盘事件（input 键盘行为请用 @confirm），已原样输出`)
+        }
         // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
         const isCustomEvent = !(raw in ctx.eventMap)
         const prefix = `${isCatch ? 'catch' : 'bind'}${isCustomEvent ? ':' : ''}`
-        attrs.push(`${prefix}${mapped}="${handler}"`)
+        // .self / .once（v0.3 尾）：仅对简单方法名 handler 做包装（script 侧生成 proteusSelf/Once 方法）
+        const isSelf = mods.includes('self') && !isCatch
+        const isOnce = mods.includes('once') && !isCatch
+        if ((isSelf || isOnce) && /^[\w$]+$/.test(handler)) {
+          if (isSelf) ctx.selfHandlers.add(handler)
+          if (isOnce) ctx.onceHandlers.add(handler)
+          const wrap = `${isSelf ? 'proteusSelf' : 'proteusOnce'}${capitalize(handler)}`
+          attrs.push(`${prefix}${mapped}="${wrap}"`)
+        } else {
+          attrs.push(`${prefix}${mapped}="${handler}"`)
+        }
         ctx.trace?.add(
-          isCatch ? 'event/modifier-catch' : 'event/click-to-tap',
+          isCatch ? 'event/modifier-catch' : isSelf || isOnce ? 'event/modifier-self-once' : 'event/click-to-tap',
           { line: node.loc.start.line, before: `@${raw}`, after: `${prefix}${mapped}` },
         )
         break
@@ -411,9 +430,18 @@ export function transformTemplateToWxml(
     // ★底线循环 ①③：生效配置 = tags.ts 常量 + config 覆盖（规则改写/禁用即时生效）
     ...resolveOverrides(opts.rules),
     scopeId: opts.scopeId,
+    selfHandlers: new Set(),
+    onceHandlers: new Set(),
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
   for (const w of ctx.warnings) console.warn(`[mp-transform] ${w}`)
-  return { wxml, vModelBindings: ctx.vModelBindings, usesNavigate: ctx.usesNavigate, warnings: ctx.warnings }
+  return {
+    wxml,
+    vModelBindings: ctx.vModelBindings,
+    usesNavigate: ctx.usesNavigate,
+    selfHandlers: [...ctx.selfHandlers],
+    onceHandlers: [...ctx.onceHandlers],
+    warnings: ctx.warnings,
+  }
 }

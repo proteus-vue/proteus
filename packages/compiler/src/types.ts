@@ -48,6 +48,10 @@ export interface TemplateTransformResult {
   vModelBindings: string[]
   /** 模板中是否出现导航链接（供 script 转换注入 __navigateTo） */
   usesNavigate: boolean
+  /** .self 修饰符 handler 名（script 生成 proteusSelfXxx 包装，v0.3 尾） */
+  selfHandlers?: string[]
+  /** .once 修饰符 handler 名（script 生成 proteusOnceXxx 包装，v0.3 尾） */
+  onceHandlers?: string[]
   warnings: string[]
 }
 
@@ -61,10 +65,14 @@ export interface ScriptTransformOptions {
   vModelBindings?: string[]
   /** 模板中是否出现导航链接（生成自动 __navigateTo handler） */
   usesNavigate?: boolean
-  /** 自动生成的 handler 是否附带调试日志（PROTEUS_DEBUG，默认 false） */
+  /** 生成的自动 handler 是否附带调试日志（PROTEUS_DEBUG，默认 false） */
   debug?: boolean
   /** 规则覆盖（可选：底线循环 ①③） */
   rules?: TransformRuleOverrides
+  /** .self 修饰符 handler 名（来自 template，生成 proteusSelfXxx 包装） */
+  selfHandlers?: string[]
+  /** .once 修饰符 handler 名（来自 template，生成 proteusOnceXxx 包装） */
+  onceHandlers?: string[]
   /** 决策 trace 收集器（阶段二，可空） */
   trace?: TransformTrace
 }

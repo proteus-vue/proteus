@@ -52,6 +52,7 @@ function bump() {
     <!-- 事件修饰符 .stop → catchtap（阻止冒泡：点按钮只加一次，点空白区加一次） -->
     <div class="box" @click="bump">
       <button @click.stop="bump">点我（.stop 不冒泡）</button>
+      <button @click.self="bump">self（仅点自身触发，v0.3 尾）</button>
       <p>点击次数：{{ count }}（双倍：{{ double }}）</p>
       <p class="watch-log">{{ watchLog }}</p>
     </div>

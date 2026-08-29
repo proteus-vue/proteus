@@ -145,7 +145,6 @@ export const TEMPLATE_RULES: TransformRule[] = [
   {
     id: 'event/modifier-catch',
     phase: 'template',
-    status: 'implemented',
     title: '.stop / .prevent 修饰符 → catch 前缀',
     description: '@click.stop / @click.prevent → catchtap（阻止冒泡）；其余修饰符忽略',
     why: '小程序无事件修饰符语法，catch* 事件天然阻止冒泡，等价 .stop 语义；.prevent 无对等机制，映射为 catch 兜底',
@@ -153,6 +152,23 @@ export const TEMPLATE_RULES: TransformRule[] = [
     example: { before: '<a @click.stop="stopFn">s</a>', after: '<a catchtap="stopFn">s</a>' },
     verify: 'tests/mp-transform.test.ts「事件映射」',
     source: 'src/compiler/template.ts → serializeElement（on 分支 isCatch）',
+    status: 'implemented',
+  },
+  {
+    id: 'event/modifier-self-once',
+    phase: 'template',
+    status: 'implemented',
+    title: '.self / .once 修饰符 → 包装方法（v0.3 尾）',
+    description: '@click.self="fn" → bindtap="proteusSelfFn"（e.target === e.currentTarget 才触发）；@click.once="fn" → bindtap="proteusOnceFn"（data 标记首次触发后不再触发）；仅对简单方法名 handler 包装',
+    why: '小程序无 .self/.once 原生语义，编译期生成包装方法（script 侧）：self 用事件源判断、once 用 data 标记；键位修饰符（@keyup.enter）无对等键盘事件 → 编译期警告（input 请用 @confirm）',
+    when: '事件指令带 self 或 once 修饰符（且 handler 是简单方法名）时',
+    example: {
+      before: '@click.self="handleTap" / @click.once="handleTap"',
+      after: 'bindtap="proteusSelfHandleTap" / bindtap="proteusOnceHandleTap"（包装方法生成于 Page methods）',
+    },
+    verify: 'tests/mp-transform.test.ts 事件修饰符用例',
+    source: 'packages/compiler/src/template.ts（on 分支）+ script.ts（proteusSelf/Once 生成）',
+    decision: '#88（v0.3 尾指令补全）',
   },
   {
     id: 'event/handler-simple-ref',

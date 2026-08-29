@@ -310,6 +310,34 @@ describe('虚拟列表（v0.4）', () => {
     expect(wxml).toContain('bindscroll="onScroll"')
   })
 
+  it('事件修饰符 .self → proteusSelfXxx 包装（target 判断）', () => {
+    const result = compileVueSfc('<script setup lang="ts">function handleTap() {}</script>\n<template><button @click.self="handleTap">s</button></template>', { filename: 'pages/self.vue' })
+    expect(result.wxml).toContain('bindtap="proteusSelfHandleTap"')
+    expect(result.js).toContain('proteusSelfHandleTap(e) {')
+    expect(result.js).toContain('if (e.target === e.currentTarget) {')
+    expect(result.js).toContain('this.handleTap(e)')
+  })
+
+  it('事件修饰符 .once → proteusOnceXxx 包装（data 标记）', () => {
+    const result = compileVueSfc('<script setup lang="ts">function go() {}</script>\n<template><button @click.once="go">o</button></template>', { filename: 'pages/once.vue' })
+    expect(result.wxml).toContain('bindtap="proteusOnceGo"')
+    expect(result.js).toContain('proteusOnceGo(e) {')
+    expect(result.js).toContain('if (!this.data.__onceGo) {')
+    expect(result.js).toContain('this.data.__onceGo = true')
+  })
+
+  it('键位修饰符 @keyup.enter → 编译期警告（input 用 @confirm）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformTemplateToWxml('<input @keyup.enter="go" />', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('无对等键盘事件'))
+  })
+
+  it('.self 与 .stop 组合 → catch 优先（不包装）', () => {
+    const { wxml } = transformTemplateToWxml('<a @click.stop.self="stopFn">s</a>', opts)
+    expect(wxml).toContain('catchtap="stopFn"')
+    expect(wxml).not.toContain('proteusSelf')
+  })
+
   it('VirtualList 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染', () => {
     const src = fs.readFileSync(path.resolve('src/components/virtual-list/index.vue'), 'utf-8')
     const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/virtual-list/index.vue' })

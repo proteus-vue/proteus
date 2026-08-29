@@ -74,6 +74,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     isComponent: options.isComponent,
     vModelBindings: tplResult.vModelBindings,
     usesNavigate: tplResult.usesNavigate,
+    selfHandlers: tplResult.selfHandlers,
+    onceHandlers: tplResult.onceHandlers,
     debug: options.debug,
     rules: options.rules,
     trace: scriptTrace,

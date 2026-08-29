@@ -671,6 +671,22 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     const src = `proteusWatch${capitalize(w.dep)}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar))}\n  },`
     pushMapped(`  ${src}`, w.line)
   }
+  // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发
+  for (const h of extra.selfHandlers ?? []) {
+    lines.push(`  proteusSelf${capitalize(h)}(e) {`)
+    lines.push(`    if (e.target === e.currentTarget) {`)
+    lines.push(`      this.${h}(e)`)
+    lines.push(`    }`)
+    lines.push(`  },`)
+  }
+  for (const h of extra.onceHandlers ?? []) {
+    lines.push(`  proteusOnce${capitalize(h)}(e) {`)
+    lines.push(`    if (!this.data.__once${capitalize(h)}) {`)
+    lines.push(`      this.data.__once${capitalize(h)} = true`)
+    lines.push(`      this.${h}(e)`)
+    lines.push(`    }`)
+    lines.push(`  },`)
+  }
   lines.push('})')
 
   // 产物级约束（es5-safe 贯穿全部生成代码；component-mode 决定构造器）
