@@ -106,13 +106,15 @@ export function createPersistence(global: { storage: StorageAdapter }) {
     const key = opt.key === undefined ? ctx.store.$id : opt.key
     const debounce = opt.debounce === undefined ? 50 : opt.debounce
 
-    // Hydrate（异步恢复）
+    // Hydrate（异步恢复；存储后端异常不阻断应用——如 App 端 NativeKV 未接入）
     void storage.getItem(key).then((raw) => {
       if (raw !== null) {
         const saved = deserialize<Record<string, unknown>>(raw)
         // as never：动态结构恢复（运行时无影响，类型断言剥离）
         ctx.store.$patch(applyFilter(saved, opt) as never)
       }
+    }).catch((err) => {
+      console.warn('[proteus] 持久化恢复失败（存储后端异常）', err)
     })
 
     // Subscribe（防抖写盘；高频变更合并为一次）

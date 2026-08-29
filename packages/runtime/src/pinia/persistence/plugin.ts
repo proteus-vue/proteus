@@ -87,6 +87,7 @@ export function createPersistedStatePlugin(options: { storage?: StorageAdapter }
 
     // 1. 初始化：从 storage 恢复（异步——Adapter 统一 async）
     if (persist.beforeRestore) persist.beforeRestore(ctx)
+    // Hydrate（异步恢复；存储后端异常不阻断应用）
     void storage.getItem(key).then((raw) => {
       if (raw !== null) {
         const saved = deserialize<Record<string, unknown>>(raw)
@@ -95,6 +96,8 @@ export function createPersistedStatePlugin(options: { storage?: StorageAdapter }
         ctx.store.$patch(data as never)
       }
       if (persist.afterRestore) persist.afterRestore(ctx)
+    }).catch((err) => {
+      console.warn('[proteus] 持久化恢复失败（存储后端异常）', err)
     })
 
     // 2. 订阅变化：写入 storage
