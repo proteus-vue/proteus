@@ -25,13 +25,13 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | # | 能力域 | uni-app | Taro 3 | Proteus 现状 | 规划版本 |
 |---|---|---|---|---|---|
 | 1 | **开发体验**：脚手架 / HMR / devtools / 错误定位 / 类型提示 | ✅ | ✅ | 🟡 HMR+devtools（Web 原生）；MP 无 devtools 插件 | v0.2 脚手架 + v1.0 devtools |
-| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、scss 预处理器、sourcemap（v0.3）；🟡 类型提示 / computed 写路径 | v0.3 + v0.3 尾 |
+| 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 / Vue 能力兼容 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、scss 预处理器、sourcemap（v0.3）；✅ vue-compat-advance 全批（provide/inject 值传递+响应式联动+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认+替代模式，Batch 1-7）；🟡 类型提示 / computed 写路径 | v0.3 + v0.3 尾 + vue-compat-advance ✅ |
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
-| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；❌ MP 编译 / 持久化 | v0.4 + v0.4 尾 |
-| 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
+| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | 🟡 Web 原生 Pinia + MP store 桥（v0.4）；🟡 跨模块引用已通（module-plan B0：纯逻辑共享模块 require；含第三方依赖如 pinia 的共享模块跳过编译——Pinia MP 编译待放行） | v0.4 + 跨模块接入 |
+| 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | 🟡 框架内置组件（virtual-list，框架内置化完成）；走 Vue 生态（Web 原生复用） | v0.3 适配层 + v2.0 组件库 |
 | 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 222 单测 + CI（拆包完成：7 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）；🟡 npm 发包待启用 | v0.2 + 拆包尾 |
-| 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表（v0.4） | — |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 447 单测 + CI（拆包完成：8 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）；🟡 npm 发包待启用 | v0.2 + 拆包尾 + module-plan ✅ |
+| 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表 + 分包体积监控（B7a） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 
 > ✅ 已具备 · 🟡 部分具备 · ❌ 缺失。**差距即路线**：以下里程碑按此矩阵排布。
@@ -146,16 +146,17 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 ```
 proteus/                        # monorepo（v0.2 起）
 ├── packages/
-│   ├── compiler/               # @proteus/compiler  编译引擎（纯函数，零依赖，当前 src/compiler）
-│   ├── runtime/                # @proteus/runtime   setData 桥接 / 生命周期 / 状态管理（当前 src/runtime）
-│   ├── router/                 # @proteus/router    路由 API / 守卫 / 转场（当前 src/router）
-│   ├── plugin-vite/            # @proteus/plugin-vite  小程序编译 Vite 插件（当前 vite-plugin-mp-transform.ts）
-│   ├── renderer-app/           # @proteus/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主）
-│   ├── cli/                    # @proteus/cli       proteus build / dev
+│   ├── compiler/               # @proteus/compiler  编译引擎（纯函数，零依赖）
+│   ├── runtime/                # @proteus/runtime   setData 桥接 / 生命周期 / 状态管理 / provide-inject
+│   ├── router/                 # @proteus/router    路由 API / 守卫 / 转场
+│   ├── plugin-vite/            # @proteus/plugin-vite  小程序编译 Vite 插件 + gen-routes
+│   ├── module/                 # @proteus/module    ★模块化（module-plan B0-B9：契约/图谱/编排器/审计/分包）
+│   ├── renderer-app/           # @proteus/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主，待建）
+│   ├── cli/                    # @proteus/cli       proteus build / explain / rules / module:check / audit
 │   ├── create-proteus/         # create-proteus     脚手架
 │   └── shared/                 # @proteus/shared    公共类型与工具
 ├── examples/                   # 示例应用（随版本更新持续演示新能力）
-└── docs/                       # 文档（本文件 + 快速开始/配置/编译/路由）
+└── docs/                       # 文档（本文件 + 快速开始/配置/编译/路由 + 各规划）
 ```
 
 依赖方向（单向）：`plugin-vite → compiler + shared`，`cli → compiler + gen-routes`，`runtime/router → shared`。业务代码只依赖 `@proteus/*` 公开包。
@@ -186,8 +187,8 @@ proteus/                        # monorepo（v0.2 起）
 |---|---|
 | v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 全部落地，决策 #76-#80）；sourcemap 接入开发者工具（✅ 已实现：sourcemap v3 + 调试构建落盘） |
-| v0.4 | 虚拟列表 demo + 性能基准套件落地（✅ 已落地，决策 #81/#82/#83）；Pinia 双端可用（🟡 Web 完整 + MP 运行时桥，MP 编译待跨模块） |
-| v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
+| v0.4 | 虚拟列表 demo + 性能基准套件落地（✅ 已落地，决策 #81/#82/#83）；Pinia 双端可用（🟡 Web 完整 + MP 运行时桥；★跨模块引用已通（module-plan B0），Pinia MP 编译待放行——含第三方依赖共享模块跳过） |
+| v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证（★前置基建提前完成：module-plan 模块化 B0-B9——跨模块引用/契约/图谱/编排器/分包/审计；vue-compat-advance 全批） |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |
 | v1.0 | 能力矩阵全 ✅；真实项目验证报告（含 iOS 真机 Skyline 白屏场景兜底验证）；性能指标达标；文档站上线 |
 | v2.0 | devtools 可用；**@proteus/components 独立包发布**（内置组件迁入包，frameworkComponentsDir 退役）；首个社区组件库发布；插件体系文档化 |
