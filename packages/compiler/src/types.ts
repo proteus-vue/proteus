@@ -52,6 +52,8 @@ export interface TemplateTransformResult {
   selfHandlers?: string[]
   /** .once 修饰符 handler 名（script 生成 proteusOnceXxx 包装，v0.3 尾） */
   onceHandlers?: string[]
+  /** vue-compat Batch B：内联事件表达式包装方法（自增/自减/简单方法调用） */
+  inlineHandlers?: Array<{ name: string; code: string }>
   warnings: string[]
 }
 
@@ -73,6 +75,8 @@ export interface ScriptTransformOptions {
   selfHandlers?: string[]
   /** .once 修饰符 handler 名（来自 template，生成 proteusOnceXxx 包装） */
   onceHandlers?: string[]
+  /** vue-compat Batch B：内联事件表达式包装方法（来自 template） */
+  inlineHandlers?: Array<{ name: string; code: string }>
   /** 决策 trace 收集器（阶段二，可空） */
   trace?: TransformTrace
 }

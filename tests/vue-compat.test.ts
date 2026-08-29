@@ -60,3 +60,38 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(listTransformRules().length).toBeGreaterThanOrEqual(61)
   })
 })
+
+describe('Batch B：事件内联表达式 → 包装方法（vue-compat）', () => {
+  it('@click="count++" → proteusInlineIncCount（setData 更新）', () => {
+    const r = compile('<template><button @click="count++">C</button></template><script setup>const count = ref(0)</script>')
+    expect(r.warnings).toHaveLength(0) // 不再警告（已支持）
+    expect(r.wxml).toContain('bindtap="proteusInlineIncCount"')
+    expect(r.js).toContain('proteusInlineIncCount(e)')
+    expect(r.js).toContain('this.setData({ count: this.data.count + 1 })')
+  })
+
+  it('@click="count--" 与 --count 前/后自减', () => {
+    const r = compile('<template><button @click="count--">D</button></template><script setup>const count = ref(0)</script>')
+    expect(r.wxml).toContain('bindtap="proteusInlineDecCount"')
+    expect(r.js).toContain('this.data.count - 1')
+  })
+
+  it('@click="fn(1)" 简单方法调用 → 包装方法', () => {
+    const r = compile('<template><button @click="fn(1)">F</button></template><script setup>const x = ref(0); function fn(n) { x.value = n }</script>')
+    expect(r.wxml).toContain('bindtap="proteusInlineFn1"')
+    expect(r.js).toContain('this.fn(1)')
+  })
+
+  it('复杂表达式（store.xxx 链式）仍警告原样', () => {
+    const r = compile('<template><button @click="store.toggle()">T</button></template><script setup>const store = { toggle: () => {} }</script>')
+    expect(r.warnings.some((w) => w.includes('不是简单方法引用'))).toBe(true)
+    expect(r.wxml).toContain('store.toggle()') // 原样
+  })
+
+  it('规则 event/inline-expression 已登记且可禁用', () => {
+    expect(getTransformRule('event/inline-expression')).toBeDefined()
+    const r = compile('<template><button @click="count++">C</button></template><script setup>const count = ref(0)</script>', 'vc-dis.vue')
+    // 默认启用：无警告
+    expect(r.warnings).toHaveLength(0)
+  })
+})

@@ -837,6 +837,13 @@ ${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, co
     lines.push(`    }`)
     lines.push(`  },`)
   }
+  // vue-compat Batch B：内联事件表达式包装方法（@click="count++" → proteusInlineIncCount 等）
+  for (const ih of extra.inlineHandlers ?? []) {
+    if (disabled.has('event/inline-expression')) continue
+    pushMapped(`  ${ih.name}(e) {`, 1)
+    pushMapped(`    ${ih.code}`, 1)
+    pushMapped(`  },`, 1)
+  }
   lines.push('})')
 
   // 产物级约束（es5-safe 贯穿全部生成代码；component-mode 决定构造器）

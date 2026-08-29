@@ -175,6 +175,42 @@ interface SerializeContext {
   selfHandlers: Set<string>
   /** .once 修饰符 handler 名集合（script 生成 proteusOnceXxx 包装） */
   onceHandlers: Set<string>
+  /** vue-compat Batch B：内联事件表达式包装方法集合（自增/自减/简单方法调用） */
+  inlineHandlers: Array<{ name: string; code: string }>
+}
+
+/**
+ * vue-compat Batch B：尝试将内联事件表达式转包装方法（自增/自减/简单方法调用）
+ * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2)
+ * 其余（含 store 链式引用等）返回 null → 走 cleanHandler 警告原样
+ */
+function tryInlineHandler(exp: string): { name: string; code: string } | null {
+  const t = exp.trim()
+  // 自增/自减（对齐 ref 重写：this.data.x ± 1，决策 #36）
+  let m = t.match(/^([\w$]+)\+\+$/) ?? t.match(/^\+\+([\w$]+)$/)
+  if (m) {
+    return {
+      name: `proteusInlineInc${capitalize(m[1])}`,
+      code: `this.setData({ ${m[1]}: this.data.${m[1]} + 1 })`,
+    }
+  }
+  m = t.match(/^([\w$]+)--$/) ?? t.match(/^--([\w$]+)$/)
+  if (m) {
+    return {
+      name: `proteusInlineDec${capitalize(m[1])}`,
+      code: `this.setData({ ${m[1]}: this.data.${m[1]} - 1 })`,
+    }
+  }
+  // 简单方法调用：fn(字面量参数)——无 . 链（store.xxx 等链式走警告）
+  m = t.match(/^([\w$]+)\(([^()]*)\)$/)
+  if (m && /^[\w$,'"\s]*$/.test(m[2])) {
+    const key = m[2].replace(/\W/g, '') || 'NoArgs'
+    return {
+      name: `proteusInline${capitalize(m[1])}${key}`,
+      code: `this.${m[1]}(${m[2]})`,
+    }
+  }
+  return null
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
@@ -318,7 +354,20 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           typeof m === 'string' ? m : (m?.content ?? ''),
         )
         const isCatch = (mods.includes('stop') || mods.includes('prevent')) && !ctx.disabled.has('event/modifier-catch')
-        const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
+        // .self / .once（v0.3 尾）：仅对简单方法名 handler 做包装（script 侧生成 proteusSelf/Once 方法）
+        const isSelf = mods.includes('self') && !isCatch
+        const isOnce = mods.includes('once') && !isCatch
+        // ★vue-compat Batch B：内联表达式（count++ / fn(1)）→ 包装方法；其余走 cleanHandler（警告原样）
+        const rawHandler = exprContent(dir.exp)
+        const inline = tryInlineHandler(rawHandler)
+        let handler: string
+        if (inline && !isSelf && !isOnce) {
+          handler = inline.name
+          if (!ctx.inlineHandlers.some((h) => h.name === inline.name)) ctx.inlineHandlers.push(inline)
+          ctx.trace?.add('event/inline-expression', { line: node.loc.start.line, before: `@${exprContent(dir.arg)}="${rawHandler}"`, after: `${inline.name}（包装方法）` })
+        } else {
+          handler = cleanHandler(rawHandler, ctx.warnings)
+        }
         // 键位修饰符（@keyup.enter 等）：小程序无键盘事件对等，警告
         if (raw === 'keyup' || raw === 'keydown' || raw === 'keypress') {
           const keyMods = mods.filter((m) => !['stop', 'prevent', 'self', 'once'].includes(m))
@@ -327,9 +376,6 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
         const isCustomEvent = !(raw in ctx.eventMap)
         const prefix = `${isCatch ? 'catch' : 'bind'}${isCustomEvent ? ':' : ''}`
-        // .self / .once（v0.3 尾）：仅对简单方法名 handler 做包装（script 侧生成 proteusSelf/Once 方法）
-        const isSelf = mods.includes('self') && !isCatch
-        const isOnce = mods.includes('once') && !isCatch
         if ((isSelf || isOnce) && /^[\w$]+$/.test(handler)) {
           if (isSelf) ctx.selfHandlers.add(handler)
           if (isOnce) ctx.onceHandlers.add(handler)
@@ -466,6 +512,7 @@ export function transformTemplateToWxml(
     scopeId: opts.scopeId,
     selfHandlers: new Set(),
     onceHandlers: new Set(),
+    inlineHandlers: [],
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
@@ -476,6 +523,7 @@ export function transformTemplateToWxml(
     usesNavigate: ctx.usesNavigate,
     selfHandlers: [...ctx.selfHandlers],
     onceHandlers: [...ctx.onceHandlers],
+    inlineHandlers: ctx.inlineHandlers,
     warnings: ctx.warnings,
   }
 }
