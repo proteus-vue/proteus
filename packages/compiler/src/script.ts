@@ -650,6 +650,28 @@ export function transformScriptToPage(
 ): ScriptTransformResult {
   const warnings: string[] = []
   const trace = extra.trace
+  // ★Batch A（vue-compat）：import 剥离显式警告（反黑盒）——小程序单文件产物无模块系统，
+  //   import 的符号在产物中未定义（引用 undefined），不再静默
+  if (!extra.isComponent) {
+    // 跳过 Vue 内置 API import（ref/computed/watch 等由编译器静态处理，不依赖真实模块）
+    const importRe = /^import\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+    const importNames: string[] = []
+    let im: RegExpExecArray | null
+    while ((im = importRe.exec(source))) {
+      if (im[1] === 'vue') continue // Vue API 导入：编译器静态识别，正常用法
+      importNames.push(im[1])
+      trace?.add('script/module-import', {
+        line: lineAt(source, im.index),
+        before: im[0].trim().slice(0, 60),
+        after: '（剥离：小程序单文件产物无模块系统，引用将 undefined）',
+      })
+    }
+    if (importNames.length) {
+      warnings.push(
+        `检测到 ${importNames.length} 条 import（${importNames.slice(0, 3).join(', ')}${importNames.length > 3 ? '…' : ''}）——小程序单文件产物无模块系统，跨模块引用将 undefined：请内联共享逻辑或改用框架 store 桥（vue-compat Batch A）`,
+      )
+    }
+  }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
   const { data, computed } = disabled.has('script/const-to-data') ? { data: {}, computed: {} } : extractData(source, warnings, trace)

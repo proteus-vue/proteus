@@ -178,6 +178,19 @@ interface SerializeContext {
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
+  // ★Batch A（vue-compat）：平台无对等标签——显式警告（反黑盒，不再静默输出无效产物）
+  if (node.tag === 'component') {
+    ctx.warnings.push(
+      `<component :is> 动态组件在小程序无对等机制（产物为无效标签）——请用 v-if/v-else 条件渲染（vue-compat Batch A）`,
+    )
+    ctx.trace?.add('template/is-component', { line: node.loc.start.line, before: '<component :is>', after: '（无效标签，请条件渲染）' })
+  }
+  if (node.tag === 'transition' || node.tag === 'transition-group' || node.tag === 'teleport' || node.tag === 'suspense' || node.tag === 'keep-alive') {
+    ctx.warnings.push(
+      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——转场请用路由 routeType，缓存/传送请移除（vue-compat Batch A）`,
+    )
+    ctx.trace?.add('template/no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（无对等，原样输出）' })
+  }
   const hasVHtml = node.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'html')
   const hasClick = node.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'on')
   // 导航链接：<a href> / <router-link to>（元素上有 @click 时不作为导航链接，交给事件映射）
@@ -240,6 +253,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       }
       if (attr.name === 'class' && effectiveBaseClass) {
         attrs.push(`class="${effectiveBaseClass}${attr.value ? ' ' + escapeXml(attr.value.content) : ''}"`)
+        continue
+      }
+      // ★Batch A（vue-compat）：模板 ref 小程序无对等——显式警告（不再静默无效）
+      if (attr.name === 'ref') {
+        ctx.warnings.push(
+          `模板 ref="${attr.value ? attr.value.content : ''}" 在小程序无对等绑定（永不赋值）——请用 this.selectComponent('#id')（vue-compat Batch A）`,
+        )
+        ctx.trace?.add('template/template-ref', { line: node.loc.start.line, before: `ref="${attr.value ? attr.value.content : ''}"`, after: '（剥离，无对等）' })
         continue
       }
       attrs.push(attr.value ? `${attr.name}="${escapeXml(attr.value.content)}"` : attr.name)
@@ -369,7 +390,15 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         ctx.trace?.add('directive/v-show', { line: node.loc.start.line, before: `v-show="${exprContent(dir.exp)}"`, after: `hidden="{{!${exprContent(dir.exp)}}}"` })
         break
       default:
-        break // v-slot / v-pre 等：MVP 忽略
+        // ★Batch A（vue-compat）：自定义指令（v-focus 等）小程序无对等——显式警告（反黑盒，不再静默剥离）
+        if (dir.name === 'slot' || dir.name === 'pre' || dir.name === 'cloak') {
+          break // v-slot/v-pre/v-cloak：MVP 忽略（无对等语义）
+        }
+        ctx.warnings.push(
+          `自定义指令 v-${dir.name} 在小程序无对等机制（已剥离且不执行）——请改用方法调用或条件渲染（vue-compat Batch A）`,
+        )
+        ctx.trace?.add('directive/custom', { line: node.loc.start.line, before: `v-${dir.name}`, after: '（剥离，无对等）' })
+        break
     }
   }
 
