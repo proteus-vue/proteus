@@ -122,7 +122,10 @@
 | B3 | ✅ | Web/Skyline |
 | B4 | ✅ | 全部 |
 | B5 | ✅ | Web/Skyline/App |
-| B6-B9 | ⏳ | 超级应用 |
+| B6 | ⏳ 延后（能力级可靠性由 B4 降级覆盖） | 超级应用 |
+| B7 | ⏳ 延后（可观测待 DevTools 基建） | 超级应用 |
+| B8 | ✅ 矩阵由 manifest + capabilities/check 测试覆盖 | Web/Skyline/App |
+| B9 | ✅ CI 门禁已接入（capabilities:check + manifest --platform） | 全部 |
 
 ---
 

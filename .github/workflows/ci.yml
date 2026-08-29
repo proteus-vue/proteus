@@ -31,11 +31,17 @@ jobs:
 
       - name: stores 铁律门禁（M8.4：禁平台分支/直连存储）
         run: |
-          if grep -rEn "wx\\.setStorage|localStorage\\.setItem|sessionStorage|if.*process\\.env" examples/stores/ 2>/dev/null; then
+          if grep -rEn "wx\.setStorage|localStorage\.setItem|sessionStorage|if.*process\.env" examples/stores/ 2>/dev/null; then
             echo "::error::stores/ 违规：禁止平台分支与直连存储（见 docs/pinia-stores-conventions.md）"
             exit 1
           fi
           echo "stores 纯净性 OK（注册表完整性由 vue-tsc + stores-registry.types.ts 校验）"
+
+      - name: 能力体系门禁（platform-plan B5 平台规范硬卡 + B3 编译期分叉缺失报告）
+        run: |
+          npx tsx packages/cli/src/index.ts capabilities:check examples
+          npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform skyline
+          npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform web
 
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: npm run build:mp
