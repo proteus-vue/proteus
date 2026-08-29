@@ -62,7 +62,7 @@ export class PersistScheduler {
     }
   }
 
-  /** 立即落盘（串行队列：同一 adapter 的 flush 顺序执行） */
+  /** 立即落盘（串行队列：同一 adapter 的 flush 顺序执行）；写盘完成后触发 onAfterFlush（配额检查等） */
   flush(): Promise<void> {
     const snapshot = this.buffer
     this.buffer = new Map()
@@ -75,9 +75,13 @@ export class PersistScheduler {
           console.warn('[proteus] 持久化写盘失败', key, err)
         }
       }
+      if (this.onAfterFlush) this.onAfterFlush(snapshot)
     })
     return this.flushChain
   }
+
+  /** 写盘完成回调（M7.3 配额检查挂在此时——淘汰发生在真实落盘后） */
+  onAfterFlush: ((written: Map<string, string>) => void) | null = null
 
   /** 停止调度（M7.5 dispose 用）：清计时器 + 缓冲，丢弃未写数据 */
   dispose(): void {

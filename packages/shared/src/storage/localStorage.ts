@@ -35,4 +35,15 @@ export class LocalStorageAdapter implements StorageAdapter {
       if (k && k.startsWith(p)) ls.removeItem(k)
     }
   }
+
+  async keys(): Promise<string[]> {
+    const ls = globalThis.localStorage
+    if (!ls) return []
+    const out: string[] = []
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i)
+      if (k) out.push(k)
+    }
+    return out
+  }
 }

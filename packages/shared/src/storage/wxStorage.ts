@@ -43,7 +43,7 @@ export class WxStorageAdapter implements StorageAdapter {
   }
 
   async clear(prefix?: string): Promise<void> {
-    const p = prefix ?? this.prefix
+    const p = prefix === undefined ? this.prefix : prefix
     try {
       if (typeof wx === 'undefined' || !wx.getStorageInfoSync) return
       const info = wx.getStorageInfoSync()
@@ -52,6 +52,16 @@ export class WxStorageAdapter implements StorageAdapter {
       }
     } catch {
       // 容错
+    }
+  }
+
+  async keys(): Promise<string[]> {
+    try {
+      if (typeof wx === 'undefined' || !wx.getStorageInfoSync) return []
+      const info = wx.getStorageInfoSync()
+      return info.keys ?? []
+    } catch {
+      return []
     }
   }
 }

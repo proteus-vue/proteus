@@ -13,4 +13,6 @@ export interface StorageAdapter {
   removeItem(key: string): Promise<void>
   /** 清空命名空间（可选，用于登出等场景） */
   clear?(prefix?: string): Promise<void>
+  /** 枚举全部 key（可选，M7.3 配额淘汰需要） */
+  keys?(): Promise<string[]>
 }

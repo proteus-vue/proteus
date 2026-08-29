@@ -28,4 +28,8 @@ export class MemoryAdapter implements StorageAdapter {
       if (k.startsWith(prefix)) this.store.delete(k)
     }
   }
+
+  async keys(): Promise<string[]> {
+    return Array.from(this.store.keys())
+  }
 }
