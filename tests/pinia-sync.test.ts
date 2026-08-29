@@ -136,13 +136,13 @@ describe('M8.1 协同引擎（LWW）', () => {
 
     // A 离线：变更入队不发送
     onlineA = false
-    if (statusCb) statusCb(false)
+    statusCb!(false)
     piniaA._s.get('cart')!.qty = 7
     await new Promise((r) => setTimeout(r, 10))
     expect(sentA.length).toBe(0) // 离线未发送
     // 重连 → 重放
     onlineA = true
-    if (statusCb) statusCb(true)
+    statusCb!(true)
     await new Promise((r) => setTimeout(r, 10))
     expect(sentA.length).toBeGreaterThan(0)
   })
