@@ -59,7 +59,7 @@ B7(性能加固) ← B3          B8(可观测 + CI 审计) ← B2-B6
 | 批 | 交付物 | 依赖 | 关键降级/说明 |
 |----|--------|------|--------------|
 | B1 | 组件契约（`src/components/contracts`：BaseProps/事件命名/插槽规范）+ 能力探测（`src/components/runtime/capability.ts`：backend 判定 + has/detect + capabilityWarn 降级告警）+ 单测 | — | ✅ 已落地（2026-08，8 用例）；对齐 02-platform-capability.md；不做渲染器目录 |
-| B2 | `p-view` `p-text` `p-image` `p-button` + 矩阵回填 + 快照测试 | B1 | `position:fixed` 编译期转换警告留 B5 一并评估（涉及 compiler transform）|
+| B2 | `p-view` `p-text` `p-image` `p-button` + 矩阵回填 + 快照测试 | B1 | ✅ 已落地（2026-08）——position:fixed 编译期转换警告留 B5 一并评估（涉及 compiler transform）|
 | B3 | `p-scroll-view` + `p-list-view`（virtual-list 通用化：item-key/虚拟开关/懒加载）| B2 | Skyline 滚动容器必备；复用既有 virtual-list 实现抽 composable |
 | B4 | `p-input` `p-textarea`（v-model 双向 + 事件归一）| B2 | MP 原生 input/textarea 映射 |
 | B5 | `p-mask` `p-popup` `p-toast` `p-loading`（弹层体系）| B2 | 转场 = CSS transition + Transition 运行时等价；Worklet 标注 v0.6 |
@@ -114,7 +114,7 @@ export type CapabilityName =
 | 批 | 状态 | 说明 |
 |----|------|------|
 | B1 契约 + 能力探测 | ✅ 已落地 | 2026-08，8 用例（contracts + capability.ts） |
-| B2 基础组件 a（view/text/image/button）| ⬜ | — |
+| B2 基础组件 a（view/text/image/button）| ✅ 已落地 | 2026-08，6 用例 + components-demo 演示页（双端构建通过）；产物要点：非 EVENT_MAP 事件 bind: 冒号形式、mode 的 Web 映射走 CSS 类（编译器 computed 仅支持箭头表达式体）、拼写错误 gen-routes warn |
 | B3 scroll-view + list-view | ⬜ | virtual-list 通用化 |
 | B4 表单（input/textarea）| ⬜ | — |
 | B5 弹层（mask/popup/toast/loading）| ⬜ | CSS 转场 |

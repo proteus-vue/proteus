@@ -3,6 +3,7 @@
 import type { RouteRecord } from '@proteus/router/types'
 
 export const routes: RouteRecord[] = [
+  { name: "builtin-components-demo", path: "pages/builtin-components-demo", component: "../pages/builtin-components-demo.vue", parent: "index", meta: {"title":"内置组件"} },
   { name: "components-demo", path: "pages/components-demo", component: "../pages/components-demo.vue", parent: "index", meta: {"title":"组件演示"} },
   { name: "config-demo", path: "pages/config-demo", component: "../pages/config-demo.vue", parent: "index", meta: {"title":"配置演示"} },
   { name: "forms", path: "pages/forms", component: "../pages/forms.vue", parent: "index", meta: {"title":"表单与指令"} },
@@ -23,6 +24,7 @@ export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m
 // ★ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）
 declare module '@proteus/router/types' {
   interface RouteParamsByName {
+    'builtin-components-demo': {  },
     'components-demo': {  },
     'config-demo': {  },
     'forms': {  },
