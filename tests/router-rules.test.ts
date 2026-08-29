@@ -74,6 +74,7 @@ describe('--trace-router 闭环（嵌套推导决策链）', () => {
       trace: (msg) => logs.push(msg),
     })
     expect(logs.some((l) => l.includes('来源登记'))).toBe(true)
-    expect(logs.some((l) => l.includes('parent'))).toBe(true)
+    // 父路由推导依据（path 前缀推导 / 显式 parent）
+    expect(logs.some((l) => l.includes('前缀推导') || l.includes('显式 parent'))).toBe(true)
   })
 })

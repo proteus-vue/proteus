@@ -31,6 +31,22 @@ examples/pages/
 └── subpackages/order/…  → name: order-pages-list  path: subpackages/order/pages/list（subPackage: order）
 ```
 
+> ★**单一真相源（决策 #112）**：路由的一切声明只写页面 `<route>` 块——`meta`（title/isTab/requiresAuth/transition…）及可选 `path`/`name`/`parent`/`redirect`/`params`。`path`/`name` 缺省时由扫描按文件位置推导（零样板）；`auto-routes.ts` / `app.json` 是**生成物**（AUTO-GENERATED，勿手动编辑），meta 从 `<route>` 单向流向产物，**不存在第二处手写 meta**。
+
+可选声明（推导的替代）：
+
+```vue
+<route>
+{
+  "path": "/user/profile",      // 显式 path（优先于文件推导）
+  "name": "userProfile",        // 显式 name
+  "parent": "user",             // 显式父子（覆盖 path 前缀推导）
+  "redirect": "/user",         // 重定向（与 parent 互斥）
+  "params": { "id": "string" } // 路由参数类型（类型提示全链路）
+}
+</route>
+```
+
 ## Router API
 
 ```typescript

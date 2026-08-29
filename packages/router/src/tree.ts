@@ -28,13 +28,14 @@ export function sortByPath(nodes: RouteNode[]): RouteNode[] {
     .map((x) => x.n)
 }
 
-/** 规则 A：按 path 前缀找最长匹配父节点（/home/profile → /home），无前缀匹配返回 null */
+/** 规则 A：按 path 前缀找最长匹配父节点（/home/profile → /home；兼容无斜杠推导 path：pages/user/profile → pages/user） */
 function findParentByPath(nodes: RouteNode[], node: RouteNode): RouteNode | null {
   const segs = node.path.split('/').filter(Boolean)
   for (let i = segs.length - 1; i >= 1; i--) {
-    const prefix = '/' + segs.slice(0, i).join('/')
-    const match = nodes.find((n) => n.path === prefix && n !== node)
-    if (match) return match
+    const prefix = segs.slice(0, i).join('/')
+    // 同时匹配 `/home` 与 `pages/user` 两种语义（显式声明 / derivePath 推导）
+    const match = nodes.find((n) => n.path === prefix || n.path === `/${prefix}`)
+    if (match && match !== node) return match
   }
   return null
 }

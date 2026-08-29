@@ -169,6 +169,17 @@ const ROUTE_RULES: RouteRule[] = [
     source: 'packages/router/src/codegen/web.ts + codegen/mp.ts',
     decision: '#101',
   },
+  {
+    id: 'route/derive-path',
+    title: 'path 推导（derivePath：页面零样板）',
+    description: '<route> 未声明 path 时从文件位置推导（pages/home.vue → pages/home；index.vue 归并目录：pages/user/index.vue → pages/user）——页面只需声明 meta（唯一真相源）',
+    why: '双管线统一（决策 #112）：页面 <route> 零样板——path/name 由扫描推导，显式声明优先；产物 path（MP 页面路径）保留既有语义',
+    when: '<route> 缺省 path 且扫描启用 derivePath（gen-routes 默认）',
+    example: { before: '<route>{ "meta": { "title": "首页" } }</route>', after: 'path: "pages/home", name: "home"（推导）' },
+    verify: 'tests/gen-routes.test.ts + tests/router-plan.test.ts',
+    source: 'packages/router/src/scan.ts → derivePathFromFile',
+    decision: '#112',
+  },
 ]
 
 const byId = new Map<string, RouteRule>(ROUTE_RULES.map((r) => [r.id, r]))

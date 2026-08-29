@@ -71,14 +71,11 @@ describe('runGenRoutes：路由表生成全链路', () => {
     expect(appJson.subPackages).toEqual([{ root: 'subpackages/order', name: 'order', pages: ['pages/list'] }])
   })
 
-  it('<route> 块非法 JSON → 警告且不中断生成（页面仍收录，meta 丢失）', () => {
+  it('<route> 块非法 JSON → 报错（透明化：严格校验含 loc，不吞错——双管线统一后不再是警告跳过）', () => {
     const root = path.join(TMP, 'badjson')
     writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
     writeFixture(root, 'src/pages/broken.vue', `<template><view>坏</view></template>\n<route>\n{\n  "meta": {\n}\n</route>\n`)
 
-    expect(() => runGenRoutes({ config: makeConfig(), root })).not.toThrow()
-    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
-    expect(appJson.pages).toContain('pages/index') // 合法页照常收录
-    expect(appJson.pages).toContain('pages/broken') // 坏 JSON 页仍收录（仅 meta 丢失，不中断）
+    expect(() => runGenRoutes({ config: makeConfig(), root })).toThrow(/不是合法 JSON/)
   })
 })

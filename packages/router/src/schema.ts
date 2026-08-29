@@ -19,6 +19,8 @@ const TRANSITIONS = ['slideUp', 'slideDown', 'halfScreen', 'scaleDown', 'none'] 
 
 /** 命名路由规范：小驼峰（^[a-z][a-zA-Z0-9]*$） */
 const NAME_RE = /^[a-z][a-zA-Z0-9]*$/
+/** derivePath 推导命名（kebab-case：user-profile，对齐既有产物） */
+const NAME_KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
 /** JSON 可序列化检查（meta 禁止 Function / RegExp / undefined；递归限深 3 防环） */
 function isSerializable(value: unknown, depth = 0): boolean {
@@ -39,19 +41,21 @@ function isSerializable(value: unknown, depth = 0): boolean {
 export function validateSchema(
   parsed: Record<string, unknown>,
   loc: { file: string; line: number; column: number },
+  options: { allowDerivedPath?: boolean } = {},
 ): RouteBlock {
-  // path：必填、string、以 / 开头
+  // path：必填、string（derivePath 模式：扫描层已注入文件推导值，可为无斜杠的产物路径）
   if (typeof parsed.path !== 'string' || parsed.path.length === 0) {
     throw new RouteValidationError('<route> 缺少 path（必须以 / 开头的字符串）', loc)
   }
-  if (!parsed.path.startsWith('/')) {
+  if (!options.allowDerivedPath && !parsed.path.startsWith('/')) {
     throw new RouteValidationError(`path "${parsed.path}" 必须以 / 开头`, loc)
   }
 
-  // name：可选、命名规范
+  // name：可选、命名规范（derivePath 模式：推导 name 为 kebab-case（user-profile，对齐既有产物命名），放宽）
   let name: string | undefined
   if (parsed.name !== undefined && parsed.name !== null) {
-    if (typeof parsed.name !== 'string' || !NAME_RE.test(parsed.name)) {
+    const valid = NAME_RE.test(String(parsed.name)) || (options.allowDerivedPath === true && NAME_KEBAB_RE.test(String(parsed.name)))
+    if (typeof parsed.name !== 'string' || !valid) {
       throw new RouteValidationError(
         `name "${String(parsed.name)}" 不合法（须匹配 ^[a-z][a-zA-Z0-9]*$）`,
         loc,
@@ -108,7 +112,38 @@ export function validateSchema(
     lazy = parsed.lazy
   }
 
-  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, componentPath: loc.file }
+  // params：可选对象（字段名 → 类型名 string/number/boolean），供 RouteParamsByName 类型表
+  let params: Record<string, string> | undefined
+  if (parsed.params !== undefined && parsed.params !== null) {
+    if (typeof parsed.params !== 'object' || parsed.params === null || Array.isArray(parsed.params)) {
+      throw new RouteValidationError('params 必须是对象（字段名 → 类型名）', loc)
+    }
+    params = {}
+    for (const [k, v] of Object.entries(parsed.params)) {
+      if (typeof v !== 'string') throw new RouteValidationError(`params.${k} 类型名必须是字符串（string/number/boolean）`, loc)
+      params[k] = v
+    }
+  }
+
+  // pageJson：可选对象（gen-routes 扩展：合并进页面 page.json）
+  let pageJson: Record<string, unknown> | undefined
+  if (parsed.pageJson !== undefined && parsed.pageJson !== null) {
+    if (typeof parsed.pageJson !== 'object' || parsed.pageJson === null || Array.isArray(parsed.pageJson)) {
+      throw new RouteValidationError('pageJson 必须是对象（合并进页面 page.json 的扩展字段）', loc)
+    }
+    pageJson = parsed.pageJson as Record<string, unknown>
+  }
+
+  // customRouteKeyName：可选字符串（gen-routes 扩展）
+  let customRouteKeyName: string | undefined
+  if (parsed.customRouteKeyName !== undefined && parsed.customRouteKeyName !== null) {
+    if (typeof parsed.customRouteKeyName !== 'string') {
+      throw new RouteValidationError('customRouteKeyName 必须是字符串', loc)
+    }
+    customRouteKeyName = parsed.customRouteKeyName
+  }
+
+  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, componentPath: loc.file }
 }
 
 /** 全局唯一性校验：path / name 重复报错（指向两个文件:行号） */

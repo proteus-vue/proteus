@@ -10,10 +10,9 @@ export const routes: RouteRecord[] = [
   { name: "mine", path: "pages/mine", component: "../pages/mine.vue", parent: "index", meta: {"title":"我的","isTab":true} },
   { name: "pinia-demo", path: "pages/pinia-demo", component: "../pages/pinia-demo.vue", parent: "index", meta: {"title":"状态管理"} },
   { name: "showcase", path: "pages/showcase", component: "../pages/showcase.vue", parent: "index", meta: {"title":"转场演示"} },
-  { name: "user", path: "pages/user/index", component: "../pages/user/index.vue", meta: {"title":"用户中心"} },
+  { name: "user", path: "pages/user/index", component: "../pages/user/index.vue", parent: "index", meta: {"title":"用户中心"} },
   { name: "user-profile", path: "pages/user/profile", component: "../pages/user/profile.vue", parent: "user", meta: {"title":"个人资料","requiresAuth":true} },
   { name: "virtual-list-demo", path: "pages/virtual-list-demo", component: "../pages/virtual-list-demo.vue", parent: "index", meta: {"title":"虚拟列表"} },
-  { name: "order-pages-list", path: "subpackages/order/pages/list", component: "../subpackages/order/pages/list.vue", subPackage: "order", meta: {"title":"订单列表"} },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -32,6 +31,5 @@ declare module '@proteus/router/types' {
     'user': {  },
     'user-profile': { id?: string; from?: string; kw?: string },
     'virtual-list-demo': {  },
-    'order-pages-list': {  },
   }
 }

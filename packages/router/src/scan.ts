@@ -1,6 +1,8 @@
 // packages/router/src/scan.ts
 // <route> 块扫描（docs/proteus-router-plan M1）—— 从所有 .vue 提取 <route>{...}</route>，校验并输出 RouteBlock[]
 // ★ 复用 @vue/compiler-sfc 的 parse（不重写 SFC 解析）；block.loc 天然给出文件:行号 → --trace-router 定位
+// ★双管线统一（决策 #112）：derivePath 模式下 path 可从文件位置推导（pages/home.vue → pages/home）——
+//   <route> 只需声明 meta（页面是路由唯一真相源，零样板），path/name 由扫描推导；显式声明优先
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse } from '@vue/compiler-sfc'
@@ -19,13 +21,45 @@ export function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+export interface ScanOptions {
+  /** --trace-router：来源登记输出（文件:行 path=...） */
+  verbose?: boolean
+  /**
+   * ★双管线统一：path 缺省时从文件位置推导（rootDir 相对路径去扩展名：pages/home.vue → pages/home）
+   * 显式声明的 path 优先；false（默认）时 path 必填（M1 schema 严格模式）
+   */
+  derivePath?: boolean
+}
+
+/** 从文件位置推导 path（rootDir 相对，去 .vue；index.vue → 目录路径：pages/user/index.vue → pages/user） */
+function derivePathFromFile(rootDir: string, file: string): string {
+  let rel = path.relative(rootDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
+  if (rel.endsWith('/index')) rel = rel.slice(0, -'/index'.length)
+  return rel
+}
+
+/** 从文件位置推导 name（kebab-case：pages/user/profile.vue → user-profile；index → 目录名：pages/user/index.vue → user） */
+export function deriveNameFromFile(rootDir: string, file: string): string {
+  const rel = path.relative(rootDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
+  const base = rel.split('/').pop() ?? ''
+  if (base === 'index') {
+    const dir = rel.slice(0, rel.lastIndexOf('/'))
+    const stripped = dir.replace(/^(pages|subpackages)(\/|$)/, '').replace(/\/$/, '')
+    return stripped ? stripped.replace(/\//g, '-') : 'index'
+  }
+  const stripped = rel.replace(/^(pages|subpackages)\//, '')
+  return stripped.replace(/\//g, '-')
+}
+
 /**
  * 扫描 rootDir 下所有 .vue 的 <route> 块，返回校验通过的 RouteBlock[]
  * - 页面无 <route> 块：跳过（兼容"页面级私有页"，verbose 时打印提示）
  * - 一个文件多个 <route> 块：报错
  * - verbose：--trace-router 模式的"来源登记"输出
+ * - derivePath：path 缺省从文件位置推导（页面零样板——meta 是唯一声明）
  */
-export function scanRoutes(rootDir: string, verbose = false): RouteBlock[] {
+export function scanRoutes(rootDir: string, options: ScanOptions | boolean = {}): RouteBlock[] {
+  const opts: ScanOptions = typeof options === 'boolean' ? { verbose: options } : options
   const routes: RouteBlock[] = []
 
   for (const file of walkVueFiles(rootDir)) {
@@ -49,9 +83,17 @@ export function scanRoutes(rootDir: string, verbose = false): RouteBlock[] {
       throw new RouteValidationError('<route> 块顶层必须是 JSON 对象', loc)
     }
 
-    const route = validateSchema(parsed, loc)
+    // ★derivePath：path 缺省 → 从文件位置推导（显式声明优先）；同时推导 name（index 归并目录名）
+    if (opts.derivePath && (parsed.path === undefined || parsed.path === null || parsed.path === '')) {
+      parsed.path = derivePathFromFile(rootDir, file)
+    }
+    if (opts.derivePath && (parsed.name === undefined || parsed.name === null || parsed.name === '')) {
+      parsed.name = deriveNameFromFile(rootDir, file)
+    }
+
+    const route = validateSchema(parsed, loc, { allowDerivedPath: opts.derivePath })
     routes.push({ ...route, componentPath: file })
-    if (verbose) {
+    if (opts.verbose) {
       console.log(`[route] ${file}:${loc.line}  path="${route.path}"${route.name ? ` name="${route.name}"` : ''}`)
     }
   }

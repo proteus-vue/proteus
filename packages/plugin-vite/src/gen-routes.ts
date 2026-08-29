@@ -13,6 +13,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { RouteRecord, RouteMeta } from '@proteus/router'
+import type { RouteBlock } from '@proteus/router/types'
+import { scanRoutes } from '@proteus/router/scan'
+import { buildRouteTree } from '@proteus/router/tree'
 import type { ProteusConfig } from './config'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
@@ -56,7 +59,7 @@ interface PageInfo {
   params?: Record<string, string>
 }
 
-/** 递归收集目录下所有 .vue 文件（跳过隐藏目录） */
+/** 递归收集目录下所有 .vue 文件（跳过隐藏目录）——组件扫描用 */
 function walkVueFiles(dir: string, acc: string[] = []): string[] {
   if (!fs.existsSync(dir)) return acc
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -68,80 +71,57 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-/**
- * 文件路径 → 命名路由（kebab-case）
- * - pages/index.vue            → "index"
- * - pages/user/index.vue       → "user"（目录名）
- * - pages/user/profile.vue     → "user-profile"
- * - subpackages/order/pages/list.vue → "order-pages-list"
- */
-function toRouteName(relSrc: string): string {
-  const base = relSrc.split('/').pop()!
-  if (base === 'index') {
-    const dir = relSrc.slice(0, relSrc.lastIndexOf('/')) // 如 pages/user
-    const stripped = dir.replace(/^(pages|subpackages)(\/|$)/, '').replace(/\/$/, '')
-    return stripped ? stripped.replace(/\//g, '-') : 'index'
-  }
-  const stripped = relSrc.replace(/^(pages|subpackages)\//, '')
-  return stripped.replace(/\//g, '-')
-}
-
-/** 解析 .vue 的 <route> 块（JSON），提取 meta / customRouteKeyName / pageJson / params */
-function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyName' | 'pageJson' | 'params'> {
-  const src = fs.readFileSync(file, 'utf-8')
-  const m = src.match(/<route\b[^>]*>([\s\S]*?)<\/route>/i)
-  if (!m) return {}
-  try {
-    const block = JSON.parse(m[1].trim()) as {
-      meta?: RouteMeta
-      customRouteKeyName?: string
-      pageJson?: Record<string, unknown>
-      params?: Record<string, string>
-    }
-    return {
-      meta: block.meta,
-      customRouteKeyName: block.customRouteKeyName,
-      pageJson: block.pageJson,
-      params: block.params,
-    }
-  } catch (err) {
-    console.warn(`[gen-routes] ${file} 的 <route> 块不是合法 JSON，已忽略：${(err as Error).message}`)
-    return {}
-  }
-}
-
-/** 扫描页面集合（主包 + 分包） */
+/** 扫描页面集合（主包 + 分包）——★双管线统一：<route> 解析走 scanRoutes（schema 校验 + loc + derivePath） */
 function scanPages(): PageInfo[] {
   const pages: PageInfo[] = []
 
   // 主包：pagesDir
-  for (const file of walkVueFiles(path.join(ROOT, config.pagesDir))) {
-    const relSrc = path.relative(APP_DIR, file).replace(/\\/g, '/').replace(/\.vue$/, '')
-    pages.push({ file, relSrc, mpPath: relSrc, ...parseRouteBlock(file) })
-    trace(`[route] ${relSrc} 来源登记（${path.relative(ROOT, file)}，route/scan）`)
+  const mainBlocks = scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true })
+  for (const b of mainBlocks) {
+    const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+    trace(`[route] ${relSrc} 来源登记（${b.loc.file}:${b.loc.line}，route/scan）`)
+    pages.push({
+      file: b.componentPath,
+      relSrc,
+      mpPath: relSrc,
+      meta: b.meta,
+      params: b.params,
+      pageJson: b.pageJson,
+      customRouteKeyName: b.customRouteKeyName,
+    })
   }
 
-  // 分包：subPackages[].root
+  // 分包：subPackages[].root（各分包独立扫描 + 树推导，跨分包不嵌套）
   for (const sp of config.subPackages ?? []) {
     const spRootAbs = path.join(ROOT, sp.root)
     const spName = sp.name ?? path.basename(sp.root)
-    for (const file of walkVueFiles(spRootAbs)) {
-      const relSrc = path.relative(APP_DIR, file).replace(/\\/g, '/').replace(/\.vue$/, '')
-      const relInSub = path.relative(spRootAbs, file).replace(/\\/g, '/').replace(/\.vue$/, '')
-      pages.push({ file, relSrc, mpPath: relSrc, subPackage: spName, relInSub, ...parseRouteBlock(file) })
+    const spBlocks = scanRoutes(spRootAbs, { derivePath: true, verbose: true })
+    for (const b of spBlocks) {
+      const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+      const relInSub = path.relative(spRootAbs, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+      pages.push({
+        file: b.componentPath,
+        relSrc,
+        mpPath: relSrc,
+        subPackage: spName,
+        relInSub,
+        meta: b.meta,
+        params: b.params,
+        pageJson: b.pageJson,
+        customRouteKeyName: b.customRouteKeyName,
+      })
     }
   }
 
   return pages
 }
 
-/** 组装路由记录（含父子关系：同目录存在 index.vue 时为其子路由） */
+/** 组装路由记录（★双管线统一：父子关系走 buildRouteTree——path 前缀推导 + 显式 parent，含 trace） */
 function buildRoutes(pages: PageInfo[]): RouteRecord[] {
-  const nameByRel = new Map(pages.map(p => [p.relSrc, toRouteName(p.relSrc)]))
-
   const routes: RouteRecord[] = pages.map(p => {
     const r: RouteRecord = {
-      name: nameByRel.get(p.relSrc)!,
+      // ★统一后 name 由 scan 推导（derivePath 模式：index 归并目录名，与旧 toRouteName 一致）
+      name: deriveName(p),
       path: p.mpPath,
       // 相对 RouterView 所在目录（{appDir}/router）的路径，Web 端 import.meta.glob 按此匹配
       component: path.relative(path.join(APP_DIR, 'router'), p.file).replace(/\\/g, '/'),
@@ -153,21 +133,41 @@ function buildRoutes(pages: PageInfo[]): RouteRecord[] {
     return r
   })
 
-  // 父子关系：src/pages/user/profile.vue → parent = src/pages/user/index.vue 的 name（若存在）
-  for (const p of pages) {
-    if (p.relSrc.endsWith('/index') || p.relSrc === 'index') continue
-    const dirIndex = p.relSrc.replace(/\/[^/]+$/, '/index')
-    const parentName = nameByRel.get(dirIndex)
-    if (parentName) {
-      const r = routes.find(r => r.name === nameByRel.get(p.relSrc))
-      if (r) {
-        r.parent = parentName
-        trace?.(`[route] ${p.relSrc} → parent "${parentName}"（同目录 index.vue 推导，route/derive-name）`)
-      }
+  // ★父子关系：buildRouteTree（path 前缀推导：pages/user + pages/user/profile；显式 parent 覆盖）
+  const nameByRel = new Map(pages.map(p => [p.relSrc, deriveName(p)]))
+  const blocks = pages.map(p => ({
+    loc: { file: p.file, line: 1, column: 1 },
+    path: p.relSrc.endsWith('/index') ? p.relSrc.slice(0, -'/index'.length) : p.relSrc,
+    name: nameByRel.get(p.relSrc),
+    meta: p.meta ?? {},
+    componentPath: p.file,
+  }))
+  const tree = buildRouteTree(blocks, {}, trace)
+  const parentByName = new Map<string, string>()
+  const walk = (nodes: typeof tree, parent?: string): void => {
+    for (const n of nodes) {
+      if (n.name && parent) parentByName.set(n.name, parent)
+      walk(n.children, n.name)
     }
+  }
+  walk(tree)
+  for (const r of routes) {
+    const parent = parentByName.get(r.name)
+    if (parent && parent !== r.name) r.parent = parent
   }
 
   return routes
+}
+
+/** name 推导（与 scan derivePath 一致：index 归并目录名）——page 无 name 时用文件位置 */
+function deriveName(p: PageInfo): string {
+  const base = p.relSrc.split('/').pop() ?? ''
+  if (base === 'index') {
+    const dir = p.relSrc.slice(0, p.relSrc.lastIndexOf('/'))
+    const stripped = dir.replace(/^(pages|subpackages)(\/|$)/, '').replace(/\/$/, '')
+    return stripped ? stripped.replace(/\//g, '-') : 'index'
+  }
+  return p.relSrc.replace(/^(pages|subpackages)\//, '').replace(/\//g, '-')
 }
 
 /** 校验硬边界（平台限制，无法突破） */

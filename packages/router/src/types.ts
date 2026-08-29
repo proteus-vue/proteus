@@ -65,6 +65,12 @@ export interface RouteBlock {
   lazy?: boolean
   /** 对应 .vue 文件绝对路径（codegen 生成 import 用） */
   componentPath: string
+  /** 路由参数类型声明（<route>.params：字段名 → string/number/boolean，类型提示全链路） */
+  params?: Record<string, string>
+  /** gen-routes 扩展：合并进页面 page.json（如半屏页透明背景） */
+  pageJson?: Record<string, unknown>
+  /** gen-routes 扩展：Skyline 自定义路由 key（page.json 的 customRouteKeyName） */
+  customRouteKeyName?: string
 }
 
 /** M2：嵌套路由树节点（tree.ts）——lazy 已解析为最终值；parent 保留（显式声明，children 反映实际嵌套） */
