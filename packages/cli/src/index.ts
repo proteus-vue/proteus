@@ -2,7 +2,7 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -13,6 +13,7 @@ import { runAuditModule } from './module-audit'
 import { writeModuleConfigSkeleton } from './module-init'
 import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
+import { checkI18nUsage, formatI18nCheck } from './i18n-check'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -101,6 +102,18 @@ async function main(): Promise<void> {
       const result = auditComponents(root)
       console.log(formatComponentAudit(result))
       if (!result.ok) process.exitCode = 1
+      break
+    }
+    case 'i18n:check': {
+      const { root, catalog } = parseI18nCheckArgs(rest)
+      try {
+        const result = checkI18nUsage(root, catalog)
+        console.log(formatI18nCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-i18n] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
       break
     }
     case 'version':

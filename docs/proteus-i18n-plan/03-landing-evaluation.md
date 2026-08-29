@@ -71,5 +71,5 @@ i18n.setLocale('enUS'); i18n.dir()                // 'ltr' | 'rtl'
 | 批 | 状态 | 说明 |
 |----|------|------|
 | B1 @proteus/i18n 包（catalog + ICU 子集 + 类型安全）| ✅ 已落地 | 2026-08，11 用例（插值/复数/=N/select/嵌套/类型安全/dir/locale 切换） |
-| B2 CLI i18n:check | ⬜ | — |
+| B2 CLI i18n:check | ✅ 已落地 | 2026-08，4 用例——扫描 t()/$t()/i18n.t() 引用 vs 语言包 JSON：缺失（error）/多余（warning）/注释豁免/变量 key 跳过；--catalog 指定 |
 | B3 demo + CI | ⬜ | — |

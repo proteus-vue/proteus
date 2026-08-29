@@ -202,6 +202,24 @@ export function parseComponentsAuditArgs(argv: string[]): { root: string } {
   return { root: path.resolve(dir) }
 }
 
+export function parseI18nCheckArgs(argv: string[]): { root: string; catalog?: string } {
+  let catalog: string | undefined
+  const positional: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--catalog') {
+      catalog = argv[i + 1]
+      i++
+    } else if (!a.startsWith('-')) {
+      positional.push(a)
+    } else {
+      throw new Error(`未知参数：${a}`)
+    }
+  }
+  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  return { root: path.resolve(positional[0] ?? '.'), catalog: catalog ? path.resolve(catalog) : undefined }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
