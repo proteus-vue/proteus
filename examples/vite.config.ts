@@ -33,7 +33,11 @@ export default defineConfig(({ mode }) => {
     plugins: isMp
       ? [
           // 小程序端：独占编译管线（不用 plugin-vue），标准 Vue SFC → wxml/wxss/js
-          mpTransform({ config }),
+          // ★框架内置组件目录显式传入（组件库未拆包，决策 #115）：与下方 @proteus/components alias 同一路径
+          mpTransform({
+            config,
+            frameworkComponentsDir: fileURLToPath(new URL('../src/components', import.meta.url)),
+          }),
         ]
       : [vue(), routeBlocksPlugin()],
     resolve: {

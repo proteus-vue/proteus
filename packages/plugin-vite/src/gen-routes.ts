@@ -25,6 +25,11 @@ export interface GenRoutesOptions {
   root?: string
   /** --trace-router：输出每条路由的生成决策（来源登记 + 父路由推导依据） */
   trace?: (msg: string) => void
+  /**
+   * ★框架内置组件目录（组件库未拆包，决策 #115）：显式传入绝对路径（如 monorepo 根 src/components）；
+   * 缺省相对 root 的 src/components（create-proteus 模板工程用）
+   */
+  frameworkComponentsDir?: string
 }
 
 /**
@@ -38,6 +43,8 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   // 应用根目录（页面/入口所在目录，从 pagesDir 推导：examples/pages → examples）
   const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
   const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
+  // ★框架内置组件目录（@proteus/components 未拆包时的定位方式，决策 #115）
+  const FW_COMPONENTS = options.frameworkComponentsDir ?? path.join(ROOT, 'src', 'components')
 
 /** 扫描到的页面 */
 interface PageInfo {
@@ -348,8 +355,8 @@ function collectComponents(file: string): Record<string, string> {
       out[tag] = `/components/${tag}/index`
       continue
     }
-    // 框架内置组件（src/components/）：产物 rel 前缀 proteus/
-    const fwCandidates = [path.join(ROOT, 'src', 'components', tag, 'index.vue'), path.join(ROOT, 'src', 'components', `${tag}.vue`)]
+    // 框架内置组件（FW_COMPONENTS/）：产物 rel 前缀 proteus/
+    const fwCandidates = [path.join(FW_COMPONENTS, tag, 'index.vue'), path.join(FW_COMPONENTS, `${tag}.vue`)]
     const fwFound = fwCandidates.find((c) => fs.existsSync(c))
     if (fwFound) {
       out[tag] = `/proteus/${tag}/index`
@@ -390,7 +397,7 @@ function writePageJsons(pages: PageInfo[]): void {
 function writeComponentJsons(): void {
   const roots = [
     { dir: path.join(APP_DIR, 'components'), prefix: 'components' },
-    { dir: path.join(ROOT, 'src', 'components'), prefix: 'proteus' },
+    { dir: FW_COMPONENTS, prefix: 'proteus' },
   ]
   let count = 0
   for (const { dir, prefix } of roots) {

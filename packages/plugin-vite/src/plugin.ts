@@ -135,6 +135,12 @@ export interface PluginOptions {
   rpxRatio?: number
   /** ★底线循环 ①③：规则覆盖（缺省取 config.rules） */
   rules?: TransformRuleOverrides
+  /**
+   * ★框架内置组件目录（@proteus/components 组件库拆包前的定位方式，决策 #115）：
+   * 组件库未拆包，仓库在工程根之外（如 monorepo 根 src/components）时，工程显式传入绝对路径；
+   * 缺省相对工程根 src/components（create-proteus 模板工程用）
+   */
+  frameworkComponentsDir?: string
 }
 
 function walkVueFiles(dir: string, acc: string[] = []): string[] {
@@ -185,7 +191,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       if (fs.existsSync(appComponents)) pushRel(appComponents)
       // 框架内置组件（v0.4，★定位修正：非示例组件）：src/components/<name>/index.vue
       // 产物路径规范化为 proteus/<name>/index（与应用组件 /components/... 隔离，gen-routes 同步解析）
-      const frameworkComponents = path.join(projectRoot, 'src', 'components')
+      const frameworkComponents = opts.frameworkComponentsDir ?? path.join(projectRoot, 'src', 'components')
       if (fs.existsSync(frameworkComponents)) {
         for (const f of walkVueFiles(frameworkComponents)) {
           const relIn = path.relative(frameworkComponents, f).replace(/\\/g, '/').replace(/\.vue$/, '')
