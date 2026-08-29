@@ -10,6 +10,8 @@
 </route>
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+// ★module-plan B0：共享模块跨模块引用（MP 端编译为 require('../utils/format.js')）
+import { formatTime } from '../utils/format'
 
 const name = ref('')
 const bio = ref('')
@@ -30,6 +32,14 @@ watch(count, (n, o) => {
 const cardOn = ref(true)
 function toggleCard() {
   cardOn.value = !cardOn.value
+}
+
+// ★module-plan B0：跨模块引用（utils/format 共享模块）——函数调用在方法体，模板显示 data 字段
+const now = ref(0)
+const timeText = ref('--:--:--')
+function refreshTime() {
+  now.value = Date.now()
+  timeText.value = formatTime(now.value)
 }
 
 function bump() {
@@ -75,6 +85,12 @@ function bump() {
       <transition name="fade">
         <div v-if="cardOn" class="card">过渡卡片：切换时先播 fade 动画再移除（Web 原生 / MP 状态机）</div>
       </transition>
+    </div>
+
+    <!-- 共享模块跨模块引用（module-plan B0）：utils/format 纯函数（MP 端 require） -->
+    <div class="box">
+      <button @click="refreshTime">刷新时间（共享模块 utils/format → require）</button>
+      <p class="tip">当前时间：{{ timeText }}</p>
     </div>
   </div>
 </template>

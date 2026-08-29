@@ -38,11 +38,13 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(r.warnings.some((w) => w.includes('routeType'))).toBe(true)
   })
 
-  it('import 剥离 → 警告（跨模块引用将 undefined）', () => {
+  it('import 剥离 → 警告（无法解析的跨模块引用）+ 函数调用运行时初始化', () => {
     const src = '<template><view>{{ v }}</view></template>\n<script setup>\nimport { useV } from "./util"\nconst v = useV()\n</script>'
     const r = compile(src)
     expect(r.warnings.some((w) => w.includes('import') && w.includes('undefined'))).toBe(true)
-    expect(r.js).toContain('v: undefined') // 初始化仍降级 undefined（非静默）
+    // ★module-plan B0：函数调用初始化不再降级 data undefined——运行时初始化实例属性（onLoad 注入）
+    expect(r.js).toContain('this.v = useV()')
+    expect(r.js).not.toContain('v: undefined')
   })
 
   it('内置指令不受影响（v-if/v-for/v-show 零新增警告）', () => {
@@ -105,11 +107,13 @@ describe('Batch C：收尾补全（vue-compat）', () => {
     expect(r.wxml).toContain('(on?\'on \':\'\')')
   })
 
-  it('函数调用初始化警告 actionable（跨模块/store 桥提示）', () => {
+  it('函数调用初始化警告 actionable（运行时初始化 + 模块 import 提示）', () => {
     const r = compile('<template><view>{{ store }}</view></template>\n<script setup>\nconst store = useStore()\n</script>')
     const w = r.warnings.find((x) => x.includes('const store'))
     expect(w).toBeDefined()
-    expect(w).toContain('函数调用/跨模块引用')
-    expect(w).toContain('store 桥')
+    // ★module-plan B0：函数调用 → 运行时初始化（实例属性），警告提示模块 import 而非旧“跨模块引用”
+    expect(w).toContain('函数调用')
+    expect(w).toContain('运行时初始化')
+    expect(r.js).toContain('this.store = useStore()')
   })
 })

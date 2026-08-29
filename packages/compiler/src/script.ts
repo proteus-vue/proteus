@@ -126,6 +126,59 @@ function buildProvideInject(
   }
 }
 
+/**
+ * ★module-plan B0：解析 import 语句结构（default / named / namespace / 副作用 / type）
+ * 返回形态供 require 转换（compiler 生成语句；requirePath 由插件预计算传入）
+ */
+interface ImportSpec {
+  /** 源模块路径（源码书写形式，如 ../stores/player） */
+  source: string
+  kind: 'default' | 'named' | 'namespace' | 'side'
+  /** named 导入名 / default 变量名 / namespace 变量名（side 为空） */
+  names: string[]
+  line: number
+  /** 是否为纯类型导入（import type，产物剥离不需 require） */
+  typeOnly: boolean
+}
+function extractImports(source: string): ImportSpec[] {
+  const out: ImportSpec[] = []
+  const lines = source.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const t = line.trim()
+    if (!t.startsWith('import ')) continue
+    const lineNo = i + 1
+    // 副作用导入：import 'm'
+    let m = t.match(/^import\s+['"]([^'"]+)['"];?$/)
+    if (m) { out.push({ source: m[1], kind: 'side', names: [], line: lineNo, typeOnly: false }); continue }
+    // type 导入：import type { x } from 'm'（纯类型，运行时剥离）
+    m = t.match(/^import\s+type\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?$/)
+    if (m) { out.push({ source: m[2], kind: 'named', names: [], line: lineNo, typeOnly: true }); continue }
+    // import def, { a, b } from 'm'（default + named 组合）
+    m = t.match(/^import\s+([A-Za-z_$][\w$]*)\s*,\s*\{([^}]*)\}\.*\s+from\s+['"]([^'"]+)['"];?$/)
+    if (m) {
+      const names = m[2].split(',').map((n) => n.trim()).filter(Boolean).map((n) => n.replace(/\s+as\s+[\w$]+$/, '').trim())
+      out.push({ source: m[3], kind: 'default', names: [m[1]], line: lineNo, typeOnly: false })
+      if (names.length) out.push({ source: m[3], kind: 'named', names, line: lineNo, typeOnly: false })
+      continue
+    }
+    // import * as ns from 'm'
+    m = t.match(/^import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"];?$/)
+    if (m) { out.push({ source: m[2], kind: 'namespace', names: [m[1]], line: lineNo, typeOnly: false }); continue }
+    // import { a, b } from 'm'
+    m = t.match(/^import\s+\{([^}]*)\}\s+from\s+['"]([^'"]+)['"];?$/)
+    if (m) {
+      const names = m[1].split(',').map((n) => n.trim()).filter(Boolean).map((n) => n.replace(/\s+as\s+[\w$]+$/, '').trim())
+      out.push({ source: m[2], kind: 'named', names, line: lineNo, typeOnly: false })
+      continue
+    }
+    // import def from 'm'
+    m = t.match(/^import\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"];?$/)
+    if (m) { out.push({ source: m[2], kind: 'default', names: [m[1]], line: lineNo, typeOnly: false }); continue }
+  }
+  return out
+}
+
 /** 从 openBraceIndex 的 { 开始匹配闭合大括号，返回内部内容 */
 function extractBracedBody(source: string, openBraceIndex: number): string | null {
   let depth = 0
@@ -392,13 +445,14 @@ function extractComputedFromInit(
   return { name, deps, expr, setter }
 }
 
-/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 */
+/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 + ★B0 运行时初始化（函数调用） */
 function extractData(
   source: string,
   warnings: string[],
   trace?: TransformTrace,
-): { data: Record<string, unknown>; computed: Record<string, ComputedInfo> } {
+): { data: Record<string, unknown>; computed: Record<string, ComputedInfo>; runtimeInits: Array<{ name: string; call: string }> } {
   const data: Record<string, unknown> = {}
+  const runtimeInits: Array<{ name: string; call: string }> = []
   const rawComputed: Array<{ name: string; init: string; line: number }> = []
   // 只提取行首（缩进 0）的顶层 const：函数体/生命周期体/块内的局部 const 天然跳过
   const re = /const\s+([A-Za-z_$][\w$]*)\s*=\s*/gm
@@ -429,15 +483,23 @@ function extractData(
     const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
     const raw = inner ? inner[1] : init
     const value = evalLiteral(raw)
-    if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
-      // vue-compat Batch C：函数调用初始化（跨模块/方法调用）补充 actionable 提示
-      // ★Batch 3：inject("key") 是 Vue 内置注入（data 初始 undefined，运行时 onLoad/attached setData 填充）——不提示
-      const isCall = /^[\w$.]+\(/.test(raw.trim())
+    const isCall = /^[\w$.]+\(/.test(raw.trim())
+    if (isCall && value === undefined && !/^inject\s*\(/.test(raw.trim())) {
+      // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
+      // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
+      runtimeInits.push({ name, call: raw.trim() })
+      trace?.add('script/runtime-init', {
+        line,
+        before: `const ${name} = ${raw.slice(0, 40)}`,
+        after: `this.${name} = ${raw.trim()}（onLoad/attached 运行时初始化，实例属性；模板绑定不支持）`,
+      })
       warnings.push(
-        isCall
-          ? `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用/跨模块引用，data.${name} 将设为 undefined（小程序单文件产物无模块系统——请内联共享逻辑或改用框架 store 桥，见 docs/pinia-migration.md）`
-          : `const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`,
+        `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用——已编译为运行时初始化 this.${name}（onLoad/attached 执行，实例属性：模板绑定不支持，逻辑层可用；共享逻辑请用模块 import，见 docs/proteus-module-plan/）`,
       )
+      continue // 不进 data（运行时实例属性）
+    }
+    if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
+      warnings.push(`const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`)
     }
     data[name] = value
   }
@@ -456,7 +518,7 @@ function extractData(
       warnings.push(`computed ${c.name} 仅支持箭头简写 + 表达式体（computed(() => expr)），已忽略`)
     }
   }
-  return { data, computed }
+  return { data, computed, runtimeInits }
 }
 
 /** 顶层方法（源码 + 起始行号，供 sourcemap / 行号注释） */
@@ -553,6 +615,11 @@ function computedInitLine(computeds: Record<string, ComputedInfo>): string {
   const entries = Object.entries(computeds)
   if (!entries.length) return ''
   return `this.setData({ ${entries.map(([n, c]) => `${n}: ${c.expr}`).join(', ')} })`
+}
+
+/** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行） */
+function runtimeInitLine(inits: Array<{ name: string; call: string }>): string {
+  return inits.map((i) => `this.${i.name} = ${i.call}`).join('\n')
 }
 
 /** immediate watch 初始化行：onLoad 时调用一次（单源标量 / 多源数组，oldVal = undefined） */
@@ -774,31 +841,51 @@ export function transformScriptToPage(
 ): ScriptTransformResult {
   const warnings: string[] = []
   const trace = extra.trace
-  // ★Batch A（vue-compat）：import 剥离显式警告（反黑盒）——小程序单文件产物无模块系统，
-  //   import 的符号在产物中未定义（引用 undefined），不再静默
-  if (!extra.isComponent) {
-    // 跳过 Vue 内置 API import（ref/computed/watch 等由编译器静态处理，不依赖真实模块）
-    const importRe = /^import\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([^'"]+)['"];?\s*$/gm
-    const importNames: string[] = []
-    let im: RegExpExecArray | null
-    while ((im = importRe.exec(source))) {
-      if (im[1] === 'vue') continue // Vue API 导入：编译器静态识别，正常用法
-      importNames.push(im[1])
+  // ★module-plan B0：import → require（跨模块引用）——moduleImports 由插件预计算（源码路径 → 产物相对 require 路径）
+  const moduleImports = new Map<string, string>()
+  for (const mi of extra.moduleImports ?? []) moduleImports.set(mi.source, mi.requirePath)
+  // 解析 import 结构（named/default/namespace/side/type）→ 生成 require 语句（产物顶部）
+  const requireLines: string[] = []
+  const importWarnings: string[] = []
+  for (const imp of extractImports(source)) {
+    if (imp.source === 'vue') continue // Vue API 导入：编译器静态识别，正常用法
+    if (imp.typeOnly) continue // import type：纯类型，运行时剥离
+    if (imp.source.endsWith('.vue')) continue // 组件导入：MP 端走 usingComponents（编译器忽略）
+    const reqPath = moduleImports.get(imp.source)
+    if (reqPath) {
+      // ★B0：可解析的跨模块引用 → require 转换（共享模块由插件编译为独立 js 产物）
+      if (imp.kind === 'named') {
+        requireLines.push(`const { ${imp.names.join(', ')} } = require('${reqPath}')`)
+      } else if (imp.kind === 'namespace') {
+        requireLines.push(`const ${imp.names[0]} = require('${reqPath}')`)
+      } else if (imp.kind === 'default') {
+        requireLines.push(`const ${imp.names[0]} = require('${reqPath}').default !== undefined ? require('${reqPath}').default : require('${reqPath}')`)
+      } else {
+        requireLines.push(`require('${reqPath}')`)
+      }
       trace?.add('script/module-import', {
-        line: lineAt(source, im.index),
-        before: im[0].trim().slice(0, 60),
-        after: '（剥离：小程序单文件产物无模块系统，引用将 undefined）',
+        line: imp.line,
+        before: `import { ${imp.names.join(', ')} } from '${imp.source}'`,
+        after: `const { ${imp.names.join(', ')} } = require('${reqPath}')（跨模块引用，共享模块独立产物）`,
+      })
+    } else if (!extra.isComponent) {
+      // 不可解析的跨模块 import（npm 包 / 未收录路径）：剥离 + 警告（反黑盒，vue-compat Batch A）
+      importWarnings.push(imp.source)
+      trace?.add('script/module-import', {
+        line: imp.line,
+        before: `import ... from '${imp.source}'`,
+        after: '（剥离：无法解析的跨模块引用，符号将 undefined）',
       })
     }
-    if (importNames.length) {
-      warnings.push(
-        `检测到 ${importNames.length} 条 import（${importNames.slice(0, 3).join(', ')}${importNames.length > 3 ? '…' : ''}）——小程序单文件产物无模块系统，跨模块引用将 undefined：请内联共享逻辑或改用框架 store 桥（vue-compat Batch A）`,
-      )
-    }
+  }
+  if (importWarnings.length) {
+    warnings.push(
+      `检测到 ${importWarnings.length} 条无法解析的 import（${importWarnings.slice(0, 3).join(', ')}${importWarnings.length > 3 ? '…' : ''}）——小程序产物无模块系统，跨模块引用将 undefined：请改用本地模块路径（module-plan B0：相对路径共享模块自动编译 + require）或框架 store 桥`,
+    )
   }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
-  const { data, computed } = disabled.has('script/const-to-data') ? { data: {}, computed: {} } : extractData(source, warnings, trace)
+  const { data, computed, runtimeInits } = disabled.has('script/const-to-data') ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }> } : extractData(source, warnings, trace)
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
@@ -842,6 +929,8 @@ export function transformScriptToPage(
   const lines: string[] = []
   if (extra.file) lines.push(`// ${extra.file}（Proteus mp-transform 编译产物）`)
   lines.push('// AUTO-GENERATED by vite-plugin-mp-transform.ts. DO NOT EDIT.', '')
+  // ★module-plan B0：跨模块引用 require 语句（共享模块产物，页面/组件顶部声明）
+  if (requireLines.length) lines.push(...requireLines, '')
   lines.push(extra.isComponent ? 'Component({' : 'Page({')
 
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra)]
@@ -929,7 +1018,7 @@ ${indentBody([unsubLine, pageCleanupLine].filter(Boolean).join('\n'))}
     if (piBlocks.provide) {
       lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
     }
-    const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
+    const initLines = [computedInitLine(computeds), runtimeInitLine(runtimeInits), immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }
@@ -939,7 +1028,7 @@ ${indentBody([unsubLine, pageCleanupLine].filter(Boolean).join('\n'))}
     }
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：computed 初始化 + immediate watch + provide/inject 注入在方法体前
-    const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+    const initLines = [computedInitLine(computeds), runtimeInitLine(runtimeInits), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
     const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
@@ -947,7 +1036,7 @@ ${indentBody([unsubLine, pageCleanupLine].filter(Boolean).join('\n'))}
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）
     if (!disabled.has('script/onload-params')) {
       trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
-      const initLines = [computedInitLine(computeds), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+      const initLines = [computedInitLine(computeds), runtimeInitLine(runtimeInits), immediateWatchLine(watches), piBlocks.page].filter(Boolean)
       lines.push(
         [
           '  onLoad(options) {',

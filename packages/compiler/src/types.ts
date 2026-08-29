@@ -85,6 +85,8 @@ export interface ScriptTransformOptions {
   inlineHandlers?: Array<{ name: string; code: string }>
   /** ★vue-compat-advance Batch 5：离开动画状态机（来自 template；生成 __tv/__tl data + toggle 方法 + 写入点注入） */
   transitions?: Array<{ ref: string; tName: string; index: number }>
+  /** ★module-plan B0：跨模块引用映射（插件预计算：源码 import 路径 → 产物相对 require 路径）；命中 → import 转 require，未收录 → 剥离 + 警告 */
+  moduleImports?: Array<{ source: string; requirePath: string }>
   /** 决策 trace 收集器（阶段二，可空） */
   trace?: TransformTrace
 }
@@ -118,6 +120,8 @@ export interface CompileOptions {
    * 由适配层注入（插件用 sass/less），保持编译器零依赖；未提供则原样传入
    */
   preprocessStyle?: (lang: string, content: string) => string
+  /** ★module-plan B0：跨模块引用映射（插件预计算：源码 import 路径 → 产物相对 require 路径）；命中 → import 转 require */
+  moduleImports?: Array<{ source: string; requirePath: string }>
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */

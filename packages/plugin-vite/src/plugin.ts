@@ -13,7 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { transform as esbuildTransform } from 'esbuild'
+import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
 import { compileVueSfc } from '@proteus/compiler'
@@ -215,6 +215,107 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
       }
+      // ★module-plan B0：跨模块引用——扫描页面/组件 import 的相对路径共享模块（.ts/.js，非 .vue）→ esbuild bundle 为 CJS 独立产物；
+      //   页面/组件产物 import → require（相对产物路径）；vue/@proteus/*/npm/.vue 不参与（编译器静态 / usingComponents / 无产物）
+      const moduleImportsByFile = new Map<string, Array<{ source: string; requirePath: string }>>()
+      const sharedModules = new Set<string>()
+      const resolveShared = (absFrom: string, source: string): string | null => {
+        if (!source.startsWith('.')) return null // 仅相对路径（本地共享模块）
+        const base = path.resolve(path.dirname(absFrom), source)
+        for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
+          if (fs.existsSync(cand) && !cand.endsWith('.vue')) return cand
+        }
+        return null
+      }
+      const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
+        const src = fs.readFileSync(absFile, 'utf-8')
+        // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
+        const script = src.includes('<script') ? (src.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '') : src
+        const out: Array<{ source: string; typeOnly: boolean }> = []
+        for (const m of script.matchAll(/import\s+(?:type\s+)?.*?from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/gm)) {
+          const s = m[1] || m[2]
+          if (s) out.push({ source: s, typeOnly: m[0].includes('import type') })
+        }
+        return out
+      }
+      for (const { file } of files) {
+        const list: Array<{ source: string; requirePath: string }> = []
+        for (const imp of scanImports(file)) {
+          if (imp.typeOnly) continue
+          const resolved = resolveShared(file, imp.source)
+          if (!resolved) continue
+          sharedModules.add(resolved)
+          list.push({ source: imp.source, requirePath: '' }) // requirePath 待 BFS 后回填
+        }
+        if (list.length) moduleImportsByFile.set(file, list)
+      }
+      // BFS：共享模块内部 import（相对路径）继续收集
+      const pending = [...sharedModules]
+      while (pending.length) {
+        const cur = pending.pop()!
+        for (const imp of scanImports(cur)) {
+          if (imp.typeOnly) continue
+          const resolved = resolveShared(cur, imp.source)
+          if (!resolved || sharedModules.has(resolved)) continue
+          sharedModules.add(resolved)
+          pending.push(resolved)
+        }
+      }
+      // ★B0 边界：含第三方依赖（裸模块 import，如 pinia/vue/@proteus/*）的共享模块树跳过编译
+      // （bundle 体积过大，MVP 仅支持纯逻辑共享模块；Pinia 接入为后续批次，届时配合分包/去重）
+      const hasThirdParty = new Set<string>()
+      for (const sharedFile of sharedModules) {
+        for (const imp of scanImports(sharedFile)) {
+          if (imp.typeOnly) continue
+          if (!imp.source.startsWith('.')) hasThirdParty.add(sharedFile)
+        }
+      }
+      // 传递：被有第三方依赖模块 import 的共享模块也跳过（bundle 会把它们一起打进）
+      const skipShared = new Set<string>()
+      const markSkip = (f: string) => {
+        if (skipShared.has(f)) return
+        skipShared.add(f)
+        for (const other of sharedModules) {
+          if (other === f) continue
+          const deps = scanImports(other).map((i) => resolveShared(other, i.source)).filter(Boolean)
+          if (deps.includes(f)) markSkip(other)
+        }
+      }
+      for (const f of hasThirdParty) markSkip(f)
+      if (skipShared.size) {
+        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑共享模块，bundle 体积过大）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
+        // 页面侧回退：被跳过模块的 import 移出 moduleImports（compiler 走剥离 + 警告）
+        for (const [file, list] of moduleImportsByFile) {
+          moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source) ?? '')))
+        }
+      }
+      // 共享模块 → esbuild bundle（全内联，产物自包含，minify）→ CJS 单文件输出
+      for (const sharedFile of sharedModules) {
+        if (skipShared.has(sharedFile)) continue
+        const relNoExt = path.relative(appDir, sharedFile).replace(/\\/g, '/').replace(/\.(ts|js)$/, '')
+        const build = await esbuildBuild({ entryPoints: [sharedFile], bundle: true, format: 'cjs', write: false, target: 'es2018', charset: 'utf8', logLevel: 'silent', minify: true })
+        const code = build.outputFiles[0]?.text ?? ''
+        if (!code) {
+          console.warn(`[mp-transform] 共享模块编译失败：${relNoExt}`)
+          continue
+        }
+        this.emitFile({ type: 'asset', fileName: `${relNoExt}.js`, source: code })
+        console.log(`[mp-transform] 共享模块 → ${relNoExt}.js（${(code.length / 1024).toFixed(1)}KB，bundle 内联）`)
+      }
+      // 回填 requirePath：页面产物（rel.js）→ 共享模块产物相对路径
+      for (const [file, list] of moduleImportsByFile) {
+        const entry = files.find((f) => f.file === file)
+        if (!entry) continue
+        const pageDir = path.posix.dirname(entry.rel)
+        for (const item of list) {
+          const sharedFile = resolveShared(file, item.source)
+          if (!sharedFile) continue
+          const sharedRel = path.relative(appDir, sharedFile).replace(/\\/g, '/').replace(/\.(ts|js)$/, '') + '.js'
+          let rel = path.posix.relative(pageDir, sharedRel)
+          if (!rel.startsWith('.')) rel = `./${rel}`
+          item.requirePath = rel
+        }
+      }
       for (const { file, rel } of files) {
         const source = fs.readFileSync(file, 'utf-8')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
@@ -224,6 +325,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           px2rpx,
           rpxRatio,
           rules,
+          // ★module-plan B0：跨模块引用映射（共享模块 require 路径）
+          moduleImports: moduleImportsByFile.get(file),
           // dev 调试：产物注入源码行号注释 + 自动 handler 调试日志（PROTEUS_DEBUG=1 时开启）
           annotateLines: isDebug,
           debug: isDebug,
