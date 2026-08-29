@@ -49,6 +49,7 @@
 - `src/runtime/pageLifecycle.ts`（onReady/onUnload 钩子 + createPage/createComponent + 参数 decode）
 - `src/runtime/renderer.ts`（可选扩展骨架，MVP 不做）
 - `src/main.mp.ts`（App() + registerRouteBuilders，产物 app.js）
+- `src/runtime/appSkeleton.ts`（★ 决策 #70：app.js 骨架模板，极简入口自动拼装）
 - `tests/runtime.test.ts`（11 用例）
 
 **P6 调试与验证**
@@ -138,12 +139,13 @@
 67. **底线三循环落地（★框架立身之本，宪章级）**：框架的底线 = 三条闭环真实可跑——① AI 能力涨 → AI 写更复杂的 transform → 框架获得新能力；② 编译出问题 → AI 看 dist/ → 定位到哪条 transform → 改规则 → 重编译；③ 用户需求变 → proteus.config.ts 开关 → 行为即时变化。落地：`src/compiler/overrides.ts`（resolveOverrides：TAG_MAP/EVENT_MAP/SEMANTIC_CLASS 常量 + 覆盖补丁合并 + 禁用集；未知规则 ID 编译期警告防笔误）；`TransformRuleOverrides`（disabled / mapping / customTags）加入 CompileOptions + 三转换函数全部改走生效配置（template 的 tagMap/eventMap/semanticClass/disabled 进 SerializeContext；style 的选择器重写正则按生效映射生成；script 的 data/methods/lifecycle/ref/自动 handler/onload 均支持禁用）；`proteus.config.ts` 新增 rules 段（演示 customTags: demo-box → view，showcase.vue 已加 <demo-box> 演示元素）；循环 ② 闭环：`.transform-debug/<file>.json` 转储新增 trace 字段（compileVueSfc 三阶段 trace 合并入 CompileResult.trace），debug 构建 dist 产物 + 决策链一处定位；`tests/overrides.test.ts`（17 用例：customTags/mapping/disabled 各阶段 + trace 反映生效行为 + 未知 ID 警告）；测试 97 → 114
 68. **路线图新增 v0.6：App 原生（Vue 自定义渲染器）+ Vapor 兼容（★标准 Vue 原则的长期红利）**：两条新主线入 roadmap——① **App 原生端**：MVP 原"非目标"改为规划 v0.6，用 `@vue/runtime-core` 的 `createRenderer` 定义原生 host config（view→原生视图/text→原生文本/事件桥接），标准 Vue SFC 直接运行；架构要点：App 端 = **运行时渲染通道**（Vue 官方渲染器，非自研 diff），与 Web/MP 编译期通道并列，两条通道共享源码/Router API/规则注册表心智，"编译期为主"原则只约束 Web/MP（App 端属平台适配层扩展，不构成原则妥协）；落地位置 `packages/renderer-app/`（@proteus/renderer-app）+ router app adapter + 原生能力桥；② **Vapor 兼容**：v0.4 研究 Vapor reset/effect 命令式 codegen 借鉴进 setData（路径合并→依赖追踪精确化，前置研究）；v0.6 Web 端 Vapor 模式（@vue/vapor 跑 Web，无虚拟 DOM 更小包体）+ MP 编译管线验证特性子集兼容（**同一份源码双模式可编译**）；Vapor 与 Proteus 哲学同构（都拒绝虚拟 DOM）互为镜像；能力矩阵 #9 多端覆盖、里程碑总览、非目标（App/Vapor 改"MVP 非目标、规划 v0.6"）、monorepo 结构（renderer-app 包）、验收清单（v0.6 行）同步；roadmap v2.48 → v2.50；GUIDE §0.4 / README 规划行同步
 69. **Skyline iOS 真机白屏 bug 入路线图（★平台可靠性关注）**：微信平台已知问题（iOS 真机偶发白屏，与基础库版本/特定能力相关，非框架代码——决策 #35 已定案过类似环境问题）。框架对策三层入 roadmap v0.5：① **能力兼容清单**——编译期警告扩充（float/fixed 已有先例），白屏高发场景（动效/worklet/特定组件）编译期预警；② **页面级降级通道**——renderer 可配置 WebView 兜底（仅白屏风险页启用，不全局降级）；③ **v1.0 真机验收**必须覆盖 iOS Skyline 白屏复现与降级切换（v1.0 目标 + 验收清单均加此条）；README 已知限制同步（含 roadmap 链接）；roadmap v2.50 → v2.51
+70. **多入口优化：main.mp.ts 极简模式（★开发体验）**：原多入口设计要求开发者手写重复样板（App() 包装 / onLaunch 调试日志 / wx.onError 错误捕获 / 预设注册），每应用一份。优化：**极简模式**——`assembleAppJs` 检测入口不含 `App(` 时，自动拼装 `src/runtime/appSkeleton.ts` 骨架（App 包装 + onLaunch 调试日志 + 全局错误捕获 + 内置预设注册），开发者只写自定义 builder（覆盖/新增预设）；**全量模式**（入口含 App()）向后兼容（尊重开发者完整自定义 app 生命周期）；examples/main.mp.ts 从 54 行降到 38 行（仅保留自定义 myHalfScreenVariant + 注册）；插件测试 +3（极简骨架生成 / 纯骨架 / 无自定义有预设）；产物验证：开发者覆盖优先（halfScreen 不重复注册）+ 预设定义在前注册在后（静态可分析）+ __PROTEUS_DEBUG__ 正式/调试双模式替换正确；文档同步（configuration/routing/GUIDE P3-4/README）；测试 114 → 117
 
 ## 验证状态（最近一次）
 
 - ✅ `npm run build:web`（vue-tsc 零错误 + vite 构建，页面 code-split 为独立 chunk）
 - ✅ `npm run build:mp`（gen-routes → vue-tsc → vite build 全链路，产出 app.js + 各页 wxml/js/wxss 四件套）
-- ✅ `npm test`（114/114：router 15 + mp-transform 45 + runtime 11 + golden 4 + plugin 3 + transforms 10 + explain 8 + overrides 17 + e2e-web 8 单独跑）
+- ✅ `npm test`（117/117：router 15 + mp-transform 45 + runtime 11 + golden 4 + plugin 7 + transforms 10 + explain 8 + overrides 17 + e2e-web 8 单独跑）
 - ✅ `npm run test:e2e:web`（8/8：含 tap 点击可见计数用例）
 - ✅ `npm run debug:mp` 全链路日志（正式构建零残留，grep 验证）
 - ✅ `npm run verify`（test + build:web + build:mp 一键全过）

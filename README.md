@@ -123,7 +123,7 @@ router.push({ name: 'user-profile', routeType: 'halfScreen' })
 beforeEach((to, from) => to.meta?.requiresAuth ? !!getToken() : true)
 ```
 
-内置转场预设：`halfScreen`（半屏弹层）/ `slideUp`（底部上滑）/ `scaleDown`（层叠缩放），配置在 `proteus.config.ts`，可在 `examples/main.mp.ts` 手写覆盖，也可用微信预设 `routeType: 'wx://bottom-sheet'`。详见[路由与转场](docs/routing.md)。
+内置转场预设：`halfScreen`（半屏弹层）/ `slideUp`（底部上滑）/ `scaleDown`（层叠缩放），配置在 `proteus.config.ts`，可在 `examples/main.mp.ts` 手写覆盖（**极简入口**：只需写自定义 builder，app 骨架由框架自动生成），也可用微信预设 `routeType: 'wx://bottom-sheet'`。详见[路由与转场](docs/routing.md)。
 
 ## 目录结构
 

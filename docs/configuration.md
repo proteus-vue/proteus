@@ -114,6 +114,7 @@ customRoute: {
 - `registerPresets: true`：注册微信官方预设（`wx://bottom-sheet` 等）。
 - `builders`：**内置预设注册表**，`name → 预设源码文件`。插件构建时把列出的预设源码**内联进 `app.js`** 并调用 `wx.router.addRouteBuilder(name, fn)` 注册——开发者无需手写注册代码。
 - 手写覆盖：在 `examples/main.mp.ts`（应用入口，直出为 `app.js`）中同名 `wx.router.addRouteBuilder('halfScreen', ...)` 即可覆盖预设（插件检测同名后跳过自动注册，开发者优先）。
+- **极简模式（★默认）**：`main.mp.ts` **不需要写 `App()` / `onLaunch` / 调试日志 / 错误捕获 / 预设注册**——app 骨架由框架自动生成（`src/runtime/appSkeleton.ts`，插件检测到入口不含 `App(` 时自动拼装），开发者只写自定义 builder；如需完全自定义 app 生命周期，写含 `App()` 的完整入口即可（全量模式，插件尊重原样）。
 - 自定义新 builder：在 `main.mp.ts` 中编写具名函数 + `addRouteBuilder`（平台约束：同一文件内静态可分析，不得 import 其它模块）。
 - 预设源码遵循微信 `RouteBuilder` 契约（`opaque` / `barrierColor` / `handlePrimaryAnimation` worklet 等），类型见 `src/shims/mp.d.ts`。
 

@@ -17,6 +17,7 @@ import type { Plugin } from 'vite'
 import config from './proteus.config'
 import { compileVueSfc } from './src/compiler'
 import type { TransformRuleOverrides } from './src/compiler'
+import { APP_LAUNCH_SKELETON } from './src/runtime/appSkeleton'
 
 /**
  * 提取 builder 函数名：function xxxBuilder(...)
@@ -27,7 +28,11 @@ export function extractBuilderFnName(code: string): string | null {
 }
 
 /**
- * 组装 app.js：主入口源码 + 内置预设 builder 函数定义 + 注册块（纯函数，可单测）
+ * 组装 app.js：入口源码 + 内置预设 builder 函数定义 + 注册（纯函数，可单测）
+ * 两种模式：
+ *  ① 全量自定义（向后兼容）：入口含 App() → 原样保留入口，追加预设定义 + 注册块
+ *  ② 极简模式（★默认推荐）：入口不含 App() → 自动拼装 app 骨架（App/调试/错误捕获/预设注册），
+ *     开发者只需写自定义 builder（覆盖预设 / 新增预设），零样板
  * 注册块在模块顶层执行（官方文档形态），builder 与 addRouteBuilder 同文件静态可分析
  */
 export function assembleAppJs(
@@ -35,12 +40,23 @@ export function assembleAppJs(
   presets: Array<{ name: string; fnName: string; source: string }>,
 ): string {
   const presetCode = presets.map((p) => p.source.trim()).join('\n\n')
-  const register = presets.length
-    ? `\nif (typeof wx !== 'undefined' && wx.router) {\n${presets
-        .map((p) => `  wx.router.addRouteBuilder('${p.name}', ${p.fnName})`)
-        .join('\n')}\n}\n`
-    : ''
-  return `${mainCode}\n\n${presetCode}${register}`
+  const custom = mainCode.trim()
+  // 全量模式：顶层 if 块内的注册行（2 空格缩进）
+  const registerLines = presets.map((p) => `  wx.router.addRouteBuilder('${p.name}', ${p.fnName})`)
+
+  if (custom.includes('App(')) {
+    // ① 全量自定义：入口已写 App()，尊重原样，仅追加预设定义 + 注册块
+    const register = presets.length
+      ? `\nif (typeof wx !== 'undefined' && wx.router) {\n${registerLines.join('\n')}\n}\n`
+      : ''
+    return `${custom}\n\n${presetCode}${register}`
+  }
+
+  // ② 极简模式：自动补全 app 骨架（App 包装 / 调试日志 / 错误捕获 / 预设注册）
+  // 骨架内 if 块是 4 空格缩进，注册行对齐 6 空格
+  const skeletonReg = presets.map((p) => `      wx.router.addRouteBuilder('${p.name}', ${p.fnName})`)
+  const skeleton = APP_LAUNCH_SKELETON.replace('__PRESET_REGISTRATION__', skeletonReg.join('\n') || '      // 无内置预设')
+  return `${custom ? `${custom}\n\n` : ''}${presetCode ? `${presetCode}\n\n` : ''}${skeleton}`
 }
 
 /**

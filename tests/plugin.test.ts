@@ -38,4 +38,37 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     const kept = filterOverriddenPresets(main, presets)
     expect(kept.map((p) => p.name)).toEqual(['slideUp'])
   })
+
+  // ★ 多入口优化：极简模式（入口不写 App() → 框架自动补全 app 骨架）
+  it('极简模式：入口不含 App() 时自动生成 app 骨架（App/调试/错误捕获/预设注册）', () => {
+    const appJs = assembleAppJs(
+      "wx.router.addRouteBuilder('halfScreen', myHalfScreenVariant)",
+      [{ name: 'slideUp', fnName: 'slideUpBuilder', source: 'function slideUpBuilder() {}' }],
+    )
+    // 骨架生成
+    expect(appJs).toContain('App({')
+    expect(appJs).toContain('[proteus][app]')
+    expect(appJs).toContain('wx.onError')
+    // 开发者自定义保留
+    expect(appJs).toContain("wx.router.addRouteBuilder('halfScreen', myHalfScreenVariant)")
+    // 预设定义 + 骨架内注册
+    expect(appJs).toContain('function slideUpBuilder() {}')
+    expect(appJs).toContain("addRouteBuilder('slideUp', slideUpBuilder)")
+    // 定义在注册之前（静态可分析）
+    expect(appJs.indexOf('function slideUpBuilder')).toBeLessThan(appJs.indexOf("addRouteBuilder('slideUp'"))
+  })
+
+  it('极简模式：无预设无自定义时生成纯骨架 app.js', () => {
+    const appJs = assembleAppJs('', [])
+    expect(appJs).toContain('App({')
+    expect(appJs).toContain('__PRESET_REGISTRATION__'.replace('__PRESET_REGISTRATION__', '无内置预设'))
+    expect(appJs).not.toContain('addRouteBuilder')
+  })
+
+  it('极简模式：无自定义但配置了预设时，预设定义 + 骨架注册齐全', () => {
+    const appJs = assembleAppJs('', [{ name: 'halfScreen', fnName: 'halfScreenBuilder', source: 'function halfScreenBuilder() {}' }])
+    expect(appJs).toContain('function halfScreenBuilder() {}')
+    expect(appJs).toContain("addRouteBuilder('halfScreen', halfScreenBuilder)")
+    expect(appJs).toContain('App({')
+  })
 })

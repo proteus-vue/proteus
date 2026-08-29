@@ -725,7 +725,8 @@ customRoute: {
 **② 应用自写与覆盖预设（高级）**：在应用入口 `examples/main.mp.ts`（直出为 app.js，不得 import）编写具名函数并注册；**同名注册即覆盖内置预设**（插件检测到 main 中已 `addRouteBuilder('<name>'` 后跳过同名预设的自动注册，开发者优先）：
 
 ```typescript
-// examples/main.mp.ts（节选：覆盖内置预设 halfScreen）
+// examples/main.mp.ts（★极简模式：不需要写 App()，app 骨架由插件自动生成）
+// 只需写自定义 builder + 注册；onLaunch 调试日志 / 全局错误捕获 / 预设注册全部由框架自动补全
 function myHalfScreenVariant(customRouteContext: RouteContext): RouteBuilderResult {
   const primaryAnimation = customRouteContext.primaryAnimation
   const handlePrimaryAnimation = () => {
@@ -736,11 +737,13 @@ function myHalfScreenVariant(customRouteContext: RouteContext): RouteBuilderResu
   return { opaque: false, barrierDismissible: true, barrierColor: 'rgba(0,0,0,0.6)', handlePrimaryAnimation }
 }
 
-App({ onLaunch() {
+if (typeof wx !== 'undefined' && wx.router) {
   // 同名注册：覆盖内置预设 halfScreen（插件自动跳过预设注册）
   wx.router.addRouteBuilder('halfScreen', myHalfScreenVariant)
-} })
+}
 ```
+
+> **极简模式说明（决策 #70）**：插件检测入口不含 `App(` 时，自动拼装 `src/runtime/appSkeleton.ts` 骨架（App 包装 / onLaunch 调试日志 / 全局错误捕获 / 内置预设注册）——开发者零样板；如需完全自定义 app 生命周期（自写 onLaunch 等），写含 `App()` 的完整入口即可（全量模式，插件尊重原样，向后兼容）。
 
 **可自定义项**（`RouteBuilderResult`，mp.d.ts 已按官方 CustomRouteConfig 补全 14 字段）：
 - 动画：`handlePrimaryAnimation` / `handleSecondaryAnimation` / `handlePreviousPageAnimation`（≥3.0.0）

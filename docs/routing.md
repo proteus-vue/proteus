@@ -127,6 +127,7 @@ afterEach((to, from) => {
 
 - 内置预设（`halfScreen` / `slideUp` / `scaleDown`）源码在 `src/router/presets/`，由 `proteus.config.ts` 的 `customRoute.builders` 声明，构建时**内联进 `app.js`** 并注册——开发者无需手写注册代码。
 - **手写覆盖预设**：`examples/main.mp.ts` 中同名 `wx.router.addRouteBuilder('halfScreen', fn)` 即可覆盖（插件检测同名后跳过自动注册，开发者优先）。
+- **极简模式（★默认）**：`main.mp.ts` 只需写自定义 builder，`App()` / `onLaunch` 调试日志 / 错误捕获 / 预设注册由框架自动生成（插件检测入口不含 `App(` 时拼装 `src/runtime/appSkeleton.ts` 骨架）。
 - **自定义新 builder**：`main.mp.ts` 中编写具名函数 + `addRouteBuilder`（约束：同文件静态可分析，不得 import 其它模块）。
 - 预设实现遵循微信 `RouteBuilder` 契约（`opaque` / `barrierColor` / `handlePrimaryAnimation` worklet…），类型见 `src/shims/mp.d.ts`。
 
