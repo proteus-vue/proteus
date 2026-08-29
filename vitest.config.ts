@@ -23,6 +23,8 @@ export default defineConfig({
       { find: '@proteus/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
       // i18n-plan B1：@proteus/i18n 包（tests/i18n.test.ts 直接引用）
       { find: '@proteus/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
+      // devtools-plan B1：@proteus/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
+      { find: '@proteus/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
     ],
   },
 })
