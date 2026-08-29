@@ -60,7 +60,12 @@ function preprocessStyle(lang: string, content: string): string {
  * - @proteus/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
  * - 其余裸模块（vue/pinia 等第三方）→ null（不参与）
  */
-export function resolveSharedModule(appDir: string, absFrom: string, source: string): { file: string; relNoExt: string } | null {
+export function resolveSharedModule(
+  appDir: string,
+  absFrom: string,
+  source: string,
+  frameworkDir?: string,
+): { file: string; relNoExt: string } | null {
   if (source.startsWith('@proteus/')) {
     try {
       const pkgRoot = path.dirname(require.resolve(`${source}/package.json`))
@@ -75,7 +80,13 @@ export function resolveSharedModule(appDir: string, absFrom: string, source: str
   const base = path.resolve(path.dirname(absFrom), source)
   for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
     if (fs.existsSync(cand) && !cand.endsWith('.vue')) {
-      return { file: cand, relNoExt: path.relative(appDir, cand).replace(/\\/g, '/').replace(/\.(ts|js)$/, '') }
+      let relNoExt = path.relative(appDir, cand).replace(/\\/g, '/').replace(/\.(ts|js)$/, '')
+      // ★框架资产越界（仓库根 src/components 在 appDir 之外，如框架组件引 runtime/event）：
+      //   重定位到 proteus/ 前缀（与框架组件产物一致，emitFile 不允许 ../ 越界路径）
+      if (relNoExt.startsWith('../') && frameworkDir && !path.relative(frameworkDir, cand).startsWith('..')) {
+        relNoExt = `proteus/${path.relative(frameworkDir, cand).replace(/\\/g, '/').replace(/\.(ts|js)$/, '')}`
+      }
+      return { file: cand, relNoExt }
     }
   }
   return null
@@ -248,7 +259,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const sharedModules = new Set<string>()
       const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus/* → _proteus/<name>）
       /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
-      const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null => resolveSharedModule(appDir, absFrom, source)
+      const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null =>
+        resolveSharedModule(appDir, absFrom, source, frameworkComponents)
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文

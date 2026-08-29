@@ -10,11 +10,13 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PView, PText, PImage, PButton, PScrollView, PListView } from '@proteus/components'
+import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea } from '@proteus/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)
 const imgErrors = ref(0)
+const name = ref('')
+const bio = ref('')
 
 // 万条数据：p-list-view 虚拟窗口只渲染可视区（行数恒定）
 const rows = ref([] as { title: string }[])
@@ -28,6 +30,12 @@ function onImgLoad() {
 }
 function onImgError() {
   imgErrors.value++
+}
+function onNameInput(e: { value: string }) {
+  name.value = e.value
+}
+function onBioInput(e: { value: string }) {
+  bio.value = e.value
 }
 </script>
 
@@ -58,6 +66,14 @@ function onImgError() {
     <p-scroll-view class="box">
       <p-list-view :items="rows" :item-height="44" :height="320" />
     </p-scroll-view>
+
+    <h2>表单（B4）</h2>
+    <p class="sub">p-input / p-textarea（:value + @input，载荷 { value } 跨端归一）</p>
+    <p-view class="box">
+      <p-input :value="name" placeholder="姓名" @input="onNameInput" />
+      <p-textarea :value="bio" placeholder="简介" @input="onBioInput" />
+      <p-text class="row">name={{ name }} / bio={{ bio }}</p-text>
+    </p-view>
   </div>
 </template>
 

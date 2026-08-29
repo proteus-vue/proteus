@@ -10,7 +10,9 @@ import PImage from './p-image/index.vue'
 import PButton from './p-button/index.vue'
 import PScrollView from './p-scroll-view/index.vue'
 import PListView from './p-list-view/index.vue'
+import PInput from './p-input/index.vue'
+import PTextarea from './p-textarea/index.vue'
 
-export { VirtualList, PView, PText, PImage, PButton, PScrollView, PListView }
+export { VirtualList, PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea }
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'
