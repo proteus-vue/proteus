@@ -92,4 +92,5 @@ L1  平台原生（DOM / Skyline / Native）
 
 ## 状态
 - v1 Draft：架构 + 矩阵 + 分批已定
+- **v2 落地评估（2026-08，`11-landing-evaluation.md`）**：对照当前代码库现实修正 —— ① 取消「L2 渲染器目录」（组件 = 标准 SFC + 既有编译管线）；② 命名统一 `p-` 前缀（virtual-list 兼容保留）；③ 批次重排 B1-B8（B4/B5/B6 中依赖 appBar/Worklet/支付的部分降级或移出 P0 首期）；④ 能力探测改轻量 runtime 模块（不全局注入）
 - 待确认：`chunk` 默认值策略（按目录自动推断 vs 显式声明）
