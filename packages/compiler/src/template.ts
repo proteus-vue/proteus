@@ -272,9 +272,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         ctx.trace?.add('directive/v-html', { line: node.loc.start.line, before: 'v-html', after: 'rich-text nodes' })
         break
       case 'show':
-        if (ctx.disabled.has('directive/v-show-limit')) break
-        ctx.warnings.push('v-show 暂不支持（MVP），已忽略，请改用 v-if')
-        ctx.trace?.add('directive/v-show-limit', { line: node.loc.start.line, before: 'v-show', after: '（忽略 + 编译期警告）' })
+        if (ctx.disabled.has('directive/v-show')) break
+        // v-show → hidden 属性（小程序 hidden = display:none，元素始终渲染，语义对齐 v-show）
+        attrs.push(`hidden="{{!${exprContent(dir.exp)}}}"`)
+        ctx.trace?.add('directive/v-show', { line: node.loc.start.line, before: `v-show="${exprContent(dir.exp)}"`, after: `hidden="{{!${exprContent(dir.exp)}}}"` })
         break
       default:
         break // v-slot / v-pre 等：MVP 忽略

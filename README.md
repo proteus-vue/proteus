@@ -42,7 +42,7 @@
 ## 核心特性
 
 - **标准 Vue 3 SFC 开发**：`<div>`/`<p>`/`<h1>`/`<a>` 照写不误，映射到小程序标签由编译器完成；`h1-h6/p/a` 自动注入对齐 Web UA 的语义基础样式（大标题/段距/链接色），两端视觉一致
-- **AI-native 透明编译**：编译引擎内置**规则注册表**（`src/compiler/transforms/`），49 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询；`explainTransform()` 对任意 Vue 文件输出**决策 trace**（该文件触发的全部转换规则 + 行号）——AI 代理与开发者都可读懂编译器的每一个决定，映射表与实现同源引用防漂移
+- **AI-native 透明编译**：编译引擎内置**规则注册表**（`packages/compiler/src/transforms/`），50 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询；`explainTransform()` 对任意 Vue 文件输出**决策 trace**（该文件触发的全部转换规则 + 行号）——AI 代理与开发者都可读懂编译器的每一个决定，映射表与实现同源引用防漂移
 - **底线三循环（规则覆盖）**：`proteus.config.ts` 的 `rules` 段（`disabled` / `mapping` / `customTags`）按规则 ID 开关编译行为，改配置即生效、无需改框架代码——AI 写规则 → 框架获得新能力；debug 构建 `.transform-debug/` 携带完整决策链，产物问题一处定位到规则
 - **Web 零转换**：Web 端直接跑标准 Vite SPA（完整 devtools + HMR），不做二等公民
 - **Skyline 一等公民**：页面默认 `"renderer": "skyline"`，`wx.router` 自定义路由转场（半屏 / 上滑 / 层叠缩放）作为一等能力；Web 端用 Vue `<Transition>` 复刻同一套 `routeType` API
@@ -133,7 +133,7 @@ proteus/
 ├── vite-plugin-mp-transform.ts     # 小程序编译 Vite 插件（薄适配层，@proteus/plugin-vite 前身）
 ├── scripts/gen-routes.ts           # 编译期路由生成器（app.json / page.json / 路由表）
 ├── packages/compiler/              # ★ @proteus/compiler 编译引擎独立包（v0.2 起 monorepo）
-│   └── src/                        #   纯函数引擎 + transforms 规则注册表（49 条 AI 说明书）
+│   └── src/                        #   纯函数引擎 + transforms 规则注册表（50 条 AI 说明书）
 ├── packages/cli/                   # ★ @proteus/cli（v0.2：build 独立编译 / explain 决策 trace / rules）
 ├── packages/create-proteus/        # ★ create-proteus（v0.2：npm create proteus 一键双端工程）
 ├── src/
@@ -142,7 +142,7 @@ proteus/
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
 ├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包）
-├── tests/                          # 130 个单元测试 + 8 个 Web e2e 测试
+├── tests/                          # 139 个单元测试 + 8 个 Web e2e 测试
 ├── .github/workflows/ci.yml        # CI：test / vue-tsc / build:web / build:mp / 独立包构建 / e2e
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
@@ -150,7 +150,7 @@ proteus/
 ## 测试与验证
 
 ```bash
-npm test                # 130 个单测（router / mp-transform / runtime / transforms / explain / overrides / golden / plugin / cli / create-proteus）
+npm test                # 139 个单测（router / mp-transform / runtime / transforms / explain / overrides / golden / plugin / cli / create-proteus）
 npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
@@ -170,7 +170,7 @@ npm run proteus -- explain <vue-file | rule-id>   # CLI：决策 trace / AI 说�
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（49 条 AI 说明书）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）、114 单测 + 8 e2e
+- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（50 条 AI 说明书）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ computed 读路径/v-show（v0.3）、139 单测 + 8 e2e
 - **规划**：编译引擎独立开源 `@proteus/compiler` + CLI、组件系统/computed/watch 补全、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via Vue 自定义渲染器**）、**Vapor 兼容**、性能优化、生态建设——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议
@@ -180,7 +180,7 @@ Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等�
 ## 已知限制（MVP）
 
 - 支持微信小程序（Skyline 优先，WebView 降级仅保证可运行）；支付宝 / 抖音 / 快手为非目标
-- `computed` / `watch` / 跨模块引用、`:class` 数组语法、`v-show`、复杂事件表达式暂不支持（编译期警告）
+- `computed`（读路径已支持：`computed(() => 表达式)` → data 派生 + 写入合并重算）/ `watch` / 跨模块引用、`:class` 数组语法、复杂事件表达式暂不支持（编译期警告）
 - 自定义路由转场是 Skyline 平台能力：**不能从 tabBar 页发起**；Web 端用 Vue Transition 复刻同一套 API
 - 运行时禁止动态注册页面 / 路由（编译期静态声明）
 - **Skyline 在 iOS 真机偶发白屏**（微信平台已知问题）：降级兜底策略（能力兼容清单 + 页面级 WebView 降级通道）已规划在 [roadmap.md](docs/roadmap.md) v0.5，v1.0 真机验收覆盖

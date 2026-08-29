@@ -68,9 +68,48 @@ function extractInitializer(source: string, valueStart: number): string {
   return source.slice(valueStart, i).trim()
 }
 
-/** 顶层 const（ref/reactive/字面量）→ data 初始值 */
-function extractData(source: string, warnings: string[], trace?: TransformTrace): Record<string, unknown> {
+/** computed 派生字段信息（v0.3 读路径：编译期把 getter 转 data 派生） */
+interface ComputedInfo {
+  name: string
+  /** getter 表达式中依赖的 ref 名（x.value → x） */
+  deps: string[]
+  /** 转写后表达式（x.value → this.data.x），供 setData 合并重算 */
+  expr: string
+}
+
+/** 提取顶层 const 中的 computed（箭头简写 + 表达式体），返回派生信息 */
+function extractComputedFromInit(
+  name: string,
+  init: string,
+  data: Record<string, unknown>,
+  warnings: string[],
+): ComputedInfo | null {
+  // 仅支持 computed(() => 表达式) 箭头简写 + 表达式体（块体/function 形式警告不支持）
+  const m = init.match(/^computed\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
+  if (!m) return null
+  const rawExpr = m[1]
+  // 块体（() => { return ... }）不是表达式体：{ 开头需拦截（否则生成 { return ... } 坏表达式）
+  if (rawExpr.trim().startsWith('{')) return null
+  const deps = [...new Set(Array.from(rawExpr.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+  const missing = deps.filter((d) => !(d in data))
+  if (missing.length) {
+    warnings.push(
+      `computed ${name} 依赖 ${missing.join('/')} 未在顶层 data 中定义（${name} 的依赖必须是本文件顶层 ref/reactive）`,
+    )
+  }
+  // 转写：x.value → this.data.x（与 ref 读取重写一致）
+  const expr = rawExpr.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
+  return { name, deps, expr }
+}
+
+/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 */
+function extractData(
+  source: string,
+  warnings: string[],
+  trace?: TransformTrace,
+): { data: Record<string, unknown>; computed: Record<string, ComputedInfo> } {
   const data: Record<string, unknown> = {}
+  const rawComputed: Array<{ name: string; init: string; line: number }> = []
   // 只提取行首（缩进 0）的顶层 const：函数体/生命周期体/块内的局部 const 天然跳过
   const re = /const\s+([A-Za-z_$][\w$]*)\s*=\s*/gm
   let m: RegExpExecArray | null
@@ -81,13 +120,19 @@ function extractData(source: string, warnings: string[], trace?: TransformTrace)
     const name = m[1]
     const init = extractInitializer(source, m.index + m[0].length)
     if (!init) continue
+    const line = lineAt(source, m.index)
+    // 跳过函数/箭头函数（属于 methods）
+    if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
+    // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
+    if (init.startsWith('computed(')) {
+      rawComputed.push({ name, init, line })
+      continue
+    }
     trace?.add('script/const-to-data', {
-      line: lineAt(source, m.index),
+      line,
       before: `const ${name} = ${init.slice(0, 40)}${init.length > 40 ? '…' : ''}`,
       after: `data.${name}`,
     })
-    // 跳过函数/箭头函数（属于 methods）
-    if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
     // 解构/嵌套 const（如 const { a } = ...）在 regex 上已天然跳过
     const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
     const raw = inner ? inner[1] : init
@@ -99,7 +144,22 @@ function extractData(source: string, warnings: string[], trace?: TransformTrace)
     }
     data[name] = value
   }
-  return data
+  // 二次处理 computed（此时 data 已完整，可校验依赖）
+  const computed: Record<string, ComputedInfo> = {}
+  for (const c of rawComputed) {
+    const info = extractComputedFromInit(c.name, c.init, data, warnings)
+    if (info) {
+      computed[c.name] = info
+      trace?.add('script/computed-to-data', {
+        line: c.line,
+        before: `const ${c.name} = computed(() => ...)`,
+        after: `派生字段（依赖 ${info.deps.join('/') || '无'}，写入时合并重算）`,
+      })
+    } else {
+      warnings.push(`computed ${c.name} 仅支持箭头简写 + 表达式体（computed(() => expr)），已忽略`)
+    }
+  }
+  return { data, computed }
 }
 
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
@@ -144,30 +204,61 @@ function numOrZero(expr: string): string {
   return `(${expr} === undefined || ${expr} === null ? 0 : ${expr})`
 }
 
-function rewriteRefAccess(body: string, refNames: Set<string>, trace?: TransformTrace, disabled?: Set<string>): string {
+/** computed 派生补丁：写入 ref 时把依赖它的 computed 重算表达式合并进同一 setData（v0.3 读路径） */
+function computedPatch(writtenRef: string, computeds: Record<string, ComputedInfo>): string {
+  const patches = Object.entries(computeds)
+    .filter(([, c]) => c.deps.includes(writtenRef))
+    .map(([n, c]) => `${n}: ${c.expr}`)
+  return patches.length ? `, ${patches.join(', ')}` : ''
+}
+
+/**
+ * setData 写入模板：有派生补丁时先更新 this.data.name 再 setData——
+ * 保证同一 setData 对象里的派生表达式读到该 ref 的**新值**（setData 是异步批量，对象内求值用当前 this.data）
+ */
+function writeSetData(name: string, valueExpr: string, patch: string): string {
+  if (!patch) return `this.setData({ ${name}: ${valueExpr} })`
+  return `this.data.${name} = ${valueExpr}; this.setData({ ${name}: this.data.${name}${patch} })`
+}
+
+/** onLoad 初始化行：一次性计算全部 computed 派生字段（首次渲染前 data 就绪） */
+function computedInitLine(computeds: Record<string, ComputedInfo>): string {
+  const entries = Object.entries(computeds)
+  if (!entries.length) return ''
+  return `this.setData({ ${entries.map(([n, c]) => `${n}: ${c.expr}`).join(', ')} })`
+}
+
+function rewriteRefAccess(
+  body: string,
+  refNames: Set<string>,
+  trace?: TransformTrace,
+  disabled?: Set<string>,
+  computeds: Record<string, ComputedInfo> = {},
+): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
+    const patch = computedPatch(name, computeds)
     // 自增/自减（含前置 ++name.value / --name.value）
     if (!skip('script/ref-incdec')) {
       if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
-        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ... })` })
+        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch ? ' + 派生重算' : ''} })` })
       }
-      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} + 1; this.setData({ ${name}: ${prop} })`)
-      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} - 1; this.setData({ ${name}: ${prop} })`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} + 1 })`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `this.setData({ ${name}: ${numOrZero(prop)} - 1 })`)
+      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} + 1; this.setData({ ${name}: ${prop}${patch} })`)
+      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${prop} = ${numOrZero(prop)} - 1; this.setData({ ${name}: ${prop}${patch} })`)
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), writeSetData(name, `${numOrZero(prop)} + 1`, patch))
+      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), writeSetData(name, `${numOrZero(prop)} - 1`, patch))
     }
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
     if (!skip('script/ref-write')) {
       if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
-        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr })` })
+        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch ? ' + 派生重算' : ''} })` })
       }
       out = out.replace(
         new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)([^;\\n]+)`),
-        (_m, expr) => `this.setData({ ${name}: ${expr.trim()} })`,
+        (_m, expr) => writeSetData(name, expr.trim(), patch),
       )
     }
     // 读取：name.value → this.data.name
@@ -219,7 +310,9 @@ export function transformScriptToPage(
   const trace = extra.trace
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
-  const data = disabled.has('script/const-to-data') ? {} : extractData(source, warnings, trace)
+  const { data, computed } = disabled.has('script/const-to-data') ? { data: {}, computed: {} } : extractData(source, warnings, trace)
+  // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
+  const computeds = disabled.has('script/computed-to-data') ? {} : computed
   const methods = extractMethods(source, warnings, trace, disabled)
   const lifecycles = extractLifecycles(source, trace, disabled)
   const vModelBindings = extra.vModelBindings ?? []
@@ -277,23 +370,28 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
-  if (lifecycles.onUnload) lines.push(`  onUnload() {\n${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled))}\n  },`)
+  if (lifecycles.onUnload) lines.push(`  onUnload() {\n${indentBody(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds))}\n  },`)
   if (lifecycles.onLoad) {
-    lines.push(`  onLoad(options) {\n${indentBody(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled))}\n  },`)
+    // 显式 onLoad：computed 初始化注入在方法体前（首次渲染前 data 派生字段就绪）
+    const initLine = computedInitLine(computeds)
+    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds)
+    lines.push(`  onLoad(options) {\n${indentBody(initLine ? `${initLine}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）
     if (!disabled.has('script/onload-params')) {
       trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
+      const initLine = computedInitLine(computeds)
       lines.push(
         [
           '  onLoad(options) {',
           ...(extra.debug ? [`    console.log('[proteus][page] onLoad ${extra.file ?? ''}', JSON.stringify(options), Date.now())`] : []),
+          ...(initLine ? [`    ${initLine}`] : []),
           '    const params = {}',
           '    const keys = Object.keys(options || {})',
           '    for (let i = 0; i < keys.length; i++) {',
@@ -309,7 +407,7 @@ export function transformScriptToPage(
     }
   }
 
-  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled)},`)
+  for (const src of Object.values(methods)) lines.push(`  ${rewriteRefAccess(src, refNames, trace, disabled, computeds)},`)
   lines.push('})')
 
   // 产物级约束（es5-safe 贯穿全部生成代码；component-mode 决定构造器）

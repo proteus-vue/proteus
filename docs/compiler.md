@@ -110,7 +110,7 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 | `v-html` | `rich-text nodes` |
 | `:class="{ active: on }"` | 三元拼接 `{{ (on?'active ':'') }}` |
 | `:style="{ color: c }"` | `style="color:{{c}}"` |
-| `v-show` | ⚠ 编译期警告（MVP 不支持，请用 `v-if`） |
+| `v-show` | `hidden="{{!expr}}"`（小程序 hidden = display:none，元素始终渲染；v0.3 已支持） |
 
 ## 语义基础样式（h1-h6 / p / a 视觉还原）
 
@@ -158,6 +158,7 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 ```
 
 - **顶层 `const` → `data`**：`ref(0)` / `reactive({...})` / 字面量在构建期求值（`evalLiteral`）。支持多行数组/对象字面量（括号平衡扫描，字符串内括号如 `'rgba(0,0,0,0.8)'` 不干扰）；只提取**零缩进顶层** const（函数体 / 生命周期体内局部 const 不误提取）；无法静态求值 → 编译期警告 + `undefined`。
+- **`computed` 读路径（v0.3）**：`const double = computed(() => count.value * 2)` 编译为 **data 派生字段**——① `data` 不存 double；② `onLoad` 初始化 `this.setData({ double: this.data.count * 2 })`（首次渲染前就绪）；③ `count` 写入时**合并重算**：`this.data.count = ...; this.setData({ count: this.data.count, double: this.data.count * 2 })`（先更新 `this.data` 再 setData，保证派生表达式读到**新值**——setData 是异步批量，对象内求值用当前 this.data）。静态提取 getter 中的 `x.value` 作为依赖；仅支持**箭头简写 + 表达式体**（块体 / function 形式编译期警告）；依赖未在顶层 data 定义 → 警告。`watch` / computed 写路径（后续）。
 - **顶层函数 → `methods`**：`function` 声明与 `const fn = () => {}` 箭头函数，方法简写输出。
 - **生命周期映射**：`onMounted → onReady`、`onUnmounted → onUnload`、`onLoad` 透传。
 - **方法内 ref 写入重写**：
@@ -197,10 +198,9 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
 ## MVP 限制（编译期警告或忽略）
 
-- `computed` / `watch` / 跨模块引用
+- `computed` 读路径已支持（v0.3：`computed(() => 表达式)` → data 派生 + 写入合并）；`watch` / computed 写路径 / 跨模块引用暂不支持
 - 复杂事件表达式（仅支持简单方法引用）
 - `:class` 数组语法
-- `v-show`（请用 `v-if`）
 - 方法内 ref 复合赋值（`+=`）
 - `<template v-slot>`
 

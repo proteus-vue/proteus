@@ -135,7 +135,7 @@ customRoute: {
 
 ```typescript
 rules: {
-  disabled: ['directive/v-show-limit'],              // 禁用规则（对应输出退化为无转换 + 编译期警告）
+  disabled: ['directive/v-for'],                       // 禁用规则（对应输出退化为无转换 + 编译期警告）
   mapping: { 'tag/link-to-view': { a: 'text' } },    // 改写映射（a → text 而非默认 view）
   customTags: { 'my-widget': 'view' },               // 新增标签映射（AI 扩展新标签的入口）
 }

@@ -16,6 +16,69 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('v-show（v0.3 指令补全）', () => {
+  it('v-show → hidden 属性（display:none 语义，元素始终渲染）', () => {
+    const { wxml } = transformTemplateToWxml('<p v-show="show">a</p>', opts)
+    expect(wxml).toContain('hidden="{{!show}}"')
+    expect(wxml).toContain('class="proteus-p"')
+  })
+
+  it('v-show 不再警告（原为 limitation 规则，已升级 implemented）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformTemplateToWxml('<p v-show="show">a</p>', opts)
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('v-show'))
+  })
+})
+
+describe('computed 读路径（v0.3）', () => {
+  const SRC = 'const count = ref(0)\nconst double = computed(() => count.value * 2)\nfunction add() {\n  count.value++\n}\nfunction setN() {\n  count.value = 5\n}'
+
+  it('data 不含 computed 字段（派生字段不进初始 data）', () => {
+    const { js } = transformScriptToPage(SRC, opts)
+    const dataLine = js.split('\n').find((l) => l.includes('count: 0'))
+    expect(dataLine).toBeTruthy()
+    expect(js).not.toContain('double: undefined')
+  })
+
+  it('onLoad 初始化：首次渲染前计算派生字段', () => {
+    const { js } = transformScriptToPage(SRC, opts)
+    expect(js).toContain('this.setData({ double: this.data.count * 2 })')
+  })
+
+  it('依赖写入 setData 合并重算：先更新 this.data 再 setData（派生读到新值）', () => {
+    const { js } = transformScriptToPage(SRC, opts)
+    // 自增（后置）：先 this.data.count 更新，setData 对象里 count + double
+    expect(js).toContain('this.data.count = (this.data.count === undefined || this.data.count === null ? 0 : this.data.count) + 1; this.setData({ count: this.data.count, double: this.data.count * 2 })')
+    // 赋值：同样先写 this.data
+    expect(js).toContain('this.data.count = 5; this.setData({ count: this.data.count, double: this.data.count * 2 })')
+  })
+
+  it('无写入的 ref（只读）不产生 setData', () => {
+    const { js } = transformScriptToPage('const a = ref(1)\nconst b = computed(() => a.value + 1)', opts)
+    expect(js).toContain('this.setData({ b: this.data.a + 1 })')
+    expect(js.split('setData').length).toBeGreaterThanOrEqual(2) // onLoad 初始化 + 无其他
+  })
+
+  it('依赖未在顶层 data 定义 → 编译期警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformScriptToPage('const double = computed(() => count.value * 2)', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('依赖 count 未在顶层 data 中定义'))
+  })
+
+  it('块体 computed（computed(() => { return ... })）→ 编译期警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { js } = transformScriptToPage('const c = ref(1)\nconst d = computed(() => { return c.value + 1 })', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('仅支持箭头简写'))
+    expect(js).not.toContain('d:')
+  })
+
+  it('模板插值直接渲染派生字段（{{ double }} 无需额外转换）', () => {
+    const result = compileVueSfc('<script setup lang="ts">const count = ref(0)\nconst double = computed(() => count.value * 2)</script>\n<template><p>{{ double }}</p></template>')
+    expect(result.wxml).toContain('{{ double }}')
+    expect(result.js).toContain('this.setData({ double: this.data.count * 2 })')
+  })
+})
+
 describe('transformTemplateToWxml（template → wxml）', () => {
   it('标准标签映射：div→view / span,p,h1→text / img→image', () => {
     const { wxml } = transformTemplateToWxml('<div><span>hi</span><p>p</p><h1>t</h1><img :src="url" /></div>', opts)

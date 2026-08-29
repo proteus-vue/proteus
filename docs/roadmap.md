@@ -71,12 +71,12 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
-| `computed` / `watch` 编译支持 | `src/compiler/script.ts` | 编译期分析依赖 → data 派生 + `setData` 联动；先做读路径（`{{ computedX }}` 渲染），再做写路径 |
+| `computed` / `watch` 编译支持（✅ 读路径已实现，决策 #76） | `packages/compiler/src/script.ts` | 已有：`computed(() => 表达式)` → data 派生字段（onLoad 初始化 + 依赖写入 setData 合并重算，先写 this.data 保证派生读新值）+ 依赖静态提取/缺失/块体警告；待做：watch、computed 写路径 |
 | 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus/compiler 独立包 |
 | 规则覆盖（✅ 已实现：底线循环 ①③） | `src/compiler/overrides.ts` + `proteus.config.ts rules` 段 | 已有：disabled / mapping / customTags 贯通三转换函数（17 用例）；阶段三：规则 apply() 升级为完整插件体系（自定义 AST 转换，roadmap v2.0 编译期插件） |
 | 组件系统 | `src/compiler/` 新增组件编译 | `defineProps` / `defineEmits` / `slots` / `defineExpose` → 小程序 `Component({ properties, data, methods })`；`isComponent` 分支已存在（测试已覆盖构造器形态） |
 | scoped CSS | `src/compiler/style.ts` | `:deep()` / 属性选择器等价方案（小程序无 scoped 原生机制，编译期加 data 属性或类前缀） |
-| 指令补全 | `src/compiler/template.ts` | `v-show`（映射 `hidden` 属性/样式）、`:class` 数组语法、事件修饰符（`.once/.self`）、`v-on` 键位 |
+| 指令补全（✅ v-show 已实现，决策 #76） | `packages/compiler/src/template.ts` | 已有：`v-show` → `hidden="{{!expr}}"`（规则从 limitation 升级 implemented）；待做：`:class` 数组语法、事件修饰符（`.once/.self`）、`v-on` 键位 |
 | CSS 预处理器 | vite 链路 | `scss` / `less` 经 Vite 预处理后进入 `transformStyleToWxss` |
 | 方法级 sourcemap | `vite-plugin-mp-transform.ts` | 产物 JS 关联源码位置，接入微信开发者工具（P6-1 待办，对标 uni-app 的"自定义基座"调试体验） |
 | 类型提示全链路 | `src/shims/` + 编译器声明生成 | 路由参数、页面 `onLoad` 参数、事件处理器的 TS 推导（决策 §0.3 原则 6 补全） |

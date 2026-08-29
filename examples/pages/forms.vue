@@ -9,7 +9,7 @@
 }
 </route>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const name = ref('')
 const bio = ref('')
@@ -18,6 +18,8 @@ const agree = ref(false)
 const status = ref('a')
 const html = ref('<h1 style="color:#1a7af8">rich-text 富文本</h1>')
 const count = ref(0)
+// computed 读路径（v0.3）：MP 端编译为 data 派生字段（onLoad 初始化 + count 写入时合并重算）
+const double = computed(() => count.value * 2)
 
 function bump() {
   count.value++
@@ -45,8 +47,11 @@ function bump() {
     <!-- 事件修饰符 .stop → catchtap（阻止冒泡：点按钮只加一次，点空白区加一次） -->
     <div class="box" @click="bump">
       <button @click.stop="bump">点我（.stop 不冒泡）</button>
-      <p>点击次数：{{ count }}</p>
+      <p>点击次数：{{ count }}（双倍：{{ double }}）</p>
     </div>
+
+    <!-- v-show → hidden 属性（v0.3）：元素始终渲染，仅切换 display -->
+    <p v-show="agree" class="tip">v-show：已勾选时才显示本行（hidden="{{!agree}}"）</p>
 
     <!-- v-html → rich-text nodes -->
     <div class="html-box" v-html="html"></div>

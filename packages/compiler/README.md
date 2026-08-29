@@ -66,5 +66,5 @@ npm publish          # 发布 @proteus/compiler（main/types/exports 指向 dist
 
 ## MVP 限制（逐步补充边缘情况）
 
-computed/watch/跨模块引用、复杂事件表达式、`:class` 数组语法、`v-show`、
+computed 读路径（v0.3 已支持：`computed(() => 表达式)` → data 派生 + setData 合并重算）/ watch / 跨模块引用、复杂事件表达式、`:class` 数组语法、
 方法体对 setup ref 的复合赋值、`<template v-slot>` —— 均编译期警告或忽略。
