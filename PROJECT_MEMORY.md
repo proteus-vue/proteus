@@ -26,7 +26,7 @@
 | v0.1 MVP | ✅ 完成 | Web + Skyline 双端编译、路由/分包/转场、setData 桥接、反黑盒、79 单测 + 8 e2e |
 | v0.2 工程化基线 | ✅ 完成（决策 #72-#75） | @proteus/compiler 独立包 + 注册表随包、@proteus/cli（build/explain/rules）、create-proteus、CI + 贡献设施、changesets 发布流水线（npm 发布待启用） |
 | 欠账清理 A/B 类 | ✅ 完成（决策 #87-#97） | 文档一致性 + B 类①-⑦ + 类型提示全链路①-⑤（198 测试） |
-| **C 类拆包（packages.md 8 步）** | 🔄 进行中（1-4 ✅，5-8 待） | ①config 解耦 ②shared ③runtime ④router 工厂化+M1/M2 ⑤plugin-vite ⑥别名切换 ⑦模板重构 ⑧CI/文档（216 测试） |
+| **C 类拆包（packages.md 8 步）** | 🔄 进行中（1-5 ✅，6-8 待） | ①config 解耦 ②shared ③runtime ④router 工厂化+M1/M2 ⑤plugin-vite ⑥别名切换 ⑦模板重构 ⑧CI/文档（219 测试） |
 
 ## 已落地文件
 
@@ -175,14 +175,15 @@
 99. **拆包步骤 2：shared 包（★adapter + shims 归 @proteus/shared）**：`git mv src/{platform,shims} → packages/shared/src/`；包 scaffold（package.json exports → dist + tsconfig.build esbuild 单文件 + index.ts 聚合 adapter/类型）；引用面：runtime/router 4 处 `../platform` → `@proteus/shared`、RouterView `@proteus/platform` → `@proteus/shared`；vite alias + tsconfig paths/types/include + vitest.config alias + snapshot-template 源改 packages/shared/src（模板暂复制保持可用，步骤 7 重构）；tests 3 处 mock 改 `@proteus/shared`；踩坑：① perl `@proteus` 数组插值吞掉（replaceAll node 修复）② vitest 独立无别名（vitest.config 补）③ mock 路径与实际 import id 不一致（re-export 链 mock 失效 → mock '@proteus/shared'）④ import.meta.env 类型（shared 独立构建无 vite types → (import.meta as any)）；验证 vue-tsc + 198 测试 + 双端 + shared 包构建 + 模板快照 + workspace 链接（@proteus/shared）；docs/packages.md 步骤 2 勾选；剩余步骤 3-8
 100. **拆包步骤 3：runtime 包（★@proteus/runtime）**：`git mv src/runtime → packages/runtime/src`（appSkeleton/debug/pageLifecycle/setDataBridge/store + index 聚合）；包 scaffold（依赖 @proteus/shared，构建 external shared）；引用面：插件 appSkeleton 相对路径、tests 相对路径、vite/vitest alias + tsconfig paths/include @proteus/runtime、snapshot 源改 packages/runtime/src；踩坑：runtime 独立构建缺全局类型（`__PROTEUS_DEBUG__`/PageOptions/ComponentOptions 在 shared mp.d.ts）——tsconfig.build types 引 shared shims；验证 vue-tsc + 198 测试 + 双端 + runtime 包构建 + 模板快照 + workspace 链接（@proteus/runtime）；docs/packages.md 步骤 3 勾选；剩余步骤 4（router 工厂化）-8
 101. **拆包步骤 4：router 包 + 工厂化 + 路由规划 M1/M2（★@proteus/router + 透明化地基）**：`git mv src/router → packages/router/src`；**工厂化**：index.ts 改 `createRouter(routes)`（删全局单例，路由表调用方注入）；guards 同工厂化（runBeforeEach/runAfterEach 收 routeMap 参数，getCurrentFrom 反查）；**auto-routes 随应用**：`examples/router/auto-routes.ts`（gen-routes routesOutput 改指向；RouterView 改相对导入 `./auto-routes`，仓库/模板通用）；**类型提示兼容方案（★关键决策）**：RouteParamsByName 改空基接口 + auto-routes 用 `declare module '@proteus/router/types'` 模块扩充注入（vue-router 同款）——基类空接口保证 keyof=never 时 name 受限负例成立，扩充后 push 泛型/PageOnLoad 零回归（tests/types/router-params.types.ts 全过）；**M1/M2 增量**（docs/proteus-router-plan）：schema.ts（手写校验 + RouteValidationError 含 loc：path/name/redirect-parent 互斥/transition 枚举/JSON 可序列化/checkDuplicates/validateParentRefs）+ scan.ts（@vue/compiler-sfc parse 复用，block.loc 行号定位，多块报错，无块跳过）+ tree.ts（嵌套树两遍扫描：parent 显式优先覆盖 path 前缀推导，找不到 parent/成环报错，sortByPath 稳定排序可复现）+ merge.ts（meta 深合并限深 3，页面胜）；**踩坑**：① lazy 默认值语义（scan 不强制置 true，RouteBlock.lazy 可空，树构建时 defaults 解析——否则全局 lazy 永失效）② RouteNode 保留 parent 字段（构建期使用，Omit 掉会断 tree.ts）③ 包独立构建 spread never（无扩充时 RouteParamsByName[never] → `as RouteParams` 显式收窄）④ 包 tsconfig.build types 补 @types/node（node:fs 模块声明）⑤ `@proteus/router/types` 子路径解析：vite alias 用目录级 `@proteus/router → packages/router/src`（前缀匹配子路径）+ tsconfig paths 双键（router/router/* 置于 @proteus/* 前）；验证 vue-tsc 零错 + 216 测试（+18 M1/M2 用例）+ 双端构建 + router 包构建 + 模板快照（gen-routes 复制时 `../packages/router/src` → `../src/router` 路径替换）+ workspace 链接（@proteus/router）；docs/packages.md 步骤 4 勾选；剩余步骤 5（plugin-vite 包）-8
+102. **拆包步骤 5：plugin-vite 包（★@proteus/plugin-vite，插件 + gen-routes 归包）**：`git mv vite-plugin-mp-transform.ts scripts/gen-routes.ts → packages/plugin-vite/src/`；**appSkeleton 从 runtime 迁入 plugin-vite**（构建期 app.js 骨架模板归构建期包，runtime 纯运行期，依赖方向保持 plugin-vite → compiler + router）；**config 解耦（★关键）**：插件不再 import 项目 config——`PluginOptions.config: ProteusConfig` 由 vite.config 注入（`mpTransform({ config })`）；ProteusConfig 类型契约迁入包内 `config.ts`（根 proteus.config.ts 改 import 类型 + 实例化，budget 改可选 + bundle-report 缺省防御）；**gen-routes 双形态**：纯函数库 `runGenRoutes({ config, root })`（可单测）+ CLI 入口 `src/cli.ts`（tsx 直跑，main 检测拆独立文件）；**踩坑**：① workspace 依赖版本必须对齐实际包版本（@proteus/compiler 实为 0.2.0，声明 0.1.0 触发 npm 404 去 registry 拉）② vite.config bundle 阶段不走 resolve.alias → 插件 @proteus/compiler 解析到 dist 产物（给 compiler 加 prepare 钩子保 dist 新鲜；且暴露 dist 陈旧 bug——重建解决）③ 预设 builders 路径随 router 拆包同步（config.customRoute.builders 改 packages/router/src/presets）④ tsx 动态 import 需带 .ts 扩展名 + 相对层级（src/ → 项目根为三级）⑤ 动态 import 项目根 config 拉偏 tsc rootDir 推断（d.ts 嵌套 dist/packages/...）→ CLI 拆独立 cli.ts + tsconfig.build rootDir ./src + exclude cli.ts；验证 vue-tsc 零错 + 219 测试（+3 gen-routes：主包/分包/坏 JSON 容错）+ 双端构建 + plugin-vite 包构建 + 模板 gen-routes CLI 冒烟（生成 app.json/page.json）+ workspace 链接（@proteus/plugin-vite）；docs/packages.md 步骤 5 勾选；剩余步骤 6（别名切换）-8
 
 ## 验证状态（最近一次）
 
 - ✅ `npm run build:web`（vue-tsc 零错误 + vite 构建，页面 code-split 为独立 chunk）
 - ✅ `npm run build:mp`（gen-routes → vue-tsc → vite build 全链路，产出 app.js + 各页 wxml/js/wxss 四件套）
-- ✅ `npm test`（216/216：router 15 + router-plan 18 + mp-transform 60 + runtime 11 + golden 4 + plugin 7 + transforms 10 + explain 8 + overrides 17 + cli 9 + create-proteus 4 + bundle-report 2 + perf 1 + store 4 等）
+- ✅ `npm test`（219/219：router 15 + router-plan 18 + gen-routes 3 + mp-transform 60 + runtime 11 + golden 4 + plugin 7 + transforms 10 + explain 8 + overrides 17 + cli 9 + create-proteus 4 + bundle-report 2 + perf 1 + store 4 等）
 - ✅ `npx vue-tsc --noEmit` 单独通过
-- ✅ `npm run build -w @proteus/router`（tsc 声明 + esbuild 单入口 bundle，external @proteus/shared）
+- ✅ `npm run build -w @proteus/{compiler,router,runtime,shared,plugin-vite}`（各包独立构建，compiler 带 prepare 钩子）
 
 ## 待办 / 注意事项
 
@@ -195,7 +196,7 @@
 - **后期可选**：按 `src/compiler/README.md` 提取路径把编译引擎独立开源为 `@proteus/compiler`；JS 产物方法级 sourcemap 接入微信开发者工具（P6-1 待办）；✅ router 工厂化（createRouter(routes)）后 auto-routes.ts 已随应用移动至 examples/（决策 #101）
 - **Skyline 自定义路由半屏视觉**：✅ 真机确诊可用（从非 tab 页发起）；⚠ 硬边界：不能从 tab 页发起（已文档化，demo 演示链接已移入非 tab 页）
 - **类型提示全链路（B 类最后一项）**：✅ 已完成（决策 #93-#97，docs/types.md 正式文档）
-- **框架本体拆包（C 类）**：📋 规划已落地 `docs/packages.md`（8 步：① config 解耦 ② shared 包 ③ runtime 包 ④ router 工厂化 ⑤ plugin-vite 包 ⑥ 别名切换 ⑦ create-proteus 模板重构 ⑧ CI/文档）；每步独立提交，全绿后下一步；**步骤 1-4 已完成（决策 #98-#101）**，下一步步骤 5：plugin-vite 包（插件 + gen-routes 归包）
+- **框架本体拆包（C 类）**：📋 规划已落地 `docs/packages.md`（8 步：① config 解耦 ② shared 包 ③ runtime 包 ④ router 工厂化 ⑤ plugin-vite 包 ⑥ 别名切换 ⑦ create-proteus 模板重构 ⑧ CI/文档）；每步独立提交，全绿后下一步；**步骤 1-5 已完成（决策 #98-#102）**，下一步步骤 6：别名与引用面全量切换（删除泛化 `@proteus` → src/）
 - **P4 MVP 限制**（已在插件注释标注）：computed/watch/跨模块引用、复杂事件表达式、:class 数组语法、v-show 暂不支持；方法内 ref 写入（`=`/`++`/`--`）已支持（重写为 setData），复合赋值 `+=` 与复杂读取仍不支持
 - 文档版本号已到 v2.49（git 仓库关联）
 

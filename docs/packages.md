@@ -80,13 +80,16 @@ packages/
 - [x] 验证：vue-tsc 零错 + 216 测试（新增 18 条 M1/M2 用例）+ 双端构建 + router 包构建 + 模板快照 + workspace 链接（@proteus/router）
 - 决策：#101；踩坑：lazy 默认值语义（scan 不强制置 true，交给 defaults 解析）；RouteNode.parent 保留（构建期使用）；auto-routes 模块扩充（空基接口保证 name 受限负例成立）
 
-### 步骤 5：plugin-vite 包（插件 + gen-routes）
+### 步骤 5：plugin-vite 包（✅ 已落地）
 
-- [ ] `git mv vite-plugin-mp-transform.ts scripts/gen-routes.ts → packages/plugin-vite/src/`
-- [ ] `packages/plugin-vite/package.json`（依赖 compiler + shared；config 由调用方传入或插件读项目 config）
-- [ ] 根 vite.config / proteus.config 引用改包；`build:mp` 脚本链（gen-routes）改包内路径
-- [ ] 验证：build:mp 全链路（gen-routes → 插件 → 产物）
-- 规模：~250 行；风险：中（构建链路）
+- [x] `git mv vite-plugin-mp-transform.ts scripts/gen-routes.ts → packages/plugin-vite/src/`（plugin.ts / gen-routes.ts；另 appSkeleton 从 runtime 迁入——构建期 app.js 骨架模板归构建期包，runtime 纯运行期）
+- [x] `packages/plugin-vite/package.json`（依赖 compiler + router；peer vite；devDep esbuild/sass/@types/node）+ tsconfig.build（rootDir ./src，exclude cli.ts）
+- [x] **config 解耦**：插件不再 `import './proteus.config'`——`PluginOptions.config` 由 vite.config 注入；`ProteusConfig` 类型契约迁入 `packages/plugin-vite/src/config.ts`，根 proteus.config.ts 改为 import 类型 + 实例化
+- [x] **gen-routes 双形态**：纯函数库 `runGenRoutes({ config, root })`（可单测）+ CLI 入口 `src/cli.ts`（tsx 直跑，动态 import 项目 config）；package.json build:mp/dev:mp 指包内 cli
+- [x] 引用面：vite.config（import 包 + `mpTransform({ config })`）、proteus.config（builders 预设路径改 packages/router/src/presets）、tests（plugin.test 路径 + 新增 gen-routes.test 3 用例）、vitest alias @proteus/compiler、tsconfig include
+- [x] snapshot-template：plugin.ts→vite-plugin-mp-transform.ts（appSkeleton 路径替换）+ gen-routes 库→scripts/gen-routes.ts（@proteus/router→../src/router/types、./config→../proteus.config）+ cli→scripts/gen-routes-cli.ts + appSkeleton→src/runtime/；模板 vite.config/package.json 手写同步
+- [x] 验证：vue-tsc 零错 + 219 测试（+3 gen-routes）+ 双端构建 + plugin-vite 包构建 + 模板 gen-routes CLI 冒烟 + workspace 链接
+- 决策：#102；踩坑：① workspace 依赖版本必须对齐实际包版本（compiler 0.2.0——0.1.0 触发 npm 404 拉 registry）② vite.config bundle 阶段不走 resolve.alias → 插件 @proteus/compiler 解析到 dist（prepare 钩子保新鲜）③ tsx 动态 import 需带 .ts 扩展名 + 层级数（src/ → 根为三级）④ 动态 import 根 config 拉偏 tsc rootDir 推断 → CLI 拆独立 cli.ts + tsconfig.build exclude
 
 ### 步骤 6：别名与引用面全量切换
 

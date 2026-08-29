@@ -1,0 +1,32 @@
+{
+  "name": "@proteus/plugin-vite",
+  "version": "0.1.0",
+  "description": "Proteus Vite 插件（mp-weixin 编译管线适配层）+ gen-routes 路由表生成器",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/compiler --external:@proteus/router --external:esbuild --external:sass --external:vite"
+  },
+  "dependencies": {
+    "@proteus/compiler": "0.2.0",
+    "@proteus/router": "0.1.0",
+    "esbuild": "^0.28.2",
+    "sass": "^1.103.1"
+  },
+  "peerDependencies": {
+    "vite": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "vite": "^5.0.0"
+  }
+}

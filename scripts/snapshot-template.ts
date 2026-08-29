@@ -2,11 +2,11 @@
 // create-proteus 模板快照生成器 —— 从主仓库抽取"最小可运行闭环"到 packages/create-proteus/templates/
 // 运行：tsx scripts/snapshot-template.ts（create-proteus 模板与主仓库保持同步的手段）
 // 复制规则：
-//   直接复制：src/platform/ src/router/(除 auto-routes.ts) src/runtime/ src/shims/ scripts/gen-routes.ts
-//              vite-plugin-mp-transform.ts（含路径替换） index.html tsconfig.json
+//   直接复制：packages/{shared,runtime,router,plugin-vite}/src（含路径替换） index.html tsconfig.json
 //   手写模板：package.json / proteus.config.ts / vite.config.ts / src/main.ts / src/main.mp.ts /
 //              src/App.vue / src/pages/index.vue / src/router/auto-routes.ts（精简占位）
-//   ★拆包后：router/runtime/shared 源码来自 packages/*/src，复制进模板 src/ 保持可用（步骤 7 重构）
+//   ★拆包后：router/runtime/shared/plugin-vite 源码来自 packages/*/src，复制进模板 src/ 保持可用（步骤 7 重构）
+//   ★步骤 5：插件（plugin.ts→vite-plugin-mp-transform.ts）+ appSkeleton + gen-routes（库）+ cli 入口都来自 packages/plugin-vite
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,22 +68,32 @@ for (const dir of ['platform', 'shims']) {
 fs.mkdirSync(path.join(TPL, 'src', 'router'), { recursive: true })
 copied.push(...copyDir(path.join(ROOT, 'packages', 'router', 'src'), path.join(TPL, 'src', 'router'), ['auto-routes.ts']))
 copied.push(copyFile(path.join(ROOT, 'examples', 'router', 'RouterView.vue'), path.join(TPL, 'src', 'router', 'RouterView.vue')))
-// 3. gen-routes + 占位入口 + 插件（插件 import 路径替换为 npm 包）
+// 3. gen-routes（库）+ cli 入口 + 插件 + appSkeleton（★步骤 5：全部来自 packages/plugin-vite/src）
 fs.mkdirSync(path.join(TPL, 'scripts'), { recursive: true })
 copied.push(...copyDir(path.join(ROOT, 'scripts'), path.join(TPL, 'scripts'), ['snapshot-template.ts', 'gen-routes.ts']))
+// gen-routes 库：模板内解析 ../proteus.config（自包含 ProteusConfig interface）与 ../src/router/types（vendored）
 copied.push(
-  // gen-routes 在模板工程内解析 src/router/types（模板把框架源码 vendored 进 src/）
-  copyFile(path.join(ROOT, 'scripts', 'gen-routes.ts'), path.join(TPL, 'scripts', 'gen-routes.ts'), [
-    [/\.\.\/packages\/router\/src/g, '../src/router'],
+  copyFile(path.join(ROOT, 'packages', 'plugin-vite', 'src', 'gen-routes.ts'), path.join(TPL, 'scripts', 'gen-routes.ts'), [
+    [/'@proteus\/router'/g, "'../src/router/types'"],
+    [/from '\.\/config'/g, "from '../proteus.config'"],
   ]),
 )
+// gen-routes CLI 入口（模板脚本 gen-routes-cli.ts：读 ../proteus.config + 执行库）
+copied.push(
+  copyFile(path.join(ROOT, 'packages', 'plugin-vite', 'src', 'cli.ts'), path.join(TPL, 'scripts', 'gen-routes-cli.ts'), [
+    [/\.\.\/\.\.\/\.\.\/proteus\.config\.ts/g, '../proteus.config.ts'],
+  ]),
+)
+// 插件（import 相对 appSkeleton 改模板 vendored 位置；@proteus/compiler 走 npm 包）
 copied.push(
   copyFile(
-    path.join(ROOT, 'vite-plugin-mp-transform.ts'),
+    path.join(ROOT, 'packages', 'plugin-vite', 'src', 'plugin.ts'),
     path.join(TPL, 'vite-plugin-mp-transform.ts'),
-    [[/\.\/packages\/compiler\/src/g, '@proteus/compiler']],
+    [[/\.\/appSkeleton/, '../src/runtime/appSkeleton']],
   ),
 )
+// appSkeleton（构建期 app.js 骨架模板，随插件 vendored 进模板 src/runtime/）
+copied.push(copyFile(path.join(ROOT, 'packages', 'plugin-vite', 'src', 'appSkeleton.ts'), path.join(TPL, 'src', 'runtime', 'appSkeleton.ts')))
 // 4. tsconfig / index.html（入口路径指向模板工程的 src/）
 copied.push(copyFile(path.join(ROOT, 'tsconfig.json'), path.join(TPL, 'tsconfig.json')))
 copied.push(copyFile(path.join(ROOT, 'index.html'), path.join(TPL, 'index.html'), [[/\/examples\/main\.ts/g, '/src/main.ts']]))

@@ -60,11 +60,13 @@ function main(): void {
   const appDir = path.dirname(config.pagesDir)
   const roots = (config.subPackages ?? []).map((sp) => sp.root.replace(`${appDir}/`, ''))
   const stat = scanMainPackage(OUT_DIR, roots)
-  console.log(formatBundleReport(stat, config.budget.mainPackageKB, config.budget.strict))
+  // budget 可选（拆包步骤 5：ProteusConfig 归包后为可选段，缺省走 roadmap 目标值）
+  const budget = config.budget ?? { mainPackageKB: 1200, strict: false }
+  console.log(formatBundleReport(stat, budget.mainPackageKB, budget.strict))
   const kb = stat.totalBytes / 1024
-  if (kb > config.budget.mainPackageKB) {
-    const msg = `⚠ 主包 ${kb.toFixed(0)} KB 超过预算 ${config.budget.mainPackageKB} KB（微信上限 2048 KB）——考虑分包 / 按需注入`
-    if (config.budget.strict) {
+  if (kb > budget.mainPackageKB) {
+    const msg = `⚠ 主包 ${kb.toFixed(0)} KB 超过预算 ${budget.mainPackageKB} KB（微信上限 2048 KB）——考虑分包 / 按需注入`
+    if (budget.strict) {
       console.error(`[proteus] ${msg}`)
       process.exitCode = 1
     } else {

@@ -1,10 +1,10 @@
-// vite-plugin-mp-transform.ts
+// packages/plugin-vite/src/plugin.ts
 // ============================================================
-// Proteus 编译管线 · Vite 适配层（薄）
+// Proteus 编译管线 · Vite 适配层（薄）—— @proteus/plugin-vite
 //
-// 编译引擎本体在 src/compiler/（纯函数、零 Vite/配置耦合，可独立开源为 @proteus/compiler）。
+// 编译引擎本体在 @proteus/compiler（纯函数、零 Vite/配置耦合，可独立使用）。
 // 本文件只做三件事：
-//   1. 读取 proteus.config.ts 的 style 选项
+//   1. 读取调用方传入的 ProteusConfig（拆包步骤 5：不再 import 项目 config，由 vite.config 注入）
 //   2. 扫描 pagesDir + subPackages 下所有 .vue
 //   3. 调 compileVueSfc() 并把 wxml/js/wxss emitFile 到 dist/mp-weixin
 //
@@ -15,10 +15,10 @@ import path from 'node:path'
 import { transform as esbuildTransform } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
-import config from './proteus.config'
 import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
-import { APP_LAUNCH_SKELETON } from './packages/runtime/src/appSkeleton'
+import type { ProteusConfig } from './config'
+import { APP_LAUNCH_SKELETON } from '../src/runtime/appSkeleton'
 
 /** CSS 预处理器（v0.3 尾）：<style lang="scss/sass/less"> → css（经 preprocessStyle 钩子注入编译器） */
 function preprocessStyle(lang: string, content: string): string {
@@ -87,12 +87,13 @@ export function filterOverriddenPresets(
   return presets.filter((p) => !new RegExp(`addRouteBuilder\\s*\\(\\s*['"]${p.name}['"]`).test(mainCode))
 }
 
-/** 读取并转译内置预设 builders（供内联进 app.js） */
+/** 读取并转译内置预设 builders（供内联进 app.js）；config 由调用方注入（拆包步骤 5） */
 async function loadPresetBuilders(
   projectRoot: string,
+  cfg: ProteusConfig,
 ): Promise<Array<{ name: string; fnName: string; source: string }>> {
   const presets: Array<{ name: string; fnName: string; source: string }> = []
-  for (const [name, modPath] of Object.entries(config.customRoute.builders)) {
+  for (const [name, modPath] of Object.entries(cfg.customRoute.builders)) {
     const abs = path.join(projectRoot, modPath)
     if (!fs.existsSync(abs)) {
       console.warn(`[mp-transform] 预设 builder ${name} 不存在：${modPath}`)
@@ -110,9 +111,12 @@ async function loadPresetBuilders(
 }
 
 export interface PluginOptions {
+  /** ★拆包步骤 5：完整 ProteusConfig（由 vite.config 从项目 proteus.config.ts 注入） */
+  config: ProteusConfig
+  /** 样式换算（缺省取 config.style.px2rpx） */
   px2rpx?: boolean
   rpxRatio?: number
-  /** ★底线循环 ①③：规则覆盖（proteus.config.ts rules 段） */
+  /** ★底线循环 ①③：规则覆盖（缺省取 config.rules） */
   rules?: TransformRuleOverrides
 }
 
@@ -127,10 +131,11 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-export default function mpTransform(opts: PluginOptions = {}): Plugin {
-  const px2rpx = opts.px2rpx ?? config.style.px2rpx
-  const rpxRatio = opts.rpxRatio ?? config.style.rpxRatio
-  const rules = opts.rules ?? config.rules
+export default function mpTransform(opts: PluginOptions): Plugin {
+  const cfg = opts.config
+  const px2rpx = opts.px2rpx ?? cfg.style.px2rpx
+  const rpxRatio = opts.rpxRatio ?? cfg.style.rpxRatio
+  const rules = opts.rules ?? cfg.rules
   const isDebug = process.env.PROTEUS_DEBUG === '1'
   let projectRoot = process.cwd()
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
@@ -145,7 +150,7 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
     async buildStart() {
       // 小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发，
       // 故在 buildStart 扫描目录逐个编译并 emitFile 资产
-      const appDir = path.join(projectRoot, path.dirname(config.pagesDir))
+      const appDir = path.join(projectRoot, path.dirname(cfg.pagesDir))
       // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
       const files: Array<{ file: string; rel: string }> = []
       const pushRel = (dir: string) => {
@@ -153,8 +158,8 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
           files.push({ file: f, rel: path.relative(appDir, f).replace(/\\/g, '/').replace(/\.vue$/, '') })
         }
       }
-      pushRel(path.join(projectRoot, config.pagesDir))
-      for (const sp of config.subPackages ?? []) {
+      pushRel(path.join(projectRoot, cfg.pagesDir))
+      for (const sp of cfg.subPackages ?? []) {
         pushRel(path.join(projectRoot, sp.root))
       }
       // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）
@@ -179,7 +184,7 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         const { code } = await esbuildTransform(src, { loader: 'ts', charset: 'utf8' })
         // 内置预设：按 proteus.config.ts 的 customRoute.builders 读取源码并内联注册；
         // main 中同名手写注册优先（filterOverriddenPresets 跳过被覆盖的预设）
-        const presets = filterOverriddenPresets(code, await loadPresetBuilders(projectRoot))
+        const presets = filterOverriddenPresets(code, await loadPresetBuilders(projectRoot, cfg))
         const appJs = assembleAppJs(code, presets)
           .replace(/__PROTEUS_DEBUG__/g, isDebug ? 'true' : 'false')
           .replace(/"worklet"/g, "'worklet'")

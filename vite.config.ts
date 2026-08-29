@@ -5,7 +5,7 @@ import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import config from './proteus.config'
-import mpTransform from './vite-plugin-mp-transform'
+import mpTransform from './packages/plugin-vite/src/plugin'
 
 /**
  * 处理 <route> 自定义块虚拟模块（?vue&type=route）
@@ -41,7 +41,8 @@ export default defineConfig(({ mode }) => {
     plugins: isMp
       ? [
           // 小程序端：独占编译管线（不用 plugin-vue），标准 Vue SFC → wxml/wxss/js
-          mpTransform({ px2rpx: config.style.px2rpx, rpxRatio: config.style.rpxRatio }),
+          // ★拆包步骤 5：插件不再读项目 config，由 vite.config 注入（config 解耦）
+          mpTransform({ config }),
         ]
       : [vue(), routeBlocksPlugin()],
     resolve: {

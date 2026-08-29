@@ -1,25 +1,35 @@
-// scripts/gen-routes.ts
+// packages/plugin-vite/src/gen-routes.ts
 // ============================================================
-// 编译期路由表生成器（P2-2 / P2-3）
+// 编译期路由表生成器（P2-2 / P2-3 + 拆包步骤 5 归 @proteus/plugin-vite）
 //
-// 输入：proteus.config.ts 的 pagesDir / subPackages / skyline
+// 输入：ProteusConfig（pagesDir / subPackages / skyline / routesOutput）
 // 输出：
-//   1. 应用侧路由表（路径 = proteus.config.ts 的 routesOutput，默认 src/router/auto-routes.ts）
+//   1. 应用侧路由表（路径 = config.routesOutput，默认 src/router/auto-routes.ts）
 //   2. dist/mp-weixin/app.json（页面声明 + 分包 + window + tabBar）
 //   3. dist/mp-weixin/**/<page>.json（每页 Skyline 配置）
 //
-// 运行：tsx scripts/gen-routes.ts（dev:mp / build:mp 前置步骤）
+// ★拆包步骤 5：纯函数库（runGenRoutes），CLI 入口见同目录 cli.ts；测试直接调本函数
 // ============================================================
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import config from '../proteus.config'
-import type { RouteRecord, RouteMeta } from '../packages/router/src/types'
+import type { RouteRecord, RouteMeta } from '@proteus/router'
+import type { ProteusConfig } from './config'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-// 应用根目录（页面/入口所在目录，从 pagesDir 推导：examples/pages → examples）
-const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
-const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
+/** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
+export interface GenRoutesOptions {
+  config: ProteusConfig
+  root?: string
+}
+
+/**
+ * 运行路由表生成（纯函数，可单测）：清理 dist 产物 → 扫描页面 → 生成 auto-routes/app.json/page.json/component.json
+ */
+export function runGenRoutes(options: GenRoutesOptions): void {
+  const config = options.config
+  const ROOT = options.root ?? process.cwd()
+  // 应用根目录（页面/入口所在目录，从 pagesDir 推导：examples/pages → examples）
+  const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
+  const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
 
 /** 扫描到的页面 */
 interface PageInfo {
@@ -365,13 +375,14 @@ function writeComponentJsons(): void {
   if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（usingComponents 嵌套）`)
 }
 
-// ---- 主流程 ----
-fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
-const pages = scanPages()
-const routes = buildRoutes(pages)
-validate(pages, routes)
-writeAutoRoutes(routes)
-writeAppJson(pages, routes)
-writePageJsons(pages)
-writeComponentJsons()
-console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)
+  // ---- 主流程 ----
+  fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
+  const pages = scanPages()
+  const routes = buildRoutes(pages)
+  validate(pages, routes)
+  writeAutoRoutes(routes)
+  writeAppJson(pages, routes)
+  writePageJsons(pages)
+  writeComponentJsons()
+  console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)
+}

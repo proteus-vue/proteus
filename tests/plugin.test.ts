@@ -1,7 +1,7 @@
 // tests/plugin.test.ts
-// mp 插件内置预设内联逻辑单测（P4 适配层）
+// mp 插件内置预设内联逻辑单测（P4 适配层 + 拆包步骤 5：插件归 @proteus/plugin-vite）
 import { describe, it, expect } from 'vitest'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets } from '../vite-plugin-mp-transform'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
