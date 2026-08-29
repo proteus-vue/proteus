@@ -1,0 +1,23 @@
+{
+  "name": "@proteus/i18n",
+  "version": "0.1.0",
+  "description": "Proteus 国际化（i18n-plan B1）：跨端消息目录 + ICU 子集（插值/复数/选择）+ 类型安全 t()——业务零平台分支",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

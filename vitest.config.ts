@@ -21,6 +21,8 @@ export default defineConfig({
       { find: '@proteus/capabilities/scan', replacement: fileURLToPath(new URL('./packages/capabilities/src/scan.ts', import.meta.url)) },
       { find: '@proteus/capabilities/check', replacement: fileURLToPath(new URL('./packages/capabilities/src/check.ts', import.meta.url)) },
       { find: '@proteus/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
+      // i18n-plan B1：@proteus/i18n 包（tests/i18n.test.ts 直接引用）
+      { find: '@proteus/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
     ],
   },
 })
