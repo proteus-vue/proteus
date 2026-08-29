@@ -4,7 +4,7 @@
 // 路径合并（父覆盖子）+ 值比较去重（对比上次已推送值）+ **深层对象/数组 diff**（变更递归
 // 出叶路径补丁，只推送变化的子路径——直击 uni-app 全量大对象 setData 痛点）。
 // ★拆包解耦（docs/packages.md 步骤 1）：不再依赖 proteus.config——batchWindow 由工厂注入（默认 16）
-import { adapter } from '../platform'
+import { adapter } from '@proteus/shared'
 
 export interface SetDataBridgeOptions {
   /** 批量合并窗口 ms（默认 16 ≈ 1 帧） */

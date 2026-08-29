@@ -1,0 +1,19 @@
+{
+  "name": "@proteus/shared",
+  "version": "0.1.0",
+  "description": "Proteus 公共层：平台适配器 + 全局类型声明（wx/Page/RouteBuilder/MpEvent）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  }
+}

@@ -6,7 +6,8 @@ import { createMpAdapter } from './mp-adapter'
 import { createWebAdapter } from './web-adapter'
 
 // import.meta.env.MODE 由 Vite 按 --mode 静态替换（web / mp-weixin）
-const isMP = (import.meta.env.MODE as string) === 'mp-weixin'
+// （import.meta as any）避免 shared 独立构建依赖 vite 类型
+const isMP = ((import.meta as any).env?.MODE as string) === 'mp-weixin'
 
 /** 全局唯一适配器实例 */
 export const adapter: PlatformAdapter = isMP ? createMpAdapter() : createWebAdapter()

@@ -1,10 +1,11 @@
 // src/router/index.ts
 // 统一路由 API（P3-1）—— 只依赖 platform/adapter 接口，禁止直连 wx（执行规则 4）
 import { routes, routeMap } from './auto-routes'
+import type { RouteParamsByName } from './auto-routes'
 import type { NavigateOptions, RouteParams, RouteRecord } from './types'
 import { runBeforeEach, runAfterEach } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
-import { adapter } from '../platform'
+import { adapter } from '@proteus/shared'
 
 class Router {
   /** 当前页面栈深度（MP 返回真实栈深；Web 恒为 1） */
@@ -12,9 +13,9 @@ class Router {
     return adapter.getCurrentPages().length
   }
 
-  /** 命名路由跳转（推荐） */
-  async push(options: NavigateOptions): Promise<void> {
-    const target = this.resolve(options)
+  /** 命名路由跳转（推荐）——泛型 N 由 name 字面量推断，params 类型自动匹配（类型提示全链路） */
+  async push<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
+    const target = this.resolve(options as NavigateOptions)
     if (!target) throw new Error(`[router] route not found: ${JSON.stringify(options)}`)
 
     // 路由守卫：返回 false 取消导航
@@ -59,7 +60,7 @@ class Router {
   }
 
   /** 替换当前页 */
-  replace(options: NavigateOptions): Promise<void> {
+  replace<N extends keyof RouteParamsByName = keyof RouteParamsByName>(options: NavigateOptions<N>): Promise<void> {
     return this.push({ ...options, replace: true })
   }
 

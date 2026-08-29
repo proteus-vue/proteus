@@ -38,6 +38,8 @@ interface PageInfo {
   customRouteKeyName?: string
   /** <route> 块 pageJson 扩展：合并进页面 page.json（如半屏页透明背景） */
   pageJson?: Record<string, unknown>
+  /** <route> 块 params 声明：字段名 → 类型名（string/number/boolean），生成 RouteParamsByName */
+  params?: Record<string, string>
 }
 
 /** 递归收集目录下所有 .vue 文件（跳过隐藏目录） */
@@ -70,8 +72,8 @@ function toRouteName(relSrc: string): string {
   return stripped.replace(/\//g, '-')
 }
 
-/** 解析 .vue 的 <route> 块（JSON），提取 meta / customRouteKeyName / pageJson */
-function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyName' | 'pageJson'> {
+/** 解析 .vue 的 <route> 块（JSON），提取 meta / customRouteKeyName / pageJson / params */
+function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyName' | 'pageJson' | 'params'> {
   const src = fs.readFileSync(file, 'utf-8')
   const m = src.match(/<route\b[^>]*>([\s\S]*?)<\/route>/i)
   if (!m) return {}
@@ -80,8 +82,14 @@ function parseRouteBlock(file: string): Pick<PageInfo, 'meta' | 'customRouteKeyN
       meta?: RouteMeta
       customRouteKeyName?: string
       pageJson?: Record<string, unknown>
+      params?: Record<string, string>
     }
-    return { meta: block.meta, customRouteKeyName: block.customRouteKeyName, pageJson: block.pageJson }
+    return {
+      meta: block.meta,
+      customRouteKeyName: block.customRouteKeyName,
+      pageJson: block.pageJson,
+      params: block.params,
+    }
   } catch (err) {
     console.warn(`[gen-routes] ${file} 的 <route> 块不是合法 JSON，已忽略：${(err as Error).message}`)
     return {}
@@ -126,6 +134,7 @@ function buildRoutes(pages: PageInfo[]): RouteRecord[] {
     if (p.subPackage) r.subPackage = p.subPackage
     if (p.meta && Object.keys(p.meta).length > 0) r.meta = p.meta
     if (p.customRouteKeyName) r.customRouteKeyName = p.customRouteKeyName
+    if (p.params && Object.keys(p.params).length > 0) r.params = p.params
     return r
   })
 
@@ -186,10 +195,32 @@ function writeAutoRoutes(routes: RouteRecord[]): void {
     "export const routeMap: Record<string, RouteRecord> = routes.reduce((m, r) => { m[r.name] = r; return m }, {} as Record<string, RouteRecord>)",
     '',
   ]
+  // 类型提示全链路（步骤 1）：按路由名生成参数类型表（<route>.params 声明，未声明为 {}）
+  lines.push('// ★ 类型提示：按路由名索引的参数类型表（来源：<route> 块 params 声明）')
+  lines.push('export interface RouteParamsByName {')
+  for (const r of routes) {
+    const params = (r as RouteRecord & { params?: Record<string, string> }).params ?? {}
+    const fields = Object.entries(params)
+    const body = fields.length
+      ? fields.map(([k, t]) => `${k}?: ${tsType(t)}`).join('; ')
+      : ''
+    lines.push(`  '${r.name}': { ${body} },`)
+  }
+  lines.push('}', '')
   const outFile = path.join(ROOT, config.routesOutput)
   fs.mkdirSync(path.dirname(outFile), { recursive: true })
   fs.writeFileSync(outFile, lines.join('\n'))
-  console.log(`[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（${routes.length} 条路由）`)
+  console.log(`[gen-routes] 已生成 ${path.relative(ROOT, outFile)}（${routes.length} 条路由 + RouteParamsByName）`)
+}
+
+/** <route>.params 类型名 → TS 类型（string/number/boolean；其他 → string + 警告） */
+function tsType(t: string): string {
+  if (t === 'number') return 'number'
+  if (t === 'boolean') return 'boolean'
+  if (t !== 'string') {
+    console.warn(`[gen-routes] 未知参数类型 ${t}（支持 string/number/boolean），已按 string 处理`)
+  }
+  return 'string'
 }
 
 /** 生成 dist/mp-weixin/app.json */
@@ -231,6 +262,59 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   console.log(`[gen-routes] 已生成 dist/mp-weixin/app.json（主包 ${mainPages.length} 页，分包 ${subPackages.length} 个）`)
 }
 
+/** 原生小程序标签 + HTML 标签（模板扫描时用于区分自定义组件标签） */
+const NATIVE_MP_TAGS = new Set([
+  'view', 'text', 'image', 'button', 'input', 'textarea', 'video', 'canvas', 'scroll-view', 'slot', 'rich-text',
+  'swiper', 'swiper-item', 'navigator', 'icon', 'progress', 'checkbox', 'radio', 'form', 'label', 'picker', 'slider',
+  'switch', 'map', 'web-view', 'cover-view', 'cover-image', 'movable-area', 'movable-view', 'block', 'template', 'wxs',
+  'audio', 'camera', 'live-player', 'ad', 'official-account', 'open-data', 'page-container', 'root-portal', 'match-media',
+])
+const HTML_TAGS = new Set([
+  'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'br', 'ul', 'ol', 'li', 'section', 'header',
+  'footer', 'main', 'aside', 'nav', 'article', 'strong', 'em', 'b', 'i', 'small', 'code', 'pre', 'select', 'option',
+  'table', 'tr', 'td', 'th', 'form', 'label', 'tbody', 'thead', 'caption', 'figure', 'figcaption', 'details', 'summary',
+])
+
+/**
+ * 扫描页面模板中的自定义组件标签（非原生/HTML 标签）→ usingComponents 映射
+ * 解析顺序：应用组件 <appRoot>/components/<tag>/index(.vue) → 框架内置组件 src/components/<tag>/index(.vue)
+ * 路径：应用 /components/<tag>/index；框架 /proteus/<tag>/index（插件产物 rel 前缀 proteus/，与应用隔离）
+ * config.rules.customTags 的标签是自定义映射（非组件），加入白名单
+ */
+function collectComponents(file: string): Record<string, string> {
+  const src = fs.readFileSync(file, 'utf-8')
+  const tpl = src.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] ?? ''
+  const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
+  const used = new Set<string>()
+  const tagRe = /<([a-z][\w-]*)/g
+  let m: RegExpExecArray | null
+  while ((m = tagRe.exec(tpl))) {
+    const tag = m[1]
+    if (tag.startsWith('!')) continue // 注释
+    if (NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag)) continue
+    used.add(tag)
+  }
+  const out: Record<string, string> = {}
+  for (const tag of used) {
+    // 应用组件优先
+    const appCandidates = [path.join(APP_DIR, 'components', tag, 'index.vue'), path.join(APP_DIR, 'components', `${tag}.vue`)]
+    const appFound = appCandidates.find((c) => fs.existsSync(c))
+    if (appFound) {
+      out[tag] = `/components/${tag}/index`
+      continue
+    }
+    // 框架内置组件（src/components/）：产物 rel 前缀 proteus/
+    const fwCandidates = [path.join(ROOT, 'src', 'components', tag, 'index.vue'), path.join(ROOT, 'src', 'components', `${tag}.vue`)]
+    const fwFound = fwCandidates.find((c) => fs.existsSync(c))
+    if (fwFound) {
+      out[tag] = `/proteus/${tag}/index`
+      continue
+    }
+    console.warn(`[gen-routes] ${file} 使用了组件 <${tag}>，但未找到 ${appCandidates.join(' 或 ')} 或框架组件 ${fwCandidates.join(' 或 ')}`)
+  }
+  return out
+}
+
 /** 生成每页 page.json（P2-3：Skyline 配置，renderer 随 skyline 开关） */
 function writePageJsons(pages: PageInfo[]): void {
   for (const p of pages) {
@@ -241,6 +325,9 @@ function writePageJsons(pages: PageInfo[]): void {
     }
     // <route> 块 pageJson 扩展（如半屏页透明背景 backgroundColorContent）
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
+    // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
+    const components = collectComponents(p.file)
+    if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
     const outFile = path.join(OUT_DIR, p.mpPath + '.json')
@@ -248,6 +335,32 @@ function writePageJsons(pages: PageInfo[]): void {
     fs.writeFileSync(outFile, JSON.stringify(pageJson, null, 2) + '\n')
   }
   console.log(`[gen-routes] 已生成 ${pages.length} 个页面 page.json`)
+}
+
+/**
+ * 组件嵌套（v0.3 尾）：为组件生成 component.json（usingComponents）——
+ * 组件 A 的模板用组件 B 时，A 的 json 需声明 B（微信要求；产物路径与插件 rel 一致：
+ * 应用组件 /components/...、框架组件 /proteus/...）
+ */
+function writeComponentJsons(): void {
+  const roots = [
+    { dir: path.join(APP_DIR, 'components'), prefix: 'components' },
+    { dir: path.join(ROOT, 'src', 'components'), prefix: 'proteus' },
+  ]
+  let count = 0
+  for (const { dir, prefix } of roots) {
+    if (!fs.existsSync(dir)) continue
+    for (const f of walkVueFiles(dir)) {
+      const rel = path.relative(dir, f).replace(/\\/g, '/').replace(/\.vue$/, '')
+      const comps = collectComponents(f)
+      if (!Object.keys(comps).length) continue
+      const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
+      fs.mkdirSync(path.dirname(outFile), { recursive: true })
+      fs.writeFileSync(outFile, JSON.stringify({ usingComponents: comps }, null, 2) + '\n')
+      count++
+    }
+  }
+  if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（usingComponents 嵌套）`)
 }
 
 // ---- 主流程 ----
@@ -258,4 +371,5 @@ validate(pages, routes)
 writeAutoRoutes(routes)
 writeAppJson(pages, routes)
 writePageJsons(pages)
+writeComponentJsons()
 console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)

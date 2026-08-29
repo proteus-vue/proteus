@@ -17,6 +17,8 @@ export interface RouteRecord {
   customRouteKeyName?: string
   /** 所属分包名（主包为 undefined） */
   subPackage?: string
+  /** 路由参数类型声明（<route> 块 params，类型提示全链路） */
+  params?: Record<string, string>
 }
 
 export interface RouteMeta {
@@ -30,19 +32,23 @@ export interface RouteMeta {
   [key: string]: unknown
 }
 
+import type { RouteParamsByName } from './auto-routes'
+
 /** 路由参数（跳转时传入） */
 export interface RouteParams {
   [key: string]: string | number | boolean | undefined
 }
 
-/** 路由跳转选项 */
-export interface NavigateOptions {
-  /** 命名路由 */
-  name?: string
+/**
+ * 页面 onLoad 参数类型（类型提示全链路步骤 3）：N = 本页路由名，自动匹配 RouteParamsByName[N]
+ * 用法：onLoad((options: PageOnLoad<'user-profile'>) => { ... })——options.id?: string 推导
+ */
+export type PageOnLoad<N extends keyof RouteParamsByName> = RouteParamsByName[N]
+
+/** 路由跳转基础选项（name/params 由 NavigateOptions<N> 泛型覆盖，类型提示全链路步骤 2） */
+export interface BaseNavigateOptions {
   /** 页面路径（命名路由优先） */
   path?: string
-  /** 路由参数（自动序列化为 query） */
-  params?: RouteParams
   /** URL query（与 params 合并） */
   query?: RouteParams
   /** Skyline 自定义路由类型 */
@@ -53,4 +59,16 @@ export interface NavigateOptions {
   reLaunch?: boolean
   /** 是否切换 Tab（switchTab，需 isTab=true） */
   switchTab?: boolean
+}
+
+/**
+ * 路由跳转选项（类型提示全链路步骤 2）：
+ * N = 命名路由（字面量推断）——name 受限为路由名 + params 匹配 RouteParamsByName[N]；
+ * 未命名（path 跳转）时 N 回退全部路由名 → params 为联合（宽松）
+ */
+export type NavigateOptions<N extends keyof RouteParamsByName = keyof RouteParamsByName> = BaseNavigateOptions & {
+  /** 命名路由（受限为路由名） */
+  name?: N
+  /** 路由参数（自动序列化为 query，匹配该路由声明的参数类型；多余字段报错） */
+  params?: RouteParamsByName[N]
 }

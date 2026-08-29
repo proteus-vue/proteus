@@ -55,10 +55,14 @@ if (fs.existsSync(backup)) {
 }
 
 const copied: string[] = []
-// 1. 框架本体运行时（相对 import 自包含，直接复制）
-for (const dir of ['platform', 'runtime', 'shims']) {
+// 1. 框架本体运行时（拆包步骤 2：platform/shims 已归 packages/shared；模板暂复制保持可用，步骤 7 重构）
+for (const dir of ['runtime']) {
   fs.mkdirSync(path.join(TPL, 'src', dir), { recursive: true })
   copied.push(...copyDir(path.join(ROOT, 'src', dir), path.join(TPL, 'src', dir)))
+}
+for (const dir of ['platform', 'shims']) {
+  fs.mkdirSync(path.join(TPL, 'src', dir), { recursive: true })
+  copied.push(...copyDir(path.join(ROOT, 'packages', 'shared', 'src', dir), path.join(TPL, 'src', dir)))
 }
 // 2. router（排除 auto-routes.ts，模板用精简占位）+ RouterView（应用壳，随应用存放）
 fs.mkdirSync(path.join(TPL, 'src', 'router'), { recursive: true })

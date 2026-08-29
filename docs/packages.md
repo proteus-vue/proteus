@@ -56,11 +56,11 @@ packages/
 
 ### 步骤 2：shared 包（adapter + shims）
 
-- [ ] `git mv src/platform src/shims → packages/shared/src/`
-- [ ] `packages/shared/package.json` + tsconfig.build（esbuild 单文件 + tsc 声明，同 compiler 模式）
-- [ ] 引用面改 `@proteus/shared`（runtime/router 的 `../platform` → `@proteus/shared`）
-- [ ] 验证：vue-tsc + 测试 + 双端构建
-- 规模：~200 行；风险：低（纯移动 + 别名）
+- [x] `git mv src/platform src/shims → packages/shared/src/`
+- [x] `packages/shared/package.json` + tsconfig.build（esbuild 单文件 + tsc 声明，同 compiler 模式）+ `index.ts` 聚合（adapter + 类型）
+- [x] 引用面改 `@proteus/shared`（runtime/router 4 处 + RouterView）；vitest.config 独立 alias；tsconfig types/include/paths；snapshot-template 源改 packages/shared/src
+- [x] 验证：vue-tsc + 198 测试 + 双端构建 + shared 包构建 + 模板快照 + workspace 链接
+- 决策：#99；踩坑：① perl/sed 替换 `@proteus` 被当数组插值吞掉（改用 node replaceAll）② vitest 独立配置无别名（vitest.config 补 @proteus/shared）③ 测试 mock 路径与实际 import id（'../src/platform' vs '@proteus/shared'，re-export 链 mock 失效）——改 mock '@proteus/shared' ④ import.meta.env 类型（shared 独立构建无 vite types）——(import.meta as any) 断言
 
 ### 步骤 3：runtime 包
 

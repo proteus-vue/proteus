@@ -2,7 +2,7 @@
 // router 单测（文档 P6-3）：mock platform/adapter + skyline，验证导航分发 / 守卫 / 栈深保护
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 
-vi.mock('../src/platform', () => ({
+vi.mock('@proteus/shared', () => ({
   adapter: {
     isMP: true,
     getCurrentPages: vi.fn(() => [{ route: 'pages/index' }]),
@@ -19,7 +19,7 @@ vi.mock('../src/router/skyline', () => ({
   navigateWithCustomRoute: vi.fn(async () => {}),
 }))
 
-import { adapter } from '../src/platform'
+import { adapter } from '@proteus/shared'
 import { isSkyline, navigateWithCustomRoute } from '../src/router/skyline'
 import { router } from '../src/router/index'
 import { beforeEach as registerGuard } from '../src/router/guards'

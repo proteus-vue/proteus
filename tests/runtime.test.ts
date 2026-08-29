@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockPage = { route: 'pages/index', setData: vi.fn() }
 
-vi.mock('../src/platform', () => ({
+vi.mock('@proteus/shared', () => ({
   adapter: {
     isMP: true,
     getCurrentPages: vi.fn(() => [mockPage]),

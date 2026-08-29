@@ -12,11 +12,12 @@
     "sourceMap": true,
     "skipLibCheck": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "./src/shims/mp.d.ts"],
+    "types": ["vite/client", "./packages/shared/src/shims/mp.d.ts"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "@proteus/compiler": ["packages/compiler/src/index.ts"],
+      "@proteus/shared": ["packages/shared/src/index.ts"],
       "@proteus/*": ["src/*"]
     }
   },
@@ -27,6 +28,8 @@
     "packages/compiler/src/**/*.ts",
     "packages/cli/src/**/*.ts",
     "packages/create-proteus/src/**/*.ts",
+    "packages/shared/src/**/*.ts",
+    "packages/shared/src/**/*.d.ts",
     "examples/**/*.ts",
     "examples/**/*.vue",
     "vite.config.ts",

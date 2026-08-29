@@ -46,10 +46,11 @@ export default defineConfig(({ mode }) => {
       : [vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
-        // @proteus/compiler 优先于 @proteus/*（monorepo：编译引擎独立包）
+        // @proteus/* 精确映射（拆包步骤 2：shared 包）；@proteus/compiler 优先
         { find: '@proteus/compiler', replacement: fileURLToPath(new URL('./packages/compiler/src/index.ts', import.meta.url)) },
+        { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
-        // 示例代码通过 @proteus/... 访问框架（与未来 npm 包 @proteus/* 的导入路径一致）
+        // 其余 @proteus/* 暂指向 src/（runtime/router 等拆包后逐一精确化）
         { find: '@proteus', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ],
     },

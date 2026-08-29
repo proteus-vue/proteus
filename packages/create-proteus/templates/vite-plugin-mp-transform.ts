@@ -13,11 +13,29 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { transform as esbuildTransform } from 'esbuild'
+import * as sass from 'sass'
 import type { Plugin } from 'vite'
 import config from './proteus.config'
 import { compileVueSfc } from '@proteus/compiler'
 import type { TransformRuleOverrides } from '@proteus/compiler'
 import { APP_LAUNCH_SKELETON } from './src/runtime/appSkeleton'
+
+/** CSS 预处理器（v0.3 尾）：<style lang="scss/sass/less"> → css（经 preprocessStyle 钩子注入编译器） */
+function preprocessStyle(lang: string, content: string): string {
+  if (lang === 'scss' || lang === 'sass') {
+    try {
+      return sass.compileString(content).css
+    } catch (err) {
+      console.warn(`[mp-transform] scss 编译失败（原样输出）：${(err as Error).message}`)
+      return content
+    }
+  }
+  if (lang === 'less') {
+    console.warn('[mp-transform] less 预处理器暂未内置（MVP 仅 scss），已原样输出')
+    return content
+  }
+  return content
+}
 
 /**
  * 提取 builder 函数名：function xxxBuilder(...)
@@ -128,9 +146,29 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
       // 小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发，
       // 故在 buildStart 扫描目录逐个编译并 emitFile 资产
       const appDir = path.join(projectRoot, path.dirname(config.pagesDir))
-      const files = walkVueFiles(path.join(projectRoot, config.pagesDir))
+      // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
+      const files: Array<{ file: string; rel: string }> = []
+      const pushRel = (dir: string) => {
+        for (const f of walkVueFiles(dir)) {
+          files.push({ file: f, rel: path.relative(appDir, f).replace(/\\/g, '/').replace(/\.vue$/, '') })
+        }
+      }
+      pushRel(path.join(projectRoot, config.pagesDir))
       for (const sp of config.subPackages ?? []) {
-        files.push(...walkVueFiles(path.join(projectRoot, sp.root)))
+        pushRel(path.join(projectRoot, sp.root))
+      }
+      // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）
+      // isComponent 判定依赖路径含 /components/
+      const appComponents = path.join(appDir, 'components')
+      if (fs.existsSync(appComponents)) pushRel(appComponents)
+      // 框架内置组件（v0.4，★定位修正：非示例组件）：src/components/<name>/index.vue
+      // 产物路径规范化为 proteus/<name>/index（与应用组件 /components/... 隔离，gen-routes 同步解析）
+      const frameworkComponents = path.join(projectRoot, 'src', 'components')
+      if (fs.existsSync(frameworkComponents)) {
+        for (const f of walkVueFiles(frameworkComponents)) {
+          const relIn = path.relative(frameworkComponents, f).replace(/\\/g, '/').replace(/\.vue$/, '')
+          files.push({ file: f, rel: `proteus/${relIn}` })
+        }
       }
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
@@ -148,11 +186,10 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
       }
-      for (const file of files) {
+      for (const { file, rel } of files) {
         const source = fs.readFileSync(file, 'utf-8')
-        const rel = path.relative(appDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
-        const { wxml, js, wxss, warnings, trace } = compileVueSfc(source, {
+        const { wxml, js, wxss, warnings, trace, sourcemap } = compileVueSfc(source, {
           filename: rel,
           isComponent,
           px2rpx,
@@ -161,11 +198,17 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
           // dev 调试：产物注入源码行号注释 + 自动 handler 调试日志（PROTEUS_DEBUG=1 时开启）
           annotateLines: isDebug,
           debug: isDebug,
+          preprocessStyle,
         })
 
+        // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
+        const jsWithMap = sourcemap && isDebug ? `${js}//# sourceMappingURL=${rel}.js.map\n` : js
         this.emitFile({ type: 'asset', fileName: `${rel}.wxml`, source: wxml })
-        this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: js })
+        this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: jsWithMap })
         this.emitFile({ type: 'asset', fileName: `${rel}.wxss`, source: wxss })
+        if (sourcemap && isDebug) {
+          this.emitFile({ type: 'asset', fileName: `${rel}.js.map`, source: sourcemap })
+        }
         if (isDebug) {
           // 反黑盒：中间产物转储，转换过程完全透明（★底线循环 ②：产物 + 决策链 一处定位）
           this.emitFile({

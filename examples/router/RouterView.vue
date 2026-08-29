@@ -5,7 +5,7 @@
 import { computed, ref, defineAsyncComponent } from 'vue'
 import type { Component } from 'vue'
 import { routeMap } from '@proteus/router/auto-routes'
-import { adapter } from '@proteus/platform'
+import { adapter } from '@proteus/shared'
 
 // 懒加载全部页面（含分包页）：Web 端按页面自动 code-split
 // glob 相对本文件（examples/router/）→ examples/pages 与 examples/subpackages/*/pages

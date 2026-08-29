@@ -2,7 +2,7 @@
 // 全局路由守卫（P3-2）—— 支持 beforeEach / afterEach，经 adapter 获取当前路由
 import type { RouteRecord } from './types'
 import { routeMap } from './auto-routes'
-import { adapter } from '../platform'
+import { adapter } from '@proteus/shared'
 
 type Guard = (to: RouteRecord, from: RouteRecord | null) => boolean | Promise<boolean> | void | Promise<void>
 type AfterGuard = (to: RouteRecord, from: RouteRecord | null) => void

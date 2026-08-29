@@ -3,7 +3,14 @@
 // （vite.config 的 mpTransform 会在 buildStart 输出产物到 dist/mp-weixin）
 // e2e 测试（tests/e2e-web.test.ts）需要真实构建产物 + Chromium，由 npm run test:e2e:web 单独运行
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   test: {},
+  resolve: {
+    alias: [
+      // 拆包后 src/runtime、src/router import @proteus/shared（vitest 不加载 vite.config，需独立别名）
+      { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
+    ],
+  },
 })

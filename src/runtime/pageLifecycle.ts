@@ -4,7 +4,7 @@
 // - createPage：Vue setup 结果（data/methods）→ Page 构造器配置
 // - createComponent：同上，组件场景（lifetimes.attached/detached）
 import { setDataBridge } from './setDataBridge'
-import { adapter } from '../platform'
+import { adapter } from '@proteus/shared'
 
 /** Vue onMounted → 小程序 onReady（页面级） */
 export function onReady(hook: () => void): void {

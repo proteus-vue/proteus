@@ -5,7 +5,7 @@ import type { RouteParamsByName } from './auto-routes'
 import type { NavigateOptions, RouteParams, RouteRecord } from './types'
 import { runBeforeEach, runAfterEach } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
-import { adapter } from '../platform'
+import { adapter } from '@proteus/shared'
 
 class Router {
   /** 当前页面栈深度（MP 返回真实栈深；Web 恒为 1） */
