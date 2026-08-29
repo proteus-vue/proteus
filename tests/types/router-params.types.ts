@@ -1,0 +1,31 @@
+// tests/types/router-params.types.ts
+// 类型提示全链路步骤 2：router.push 泛型推导（name 受限 + params 类型匹配）
+// 本文件仅类型断言（vue-tsc 检查），不运行——`// @ts-expect-error` 行在类型不匹配时应报错
+// 运行验证：npx vue-tsc --noEmit（纳入全项目类型检查）
+import { router } from '../../src/router'
+
+// ✅ 正例：命名路由 + 匹配参数（user-profile 声明 { id?: string; from?: string }）
+router.push({ name: 'user-profile', params: { id: '42' } })
+router.push({ name: 'user-profile', params: { id: '42', from: 'index' } })
+
+// ✅ 正例：无参数路由 / path 跳转
+router.push({ name: 'index' })
+router.push({ name: 'user-profile' })
+router.push({ path: '/pages/forms', params: { any: 'ok' } })
+
+// ✅ 正例：name 受限于路由名
+router.push({ name: 'forms' })
+
+// ❌ 负例：参数类型不匹配（id 应为 string，number 报错）
+// @ts-expect-error user-profile 的 id 声明为 string
+router.push({ name: 'user-profile', params: { id: 42 } })
+
+// ❌ 负例：未声明参数字段（多余属性，非条件类型 → EPC 生效）
+// @ts-expect-error user-profile 未声明 extra 参数
+router.push({ name: 'user-profile', params: { extra: 'x' } })
+
+// ❌ 负例：未知路由名报错（name 受限为路由名）
+// @ts-expect-error 非路由名
+router.push({ name: 'not-a-route' })
+
+export {}

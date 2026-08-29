@@ -46,21 +46,21 @@ RouteParamsByName（按路由名索引的参数类型表，生成进 auto-routes
 
 ### 步骤 1：路由参数类型生成（gen-routes + `<route>.params`）
 
-- [ ] `<route>` 块解析 `params`：`{ "id": "string", "kw": "string" }`（JSON：字段名 → 类型名）
-- [ ] `writeAutoRoutes` 生成 `RouteParamsByName`（未声明 params 的路由为 `{}`）
-- [ ] 产物：`auto-routes.ts` 追加 `export interface RouteParamsByName { 'user-profile': { id: string; kw: string }; ... }`
-- [ ] 验证：构建后类型声明存在 + `vue-tsc` 通过 + `import type { RouteParamsByName }` 可用
-- 改动：`scripts/gen-routes.ts`（parseRouteBlock / writeAutoRoutes）、`src/router/types.ts`
-- 验收：`auto-routes.ts` 含参数类型表，`npm run build:mp` + `vue-tsc` 全绿
+- [x] `<route>` 块解析 `params`：`{ "id": "string", "kw": "string" }`（JSON：字段名 → 类型名）
+- [x] `writeAutoRoutes` 生成 `RouteParamsByName`（未声明 params 的路由为 `{}`）
+- [x] 产物：`auto-routes.ts` 追加 `export interface RouteParamsByName { 'user-profile': { id?: string; from?: string; kw?: string }; ... }`
+- [x] 验证：构建后类型声明存在 + `vue-tsc` 通过 + `import type { RouteParamsByName }` 可用
+- 改动：`scripts/gen-routes.ts`（parseRouteBlock / writeAutoRoutes）、`src/router/types.ts`、示例 `user/profile.vue`
+- 决策：#93；踩坑：文件注释里 `<route>` 字样被正则先匹配（改措辞）
 
 ### 步骤 2：`router.push` 泛型推导（API 层）
 
-- [ ] `NavigateOptions` 泛型化：`push<N extends keyof RouteParamsByName>(options: NavigateOptions<N>)`
-- [ ] `NavigateOptions<N> = Omit<Base, 'name'|'params'> & { name?: N; params?: RouteParamsByName[N] }`（path 跳转 name 缺省、params 放宽，**兼容现有调用**）
-- [ ] 新增类型断言测试 `tests/types/router-params.types.ts`（正例 + `// @ts-expect-error` 负例）
-- [ ] 验证：类型测试 + 既有 `tests/router.test.ts`（15 用例）不破
-- 改动：`src/router/types.ts`、`src/router/index.ts`（push/replace）
-- 验收：vue-tsc 全绿 + router 运行时测试全过
+- [x] `NavigateOptions` 泛型化：`NavigateOptions<N extends keyof RouteParamsByName = keyof RouteParamsByName>`（N 受限路由名）
+- [x] `push<N>(options: NavigateOptions<N>)`（name 字面量推断 → params 匹配；path 跳转 N 回退全部路由名）
+- [x] 类型断言测试 `tests/types/router-params.types.ts`（正例 + 3 负例：id 类型不匹配 / 多余字段 EPC / 非路由名）
+- [x] 验证：vue-tsc 全绿（含类型测试负例）+ 既有 router 15 用例不破（运行时负例 `name: 'not-exist'` 加类型断言保留）
+- 改动：`src/router/types.ts`（NavigateOptions 重构 BaseNavigateOptions + 泛型）、`src/router/index.ts`（push/replace + RouteParamsByName import）、`tests/types/router-params.types.ts`
+- 决策：#94；设计要点：N 默认 `keyof RouteParamsByName`（path-only 兼容）；非条件类型保证多余属性检查（EPC）生效
 
 ### 步骤 3：页面 `onLoad` 参数类型（PageOnLoad）
 

@@ -33,12 +33,13 @@ beforeEach(() => {
 
 describe('router.push 导航分发', () => {
   it('命名路由 + params → navigateTo（URL 自动 encode）', async () => {
-    await router.push({ name: 'user-profile', params: { id: 1, kw: 'a b' } })
+    // 类型提示：user-profile 声明 { id?: string; from?: string }——id 用字符串（number 会被 TS 拦截）
+    await router.push({ name: 'user-profile', params: { id: '1', kw: 'a b' } })
     expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalledWith({ url: '/pages/user/profile?id=1&kw=a%20b' })
   })
 
   it('params 与 query 合并', async () => {
-    await router.push({ name: 'user-profile', params: { id: 1 }, query: { tab: 'info' } })
+    await router.push({ name: 'user-profile', params: { id: '1' }, query: { tab: 'info' } })
     expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalledWith({ url: '/pages/user/profile?id=1&tab=info' })
   })
 
@@ -62,8 +63,10 @@ describe('router.push 导航分发', () => {
     expect(vi.mocked(adapter.reLaunch)).toHaveBeenCalledWith({ url: '/pages/user/index' })
   })
 
-  it('不存在的命名路由 → 抛错', async () => {
-    await expect(router.push({ name: 'not-exist' })).rejects.toThrow('route not found')
+  it('不存在的命名路由 → 抛错（运行时负例；类型层已拦截，此处显式断言绕过）', async () => {
+    // 类型提示：非路由名在编译期报错（tests/types/router-params.types.ts 负例），
+    // 此处用类型断言保留运行时行为验证
+    await expect(router.push({ name: 'not-exist' as keyof import('../src/router/auto-routes').RouteParamsByName })).rejects.toThrow('route not found')
   })
 
   it('back → navigateBack', () => {

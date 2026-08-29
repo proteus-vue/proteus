@@ -8,7 +8,8 @@
   },
   "params": {
     "id": "string",
-    "from": "string"
+    "from": "string",
+    "kw": "string"
   }
 }
 </route>

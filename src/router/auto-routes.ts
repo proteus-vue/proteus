@@ -29,7 +29,7 @@ export interface RouteParamsByName {
   'pinia-demo': {  },
   'showcase': {  },
   'user': {  },
-  'user-profile': { id?: string; from?: string },
+  'user-profile': { id?: string; from?: string; kw?: string },
   'virtual-list-demo': {  },
   'order-pages-list': {  },
 }
