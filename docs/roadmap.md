@@ -120,6 +120,8 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 **架构要点**：App 端 = **运行时渲染通道**（Vue 官方渲染器，非自研 diff），与 Web/MP 的编译期通道并列；"编译期为主"原则约束 Web/MP（不引入运行时 DOM 模拟），App 端用 Vue 官方能力属平台适配层扩展而非原则妥协。Vapor 与 Proteus 哲学同构（都拒绝虚拟 DOM），互为镜像：Vapor 的 codegen 借鉴进 setData（v0.4），Proteus 的产物契约可作为 Vapor 多端化的参考。
 
+**★批次执行规划**：详见 [docs/proteus-app-plan/](proteus-app-plan/00-overview.md)（00 总览 / 01 App 渲染器 / 02 Vapor / 09 批次 B1-B6——实现待 v0.5 稳定 + npm 发布后启动）。
+
 ### v1.0 生产可用（能力矩阵达标）
 
 **目标**：能力矩阵 9 域全部达标 + 真实项目验证，可对外宣传"生产级"。
