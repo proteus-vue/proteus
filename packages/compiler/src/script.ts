@@ -300,8 +300,8 @@ function extractData(
     const init = extractInitializer(source, m.index + m[0].length)
     if (!init) continue
     const line = lineAt(source, m.index)
-    // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data
-    if (/^(?:defineProps|defineEmits|defineExpose)\s*\(/.test(init)) continue
+    // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
+    if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\()/.test(init)) continue
     // 跳过函数/箭头函数（属于 methods）
     if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
     // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）

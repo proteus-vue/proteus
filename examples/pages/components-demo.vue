@@ -11,6 +11,7 @@
 import { ref } from 'vue'
 // Web 端注册组件（MP 端编译器忽略 import，标签走 usingComponents）
 import Counter from '../components/counter/index.vue'
+import Panel from '../components/panel/index.vue'
 
 const total = ref(0)
 
@@ -28,6 +29,9 @@ function onChange(e: { detail?: number }) {
     <p class="sub">父页面使用 &lt;counter&gt;（defineProps / emit → triggerEvent，usingComponents 自动注入）</p>
     <counter :initial="5" label="计数" @change="onChange" />
     <p>组件上报值：{{ total }}</p>
+
+    <!-- 组件嵌套（v0.3 尾）：panel 组件内部使用 counter，component.json 自动注入 -->
+    <panel title="嵌套面板" />
   </div>
 </template>
 

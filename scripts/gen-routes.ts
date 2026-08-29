@@ -306,6 +306,32 @@ function writePageJsons(pages: PageInfo[]): void {
   console.log(`[gen-routes] 已生成 ${pages.length} 个页面 page.json`)
 }
 
+/**
+ * 组件嵌套（v0.3 尾）：为组件生成 component.json（usingComponents）——
+ * 组件 A 的模板用组件 B 时，A 的 json 需声明 B（微信要求；产物路径与插件 rel 一致：
+ * 应用组件 /components/...、框架组件 /proteus/...）
+ */
+function writeComponentJsons(): void {
+  const roots = [
+    { dir: path.join(APP_DIR, 'components'), prefix: 'components' },
+    { dir: path.join(ROOT, 'src', 'components'), prefix: 'proteus' },
+  ]
+  let count = 0
+  for (const { dir, prefix } of roots) {
+    if (!fs.existsSync(dir)) continue
+    for (const f of walkVueFiles(dir)) {
+      const rel = path.relative(dir, f).replace(/\\/g, '/').replace(/\.vue$/, '')
+      const comps = collectComponents(f)
+      if (!Object.keys(comps).length) continue
+      const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
+      fs.mkdirSync(path.dirname(outFile), { recursive: true })
+      fs.writeFileSync(outFile, JSON.stringify({ usingComponents: comps }, null, 2) + '\n')
+      count++
+    }
+  }
+  if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（usingComponents 嵌套）`)
+}
+
 // ---- 主流程 ----
 fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
 const pages = scanPages()
@@ -314,4 +340,5 @@ validate(pages, routes)
 writeAutoRoutes(routes)
 writeAppJson(pages, routes)
 writePageJsons(pages)
+writeComponentJsons()
 console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)
