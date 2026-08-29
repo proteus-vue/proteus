@@ -243,9 +243,9 @@ interface ComputedInfo {
   setter?: { param: string; body: string }
 }
 
-/** watch 信息（v0.3 起：单 ref / 数组源 / 函数源，依赖写入后自动调用回调） */
+/** watch 信息（v0.3 起：单 ref / 数组源 / 函数源，依赖写入后自动调用回调；★B3 起：props 源 → observers） */
 interface WatchInfo {
-  /** 方法名后缀（deps 组合：count → Count、[a,b] → AAndB） */
+  /** 方法名后缀（deps 组合：count → Count、[a,b] → AAndB；props 源 → PropX） */
   id: string
   /** 依赖的 ref 名列表 */
   deps: string[]
@@ -259,6 +259,8 @@ interface WatchInfo {
   line: number
   /** 函数源 getter（转写后 this.data 形式；undefined = ref 直接源） */
   expr?: string
+  /** ★props 源：监听自身属性名（→ WeChat observers；Web 端标准 Vue watch） */
+  propField?: string
 }
 
 /** 组件 prop 信息（v0.3 组件系统：defineProps → Component properties） */
@@ -344,7 +346,7 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
 
 /**
  * 提取顶层 watch 调用：watch(源, (newVal, oldVal) => { ... }[, { immediate: true }])
- * 源：单 ref（count）| 数组（[a, b]）| 函数（() => expr，依赖从 expr 的 x.value 提取）
+ * 源：单 ref（count）| 数组（[a, b]）| 函数（() => expr，依赖从 expr 的 x.value 提取）| ★props 源（props.x / () => props.x → WeChat observers）
  * MVP：箭头函数回调；function 回调警告
  */
 function extractWatch(
@@ -352,6 +354,7 @@ function extractWatch(
   data: Record<string, unknown>,
   warnings: string[],
   trace?: TransformTrace,
+  allowPropWatch = true,
 ): Record<string, WatchInfo> {
   const out: Record<string, WatchInfo> = {}
   const re = /^watch\s*\(\s*([\s\S]*?)\s*,\s*(?:\(([^)]*)\)\s*=>|function\s*\(([^)]*)\)\s*)\s*\{/gm
@@ -361,6 +364,37 @@ function extractWatch(
     if (source.slice(lineStart, m.index) !== '') continue
     const rawSrc = m[1].trim()
     const params = (m[2] ?? m[3] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    // ★props 源（组件监听自身属性变化）：watch(props.x, cb) / watch(() => props.x, cb)
+    //   Web 端即标准 Vue watch（全响应式）；MP 端编译为 Component observers（属性变化触发回调）
+    let propField: string | undefined
+    if (allowPropWatch && rawSrc.startsWith('props.')) {
+      propField = rawSrc.slice('props.'.length).trim().replace(/\.value$/, '')
+    } else if (allowPropWatch && rawSrc.startsWith('()')) {
+      const getter = rawSrc.replace(/^\(\)\s*=>\s*/, '').trim()
+      const pm = getter.match(/^props\.([A-Za-z_$][\w$]*)$/)
+      if (pm) propField = pm[1]
+    }
+    if (propField) {
+      const braceIdx = m.index + m[0].length - 1
+      const body = extractBracedBody(source, braceIdx)
+      if (body === null) {
+        warnings.push(`watch ${rawSrc} 回调体解析失败，已跳过`)
+        continue
+      }
+      const after = source.slice(braceIdx + body.length + 1, braceIdx + body.length + 120)
+      const immediate = /immediate\s*:\s*true/.test(after)
+      const id = `Prop${capitalize(propField)}`
+      if (out[id]) {
+        warnings.push(`watch ${rawSrc} 与已有 watch 重名（${id}），后者覆盖前者`)
+      }
+      trace?.add('script/watch-props', {
+        line: lineAt(source, m.index),
+        before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
+        after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（attached 初始化调用一次）' : ''} }`,
+      })
+      out[id] = { id, deps: [], params, body, immediate, line: lineAt(source, m.index), propField }
+      continue
+    }
     // 解析源 → deps + 函数源 getter
     let deps: string[] = []
     let expr: string | undefined
@@ -645,8 +679,12 @@ function immediateWatchLine(watches: Record<string, WatchInfo>): string {
     .filter(([, w]) => w.immediate)
     .map(([, w]) => {
       const single = w.deps.length === 1
-      const newVals = single ? (w.expr ?? `this.data.${w.deps[0]}`) : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
-      const oldVals = single ? 'undefined' : `[${w.deps.map(() => 'undefined').join(', ')}]`
+      const newVals = w.propField
+        ? `this.data.${w.propField}`
+        : single
+          ? (w.expr ?? `this.data.${w.deps[0]}`)
+          : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
+      const oldVals = w.propField ? 'undefined' : single ? 'undefined' : `[${w.deps.map(() => 'undefined').join(', ')}]`
       return `this.proteusWatch${w.id}(${newVals}, ${oldVals})`
     })
   return lines.join('\n')
@@ -909,7 +947,7 @@ export function transformScriptToPage(
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
-  const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace)
+  const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace, !disabled.has('script/watch-props'))
   // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
   const props = extra.isComponent && !disabled.has('script/define-props') ? extractProps(source, warnings, trace) : {}
   const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*[<(]/)?.[1]
@@ -991,6 +1029,20 @@ export function transformScriptToPage(
       before: `v-model="${vModelBindings.join('", "')}"`,
       after: `proteusOn${vModelBindings.map(capitalize).join(' / proteusOn')}Input（setData 回写）`,
     })
+  }
+
+  // ★props 源 watch → WeChat observers（组件监听自身属性变化；Web 端即标准 Vue watch）
+  const propWatches = Object.values(watches).filter((w) => w.propField)
+  if (extra.isComponent && propWatches.length) {
+    lines.push('  observers: {')
+    for (const w of propWatches) {
+      const observerBody = rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
+      const bodyLines = observerBody.split('\n')
+      lines.push(`    ${w.propField}(n, o) {`)
+      for (const bl of bodyLines) lines.push(`      ${bl}`)
+      lines.push('    },')
+    }
+    lines.push('  },')
   }
 
   // 导航链接自动 handler（模板出现 <a href> / <router-link> 时注入，仅 MP 产物存在）
@@ -1110,7 +1162,9 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
     pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)},`, m.line)
   }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
+  // ★props 源非 immediate watch 只走 observers，不生成方法（避免无用产物）；immediate 需要方法（attached 初始化调用）
   for (const w of Object.values(watches)) {
+    if (w.propField && !w.immediate) continue
     const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle))}\n  },`
     pushMapped(`  ${src}`, w.line)
   }

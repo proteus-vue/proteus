@@ -52,6 +52,22 @@ export const SCRIPT_RULES: TransformRule[] = [
     decision: '#78（v0.3）',
   },
   {
+    id: 'script/watch-props',
+    phase: 'script',
+    status: 'implemented',
+    title: 'watch props 源 → WeChat observers（组件属性监听）',
+    description: 'watch(props.x, (n, o) => { body }) 或 watch(() => props.x, ...) → Component observers: { x(n, o) { body } }（属性变化触发回调；Web 端即标准 Vue watch，全响应式）；immediate: true → 另生成 proteusWatchPropX 方法 + attached 初始化调用一次',
+    why: '组件需要响应自身属性变化（列表 items 分页/加载更多、弹层 visible v-model、表单 value 同步等）；小程序无响应式系统，属性变化唯一通道是 observers',
+    when: '组件 script 顶层出现 watch(props.x, callback) / watch(() => props.x, callback) 时（MVP：单属性源）',
+    example: {
+      before: 'watch(() => props.items, () => {\n  calc()\n})',
+      after: 'observers: {\n  items(n, o) {\n    calc()\n  },\n}',
+    },
+    verify: 'tests/mp-transform.test.ts props 源 watch 用例',
+    source: 'packages/compiler/src/script.ts → extractWatch（propField 分支）+ observers 发射',
+    decision: '组件库 B3（p-list-view items 响应式）',
+  },
+  {
     id: 'script/module-import',
     phase: 'script',
     status: 'implemented',

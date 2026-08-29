@@ -10,11 +10,15 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PView, PText, PImage, PButton } from '@proteus/components'
+import { PView, PText, PImage, PButton, PScrollView, PListView } from '@proteus/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)
 const imgErrors = ref(0)
+
+// 万条数据：p-list-view 虚拟窗口只渲染可视区（行数恒定）
+const rows = ref([] as { title: string }[])
+for (let i = 0; i < 10000; i++) rows.value.push({ title: 'item ' + i })
 
 function onTap() {
   clicks.value++
@@ -48,6 +52,12 @@ function onImgError() {
       @error="onImgError"
     />
     <p-text class="row">图片加载 {{ imgLoads }} / 错误 {{ imgErrors }}</p-text>
+
+    <h2>长列表（B3）</h2>
+    <p class="sub">p-scroll-view 包裹 + p-list-view 虚拟窗口（10000 条，行数恒定）</p>
+    <p-scroll-view class="box">
+      <p-list-view :items="rows" :item-height="44" :height="320" />
+    </p-scroll-view>
   </div>
 </template>
 

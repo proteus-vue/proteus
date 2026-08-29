@@ -418,23 +418,34 @@ describe('虚拟列表（v0.4）', () => {
     expect(wxml).not.toContain('proteusSelf')
   })
 
-  it('VirtualList 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染', () => {
-    const src = fs.readFileSync(path.resolve('src/components/virtual-list/index.vue'), 'utf-8')
-    const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/virtual-list/index.vue' })
+  it('PListView 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染 + observers', () => {
+    const src = fs.readFileSync(path.resolve('src/components/p-list-view/index.vue'), 'utf-8')
+    const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/p-list-view/index.vue' })
     // properties：函数默认值（() => []）忽略，仅 type
     expect(r.js).toContain('items: { type: Array }')
-    // 切片逻辑：props 重写 + slice
+    // 切片逻辑：props 重写 + slice（方法体内改写为 this.data）
     expect(r.js).toContain('this.data.items.slice')
+    // items 变化响应：props 源 watch → observers
+    expect(r.js).toContain('observers: {')
     // onReady 首屏计算
     expect(r.js).toContain('onReady()')
-    expect(r.js).toContain('calc(0)')
-    // 模板：scroll-view + bindscroll + 可视区 v-for
+    expect(r.js).toContain('calc()')
+    // 模板：scroll-view + bindscroll + 可视区 v-for + 虚拟/全量双分支
     expect(r.wxml).toContain('<scroll-view')
     expect(r.wxml).toContain('bindscroll="onScroll"')
     expect(r.wxml).toContain('wx:for="{{visible}}"')
+    expect(r.wxml).toContain('wx:else wx:for="{{items}}"')
     expect(r.wxml).toContain('wx:key="i"')
     // 产物自校验通过（无坏产物）
     expect(r.js).not.toContain('undefined undefined')
+  })
+
+  it('VirtualList 兼容别名：转发 p-list-view（原 API 表面不变）', () => {
+    const src = fs.readFileSync(path.resolve('src/components/virtual-list/index.vue'), 'utf-8')
+    const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/virtual-list/index.vue' })
+    expect(r.wxml).toContain('<p-list-view')
+    expect(r.wxml).toContain('items="{{items}}"')
+    expect(r.js).toContain('items: { type: Array }')
   })
 })
 
