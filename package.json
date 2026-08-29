@@ -22,6 +22,8 @@
     "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
     "proteus": "tsx packages/cli/src/index.ts",
     "cli:build": "npm run build -w @proteus/cli",
+    "create": "tsx packages/create-proteus/src/index.ts",
+    "create:build": "npm run build -w create-proteus",
     "preview:web": "vite preview --mode web",
     "verify": "npm test && npm run build:web && npm run build:mp",
     "test": "vitest run --exclude tests/e2e-web.test.ts",

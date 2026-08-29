@@ -1,0 +1,14 @@
+{
+  "name": "create-proteus",
+  "version": "0.1.0",
+  "description": "Proteus 脚手架：npm create proteus my-app —— 一键生成 Web + 微信小程序（Skyline）双端工程",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "create-proteus": "./dist/index.js"
+  },
+  "files": ["dist", "templates", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\""
+  }
+}

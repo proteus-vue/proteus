@@ -60,7 +60,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 编译引擎独立包 `@proteus/compiler`（✅ 已落地：目录拆分 + workspace + 独立构建） | `packages/compiler/`（monorepo） | ✅ `npm run build -w @proteus/compiler` 产出 dist（esbuild 单文件 + tsc 声明文件）；适配层改 import `packages/compiler/src`（npm 发布后切换 `@proteus/compiler`）；纯函数 API 不变 |
 | 规则注册表随包发布（✅ 已落地） | `packages/compiler/src/transforms/` | ✅ `@proteus/compiler` 导出 `listTransformRules` / `getTransformRule` / `formatTransformRule` / `explainTransform`（49 条 AI 说明书随包携带） |
 | CLI `@proteus/cli`（✅ 已落地） | `packages/cli/` | ✅ `proteus build <dir> --out <dir> [--debug] [--rules]`（独立编译，esbuild 单文件 + shebang，`node_modules/.bin/proteus` 验证）；`proteus explain <vue-file | rule-id>`（决策 trace / AI 说明书）；`proteus rules`（能力目录）；核心逻辑纯函数可单测（tests/cli.test.ts 9 用例） |
-| 脚手架 `create-proteus` | `packages/create-proteus/` | `npm create proteus my-app` 生成可运行工程（对标 `create-taro` / `npx degit dcloudio`） |
+| 脚手架 `create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create proteus my-app` 生成 32 文件双端工程（模板快照 + 手写模板）；端到端验证：生成 → 安装（file: 指向仓库 compiler）→ build:web + build:mp 双端构建通过；模板同步脚本 `scripts/snapshot-template.ts` |
 | CI（✅ 已落地） | `.github/workflows/ci.yml` | ✅ `vue-tsc / test / build:mp / build:web / 独立包构建` + `e2e-web` 双 job 全绿 |
 | 发布流水线 | changesets + npm | 语义化版本、changelog、标签发布 |
 | 贡献设施（✅ 已落地） | `CONTRIBUTING.md` / Issue & PR 模板 / 行为准则 | ✅ 规则改动同步约定（实现/AI 说明书/映射表/测试四处一致） |
@@ -183,7 +183,7 @@ proteus/                        # monorepo（v0.2 起）
 
 | 里程碑 | 验收 |
 |---|---|
-| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）；`create-proteus` 一条命令跑起双端；CI 全绿；`proteus explain` 可用（✅ CLI 已落地，npm 发布待流水线） |
+| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）；`create-proteus` 一条命令跑起双端（✅ 已落地，npm 发布待流水线）；CI 全绿；`proteus explain` 可用（✅ CLI 已落地） |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo；sourcemap 接入开发者工具 |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地；Pinia 双端可用 |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证 |
