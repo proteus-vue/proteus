@@ -128,15 +128,29 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
       // 小程序页面不在模块图中（main.mp.ts 未引用页面），transform 钩子不会触发，
       // 故在 buildStart 扫描目录逐个编译并 emitFile 资产
       const appDir = path.join(projectRoot, path.dirname(config.pagesDir))
-      const files = walkVueFiles(path.join(projectRoot, config.pagesDir))
+      // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
+      const files: Array<{ file: string; rel: string }> = []
+      const pushRel = (dir: string) => {
+        for (const f of walkVueFiles(dir)) {
+          files.push({ file: f, rel: path.relative(appDir, f).replace(/\\/g, '/').replace(/\.vue$/, '') })
+        }
+      }
+      pushRel(path.join(projectRoot, config.pagesDir))
       for (const sp of config.subPackages ?? []) {
-        files.push(...walkVueFiles(path.join(projectRoot, sp.root)))
+        pushRel(path.join(projectRoot, sp.root))
       }
       // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）
-      // isComponent 判定依赖路径含 /components/（buildStart 已覆盖）
+      // isComponent 判定依赖路径含 /components/
       const appComponents = path.join(appDir, 'components')
-      if (fs.existsSync(appComponents)) {
-        files.push(...walkVueFiles(appComponents))
+      if (fs.existsSync(appComponents)) pushRel(appComponents)
+      // 框架内置组件（v0.4，★定位修正：非示例组件）：src/components/<name>/index.vue
+      // 产物路径规范化为 proteus/<name>/index（与应用组件 /components/... 隔离，gen-routes 同步解析）
+      const frameworkComponents = path.join(projectRoot, 'src', 'components')
+      if (fs.existsSync(frameworkComponents)) {
+        for (const f of walkVueFiles(frameworkComponents)) {
+          const relIn = path.relative(frameworkComponents, f).replace(/\\/g, '/').replace(/\.vue$/, '')
+          files.push({ file: f, rel: `proteus/${relIn}` })
+        }
       }
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
@@ -154,9 +168,8 @@ export default function mpTransform(opts: PluginOptions = {}): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
       }
-      for (const file of files) {
+      for (const { file, rel } of files) {
         const source = fs.readFileSync(file, 'utf-8')
-        const rel = path.relative(appDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
         const { wxml, js, wxss, warnings, trace, sourcemap } = compileVueSfc(source, {
           filename: rel,

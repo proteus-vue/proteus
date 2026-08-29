@@ -246,7 +246,8 @@ const HTML_TAGS = new Set([
 
 /**
  * 扫描页面模板中的自定义组件标签（非原生/HTML 标签）→ usingComponents 映射
- * 约定：<my-counter> → <appRoot>/components/my-counter/index(.vue)，路径以 /components/... 绝对形式（相对小程序根）
+ * 解析顺序：应用组件 <appRoot>/components/<tag>/index(.vue) → 框架内置组件 src/components/<tag>/index(.vue)
+ * 路径：应用 /components/<tag>/index；框架 /proteus/<tag>/index（插件产物 rel 前缀 proteus/，与应用隔离）
  * config.rules.customTags 的标签是自定义映射（非组件），加入白名单
  */
 function collectComponents(file: string): Record<string, string> {
@@ -264,11 +265,21 @@ function collectComponents(file: string): Record<string, string> {
   }
   const out: Record<string, string> = {}
   for (const tag of used) {
-    // 组件文件约定：<appRoot>/components/<tag>/index.vue 或 <tag>.vue
-    const candidates = [path.join(APP_DIR, 'components', tag, 'index.vue'), path.join(APP_DIR, 'components', `${tag}.vue`)]
-    const found = candidates.find((c) => fs.existsSync(c))
-    if (found) out[tag] = `/components/${tag}/index`
-    else console.warn(`[gen-routes] ${file} 使用了组件 <${tag}>，但未找到 ${candidates.join(' 或 ')}（组件须放在 ${path.join(APP_DIR, 'components')}/）`)
+    // 应用组件优先
+    const appCandidates = [path.join(APP_DIR, 'components', tag, 'index.vue'), path.join(APP_DIR, 'components', `${tag}.vue`)]
+    const appFound = appCandidates.find((c) => fs.existsSync(c))
+    if (appFound) {
+      out[tag] = `/components/${tag}/index`
+      continue
+    }
+    // 框架内置组件（src/components/）：产物 rel 前缀 proteus/
+    const fwCandidates = [path.join(ROOT, 'src', 'components', tag, 'index.vue'), path.join(ROOT, 'src', 'components', `${tag}.vue`)]
+    const fwFound = fwCandidates.find((c) => fs.existsSync(c))
+    if (fwFound) {
+      out[tag] = `/proteus/${tag}/index`
+      continue
+    }
+    console.warn(`[gen-routes] ${file} 使用了组件 <${tag}>，但未找到 ${appCandidates.join(' 或 ')} 或框架组件 ${fwCandidates.join(' 或 ')}`)
   }
   return out
 }

@@ -89,7 +89,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 |---|---|---|
 | setData 深度优化（✅ 已实现，决策 #81） | `src/runtime/setDataBridge.ts` | 已有：批量合并（16ms 窗口）+ 路径合并 + 值去重 + **深层对象/数组 diff**（变更递归出叶路径补丁，只推送变化子路径——对象更新从整对象 → 变化字段；首次推送展开叶路径）+ reset（测试隔离） |
 | Vapor codegen 借鉴 | `src/runtime/setDataBridge.ts` | 研究 Vapor 的 reset/effect **命令式更新**：setData 从"路径合并"推进到"依赖追踪精确化"（v0.6 App/Vapor 兼容的前置研究） |
-| 虚拟列表（✅ 已实现，决策 #82） | `examples/components/virtual-list/`（框架内置组件雏形） | 已有：`<virtual-list :items :item-height :height>` 数据切片 + 占位（只渲染可视区，多 2 行缓冲）；双端同源码（scroll-view 模板 → MP 原生滚动 + bindscroll / Web 自定义元素 + CSS overflow）；onMounted 首屏计算 + scroll 联动；demo 页万条数据；通用插槽渲染待编译器支持作用域插槽 |
+| 虚拟列表（✅ 已实现并框架内置化，决策 #82/#83） | `src/components/virtual-list/`（★框架内置组件） | 已有：`<virtual-list :items :item-height :height>` 数据切片 + 占位（只渲染可视区，多 2 行缓冲）；双端同源码（scroll-view 模板 → MP 原生滚动 + bindscroll / Web 自定义元素 + CSS overflow）；onMounted 首屏计算 + scroll 联动；**框架内置**：产物 `proteus/<name>/index` 前缀（与应用组件 `/components/...` 隔离），gen-routes 组件解析应用优先、回退框架，demo 万条数据；通用插槽渲染待编译器支持作用域插槽 |
 | Pinia 状态管理适配 | `src/runtime/store/` | `defineStore` 编译/桥接到 MP（data 同步 + setData 联动）；Web 端原生 Pinia |
 | 包体积控制 | `build:mp` 链路 | 按需注入、`tree-shaking` 编译产物、主包 ≤ 2MB 预算仪表 |
 | 性能基准（✅ 已落地，决策 #81） | `tests/perf/` | 已有：setData 桥接基准（1000 次变更 → 1 次批量 / 对象 diff 全量 4 条 vs 变化 1 条 / 同值去重零推送）+ 编译引擎基准（典型页平均耗时报告 + 宽松阈值门禁），随 npm test 运行 |

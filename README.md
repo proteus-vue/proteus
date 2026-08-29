@@ -137,6 +137,7 @@ proteus/
 ├── packages/cli/                   # ★ @proteus/cli（v0.2：build 独立编译 / explain 决策 trace / rules）
 ├── packages/create-proteus/        # ★ create-proteus（v0.2：npm create proteus 一键双端工程）
 ├── src/
+│   ├── components/                   # ★ 框架内置组件（v0.4：virtual-list 等，产物 proteus/ 前缀）
 │   ├── platform/                   # 平台适配层（adapter / web-adapter / mp-adapter）
 │   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）

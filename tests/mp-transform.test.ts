@@ -295,8 +295,8 @@ describe('虚拟列表（v0.4）', () => {
   })
 
   it('VirtualList 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染', () => {
-    const src = fs.readFileSync(path.resolve('examples/components/virtual-list/index.vue'), 'utf-8')
-    const r = compileVueSfc(src, { isComponent: true, filename: 'components/virtual-list/index.vue' })
+    const src = fs.readFileSync(path.resolve('src/components/virtual-list/index.vue'), 'utf-8')
+    const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/virtual-list/index.vue' })
     // properties：函数默认值（() => []）忽略，仅 type
     expect(r.js).toContain('items: { type: Array }')
     // 切片逻辑：props 重写 + slice

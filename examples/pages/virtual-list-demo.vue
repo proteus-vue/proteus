@@ -8,8 +8,8 @@
 </route>
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-// Web 端注册组件（MP 端编译器忽略 import，标签走 usingComponents）
-import VirtualList from '../components/virtual-list/index.vue'
+// Web 端注册框架内置组件（MP 端编译器忽略 import，标签走 usingComponents 框架路径 /proteus/...）
+import VirtualList from '@proteus/components/virtual-list/index.vue'
 
 // ref 用非空初始值推导类型（空数组会推断 never[]，编译器不支持泛型标注）
 const items = ref([{ title: '' }])
