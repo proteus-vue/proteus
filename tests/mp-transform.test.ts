@@ -79,6 +79,53 @@ describe('computed 读路径（v0.3）', () => {
   })
 })
 
+describe('scoped CSS（v0.3）', () => {
+  const SFC = '<template>\n  <div class="card">\n    <p class="title">hi</p>\n  </div>\n</template>\n<style scoped>\n.card { padding: 8px; }\n.card .title { color: red; }\n</style>'
+
+  it('模板元素附加作用域属性 + 选择器追加 [data-v-xxx]', () => {
+    const result = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
+    expect(result.wxml).toContain('data-v-')
+    expect(result.wxml).toContain('<view data-v-')
+    expect(result.wxss).toContain('.card[data-v-')
+    expect(result.wxss).toContain('.card .title[data-v-')
+  })
+
+  it('scopeId 稳定（同文件同属性名），且产物自校验通过', () => {
+    const a = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
+    const b = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
+    const idA = a.wxml.match(/data-v-[a-f0-9]+/)?.[0]
+    const idB = b.wxml.match(/data-v-[a-f0-9]+/)?.[0]
+    expect(idA).toBeTruthy()
+    expect(idA).toBe(idB)
+  })
+
+  it(':deep() 去包装（内容保留）', () => {
+    const result = compileVueSfc('<template><div class="a">x</div></template>\n<style scoped>\n.a :deep(.b) { color: red; }\n</style>', { filename: 'deep-demo.vue' })
+    expect(result.wxss).toContain('.a .b[')
+    expect(result.wxss).not.toContain(':deep')
+  })
+
+  it('非 scoped style 不生成作用域属性', () => {
+    const result = compileVueSfc('<template><div class="a">x</div></template>\n<style>\n.a { color: red; }\n</style>', { filename: 'plain-demo.vue' })
+    expect(result.wxml).not.toContain('data-v-')
+    expect(result.wxss).not.toContain('[data-v-')
+  })
+})
+
+describe(':class 数组语法（v0.3）', () => {
+  it('数组 → 逐项拼接（字符串/对象/简单变量/三元）', () => {
+    const { wxml } = transformTemplateToWxml('<p :class="[base, { active: on }, \'fixed\', cond ? \'a\' : \'b\']">x</p>', opts)
+    expect(wxml).toContain("{{((base)?(base)+' ':'')+(on?'active ':'')+'fixed '+((cond ? 'a' : 'b')?(cond ? 'a' : 'b')+' ':'')}}")
+  })
+
+  it('数组项不支持形式 → 编译期警告并跳过该项', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { wxml } = transformTemplateToWxml('<p :class="[foo.bar(), ok]">x</p>', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('数组项'))
+    expect(wxml).toContain('ok')
+  })
+})
+
 describe('transformTemplateToWxml（template → wxml）', () => {
   it('标准标签映射：div→view / span,p,h1→text / img→image', () => {
     const { wxml } = transformTemplateToWxml('<div><span>hi</span><p>p</p><h1>t</h1><img :src="url" /></div>', opts)

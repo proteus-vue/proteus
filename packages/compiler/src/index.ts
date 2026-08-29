@@ -9,6 +9,15 @@ import { assertValidResult, CompilerError } from './validate'
 import { createTrace } from './trace'
 import type { CompileOptions, CompileResult } from './types'
 
+/** djb2 哈希 → scoped 属性名（稳定：同文件同 scopeId；零依赖纯函数） */
+export function scopedIdFrom(filename: string): string {
+  let hash = 5381
+  for (let i = 0; i < filename.length; i++) {
+    hash = ((hash << 5) + hash + filename.charCodeAt(i)) >>> 0
+  }
+  return `data-v-${hash.toString(16).slice(0, 6)}`
+}
+
 export type {
   CompileOptions,
   CompileResult,
@@ -44,6 +53,9 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     rules: options.rules,
   }
 
+  // scoped CSS（v0.3）：任一 <style scoped> 则全量作用域化（MVP：单块/全 scope 简化，组件边界场景后续完善）
+  const hasScoped = descriptor.styles.some((s) => s.scoped)
+  const scopeId = hasScoped ? scopedIdFrom(options.filename ?? 'anonymous.vue') : undefined
   // 决策 trace（阶段二）：三阶段共用一条链路，产物侧可据此反查规则（★底线循环 ②）
   const tplTrace = createTrace('template')
   const tpl = descriptor.template?.content ?? ''
@@ -51,6 +63,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     ...styleOpts,
     filename: options.filename,
     annotateLines: options.annotateLines,
+    scopeId,
     trace: tplTrace,
   })
 
@@ -69,6 +82,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const styleTrace = createTrace('style')
   const wxss = transformStyleToWxss(descriptor.styles.map((s) => s.content).join('\n'), {
     ...styleOpts,
+    scopeId,
     trace: styleTrace,
   })
 

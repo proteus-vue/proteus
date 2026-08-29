@@ -66,14 +66,70 @@ function cleanHandler(exp: string, warnings: string[]): string {
 function formatClassBinding(exp: string, warnings: string[]): string {
   const t = exp.trim()
   if (t.startsWith('{')) {
+    // 对象语法 → 三元拼接
     const parts: string[] = []
     const re = /(['"]?)([\w-]+)\1\s*:\s*([^,}]+)/g
     let m: RegExpExecArray | null
     while ((m = re.exec(t))) parts.push(`(${m[3].trim()}?'${m[2]} ':'')`)
     if (parts.length) return `{{${parts.join('+')}}}`
   }
-  if (t.startsWith('[')) warnings.push(`:class 数组语法暂不支持（MVP），已按表达式输出`)
+  if (t.startsWith('[')) {
+    // 数组语法（v0.3）：按顶层逗号分割，逐项转换——字符串字面量直接拼、对象项转三元、
+    // 变量/三元项 → (expr?expr+' ':'')；其余形式编译期警告
+    const items = splitTopLevel(t.slice(1, -1))
+    const parts: string[] = []
+    for (const item of items) {
+      const i = item.trim()
+      if (!i) continue
+      const str = i.match(/^(['"])([^'"]*)\1$/)
+      if (str) {
+        parts.push(`'${str[2]} '`)
+        continue
+      }
+      if (i.startsWith('{')) {
+        const inner = i.slice(1, -1)
+        const re = /(['"]?)([\w-]+)\1\s*:\s*([^,}]+)/g
+        let m: RegExpExecArray | null
+        let ok = false
+        while ((m = re.exec(inner))) {
+          parts.push(`(${m[3].trim()}?'${m[2]} ':'')`)
+          ok = true
+        }
+        if (ok) continue
+      }
+      if (/^[\w$.]+(?:\s*\?\s*[^:]+:.+)?$/.test(i)) {
+        // 简单变量 / 三元：值即类名（括号包裹避免三元嵌套优先级歧义）
+        parts.push(`((${i})?(${i})+' ':'')`)
+        continue
+      }
+      warnings.push(`:class 数组项 "${i}" 暂不支持（MVP：仅字符串/对象/简单变量/三元），已跳过`)
+    }
+    if (parts.length) return `{{${parts.join('+')}}}`
+  }
   return `{{${t}}}`
+}
+
+/** 按顶层逗号分割（跳过字符串 / 括号内逗号） */
+function splitTopLevel(expr: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let quote: string | null = null
+  let cur = ''
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i]
+    if (quote) {
+      cur += ch
+      if (ch === quote && expr[i - 1] !== '\\') quote = null
+      continue
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; cur += ch; continue }
+    if (ch === '(' || ch === '{' || ch === '[') { depth++; cur += ch; continue }
+    if (ch === ')' || ch === '}' || ch === ']') { depth--; cur += ch; continue }
+    if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  if (cur.trim()) parts.push(cur)
+  return parts
 }
 
 /** :style 绑定：对象语法 → prop:{{expr}} 拼接，其余 → {{expr}} */
@@ -111,6 +167,8 @@ interface SerializeContext {
   semanticClass: Record<string, string>
   /** 被禁用的规则 ID 集合 */
   disabled: Set<string>
+  /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
+  scopeId?: string
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
@@ -147,6 +205,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const isInputLike = tag === 'input' || tag === 'textarea'
   const attrs: string[] = []
   let hasNavTarget = false
+
+  // scoped CSS（v0.3）：模板元素附加作用域属性（样式选择器 [data-v-xxx] 精确匹配）
+  if (ctx.scopeId) {
+    attrs.push(ctx.scopeId)
+    ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} ${ctx.scopeId}>` })
+  }
 
   for (const prop of node.props) {
     if (prop.type === NodeTypes.ATTRIBUTE) {
@@ -343,6 +407,7 @@ export function transformTemplateToWxml(
     trace: opts.trace,
     // ★底线循环 ①③：生效配置 = tags.ts 常量 + config 覆盖（规则改写/禁用即时生效）
     ...resolveOverrides(opts.rules),
+    scopeId: opts.scopeId,
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')

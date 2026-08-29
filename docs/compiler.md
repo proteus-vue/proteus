@@ -109,6 +109,7 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 | `v-model` | `value` + `bindinput`（自动 handler） |
 | `v-html` | `rich-text nodes` |
 | `:class="{ active: on }"` | 三元拼接 `{{ (on?'active ':'') }}` |
+| `:class="[a, { b: on }, 'c']"` | 数组逐项拼接 `{{((a)?(a)+' ':'')+(on?'b ':'')+'c '}}`（v0.3） |
 | `:style="{ color: c }"` | `style="color:{{c}}"` |
 | `v-show` | `hidden="{{!expr}}"`（小程序 hidden = display:none，元素始终渲染；v0.3 已支持） |
 
@@ -127,6 +128,23 @@ Web 端浏览器有 UA 默认样式（大标题 / 段距 / 链接色），小程
 ```
 
 用户样式特异性（如 `.home h1` → `.home .proteus-h1`）高于基础类，可正常覆盖。
+
+## scoped CSS（v0.3）
+
+小程序无 scoped 原生机制，编译期用**属性选择器等价**：
+
+1. **模板侧**：`<style scoped>` 存在时，所有元素附加作用域属性 `data-v-xxxxxx`（由文件名 djb2 哈希生成，同文件稳定）
+2. **样式侧**：每条规则选择器末尾追加 `[data-v-xxxxxx]`（`.card` → `.card[data-v-xxxxxx]`）；`:deep(X)` 去包装为 `X`；`@media`/`@keyframes` 骨架保留
+
+```css
+/* 源码（<style scoped>） */
+.card .title { color: red; }
+/* 产物 */
+.card .title[data-v-e984db] { color: red; }
+/* 模板对应：<view data-v-e984db class="card"><text data-v-e984db class="proteus-p title"> */
+```
+
+- **MVP 简化**：任一 `<style scoped>` 则全量作用域化（多块混用后续完善）；`:deep()` 部分同样作用域化（组件边界场景后续完善）；`rules.disabled: ['style/scoped-css', 'template/scope-attr']` 可关闭。
 
 ## 样式转换（Style → WXSS）
 
@@ -200,7 +218,6 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
 - `computed` 读路径已支持（v0.3：`computed(() => 表达式)` → data 派生 + 写入合并）；`watch` / computed 写路径 / 跨模块引用暂不支持
 - 复杂事件表达式（仅支持简单方法引用）
-- `:class` 数组语法
 - 方法内 ref 复合赋值（`+=`）
 - `<template v-slot>`
 

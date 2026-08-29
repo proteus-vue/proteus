@@ -34,8 +34,8 @@ function bump() {
     <input v-model="name" placeholder="输入昵称" class="field" />
     <textarea v-model="bio" placeholder="输入简介" class="field" />
 
-    <!-- :class 对象语法 → 三元拼接；:style 对象语法 → prop:{{expr}} -->
-    <p :class="{ tip: true, 'tip-on': agree }" :style="{ color: agree ? '#16a34a' : '#888' }">
+    <!-- :class 数组语法（v0.3）+ :style 对象语法 → prop:{{expr}} -->
+    <p :class="['tip', { 'tip-on': agree }]" :style="{ color: agree ? '#16a34a' : '#888' }">
       已勾选：{{ agree }}
     </p>
 
@@ -58,7 +58,7 @@ function bump() {
   </div>
 </template>
 
-<style>
+<style scoped>
 .forms {
   padding: 24px;
 }

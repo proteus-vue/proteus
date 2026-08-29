@@ -29,6 +29,8 @@ export interface StyleTransformOptions {
   trace?: TransformTrace
   /** 规则覆盖（可选：底线循环 ①③） */
   rules?: TransformRuleOverrides
+  /** scoped CSS 作用域属性（如 'data-v-abc123'，v0.3：style 选择器追加 [scopeId]、template 元素附加该属性） */
+  scopeId?: string
 }
 
 /** template 转换选项（含反黑盒调试能力） */

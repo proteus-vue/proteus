@@ -78,6 +78,9 @@ export function transformStyleToWxss(
   // ★底线循环 ①③：生效映射 + 禁用集（config rules 即时生效）
   const res = resolveOverrides(opts.rules)
   const tagRe = makeTagSelectorRe(res.tagMap, res.semanticClass)
+  const scopeId = opts.scopeId
+  const doScope = Boolean(scopeId) && !res.disabled.has('style/scoped-css')
+  if (doScope && scopeId) trace?.add('style/scoped-css', { before: '<style scoped>', after: `选择器末尾追加 [${scopeId}]（:deep() 去包装）` })
 
   const injectBase = !res.disabled.has('style/semantic-base-wxss')
   let css = injectBase ? `${BASE_SEMANTIC_WXSS}\n${source}` : source
@@ -107,6 +110,17 @@ export function transformStyleToWxss(
   for (const u of unsupported) {
     console.warn(`[mp-transform] WXSS 检测到 Skyline 不支持的属性：${u}（编译期警告）`)
     trace?.add('style/skyline-unsupported', { before: u, after: '编译期警告（不阻断构建）' })
+  }
+
+  // 4. scoped CSS（v0.3）：:deep() 去包装 + 每条规则选择器末尾追加 [scopeId]
+  //    （模板侧元素已附加 scopeId 属性，属性选择器精确匹配；@media/@keyframes 骨架保留）
+  if (doScope && scopeId) {
+    css = css.replace(/:deep\(([^)]*)\)/g, '$1')
+    css = css.replace(/([^{}]+)\{/g, (m: string, sel: string) => {
+      const s = sel.trim()
+      if (s.startsWith('@')) return m
+      return `${s}[${scopeId}] {`
+    })
   }
   return css
 }

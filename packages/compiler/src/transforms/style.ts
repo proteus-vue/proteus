@@ -73,4 +73,17 @@ export const STYLE_RULES: TransformRule[] = [
     verify: 'tests/mp-transform.test.ts 警告用例',
     source: 'src/compiler/style.ts → transformStyleToWxss（unsupported 分支）',
   },
+  {
+    id: 'style/scoped-css',
+    phase: 'style',
+    status: 'implemented',
+    title: 'scoped CSS：选择器追加作用域属性（v0.3）',
+    description: '<style scoped> 存在时：:deep(X) 去包装 + 每条规则选择器末尾追加 [data-v-xxx]（@media/@keyframes 骨架保留）；模板侧元素已附加该属性（template/scope-attr）',
+    why: '小程序无 scoped CSS 原生机制，编译期用属性选择器等价（v0.3，决策 #77）；MVP 单层简化：任一 style scoped 则全量作用域化、:deep 部分同样作用域化（组件边界场景后续完善）',
+    when: 'SFC 含 <style scoped> 且规则未被禁用时',
+    example: { before: '.card { color: red; }', after: '.card[data-v-abc123] { color: red; }' },
+    verify: 'tests/mp-transform.test.ts scoped CSS 用例',
+    source: 'packages/compiler/src/style.ts → transformStyleToWxss（scopeId 分支）',
+    decision: '#77（v0.3 scoped CSS）',
+  },
 ]
