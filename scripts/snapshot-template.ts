@@ -55,11 +55,9 @@ if (fs.existsSync(backup)) {
 }
 
 const copied: string[] = []
-// 1. 框架本体运行时（拆包步骤 2：platform/shims 已归 packages/shared；模板暂复制保持可用，步骤 7 重构）
-for (const dir of ['runtime']) {
-  fs.mkdirSync(path.join(TPL, 'src', dir), { recursive: true })
-  copied.push(...copyDir(path.join(ROOT, 'src', dir), path.join(TPL, 'src', dir)))
-}
+// 1. 框架本体运行时（拆包：runtime 归 packages/runtime；模板暂复制保持可用，步骤 7 重构）
+fs.mkdirSync(path.join(TPL, 'src', 'runtime'), { recursive: true })
+copied.push(...copyDir(path.join(ROOT, 'packages', 'runtime', 'src'), path.join(TPL, 'src', 'runtime')))
 for (const dir of ['platform', 'shims']) {
   fs.mkdirSync(path.join(TPL, 'src', dir), { recursive: true })
   copied.push(...copyDir(path.join(ROOT, 'packages', 'shared', 'src', dir), path.join(TPL, 'src', dir)))

@@ -1,7 +1,7 @@
 // tests/store.test.ts
 // v0.4 框架级 store 桥：单例共享 + 广播订阅 + 页面连接（MP 端 Pinia 过渡方案）
 import { describe, it, expect, vi } from 'vitest'
-import { createStore, connectPageStore } from '../src/runtime/store'
+import { createStore, connectPageStore } from '../packages/runtime/src/store'
 
 describe('createStore（框架级 store 桥，v0.4）', () => {
   it('同 id 单例：跨调用共享同一状态', () => {

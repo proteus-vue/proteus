@@ -1,0 +1,22 @@
+{
+  "name": "@proteus/runtime",
+  "version": "0.1.0",
+  "description": "Proteus 运行时：setData 桥接（批量 + 深层 diff）/ 页面生命周期 / store 桥 / app 骨架模板",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared"
+  },
+  "dependencies": {
+    "@proteus/shared": "0.1.0"
+  }
+}

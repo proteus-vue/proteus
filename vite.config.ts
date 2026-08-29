@@ -49,6 +49,7 @@ export default defineConfig(({ mode }) => {
         // @proteus/* 精确映射（拆包步骤 2：shared 包）；@proteus/compiler 优先
         { find: '@proteus/compiler', replacement: fileURLToPath(new URL('./packages/compiler/src/index.ts', import.meta.url)) },
         { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
+        { find: '@proteus/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
         // 其余 @proteus/* 暂指向 src/（runtime/router 等拆包后逐一精确化）
         { find: '@proteus', replacement: fileURLToPath(new URL('./src', import.meta.url)) },

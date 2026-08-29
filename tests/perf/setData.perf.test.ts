@@ -16,7 +16,7 @@ vi.mock('../../src/proteus.config', () => ({
   default: { setDataBridge: { batchWindow: 16, perComponent: true } },
 }))
 
-import { setDataBridge } from '../../src/runtime/setDataBridge'
+import { setDataBridge } from '../../packages/runtime/src/setDataBridge'
 
 beforeEach(() => {
   mockPage.setData.mockClear()

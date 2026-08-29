@@ -64,11 +64,11 @@ packages/
 
 ### 步骤 3：runtime 包
 
-- [ ] `git mv src/runtime → packages/runtime/src`（appSkeleton/debug/pageLifecycle/setDataBridge/store）
-- [ ] `packages/runtime/package.json` + 构建（依赖 shared）
-- [ ] 引用面改 `@proteus/runtime`；appSkeleton 的插件引用同步
-- [ ] 验证：测试 + 双端构建
-- 规模：~150 行；风险：低
+- [x] `git mv src/runtime → packages/runtime/src`（appSkeleton/debug/pageLifecycle/setDataBridge/store + index 聚合）
+- [x] `packages/runtime/package.json`（依赖 @proteus/shared，构建 external shared）+ tsconfig.build（types 引 shared shims 全局声明）
+- [x] 引用面：插件 appSkeleton `./packages/runtime/src/appSkeleton`、tests 相对路径、vite/vitest alias + tsconfig paths/include @proteus/runtime、snapshot 源改 packages/runtime/src
+- [x] 验证：vue-tsc + 198 测试 + 双端构建 + runtime 包构建 + 模板快照 + workspace 链接
+- 决策：#100；踩坑：runtime 独立构建缺全局类型（__PROTEUS_DEBUG__/PageOptions/ComponentOptions 在 shared mp.d.ts）——tsconfig.build types 引 shared shims
 
 ### 步骤 4：router 包 + 工厂化
 

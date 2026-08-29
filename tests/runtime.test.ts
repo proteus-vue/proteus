@@ -20,8 +20,8 @@ vi.mock('../src/proteus.config', () => ({
   default: { setDataBridge: { batchWindow: 16, perComponent: true } },
 }))
 
-import { setDataBridge } from '../src/runtime/setDataBridge'
-import { createPage, createComponent } from '../src/runtime/pageLifecycle'
+import { setDataBridge } from '../packages/runtime/src/setDataBridge'
+import { createPage, createComponent } from '../packages/runtime/src/pageLifecycle'
 
 beforeEach(() => {
   vi.useFakeTimers()
