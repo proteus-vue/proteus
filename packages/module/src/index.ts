@@ -8,3 +8,5 @@ export { DependencyGraph, CycleError, buildModuleGraphManifest, moduleGraphToMer
 export type { ModuleNode, Cycle, VersionConflict } from './graph'
 export { createModuleSystem, createModuleEventBus, satisfies, parseSemver, VersionMismatchError } from './orchestrator'
 export type { ModuleDefinition, ModuleInstance, ModuleSystem, ModuleEventBus, ModuleState } from './orchestrator'
+export { generateRollupOptions } from './web-codegen'
+export type { WebCodegenOptions } from './web-codegen'

@@ -3,8 +3,11 @@ import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import path from 'node:path'
 import config from './proteus.config'
 import { mpTransform } from '@proteus/plugin-vite'
+// ★module-plan B4：模块图谱 → Web manualChunks（有 modules/ 目录时自动生效）
+import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus/module'
 
 /** 处理 <route> 自定义块虚拟模块（?vue&type=route），保证 Web 构建不报错 */
 function routeBlocksPlugin(): Plugin {
@@ -20,9 +23,15 @@ function routeBlocksPlugin(): Plugin {
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
   const platform = mode === 'mp-weixin' || mode === 'web' ? mode : config.platform
   const isMp = platform === 'mp-weixin'
+  // ★module-plan B4：扫描模块契约 → 依赖图 → Web manualChunks（module 目录下文件按 chunk 分组；无模块时为空配置零副作用）
+  const scan = await scanModuleConfigs(path.resolve(__dirname))
+  const graph = DependencyGraph.fromConfigs(
+    scan.modules.filter((m) => m.ok && m.name).map((m) => ({ name: m.name!, version: m.version ?? '0.0.0', chunk: m.chunk, dependencies: m.dependencies })),
+  )
+  const webRollup = isMp ? {} : generateRollupOptions(graph).rollupOptions
 
   return {
     define: {
@@ -55,7 +64,7 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: !isMp,
       rollupOptions: isMp
         ? { input: 'scripts/mp-entry-stub.ts', output: { entryFileNames: 'mp-entry.js' } }
-        : undefined,
+        : (webRollup as Record<string, unknown>),
     },
   }
 })
