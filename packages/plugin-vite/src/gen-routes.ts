@@ -87,6 +87,8 @@ interface PageInfo {
   customRouteKeyName?: string
   /** <route> 块 pageJson 扩展：合并进页面 page.json（如半屏页透明背景） */
   pageJson?: Record<string, unknown>
+  /** ★Router M7.1：页面归属模块分包（与模块 chunk 对齐校验） */
+  chunk?: string
   /** <route> 块 params 声明：字段名 → 类型名（string/number/boolean），生成 RouteParamsByName */
   params?: Record<string, string>
 }
@@ -165,7 +167,12 @@ function scanPages(): PageInfo[] {
         params: b.params,
         pageJson: b.pageJson,
         customRouteKeyName: b.customRouteKeyName,
+        chunk: b.chunk,
       })
+      // ★Router M7.1（module-plan 05）：分包页面声明 chunk → 必须与分包名对齐（页面→模块映射；不一致 → 透明化警告）
+      if (b.chunk && b.chunk !== spName) {
+        console.warn(`[gen-routes] 分包页面 ${relInSub} 声明 chunk="${b.chunk}" 与分包名 "${spName}" 不一致（Router M7.1：页面 chunk 应对齐模块分包名，见 module-plan 05）`)
+      }
     }
   }
 

@@ -143,7 +143,16 @@ export function validateSchema(
     customRouteKeyName = parsed.customRouteKeyName
   }
 
-  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, componentPath: loc.file }
+  // ★Router M7.1（module-plan 05 对齐）：chunk 可选字符串——页面归属模块分包，与 proteus-module.config.ts 的 chunk 校验
+  let chunk: string | undefined
+  if (parsed.chunk !== undefined && parsed.chunk !== null) {
+    if (typeof parsed.chunk !== 'string' || !/^[a-z][a-z0-9-]*$/.test(parsed.chunk)) {
+      throw new RouteValidationError('chunk 必须是 kebab-case 字符串（对齐模块分包名，见 module-plan 05）', loc)
+    }
+    chunk = parsed.chunk
+  }
+
+  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, chunk, componentPath: loc.file }
 }
 
 /** 全局唯一性校验：path / name 重复报错（指向两个文件:行号） */

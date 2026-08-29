@@ -123,6 +123,26 @@ describe('runGenRoutes：路由表生成全链路', () => {
     expect(() => runGenRoutes({ config: makeConfig(), root })).toThrow(/不是合法 JSON/)
   })
 
+  it('★Router M7.1：<route> 块 chunk 字段（与分包名对齐校验——不一致警告，非法值报错）', () => {
+    const root = path.join(TMP, 'm71')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单" },\n  "chunk": "trade"\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/detail.vue', `<template><view>详情</view></template>\n<route>\n{\n  "meta": { "title": "详情" },\n  "chunk": "user"\n}\n</route>\n`)
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })
+      // list.vue chunk=trade 与分包名对齐 → 不警告；detail.vue chunk=user 不一致 → 警告
+      expect(warnSpy.mock.calls.some((c) => c[0].includes('chunk') && c[0].includes('user') && c[0].includes('不一致'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+    }
+
+    // 非法 chunk（非 kebab-case）→ 报错
+    writeFixture(root, 'src/subpackages/trade/pages/bad.vue', `<template><view>x</view></template>\n<route>\n{\n  "meta": {},\n  "chunk": "Trade!"\n}\n</route>\n`)
+    expect(() => runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })).toThrow(/kebab-case/)
+  })
+
   it('★决策 #113 集中式 meta：页面零 <route> 声明也收录，meta 从 config router.meta 注入（精确路径 > 目录前缀）', () => {
     const root = path.join(TMP, 'config-meta')
     writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)

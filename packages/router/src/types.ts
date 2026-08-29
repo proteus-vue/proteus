@@ -71,6 +71,8 @@ export interface RouteBlock {
   pageJson?: Record<string, unknown>
   /** gen-routes 扩展：Skyline 自定义路由 key（page.json 的 customRouteKeyName） */
   customRouteKeyName?: string
+  /** ★Router M7.1：页面归属模块分包（<route> 块 chunk；与 proteus-module.config.ts 的模块 chunk 对齐校验） */
+  chunk?: string
 }
 
 /** M2：嵌套路由树节点（tree.ts）——lazy 已解析为最终值；parent 保留（显式声明，children 反映实际嵌套） */
