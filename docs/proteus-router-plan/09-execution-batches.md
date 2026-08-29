@@ -14,7 +14,7 @@
 | **B4** | `00-overview` + `02` + `04-m4-mp-codegen` | B2 | mp codegen + app.json | ✅（codegen/mp + 合并）|
 | **B5** | `00-overview` + `02` + `05-m5-app-codegen` | B2 | App codegen + 栈操作 | ⬜ 待 v0.6（NativeKV/渲染器同批）|
 | **B6** | `00-overview` + `03/04/05` + `06-m6-guards-tabbar` | B1-B5 + Pinia M1-M2 | 守卫 + tabBar + redirect | ✅（守卫实例 API + trace / tabBar config / redirect 跨端）|
-| **B7** | `00-overview` + `07-testing` + `08-migration` | B1-B6 | 测试套件 + 迁移工具 | ⬜ 待执行（router-codegen/guards-tabbar 等测试已先落地）|
+| **B7** | `00-overview` + `07-testing` + `08-migration` | B1-B6 | 测试套件 + 迁移工具 | ✅（L2 集成快照 + L4 矩阵 + 纯净性门禁 + router:check CLI）|
 
 **顺序依赖（企业级）**：B1 → B2 → (B3 ∥ B4 ∥ B5) → B6 → B7
 
