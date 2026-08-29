@@ -1,5 +1,7 @@
 // packages/api/src/types.ts
 // ★api-plan A1：网络请求统一契约（业务零平台分支——平台差异收敛在 adapter）
+import type { AuthManager } from './auth'
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 export interface RequestConfig {
@@ -58,4 +60,6 @@ export interface ApiOptions {
   afterResponse?: <T>(response: RequestResponse<T>) => RequestResponse<T> | Promise<RequestResponse<T>>
   /** 是否静默重试（默认 false——重试失败抛 ApiError RETRY_FAILED） */
   adapter?: IRequestAdapter
+  /** ★api-plan B3：凭证托管（beforeRequest 后自动加 Authorization；skipAuth 跳过） */
+  auth?: AuthManager
 }

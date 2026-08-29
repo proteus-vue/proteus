@@ -32,6 +32,13 @@ export function createApi(options: ApiOptions = {}): ApiClient {
     if (!config.skipAuth && options.beforeRequest) {
       config = await options.beforeRequest(config)
     }
+    // ★api-plan B3：凭证托管自动加 Authorization（beforeRequest 之后——拦截器可先 refresh token）
+    if (options.auth && !config.skipAuth) {
+      const token = options.auth.getToken()
+      if (token) {
+        config = { ...config, headers: { ...(config.headers ?? {}), Authorization: `Bearer ${token}` } }
+      }
+    }
     const attempt = async (n: number): Promise<RequestResponse<T>> => {
       try {
         let response = await adapter.request<T>(config)

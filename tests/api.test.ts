@@ -1,10 +1,11 @@
 // tests/api.test.ts
 // ★api-plan A1/A8：createApi 请求客户端（web fetch / wx adapter / 拦截器 / 重试 / 错误模型）+ 设备信息
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createApi, ApiError, getDeviceInfo, buildUrl } from '../packages/api/src'
+import { createApi, ApiError, getDeviceInfo, buildUrl, createAuth } from '../packages/api/src'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('web fetch adapter', () => {
@@ -117,5 +118,58 @@ describe('设备信息 / buildUrl', () => {
   it('buildUrl：baseURL + url + params 拼接', () => {
     expect(buildUrl('https://a.com/api', 'user', { id: '1', v: 2 })).toBe('https://a.com/api/user?id=1&v=2')
     expect(buildUrl('', '/x')).toBe('/x')
+  })
+})
+
+describe('★api-plan B3：凭证托管（createAuth + createApi 自动 Authorization）', () => {
+  it('createAuth：set/get/isAuthenticated/subscribe/清除', () => {
+    const auth = createAuth()
+    expect(auth.isAuthenticated()).toBe(false)
+    const seen: Array<string | null> = []
+    auth.subscribe((t) => seen.push(t))
+    auth.setToken('t1')
+    expect(auth.getToken()).toBe('t1')
+    expect(auth.isAuthenticated()).toBe(true)
+    expect(seen).toEqual(['t1'])
+    auth.setToken(null)
+    expect(auth.isAuthenticated()).toBe(false)
+  })
+
+  it('createApi({ auth })：beforeRequest 后自动加 Authorization；skipAuth 跳过；无 token 不加', async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const auth = createAuth()
+    const api = createApi({ auth })
+    await api.get('/a')
+    expect((fetchMock.mock.calls[0][1] as { headers?: Record<string, string> }).headers?.Authorization).toBeUndefined()
+    auth.setToken('secret')
+    await api.get('/b')
+    expect((fetchMock.mock.calls[1][1] as { headers: Record<string, string> }).headers.Authorization).toBe('Bearer secret')
+    await api.get('/c', { skipAuth: true })
+    expect((fetchMock.mock.calls[2][1] as { headers?: Record<string, string> }).headers?.Authorization).toBeUndefined()
+  })
+
+  it('auth 与 beforeRequest 集成：拦截器可先 refresh token 再自动加头', async () => {
+    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const auth = createAuth()
+    auth.setToken('old')
+    const api = createApi({
+      auth,
+      beforeRequest: async () => {
+        auth.setToken('refreshed')
+        return {}
+      },
+    })
+    await api.get('/x')
+    // 拦截器刷新 token 后 → 自动加新 token
+    expect((fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers.Authorization).toBe('Bearer refreshed')
+  })
+
+  it('持久化 storage：token 恢复（创建时读 storage）', () => {
+    const storage = { getItem: () => 'saved', setItem: vi.fn() }
+    const auth = createAuth(storage)
+    expect(auth.getToken()).toBe('saved')
+    expect(auth.isAuthenticated()).toBe(true)
   })
 })
