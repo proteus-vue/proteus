@@ -13,7 +13,7 @@ export const WEB_TRANSITION_MAP: Record<RouteTransition, string> = {
   none: 'none',
 }
 
-/** MP：transition → wx.navigateTo({ routeType }) / app.json routeType（运行时传参） */
+/** MP：transition → 小程序运行时 navigateTo({ routeType }) 传参 / app.json routeType（运行时传参） */
 export const MP_ROUTE_TYPE_MAP: Record<RouteTransition, string> = {
   slideUp: 'slideUp',
   slideDown: 'slideDown',

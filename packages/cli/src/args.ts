@@ -1,7 +1,9 @@
 // packages/cli/src/args.ts
 // CLI 参数解析（纯函数，可单测）——零依赖，手写解析
 import fs from 'node:fs'
+import path from 'node:path'
 import type { TransformRuleOverrides } from '@proteus/compiler'
+import type { ProteusConfig } from '@proteus/plugin-vite'
 
 export interface BuildArgs {
   /** 输入目录（扫描 .vue） */
@@ -71,6 +73,17 @@ export function parseRulesArgs(argv: string[]): { phase?: string } {
   }
   if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
   return { phase }
+}
+
+export interface RouterCheckArgs {
+  /** 页面根目录（扫描 <route> 块；缺省当前目录） */
+  pagesDir: string
+}
+
+export function parseRouterCheckArgs(argv: string[]): RouterCheckArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { pagesDir: path.resolve(dir) }
 }
 
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架

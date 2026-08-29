@@ -2,6 +2,7 @@
 // M3 — Web 端 codegen（docs/proteus-router-plan 03）：RouteNode[] → vue-router 4 RouteRecordRaw 代码
 // 输出 routes.generated.ts 形态：lazy → () => import() 代码分割；children 递归（vue-router 原生嵌套）
 // ★透明化：输入为 scan/tree 的 RouteNode（含 loc/决策链），产物可反查源码
+// ★逗号约定：record 每行自带尾逗号 + join('\n')；数组元素间用 join(',\n')——避免双逗号
 import type { RouteNode } from '../types'
 import { webTransitionName } from '../transforms/transform-transition'
 
@@ -14,6 +15,9 @@ function nodeToRecord(node: RouteNode, indent: string): string {
   // meta.transition 交给 <RouterTransition> 包裹组件消费（不直接映射进 vue-router meta）
   const meta = { ...node.meta }
   delete meta.transition
+  const childrenBody = node.children.length > 0
+    ? `\n${node.children.map((c) => nodeToRecord(c, `${indent}    `)).join(',\n')}\n${indent}  `
+    : ''
   const lines = [
     `${indent}{`,
     `${indent}  path: ${JSON.stringify(node.path)},`,
@@ -21,10 +25,8 @@ function nodeToRecord(node: RouteNode, indent: string): string {
     node.redirect ? `${indent}  redirect: ${JSON.stringify(node.redirect)},` : '',
     `${indent}  component: ${pad(comp)},`,
     Object.keys(meta).length > 0 ? `${indent}  meta: ${pad(JSON.stringify(meta))},` : '',
-    node.children.length > 0
-      ? `${indent}  children: [\n${node.children.map((c) => nodeToRecord(c, `${indent}    `)).join(',\n')}\n${indent}  ],`
-      : '',
-    `${indent}},`,
+    node.children.length > 0 ? `${indent}  children: [${childrenBody}],` : '',
+    `${indent}}`,
   ]
   return lines.filter(Boolean).join('\n')
 }

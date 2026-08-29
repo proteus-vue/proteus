@@ -14,23 +14,39 @@
     "./types": {
       "types": "./dist/types.d.ts"
     },
-    "./schema": {
-      "types": "./dist/schema.d.ts"
-    },
     "./scan": {
-      "types": "./dist/scan.d.ts"
+      "types": "./dist/scan.d.ts",
+      "import": "./dist/scan.js"
     },
     "./tree": {
-      "types": "./dist/tree.d.ts"
+      "types": "./dist/tree.d.ts",
+      "import": "./dist/tree.js"
+    },
+    "./rules": {
+      "types": "./dist/rules.d.ts",
+      "import": "./dist/rules.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
     },
     "./merge": {
-      "types": "./dist/merge.d.ts"
+      "types": "./dist/merge.d.ts",
+      "import": "./dist/merge.js"
+    },
+    "./transforms/transform-transition": {
+      "types": "./dist/transforms/transform-transition.d.ts",
+      "import": "./dist/transforms/transform-transition.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen/index.d.ts",
+      "import": "./dist/codegen/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": ["dist", "src/presets", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus/shared --external:@vue/compiler-sfc"
   },
   "dependencies": {
     "@proteus/shared": "0.1.0"
