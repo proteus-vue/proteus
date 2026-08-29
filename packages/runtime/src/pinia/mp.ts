@@ -5,10 +5,12 @@
 import { createPinia } from 'pinia'
 import { WxStorageAdapter, setPlatform } from '@proteus/shared'
 import { createPersistence } from './persistence/lightweight'
+import { createDevtoolsPlugin, registerStoreSnapshot } from './devtools'
 
 /**
  * 创建小程序端 Pinia：平台标记 + 持久化（wx.setStorageSync，防抖 100ms）
  * 用法：应用自定义入口（全量模式 main.mp.ts）或首屏逻辑调用后，页面 useStore() 直接可用
+ * 调试：小程序无浏览器 DevTools——开发构建挂 trace（[pinia] 日志）+ __PROTEUS_STORES__ 快照导出
  */
 export function createMpPinia() {
   setPlatform('mp')
@@ -18,5 +20,10 @@ export function createMpPinia() {
       storage: new WxStorageAdapter(),
     }),
   )
+  const isDebug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
+  if (isDebug) {
+    pinia.use(createDevtoolsPlugin())
+    registerStoreSnapshot(pinia)
+  }
   return pinia
 }
