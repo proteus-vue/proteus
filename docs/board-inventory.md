@@ -7,7 +7,7 @@
 | # | 板块 | 状态 | 已实现范围 | 未实现/延后 |
 |---|------|------|-----------|------------|
 | 1 | api-plan | ✅ 已实现 | B1-B4：createApi 请求抽象（wx/fetch adapter + 拦截器/重试/错误模型）+ getDeviceInfo + createAuth 凭证托管（自动 Authorization/skipAuth/登录态订阅） | P1 业务模块（文件/支付/UI，A5 支付标注依赖） |
-| 2 | app-plan | ⬜ v0.6 规划 | — | App 渲染器 createRenderer + Vapor 双模式（B1-B6 批次，待 v0.5 稳定 + npm 发布启动） |
+| 2 | app-plan | ✅ B1 核心已落地（B2-B5 标 v0.6 正式启动）| @proteus/renderer-app：NativeAdapter 抽象 + createRenderer host config + mock adapter——Vue 官方渲染器接线可测（无需真机）；标准 Vue SFC 三端复用的 App 运行时通道 | B2-B5（iOS/Android 原生视图/样式 rpx→dp/路由桥/能力桥/demo）需 npm 发布 + 原生工程；Vapor 双模式（B6）依赖 @vue/vapor 实验版 |
 | 3 | build-plan | ✅ 已实现 | @proteus/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线 | 增量 HMR/缓存深化（06/07 规划） |
 | 4 | cli-plan | ✅ 已实现 | @proteus/cli：build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check/**components:audit** | dev/preview 命令（M2 规划） |
 | 5 | compiler-plan | ✅ 已实现 | 编译管线 + 69 条规则注册表 + explain/trace + 产物自校验 + sourcemap + **4 项增强**（props 源 watch→observers / ref 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射钩子显式警告） | computed 写路径/类型提示尾项 |
@@ -26,10 +26,10 @@
 
 ## 汇总
 
-- ✅ 已实现 **15** 个板块（api/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/security/testing/types）
-- ⬜ 未实现 **2** 个（app 为 v0.6 明确排期；website 为远期）
+- ✅ 已实现 **16** 个板块（api/app(B1 核心)/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/security/testing/types）
+- ⬜ 未实现 **1** 个（website 为远期）
 
-> devtools（面板 B3-B8）、i18n（分包/完整 ICU）、security（M4-M8）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
+> devtools（面板 B3-B8）、i18n（分包/完整 ICU）、security（M4-M8）、app（B2-B5 原生工程）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
 
 ## 交叉能力（编译器 4 增强，跨板块复用）
 
@@ -41,6 +41,6 @@
 
 ## 下一步候选
 
-1. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 15 包）
-2. **security M4-M8 评估**（注入防护/网络安全/脱敏）或 **router 权限守卫自动生成**（meta.permissions → beforeEach，security M3 后续）
-3. **app-plan 启动**（v0.6：App 渲染器 createRenderer + Vapor——待 v0.5 稳定 + npm 发布）
+1. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 16 包）
+2. **security M4-M8 评估**（注入防护/网络安全/脱敏）或 **app B2 预研**（原生视图样式系统 rpx→dp 契约设计）
+3. **website-plan 评估**（官网文档系统——远期，依赖 v1.0）

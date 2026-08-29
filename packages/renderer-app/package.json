@@ -1,0 +1,27 @@
+{
+  "name": "@proteus/renderer-app",
+  "version": "0.1.0",
+  "description": "Proteus App 渲染器（app-plan B1）：Vue createRenderer 自定义 host config（NativeAdapter 抽象）——标准 Vue SFC 的 App 原生运行时通道",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/runtime-core"
+  },
+  "peerDependencies": {
+    "@vue/runtime-core": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vue/runtime-core": "^3.5.42"
+  }
+}
