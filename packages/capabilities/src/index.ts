@@ -1,10 +1,15 @@
 // packages/capabilities/src/index.ts
-// ★platform-plan B1（M1 Capability 契约）：defineCapability（描述文件声明 + 校验）+ 注册中心 + useCapability/getCapability
+// ★platform-plan B1/B2：Capability 契约（defineCapability + 描述文件校验）+ Adapter Registry（注册中心 + 选择策略）
 //   业务代码只使用 capability / useCapability()，无任何平台判断（铁律 1）
+//   B2 升级：注册中心以 adapter 为单位（CapabilityRegistry，多实例隔离工厂）；B1 描述文件的 adapters 展开为 adapter 注册
 import type { Capability, CapabilityAPI, CapabilityDefinition, CapabilityPlatform } from './types'
+import { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
+import type { CapabilityAdapter } from './adapter'
 
-// ★scan 为 node 工具（esbuild/fs），仅经子路径 '@proteus/capabilities/scan' 导入——不进运行时入口（浏览器/MP 产物）
 export * from './types'
+export { CapabilityRegistry, defineAdapter, validateAdapter } from './adapter'
+export type { CapabilityAdapter } from './adapter'
+export { detectPlatform } from './adapter'
 
 /** 校验能力描述文件（纯函数；id kebab-case 必填 / tier 1-4 / adapters 非空 / fallback 引用合法） */
 export function validateCapabilityDefinition(input: unknown): { ok: true; value: CapabilityDefinition } | { ok: false; errors: Array<{ field: string; message: string }> } {
@@ -42,19 +47,26 @@ export function defineCapability<C extends CapabilityAPI>(def: CapabilityDefinit
   return def
 }
 
-// ==================== 注册中心（B2 Adapter Registry 的地基，B1 最小版） ====================
+// ==================== 全局注册中心（B1 兼容 + B2 adapter 级） ====================
 
-const registry = new Map<string, CapabilityDefinition>()
+/** 全局默认 registry（业务入口用；SSR/Worker 用 createCapabilityRegistry 独立实例） */
+export const globalRegistry = new CapabilityRegistry()
 
-/** 注册能力（重复 → 报错；全局唯一铁律） */
+/** 注册能力描述文件（B1）：adapters 展开为 adapter 注册 + fallback 关系；重复注册 → 报错 */
 export function registerCapability(def: CapabilityDefinition): void {
-  if (registry.has(def.meta.id)) throw new Error(`[proteus-capabilities] 重复注册能力 "${def.meta.id}"（能力标识全局唯一）`)
-  registry.set(def.meta.id, def)
-}
-
-/** 能力是否已注册（scan 幂等判断用） */
-export function hasCapability(id: string): boolean {
-  return registry.has(id)
+  const existing = globalRegistry.has(def.meta.id)
+  if (existing) throw new Error(`[proteus-capabilities] 重复注册能力 "${def.meta.id}"（能力标识全局唯一）`)
+  for (const [platform, factory] of Object.entries(def.adapters)) {
+    globalRegistry.register({
+      capability: def.meta.id,
+      platform: platform as CapabilityPlatform,
+      priority: 0,
+      // 探测延迟（§6：adapter 不得在模块顶层执行平台 API；isSupported 延后调用）
+      isSupported: () => factory().create().isSupported(),
+      create: () => factory().create(),
+    })
+  }
+  globalRegistry.registerFallback(def.meta.id, def.fallback)
 }
 
 /** 注册能力集合（脚手架/入口批量注册） */
@@ -62,44 +74,36 @@ export function registerCapabilities(defs: CapabilityDefinition[]): void {
   for (const d of defs) registerCapability(d)
 }
 
+/** 注册独立 adapter（B2：capabilities/*.adapter.ts；幂等——同 id+platform 跳过） */
+export function registerAdapter<C extends CapabilityAPI>(adapter: CapabilityAdapter<C>): void {
+  globalRegistry.registerIdempotent(adapter as CapabilityAdapter)
+}
+
 /** 清空注册表（测试隔离） */
 export function clearCapabilities(): void {
-  registry.clear()
+  globalRegistry.clear()
 }
 
-/** 当前平台探测（feature detection 优先于平台判断）：skyline（wx）/ web（window） */
-export function detectPlatform(): CapabilityPlatform {
-  const wxGlobal = (globalThis as { wx?: unknown }).wx
-  if (typeof wxGlobal !== 'undefined') return 'skyline'
-  return 'web'
+/** 能力是否已注册 */
+export function hasCapability(id: string): boolean {
+  return globalRegistry.has(id)
 }
 
-/** 解析能力（命令式）：平台 adapter 探测 → 实例化；无 adapter → undefined */
+/** 解析能力（同步：仅同步 isSupported 的 adapter 命中；异步探测请用 resolveCapability） */
 export function getCapability<C extends CapabilityAPI = CapabilityAPI>(id: string, platform: CapabilityPlatform = detectPlatform()): Capability<C> | undefined {
-  const def = registry.get(id)
-  if (!def) return undefined
-  const factory = def.adapters[platform]
-  if (!factory) return undefined
-  const adapter = factory()
-  const api = adapter.create()
-  const cap: Capability<C> = {
-    meta: def.meta,
-    api: api as C,
-    isSupported: () => api.isSupported(),
-  }
-  if (def.fallback) {
-    const fb = getCapability<C>(def.fallback, platform)
-    if (fb) cap.fallback = fb
-  }
-  return cap
+  return globalRegistry.resolveSync<C>(id, platform)
 }
 
-/** 组合式 API（推荐）：业务用 useCapability('share') —— 无平台判断 */
+/** 组合式 API（推荐）：业务用 useCapability('share') —— 无平台判断；缺失 → 显式失败 */
 export function useCapability<C extends CapabilityAPI = CapabilityAPI>(id: string, platform: CapabilityPlatform = detectPlatform()): Capability<C> {
   const cap = getCapability<C>(id, platform)
   if (!cap) {
-    // 未注册或当前平台无 adapter：显式失败（铁律 4：缺失必须可降级或显式失败）
-    throw new Error(`[proteus-capabilities] 能力 "${id}" 在当前平台（${platform}）不可用：未注册或缺少 adapter${platform === 'skyline' ? '（Skyline 限制见 platform-plan 01 §5）' : ''}`)
+    throw new Error(`[proteus-capabilities] 能力 "${id}" 在当前平台（${platform}）不可用：未注册、缺少 adapter 或探测失败（Skyline 限制见 platform-plan 01 §5）`)
   }
   return cap
+}
+
+/** 异步完整解析（B2 选择策略：异步 isSupported 探测 + fallback 递归） */
+export async function resolveCapability<C extends CapabilityAPI = CapabilityAPI>(id: string, platform: CapabilityPlatform = detectPlatform()): Promise<Capability<C> | undefined> {
+  return globalRegistry.resolve<C>(id, platform)
 }
