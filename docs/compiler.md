@@ -1,6 +1,6 @@
 # 编译原理（Compiler）
 
-> Proteus 的**编译引擎**位于 `src/compiler/`——项目最核心的基建。它是**纯函数模块**：零 Vite 依赖、零项目配置依赖、选项全部入参，可独立提取为开源包 `@proteus/compiler`（见文末）。
+> Proteus 的**编译引擎**位于 `packages/compiler/`（v0.2 起独立为 monorepo 包 `@proteus/compiler`）——项目最核心的基建。它是**纯函数模块**：零 Vite 依赖、零项目配置依赖、选项全部入参，已可独立构建分发（`npm run build -w @proteus/compiler`）。
 
 ## 编译管线
 
@@ -18,7 +18,7 @@ Web 端**不走此管线**：标准 Vite + `@vitejs/plugin-vue` 原生渲染，�
 
 ## 编译规则注册表（transforms）—— AI-native 透明编译
 
-所有转换规则集中为**自描述的规则注册表**（`src/compiler/transforms/`），每条规则 = 一份结构化 AI 说明书：
+所有转换规则集中为**自描述的规则注册表**（`packages/compiler/src/transforms/`），每条规则 = 一份结构化 AI 说明书：
 
 ```typescript
 interface TransformRule {
@@ -37,7 +37,7 @@ interface TransformRule {
 }
 ```
 
-消费 API（经 `src/compiler/index.ts` 导出）：
+消费 API（经 `packages/compiler/src/index.ts` 导出）：
 
 ```typescript
 listTransformRules(phase?) // 枚举规则（能力清单）：template/script/style/validate 四阶段 49 条
@@ -52,7 +52,7 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 
 - **AI 用法**：`listTransformRules()` 摸清编译器能力边界 → `getTransformRule('tag/div-to-view')` 查 why/when/verify → 按 `source` 跳读实现 → 改完跑对应单测；写完页面用 `explainTransform()` 验证转换链路。
 - **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析。
-- **演进**：阶段三（随 `@proteus/compiler` 独立包）每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `src/compiler/transforms/README.md`。
+- **演进**：阶段三每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `packages/compiler/README.md`。
 
 ## 底线三循环（框架的立身之本）
 
@@ -85,7 +85,7 @@ formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 
 - 未列出的标签按 kebab-case 原样输出。
 - `<a href="...">` / `<router-link to="...">` 自动转为导航链接：`data-url` + `bindtap="proteusNavigateTo"`（handler 由 script 转换自动注入）。
-- 映射表集中在 `src/compiler/tags.ts`，模板转换与样式选择器重写共用——保证**元素与样式两侧映射永远一致**。
+- 映射表集中在 `packages/compiler/src/tags.ts`，模板转换与样式选择器重写共用——保证**元素与样式两侧映射永远一致**。
 
 ## 事件映射（EVENT_MAP）
 
@@ -204,6 +204,6 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 - 方法内 ref 复合赋值（`+=`）
 - `<template v-slot>`
 
-## 独立开源计划（后期）
+## 独立开源（✅ v0.2 已落地）
 
-`src/compiler/README.md` 已给出提取路径：整体移到 `packages/compiler/`，加 `package.json`（`@proteus/compiler`，peer 依赖 `@vue/compiler-sfc` / `@vue/compiler-dom`），`tsc` 构建发布；可附带 CLI `@proteus/cli`（`proteus build <dir> --out <dir>`），核心就是调 `compileVueSfc`。
+`packages/compiler/` 已是 monorepo 独立包 `@proteus/compiler`：`npm run build -w @proteus/compiler` 产出 `dist/`（esbuild 单文件 + tsc 声明文件），`npm publish` 即发布；peer 依赖 `@vue/compiler-sfc` / `@vue/compiler-dom`。下一步 CLI `@proteus/cli`（`proteus build <dir> --out <dir>` / `proteus explain`），核心就是调 `compileVueSfc` + `explainTransform`。

@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@proteus/compiler": ["packages/compiler/src/index.ts"],
       "@proteus/*": ["src/*"]
     }
   },
@@ -23,6 +24,7 @@
     "src/**/*.ts",
     "src/**/*.d.ts",
     "src/**/*.vue",
+    "packages/**/*.ts",
     "examples/**/*.ts",
     "examples/**/*.vue",
     "vite.config.ts",

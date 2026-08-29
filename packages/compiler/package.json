@@ -1,0 +1,27 @@
+{
+  "name": "@proteus/compiler",
+  "version": "0.1.0",
+  "description": "Proteus 编译引擎 —— 标准 Vue SFC → 小程序四件套（纯函数、零运行时依赖、规则注册表 + AI 说明书）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom"
+  },
+  "peerDependencies": {
+    "@vue/compiler-sfc": "^3.4",
+    "@vue/compiler-dom": "^3.4"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^3.5.42",
+    "@vue/compiler-dom": "^3.5.42"
+  }
+}

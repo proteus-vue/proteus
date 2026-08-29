@@ -15,8 +15,8 @@ import path from 'node:path'
 import { transform as esbuildTransform } from 'esbuild'
 import type { Plugin } from 'vite'
 import config from './proteus.config'
-import { compileVueSfc } from './src/compiler'
-import type { TransformRuleOverrides } from './src/compiler'
+import { compileVueSfc } from './packages/compiler/src'
+import type { TransformRuleOverrides } from './packages/compiler/src'
 import { APP_LAUNCH_SKELETON } from './src/runtime/appSkeleton'
 
 /**

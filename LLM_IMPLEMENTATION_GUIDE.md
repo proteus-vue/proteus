@@ -122,12 +122,12 @@
 
 框架的差异化定位不止于"跨端"，而是 **AI-native 透明编译**：
 
-1. **规则即文档**：所有转换规则集中为自描述的规则注册表 `src/compiler/transforms/`——每条规则 = 一份 AI 说明书（what/why/when/example/verify/决策号/source），`listTransformRules()` 可枚举、`getTransformRule(id)` 可查询。
-2. **防漂移**：规则的 `mapping` 与 `src/compiler/tags.ts` 常量同源引用，`tests/transforms.test.ts` 校验覆盖完整性——改映射表遗漏会当场报错。
+1. **规则即文档**：所有转换规则集中为自描述的规则注册表 `packages/compiler/src/transforms/`（v0.2 起 monorepo 独立包）——每条规则 = 一份 AI 说明书（what/why/when/example/verify/决策号/source），`listTransformRules()` 可枚举、`getTransformRule(id)` 可查询。
+2. **防漂移**：规则的 `mapping` 与 `packages/compiler/src/tags.ts` 常量同源引用，`tests/transforms.test.ts` 校验覆盖完整性——改映射表遗漏会当场报错。
 3. **LLM 生成新规则时必须同步注册**：在对应阶段文件（`transforms/template.ts` / `script.ts` / `style.ts` / `validate.ts`）登记规则 + AI 说明书，并更新 `tests/transforms.test.ts`（如涉及新映射表键）——**规则注册表与实现永不脱节**。
 4. **阶段二演进**（随 `@proteus/compiler` 独立包）：每条规则增加 `apply()` → 注册表升级为分派层 → `explainTransform(source)` 输出决策 trace。现阶段注册表只描述不执行。
 
-> 设计意图：编译器的每个决定都对 AI 代理与人类开发者透明（拒绝黑盒）；详见 `src/compiler/transforms/README.md`。
+> 设计意图：编译器的每个决定都对 AI 代理与人类开发者透明（拒绝黑盒）；详见 `packages/compiler/README.md`。
 
 ---
 
@@ -1187,7 +1187,7 @@ export function createComponent(vueSetupResult: {
 
 **LLM 指令**：
 - 编译产物的 .wxml 保持与源码结构一致（缩进、注释保留），命名贴近手写小程序（✅ 已落地）
-- **产物自校验**：js 语法校验 + wxml 标签配对校验，坏产物当场抛 `CompilerError` 并指明源文件（✅ 已落地：`src/compiler/validate.ts`，绝不静默输出坏产物）
+- **产物自校验**：js 语法校验 + wxml 标签配对校验，坏产物当场抛 `CompilerError` 并指明源文件（✅ 已落地：`packages/compiler/src/validate.ts`，绝不静默输出坏产物）
 - `PROTEUS_DEBUG=1` 构建：WXML 注入 `<!-- @12 div -->` 源码行号注释 + 输出中间产物到 `dist/mp-weixin/.transform-debug/`（✅ 已落地，转换过程完全透明）
 - `build:mp` 时调试产物不产出（默认关闭，✅ 已落地）
 - buildEnd 输出编译警告汇总摘要（文件 × 条数 + 明细，✅ 已落地）
@@ -1349,6 +1349,7 @@ P6 调试与验证 ◄─────────────── 依赖 P4 �
 
 | 版本 | 变更 |
 |---|---|
+| v2.52 | **v0.2 工程化基线**：`src/compiler` → `packages/compiler/` monorepo 独立包 `@proteus/compiler`（tsc 声明文件 + esbuild 单文件构建，workspace 链接验证通过）；`.github/workflows/ci.yml`（verify + e2e-web 双 job）；CONTRIBUTING.md + Issue 模板；vite alias / tsconfig paths 加 `@proteus/compiler`（决策 #72） |
 | v2.49 | **git 仓库关联**：https://github.com/proteus-vue/proteus（main 分支）；.gitignore（node_modules/dist/.env）；package.json 补 repository/homepage/bugs；首次提交推送 |
 | v2.48 | **开源协议 + 对标大厂路线图**：LICENSE 选 Apache-2.0（宽松可商用 + 专利授权，package.json/README 同步）；新增 docs/roadmap.md——九域能力矩阵（对标 uni-app/Taro）+ v0.2~v2.0 分里程碑路线（独立包/编译能力/性能/多端/生态）+ monorepo 架构 + 量化性能目标 + 验收清单 |
 | v2.47 | **文档体系落地**：根 README.md（命名来源/痛点对照/核心特性/快速开始/目录/测试/路线图）+ docs/ 四篇中文文档（getting-started / configuration / compiler / routing），内容基于真实代码与已归档决策 |

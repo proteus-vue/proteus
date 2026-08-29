@@ -7,8 +7,8 @@ import {
   transformTemplateToWxml,
   transformStyleToWxss,
   transformScriptToPage,
-} from '../src/compiler'
-import type { TransformRuleOverrides } from '../src/compiler'
+} from '../packages/compiler/src'
+import type { TransformRuleOverrides } from '../packages/compiler/src'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 const rules = (r: TransformRuleOverrides) => ({ ...opts, rules: r })

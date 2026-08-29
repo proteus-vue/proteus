@@ -8,7 +8,7 @@ import {
   compileVueSfc,
   validateJs,
   validateWxml,
-} from '../src/compiler'
+} from '../packages/compiler/src'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 

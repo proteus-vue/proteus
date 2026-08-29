@@ -13,6 +13,7 @@
   },
   "private": true,
   "type": "module",
+  "workspaces": ["packages/*"],
   "scripts": {
     "dev:web": "vite --mode web",
     "build:web": "vue-tsc --noEmit && vite build --mode web",

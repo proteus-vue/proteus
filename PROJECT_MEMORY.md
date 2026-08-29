@@ -59,9 +59,9 @@
 - `vitest.config.ts`（独立测试配置，避免加载 vite.config 触发 mp 构建副作用）
 - package.json 新增 `preview:web` / `verify` / `test:e2e:web` 脚本
 
-**P4 编译转换插件**
-- `src/compiler/`（★ 编译引擎模块，可独立开源为 `@proteus/compiler`）：`index.ts`（compileVueSfc 入口）/ `template.ts` / `script.ts` / `style.ts` / `validate.ts`（产物自校验）/ `types.ts` / `README.md`（模块边界契约）
-- `src/compiler/transforms/`（★ AI-native 透明定位落地，决策 #65）：编译规则注册表——`types.ts`（TransformRule AI 说明书接口）/ `template.ts`（30 规则）/ `script.ts`（12 规则）/ `style.ts`（5 规则）/ `validate.ts`（3 规则）/ `registry.ts`（list/get/format 查询 API）/ `README.md`（模块契约 + 阶段三演进）；`tests/transforms.test.ts`（10 用例：ID 唯一、字段齐全、映射表覆盖防漂移、API 行为）
+**P4 编译转换插件**（★v0.2 已移入 `packages/compiler/` monorepo 独立包，决策 #72）
+- `packages/compiler/`（★ @proteus/compiler 编译引擎独立包）：`src/index.ts`（compileVueSfc 入口）/ `template.ts` / `script.ts` / `style.ts` / `validate.ts`（产物自校验）/ `types.ts` / `overrides.ts`（规则覆盖）/ `explain.ts` + `trace.ts`（决策 trace）/ `README.md`（模块边界 + 构建发布）
+- `packages/compiler/src/transforms/`（★ AI-native 透明定位落地，决策 #65）：编译规则注册表——`types.ts`（TransformRule AI 说明书接口）/ `template.ts`（30 规则）/ `script.ts`（12 规则）/ `style.ts`（5 规则）/ `validate.ts`（3 规则）/ `registry.ts`（list/get/format 查询 API）/ `README.md`（模块契约 + 阶段三演进）；`tests/transforms.test.ts`（10 用例：ID 唯一、字段齐全、映射表覆盖防漂移、API 行为）
 - 决策 trace（★ 决策 #66）：`src/compiler/trace.ts`（收集器 + lineAt）+ `src/compiler/explain.ts`（explainTransform / formatTransformTrace）+ template.ts 的 `TAG_RULE_BY_TAG` 追踪键；`tests/explain.test.ts`（8 用例：ruleId 可解析防漂移 + 典型 SFC 触发预期规则）
 - 底线三循环（★ 决策 #67）：`src/compiler/overrides.ts`（resolveOverrides 生效配置）+ `TransformRuleOverrides`（disabled/mapping/customTags）贯通三转换函数 + proteus.config.ts rules 段（demo-box 演示）+ `.transform-debug/` 转储携带 trace（决策链落盘）；`tests/overrides.test.ts`（17 用例）
 - `vite-plugin-mp-transform.ts`（薄适配层：扫描页面 → 传选项 → emitFile）
@@ -141,6 +141,7 @@
 69. **Skyline iOS 真机白屏 bug 入路线图（★平台可靠性关注）**：微信平台已知问题（iOS 真机偶发白屏，与基础库版本/特定能力相关，非框架代码——决策 #35 已定案过类似环境问题）。框架对策三层入 roadmap v0.5：① **能力兼容清单**——编译期警告扩充（float/fixed 已有先例），白屏高发场景（动效/worklet/特定组件）编译期预警；② **页面级降级通道**——renderer 可配置 WebView 兜底（仅白屏风险页启用，不全局降级）；③ **v1.0 真机验收**必须覆盖 iOS Skyline 白屏复现与降级切换（v1.0 目标 + 验收清单均加此条）；README 已知限制同步（含 roadmap 链接）；roadmap v2.50 → v2.51
 70. **多入口优化：main.mp.ts 极简模式（★开发体验）**：原多入口设计要求开发者手写重复样板（App() 包装 / onLaunch 调试日志 / wx.onError 错误捕获 / 预设注册），每应用一份。优化：**极简模式**——`assembleAppJs` 检测入口不含 `App(` 时，自动拼装 `src/runtime/appSkeleton.ts` 骨架（App 包装 + onLaunch 调试日志 + 全局错误捕获 + 内置预设注册），开发者只写自定义 builder（覆盖/新增预设）；**全量模式**（入口含 App()）向后兼容（尊重开发者完整自定义 app 生命周期）；examples/main.mp.ts 从 54 行降到 38 行（仅保留自定义 myHalfScreenVariant + 注册）；插件测试 +3（极简骨架生成 / 纯骨架 / 无自定义有预设）；产物验证：开发者覆盖优先（halfScreen 不重复注册）+ 预设定义在前注册在后（静态可分析）+ __PROTEUS_DEBUG__ 正式/调试双模式替换正确；文档同步（configuration/routing/GUIDE P3-4/README）；测试 114 → 117
 71. **examples 丰富：按能力矩阵铺开（★活文档）**：新增 `examples/pages/forms.vue`（表单与指令能力演示：v-model input/textarea → value+bindinput、:class 对象语法 → 三元拼接、:style 对象语法 → prop:{{expr}}、v-if-v-else-if-v-else → wx:if/wx:elif/wx:else、@click.stop → catchtap、v-html → rich-text nodes）与 `examples/pages/config-demo.vue`（proteus.config rules 演示页：customTags 已启用 demo-box→view，页面内含 disabled/mapping 试玩说明）；config 的 customTags 从"注释演示"改为"启用演示"（产物直观可见），showcase.vue 的 demo-box 元素挪至 config-demo；首页 links 增加两个入口；实测 forms.wxml 六项能力全部正确编译；踩坑记录：`ref<'a'|'b'|'c'>('a')` 泛型标注触发编译器静态求值限制（data 变 undefined）——示例改用无泛型 ref；getting-started 新增"示例应用覆盖的能力"表格；测试 117 不变（router/golden/e2e 对页面数无依赖，e2e 用精确 href 选择器不受新增链接影响）
+72. **v0.2 工程化基线落地（★monorepo 拆分：@proteus/compiler 独立包 + CI + 贡献设施）**：按 roadmap v0.2 推进——① **独立包**：`git mv src/compiler → packages/compiler/src`（目录自包含：仅依赖 @vue/* + 内部相对路径），新增 `packages/compiler/package.json`（@proteus/compiler，peer 依赖 @vue/compiler-sfc/dom）+ `tsconfig.build.json`；构建 = tsc --emitDeclarationOnly（.d.ts）+ esbuild 单文件 bundle（external @vue/*，规避 ESM 相对导入无扩展名问题）；根 package.json 加 workspaces，`node_modules/@proteus/compiler` 链接验证：dist 包消费 compileVueSfc/listTransformRules(49)/explainTransform 全通；适配层（vite-plugin/proteus.config/tests×5）import 改 `./packages/compiler/src`；vite alias 与 tsconfig paths 加 `@proteus/compiler`（先于 @proteus/*，数组/对象保序）；② **CI**：`.github/workflows/ci.yml` 双 job（verify: vue-tsc/test/build:mp/build:web/独立包构建；e2e-web: playwright chromium）；③ **贡献设施**：CONTRIBUTING.md（规则改动四处同步约定）+ Issue 模板（bug 要求附决策链 trace / feature 要求标规则 ID）；perl 批量替换踩坑：替换串自带引号导致 `src''` 双引号（TS1005），二次修正；测试 117 不变 + 双端构建 + 独立包构建全绿
 
 ## 验证状态（最近一次）
 
@@ -172,4 +173,4 @@
 2. `LLM_IMPLEMENTATION_GUIDE.md` —— §0 痛点对照 + 当前阶段任务指令（§0.5 定位宪章）
 3. `proteus.config.ts` —— 当前配置
 4. `src/router/types.ts` + `src/platform/adapter.ts` —— 接口契约
-5. `src/compiler/transforms/registry.ts` + `README.md` —— 编译规则注册表（AI 说明书，改动编译器前先查）
+5. `packages/compiler/src/transforms/registry.ts` + `README.md` —— 编译规则注册表（AI 说明书，改动编译器前先查）

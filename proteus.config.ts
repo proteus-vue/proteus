@@ -1,6 +1,6 @@
 // proteus.config.ts
 // Proteus 框架统一配置 —— LLM 生成任何模块前必须先读此文件，理解 platform / skyline / pagesDir 等约束
-import type { TransformRuleOverrides } from './src/compiler'
+import type { TransformRuleOverrides } from './packages/compiler/src'
 
 export interface ProteusConfig {
   /** 目标平台 */

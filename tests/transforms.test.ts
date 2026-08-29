@@ -10,8 +10,8 @@ import {
   formatTransformRule,
   formatTransformCatalog,
   TRANSFORM_RULES,
-} from '../src/compiler/transforms/registry'
-import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from '../src/compiler/tags'
+} from '../packages/compiler/src/transforms/registry'
+import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from '../packages/compiler/src/tags'
 
 const REQUIRED_FIELDS = ['id', 'phase', 'title', 'description', 'why', 'when', 'example', 'verify', 'status', 'source'] as const
 

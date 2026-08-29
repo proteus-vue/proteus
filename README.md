@@ -129,18 +129,20 @@ beforeEach((to, from) => to.meta?.requiresAuth ? !!getToken() : true)
 
 ```
 proteus/
-├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 样式策略）
-├── vite-plugin-mp-transform.ts     # 小程序编译 Vite 插件（薄适配层）
+├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 样式策略 / 规则覆盖）
+├── vite-plugin-mp-transform.ts     # 小程序编译 Vite 插件（薄适配层，@proteus/plugin-vite 前身）
 ├── scripts/gen-routes.ts           # 编译期路由生成器（app.json / page.json / 路由表）
+├── packages/compiler/              # ★ @proteus/compiler 编译引擎独立包（v0.2 起 monorepo）
+│   └── src/                        #   纯函数引擎 + transforms 规则注册表（49 条 AI 说明书）
 ├── src/
-│   ├── compiler/                   # ★ 编译引擎（纯函数，可独立开源为 @proteus/compiler）
-│   │   └── transforms/             #   编译规则注册表（每条规则一份 AI 说明书，透明定位核心）
 │   ├── platform/                   # 平台适配层（adapter / web-adapter / mp-adapter）
 │   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
-│   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / 调试）
+│   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
 ├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包）
-├── tests/                          # 114 个单元测试 + 8 个 Web e2e 测试
+├── tests/                          # 117 个单元测试 + 8 个 Web e2e 测试
+├── .github/workflows/ci.yml        # CI：test / vue-tsc / build:web / build:mp / 独立包构建 / e2e
+└── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
 
 ## 测试与验证

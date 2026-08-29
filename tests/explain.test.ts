@@ -4,7 +4,7 @@
 // 2. 一份典型 SFC 触发预期的规则集合（标签/指令/事件/script/style 各阶段）
 // 3. formatTransformTrace 渲染正确
 import { describe, it, expect } from 'vitest'
-import { explainTransform, formatTransformTrace, getTransformRule } from '../src/compiler'
+import { explainTransform, formatTransformTrace, getTransformRule } from '../packages/compiler/src'
 
 const SFC = `<route>
 { "meta": { "title": "首页" } }
