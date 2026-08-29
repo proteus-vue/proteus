@@ -111,6 +111,44 @@ export function parseModuleDuplicatesArgs(argv: string[]): ModuleDuplicatesArgs 
   return { distDir: path.resolve(dir) }
 }
 
+export interface ModuleAuditArgs {
+  /** 项目根目录（扫描模块契约；缺省当前目录） */
+  root: string
+  /** --dist <dir>：产物目录（分包体积/重复检测；缺省不检查产物） */
+  distDir?: string
+  /** --graph-json <path>：落盘 module-graph.json（缺省 .proteus/module-graph.json，--no-graph-json 关闭） */
+  graphJson: boolean
+  graphJsonPath: string
+}
+
+export function parseModuleAuditArgs(argv: string[]): ModuleAuditArgs {
+  const rootArg = argv.find((a) => !a.startsWith('-')) ?? '.'
+  let distDir: string | undefined
+  let graphJson = true
+  let graphJsonPath = '.proteus/module-graph.json'
+  let i = 0
+  while (i < argv.length) {
+    const a = argv[i]
+    if (a === '--dist') {
+      distDir = argv[++i]
+      if (distDir == null) throw new Error('--dist 需要目录参数')
+    } else if (a === '--graph-json') {
+      graphJson = true
+      const p = argv[i + 1]
+      if (p && !p.startsWith('-')) {
+        graphJsonPath = p
+        i++
+      }
+    } else if (a === '--no-graph-json') {
+      graphJson = false
+    } else if (a.startsWith('-')) {
+      throw new Error(`未知参数：${a}`)
+    }
+    i++
+  }
+  return { root: path.resolve(rootArg), distDir: distDir ? path.resolve(distDir) : undefined, graphJson, graphJsonPath }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -135,6 +173,11 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
   proteus module:duplicates [distDir]
       分包间共享依赖去重检测（读 dist/mp-weixin/app.json 的 subPackages，hash 相同文件 ≥2 分包 → 报告）
+
+  proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-json]
+      ★综合审计门禁（M8.6，全部硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist：分包体积/重复）
+      --dist         产物目录（分包体积阈值 + 去重检测）
+      --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）
 
   proteus version / help
 `

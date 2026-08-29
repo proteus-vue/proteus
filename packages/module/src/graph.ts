@@ -187,7 +187,7 @@ export class DependencyGraph {
   }
 }
 
-/** 生成 module-graph manifest（module-graph.json）：modules + chunks + initOrder */
+/** 生成 module-graph manifest（module-graph.json）：modules + chunks + initOrder；★有环时 initOrder 降级为空（拓扑不可用） */
 export function buildModuleGraphManifest(g: DependencyGraph): {
   modules: Array<{ name: string; chunk: string; dependencies: string[] }>
   chunks: Record<string, string[]>
@@ -203,7 +203,13 @@ export function buildModuleGraphManifest(g: DependencyGraph): {
     }))
   const chunks: Record<string, string[]> = {}
   for (const [chunk, names] of g.chunkGroups()) chunks[chunk] = [...names].sort()
-  return { modules, chunks, initOrder: g.topologicalSort() }
+  let initOrder: string[] = []
+  try {
+    initOrder = g.topologicalSort()
+  } catch {
+    // ★有环：拓扑不可用（环已由 detectCycles/audit 检出并阻断），manifest 降级
+  }
+  return { modules, chunks, initOrder }
 }
 
 /** Mermaid 依赖图（CLI audit module --graph / 可视化）；有环 → 说明文本（拓扑不可用） */

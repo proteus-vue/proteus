@@ -2,13 +2,14 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, HELP_TEXT } from './args'
 import { buildDir } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
 import { checkModuleConfigs } from './module-check'
 import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
+import { runAuditModule } from './module-audit'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -60,6 +61,15 @@ async function main(): Promise<void> {
       const duplicates = scanDuplicateModules(distDir, roots)
       console.log(formatDuplicateReport(duplicates))
       if (duplicates.length) process.exitCode = 1
+      break
+    }
+    case 'audit': {
+      // proteus audit module（M8.6 CI 门禁）；其余 audit 子命令后续
+      if (rest[0] !== 'module') throw new Error('proteus audit 目前仅支持 module（proteus audit module [root] [--dist]）')
+      const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
+      const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
+      console.log(text)
+      if (!audit.ok) process.exitCode = 1
       break
     }
     case 'version':

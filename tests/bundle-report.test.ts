@@ -4,7 +4,9 @@ import { describe, it, expect, vi, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { scanMainPackage, formatBundleReport, scanSubPackages, checkSubPackageLimits, SUBPACKAGE_LIMITS } from '../examples/scripts/bundle-report'
+import { scanMainPackage, formatBundleReport, scanSubPackages, checkSubPackageLimits } from '../examples/scripts/bundle-report'
+// ★B8：体积阈值常量抽到 @proteus/module（bundle-report 不再导出）
+import { SUBPACKAGE_LIMITS } from '../packages/module/src'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-bundle-'))
 

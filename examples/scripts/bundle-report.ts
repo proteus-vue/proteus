@@ -6,21 +6,34 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import config from '../proteus.config'
+// ★module-plan B7a/B8：分包体积统计/阈值评估抽到 @proteus/module（bundle-report 与 CLI audit 共用）
+import { scanSubPackages, evaluateSubPackageSizes } from '@proteus/module'
+import type { SubPackageStat } from '@proteus/module'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
-
-/** ★M7.6 分包阈值（微信硬限制）：单分包 >1.5MB warn / >2MB error；总分包 >16MB error */
-export const SUBPACKAGE_LIMITS = { warnKB: 1536, errorKB: 2048, totalErrorKB: 16384 }
 
 export interface BundleStat {
   totalBytes: number
   files: Array<{ file: string; bytes: number }>
 }
 
-export interface SubPackageStat {
-  root: string
-  totalBytes: number
+export { scanSubPackages, evaluateSubPackageSizes }
+export type { SubPackageStat }
+
+/** ★B7a：分包体积门禁（console 渲染；超硬限 → error 退出码 1；超阈值 → 警告）——返回是否阻断 */
+export function checkSubPackageLimits(subPackages: SubPackageStat[]): boolean {
+  const issues = evaluateSubPackageSizes(subPackages)
+  let blocked = false
+  for (const msg of issues) {
+    if (msg.includes('超过微信单包限制') || msg.includes('超过微信限制')) {
+      console.error(`[proteus] ❌ ${msg}`)
+      blocked = true
+    } else {
+      console.warn(`[proteus] ⚠ ${msg}`)
+    }
+  }
+  return blocked
 }
 
 /** 统计主包文件体积（纯函数，可单测）：排除分包 root 前缀 + 隐藏调试目录 */
@@ -48,24 +61,6 @@ export function scanMainPackage(outDir: string, subPackageRoots: string[]): Bund
   return { totalBytes: total, files }
 }
 
-/** ★B7a：统计各分包体积（纯函数，可单测） */
-export function scanSubPackages(outDir: string, roots: string[]): SubPackageStat[] {
-  return roots.map((root) => {
-    let total = 0
-    const walk = (d: string): void => {
-      if (!fs.existsSync(d)) return
-      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-        if (entry.name.startsWith('.')) continue
-        const full = path.join(d, entry.name)
-        if (entry.isDirectory()) walk(full)
-        else total += fs.statSync(full).size
-      }
-    }
-    walk(path.join(outDir, root))
-    return { root, totalBytes: total }
-  })
-}
-
 /** 渲染体积报告（纯函数，可单测）——主包 + ★B7a 各分包行 */
 export function formatBundleReport(stat: BundleStat, budgetKB: number, strict: boolean, subPackages: SubPackageStat[] = []): string {
   const kb = stat.totalBytes / 1024
@@ -76,37 +71,17 @@ export function formatBundleReport(stat: BundleStat, budgetKB: number, strict: b
   const subLines = subPackages
     .map((sp) => {
       const skb = sp.totalBytes / 1024
-      const flag = skb > SUBPACKAGE_LIMITS.errorKB ? '❌超限' : skb > SUBPACKAGE_LIMITS.warnKB ? '⚠超阈值' : ''
+      const flag = skb > 2048 ? '❌超限' : skb > 1536 ? '⚠超阈值' : ''
       return `  ${skb.toFixed(0).padStart(6)} KB  分包 ${sp.root}${flag ? ` ${flag}` : ''}`
     })
     .join('\n')
   return [
     `[proteus] 主包体积：${kb.toFixed(0)} KB（${(kb / 1024).toFixed(2)} MB），预算 ${budgetKB} KB${strict ? '（strict，超限失败）' : ''}`,
-    subLines ? `分包体积（阈值 ${SUBPACKAGE_LIMITS.warnKB}KB 警告 / ${SUBPACKAGE_LIMITS.errorKB}KB 微信硬限）：\n${subLines}` : '',
+    subLines ? `分包体积（阈值 1536KB 警告 / 2048KB 微信硬限）：\n${subLines}` : '',
     top ? `Top 5 大文件：\n${top}` : '',
   ]
     .filter(Boolean)
     .join('\n')
-}
-
-/** ★B7a：分包体积门禁（超硬限 → error 退出码 1；超阈值 → 警告）——返回是否阻断 */
-export function checkSubPackageLimits(subPackages: SubPackageStat[]): boolean {
-  let blocked = false
-  const totalKB = subPackages.reduce((n, sp) => n + sp.totalBytes, 0) / 1024
-  if (totalKB > SUBPACKAGE_LIMITS.totalErrorKB) {
-    console.error(`[proteus] ❌ 总分包 ${totalKB.toFixed(0)} KB 超过微信限制 ${SUBPACKAGE_LIMITS.totalErrorKB} KB`)
-    blocked = true
-  }
-  for (const sp of subPackages) {
-    const skb = sp.totalBytes / 1024
-    if (skb > SUBPACKAGE_LIMITS.errorKB) {
-      console.error(`[proteus] ❌ 分包 ${sp.root} ${skb.toFixed(0)} KB 超过微信单包限制 ${SUBPACKAGE_LIMITS.errorKB} KB——需拆分或压缩`)
-      blocked = true
-    } else if (skb > SUBPACKAGE_LIMITS.warnKB) {
-      console.warn(`[proteus] ⚠ 分包 ${sp.root} ${skb.toFixed(0)} KB 超过阈值 ${SUBPACKAGE_LIMITS.warnKB} KB`)
-    }
-  }
-  return blocked
 }
 
 function main(): void {
