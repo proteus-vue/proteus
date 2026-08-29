@@ -244,11 +244,14 @@
 
 ## 验证状态（最近一次）
 
-- ✅ `npm run verify` 全绿：**638 单测 / 73 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
+- ✅ `npm run verify` 全绿：**689 单测 / 80 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
 - ✅ 双端构建：web（vue-tsc 零错误 + vite）+ mp（gen-routes → vue-tsc → vite，产出 app.js + 各页四件套 + proteus/ 组件产物 + 共享模块）
-- ✅ 各 @proteus/* 包独立构建（14 个包，prepare 钩子 + esbuild bundle）
-- ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / 模板快照一致性
+- ✅ 各 @proteus/* 包独立构建（**17 个包**，prepare 钩子 + esbuild bundle）
+- ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / generate types --check / config:check / 模板快照一致性
 - ✅ 审计基线：`components:audit` 16 组件零违规；`i18n:check` examples 4/4 引用干净
+- ✅ 构建缓存（M8）：编译缓存 + bundle 缓存均 100% 命中、产物 diff 逐字节一致、单文件变更精确失效
+- ✅ 组件类型：GlobalComponents 模板标签类型注册（16 组件），examples vue-tsc 0 错误
+- ✅ 类型收口：公共类型全部在 @proteus/types，实现包 re-export 兼容层，消费方零改动，type-only 擦除验证
 
 ## 待办 / 注意事项
 
@@ -262,10 +265,15 @@
 - **组件库 P0（component-plan B1-B8）**：✅ 2026-08 全批收官——16 组件 + 4 runtime 共享模块 + components:audit + 编译器 4 增强（script/watch-props props 源 watch→observers / ref-write 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射 onXxx 钩子警告）；业务组件（player-bar/payment-sheet/login-gate）标注依赖 appBar/支付（v0.6+）
 - **i18n-plan（B1-B3）**：✅ 2026-08——@proteus/i18n（ICU 子集：插值/复数/=N/select/#）+ i18n:check 门禁 + demo；分包加载/完整 ICU/Intl/RTL 标后续
 - **devtools-plan（B1-B2）**：✅ 2026-08——@proteus/devtools-runtime（TraceBus 协议/环形缓冲/脱敏/采样/零开销门控）+ lifecycle/component 两源接入（type-only 注入）；面板 B3-B8 标 v1.0+
-- **npm 发布准备**：✅ changesets 配置齐全（16 包字段完整 + 待发 changeset 7 个）；发布清单见 docs/packages.md（不真实发布）
+- **npm 发布准备**：✅ changesets 配置齐全（**17 包**字段完整 + 待发 changeset 7 个）；发布清单见 docs/packages.md（不真实发布）
 - **security-plan（M1-M3）**：✅ 2026-08——@proteus/security（M1 SecretStorage 加密存储：WebCipher/DemoCipher/volatile/redact/migrate；M3 PermissionRegistry + withPermission + PermissionDenied）+ M3 §3 Router 权限守卫自动生成（RouteMeta.permissions + createRouter options.permissions，与 requiresAuth 守卫同层）；M4-M8 标后续
 - **app-plan（B1 核心）**：✅ 2026-08——@proteus/renderer-app（Vue createRenderer + NativeAdapter 抽象 + mock adapter，无需真机验证渲染器接线）；B2-B5（原生视图/样式 rpx→dp/路由桥/能力桥/demo）标 v0.6 正式启动（需 npm 发布 + 原生工程）；Vapor 双模式标后续
-- 文档版本号已到 v2.52（git 仓库关联）
+- **build-plan M8 缓存**：✅ 2026-08——编译缓存（compileCacheKey 全入参哈希 + 磁盘/内存双层）+ esbuild bundle 缓存（输入快照 mtime+size 指纹）；examples 真实构建 100% 命中 + 产物逐字节一致 + 单文件精确失效；PROTEUS_NO_CACHE 关闭；详见 02-optimize-cache.md
+- **types-plan（B3-B7 全批）**：✅ 2026-08——@proteus/types 独立包（Platform/PlatformTarget + JSON Schema + generate types --check 防漂移）+ B4 平台守卫（matchPlatform/assertPlatform/exhaustiveCheck，铁律 #4）+ B5 validateConfig（config:check CLI 错误码）+ B6 加固（品牌类型 Brand/配置迁移 migrateConfig/Schema Registry extendConfigSchema）+ B7 migrate types codemod + CI 门禁；四层测试矩阵随批落地
+- **组件类型齐全**：✅ 2026-08——GlobalComponents 模板标签类型注册（16 组件 Pascal+kebab 双名）+ @vue-expect-error 断言 fixture（防退化）；examples vue-tsc 0 错误
+- **类型收口（T1-T4）**：✅ 2026-08——公共类型全部统一到 @proteus/types（compiler-types/capabilities/router-types/api-types/config/index-shared），各实现包 types.ts 为 re-export 兼容层（消费方零改动）；runtime 值（ApiError/CapabilityError class、createTrace）留实现包；CapabilityPlatform = Platform alias；type-only 擦除验证 + 无环依赖；方案见 docs/proteus-types-plan/10-type-consolidation.md
+- ⚠ **根 vue-tsc 有 36 个预先存在的测试文件类型错误**（tests/*.test.ts mock 类型，非 verify 门控但 CI 类型检查步骤会失败）——待清理
+- 文档版本号已到 v2.53（git 仓库关联）
 
 ## 会话恢复指引（新 LLM 按此顺序阅读）
 
