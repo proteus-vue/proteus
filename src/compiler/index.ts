@@ -27,6 +27,12 @@ export { validateJs, validateWxml, CompilerError } from './validate'
 export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog } from './transforms/registry'
 export type { TransformRule, TransformPhase, RuleStatus } from './transforms/types'
 
+// 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）
+export { explainTransform, formatTransformTrace } from './explain'
+export type { ExplainOptions, ExplainResult } from './explain'
+export { createTrace, lineAt } from './trace'
+export type { TransformTrace, TransformTraceEvent } from './trace'
+
 /** 整包编译：标准 Vue SFC 源码 → { wxml, js, wxss }（.json 由路由生成器负责） */
 export function compileVueSfc(source: string, options: CompileOptions = {}): CompileResult {
   const { descriptor } = sfcParse(source, { filename: options.filename ?? 'anonymous.vue' })

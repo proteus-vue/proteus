@@ -72,7 +72,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
 | `computed` / `watch` 编译支持 | `src/compiler/script.ts` | 编译期分析依赖 → data 派生 + `setData` 联动；先做读路径（`{{ computedX }}` 渲染），再做写路径 |
-| 转换决策 trace（阶段二） | `src/compiler/transforms/` | 每条规则增加 `apply()`，注册表升级为分派层；`explainTransform(source)` 输出逐节点决策 trace（`line 26: <h1> → <text class="proteus-h1">（tag/heading-to-text + semantic/base-class）`） |
+| 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；阶段三：规则增加 `apply()` 后升级为分派即 trace（随 @proteus/compiler 独立包） |
 | 组件系统 | `src/compiler/` 新增组件编译 | `defineProps` / `defineEmits` / `slots` / `defineExpose` → 小程序 `Component({ properties, data, methods })`；`isComponent` 分支已存在（测试已覆盖构造器形态） |
 | scoped CSS | `src/compiler/style.ts` | `:deep()` / 属性选择器等价方案（小程序无 scoped 原生机制，编译期加 data 属性或类前缀） |
 | 指令补全 | `src/compiler/template.ts` | `v-show`（映射 `hidden` 属性/样式）、`:class` 数组语法、事件修饰符（`.once/.self`）、`v-on` 键位 |

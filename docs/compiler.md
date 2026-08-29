@@ -44,11 +44,15 @@ listTransformRules(phase?) // 枚举规则（能力清单）：template/script/s
 getTransformRule(id)       // 查单条规则
 formatTransformRule(rule)  // 渲染单条 AI 说明书
 formatTransformCatalog()   // 渲染全量目录
+
+// 阶段二：决策 trace（对一份 Vue SFC 输出它实际触发的全部规则）
+explainTransform(source, options?)   // → { events: [{ ruleId, phase, line, before, after }] }
+formatTransformTrace(result)         // 渲染为按阶段分组的可读文本
 ```
 
-- **AI 用法**：`listTransformRules()` 摸清编译器能力边界 → `getTransformRule('tag/div-to-view')` 查 why/when/verify → 按 `source` 跳读实现 → 改完跑对应单测。
-- **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错。
-- **演进**：阶段二（随 `@proteus/compiler` 独立包）每条规则增加 `apply()`，注册表升级为分派层，输出 `explainTransform(source)` 决策 trace；详见 `src/compiler/transforms/README.md`。
+- **AI 用法**：`listTransformRules()` 摸清编译器能力边界 → `getTransformRule('tag/div-to-view')` 查 why/when/verify → 按 `source` 跳读实现 → 改完跑对应单测；写完页面用 `explainTransform()` 验证转换链路。
+- **防漂移**：`mapping` 直接引用 `tags.ts` 常量（`TAG_MAP` / `EVENT_MAP` / `SEMANTIC_CLASS`），`tests/transforms.test.ts` 校验每个键都被规则覆盖——改映射表遗漏会当场报错；trace 事件 ruleId 由 `tests/explain.test.ts` 校验可解析。
+- **演进**：阶段三（随 `@proteus/compiler` 独立包）每条规则增加 `apply()`，注册表升级为分派层，`explainTransform` 从内嵌 trace 升级为分派即 trace；详见 `src/compiler/transforms/README.md`。
 
 ## 标签映射（TAG_MAP）
 

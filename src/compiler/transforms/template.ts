@@ -377,3 +377,13 @@ export const TEMPLATE_RULES: TransformRule[] = [
     decision: '#17',
   },
 ]
+
+// 追踪键（防漂移）：标签 → 规则 ID，由 tag/* 规则的 mapping 反推——实现侧 trace 引用同一份数据
+// 只取 tag/ 前缀规则：semantic/base-class（mapping 含 h1-p/a）与 event/click-to-tap（mapping 含 input/click）
+// 的键是另一维度的映射，不得混入标签追踪（后定义覆盖会污染）。
+// tests/explain.test.ts 校验所有 trace 事件 ruleId 均可解析
+export const TAG_RULE_BY_TAG: Record<string, string> = Object.fromEntries(
+  TEMPLATE_RULES.filter((r) => r.id.startsWith('tag/')).flatMap((r) =>
+    r.mapping ? Object.keys(r.mapping).map((t): [string, string] => [t, r.id]) : [],
+  ),
+)

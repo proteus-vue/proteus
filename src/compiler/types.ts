@@ -2,12 +2,16 @@
 // 编译引擎公共类型 —— 未来独立包 @proteus/compiler 的公开 API 类型
 // 约束：本目录所有代码不得 import vite / proteus.config（保持可独立分发）
 
+import type { TransformTrace } from './trace'
+
 /** 样式转换选项 */
 export interface StyleTransformOptions {
   /** 是否 px → rpx */
   px2rpx: boolean
   /** px→rpx 比例 */
   rpxRatio: number
+  /** 决策 trace 收集器（可选：透明定位阶段二，explainTransform 使用） */
+  trace?: TransformTrace
 }
 
 /** template 转换选项（含反黑盒调试能力） */
@@ -40,6 +44,8 @@ export interface ScriptTransformOptions {
   usesNavigate?: boolean
   /** 生成的自动 handler 是否附带调试日志（PROTEUS_DEBUG） */
   debug?: boolean
+  /** 决策 trace 收集器（阶段二，可空） */
+  trace?: TransformTrace
 }
 
 /** script → Page/Component 构造器结果 */

@@ -31,30 +31,41 @@ listTransformRules(phase?: 'template' | 'script' | 'style' | 'validate'): Transf
 getTransformRule(id: string): TransformRule | undefined
 formatTransformRule(rule: TransformRule): string   // 单条 AI 说明书（markdown 文本）
 formatTransformCatalog(): string                    // 全量目录（按阶段分组）
+
+// 阶段二：决策 trace（已实现）
+explainTransform(source: string, options?): ExplainResult   // 一份 Vue SFC → 触发的全部规则
+formatTransformTrace(result): string                        // 渲染决策 trace（按阶段 + 行号）
 ```
+
+## 阶段二已实现：决策 trace（explainTransform）
+
+转换函数（template/script/style）内嵌可选 trace 收集器（`src/compiler/trace.ts`）：
+
+- **零副作用**：trace 是可选注入（`options.trace`），默认不存在则零开销，产物与既有 97 个单测锁定行为完全一致
+- **防漂移**：template 侧 trace 键引用 `TAG_RULE_BY_TAG`（由规则 mapping 反推），`tests/explain.test.ts` 校验每个 trace 事件的 ruleId 都能在注册表解析——改规则 ID 而漏改实现侧 trace 当场报错
+- **用法**：AI 改完编译器 / 写完页面 → `explainTransform(src)` 看转换链路 → 对照注册表理解每个决定
 
 ## 消费方
 
-- **AI 代理**：`listTransformRules()` 摸清能力边界 → `getTransformRule(id)` 查单条 → 按 `source` 跳读实现
+- **AI 代理**：`listTransformRules()` 摸清能力边界 → `getTransformRule(id)` 查单条 → 按 `source` 跳读实现 → `explainTransform()` 验证自己写的页面/改动
 - **文档生成**：`formatTransformCatalog()` 直出文档章节（`docs/compiler.md` 的映射表与此同源）
-- **未来 CLI**（roadmap v0.2）：`proteus explain <rule-id>` 输出单条说明书
-- **未来 trace**（阶段二）：`proteus explain <vue-file>` 输出该文件触发的全部规则
+- **未来 CLI**（roadmap v0.2）：`proteus explain <vue-file|rule-id>` 输出决策 trace / 单条说明书
 
-## 阶段二：从"描述层"升级为"分派层"（规划，不在此阶段实现）
+## 阶段三：从"描述层"升级为"分派层"（规划，尚未实现）
 
-当前注册表只**描述**规则，不**执行**。后续里程碑（随 `@proteus/compiler` 独立包一起）为每条规则增加：
+当前注册表**描述**规则 + 转换函数内嵌 trace；后续里程碑（随 `@proteus/compiler` 独立包一起）为每条规则增加：
 
 ```typescript
 interface TransformRule {
   // ...现有 AI 说明书字段
-  apply?: (ctx: TransformContext) => void   // 阶段二：规则成为可独立调用的转换单元
+  apply?: (ctx: TransformContext) => void   // 阶段三：规则成为可独立调用的转换单元
 }
 ```
 
 届时：
 
 - 编译管线改为按注册表分派（`template.ts` 等瘦身为规则编排器）
-- `explainTransform(source)` 输出决策 trace：`line 26: <h1> → <text class="proteus-h1">（tag/heading-to-text + semantic/base-class）`
+- `explainTransform` 从"内嵌 trace"升级为"分派即 trace"（天然完整，无遗漏）
 - 插件体系（roadmap v2.0 编译期插件）天然落地：第三方注册自定义规则
 
-**为何不现在拆实现**：编译管线已被 79 个单测 + golden fixtures 锁定，先以注册表形态落地"透明"，再以增量方式演进到分派层，避免一次性重构动摇已验证的产物。
+**为何分两步走**：先以"内嵌 trace"形态落地可观察性（已实现、零风险），再演进到"分派层"（重构编译管线，需 golden 回归保护）；避免一次性重构动摇已验证的产物。

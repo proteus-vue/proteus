@@ -10,6 +10,8 @@ import type {
 } from '@vue/compiler-dom'
 import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from './tags'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
+import type { TransformTrace } from './trace'
+import { TAG_RULE_BY_TAG } from './transforms/template'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -97,6 +99,10 @@ interface SerializeContext {
   filename?: string
   /** 模板中是否出现导航链接（<a href> / <router-link>，触发 __navigateTo handler 注入） */
   usesNavigate: boolean
+  /** 决策 trace 收集器（阶段二，可空） */
+  trace?: TransformTrace
+  /** 行号注释 trace 已记录标记（避免每个元素都记一条） */
+  lineNoteTraced?: boolean
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
@@ -106,8 +112,16 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const isNavLink = (node.tag === 'a' || node.tag === 'router-link') && !hasClick
   let tag = hasVHtml ? 'rich-text' : (TAG_MAP[node.tag] ?? kebabCase(node.tag))
   if (node.tag === 'router-link') tag = 'view'
+  // 决策 trace：标签映射
+  ctx.trace?.add(
+    hasVHtml ? 'tag/rich-text' : node.tag === 'router-link' ? 'tag/router-link' : (TAG_RULE_BY_TAG[node.tag] ?? 'tag/unknown-kebab'),
+    { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${tag}>` },
+  )
   // 语义标签基础类（h1-h6/p/a → proteus-*，样式侧注入 Web UA 等价默认样式；rich-text 不附加）
   const baseClass = hasVHtml ? '' : (SEMANTIC_CLASS[node.tag] ?? '')
+  if (baseClass) {
+    ctx.trace?.add('semantic/base-class', { line: node.loc.start.line, before: node.tag, after: baseClass })
+  }
   const isInputLike = tag === 'input' || tag === 'textarea'
   const attrs: string[] = []
   let hasNavTarget = false
@@ -118,6 +132,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       if (isNavLink && (attr.name === 'href' || attr.name === 'to' || attr.name === 'route-type')) {
         if (attr.name === 'route-type' && attr.value) {
           attrs.push(`data-route-type="${escapeXml(attr.value.content)}"`)
+          ctx.trace?.add('nav/route-type', { line: node.loc.start.line, before: `route-type="${attr.value.content}"`, after: `data-route-type="${attr.value.content}"` })
         } else if (attr.value) {
           attrs.push(`data-url="${escapeXml(attr.value.content)}"`)
           hasNavTarget = true
@@ -145,18 +160,22 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     switch (dir.name) {
       case 'if':
         attrs.push(`wx:if="{{${exprContent(dir.exp)}}}"`)
+        ctx.trace?.add('directive/v-if', { line: node.loc.start.line, before: `v-if="${exprContent(dir.exp)}"`, after: `wx:if="{{${exprContent(dir.exp)}}}"` })
         break
       case 'else-if':
         attrs.push(`wx:elif="{{${exprContent(dir.exp)}}}"`)
+        ctx.trace?.add('directive/v-else-if', { line: node.loc.start.line, before: 'v-else-if', after: 'wx:elif' })
         break
       case 'else':
         attrs.push('wx:else')
+        ctx.trace?.add('directive/v-else', { line: node.loc.start.line, before: 'v-else', after: 'wx:else' })
         break
       case 'for': {
         const f = parseForExpr(exprContent(dir.exp))
         attrs.push(`wx:for="{{${f.list}}}"`)
         if (f.item) attrs.push(`wx:for-item="${f.item}"`)
         if (f.index) attrs.push(`wx:for-index="${f.index}"`)
+        ctx.trace?.add('directive/v-for', { line: node.loc.start.line, before: exprContent(dir.exp), after: `wx:for="{{${f.list}}}"` })
         break
       }
       case 'on': {
@@ -167,7 +186,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           typeof m === 'string' ? m : (m?.content ?? ''),
         )
         const isCatch = mods.includes('stop') || mods.includes('prevent')
-        attrs.push(`${isCatch ? 'catch' : 'bind'}${mapped}="${cleanHandler(exprContent(dir.exp), ctx.warnings)}"`)
+        const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
+        attrs.push(`${isCatch ? 'catch' : 'bind'}${mapped}="${handler}"`)
+        ctx.trace?.add(
+          isCatch ? 'event/modifier-catch' : 'event/click-to-tap',
+          { line: node.loc.start.line, before: `@${raw}`, after: `${isCatch ? 'catch' : 'bind'}${mapped}` },
+        )
         break
       }
       case 'bind': {
@@ -176,12 +200,17 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         if (arg === 'class') {
           const cls = formatClassBinding(exp, ctx.warnings)
           attrs.push(`class="${baseClass ? `${baseClass} ` : ''}${cls}"`)
-        } else if (arg === 'style') attrs.push(`style="${formatStyleBinding(exp)}"`)
-        else if (arg === 'key') {
+          ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: cls })
+        } else if (arg === 'style') {
+          attrs.push(`style="${formatStyleBinding(exp)}"`)
+          ctx.trace?.add('directive/v-bind-style', { line: node.loc.start.line, before: `:style="${exp}"`, after: formatStyleBinding(exp) })
+        } else if (arg === 'key') {
           if (/^[\w$]+$/.test(exp)) attrs.push(`wx:key="${exp}"`)
           else ctx.warnings.push(`:key="${exp}" 不是简单标识符（MVP），wx:key 已忽略`)
+          ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${exp}"` })
         } else {
           attrs.push(`${arg}="{{${exp}}}"`)
+          ctx.trace?.add('directive/v-bind', { line: node.loc.start.line, before: `:${arg}`, after: `${arg}="{{${exp}}}"` })
         }
         break
       }
@@ -191,13 +220,16 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         if (isInputLike) attrs.push(`value="{{${model}}}"`)
         // 方法名不用 __ 前缀（微信保留前缀，真机绑定可能失效）
         attrs.push(`bindinput="proteusOn${capitalize(model)}Input"`)
+        ctx.trace?.add('directive/v-model', { line: node.loc.start.line, before: `v-model="${model}"`, after: `bindinput="proteusOn${capitalize(model)}Input"` })
         break
       }
       case 'html':
         attrs.push(`nodes="{{${exprContent(dir.exp)}}}"`)
+        ctx.trace?.add('directive/v-html', { line: node.loc.start.line, before: 'v-html', after: 'rich-text nodes' })
         break
       case 'show':
         ctx.warnings.push('v-show 暂不支持（MVP），已忽略，请改用 v-if')
+        ctx.trace?.add('directive/v-show-limit', { line: node.loc.start.line, before: 'v-show', after: '（忽略 + 编译期警告）' })
         break
       default:
         break // v-slot / v-pre 等：MVP 忽略
@@ -208,6 +240,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     // 导航链接：绑定点击跳转（handler 由 script 转换自动注入；方法名避免 __ 前缀）
     attrs.push('bindtap="proteusNavigateTo"')
     ctx.usesNavigate = true
+    ctx.trace?.add('nav/navigate-link', { line: node.loc.start.line, before: `<${node.tag}>` + (node.tag === 'a' ? ' href/to' : ' to'), after: 'data-url + bindtap="proteusNavigateTo"' })
   }
   if (baseClass && !attrs.some((a) => a.startsWith('class='))) {
     attrs.push(`class="${baseClass}"`)
@@ -215,6 +248,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
   const lineNote = ctx.annotateLines ? `<!-- @${node.loc.start.line} ${node.tag} -->\n` : ''
+  if (lineNote && !ctx.lineNoteTraced) {
+    ctx.lineNoteTraced = true
+    ctx.trace?.add('annotation/line-note', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<!-- @${node.loc.start.line} ${node.tag} -->` })
+  }
   if (!node.children.length) return `${lineNote}<${tag}${attrStr} />`
   const hasElementChild = node.children.some((c) => c.type === NodeTypes.ELEMENT)
   if (hasElementChild) {
@@ -233,6 +270,7 @@ function serializeNode(node: TemplateChildNode, ctx: SerializeContext): string {
     case NodeTypes.TEXT:
       return escapeXml((node as unknown as { content: string }).content)
     case NodeTypes.INTERPOLATION:
+      ctx.trace?.add('node/interpolation', { line: (node as unknown as { loc: { start: { line: number } } }).loc.start.line, before: '{{ expr }}', after: '{{ expr }}（原样保留）' })
       return `{{ ${(node as unknown as { content: { content: string } }).content.content} }}`
     case NodeTypes.COMMENT:
       return `<!-- ${(node as unknown as { content: string }).content} -->`
@@ -256,6 +294,7 @@ export function transformTemplateToWxml(
     annotateLines: opts.annotateLines ?? false,
     filename: opts.filename,
     usesNavigate: false,
+    trace: opts.trace,
   }
   const root = domParse(source, { onError: () => undefined })
   const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')

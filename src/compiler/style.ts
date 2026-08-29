@@ -4,6 +4,7 @@
 // HTML 标签选择器 → 小程序标签选择器（与 template.ts 共用 TAG_MAP，保证元素与样式一一对应）
 import { TAG_MAP, SEMANTIC_CLASS } from './tags'
 import type { StyleTransformOptions } from './types'
+import type { TransformTrace } from './trace'
 
 // 选择器中的标签名 → 小程序标签（.links a → .links view、h1 → text）
 // 命中条件：标签名必须位于选择器起始或组合器之后（空格 / > + ~ , ( 之后），
@@ -58,12 +59,19 @@ export function transformStyleToWxss(
   source: string,
   opts: StyleTransformOptions = { px2rpx: true, rpxRatio: 2 },
 ): string {
+  const trace = opts.trace
   let css = `${BASE_SEMANTIC_WXSS}\n${source}`
+  trace?.add('style/semantic-base-wxss', { before: 'h1-h6/p/a 无 UA 样式', after: '.proteus-h1~h6/.proteus-p/.proteus-a 基础 WXSS（注入在用户样式之前）' })
   // 1. 标签选择器映射（与模板标签映射一一对应，避免元素已映射而样式匹配不到）
+  const counts = countSelectorRewrites(css)
   css = rewriteSelectorTags(css)
+  if (counts.tag > 0) trace?.add('style/selector-tag', { before: `选择器含 HTML 标签（${counts.tag} 处）`, after: '映射为小程序标签（div → view）' })
+  if (counts.semantic > 0) trace?.add('style/selector-semantic', { before: `h1-h6/p/a 选择器（${counts.semantic} 处）`, after: '.proteus-* 类选择器（避免同特异性覆盖）' })
   // 2. px → rpx
+  const pxCount = (css.match(/(\d+(?:\.\d+)?)px\b/g) ?? []).length
   if (opts.px2rpx) {
     css = css.replace(/(\d+(?:\.\d+)?)px\b/g, (_m, n: string) => `${Number(n) * opts.rpxRatio}rpx`)
+    if (pxCount > 0) trace?.add('style/px-to-rpx', { before: `${pxCount} 处 px`, after: `${pxCount} 处 rpx（rpxRatio=${opts.rpxRatio}）` })
   }
   // 3. Skyline 不支持的属性编译期警告
   const unsupported: string[] = []
@@ -71,6 +79,17 @@ export function transformStyleToWxss(
   if (/position\s*:\s*fixed\b/.test(css)) unsupported.push('position: fixed')
   for (const u of unsupported) {
     console.warn(`[mp-transform] WXSS 检测到 Skyline 不支持的属性：${u}（编译期警告）`)
+    trace?.add('style/skyline-unsupported', { before: u, after: '编译期警告（不阻断构建）' })
   }
   return css
+}
+
+/** 统计选择器重写前源 CSS 中的标签选择器处数（语义标签与普通标签分开计数） */
+function countSelectorRewrites(css: string): { tag: number; semantic: number } {
+  const semanticKeys = Object.keys(SEMANTIC_CLASS)
+  const tagKeys = Object.keys(TAG_MAP).filter((k) => !semanticKeys.includes(k))
+  const lookahead = '[\\s.#:\\[>+,~)(\\u0000]|$'
+  const semanticRe = new RegExp(`(?<![\\w-.\\#:\\[*])(?:${semanticKeys.join('|')})(?=${lookahead})`, 'g')
+  const tagRe = new RegExp(`(?<![\\w-.\\#:\\[*])(?:${tagKeys.join('|')})(?=${lookahead})`, 'g')
+  return { tag: (css.match(tagRe) ?? []).length, semantic: (css.match(semanticRe) ?? []).length }
 }

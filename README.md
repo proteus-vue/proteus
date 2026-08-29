@@ -42,7 +42,7 @@
 ## 核心特性
 
 - **标准 Vue 3 SFC 开发**：`<div>`/`<p>`/`<h1>`/`<a>` 照写不误，映射到小程序标签由编译器完成；`h1-h6/p/a` 自动注入对齐 Web UA 的语义基础样式（大标题/段距/链接色），两端视觉一致
-- **AI-native 透明编译**：编译引擎内置**规则注册表**（`src/compiler/transforms/`），49 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询，映射表与实现同源引用防漂移——AI 代理与开发者都可读懂编译器的每一个决定
+- **AI-native 透明编译**：编译引擎内置**规则注册表**（`src/compiler/transforms/`），49 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询；`explainTransform()` 对任意 Vue 文件输出**决策 trace**（该文件触发的全部转换规则 + 行号）——AI 代理与开发者都可读懂编译器的每一个决定，映射表与实现同源引用防漂移
 - **Web 零转换**：Web 端直接跑标准 Vite SPA（完整 devtools + HMR），不做二等公民
 - **Skyline 一等公民**：页面默认 `"renderer": "skyline"`，`wx.router` 自定义路由转场（半屏 / 上滑 / 层叠缩放）作为一等能力；Web 端用 Vue `<Transition>` 复刻同一套 `routeType` API
 - **反编译黑盒**：产物自校验 + 调试日志 + 源码行号注释 + 转换函数独立可单测，坏产物当场报错
@@ -139,13 +139,13 @@ proteus/
 │   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / 调试）
 │   └── shims/                      # wx / Page / RouteBuilder 类型声明
 ├── examples/                       # 示例应用（pages / subpackages / router / main）
-├── tests/                          # 89 个单元测试 + 8 个 Web e2e 测试
+├── tests/                          # 97 个单元测试 + 8 个 Web e2e 测试
 ```
 
 ## 测试与验证
 
 ```bash
-npm test                # 89 个单测（router / mp-transform / runtime / transforms / golden / plugin）
+npm test                # 97 个单测（router / mp-transform / runtime / transforms / explain / golden / plugin）
 npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
@@ -164,7 +164,7 @@ npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环�
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（49 条 AI 说明书）、89 单测 + 8 e2e
+- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接、反黑盒调试、AI-native 规则注册表（49 条 AI 说明书）+ 决策 trace（explainTransform）、97 单测 + 8 e2e
 - **规划**：编译引擎独立开源 `@proteus/compiler` + CLI、组件系统/computed/watch 补全、多端扩展、性能优化、生态建设——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
 
 ## 开源协议
