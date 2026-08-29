@@ -19,6 +19,8 @@ import type { ProteusConfig } from './config'
 export interface GenRoutesOptions {
   config: ProteusConfig
   root?: string
+  /** --trace-router：输出每条路由的生成决策（来源登记 + 父路由推导依据） */
+  trace?: (msg: string) => void
 }
 
 /**
@@ -27,6 +29,8 @@ export interface GenRoutesOptions {
 export function runGenRoutes(options: GenRoutesOptions): void {
   const config = options.config
   const ROOT = options.root ?? process.cwd()
+  // --trace-router：路由生成决策链输出（来源登记 + 父路由推导依据，对齐 --trace-transform）
+  const trace = options.trace ?? (() => {})
   // 应用根目录（页面/入口所在目录，从 pagesDir 推导：examples/pages → examples）
   const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
   const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
@@ -114,6 +118,7 @@ function scanPages(): PageInfo[] {
   for (const file of walkVueFiles(path.join(ROOT, config.pagesDir))) {
     const relSrc = path.relative(APP_DIR, file).replace(/\\/g, '/').replace(/\.vue$/, '')
     pages.push({ file, relSrc, mpPath: relSrc, ...parseRouteBlock(file) })
+    trace(`[route] ${relSrc} 来源登记（${path.relative(ROOT, file)}，route/scan）`)
   }
 
   // 分包：subPackages[].root
@@ -155,7 +160,10 @@ function buildRoutes(pages: PageInfo[]): RouteRecord[] {
     const parentName = nameByRel.get(dirIndex)
     if (parentName) {
       const r = routes.find(r => r.name === nameByRel.get(p.relSrc))
-      if (r) r.parent = parentName
+      if (r) {
+        r.parent = parentName
+        trace?.(`[route] ${p.relSrc} → parent "${parentName}"（同目录 index.vue 推导，route/derive-name）`)
+      }
     }
   }
 

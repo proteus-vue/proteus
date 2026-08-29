@@ -8,6 +8,11 @@ import type { GlobalRouteDefaults, RouteBlock, RouteNode } from './types'
 import { RouteValidationError } from './schema'
 import { mergeMeta } from './merge'
 
+export interface RouteTreeTrace {
+  /** 嵌套推导决策（--trace-router 反查源码依据） */
+  (msg: string): void
+}
+
 /** path 分段排序（稳定）：先按段数少→多，再按字典序，保证产物可复现 */
 export function sortByPath(nodes: RouteNode[]): RouteNode[] {
   const segs = (n: RouteNode): number => n.path.split('/').filter(Boolean).length
@@ -39,8 +44,13 @@ function findParentByPath(nodes: RouteNode[], node: RouteNode): RouteNode | null
  * 第一遍：建节点（合并默认 meta / lazy）+ byName 索引；
  * 第二遍：parent 显式（规则 B）优先挂载，否则 path 前缀推导（规则 A），都无 → 根
  * 找不到 parent / parent 成环 → 报错（含 loc）
+ * @param trace --trace-router：输出每条路由的嵌套决策（显式 parent / path 推导 / 根）
  */
-export function buildRouteTree(blocks: RouteBlock[], defaults: GlobalRouteDefaults = {}): RouteNode[] {
+export function buildRouteTree(
+  blocks: RouteBlock[],
+  defaults: GlobalRouteDefaults = {},
+  trace?: (msg: string) => void,
+): RouteNode[] {
   const nodes: RouteNode[] = blocks.map((b) => ({
     ...b,
     children: [],
@@ -57,11 +67,17 @@ export function buildRouteTree(blocks: RouteBlock[], defaults: GlobalRouteDefaul
       const p = byName.get(node.parent)
       if (!p) throw new RouteValidationError(`parent "${node.parent}" 未找到`, node.loc)
       p.children.push(node)
+      trace?.(`[route] ${node.path} → ${p.path}（显式 parent "${node.parent}"，规则 B 覆盖 path 推导）`)
     } else {
       // 规则 A：path 前缀推导
       const parentByPath = findParentByPath(nodes, node)
-      if (parentByPath) parentByPath.children.push(node)
-      else roots.push(node)
+      if (parentByPath) {
+        parentByPath.children.push(node)
+        trace?.(`[route] ${node.path} → ${parentByPath.path}（path 前缀推导，规则 A）`)
+      } else {
+        roots.push(node)
+        trace?.(`[route] ${node.path} → 根路由`)
+      }
     }
   }
 
