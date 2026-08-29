@@ -91,12 +91,14 @@ packages/
 - [x] 验证：vue-tsc 零错 + 219 测试（+3 gen-routes）+ 双端构建 + plugin-vite 包构建 + 模板 gen-routes CLI 冒烟 + workspace 链接
 - 决策：#102；踩坑：① workspace 依赖版本必须对齐实际包版本（compiler 0.2.0——0.1.0 触发 npm 404 拉 registry）② vite.config bundle 阶段不走 resolve.alias → 插件 @proteus/compiler 解析到 dist（prepare 钩子保新鲜）③ tsx 动态 import 需带 .ts 扩展名 + 层级数（src/ → 根为三级）④ 动态 import 根 config 拉偏 tsc rootDir 推断 → CLI 拆独立 cli.ts + tsconfig.build exclude
 
-### 步骤 6：别名与引用面全量切换
+### 步骤 6：别名与引用面全量切换（✅ 已落地）
 
-- [ ] vite alias / tsconfig paths：`@proteus/{router,runtime,shared,compiler,plugin-vite}` 精确映射，删除泛化 `@proteus` → src/
-- [ ] examples 全部 import 改精确包路径（@proteus/router、@proteus/runtime、@proteus/components 保持 src）
-- [ ] 验证：vue-tsc + 198 测试 + 双端构建
-- 规模：~200 行；风险：中（引用面广）
+- [x] vite alias / tsconfig paths：`@proteus/{router,runtime,shared,compiler,plugin-vite,components}` 精确映射，**删除泛化 `@proteus` → src/（防误匹配）**
+- [x] `@proteus/components` → `src/components`（框架内置组件暂留 src，组件库 v2.0 方向）——vite 单键前缀匹配子路径（`@proteus/components/virtual-list/index.vue`）+ tsconfig 双键（components/components/*）
+- [x] 模板 vite.config 同步精确化（vendored 结构：@proteus/shared → src/platform/index.ts（adapter 聚合）、@proteus/router → src/router、@proteus/runtime → src/runtime）
+- [x] 盘点确认：examples 全部 import 已是精确包路径（步骤 2-5 铺垫），无 `@proteus` 泛化残留；`@/` 保留（无人用，兼容未来）
+- [x] 验证：vue-tsc 零错 + 219 测试 + 双端构建 + 模板快照
+- 决策：#103；风险收敛：引用面在步骤 2-5 已逐包精确化，本步只需删兜底，无存量 import 受影响
 
 ### 步骤 7：create-proteus 模板重构
 

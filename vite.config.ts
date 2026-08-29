@@ -47,15 +47,17 @@ export default defineConfig(({ mode }) => {
       : [vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
-        // @proteus/* 精确映射（拆包步骤 2：shared 包）；@proteus/compiler 优先
+        // ★拆包步骤 6：@proteus/* 全量精确映射（删除泛化 @proteus → src/，防误匹配）
         { find: '@proteus/compiler', replacement: fileURLToPath(new URL('./packages/compiler/src/index.ts', import.meta.url)) },
         { find: '@proteus/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
         { find: '@proteus/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
         // router 指向包目录：'@proteus/router' 裸导入 → src/index.ts（目录索引），子路径 '@proteus/router/types' → src/types（前缀匹配）
         { find: '@proteus/router', replacement: fileURLToPath(new URL('./packages/router/src', import.meta.url)) },
+        // 插件（构建期，vite.config import 时走相对路径，此处供外部使用）
+        { find: '@proteus/plugin-vite', replacement: fileURLToPath(new URL('./packages/plugin-vite/src', import.meta.url)) },
+        // 框架内置组件（v0.4）：src/components/ 暂留源码（组件库是 v2.0 方向），精确别名
+        { find: '@proteus/components', replacement: fileURLToPath(new URL('./src/components', import.meta.url)) },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
-        // 其余 @proteus/* 暂指向 src/（runtime/router 等拆包后逐一精确化）
-        { find: '@proteus', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ],
     },
     build: {

@@ -22,7 +22,10 @@
       "@proteus/runtime": ["packages/runtime/src/index.ts"],
       "@proteus/router": ["packages/router/src/index.ts"],
       "@proteus/router/*": ["packages/router/src/*"],
-      "@proteus/*": ["src/*"]
+      "@proteus/plugin-vite": ["packages/plugin-vite/src/index.ts"],
+      "@proteus/plugin-vite/*": ["packages/plugin-vite/src/*"],
+      "@proteus/components": ["src/components/index.ts"],
+      "@proteus/components/*": ["src/components/*"]
     }
   },
   "include": [

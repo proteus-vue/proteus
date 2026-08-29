@@ -37,9 +37,13 @@ export default defineConfig(({ mode }) => {
       : [vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
-        // 业务代码通过 @proteus/... 访问框架本体（src/ 内）
+        // ★拆包步骤 6：模板 vendored 结构下的精确映射（步骤 7 重构后改依赖 npm 包）
+        // @proteus/shared 的 adapter 聚合在模板由 src/platform/index.ts 充当（shared 包 platform 目录 vendored 在此）
+        { find: '@proteus/shared', replacement: fileURLToPath(new URL('./src/platform/index.ts', import.meta.url)) },
+        { find: '@proteus/runtime', replacement: fileURLToPath(new URL('./src/runtime', import.meta.url)) },
+        { find: '@proteus/router', replacement: fileURLToPath(new URL('./src/router', import.meta.url)) },
+        { find: '@proteus/components', replacement: fileURLToPath(new URL('./src/components', import.meta.url)) },
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
-        { find: '@proteus', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ],
     },
     build: {
