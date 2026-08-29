@@ -176,7 +176,8 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 ```
 
 - **顶层 `const` → `data`**：`ref(0)` / `reactive({...})` / 字面量在构建期求值（`evalLiteral`）。支持多行数组/对象字面量（括号平衡扫描，字符串内括号如 `'rgba(0,0,0,0.8)'` 不干扰）；只提取**零缩进顶层** const（函数体 / 生命周期体内局部 const 不误提取）；无法静态求值 → 编译期警告 + `undefined`。
-- **`computed` 读路径（v0.3）**：`const double = computed(() => count.value * 2)` 编译为 **data 派生字段**——① `data` 不存 double；② `onLoad` 初始化 `this.setData({ double: this.data.count * 2 })`（首次渲染前就绪）；③ `count` 写入时**合并重算**：`this.data.count = ...; this.setData({ count: this.data.count, double: this.data.count * 2 })`（先更新 `this.data` 再 setData，保证派生表达式读到**新值**——setData 是异步批量，对象内求值用当前 this.data）。静态提取 getter 中的 `x.value` 作为依赖；仅支持**箭头简写 + 表达式体**（块体 / function 形式编译期警告）；依赖未在顶层 data 定义 → 警告。`watch` / computed 写路径（后续）。
+- **`computed` 读路径（v0.3）**：`const double = computed(() => count.value * 2)` 编译为 **data 派生字段**——① `data` 不存 double；② `onLoad` 初始化 `this.setData({ double: this.data.count * 2 })`（首次渲染前就绪）；③ `count` 写入时**合并重算**：`this.data.count = ...; this.setData({ count: this.data.count, double: this.data.count * 2 })`（先更新 `this.data` 再 setData，保证派生表达式读到**新值**——setData 是异步批量，对象内求值用当前 this.data）。静态提取 getter 中的 `x.value` 作为依赖；仅支持**箭头简写 + 表达式体**（块体 / function 形式编译期警告）；依赖未在顶层 data 定义 → 警告。
+- **`watch`（v0.3）**：`watch(ref, (newVal, oldVal) => {...})` 编译为 `proteusWatchX(newVal, oldVal)` 方法——依赖 ref 写入 setData 后**自动调用**（编译期在写入点注入：`const oldX = this.data.x; ...setData(...); this.proteusWatchX(this.data.x, oldX)`，旧值在写入前保存）；`{ immediate: true }` → onLoad 初始化调用一次（oldVal = undefined）；回调体内 ref 读写照常重写（可再触发其它 computed/watch 联动）。MVP：仅单 ref 直接引用 + 箭头函数回调（数组源 / 函数源 / function 回调警告）；同一 ref 多个 watch 仅保留后者（警告）。
 - **顶层函数 → `methods`**：`function` 声明与 `const fn = () => {}` 箭头函数，方法简写输出。
 - **生命周期映射**：`onMounted → onReady`、`onUnmounted → onUnload`、`onLoad` 透传。
 - **方法内 ref 写入重写**：

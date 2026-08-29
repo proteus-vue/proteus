@@ -126,6 +126,68 @@ describe(':class 数组语法（v0.3）', () => {
   })
 })
 
+describe('watch（v0.3）', () => {
+  const SRC = `const count = ref(0)
+watch(count, (n, o) => {
+  console.log(n, o)
+})
+function bump() {
+  count.value++
+}
+function setN() {
+  count.value = 5
+}`
+
+  it('生成 proteusWatchX 方法（回调体入 methods）', () => {
+    const { js } = transformScriptToPage(SRC, opts)
+    expect(js).toContain('proteusWatchCount(n, o) {')
+    expect(js).toContain('console.log(n, o)')
+  })
+
+  it('依赖写入 setData 后自动调用：旧值在写入前保存 + 分号分隔', () => {
+    const { js } = transformScriptToPage(SRC, opts)
+    // 后置 ++（有 watch：先存旧值 → 先写 this.data → setData → 调用）
+    expect(js).toContain('const oldCount = this.data.count; this.data.count = (this.data.count === undefined || this.data.count === null ? 0 : this.data.count) + 1; this.setData({ count: this.data.count }); this.proteusWatchCount(this.data.count, oldCount)')
+    // 赋值
+    expect(js).toContain('const oldCount = this.data.count; this.data.count = 5; this.setData({ count: this.data.count }); this.proteusWatchCount(this.data.count, oldCount)')
+  })
+
+  it('watch 与 computed 联动：写入时派生重算 + watch 调用同在', () => {
+    const src = `const count = ref(0)\nconst double = computed(() => count.value * 2)\nwatch(count, (n) => {\n  log(n)\n})\nfunction setN() {\n  count.value = 5\n}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('const oldCount = this.data.count; this.data.count = 5; this.setData({ count: this.data.count, double: this.data.count * 2 }); this.proteusWatchCount(this.data.count, oldCount)')
+  })
+
+  it('immediate: true → onLoad 初始化调用一次（oldVal = undefined）', () => {
+    const src = `const count = ref(0)\nwatch(count, (n) => {\n  log(n)\n}, { immediate: true })`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('this.proteusWatchCount(this.data.count, undefined)')
+  })
+
+  it('watch 回调体内的 ref 读取被重写（this.data 形式）', () => {
+    const src = `const count = ref(0)\nwatch(count, (n) => {\n  console.log(count.value)\n})`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('console.log(this.data.count)')
+  })
+
+  it('依赖未在顶层 data 定义 → 编译期警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformScriptToPage('watch(other, (n) => { log(n) })', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('未在顶层 data 中定义'))
+  })
+
+  it('同一 ref 多个 watch → 警告（MVP 仅一个，后者覆盖）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    transformScriptToPage('const c = ref(0)\nwatch(c, (n) => { a(n) })\nwatch(c, (n) => { b(n) })', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('存在多个'))
+  })
+
+  it('rules.disabled 禁用 script/watch-to-methods → 不生成 watch 方法', () => {
+    const { js } = transformScriptToPage('const c = ref(0)\nwatch(c, (n) => { a(n) })', opts, { rules: { disabled: ['script/watch-to-methods'] } })
+    expect(js).not.toContain('proteusWatch')
+  })
+})
+
 describe('transformTemplateToWxml（template → wxml）', () => {
   it('标准标签映射：div→view / span,p,h1→text / img→image', () => {
     const { wxml } = transformTemplateToWxml('<div><span>hi</span><p>p</p><h1>t</h1><img :src="url" /></div>', opts)

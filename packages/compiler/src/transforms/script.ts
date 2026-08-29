@@ -36,6 +36,22 @@ export const SCRIPT_RULES: TransformRule[] = [
     decision: '#76（v0.3）',
   },
   {
+    id: 'script/watch-to-methods',
+    phase: 'script',
+    status: 'implemented',
+    title: 'watch → proteusWatchX 方法（v0.3）',
+    description: 'watch(ref, (newVal, oldVal) => { body }) → methods 生成 proteusWatchX；依赖 ref 写入 setData 后自动调用（旧值在写入前保存）；immediate: true → onLoad 初始化调用一次',
+    why: '小程序无 watch 概念，编译期模拟：依赖静态提取（单 ref）+ 写入点联动（setData 后调用回调，newVal/oldVal 由编译期保存）；MVP：仅单 ref 直接引用 + 箭头函数回调（数组源/函数源/function 回调警告）',
+    when: 'script 顶层出现 watch(refName, callback) 时',
+    example: {
+      before: 'watch(count, (n, o) => {\n  log(n, o)\n})',
+      after: 'proteusWatchCount(n, o) {\n  log(n, o)\n},\n// count 写入：const oldCount = this.data.count; ...setData(...); this.proteusWatchCount(this.data.count, oldCount)',
+    },
+    verify: 'tests/mp-transform.test.ts watch 用例',
+    source: 'packages/compiler/src/script.ts → extractWatch + watchTail + immediateWatchLine',
+    decision: '#78（v0.3）',
+  },
+  {
     id: 'script/function-to-methods',
     phase: 'script',
     status: 'implemented',

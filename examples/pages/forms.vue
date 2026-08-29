@@ -9,7 +9,7 @@
 }
 </route>
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const name = ref('')
 const bio = ref('')
@@ -20,6 +20,11 @@ const html = ref('<h1 style="color:#1a7af8">rich-text 富文本</h1>')
 const count = ref(0)
 // computed 读路径（v0.3）：MP 端编译为 data 派生字段（onLoad 初始化 + count 写入时合并重算）
 const double = computed(() => count.value * 2)
+// watch（v0.3）：MP 端编译为 proteusWatchCount（count 写入 setData 后自动调用）
+const watchLog = ref('')
+watch(count, (n, o) => {
+  watchLog.value = `watch: ${o} → ${n}`
+})
 
 function bump() {
   count.value++
@@ -48,6 +53,7 @@ function bump() {
     <div class="box" @click="bump">
       <button @click.stop="bump">点我（.stop 不冒泡）</button>
       <p>点击次数：{{ count }}（双倍：{{ double }}）</p>
+      <p class="watch-log">{{ watchLog }}</p>
     </div>
 
     <!-- v-show → hidden 属性（v0.3）：元素始终渲染，仅切换 display -->
