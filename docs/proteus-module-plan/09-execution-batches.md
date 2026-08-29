@@ -119,6 +119,8 @@ B1 ──┬── B2 ──┬── B6
 | B7b | ✅ | | 共享依赖去重检测（module:duplicates） |
 | B7c | ✅ | | 懒加载 loadModule（M7.3 简化版） |
 | B7d | ⬜ | | 沙箱 / 内存守护（B7 子项拆批） |
+| B8 | ✅ | | audit + ESLint 阻断（audit module 硬卡） |
+| B9 | ✅ | | 示例 + 迁移指南 + init module（B9 文档整合） |
 | B5 | ✅ | | Skyline subPackages 生成（分包依赖 + preloadRule） |
 | B4 | ⬜ | | Web 分包产物验证 |
 | B5 | ⬜ | | Skyline subPackages 生成 |

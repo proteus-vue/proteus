@@ -149,6 +149,17 @@ export function parseModuleAuditArgs(argv: string[]): ModuleAuditArgs {
   return { root: path.resolve(rootArg), distDir: distDir ? path.resolve(distDir) : undefined, graphJson, graphJsonPath }
 }
 
+export interface ModuleInitArgs {
+  /** 项目根目录（生成 proteus-module.config.ts；缺省当前目录） */
+  root: string
+}
+
+export function parseModuleInitArgs(argv: string[]): ModuleInitArgs {
+  const dir = argv.find((a) => !a.startsWith('-')) ?? '.'
+  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
+  return { root: path.resolve(dir) }
+}
+
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
@@ -178,6 +189,9 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
       ★综合审计门禁（M8.6，全部硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist：分包体积/重复）
       --dist         产物目录（分包体积阈值 + 去重检测）
       --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）
+
+  proteus init module [dir]
+      ★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）
 
   proteus version / help
 `
