@@ -35,11 +35,11 @@ describe('p-scroll-view（滚动容器，薄包装）', () => {
 describe('p-list-view（虚拟长列表，virtual-list 通用化）', () => {
   it('MP 产物：scroll-view + 虚拟/全量双分支 + 占位 + items observers + 守卫', () => {
     const { wxml, js } = compileComponent('p-list-view')
-    // wxml：虚拟窗口（占位 + visible）与全量分支（v-else over items）
+    // wxml：虚拟窗口（占位 + 单一 v-for visible——真机修复：去 wx:else 双 if，virtual=false 由 calc 置全量）
     expect(wxml).toContain('<scroll-view')
     expect(wxml).toContain('wx:if="{{virtual}}"')
     expect(wxml).toContain('wx:for="{{visible}}"')
-    expect(wxml).toContain('wx:else wx:for="{{items}}"')
+    expect(wxml).not.toContain('wx:else')
     expect(wxml).toContain("height:{{start * itemHeight + 'px'}}")
     // js：items 变化响应（props 源 watch → observers）
     expect(js).toContain('observers: {')

@@ -12,12 +12,7 @@
 <template>
   <scroll-view class="p-list-view" scroll-y :style="{ height: height + 'px' }" @scroll="onScroll">
     <view v-if="virtual" class="plv-ph" :style="{ height: start * itemHeight + 'px' }" />
-    <template v-if="virtual">
-      <view v-for="(item, i) in visible" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
-        <text>{{ item.title }}</text>
-      </view>
-    </template>
-    <view v-else v-for="(item, i) in items" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
+    <view v-for="(item, i) in visible" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
       <text>{{ item.title }}</text>
     </view>
   </scroll-view>
@@ -47,6 +42,8 @@ const ready = ref(false)
 
 // 计算可视窗口（方法体内 props.x → this.data.x 改写 ✓）；lazy 模式下首次滚动（onScroll 置 ready）前不渲染
 // ★B7：窗口数学抽纯函数 getVirtualWindow（可单测：10k 数据 → 恒定行数），此处只做切片
+// ★真机修复：去 template v-if/v-else 双 if 结构（WXML wx:else 无法配对）→ 单一 v-for visible，
+//   virtual=false 时 visible 直接置全量 items（模板零 wx:else，天然兼容微信解析）
 function calc() {
   if (props.lazy && !ready.value) return
   const t0 = Date.now()
@@ -57,12 +54,13 @@ function calc() {
     props.bufferSize,
     props.items.length,
   )
-  visible.value = props.items.slice(w.start, w.start + w.count)
+  visible.value = props.virtual ? props.items.slice(w.start, w.start + w.count) : props.items
   // ★B8 渲染埋点（默认 no-op；开发开 setObservabilityEnabled(true) 后输出）
-  componentRender('p-list-view', { durationMs: Date.now() - t0, itemCount: w.count, strategy: 'virtual' })
+  componentRender('p-list-view', { durationMs: Date.now() - t0, itemCount: props.virtual ? w.count : props.items.length, strategy: props.virtual ? 'virtual' : 'full' })
 }
 
 function onScroll(e: unknown) {
+  if (!props.virtual) return // 全量模式：无虚拟窗口，滚动无需处理
   if (props.lazy && !ready.value) {
     ready.value = true
     calc() // 懒挂载首帧：立即渲染首屏（即使窗口未跨行）

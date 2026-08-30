@@ -430,11 +430,11 @@ describe('虚拟列表（v0.4）', () => {
     // onReady 首屏计算
     expect(r.js).toContain('onReady()')
     expect(r.js).toContain('calc()')
-    // 模板：scroll-view + bindscroll + 可视区 v-for + 虚拟/全量双分支
+    // 模板：scroll-view + bindscroll + 单一可视区 v-for（真机修复：无 wx:else 双 if）
     expect(r.wxml).toContain('<scroll-view')
     expect(r.wxml).toContain('bindscroll="onScroll"')
     expect(r.wxml).toContain('wx:for="{{visible}}"')
-    expect(r.wxml).toContain('wx:else wx:for="{{items}}"')
+    expect(r.wxml).not.toContain('wx:else')
     expect(r.wxml).toContain('wx:key="i"')
     // 产物自校验通过（无坏产物）
     expect(r.js).not.toContain('undefined undefined')
