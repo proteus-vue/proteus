@@ -70,6 +70,9 @@ function rewriteSelectorTags(css: string, res: ResolvedOverrides, tagRe: RegExp)
 // 而 Skyline 自研引擎不折叠，单边 bottom 在两端主流组合（段落连续 / 标题后接段落）下
 // 视觉间距一致（如 p→p 均为 1em、h1→p 均为 0.67emₕ₁）；用户样式特异性更高可覆盖
 const BASE_SEMANTIC_WXSS = [
+  // ★2026-08：text 默认行内（微信 text 语义；Skyline defaultDisplayBlock 会把所有节点 block 化——tag 选择器
+  //   需配合 tagNameStyleIsolation: legacy（app.json）才能作用原生组件；WebView 下本就 inline，规则无害）
+  'text { display: inline; }',
   '.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }',
   '.proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }',
   '.proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }',

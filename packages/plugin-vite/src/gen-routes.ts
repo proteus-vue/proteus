@@ -357,10 +357,17 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   appJson.window = windowConfig
   // Skyline 渲染前提（微信平台校验）：页面 renderer=skyline 时必须声明 requiredComponents
   if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
-  // ★Skyline 默认 block 布局（2026-08 真机实测）：Skyline 节点默认 flex——switch/slider/icon 等表单元素
-  //   被 stretch 占满一行且居中（与 WebView/Web 块级布局不一致）——官方对齐方案 defaultDisplayBlock（基础库 2.31.1+）
+  // ★Skyline 布局对齐（2026-08 真机实测）：
+  //   ① defaultDisplayBlock——Skyline 节点默认 flex 会 stretch 拉伸表单元素（switch/slider/icon 占满一行居中）→ 默认 block 对齐 WebView/Web
+  //   ② tagNameStyleIsolation: legacy——defaultDisplayBlock 把 text 等行内组件也 block 化，需 tag 选择器恢复（text{display:inline}）——
+  //      legacy 使 tag 选择器不受样式隔离约束（对齐 WebView 行为，基础库 3.6.0+）
   if (config.skyline) {
-    appJson.rendererOptions = { skyline: { defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true } }
+    appJson.rendererOptions = {
+      skyline: {
+        defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true,
+        tagNameStyleIsolation: 'legacy',
+      },
+    }
   }
   // 平台硬边界：tabBar.list 至少 2 项（微信校验），不足时告警并忽略
   if (tabRoutes.length >= 2) {

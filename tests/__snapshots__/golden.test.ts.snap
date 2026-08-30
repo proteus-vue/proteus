@@ -40,7 +40,8 @@ Page({
 <image src="{{avatar}}" alt="avatar" />
 </view>
 </scroll-view>",
-  "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+  "wxss": "text { display: inline; }
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
 .proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
@@ -49,7 +50,7 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
-.proteus-h1-data-v-e934cf { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-e934cf { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-e934cf { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-e934cf { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-e934cf { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-e934cf { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-e934cf { display: block; margin: 0 0 1em; }.proteus-a-data-v-e934cf { color: #1a7af8; text-decoration: underline; }.page-data-v-e934cf {
+text { display: inline; }.proteus-h1-data-v-e934cf { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-e934cf { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-e934cf { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-e934cf { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-e934cf { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-e934cf { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-e934cf { display: block; margin: 0 0 1em; }.proteus-a-data-v-e934cf { color: #1a7af8; text-decoration: underline; }.page-data-v-e934cf {
   padding: 40rpx;
 }.row-data-v-e934cf {
   margin: 8rpx 0;
@@ -90,7 +91,8 @@ Page({
 <textarea value="{{text}}" bindinput="proteusOnTextInput" />
 </view>
 </scroll-view>",
-  "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+  "wxss": "text { display: inline; }
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
 .proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
@@ -99,6 +101,7 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
+text { display: inline; }
 .proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
@@ -139,7 +142,8 @@ Page({
   "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
 <rich-text nodes="{{html}}" />
 </scroll-view>",
-  "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+  "wxss": "text { display: inline; }
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
 .proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
@@ -148,6 +152,7 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
+text { display: inline; }
 .proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
@@ -188,7 +193,8 @@ Page({
   "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
 <view class="tab-data-v-5a03df">{{ count }}</view>
 </scroll-view>",
-  "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+  "wxss": "text { display: inline; }
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
 .proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
@@ -197,7 +203,7 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
-.proteus-h1-data-v-5a03df { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-5a03df { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-5a03df { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-5a03df { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-5a03df { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-5a03df { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-5a03df { display: block; margin: 0 0 1em; }.proteus-a-data-v-5a03df { color: #1a7af8; text-decoration: underline; }.tab-data-v-5a03df {
+text { display: inline; }.proteus-h1-data-v-5a03df { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-5a03df { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-5a03df { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-5a03df { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-5a03df { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-5a03df { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-5a03df { display: block; margin: 0 0 1em; }.proteus-a-data-v-5a03df { color: #1a7af8; text-decoration: underline; }.tab-data-v-5a03df {
   font-size: 28rpx;
 }
 
