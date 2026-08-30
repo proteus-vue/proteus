@@ -73,7 +73,7 @@
 .proteus-web-toast {
   position: fixed;
   left: 50%;
-  top: 40%; /* ★WeUI top:40%——微信 toast 在屏幕偏上位置 */
+  top: 50%; /* ★用户实测微信 showToast 居中显示（WeUI 官网 top:40% 仅网页演示，实际居中） */
   transform: translate(-50%, -50%);
   background: #4c4c4c; /* var(--weui-BG-4) */
   color: rgba(255, 255, 255, 0.9); /* ★WeUI 文字色（0.9 白，非纯白） */
