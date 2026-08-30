@@ -38,6 +38,7 @@
 | **示例工程完整工程化** | ✅ 完成（决策 #114） | examples 自包含（proteus.config/vite.config/tsconfig/package.json/index.html），根配置移交（350 测试） |
 | **示例工程 npm 包方式** | ✅ 完成（决策 #115） | @proteus-vue/* 走 workspace 链接 dist（真实使用方式），仅 components 保留 alias（350 测试） |
 | **Vue 能力兼容修复** | ✅ 完成（决策 #116） | 反黑盒警告清单（无对等/import）+ 事件内联表达式 + :class 简写（364 测试，规则 57→64） |
+| **14-mp-first-semantics 批次 1-4 视觉对齐** | ✅ 批次 1-3 + 批次 4 交互层/能力矩阵完成（2026-08-30） | @proteus-vue/web 小程序语义 Web 模拟层：12 组件 + wx API 15 项 + **weui.io 官方像素级对齐**（toast/modal/actionSheet/picker/switch/slider/button + 暗黑模式 + 动画 + 禁用态）；规划 17（weui-io-alignment 方法论）+ 18（picker-swiper） |
 
 ## 已落地文件
 
@@ -244,7 +245,7 @@
 
 ## 验证状态（最近一次）
 
-- ✅ `npm run verify` 全绿：**689 单测 / 80 文件** + build:web + build:mp + build --workspaces（2026-08 全仓盘点基线）
+- ✅ `npm run verify` 全绿：**749 单测 / 85 文件** + build:web + build:mp + build --workspaces（2026-08-30）
 - ✅ 双端构建：web（vue-tsc 零错误 + vite）+ mp（gen-routes → vue-tsc → vite，产出 app.js + 各页四件套 + proteus/ 组件产物 + 共享模块）
 - ✅ 各 @proteus-vue/* 包独立构建（**17 个包**，prepare 钩子 + esbuild bundle）
 - ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / generate types --check / config:check / 模板快照一致性
@@ -252,6 +253,7 @@
 - ✅ 构建缓存（M8）：编译缓存 + bundle 缓存均 100% 命中、产物 diff 逐字节一致、单文件变更精确失效
 - ✅ 组件类型：GlobalComponents 模板标签类型注册（16 组件），examples vue-tsc 0 错误
 - ✅ 类型收口：公共类型全部在 @proteus-vue/types，实现包 re-export 兼容层，消费方零改动，type-only 擦除验证
+- ✅ 小程序语义 Web 模拟层（@proteus-vue/web）视觉对齐（2026-08-30，方法见 docs/proteus-compiler-plan/17-weui-io-alignment.md）：toast/modal/actionSheet/picker/switch/slider/button 全部 weui.io 官方像素级对齐（CDP 双模式 light/dark 断言 + 动画逐帧采样）
 
 ## 待办 / 注意事项
 
@@ -274,6 +276,14 @@
 - **类型收口（T1-T4）**：✅ 2026-08——公共类型全部统一到 @proteus-vue/types（compiler-types/capabilities/router-types/api-types/config/index-shared），各实现包 types.ts 为 re-export 兼容层（消费方零改动）；runtime 值（ApiError/CapabilityError class、createTrace）留实现包；CapabilityPlatform = Platform alias；type-only 擦除验证 + 无环依赖；方案见 docs/proteus-types-plan/10-type-consolidation.md
 - ⚠ **根 vue-tsc 有 36 个预先存在的测试文件类型错误**（tests/*.test.ts mock 类型，非 verify 门控但 CI 类型检查步骤会失败）——待清理
 - 文档版本号已到 v2.53（git 仓库关联）
+
+## 后续规划（2026-08-30 更新）
+
+- **18-picker-swiper（规划 18）**：B1 selector ✅ + B2 multiSelector ✅（749 测试全绿时）；B2 余 **time / date / region**（date 年/月/日三列 fields 裁剪、region 省市区需内置精简行政区划数据标注 partial）；B3-B4 **swiper**（基础：指示点/手势/current 受控 → 进阶：autoplay/circular/vertical/display-multiple-items）；B5 双端实测 + 能力矩阵转 full
+- **14 批次 4 收尾**：picker/swiper 完成后能力矩阵转 full + examples 双端实测
+- **规划 17 方法论复用**：新组件视觉对齐（swiper/checkbox/radio/loading）按 weui-io-alignment 五步走 + --pwu-* 变量组（暗黑适配是默认要求）
+- **已知限制（用户验收时发现，未修）**：tabBar 100vh 遮挡 / 半屏页 / 长列表 list-view 摊平 / 下拉刷新 Web 端未桥接——用户没提先不做
+- 其余 roadmap 大项（v0.5 多端 / v0.6 App+Vapor / v1.0 生产可用）见 docs/roadmap.md，待 npm 发布 + 真实项目验证启动
 
 ## 会话恢复指引（新 LLM 按此顺序阅读）
 
