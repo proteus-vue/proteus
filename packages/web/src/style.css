@@ -129,7 +129,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 280px;
+  width: 300px; /* ★WeUI 对话框 622rpx≈311px（375 基准）——280px 偏窄 */
   max-width: 80vw;
   background: #fff;
   border-radius: 12px;
@@ -137,14 +137,14 @@
   overflow: hidden;
 }
 .pwu-modal-title {
-  font-size: 16px;
+  font-size: 17px; /* WeUI 标题 */
   font-weight: 600;
   text-align: center;
   padding: 20px 16px 0;
 }
 .pwu-modal-content {
-  font-size: 14px;
-  color: #666;
+  font-size: 15px; /* WeUI 内容 */
+  color: #888888; /* ★微信次级文字（原 #666 偏深） */
   text-align: center;
   padding: 12px 16px 20px;
 }
@@ -161,7 +161,7 @@
   cursor: pointer;
 }
 .pwu-modal-btn--cancel {
-  color: #666;
+  color: #888888; /* 微信次级文字 */
   border-right: 1px solid #eee;
 }
 .pwu-modal-btn--confirm {
@@ -173,7 +173,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f5f5f5;
+  background: #f7f7f7; /* WeUI 弹层背景 */
   z-index: 99991;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
@@ -181,21 +181,21 @@
 .pwu-sheet-item {
   display: block;
   width: 100%;
-  padding: 14px 0;
+  padding: 15px 0; /* WeUI 行高 48px 附近 */
   border: none;
   border-bottom: 1px solid #eee;
   background: #fff;
-  font-size: 16px;
+  font-size: 17px; /* WeUI 操作项字号 */
   cursor: pointer;
 }
 .pwu-sheet-cancel {
   display: block;
   width: 100%;
-  padding: 14px 0;
+  padding: 15px 0;
   border: none;
   background: #fff;
-  font-size: 16px;
-  color: #666;
+  font-size: 17px;
+  color: #888888;
   cursor: pointer;
   margin-top: 6px;
 }
