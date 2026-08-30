@@ -32,6 +32,7 @@ function handleTap() {
       <a href="/pages/forms">表单与指令</a>
       <a href="/pages/config-demo">配置演示</a>
       <a href="/pages/components-demo">组件演示</a>
+      <a href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
       <a href="/pages/builtin-components-demo">内置组件</a>
       <a href="/pages/i18n-demo">国际化</a>
       <a href="/pages/provide-inject-demo">注入演示</a>
