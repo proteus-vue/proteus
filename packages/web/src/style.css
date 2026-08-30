@@ -219,27 +219,32 @@
   appearance: none;
   -webkit-appearance: none;
   border-radius: 16px;
-  /* ★对齐微信 switch 关闭态：灰色渐变（上白下灰）——微信关闭背景为渐变而非纯色 */
-  background: linear-gradient(180deg, #ffffff 0%, #e0e0e0 100%);
+  box-sizing: border-box;
+  /* ★对齐微信 switch 静止态：关闭=白色背景+灰边框；打开=微信绿背景+绿边框（iOS 风格，非渐变底色） */
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
   position: relative;
   cursor: pointer;
-  transition: background 0.2s;
+  /* 过渡近似微信的白色扩散/收缩（iOS UISwitch：thumb 滑动 + track 颜色过渡） */
+  transition: background 0.2s ease, border-color 0.2s ease;
   margin: 0;
 }
 .proteus-web-switch:checked {
   background: #07c160;
+  border-color: #07c160;
 }
 .proteus-web-switch::before {
   content: '';
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s;
+  transition: transform 0.2s ease;
+  z-index: 1;
 }
 .proteus-web-switch:checked::before {
   transform: translateX(20px);
