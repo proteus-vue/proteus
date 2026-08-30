@@ -39,6 +39,10 @@
   border-radius: 10px;
   pointer-events: none;
 }
+/* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗） */
+.proteus-web-button--hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
 
 /* ===== input（对齐微信 input：无边框/透明背景/继承字号）===== */
 .proteus-web-input {

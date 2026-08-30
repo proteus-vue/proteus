@@ -1,6 +1,7 @@
 // packages/web/src/components/button.ts
 // 小程序 <button>：Web 模拟：原生 button + open-type 开放能力降级（触发 openxxx 事件）
-import { defineComponent, h } from 'vue'
+//   + hover-class 按下反馈（对齐微信 button 默认 button-hover：按下背景变暗 rgba(0,0,0,0.1)）
+import { defineComponent, h, ref } from 'vue'
 import { OPEN_TYPE_EVENTS } from '../open-type'
 
 export const WebButton = defineComponent({
@@ -8,6 +9,7 @@ export const WebButton = defineComponent({
   inheritAttrs: false,
   emits: ['click', ...Object.values(OPEN_TYPE_EVENTS)],
   setup(_props, { slots, attrs, emit }) {
+    const hovered = ref(false)
     const onClick = (e: Event) => {
       const openType = (attrs as Record<string, unknown>).openType as string | undefined
       if (openType && OPEN_TYPE_EVENTS[openType]) {
@@ -21,8 +23,24 @@ export const WebButton = defineComponent({
       emit('click', e)
     }
     return () => {
-      const { class: cls, openType, ...rest } = attrs as Record<string, unknown>
-      return h('button', { ...rest, class: ['proteus-web-button', (cls as string) || ''], onClick }, slots.default?.())
+      const { class: cls, openType, hoverClass, ...rest } = attrs as Record<string, unknown>
+      // hover-class：小程序按下加类（默认 button-hover 背景变暗）；Web 用 pointer 事件切换
+      const hoverCls = (hoverClass as string) || 'proteus-web-button--hover'
+      const handlers: Record<string, unknown> = {
+        onClick,
+        onPointerdown: () => (hovered.value = true),
+        onPointerup: () => (hovered.value = false),
+        onPointerleave: () => (hovered.value = false),
+      }
+      return h(
+        'button',
+        {
+          ...rest,
+          ...handlers,
+          class: ['proteus-web-button', hovered.value ? hoverCls : '', (cls as string) || ''],
+        },
+        slots.default?.(),
+      )
     }
   },
 })
