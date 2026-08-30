@@ -143,7 +143,7 @@
   padding: 28px 20px 0; /* 微信标题顶部间距较大（对齐 WeUI 32px 附近） */
 }
 .pwu-modal-content {
-  font-size: 15px; /* WeUI 内容 */
+  font-size: 17px; /* ★WeUI modal 文字统一 17px（标题/内容/按钮同字号体系，用户实测） */
   color: #888888; /* ★微信次级文字 */
   text-align: center;
   padding: 14px 20px 28px;
