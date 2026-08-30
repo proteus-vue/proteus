@@ -110,9 +110,10 @@
     --pwu-toast-bg: #404040; /* 暗黑 toast（官方实测 #404040） */
     --pwu-input-border: rgba(255, 255, 255, 0.2);
     --pwu-wash-bg: rgba(255, 255, 255, 0.9);
-    /* switch/slider 暗黑：轨道 rgba(255,255,255,0.1)（官方实测）、打开态绿不变、滑块白不变 */
+    /* switch/slider 暗黑：轨道 rgba(255,255,255,0.1)（官方实测）、打开态绿不变、滑块白不变
+     * ★关闭态边框与轨道同色（官方 form_switch 无边框方案 borderWidth 0——1px 透明边框保持 thumb 定位不变） */
     --pwu-sw-track-off: rgba(255, 255, 255, 0.1);
-    --pwu-sw-border-off: rgba(255, 255, 255, 0.2);
+    --pwu-sw-border-off: rgba(255, 255, 255, 0.1);
     --pwu-sw-track-on: #07c160;
     --pwu-sw-thumb: #ffffff;
     --pwu-sw-thumb-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.2);
