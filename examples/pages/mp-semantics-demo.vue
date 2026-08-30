@@ -72,6 +72,11 @@
           <text class="msd-scroll-text">picker：{{ pickerRange[pickerIdx] }}</text>
         </picker>
       </view>
+      <view class="msd-row">
+        <picker mode="multiSelector" :range="pickerMultiRange" :value="pickerMultiValue" @change="onMultiPickerChange" @columnchange="onMultiColumnChange" class="msd-picker">
+          <text class="msd-scroll-text">multiSelector：{{ pickerMultiValue.join('/') }}</text>
+        </picker>
+      </view>
     </view>
 
     <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
@@ -113,6 +118,20 @@ const pickerIdx = ref(0)
 function onPickerChange(e: any) {
   pickerIdx.value = e?.detail?.value ?? 0
   console.log('[mp-semantics] picker:', e?.detail?.value)
+}
+// picker multiSelector 演示（B2 多列）——省/市/区三列静态（★微信语义：联动由开发者 bindcolumnchange 改 range 驱动）
+const pickerMultiRange = [
+  ['广东省', '浙江省'],
+  ['广州市', '深圳市', '杭州市'],
+  ['天河区', '南山区', '西湖区', '海曙区'],
+]
+const pickerMultiValue = ref([0, 0, 0])
+function onMultiPickerChange(e: any) {
+  pickerMultiValue.value = e?.detail?.value ?? [0, 0, 0]
+  console.log('[mp-semantics] multiPicker:', e?.detail?.value)
+}
+function onMultiColumnChange(e: any) {
+  console.log('[mp-semantics] multiPicker columnchange:', e?.detail?.column, e?.detail?.value)
 }
 function onSwitch(e: any) {
   console.log('[mp-semantics] switch:', e?.detail?.value)
