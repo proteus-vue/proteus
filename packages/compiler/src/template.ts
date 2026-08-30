@@ -322,13 +322,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const attrs: string[] = []
   let hasNavTarget = false
 
-  // scoped CSS（v0.3）：模板元素附加作用域属性（★分派层：经注册表执行，AI 覆盖规则 apply 即生效）
+  // scoped CSS（v0.3，★Skyline 兼容修复）：模板元素附加作用域 **class**（glass-easel 不支持属性选择器）
+  //   选择器侧 .a.data-v-xxx 匹配（class 选择器 Skyline 支持）；微信支持多 class 属性合并（与 :class 共存）
   if (ctx.scopeId) {
     const scopeCtx: RuleContext = { input: { tag: node.tag, scopeId: ctx.scopeId } }
     executeRule('template/scope-attr', scopeCtx)
-    const attr = (scopeCtx.output as string | undefined) ?? ctx.scopeId
-    attrs.push(attr)
-    ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} ${attr}>` })
+    const scopeClass = (scopeCtx.output as string | undefined) ?? ctx.scopeId
+    attrs.push(`class="${scopeClass}"`)
+    ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} class="${scopeClass}">` })
   }
 
   for (const prop of node.props) {

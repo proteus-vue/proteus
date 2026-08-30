@@ -140,14 +140,14 @@ export function transformStyleToWxss(
     trace?.add('style/skyline-unsupported', { before: u, after: '编译期警告（不阻断构建）' })
   }
 
-  // 4. scoped CSS（v0.3）：:deep() 去包装 + 每条规则选择器末尾追加 [scopeId]
-  //    （模板侧元素已附加 scopeId 属性，属性选择器精确匹配；@media/@keyframes 骨架保留）
+  // 4. scoped CSS（v0.3，★Skyline 兼容修复）：:deep() 去包装 + 每条规则选择器末尾追加 .scopeId（class 选择器）
+  //    （glass-easel 不支持属性选择器 [data-v-xxx] → 改 class 方案；模板侧元素已附加 class="data-v-xxx"；@media/@keyframes 骨架保留）
   if (doScope && scopeId) {
     css = css.replace(/:deep\(([^)]*)\)/g, '$1')
     css = css.replace(/([^{}]+)\{/g, (m: string, sel: string) => {
       const s = sel.trim()
       if (s.startsWith('@')) return m
-      return `${s}[${scopeId}] {`
+      return `${s}.${scopeId} {`
     })
   }
   return css
