@@ -45,13 +45,16 @@ export const WebSwitch = defineComponent({
       const on = checked.value
       // translateX 21：thumb 28px 贴 track 内部右缘（left 1 + 21 + 28 = 50 = 内部右缘）——两端贴合无缝隙
       const tx = on ? 21 : 0
+      // 关闭态轨道浅灰（#f2f2f2，对齐微信——非纯白；thumb 纯白 #fff 有对比，滑块可见）
+      const trackBg = on ? '#07c160' : '#f2f2f2'
+      const trackBorder = on ? '#07c160' : '#d0d0d0'
       return h(
         'div',
         {
           class: ['proteus-web-switch', on ? 'is-on' : '', (cls as string) || ''],
           style: {
-            backgroundColor: on ? '#07c160' : '#ffffff',
-            borderColor: on ? '#07c160' : '#d0d0d0',
+            backgroundColor: trackBg,
+            borderColor: trackBorder,
             accentColor: color ? String(color) : undefined,
           },
         },
