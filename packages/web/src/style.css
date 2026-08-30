@@ -304,6 +304,68 @@
   margin-top: 8px; /* ★WeUI action margin-top 8px（--weui-BG-1 间距） */
 }
 
+/* ===== picker 半屏弹层（18-picker-swiper B1 selector，对齐微信）===== */
+.proteus-web-picker-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  z-index: 99992;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+/* toolbar：取消 / 确定（WeUI 蓝），行高 56px（对齐微信 picker toolbar） */
+.pwp-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+.pwp-toolbar-btn {
+  border: none;
+  background: #fff;
+  font-size: 17px;
+  padding: 0;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.9);
+}
+.pwp-toolbar-btn--confirm {
+  color: #576b95; /* WeUI 蓝（确定） */
+  font-weight: 500;
+}
+/* 滚动列：scroll-snap 居中吸附（每项 40px，微信 picker 行高）
+ * position: relative——作为 items 的 offsetParent（否则 offsetTop 相对 fixed sheet 含 toolbar 偏移，实测根因）
+ * padding 上下 80px spacer：让首项/末项也能滚动到中心（微信 picker 滚动列留白） */
+.pwp-col {
+  position: relative;
+  height: 200px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  padding: 80px 0;
+  box-sizing: border-box;
+  background: linear-gradient(to bottom, #fff 0%, rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0) 85%, #fff 100%);
+}
+.pwp-col-item {
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  font-size: 17px;
+  color: rgba(0, 0, 0, 0.55); /* 未选中 FG-1 */
+  scroll-snap-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+.pwp-col-item.is-selected {
+  color: rgba(0, 0, 0, 0.9); /* 选中 FG-0 */
+  font-weight: 600;
+}
+
 /* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
 .proteus-web-textarea {
   box-sizing: border-box;

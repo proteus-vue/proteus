@@ -15,6 +15,7 @@ import { WebSlider } from './components/slider'
 import { WebIcon } from './components/icon'
 import { WebProgress } from './components/progress'
 import { WebNavigator } from './components/navigator'
+import { WebPicker } from './components/picker'
 import { installWxApi } from './wx'
 
 /** 注册小程序语义组件（proteus-*）+ wx API 模拟（wx.* 全局注入）
@@ -34,6 +35,7 @@ export function installWebPlatform(app: App): App {
   app.component('proteus-icon', WebIcon)
   app.component('proteus-progress', WebProgress)
   app.component('proteus-navigator', WebNavigator)
+  app.component('proteus-picker', WebPicker)
   installWxApi()
   return app
 }

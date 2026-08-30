@@ -1,6 +1,6 @@
 # 18 - picker / swiper 复杂组件专项（14-mp-first-semantics 批次 4 收尾）
 
-> 状态：📋 规划中（2026-08-30）
+> 状态：📋 B1 完成（selector 单选），B2 进行中（2026-08-30）
 > 前置：规划 14（MP 优先语义）+ 规划 17（weui-io-alignment 视觉对齐方法论）
 > 目标：把能力矩阵里"待专项"的两个复杂组件（picker/swiper）补齐到 `full`——MP 端原生、Web 端对齐微信视觉与交互
 
@@ -86,7 +86,7 @@ export const WebPicker = defineComponent({
 
 | 批次 | 内容 | 验收 |
 |---|---|---|
-| B1 | picker selector（单选） | Web 弹层 + 滚动选中 + change 载荷；测试 + examples demo；CDP 视觉对齐 |
+| B1 | picker selector（单选） | ✅ 完成：Web 弹层（toolbar 取消/确定 + scroll-snap 滚动列 40px 行 + 选中高亮 FG-0/600）+ spacer padding 首末项可居中；range-key 对象字段；点击项直接选中；change 载荷 { detail: { value: 索引 } }；取消/遮罩不触发；MP 端 NATIVE_TAGS 原生透传；Web 标签改写 MP_TAG_MAP + picker；测试 +6（tests/web-picker.test.ts）；CDP 实测：打开/滚动/确定/取消全通 |
 | B2 | picker multiSelector / time / date / region | 多列联动；区划数据内置（省市区精简版）；测试 |
 | B3 | swiper 基础（指示点/切换/手势/current 受控） | Web 滑动 + 指示点 + change；测试 + demo；CDP 视觉对齐 |
 | B4 | swiper 进阶（autoplay/circular/vertical/display-multiple-items/前后露出） | 全部属性 + 测试 |

@@ -14,6 +14,7 @@ import type { WebSlider } from './components/slider'
 import type { WebIcon } from './components/icon'
 import type { WebProgress } from './components/progress'
 import type { WebNavigator } from './components/navigator'
+import type { WebPicker } from './components/picker'
 
 declare module 'vue' {
   export interface GlobalComponents {
@@ -29,6 +30,7 @@ declare module 'vue' {
     'proteus-icon': typeof WebIcon
     'proteus-progress': typeof WebProgress
     'proteus-navigator': typeof WebNavigator
+    'proteus-picker': typeof WebPicker
   }
 }
 

@@ -56,6 +56,11 @@
       <view class="msd-row">
         <navigator url="/pages/showcase" class="msd-nav">navigator → showcase</navigator>
       </view>
+      <view class="msd-row">
+        <picker :range="pickerRange" @change="onPickerChange" class="msd-picker">
+          <text class="msd-scroll-text">picker：{{ pickerRange[pickerIdx] }}</text>
+        </picker>
+      </view>
     </view>
 
     <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
@@ -91,6 +96,13 @@ function goTop() {
 }
 // 扩展组件演示（批次3）
 const sliderVal = ref(60)
+// picker 演示（18-picker-swiper B1 selector）
+const pickerRange = ['选项一', '选项二', '选项三', '选项四', '选项五', '选项六', '选项七', '选项八', '选项九', '选项十']
+const pickerIdx = ref(0)
+function onPickerChange(e: any) {
+  pickerIdx.value = e?.detail?.value ?? 0
+  console.log('[mp-semantics] picker:', e?.detail?.value)
+}
 function onSwitch(e: any) {
   console.log('[mp-semantics] switch:', e?.detail?.value)
 }

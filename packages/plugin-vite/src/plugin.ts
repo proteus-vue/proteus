@@ -42,6 +42,7 @@ const MP_TAG_MAP: Record<string, string> = {
   icon: 'proteus-icon',
   progress: 'proteus-progress',
   navigator: 'proteus-navigator',
+  picker: 'proteus-picker',
 }
 
 export function defaultScopedPlugin(): Plugin {
@@ -56,7 +57,7 @@ export function defaultScopedPlugin(): Plugin {
         return m.replace(/^<style/, '<style scoped')
       })
       // 小程序语义标签 → proteus-*（<view / > / </view>；边界 \s|/?> 避免误伤 <viewer>；scroll-view 自带连字符也统一改写）
-      out = out.replace(/<(\/)?(view|text|button|input|image|scroll-view|textarea|switch|slider|icon|progress|navigator)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
+      out = out.replace(/<(\/)?(view|text|button|input|image|scroll-view|textarea|switch|slider|icon|progress|navigator|picker)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
         return `<${close ?? ''}${MP_TAG_MAP[tag]}${rest}`
       })
       // ★15-page-scroll-container 批次2（Web 端）：onPageScroll/onReachBottom 桥接——页面滚动 = window 滚动，注入 scroll 监听
