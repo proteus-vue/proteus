@@ -24,6 +24,7 @@
       "@proteus-vue/router/*": ["packages/router/src/*"],
       "@proteus-vue/plugin-vite": ["packages/plugin-vite/src/index.ts"],
       "@proteus-vue/plugin-vite/*": ["packages/plugin-vite/src/*"],
+      "@proteus-vue/web": ["packages/web/src/index.ts"],
       "@proteus-vue/components": ["src/components/index.ts"],
       "@proteus-vue/components/*": ["src/components/*"]
     }
@@ -40,6 +41,8 @@
     "packages/runtime/src/**/*.ts",
     "packages/router/src/**/*.ts",
     "packages/plugin-vite/src/**/*.ts",
+    "packages/web/src/**/*.ts",
+    "packages/web/src/**/*.d.ts",
     "vite.config.ts",
     "proteus.config.ts",
     "scripts/**/*.ts",

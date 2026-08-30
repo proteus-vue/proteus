@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { createWebPinia, defineApp } from '@proteus-vue/runtime'
 import { createApi } from '@proteus-vue/api'
+// ★14-mp-first-semantics：小程序语义 Web 模拟层——注册 view/text/button/input/image 组件 + wx API（以小程序为标准）
+import { installWebPlatform } from '@proteus-vue/web'
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 const api = createApi({ baseURL: 'https://api.example.com' })
@@ -20,6 +22,9 @@ defineApp({
     ctx.isMinimalMode === false && console.log('[lifecycle] coreReady api:', api !== undefined)
   },
   interactive() {
-    createApp(App).use(createWebPinia()).mount('#app')
+    // ★小程序语义组件/API 注入（installWebPlatform：view/text/button/input/image + wx.*）
+    const app = createApp(App)
+    installWebPlatform(app)
+    app.use(createWebPinia()).mount('#app')
   },
 }).run({ launchType: 'cold' })
