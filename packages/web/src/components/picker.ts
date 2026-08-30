@@ -1,11 +1,15 @@
 // packages/web/src/components/picker.ts
 // 小程序 <picker>（18-picker-swiper B1：selector 单选）：Web 模拟
-// 对齐微信：点击触发底部半屏弹层（toolbar 取消/确定 + 滚动列居中选中高亮）
-// 载荷对齐微信 change：{ detail: { value: 索引 } }（小程序 picker change 的 detail.value 是索引）
+// ★对齐 weui.io/#form_select_primary 官方单列选择器（规划 17 方法论 CDP 实测）：
+//   弹层 = 左上关闭按钮 + 居中标题（15px/500）；滚轮区 280px + 56px 行；
+//   选中高亮 = indicator 灰条（top 112px / #f7f7f7 / 左右 8px / 四角 8px）+ 上下白色渐隐遮罩（112px）；
+//   内容定位 = translate3d 平移（非 scroll-snap），滚动/点击后吸附最近项
+// 载荷对齐微信 change：{ detail: { value: 索引 } }
 import { defineComponent, h } from 'vue'
 
-const ROW_H = 40 // 每项高度（微信 picker 行高 40px 附近）
-const COL_H = 200 // 滚动列可视高度（4-5 项露出）
+const ITEM_H = 56 // 官方 .weui-picker__item height
+const BD_H = 280 // 官方 .weui-picker__bd height
+const INDICATOR_TOP = (BD_H - ITEM_H) / 2 // 112（官方 top）
 
 /** 取选项显示文本：range 元素为对象时按 range-key 取值 */
 function itemLabel(item: unknown, rangeKey?: string): string {
@@ -26,103 +30,135 @@ export const WebPicker = defineComponent({
     const openSelector = () => {
       const range = ((attrs as Record<string, unknown>).range as unknown[] | undefined) ?? []
       const rangeKey = (attrs as Record<string, unknown>).rangeKey ? String((attrs as Record<string, unknown>).rangeKey) : undefined
-      const initValue = Number((attrs as Record<string, unknown>).value ?? 0)
+      const initValue = Math.min(Math.max(Number((attrs as Record<string, unknown>).value ?? 0), 0), range.length - 1)
 
       const mask = document.createElement('div')
       mask.className = 'proteus-web-ui-mask'
       const sheet = document.createElement('div')
       sheet.className = 'proteus-web-picker-sheet'
 
-      // toolbar：取消（左）/ 确定（右，WeUI 蓝）
-      const toolbar = document.createElement('div')
-      toolbar.className = 'pwp-toolbar'
-      const cancelBtn = document.createElement('button')
-      cancelBtn.className = 'pwp-toolbar-btn'
-      cancelBtn.textContent = '取消'
-      const confirmBtn = document.createElement('button')
-      confirmBtn.className = 'pwp-toolbar-btn pwp-toolbar-btn--confirm'
-      confirmBtn.textContent = '确定'
-      toolbar.append(cancelBtn, confirmBtn)
+      // 弹层头：左上关闭按钮（×）+ 居中标题（官方 weui-half-screen-dialog__hd）
+      const hd = document.createElement('div')
+      hd.className = 'pwp-hd'
+      const closeBtn = document.createElement('button')
+      closeBtn.className = 'pwp-close'
+      closeBtn.innerHTML = '<svg class="pwp-close-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+      const title = document.createElement('strong')
+      title.className = 'pwp-title'
+      title.textContent = String((attrs as Record<string, unknown>).title ?? '选择')
+      hd.append(closeBtn, title)
 
-      // 滚动列（scroll-snap 居中吸附）
-      const col = document.createElement('div')
-      col.className = 'pwp-col'
+      // 滚轮区：mask（渐隐遮罩）+ indicator（高亮条）+ content（translate3d 平移）
+      const bd = document.createElement('div')
+      bd.className = 'pwp-bd'
+      const group = document.createElement('div')
+      group.className = 'pwp-group'
+      const maskEl = document.createElement('div')
+      maskEl.className = 'pwp-picker-mask'
+      const indicator = document.createElement('div')
+      indicator.className = 'pwp-indicator'
+      const content = document.createElement('div')
+      content.className = 'pwp-content'
       range.forEach((item, i) => {
         const opt = document.createElement('div')
-        opt.className = 'pwp-col-item'
+        opt.className = 'pwp-item'
         opt.textContent = itemLabel(item, rangeKey)
         opt.dataset.i = String(i)
-        col.appendChild(opt)
+        content.appendChild(opt)
       })
-
-      sheet.append(toolbar, col)
+      group.append(maskEl, indicator, content)
+      bd.append(group)
+      sheet.append(hd, bd)
       document.body.append(mask, sheet)
 
-      // 初始定位到 value 索引（scroll-snap 居中）
-      const initScroll = () => {
-        const target = col.children[initValue] as HTMLElement | undefined
-        if (target) col.scrollTop = target.offsetTop - (COL_H - ROW_H) / 2
-      }
-      initScroll()
-
-      // 选中高亮：滚动后取最接近列中心的行
-      const highlight = () => {
-        const center = col.scrollTop + COL_H / 2
-        let best = initValue
-        let bestDist = Infinity
-        for (let i = 0; i < col.children.length; i++) {
-          const el = col.children[i] as HTMLElement
-          const mid = el.offsetTop + ROW_H / 2
-          const d = Math.abs(mid - center)
-          if (d < bestDist) {
-            bestDist = d
-            best = i
-          }
-        }
-        for (let i = 0; i < col.children.length; i++) {
-          ;(col.children[i] as HTMLElement).classList.toggle('is-selected', i === best)
-        }
-        return best
-      }
-      highlight()
-      col.addEventListener('scroll', () => highlight(), { passive: true })
-      // scroll-snap 吸附是异步的——滚轮停止后补一次 highlight（对齐选中）
+      // 内容平移量：选中项顶部对齐 indicator（offsetY = INDICATOR_TOP - sel * ITEM_H）
+      let offsetY = INDICATOR_TOP - initValue * ITEM_H
+      let selected = initValue
+      let dragging = false
+      let startY = 0
+      let startOffset = 0
       let snapTimer = 0
-      col.addEventListener(
-        'scrollend',
-        () => highlight(),
-        { passive: true } as AddEventListenerOptions,
-      )
-      col.addEventListener(
-        'scroll',
-        () => {
+
+      const render = () => {
+        content.style.transform = `translate3d(0, ${offsetY}px, 0)`
+        content.querySelectorAll<HTMLElement>('.pwp-item').forEach((el, i) => {
+          el.classList.toggle('is-selected', i === selected)
+        })
+      }
+      const clampOffset = (v: number): number => {
+        const min = INDICATOR_TOP - (range.length - 1) * ITEM_H // 最后一项
+        return Math.min(INDICATOR_TOP, Math.max(min, v))
+      }
+      /** 吸附最近项（滚轮/拖拽松手后） */
+      const snap = () => {
+        const raw = Math.round((INDICATOR_TOP - offsetY) / ITEM_H)
+        selected = Math.min(Math.max(raw, 0), range.length - 1)
+        offsetY = INDICATOR_TOP - selected * ITEM_H
+        render()
+      }
+      /** 选中某索引（点击项 / 外部 value） */
+      const selectIndex = (i: number) => {
+        selected = Math.min(Math.max(i, 0), range.length - 1)
+        offsetY = INDICATOR_TOP - selected * ITEM_H
+        render()
+      }
+
+      // 滚轮：累加位移 + 防抖吸附
+      group.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault()
+          offsetY = clampOffset(offsetY - e.deltaY)
+          selected = Math.min(Math.max(Math.round((INDICATOR_TOP - offsetY) / ITEM_H), 0), range.length - 1)
+          render()
           window.clearTimeout(snapTimer)
-          snapTimer = window.setTimeout(() => highlight(), 120)
+          snapTimer = window.setTimeout(snap, 120)
         },
-        { passive: true },
+        { passive: false },
       )
-      // 点击某项直接选中并吸附居中
-      col.querySelectorAll('.pwp-col-item').forEach((el) => {
+
+      // 触摸/鼠标拖拽（对齐微信滚轮手感）
+      group.addEventListener('pointerdown', (e) => {
+        dragging = true
+        startY = e.clientY
+        startOffset = offsetY
+        ;(group as HTMLElement).setPointerCapture(e.pointerId)
+      })
+      group.addEventListener('pointermove', (e) => {
+        if (!dragging) return
+        offsetY = clampOffset(startOffset + (e.clientY - startY))
+        selected = Math.min(Math.max(Math.round((INDICATOR_TOP - offsetY) / ITEM_H), 0), range.length - 1)
+        render()
+      })
+      const endDrag = () => {
+        if (!dragging) return
+        dragging = false
+        snap()
+      }
+      group.addEventListener('pointerup', endDrag)
+      group.addEventListener('pointercancel', endDrag)
+
+      // 点击某项：选中 + 发 change + 关闭（weui 网页交互：点选即完成）
+      content.querySelectorAll('.pwp-item').forEach((el) => {
         el.addEventListener('click', () => {
-          const idx = Number((el as HTMLElement).dataset.i)
-          col.scrollTop = (el as HTMLElement).offsetTop - (COL_H - ROW_H) / 2
-          highlight()
+          selectIndex(Number((el as HTMLElement).dataset.i))
+          const idx = selected
+          close()
+          // ★载荷对齐微信 picker change：{ detail: { value: 索引 } }
+          emit('change', { detail: { value: idx } })
         })
       })
+
+      // 初始渲染（选中 initValue）
+      selectIndex(initValue)
 
       const close = (): void => {
         mask.remove()
         sheet.remove()
       }
-      cancelBtn.addEventListener('click', () => {
+      closeBtn.addEventListener('click', () => {
         close()
         emit('cancel', {})
-      })
-      confirmBtn.addEventListener('click', () => {
-        const idx = highlight()
-        close()
-        // ★载荷对齐微信 picker change：{ detail: { value: 索引 } }
-        emit('change', { detail: { value: idx } })
       })
       mask.addEventListener('click', () => {
         close()
@@ -136,7 +172,7 @@ export const WebPicker = defineComponent({
     }
 
     return () => {
-      const { class: cls, mode: _m, range: _r, rangeKey: _rk, value: _v, ...rest } = attrs as Record<string, unknown>
+      const { class: cls, mode: _m, range: _r, rangeKey: _rk, value: _v, title: _t, ...rest } = attrs as Record<string, unknown>
       return h(
         'div',
         {

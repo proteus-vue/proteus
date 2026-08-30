@@ -304,7 +304,11 @@
   margin-top: 8px; /* ★WeUI action margin-top 8px（--weui-BG-1 间距） */
 }
 
-/* ===== picker 半屏弹层（18-picker-swiper B1 selector，对齐微信）===== */
+/* ===== picker 半屏弹层（18-picker-swiper B1 selector）=====
+ * ★对齐 weui.io/#form_select_primary 官方（规划 17 方法论 CDP 实测）：
+ *   弹层 = 左上关闭按钮（×）+ 居中标题 15px/500；滚轮区 280px + 56px 行；
+ *   选中高亮 = indicator 灰条（top 112px / #f7f7f7 / 左右 8px / 四角 8px 圆角）+ 上下白色渐隐遮罩；
+ *   内容定位 = translate3d 平移（.weui-picker__content），滚动/拖拽后吸附最近项 */
 .proteus-web-picker-sheet {
   position: fixed;
   left: 0;
@@ -315,55 +319,96 @@
   border-radius: 12px 12px 0 0;
   overflow: hidden;
 }
-/* toolbar：取消 / 确定（WeUI 蓝），行高 56px（对齐微信 picker toolbar） */
-.pwp-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 56px;
-  padding: 0 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-.pwp-toolbar-btn {
-  border: none;
-  background: #fff;
-  font-size: 17px;
-  padding: 0;
-  cursor: pointer;
-  color: rgba(0, 0, 0, 0.9);
-}
-.pwp-toolbar-btn--confirm {
-  color: #576b95; /* WeUI 蓝（确定） */
-  font-weight: 500;
-}
-/* 滚动列：scroll-snap 居中吸附（每项 40px，微信 picker 行高）
- * position: relative——作为 items 的 offsetParent（否则 offsetTop 相对 fixed sheet 含 toolbar 偏移，实测根因）
- * padding 上下 80px spacer：让首项/末项也能滚动到中心（微信 picker 滚动列留白） */
-.pwp-col {
+/* 弹层头（官方 weui-half-screen-dialog__hd：左上关闭 + 居中标题 15px/500） */
+.pwp-hd {
   position: relative;
-  height: 200px;
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  padding: 80px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px; /* 官方实测 hd 高 64px */
+  padding: 0 24px;
   box-sizing: border-box;
-  background: linear-gradient(to bottom, #fff 0%, rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0) 85%, #fff 100%);
 }
-.pwp-col-item {
-  height: 40px;
-  line-height: 40px;
+.pwp-close {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  padding: 8px;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
+  display: flex;
+  align-items: center;
+}
+.pwp-title {
+  font-size: 15px; /* 官方 half-screen-dialog__title */
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.9);
+  text-align: center;
+}
+/* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden） */
+.pwp-bd {
+  display: flex;
+  position: relative;
+  height: 280px;
+  overflow: hidden;
+  background: #fff;
+}
+.pwp-group {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  font-size: 17px;
+  overflow: hidden;
+  touch-action: none; /* 拖拽不触发页面滚动 */
+}
+/* 上下白色渐隐遮罩（官方 weui-picker__mask：linear-gradient 顶部+底部 112px） */
+.pwp-picker-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)), linear-gradient(0deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6));
+  background-position: center top, center bottom;
+  background-size: 100% 112px;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+/* 选中高亮条（官方 weui-picker__indicator：top 112px / h 56px / #f7f7f7 / 左右 8px / 四角 8px 圆角） */
+.pwp-indicator {
+  position: absolute;
+  top: 112px;
+  left: 8px;
+  right: 8px;
+  height: 56px;
+  z-index: 1;
+  background: #f7f7f7; /* --weui-BG-3 */
+  border-radius: 8px;
+  pointer-events: none;
+}
+/* 内容轨道（官方 weui-picker__content：translate3d 平移） */
+.pwp-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 2;
+}
+.pwp-item {
+  height: 56px; /* 官方 weui-picker__item */
+  line-height: 56px;
   text-align: center;
   font-size: 17px;
-  color: rgba(0, 0, 0, 0.55); /* 未选中 FG-1 */
-  scroll-snap-align: center;
-  cursor: pointer;
+  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
   box-sizing: border-box;
-}
-.pwp-col-item.is-selected {
-  color: rgba(0, 0, 0, 0.9); /* 选中 FG-0 */
-  font-weight: 600;
 }
 
 /* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
