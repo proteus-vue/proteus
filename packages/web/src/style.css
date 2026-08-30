@@ -214,27 +214,27 @@
   resize: none;
 }
 .proteus-web-switch {
+  position: relative;
+  display: inline-block;
   width: 52px;
   height: 32px;
-  appearance: none;
-  -webkit-appearance: none;
   border-radius: 16px;
   box-sizing: border-box;
-  /* ★对齐微信 switch 静止态：关闭=白色背景+灰边框；打开=微信绿背景+绿边框（iOS 风格，非渐变底色） */
-  background: #ffffff;
+  /* ★对齐微信 switch 静止态：关闭=白色背景+灰边框；打开=微信绿背景+绿边框（iOS 风格） */
+  background-color: #ffffff;
   border: 1px solid #d0d0d0;
-  position: relative;
   cursor: pointer;
-  /* 过渡近似微信的白色扩散/收缩（iOS UISwitch：thumb 滑动 + track 颜色过渡） */
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.28s ease, border-color 0.28s ease;
+  vertical-align: middle;
+}
+.proteus-web-switch input {
+  position: absolute;
+  inset: 0;
   margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
-.proteus-web-switch:checked {
-  background: #07c160;
-  border-color: #07c160;
-}
-.proteus-web-switch::before {
-  content: '';
+.pws-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -243,11 +243,10 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease;
+  /* ★过渡对齐微信（iOS UISwitch）：放大（白色扩散）→ 滑动 + 底色过渡 → 缩回 */
+  transition: transform 0.28s ease;
   z-index: 1;
-}
-.proteus-web-switch:checked::before {
-  transform: translateX(20px);
+  pointer-events: none;
 }
 .proteus-web-slider {
   width: 100%;
