@@ -502,15 +502,15 @@ export const TEMPLATE_RULES: TransformRule[] = [
     id: 'template/scope-attr',
     phase: 'template',
     status: 'implemented',
-    title: 'scoped CSS：元素附加作用域 class（合并进单 class 属性）',
-    description: '<style scoped> 存在时，模板元素附加 data-v-xxx 作用域 class，与用户静态 class/:class 合并为**单个 class 属性**发射（scope class 在前）；样式侧选择器 .a.data-v-xxx 匹配',
-    why: '小程序无 scoped CSS 原生机制，编译期加 class + class 选择器等价（v0.3，决策 #77；★2026-08 Skyline 兼容修复：属性选择器 [data-v] 在 glass-easel 下不匹配 → 改 class）；★真机实测：WXML 重复 class 属性只保留其一——独立 scope class 属性会丢用户 class，scoped 复合选择器失配 → 样式全丢，必须单属性合并',
+    title: 'scoped CSS：用户 class 与 scopeId 拼接为单一类（★2026-08 真机重构：类名后缀）',
+    description: '<style scoped> 存在时，模板元素 class 值 token 追加 -scopeId（.box → box-data-v-xxx）；:class 字符串字面量/对象键同样后缀（动态变量类名编译期警告）；样式侧选择器 .box-data-v-xxx 匹配',
+    why: '小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径',
     when: 'SFC 含 <style scoped>（compileVueSfc 生成 scopeId 并注入）时',
-    example: { before: '<div class="card">…</div>', after: '<view class="data-v-abc123 card">…</view>' },
+    example: { before: '<div class="card">…</div>', after: '<view class="card-data-v-abc123">…</view>' },
     verify: 'tests/mp-transform.test.ts scoped CSS 用例',
-    source: 'packages/compiler/src/template.ts → serializeElement（scopeId 分支）',
-    decision: '#77（v0.3 scoped CSS）',
-    // ★分派层示范：输入 { tag, scopeId } → 输出作用域属性片段（AI 覆盖可改属性名/注入位置）
+    source: 'packages/compiler/src/template.ts → serializeElement（scopeSuffix 分支）',
+    decision: '#77（v0.3 scoped CSS）+ 2026-08 Skyline 真机重构（类名后缀）',
+    // ★分派层示范：输入 { tag, scopeId } → 输出作用域后缀片段（AI 覆盖可改后缀名）
     apply: (ctx: RuleContext) => {
       const input = ctx.input as { tag: string; scopeId: string }
       ctx.output = input.scopeId

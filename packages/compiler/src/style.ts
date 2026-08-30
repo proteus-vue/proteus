@@ -159,15 +159,12 @@ export function transformStyleToWxss(
     trace?.add('style/skyline-unsupported', { before: u, after: '编译期警告（不阻断构建）' })
   }
 
-  // 4. scoped CSS（v0.3，★Skyline 兼容修复）：:deep() 去包装 + 每条规则选择器末尾追加 .scopeId（class 选择器）
-  //    （glass-easel 不支持属性选择器 [data-v-xxx] → 改 class 方案；模板侧元素已附加 class="data-v-xxx"；@media 骨架保留）
-  //    ★2026-08 真机实测修复①：@keyframes 的 from/to/百分比 帧选择器不追加（from.data-v-xxx 非法语法，Skyline 动画失效）
-  //    ★2026-08 真机实测修复②：伪元素/伪类选择器——.scopeId 插到伪选择器**前**（.a.data-v-x::after 而非 .a::after.data-v-x，
-  //    后者伪元素后出现选择器非法，双端忽略整条规则；p-button::after 清除微信原生边框即因此失效）
-  //    ★2026-08 修复③：逗号选择器列表逐条作用域化（.a, .b → .a.data-v-x, .b.data-v-x；整体追加只作用域化最后一条，
-  //    .a 泄漏到全局——历史隐藏 bug）
+  // 4. scoped CSS（v0.3 → ★2026-08 真机重构）：选择器类名后缀拼接——scopeId 并入类名（.box → .box-data-v-xxx），单一类选择器
+  //    （Skyline glass-easel **不支持复合类选择器 .a.b**——真机实测：组件自己 wxss 匹配自己根节点都失效（p-button padding 消失）且无警告；
+  //    属性选择器 [data-v] 也不支持（f48460c 改 class 复合仍不兼容）→ 类名后缀是唯一 Skyline 确定支持的路径（类选择器 ✓））
+  //    ★修复①②③（0b16523）：@keyframes 帧不处理 / 伪类伪元素后缀在类名后（.a-data-v-x:hover）/ 逗号列表逐条 / :deep 去包装后统一后缀
   if (doScope && scopeId) {
-    css = css.replace(/:deep\(([^)]*)\)/g, '$1')
+    css = css.replace(/:deep\(([^)]*)\)/g, '$1') // 去包装（后缀由下方统一处理）
     css = css.replace(/([^{}]+)\{/g, (m: string, sel: string) => {
       const s = sel.trim()
       if (s.startsWith('@')) return m
@@ -175,15 +172,29 @@ export function transformStyleToWxss(
       const scoped = parts
         .map((p) => {
           const t = p.trim()
-          if (/^(from|to|\d+(?:\.\d+)?%)$/i.test(t)) return t
-          // ★伪元素/伪类：用 [\s\S]*? 允许跨换行——选择器前有注释（/* .. */\n.a::after）时 .*? 无法跨 \n 到达末尾伪选择器（真机复现：p-button 注释后 ::after 未走伪元素分支）
-          const pseudo = t.match(/^([\s\S]*?)(::?[\w-]+(?:\([^)]*\))?)$/)
-          if (pseudo && pseudo[1].trim()) return `${pseudo[1].trim()}.${scopeId}${pseudo[2]}`
-          return `${t}.${scopeId}`
+          if (/^(from|to|\d+(?:\.\d+)?%)$/i.test(t)) return t // @keyframes 帧选择器不处理
+          return suffixClassTokens(t, scopeId)
         })
         .join(', ')
       return `${scoped} {`
     })
   }
   return css
+}
+
+/** ★scoped 类名后缀拼接：选择器内每个类 token 追加 -scopeId（单类选择器，Skyline ✓）
+ * - .box → .box-data-v-x；.box:hover → .box-data-v-x:hover（伪类不后缀）
+ * - .box .title → .box-data-v-x .title-data-v-x（每个类 token）
+ * - 属性选择器内容屏蔽（[..] 内可能含 .）；已带 scopeId 后缀的不重复
+ * - 标签选择器（无 .）不处理（依赖微信样式隔离 ownerSpace） */
+function suffixClassTokens(sel: string, scopeId: string): string {
+  const attrs: string[] = []
+  const masked = sel.replace(/\[[^\]]*\]/g, (m) => {
+    attrs.push(m)
+    return `\u0000${attrs.length - 1}\u0000`
+  })
+  const out = masked.replace(/\.(-?[_a-zA-Z][-_a-zA-Z0-9]*)/g, (m, name: string) =>
+    name.endsWith(`-${scopeId}`) ? m : `.${name}-${scopeId}`,
+  )
+  return out.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => attrs[Number(i)])
 }

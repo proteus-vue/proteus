@@ -85,14 +85,16 @@ describe('computed 读路径（v0.3）', () => {
 describe('scoped CSS（v0.3）', () => {
   const SFC = '<template>\n  <div class="card">\n    <p class="title">hi</p>\n  </div>\n</template>\n<style scoped>\n.card { padding: 8px; }\n.card .title { color: red; }\n</style>'
 
-  it('模板元素附加作用域 class + 选择器追加 .data-v-xxx（Skyline 兼容：类选择器 + 单 class 属性）', () => {
+  it('★类名后缀拼接：用户 class 与 scopeId 拼接为单一类（.card → .card-data-v-x，Skyline 单类选择器 ✓）', () => {
     const result = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
     expect(result.wxml).toContain('data-v-')
-    expect(result.wxml).toContain('class="data-v-') // ★scope class 与用户 class 合并为单个 class 属性（scope class 在前）
-    // ★2026-08 真机实测：WXML 重复 class 属性只保留其一 → 用户 class 丢失 → scoped 复合选择器失配 → 样式全丢；
-    //   锁定不变量：每个元素至多一个 class 属性
+    expect(result.wxml).toContain('class="card-data-v-') // 用户类名 + '-' + scopeId（不再并列 scope class——复合选择器 Skyline 不匹配）
+    expect(result.wxml).toContain('class="proteus-p-data-v-') // 语义基础类同样后缀
+    expect(result.wxml).toContain('title-data-v-')
+    // 单 class 属性不变量（WXML 重复 class 属性只保留其一）
     expect(result.wxml).not.toMatch(/class="[^"]*"\s+class=/)
-    expect(result.wxss).toContain('.card.data-v-')
+    expect(result.wxss).toContain('.card-data-v-')
+    expect(result.wxss).not.toContain('.card.data-v-') // 复合选择器方案已废弃（Skyline 不匹配）
     expect(result.wxss).not.toContain('.card[data-v-') // 属性选择器 Skyline 不支持
   })
 
@@ -107,35 +109,35 @@ describe('scoped CSS（v0.3）', () => {
     expect(result.wxss).not.toContain('from.data-v-')
     expect(result.wxss).not.toContain('to.data-v-')
     expect(result.wxss).not.toContain('50%.data-v-')
-    expect(result.wxss).toContain('.a.data-v-')
+    expect(result.wxss).toContain('.a-data-v-') // 类名后缀拼接（单类选择器）
   })
 
-  it('伪元素/伪类选择器：scope class 插到伪选择器前（.a.data-v-x::after 而非 .a::after.data-v-x）', () => {
+  it('伪元素/伪类选择器：类名后缀后接伪选择器（.a-data-v-x::after / .a-data-v-x:hover）', () => {
     const result = compileVueSfc(
       '<template><div class="a">x</div></template>\n<style scoped>\n.a::after { border: none; }\n.a:hover { opacity: 0.8; }\n</style>',
       { filename: 'pseudo-demo.vue' },
     )
-    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+::after/)
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+::after/)
     expect(result.wxss).not.toContain('::after.data-v-')
-    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+:hover/)
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+:hover/)
     expect(result.wxss).not.toContain(':hover.data-v-')
   })
 
-  it('注释 + 换行 + 伪元素（.*? 跨 \\n 失效回归——p-button 真机复现）：.scopeId 仍插到伪选择器前', () => {
+  it('注释 + 换行 + 伪元素（类名后缀不受注释影响）', () => {
     const result = compileVueSfc(
       '<template><div class="a">x</div></template>\n<style scoped>\n/* 说明：清除原生 ::after 边框线 */\n.a::after { border: none; }\n</style>',
       { filename: 'pseudo-comment.vue' },
     )
-    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+::after/)
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+::after/)
     expect(result.wxss).not.toContain('::after.data-v-')
   })
 
-  it('逗号选择器列表逐条作用域化（.a, .b → 各自追加，无泄漏）', () => {
+  it('逗号选择器列表逐条后缀（.a, .b → .a-data-v-x, .b-data-v-x，无泄漏）', () => {
     const result = compileVueSfc(
       '<template><div class="a">x</div><div class="b">y</div></template>\n<style scoped>\n.a, .b { color: red; }\n</style>',
       { filename: 'comma-demo.vue' },
     )
-    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+, \.b\.data-v-[a-f0-9]+/)
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+, \.b-data-v-[a-f0-9]+/)
     expect(result.wxss).not.toContain('.a, .b.data-v-')
   })
 
@@ -148,9 +150,9 @@ describe('scoped CSS（v0.3）', () => {
     expect(idA).toBe(idB)
   })
 
-  it(':deep() 去包装（内容保留）', () => {
+  it(':deep() 去包装（内容保留 + 后缀）', () => {
     const result = compileVueSfc('<template><div class="a">x</div></template>\n<style scoped>\n.a :deep(.b) { color: red; }\n</style>', { filename: 'deep-demo.vue' })
-    expect(result.wxss).toContain('.a .b.data-v-') // :deep 去包装 + scoped class 追加
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+ \.b-data-v-[a-f0-9]+/) // :deep 去包装 + 类名后缀
     expect(result.wxss).not.toContain(':deep')
   })
 
@@ -963,12 +965,13 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
       '<script setup>const on = ref(true)</script>\n<template><p-view class="box" :class="{ on: on }">x</p-view></template>\n<style scoped>.box { padding: 8px; }</style>',
       { filename: 'pages/use-pview.vue' },
     )
-    expect(wxml).toMatch(/root-class="data-v-[a-f0-9]+ box /)
-    expect(wxml).toContain('{{(on?\'on \':\'\')}}')
+    // 组件标签 class 后缀拼接后透传（root-class="box-data-v-x {{...}}"）
+    expect(wxml).toMatch(/root-class="box-data-v-[a-f0-9]+ /)
+    expect(wxml).toContain('{{(on?\'on-data-v-')
     // 组件标签不再输出独立 class 属性（避免 host 节点样式双重应用）
     expect(wxml).not.toMatch(/<p-view[^>]*\sclass="/)
-    // 原生标签不受影响
-    expect(wxml).toContain('class="data-v-')
+    // scoped 后缀特征（类名拼接 -data-v-）
+    expect(wxml).toContain('-data-v-')
   })
 
   it('组件模式：根节点 class 追加 {{rootClass}} + js 注入 rootClass property', () => {
@@ -976,7 +979,8 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
       '<template><view class="p-view"><slot /></view></template>\n<style scoped>.p-view { display: flex; }</style>',
       { filename: 'proteus/p-view/index', isComponent: true },
     )
-    expect(wxml).toMatch(/<view[^>]*class="data-v-[a-f0-9]+ p-view \{\{rootClass\}\}"/)
+    // 组件根节点：组件自身类名后缀 + {{rootClass}}（rootClass 由页面 root-class 传入，已后缀）
+    expect(wxml).toMatch(/<view[^>]*class="p-view-data-v-[a-f0-9]+ \{\{rootClass\}\}"/)
     expect(js).toContain('rootClass: { type: String, value: "" }')
     // 非组件模式（页面）不注入 rootClass property
     const page = compileVueSfc('<template><view class="a">x</view></template>', { filename: 'pages/x.vue' })

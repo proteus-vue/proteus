@@ -27,6 +27,21 @@ function camelToKebab(s: string): string {
   return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
 }
 
+/** ★scoped 类名拼接（2026-08 真机重构）：class 值 token 追加 -scopeId（'.box → box-data-v-x' 单一类，Skyline ✓；已带后缀不重复） */
+function suffixClassValue(value: string, scopeId: string): string {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((n) => (n.endsWith(`-${scopeId}`) ? n : `${n}-${scopeId}`))
+    .join(' ')
+}
+
+/** 单个类名追加 scope 后缀（'fade-leave' → 'fade-leave-data-v-x'；scopeId 为空时原样） */
+function suffixClassName(name: string, scopeId: string): string {
+  if (!scopeId) return name
+  return name.endsWith(`-${scopeId}`) ? name : `${name}-${scopeId}`
+}
+
 /** 小程序原生基础标签（映射后的标签在此集合内 → 非组件；否则视为自定义组件标签，class 走 root-class 透传） */
 const NATIVE_TAGS = new Set([
   'view', 'scroll-view', 'swiper', 'swiper-item', 'movable-view', 'movable-area', 'cover-view', 'cover-image',
@@ -74,15 +89,22 @@ function cleanHandler(exp: string, warnings: string[]): string {
   return t
 }
 
-/** :class 绑定：对象语法 → 三元拼接，其余 → {{expr}} */
-function formatClassBinding(exp: string, warnings: string[]): string {
+/** :class 绑定：对象语法 → 三元拼接，其余 → {{expr}}
+ * ★2026-08 scoped 后缀：scopeId 非空时字符串字面量/对象键后缀（'box' → 'box-data-v-x'）；动态变量类名无法静态后缀 → 编译期警告 */
+function formatClassBinding(exp: string, warnings: string[], scopeId = ''): string {
   const t = exp.trim()
+  const sfx = (name: string): string => (scopeId && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name)
+  // 表达式内字符串字面量后缀（三元值 'a'/'b' 等）
+  const sfxExpr = (e: string): string => (scopeId ? e.replace(/'([^']*)'/g, (_m, s: string) => `'${sfx(s)}'`) : e)
+  const dynWarn = (name: string): void => {
+    if (scopeId) warnings.push(`:class 动态类名 "${name}" 无法 scoped 后缀（MP 单类选择器机制），该动态类在小程序无 scoped 样式匹配（Web 端正常）`)
+  }
   if (t.startsWith('{')) {
     // 对象语法 → 三元拼接
     const parts: string[] = []
     const re = /(['"]?)([\w-]+)\1\s*:\s*([^,}]+)/g
     let m: RegExpExecArray | null
-    while ((m = re.exec(t))) parts.push(`(${m[3].trim()}?'${m[2]} ':'')`)
+    while ((m = re.exec(t))) parts.push(`(${m[3].trim()}?'${sfx(m[2])} ':'')`)
     if (parts.length) return `{{${parts.join('+')}}}`
   }
   if (t.startsWith('[')) {
@@ -95,7 +117,7 @@ function formatClassBinding(exp: string, warnings: string[]): string {
       if (!i) continue
       const str = i.match(/^(['"])([^'"]*)\1$/)
       if (str) {
-        parts.push(`'${str[2]} '`)
+        parts.push(`'${sfx(str[2])} '`)
         continue
       }
       if (i.startsWith('{')) {
@@ -103,28 +125,30 @@ function formatClassBinding(exp: string, warnings: string[]): string {
         // 对象简写 { on } → 键即值（vue-compat Batch C）
         const shorthand = inner.trim().match(/^([\w$]+)$/)
         if (shorthand) {
-          parts.push(`(${shorthand[1]}?'${shorthand[1]} ':'')`)
+          parts.push(`(${shorthand[1]}?'${sfx(shorthand[1])} ':'')`)
           continue
         }
         const re = /(['"]?)([\w-]+)\1\s*:\s*([^,}]+)/g
         let m: RegExpExecArray | null
         let ok = false
         while ((m = re.exec(inner))) {
-          parts.push(`(${m[3].trim()}?'${m[2]} ':'')`)
+          parts.push(`(${m[3].trim()}?'${sfx(m[2])} ':'')`)
           ok = true
         }
         if (ok) continue
       }
       if (/^[\w$.]+(?:\s*\?\s*[^:]+:.+)?$/.test(i)) {
         // 简单变量 / 三元：值即类名（括号包裹避免三元嵌套优先级歧义）
-        parts.push(`((${i})?(${i})+' ':'')`)
+        if (scopeId && /^[\w$.]+$/.test(i)) dynWarn(i)
+        parts.push(`((${sfxExpr(i)})?(${sfxExpr(i)})+' ':'')`)
         continue
       }
       warnings.push(`:class 数组项 "${i}" 暂不支持（MVP：仅字符串/对象/简单变量/三元），已跳过`)
     }
     if (parts.length) return `{{${parts.join('+')}}}`
   }
-  return `{{${t}}}`
+  if (/^[\w$.]+$/.test(t)) dynWarn(t)
+  return `{{${sfxExpr(t)}}}`
 }
 
 /** 按顶层逗号分割（跳过字符串 / 括号内逗号） */
@@ -344,6 +368,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     scopeClass = (scopeCtx.output as string | undefined) ?? ctx.scopeId
     ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} class="${scopeClass}">` })
   }
+  // ★scoped 类名拼接后缀（2026-08 真机重构）：scopeClass 作为类名后缀（.box → .box-data-v-x 单类选择器），不再附加独立 scope class
+  const scopeSuffix = scopeClass || ''
   // class 源缓冲：静态 class / :class 绑定（发射统一合并为单个 class 属性，见本函数末尾）
   let staticClass: string | undefined
   let bindingClass: string | undefined
@@ -497,7 +523,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         if (arg === 'class') {
           if (ctx.disabled.has('directive/v-bind-class')) break
-          bindingClass = formatClassBinding(exp, ctx.warnings)
+          bindingClass = formatClassBinding(exp, ctx.warnings, scopeSuffix)
           ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: bindingClass })
         } else if (arg === 'style') {
           if (ctx.disabled.has('directive/v-bind-style')) break
@@ -564,11 +590,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     ctx.transitionClassName = undefined
     const tctx = ctx.transitionCtx
     ctx.transitionCtx = undefined // 首个元素消费后清空（多子元素场景后续元素不受影响）
-    if (tctx && tctx.ref !== undefined) transitionLeaveExpr = `{{__tl${tctx.index} ? '${transitionAnimCls}-leave' : ''}}`
+    if (tctx && tctx.ref !== undefined) {
+      transitionLeaveExpr = `{{__tl${tctx.index} ? '${suffixClassName(`${transitionAnimCls}-leave`, scopeSuffix)}' : ''}}`
+    }
   }
-  // ★统一 class 发射（2026-08 真机实测修复）：scope class + 语义基础类 + 静态 class + :class 绑定 + transition 动画类
-  //   合并为**单个** class 属性（WXML 不支持重复 class 属性——多 class 属性只保留其一，用户 class 丢失 → scoped 复合选择器失配 → 样式全丢）
-  const classStatic = [transitionAnimCls, scopeClass, effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c))
+  // ★统一 class 发射（★2026-08 真机重构）：scope 后缀化各类名（.box → .box-data-v-x 单一类，Skyline ✓）——
+  //   不再附加独立 scope class（复合选择器 .a.data-v-x 在 Skyline 不匹配，真机实测 p-button 自身样式失效）
+  const suffix = (v: string): string => (scopeSuffix ? suffixClassValue(v, scopeSuffix) : v)
+  const classStatic = [transitionAnimCls, effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c)).map(suffix)
   const classInterp = [bindingClass, transitionLeaveExpr].filter((c): c is string => Boolean(c))
   // ★组件根节点（组件模式首元素）：接收外部 class 透传（root-class 属性 → rootClass property → 根节点 {{rootClass}}）
   if (ctx.isComponentRoot) classInterp.push('{{rootClass}}')
