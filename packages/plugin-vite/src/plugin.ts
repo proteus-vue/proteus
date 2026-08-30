@@ -66,8 +66,9 @@ export function defaultScopedPlugin(): Plugin {
         const hookCode =
           '\nlet __proteusScrollHandler = () => {\n' +
           '  const __y = window.scrollY || 0\n' +
-          '  const __f = onPageScroll; if (typeof __f === \'function\') __f({ scrollTop: __y, scrollLeft: window.scrollX || 0 })\n' +
-          '  const __rb = onReachBottom; if (typeof __rb === \'function\' && __y + window.innerHeight >= document.documentElement.scrollHeight - 50) __rb()\n' +
+          '  // typeof 安全包裹：页面可能只声明 onPageScroll 或 onReachBottom 之一（未声明标识符直接引用抛 ReferenceError）\n' +
+          '  const __f = typeof onPageScroll === \'function\' ? onPageScroll : null; if (__f) __f({ scrollTop: __y, scrollLeft: window.scrollX || 0 })\n' +
+          '  if (typeof onReachBottom === \'function\' && __y + window.innerHeight >= document.documentElement.scrollHeight - 50) onReachBottom()\n' +
           '}\n' +
           '__proteusOnMounted(() => { window.addEventListener(\'scroll\', __proteusScrollHandler) })\n' +
           '__proteusOnUnmounted(() => { window.removeEventListener(\'scroll\', __proteusScrollHandler) })\n'
