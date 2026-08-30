@@ -281,31 +281,30 @@
 }
 .pws-track {
   position: absolute;
-  top: 15px;
+  top: 16px; /* (34 - 2) / 2 居中 */
   left: 0;
   right: 0;
-  height: 4px;
-  border-radius: 2px;
+  height: 2px; /* 微信滑轨细（原 4px 太粗，用户反馈） */
+  border-radius: 1px;
   background: #e9e9e9; /* 微信滑轨浅灰 */
 }
 .pws-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--pws-color, #07c160); /* 已填充 activeColor */
 }
-/* ★slider 滑块（28px = 微信 blockSize 默认；与 switch 滑块类名分离 .pws-slider-thumb） */
+/* ★slider 滑块（28px = 微信 blockSize 默认；与 switch 滑块类名分离 .pws-slider-thumb）
+ * 纯白圆点无灰边（对齐微信——用户反馈去掉灰边框；保留轻阴影可见） */
 .pws-slider-thumb {
   position: absolute;
-  top: 3px;
+  top: 3px; /* (34 - 28) / 2 居中 */
   width: 28px;
   height: 28px;
   border-radius: 50%;
   background: #fff;
-  border: 1px solid #d0d0d0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transform: translateX(-50%);
   pointer-events: none;
-  box-sizing: border-box;
   z-index: 1;
 }
 .proteus-web-slider input {
