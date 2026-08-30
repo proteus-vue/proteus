@@ -18,12 +18,13 @@ export const WebSwitch = defineComponent({
     const onChange = (e: Event) => {
       const next = (e.target as HTMLInputElement).checked
       if (checked.value) {
-        // 开→关：wash 扩散与底色绿→白**同步**（微信效果：白色扩展的同时底色变白，无先后延迟）
+        // 开→关：wash 白色扩散（盖绿）→ 底色绿→灰**同步** + wash 扩散后**立即收缩**（200ms）——
+        //   灰从 wash 边缘渐显（避免 wash 长时间盖住底色导致'关闭一会儿才变灰'，用户实测反馈）
         wash.value = true
         checked.value = false
         window.setTimeout(() => {
-          wash.value = false // 扩散完成（track 已白）收缩无感
-        }, 420)
+          wash.value = false
+        }, 200)
       } else {
         // 关→开：wash 先瞬间覆盖（无过渡，白底上无感）→ 底色白→绿与 wash 收缩**同步**
         washInstant.value = true
@@ -45,8 +46,8 @@ export const WebSwitch = defineComponent({
       const on = checked.value
       // translateX 21：thumb 28px 贴 track 内部右缘（left 1 + 21 + 28 = 50 = 内部右缘）——两端贴合无缝隙
       const tx = on ? 21 : 0
-      // 关闭态轨道浅灰（#f2f2f2，对齐微信——非纯白；thumb 纯白 #fff 有对比，滑块可见）
-      const trackBg = on ? '#07c160' : '#f2f2f2'
+      // 关闭态轨道极浅灰（#fafafa，对齐微信'有点点灰色'——#f2f2f2 过深，用户反馈）
+      const trackBg = on ? '#07c160' : '#fafafa'
       const trackBorder = on ? '#07c160' : '#d0d0d0'
       return h(
         'div',
