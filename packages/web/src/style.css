@@ -1,0 +1,64 @@
+/* packages/web/src/style.css —— 小程序语义 Web 模拟层 · 微信默认样式对齐层（14-mp-first-semantics）
+ * 小程序原生组件由微信框架注入默认 UA 样式（button 灰底/圆角/::after 边框、input 无边框等）；
+ * Web 端浏览器默认样式不同（button 立体边框、input 默认边框）——本文件对齐微信默认表现，双端视觉一致。
+ * 优先级：单类选择器（特异性最低）→ 用户 scoped 样式（双类）可覆盖。
+ * 使用：import '@proteus-vue/web/style.css'（或经构建插件注入）
+ */
+
+/* ===== button（对齐微信小程序 button 默认：灰底/圆角/18px/行高/::after 1px 边框）===== */
+.proteus-web-button {
+  position: relative;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 14px;
+  padding-right: 14px;
+  box-sizing: border-box;
+  font-size: 18px;
+  text-align: center;
+  text-decoration: none;
+  line-height: 2.55555556;
+  border-radius: 5px;
+  overflow: hidden;
+  color: #000000;
+  background-color: #f8f8f8;
+  border: none;
+}
+/* 微信 button::after 边框（200%/scale(0.5) 细线方案，对齐微信实现） */
+.proteus-web-button::after {
+  content: ' ';
+  width: 200%;
+  height: 200%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  transform: scale(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+/* ===== input（对齐微信 input：无边框/透明背景/继承字号）===== */
+.proteus-web-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  padding: 0;
+  min-height: 1.4em;
+}
+
+/* ===== image（对齐微信 image：块级展示；mode 映射尺寸见组件内联）===== */
+.proteus-web-image {
+  display: block;
+}
+
+/* ===== view/text 最小对齐（微信默认：block/inline + 继承；text 取消默认空隙）===== */
+.proteus-web-view {
+  display: block;
+}
+.proteus-web-text {
+  display: inline;
+}
