@@ -219,7 +219,8 @@
   appearance: none;
   -webkit-appearance: none;
   border-radius: 16px;
-  background: #e5e5e5;
+  /* ★对齐微信 switch 关闭态：灰色渐变（上白下灰）——微信关闭背景为渐变而非纯色 */
+  background: linear-gradient(180deg, #ffffff 0%, #e0e0e0 100%);
   position: relative;
   cursor: pointer;
   transition: background 0.2s;
