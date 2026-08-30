@@ -208,7 +208,10 @@
   background: transparent;
   outline: none;
   font-size: 16px;
-  min-height: 2em;
+  /* ★对齐微信 textarea 默认高度 150px（微信组件默认；用户设置 height 可覆盖——特异性更高） */
+  height: 150px;
+  padding: 0;
+  resize: none;
 }
 .proteus-web-switch {
   width: 52px;
