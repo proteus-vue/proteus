@@ -249,31 +249,59 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f7f7f7; /* WeUI 弹层背景 */
+  background: #f7f7f7; /* --weui-BG-1 弹层背景 */
   z-index: 99991;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
 }
+/* ★对齐 WeUI 官方 actionsheet（weui.io/#actionsheet 实测）：
+ *   cell padding 16px 16px / 17px / line-height 1.41176 / FG-0；
+ *   分割线 hairline rgba(0,0,0,.1) scaleY(0.5)（first-child 无）；:active 背景 #ececec；
+ *   取消区 margin-top 8px（--weui-BG-1 露出的间距） */
 .pwu-sheet-item {
+  position: relative;
   display: block;
   width: 100%;
-  padding: 15px 0; /* WeUI 行高 48px 附近 */
+  padding: 16px 16px; /* WeUI cell padding */
   border: none;
-  border-bottom: 1px solid #e5e5e5; /* WeUI 分割线（与 modal 一致） */
   background: #fff;
-  font-size: 17px; /* WeUI 操作项字号 */
+  font-size: 17px;
+  line-height: 1.41176;
+  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
   cursor: pointer;
+}
+/* ★顶部 hairline 分割线（WeUI cell::before scaleY(0.5)），首项无线 */
+.pwu-sheet-item::before {
+  content: ' ';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1); /* --weui-FG-3 */
+  transform: scaleY(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+}
+.pwu-sheet-item:first-child::before {
+  display: none;
+}
+/* ★按压反馈（WeUI cell:active --weui-BG-COLOR-ACTIVE） */
+.pwu-sheet-item:active,
+.pwu-sheet-cancel:active {
+  background-color: #ececec;
 }
 .pwu-sheet-cancel {
   display: block;
   width: 100%;
-  padding: 15px 0;
+  padding: 16px 16px;
   border: none;
   background: #fff;
   font-size: 17px;
-  color: #000000; /* ★微信取消按钮为黑色文字（非灰色） */
+  line-height: 1.41176;
+  color: rgba(0, 0, 0, 0.9); /* ★微信取消按钮黑色（--weui-FG-0，非灰色） */
   cursor: pointer;
-  margin-top: 8px; /* 微信取消按钮与列表间距较大 */
+  margin-top: 8px; /* ★WeUI action margin-top 8px（--weui-BG-1 间距） */
 }
 
 /* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
