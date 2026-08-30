@@ -468,6 +468,11 @@ function writeComponentJsons(): void {
       const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
       fs.mkdirSync(path.dirname(outFile), { recursive: true })
       const json: Record<string, unknown> = { component: true }
+      // ★样式穿透（2026-08 真机实测）：默认 styleIsolation: isolated 使页面 wxss 无法作用于组件内部——
+      //   <p-view class="box"> 的 class 虽被微信合并到组件根节点，但页面 .box.data-v-xxx 规则进不去 → 外层容器样式失效。
+      //   apply-shared：页面样式可作用组件（等价 Vue 父组件 scoped 样式作用于子组件根节点语义）；组件 wxss 不反向影响页面。
+      //   Web 端全局样式本就会作用于组件内部，apply-shared 使 MP 行为与 Web 一致
+      json.styleIsolation = 'apply-shared'
       if (Object.keys(comps).length) json.usingComponents = comps
       fs.writeFileSync(outFile, JSON.stringify(json, null, 2) + '\n')
       count++

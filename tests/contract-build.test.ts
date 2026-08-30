@@ -86,6 +86,9 @@ describe('build 产物契约（跨层一致性）', () => {
     const viewJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/p-view/index.json'), 'utf-8'))
     expect(viewJson.component).toBe(true)
     expect(viewJson.usingComponents).toBeUndefined()
+    // ★样式穿透契约：页面 wxss 需作用到组件根节点（<p-view class="box"> 外层容器样式），
+    //   styleIsolation 必须为 apply-shared（默认 isolated 会挡住页面样式，2026-08 真机实测）
+    expect(viewJson.styleIsolation).toBe('apply-shared')
     const vlJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/virtual-list/index.json'), 'utf-8'))
     expect(vlJson.component).toBe(true)
     expect(vlJson.usingComponents['p-list-view']).toBe('/proteus/p-list-view/index')
