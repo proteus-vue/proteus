@@ -298,6 +298,54 @@ function tryInlineHandler(exp: string): { name: string; code: string } | null {
   return null
 }
 
+/** ★16-progress-skyline-degrade：<progress> → 自定义 view 进度条（Skyline 官方不支持原生 progress，真机实测不渲染）
+ * 属性映射：percent → inner 宽度；active-color/color → 填充色；stroke-width → track 高度；show-info → 百分比文字
+ * 静态属性直接输出、绑定属性插值（{{expr}}）；show-info 无值属性 = true（微信布尔语义） */
+function serializeProgress(node: ElementNode, ctx: SerializeContext): string {
+  const find = (name: string): AttributeNode | DirectiveNode | undefined =>
+    node.props.find((p) =>
+      p.type === NodeTypes.ATTRIBUTE ? (p as AttributeNode).name === name : exprContent((p as DirectiveNode).arg) === name,
+    )
+  const staticVal = (name: string): string | undefined => {
+    const a = find(name) as AttributeNode | undefined
+    return a && a.type === NodeTypes.ATTRIBUTE && a.value ? a.value.content : undefined
+  }
+  const bindVal = (name: string): string | undefined => {
+    const d = find(name) as DirectiveNode | undefined
+    return d && d.type === NodeTypes.DIRECTIVE && d.exp ? exprContent(d.exp) : undefined
+  }
+  const attr = (name: string): { static?: string; bind?: string } => ({ static: staticVal(name), bind: bindVal(name) })
+  const p = attr('percent')
+  const c = attr('active-color') || attr('color')
+  const sw = attr('stroke-width')
+  const percentInner = p.bind ?? p.static ?? '0' // 裸表达式（info 插值用）
+  const percentExpr = p.bind ? `{{${p.bind}}}` : (p.static ?? '0')
+  const colorExpr = c.bind ? `{{${c.bind}}}` : (c.static ?? '#07c160')
+  const swExpr = sw.bind ? `{{${sw.bind}}}` : (sw.static ?? '6')
+  const widthStyle = p.bind ? `width:{{${p.bind}}}%` : `width:${p.static ?? 0}%`
+  const colorStyle = c.bind ? `background-color:{{${c.bind}}}` : `background-color:${c.static ?? '#07c160'}`
+  // show-info：无值属性（微信布尔 true）；:show-info 绑定表达式；缺失 → 不显示
+  const si = find('show-info')
+  const showInfo = si
+    ? si.type === NodeTypes.DIRECTIVE
+      ? (exprContent((si as DirectiveNode).exp) || 'true')
+      : 'true'
+    : 'false'
+  ctx.trace?.add('component/progress-degrade', {
+    line: node.loc.start.line,
+    before: '<progress percent="70" show-info>',
+    after: '自定义 view 进度条（Skyline 不支持原生 progress，16-progress-skyline-degrade）',
+  })
+  return (
+    `<view class="proteus-progress">\n` +
+    `  <view class="proteus-progress-track" style="height:${swExpr}px">\n` +
+    `    <view class="proteus-progress-inner" style="${widthStyle};${colorStyle}"></view>\n` +
+    `  </view>\n` +
+    `  ${showInfo === 'false' ? '' : `<text wx:if="{{${showInfo}}}" class="proteus-progress-info">{{${percentInner}}}%</text>\n`}` +
+    `</view>`
+  )
+}
+
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★Batch A（vue-compat）：平台无对等标签——显式警告（反黑盒，不再静默输出无效产物）
   if (node.tag === 'component') {
@@ -340,6 +388,11 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (tagRuleId && ctx.disabled.has(tagRuleId)) {
     tag = kebabCase(node.tag)
     ctx.warnings.push(`规则 ${tagRuleId} 已被禁用（rules.disabled），<${node.tag}> 按未注册标签原样输出`)
+  }
+  // ★16-progress-skyline-degrade：Skyline 官方不支持 progress（组件支持表"暂不考虑"）——
+  //   小程序语义 <progress> 降级为自定义 view 进度条（双端一致 + Skyline 可用；rules.disabled 可关）
+  if (tag === 'progress' && !ctx.disabled.has('component/progress-degrade')) {
+    return serializeProgress(node, ctx)
   }
   // 决策 trace：标签映射
   if (!ctx.disabled.has('tag/unknown-kebab') && !(tagRuleId && ctx.disabled.has(tagRuleId))) {

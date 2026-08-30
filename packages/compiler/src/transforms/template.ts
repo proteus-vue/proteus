@@ -542,6 +542,19 @@ export const TEMPLATE_RULES: TransformRule[] = [
     source: 'packages/compiler/src/template.ts → serializeElement（autoFlexRow 判定）+ style.ts → BASE_SEMANTIC_WXSS',
     decision: '2026-08 用户决策（Skyline inline 限制）',
   },
+  {
+    id: 'component/progress-degrade',
+    phase: 'template',
+    status: 'implemented',
+    title: 'progress 降级自定义 view 进度条（Skyline 官方不支持 progress）',
+    description: '小程序语义 <progress> 编译为自定义 view 结构（track/inner/info 三节点）——percent→宽度、active-color/color→填充色、stroke-width→高度、show-info（无值=真）→百分比文字；静态属性直出、绑定插值；BASE 注入 .proteus-progress 样式',
+    why: 'Skyline 组件支持表 progress 暂不考虑（真机实测不渲染）——降级自定义结构双端一致 + Skyline 可用（16-progress-skyline-degrade）',
+    when: '模板出现 <progress> 且规则未禁用时',
+    example: { before: '<progress :percent="70" show-info />', after: '<view class="proteus-progress"><view class="proteus-progress-track"><view class="proteus-progress-inner" style="width:{{70}}%;background-color:#07c160"></view></view><text wx:if="{{true}}" class="proteus-progress-info">{{70}}%</text></view>' },
+    verify: 'tests/mp-transform.test.ts progress 降级用例',
+    source: 'packages/compiler/src/template.ts → serializeProgress + style.ts → BASE_SEMANTIC_WXSS',
+    decision: '2026-08 真机实测（Skyline 不支持 progress）',
+  },
 ]
 
 // 追踪键（防漂移）：标签 → 规则 ID，由 tag/* 规则的 mapping 反推——实现侧 trace 引用同一份数据

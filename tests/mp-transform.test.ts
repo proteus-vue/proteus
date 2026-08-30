@@ -1120,4 +1120,33 @@ describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-containe
     })
     expect(wxml).not.toContain('proteus-flex-row')
   })
+
+  it('progress 降级（component/progress-degrade）：Skyline 不支持原生 progress → 自定义 view 结构 + 属性映射', () => {
+    const { wxml, wxss } = compileVueSfc('<template><progress :percent="70" show-info stroke-width="6" active-color="#07c160" /></template>', {
+      filename: 'pages/prog.vue',
+    })
+    expect(wxml).toContain('class="proteus-progress"')
+    expect(wxml).toContain('class="proteus-progress-track" style="height:6px"') // 静态 stroke-width 直出
+    expect(wxml).toContain('width:{{70}}%;background-color:#07c160') // 绑定 percent 插值 + 静态 active-color
+    expect(wxml).toContain('class="proteus-progress-info">{{70}}%')
+    expect(wxss).toContain('.proteus-progress-track')
+  })
+
+  it('progress 降级：show-info 缺失不输出 info；绑定 percent/color 插值', () => {
+    const { wxml } = compileVueSfc('<script setup>const pct = ref(30)</script><template><progress :percent="pct" :active-color="c"></progress></template>', {
+      filename: 'pages/prog2.vue',
+    })
+    expect(wxml).not.toContain('proteus-progress-info')
+    expect(wxml).toContain('width:{{pct}}%')
+    expect(wxml).toContain('background-color:{{c}}')
+  })
+
+  it('rules.disabled 关闭 component/progress-degrade → 原样输出', () => {
+    const { wxml } = compileVueSfc('<template><progress percent="10" /></template>', {
+      filename: 'pages/prog3.vue',
+      rules: { disabled: ['component/progress-degrade'] },
+    })
+    expect(wxml).toContain('<progress')
+    expect(wxml).not.toContain('proteus-progress')
+  })
 })

@@ -70,6 +70,11 @@ function rewriteSelectorTags(css: string, res: ResolvedOverrides, tagRe: RegExp)
 // 而 Skyline 自研引擎不折叠，单边 bottom 在两端主流组合（段落连续 / 标题后接段落）下
 // 视觉间距一致（如 p→p 均为 1em、h1→p 均为 0.67emₕ₁）；用户样式特异性更高可覆盖
 const BASE_SEMANTIC_WXSS = [
+  // ★16-progress-skyline-degrade：<progress> 降级自定义进度条（Skyline 不支持原生 progress）
+  '.proteus-progress { display: flex; align-items: center; gap: 8px; }',
+  '.proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 2px; overflow: hidden; }',
+  '.proteus-progress-inner { height: 100%; border-radius: 2px; background: #07c160; }',
+  '.proteus-progress-info { font-size: 13px; color: #666; min-width: 34px; text-align: right; }',
   // ★2026-08：行内场景自动 flex row（layout/auto-flex-row 模板注入 proteus-flex-row 类）——
   //   Skyline 不支持 inline 布局，text + 行内控件同行必须 flex row（双端一致）
   '.proteus-flex-row { display: flex; flex-direction: row; align-items: center; }',
