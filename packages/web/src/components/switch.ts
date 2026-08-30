@@ -46,9 +46,10 @@ export const WebSwitch = defineComponent({
       const on = checked.value
       // translateX 21：thumb 28px 贴 track 内部右缘（left 1 + 21 + 28 = 50 = 内部右缘）——两端贴合无缝隙
       const tx = on ? 21 : 0
-      // 关闭态轨道极浅灰（#fafafa，对齐微信'有点点灰色'——#f2f2f2 过深，用户反馈）
-      const trackBg = on ? '#07c160' : '#fafafa'
-      const trackBorder = on ? '#07c160' : '#d0d0d0'
+      // ★开关态轨道色走 CSS 变量（--pwu-sw-*：浅色白底灰边 / 暗黑 rgba(255,255,255,0.1)）——
+      //   打开态微信绿（浅暗黑同值）；CSS 变量在运行时由 prefers-color-scheme 自动切换
+      const trackBg = on ? 'var(--pwu-sw-track-on)' : 'var(--pwu-sw-track-off)'
+      const trackBorder = on ? 'var(--pwu-sw-track-on)' : 'var(--pwu-sw-border-off)'
       return h(
         'div',
         {

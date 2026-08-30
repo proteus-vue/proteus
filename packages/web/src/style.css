@@ -86,6 +86,15 @@
   --pwu-toast-bg: #4c4c4c; /* toast 背景 */
   --pwu-input-border: #d9d9d9; /* modal 输入框边框 */
   --pwu-wash-bg: #ffffff; /* toast 图标（success 白勾） */
+  /* switch/slider（2026-08-30 暗黑实测：轨道 rgba(255,255,255,0.1) / 阴影 rgba(255,255,255,0.1)） */
+  --pwu-sw-track-off: #fafafa; /* switch 关闭态轨道（用户真机验收白底） */
+  --pwu-sw-border-off: #d0d0d0; /* switch 关闭态边框 */
+  --pwu-sw-track-on: #07c160; /* switch 打开态（--weui-BRAND） */
+  --pwu-sw-thumb: #ffffff; /* switch/slider 滑块 */
+  --pwu-sw-thumb-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.06); /* switch 滑块阴影（weui 官方） */
+  --pwu-sl-track: rgba(0, 0, 0, 0.1); /* slider 轨道（--weui-FG-3） */
+  --pwu-sl-thumb-shadow: 0 0 4px rgba(0, 0, 0, 0.1); /* slider 滑块阴影（weui 官方） */
+  --pwu-wash-ripple: #ffffff; /* switch wash 白色扩散遮罩 */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -101,6 +110,15 @@
     --pwu-toast-bg: #404040; /* 暗黑 toast（官方实测 #404040） */
     --pwu-input-border: rgba(255, 255, 255, 0.2);
     --pwu-wash-bg: rgba(255, 255, 255, 0.9);
+    /* switch/slider 暗黑：轨道 rgba(255,255,255,0.1)（官方实测）、打开态绿不变、滑块白不变 */
+    --pwu-sw-track-off: rgba(255, 255, 255, 0.1);
+    --pwu-sw-border-off: rgba(255, 255, 255, 0.2);
+    --pwu-sw-track-on: #07c160;
+    --pwu-sw-thumb: #ffffff;
+    --pwu-sw-thumb-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.2);
+    --pwu-sl-track: rgba(255, 255, 255, 0.1);
+    --pwu-sl-thumb-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+    --pwu-wash-ripple: rgba(255, 255, 255, 0.9);
   }
 }
 /* ★对齐 WeUI 官方（weui.io/#toast）：背景 #4c4c4c、圆角 8px、padding 28px 20px、文字 rgba(255,255,255,0.9)、
@@ -524,10 +542,11 @@
   height: 32px;
   border-radius: 16px;
   box-sizing: border-box;
-  /* ★对齐微信 switch 静止态：关闭=极浅灰轨道（#fafafa，'有点点灰色'）+灰边框；打开=微信绿背景+绿边框（iOS 风格）
-   * 用户真机实测优先（weui.io 网页版为 rgba(0,0,0,.1) 无边框——保留用户验收的白底灰边） */
-  background-color: #fafafa;
-  border: 1px solid #d0d0d0;
+  /* ★对齐微信 switch 静止态：关闭=极浅灰轨道 + 灰边框；打开=微信绿背景+绿边框（iOS 风格）
+   * 用户真机实测优先（weui.io 网页版为 rgba(0,0,0,.1) 无边框——保留用户验收的白底灰边）
+   * 颜色走 --pwu-sw-* 变量（暗黑：轨道 rgba(255,255,255,0.1) 官方实测） */
+  background-color: var(--pwu-sw-track-off);
+  border: 1px solid var(--pwu-sw-border-off);
   cursor: pointer;
   /* ★weui 官方过渡：background-color 0.1s（原 0.4s 过长——用户实测'关闭延迟卡一下'） */
   transition: background-color 0.1s ease, border-color 0.1s ease;
@@ -553,9 +572,9 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--pwu-sw-thumb);
   /* ★weui 官方 thumb 阴影：0 2px 3px 0 rgba(0,0,0,0.06)（轻而柔和——原 0 1px 2px 0.2 过硬） */
-  box-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.06);
+  box-shadow: var(--pwu-sw-thumb-shadow);
   /* ★weui 官方 thumb 过渡：0.35s cubic-bezier(0.4,0.4,0.25,1.35)（回弹曲线——原 0.28s ease） */
   transition: transform 0.35s cubic-bezier(0.4, 0.4, 0.25, 1.35);
   z-index: 2;
@@ -570,7 +589,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--pwu-wash-ripple);
   transform: translate(-50%, -50%) scale(0);
   opacity: 0;
   transition: transform 0.4s ease, opacity 0.25s ease;
@@ -589,7 +608,7 @@
   position: relative;
   height: 2px; /* weui 官方 .weui-slider__inner height 2px */
   border-radius: 1px;
-  background: rgba(0, 0, 0, 0.1); /* ★weui 官方 --weui-FG-3（原 #e9e9e9 过深） */
+  background: var(--pwu-sl-track); /* ★weui 官方 --weui-FG-3（暗黑 rgba(255,255,255,0.1) 实测） */
 }
 .pws-fill {
   height: 100%;
@@ -604,8 +623,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1); /* weui 官方 */
+  background: var(--pwu-sw-thumb);
+  box-shadow: var(--pwu-sl-thumb-shadow); /* weui 官方（暗黑 rgba(255,255,255,0.1) 实测） */
   transform: translate(-50%, -50%); /* 居中：left 由百分比定位 + 自身 50% 回中 */
   pointer-events: none;
   z-index: 1;
