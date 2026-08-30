@@ -40,6 +40,25 @@ function rewriteTagSelectors(selector: string, res: ResolvedOverrides, tagRe: Re
   return rewritten.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => attrs[Number(i)])
 }
 
+/** 逗号选择器列表顶层分割（括号感知：:not(.a, .b) / [data-x="a,b"] 内的逗号不分割） */
+function splitTopLevelSelectors(s: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let cur = ''
+  for (const ch of s) {
+    if (ch === '(' || ch === '[') depth++
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1)
+    if (ch === ',' && depth === 0) {
+      out.push(cur)
+      cur = ''
+      continue
+    }
+    cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
 /** 仅重写每条规则的选择器部分（声明块与 @media/@keyframes 骨架原样保留） */
 function rewriteSelectorTags(css: string, res: ResolvedOverrides, tagRe: RegExp): string {
   return css.replace(/([^{}]+)\{/g, (_m, sel: string) => `${rewriteTagSelectors(sel, res, tagRe)}{`)
@@ -142,16 +161,28 @@ export function transformStyleToWxss(
 
   // 4. scoped CSS（v0.3，★Skyline 兼容修复）：:deep() 去包装 + 每条规则选择器末尾追加 .scopeId（class 选择器）
   //    （glass-easel 不支持属性选择器 [data-v-xxx] → 改 class 方案；模板侧元素已附加 class="data-v-xxx"；@media 骨架保留）
-  //    ★2026-08 真机实测修复：@keyframes 的 from/to/百分比 选择器**不**追加（追加产生非法语法 from.data-v-xxx，
-  //    Skyline 报 Unsupported keyframes syntax，动画全部失效）
+  //    ★2026-08 真机实测修复①：@keyframes 的 from/to/百分比 帧选择器不追加（from.data-v-xxx 非法语法，Skyline 动画失效）
+  //    ★2026-08 真机实测修复②：伪元素/伪类选择器——.scopeId 插到伪选择器**前**（.a.data-v-x::after 而非 .a::after.data-v-x，
+  //    后者伪元素后出现选择器非法，双端忽略整条规则；p-button::after 清除微信原生边框即因此失效）
+  //    ★2026-08 修复③：逗号选择器列表逐条作用域化（.a, .b → .a.data-v-x, .b.data-v-x；整体追加只作用域化最后一条，
+  //    .a 泄漏到全局——历史隐藏 bug）
   if (doScope && scopeId) {
     css = css.replace(/:deep\(([^)]*)\)/g, '$1')
     css = css.replace(/([^{}]+)\{/g, (m: string, sel: string) => {
       const s = sel.trim()
       if (s.startsWith('@')) return m
-      // @keyframes 帧选择器（from/to/百分比，可逗号列表）：非类/元素选择器，作用域化无意义且产生非法语法
-      if (/^(from|to|\d+(?:\.\d+)?%)(\s*,\s*(from|to|\d+(?:\.\d+)?%))*$/i.test(s)) return m
-      return `${s}.${scopeId} {`
+      const parts = splitTopLevelSelectors(s)
+      const scoped = parts
+        .map((p) => {
+          const t = p.trim()
+          if (/^(from|to|\d+(?:\.\d+)?%)$/i.test(t)) return t
+          // ★伪元素/伪类：用 [\s\S]*? 允许跨换行——选择器前有注释（/* .. */\n.a::after）时 .*? 无法跨 \n 到达末尾伪选择器（真机复现：p-button 注释后 ::after 未走伪元素分支）
+          const pseudo = t.match(/^([\s\S]*?)(::?[\w-]+(?:\([^)]*\))?)$/)
+          if (pseudo && pseudo[1].trim()) return `${pseudo[1].trim()}.${scopeId}${pseudo[2]}`
+          return `${t}.${scopeId}`
+        })
+        .join(', ')
+      return `${scoped} {`
     })
   }
   return css

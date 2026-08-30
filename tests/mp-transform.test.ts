@@ -101,11 +101,42 @@ describe('scoped CSS（v0.3）', () => {
       '<template><div class="a">x</div></template>\n<style scoped>\n@keyframes pop { from { opacity: 0; } 50% { opacity: 0.5; } to { opacity: 1; } }\n.a { animation: pop 0.3s; }\n</style>',
       { filename: 'keyframes-demo.vue' },
     )
-    expect(result.wxss).toContain('@keyframes pop { from { opacity: 0; } 50% { opacity: 0.5; } to { opacity: 1; } }')
+    expect(result.wxss).toContain('@keyframes pop {')
+    expect(result.wxss).toContain('from { opacity: 0; }')
+    expect(result.wxss).toContain('to { opacity: 1; }')
     expect(result.wxss).not.toContain('from.data-v-')
     expect(result.wxss).not.toContain('to.data-v-')
     expect(result.wxss).not.toContain('50%.data-v-')
     expect(result.wxss).toContain('.a.data-v-')
+  })
+
+  it('伪元素/伪类选择器：scope class 插到伪选择器前（.a.data-v-x::after 而非 .a::after.data-v-x）', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div></template>\n<style scoped>\n.a::after { border: none; }\n.a:hover { opacity: 0.8; }\n</style>',
+      { filename: 'pseudo-demo.vue' },
+    )
+    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+::after/)
+    expect(result.wxss).not.toContain('::after.data-v-')
+    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+:hover/)
+    expect(result.wxss).not.toContain(':hover.data-v-')
+  })
+
+  it('注释 + 换行 + 伪元素（.*? 跨 \\n 失效回归——p-button 真机复现）：.scopeId 仍插到伪选择器前', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div></template>\n<style scoped>\n/* 说明：清除原生 ::after 边框线 */\n.a::after { border: none; }\n</style>',
+      { filename: 'pseudo-comment.vue' },
+    )
+    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+::after/)
+    expect(result.wxss).not.toContain('::after.data-v-')
+  })
+
+  it('逗号选择器列表逐条作用域化（.a, .b → 各自追加，无泄漏）', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div><div class="b">y</div></template>\n<style scoped>\n.a, .b { color: red; }\n</style>',
+      { filename: 'comma-demo.vue' },
+    )
+    expect(result.wxss).toMatch(/\.a\.data-v-[a-f0-9]+, \.b\.data-v-[a-f0-9]+/)
+    expect(result.wxss).not.toContain('.a, .b.data-v-')
   })
 
   it('scopeId 稳定（同文件同属性名），且产物自校验通过', () => {

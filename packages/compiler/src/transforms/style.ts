@@ -85,7 +85,7 @@ export const STYLE_RULES: TransformRule[] = [
     phase: 'style',
     status: 'implemented',
     title: 'scoped CSS：选择器追加作用域 class（v0.3，★Skyline 兼容）',
-    description: '<style scoped> 存在时：:deep(X) 去包装 + 每条规则选择器末尾追加 .data-v-xxx（class 选择器；glass-easel 不支持属性选择器）；模板侧元素已附加 class="data-v-xxx"（template/scope-attr）；★2026-08 真机修复：@keyframes 的 from/to/百分比帧选择器不追加（追加为非法语法，Skyline 报 Unsupported keyframes syntax）',
+    description: '<style scoped> 存在时：:deep(X) 去包装 + 每条规则选择器末尾追加 .data-v-xxx（class 选择器；glass-easel 不支持属性选择器）；模板侧元素已附加 class="data-v-xxx"（template/scope-attr）；★2026-08 真机修复：@keyframes from/to/百分比帧选择器不追加（非法语法）、伪元素/伪类选择器 .scopeId 插到伪选择器前（.a.data-v-x::after）、逗号选择器列表逐条作用域化（无泄漏）',
     why: '小程序无 scoped CSS 原生机制，编译期用 class 选择器等价（v0.3，决策 #77；★2026-08 Skyline 兼容修复：属性选择器 [data-v] 在 glass-easel 下不匹配 → 改 class）；MVP 单层简化：任一 style scoped 则全量作用域化、:deep 部分同样作用域化',
     when: 'SFC 含 <style scoped> 且规则未被禁用时',
     example: { before: '.card { color: red; }', after: '.card.data-v-abc123 { color: red; }' },

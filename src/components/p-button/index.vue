@@ -38,6 +38,26 @@ function onClick(e: unknown) {
 </script>
 
 <style scoped>
+/* ★跨端归一（2026-08 真机实测）：浏览器 <button> 默认样式（buttonface 背景/outset 边框）与微信原生 <button>
+   默认样式（灰底/圆角/::after 边框线/hover 变暗）完全不同——纯透传时双端视觉不一致。
+   显式定义统一按钮外观（双端同源码同视觉），覆盖两端原生默认差异 */
+.p-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #1a7af8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* 微信原生 button::after 边框线（WebView 模式默认样式）清除；Skyline 无此默认，规则被忽略也无害 */
+.p-button::after {
+  border: none;
+}
 .p-button.is-loading {
   opacity: 0.7;
 }
