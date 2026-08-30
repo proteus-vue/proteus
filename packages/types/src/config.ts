@@ -9,6 +9,11 @@ export interface ProteusConfig {
   platform: 'mp-weixin' | 'web'
   /** 是否启用 Skyline 渲染（仅 mp-weixin 生效） */
   skyline: boolean
+  /** ★Skyline 布局对齐（2026-08 真机实测：Skyline 节点默认 flex 布局——switch/slider/icon 等表单元素被 stretch 占满一行且居中，
+   *   与 WebView/Web 块级布局不一致——默认开启 defaultDisplayBlock（Skyline 官方对齐方案） */
+  skylineLayout?: {
+    defaultDisplayBlock?: boolean
+  }
   /** 小程序 AppID */
   appid: string
   /** 页面根目录（主包路由扫描起点） */
