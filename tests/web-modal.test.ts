@@ -107,4 +107,18 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(document.querySelector('.proteus-web-modal')).toBeNull()
     expect(document.querySelector('.proteus-web-ui-mask')).toBeNull()
   })
+
+  it('showToast 微信语义：默认 icon success（不传 icon）→ 对勾；icon:none → 无图标', () => {
+    wx.showToast({ title: '默认' })
+    expect(document.querySelector('.proteus-web-toast .pwu-icon-success')).not.toBeNull()
+    document.body.innerHTML = ''
+    wx.showToast({ title: 'none', icon: 'none' })
+    expect(document.querySelector('.proteus-web-toast .pwu-icon')).toBeNull()
+    document.body.innerHTML = ''
+    // 显式 loading → spinner
+    wx.showToast({ title: '加载', icon: 'loading' })
+    expect(document.querySelector('.proteus-web-toast .pwu-icon-loading')).not.toBeNull()
+    document.body.innerHTML = ''
+    wx.hideToast()
+  })
 })

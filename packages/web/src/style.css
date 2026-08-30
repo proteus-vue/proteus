@@ -73,7 +73,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.75);
+  background: #4c4c4c; /* ★微信 toast 不透明深灰（非半透明 rgba） */
   color: #fff;
   padding: 16px 24px;
   border-radius: 10px;

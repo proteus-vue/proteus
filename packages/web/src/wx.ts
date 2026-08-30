@@ -133,7 +133,8 @@ export const wx: WxApi = {
   //   样式类见 @proteus-vue/web/style.css（proteus-web-ui 段）
   showToast(opts) {
     const title = opts?.title ?? ''
-    const icon = opts?.icon && opts.icon !== 'none' ? opts.icon : ''
+    // ★微信语义：不传 icon → 默认 success（对勾）；icon:'none' → 无图标；'success'/'error'/'loading' 对应
+    const icon = opts?.icon === undefined ? 'success' : opts.icon === 'none' ? '' : opts.icon
     const iconHtml =
       icon === 'success' ? '<div class="pwu-icon pwu-icon-success">✓</div>' :
       icon === 'error' ? '<div class="pwu-icon pwu-icon-error">✗</div>' :
