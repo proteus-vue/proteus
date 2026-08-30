@@ -135,7 +135,8 @@ const grab = (sel) => all.slice(all.indexOf(sel), all.indexOf('}', all.indexOf(s
 | modal | 宽 320px + max-width 90vw、圆角 12px | 标题 32px 24px 16px / 17px / 500 / FG-0；内容 0 24px + mb 32px / FG-1；按钮 20px 8px / 500 / LINK(#576b95)；hairline rgba(0,0,0,0.1)；无标题内容 32px 24px 0 + FG-0；暗黑 bg #191919 / 确定 #7d90a9 |
 | actionSheet | cell 16px 16px / 17px / 1.41176 / 56px / FG-0；hairline 首项无；:active #ececec；取消 margin-top 8px | bg #f7f7f7（暗黑 #1e1e1e）/ cell #fff（暗黑 #191919） |
 | picker | 弹层 左上关闭 24px 细叉 + 居中标题 15px/500 + 底部确定（绿 #07c160 白 17px 圆角 8px 高 48px 宽 184px）；滚轮区 280px + 56px 行 + indicator（top 112 / #f7f7f7 / 左右 8px / 四角 8px）+ 渐隐遮罩 112px；translate3d 定位；无 value 默认中间项；44px 间距（bd→确定）；动画 0.3s | 暗黑 bg #191919 / indicator #202020 / 文字 rgba(255,255,255,0.8) / 遮罩 rgba(25,25,25,0.95/0.6) |
-| switch | 52×32 / 圆角 16 / thumb 28px / 过渡：轨道背景色 0.1s 直切 + thumb 0.35s cubic-bezier(0.4,0.4,0.25,1.35) 回弹；**无 wash 扩散**（官方 web） | 关闭态浅色白底灰边（真机）/ 暗黑 rgba(255,255,255,0.1) 无边框；打开态绿 #07c160 |
+| switch | 52×32 / 圆角 16 / thumb 28px / 过渡：轨道背景色 0.1s 直切 + thumb 0.35s cubic-bezier(0.4,0.4,0.25,1.35) 回弹；**无 wash 扩散**（官方 web）；禁用态 opacity 0.1 整体淡出 | 关闭态浅色白底灰边（真机）/ 暗黑 rgba(255,255,255,0.1) 无边框；打开态绿 #07c160 |
+| button | 默认（type=default）微信原生：灰底 #f8f8f8 / 18px / 行高 2.556 / 圆角 5px / ::after 细边框（用户已验收，不改为 weui 网页值） | 变体（weui.io/#button_default 数值）：primary 绿 #07c160 白字 / warn 红 #fa5151 白字 / mini 14px·padding 6px 12px·圆角 6px·inline-block / disabled 淡灰底浅字 / loading spinner / plain 透明底绿边；暗黑 default rgba(255,255,255,0.1) 白字 0.8；★布尔属性（无值=空字符串）用 !== undefined 判断 |
 | slider | 容器 padding 15px 18px / 轨道 2px rgba(0,0,0,0.1)（暗黑 rgba(255,255,255,0.1)）/ thumb 28px 阴影 0 0 4px | 填充绿 #07c160 |
 
 ## 六、后续复用
