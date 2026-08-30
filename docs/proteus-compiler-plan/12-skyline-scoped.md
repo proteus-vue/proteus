@@ -1,8 +1,17 @@
 # 12 - Skyline scoped CSS 重构：类名后缀拼接（单类选择器）
 
-> 状态：规划中 → 分 4 批实施
-> 决策时间：2026-08-30（真机实测第 N 轮）
+> 状态：✅ 批次 1-4 完成（2026-08-30）——单类选择器 + text 行内限制说明
 > 关联：`f48460c`（属性选择器 → class 复合）、`0b16523`（单 class 属性合并）、`d907a1a`（root-class 透传）
+
+## 附：Skyline 布局能力差异（行内布局不支持，2026-08 真机实测）
+
+- **Skyline 引擎不支持 inline 布局**（官方 WXSS 文档：`Inline 布局 × 开发中`）——`display: inline` 在 Skyline 下无效
+- text 等行内语义元素在 Skyline 下**默认 block/flex**（单独占一行是引擎行为，非样式问题）——
+  `.proteus-text-inline { display: inline }` 类规则在 Skyline 无效（曾尝试 tag 选择器 + tagNameStyleIsolation: legacy，
+  当前开发者工具校验拒绝该配置）
+- **行内排布正确姿势**：外层 `display: flex` 容器（微信官方 Skyline 模式，用户实测有效）——如
+  `<view class="row" style="display:flex;align-items:center"><switch/><text>文字</text></view>`
+- **双端影响**：WebView/Web 的 inline 正常；Skyline 需 flex——框架文档透明化（示例 mp-semantics-demo 的 .msd-row 已用 flex）
 
 ## 一、背景与证据链
 

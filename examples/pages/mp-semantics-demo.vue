@@ -4,7 +4,7 @@
 <template>
   <!-- ★Skyline 页面本身不滚动——编译器自动包 scroll-view（15-page-scroll-container）；onPageScroll 桥接自动绑定 -->
   <view class="msd">
-    <text class="msd-title">小程序语义（14-mp-first-semantics）</text>
+    <text class="msd-title">小程序语义1（14-mp-first-semantics）</text>
     <text class="msd-sub">view/text/button/image/input + wx API —— MP 原生 / Web 模拟层对齐</text>
 
     <view class="msd-box">
@@ -168,6 +168,10 @@ function onSystemInfo() {
   margin-bottom: 8px;
 }
 .msd-row {
+  /* ★Skyline 引擎不支持 inline 布局（官方：Inline × 开发中）——行内排布（switch + text 同行）必须 flex 容器 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 4px 0;
 }
 .msd-img {
