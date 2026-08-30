@@ -66,3 +66,136 @@
 .proteus-web-text {
   display: inline;
 }
+
+/* ===== wx 交互 UI（showToast/showModal/showActionSheet 对齐微信表现）===== */
+.proteus-web-toast {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  padding: 16px 24px;
+  border-radius: 10px;
+  z-index: 99999;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 70vw;
+}
+.pwu-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+}
+.pwu-icon-success {
+  background: #07c160;
+  color: #fff;
+}
+.pwu-icon-error {
+  background: #fa5151;
+  color: #fff;
+}
+.pwu-icon-loading {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: proteus-web-spin 0.8s linear infinite;
+}
+@keyframes proteus-web-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pwu-toast-title {
+  font-size: 14px;
+  text-align: center;
+}
+.proteus-web-ui-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99990;
+}
+.proteus-web-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  max-width: 80vw;
+  background: #fff;
+  border-radius: 12px;
+  z-index: 99991;
+  overflow: hidden;
+}
+.pwu-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  padding: 20px 16px 0;
+}
+.pwu-modal-content {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  padding: 12px 16px 20px;
+}
+.pwu-modal-btns {
+  display: flex;
+  border-top: 1px solid #eee;
+}
+.pwu-modal-btn {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+.pwu-modal-btn--cancel {
+  color: #666;
+  border-right: 1px solid #eee;
+}
+.pwu-modal-btn--confirm {
+  color: #07c160;
+  font-weight: 600;
+}
+.proteus-web-actionsheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f5f5f5;
+  z-index: 99991;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+.pwu-sheet-item {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+.pwu-sheet-cancel {
+  display: block;
+  width: 100%;
+  padding: 14px 0;
+  border: none;
+  background: #fff;
+  font-size: 16px;
+  color: #666;
+  cursor: pointer;
+  margin-top: 6px;
+}

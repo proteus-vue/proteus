@@ -6,6 +6,11 @@
 //   event   无 Web 对等（支付/扫码等业务能力→触发自定义钩子/警告）
 import { adapter } from '@proteus-vue/shared'
 
+/** 转义 HTML（自定义 UI 注入 title/content 防 XSS） */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 export interface WxApi {
   // ===== 路由（full：代理 PlatformAdapter，Web 端 history 驱动 RouterView 转场）=====
   navigateTo(opts: { url: string; routeType?: string }): Promise<void>
@@ -27,8 +32,9 @@ export interface WxApi {
   getSystemInfoSync(): Record<string, unknown>
   getDeviceInfo(): Record<string, unknown>
 
-  // ===== 交互（partial：DOM 实现，批次 2 完善）=====
+  // ===== 交互（partial→full：自定义 DOM UI 对齐微信表现）=====
   showToast(opts?: { title?: string; icon?: 'success' | 'error' | 'loading' | 'none'; duration?: number }): void
+  hideToast(): void
   showLoading(opts?: { title?: string }): void
   hideLoading(): void
   showModal(opts: { title?: string; content?: string; showCancel?: boolean }): Promise<{ confirm: boolean }>
@@ -111,22 +117,34 @@ export const wx: WxApi = {
     }
   },
 
-  // ★交互（partial）：MVP 简易 DOM toast/loading/modal——批次 2 对齐 runtime 组件样式
+  // ★交互（15-page-scroll-container 之后批次 2 完善）：自定义 DOM UI 对齐微信表现（遮罩/弹层/按钮/图标）
+  //   样式类见 @proteus-vue/web/style.css（proteus-web-ui 段）
   showToast(opts) {
+    const title = opts?.title ?? ''
     const icon = opts?.icon && opts.icon !== 'none' ? opts.icon : ''
+    const iconHtml =
+      icon === 'success' ? '<div class="pwu-icon pwu-icon-success">✓</div>' :
+      icon === 'error' ? '<div class="pwu-icon pwu-icon-error">✗</div>' :
+      icon === 'loading' ? '<div class="pwu-icon pwu-icon-loading"></div>' : ''
     const el = document.createElement('div')
-    el.textContent = `${icon ? `[${icon}] ` : ''}${opts?.title ?? ''}`
-    el.style.cssText =
-      'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#fff;padding:12px 24px;border-radius:8px;z-index:99999;font-size:14px;'
+    el.className = 'proteus-web-toast'
+    el.innerHTML = `${iconHtml}${title ? `<div class="pwu-toast-title">${escapeHtml(title)}</div>` : ''}`
     document.body.appendChild(el)
-    setTimeout(() => el.remove(), opts?.duration ?? 1500)
+    if (icon === 'loading') {
+      // loading toast 常驻（对齐 wx.showToast({ icon: 'loading' })），需 wx.hideToast 关闭
+      el.classList.add('proteus-web-toast--loading')
+    } else {
+      setTimeout(() => el.remove(), opts?.duration ?? 1500)
+    }
+  },
+  hideToast() {
+    document.querySelectorAll('.proteus-web-toast').forEach((el) => el.remove())
   },
   showLoading(opts) {
     const el = document.createElement('div')
-    el.textContent = opts?.title ?? '加载中…'
     el.id = 'proteus-web-loading'
-    el.style.cssText =
-      'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#fff;padding:16px 24px;border-radius:8px;z-index:99999;font-size:14px;'
+    el.className = 'proteus-web-toast proteus-web-toast--loading'
+    el.innerHTML = `<div class="pwu-icon pwu-icon-loading"></div>${opts?.title ? `<div class="pwu-toast-title">${escapeHtml(opts.title)}</div>` : ''}`
     document.body.appendChild(el)
   },
   hideLoading() {
@@ -134,14 +152,52 @@ export const wx: WxApi = {
   },
   showModal(opts) {
     return new Promise((resolve) => {
-      const ok = window.confirm(opts?.content ?? opts?.title ?? '')
-      resolve({ confirm: ok })
+      const mask = document.createElement('div')
+      mask.className = 'proteus-web-ui-mask'
+      const box = document.createElement('div')
+      box.className = 'proteus-web-modal'
+      box.innerHTML =
+        `${opts?.title ? `<div class="pwu-modal-title">${escapeHtml(opts.title)}</div>` : ''}` +
+        `<div class="pwu-modal-content">${escapeHtml(opts?.content ?? '')}</div>` +
+        `<div class="pwu-modal-btns">` +
+        `${opts?.showCancel !== false ? '<button class="pwu-modal-btn pwu-modal-btn--cancel">取消</button>' : ''}` +
+        '<button class="pwu-modal-btn pwu-modal-btn--confirm">确定</button>' +
+        '</div>'
+      document.body.appendChild(mask)
+      document.body.appendChild(box)
+      const done = (confirm: boolean): void => {
+        mask.remove()
+        box.remove()
+        resolve({ confirm })
+      }
+      box.querySelector('.pwu-modal-btn--cancel')?.addEventListener('click', () => done(false))
+      box.querySelector('.pwu-modal-btn--confirm')?.addEventListener('click', () => done(true))
+      mask.addEventListener('click', () => done(false))
     })
   },
   showActionSheet(opts) {
-    const pick = window.prompt(`选择（输入序号 0-${opts.itemList.length - 1}）：\n${opts.itemList.map((s, i) => `${i}. ${s}`).join('\n')}`)
-    const idx = pick === null ? -1 : Math.max(0, Math.min(opts.itemList.length - 1, Number(pick) || 0))
-    return Promise.resolve({ tapIndex: idx })
+    return new Promise((resolve) => {
+      const mask = document.createElement('div')
+      mask.className = 'proteus-web-ui-mask'
+      const sheet = document.createElement('div')
+      sheet.className = 'proteus-web-actionsheet'
+      const items = opts.itemList
+        .map((s, i) => `<button class="pwu-sheet-item" data-i="${i}">${escapeHtml(s)}</button>`)
+        .join('')
+      sheet.innerHTML = `${items}<button class="pwu-sheet-cancel">取消</button>`
+      document.body.appendChild(mask)
+      document.body.appendChild(sheet)
+      const done = (tapIndex: number): void => {
+        mask.remove()
+        sheet.remove()
+        resolve({ tapIndex })
+      }
+      sheet.querySelectorAll('.pwu-sheet-item').forEach((b) => {
+        b.addEventListener('click', () => done(Number((b as HTMLElement).dataset.i)))
+      })
+      sheet.querySelector('.pwu-sheet-cancel')?.addEventListener('click', () => done(-1))
+      mask.addEventListener('click', () => done(-1))
+    })
   },
 
   async request(opts) {
@@ -156,6 +212,10 @@ export const wx: WxApi = {
       data = JSON.parse(text)
     } catch {
       /* 非 JSON 原样返回 */
+    }
+    // 对齐小程序 request：非 2xx 走 fail（reject）
+    if (res.status < 200 || res.status >= 300) {
+      return Promise.reject(new Error(`[proteus-web] wx.request 失败：${res.status} ${res.statusText}`))
     }
     return { statusCode: res.status, data }
   },
