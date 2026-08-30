@@ -319,7 +319,11 @@
 }
 .proteus-web-icon {
   display: inline-block;
-  text-align: center;
+  line-height: 0; /* svg 占位精确 */
+  vertical-align: middle;
+}
+.proteus-web-icon svg {
+  display: block;
 }
 .proteus-web-progress {
   display: flex;
