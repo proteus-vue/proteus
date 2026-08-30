@@ -1,6 +1,6 @@
 # 14 - MP 优先语义：小程序组件/API 为标准，Web 端反向对齐（uni-app 思路）
 
-> 状态：规划（用户 2026-08 提出，重大架构方向）
+> 状态：✅ 批次 1-3 完成，批次 4 收尾中（2026-08-30）
 > 决策：以小程序内置组件 + API 为标准——开发者直接用小程序语义（`<view>`/`<button open-type>`/wx API），MP 端原生跑，**Web 端由框架自定义组件/API 模拟层完全对齐**——不再手动补小程序内置组件能力
 
 ## 一、动机（用户提出）
@@ -63,12 +63,12 @@
 - Web 端使用无对等能力 → 触发事件让开发者自定义（透明，不静默丢弃）
 - 类型：小程序组件属性类型（global-components 扩展）+ wx API 类型（api-types 扩充）
 
-## 六、批次（每批全绿提交）
+## 六、批次（✅ 1-3 完成）
 
-- **批次 1**：Web 组件模拟层骨架——view/text/button/input/image + `open-type` 事件降级机制 + vite 自动注册 + 类型
-- **批次 2**：wx API 模拟层——路由/存储/toast/modal/loading/系统信息 + 注入
-- **批次 3**：扩展组件——scroll-view/navigator/textarea/switch/slider/icon/progress + 能力矩阵文档
-- **批次 4**：examples 小程序语义示例页（开放能力演示）+ 测试 + 文档 + 双端验证
+- **批次 1** ✅：Web 组件模拟层骨架——view/text/button/input/image + `open-type` 事件降级机制 + vite 自动注册 + 类型（★标签改写 proteus-*：Vue 编译器无连字符标签不 resolveComponent，CDP 实测根因）
+- **批次 2** ✅：wx API 模拟层——路由（adapter 代理）/存储（localStorage）/系统信息 + 交互自定义 UI（toast/modal/actionSheet 对齐微信视觉 + 图标/spinner）/网络（fetch + 非 2xx fail）；wx.pageScrollTo（规划 15 批次 3 联动）
+- **批次 3** ✅：扩展组件——scroll-view（规划 15）/textarea/switch/slider/icon/progress/navigator + 微信默认样式对齐层（style.css）+ 能力矩阵文档
+- **批次 4**（收尾中）：examples 小程序语义示例页完善 + 双端实测 + 能力矩阵文档（picker/swiper 等复杂组件后续专项）
 
 ## 七、风险与权衡
 
