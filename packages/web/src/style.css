@@ -241,8 +241,8 @@
    * 注意：switch 与 slider 滑块类名分离（.pws-thumb switch / .pws-slider-thumb slider）——
    * 共享类名会导致 slider 尺寸修改误伤 switch（2026-08 实测） */
   position: absolute;
-  top: 1px;
-  left: 1px; /* 父 border 内 1px → 外缘 gap = border 1 + 1 = 2px（与右端 translateX 19 对称） */
+  top: 0px; /* 顶距 = border 1px + 0 = 1px（thumb 30px 在 track 32px 内垂直居中，底距同样 1px） */
+  left: 1px; /* 父 border 内 1px → 外缘 gap = border 1 + 1 = 2px（与右端 translateX 18 对称） */
   width: 28px;
   height: 28px;
   border-radius: 50%;
