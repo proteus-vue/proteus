@@ -18,25 +18,21 @@ export const WebSwitch = defineComponent({
     const onChange = (e: Event) => {
       const next = (e.target as HTMLInputElement).checked
       if (checked.value) {
-        // 开→关：白色从中间向四周扩展（wash 0→大 扩散）→ 底色绿→白 → wash 收缩（track 已白，无感）
+        // 开→关：wash 扩散与底色绿→白**同步**（微信效果：白色扩展的同时底色变白，无先后延迟）
         wash.value = true
+        checked.value = false
         window.setTimeout(() => {
-          checked.value = false
-          window.setTimeout(() => {
-            wash.value = false
-          }, 220)
-        }, 320)
+          wash.value = false // 扩散完成（track 已白）收缩无感
+        }, 420)
       } else {
-        // 关→开：白色从四周向中间收缩——wash 先瞬间覆盖（无过渡，track 白底上无感）→ 底色白→绿 → wash 大→0 收缩
+        // 关→开：wash 先瞬间覆盖（无过渡，白底上无感）→ 底色白→绿与 wash 收缩**同步**
         washInstant.value = true
         wash.value = true
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             washInstant.value = false // 恢复过渡
-            window.setTimeout(() => {
-              checked.value = true
-              wash.value = false // 收缩（白色从四周向中间缩小消失）
-            }, 30)
+            checked.value = true
+            wash.value = false // 收缩（白色从四周向中间缩小消失，底色同步转绿）
           })
         })
       }
