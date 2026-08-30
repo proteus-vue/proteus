@@ -21,6 +21,17 @@
     </view>
 
     <view class="msd-box">
+      <text class="msd-label">button 变体（type/size/disabled/loading/plain，对齐 weui.io/#button_default）</text>
+      <!-- :type 绑定绕过 HTML button 原生 type 类型限制（primary/warn 是小程序语义，as any 兼容——规划 14 标注） -->
+      <button :type="('primary' as any)" class="msd-btn">type="primary"（绿）</button>
+      <button :type="('warn' as any)" class="msd-btn">type="warn"（红）</button>
+      <button size="mini" class="msd-btn">size="mini"</button>
+      <button disabled class="msd-btn">disabled</button>
+      <button loading class="msd-btn">loading</button>
+      <button plain class="msd-btn">plain</button>
+    </view>
+
+    <view class="msd-box">
       <text class="msd-label">wx API（路由/存储/交互/系统信息）</text>
       <button @click="onToast">wx.showToast</button>
       <button @click="onStorage">wx.setStorageSync / getStorageSync</button>
@@ -216,6 +227,10 @@ function onSystemInfo() {
 .msd-nav {
   color: #1a7af8;
 }
+.msd-btn {
+  margin-top: 8px;
+}
+
 /* 暗黑模式：页面深底（RouterView .page #111）——demo 文字/边框/输入框配色适配 */
 @media (prefers-color-scheme: dark) {
   .msd-title {

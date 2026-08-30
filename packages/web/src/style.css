@@ -5,7 +5,11 @@
  * 使用：import '@proteus-vue/web/style.css'（或经构建插件注入）
  */
 
-/* ===== button（对齐微信小程序 button 默认：灰底/圆角/18px/行高/::after 1px 边框）===== */
+/* ===== button（对齐微信小程序 button 默认：灰底/圆角/18px/行高/::after 1px 边框）=====
+ * ★变体（2026-08-30，对齐 weui.io/#button_default 数值）：
+ *   type=primary 绿 #07c160 / warn 红 #fa5151；size=mini 小尺寸（weui-btn_mini 数值）；
+ *   disabled 禁用；loading spinner；plain 幽灵（透明底+边框）
+ *   默认（type=default）保留微信原生：灰底 #f8f8f8 / 18px / 行高 2.556 / 圆角 5px（用户已验收） */
 .proteus-web-button {
   position: relative;
   display: block;
@@ -23,6 +27,67 @@
   color: #000000;
   background-color: #f8f8f8;
   border: none;
+}
+/* 变体：primary 绿 / warn 红（对齐 weui-btn_primary/weui-btn_warn + 微信原生 type） */
+.proteus-web-button.is-primary {
+  background-color: #07c160; /* --weui-BRAND */
+  color: #fff;
+}
+.proteus-web-button.is-warn {
+  background-color: #fa5151; /* --weui-RED-100 */
+  color: #fff;
+}
+/* 变体：mini 小尺寸（weui-btn_mini：14px/padding 6px 12px/圆角 6px/inline-block） */
+.proteus-web-button.is-mini {
+  display: inline-block;
+  min-width: 0;
+  width: auto;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.42857;
+}
+/* 变体：禁用（微信原生 button disabled：淡灰底 + 浅字） */
+.proteus-web-button.is-disabled {
+  color: rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.15);
+  cursor: not-allowed;
+}
+.proteus-web-button.is-primary.is-disabled,
+.proteus-web-button.is-warn.is-disabled {
+  color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(0, 0, 0, 0.2);
+}
+/* 变体：plain 幽灵按钮（透明底 + 细边框——微信原生 plain） */
+.proteus-web-button.is-plain {
+  background: transparent;
+  color: #07c160;
+  border: 1px solid #07c160;
+}
+.proteus-web-button.is-plain.is-warn {
+  color: #fa5151;
+  border-color: #fa5151;
+}
+/* loading spinner（对齐 weui-btn_loading：旋转圆环） */
+.pwb-loading {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 6px;
+  vertical-align: -0.15em;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: pwb-spin 0.8s linear infinite;
+}
+.proteus-web-button.is-default .pwb-loading {
+  border-color: rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.6);
+}
+@keyframes pwb-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 /* 微信 button::after 边框（200%/scale(0.5) 细线方案，对齐微信实现） */
 .proteus-web-button::after {
@@ -42,6 +107,20 @@
 /* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗） */
 .proteus-web-button--hover {
   background-color: rgba(0, 0, 0, 0.1);
+}
+/* 暗黑模式（对齐 weui 暗黑按钮）：primary/warn 保持；default 深底浅字 */
+@media (prefers-color-scheme: dark) {
+  .proteus-web-button.is-default {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .proteus-web-button.is-default::after {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .proteus-web-button.is-disabled {
+    color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.15);
+  }
 }
 
 /* ===== input（对齐微信 input：无边框/透明背景/继承字号）===== */
