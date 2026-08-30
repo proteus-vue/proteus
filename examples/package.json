@@ -7,7 +7,7 @@
   "scripts": {
     "dev:web": "vite --mode web",
     "build:web": "vue-tsc --noEmit && vite build --mode web",
-    "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
+    "dev:mp": "tsx scripts/dev-mp.ts",
     "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin && tsx scripts/bundle-report.ts",
     "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
     "preview:web": "vite preview --mode web",
