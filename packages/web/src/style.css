@@ -75,6 +75,12 @@
   transform: translate(-50%, -50%);
   background: #4c4c4c; /* ★微信 toast 不透明深灰（非半透明 rgba） */
   color: #fff;
+  /* ★微信 toast 尺寸规则：最小宽度 132px；纯文字长文本最大宽度 320px（横向）
+   * width: max-content 让文字优先单行撑开（图标态/短文字不换行），超 320 才换行 */
+  width: max-content;
+  min-width: 132px;
+  max-width: 320px;
+  box-sizing: border-box;
   padding: 16px 24px;
   border-radius: 10px;
   z-index: 99999;
@@ -82,8 +88,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  max-width: 70vw;
+  text-align: center;
+}
+/* ★图标态：正方形（宽=高）——微信短文字 + 图标时 toast 为方形（aspect-ratio 保持 1:1） */
+.proteus-web-toast--icon {
+  aspect-ratio: 1 / 1;
 }
 .pwu-icon {
   display: flex;
