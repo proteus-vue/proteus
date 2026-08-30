@@ -36,6 +36,28 @@
       <text class="msd-log">输入：{{ inputLog }}</text>
     </view>
 
+    <view class="msd-box">
+      <text class="msd-label">扩展组件（批次3：textarea/switch/slider/icon/progress/navigator）</text>
+      <textarea class="msd-input" placeholder="textarea（批次3）" />
+      <view class="msd-row">
+        <switch :checked="true" @change="onSwitch" />
+        <text class="msd-scroll-text">switch（默认开）</text>
+      </view>
+      <view class="msd-row">
+        <slider :value="sliderVal" @change="onSlider" class="msd-slider" />
+        <text class="msd-scroll-text">slider：{{ sliderVal }}</text>
+      </view>
+      <view class="msd-row">
+        <icon type="success" size="20" color="#07c160" />
+        <icon type="warn" size="20" color="#fa5151" />
+        <text class="msd-scroll-text">icon（success/warn）</text>
+      </view>
+      <progress :percent="70" show-info stroke-width="6" active-color="#07c160" />
+      <view class="msd-row">
+        <navigator url="/pages/showcase" class="msd-nav">navigator → showcase</navigator>
+      </view>
+    </view>
+
     <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
     <view class="msd-box">
       <text class="msd-label">onPageScroll 桥接（15-page-scroll-container 批次2/3）</text>
@@ -66,6 +88,14 @@ function onPageScroll(e: { scrollTop: number }) {
 // wx.pageScrollTo 桥接（15-page-scroll-container 批次3：MP → 自动包装 scroll-view scroll-top / Web → window.scrollTo）
 function goTop() {
   wx.pageScrollTo({ scrollTop: 0 })
+}
+// 扩展组件演示（批次3）
+const sliderVal = ref(60)
+function onSwitch(e: any) {
+  console.log('[mp-semantics] switch:', e?.detail?.value)
+}
+function onSlider(e: any) {
+  sliderVal.value = e?.detail?.value ?? sliderVal.value
 }
 // 滚动测试：长列表区块（小程序 wx:for 只接受数组，用字面量数组初始化）
 const scrollBlocks = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
@@ -162,5 +192,12 @@ function onSystemInfo() {
   font-size: 13px;
   color: #444;
   line-height: 1.6;
+}
+.msd-slider {
+  width: 60%;
+  display: inline-block;
+}
+.msd-nav {
+  color: #1a7af8;
 }
 </style>

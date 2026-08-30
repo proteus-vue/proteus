@@ -8,6 +8,12 @@ import type { WebButton } from './components/button'
 import type { WebInput } from './components/input'
 import type { WebImage } from './components/image'
 import type { WebScrollView } from './components/scroll-view'
+import type { WebTextarea } from './components/textarea'
+import type { WebSwitch } from './components/switch'
+import type { WebSlider } from './components/slider'
+import type { WebIcon } from './components/icon'
+import type { WebProgress } from './components/progress'
+import type { WebNavigator } from './components/navigator'
 
 declare module 'vue' {
   export interface GlobalComponents {
@@ -17,6 +23,12 @@ declare module 'vue' {
     'proteus-input': typeof WebInput
     'proteus-image': typeof WebImage
     'proteus-scroll-view': typeof WebScrollView
+    'proteus-textarea': typeof WebTextarea
+    'proteus-switch': typeof WebSwitch
+    'proteus-slider': typeof WebSlider
+    'proteus-icon': typeof WebIcon
+    'proteus-progress': typeof WebProgress
+    'proteus-navigator': typeof WebNavigator
   }
 }
 
