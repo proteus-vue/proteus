@@ -3,7 +3,7 @@
 // --check：校验已生成文件与当前 schema 一致（CI 防漂移，exit 1）——铁律 #5 自动化
 import fs from 'node:fs'
 import path from 'node:path'
-import { proteusConfigSchemaJson } from '@proteus/types/config-schema'
+import { proteusConfigSchemaJson } from '@proteus-vue/types/config-schema'
 
 export interface GenerateTypesOptions {
   out?: string

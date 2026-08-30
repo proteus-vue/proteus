@@ -26,7 +26,7 @@
 
 ```ts
 // app.ts（三端通用）
-import { defineApp } from '@proteus/runtime'
+import { defineApp } from '@proteus-vue/runtime'
 
 export default defineApp({
   // —— 启动阶段（按顺序执行）——

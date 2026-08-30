@@ -8,7 +8,7 @@ API 层整体体积小（主要是适配器和拦截器），但**部分能力�
 
 ```ts
 // 业务层按需引入（不阻塞首屏）
-const { media } = await import('@proteus/api/modules/media')
+const { media } = await import('@proteus-vue/api/modules/media')
 await media.chooseImage()
 ```
 
@@ -25,7 +25,7 @@ await media.chooseImage()
 const platform = process.env.PROTEUS_PLATFORM // 'web' | 'mp' | 'app'
 resolve: {
   alias: {
-    '@proteus/api/platform': `@proteus/api/platforms/${platform}`,
+    '@proteus-vue/api/platform': `@proteus-vue/api/platforms/${platform}`,
   },
 }
 ```
@@ -54,7 +54,7 @@ resolve: {
 ```js
 // .eslintrc.cjs
 module.exports = {
-  plugins: ['@proteus/eslint-plugin'],
+  plugins: ['@proteus-vue/eslint-plugin'],
   rules: {
     'proteus/no-platform-api': ['error', {
       zones: [{

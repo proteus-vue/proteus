@@ -1,11 +1,11 @@
-# @proteus/devtools-runtime
+# @proteus-vue/devtools-runtime
 
 Proteus DevTools 运行时（devtools-plan B1）：统一 trace 事件流。
 
 ## 用法
 
 ```ts
-import { createTraceBus } from '@proteus/devtools-runtime'
+import { createTraceBus } from '@proteus-vue/devtools-runtime'
 
 // 应用侧单例（开发开启，生产默认关闭 → emit 零开销）
 export const bus = createTraceBus({ enabled: import.meta.env.DEV, bufferSize: 10000 })

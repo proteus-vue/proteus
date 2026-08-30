@@ -14,7 +14,7 @@ const NEXT_STEPS = (name: string) => `✅ 已生成工程：${name}
 
 下一步：
   cd ${name}
-  npm install            # 安装依赖（@proteus/compiler 发布后可正常安装；未发布时用仓库 workspace 或 npm link）
+  npm install            # 安装依赖（@proteus-vue/compiler 发布后可正常安装；未发布时用仓库 workspace 或 npm link）
   npm run dev:web        # Web 端（浏览器打开 Vite 提示地址）
   npm run build:mp       # 小程序端（微信开发者工具导入 dist/mp-weixin，需替换 proteus.config.ts 的 appid）
 

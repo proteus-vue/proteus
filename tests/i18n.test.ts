@@ -1,5 +1,5 @@
 // tests/i18n.test.ts
-// ★i18n-plan B1：@proteus/i18n（createI18n 类型安全 + ICU 子集解析器 + dir/RTL + locale 切换）
+// ★i18n-plan B1：@proteus-vue/i18n（createI18n 类型安全 + ICU 子集解析器 + dir/RTL + locale 切换）
 import { describe, it, expect } from 'vitest'
 import { createI18n } from '../packages/i18n/src'
 import { renderMessage } from '../packages/i18n/src/icu'

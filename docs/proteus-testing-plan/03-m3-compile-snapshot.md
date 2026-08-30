@@ -25,7 +25,7 @@ __snapshots__/mp/
 每个 `.snap` 是编译产物原文 + 元数据头：
 
 ```js
-// @proteus-snapshot v1
+// @proteus-vue-snapshot v1
 // source: src/pages/home/Home.vue
 // transform: compileSFC
 // compiler-version: 2.47.0

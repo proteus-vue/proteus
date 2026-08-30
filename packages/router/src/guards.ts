@@ -2,7 +2,7 @@
 // 全局路由守卫（P3-2 + 拆包步骤 4 工厂化）—— 支持 beforeEach / afterEach，经 adapter 获取当前路由
 // ★工厂化：routeMap 不再 import 自 auto-routes，由 Router.push 调用时注入（对齐 createRouter 设计）
 import type { RouteRecord } from './types'
-import { adapter } from '@proteus/shared'
+import { adapter } from '@proteus-vue/shared'
 
 export type Guard = (to: RouteRecord, from: RouteRecord | null) => boolean | Promise<boolean> | void | Promise<void>
 export type AfterGuard = (to: RouteRecord, from: RouteRecord | null) => void

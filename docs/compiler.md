@@ -1,6 +1,6 @@
 # 编译原理（Compiler）
 
-> Proteus 的**编译引擎**位于 `packages/compiler/`（v0.2 起独立为 monorepo 包 `@proteus/compiler`）——项目最核心的基建。它是**纯函数模块**：零 Vite 依赖、零项目配置依赖、选项全部入参，已可独立构建分发（`npm run build -w @proteus/compiler`）。
+> Proteus 的**编译引擎**位于 `packages/compiler/`（v0.2 起独立为 monorepo 包 `@proteus-vue/compiler`）——项目最核心的基建。它是**纯函数模块**：零 Vite 依赖、零项目配置依赖、选项全部入参，已可独立构建分发（`npm run build -w @proteus-vue/compiler`）。
 
 ## 编译管线
 
@@ -274,8 +274,8 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
   `++` / `--` / 赋值 / 读取（`this.data.count`）均重写；**不用 `??` 运算符**（真机预览报 `SyntaxError: Unexpected token ?`）。复合赋值（`+=`）暂不支持。
 - **默认 `onLoad`**：路由参数自动 decode 注入 `data`（query 中 JSON 字符串自动 `JSON.parse`）。
-- **`provide/inject`（vue-compat-advance Batch 3/4/6）**：零缩进顶层 `provide("key", expr)` / `const x = inject("key"[, default])` → 编译为 `getApp().__proteusProvides` 注册表读写（MP 单文件产物无模块系统，不 import 运行时；运行时桥 `@proteus/runtime` 的 `registerProvide/readInject/subscribeProvide/notifyProvide/nextPageId/destroyPage` 与之共享同一注册表）：**页面 onLoad 单函数合并块**（provide 注册 + inject setData）；**组件 provide 放 `created`**（先于子组件 attached 注入）、**inject 放 `attached`**（computed/immediate-watch 之后）；provide 值表达式重写裸 ref 名 / `ref.value` → `this.data.<name>`；inject 默认值编译为 ES5 三元（`provides[k] === undefined ? def : provides[k]`）。**★Batch 4 响应式联动**：裸 ref 提供（`provide("k", refName)`）→ ref 写入点（赋值/自增自减）追加 `proteusSyncProvide("k", "ref")`（同步注册表值 + 通知 `__subs` 订阅者）；inject 侧订阅 `provides.__subs[key]`（值变化 setData 刷新，`__self` 闭包捕获）+ `detached`/`onUnload` 取消（`proteusUnsubscribeProvide` 按引用移除防泄漏）；`.value`/字面量提供保持静态快照（对齐 Vue：传 ref 联动、传值快照）。**★Batch 6 页面级隔离**：注册表按 pageId 命名空间（`{ [pageId]: {...}, __seq }`）——页面 onLoad 用 `__seq` 递增生成 `__proteusPageId`（存实例）、组件 created/attached 用 `getCurrentPages()` 栈顶解析所属页面 id（无则 'global'），跨页面互不污染；onUnload `delete __reg[pageId]` 清理防泄漏。规则 `script/provide-inject`
-- **跨模块引用（module-plan B0）**：`import { a } from '../utils/format'` → 产物顶部 `const { a } = require('../utils/format.js')`（named/default/namespace/side 四形态；requirePath 由插件预计算：共享模块 esbuild bundle 为 CJS 独立产物，页面产物相对路径引用）；`vue`（编译器静态）/ `@proteus/*`（Web 专用或编译期处理）/ `.vue` 组件（usingComponents）/ `import type`（纯类型）不参与；**无法解析的路径 → 剥离 + 警告**（反黑盒）。**函数调用初始化**（`const store = usePlayerStore()`）→ 不再静态求值失败丢调用：onLoad/attached 注入 `this.store = usePlayerStore()`（运行时初始化实例属性，MVP 模板绑定不支持——逻辑层可用；共享逻辑请用模块 import）。★B0 边界：共享模块含第三方依赖（pinia/vue 等裸模块）→ 跳过编译（bundle 体积过大），Pinia 接入为后续批次；规则 `script/module-import` + `script/runtime-init`
+- **`provide/inject`（vue-compat-advance Batch 3/4/6）**：零缩进顶层 `provide("key", expr)` / `const x = inject("key"[, default])` → 编译为 `getApp().__proteusProvides` 注册表读写（MP 单文件产物无模块系统，不 import 运行时；运行时桥 `@proteus-vue/runtime` 的 `registerProvide/readInject/subscribeProvide/notifyProvide/nextPageId/destroyPage` 与之共享同一注册表）：**页面 onLoad 单函数合并块**（provide 注册 + inject setData）；**组件 provide 放 `created`**（先于子组件 attached 注入）、**inject 放 `attached`**（computed/immediate-watch 之后）；provide 值表达式重写裸 ref 名 / `ref.value` → `this.data.<name>`；inject 默认值编译为 ES5 三元（`provides[k] === undefined ? def : provides[k]`）。**★Batch 4 响应式联动**：裸 ref 提供（`provide("k", refName)`）→ ref 写入点（赋值/自增自减）追加 `proteusSyncProvide("k", "ref")`（同步注册表值 + 通知 `__subs` 订阅者）；inject 侧订阅 `provides.__subs[key]`（值变化 setData 刷新，`__self` 闭包捕获）+ `detached`/`onUnload` 取消（`proteusUnsubscribeProvide` 按引用移除防泄漏）；`.value`/字面量提供保持静态快照（对齐 Vue：传 ref 联动、传值快照）。**★Batch 6 页面级隔离**：注册表按 pageId 命名空间（`{ [pageId]: {...}, __seq }`）——页面 onLoad 用 `__seq` 递增生成 `__proteusPageId`（存实例）、组件 created/attached 用 `getCurrentPages()` 栈顶解析所属页面 id（无则 'global'），跨页面互不污染；onUnload `delete __reg[pageId]` 清理防泄漏。规则 `script/provide-inject`
+- **跨模块引用（module-plan B0）**：`import { a } from '../utils/format'` → 产物顶部 `const { a } = require('../utils/format.js')`（named/default/namespace/side 四形态；requirePath 由插件预计算：共享模块 esbuild bundle 为 CJS 独立产物，页面产物相对路径引用）；`vue`（编译器静态）/ `@proteus-vue/*`（Web 专用或编译期处理）/ `.vue` 组件（usingComponents）/ `import type`（纯类型）不参与；**无法解析的路径 → 剥离 + 警告**（反黑盒）。**函数调用初始化**（`const store = usePlayerStore()`）→ 不再静态求值失败丢调用：onLoad/attached 注入 `this.store = usePlayerStore()`（运行时初始化实例属性，MVP 模板绑定不支持——逻辑层可用；共享逻辑请用模块 import）。★B0 边界：共享模块含第三方依赖（pinia/vue 等裸模块）→ 跳过编译（bundle 体积过大），Pinia 接入为后续批次；规则 `script/module-import` + `script/runtime-init`
 - **产物 ES5 安全**：数组解构 / 对象展开 / `??` / `?.` 一律规避（微信真机 babel 转译问题）。
 
 ## 反编译黑盒（产物自校验）
@@ -299,7 +299,7 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
 - `vite-plugin-mp-transform.ts`（项目根）：薄适配层——小程序页面不在 Vite 模块图中，`buildStart` 扫描 `pagesDir` 编译 + `emitFile` 产物
 - `tests/mp-transform.test.ts`：直接调纯函数做 golden test（45 个用例）
-- 未来：`@proteus/compiler` 独立包
+- 未来：`@proteus-vue/compiler` 独立包
 
 ## MVP 限制（编译期警告或忽略）
 
@@ -310,4 +310,4 @@ transformScriptToPage(source, styleOpts, { file, isComponent, vModelBindings, us
 
 ## 独立开源（✅ v0.2 已落地）
 
-`packages/compiler/` 已是 monorepo 独立包 `@proteus/compiler`：`npm run build -w @proteus/compiler` 产出 `dist/`（esbuild 单文件 + tsc 声明文件），`npm publish` 即发布；peer 依赖 `@vue/compiler-sfc` / `@vue/compiler-dom`。下一步 CLI `@proteus/cli`（`proteus build <dir> --out <dir>` / `proteus explain`），核心就是调 `compileVueSfc` + `explainTransform`。
+`packages/compiler/` 已是 monorepo 独立包 `@proteus-vue/compiler`：`npm run build -w @proteus-vue/compiler` 产出 `dist/`（esbuild 单文件 + tsc 声明文件），`npm publish` 即发布；peer 依赖 `@vue/compiler-sfc` / `@vue/compiler-dom`。下一步 CLI `@proteus-vue/cli`（`proteus build <dir> --out <dir>` / `proteus explain`），核心就是调 `compileVueSfc` + `explainTransform`。

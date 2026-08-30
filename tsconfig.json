@@ -17,15 +17,15 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@proteus/compiler": ["packages/compiler/src/index.ts"],
-      "@proteus/shared": ["packages/shared/src/index.ts"],
-      "@proteus/runtime": ["packages/runtime/src/index.ts"],
-      "@proteus/router": ["packages/router/src/index.ts"],
-      "@proteus/router/*": ["packages/router/src/*"],
-      "@proteus/plugin-vite": ["packages/plugin-vite/src/index.ts"],
-      "@proteus/plugin-vite/*": ["packages/plugin-vite/src/*"],
-      "@proteus/components": ["src/components/index.ts"],
-      "@proteus/components/*": ["src/components/*"]
+      "@proteus-vue/compiler": ["packages/compiler/src/index.ts"],
+      "@proteus-vue/shared": ["packages/shared/src/index.ts"],
+      "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
+      "@proteus-vue/router": ["packages/router/src/index.ts"],
+      "@proteus-vue/router/*": ["packages/router/src/*"],
+      "@proteus-vue/plugin-vite": ["packages/plugin-vite/src/index.ts"],
+      "@proteus-vue/plugin-vite/*": ["packages/plugin-vite/src/*"],
+      "@proteus-vue/components": ["src/components/index.ts"],
+      "@proteus-vue/components/*": ["src/components/*"]
     }
   },
   "include": [

@@ -60,7 +60,7 @@ function nodeToRecord(node: RouteNode): string {
 输出产物 `dist/.proteus/routes.generated.ts` 被 `main.web.ts` 引用：
 ```ts
 // main.web.ts
-import { createWebRouter, createApp } from '@proteus/runtime'
+import { createWebRouter, createApp } from '@proteus-vue/runtime'
 import { routes } from '../.proteus/routes.generated'
 
 const router = createWebRouter({ routes, history: createWebHistory() })

@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 // Web 端注册框架内置组件（聚合入口；MP 端编译器忽略 import，标签走 usingComponents /proteus/...）
-import { VirtualList } from '@proteus/components'
+import { VirtualList } from '@proteus-vue/components'
 
 // ref 用非空初始值推导类型（空数组会推断 never[]，编译器不支持泛型标注）
 const items = ref([{ title: '' }])

@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/runtime",
+  "name": "@proteus-vue/runtime",
   "version": "0.1.0",
   "description": "Proteus 运行时：setData 桥接（批量 + 深层 diff）/ 页面生命周期 / store 桥 / app 骨架模板",
   "type": "module",
@@ -15,10 +15,10 @@
   },
   "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus/shared --external:pinia"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/shared --external:pinia"
   },
   "dependencies": {
-    "@proteus/shared": "0.1.0"
+    "@proteus-vue/shared": "0.1.0"
   },
   "peerDependencies": {
     "pinia": "^4.0.0"

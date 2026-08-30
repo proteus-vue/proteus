@@ -12,10 +12,10 @@ import { ref } from 'vue'
 // ★platform-plan B1：Capability 能力（业务依赖能力不依赖平台）——Web 端 Vite ESM 可用；MP 端接入待能力包打包放行
 import clipboardCap from '../capabilities/clipboard.capability'
 import type { ClipboardAPI } from '../capabilities/clipboard.capability'
-import { registerCapability, useCapability } from '@proteus/capabilities'
-import type { Capability } from '@proteus/capabilities'
-// ★api-plan B1：设备信息（@proteus/api 框架包——MP 端经共享模块放行 _proteus/api.js）
-import { getDeviceInfo } from '@proteus/api'
+import { registerCapability, useCapability } from '@proteus-vue/capabilities'
+import type { Capability } from '@proteus-vue/capabilities'
+// ★api-plan B1：设备信息（@proteus-vue/api 框架包——MP 端经共享模块放行 _proteus/api.js）
+import { getDeviceInfo } from '@proteus-vue/api'
 
 registerCapability(clipboardCap)
 
@@ -61,9 +61,9 @@ function showDevice() {
       <p class="sub">{{ copyStatus }}</p>
     </div>
 
-    <!-- ★api-plan B1：设备信息（@proteus/api getDeviceInfo——业务零平台分支） -->
+    <!-- ★api-plan B1：设备信息（@proteus-vue/api getDeviceInfo——业务零平台分支） -->
     <div class="box">
-      <button @click="showDevice">设备信息（@proteus/api）</button>
+      <button @click="showDevice">设备信息（@proteus-vue/api）</button>
       <p class="sub">{{ device.platform }} {{ device.screenWidth }}×{{ device.screenHeight }}{{ device.isSkyline ? '（Skyline）' : '' }}</p>
     </div>
 

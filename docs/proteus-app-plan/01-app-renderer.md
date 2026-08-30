@@ -2,7 +2,7 @@
 
 ## 目标
 
-`@proteus/renderer-app`——用 Vue 官方 `createRenderer` 定义原生 host config，**标准 Vue SFC 直接运行**于 iOS/Android 原生视图。
+`@proteus-vue/renderer-app`——用 Vue 官方 `createRenderer` 定义原生 host config，**标准 Vue SFC 直接运行**于 iOS/Android 原生视图。
 
 ## 1. 包结构
 

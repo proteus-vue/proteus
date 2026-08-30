@@ -4,7 +4,7 @@
 
 ### 压缩策略
 ```ts
-// vite.config.ts（由 @proteus/vite-plugin 内部配置）
+// vite.config.ts（由 @proteus-vue/vite-plugin 内部配置）
 export default defineConfig({
   build: {
     minify: 'esbuild',   // 快；生产可选 'terser' 更高压缩率

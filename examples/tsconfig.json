@@ -16,8 +16,8 @@
     "types": ["vite/client", "./shims/mp.d.ts", "./shims/events.d.ts", "./shims/vue.d.ts"],
     "baseUrl": ".",
     "paths": {
-      "@proteus/components": ["../src/components/index.ts"],
-      "@proteus/components/*": ["../src/components/*"]
+      "@proteus-vue/components": ["../src/components/index.ts"],
+      "@proteus-vue/components/*": ["../src/components/*"]
     }
   },
   "include": [

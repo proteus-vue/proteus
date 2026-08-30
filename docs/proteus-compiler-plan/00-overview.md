@@ -2,7 +2,7 @@
 
 ## 定位
 
-`@proteus/compiler` —— 应用层多 main 架构下的透明编译内核。
+`@proteus-vue/compiler` —— 应用层多 main 架构下的透明编译内核。
 
 **输入**：`src/` 下的 Vue SFC + `proteus.config.ts` + `app.ts`（多 main）
 **输出**：`dist/web/` + `dist/mp/` + `dist/app/`（三端产物）

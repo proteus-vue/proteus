@@ -1,6 +1,6 @@
 # 00 · 架构总览、依赖关系与里程碑
 
-> 本文档定义 Proteus 全局类型系统（`@proteus/types`）与配置 Schema（`@proteus/config-schema`）的落地方案，是 Compiler/CLI/Audit 之后的**横切契约层**。所有运行时层（Platform/Lifecycle/Module/Pinia/Router/API/Component）共享本文档定义的类型与配置约束。
+> 本文档定义 Proteus 全局类型系统（`@proteus-vue/types`）与配置 Schema（`@proteus-vue/config-schema`）的落地方案，是 Compiler/CLI/Audit 之后的**横切契约层**。所有运行时层（Platform/Lifecycle/Module/Pinia/Router/API/Component）共享本文档定义的类型与配置约束。
 
 ---
 
@@ -81,7 +81,7 @@ Compiler (✅) → CLI (✅) → Types+ConfigSchema (本次, B1-B2 先行) → T
 
 ## 6. 验收标准
 
-- [ ] 业务代码 `import type { Platform } from '@proteus/types'` 可在三端正确收窄
+- [ ] 业务代码 `import type { Platform } from '@proteus-vue/types'` 可在三端正确收窄
 - [ ] `proteus.config.ts` 写错字段 → tsc + CLI audit **双报错**且定位到行列
 - [ ] 任一 IR 变更 → 各层 `.d.ts` 通过 `generate` 自动同步，无需手写
 - [ ] 新增平台（如鸿蒙）只需扩展 `Platform` 联合 + 对应 schema，业务代码零改动

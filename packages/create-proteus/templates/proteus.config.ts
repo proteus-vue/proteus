@@ -1,5 +1,5 @@
-// proteus.config.ts —— Proteus 框架统一配置（拆包步骤 7：类型契约来自 @proteus/plugin-vite npm 包）
-import type { ProteusConfig } from '@proteus/plugin-vite'
+// proteus.config.ts —— Proteus 框架统一配置（拆包步骤 7：类型契约来自 @proteus-vue/plugin-vite npm 包）
+import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 const config: ProteusConfig = {
   platform: 'mp-weixin',
@@ -9,11 +9,11 @@ const config: ProteusConfig = {
   routesOutput: 'src/router/auto-routes.ts',
   customRoute: {
     registerPresets: true,
-    // 内置预设 builders（随 @proteus/router 包发布源码，插件读取后内联进 app.js 注册）
+    // 内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
     builders: {
-      halfScreen: 'node_modules/@proteus/router/src/presets/halfScreen.ts',
-      slideUp: 'node_modules/@proteus/router/src/presets/slideUp.ts',
-      scaleDown: 'node_modules/@proteus/router/src/presets/scaleDown.ts',
+      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+      slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+      scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
     },
   },
   // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）

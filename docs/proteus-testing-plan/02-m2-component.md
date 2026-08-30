@@ -40,7 +40,7 @@ it('disabled when loading', () => {
 验证 `<route>` 块解析产物：
 
 ```ts
-import { parseRouteBlock } from '@proteus/compiler'
+import { parseRouteBlock } from '@proteus-vue/compiler'
 
 it('parses nested route meta', () => {
   const ir = parseRouteBlock(`
@@ -58,7 +58,7 @@ it('parses nested route meta', () => {
 每个 transform 一份测试，输入 IR → 期望产物：
 
 ```ts
-import { transformVIf } from '@proteus/compiler/transforms/v-if'
+import { transformVIf } from '@proteus-vue/compiler/transforms/v-if'
 
 it('v-if → wx:if', () => {
   const input = { type: 'Element', tag: 'view', directives: [{ name: 'if', exp: 'show' }] }

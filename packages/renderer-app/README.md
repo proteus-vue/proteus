@@ -1,11 +1,11 @@
-# @proteus/renderer-app
+# @proteus-vue/renderer-app
 
 Proteus App 渲染器（app-plan B1 核心）：Vue 官方 `createRenderer` 自定义 host config——标准 Vue SFC 的 App 原生运行时通道（与 Web/MP 编译期通道并列）。
 
 ## 用法（B1 核心验证）
 
 ```ts
-import { createAppRenderer, createMockAdapter } from '@proteus/renderer-app'
+import { createAppRenderer, createMockAdapter } from '@proteus-vue/renderer-app'
 import { h } from 'vue'
 
 const adapter = createMockAdapter()
@@ -21,7 +21,7 @@ adapter.root.children // [{ tag: 'view', props: { class: 'box' }, children: [{ t
 ```
 业务代码（标准 Vue SFC）
 ├── Web/MP → 编译期通道（现有）
-└── App    → @proteus/renderer-app（运行时通道）
+└── App    → @proteus-vue/renderer-app（运行时通道）
               ├── NativeAdapter 接口（原生节点抽象：view/text/事件/样式）
               ├── createAppHostConfig → Vue createRenderer（官方 diff 引擎）
               └── v0.6 正式形态：iOS UIView / Android View 实现 NativeAdapter

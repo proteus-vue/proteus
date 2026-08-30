@@ -7,7 +7,7 @@
 //   3. maxWait：防抖期间持续变更超时强制落盘（防崩溃丢数据）
 //   4. flush 串行：同一 adapter 串行写，避免竞态覆盖
 // ⚠ MP 产物安全：全文件无 ?? / ?. / 对象展开 / 数组解构
-import type { StorageAdapter } from '@proteus/shared'
+import type { StorageAdapter } from '@proteus-vue/shared'
 
 export interface PersistSchedulerOptions {
   /** 防抖窗口 ms（默认 100；M2 lightweight 默认 50，M7 统一 100） */

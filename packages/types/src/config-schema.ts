@@ -1,5 +1,5 @@
 // packages/types/src/config-schema.ts
-// ★types-plan B3：ProteusConfig JSON Schema（单一来源产物 2）——对齐 @proteus/plugin-vite 的 ProteusConfig
+// ★types-plan B3：ProteusConfig JSON Schema（单一来源产物 2）——对齐 @proteus-vue/plugin-vite 的 ProteusConfig
 // ★铁律 #5：schema 字段变更必须同步 plugin-vite/config.ts + CLI config-validate.ts（CI `proteus generate types --check` 拦截生成文件漂移）
 // 编辑器接入：VS Code settings.json → "json.schemas": [{ "fileMatch": ["proteus.config.json"], "url": ".proteus/proteus.config.schema.json" }]
 

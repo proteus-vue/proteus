@@ -78,9 +78,9 @@ describe('scanModuleConfigs / CLI module:check（扫描 + 汇总 + 重名检测�
   })
 
   it('递归扫描全部 proteus-module.config.ts + 校验汇总', async () => {
-    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
-    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'trade', version: '1.2.0', dependencies: { app: '^1.0.0' }, preload: ['user'] })\n`)
-    writeFixture('modules/broken/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ version: '1.0.0' })\n`)
+    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'trade', version: '1.2.0', dependencies: { app: '^1.0.0' }, preload: ['user'] })\n`)
+    writeFixture('modules/broken/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ version: '1.0.0' })\n`)
     const { result } = await checkModuleConfigs(TMP)
     expect(result.modules.length).toBe(3)
     const app = result.modules.find((m) => m.name === 'app')
@@ -95,8 +95,8 @@ describe('scanModuleConfigs / CLI module:check（扫描 + 汇总 + 重名检测�
   })
 
   it('★重名模块（全局唯一）→ duplicateNames 检出', async () => {
-    writeFixture('dup-a/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'dup', version: '1.0.0' })\n`)
-    writeFixture('dup-b/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'dup', version: '2.0.0' })\n`)
+    writeFixture('dup-a/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'dup', version: '1.0.0' })\n`)
+    writeFixture('dup-b/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'dup', version: '2.0.0' })\n`)
     const { result } = await checkModuleConfigs(TMP)
     expect(result.duplicateNames.some((d) => d.name === 'dup' && d.files.length === 2)).toBe(true)
   })

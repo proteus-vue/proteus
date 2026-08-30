@@ -10,7 +10,7 @@
 
 ### B1 — TraceBus 骨架（地基，无依赖）
 **输入**：`00-overview.md`, `01-m1-trace-bus.md`
-**产出**：`@proteus/devtools-runtime` 包骨架 + `TraceBus` + `useTrace` + 采样 + 脱敏 + 环形缓冲
+**产出**：`@proteus-vue/devtools-runtime` 包骨架 + `TraceBus` + `useTrace` + 采样 + 脱敏 + 环形缓冲
 **验收**：emit noop 开销 < 0.1ms；redact 单测全绿
 **依赖**：无（仅 Types 事件类型）
 
@@ -83,7 +83,7 @@
 
 | 批 | 模块 | 状态 | PR |
 |----|------|------|-----|
-| B1 | TraceBus | ✅（2026-08，@proteus/devtools-runtime：协议/环形缓冲/脱敏/采样/零开销门控，8 用例） | — |
+| B1 | TraceBus | ✅（2026-08，@proteus-vue/devtools-runtime：协议/环形缓冲/脱敏/采样/零开销门控，8 用例） | — |
 | B2 | 六源接入 | ✅（2026-08，lifecycle + componentRender 两源示范，type-only 注入，6 用例；router/store/api/capability/compiler 同模式后续） | — |
 | B3 | 时间轴 | ⬜ v1.0+（面板 UI） | — |
 | B4 | 快照/时间旅行 | ⬜ v1.0+ | — |

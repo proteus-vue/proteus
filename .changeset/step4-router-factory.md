@@ -1,5 +1,5 @@
 ---
-'@proteus/router': minor
+'@proteus-vue/router': minor
 ---
 
 拆包步骤 4：router 工厂化 + 路由规划 M1/M2 落地

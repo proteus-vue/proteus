@@ -3,9 +3,9 @@
 // 扫描 pagesDir 的 <route> 块 → scanRoutes 严格校验（含 loc 报错）→ 迁移就绪报告
 // ★透明化：报错精确到 文件:行号；通过后输出路由摘要 + 嵌套决策 trace（--trace-router 语义）
 import path from 'node:path'
-import { scanRoutes } from '@proteus/router/scan'
-import { buildRouteTree } from '@proteus/router/tree'
-import { listRouteRules } from '@proteus/router/rules'
+import { scanRoutes } from '@proteus-vue/router/scan'
+import { buildRouteTree } from '@proteus-vue/router/tree'
+import { listRouteRules } from '@proteus-vue/router/rules'
 
 export interface RouterCheckResult {
   ok: boolean

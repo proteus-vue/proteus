@@ -6,7 +6,7 @@
 
 - **Runner**: `vitest`（ESM 原生、快、与 Vite 共享配置）
 - **DOM 环境**: `happy-dom`（Web 端组件）/ `jsdom`（小程序端模拟）
-- **小程序宿主**: `@proteus/test-utils` 提供 `createMockContext()`
+- **小程序宿主**: `@proteus-vue/test-utils` 提供 `createMockContext()`
 - **断言**: `vitest` 内置 `expect` + `@testing-library/jest-dom`
 
 ## 2. 目录约定
@@ -69,7 +69,7 @@ it('persist hydrated state', () => {
 ## 5. Adapter 单测（Platform）
 
 ```ts
-import { share } from '@proteus/capabilities/share'
+import { share } from '@proteus-vue/capabilities/share'
 
 describe('share adapter', () => {
   it('web uses navigator.share', async () => {

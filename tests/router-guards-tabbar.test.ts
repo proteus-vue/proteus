@@ -2,7 +2,7 @@
 // 路由规划 M6（B6）：Router 实例守卫 API + 守卫 trace + redirect 跨端 + tabBar config 驱动
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@proteus/shared', () => ({
+vi.mock('@proteus-vue/shared', () => ({
   adapter: {
     isMP: true,
     getCurrentPages: vi.fn(() => [{ route: 'pages/index' }]),
@@ -37,7 +37,7 @@ describe('M6 守卫：Router 实例 API + trace', () => {
     router.beforeEach((to) => to.name === 'index')
     await router.push({ name: 'user' })
     // 守卫返回 false（index 为 true 才放行）→ 导航取消
-    const { adapter } = await import('@proteus/shared')
+    const { adapter } = await import('@proteus-vue/shared')
     expect(vi.mocked(adapter.navigateTo)).not.toHaveBeenCalled()
   })
 
@@ -47,7 +47,7 @@ describe('M6 守卫：Router 实例 API + trace', () => {
       auth: async () => false,
       onAuthFail: vi.fn(),
     })
-    const { adapter } = await import('@proteus/shared')
+    const { adapter } = await import('@proteus-vue/shared')
     await authed.push({ name: 'user' })
     expect(vi.mocked(adapter.navigateTo)).not.toHaveBeenCalled() // 未登录拦截
     expect((authed as unknown as { options: { onAuthFail: ReturnType<typeof vi.fn> } }).options.onAuthFail).toHaveBeenCalled()
@@ -59,7 +59,7 @@ describe('M6 守卫：Router 实例 API + trace', () => {
   })
 
   it('★B11：无 auth 检查器 / 非 requiresAuth 页面 → 放行（默认行为不变）', async () => {
-    const { adapter } = await import('@proteus/shared')
+    const { adapter } = await import('@proteus-vue/shared')
     await router.push({ name: 'forms' }) // 非 tab 非 requiresAuth → navigateTo
     expect(vi.mocked(adapter.navigateTo)).toHaveBeenCalled()
     await router.push({ name: 'user' }) // requiresAuth 但无 auth 检查器 → 放行
@@ -70,7 +70,7 @@ describe('M6 守卫：Router 实例 API + trace', () => {
     const afterSpy = vi.fn()
     router.afterEach((to) => void afterSpy(to.name))
     await router.push({ name: 'index' }) // beforeEach 放行（name === 'index'）
-    const { adapter } = await import('@proteus/shared')
+    const { adapter } = await import('@proteus-vue/shared')
     expect(vi.mocked(adapter.switchTab)).toHaveBeenCalled()
     expect(afterSpy).toHaveBeenCalledWith('index')
   })

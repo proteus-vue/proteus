@@ -89,7 +89,7 @@ export function generateAppNavigation(nodes: RouteNode[]): string {
   }`).join(',\n  ')
 
   return `
-import { registerScreens } from '@proteus/runtime/app'
+import { registerScreens } from '@proteus-vue/runtime/app'
 export const screens = { ${screens} }
 registerScreens(screens)
 `
@@ -99,7 +99,7 @@ registerScreens(screens)
 产物 `navigation.generated.ts` 在 App 入口调用：
 ```ts
 // main.app.ts
-import { createAppRouter } from '@proteus/runtime'
+import { createAppRouter } from '@proteus-vue/runtime'
 import { screens } from '../.proteus/navigation.generated'
 
 const router = createAppRouter({ screens, root: 'home' })

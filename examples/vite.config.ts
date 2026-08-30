@@ -5,9 +5,9 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import path from 'node:path'
 import config from './proteus.config'
-import { mpTransform } from '@proteus/plugin-vite'
+import { mpTransform } from '@proteus-vue/plugin-vite'
 // ★module-plan B4：模块图谱 → Web manualChunks（有 modules/ 目录时自动生效）
-import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus/module'
+import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus-vue/module'
 
 /** 处理 <route> 自定义块虚拟模块（?vue&type=route），保证 Web 构建不报错 */
 function routeBlocksPlugin(): Plugin {
@@ -42,7 +42,7 @@ export default defineConfig(async ({ mode }) => {
     plugins: isMp
       ? [
           // 小程序端：独占编译管线（不用 plugin-vue），标准 Vue SFC → wxml/wxss/js
-          // ★框架内置组件目录显式传入（组件库未拆包，决策 #115）：与下方 @proteus/components alias 同一路径
+          // ★框架内置组件目录显式传入（组件库未拆包，决策 #115）：与下方 @proteus-vue/components alias 同一路径
           mpTransform({
             config,
             frameworkComponentsDir: fileURLToPath(new URL('../src/components', import.meta.url)),
@@ -51,9 +51,9 @@ export default defineConfig(async ({ mode }) => {
       : [vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
-        // ★真实 npm 包使用方式（决策 #115）：@proteus/{router,runtime,shared,plugin-vite} 走 workspace 链接的
-        //   npm 包 dist（与 create-proteus 生成工程一致）；仅 @proteus/components 保留 alias（组件库未拆包，v2.0 方向）
-        { find: '@proteus/components', replacement: fileURLToPath(new URL('../src/components', import.meta.url)) },
+        // ★真实 npm 包使用方式（决策 #115）：@proteus-vue/{router,runtime,shared,plugin-vite} 走 workspace 链接的
+        //   npm 包 dist（与 create-proteus 生成工程一致）；仅 @proteus-vue/components 保留 alias（组件库未拆包，v2.0 方向）
+        { find: '@proteus-vue/components', replacement: fileURLToPath(new URL('../src/components', import.meta.url)) },
       ],
     },
     build: {

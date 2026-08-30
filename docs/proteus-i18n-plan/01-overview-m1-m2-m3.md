@@ -10,7 +10,7 @@
 
 ```
 L4 业务（模板 $t / 组件 <i18n>）
-L3 @proteus/i18n（useI18n / MessageCatalog / Loader）
+L3 @proteus-vue/i18n（useI18n / MessageCatalog / Loader）
 L2 adapter（web(dynamic import) / skyline(分包+require) / app(Native bundle)）
 L1 平台（fetch / wx.loadSubPackage / iOS/Android bundle）
 ```

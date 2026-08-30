@@ -17,7 +17,7 @@
 | 5 | 脱敏 redact（递归，REDACT_KEYS）| pinia 敏感字段（volatile/encrypted）有标记 | ✅ B1 实现递归脱敏（Date/Map/Set/数组/嵌套对象）|
 | 6 | 可序列化：DOM/节点转 handle | 无节点引用进 payload 的现状（trace 只带字符串）| ✅ 协议约束 payload JSON-safe + 文档标注 handle 约定 |
 | 7 | 六源接入（lifecycle/router/store/api/capability/compiler）| 各源有独立 trace 回调 | ⏸ B2 逐个接入（生命周期 orchestration + componentRender 先接入示范）|
-| 8 | MP 编译 | 共享模块白名单 `@proteus/*` ✓ | ✅ 纯逻辑 ES5-safe → `_proteus/devtools-runtime` 直接可用 |
+| 8 | MP 编译 | 共享模块白名单 `@proteus-vue/*` ✓ | ✅ 纯逻辑 ES5-safe → `_proteus/devtools-runtime` 直接可用 |
 
 ---
 
@@ -25,7 +25,7 @@
 
 | 批 | 交付物 | 说明 |
 |----|--------|------|
-| B1 | `@proteus/devtools-runtime`：TraceBus（TraceEvent 协议/emit/on/环形缓冲/flush/setEnabled）+ redact 脱敏 + 采样（traceId hash + error tail）+ createTraceId | ✅ 本批（纯逻辑零依赖，可单测）|
+| B1 | `@proteus-vue/devtools-runtime`：TraceBus（TraceEvent 协议/emit/on/环形缓冲/flush/setEnabled）+ redact 脱敏 + 采样（traceId hash + error tail）+ createTraceId | ✅ 本批（纯逻辑零依赖，可单测）|
 | B2 | 六源接入：lifecycle orchestrator trace → bus + componentRender → bus（先两源示范）| 依赖 B1 |
 | 后续 | 面板（时间轴/快照/火焰图/根因/设备）+ 六源全量 + handle 序列化 | 标长期（v1.0+），面板为浏览器扩展/独立窗口 |
 

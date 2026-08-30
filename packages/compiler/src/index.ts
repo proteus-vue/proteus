@@ -1,5 +1,5 @@
 // src/compiler/index.ts
-// 编译引擎公开 API —— 未来独立包 @proteus/compiler 的入口
+// 编译引擎公开 API —— 未来独立包 @proteus-vue/compiler 的入口
 // 约束：本模块及同目录文件不得 import vite / proteus.config，选项全部入参
 import { parse as sfcParse } from '@vue/compiler-sfc'
 import { transformTemplateToWxml } from './template'

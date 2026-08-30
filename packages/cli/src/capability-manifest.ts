@@ -2,10 +2,10 @@
 // ★platform-plan B1/B3：proteus capabilities:manifest —— 能力清单 + 平台缺失报告 + 业务引用检查（编译期分叉 §7）
 import fs from 'node:fs'
 import path from 'node:path'
-import { scanCapabilities } from '@proteus/capabilities/scan'
-import type { CapabilityManifest, ManifestCapabilityEntry } from '@proteus/capabilities/scan'
-import { scanCapabilityUsage, checkCapabilityUsage, scanPlatformViolations } from '@proteus/capabilities/check'
-import type { PlatformViolation } from '@proteus/capabilities/check'
+import { scanCapabilities } from '@proteus-vue/capabilities/scan'
+import type { CapabilityManifest, ManifestCapabilityEntry } from '@proteus-vue/capabilities/scan'
+import { scanCapabilityUsage, checkCapabilityUsage, scanPlatformViolations } from '@proteus-vue/capabilities/check'
+import type { PlatformViolation } from '@proteus-vue/capabilities/check'
 
 /** 渲染 manifest 报告（纯函数；--platform 时追加缺失报告） */
 export function formatCapabilityManifest(

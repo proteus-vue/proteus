@@ -30,7 +30,7 @@
 ## 3. 写法示例（C2）
 
 ```ts
-import { createTestingApp } from '@proteus/test-utils'
+import { createTestingApp } from '@proteus-vue/test-utils'
 import { useUserStore } from '@/stores/user'
 import { router } from '@/router'
 

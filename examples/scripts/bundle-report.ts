@@ -6,9 +6,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import config from '../proteus.config'
-// ★module-plan B7a/B8：分包体积统计/阈值评估抽到 @proteus/module（bundle-report 与 CLI audit 共用）
-import { scanSubPackages, evaluateSubPackageSizes } from '@proteus/module'
-import type { SubPackageStat } from '@proteus/module'
+// ★module-plan B7a/B8：分包体积统计/阈值评估抽到 @proteus-vue/module（bundle-report 与 CLI audit 共用）
+import { scanSubPackages, evaluateSubPackageSizes } from '@proteus-vue/module'
+import type { SubPackageStat } from '@proteus-vue/module'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')

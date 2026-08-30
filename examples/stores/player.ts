@@ -1,9 +1,9 @@
 // examples/stores/player.ts —— 音乐播放器 store（pinia-plan M3 验收：同一份源码四端一致）
 // ★铁律：本文件禁止任何平台判断（if window / if wx / getPlatform 分支）——平台差异收敛在
-//   @proteus/runtime 的 createXxxPinia 工厂（platforms/pinia.ts）与 shared/storage
+//   @proteus-vue/runtime 的 createXxxPinia 工厂（platforms/pinia.ts）与 shared/storage
 // 持久化：persisted() 轻量方案——只存 volume/history（playing 是瞬时态，不持久化）
 import { defineStore } from 'pinia'
-import { persisted } from '@proteus/runtime'
+import { persisted } from '@proteus-vue/runtime'
 
 export interface Track {
   title: string

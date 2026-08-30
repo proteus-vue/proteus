@@ -1,4 +1,4 @@
-# 02 · M2 配置 Schema（`@proteus/config-schema`）
+# 02 · M2 配置 Schema（`@proteus-vue/config-schema`）
 
 > 定义 `proteus.config.ts` 的完整字段、归属层、默认值。是 CLI config loader 与 Audit 规则的**唯一真相源**。
 

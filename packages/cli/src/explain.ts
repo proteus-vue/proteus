@@ -3,7 +3,7 @@
 //   <vue 文件> → 决策 trace（该文件实际触发的全部转换规则）
 //   <规则 ID>  → 该规则的 AI 说明书（what/why/when/example/verify/source）
 import fs from 'node:fs'
-import { explainTransform, formatTransformTrace, getTransformRule, formatTransformRule } from '@proteus/compiler'
+import { explainTransform, formatTransformTrace, getTransformRule, formatTransformRule } from '@proteus-vue/compiler'
 
 /** 智能识别目标：文件存在 → vue 决策 trace；否则 → 规则 ID 的 AI 说明书（纯函数，可单测） */
 export function explainTarget(target: string): string {

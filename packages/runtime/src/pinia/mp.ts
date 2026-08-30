@@ -3,7 +3,7 @@
 // 特性：WxStorageAdapter 持久化 + 写盘防抖拉长（主线程敏感，setStorageSync 阻塞）
 // 注意：小程序无 DevTools 扩展（window.__PINIA_DEVTOOLS__ 不存在）——模块 06 的 DevTools 在 mp 端自动 no-op
 import { createPinia } from 'pinia'
-import { WxStorageAdapter, setPlatform } from '@proteus/shared'
+import { WxStorageAdapter, setPlatform } from '@proteus-vue/shared'
 import { createPersistence } from './persistence/lightweight'
 import { createDevtoolsPlugin, registerStoreSnapshot } from './devtools'
 

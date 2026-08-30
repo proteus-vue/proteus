@@ -1,4 +1,4 @@
-# 01 · M1 核心类型系统（`@proteus/types`）
+# 01 · M1 核心类型系统（`@proteus-vue/types`）
 
 > 定义 Proteus 全局共享类型：平台判别、生命周期阶段、各层 IR、全局 Registry 推断。**零运行时依赖，纯 `.d.ts`。**
 
@@ -48,7 +48,7 @@ export type IfPlatform<P extends Platform, T> = P extends Platform ? T : never
 **使用范式**（业务代码）：
 ```ts
 // ✅ 正确：用类型收窄
-import type { Platform } from '@proteus/types'
+import type { Platform } from '@proteus-vue/types'
 declare const __PLATFORM__: Platform
 
 function getStorage() {

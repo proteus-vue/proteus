@@ -5,7 +5,7 @@
 
 ## 铁律（AI 必须遵守）
 
-1. **stores/ 下禁止平台判断**：`process.env` / `wx.` / `window.` / `plus.` / `my.` / `typeof window` 一律不得出现（平台差异收敛到 `@proteus/runtime` 工厂与 `@proteus/shared` storage）
+1. **stores/ 下禁止平台判断**：`process.env` / `wx.` / `window.` / `plus.` / `my.` / `typeof window` 一律不得出现（平台差异收敛到 `@proteus-vue/runtime` 工厂与 `@proteus-vue/shared` storage）
 2. **新增 store → 必须同时在 `stores/registry.ts` 追加类型**（否则 `useStore()` 类型注册表漏项，CI 门禁拦截）
 3. **持久化配置只能写在 `defineStore` 第 3 参数**（`persistence: persisted({...})` / `persist: {...}`），不得运行时动态拼接
 4. **跨平台差异 → 收敛到 shared/ 或平台工厂**，不在 store 里写分支

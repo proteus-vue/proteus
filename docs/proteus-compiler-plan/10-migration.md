@@ -8,7 +8,7 @@
 
 ```
 阶段 1：源码仍手写 main.mp.ts / 页面 JSON
-         ↓ 接入 @proteus/compiler 只做 SFC → 四件套
+         ↓ 接入 @proteus-vue/compiler 只做 SFC → 四件套
 阶段 2：逐步把平台差异抽成 <route> / defineApp / app.component
          ↓ 编译器接管全局注册、分包、转场
 阶段 3：全量透明编译，产物可审计
@@ -22,7 +22,7 @@
 | `App()` / `Page()` 手写注册 | → `defineApp` / `definePage` |
 | `pages.json` 手写 | → `<route>` 块就近声明 |
 | `usingComponents` 每页写 | → `app.component()` 编译期注入 |
-| `wx.xxx` 直调 | → `useCapability()` / `@proteus/api` |
+| `wx.xxx` 直调 | → `useCapability()` / `@proteus-vue/api` |
 
 ## 三、codemod 脚本
 

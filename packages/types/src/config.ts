@@ -1,6 +1,6 @@
 // packages/types/src/config.ts
-// ★类型收口（10-type-consolidation）：ProteusConfig（原 @proteus/plugin-vite/src/config.ts 的 interface）
-// runtime 值（defineConfig 等助手）留 @proteus/plugin-vite
+// ★类型收口（10-type-consolidation）：ProteusConfig（原 @proteus-vue/plugin-vite/src/config.ts 的 interface）
+// runtime 值（defineConfig 等助手）留 @proteus-vue/plugin-vite
 import type { TransformRuleOverrides } from './compiler-types'
 import type { RouteMeta } from './router-types'
 

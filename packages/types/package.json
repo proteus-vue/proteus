@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/types",
+  "name": "@proteus-vue/types",
   "version": "0.1.0",
   "description": "Proteus 框架级共享类型单一来源（types-plan B3）：Platform/PlatformTarget + ProteusConfig JSON Schema",
   "type": "module",

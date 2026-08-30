@@ -14,7 +14,7 @@ export type { CapabilityAdapter } from './adapter'
 export { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck } from './guard'
 export type { PlatformCases } from './guard'
 
-// ★scan/check 为 node 工具（esbuild/fs），仅经子路径 '@proteus/capabilities/scan' / 'check' 导入——不进运行时入口（浏览器/MP 产物）
+// ★scan/check 为 node 工具（esbuild/fs），仅经子路径 '@proteus-vue/capabilities/scan' / 'check' 导入——不进运行时入口（浏览器/MP 产物）
 
 /** 校验能力描述文件（纯函数；id kebab-case 必填 / tier 1-4 / adapters 非空 / fallback 引用合法） */
 export function validateCapabilityDefinition(input: unknown): { ok: true; value: CapabilityDefinition } | { ok: false; errors: Array<{ field: string; message: string }> } {

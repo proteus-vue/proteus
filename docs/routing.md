@@ -65,7 +65,7 @@ examples/pages/
 ## Router API
 
 ```typescript
-import { router } from '@proteus/router'
+import { router } from '@proteus-vue/router'
 
 // 命名路由跳转（推荐）
 router.push({ name: 'user-profile', params: { id: 1 } })
@@ -111,7 +111,7 @@ interface NavigateOptions {
 ### 路由守卫
 
 ```typescript
-import { beforeEach, afterEach } from '@proteus/router/guards'
+import { beforeEach, afterEach } from '@proteus-vue/router/guards'
 
 beforeEach((to, from) => {
   if (to.meta?.requiresAuth && !getToken()) {

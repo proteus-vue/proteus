@@ -157,7 +157,7 @@ override fun onDestroy() { ProteusBridge.runLifecycle("destroy") }
 
 ### JS 桥接层
 ```ts
-// @proteus/runtime-app
+// @proteus-vue/runtime-app
 export const NativeLifecycle = {
   on(event: string, handler: () => void) {
     // JSI: 注册原生 → JS 回调

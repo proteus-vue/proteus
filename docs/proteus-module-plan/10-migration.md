@@ -37,7 +37,7 @@ import { formatTime } from '../utils/format'
 ### Step 4：运行时编排（B2，可选）
 
 ```ts
-import { createModuleSystem } from '@proteus/module'
+import { createModuleSystem } from '@proteus-vue/module'
 const ms = createModuleSystem({ modules: [tradeModule, userModule] })
 await ms.init()           // 按拓扑序初始化（依赖者后 init）
 const trade = ms.getModule('trade')   // 类型安全访问

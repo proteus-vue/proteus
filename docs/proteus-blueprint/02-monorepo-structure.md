@@ -56,24 +56,24 @@ packages:
 
 dependencies:
   # 基建层（无依赖）
-  '@proteus/compiler': workspace:*
-  '@proteus/types': workspace:*
+  '@proteus-vue/compiler': workspace:*
+  '@proteus-vue/types': workspace:*
   
   # 运行时层（依赖基建）
-  '@proteus/pinia': 
+  '@proteus-vue/pinia': 
     workspace:*, 
-    requires: ['@proteus/compiler', '@proteus/types']
-  '@proteus/lifecycle':
+    requires: ['@proteus-vue/compiler', '@proteus-vue/types']
+  '@proteus-vue/lifecycle':
     workspace:*,
-    requires: ['@proteus/compiler', '@proteus/types']
-  '@proteus/module':
+    requires: ['@proteus-vue/compiler', '@proteus-vue/types']
+  '@proteus-vue/module':
     workspace:*,
-    requires: ['@proteus/compiler', '@proteus/types']
+    requires: ['@proteus-vue/compiler', '@proteus-vue/types']
   
   # 应用层（依赖运行时）
   '@app/modules/player':
     workspace:*,
-    requires: ['@proteus/pinia', '@proteus/lifecycle', '@proteus/api']
+    requires: ['@proteus-vue/pinia', '@proteus-vue/lifecycle', '@proteus-vue/api']
 ```
 
 **验收点**：
@@ -85,7 +85,7 @@ dependencies:
 
 ```ts
 // proteus.config.ts
-import { defineConfig } from '@proteus/types'
+import { defineConfig } from '@proteus-vue/types'
 
 export default defineConfig({
   // Compiler

@@ -42,11 +42,11 @@
 ```
 L4  业务页面 (.vue)
        ↓ 使用 <p-view> / <p-scroll-view> / <p-player-bar>
-L3  内置组件 (@proteus/components)
+L3  内置组件 (@proteus-vue/components)
        ├─ 基础组件 (Base)
        └─ 业务组件 (Business)
        ↓ Props/Slots/Events 标准化
-L2  平台渲染抽象 (@proteus/runtime)
+L2  平台渲染抽象 (@proteus-vue/runtime)
        ├─ Web Renderer (DOM)
        ├─ Skyline Renderer (glass-easel + Worklet)
        └─ App Renderer (Custom Renderer，未来)

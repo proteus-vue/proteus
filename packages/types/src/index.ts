@@ -1,5 +1,5 @@
 // packages/types/src/index.ts
-// @proteus/types —— 框架级共享类型单一来源（types-plan B3 + 类型收口 10-type-consolidation）
+// @proteus-vue/types —— 框架级共享类型单一来源（types-plan B3 + 类型收口 10-type-consolidation）
 // 零运行时依赖（纯类型 + schema 数据 + 品牌/迁移）；各实现包从本包引用公共类型 + re-export 兼容
 // ★MP 产物安全（决策 #32/#36）：共享模块 _proteus/types 进 MP（Platform 常量等为纯数据）
 

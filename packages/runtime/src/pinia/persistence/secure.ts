@@ -6,7 +6,7 @@
 // ⚠ 安全声明：内置 encrypt/decrypt 为轻量混淆（防明文存储），非高安全——生产环境请注入
 //   平台安全存储（web: crypto.subtle+IndexedDB / mp: 后端下发密钥 / app: Keychain），详见 docs/proteus-pinia-plan 10-m7
 // ⚠ MP 产物安全：全文件无 ?? / ?. / 对象展开 / 数组解构
-import { deserialize } from '@proteus/shared'
+import { deserialize } from '@proteus-vue/shared'
 
 export interface SecureFields {
   /** 白名单：仅加密这些字段 */

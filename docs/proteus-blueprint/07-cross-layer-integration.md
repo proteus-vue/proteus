@@ -24,7 +24,7 @@
 ```ts
 // tests/contract/lifecycle-component.spec.ts
 import { describe, it, expect } from 'vitest'
-import { defineApp, mountMpApp } from '@proteus/lifecycle'
+import { defineApp, mountMpApp } from '@proteus-vue/lifecycle'
 import PlayerBar from '@/global/PlayerBar.vue'
 
 describe('C2: mountMpApp appBar → Component', () => {

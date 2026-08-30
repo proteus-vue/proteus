@@ -18,7 +18,7 @@ describe('proteus init module（契约骨架生成）', () => {
     const out = writeModuleConfigSkeleton(TMP)
     expect(path.basename(out)).toBe('proteus-module.config.ts')
     const content = fs.readFileSync(out, 'utf-8')
-    expect(content).toContain("import { defineModule } from '@proteus/module'")
+    expect(content).toContain("import { defineModule } from '@proteus-vue/module'")
     expect(content).toContain("name: 'app'")
     expect(content).toContain('dependencies: {}')
     expect(content).toContain(MODULE_CONFIG_SKELETON)

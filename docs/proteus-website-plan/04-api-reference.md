@@ -23,7 +23,7 @@ packages/*/src/**.ts（含 TSDoc 注释）
 - 参数表（name / type / required / default / description）
 - 返回值
 - 示例（从 ```` ```ts ```` 代码块提取）
-- 所属包（`@proteus/core` / `@proteus/compiler` ...）
+- 所属包（`@proteus-vue/core` / `@proteus-vue/compiler` ...）
 - `since` / `stability`（对齐 03-guide 版本标记）
 - 平台支持矩阵（Web / Skyline / App，来自 Platform capability）
 

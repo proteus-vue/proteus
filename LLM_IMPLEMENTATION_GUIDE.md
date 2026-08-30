@@ -41,7 +41,7 @@
 
 - **配置**：`proteus.config.ts`（即 v2.0 中的 `framework.config.ts`，全文档已统一更名）
 - **CLI**（未来）：`proteus dev:mp` / `proteus build:web`
-- **包**：`proteus-vue`（核心）、`@proteus/plugin-*`（Vite 插件等）
+- **包**：`proteus-vue`（核心）、`@proteus-vue/plugin-*`（Vite 插件等）
 - **Tagline**："One Vue source. Every form."（一份源码，千端形态）
 - **Logo 意象**：变形/流体形态 + 双端之门
 
@@ -125,7 +125,7 @@
 1. **规则即文档**：所有转换规则集中为自描述的规则注册表 `packages/compiler/src/transforms/`（v0.2 起 monorepo 独立包）——每条规则 = 一份 AI 说明书（what/why/when/example/verify/决策号/source），`listTransformRules()` 可枚举、`getTransformRule(id)` 可查询。
 2. **防漂移**：规则的 `mapping` 与 `packages/compiler/src/tags.ts` 常量同源引用，`tests/transforms.test.ts` 校验覆盖完整性——改映射表遗漏会当场报错。
 3. **LLM 生成新规则时必须同步注册**：在对应阶段文件（`transforms/template.ts` / `script.ts` / `style.ts` / `validate.ts`）登记规则 + AI 说明书，并更新 `tests/transforms.test.ts`（如涉及新映射表键）——**规则注册表与实现永不脱节**。
-4. **阶段二演进**（随 `@proteus/compiler` 独立包）：每条规则增加 `apply()` → 注册表升级为分派层 → `explainTransform(source)` 输出决策 trace。现阶段注册表只描述不执行。
+4. **阶段二演进**（随 `@proteus-vue/compiler` 独立包）：每条规则增加 `apply()` → 注册表升级为分派层 → `explainTransform(source)` 输出决策 trace。现阶段注册表只描述不执行。
 
 > 设计意图：编译器的每个决定都对 AI 代理与人类开发者透明（拒绝黑盒）；详见 `packages/compiler/README.md`。
 
@@ -168,7 +168,7 @@ proteus/
 ├── scripts/
 │   └── gen-routes.ts                # 路由表生成脚本（编译期）
 ├── src/                             # ★ 框架本体（未来 npm 包来源）
-│   ├── compiler/                    # ★ 编译引擎（纯函数模块，可独立开源为 @proteus/compiler）
+│   ├── compiler/                    # ★ 编译引擎（纯函数模块，可独立开源为 @proteus-vue/compiler）
 │   │   ├── index.ts                 # compileVueSfc 统一入口
 │   │   ├── template.ts              # template → wxml
 │   │   ├── script.ts                # script → Page/Component 构造器
@@ -1349,7 +1349,7 @@ P6 调试与验证 ◄─────────────── 依赖 P4 �
 
 | 版本 | 变更 |
 |---|---|
-| v2.52 | **v0.2 工程化基线**：`src/compiler` → `packages/compiler/` monorepo 独立包 `@proteus/compiler`（tsc 声明文件 + esbuild 单文件构建，workspace 链接验证通过）；`.github/workflows/ci.yml`（verify + e2e-web 双 job）；CONTRIBUTING.md + Issue 模板；vite alias / tsconfig paths 加 `@proteus/compiler`（决策 #72） |
+| v2.52 | **v0.2 工程化基线**：`src/compiler` → `packages/compiler/` monorepo 独立包 `@proteus-vue/compiler`（tsc 声明文件 + esbuild 单文件构建，workspace 链接验证通过）；`.github/workflows/ci.yml`（verify + e2e-web 双 job）；CONTRIBUTING.md + Issue 模板；vite alias / tsconfig paths 加 `@proteus-vue/compiler`（决策 #72） |
 | v2.49 | **git 仓库关联**：https://github.com/proteus-vue/proteus（main 分支）；.gitignore（node_modules/dist/.env）；package.json 补 repository/homepage/bugs；首次提交推送 |
 | v2.48 | **开源协议 + 对标大厂路线图**：LICENSE 选 Apache-2.0（宽松可商用 + 专利授权，package.json/README 同步）；新增 docs/roadmap.md——九域能力矩阵（对标 uni-app/Taro）+ v0.2~v2.0 分里程碑路线（独立包/编译能力/性能/多端/生态）+ monorepo 架构 + 量化性能目标 + 验收清单 |
 | v2.47 | **文档体系落地**：根 README.md（命名来源/痛点对照/核心特性/快速开始/目录/测试/路线图）+ docs/ 四篇中文文档（getting-started / configuration / compiler / routing），内容基于真实代码与已归档决策 |
@@ -1390,13 +1390,13 @@ P6 调试与验证 ◄─────────────── 依赖 P4 �
 | v2.12 | **修复小程序真机校验报错（tabBar 至少 2 项）**：demo 新增第二个 Tab 页 `examples/pages/mine.vue`（我的）；gen-routes 加守卫——tabRoutes < 2 时告警并忽略 tabBar，不再产出非法 app.json |
 | v2.11 | **Web 端 SPA 导航**：web-adapter 全局拦截站内 `<a>` 链接（`preventDefault` + `pushState`，外部链接/_blank/修饰键点击不拦截），点击导航不再整页刷新；E2E 新增 window 标记验证无刷新 + 浏览器后退链路 |
 | v2.10 | **页面导航链接（<a href> / <router-link>）**：模板转换编译为 `view bindtap="__navigateTo" + data-url`（支持 route-type），script 转换自动注入 `__navigateTo` handler（wx.navigateTo，仅 MP 产物）；Web 端 `<a href>` 走浏览器导航（SPA fallback）双端可用；demo 首页新增 3 个导航链接；新增 E2E「A 页点击跳转 B 页」用例；产物自校验机制当场捕获并修复一处生成的非法正则（`/^\//` → `/^[/]/`） |
-| v2.9 | **示例项目独立化**：示例应用（pages / subpackages / App / main 入口 / RouterView）移入 `examples/`，`src/` 仅保留框架本体；gen-routes 与 mp 插件按 `pagesDir` 推导应用根目录；新增 `@proteus/*` 别名（与未来 npm 包导入路径一致）；`auto-routes.ts` 生成位置保持在 `src/router/`（框架单例 router 依赖，见 PROJECT_MEMORY 决策 #23） |
+| v2.9 | **示例项目独立化**：示例应用（pages / subpackages / App / main 入口 / RouterView）移入 `examples/`，`src/` 仅保留框架本体；gen-routes 与 mp 插件按 `pagesDir` 推导应用根目录；新增 `@proteus-vue/*` 别名（与未来 npm 包导入路径一致）；`auto-routes.ts` 生成位置保持在 `src/router/`（框架单例 router 依赖，见 PROJECT_MEMORY 决策 #23） |
 | v2.8 | **方法内 ref 写入支持**：编译引擎新增 ref 访问重写（`count.value++` / `--` / 赋值 / 读取 → `setData` / `this.data`），消除"方法体不能引用 setup ref"限制（复合赋值除外）；demo 页 tap 按钮改为可见计数（Web 响应式 + MP setData 双端可用）；新增 E2E 点击用例（7/7） |
 | v2.7 | **Web E2E 实测（P6 验收）**：Playwright 无头浏览器 6 用例（首页 / SPA 跳转 / 前进后退 / 刷新恢复 / 分包页 / 404），实测发现并修复 RouterView 两处缺陷（空路由归一化、routeMap 按 path 回退查找）；新增 `vitest.config.ts` 独立配置避免测试触发 mp 构建副作用 |
 | v2.6 | **调试与验证收尾（P6）**：golden test fixtures 正式化（tests/fixtures/pages/ 4 个 fixture + 快照锁定产物）、新增 `preview:web` / `verify` 总验证脚本；**P1-P5 全部代码任务完成，进入验收阶段** |
 | v2.5 | **运行时桥接（P5）**：`setDataBridge`（数组下标感知路径合并 + 值去重 + 16ms 批量）、`pageLifecycle`（createPage/createComponent + 路由参数 decode）、`main.mp.ts` 接入 `App()` + `registerRouteBuilders()`；编译产物默认 onLoad 注入路由参数（与 runtime 对齐）；mp 构建关闭压缩（反黑盒） |
 | v2.4 | **反编译黑盒机制**：编译引擎新增产物自校验（`validateJs`/`validateWxml`，坏产物抛 `CompilerError` 指明文件）、`PROTEUS_DEBUG=1` 行号注释 + 中间产物转储、buildEnd 警告汇总摘要 |
-| v2.3 | **编译器模块化**：编译引擎拆分为独立模块 `src/compiler/`（零 Vite / 零配置依赖的纯函数模块），`vite-plugin-mp-transform.ts` 降为薄适配层；新增 `src/compiler/README.md` 记录模块边界与独立开源提取路径（后期发布 `@proteus/compiler`） |
+| v2.3 | **编译器模块化**：编译引擎拆分为独立模块 `src/compiler/`（零 Vite / 零配置依赖的纯函数模块），`vite-plugin-mp-transform.ts` 降为薄适配层；新增 `src/compiler/README.md` 记录模块边界与独立开源提取路径（后期发布 `@proteus-vue/compiler`） |
 | v2.2 | **项目记忆**：新增根目录 `PROJECT_MEMORY.md` 项目本地记忆文件（进度 / 已落地文件 / 关键决策与偏差 / 验证状态），执行规则 6 与附录 Prompt 模板要求新会话先读该文件 |
 | v2.1 | **框架命名**：正式定名 **Proteus（普罗透斯）**，新增"框架命名"章节记录名字来源与设计意图；统一更名 `framework.config.ts` → `proteus.config.ts`，目录结构 / 代码示例 / 附录 Prompt 中的命名引用同步更新 |
 | v2.0 | **§0 痛点对照**：新增动机章节，12 条主流痛点 → 对策对照表，10 条设计原则，非目标声明<br>**适配层**：新增 `platform/adapter.ts` 接口 + 双端实现，router/runtime 不再直连 `wx`（§0.2 #7）<br>**Web 端策略**：明确"Web 原生、MP 编译"，`RouterView.vue` + web-adapter（§0.3 原则 2）<br>**分包**：`framework.config.ts` 增 `subPackages`，`gen-routes` 生成 subPackages（§0.2 #10）<br>**setData 强化**：路径合并 + 值比较去重（§0.2 #5）<br>**renderer 降级**：改为可选扩展，MVP 不做（§0.2 #4）<br>**组件级生命周期**：`createComponent` + attached/detached（§P5-3）<br>**调试与测试**：新增 P6 阶段（golden test、adapter mock 单测、产物可读性）（§0.2 #3） |

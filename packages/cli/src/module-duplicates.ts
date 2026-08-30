@@ -1,7 +1,7 @@
 // packages/cli/src/module-duplicates.ts
-// ★module-plan B7b/B8：proteus module:duplicates —— 分包间共享依赖去重检测（薄壳：纯函数在 @proteus/module）
-import { readSubPackageRoots, scanDuplicateModules } from '@proteus/module'
-import type { DuplicateEntry } from '@proteus/module'
+// ★module-plan B7b/B8：proteus module:duplicates —— 分包间共享依赖去重检测（薄壳：纯函数在 @proteus-vue/module）
+import { readSubPackageRoots, scanDuplicateModules } from '@proteus-vue/module'
+import type { DuplicateEntry } from '@proteus-vue/module'
 
 export { readSubPackageRoots, scanDuplicateModules }
 

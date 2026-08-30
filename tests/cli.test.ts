@@ -1,5 +1,5 @@
 // tests/cli.test.ts
-// @proteus/cli 核心纯函数测试：参数解析 + explain 目标识别
+// @proteus-vue/cli 核心纯函数测试：参数解析 + explain 目标识别
 // CLI 本身是薄壳（命令分发 + 打印），核心逻辑均为纯函数
 import { describe, it, expect } from 'vitest'
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs } from '../packages/cli/src/args'

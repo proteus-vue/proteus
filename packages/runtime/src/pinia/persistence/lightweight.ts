@@ -6,8 +6,8 @@
 // 与 createPersistedStatePlugin（兼容层）可共存：识别标记不同（__persisted__ vs persist）
 // ⚠ MP 产物安全（决策 #32/#36）：全文件无 ?? / ?. / 对象展开（用 Object.assign）/ 数组解构
 import type { PiniaPluginContext } from 'pinia'
-import { type StorageAdapter } from '@proteus/shared'
-import { getPlatform } from '@proteus/shared'
+import { type StorageAdapter } from '@proteus-vue/shared'
+import { getPlatform } from '@proteus-vue/shared'
 import { PersistScheduler, type PersistSchedulerOptions } from './scheduler'
 import { isLazy, mountSharding, pickKeys, type ShardingOptions } from './sharding'
 import { QuotaManager, QuotaExceededError, type QuotaOptions } from './quota'

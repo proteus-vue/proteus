@@ -1,6 +1,6 @@
 // examples/proteus.config.ts —— Proteus 示例工程配置（完整工程形态，自包含）
 // ★配置不再挂在仓库根：示例 = 独立工程（对应 create-proteus 生成的工程结构）
-import type { ProteusConfig } from '@proteus/plugin-vite'
+import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 const config: ProteusConfig = {
   platform: 'mp-weixin',
@@ -11,11 +11,11 @@ const config: ProteusConfig = {
   subPackages: [{ root: 'subpackages/order', name: 'order' }], // 分包示例：订单模块
   customRoute: {
     registerPresets: true,
-    // 内置预设 builders（随 @proteus/router 包发布源码，插件读取后内联进 app.js 注册）
+    // 内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
     builders: {
-      halfScreen: 'node_modules/@proteus/router/src/presets/halfScreen.ts',
-      slideUp: 'node_modules/@proteus/router/src/presets/slideUp.ts',
-      scaleDown: 'node_modules/@proteus/router/src/presets/scaleDown.ts',
+      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+      slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+      scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
     },
   },
   // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）

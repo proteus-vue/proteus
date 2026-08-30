@@ -22,7 +22,7 @@
 
 ```ts
 import { defineStore } from 'pinia'
-import { persisted } from '@proteus/persistence'
+import { persisted } from '@proteus-vue/persistence'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref('')
@@ -45,7 +45,7 @@ export const useUserStore = defineStore('user', () => {
 ```ts
 // platforms/mp/pinia.ts
 import { createPinia } from 'pinia'
-import { createPersistence } from '@proteus/persistence'
+import { createPersistence } from '@proteus-vue/persistence'
 import { WxStorageAdapter } from '@/shared/storage/wxStorage'
 
 export function createMpPinia() {

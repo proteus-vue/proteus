@@ -52,8 +52,8 @@
 **Step 1：安装 + 配置**
 ```ts
 // main.mp.ts
-import { createApi } from '@proteus/api'
-import { createMpRequestAdapter } from '@proteus/api/platforms/mp'
+import { createApi } from '@proteus-vue/api'
+import { createMpRequestAdapter } from '@proteus-vue/api/platforms/mp'
 
 const api = createApi({
   baseURL: 'https://api.example.com',
@@ -161,10 +161,10 @@ B5/B6 内部（A2/A5/A6/A7/A9/A10/A11）互相独立，可拆分到子 PR 进一
 
 | 批 | 模块 | 档 | 状态 |
 |----|------|---|------|
-| B1 | A1 Request | P0 | ✅（@proteus/api：createApi + wx/fetch adapter + 拦截器/重试/错误模型，2026-08） |
+| B1 | A1 Request | P0 | ✅（@proteus-vue/api：createApi + wx/fetch adapter + 拦截器/重试/错误模型，2026-08） |
 | B2 | A3 Storage | P0 | ✅ 已由 pinia-plan M1 覆盖（packages/shared/src/storage） |
-| B3 | A4 Auth | P0 | ✅ 部分（@proteus/api createAuth 凭证托管 + createApi 自动 Authorization，2026-08；完整登录态/权限守卫依赖 security-plan） |
-| B4 | A8 Navigator | P0 | ✅ 部分：设备信息（getDeviceInfo）；导航已由 @proteus/shared PlatformAdapter 覆盖 |
+| B3 | A4 Auth | P0 | ✅ 部分（@proteus-vue/api createAuth 凭证托管 + createApi 自动 Authorization，2026-08；完整登录态/权限守卫依赖 security-plan） |
+| B4 | A8 Navigator | P0 | ✅ 部分：设备信息（getDeviceInfo）；导航已由 @proteus-vue/shared PlatformAdapter 覆盖 |
 | B5 | A2/A5/A6/A9 | P1 | ⬜ |
 | B6 | A7/A10/A11 | P2 | ⬜ |
 | B7 | 测试/迁移/codemod | — | ⬜ |

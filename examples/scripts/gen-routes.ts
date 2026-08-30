@@ -5,8 +5,8 @@
 import { fileURLToPath, URL } from 'node:url'
 import path from 'node:path'
 import config from '../proteus.config'
-import { runGenRoutes } from '@proteus/plugin-vite'
-import { scanModuleConfigs } from '@proteus/module'
+import { runGenRoutes } from '@proteus-vue/plugin-vite'
+import { scanModuleConfigs } from '@proteus-vue/module'
 
 // ★框架内置组件目录显式传入（组件库未拆包，决策 #115）：monorepo 根 src/components（本文件在 scripts/ 下，需 ../../）
 async function main(): Promise<void> {

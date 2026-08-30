@@ -54,7 +54,7 @@ ms.loadModule('trade', {
 - [ ] 无重复依赖
 - [ ] 分包体积不超限
 - [ ] 业务目录无 `wx.*` / `window.*` / `require` 裸调用
-- [ ] 所有跨模块 import 来自 `@proteus/module` 或公共契约
+- [ ] 所有跨模块 import 来自 `@proteus-vue/module` 或公共契约
 - [ ] `chunk` 与 Router M7.1 一致
 
 ESLint 插件 `eslint-plugin-proteus`：

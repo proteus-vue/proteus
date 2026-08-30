@@ -2,7 +2,7 @@
 
 > 状态：已落地评估（2026-08）  
 > 前置：`00-overview.md`（威胁模型/铁律）、`01-m1-secret-storage.md`、`03-m3-permissions.md`  
-> 结论先行：**M1（SecretStorage 字段级加解密）+ M3（PermissionRegistry 权限最小化）可完整落地为 `@proteus/security` 包；M2 凭证托管已在 @proteus/api（createAuth）落地（归属说明见下）；M4-M8（注入防护/网络安全/审计）标后续**。
+> 结论先行：**M1（SecretStorage 字段级加解密）+ M3（PermissionRegistry 权限最小化）可完整落地为 `@proteus-vue/security` 包；M2 凭证托管已在 @proteus-vue/api（createAuth）落地（归属说明见下）；M4-M8（注入防护/网络安全/审计）标后续**。
 
 ---
 
@@ -17,8 +17,8 @@
 | 5 | M3 PermissionRegistry（granted set / request / has / hasAll）| 无权限基建 | ✅ 纯逻辑实现 + granted 持久化（storage 回调，键明文不存凭证）|
 | 6 | Router 权限守卫自动生成（meta.permissions → beforeEach）| router 守卫工厂已存在（createRouter auth 检查器）| ✅ **已落地（B2.5）**：RouteMeta.permissions + createRouter options.permissions/onPermissionFail；`<PermissionGate>` 组件与编译期规则标后续 |
 | 7 | M3 `<PermissionGate>` 组件 | 组件库已有降级模式（p-error-boundary 等）| ⏸ 组件包装标后续（依赖组件库 + 权限注册表）；首期 API 层足够 |
-| 8 | M2 凭证托管归 @proteus/security | M2 已在 @proteus/api（createAuth，贴近请求层）| ✅ **维持现状**：createAuth 留在 api（请求自动 Authorization 同层）；security 包负责存储加密 + 权限 |
-| 9 | MP 编译 | 共享模块白名单 `@proteus/*` ✓ | ✅ 纯逻辑 ES5-safe → `_proteus/security` 可用（加密降级到 DemoCipher 或明文 null，文档标注）|
+| 8 | M2 凭证托管归 @proteus-vue/security | M2 已在 @proteus-vue/api（createAuth，贴近请求层）| ✅ **维持现状**：createAuth 留在 api（请求自动 Authorization 同层）；security 包负责存储加密 + 权限 |
+| 9 | MP 编译 | 共享模块白名单 `@proteus-vue/*` ✓ | ✅ 纯逻辑 ES5-safe → `_proteus/security` 可用（加密降级到 DemoCipher 或明文 null，文档标注）|
 
 ---
 
@@ -26,7 +26,7 @@
 
 | 批 | 交付物 | 说明 |
 |----|--------|------|
-| B1 | `@proteus/security`：FieldDescriptor + Cipher 接口（WebCipher/DemoCipher）+ SecretStorage（字段级加解密/volatile 跳过/redact/migrate）| M1，本批 |
+| B1 | `@proteus-vue/security`：FieldDescriptor + Cipher 接口（WebCipher/DemoCipher）+ SecretStorage（字段级加解密/volatile 跳过/redact/migrate）| M1，本批 |
 | B2 | PermissionRegistry + PermissionDenied + withPermission + granted 持久化 | M3，本批 |
 | 后续 | 编译期字段校验 transform / Router 权限守卫自动生成 / `<PermissionGate>` 组件 / audit security 权限矩阵 / App Keystore | 标后续（pinia 集成 / router 守卫对接 / 组件库 / v0.6）|
 

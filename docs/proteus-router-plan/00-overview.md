@@ -46,7 +46,7 @@
 ┌────────────────────────────────────────────────────┐
 │  <route> 块（源码层 · 就近声明 · 唯一真相源）         │
 ├────────────────────────────────────────────────────┤
-│  @proteus/router 编译器                             │
+│  @proteus-vue/router 编译器                             │
 │   - scanRoutes()     扫描全部 <route>               │
 │   - validateSchema() 校验字段（Zod / 手写）          │
 │   - resolveNested()  按 path 构建嵌套树 children    │

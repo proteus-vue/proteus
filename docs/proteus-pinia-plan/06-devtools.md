@@ -30,7 +30,7 @@ Pinia 官方 DevTools 通过 `window.__PINIA_DEVTOOLS__` 通信，由 `pinia._p`
 
 ---
 
-## 3. 非 Web 端的替代：`@proteus/trace`
+## 3. 非 Web 端的替代：`@proteus-vue/trace`
 
 由于小程序 / App 无浏览器 DevTools，提供轻量状态追踪：
 

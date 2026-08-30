@@ -12,7 +12,7 @@ App 级（defineApp）    → 全局一次
 
 ### API
 ```ts
-import { definePage } from '@proteus/runtime'
+import { definePage } from '@proteus-vue/runtime'
 import { usePlayerStore } from '@/stores/player'
 
 export default definePage({

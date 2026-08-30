@@ -7,7 +7,7 @@
 ## API 设计
 
 ```ts
-import { createModuleSystem } from '@proteus/module'
+import { createModuleSystem } from '@proteus-vue/module'
 
 const ms = createModuleSystem({
   modules: [tradeModule, userModule, paymentModule],

@@ -5,8 +5,8 @@
 import { computed, ref, defineAsyncComponent } from 'vue'
 import type { Component } from 'vue'
 import { routeMap } from './auto-routes'
-import { adapter } from '@proteus/shared'
-import { webTransitionName } from '@proteus/router'
+import { adapter } from '@proteus-vue/shared'
+import { webTransitionName } from '@proteus-vue/router'
 
 // 懒加载全部页面（含分包页）：Web 端按页面自动 code-split
 // glob 相对本文件（examples/router/）→ examples/pages 与 examples/subpackages/*/pages

@@ -37,14 +37,14 @@ export function walkCapabilityFiles(dir: string, acc: string[] = []): string[] {
 }
 
 /**
- * 加载能力描述文件：esbuild transform 转 CJS → 去 @proteus/capabilities require 行 →
+ * 加载能力描述文件：esbuild transform 转 CJS → 去 @proteus-vue/capabilities require 行 →
  * eval（defineCapability 由 Function 参数注入，与 validate 同源；require 基目录 = 描述文件所在目录）
  */
 export async function loadCapabilityFile(file: string): Promise<CapabilityDefinition> {
   const src = fs.readFileSync(file, 'utf-8')
   const { code } = await transform(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
   const finalCode = code
-    .replace(/^[^\n]*require\(['"]@proteus\/capabilities['"]\)[^\n]*$/gm, '')
+    .replace(/^[^\n]*require\(['"]@proteus-vue\/capabilities['"]\)[^\n]*$/gm, '')
     .replace(/\bimport_[a-zA-Z0-9_$]*\.defineCapability\b/g, 'defineCapability')
   const mod = { exports: {} as Record<string, unknown> }
   const fileRequire = createRequire(pathToFileURL(file))

@@ -8,7 +8,7 @@ import { transform } from 'esbuild'
 import { validateModuleConfig, defineModule } from './contract'
 import type { ModuleValidationIssue } from './contract'
 
-/** 从本包位置解析 @proteus/module（fixture 配置 eval 时 require 用；CLI/测试运行环境 node_modules 可达） */
+/** 从本包位置解析 @proteus-vue/module（fixture 配置 eval 时 require 用；CLI/测试运行环境 node_modules 可达） */
 const nodeRequire = createRequire(import.meta.url)
 
 export interface ModuleScanEntry {
@@ -45,14 +45,14 @@ export function walkModuleConfigs(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
-/** 加载 proteus-module.config.ts：esbuild transform 转 CJS → 去掉 @proteus/module require 行 →
+/** 加载 proteus-module.config.ts：esbuild transform 转 CJS → 去掉 @proteus-vue/module require 行 →
  * eval 时 defineModule 由作用域注入（与 validateModuleConfig 同源，零外部依赖加载，规避 ESM require/循环） */
 export async function loadModuleConfig(file: string): Promise<unknown> {
   const src = fs.readFileSync(file, 'utf-8')
   const { code } = await transform(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
-  // 去掉 @proteus/module 的 require 行 + import_module.defineModule → defineModule（Function 参数注入，零外部依赖加载）
+  // 去掉 @proteus-vue/module 的 require 行 + import_module.defineModule → defineModule（Function 参数注入，零外部依赖加载）
   const finalCode = code
-    .replace(/^[^\n]*require\(['"]@proteus\/module['"]\)[^\n]*$/gm, '')
+    .replace(/^[^\n]*require\(['"]@proteus-vue\/module['"]\)[^\n]*$/gm, '')
     .replace(/\bimport_[a-zA-Z0-9_$]*\.defineModule\b/g, 'defineModule')
   const mod = { exports: {} as Record<string, unknown> }
   // eslint-disable-next-line no-new-func

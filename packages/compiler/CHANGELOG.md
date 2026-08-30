@@ -1,4 +1,4 @@
-# @proteus/compiler
+# @proteus-vue/compiler
 
 ## 0.2.0
 

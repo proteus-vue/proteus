@@ -34,7 +34,7 @@
               └───────────┘                   └───────────┘
 ```
 
-**本计划是横切契约**：所有层 import `@proteus/types`，CLI 加载 `ProteusConfig`，Audit 引用 schema。
+**本计划是横切契约**：所有层 import `@proteus-vue/types`，CLI 加载 `ProteusConfig`，Audit 引用 schema。
 
 ---
 

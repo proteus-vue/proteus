@@ -1,5 +1,5 @@
 // tests/plugin.test.ts
-// mp 插件内置预设内联逻辑单测（P4 适配层 + 拆包步骤 5：插件归 @proteus/plugin-vite）
+// mp 插件内置预设内联逻辑单测（P4 适配层 + 拆包步骤 5：插件归 @proteus-vue/plugin-vite）
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -60,11 +60,11 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     expect(appJs.indexOf('function slideUpBuilder')).toBeLessThan(appJs.indexOf("addRouteBuilder('slideUp'"))
   })
 
-  // ★ 拆包步骤 7：npm 包内预设源码路径解析（模板 config.builders 指向 node_modules/@proteus/router/...）
+  // ★ 拆包步骤 7：npm 包内预设源码路径解析（模板 config.builders 指向 node_modules/@proteus-vue/router/...）
   describe('resolvePkgPath：node_modules 包内路径解析', () => {
     it('scoped 包路径 → 解析包根 + 子路径', () => {
-      const abs = resolvePkgPath('/tmp/project', 'node_modules/@proteus/router/src/presets/halfScreen.ts')
-      // 从测试所在仓库解析 @proteus/router → packages/router，接 src/presets/...
+      const abs = resolvePkgPath('/tmp/project', 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts')
+      // 从测试所在仓库解析 @proteus-vue/router → packages/router，接 src/presets/...
       expect(abs.endsWith('src/presets/halfScreen.ts')).toBe(true)
       expect(fs.existsSync(abs)).toBe(true)
     })
@@ -82,9 +82,9 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     })
   })
 
-  describe('★共享模块解析（resolveSharedModule：@proteus/* 放行 + 第三方跳过）', () => {
-    it('@proteus/* 框架包 → 产物 _proteus/<name>（白名单放行，platform-plan B5 尾）', () => {
-      const r = resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus/capabilities')
+  describe('★共享模块解析（resolveSharedModule：@proteus-vue/* 放行 + 第三方跳过）', () => {
+    it('@proteus-vue/* 框架包 → 产物 _proteus/<name>（白名单放行，platform-plan B5 尾）', () => {
+      const r = resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus-vue/capabilities')
       expect(r?.relNoExt).toBe('_proteus/capabilities')
       expect(r?.file).toContain('packages/capabilities/dist/index.js')
     })
@@ -102,8 +102,8 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
       expect(resolveSharedModule('/proj', '/proj/pages/a.vue', 'lodash')).toBeNull()
     })
 
-    it('@proteus/* 未构建（无 dist）→ null', () => {
-      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus/ghost')).toBeNull()
+    it('@proteus-vue/* 未构建（无 dist）→ null', () => {
+      expect(resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus-vue/ghost')).toBeNull()
     })
   })
 

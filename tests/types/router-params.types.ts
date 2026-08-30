@@ -3,7 +3,7 @@
 // 本文件仅类型断言（vue-tsc 检查），不运行——`// @ts-expect-error` 行在类型不匹配时应报错
 // 运行验证：npx vue-tsc --noEmit（纳入全项目类型检查）
 // ★拆包步骤 4：router 为应用侧单例（examples/router 注入 createRouter）；
-//   RouteParamsByName 由 examples/router/auto-routes.ts 的模块扩充注入 @proteus/router/types
+//   RouteParamsByName 由 examples/router/auto-routes.ts 的模块扩充注入 @proteus-vue/router/types
 import { router } from '../../examples/router'
 
 // ✅ 正例：命名路由 + 匹配参数（user-profile 声明 { id?: string; from?: string }）
@@ -31,8 +31,8 @@ router.push({ name: 'user-profile', params: { extra: 'x' } })
 router.push({ name: 'not-a-route' })
 
 // ============ 步骤 3：页面 onLoad 参数类型（PageOnLoad） ============
-// 与真实页面同路径（examples/pages/user/profile.vue）：@proteus/router/types 子路径 + 模块扩充生效
-import type { PageOnLoad } from '@proteus/router/types'
+// 与真实页面同路径（examples/pages/user/profile.vue）：@proteus-vue/router/types 子路径 + 模块扩充生效
+import type { PageOnLoad } from '@proteus-vue/router/types'
 
 // ✅ 正例：onLoad 参数匹配本路由声明
 const opts: PageOnLoad<'user-profile'> = { id: '1', from: 'index' }

@@ -29,7 +29,7 @@
 │       import { useApi } from 'proteus'         │
 │       const { data } = await api.user.get(id)  │
 ├──────────────────────────────────────────────┤
-│  L3  标准 API 层  (@proteus/api)               │
+│  L3  标准 API 层  (@proteus-vue/api)               │
 │       - 统一签名 / 类型 / 错误码               │
 │       - 拦截器 / 重试 / 缓存 / 取消            │
 │       - 不感知平台                              │

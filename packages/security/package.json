@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/security",
+  "name": "@proteus-vue/security",
   "version": "0.1.0",
   "description": "Proteus 安全基线（security-plan B1-B2）：M1 SecretStorage 敏感字段加密存储（WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级）+ M3 PermissionRegistry 权限最小化",
   "type": "module",

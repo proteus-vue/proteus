@@ -28,7 +28,7 @@ export interface PluginContext {
 export default defineConfig({
   devtools: {
     plugins: [
-      () => import('@proteus/devtools-plugin-network').then(m => m.default),
+      () => import('@proteus-vue/devtools-plugin-network').then(m => m.default),
     ],
   },
 })

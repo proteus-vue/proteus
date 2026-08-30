@@ -3,8 +3,8 @@
 // 说明：.json（page.json/app.json）由路由生成器负责（框架内 scripts/gen-routes.ts），CLI 专注页面编译
 import fs from 'node:fs'
 import path from 'node:path'
-import { compileVueSfc } from '@proteus/compiler'
-import type { TransformRuleOverrides } from '@proteus/compiler'
+import { compileVueSfc } from '@proteus-vue/compiler'
+import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 
 export interface BuildOptions {
   outDir: string

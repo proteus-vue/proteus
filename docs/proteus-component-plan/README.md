@@ -22,7 +22,7 @@ Proteus 已有 Pinia（状态）、Router（路由）、API（接口）三层规
 
 ```
 L4  业务页面
-L3  @proteus/components { Base, Business }
+L3  @proteus-vue/components { Base, Business }
 L2  Runtime { capability, web, skyline, app }
 L1  平台原生（DOM / Skyline / Native）
 ```

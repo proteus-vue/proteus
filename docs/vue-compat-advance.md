@@ -60,7 +60,7 @@
 **目标**：页面/组件 provide → 组件 inject（跨层级取值）
 
 **实际实现**（2026-08）：
-1. **运行时桥** `@proteus/runtime`（runtime/src/provide-inject.ts）：
+1. **运行时桥** `@proteus-vue/runtime`（runtime/src/provide-inject.ts）：
    - `registerProvide(key, value)` / `readInject(key)`：统一挂在 `getApp().__proteusProvides` 全局注册表（与编译产物共享同一存储；非小程序环境回退 globalThis，测试可用）
    - `clearProvides()` / `provideCount()`：测试/诊断
 2. **编译**（script.ts）：

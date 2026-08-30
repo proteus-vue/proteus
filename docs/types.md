@@ -16,8 +16,8 @@
 }
 </route>
 <script setup lang="ts">
-import { onLoad } from '@proteus/runtime'          // Web 端 no-op 兼容（MP 端编译产物处理）
-import type { PageOnLoad } from '@proteus/router/types'
+import { onLoad } from '@proteus-vue/runtime'          // Web 端 no-op 兼容（MP 端编译产物处理）
+import type { PageOnLoad } from '@proteus-vue/router/types'
 
 // ③ 页面 onLoad 参数类型（自动对应自己的路由 params）
 onLoad((options: PageOnLoad<'user-profile'>) => {

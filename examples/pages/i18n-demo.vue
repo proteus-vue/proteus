@@ -1,5 +1,5 @@
 <!-- examples/pages/i18n-demo.vue —— 国际化演示页（i18n-plan B3）
-     双端验证：@proteus/i18n 共享模块（MP _proteus/i18n）+ locale 切换 + 复数/插值
+     双端验证：@proteus-vue/i18n 共享模块（MP _proteus/i18n）+ locale 切换 + 复数/插值
      ★响应式说明：i18n 无内置响应式，页面持有 lang ref 触发重算（computed 依赖 lang.value 建立依赖） -->
 <route>
 {
@@ -33,7 +33,7 @@ function switchLocale(l: string) {
 <template>
   <div class="id">
     <h2>国际化（i18n B1-B3）</h2>
-    <p class="sub">@proteus/i18n：类型安全 t() + ICU 子集（插值/复数）</p>
+    <p class="sub">@proteus-vue/i18n：类型安全 t() + ICU 子集（插值/复数）</p>
 
     <div class="langs">
       <button @click="switchLocale('zhCN')">中文</button>

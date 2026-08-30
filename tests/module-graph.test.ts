@@ -108,8 +108,8 @@ describe('CLI module:check 集成（依赖图）', () => {
   })
 
   it('环依赖 → cycles 检出 + 输出含环路径', async () => {
-    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0', dependencies: { trade: '^1.0.0' } })\n`)
-    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
+    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0', dependencies: { trade: '^1.0.0' } })\n`)
+    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
     const { text, result, cycles } = await checkModuleConfigs(TMP)
     expect(result.modules.every((m) => m.ok)).toBe(true)
     expect(cycles.length).toBe(1)
@@ -119,8 +119,8 @@ describe('CLI module:check 集成（依赖图）', () => {
 
   it('--graph：输出 Mermaid 依赖图（无环 fixture）', async () => {
     // 覆盖上一个测试的环 fixture（app 依赖 trade + trade 依赖 app）为无环
-    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
-    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
+    writeFixture('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    writeFixture('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
     const { text, cycles } = await checkModuleConfigs(TMP, true)
     expect(cycles.length).toBe(0)
     expect(text).toContain('依赖图（Mermaid）：')

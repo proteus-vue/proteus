@@ -16,8 +16,8 @@
 | 4 | M4 编译期 AST transform 提取 `$t()` → messages 清单 | 编译器无 $t 专项 transform（规则注册表需登记） | ⚠️ 首期 **CLI `i18n:check` 扫描级审计**（正则扫 `t('key')`/`$t('key')` 引用 → 缺失/多余报告）；AST transform 标后续 |
 | 5 | RTL 一等公民（`[dir="rtl"]` 布局切换） | Web `documentElement.dir` 可行；Skyline 需 page setData | ✅ 首期 `dir()` + `setLocale` 回调（应用自行应用 dir）；自动 RTL 样式标后续 |
 | 6 | 类型安全 `MessageKey` 自动生成（codegen） | codegen 需构建链接入 | ✅ **免 codegen**：`as const` catalog + `keyof` 推导 `MessageKey`（`createI18n<typeof zhCN>`），`t<K extends MessageKey>` 编译期约束 |
-| 7 | 持久化 locale（Storage） | @proteus/shared 有 Storage 抽象（async 契约） | ✅ 首期 `setLocale` 透出回调（应用自选持久化）；内置 Storage 依赖标后续 |
-| 8 | MP 编译 | 框架包共享模块白名单 `@proteus/*` ✓ 已有（_proteus/<name>） | ✅ **纯逻辑 ES5-safe**（无 ?? / ?. / 展开 / 解构）→ 共享模块直接可用，无需编译器改动 |
+| 7 | 持久化 locale（Storage） | @proteus-vue/shared 有 Storage 抽象（async 契约） | ✅ 首期 `setLocale` 透出回调（应用自选持久化）；内置 Storage 依赖标后续 |
+| 8 | MP 编译 | 框架包共享模块白名单 `@proteus-vue/*` ✓ 已有（_proteus/<name>） | ✅ **纯逻辑 ES5-safe**（无 ?? / ?. / 展开 / 解构）→ 共享模块直接可用，无需编译器改动 |
 
 ---
 
@@ -25,7 +25,7 @@
 
 | 批 | 交付物 | 依赖 | 说明 |
 |----|--------|------|------|
-| B1 | `@proteus/i18n` 包：catalog（`createI18n`）+ ICU 子集解析器（插值/复数/选择）+ `useI18n`（t/setLocale/dir）+ 类型安全 | — | 纯逻辑零依赖；workspace 链接 + vitest alias + MP 共享模块 |
+| B1 | `@proteus-vue/i18n` 包：catalog（`createI18n`）+ ICU 子集解析器（插值/复数/选择）+ `useI18n`（t/setLocale/dir）+ 类型安全 | — | 纯逻辑零依赖；workspace 链接 + vitest alias + MP 共享模块 |
 | B2 | CLI `i18n:check`：扫描 `t('key')`/`$t('key')` 引用 → 缺失/多余/未引用报告（对齐 capabilities:check 模式）| B1 | 扫描级审计门禁 |
 | B3 | demo 页（locale 切换 + 复数/插值演示）+ CI 接入 | B1/B2 | 双端构建验证 |
 | 后续 | 按需分包加载（module chunk 对齐）/ 完整 ICU / Intl 日期货币 / RTL 自动应用 / AST 提取 | 基建成熟 | 标注于 02-m4-to-m8-batches.md |
@@ -60,7 +60,7 @@ i18n.setLocale('enUS'); i18n.dir()                // 'ltr' | 'rtl'
 
 1. `createI18n` 类型安全：非法 key 编译报错（tsc 断言）+ 合法 key 通过。
 2. ICU 子集：插值 / 复数（one/other + `#` 占位）/ 选择（select）单测全覆盖；`#` 替换正确。
-3. MP 产物：示例页经 `@proteus/i18n` 共享模块（`_proteus/i18n`）编译通过，双端构建全绿。
+3. MP 产物：示例页经 `@proteus-vue/i18n` 共享模块（`_proteus/i18n`）编译通过，双端构建全绿。
 4. `i18n:check`：缺失 key / 多余 key / 未引用 key 报告可测，入 CLI。
 5. 每批独立提交，验证 = `npm run verify` 全绿。
 
@@ -70,6 +70,6 @@ i18n.setLocale('enUS'); i18n.dir()                // 'ltr' | 'rtl'
 
 | 批 | 状态 | 说明 |
 |----|------|------|
-| B1 @proteus/i18n 包（catalog + ICU 子集 + 类型安全）| ✅ 已落地 | 2026-08，11 用例（插值/复数/=N/select/嵌套/类型安全/dir/locale 切换） |
+| B1 @proteus-vue/i18n 包（catalog + ICU 子集 + 类型安全）| ✅ 已落地 | 2026-08，11 用例（插值/复数/=N/select/嵌套/类型安全/dir/locale 切换） |
 | B2 CLI i18n:check | ✅ 已落地 | 2026-08，4 用例——扫描 t()/$t()/i18n.t() 引用 vs 语言包 JSON：缺失（error）/多余（warning）/注释豁免/变量 key 跳过；--catalog 指定 |
 | B3 demo + CI | ⬜ | — |

@@ -57,8 +57,8 @@ describe('checkCapabilityUsage / runCapabilityScan（平台缺失报告）', () 
   })
 
   it('runCapabilityScan --platform：缺失报告入输出 + manifest 含 source', async () => {
-    write('capabilities/share.capability.ts', `import { defineCapability } from '@proteus/capabilities'\nexport default defineCapability({ meta: { id: 'share', tier: 2 }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }), skyline: () => ({ platform: 'skyline', create: () => ({ isSupported: () => true }) }) } })\n`)
-    write('capabilities/bio.capability.ts', `import { defineCapability } from '@proteus/capabilities'\nexport default defineCapability({ meta: { id: 'bio', tier: 3 }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }) } })\n`)
+    write('capabilities/share.capability.ts', `import { defineCapability } from '@proteus-vue/capabilities'\nexport default defineCapability({ meta: { id: 'share', tier: 2 }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }), skyline: () => ({ platform: 'skyline', create: () => ({ isSupported: () => true }) }) } })\n`)
+    write('capabilities/bio.capability.ts', `import { defineCapability } from '@proteus-vue/capabilities'\nexport default defineCapability({ meta: { id: 'bio', tier: 3 }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }) } })\n`)
     write('pages/home.vue', '<script setup lang="ts">\nconst bio = useCapability("bio")\n</script>')
     const { text, manifest: m, check } = await runCapabilityScan(TMP, undefined, 'skyline')
     expect(m.capabilities.every((c) => c.source)).toBe(true)

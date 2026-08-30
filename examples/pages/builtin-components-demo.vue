@@ -10,7 +10,7 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast, PNavBar, PSkeleton } from '@proteus/components'
+import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast, PNavBar, PSkeleton } from '@proteus-vue/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)

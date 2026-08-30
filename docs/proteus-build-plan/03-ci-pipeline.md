@@ -108,9 +108,9 @@ pnpm changeset publish --tag latest
 ### 多包版本策略
 ```
 packages/
-  compiler/    → @proteus/compiler
-  cli/         → @proteus/cli
-  types/       → @proteus/types
+  compiler/    → @proteus-vue/compiler
+  cli/         → @proteus-vue/cli
+  types/       → @proteus-vue/types
   ...
 ```
 - 独立版本号（semver）

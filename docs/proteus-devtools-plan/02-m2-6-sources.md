@@ -9,7 +9,7 @@
 每个源暴露一个 `install(bus)` 函数，幂等，由 `createDevTools()` 统一调用：
 
 ```ts
-// @proteus/devtools-runtime/sources
+// @proteus-vue/devtools-runtime/sources
 export function installLifecycle(bus: TraceBus) { /* ... */ }
 export function installRouter(bus: TraceBus, router: Router) { /* ... */ }
 export function installStore(bus: TraceBus, pinia: Pinia) { /* ... */ }

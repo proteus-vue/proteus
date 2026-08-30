@@ -53,7 +53,7 @@ formatTransformTrace(result): string                        // 渲染决策 trac
 
 ## 阶段三：从"描述层"升级为"分派层"（规划，尚未实现）
 
-当前注册表**描述**规则 + 转换函数内嵌 trace；后续里程碑（随 `@proteus/compiler` 独立包一起）为每条规则增加：
+当前注册表**描述**规则 + 转换函数内嵌 trace；后续里程碑（随 `@proteus-vue/compiler` 独立包一起）为每条规则增加：
 
 ```typescript
 interface TransformRule {

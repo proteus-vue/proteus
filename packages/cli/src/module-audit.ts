@@ -3,8 +3,8 @@
 //   全部硬卡（任一违规 → 退出码 1）；module-graph.json 落盘（M8.1 产物可审计铁律）
 import fs from 'node:fs'
 import path from 'node:path'
-import { auditModule } from '@proteus/module'
-import type { ModuleAuditResult } from '@proteus/module'
+import { auditModule } from '@proteus-vue/module'
+import type { ModuleAuditResult } from '@proteus-vue/module'
 import { formatDuplicateReport } from './module-duplicates'
 
 /** 渲染审计报告（纯函数） */

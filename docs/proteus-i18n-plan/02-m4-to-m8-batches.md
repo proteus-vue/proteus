@@ -81,7 +81,7 @@ traceBus.emit('i18n:missing', { key, location })
 
 ## Migration（存量迁移）
 
-1. 安装 `@proteus/i18n`
+1. 安装 `@proteus-vue/i18n`
 2. 把硬编码字符串抽到 `locales/*.json`：`"common.confirm": "确认"`
 3. 替换 `{{ '确认' }}` → `{{ $t('common.confirm') }}`
 4. 运行 `proteus audit i18n --extract` 生成 `extracted.json`

@@ -1,4 +1,4 @@
-# @proteus/compiler —— 编译引擎独立包
+# @proteus-vue/compiler —— 编译引擎独立包
 
 > Proteus 的**编译引擎**，v0.2 起独立为 monorepo 包（`packages/compiler/`）。
 > 设计目标：**零 Vite 依赖、零项目配置依赖、纯函数、选项全入参**——可独立分发、独立测试、被任何构建器消费。
@@ -53,19 +53,19 @@ formatTransformTrace(result)        // 渲染为按阶段分组的可读文本
 
 ## 消费方
 
-- `vite-plugin-mp-transform.ts`（monorepo 根，`@proteus/plugin-vite` 前身）：薄适配层——扫描页面、传选项（含 `rules` 覆盖）、`emitFile` 产物
+- `vite-plugin-mp-transform.ts`（monorepo 根，`@proteus-vue/plugin-vite` 前身）：薄适配层——扫描页面、传选项（含 `rules` 覆盖）、`emitFile` 产物
 - `tests/*.test.ts`：直接 import `../packages/compiler/src` 调纯函数（vitest，无 Vite 依赖）
-- 未来 CLI `@proteus/cli`：`proteus build` / `proteus explain` 核心即调 `compileVueSfc` + `explainTransform`
+- 未来 CLI `@proteus-vue/cli`：`proteus build` / `proteus explain` 核心即调 `compileVueSfc` + `explainTransform`
 
 ## 构建与发布
 
 ```bash
 cd packages/compiler
 npm run build        # tsc -p tsconfig.build.json → dist/（ESM + .d.ts）
-npm publish          # 发布 @proteus/compiler（main/types/exports 指向 dist）
+npm publish          # 发布 @proteus-vue/compiler（main/types/exports 指向 dist）
 ```
 
-发布后适配层可改为 `import { compileVueSfc } from '@proteus/compiler'`（npm workspace 链接或直接依赖），
+发布后适配层可改为 `import { compileVueSfc } from '@proteus-vue/compiler'`（npm workspace 链接或直接依赖），
 `proteus.config.ts` 的 `style` / `rules` 选项由适配层读取后传入——编译引擎 API 不变。
 
 ## MVP 限制（逐步补充边缘情况）

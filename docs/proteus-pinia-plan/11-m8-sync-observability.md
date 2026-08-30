@@ -11,9 +11,9 @@
 ### 问题
 超级应用要"一处改、处处同步"：购物车、登录态、播放进度（手机改 → 桌面端即时更新）。
 
-### 设计（可选模块 `@proteus/pinia-sync`，不强制核心依赖）
+### 设计（可选模块 `@proteus-vue/pinia-sync`，不强制核心依赖）
 ```ts
-import { createSyncEngine } from '@proteus/pinia-sync'
+import { createSyncEngine } from '@proteus-vue/pinia-sync'
 
 const sync = createSyncEngine({
   pinia,
@@ -61,7 +61,7 @@ defineStore(id, setup, { sync: true })
 
 ### 设计
 ```ts
-import { createSnapshotManager } from '@proteus/pinia-devtools'
+import { createSnapshotManager } from '@proteus-vue/pinia-devtools'
 
 const snapshot = createSnapshotManager({ pinia })
 

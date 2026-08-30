@@ -1,12 +1,12 @@
 // packages/router/src/index.ts
-// 统一路由 API（P3-1 + 拆包步骤 4 工厂化）—— 只依赖 @proteus/shared 接口，禁止直连 wx（执行规则 4）
+// 统一路由 API（P3-1 + 拆包步骤 4 工厂化）—— 只依赖 @proteus-vue/shared 接口，禁止直连 wx（执行规则 4）
 // ★工厂化：createRouter(routes) 接收路由表（应用侧由 gen-routes 生成的 auto-routes 提供），
 //   不再全局单例 import——路由表由调用方注入（对齐 docs/proteus-router-plan M2）
 import type { NavigateOptions, RouteParams, RouteRecord, RouteParamsByName } from './types'
 import { runBeforeEach, runAfterEach, beforeEach as registerBeforeEach, afterEach as registerAfterEach } from './guards'
 import type { Guard, AfterGuard, GuardTrace } from './guards'
 import { isSkyline, navigateWithCustomRoute } from './skyline'
-import { adapter } from '@proteus/shared'
+import { adapter } from '@proteus-vue/shared'
 
 class Router {
   /** 当前页面栈深度（MP 返回真实栈深；Web 恒为 1） */
@@ -166,7 +166,7 @@ export type { RouteTransition } from './transforms/transform-transition'
 export { generateWebRoutes, generateMpConfig, mergeAppJson, flattenNodes, toPageConfig } from './codegen'
 export type { MpPageConfig } from './codegen'
 
-// 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus/router' 即可，无需深路径）
+// 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus-vue/router' 即可，无需深路径）
 export type {
   RouteRecord,
   RouteMeta,

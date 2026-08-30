@@ -1,6 +1,6 @@
 // packages/cli/src/config-validate.ts
 // ★types-plan B5：配置校验器（validateConfig）——手写校验（铁律 #1：不引入 zod 等运行时依赖）
-// 放 CLI 侧（对齐 component-audit/i18n-check 治理工具模式）；ProteusConfig 类型在 @proteus/plugin-vite
+// 放 CLI 侧（对齐 component-audit/i18n-check 治理工具模式）；ProteusConfig 类型在 @proteus-vue/plugin-vite
 // 错误码：CONFIG_INVALID_ROOT / CONFIG_MISSING_REQUIRED / CONFIG_INVALID_TYPE / CONFIG_INVALID_ENUM / CONFIG_UNKNOWN_FIELD
 // ★source map 行列定位为后续批次（需配置源文件解析；当前 path 已可定位）
 

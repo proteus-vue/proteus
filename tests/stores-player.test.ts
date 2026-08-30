@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/stores-player.test.ts
 // player store 纯逻辑测试（docs/proteus-pinia-plan M6 §2.3）—— 直接用原生 createPinia，不依赖平台
-// ★证明：store 源码无平台代码，适配层完全收敛在 @proteus/runtime 工厂之外
+// ★证明：store 源码无平台代码，适配层完全收敛在 @proteus-vue/runtime 工厂之外
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlayerStore } from '../examples/stores/player'

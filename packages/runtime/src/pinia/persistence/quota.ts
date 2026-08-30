@@ -6,7 +6,7 @@
 //   · LRU/LFU：按访问时间戳/计数排序淘汰
 //   · 单次写入单 key 超限 → 直接抛错不走淘汰（避免误删其他数据）
 // ⚠ MP 产物安全：全文件无 ?? / ?. / 对象展开 / 数组解构
-import type { StorageAdapter } from '@proteus/shared'
+import type { StorageAdapter } from '@proteus-vue/shared'
 
 export type EvictionStrategy = 'protected' | 'lru' | 'lfu'
 

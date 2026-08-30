@@ -89,7 +89,7 @@ export default defineConfig({
 | Node 版本 | ≥ 20 |
 | 微信开发者工具 | 已安装 + CLI 可用 |
 | 基础库版本 | ≥ 2.29.2（Skyline 门槛） |
-| `@proteus/compiler` | 与 CLI 主版本一致 |
+| `@proteus-vue/compiler` | 与 CLI 主版本一致 |
 | `proteus.config.ts` | 存在且校验通过 |
 | 端口占用 | dev server 端口空闲 |
 
@@ -99,7 +99,7 @@ $ proteus doctor
   ✓ Node 20.10.0
   ✓ WeChat DevTools 1.06.2308310
   ⚠ 基础库 2.28.0 (期望 ≥ 2.29.2 for Skyline)
-  ✗ @proteus/compiler 0.9.0 (期望 1.x)
+  ✗ @proteus-vue/compiler 0.9.0 (期望 1.x)
 ```
 
 ## 5. CI 集成

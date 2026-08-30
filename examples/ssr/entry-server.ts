@@ -3,7 +3,7 @@
 //   并发请求共享会导致 A 用户状态泄漏给 B（本文件即演示：render() 内新建）
 import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { createSsrPinia } from '@proteus/runtime'
+import { createSsrPinia } from '@proteus-vue/runtime'
 import App from '../App.vue'
 import { usePlayerStore } from '../stores/player'
 

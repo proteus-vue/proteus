@@ -11,8 +11,8 @@
 | # | Draft v1 假设 | 当前事实 | 结论 |
 |---|--------------|----------|------|
 | 1 | L2 需要独立三端渲染器目录（`runtime/{web,skyline,app}`） | 内置组件 = **标准 Vue SFC**，Web 端原生 Vue 渲染，MP 端走既有编译管线（SFC → WXML + JS + component.json）；无平台渲染器概念 | ❌ 取消渲染器目录 —— 组件就是 SFC |
-| 2 | 组件自带 `transform.ts`（每组件编译规则） | 编译管线已内置：`tag/unknown-kebab` kebab 直通 + gen-routes 自动扫描模板 → `usingComponents: { "<tag>": "/proteus/<tag>/index" }`（`gen-routes.ts` L382-466）+ 插件产物 `proteus/` 前缀；Web 侧 `@proteus/components` 精确别名聚合导出 | ⚠️ 简化 —— 新增组件默认**零编译规则**；只有特殊映射（如 fixed 转换）才登记规则 + AI 说明书 |
-| 3 | 组件目录 = `packages/components`（独立 npm 包） | 决策 #115：组件暂留工程内 `src/components/`（`componentsDir` 选项），`@proteus/components` 别名已配；**v2.0 才拆包**（plugin-vite L166 注释） | ✅ 维持现状 —— 拆包留 v2.0，本规划不推动拆包 |
+| 2 | 组件自带 `transform.ts`（每组件编译规则） | 编译管线已内置：`tag/unknown-kebab` kebab 直通 + gen-routes 自动扫描模板 → `usingComponents: { "<tag>": "/proteus/<tag>/index" }`（`gen-routes.ts` L382-466）+ 插件产物 `proteus/` 前缀；Web 侧 `@proteus-vue/components` 精确别名聚合导出 | ⚠️ 简化 —— 新增组件默认**零编译规则**；只有特殊映射（如 fixed 转换）才登记规则 + AI 说明书 |
+| 3 | 组件目录 = `packages/components`（独立 npm 包） | 决策 #115：组件暂留工程内 `src/components/`（`componentsDir` 选项），`@proteus-vue/components` 别名已配；**v2.0 才拆包**（plugin-vite L166 注释） | ✅ 维持现状 —— 拆包留 v2.0，本规划不推动拆包 |
 | 4 | `p-nav-bar` 依赖 appBar（Router M5） | Router B5（app codegen/appBar）**⬜ 待 v0.6** | ⏸ 降级 —— 首期 `p-nav-bar` 用普通组件（fixed 定位 + 自定义返回），appBar 集成标注 v0.6 |
 | 5 | `p-popup` 转场走 Worklet `applyAnimatedStyle`（Router M7.4） | Worklet 转场调度器未实现（router B10 ⬜） | ⏸ 降级 —— 首期 **CSS transition + Transition 运行时等价**（vue-compat-advance B5/B6 已实现：进入+离开动画状态机），Worklet 后接 |
 | 6 | `p-toast/p-loading` 走 Worklet 自定义组件（API A9） | API A9（反馈 UI）未实现 | ⏸ 降级 —— 首期复用 `p-popup` 渲染管线，API 层后接 |
@@ -25,7 +25,7 @@
 ```
 新增内置组件三步：
 ① src/components/<tag>/index.vue      ← 标准 Vue SFC（双端同源码）
-② src/components/index.ts 聚合导出    ← Web import { Xxx } from '@proteus/components'
+② src/components/index.ts 聚合导出    ← Web import { Xxx } from '@proteus-vue/components'
 ③ 01-component-matrix.md 回填矩阵    ← CI 唯一真相源
 （MP 端零改动：kebab 直通 + gen-routes 自动 usingComponents /proteus/<tag>/index）
 ```

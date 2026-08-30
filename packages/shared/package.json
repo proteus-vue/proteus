@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/shared",
+  "name": "@proteus-vue/shared",
   "version": "0.1.0",
   "description": "Proteus 公共层：平台适配器 + 全局类型声明（wx/Page/RouteBuilder/MpEvent）",
   "type": "module",

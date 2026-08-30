@@ -1,6 +1,6 @@
 // packages/types/src/api-types.ts
-// ★类型收口（10-type-consolidation）：网络请求统一契约（原 @proteus/api/types.ts 纯类型部分）
-// runtime 值（ApiError class）留 @proteus/api；ApiOptions（依赖内部 AuthManager）留 @proteus/api
+// ★类型收口（10-type-consolidation）：网络请求统一契约（原 @proteus-vue/api/types.ts 纯类型部分）
+// runtime 值（ApiError class）留 @proteus-vue/api；ApiOptions（依赖内部 AuthManager）留 @proteus-vue/api
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 

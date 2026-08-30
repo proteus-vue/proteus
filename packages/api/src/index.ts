@@ -1,4 +1,4 @@
-// packages/api/src/index.ts —— @proteus/api 公共入口（api-plan A1/A8 + B3 auth）
+// packages/api/src/index.ts —— @proteus-vue/api 公共入口（api-plan A1/A8 + B3 auth）
 export { createApi, ALL_METHODS, createRequestAdapter } from './client'
 export type { ApiClient } from './client'
 export { ApiError, buildUrl, getDeviceInfo } from './adapters'

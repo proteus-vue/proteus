@@ -1,7 +1,7 @@
 // packages/runtime/src/pinia/ssr.ts
 // SSR 工厂（docs/proteus-pinia-plan M3 §2.4）—— 每请求独立实例，绝不在模块顶层调用
 import { createPinia } from 'pinia'
-import { MemoryAdapter, setPlatform } from '@proteus/shared'
+import { MemoryAdapter, setPlatform } from '@proteus-vue/shared'
 import { createPersistence } from './persistence/lightweight'
 
 /**

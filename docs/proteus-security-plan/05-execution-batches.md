@@ -6,7 +6,7 @@
 
 ### B1（M1）— SecretStorage + 字段描述符
 - **输入**：`01-m1-secret-storage.md` + Types `FieldDescriptor` + Compiler transform 骨架
-- **产出**：`@proteus/security/secret-storage.ts` + Storage adapter 加密层 + 单测
+- **产出**：`@proteus-vue/security/secret-storage.ts` + Storage adapter 加密层 + 单测
 - **验收**：encrypted round-trip / volatile 不落盘 / trace 脱敏
 
 ### B2（M2）— CredentialStore + 刷新竞态

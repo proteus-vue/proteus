@@ -21,7 +21,7 @@ export interface CompileCacheStats {
 /** 编译器版本（缓存键组成部分——编译器 dist 重建即全局失效） */
 export function getCompilerVersion(): string {
   try {
-    const pkg = JSON.parse(fs.readFileSync(require.resolve('@proteus/compiler/package.json'), 'utf-8')) as { version: string }
+    const pkg = JSON.parse(fs.readFileSync(require.resolve('@proteus-vue/compiler/package.json'), 'utf-8')) as { version: string }
     return pkg.version
   } catch {
     return 'unknown'
@@ -131,7 +131,7 @@ export function bundleCacheKey(entryFile: string): string {
       format: 'cjs',
       charset: 'utf8',
       minify: true,
-      external: ['@proteus/*'],
+      external: ['@proteus-vue/*'],
     }),
   )
   return h.digest('hex')

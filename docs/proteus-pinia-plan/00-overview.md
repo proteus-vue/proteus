@@ -151,10 +151,10 @@ interface StorageAdapter {
 ## 6. 不做的事（明确排除，防止 scope creep）
 
 - ❌ 不实现 Redux DevTools 协议（仅 Pinia 官方 DevTools）
-- ⚠️ 时间旅行：M6 基线**不内置**；由 M8.2（`@proteus/pinia-devtools` 快照/时间旅行）按需提供，仅开发/调试 + 灰度复现包启用，生产默认关闭
+- ⚠️ 时间旅行：M6 基线**不内置**；由 M8.2（`@proteus-vue/pinia-devtools` 快照/时间旅行）按需提供，仅开发/调试 + 灰度复现包启用，生产默认关闭
 - ❌ 不做跨 store 事务（保持 Pinia 原子性）
 - ❌ 不修改 Pinia 内部源码（全部走插件 / 适配器）
-- ❌ M8.1 sync engine 不作为核心依赖（可选子包 `@proteus/pinia-sync`）
+- ❌ M8.1 sync engine 不作为核心依赖（可选子包 `@proteus-vue/pinia-sync`）
 
 ---
 

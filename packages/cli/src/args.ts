@@ -2,8 +2,8 @@
 // CLI 参数解析（纯函数，可单测）——零依赖，手写解析
 import fs from 'node:fs'
 import path from 'node:path'
-import type { TransformRuleOverrides } from '@proteus/compiler'
-import type { ProteusConfig } from '@proteus/plugin-vite'
+import type { TransformRuleOverrides } from '@proteus-vue/compiler'
+import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 export interface BuildArgs {
   /** 输入目录（扫描 .vue） */

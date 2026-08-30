@@ -1,5 +1,5 @@
 // packages/types/src/router-types.ts
-// ★类型收口（10-type-consolidation）：路由类型契约（原 @proteus/router/types.ts）
+// ★类型收口（10-type-consolidation）：路由类型契约（原 @proteus-vue/router/types.ts）
 // 模块扩充（RouteParamsByName declare module）仍由应用侧 auto-routes.ts 生成（机制不动）
 import type { RouteTransition } from './index-shared'
 

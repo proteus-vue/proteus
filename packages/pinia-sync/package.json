@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/pinia-sync",
+  "name": "@proteus-vue/pinia-sync",
   "version": "0.1.0",
   "description": "Proteus × Pinia 多端状态协同（docs/proteus-pinia-plan M8.1）：LWW 零依赖默认 + CRDT 接口占位",
   "type": "module",

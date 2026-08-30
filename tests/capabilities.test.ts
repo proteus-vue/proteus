@@ -79,8 +79,8 @@ describe('defineCapability / validateCapabilityDefinition', () => {
 
 describe('capabilities:manifest（描述文件扫描）', () => {
   it('扫描 capabilities/*.capability.ts → manifest（id/tier/platforms/fallback）', async () => {
-    write('capabilities/clipboard.capability.ts', `import { defineCapability } from '@proteus/capabilities'\nexport default defineCapability({ meta: { id: 'clipboard', tier: 2, name: '剪贴板' }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }), skyline: () => ({ platform: 'skyline', create: () => ({ isSupported: () => false }) }) }, fallback: 'share' })\n`)
-    write('capabilities/broken.capability.ts', `import { defineCapability } from '@proteus/capabilities'\nexport default defineCapability({ meta: { tier: 2 }, adapters: {} })\n`)
+    write('capabilities/clipboard.capability.ts', `import { defineCapability } from '@proteus-vue/capabilities'\nexport default defineCapability({ meta: { id: 'clipboard', tier: 2, name: '剪贴板' }, adapters: { web: () => ({ platform: 'web', create: () => ({ isSupported: () => true }) }), skyline: () => ({ platform: 'skyline', create: () => ({ isSupported: () => false }) }) }, fallback: 'share' })\n`)
+    write('capabilities/broken.capability.ts', `import { defineCapability } from '@proteus-vue/capabilities'\nexport default defineCapability({ meta: { tier: 2 }, adapters: {} })\n`)
     const { manifest, files } = await scanCapabilities(TMP)
     expect(files.some((f) => f.file.includes('clipboard') && f.ok)).toBe(true)
     expect(files.some((f) => f.file.includes('broken') && !f.ok)).toBe(true)

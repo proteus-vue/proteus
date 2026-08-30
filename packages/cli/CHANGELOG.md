@@ -1,4 +1,4 @@
-# @proteus/cli
+# @proteus-vue/cli
 
 ## 0.2.0
 
@@ -9,4 +9,4 @@
 ### Patch Changes
 
 - Updated dependencies
-  - @proteus/compiler@0.2.0
+  - @proteus-vue/compiler@0.2.0

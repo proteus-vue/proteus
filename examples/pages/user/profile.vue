@@ -15,8 +15,8 @@
 </route>
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { PageOnLoad } from '@proteus/router/types'
-import { onLoad } from '@proteus/runtime'
+import type { PageOnLoad } from '@proteus-vue/router/types'
+import { onLoad } from '@proteus-vue/runtime'
 
 // 类型提示全链路：onLoad 参数自动匹配本路由声明的 params（{ id?, from?, kw? }）
 // MP 端：编译产物注入路由参数 + 回调执行；Web 端：no-op 兼容（参数在路由层处理）

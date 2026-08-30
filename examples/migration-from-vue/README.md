@@ -39,11 +39,11 @@ app.use(pinia)
 -pinia.use(persistedstatePlugin)
 -app.use(pinia)
 +// main.web.ts（替换）
-+import { createWebPinia } from '@proteus/runtime'
++import { createWebPinia } from '@proteus-vue/runtime'
 +app.use(createWebPinia())
 
 +// main.mp.ts（新增）
-+import { createMpPinia } from '@proteus/runtime'
++import { createMpPinia } from '@proteus-vue/runtime'
 +createMpPinia()
 ```
 

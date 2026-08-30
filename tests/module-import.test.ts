@@ -39,7 +39,7 @@ describe('module-plan B0：跨模块引用（import → require）', () => {
     expect(r.js).toContain("const utils = require('../utils/format.js')")
   })
 
-  it('未收录路径 → 剥离 + 警告（反黑盒）；vue/@proteus/type/.vue 跳过', () => {
+  it('未收录路径 → 剥离 + 警告（反黑盒）；vue/@proteus-vue/type/.vue 跳过', () => {
     const r = compile(
       '<script setup>\nimport { useStore } from "../stores/missing"\nimport type { Foo } from "../types"\n</script>',
     )

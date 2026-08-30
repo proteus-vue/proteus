@@ -34,11 +34,11 @@ app.use(pinia)
 ```ts
 // stores/user.ts —— 0 行改动（persist.storage 保留也能跑：兼容层自动包成 Adapter）
 // main.web.ts（替换 1 行）
-import { createWebPinia } from '@proteus/runtime'
+import { createWebPinia } from '@proteus-vue/runtime'
 app.use(createWebPinia())
 
 // main.mp.ts（新增 ~3 行）
-import { createMpPinia } from '@proteus/runtime'
+import { createMpPinia } from '@proteus-vue/runtime'
 createMpPinia() // 首屏逻辑调用后，页面 useStore() 直接可用
 ```
 
@@ -48,7 +48,7 @@ createMpPinia() // 首屏逻辑调用后，页面 useStore() 直接可用
 
 ```ts
 // stores/user.ts
-import { persisted } from '@proteus/runtime'   // 新增 import
+import { persisted } from '@proteus-vue/runtime'   // 新增 import
 export const useUserStore = defineStore('user', {
   state: () => ({ token: '', profile: null }),
   persistence: persisted({ pick: ['token'] }), // 改动 1 行：persist → persistence: persisted()
@@ -61,7 +61,7 @@ export const useUserStore = defineStore('user', {
 
 ```ts
 // Step 1：替换 Pinia 创建
-import { createMpPinia } from '@proteus/runtime'  // 替代 createPinia()
+import { createMpPinia } from '@proteus-vue/runtime'  // 替代 createPinia()
 app.use(createMpPinia())
 
 // Step 2：删掉 persist.storage（小程序端 localStorage 会炸，Proteus 自动选 WxStorageAdapter）
@@ -89,7 +89,7 @@ persist: { key: 'user' }
 
 ## 检查清单
 
-- [ ] package.json 新增 `@proteus/runtime` 依赖（含 pinia peer）
+- [ ] package.json 新增 `@proteus-vue/runtime` 依赖（含 pinia peer）
 - [ ] 入口替换为平台工厂调用
 - [ ] store 的 `persist.storage` 移除（改为平台注入；不删也能跑）
 - [ ] `npm test` 全绿（含 cross-platform 矩阵）

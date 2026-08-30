@@ -1,21 +1,21 @@
 // packages/cli/src/config-check.ts
 // ★types-plan B5：proteus config:check —— 加载 proteus.config.ts（esbuild transform + Function 注入 eval）→ validateConfig → 报告
-// 对齐 capabilities 描述文件加载模式（@proteus/plugin-vite import 剥离——配置为类型/纯数据，无运行时框架依赖）
+// 对齐 capabilities 描述文件加载模式（@proteus-vue/plugin-vite import 剥离——配置为类型/纯数据，无运行时框架依赖）
 import fs from 'node:fs'
 import path from 'node:path'
 import { transform } from 'esbuild'
 import { validateConfig } from './config-validate'
 import type { ConfigValidationResult } from './config-validate'
-import { configNeedsMigration, CONFIG_VERSION } from '@proteus/types'
+import { configNeedsMigration, CONFIG_VERSION } from '@proteus-vue/types'
 
-/** 加载 TS 配置：transform → CJS → 剥离 @proteus/plugin-vite require → Function eval → 取 .default */
+/** 加载 TS 配置：transform → CJS → 剥离 @proteus-vue/plugin-vite require → Function eval → 取 .default */
 export async function loadTsConfig(file: string): Promise<unknown> {
   const src = fs.readFileSync(file, 'utf-8')
   const { code } = await transform(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
-  // 剥离 @proteus/plugin-vite require 行（config 文件只应类型引用；运行时无框架依赖）
+  // 剥离 @proteus-vue/plugin-vite require 行（config 文件只应类型引用；运行时无框架依赖）
   const finalCode = code
     .split('\n')
-    .filter((l) => !l.includes("require('@proteus/plugin-vite')") && !l.includes('require("@proteus/plugin-vite")'))
+    .filter((l) => !l.includes("require('@proteus-vue/plugin-vite')") && !l.includes('require("@proteus-vue/plugin-vite")'))
     .join('\n')
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const fileRequire = (id: string): unknown => {

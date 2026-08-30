@@ -2,7 +2,7 @@
 
 > 状态：已落地评估（2026-08）  
 > 前置：`00-overview.md`（v0.6 渲染器 + Vapor）、`01-app-renderer.md`（createRenderer host config）、`02-vapor.md`  
-> 结论先行：**B1 核心（`@proteus/renderer-app`：NativeAdapter 抽象 + createRenderer host config + 测试用 mock adapter）可在本仓先行落地验证 Vue 官方渲染器契约；B2-B5 依赖 iOS/Android 原生工程 + npm 发布脚手架，标 v0.6 正式启动；Vapor（B6）依赖 @vue/vapor 实验版，标后续**。
+> 结论先行：**B1 核心（`@proteus-vue/renderer-app`：NativeAdapter 抽象 + createRenderer host config + 测试用 mock adapter）可在本仓先行落地验证 Vue 官方渲染器契约；B2-B5 依赖 iOS/Android 原生工程 + npm 发布脚手架，标 v0.6 正式启动；Vapor（B6）依赖 @vue/vapor 实验版，标后续**。
 
 ---
 
@@ -10,7 +10,7 @@
 
 | # | Draft 假设 | 当前现实 | 结论 |
 |---|-----------|----------|------|
-| 1 | `@proteus/renderer-app` 用 Vue 官方 `createRenderer` 定义 host config | @vue/runtime-core 3.5.42 已装（vue 依赖）；`createRenderer` 契约可用 | ✅ **B1 核心先行**：NativeAdapter 接口（原生节点抽象）+ host config 纯 TS 可单测——**无需真机即可验证渲染器接线** |
+| 1 | `@proteus-vue/renderer-app` 用 Vue 官方 `createRenderer` 定义 host config | @vue/runtime-core 3.5.42 已装（vue 依赖）；`createRenderer` 契约可用 | ✅ **B1 核心先行**：NativeAdapter 接口（原生节点抽象）+ host config 纯 TS 可单测——**无需真机即可验证渲染器接线** |
 | 2 | host 内 createElement → iOS UIView / Android View | 本仓无 Xcode/Android SDK；原生工程骨架无法验证 | ⏸ B2-B5 **标 v0.6 正式启动**（npm 发布后脚手架 + 原生工程）；NativeAdapter 接口已为原生实现留好接缝 |
 | 3 | 样式系统（rpx→dp / flexbox 引擎） | 无原生布局引擎 | ⏸ 标 B2（Yoga/flexbox-layout 选型）；props 透传契约已定 |
 | 4 | 路由/状态桥（router app adapter + Pinia） | createRouter API 已就绪（三端一致） | ⏸ 标 B3（原生导航栈适配）；API 契约已定 |
@@ -24,7 +24,7 @@
 
 | 批 | 交付物 | 说明 |
 |----|--------|------|
-| B1 | `@proteus/renderer-app`：NativeAdapter 接口 + host config（createRenderer）+ mock adapter（可断言原生树）+ createAppRenderer | ✅ **本批**（纯 TS 可单测：渲染/更新/事件契约验证）|
+| B1 | `@proteus-vue/renderer-app`：NativeAdapter 接口 + host config（createRenderer）+ mock adapter（可断言原生树）+ createAppRenderer | ✅ **本批**（纯 TS 可单测：渲染/更新/事件契约验证）|
 | B2 | 原生 host 完整（iOS/Android 视图 + 样式 rpx→dp + 事件桥）| ⏸ v0.6 正式启动（npm 发布 + 原生工程）|
 | B3 | 路由/状态桥（router app adapter + routeType 原生转场）| ⏸ v0.6 |
 | B4 | capabilities app adapter | ⏸ v0.6 |
@@ -69,5 +69,5 @@ app.mount(containerNode)
 
 | 批 | 状态 | 说明 |
 |----|------|------|
-| B1 renderer 核心（NativeAdapter + host config + mock）| ✅ 已落地 | 2026-08——@proteus/renderer-app：NativeAdapter 接口 + createAppHostConfig（Vue createRenderer 契约）+ mock adapter + createAppRenderer，5 用例（挂载/响应式更新/事件属性/卸载/v-if）|
+| B1 renderer 核心（NativeAdapter + host config + mock）| ✅ 已落地 | 2026-08——@proteus-vue/renderer-app：NativeAdapter 接口 + createAppHostConfig（Vue createRenderer 契约）+ mock adapter + createAppRenderer，5 用例（挂载/响应式更新/事件属性/卸载/v-if）|
 | B2-B6 | ⏸ v0.6 正式启动 / @vue/vapor 后续 | 原生视图/样式/路由桥/能力桥/demo 需 npm 发布 + 原生工程 |

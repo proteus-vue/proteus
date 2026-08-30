@@ -5,14 +5,14 @@
 ## 是什么
 
 一个运行时 + 一个面板：
-- **`@proteus/devtools-runtime`**：TraceBus，接收六层 trace 事件
-- **`@proteus/devtools-panel`**：时间轴 / 快照 / 火焰图 / 根因（浏览器扩展 or 独立窗口）
+- **`@proteus-vue/devtools-runtime`**：TraceBus，接收六层 trace 事件
+- **`@proteus-vue/devtools-panel`**：时间轴 / 快照 / 火焰图 / 根因（浏览器扩展 or 独立窗口）
 
 ## 快速接入
 
 ```ts
 // main.mp.ts / main.web.ts
-import { createDevTools } from '@proteus/devtools-runtime'
+import { createDevTools } from '@proteus-vue/devtools-runtime'
 
 createDevTools({
   enabled: import.meta.env.DEV,
@@ -22,7 +22,7 @@ createDevTools({
 
 面板连接：
 ```ts
-import { connectPanel } from '@proteus/devtools-panel'
+import { connectPanel } from '@proteus-vue/devtools-panel'
 connectPanel({ host: 'localhost', port: 7092 })
 ```
 

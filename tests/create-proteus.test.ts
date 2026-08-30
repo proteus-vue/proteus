@@ -23,7 +23,7 @@ describe('create-proteus copyTemplate', () => {
     expect(rel.has('vite.config.ts')).toBe(true)
     expect(rel.has('index.html')).toBe(true)
     expect(rel.has('tsconfig.json')).toBe(true)
-    // 编译管线（gen-routes 走 @proteus/plugin-vite npm 包）
+    // 编译管线（gen-routes 走 @proteus-vue/plugin-vite npm 包）
     expect(rel.has('scripts/gen-routes.ts')).toBe(true)
     // 应用壳（拆包步骤 7：不再复制框架本体 src/，框架走 npm 包）
     expect(rel.has('src/router/RouterView.vue')).toBe(true)
@@ -48,20 +48,20 @@ describe('create-proteus copyTemplate', () => {
     expect(JSON.stringify(pkg)).not.toContain('{{name}}')
   })
 
-  it('插件与 gen-routes 走 @proteus/* npm 包（拆包步骤 7）', () => {
+  it('插件与 gen-routes 走 @proteus-vue/* npm 包（拆包步骤 7）', () => {
     const dir = path.join(TMP, 'plugin-check')
     copyTemplate(dir, { name: 'x' }, TEMPLATES)
     const viteCfg = fs.readFileSync(path.join(dir, 'vite.config.ts'), 'utf-8')
-    expect(viteCfg).toContain("from '@proteus/plugin-vite'")
+    expect(viteCfg).toContain("from '@proteus-vue/plugin-vite'")
     expect(viteCfg).not.toContain('./packages/')
     const genRoutes = fs.readFileSync(path.join(dir, 'scripts/gen-routes.ts'), 'utf-8')
-    expect(genRoutes).toContain("from '@proteus/plugin-vite'")
+    expect(genRoutes).toContain("from '@proteus-vue/plugin-vite'")
     // 框架依赖在 package.json（不 vendored）
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'))
-    expect(pkg.dependencies['@proteus/router']).toBeDefined()
-    expect(pkg.dependencies['@proteus/runtime']).toBeDefined()
-    expect(pkg.dependencies['@proteus/shared']).toBeDefined()
-    expect(pkg.devDependencies['@proteus/plugin-vite']).toBeDefined()
+    expect(pkg.dependencies['@proteus-vue/router']).toBeDefined()
+    expect(pkg.dependencies['@proteus-vue/runtime']).toBeDefined()
+    expect(pkg.dependencies['@proteus-vue/shared']).toBeDefined()
+    expect(pkg.devDependencies['@proteus-vue/plugin-vite']).toBeDefined()
   })
 
   it('首页是标准 Vue SFC（可编译的最小闭环）', () => {

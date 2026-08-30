@@ -1,5 +1,5 @@
 // packages/renderer-app/src/index.ts
-// @proteus/renderer-app —— App 端 Vue 自定义渲染器（app-plan B1 核心）
+// @proteus-vue/renderer-app —— App 端 Vue 自定义渲染器（app-plan B1 核心）
 // Vue 官方 createRenderer + NativeAdapter 抽象：标准 Vue SFC 三端复用的 App 运行时通道
 // v0.6 正式形态：nativeAdapter 由 iOS/Android 工程实现（B2）；本仓用 mock adapter 验证接线
 import { createRenderer } from '@vue/runtime-core'

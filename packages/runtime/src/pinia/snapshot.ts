@@ -7,7 +7,7 @@
 //   · timeTravel(n)：mutation 历史栈回退（开发模式默认；生产 enableSnapshotInProd 才开）
 // ⚠ MP 产物安全：全文件无 ?? / ?. / 对象展开 / 数组解构
 import type { Pinia } from 'pinia'
-import { serialize, deserialize } from '@proteus/shared'
+import { serialize, deserialize } from '@proteus-vue/shared'
 
 export interface Snapshot {
   at: number

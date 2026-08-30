@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/api",
+  "name": "@proteus-vue/api",
   "version": "0.1.0",
   "description": "Proteus API 层（api-plan A1/A8）：网络请求统一抽象（wx.request/fetch）+ 设备信息——业务零平台分支",
   "type": "module",
@@ -24,6 +24,6 @@
     "@types/node": "^20.0.0"
   },
   "dependencies": {
-    "@proteus/types": "0.1.0"
+    "@proteus-vue/types": "0.1.0"
   }
 }

@@ -49,13 +49,13 @@ LLM 一次只喂 `00-overview.md` + 当前 Batch 文件（≤3 文件）。依�
 | 能力 | 落地 | 验证 |
 |------|------|------|
 | B0 跨模块引用（import → require） | compiler + plugin-vite | tests/module-import.test.ts |
-| B1 模块契约（defineModule + 校验） | @proteus/module + CLI module:check | tests/module-contract.test.ts |
-| B2 运行时编排器（createModuleSystem） | @proteus/module | tests/module-orchestrator.test.ts |
-| B3 依赖图谱（环检测 + 拓扑 + manifest） | @proteus/module | tests/module-graph.test.ts |
-| B4 Web 打包（manualChunks） | @proteus/module + vite.config | tests/module-web-codegen.test.ts |
+| B1 模块契约（defineModule + 校验） | @proteus-vue/module + CLI module:check | tests/module-contract.test.ts |
+| B2 运行时编排器（createModuleSystem） | @proteus-vue/module | tests/module-orchestrator.test.ts |
+| B3 依赖图谱（环检测 + 拓扑 + manifest） | @proteus-vue/module | tests/module-graph.test.ts |
+| B4 Web 打包（manualChunks） | @proteus-vue/module + vite.config | tests/module-web-codegen.test.ts |
 | B5 Skyline 分包（dependencies/preloadRule） | gen-routes | tests/gen-routes.test.ts |
 | B7a 分包体积监控 / B7b 去重检测 / B7c 懒加载 | bundle-report + CLI | tests/bundle-report / module-duplicates / module-orchestrator |
-| B8 综合审计门禁（audit module） | @proteus/module + CLI | tests/module-audit.test.ts |
+| B8 综合审计门禁（audit module） | @proteus-vue/module + CLI | tests/module-audit.test.ts |
 | B9 整合（init module + 迁移指南） | CLI + docs | tests/module-init.test.ts |
 
 **快速上手**：`proteus init module` → 编辑契约 → `proteus module:check --graph` → `proteus audit module`

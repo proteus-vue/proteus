@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/module",
+  "name": "@proteus-vue/module",
   "version": "0.1.0",
   "description": "Proteus 模块化（module-plan）：模块契约 defineModule + 校验（B1）——业务域声明式边界，编译期依赖图谱/分包的地基",
   "type": "module",

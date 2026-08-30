@@ -2,7 +2,7 @@
 // create-proteus 模板快照生成器 —— 从主仓库抽取"应用壳"到 packages/create-proteus/templates/
 // 运行：tsx scripts/snapshot-template.ts（create-proteus 模板与主仓库保持同步的手段）
 // ★拆包步骤 7：模板不再复制框架本体（src/platform|runtime|router|shims 的框架代码）——
-//   模板依赖 @proteus/{router,runtime,shared,plugin-vite} npm 包（workspace 链接 / 发布后 registry）
+//   模板依赖 @proteus-vue/{router,runtime,shared,plugin-vite} npm 包（workspace 链接 / 发布后 registry）
 // 复制（受管）：
 //   - 应用壳：examples/router/{RouterView.vue,index.ts} → src/router/
 //   - 应用侧全局类型：packages/shared/src/shims/*.d.ts → src/shims/（微信宿主类型，应用侧持有）
@@ -76,7 +76,7 @@ copied.push(copyFile(path.join(ROOT, 'examples', 'router', 'RouterView.vue'), pa
 copied.push(copyFile(path.join(ROOT, 'examples', 'router', 'index.ts'), path.join(TPL, 'src', 'router', 'index.ts')))
 // 2. 应用侧全局类型（微信宿主类型声明：wx/Page/RouteBuilder/MpEvent/declare module '*.vue'）
 copied.push(...copyDir(path.join(ROOT, 'packages', 'shared', 'src', 'shims'), path.join(TPL, 'src', 'shims')))
-// 3. 编译管线占位入口（真实 app.js 由 @proteus/plugin-vite 插件 buildStart 直出）
+// 3. 编译管线占位入口（真实 app.js 由 @proteus-vue/plugin-vite 插件 buildStart 直出）
 fs.mkdirSync(path.join(TPL, 'scripts'), { recursive: true })
 copied.push(...copyDir(path.join(ROOT, 'scripts'), path.join(TPL, 'scripts'), ['snapshot-template.ts', 'bundle-report.ts', 'gen-routes.ts']))
 // 4. index.html（入口路径指向模板工程的 src/）

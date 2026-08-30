@@ -27,10 +27,10 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | 1 | **开发体验**：脚手架 / HMR / devtools / 错误定位 / 类型提示 | ✅ | ✅ | 🟡 HMR+devtools（Web 原生）；★devtools-plan B1-B2（TraceBus 统一事件协议 + lifecycle/component 源接入，type-only 注入）；MP 无 devtools 面板（B3-B8 标 v1.0+） | v0.2 脚手架 + v1.0 devtools |
 | 2 | **编译能力**：组件系统（props/emits/slots）/ computed/watch / 指令全集 / scoped CSS / 预处理器 / Vue 能力兼容 | ✅ | ✅ | ✅ 组件 props/emits/slots、computed 读路径、watch、v-show、:class 数组、scoped CSS、scss 预处理器、sourcemap（v0.3）；✅ vue-compat-advance 全批（provide/inject 值传递+响应式联动+页面级隔离、Transition 进入+离开动画、作用域插槽平台限制确认+替代模式，Batch 1-7）；🟡 类型提示 / computed 写路径 | v0.3 + v0.3 尾 + vue-compat-advance ✅ |
 | 3 | **路由**：嵌套 / tabBar / 分包 / 自定义转场 / 守卫 / 深链 | ✅ | ✅ | ✅ 全量（MVP 已交付，含 Skyline 自定义转场） | — |
-| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | ✅ pinia-plan M1-M8 全批（Web 原生 Pinia + MP store 桥 + 四端工厂 + 持久化/分片/版本迁移/配额淘汰 + 快照时间旅行 + 协同 @proteus/pinia-sync + 可观测）+ MP 编译 P1-P3（模板 store 绑定桥 $subscribe→setData + 方法事件包装 proteusStoreXxx + pinia 白名单放行，主包 83KB） | v0.4 + pinia-plan ✅ |
+| 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | ✅ pinia-plan M1-M8 全批（Web 原生 Pinia + MP store 桥 + 四端工厂 + 持久化/分片/版本迁移/配额淘汰 + 快照时间旅行 + 协同 @proteus-vue/pinia-sync + 可观测）+ MP 编译 P1-P3（模板 store 绑定桥 $subscribe→setData + 方法事件包装 proteusStoreXxx + pinia 白名单放行，主包 83KB） | v0.4 + pinia-plan ✅ |
 | 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | ✅ 组件库 P0 全批（B1-B8，2026-08）：16 个内置组件（p-view/p-text/p-image/p-button/p-scroll-view/p-list-view/p-input/p-textarea/p-mask/p-popup/p-toast/p-loading/p-nav-bar/p-skeleton/p-error-boundary + virtual-list 兼容别名）+ 4 个 runtime 共享模块（capability 探测/event 归一/virtual-window 窗口/observability 埋点）+ `components:audit` 门禁（no-platform-api/no-sync-storage/manifest-complete，入 CI）+ 编译器 4 增强（props 源 watch→observers/多行 RHS 修复/组件 detached/未映射钩子警告）；🟡 业务组件（player-bar/payment-sheet 依赖 appBar/支付）标注 v0.6+ | v0.3 适配层 + v2.0 组件库拆包 |
 | 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底 + ★能力体系（platform-plan B1-B5：Capability 契约/Adapter Registry/降级/平台规范，MP 端 capability 可用）+ ✅ api-plan B1-B4（createApi 跨端请求抽象：wx/fetch adapter + 拦截器/重试/错误模型 + 设备信息 + createAuth 凭证托管，业务零平台分支）；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 616 单测 + CI（拆包完成：14 个 @proteus/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）+ lifecycle-plan（defineApp 五阶段编排/超时降级/错误隔离/trace，B1-B6）+ security M2 凭证托管 + 组件库 audit 门禁（components:audit）+ i18n:check 消息审计门禁；🟡 npm 发包配置就绪（changesets 已配，待真实发布） | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 616 单测 + CI（拆包完成：14 个 @proteus-vue/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）+ lifecycle-plan（defineApp 五阶段编排/超时降级/错误隔离/trace，B1-B6）+ security M2 凭证托管 + 组件库 audit 门禁（components:audit）+ i18n:check 消息审计门禁；🟡 npm 发包配置就绪（changesets 已配，待真实发布） | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
 | 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表 + 分包体积监控（B7a）+ 组件库性能加固（B7：getVirtualWindow 虚拟窗口纯函数 10k→恒定行数 / start 守卫零 setData / 定时器 detached 清理 / 降级 warn-once） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 
@@ -59,10 +59,10 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 | 任务 | 落地位置 | 验收标准 |
 |---|---|---|
-| 编译引擎独立包 `@proteus/compiler`（✅ 已落地） | `packages/compiler/`（monorepo） | ✅ `npm run build -w @proteus/compiler` 产出 dist（esbuild 单文件 + tsc 声明文件）；插件 `@proteus/plugin-vite` 以 npm 包形态消费（prepare 钩子保 dist 新鲜）；纯函数 API 不变 |
-| 规则注册表随包发布（✅ 已落地） | `packages/compiler/src/transforms/` | ✅ `@proteus/compiler` 导出 `listTransformRules` / `getTransformRule` / `formatTransformRule` / `explainTransform`（49 条 AI 说明书随包携带） |
-| CLI `@proteus/cli`（✅ 已落地） | `packages/cli/` | ✅ `proteus build <dir> --out <dir> [--debug] [--rules]`（独立编译，esbuild 单文件 + shebang，`node_modules/.bin/proteus` 验证）；`proteus explain <vue-file | rule-id>`（决策 trace / AI 说明书）；`proteus rules`（能力目录）；核心逻辑纯函数可单测（tests/cli.test.ts 9 用例） |
-| 脚手架 `create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create proteus my-app` 生成双端工程（应用壳 + shims，框架走 @proteus/* npm 包，无 vendored 副本）；模板同步脚本 `scripts/snapshot-template.ts`（CI 快照一致性检查） |
+| 编译引擎独立包 `@proteus-vue/compiler`（✅ 已落地） | `packages/compiler/`（monorepo） | ✅ `npm run build -w @proteus-vue/compiler` 产出 dist（esbuild 单文件 + tsc 声明文件）；插件 `@proteus-vue/plugin-vite` 以 npm 包形态消费（prepare 钩子保 dist 新鲜）；纯函数 API 不变 |
+| 规则注册表随包发布（✅ 已落地） | `packages/compiler/src/transforms/` | ✅ `@proteus-vue/compiler` 导出 `listTransformRules` / `getTransformRule` / `formatTransformRule` / `explainTransform`（49 条 AI 说明书随包携带） |
+| CLI `@proteus-vue/cli`（✅ 已落地） | `packages/cli/` | ✅ `proteus build <dir> --out <dir> [--debug] [--rules]`（独立编译，esbuild 单文件 + shebang，`node_modules/.bin/proteus` 验证）；`proteus explain <vue-file | rule-id>`（决策 trace / AI 说明书）；`proteus rules`（能力目录）；核心逻辑纯函数可单测（tests/cli.test.ts 9 用例） |
+| 脚手架 `create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create proteus my-app` 生成双端工程（应用壳 + shims，框架走 @proteus-vue/* npm 包，无 vendored 副本）；模板同步脚本 `scripts/snapshot-template.ts`（CI 快照一致性检查） |
 | CI（✅ 已落地） | `.github/workflows/ci.yml` | ✅ `vue-tsc / test / build:mp / build:web / 独立包构建` + `e2e-web` 双 job 全绿 |
 | 发布流水线（✅ 已就绪：changesets 配置 + 流程验证，npm 发布待启用） | `.changeset/` + 脚本 | ✅ `changeset`（写变更）/ `changeset version`（bump + CHANGELOG）/ `changeset publish`（发布，待 npm 登录）；实测：初始 changeset → version → 三包 0.1.0→0.2.0 + CHANGELOG.md 生成 + 内部依赖自动更新；CI 发布 job 待启用 |
 | 贡献设施（✅ 已落地） | `CONTRIBUTING.md` / Issue & PR 模板 / 行为准则 | ✅ 规则改动同步约定（实现/AI 说明书/映射表/测试四处一致） |
@@ -74,12 +74,12 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
 | `computed` / `watch` 编译支持（✅ 读路径 + 写路径 + watch 全源，决策 #76/#78/#89/#90） | `packages/compiler/src/script.ts` | 已有：`computed(() => 表达式)` / `computed({ get, set })` → data 派生字段 + proteusSetX setter 方法（只读赋值注释忽略）；`watch` 单 ref / 数组源 / 函数源 → proteusWatch 方法（写入联动 + immediate；多源回调数组） |
-| 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus/compiler 独立包 |
+| 转换决策 trace（✅ 已实现：内嵌 trace + explainTransform） | `src/compiler/explain.ts` + `src/compiler/trace.ts` | 已有：`explainTransform(source)` 输出逐节点决策 trace（`L9 tag/link-to-view：<a> → <view>`）；debug 构建 `.transform-debug/` 携带决策链（底线循环 ②）；规则 apply() 分派层（阶段三）随 @proteus-vue/compiler 独立包 |
 | 规则覆盖（✅ 已实现：底线循环 ①③） | `src/compiler/overrides.ts` + `proteus.config.ts rules` 段 | 已有：disabled / mapping / customTags 贯通三转换函数（17 用例）；阶段三：规则 apply() 升级为完整插件体系（自定义 AST 转换，roadmap v2.0 编译期插件） |
 | 组件系统（✅ 已实现，决策 #79/#91/#92） | `packages/compiler/` + `scripts/gen-routes.ts` | 已有：defineProps（对象 + TS 泛型）→ properties、defineEmits + emit() → triggerEvent、defineExpose（no-op 校验）、<slot> 透传、attached 生命周期；父模板标签 + bind: 冒号事件 + **usingComponents 自动注入**（页面 page.json + 组件 component.json 嵌套，应用/框架组件双目录）；TS 参数标注剥离 |
 | scoped CSS（✅ 已实现，决策 #77） | `packages/compiler/src/style.ts` + `template.ts` | 已有：`<style scoped>` → 模板元素附加 `data-v-xxx` + 选择器末尾追加 `[data-v-xxx]`（:deep 去包装、@media 骨架保留、scopeId 由文件名 djb2 哈希稳定生成）；MVP 简化：任一 scoped 全量作用域化 |
 | 指令补全（✅ v-show / :class 数组 / .self / .once 已实现，决策 #76/#77/#88） | `packages/compiler/src/template.ts` + `script.ts` | 已有：`v-show` → `hidden="{{!expr}}"`、`:class` 数组（逐项拼接）、`.self/.once` 修饰符 → proteusSelf/Once 包装方法（target 判断 / data 标记）；`@keyup.enter` 等键位警告（无对等键盘事件，input 用 `@confirm`） |
-| CSS 预处理器（✅ scss 已实现，决策 #87） | 插件 `preprocessStyle` 钩子 + `sass` | 已有：编译器新增 `CompileOptions.preprocessStyle(lang, content)` 钩子（保持 @proteus/compiler 零依赖）；插件注入 sass 实现——`<style lang="scss">` 编译为 css 后进 WXSS（Web 端 Vite 原生处理 scss）；forms.vue 演示（变量 $brand + 嵌套）；less 待内置 |
+| CSS 预处理器（✅ scss 已实现，决策 #87） | 插件 `preprocessStyle` 钩子 + `sass` | 已有：编译器新增 `CompileOptions.preprocessStyle(lang, content)` 钩子（保持 @proteus-vue/compiler 零依赖）；插件注入 sass 实现——`<style lang="scss">` 编译为 css 后进 WXSS（Web 端 Vite 原生处理 scss）；forms.vue 演示（变量 $brand + 嵌套）；less 待内置 |
 | 方法级 sourcemap（✅ 已实现，决策 #80） | `packages/compiler/src/script.ts` + `vite-plugin-mp-transform.ts` | 已有：sourcemap v3（VLQ 编码，产物行 → 源码行：方法体 / watch 回调体）+ 调试构建落盘 .js.map + sourceMappingURL + 方法行号注释（微信开发者工具可定位源码） |
 | 类型提示全链路（✅ 已实现，决策 #93-#97） | `src/router/types.ts` + `scripts/gen-routes.ts` + `src/shims/events.d.ts` | 已有：`<route>.params` 声明 → `RouteParamsByName` 类型表（gen-routes 生成）；`router.push` 泛型（name 受限 + params 匹配 + 多余字段 EPC）；`PageOnLoad<N>` 页面 onLoad 参数（runtime onLoad Web no-op）；事件类型 `MpEvent/MpInputEvent/TapEvent`（shims 全局）；类型测试 tests/types/；三处全链路用法见 docs/types.md |
 
@@ -115,7 +115,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 
 | 任务 | 落地位置 | 说明 |
 |---|---|---|
-| App 端自定义渲染器（iOS/Android） | 新增 `packages/renderer-app/`（`@proteus/renderer-app`） | `@vue/runtime-core` 的 `createRenderer` 定义原生 host config（view → 原生视图、text → 原生文本、事件桥接、diff 策略），**标准 Vue SFC 直接运行**；与编译期为主的关系：Web/小程序仍走编译期通道，App 端是平台适配层的**运行时通道**——两条通道共享同一份源码、同一套 Router/守卫 API、同一份规则注册表心智 |
+| App 端自定义渲染器（iOS/Android） | 新增 `packages/renderer-app/`（`@proteus-vue/renderer-app`） | `@vue/runtime-core` 的 `createRenderer` 定义原生 host config（view → 原生视图、text → 原生文本、事件桥接、diff 策略），**标准 Vue SFC 直接运行**；与编译期为主的关系：Web/小程序仍走编译期通道，App 端是平台适配层的**运行时通道**——两条通道共享同一份源码、同一套 Router/守卫 API、同一份规则注册表心智 |
 | App 端路由 / 状态桥接 | `packages/router/` 新增 app adapter | 复用既有 Router API（守卫 / 参数 / routeType），映射到原生导航栈；Pinia 原生侧 state 同步 |
 | 原生能力桥（App） | 插件体系 | 原生组件 / 原生事件 / 原生模块调用（对标 Taro 插件体系，v0.5 原生能力桥复用） |
 | **Vapor 运行时兼容（Web 端 Vapor 模式）** | `packages/plugin-vite/` + 运行时 | 业务代码用 `@vue/vapor` 编译跑 Web（无虚拟 DOM、更小包体、更快）；Proteus MP 编译管线验证与 Vapor 特性子集兼容——**同一份源码双模式可编译**（Vapor 跑 Web + Proteus 编译 MP） |
@@ -140,7 +140,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 任务 | 说明 |
 |---|---|
 | 调试 devtools | 小程序端编译产物可读面板（转场 / setData / 路由时间线），对标 Taro devtools / uni-app HBuilderX 调试器 |
-| 组件库拆包（★前置） | **@proteus/components 独立 npm 包**：框架内置组件（virtual-list 等）从仓库根 `src/components/` 迁入包内（含 src/components/index.ts 聚合入口）；Web 侧删除 alias 改直接 import；MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` node_modules 包内路径机制），**`frameworkComponentsDir` 两个选项退役**（含缺省相对工程根 `src/components` 兜底），产物路径 `proteus/<name>/index` 不变；详见 docs/packages.md「框架内置组件的定位与退役路径」 |
+| 组件库拆包（★前置） | **@proteus-vue/components 独立 npm 包**：框架内置组件（virtual-list 等）从仓库根 `src/components/` 迁入包内（含 src/components/index.ts 聚合入口）；Web 侧删除 alias 改直接 import；MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` node_modules 包内路径机制），**`frameworkComponentsDir` 两个选项退役**（含缺省相对工程根 `src/components` 兜底），产物路径 `proteus/<name>/index` 不变；详见 docs/packages.md「框架内置组件的定位与退役路径」 |
 | 组件库 | 首个由社区共建的跨端组件库（走"标准 Vue + 编译"路线，天然双端可用）——架构规划见 docs/proteus-component-plan/ |
 | 插件体系 | 编译期插件（自定义映射 / 自定义产物）、运行时插件（中间件） |
 | 社区设施 | 示例仓库、Gitter/Discord、贡献者指南、RFC 流程 |
@@ -150,21 +150,21 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 ```
 proteus/                        # monorepo（v0.2 起）
 ├── packages/
-│   ├── compiler/               # @proteus/compiler  编译引擎（纯函数，零依赖）
-│   ├── runtime/                # @proteus/runtime   setData 桥接 / 生命周期 / 状态管理 / provide-inject
-│   ├── router/                 # @proteus/router    路由 API / 守卫 / 转场
-│   ├── plugin-vite/            # @proteus/plugin-vite  小程序编译 Vite 插件 + gen-routes
-│   ├── module/                 # @proteus/module    ★模块化（module-plan B0-B9：契约/图谱/编排器/审计/分包）
-│   ├── capabilities/           # @proteus/capabilities ★能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
-│   ├── renderer-app/           # @proteus/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主，待建）
-│   ├── cli/                    # @proteus/cli       proteus build / explain / rules / module:check / audit
+│   ├── compiler/               # @proteus-vue/compiler  编译引擎（纯函数，零依赖）
+│   ├── runtime/                # @proteus-vue/runtime   setData 桥接 / 生命周期 / 状态管理 / provide-inject
+│   ├── router/                 # @proteus-vue/router    路由 API / 守卫 / 转场
+│   ├── plugin-vite/            # @proteus-vue/plugin-vite  小程序编译 Vite 插件 + gen-routes
+│   ├── module/                 # @proteus-vue/module    ★模块化（module-plan B0-B9：契约/图谱/编排器/审计/分包）
+│   ├── capabilities/           # @proteus-vue/capabilities ★能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
+│   ├── renderer-app/           # @proteus-vue/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主，待建）
+│   ├── cli/                    # @proteus-vue/cli       proteus build / explain / rules / module:check / audit
 │   ├── create-proteus/         # create-proteus     脚手架
-│   └── shared/                 # @proteus/shared    公共类型与工具
+│   └── shared/                 # @proteus-vue/shared    公共类型与工具
 ├── examples/                   # 示例应用（随版本更新持续演示新能力）
 └── docs/                       # 文档（本文件 + 快速开始/配置/编译/路由 + 各规划）
 ```
 
-依赖方向（单向）：`plugin-vite → compiler + shared`，`cli → compiler + gen-routes`，`runtime/router → shared`。业务代码只依赖 `@proteus/*` 公开包。
+依赖方向（单向）：`plugin-vite → compiler + shared`，`cli → compiler + gen-routes`，`runtime/router → shared`。业务代码只依赖 `@proteus-vue/*` 公开包。
 
 ## 6. 性能目标（量化）
 
@@ -190,13 +190,13 @@ proteus/                        # monorepo（v0.2 起）
 
 | 里程碑 | 验收 |
 |---|---|
-| v0.2 | `@proteus/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
+| v0.2 | `@proteus-vue/compiler` 已发布 npm 且示例工程改用 npm 包（含 49 条规则 AI 说明书随包导出）——✅ 独立包/CLI/脚手架/CI/贡献设施/发布流水线（changesets）已就绪，**npm 发布待启用**（用户指示暂不真实发布）；`proteus explain` 可用（✅） |
 | v0.3 | 组件 props/emits/slots、computed、scoped CSS、`v-show` 均有单测与 demo（✅ 全部落地，决策 #76-#80）；sourcemap 接入开发者工具（✅ 已实现：sourcemap v3 + 调试构建落盘） |
 | v0.4 | 虚拟列表 demo + 性能基准套件落地（✅ 已落地，决策 #81/#82/#83）；Pinia 双端可用（🟡 Web 完整 + MP 运行时桥；★跨模块引用已通（module-plan B0），Pinia MP 编译待放行——含第三方依赖共享模块跳过） |
 | v0.5 | 支付宝 + 抖音端 demo 构建通过并真机验证（★前置基建提前完成：module-plan 模块化 B0-B9——跨模块引用/契约/图谱/编排器/分包/审计；vue-compat-advance 全批） |
 | v0.6 | App 端 demo（iOS/Android）用 Vue 自定义渲染器跑通同一份示例代码；Web 端 Vapor 模式构建通过；setData 依赖追踪基准达标 |
 | v1.0 | 能力矩阵全 ✅；真实项目验证报告（含 iOS 真机 Skyline 白屏场景兜底验证）；性能指标达标；文档站上线 |
-| v2.0 | devtools 可用；**@proteus/components 独立包发布**（内置组件迁入包，frameworkComponentsDir 退役）；首个社区组件库发布；插件体系文档化 |
+| v2.0 | devtools 可用；**@proteus-vue/components 独立包发布**（内置组件迁入包，frameworkComponentsDir 退役）；首个社区组件库发布；插件体系文档化 |
 
 ---
 

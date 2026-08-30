@@ -28,14 +28,14 @@ types/src/*.ts (单一来源)
 ```ts
 // generated/stores.d.ts
 // AUTO-GENERATED — DO NOT EDIT
-declare module '@proteus/types' {
+declare module '@proteus-vue/types' {
   interface StoresRegistry {
     // 由各 defineStore 自动填充
   }
 }
 
 // generated/modules.d.ts
-declare module '@proteus/types' {
+declare module '@proteus-vue/types' {
   interface ModulesRegistry {
     // 由各 defineModule 自动填充
   }

@@ -2,7 +2,7 @@
 // 业务域用 proteus-module.config.ts 声明自身元信息（name/version/dependencies/exports...），
 // 编译期据此构建依赖图谱（B3）与分包（B5）；校验：proteus module:check
 // ★铁律：公共契约（types/interfaces/events/configSchema）是唯一允许跨模块 import 的东西
-import { defineModule } from '@proteus/module'
+import { defineModule } from '@proteus-vue/module'
 
 export default defineModule({
   // 模块标识（全局唯一，kebab-case）

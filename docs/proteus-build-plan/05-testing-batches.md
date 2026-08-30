@@ -55,7 +55,7 @@ describe('build contract', () => {
 ## 二、迁移（从现有 Vite 工程）
 
 ### 迁移步骤
-1. 安装：`pnpm add -D @proteus/vite-plugin`
+1. 安装：`pnpm add -D @proteus-vue/vite-plugin`
 2. 替换 vite.config.ts：
    ```ts
    // before
@@ -63,7 +63,7 @@ describe('build contract', () => {
    export default defineConfig({ /* ... */ })
 
    // after
-   import { proteus } from '@proteus/vite-plugin'
+   import { proteus } from '@proteus-vue/vite-plugin'
    export default proteus({
      platform: 'web',  // 或 'mp' / 'app'
    })

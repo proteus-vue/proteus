@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/cli",
+  "name": "@proteus-vue/cli",
   "version": "0.2.0",
   "description": "Proteus 命令行：proteus build（独立编译）/ explain（决策 trace + AI 说明书）/ rules（规则目录）",
   "type": "module",
@@ -12,14 +12,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus/router --external:@proteus/module --external:@proteus/compiler --external:@proteus/capabilities --external:esbuild --banner:js=\"#!/usr/bin/env node\""
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/router --external:@proteus-vue/module --external:@proteus-vue/compiler --external:@proteus-vue/capabilities --external:esbuild --banner:js=\"#!/usr/bin/env node\""
   },
   "dependencies": {
-    "@proteus/capabilities": "0.1.0",
-    "@proteus/compiler": "0.2.0",
-    "@proteus/module": "0.1.0",
-    "@proteus/router": "0.1.0",
-    "@proteus/types": "0.1.0"
+    "@proteus-vue/capabilities": "0.1.0",
+    "@proteus-vue/compiler": "0.2.0",
+    "@proteus-vue/module": "0.1.0",
+    "@proteus-vue/router": "0.1.0",
+    "@proteus-vue/types": "0.1.0"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",

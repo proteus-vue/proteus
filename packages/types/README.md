@@ -1,12 +1,12 @@
-# @proteus/types
+# @proteus-vue/types
 
 Proteus 框架级共享类型单一来源（types-plan B3）。零运行时依赖。
 
 ## 导出
 
 ```ts
-import type { Platform, PlatformTarget, ProteusConfigSchema } from '@proteus/types'
-import { proteusConfigSchema } from '@proteus/types'
+import type { Platform, PlatformTarget, ProteusConfigSchema } from '@proteus-vue/types'
+import { proteusConfigSchema } from '@proteus-vue/types'
 
 // Platform：'web' | 'skyline' | 'app'（capabilities.CapabilityPlatform 对齐）
 // PlatformTarget：'mp-weixin' | 'web'（ProteusConfig.platform）

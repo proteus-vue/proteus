@@ -33,7 +33,7 @@ Proteus Security 层提供**三端统一的 Web / Skyline / App 安全基线**�
 
 ```
 L4 业务页面/组件          ← 禁止直接操作敏感数据、禁止 eval/innerHTML
-L3 @proteus/security     ← useSecret / usePermission / withPermission
+L3 @proteus-vue/security     ← useSecret / usePermission / withPermission
 L2 适配器                ← web(crypto/subtle) / skyline(wx.getStorage encrypted) / app(Keystore/Keychain)
 L1 平台原生               ← Web Crypto / wx 加密 API / iOS Keychain / Android Keystore
 ```

@@ -94,7 +94,7 @@ import share from './adapters/share.web'
 
 ```ts
 // 编译期保证：当前平台不存在的能力 → 类型上不可用
-declare module '@proteus/capabilities' {
+declare module '@proteus-vue/capabilities' {
   interface CapabilityMap {
     'share': ShareAPI | UnsupportedAPI
   }

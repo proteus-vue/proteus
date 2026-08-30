@@ -12,8 +12,8 @@
 ### B0 — 跨模块引用最小闭环（★先导批次，后续所有基建的地基）
 **喂 LLM**：`00-overview.md` + 本文件 B0 段 + `packages/compiler/src/script.ts`（import 剥离 + extractData）
 **产出**：
-1. **共享模块编译**（plugin-vite）：扫描页面/组件 import 的本地模块（相对路径、非 .vue、非 vue、非 @proteus/*）→ BFS 收集依赖链 → esbuild 转 CommonJS → 产物 `dist/mp-weixin/<源码相对路径>.js`
-2. **import → require**（compiler script.ts）：`import { a } from '../stores/player'` → 产物顶部 `const { a } = require('<相对产物路径>.js')`（named/default/namespace 三形态；vue/@proteus/*/.vue 组件维持现状跳过/剥离）
+1. **共享模块编译**（plugin-vite）：扫描页面/组件 import 的本地模块（相对路径、非 .vue、非 vue、非 @proteus-vue/*）→ BFS 收集依赖链 → esbuild 转 CommonJS → 产物 `dist/mp-weixin/<源码相对路径>.js`
+2. **import → require**（compiler script.ts）：`import { a } from '../stores/player'` → 产物顶部 `const { a } = require('<相对产物路径>.js')`（named/default/namespace 三形态；vue/@proteus-vue/*/.vue 组件维持现状跳过/剥离）
 3. **函数调用初始化运行时化**（compiler extractData）：`const store = usePlayerStore()` 不再静态求值失败丢调用——收集为运行时初始化，onLoad/attached 注入 `this.store = usePlayerStore()`（实例属性，MVP 模板绑定不支持，逻辑层可用）
 4. **警告降级**：可解析的跨模块 import 不再报"引用将 undefined"；仅不可解析路径保留剥离警告
 **验证**：compiler 三形态 require 单测 + 运行时初始化单测 + demo（utils/format 纯函数跨页 + Pinia store 逻辑调用）；双端构建（Web 不变）

@@ -8,7 +8,7 @@
 
 ```ts
 // proteus-module.config.ts
-import { defineModule } from '@proteus/module'
+import { defineModule } from '@proteus-vue/module'
 
 export default defineModule({
   // 模块标识（全局唯一）

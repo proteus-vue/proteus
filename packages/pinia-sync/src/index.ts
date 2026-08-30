@@ -1,5 +1,5 @@
 // packages/pinia-sync/src/index.ts
-// 多端状态协同引擎（docs/proteus-pinia-plan M8.1）—— 可选子包 @proteus/pinia-sync
+// 多端状态协同引擎（docs/proteus-pinia-plan M8.1）—— 可选子包 @proteus-vue/pinia-sync
 // 目标："一处改、处处同步"（购物车 / 登录态 / 播放进度）
 //   · LWW（默认，零依赖）：op 带 { value, timestamp, clientId }——取最新；时间戳相同 → clientId 字典序兜底
 //   · CRDT（strategy: 'crgt'）：接口占位（动态加载 Yjs，未接入时 warn 降级 LWW）
@@ -46,7 +46,7 @@ export interface SyncEngineOptions {
   excludeFields?: string[]
 }
 
-/** 本地缓存 op（离线缓冲；默认内存实现，可换 @proteus/shared storage 持久化） */
+/** 本地缓存 op（离线缓冲；默认内存实现，可换 @proteus-vue/shared storage 持久化） */
 export interface OpStore {
   push(op: SyncOp): Promise<void>
   drain(): Promise<SyncOp[]>

@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/compiler",
+  "name": "@proteus-vue/compiler",
   "version": "0.2.0",
   "description": "Proteus 编译引擎 —— 标准 Vue SFC → 小程序四件套（纯函数、零运行时依赖、规则注册表 + AI 说明书）",
   "type": "module",
@@ -30,6 +30,6 @@
     "@vue/compiler-dom": "^3.5.42"
   },
   "dependencies": {
-    "@proteus/types": "0.1.0"
+    "@proteus-vue/types": "0.1.0"
   }
 }

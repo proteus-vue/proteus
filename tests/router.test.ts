@@ -3,7 +3,7 @@
 // ★工厂化：不再 import 全局单例，改用 createRouter(routes) 注入应用侧 auto-routes 路由表
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 
-vi.mock('@proteus/shared', () => ({
+vi.mock('@proteus-vue/shared', () => ({
   adapter: {
     isMP: true,
     getCurrentPages: vi.fn(() => [{ route: 'pages/index' }]),
@@ -20,7 +20,7 @@ vi.mock('../packages/router/src/skyline', () => ({
   navigateWithCustomRoute: vi.fn(async () => {}),
 }))
 
-import { adapter } from '@proteus/shared'
+import { adapter } from '@proteus-vue/shared'
 import { isSkyline, navigateWithCustomRoute } from '../packages/router/src/skyline'
 import { createRouter } from '../packages/router/src/index'
 import { routes } from '../examples/router/auto-routes'

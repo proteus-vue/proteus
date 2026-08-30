@@ -2,7 +2,7 @@
 // ★注意：必须先 pinia.state.value = initialState 再 app.use(pinia)——
 //   否则组件首次渲染读到空 state，导致 hydration mismatch
 import { createApp } from 'vue'
-import { createWebPinia } from '@proteus/runtime'
+import { createWebPinia } from '@proteus-vue/runtime'
 import App from '../App.vue'
 
 declare global {

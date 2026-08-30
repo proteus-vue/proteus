@@ -8,8 +8,8 @@
 //   · cookieOptions 不支持（App 端无 cookie 概念）
 // ⚠ MP 产物安全（决策 #32/#36）：全文件无 ?? / ?. / 对象展开 / 数组解构
 import type { PiniaPluginContext } from 'pinia'
-import { createStorage, serialize, deserialize, type StorageAdapter } from '@proteus/shared'
-import { getPlatform } from '@proteus/shared'
+import { createStorage, serialize, deserialize, type StorageAdapter } from '@proteus-vue/shared'
+import { getPlatform } from '@proteus-vue/shared'
 
 /** 兼容层选项（对齐 pinia-plugin-persistedstate 的 persist 配置） */
 export interface PersistOptions {

@@ -39,7 +39,7 @@ componentRender('p-list-view', {
 
 ---
 
-## 3. DevTools（可选子包 `@proteus/devtools`）
+## 3. DevTools（可选子包 `@proteus-vue/devtools`）
 
 面板能力：
 - 组件树（Web = Vue DevTools 扩展；Skyline = 序列化快照）

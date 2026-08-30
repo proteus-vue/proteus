@@ -24,7 +24,7 @@
     "debug:mp": "npm --prefix examples run debug:mp",
     "preview:web": "npm --prefix examples run preview:web",
     "proteus": "tsx packages/cli/src/index.ts",
-    "cli:build": "npm run build -w @proteus/cli",
+    "cli:build": "npm run build -w @proteus-vue/cli",
     "create": "tsx packages/create-proteus/src/index.ts",
     "create:build": "npm run build -w create-proteus",
     "changeset": "changeset",

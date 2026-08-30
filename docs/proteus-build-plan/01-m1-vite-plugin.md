@@ -1,6 +1,6 @@
 # M1 Vite 插件 + M2 多入口 + M3 代码分割
 
-## M1：@proteus/vite-plugin 骨架
+## M1：@proteus-vue/vite-plugin 骨架
 
 ### 设计原则
 **Vite 插件是唯一入口**（铁律 #1）。所有编译逻辑在 Compiler plan，本插件只做：
@@ -13,8 +13,8 @@
 ```ts
 // packages/vite-plugin/src/index.ts
 import type { Plugin } from 'vite'
-import { loadConfig } from '@proteus/types'  // Types plan M2
-import { compile } from '@proteus/compiler'   // Compiler M3
+import { loadConfig } from '@proteus-vue/types'  // Types plan M2
+import { compile } from '@proteus-vue/compiler'   // Compiler M3
 
 export interface ProteusPluginOptions {
   platform: 'web' | 'mp' | 'app'
@@ -59,7 +59,7 @@ export function proteus(options: ProteusPluginOptions): Plugin[] {
 ```ts
 // 根据 platform 解析条件导出
 resolveId(id) {
-  if (id.startsWith('@proteus/capability')) {
+  if (id.startsWith('@proteus-vue/capability')) {
     return `${id}/${options.platform}`  // → .web.ts / .mp.ts / .app.ts
   }
 }
@@ -109,7 +109,7 @@ manualChunks(id, { getModuleInfo }) {
   if (id.includes('node_modules/vue')) return 'shared/vue'
   if (id.includes('node_modules/@vue')) return 'shared/vue-runtime'
   // 3. 平台 adapter
-  if (id.includes('@proteus/adapter')) return 'shared/adapters'
+  if (id.includes('@proteus-vue/adapter')) return 'shared/adapters'
 }
 ```
 

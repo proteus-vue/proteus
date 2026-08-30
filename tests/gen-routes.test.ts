@@ -1,5 +1,5 @@
 // tests/gen-routes.test.ts
-// 路由表生成器冒烟测试（拆包步骤 5：gen-routes 归 @proteus/plugin-vite，改为 runGenRoutes 纯函数）
+// 路由表生成器冒烟测试（拆包步骤 5：gen-routes 归 @proteus-vue/plugin-vite，改为 runGenRoutes 纯函数）
 // 验证：auto-routes / app.json（主包+分包）/ page.json 全链路生成
 import { describe, it, expect, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
@@ -48,7 +48,7 @@ describe('runGenRoutes：路由表生成全链路', () => {
     const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
     expect(auto).toContain('name: "index"')
     expect(auto).toContain('name: "user-profile"')
-    expect(auto).toContain("declare module '@proteus/router/types'")
+    expect(auto).toContain("declare module '@proteus-vue/router/types'")
     expect(auto).toContain("'user-profile': { id?: string }")
 
     // app.json：主包页面声明

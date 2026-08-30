@@ -3,8 +3,8 @@
 // ★lifecycle-plan B1/B2：defineApp 阶段化启动（bootstrap → interactive，超时降级 + trace）
 import { createApp } from 'vue'
 import App from './App.vue'
-import { createWebPinia, defineApp } from '@proteus/runtime'
-import { createApi } from '@proteus/api'
+import { createWebPinia, defineApp } from '@proteus-vue/runtime'
+import { createApi } from '@proteus-vue/api'
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 const api = createApi({ baseURL: 'https://api.example.com' })

@@ -30,8 +30,8 @@ B1 (核心类型: platform/lifecycle/IR/registry)
 
 | 批次 | 文件 | 内容 | 依赖 | 产物 |
 |------|------|------|------|------|
-| **B1** | `01-m1-core-types.md` | Platform/AppPhase/IR/Registry | — | `@proteus/types` 骨架 |
-| **B2** | `02-m2-config-schema.md` | ProteusConfigSchema + 字段归属 | B1 | `@proteus/config-schema` |
+| **B1** | `01-m1-core-types.md` | Platform/AppPhase/IR/Registry | — | `@proteus-vue/types` 骨架 |
+| **B2** | `02-m2-config-schema.md` | ProteusConfigSchema + 字段归属 | B1 | `@proteus-vue/config-schema` |
 | **B3** | `03-m3-codegen.md` | generate 命令 + 四产物 | B1, B2 | `proteus generate types` |
 | **B4** | `04-m4-platform-guards.md` | assertPlatform/matchPlatform | B1 | 运行时守卫 |
 | **B5** | `05-m5-validator.md` | validateConfig + 错误码 | B1, B2 | 校验器 + source map |

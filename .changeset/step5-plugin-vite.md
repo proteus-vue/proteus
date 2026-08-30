@@ -1,8 +1,8 @@
 ---
-'@proteus/plugin-vite': minor
+'@proteus-vue/plugin-vite': minor
 ---
 
-拆包步骤 5：Vite 插件 + gen-routes 归 @proteus/plugin-vite
+拆包步骤 5：Vite 插件 + gen-routes 归 @proteus-vue/plugin-vite
 
 - `mpTransform` 插件 config 解耦：`PluginOptions.config` 由 vite.config 注入（不再 import 项目 config）
 - `ProteusConfig` 类型契约迁入包内 `config.ts`

@@ -45,7 +45,7 @@ function checkComponentFile(abs: string, violations: ComponentViolation[]): void
       violations.push({
         file: `${path.relative(process.cwd(), abs)}:${i + 1}`,
         rule: 'no-sync-storage',
-        message: '组件内禁止同步存储（wx.setStorageSync / localStorage）——异步原则走 @proteus/api 存储或 store 持久化',
+        message: '组件内禁止同步存储（wx.setStorageSync / localStorage）——异步原则走 @proteus-vue/api 存储或 store 持久化',
       })
     }
   }

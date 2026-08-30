@@ -1,5 +1,5 @@
 // tests/generate-types.test.ts
-// ★types-plan B3：@proteus/types 独立包（Platform 共享类型 + ProteusConfig JSON Schema）+ proteus generate types（落盘 / --check 防漂移）
+// ★types-plan B3：@proteus-vue/types 独立包（Platform 共享类型 + ProteusConfig JSON Schema）+ proteus generate types（落盘 / --check 防漂移）
 import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'

@@ -6,7 +6,7 @@ import path from 'node:path'
 export const MODULE_CONFIG_SKELETON = `// proteus-module.config.ts —— 模块契约（module-plan B1）
 // 每个业务域用本文件声明元信息：name/version/dependencies/exports/chunk...
 // 校验：proteus module:check；综合审计（CI 门禁）：proteus audit module；依赖图：proteus module:check --graph
-import { defineModule } from '@proteus/module'
+import { defineModule } from '@proteus-vue/module'
 
 export default defineModule({
   // 模块标识（全局唯一，kebab-case）

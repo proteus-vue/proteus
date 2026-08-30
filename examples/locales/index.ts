@@ -1,7 +1,7 @@
 // examples/locales/index.ts —— i18n 单例（i18n-plan B1-B3）
 // 类型安全：as const catalog + keyof（免 codegen）；MP 端共享模块（locales.js bundle + _proteus/i18n external）
 // ★审计同步：本 TS 目录 key 须与 locales/zh-CN.json 一致（proteus i18n:check examples 校验引用缺失）
-import { createI18n } from '@proteus/i18n'
+import { createI18n } from '@proteus-vue/i18n'
 
 export const zhCN = {
   'common.confirm': '确认',

@@ -1,7 +1,7 @@
 // examples/router/index.ts —— 应用侧路由单例（拆包步骤 4 工厂化）
 // ★工厂化：路由表不再藏在框架里，由本文件从 gen-routes 生成的 ./auto-routes 注入 createRouter
 // 应用开发者视角：只需这一行单例；换应用换路由表，框架零改动
-import { createRouter } from '@proteus/router'
+import { createRouter } from '@proteus-vue/router'
 import { routes } from './auto-routes'
 
 export const router = createRouter(routes)
@@ -15,4 +15,4 @@ export type {
   PageOnLoad,
   NavigateOptions,
   RouterInstance,
-} from '@proteus/router'
+} from '@proteus-vue/router'

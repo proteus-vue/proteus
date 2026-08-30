@@ -55,7 +55,7 @@
 | 编译快照 (L3) | ✅ | ✅ | ✅ |
 | E2E (L4) | ✅ Playwright | ⚠️ miniprogram-ci 真机 | ❌ 外置 |
 
-**关键约束**：小程序无 DOM → 用 `@proteus/test-utils` 提供的 `createMockContext()` 模拟 `wx` + 页面节点树。
+**关键约束**：小程序无 DOM → 用 `@proteus-vue/test-utils` 提供的 `createMockContext()` 模拟 `wx` + 页面节点树。
 
 ---
 

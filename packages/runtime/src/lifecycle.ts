@@ -1,7 +1,7 @@
 // packages/runtime/src/lifecycle.ts
 // ★lifecycle-plan B1+B2：App 级阶段化生命周期——defineApp API + LifecycleOrchestrator（顺序执行/超时降级/错误隔离/trace）
 // ★devtools B2：可选 TraceBus 注入（type-only，运行时零依赖）——结构化事件（start/end/error/point）汇入统一协议
-import type { TraceBus } from '@proteus/devtools-runtime'
+import type { TraceBus } from '@proteus-vue/devtools-runtime'
 // 五阶段：bootstrap → coreReady → navigationReady → beforeFirstPaint → interactive（顺序即契约，业务不可篡改）
 // 设计（docs/proteus-lifecycle-plan/01-m1-phases.md + 02-m2-orchestrator.md）
 // 产物 ES5 安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构

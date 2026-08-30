@@ -1,7 +1,7 @@
 // packages/cli/src/module-check.ts
 // ★module-plan B1/B3：proteus module:check —— 模块契约校验 + 依赖图（环检测 / 版本冲突 / --graph）
-import { scanModuleConfigs, formatModuleCheck, DependencyGraph, moduleGraphToMermaid } from '@proteus/module'
-import type { ModuleScanResult, Cycle, VersionConflict } from '@proteus/module'
+import { scanModuleConfigs, formatModuleCheck, DependencyGraph, moduleGraphToMermaid } from '@proteus-vue/module'
+import type { ModuleScanResult, Cycle, VersionConflict } from '@proteus-vue/module'
 
 export interface ModuleCheckOutput {
   text: string

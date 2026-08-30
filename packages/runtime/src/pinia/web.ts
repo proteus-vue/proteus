@@ -1,7 +1,7 @@
 // packages/runtime/src/pinia/web.ts
 // Web SPA 工厂（docs/proteus-pinia-plan M3 §2.1）—— 基准实现
 import { createPinia } from 'pinia'
-import { LocalStorageAdapter, setPlatform } from '@proteus/shared'
+import { LocalStorageAdapter, setPlatform } from '@proteus-vue/shared'
 import { createPersistence } from './persistence/lightweight'
 import { createDevtoolsPlugin, registerStoreSnapshot } from './devtools'
 

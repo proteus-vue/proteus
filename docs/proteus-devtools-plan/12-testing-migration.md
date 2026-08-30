@@ -35,14 +35,14 @@ export const errorChain = [/* api.error → store → guard → lifecycle */]
 ### 阶段 1：只装 Runtime
 ```ts
 // 任何入口加两行
-import { createDevTools } from '@proteus/devtools-runtime'
+import { createDevTools } from '@proteus-vue/devtools-runtime'
 createDevTools({ enabled: true })
 ```
 无侵入，仅开启采集，面板可后续接。
 
 ### 阶段 2：接面板
 ```ts
-import { connectPanel } from '@proteus/devtools-panel'
+import { connectPanel } from '@proteus-vue/devtools-panel'
 connectPanel()
 ```
 

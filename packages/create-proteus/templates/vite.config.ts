@@ -1,10 +1,10 @@
-// vite.config.ts —— Proteus 工程骨架（拆包步骤 7：插件来自 @proteus/plugin-vite npm 包）
+// vite.config.ts —— Proteus 工程骨架（拆包步骤 7：插件来自 @proteus-vue/plugin-vite npm 包）
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import config from './proteus.config'
-import { mpTransform } from '@proteus/plugin-vite'
+import { mpTransform } from '@proteus-vue/plugin-vite'
 
 /** 处理 <route> 自定义块虚拟模块（?vue&type=route），保证 Web 构建不报错 */
 function routeBlocksPlugin(): Plugin {

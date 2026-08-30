@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PermissionRegistry, permissionFor } from '../packages/security/src'
 
-vi.mock('@proteus/shared', () => ({
+vi.mock('@proteus-vue/shared', () => ({
   adapter: {
     isMP: true,
     getCurrentPages: vi.fn(() => [{ route: 'pages/index' }]),
@@ -20,7 +20,7 @@ vi.mock('../packages/router/src/skyline', () => ({
   navigateWithCustomRoute: vi.fn(async () => {}),
 }))
 
-import { adapter } from '@proteus/shared'
+import { adapter } from '@proteus-vue/shared'
 import { createRouter } from '../packages/router/src/index'
 import type { RouteRecord } from '../packages/router/src/types'
 

@@ -43,7 +43,7 @@ window.location.href = '/login'
 L4 业务代码
     └── 只使用 capability / useCapability()
 
-L3 标准能力 API（@proteus/capabilities）
+L3 标准能力 API（@proteus-vue/capabilities）
     └── login / payment / share / biometrics / clipboard ...
 
 L2 Adapter 层（platforms/* + adapters/*）

@@ -1,11 +1,11 @@
-# @proteus/security
+# @proteus-vue/security
 
 Proteus 三端统一安全基线（security-plan B1-B2）。
 
 ## M1 — SecretStorage（敏感字段加密存储）
 
 ```ts
-import { SecretStorage, createCipher } from '@proteus/security'
+import { SecretStorage, createCipher } from '@proteus-vue/security'
 
 // 字段描述符：volatile = 内存 only；encrypted = 加密落盘；默认明文
 const fields = {
@@ -25,7 +25,7 @@ await store.migrate('user')                 // 旧明文 → 加密写回（失�
 ## M3 — PermissionRegistry（权限最小化）
 
 ```ts
-import { PermissionRegistry, withPermission, permissionFor, PermissionDenied } from '@proteus/security'
+import { PermissionRegistry, withPermission, permissionFor, PermissionDenied } from '@proteus-vue/security'
 
 const registry = new PermissionRegistry({ storage: localStorageAdapter })
 registry.grant([permissionFor('camera', 'use')])
@@ -41,4 +41,4 @@ try {
 
 - DemoCipher 为无 WebCrypto 平台（小程序）的演示级降级——生产接 Keystore/服务端加密（v0.6+）
 - Router 权限守卫自动生成 / `<PermissionGate>` 组件 / 编译期字段校验 → 后续批次
-- M2 凭证托管（createAuth）在 @proteus/api（贴近请求层），见 `docs/proteus-security-plan/06-landing-evaluation.md`
+- M2 凭证托管（createAuth）在 @proteus-vue/api（贴近请求层），见 `docs/proteus-security-plan/06-landing-evaluation.md`

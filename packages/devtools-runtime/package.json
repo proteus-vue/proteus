@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/devtools-runtime",
+  "name": "@proteus-vue/devtools-runtime",
   "version": "0.1.0",
   "description": "Proteus DevTools 运行时（devtools-plan B1）：TraceBus 统一事件协议 + 环形缓冲 + 脱敏 + 采样 + 零开销门控",
   "type": "module",

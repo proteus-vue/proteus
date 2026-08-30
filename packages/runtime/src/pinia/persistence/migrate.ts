@@ -5,7 +5,7 @@
 //   · 逐条执行 from → to 迁移链（支持跨多版本：1→3 = 1→2→3）
 //   · 迁移失败 → 丢弃该 store 数据（走初始值 + 告警，不崩溃）
 // ⚠ MP 产物安全：全文件无 ?? / ?. / 对象展开 / 数组解构
-import { deserialize, serialize } from '@proteus/shared'
+import { deserialize, serialize } from '@proteus-vue/shared'
 
 /** 版本迁移声明：from 版本数据 → to 版本（up 就地修改 state 或返回新 state） */
 export interface Migration {

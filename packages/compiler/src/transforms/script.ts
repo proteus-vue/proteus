@@ -72,7 +72,7 @@ export const SCRIPT_RULES: TransformRule[] = [
     phase: 'script',
     status: 'implemented',
     title: '跨模块引用：import → require 转换（module-plan B0）/ 剥离警告',
-    description: 'setup 顶层 import：相对路径共享模块（moduleImports 命中）→ 产物顶部 const { x } = require("<相对产物路径>.js")（named/default/namespace/side 四形态）；vue/@proteus/*/type/.vue 跳过（编译器静态/usingComponents/纯类型）；无法解析的路径 → 剥离 + 警告',
+    description: 'setup 顶层 import：相对路径共享模块（moduleImports 命中）→ 产物顶部 const { x } = require("<相对产物路径>.js")（named/default/namespace/side 四形态）；vue/@proteus-vue/*/type/.vue 跳过（编译器静态/usingComponents/纯类型）；无法解析的路径 → 剥离 + 警告',
     why: '反黑盒（vue-compat Batch A，决策 #116）：import 剥离不再静默，产物未定义引用显式提示；★module-plan B0：相对路径共享模块编译为独立产物 + require 转换，跨模块引用真正可用（后续 Pinia/API/Component 基建的地基）',
     when: '<script setup> 顶层出现 import 语句',
     example: { before: 'import { formatTime } from "../utils/format"', after: 'const { formatTime } = require("../utils/format.js")（moduleImports 命中）；未收录路径 → 警告 + 剥离' },

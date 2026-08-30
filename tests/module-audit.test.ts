@@ -21,7 +21,7 @@ afterAll(() => {
 
 describe('auditModule（M8.6 综合审计）', () => {
   it('合规项目 → ok（契约 + 图谱 + 产物）', async () => {
-    write('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    write('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
     write('app.json', JSON.stringify({ pages: ['pages/index'], subPackages: [{ root: 'subpackages/order' }] }))
     write('subpackages/order/pages/list.js', 'const a = 1')
     const audit = await auditModule(TMP, TMP)
@@ -33,9 +33,9 @@ describe('auditModule（M8.6 综合审计）', () => {
   })
 
   it('违规项目（契约失败 + 环）→ ok false 且各违规项检出', async () => {
-    write('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0', dependencies: { trade: '^1.0.0' } })\n`)
-    write('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
-    write('modules/broken/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ version: '1.0.0' })\n`)
+    write('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0', dependencies: { trade: '^1.0.0' } })\n`)
+    write('modules/trade/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'trade', version: '1.0.0', dependencies: { app: '^1.0.0' } })\n`)
+    write('modules/broken/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ version: '1.0.0' })\n`)
     const audit = await auditModule(TMP)
     expect(audit.ok).toBe(false)
     expect(audit.cycles.length).toBe(1)
@@ -43,7 +43,7 @@ describe('auditModule（M8.6 综合审计）', () => {
   })
 
   it('产物违规（分包超硬限 + 分包间重复）→ ok false', async () => {
-    write('proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    write('proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
     write('app.json', JSON.stringify({ pages: ['pages/index'], subPackages: [{ root: 'subpackages/a' }, { root: 'subpackages/b' }] }))
     write('subpackages/a/pages/x.js', Buffer.alloc(2048 * 1024 + 1, 1)) // 超 2MB 硬限
     write('subpackages/a/pages/y.js', 'dup')
@@ -59,7 +59,7 @@ describe('runAuditModule（module-graph.json 落盘 + 报告渲染）', () => {
   it('落盘 module-graph.json（默认 .proteus/ 下）', async () => {
     const sub = path.join(TMP, 'graph')
     fs.mkdirSync(sub, { recursive: true })
-    write('graph/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    write('graph/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
     const { text, audit } = await runAuditModule({ root: sub })
     expect(audit.ok).toBe(true)
     const graphJson = JSON.parse(fs.readFileSync(path.join(sub, '.proteus/module-graph.json'), 'utf-8'))
@@ -71,7 +71,7 @@ describe('runAuditModule（module-graph.json 落盘 + 报告渲染）', () => {
   it('报告渲染：通过 / 违规标注', async () => {
     const sub = path.join(TMP, 'report')
     fs.mkdirSync(sub, { recursive: true })
-    write('report/proteus-module.config.ts', `import { defineModule } from '@proteus/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
+    write('report/proteus-module.config.ts', `import { defineModule } from '@proteus-vue/module'\nexport default defineModule({ name: 'app', version: '1.0.0' })\n`)
     const a1 = await auditModule(sub)
     expect(formatAuditReport(a1)).toContain('全部通过')
     const fake: typeof a1 = { ...a1, ok: false, cycles: [['a', 'b']] }

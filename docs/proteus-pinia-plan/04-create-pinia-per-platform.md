@@ -26,7 +26,7 @@ export { usePlayerStore } from './player'
 ```ts
 // platforms/web/pinia.ts
 import { createPinia } from 'pinia'
-import { createPersistence } from '@proteus/persistence'
+import { createPersistence } from '@proteus-vue/persistence'
 import { LocalStorageAdapter } from '@/shared/storage/localStorage'
 import { createDevtoolsPlugin } from '@/shared/devtools'  // 见模块 06
 
@@ -50,7 +50,7 @@ export function createWebPinia() {
 ```ts
 // platforms/mp/pinia.ts
 import { createPinia } from 'pinia'
-import { createPersistence } from '@proteus/persistence'
+import { createPersistence } from '@proteus-vue/persistence'
 import { WxStorageAdapter } from '@/shared/storage/wxStorage'
 
 export function createMpPinia() {
@@ -73,7 +73,7 @@ export function createMpPinia() {
 ```ts
 // platforms/app/pinia.ts
 import { createPinia } from 'pinia'
-import { createPersistence } from '@proteus/persistence'
+import { createPersistence } from '@proteus-vue/persistence'
 import { NativeKVAdapter } from '@/shared/storage/nativeKV'
 
 export function createAppPinia() {
@@ -127,7 +127,7 @@ app.mount('#app')
 ### 小程序（`main.mp.ts`）
 ```ts
 import { createMpPinia } from '@/platforms/mp/pinia'
-import { mountMpApp } from '@proteus/runtime'
+import { mountMpApp } from '@proteus-vue/runtime'
 
 mountMpApp({
   pinia: createMpPinia(),   // ← 注入 Pinia

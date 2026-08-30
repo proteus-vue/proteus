@@ -1,8 +1,8 @@
 // packages/plugin-vite/src/plugin.ts
 // ============================================================
-// Proteus 编译管线 · Vite 适配层（薄）—— @proteus/plugin-vite
+// Proteus 编译管线 · Vite 适配层（薄）—— @proteus-vue/plugin-vite
 //
-// 编译引擎本体在 @proteus/compiler（纯函数、零 Vite/配置耦合，可独立使用）。
+// 编译引擎本体在 @proteus-vue/compiler（纯函数、零 Vite/配置耦合，可独立使用）。
 // 本文件只做三件事：
 //   1. 读取调用方传入的 ProteusConfig（拆包步骤 5：不再 import 项目 config，由 vite.config 注入）
 //   2. 扫描 pagesDir + subPackages 下所有 .vue
@@ -16,16 +16,16 @@ import { createRequire } from 'node:module'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
-import { compileVueSfc } from '@proteus/compiler'
-import type { TransformRuleOverrides } from '@proteus/compiler'
+import { compileVueSfc } from '@proteus-vue/compiler'
+import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
-/** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus/router/src/presets/x.ts' → 解析包根 + 子路径 */
+/** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus-vue/router/src/presets/x.ts' → 解析包根 + 子路径 */
 const require = createRequire(import.meta.url)
 export function resolvePkgPath(projectRoot: string, modPath: string): string {
-  // 支持 scoped 包（@proteus/router）与非 scoped 包
+  // 支持 scoped 包（@proteus-vue/router）与非 scoped 包
   const m = modPath.match(/^node_modules\/((?:@[^/]+\/)?[^/]+)\/([\s\S]+)$/)
   if (m) {
     try {
@@ -58,7 +58,7 @@ function preprocessStyle(lang: string, content: string): string {
 /**
  * ★module-plan B0 + platform-plan B5 尾：共享模块解析（纯函数可测）
  * - 相对路径（本地 .ts/.js）→ 产物相对 appDir 路径
- * - @proteus/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
+ * - @proteus-vue/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
  * - 其余裸模块（vue/pinia 等第三方）→ null（不参与）
  */
 export function resolveSharedModule(
@@ -67,12 +67,12 @@ export function resolveSharedModule(
   source: string,
   frameworkDir?: string,
 ): { file: string; relNoExt: string } | null {
-  if (source.startsWith('@proteus/')) {
+  if (source.startsWith('@proteus-vue/')) {
     try {
       const pkgRoot = path.dirname(require.resolve(`${source}/package.json`))
       const entry = path.join(pkgRoot, 'dist', 'index.js')
       if (!fs.existsSync(entry)) return null
-      return { file: entry, relNoExt: `_proteus/${source.replace('@proteus/', '')}` }
+      return { file: entry, relNoExt: `_proteus/${source.replace('@proteus-vue/', '')}` }
     } catch {
       return null
     }
@@ -183,10 +183,10 @@ export interface PluginOptions {
   /** ★底线循环 ①③：规则覆盖（缺省取 config.rules） */
   rules?: TransformRuleOverrides
   /**
-   * ★框架内置组件目录（@proteus/components 组件库拆包前的定位方式，决策 #115）：
+   * ★框架内置组件目录（@proteus-vue/components 组件库拆包前的定位方式，决策 #115）：
    * 组件库未拆包，仓库在工程根之外（如 monorepo 根 src/components）时，工程显式传入绝对路径；
    * 缺省相对工程根 src/components（create-proteus 模板工程用）
-   * ★v2.0 退役：@proteus/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
+   * ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
    */
   frameworkComponentsDir?: string
 }
@@ -265,12 +265,12 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
       }
-      // ★module-plan B0 + platform-plan B5 尾：跨模块引用——扫描页面/组件 import 的共享模块（相对路径 .ts/.js + @proteus/* 框架包）→ esbuild bundle 为 CJS 独立产物；
+      // ★module-plan B0 + platform-plan B5 尾：跨模块引用——扫描页面/组件 import 的共享模块（相对路径 .ts/.js + @proteus-vue/* 框架包）→ esbuild bundle 为 CJS 独立产物；
       //   页面/组件产物 import → require（相对产物路径）；vue/第三方 npm/.vue 不参与（编译器静态 / 体积过大跳过 / usingComponents）
       const moduleImportsByFile = new Map<string, Array<{ source: string; requirePath: string }>>()
       const sharedModules = new Set<string>()
-      const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus/* → _proteus/<name>）
-      /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
+      const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus-vue/* → _proteus/<name>）
+      /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus-vue/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
       const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null =>
         resolveSharedModule(appDir, absFrom, source, frameworkComponents)
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
@@ -296,7 +296,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         if (list.length) moduleImportsByFile.set(file, list)
       }
-      // BFS：共享模块内部 import（相对路径 + @proteus/*）继续收集
+      // BFS：共享模块内部 import（相对路径 + @proteus-vue/*）继续收集
       const pending = [...sharedModules]
       while (pending.length) {
         const cur = pending.pop()!
@@ -309,14 +309,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           pending.push(resolved.file)
         }
       }
-      // ★B0 边界（★放行 @proteus/* 框架包 + pinia 白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
+      // ★B0 边界（★放行 @proteus-vue/* 框架包 + pinia 白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
       // （pinia 是框架默认状态库——P3 放行，bundle 体积由 bundle-report 监控；其余第三方保持跳过）
       const THIRD_PARTY_ALLOW = new Set(['pinia', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
       const hasThirdParty = new Set<string>()
       for (const sharedFile of sharedModules) {
         for (const imp of scanImports(sharedFile)) {
           if (imp.typeOnly) continue
-          if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus/') && !THIRD_PARTY_ALLOW.has(imp.source)) hasThirdParty.add(sharedFile)
+          if (!imp.source.startsWith('.') && !imp.source.startsWith('@proteus-vue/') && !THIRD_PARTY_ALLOW.has(imp.source)) hasThirdParty.add(sharedFile)
         }
       }
       // 传递：被有第三方依赖模块 import 的共享模块也跳过（bundle 会把它们一起打进）
@@ -332,13 +332,13 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       }
       for (const f of hasThirdParty) markSkip(f)
       if (skipShared.size) {
-        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑 + @proteus/* 框架包共享模块）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
+        console.warn(`[mp-transform] ⚠ ${skipShared.size} 个共享模块含第三方依赖（pinia/vue 等）已跳过编译（B0 MVP：仅支持纯逻辑 + @proteus-vue/* 框架包共享模块）——请用 store 桥 / 内联，Pinia 接入为后续批次`)
         // 页面侧回退：被跳过模块的 import 移出 moduleImports（compiler 走剥离 + 警告）
         for (const [file, list] of moduleImportsByFile) {
           moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source)?.file ?? '')))
         }
       }
-      // 共享模块 → esbuild bundle（全内联 + @proteus/* external 映射，minify）→ CJS 单文件输出
+      // 共享模块 → esbuild bundle（全内联 + @proteus-vue/* external 映射，minify）→ CJS 单文件输出
       // ★M8：bundle 缓存（输入快照 mtime+size 校验；PROTEUS_NO_CACHE=1 关闭）
       const bundleCacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
       for (const sharedFile of sharedModules) {
@@ -366,14 +366,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             logLevel: 'silent',
             minify: true,
             metafile: true,
-            // ★@proteus/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
-            external: ['@proteus/*'],
+            // ★@proteus-vue/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
+            external: ['@proteus-vue/*'],
             plugins: [
               {
                 name: 'proteus-pkg-require-path',
                 setup(b) {
-                  b.onResolve({ filter: /^@proteus\// }, (args) => {
-                    const pkgRel = `_proteus/${args.path.replace('@proteus/', '')}.js`
+                  b.onResolve({ filter: /^@proteus-vue\// }, (args) => {
+                    const pkgRel = `_proteus/${args.path.replace('@proteus-vue/', '')}.js`
                     const dir = path.posix.dirname(relNoExt)
                     let rel = path.posix.relative(dir, pkgRel)
                     if (!rel.startsWith('.')) rel = `./${rel}`

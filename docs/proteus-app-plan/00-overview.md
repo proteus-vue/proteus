@@ -29,11 +29,11 @@
 L4 业务代码（标准 Vue SFC）
     ├── Web/MP 通道：编译期（现有）
     └── App 通道：运行时（v0.6）
-        ├── @proteus/renderer-app：createRenderer 自定义 host config
+        ├── @proteus-vue/renderer-app：createRenderer 自定义 host config
         │     ├── view/text 原生视图（iOS UIView / Android View）
         │     ├── 事件桥接（Vue 事件 → 原生手势）
         │     └── diff 策略（Vue 运行时 diff → 原生视图更新）
-        ├── @proteus/router app adapter：原生导航栈 + routeType 转场
+        ├── @proteus-vue/router app adapter：原生导航栈 + routeType 转场
         ├── Pinia 原生侧 state 同步
         └── capabilities app adapter（原生能力：登录/分享/生物识别...）
 ```

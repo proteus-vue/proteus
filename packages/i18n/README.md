@@ -1,4 +1,4 @@
-# @proteus/i18n
+# @proteus-vue/i18n
 
 Proteus 跨端国际化（i18n-plan B1）：消息目录 + ICU 子集 + 类型安全 `t()`。
 
@@ -6,7 +6,7 @@ Proteus 跨端国际化（i18n-plan B1）：消息目录 + ICU 子集 + 类型�
 
 ```ts
 // locales.ts（应用侧单例，as const 获得类型安全）
-import { createI18n } from '@proteus/i18n'
+import { createI18n } from '@proteus-vue/i18n'
 
 const zhCN = {
   'common.confirm': '确认',

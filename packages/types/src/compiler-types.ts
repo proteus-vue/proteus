@@ -1,7 +1,7 @@
 // packages/types/src/compiler-types.ts
-// ★类型收口（10-type-consolidation）：编译引擎公共类型（原 @proteus/compiler/types.ts + trace 纯类型）
+// ★类型收口（10-type-consolidation）：编译引擎公共类型（原 @proteus-vue/compiler/types.ts + trace 纯类型）
 // 约束：本组类型不 import vite / proteus.config（保持编译引擎可独立分发）
-// runtime 值（createTrace/lineAt 函数）留 @proteus/compiler
+// runtime 值（createTrace/lineAt 函数）留 @proteus-vue/compiler
 
 /** 编译阶段（transforms 注册表 phase 字段） */
 export type TransformPhase = 'template' | 'script' | 'style' | 'validate'

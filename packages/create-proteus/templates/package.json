@@ -13,14 +13,14 @@
     "proteus": "npx proteus"
   },
   "dependencies": {
-    "@proteus/router": "^0.1.0",
-    "@proteus/runtime": "^0.1.0",
-    "@proteus/shared": "^0.1.0",
+    "@proteus-vue/router": "^0.1.0",
+    "@proteus-vue/runtime": "^0.1.0",
+    "@proteus-vue/shared": "^0.1.0",
     "vue": "^3.4.0"
   },
   "devDependencies": {
-    "@proteus/compiler": "^0.2.0",
-    "@proteus/plugin-vite": "^0.1.0",
+    "@proteus-vue/compiler": "^0.2.0",
+    "@proteus-vue/plugin-vite": "^0.1.0",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "tsx": "^4.0.0",

@@ -7,7 +7,7 @@
 ## 1. 设计
 
 ```ts
-// @proteus/components/runtime/capability.ts
+// @proteus-vue/components/runtime/capability.ts
 export interface PlatformCapability {
   /** 当前渲染后端 */
   backend: 'web' | 'skyline' | 'app'
@@ -38,7 +38,7 @@ export type CapabilityName =
 | `skyline` | `wx.getRenderer()`、基础库版本、`__wxConfig` |
 | `app` | Custom Renderer 注入的能力表（未来） |
 
-启动时由 `@proteus/runtime` 创建 **只读** capability 对象，注入 Vue app（`app.config.globalProperties.$capability`）。
+启动时由 `@proteus-vue/runtime` 创建 **只读** capability 对象，注入 Vue app（`app.config.globalProperties.$capability`）。
 
 ---
 

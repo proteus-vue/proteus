@@ -65,7 +65,7 @@ mountMpApp({ pinia: createMpPinia() })
 ```ts
 // stores/user.ts
 import { defineStore } from 'pinia'
-import { persisted } from '@proteus/persistence'   // ← 新增 import
+import { persisted } from '@proteus-vue/persistence'   // ← 新增 import
 
 export const useUserStore = defineStore('user', {
   state: () => ({ token: '', profile: null }),
@@ -90,7 +90,7 @@ const pinia = createPinia()
 app.use(pinia)
 
 // 改为
-import { createMpPinia } from '@proteus/platforms/mp/pinia'
+import { createMpPinia } from '@proteus-vue/platforms/mp/pinia'
 app.use(createMpPinia())
 ```
 
@@ -107,7 +107,7 @@ persist: { key: 'user' }   // ← 删掉 storage 字段即可
 
 ## 5. 迁移检查清单
 
-- [ ] `package.json` 新增 `@proteus/persistence` 依赖
+- [ ] `package.json` 新增 `@proteus-vue/persistence` 依赖
 - [ ] `main.ts` 替换为 `platforms/*/pinia.ts` 工厂调用
 - [ ] 所有 store 的 `persist.storage` 字段移除（改为平台注入）
 - [ ] `pinia-plugin-persistedstate` 仍可保留（兼容层兜底），迁移完成后再决定是否换自研 API

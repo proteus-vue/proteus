@@ -1,5 +1,5 @@
 {
-  "name": "@proteus/renderer-app",
+  "name": "@proteus-vue/renderer-app",
   "version": "0.1.0",
   "description": "Proteus App 渲染器（app-plan B1）：Vue createRenderer 自定义 host config（NativeAdapter 抽象）——标准 Vue SFC 的 App 原生运行时通道",
   "type": "module",

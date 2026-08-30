@@ -3,7 +3,7 @@
 // ★devtools B2：可选 TraceBus 注入（type-only，运行时零依赖）——component.render 汇入统一事件流
 // 与 API trace / Router navTrace 共用 traceId 的完整 Observability Layer 为 v1.0 规划
 // ★MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构
-import type { TraceBus } from '@proteus/devtools-runtime'
+import type { TraceBus } from '@proteus-vue/devtools-runtime'
 
 export interface ComponentRenderMetric {
   durationMs: number

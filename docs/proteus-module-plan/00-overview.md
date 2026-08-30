@@ -23,7 +23,7 @@ L1 平台原生            import / wx.* / iOS/Android
 
 ## 设计原则（铁律）
 
-1. **业务代码不写平台分支** — 只用 `import { useTradeModule } from '@proteus/module'`
+1. **业务代码不写平台分支** — 只用 `import { useTradeModule } from '@proteus-vue/module'`
 2. **公共契约是唯一允许跨模块 import 的东西** — 其余走 ModuleBoundary
 3. **编译期检测循环依赖** — 环存在直接报错，不静默
 4. **三端产物各自符合平台原生规范** — Web=ESM、Skyline=分包、App=Native Module

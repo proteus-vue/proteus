@@ -52,7 +52,7 @@ $ proteus build --platform mp --explain
 [Plan] build --platform mp
   config: ./proteus.config.ts
   entry: src/main.mp.ts
-  compiler: @proteus/compiler@1.0
+  compiler: @proteus-vue/compiler@1.0
   transforms:
     - v-if → wx:if           (compiler/transforms/v-if.ts:12)
     - appBar → app.json      (router/transforms/app-bar.ts:45)

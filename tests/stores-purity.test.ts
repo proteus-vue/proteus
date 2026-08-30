@@ -1,6 +1,6 @@
 // tests/stores-purity.test.ts
 // stores/ 目录平台纯净性校验（docs/proteus-pinia-plan M6 §2.3 + 铁律：禁止平台分支代码）
-// 同一份 store 四端一致的前提：store 源码不感知平台——差异必须收敛在 @proteus/runtime 工厂与 shared/storage
+// 同一份 store 四端一致的前提：store 源码不感知平台——差异必须收敛在 @proteus-vue/runtime 工厂与 shared/storage
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
