@@ -135,10 +135,15 @@ export const wx: WxApi = {
     const title = opts?.title ?? ''
     // ★微信语义：不传 icon → 默认 success（对勾）；icon:'none' → 无图标；'success'/'error'/'loading' 对应
     const icon = opts?.icon === undefined ? 'success' : opts.icon === 'none' ? '' : opts.icon
+    // ★toast 图标对齐微信：success = 无底色白色细勾（SVG）；error = 白色圆底黑色叹号（SVG）；loading = spinner
     const iconHtml =
-      icon === 'success' ? '<div class="pwu-icon pwu-icon-success">✓</div>' :
-      icon === 'error' ? '<div class="pwu-icon pwu-icon-error">✗</div>' :
-      icon === 'loading' ? '<div class="pwu-icon pwu-icon-loading"></div>' : ''
+      icon === 'success'
+        ? '<div class="pwu-icon"><svg class="pwu-svg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5L10 17.5L19 6.5"/></svg></div>'
+        : icon === 'error'
+          ? '<div class="pwu-icon"><svg class="pwu-svg" viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="12" fill="#ffffff"/><rect x="10.8" y="5" width="2.4" height="9" rx="1.2" fill="#000000"/><circle cx="12" cy="17.5" r="1.7" fill="#000000"/></svg></div>'
+          : icon === 'loading'
+            ? '<div class="pwu-icon pwu-icon-loading"></div>'
+            : ''
     const el = document.createElement('div')
     el.className = 'proteus-web-toast'
     el.innerHTML = `${iconHtml}${title ? `<div class="pwu-toast-title">${escapeHtml(title)}</div>` : ''}`

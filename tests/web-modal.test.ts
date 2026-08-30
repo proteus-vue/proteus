@@ -108,10 +108,24 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(document.querySelector('.proteus-web-ui-mask')).toBeNull()
   })
 
-  it('showToast 微信语义：默认 icon success（不传 icon）→ 对勾；icon:none → 无图标', () => {
+  it('showToast 微信语义：默认 icon success + toast 图标样式（success 无底色白勾 / error 白圆底黑叹号）', () => {
     wx.showToast({ title: '默认' })
-    expect(document.querySelector('.proteus-web-toast .pwu-icon-success')).not.toBeNull()
+    // success：SVG 白色勾（stroke #ffffff），无 pwu-icon-success 底色类
+    const okEl = document.querySelector('.proteus-web-toast')
+    const okSvg = okEl?.querySelector('svg') as SVGSVGElement | null
+    expect(okSvg).not.toBeNull()
+    expect(okSvg?.getAttribute('stroke')).toBe('#ffffff')
+    expect(okEl?.querySelector('.pwu-icon-success')).toBeNull()
     document.body.innerHTML = ''
+    // error：SVG 白圆底（circle fill #ffffff）+ 黑叹号（rect fill #000000）
+    wx.showToast({ title: '失败', icon: 'error' })
+    const errEl = document.querySelector('.proteus-web-toast')
+    const errSvg = errEl?.querySelector('svg') as SVGSVGElement | null
+    expect(errSvg).not.toBeNull()
+    expect(errSvg?.querySelector('circle')?.getAttribute('fill')).toBe('#ffffff')
+    expect(errSvg?.querySelector('rect')?.getAttribute('fill')).toBe('#000000')
+    document.body.innerHTML = ''
+    // icon:'none' → 无图标
     wx.showToast({ title: 'none', icon: 'none' })
     expect(document.querySelector('.proteus-web-toast .pwu-icon')).toBeNull()
     document.body.innerHTML = ''

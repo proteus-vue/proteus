@@ -86,24 +86,18 @@
   max-width: 70vw;
 }
 .pwu-icon {
-  width: 40px; /* ★微信 toast 图标 40px 圆（success/error） */
-  height: 40px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  font-weight: 700;
 }
-.pwu-icon-success {
-  background: #07c160;
-  color: #fff;
+.pwu-icon svg {
+  display: block;
 }
-.pwu-icon-error {
-  background: #fa5151;
-  color: #fff;
-}
+/* ★toast 图标对齐微信：success 无底色白勾（SVG 自带）；error 白圆底黑叹号（SVG 自带）——无需 CSS 底色
+ * 注意：与 <icon> 组件（彩色圆底）不同——toast 图标是另一种视觉 */
 .pwu-icon-loading {
+  width: 40px;
+  height: 40px;
   border: 3px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
   border-radius: 50%;
