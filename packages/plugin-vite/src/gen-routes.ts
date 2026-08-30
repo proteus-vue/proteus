@@ -359,7 +359,7 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
   // ★Skyline 布局对齐（2026-08 真机实测）：Skyline 节点默认 flex 会 stretch 拉伸表单元素（switch/slider/icon 占满一行居中）
   //   → defaultDisplayBlock 默认 block 对齐 WebView/Web（基础库 2.31.1+）
-  //   （tagNameStyleIsolation: legacy 在页面级声明——app.json 层真机校验报无效，见 writePageJsons）
+  //   （text 行内恢复走类选择器 .proteus-text-inline——tagNameStyleIsolation 当前开发者工具校验拒绝，不可用）
   if (config.skyline) {
     appJson.rendererOptions = { skyline: { defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true } }
   }
@@ -439,10 +439,6 @@ function writePageJsons(pages: PageInfo[]): void {
     if (config.skyline) {
       pageJson.renderer = 'skyline'
       pageJson.componentFramework = 'glass-easel' // Skyline 强制要求（真机校验：需同时设置）
-      // ★tag 选择器对齐 WebView（2026-08）：Skyline 下 tag 选择器默认受样式隔离约束（text{display:inline} 等基础规则
-      //   不作用原生组件）——legacy 对齐 WebView（基础库 3.6.0+）——★真机校验：app.json 层无效（报 invalid rendererOptions.skyline[tagNameStyleIsolation]），
-      //   必须页面级声明
-      pageJson.rendererOptions = { skyline: { tagNameStyleIsolation: 'legacy' } }
     }
     // <route> 块 pageJson 扩展（如半屏页透明背景 backgroundColorContent）
     if (p.pageJson) Object.assign(pageJson, p.pageJson)

@@ -50,4 +50,8 @@ export const SEMANTIC_CLASS: Record<string, string> = {
   h6: 'proteus-h6',
   p: 'proteus-p',
   a: 'proteus-a',
+  // ★2026-08：text 行内语义（Skyline defaultDisplayBlock 把 text 组件 block 化占满一行）——
+  //   类选择器方案（tag 选择器需 tagNameStyleIsolation: legacy，当前开发者工具版本校验拒绝）：
+  //   text 元素附加 .proteus-text-inline，样式侧 text 选择器 → .proteus-text-inline（类选择器无 tag 隔离限制）
+  text: 'proteus-text-inline',
 }
