@@ -91,6 +91,15 @@ describe('build 产物契约（跨层一致性）', () => {
     expect(vlJson.usingComponents['p-list-view']).toBe('/proteus/p-list-view/index')
   })
 
+  it('默认首页一致：主包根 index 页置顶（小程序 pages[0] = 冷启动默认页，对齐 Web RouterView 回退）', () => {
+    // 制造字母序首页非 index 的页面集合（a-demo 字母序在 index 前）
+    writeFixture(path.join(pageDir, 'a-demo.vue'), `<template><view>a</view></template>\n`)
+    writeFixture(path.join(pageDir, 'index.vue'), `<template><view>首页</view></template>\n`)
+    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    expect(appJson.pages[0]).toBe('pages/index')
+  })
+
   it('共享模块产物路径契约：相对 appDir 不越界（rollup emitFile 安全）', () => {
     writeFixture(path.join(root, 'src/utils/format.ts'), `export function fmt(n: number): string { return String(n) }\n`)
     writeFixture(
