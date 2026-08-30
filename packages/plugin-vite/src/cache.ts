@@ -18,11 +18,15 @@ export interface CompileCacheStats {
   misses: number
 }
 
-/** 编译器版本（缓存键组成部分——编译器 dist 重建即全局失效） */
+/** 编译器版本指纹（缓存键组成部分——编译器代码变更即全局失效）
+ * ★修复：仅 package.json version 不足（代码改了版本没变 → 缓存命中旧产物）；改用 dist/index.js 内容哈希 */
 export function getCompilerVersion(): string {
   try {
     const pkg = JSON.parse(fs.readFileSync(require.resolve('@proteus-vue/compiler/package.json'), 'utf-8')) as { version: string }
-    return pkg.version
+    const dist = fs.readFileSync(require.resolve('@proteus-vue/compiler'), 'utf-8')
+    const h = crypto.createHash('sha1')
+    h.update(dist)
+    return `${pkg.version}-${h.digest('hex').slice(0, 8)}`
   } catch {
     return 'unknown'
   }
