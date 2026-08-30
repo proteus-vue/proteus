@@ -64,6 +64,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     filename: options.filename,
     annotateLines: options.annotateLines,
     scopeId,
+    isComponent: options.isComponent,
     trace: tplTrace,
   })
 

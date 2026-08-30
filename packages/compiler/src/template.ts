@@ -27,6 +27,16 @@ function camelToKebab(s: string): string {
   return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
 }
 
+/** 小程序原生基础标签（映射后的标签在此集合内 → 非组件；否则视为自定义组件标签，class 走 root-class 透传） */
+const NATIVE_TAGS = new Set([
+  'view', 'scroll-view', 'swiper', 'swiper-item', 'movable-view', 'movable-area', 'cover-view', 'cover-image',
+  'icon', 'text', 'rich-text', 'progress', 'button', 'checkbox', 'checkbox-group', 'form', 'input', 'label',
+  'picker', 'picker-view', 'picker-view-column', 'radio', 'radio-group', 'slider', 'switch', 'textarea', 'navigator',
+  'image', 'video', 'camera', 'live-player', 'live-pusher', 'map', 'canvas', 'web-view', 'ad', 'official-account',
+  'open-data', 'slot', 'block', 'template', 'match-media', 'page-container', 'share-element', 'sticky-header',
+  'sticky-section', 'root-portal', 'channel-live', 'channel-video', 'list', 'grid', 'cell', 'cell-group', 'waterflow',
+])
+
 /** 提取表达式节点的文本（兼容 Simple/Compound/Interpolation/Text/字符串） */
 function exprContent(exp: unknown): string {
   if (exp == null) return ''
@@ -177,6 +187,8 @@ interface SerializeContext {
   disabled: Set<string>
   /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
   scopeId?: string
+  /** ★组件模式根节点标记（首个顶层元素：class 追加 {{rootClass}} 接收外部 class 透传） */
+  isComponentRoot?: boolean
   /** .self 修饰符 handler 名集合（script 生成 proteusSelfXxx 包装） */
   selfHandlers: Set<string>
   /** .once 修饰符 handler 名集合（script 生成 proteusOnceXxx 包装） */
@@ -558,8 +570,20 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   合并为**单个** class 属性（WXML 不支持重复 class 属性——多 class 属性只保留其一，用户 class 丢失 → scoped 复合选择器失配 → 样式全丢）
   const classStatic = [transitionAnimCls, scopeClass, effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c))
   const classInterp = [bindingClass, transitionLeaveExpr].filter((c): c is string => Boolean(c))
+  // ★组件根节点（组件模式首元素）：接收外部 class 透传（root-class 属性 → rootClass property → 根节点 {{rootClass}}）
+  if (ctx.isComponentRoot) classInterp.push('{{rootClass}}')
+  // ★自定义组件标签（p-view/counter 等非原生标签）：class 全部改发 root-class 透传——
+  //   微信页面 wxss 无法可靠作用于组件 host 节点（真机实测：p-view 外层容器 box 样式不生效，即使 styleIsolation: apply-shared）——
+  //   Vue 的 class 继承语义需编译期等价：组件标签 class → root-class 属性 → 组件 properties.rootClass → 组件根节点绑定 {{rootClass}}
+  const isComponentTag = !NATIVE_TAGS.has(tag)
+  const rootClassEnabled = !ctx.disabled.has('component/root-class')
   if (classStatic.length || classInterp.length) {
-    attrs.push(`class="${classStatic.join(' ')}${classInterp.length ? `${classStatic.length ? ' ' : ''}${classInterp.join(' ')}` : ''}"`)
+    const clsValue = `${classStatic.join(' ')}${classInterp.length ? `${classStatic.length ? ' ' : ''}${classInterp.join(' ')}` : ''}`
+    // 规则禁用时回退普通 class（组件标签 class 留在组件节点，不做透传）
+    attrs.push(isComponentTag && rootClassEnabled ? `root-class="${clsValue}"` : `class="${clsValue}"`)
+    if (isComponentTag && rootClassEnabled) {
+      ctx.trace?.add('component/root-class', { line: node.loc.start.line, before: `<${node.tag} class="${clsValue}">`, after: `<${node.tag} root-class="${clsValue}">` })
+    }
   }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
@@ -623,7 +647,18 @@ export function transformTemplateToWxml(
     storeBindings: new Set<string>(),
   }
   const root = domParse(source, { onError: () => undefined })
-  const wxml = root.children.map((c) => serializeNode(c, ctx)).join('\n')
+  // ★组件模式：顶层第一个元素为组件根节点（class 追加 {{rootClass}}，接收外部 root-class 透传）
+  const isComp = opts.isComponent === true
+  let firstEl = isComp
+  const wxml = root.children
+    .map((c) => {
+      if (firstEl && c.type === NodeTypes.ELEMENT) {
+        firstEl = false
+        return serializeNode(c, { ...ctx, isComponentRoot: true })
+      }
+      return serializeNode(c, ctx)
+    })
+    .join('\n')
   for (const w of ctx.warnings) console.warn(`[mp-transform] ${w}`)
   return {
     wxml,

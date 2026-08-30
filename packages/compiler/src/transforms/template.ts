@@ -516,6 +516,19 @@ export const TEMPLATE_RULES: TransformRule[] = [
       ctx.output = input.scopeId
     },
   },
+  {
+    id: 'component/root-class',
+    phase: 'template',
+    status: 'implemented',
+    title: '组件标签 class 透传：root-class 属性 → 组件根节点 {{rootClass}}（Vue class 继承语义）',
+    description: '自定义组件标签（非原生基础标签）的 class（scope class + 用户 class + :class 绑定）合并为单个 root-class 属性发射；组件模板根节点 class 追加 {{rootClass}}；script 侧组件注入 rootClass property（value: \"\"）',
+    why: 'Vue 的 class 继承语义（父组件 class 作用于子组件根节点）在微信无原生对等——组件 host 节点 class 合并后，页面 wxss 无法可靠作用（真机实测：p-view 外层容器 box 样式不生效，即使 styleIsolation: apply-shared）——编译期等价：class 经 root-class 属性传入组件，根节点绑定 {{rootClass}}，配合 apply-shared 让页面样式作用组件根节点',
+    when: '模板出现非小程序原生标签（组件标签，如 p-view/counter）且规则未禁用时；组件模式根节点绑定',
+    example: { before: '<p-view class="box">…</p-view>', after: '<p-view root-class="data-v-abc123 box" />（组件根节点 class="… {{rootClass}}"）' },
+    verify: 'tests/mp-transform.test.ts 组件 class 透传用例',
+    source: 'packages/compiler/src/template.ts → serializeElement（isComponentTag 分支）+ transformTemplateToWxml（isComponentRoot）；packages/compiler/src/script.ts → transformScriptToPage（properties.rootClass）',
+    decision: '2026-08 真机实测（Skyline）',
+  },
 ]
 
 // 追踪键（防漂移）：标签 → 规则 ID，由 tag/* 规则的 mapping 反推——实现侧 trace 引用同一份数据

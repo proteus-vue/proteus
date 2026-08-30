@@ -956,3 +956,47 @@ describe('产物自校验（反编译黑盒）', () => {
     expect(normal.wxml).not.toContain('<!-- @')
   })
 })
+
+describe('组件 class 透传（component/root-class，2026-08 真机实测）', () => {
+  it('页面模式：组件标签 class → root-class 属性（scope class + 用户 class + :class 绑定合并）', () => {
+    const { wxml } = compileVueSfc(
+      '<script setup>const on = ref(true)</script>\n<template><p-view class="box" :class="{ on: on }">x</p-view></template>\n<style scoped>.box { padding: 8px; }</style>',
+      { filename: 'pages/use-pview.vue' },
+    )
+    expect(wxml).toMatch(/root-class="data-v-[a-f0-9]+ box /)
+    expect(wxml).toContain('{{(on?\'on \':\'\')}}')
+    // 组件标签不再输出独立 class 属性（避免 host 节点样式双重应用）
+    expect(wxml).not.toMatch(/<p-view[^>]*\sclass="/)
+    // 原生标签不受影响
+    expect(wxml).toContain('class="data-v-')
+  })
+
+  it('组件模式：根节点 class 追加 {{rootClass}} + js 注入 rootClass property', () => {
+    const { wxml, js } = compileVueSfc(
+      '<template><view class="p-view"><slot /></view></template>\n<style scoped>.p-view { display: flex; }</style>',
+      { filename: 'proteus/p-view/index', isComponent: true },
+    )
+    expect(wxml).toMatch(/<view[^>]*class="data-v-[a-f0-9]+ p-view \{\{rootClass\}\}"/)
+    expect(js).toContain('rootClass: { type: String, value: "" }')
+    // 非组件模式（页面）不注入 rootClass property
+    const page = compileVueSfc('<template><view class="a">x</view></template>', { filename: 'pages/x.vue' })
+    expect(page.js).not.toContain('rootClass')
+  })
+
+  it('组件根节点本身是组件标签（virtual-list 根 p-list-view）：root-class 透传自身 {{rootClass}}', () => {
+    const { wxml } = compileVueSfc(
+      '<template><p-list-view :items="items" /></template>\n<script setup>const items = ref([])</script>',
+      { filename: 'proteus/virtual-list/index', isComponent: true },
+    )
+    expect(wxml).toContain('root-class="{{rootClass}}"')
+  })
+
+  it('rules.disabled 禁用 component/root-class → 回退普通 class 属性', () => {
+    const { wxml } = compileVueSfc(
+      '<template><p-view class="box">x</p-view></template>',
+      { filename: 'pages/x.vue', rules: { disabled: ['component/root-class'] } },
+    )
+    expect(wxml).toContain('class="box"')
+    expect(wxml).not.toContain('root-class')
+  })
+})

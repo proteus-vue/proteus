@@ -1082,8 +1082,23 @@ export function transformScriptToPage(
   }
 
   // 组件 properties（v0.3）：defineProps 对象形式 → 微信 properties（type + value 默认值）
+  // ★2026-08 真机修复：始终注入 rootClass（组件标签 class 透传——页面 wxss 无法可靠作用于 host 节点，
+  //   class 经 root-class 属性 → rootClass property → 组件根节点 {{rootClass}}，Vue class 继承语义等价）
   const propEntries = Object.entries(props)
-  if (extra.isComponent && propEntries.length) {
+  if (extra.isComponent) {
+    const allProps = { ...props }
+    if (!disabled.has('component/root-class')) {
+      allProps.rootClass = { type: 'String', value: '' }
+    }
+    const entries = Object.entries(allProps)
+    if (entries.length) {
+      lines.push('  properties: {')
+      for (const [k, p] of entries) {
+        lines.push(`    ${k}: { type: ${p.type}${p.value !== undefined ? `, value: ${JSON.stringify(p.value)}` : ''} },`)
+      }
+      lines.push('  },')
+    }
+  } else if (propEntries.length) {
     lines.push('  properties: {')
     for (const [k, p] of propEntries) {
       lines.push(`    ${k}: { type: ${p.type}${p.value !== undefined ? `, value: ${JSON.stringify(p.value)}` : ''} },`)

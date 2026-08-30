@@ -60,6 +60,8 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
   filename?: string
   /** 产物注入源码行号注释（dev 调试） */
   annotateLines?: boolean
+  /** 组件模式（★2026-08：组件根节点绑定 {{rootClass}} 接收外部 class 透传） */
+  isComponent?: boolean
 }
 
 /** template → wxml 结果 */
