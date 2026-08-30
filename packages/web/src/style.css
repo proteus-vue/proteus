@@ -309,18 +309,38 @@
  *   弹层 = 左上关闭按钮 + 居中标题 15px/500；滚轮区 280px + 56px 行；
  *   选中高亮 = indicator 灰条（top 112px / #f7f7f7 / 左右 8px / 四角 8px 圆角）+ 上下白色渐隐遮罩；
  *   内容定位 = translate3d 平移（.weui-picker__content），滚动/拖拽后吸附最近项
- *   动画 = 弹出/关闭 0.3s ease（官方 weui-animate-slide-up/down：translate3d(0,100%,0) ↔ 0） */
+ *   动画 = 弹出/关闭 0.3s ease（官方 weui-animate-slide-up/down：translate3d(0,100%,0) ↔ 0）
+ *   暗黑模式 = 官方同构：CSS 变量 + prefers-color-scheme 覆盖（实测暗黑：bg #191919 / indicator #202020 / 文字 rgba(255,255,255,0.8)）
+ *   ★变量作用域在 .proteus-web-picker-sheet 上（组件内局部，不污染全局） */
 .proteus-web-picker-sheet {
+  /* 浅色默认（官方 light 变量） */
+  --pwp-bg: #ffffff;
+  --pwp-indicator: #f7f7f7;
+  --pwp-fg: rgba(0, 0, 0, 0.9);
+  --pwp-mask-1: rgba(255, 255, 255, 0.95);
+  --pwp-mask-2: rgba(255, 255, 255, 0.6);
+  --pwp-mask-bg: #ffffff;
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #fff;
+  background: var(--pwp-bg);
   z-index: 99992;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
   transform: translate3d(0, 100%, 0); /* 初始在屏外（官方 .weui-picker transform） */
   transition: transform 0.3s ease; /* 官方 0.3s ease */
+}
+/* ★暗黑模式（官方实测：bg #191919 / indicator #202020 / 文字 rgba(255,255,255,0.8) / 渐隐配 #191919） */
+@media (prefers-color-scheme: dark) {
+  .proteus-web-picker-sheet {
+    --pwp-bg: #191919;
+    --pwp-indicator: #202020;
+    --pwp-fg: rgba(255, 255, 255, 0.8);
+    --pwp-mask-1: rgba(25, 25, 25, 0.95);
+    --pwp-mask-2: rgba(25, 25, 25, 0.6);
+    --pwp-mask-bg: #191919;
+  }
 }
 /* ★弹出动画：上滑到屏幕内（官方 @keyframes a） */
 .proteus-web-picker-sheet.is-open {
@@ -349,7 +369,7 @@
   background: transparent;
   padding: 8px;
   cursor: pointer;
-  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
+  color: var(--pwp-fg); /* 官方 FG-0 */
   display: flex;
   align-items: center;
 }
@@ -359,7 +379,7 @@
 .pwp-title {
   font-size: 15px; /* 官方 half-screen-dialog__title */
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.9);
+  color: var(--pwp-fg);
   text-align: center;
 }
 /* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden；★底部到确定按钮间距 44px 来自 half-screen-dialog__bd padding-bottom） */
@@ -369,7 +389,7 @@
   height: 280px;
   margin-bottom: 44px; /* ★官方实测 bd 底 → 确定按钮顶 = 44px */
   overflow: hidden;
-  background: #fff;
+  background: var(--pwp-bg);
 }
 .pwp-group {
   flex: 1;
@@ -379,7 +399,7 @@
   overflow: hidden;
   touch-action: none; /* 拖拽不触发页面滚动 */
 }
-/* 上下白色渐隐遮罩（官方 weui-picker__mask：linear-gradient 顶部+底部 112px） */
+/* 上下白色渐隐遮罩（官方 weui-picker__mask：linear-gradient 顶部+底部 112px；暗黑配 #191919） */
 .pwp-picker-mask {
   position: absolute;
   top: 0;
@@ -387,13 +407,13 @@
   width: 100%;
   height: 100%;
   z-index: 3;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)), linear-gradient(0deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6));
+  background-image: linear-gradient(var(--pwp-mask-1), var(--pwp-mask-2)), linear-gradient(0deg, var(--pwp-mask-1), var(--pwp-mask-2));
   background-position: center top, center bottom;
   background-size: 100% 112px;
   background-repeat: no-repeat;
   pointer-events: none;
 }
-/* 选中高亮条（官方 weui-picker__indicator：top 112px / h 56px / #f7f7f7 / 左右 8px / 四角 8px 圆角） */
+/* 选中高亮条（官方 weui-picker__indicator：top 112px / h 56px / 左右 8px / 四角 8px 圆角；暗黑 #202020） */
 .pwp-indicator {
   position: absolute;
   top: 112px;
@@ -401,7 +421,7 @@
   right: 8px;
   height: 56px;
   z-index: 1;
-  background: #f7f7f7; /* --weui-BG-3 */
+  background: var(--pwp-indicator);
   border-radius: 8px;
   pointer-events: none;
 }
@@ -418,7 +438,7 @@
   line-height: 56px;
   text-align: center;
   font-size: 17px;
-  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
+  color: var(--pwp-fg); /* 官方 FG-0 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -428,7 +448,7 @@
 /* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding-bottom calc(64px + safe-area)） */
 .pwp-ft {
   padding: 0 24px calc(64px + env(safe-area-inset-bottom)); /* 官方 ft */
-  background: #fff;
+  background: var(--pwp-bg);
 }
 /* 确定按钮（官方 weui-btn_primary：绿底 #07c160 / 白字 17px / 圆角 8px / 高 48px / 居中） */
 .pwp-confirm {
