@@ -37,7 +37,18 @@ export interface WxApi {
   hideToast(): void
   showLoading(opts?: { title?: string }): void
   hideLoading(): void
-  showModal(opts: { title?: string; content?: string; showCancel?: boolean }): Promise<{ confirm: boolean }>
+  /** ★WeUI 三种对话框样式：双按钮（默认）/ 单按钮（showCancel:false）/ 可输入（editable:true） */
+  showModal(opts: {
+    title?: string
+    content?: string
+    showCancel?: boolean
+    cancelText?: string
+    cancelColor?: string
+    confirmText?: string
+    confirmColor?: string
+    editable?: boolean
+    placeholderText?: string
+  }): Promise<{ confirm: boolean; content?: string }>
   showActionSheet(opts: { itemList: string[] }): Promise<{ tapIndex: number }>
 
   // ===== 网络（partial：fetch 封装）=====
@@ -155,20 +166,29 @@ export const wx: WxApi = {
       const mask = document.createElement('div')
       mask.className = 'proteus-web-ui-mask'
       const box = document.createElement('div')
-      box.className = 'proteus-web-modal'
+      // ★WeUI 三种对话框样式：无标题时内容上下对称居中（.pwu-modal--no-title）
+      box.className = 'proteus-web-modal' + (opts?.title ? '' : ' pwu-modal--no-title')
+      // editable 可输入弹窗（微信 showModal editable/placeholderText）
+      const editable = !!opts?.editable
       box.innerHTML =
         `${opts?.title ? `<div class="pwu-modal-title">${escapeHtml(opts.title)}</div>` : ''}` +
         `<div class="pwu-modal-content">${escapeHtml(opts?.content ?? '')}</div>` +
+        (editable
+          ? `<input class="pwu-modal-input" placeholder="${escapeHtml(opts?.placeholderText ?? '')}" />`
+          : '') +
         `<div class="pwu-modal-btns">` +
-        `${opts?.showCancel !== false ? '<button class="pwu-modal-btn pwu-modal-btn--cancel">取消</button>' : ''}` +
-        '<button class="pwu-modal-btn pwu-modal-btn--confirm">确定</button>' +
+        `${opts?.showCancel !== false ? `<button class="pwu-modal-btn pwu-modal-btn--cancel" style="color:${opts?.cancelColor ?? '#000000'}">${escapeHtml(opts?.cancelText ?? '取消')}</button>` : ''}` +
+        `<button class="pwu-modal-btn pwu-modal-btn--confirm" style="color:${opts?.confirmColor ?? '#576b95'}">${escapeHtml(opts?.confirmText ?? '确定')}</button>` +
         '</div>'
       document.body.appendChild(mask)
       document.body.appendChild(box)
       const done = (confirm: boolean): void => {
+        // editable 时 resolve content 为输入值（对齐微信返回）
+        const input = box.querySelector('.pwu-modal-input') as HTMLInputElement | null
         mask.remove()
         box.remove()
-        resolve({ confirm })
+        if (editable) resolve({ confirm, content: input?.value ?? '' })
+        else resolve({ confirm })
       }
       box.querySelector('.pwu-modal-btn--cancel')?.addEventListener('click', () => done(false))
       box.querySelector('.pwu-modal-btn--confirm')?.addEventListener('click', () => done(true))

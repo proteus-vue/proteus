@@ -148,6 +148,26 @@
   text-align: center;
   padding: 14px 20px 28px;
 }
+/* ★WeUI 无标题对话框：内容上下对称居中（微信无标题时内容区垂直居中） */
+.pwu-modal--no-title .pwu-modal-content {
+  padding: 28px 20px;
+}
+/* ★WeUI 可输入对话框（showModal editable）：输入框白底灰边框圆角（微信输入框） */
+.pwu-modal-input {
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 40px); /* 20px 左右边距与内容对齐 */
+  margin: 0 auto 28px;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9; /* 微信输入框浅灰边框 */
+  border-radius: 6px;
+  background: #fff;
+  font-size: 17px;
+  outline: none;
+}
+.pwu-modal-input:focus {
+  border-color: #576b95; /* 聚焦边框 WeUI 蓝 */
+}
 .pwu-modal-btns {
   display: flex;
   border-top: 1px solid #e5e5e5; /* 微信分割线（WeUI） */
