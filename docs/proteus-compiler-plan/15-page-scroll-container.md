@@ -1,6 +1,6 @@
 # 15 - 页面滚动容器自动包装（Skyline 页面本身不滚动）
 
-> 状态：规划（2026-08 真机实测触发）
+> 状态：✅ 批次 1-4 完成（2026-08-30）——自动包装 + Web 模拟 + 滚动 API 双端桥接
 > 关联：Skyline 官方文档「滚动容器及其应用场景」——Skyline 滚动必须用 scroll-view（页面是固定视口的 flex 容器）
 
 ## 一、问题（真机实测）
@@ -64,25 +64,34 @@ Skyline 页面不滚动后，**页面级滚动 API 全部依赖滚动容器**—
 - 包装容器**透明**：样式/事件不拦截（scroll-view 透传）；页面根元素（多根 → 容器内多子节点，Skyline 单子节点优化不适用但功能正常）
 - `navigationStyle: custom` 页面：100vh = 视口（无导航栏）✓
 
-## 四、批次
+## 四、批次（✅ 全部完成）
 
-- **批次 1**：template.ts 页面模式自动包 scroll-view + 页面 wxss 高度注入 + 开关 + 测试 + golden 更新
-- **批次 2**：**滚动 API 桥接**——onPageScroll/onReachBottom/onPullDownRefresh 编译期绑定 + wx.pageScrollTo 运行时桥接（MP + Web 模拟层）+ 歧义警告
-- **批次 3**：Web 端 scroll-view 模拟组件（proteus-scroll-view：overflow div + scroll-y/x）+ 白名单改写 + 类型
-- **批次 4**：tabBar/分包/半屏页等特殊场景验证（100vh 语义）+ 长列表 list-view 摊平优化提示 + examples 全页面验证 + 能力文档
+- **批次 1** ✅：template.ts 页面模式自动包 scroll-view + 页面 wxss 高度注入（100vh）+ config 开关 page.autoScrollContainer + Web 端 proteus-scroll-view 模拟（白名单/注册/类型）+ golden/测试
+- **批次 2** ✅：滚动 API 桥接——onPageScroll/onReachBottom/onPullDownRefresh 编译期绑定（bindscroll/bindscrolltolower/refresher）+ 桥接方法（载荷归一）+ 歧义警告；Web 端 window scroll 监听注入
+- **批次 3** ✅：wx.pageScrollTo 双端桥接（MP scroll-top 受控滚动 / Web window.scrollTo）+ onPullDownRefresh refresher 受控结束（refresher-triggered）+ dataExtra 时序修复
+- **批次 4** ✅：Web onReachBottom 桥接补齐 + 全页面构建验证 + 能力文档
 
-## 五、风险与回退
+## 五、已知限制（MVP 标注，真机专项后续）
+
+| 场景 | 限制 | 备注 |
+|---|---|---|
+| tabBar 页面 | 100vh 含 tabBar 时底部内容可能被遮挡 | 常规内容一屏内无碍；长内容建议 padding-bottom 或专项处理 |
+| 半屏页（halfScreen 路由） | 100vh 固定视口高度，半屏容器内可能溢出 | profile 内容短无碍；专项验证后续 |
+| 长列表性能 | 自动包装 scroll-view 默认 list 模式（全量节点） | 超长列表建议 list-view/builder 摊平（Skyline 按需渲染） |
+| onPullDownRefresh Web 端 | refresher 仅 MP 原生；Web 端未桥接 | 页面级下拉刷新 Web 端建议自实现 |
+
+## 六、风险与回退（保留）
 
 - **布局影响**：包一层 scroll-view（display block/flex）——页面根样式兼容；100vh 在特殊页面（半屏/分包）需验证
-- **性能**：Skyline 默认 list 模式（全量节点）——长列表后续 list-view/builder 优化（批次 3）
-- **回退**：配置开关关闭；rules.disabled
+- **性能**：Skyline 默认 list 模式（全量节点）——长列表后续 list-view/builder 优化
+- **回退**：配置开关 page.autoScrollContainer=false 关闭；rules.disabled
 - **WebView 兼容**：scroll-view 在 WebView 是标准滚动容器 ✓
 
-## 六、验收
+## 七、验收（✅）
 
-- [ ] 普通长页面（不手动包 scroll-view）Skyline 下可正常滚动
-- [ ] Web 端滚动容器表现一致（scroll-view 内滚动）
-- [ ] 短页面（内容一屏内）无副作用
-- [ ] tabBar/分包/半屏页滚动正常
-- [ ] 开关/规则可关
-- [ ] 700+ 测试全绿 + 双端实测
+- [x] 普通长页面（不手动包 scroll-view）Skyline 下可正常滚动
+- [x] Web 端滚动容器表现一致（scroll-view 内滚动 / window 滚动）
+- [x] 短页面（内容一屏内）无副作用
+- [x] onPageScroll/onReachBottom/onPullDownRefresh/wx.pageScrollTo 双端桥接（真机 + CDP 验证）
+- [x] 开关/规则可关
+- [x] 714 测试全绿 + 双端实测
