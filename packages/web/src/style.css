@@ -129,8 +129,8 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 300px; /* ★WeUI 对话框 622rpx≈311px（375 基准）——280px 偏窄 */
-  max-width: 80vw;
+  width: 320px; /* ★微信 showModal 对话框宽度 320px（iOS 风格，用户实测） */
+  max-width: 90vw; /* 小屏兜底（375 视口 90vw=337px > 320 不截断） */
   background: #fff;
   border-radius: 12px;
   z-index: 99991;
@@ -154,18 +154,18 @@
 }
 .pwu-modal-btn {
   flex: 1;
-  padding: 15px 0; /* ★按钮高度 ~49px（微信 48px 对齐） */
+  padding: 20px 8px; /* ★微信底部按钮 padding（用户实测：上下 20px 左右 8px） */
   border: none;
   background: #fff;
   font-size: 17px; /* WeUI 按钮字号 */
   cursor: pointer;
 }
 .pwu-modal-btn--cancel {
-  color: #888888; /* 微信次级文字 */
+  color: #000000; /* ★微信取消按钮黑色文字（非灰色） */
   border-right: 1px solid #e5e5e5;
 }
 .pwu-modal-btn--confirm {
-  color: #07c160;
+  color: #576b95; /* ★微信确定按钮 WeUI 蓝（非品牌绿） */
   font-weight: 600;
 }
 .proteus-web-actionsheet {
