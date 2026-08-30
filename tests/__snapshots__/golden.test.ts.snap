@@ -31,11 +31,11 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<view class="page">
-<text class="proteus-h1">{{ title }}</text>
-<text wx:if="{{show}}" class="proteus-p">visible</text>
-<view wx:for="{{items}}" wx:for-item="item" wx:for-index="idx" wx:key="idx" class="row">{{ idx }}.{{ item }}</view>
-<view bindtap="handleTap" class="proteus-a">link</view>
+  "wxml": "<view class="page-data-v-e934cf">
+<text class="proteus-h1-data-v-e934cf">{{ title }}</text>
+<text wx:if="{{show}}" class="proteus-p-data-v-e934cf">visible</text>
+<view wx:for="{{items}}" wx:for-item="item" wx:for-index="idx" wx:key="idx" class="row-data-v-e934cf">{{ idx }}.{{ item }}</view>
+<view bindtap="handleTap" class="proteus-a-data-v-e934cf">link</view>
 <image src="{{avatar}}" alt="avatar" />
 </view>",
   "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
@@ -47,10 +47,9 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
-.page {
+.proteus-h1-data-v-e934cf { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-e934cf { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-e934cf { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-e934cf { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-e934cf { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-e934cf { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-e934cf { display: block; margin: 0 0 1em; }.proteus-a-data-v-e934cf { color: #1a7af8; text-decoration: underline; }.page-data-v-e934cf {
   padding: 40rpx;
-}
-.row {
+}.row-data-v-e934cf {
   margin: 8rpx 0;
 }
 ",
@@ -86,6 +85,15 @@ Page({
 <textarea value="{{text}}" bindinput="proteusOnTextInput" />
 </view>",
   "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+.proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
+.proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
+.proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
+.proteus-h5 { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }
+.proteus-h6 { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }
+.proteus-p { display: block; margin: 0 0 1em; }
+.proteus-a { color: #1a7af8; text-decoration: underline; }
+
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
 .proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
@@ -129,6 +137,15 @@ Page({
 .proteus-h6 { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
+
+.proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+.proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
+.proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
+.proteus-h4 { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }
+.proteus-h5 { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }
+.proteus-h6 { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }
+.proteus-p { display: block; margin: 0 0 1em; }
+.proteus-a { color: #1a7af8; text-decoration: underline; }
 ",
 }
 `;
@@ -156,7 +173,7 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<view class="tab">{{ count }}</view>",
+  "wxml": "<view class="tab-data-v-5a03df">{{ count }}</view>",
   "wxss": ".proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
 .proteus-h2 { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }
 .proteus-h3 { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }
@@ -166,7 +183,7 @@ Page({
 .proteus-p { display: block; margin: 0 0 1em; }
 .proteus-a { color: #1a7af8; text-decoration: underline; }
 
-.tab {
+.proteus-h1-data-v-5a03df { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }.proteus-h2-data-v-5a03df { display: block; font-size: 48rpx; font-weight: 700; margin: 0 0 0.83em; }.proteus-h3-data-v-5a03df { display: block; font-size: 36rpx; font-weight: 700; margin: 0 0 1em; }.proteus-h4-data-v-5a03df { display: block; font-size: 32rpx; font-weight: 700; margin: 0 0 1.33em; }.proteus-h5-data-v-5a03df { display: block; font-size: 28rpx; font-weight: 700; margin: 0 0 1.67em; }.proteus-h6-data-v-5a03df { display: block; font-size: 24rpx; font-weight: 700; margin: 0 0 2.33em; }.proteus-p-data-v-5a03df { display: block; margin: 0 0 1em; }.proteus-a-data-v-5a03df { color: #1a7af8; text-decoration: underline; }.tab-data-v-5a03df {
   font-size: 28rpx;
 }
 ",

@@ -9,7 +9,7 @@ import RouterView from './router/RouterView.vue'
   </div>
 </template>
 
-<style>
+<style global>
 .app {
   font-family: system-ui, -apple-system, sans-serif;
   color: #1f2328;

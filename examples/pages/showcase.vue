@@ -32,7 +32,7 @@ const cards = ref([
   </div>
 </template>
 
-<style>
+<style scoped>
 .showcase {
   padding: 24px;
   text-align: center;

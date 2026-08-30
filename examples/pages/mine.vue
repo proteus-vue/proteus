@@ -20,7 +20,7 @@ const nickname = ref('Proteus 用户')
   </div>
 </template>
 
-<style>
+<style scoped>
 .mine {
   text-align: center;
   padding: 48px 0;

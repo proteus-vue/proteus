@@ -34,7 +34,7 @@ onLoad((options: PageOnLoad<'user-profile'>) => {
   </div>
 </template>
 
-<style>
+<style scoped>
 /* 半屏页透明背景暂移除：真机报 applyAnimatedStyle can not find corresponding nodes，隔离测试用 */
 .profile {
   text-align: center;

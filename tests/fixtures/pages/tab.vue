@@ -17,7 +17,7 @@ const count = ref(0)
   <div class="tab">{{ count }}</div>
 </template>
 
-<style>
+<style scoped>
 .tab {
   font-size: 14px;
 }

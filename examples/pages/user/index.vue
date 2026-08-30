@@ -24,7 +24,7 @@
   </div>
 </template>
 
-<style>
+<style scoped>
 .user {
   text-align: center;
   padding: 24px 0;

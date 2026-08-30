@@ -78,7 +78,7 @@ function showDevice() {
   </div>
 </template>
 
-<style>
+<style scoped>
 .config-demo {
   padding: 24px;
   text-align: center;

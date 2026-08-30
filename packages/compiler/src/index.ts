@@ -53,8 +53,12 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     rules: options.rules,
   }
 
-  // scoped CSS（v0.3）：任一 <style scoped> 则全量作用域化（MVP：单块/全 scope 简化，组件边界场景后续完善）
-  const hasScoped = descriptor.styles.some((s) => s.scoped)
+  // scoped CSS（★2026-08 用户决策：默认 scoped）：非 <style global> 的 style 块即作用域化（类名后缀拼接）
+  //   <style>（无标记）按 scoped 处理 + 编译期警告；<style global>（Proteus 扩展）显式全局（不作用域化）
+  //   MVP 简化：scoped 组与 global 组分开转换输出（global 在前，可被 scoped 覆盖）
+  const globalStyles = descriptor.styles.filter((s) => s.attrs?.global !== undefined)
+  const scopedStyles = descriptor.styles.filter((s) => s.attrs?.global === undefined)
+  const hasScoped = scopedStyles.length > 0
   const scopeId = hasScoped ? scopedIdFrom(options.filename ?? 'anonymous.vue') : undefined
   // 决策 trace（阶段二）：三阶段共用一条链路，产物侧可据此反查规则（★底线循环 ②）
   const tplTrace = createTrace('template')
@@ -88,15 +92,33 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
 
   const styleTrace = createTrace('style')
   // CSS 预处理器（v0.3 尾）：lang=scss/less 的 style 块先经 preprocessStyle 钩子转 css（适配层注入，编译器零依赖）
-  const styles = descriptor.styles.map((s) =>
-    s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, s.content) : s.content,
-  )
-  const wxss = transformStyleToWxss(styles.join('\n'), {
+  const preprocess = (s: (typeof descriptor.styles)[number]): string =>
+    s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, s.content) : s.content
+  // ★默认 scoped（2026-08）：<style> 无标记按 scoped 处理 + 警告（每文件一条）
+  if (!options.rules?.disabled?.includes('style/default-scoped')) {
+    for (const s of scopedStyles) {
+      if (!s.scoped) {
+        const msg =
+          `<style> 已按 scoped 处理（Proteus 默认局部作用域；Vue 标准 <style> 为全局，Web 端会泄漏到所有页面）——如需全局样式请改用 <style global>`
+        tplResult.warnings.push(msg)
+        console.warn(`[mp-transform] ${msg}`)
+        break
+      }
+    }
+  }
+  // global 组（非作用域化，页面级）+ scoped 组（类名后缀），global 在前可被 scoped 覆盖
+  const globalWxss = transformStyleToWxss(globalStyles.map(preprocess).join('\n'), {
+    ...styleOpts,
+    usesTransition: tplResult.usesTransition,
+    trace: styleTrace,
+  })
+  const scopedWxss = transformStyleToWxss(scopedStyles.map(preprocess).join('\n'), {
     ...styleOpts,
     scopeId,
     usesTransition: tplResult.usesTransition,
     trace: styleTrace,
   })
+  const wxss = [globalWxss, scopedWxss].filter(Boolean).join('\n')
 
   const result: CompileResult = {
     wxml: tplResult.wxml,

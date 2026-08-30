@@ -156,10 +156,30 @@ describe('scoped CSS（v0.3）', () => {
     expect(result.wxss).not.toContain(':deep')
   })
 
-  it('非 scoped style 不生成作用域属性', () => {
+  it('★默认 scoped（2026-08 用户决策）：<style> 无标记按 scoped 处理（类名后缀）+ 编译期警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const result = compileVueSfc('<template><div class="a">x</div></template>\n<style>\n.a { color: red; }\n</style>', { filename: 'plain-demo.vue' })
+    expect(result.wxml).toContain('class="a-data-v-') // 默认 scoped：用户 class + 后缀
+    expect(result.wxss).toContain('.a-data-v-') // 选择器后缀
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('scoped 处理'))
+  })
+
+  it('<style global> 显式全局：不作用域化（无后缀无警告）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const result = compileVueSfc('<template><div class="a">x</div></template>\n<style global>\n.a { color: red; }\n</style>', { filename: 'global-demo.vue' })
     expect(result.wxml).not.toContain('data-v-')
-    expect(result.wxss).not.toContain('[data-v-')
+    expect(result.wxss).toContain('.a { color: red; }')
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('默认 scoped'))
+  })
+
+  it('同文件 scoped + global 分组输出（global 在前可被 scoped 覆盖）', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div></template>\n<style global>\n.g { color: red; }\n</style>\n<style scoped>\n.a { color: blue; }\n</style>',
+      { filename: 'mixed-demo.vue' },
+    )
+    expect(result.wxss).toContain('.g { color: red; }') // global 不后缀
+    expect(result.wxss).toContain('.a-data-v-') // scoped 后缀
+    expect(result.wxss.indexOf('.g')).toBeLessThan(result.wxss.indexOf('.a-data-v-')) // global 在前
   })
 })
 
@@ -392,7 +412,7 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     const preprocessStyle = vi.fn((_lang: string, content: string) => content.replace('$c: red;\n', '').replace('$c', 'red'))
     const result = compileVueSfc(src, { preprocessStyle })
     expect(preprocessStyle).toHaveBeenCalledWith('scss', expect.stringContaining('$c'))
-    expect(result.wxss).toContain('.a { color: red; }')
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+ \{ color: red; \}/) // 默认 scoped（2026-08）：选择器后缀
     expect(result.wxss).not.toContain('$c')
   })
 
@@ -805,7 +825,7 @@ describe('compileVueSfc（整包编译入口）', () => {
       '<style>.a { padding: 16px; }</style>',
     ].join('\n')
     const { wxml, js, wxss, warnings } = compileVueSfc(sfc, { filename: 'pages/test/index' })
-    expect(wxml).toContain('<view class="a">')
+    expect(wxml).toContain('class="a-data-v-') // 默认 scoped（2026-08）
     expect(wxml).toContain('<image src="{{url}}" />')
     expect(js).toContain('Page({')
     expect(js).toContain('title: "hi"')

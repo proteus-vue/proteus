@@ -89,7 +89,7 @@ const view = computed<Component | null>(() => {
   </div>
 </template>
 
-<style>
+<style scoped>
 /* 层叠容器：所有 routeType 转场时新旧页同屏绝对定位重叠 */
 .router-view {
   position: relative;

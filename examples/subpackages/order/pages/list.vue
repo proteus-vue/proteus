@@ -19,7 +19,7 @@
   </div>
 </template>
 
-<style>
+<style scoped>
 .order-list {
   text-align: center;
   padding: 24px 0;

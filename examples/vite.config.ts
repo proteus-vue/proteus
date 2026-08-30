@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 import path from 'node:path'
 import config from './proteus.config'
-import { mpTransform } from '@proteus-vue/plugin-vite'
+import { mpTransform, defaultScopedPlugin } from '@proteus-vue/plugin-vite'
 // ★module-plan B4：模块图谱 → Web manualChunks（有 modules/ 目录时自动生效）
 import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus-vue/module'
 
@@ -48,7 +48,7 @@ export default defineConfig(async ({ mode }) => {
             frameworkComponentsDir: fileURLToPath(new URL('../src/components', import.meta.url)),
           }),
         ]
-      : [vue(), routeBlocksPlugin()],
+      : [defaultScopedPlugin(), vue(), routeBlocksPlugin()],
     resolve: {
       alias: [
         // ★真实 npm 包使用方式（决策 #115）：@proteus-vue/{router,runtime,shared,plugin-vite} 走 workspace 链接的

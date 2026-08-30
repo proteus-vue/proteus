@@ -10,6 +10,7 @@ import { getTransformRule, listTransformRules } from '../packages/compiler/src/t
 
 /** 实现文件（消费方）：转换逻辑所在，规则 ID 出现在 disabled/trace/executeRule 调用中 */
 const IMPL_FILES = [
+  'packages/compiler/src/index.ts',
   'packages/compiler/src/template.ts',
   'packages/compiler/src/script.ts',
   'packages/compiler/src/style.ts',

@@ -44,7 +44,7 @@ function handleTap() {
   </div>
 </template>
 
-<style>
+<style scoped>
 .home {
   text-align: center;
   padding: 48px 0;

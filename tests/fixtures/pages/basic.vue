@@ -29,7 +29,7 @@ function handleTap() {
   </div>
 </template>
 
-<style>
+<style scoped>
 .page {
   padding: 20px;
 }
