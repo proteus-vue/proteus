@@ -73,7 +73,7 @@ describe('p-loading（加载中）', () => {
   it('MP 产物：wx:if visible + spinner + 可选 text', () => {
     const { wxml, wxss } = compileComponent('p-loading')
     expect(wxml).toContain('wx:if="{{visible}}"')
-    expect(wxml).toContain('class="p-loading-spinner"')
+    expect(wxml).toMatch(/class="[^"]*\bp-loading-spinner\b/)
     expect(wxml).toContain('wx:if="{{text}}"')
     expect(wxss).toContain('@keyframes proteus-loading-spin')
   })

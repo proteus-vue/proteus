@@ -21,7 +21,7 @@ describe('p-nav-bar（导航栏普通态）', () => {
   it('MP 产物：title/back/fixed + left/right 插槽 + back emit', () => {
     const { wxml, js } = compileComponent('p-nav-bar')
     expect(wxml).toContain('<view')
-    expect(wxml).toContain('class="p-nav-bar"')
+    expect(wxml).toMatch(/class="[^"]*\bp-nav-bar\b/)
     expect(wxml).toContain('{{ title }}')
     expect(wxml).toContain('wx:if="{{back}}"')
     expect(wxml).toContain('bind:tap="onBackTap"')

@@ -322,15 +322,19 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const attrs: string[] = []
   let hasNavTarget = false
 
-  // scoped CSS（v0.3，★Skyline 兼容修复）：模板元素附加作用域 **class**（glass-easel 不支持属性选择器）
-  //   选择器侧 .a.data-v-xxx 匹配（class 选择器 Skyline 支持）；微信支持多 class 属性合并（与 :class 共存）
+  // scoped CSS（v0.3，★Skyline 兼容修复）：作用域 **class**（glass-easel 不支持属性选择器）
+  //   ★仅计算、末尾统一发射（2026-08 真机实测修复：WXML 重复 class 属性只保留其一——独立 scope class 属性会丢掉用户 class，
+  //   scoped 复合选择器 .a.data-v-xxx 失配 → 样式全丢）
+  let scopeClass = ''
   if (ctx.scopeId) {
     const scopeCtx: RuleContext = { input: { tag: node.tag, scopeId: ctx.scopeId } }
     executeRule('template/scope-attr', scopeCtx)
-    const scopeClass = (scopeCtx.output as string | undefined) ?? ctx.scopeId
-    attrs.push(`class="${scopeClass}"`)
+    scopeClass = (scopeCtx.output as string | undefined) ?? ctx.scopeId
     ctx.trace?.add('template/scope-attr', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<${node.tag} class="${scopeClass}">` })
   }
+  // class 源缓冲：静态 class / :class 绑定（发射统一合并为单个 class 属性，见本函数末尾）
+  let staticClass: string | undefined
+  let bindingClass: string | undefined
 
   for (const prop of node.props) {
     if (prop.type === NodeTypes.ATTRIBUTE) {
@@ -349,8 +353,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         continue
       }
-      if (attr.name === 'class' && effectiveBaseClass) {
-        attrs.push(`class="${effectiveBaseClass}${attr.value ? ' ' + escapeXml(attr.value.content) : ''}"`)
+      if (attr.name === 'class') {
+        // 静态 class 缓冲（仅用户类名；语义基础类由末尾统一发射合并——避免重复）
+        staticClass = attr.value ? escapeXml(attr.value.content) : ''
         continue
       }
       // ★Batch A（vue-compat）：模板 ref 小程序无对等——显式警告（不再静默无效）
@@ -480,9 +485,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         if (arg === 'class') {
           if (ctx.disabled.has('directive/v-bind-class')) break
-          const cls = formatClassBinding(exp, ctx.warnings)
-          attrs.push(`class="${effectiveBaseClass ? `${effectiveBaseClass} ` : ''}${cls}"`)
-          ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: cls })
+          bindingClass = formatClassBinding(exp, ctx.warnings)
+          ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: bindingClass })
         } else if (arg === 'style') {
           if (ctx.disabled.has('directive/v-bind-style')) break
           attrs.push(`style="${formatStyleBinding(exp)}"`)
@@ -540,23 +544,22 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     ctx.usesNavigate = true
     ctx.trace?.add('nav/navigate-link', { line: node.loc.start.line, before: `<${node.tag}>` + (node.tag === 'a' ? ' href/to' : ' to'), after: 'data-url + bindtap="proteusNavigateTo"' })
   }
-  if (effectiveBaseClass && !attrs.some((a) => a.startsWith('class='))) {
-    attrs.push(`class="${effectiveBaseClass}"`)
-  }
-  // ★vue-compat-advance Batch 2/5：<transition> 子元素注入动画 class（首个元素；进入动画由重建自动播放）
-  // ★Batch 5：裸 ref v-if 状态机启用时，class 追加 __tl{i} 插值（离开中切换 leave 动画 class）
+  // ★vue-compat-advance Batch 2/5：<transition> 子元素动画 class（进入动画由重建自动播放；离开由 __tl{i} 插值切换）
+  let transitionAnimCls = ''
+  let transitionLeaveExpr = ''
   if (ctx.transitionClassName) {
-    const animCls = ctx.transitionClassName
+    transitionAnimCls = ctx.transitionClassName
     ctx.transitionClassName = undefined
     const tctx = ctx.transitionCtx
     ctx.transitionCtx = undefined // 首个元素消费后清空（多子元素场景后续元素不受影响）
-    const leaveExpr = tctx && tctx.ref !== undefined ? ` {{__tl${tctx.index} ? '${animCls}-leave' : ''}}` : ''
-    const clsIdx = attrs.findIndex((a) => a.startsWith('class='))
-    if (clsIdx >= 0) {
-      attrs[clsIdx] = attrs[clsIdx].replace(/^class="/, `class="${animCls}${leaveExpr} `)
-    } else {
-      attrs.push(`class="${animCls}${leaveExpr}"`)
-    }
+    if (tctx && tctx.ref !== undefined) transitionLeaveExpr = `{{__tl${tctx.index} ? '${transitionAnimCls}-leave' : ''}}`
+  }
+  // ★统一 class 发射（2026-08 真机实测修复）：scope class + 语义基础类 + 静态 class + :class 绑定 + transition 动画类
+  //   合并为**单个** class 属性（WXML 不支持重复 class 属性——多 class 属性只保留其一，用户 class 丢失 → scoped 复合选择器失配 → 样式全丢）
+  const classStatic = [transitionAnimCls, scopeClass, effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c))
+  const classInterp = [bindingClass, transitionLeaveExpr].filter((c): c is string => Boolean(c))
+  if (classStatic.length || classInterp.length) {
+    attrs.push(`class="${classStatic.join(' ')}${classInterp.length ? `${classStatic.length ? ' ' : ''}${classInterp.join(' ')}` : ''}"`)
   }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）

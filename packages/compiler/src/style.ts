@@ -141,12 +141,16 @@ export function transformStyleToWxss(
   }
 
   // 4. scoped CSS（v0.3，★Skyline 兼容修复）：:deep() 去包装 + 每条规则选择器末尾追加 .scopeId（class 选择器）
-  //    （glass-easel 不支持属性选择器 [data-v-xxx] → 改 class 方案；模板侧元素已附加 class="data-v-xxx"；@media/@keyframes 骨架保留）
+  //    （glass-easel 不支持属性选择器 [data-v-xxx] → 改 class 方案；模板侧元素已附加 class="data-v-xxx"；@media 骨架保留）
+  //    ★2026-08 真机实测修复：@keyframes 的 from/to/百分比 选择器**不**追加（追加产生非法语法 from.data-v-xxx，
+  //    Skyline 报 Unsupported keyframes syntax，动画全部失效）
   if (doScope && scopeId) {
     css = css.replace(/:deep\(([^)]*)\)/g, '$1')
     css = css.replace(/([^{}]+)\{/g, (m: string, sel: string) => {
       const s = sel.trim()
       if (s.startsWith('@')) return m
+      // @keyframes 帧选择器（from/to/百分比，可逗号列表）：非类/元素选择器，作用域化无意义且产生非法语法
+      if (/^(from|to|\d+(?:\.\d+)?%)(\s*,\s*(from|to|\d+(?:\.\d+)?%))*$/i.test(s)) return m
       return `${s}.${scopeId} {`
     })
   }

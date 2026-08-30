@@ -85,12 +85,27 @@ describe('computed 读路径（v0.3）', () => {
 describe('scoped CSS（v0.3）', () => {
   const SFC = '<template>\n  <div class="card">\n    <p class="title">hi</p>\n  </div>\n</template>\n<style scoped>\n.card { padding: 8px; }\n.card .title { color: red; }\n</style>'
 
-  it('模板元素附加作用域 class + 选择器追加 .data-v-xxx（Skyline 兼容：类选择器）', () => {
+  it('模板元素附加作用域 class + 选择器追加 .data-v-xxx（Skyline 兼容：类选择器 + 单 class 属性）', () => {
     const result = compileVueSfc(SFC, { filename: 'scoped-demo.vue' })
     expect(result.wxml).toContain('data-v-')
-    expect(result.wxml).toContain('class="data-v-') // 独立 class 属性（scope class 在前，微信合并多 class）
+    expect(result.wxml).toContain('class="data-v-') // ★scope class 与用户 class 合并为单个 class 属性（scope class 在前）
+    // ★2026-08 真机实测：WXML 重复 class 属性只保留其一 → 用户 class 丢失 → scoped 复合选择器失配 → 样式全丢；
+    //   锁定不变量：每个元素至多一个 class 属性
+    expect(result.wxml).not.toMatch(/class="[^"]*"\s+class=/)
     expect(result.wxss).toContain('.card.data-v-')
     expect(result.wxss).not.toContain('.card[data-v-') // 属性选择器 Skyline 不支持
+  })
+
+  it('@keyframes 帧选择器（from/to/百分比）不追加 scope class（Skyline 非法语法）', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div></template>\n<style scoped>\n@keyframes pop { from { opacity: 0; } 50% { opacity: 0.5; } to { opacity: 1; } }\n.a { animation: pop 0.3s; }\n</style>',
+      { filename: 'keyframes-demo.vue' },
+    )
+    expect(result.wxss).toContain('@keyframes pop { from { opacity: 0; } 50% { opacity: 0.5; } to { opacity: 1; } }')
+    expect(result.wxss).not.toContain('from.data-v-')
+    expect(result.wxss).not.toContain('to.data-v-')
+    expect(result.wxss).not.toContain('50%.data-v-')
+    expect(result.wxss).toContain('.a.data-v-')
   })
 
   it('scopeId 稳定（同文件同属性名），且产物自校验通过', () => {

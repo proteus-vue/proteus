@@ -26,7 +26,7 @@ describe('p-view（通用容器）', () => {
   it('MP 产物：div → view + 插槽透传 + BaseProps properties', () => {
     const { wxml, js } = compileComponent('p-view')
     expect(wxml).toContain('<view')
-    expect(wxml).toContain('class="p-view"')
+    expect(wxml).toMatch(/class="[^"]*\bp-view\b/) // 合并后单 class 属性：scope class + p-view + :class 绑定
     expect(wxml).toContain('aria-label="{{ariaLabel}}"')
     expect(wxml).toContain('<slot')
     expect(js).toContain('Component({')
@@ -40,7 +40,7 @@ describe('p-text（文本）', () => {
   it('MP 产物：span → text + selectable 透传', () => {
     const { wxml, js } = compileComponent('p-text')
     expect(wxml).toContain('<text')
-    expect(wxml).toContain('class="p-text"')
+    expect(wxml).toMatch(/class="[^"]*\bp-text\b/)
     expect(wxml).toContain('selectable="{{selectable ? \'true\' : \'\'}}"')
     expect(wxml).toContain('<slot')
     expect(js).toContain('selectable: { type: Boolean, value: false }')
@@ -51,7 +51,7 @@ describe('p-image（图片）', () => {
   it('MP 产物：img → image + mode/lazy-load/placeholder 映射 + bind:load/bind:error', () => {
     const { wxml, js } = compileComponent('p-image')
     expect(wxml).toContain('<image')
-    expect(wxml).toContain('class="p-image"')
+    expect(wxml).toMatch(/class="[^"]*\bp-image\b/)
     expect(wxml).toContain('src="{{src}}"')
     expect(wxml).toContain('mode="{{mode}}"')
     expect(wxml).toContain('lazy-load="{{lazyLoad ? \'true\' : \'\'}}"')
@@ -69,7 +69,7 @@ describe('p-button（按钮）', () => {
   it('MP 产物：button 透传 + disabled 联动 + bindtap + throttle 防重复', () => {
     const { wxml, js } = compileComponent('p-button')
     expect(wxml).toContain('<button')
-    expect(wxml).toContain('class="p-button"')
+    expect(wxml).toMatch(/class="[^"]*\bp-button\b/)
     expect(wxml).toContain('disabled="{{disabled || loading}}"')
     expect(wxml).toContain('bindtap="onClick"')
     expect(js).toContain('throttle: { type: Number, value: 0 }')
