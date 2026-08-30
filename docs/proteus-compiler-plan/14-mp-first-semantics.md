@@ -64,6 +64,49 @@
 - Web 端使用无对等能力 → 触发事件让开发者自定义（透明，不静默丢弃）
 - 类型：小程序组件属性类型（global-components 扩展）+ wx API 类型（api-types 扩充）
 
+### 5.1 组件能力矩阵（12 个已覆盖，2026-08-30）
+
+| 组件 | 状态 | 对齐要点 | 备注 |
+|---|---|---|---|
+| view | ✅ full | block 容器、selectable 文本可选 | proteus-view |
+| text | ✅ full | inline、selectable | proteus-text |
+| button | ✅ full | 微信默认样式（灰底 #f8f8f8/18px/行高 2.556/::after 细边框/hover 按压缩放）+ open-type 降级事件 | proteus-button；open-type 无 Web 对等 → 触发 openshare 等事件 |
+| input | ✅ full | 无边框/透明背景、@input 载荷 { detail: { value } } | proteus-input |
+| textarea | ✅ full | 默认高度 150px（微信组件默认）、无边框 | proteus-textarea |
+| image | ✅ full | mode 映射（widthFix 等）、懒加载、块级 | proteus-image |
+| scroll-view | ✅ full | 双端滚动 + 页面滚动容器（规划 15） | proteus-scroll-view |
+| switch | ✅ full | iOS 过渡：关态浅灰轨 + 开态绿底绿边、纯白滑块 + 轻阴影、wash 白色扩散方向区分 | 与 slider 滑块类名分离（.pws-thumb/.pws-slider-thumb） |
+| slider | ✅ full | 2px 滑轨 #e9e9e9 + 绿填充 + 28px 白滑块 + 阴影、自定义结构 | 内部 val ref（受控） |
+| icon | ✅ full | 14 图标内联 SVG、彩色圆底 + 白图形、color 覆盖所有主色、success 毛笔勾 4 段 stroke | 与 toast 图标（无底色）区分 |
+| progress | ✅ full（双通道） | Web 原生 progress + Skyline 降级自定义 view 进度条（规划 16） | 编译器 serializeProgress |
+| navigator | ✅ full | 继承色无下划线、url 跳转 | proteus-navigator |
+| picker | ⬜ 待专项 | 复杂组件（规划批次 4 后续） | — |
+| swiper | ⬜ 待专项 | 复杂组件（规划批次 4 后续） | — |
+
+### 5.2 wx API 能力矩阵（2026-08-30）
+
+| API | 状态 | 对齐要点 | 备注 |
+|---|---|---|---|
+| navigateTo / redirectTo / reLaunch / switchTab | ✅ full | 代理 PlatformAdapter（history 驱动 RouterView） | routeType 转场参数透传 |
+| navigateBack / getCurrentPages | ✅ full | adapter 代理 | — |
+| pageScrollTo | ✅ full | MP 桥接自动包装 scroll-view / Web window.scrollTo（规划 15 批次 3） | — |
+| setStorageSync / getStorageSync / removeStorageSync / clearStorageSync | ✅ full | localStorage JSON 序列化 | — |
+| getSystemInfoSync / getDeviceInfo | ✅ full | 浏览器信息字段 | — |
+| showToast | ✅ full | weui.io 像素级对齐：默认 icon success、不透明 #4c4c4c、132 方形/min 132/max 320、图标 40px + 16px 间距、位置居中 | 用户真机优先（居中） |
+| showModal | ✅ full | weui.io 像素级对齐：宽 320px、三种样式（双按钮/单按钮/editable）、返回 { confirm, cancel, errMsg } | WeUI 蓝 #576b95 / 取消黑 |
+| showActionSheet | ✅ full | weui.io 像素级对齐：cell 56px、hairline 分割线、取消 8px 间距、:active #ececec | — |
+| showLoading / hideLoading | ✅ full | 常驻 spinner + hideLoading 关闭 | — |
+| hideToast | ✅ full | 移除全部 toast DOM | — |
+| request | ✅ partial | fetch 封装 + 非 2xx fail | 未对齐超时/取消 |
+| requestPayment | ⬜ event | 无 Web 对等 → 触发自定义钩子 proteusWebPay 或警告 | 反黑盒降级 |
+
+### 5.3 能力状态图例
+
+- ✅ full：完整对齐（双端视觉/行为一致，CDP 断言或测试覆盖）
+- ⬜ partial：部分对齐（标注缺口）
+- ⬜ event：仅触发事件，Web 无对等能力（透明降级）
+- ⬜ 待专项：未实现，列入后续批次
+
 ## 六、批次（✅ 1-3 完成）
 
 - **批次 1** ✅：Web 组件模拟层骨架——view/text/button/input/image + `open-type` 事件降级机制 + vite 自动注册 + 类型（★标签改写 proteus-*：Vue 编译器无连字符标签不 resolveComponent，CDP 实测根因）
@@ -71,7 +114,8 @@
 - **批次 3** ✅：扩展组件——scroll-view（规划 15）/textarea/switch/slider/icon/progress/navigator + 微信默认样式对齐层（style.css）+ 能力矩阵文档
 - **批次 4**（收尾中）：examples 小程序语义示例页完善 + 双端实测 + 能力矩阵文档（picker/swiper 等复杂组件后续专项）
   - ✅ 交互层视觉对齐（2026-08-30，用户逐组件验收，方法见规划 17）：toast/modal/actionSheet 已按 weui.io 官方像素级对齐（CDP 实测对比 + hairline 分割线 + 用户真机优先：toast 居中、modal 宽 320px）；switch（iOS 过渡 wash）/slider（2px 滑轨 + 28px 滑块）/icon（毛笔勾 + color 全覆盖）/progress（Skyline 降级，规划 16）/button（微信默认样式 + ::after 细边框 + hover）
-  - 待办：picker/swiper 等复杂组件专项 + 能力矩阵文档补全（按规划 17 方法论继续）
+  - ✅ 能力矩阵文档（§5.1 组件 12 个 + §5.2 wx API 15 项，full/partial/event/待专项 状态标注）
+  - 待办：picker/swiper 等复杂组件专项（按规划 17 方法论继续）
 
 ## 七、风险与权衡
 
