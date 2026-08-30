@@ -248,6 +248,9 @@
   height: 28px;
   border-radius: 50%;
   background: #ffffff;
+  /* ★轻阴影（对齐微信：thumb 有浅阴影让滑块有边界感——关闭时白+白也能看出滑块轮廓；
+   * 之前完全去掉导致关闭时滑块不可见，用户实测反馈） */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   /* 纯滑动（不放大——扩散动画在 .pws-wash 遮罩上） */
   transition: transform 0.28s ease;
   z-index: 2;
