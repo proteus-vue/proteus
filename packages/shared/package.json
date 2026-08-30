@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/shared",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.0",
   "description": "Proteus 公共层：平台适配器 + 全局类型声明（wx/Page/RouteBuilder/MpEvent）",
   "type": "module",
   "license": "Apache-2.0",
@@ -13,7 +13,10 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
   }

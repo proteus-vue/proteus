@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/cli",
-  "version": "0.2.0",
+  "version": "0.2.1-beta.0",
   "description": "Proteus 命令行：proteus build（独立编译）/ explain（决策 trace + AI 说明书）/ rules（规则目录）",
   "type": "module",
   "license": "Apache-2.0",
@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "@proteus-vue/capabilities": "0.1.0",
-    "@proteus-vue/compiler": "0.2.0",
+    "@proteus-vue/compiler": "0.3.0-beta.0",
     "@proteus-vue/module": "0.1.0",
-    "@proteus-vue/router": "0.1.0",
+    "@proteus-vue/router": "0.2.0-beta.0",
     "@proteus-vue/types": "0.1.0"
   },
   "devDependencies": {

@@ -1,5 +1,16 @@
 # @proteus-vue/cli
 
+## 0.2.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies [7cf0406]
+- Updated dependencies [00c9fb7]
+- Updated dependencies [a501441]
+- Updated dependencies [ae60825]
+  - @proteus-vue/router@0.2.0-beta.0
+  - @proteus-vue/compiler@0.3.0-beta.0
+
 ## 0.2.0
 
 ### Minor Changes
