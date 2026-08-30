@@ -50,7 +50,7 @@
       <view class="msd-row">
         <icon type="success" size="20" color="#07c160" />
         <icon type="warn" size="20" color="#fa5151" />
-        <text class="msd-scroll-text">icon（success/warn）</text>
+        <text class="msd-scroll-text">icon（success/warn + color 调色）</text>
       </view>
       <progress :percent="70" show-info stroke-width="6" active-color="#07c160" />
       <view class="msd-row">

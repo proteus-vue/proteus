@@ -32,6 +32,9 @@ const ICON_SVG: Record<string, string> = {
 /** 单色图标（color 属性生效——对齐微信 icon color；彩色图标固定色） */
 const MONO_ICONS = new Set(['waiting', 'clear', 'search', 'download', 'upload', 'share', 'dislike'])
 
+/** 图标主色（圆底 fill / 单色描边）——color 属性传入时统一替换（对齐微信：color 覆盖所有图标主色，白图形保持） */
+const MAIN_COLORS = ['#09BB07', '#10AEFF', '#FFC300', '#F43530', '#FF5000', '#C9C9C9']
+
 export const WebIcon = defineComponent({
   name: 'ProteusWebIcon',
   inheritAttrs: false,
@@ -41,7 +44,14 @@ export const WebIcon = defineComponent({
       const t = String(type ?? '')
       const svg = ICON_SVG[t]
       const px = Number(size ?? 23)
-      const colorVal = String(color ?? '#c9c9c9')
+      const colorVal = color !== undefined && color !== '' ? String(color) : null
+      let inner = svg
+      if (svg && colorVal) {
+        // ★color 覆盖主色（对齐微信：用户设 color → 图标主色变 color；白色图形保持）
+        for (const c of MAIN_COLORS) {
+          inner = inner.split(c).join(colorVal)
+        }
+      }
       return h(
         'span',
         {
@@ -51,14 +61,8 @@ export const WebIcon = defineComponent({
         },
         [
           svg
-            ? h('svg', {
-                viewBox: '0 0 22 22',
-                width: px,
-                height: px,
-                // 单色图标：color 替换默认灰（对齐微信 icon color 属性）
-                innerHTML: MONO_ICONS.has(t) ? svg.replace(/#C9C9C9/g, colorVal) : svg,
-              })
-            : h('span', { class: 'pwi-unknown', style: { fontSize: `${px}px`, color: colorVal } }, '?'),
+            ? h('svg', { viewBox: '0 0 22 22', width: px, height: px, innerHTML: inner })
+            : h('span', { class: 'pwi-unknown', style: { fontSize: `${px}px`, color: (color as string) || '#c9c9c9' } }, '?'),
         ],
       )
     }
