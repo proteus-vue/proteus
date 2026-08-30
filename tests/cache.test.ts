@@ -4,13 +4,17 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from '../packages/plugin-vite/src/cache'
+import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey, getCompilerVersion, getEsbuildVersion } from '../packages/plugin-vite/src/cache'
 import { compileVueSfc } from '../packages/compiler/src'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-cache-'))
 afterAll(() => {
   fs.rmSync(TMP, { recursive: true, force: true })
 })
+
+// ★2026-08：缓存键基准 projectRoot（createRequire(projectRoot) 解析编译器 dist 指纹）——
+//   仓库根可解析 node_modules/@proteus-vue/compiler
+const ROOT = path.resolve(__dirname, '..')
 
 function baseOpts(over: Record<string, unknown> = {}) {
   return {
@@ -26,26 +30,39 @@ function baseOpts(over: Record<string, unknown> = {}) {
 
 describe('compileCacheKey（铁律 #4：全入参哈希）', () => {
   it('源码变化 → 键变化', () => {
-    const a = compileCacheKey('<template><view>a</view></template>', baseOpts())
-    const b = compileCacheKey('<template><view>b</view></template>', baseOpts())
+    const a = compileCacheKey('<template><view>a</view></template>', baseOpts(), ROOT)
+    const b = compileCacheKey('<template><view>b</view></template>', baseOpts(), ROOT)
     expect(a).not.toBe(b)
   })
 
   it('配置变化（px2rpx/rpxRatio/rules/moduleImports）→ 键变化', () => {
-    const base = compileCacheKey('<template><view>a</view></template>', baseOpts())
-    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ px2rpx: false }))).not.toBe(base)
-    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ rpxRatio: 4 }))).not.toBe(base)
-    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ rules: { customTags: { 'x': 'y' } } }))).not.toBe(base)
+    const base = compileCacheKey('<template><view>a</view></template>', baseOpts(), ROOT)
+    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ px2rpx: false }), ROOT)).not.toBe(base)
+    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ rpxRatio: 4 }), ROOT)).not.toBe(base)
+    expect(compileCacheKey('<template><view>a</view></template>', baseOpts({ rules: { customTags: { 'x': 'y' } } }), ROOT)).not.toBe(base)
     expect(
-      compileCacheKey('<template><view>a</view></template>', baseOpts({ moduleImports: [{ source: '../m', requirePath: './m.js' }] })),
+      compileCacheKey('<template><view>a</view></template>', baseOpts({ moduleImports: [{ source: '../m', requirePath: './m.js' }] }), ROOT),
     ).not.toBe(base)
   })
 
   it('组件标记/注释标记变化 → 键变化；同入参 → 键稳定', () => {
     const src = '<template><view>a</view></template>'
-    expect(compileCacheKey(src, baseOpts({ isComponent: true }))).not.toBe(compileCacheKey(src, baseOpts({ isComponent: false })))
-    expect(compileCacheKey(src, baseOpts({ annotateLines: true }))).not.toBe(compileCacheKey(src, baseOpts()))
-    expect(compileCacheKey(src, baseOpts())).toBe(compileCacheKey(src, baseOpts()))
+    expect(compileCacheKey(src, baseOpts({ isComponent: true }), ROOT)).not.toBe(
+      compileCacheKey(src, baseOpts({ isComponent: false }), ROOT),
+    )
+    expect(compileCacheKey(src, baseOpts({ annotateLines: true }), ROOT)).not.toBe(compileCacheKey(src, baseOpts(), ROOT))
+    expect(compileCacheKey(src, baseOpts(), ROOT)).toBe(compileCacheKey(src, baseOpts(), ROOT))
+  })
+
+  it('★编译器版本指纹参与缓存键（vite config bundle 基准失效修复后真实可解析）', () => {
+    // 机制契约：projectRoot 基准能解析 @proteus-vue/compiler dist → 指纹为真实值（非 'unknown'）
+    const fp = getCompilerVersion(ROOT)
+    expect(fp).not.toBe('unknown')
+    expect(fp).toMatch(/^\d+\.\d+\.\d+/)
+    // 指纹变化 → 键变化（改编译器代码 → 缓存全局失效）
+    const src = '<template><view>a</view></template>'
+    expect(compileCacheKey(src, baseOpts(), ROOT)).not.toBe(compileCacheKey(src, { ...baseOpts(), rel: 'other.vue' }, ROOT))
+    expect(getEsbuildVersion(ROOT)).not.toBe('unknown')
   })
 })
 
@@ -83,9 +100,9 @@ describe('createCompileCache（磁盘 + 内存双层 + 统计）', () => {
 
 describe('bundle 缓存（M8 第二批：esbuild bundle）', () => {
   it('bundleCacheKey：入口变化 → 键变；同入口稳定', () => {
-    const a = bundleCacheKey('/x/stores/player.ts')
-    const b = bundleCacheKey('/x/stores/player.ts')
-    const c = bundleCacheKey('/x/stores/user.ts')
+    const a = bundleCacheKey('/x/stores/player.ts', ROOT)
+    const b = bundleCacheKey('/x/stores/player.ts', ROOT)
+    const c = bundleCacheKey('/x/stores/user.ts', ROOT)
     expect(a).toBe(b)
     expect(a).not.toBe(c)
   })
@@ -139,7 +156,7 @@ describe('缓存与编译一致性（M8 验收：二次构建产物一致 + 命�
       annotateLines: false,
       debug: false,
     }
-    const key = compileCacheKey(src, { ...baseOpts(), rel: 'pages/x.vue' })
+    const key = compileCacheKey(src, { ...baseOpts(), rel: 'pages/x.vue' }, ROOT)
     const cache = createCompileCache(path.join(TMP, 'c4'))
     // 首次：未命中 → 编译 + 写缓存
     expect(cache.get(key)).toBeNull()

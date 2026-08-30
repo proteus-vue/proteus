@@ -63,7 +63,8 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   // ★ 拆包步骤 7：npm 包内预设源码路径解析（模板 config.builders 指向 node_modules/@proteus-vue/router/...）
   describe('resolvePkgPath：node_modules 包内路径解析', () => {
     it('scoped 包路径 → 解析包根 + 子路径', () => {
-      const abs = resolvePkgPath('/tmp/project', 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts')
+      // projectRoot 为仓库根（★2026-08：基准改 projectRoot，createRequire(projectRoot) 解析真实 node_modules）
+      const abs = resolvePkgPath(path.resolve(__dirname, '..'), 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts')
       // 从测试所在仓库解析 @proteus-vue/router → packages/router，接 src/presets/...
       expect(abs.endsWith('src/presets/halfScreen.ts')).toBe(true)
       expect(fs.existsSync(abs)).toBe(true)

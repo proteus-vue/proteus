@@ -22,14 +22,19 @@ import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
-/** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus-vue/router/src/presets/x.ts' → 解析包根 + 子路径 */
+/** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus-vue/router/src/presets/x.ts' → 解析包根 + 子路径
+ * ★2026-08：以 projectRoot 为基准（createRequire(projectRoot)）——vite config bundle 到 os.tmpdir 后
+ *   import.meta.url 基准失效，模块级 require 找不到项目 node_modules */
+// 注：resolveSharedModule 仍用模块级 require（真实构建验证可解析 @proteus-vue/* 共享模块）；
+//   指纹（cache.ts）与包内路径解析（本函数）改 projectRoot 基准
 const require = createRequire(import.meta.url)
 export function resolvePkgPath(projectRoot: string, modPath: string): string {
   // 支持 scoped 包（@proteus-vue/router）与非 scoped 包
   const m = modPath.match(/^node_modules\/((?:@[^/]+\/)?[^/]+)\/([\s\S]+)$/)
   if (m) {
     try {
-      const pkgRoot = path.dirname(require.resolve(`${m[1]}/package.json`))
+      const pkgRequire = createRequire(path.join(projectRoot, 'package.json'))
+      const pkgRoot = path.dirname(pkgRequire.resolve(`${m[1]}/package.json`))
       return path.join(pkgRoot, m[2])
     } catch {
       // 包未安装（如模板构建前的预检）：回退 projectRoot 相对路径
@@ -347,7 +352,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         let code = ''
         let bundleHit = false
         if (bundleCacheEnabled) {
-          const bKey = bundleCacheKey(sharedFile)
+          const bKey = bundleCacheKey(sharedFile, projectRoot)
           const cachedBundle = bundleCache.get(bKey)
           if (cachedBundle) {
             code = cachedBundle.output
@@ -401,7 +406,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
                 }
               })
               .filter((x): x is { file: string; mtimeMs: number; size: number } => x !== null)
-            bundleCache.set(bundleCacheKey(sharedFile), { output: code, inputs })
+            bundleCache.set(bundleCacheKey(sharedFile, projectRoot), { output: code, inputs })
           }
         }
         this.emitFile({ type: 'asset', fileName: `${relNoExt}.js`, source: code })
@@ -434,16 +439,20 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         let sourcemap: string | undefined
         let cached = false
         if (cacheEnabled) {
-          const key = compileCacheKey(source, {
-            rel,
-            isComponent,
-            px2rpx,
-            rpxRatio,
-            rules: rules as Record<string, unknown> | undefined,
-            moduleImports: moduleImportsByFile.get(file),
-            annotateLines: isDebug,
-            debug: isDebug,
-          })
+          const key = compileCacheKey(
+            source,
+            {
+              rel,
+              isComponent,
+              px2rpx,
+              rpxRatio,
+              rules: rules as Record<string, unknown> | undefined,
+              moduleImports: moduleImportsByFile.get(file),
+              annotateLines: isDebug,
+              debug: isDebug,
+            },
+            projectRoot,
+          )
           const entry = compileCache.get(key)
           if (entry) {
             wxml = entry.wxml

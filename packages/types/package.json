@@ -9,7 +9,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./index-shared": {
       "types": "./dist/index-shared.d.ts",
@@ -42,7 +43,10 @@
     "./proteus.config.schema.json": "./src/config-schema.ts",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/config.ts src/config-schema.ts --bundle --format=esm --platform=node --outdir=dist"
   },

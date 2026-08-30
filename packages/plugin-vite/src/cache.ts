@@ -5,6 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import { createRequire } from 'node:module'
 
 export interface CompileCacheEntry {
   wxml: string
@@ -19,22 +20,28 @@ export interface CompileCacheStats {
 }
 
 /** 编译器版本指纹（缓存键组成部分——编译器代码变更即全局失效）
- * ★修复：仅 package.json version 不足（代码改了版本没变 → 缓存命中旧产物）；改用 dist/index.js 内容哈希 */
-export function getCompilerVersion(): string {
+ * ★修复①：仅 package.json version 不足（代码改了版本没变 → 缓存命中旧产物）；改用 dist 代码内容哈希
+ * ★修复②（2026-08 真机复现）：vite 5.4 加载 config 时把插件 bundle 到 os.tmpdir() → import.meta.url 基准失效 →
+ *   require.resolve 找不到项目 node_modules（MODULE_NOT_FOUND）→ 恒 'unknown' → 指纹永不变化 → 改编译器代码缓存不失效
+ *   （8aac7c3 的 dist 指纹设计在 vite bundle 场景从未生效）。改以 projectRoot 为基准（createRequire(projectRoot)）显式解析 */
+export function getCompilerVersion(projectRoot: string): string {
   try {
-    const pkg = JSON.parse(fs.readFileSync(require.resolve('@proteus-vue/compiler/package.json'), 'utf-8')) as { version: string }
-    const dist = fs.readFileSync(require.resolve('@proteus-vue/compiler'), 'utf-8')
+    const require = createRequire(path.join(projectRoot, 'package.json'))
+    const pkgJsonPath = require.resolve('@proteus-vue/compiler/package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')) as { version: string; main: string }
+    const dist = path.join(path.dirname(pkgJsonPath), pkg.main ?? 'dist/index.js')
     const h = crypto.createHash('sha1')
-    h.update(dist)
+    h.update(fs.readFileSync(dist, 'utf-8'))
     return `${pkg.version}-${h.digest('hex').slice(0, 8)}`
   } catch {
     return 'unknown'
   }
 }
 
-/** esbuild 版本（bundle 缓存键组成部分） */
-export function getEsbuildVersion(): string {
+/** esbuild 版本（bundle 缓存键组成部分；同样以 projectRoot 为基准解析，避免 vite config bundle 基准失效） */
+export function getEsbuildVersion(projectRoot: string): string {
   try {
+    const require = createRequire(path.join(projectRoot, 'package.json'))
     const pkg = JSON.parse(fs.readFileSync(require.resolve('esbuild/package.json'), 'utf-8')) as { version: string }
     return pkg.version
   } catch {
@@ -55,11 +62,12 @@ export function compileCacheKey(
     annotateLines: boolean
     debug: boolean
   },
+  projectRoot: string,
 ): string {
   const h = crypto.createHash('sha1')
   h.update(source)
   h.update('|')
-  h.update(JSON.stringify({ ...options, compilerVersion: getCompilerVersion() }))
+  h.update(JSON.stringify({ ...options, compilerVersion: getCompilerVersion(projectRoot) }))
   return h.digest('hex')
 }
 
@@ -124,13 +132,13 @@ export interface BundleCacheEntry {
 }
 
 /** bundle 缓存键：sha1(入口文件 + esbuild 版本 + 构建选项) */
-export function bundleCacheKey(entryFile: string): string {
+export function bundleCacheKey(entryFile: string, projectRoot: string): string {
   const h = crypto.createHash('sha1')
   h.update(entryFile)
   h.update('|')
   h.update(
     JSON.stringify({
-      esbuild: getEsbuildVersion(),
+      esbuild: getEsbuildVersion(projectRoot),
       target: 'es2018',
       format: 'cjs',
       charset: 'utf8',
