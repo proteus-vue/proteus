@@ -29,7 +29,7 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     document.body.innerHTML = ''
   })
 
-  /** 触发指定按钮点击（或蒙层）并返回 resolve 结果 */
+  /** 触发指定按钮点击并返回 resolve 结果 */
   it('样式一：双按钮对话框（默认）——取消/确定 + 标题内容', async () => {
     const p = wx.showModal({ title: '提示', content: '内容文字' })
     expect(document.querySelector('.pwu-modal-title')?.textContent).toBe('提示')
@@ -44,7 +44,8 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(document.querySelector('.proteus-web-modal')?.classList.contains('pwu-modal--no-title')).toBe(false)
     ;(btns[1] as HTMLElement).click()
     const r = await p
-    expect(r).toEqual({ confirm: true })
+    // ★返回对齐小程序：{ confirm, cancel, errMsg }（confirm/cancel 互补）
+    expect(r).toEqual({ confirm: true, cancel: false, errMsg: 'showModal:ok' })
   })
 
   it('样式二：单按钮对话框（showCancel:false）——仅确定', async () => {
@@ -53,7 +54,7 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(btns.length).toBe(1)
     expect(btns[0].textContent).toBe('确定')
     ;(btns[0] as HTMLElement).click()
-    expect(await p).toEqual({ confirm: true })
+    expect(await p).toEqual({ confirm: true, cancel: false, errMsg: 'showModal:ok' })
   })
 
   it('样式三：可输入对话框（editable:true）——输入框 + placeholder + 返回 content', async () => {
@@ -64,7 +65,7 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     input!.value = 'proteus'
     ;(document.querySelector('.pwu-modal-btn--confirm') as HTMLElement).click()
     const r = await p
-    expect(r).toEqual({ confirm: true, content: 'proteus' })
+    expect(r).toEqual({ confirm: true, cancel: false, errMsg: 'showModal:ok', content: 'proteus' })
   })
 
   it('自定义文案/颜色（cancelText/confirmText/cancelColor/confirmColor）', () => {
@@ -90,13 +91,13 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     // 样式（对称 padding + 黑色）由 .pwu-modal--no-title .pwu-modal-content 驱动——CDP 实测验证
   })
 
-  it('取消按钮 → confirm:false；点蒙层 → confirm:false', async () => {
+  it('取消按钮/蒙层 → confirm:false + cancel:true；点蒙层同样', async () => {
     const p1 = wx.showModal({ title: 't' })
     ;(document.querySelector('.pwu-modal-btn--cancel') as HTMLElement).click()
-    expect(await p1).toEqual({ confirm: false })
+    expect(await p1).toEqual({ confirm: false, cancel: true, errMsg: 'showModal:ok' })
     const p2 = wx.showModal({ title: 't' })
     ;(document.querySelector('.proteus-web-ui-mask') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    expect(await p2).toEqual({ confirm: false })
+    expect(await p2).toEqual({ confirm: false, cancel: true, errMsg: 'showModal:ok' })
   })
 
   it('resolve 后 DOM 清理（mask/modal 移除）', async () => {

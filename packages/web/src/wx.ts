@@ -37,7 +37,8 @@ export interface WxApi {
   hideToast(): void
   showLoading(opts?: { title?: string }): void
   hideLoading(): void
-  /** ★WeUI 三种对话框样式：双按钮（默认）/ 单按钮（showCancel:false）/ 可输入（editable:true） */
+  /** ★WeUI 三种对话框样式：双按钮（默认）/ 单按钮（showCancel:false）/ 可输入（editable:true）
+   *  返回对齐小程序：{ confirm, cancel, errMsg }（editable 时含 content） */
   showModal(opts: {
     title?: string
     content?: string
@@ -48,7 +49,7 @@ export interface WxApi {
     confirmColor?: string
     editable?: boolean
     placeholderText?: string
-  }): Promise<{ confirm: boolean; content?: string }>
+  }): Promise<{ confirm: boolean; cancel: boolean; errMsg: string; content?: string }>
   showActionSheet(opts: { itemList: string[] }): Promise<{ tapIndex: number }>
 
   // ===== 网络（partial：fetch 封装）=====
@@ -187,8 +188,10 @@ export const wx: WxApi = {
         const input = box.querySelector('.pwu-modal-input') as HTMLInputElement | null
         mask.remove()
         box.remove()
-        if (editable) resolve({ confirm, content: input?.value ?? '' })
-        else resolve({ confirm })
+        // ★返回对齐小程序：{ confirm, cancel, errMsg }（confirm/cancel 互补）
+        const base = { confirm, cancel: !confirm, errMsg: 'showModal:ok' }
+        if (editable) resolve({ ...base, content: input?.value ?? '' })
+        else resolve(base)
       }
       box.querySelector('.pwu-modal-btn--cancel')?.addEventListener('click', () => done(false))
       box.querySelector('.pwu-modal-btn--confirm')?.addEventListener('click', () => done(true))
