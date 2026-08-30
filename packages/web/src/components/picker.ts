@@ -163,10 +163,34 @@ export const WebPicker = defineComponent({
       // 初始渲染（选中 initValue）
       selectIndex(initValue)
 
+      // ★弹出动画：挂载后 rAF 加 is-open（触发 translate3d 上滑 0.3s）
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => sheet.classList.add('is-open'))
+      })
+
+      // ★关闭动画：先播下滑（0.3s）再移除 DOM——复用同一 transition
       const close = (): void => {
-        mask.remove()
-        sheet.remove()
+        // 遮罩 fade-out 前恢复 transition（打开时的清理定时器可能已清掉 inline transition）
+        mask.style.transition = 'opacity 0.3s ease'
+        sheet.classList.remove('is-open')
+        mask.style.opacity = '0'
+        window.setTimeout(() => {
+          mask.remove()
+          sheet.remove()
+        }, 300)
       }
+      // 遮罩默认透明度（fade-in：初始 0 → 1，0.3s ease——官方 weui-animate-fade-in）
+      mask.style.transition = 'opacity 0.3s ease'
+      mask.style.opacity = '0'
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          mask.style.opacity = '1'
+        })
+      })
+      // 动画结束后清理遮罩内联过渡（避免残留影响其他复用）
+      window.setTimeout(() => {
+        mask.style.transition = ''
+      }, 400)
       closeBtn.addEventListener('click', () => {
         close()
         emit('cancel', {})

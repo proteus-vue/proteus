@@ -84,32 +84,32 @@ describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
     expect(selected?.textContent).toBe('丙')
   })
 
-  it('确定 → change { detail: { value: 选中索引 } } + 关闭弹层', async () => {
+  it('确定 → change { detail: { value: 选中索引 } } + 关闭弹层（动画后移除）', async () => {
     const state = mountPicker(['甲', '乙', '丙'])
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
     // 无 value → 默认选中中间项（3 项 → index 1）
     ;(document.querySelector('.pwp-confirm') as HTMLElement).click()
-    await new Promise((r) => setTimeout(r, 30))
+    await new Promise((r) => setTimeout(r, 350)) // 关闭动画 0.3s 后移除
     expect(document.querySelector('.proteus-web-picker-sheet')).toBeNull()
     expect(document.querySelector('.proteus-web-ui-mask')).toBeNull()
     expect(state.picked).toBe(1)
   })
 
-  it('关闭按钮 → cancel 事件 + 关闭弹层（不发 change）', async () => {
+  it('关闭按钮 → cancel 事件 + 关闭弹层（不发 change，动画后移除）', async () => {
     const state = mountPicker(['甲', '乙'])
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
     ;(document.querySelector('.pwp-close') as HTMLElement).click()
-    await new Promise((r) => setTimeout(r, 30))
+    await new Promise((r) => setTimeout(r, 350))
     expect(document.querySelector('.proteus-web-picker-sheet')).toBeNull()
     expect(state.picked).toBe(-1)
     expect(state.cancelled).toBe(1)
   })
 
-  it('点遮罩 → cancel + 关闭', async () => {
+  it('点遮罩 → cancel + 关闭（动画后移除）', async () => {
     const state = mountPicker(['甲'])
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
     ;(document.querySelector('.proteus-web-ui-mask') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await new Promise((r) => setTimeout(r, 30))
+    await new Promise((r) => setTimeout(r, 350))
     expect(document.querySelector('.proteus-web-picker-sheet')).toBeNull()
     expect(state.cancelled).toBe(1)
   })

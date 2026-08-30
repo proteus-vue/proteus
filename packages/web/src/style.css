@@ -306,9 +306,10 @@
 
 /* ===== picker 半屏弹层（18-picker-swiper B1 selector）=====
  * ★对齐 weui.io/#form_select_primary 官方（规划 17 方法论 CDP 实测）：
- *   弹层 = 左上关闭按钮（×）+ 居中标题 15px/500；滚轮区 280px + 56px 行；
+ *   弹层 = 左上关闭按钮 + 居中标题 15px/500；滚轮区 280px + 56px 行；
  *   选中高亮 = indicator 灰条（top 112px / #f7f7f7 / 左右 8px / 四角 8px 圆角）+ 上下白色渐隐遮罩；
- *   内容定位 = translate3d 平移（.weui-picker__content），滚动/拖拽后吸附最近项 */
+ *   内容定位 = translate3d 平移（.weui-picker__content），滚动/拖拽后吸附最近项
+ *   动画 = 弹出/关闭 0.3s ease（官方 weui-animate-slide-up/down：translate3d(0,100%,0) ↔ 0） */
 .proteus-web-picker-sheet {
   position: fixed;
   left: 0;
@@ -318,6 +319,16 @@
   z-index: 99992;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
+  transform: translate3d(0, 100%, 0); /* 初始在屏外（官方 .weui-picker transform） */
+  transition: transform 0.3s ease; /* 官方 0.3s ease */
+}
+/* ★弹出动画：上滑到屏幕内（官方 @keyframes a） */
+.proteus-web-picker-sheet.is-open {
+  transform: translateZ(0);
+}
+/* 遮罩渐隐：官方 weui-animate-fade-in（opacity 0→1 0.3s ease） */
+.proteus-web-picker-sheet + .proteus-web-ui-mask {
+  transition: opacity 0.3s ease;
 }
 /* 弹层头（官方 weui-half-screen-dialog__hd：左上关闭 + 居中标题 15px/500） */
 .pwp-hd {
