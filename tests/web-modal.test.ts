@@ -116,6 +116,9 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(okSvg).not.toBeNull()
     expect(okSvg?.getAttribute('stroke')).toBe('#ffffff')
     expect(okEl?.querySelector('.pwu-icon-success')).toBeNull()
+    // 图标态标记 + 无纯文字态
+    expect(okEl?.classList.contains('proteus-web-toast--icon')).toBe(true)
+    expect(okEl?.classList.contains('proteus-web-toast--text')).toBe(false)
     document.body.innerHTML = ''
     // error：SVG 白圆底（circle fill #ffffff）+ 黑叹号（rect fill #000000）
     wx.showToast({ title: '失败', icon: 'error' })
@@ -125,9 +128,12 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect(errSvg?.querySelector('circle')?.getAttribute('fill')).toBe('#ffffff')
     expect(errSvg?.querySelector('rect')?.getAttribute('fill')).toBe('#000000')
     document.body.innerHTML = ''
-    // icon:'none' → 无图标
+    // icon:'none' → 无图标 + 纯文字态标记（WeUI weui-toast_text：小 padding）
     wx.showToast({ title: 'none', icon: 'none' })
-    expect(document.querySelector('.proteus-web-toast .pwu-icon')).toBeNull()
+    const noneEl = document.querySelector('.proteus-web-toast')
+    expect(noneEl?.querySelector('.pwu-icon')).toBeNull()
+    expect(noneEl?.classList.contains('proteus-web-toast--text')).toBe(true)
+    expect(noneEl?.classList.contains('proteus-web-toast--icon')).toBe(false)
     document.body.innerHTML = ''
     // 显式 loading → spinner
     wx.showToast({ title: '加载', icon: 'loading' })

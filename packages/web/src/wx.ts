@@ -145,8 +145,9 @@ export const wx: WxApi = {
             ? '<div class="pwu-icon pwu-icon-loading"></div>'
             : ''
     const el = document.createElement('div')
-    // ★图标态方形标记（.proteus-web-toast--icon：宽=高正方形）
-    el.className = 'proteus-web-toast' + (icon ? ' proteus-web-toast--icon' : '')
+    // ★样式类：图标态 --icon（方形）/ 纯文字态 --text（WeUI weui-toast_text：小 padding）
+    const mod = icon ? ' proteus-web-toast--icon' : ' proteus-web-toast--text'
+    el.className = 'proteus-web-toast' + mod
     el.innerHTML = `${iconHtml}${title ? `<div class="pwu-toast-title">${escapeHtml(title)}</div>` : ''}`
     document.body.appendChild(el)
     if (icon === 'loading') {

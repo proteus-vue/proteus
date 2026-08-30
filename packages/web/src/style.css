@@ -68,39 +68,50 @@
 }
 
 /* ===== wx 交互 UI（showToast/showModal/showActionSheet 对齐微信表现）===== */
+/* ★对齐 WeUI 官方（weui.io/#toast）：背景 #4c4c4c、圆角 8px、padding 28px 20px、文字 rgba(255,255,255,0.9)、
+ *   位置 top 40%、行高 1.4；min-width 132 / max-width 320（图标态方形 132×132，纯文字态见 --text） */
 .proteus-web-toast {
   position: fixed;
   left: 50%;
-  top: 50%;
+  top: 40%; /* ★WeUI top:40%——微信 toast 在屏幕偏上位置 */
   transform: translate(-50%, -50%);
-  background: #4c4c4c; /* ★微信 toast 不透明深灰（非半透明 rgba） */
-  color: #fff;
+  background: #4c4c4c; /* var(--weui-BG-4) */
+  color: rgba(255, 255, 255, 0.9); /* ★WeUI 文字色（0.9 白，非纯白） */
   /* ★微信 toast 尺寸规则：最小宽度 132px；纯文字长文本最大宽度 320px（横向）
    * width: max-content 让文字优先单行撑开（图标态/短文字不换行），超 320 才换行 */
   width: max-content;
   min-width: 132px;
   max-width: 320px;
   box-sizing: border-box;
-  padding: 16px 24px;
-  border-radius: 10px;
+  padding: 28px 20px; /* ★WeUI padding */
+  border-radius: 8px; /* ★WeUI 圆角 */
+  line-height: 1.4; /* ★WeUI 行高 */
   z-index: 99999;
   font-size: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   text-align: center;
 }
-/* ★图标态：固定方形 132×132（微信 toast 图标态固定尺寸，文字在内部换行——不随文字撑大） */
+/* ★图标态：固定方形 132×132（WeUI 图标态 40 图标 + 16 间距 + 文字 + 28×2 padding = 132 自然方形） */
 .proteus-web-toast--icon {
   width: 132px;
   height: 132px;
+}
+/* ★纯文字态（weui-toast_text）：padding 12px 20px + 不设最小宽高（WeUI 官方） */
+.proteus-web-toast--text {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 20px;
 }
 .pwu-icon {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* ★WeUI 图标与文字间距 16px（.weui-icon_toast margin-bottom） */
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .pwu-icon svg {
   display: block;
