@@ -34,6 +34,17 @@
       <input class="msd-input" placeholder="wx input（@input 载荷 { value }）" @input="onInput" />
       <text class="msd-log">输入：{{ inputLog }}</text>
     </view>
+
+    <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
+    <view class="msd-box" v-for="(n, idx) in scrollBlocks" :key="idx">
+      <text class="msd-label">滚动区块 {{ n }} / 20</text>
+      <view class="msd-row">
+        <text class="msd-scroll-text">
+          内容 {{ n }}：这是一段较长的文本，用于验证页面在长内容场景下能否正常滚动。
+          小程序端为页面级滚动（Skyline / WebView），Web 端为浏览器滚动——双端行为应对齐。
+        </text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -41,6 +52,8 @@
 import { ref } from 'vue'
 
 const inputLog = ref('')
+// 滚动测试：长列表区块（小程序 wx:for 只接受数组，用字面量数组初始化）
+const scrollBlocks = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 // ★Vue 对 <input> 用原生 InputHTMLAttributes 类型（HTML 标签优先于 GlobalComponents）；运行时载荷对齐小程序 { detail: { value } }——any 兼容（透明）
 function onInput(e: any) {
   inputLog.value = e?.detail?.value ?? ''
@@ -129,5 +142,10 @@ function onSystemInfo() {
   color: #1a7af8;
   font-size: 13px;
   margin-top: 6px;
+}
+.msd-scroll-text {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.6;
 }
 </style>
