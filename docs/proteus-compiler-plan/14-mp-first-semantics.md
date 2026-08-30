@@ -1,6 +1,6 @@
 # 14 - MP 优先语义：小程序组件/API 为标准，Web 端反向对齐（uni-app 思路）
 
-> 状态：✅ 批次 1-3 完成，批次 4 收尾中（2026-08-30）
+> 状态：✅ 批次 1-3 完成，批次 4 收尾中（交互层视觉对齐已完成，2026-08-30）
 > 决策：以小程序内置组件 + API 为标准——开发者直接用小程序语义（`<view>`/`<button open-type>`/wx API），MP 端原生跑，**Web 端由框架自定义组件/API 模拟层完全对齐**——不再手动补小程序内置组件能力
 
 ## 一、动机（用户提出）
@@ -69,6 +69,8 @@
 - **批次 2** ✅：wx API 模拟层——路由（adapter 代理）/存储（localStorage）/系统信息 + 交互自定义 UI（toast/modal/actionSheet 对齐微信视觉 + 图标/spinner）/网络（fetch + 非 2xx fail）；wx.pageScrollTo（规划 15 批次 3 联动）
 - **批次 3** ✅：扩展组件——scroll-view（规划 15）/textarea/switch/slider/icon/progress/navigator + 微信默认样式对齐层（style.css）+ 能力矩阵文档
 - **批次 4**（收尾中）：examples 小程序语义示例页完善 + 双端实测 + 能力矩阵文档（picker/swiper 等复杂组件后续专项）
+  - ✅ 交互层视觉对齐（2026-08-30，用户逐组件验收）：modal（标题 17px/600 + 28px 顶距、内容 15px #888、按钮 ~49px、分割线 #e5e5e5、宽 300px）/ actionSheet（取消按钮黑字 #000 + 8px 间距、分割线 #e5e5e5）/ toast（icon 40px 圆 + 22px 符号）/ switch（iOS 过渡：wash 扩散方向区分）/ slider（2px 滑轨 + 28px 滑块）/ icon（毛笔勾 4 段 stroke 递变 + color 全覆盖）/ progress（Skyline 降级自定义 view 进度条，规划 16）/ button（微信默认样式 + ::after 细边框 + hover 按压缩放）
+  - 待办：picker/swiper 等复杂组件专项 + 能力矩阵文档补全
 
 ## 七、风险与权衡
 
