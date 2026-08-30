@@ -18,8 +18,8 @@ const IMPL_FILES = [
   'packages/compiler/src/overrides.ts',
 ]
 
-/** 规则 ID 字面量模式：phase/name（与 transforms/types.ts 的 id 规范一致；component/ 为 2026-08 组件 class 透传决策域，page/ 为页面滚动桥接） */
-const ID_RE = /'((?:tag|event|directive|nav|node|annotation|template|script|style|validate|slot|transition|component|page)\/[a-z0-9-]+)'/g
+/** 规则 ID 字面量模式：phase/name（component/ 为 2026-08 组件 class 透传决策域，page/ 为页面滚动桥接，layout/ 为行内 flex） */
+const ID_RE = /'((?:tag|event|directive|nav|node|annotation|template|script|style|validate|slot|transition|component|page|layout)\/[a-z0-9-]+)'/g
 
 describe('实现 ↔ 注册表反向漂移门禁', () => {
   it('实现文件引用的全部规则 ID 已登记（新增转换决策必须登记 AI 说明书）', () => {

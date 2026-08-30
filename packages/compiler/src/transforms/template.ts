@@ -529,6 +529,19 @@ export const TEMPLATE_RULES: TransformRule[] = [
     source: 'packages/compiler/src/template.ts → serializeElement（isComponentTag 分支）+ transformTemplateToWxml（isComponentRoot）；packages/compiler/src/script.ts → transformScriptToPage（properties.rootClass）',
     decision: '2026-08 真机实测（Skyline）',
   },
+  {
+    id: 'layout/auto-flex-row',
+    phase: 'template',
+    status: 'implemented',
+    title: '行内场景自动 flex row（Skyline 无 inline 布局）',
+    description: '容器直接子元素同时含 text 与行内控件（switch/slider/icon/image/button/input/textarea/checkbox/radio/label/navigator/progress）→ 自动附加 proteus-flex-row 类（display:flex;row;align-items:center）；BASE 注入对应规则',
+    why: 'Skyline 引擎不支持 inline 布局（官方 Inline × 开发中）——text 天生 block 占满一行，行内排布（text + switch 同行）唯一路径是 flex row（用户实测）；自动检测免开发者手动包 flex（双端一致）',
+    when: '容器子元素含 text 且含行内控件（rules.disabled 可关）',
+    example: { before: '<view><switch/><text>开关</text></view>', after: '<view class="proteus-flex-row"><switch/><text>开关</text></view>' },
+    verify: 'tests/mp-transform.test.ts 行内 flex 用例',
+    source: 'packages/compiler/src/template.ts → serializeElement（autoFlexRow 判定）+ style.ts → BASE_SEMANTIC_WXSS',
+    decision: '2026-08 用户决策（Skyline inline 限制）',
+  },
 ]
 
 // 追踪键（防漂移）：标签 → 规则 ID，由 tag/* 规则的 mapping 反推——实现侧 trace 引用同一份数据

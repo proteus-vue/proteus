@@ -520,6 +520,7 @@ describe('虚拟列表（v0.4）', () => {
 describe('transformTemplateToWxml（template → wxml）', () => {
   it('标准标签映射：div→view / span,p,h1→text / img→image', () => {
     const { wxml } = transformTemplateToWxml('<div><span>hi</span><p>p</p><h1>t</h1><img :src="url" /></div>', opts)
+    // 多 text + image（纵向容器）→ 不触发 auto-flex-row（保守规则）
     expect(wxml).toContain('<view>')
     expect(wxml).toContain('<text>hi</text>')
     expect(wxml).toContain('<text class="proteus-p">p</text>')
@@ -825,7 +826,7 @@ describe('compileVueSfc（整包编译入口）', () => {
       '<style>.a { padding: 16px; }</style>',
     ].join('\n')
     const { wxml, js, wxss, warnings } = compileVueSfc(sfc, { filename: 'pages/test/index' })
-    expect(wxml).toContain('class="a-data-v-') // 默认 scoped（2026-08）
+    expect(wxml).toContain('a-data-v-') // 默认 scoped（2026-08）——auto-flex-row 前缀共存
     expect(wxml).toContain('<image src="{{url}}" />')
     expect(js).toContain('Page({')
     expect(js).toContain('title: "hi"')
@@ -1090,5 +1091,33 @@ describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-containe
     expect(wxml).toContain('refresher-triggered="{{__proteusRefreshing}}"')
     expect(js).toContain('this.setData({ __proteusRefreshing: false })')
     expect(js).toContain('__proteusRefreshing: false')
+  })
+
+  it('行内场景自动 flex row（layout/auto-flex-row）：text + switch 同容器 → proteus-flex-row 类 + BASE 规则', () => {
+    const { wxml, wxss } = compileVueSfc('<template><view class="row"><switch /><text>开关</text></view></template>', {
+      filename: 'pages/flexrow.vue',
+    })
+    // 无 scoped：类无后缀（BASE .proteus-flex-row 规则匹配）
+    expect(wxml).toContain('class="proteus-flex-row row"')
+    expect(wxss).toContain('.proteus-flex-row { display: flex; flex-direction: row; align-items: center; }')
+    // scoped 场景：类 + 规则同步后缀
+    const scoped = compileVueSfc('<template><view class="row"><switch /><text>开关</text></view></template>\n<style scoped>.row { margin: 4px 0; }</style>', {
+      filename: 'pages/flexrow2.vue',
+    })
+    expect(scoped.wxml).toContain('class="proteus-flex-row-data-v-')
+    expect(scoped.wxss).toMatch(/\.proteus-flex-row-data-v-[a-f0-9]+ \{ display: flex; flex-direction: row; align-items: center; \}/)
+  })
+
+  it('纯文本容器（无行内控件）不自动 flex row', () => {
+    const { wxml } = compileVueSfc('<template><view class="p"><text>一段文字</text></view></template>', { filename: 'pages/noflex.vue' })
+    expect(wxml).not.toContain('proteus-flex-row')
+  })
+
+  it('rules.disabled 关闭 layout/auto-flex-row', () => {
+    const { wxml } = compileVueSfc('<template><view><switch /><text>开关</text></view></template>', {
+      filename: 'pages/flexoff.vue',
+      rules: { disabled: ['layout/auto-flex-row'] },
+    })
+    expect(wxml).not.toContain('proteus-flex-row')
   })
 })

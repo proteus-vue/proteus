@@ -52,6 +52,11 @@ const NATIVE_TAGS = new Set([
   'sticky-section', 'root-portal', 'channel-live', 'channel-video', 'list', 'grid', 'cell', 'cell-group', 'waterflow',
 ])
 
+/** ★layout/auto-flex-row：行内控件标签（与 text 同容器 → 自动 flex row；Skyline 无 inline，行内排布唯一路径） */
+const INLINE_CONTROL_TAGS = new Set([
+  'switch', 'slider', 'icon', 'image', 'button', 'input', 'textarea', 'checkbox', 'radio', 'label', 'navigator', 'progress',
+])
+
 /** 提取表达式节点的文本（兼容 Simple/Compound/Interpolation/Text/字符串） */
 function exprContent(exp: unknown): string {
   if (exp == null) return ''
@@ -597,7 +602,26 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★统一 class 发射（★2026-08 真机重构）：scope 后缀化各类名（.box → .box-data-v-x 单一类，Skyline ✓）——
   //   不再附加独立 scope class（复合选择器 .a.data-v-x 在 Skyline 不匹配，真机实测 p-button 自身样式失效）
   const suffix = (v: string): string => (scopeSuffix ? suffixClassValue(v, scopeSuffix) : v)
-  const classStatic = [transitionAnimCls, effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c)).map(suffix)
+  // ★layout/auto-flex-row（2026-08 用户决策）：Skyline 引擎不支持 inline 布局（text 天生 block 占满一行）——
+  //   容器**恰好** 1 个 text + **恰好** 1 个行内控件（switch/slider/icon/image/button 等）→ 自动 flex row（双端一致：行内排布唯一路径）
+  //   ★保守规则：多 text（label+描述+按钮）或多控件（纵向列表容器）不触发——避免误伤
+  let autoFlexRow = false
+  if (!ctx.disabled.has('layout/auto-flex-row')) {
+    const childTags = node.children
+      .filter((c) => c.type === NodeTypes.ELEMENT)
+      .map((c) => (ctx.tagMap[(c as ElementNode).tag] ?? kebabCase((c as ElementNode).tag)))
+    const controls = childTags.filter((t) => INLINE_CONTROL_TAGS.has(t))
+    const textCount = childTags.filter((t) => t === 'text').length
+    autoFlexRow = controls.length === 1 && textCount === 1
+    if (autoFlexRow) {
+      ctx.trace?.add('layout/auto-flex-row', {
+        line: node.loc.start.line,
+        before: `<${node.tag}>（1 text + 1 行内控件）`,
+        after: `自动附加 proteus-flex-row（display:flex;row;align-items:center——Skyline 无 inline，行内排布必须 flex row）`,
+      })
+    }
+  }
+  const classStatic = [transitionAnimCls, autoFlexRow ? 'proteus-flex-row' : '', effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c)).map(suffix)
   const classInterp = [bindingClass, transitionLeaveExpr].filter((c): c is string => Boolean(c))
   // ★组件根节点（组件模式首元素）：接收外部 class 透传（root-class 属性 → rootClass property → 根节点 {{rootClass}}）
   if (ctx.isComponentRoot) classInterp.push('{{rootClass}}')
