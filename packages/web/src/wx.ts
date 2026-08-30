@@ -186,8 +186,8 @@ export const wx: WxApi = {
           ? `<input class="pwu-modal-input" placeholder="${escapeHtml(opts?.placeholderText ?? '')}" />`
           : '') +
         `<div class="pwu-modal-btns">` +
-        `${opts?.showCancel !== false ? `<button class="pwu-modal-btn pwu-modal-btn--cancel" style="color:${opts?.cancelColor ?? 'rgba(0,0,0,0.9)'}">${escapeHtml(opts?.cancelText ?? '取消')}</button>` : ''}` +
-        `<button class="pwu-modal-btn pwu-modal-btn--confirm" style="color:${opts?.confirmColor ?? '#576b95'}">${escapeHtml(opts?.confirmText ?? '确定')}</button>` +
+        `${opts?.showCancel !== false ? `<button class="pwu-modal-btn pwu-modal-btn--cancel"${opts?.cancelColor ? ` style="color:${opts.cancelColor}"` : ''}>${escapeHtml(opts?.cancelText ?? '取消')}</button>` : ''}` +
+        `<button class="pwu-modal-btn pwu-modal-btn--confirm"${opts?.confirmColor ? ` style="color:${opts.confirmColor}"` : ''}>${escapeHtml(opts?.confirmText ?? '确定')}</button>` +
         '</div>'
       document.body.appendChild(mask)
       document.body.appendChild(box)

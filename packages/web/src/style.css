@@ -68,6 +68,41 @@
 }
 
 /* ===== wx 交互 UI（showToast/showModal/showActionSheet 对齐微信表现）===== */
+/* ★暗黑模式（2026-08-30，weui.io emulateMedia dark 实测）：
+ *   全局变量组（weui 语义）+ prefers-color-scheme 覆盖——与官方 wx-root 变量同构
+ *   实测暗黑：弹层 bg #191919 / toast bg #404040 / 文字 rgba(255,255,255,0.8~0.5) /
+ *   分割线 rgba(255,255,255,0.1) / 确定按钮 LINK #7d90a9 */
+:root {
+  /* 弹层背景（modal/actionsheet menu/取消） */
+  --pwu-bg-2: #ffffff;
+  --pwu-bg-1: #f7f7f7; /* actionsheet 弹层露出的间距色 */
+  --pwu-bg-3: #f7f7f7; /* actionsheet cell 内部分隔背景（暂同 bg-1） */
+  --pwu-fg-0: rgba(0, 0, 0, 0.9); /* 主文字 */
+  --pwu-fg-1: rgba(0, 0, 0, 0.55); /* 次级文字 */
+  --pwu-fg-3: rgba(0, 0, 0, 0.1); /* 分割线 */
+  --pwu-fg-half: rgba(0, 0, 0, 0.9); /* 取消按钮文字 */
+  --pwu-link: #576b95; /* 确定按钮 WeUI 蓝 */
+  --pwu-active: #ececec; /* 按压反馈 */
+  --pwu-toast-bg: #4c4c4c; /* toast 背景 */
+  --pwu-input-border: #d9d9d9; /* modal 输入框边框 */
+  --pwu-wash-bg: #ffffff; /* toast 图标（success 白勾） */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pwu-bg-2: #191919;
+    --pwu-bg-1: #1e1e1e;
+    --pwu-bg-3: #202020;
+    --pwu-fg-0: rgba(255, 255, 255, 0.8);
+    --pwu-fg-1: rgba(255, 255, 255, 0.5);
+    --pwu-fg-3: rgba(255, 255, 255, 0.1);
+    --pwu-fg-half: rgba(255, 255, 255, 0.6);
+    --pwu-link: #7d90a9; /* 暗化 WeUI 蓝（官方实测） */
+    --pwu-active: rgba(255, 255, 255, 0.1);
+    --pwu-toast-bg: #404040; /* 暗黑 toast（官方实测 #404040） */
+    --pwu-input-border: rgba(255, 255, 255, 0.2);
+    --pwu-wash-bg: rgba(255, 255, 255, 0.9);
+  }
+}
 /* ★对齐 WeUI 官方（weui.io/#toast）：背景 #4c4c4c、圆角 8px、padding 28px 20px、文字 rgba(255,255,255,0.9)、
  *   位置 top 40%、行高 1.4；min-width 132 / max-width 320（图标态方形 132×132，纯文字态见 --text） */
 .proteus-web-toast {
@@ -75,8 +110,8 @@
   left: 50%;
   top: 50%; /* ★用户实测微信 showToast 居中显示（WeUI 官网 top:40% 仅网页演示，实际居中） */
   transform: translate(-50%, -50%);
-  background: #4c4c4c; /* var(--weui-BG-4) */
-  color: rgba(255, 255, 255, 0.9); /* ★WeUI 文字色（0.9 白，非纯白） */
+  background: var(--pwu-toast-bg); /* var(--weui-BG-4) */
+  color: rgba(255, 255, 255, 0.9); /* ★WeUI 文字色（0.9 白，非纯白——toast 深底浅暗黑不变） */
   /* ★微信 toast 尺寸规则：最小宽度 132px；纯文字长文本最大宽度 320px（横向）
    * width: max-content 让文字优先单行撑开（图标态/短文字不换行），超 320 才换行 */
   width: max-content;
@@ -148,7 +183,7 @@
   transform: translate(-50%, -50%);
   width: 320px; /* ★微信 showModal 宽度固定 320px（iOS UIAlertController 风格，不随大屏等比放大） */
   max-width: 90vw; /* 小屏兜底：320 视口下 288px 防溢出（微信 rpx 在小屏等比缩小） */
-  background: #fff;
+  background: var(--pwu-bg-2);
   border-radius: 12px;
   z-index: 99991;
   overflow: hidden;
@@ -161,12 +196,12 @@
   font-weight: 500;
   text-align: center;
   line-height: 1.4;
-  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
+  color: var(--pwu-fg-0); /* --weui-FG-0 */
   padding: 32px 24px 16px; /* WeUI hd */
 }
 .pwu-modal-content {
   font-size: 17px;
-  color: rgba(0, 0, 0, 0.55); /* --weui-FG-1（次级文字） */
+  color: var(--pwu-fg-1); /* --weui-FG-1（次级文字） */
   text-align: center;
   line-height: 1.4;
   padding: 0 24px; /* WeUI bd */
@@ -175,7 +210,7 @@
 /* ★WeUI 无标题对话框：内容顶替标题位置（padding 32px 24px 0）+ FG-0 色（0.9 黑，非灰色） */
 .pwu-modal--no-title .pwu-modal-content {
   padding: 32px 24px 0;
-  color: rgba(0, 0, 0, 0.9);
+  color: var(--pwu-fg-0);
 }
 /* ★WeUI 可输入对话框（showModal editable）：输入框白底灰边框圆角（微信输入框） */
 .pwu-modal-input {
@@ -184,9 +219,10 @@
   width: calc(100% - 48px); /* 24px 左右边距与内容对齐 */
   margin: 0 auto 32px;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9; /* 微信输入框浅灰边框 */
+  border: 1px solid var(--pwu-input-border); /* 微信输入框浅灰边框 */
   border-radius: 6px;
-  background: #fff;
+  background: var(--pwu-bg-2);
+  color: var(--pwu-fg-0);
   font-size: 17px;
   outline: none;
 }
@@ -205,7 +241,7 @@
   right: 0;
   top: 0;
   height: 1px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1); /* --weui-DIALOG-LINE-COLOR */
+  border-top: 1px solid var(--pwu-fg-3); /* --weui-DIALOG-LINE-COLOR */
   transform: scaleY(0.5);
   transform-origin: 0 0;
   box-sizing: border-box;
@@ -215,11 +251,11 @@
   position: relative;
   padding: 20px 8px; /* ★微信底部按钮 padding（用户实测：上下 20px 左右 8px） */
   border: none;
-  background: #fff;
+  background: var(--pwu-bg-2);
   font-size: 17px;
   font-weight: 500; /* WeUI 按钮 500（非 600） */
   line-height: 1.41176; /* WeUI btn 行高 */
-  color: #576b95; /* --weui-LINK 默认（主操作） */
+  color: var(--pwu-link); /* --weui-LINK 默认（主操作） */
   cursor: pointer;
 }
 /* ★按钮间 hairline 竖线（WeUI btn::after：scaleX(0.5)），首个按钮无线 */
@@ -230,7 +266,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  border-left: 1px solid rgba(0, 0, 0, 0.1);
+  border-left: 1px solid var(--pwu-fg-3);
   transform: scaleX(0.5);
   transform-origin: 0 0;
   box-sizing: border-box;
@@ -239,17 +275,17 @@
   display: none;
 }
 .pwu-modal-btn--cancel {
-  color: rgba(0, 0, 0, 0.9); /* --weui-FG-HALF（取消/辅助操作） */
+  color: var(--pwu-fg-half); /* --weui-FG-HALF（取消/辅助操作） */
 }
 .pwu-modal-btn--confirm {
-  color: #576b95; /* --weui-LINK（主操作/确定） */
+  color: var(--pwu-link); /* --weui-LINK（主操作/确定） */
 }
 .proteus-web-actionsheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #f7f7f7; /* --weui-BG-1 弹层背景 */
+  background: var(--pwu-bg-1); /* --weui-BG-1 弹层背景 */
   z-index: 99991;
   border-radius: 12px 12px 0 0;
   overflow: hidden;
@@ -264,10 +300,10 @@
   width: 100%;
   padding: 16px 16px; /* WeUI cell padding */
   border: none;
-  background: #fff;
+  background: var(--pwu-bg-2);
   font-size: 17px;
   line-height: 1.41176;
-  color: rgba(0, 0, 0, 0.9); /* --weui-FG-0 */
+  color: var(--pwu-fg-0); /* --weui-FG-0 */
   cursor: pointer;
 }
 /* ★顶部 hairline 分割线（WeUI cell::before scaleY(0.5)），首项无线 */
@@ -278,7 +314,7 @@
   right: 0;
   top: 0;
   height: 1px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1); /* --weui-FG-3 */
+  border-top: 1px solid var(--pwu-fg-3); /* --weui-FG-3 */
   transform: scaleY(0.5);
   transform-origin: 0 0;
   box-sizing: border-box;
@@ -289,17 +325,17 @@
 /* ★按压反馈（WeUI cell:active --weui-BG-COLOR-ACTIVE） */
 .pwu-sheet-item:active,
 .pwu-sheet-cancel:active {
-  background-color: #ececec;
+  background-color: var(--pwu-active);
 }
 .pwu-sheet-cancel {
   display: block;
   width: 100%;
   padding: 16px 16px;
   border: none;
-  background: #fff;
+  background: var(--pwu-bg-2);
   font-size: 17px;
   line-height: 1.41176;
-  color: rgba(0, 0, 0, 0.9); /* ★微信取消按钮黑色（--weui-FG-0，非灰色） */
+  color: var(--pwu-fg-0); /* ★微信取消按钮黑色（--weui-FG-0，非灰色） */
   cursor: pointer;
   margin-top: 8px; /* ★WeUI action margin-top 8px（--weui-BG-1 间距） */
 }
