@@ -129,8 +129,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 320px; /* ★微信 showModal 对话框宽度 320px（iOS 风格，用户实测） */
-  max-width: 90vw; /* 小屏兜底（375 视口 90vw=337px > 320 不截断） */
+  width: 85.33vw; /* ★微信 showModal 宽度按 rpx 等比屏宽缩放（640rpx/750：375 视口=320px，320 视口≈273px） */
   background: #fff;
   border-radius: 12px;
   z-index: 99991;
