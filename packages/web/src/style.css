@@ -243,8 +243,23 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  /* ★过渡对齐微信（iOS UISwitch）：放大（白色扩散）→ 滑动 + 底色过渡 → 缩回 */
+  /* 纯滑动（不放大——扩散动画在 .pws-wash 遮罩上） */
   transition: transform 0.28s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+/* ★track 上的白色扩散遮罩（对齐微信 iOS 过渡）：白色圆从中间 scale 扩散（开→关填满）/ 收缩（关→开消失） */
+.pws-wash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  transition: transform 0.34s ease, opacity 0.2s ease;
   z-index: 1;
   pointer-events: none;
 }

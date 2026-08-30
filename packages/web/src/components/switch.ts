@@ -1,6 +1,8 @@
 // packages/web/src/components/switch.ts
 // 小程序 <switch>：Web 模拟——对齐微信 iOS 风格过渡（载荷 { detail: { value } }）
-// 静止态：关闭=白底灰边 / 打开=绿底绿边；过渡：白色 thumb 放大（扩散）→ 滑动 + 底色过渡 → 缩回
+// 静止态：关闭=白底灰边 / 打开=绿底绿边
+// ★过渡（track 上的白色扩散/收缩，非 thumb 放大）：白色 wash 遮罩从中间 scale 扩散（开→关：白色从中间向四周填满）
+//   → 底色切换 → wash 收缩（关→开：白色从四周向中间缩小消失）
 import { defineComponent, h, ref } from 'vue'
 
 export const WebSwitch = defineComponent({
@@ -9,21 +11,18 @@ export const WebSwitch = defineComponent({
   emits: ['change', 'update:modelValue'],
   setup(_props, { attrs, emit }) {
     const checked = ref(Boolean((attrs as Record<string, unknown>).checked))
-    const expanding = ref(false) // 白色 thumb 放大（扩散阶段）
-    const sliding = ref(false) // 滑动 + 底色过渡阶段
+    const wash = ref(false) // 白色扩散遮罩（track 上的白色扩散/收缩动画）
 
     const onChange = (e: Event) => {
       const next = (e.target as HTMLInputElement).checked
-      // ★iOS 风格过渡（对齐微信）：白色从 thumb 位置扩散 → 滑动 + 底色过渡 → 缩回
-      expanding.value = true // 放大（白色扩散起点）
+      // ★iOS 风格（对齐微信）：wash 白色遮罩放大（白色从中间扩散）→ 底色切换（transition 过渡）→ wash 缩小（白色收缩/填满后无感）
+      wash.value = true
       window.setTimeout(() => {
-        checked.value = next // 底色切换（transition 过渡）+ 滑动
-        sliding.value = true
+        checked.value = next
         window.setTimeout(() => {
-          expanding.value = false // 缩回
-          sliding.value = false
-        }, 280)
-      }, 150)
+          wash.value = false
+        }, 140)
+      }, 200)
       emit('change', { detail: { value: next } })
       emit('update:modelValue', next)
     }
@@ -31,7 +30,6 @@ export const WebSwitch = defineComponent({
     return () => {
       const { class: cls, checked: _c, disabled, color, ...rest } = attrs as Record<string, unknown>
       const on = checked.value
-      const scale = expanding.value || sliding.value ? 1.5 : 1
       const tx = on ? 20 : 0
       return h(
         'div',
@@ -44,8 +42,17 @@ export const WebSwitch = defineComponent({
           },
         },
         [
+          // 白色扩散遮罩：track 上的白色圆（scale 扩散/收缩——对齐微信 iOS 过渡）
+          h('span', {
+            class: 'pws-wash',
+            style: {
+              transform: `translate(-50%, -50%) scale(${wash.value ? 2.4 : 0})`,
+              opacity: wash.value ? 1 : 0,
+            },
+          }),
           h('input', { ...rest, type: 'checkbox', checked: on, disabled: !!disabled, onChange }),
-          h('span', { class: 'pws-thumb', style: { transform: `translateX(${tx}px) scale(${scale})` } }),
+          // thumb 纯滑动（不放大——扩散动画在 track 遮罩上）
+          h('span', { class: 'pws-thumb', style: { transform: `translateX(${tx}px)` } }),
         ],
       )
     }
