@@ -302,7 +302,8 @@
   height: 28px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  /* 阴影稍大（用户反馈 0 1px 2px 太小——滑块立体感不足） */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transform: translateX(-50%);
   pointer-events: none;
   z-index: 1;
