@@ -10,6 +10,8 @@ export const WebProgress = defineComponent({
       const { class: cls, percent, color, showInfo, activeColor, strokeWidth, ...rest } = attrs as Record<string, unknown>
       const p = Math.max(0, Math.min(100, Number(percent ?? 0)))
       const barColor = String(activeColor ?? color ?? '#07c160')
+      // ★微信布尔属性语义：show-info（无值）→ attrs 空字符串（falsy）——存在即 true（显式 false 才关闭）
+      const showInfoOn = showInfo !== undefined && showInfo !== false
       return h(
         'div',
         {
@@ -20,7 +22,7 @@ export const WebProgress = defineComponent({
           h('div', { class: 'pwp-track', style: { height: `${Number(strokeWidth ?? 6)}px` } }, [
             h('div', { class: 'pwp-inner', style: { width: `${p}%`, backgroundColor: barColor } }),
           ]),
-          showInfo ? h('span', { class: 'pwp-info' }, `${p}%`) : null,
+          showInfoOn ? h('span', { class: 'pwp-info' }, `${p}%`) : null,
         ],
       )
     }
