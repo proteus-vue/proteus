@@ -26,8 +26,8 @@ describe('defineCapability / validateCapabilityDefinition', () => {
     const def = defineCapability({
       meta: { id: 'clipboard', tier: 2, name: '剪贴板' },
       adapters: {
-        web: () => ({ platform: 'web' as const, create: () => ({ isSupported: () => true, write: () => 'ok' }) }),
-        skyline: () => ({ platform: 'skyline' as const, create: () => ({ isSupported: () => false }) }),
+        web: () => ({ platform: 'web' as const, create: () => ({ isSupported: () => (true as boolean), write: () => 'ok' }) }),
+        skyline: () => ({ platform: 'skyline' as const, create: () => ({ isSupported: () => false, write: () => 'ok' }) }),
       },
       fallback: 'share',
     })

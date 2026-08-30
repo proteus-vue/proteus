@@ -9,7 +9,7 @@ import { formatAuditReport, runAuditModule } from '../packages/cli/src/module-au
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-'))
 
-function write(rel: string, content: string): void {
+function write(rel: string, content: string | Buffer): void {
   const full = path.join(TMP, rel)
   fs.mkdirSync(path.dirname(full), { recursive: true })
   fs.writeFileSync(full, content)

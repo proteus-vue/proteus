@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe('web fetch adapter', () => {
   it('GET 请求 → 统一响应（data/status/headers）', async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => ({
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
       json: async () => ({ id: 1 }),
@@ -24,7 +24,7 @@ describe('web fetch adapter', () => {
   })
 
   it('post 带 body（JSON 序列化）+ 快捷方法', async () => {
-    const fetchMock = vi.fn(async () => ({ status: 201, headers: new Headers(), json: async () => ({ ok: true }) }))
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => ({ status: 201, headers: new Headers(), json: async () => ({ ok: true }) }))
     vi.stubGlobal('fetch', fetchMock)
     const api = createApi()
     await api.post('/login', { name: 'a' })
@@ -34,7 +34,7 @@ describe('web fetch adapter', () => {
   })
 
   it('网络错误 / 超时 → ApiError（code + config 可定位）', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('boom') }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => { throw new Error('boom') }))
     const api = createApi()
     await expect(api.get('/x')).rejects.toThrow(ApiError)
     await expect(api.get('/x')).rejects.toThrow(/NETWORK_ERROR/)
@@ -53,7 +53,7 @@ describe('web fetch adapter', () => {
 
   it('重试：失败后自动重试（成功在第 2 次）', async () => {
     let n = 0
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => {
       n++
       if (n < 2) throw new Error('flaky')
       return { status: 200, headers: new Headers(), json: async () => ({ ok: true }) }
@@ -66,13 +66,13 @@ describe('web fetch adapter', () => {
   })
 
   it('重试耗尽 → ApiError RETRY_FAILED', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('always') }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => { throw new Error('always') }))
     const api = createApi()
     await expect(api.get('/x', { retry: 1, retryDelay: 1 })).rejects.toThrow(/RETRY_FAILED/)
   })
 
   it('beforeRequest 拦截器（改 config）+ skipAuth 跳过', async () => {
-    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const seen: string[] = []
     const api = createApi({
@@ -88,7 +88,7 @@ describe('web fetch adapter', () => {
 describe('wx adapter', () => {
   it('wx.request 包装 → 统一响应', async () => {
     const wxMock = {
-      request: vi.fn((opts: Record<string, unknown>) => {
+      request: vi.fn((opts: { success?: (r: Record<string, unknown>) => void; fail?: (e: unknown) => void }) => {
         opts.success?.({ statusCode: 200, data: { wx: 1 }, header: { 'x-a': '1' } })
       }),
     }
@@ -102,7 +102,7 @@ describe('wx adapter', () => {
 
   it('wx.request fail → ApiError NETWORK_ERROR', async () => {
     vi.stubGlobal('wx', {
-      request: vi.fn((opts: Record<string, unknown>) => opts.fail?.({ errMsg: 'request:fail' })),
+      request: vi.fn((opts: { success?: (r: Record<string, unknown>) => void; fail?: (e: unknown) => void }) => opts.fail?.({ errMsg: 'request:fail' })),
     })
     await expect(createApi().get('/u')).rejects.toThrow(/NETWORK_ERROR/)
   })
@@ -136,7 +136,7 @@ describe('★api-plan B3：凭证托管（createAuth + createApi 自动 Authoriz
   })
 
   it('createApi({ auth })：beforeRequest 后自动加 Authorization；skipAuth 跳过；无 token 不加', async () => {
-    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const auth = createAuth()
     const api = createApi({ auth })
@@ -150,7 +150,7 @@ describe('★api-plan B3：凭证托管（createAuth + createApi 自动 Authoriz
   })
 
   it('auth 与 beforeRequest 集成：拦截器可先 refresh token 再自动加头', async () => {
-    const fetchMock = vi.fn(async () => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
+    const fetchMock = vi.fn(async (url: string, opts?: { signal?: AbortSignal }) => ({ status: 200, headers: new Headers(), json: async () => ({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const auth = createAuth()
     auth.setToken('old')
@@ -158,7 +158,7 @@ describe('★api-plan B3：凭证托管（createAuth + createApi 自动 Authoriz
       auth,
       beforeRequest: async () => {
         auth.setToken('refreshed')
-        return {}
+        return { url: '' }
       },
     })
     await api.get('/x')

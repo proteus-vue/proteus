@@ -27,10 +27,18 @@ import type { RouteRecord } from '../packages/router/src/types'
 const TRADE = permissionFor('trade', 'create')
 
 const routes: RouteRecord[] = [
-  { name: 'index', path: 'pages/index', file: 'index.vue' },
-  { name: 'trade-create', path: 'pages/trade/create', file: 'trade/create.vue', meta: { title: '下单', permissions: [TRADE] } },
-  { name: 'admin', path: 'pages/admin', file: 'admin.vue', meta: { permissions: [permissionFor('admin', 'view'), 'user:read'] } },
+  { name: 'index', path: 'pages/index', component: 'index.vue' },
+  { name: 'trade-create', path: 'pages/trade/create', component: 'trade/create.vue', meta: { title: '下单', permissions: [TRADE] } },
+  { name: 'admin', path: 'pages/admin', component: 'admin.vue', meta: { permissions: [permissionFor('admin', 'view'), 'user:read'] } },
 ]
+
+// 测试用路由参数扩充（仅声明本文件路由；index 由 examples auto-routes 扩充提供）
+declare module '@proteus-vue/router/types' {
+  interface RouteParamsByName {
+    'trade-create': undefined
+    'admin': undefined
+  }
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

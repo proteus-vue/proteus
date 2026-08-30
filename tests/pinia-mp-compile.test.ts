@@ -5,9 +5,9 @@ import path from 'node:path'
 import { compileVueSfc } from '../packages/compiler/src'
 import { resolveSharedModule } from '../packages/plugin-vite/src/plugin'
 
-const compile = (src: string, name = 'pinia.vue'): { wxml: string; js: string } => {
+const compile = (src: string, name = 'pinia.vue'): { wxml: string; js: string; warnings: string[] } => {
   const r = compileVueSfc(src, { filename: name })
-  return { wxml: r.wxml, js: r.js }
+  return { wxml: r.wxml, js: r.js, warnings: r.warnings }
 }
 
 describe('P1：模板 store 绑定（script/store-binding）', () => {

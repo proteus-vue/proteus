@@ -58,7 +58,7 @@ describe('redactValue 脱敏（递归 + 大小写不敏感）', () => {
       {
         user: { token: 'abc', name: 'P' },
         list: [{ password: 'x' }, { phone: '138' }],
-        map: new Map([['authorization', 'Bearer x'], ['ok', 1]]),
+        map: new Map<string, string | number>([['authorization', 'Bearer x'], ['ok', 1]]),
         set: new Set(['token-in-set', 'plain']),
         when: new Date('2024-01-01T00:00:00Z'),
         Token: 'upper',

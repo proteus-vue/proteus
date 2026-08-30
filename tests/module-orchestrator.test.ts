@@ -5,7 +5,7 @@ import { createModuleSystem, createModuleEventBus, satisfies, VersionMismatchErr
 import type { ModuleDefinition } from '../packages/module/src'
 
 /** 记录钩子调用的 mock 模块 */
-function mockModule(name: string, deps: Record<string, string> = {}, log: string[], hooks?: Partial<ModuleDefinition['lifecycle']>): ModuleDefinition {
+function mockModule(name: string, deps: Record<string, string> = {}, log: string[] = [], hooks?: Partial<ModuleDefinition['lifecycle']>): ModuleDefinition {
   return {
     name,
     version: '1.0.0',

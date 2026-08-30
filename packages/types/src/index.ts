@@ -45,7 +45,7 @@ export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from
 export type { ProteusConfig } from './config'
 
 // ============ 品牌 / 迁移 / Schema（B6/B3 既有） ============
-export { Brand } from './brand'
+export type { Brand } from './brand'
 export type { StoreId, ModuleDomain, RouteName, CapabilityId } from './brand'
 export { asStoreId, asModuleDomain, asRouteName, asCapabilityId } from './brand'
 export { CONFIG_VERSION, configMigrations, migrateConfig, configNeedsMigration } from './migration'

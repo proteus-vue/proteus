@@ -96,7 +96,6 @@ describe('类型安全（免 codegen，tsc 断言）', () => {
     expect(ok).toBe('你好，x')
     // @ts-expect-error —— key 类型约束：typo 编译报错
     const _typo = i18n.t('user.greetin')
-    // @ts-expect-error —— params 缺 name 不影响类型（运行时渲染空串，审计可见）
-    const _noParam = i18n.t('user.greeting')
+    expect(_typo).toBe('user.greetin') // 缺失消息回退 key 本身（类型层：合法 key 通过）
   })
 })
