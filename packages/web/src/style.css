@@ -148,9 +148,10 @@
   text-align: center;
   padding: 14px 20px 28px;
 }
-/* ★WeUI 无标题对话框：内容上下对称居中（微信无标题时内容区垂直居中） */
+/* ★WeUI 无标题对话框：内容上下对称居中 + 黑色文字（微信 iOS 风格：无标题时 content 以标题样式显示，非灰色） */
 .pwu-modal--no-title .pwu-modal-content {
   padding: 28px 20px;
+  color: #000000;
 }
 /* ★WeUI 可输入对话框（showModal editable）：输入框白底灰边框圆角（微信输入框） */
 .pwu-modal-input {

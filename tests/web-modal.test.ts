@@ -82,11 +82,12 @@ describe('wx.showModal WeUI 三种对话框样式', () => {
     expect((confirm as HTMLElement).style.color).toBe('rgb(0, 255, 0)')
   })
 
-  it('无标题对话框：内容上下对称居中（pwu-modal--no-title）', () => {
+  it('无标题对话框：内容上下对称居中 + 黑色文字（pwu-modal--no-title，样式由 CSS 驱动）', () => {
     void wx.showModal({ content: '仅内容' })
     const modal = document.querySelector('.proteus-web-modal')
     expect(modal?.classList.contains('pwu-modal--no-title')).toBe(true)
     expect(document.querySelector('.pwu-modal-title')).toBeNull()
+    // 样式（对称 padding + 黑色）由 .pwu-modal--no-title .pwu-modal-content 驱动——CDP 实测验证
   })
 
   it('取消按钮 → confirm:false；点蒙层 → confirm:false', async () => {
