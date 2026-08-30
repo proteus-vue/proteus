@@ -6,8 +6,12 @@ import { defineComponent, h } from 'vue'
 /** 微信 icon type → SVG path 内容（viewBox 22；符号相对小 + 细描边，对齐微信——非均匀粗细近似用圆头） */
 const ICON_SVG: Record<string, string> = {
   success:
-    // ★毛笔对勾（对齐微信：起笔左下轻细 → 中间运笔粗 → 右上提笔变尖）——fill 闭合路径模拟两头细中间粗
-    '<circle cx="11" cy="11" r="10" fill="#09BB07"/><path d="M7.4 11.2 L9.6 13.6 L14.4 9.2 L14.9 9.7 L10.4 14.2 L7.8 12 Z" fill="#fff"/>',
+    // ★毛笔对勾（对齐微信：起笔左下轻细 → 中间运笔粗 → 右上提笔变尖）——多段 stroke 递变（无 fill 自交问题）
+    '<circle cx="11" cy="11" r="10" fill="#09BB07"/>' +
+    '<path d="M6.5 10.8 L8.2 12.4" stroke="#fff" stroke-width="1.1" stroke-linecap="round" fill="none"/>' +
+    '<path d="M8.2 12.4 L9.9 14.0" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>' +
+    '<path d="M9.9 14.0 L12.4 11.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>' +
+    '<path d="M12.4 11.5 L14.9 9.0" stroke="#fff" stroke-width="1.1" stroke-linecap="round" fill="none"/>',
   success_no_circle:
     '<path d="M6.5 11.5 9.5 14.5l6-7.5" stroke="#09BB07" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   info: '<circle cx="11" cy="11" r="10" fill="#10AEFF"/><path d="M11 9.2v4.6" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="11" cy="7.4" r="0.7" fill="#fff"/>',
