@@ -1070,4 +1070,25 @@ describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-containe
     expect(wxml).not.toContain('proteus-page-scroll')
     expect(js).not.toContain('proteusPageScroll')
   })
+
+  it('wx.pageScrollTo 桥接：调用改写为 this.proteusPageScrollTo + scroll-view scroll-top 绑定（批次3）', () => {
+    const { wxml, js } = compileVueSfc(
+      '<script setup>function goTop() { wx.pageScrollTo({ scrollTop: 0 }) }</script>\n<template><view class="a">x</view></template>',
+      { filename: 'pages/pagescrollto.vue' },
+    )
+    expect(wxml).toContain('scroll-top="{{__proteusPageScrollTop}}"')
+    expect(wxml).toContain('scroll-with-animation')
+    expect(js).toContain('this.proteusPageScrollTo({ scrollTop: 0 })')
+    expect(js).toContain('proteusPageScrollTo(opts) { this.setData({ __proteusPageScrollTop: opts.scrollTop }) }')
+    expect(js).toContain('__proteusPageScrollTop: 0')
+  })
+
+  it('onPullDownRefresh refresher 受控结束（refresher-triggered 绑定 + 置 false 收回，批次3）', () => {
+    const { wxml, js } = compileVueSfc('<script setup>function onPullDownRefresh() {}</script>\n<template><view class="a">x</view></template>', {
+      filename: 'pages/pull2.vue',
+    })
+    expect(wxml).toContain('refresher-triggered="{{__proteusRefreshing}}"')
+    expect(js).toContain('this.setData({ __proteusRefreshing: false })')
+    expect(js).toContain('__proteusRefreshing: false')
+  })
 })

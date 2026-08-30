@@ -1074,6 +1074,21 @@ export function transformScriptToPage(
   // ★方法名白名单：方法体裸调用改写 this.x()（模块函数/内置不在白名单 → 保持裸调用）
   const methodNames = new Set<string>(Object.keys(methods))
 
+  // ★15-page-scroll-container 批次2/3：页面滚动 API 桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
+  //   页面级钩子（onPageScroll/onReachBottom/onPullDownRefresh/wx.pageScrollTo）靠自动包装 scroll-view 事件触发（template 侧绑定）
+  //   载荷归一：scroll-view e.detail.scrollTop → 页面 onPageScroll { scrollTop }（对齐页面生命周期载荷）；
+  //   ★须在 dataEntries 组装前赋值 dataExtra（__proteusRefreshing/__proteusPageScrollTop 进初始 data）
+  const bridgeHooks = {
+    hasOnPageScroll: /onPageScroll\s*\(/.test(source),
+    hasOnReachBottom: /onReachBottom\s*\(/.test(source),
+    hasOnPullDownRefresh: /onPullDownRefresh\s*\(/.test(source),
+    hasPageScrollTo: /wx\.pageScrollTo\s*\(/.test(source),
+  }
+  if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
+    if (bridgeHooks.hasOnPullDownRefresh) dataExtra.__proteusRefreshing = false
+    if (bridgeHooks.hasPageScrollTo) dataExtra.__proteusPageScrollTop = 0
+  }
+
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra)]
   if (dataEntries.length) {
     lines.push('  data: {')
@@ -1260,21 +1275,27 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
     const body = m.src.slice(braceIdx + 1)
     pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)},`, m.line)
   }
-  // ★15-page-scroll-container 批次2：页面滚动 API 桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
-  //   页面级钩子（onPageScroll/onReachBottom/onPullDownRefresh）靠自动包装 scroll-view 事件触发（template 侧绑定）
-  //   载荷归一：scroll-view e.detail.scrollTop → 页面 onPageScroll { scrollTop }（对齐页面生命周期载荷）
+  // ★15-page-scroll-container 批次2/3：桥接方法生成（dataExtra 已在 dataEntries 前赋值）
   if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
-    if (/onPageScroll\s*\(/.test(source)) {
+    if (bridgeHooks.hasOnPageScroll) {
       methodNames.add('proteusPageScroll')
       methodLines.push('  proteusPageScroll(e) { if (typeof this.onPageScroll === "function") this.onPageScroll({ scrollTop: e.detail.scrollTop, scrollLeft: e.detail.scrollLeft }) },')
     }
-    if (/onReachBottom\s*\(/.test(source)) {
+    if (bridgeHooks.hasOnReachBottom) {
       methodNames.add('proteusReachBottom')
       methodLines.push('  proteusReachBottom() { if (typeof this.onReachBottom === "function") this.onReachBottom() },')
     }
-    if (/onPullDownRefresh\s*\(/.test(source)) {
+    if (bridgeHooks.hasOnPullDownRefresh) {
+      // ★批次3：refresher 受控结束（refresher-triggered 绑定 __proteusRefreshing，触发后置 false 收回刷新态）
       methodNames.add('proteusPullDownRefresh')
-      methodLines.push('  proteusPullDownRefresh() { if (typeof this.onPullDownRefresh === "function") this.onPullDownRefresh() },')
+      methodLines.push(
+        '  proteusPullDownRefresh() { const __r = typeof this.onPullDownRefresh === "function" ? this.onPullDownRefresh() : undefined; this.setData({ __proteusRefreshing: false }); return __r },'
+      )
+    }
+    if (bridgeHooks.hasPageScrollTo) {
+      // ★批次3：wx.pageScrollTo → 页面方法（自动包装 scroll-view scroll-top 绑定，运行时桥接）
+      methodNames.add('proteusPageScrollTo')
+      methodLines.push('  proteusPageScrollTo(opts) { this.setData({ __proteusPageScrollTop: opts.scrollTop }) },')
     }
   }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
@@ -1400,7 +1421,9 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
 
   for (const w of warnings) console.warn(`[mp-transform] ${w}`)
   const js = lines.join('\n') + '\n'
+  // ★15-page-scroll-container 批次3：wx.pageScrollTo → this.proteusPageScrollTo（页面上下文桥接，自动包装 scroll-view scroll-top）
+  const jsFinal = js.replace(/\bwx\.pageScrollTo\s*\(/g, 'this.proteusPageScrollTo(')
   // sourcemap v3（VLQ）：产物每行 → 源码行（无映射行为空 segment）
-  const sourcemap = buildSourceMap(js, extra.file, source, lineMappings)
-  return { js, warnings, sourcemap }
+  const sourcemap = buildSourceMap(jsFinal, extra.file, source, lineMappings)
+  return { js: jsFinal, warnings, sourcemap }
 }

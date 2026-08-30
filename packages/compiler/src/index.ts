@@ -69,6 +69,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     hasOnPageScroll: /onPageScroll\s*\(/.test(setup),
     hasOnReachBottom: /onReachBottom\s*\(/.test(setup),
     hasOnPullDownRefresh: /onPullDownRefresh\s*\(/.test(setup),
+    hasPageScrollTo: /wx\.pageScrollTo\s*\(/.test(setup),
   }
   const tplResult = transformTemplateToWxml(tpl, {
     ...styleOpts,

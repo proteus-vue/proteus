@@ -69,6 +69,7 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
     hasOnPageScroll?: boolean
     hasOnReachBottom?: boolean
     hasOnPullDownRefresh?: boolean
+    hasPageScrollTo?: boolean
   }
 }
 

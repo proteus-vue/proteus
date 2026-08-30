@@ -701,7 +701,14 @@ export function transformTemplateToWxml(
     const bindAttrs: string[] = ['scroll-y', 'class="proteus-page-scroll"']
     if (hooks.hasOnPageScroll) bindAttrs.push('bindscroll="proteusPageScroll"')
     if (hooks.hasOnReachBottom) bindAttrs.push('bindscrolltolower="proteusReachBottom"')
-    if (hooks.hasOnPullDownRefresh) bindAttrs.push('refresher-enabled="{{true}}" bindrefresherrefresh="proteusPullDownRefresh"')
+    if (hooks.hasOnPullDownRefresh) {
+      // ★批次3：refresher 受控结束（bindrefresherrefresh → proteusPullDownRefresh 置 false 收回）
+      bindAttrs.push('refresher-enabled="{{true}}" refresher-triggered="{{__proteusRefreshing}}" bindrefresherrefresh="proteusPullDownRefresh"')
+    }
+    if (hooks.hasPageScrollTo) {
+      // ★批次3：wx.pageScrollTo 运行时桥接（scroll-top 受控滚动；scroll-with-animation 平滑）
+      bindAttrs.push('scroll-top="{{__proteusPageScrollTop}}" scroll-with-animation')
+    }
     // 高度由 compileVueSfc 注入 .proteus-page-scroll（100vh，scoped 转换后拼接，不参与后缀）
     wxml = `<scroll-view ${bindAttrs.join(' ')}>\n${inner}\n</scroll-view>`
   } else if (!isComp && (opts.pageScrollHooks?.hasOnPageScroll || opts.pageScrollHooks?.hasOnReachBottom)) {

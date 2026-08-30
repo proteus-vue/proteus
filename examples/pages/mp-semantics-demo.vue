@@ -38,8 +38,9 @@
 
     <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
     <view class="msd-box">
-      <text class="msd-label">onPageScroll 桥接（15-page-scroll-container 批次2）</text>
+      <text class="msd-label">onPageScroll 桥接（15-page-scroll-container 批次2/3）</text>
       <text class="msd-scroll-text">滚动位置 scrollTop：{{ scrollTop }}（Skyline 页面不滚动，页面钩子经自动包装 scroll-view 触发）</text>
+      <button class="msd-top" @click="goTop">wx.pageScrollTo 回到顶部</button>
     </view>
     <view class="msd-box" v-for="(n, idx) in scrollBlocks" :key="idx">
       <text class="msd-label">滚动区块 {{ n }} / 20</text>
@@ -61,6 +62,10 @@ const inputLog = ref('')
 const scrollTop = ref(0)
 function onPageScroll(e: { scrollTop: number }) {
   scrollTop.value = e.scrollTop
+}
+// wx.pageScrollTo 桥接（15-page-scroll-container 批次3：MP → 自动包装 scroll-view scroll-top / Web → window.scrollTo）
+function goTop() {
+  wx.pageScrollTo({ scrollTop: 0 })
 }
 // 滚动测试：长列表区块（小程序 wx:for 只接受数组，用字面量数组初始化）
 const scrollBlocks = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])

@@ -14,6 +14,8 @@ export interface WxApi {
   switchTab(opts: { url: string }): Promise<void>
   navigateBack(opts?: { delta?: number }): void
   getCurrentPages(): Array<{ route: string }>
+  /** ★15-page-scroll-container：滚动到指定位置（MP 桥接到自动包装 scroll-view；Web window.scrollTo） */
+  pageScrollTo(opts?: { scrollTop?: number; duration?: number }): void
 
   // ===== 存储（full：localStorage，JSON 序列化对齐小程序）=====
   setStorageSync(key: string, data: unknown): void
@@ -59,6 +61,11 @@ export const wx: WxApi = {
   },
   getCurrentPages() {
     return adapter.getCurrentPages()
+  },
+
+  pageScrollTo(opts) {
+    // Web 端页面滚动 = window 滚动（无自动包装容器）
+    window.scrollTo({ top: opts?.scrollTop ?? 0, behavior: opts?.duration ? 'smooth' : 'auto' })
   },
 
   setStorageSync(key, data) {
