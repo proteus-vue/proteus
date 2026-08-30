@@ -351,11 +351,12 @@
   color: rgba(0, 0, 0, 0.9);
   text-align: center;
 }
-/* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden） */
+/* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden；★底部到确定按钮间距 44px 来自 half-screen-dialog__bd padding-bottom） */
 .pwp-bd {
   display: flex;
   position: relative;
   height: 280px;
+  margin-bottom: 44px; /* ★官方实测 bd 底 → 确定按钮顶 = 44px */
   overflow: hidden;
   background: #fff;
 }
@@ -413,9 +414,9 @@
   cursor: pointer;
   box-sizing: border-box;
 }
-/* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding 0 24px 64px） */
+/* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding-bottom calc(64px + safe-area)） */
 .pwp-ft {
-  padding: 0 24px 64px; /* 官方 ft padding-bottom 64px（safe-area） */
+  padding: 0 24px calc(64px + env(safe-area-inset-bottom)); /* 官方 ft */
   background: #fff;
 }
 /* 确定按钮（官方 weui-btn_primary：绿底 #07c160 / 白字 17px / 圆角 8px / 高 48px / 居中） */

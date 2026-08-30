@@ -46,7 +46,9 @@ export const WebPicker = defineComponent({
       hd.className = 'pwp-hd'
       const closeBtn = document.createElement('button')
       closeBtn.className = 'pwp-close'
-      closeBtn.innerHTML = '<svg class="pwp-close-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+      // ★官方 weui-icon-close-thin 精确 path（fill-rule evenodd 填充式细叉，描边约 1.2px——非 stroke 粗线）
+      closeBtn.innerHTML =
+        '<svg class="pwp-close-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path fill-rule="evenodd" d="M12.25 10.693L6.057 4.5 5 5.557l6.193 6.193L5 17.943 6.057 19l6.193-6.193L18.443 19l1.057-1.057-6.193-6.193L19.5 5.557 18.443 4.5z"/></svg>'
       const title = document.createElement('strong')
       title.className = 'pwp-title'
       title.textContent = String((attrs as Record<string, unknown>).title ?? '选择')
