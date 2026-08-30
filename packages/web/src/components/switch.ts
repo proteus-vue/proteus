@@ -42,11 +42,11 @@ export const WebSwitch = defineComponent({
           },
         },
         [
-          // 白色扩散遮罩：track 上的白色圆（scale 扩散/收缩——对齐微信 iOS 过渡）
+          // 白色扩散遮罩：滑轨内的小圆（scale 扩散——被 track overflow:hidden 裁剪在圆角内，非整个 switch 大圆）
           h('span', {
             class: 'pws-wash',
             style: {
-              transform: `translate(-50%, -50%) scale(${wash.value ? 2.4 : 0})`,
+              transform: `translate(-50%, -50%) scale(${wash.value ? 2.6 : 0})`,
               opacity: wash.value ? 1 : 0,
             },
           }),

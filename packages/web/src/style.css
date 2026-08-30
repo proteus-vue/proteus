@@ -224,8 +224,10 @@
   background-color: #ffffff;
   border: 1px solid #d0d0d0;
   cursor: pointer;
-  transition: background-color 0.28s ease, border-color 0.28s ease;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
   vertical-align: middle;
+  /* ★白色扩散遮罩裁剪在滑轨内（overflow hidden——wash 圆再大也被限制在圆角滑轨内，不在整个开关上盖大圆） */
+  overflow: hidden;
 }
 .proteus-web-switch input {
   position: absolute;
@@ -248,18 +250,19 @@
   z-index: 2;
   pointer-events: none;
 }
-/* ★track 上的白色扩散遮罩（对齐微信 iOS 过渡）：白色圆从中间 scale 扩散（开→关填满）/ 收缩（关→开消失） */
+/* ★track 上的白色扩散遮罩（对齐微信 iOS 过渡）：白色圆从中间慢慢 scale 扩散（被 overflow hidden 裁剪在滑轨圆角内）
+ *   开→关：白色向四周填满滑轨；关→开：白色向中间缩小消失 */
 .pws-wash {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 30px;
-  height: 30px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #ffffff;
   transform: translate(-50%, -50%) scale(0);
   opacity: 0;
-  transition: transform 0.34s ease, opacity 0.2s ease;
+  transition: transform 0.4s ease, opacity 0.25s ease;
   z-index: 1;
   pointer-events: none;
 }
