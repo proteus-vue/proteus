@@ -32,7 +32,7 @@ Page({
 ",
   "warnings": [],
   "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
-<view class="proteus-flex-row-data-v-e934cf page-data-v-e934cf">
+<view class="page-data-v-e934cf">
 <text class="proteus-h1-data-v-e934cf">{{ title }}</text>
 <text wx:if="{{show}}" class="proteus-p-data-v-e934cf">visible</text>
 <view wx:for="{{items}}" wx:for-item="item" wx:for-index="idx" wx:key="idx" class="row-data-v-e934cf">{{ idx }}.{{ item }}</view>
