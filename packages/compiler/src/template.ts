@@ -695,8 +695,20 @@ export function transformTemplateToWxml(
     .join('\n')
   let wxml = inner
   if (autoScroll && !alreadyScroll) {
+    // ★15-page-scroll-container：页面滚动 API 桥接（批次2）——声明 onPageScroll/onReachBottom 等时
+    //   自动包装 scroll-view 绑定对应事件（页面本身不滚动，页面级钩子靠 scroll-view 事件触发）
+    const hooks = opts.pageScrollHooks ?? {}
+    const bindAttrs: string[] = ['scroll-y', 'class="proteus-page-scroll"']
+    if (hooks.hasOnPageScroll) bindAttrs.push('bindscroll="proteusPageScroll"')
+    if (hooks.hasOnReachBottom) bindAttrs.push('bindscrolltolower="proteusReachBottom"')
+    if (hooks.hasOnPullDownRefresh) bindAttrs.push('refresher-enabled="{{true}}" bindrefresherrefresh="proteusPullDownRefresh"')
     // 高度由 compileVueSfc 注入 .proteus-page-scroll（100vh，scoped 转换后拼接，不参与后缀）
-    wxml = `<scroll-view scroll-y class="proteus-page-scroll">\n${inner}\n</scroll-view>`
+    wxml = `<scroll-view ${bindAttrs.join(' ')}>\n${inner}\n</scroll-view>`
+  } else if (!isComp && (opts.pageScrollHooks?.hasOnPageScroll || opts.pageScrollHooks?.hasOnReachBottom)) {
+    // 歧义警告（反黑盒）：手动写 scroll-view 又声明页面滚动钩子——滚动源歧义
+    ctx.warnings.push(
+      '歧义警告：页面声明 onPageScroll/onReachBottom 且顶层是 scroll-view（用户显式滚动容器）——页面级滚动钩子不会被 scroll-view 触发，请用 bindscroll/bindscrolltolower 或交由自动包装（15-page-scroll-container）',
+    )
   }
   for (const w of ctx.warnings) console.warn(`[mp-transform] ${w}`)
   return {

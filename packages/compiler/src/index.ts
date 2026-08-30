@@ -63,6 +63,13 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   // 决策 trace（阶段二）：三阶段共用一条链路，产物侧可据此反查规则（★底线循环 ②）
   const tplTrace = createTrace('template')
   const tpl = descriptor.template?.content ?? ''
+  const setup = descriptor.scriptSetup?.content ?? descriptor.script?.content ?? ''
+  // ★15-page-scroll-container 批次2：页面滚动 API 桥接——检测页面声明的滚动生命周期（传给 template 绑定 scroll-view 事件）
+  const pageScrollHooks = {
+    hasOnPageScroll: /onPageScroll\s*\(/.test(setup),
+    hasOnReachBottom: /onReachBottom\s*\(/.test(setup),
+    hasOnPullDownRefresh: /onPullDownRefresh\s*\(/.test(setup),
+  }
   const tplResult = transformTemplateToWxml(tpl, {
     ...styleOpts,
     filename: options.filename,
@@ -70,10 +77,9 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     scopeId,
     isComponent: options.isComponent,
     autoScrollContainer: options.autoScrollContainer,
+    pageScrollHooks,
     trace: tplTrace,
   })
-
-  const setup = descriptor.scriptSetup?.content ?? descriptor.script?.content ?? ''
   const scriptTrace = createTrace('script')
   const scriptResult = transformScriptToPage(setup, styleOpts, {
     file: options.filename,

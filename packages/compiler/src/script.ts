@@ -1260,6 +1260,23 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
     const body = m.src.slice(braceIdx + 1)
     pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)},`, m.line)
   }
+  // ★15-page-scroll-container 批次2：页面滚动 API 桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
+  //   页面级钩子（onPageScroll/onReachBottom/onPullDownRefresh）靠自动包装 scroll-view 事件触发（template 侧绑定）
+  //   载荷归一：scroll-view e.detail.scrollTop → 页面 onPageScroll { scrollTop }（对齐页面生命周期载荷）
+  if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
+    if (/onPageScroll\s*\(/.test(source)) {
+      methodNames.add('proteusPageScroll')
+      methodLines.push('  proteusPageScroll(e) { if (typeof this.onPageScroll === "function") this.onPageScroll({ scrollTop: e.detail.scrollTop, scrollLeft: e.detail.scrollLeft }) },')
+    }
+    if (/onReachBottom\s*\(/.test(source)) {
+      methodNames.add('proteusReachBottom')
+      methodLines.push('  proteusReachBottom() { if (typeof this.onReachBottom === "function") this.onReachBottom() },')
+    }
+    if (/onPullDownRefresh\s*\(/.test(source)) {
+      methodNames.add('proteusPullDownRefresh')
+      methodLines.push('  proteusPullDownRefresh() { if (typeof this.onPullDownRefresh === "function") this.onPullDownRefresh() },')
+    }
+  }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   // ★props 源非 immediate watch 只走 observers，不生成方法（避免无用产物）；immediate 需要方法（attached 初始化调用）
   for (const w of Object.values(watches)) {

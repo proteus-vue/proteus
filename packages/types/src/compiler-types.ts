@@ -64,6 +64,12 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
   isComponent?: boolean
   /** ★15-page-scroll-container：页面模式自动包滚动容器（默认 true） */
   autoScrollContainer?: boolean
+  /** ★15-page-scroll-container 批次2：页面滚动 API 桥接检测（声明了对应生命周期 → 自动包装 scroll-view 加事件绑定） */
+  pageScrollHooks?: {
+    hasOnPageScroll?: boolean
+    hasOnReachBottom?: boolean
+    hasOnPullDownRefresh?: boolean
+  }
 }
 
 /** template → wxml 结果 */

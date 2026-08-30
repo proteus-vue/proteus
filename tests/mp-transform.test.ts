@@ -1024,3 +1024,50 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     expect(wxml).not.toContain('root-class')
   })
 })
+
+describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-container 批次2）', () => {
+  it('onPageScroll + onReachBottom → 自动包装 scroll-view 绑定事件 + 桥接方法（载荷归一）', () => {
+    const { wxml, js } = compileVueSfc(
+      '<script setup>function onPageScroll(e) { console.log(e.scrollTop) }\nfunction onReachBottom() { console.log("bottom") }</script>\n<template><view class="a">x</view></template>',
+      { filename: 'pages/scroll-demo.vue' },
+    )
+    expect(wxml).toContain('bindscroll="proteusPageScroll"')
+    expect(wxml).toContain('bindscrolltolower="proteusReachBottom"')
+    // 载荷归一：scroll-view e.detail.scrollTop → onPageScroll { scrollTop }
+    expect(js).toContain('this.onPageScroll({ scrollTop: e.detail.scrollTop, scrollLeft: e.detail.scrollLeft })')
+    expect(js).toContain('proteusReachBottom() { if (typeof this.onReachBottom === "function") this.onReachBottom() },')
+  })
+
+  it('onPullDownRefresh → refresher 绑定', () => {
+    const { wxml } = compileVueSfc(
+      '<script setup>function onPullDownRefresh() {}</script>\n<template><view class="a">x</view></template>',
+      { filename: 'pages/pull.vue' },
+    )
+    expect(wxml).toContain('refresher-enabled="{{true}}"')
+    expect(wxml).toContain('bindrefresherrefresh="proteusPullDownRefresh"')
+  })
+
+  it('无滚动钩子 → 不生成桥接', () => {
+    const { wxml, js } = compileVueSfc('<template><view class="a">x</view></template>', { filename: 'pages/plain-scroll.vue' })
+    expect(wxml).toContain('class="proteus-page-scroll"') // 仍自动包装
+    expect(wxml).not.toContain('bindscroll=')
+    expect(js).not.toContain('proteusPageScroll')
+  })
+
+  it('手动 scroll-view 根 + 声明滚动钩子 → 歧义警告', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    compileVueSfc('<script setup>function onPageScroll(e) {}</script>\n<template><scroll-view scroll-y><view>a</view></scroll-view></template>', {
+      filename: 'pages/manual-scroll.vue',
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('歧义'))
+  })
+
+  it('组件模式不生成滚动桥接', () => {
+    const { wxml, js } = compileVueSfc('<script setup>function onPageScroll(e) {}</script>\n<template><view>a</view></template>', {
+      filename: 'components/x/index.vue',
+      isComponent: true,
+    })
+    expect(wxml).not.toContain('proteus-page-scroll')
+    expect(js).not.toContain('proteusPageScroll')
+  })
+})

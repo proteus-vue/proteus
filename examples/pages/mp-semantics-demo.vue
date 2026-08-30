@@ -2,10 +2,9 @@
      以小程序组件/API 为标准：view/text/button/image/input 双端直用（MP 原生 / Web 模拟层对齐）
      open-type 开放能力：MP 原生分享，Web 触发 openshare 事件（开发者自定义处理） -->
 <template>
-  <!-- ★Skyline 页面本身不滚动（固定视口 flex 容器）——滚动必须用 scroll-view（小程序语义，双端：MP 原生 / Web proteus-scroll-view） -->
-  <scroll-view scroll-y class="msd-page">
-    <view class="msd">
-      <text class="msd-title">小程序语义（14-mp-first-semantics）</text>
+  <!-- ★Skyline 页面本身不滚动——编译器自动包 scroll-view（15-page-scroll-container）；onPageScroll 桥接自动绑定 -->
+  <view class="msd">
+    <text class="msd-title">小程序语义（14-mp-first-semantics）</text>
     <text class="msd-sub">view/text/button/image/input + wx API —— MP 原生 / Web 模拟层对齐</text>
 
     <view class="msd-box">
@@ -38,6 +37,10 @@
     </view>
 
     <!-- 滚动测试：长列表区块（页面级滚动，双端验证） -->
+    <view class="msd-box">
+      <text class="msd-label">onPageScroll 桥接（15-page-scroll-container 批次2）</text>
+      <text class="msd-scroll-text">滚动位置 scrollTop：{{ scrollTop }}（Skyline 页面不滚动，页面钩子经自动包装 scroll-view 触发）</text>
+    </view>
     <view class="msd-box" v-for="(n, idx) in scrollBlocks" :key="idx">
       <text class="msd-label">滚动区块 {{ n }} / 20</text>
       <view class="msd-row">
@@ -48,13 +51,17 @@
       </view>
     </view>
     </view>
-  </scroll-view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 
 const inputLog = ref('')
+// 页面滚动桥接演示（15-page-scroll-container 批次2：onPageScroll → 自动包装 scroll-view bindscroll，载荷归一）
+const scrollTop = ref(0)
+function onPageScroll(e: { scrollTop: number }) {
+  scrollTop.value = e.scrollTop
+}
 // 滚动测试：长列表区块（小程序 wx:for 只接受数组，用字面量数组初始化）
 const scrollBlocks = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 // ★Vue 对 <input> 用原生 InputHTMLAttributes 类型（HTML 标签优先于 GlobalComponents）；运行时载荷对齐小程序 { detail: { value } }——any 兼容（透明）
@@ -97,10 +104,6 @@ function onSystemInfo() {
 </script>
 
 <style scoped>
-/* ★滚动容器高度：scroll-view 需要固定高度才能滚动（Skyline 视口 = 100vh） */
-.msd-page {
-  height: 100vh;
-}
 .msd {
   padding: 24px;
   text-align: left;

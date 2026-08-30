@@ -53,6 +53,17 @@ export function defaultScopedPlugin(): Plugin {
       out = out.replace(/<(\/)?(view|text|button|input|image|scroll-view)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
         return `<${close ?? ''}${MP_TAG_MAP[tag]}${rest}`
       })
+      // ★15-page-scroll-container 批次2（Web 端）：onPageScroll 桥接——页面滚动 = window 滚动，注入 scroll 监听
+      //   （MP 端经自动包装 scroll-view bindscroll 触发；Web 端页面无自动包装（Vue 原生），对齐小程序语义用 window scroll）
+      if (/function\s+onPageScroll\s*\(/.test(out) && out.includes('<script')) {
+        const importLine = "\nimport { onMounted as __proteusOnMounted, onUnmounted as __proteusOnUnmounted } from 'vue'\n"
+        const hookCode =
+          '\nlet __proteusScrollHandler = () => { const __f = onPageScroll; if (typeof __f === \'function\') __f({ scrollTop: window.scrollY || 0, scrollLeft: window.scrollX || 0 }) }\n' +
+          '__proteusOnMounted(() => { window.addEventListener(\'scroll\', __proteusScrollHandler) })\n' +
+          '__proteusOnUnmounted(() => { window.removeEventListener(\'scroll\', __proteusScrollHandler) })\n'
+        out = out.replace(/<script([^>]*)>/, (m: string) => `${m}${importLine}`)
+        out = out.replace('</script>', `${hookCode}</script>`)
+      }
       return out === code ? null : { code: out, map: null }
     },
   }
