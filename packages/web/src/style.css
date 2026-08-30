@@ -562,6 +562,13 @@
   opacity: 0;
   cursor: pointer;
 }
+/* ★禁用态对齐官方（weui.io/#form_switch）：.weui-switch[disabled] { opacity: 0.1 }——整体淡出（轨道+thumb 一起） */
+.proteus-web-switch.is-disabled {
+  opacity: 0.1;
+}
+.proteus-web-switch.is-disabled input {
+  cursor: not-allowed;
+}
 .pws-thumb {
   /* ★switch 滑块（对齐微信：纯白圆点无边框无阴影）——关闭时与白色 track 融合无缝隙；
    * 打开时 track 绿从 thumb 边缘缝隙（1px）露出成细绿边（用户实测：'只有一个微信绿边框看得到'）

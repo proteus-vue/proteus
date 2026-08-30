@@ -32,7 +32,7 @@ export const WebSwitch = defineComponent({
       return h(
         'div',
         {
-          class: ['proteus-web-switch', on ? 'is-on' : '', (cls as string) || ''],
+          class: ['proteus-web-switch', on ? 'is-on' : '', disabled ? 'is-disabled' : '', (cls as string) || ''],
           style: {
             backgroundColor: trackBg,
             borderColor: trackBorder,
