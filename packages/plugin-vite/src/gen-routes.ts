@@ -357,17 +357,11 @@ function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
   appJson.window = windowConfig
   // Skyline 渲染前提（微信平台校验）：页面 renderer=skyline 时必须声明 requiredComponents
   if (config.skyline) appJson.lazyCodeLoading = 'requiredComponents'
-  // ★Skyline 布局对齐（2026-08 真机实测）：
-  //   ① defaultDisplayBlock——Skyline 节点默认 flex 会 stretch 拉伸表单元素（switch/slider/icon 占满一行居中）→ 默认 block 对齐 WebView/Web
-  //   ② tagNameStyleIsolation: legacy——defaultDisplayBlock 把 text 等行内组件也 block 化，需 tag 选择器恢复（text{display:inline}）——
-  //      legacy 使 tag 选择器不受样式隔离约束（对齐 WebView 行为，基础库 3.6.0+）
+  // ★Skyline 布局对齐（2026-08 真机实测）：Skyline 节点默认 flex 会 stretch 拉伸表单元素（switch/slider/icon 占满一行居中）
+  //   → defaultDisplayBlock 默认 block 对齐 WebView/Web（基础库 2.31.1+）
+  //   （tagNameStyleIsolation: legacy 在页面级声明——app.json 层真机校验报无效，见 writePageJsons）
   if (config.skyline) {
-    appJson.rendererOptions = {
-      skyline: {
-        defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true,
-        tagNameStyleIsolation: 'legacy',
-      },
-    }
+    appJson.rendererOptions = { skyline: { defaultDisplayBlock: config.skylineLayout?.defaultDisplayBlock ?? true } }
   }
   // 平台硬边界：tabBar.list 至少 2 项（微信校验），不足时告警并忽略
   if (tabRoutes.length >= 2) {
@@ -445,6 +439,10 @@ function writePageJsons(pages: PageInfo[]): void {
     if (config.skyline) {
       pageJson.renderer = 'skyline'
       pageJson.componentFramework = 'glass-easel' // Skyline 强制要求（真机校验：需同时设置）
+      // ★tag 选择器对齐 WebView（2026-08）：Skyline 下 tag 选择器默认受样式隔离约束（text{display:inline} 等基础规则
+      //   不作用原生组件）——legacy 对齐 WebView（基础库 3.6.0+）——★真机校验：app.json 层无效（报 invalid rendererOptions.skyline[tagNameStyleIsolation]），
+      //   必须页面级声明
+      pageJson.rendererOptions = { skyline: { tagNameStyleIsolation: 'legacy' } }
     }
     // <route> 块 pageJson 扩展（如半屏页透明背景 backgroundColorContent）
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
