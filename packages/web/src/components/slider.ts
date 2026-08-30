@@ -40,7 +40,8 @@ export const WebSlider = defineComponent({
         },
         [
           h('div', { class: 'pws-track' }, [h('div', { class: 'pws-fill', style: { width: `${pct.value}%` } })]),
-          h('span', { class: 'pws-thumb', style: { left: `${pct.value}%` } }),
+          // 白圆点滑块（28px = 微信 blockSize 默认；类名独立避免与 switch 滑块冲突）
+          h('span', { class: 'pws-slider-thumb', style: { left: `${pct.value}%` } }),
           h('input', {
             ...rest,
             type: 'range',
