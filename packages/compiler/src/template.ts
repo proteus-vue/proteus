@@ -678,8 +678,13 @@ export function transformTemplateToWxml(
   const root = domParse(source, { onError: () => undefined })
   // ★组件模式：顶层第一个元素为组件根节点（class 追加 {{rootClass}}，接收外部 root-class 透传）
   const isComp = opts.isComponent === true
+  // ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view）——
+  //   顶层已是 scroll-view/p-scroll-view 根时不重复包装（用户显式滚动容器场景）；开关 autoScrollContainer 默认 true
+  const autoScroll = opts.autoScrollContainer !== false && !isComp
+  const topTags = root.children.filter((c) => c.type === NodeTypes.ELEMENT).map((c) => (c as ElementNode).tag)
+  const alreadyScroll = topTags.length === 1 && (topTags[0] === 'scroll-view' || topTags[0] === 'p-scroll-view')
   let firstEl = isComp
-  const wxml = root.children
+  const inner = root.children
     .map((c) => {
       if (firstEl && c.type === NodeTypes.ELEMENT) {
         firstEl = false
@@ -688,6 +693,11 @@ export function transformTemplateToWxml(
       return serializeNode(c, ctx)
     })
     .join('\n')
+  let wxml = inner
+  if (autoScroll && !alreadyScroll) {
+    // 高度由 compileVueSfc 注入 .proteus-page-scroll（100vh，scoped 转换后拼接，不参与后缀）
+    wxml = `<scroll-view scroll-y class="proteus-page-scroll">\n${inner}\n</scroll-view>`
+  }
   for (const w of ctx.warnings) console.warn(`[mp-transform] ${w}`)
   return {
     wxml,
@@ -701,6 +711,8 @@ export function transformTemplateToWxml(
     transitions: ctx.transitions,
     // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
     storeBindings: [...ctx.storeBindings],
+    // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
+    pageScrollWrapped: autoScroll && !alreadyScroll,
     warnings: ctx.warnings,
   }
 }

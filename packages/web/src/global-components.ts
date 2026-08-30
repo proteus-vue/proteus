@@ -7,6 +7,7 @@ import type { WebText } from './components/text'
 import type { WebButton } from './components/button'
 import type { WebInput } from './components/input'
 import type { WebImage } from './components/image'
+import type { WebScrollView } from './components/scroll-view'
 
 declare module 'vue' {
   export interface GlobalComponents {
@@ -15,6 +16,7 @@ declare module 'vue' {
     'proteus-button': typeof WebButton
     'proteus-input': typeof WebInput
     'proteus-image': typeof WebImage
+    'proteus-scroll-view': typeof WebScrollView
   }
 }
 

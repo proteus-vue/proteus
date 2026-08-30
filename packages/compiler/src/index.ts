@@ -69,6 +69,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     annotateLines: options.annotateLines,
     scopeId,
     isComponent: options.isComponent,
+    autoScrollContainer: options.autoScrollContainer,
     trace: tplTrace,
   })
 
@@ -119,11 +120,15 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     trace: styleTrace,
   })
   const wxss = [globalWxss, scopedWxss].filter(Boolean).join('\n')
+  // ★15-page-scroll-container：页面自动包滚动容器后注入高度样式（100vh = Skyline 视口；
+  //   scoped 转换后拼接 → .proteus-page-scroll 不参与 scope 后缀，匹配模板注入节点）
+  const pageScrollCss = tplResult.pageScrollWrapped ? '\n.proteus-page-scroll { height: 100vh; }\n' : ''
+  const finalWxss = `${wxss}${pageScrollCss}`
 
   const result: CompileResult = {
     wxml: tplResult.wxml,
     js: scriptResult.js,
-    wxss,
+    wxss: finalWxss,
     warnings: [...tplResult.warnings, ...scriptResult.warnings],
     trace: [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events],
     sourcemap: scriptResult.sourcemap,

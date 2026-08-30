@@ -62,6 +62,8 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
   annotateLines?: boolean
   /** 组件模式（★2026-08：组件根节点绑定 {{rootClass}} 接收外部 class 透传） */
   isComponent?: boolean
+  /** ★15-page-scroll-container：页面模式自动包滚动容器（默认 true） */
+  autoScrollContainer?: boolean
 }
 
 /** template → wxml 结果 */
@@ -83,6 +85,8 @@ export interface TemplateTransformResult {
   transitions?: Array<{ ref: string; tName: string; index: number }>
   /** 模板 store.<field> 引用字段 */
   storeBindings?: string[]
+  /** ★15-page-scroll-container：页面已自动包滚动容器（compileVueSfc 据此注入高度样式） */
+  pageScrollWrapped?: boolean
   warnings: string[]
 }
 
@@ -126,6 +130,8 @@ export interface CompileOptions {
   preprocessStyle?: (lang: string, content: string) => string
   /** ★module-plan B0：跨模块引用映射 */
   moduleImports?: Array<{ source: string; requirePath: string }>
+  /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
+  autoScrollContainer?: boolean
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */

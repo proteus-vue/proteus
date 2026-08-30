@@ -2,8 +2,8 @@
      以小程序组件/API 为标准：view/text/button/image/input 双端直用（MP 原生 / Web 模拟层对齐）
      open-type 开放能力：MP 原生分享，Web 触发 openshare 事件（开发者自定义处理） -->
 <template>
-  <!-- ★Skyline 页面本身不滚动（固定视口 flex 容器）——滚动必须用 scroll-view（p-scroll-view 双端一致：MP 原生 / Web 组件） -->
-  <p-scroll-view scroll-y class="msd-page">
+  <!-- ★Skyline 页面本身不滚动（固定视口 flex 容器）——滚动必须用 scroll-view（小程序语义，双端：MP 原生 / Web proteus-scroll-view） -->
+  <scroll-view scroll-y class="msd-page">
     <view class="msd">
       <text class="msd-title">小程序语义（14-mp-first-semantics）</text>
     <text class="msd-sub">view/text/button/image/input + wx API —— MP 原生 / Web 模拟层对齐</text>
@@ -48,7 +48,7 @@
       </view>
     </view>
     </view>
-  </p-scroll-view>
+  </scroll-view>
 </template>
 
 <script setup lang="ts">

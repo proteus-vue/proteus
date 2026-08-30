@@ -35,6 +35,7 @@ const MP_TAG_MAP: Record<string, string> = {
   button: 'proteus-button',
   input: 'proteus-input',
   image: 'proteus-image',
+  'scroll-view': 'proteus-scroll-view',
 }
 
 export function defaultScopedPlugin(): Plugin {
@@ -48,8 +49,8 @@ export function defaultScopedPlugin(): Plugin {
         if (/\bglobal\b/.test(attrs)) return m.replace(/\bglobal\b\s*/, '')
         return m.replace(/^<style/, '<style scoped')
       })
-      // 小程序语义标签 → proteus-*（<view / > / </view>；边界 \s|/?> 避免误伤 <viewer>）
-      out = out.replace(/<(\/)?(view|text|button|input|image)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
+      // 小程序语义标签 → proteus-*（<view / > / </view>；边界 \s|/?> 避免误伤 <viewer>；scroll-view 自带连字符也统一改写）
+      out = out.replace(/<(\/)?(view|text|button|input|image|scroll-view)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
         return `<${close ?? ''}${MP_TAG_MAP[tag]}${rest}`
       })
       return out === code ? null : { code: out, map: null }
@@ -247,6 +248,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
   const px2rpx = opts.px2rpx ?? cfg.style.px2rpx
   const rpxRatio = opts.rpxRatio ?? cfg.style.rpxRatio
   const rules = opts.rules ?? cfg.rules
+  // ★15-page-scroll-container：页面自动包滚动容器开关（默认 true）
+  const autoScrollContainer = cfg.page?.autoScrollContainer ?? true
   const isDebug = process.env.PROTEUS_DEBUG === '1'
   let projectRoot = process.cwd()
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
@@ -485,6 +488,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               moduleImports: moduleImportsByFile.get(file),
               annotateLines: isDebug,
               debug: isDebug,
+              autoScrollContainer,
             },
             projectRoot,
           )
@@ -506,6 +510,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               annotateLines: isDebug,
               debug: isDebug,
               preprocessStyle,
+              autoScrollContainer,
             })
             wxml = result.wxml
             js = result.js
@@ -526,6 +531,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             annotateLines: isDebug,
             debug: isDebug,
             preprocessStyle,
+            autoScrollContainer,
           })
           wxml = result.wxml
           js = result.js

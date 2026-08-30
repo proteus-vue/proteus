@@ -35,6 +35,10 @@ export interface ProteusConfig {
     px2rpx: boolean
     rpxRatio: number
   }
+  /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
+  page?: {
+    autoScrollContainer?: boolean
+  }
   /** 包体积预算 */
   budget?: {
     mainPackageKB: number

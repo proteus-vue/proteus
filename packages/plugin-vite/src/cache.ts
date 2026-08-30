@@ -61,6 +61,7 @@ export function compileCacheKey(
     moduleImports?: Array<{ source: string; requirePath: string }>
     annotateLines: boolean
     debug: boolean
+    autoScrollContainer?: boolean
   },
   projectRoot: string,
 ): string {
