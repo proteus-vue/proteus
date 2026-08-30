@@ -86,13 +86,13 @@
   max-width: 70vw;
 }
 .pwu-icon {
-  width: 36px;
-  height: 36px;
+  width: 40px; /* ★微信 toast 图标 40px 圆（success/error） */
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
 }
 .pwu-icon-success {
@@ -183,7 +183,7 @@
   width: 100%;
   padding: 15px 0; /* WeUI 行高 48px 附近 */
   border: none;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e5e5e5; /* WeUI 分割线（与 modal 一致） */
   background: #fff;
   font-size: 17px; /* WeUI 操作项字号 */
   cursor: pointer;
@@ -195,9 +195,9 @@
   border: none;
   background: #fff;
   font-size: 17px;
-  color: #888888;
+  color: #000000; /* ★微信取消按钮为黑色文字（非灰色） */
   cursor: pointer;
-  margin-top: 6px;
+  margin-top: 8px; /* 微信取消按钮与列表间距较大 */
 }
 
 /* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
