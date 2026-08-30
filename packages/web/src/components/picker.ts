@@ -30,19 +30,23 @@ export const WebPicker = defineComponent({
     const openSelector = () => {
       const range = ((attrs as Record<string, unknown>).range as unknown[] | undefined) ?? []
       const rangeKey = (attrs as Record<string, unknown>).rangeKey ? String((attrs as Record<string, unknown>).rangeKey) : undefined
-      const initValue = Math.min(Math.max(Number((attrs as Record<string, unknown>).value ?? 0), 0), range.length - 1)
+      // ★默认选中中间项（weui 官方：5 项默认 index 2，content 偏移 0）——value 属性缺省时取 Math.floor(n/2)
+      const hasValue = (attrs as Record<string, unknown>).value !== undefined
+      const initValue = hasValue
+        ? Math.min(Math.max(Number((attrs as Record<string, unknown>).value ?? 0), 0), range.length - 1)
+        : Math.floor(range.length / 2)
 
       const mask = document.createElement('div')
       mask.className = 'proteus-web-ui-mask'
       const sheet = document.createElement('div')
       sheet.className = 'proteus-web-picker-sheet'
 
-      // 弹层头：左上关闭按钮（×）+ 居中标题（官方 weui-half-screen-dialog__hd）
+      // 弹层头：左上关闭按钮（× 24px，官方 weui-icon-close-thin）+ 居中标题（官方 15px/500）
       const hd = document.createElement('div')
       hd.className = 'pwp-hd'
       const closeBtn = document.createElement('button')
       closeBtn.className = 'pwp-close'
-      closeBtn.innerHTML = '<svg class="pwp-close-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+      closeBtn.innerHTML = '<svg class="pwp-close-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
       const title = document.createElement('strong')
       title.className = 'pwp-title'
       title.textContent = String((attrs as Record<string, unknown>).title ?? '选择')
@@ -68,7 +72,16 @@ export const WebPicker = defineComponent({
       })
       group.append(maskEl, indicator, content)
       bd.append(group)
-      sheet.append(hd, bd)
+
+      // 底部确定按钮（官方 weui-half-screen-dialog__ft：weui-btn_primary 绿底白字 17px 圆角 8px 高 48px 居中）
+      const ft = document.createElement('div')
+      ft.className = 'pwp-ft'
+      const confirmBtn = document.createElement('button')
+      confirmBtn.className = 'pwp-confirm'
+      confirmBtn.textContent = String((attrs as Record<string, unknown>).confirmText ?? '确定')
+      ft.append(confirmBtn)
+
+      sheet.append(hd, bd, ft)
       document.body.append(mask, sheet)
 
       // 内容平移量：选中项顶部对齐 indicator（offsetY = INDICATOR_TOP - sel * ITEM_H）
@@ -138,14 +151,10 @@ export const WebPicker = defineComponent({
       group.addEventListener('pointerup', endDrag)
       group.addEventListener('pointercancel', endDrag)
 
-      // 点击某项：选中 + 发 change + 关闭（weui 网页交互：点选即完成）
+      // 点击某项：选中 + 吸附（滚动预览，等待确定）
       content.querySelectorAll('.pwp-item').forEach((el) => {
         el.addEventListener('click', () => {
           selectIndex(Number((el as HTMLElement).dataset.i))
-          const idx = selected
-          close()
-          // ★载荷对齐微信 picker change：{ detail: { value: 索引 } }
-          emit('change', { detail: { value: idx } })
         })
       })
 
@@ -163,6 +172,13 @@ export const WebPicker = defineComponent({
       mask.addEventListener('click', () => {
         close()
         emit('cancel', {})
+      })
+      // 确定 → change { detail: { value: 索引 } }（微信小程序 picker 交互：滚动选择 + 确定提交）
+      confirmBtn.addEventListener('click', () => {
+        const idx = selected
+        close()
+        // ★载荷对齐微信 picker change：{ detail: { value: 索引 } }
+        emit('change', { detail: { value: idx } })
       })
     }
 

@@ -22,19 +22,19 @@ describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
     host = null
   })
 
-  /** 挂载：range 数组 + change 监听，渲染为可点击容器（Vue 渲染器真实挂载） */
-  function mountPicker(range: unknown[], value = 0, rangeKey?: string, title?: string) {
+  /** 挂载：range 数组 + change 监听，渲染为可点击容器（Vue 渲染器真实挂载）
+   * value === undefined 时 props 不含 value（对齐'无 value 默认中间项'语义） */
+  function mountPicker(range: unknown[], value?: number, rangeKey?: string, title?: string) {
     const state = reactive({ picked: -1, cancelled: 0 })
+    const props: Record<string, unknown> = { range, rangeKey, title }
+    if (value !== undefined) props.value = value
     const Root = {
       setup() {
         return () =>
           h(
             WebPicker,
             {
-              range,
-              value,
-              rangeKey,
-              title,
+              ...props,
               onChange: (e: { detail: { value: number } }) => {
                 state.picked = e.detail.value
               },
@@ -53,18 +53,18 @@ describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
     return state
   }
 
-  it('点击容器 → 打开半屏弹层（左上关闭 + 居中标题 + 滚轮区）', () => {
+  it('点击容器 → 打开半屏弹层（左上关闭 + 居中标题 + 滚轮区 + 底部确定）', () => {
     mountPicker(['甲', '乙', '丙'], 0, undefined, '单列选择器')
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
     const sheet = document.querySelector('.proteus-web-picker-sheet')
     expect(sheet).not.toBeNull()
-    // 官方结构：关闭按钮 + 标题 + indicator + mask + content
+    // 官方结构：关闭按钮 + 标题 + indicator + mask + content + 底部确定
     expect(sheet?.querySelector('.pwp-close')).not.toBeNull()
+    expect(sheet?.querySelector('.pwp-close-icon')?.getAttribute('width')).toBe('24')
     expect(sheet?.querySelector('.pwp-title')?.textContent).toBe('单列选择器')
     expect(sheet?.querySelector('.pwp-indicator')).not.toBeNull()
     expect(sheet?.querySelector('.pwp-picker-mask')).not.toBeNull()
-    // 无取消/确定 toolbar（官方单列选择器无确定按钮）
-    expect(sheet?.querySelector('.pwp-toolbar')).toBeNull()
+    expect(sheet?.querySelector('.pwp-confirm')?.textContent).toBe('确定')
     const texts = [...(sheet?.querySelectorAll('.pwp-item') ?? [])].map((el) => el.textContent)
     expect(texts).toEqual(['甲', '乙', '丙'])
   })
@@ -76,14 +76,23 @@ describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
     expect(texts).toEqual(['北京', '上海'])
   })
 
-  it('点击某项 → change { detail: { value: 索引 } } + 关闭弹层', async () => {
+  it('无 value 时默认选中中间项（weui 官方：Math.floor(n/2)）', () => {
+    // value 显式传 undefined（区别于默认 0）
+    mountPicker(['甲', '乙', '丙', '丁', '戊']) // 5 项 → 中间 index 2
+    ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
+    const selected = document.querySelector('.pwp-item.is-selected')
+    expect(selected?.textContent).toBe('丙')
+  })
+
+  it('确定 → change { detail: { value: 选中索引 } } + 关闭弹层', async () => {
     const state = mountPicker(['甲', '乙', '丙'])
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
-    ;(document.querySelectorAll('.pwp-item')[2] as HTMLElement).click()
+    // 无 value → 默认选中中间项（3 项 → index 1）
+    ;(document.querySelector('.pwp-confirm') as HTMLElement).click()
     await new Promise((r) => setTimeout(r, 30))
     expect(document.querySelector('.proteus-web-picker-sheet')).toBeNull()
     expect(document.querySelector('.proteus-web-ui-mask')).toBeNull()
-    expect(state.picked).toBe(2)
+    expect(state.picked).toBe(1)
   })
 
   it('关闭按钮 → cancel 事件 + 关闭弹层（不发 change）', async () => {
@@ -105,7 +114,7 @@ describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
     expect(state.cancelled).toBe(1)
   })
 
-  it('初始选中 value 索引（is-selected 类）', () => {
+  it('显式 value 时初始选中该索引（is-selected 类）', () => {
     mountPicker(['甲', '乙', '丙'], 1)
     ;(document.querySelector('.proteus-web-picker') as HTMLElement).click()
     const selected = document.querySelector('.pwp-item.is-selected')

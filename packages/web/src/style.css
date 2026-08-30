@@ -342,6 +342,9 @@
   display: flex;
   align-items: center;
 }
+.pwp-close-icon {
+  display: block; /* ★24px（官方 weui-icon-close-thin 宽高 24） */
+}
 .pwp-title {
   font-size: 15px; /* 官方 half-screen-dialog__title */
   font-weight: 500;
@@ -407,6 +410,28 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+/* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding 0 24px 64px） */
+.pwp-ft {
+  padding: 0 24px 64px; /* 官方 ft padding-bottom 64px（safe-area） */
+  background: #fff;
+}
+/* 确定按钮（官方 weui-btn_primary：绿底 #07c160 / 白字 17px / 圆角 8px / 高 48px / 居中） */
+.pwp-confirm {
+  display: block;
+  width: 100%;
+  max-width: 184px; /* 官方实测按钮宽 184px */
+  margin: 0 auto;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  background: #07c160; /* --weui-BRAND */
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.41176;
   cursor: pointer;
   box-sizing: border-box;
 }
