@@ -43,8 +43,8 @@ export const WebSwitch = defineComponent({
     return () => {
       const { class: cls, checked: _c, disabled, color, ...rest } = attrs as Record<string, unknown>
       const on = checked.value
-      // translateX 18：开态右缘 ≈ track 右缘 - 2px（与左端 gap 对称）
-      const tx = on ? 18 : 0
+      // translateX 21：thumb 28px 贴 track 内部右缘（left 1 + 21 + 28 = 50 = 内部右缘）——两端贴合无缝隙
+      const tx = on ? 21 : 0
       return h(
         'div',
         {

@@ -237,18 +237,17 @@
   cursor: pointer;
 }
 .pws-thumb {
-  /* ★switch 滑块（28px 对齐微信 switch 比例——track 32px 内留 2px 边距）
+  /* ★switch 滑块（对齐微信：纯白圆点无边框无阴影）——关闭时与白色 track 融合无缝隙；
+   * 打开时 track 绿从 thumb 边缘缝隙（1px）露出成细绿边（用户实测：'只有一个微信绿边框看得到'）
    * 注意：switch 与 slider 滑块类名分离（.pws-thumb switch / .pws-slider-thumb slider）——
    * 共享类名会导致 slider 尺寸修改误伤 switch（2026-08 实测） */
   position: absolute;
-  top: 0px; /* 顶距 = border 1px + 0 = 1px（thumb 30px 在 track 32px 内垂直居中，底距同样 1px） */
-  left: 1px; /* 父 border 内 1px → 外缘 gap = border 1 + 1 = 2px（与右端 translateX 18 对称） */
+  top: 1px; /* thumb 28px 垂直居中（顶距 = border 1 + 1 = 2，底距 32-2-28 = 2 对称——绿边上下等宽） */
+  left: 1px; /* 贴 track 内部左缘（border 内侧） */
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #fff;
-  border: 1px solid #d0d0d0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: #ffffff;
   /* 纯滑动（不放大——扩散动画在 .pws-wash 遮罩上） */
   transition: transform 0.28s ease;
   z-index: 2;
