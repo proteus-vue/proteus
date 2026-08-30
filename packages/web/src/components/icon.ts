@@ -6,7 +6,8 @@ import { defineComponent, h } from 'vue'
 /** 微信 icon type → SVG path 内容（viewBox 22；符号相对小 + 细描边，对齐微信——非均匀粗细近似用圆头） */
 const ICON_SVG: Record<string, string> = {
   success:
-    '<circle cx="11" cy="11" r="10" fill="#09BB07"/><path d="M7.5 11.5 10 14.5l4.5-5.5" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+    // ★勾左粗右细（对齐微信手写感：左下起笔粗、右上收笔细）——拆两段 stroke
+    '<circle cx="11" cy="11" r="10" fill="#09BB07"/><path d="M7.2 11.6 10 14.4" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M10 14.4 14.8 9.2" stroke="#fff" stroke-width="1.1" fill="none" stroke-linecap="round"/>',
   success_no_circle:
     '<path d="M6.5 11.5 9.5 14.5l6-7.5" stroke="#09BB07" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   info: '<circle cx="11" cy="11" r="10" fill="#10AEFF"/><path d="M11 9.2v4.6" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="11" cy="7.4" r="0.7" fill="#fff"/>',
