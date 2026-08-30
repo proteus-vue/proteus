@@ -66,7 +66,6 @@ Page({
   data: {
     text: "",
   },
-  proteusOnTextInput(e) { this.setData({ text: e.detail.value }) },
   onLoad(options) {
     const params = {}
     const keys = Object.keys(options || {})
@@ -78,6 +77,7 @@ Page({
     }
     this.setData(params)
   },
+  proteusOnTextInput(e) { this.setData({ text: e.detail.value }) },
 })
 ",
   "warnings": [],

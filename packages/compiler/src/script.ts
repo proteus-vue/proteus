@@ -709,6 +709,19 @@ function watchTail(w: WatchInfo | undefined): string {
   return `; this.proteusWatch${w.id}(${newVals}, ${oldVals})`
 }
 
+/**
+ * 方法体裸调用改写：已知组件方法名 → this.name(（真机修复：微信组件方法必须在 methods 且须 this 调用，
+ * 裸标识符调用是词法查找 → 顶层/全局找不到 → ReferenceError / 事件报 does not have a method）
+ * methodNames 白名单精确区分：组件方法（改写）vs 模块函数/内置（setTimeout/eventValue 等 → 保持裸调用）
+ */
+function rewriteBareMethodCalls(body: string, methodNames: Set<string>): string {
+  let out = body
+  for (const name of methodNames) {
+    out = out.replace(new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g'), `this.${name}(`)
+  }
+  return out
+}
+
 function rewriteRefAccess(
   body: string,
   refNames: Set<string>,
@@ -1046,6 +1059,21 @@ export function transformScriptToPage(
   if (requireLines.length) lines.push(...requireLines, '')
   lines.push(extra.isComponent ? 'Component({' : 'Page({')
 
+  // ★真机修复：方法类行收集到 methodLines——组件模式包进 methods: {}（微信组件方法必须在此，顶层不识别）；
+  //   页面模式方法保留顶层（Page 支持）；sourcemap 映射独立维护，最后合并（methods 块插入后重定位）
+  const methodLines: string[] = []
+  const methodMappings: Array<{ out: number; src: number }> = []
+  const pushMethod = (line: string, srcLine?: number): void => {
+    const start = methodLines.length
+    methodLines.push(line)
+    if (srcLine !== undefined) {
+      const sub = line.split('\n')
+      for (let i = 0; i < sub.length; i++) methodMappings.push({ out: start + i, src: srcLine + i })
+    }
+  }
+  // ★方法名白名单：方法体裸调用改写 this.x()（模块函数/内置不在白名单 → 保持裸调用）
+  const methodNames = new Set<string>(Object.keys(methods))
+
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra)]
   if (dataEntries.length) {
     lines.push('  data: {')
@@ -1066,7 +1094,10 @@ export function transformScriptToPage(
   // v-model 自动 handler：proteusOnXxxInput(e) { this.setData({ xxx: e.detail.value }) }
   const vmodelDisabled = disabled.has('script/vmodel-handler')
   for (const name of vModelBindings) {
-    if (!vmodelDisabled) lines.push(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
+    if (!vmodelDisabled) {
+      methodNames.add(`proteusOn${capitalize(name)}Input`)
+      pushMethod(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
+    }
   }
   if (vModelBindings.length && !vmodelDisabled) {
     trace?.add('script/vmodel-handler', {
@@ -1080,7 +1111,7 @@ export function transformScriptToPage(
   if (extra.isComponent && propWatches.length) {
     lines.push('  observers: {')
     for (const w of propWatches) {
-      const observerBody = rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
+      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
       const bodyLines = observerBody.split('\n')
       lines.push(`    ${w.propField}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
@@ -1095,7 +1126,8 @@ export function transformScriptToPage(
     trace?.add('script/nav-handler', { before: '<a href> / <router-link>', after: 'proteusNavigateTo(e)（data-url → wx.navigateTo）' })
     // 注意：生成代码避免数组解构/对象展开（微信 ES5 转译依赖 babel helper 模块）
     // 调试日志统一 [proteus][环节] 格式，仅 debug 构建注入
-    lines.push(
+    methodNames.add('proteusNavigateTo')
+    methodLines.push(
       '  proteusNavigateTo(e) {',
       '    const ds = e.currentTarget.dataset',
       '    const url = String(ds.url || "")',
@@ -1117,7 +1149,7 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
@@ -1134,7 +1166,7 @@ export function transformScriptToPage(
   if (lifecycles.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
-    const unloadBody = rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
+    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
@@ -1165,7 +1197,7 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：computed 初始化 + immediate watch + provide/inject 注入在方法体前
     const initLines = [computedInitLine(computeds), runtimeInitLine(runtimeInits), storeBindingInit, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
-    const body = rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)
+    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -1206,49 +1238,59 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
   }
 
   for (const [name, m] of Object.entries(methods)) {
-    if (extra.debug) lines.push(`  // @${m.line} ${name}()`)
-    pushMapped(`  ${rewriteRefAccess(m.src, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle)},`, m.line)
+    if (extra.debug) methodLines.push(`  // @${m.line} ${name}()`)
+    // ★签名行不参与改写（方法名定义处不能变 this.x）；仅函数体做 ref 重写 + 裸调用改写
+    const braceIdx = m.src.indexOf('{')
+    const sig = m.src.slice(0, braceIdx + 1)
+    const body = m.src.slice(braceIdx + 1)
+    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)},`, m.line)
   }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
   // ★props 源非 immediate watch 只走 observers，不生成方法（避免无用产物）；immediate 需要方法（attached 初始化调用）
   for (const w of Object.values(watches)) {
     if (w.propField && !w.immediate) continue
-    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle))}\n  },`
-    pushMapped(`  ${src}`, w.line)
+    methodNames.add(`proteusWatch${w.id}`)
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`
+    pushMethod(`  ${src}`, w.line)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {
     if (!c.setter) continue
-    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle))}\n  },`
-    pushMapped(`  ${src}`, 1)
+    methodNames.add(`proteusSet${capitalize(cname)}`)
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`
+    pushMethod(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发
   for (const h of extra.selfHandlers ?? []) {
-    lines.push(`  proteusSelf${capitalize(h)}(e) {`)
-    lines.push(`    if (e.target === e.currentTarget) {`)
-    lines.push(`      this.${h}(e)`)
-    lines.push(`    }`)
-    lines.push(`  },`)
+    methodNames.add(`proteusSelf${capitalize(h)}`)
+    methodLines.push(`  proteusSelf${capitalize(h)}(e) {`)
+    methodLines.push(`    if (e.target === e.currentTarget) {`)
+    methodLines.push(`      this.${h}(e)`)
+    methodLines.push(`    }`)
+    methodLines.push(`  },`)
   }
   for (const h of extra.onceHandlers ?? []) {
-    lines.push(`  proteusOnce${capitalize(h)}(e) {`)
-    lines.push(`    if (!this.data.__once${capitalize(h)}) {`)
-    lines.push(`      this.data.__once${capitalize(h)} = true`)
-    lines.push(`      this.${h}(e)`)
-    lines.push(`    }`)
-    lines.push(`  },`)
+    methodNames.add(`proteusOnce${capitalize(h)}`)
+    methodLines.push(`  proteusOnce${capitalize(h)}(e) {`)
+    methodLines.push(`    if (!this.data.__once${capitalize(h)}) {`)
+    methodLines.push(`      this.data.__once${capitalize(h)} = true`)
+    methodLines.push(`      this.${h}(e)`)
+    methodLines.push(`    }`)
+    methodLines.push(`  },`)
   }
   // vue-compat Batch B：内联事件表达式包装方法（@click="count++" → proteusInlineIncCount 等）
   for (const ih of extra.inlineHandlers ?? []) {
     if (disabled.has('event/inline-expression')) continue
-    pushMapped(`  ${ih.name}(e) {`, 1)
-    pushMapped(`    ${ih.code}`, 1)
-    pushMapped(`  },`, 1)
+    methodNames.add(ih.name)
+    pushMethod(`  ${ih.name}(e) {`, 1)
+    pushMethod(`    ${ih.code}`, 1)
+    pushMethod(`  },`, 1)
   }
   // ★vue-compat-advance Batch 4：provide/inject 响应式联动辅助方法
   if (providedRefs.size > 0) {
     // 提供侧：ref 写入点（rewriteRefAccess 注入）调用——同步当前页命名空间值 + 通知订阅者（inject 侧 setData 刷新）
-    lines.push(
+    methodNames.add('proteusSyncProvide')
+    methodLines.push(
       '  proteusSyncProvide(key, ref) {',
       '    const reg = getApp().__proteusProvides',
       '    const p = reg && this.__proteusPageId ? reg[this.__proteusPageId] : (reg || {})',
@@ -1262,7 +1304,8 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
   }
   if (hasInjects) {
     // inject 侧：取消订阅（组件 detached / 页面 onUnload 调用；按引用索引移除防泄漏）
-    lines.push(
+    methodNames.add('proteusUnsubscribeProvide')
+    methodLines.push(
       '  proteusUnsubscribeProvide() {',
       '    const reg = getApp().__proteusProvides',
       '    const p = reg && this.__proteusPageId ? reg[this.__proteusPageId] : (reg || {})',
@@ -1283,7 +1326,8 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
   // 动画时长对齐 style.ts keyframes（fade 250 / slide-up 320 / scale 400）；定时器 id 存实例属性防重/可取消
   for (const t of transitions) {
     const dur = { fade: 250, 'slide-up': 320, scale: 400 }[t.tName] ?? 250
-    lines.push(
+    methodNames.add(`proteusTransitionToggle${t.index}`)
+    methodLines.push(
       `  proteusTransitionToggle${t.index}() {`,
       `    if (this.data.${t.ref}) {`,
       `      clearTimeout(this.__tlTimer${t.index})`,
@@ -1300,6 +1344,19 @@ ${indentBody([unsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join
       `  },`,
     )
   }
+  // ★真机修复：微信组件方法必须定义在 methods: {}（顶层方法不识别 → 事件绑定报 does not have a method）；
+  //   页面模式方法保留顶层（Page 支持）；methods 块插入后合并 sourcemap 映射（out 相对插入点）
+  if (extra.isComponent) {
+    lines.push('  methods: {')
+    for (const ml of methodLines) {
+      for (const sl of ml.split('\n')) lines.push(`  ${sl}`)
+    }
+    lines.push('  },')
+  } else {
+    lines.push(...methodLines)
+  }
+  const methodsBase = lines.length
+  for (const mm of methodMappings) lineMappings.push({ out: methodsBase + mm.out, src: mm.src })
   lines.push('})')
 
   // 产物级约束（es5-safe 贯穿全部生成代码；component-mode 决定构造器）
