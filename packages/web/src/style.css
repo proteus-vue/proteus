@@ -92,9 +92,10 @@
   gap: 6px;
   text-align: center;
 }
-/* ★图标态：正方形（宽=高）——微信短文字 + 图标时 toast 为方形（aspect-ratio 保持 1:1） */
+/* ★图标态：固定方形 132×132（微信 toast 图标态固定尺寸，文字在内部换行——不随文字撑大） */
 .proteus-web-toast--icon {
-  aspect-ratio: 1 / 1;
+  width: 132px;
+  height: 132px;
 }
 .pwu-icon {
   display: flex;
