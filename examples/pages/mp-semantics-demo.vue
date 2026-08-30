@@ -216,4 +216,33 @@ function onSystemInfo() {
 .msd-nav {
   color: #1a7af8;
 }
+/* 暗黑模式：页面深底（RouterView .page #111）——demo 文字/边框/输入框配色适配 */
+@media (prefers-color-scheme: dark) {
+  .msd-title {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .msd-sub {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .msd-box {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .msd-label {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .msd-input {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: #191919;
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .msd-log {
+    color: #7d90a9;
+  }
+  .msd-scroll-text {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .msd-nav {
+    color: #7d90a9;
+  }
+}
 </style>

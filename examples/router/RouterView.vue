@@ -132,11 +132,17 @@ const view = computed<Component | null>(() => {
 }
 
 /* 页面"纸片"基础样式：白色背景 + 撑满视口 + 恒在遮罩(z:1)之上(z:2)
-   层叠转场时旧页被 leave 规则降为 z:0 暴露在遮罩下；停留页始终盖住遮罩 */
+   层叠转场时旧页被 leave 规则降为 z:0 暴露在遮罩下；停留页始终盖住遮罩
+   ★暗黑模式：页面底色随系统（微信小程序暗黑模式下页面深底——Web 模拟层对齐） */
 .page {
   background: #fff;
   min-height: 100vh;
   z-index: 2;
+}
+@media (prefers-color-scheme: dark) {
+  .page {
+    background: #111111; /* 官方暗黑页面底色 rgb(17,17,17) */
+  }
 }
 
 /* 默认：淡入淡出 */
