@@ -10,8 +10,10 @@ export const WebProgress = defineComponent({
       const { class: cls, percent, color, showInfo, activeColor, strokeWidth, ...rest } = attrs as Record<string, unknown>
       const p = Math.max(0, Math.min(100, Number(percent ?? 0)))
       const barColor = String(activeColor ?? color ?? '#07c160')
-      // ★微信布尔属性语义：show-info（无值）→ attrs 空字符串（falsy）——存在即 true（显式 false 才关闭）
-      const showInfoOn = showInfo !== undefined && showInfo !== false
+      // ★微信布尔属性语义：show-info（无值）→ attrs['show-info'] = ''——存在即 true（显式 false 才关闭）；
+      //   Vue attrs 用原始 kebab 键（attrs.showInfo undefined），需同时查两个键
+      const showInfoRaw = (attrs as Record<string, unknown>)['show-info'] ?? showInfo
+      const showInfoOn = showInfoRaw !== undefined && showInfoRaw !== false
       return h(
         'div',
         {
