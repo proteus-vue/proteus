@@ -81,6 +81,16 @@ describe('build 产物契约（跨层一致性）', () => {
     }
   })
 
+  it('每个组件产物必有 component.json（component: true 最小声明 + 嵌套 usingComponents）', () => {
+    // p-view：无嵌套 → { component: true }；virtual-list：嵌套 p-list-view → component + usingComponents
+    const viewJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/p-view/index.json'), 'utf-8'))
+    expect(viewJson.component).toBe(true)
+    expect(viewJson.usingComponents).toBeUndefined()
+    const vlJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/virtual-list/index.json'), 'utf-8'))
+    expect(vlJson.component).toBe(true)
+    expect(vlJson.usingComponents['p-list-view']).toBe('/proteus/p-list-view/index')
+  })
+
   it('共享模块产物路径契约：相对 appDir 不越界（rollup emitFile 安全）', () => {
     writeFixture(path.join(root, 'src/utils/format.ts'), `export function fmt(n: number): string { return String(n) }\n`)
     writeFixture(

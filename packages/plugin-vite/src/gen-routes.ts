@@ -441,8 +441,9 @@ function writePageJsons(pages: PageInfo[]): void {
 }
 
 /**
- * 组件嵌套（v0.3 尾）：为组件生成 component.json（usingComponents）——
- * 组件 A 的模板用组件 B 时，A 的 json 需声明 B（微信要求；产物路径与插件 rel 一致：
+ * 组件声明（v0.3 尾 + 修复）：为每个组件生成 component.json——
+ * ★修复：无嵌套组件也必须生成 { component: true }（微信要求组件必须有 json 声明，否则 usingComponents 报“未找到组件”）；
+ * 有嵌套时附加 usingComponents（组件 A 的模板用组件 B 时声明 B；产物路径与插件 rel 一致：
  * 应用组件 /components/...、框架组件 /proteus/...）
  */
 function writeComponentJsons(): void {
@@ -456,14 +457,15 @@ function writeComponentJsons(): void {
     for (const f of walkVueFiles(dir)) {
       const rel = path.relative(dir, f).replace(/\\/g, '/').replace(/\.vue$/, '')
       const comps = collectComponents(f)
-      if (!Object.keys(comps).length) continue
       const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
       fs.mkdirSync(path.dirname(outFile), { recursive: true })
-      fs.writeFileSync(outFile, JSON.stringify({ usingComponents: comps }, null, 2) + '\n')
+      const json: Record<string, unknown> = { component: true }
+      if (Object.keys(comps).length) json.usingComponents = comps
+      fs.writeFileSync(outFile, JSON.stringify(json, null, 2) + '\n')
       count++
     }
   }
-  if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（usingComponents 嵌套）`)
+  if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（component 声明 + usingComponents 嵌套）`)
 }
 
   // ---- 主流程 ----
