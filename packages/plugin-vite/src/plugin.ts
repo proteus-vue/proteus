@@ -23,21 +23,34 @@ import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
 /**
- * ★默认 scoped（2026-08 用户决策）：Web 端把 <style>（无 scoped/global）改写为 <style scoped>；<style global> 改回 <style>——
- *   与 MP 编译器「非 <style global> 即 scoped」语义对齐（Vue 标准 <style> 是全局，Web 端会泄漏到所有页面；
- *   真机实测 config-demo 灰色背景串页）。enforce: pre 先于 @vitejs/plugin-vue 拿到改写后的 SFC。
- *   幂等：<style scoped> 不再改写；<style global> 仅去标记。
+ * ★默认 scoped + 小程序语义标签改写（2026-08 用户决策）：
+ * ① <style>（无 scoped/global）→ <style scoped>；<style global> 改回 <style>——与 MP 编译器默认 scoped 语义对齐
+ * ② 小程序语义标签（view/text/button/input/image）→ proteus-*（带连字符）——★Vue 编译器只对带连字符标签
+ *   resolveComponent（无连字符标签永远编译为原生元素，运行时注册 view 组件不生效——CDP 实测）
+ * enforce: pre 先于 @vitejs/plugin-vue 拿到改写后的 SFC。幂等：proteus-* 不再改写。
  */
+const MP_TAG_MAP: Record<string, string> = {
+  view: 'proteus-view',
+  text: 'proteus-text',
+  button: 'proteus-button',
+  input: 'proteus-input',
+  image: 'proteus-image',
+}
+
 export function defaultScopedPlugin(): Plugin {
   return {
     name: 'proteus-default-scoped',
     enforce: 'pre',
     transform(code, id) {
       if (!id.endsWith('.vue')) return null
-      const out = code.replace(/<style\b([^>]*)>/g, (m: string, attrs: string) => {
+      let out = code.replace(/<style\b([^>]*)>/g, (m: string, attrs: string) => {
         if (/\bscoped\b/.test(attrs)) return m
         if (/\bglobal\b/.test(attrs)) return m.replace(/\bglobal\b\s*/, '')
         return m.replace(/^<style/, '<style scoped')
+      })
+      // 小程序语义标签 → proteus-*（<view / > / </view>；边界 \s|/?> 避免误伤 <viewer>）
+      out = out.replace(/<(\/)?(view|text|button|input|image)(\s|\/?>)/g, (m: string, close: string | undefined, tag: string, rest: string) => {
+        return `<${close ?? ''}${MP_TAG_MAP[tag]}${rest}`
       })
       return out === code ? null : { code: out, map: null }
     },

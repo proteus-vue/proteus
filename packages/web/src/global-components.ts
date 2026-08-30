@@ -1,6 +1,7 @@
-// packages/web/src/global-components.d.ts
-// ★14-mp-first-semantics：小程序组件全局类型声明——模板里写 view/text/button/input/image 即用小程序语义组件类型
-//   （覆盖 Vue 原生 HTML 类型；Web 端 installWebPlatform 注册同名运行时组件，类型与运行时一致）
+// packages/web/src/global-components.ts
+// ★14-mp-first-semantics：小程序组件全局类型声明——模板里写 view/text/button/input/image
+//   （Web 端经 defaultScopedPlugin 改写为 proteus-*）即用小程序语义组件类型
+//   组件名必须带连字符（proteus-*）：Vue 编译器只对带连字符标签 resolveComponent
 import type { WebView } from './components/view'
 import type { WebText } from './components/text'
 import type { WebButton } from './components/button'
@@ -9,11 +10,11 @@ import type { WebImage } from './components/image'
 
 declare module 'vue' {
   export interface GlobalComponents {
-    view: typeof WebView
-    text: typeof WebText
-    button: typeof WebButton
-    input: typeof WebInput
-    image: typeof WebImage
+    'proteus-view': typeof WebView
+    'proteus-text': typeof WebText
+    'proteus-button': typeof WebButton
+    'proteus-input': typeof WebInput
+    'proteus-image': typeof WebImage
   }
 }
 
