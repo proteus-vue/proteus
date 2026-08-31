@@ -381,6 +381,10 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
       --dist         产物目录（分包体积阈值 + 去重检测）
       --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）
 
+  proteus audit all [root]
+      ★全量审计门禁（test-framework B6）：route / module / config / i18n / capabilities / components 六域聚合
+      + CI 耗时预算（<12s，超预算阻断）；缺配置文件域跳过（独立编译模式）
+
   proteus init module [dir]
       ★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）
 

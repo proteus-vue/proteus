@@ -26,6 +26,7 @@ import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 import { parseCiArgs, planCiInit } from './ci'
 import { generateAppConfigSkeleton } from './app-config-gen'
+import { runAuditAll, formatAuditAll } from './audit-all'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -108,8 +109,20 @@ async function main(): Promise<void> {
       break
     }
       case 'audit': {
-      // proteus audit module（M8.6 CI 门禁）；其余 audit 子命令后续
-      if (rest[0] !== 'module') throw new Error('proteus audit 目前仅支持 module（proteus audit module [root] [--dist]）')
+      // proteus audit module（M8.6 CI 门禁）；★B6：audit all 全量门禁（test-framework B6）
+      if (rest[0] === 'all') {
+        const root = rest.find((a) => a !== 'all' && !a.startsWith('-')) ?? '.'
+        try {
+          const result = await runAuditAll(path.resolve(root))
+          console.log(formatAuditAll(result))
+          if (!result.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      if (rest[0] !== 'module') throw new Error('proteus audit 支持 module / all（proteus audit module [root] [--dist] | audit all [root]）')
       const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
       const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
       console.log(text)

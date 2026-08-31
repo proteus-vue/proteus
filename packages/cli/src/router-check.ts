@@ -5,6 +5,7 @@
 // ★router-plus strict-router：ROUTE003（path kebab-case）/ ROUTE004（meta.stack 非法值）
 // ★透明化：报错精确到 文件:行号；通过后输出路由摘要 + 嵌套决策 trace（--trace-router 语义）
 import path from 'node:path'
+import fs from 'node:fs'
 import { scanRoutes } from '@proteus-vue/router/scan'
 import { buildRouteTree } from '@proteus-vue/router/tree'
 import { listRouteRules } from '@proteus-vue/router/rules'
@@ -16,6 +17,26 @@ export interface RouterCheckResult {
   routeCount: number
   errors: string[]
   summary: string[]
+}
+
+/**
+ * 解析 pages 目录（★约定式路由回归修复）：优先读 proteus.config.ts 的 pagesDir（轻量正则，不加载 esbuild 链）
+ * root/pagesDir 存在 → 用之（对齐 gen-routes 双管线）；否则 fallback root（独立编译模式/无 pages 目录）
+ */
+export function resolvePagesDir(root: string): string {
+  const configFile = path.join(root, 'proteus.config.ts')
+  let pagesDir = 'pages'
+  if (fs.existsSync(configFile)) {
+    try {
+      const src = fs.readFileSync(configFile, 'utf-8')
+      const m = src.match(/pagesDir\s*:\s*['"]([^'"]+)['"]/)
+      if (m) pagesDir = m[1] as string
+    } catch {
+      /* 解析失败 fallback 默认 */
+    }
+  }
+  const full = path.join(root, pagesDir)
+  return fs.existsSync(full) ? full : root
 }
 
 /**

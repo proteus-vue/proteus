@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
-import { checkRoutes, formatRouterCheck } from './router-check'
+import { checkRoutes, formatRouterCheck, resolvePagesDir } from './router-check'
 import { checkConfigFile, loadTsConfig } from './config-check'
 import { checkRequiredTargets, checkFeatureConflicts, checkProteusDirConsistency } from './strict-cli'
 import { appConfigCheckSummary } from './app-config-check'
@@ -52,9 +52,9 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
     }
   }
 
-  // --strict-router（CLI002 语义：路由目标配置完整）：router:check
+  // --strict-router（CLI002 语义：路由目标配置完整）：router:check（★resolvePagesDir：扫 pages 目录对齐 gen-routes）
   if (opts.strictRouter) {
-    const result = checkRoutes(root)
+    const result = checkRoutes(resolvePagesDir(root))
     domains.push({ name: 'router', ok: result.ok, detail: formatRouterCheck(result) })
   }
 
