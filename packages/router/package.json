@@ -51,6 +51,10 @@
       "types": "./dist/stack-diff.d.ts",
       "import": "./dist/stack-diff.js"
     },
+    "./deep-link": {
+      "types": "./dist/deep-link.d.ts",
+      "import": "./dist/deep-link.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -59,7 +63,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/stack-diff.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/stack-diff.ts src/deep-link.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
   },
   "dependencies": {
     "@proteus-vue/shared": "0.2.0-beta.0",

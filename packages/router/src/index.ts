@@ -180,6 +180,10 @@ export type { StackSemantic, StylePlatform } from './navigation'
 export { computeRoutePatch, applyRoutePatch } from './stack-diff'
 export type { RoutePatch } from './stack-diff'
 
+// ★router-plus G-32 M4：Deep Link（URL 解析 + pattern 匹配 + 白名单 + 冷启动栈）
+export { parseDeepLinkUrl, matchPattern, isDeepLinkAllowed, resolveDeepLink, buildColdStartStack } from './deep-link'
+export type { DeepLinkConfig, ParsedDeepLink, ResolvedRoute } from './deep-link'
+
 // 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus-vue/router' 即可，无需深路径）
 export type {
   RouteRecord,
