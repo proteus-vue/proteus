@@ -2,8 +2,8 @@
 // G-21 css-compat B1：proteus css:check —— 扫描目录/文件（.vue/.css）→ --strict-css 校验 + 编译期重写 + 报告
 import fs from 'node:fs'
 import path from 'node:path'
-import { buildCssCompatReport, extractStyleBlocks, rewriteStyleCss } from '@proteus-vue/css-compat'
-import type { CssCompatReport, CssFileResult, CssViolation, StrictCssOptions } from '@proteus-vue/css-compat'
+import { buildCssCompatReport, extractStyleBlocks, rewriteStyleCss, checkCssBudget } from '@proteus-vue/css-compat'
+import type { CssCompatReport, CssFileResult, CssGlobalReport, CssViolation, StrictCssOptions } from '@proteus-vue/css-compat'
 
 export interface CssCheckOptions {
   strict: boolean
@@ -18,6 +18,9 @@ export interface CssCheckResult {
     fixableCount: number
     rewritten: CssCompatReport['rewritten']
   }
+  /** 全局聚合报告（10 §四 check-css-report 输入） */
+  global: CssGlobalReport
+  budgetChecks: ReturnType<typeof checkCssBudget>
   ok: boolean
 }
 
@@ -50,6 +53,9 @@ function checkFile(file: string, opts: CssCheckOptions): CssFileResult {
   const semanticComponents: Record<string, number> = {}
   const forbidden = { float: 0, universalSelector: 0 }
   let bundleCssBytes = 0
+  let forbiddenCount = 0
+  let selectors = 0
+  let classSelectors = 0
 
   for (const css of blocks) {
     const report = buildCssCompatReport(css, options)
@@ -61,11 +67,14 @@ function checkFile(file: string, opts: CssCheckOptions): CssFileResult {
     forbidden.float += report.forbidden.float
     forbidden.universalSelector += report.forbidden.universalSelector
     bundleCssBytes += report.bundleCssBytes
+    forbiddenCount += report.forbiddenCount
+    selectors += report.selectors
+    classSelectors += report.classSelectors
   }
 
   return {
     file: path.relative(process.cwd(), file),
-    report: { rewritten, semanticComponents, forbidden, bundleCssBytes, violations },
+    report: { rewritten, semanticComponents, forbidden, forbiddenCount, selectors, classSelectors, bundleCssBytes, violations },
   }
 }
 
@@ -87,7 +96,28 @@ export function runCssCheck(target: string, opts: CssCheckOptions): CssCheckResu
     { errorCount: 0, warnCount: 0, fixableCount: 0, rewritten: { calc: 0, vh: 0, 'rgba-to-argb': 0 } },
   )
   // --fix 时：重写统计已含在 rewritten（B1 原型不落盘改写，防误改业务文件；格式修复见 02 §三）
-  return { files: results, total, ok: total.errorCount === 0 }
+  // ★B3 全局聚合（10 §四）：字节/选择器/语义占比/禁止项 → 预算门禁
+  const FORBIDDEN_CODES = ['CSS001', 'CSS002', 'CSS003', 'CSS004', 'CSS005', 'CSS006', 'CSS007'] // 10 §四「CSS001-007 必须为 0」
+  const global: CssGlobalReport = results.reduce<CssGlobalReport>(
+    (acc, r) => {
+      acc.bundleCssBytes += r.report.bundleCssBytes
+      acc.selectors += r.report.selectors
+      acc.classSelectors += r.report.classSelectors
+      // 预算门禁只拦截 error 级禁止项（loose 降级后为 warn → 不阻断）
+      acc.forbiddenCount += r.report.violations.filter((v) => v.severity === 'error' && FORBIDDEN_CODES.indexOf(v.code) >= 0).length
+      acc.fileCount += 1
+      // criticalCssBytes：单文件最大（最坏首屏，B3 近似）
+      if (r.report.bundleCssBytes > acc.criticalCssBytes) acc.criticalCssBytes = r.report.bundleCssBytes
+      return acc
+    },
+    { bundleCssBytes: 0, criticalCssBytes: 0, styleIRObjects: 0, selectors: 0, classSelectors: 0, semanticRatio: 0, forbiddenCount: 0, fileCount: 0 },
+  )
+  // styleIRObjects：IR 对象数 ≈ 选择器数（B3 代理指标，真机矩阵 B4）
+  global.styleIRObjects = global.selectors
+  // semanticRatio：类选择器占比（.class 范式 = 语义化，06 哲学；10 §一 ≥70% 目标）
+  global.semanticRatio = global.selectors > 0 ? global.classSelectors / global.selectors : 1
+  const budgetChecks = checkCssBudget(global)
+  return { files: results, total, global, budgetChecks, ok: total.errorCount === 0 && budgetChecks.every((c) => c.pass) }
 }
 
 /** 文本报告（对齐 03 §三 报告 + 09 CLI 集成） */
@@ -109,5 +139,11 @@ export function formatCssCheck(result: CssCheckResult): string {
   lines.push(
     `[proteus-css] 重写统计（编译期）：calc ${rw.calc} / vh ${rw.vh} / rgba→ARGB ${rw['rgba-to-argb']}；可自动修复 ${result.total.fixableCount} 项`,
   )
+  lines.push('[proteus-css] 预算门禁（10-benchmark-budgets.md）：')
+  for (const c of result.budgetChecks) {
+    const mark = c.pass ? '✅' : '✗'
+    const arrow = c.metric.direction === 'max' ? '≤' : '≥'
+    lines.push(`  ${mark} ${c.metric.label}：${c.actual} ${arrow} ${c.metric.limit}`)
+  }
   return lines.join('\n')
 }

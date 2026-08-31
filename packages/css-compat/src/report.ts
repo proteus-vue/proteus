@@ -46,6 +46,9 @@ export function buildCssCompatReport(css: string, options: StrictCssOptions = {}
       rewritten: { calc: 0, vh: 0, 'rgba-to-argb': 0 },
       semanticComponents: {},
       forbidden: { float: 0, universalSelector: 0 },
+      forbiddenCount: 0,
+      selectors: 0,
+      classSelectors: 0,
       bundleCssBytes: Buffer.byteLength(css, 'utf8'),
       violations: [{ code: 'CSS-PARSE', message: 'CSS 解析失败：' + (e as Error).message, severity: 'error', fixable: false }],
     }
@@ -56,10 +59,21 @@ export function buildCssCompatReport(css: string, options: StrictCssOptions = {}
   })
 
   const { rewritten } = rewriteStyleCss(css)
+  const forbidden = countForbidden(root)
+  let selectorCount = 0
+  let classSelectorCount = 0
+  root.walkRules((rule) => {
+    selectorCount++
+    // 类选择器（.class 范式 = 语义化，06 选择器级联哲学）；标签/属性/通用选择器不计
+    if (/\./.test(rule.selector)) classSelectorCount++
+  })
   return {
     rewritten,
     semanticComponents: detectSemanticComponents(root),
-    forbidden: countForbidden(root),
+    forbidden,
+    forbiddenCount: forbidden.float + forbidden.universalSelector,
+    selectors: selectorCount,
+    classSelectors: classSelectorCount,
     bundleCssBytes: Buffer.byteLength(css, 'utf8'),
     violations,
   }

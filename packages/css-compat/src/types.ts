@@ -50,6 +50,12 @@ export interface CssCompatReport {
     float: number
     universalSelector: number
   }
+  /** 禁止项总数（10 §四 check-css-report assert forbidden === 0） */
+  forbiddenCount: number
+  /** 选择器数量（10 §一 ≤800） */
+  selectors: number
+  /** 类选择器数量（semanticRatio 数据源：.class 范式 = 语义化，06 哲学） */
+  classSelectors: number
   bundleCssBytes: number
   violations: CssViolation[]
 }
