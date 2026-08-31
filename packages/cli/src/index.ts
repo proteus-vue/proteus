@@ -7,7 +7,7 @@ import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 // ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, HELP_TEXT } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -395,7 +395,8 @@ async function main(): Promise<void> {
       break
     case 'help':
     default:
-      console.log(HELP_TEXT)
+      // ★美化帮助（决策 #213）：分组 + ANSI 色彩（TTY 自动检测；非 TTY/CI 纯文本）
+      console.log(formatHelpText())
       break
   }
 }

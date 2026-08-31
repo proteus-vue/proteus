@@ -330,96 +330,183 @@ export function parseMigrateTypesArgs(argv: string[]): { file: string; dryRun: b
   return { file: path.resolve(positional[0]), dryRun }
 }
 
-export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
+export interface HelpEntry {
+  usage: string
+  desc: string
+}
 
-用法：
-  proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--target <web|skyline|all>]
-      扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>
-      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）
-      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
-      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译
+export interface HelpGroup {
+  title: string
+  entries: HelpEntry[]
+}
 
-  proteus dev [--target <web|skyline>]
-      开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）
+/** ★命令分组（proteus help 渲染源——分组让长命令表可扫） */
+export const HELP_GROUPS: HelpGroup[] = [
+  {
+    title: '构建与开发',
+    entries: [
+      {
+        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--target <web|skyline|all>]',
+        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译',
+      },
+      {
+        usage: 'proteus dev [--target <web|skyline>]',
+        desc: '开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）',
+      },
+    ],
+  },
+  {
+    title: '检查与门禁',
+    entries: [
+      {
+        usage: 'proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]',
+        desc: '★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合\n      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）',
+      },
+      {
+        usage: 'proteus health [dir]',
+        desc: '★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE\n      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）',
+      },
+      {
+        usage: 'proteus css:check [dir|file] [--no-strict] [--fix] [--report <path>]',
+        desc: '★CSS 跨端兼容校验（G-21）：CSS001-012 + 预算门禁（字节/选择器/语义占比/禁止项）\n      --no-strict  违规降级 warn；--report 落盘 css-compat-report.json（check-css-report.mjs 消费）',
+      },
+      {
+        usage: 'proteus style:check [dir|file] [--platform <web|skyline|ios|android|harmony>]',
+        desc: '★样式运行时安全（G-31）：模板 :style 白名单 STS001-006 + 静态推导覆盖率（常量折叠）',
+      },
+      {
+        usage: 'proteus config:check <proteus.config.ts>',
+        desc: '★配置校验（types-plus B2/B5）：必填字段 + 跨层依赖（CONFIG_LAYER_VIOLATION）+ 版本迁移提示',
+      },
+      {
+        usage: 'proteus i18n:check [root] [--catalog <path>]',
+        desc: '★i18n 用法检查（i18n-plan B1）：硬编码文案检测 + catalog 键对照',
+      },
+      {
+        usage: 'proteus router:check [dir]',
+        desc: '校验 <route> 块与集中式 meta（来源登记 + 父路由推导依据）',
+      },
+      {
+        usage: 'proteus module:check [dir] [--graph]',
+        desc: '校验 proteus-module.config.ts 模块契约（缺失字段/环/重名/版本冲突）\n      --graph  追加 Mermaid 依赖图',
+      },
+      {
+        usage: 'proteus module:duplicates [distDir]',
+        desc: '分包间共享依赖去重检测（读 dist/mp-weixin/app.json 的 subPackages，hash 相同文件 ≥2 分包 → 报告）',
+      },
+      {
+        usage: 'proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-json]',
+        desc: '★综合审计门禁（M8.6，全部硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist：分包体积/重复）\n      --dist         产物目录（分包体积阈值 + 去重检测）\n      --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）',
+      },
+      {
+        usage: 'proteus audit all [root]',
+        desc: '★全量审计门禁（test-framework B6）：route / module / config / i18n / capabilities / components 六域聚合\n      + CI 耗时预算（<12s，超预算阻断）；缺配置文件域跳过（独立编译模式）',
+      },
+      {
+        usage: 'proteus capabilities:manifest [dir] [--platform <web|skyline|app>]',
+        desc: '★扫描 capabilities/*.capability.ts → capability-manifest.json（B1 能力清单审计）\n      --platform   能力缺失报告（B3 编译期分叉：该平台无 adapter 的能力 + 业务引用警告）',
+      },
+      {
+        usage: 'proteus capabilities:check [dir]',
+        desc: '★平台原生模块规范静态检查（B5 §6 禁止清单：业务目录禁 wx.*/window.*，平台文件防 API 泄漏）',
+      },
+      {
+        usage: 'proteus components:audit [dir]',
+        desc: '★组件审计：p-* 组件注册表 vs 实际使用（未登记/未使用/标签漂移）',
+      },
+    ],
+  },
+  {
+    title: '测试',
+    entries: [
+      {
+        usage: 'proteus test [unit|e2e:web|e2e:mp] [--ide <cli 路径>] [--port <n>] [--debugger <模块>]',
+        desc: '★测试入口（test-framework）：unit → L1-L3 + 编译快照；e2e:web → Playwright（先 build --target web）\n      e2e:mp → automator（B5）：IDE 路径可配置（PROTEUS_IDE_CLI 环境变量 / --ide 参数 / 平台默认探测）\n      + 自动启动微信开发者工具（auto --auto-port）→ 端口就绪 → 跑 e2e-mp-smoke（缺 IDE 报错含指引）\n      + --debugger <模块>：注入 MpDebuggerLike 适配模块（console/network/clearCache/refresh——wechatide 工具能力，见 docs 13 §6.5）',
+      },
+    ],
+  },
+  {
+    title: '生成与迁移',
+    entries: [
+      {
+        usage: 'proteus init module [dir]',
+        desc: '★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）',
+      },
+      {
+        usage: 'proteus generate types [--out <path>] [--check]',
+        desc: '★生成全局类型产物（types-plan B3）：JSON Schema + 全局 d.ts（--check 校验漂移）',
+      },
+      {
+        usage: 'proteus migrate types <file>',
+        desc: '★迁移助手：旧类型写法 → 新收口类型（types-plan 10 类型收口）',
+      },
+      {
+        usage: 'proteus gen config [file]',
+        desc: '★生成 app.config.ts 骨架（G-35 M5）：defineAppConfig 类型安全形态；缺省 app.config.ts',
+      },
+      {
+        usage: 'proteus ci:init [--platform <github|gitlab|circleci>] [--targets <a,b>] [dir]',
+        desc: '★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）\n      默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）',
+      },
+    ],
+  },
+  {
+    title: '诊断与工具',
+    entries: [
+      {
+        usage: 'proteus explain <vue 文件 | 规则 ID>',
+        desc: 'vue 文件 → 决策 trace（该文件实际触发的全部转换规则）\n      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）',
+      },
+      {
+        usage: 'proteus rules [template | script | style | validate]',
+        desc: '列出全部编译规则（AI 说明书目录）',
+      },
+      {
+        usage: 'proteus version',
+        desc: '版本号',
+      },
+      {
+        usage: 'proteus help',
+        desc: '本帮助',
+      },
+    ],
+  },
+]
 
-  proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]
-      ★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合
-      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）
+const ANSI_CYAN = '\u001b[36m'
+const ANSI_BOLD = '\u001b[1m'
+const ANSI_RESET = '\u001b[0m'
 
-  proteus health [dir]
-      ★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE
-      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）
+/**
+ * ★帮助文本渲染（分组 + ANSI 色彩；useColor=false 纯文本——非 TTY/CI 安全）
+ * 命令名 cyan、分组标题 bold；desc 保留多行缩进
+ */
+export function formatHelpText(useColor = typeof process !== 'undefined' && process.stdout?.isTTY === true): string {
+  const lines: string[] = []
+  lines.push('Proteus CLI —— AI-native 透明跨端编译框架')
+  lines.push('')
+  lines.push('用法：')
+  lines.push('  proteus <command> [args...]')
+  lines.push('')
+  for (const group of HELP_GROUPS) {
+    lines.push(useColor ? `${ANSI_BOLD}${group.title}${ANSI_RESET}` : group.title)
+    lines.push('')
+    for (const entry of group.entries) {
+      // 命令名 = usage 前两个 token（proteus <子命令>，如 'proteus check'/'proteus test'）→ cyan；其余参数原样
+      const tokens = entry.usage.split(' ')
+      const cmdLen = tokens[0] === 'proteus' && tokens[1] ? 2 : 1
+      const cmd = tokens.slice(0, cmdLen).join(' ')
+      const rest = tokens.slice(cmdLen).join(' ')
+      lines.push(useColor ? `  ${ANSI_CYAN}${cmd}${ANSI_RESET} ${rest}`.trimEnd() : `  ${entry.usage}`)
+      // desc：首行统一 6 空格前缀；后续行保留 desc 内自带缩进（避免叠加变深）
+      const descLines = entry.desc.split('\n')
+      lines.push(`      ${descLines[0]}`)
+      for (const l of descLines.slice(1)) lines.push(l)
+      lines.push('')
+    }
+  }
+  return lines.join('\n').replace(/\n\n\n/g, '\n\n').trimEnd() + '\n'
+}
 
-  proteus css:check [dir|file] [--no-strict] [--fix] [--report <path>]
-      ★CSS 跨端兼容校验（G-21）：CSS001-012 + 预算门禁（字节/选择器/语义占比/禁止项）
-      --no-strict  违规降级 warn；--report 落盘 css-compat-report.json（check-css-report.mjs 消费）
-
-  proteus style:check [dir|file] [--platform <web|skyline|ios|android|harmony>]
-      ★样式运行时安全（G-31）：模板 :style 白名单 STS001-006 + 静态推导覆盖率（常量折叠）
-
-  proteus explain <vue 文件 | 规则 ID>
-      vue 文件 → 决策 trace（该文件实际触发的全部转换规则）
-      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）
-
-  proteus rules [template | script | style | validate]
-      列出全部编译规则（AI 说明书目录）
-
-  proteus config:check <proteus.config.ts>
-      ★配置校验（types-plus B2/B5）：必填字段 + 跨层依赖（CONFIG_LAYER_VIOLATION）+ 版本迁移提示
-
-  proteus i18n:check [root] [--catalog <path>]
-      ★i18n 用法检查（i18n-plan B1）：硬编码文案检测 + catalog 键对照
-
-  proteus router:check [dir]
-      校验 <route> 块与集中式 meta（来源登记 + 父路由推导依据）
-
-  proteus module:check [dir] [--graph]
-      校验 proteus-module.config.ts 模块契约（缺失字段/环/重名/版本冲突）
-      --graph  追加 Mermaid 依赖图
-
-  proteus module:duplicates [distDir]
-      分包间共享依赖去重检测（读 dist/mp-weixin/app.json 的 subPackages，hash 相同文件 ≥2 分包 → 报告）
-
-  proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-json]
-      ★综合审计门禁（M8.6，全部硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist：分包体积/重复）
-      --dist         产物目录（分包体积阈值 + 去重检测）
-      --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）
-
-  proteus audit all [root]
-      ★全量审计门禁（test-framework B6）：route / module / config / i18n / capabilities / components 六域聚合
-      + CI 耗时预算（<12s，超预算阻断）；缺配置文件域跳过（独立编译模式）
-
-  proteus init module [dir]
-      ★生成 proteus-module.config.ts 骨架（module-plan B9：新工程零门槛接入模块化）
-
-  proteus capabilities:manifest [dir] [--platform <web|skyline|app>]
-      ★扫描 capabilities/*.capability.ts → capability-manifest.json（B1 能力清单审计）
-      --platform   能力缺失报告（B3 编译期分叉：该平台无 adapter 的能力 + 业务引用警告）
-
-  proteus capabilities:check [dir]
-      ★平台原生模块规范静态检查（B5 §6 禁止清单：业务目录禁 wx.*/window.*，平台文件防 API 泄漏）
-
-  proteus components:audit [dir]
-      ★组件审计：p-* 组件注册表 vs 实际使用（未登记/未使用/标签漂移）
-
-  proteus generate types [--out <path>] [--check]
-      ★生成全局类型产物（types-plan B3）：JSON Schema + 全局 d.ts（--check 校验漂移）
-
-  proteus migrate types <file>
-      ★迁移助手：旧类型写法 → 新收口类型（types-plan 10 类型收口）
-
-  proteus ci:init [--platform <github|gitlab|circleci>] [--targets <a,b>] [dir]
-      ★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）
-      默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）
-
-  proteus gen config [file]
-      ★生成 app.config.ts 骨架（G-35 M5）：defineAppConfig 类型安全形态；缺省 app.config.ts
-
-  proteus test [unit|e2e:web|e2e:mp] [--ide <cli 路径>] [--port <n>] [--debugger <模块>]
-      ★测试入口（test-framework）：unit → L1-L3 + 编译快照；e2e:web → Playwright（先 build --target web）
-      e2e:mp → automator（B5）：IDE 路径可配置（PROTEUS_IDE_CLI 环境变量 / --ide 参数 / 平台默认探测）
-      + 自动启动微信开发者工具（auto --auto-port）→ 端口就绪 → 跑 e2e-mp-smoke（缺 IDE 报错含指引）
-      + --debugger <模块>：注入 MpDebuggerLike 适配模块（console/network/clearCache/refresh——wechatide 工具能力，见 docs 13 §6.5）
-
-  proteus version / help
-`
+/** ★纯文本帮助（向后兼容；CLI 输出用 formatHelpText() 自动 TTY 检测） */
+export const HELP_TEXT = formatHelpText(false)

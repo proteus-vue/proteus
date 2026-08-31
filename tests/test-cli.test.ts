@@ -2,6 +2,7 @@
 // ★test-framework：proteus test 入口（README 快速开始：unit / e2e:web / e2e:mp）
 import { describe, expect, it } from 'vitest'
 import { parseTestArgs, runTest } from '../packages/cli/src/test'
+import { formatHelpText } from '../packages/cli/src/args'
 
 describe('proteus test（test-framework 入口）', () => {
   it('parseTestArgs：缺省 unit / 显式 scope / e2e:mp root / 非法报错', () => {
@@ -50,5 +51,30 @@ describe('proteus test（test-framework 入口）', () => {
     const plan = runTest({ scope: 'e2e:mp' })
     expect(plan.command).toBe('')
     expect(plan.note).toContain('微信开发者工具')
+  })
+})
+
+describe('proteus help 美化（分组 + ANSI 色彩开关）', () => {
+  it('formatHelpText(false)：纯文本分组渲染（命令名/说明完整）', () => {
+    const text = formatHelpText(false)
+    // 分组标题
+    expect(text).toContain('构建与开发')
+    expect(text).toContain('检查与门禁')
+    expect(text).toContain('测试')
+    expect(text).toContain('生成与迁移')
+    expect(text).toContain('诊断与工具')
+    // 命令与说明完整保留
+    expect(text).toContain('proteus check [dir]')
+    expect(text).toContain('proteus health [dir]')
+    expect(text).toContain('proteus test [unit|e2e:web|e2e:mp]')
+    expect(text).toContain('★一键全量门禁')
+    // 纯文本无 ANSI
+    expect(text).not.toContain('\u001b[')
+  })
+
+  it('formatHelpText(true)：命令名 cyan + 分组标题 bold', () => {
+    const text = formatHelpText(true)
+    expect(text).toContain('\u001b[36mproteus check\u001b[0m') // 命令名 cyan
+    expect(text).toContain('\u001b[1m检查与门禁\u001b[0m') // 分组标题 bold
   })
 })
