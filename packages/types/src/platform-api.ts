@@ -18,11 +18,42 @@ export interface StorageAPI {
   clear(): void
 }
 
-/** 跨端路由（对齐 Router API 语义：push 对应 navigateTo、replace 对应 redirectTo/switchTab 由实现映射） */
+/** 跨端路由（对齐 Router API 语义：push 对应 navigateTo、replace 对应 redirectTo；switchTab/reLaunch 对齐微信 tab/重载语义，Web 端由实现映射为 push/replace 驱动） */
 export interface RouterAPI {
   push(url: string, query?: Record<string, string>): void
   replace(url: string, query?: Record<string, string>): void
+  /** 微信 switchTab：切 tab 页（Web 端映射为 replace 语义） */
+  switchTab(url: string, query?: Record<string, string>): void
+  /** 微信 reLaunch：关闭所有页面重开（Web 端映射为 replace 语义） */
+  reLaunch(url: string, query?: Record<string, string>): void
   back(delta?: number): void
+}
+
+/** showModal 选项（对齐微信 showModal 高频字段；editable 等低频字段走 capability） */
+export interface ModalOptions {
+  title?: string
+  content?: string
+  showCancel?: boolean
+  confirmText?: string
+  cancelText?: string
+}
+
+/** showModal 结果（confirm=true 且无 cancel 时确认） */
+export interface ModalResult {
+  confirm: boolean
+  cancel: boolean
+}
+
+/** showActionSheet 选项 */
+export interface ActionSheetOptions {
+  itemList: string[]
+  /** 取消按钮文案（默认「取消」） */
+  cancelText?: string
+}
+
+/** showActionSheet 结果（取消 tapIndex=-1） */
+export interface ActionSheetResult {
+  tapIndex: number
 }
 
 /** 跨端轻量 UI 反馈 */
@@ -30,6 +61,10 @@ export interface UIAPI {
   showToast(message: string, duration?: number): void
   showLoading(title?: string): void
   hideLoading(): void
+  /** 模态确认框（对齐 wx.showModal；Web 端 DOM 实现） */
+  showModal(options?: ModalOptions): Promise<ModalResult>
+  /** 操作菜单（对齐 wx.showActionSheet；Web 端 DOM 实现） */
+  showActionSheet(options: ActionSheetOptions): Promise<ActionSheetResult>
 }
 
 /**
@@ -60,12 +95,16 @@ const _platformApiShapeCheck: PlatformAPI = {
   router: {
     push: () => {},
     replace: () => {},
+    switchTab: () => {},
+    reLaunch: () => {},
     back: () => {},
   },
   ui: {
     showToast: () => {},
     showLoading: () => {},
     hideLoading: () => {},
+    showModal: async () => ({ confirm: false, cancel: true }),
+    showActionSheet: async () => ({ tapIndex: -1 }),
   },
 }
 void _platformApiShapeCheck

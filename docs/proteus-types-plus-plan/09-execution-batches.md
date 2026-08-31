@@ -113,7 +113,7 @@ B1 (核心类型: platform/lifecycle/IR/registry)
 ```
 
 > ★B8 落地说明（2026-08-31）：`packages/types/src/mp/`（component-schema / sdk-version / official-typings）+ `@proteus-vue/types/mp` 子路径 + 8 单测（764 全绿，Node 22）。**shims wx: any → 官方类型替换已完成（B8 验收闭环）**：packages/shared + examples 两处 shims 加 `/// <reference types="miniprogram-api-typings" />`、`wx: WechatMiniprogram.Wx`、删自建 App/Page/Component 全局（官方已有）；涟漪修复：getCurrentPages 全局函数 / require.resolve→createRequire / CustomRouteBuilder 全必选适配；`MpSdkVersion` 维护表补录待续。
-> ★B9 落地说明（2026-08-31）：`packages/types/src/platform-api.ts`（PlatformAPI/StorageAPI/RouterAPI/UIAPI 契约，request 复用 api-types 单一来源，契约自包含 re-export RequestConfig/RequestResponse）+ `@proteus-vue/types/platform-api` 子路径 + 根 index 导出 + **`@proteus-vue/api` 运行时 createPlatformAPI**（storage/router/ui/request 四域 wx/web 双端适配 + 内存/DOM/console 兜底，MP 产物 ES5 安全）+ `@proteus-vue/api` re-export；类型断言 tests/types/platform-api.types.ts + 运行时单测 tests/platform-api.test.ts 7 用例（764 全绿）。
+> ★B9 落地说明（2026-08-31）：`packages/types/src/platform-api.ts`（PlatformAPI/StorageAPI/RouterAPI/UIAPI 契约，request 复用 api-types 单一来源，契约自包含 re-export RequestConfig/RequestResponse）+ `@proteus-vue/types/platform-api` 子路径 + 根 index 导出 + **`@proteus-vue/api` 运行时 createPlatformAPI**（storage/router/ui/request 四域 wx/web 双端适配 + 内存/DOM/console 兜底，MP 产物 ES5 安全）+ `@proteus-vue/api` re-export；类型断言 tests/types/platform-api.types.ts + 运行时单测 tests/platform-api.test.ts 9 用例（770 全绿）。**★高频 API 补齐（2026-08-31）**：ui.showModal（ModalOptions/ModalResult + Web DOM 对话框）/ ui.showActionSheet（ActionSheetOptions/Result + Web DOM 菜单）/ router.switchTab + reLaunch（Web 映射 replace 语义）；pageScrollTo 跨端差异大暂不补（走 capability）。
 
 ---
 

@@ -43,18 +43,22 @@
     </view>
 
     <view class="pad-box">
-      <text class="pad-label">④ ui（wx.showToast / showLoading → platformAPI.ui）</text>
+      <text class="pad-label">④ ui（wx.showToast / showModal / showActionSheet → platformAPI.ui）</text>
       <view class="pad-row">
         <button class="pad-btn" @click="onToast">showToast</button>
+        <button class="pad-btn" @click="onModal">showModal</button>
+        <button class="pad-btn" @click="onActionSheet">showActionSheet</button>
         <button class="pad-btn" @click="onLoading">showLoading（2s 自动关）</button>
         <button class="pad-btn" @click="onHideLoading">hideLoading</button>
       </view>
+      <text class="pad-log">{{ uiLog }}</text>
     </view>
 
     <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
-        wx.showToast → api.ui.showToast · wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.request → api.request
+        wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
+        wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.switchTab → api.router.switchTab · wx.request → api.request
       </text>
     </view>
   </view>
@@ -110,8 +114,19 @@ function onRouterBack() {
 }
 
 // ---------- ④ ui ----------
+const uiLog = ref('')
 function onToast() {
   api.ui.showToast('platformAPI.ui.showToast')
+}
+function onModal() {
+  void api.ui.showModal({ title: '确认', content: 'platformAPI.ui.showModal（确认对话框）' }).then((r) => {
+    uiLog.value = r.confirm ? 'showModal → 点了确定' : 'showModal → 取消'
+  })
+}
+function onActionSheet() {
+  void api.ui.showActionSheet({ itemList: ['编辑', '删除'] }).then((r) => {
+    uiLog.value = r.tapIndex === -1 ? 'showActionSheet → 取消' : `showActionSheet → 点了第 ${r.tapIndex + 1} 项`
+  })
 }
 function onLoading() {
   api.ui.showLoading('加载中…')

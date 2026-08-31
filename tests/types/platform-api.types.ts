@@ -21,28 +21,56 @@ const full: PlatformAPI = {
   router: {
     push: (url: string, query?: Record<string, string>) => void [url, query],
     replace: () => {},
+    switchTab: (url: string, query?: Record<string, string>) => void [url, query],
+    reLaunch: () => {},
     back: (delta?: number) => void [delta],
   },
   ui: {
     showToast: (message: string, duration?: number) => void [message, duration],
     showLoading: () => {},
     hideLoading: () => {},
+    showModal: async () => ({ confirm: true, cancel: false }),
+    showActionSheet: async () => ({ tapIndex: 0 }),
   },
 }
 void full
 
 // ---- 子接口可独立引用 ----
 const storage: StorageAPI = { get: () => undefined, set: () => {}, remove: () => {}, clear: () => {} }
-const router: RouterAPI = { push: () => {}, replace: () => {}, back: () => {} }
-const ui: UIAPI = { showToast: () => {}, showLoading: () => {}, hideLoading: () => {} }
+const router: RouterAPI = {
+  push: () => {},
+  replace: () => {},
+  switchTab: () => {},
+  reLaunch: () => {},
+  back: () => {},
+}
+const ui: UIAPI = {
+  showToast: () => {},
+  showLoading: () => {},
+  hideLoading: () => {},
+  showModal: async () => ({ confirm: false, cancel: true }),
+  showActionSheet: async () => ({ tapIndex: -1 }),
+}
 void [storage, router, ui]
 
 // ---- 负例：缺任一成员必须报错（防漂移） ----
 // @ts-expect-error 缺 request
 const noRequest: PlatformAPI = {
   storage: { get: () => undefined, set: () => {}, remove: () => {}, clear: () => {} },
-  router: { push: () => {}, replace: () => {}, back: () => {} },
-  ui: { showToast: () => {}, showLoading: () => {}, hideLoading: () => {} },
+  router: {
+    push: () => {},
+    replace: () => {},
+    switchTab: () => {},
+    reLaunch: () => {},
+    back: () => {},
+  },
+  ui: {
+    showToast: () => {},
+    showLoading: () => {},
+    hideLoading: () => {},
+    showModal: async () => ({ confirm: false, cancel: true }),
+    showActionSheet: async () => ({ tapIndex: -1 }),
+  },
 }
 // @ts-expect-error 缺 storage
 const noStorage: PlatformAPI = {
@@ -52,8 +80,20 @@ const noStorage: PlatformAPI = {
     headers: {},
     config,
   }),
-  router: { push: () => {}, replace: () => {}, back: () => {} },
-  ui: { showToast: () => {}, showLoading: () => {}, hideLoading: () => {} },
+  router: {
+    push: () => {},
+    replace: () => {},
+    switchTab: () => {},
+    reLaunch: () => {},
+    back: () => {},
+  },
+  ui: {
+    showToast: () => {},
+    showLoading: () => {},
+    hideLoading: () => {},
+    showModal: async () => ({ confirm: false, cancel: true }),
+    showActionSheet: async () => ({ tapIndex: -1 }),
+  },
 }
 // @ts-expect-error storage.get 必须返回 T | undefined
 const badGet: StorageAPI = { get: () => 'never', set: () => {}, remove: () => {}, clear: () => {} }

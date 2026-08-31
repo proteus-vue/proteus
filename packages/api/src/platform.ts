@@ -3,7 +3,18 @@
 // 定位：业务层只依赖 @proteus-vue/types 的 PlatformAPI 类型 + 本工厂——不出现 wx./window. 裸调用。
 // ★MP 产物安全（决策 #32/#36）：无 ?. / ?? / 对象展开 / 数组解构（显式 null 检查）
 // ★平台探测：globalThis 窄类型（与 adapters.ts 一致，api 包不直接 import 官方包，保持轻量）
-import type { PlatformAPI, RequestConfig, RequestResponse, RouterAPI, StorageAPI, UIAPI } from '@proteus-vue/types/platform-api'
+import type {
+  ActionSheetOptions,
+  ActionSheetResult,
+  ModalOptions,
+  ModalResult,
+  PlatformAPI,
+  RequestConfig,
+  RequestResponse,
+  RouterAPI,
+  StorageAPI,
+  UIAPI,
+} from '@proteus-vue/types/platform-api'
 import type { IRequestAdapter } from '@proteus-vue/types/api-types'
 import { createRequestAdapter } from './adapters'
 
@@ -15,8 +26,19 @@ interface WxGlobal {
   clearStorageSync?: () => void
   navigateTo?: (opt: { url: string }) => void
   redirectTo?: (opt: { url: string }) => void
+  switchTab?: (opt: { url: string }) => void
+  reLaunch?: (opt: { url: string }) => void
   navigateBack?: (opt: { delta?: number }) => void
   showToast?: (opt: { title: string; duration?: number; icon?: string }) => void
+  showModal?: (opt: {
+    title?: string
+    content?: string
+    showCancel?: boolean
+    confirmText?: string
+    cancelText?: string
+    success?: (res: { confirm: boolean; cancel: boolean }) => void
+  }) => void
+  showActionSheet?: (opt: { itemList: string[]; success?: (res: { tapIndex: number }) => void }) => void
   showLoading?: (opt: { title?: string }) => void
   hideLoading?: () => void
 }
@@ -113,23 +135,33 @@ function createRouterAPI(): RouterAPI {
       replace: (url, query) => {
         if (wx.redirectTo) wx.redirectTo({ url: withQuery(url, query) })
       },
+      switchTab: (url, query) => {
+        if (wx.switchTab) wx.switchTab({ url: withQuery(url, query) })
+      },
+      reLaunch: (url, query) => {
+        if (wx.reLaunch) wx.reLaunch({ url: withQuery(url, query) })
+      },
       back: (delta) => {
         if (wx.navigateBack) wx.navigateBack({ delta: delta === undefined ? 1 : delta })
       },
     }
   }
   // Web：pushState + 手动 popstate（框架 web-adapter/RouterView 监听 popstate 驱动路由）
+  // ★switchTab/reLaunch 无微信 tab 语义，映射为 replace（决策：Web 端 tab 由路由层处理）
+  const replaceState = (url: string, query?: Record<string, string>): void => {
+    const full = withQuery(url, query)
+    window.history.replaceState({ proteusPlatformApi: full }, '', full)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
   return {
     push: (url, query) => {
       const full = withQuery(url, query)
       window.history.pushState({ proteusPlatformApi: full }, '', full)
       window.dispatchEvent(new PopStateEvent('popstate'))
     },
-    replace: (url, query) => {
-      const full = withQuery(url, query)
-      window.history.replaceState({ proteusPlatformApi: full }, '', full)
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    },
+    replace: (url, query) => replaceState(url, query),
+    switchTab: (url, query) => replaceState(url, query),
+    reLaunch: (url, query) => replaceState(url, query),
     back: (delta) => {
       const n = delta === undefined ? 1 : delta
       for (let i = 0; i < n; i++) window.history.back()
@@ -180,13 +212,142 @@ function createUIAPI(): UIAPI {
       hideLoading: () => {
         if (wx.hideLoading) wx.hideLoading()
       },
+      showModal: (options) =>
+        new Promise((resolve) => {
+          if (!wx.showModal) {
+            resolve({ confirm: false, cancel: true })
+            return
+          }
+          wx.showModal({
+            title: options?.title,
+            content: options?.content,
+            showCancel: options?.showCancel,
+            confirmText: options?.confirmText,
+            cancelText: options?.cancelText,
+            success: (res) => resolve(res),
+          })
+        }),
+      showActionSheet: (options) =>
+        new Promise((resolve) => {
+          if (!wx.showActionSheet) {
+            resolve({ tapIndex: -1 })
+            return
+          }
+          wx.showActionSheet({ itemList: options.itemList, success: (res) => resolve(res) })
+        }),
     }
   }
   return {
     showToast: (message) => showDomToast(message, false),
     showLoading: (title) => showDomToast(title === undefined ? '加载中' : title, true),
     hideLoading: hideDomToast,
+    showModal: showDomModal,
+    showActionSheet: showDomActionSheet,
   }
+}
+
+// ---------------- DOM modal / actionSheet（Web 端；内联样式，不依赖平台模拟层 CSS） ----------------
+
+interface DomOverlay {
+  mask: HTMLElement
+  box: HTMLElement
+}
+
+function createDomOverlay(doc: Document, className: string): DomOverlay {
+  const mask = doc.createElement('div')
+  mask.style.cssText =
+    'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;' + 'display:flex;align-items:center;justify-content:center'
+  mask.className = className
+  const box = doc.createElement('div')
+  box.style.cssText =
+    'background:#fff;border-radius:12px;padding:16px;min-width:260px;max-width:320px;' + 'box-shadow:0 8px 24px rgba(0,0,0,0.2);text-align:center'
+  if (doc.body) doc.body.appendChild(mask)
+  mask.appendChild(box)
+  return { mask, box }
+}
+
+function removeDomOverlay(overlay: DomOverlay): void {
+  if (overlay.mask.parentNode) overlay.mask.parentNode.removeChild(overlay.mask)
+}
+
+/** Web 端 showModal：确认/取消对话框（返回 { confirm, cancel }） */
+function showDomModal(options?: ModalOptions): Promise<ModalResult> {
+  const doc = (globalThis as { document?: Document }).document
+  if (!doc || typeof doc.createElement !== 'function') {
+    console.info(`[proteus-ui] showModal: ${options?.content ?? ''}`)
+    return Promise.resolve({ confirm: true, cancel: false })
+  }
+  return new Promise((resolve) => {
+    const overlay = createDomOverlay(doc, 'proteus-modal')
+    const { box } = overlay
+    const title = doc.createElement('div')
+    title.textContent = options?.title ?? ''
+    title.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:8px'
+    const content = doc.createElement('div')
+    content.textContent = options?.content ?? ''
+    content.style.cssText = 'font-size:14px;color:#666;margin-bottom:16px'
+    box.appendChild(title)
+    box.appendChild(content)
+    const finish = (result: ModalResult): void => {
+      removeDomOverlay(overlay)
+      resolve(result)
+    }
+    const btnWrap = doc.createElement('div')
+    btnWrap.style.cssText = 'display:flex;gap:8px;justify-content:center'
+    const showCancel = options?.showCancel !== false
+    const makeBtn = (text: string, primary: boolean): HTMLElement => {
+      const btn = doc.createElement('button')
+      btn.textContent = text
+      btn.style.cssText =
+        'border:none;border-radius:6px;padding:6px 16px;font-size:14px;cursor:pointer;' +
+        (primary ? 'background:#07c160;color:#fff' : 'background:#f2f3f5;color:#333')
+      return btn
+    }
+    if (showCancel) {
+      const cancelBtn = makeBtn(options?.cancelText ?? '取消', false)
+      cancelBtn.onclick = () => finish({ confirm: false, cancel: true })
+      btnWrap.appendChild(cancelBtn)
+    }
+    const confirmBtn = makeBtn(options?.confirmText ?? '确定', true)
+    confirmBtn.onclick = () => finish({ confirm: true, cancel: false })
+    btnWrap.appendChild(confirmBtn)
+    box.appendChild(btnWrap)
+    overlay.mask.onclick = () => finish({ confirm: false, cancel: true })
+  })
+}
+
+/** Web 端 showActionSheet：操作菜单（取消 tapIndex=-1） */
+function showDomActionSheet(options: ActionSheetOptions): Promise<ActionSheetResult> {
+  const doc = (globalThis as { document?: Document }).document
+  if (!doc || typeof doc.createElement !== 'function') {
+    console.info(`[proteus-ui] showActionSheet: ${options.itemList.join(' / ')}`)
+    return Promise.resolve({ tapIndex: -1 })
+  }
+  return new Promise((resolve) => {
+    const overlay = createDomOverlay(doc, 'proteus-actionsheet')
+    const { box } = overlay
+    box.style.cssText = box.style.cssText + ';padding:8px 0;overflow:hidden'
+    const finish = (result: ActionSheetResult): void => {
+      removeDomOverlay(overlay)
+      resolve(result)
+    }
+    options.itemList.forEach((item, idx) => {
+      const row = doc.createElement('div')
+      row.className = 'proteus-actionsheet-item'
+      row.textContent = item
+      row.style.cssText =
+        'padding:12px 16px;font-size:15px;cursor:pointer;border-bottom:1px solid #f0f0f0;' + 'text-align:center'
+      row.onclick = () => finish({ tapIndex: idx })
+      box.appendChild(row)
+    })
+    const cancelRow = doc.createElement('div')
+    cancelRow.className = 'proteus-actionsheet-cancel'
+    cancelRow.textContent = options.cancelText ?? '取消'
+    cancelRow.style.cssText = 'padding:12px 16px;font-size:15px;cursor:pointer;text-align:center;color:#999'
+    cancelRow.onclick = () => finish({ tapIndex: -1 })
+    box.appendChild(cancelRow)
+    overlay.mask.onclick = () => finish({ tapIndex: -1 })
+  })
 }
 
 // ---------------- 统一实例 ----------------
