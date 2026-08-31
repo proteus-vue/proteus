@@ -37,6 +37,8 @@ proteus-monorepo/
 │   ├── router/         ← @proteus-vue/router       (L1, 路由 + chunk 分包)
 │   ├── api/            ← @proteus-vue/api          (L1, 端点注册 + 拦截器)
 │   ├── component/      ← @proteus-vue/component    (L1, p-* + WXML schema)
+│   ├── built-in-components/ ← @proteus-vue/built-in-components (L1, 微信内置组件为基准，决策 #162)
+│   ├── contracts/      ← @proteus-vue/contracts     (L0, 跨层共享 DTO，types-plan §07)
 │   ├── platform/       ← @proteus-vue/platform     (L1, 端能力 + typings 整合)
 │   ├── lifecycle/      ← @proteus-vue/lifecycle    (L1, 生命周期编排)
 │   ├── module/         ← @proteus-vue/module       (L1, 模块化 + 循环检测)

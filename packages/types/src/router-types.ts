@@ -4,35 +4,9 @@
 import type { RouteTransition } from './index-shared'
 
 export type { RouteTransition } from './index-shared'
-
-/** 单个路由记录（编译期生成，勿手动编辑） */
-export interface RouteRecord {
-  /** 命名路由（kebab-case） */
-  name: string
-  /** 小程序页面路径（相对小程序根目录，含分包 root 前缀） */
-  path: string
-  /** 对应 .vue 文件路径（相对 src/router/，Web RouterView 加载） */
-  component: string
-  parent?: string
-  meta?: RouteMeta
-  /** Skyline 自定义路由 key */
-  customRouteKeyName?: string
-  /** 所属分包名（主包 undefined） */
-  subPackage?: string
-  /** 路由参数类型声明 */
-  params?: Record<string, string>
-}
-
-export interface RouteMeta {
-  requiresAuth?: boolean
-  /** ★security M3：所需权限（permission = resource:action） */
-  permissions?: string[]
-  title?: string
-  isTab?: boolean
-  transition?: RouteTransition
-  /** 任意扩展字段（仅 JSON 可序列化） */
-  [key: string]: unknown
-}
+// ★跨层 DTO 收口（架构规约 L0 / types-plan §07）：RouteRecord/RouteMeta 单一来源 @proteus-vue/contracts
+import type { RouteMeta } from '@proteus-vue/contracts'
+export type { RouteMeta, RouteRecord } from '@proteus-vue/contracts'
 
 /**
  * 路由参数类型表：基类为空接口，应用侧 auto-routes.ts 用模块扩充注入具体路由

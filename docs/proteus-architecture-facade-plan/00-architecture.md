@@ -54,7 +54,8 @@ L5 验证+门面 : blueprint / website / test-framework
 | `@proteus-vue/pinia` | 全局状态 + 分片 + 持久化 |
 | `@proteus-vue/router` | 路由 + 分包 + 守卫 |
 | `@proteus-vue/api` | 请求/拦截/缓存/签名 |
-| `@proteus-vue/components` | `p-*` 组件库（Web ↔ Skyline 映射） |
+| `@proteus-vue/components` | `p-*` 组件库（Web ↔ Skyline 映射） | component |
+| `@proteus-vue/built-in-components` | 框架内置组件（微信内置组件为基准；Web 模拟/Skyline 原生/App v0.6，决策 #162 拆包） | component |
 | `@proteus-vue/platform` | 平台判别 + 能力探测 + `PlatformAPI` |
 | `@proteus-vue/lifecycle` | 应用/页面生命周期编排 |
 | `@proteus-vue/module` | 模块化 + 依赖图 + 循环检测 |

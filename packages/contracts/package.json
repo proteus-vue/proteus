@@ -1,0 +1,43 @@
+{
+  "name": "@proteus-vue/contracts",
+  "version": "0.1.0",
+  "description": "Proteus 跨层共享 DTO 契约（架构规约 L0 + types-plan §07）：RouteRecord/RouteMeta/RouteTransition/ApiResponse/StoreSnapshot/CapabilityDescriptor——零运行时依赖纯类型，types 包 re-export 兼容（同名必同义，铁律 #9）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./route": {
+      "types": "./dist/route.d.ts",
+      "import": "./dist/route.js"
+    },
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
+    },
+    "./capability": {
+      "types": "./dist/capability.d.ts",
+      "import": "./dist/capability.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts --bundle --format=esm --platform=node --outdir=dist"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

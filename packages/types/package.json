@@ -82,6 +82,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/lifecycle-types.ts src/utils.ts src/ir-guards.ts src/config.ts src/config-schema.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
   },
+  "dependencies": {
+    "@proteus-vue/contracts": "0.1.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "miniprogram-api-typings": "^5.2.3"

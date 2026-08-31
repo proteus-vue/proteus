@@ -10,5 +10,5 @@ export type PlatformTarget = 'mp-weixin' | 'web'
 /** 语言方向（i18n RTL 一等公民） */
 export type LocaleDir = 'ltr' | 'rtl'
 
-/** 转场枚举（router RouteMeta.transition 对齐） */
-export type RouteTransition = 'slideUp' | 'slideDown' | 'halfScreen' | 'scaleDown' | 'none'
+/** 转场枚举（router RouteMeta.transition 对齐）——★收口 @proteus-vue/contracts（跨层 DTO，铁律 #9） */
+export type { RouteTransition } from '@proteus-vue/contracts'
