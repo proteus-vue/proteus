@@ -73,3 +73,14 @@ export type { ProteusConfigSchema } from './config-schema'
 // ============ config-layers（B2 §4 字段归属 + B5 §3 跨层检测） ============
 export type { ConfigLayer, CrossLayerPattern, ConfigLayerViolation, ConfigAuditRule } from './config-layers'
 export { CONFIG_FIELD_LAYERS, CROSS_LAYER_PATTERNS, CONFIG_AUDIT_RULES, checkConfigLayerViolations, getFieldLayer } from './config-layers'
+
+// ============ define-proteus（cli-plus G-33 M1：五端统一配置入口） ============
+export { defineProteus } from './define-proteus'
+export type {
+  DefineProteusConfig,
+  DefineProteusTargets,
+  DefineProteusFeatures,
+  DefineProteusTheme,
+  DefineProteusFontScale,
+  DefineProteusCache,
+} from './define-proteus'
