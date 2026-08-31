@@ -44,8 +44,8 @@ function checkFile(file: string, opts: CssCheckOptions): CssFileResult {
   const source = fs.readFileSync(file, 'utf8')
   const isVue = file.endsWith('.vue')
   const blocks = isVue
-    ? extractStyleBlocks(source).map((b) => b.content)
-    : [source]
+    ? extractStyleBlocks(source).map((b) => ({ css: b.content, baseLine: b.line }))
+    : [{ css: source, baseLine: 1 }]
 
   const options: StrictCssOptions = { strict: opts.strict }
   const violations: CssViolation[] = []
@@ -57,8 +57,13 @@ function checkFile(file: string, opts: CssCheckOptions): CssFileResult {
   let selectors = 0
   let classSelectors = 0
 
-  for (const css of blocks) {
+  for (const { css, baseLine } of blocks) {
     const report = buildCssCompatReport(css, options)
+    // ★行号补偿：postcss loc 相对 style 块（从 1 起），补块起始行 → 文件绝对行号
+    const offset = baseLine - 1
+    for (const v of report.violations) {
+      if (v.loc && v.loc.line) v.loc.line += offset
+    }
     violations.push(...report.violations)
     rewritten.calc += report.rewritten.calc
     rewritten.vh += report.rewritten.vh

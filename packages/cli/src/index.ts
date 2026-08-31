@@ -140,7 +140,7 @@ async function main(): Promise<void> {
         console.log(formatCssCheck(result))
         if (report) {
           const fs = await import('node:fs')
-          fs.writeFileSync(report, JSON.stringify({ files: result.files, total: result.total }, null, 2))
+          fs.writeFileSync(report, JSON.stringify({ files: result.files, total: result.total, global: result.global, budgetChecks: result.budgetChecks }, null, 2))
           console.log(`[proteus-css] 报告已落盘：${report}`)
         }
         if (!result.ok) process.exitCode = 1

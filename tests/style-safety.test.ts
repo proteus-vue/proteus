@@ -57,10 +57,12 @@ describe('validateProp（06 §2：①白名单 ②类型守卫 ③平台收窄�
     expect(validateProp('width', '20px', 'web').valid).toBe(true)
   })
 
-  it('收窄：Length 字符串 → 数值', () => {
+  it('收窄：非 web 端 Length 字符串 → 数值；web 保留原值（04 §3 最宽容）', () => {
     const r = validateProp('width', '20px', 'web')
     expect(r.valid).toBe(true)
-    expect(r.value).toBe(20)
+    expect(r.value).toBe('20px') // web CSSLength 原生语义
+    const sky = validateProp('width', '20px', 'skyline')
+    expect(sky.value).toBe(20) // 非 web 归一为数值
   })
 
   it('zIndex 必须整数', () => {
