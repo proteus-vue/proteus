@@ -5,6 +5,7 @@
 // ★MP 产物 ES5 安全：禁 ?. ?? 展开 解构（决策 #32/#36）
 
 import { STYLE_PROP_LEVELS } from '@proteus-vue/contracts/style'
+import { isLength, isColor, isOpacity, isInteger, isFlexNumber, isEnum } from './types'
 
 export type StylePropKind = import('@proteus-vue/contracts/style').StylePropLevel
 
@@ -22,27 +23,18 @@ export const FALLBACK_DEFAULTS: Record<string, unknown> = {
   borderRadius: 0,
 }
 
-/** 值类型守卫（06 §2 第 2 步）——Length/Color/Opacity/Integer 基础类型检查 */
+/** 值类型守卫（06 §2 第 2 步）——04 §2 命名守卫（types.ts）按属性类型映射 */
+const FLEX_ALIGN = ['flex-start', 'flex-end', 'center', 'stretch', 'baseline', 'auto']
+const FLEX_JUSTIFY = ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly']
+
 export const PROP_TYPES = {
-  Length: (v: unknown): boolean => {
-    // 数值（像素/逻辑单位）或带单位的字符串（px/rpx/rem/%）
-    if (typeof v === 'number') return Number.isFinite(v)
-    if (typeof v === 'string') return /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rpx|rem|%)?$/.test(v.trim())
-    return false
-  },
-  Color: (v: unknown): boolean => {
-    if (typeof v !== 'string') return false
-    const s = v.trim()
-    return /^#[0-9a-fA-F]{3,8}$/.test(s) || /^rgba?\([\d.,\s%]+\)$/.test(s) || /^hsla?\([\d.,\s%deg]+\)$/.test(s) || s === 'transparent' || s === 'inherit'
-  },
-  Opacity: (v: unknown): boolean => {
-    if (typeof v !== 'number') return false
-    return v >= 0 && v <= 1
-  },
-  Integer: (v: unknown): boolean => typeof v === 'number' && Number.isInteger(v),
-  FlexNumber: (v: unknown): boolean => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && /^-?(?:\d+(?:\.\d+)?|auto)$/.test(v.trim())),
-  FlexAlign: (v: unknown): boolean => ['flex-start', 'flex-end', 'center', 'stretch', 'baseline', 'auto'].indexOf(String(v)) >= 0,
-  FlexJustify: (v: unknown): boolean => ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'].indexOf(String(v)) >= 0,
+  Length: isLength,
+  Color: isColor,
+  Opacity: isOpacity,
+  Integer: isInteger,
+  FlexNumber: isFlexNumber,
+  FlexAlign: isEnum(FLEX_ALIGN),
+  FlexJustify: isEnum(FLEX_JUSTIFY),
   Transform: (v: unknown): boolean => typeof v === 'string' && /^(translate|scale|rotate|skew)/i.test(v.trim()),
   TransformOrigin: (v: unknown): boolean => typeof v === 'string' && /^(left|right|top|bottom|center|\d+)/i.test(v.trim()),
 } as const
