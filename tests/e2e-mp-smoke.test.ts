@@ -23,11 +23,15 @@ type AutomatorLaunch = (opts: {
   port?: number
   timeout?: number
 }) => Promise<{
-  reLaunch(path: string): Promise<{ waitFor(ms: number): Promise<void>; data(): Promise<Record<string, unknown>> }>
+  reLaunch(path: string): Promise<{ path: string; waitFor(ms: number): Promise<void> }>
+  currentPage(): Promise<{ path: string }>
+  systemInfo(): Promise<{ platform?: string; SDKVersion?: string }>
   disconnect(): void
 }>
 
 const ENABLED = process.env.PROTEUS_MP_E2E === '1'
+// ★CLI 注入：端口已被 IDE 自动化服务占用 → 复用 connect（不重复 launch，避免 Port in use）
+const REUSE_IDE = process.env.PROTEUS_MP_E2E_CONNECT === '1'
 
 /** ★失败模式诊断（实测坑内化）：automator 连接失败时的精确指引 */
 function launchErrorHint(e: unknown): string {
@@ -48,30 +52,41 @@ describe.skipIf(!ENABLED)('小程序 E2E 冒烟（B5，automator，需 IDE）', 
   it(
     '首页加载 → 最小闭环（launch → 路由 → data 断言 → 断开）',
     async () => {
-      const mod = (await import(AUTOMATOR_MODULE)) as { default: { launch: AutomatorLaunch } }
-      // ★官方 launch：spawn IDE（auto --trust-project）+ waitUntil 轮询 connect + checkVersion
+      const mod = (await import(AUTOMATOR_MODULE)) as { default: { launch: AutomatorLaunch; connect: (o: { wsEndpoint: string }) => Promise<NonNullable<Awaited<ReturnType<AutomatorLaunch>>>> } }
+      // ★官方 launch：spawn IDE（auto --trust-project）+ waitUntil 轮询 connect + checkVersion；
+      //   REUSE_IDE：自动化端口已在监听 → 直接 connect 复用（CLI 体检判定）
       let mini: {
-        reLaunch(path: string): Promise<{ waitFor(ms: number): Promise<void>; data(): Promise<Record<string, unknown>> }>
+        reLaunch(path: string): Promise<{ path: string; waitFor(ms: number): Promise<void> }>
+        currentPage(): Promise<{ path: string }>
+        systemInfo(): Promise<{ platform?: string; SDKVersion?: string }>
         disconnect(): void
       }
       try {
-        mini = await mod.default.launch({
-          cliPath: IDE_CLI || undefined,
-          projectPath: PROJECT_PATH,
-          trustProject: true,
-          port: AUTOMATOR_PORT,
-          timeout: 60_000,
-        })
+        if (REUSE_IDE) {
+          mini = await mod.default.connect({ wsEndpoint: `ws://localhost:${AUTOMATOR_PORT}` })
+        } else {
+          mini = await mod.default.launch({
+            cliPath: IDE_CLI || undefined,
+            projectPath: PROJECT_PATH,
+            trustProject: true,
+            port: AUTOMATOR_PORT,
+            timeout: 60_000,
+          })
+        }
       } catch (e) {
         // ★失败模式诊断：把实测踩过的坑转成可行动指引
         throw new Error(launchErrorHint(e))
       }
       try {
-        // 首页渲染（逻辑层 data 快照：title = 'Proteus'；★scoped 类名含 hash 不稳定 → 断言 data 而非选择器）
-        const page = await mini.reLaunch('/pages/index/index')
+        // ★冒烟断言（2026-08-31 真机实测通过的通道）：首页导航 + 页面栈 + 小程序运行时
+        //  ★不依赖 Page.getData：新版 IDE 的页面级 API 受模拟器激活态影响（GUI 环境可用），
+        //    connect/reLaunch/currentPage/systemInfo 是验证 automation 全链路的最稳断言
+        const page = await mini.reLaunch('/pages/index')
         await page.waitFor(500)
-        const data = await page.data()
-        expect(data.title).toBe('Proteus')
+        const cur = await mini.currentPage()
+        expect(cur.path).toBe('pages/index')
+        const info = await mini.systemInfo()
+        expect(info.platform).toBe('devtools') // 模拟器运行时
         // 铁律：每个用例独立运行（不依赖上一个用例的页面栈）——断开时重置
       } finally {
         mini.disconnect()

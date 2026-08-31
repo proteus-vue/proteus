@@ -259,12 +259,16 @@ async function main(): Promise<void> {
         try {
           const projectRoot = root ?? '.'
           // ① 环境体检（★实测坑内化：占位 appid / 端口残留 / 产物缺失 一次性报告）
-          const diagnosis = diagnoseMpE2EEnv({ root: projectRoot, port, ideCli: ide ?? undefined, isPortBusy: (p) => portInUseSync(p) })
+          //   ★异步端口探测（net 无同步 API；busy-wait 不可靠——事件回调可能晚于循环退出）
+          const portBusy = await probePort(port ?? 9420)
+          const diagnosis = diagnoseMpE2EEnv({ root: projectRoot, port, ideCli: ide ?? undefined, isPortBusy: () => portBusy })
           console.log(formatMpE2EDiagnosis(diagnosis))
           if (!diagnosis.ok) {
             process.exitCode = 1
             break
           }
+          // ★复用已运行 IDE：端口被占（自动化服务已在监听）→ connect 模式（不重复 launch，避免 Port in use）
+          const reuseIde = portBusy
           const plan = planMpE2E({ root: projectRoot, port, ideCli: ide ?? undefined })
           // ② 产物独立副本（避开 IDE 路径缓存 + 不污染 dist）
           const prepared = prepareMpE2EProject(projectRoot)
@@ -294,6 +298,7 @@ async function main(): Promise<void> {
               env: {
                 ...process.env,
                 PROTEUS_MP_E2E: '1',
+                PROTEUS_MP_E2E_CONNECT: reuseIde ? '1' : '0',
                 PROTEUS_AUTOMATOR_PORT: String(plan.port),
                 PROTEUS_IDE_CLI: plan.ideCli,
                 PROTEUS_MINI_PROGRAM_PATH: prepared.projectDir,
@@ -383,24 +388,23 @@ main().catch((err: Error) => {
   process.exitCode = 1
 })
 
-/** 端口占用同步探测（e2e:mp 体检；net 是异步的——用 300ms 有界等待收敛结果） */
-function portInUseSync(port: number): boolean {
-  let used = false
-  try {
+/** 端口占用异步探测（net.connect 短超时；e2e:mp 体检 + 复用判定） */
+async function probePort(port: number, timeoutMs = 500): Promise<boolean> {
+  return new Promise((resolve) => {
     const socket = net.connect({ port, host: '127.0.0.1' })
-    socket.once('connect', () => {
-      used = true
+    const timer = setTimeout(() => {
       socket.destroy()
+      resolve(false)
+    }, timeoutMs)
+    socket.once('connect', () => {
+      clearTimeout(timer)
+      socket.destroy()
+      resolve(true)
     })
     socket.once('error', () => {
+      clearTimeout(timer)
       socket.destroy()
+      resolve(false)
     })
-    const start = Date.now()
-    while (Date.now() - start < 300) {
-      // 有界等待 connect/error 事件（最多 300ms；被占端口 connect 立即成功）
-    }
-  } catch {
-    return false
-  }
-  return used
+  })
 }
