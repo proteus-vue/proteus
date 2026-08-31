@@ -241,7 +241,7 @@ function onSystemInfo() {
 }
 .msd-slider {
   width: 60%;
-  display: inline-block;
+  display: block;
 }
 .msd-nav {
   color: #1a7af8;

@@ -14,7 +14,7 @@
   <div class="order-list">
     <h2>订单列表（分包）</h2>
     <div class="links">
-      <a href="/pages/showcase" route-type="scaleDown">转场演示（层叠缩放：本页下沉 + 演示页滑入）</a>
+      <a class="link" href="/pages/showcase" route-type="scaleDown">转场演示（层叠缩放：本页下沉 + 演示页滑入）</a>
     </div>
   </div>
 </template>
@@ -24,7 +24,7 @@
   text-align: center;
   padding: 24px 0;
 }
-.links a {
+.links .link {
   display: block;
   padding: 8px 0;
   color: #1a7af8;

@@ -41,10 +41,15 @@ describe('CSS001-012 校验（02-strict-css-lint.md）', () => {
     expect(codes('.a .b .c { color: red; }')).toContain('CSS006')
     expect(codes('.a .b { color: red; }')).not.toContain('CSS006')
     expect(codes('.a > .b > .c { color: red; }')).toContain('CSS006')
+    // ★多行选择器（行首缩进）不误计为组合符（CSS006 19 层误报 bug 回归）
+    expect(codes('.fade-enter-active,\n  .fade-leave-active { color: red; }')).not.toContain('CSS006')
   })
 
   it('CSS007 z-index', () => {
     expect(codes('.a { z-index: 10; }')).toContain('CSS007')
+    // ★B1 保守实现无法判定跨父级（精确判定需 IR 上下文）→ strict 下也降级 warn 提示
+    const v = lintStyleCss('.a { z-index: 10; }')
+    expect(v.find((x) => x.code === 'CSS007')?.severity).toBe('warn')
   })
 
   it('CSS008 calc()/vh/vw（strict 报错；非 strict 降级 warn + fixable）', () => {
@@ -53,6 +58,9 @@ describe('CSS001-012 校验（02-strict-css-lint.md）', () => {
     expect(codes('.a { width: calc(100px + 20px); }', { strict: false })).toContain('CSS008')
     const v = lintStyleCss('.a { height: 100vh; }', { strict: false })
     expect(v.find((x) => x.code === 'CSS008')?.severity).toBe('warn')
+    // ★min-height: 100vh 弹性安全用法豁免（不会遮挡输入框，仅 height/width 误报）
+    expect(codes('.a { min-height: 100vh; }')).not.toContain('CSS008')
+    expect(codes('.a { width: 100vw; }')).toContain('CSS008')
   })
 
   it('CSS009 裸 backdrop-filter', () => {

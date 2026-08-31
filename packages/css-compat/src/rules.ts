@@ -32,13 +32,16 @@ export { UNIVERSAL_SELECTOR_RE }
 const VH_RE = /\d+(?:\.\d+)?(?:vh|vw)\b/
 const CALC_RE = /calc\(/i
 
-/** 后代/子代组合符计数（屏蔽 [] 与 () 内容后统计层级） */
+/** 后代/子代组合符计数（屏蔽 [] 与 () 内容后统计层级）
+ * ★多行选择器（每行行首缩进空格）不误计：先折叠换行+行首空白 */
 function countCascadeDepth(selector: string): number {
+  // 多行格式化（逗号列表/长选择器换行）：\n + 行首缩进 → 空格（不产生组合符）
+  const flat = selector.replace(/\s*\n\s*/g, '')
   let depth = 0
   let inBracket = 0
   let inParen = 0
   let prevSignificant = ''
-  for (const ch of selector) {
+  for (const ch of flat) {
     if (ch === '[') inBracket++
     else if (ch === ']') inBracket = Math.max(0, inBracket - 1)
     else if (ch === '(') inParen++
@@ -123,10 +126,10 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS007',
     name: 'z-index 依赖 stacking context',
-    severity: 'error',
-    description: '跨父级 stacking 无法五端统一',
+    severity: 'warn',
+    description: '跨父级 stacking 无法五端统一（B1 保守提示，精确判定需 IR 上下文）',
     fixable: false,
-    checkDeclaration: (prop) => (prop === 'z-index' ? 'z-index 依赖 stacking context：跨父级无法五端统一（B1 保守报错，精确判定需 IR 上下文）' : null),
+    checkDeclaration: (prop) => (prop === 'z-index' ? 'z-index 依赖 stacking context：跨父级无法五端统一（B1 保守提示，精确判定需 IR 上下文）' : null),
   },
   {
     code: 'CSS008',
@@ -136,7 +139,8 @@ export const CSS_RULES: CssRule[] = [
     fixable: true,
     checkDeclaration: (prop, value) => {
       if (CALC_RE.test(value)) return 'calc() 需编译期求值/拆分（简单数值可 --fix 折叠；含百分比走 <p-* 布局语义>）'
-      if (VH_RE.test(value)) return 'vh/vw 需编译期重写（键盘弹出不收缩，--fix 转 % 语义）'
+      // ★vh/vw 仅 height/width 误报（键盘弹出遮挡输入框）；min-height:100vh 等弹性安全用法豁免（不会遮挡）
+      if (VH_RE.test(value) && (prop === 'height' || prop === 'width')) return 'vh/vw 需编译期重写（键盘弹出不收缩，--fix 转 % 语义）'
       return null
     },
   },

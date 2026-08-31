@@ -29,19 +29,19 @@ function handleTap() {
     <div v-for="(item, idx) in items" :key="idx" class="item">{{ idx }}. {{ item }}</div>
     <button @click="handleTap">tap</button>
     <div class="links">
-      <a href="/pages/forms">表单与指令</a>
-      <a href="/pages/config-demo">配置演示</a>
-      <a href="/pages/components-demo">组件演示</a>
-      <a href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
-      <a href="/pages/platform-api-demo">PlatformAPI 收口</a>
-      <a href="/pages/builtin-components-demo">内置组件</a>
-      <a href="/pages/i18n-demo">国际化</a>
-      <a href="/pages/provide-inject-demo">注入演示</a>
-      <a href="/pages/virtual-list-demo">虚拟列表</a>
-      <a href="/pages/pinia-demo">状态管理</a>
-      <a href="/pages/user/index">用户中心</a>
-      <a href="/pages/user/profile">个人资料</a>
-      <a href="/subpackages/order/pages/list">订单列表</a>
+      <a class="link" href="/pages/forms">表单与指令</a>
+      <a class="link" href="/pages/config-demo">配置演示</a>
+      <a class="link" href="/pages/components-demo">组件演示</a>
+      <a class="link" href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
+      <a class="link" href="/pages/platform-api-demo">PlatformAPI 收口</a>
+      <a class="link" href="/pages/builtin-components-demo">内置组件</a>
+      <a class="link" href="/pages/i18n-demo">国际化</a>
+      <a class="link" href="/pages/provide-inject-demo">注入演示</a>
+      <a class="link" href="/pages/virtual-list-demo">虚拟列表</a>
+      <a class="link" href="/pages/pinia-demo">状态管理</a>
+      <a class="link" href="/pages/user/index">用户中心</a>
+      <a class="link" href="/pages/user/profile">个人资料</a>
+      <a class="link" href="/subpackages/order/pages/list">订单列表</a>
     </div>
   </div>
 </template>
@@ -57,7 +57,7 @@ function handleTap() {
 .links {
   margin-top: 24px;
 }
-.links a {
+.links .link {
   display: block;
   padding: 8px 0;
   color: #1a7af8;

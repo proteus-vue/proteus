@@ -23,11 +23,11 @@ const cards = ref([
     <h2>缩放转场演示</h2>
     <p class="sub">进入时底部滑入 + 放大，前页下沉缩放联动</p>
     <div v-for="(card, idx) in cards" :key="idx" class="card">
-      <h3>{{ card.title }}</h3>
-      <p>{{ card.desc }}</p>
+      <h3 class="card-title">{{ card.title }}</h3>
+      <p class="card-desc">{{ card.desc }}</p>
     </div>
     <div class="links">
-      <a href="/pages/user/profile" route-type="scaleDown">→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）</a>
+      <a class="link" href="/pages/user/profile" route-type="scaleDown">→ 个人资料（层叠缩放：本页下沉 + 目标页滑入）</a>
     </div>
   </div>
 </template>
@@ -48,11 +48,11 @@ const cards = ref([
   margin: 12px 0;
   text-align: left;
 }
-.card h3 {
+.card .card-title {
   margin: 0 0 4px;
   font-size: 16px;
 }
-.card p {
+.card .card-desc {
   margin: 0;
   color: #666;
   font-size: 13px;
@@ -60,7 +60,7 @@ const cards = ref([
 .links {
   margin-top: 20px;
 }
-.links a {
+.links .link {
   display: block;
   padding: 8px 0;
   color: #1a7af8;
