@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/app-config",
+  "version": "0.1.0",
+  "description": "Proteus 应用全局配置（G-35）：四层合并（默认<env<platform<remote）+ 自研轻量校验（非法降级不崩溃）——纯 TS 零依赖，M1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  }
+}
