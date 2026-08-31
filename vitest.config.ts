@@ -11,6 +11,8 @@ export default defineConfig({
     alias: [
       // 拆包后 src/runtime、src/router import @proteus-vue/shared/runtime（vitest 不加载 vite.config，需独立别名）
       { find: '@proteus-vue/shared', replacement: fileURLToPath(new URL('./packages/shared/src/index.ts', import.meta.url)) },
+      // ★子路径 alias 必须在父路径之前（vite alias 前缀匹配：@proteus-vue/runtime 会吞掉 /style-safety 后缀）
+      { find: '@proteus-vue/runtime/style-safety', replacement: fileURLToPath(new URL('./packages/runtime/src/style-safety/index.ts', import.meta.url)) },
       { find: '@proteus-vue/runtime', replacement: fileURLToPath(new URL('./packages/runtime/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/router', replacement: fileURLToPath(new URL('./packages/router/src', import.meta.url)) },
       // 插件/编译引擎（plugin.test 加载 plugin.ts 时 import @proteus-vue/compiler 需解析）

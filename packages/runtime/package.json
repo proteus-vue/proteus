@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./style-safety": {
+      "types": "./dist/style-safety/index.d.ts",
+      "import": "./dist/style-safety/index.js",
+      "default": "./dist/style-safety/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,7 +24,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/shared --external:pinia"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:pinia"
   },
   "dependencies": {
     "@proteus-vue/shared": "0.2.0-beta.0"

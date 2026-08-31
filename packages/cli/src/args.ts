@@ -251,6 +251,24 @@ export function parseCssCheckArgs(argv: string[]): { target: string; strict: boo
   return { target: path.resolve(positional[0] ?? '.'), strict, fix, report: report ? path.resolve(report) : undefined }
 }
 
+export function parseStyleCheckArgs(argv: string[]): { target: string; platform: string } {
+  let platform = 'web'
+  const positional: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--platform') {
+      platform = argv[i + 1] ?? ''
+      i++
+    } else if (!a.startsWith('-')) {
+      positional.push(a)
+    } else {
+      throw new Error(`未知参数：${a}`)
+    }
+  }
+  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  return { target: path.resolve(positional[0] ?? '.'), platform }
+}
+
 export function parseGenerateTypesArgs(argv: string[]): { out?: string; check?: boolean } {
   let out: string | undefined
   let check = false
