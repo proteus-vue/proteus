@@ -24,9 +24,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:pinia"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@proteus-vue/contracts --external:pinia"
   },
   "dependencies": {
+    "@proteus-vue/contracts": "0.1.0",
     "@proteus-vue/shared": "0.2.0-beta.0"
   },
   "peerDependencies": {

@@ -18,7 +18,10 @@
     "paths": {
       "@/*": ["src/*"],
       "@proteus-vue/compiler": ["packages/compiler/src/index.ts"],
+      "@proteus-vue/compiler/style-safety": ["packages/compiler/src/style-safety/index.ts"],
       "@proteus-vue/shared": ["packages/shared/src/index.ts"],
+      "@proteus-vue/contracts/style": ["packages/contracts/src/style.ts"],
+      "@proteus-vue/contracts": ["packages/contracts/src/index.ts"],
       "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
       "@proteus-vue/runtime/style-safety": ["packages/runtime/src/style-safety/index.ts"],
       "@proteus-vue/router": ["packages/router/src/index.ts"],

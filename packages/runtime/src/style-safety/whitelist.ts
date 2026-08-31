@@ -1,68 +1,17 @@
 // packages/runtime/src/style-safety/whitelist.ts
 // G-31 style-safety B1：ALLOWED_STYLE_PROPS 白名单 + PROP_TYPES 类型守卫 + 降级默认值
-// 03-semantic-token-layer.md §1 全量清单（与 css-compat CSS 矩阵联动：✅直映射 / 🔶语义 / ❌禁止）
+// ★白名单数据下沉 contracts（L0，铁律 #9 同源）：runtime 与 compiler 编译期推导共用同一张表
+// 03-semantic-token-layer.md §1（与 css-compat CSS 矩阵联动：✅直映射 / 🔶语义 / ❌禁止）
 // ★MP 产物 ES5 安全：禁 ?. ?? 展开 解构（决策 #32/#36）
 
-/** 白名单值类型（03 §1 级别语义） */
-export type StylePropKind =
-  | 'Length'
-  | 'Color'
-  | 'Opacity'
-  | 'Integer'
-  | 'FlexNumber'
-  | 'FlexAlign'
-  | 'FlexJustify'
-  | 'Transform'
-  | 'TransformOrigin'
-  | 'SEMANTIC_ONLY'
-  | 'FORBIDDEN'
+import { STYLE_PROP_LEVELS } from '@proteus-vue/contracts/style'
+
+export type StylePropKind = import('@proteus-vue/contracts/style').StylePropLevel
+
+/** 属性白名单（03 §1；✅ 直映射走类型守卫，🔶 语义组件，❌ 禁止）——contracts 单一来源 */
+export const ALLOWED_STYLE_PROPS = STYLE_PROP_LEVELS
 
 export type AllowedStyleProp = keyof typeof ALLOWED_STYLE_PROPS
-
-/** 属性白名单（03 §1；✅ 直映射走类型守卫，🔶 语义组件，❌ 禁止） */
-export const ALLOWED_STYLE_PROPS = {
-  // ── ✅ 直映射：五端原生都有对应，值经类型守卫后放行 ──
-  width: 'Length',
-  height: 'Length',
-  minWidth: 'Length',
-  maxWidth: 'Length',
-  minHeight: 'Length',
-  maxHeight: 'Length',
-  padding: 'Length',
-  paddingTop: 'Length',
-  paddingRight: 'Length',
-  paddingBottom: 'Length',
-  paddingLeft: 'Length',
-  margin: 'Length',
-  marginTop: 'Length',
-  marginRight: 'Length',
-  marginBottom: 'Length',
-  marginLeft: 'Length',
-  color: 'Color',
-  backgroundColor: 'Color',
-  borderColor: 'Color',
-  opacity: 'Opacity',
-  borderRadius: 'Length',
-  borderWidth: 'Length',
-  borderTopWidth: 'Length',
-  transform: 'Transform',
-  transformOrigin: 'TransformOrigin',
-  zIndex: 'Integer',
-  flex: 'FlexNumber',
-  flexGrow: 'FlexNumber',
-  flexShrink: 'FlexNumber',
-  alignSelf: 'FlexAlign',
-  justifyContent: 'FlexJustify',
-  alignItems: 'FlexAlign',
-  // ── 🔶 语义组件：必须用 p-* 封装，禁止裸写 ──
-  backdropFilter: 'SEMANTIC_ONLY', // → <p-glass>
-  filter: 'SEMANTIC_ONLY', // → <p-filter>
-  // ── ❌ 禁止（CSS 矩阵 ❌ 级）──
-  display: 'FORBIDDEN', // inline/float 禁用，用 p-flex/p-stack
-  float: 'FORBIDDEN',
-  clear: 'FORBIDDEN',
-  verticalAlign: 'FORBIDDEN',
-} as const
 
 /** 降级默认值（06 §5 / 01 §5）：非法值 → 此默认值，避免直达原生 */
 export const FALLBACK_DEFAULTS: Record<string, unknown> = {

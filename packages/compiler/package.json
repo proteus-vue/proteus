@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./style-safety": {
+      "types": "./dist/style-safety/index.d.ts",
+      "import": "./dist/style-safety/index.js",
+      "default": "./dist/style-safety/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,7 +25,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts"
   },
   "peerDependencies": {
     "@vue/compiler-sfc": "^3.4",
@@ -31,6 +36,7 @@
     "@vue/compiler-dom": "^3.5.42"
   },
   "dependencies": {
+    "@proteus-vue/contracts": "0.1.0",
     "@proteus-vue/types": "0.1.0"
   }
 }

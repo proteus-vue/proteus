@@ -24,6 +24,10 @@
       "types": "./dist/store.d.ts",
       "import": "./dist/store.js"
     },
+    "./style": {
+      "types": "./dist/style.d.ts",
+      "import": "./dist/style.js"
+    },
     "./capability": {
       "types": "./dist/capability.d.ts",
       "import": "./dist/capability.js"
@@ -35,7 +39,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/route.ts src/api.ts src/store.ts src/capability.ts src/style.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"
