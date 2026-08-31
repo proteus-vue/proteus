@@ -27,6 +27,7 @@
       "@proteus-vue/web": ["packages/web/src/index.ts"],
       "@proteus-vue/built-in-components": ["packages/built-in-components/src/index.ts"],
       "@proteus-vue/built-in-components/*": ["packages/built-in-components/src/*"],
+      "@proteus-vue/css-compat": ["packages/css-compat/src/index.ts"],
       "@proteus-vue/components": ["src/components/index.ts"],
       "@proteus-vue/components/*": ["src/components/*"]
     }
@@ -36,6 +37,7 @@
     "src/**/*.d.ts",
     "src/**/*.vue",
     "packages/compiler/src/**/*.ts",
+    "packages/css-compat/src/**/*.ts",
     "packages/cli/src/**/*.ts",
     "packages/create-proteus/src/**/*.ts",
     "packages/shared/src/**/*.ts",

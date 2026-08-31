@@ -23,6 +23,8 @@ export default defineConfig({
       { find: '@proteus-vue/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
       // i18n-plan B1：@proteus-vue/i18n 包（tests/i18n.test.ts 直接引用）
       { find: '@proteus-vue/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
+      // css-compat G-21 B1：@proteus-vue/css-compat 包（tests/css-compat.test.ts 直接引用）
+      { find: '@proteus-vue/css-compat', replacement: fileURLToPath(new URL('./packages/css-compat/src/index.ts', import.meta.url)) },
       // devtools-plan B1：@proteus-vue/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
       { find: '@proteus-vue/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
       // security-plan B1-B2：@proteus-vue/security 包（tests/security.test.ts 直接引用）

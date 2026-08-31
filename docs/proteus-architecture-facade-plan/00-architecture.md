@@ -46,6 +46,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | 包名 | 职责 |
 |------|------|
 | `@proteus-vue/compiler` | SFC parser → IR → 三端 codegen |
+| `@proteus-vue/css-compat` | CSS 跨端兼容（G-21）：--strict-css 校验 CSS001-012 + 编译期重写 + css-compat-report（纯逻辑零运行时依赖） |
 | `@proteus-vue/source-map` | 源码映射（DevTools 跳转用） |
 
 ### L2 运行时

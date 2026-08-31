@@ -29,6 +29,7 @@ proteus-monorepo/
 ├── packages/
 │   ├── types/          ← @proteus-vue/types        (L0, 全局 Registry + Platform 判别联合)
 │   ├── compiler/       ← @proteus-vue/compiler     (L0, SFC → IR → 四件套)
+│   ├── css-compat/     ← @proteus-vue/css-compat   (L0, CSS 跨端兼容校验/重写/报告, G-21)
 │   ├── cli/            ← @proteus-vue/cli          (L0, 命令面)
 │   ├── testing/        ← @proteus-vue/testing      (L0, 测试金字塔基建)
 │   ├── devtools/       ← @proteus-vue/devtools     (L0, TraceBus + 六源汇聚)

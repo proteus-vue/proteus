@@ -27,7 +27,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/check.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/types"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/check.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/types --external:esbuild --external:fs --external:path --external:os --external:child_process --external:util --external:crypto --external:url --external:stream --external:buffer --external:events --external:http --external:https --external:net --external:zlib --external:assert --external:module --external:worker_threads --external:timers --external:constants"
   },
   "dependencies": {
     "esbuild": "^0.28.2",

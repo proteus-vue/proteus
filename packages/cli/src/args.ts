@@ -227,6 +227,30 @@ export function parseConfigCheckArgs(argv: string[]): { file: string } {
   return { file: path.resolve(file) }
 }
 
+export function parseCssCheckArgs(argv: string[]): { target: string; strict: boolean; fix: boolean; report?: string } {
+  let strict = true
+  let fix = false
+  let report: string | undefined
+  const positional: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--strict') strict = true
+    else if (a === '--no-strict') strict = false
+    else if (a === '--fix') fix = true
+    else if (a === '--report') {
+      report = argv[i + 1]
+      if (!report) throw new Error('--report 需要输出路径')
+      i++
+    } else if (!a.startsWith('-')) {
+      positional.push(a)
+    } else {
+      throw new Error(`未知参数：${a}`)
+    }
+  }
+  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  return { target: path.resolve(positional[0] ?? '.'), strict, fix, report: report ? path.resolve(report) : undefined }
+}
+
 export function parseGenerateTypesArgs(argv: string[]): { out?: string; check?: boolean } {
   let out: string | undefined
   let check = false
