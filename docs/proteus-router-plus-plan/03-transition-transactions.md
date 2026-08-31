@@ -53,7 +53,7 @@ progress: 0 → 1
   └─ iOS additionalSafeAreaInsets: 动画过渡
 ```
 
-> 这些 `patchStyle` / `patchProp` 调用**走 Style Safety G-16 的 Validator**（联动 `06-integration.md`），确保转场中设置的 `paddingTop` / `blur` 值合法 —— 转场动画不会因非法值 crash。
+> 这些 `patchStyle` / `patchProp` 调用**走 Style Safety G-31 的 Validator**（联动 `06-integration.md`），确保转场中设置的 `paddingTop` / `blur` 值合法 —— 转场动画不会因非法值 crash。
 
 **灵动岛融合**：`<pg-glass>` 的 `containerRelativeAnchor` 在转场中保持相对容器 —— 玻璃与灵动岛持续融合（G-09）。
 

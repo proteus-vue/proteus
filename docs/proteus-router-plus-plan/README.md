@@ -1,6 +1,6 @@
 # Proteus Router —— 声明式路由 + 原生导航映射
 
-> 第 33 份 plan · 执行位 **G-17** · P0
+> 第 33 份 plan · 执行位 **G-32** · P0
 
 ## 定位
 
@@ -21,7 +21,7 @@
 | `05-strict-router.md` | `--strict-router` 规则 + 迁移 |
 | `06-benchmark-budgets.md` | 性能预算 + 真机验收矩阵 |
 | `07-batches.md` | M1-M4 分批 + Prompt 模板 |
-| `architecture-update.md` | G-17 + 原则 #11 + 全景图 |
+| `architecture-update.md` | G-32 + 原则 #11 + 全景图 |
 
 ## 差异化
 

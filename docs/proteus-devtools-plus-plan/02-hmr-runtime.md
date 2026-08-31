@@ -11,7 +11,7 @@
 
 ## 2. 原生侧安全 reload
 
-JSI binding 变更 → 保存路由栈（Router G-17 序列化）+ 页面状态 → reload → 恢复。
+JSI binding 变更 → 保存路由栈（Router G-32 序列化）+ 页面状态 → reload → 恢复。
 
 ## 3. 性能预算
 

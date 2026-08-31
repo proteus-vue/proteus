@@ -1,6 +1,6 @@
 # Proteus HMR & DevTools
 
-> 第 35 份 plan · 执行位 **G-19** · P0
+> 第 35 份 plan · 执行位 **G-34** · P0
 
 ## 定位
 
@@ -17,10 +17,10 @@ JSI 架构下的毫秒级 HMR + 透明调试 —— 让"编译透明"原则落�
 
 ## 差异化
 
-- Style Safety 可视化（G-16 闸门可见）
+- Style Safety 可视化（G-31 闸门可见）
 - 原生视图检查器（组件 ↔ 原生 View 映射）
 - JSI HostObject 引用查看（LeakRegistry）
 
 ## 关联
 
-Compiler、CLI(G-18)、Style Safety(G-16)、Memory(G-06)、Router(G-17)
+Compiler、CLI(G-33)、Style Safety(G-31)、Memory(G-06)、Router(G-32)

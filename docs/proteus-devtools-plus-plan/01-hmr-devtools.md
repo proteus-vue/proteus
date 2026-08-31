@@ -1,7 +1,7 @@
 # HMR & DevTools —— JSI 架构下的热更新与调试
 
-> 执行位：**G-19**（P0）· 第 35 份 plan
-> 依赖：`proteus-compiler-plan`（增量编译）、`proteus-cli`（G-18）、`proteus-style-safety`（G-16）、Architecture 原则 #10
+> 执行位：**G-34**（P0）· 第 35 份 plan
+> 依赖：`proteus-compiler-plan`（增量编译）、`proteus-cli`（G-33）、`proteus-style-safety`（G-31）、Architecture 原则 #10
 > 目标：**JSI 直调架构下实现毫秒级 HMR + 透明调试**，让"编译透明"原则（原则 #3）落到开发体验。
 
 ---
@@ -56,7 +56,7 @@ Runtime HMR Runtime
 ### 2.3 层 3：原生侧安全 reload
 
 - **JSI binding 变更**（如新增原生方法）：无法热替换 → 触发**安全 reload**
-  - 保存当前路由栈 + 页面状态 → reload → 恢复（联动 Router G-17 栈序列化）
+  - 保存当前路由栈 + 页面状态 → reload → 恢复（联动 Router G-32 栈序列化）
 - **原生资源变更**（图片/字体）：热替换资源缓存
 
 ---
@@ -72,7 +72,7 @@ Runtime HMR Runtime
 
 DevTools 面板实时显示：
 - 每条样式经哪个闸门放行（语义层/编译推导/运行时/原生闸门）
-- 被拒绝/降级的样式（联动 G-16）
+- 被拒绝/降级的样式（联动 G-31）
 - 各端原生值映射
 
 > **这是"编译透明"原则的直接体验** —— 开发者能看到框架在背后做了什么。
@@ -147,7 +147,7 @@ DevTools (Chrome)  ←CDP→  Debug Bridge (Node)  ←WS→  App Runtime
 
 ## 9. 关联
 
-- Compiler（增量）、CLI（dev server）、Style Safety（G-16 可视化）
+- Compiler（增量）、CLI（dev server）、Style Safety（G-31 可视化）
 - Memory（LeakRegistry 集成 DevTools）
 - Router（栈序列化用于安全 reload）
 - Architecture 原则 #3（编译透明）、#10

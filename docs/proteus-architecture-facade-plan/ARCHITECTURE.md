@@ -79,7 +79,7 @@ Compiler ──▶ Types ◀── CLI
 
 ---
 
-## 4. 全局执行序（G-01 ~ G-31）
+## 4. 全局执行序（G-01 ~ G-34）
 
 LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G，避免 B1-Bn 冲突。
 
@@ -116,8 +116,11 @@ LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G�
 | G-29 | Glass 液态玻璃（L1-L3 + 降级） | L2 横切 | glass |
 | G-30 | 性能深度优化（AOT/IFR/Worklet） | L0 基建 | performance |
 | G-31 | Style Runtime Safety（白名单 + Validator + 编译期推导 + 五端闸门） | L1 横切 | style-safety |
+| G-32 | 严格路由（配置校验 + 导航映射 + 转场事务 + deep link） | L1 | router-plus |
+| G-33 | 严格 CLI（编译管线 + dev server + strict 门禁） | L0 | cli-plus |
+| G-34 | HMR + DevTools 协议 + Style Safety 可视化 | L0 | devtools-plus |
 
-**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-31）各按其依赖插入，不阻塞原始主链。
+**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-34）各按其依赖插入，不阻塞原始主链。
 **并行空间**：G-04 内三联可并行；G-09 两横切可并行；G-16/G-17 双端可并行；G-21/G-24/G-25/G-27 的 M1 纯逻辑批次可与 G-01 地基同期启动。
 
 ---

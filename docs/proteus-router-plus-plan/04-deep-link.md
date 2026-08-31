@@ -27,7 +27,7 @@ interface DeepLinkResolver {
 ## 4. 安全性
 
 - URL 白名单（防止恶意 scheme 跳转）
-- 参数校验（联动 Style Safety G-16 的类型系统思路）
+- 参数校验（联动 Style Safety G-31 的类型系统思路）
 - 敏感页面（登录态校验）拦截 → 重定向到登录
 
 ## 5. 配置示例

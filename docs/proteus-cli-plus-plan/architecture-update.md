@@ -1,10 +1,10 @@
-# Architecture 规约更新（G-18）
+# Architecture 规约更新（G-33）
 
 ## 1. 新增执行位
 
 | 编号 | 名称 | 优先级 | 依赖 |
 |------|------|--------|------|
-| **G-18** | CLI & 工程化 | P0 | Compiler B1 |
+| **G-33** | CLI & 工程化 | P0 | Compiler B1 |
 
 ## 2. 新增原则
 
@@ -19,7 +19,7 @@
 ## 3. 全景图补充
 
 ```
-[工具链层]  CLI / Compiler / DevTools (G-18, G-19)
+[工具链层]  CLI / Compiler / DevTools (G-33, G-34)
                 ↓ 产物
 [Layer 4]   应用能力 (Router/Theme/...)
 [Layer 3]   渲染层 (App Renderer/Glass/Safe Area)
@@ -31,5 +31,5 @@
 ## 4. 关联
 
 - 原则 #10（配置语义 → 各端产物）
-- G-17 Router（CLI 集成路由配置）
+- G-32 Router（CLI 集成路由配置）
 - 所有横切能力开关（features 字段）

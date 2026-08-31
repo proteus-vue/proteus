@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.3（全局缝合 + 新 plan 追加）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 11 份新增 plan（G-21~G-31 追加）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.4（全局缝合 + 新 plan 追加）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 14 份新增 plan（G-21~G-34 追加）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -146,10 +146,15 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-29** | glass（液态玻璃 L1-L3 跨端：pg-glass + 平台映射 + 降级） | G-06（Component）、G-22（App Renderer） | L1 必达 + 降级不崩溃 + L3 系统级 |
 | **G-30** | performance（AOT 预编译 + IFR 静态首帧 + Worklet 隔离） | G-10（Compiler IR）、G-22（App Renderer） | 首屏 <200ms + 手势 60fps |
 | **G-31** | style-safety B1-B4（样式运行时安全：白名单 + Validator + 编译期推导 + 五端闸门） | G-21（CSS 矩阵）、G-22（App Renderer patchStyle） | 非法样式值永不抵达原生 + 静态推导覆盖率 > 80% |
+| **G-32** | router-plus（严格路由：配置校验 + 导航映射 + 转场事务 + deep link） | G-12（Router 强类型）、G-22 | 路由层 Style Safety 接入 + 转场不 crash |
+| **G-33** | cli-plus（严格 CLI：编译管线 + dev server + strict 开关） | G-07（CLI 骨架）、G-21/G-31 | CLI 集成 strict 门禁 + 增量编译 |
+| **G-34** | devtools-plus（HMR + DevTools 协议 + 可视化） | G-08（TraceBus）、G-31、G-33 | HMR 生效 + Style Safety 闸门可见 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
 > **追加说明（v3.3）**：style-safety（样式运行时安全，2026-08 新增 plan）并入本表 **G-31**。其文档声称的 G-16 与 blueprint（G-16 = blueprint B1-B5）撞号，**一律以本表为准：G-16 = blueprint、style-safety = G-31**。依赖关系：B1 依赖 CSS 四级矩阵（G-21 ✅ 已完成）+ Compiler IR（G-10），B4 五端闸门依赖 App Renderer（G-22）。
+
+> **追加说明（v3.4）**：router-plus / cli-plus / devtools-plus（2026-08 新增 P0 plan，第 33-35 份）并入本表 **G-32 / G-33 / G-34**。其声称的 G-17 / G-18 / G-19 与 blueprint（G-17 = blueprint B6-B10、G-18 = website B1-B5、G-19 = website B6-B8 + test-framework）撞号，**一律以本表为准**（router-plus→G-32、cli-plus→G-33、devtools-plus→G-34；旧编号引用 G-05/G-06/G-09/G-11/G-12/G-13/G-16 同前重指向：G-05→G-22 系、G-06→G-22 系、G-09→G-23 系、G-11/G-12→G-12、G-13→G-08/G-11、G-16→G-31）。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**

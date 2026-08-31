@@ -1,6 +1,6 @@
 # Proteus Router —— 声明式路由 + 原生导航映射
 
-> 执行位：**G-17**（P0，与 App Renderer G-05、安全区 G-09 协同）
+> 执行位：**G-32**（P0，与 App Renderer G-05、安全区 G-09 协同）
 > 依赖：`proteus-app-renderer-plan`（页面栈 diff）、`proteus-safe-area`（转场避让安全区）、`proteus-glass-plan`（导航栏玻璃）、Architecture 原则 #10
 > 目标：让 `router.push()` 在五端（Web / Skyline / iOS / Android / 鸿蒙）映射到**各自最优的原生导航实现**，业务代码零平台分支。
 

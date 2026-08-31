@@ -32,7 +32,7 @@ proteus build --no-strict-router # 仅 warn（迁移期）
 
 ## 4. 与 Style Safety 协同
 
-路由组件内的 `<style>` / `:style` **同样受 G-16 Validator 管控** —— 路由层不做样式校验，交给 Style Safety 统一处理（单一职责）。
+路由组件内的 `<style>` / `:style` **同样受 G-31 Validator 管控** —— 路由层不做样式校验，交给 Style Safety 统一处理（单一职责）。
 
 ## 5. CI 门禁
 

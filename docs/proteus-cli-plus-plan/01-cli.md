@@ -1,7 +1,7 @@
 # Proteus CLI & 工程化 —— 开发者入口体验
 
-> 执行位：**G-18**（P0）· 第 34 份 plan
-> 依赖：`proteus-compiler-plan`（B1 产物）、`proteus-router`（G-17）、Architecture 原则 #10
+> 执行位：**G-33**（P0）· 第 34 份 plan
+> 依赖：`proteus-compiler-plan`（B1 产物）、`proteus-router`（G-32）、Architecture 原则 #10
 > 目标：让 `proteus create` / `dev` / `build` 成为开发者接触框架的第一面，**配置即类型安全**、**构建即五端产物**。
 
 ---
@@ -75,8 +75,8 @@ export default defineProteus({
     safeArea: true,     // G-09
     memorial: true,     // G-11
     skeleton: true,     // G-12
-    styleSafety: true,  // G-16
-    strictRouter: true  // G-17
+    styleSafety: true,  // G-31
+    strictRouter: true  // G-32
   },
 
   // 主题/字体/缓存（联动 G-13/14/15）
@@ -84,7 +84,7 @@ export default defineProteus({
   fontScale: { enabled: true, min: 0.8, max: 2.0 },
   cache: { budget: '50mb' },
 
-  // 路由（联动 G-17）
+  // 路由（联动 G-32）
   router: { deepLink: { scheme: 'proteusdemo' } }
 })
 ```
@@ -175,5 +175,5 @@ src/ (SFC + <route> + p-*) + proteus.config.ts
 
 ## 9. 关联
 
-- Compiler（B1 产物）、Router（G-17）、所有横切能力（G-07~G-16）
+- Compiler（B1 产物）、Router（G-32）、所有横切能力（G-07~G-16）
 - Architecture 原则 #10：配置语义 → 各端构建产物

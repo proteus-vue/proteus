@@ -1,6 +1,6 @@
 # Proteus CLI & 工程化
 
-> 第 34 份 plan · 执行位 **G-18** · P0
+> 第 34 份 plan · 执行位 **G-33** · P0
 
 ## 定位
 
@@ -27,4 +27,4 @@ proteus check --strict   # 聚合所有 strict
 
 ## 关联
 
-Compiler、Router(G-17)、所有横切能力(G-07~G-16)
+Compiler、Router(G-32)、所有横切能力(G-07~G-16)
