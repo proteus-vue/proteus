@@ -5,21 +5,21 @@
 //   const driver = createDriver({ platform: 'mp', mini })        // automator miniProgram
 //   const driver = createDriver({ platform: 'web', page })       // playwright Page
 //   await driver.reLaunch('/pages/index'); await driver.element('button').tap(); ...
-import type { TestDriver, PlaywrightPageLike, AutomatorMiniLike, MpDebuggerLike } from './types'
+import type { TestDriver, PlaywrightPageLike, AutomatorMiniLike, MpDebuggerLike, CdpSessionLike } from './types'
 import { createWebDriver } from './web'
 import { createMpDriver } from './mp'
 
 export type { TestDriver, TestElement, TestElementOptions, ElementWaitOptions, ElementWaitState, PageSnapshot, SystemSnapshot, ConsoleEntry, NetworkEntry } from './types'
-export type { PlaywrightPageLike, PlaywrightLocatorLike, AutomatorMiniLike, AutomatorElementLike, MpDebuggerLike, WxApiHandle, TicketHandle } from './types'
+export type { PlaywrightPageLike, PlaywrightLocatorLike, AutomatorMiniLike, AutomatorElementLike, MpDebuggerLike, WxApiHandle, TicketHandle, CdpHandle, CdpSessionLike } from './types'
 export { createWebDriver } from './web'
 export { createMpDriver } from './mp'
 
 export type DriverLaunchOptions =
-  | { platform: 'web'; page: PlaywrightPageLike }
+  | { platform: 'web'; page: PlaywrightPageLike; cdp?: CdpSessionLike }
   | { platform: 'mp'; mini: AutomatorMiniLike; debugger?: MpDebuggerLike }
 
 /** ★统一驱动入口：platform + 注入句柄 → TestDriver（对齐 mountComponent 的统一挂载模式） */
 export function createDriver(options: DriverLaunchOptions): TestDriver {
-  if (options.platform === 'web') return createWebDriver(options.page)
+  if (options.platform === 'web') return createWebDriver(options.page, options.cdp)
   return createMpDriver(options.mini, options.debugger)
 }

@@ -17,6 +17,7 @@ import type {
   MpDebuggerLike,
   WxApiHandle,
   TicketHandle,
+  CdpHandle,
 } from './types'
 
 const DEFAULT_TIMEOUT = 5000
@@ -126,10 +127,20 @@ export function createMpDriver(mini: AutomatorMiniLike, debuggerHandle?: MpDebug
   const needDebugger = (what: string): never => {
     throw new Error(`[test-core/driver] ${what} 需要注入 wechatide debugger 句柄（createMpDriver(mini, debugger)：console/network/clearCache/refresh 是 IDE 工具能力）`)
   }
+  // ★CDP 降级（小程序无 CDP 概念——渲染是原生 WXML，非 Chromium）
+  const cdp: CdpHandle = {
+    async send(): Promise<never> {
+      throw new Error('[test-core/driver] cdp 是小程序端不适用能力（无 CDP——渲染是原生 WXML 非 Chromium；用 evaluate/wxApi 替代）')
+    },
+    on(): never {
+      throw new Error('[test-core/driver] cdp 是小程序端不适用能力（无 CDP——渲染是原生 WXML 非 Chromium）')
+    },
+  }
   return {
     platform: 'mp',
     wxApi,
     ticket,
+    cdp,
     async close(): Promise<void> {
       mini.disconnect()
     },

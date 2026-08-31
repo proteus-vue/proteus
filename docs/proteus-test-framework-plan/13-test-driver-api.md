@@ -25,6 +25,7 @@
 | 刷新 | `refresh()` | `page.reload` | wechatide `simulator_refresh`（注入 debugger 句柄） | — |
 | wx API（小程序独有） | `driver.wxApi.call/mock/restore` | ❌ 降级抛错（业务已收口 platformAPI） | automator `callWxMethod/mockWxMethod/restoreWxMethod` | — |
 | 登录凭据（小程序独有） | `driver.ticket.set/get/refresh/testAccounts` | ❌ 降级抛错（web 无对等） | automator `setTicket/getTicket/refreshTicket/testAccounts` | — |
+| CDP 底层会话 | `driver.cdp.send/on` | 注入 CDP session（`createWebDriver(page, cdp)`：Playwright `context.newCDPSession`）——性能/网络/DOM 域命令透传 | ❌ 降级抛错（无 CDP——原生 WXML 非 Chromium） | — |
 
 **设计要点**：
 - **注入句柄 + 结构类型**：driver 不直接依赖 playwright / miniprogram-automator 包，用户把已装配的句柄（playwright `Page` / automator `miniProgram`）传给工厂函数；句柄形状用最小结构类型声明（§6），形状兼容即用。
@@ -187,6 +188,23 @@ interface TicketHandle {
   refresh(): Promise<void>                 // automator refreshTicket
   testAccounts(): Promise<unknown>         // automator testAccounts
 }
+```
+
+### `cdp: CdpHandle`（web debug 能力）
+CDP 底层会话透传（性能/网络/DOM 域命令）——**web 注入式**（Playwright `context.newCDPSession(page)`），**mp 端降级抛错**（无 CDP 概念——渲染是原生 WXML 非 Chromium）。
+
+```ts
+interface CdpHandle {
+  send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>  // 任意 CDP 域命令
+  on(event: string, handler: (...args: unknown[]) => void): unknown                 // CDP 事件订阅
+}
+```
+
+```ts
+const driver = createDriver({ platform: 'web', page, cdp: await context.newCDPSession(page) })
+await driver.cdp.send('Performance.enable')                                          // 性能追踪
+await driver.cdp.send('Network.emulateNetworkConditions', { latency: 200, offline: false, ... })
+driver.cdp.on('Network.requestWillBeSent', (e) => console.log(e))
 ```
 
 ---

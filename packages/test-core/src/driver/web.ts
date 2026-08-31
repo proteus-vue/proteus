@@ -15,6 +15,8 @@ import type {
   NetworkEntry,
   WxApiHandle,
   TicketHandle,
+  CdpHandle,
+  CdpSessionLike,
 } from './types'
 
 const DEFAULT_TIMEOUT = 5000
@@ -119,9 +121,20 @@ class WebElement implements TestElement {
   }
 }
 
-/** ★统一测试 API Web 实现：注入 playwright Page */
-export function createWebDriver(page: PlaywrightPageLike): TestDriver {
+/** ★统一测试 API Web 实现：注入 playwright Page + 可选 CDP 会话（web debug 能力） */
+export function createWebDriver(page: PlaywrightPageLike, cdpSession?: CdpSessionLike): TestDriver {
   const buffer = new DebugBuffer(page)
+  // ★CDP 句柄：注入会话 → 透传 send/on；未注入 → 抛错提示（web 底层 debug 能力）
+  const cdp: CdpHandle = {
+    async send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+      if (!cdpSession) throw new Error('[test-core/driver] cdp.send 需要注入 CDP 会话（createWebDriver(page, cdpSession)：Playwright context.newCDPSession(page)）')
+      return cdpSession.send<T>(method, params)
+    },
+    on(event: string, handler: (...args: unknown[]) => void): unknown {
+      if (!cdpSession?.on) throw new Error('[test-core/driver] cdp.on 需要注入支持事件订阅的 CDP 会话')
+      return cdpSession.on(event, handler)
+    },
+  }
   // ★web 降级（小程序独有能力：wx API 业务已收口 platformAPI；登录凭据 web 无对等）
   const wxApi: WxApiHandle = {
     async call(): Promise<never> {
@@ -152,6 +165,7 @@ export function createWebDriver(page: PlaywrightPageLike): TestDriver {
     platform: 'web',
     wxApi,
     ticket,
+    cdp,
     async close(): Promise<void> {
       // 浏览器实例由用户句柄管理（launch/close 生命周期不进 driver）
     },

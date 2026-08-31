@@ -155,6 +155,25 @@ export interface TestDriver {
   readonly wxApi: WxApiHandle
   /** ★登录凭据句柄（automation_testaccount：小程序独有能力；web 端降级抛错） */
   readonly ticket: TicketHandle
+  /** ★CDP 会话句柄（web：注入 CDP session——性能/网络/DOM 域命令透传；mp：无 CDP 概念，降级抛错） */
+  readonly cdp: CdpHandle
+}
+
+/** ★CDP 句柄（web debug 能力：通用透传 + 事件订阅） */
+export interface CdpHandle {
+  /** 发送 CDP 命令（如 Performance.enable / Network.emulateNetworkConditions / DOM.getDocument） */
+  send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
+  /** 监听 CDP 事件（如 Network.requestWillBeSent / Runtime.consoleAPICalled） */
+  on(event: string, handler: (...args: unknown[]) => void): unknown
+}
+
+/**
+ * ★CDP 会话注入句柄（web debug 能力：Playwright context.newCDPSession(page)）
+ * 覆盖：Performance/Trace 性能追踪、Network 节流与拦截、DOM/CSS 样式检查、Profiler 覆盖率等 CDP 域命令
+ */
+export interface CdpSessionLike {
+  send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
+  on?(event: string, handler: (...args: unknown[]) => void): unknown
 }
 
 // ============ 结构类型（注入句柄最小形状，零依赖） ============

@@ -283,3 +283,37 @@ describe('小程序独有能力（wxApi / ticket——automation_wx_api / automa
     await expect(web.ticket.get()).rejects.toThrow(/小程序独有能力/)
   })
 })
+
+describe('CDP debug 能力（web：注入 CDP session 透传；mp：降级）', () => {
+  it('web：注入 CDP 会话 → cdp.send/on 透传（Performance/Network/DOM 域命令）', async () => {
+    const send = vi.fn(async (_method: string, params?: Record<string, unknown>) => ({ params }))
+    const events: Record<string, Array<(...args: unknown[]) => void>> = {}
+    const cdpSession = {
+      send,
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+        ;(events[event] ??= []).push(handler)
+      }),
+    }
+    const driver = createDriver({ platform: 'web', page: fakePage().page, cdp: cdpSession as never })
+    // 性能追踪（CDP 域命令透传）
+    await driver.cdp.send('Performance.enable')
+    await driver.cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 200, downloadThroughput: 1000, uploadThroughput: 1000 })
+    expect(send).toHaveBeenNthCalledWith(1, 'Performance.enable', undefined)
+    expect(send).toHaveBeenNthCalledWith(2, 'Network.emulateNetworkConditions', expect.objectContaining({ latency: 200 }))
+    // CDP 事件订阅
+    const handler = vi.fn()
+    driver.cdp.on('Network.requestWillBeSent', handler)
+    events['Network.requestWillBeSent']?.forEach((h) => h({ request: { url: 'https://x.com' } }))
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  it('web：未注入 CDP 会话 → 抛错提示（createWebDriver 第二参数）', async () => {
+    const web = createDriver({ platform: 'web', page: fakePage().page })
+    await expect(web.cdp.send('Performance.enable')).rejects.toThrow(/注入 CDP 会话/)
+  })
+
+  it('mp：cdp 降级抛错（无 CDP 概念——渲染是原生 WXML 非 Chromium）', async () => {
+    const mp = createDriver({ platform: 'mp', mini: fakeMini().mini })
+    await expect(mp.cdp.send('Performance.enable')).rejects.toThrow(/小程序端不适用/)
+  })
+})
