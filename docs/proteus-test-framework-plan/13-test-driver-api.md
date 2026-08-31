@@ -19,6 +19,12 @@
 | 等待 | `TestElement.waitFor()` / `driver.waitFor(ms)` | locator.waitFor / waitForTimeout | 轮询解析 / evaluate setTimeout | — |
 | 执行表达式 | `evaluate(fn, ...args)` | `page.evaluate` | `mini.evaluate` | — |
 | 截图 | `screenshot(path?)` | `page.screenshot` | `mini.screenshot` | — |
+| 控制台日志 | `consoleLogs(filter?)` | page console/pageerror 事件收集 | wechatide `get_simulator_console`（注入 debugger 句柄） | — |
+| 网络请求 | `networkRequests(filter?)` | page request/response 事件收集 | wechatide `get_simulator_network`（注入 debugger 句柄） | — |
+| 清缓存 | `clearCache()` | localStorage/sessionStorage 清理 | wechatide `debug_clear_cache`（注入 debugger 句柄） | — |
+| 刷新 | `refresh()` | `page.reload` | wechatide `simulator_refresh`（注入 debugger 句柄） | — |
+| wx API（小程序独有） | `driver.wxApi.call/mock/restore` | ❌ 降级抛错（业务已收口 platformAPI） | automator `callWxMethod/mockWxMethod/restoreWxMethod` | — |
+| 登录凭据（小程序独有） | `driver.ticket.set/get/refresh/testAccounts` | ❌ 降级抛错（web 无对等） | automator `setTicket/getTicket/refreshTicket/testAccounts` | — |
 
 **设计要点**：
 - **注入句柄 + 结构类型**：driver 不直接依赖 playwright / miniprogram-automator 包，用户把已装配的句柄（playwright `Page` / automator `miniProgram`）传给工厂函数；句柄形状用最小结构类型声明（§6），形状兼容即用。
@@ -35,14 +41,15 @@
 // web：注入 playwright Page
 const driver = createDriver({ platform: 'web', page })
 // mp：注入 automator miniProgram（launch/connect 由 CLI `proteus test e2e:mp` 或用户装配）
-const driver = createDriver({ platform: 'mp', mini })
+//     + 可选 debugger 句柄（wechatide 工具能力：console/network/clearCache/refresh）
+const driver = createDriver({ platform: 'mp', mini, debugger: wechatIdeHandle })
 ```
 
 ### `createWebDriver(page: PlaywrightPageLike): TestDriver`
 Web 端实现（playwright 适配）。句柄形状见 §6.1。
 
-### `createMpDriver(mini: AutomatorMiniLike): TestDriver`
-小程序端实现（automator 适配）。句柄形状见 §6.2。
+### `createMpDriver(mini: AutomatorMiniLike, debugger?: MpDebuggerLike): TestDriver`
+小程序端实现（automator 适配）。句柄形状见 §6.2；debugger 句柄（§6.5）提供 console/network/clearCache/refresh（wechatide 工具能力）。
 
 ---
 
@@ -119,7 +126,68 @@ interface TestElementOptions {
 ### `waitFor(ms: number): Promise<void>`
 固定等待（`wait`）。用于确定性时序（如渲染动画）。
 - **web**：`page.waitForTimeout(ms)`。
-- **mp**：`evaluate('(ms) => new Promise((r) => setTimeout(r, ms))', ms)`。
+- **mp**：`evaluate((delay) => new Promise(...), ms)`（★必须传函数——automator 内部 `fn.toString()` 序列化，传字符串运行时无响应挂起）。
+
+### `consoleLogs(filter?: string): Promise<ConsoleEntry[]>`
+控制台日志（`get_simulator_console`）。`filter` 为子串过滤。
+
+```ts
+interface ConsoleEntry {
+  level?: 'log' | 'info' | 'warn' | 'error' | 'debug'  // web 真实级别；mp grep 行首 [level] 猜测
+  text: string
+}
+```
+
+- **web**：`page.on('console'/'pageerror')` 事件缓冲收集（页面加载前的事件也记录）；`page.on` 未注入时返回空数组。
+- **mp**：wechatide `get_simulator_console`（注入 debugger 句柄，§6.5）；未注入抛错提示。
+
+### `networkRequests(filter?: string): Promise<NetworkEntry[]>`
+网络请求（`get_simulator_network`）。
+
+```ts
+interface NetworkEntry {
+  url: string
+  method?: string
+  status?: number
+  text: string  // mp 为 grep 命中行原文
+}
+```
+
+- **web**：`page.on('request'/'response')` 事件收集（response 回填 status）。
+- **mp**：wechatide `get_simulator_network`（注入 debugger 句柄）；未注入抛错提示。
+
+### `clearCache(): Promise<void>`
+清缓存（`debug_clear_cache`）。
+- **web**：`localStorage.clear() + sessionStorage.clear()`（cookies 由用户 context 管理）。
+- **mp**：wechatide `debug_clear_cache`（注入 debugger 句柄）；未注入抛错提示。
+
+### `refresh(): Promise<void>`
+刷新（`simulator_refresh`）。
+- **web**：`page.reload()`。
+- **mp**：wechatide `simulator_refresh`（注入 debugger 句柄）；未注入抛错提示。
+
+### `wxApi: WxApiHandle`（小程序独有能力）
+wx API 调用/mock/恢复（`automation_wx_api`）。**web 端降级抛错**（业务已收口 platformAPI，web 无 wx 运行时对等）。
+
+```ts
+interface WxApiHandle {
+  call<T>(method: string, args?: Record<string, unknown>): Promise<T>     // automator callWxMethod
+  mock<T>(method: string, impl: ((...args: any[]) => T) | T): Promise<void> // automator mockWxMethod
+  restore(method: string): Promise<void>                                  // automator restoreWxMethod
+}
+```
+
+### `ticket: TicketHandle`（小程序独有能力）
+登录凭据/测试号（`automation_testaccount`）。**web 端降级抛错**（web 无登录凭据对等）。
+
+```ts
+interface TicketHandle {
+  set(ticket: string): Promise<void>       // automator setTicket
+  get(): Promise<string>                   // automator getTicket
+  refresh(): Promise<void>                 // automator refreshTicket
+  testAccounts(): Promise<unknown>         // automator testAccounts
+}
+```
 
 ---
 
@@ -215,6 +283,8 @@ interface PlaywrightPageLike {
   waitForTimeout(ms: number): Promise<void>
   screenshot(options?: { path?: string }): Promise<Buffer | { path?: string }>
   locator(selector: string): PlaywrightLocatorLike
+  reload(options?: unknown): Promise<unknown>
+  on?(event: string, handler: (...args: unknown[]) => void): unknown   // debug 能力（console/request/response/pageerror）；可选
 }
 ```
 
@@ -242,6 +312,14 @@ interface AutomatorMiniLike {
   evaluate(fn: string | ((...args: unknown[]) => unknown), ...args: unknown[]): Promise<unknown>
   screenshot(options?: { path?: string }): Promise<{ path: string }>
   disconnect(): void
+  // ★wx API（automation_wx_api）与登录凭据（automation_testaccount）——可选：缺省时 wxApi/ticket 句柄抛错
+  callWxMethod?(method: string, args?: Record<string, unknown>): Promise<unknown>
+  mockWxMethod?(method: string, impl: ((...args: unknown[]) => unknown) | (() => unknown)): Promise<void>
+  restoreWxMethod?(method: string): Promise<void>
+  setTicket?(ticket: string): Promise<void>
+  getTicket?(): Promise<unknown>
+  refreshTicket?(): Promise<void>
+  testAccounts?(): Promise<unknown>
 }
 ```
 
@@ -257,11 +335,23 @@ interface AutomatorElementLike {
 }
 ```
 
+### 6.5 `MpDebuggerLike`（createMpDriver 第二参数，可选）
+wechatide 工具能力句柄（automator 无 console/network/clearCache/refresh API——这些是 IDE 工具）：
+```ts
+interface MpDebuggerLike {
+  consoleGrep?(command: string): Promise<string[]>   // wechatide get_simulator_console（grep 命令，返回命中行）
+  networkGrep?(command: string): Promise<string[]>   // wechatide get_simulator_network
+  clearCache?(action?: string): Promise<void>        // wechatide debug_clear_cache
+  refresh?(): Promise<void>                          // wechatide simulator_refresh
+}
+```
+未注入 → 对应 driver 方法抛错提示「注入 wechatide debugger 句柄」。
+
 ---
 
 ## 7. 边界与扩展
 
-- **console / network 取证**（wechatide debugger 域：`get_simulator_console`/`get_simulator_network`）：暂未入 driver 接口，标扩展——Web 走 `page.on('console'/'request')`，MP 走 IDE 缓冲区，能力差异大，后续单独设计。
-- **wx API mock**（`automation_wx_api`）：MVP 用 `evaluate` 覆盖（`evaluate('wx.showToast')`），专项 mock 能力标扩展。
+- **console / network 取证**：已入 driver 接口（`consoleLogs`/`networkRequests`）——web 事件收集真实可用；MP 走 wechatide debugger 句柄（注入式，automator 无此 API）。
+- **wx API mock / 登录凭据**：已入 driver 接口（`wxApi`/`ticket` 子域）——MP automator 原生实现；web 降级抛错（业务已收口 platformAPI）。
 - **App 端**：`createDriver({ platform: 'app', ... })` 第三实现预留（§09）。
 - **小游戏**（wechatide automator 画布坐标模式）：与小程序 WXML selector 模式能力差异大，未纳入（后续按需）。

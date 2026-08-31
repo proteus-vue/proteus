@@ -19,6 +19,7 @@ function fakePage() {
     dispatchEvent: vi.fn(async () => undefined),
     hover: vi.fn(async () => undefined),
   }
+  const handlers: Record<string, Array<(...args: unknown[]) => void>> = {}
   const page = {
     goto: vi.fn(async () => undefined),
     goBack: vi.fn(async () => undefined),
@@ -27,12 +28,18 @@ function fakePage() {
     waitForTimeout: vi.fn(async () => undefined),
     screenshot: vi.fn(async (opts?: { path?: string }) => ({ path: opts?.path ?? '/tmp/web.png' })),
     locator: vi.fn(() => el),
+    reload: vi.fn(async () => undefined),
+    // ★debug 事件收集：console/request/response（模拟 playwright 事件订阅）
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      ;(handlers[event] ??= []).push(handler)
+    }),
     // ★整体断言（vi.fn Mock 与 PlaywrightPageLike 交叉类型逆变冲突——fake 句柄不需要严格类型）
   } as unknown as PlaywrightPageLike & {
     goto: ReturnType<typeof vi.fn>
     goBack: ReturnType<typeof vi.fn>
+    reload: ReturnType<typeof vi.fn>
   }
-  return { page, el }
+  return { page, el, handlers }
 }
 
 /** fake automator miniProgram（形状兼容 AutomatorMiniLike） */
@@ -51,6 +58,15 @@ function fakeMini() {
     evaluate: vi.fn(async (_fn: string | ((...a: unknown[]) => unknown), ...args: unknown[]) => args[0] ?? 'devtools'),
     screenshot: vi.fn(async (opts?: { path?: string }) => ({ path: opts?.path ?? '/tmp/mp.png' })),
     disconnect: vi.fn(),
+    // ★wx API（automation_wx_api）
+    callWxMethod: vi.fn(async () => ({ ok: true })),
+    mockWxMethod: vi.fn(async () => undefined),
+    restoreWxMethod: vi.fn(async () => undefined),
+    // ★登录凭据（automation_testaccount）
+    setTicket: vi.fn(async () => undefined),
+    getTicket: vi.fn(async () => 'ticket-abc'),
+    refreshTicket: vi.fn(async () => undefined),
+    testAccounts: vi.fn(async () => [{ name: '测试号A' }]),
     // ★整体断言（vi.fn Mock 与 AutomatorMiniLike 交叉类型逆变冲突——fake 句柄不需要严格类型）
   } as unknown as AutomatorMiniLike & {
     reLaunch: ReturnType<typeof vi.fn>
@@ -58,6 +74,13 @@ function fakeMini() {
     systemInfo: ReturnType<typeof vi.fn>
     evaluate: ReturnType<typeof vi.fn>
     disconnect: ReturnType<typeof vi.fn>
+    callWxMethod: ReturnType<typeof vi.fn>
+    mockWxMethod: ReturnType<typeof vi.fn>
+    restoreWxMethod: ReturnType<typeof vi.fn>
+    setTicket: ReturnType<typeof vi.fn>
+    getTicket: ReturnType<typeof vi.fn>
+    refreshTicket: ReturnType<typeof vi.fn>
+    testAccounts: ReturnType<typeof vi.fn>
   }
   return { mini, element }
 }
@@ -179,5 +202,84 @@ describe('★一套能力接口多端复用（统一测试 API 目标形态）',
     const mp = createDriver({ platform: 'mp', mini })
     await mp.close()
     expect(mini.disconnect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('debug 能力域（console/network/clearCache/refresh——wechatide debugger 域）', () => {
+  it('web：console/network 事件收集 + clearCache + refresh', async () => {
+    const { page, handlers } = fakePage()
+    const driver = createDriver({ platform: 'web', page })
+    // 模拟 console/request/response 事件
+    handlers.console?.forEach((h) => h({ type: () => 'error', text: () => 'boom' }))
+    handlers.request?.forEach((h) => h({ url: () => 'https://api.example.com/x', method: () => 'POST' }))
+    handlers.response?.forEach((h) => h({ url: () => 'https://api.example.com/x', status: () => 200 }))
+    const logs = await driver.consoleLogs()
+    expect(logs).toEqual([{ level: 'error', text: 'boom' }])
+    expect(await driver.consoleLogs('nope')).toEqual([]) // filter 生效
+    const nets = await driver.networkRequests()
+    expect(nets).toHaveLength(1)
+    expect(nets[0].method).toBe('POST')
+    expect(nets[0].status).toBe(200)
+    expect(nets[0].url).toContain('api.example.com')
+    await driver.clearCache()
+    expect(page.evaluate).toHaveBeenCalledWith('(localStorage.clear(), sessionStorage.clear())')
+    await driver.refresh()
+    expect(page.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('mp：console/network/clearCache/refresh 走注入 debugger 句柄（wechatide 工具）；未注入抛错提示', async () => {
+    const { mini } = fakeMini()
+    // 未注入 debugger → 抛错提示
+    const bare = createDriver({ platform: 'mp', mini })
+    await expect(bare.consoleLogs()).rejects.toThrow(/注入 wechatide debugger 句柄/)
+    await expect(bare.refresh()).rejects.toThrow(/注入 wechatide debugger 句柄/)
+    // 注入 debugger 句柄 → 转发
+    const consoleGrep = vi.fn(async () => ['[error] boom'])
+    const networkGrep = vi.fn(async () => ['POST https://api.example.com/x 200'])
+    const clearCache = vi.fn(async () => undefined)
+    const refresh = vi.fn(async () => undefined)
+    const mp = createDriver({ platform: 'mp', mini, debugger: { consoleGrep, networkGrep, clearCache, refresh } })
+    const logs = await mp.consoleLogs('boom')
+    expect(logs).toEqual([{ level: 'error', text: '[error] boom' }])
+    expect(consoleGrep).toHaveBeenCalledWith(expect.stringContaining('boom'))
+    const nets = await mp.networkRequests()
+    expect(nets[0].url).toContain('https://api.example.com/x')
+    expect(nets[0].text).toContain('200')
+    await mp.clearCache()
+    expect(clearCache).toHaveBeenCalledTimes(1)
+    await mp.refresh()
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('小程序独有能力（wxApi / ticket——automation_wx_api / automation_testaccount）', () => {
+  it('mp：wxApi.call/mock/restore → automator callWxMethod/mockWxMethod/restoreWxMethod', async () => {
+    const { mini } = fakeMini()
+    const mp = createDriver({ platform: 'mp', mini })
+    expect(await mp.wxApi.call('showToast', { title: 'hi' })).toEqual({ ok: true })
+    expect(mini.callWxMethod).toHaveBeenCalledWith('showToast', { title: 'hi' })
+    await mp.wxApi.mock('getSystemInfoSync', () => ({ platform: 'mock' }))
+    await mp.wxApi.restore('getSystemInfoSync')
+    expect(mini.mockWxMethod).toHaveBeenCalledWith('getSystemInfoSync', expect.any(Function))
+    expect(mini.restoreWxMethod).toHaveBeenCalledWith('getSystemInfoSync')
+  })
+
+  it('mp：ticket.set/get/refresh/testAccounts → automator 原生', async () => {
+    const { mini } = fakeMini()
+    const mp = createDriver({ platform: 'mp', mini })
+    await mp.ticket.set('ticket-x')
+    expect(mini.setTicket).toHaveBeenCalledWith('ticket-x')
+    expect(await mp.ticket.get()).toBe('ticket-abc')
+    await mp.ticket.refresh()
+    expect(mini.refreshTicket).toHaveBeenCalledTimes(1)
+    expect(await mp.ticket.testAccounts()).toEqual([{ name: '测试号A' }])
+  })
+
+  it('web：wxApi/ticket 降级抛错（小程序独有能力）', async () => {
+    const web = createDriver({ platform: 'web', page: fakePage().page })
+    await expect(web.wxApi.call('showToast')).rejects.toThrow(/小程序独有能力/)
+    await expect(web.wxApi.mock('x', 1)).rejects.toThrow(/小程序独有能力/)
+    await expect(web.ticket.set('t')).rejects.toThrow(/小程序独有能力/)
+    await expect(web.ticket.get()).rejects.toThrow(/小程序独有能力/)
   })
 })

@@ -17,6 +17,61 @@ export interface PageSnapshot {
   url: string
 }
 
+/** 控制台日志条目（get_simulator_console / web console 事件） */
+export interface ConsoleEntry {
+  /** 级别：web 有真实级别；mp grep 行首 [level] 猜测，未知为 undefined */
+  level?: 'log' | 'info' | 'warn' | 'error' | 'debug'
+  /** 日志文本（mp 为 grep 命中行原文） */
+  text: string
+}
+
+/** 网络请求条目（get_simulator_network / web request+response 事件） */
+export interface NetworkEntry {
+  url: string
+  method?: string
+  status?: number
+  /** 原始行/描述（mp 为 grep 命中行原文） */
+  text: string
+}
+
+/**
+ * ★MP debugger 注入句柄（wechatide 工具能力：console/network/clearCache/refresh——automator 无这些 API）
+ * 结构类型：用户/CLI 装配 wechatide 工具（get_simulator_console/get_simulator_network/debug_clear_cache/simulator_refresh）
+ * 未注入 → MpDriver 对应方法抛错提示
+ */
+export interface MpDebuggerLike {
+  /** 控制台缓冲区 grep（wechatide get_simulator_console）——command 为 grep 命令字符串，返回命中行 */
+  consoleGrep?(command: string): Promise<string[]>
+  /** 网络缓冲区 grep（wechatide get_simulator_network）——command 为 grep 命令字符串，返回命中行 */
+  networkGrep?(command: string): Promise<string[]>
+  /** 清缓存（wechatide debug_clear_cache） */
+  clearCache?(action?: string): Promise<void>
+  /** 刷新模拟器/重新编译（wechatide simulator_refresh） */
+  refresh?(): Promise<void>
+}
+
+/** ★wx API 句柄（automation_wx_api）：调用/mock/恢复 wx API（小程序独有能力） */
+export interface WxApiHandle {
+  /** 调用 wx API（automator callWxMethod） */
+  call<T = unknown>(method: string, args?: Record<string, unknown>): Promise<T>
+  /** mock wx API（automator mockWxMethod；impl 传函数或返回值） */
+  mock<T = unknown>(method: string, impl: ((...args: any[]) => T) | T): Promise<void>
+  /** 恢复原始实现（automator restoreWxMethod） */
+  restore(method: string): Promise<void>
+}
+
+/** ★登录凭据句柄（automation_testaccount）：测试号/ticket 管理（小程序独有能力） */
+export interface TicketHandle {
+  /** 设置登录 ticket */
+  set(ticket: string): Promise<void>
+  /** 读取当前 ticket */
+  get(): Promise<string>
+  /** 刷新 ticket */
+  refresh(): Promise<void>
+  /** 列出测试号 */
+  testAccounts(): Promise<unknown>
+}
+
 /** 运行时快照（systemInfo） */
 export interface SystemSnapshot {
   /** web = 'web'；mp = automator systemInfo().platform（devtools/ios/android/...） */
@@ -88,6 +143,18 @@ export interface TestDriver {
   screenshot(path?: string): Promise<string>
   /** 固定等待（ms） */
   waitFor(ms: number): Promise<void>
+  /** ★debug 能力：控制台日志（get_simulator_console / web console 事件收集；filter 为 grep 子串） */
+  consoleLogs(filter?: string): Promise<ConsoleEntry[]>
+  /** ★debug 能力：网络请求（get_simulator_network / web request+response 事件收集） */
+  networkRequests(filter?: string): Promise<NetworkEntry[]>
+  /** ★debug 能力：清缓存（debug_clear_cache / web localStorage+sessionStorage） */
+  clearCache(): Promise<void>
+  /** ★debug 能力：刷新（simulator_refresh / web reload） */
+  refresh(): Promise<void>
+  /** ★wx API 句柄（automation_wx_api：小程序独有能力；web 端降级抛错） */
+  readonly wxApi: WxApiHandle
+  /** ★登录凭据句柄（automation_testaccount：小程序独有能力；web 端降级抛错） */
+  readonly ticket: TicketHandle
 }
 
 // ============ 结构类型（注入句柄最小形状，零依赖） ============
@@ -101,6 +168,9 @@ export interface PlaywrightPageLike {
   waitForTimeout(ms: number): Promise<void>
   screenshot(options?: { path?: string }): Promise<Buffer | { path?: string }>
   locator(selector: string): PlaywrightLocatorLike
+  reload(options?: unknown): Promise<unknown>
+  /** 事件订阅（debug 能力：console/request/response/pageerror）——可选（缺省 debug 收集不可用） */
+  on?(event: string, handler: (...args: unknown[]) => void): unknown
 }
 
 /** playwright Locator 最小形状 */
@@ -137,4 +207,13 @@ export interface AutomatorMiniLike {
   screenshot(options?: { path?: string }): Promise<{ path: string }>
   disconnect(): void
   /** 复用 connect 模式（CLI 装配：PROTEUS_MP_E2E_CONNECT）——无 launch，close 语义一致 */
+  // ★wx API（automation_wx_api）
+  callWxMethod?(method: string, args?: Record<string, unknown>): Promise<unknown>
+  mockWxMethod?(method: string, impl: ((...args: unknown[]) => unknown) | (() => unknown)): Promise<void>
+  restoreWxMethod?(method: string): Promise<void>
+  // ★登录凭据（automation_testaccount）
+  setTicket?(ticket: string): Promise<void>
+  getTicket?(): Promise<unknown>
+  refreshTicket?(): Promise<void>
+  testAccounts?(): Promise<unknown>
 }

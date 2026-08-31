@@ -12,6 +12,11 @@ import type {
   ElementWaitOptions,
   PageSnapshot,
   SystemSnapshot,
+  ConsoleEntry,
+  NetworkEntry,
+  MpDebuggerLike,
+  WxApiHandle,
+  TicketHandle,
 } from './types'
 
 const DEFAULT_TIMEOUT = 5000
@@ -88,10 +93,43 @@ class MpElement implements TestElement {
   }
 }
 
-/** ★统一测试 API MP 实现：注入 automator miniProgram（launch/connect 由 CLI/用户装配） */
-export function createMpDriver(mini: AutomatorMiniLike): TestDriver {
+/** ★统一测试 API MP 实现：注入 automator miniProgram（launch/connect 由 CLI/用户装配）+ 可选 debugger 句柄（wechatide 工具） */
+export function createMpDriver(mini: AutomatorMiniLike, debuggerHandle?: MpDebuggerLike): TestDriver {
+  // ★wx API 句柄（automator 原生 callWxMethod/mockWxMethod/restoreWxMethod）
+  const wxApi: WxApiHandle = {
+    async call<T = unknown>(method: string, args?: Record<string, unknown>): Promise<T> {
+      return mini.callWxMethod!(method, args) as Promise<T>
+    },
+    async mock<T = unknown>(method: string, impl: ((...args: any[]) => T) | T): Promise<void> {
+      await mini.mockWxMethod!(method, typeof impl === 'function' ? (impl as (...args: any[]) => T) : () => impl)
+    },
+    async restore(method: string): Promise<void> {
+      await mini.restoreWxMethod!(method)
+    },
+  }
+  // ★登录凭据句柄（automator 原生 getTicket/setTicket/refreshTicket/testAccounts）
+  const ticket: TicketHandle = {
+    async set(t: string): Promise<void> {
+      await mini.setTicket!(t)
+    },
+    async get(): Promise<string> {
+      return (await mini.getTicket!()) as string
+    },
+    async refresh(): Promise<void> {
+      await mini.refreshTicket!()
+    },
+    async testAccounts(): Promise<unknown> {
+      return mini.testAccounts!()
+    },
+  }
+  // ★debug 能力降级提示（wechatide 工具能力：automator 无 console/network/clearCache/refresh——需注入 debugger 句柄）
+  const needDebugger = (what: string): never => {
+    throw new Error(`[test-core/driver] ${what} 需要注入 wechatide debugger 句柄（createMpDriver(mini, debugger)：console/network/clearCache/refresh 是 IDE 工具能力）`)
+  }
   return {
     platform: 'mp',
+    wxApi,
+    ticket,
     async close(): Promise<void> {
       mini.disconnect()
     },
@@ -131,5 +169,37 @@ export function createMpDriver(mini: AutomatorMiniLike): TestDriver {
       // automator 无 mini 级 waitFor → evaluate 延时（★必须传函数，见 resolve 注释）
       await mini.evaluate((delay) => new Promise((r) => setTimeout(r, delay)), ms)
     },
+    // ★debug 能力（wechatide 工具：console/network/clearCache/refresh——automator 无这些 API，需注入 debugger 句柄）
+    async consoleLogs(filter?: string): Promise<ConsoleEntry[]> {
+      if (!debuggerHandle?.consoleGrep) needDebugger('consoleLogs')
+      // wechatide get_simulator_console：grep 命令字符串（缺省全量）；行首 [level] 猜测级别
+      const lines = await debuggerHandle!.consoleGrep!(filter ? `grep -i '${filter}'` : 'grep -v ""')
+      return lines.map((line) => ({ level: guessLevel(line), text: line }))
+    },
+    async networkRequests(filter?: string): Promise<NetworkEntry[]> {
+      if (!debuggerHandle?.networkGrep) needDebugger('networkRequests')
+      const lines = await debuggerHandle!.networkGrep!(filter ? `grep -i '${filter}'` : 'grep -v ""')
+      return lines.map((line) => ({ url: extractUrl(line), text: line }))
+    },
+    async clearCache(): Promise<void> {
+      if (!debuggerHandle?.clearCache) needDebugger('clearCache')
+      await debuggerHandle!.clearCache!()
+    },
+    async refresh(): Promise<void> {
+      if (!debuggerHandle?.refresh) needDebugger('refresh')
+      await debuggerHandle!.refresh!()
+    },
   }
+}
+
+/** 行首 [level] 猜测（wechatide console grep 行可能带 [log]/[error] 前缀） */
+function guessLevel(line: string): ConsoleEntry['level'] {
+  const m = line.match(/^\[?(log|info|warn|error|debug)\]?/i)
+  return m ? (m[1].toLowerCase() as ConsoleEntry['level']) : undefined
+}
+
+/** 行内提取 URL（wechatide network grep 行含请求 URL） */
+function extractUrl(line: string): string {
+  const m = line.match(/https?:\/\/[^\s"'<>]+/i)
+  return m ? m[0] : line.slice(0, 120)
 }

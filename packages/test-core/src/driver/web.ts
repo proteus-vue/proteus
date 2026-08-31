@@ -11,9 +11,59 @@ import type {
   ElementWaitOptions,
   PageSnapshot,
   SystemSnapshot,
+  ConsoleEntry,
+  NetworkEntry,
+  WxApiHandle,
+  TicketHandle,
 } from './types'
 
 const DEFAULT_TIMEOUT = 5000
+
+/** MP 独有能力降级错误（web 无 wx API/登录凭据对等——业务侧已收口 platformAPI/框架自有登录） */
+function mpOnlyError(what: string): Error {
+  return new Error(`[test-core/driver] ${what} 是小程序独有能力（web 无对等——业务已收口 platformAPI）`)
+}
+
+/** ★debug 收集缓冲：console/request/response 事件 → 条目列表（page.on 可选，未注入则收集不可用） */
+class DebugBuffer {
+  private readonly consoles: ConsoleEntry[] = []
+  private readonly networks: NetworkEntry[] = []
+  constructor(page: PlaywrightPageLike) {
+    if (page.on) {
+      page.on('console', (msg: unknown) => {
+        const m = msg as { type?(): string; text?(): string }
+        this.consoles.push({
+          level: normalizeLevel(m.type?.()),
+          text: m.text?.() ?? String(msg),
+        })
+      })
+      page.on('pageerror', (err: unknown) => {
+        this.consoles.push({ level: 'error', text: err instanceof Error ? err.message : String(err) })
+      })
+      page.on('request', (req: unknown) => {
+        const r = req as { url?(): string; method?(): string }
+        this.networks.push({ url: r.url?.() ?? '', method: r.method?.(), text: `${r.method?.() ?? 'GET'} ${r.url?.() ?? ''}` })
+      })
+      page.on('response', (res: unknown) => {
+        const r = res as { url?(): string; status?(): number }
+        const hit = this.networks.find((n) => n.url === r.url?.() && n.status === undefined)
+        if (hit) hit.status = r.status?.()
+      })
+    }
+  }
+  consolesOf(filter?: string): ConsoleEntry[] {
+    return filter ? this.consoles.filter((c) => c.text.includes(filter)) : [...this.consoles]
+  }
+  networksOf(filter?: string): NetworkEntry[] {
+    return filter ? this.networks.filter((n) => n.url.includes(filter)) : [...this.networks]
+  }
+}
+
+function normalizeLevel(type?: string): ConsoleEntry['level'] {
+  if (type === 'warning') return 'warn'
+  if (type === 'error' || type === 'warn' || type === 'info' || type === 'debug' || type === 'log') return type
+  return undefined
+}
 
 /** Web 元素（locator 惰性查询：每次操作 Playwright 重查当前 DOM） */
 class WebElement implements TestElement {
@@ -71,8 +121,37 @@ class WebElement implements TestElement {
 
 /** ★统一测试 API Web 实现：注入 playwright Page */
 export function createWebDriver(page: PlaywrightPageLike): TestDriver {
+  const buffer = new DebugBuffer(page)
+  // ★web 降级（小程序独有能力：wx API 业务已收口 platformAPI；登录凭据 web 无对等）
+  const wxApi: WxApiHandle = {
+    async call(): Promise<never> {
+      throw mpOnlyError('wxApi.call')
+    },
+    async mock(): Promise<never> {
+      throw mpOnlyError('wxApi.mock')
+    },
+    async restore(): Promise<never> {
+      throw mpOnlyError('wxApi.restore')
+    },
+  }
+  const ticket: TicketHandle = {
+    async set(): Promise<never> {
+      throw mpOnlyError('ticket.set')
+    },
+    async get(): Promise<never> {
+      throw mpOnlyError('ticket.get')
+    },
+    async refresh(): Promise<never> {
+      throw mpOnlyError('ticket.refresh')
+    },
+    async testAccounts(): Promise<never> {
+      throw mpOnlyError('ticket.testAccounts')
+    },
+  }
   return {
     platform: 'web',
+    wxApi,
+    ticket,
     async close(): Promise<void> {
       // 浏览器实例由用户句柄管理（launch/close 生命周期不进 driver）
     },
@@ -108,6 +187,20 @@ export function createWebDriver(page: PlaywrightPageLike): TestDriver {
     },
     async waitFor(ms: number): Promise<void> {
       await page.waitForTimeout(ms)
+    },
+    // ★debug 能力（web 事件收集）：console/request/response（page.on 未注入时返回空数组）
+    async consoleLogs(filter?: string): Promise<ConsoleEntry[]> {
+      return buffer.consolesOf(filter)
+    },
+    async networkRequests(filter?: string): Promise<NetworkEntry[]> {
+      return buffer.networksOf(filter)
+    },
+    async clearCache(): Promise<void> {
+      // localStorage/sessionStorage 清理（cookies 由用户 context 管理）；★字符串逗号表达式（不经 TS 类型检查 + playwright 表达式求值）
+      await page.evaluate('(localStorage.clear(), sessionStorage.clear())')
+    },
+    async refresh(): Promise<void> {
+      await page.reload()
     },
   }
 }

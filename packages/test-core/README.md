@@ -9,7 +9,7 @@ Proteus 测试核心（test-framework M3 + B7 + 统一测试 API）——L1-L3 �
 | `createMockContext(options?)` | **唯一 wx 来源**：wx 全局 mock（storage/router/ui 内存实现 + vi.fn 可断言）+ Page/Component/App 构造器捕获 + getApp/getCurrentPages + 内存存储。`afterEach` 调 `cleanup()` 恢复全局 |
 | `mountMpComponent(sfc, options?)` | SFC → 真实编译（`compileVueSfc`）→ 执行逻辑层 JS → 返回 `{ instance, wxml, js, context, config }`——**逻辑 + WXML 双断言**（不真实渲染，真机行为下沉 L4）；★方法已摊平（组件 methods + 页面顶层函数绑定实例），setData 合并进 data（真实语义） |
 | `mountComponent(sfc, { platform: 'web' \| 'mp' })` | **统一挂载**：同一份 SFC → Web（@vue/test-utils 真实渲染，需 happy-dom 环境）或 MP（逻辑层归一化 host：instance 摊平 + wxml 顶层暴露）——配合 `stateOf`/`textOf`/`tap` 跨端复用同一份断言 |
-| `createDriver({ platform: 'web' \| 'mp', page/mini })` | **统一测试 API（E2E 层）**：一套 `TestDriver` 能力接口 → web（注入 playwright Page）/ mp（注入 automator miniProgram）/ app（预留）；零硬依赖（结构类型 + 注入句柄）；**全部能力 API 说明见下方「统一测试 API（E2E 层）完整能力清单」** |
+| `createDriver({ platform: 'web' \| 'mp', page/mini, debugger? })` | **统一测试 API（E2E 层）**：一套 `TestDriver` 能力接口 → web（注入 playwright Page）/ mp（注入 automator miniProgram + 可选 wechatide debugger 句柄）/ app（预留）；零硬依赖（结构类型 + 注入句柄）；**全部能力 API 说明见下方「统一测试 API（E2E 层）完整能力清单」** |
 | `mountWebComponent(sfc)` / `sfcToComponent(sfc)` | Web 分支底层：SFC → 组件对象（compileScript + compileTemplate 双段编译 + esbuild 剥离 TS + __VUE__ 注入执行）→ mount |
 | `stateOf(host)` / `textOf(host)` | **统一断言**：状态读取（Web `vm.$.setupState`+`$data` / MP `data` 快照）与文本读取（Web `wrapper.text()` / MP wxml 规范化）——06 铁律：状态跨端完全共用、DOM 各自断言 |
 | `tap(el, selector?)` / `isWebElement` / `isMpElement` | 统一事件分发（Web `trigger('click')` / 小程序 automator `tap()`）+ 类型守卫 |
@@ -100,7 +100,13 @@ describe('双端同一断言', () => {
 | `element(selector, options?)` | `TestElement` | `page.locator`（惰性重查） | `currentPage().$()`（每次重新解析） |
 | `evaluate(fn, ...args)` | `Promise<T>` | `page.evaluate` | `mini.evaluate` |
 | `screenshot(path?)` | `Promise<string>`（本地路径） | `page.screenshot({ path })`；无 path 返回 '' | `mini.screenshot({ path }).path` |
-| `waitFor(ms)` | `Promise<void>` | `page.waitForTimeout(ms)` | evaluate setTimeout |
+| `waitFor(ms)` | `Promise<void>` | `page.waitForTimeout(ms)` | evaluate 函数（★传函数，字符串挂起） |
+| `consoleLogs(filter?)` | `Promise<ConsoleEntry[]>` | console/pageerror 事件收集 | wechatide get_simulator_console（注入 debugger 句柄） |
+| `networkRequests(filter?)` | `Promise<NetworkEntry[]>` | request/response 事件收集 | wechatide get_simulator_network（注入 debugger 句柄） |
+| `clearCache()` | `Promise<void>` | localStorage/sessionStorage 清理 | wechatide debug_clear_cache（注入 debugger 句柄） |
+| `refresh()` | `Promise<void>` | `page.reload()` | wechatide simulator_refresh（注入 debugger 句柄） |
+| `wxApi` 子域 | `call/mock/restore` | ❌ 降级抛错（业务已收口 platformAPI） | automator callWxMethod/mockWxMethod/restoreWxMethod |
+| `ticket` 子域 | `set/get/refresh/testAccounts` | ❌ 降级抛错（web 无对等） | automator setTicket/getTicket/refreshTicket/testAccounts |
 
 **TestElement 全部方法**（`driver.element(selector)` 返回值）
 
