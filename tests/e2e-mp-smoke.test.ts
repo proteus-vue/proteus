@@ -10,15 +10,27 @@
 // ⚠ 文件被根 test 排除（tests/e2e-*.test.ts 通配，与 Web E2E 平级）
 import { describe, it, expect } from 'vitest'
 import { createDriver } from '@proteus-vue/test-core/driver'
-import type { AutomatorMiniLike } from '@proteus-vue/test-core/driver'
+import type { AutomatorMiniLike, MpDebuggerLike } from '@proteus-vue/test-core/driver'
 import { runSharedSmoke } from './e2e-driver-shared'
 
 // miniprogram-automator 动态 import（字符串变量避免编译期模块解析）
 const AUTOMATOR_MODULE = 'miniprogram-automator'
-// ★CLI（proteus test e2e:mp）注入：端口 / IDE CLI / 项目产物路径
+// ★CLI（proteus test e2e:mp）注入：端口 / IDE CLI / 项目产物路径 / debugger 适配模块
 const AUTOMATOR_PORT = Number(process.env.PROTEUS_AUTOMATOR_PORT ?? '9420')
 const IDE_CLI = process.env.PROTEUS_IDE_CLI ?? ''
 const PROJECT_PATH = process.env.PROTEUS_MINI_PROGRAM_PATH ?? 'dist/mp-weixin'
+const DEBUGGER_MODULE = process.env.PROTEUS_MP_DEBUGGER_MODULE ?? ''
+
+/** ★debugger 适配模块装配（--debugger <module>，MpDebuggerLike 形状）：动态 import（字符串变量），失败给可行动提示 */
+async function loadDebuggerHandle(): Promise<MpDebuggerLike | undefined> {
+  if (!DEBUGGER_MODULE) return undefined
+  try {
+    const mod = (await import(DEBUGGER_MODULE)) as { default?: MpDebuggerLike; createMpDebugger?: (opts?: unknown) => MpDebuggerLike }
+    return mod.default ?? mod.createMpDebugger?.()
+  } catch (e) {
+    throw new Error(`[test-core/driver] debugger 模块加载失败：${DEBUGGER_MODULE}——请导出 default（MpDebuggerLike 形状）或 createMpDebugger()（${e instanceof Error ? e.message : String(e)}）`)
+  }
+}
 
 type AutomatorLaunch = (opts: {
   cliPath?: string
@@ -78,7 +90,7 @@ describe.skipIf(!ENABLED)('小程序 E2E 冒烟（B5 + 统一测试 API TestDriv
       }
       // ★统一测试 API：注入 automator miniProgram → TestDriver → 同一份跨端用例（tests/e2e-driver-shared.ts）
       log('createDriver + runSharedSmoke ...')
-      const driver = createDriver({ platform: 'mp', mini })
+      const driver = createDriver({ platform: 'mp', mini, debugger: await loadDebuggerHandle() })
       // ★elementOps:false——当前 IDE 模拟器激活态下 automator page.$ 挂起（B5 边界：页面级 DOM 查询受激活态影响）
       //   稳通道（reLaunch/currentPage/systemInfo/evaluate/screenshot）全链路验证；元素层待模拟器激活态场景
       await runSharedSmoke(driver, {

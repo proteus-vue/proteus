@@ -12,14 +12,17 @@ export interface TestOptions {
   ide?: string
   /** e2e:mp：automator 端口（--port <n>；缺省 9420） */
   port?: number
+  /** e2e:mp：debugger 适配模块（--debugger <module>，MpDebuggerLike 形状——console/network/clearCache/refresh 注入） */
+  debugger?: string
 }
 
 const SCOPES = ['unit', 'e2e:web', 'e2e:mp']
 
-/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp [root]] [--ide <path>] [--port <n>]（缺省 unit） */
+/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp [root]] [--ide <path>] [--port <n>] [--debugger <module>]（缺省 unit） */
 export function parseTestArgs(argv: string[]): TestOptions {
   let ide: string | undefined
   let port: number | undefined
+  let debuggerModule: string | undefined
   const positional: string[] = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -31,6 +34,10 @@ export function parseTestArgs(argv: string[]): TestOptions {
       const v = argv[++i]
       if (!v || !/^\d+$/.test(v)) throw new Error(`--port 非法：${v}（需数字）`)
       port = Number(v)
+    } else if (a === '--debugger') {
+      const v = argv[++i]
+      if (!v) throw new Error('--debugger 缺少值（如 --debugger ./e2e/mp-debugger.ts）')
+      debuggerModule = v
     } else if (a.startsWith('--')) {
       throw new Error(`未知参数：${a}`)
     } else {
@@ -42,8 +49,10 @@ export function parseTestArgs(argv: string[]): TestOptions {
   if (SCOPES.indexOf(scope) < 0) throw new Error(`未知 scope：${scope}（允许：${SCOPES.join('/')}）`)
   // ★B5：e2e:mp 允许第二个位置参数 = 项目根目录（产物 dist/mp-weixin 相对该目录）；其余 scope 多余参数报错
   if (positional.length === 2 && scope !== 'e2e:mp') throw new Error(`多余参数：${positional[1]}（仅 e2e:mp 支持项目根目录）`)
+  // ★debugger 仅 e2e:mp 支持（console/network/clearCache/refresh 是 MP 注入句柄）
+  if (debuggerModule && scope !== 'e2e:mp') throw new Error('--debugger 仅 e2e:mp 支持（小程序 debugger 句柄注入）')
   const root = scope === 'e2e:mp' ? positional[1] : undefined
-  return { scope, root, ide, port }
+  return { scope, root, ide, port, debugger: debuggerModule }
 }
 
 /** 测试执行计划（纯函数）：unit → vitest run；e2e:web → 构建后 Playwright；e2e:mp → 需 IDE */

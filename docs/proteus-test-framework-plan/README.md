@@ -14,9 +14,9 @@
 | 02-snapshot-compile | L2 编译产物快照（@proteus-vue/test-core/snapshot：WXML 结构等值 + sourcemap 回源） | ✅ B2 |
 | 03-component-integration | L3 组件 + createMockContext | ✅ M3 |
 | 03b-mount-unified | **统一测试 API（@proteus-vue/test-core mount.ts）**：同一份 SFC → `mountComponent(platform: 'web'/'mp')` 双端挂载（Web @vue/test-utils 真实渲染 / MP 逻辑层 + WXML 归一化 host）+ `stateOf`/`textOf` 跨端统一断言 + `tap` 事件分发——状态完全共用、DOM 各自断言（06 铁律）；★web 分支需 happy-dom（esbuild TextEncoder 检查）、状态读 vm.$.setupState、increment 后文本断言先 await $nextTick | ✅ 统一 API |
-| 03c-driver-e2e | **统一测试 API（E2E 层 @proteus-vue/test-core/driver）**：一套 `TestDriver` 能力接口 → web（Playwright）/ mp（automator + 可选 wechatide debugger 句柄）；含 **debug 能力域**（consoleLogs/networkRequests/clearCache/refresh）+ **小程序独有**（wxApi/ticket 子域——automator 原生，web 降级）；注入句柄 + 结构类型（零硬依赖）；MP 经验内化（元素每次重新解析、reLaunch 最稳通道、evaluate 必须传函数）；`createDriver({ platform, page/mini, debugger? })` 统一入口——同一份跨端用例代码双端跑（tests/test-driver.test.ts 12 用例）；**全部能力接口说明见 §13** | ✅ 统一 API |
+| 03c-driver-e2e | **统一测试 API（E2E 层 @proteus-vue/test-core/driver）**：一套 `TestDriver` 能力接口 → web（Playwright）/ mp（automator + 可选 wechatide debugger 句柄）；含 **debug 能力域**（consoleLogs/networkRequests/clearCache/refresh——`--debugger <module>` 可插拔装配）+ **小程序独有**（wxApi/ticket 子域——automator 原生，web 降级）+ **web CDP**（cdp 子域——注入 CDP session）；MP 经验内化（元素查询超时诊断、reLaunch 最稳通道、evaluate 必须传函数）；`createDriver({ platform, page/mini, cdp?/debugger? })` 统一入口——同一份跨端用例代码双端跑（tests/test-driver.test.ts 15 用例）；**全部能力接口说明见 §13** | ✅ 统一 API |
 | 04-e2e-web-playwright | Web E2E（路由/渲染 + 关键路径 data-testid）；★统一 driver 适配（@proteus-vue/test-core/driver：createDriver({platform:'web', page})) | ✅ B4 |
-| 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——**examples 真机全链路跑通**（体检/副本/补丁/端口复用/冒烟断言）；Page.getData 受模拟器激活态影响 → 断言用 reLaunch/currentPage/systemInfo；★统一 driver 适配（createDriver({platform:'mp', mini})） | ✅ B5 |
+| 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——**examples 真机全链路跑通**（体检/副本/补丁/端口复用/冒烟断言 + 元素查询超时诊断 + --debugger 装配）；Page.getData 受模拟器激活态影响 → 断言用 reLaunch/currentPage/systemInfo；★统一 driver 适配（createDriver({platform:'mp', mini})） | ✅ B5 |
 | 06-cross-platform-assert | 跨端断言一致性（@proteus-vue/test-core 统一 tap/类型守卫 + stateOf/textOf 统一状态/文本读取） | ✅ B7 |
 | 07-fixtures-mock-wx | fixture + wx polyfill | ✅ |
 | 08-ci-strategy | CI 策略——§08「决策未定前 CI 只跑 L1-L3 + 快照 + Web Playwright」已落 proteus ci:init（automator 留 Mac runner 条件） | 🔶 决策待定 |

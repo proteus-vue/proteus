@@ -21,6 +21,24 @@ import type {
 } from './types'
 
 const DEFAULT_TIMEOUT = 5000
+/** 单次元素查询超时（automator page.$ 在模拟器未激活/IDE 协议异常时挂起无响应——实测 8s+ 无返回） */
+const QUERY_TIMEOUT = 3000
+
+/** ★元素查询诊断（05 已知限制）：$ 挂起 = 模拟器激活态/IDE 协议问题，给可行动提示而非静默拖死用例 */
+const ELEMENT_QUERY_HINT =
+  'MP 元素查询超时——automator page.$ 在模拟器未激活/IDE 协议异常时挂起（05 已知限制）：' +
+  '① 激活模拟器页面（点 IDE 窗口/模拟器）后重试；② 改用稳通道断言（currentPage/systemInfo/evaluate）；③ 元素级交互待模拟器激活态场景'
+
+/** ★有界调用：automator 部分协议方法（page.$/screenshot）挂起无超时 → Promise.race 兜底，超时抛诊断 */
+async function withBound<T>(p: Promise<T> | null | undefined, label: string, hint = ''): Promise<T | null> {
+  if (p == null) return null
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`[test-core/driver] ${label} 超时（${QUERY_TIMEOUT}ms）${hint ? `——${hint}` : ''}`)), QUERY_TIMEOUT)
+    }),
+  ])
+}
 
 /** ★MP 元素：每次操作重新解析（不缓存——导航后页面实例变化，旧引用失效） */
 class MpElement implements TestElement {
@@ -35,7 +53,8 @@ class MpElement implements TestElement {
     const deadline = Date.now() + timeout
     for (;;) {
       const page = await this.mini.currentPage()
-      const el = await page.$?.(this.selector)
+      // ★$ 挂起（激活态/协议）→ 快速失败诊断；返回 null → 正常轮询（页面/元素异步渲染）
+      const el = await withBound(page.$?.(this.selector), `MP 元素查询 ${this.selector}`, ELEMENT_QUERY_HINT)
       if (el) return el
       if (Date.now() >= deadline) {
         throw new Error(`[test-core/driver] MP 元素未找到：${this.selector}（${timeout}ms）——用 querySelectorAll 核对选择器或等待页面渲染`)
@@ -78,7 +97,7 @@ class MpElement implements TestElement {
       const deadline = Date.now() + timeout
       for (;;) {
         const page = await this.mini.currentPage()
-        const el = await page.$?.(this.selector)
+        const el = await withBound(page.$?.(this.selector), `MP 元素查询 ${this.selector}`, ELEMENT_QUERY_HINT)
         if (!el) return
         if (Date.now() >= deadline) throw new Error(`[test-core/driver] MP 元素未消失：${this.selector}（${timeout}ms）`)
         await this.mini.evaluate(() => new Promise((r) => setTimeout(r, 200)))
@@ -90,7 +109,7 @@ class MpElement implements TestElement {
 
   async exists(_options?: TestElementOptions): Promise<boolean> {
     const page = await this.mini.currentPage()
-    return Boolean(await page.$?.(this.selector))
+    return Boolean(await withBound(page.$?.(this.selector), `MP 元素查询 ${this.selector}`, ELEMENT_QUERY_HINT))
   }
 }
 

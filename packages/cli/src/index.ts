@@ -253,7 +253,7 @@ async function main(): Promise<void> {
       break
     }
     case 'test': {
-      const { scope, root, ide, port } = parseTestArgs(rest)
+      const { scope, root, ide, port, debugger: debuggerModule } = parseTestArgs(rest)
       if (scope === 'e2e:mp') {
         // ★test-framework B5：环境体检 → 产物副本 → automator launch（内部 spawn IDE + trust + 轮询）
         try {
@@ -302,6 +302,8 @@ async function main(): Promise<void> {
                 PROTEUS_AUTOMATOR_PORT: String(plan.port),
                 PROTEUS_IDE_CLI: plan.ideCli,
                 PROTEUS_MINI_PROGRAM_PATH: prepared.projectDir,
+                // ★debugger 适配模块（--debugger <module>，MpDebuggerLike——console/network/clearCache/refresh 注入）
+                ...(debuggerModule ? { PROTEUS_MP_DEBUGGER_MODULE: path.resolve(debuggerModule) } : {}),
               },
             },
           )

@@ -365,6 +365,8 @@ interface MpDebuggerLike {
 ```
 未注入 → 对应 driver 方法抛错提示「注入 wechatide debugger 句柄」。
 
+**★装配通道（决策 #209）**：CLI `proteus test e2e:mp --debugger <module>`（或 env `PROTEUS_MP_DEBUGGER_MODULE`）——spec 动态 import 适配模块（导出 `default` MpDebuggerLike 或 `createMpDebugger()`）注入 `createDriver({ platform:'mp', mini, debugger })`；示例见 05-e2e-mp-automator.md「debugger 适配装配」。
+
 ---
 
 ## 7. 边界与扩展

@@ -65,7 +65,7 @@ automator **不能 headless**，必须启动微信开发者工具。
 |---|---|
 | automation 端口 | `--auto-port 9420` 仍有效（automation WS 监听该端口；★仅 IPv6 监听（lsof `*:9420`）→ 框架端口探测已双栈（IPv4+IPv6，2026-08-31 真机踩坑））；IDE server 端口是另一个，动态 |
 | `Tool.getInfo.SDKVersion` | 返回（项目就绪后；未就绪时为空 → automator checkVersion 崩 → 框架 patch 容错） |
-| `Page.getData` / `page.$` | **受模拟器页面激活态影响**（GUI 未激活页面时报 not on top / `$` 查询挂起无响应）→ 断言改用 connect/reLaunch/currentPage/systemInfo/evaluate（全链路最稳通道） |
+| `Page.getData` / `page.$` | **受模拟器页面激活态影响**（GUI 未激活页面时报 not on top / `$` 查询挂起无响应）→ 断言改用 connect/reLaunch/currentPage/systemInfo/evaluate（全链路最稳通道）；**★框架已加查询超时诊断**（MpElement 单次查询 3s 有界——$ 挂起时快速失败并提示「激活模拟器/改稳通道」，不再静默拖死用例） |
 | `mini.screenshot` | **当前 IDE 挂起**（协议/激活态限制，B5 未验证能力）→ TestDriver 截图断言 MP 端跳过（web 正常） |
 | `mini.evaluate` | 正常（★必须传**函数**——automator 内部 `fn.toString()` 序列化；传字符串原样下发导致运行时无响应挂起；带参函数正常） |
 | 端口复用 | 已运行 IDE 的 automation 端口被占 → CLI 自动转 connect 复用（不重复 launch） |
@@ -77,9 +77,45 @@ automator **不能 headless**，必须启动微信开发者工具。
 - automator SDKVersion 幂等补丁（scripts/patch-automator.mjs，CLI 自动执行；★单行文件禁用 // 注释 MARK——会吞整行代码）
 - 失败模式诊断（连接拒绝 → 提示 GUI「设置 → 安全设置 → 服务端口」）
 - **端口复用**（automation 端口被占 → connect 模式）+ **双栈端口探测**（IPv4/IPv6）
+- **元素查询超时诊断**（MpElement：automator `$` 挂起 → 3s 有界快速失败 + 激活态/稳通道提示）
+- **debugger 适配装配**（`--debugger <module>`：MpDebuggerLike 注入 console/network/clearCache/refresh——wechatide 工具能力）
 - **TestDriver MP 适配**（决策 #205）：稳通道（reLaunch/currentPage/systemInfo/evaluate）已验证跑通；元素层（$）与截图标注激活态/协议边界（web 端完整可用）
 
 **examples 实测**：`proteus test e2e:mp examples --port 9420 --ide <cli>` 全链路 EXIT=0（体检 → 副本 → 补丁 → connect → TestDriver runSharedSmoke 稳通道 + evaluate 页面 data 断言）。
+
+## debugger 适配装配（--debugger <module>，决策 #209）
+
+console/network/clearCache/refresh 是 **wechatide 工具能力**（automator 无 API）→ CLI 支持注入 MpDebuggerLike 适配模块：
+
+```bash
+proteus test e2e:mp examples --ide <cli> --debugger ./e2e/mp-debugger.ts
+```
+
+适配模块导出 `default`（MpDebuggerLike 形状）或 `createMpDebugger()`（spec 动态 import 装配；模块导出 default 优先）：
+
+```ts
+// e2e/mp-debugger.ts —— MpDebuggerLike 示例适配
+import type { MpDebuggerLike } from '@proteus-vue/test-core/driver'
+import { execFileSync } from 'node:child_process'
+
+export default {
+  // wechatide 工具：get_simulator_console --command '<grep>'
+  async consoleGrep(command: string): Promise<string[]> {
+    return runWechatide('get_simulator_console', command)
+  },
+  async networkGrep(command: string): Promise<string[]> {
+    return runWechatide('get_simulator_network', command)
+  },
+  async clearCache(): Promise<void> {
+    // wechatide debug_clear_cache；或运行时 wx.clearStorageSync（evaluate 通道）
+  },
+  async refresh(): Promise<void> {
+    // wechatide simulator_refresh（重新编译当前页）
+  },
+} satisfies MpDebuggerLike
+```
+
+未注入 `--debugger` 时，`driver.consoleLogs()` 等调用抛错提示「注入 wechatide debugger 句柄」（接口就位、句柄可插拔）。
 
 ## 统一 driver 适配（决策 #205）
 

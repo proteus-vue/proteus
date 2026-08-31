@@ -15,6 +15,22 @@ describe('proteus test（test-framework 入口）', () => {
     expect(() => parseTestArgs(['e2e:mp', 'a', 'b'])).toThrow(/多余参数/)
   })
 
+  it('parseTestArgs：--debugger 适配模块（仅 e2e:mp；缺值/其他 scope 报错）', () => {
+    expect(parseTestArgs(['e2e:mp', '--debugger', './e2e/mp-debugger.ts'])).toEqual({
+      scope: 'e2e:mp',
+      debugger: './e2e/mp-debugger.ts',
+    })
+    expect(parseTestArgs(['e2e:mp', 'examples', '--debugger', './dbg.ts', '--ide', '/x/cli', '--port', '9421'])).toEqual({
+      scope: 'e2e:mp',
+      root: 'examples',
+      debugger: './dbg.ts',
+      ide: '/x/cli',
+      port: 9421,
+    })
+    expect(() => parseTestArgs(['e2e:mp', '--debugger'])).toThrow(/--debugger 缺少值/)
+    expect(() => parseTestArgs(['unit', '--debugger', './dbg.ts'])).toThrow(/仅 e2e:mp/)
+  })
+
   it('runTest：unit → vitest run（L1-L3 + 快照，排除 e2e 通配）', () => {
     const plan = runTest({ scope: 'unit' })
     expect(plan.command).toBe('npx')
