@@ -12,10 +12,11 @@
 | v3.2 | 新 plan 追加 | 新增 10 份 plan 追加 G-21~G-30（css-compat G-21 / app-renderer G-22 / safe-area G-23 / memory-plan G-24 / memorial G-25 / skeleton G-26 / theme+fontscale G-27 / cache G-28 / glass G-29 / performance G-30）；各新 plan 声称的旧编号（G-04/G-05/G-08/G-10~G-18）一律重指向本表；`check-consistency.js` 落地（scope 扫描 + G 表跨文件一致 + 包注册表对照 + contracts 检查） | 规约表 G-01~G-30 · 10 份新 plan 文档 · 遗留 `@proteus/` scope 修正（types-plus/test-framework） |
 | v3.3 | style-safety 追加 | 新增 style-safety（全端样式运行时安全）plan 并入 **G-31**；其声称的 G-16 与 blueprint 撞号 → 一律以本表为准（G-16 = blueprint B1-B5、style-safety = G-31）；依赖 G-21（CSS 矩阵 ✅）/ G-22（App Renderer patchStyle）/ G-10（Compiler IR） | 规约表 G-01~G-31 · style-safety 12 文档 G-16→G-31 重指向 |
 | v3.4 | plus 系列追加 | 新增 router-plus / cli-plus / devtools-plus（P0，第 33-35 份）并入 **G-32 / G-33 / G-34**；声称的 G-17/G-18/G-19 与 blueprint/website 撞号 → 一律以本表为准（重指向 + 交叉引用同步：router-plus G-17→G-32、cli-plus G-18→G-33、devtools-plus G-19→G-34、Style Safety 引用 G-16→G-31、CLI 引用 G-18→G-33、Router 引用 G-17→G-32；cli-plus 的「G-07~G-16 横切区间」保留原编号） | 规约表 G-01~G-34 · plus 三 plan 文档编号重指向（46 处） |
+| v3.5 | app-config 追加 | 新增 app-config（应用全局配置：运行时配置 + 远端更新 + 五端存储）并入 **G-35**；声称的 G-20（v1.0 发布）撞号 → 一律以本表为准；旧编号引用重指向：Theme/Font G-13/G-15→G-27、Memorial G-11→G-25、Style Safety G-16→G-31、Cache G-14→G-28、CLI G-18→G-33、DevTools G-19→G-34、Router G-17→G-32、Glass G-12→G-29 | 规约表 G-01~G-35 · app-config 9 文档编号重指向（42 处） |
 
 ---
 
-## 二、G-01 ~ G-34 全局执行序（权威版）
+## 二、G-01 ~ G-35 全局执行序（权威版）
 
 | 序号 | 内容 | 前置 | 备注 |
 |------|------|------|------|
@@ -53,6 +54,7 @@
 | G-32 | router-plus（严格路由） | G-12,G-22 | 路由（原声称 G-17 与 blueprint 撞号，重指向 G-32） |
 | G-33 | cli-plus（严格 CLI） | G-07,G-21,G-31 | CLI（原声称 G-18 与 website 撞号，重指向 G-33） |
 | G-34 | devtools-plus（HMR + 协议 + 可视化） | G-08,G-31,G-33 | DevTools（原声称 G-19 与 website 撞号，重指向 G-34） |
+| G-35 | app-config（应用全局配置） | G-27,G-28,G-25 | 应用配置（原声称 G-20 与 v1.0 发布撞号，重指向 G-35） |
 
 ---
 
