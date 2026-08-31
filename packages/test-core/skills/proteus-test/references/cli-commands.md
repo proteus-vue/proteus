@@ -15,6 +15,7 @@
 | `npx proteus test e2e:mp <root> [--ide <cli>] [--port <n>] [--debugger <module>]` | 小程序 E2E 真机 | 全链路：体检 → 副本 → 补丁 → launch/connect → spec |
 | `npx proteus audit all` | 六域门禁 | route/module/config/i18n/capabilities/components；预算 12s 超时阻断 |
 | `npx proteus check <root>` | 四域规范检查 | capabilities 域扫业务 `wx.*` 直连（B5 平台规范门禁） |
+| `npx proteus health <root>` | **工程/环境健康检查** | Node 版本 / 结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE——一次性诊断（✅/⚠/✗，error 阻断） |
 
 ## e2e:mp 参数
 
