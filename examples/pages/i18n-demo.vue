@@ -1,14 +1,6 @@
 <!-- examples/pages/i18n-demo.vue —— 国际化演示页（i18n-plan B3）
      双端验证：@proteus-vue/i18n 共享模块（MP _proteus/i18n）+ locale 切换 + 复数/插值
      ★响应式说明：i18n 无内置响应式，页面持有 lang ref 触发重算（computed 依赖 lang.value 建立依赖） -->
-<route>
-{
-  "path": "/pages/i18n-demo",
-  "meta": {
-    "title": "国际化"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { i18n } from '../locales'

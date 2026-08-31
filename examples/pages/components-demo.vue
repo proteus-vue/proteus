@@ -1,13 +1,5 @@
 <!-- examples/pages/components-demo.vue —— 组件系统演示页（v0.3）
      父页面使用 <counter>：props 传递 / @change 事件 / usingComponents 由 gen-routes 自动注入 page.json -->
-<route>
-{
-  "path": "/pages/components-demo",
-  "meta": {
-    "title": "组件演示"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref } from 'vue'
 // Web 端注册组件（MP 端编译器忽略 import，标签走 usingComponents）

@@ -1,12 +1,4 @@
 <!-- examples/pages/showcase.vue —— 转场演示页（scaleDown 综合能力演示的目标页） -->
-<route>
-{
-  "path": "/pages/showcase",
-  "meta": {
-    "title": "转场演示"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref } from 'vue'
 

@@ -39,12 +39,29 @@ const config: ProteusConfig = {
     strict: false,
   },
   // ★决策 #113 集中式 meta：页面零 <route> 声明也能获得 meta（精确路径 > 目录前缀 > 默认）
+  // ★约定式路由收口（决策 #112/#113）：path/name 从文件路径推导，meta 全部集中在此（<route> 块仅剩 params 等特殊声明）
   router: {
     meta: {
+      // 主包页面（pageRel：pages/ 去前缀；index.vue → 目录路径归并）
+      'index': { title: '首页', isTab: true },
+      'mine': { title: '我的', isTab: true },
+      'components-demo': { title: '组件演示' },
+      'builtin-components-demo': { title: '内置组件' },
+      'config-demo': { title: '配置演示' },
+      'forms': { title: '表单与指令' },
+      'i18n-demo': { title: '国际化' },
+      'showcase': { title: '转场演示' },
+      'pinia-demo': { title: '状态管理' },
+      'platform-api-demo': { title: 'PlatformAPI 收口' },
+      'provide-inject-demo': { title: '注入演示' },
+      'virtual-list-demo': { title: '虚拟列表' },
       // 目录级示例：user 下全部页面需登录 + 上滑转场
       'user': { requiresAuth: true, transition: 'slideUp' },
       // 精确路径：细化目录级（精确字段覆盖，目录其余保留）
+      'user/index': { title: '用户中心' },
       'user/profile': { title: '个人资料' },
+      // 分包页面（relInSub 去 pages/ 前缀）
+      'list': { title: '订单列表' },
     },
   },
 }

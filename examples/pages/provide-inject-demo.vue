@@ -2,14 +2,6 @@
      页面顶层 provide("key", value) → 编译为 onLoad 注册 getApp().__proteusProvides；
      ★Batch 4 语义（对齐 Vue）：裸 ref 提供（provide("demo-user", user)）→ 响应式联动（ref 写入 → inject 组件自动 setData）；
      .value / 字面量提供 → 静态快照。组件 inject → attached 订阅 __subs[key]（值变化刷新），detached 取消 -->
-<route>
-{
-  "path": "/pages/provide-inject-demo",
-  "meta": {
-    "title": "注入演示"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref, provide } from 'vue'
 // Web 端注册组件（MP 端编译器忽略 import，标签走 usingComponents）

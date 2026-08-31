@@ -1,13 +1,5 @@
 <!-- examples/pages/config-demo.vue —— proteus.config 规则覆盖演示页（★底线循环 ③）
      演示 proteus.config.ts 的 rules 段：改配置即改变编译行为，无需改框架代码 -->
-<route>
-{
-  "path": "/pages/config-demo",
-  "meta": {
-    "title": "配置演示"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref } from 'vue'
 // ★platform-plan B1：Capability 能力（业务依赖能力不依赖平台）——Web 端 Vite ESM 可用；MP 端接入待能力包打包放行

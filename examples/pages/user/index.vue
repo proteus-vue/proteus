@@ -1,13 +1,5 @@
 <!-- examples/pages/user/index.vue —— 用户中心（非 tab 页）
      自定义路由（半屏/转场）必须从非 tab 页发起（微信平台约束，真机确诊），故演示链接放在本页 -->
-<route>
-{
-  "path": "/pages/user/index",
-  "meta": {
-    "title": "用户中心"
-  }
-}
-</route>
 <script setup lang="ts">
 </script>
 

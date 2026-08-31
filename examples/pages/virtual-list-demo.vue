@@ -1,12 +1,4 @@
 <!-- examples/pages/virtual-list-demo.vue —— 虚拟列表演示页（v0.4） -->
-<route>
-{
-  "path": "/pages/virtual-list-demo",
-  "meta": {
-    "title": "虚拟列表"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 // Web 端注册框架内置组件（聚合入口；MP 端编译器忽略 import，标签走 usingComponents /proteus/...）

@@ -1,14 +1,6 @@
 <!-- examples/pages/forms.vue —— 表单与指令能力演示页
      覆盖编译器能力矩阵：v-model（input/textarea）/ :class 对象语法 / :style 对象语法 /
      v-if-v-else-if-v-else 条件链 / 事件修饰符 .stop → catchtap / v-html → rich-text / ref 写入 -->
-<route>
-{
-  "path": "/pages/forms",
-  "meta": {
-    "title": "表单与指令"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 // ★module-plan B0：共享模块跨模块引用（MP 端编译为 require('../utils/format.js')）

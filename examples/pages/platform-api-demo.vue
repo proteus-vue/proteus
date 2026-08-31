@@ -3,14 +3,6 @@
      对照：mp-semantics-demo 直接 wx.*（小程序语义演示）→ 本页展示收口后的业务落地形态
      ★双端：MP 端平台分支自动生效（wx.request/setStorageSync/navigateTo/showToast），Web 端
        fetch/localStorage/history/DOM toast；request 默认 httpbin（CORS 开放；MP 端需开发者工具关闭域名校验） -->
-<route>
-{
-  "path": "/pages/platform-api-demo",
-  "meta": {
-    "title": "PlatformAPI 收口"
-  }
-}
-</route>
 <template>
   <view class="pad">
     <text class="pad-title">PlatformAPI 收口演示（B9）</text>

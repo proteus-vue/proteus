@@ -1,13 +1,5 @@
 <!-- examples/subpackages/order/pages/list.vue —— 分包示例页（订单列表）
      本页以 route-type="scaleDown" 进入后获得联动能力：被覆盖时自身下沉缩放（经典架构 A 页） -->
-<route>
-{
-  "path": "/subpackages/order/pages/list",
-  "meta": {
-    "title": "订单列表"
-  }
-}
-</route>
 <script setup lang="ts">
 </script>
 

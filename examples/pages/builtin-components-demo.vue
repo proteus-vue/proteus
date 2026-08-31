@@ -1,14 +1,6 @@
 <!-- examples/pages/builtin-components-demo.vue —— 内置组件演示页（组件库 B2：p-view / p-text / p-image / p-button）
      双端验证：Web import 聚合 + MP usingComponents /proteus/<tag>/index 自动解析
      （components-demo.vue 保留给 v0.3 组件系统演示 counter/panel，本页专演示框架内置组件） -->
-<route>
-{
-  "path": "/pages/builtin-components-demo",
-  "meta": {
-    "title": "内置组件"
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref } from 'vue'
 import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast, PNavBar, PSkeleton } from '@proteus-vue/components'

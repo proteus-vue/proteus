@@ -1,13 +1,4 @@
 <!-- examples/pages/mine.vue —— 我的（第二个 Tab 页：微信 tabBar.list 至少 2 项） -->
-<route>
-{
-  "path": "/pages/mine",
-  "meta": {
-    "title": "我的",
-    "isTab": true
-  }
-}
-</route>
 <script setup lang="ts">
 import { ref } from 'vue'
 

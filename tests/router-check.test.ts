@@ -9,15 +9,16 @@ import { parseRouterCheckArgs } from '../packages/cli/src/args'
 const FIX = fileURLToPath(new URL('./fixtures/router-plan', import.meta.url))
 
 describe('router:check 迁移检查', () => {
-  it('合规页面 → ok + 迁移就绪报告（来源登记 + 嵌套树 trace）', () => {
+  it('合规页面 → ok + 迁移就绪报告（★约定式路由：无 <route> 块页面也推导收录）', () => {
     const result = checkRoutes(path.join(FIX, 'pages'))
     expect(result.ok).toBe(true)
-    expect(result.pageCount).toBe(4) // home / home/profile / user / user/order（private 无 route 跳过）
+    expect(result.pageCount).toBe(5) // home / home/profile / user/index / user/order + private（无块推导收录，决策 #112/#113）
     expect(result.errors).toHaveLength(0)
     expect(result.summary.some((s) => s.includes('path 前缀推导') || s.includes('根路由'))).toBe(true) // 嵌套树 trace
+    expect(result.summary.some((s) => s.includes('private'))).toBe(true) // 无块页面推导收录 trace
     const report = formatRouterCheck(result)
     expect(report).toContain('router:check ✓')
-    expect(report).toContain('迁移就绪')
+    expect(report).toContain('<route> 块可选')
   })
 
   it('非法 <route> → 校验失败 + 精确 loc 报错（页面 .vue 零改动修正提示）', () => {
