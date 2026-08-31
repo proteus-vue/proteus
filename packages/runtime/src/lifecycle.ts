@@ -2,16 +2,29 @@
 // ★lifecycle-plan B1+B2：App 级阶段化生命周期——defineApp API + LifecycleOrchestrator（顺序执行/超时降级/错误隔离/trace）
 // ★devtools B2：可选 TraceBus 注入（type-only，运行时零依赖）——结构化事件（start/end/error/point）汇入统一协议
 import type { TraceBus } from '@proteus-vue/devtools-runtime'
+// ★类型收口（08 契约表）：AppPhase/LaunchType/LifecycleContext/PhaseHook 单一来源 @proteus-vue/types/lifecycle-types
+import type { AppPhase, FallbackStrategy, LaunchType, LifecycleContext } from '@proteus-vue/types/lifecycle-types'
 // 五阶段：bootstrap → coreReady → navigationReady → beforeFirstPaint → interactive（顺序即契约，业务不可篡改）
 // 设计（docs/proteus-lifecycle-plan/01-m1-phases.md + 02-m2-orchestrator.md）
 // 产物 ES5 安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构
 
 /** 五阶段（顺序固定） */
 export const PHASE_ORDER = ['bootstrap', 'coreReady', 'navigationReady', 'beforeFirstPaint', 'interactive'] as const
-export type LifecyclePhase = (typeof PHASE_ORDER)[number]
+/** 阶段类型别名（types 收口，保持既有引用兼容） */
+export type LifecyclePhase = AppPhase
 
-/** 降级策略（阶段超时后） */
-export type FallbackStrategy = 'warn' | 'minimal' | 'home' | 'skeleton' | 'lazy'
+// 编译期断言：PHASE_ORDER 与 AppPhase 同值（types 收口防漂移）
+const _phaseOrderMatches: Record<AppPhase, true> = {
+  bootstrap: true,
+  coreReady: true,
+  navigationReady: true,
+  beforeFirstPaint: true,
+  interactive: true,
+}
+void _phaseOrderMatches
+
+/** 降级策略（阶段超时后）——types 收口（lifecycle-types） */
+export type { FallbackStrategy, LaunchType, LifecycleContext, PhaseHook } from '@proteus-vue/types/lifecycle-types'
 
 /** 默认超时（ms，M2 §六） */
 export const DEFAULT_PHASE_TIMEOUT: Record<LifecyclePhase, number> = {
@@ -31,18 +44,7 @@ export const DEFAULT_PHASE_FALLBACK: Record<LifecyclePhase, FallbackStrategy> = 
   interactive: 'lazy',
 }
 
-export type LaunchType = 'cold' | 'warm' | 'recover'
-
-/** 阶段上下文（业务钩子只读 ctx + 调已注册服务，禁止直连平台 API） */
-export interface LifecycleContext {
-  launchType: LaunchType
-  launchOptions?: { path?: string; query?: Record<string, string> }
-  network: 'wifi' | '4g' | '3g' | 'none'
-  platform: 'web' | 'skyline' | 'app'
-  /** ★minimal 模式（coreReady 超时/失败后）——业务读此标记跳过非必要逻辑 */
-  isMinimalMode: boolean
-}
-
+/** 阶段上下文类型已收口 types（lifecycle-types）——见顶部 re-export；此处仅保留 trace 结构 */
 export interface LifecycleTrace {
   phase: LifecyclePhase
   startTime: number

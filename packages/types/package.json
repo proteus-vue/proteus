@@ -52,6 +52,18 @@
       "types": "./dist/platform-api.d.ts",
       "import": "./dist/platform-api.js"
     },
+    "./lifecycle-types": {
+      "types": "./dist/lifecycle-types.d.ts",
+      "import": "./dist/lifecycle-types.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js"
+    },
+    "./ir-guards": {
+      "types": "./dist/ir-guards.d.ts",
+      "import": "./dist/ir-guards.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
@@ -68,7 +80,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/config.ts src/config-schema.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/lifecycle-types.ts src/utils.ts src/ir-guards.ts src/config.ts src/config-schema.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

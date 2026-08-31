@@ -55,6 +55,12 @@ export type { MpSdkVersion } from './mp/sdk-version'
 export { DEFAULT_TYPINGS_VERSION, MP_SDK_VERSION_MAP, resolveTypingsVersion, validateMpSdkVersion } from './mp/sdk-version'
 // ★官方类型桥（WechatMiniprogram 命名空间）为 opt-in：单独经 '@proteus-vue/types/mp/official-typings' 引用
 
+// ============ lifecycle / utils / ir-guards（types-plus B1 §3/§6 + B5 §2） ============
+export type { AppPhase, LaunchType, LifecycleContext, PhaseHook, FallbackStrategy } from './lifecycle-types'
+export type { IfPlatform, ExtractByPlatform, RequiredBy } from './utils'
+export { IR_GUARD_ERROR_CODES, isRouteIR, isStoreIR, isSFCIR, assertRouteIR, assertStoreIR, assertSFCIR } from './ir-guards'
+export type { IRGuardErrorCode } from './ir-guards'
+
 // ============ 品牌 / 迁移 / Schema（B6/B3 既有） ============
 export type { Brand } from './brand'
 export type { StoreId, ModuleDomain, RouteName, CapabilityId } from './brand'
