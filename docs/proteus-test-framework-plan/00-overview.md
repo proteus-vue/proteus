@@ -26,7 +26,7 @@ L1  单元                Vitest + vi.mock  ────────────
 
 **关键：Vitest 是 L1-L3 的统一运行器；仅 L4 按端分叉。**
 
-**★L4 之上的统一抽象（决策 #205）**：分叉保留在句柄层（playwright page / automator mini 由用户或 CLI 装配），用例描述走统一 `TestDriver` 能力接口（@proteus-vue/test-core/driver：navigate · element · evaluate · screenshot · currentPage/systemInfo）——**同一份跨端用例代码多端跑**；App 端为第三实现预留（§09）。
+**★L4 之上的统一抽象（决策 #205）**：分叉保留在句柄层（playwright page / automator mini 由用户或 CLI 装配），用例描述走统一 `TestDriver` 能力接口（@proteus-vue/test-core/driver，**全部能力接口说明见 §13**）——**同一份跨端用例代码多端跑**；App 端为第三实现预留（§09）。
 
 ## 3. 技术选型（已确认）
 

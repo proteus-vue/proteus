@@ -14,7 +14,7 @@
 | 02-snapshot-compile | L2 编译产物快照（@proteus-vue/test-core/snapshot：WXML 结构等值 + sourcemap 回源） | ✅ B2 |
 | 03-component-integration | L3 组件 + createMockContext | ✅ M3 |
 | 03b-mount-unified | **统一测试 API（@proteus-vue/test-core mount.ts）**：同一份 SFC → `mountComponent(platform: 'web'/'mp')` 双端挂载（Web @vue/test-utils 真实渲染 / MP 逻辑层 + WXML 归一化 host）+ `stateOf`/`textOf` 跨端统一断言 + `tap` 事件分发——状态完全共用、DOM 各自断言（06 铁律）；★web 分支需 happy-dom（esbuild TextEncoder 检查）、状态读 vm.$.setupState、increment 后文本断言先 await $nextTick | ✅ 统一 API |
-| 03c-driver-e2e | **统一测试 API（E2E 层 @proteus-vue/test-core/driver）**：一套 `TestDriver` 能力接口 → web（Playwright）/ mp（automator）——能力域对照 wechatide-skill automator「意图→工具」表（navigate/reLaunch/back · currentPage/systemInfo · element(tap/input/longPress/text/value/waitFor) · evaluate · screenshot · waitFor）；注入句柄 + 结构类型（零硬依赖）；MP 经验内化（元素每次重新解析、reLaunch 最稳通道）；`createDriver({ platform, page/mini })` 统一入口——同一份跨端用例代码双端跑（tests/test-driver.test.ts 7 用例） | ✅ 统一 API |
+| 03c-driver-e2e | **统一测试 API（E2E 层 @proteus-vue/test-core/driver）**：一套 `TestDriver` 能力接口 → web（Playwright）/ mp（automator）；注入句柄 + 结构类型（零硬依赖）；MP 经验内化（元素每次重新解析、reLaunch 最稳通道）；`createDriver({ platform, page/mini })` 统一入口——同一份跨端用例代码双端跑（tests/test-driver.test.ts 7 用例）；**全部能力接口说明见 §13** | ✅ 统一 API |
 | 04-e2e-web-playwright | Web E2E（路由/渲染 + 关键路径 data-testid）；★统一 driver 适配（@proteus-vue/test-core/driver：createDriver({platform:'web', page})) | ✅ B4 |
 | 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——**examples 真机全链路跑通**（体检/副本/补丁/端口复用/冒烟断言）；Page.getData 受模拟器激活态影响 → 断言用 reLaunch/currentPage/systemInfo；★统一 driver 适配（createDriver({platform:'mp', mini})） | ✅ B5 |
 | 06-cross-platform-assert | 跨端断言一致性（@proteus-vue/test-core 统一 tap/类型守卫 + stateOf/textOf 统一状态/文本读取） | ✅ B7 |
@@ -24,6 +24,7 @@
 | 10-blueprint-integration | Blueprint 150 页（P1-P5 业务路径待 v0.6 组件） | 🔶 |
 | 11-execution-batches | B1-B8 + Prompt | ✅ |
 | 12-placeholders | CI / App TODO | ✅ |
+| 13-test-driver-api | **统一测试 API 参考（TestDriver/TestElement 全部能力接口）**：入口工厂 · 全部方法签名/参数/返回 · 双端行为差异 · 注入句柄结构类型 · 完整跨端用例 · 边界扩展 | ✅ |
 
 ## 方案可行性结论
 - ✅ Web 用 Vitest —— 正确

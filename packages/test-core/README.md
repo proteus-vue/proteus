@@ -9,7 +9,7 @@ Proteus 测试核心（test-framework M3 + B7 + 统一测试 API）——L1-L3 �
 | `createMockContext(options?)` | **唯一 wx 来源**：wx 全局 mock（storage/router/ui 内存实现 + vi.fn 可断言）+ Page/Component/App 构造器捕获 + getApp/getCurrentPages + 内存存储。`afterEach` 调 `cleanup()` 恢复全局 |
 | `mountMpComponent(sfc, options?)` | SFC → 真实编译（`compileVueSfc`）→ 执行逻辑层 JS → 返回 `{ instance, wxml, js, context, config }`——**逻辑 + WXML 双断言**（不真实渲染，真机行为下沉 L4）；★方法已摊平（组件 methods + 页面顶层函数绑定实例），setData 合并进 data（真实语义） |
 | `mountComponent(sfc, { platform: 'web' \| 'mp' })` | **统一挂载**：同一份 SFC → Web（@vue/test-utils 真实渲染，需 happy-dom 环境）或 MP（逻辑层归一化 host：instance 摊平 + wxml 顶层暴露）——配合 `stateOf`/`textOf`/`tap` 跨端复用同一份断言 |
-| `createDriver({ platform: 'web' \| 'mp', page/mini })` | **统一测试 API（E2E 层）**：一套 `TestDriver` 能力接口（navigate/reLaunch/back · currentPage/systemInfo · element · evaluate · screenshot · waitFor）→ web（注入 playwright Page）/ mp（注入 automator miniProgram）；能力域对照 wechatide-skill automator「意图→工具」表；零硬依赖（结构类型 + 注入句柄） |
+| `createDriver({ platform: 'web' \| 'mp', page/mini })` | **统一测试 API（E2E 层）**：一套 `TestDriver` 能力接口 → web（注入 playwright Page）/ mp（注入 automator miniProgram）/ app（预留）；零硬依赖（结构类型 + 注入句柄）；**全部能力 API 说明见下方「统一测试 API（E2E 层）完整能力清单」** |
 | `mountWebComponent(sfc)` / `sfcToComponent(sfc)` | Web 分支底层：SFC → 组件对象（compileScript + compileTemplate 双段编译 + esbuild 剥离 TS + __VUE__ 注入执行）→ mount |
 | `stateOf(host)` / `textOf(host)` | **统一断言**：状态读取（Web `vm.$.setupState`+`$data` / MP `data` 快照）与文本读取（Web `wrapper.text()` / MP wxml 规范化）——06 铁律：状态跨端完全共用、DOM 各自断言 |
 | `tap(el, selector?)` / `isWebElement` / `isMpElement` | 统一事件分发（Web `trigger('click')` / 小程序 automator `tap()`）+ 类型守卫 |
@@ -74,7 +74,50 @@ describe('双端同一断言', () => {
 
 ★Web 分支注意：increment 后同步读 `stateOf` 已变（ref 同步），但渲染更新在微任务队列——文本断言前需 `await host.vm.$nextTick()`。
 
-### 统一测试 API（E2E 层）：一套能力接口多端自动化
+### 统一测试 API（E2E 层）完整能力清单
+
+> 子路径：`@proteus-vue/test-core/driver`。能力域来源：微信开发者工具官方 skill（wechatide-skill）automator 场景的「意图→工具」表——确定性 UI 操作抽象为跨端一致接口。★MP 经验内化：元素每次操作重新解析（导航后失效重查）、`reLaunch` 全链路最稳通道（05 真机实测）。
+
+**入口工厂**
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `createDriver` | `(options: { platform: 'web'; page } \| { platform: 'mp'; mini }) => TestDriver` | 统一入口（按 platform 分发） |
+| `createWebDriver` | `(page: PlaywrightPageLike) => TestDriver` | Web 实现（playwright 适配：goto/locator/evaluate/screenshot） |
+| `createMpDriver` | `(mini: AutomatorMiniLike) => TestDriver` | MP 实现（automator 适配：reLaunch/currentPage()/$/systemInfo/evaluate/screenshot） |
+
+**TestDriver 全部方法**
+
+| 方法 | 签名 | Web 行为 | MP 行为 |
+|---|---|---|---|
+| `platform` | `readonly 'web' \| 'mp'` | — | — |
+| `close()` | `Promise<void>` | 空操作（浏览器句柄用户管） | `mini.disconnect()` |
+| `navigate(url)` | `Promise<void>` | `page.goto(url)` | `mini.reLaunch(url)`（★最稳通道） |
+| `reLaunch(url)` | `Promise<void>` | `page.goto(url)` | `mini.reLaunch(url)` |
+| `back()` | `Promise<void>` | `page.goBack()` | `wx.navigateBack`（evaluate 降级） |
+| `currentPage()` | `Promise<PageSnapshot>` | `{ path: URL pathname, url }` | `{ path: page route, url: '' }` |
+| `systemInfo()` | `Promise<SystemSnapshot>` | `{ platform: 'web', version: UA 截断 }` | automator systemInfo（platform/SDKVersion + 透传） |
+| `element(selector, options?)` | `TestElement` | `page.locator`（惰性重查） | `currentPage().$()`（每次重新解析） |
+| `evaluate(fn, ...args)` | `Promise<T>` | `page.evaluate` | `mini.evaluate` |
+| `screenshot(path?)` | `Promise<string>`（本地路径） | `page.screenshot({ path })`；无 path 返回 '' | `mini.screenshot({ path }).path` |
+| `waitFor(ms)` | `Promise<void>` | `page.waitForTimeout(ms)` | evaluate setTimeout |
+
+**TestElement 全部方法**（`driver.element(selector)` 返回值）
+
+| 方法 | 签名 | Web 行为 | MP 行为 |
+|---|---|---|---|
+| `tap(options?)` | `Promise<void>` | `locator.click()` | `element.tap()` |
+| `input(text, options?)` | `Promise<void>` | `locator.fill(text)` | `element.input(text)` |
+| `longPress(durationMs?)` | `Promise<void>` | hover + mousedown + 延时 + mouseup（近似模拟） | `element.longPress(durationMs)`（原生） |
+| `text(options?)` | `Promise<string>` | `locator.textContent()`（null→''） | `element.text()` |
+| `value(options?)` | `Promise<string>` | `locator.inputValue()` | `element.value()` |
+| `attribute(name)` | `Promise<string \| null>` | `locator.getAttribute(name)` | 原生 attribute 或 MVP null |
+| `waitFor(options?)` | `Promise<void>` | `locator.waitFor({ state, timeout })` | 轮询解析（attached/visible）或轮询消失（detached） |
+| `exists(options?)` | `Promise<boolean>` | `locator.count() > 0` | `currentPage().$()` 解析成功 |
+
+**类型**：`PageSnapshot { path, url }` · `SystemSnapshot { platform, version?, ... }` · `ElementWaitState 'attached' \| 'visible' \| 'detached'` · `ElementWaitOptions { timeout?, state? }` · `TestElementOptions { timeout? }`（缺省 5000ms）· 注入句柄结构类型 `PlaywrightPageLike`/`PlaywrightLocatorLike`/`AutomatorMiniLike`/`AutomatorElementLike`（形状兼容即用，零依赖）。
+
+### 统一测试 API（E2E 层）完整跨端用例
 
 ```ts
 // ★注入句柄：playwright page / automator miniProgram 由用户或 CLI（proteus test e2e:mp）装配
@@ -98,7 +141,7 @@ await runShared(web)
 await runShared(mp)
 ```
 
-★能力域对照 wechatide-skill automator：`automation_navigate → navigate/reLaunch/back`、`automation_runtime_info → currentPage/systemInfo`、`automation_element_action → element(tap/input/longPress/text/value)`、`automation_evaluate → evaluate`、`simulator_screenshot → screenshot`、`waitForSelector/wait → waitFor`。★MP 经验内化：元素每次操作重新解析（导航后失效重查）、reLaunch 是全链路最稳通道。
+★能力域对照 wechatide-skill automator（完整 API 逐方法说明见 docs/proteus-test-framework-plan/13-test-driver-api.md）：`automation_navigate → navigate/reLaunch/back`、`automation_runtime_info → currentPage/systemInfo`、`automation_element_action → element(tap/input/longPress/text/value)`、`automation_evaluate → evaluate`、`simulator_screenshot → screenshot`、`waitForSelector/wait → waitFor`。★MP 经验内化：元素每次操作重新解析（导航后失效重查）、reLaunch 是全链路最稳通道。
 
 ## 铁律（03-component-integration.md + 06-cross-platform-assert.md）
 

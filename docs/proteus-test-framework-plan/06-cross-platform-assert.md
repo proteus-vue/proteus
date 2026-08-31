@@ -57,7 +57,7 @@ expect(stateOf(mpHost).count).toBe(1)  // MP：data.count
 
 ## 统一测试 API（E2E 层）TestDriver（决策 #205）
 
-一套能力接口多端自动化（能力域对照 wechatide-skill automator「意图→工具」表）：
+一套能力接口多端自动化——**全部能力接口说明见 §13（13-test-driver-api.md）**，此处仅摘要：
 
 ```ts
 import { createDriver } from '@proteus-vue/test-core/driver'
@@ -79,8 +79,8 @@ await runShared(web)
 await runShared(mp)
 ```
 
-- 能力接口：`navigate/reLaunch/back` · `currentPage/systemInfo` · `element(tap/input/longPress/text/value/attribute/waitFor/exists)` · `evaluate` · `screenshot` · `waitFor` · `close`
-- 注入句柄 + 结构类型（PlaywrightPageLike/AutomatorMiniLike）——test-core 零硬依赖，句柄由用户或 CLI（proteus test e2e:mp）装配
+- 能力接口（§13 逐个方法列签名/参数/双端行为）：`navigate/reLaunch/back` · `currentPage/systemInfo` · `element(tap/input/longPress/text/value/attribute/waitFor/exists)` · `evaluate` · `screenshot` · `waitFor` · `close`
+- 注入句柄 + 结构类型（PlaywrightPageLike/AutomatorMiniLike，§13 §6）——test-core 零硬依赖，句柄由用户或 CLI（proteus test e2e:mp）装配
 - ★MP 经验内化（§05）：元素每次操作重新解析（导航后失效重查）、reLaunch 全链路最稳、断言走 currentPage/systemInfo/evaluate
 - 分层衔接：组件层统一挂载（§03b）管「组件状态」，driver 管「整页交互」——组件用例用 mountComponent，E2E 用例用 TestDriver
 
