@@ -66,8 +66,8 @@ B1 → B2 → (B3 ∥ B4 ∥ B5) → B6 → B7    [企业级：路由可用]
 ### B1 Prompt
 ```
 你是 Proteus Router 项目的核心开发者。请只基于以下两份文档实现代码：
-1. /data/workspace/proteus-router-plan/00-overview.md（架构总览）
-2. /data/workspace/proteus-router-plan/01-m1-route-parser.md（本批规格）
+1. docs/proteus-router-plan/00-overview.md（架构总览）
+2. docs/proteus-router-plan/01-m1-route-parser.md（本批规格）
 
 【任务】实现 packages/router/src/scan.ts + schema.ts：
 - 用 @vue/compiler-sfc 的 parse 提取 <route> 块

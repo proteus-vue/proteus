@@ -119,7 +119,7 @@ describe('WebPicker multiSelector（18-picker-swiper B2）', () => {
 
   /** 挂载 multiSelector picker，返回事件记录 */
   function mountMultiPicker(range: unknown[][], value?: number[]) {
-    const events = reactive({ changes: [], columnchanges: [] })
+    const events = reactive<{ changes: unknown[][]; columnchanges: number[][] }>({ changes: [], columnchanges: [] })
     const props: Record<string, unknown> = { mode: 'multiSelector', range }
     if (value) props.value = value
     const Root = {

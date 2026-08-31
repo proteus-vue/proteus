@@ -16,13 +16,17 @@ export interface MpSdkVersion {
 export const DEFAULT_TYPINGS_VERSION = '5.2.3'
 
 /**
- * 基础库 → typings 版本维护表（★人工维护：随官方发版节奏更新，新基础库发布后补录）
+ * 基础库 → typings 版本维护表（★人工维护：随双方发版节奏更新，新基础库发布后补录；
+ * 来源 = npm 发布窗口对齐，非官方权威映射——微信不发布「基础库 ↔ typings」对照表）
+ * ⚠ 注意：typings 版本号与基础库版本号**不同步**（typings 3.12 发布于 2024，对应基础库 3.x 时代；
+ *   typings 3.0 是 2020 年的老线，勿与基础库 3.0 混淆）
  * 未收录的 libVersion 由 resolveTypingsVersion 回退 DEFAULT_TYPINGS_VERSION 并触发告警（透明化，不静默）
  */
 export const MP_SDK_VERSION_MAP: Record<string, string> = {
-  // 示例：与基础库 2.29.2（本框架最低要求）对齐的 typings 版本线
-  '2.29.2': '3.0.0',
-  '3.0.0': '3.12.0',
+  // 基础库 2.29.2（2021，本框架最低要求）↔ typings 3.6.0（2022-09 稳定线，覆盖 2.29 时代后段）
+  '2.29.2': '3.6.0',
+  // 基础库 3.0.0（2024，Skyline 稳定）↔ typings 3.12.3（2024-08 稳定线，覆盖基础库 3.x 时代）
+  '3.0.0': '3.12.3',
 }
 
 /** semver 形态校验（x.y.z 或 x.y，宽松） */
