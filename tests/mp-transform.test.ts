@@ -20,6 +20,15 @@ afterEach(() => {
 })
 
 describe('v-show（v0.3 指令补全）', () => {
+  it('★TS 类型断言剥离（2026-08-31 B5 真机实测：as any 原样进 WXML → 微信编译 Fatal）', () => {
+    // 'primary' as any / (x as any) 是编译期擦除的 TS 语法，不应进小程序 WXML 表达式
+    const { wxml, warnings } = transformTemplateToWxml(`<button :type="('primary' as any)" :disabled="(x as any)">b</button>`, opts)
+    expect(wxml).toContain('type="{{\'primary\'}}"')
+    expect(wxml).toContain('disabled="{{x}}"')
+    expect(wxml).not.toContain('as any')
+    expect(warnings).not.toContain('unmatched')
+  })
+
   it('v-show → hidden 属性（display:none 语义，元素始终渲染）', () => {
     const { wxml } = transformTemplateToWxml('<p v-show="show">a</p>', opts)
     expect(wxml).toContain('hidden="{{!show}}"')

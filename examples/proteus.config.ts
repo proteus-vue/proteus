@@ -5,7 +5,7 @@ import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 const config: ProteusConfig = {
   platform: 'mp-weixin',
   skyline: true,
-  appid: 'wx0000000000', // 替换为真实 AppID
+  appid: 'wx33bc04a52024def7',
   pagesDir: 'pages',
   routesOutput: 'router/auto-routes.ts',
   subPackages: [{ root: 'subpackages/order', name: 'order' }], // 分包示例：订单模块

@@ -3,6 +3,9 @@
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+// ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
+const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, HELP_TEXT } from './args'
 import { buildDir, planTargetedBuild } from './build'
 import { explainTarget } from './explain'
@@ -263,6 +266,13 @@ async function main(): Promise<void> {
           // ★automator 官方 launch 处理 IDE 启动（auto --trust-project）+ 端口轮询 + checkVersion；
           //   此处仅装配环境变量后跑 spec（trustProject 解决新项目信任弹窗阻塞 automator 服务）
           const { spawnSync } = await import('node:child_process')
+          // ★B5 兼容补丁：automator 0.12.1 与新版 IDE（Tool.getInfo 缺 SDKVersion）——幂等，先打再跑
+          const patch = spawnSync(process.execPath, [AUTOMATOR_PATCH_SCRIPT], { stdio: 'inherit' })
+          if (patch.status !== 0) {
+            console.error('[proteus-test] automator 兼容补丁失败（scripts/patch-automator.mjs），中止')
+            process.exitCode = 1
+            break
+          }
           const r = spawnSync(
             'npx',
             ['vitest', 'run', 'tests/e2e-mp-smoke.test.ts'],

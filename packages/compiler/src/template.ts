@@ -57,24 +57,49 @@ const INLINE_CONTROL_TAGS = new Set([
   'switch', 'slider', 'icon', 'image', 'button', 'input', 'textarea', 'checkbox', 'radio', 'label', 'navigator', 'progress',
 ])
 
-/** 提取表达式节点的文本（兼容 Simple/Compound/Interpolation/Text/字符串） */
+/**
+ * ★TS 类型断言剥离（2026-08-31 B5 真机实测暴露：'primary' as any 原样进 WXML → 微信编译器
+ *   Fatal: unmatched parenthesis → 小程序包无法编译）：类型断言是编译期擦除的 TS 语法，不应进产物。
+ *   Web 端 Vue 编译器自动剥离；自研 MP 编译器补齐。支持：括号包裹 (expr as Type) → expr、尾部 expr as Type → expr（连续循环）
+ */
+function stripTypeAssertions(expr: string): string {
+  let out = expr.trim()
+  for (let i = 0; i < 5; i++) {
+    let changed = false
+    // 括号包裹的断言：(expr as Type) → expr（[^()] 避免误吞嵌套；字符串内 as 保留）
+    out = out.replace(/\(\s*([^()]*?)\s+as\s+[A-Za-z_$][\w$.]*(\[\])?\s*\)/g, (_m, inner: string) => {
+      changed = true
+      return inner
+    })
+    // 尾部裸断言：expr as Type → expr
+    out = out.replace(/\s+as\s+[A-Za-z_$][\w$.]*(\[\])?\s*$/g, () => {
+      changed = true
+      return ''
+    })
+    if (!changed) break
+  }
+  return out.trim()
+}
+
+/** 提取表达式节点的文本（兼容 Simple/Compound/Interpolation/Text/字符串）；★统一剥离 TS 类型断言 */
 function exprContent(exp: unknown): string {
+  let out = ''
   if (exp == null) return ''
-  if (typeof exp === 'string') return exp
-  const node = exp as { type?: number; content?: unknown; children?: unknown[] }
-  if (node.type === NodeTypes.SIMPLE_EXPRESSION) {
-    return typeof node.content === 'string' ? node.content : ''
+  if (typeof exp === 'string') {
+    out = exp
+  } else {
+    const node = exp as { type?: number; content?: unknown; children?: unknown[] }
+    if (node.type === NodeTypes.SIMPLE_EXPRESSION) {
+      out = typeof node.content === 'string' ? node.content : ''
+    } else if (node.type === NodeTypes.INTERPOLATION) {
+      out = exprContent(node.content)
+    } else if (node.type === NodeTypes.COMPOUND_EXPRESSION || Array.isArray(node.children)) {
+      out = (node.children as unknown[]).map((c) => exprContent(c)).join('')
+    } else if (node.type === NodeTypes.TEXT) {
+      out = typeof node.content === 'string' ? node.content : ''
+    }
   }
-  if (node.type === NodeTypes.INTERPOLATION) {
-    return exprContent(node.content)
-  }
-  if (node.type === NodeTypes.COMPOUND_EXPRESSION || Array.isArray(node.children)) {
-    return (node.children as unknown[]).map((c) => exprContent(c)).join('')
-  }
-  if (node.type === NodeTypes.TEXT) {
-    return typeof node.content === 'string' ? node.content : ''
-  }
-  return ''
+  return stripTypeAssertions(out)
 }
 
 /** 解析 v-for 表达式：(item, idx) in list / item of items */
