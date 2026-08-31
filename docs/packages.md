@@ -27,7 +27,7 @@ packages/
 ├── capabilities/  # ★@proteus-vue/capabilities 能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
 ├── compiler/      # ✅ 已有
 ├── cli/           # ✅ 已有（build / explain / rules / module:* / audit / capabilities:*）
-└── create-proteus/# ✅ 已有（模板改依赖 @proteus-vue/* npm 包）
+└── create-proteus/# ✅ @proteus-vue/create-proteus（模板改依赖 @proteus-vue/* npm 包）
 ```
 
 依赖方向（单向）：`plugin-vite → compiler + shared`；`cli → compiler + plugin-vite(gen-routes)`；`runtime → shared`；`router → shared`；业务代码只依赖 `@proteus-vue/*`。
@@ -169,7 +169,7 @@ npm run changeset:publish   # 按依赖拓扑自动发布全部包
 # ⑧ 发布后打 tag（如 @proteus-vue/router@0.2.0）并 push
 ```
 
-★注意：① 之后 examples/ 与 templates/ 的 `^0.x` 范围必须同步到新版本；版本若未同步，workspace 内 `npm install` 会因版本不匹配直接失败（发布时也会让 create-proteus 装到不存在的旧版本 → npm 404）。
+★注意：① 之后 examples/ 与 templates/ 的 `^0.x` 范围必须同步到新版本；版本若未同步，workspace 内 `npm install` 会因版本不匹配直接失败（发布时也会让 @proteus-vue/create-proteus 装到不存在的旧版本 → npm 404）。
 
 ## 验收清单（✅ 全部通过）
 

@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { copyTemplate } from 'create-proteus'
+import { copyTemplate } from '@proteus-vue/create-proteus'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-create-'))
 const TEMPLATES = path.resolve('packages/create-proteus/templates')

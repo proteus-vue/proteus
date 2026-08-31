@@ -81,11 +81,11 @@ for (const entry of pkgDirs) {
   }
   console.log(`\n[${pkg.name || entry.name}]`)
   const name = pkg.name ?? ''
-  /** bin 工具包（cli/create-proteus）：无库入口，豁免 main/types/exports 必填 */
+  /** bin 工具包（cli/@proteus-vue/create-proteus）：无库入口，豁免 main/types/exports 必填 */
   const isBinTool = Boolean(pkg.bin)
 
   // ① 必填字段
-  if (!name.startsWith('@proteus-vue/') && !name.startsWith('create-')) err('name 必须以 @proteus-vue/ 或 create- 开头')
+  if (!name.startsWith('@proteus-vue/')) err('name 必须以 @proteus-vue/ 开头（全部产物收口到组织 scope）')
   if (!pkg.version) err('缺 version')
   if (!pkg.license) err('缺 license')
   if (!pkg.description) warn('缺 description')

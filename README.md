@@ -148,7 +148,7 @@ proteus/
 ├── packages/i18n/                  # ★ @proteus-vue/i18n 国际化（类型安全 t() + ICU 子集 + i18n:check 审计）
 ├── packages/devtools-runtime/      # ★ @proteus-vue/devtools-runtime 可观测（TraceBus 统一事件协议 + 脱敏/采样）
 ├── packages/cli/                   # ★ @proteus-vue/cli（v0.2：build / explain / rules / module:check / audit / capabilities:* / i18n:check / components:audit）
-├── packages/create-proteus/        # ★ create-proteus（v0.2：npm create proteus 一键双端工程）
+├── packages/create-proteus/        # ★ @proteus-vue/create-proteus（v0.2：npm create @proteus-vue/proteus 一键双端工程）
 ├── src/
 │   ├── components/                   # ★ 框架内置组件库（组件库 P0 全批：16 个组件 p-view/p-text/…/p-list-view/… + virtual-list 兼容别名，聚合入口 index.ts + 产物 proteus/ 前缀）
 │   ├── platform/                   # 平台适配层（adapter / web-adapter / mp-adapter）

@@ -26,7 +26,7 @@
     "proteus": "tsx packages/cli/src/index.ts",
     "cli:build": "npm run build -w @proteus-vue/cli",
     "create": "tsx packages/create-proteus/src/index.ts",
-    "create:build": "npm run build -w create-proteus",
+    "create:build": "npm run build -w @proteus-vue/create-proteus",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",

@@ -61,7 +61,7 @@ jobs:
       - name: Web 构建（示例工程）
         run: npm run build:web
 
-      - name: 全部 @proteus-vue/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/create-proteus → dist）
+      - name: 全部 @proteus-vue/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/@proteus-vue/create-proteus → dist）
         run: npm run build --workspaces
 
       - name: 模板快照一致性（快照后 git 无差异 → 模板与主仓同步）

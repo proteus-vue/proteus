@@ -1,4 +1,4 @@
-# create-proteus
+# @proteus-vue/create-proteus
 
 ## 0.2.0
 

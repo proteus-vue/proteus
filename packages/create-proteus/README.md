@@ -1,11 +1,11 @@
-# create-proteus —— Proteus 脚手架
+# @proteus-vue/create-proteus —— Proteus 脚手架
 
-> `npm create proteus my-app` —— 一键生成 Web + 微信小程序（Skyline）双端工程。
+> `npm create @proteus-vue/proteus my-app` —— 一键生成 Web + 微信小程序（Skyline）双端工程。
 
 ## 使用
 
 ```bash
-npm create proteus my-app
+npm create @proteus-vue/proteus my-app
 cd my-app
 npm install
 npm run dev:web        # Web 端（浏览器打开 Vite 提示地址）
@@ -35,6 +35,6 @@ tsx scripts/snapshot-template.ts
 ## 发布
 
 ```bash
-npm run build -w create-proteus   # esbuild 单文件（dist/index.js + shebang）
+npm run build -w @proteus-vue/create-proteus   # esbuild 单文件（dist/index.js + shebang）
 npm publish                       # files: dist + templates
 ```

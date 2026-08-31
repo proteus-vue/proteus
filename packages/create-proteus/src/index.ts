@@ -1,5 +1,5 @@
 // packages/create-proteus/src/index.ts
-// create-proteus：npm create proteus my-app —— 复制模板工程 + 替换项目名
+// @proteus-vue/create-proteus：npm create @proteus-vue/proteus my-app —— 复制模板工程 + 替换项目名
 // 核心逻辑（copyTemplate）为纯函数，可单测
 import fs from 'node:fs'
 import path from 'node:path'
@@ -57,7 +57,7 @@ function walk(dir: string, visit: (file: string, rel: string) => void, base = ''
 function main(): void {
   const [nameArg, ...rest] = process.argv.slice(2)
   if (!nameArg) {
-    console.error('用法：npm create proteus <项目名>（如 npm create proteus my-app）')
+    console.error('用法：npm create @proteus-vue/proteus <项目名>（如 npm create @proteus-vue/proteus my-app）')
     process.exitCode = 1
     return
   }

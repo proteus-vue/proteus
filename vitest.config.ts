@@ -32,7 +32,7 @@ export default defineConfig({
       // ★发布前收口（决策 #214）：测试统一走包名（去掉 packages 相对路径引入）——缺失 alias 补全
       { find: '@proteus-vue/api', replacement: fileURLToPath(new URL('./packages/api/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/built-in-components', replacement: fileURLToPath(new URL('./packages/built-in-components/src/index.ts', import.meta.url)) },
-      { find: 'create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
+      { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },
       // i18n-plan B1：@proteus-vue/i18n 包（tests/i18n.test.ts 直接引用）

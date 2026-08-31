@@ -62,7 +62,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 编译引擎独立包 `@proteus-vue/compiler`（✅ 已落地） | `packages/compiler/`（monorepo） | ✅ `npm run build -w @proteus-vue/compiler` 产出 dist（esbuild 单文件 + tsc 声明文件）；插件 `@proteus-vue/plugin-vite` 以 npm 包形态消费（prepare 钩子保 dist 新鲜）；纯函数 API 不变 |
 | 规则注册表随包发布（✅ 已落地） | `packages/compiler/src/transforms/` | ✅ `@proteus-vue/compiler` 导出 `listTransformRules` / `getTransformRule` / `formatTransformRule` / `explainTransform`（49 条 AI 说明书随包携带） |
 | CLI `@proteus-vue/cli`（✅ 已落地） | `packages/cli/` | ✅ `proteus build <dir> --out <dir> [--debug] [--rules]`（独立编译，esbuild 单文件 + shebang，`node_modules/.bin/proteus` 验证）；`proteus explain <vue-file | rule-id>`（决策 trace / AI 说明书）；`proteus rules`（能力目录）；核心逻辑纯函数可单测（tests/cli.test.ts 9 用例） |
-| 脚手架 `create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create proteus my-app` 生成双端工程（应用壳 + shims，框架走 @proteus-vue/* npm 包，无 vendored 副本）；模板同步脚本 `scripts/snapshot-template.ts`（CI 快照一致性检查） |
+| 脚手架 `@proteus-vue/create-proteus`（✅ 已落地） | `packages/create-proteus/` | ✅ `npm create @proteus-vue/proteus my-app` 生成双端工程（应用壳 + shims，框架走 @proteus-vue/* npm 包，无 vendored 副本）；模板同步脚本 `scripts/snapshot-template.ts`（CI 快照一致性检查） |
 | CI（✅ 已落地） | `.github/workflows/ci.yml` | ✅ `vue-tsc / test / build:mp / build:web / 独立包构建` + `e2e-web` 双 job 全绿 |
 | 发布流水线（✅ 已就绪：changesets 配置 + 流程验证，npm 发布待启用） | `.changeset/` + 脚本 | ✅ `changeset`（写变更）/ `changeset version`（bump + CHANGELOG）/ `changeset publish`（发布，待 npm 登录）；实测：初始 changeset → version → 三包 0.1.0→0.2.0 + CHANGELOG.md 生成 + 内部依赖自动更新；CI 发布 job 待启用 |
 | 贡献设施（✅ 已落地） | `CONTRIBUTING.md` / Issue & PR 模板 / 行为准则 | ✅ 规则改动同步约定（实现/AI 说明书/映射表/测试四处一致） |
@@ -158,7 +158,7 @@ proteus/                        # monorepo（v0.2 起）
 │   ├── capabilities/           # @proteus-vue/capabilities ★能力体系（platform-plan B1-B5：契约/Registry/分叉/降级/规范）
 │   ├── renderer-app/           # @proteus-vue/renderer-app  App 原生渲染器（v0.6：Vue 自定义渲染器宿主，待建）
 │   ├── cli/                    # @proteus-vue/cli       proteus build / explain / rules / module:check / audit
-│   ├── create-proteus/         # create-proteus     脚手架
+│   ├── create-proteus/         # @proteus-vue/create-proteus     脚手架
 │   └── shared/                 # @proteus-vue/shared    公共类型与工具
 ├── examples/                   # 示例应用（随版本更新持续演示新能力）
 └── docs/                       # 文档（本文件 + 快速开始/配置/编译/路由 + 各规划）
