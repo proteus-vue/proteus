@@ -111,3 +111,43 @@ export function checkConfigLayerViolations(config: unknown): ConfigLayerViolatio
 export function getFieldLayer(field: keyof ProteusConfig): ConfigLayer | undefined {
   return CONFIG_FIELD_LAYERS[field as string]
 }
+
+// ============ 03 §4 产物 3：Audit 规则注册表（数据驱动，字段新增自动覆盖） ============
+
+/** 配置审计规则（CLI audit all / config:check 统一消费；check 返回违规列表，空 = 通过） */
+export interface ConfigAuditRule {
+  id: string
+  description: string
+  check: (config: unknown) => ConfigLayerViolation[]
+}
+
+/**
+ * 配置审计规则注册表（03 §4：从字段归属标注派生——新增字段只需补录
+ * CONFIG_FIELD_LAYERS / CROSS_LAYER_PATTERNS，规则自动覆盖，无需手写规则，铁律 #5 自动化）
+ * config:unknown-field 由 CLI validateConfig（KNOWN_FIELDS 白名单）覆盖，规则面见 config-validate
+ */
+export const CONFIG_AUDIT_RULES: ConfigAuditRule[] = [
+  {
+    id: 'config:layer-violation',
+    description: '配置字段跨层隐式依赖（归属表漏标 / 反模式越层——router 不得影响 pinia 等）',
+    check: (config) => checkConfigLayerViolations(config),
+  },
+  {
+    id: 'config:layer-unassigned',
+    description: '新增配置字段必须标注归属层（CONFIG_FIELD_LAYERS 完整性，铁律 #5 防漂移）',
+    check: (config) => {
+      const errors: ConfigLayerViolation[] = []
+      if (!isRecord(config)) return errors
+      for (const field of Object.keys(config)) {
+        if (!(field in CONFIG_FIELD_LAYERS)) {
+          errors.push({
+            code: 'CONFIG_LAYER_VIOLATION',
+            path: field,
+            message: `字段 "${field}" 未标注归属层（CONFIG_FIELD_LAYERS 漏标——新增配置字段必须补录）`,
+          })
+        }
+      }
+      return errors
+    },
+  },
+]

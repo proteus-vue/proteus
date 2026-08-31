@@ -71,5 +71,5 @@ export { proteusConfigSchema, proteusConfigSchemaJson, extendConfigSchema, getCo
 export type { ProteusConfigSchema } from './config-schema'
 
 // ============ config-layers（B2 §4 字段归属 + B5 §3 跨层检测） ============
-export type { ConfigLayer, CrossLayerPattern, ConfigLayerViolation } from './config-layers'
-export { CONFIG_FIELD_LAYERS, CROSS_LAYER_PATTERNS, checkConfigLayerViolations, getFieldLayer } from './config-layers'
+export type { ConfigLayer, CrossLayerPattern, ConfigLayerViolation, ConfigAuditRule } from './config-layers'
+export { CONFIG_FIELD_LAYERS, CROSS_LAYER_PATTERNS, CONFIG_AUDIT_RULES, checkConfigLayerViolations, getFieldLayer } from './config-layers'

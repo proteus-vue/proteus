@@ -2,6 +2,7 @@
 // ★types-plus-plan B2 §4 / B5 §3：CONFIG_FIELD_LAYERS 归属表 + checkConfigLayerViolations 跨层检测
 import { describe, expect, it } from 'vitest'
 import {
+  CONFIG_AUDIT_RULES,
   CONFIG_FIELD_LAYERS,
   CROSS_LAYER_PATTERNS,
   checkConfigLayerViolations,
@@ -26,6 +27,24 @@ describe('CONFIG_FIELD_LAYERS（02 §4 字段归属表）', () => {
     for (const p of CROSS_LAYER_PATTERNS) {
       expect(CONFIG_FIELD_LAYERS[p.field]).toBeDefined()
     }
+  })
+})
+
+describe('CONFIG_AUDIT_RULES（03 §4 产物 3：数据驱动，字段新增自动覆盖）', () => {
+  it('注册表含 layer-violation + layer-unassigned 两条规则', () => {
+    expect(CONFIG_AUDIT_RULES.map((r) => r.id)).toEqual(['config:layer-violation', 'config:layer-unassigned'])
+  })
+
+  it('layer-violation：越层配置返回违规（check 行为）', () => {
+    const rule = CONFIG_AUDIT_RULES.find((r) => r.id === 'config:layer-violation')!
+    const errors = rule.check({ router: { stores: {} } })
+    expect(errors[0]?.path).toBe('router.stores')
+  })
+
+  it('layer-unassigned：新字段漏标归属 → 违规（数据驱动扩展，无需手写规则）', () => {
+    const rule = CONFIG_AUDIT_RULES.find((r) => r.id === 'config:layer-unassigned')!
+    const errors = rule.check({ brandNewField: 1 })
+    expect(errors[0]?.path).toBe('brandNewField')
   })
 })
 
