@@ -17,7 +17,13 @@
     "@proteus-vue/runtime": "0.1.0",
     "@proteus-vue/security": "0.1.0",
     "@proteus-vue/shared": "0.1.0",
-    "@proteus-vue/types": "0.1.0"
+    "@proteus-vue/types": "0.1.0",
+    "@proteus-vue/app-config": "0.1.0",
+    "@proteus-vue/built-in-components": "0.1.0",
+    "@proteus-vue/contracts": "0.1.0",
+    "@proteus-vue/css-compat": "0.1.0",
+    "@proteus-vue/test-core": "0.1.0",
+    "@proteus-vue/web": "0.1.0"
   },
   "changesets": [
     "pinia-m1-m6",
