@@ -28,6 +28,7 @@ export interface RemoteConfigConfig {
 /** 应用全局配置 Schema（§2.2；开发者定义，框架推导类型） */
 export interface AppConfig {
   app: {
+    /** 应用运行时标识（上报/多租户；★决策 #211：区别于 proteus.config.appid——微信平台编译标识，构建期消费） */
     id: string
     name: string
     version: string

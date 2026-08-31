@@ -375,9 +375,10 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           pending.push(resolved.file)
         }
       }
-      // ★B0 边界（★放行 @proteus-vue/* 框架包 + pinia 白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
-      // （pinia 是框架默认状态库——P3 放行，bundle 体积由 bundle-report 监控；其余第三方保持跳过）
-      const THIRD_PARTY_ALLOW = new Set(['pinia', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
+      // ★B0 边界（★放行 @proteus-vue/* 框架包 + 第三方白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
+      // （pinia 是框架默认状态库——P3 放行；★决策 #211：vue 加入白名单——@proteus-vue/app-config 等框架包运行时依赖 vue 是生态常态，
+      //   bundle 体积由 bundle-report 监控；其余第三方保持跳过）
+      const THIRD_PARTY_ALLOW = new Set(['pinia', 'vue', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
       const hasThirdParty = new Set<string>()
       for (const sharedFile of sharedModules) {
         for (const imp of scanImports(sharedFile)) {

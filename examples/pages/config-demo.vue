@@ -9,6 +9,20 @@ import { registerCapability, useCapability } from '@proteus-vue/capabilities'
 import type { Capability } from '@proteus-vue/capabilities'
 // ★api-plan B1：设备信息（@proteus-vue/api 框架包——MP 端经共享模块放行 _proteus/api.js）
 import { getDeviceInfo } from '@proteus-vue/api'
+// ★app-config G-35 + 决策 #211：应用级运行时配置（与 proteus.config 职责正交——构建期 vs 运行时）
+import { initAppConfig, useAppConfig, useFeatureFlag, setConfig } from '@proteus-vue/app-config'
+import appConfig from '../app.config'
+
+// ★应用配置初始化：模块级单例，重复调用 = 覆盖默认 + 保留已合并层。
+//   生产建议在启动期初始化一次（Web main.ts / MP 经共享模块）；此处页面级演示（config-demo 自包含）
+initAppConfig(appConfig)
+const appConf = useAppConfig()
+const glassFlag = useFeatureFlag('glassEffect')
+
+function toggleGlass() {
+  // ★setConfig：partial 深合并 + 校验（非法拒绝）+ 响应式通知（useAppConfig 自动更新）
+  setConfig({ features: { glassEffect: !appConf.features.glassEffect } })
+}
 
 registerCapability(clipboardCap)
 
@@ -58,6 +72,15 @@ function showDevice() {
     <div class="box">
       <button @click="showDevice">设备信息（@proteus-vue/api）</button>
       <p class="sub">{{ device.platform }} {{ device.screenWidth }}×{{ device.screenHeight }}{{ device.isSkyline ? '（Skyline）' : '' }}</p>
+    </div>
+
+    <!-- ★app-config G-35 + 决策 #211：应用运行时配置演示（区别于上方 proteus.config——构建期） -->
+    <div class="box">
+      <h3>app.config（应用运行时配置）</h3>
+      <p class="sub">{{ appConf.app.name }} v{{ appConf.app.version }} · env={{ appConf.env }} · theme={{ appConf.theme.default }}</p>
+      <p class="sub">api.baseUrl: {{ appConf.api.baseUrl }} · timeout: {{ appConf.api.timeout }}ms</p>
+      <p class="sub">features.glassEffect: {{ glassFlag.enabled ? '开' : '关' }}</p>
+      <button @click="toggleGlass">切换 glassEffect（setConfig 运行时更新）</button>
     </div>
 
     <div class="note">

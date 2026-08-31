@@ -14,7 +14,8 @@ export interface ProteusConfig {
   skylineLayout?: {
     defaultDisplayBlock?: boolean
   }
-  /** 小程序 AppID */
+  /** 小程序 AppID——★平台编译标识（构建期写 project.config.json / IDE 导入 / automator 体检）
+   *  ★决策 #211 职责边界：区别于 app.config.ts 的 app.id（应用运行时标识）——appid 是构建期消费，必须在此 */
   appid: string
   /** 页面根目录（主包路由扫描起点） */
   pagesDir: string

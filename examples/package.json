@@ -22,6 +22,7 @@
     "cli:help": "tsx ../packages/cli/src/index.ts help"
   },
   "dependencies": {
+    "@proteus-vue/app-config": "^0.1.0",
     "@proteus-vue/router": "^0.2.0-beta.0",
     "@proteus-vue/runtime": "^0.2.0-beta.0",
     "@proteus-vue/shared": "^0.2.0-beta.0",

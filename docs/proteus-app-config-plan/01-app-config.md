@@ -40,6 +40,39 @@
 - `proteus.config` = "**怎么构建这个 App**"
 - `app.config` = "**这个 App 运行时要怎么表现**"
 
+### 1.2b 配置职责边界（决策 #211，2026-08-31 全字段梳理）
+
+> **判断准则（唯一）**：字段被**构建期**消费（Compiler/CLI/打包 → 产物）→ 归 `proteus.config.ts`；字段被**运行时**消费（业务/`useAppConfig`/能力模块）→ 归 `app.config.ts`。
+
+**全字段对照表**：
+
+| 维度 | `proteus.config.ts`（框架/工程） | `app.config.ts`（应用/运行时） |
+|------|--------------------------------|-------------------------------|
+| 层级 | 工程 / 框架 | 应用级 |
+| 生命周期 | 构建时固化（改配置 → 重新构建） | 运行时动态（启动读取 + 可选远端热更新） |
+| 消费方 | Compiler / CLI / 打包流水线 | Runtime / 业务 / `useAppConfig()` |
+| 进产物 | 部分（构建后不再需要） | 是（整个运行时需要） |
+| 平台字段 | `platform` = **构建目标**（mp-weixin/web，决定产物） | `platform` = **运行时平台覆盖层**（ios/android/harmony 差异化） |
+| 标识字段 | `appid` = **平台编译标识**（微信 appid，写 project.config.json / IDE / automator） | `app.id` = **应用运行时标识**（上报/多租户；非微信 appid） |
+| 视觉相关 | `style.px2rpx/rpxRatio`（编译换算）、`budget`（包体积） | `theme`/`font`/`safeArea`（运行时表现，联动 G-27） |
+| 功能开关 | `rules`/`setDataBridge`（编译行为） | `features.*`（运行时开关，可远端下发） |
+| 路由 | `router.tabBar`/`meta`（生成 app.json/路由表） | —（路由声明属框架，文案内容后续可下沉） |
+| 环境 | —（`env` 属运行时） | `env`（dev/staging/prod 覆盖层） |
+| 网络 | — | `api.baseUrl/timeout/retry/cache` |
+
+**易混项澄清**：
+
+| 易混点 | 框架配置（proteus.config） | 应用配置（app.config） | 为何两者都需要 |
+|--------|--------------------------|------------------------|----------------|
+| `appid` vs `app.id` | `appid`：微信平台编译标识（构建期写 project.config.json） | `app.id`：应用自身运行时标识 | 微信 appid 是编译期必需（IDE 导入/automator 体检）；应用标识是运行时业务语义——**不可互相替代** |
+| `platform` ×2 | 构建目标（决定产物端） | 运行时平台覆盖（同端内差异化） | 编译期只能产一端；运行时需要表达「iOS 开、Android 关」 |
+| `style` vs `theme/font` | `style`：px→rpx 编译换算（产出 WXSS） | `theme`/`font`：运行时表现（用户可调） | 编译换算 vs 运行时表现，正交 |
+| `router.meta.title` | 路由声明（编译期生成 page.json 导航栏标题） | — | 小程序导航栏标题是编译期静态声明；动态文案后续可走运行时配置 |
+
+**铁律**：构建期消费的字段**必须**在 `proteus.config.ts`（放 app.config 会导致编译期读不到）；运行时消费的字段**必须**在 `app.config.ts`（放 proteus.config 会导致无法热更新/无法被业务 `useAppConfig` 读取）。
+
+**示例工程落地**（决策 #211）：`examples/app.config.ts` + config-demo 页 `useAppConfig`/`useFeatureFlag` 演示（详见 §2.3 与 config-demo.vue）——让职责划分有真实形态，避免「应用配置无处安放 → 塞进 proteus.config」。
+
 ### 1.3 设计目标
 
 1. **单一事实源**：所有应用级配置集中定义、集中校验
