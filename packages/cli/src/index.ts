@@ -3,6 +3,7 @@
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
 import path from 'node:path'
+import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 // ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
@@ -30,7 +31,7 @@ import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 import { parseCiArgs, planCiInit } from './ci'
 import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
-import { planMpE2E } from './mp-e2e'
+import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -254,17 +255,28 @@ async function main(): Promise<void> {
     case 'test': {
       const { scope, root, ide, port } = parseTestArgs(rest)
       if (scope === 'e2e:mp') {
-        // ★test-framework B5：IDE 路径可配置——探测 → 产物检查 → automator launch（内部 spawn IDE + trust + 轮询）
+        // ★test-framework B5：环境体检 → 产物副本 → automator launch（内部 spawn IDE + trust + 轮询）
         try {
-          const plan = planMpE2E({ root: root ?? '.', port, ideCli: ide ?? undefined })
-          for (const s of plan.steps) console.log(s)
-          if (plan.needBuild) {
+          const projectRoot = root ?? '.'
+          // ① 环境体检（★实测坑内化：占位 appid / 端口残留 / 产物缺失 一次性报告）
+          const diagnosis = diagnoseMpE2EEnv({ root: projectRoot, port, ideCli: ide ?? undefined, isPortBusy: (p) => portInUseSync(p) })
+          console.log(formatMpE2EDiagnosis(diagnosis))
+          if (!diagnosis.ok) {
+            process.exitCode = 1
+            break
+          }
+          const plan = planMpE2E({ root: projectRoot, port, ideCli: ide ?? undefined })
+          // ② 产物独立副本（避开 IDE 路径缓存 + 不污染 dist）
+          const prepared = prepareMpE2EProject(projectRoot)
+          if (!prepared) {
             console.error('[proteus-test] 产物缺失：请先 npm run build:mp（产出 dist/mp-weixin）')
             process.exitCode = 1
             break
           }
-          // ★automator 官方 launch 处理 IDE 启动（auto --trust-project）+ 端口轮询 + checkVersion；
-          //   此处仅装配环境变量后跑 spec（trustProject 解决新项目信任弹窗阻塞 automator 服务）
+          for (const s of plan.steps) console.log(s)
+          console.log(`[proteus-test] 使用独立副本：${prepared.projectDir}（每次重建，避 IDE 路径缓存）`)
+          // ③ automator 官方 launch 处理 IDE 启动（auto --trust-project）+ 端口轮询 + checkVersion；
+          //    此处仅装配环境变量后跑 spec（trustProject 解决新项目信任弹窗阻塞 automator 服务）
           const { spawnSync } = await import('node:child_process')
           // ★B5 兼容补丁：automator 0.12.1 与新版 IDE（Tool.getInfo 缺 SDKVersion）——幂等，先打再跑
           const patch = spawnSync(process.execPath, [AUTOMATOR_PATCH_SCRIPT], { stdio: 'inherit' })
@@ -284,7 +296,7 @@ async function main(): Promise<void> {
                 PROTEUS_MP_E2E: '1',
                 PROTEUS_AUTOMATOR_PORT: String(plan.port),
                 PROTEUS_IDE_CLI: plan.ideCli,
-                PROTEUS_MINI_PROGRAM_PATH: plan.projectDir,
+                PROTEUS_MINI_PROGRAM_PATH: prepared.projectDir,
               },
             },
           )
@@ -370,3 +382,25 @@ main().catch((err: Error) => {
   console.error(`[proteus] ${err.message}`)
   process.exitCode = 1
 })
+
+/** 端口占用同步探测（e2e:mp 体检；net 是异步的——用 300ms 有界等待收敛结果） */
+function portInUseSync(port: number): boolean {
+  let used = false
+  try {
+    const socket = net.connect({ port, host: '127.0.0.1' })
+    socket.once('connect', () => {
+      used = true
+      socket.destroy()
+    })
+    socket.once('error', () => {
+      socket.destroy()
+    })
+    const start = Date.now()
+    while (Date.now() - start < 300) {
+      // 有界等待 connect/error 事件（最多 300ms；被占端口 connect 立即成功）
+    }
+  } catch {
+    return false
+  }
+  return used
+}
