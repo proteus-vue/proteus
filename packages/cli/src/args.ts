@@ -400,5 +400,9 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
   proteus migrate types <file>
       ★迁移助手：旧类型写法 → 新收口类型（types-plan 10 类型收口）
 
+  proteus ci:init [--platform <github|gitlab|circleci>] [--targets <a,b>] [dir]
+      ★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）
+      默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）
+
   proteus version / help
 `

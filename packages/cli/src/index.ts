@@ -24,6 +24,7 @@ import { parseTestArgs, runTest } from './test'
 import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
+import { parseCiArgs, planCiInit } from './ci'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -263,6 +264,19 @@ async function main(): Promise<void> {
         console.log(formatMigrateTypes(file, changed, dryRun))
       } catch (e) {
         console.error(`[proteus-types] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'ci:init': {
+      // ★cli-plus M4：CI/CD 模板生成（02-build-pipeline.md §3）
+      const { options, dir } = parseCiArgs(rest)
+      try {
+        const { file } = planCiInit(dir, options)
+        console.log(`[proteus-ci] 已生成 ${file}（platform=${options.platform} targets=${options.targets.join(',')}）`)
+        console.log('流水线：proteus check（四域门禁）→ 逐端构建 → 产物归档；推送到 Git 远程后即触发')
+      } catch (e) {
+        console.error(`[proteus-ci] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break

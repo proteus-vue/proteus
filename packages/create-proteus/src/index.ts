@@ -45,7 +45,8 @@ export function copyTemplate(
 
 function walk(dir: string, visit: (file: string, rel: string) => void, base = ''): void {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue
+    // ★G-33 M4：放开点文件拷贝（模板含 .github/workflows/proteus.yml CI 模板）；仅排除 .git
+    if (entry.name === '.git') continue
     const full = path.join(dir, entry.name)
     const rel = base ? `${base}/${entry.name}` : entry.name
     if (entry.isDirectory()) walk(full, visit, rel)
