@@ -38,6 +38,7 @@ export default defineConfig({
       { find: '@proteus-vue/app-config', replacement: fileURLToPath(new URL('./packages/app-config/src/index.ts', import.meta.url)) },
       // test-framework M3+B2：@proteus-vue/test-core 包（tests/test-core.test.ts 直接引用；★子路径在父路径前）
       { find: '@proteus-vue/test-core/snapshot', replacement: fileURLToPath(new URL('./packages/test-core/src/snapshot/index.ts', import.meta.url)) },
+      { find: '@proteus-vue/test-core/driver', replacement: fileURLToPath(new URL('./packages/test-core/src/driver/index.ts', import.meta.url)) },
       { find: '@proteus-vue/test-core', replacement: fileURLToPath(new URL('./packages/test-core/src/index.ts', import.meta.url)) },
       // devtools-plan B1：@proteus-vue/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
       { find: '@proteus-vue/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },

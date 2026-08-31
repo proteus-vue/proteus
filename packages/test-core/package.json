@@ -17,6 +17,11 @@
       "import": "./dist/snapshot/index.js",
       "default": "./dist/snapshot/index.js"
     },
+    "./driver": {
+      "types": "./dist/driver/index.d.ts",
+      "import": "./dist/driver/index.js",
+      "default": "./dist/driver/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -25,7 +30,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/snapshot/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/compiler --external:vitest --external:esbuild --external:@vue/compiler-sfc --external:@vue/test-utils --external:vue"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/snapshot/index.ts src/driver/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/compiler --external:vitest --external:esbuild --external:@vue/compiler-sfc --external:@vue/test-utils --external:vue"
   },
   "peerDependencies": {
     "vitest": "^1.0.0",
