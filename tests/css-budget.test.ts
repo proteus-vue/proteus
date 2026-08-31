@@ -22,6 +22,7 @@ describe('checkCssBudget（10 §四 assert 语义）', () => {
       selectors: 60,
       semanticRatio: 0.75,
       forbiddenCount: 0,
+      classSelectors: 45,
       fileCount: 10,
     }
     const checks = checkCssBudget(report)
@@ -36,6 +37,7 @@ describe('checkCssBudget（10 §四 assert 语义）', () => {
       selectors: 100,
       semanticRatio: 0.5,
       forbiddenCount: 3,
+      classSelectors: 40,
       fileCount: 1,
     }
     const checks = checkCssBudget(report)

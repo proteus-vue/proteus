@@ -31,8 +31,8 @@ describe('createMockContext（唯一 wx 来源）', () => {
   it('Page/Component/App 构造器捕获注册配置', () => {
     ctx = createMockContext()
     const pageConfig = { data: { count: 0 }, onLoad() {} }
-    // 模拟页面注册（全局 Page 已被 stub）
-    ;(globalThis as Record<string, unknown>).Page(pageConfig)
+    // 模拟页面注册（全局 Page 已被 stub）；★类型收窄：Record 读值 unknown → 双重断言为可调用
+    ;(globalThis as unknown as { Page: (c: unknown) => void }).Page(pageConfig)
     expect(ctx.registrations.page).toBe(pageConfig)
     ctx.cleanup()
     expect((globalThis as Record<string, unknown>).wx).toBeUndefined() // 恢复
