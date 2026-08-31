@@ -3,7 +3,7 @@
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, HELP_TEXT } from './args'
-import { buildDir } from './build'
+import { buildDir, planTargetedBuild } from './build'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
@@ -28,6 +28,26 @@ async function main(): Promise<void> {
   switch (cmd) {
     case 'build': {
       const args = parseBuildArgs(rest)
+      // ★cli-plus M2：--target web|skyline|all → 工程构建（复用项目 Vite 管线）；缺省 = 独立编译
+      if (args.target) {
+        try {
+          const plans = planTargetedBuild(process.cwd(), args.target)
+          const { spawnSync } = await import('node:child_process')
+          for (const plan of plans) {
+            console.log(`[proteus] build --target：${plan.script}（${plan.command} ${plan.args.join(' ')}）`)
+            const r = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+            if (r.status !== 0) {
+              console.error(`[proteus] build 失败（${plan.script} exit ${r.status}）`)
+              process.exitCode = r.status ?? 1
+              break
+            }
+          }
+        } catch (e) {
+          console.error(`[proteus-build] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
       const result = buildDir(args.inputDir, {
         outDir: args.outDir,
         px2rpx: args.px2rpx,

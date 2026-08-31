@@ -16,6 +16,8 @@ export interface BuildArgs {
   debug: boolean
   /** 规则覆盖（--rules <json-file>） */
   rules?: TransformRuleOverrides
+  /** ★cli-plus M2：工程构建目标（--target web|skyline|all；缺省 = 独立编译） */
+  target?: 'web' | 'skyline' | 'all'
 }
 
 export function parseBuildArgs(argv: string[]): BuildArgs {
@@ -28,6 +30,10 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
       if (args.outDir == null) throw new Error('--out 需要目录参数')
     } else if (a === '--debug') {
       args.debug = true
+    } else if (a === '--target') {
+      const t = argv[++i]
+      if (t !== 'web' && t !== 'skyline' && t !== 'all') throw new Error(`--target 需为 web/skyline/all（${t ?? '空'}）`)
+      args.target = t
     } else if (a === '--no-px2rpx') {
       args.px2rpx = false
     } else if (a === '--rpx-ratio') {

@@ -1,6 +1,7 @@
 // packages/cli/src/build.ts
 // proteus build —— 编译引擎独立可用（脱离 Vite）：扫描目录 .vue → 小程序四件套中的三件（wxml/js/wxss）
 // 说明：.json（page.json/app.json）由路由生成器负责（框架内 scripts/gen-routes.ts），CLI 专注页面编译
+// ★cli-plus M2：--target web|skyline|all 工程构建（复用项目 Vite 管线，spawn 计划纯函数）
 import fs from 'node:fs'
 import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
@@ -19,6 +20,35 @@ export interface BuildResult {
   files: string[]
   warnings: number
   traceFiles: string[]
+}
+
+/** ★cli-plus M2：target → 项目构建脚本名（模板约定，create-proteus 生成的标准脚本） */
+export const TARGET_BUILD_SCRIPTS: Record<'web' | 'skyline', string> = {
+  web: 'build:web',
+  skyline: 'build:mp', // mp-weixin = Skyline 小程序包
+}
+
+/** 工程构建计划（纯函数）：校验 package.json 脚本存在性 → spawn 参数列表（M2，复用 Vite 管线） */
+export function planTargetedBuild(root: string, target: 'web' | 'skyline' | 'all'): { command: string; args: string[]; script: string }[] {
+  const pkgPath = path.join(root, 'package.json')
+  let scripts: Record<string, string> = {}
+  if (fs.existsSync(pkgPath)) {
+    try {
+      scripts = (JSON.parse(fs.readFileSync(pkgPath, 'utf8')).scripts ?? {}) as Record<string, string>
+    } catch {
+      scripts = {}
+    }
+  }
+  const targets = target === 'all' ? (['web', 'skyline'] as const) : [target]
+  const plans: { command: string; args: string[]; script: string }[] = []
+  for (const t of targets) {
+    const script = TARGET_BUILD_SCRIPTS[t]
+    if (!scripts[script]) {
+      throw new Error(`工程缺构建脚本 ${script}（package.json scripts 未定义；create-proteus 模板默认生成）`)
+    }
+    plans.push({ command: 'npm', args: ['run', script], script })
+  }
+  return plans
 }
 
 function walkVueFiles(dir: string, acc: string[] = []): string[] {
