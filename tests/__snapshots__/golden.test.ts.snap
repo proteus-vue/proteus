@@ -31,14 +31,22 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
-<view class="page-data-v-e934cf">
-<text class="proteus-h1-data-v-e934cf">{{ title }}</text>
-<text wx:if="{{show}}" class="proteus-p-data-v-e934cf">visible</text>
-<view wx:for="{{items}}" wx:for-item="item" wx:for-index="idx" wx:key="idx" class="row-data-v-e934cf">{{ idx }}.{{ item }}</view>
-<view bindtap="handleTap" class="proteus-a-data-v-e934cf">link</view>
-<image src="{{avatar}}" alt="avatar" />
-</view>
+  "wxml": "<scroll-view class="proteus-page-scroll" scroll-y>
+  <view class="page-data-v-e934cf">
+    <text class="proteus-h1-data-v-e934cf">
+      {{ title }}
+    </text>
+    <text class="proteus-p-data-v-e934cf" wx:if="{{show}}">
+      visible
+    </text>
+    <view class="row-data-v-e934cf" wx:for="{{items}}" wx:for-index="idx" wx:for-item="item" wx:key="idx">
+      {{ idx }}.{{ item }}
+    </view>
+    <view bindtap="handleTap" class="proteus-a-data-v-e934cf">
+      link
+    </view>
+    <image alt="avatar" src="{{avatar}}" />
+  </view>
 </scroll-view>",
   "wxss": ".proteus-progress { display: flex; align-items: center; gap: 16rpx; }
 .proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 4rpx; overflow: hidden; }
@@ -89,11 +97,11 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
-<view>
-<input value="{{text}}" bindinput="proteusOnTextInput" placeholder="type" />
-<textarea value="{{text}}" bindinput="proteusOnTextInput" />
-</view>
+  "wxml": "<scroll-view class="proteus-page-scroll" scroll-y>
+  <view>
+    <input bindinput="proteusOnTextInput" placeholder="type" value="{{text}}" />
+    <textarea bindinput="proteusOnTextInput" value="{{text}}" />
+  </view>
 </scroll-view>",
   "wxss": ".proteus-progress { display: flex; align-items: center; gap: 16rpx; }
 .proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 4rpx; overflow: hidden; }
@@ -151,8 +159,8 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
-<rich-text nodes="{{html}}" />
+  "wxml": "<scroll-view class="proteus-page-scroll" scroll-y>
+  <rich-text nodes="{{html}}" />
 </scroll-view>",
   "wxss": ".proteus-progress { display: flex; align-items: center; gap: 16rpx; }
 .proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 4rpx; overflow: hidden; }
@@ -210,8 +218,10 @@ Page({
 })
 ",
   "warnings": [],
-  "wxml": "<scroll-view scroll-y class="proteus-page-scroll">
-<view class="tab-data-v-5a03df">{{ count }}</view>
+  "wxml": "<scroll-view class="proteus-page-scroll" scroll-y>
+  <view class="tab-data-v-5a03df">
+    {{ count }}
+  </view>
 </scroll-view>",
   "wxss": ".proteus-progress { display: flex; align-items: center; gap: 16rpx; }
 .proteus-progress-track { flex: 1; background: #ebedf0; border-radius: 4rpx; overflow: hidden; }

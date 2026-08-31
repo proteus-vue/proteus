@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/test-core",
   "version": "0.1.0",
-  "description": "Proteus 测试核心（test-framework M3）：createMockContext（唯一 wx 来源）+ mountMpComponent（SFC → 编译 → 逻辑层实例）——L1-L3 标准件",
+  "description": "Proteus 测试核心（test-framework M3+B2）：createMockContext（唯一 wx 来源）+ mountMpComponent（SFC → 编译 → 逻辑层实例）+ snapshot（编译快照规范化：WXML 结构等值 / sourcemap 校验 / JS 导出检查）——L1-L3 标准件",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./snapshot": {
+      "types": "./dist/snapshot/index.d.ts",
+      "import": "./dist/snapshot/index.js",
+      "default": "./dist/snapshot/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,7 +25,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/compiler --external:vitest"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/snapshot/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/compiler --external:vitest"
   },
   "peerDependencies": {
     "vitest": "^1.0.0"

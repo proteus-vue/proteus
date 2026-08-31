@@ -32,7 +32,8 @@
     "changeset:publish": "changeset publish",
     "verify": "npm test && npm run build:web && npm run build:mp && npm run build --workspaces",
     "test": "vitest run --exclude tests/e2e-web.test.ts",
-    "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts"
+    "test:e2e:web": "npm run build:web && vitest run tests/e2e-web.test.ts",
+    "test:update": "vitest run -u --exclude tests/e2e-web.test.ts"
   },
   "dependencies": {
     "pinia": "^4.0.3",
