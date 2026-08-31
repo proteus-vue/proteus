@@ -10,10 +10,11 @@
 | v3.0 | 全局缝合 | scope 全量统一为 `@proteus-vue/*`；新增 `proteus-architecture` 规约层；G-01~G-20 全局执行序；18 份 plan 全部锚定全局规约；落地 `scripts/check-consistency.js` 跨层校验 | 18 份 plan · 61 文件 · 120 处 scope 修正 |
 | v3.1 | 规约→工程 | 跨层校验接入 GitHub Actions（`.github/workflows/consistency.yml`：scope 扫描 + 分层锁定 `tsc -b` + contracts 变更聚焦）；新增 `ARCHITECTURE.md` 一页全景（分层 / monorepo / 依赖图 / G-01~G-20 / 9 铁律 / v1.0 验收） | 规约从「文档」升级为「CI 硬门禁」 |
 | v3.2 | 新 plan 追加 | 新增 10 份 plan 追加 G-21~G-30（css-compat G-21 / app-renderer G-22 / safe-area G-23 / memory-plan G-24 / memorial G-25 / skeleton G-26 / theme+fontscale G-27 / cache G-28 / glass G-29 / performance G-30）；各新 plan 声称的旧编号（G-04/G-05/G-08/G-10~G-18）一律重指向本表；`check-consistency.js` 落地（scope 扫描 + G 表跨文件一致 + 包注册表对照 + contracts 检查） | 规约表 G-01~G-30 · 10 份新 plan 文档 · 遗留 `@proteus/` scope 修正（types-plus/test-framework） |
+| v3.3 | style-safety 追加 | 新增 style-safety（全端样式运行时安全）plan 并入 **G-31**；其声称的 G-16 与 blueprint 撞号 → 一律以本表为准（G-16 = blueprint B1-B5、style-safety = G-31）；依赖 G-21（CSS 矩阵 ✅）/ G-22（App Renderer patchStyle）/ G-10（Compiler IR） | 规约表 G-01~G-31 · style-safety 12 文档 G-16→G-31 重指向 |
 
 ---
 
-## 二、G-01 ~ G-20 全局执行序（权威版）
+## 二、G-01 ~ G-31 全局执行序（权威版）
 
 | 序号 | 内容 | 前置 | 备注 |
 |------|------|------|------|
@@ -47,6 +48,7 @@
 | G-28 | cache（L0-L3 缓存） | G-24 | 缓存（原声称 G-15，重指向） |
 | G-29 | glass（液态玻璃 L1-L3） | G-06,G-22 | 玻璃（原里程碑标号 G-04~G-18，统一为 M1-M6） |
 | G-30 | performance（AOT/IFR/Worklet） | G-10,G-22 | 性能（原声称 G-10/G-05，重指向 G-30/G-22） |
+| G-31 | style-safety B1-B4（样式运行时安全） | G-21,G-22,G-10 | 样式安全（原声称 G-16 与 blueprint 撞号，重指向 G-31） |
 
 ---
 

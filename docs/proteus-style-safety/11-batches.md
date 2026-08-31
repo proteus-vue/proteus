@@ -1,4 +1,4 @@
-# 分批落地策略（G-16）
+# 分批落地策略（G-31）
 
 > 依赖：CSS 兼容矩阵、App Renderer、Compiler IR
 

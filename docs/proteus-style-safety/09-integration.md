@@ -102,7 +102,7 @@ DevTools Panel
 └────────────────────┬────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────┐
-│  Style Runtime Safety (G-16)                        │
+│  Style Runtime Safety (G-31)                        │
 │  ├─ ① 编译期静态校验（CSS 矩阵联动）                 │
 │  ├─ ② 编译期代码生成                                │
 │  ├─ ③ 运行时 Validator                              │
@@ -121,7 +121,7 @@ DevTools Panel
 
 | 模块 | 变更 |
 |------|------|
-| Architecture 规约 | 新增 G-16 + 原则 #10 补充 |
+| Architecture 规约 | 新增 G-31 + 原则 #10 补充 |
 | CSS 兼容矩阵 | 无变更（本方案消费矩阵） |
 | App Renderer | `patchStyle` 接入 Validator |
 | Compiler | 新增 style-safety transform |

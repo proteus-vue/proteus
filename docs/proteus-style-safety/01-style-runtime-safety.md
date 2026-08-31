@@ -1,6 +1,6 @@
 # 全端样式运行时安全解决方案
 
-- 执行位：G-16 · 优先级：P1 · 依赖：CSS 兼容矩阵、App Renderer、Compiler IR、Memory Plan
+- 执行位：G-31 · 优先级：P1 · 依赖：CSS 兼容矩阵、App Renderer、Compiler IR、Memory Plan
 - 一句话：**不让任何一条未经语义校验的样式值抵达原生渲染管线。**
 
 ---

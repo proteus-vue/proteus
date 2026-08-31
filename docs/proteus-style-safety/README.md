@@ -1,6 +1,6 @@
 # Proteus 全端样式运行时安全解决方案
 
-> 执行位：**G-16** · 优先级：**P1** · 归属：Architecture 原则 #10 + Compiler + Runtime + DevTools
+> 执行位：**G-31** · 优先级：**P1** · 归属：Architecture 原则 #10 + Compiler + Runtime + DevTools
 >
 > 配套：CSS 跨端兼容矩阵（`proteus-css-compat`）、App Renderer、Memory Plan、App Capabilities
 
@@ -42,7 +42,7 @@ Web 时代样式写错最多"不生效"，App 端 **JSI 直调会把非法值直
 | `09-integration.md` | 与 CSS 矩阵 / Memory / Theme / HMR / DevTools 的协同 |
 | `10-benchmark-budgets.md` | 性能预算（验证开销 <3%）+ 真机五端验收矩阵 |
 | `11-batches.md` | 分批 B1-B4 + Prompt 模板 |
-| `architecture-update.md` | 合并进 Architecture 规约的变更（原则 #10 补充 + G-16） |
+| `architecture-update.md` | 合并进 Architecture 规约的变更（原则 #10 补充 + G-31） |
 | `pack.sh` | 打包脚本（双通道交付 + SHA256 校验） |
 
 ## 校验结果
@@ -63,7 +63,7 @@ Web 时代样式写错最多"不生效"，App 端 **JSI 直调会把非法值直
 ```
 CSS 四级兼容矩阵（proteus-css-compat）
         ↓ 白名单属性 / 级别定义
-Style Runtime Safety（本方案）        ← 新增 G-16
+Style Runtime Safety（本方案）        ← 新增 G-31
         ↓ 运行时闸门
 App Renderer（Custom Renderer patchStyle）
         ↓ JSI
