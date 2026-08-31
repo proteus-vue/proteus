@@ -33,6 +33,7 @@
       "@proteus-vue/built-in-components": ["packages/built-in-components/src/index.ts"],
       "@proteus-vue/built-in-components/*": ["packages/built-in-components/src/*"],
       "@proteus-vue/css-compat": ["packages/css-compat/src/index.ts"],
+      "@proteus-vue/test-core": ["packages/test-core/src/index.ts"],
       "@proteus-vue/types/define-proteus": ["packages/types/src/define-proteus.ts"],
       "@proteus-vue/components": ["src/components/index.ts"],
       "@proteus-vue/components/*": ["src/components/*"]

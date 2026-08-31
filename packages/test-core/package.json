@@ -1,0 +1,34 @@
+{
+  "name": "@proteus-vue/test-core",
+  "version": "0.1.0",
+  "description": "Proteus 测试核心（test-framework M3）：createMockContext（唯一 wx 来源）+ mountMpComponent（SFC → 编译 → 逻辑层实例）——L1-L3 标准件",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/compiler --external:vitest"
+  },
+  "peerDependencies": {
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "@proteus-vue/compiler": "0.3.0-beta.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0"
+  }
+}

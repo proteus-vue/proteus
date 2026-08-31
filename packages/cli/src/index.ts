@@ -19,6 +19,7 @@ import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
 import { parseDevArgs, runDev } from './dev'
+import { parseTestArgs, runTest } from './test'
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 
@@ -213,6 +214,21 @@ async function main(): Promise<void> {
         process.on('SIGTERM', () => child.kill('SIGTERM'))
       } catch (e) {
         console.error(`[proteus-dev] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'test': {
+      const { scope } = parseTestArgs(rest)
+      const plan = runTest({ scope })
+      if (plan.note) console.log(`[proteus-test] ${plan.note}`)
+      if (!plan.command) break // e2e:mp 仅提示
+      try {
+        const { spawnSync } = await import('node:child_process')
+        const r = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+        if (r.status !== 0) process.exitCode = r.status ?? 1
+      } catch (e) {
+        console.error(`[proteus-test] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break
