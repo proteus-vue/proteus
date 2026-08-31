@@ -15,13 +15,15 @@ G-35 App Config
 
 ## 批次
 
-| 批次 | 内容 | 依赖 | 可单测 | 产出 |
-|------|------|------|--------|------|
-| **M1** | Schema + 合并逻辑 + 校验器 | 无 | ✅ 纯逻辑 | 100% 单测覆盖 |
-| **M2** | `defineAppConfig` + `useAppConfig()` 响应式 | Vue runtime | ✅ | 基础 API 可用 |
-| **M3** | 多环境加载 + 平台覆盖 | M1 | ✅ | env/platform 生效 |
-| **M4** | 远端下发（https source）+ L1 缓存 | Cache G-28 | ⚠️ mock | 热更新可用 |
-| **M5** | 五端原生持久化 + CLI `check`/`gen` | CLI G-33 | ⚠️ 需原生 | 全端闭环 |
+| 批次 | 内容 | 依赖 | 可单测 | 产出 | 状态 |
+|------|------|------|--------|------|------|
+| **M1** | Schema + 合并逻辑 + 校验器 | 无 | ✅ 纯逻辑 | 100% 单测覆盖 | ✅（#191） |
+| **M2** | `defineAppConfig` + `useAppConfig()` 响应式 | Vue runtime | ✅ | 基础 API 可用 | ✅ |
+| **M3** | 多环境加载 + 平台覆盖 | M1 | ✅ | env/platform 生效 | ✅ |
+| **M4** | 远端下发（https source）+ L1 缓存 | Cache G-28 | ⚠️ mock | 热更新可用 | ✅（#191） |
+| **M5** | 五端原生持久化 + CLI `check`/`gen` | CLI G-33 | ⚠️ 需原生 | 全端闭环 | ✅ JS 侧（#192）/ 🔶 App 端原生待 G-22 |
+
+> **★现状（2026-08-31）**：M1-M5 **全部 JS 侧落地**——@proteus-vue/app-config 包（merge/validate/store/define/load/remote/storage 全模块）+ CLI `app-config:check`/`gen config` + 6 个测试文件（基础/load/store/remote/storage/gen）。**唯一剩余：M5 的 App 端原生持久化**（iOS/Android/鸿蒙存储接线，createVolatileConfigStore 内存降级占位）——待 G-22 App Renderer 解锁（原生依赖，非 JS 缺口）。
 
 ## M1 最小验证（推荐先动手）
 
