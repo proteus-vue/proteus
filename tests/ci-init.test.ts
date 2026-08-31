@@ -8,7 +8,7 @@ import path from 'node:path'
 import { generateCiWorkflow, parseCiArgs, planCiInit, CI_FILE_PATHS } from '../packages/cli/src/ci'
 
 describe('generateCiWorkflow（GitHub Actions）', () => {
-  it('默认：check 门禁 + web/skyline 构建 + 产物归档', () => {
+  it('默认：check 门禁 + web/skyline 构建 + test（L1-L3 + Web E2E）+ 产物归档', () => {
     const yml = generateCiWorkflow({ platform: 'github', targets: ['web', 'skyline'] })
     expect(yml).toContain('name: Proteus CI')
     expect(yml).toContain('npx proteus check')
@@ -16,32 +16,39 @@ describe('generateCiWorkflow（GitHub Actions）', () => {
     expect(yml).toContain('npx proteus build --target skyline')
     expect(yml).toContain('actions/upload-artifact@v4')
     expect(yml).toContain('dist/mp-weixin/')
-    // check 是 build 的前置（needs）
+    // check 是 build 的前置（needs）；§08 test job 在 build 后（L1-L3 + Web E2E）
     expect(yml).toContain('needs: check')
+    expect(yml).toContain('needs: build')
+    expect(yml).toContain('npx proteus test')
+    expect(yml).toContain('npx proteus test e2e:web')
   })
 
-  it('targets 定制：仅 skyline → 只生成对应构建步骤', () => {
+  it('targets 定制：仅 skyline → build job 只生成对应构建步骤（test job 的 Web E2E 构建不受 targets 影响）', () => {
     const yml = generateCiWorkflow({ platform: 'github', targets: ['skyline'] })
-    expect(yml).toContain('npx proteus build --target skyline')
-    expect(yml).not.toContain('npx proteus build --target web')
+    expect(yml).toContain('- run: npx proteus build --target skyline')
+    expect(yml).not.toContain('- run: npx proteus build --target web')
+    // test job 仍要 Web 产物（e2e:web 依赖 build --target web）
+    expect(yml).toContain('npx proteus build --target web && npx proteus test e2e:web')
   })
 })
 
 describe('generateCiWorkflow（GitLab / CircleCI）', () => {
-  it('GitLab：stages + artifacts', () => {
+  it('GitLab：stages（check/build/test）+ artifacts', () => {
     const yml = generateCiWorkflow({ platform: 'gitlab', targets: ['web'] })
     expect(yml).toContain('stages:')
     expect(yml).toContain('npx proteus check')
     expect(yml).toContain('npx proteus build --target web')
     expect(yml).toContain('artifacts:')
+    expect(yml).toContain('npx proteus test e2e:web')
   })
 
-  it('CircleCI：jobs + workflows requires', () => {
+  it('CircleCI：jobs + workflows requires（含 test）', () => {
     const yml = generateCiWorkflow({ platform: 'circleci', targets: ['web', 'skyline'] })
     expect(yml).toContain('version: 2.1')
     expect(yml).toContain('jobs:')
     expect(yml).toContain('store_artifacts:')
     expect(yml).toContain('requires: [check]')
+    expect(yml).toContain('npx proteus test')
   })
 })
 

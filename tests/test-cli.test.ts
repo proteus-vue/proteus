@@ -12,16 +12,18 @@ describe('proteus test（test-framework 入口）', () => {
     expect(() => parseTestArgs(['unit', 'e2e:web'])).toThrow(/多余参数/)
   })
 
-  it('runTest：unit → vitest run（L1-L3 + 快照，排除 e2e）', () => {
+  it('runTest：unit → vitest run（L1-L3 + 快照，排除 e2e 通配）', () => {
     const plan = runTest({ scope: 'unit' })
     expect(plan.command).toBe('npx')
     expect(plan.args).toContain('--exclude')
-    expect(plan.args).toContain('tests/e2e-web.test.ts')
+    expect(plan.args).toContain('tests/e2e-*.test.ts')
   })
 
-  it('runTest：e2e:web → Playwright（构建产物提示）', () => {
+  it('runTest：e2e:web → Playwright 双文件串行（构建产物提示）', () => {
     const plan = runTest({ scope: 'e2e:web' })
     expect(plan.args).toContain('tests/e2e-web.test.ts')
+    expect(plan.args).toContain('tests/e2e-web-keypaths.test.ts')
+    expect(plan.args).toContain('--no-file-parallelism')
     expect(plan.note).toContain('build --target web')
   })
 

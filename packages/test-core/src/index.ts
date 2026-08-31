@@ -5,3 +5,6 @@ export { createMockContext } from './context'
 export type { MockContext, MockContextOptions, WxStorageMock, WxRouterMock, WxUiMock } from './context'
 export { mountMpComponent } from './mount-mp'
 export type { MountMpComponentResult, MpComponentInstance } from './mount-mp'
+// ★test-framework B7：跨端统一断言 helper（06-cross-platform-assert.md）
+export { tap, isWebElement, isMpElement } from './events'
+export type { CrossPlatformElement, WebEventTarget, MpEventTarget } from './events'

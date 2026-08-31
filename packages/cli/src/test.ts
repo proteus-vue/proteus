@@ -25,10 +25,15 @@ export function parseTestArgs(argv: string[]): TestOptions {
 export function runTest(opts: TestOptions): { command: string; args: string[]; note?: string } {
   switch (opts.scope) {
     case 'unit':
-      // ★排除 e2e：E2E 依赖真实构建产物 + Chromium，由 e2e:web 显式触发（与根 test 脚本一致）
-      return { command: 'npx', args: ['vitest', 'run', '--exclude', 'tests/e2e-web.test.ts'] }
+      // ★排除 e2e：E2E 依赖真实构建产物 + Chromium，由 e2e:web 显式触发（与根 test 脚本一致；引号让 vitest 自己 picomatch glob）
+      return { command: 'npx', args: ['vitest', 'run', '--exclude', 'tests/e2e-*.test.ts'] }
     case 'e2e:web':
-      return { command: 'npx', args: ['vitest', 'run', 'tests/e2e-web.test.ts'], note: '需先执行 proteus build --target web（E2E 依赖真实构建产物）' }
+      // ★B4：路由/渲染 + 关键路径两个文件；--no-file-parallelism 串行（Chromium 并发会 5s 超时）
+      return {
+        command: 'npx',
+        args: ['vitest', 'run', '--no-file-parallelism', 'tests/e2e-web.test.ts', 'tests/e2e-web-keypaths.test.ts'],
+        note: '需先执行 proteus build --target web（E2E 依赖真实构建产物）',
+      }
     case 'e2e:mp':
       return { command: '', args: [], note: 'e2e:mp 需微信开发者工具运行（miniprogram-automator），CLI 仅提示' }
   }
