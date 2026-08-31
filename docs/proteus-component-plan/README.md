@@ -95,3 +95,4 @@ L1  平台原生（DOM / Skyline / Native）
 - **v2 落地评估（2026-08，`11-landing-evaluation.md`）**：对照当前代码库现实修正 —— ① 取消「L2 渲染器目录」（组件 = 标准 SFC + 既有编译管线）；② 命名统一 `p-` 前缀（virtual-list 兼容保留）；③ 批次重排 B1-B8（B4/B5/B6 中依赖 appBar/Worklet/支付的部分降级或移出 P0 首期）；④ 能力探测改轻量 runtime 模块（不全局注入）
 - **★P0 收官（2026-08）：B1-B8 全批落地** —— 16 个组件（15 个 p-* + virtual-list 兼容别名）+ 4 个 runtime 共享模块（capability/event/virtual-window/observability）+ 编译器 4 项增强（props 源 watch→observers / 多行 RHS / 组件 detached / 未映射钩子警告）+ `components:audit` CI 门禁；全部 580+ 测试全绿
 - 待确认：`chunk` 默认值策略（按目录自动推断 vs 显式声明）
+- **★内置组件基准调整（2026-08-31，拆包 @proteus-vue/built-in-components）**：`src/components` 的 p-* 不再是内置组件；新基准 = **微信小程序内置组件**（view/text/button/…），Web 端用 @proteus-vue/built-in-components 的 Vue 模拟（proteus-*，从 @proteus-vue/web 拆出）+ wx API 模拟留 @proteus-vue/web（installWebPlatform 聚合）；与扩展组件（@proteus-vue/components）明确区分；`schemas.ts` 消费 MpComponentSchema（B8）对照防漂移；src/components 旧体系保留待迁移

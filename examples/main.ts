@@ -8,7 +8,7 @@ import { createApi } from '@proteus-vue/api'
 // ★14-mp-first-semantics：小程序语义 Web 模拟层——注册 view/text/button/input/image 组件 + wx API（以小程序为标准）
 import { installWebPlatform } from '@proteus-vue/web'
 // 微信默认样式对齐层（button/input 等原生默认外观对齐小程序，双端视觉一致）
-import '@proteus-vue/web/style.css'
+import '@proteus-vue/built-in-components/style.css'
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 const api = createApi({ baseURL: 'https://api.example.com' })

@@ -45,6 +45,7 @@ const REQUIRED_TAGS = [
   'picker',
   'switch',
   'slider',
+  'icon',
   'progress',
   'navigator',
   'video',
@@ -201,6 +202,19 @@ export const mpComponentRegistry: MpComponentRegistry &
       onChanging: { name: 'bindchanging', type: 'event' },
     },
     proteusAlias: 'p-slider',
+  },
+  icon: {
+    tag: 'icon',
+    props: {
+      type: {
+        name: 'type',
+        type: 'enum',
+        enumValues: ['success', 'success_no_circle', 'info', 'warn', 'waiting', 'cancel', 'download', 'search', 'clear'],
+      },
+      size: { name: 'size', type: 'number' },
+      color: { name: 'color', type: 'string' },
+    },
+    proteusAlias: 'p-icon',
   },
   progress: {
     tag: 'progress',

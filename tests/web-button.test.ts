@@ -4,8 +4,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createApp, h, reactive } from 'vue'
-import { WebButton } from '../packages/web/src/components/button'
-import { WebPicker } from '../packages/web/src/components/picker'
+import { WebButton } from '../packages/built-in-components/src/components/button'
+import { WebPicker } from '../packages/built-in-components/src/components/picker'
 
 describe('WebButton（对齐 weui.io/#button_default 变体）', () => {
   let app: ReturnType<typeof createApp> | null = null

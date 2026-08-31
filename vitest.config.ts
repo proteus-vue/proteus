@@ -34,6 +34,7 @@ export default defineConfig({
       { find: '@proteus-vue/types/api-types', replacement: fileURLToPath(new URL('./packages/types/src/api-types.ts', import.meta.url)) },
       { find: '@proteus-vue/types/config', replacement: fileURLToPath(new URL('./packages/types/src/config.ts', import.meta.url)) },
       { find: '@proteus-vue/types/config-schema', replacement: fileURLToPath(new URL('./packages/types/src/config-schema.ts', import.meta.url)) },
+      { find: '@proteus-vue/types/mp/component-schema', replacement: fileURLToPath(new URL('./packages/types/src/mp/component-schema.ts', import.meta.url)) },
       { find: '@proteus-vue/types', replacement: fileURLToPath(new URL('./packages/types/src/index.ts', import.meta.url)) },
     ],
   },

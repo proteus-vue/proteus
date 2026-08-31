@@ -4,7 +4,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createApp, h, reactive } from 'vue'
-import { WebSwitch } from '../packages/web/src/components/switch'
+import { WebSwitch } from '../packages/built-in-components/src/components/switch'
 
 describe('WebSwitch（对齐官方 weui.io/#form_switch）', () => {
   let app: ReturnType<typeof createApp> | null = null

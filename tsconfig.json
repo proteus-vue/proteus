@@ -25,6 +25,8 @@
       "@proteus-vue/plugin-vite": ["packages/plugin-vite/src/index.ts"],
       "@proteus-vue/plugin-vite/*": ["packages/plugin-vite/src/*"],
       "@proteus-vue/web": ["packages/web/src/index.ts"],
+      "@proteus-vue/built-in-components": ["packages/built-in-components/src/index.ts"],
+      "@proteus-vue/built-in-components/*": ["packages/built-in-components/src/*"],
       "@proteus-vue/components": ["src/components/index.ts"],
       "@proteus-vue/components/*": ["src/components/*"]
     }

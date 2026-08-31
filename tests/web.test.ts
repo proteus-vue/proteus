@@ -16,7 +16,7 @@ const { adapterMock } = vi.hoisted(() => ({
 vi.mock('@proteus-vue/shared', () => ({ adapter: adapterMock }))
 
 import { wx, installWxApi } from '../packages/web/src/wx'
-import { OPEN_TYPE_EVENTS } from '../packages/web/src/open-type'
+import { OPEN_TYPE_EVENTS } from '../packages/built-in-components/src/open-type'
 
 /** node 环境无 localStorage——stub 简单实现 */
 function stubLocalStorage(): void {

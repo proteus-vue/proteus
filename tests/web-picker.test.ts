@@ -5,7 +5,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createApp, h, reactive } from 'vue'
-import { WebPicker } from '../packages/web/src/components/picker'
+import { WebPicker } from '../packages/built-in-components/src/components/picker'
 
 describe('WebPicker（selector 单选，18-picker-swiper B1）', () => {
   let app: ReturnType<typeof createApp> | null = null
