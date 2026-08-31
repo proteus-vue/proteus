@@ -11,8 +11,9 @@ export function createMpAdapter(): PlatformAdapter {
   return {
     isMP: true,
     getCurrentPages: () => {
-      if (typeof wx === 'undefined' || !wx.getCurrentPages) return []
-      return wx.getCurrentPages().map(norm)
+      // ★getCurrentPages 是全局函数（官方 typings 声明），不在 wx.* 上
+      if (typeof wx === 'undefined' || typeof getCurrentPages !== 'function') return []
+      return getCurrentPages().map(norm)
     },
     navigateTo: (opts) =>
       new Promise((resolve) => {

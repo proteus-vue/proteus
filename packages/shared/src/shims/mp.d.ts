@@ -1,17 +1,18 @@
 // src/shims/mp.d.ts
 // ============================================================
-// 微信小程序 API 类型声明垫片（minimal）
+// 微信小程序 API 类型声明垫片（minimal + 官方 typings 接入）
 //
 // 职责：
-// - 让 wx.* / Page() / App() / Component() 在小程序端代码中通过编译
-// - 提供 RouteBuilder / PageOptions 等类型，是 P3（router）、
-//   P4（编译产物）、P5（pageLifecycle）的类型依据，务必完整
-//
-// 注意：本文件无 import/export，保持全局声明（ambient）形态
+// - ★B8（types-plus-plan）：wx.* / App() / Page() / Component() 参数全部源自官方
+//   miniprogram-api-typings（WechatMiniprogram 命名空间），本文件不再自造 wx 类型
+// - 保留 Proteus 自定义类型：RouteContext / RouteBuilder / PageOptions 等（官方不覆盖）
+// - 注意：本文件无 import/export，保持全局声明（ambient）形态
 // ============================================================
 
-/** wx 全局对象（minimal：任何属性可用，仅供编译通过） */
-declare const wx: any
+/// <reference types="miniprogram-api-typings" />
+
+/** wx 全局对象（★官方类型：WechatMiniprogram.Wx，含 wx.router 等 Skyline API） */
+declare const wx: WechatMiniprogram.Wx
 
 /** Skyline wx.router 自定义路由上下文（官方 CustomRouteContext） */
 interface RouteContext {
@@ -98,8 +99,7 @@ interface ComponentOptions {
 }
 
 declare function App(options: Record<string, unknown>): void
-declare function Page(options: PageOptions): void
-declare function Component(options: ComponentOptions): void
+/** 说明：Page/Component/App 全局构造器由官方 miniprogram-api-typings 声明（WechatMiniprogram.Page.Constructor 等），本文件不再重复声明 */
 
 /** Skyline worklet 渲染线程全局（仅 worklet 函数内可用） */
 declare const screenHeight: number

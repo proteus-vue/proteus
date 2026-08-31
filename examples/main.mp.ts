@@ -37,5 +37,7 @@ function myHalfScreenVariant(customRouteContext: RouteContext): RouteBuilderResu
 }
 
 if (typeof wx !== 'undefined' && wx.router) {
-  wx.router.addRouteBuilder('halfScreen', myHalfScreenVariant)
+  // ★官方 CustomRouteConfig 字段全必选，而 worklet builder 可按需返回（运行时缺省补全）——
+  // 显式适配官方签名（能力边界，非 any）；shims RouteBuilderResult 保留可选形态供产物校验
+  wx.router.addRouteBuilder('halfScreen', myHalfScreenVariant as unknown as WechatMiniprogram.CustomRouteBuilder)
 }

@@ -69,4 +69,4 @@ proteus-types-plan/
 [x] B9 跨端 API 统一层    (2026-08-31 落地；运行时实现归 @proteus-vue/api)
 ```
 
-> B1-B7 由 types-plan（决策 #274/#276 类型收口）落地；**B8 落地**：`packages/types/src/mp/`（component-schema 注册表 + sdk-version 对齐 + official-typings 官方类型桥，`@proteus-vue/types/mp` 子路径）+ 8 单测；**B9 落地**：`packages/types/src/platform-api.ts`（PlatformAPI 统一契约 + `@proteus-vue/types/platform-api` 子路径 + **@proteus-vue/api 运行时 createPlatformAPI 四域实现** + re-export）+ 类型断言 + 7 运行时单测（764 全绿）；遗留：shims `wx: any` 替换（独立批次）、`MpSdkVersion` 维护表补录。
+> B1-B7 由 types-plan（决策 #274/#276 类型收口）落地；**B8 落地**：`packages/types/src/mp/`（component-schema 注册表 + sdk-version 对齐 + official-typings 官方类型桥，`@proteus-vue/types/mp` 子路径）+ 8 单测 + **shims wx:any → 官方类型替换（验收闭环）**；**B9 落地**：`packages/types/src/platform-api.ts`（PlatformAPI 统一契约 + `@proteus-vue/types/platform-api` 子路径 + **@proteus-vue/api 运行时 createPlatformAPI 四域实现** + re-export）+ 类型断言 + 7 运行时单测（764 全绿）；遗留：`MpSdkVersion` 维护表补录。

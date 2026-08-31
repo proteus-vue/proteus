@@ -1,7 +1,11 @@
 // tests/platform-guards.test.ts
 // ★types-plan B4：平台守卫（matchPlatform/assertPlatform/exhaustiveCheck/getPlatform）——铁律 #4 替代 #ifdef
 import { describe, it, expect, afterEach, vi } from 'vitest'
+import { createRequire } from 'node:module'
 import { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck, detectPlatform } from '../packages/capabilities/src'
+
+// ★官方 miniprogram-api-typings 的 require 全局无 resolve（覆盖 node require）——测试用 node 语义需 createRequire
+const nodeRequire = createRequire(import.meta.url)
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -58,7 +62,7 @@ describe('exhaustiveCheck（穷尽兜底）', () => {
 describe('平台守卫的 MP 产物安全（无 ?./??/展开/解构）', () => {
   it('guard.ts 源码不含禁用语法（决策 #32/#36）', () => {
     const fs = require('node:fs')
-    const src = fs.readFileSync(require.resolve('../packages/capabilities/src/guard.ts'), 'utf-8')
+    const src = fs.readFileSync(nodeRequire.resolve('../packages/capabilities/src/guard.ts'), 'utf-8')
     expect(src).not.toMatch(/\?\./)
     expect(src).not.toMatch(/\?\?/)
     expect(src).not.toMatch(/\.\.\./)
