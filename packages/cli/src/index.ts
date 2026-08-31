@@ -390,21 +390,27 @@ main().catch((err: Error) => {
 
 /** 端口占用异步探测（net.connect 短超时；e2e:mp 体检 + 复用判定） */
 async function probePort(port: number, timeoutMs = 500): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect({ port, host: '127.0.0.1' })
-    const timer = setTimeout(() => {
-      socket.destroy()
-      resolve(false)
-    }, timeoutMs)
-    socket.once('connect', () => {
-      clearTimeout(timer)
-      socket.destroy()
-      resolve(true)
+  // ★双栈探测（IPv4 + IPv6）：微信开发者工具 automation 可能只监听 IPv6（lsof: *:9420 IPv6）——
+  //   单 IPv4 探测会误判空闲 → 误走 launch 新实例 → 端口冲突 Failed to launch（真机实测踩坑）
+  for (const host of ['127.0.0.1', '::1']) {
+    const busy = await new Promise<boolean>((resolve) => {
+      const socket = net.connect({ port, host })
+      const timer = setTimeout(() => {
+        socket.destroy()
+        resolve(false)
+      }, timeoutMs)
+      socket.once('connect', () => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(true)
+      })
+      socket.once('error', () => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(false)
+      })
     })
-    socket.once('error', () => {
-      clearTimeout(timer)
-      socket.destroy()
-      resolve(false)
-    })
-  })
+    if (busy) return true
+  }
+  return false
 }

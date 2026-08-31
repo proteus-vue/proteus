@@ -84,21 +84,31 @@ export function planMpE2E(opts: { root?: string; port?: number; ideCli?: string 
   return { ideCli, projectDir, port, needBuild, steps }
 }
 
-/** 轮询 automator 端口就绪（IDE 启动后 WS 服务可连；超时返回 false） */
+/** 轮询 automator 端口就绪（IDE 启动后 WS 服务可连；超时返回 false）——★双栈探测（IPv4+IPv6，同 probePort 踩坑） */
 export function waitForAutomatorPort(port: number, timeoutMs = 60_000): Promise<boolean> {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeoutMs
+    const hosts = ['127.0.0.1', '::1']
     const tryConnect = (): void => {
-      const socket = net.connect({ port, host: '127.0.0.1' })
-      socket.once('connect', () => {
-        socket.destroy()
-        resolve(true)
-      })
-      socket.once('error', () => {
-        socket.destroy()
-        if (Date.now() > deadline) resolve(false)
-        else setTimeout(tryConnect, 1000)
-      })
+      let idx = 0
+      const attempt = (): void => {
+        if (idx >= hosts.length) {
+          if (Date.now() > deadline) resolve(false)
+          else setTimeout(tryConnect, 1000)
+          return
+        }
+        const host = hosts[idx++]
+        const socket = net.connect({ port, host })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve(true)
+        })
+        socket.once('error', () => {
+          socket.destroy()
+          attempt()
+        })
+      }
+      attempt()
     }
     tryConnect()
   })

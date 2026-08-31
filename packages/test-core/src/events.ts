@@ -35,12 +35,10 @@ export async function tap(el: CrossPlatformElement): Promise<void> {
 
 // ============ ★统一测试 API：状态/文本读取（06 分层断言：状态完全共用，DOM 各自断言） ============
 
-/** Web 挂载 host（@vue/test-utils VueWrapper）——vm 状态读取 */
+/** Web 挂载 host（@vue/test-utils VueWrapper）——vm 状态读取（★只依赖 vm.$ 存在；形状保持最宽避免与 VueWrapper 精确 vm 类型冲突） */
 export interface WebHostLike {
-  vm: Record<string, unknown> & {
-    /** 内部实例（script setup 绑定在 vm.$.setupState：公开代理无 own keys，走 has/get trap） */
-    $?: { setupState?: Record<string, unknown>; $data?: Record<string, unknown> }
-  }
+  /** vm 存在即 web host（mp host 无 vm 属性）；内部实例 vm.$ 由 stateOf 内部收窄读取 */
+  vm: { $?: unknown }
   text?(): string
 }
 
@@ -50,17 +48,18 @@ export interface MpHostLike {
   wxml?: string
 }
 
-/** 统一状态读取：Web → setupState/$data（vm 公开代理无 own keys，状态在内部实例）；MP → data 快照（06 §分层断言：状态跨端完全共用） */
+/** 统一状态读取：Web → setupState/$data（vm 公开代理无 own keys，状态在内部实例 vm.$）；MP → data 快照（06 §分层断言：状态跨端完全共用） */
 export function stateOf(host: WebHostLike | MpHostLike): Record<string, unknown> {
   const web = host as WebHostLike
   if (web.vm) {
     const out: Record<string, unknown> = {}
     // ★script setup 绑定（vm.$.setupState）+ options API data（$data）合并；排除内部 $/__ 前缀
-    const setupState = web.vm.$?.setupState ?? {}
+    const internal = web.vm.$ as { setupState?: Record<string, unknown>; $data?: Record<string, unknown> } | undefined
+    const setupState = internal?.setupState ?? {}
     for (const k of Object.keys(setupState)) {
       if (!k.startsWith('$') && !k.startsWith('__')) out[k] = setupState[k]
     }
-    const data = web.vm.$?.$data
+    const data = internal?.$data
     if (data) {
       for (const k of Object.keys(data)) {
         if (!(k in out)) out[k] = data[k]

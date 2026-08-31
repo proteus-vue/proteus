@@ -90,7 +90,9 @@ export function createWebDriver(page: PlaywrightPageLike): TestDriver {
       return { path: url.replace(/^[a-z]+:\/\/[^/]+/, ''), url }
     },
     async systemInfo(): Promise<SystemSnapshot> {
-      const ua = await page.evaluate<string>(`() => navigator.userAgent`)
+      // ★evaluate 传裸表达式字符串（playwright 按表达式求值返回其值；箭头函数源码会返回函数对象）
+      //   字符串不经 TS 类型检查（test-core build lib 仅 ES2020 无 DOM）
+      const ua = await page.evaluate<string>('navigator.userAgent')
       return { platform: 'web', version: ua.slice(0, 200), userAgent: ua }
     },
     element(selector: string, options?: TestElementOptions): TestElement {

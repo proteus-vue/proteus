@@ -19,7 +19,7 @@ function fakePage() {
     dispatchEvent: vi.fn(async () => undefined),
     hover: vi.fn(async () => undefined),
   }
-  const page: PlaywrightPageLike & { goto: ReturnType<typeof vi.fn>; goBack: ReturnType<typeof vi.fn> } = {
+  const page = {
     goto: vi.fn(async () => undefined),
     goBack: vi.fn(async () => undefined),
     url: vi.fn(() => 'http://localhost:4175/pages/index'),
@@ -27,6 +27,10 @@ function fakePage() {
     waitForTimeout: vi.fn(async () => undefined),
     screenshot: vi.fn(async (opts?: { path?: string }) => ({ path: opts?.path ?? '/tmp/web.png' })),
     locator: vi.fn(() => el),
+    // ★整体断言（vi.fn Mock 与 PlaywrightPageLike 交叉类型逆变冲突——fake 句柄不需要严格类型）
+  } as unknown as PlaywrightPageLike & {
+    goto: ReturnType<typeof vi.fn>
+    goBack: ReturnType<typeof vi.fn>
   }
   return { page, el }
 }
@@ -40,13 +44,19 @@ function fakeMini() {
     text: vi.fn(async () => 'counter: 1'),
     value: vi.fn(async () => '7'),
   }
-  const mini: AutomatorMiniLike & { reLaunch: ReturnType<typeof vi.fn>; currentPage: ReturnType<typeof vi.fn>; systemInfo: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> } = {
+  const mini = {
     reLaunch: vi.fn(async (url: string) => ({ path: url.replace(/^\//, '') })),
     currentPage: vi.fn(async () => ({ path: 'pages/index', $: vi.fn(async () => element) })),
     systemInfo: vi.fn(async () => ({ platform: 'devtools', SDKVersion: '3.16.2' })),
     evaluate: vi.fn(async (_fn: string | ((...a: unknown[]) => unknown), ...args: unknown[]) => args[0] ?? 'devtools'),
     screenshot: vi.fn(async (opts?: { path?: string }) => ({ path: opts?.path ?? '/tmp/mp.png' })),
     disconnect: vi.fn(),
+    // ★整体断言（vi.fn Mock 与 AutomatorMiniLike 交叉类型逆变冲突——fake 句柄不需要严格类型）
+  } as unknown as AutomatorMiniLike & {
+    reLaunch: ReturnType<typeof vi.fn>
+    currentPage: ReturnType<typeof vi.fn>
+    systemInfo: ReturnType<typeof vi.fn>
+    disconnect: ReturnType<typeof vi.fn>
   }
   return { mini, element }
 }

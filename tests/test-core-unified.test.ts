@@ -24,7 +24,7 @@ function increment() {
 describe('mountComponent（统一挂载 API：双端同一份 SFC）', () => {
   it('web：真实渲染 + 状态读取 + 事件触发（@vue/test-utils）', async () => {
     const host = (await mountComponent(COUNTER_SFC, { platform: 'web' })) as MountedHost & {
-      vm: { count: number; label: string; increment: () => void }
+      vm: { count: number; label: string; increment: () => void; $nextTick(): Promise<void> }
       text: () => string
     }
     expect(host.vm.count).toBe(1)
@@ -68,6 +68,8 @@ describe('mountComponent（统一挂载 API：双端同一份 SFC）', () => {
   it('tap 统一事件分发（Web wrapper 内元素 trigger）', async () => {
     const host = (await mountComponent(COUNTER_SFC, { platform: 'web' })) as unknown as {
       find: (sel: string) => { trigger: (e: string) => void }
+      // stateOf 读取通道（vm.$.setupState）
+      vm: { $: { setupState: { count: number } } }
     }
     // DOM 定位属于各端断言（06 铁律：跨端共享部分只碰逻辑/状态），定位到 button 再走统一 tap
     const btn = host.find('button')
