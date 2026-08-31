@@ -9,8 +9,8 @@ const ROUTER_SRC = path.resolve('packages/router/src')
 
 /** 平台直连关键词：出现在非 skyline.ts / 非 codegen/ 的路由源码中即视为违规 */
 const FORBIDDEN = ['wx.', 'window.', 'localStorage', 'document.']
-/** 允许直连 wx 的模块（skyline.ts 是唯一 wx.router bridge，执行规则 5） */
-const ALLOWED_WX = new Set(['skyline.ts'])
+/** 允许直连 wx 的模块（skyline.ts 是唯一 wx.router bridge，执行规则 5；navigation.ts 是五端 API 名映射表——收敛点，与 codegen/ 同性质） */
+const ALLOWED_WX = new Set(['skyline.ts', 'navigation.ts'])
 
 /** 收集所有 .ts 文件（含子目录），跳过 index/聚合与测试无关 */
 function collectTsFiles(dir: string, acc: string[] = []): string[] {

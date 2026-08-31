@@ -43,6 +43,14 @@
       "types": "./dist/codegen/index.d.ts",
       "import": "./dist/codegen/index.js"
     },
+    "./navigation": {
+      "types": "./dist/navigation.d.ts",
+      "import": "./dist/navigation.js"
+    },
+    "./stack-diff": {
+      "types": "./dist/stack-diff.d.ts",
+      "import": "./dist/stack-diff.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -51,7 +59,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/stack-diff.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
   },
   "dependencies": {
     "@proteus-vue/shared": "0.2.0-beta.0",

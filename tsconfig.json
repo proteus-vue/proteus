@@ -24,6 +24,7 @@
       "@proteus-vue/contracts": ["packages/contracts/src/index.ts"],
       "@proteus-vue/runtime": ["packages/runtime/src/index.ts"],
       "@proteus-vue/runtime/style-safety": ["packages/runtime/src/style-safety/index.ts"],
+      "@proteus-vue/router/navigation": ["packages/router/src/navigation.ts"],
       "@proteus-vue/router": ["packages/router/src/index.ts"],
       "@proteus-vue/router/*": ["packages/router/src/*"],
       "@proteus-vue/plugin-vite": ["packages/plugin-vite/src/index.ts"],

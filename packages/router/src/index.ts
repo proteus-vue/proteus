@@ -166,6 +166,20 @@ export type { RouteTransition } from './transforms/transform-transition'
 export { generateWebRoutes, generateMpConfig, mergeAppJson, flattenNodes, toPageConfig } from './codegen'
 export type { MpPageConfig } from './codegen'
 
+// ★router-plus G-32 M1：路由语义层 + 五端导航映射 + 栈 diff
+//（NAVIGATION_MAP 映射语义 → 各端原生 API；computeRoutePatch 是转场事务的输入）
+export {
+  STACK_SEMANTICS,
+  NAVIGATION_MAP,
+  BACK_MAP,
+  isStackSemantic,
+  validateStackSemantic,
+  resolveNavigation,
+} from './navigation'
+export type { StackSemantic, StylePlatform } from './navigation'
+export { computeRoutePatch, applyRoutePatch } from './stack-diff'
+export type { RoutePatch } from './stack-diff'
+
 // 类型契约再导出（应用侧 import type { RouteRecord } from '@proteus-vue/router' 即可，无需深路径）
 export type {
   RouteRecord,

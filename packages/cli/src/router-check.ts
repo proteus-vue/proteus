@@ -1,12 +1,14 @@
 // packages/cli/src/router-check.ts
-// proteus router:check —— 路由检查器（docs/proteus-router-plan 08-migration Step 1）
+// proteus router:check —— 路由检查器（docs/proteus-router-plan 08-migration Step 1 + router-plus G-32 strict-router）
 // 扫描 pagesDir 的 .vue → scanRoutes（★决策 #112/#113：derivePath + includeNoRoute——
 //   <route> 块完全可选，path/name 从文件路径推导，meta 由 config 集中注入；块仅覆盖 path/meta/params/pageJson）
+// ★router-plus strict-router：ROUTE003（path kebab-case）/ ROUTE004（meta.stack 非法值）
 // ★透明化：报错精确到 文件:行号；通过后输出路由摘要 + 嵌套决策 trace（--trace-router 语义）
 import path from 'node:path'
 import { scanRoutes } from '@proteus-vue/router/scan'
 import { buildRouteTree } from '@proteus-vue/router/tree'
 import { listRouteRules } from '@proteus-vue/router/rules'
+import { validateStackSemantic } from '@proteus-vue/router/navigation'
 
 export interface RouterCheckResult {
   ok: boolean
@@ -19,8 +21,8 @@ export interface RouterCheckResult {
 /**
  * 路由检查（纯函数，可单测）：
  * 1. 扫描页面（derivePath + includeNoRoute：<route> 块可选，path/name 推导）
- * 2. 构建嵌套树（显式 parent / path 推导 trace）
- * 3. 输出摘要
+ * 2. ★strict-router：ROUTE003 path kebab-case / ROUTE004 meta.stack 非法值（router-plus G-32）
+ * 3. 构建嵌套树（显式 parent / path 推导 trace）
  */
 export function checkRoutes(pagesDir: string): RouterCheckResult {
   const errors: string[] = []
@@ -35,15 +37,23 @@ export function checkRoutes(pagesDir: string): RouterCheckResult {
     return { ok: false, pageCount: 0, routeCount: 0, errors: [(err as Error).message], summary }
   }
 
+  // ★strict-router（G-32）：ROUTE003 path kebab-case / ROUTE004 meta.stack 非法值
+  // （兼容两种 path 格式：Vue Router '/home' 前导斜杠 + 小程序 'pages/home' 无前导斜杠）
+  for (const r of routes) {
+    const loc = `${path.relative(process.cwd(), r.loc.file)}:${r.loc.line}`
+    if (!/^\/?[a-z0-9-]+(\/[a-z0-9-]+)*$/.test(r.path)) {
+      errors.push(`[ROUTE003] ${loc} path "${r.path}" 非 kebab-case（小写 + 连字符，参数用 :name）`)
+    }
+    const stackErr = validateStackSemantic(r.meta?.stack)
+    if (stackErr) {
+      errors.push(`[ROUTE004] ${loc} ${stackErr}`)
+    }
+  }
+
   const tree = buildRouteTree(routes, {}, trace)
   summary.push(`[route] 共 ${routes.length} 条路由，${tree.length} 个根路由（嵌套树构建完成）`)
 
-  // 迁移检查（08-migration §5）：name 建议补充声明（path 推导运行时可用）
-  const missingName = routes.filter((r) => !r.name)
-  if (missingName.length) {
-    summary.push(`[check] ⚠ ${missingName.length} 条路由未声明 name（运行时可用 path 推导，建议补充声明）`)
-  }
-
+  if (errors.length) return { ok: false, pageCount: routes.length, routeCount: routes.length, errors, summary }
   return { ok: true, pageCount: routes.length, routeCount: routes.length, errors, summary }
 }
 
