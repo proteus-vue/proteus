@@ -14,5 +14,9 @@ export { defineAppConfig } from './define'
 export { loadAppConfig, resolveEnvConfig } from './load'
 export type { LoadAppConfigLayers } from './load'
 
+// ★G-35 M4：远端下发 + L1 缓存（03-remote-config.md §1/§3/§4/§7）
+export { createMemoryConfigCache, createHttpsFetcher, fetchAndApplyRemote } from './remote'
+export type { ConfigCache, FetchLike, RemoteFetcher, RemoteFetchContext, FetchRemoteOptions, RemoteApplyResult } from './remote'
+
 // 配置入口标记（defineAppConfig 附加）
 export const APP_CONFIG_MARK = '__isAppConfig'
