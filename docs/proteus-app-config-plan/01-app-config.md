@@ -57,6 +57,7 @@
 | 视觉相关 | `style.px2rpx/rpxRatio`（编译换算）、`budget`（包体积） | `theme`/`font`/`safeArea`（运行时表现，联动 G-27） |
 | 功能开关 | `rules`/`setDataBridge`（编译行为） | `features.*`（运行时开关，可远端下发） |
 | 路由 | `router.tabBar`/`meta`（生成 app.json/路由表） | —（路由声明属框架，文案内容后续可下沉） |
+| 应用标题 | —（页面导航标题声明：`router.meta.title`） | **`app.name` = 应用标题唯一事实源**（浏览器标签/关于页/分享；Web 运行时设置 document.title） |
 | 环境 | —（`env` 属运行时） | `env`（dev/staging/prod 覆盖层） |
 | 网络 | — | `api.baseUrl/timeout/retry/cache` |
 
