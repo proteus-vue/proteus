@@ -113,7 +113,7 @@ B1 (核心类型: platform/lifecycle/IR/registry)
 ```
 
 > ★B8 落地说明（2026-08-31）：`packages/types/src/mp/`（component-schema / sdk-version / official-typings）+ `@proteus-vue/types/mp` 子路径 + 8 单测（757 全绿，Node 22）。`wx: any` shims 替换为官方类型列为后续批次（需解决 App/Page/Component/console 全局冲突）。
-> ★B9 落地说明（2026-08-31）：`packages/types/src/platform-api.ts`（PlatformAPI/StorageAPI/RouterAPI/UIAPI 契约，request 复用 api-types 单一来源）+ `@proteus-vue/types/platform-api` 子路径 + 根 index 导出 + `@proteus-vue/api` re-export；类型断言 tests/types/platform-api.types.ts（正例 + @ts-expect-error 负例，build:web vue-tsc 校验）。
+> ★B9 落地说明（2026-08-31）：`packages/types/src/platform-api.ts`（PlatformAPI/StorageAPI/RouterAPI/UIAPI 契约，request 复用 api-types 单一来源，契约自包含 re-export RequestConfig/RequestResponse）+ `@proteus-vue/types/platform-api` 子路径 + 根 index 导出 + **`@proteus-vue/api` 运行时 createPlatformAPI**（storage/router/ui/request 四域 wx/web 双端适配 + 内存/DOM/console 兜底，MP 产物 ES5 安全）+ `@proteus-vue/api` re-export；类型断言 tests/types/platform-api.types.ts + 运行时单测 tests/platform-api.test.ts 7 用例（764 全绿）。
 
 ---
 

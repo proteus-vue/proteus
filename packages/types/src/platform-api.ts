@@ -8,6 +8,8 @@
 
 import type { RequestConfig, RequestResponse } from './api-types'
 
+export type { RequestConfig, RequestResponse } from './api-types'
+
 /** 跨端存储（最小公约数：同步形态；异步/分片等走 pinia StorageAdapter 或 CapabilityIR） */
 export interface StorageAPI {
   get<T = unknown>(key: string): T | undefined
