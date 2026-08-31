@@ -28,10 +28,12 @@ export interface MountMpComponentResult {
   config: unknown
 }
 
-function createTrackedSetData() {
+/** setData：合并更新 + 追踪（断言更新序列）——★真实语义：同步合并进 data（统一状态断言 stateOf 依赖） */
+function createTrackedSetData(target: Record<string, unknown>) {
   const calls: Array<Record<string, unknown>> = []
   const setData = (patch: Record<string, unknown>): void => {
     calls.push(patch)
+    Object.assign(target, patch)
   }
   return Object.assign(setData, { calls })
 }
@@ -74,16 +76,23 @@ export function mountMpComponent(sfcSource: string, options: CompileOptions = {}
     data?: Record<string, unknown>
     [key: string]: unknown
   }
+  const data: Record<string, unknown> = { ...(raw.data ?? {}) }
   const instance: MpComponentInstance = {
-    data: { ...(raw.data ?? {}) },
-    setData: createTrackedSetData(),
+    data,
+    setData: createTrackedSetData(data),
   }
-  // 方法暴露（组件 methods / 页面事件处理，绑定实例）
+  // 方法暴露：页面模式顶层函数 + 组件模式 methods（微信组件方法必须在 methods: {}——编译器强制）
+  // ★methods 后绑定覆盖（组件模式以 methods 为准，防顶层同名残留）
+  const exposeMethod = (name: string, fn: (...args: unknown[]) => unknown): void => {
+    if (name === 'data' || name === 'setData') return
+    instance[name] = fn.bind(instance)
+  }
   for (const key of Object.keys(raw)) {
-    if (key === 'data' || key === 'setData') continue
-    if (typeof raw[key] === 'function') {
-      instance[key] = (raw[key] as (...args: unknown[]) => unknown).bind(instance)
-    }
+    if (typeof raw[key] === 'function') exposeMethod(key, raw[key] as (...args: unknown[]) => unknown)
+  }
+  const rawMethods = (raw.methods ?? {}) as Record<string, unknown>
+  for (const key of Object.keys(rawMethods)) {
+    if (typeof rawMethods[key] === 'function') exposeMethod(key, rawMethods[key] as (...args: unknown[]) => unknown)
   }
 
   return { instance, wxml, js, context, config }
