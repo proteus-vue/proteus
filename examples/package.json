@@ -11,7 +11,15 @@
     "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin && tsx scripts/bundle-report.ts",
     "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
     "preview:web": "vite preview --mode web",
-    "router:check": "tsx ../../packages/cli/src/index.ts router:check pages"
+    "router:check": "tsx ../packages/cli/src/index.ts router:check pages",
+    "cli:check": "tsx ../packages/cli/src/index.ts check",
+    "cli:css-check": "tsx ../packages/cli/src/index.ts css:check .",
+    "cli:style-check": "tsx ../packages/cli/src/index.ts style:check .",
+    "cli:config-check": "tsx ../packages/cli/src/index.ts config:check proteus.config.ts",
+    "cli:build:web": "tsx ../packages/cli/src/index.ts build --target web",
+    "cli:build:mp": "tsx ../packages/cli/src/index.ts build --target skyline",
+    "cli:dev": "tsx ../packages/cli/src/index.ts dev --target web",
+    "cli:help": "tsx ../packages/cli/src/index.ts help"
   },
   "dependencies": {
     "@proteus-vue/router": "^0.2.0-beta.0",
