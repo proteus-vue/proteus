@@ -27,6 +27,7 @@ import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 import { parseCiArgs, planCiInit } from './ci'
 import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
+import { planMpE2E, waitForAutomatorPort } from './mp-e2e'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -248,10 +249,47 @@ async function main(): Promise<void> {
       break
     }
     case 'test': {
-      const { scope } = parseTestArgs(rest)
+      const { scope, ide, port } = parseTestArgs(rest)
+      if (scope === 'e2e:mp') {
+        // ★test-framework B5：IDE 路径可配置——探测 → 启动 → 端口就绪 → automator spec（05-e2e-mp-automator.md）
+        try {
+          const plan = planMpE2E({ port, ideCli: ide ?? undefined })
+          for (const s of plan.steps) console.log(s)
+          if (plan.needBuild) {
+            console.error('[proteus-test] 产物缺失：请先 npm run build:mp（产出 dist/mp-weixin）')
+            process.exitCode = 1
+            break
+          }
+          const { spawn, spawnSync } = await import('node:child_process')
+          // 启动 IDE（detached：automator 连接后 IDE 继续运行，不阻塞 CLI）
+          const ideProc = spawn(plan.ideCli, ['auto', '--project', plan.projectDir, '--auto-port', String(plan.port)], {
+            stdio: 'ignore',
+            detached: true,
+          })
+          ideProc.unref()
+          console.log(`[proteus-test] 等待 automator 端口 ${plan.port} 就绪（60s）...`)
+          const ready = await waitForAutomatorPort(plan.port)
+          if (!ready) {
+            console.error('[proteus-test] automator 端口未就绪：确认微信开发者工具已启动且开启服务端口（设置 → 安全设置 → 服务端口）')
+            process.exitCode = 1
+            break
+          }
+          const r = spawnSync('npx', ['vitest', 'run', 'tests/e2e-mp-smoke.test.ts'], {
+            stdio: 'inherit',
+            shell: process.platform === 'win32',
+            env: { ...process.env, PROTEUS_MP_E2E: '1', PROTEUS_AUTOMATOR_PORT: String(plan.port) },
+          })
+          if (r.status !== 0) process.exitCode = r.status ?? 1
+          console.log('[proteus-test] e2e:mp 完成——微信开发者工具仍在运行，可手动关闭')
+        } catch (e) {
+          console.error(`[proteus-test] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
       const plan = runTest({ scope })
       if (plan.note) console.log(`[proteus-test] ${plan.note}`)
-      if (!plan.command) break // e2e:mp 仅提示
+      if (!plan.command) break // 理论不可达（e2e:mp 已分支）
       try {
         const { spawnSync } = await import('node:child_process')
         const r = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })

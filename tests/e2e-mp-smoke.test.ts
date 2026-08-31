@@ -13,6 +13,8 @@ import { describe, it, expect } from 'vitest'
 // miniprogram-automator 未内置依赖（仅 IDE 环境按需安装）；动态 import 用变量名避免编译期模块解析
 // ★连接形状对齐 05 §用例（automator.connect({ wsEndpoint }) → mini.reLaunch → page.$ → disconnect）
 const AUTOMATOR_MODULE = 'miniprogram-automator'
+// ★B5：端口由 CLI 注入（proteus test e2e:mp --port <n>；缺省 9420）
+const AUTOMATOR_PORT = Number(process.env.PROTEUS_AUTOMATOR_PORT ?? '9420')
 
 type AutomatorConnect = (opts: { wsEndpoint: string }) => Promise<{
   reLaunch(path: string): Promise<{ waitFor(ms: number): Promise<void>; $(selector: string): Promise<{ text(): Promise<string> } | null> }>
@@ -24,7 +26,7 @@ const ENABLED = process.env.PROTEUS_MP_E2E === '1'
 describe.skipIf(!ENABLED)('小程序 E2E 冒烟（B5，automator，需 IDE）', () => {
   it('首页加载 → 最小闭环（连接 → 路由 → 断言 → 断开）', async () => {
     const mod = (await import(AUTOMATOR_MODULE)) as { default: { connect: AutomatorConnect } }
-    const mini = await mod.default.connect({ wsEndpoint: 'ws://localhost:9420' })
+    const mini = await mod.default.connect({ wsEndpoint: `ws://localhost:${AUTOMATOR_PORT}` })
     try {
       // 首页渲染（MP 产物：<view class="proteus-h1">Proteus</view>）
       const page = await mini.reLaunch('/pages/index/index')

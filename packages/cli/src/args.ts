@@ -411,5 +411,10 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
   proteus gen config [file]
       ★生成 app.config.ts 骨架（G-35 M5）：defineAppConfig 类型安全形态；缺省 app.config.ts
 
+  proteus test [unit|e2e:web|e2e:mp] [--ide <cli 路径>] [--port <n>]
+      ★测试入口（test-framework）：unit → L1-L3 + 编译快照；e2e:web → Playwright（先 build --target web）
+      e2e:mp → automator（B5）：IDE 路径可配置（PROTEUS_IDE_CLI 环境变量 / --ide 参数 / 平台默认探测）
+      + 自动启动微信开发者工具（auto --auto-port）→ 端口就绪 → 跑 e2e-mp-smoke（缺 IDE 报错含指引）
+
   proteus version / help
 `

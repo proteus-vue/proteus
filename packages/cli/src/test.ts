@@ -2,23 +2,43 @@
 // ★test-framework：proteus test —— 测试入口（README 快速开始）
 //   proteus test            → L1-L3（vitest run，含编译快照）
 //   proteus test e2e:web    → Playwright（需先 build:web）
-//   proteus test e2e:mp     → miniprogram-automator（需 IDE 运行）
+//   proteus test e2e:mp     → automator（★B5：IDE 路径可配置——PROTEUS_IDE_CLI 环境变量 / --ide 参数 / 平台默认探测）
 // runTest 纯函数返回 spawn 计划（复用 dev.ts 模式）
 export interface TestOptions {
   scope: 'unit' | 'e2e:web' | 'e2e:mp'
+  /** e2e:mp：IDE CLI 路径（--ide <path>；缺省走 PROTEUS_IDE_CLI → 平台默认路径探测） */
+  ide?: string
+  /** e2e:mp：automator 端口（--port <n>；缺省 9420） */
+  port?: number
 }
 
 const SCOPES = ['unit', 'e2e:web', 'e2e:mp']
 
-/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp]（缺省 unit） */
+/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp] [--ide <path>] [--port <n>]（缺省 unit） */
 export function parseTestArgs(argv: string[]): TestOptions {
-  const positional = argv.filter((a) => !a.startsWith('-'))
-  const unknown = argv.filter((a) => a.startsWith('-'))
-  if (unknown.length) throw new Error(`未知参数：${unknown.join(' ')}`)
+  let ide: string | undefined
+  let port: number | undefined
+  const positional: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--ide') {
+      const v = argv[++i]
+      if (!v) throw new Error('--ide 缺少值（如 --ide /path/to/cli）')
+      ide = v
+    } else if (a === '--port') {
+      const v = argv[++i]
+      if (!v || !/^\d+$/.test(v)) throw new Error(`--port 非法：${v}（需数字）`)
+      port = Number(v)
+    } else if (a.startsWith('--')) {
+      throw new Error(`未知参数：${a}`)
+    } else {
+      positional.push(a)
+    }
+  }
   if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
   const scope = (positional[0] ?? 'unit') as TestOptions['scope']
   if (SCOPES.indexOf(scope) < 0) throw new Error(`未知 scope：${scope}（允许：${SCOPES.join('/')}）`)
-  return { scope }
+  return { scope, ide, port }
 }
 
 /** 测试执行计划（纯函数）：unit → vitest run；e2e:web → 构建后 Playwright；e2e:mp → 需 IDE */
@@ -35,6 +55,11 @@ export function runTest(opts: TestOptions): { command: string; args: string[]; n
         note: '需先执行 proteus build --target web（E2E 依赖真实构建产物）',
       }
     case 'e2e:mp':
-      return { command: '', args: [], note: 'e2e:mp 需微信开发者工具运行（miniprogram-automator），CLI 仅提示' }
+      // ★B5：完整链路在 index.ts 执行（探测 IDE → 启动 → 端口就绪 → automator spec）；此处仅提示
+      return {
+        command: '',
+        args: [],
+        note: 'e2e:mp 需微信开发者工具（GUI）：PROTEUS_IDE_CLI 环境变量 / --ide 参数 / 平台默认路径探测；先 npm run build:mp 产出 dist/mp-weixin',
+      }
   }
 }
