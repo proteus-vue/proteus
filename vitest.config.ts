@@ -31,7 +31,8 @@ export default defineConfig({
       { find: '@proteus-vue/capabilities', replacement: fileURLToPath(new URL('./packages/capabilities/src/index.ts', import.meta.url)) },
       // i18n-plan B1：@proteus-vue/i18n 包（tests/i18n.test.ts 直接引用）
       { find: '@proteus-vue/i18n', replacement: fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)) },
-      // css-compat G-21 B1：@proteus-vue/css-compat 包（tests/css-compat.test.ts 直接引用）
+      // css-compat G-21：@proteus-vue/css-compat 包（★B2 数据层子路径在父路径前）
+      { find: '@proteus-vue/css-compat/layout-semantics', replacement: fileURLToPath(new URL('./packages/css-compat/src/layout-semantics/index.ts', import.meta.url)) },
       { find: '@proteus-vue/css-compat', replacement: fileURLToPath(new URL('./packages/css-compat/src/index.ts', import.meta.url)) },
       // app-config G-35 M1：@proteus-vue/app-config 包（tests/app-config.test.ts 直接引用）
       { find: '@proteus-vue/app-config', replacement: fileURLToPath(new URL('./packages/app-config/src/index.ts', import.meta.url)) },

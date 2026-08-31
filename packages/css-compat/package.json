@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./layout-semantics": {
+      "types": "./dist/layout-semantics/index.d.ts",
+      "import": "./dist/layout-semantics/index.js",
+      "default": "./dist/layout-semantics/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,7 +25,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:postcss --external:@vue/compiler-sfc"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/layout-semantics/index.ts --bundle --format=esm --platform=node --outdir=dist --external:postcss --external:@vue/compiler-sfc"
   },
   "peerDependencies": {
     "@vue/compiler-sfc": "^3.4"
