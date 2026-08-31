@@ -37,14 +37,15 @@ describe('planMpE2E（执行计划）', () => {
     expect(plan.ideCli).toBe('/real/cli')
     expect(plan.port).toBe(9527)
     expect(plan.needBuild).toBe(true)
-    expect(plan.steps.some((s) => s.includes('auto --project'))).toBe(true)
     expect(plan.steps.some((s) => s.includes('9527'))).toBe(true)
+    expect(plan.steps.some((s) => s.includes('launch'))).toBe(true)
   })
 
-  it('产物存在 → needBuild false；步骤含端口就绪与 vitest 执行说明', () => {
+  it('产物存在 → needBuild false；步骤说明 automator launch 链路', () => {
     const plan = planMpE2E({ ideCli: '/real/cli', projectDir: '/p/dist/mp-weixin', port: 9420, exists: () => true })
     expect(plan.needBuild).toBe(false)
-    expect(plan.steps.some((s) => s.includes('PROTEUS_MP_E2E=1'))).toBe(true)
+    expect(plan.steps.some((s) => s.includes('trust-project'))).toBe(true)
+    expect(plan.steps.some((s) => s.includes('reLaunch'))).toBe(true)
   })
 })
 

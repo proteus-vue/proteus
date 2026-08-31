@@ -487,6 +487,23 @@ function writeComponentJsons(): void {
   if (count) console.log(`[gen-routes] 已生成 ${count} 个组件 component.json（component 声明 + usingComponents 嵌套）`)
 }
 
+/**
+ * 生成 dist/mp-weixin/project.config.json（★小程序工程配置：产物可导入微信开发者工具 + automator 前置）
+ * appid 来自 proteus.config.ts（占位 wx0000000000 需替换为真实 AppID 才能在真机/automator 使用）
+ */
+function writeProjectConfig(): void {
+  const projectName = path.basename(ROOT).replace(/[^\w.-]/g, '-')
+  const projectConfig = {
+    compileType: 'miniprogram',
+    appid: config.appid,
+    projectname: projectName,
+    setting: { minifyWXML: true, urlCheck: false },
+  }
+  fs.mkdirSync(OUT_DIR, { recursive: true })
+  fs.writeFileSync(path.join(OUT_DIR, 'project.config.json'), JSON.stringify(projectConfig, null, 2) + '\n')
+  console.log(`[gen-routes] 已生成 dist/mp-weixin/project.config.json（appid=${config.appid}，projectname=${projectName}）`)
+}
+
   // ---- 主流程 ----
   fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
   const pages = scanPages()
@@ -496,5 +513,6 @@ function writeComponentJsons(): void {
   writeAppJson(pages, routes)
   writePageJsons(pages)
   writeComponentJsons()
+  writeProjectConfig()
   console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)
 }

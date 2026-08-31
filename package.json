@@ -48,6 +48,7 @@
     "esbuild": "^0.28.2",
     "jsdom": "^27.0.1",
     "miniprogram-api-typings": "^5.2.3",
+    "miniprogram-automator": "^0.12.1",
     "playwright": "^1.48.2",
     "sass": "^1.103.1",
     "tsx": "^4.0.0",

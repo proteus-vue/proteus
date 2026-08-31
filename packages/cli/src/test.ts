@@ -6,6 +6,8 @@
 // runTest 纯函数返回 spawn 计划（复用 dev.ts 模式）
 export interface TestOptions {
   scope: 'unit' | 'e2e:web' | 'e2e:mp'
+  /** e2e:mp：项目根目录（产物 dist/mp-weixin 相对该目录；缺省当前目录） */
+  root?: string
   /** e2e:mp：IDE CLI 路径（--ide <path>；缺省走 PROTEUS_IDE_CLI → 平台默认路径探测） */
   ide?: string
   /** e2e:mp：automator 端口（--port <n>；缺省 9420） */
@@ -14,7 +16,7 @@ export interface TestOptions {
 
 const SCOPES = ['unit', 'e2e:web', 'e2e:mp']
 
-/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp] [--ide <path>] [--port <n>]（缺省 unit） */
+/** 解析 test 参数：proteus test [unit|e2e:web|e2e:mp [root]] [--ide <path>] [--port <n>]（缺省 unit） */
 export function parseTestArgs(argv: string[]): TestOptions {
   let ide: string | undefined
   let port: number | undefined
@@ -35,10 +37,13 @@ export function parseTestArgs(argv: string[]): TestOptions {
       positional.push(a)
     }
   }
-  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  if (positional.length > 2) throw new Error(`多余参数：${positional.slice(2).join(' ')}`)
   const scope = (positional[0] ?? 'unit') as TestOptions['scope']
   if (SCOPES.indexOf(scope) < 0) throw new Error(`未知 scope：${scope}（允许：${SCOPES.join('/')}）`)
-  return { scope, ide, port }
+  // ★B5：e2e:mp 允许第二个位置参数 = 项目根目录（产物 dist/mp-weixin 相对该目录）；其余 scope 多余参数报错
+  if (positional.length === 2 && scope !== 'e2e:mp') throw new Error(`多余参数：${positional[1]}（仅 e2e:mp 支持项目根目录）`)
+  const root = scope === 'e2e:mp' ? positional[1] : undefined
+  return { scope, root, ide, port }
 }
 
 /** 测试执行计划（纯函数）：unit → vitest run；e2e:web → 构建后 Playwright；e2e:mp → 需 IDE */

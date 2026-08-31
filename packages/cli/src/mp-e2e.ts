@@ -78,8 +78,8 @@ export function planMpE2E(opts: { root?: string; port?: number; ideCli?: string 
   const steps = [
     `[proteus] MP E2E：IDE CLI ${ideCli}（port ${port}）`,
     `[proteus] 项目产物：${projectDir}${needBuild ? '（⚠ 缺失，需先 npm run build:mp）' : ''}`,
-    `[proteus] 启动 IDE：${ideCli} auto --project ${projectDir} --auto-port ${port}`,
-    '[proteus] 等待 automator 端口就绪 → vitest 跑 tests/e2e-mp-smoke.test.ts（PROTEUS_MP_E2E=1）',
+    '[proteus] automator launch：spawn IDE（auto --trust-project）+ 轮询连接 + checkVersion（官方 SDK 路径）',
+    '[proteus] spec：reLaunch 首页 → data 断言 → disconnect（铁律：用例独立运行）',
   ]
   return { ideCli, projectDir, port, needBuild, steps }
 }

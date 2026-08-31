@@ -44,6 +44,12 @@ describe('runGenRoutes：路由表生成全链路', () => {
 
     runGenRoutes({ config: makeConfig(), root })
 
+    // ★B5：project.config.json（小程序工程配置，automator/IDE 前置）
+    const projectConfig = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/project.config.json'), 'utf-8'))
+    expect(projectConfig.appid).toBe('wx0000000000')
+    expect(projectConfig.compileType).toBe('miniprogram')
+    expect(typeof projectConfig.projectname).toBe('string')
+
     // auto-routes：路由记录 + RouteParamsByName 模块扩充
     const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
     expect(auto).toContain('name: "index"')

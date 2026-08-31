@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest'
 import { parseTestArgs, runTest } from '../packages/cli/src/test'
 
 describe('proteus test（test-framework 入口）', () => {
-  it('parseTestArgs：缺省 unit / 显式 scope / 非法报错', () => {
+  it('parseTestArgs：缺省 unit / 显式 scope / e2e:mp root / 非法报错', () => {
     expect(parseTestArgs([])).toEqual({ scope: 'unit' })
     expect(parseTestArgs(['e2e:web'])).toEqual({ scope: 'e2e:web' })
     expect(parseTestArgs(['e2e:mp'])).toEqual({ scope: 'e2e:mp' })
+    // ★B5：e2e:mp 第二个位置参数 = 项目根目录
+    expect(parseTestArgs(['e2e:mp', 'examples'])).toEqual({ scope: 'e2e:mp', root: 'examples' })
     expect(() => parseTestArgs(['e2e:wasm'])).toThrow(/未知 scope/)
     expect(() => parseTestArgs(['unit', 'e2e:web'])).toThrow(/多余参数/)
+    expect(() => parseTestArgs(['e2e:mp', 'a', 'b'])).toThrow(/多余参数/)
   })
 
   it('runTest：unit → vitest run（L1-L3 + 快照，排除 e2e 通配）', () => {
