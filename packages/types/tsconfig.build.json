@@ -11,6 +11,8 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "esModuleInterop": true,
+    // ★miniprogram-api-typings 不列入 types 数组：由 mp/official-typings.ts 内 /// <reference> 引入，
+    //   这样产物 .d.ts 会保留该引用（进 types 数组会被 tsc 消费并剥离），消费方 import 即获得官方命名空间
     "types": ["node"]
   },
   "include": ["src"]

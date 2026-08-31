@@ -42,7 +42,18 @@ export type {
   NavigateOptions,
 } from './router-types'
 export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from './api-types'
+
+// ============ B9 跨端 API 统一契约（platform-api.ts） ============
+export type { PlatformAPI, StorageAPI, RouterAPI, UIAPI } from './platform-api'
+// ★运行时实现归 @proteus-vue/api（createApi + 三端 adapter）；本文件仅类型契约（规划 M9）
 export type { ProteusConfig } from './config'
+
+// ============ B8 小程序端类型（mp/ 子目录：组件 schema + 版本对齐） ============
+export type { MpComponentProp, MpComponentSchema, MpComponentRegistry } from './mp/component-schema'
+export { mpComponentRegistry, getComponentSchema, registerComponentSchema } from './mp/component-schema'
+export type { MpSdkVersion } from './mp/sdk-version'
+export { DEFAULT_TYPINGS_VERSION, MP_SDK_VERSION_MAP, resolveTypingsVersion, validateMpSdkVersion } from './mp/sdk-version'
+// ★官方类型桥（WechatMiniprogram 命名空间）为 opt-in：单独经 '@proteus-vue/types/mp/official-typings' 引用
 
 // ============ 品牌 / 迁移 / Schema（B6/B3 既有） ============
 export type { Brand } from './brand'

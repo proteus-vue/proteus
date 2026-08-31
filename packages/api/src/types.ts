@@ -5,6 +5,8 @@ import type { RequestConfig, RequestResponse, IRequestAdapter } from '@proteus-v
 import type { AuthManager } from './auth'
 
 export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from '@proteus-vue/types/api-types'
+// ★B9：跨端统一契约（类型层在 @proteus-vue/types/platform-api；本包为运行时实现方，re-export 供消费方一处取用）
+export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from '@proteus-vue/types/platform-api'
 
 /** ★透明化错误模型（含状态码 + 配置可定位）——runtime class，留实现包 */
 export class ApiError extends Error {

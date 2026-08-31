@@ -12,6 +12,22 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./mp": {
+      "types": "./dist/mp/index.d.ts",
+      "import": "./dist/mp/index.js"
+    },
+    "./mp/component-schema": {
+      "types": "./dist/mp/component-schema.d.ts",
+      "import": "./dist/mp/component-schema.js"
+    },
+    "./mp/sdk-version": {
+      "types": "./dist/mp/sdk-version.d.ts",
+      "import": "./dist/mp/sdk-version.js"
+    },
+    "./mp/official-typings": {
+      "types": "./dist/mp/official-typings.d.ts",
+      "import": "./dist/mp/official-typings.js"
+    },
     "./index-shared": {
       "types": "./dist/index-shared.d.ts",
       "import": "./dist/index-shared.js"
@@ -32,6 +48,10 @@
       "types": "./dist/api-types.d.ts",
       "import": "./dist/api-types.js"
     },
+    "./platform-api": {
+      "types": "./dist/platform-api.d.ts",
+      "import": "./dist/platform-api.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
@@ -48,9 +68,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/config.ts src/config-schema.ts --bundle --format=esm --platform=node --outdir=dist"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/config.ts src/config-schema.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "miniprogram-api-typings": "^5.2.3"
   }
 }
