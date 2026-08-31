@@ -63,6 +63,23 @@ describe('validateConfig（types-plan B5）', () => {
     const r = validateConfig('config')
     if (!r.ok) expect(r.errors[0].code).toBe('CONFIG_INVALID_ROOT')
   })
+
+  it('router 下声明 pinia 语义键 → CONFIG_LAYER_VIOLATION（B5 §3 跨层检测集成）', () => {
+    const r = validateConfig({ ...VALID, router: { stores: { user: {} } } })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      const e = r.errors.find((x) => x.code === 'CONFIG_LAYER_VIOLATION')
+      expect(e?.path).toBe('router.stores')
+    }
+  })
+
+  it('未知字段只报 CONFIG_UNKNOWN_FIELD（不重复报漏标）', () => {
+    const r = validateConfig({ ...VALID, typoField: 1 })
+    if (!r.ok) {
+      expect(r.errors.filter((e) => e.path === 'typoField')).toHaveLength(1)
+      expect(r.errors.find((e) => e.path === 'typoField')?.code).toBe('CONFIG_UNKNOWN_FIELD')
+    }
+  })
 })
 
 describe('config:check CLI（TS 配置加载 + 校验报告）', () => {

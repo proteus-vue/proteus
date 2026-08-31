@@ -69,3 +69,7 @@ export { CONFIG_VERSION, configMigrations, migrateConfig, configNeedsMigration }
 export type { Migration } from './migration'
 export { proteusConfigSchema, proteusConfigSchemaJson, extendConfigSchema, getConfigSchema } from './config-schema'
 export type { ProteusConfigSchema } from './config-schema'
+
+// ============ config-layers（B2 §4 字段归属 + B5 §3 跨层检测） ============
+export type { ConfigLayer, CrossLayerPattern, ConfigLayerViolation } from './config-layers'
+export { CONFIG_FIELD_LAYERS, CROSS_LAYER_PATTERNS, checkConfigLayerViolations, getFieldLayer } from './config-layers'

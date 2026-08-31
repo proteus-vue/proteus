@@ -4,6 +4,8 @@
 // 错误码：CONFIG_INVALID_ROOT / CONFIG_MISSING_REQUIRED / CONFIG_INVALID_TYPE / CONFIG_INVALID_ENUM / CONFIG_UNKNOWN_FIELD
 // ★source map 行列定位为后续批次（需配置源文件解析；当前 path 已可定位）
 
+import { checkConfigLayerViolations } from '@proteus-vue/types'
+
 export interface ConfigValidationError {
   code: string
   path: string
@@ -82,6 +84,14 @@ export function validateConfig(config: unknown): ConfigValidationResult {
     if (!KNOWN_FIELDS.has(k)) {
       errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: k, message: `未知字段 "${k}"（可能拼写错误；合法字段：${[...KNOWN_FIELDS].join(' / ')}）` })
     }
+  }
+
+  // ★B5 §3：跨层隐式依赖检测（CONFIG_LAYER_VIOLATION：字段归属表漏标 / 跨层反模式）
+  // 未知字段的「未标注归属」已由 CONFIG_UNKNOWN_FIELD 报，此处跳过避免重复
+  for (const e of checkConfigLayerViolations(cfg)) {
+    const topField = e.path.split('.')[0]
+    if (!KNOWN_FIELDS.has(topField)) continue
+    errors.push(e)
   }
 
   return errors.length ? { ok: false, errors } : { ok: true }
