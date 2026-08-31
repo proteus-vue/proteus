@@ -49,8 +49,15 @@ export interface WxApi {
     confirmColor?: string
     editable?: boolean
     placeholderText?: string
+    /** ★微信语义：回调式结果（PlatformAPI wx 分支靠 success 转发 Promise） */
+    success?: (res: { confirm: boolean; cancel: boolean; errMsg: string; content?: string }) => void
+    fail?: (err: unknown) => void
   }): Promise<{ confirm: boolean; cancel: boolean; errMsg: string; content?: string }>
-  showActionSheet(opts: { itemList: string[] }): Promise<{ tapIndex: number }>
+  showActionSheet(opts: {
+    itemList: string[]
+    success?: (res: { tapIndex: number; errMsg: string }) => void
+    fail?: (err: unknown) => void
+  }): Promise<{ tapIndex: number; errMsg: string }>
 
   // ===== 网络（partial：fetch 封装）=====
   request(opts: { url: string; method?: string; data?: unknown; header?: Record<string, string> }): Promise<{ statusCode: number; data: unknown }>
@@ -198,8 +205,15 @@ export const wx: WxApi = {
         box.remove()
         // ★返回对齐小程序：{ confirm, cancel, errMsg }（confirm/cancel 互补）
         const base = { confirm, cancel: !confirm, errMsg: 'showModal:ok' }
-        if (editable) resolve({ ...base, content: input?.value ?? '' })
-        else resolve(base)
+        if (editable) {
+          const withContent = { ...base, content: input?.value ?? '' }
+          resolve(withContent)
+          // ★微信语义：回调式 success/fail（PlatformAPI 的 wx 分支靠 success 转发 resolve）
+          if (opts?.success) opts.success(withContent)
+        } else {
+          resolve(base)
+          if (opts?.success) opts.success(base)
+        }
       }
       box.querySelector('.pwu-modal-btn--cancel')?.addEventListener('click', () => done(false))
       box.querySelector('.pwu-modal-btn--confirm')?.addEventListener('click', () => done(true))
@@ -221,7 +235,10 @@ export const wx: WxApi = {
       const done = (tapIndex: number): void => {
         mask.remove()
         sheet.remove()
-        resolve({ tapIndex })
+        // ★微信语义：回调式 success/fail（PlatformAPI 的 wx 分支靠 success 转发 resolve）
+        const result = { tapIndex, errMsg: 'showActionSheet:ok' }
+        resolve(result)
+        if (opts?.success) opts.success(result)
       }
       sheet.querySelectorAll('.pwu-sheet-item').forEach((b) => {
         b.addEventListener('click', () => done(Number((b as HTMLElement).dataset.i)))

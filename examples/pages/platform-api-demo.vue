@@ -20,11 +20,11 @@
     <view class="pad-box">
       <text class="pad-label">② storage（wx.setStorageSync → platformAPI.storage，JSON 往返）</text>
       <view class="pad-row">
-        <button class="pad-btn" @click="onStorageSet">写入</button>
-        <button class="pad-btn" @click="onStorageGet">读取</button>
-        <button class="pad-btn" @click="onStorageRemove">删除</button>
+        <button class="pad-btn" data-testid="pad-storage-set" @click="onStorageSet">写入</button>
+        <button class="pad-btn" data-testid="pad-storage-get" @click="onStorageGet">读取</button>
+        <button class="pad-btn" data-testid="pad-storage-remove" @click="onStorageRemove">删除</button>
       </view>
-      <text class="pad-log">{{ storageLog }}</text>
+      <text class="pad-log" data-testid="pad-storage-log">{{ storageLog }}</text>
     </view>
 
     <view class="pad-box">
@@ -38,13 +38,12 @@
     <view class="pad-box">
       <text class="pad-label">④ ui（wx.showToast / showModal / showActionSheet → platformAPI.ui）</text>
       <view class="pad-row">
-        <button class="pad-btn" @click="onToast">showToast</button>
-        <button class="pad-btn" @click="onModal">showModal</button>
-        <button class="pad-btn" @click="onActionSheet">showActionSheet</button>
-        <button class="pad-btn" @click="onLoading">showLoading（2s 自动关）</button>
+        <button class="pad-btn" data-testid="pad-modal" @click="onModal">showModal</button>
+        <button class="pad-btn" data-testid="pad-action-sheet" @click="onActionSheet">showActionSheet</button>
+        <button class="pad-btn" data-testid="pad-loading" @click="onLoading">showLoading（2s 自动关）</button>
         <button class="pad-btn" @click="onHideLoading">hideLoading</button>
       </view>
-      <text class="pad-log">{{ uiLog }}</text>
+      <text class="pad-log" data-testid="pad-ui-log">{{ uiLog }}</text>
     </view>
 
     <view class="pad-box">

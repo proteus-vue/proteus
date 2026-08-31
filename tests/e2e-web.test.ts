@@ -7,15 +7,18 @@ import { preview } from 'vite'
 import type { PreviewServer } from 'vite'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
+import path from 'node:path'
 
 const BASE = 'http://localhost:4174'
+// ★产物在 examples/dist/web（vite.config outDir = dist/{platform}）；preview 须 root=examples（默认 cwd 根会 404）
+const EXAMPLES_ROOT = path.resolve(__dirname, '../examples')
 
 let server: PreviewServer
 let browser: Browser
 let page: Page
 
 beforeAll(async () => {
-  server = await preview({ mode: 'web', preview: { port: 4174 } })
+  server = await preview({ root: EXAMPLES_ROOT, mode: 'web', preview: { port: 4174 } })
   browser = await chromium.launch()
   page = await browser.newPage()
 }, 120_000)
