@@ -333,10 +333,25 @@ export function parseMigrateTypesArgs(argv: string[]): { file: string; dryRun: b
 export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
 用法：
-  proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>]
+  proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--target <web|skyline|all>]
       扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>
       --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）
       --rules    JSON 规则覆盖文件（disabled / mapping / customTags）
+      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译
+
+  proteus dev [--target <web|skyline>]
+      开发服务器（G-33 M1）：web → vite --mode web；skyline → dev-mp watch 构建（app 端待 M3 原生同步）
+
+  proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]
+      ★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合
+      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）
+
+  proteus css:check [dir|file] [--no-strict] [--fix] [--report <path>]
+      ★CSS 跨端兼容校验（G-21）：CSS001-012 + 预算门禁（字节/选择器/语义占比/禁止项）
+      --no-strict  违规降级 warn；--report 落盘 css-compat-report.json（check-css-report.mjs 消费）
+
+  proteus style:check [dir|file] [--platform <web|skyline|ios|android|harmony>]
+      ★样式运行时安全（G-31）：模板 :style 白名单 STS001-006 + 静态推导覆盖率（常量折叠）
 
   proteus explain <vue 文件 | 规则 ID>
       vue 文件 → 决策 trace（该文件实际触发的全部转换规则）
@@ -344,6 +359,12 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
   proteus rules [template | script | style | validate]
       列出全部编译规则（AI 说明书目录）
+
+  proteus config:check <proteus.config.ts>
+      ★配置校验（types-plus B2/B5）：必填字段 + 跨层依赖（CONFIG_LAYER_VIOLATION）+ 版本迁移提示
+
+  proteus i18n:check [root] [--catalog <path>]
+      ★i18n 用法检查（i18n-plan B1）：硬编码文案检测 + catalog 键对照
 
   proteus router:check [dir]
       校验 <route> 块与集中式 meta（来源登记 + 父路由推导依据）
@@ -369,6 +390,15 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
 
   proteus capabilities:check [dir]
       ★平台原生模块规范静态检查（B5 §6 禁止清单：业务目录禁 wx.*/window.*，平台文件防 API 泄漏）
+
+  proteus components:audit [dir]
+      ★组件审计：p-* 组件注册表 vs 实际使用（未登记/未使用/标签漂移）
+
+  proteus generate types [--out <path>] [--check]
+      ★生成全局类型产物（types-plan B3）：JSON Schema + 全局 d.ts（--check 校验漂移）
+
+  proteus migrate types <file>
+      ★迁移助手：旧类型写法 → 新收口类型（types-plan 10 类型收口）
 
   proteus version / help
 `
