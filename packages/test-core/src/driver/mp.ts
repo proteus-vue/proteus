@@ -34,7 +34,8 @@ class MpElement implements TestElement {
       if (Date.now() >= deadline) {
         throw new Error(`[test-core/driver] MP 元素未找到：${this.selector}（${timeout}ms）——用 querySelectorAll 核对选择器或等待页面渲染`)
       }
-      await this.mini.evaluate(`() => new Promise((r) => setTimeout(r, 200))`)
+      // ★evaluate 必须传函数（automator 内部 t.toString() 序列化；传字符串会直接原样下发导致运行时无响应挂起）
+      await this.mini.evaluate(() => new Promise((r) => setTimeout(r, 200)))
     }
   }
 
@@ -74,7 +75,7 @@ class MpElement implements TestElement {
         const el = await page.$?.(this.selector)
         if (!el) return
         if (Date.now() >= deadline) throw new Error(`[test-core/driver] MP 元素未消失：${this.selector}（${timeout}ms）`)
-        await this.mini.evaluate(`() => new Promise((r) => setTimeout(r, 200))`)
+        await this.mini.evaluate(() => new Promise((r) => setTimeout(r, 200)))
       }
     }
     // attached/visible：轮询解析成功
@@ -103,7 +104,10 @@ export function createMpDriver(mini: AutomatorMiniLike): TestDriver {
     },
     async back(): Promise<void> {
       // automator 无 miniProgram.navigateBack → 全局 wx.navigateBack 降级（栈空时静默失败）
-      await mini.evaluate(`() => wx.navigateBack({})`)
+      // ★globalThis 访问（test-core build 无 miniprogram 类型；小程序运行时 evaluate 上下文 globalThis.wx 存在）
+      await mini.evaluate(
+        () => (globalThis as unknown as { wx: { navigateBack(opts: unknown): void } }).wx.navigateBack({}),
+      )
     },
     async currentPage(): Promise<PageSnapshot> {
       const cur = await mini.currentPage()
@@ -124,8 +128,8 @@ export function createMpDriver(mini: AutomatorMiniLike): TestDriver {
       return result?.path ?? path ?? ''
     },
     async waitFor(ms: number): Promise<void> {
-      // automator 无 mini 级 waitFor → evaluate 延时
-      await mini.evaluate(`(ms) => new Promise((r) => setTimeout(r, ms))`, ms)
+      // automator 无 mini 级 waitFor → evaluate 延时（★必须传函数，见 resolve 注释）
+      await mini.evaluate((delay) => new Promise((r) => setTimeout(r, delay)), ms)
     },
   }
 }

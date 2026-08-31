@@ -132,7 +132,8 @@ export interface AutomatorMiniLike {
   reLaunch(url: string): Promise<{ path: string; waitFor?(ms: number): Promise<void> }>
   currentPage(): Promise<{ path: string; $?(selector: string): Promise<AutomatorElementLike | null> }>
   systemInfo(): Promise<Record<string, unknown>>
-  evaluate(fn: string | ((...args: unknown[]) => unknown), ...args: unknown[]): Promise<unknown>
+  /** ★fn 参数用 any[]（automator evaluate 传函数序列化；unknown[] 会导致带参函数逆变报错） */
+  evaluate(fn: string | ((...args: any[]) => unknown), ...args: unknown[]): Promise<unknown>
   screenshot(options?: { path?: string }): Promise<{ path: string }>
   disconnect(): void
   /** 复用 connect 模式（CLI 装配：PROTEUS_MP_E2E_CONNECT）——无 launch，close 语义一致 */

@@ -63,20 +63,23 @@ automator **不能 headless**，必须启动微信开发者工具。
 
 | 项 | 结论 |
 |---|---|
-| automation 端口 | `--auto-port 9420` 仍有效（automation WS 监听该端口；IDE server 端口是另一个，动态） |
+| automation 端口 | `--auto-port 9420` 仍有效（automation WS 监听该端口；★仅 IPv6 监听（lsof `*:9420`）→ 框架端口探测已双栈（IPv4+IPv6，2026-08-31 真机踩坑））；IDE server 端口是另一个，动态 |
 | `Tool.getInfo.SDKVersion` | 返回（项目就绪后；未就绪时为空 → automator checkVersion 崩 → 框架 patch 容错） |
-| `Page.getData` | **受模拟器页面激活态影响**（GUI 未激活页面时报 not on top）→ 冒烟断言改用 connect/reLaunch/currentPage/systemInfo（全链路最稳通道） |
+| `Page.getData` / `page.$` | **受模拟器页面激活态影响**（GUI 未激活页面时报 not on top / `$` 查询挂起无响应）→ 断言改用 connect/reLaunch/currentPage/systemInfo/evaluate（全链路最稳通道） |
+| `mini.screenshot` | **当前 IDE 挂起**（协议/激活态限制，B5 未验证能力）→ TestDriver 截图断言 MP 端跳过（web 正常） |
+| `mini.evaluate` | 正常（★必须传**函数**——automator 内部 `fn.toString()` 序列化；传字符串原样下发导致运行时无响应挂起；带参函数正常） |
 | 端口复用 | 已运行 IDE 的 automation 端口被占 → CLI 自动转 connect 复用（不重复 launch） |
 
-**框架已内化**（`proteus test e2e:mp`）：
+**framework 内化**（`proteus test e2e:mp`）：
 - IDE 路径可配置（PROTEUS_IDE_CLI / --ide / 平台默认探测）
 - 环境体检（appid 有效性 / 产物 / 端口占用一次性报告，占位 appid 直接 error）
 - 产物独立副本（.proteus/e2e-mp，避 IDE 路径缓存 + 不污染 dist）
 - automator SDKVersion 幂等补丁（scripts/patch-automator.mjs，CLI 自动执行；★单行文件禁用 // 注释 MARK——会吞整行代码）
 - 失败模式诊断（连接拒绝 → 提示 GUI「设置 → 安全设置 → 服务端口」）
-- **端口复用**（automation 端口被占 → connect 模式）
+- **端口复用**（automation 端口被占 → connect 模式）+ **双栈端口探测**（IPv4/IPv6）
+- **TestDriver MP 适配**（决策 #205）：稳通道（reLaunch/currentPage/systemInfo/evaluate）已验证跑通；元素层（$）与截图标注激活态/协议边界（web 端完整可用）
 
-**examples 实测**：`proteus test e2e:mp examples --port 9420 --ide <cli>` 全链路 EXIT=0（体检 → 副本 → 补丁 → connect → reLaunch 首页 → currentPage + systemInfo 断言）。
+**examples 实测**：`proteus test e2e:mp examples --port 9420 --ide <cli>` 全链路 EXIT=0（体检 → 副本 → 补丁 → connect → TestDriver runSharedSmoke 稳通道 + evaluate 页面 data 断言）。
 
 ## 统一 driver 适配（决策 #205）
 

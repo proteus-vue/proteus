@@ -56,6 +56,7 @@ function fakeMini() {
     reLaunch: ReturnType<typeof vi.fn>
     currentPage: ReturnType<typeof vi.fn>
     systemInfo: ReturnType<typeof vi.fn>
+    evaluate: ReturnType<typeof vi.fn>
     disconnect: ReturnType<typeof vi.fn>
   }
   return { mini, element }
@@ -82,7 +83,9 @@ describe('createDriver（统一入口：platform + 注入句柄）', () => {
     await driver.back()
     expect(mini.reLaunch).toHaveBeenNthCalledWith(1, '/pages/home')
     expect(mini.reLaunch).toHaveBeenNthCalledWith(2, '/pages/index')
-    expect(mini.evaluate).toHaveBeenCalledWith(expect.stringContaining('wx.navigateBack'))
+    // ★evaluate 传函数（automator 序列化）——断言函数体含 wx.navigateBack
+    const backFn = mini.evaluate.mock.calls[0][0] as (() => unknown)
+    expect(backFn.toString()).toContain('wx.navigateBack')
   })
 
   it('currentPage/systemInfo：两端统一 PageSnapshot/SystemSnapshot 形状', async () => {
@@ -142,7 +145,9 @@ describe('createDriver（统一入口：platform + 注入句柄）', () => {
     await mp.evaluate('() => wx.getSystemInfoSync()')
     expect(await mp.screenshot('/tmp/mp.png')).toBe('/tmp/mp.png')
     await mp.waitFor(100)
-    expect(mini.evaluate).toHaveBeenCalledWith(expect.stringContaining('setTimeout'), 100)
+    // ★evaluate 传函数 + 参数（automator 序列化）——断言第二参数透传 100
+    expect(mini.evaluate).toHaveBeenCalledWith(expect.any(Function), 100)
+    expect(mini.screenshot).toHaveBeenCalledWith({ path: '/tmp/mp.png' })
   })
 })
 
