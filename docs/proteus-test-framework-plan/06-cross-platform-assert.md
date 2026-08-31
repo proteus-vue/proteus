@@ -32,11 +32,57 @@ expect(wrapper.find('div.btn').exists()).toBe(true)   // 小程序是 view
 
 ```ts
 // test-core/events.ts
+import { tap } from '@proteus-vue/test-core'
+
 export async function tap(el: WebEl | MpEl) {
   if ('trigger' in el) el.trigger('click')      // Web
   else await el.tap()                            // 小程序
 }
 ```
+
+## 统一状态/文本读取（stateOf / textOf，决策 #204）
+
+跨端用例的状态断言只写一份（分层断言表「状态完全共用」的落地）：
+
+```ts
+import { stateOf, textOf } from '@proteus-vue/test-core'
+
+// ★状态：Web 读 vm.$.setupState（公开代理无 own keys，走 has/get trap）+ $data；MP 读 data 快照
+// ★文本：Web wrapper.text()（渲染文本）；MP wxml 规范化（结构文本，语义近似）
+expect(stateOf(webHost).count).toBe(1) // Web：vm.$.setupState.count（ref 已解包）
+expect(stateOf(mpHost).count).toBe(1)  // MP：data.count
+```
+
+★Web 注意：脚本绑定在 `vm.$.setupState`（`Object.keys(vm)` 为空）；options API 数据在 `$data`；内部属性（`$`/`__` 前缀）自动排除。
+
+## 统一测试 API（E2E 层）TestDriver（决策 #205）
+
+一套能力接口多端自动化（能力域对照 wechatide-skill automator「意图→工具」表）：
+
+```ts
+import { createDriver } from '@proteus-vue/test-core/driver'
+import type { TestDriver } from '@proteus-vue/test-core/driver'
+
+async function runShared(driver: TestDriver): Promise<void> {
+  await driver.reLaunch('/pages/index')
+  const btn = driver.element('button')
+  await btn.waitFor()
+  await btn.tap()
+  expect((await driver.currentPage()).path).toContain('pages/index')
+  expect((await driver.systemInfo()).platform).toBeTruthy()
+  await driver.screenshot()
+}
+
+const web = createDriver({ platform: 'web', page })   // playwright Page
+const mp = createDriver({ platform: 'mp', mini })     // automator miniProgram
+await runShared(web)
+await runShared(mp)
+```
+
+- 能力接口：`navigate/reLaunch/back` · `currentPage/systemInfo` · `element(tap/input/longPress/text/value/attribute/waitFor/exists)` · `evaluate` · `screenshot` · `waitFor` · `close`
+- 注入句柄 + 结构类型（PlaywrightPageLike/AutomatorMiniLike）——test-core 零硬依赖，句柄由用户或 CLI（proteus test e2e:mp）装配
+- ★MP 经验内化（§05）：元素每次操作重新解析（导航后失效重查）、reLaunch 全链路最稳、断言走 currentPage/systemInfo/evaluate
+- 分层衔接：组件层统一挂载（§03b）管「组件状态」，driver 管「整页交互」——组件用例用 mountComponent，E2E 用例用 TestDriver
 
 ## DOM 差异收敛点（对齐 Component plan `p-*`）
 

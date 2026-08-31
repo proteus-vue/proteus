@@ -48,6 +48,24 @@ E2E 失败时自动导出 DevTools 录制（TraceBus dump）：
 test-results/play-fail.json  → 拖入 DevTools 复现
 ```
 
+## 统一 driver 适配（决策 #205）
+
+```ts
+import { createDriver } from '@proteus-vue/test-core/driver'
+
+// ★注入 playwright Page → TestDriver（能力域：navigate/element/evaluate/screenshot/currentPage/systemInfo）
+const driver = createDriver({ platform: 'web', page })
+await driver.reLaunch('/pages/index')
+const btn = driver.element('[data-testid="play"]')
+await btn.waitFor()
+await btn.tap()
+await driver.screenshot('/tmp/play.png')
+```
+
+- 关键路径仍以 `data-testid` 定位（铁律）；driver 元素 = Playwright locator（惰性重查当前 DOM）
+- `longPress` web 无原生长按 → mousedown + 延时 + mouseup 近似模拟
+- 同一份用例代码经 `createDriver({ platform: 'web' })` / `({ platform: 'mp' })` 双端复用（§06）
+
 ## 铁律
 - Web E2E **只跑真实浏览器**，禁止 happy-dom 冒充
 - 关键路径必须带 `data-testid`，禁止靠文本定位

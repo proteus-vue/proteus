@@ -26,6 +26,8 @@ L1  单元                Vitest + vi.mock  ────────────
 
 **关键：Vitest 是 L1-L3 的统一运行器；仅 L4 按端分叉。**
 
+**★L4 之上的统一抽象（决策 #205）**：分叉保留在句柄层（playwright page / automator mini 由用户或 CLI 装配），用例描述走统一 `TestDriver` 能力接口（@proteus-vue/test-core/driver：navigate · element · evaluate · screenshot · currentPage/systemInfo）——**同一份跨端用例代码多端跑**；App 端为第三实现预留（§09）。
+
 ## 3. 技术选型（已确认）
 
 | 层 | Web | 小程序 | 说明 |
@@ -33,7 +35,7 @@ L1  单元                Vitest + vi.mock  ────────────
 | L1 单元 | Vitest | Vitest（mock wx） | 共用同一份用例 |
 | L2 快照 | Vitest | Vitest | 解析产物 AST，不依赖运行时 |
 | L3 组件 | happy-dom + @vue/test-utils | createMockContext | 见 §06 |
-| L4 E2E | Playwright | miniprogram-automator | 见 §07 / §08 |
+| L4 E2E | Playwright | miniprogram-automator | 见 §07 / §08；★统一 TestDriver 能力接口（决策 #205），App 端预留 |
 
 **小程序官方 SDK 澄清**：不存在"官方 e2e SDK"一说，实际是 **miniprogram-automator**（运行时驱动）+ **miniprogram-ci**（上传打包）+ **devtools --auto**（连接基座）三件套。本框架用 automator 做 E2E。
 

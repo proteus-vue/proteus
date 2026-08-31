@@ -20,7 +20,7 @@
 | 06-cross-platform-assert | 跨端断言一致性（@proteus-vue/test-core 统一 tap/类型守卫 + stateOf/textOf 统一状态/文本读取） | ✅ B7 |
 | 07-fixtures-mock-wx | fixture + wx polyfill | ✅ |
 | 08-ci-strategy | CI 策略——§08「决策未定前 CI 只跑 L1-L3 + 快照 + Web Playwright」已落 proteus ci:init（automator 留 Mac runner 条件） | 🔶 决策待定 |
-| 09-app-end | **App 端（占位）** | ⏸ |
+| 09-app-end | **App 端（占位）**——预留 TestDriver 第三实现（createDriver({platform:'app'})，G-22 后接线） | ⏸ |
 | 10-blueprint-integration | Blueprint 150 页（P1-P5 业务路径待 v0.6 组件） | 🔶 |
 | 11-execution-batches | B1-B8 + Prompt | ✅ |
 | 12-placeholders | CI / App TODO | ✅ |

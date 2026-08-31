@@ -15,21 +15,22 @@ App 端测试当前无官方统一方案，需评估：
 
 ## 预留接口
 
+App 端就是 **TestDriver 的第三实现**（决策 #205：一套能力接口多端自动化）：
+
 ```ts
-// test-runner/drivers/app-driver.ts（待实现）
-export interface AppDriver {
-  launch(): Promise<void>
-  tap(selector: string): Promise<void>
-  screenshot(): Promise<Buffer>
-  // ...对齐 automator 的最小 API 表面
-}
+// @proteus-vue/test-core/driver/app.ts（待实现，G-22 后接线）
+import { createDriver } from '@proteus-vue/test-core/driver'
+
+// 形态：createDriver({ platform: 'app', app: <Appium/Detox/云测句柄> })
+// 复用能力接口：navigate · element(tap/input/longPress/text/value) · evaluate · screenshot · currentPage/systemInfo · waitFor
+// 与 web/mp 的差异（原生渲染）：元素定位走原生选择器/坐标，longPress 有原生语义，截图走真机
 ```
 
-设计目标：**让 App E2E 用例与 Web / 小程序尽量共用同一份描述**（BDD / 步骤化），仅驱动层替换。
+设计目标：**App E2E 用例与 Web / 小程序共用同一份 TestDriver 描述**，仅驱动层替换（句柄装配）。
 
 ## TODO（启动 M8 时补齐）
 - [ ] 选型评估：Detox / Appium / 云测
-- [ ] App Driver 对接 automator 风格 API
+- [ ] `createAppDriver` 对接 TestDriver 接口（对齐 automator 风格能力域）
 - [ ] 真机矩阵（iOS / Android / 厂商）
 - [ ] CI 接入（Mac runner 同节点或独立）
 

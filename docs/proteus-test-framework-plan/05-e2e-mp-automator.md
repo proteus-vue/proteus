@@ -76,6 +76,25 @@ automator **不能 headless**，必须启动微信开发者工具。
 - 失败模式诊断（连接拒绝 → 提示 GUI「设置 → 安全设置 → 服务端口」）
 - **端口复用**（automation 端口被占 → connect 模式）
 
-**examples 实测**：`proteus test e2e:mp examples --port 9420 --ide <cli> --ide <cli>` 全链路 EXIT=0（体检 → 副本 → 补丁 → connect → reLaunch 首页 → currentPage + systemInfo 断言）。
+**examples 实测**：`proteus test e2e:mp examples --port 9420 --ide <cli>` 全链路 EXIT=0（体检 → 副本 → 补丁 → connect → reLaunch 首页 → currentPage + systemInfo 断言）。
+
+## 统一 driver 适配（决策 #205）
+
+```ts
+import { createDriver } from '@proteus-vue/test-core/driver'
+
+// ★注入 automator miniProgram → TestDriver（launch/connect 由 CLI：proteus test e2e:mp 装配）
+const driver = createDriver({ platform: 'mp', mini })
+await driver.reLaunch('/pages/index')
+const btn = driver.element('button')
+await btn.waitFor()
+await btn.tap()
+const cur = await driver.currentPage()
+expect(cur.path).toBe('pages/index')
+```
+
+- ★经验内化：元素每次操作重新解析（currentPage().$()，导航后失效重查）；reLaunch 全链路最稳通道（不依赖模拟器激活态）；back 用 wx.navigateBack 降级
+- 同一份用例代码经 `createDriver({ platform: 'mp' })` / `({ platform: 'web' })` 双端复用（§06）
+- App 端为 TestDriver 第三实现预留（§09）
 
 ---
