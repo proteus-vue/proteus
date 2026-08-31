@@ -475,28 +475,42 @@ export const HELP_GROUPS: HelpGroup[] = [
 
 const ANSI_CYAN = '\u001b[36m'
 const ANSI_BOLD = '\u001b[1m'
+const ANSI_YELLOW = '\u001b[33m'
+const ANSI_DIM = '\u001b[2m'
 const ANSI_RESET = '\u001b[0m'
+const LINE = '─'
+const SEP_WIDTH = 46
+
+/** ★usage 参数语义着色：<必选> 黄、[可选] 灰（先 < 后 [] 避免嵌套冲突；命令名 cyan 由外层处理） */
+function styleUsageParams(usage: string, color: boolean): string {
+  if (!color) return usage
+  return usage
+    .replace(/(<[^>]+>)/g, `${ANSI_YELLOW}$1${ANSI_RESET}`)
+    .replace(/(\[[^\]]+\])/g, `${ANSI_DIM}$1${ANSI_RESET}`)
+}
 
 /**
- * ★帮助文本渲染（分组 + ANSI 色彩；useColor=false 纯文本——非 TTY/CI 安全）
- * 命令名 cyan、分组标题 bold；desc 保留多行缩进
+ * ★帮助文本渲染（分组 + ANSI 色彩 + 装饰线；useColor=false 纯文本——非 TTY/CI 安全）
+ * 命令名 cyan、分组标题 bold + 分隔线、<必选> 黄、[可选] 灰、头部/尾部装饰
  */
 export function formatHelpText(useColor = typeof process !== 'undefined' && process.stdout?.isTTY === true): string {
   const lines: string[] = []
-  lines.push('Proteus CLI —— AI-native 透明跨端编译框架')
+  lines.push(useColor ? `${ANSI_BOLD}Proteus CLI${ANSI_RESET} —— AI-native 透明跨端编译框架` : 'Proteus CLI —— AI-native 透明跨端编译框架')
+  lines.push(LINE.repeat(SEP_WIDTH))
   lines.push('')
-  lines.push('用法：')
-  lines.push('  proteus <command> [args...]')
+  lines.push(useColor ? `${ANSI_BOLD}用法${ANSI_RESET}` : '用法')
+  lines.push(`  proteus ${styleUsageParams('<command> [args...]', useColor)}`)
   lines.push('')
   for (const group of HELP_GROUPS) {
-    lines.push(useColor ? `${ANSI_BOLD}${group.title}${ANSI_RESET}` : group.title)
+    const title = useColor ? `${ANSI_BOLD}${group.title}${ANSI_RESET}` : group.title
+    lines.push(`${title} ${LINE.repeat(Math.max(2, SEP_WIDTH - title.length - 1))}`)
     lines.push('')
     for (const entry of group.entries) {
-      // 命令名 = usage 前两个 token（proteus <子命令>，如 'proteus check'/'proteus test'）→ cyan；其余参数原样
+      // 命令名 = usage 前两个 token（proteus <子命令>，如 'proteus check'/'proteus test'）→ cyan；其余参数语义着色
       const tokens = entry.usage.split(' ')
       const cmdLen = tokens[0] === 'proteus' && tokens[1] ? 2 : 1
       const cmd = tokens.slice(0, cmdLen).join(' ')
-      const rest = tokens.slice(cmdLen).join(' ')
+      const rest = styleUsageParams(tokens.slice(cmdLen).join(' '), useColor)
       lines.push(useColor ? `  ${ANSI_CYAN}${cmd}${ANSI_RESET} ${rest}`.trimEnd() : `  ${entry.usage}`)
       // desc：首行统一 6 空格前缀；后续行保留 desc 内自带缩进（避免叠加变深）
       const descLines = entry.desc.split('\n')
@@ -505,6 +519,10 @@ export function formatHelpText(useColor = typeof process !== 'undefined' && proc
       lines.push('')
     }
   }
+  lines.push(LINE.repeat(SEP_WIDTH))
+  const hint = '提示：proteus <command> --help（单命令参数）· 文档 docs/ · GitHub github.com/proteus-vue/proteus'
+  lines.push(useColor ? `${ANSI_DIM}${hint}${ANSI_RESET}` : hint)
+  lines.push(`版本 ${useColor ? `${ANSI_BOLD}0.1.0${ANSI_RESET}` : '0.1.0'}`)
   return lines.join('\n').replace(/\n\n\n/g, '\n\n').trimEnd() + '\n'
 }
 

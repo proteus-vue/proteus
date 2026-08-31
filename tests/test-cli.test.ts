@@ -72,9 +72,11 @@ describe('proteus help 美化（分组 + ANSI 色彩开关）', () => {
     expect(text).not.toContain('\u001b[')
   })
 
-  it('formatHelpText(true)：命令名 cyan + 分组标题 bold', () => {
+  it('formatHelpText(true)：命令名 cyan + 分组标题 bold + 参数语义着色（<必选> 黄 / [可选] 灰）', () => {
     const text = formatHelpText(true)
     expect(text).toContain('\u001b[36mproteus check\u001b[0m') // 命令名 cyan
     expect(text).toContain('\u001b[1m检查与门禁\u001b[0m') // 分组标题 bold
+    expect(text).toContain('\u001b[2m[dir]\u001b[0m') // [可选] 灰（dim）
+    expect(text).toContain('\u001b[33m<dir>\u001b[0m') // <必选> 黄
   })
 })
