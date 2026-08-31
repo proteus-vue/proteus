@@ -14,7 +14,7 @@
 | 02-snapshot-compile | L2 编译产物快照（@proteus-vue/test-core/snapshot：WXML 结构等值 + sourcemap 回源） | ✅ B2 |
 | 03-component-integration | L3 组件 + createMockContext | ✅ M3 |
 | 04-e2e-web-playwright | Web E2E（路由/渲染 + 关键路径 data-testid） | ✅ B4 |
-| 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——需微信开发者工具 | ⏸ B5（待 IDE） |
+| 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——框架链路就位（体检/副本/补丁/诊断）；**automator 0.12.1 与新 IDE 端口协议不兼容**，旧版 IDE 可全链路跑通 | 🔶 B5
 | 06-cross-platform-assert | 跨端断言一致性（@proteus-vue/test-core 统一 tap/类型守卫） | ✅ B7 |
 | 07-fixtures-mock-wx | fixture + wx polyfill | ✅ |
 | 08-ci-strategy | CI 策略——§08「决策未定前 CI 只跑 L1-L3 + 快照 + Web Playwright」已落 proteus ci:init（automator 留 Mac runner 条件） | 🔶 决策待定 |

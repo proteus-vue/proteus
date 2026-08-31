@@ -57,4 +57,24 @@ automator **不能 headless**，必须启动微信开发者工具。
 - 用例文件放 `e2e/mp/`，与 Web E2E 平级
 - 每个用例必须可独立运行（不依赖上一个用例的页面栈）
 
+## ⚠ 已知限制（2026-08-31 真机实测，2.01.2510260）
+
+**miniprogram-automator 0.12.1（2021，npm 最新）与新版微信开发者工具（2.01.x）的自动化端口协议不兼容**：
+
+| 项 | 旧版 IDE | 新版 IDE（2.01.x） |
+|---|---|---|
+| `cli auto --auto-port <n>` | 支持，automation WS 监听该端口 | **参数已移除**（`cli auto -h` 无） |
+| automation 端口 | 固定（--auto-port） | **动态**（IDE server 动态端口；WS 端点非公开协议） |
+| `Tool.getInfo.SDKVersion` | 返回 | **缺失**（automator checkVersion 崩 → 框架已 patch 容错） |
+
+**框架已内化**（`proteus test e2e:mp`）：
+- IDE 路径可配置（PROTEUS_IDE_CLI / --ide / 平台默认探测）
+- 环境体检（appid 有效性 / 产物 / 端口占用一次性报告，占位 appid 直接 error）
+- 产物独立副本（.proteus/e2e-mp，避 IDE 路径缓存 + 不污染 dist）
+- automator SDKVersion 幂等补丁（scripts/patch-automator.mjs，CLI 自动执行）
+- 失败模式诊断（连接拒绝 → 提示 GUI「设置 → 安全设置 → 服务端口」）
+
+**剩余边界**：automation WS 端点（动态端口 + 非公开协议）需 automator 官方 SDK 跟进新版 IDE；
+服务端口开启后（GUI 设置 → 安全设置 → 服务端口），低版本 IDE（--auto-port 语义）可直接跑通全链路。
+
 ---
