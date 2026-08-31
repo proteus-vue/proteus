@@ -2,6 +2,7 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
+import path from 'node:path'
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, HELP_TEXT } from './args'
 import { buildDir, planTargetedBuild } from './build'
 import { explainTarget } from './explain'
@@ -20,6 +21,7 @@ import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
 import { parseDevArgs, runDev } from './dev'
 import { parseTestArgs, runTest } from './test'
+import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 
@@ -140,6 +142,18 @@ async function main(): Promise<void> {
         if (!result.ok) process.exitCode = 1
       } catch (e) {
         console.error(`[proteus-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'app-config:check': {
+      const file = rest.find((a) => !a.startsWith('-')) ?? 'app.config.ts'
+      try {
+        const result = await checkAppConfigFile(path.resolve(file))
+        console.log(formatAppConfigCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-app-config] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break

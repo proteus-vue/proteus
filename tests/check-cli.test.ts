@@ -27,7 +27,7 @@ describe('proteus check（G-33 M1 聚合）', () => {
     try {
       const summary = await runCheck(dir, { strictCss: true, strictStyle: true, strictRouter: true, strictCli: true })
       expect(summary.ok).toBe(true)
-      expect(summary.domains.map((d) => d.name).sort()).toEqual(['cli', 'css', 'router', 'style'])
+      expect(summary.domains.map((d) => d.name).sort()).toEqual(['app-config', 'cli', 'css', 'router', 'style'])
       const text = formatCheck(summary)
       expect(text).toContain('全部通过')
     } finally {

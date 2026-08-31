@@ -8,6 +8,7 @@ import { runStyleCheck, formatStyleCheck } from './style-check'
 import { checkRoutes, formatRouterCheck } from './router-check'
 import { checkConfigFile, loadTsConfig } from './config-check'
 import { checkRequiredTargets, checkFeatureConflicts, checkProteusDirConsistency } from './strict-cli'
+import { appConfigCheckSummary } from './app-config-check'
 
 export interface CheckOptions {
   strictCss: boolean
@@ -86,6 +87,16 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
     const proteusViolations = checkProteusDirConsistency(path.join(root, '.proteus'))
     for (const v of proteusViolations) lines.push(`  [${v.code}] △ ${v.message}`)
     domains.push({ name: 'cli', ok, detail: lines.join('\n') })
+  }
+
+  // ★app-config（G-35 M3）：应用全局配置校验（06-cli-integration.md §1，并入 check 全量门禁）
+  if (opts.strictCli) {
+    try {
+      const { ok, text } = await appConfigCheckSummary(root)
+      domains.push({ name: 'app-config', ok, detail: text })
+    } catch (e) {
+      domains.push({ name: 'app-config', ok: false, detail: `[proteus-app-config] ${(e as Error).message}` })
+    }
   }
 
   return { domains, ok: domains.every((d) => d.ok) }

@@ -10,5 +10,9 @@ export { initAppConfig, getConfig, setConfig, useAppConfig, useFeatureFlag, getF
 export type { SetConfigInput, FeatureFlagResult } from './store'
 export { defineAppConfig } from './define'
 
+// ★G-35 M3：多环境加载 + 平台覆盖（§2.1 层级落地）
+export { loadAppConfig, resolveEnvConfig } from './load'
+export type { LoadAppConfigLayers } from './load'
+
 // 配置入口标记（defineAppConfig 附加）
 export const APP_CONFIG_MARK = '__isAppConfig'
