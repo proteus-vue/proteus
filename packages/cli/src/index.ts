@@ -25,6 +25,7 @@ import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from 
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 import { parseCiArgs, planCiInit } from './ci'
+import { generateAppConfigSkeleton } from './app-config-gen'
 
 async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2)
@@ -277,6 +278,20 @@ async function main(): Promise<void> {
         console.log('流水线：proteus check（四域门禁）→ 逐端构建 → 产物归档；推送到 Git 远程后即触发')
       } catch (e) {
         console.error(`[proteus-ci] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'gen': {
+      // ★app-config G-35 M5：proteus gen config —— 生成 app.config.ts 骨架（06 §1）
+      if (rest[0] !== 'config') throw new Error('proteus gen 目前仅支持 config（proteus gen config [file]）')
+      const file = rest.find((a) => a !== 'config' && !a.startsWith('-')) ?? 'app.config.ts'
+      try {
+        const out = generateAppConfigSkeleton(path.resolve(file))
+        console.log(`[proteus-app-config] 已生成骨架：${out}`)
+        console.log('下一步：proteus app-config:check app.config.ts 校验 → 编辑 env/api/features 后接入运行时')
+      } catch (e) {
+        console.error(`[proteus-app-config] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break

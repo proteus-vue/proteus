@@ -404,5 +404,8 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
       ★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）
       默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）
 
+  proteus gen config [file]
+      ★生成 app.config.ts 骨架（G-35 M5）：defineAppConfig 类型安全形态；缺省 app.config.ts
+
   proteus version / help
 `

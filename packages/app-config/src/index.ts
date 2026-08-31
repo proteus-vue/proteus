@@ -18,5 +18,9 @@ export type { LoadAppConfigLayers } from './load'
 export { createMemoryConfigCache, createHttpsFetcher, fetchAndApplyRemote } from './remote'
 export type { ConfigCache, FetchLike, RemoteFetcher, RemoteFetchContext, FetchRemoteOptions, RemoteApplyResult } from './remote'
 
+// ★G-35 M5：五端配置存储适配层（05-five-end-storage.md）
+export { createWebConfigStore, createSkylineConfigStore, createVolatileConfigStore, createPlatformConfigStore } from './storage'
+export type { ConfigStore, WebStorageLike, WxStorageLike } from './storage'
+
 // 配置入口标记（defineAppConfig 附加）
 export const APP_CONFIG_MARK = '__isAppConfig'

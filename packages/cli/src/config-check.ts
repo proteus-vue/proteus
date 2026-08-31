@@ -21,6 +21,8 @@ export async function loadTsConfig(file: string): Promise<unknown> {
   const fileRequire = (id: string): unknown => {
     // 相对路径 require（配置内如引本地 JSON）：基于文件目录解析
     if (id.startsWith('.')) return require(path.resolve(path.dirname(file), id))
+    // ★G-35 M5：defineAppConfig 为纯 identity（Vite defineConfig 模式），沙箱注入 stub——app.config.ts 保持 canonical 形态
+    if (id === '@proteus-vue/app-config') return { defineAppConfig: (c: unknown) => c }
     throw new Error(`配置引用了运行时依赖 ${id}（仅允许类型导入与本地相对导入）`)
   }
   new Function('module', 'exports', 'require', finalCode)(mod, mod.exports, fileRequire)
