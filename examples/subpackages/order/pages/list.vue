@@ -2,6 +2,7 @@
      本页以 route-type="scaleDown" 进入后获得联动能力：被覆盖时自身下沉缩放（经典架构 A 页） -->
 <route>
 {
+  "path": "/subpackages/order/pages/list",
   "meta": {
     "title": "订单列表"
   }

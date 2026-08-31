@@ -3,6 +3,7 @@
      MP 端：⚠ 页面绑定桥（Pinia → setData）待 M6 迁移文档覆盖；store 逻辑层可用（Pinia 纯 JS） -->
 <route>
 {
+  "path": "/pages/pinia-demo",
   "meta": {
     "title": "状态管理"
   }

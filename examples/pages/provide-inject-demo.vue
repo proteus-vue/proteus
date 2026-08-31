@@ -4,6 +4,7 @@
      .value / 字面量提供 → 静态快照。组件 inject → attached 订阅 __subs[key]（值变化刷新），detached 取消 -->
 <route>
 {
+  "path": "/pages/provide-inject-demo",
   "meta": {
     "title": "注入演示"
   }

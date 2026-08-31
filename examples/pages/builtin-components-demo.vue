@@ -3,6 +3,7 @@
      （components-demo.vue 保留给 v0.3 组件系统演示 counter/panel，本页专演示框架内置组件） -->
 <route>
 {
+  "path": "/pages/builtin-components-demo",
   "meta": {
     "title": "内置组件"
   }

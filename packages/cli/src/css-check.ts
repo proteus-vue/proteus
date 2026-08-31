@@ -44,7 +44,10 @@ function checkFile(file: string, opts: CssCheckOptions): CssFileResult {
   const source = fs.readFileSync(file, 'utf8')
   const isVue = file.endsWith('.vue')
   const blocks = isVue
-    ? extractStyleBlocks(source).map((b) => ({ css: b.content, baseLine: b.line }))
+    ? extractStyleBlocks(source)
+        // ★跳过预处理器块（lang="scss"/"less" 等）：构建期编译后才是产物 CSS，门禁针对产物子集
+        .filter((b) => b.lang === null)
+        .map((b) => ({ css: b.content, baseLine: b.line }))
     : [{ css: source, baseLine: 1 }]
 
   const options: StrictCssOptions = { strict: opts.strict }

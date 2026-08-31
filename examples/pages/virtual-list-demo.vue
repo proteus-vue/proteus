@@ -1,6 +1,7 @@
 <!-- examples/pages/virtual-list-demo.vue —— 虚拟列表演示页（v0.4） -->
 <route>
 {
+  "path": "/pages/virtual-list-demo",
   "meta": {
     "title": "虚拟列表"
   }

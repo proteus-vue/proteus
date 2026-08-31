@@ -2,6 +2,7 @@
      演示 proteus.config.ts 的 rules 段：改配置即改变编译行为，无需改框架代码 -->
 <route>
 {
+  "path": "/pages/config-demo",
   "meta": {
     "title": "配置演示"
   }

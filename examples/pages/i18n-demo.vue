@@ -3,6 +3,7 @@
      ★响应式说明：i18n 无内置响应式，页面持有 lang ref 触发重算（computed 依赖 lang.value 建立依赖） -->
 <route>
 {
+  "path": "/pages/i18n-demo",
   "meta": {
     "title": "国际化"
   }

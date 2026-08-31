@@ -1,6 +1,7 @@
 <!-- src/pages/index.vue —— 首页（TabBar 页面示例，覆盖核心映射：ref/v-if/v-for/:src/事件/ref 写入） -->
 <route>
 {
+  "path": "/pages/index",
   "meta": {
     "title": "首页",
     "isTab": true

@@ -5,6 +5,7 @@
        fetch/localStorage/history/DOM toast；request 默认 httpbin（CORS 开放；MP 端需开发者工具关闭域名校验） -->
 <route>
 {
+  "path": "/pages/platform-api-demo",
   "meta": {
     "title": "PlatformAPI 收口"
   }

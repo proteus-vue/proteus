@@ -2,6 +2,7 @@
      类型提示全链路示例：route 块的 params 声明路由参数类型（生成 RouteParamsByName） -->
 <route>
 {
+  "path": "/pages/user/profile",
   "meta": {
     "title": "个人资料",
     "requiresAuth": true

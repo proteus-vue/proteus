@@ -3,6 +3,7 @@
      v-if-v-else-if-v-else 条件链 / 事件修饰符 .stop → catchtap / v-html → rich-text / ref 写入 -->
 <route>
 {
+  "path": "/pages/forms",
   "meta": {
     "title": "表单与指令"
   }

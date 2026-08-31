@@ -269,6 +269,31 @@ export function parseStyleCheckArgs(argv: string[]): { target: string; platform:
   return { target: path.resolve(positional[0] ?? '.'), platform }
 }
 
+export interface CheckArgs {
+  root: string
+  strictCss: boolean
+  strictStyle: boolean
+  strictRouter: boolean
+  strictCli: boolean
+}
+
+/** proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]（默认全开） */
+export function parseCheckArgs(argv: string[]): CheckArgs {
+  const args: CheckArgs = { root: '.', strictCss: true, strictStyle: true, strictRouter: true, strictCli: true }
+  const positional: string[] = []
+  for (const a of argv) {
+    if (a === '--no-strict-css') args.strictCss = false
+    else if (a === '--no-strict-style') args.strictStyle = false
+    else if (a === '--no-strict-router') args.strictRouter = false
+    else if (a === '--no-strict-cli') args.strictCli = false
+    else if (!a.startsWith('-')) positional.push(a)
+    else throw new Error(`未知参数：${a}`)
+  }
+  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  args.root = path.resolve(positional[0] ?? '.')
+  return args
+}
+
 export function parseGenerateTypesArgs(argv: string[]): { out?: string; check?: boolean } {
   let out: string | undefined
   let check = false

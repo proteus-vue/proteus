@@ -2,6 +2,7 @@
      父页面使用 <counter>：props 传递 / @change 事件 / usingComponents 由 gen-routes 自动注入 page.json -->
 <route>
 {
+  "path": "/pages/components-demo",
   "meta": {
     "title": "组件演示"
   }
