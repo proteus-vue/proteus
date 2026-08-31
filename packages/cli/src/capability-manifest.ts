@@ -6,6 +6,7 @@ import { scanCapabilities } from '@proteus-vue/capabilities/scan'
 import type { CapabilityManifest, ManifestCapabilityEntry } from '@proteus-vue/capabilities/scan'
 import { scanCapabilityUsage, checkCapabilityUsage, scanPlatformViolations } from '@proteus-vue/capabilities/check'
 import type { PlatformViolation } from '@proteus-vue/capabilities/check'
+import { AUTO_GENERATED_MARK, registerGeneratedFile } from './strict-cli'
 
 /** 渲染 manifest 报告（纯函数；--platform 时追加缺失报告） */
 export function formatCapabilityManifest(
@@ -51,7 +52,9 @@ export async function runCapabilityScan(root: string, outFile?: string, platform
   const text = formatCapabilityManifest(manifest, files, check)
   const outPath = path.resolve(root, outFile ?? '.proteus/capability-manifest.json')
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
+  // ★CLI004 配套：纯 JSON 落盘（保持 JSON.parse 兼容）+ 指纹登记
   fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n')
+  registerGeneratedFile(outPath)
   return { text, manifest, check }
 }
 

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { auditModule } from '@proteus-vue/module'
 import type { ModuleAuditResult } from '@proteus-vue/module'
 import { formatDuplicateReport } from './module-duplicates'
+import { AUTO_GENERATED_MARK, registerGeneratedFile } from './strict-cli'
 
 /** 渲染审计报告（纯函数） */
 export function formatAuditReport(audit: ModuleAuditResult, distDir?: string): string {
@@ -46,7 +47,9 @@ export async function runAuditModule(options: { root: string; distDir?: string; 
   if (options.graphJson !== false) {
     const outPath = path.resolve(options.root, options.graphJsonPath ?? '.proteus/module-graph.json')
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
+    // ★CLI004 配套：纯 JSON 落盘 + 指纹登记
     fs.writeFileSync(outPath, JSON.stringify(audit.graphManifest, null, 2) + '\n')
+    registerGeneratedFile(outPath)
     return { text: text + `\n[proteus-audit] module-graph.json 已落盘：${path.relative(options.root, outPath)}`, audit }
   }
   return { text, audit }

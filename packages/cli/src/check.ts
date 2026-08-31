@@ -6,7 +6,8 @@ import path from 'node:path'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { checkRoutes, formatRouterCheck } from './router-check'
-import { checkConfigFile } from './config-check'
+import { checkConfigFile, loadTsConfig } from './config-check'
+import { checkRequiredTargets, checkFeatureConflicts, checkProteusDirConsistency } from './strict-cli'
 
 export interface CheckOptions {
   strictCss: boolean
@@ -56,20 +57,35 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
     domains.push({ name: 'router', ok: result.ok, detail: formatRouterCheck(result) })
   }
 
-  // --strict-cli（CLI001 语义：proteus.config.ts 校验）：config:check
+  // --strict-cli（CLI001-004）：配置校验 + 能力冲突 + .proteus/ 一致性
   if (opts.strictCli) {
     const configFile = path.join(root, 'proteus.config.ts')
+    const lines: string[] = []
+    let ok = true
     if (fs.existsSync(configFile)) {
       try {
         const { result, text } = await checkConfigFile(configFile)
-        domains.push({ name: 'cli', ok: result.ok, detail: text })
+        ok = result.ok
+        lines.push(text)
       } catch (e) {
-        domains.push({ name: 'cli', ok: false, detail: `[proteus-config] ${(e as Error).message}` })
+        ok = false
+        lines.push(`[proteus-config] ${(e as Error).message}`)
+      }
+      // ★cli-plus G-33：defineProteus 新形态规则（CLI002 targets 完整 + CLI003 能力冲突）
+      const config = await loadTsConfig(configFile)
+      const strictViolations = [...checkRequiredTargets(config), ...checkFeatureConflicts(config)]
+      const strictErrors = strictViolations.filter((v) => v.severity === 'error')
+      if (strictErrors.length) ok = false
+      for (const v of strictViolations) {
+        lines.push(`  [${v.code}] ${v.severity === 'error' ? '✗' : '△'} ${v.message}`)
       }
     } else {
-      // CLI002：缺失必要 target 配置 → warn 不阻断（项目可能用 CLI 独立编译模式）
-      domains.push({ name: 'cli', ok: true, detail: `[proteus-config] ${configFile} 不存在——跳过（独立编译模式无配置文件）` })
+      lines.push(`[proteus-config] ${configFile} 不存在——跳过（独立编译模式无配置文件）`)
     }
+    // CLI004：.proteus/ 生成文件一致性（warn 不阻断）
+    const proteusViolations = checkProteusDirConsistency(path.join(root, '.proteus'))
+    for (const v of proteusViolations) lines.push(`  [${v.code}] △ ${v.message}`)
+    domains.push({ name: 'cli', ok, detail: lines.join('\n') })
   }
 
   return { domains, ok: domains.every((d) => d.ok) }

@@ -18,6 +18,7 @@ import { checkConfigFile } from './config-check'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
+import { parseDevArgs, runDev } from './dev'
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
 
@@ -172,6 +173,26 @@ async function main(): Promise<void> {
         if (!summary.ok) process.exitCode = 1
       } catch (e) {
         console.error(`[proteus-check] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'dev': {
+      const { target } = parseDevArgs(rest)
+      try {
+        const plan = runDev({ target })
+        console.log(`[proteus] dev --target ${target}：${plan.command} ${plan.args.join(' ')}`)
+        const { spawn } = await import('node:child_process')
+        const child = spawn(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+        child.on('error', (e) => {
+          console.error(`[proteus] dev 启动失败：${e.message}`)
+          process.exitCode = 1
+        })
+        // 保持进程存活（dev server 长驻）
+        process.on('SIGINT', () => child.kill('SIGINT'))
+        process.on('SIGTERM', () => child.kill('SIGTERM'))
+      } catch (e) {
+        console.error(`[proteus-dev] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break
