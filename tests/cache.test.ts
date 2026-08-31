@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey, getCompilerVersion, getEsbuildVersion } from '../packages/plugin-vite/src/cache'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-cache-'))
 afterAll(() => {

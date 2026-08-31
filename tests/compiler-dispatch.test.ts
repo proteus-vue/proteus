@@ -2,7 +2,7 @@
 // ★阶段三分派层验证（底线循环 ① 完全形态）：
 //   AI 覆盖规则的 apply() → 编译输出即时变化，无需改框架代码（规则注册表升级为分派层）
 import { describe, it, expect } from 'vitest'
-import { compileVueSfc, transformStyleToWxss, formatTransformCatalog } from '../packages/compiler/src'
+import { compileVueSfc, transformStyleToWxss, formatTransformCatalog } from '@proteus-vue/compiler'
 import { getTransformRule, executeRule, listTransformRules } from '../packages/compiler/src/transforms/registry'
 import type { RuleContext } from '../packages/compiler/src/transforms/types'
 

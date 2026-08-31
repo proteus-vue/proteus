@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { scanMainPackage, formatBundleReport, scanSubPackages, checkSubPackageLimits } from '../examples/scripts/bundle-report'
 // ★B8：体积阈值常量抽到 @proteus-vue/module（bundle-report 不再导出）
-import { SUBPACKAGE_LIMITS } from '../packages/module/src'
+import { SUBPACKAGE_LIMITS } from '@proteus-vue/module'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-bundle-'))
 

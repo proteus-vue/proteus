@@ -9,7 +9,7 @@ import {
   createPlatformConfigStore,
 } from '../packages/app-config/src/storage'
 import type { WebStorageLike, WxStorageLike } from '../packages/app-config/src/storage'
-import type { AppConfig } from '../packages/app-config/src/index'
+import type { AppConfig } from '@proteus-vue/app-config'
 
 const CONFIG: AppConfig = {
   app: { id: 'x', name: 'X', version: '1.0.0', buildNumber: 1 },

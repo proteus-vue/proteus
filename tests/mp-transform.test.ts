@@ -10,7 +10,7 @@ import {
   compileVueSfc,
   validateJs,
   validateWxml,
-} from '../packages/compiler/src'
+} from '@proteus-vue/compiler'
 import { vlqEncode, vlqDecode } from '../packages/compiler/src/script'
 
 const opts = { px2rpx: true, rpxRatio: 2 }

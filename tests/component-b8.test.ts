@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { auditComponents, formatComponentAudit } from '../packages/cli/src/component-audit'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { componentRender, setObservabilityEnabled } from '../src/components/runtime/observability'
 
 const COMPONENTS_DIR = path.resolve('src/components')

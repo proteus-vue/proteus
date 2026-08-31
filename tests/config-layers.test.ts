@@ -7,7 +7,7 @@ import {
   CROSS_LAYER_PATTERNS,
   checkConfigLayerViolations,
   getFieldLayer,
-} from '../packages/types/src/config-layers'
+} from '@proteus-vue/types'
 
 describe('CONFIG_FIELD_LAYERS（02 §4 字段归属表）', () => {
   it('归属表覆盖全部顶层字段（防漂移：validateConfig 集成后漏标即报错）', () => {

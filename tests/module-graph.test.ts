@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { DependencyGraph, CycleError, buildModuleGraphManifest, moduleGraphToMermaid } from '../packages/module/src'
+import { DependencyGraph, CycleError, buildModuleGraphManifest, moduleGraphToMermaid } from '@proteus-vue/module'
 import { checkModuleConfigs } from '../packages/cli/src/module-check'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-module-graph-'))

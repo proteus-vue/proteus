@@ -1,7 +1,7 @@
 // tests/devtools-sources.test.ts
 // ★devtools-plan B2：六源接入示范——lifecycle orchestrator + componentRender → TraceBus（type-only 注入，运行时零依赖）
 import { describe, it, expect, afterEach } from 'vitest'
-import { createTraceBus } from '../packages/devtools-runtime/src'
+import { createTraceBus } from '@proteus-vue/devtools-runtime'
 import { LifecycleOrchestrator } from '../packages/runtime/src/lifecycle'
 import type { LifecycleContext } from '../packages/runtime/src/lifecycle'
 import { componentRender, setTraceBus, setObservabilityEnabled } from '../src/components/runtime/observability'

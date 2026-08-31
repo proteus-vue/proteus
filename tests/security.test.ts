@@ -1,8 +1,8 @@
 // tests/security.test.ts
 // ★security-plan B1-B2：SecretStorage（加密 round-trip / volatile 跳过 / redact / migrate / 可序列化校验）+ PermissionRegistry（withPermission / PermissionDenied / 持久化）
 import { describe, it, expect, vi } from 'vitest'
-import { SecretStorage, createDemoCipher, createWebCipher, PermissionRegistry, PermissionDenied, permissionFor, withPermission } from '../packages/security/src'
-import type { StorageLike } from '../packages/security/src'
+import { SecretStorage, createDemoCipher, createWebCipher, PermissionRegistry, PermissionDenied, permissionFor, withPermission } from '@proteus-vue/security'
+import type { StorageLike } from '@proteus-vue/security'
 
 /** 内存 storage（可断言写入次数） */
 function makeStorage(): StorageLike & { writes: string[] } {

@@ -1,8 +1,8 @@
 // tests/module-orchestrator.test.ts
 // ★module-plan B2（M2 ModuleOrchestrator）：拓扑序初始化 / 生命周期状态机 / 版本协商 / 事件总线
 import { describe, it, expect } from 'vitest'
-import { createModuleSystem, createModuleEventBus, satisfies, VersionMismatchError, CycleError } from '../packages/module/src'
-import type { ModuleDefinition } from '../packages/module/src'
+import { createModuleSystem, createModuleEventBus, satisfies, VersionMismatchError, CycleError } from '@proteus-vue/module'
+import type { ModuleDefinition } from '@proteus-vue/module'
 
 /** 记录钩子调用的 mock 模块 */
 function mockModule(name: string, deps: Record<string, string> = {}, log: string[] = [], hooks?: Partial<ModuleDefinition['lifecycle']>): ModuleDefinition {

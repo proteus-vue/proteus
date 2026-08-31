@@ -1,8 +1,8 @@
 // tests/types/platform-api.types.ts
 // ★types-plus-plan B9：PlatformAPI 契约类型级断言（正例 + @ts-expect-error 负例）
 // 由根 vue-tsc（build:web）校验：负例若未报错 → @ts-expect-error 未使用 → 编译失败（防漂移）
-import type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from '../../packages/types/src/platform-api'
-import type { RequestConfig } from '../../packages/types/src/api-types'
+import type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from '@proteus-vue/types'
+import type { RequestConfig } from '@proteus-vue/types'
 
 // ---- 正例：完整实现满足 PlatformAPI ----
 const full: PlatformAPI = {

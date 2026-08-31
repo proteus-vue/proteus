@@ -1,7 +1,7 @@
 // tests/test-core.test.ts
 // ★test-framework M3：createMockContext（唯一 wx 来源）+ mountMpComponent（逻辑 + WXML 双断言）
 import { describe, it, expect, afterEach } from 'vitest'
-import { createMockContext, mountMpComponent } from '../packages/test-core/src/index'
+import { createMockContext, mountMpComponent } from '@proteus-vue/test-core'
 
 describe('createMockContext（唯一 wx 来源）', () => {
   let ctx: ReturnType<typeof createMockContext> | undefined

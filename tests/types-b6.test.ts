@@ -12,7 +12,7 @@ import {
   extendConfigSchema,
   getConfigSchema,
   proteusConfigSchemaJson,
-} from '../packages/types/src'
+} from '@proteus-vue/types'
 
 describe('品牌类型（B6 §2：防混淆）', () => {
   it('asStoreId/asModuleDomain 构造（运行时为原字符串，品牌为类型层标记）', () => {

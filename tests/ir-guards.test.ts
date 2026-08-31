@@ -8,7 +8,7 @@ import {
   isRouteIR,
   isSFCIR,
   isStoreIR,
-} from '../packages/types/src/ir-guards'
+} from '@proteus-vue/types'
 
 describe('isRouteIR', () => {
   it('合法 RouteIR（path 必填 string）', () => {

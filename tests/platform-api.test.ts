@@ -4,7 +4,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlatformAPI } from '../packages/api/src/platform'
-import type { IRequestAdapter, RequestConfig, RequestResponse } from '../packages/types/src/api-types'
+import type { IRequestAdapter, RequestConfig, RequestResponse } from '@proteus-vue/types'
 
 afterEach(() => {
   vi.unstubAllGlobals()

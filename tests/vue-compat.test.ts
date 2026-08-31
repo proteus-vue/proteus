@@ -2,7 +2,7 @@
 // Vue 能力兼容（docs/vue-compat-plan Batch A：反黑盒）——
 // 平台无对等能力 + import 剥离 → 编译期显式警告（不再静默失败）
 import { describe, it, expect } from 'vitest'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { listTransformRules, getTransformRule } from '../packages/compiler/src/transforms/registry'
 
 const compile = (src: string, name = 'vc.vue'): { warnings: string[]; wxml: string; js: string } => {

@@ -4,7 +4,7 @@
 //   Batch 2：<transition> 装饰式进入动画
 //   Batch 3：provide/inject 页面级注入桥（全局注册表）
 import { describe, it, expect, beforeEach } from 'vitest'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { getTransformRule } from '../packages/compiler/src/transforms/registry'
 import { registerProvide, readInject, clearProvides, provideCount, subscribeProvide, notifyProvide, nextPageId, destroyPage } from '../packages/runtime/src/provide-inject'
 

@@ -10,8 +10,8 @@ import {
   getFeatureFlag,
   defineAppConfig,
   APP_CONFIG_MARK,
-} from '../packages/app-config/src/index'
-import type { AppConfig } from '../packages/app-config/src/index'
+} from '@proteus-vue/app-config'
+import type { AppConfig } from '@proteus-vue/app-config'
 
 const DEFAULTS: AppConfig = {
   app: { id: 'demo', name: 'Demo', version: '1.0.0', buildNumber: 1 },

@@ -2,7 +2,7 @@
 // v0.4 性能基准：编译引擎（compileVueSfc）
 // 门禁：宽松时间阈值（正常 ~5ms/次，阈值 500ms 只在极端退化时触发）；报告平均耗时
 import { describe, it, expect } from 'vitest'
-import { compileVueSfc } from '../../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 
 // 典型业务页（含 template 指令 / script ref+computed+watch / scoped style）
 const TYPICAL_PAGE = `<script setup lang="ts">

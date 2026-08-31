@@ -6,7 +6,7 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { compileVueSfc, transformScriptToPage } from '../packages/compiler/src'
+import { compileVueSfc, transformScriptToPage } from '@proteus-vue/compiler'
 import { getVirtualWindow } from '../src/components/runtime/virtual-window'
 import { capabilityWarnOnce, capabilityWarn } from '../src/components/runtime/capability'
 

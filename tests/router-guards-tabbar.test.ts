@@ -19,7 +19,7 @@ vi.mock('../packages/router/src/skyline', () => ({
   navigateWithCustomRoute: vi.fn(async () => {}),
 }))
 
-import { createRouter } from '../packages/router/src/index'
+import { createRouter } from '@proteus-vue/router'
 import { clearGuards } from '../packages/router/src/guards'
 import { routes } from '../examples/router/auto-routes'
 import { generateWebRoutes, generateMpConfig } from '../packages/router/src/codegen'

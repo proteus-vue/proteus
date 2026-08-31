@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { auditModule } from '../packages/module/src'
+import { auditModule } from '@proteus-vue/module'
 import { formatAuditReport, runAuditModule } from '../packages/cli/src/module-audit'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-'))

@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { loadAppConfig, resolveEnvConfig } from '../packages/app-config/src/index'
-import type { AppConfig } from '../packages/app-config/src/index'
+import { loadAppConfig, resolveEnvConfig } from '@proteus-vue/app-config'
+import type { AppConfig } from '@proteus-vue/app-config'
 import { checkAppConfigFile, formatAppConfigCheck } from '../packages/cli/src/app-config-check'
 
 const DEFAULTS: AppConfig = {

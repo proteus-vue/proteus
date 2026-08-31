@@ -1,8 +1,8 @@
 // tests/define-proteus.test.ts
 // ★cli-plus G-33 M1：defineProteus 配置入口（01-cli.md §3，Vite defineConfig 模式）
 import { describe, expect, it } from 'vitest'
-import { defineProteus } from '../packages/types/src/define-proteus'
-import type { DefineProteusConfig } from '../packages/types/src/define-proteus'
+import { defineProteus } from '@proteus-vue/types'
+import type { DefineProteusConfig } from '@proteus-vue/types'
 
 describe('defineProteus（cli-plus G-33 M1 配置入口）', () => {
   it('identity：原样返回入参（零运行时逻辑，Vite 模式）', () => {

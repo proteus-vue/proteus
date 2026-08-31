@@ -6,7 +6,7 @@
 // @vitest-environment jsdom（import 链含 @proteus-vue/shared web-adapter 顶层 location）
 import { describe, expect, it } from 'vitest'
 import { createApp } from 'vue'
-import { BUILT_IN_TAGS, getBuiltInSchema, installBuiltInComponents } from '../packages/built-in-components/src'
+import { BUILT_IN_TAGS, getBuiltInSchema, installBuiltInComponents } from '@proteus-vue/built-in-components'
 import { mpComponentRegistry } from '../packages/types/src/mp/component-schema'
 
 describe('内置组件 ↔ MpComponentSchema（B8 对照，防漂移）', () => {

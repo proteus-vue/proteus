@@ -5,7 +5,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { defineModule, validateModuleConfig, scanModuleConfigs, walkModuleConfigs } from '../packages/module/src'
+import { defineModule, validateModuleConfig, scanModuleConfigs, walkModuleConfigs } from '@proteus-vue/module'
 import { checkModuleConfigs } from '../packages/cli/src/module-check'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-module-'))

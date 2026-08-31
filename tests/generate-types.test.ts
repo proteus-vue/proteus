@@ -5,8 +5,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { generateTypes, formatGenerateTypes } from '../packages/cli/src/generate-types'
-import { proteusConfigSchema, proteusConfigSchemaJson } from '../packages/types/src/config-schema'
-import type { Platform, PlatformTarget } from '../packages/types/src'
+import { proteusConfigSchema, proteusConfigSchemaJson } from '@proteus-vue/types'
+import type { Platform, PlatformTarget } from '@proteus-vue/types'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-generate-types-'))
 afterAll(() => {

@@ -7,7 +7,7 @@ import {
   rewriteStyleCss,
   extractStyleBlocks,
   CSS_RULES,
-} from '../packages/css-compat/src/index'
+} from '@proteus-vue/css-compat'
 
 const codes = (css: string, opts?: Parameters<typeof lintStyleCss>[1]) => lintStyleCss(css, opts).map((v) => v.code)
 

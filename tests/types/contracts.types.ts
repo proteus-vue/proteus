@@ -1,10 +1,10 @@
 // tests/types/contracts.types.ts
 // ★架构规约 L0 / types-plan §07：跨层 DTO 契约类型级断言（正例 + @ts-expect-error 负例）
 // 由根 vue-tsc 校验：负例若未报错 → @ts-expect-error 未使用 → 编译失败（防漂移）
-import type { ApiResponse, CapabilityDescriptor, RouteMeta, RouteRecord, StoreSnapshot, RouteTransition } from '../../packages/contracts/src'
+import type { ApiResponse, CapabilityDescriptor, RouteMeta, RouteRecord, StoreSnapshot, RouteTransition } from '@proteus-vue/contracts'
 // types 包 re-export 兼容（消费方经 @proteus-vue/types 零改动）
-import type { RouteRecord as TSRouteRecord, RouteMeta as TSRouteMeta, RouteTransition as TSRouteTransition } from '../../packages/types/src/router-types'
-import type { RouteTransition as TSSharedTransition } from '../../packages/types/src/index-shared'
+import type { RouteRecord as TSRouteRecord, RouteMeta as TSRouteMeta, RouteTransition as TSRouteTransition } from '@proteus-vue/types'
+import type { RouteTransition as TSSharedTransition } from '@proteus-vue/types'
 
 // ---- 正例：RouteRecord 形状（name/path/component 必填） ----
 const route: RouteRecord = {

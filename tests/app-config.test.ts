@@ -1,8 +1,8 @@
 // tests/app-config.test.ts
 // ★app-config G-35 M1：合并引擎 + 校验器（09-batches M1 验收：深合并/平台覆盖/数组替换 + 校验规则）
 import { describe, expect, it } from 'vitest'
-import { mergeAppConfig, deepMerge, extractPlatformOverride, validateAppConfig, validateAndApply } from '../packages/app-config/src/index'
-import type { AppConfig, DeepPartial } from '../packages/app-config/src/index'
+import { mergeAppConfig, deepMerge, extractPlatformOverride, validateAppConfig, validateAndApply } from '@proteus-vue/app-config'
+import type { AppConfig, DeepPartial } from '@proteus-vue/app-config'
 
 const DEFAULTS: AppConfig = {
   app: { id: 'demo', name: 'Demo', version: '1.0.0', buildNumber: 1 },

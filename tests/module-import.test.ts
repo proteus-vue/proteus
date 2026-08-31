@@ -2,7 +2,7 @@
 // ★module-plan B0：跨模块引用最小闭环——import → require 转换 + 函数调用初始化运行时化
 //   compiler 侧：moduleImports（插件预计算路径）命中 → require 语句；未命中 → 剥离 + 警告
 import { describe, it, expect } from 'vitest'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { getTransformRule } from '../packages/compiler/src/transforms/registry'
 
 const compile = (src: string, name = 'mi.vue', moduleImports?: Array<{ source: string; requirePath: string }>) => {

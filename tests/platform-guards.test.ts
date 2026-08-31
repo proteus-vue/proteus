@@ -2,7 +2,7 @@
 // ★types-plan B4：平台守卫（matchPlatform/assertPlatform/exhaustiveCheck/getPlatform）——铁律 #4 替代 #ifdef
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createRequire } from 'node:module'
-import { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck, detectPlatform } from '../packages/capabilities/src'
+import { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck, detectPlatform } from '@proteus-vue/capabilities'
 
 // ★官方 miniprogram-api-typings 的 require 全局无 resolve（覆盖 node require）——测试用 node 语义需 createRequire
 const nodeRequire = createRequire(import.meta.url)

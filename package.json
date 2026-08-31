@@ -30,7 +30,8 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
-    "verify": "npm test && npm run build:web && npm run build:mp && npm run build --workspaces",
+    "verify": "npm test && npm run build:web && npm run build:mp && npm run build --workspaces && npm run check:pkg",
+    "check:pkg": "node scripts/check-package-health.js",
     "test": "vitest run --exclude \"tests/e2e-*.test.ts\"",
     "test:e2e:web": "npm run build:web && vitest run --no-file-parallelism tests/e2e-web.test.ts tests/e2e-web-keypaths.test.ts",
     "test:update": "vitest run -u --exclude \"tests/e2e-*.test.ts\""

@@ -7,8 +7,8 @@ import {
   transformTemplateToWxml,
   transformStyleToWxss,
   transformScriptToPage,
-} from '../packages/compiler/src'
-import type { TransformRuleOverrides } from '../packages/compiler/src'
+} from '@proteus-vue/compiler'
+import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 const rules = (r: TransformRuleOverrides) => ({ ...opts, rules: r })

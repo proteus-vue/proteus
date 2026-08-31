@@ -1,7 +1,7 @@
 // tests/capability-fallback.test.ts
 // ★platform-plan B4（M4 运行时降级）：缺失能力不崩溃（UnsupportedAPI）/ required 阻断 / fallback 自动生效 / 错误模型
 import { describe, it, expect } from 'vitest'
-import { useCapability, unsupported, unsupportedCapability, CapabilityError, clearCapabilities, registerCapability, defineCapability } from '../packages/capabilities/src'
+import { useCapability, unsupported, unsupportedCapability, CapabilityError, clearCapabilities, registerCapability, defineCapability } from '@proteus-vue/capabilities'
 
 const webAdapter = (supported = true) => ({ platform: 'web' as const, create: () => ({ isSupported: () => supported, ping: () => 'pong' }) })
 

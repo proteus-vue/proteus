@@ -1,7 +1,7 @@
 // tests/adapter-registry.test.ts
 // ★platform-plan B2（M2 Adapter Registry）：defineAdapter + CapabilityRegistry（优先级/平台过滤/isSupported 探测/fallback）+ 多实例隔离
 import { describe, it, expect } from 'vitest'
-import { defineAdapter, CapabilityRegistry, registerAdapter, resolveCapability, useCapability, clearCapabilities } from '../packages/capabilities/src'
+import { defineAdapter, CapabilityRegistry, registerAdapter, resolveCapability, useCapability, clearCapabilities } from '@proteus-vue/capabilities'
 
 const adapter = (capability: string, platform: 'web' | 'skyline', opts: { priority?: number; supported?: boolean } = {}) =>
   defineAdapter({

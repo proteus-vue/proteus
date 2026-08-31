@@ -1,8 +1,8 @@
 // tests/types/conditionals.types.ts
 // ★types-plus-plan B1（01 §2/§6）：条件类型工具类型级断言（正例 + @ts-expect-error 负例）
 // 由根 vue-tsc 校验：负例若未报错 → @ts-expect-error 未使用 → 编译失败（防漂移）
-import type { ExtractByPlatform, IfPlatform, RequiredBy } from '../../packages/types/src/utils'
-import type { Platform } from '../../packages/types/src/index-shared'
+import type { ExtractByPlatform, IfPlatform, RequiredBy } from '@proteus-vue/types'
+import type { Platform } from '@proteus-vue/types'
 
 // ---- IfPlatform：平台为 P 时取 T，否则 never ----
 const webOnly: IfPlatform<'web', string> = 'web 端类型'

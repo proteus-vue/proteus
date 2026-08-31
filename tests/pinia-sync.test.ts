@@ -2,7 +2,7 @@
 // M8.1 多端协同引擎单测（LWW 最终一致 / 冲突兜底 / 离线重放 / excluded 跳过）
 import { describe, it, expect } from 'vitest'
 import { createPinia, defineStore, setActivePinia } from 'pinia'
-import { createSyncEngine, type SyncOp, type SyncTransport } from '../packages/pinia-sync/src'
+import { createSyncEngine, type SyncOp, type SyncTransport } from '@proteus-vue/pinia-sync'
 
 /** 内存双向传输（模拟两个端之间的通道） */
 function makeChannel() {

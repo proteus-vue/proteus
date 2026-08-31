@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { canonicalizeWxml, verifySourceMap, checkJsExports } from '@proteus-vue/test-core/snapshot'
 
 const fixturesDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/pages')

@@ -22,7 +22,7 @@ vi.mock('../packages/router/src/skyline', () => ({
 
 import { adapter } from '@proteus-vue/shared'
 import { isSkyline, navigateWithCustomRoute } from '../packages/router/src/skyline'
-import { createRouter } from '../packages/router/src/index'
+import { createRouter } from '@proteus-vue/router'
 import { routes } from '../examples/router/auto-routes'
 import { beforeEach as registerGuard } from '../packages/router/src/guards'
 

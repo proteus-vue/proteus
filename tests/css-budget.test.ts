@@ -1,8 +1,8 @@
 // tests/css-budget.test.ts
 // ★G-21 css-compat B3：预算门禁（10-benchmark-budgets.md §一/§四 check-css-report）
 import { describe, expect, it } from 'vitest'
-import { CSS_BUDGETS, checkCssBudget, buildCssCompatReport } from '../packages/css-compat/src/index'
-import type { CssGlobalReport } from '../packages/css-compat/src/index'
+import { CSS_BUDGETS, checkCssBudget, buildCssCompatReport } from '@proteus-vue/css-compat'
+import type { CssGlobalReport } from '@proteus-vue/css-compat'
 
 describe('CSS_BUDGETS 预算表（10 §一）', () => {
   it('六项指标完整（含方向）', () => {

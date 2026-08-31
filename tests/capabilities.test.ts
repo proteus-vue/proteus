@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { defineCapability, validateCapabilityDefinition, registerCapability, registerCapabilities, clearCapabilities, useCapability, getCapability, detectPlatform } from '../packages/capabilities/src'
+import { defineCapability, validateCapabilityDefinition, registerCapability, registerCapabilities, clearCapabilities, useCapability, getCapability, detectPlatform } from '@proteus-vue/capabilities'
 import { walkCapabilityFiles, scanCapabilities } from '../packages/capabilities/src/scan'
 import { runCapabilityScan } from '../packages/cli/src/capability-manifest'
 

@@ -1,7 +1,7 @@
 // tests/api.test.ts
 // ★api-plan A1/A8：createApi 请求客户端（web fetch / wx adapter / 拦截器 / 重试 / 错误模型）+ 设备信息
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createApi, ApiError, getDeviceInfo, buildUrl, createAuth } from '../packages/api/src'
+import { createApi, ApiError, getDeviceInfo, buildUrl, createAuth } from '@proteus-vue/api'
 
 afterEach(() => {
   vi.restoreAllMocks()

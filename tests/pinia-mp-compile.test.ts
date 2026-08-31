@@ -2,7 +2,7 @@
 // ★pinia-plan 12：Pinia MP 编译接入——P1 模板 store 绑定（编译产物断言）+ P3 共享模块放行（resolveSharedModule pinia 白名单）
 import { describe, it, expect } from 'vitest'
 import path from 'node:path'
-import { compileVueSfc } from '../packages/compiler/src'
+import { compileVueSfc } from '@proteus-vue/compiler'
 import { resolveSharedModule } from '../packages/plugin-vite/src/plugin'
 
 const compile = (src: string, name = 'pinia.vue'): { wxml: string; js: string; warnings: string[] } => {

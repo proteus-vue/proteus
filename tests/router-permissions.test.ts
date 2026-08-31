@@ -1,7 +1,7 @@
 // tests/router-permissions.test.ts
 // ★security M3 §3：createRouter permissions 检查器 —— meta.permissions 自动守卫（与 PermissionRegistry 直接对接）
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { PermissionRegistry, permissionFor } from '../packages/security/src'
+import { PermissionRegistry, permissionFor } from '@proteus-vue/security'
 
 vi.mock('@proteus-vue/shared', () => ({
   adapter: {
@@ -21,7 +21,7 @@ vi.mock('../packages/router/src/skyline', () => ({
 }))
 
 import { adapter } from '@proteus-vue/shared'
-import { createRouter } from '../packages/router/src/index'
+import { createRouter } from '@proteus-vue/router'
 import type { RouteRecord } from '../packages/router/src/types'
 
 const TRADE = permissionFor('trade', 'create')

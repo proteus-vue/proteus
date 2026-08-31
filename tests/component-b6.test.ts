@@ -5,7 +5,7 @@ import { describe, it, expect, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { compileVueSfc, transformScriptToPage } from '../packages/compiler/src'
+import { compileVueSfc, transformScriptToPage } from '@proteus-vue/compiler'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 

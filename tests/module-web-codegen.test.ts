@@ -1,7 +1,7 @@
 // tests/module-web-codegen.test.ts
 // ★module-plan B4（M4 Web 打包）：generateRollupOptions——模块图谱 → manualChunks（Web 端按模块边界 code-split）
 import { describe, it, expect } from 'vitest'
-import { DependencyGraph, generateRollupOptions } from '../packages/module/src'
+import { DependencyGraph, generateRollupOptions } from '@proteus-vue/module'
 
 function tradeGraph(): DependencyGraph {
   return DependencyGraph.fromConfigs([

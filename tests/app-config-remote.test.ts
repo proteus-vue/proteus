@@ -8,7 +8,7 @@ import {
   fetchAndApplyRemote,
 } from '../packages/app-config/src/remote'
 import type { FetchLike } from '../packages/app-config/src/remote'
-import type { AppConfig } from '../packages/app-config/src/index'
+import type { AppConfig } from '@proteus-vue/app-config'
 
 const CURRENT: AppConfig = {
   app: { id: 'x', name: 'X', version: '1.0.0', buildNumber: 1 },

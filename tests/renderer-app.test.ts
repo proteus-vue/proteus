@@ -2,8 +2,8 @@
 // ★app-plan B1：App 渲染器核心——Vue createRenderer + NativeAdapter mock 接线（渲染/更新/卸载/事件属性）
 import { describe, it, expect } from 'vitest'
 import { h, ref, nextTick } from 'vue'
-import { createAppRenderer, createMockAdapter } from '../packages/renderer-app/src'
-import type { NativeElementNode } from '../packages/renderer-app/src'
+import { createAppRenderer, createMockAdapter } from '@proteus-vue/renderer-app'
+import type { NativeElementNode } from '@proteus-vue/renderer-app'
 
 /** 取元素子节点中第一个文本内容（h('text', null, 'x') → text 元素 → 文本子节点） */
 function firstText(el: NativeElementNode): string {

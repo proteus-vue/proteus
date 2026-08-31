@@ -2,7 +2,7 @@
 // ★组件库 B3 编译器增强：watch props 源（watch(props.x) / watch(() => props.x)）→ WeChat observers
 // 组件监听自身属性变化（列表 items 分页、弹层 visible v-model 等）；Web 端即标准 Vue watch（全响应式）
 import { describe, it, expect } from 'vitest'
-import { transformScriptToPage, compileVueSfc } from '../packages/compiler/src'
+import { transformScriptToPage, compileVueSfc } from '@proteus-vue/compiler'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
