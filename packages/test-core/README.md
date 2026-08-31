@@ -4,6 +4,8 @@ Proteus 测试核心（test-framework M3 + B7 + 统一测试 API）——L1-L3 �
 
 ## 能力
 
+> ★**随包 Skill**：`@proteus-vue/test-core` 自带 agent skill（`skills/proteus-test/`，npm 发布后随包分发）——安装到 agent skills 目录即可让 AI 直接使用本测试框架（CLI 命令 / TestDriver 能力 / 跨端用例模式 / MP 真机指南 / 环境坑）。
+
 | API | 说明 |
 |-----|------|
 | `createMockContext(options?)` | **唯一 wx 来源**：wx 全局 mock（storage/router/ui 内存实现 + vi.fn 可断言）+ Page/Component/App 构造器捕获 + getApp/getCurrentPages + 内存存储。`afterEach` 调 `cleanup()` 恢复全局 |

@@ -25,6 +25,7 @@
 | 11-execution-batches | B1-B8 + Prompt | ✅ |
 | 12-placeholders | CI / App TODO | ✅ |
 | 13-test-driver-api | **统一测试 API 参考（TestDriver/TestElement 全部能力接口）**：入口工厂 · 全部方法签名/参数/返回 · 双端行为差异 · 注入句柄结构类型 · 完整跨端用例 · 边界扩展 | ✅ |
+| 14-agent-skill | **随包 Agent Skill（packages/test-core/skills/proteus-test/）**：AI 直接使用测试框架——意图→命令表 · TestDriver 能力索引 · 跨端用例模式 · MP 真机指南 · 环境坑合集（npm 发布后随 @proteus-vue/test-core 分发） | ✅ |
 
 ## 方案可行性结论
 - ✅ Web 用 Vitest —— 正确
