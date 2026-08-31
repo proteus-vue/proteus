@@ -150,26 +150,31 @@ packages/
 | 模板依赖 npm 包未发布（步骤 7） | workspace 链接（node_modules/@proteus-vue/* 指向 packages）；发布后切 npm |
 | create-proteus 快照脚本与主仓同步 | 步骤 7 重写 snapshot-template.ts（只快照应用壳） |
 
-## npm 发布清单（★真实发布时按序执行；发布准备已就绪，未执行）
+## npm 发布记录（2026-08-31：beta 预览已全部发布）
 
-> 发布配置已就绪：11 个 @proteus-vue/* 包字段完整（main/types/exports 子路径/files）、包间依赖**精确版本**对齐（npm 404 教训）、cli 对 @proteus-vue/{compiler,capabilities,module,router} 全部 external（运行时从 node_modules 解析）、changesets 已配（access: public / baseBranch: main / 7 个待发 changeset：router/runtime/shared/pinia-sync/plugin-vite minor + compiler minor + cli patch）。
+> ✅ **22 包全部已发布**（`npm run changeset:publish`，dist-tag `beta`；首发布时 npm 同时置 `latest`）。发布拓扑：contracts → types → api → app-config → shared → built-in-components → capabilities → compiler → css-compat → module → router → runtime → cli → create-proteus → devtools-runtime → i18n → pinia-sync → plugin-vite → renderer-app → security → test-core → web。
+>
+> - 包健康门禁 `npm run check:pkg`（22 包 0 error/0 warn）入 verify 末尾
+> - **发布凭据**：granular Automation token（只授权 `@proteus-vue` scope，可绕过 2FA）——因此脚手架包从裸名 `create-proteus` **收口改名 `@proteus-vue/create-proteus`**（命令 `npm create @proteus-vue/proteus my-app`），使全部产物统一受组织 token 管理（决策 #215）
+> - **README 随包**：22 包 README 全覆盖（9 个此前缺失的包已补齐）——npm 页面展示随下一次版本发布生效
+> - test-core 随包 skill（`skills/proteus-test/`）随发布物分发
+> - 验证：1058 单测 + check:pkg + Web E2E 13/13 + MP E2E 1/1 全绿；发布前 dry-run 确认 dist 内容正确
+
+**正式版（后续）**：
 
 ```bash
-# ① 应用 changeset：bump 版本 + 写 CHANGELOG + 自动对齐 workspace 包间精确依赖
-npm run changeset:version
-
-# ② ★手动同步 changesets 管不到的两处（否则首次发布即 404 / workspace 解析失败）：
+npx changeset pre exit   # 退出 pre 模式（当前 tag: beta 已是合法版本）
+npm run changeset:version   # ① 应用 7 个待发 changeset：bump + CHANGELOG + 自动对齐 workspace 包间精确依赖
+# ② ★手动同步 changesets 管不到的两处（否则 workspace 解析失败）：
 #   - examples/package.json：@proteus-vue/* 范围同步到新版本（private 包不被 changesets 管理）
 #   - packages/create-proteus/templates/package.json：同上（模板工程按新版本装包）
 npm install   # ③ 更新 lockfile
-npm run verify   # ④ 全绿（616 单测 + 双端构建 + workspaces 构建）
+npm run verify   # ④ 全绿
 npx tsx scripts/snapshot-template.ts && git diff --exit-code -- packages/create-proteus/templates   # ⑤ 模板无漂移
 # ⑥ 提交（版本 bump + changelog + 依赖同步）→ ⑦ 再执行真实发布：
 npm run changeset:publish   # 按依赖拓扑自动发布全部包
-# ⑧ 发布后打 tag（如 @proteus-vue/router@0.2.0）并 push
+# ⑧ 发布后打 tag 并 push
 ```
-
-★注意：① 之后 examples/ 与 templates/ 的 `^0.x` 范围必须同步到新版本；版本若未同步，workspace 内 `npm install` 会因版本不匹配直接失败（发布时也会让 @proteus-vue/create-proteus 装到不存在的旧版本 → npm 404）。
 
 ## 验收清单（✅ 全部通过）
 
@@ -181,4 +186,4 @@ npm run changeset:publish   # 按依赖拓扑自动发布全部包
 
 ## 文档版本
 
-v1.1（npm 发布准备：cli external 统一 + exports ./package.json 补全 + 发布清单）
+v1.2（2026-08-31：22 包 beta 发布 + 发布记录更新 + create-proteus 收口 @proteus-vue scope）
