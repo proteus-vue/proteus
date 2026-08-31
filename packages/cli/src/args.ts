@@ -346,6 +346,10 @@ export const HELP_TEXT = `Proteus CLI —— AI-native 透明跨端编译框架
       ★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合
       任一域失败 → exit 1（默认全开，--no-* 关闭对应域）
 
+  proteus health [dir]
+      ★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE
+      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）
+
   proteus css:check [dir|file] [--no-strict] [--fix] [--report <path>]
       ★CSS 跨端兼容校验（G-21）：CSS001-012 + 预算门禁（字节/选择器/语义占比/禁止项）
       --no-strict  违规降级 warn；--report 落盘 css-compat-report.json（check-css-report.mjs 消费）

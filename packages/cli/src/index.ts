@@ -24,6 +24,7 @@ import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
 import { parseDevArgs, runDev } from './dev'
+import { runHealthCheck, formatHealthReport } from './health'
 import { parseTestArgs, runTest } from './test'
 import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
 import { generateTypes, formatGenerateTypes } from './generate-types'
@@ -228,6 +229,20 @@ async function main(): Promise<void> {
         if (!summary.ok) process.exitCode = 1
       } catch (e) {
         console.error(`[proteus-check] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'health': {
+      // ★工程/环境健康检查（与 check 领域门禁正交）：Node 版本/结构/依赖/产物/appid/IDE 一次性诊断
+      const root = rest[0] && !rest[0].startsWith('-') ? rest[0] : '.'
+      try {
+        const items = await runHealthCheck(root)
+        const { text, ok } = formatHealthReport(items)
+        console.log(text)
+        if (!ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-health] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break
