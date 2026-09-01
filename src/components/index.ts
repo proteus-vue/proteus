@@ -26,6 +26,9 @@ import PFit from './p-fit/index.vue'
 // ★Fluid System（fluid-system-plan S1）：自适应分栏 / 容器断点分区
 import PSplit from './p-split/index.vue'
 import PZone from './p-zone/index.vue'
+// ★Fluid System（fluid-system-plan S2）：安全区避让 / 纵横比容器
+import PSafe from './p-safe/index.vue'
+import PAspect from './p-aspect/index.vue'
 
 export {
   VirtualList,
@@ -51,6 +54,9 @@ export {
   // ★Fluid System
   PSplit,
   PZone,
+  // ★Fluid System S2
+  PSafe,
+  PAspect,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

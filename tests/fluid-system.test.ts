@@ -12,8 +12,9 @@ import {
   readDisplayMode,
   detectFluidCapabilities,
   createSizeAwareObserver,
+  resolveSafeAreaStyle,
 } from '@proteus-vue/fluid'
-import { PSplit, PZone, PGrid } from '@proteus-vue/components'
+import { PSplit, PZone, PGrid, PSafe, PAspect } from '@proteus-vue/components'
 
 /** fake 尺寸观察器工厂：observe 记录目标；fire 驱动 onSize（真实 RO 的 contentRect 回调等价） */
 function fakeObserverFactory(onSize: (w: number, h: number) => void): { observe: (t: unknown) => void; disconnect: () => void; fire: (w: number, h: number) => void } {
@@ -136,24 +137,28 @@ describe('Fluid System 组件（S1：p-split / p-zone）', () => {
 describe('能力检测 detectFluidCapabilities（essence 02 §4 降级策略）', () => {
   it('supports 注入：全支持 / 部分不支持 / probe 抛错兑底（单能力 false 不牵连其余）', () => {
     const all = detectFluidCapabilities(() => true)
-    expect(all).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true })
+    expect(all).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
     const noGrid = detectFluidCapabilities((p, v) => !(p === 'display' && v === 'grid'))
     expect(noGrid.grid).toBe(false)
     expect(noGrid.clamp).toBe(true)
     expect(noGrid.containerQuery).toBe(true)
     expect(noGrid.flexGap).toBe(true)
+    expect(noGrid.aspectRatio).toBe(true)
+    const noAspect = detectFluidCapabilities((p, v) => !(p === 'aspect-ratio' && v === '1 / 1'))
+    expect(noAspect.aspectRatio).toBe(false)
+    expect(noAspect.grid).toBe(true)
     const throwing = detectFluidCapabilities(() => {
       throw new Error('boom')
     })
-    expect(throwing).toEqual({ clamp: false, grid: false, containerQuery: false, flexGap: false })
+    expect(throwing).toEqual({ clamp: false, grid: false, containerQuery: false, flexGap: false, aspectRatio: false })
   })
 
   it('无 CSS.supports（MP 逻辑层/SSR）→ 假设全支持（渲染端自决降级）', () => {
-    expect(detectFluidCapabilities(null)).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true })
+    expect(detectFluidCapabilities(null)).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
   })
 
   it('缺省读全局 CSS.supports（happy-dom 全真 → 全支持）', () => {
-    expect(detectFluidCapabilities()).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true })
+    expect(detectFluidCapabilities()).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
   })
 })
 
@@ -254,5 +259,112 @@ describe('Fluid System 组件降级（G-22.2 铁律「朴素但正确」：p-gri
       if (prevCss === undefined) delete (globalThis as { CSS?: unknown }).CSS
       else (globalThis as { CSS: unknown }).CSS = prevCss
     }
+  })
+})
+
+describe('Fluid System S2 纯逻辑（resolveSafeAreaStyle 安全区样式）', () => {
+  it('area=top → paddingTop env(safe-area-inset-top)；fallback 0 不包裹', () => {
+    expect(resolveSafeAreaStyle({ area: 'top' })).toEqual({ paddingTop: 'env(safe-area-inset-top, 0px)' })
+    expect(resolveSafeAreaStyle({})).toEqual({ paddingTop: 'env(safe-area-inset-top, 0px)' }) // 默认 top
+  })
+
+  it('area=all + fallback=44 → 四边 max(env(...), 44px) 包裹（「至少 Npx」）', () => {
+    expect(resolveSafeAreaStyle({ area: 'all', fallback: 44 })).toEqual({
+      paddingTop: 'max(env(safe-area-inset-top, 0px), 44px)',
+      paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 44px)',
+      paddingLeft: 'max(env(safe-area-inset-left, 0px), 44px)',
+      paddingRight: 'max(env(safe-area-inset-right, 0px), 44px)',
+    })
+  })
+
+  it('area=horizontal → 左右避让；未知 area → 空样式', () => {
+    expect(resolveSafeAreaStyle({ area: 'horizontal' })).toEqual({
+      paddingLeft: 'env(safe-area-inset-left, 0px)',
+      paddingRight: 'env(safe-area-inset-right, 0px)',
+    })
+    expect(resolveSafeAreaStyle({ area: 'diagonal' })).toEqual({})
+  })
+
+  it('fold + displayMode=fold/span → hinge 左右避让（fold-right 由 fold-left+fold-width 推导）', () => {
+    const hinge = {
+      paddingLeft: 'env(fold-left, 0px)',
+      paddingRight: 'calc(100% - env(fold-left, 0px) - env(fold-width, 0px))',
+    }
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'fold' })).toEqual(hinge)
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'span' })).toEqual(hinge)
+  })
+
+  it('fold 开关守卫：expand/standard 不生效；fold=false 即使 displayMode=fold 也不生效', () => {
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'expand' })).toEqual({})
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'standard' })).toEqual({})
+    expect(resolveSafeAreaStyle({ fold: false, displayMode: 'fold' })).toEqual({ paddingTop: 'env(safe-area-inset-top, 0px)' })
+  })
+})
+
+describe('Fluid System S2 组件（p-safe 安全区 / p-aspect 纵横比）', () => {
+  it('p-safe：area=top 渲染（样式字符串由 resolveSafeAreaStyle 纯函数保证——happy-dom CSS 解析器丢弃 env()）', async () => {
+    const el = mount(PSafe, { area: 'top' }, { default: () => h('div', { class: 'inner' }) })
+    await nextTick()
+    const root = el.querySelector('.p-safe') as HTMLElement
+    expect(root.classList.contains('p-safe-fold')).toBe(false)
+    expect(el.querySelector('.inner')).not.toBeNull()
+  })
+
+  it('p-safe：fold=true 且 display-mode=fold（matchMedia 注入）→ p-safe-fold 类 + hinge 样式', async () => {
+    const prevMm = (globalThis as { matchMedia?: unknown }).matchMedia
+    ;(globalThis as { matchMedia: unknown }).matchMedia = (q: string) => ({
+      matches: q === '(display-mode: fold)',
+      addEventListener() {},
+      removeEventListener() {},
+    })
+    try {
+      const el = mount(PSafe, { fold: true })
+      await nextTick()
+      const root = el.querySelector('.p-safe') as HTMLElement
+      expect(root.classList.contains('p-safe-fold')).toBe(true)
+    } finally {
+      if (prevMm === undefined) delete (globalThis as { matchMedia?: unknown }).matchMedia
+      else (globalThis as { matchMedia: unknown }).matchMedia = prevMm
+    }
+  })
+
+  it('p-safe：fold=true 但 display-mode=standard（桌面）→ 无 hinge（不误伤普通环境）', async () => {
+    const el = mount(PSafe, { fold: true })
+    await nextTick()
+    expect((el.querySelector('.p-safe') as HTMLElement).classList.contains('p-safe-fold')).toBe(false)
+  })
+
+  it('p-aspect：aspect-ratio 支持 → 原生比例 + maxWidth', async () => {
+    const el = mount(PAspect, { ratio: 16 / 9, maxWidth: 400 })
+    await nextTick()
+    const root = el.querySelector('.p-aspect') as HTMLElement
+    expect(root.classList.contains('p-aspect-fallback')).toBe(false)
+    expect(root.style.aspectRatio).toBe('1.7777777777777777 / 1')
+    expect(root.style.maxWidth).toBe('400px')
+    expect(root.style.position).toBe('relative')
+  })
+
+  it('p-aspect：aspect-ratio 不支持 → padding-top hack 降级（height 0 + paddingTop 1/ratio%）', async () => {
+    const prevCss = (globalThis as { CSS?: unknown }).CSS
+    ;(globalThis as { CSS: unknown }).CSS = { supports: (p: string, v: string) => !(p === 'aspect-ratio' && v === '1 / 1') }
+    try {
+      const el = mount(PAspect, { ratio: 16 / 9 })
+      await nextTick()
+      const root = el.querySelector('.p-aspect') as HTMLElement
+      expect(root.classList.contains('p-aspect-fallback')).toBe(true)
+      expect(root.style.height).toBe('0px')
+      expect(root.style.paddingTop).toBe('56.25%')
+      expect(root.style.aspectRatio).toBe('')
+    } finally {
+      if (prevCss === undefined) delete (globalThis as { CSS?: unknown }).CSS
+      else (globalThis as { CSS: unknown }).CSS = prevCss
+    }
+  })
+
+  it('p-aspect：ratio 非法（≤0）→ 兜底 16/9', async () => {
+    const el = mount(PAspect, { ratio: 0 })
+    await nextTick()
+    const root = el.querySelector('.p-aspect') as HTMLElement
+    expect(root.style.aspectRatio).toBe('1.7777777777777777 / 1')
   })
 })

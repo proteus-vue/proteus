@@ -10,13 +10,15 @@ export interface FluidCapabilities {
   containerQuery: boolean
   /** Flex gap（弹性布局子项间距） */
   flexGap: boolean
+  /** CSS aspect-ratio（宽高比盒——p-aspect 原生支撑；不支持 → padding-top hack 降级） */
+  aspectRatio: boolean
 }
 
 /** CSS.supports 结构类型（(property, value) 双参；浏览器全局或注入 fake） */
 export type FluidSupportsFn = (property: string, value: string) => boolean
 
 /** 无探测能力时的缺省：假设全支持（MP/SSR 渲染端自决降级，不在逻辑层误判） */
-const ALL_SUPPORTED: FluidCapabilities = { clamp: true, grid: true, containerQuery: true, flexGap: true }
+const ALL_SUPPORTED: FluidCapabilities = { clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true }
 
 function probe(fn: FluidSupportsFn, property: string, value: string): boolean {
   try {
@@ -35,7 +37,7 @@ function globalSupports(): FluidSupportsFn | null {
 }
 
 /**
- * 检测目标环境柔性能力（clamp / grid(auto-fit) / containerQuery / flexGap）
+ * 检测目标环境柔性能力（clamp / grid(auto-fit) / containerQuery / flexGap / aspectRatio）
  * - 传入 supports（测试注入 fake）优先；否则读全局 CSS.supports
  * - 无 CSS.supports → 全支持（Web 端才有探测条件；MP/SSR 渲染端自决降级）
  */
@@ -47,5 +49,6 @@ export function detectFluidCapabilities(supports?: FluidSupportsFn | null): Flui
     grid: probe(fn, 'display', 'grid') && probe(fn, 'grid-template-columns', 'repeat(auto-fit, minmax(1px, 1fr))'),
     containerQuery: probe(fn, 'container-type', 'inline-size'),
     flexGap: probe(fn, 'gap', '1px'),
+    aspectRatio: probe(fn, 'aspect-ratio', '1 / 1'),
   }
 }

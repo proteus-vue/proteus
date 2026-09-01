@@ -12,3 +12,6 @@ export { detectFluidCapabilities } from './capabilities'
 export type { FluidCapabilities, FluidSupportsFn } from './capabilities'
 export { createSizeAwareObserver } from './layout'
 export type { SizeAwareObserver, SizeAwareState, SizeAwareOptions, ResizeTargetLike } from './layout'
+// ★S2 + G-09 SafeArea：安全区避让样式纯逻辑（Web env() 映射 + 折叠屏 hinge）
+export { resolveSafeAreaStyle } from './safe-area'
+export type { SafeAreaStyleOptions } from './safe-area'

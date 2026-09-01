@@ -1,11 +1,15 @@
-<!-- examples/pages/fluid-system-demo.vue —— ★Fluid System 演示（fluid-system-plan S1：多形态设备语义布局）
+<!-- examples/pages/fluid-system-demo.vue —— ★Fluid System 演示（fluid-system-plan S1+S2：多形态设备语义布局）
      · p-split  自适应分栏：容器宽 < minSplitWidth → 堆叠；≥ → 并排（按容器而非视口——拖宽/拖窄窗口看变化）
      · p-zone   容器断点分区：sm/md/lg/xl 命名槽按容器断点渲染
+     · p-safe   安全区避让：env(safe-area-inset-*) + 折叠屏 hinge（display-mode fold/span）
+     · p-aspect 纵横比容器：aspect-ratio 原生 / padding-top hack 降级
      · 折叠屏/车机/平板的响应式意图声明
-     ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽） -->
+     ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽、p-safe fold 恒不生效） -->
 <script setup lang="ts">
-import { ref } from 'vue'
-import { PSplit, PZone } from '@proteus-vue/components'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { PSplit, PZone, PSafe, PAspect } from '@proteus-vue/components'
+import { createDeviceEnv } from '@proteus-vue/fluid'
+import type { DeviceEnv, FluidDisplayMode } from '@proteus-vue/fluid'
 
 const cards = ref([{ id: 1, title: '分区卡片' }])
 function expand(): void {
@@ -13,6 +17,24 @@ function expand(): void {
   for (let i = 1; i <= 8; i++) arr.push({ id: i, title: '卡片 ' + i })
   cards.value = arr
 }
+
+// ★S2 折叠形态指示器：display-mode（fold/span/expand）——DevTools 折叠屏模拟可切换；MP 无 matchMedia → standard
+const displayMode = ref<FluidDisplayMode>('standard')
+const orientation = ref('portrait')
+let env: DeviceEnv | null = null
+onMounted(() => {
+  env = createDeviceEnv()
+  displayMode.value = env.get().displayMode
+  orientation.value = env.get().orientation
+  env.subscribe((s) => {
+    displayMode.value = s.displayMode
+    orientation.value = s.orientation
+  })
+})
+onUnmounted(() => {
+  if (env) env.destroy()
+  env = null
+})
 </script>
 
 <template>
@@ -59,6 +81,43 @@ function expand(): void {
     <p-grid :min-col-width="140" :gap="10" class="demo-grid">
       <div v-for="c in cards" :key="c.id" class="cell">{{ c.title }}</div>
     </p-grid>
+
+    <!-- ★S2 p-safe：安全区避让（刘海/Home Indicator；fallback 演示桌面 env()=0 时的至少值） -->
+    <h3 class="sec-title">S2 · 安全区避让（p-safe）</h3>
+    <p class="hint">
+      Web 端 env(safe-area-inset-*) 需 viewport-fit=cover（已注入）；桌面 env()=0 → fallback 兜底「至少 Npx」。
+      折叠屏 hinge 用 DevTools 设备模拟（display-mode: fold/span）验证。
+    </p>
+    <p-safe area="top" :fallback="44" class="safe-demo">
+      <div class="safe-inner">顶部避让 · fallback 44px（模拟刘海/状态栏）</div>
+    </p-safe>
+    <p-safe area="bottom" :fallback="34" class="safe-demo">
+      <div class="safe-inner">底部避让 · fallback 34px（模拟 Home Indicator）</div>
+    </p-safe>
+    <p-safe area="all" :fallback="8" class="safe-demo">
+      <div class="safe-inner">四边避让 · fallback 8px</div>
+    </p-safe>
+    <p-safe fold class="safe-demo safe-fold">
+      <div class="safe-inner">折叠屏 hinge 避让（display-mode fold/span 时左右避开折叠区）</div>
+    </p-safe>
+
+    <!-- ★S2 p-aspect：纵横比容器（aspect-ratio 原生 / padding-top hack 降级） -->
+    <h3 class="sec-title">S2 · 纵横比容器（p-aspect）</h3>
+    <div class="aspect-row">
+      <p-aspect :ratio="16 / 9" class="aspect-demo">
+        <div class="aspect-inner">16:9</div>
+      </p-aspect>
+      <p-aspect :ratio="1" class="aspect-demo">
+        <div class="aspect-inner">1:1</div>
+      </p-aspect>
+    </div>
+
+    <!-- ★S2 折叠形态指示器：display-mode / 方向（DevTools 折叠屏模拟可切换） -->
+    <div class="env-box">
+      <h3>当前设备形态</h3>
+      <p class="hint">display-mode：<strong>{{ displayMode }}</strong>（DevTools 折叠屏模拟 → fold/span/expand）</p>
+      <p class="hint">方向：<strong>{{ orientation }}</strong></p>
+    </div>
   </div>
 </template>
 
@@ -128,5 +187,54 @@ function expand(): void {
 .hint {
   color: #999;
   font-size: 12px;
+}
+/* ★S2 demo：安全区 / 纵横比 / 设备形态 */
+.sec-title {
+  margin: 28px 0 8px;
+  font-size: 16px;
+}
+.safe-demo {
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background: #eef4fb;
+  border: 1px solid #d6e4f5;
+}
+.safe-fold {
+  background: #fffbe6;
+  border-color: #ffe58f;
+}
+.safe-inner {
+  padding: 12px;
+  font-size: 13px;
+}
+.aspect-row {
+  display: flex;
+  gap: 12px;
+}
+.aspect-demo {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #d9d9d9;
+}
+.aspect-inner {
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 13px;
+  height: 100%;
+}
+.env-box {
+  margin-top: 24px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid #eee;
+}
+.env-box h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
 }
 </style>
