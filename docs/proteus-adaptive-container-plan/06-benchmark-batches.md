@@ -114,13 +114,13 @@ describe('validateAdaptiveConstraint', () => {
 
 **验收**：100% 单测通过，零原生依赖 ✅
 
-### B2：运行时 Controller（M2）
+### B2：运行时 Controller（M2）✅ 已落地
 
-- [ ] `AdaptiveController`（ResizeObserver 绑定）
-- [ ] `applyAdaptiveForm()` 五端 nodeOps 抽象
-- [ ] 容器宽度变化 → 形态切换
+- [x] `AdaptiveController`（ResizeObserver 绑定）——`createAdaptiveController`（fluid/adaptive.ts，复用 createContainerQuery + computeAdaptiveForm，工厂注入可单测）
+- [x] `applyAdaptiveForm()` 五端 nodeOps 抽象——Web 端 `resolveAdaptiveFormStyle`（sheet 底部全宽 / dialog·popover 居中降级）；B3 原生映射待 App Renderer
+- [x] 容器宽度变化 → 形态切换——`src/components/p-adaptive`（modes 表达式 + visible + formChange emit；MP 无 RO 恒首区间兜底）
 
-**验收**：Web 端拖拽窗口实时 reflow
+**验收**：Web 端拖拽窗口实时 reflow ✅（fluid-system-demo p-adaptive 区块，tests/adaptive.test.ts B2 用例）
 
 ### B3：原生映射（M3，按端）
 

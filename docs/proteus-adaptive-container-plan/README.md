@@ -77,4 +77,4 @@ bash pack.sh
 
 ## 状态
 
-规划完成，待并入 `proteus-architecture` 规约。**B1（compute/validate 纯逻辑）已落地**（`@proteus-vue/fluid` adaptive.ts：parseAdaptiveExpression / validateAdaptiveRanges（FLD007）/ computeAdaptiveForm，零依赖可单测；`proteus fluid:check` 接入 FLD007-009）。B2（AdaptiveController 容器监听）起待组件层。
+规划完成，待并入 `proteus-architecture` 规约。**B1 已落地**（`@proteus-vue/fluid` adaptive.ts：parseAdaptiveExpression / validateAdaptiveRanges（FLD007）/ computeAdaptiveForm，零依赖可单测；`proteus fluid:check` 接入 FLD007-009）。**B2 已落地**（createAdaptiveController 容器监听 + resolveAdaptiveFormStyle Web 形态样式 + src/components/p-adaptive 组件——拖窗口实时 reflow）。B3（iOS/Android/鸿蒙原生容器映射）待 App Renderer。

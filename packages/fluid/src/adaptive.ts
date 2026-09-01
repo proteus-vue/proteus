@@ -1,8 +1,12 @@
 // packages/fluid/src/adaptive.ts
-// ★p-adaptive（adaptive-container-plan G-22 §5 / B1）：容器形态自适应纯逻辑
+// ★p-adaptive（adaptive-container-plan G-22 §5 / B1+B2）：容器形态自适应纯逻辑
 //   把系统「同一语义随尺寸切换形态」能力语义化（iOS UISheet / Android BottomSheet / 鸿蒙 SideBarContainer）
 //   B1 零依赖纯函数：解析（字符串→区间）/ 校验（FLD007 连续不重叠）/ 求解（宽度→形态）
-//   形态切换是「换容器」由渲染层 nodeOps 实现（B3+）；Web 端 B2 AdaptiveController 在此之上监听容器宽度
+//   B2 运行时：createAdaptiveController（容器监听 + 求解，尺寸观察器可注入）+ resolveAdaptiveFormStyle（Web 形态样式）
+//   形态切换是「换容器」由渲染层 nodeOps 实现（B3+）；本模块是 Web 端 B2 的纯逻辑底座
+import { createContainerQuery } from './context'
+import type { SizeObserverFactory } from './context'
+
 export interface AdaptiveVariant {
   /** 形态名（sheet/dialog/popover/drawer/sidebar/...——语义由渲染层定义） */
   form: string
@@ -75,4 +79,85 @@ export function computeAdaptiveForm(modes: AdaptiveVariant[], width: number): st
   const last = modes[modes.length - 1] as AdaptiveVariant
   if (width >= last.hi) return last.form
   return null
+}
+
+// ── B2：AdaptiveController（容器监听 + 求解，尺寸观察器工厂注入可单测）──
+
+/** Web 端形态样式（applyAdaptiveForm 的 Web 实现底座）：sheet 底部全宽 / dialog·popover 居中 */
+export function resolveAdaptiveFormStyle(form: string): Record<string, string> {
+  const centered = { position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
+  if (form === 'sheet') {
+    return { position: 'fixed', left: '0px', right: '0px', bottom: '0px' }
+  }
+  if (form === 'popover') {
+    // ★降级链（03 §6）：Web 不支持 popover 锚定定位时降级为 position: fixed 居中——文档明确
+    return centered
+  }
+  // dialog / 其他形态：居中
+  return centered
+}
+
+export interface AdaptiveControllerState {
+  /** 当前形态（computeAdaptiveForm 求解；无区间 → null） */
+  form: string | null
+  /** 容器宽度（px） */
+  width: number
+}
+
+export interface AdaptiveControllerOptions {
+  /** 形态区间（有序、连续不重叠——由 parseAdaptiveExpression 解析或手写） */
+  modes: AdaptiveVariant[]
+  /** 尺寸观察器工厂（缺省 globalThis.ResizeObserver；无则容器保持初始/静态——MP 降级） */
+  createObserver?: SizeObserverFactory
+  /** 尺寸读取器（初始尺寸；测试注入） */
+  readSize?: () => { width: number; height: number }
+}
+
+export interface AdaptiveController {
+  get(): AdaptiveControllerState
+  subscribe(cb: (state: AdaptiveControllerState) => void): () => void
+  destroy(): void
+}
+
+/**
+ * 容器形态控制器（B2）：监听容器尺寸变化 → computeAdaptiveForm 求解 → 订阅者收到形态切换
+ * - 复用 createContainerQuery（容器查询运行时）；createObserver 工厂注入可单测
+ * - 稳态零开销（只响应容器尺寸变化；不轮询、不监听屏幕旋转——铁律 G-22.6）
+ */
+export function createAdaptiveController(el: unknown, options: AdaptiveControllerOptions): AdaptiveController {
+  const modes = options.modes
+  const state: AdaptiveControllerState = { form: computeAdaptiveForm(modes, 0), width: 0 }
+  const handlers: Array<(s: AdaptiveControllerState) => void> = []
+  let destroyed = false
+
+  const query = createContainerQuery(el, {
+    createObserver: options.createObserver,
+    readSize: options.readSize,
+  })
+  query.subscribe((s) => {
+    state.form = computeAdaptiveForm(modes, s.width)
+    state.width = s.width
+    for (const h of handlers) h({ ...state })
+  })
+
+  return {
+    get: () => ({ ...state }),
+    subscribe(cb) {
+      handlers.push(cb)
+      cb({ ...state })
+      let removed = false
+      return () => {
+        if (removed) return
+        removed = true
+        const idx = handlers.indexOf(cb)
+        if (idx >= 0) handlers.splice(idx, 1)
+      }
+    },
+    destroy() {
+      if (destroyed) return
+      destroyed = true
+      query.destroy()
+      handlers.length = 0
+    },
+  }
 }

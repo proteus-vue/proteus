@@ -7,7 +7,7 @@
      ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽、p-safe fold 恒不生效） -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale } from '@proteus-vue/components'
+import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale, PAdaptive } from '@proteus-vue/components'
 import { createDeviceEnv, shouldReduceMotion, createSizeAwareObserver, computeAdaptiveForm } from '@proteus-vue/fluid'
 import type { DeviceEnv, FluidDisplayMode, SizeAwareObserver } from '@proteus-vue/fluid'
 
@@ -60,6 +60,7 @@ const ADAPTIVE_MODES = [
 ]
 const viewportWidth = ref(0)
 const adaptiveForm = ref('sheet')
+const showAdaptive = ref(false)
 let aware: SizeAwareObserver | null = null
 onMounted(() => {
   aware = createSizeAwareObserver(null, { viewportSize: () => window.innerWidth })
@@ -198,10 +199,10 @@ onUnmounted(() => {
       </p-scale>
     </div>
 
-    <!-- ★p-adaptive 求解演示（adaptive-container-plan B1）：视口宽度 → 弹窗形态（sheet/dialog/popover） -->
-    <h3 class="sec-title">p-adaptive · 容器形态自适应（B1 求解演示）</h3>
-    <p class="hint">当前视口 <strong>{{ viewportWidth }}px</strong> → 弹窗形态 <strong>{{ adaptiveForm }}</strong>
-      （sheet &lt; 600 / dialog 600-840 / popover ≥ 840——拖拽窗口看切换；形态切换是「换容器」由渲染层 nodeOps 实现）</p>
+    <!-- ★p-adaptive 求解演示（adaptive-container-plan B1+B2）：视口宽度 → 弹窗形态（sheet/dialog/popover） -->
+    <h3 class="sec-title">p-adaptive · 容器形态自适应（B1 求解 + B2 组件）</h3>
+    <p class="hint">当前视口 <strong>{{ viewportWidth }}px</strong> → 形态 <strong>{{ adaptiveForm }}</strong>
+      （sheet &lt; 600 / dialog 600-840 / popover ≥ 840——拖拽窗口看实时切换）</p>
     <div class="adaptive-demo">
       <div class="adaptive-form">{{ adaptiveForm }}</div>
       <div class="adaptive-bar">
@@ -209,7 +210,21 @@ onUnmounted(() => {
         <span class="adaptive-seg" :class="{ on: adaptiveForm === 'dialog' }">dialog</span>
         <span class="adaptive-seg" :class="{ on: adaptiveForm === 'popover' }">popover</span>
       </div>
+      <button class="btn" @click="showAdaptive = !showAdaptive">{{ showAdaptive ? '关闭弹窗' : '打开弹窗（B2 形态层）' }}</button>
     </div>
+    <!-- ★B2 形态层：随容器宽度切换 sheet（底部）/ dialog（居中）/ popover（居中降级） -->
+    <p-adaptive
+      :modes="'sheet(0, 600) | dialog(600, 840) | popover(840, ∞)'"
+      :visible="showAdaptive"
+      @form-change="adaptiveForm = $event"
+    >
+      <div class="adaptive-content">
+        <h4>弹窗内容 · 形态自动切换</h4>
+        <p class="hint">当前形态：<strong>{{ adaptiveForm }}</strong></p>
+        <p class="hint">sheet → 底部全宽（手机）；dialog/popover → 居中（平板/桌面，popover 锚定降级居中）</p>
+        <button class="btn" @click="showAdaptive = false">关闭</button>
+      </div>
+    </p-adaptive>
   </div>
 </template>
 
@@ -403,5 +418,17 @@ onUnmounted(() => {
 .adaptive-seg.on {
   background: #1d6fb8;
   color: #fff;
+}
+/* ★B2 形态层内容 */
+.adaptive-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  max-width: 360px;
+  margin: 0 auto;
+}
+.adaptive-content h4 {
+  margin: 0 0 8px;
 }
 </style>

@@ -34,6 +34,8 @@ import PSidebar from './p-sidebar/index.vue'
 import PToolbar from './p-toolbar/index.vue'
 // ★Fluid System（fluid-system-plan S4）：动态字号/密度
 import PScale from './p-scale/index.vue'
+// ★p-adaptive（adaptive-container-plan B2）：容器形态自适应
+import PAdaptive from './p-adaptive/index.vue'
 
 export {
   VirtualList,
@@ -67,6 +69,8 @@ export {
   PToolbar,
   // ★Fluid System S4
   PScale,
+  // ★p-adaptive
+  PAdaptive,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数
