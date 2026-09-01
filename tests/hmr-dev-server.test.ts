@@ -6,6 +6,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createHmrDevServer } from '@proteus-vue/hmr/dev-server'
 import type { HmrDevServer } from '@proteus-vue/hmr/dev-server'
 import { compileVueSfc } from '@proteus-vue/compiler'
+import { WebSocket } from 'ws' // Node 18 无全局 WebSocket → 用 ws 包客户端（与 hmr 服务端同源）
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

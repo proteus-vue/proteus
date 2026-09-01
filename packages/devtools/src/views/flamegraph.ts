@@ -1,6 +1,7 @@
 // packages/devtools/src/views/flamegraph.ts
 // DevTools 火焰图视图：按 depth 分行的堆叠块（宽度 ∝ durationMs，相对总窗口定位）
 import type { FlameNode } from '@proteus-vue/devtools-runtime'
+import { attachTip } from '../tooltip'
 
 export interface FlamegraphViewData {
   nodes: FlameNode[]
@@ -39,7 +40,11 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
     block.style.width = Math.max(0.5, (n.durationMs / total) * 100).toFixed(2) + '%'
     block.style.top = n.depth * ROW_HEIGHT + 'px'
     block.style.height = ROW_HEIGHT - 2 + 'px'
-    block.title = `${n.source}.${n.name} inclusive=${n.durationMs}ms exclusive=${n.selfMs}ms`
+    // hover 浮层：来源 + inclusive / exclusive 耗时
+    attachTip(block, {
+      title: `${n.source}.${n.name}`,
+      lines: [`inclusive ${n.durationMs}ms`, `exclusive ${n.selfMs}ms`],
+    })
     const label = document.createElement('span')
     label.textContent = n.name + ' ' + n.selfMs + 'ms'
     block.appendChild(label)

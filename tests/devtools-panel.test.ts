@@ -2,7 +2,7 @@
 // 五视图渲染函数（时间轴泳道/火焰图/状态/路由/根因）+ 面板装配（事件流 → 视图更新 + tab 切换）+ WS 数据源（CDP Proteus.event 协议）
 // ★Vue DevTools 接入：installProteusTimeline（Timeline layer + 事件映射）+ createTraceBusSource（TraceBus 直连源）
 // @vitest-environment happy-dom（DOM 渲染断言）
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   createDevtoolsPanel,
   createDevtoolsWsSource,
@@ -13,6 +13,8 @@ import {
   renderState,
   renderRoute,
   renderErrors,
+  createTooltipLayer,
+  bindTooltip,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
@@ -58,6 +60,8 @@ describe('视图渲染函数', () => {
     expect(spans.length).toBe(3)
     expect(spans[1].classList.contains('pd-span-pending')).toBe(true)
     expect(spans[2].classList.contains('pd-span-dot')).toBe(true)
+    // hover 浮层数据（attachTip → data-tip 标记 + 耗时行）
+    expect((spans[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
   it('renderFlamegraph：按 depth 分行堆叠 + 宽度 ∝ 耗时 + selfMs 标注', () => {
@@ -72,6 +76,7 @@ describe('视图渲染函数', () => {
     expect(blocks.length).toBe(2)
     expect((blocks[1] as HTMLElement).style.top).toBe('22px') // depth 1 第二行
     expect(blocks[0].textContent).toContain('30ms')
+    expect((blocks[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
   it('renderState：store 列表 + inspector key-value 树 + 类型着色 + 滑块（steps > 0 时出现）', () => {
@@ -136,6 +141,7 @@ describe('视图渲染函数', () => {
     expect(guards.length).toBe(2)
     expect(guards[0].classList.contains('pd-guard-next')).toBe(true)
     expect(guards[1].classList.contains('pd-guard-redirect')).toBe(true)
+    expect((guards[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
   it('renderErrors：根因卡片（attribution + 影响 chips + 复现步骤 + 根因高亮）', () => {
@@ -307,5 +313,93 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     expect(received.length).toBe(1)
     off()
     source.close()
+  })
+})
+
+describe('Tooltip 浮层', () => {
+  afterEach(() => {
+    document.querySelectorAll('.pd-tooltip').forEach((el) => el.remove())
+    vi.useRealTimers()
+  })
+
+  it('createTooltipLayer：show 渲染标题 + 详情行 + visible；hide 清空隐藏', () => {
+    const layer = createTooltipLayer()
+    expect(layer.visible).toBe(false)
+    layer.show({ title: 'lifecycle.boot', lines: ['耗时 100ms', '阶段 completed'] }, 10, 10)
+    expect(layer.visible).toBe(true)
+    const tip = document.querySelector('.pd-tooltip') as HTMLElement
+    expect(tip).not.toBeNull()
+    expect(tip.querySelector('.pd-tooltip-title')?.textContent).toBe('lifecycle.boot')
+    expect(Array.from(tip.querySelectorAll('.pd-tooltip-line')).map((l) => l.textContent)).toEqual(['耗时 100ms', '阶段 completed'])
+    layer.hide()
+    expect(layer.visible).toBe(false)
+    expect(tip.style.display).toBe('none')
+  })
+
+  it('createTooltipLayer：视口边缘翻转（右侧放不下 → 左侧定位）', () => {
+    const layer = createTooltipLayer()
+    layer.show({ title: 't', lines: ['l'] }, window.innerWidth - 10, 10)
+    const tip = document.querySelector('.pd-tooltip') as HTMLElement
+    expect(parseFloat(tip.style.left)).toBeLessThan(window.innerWidth - 10)
+    layer.hide()
+  })
+
+  it('bindTooltip：150ms 防抖（快速划过不显示）+ resolve null 不显示 + 解绑后不触发', () => {
+    vi.useFakeTimers()
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const el = document.createElement('div')
+    el.dataset.tip = ''
+    el.textContent = 'boot'
+    root.appendChild(el)
+    const nullEl = document.createElement('div')
+    nullEl.dataset.tip = ''
+    nullEl.textContent = 'skip'
+    root.appendChild(nullEl)
+    const layer = createTooltipLayer()
+    const resolve = vi.fn((t: HTMLElement) => (t.textContent === 'skip' ? null : { title: 'hit', lines: [t.textContent ?? ''] }))
+    const unbind = bindTooltip(root, layer, resolve)
+    // 快速划过：150ms 内移出 → 不显示
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 5, clientY: 5 }))
+    root.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
+    vi.advanceTimersByTime(200)
+    expect(layer.visible).toBe(false)
+    // resolve null → 不显示
+    nullEl.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 5, clientY: 5 }))
+    vi.advanceTimersByTime(200)
+    expect(layer.visible).toBe(false)
+    // 稳定 hover 150ms → 显示
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 10, clientY: 10 }))
+    vi.advanceTimersByTime(150)
+    expect(resolve).toHaveBeenCalled()
+    expect(layer.visible).toBe(true)
+    expect(document.querySelector('.pd-tooltip-title')?.textContent).toBe('hit')
+    // 解绑后不再触发
+    unbind()
+    layer.hide()
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 20, clientY: 20 }))
+    vi.advanceTimersByTime(200)
+    expect(layer.visible).toBe(false)
+    root.remove()
+  })
+
+  it('面板：hover timeline span → tooltip 显示事件详情（attachTip 数据贯通）', () => {
+    vi.useFakeTimers()
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('lifecycle', 'start', 'boot', 100))
+    source.push(ev('lifecycle', 'end', 'boot', 200))
+    vi.advanceTimersByTime(40) // 16ms 节流渲染
+    const span = root.querySelector('.pd-span') as HTMLElement
+    expect(span).not.toBeNull()
+    expect(span.dataset.tip).toBeDefined()
+    span.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: 10, clientY: 10 }))
+    vi.advanceTimersByTime(200)
+    expect(document.querySelector('.pd-tooltip-title')?.textContent).toBe('lifecycle.boot')
+    expect(document.querySelector('.pd-tooltip-line')?.textContent).toBe('耗时 100ms')
+    panel.destroy()
+    root.remove()
   })
 })

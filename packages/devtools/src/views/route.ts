@@ -1,6 +1,7 @@
 // packages/devtools/src/views/route.ts
 // DevTools 路由回溯视图：导航链（from → to）+ 守卫徽章（next 绿 / redirect 橙 / cancel·error 红）+ 耗时
 import type { NavRecord } from '@proteus-vue/devtools-runtime'
+import { attachTip } from '../tooltip'
 
 export interface RouteViewData {
   records: NavRecord[]
@@ -47,7 +48,11 @@ export function renderRoute(container: HTMLElement, data: RouteViewData): void {
       const badge = document.createElement('span')
       badge.className = 'pd-guard pd-guard-' + g.result
       badge.textContent = g.name + ' ' + g.durationMs + 'ms (' + g.result + ')'
-      badge.title = '守卫 ' + g.name + ' → ' + g.result
+      // hover 浮层：守卫名 + 结果
+      attachTip(badge, {
+        title: '守卫 ' + g.name,
+        lines: [`结果: ${g.result}`, `耗时 ${g.durationMs}ms`],
+      })
       guards.appendChild(badge)
     }
     row.appendChild(guards)

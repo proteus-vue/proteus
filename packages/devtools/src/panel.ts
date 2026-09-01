@@ -15,6 +15,7 @@ import { renderFlamegraph } from './views/flamegraph'
 import { renderState } from './views/state'
 import { renderRoute } from './views/route'
 import { renderErrors } from './views/errors'
+import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
 
 export interface DevtoolsPanelOptions {
   source: DevtoolsSource
@@ -71,6 +72,10 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   bodyRow.appendChild(sidebar)
   bodyRow.appendChild(content)
   root.appendChild(bodyRow)
+
+  // ★hover 浮层：视图渲染时 attachTip 挂数据 → 面板统一 resolve（元素 → TooltipData）
+  const tooltip = createTooltipLayer()
+  const unbindTip = bindTooltip(root, tooltip, (target) => resolveTipData(target))
 
   const views = new Map<string, HTMLElement>()
   const containers = new Map<string, HTMLElement>()
@@ -238,6 +243,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   return {
     destroy() {
       off()
+      unbindTip()
+      tooltip.dispose()
       source.close()
       if (renderTimer) clearTimeout(renderTimer)
       root.replaceChildren()

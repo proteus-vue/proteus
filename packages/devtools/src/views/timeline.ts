@@ -2,6 +2,7 @@
 // DevTools 时间轴视图（泳道）：按 source 分组渲染 span（线段宽度 ∝ 耗时 + 相对定位）
 // 纯函数：data → DOM（jsdom 可单测）；★UI 只消费数据层（铁律 1：TraceBus 唯一入口）
 import type { TimelineSpan } from '@proteus-vue/devtools-runtime'
+import { attachTip } from '../tooltip'
 
 export interface TimelineViewData {
   spans: TimelineSpan[]
@@ -63,7 +64,11 @@ export function renderTimeline(container: HTMLElement, data: TimelineViewData): 
       seg.className = 'pd-span' + (s.pending ? ' pd-span-pending' : '') + (s.durationMs === 0 ? ' pd-span-dot' : '')
       seg.style.left = left.toFixed(2) + '%'
       seg.style.width = width.toFixed(2) + '%'
-      seg.title = `${s.source}.${s.name} ${s.durationMs !== undefined ? s.durationMs + 'ms' : ''}`
+      // hover 浮层（替代原生 title）：来源 + 耗时 + 阶段
+      attachTip(seg, {
+        title: `${s.source}.${s.name}`,
+        lines: [s.durationMs !== undefined ? `耗时 ${s.durationMs}ms` : '瞬时事件', s.pending ? '阶段: pending（进行中）' : '阶段: completed'],
+      })
       const text = document.createElement('span')
       text.textContent = s.name + (s.durationMs !== undefined ? ' ' + s.durationMs + 'ms' : '')
       seg.appendChild(text)

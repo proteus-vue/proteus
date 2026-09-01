@@ -469,6 +469,34 @@ body.pd-body {
   margin: 2px 0;
 }
 
+/* ── Tooltip 浮层（Vue DevTools 质感：暗色 + 边框 + 阴影 + mono） ── */
+.pd-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  max-width: 320px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pd-tooltip-title {
+  font-weight: 600;
+  color: var(--pd-accent);
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.pd-tooltip-line {
+  color: var(--pd-text-dim);
+  white-space: nowrap;
+}
+
 /* 滚动条 */
 .pd-content::-webkit-scrollbar,
 .pd-inspector::-webkit-scrollbar,
