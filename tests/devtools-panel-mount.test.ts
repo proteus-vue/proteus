@@ -36,4 +36,36 @@ describe('installProteusDevtools 一键接入', () => {
     devtools.destroy()
     app.unmount()
   })
+
+  it('hmr 选项：vite 热更新事件 → TraceBus（timeline 显示 vite:update/full-reload/error）', async () => {
+    const app = createApp({})
+    const bus = createTraceBus({ enabled: true })
+    const hmrListeners: Array<{ event: string; cb: (...args: unknown[]) => void }> = []
+    const devtools = installProteusDevtools(app, {
+      traceBus: bus,
+      mount: false,
+      hmr: {
+        on: (event: string, cb: (...args: unknown[]) => void) => {
+          hmrListeners.push({ event, cb })
+          return () => {
+            const i = hmrListeners.findIndex((l) => l.event === event && l.cb === cb)
+            if (i >= 0) hmrListeners.splice(i, 1)
+          }
+        },
+      },
+    })
+    expect(hmrListeners.map((l) => l.event)).toEqual(['vite:update', 'vite:full-reload', 'vite:error'])
+    // 触发 HMR 事件 → bus 有 hmr 记录
+    const seen: string[] = []
+    const off = bus.on((e) => seen.push(e.source + ':' + e.phase + ':' + e.name))
+    hmrListeners[0].cb({ updates: [{ type: 'js-update' }] }) // vite:update
+    hmrListeners[1].cb() // vite:full-reload
+    hmrListeners[2].cb(new Error('编译失败')) // vite:error
+    expect(seen).toEqual(['hmr:point:vite:update', 'hmr:point:vite:full-reload', 'hmr:error:vite:error'])
+    // destroy 解绑监听
+    devtools.destroy()
+    expect(hmrListeners.length).toBe(0)
+    app.unmount()
+    off()
+  })
 })

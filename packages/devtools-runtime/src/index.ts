@@ -3,7 +3,7 @@
 // 把分散的字符串 trace（lifecycle/router/compiler）收敛为统一事件流；面板（v1.0+）经 flush() 订阅
 // ★MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构（共享模块 _proteus/devtools-runtime 进 MP）
 
-export type TraceSource = 'lifecycle' | 'router' | 'store' | 'api' | 'capability' | 'compiler' | 'component'
+export type TraceSource = 'lifecycle' | 'router' | 'store' | 'api' | 'capability' | 'compiler' | 'component' | 'hmr'
 export type TracePhase = 'start' | 'end' | 'point' | 'error'
 
 export interface TraceEvent<T = unknown> {

@@ -30,6 +30,11 @@ export interface PiniaLike {
   _s: Map<string, unknown>
 }
 
+/** vite import.meta.hot 结构类型（HMR 事件 → TraceBus；零硬依赖，业务侧传 import.meta.hot） */
+export interface HmrLike {
+  on(event: string, cb: (...args: unknown[]) => void): (() => void) | void
+}
+
 export interface InstallDevtoolsOptions {
   /** pinia 实例（提供 → store 变更追踪：面板 state 视图 + Pinia Inspector 原生） */
   pinia?: PiniaLike
@@ -43,6 +48,8 @@ export interface InstallDevtoolsOptions {
   pages?: PagesViewData
   /** 是否挂载本地面板浮动窗口（缺省 true；仅挂载一次——重复调用复用） */
   mount?: boolean
+  /** vite HMR 句柄（传 import.meta.hot）：热更新事件 → TraceBus（timeline 显示 vite:update/full-reload/error 记录） */
+  hmr?: HmrLike
   /**
    * 远程查看（移动端/真机场景）：TraceBus → WS（devtoolsRelayPlugin 的 /proteus-source 端点）→
    * 电脑浏览器 panel.html?ws= 下行查看。true = 同源自动（ws://location.host/proteus-source）；
@@ -136,12 +143,29 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     })
   }
 
+  // ⑦ HMR 事件源（vite 热更新 → TraceBus：timeline 显示热更新记录；业务侧传 import.meta.hot）
+  let offHmr: (() => void) | null = null
+  if (options.hmr) {
+    const offs: Array<(() => void) | null> = []
+    offs.push(options.hmr.on('vite:update', () => bus.emit('hmr', 'point', 'vite:update')) ?? null)
+    offs.push(options.hmr.on('vite:full-reload', () => bus.emit('hmr', 'point', 'vite:full-reload')) ?? null)
+    offs.push(
+      options.hmr.on('vite:error', (err) =>
+        bus.emit('hmr', 'error', 'vite:error', { message: err instanceof Error ? err.message : String(err) }),
+      ) ?? null,
+    )
+    offHmr = () => {
+      for (const f of offs) f?.()
+    }
+  }
+
   return {
     traceBus: bus,
     destroy() {
       storeTracer?.dispose()
       offComponent()
       remoteBridge?.close()
+      offHmr?.()
     },
   }
 }
