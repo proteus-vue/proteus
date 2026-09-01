@@ -17,9 +17,12 @@ interface DirtyRecord {
   value: unknown
 }
 
-/** 判断 child 是否为 parent 的后代路径（支持点号与数组下标两种分隔） */
+/** 判断 child 是否为 parent 的后代路径（支持点号与数组下标两种分隔）
+ * ★性能（2026-08-31）：索引比较替代 `parent + '.'` / `parent + '['` 字符串拼接（每次比较省 2 次分配） */
 function isChildPath(parent: string, child: string): boolean {
-  return child.startsWith(parent + '.') || child.startsWith(parent + '[')
+  if (child.length <= parent.length || !child.startsWith(parent)) return false
+  const c = child[parent.length]
+  return c === '.' || c === '['
 }
 
 /** 可参与深层 diff 的对象（普通对象 / 数组；null/Date 等按标量） */
@@ -32,33 +35,48 @@ function isDiffable(v: unknown): boolean {
  * - 对象：逐键递归（删除的键也产出，值为 undefined）
  * - 数组：逐下标递归（长度变化部分整体替换）
  * - 标量：整体替换
+ * ★性能（2026-08-31，benchmark 驱动）：收集器模式——共享 out 数组直接 push，零中间数组分配；
+ *   键集合用「新值键 + 旧值独有键」两次遍历替代 Set 联合（每个对象省一次 Set+双数组分配）
  */
 function diffPaths(base: string, oldVal: unknown, newVal: unknown): Array<{ path: string; value: unknown }> {
-  if (oldVal === newVal) return []
+  const out: Array<{ path: string; value: unknown }> = []
+  collectDiff(out, base, oldVal, newVal)
+  return out
+}
+
+function collectDiff(out: Array<{ path: string; value: unknown }>, base: string, oldVal: unknown, newVal: unknown): void {
+  if (oldVal === newVal) return
   if (isDiffable(oldVal) && isDiffable(newVal)) {
     if (Array.isArray(oldVal) && Array.isArray(newVal)) {
-      const out: Array<{ path: string; value: unknown }> = []
       const max = Math.max(oldVal.length, newVal.length)
       for (let i = 0; i < max; i++) {
-        if (oldVal[i] === newVal[i]) continue
-        out.push(...diffPaths(`${base}[${i}]`, oldVal[i], newVal[i]))
+        const ov = oldVal[i]
+        const nv = newVal[i]
+        if (ov === nv) continue
+        collectDiff(out, base + '[' + i + ']', ov, nv)
       }
-      return out
+      return
     }
     if (!Array.isArray(oldVal) && !Array.isArray(newVal)) {
-      const out: Array<{ path: string; value: unknown }> = []
-      const keys = new Set([...Object.keys(oldVal as object), ...Object.keys(newVal as object)])
-      for (const k of keys) {
-        const ov = (oldVal as Record<string, unknown>)[k]
-        const nv = (newVal as Record<string, unknown>)[k]
+      const newObj = newVal as Record<string, unknown>
+      const oldObj = oldVal as Record<string, unknown>
+      // ① 新值键：更新/新增（不变跳过）
+      for (const k of Object.keys(newObj)) {
+        const ov = oldObj[k]
+        const nv = newObj[k]
         if (ov === nv) continue
-        out.push(...diffPaths(`${base}.${k}`, ov, nv))
+        collectDiff(out, base + '.' + k, ov, nv)
       }
-      return out
+      // ② 旧值独有键：已删除 → 补 undefined（语义与原 Set 联合一致，顺序不影响路径级补丁结果）
+      for (const k of Object.keys(oldObj)) {
+        if (Object.prototype.hasOwnProperty.call(newObj, k)) continue
+        collectDiff(out, base + '.' + k, oldObj[k], undefined)
+      }
+      return
     }
   }
   // 类型变化 / 标量 / 混合：整体替换
-  return [{ path: base, value: newVal }]
+  out.push({ path: base, value: newVal })
 }
 
 /** 展开对象/数组为全部叶路径（首次推送 / 无旧值基准时：无 diff 可做，直接叶路径补丁） */
@@ -135,7 +153,8 @@ class SetDataBridge {
       if (isChildPath(existing, dataPath)) return
     }
     // 新路径是已有脏路径的祖先 → 移除被覆盖的子路径
-    for (const existing of [...map.keys()]) {
+    // ★性能（2026-08-31）：Map 迭代中删除当前/已访问条目安全，无需 `[...map.keys()]` 全量拷贝
+    for (const existing of map.keys()) {
       if (isChildPath(dataPath, existing)) map.delete(existing)
     }
     map.set(dataPath, { path: dataPath, value })

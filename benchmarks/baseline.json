@@ -1,20 +1,20 @@
 {
-  "updatedAt": "2026-09-01T00:39:32.156Z",
+  "updatedAt": "2026-09-01T00:43:33.767Z",
   "results": {
     "compile-vue-sfc": {
-      "medianMs": 0.385
+      "medianMs": 0.418
     },
     "setdata-deep-diff-1000": {
-      "medianMs": 332.199
+      "medianMs": 112.877
     },
     "hmr-apply-batch-1000": {
-      "medianMs": 0.073
+      "medianMs": 0.081
     },
     "style-gate-collect-100": {
-      "medianMs": 0.03
+      "medianMs": 0.032
     },
     "trace-redact-1000": {
-      "medianMs": 0.305
+      "medianMs": 0.309
     }
   }
 }
