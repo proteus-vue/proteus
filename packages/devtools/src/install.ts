@@ -10,7 +10,7 @@ import type { App } from 'vue'
 import { getProteusTraceBus, createStoreTracer } from '@proteus-vue/devtools-runtime'
 import type { TraceBus } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
-import { installProteusTimeline, installProteusInspectors } from './vue-devtools'
+import { installProteusTimeline, installProteusInspectors, PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR } from './vue-devtools'
 import { createTraceBusSource } from './source'
 import { createTraceBusWsBridge } from './ws-bridge'
 import type { TraceBusWsBridge } from './ws-bridge'
@@ -159,7 +159,9 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       navInflight = null
     }
   })
-  setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (devtoolsApi) => {
+  // ★descriptor.logo 必须设置（Vue DevTools 8.2.1 导航图标只渲染 descriptor.logo，
+  //   未传 → 三个自定义 Inspector 全默认图标；占位值触发 img error → fallback 字典图标，详见 vue-devtools.ts）
+  setupDevtoolsPlugin({ ...PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR, app }, (devtoolsApi) => {
     installProteusTimeline(devtoolsApi as never, { source: createTraceBusSource(bus) })
     installProteusInspectors(devtoolsApi as never, {
       getConfig: options.getConfig,

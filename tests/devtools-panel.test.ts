@@ -9,6 +9,7 @@ import {
   installProteusTimeline,
   installProteusInspectors,
   createTraceBusSource,
+  PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR,
   renderTimeline,
   renderFlamegraph,
   renderState,
@@ -417,6 +418,17 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     tl.dispose()
   })
 
+  it('PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR：提供触发 fallback 的 logo（Vue DevTools 8.2.1 导航图标只渲染 descriptor.logo，undefined → 三个 inspector 同默认图标）', () => {
+    expect(PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR.id).toBe('proteus')
+    expect(PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR.label).toBe('Proteus')
+    // ★logo 必须是「URL 形态」值（TabIcon 的 isUrlString：'/' 开头或 http(s)://）——
+    //   只有 img 加载失败（@error）才切到 fallback（custom-ic-baseline-* → VueIcIcon 字典图标）
+    const logo = PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR.logo
+    expect(logo.startsWith('/') || logo.startsWith('http')).toBe(true)
+    // ★占位值不能是真实可加载图片（否则显示图片而非三个不同字典图标）
+    expect(logo).not.toMatch(/^https?:\/\//)
+  })
+
   it('installProteusInspectors：注册 app-config inspector + 树根节点 + getInspectorState 当前值 + editInspectorState 回写（path → 嵌套 patch）', () => {
     let config = { app: { name: 'Demo' }, features: { glass: true } }
     const calls: Array<{ method: string; options: unknown }> = []
@@ -442,7 +454,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
-    expect(registered.options.icon).toBe('lucide:settings') // ★Iconify 格式（裸名 fallback 默认图标）
+    expect(registered.options.icon).toBe('settings') // ★裸 Material 名（kit 拼 custom-ic-baseline-settings 作 fallback）
     // ★树根节点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
     const treePayload = { inspectorId: 'proteus-app-config' }
     treeCbs[0](treePayload)
@@ -531,7 +543,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const routerInspector = calls.find((c) => (c.options as { id: string }).id === 'proteus-router') as { options: { label: string; icon: string } }
     expect(routerInspector).toBeDefined()
     expect(routerInspector.options.label).toBe('Router')
-    expect(routerInspector.options.icon).toBe('lucide:route')
+    expect(routerInspector.options.icon).toBe('route')
     // ★嵌套树：导航记录节点置顶 + index 根 → user（parent index）→ user-profile（parent user）
     // ★取最后一个 tree 回调（app-config 也注册了树根节点）
     const treePayload = { inspectorId: 'proteus-router' }

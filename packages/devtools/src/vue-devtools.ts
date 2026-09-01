@@ -141,6 +141,22 @@ function configToStateRows(config: Record<string, unknown>): Array<{ key: string
   return keys.length ? keys.map((k) => ({ key: k, value: config[k] })) : [{ key: '(empty)', value: {} }]
 }
 
+// ═══════════ 自定义 Inspector 图标机制（Vue DevTools 8.2.1 源码逐层验证）═══════════
+// ① 模块导航（SideNav）渲染的是 inspector.logo = plugin descriptor.logo（每插件一个）——
+//    未传 logo → TabIcon 落 `v-else` 默认类 i-carbon-bring-forward（三个 inspector 同图标，即此前 bug 根因）
+// ② addInspector 的 icon 字段 → @vue/devtools-kit 拼成 `custom-ic-baseline-${icon}` 作为 fallback，
+//    前端 TabIcon 仅在 logo 为 URL 形态（isUrlString：'/' 开头或 http(s)://）且加载失败（@error）时切到 fallback
+// ③ fallback 剥掉 `custom-ic-` 前缀后喂 VueIcIcon → 查内置 Material 图标字典（@iconify-json/ic，键形如 baseline-settings）
+// 结论：icon 传裸 Material 名（settings/shield/route），并配合 install 侧把 descriptor.logo
+// 设为必然加载失败的值（根相对路径）→ img error → fallback → VueIcIcon 字典渲染出三个不同图标
+export const PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR = {
+  id: 'proteus',
+  label: 'Proteus',
+  /** ★触发 fallback 的占位 logo（根相对路径：扩展/独立/dev server 下 404 或图片解码失败 → img error）
+   * 不能传 undefined（三个 inspector 全默认图标），也不能传真实图片 URL（会直接显示图片而非字典图标） */
+  logo: '/__proteus-inspector-icons__.svg',
+} as const
+
 const APP_CONFIG_INSPECTOR = 'proteus-app-config'
 const STYLE_SAFETY_INSPECTOR = 'proteus-style-safety'
 const ROUTER_INSPECTOR = 'proteus-router'
@@ -194,7 +210,7 @@ function buildRouterTree(
  * })
  */
 export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
-  api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'lucide:settings' })
+  api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' }) // ★裸 Material 名（kit 拼 custom-ic-baseline-settings → 前端字典渲染）
   // ★必须有树节点可点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
   api.on.getInspectorTree((payload) => {
     if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
@@ -214,7 +230,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     })
   }
   if (options.getStyleSafetyRecords) {
-    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'lucide:shield' })
+    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' }) // ★裸 Material 名（custom-ic-baseline-shield）
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
       payload.rootNodes = [{ id: 'root', label: 'Style Safety' }]
@@ -230,7 +246,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
   }
   if (options.pages) {
     // ★Router Inspector：路由嵌套树（parent 父子层级）+ 导航记录（当前路由 + 最近导航历史）
-    api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'lucide:route' })
+    api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'route' }) // ★裸 Material 名（custom-ic-baseline-route）
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== ROUTER_INSPECTOR) return
       const routerState = options.getRouterState?.()
