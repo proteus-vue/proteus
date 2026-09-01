@@ -147,8 +147,10 @@ function configToStateRows(config: Record<string, unknown>): Array<{ key: string
 // ② addInspector 的 icon 字段 → @vue/devtools-kit 拼成 `custom-ic-baseline-${icon}` 作为 fallback，
 //    前端 TabIcon 仅在 logo 为 URL 形态（isUrlString：'/' 开头或 http(s)://）且加载失败（@error）时切到 fallback
 // ③ fallback 剥掉 `custom-ic-` 前缀后喂 VueIcIcon → 查内置 Material 图标字典（@iconify-json/ic，键形如 baseline-settings）
-// 结论：icon 传裸 Material 名（settings/shield/route），并配合 install 侧把 descriptor.logo
+// 结论：icon 传裸 Material 名（settings/gpp-good/route），并配合 install 侧把 descriptor.logo
 // 设为必然加载失败的值（根相对路径）→ img error → fallback → VueIcIcon 字典渲染出三个不同图标
+// ★Style Safety 用 gpp-good（实心盾牌 + 中间空心对勾——内外 subpath 绕向相反 → nonzero 填充镂空）而非 shield（纯实心），
+//   字典无 Material outline 盾牌变体，gpp-good 是对「中间空心」的最接近表达，且语义契合校验通过
 export const PROTEUS_DEVTOOLS_PLUGIN_DESCRIPTOR = {
   id: 'proteus',
   label: 'Proteus',
@@ -230,7 +232,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     })
   }
   if (options.getStyleSafetyRecords) {
-    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' }) // ★裸 Material 名（custom-ic-baseline-shield）
+    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'gpp-good' }) // ★实心盾牌 + 中间空心对勾（字典无 outline 盾牌，gpp-good 镂空对勾最接近「中间空心」）
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
       payload.rootNodes = [{ id: 'root', label: 'Style Safety' }]
