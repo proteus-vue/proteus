@@ -16,6 +16,11 @@ import { renderFlamegraph } from './views/flamegraph'
 import { renderState } from './views/state'
 import { renderRoute } from './views/route'
 import { renderErrors } from './views/errors'
+import { renderComponents } from './views/components'
+import type { ComponentNodeData } from './views/components'
+import { renderPages } from './views/pages'
+import type { PagesViewData, PageRouteData } from './views/pages'
+import { renderGraph } from './views/graph'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
 import { createPluginRegistry, createMemoryStorage, createCommandRegistry } from './plugins'
 import type { DevToolsPlugin, KVStorage, PluginContext } from './plugins'
@@ -28,6 +33,8 @@ export interface DevtoolsPanelOptions {
   plugins?: DevToolsPlugin[]
   /** 插件持久化存储（缺省内存 KV） */
   storage?: KVStorage
+  /** ★pages/依赖图面板：应用路由表 + 页面栈（缺省取 source.appInfo() 路由表；均无 → 空态） */
+  pages?: PagesViewData
 }
 
 export interface DevtoolsPanel {
@@ -36,7 +43,7 @@ export interface DevtoolsPanel {
   show(view: string): void
 }
 
-const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors'] as const
+const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph'] as const
 
 const VIEW_ICONS: Record<string, string> = {
   timeline: '⊞',
@@ -44,6 +51,9 @@ const VIEW_ICONS: Record<string, string> = {
   state: '☰',
   route: '⇄',
   errors: '✕',
+  components: '◫',
+  pages: '▦',
+  graph: '⌬',
 }
 
 export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOptions): DevtoolsPanel {
@@ -182,6 +192,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   const storeSnapshots = new Map<string, Record<string, unknown>>()
   const storeSteps: Array<{ index: number; storeId: string; payload: unknown; timestamp: number }> = []
   let stepSeq = 0
+  /** Components 聚合：component.mount/unmount 事件 → 组件树节点（id → 节点） */
+  const componentNodes = new Map<number, ComponentNodeData>()
 
   function handleEvent(e: TraceEvent): void {
     timeline.ingest(e)
@@ -244,6 +256,25 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         if (storeSteps.length > 1000) storeSteps.shift()
       }
     }
+    // Components 聚合：mount → 建/计数节点；unmount → 移除
+    if (e.source === 'component' && e.payload && typeof e.payload === 'object') {
+      const p = e.payload as { id?: number; name?: string; parentId?: number }
+      if (typeof p.id === 'number') {
+        // ★unmount 先判（'component.unmount' 含 'mount' 子串——顺序反了会误入 mount 分支）
+        if (/unmount/i.test(e.name)) {
+          componentNodes.delete(p.id)
+        } else if (/mount/i.test(e.name)) {
+          const existing = componentNodes.get(p.id)
+          componentNodes.set(p.id, {
+            id: p.id,
+            name: p.name ?? 'Anonymous',
+            parentId: p.parentId,
+            ts: e.timestamp,
+            count: (existing?.count ?? 0) + 1,
+          })
+        }
+      }
+    }
   }
 
   // 火焰图录制控制（工具按钮）+ 对比模式：上次完成录制为 baseline，再次停止时 diff（±10% 高亮）
@@ -291,6 +322,10 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       },
       { onTimeTravel },
     )
+    // Components / Pages / Graph 视图
+    renderComponents(containers.get('components') as HTMLElement, { nodes: Array.from(componentNodes.values()) })
+    renderPages(containers.get('pages') as HTMLElement, resolvePagesData())
+    renderGraph(containers.get('graph') as HTMLElement, { routes: resolvePagesData().routes })
     // M9 插件视图渲染（崩溃 → 占位提示；render 抛错 → 当场标记崩溃，核心不崩）
     for (const [id, pv] of pluginViews) {
       const container = containers.get(id) as HTMLElement
@@ -324,7 +359,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     container.appendChild(card)
   }
 
-  // 渲染节流（事件高频 → 16ms 帧窗口）
+  /** 渲染节流（事件高频 → 16ms 帧窗口） */
   let renderTimer: ReturnType<typeof setTimeout> | null = null
   function scheduleRender(): void {
     if (renderTimer) return
@@ -332,6 +367,12 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       renderTimer = null
       rerender()
     }, 16)
+  }
+  /** pages 数据：options.pages 优先 → source.appInfo()（Proteus.appInfo 协议，{ routes }）兜底 */
+  function resolvePagesData(): PagesViewData {
+    if (options.pages) return options.pages
+    const info = source.appInfo?.() as { routes?: PageRouteData[] } | undefined
+    return { routes: info?.routes ?? [] }
   }
   let statusConnected = false
   const off = source.onEvent((e: TraceEvent) => {

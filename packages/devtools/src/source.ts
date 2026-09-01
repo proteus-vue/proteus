@@ -6,6 +6,8 @@ import type { TraceBus } from '@proteus-vue/devtools-runtime'
 export interface DevtoolsSource {
   /** 订阅事件流，返回取消函数 */
   onEvent(cb: (e: TraceEvent) => void): () => void
+  /** 应用信息（Proteus.appInfo：pages/依赖图数据源；WS 源请求缓存，TraceBus 源缺省） */
+  appInfo?(): unknown
   close(): void
 }
 
@@ -29,6 +31,7 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
   let closed = false
   let seq = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let appInfoCache: unknown
 
   function connect(): void {
     if (closed) return
@@ -41,15 +44,23 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     const sock = ws
     sock.onopen = () => {
       sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.enable' }))
+      // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
+      sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.appInfo' }))
     }
     sock.onmessage = (ev) => {
-      let msg: { method?: string; params?: Record<string, unknown> }
+      let msg: { id?: number; method?: string; result?: unknown; params?: Record<string, unknown> }
       try {
         msg = JSON.parse(String(ev.data))
       } catch {
         return
       }
-      if (!msg || typeof msg !== 'object' || msg.method !== 'Proteus.event') return
+      if (!msg || typeof msg !== 'object') return
+      // appInfo 命令响应（含 id 且无 method）→ 缓存
+      if (msg.id !== undefined && msg.result !== undefined) {
+        appInfoCache = msg.result
+        return
+      }
+      if (msg.method !== 'Proteus.event') return
       const p = msg.params ?? {}
       const source = p.source as TraceSource | undefined
       const name = p.name as string | undefined
@@ -95,6 +106,9 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       }
       ws?.close()
       ws = null
+    },
+    appInfo() {
+      return appInfoCache
     },
   }
 }

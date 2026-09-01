@@ -11,7 +11,7 @@ import { installWebPlatform } from '@proteus-vue/web'
 // 微信默认样式对齐层（button/input 等原生默认外观对齐小程序，双端视觉一致）
 import '@proteus-vue/built-in-components/style.css'
 // ★devtools-plan：TraceBus 事件源 + Vue DevTools Timeline 接入（@vue/devtools-api）
-import { createTraceBusSource, installProteusTimeline } from '@proteus-vue/devtools'
+import { createTraceBusSource, installProteusTimeline, installComponentTrace } from '@proteus-vue/devtools'
 import { createStoreTracer } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
 // ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
@@ -53,6 +53,8 @@ defineApp({
     app.use(pinia).mount('#app')
     // ★devtools 打通：store 变更 → traceBus（面板 state 视图实时快照 + 时间旅行滑块）
     createStoreTracer(pinia, traceBus)
+    // ★devtools 打通：Vue 组件树 → traceBus（面板 components 视图实时组件树）
+    installComponentTrace(app, traceBus)
     emit('lifecycle', 'end', 'interactive')
 
     // ★Vue DevTools 接入：Timeline 面板出现 Proteus layer（编译/路由/API/生命周期事件；

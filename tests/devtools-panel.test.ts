@@ -13,6 +13,10 @@ import {
   renderState,
   renderRoute,
   renderErrors,
+  renderComponents,
+  renderPages,
+  renderGraph,
+  installComponentTrace,
   createTooltipLayer,
   bindTooltip,
   createTimelineZoom,
@@ -210,7 +214,7 @@ describe('面板装配', () => {
     const root = document.createElement('div')
     const source = mockSource()
     const panel = createDevtoolsPanel(root, { source })
-    expect(root.querySelectorAll('.pd-nav-item').length).toBe(5)
+    expect(root.querySelectorAll('.pd-nav-item').length).toBe(8) // timeline/flamegraph/state/route/errors/components/pages/graph
     expect(root.querySelector('.pd-header-status')?.textContent).toContain('连接中')
     // 推事件（渲染 16ms 节流）
     source.push(ev('lifecycle', 'start', 'boot', 100))
@@ -368,6 +372,23 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     sockets[0].onmessage?.({ data: JSON.stringify({ method: 'Runtime.consoleAPICalled' }) })
     expect(received.length).toBe(1)
     off()
+    source.close()
+  })
+
+  it('连接后请求 Proteus.appInfo → 响应缓存 → appInfo() 返回（pages/依赖图数据源）', () => {
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    sockets[0].onopen?.()
+    const sends = sockets[0].send.mock.calls.map((c) => JSON.parse(c[0]))
+    expect(sends.length).toBe(2)
+    expect(sends[1].method).toBe('Proteus.appInfo')
+    // appInfo 命令响应（含 id 且无 method）→ 缓存
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: 2, result: { routes: [{ name: 'index', path: 'pages/index' }] } }) })
+    expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
     source.close()
   })
 })
@@ -710,5 +731,128 @@ describe('M9 插件机制', () => {
     expect(run).toHaveBeenCalledWith('proteus.test.cmd')
     expect(storage.get('k')).toBe(42)
     panel.destroy()
+  })
+})
+
+describe('Components / Pages / Graph 视图', () => {
+  it('renderComponents：parent 关联构建树 + 折叠（点击子行不冒泡触发父折叠）', () => {
+    const root = document.createElement('div')
+    renderComponents(root, {
+      nodes: [
+        { id: 1, name: 'App', ts: 1, count: 1 },
+        { id: 2, name: 'Home', parentId: 1, ts: 2, count: 1 },
+        { id: 3, name: 'Card', parentId: 2, ts: 3, count: 2 },
+      ],
+    })
+    const rows = root.querySelectorAll('.pd-cmp-row')
+    expect(rows.length).toBe(3)
+    expect(rows[0].textContent).toContain('App')
+    expect(rows[1].textContent).toContain('Home')
+    expect(rows[2].textContent).toContain('×2') // 计数
+    // 子行缩进（depth 1 → paddingLeft 22px）
+    expect((rows[1] as HTMLElement).style.paddingLeft).toBe('22px')
+    // 折叠根：点击子行 → 不触发父折叠（closest 判定）；点击根行 → 子层隐藏
+    ;(rows[1] as HTMLElement).click()
+    const subEl = (rows[0] as HTMLElement).querySelector('.pd-cmp-children') as HTMLElement
+    expect(subEl.childNodes.length).toBeGreaterThan(0)
+    ;(rows[0] as HTMLElement).click()
+    expect(subEl.style.display).toBe('none')
+    ;(rows[0] as HTMLElement).click()
+    expect(subEl.style.display).toBe('block')
+  })
+
+  it('renderPages：主包/分包分组 + tab 标记 + 页面栈高亮', () => {
+    const root = document.createElement('div')
+    renderPages(root, {
+      routes: [
+        { name: 'index', path: 'pages/index', meta: { isTab: true, title: '首页' } },
+        { name: 'order-list', path: 'subpackages/order/pages/list', subPackage: 'order' },
+      ],
+      stack: [{ route: 'pages/index' }],
+    })
+    expect(root.querySelector('.pd-page-stack')?.textContent).toContain('页面栈')
+    expect(root.querySelector('.pd-page-current')?.textContent).toContain('pages/index')
+    expect(root.querySelectorAll('.pd-page-group').length).toBe(2) // 主包 + 分包
+    const metaTexts = Array.from(root.querySelectorAll('.pd-page-meta')).map((el) => el.textContent)
+    expect(metaTexts.some((t) => t?.includes('tab'))).toBe(true)
+  })
+
+  it('renderGraph：路由父子树（字符线 + 根/子 + 分包标记）', () => {
+    const root = document.createElement('div')
+    renderGraph(root, {
+      routes: [
+        { name: 'index', path: 'pages/index' },
+        { name: 'user', path: 'pages/user/index', parent: 'index' },
+        { name: 'user-profile', path: 'pages/user/profile', parent: 'user', subPackage: 'order' },
+      ],
+    })
+    const nodes = root.querySelectorAll('.pd-graph-node')
+    expect(nodes.length).toBe(3)
+    expect(root.querySelector('.pd-graph-line')?.textContent).toContain('└─') // 单根行
+    expect(nodes[1].textContent).toContain('user')
+    const metas = Array.from(root.querySelectorAll('.pd-graph-meta')).map((el) => el.textContent)
+    expect(metas.some((m) => m?.includes('分包 order'))).toBe(true)
+  })
+
+  it('面板：component 事件聚合 → components 树（mount/unmount）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('component', 'point', 'component.mount', 100, 'comp-1', { id: 1, name: 'App', parentId: undefined }))
+    source.push(ev('component', 'point', 'component.mount', 110, 'comp-2', { id: 2, name: 'Home', parentId: 1 }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('components')
+    const componentsView = root.querySelector('.pd-view[data-view="components"]') as HTMLElement
+    expect(componentsView.querySelectorAll('.pd-cmp-row').length).toBe(2)
+    // unmount → 移除节点
+    source.push(ev('component', 'point', 'component.unmount', 120, 'comp-2', { id: 2 }))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(componentsView.querySelectorAll('.pd-cmp-row').length).toBe(1)
+    panel.destroy()
+  })
+
+  it('面板：pages 注入 → pages 清单 + graph 依赖树渲染', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, {
+      source,
+      pages: {
+        routes: [
+          { name: 'index', path: 'pages/index', meta: { isTab: true } },
+          { name: 'user', path: 'pages/user/index', parent: 'index' },
+        ],
+      },
+    })
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('pages')
+    const pagesView = root.querySelector('.pd-view[data-view="pages"]') as HTMLElement
+    expect(pagesView.querySelectorAll('.pd-page-row').length).toBeGreaterThan(0)
+    panel.show('graph')
+    const graphView = root.querySelector('.pd-view[data-view="graph"]') as HTMLElement
+    expect(graphView.querySelectorAll('.pd-graph-node').length).toBe(2)
+    panel.destroy()
+  })
+
+  it('installComponentTrace：mixin 挂载/卸载 → component 事件（id 稳定 + parentId 关联）', async () => {
+    const { createApp, defineComponent } = await import('vue')
+    const bus = createTraceBus({ enabled: true })
+    const events: unknown[] = []
+    const off = bus.on((e) => events.push(e))
+    const app = createApp(defineComponent({ name: 'Root', template: '<div><Child/></div>' }))
+    installComponentTrace(app, bus)
+    app.component('Child', defineComponent({ name: 'Child', template: '<span/>' }))
+    app.mount(document.createElement('div'))
+    await new Promise((r) => setTimeout(r, 20))
+    app.unmount()
+    await new Promise((r) => setTimeout(r, 20))
+    const mounts = events.filter((e) => (e as { name: string }).name === 'component.mount')
+    expect(mounts.length).toBeGreaterThanOrEqual(2)
+    // ★Vue 挂载深度优先（子先）→ 用 find 定位而非顺序
+    const rootMount = mounts.find((m) => (m as { payload: { name: string } }).payload.name === 'Root') as { payload: { id: number; name: string; parentId?: number } }
+    expect(rootMount.payload.name).toBe('Root')
+    const child = mounts.find((m) => (m as { payload: { name: string } }).payload.name === 'Child') as { payload: { id: number; parentId?: number } }
+    expect(child.payload.parentId).toBe(rootMount.payload.id) // parentId 关联根
+    expect(events.some((e) => (e as { name: string }).name === 'component.unmount')).toBe(true)
+    off()
   })
 })

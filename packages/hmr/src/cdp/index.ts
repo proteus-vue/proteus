@@ -40,6 +40,8 @@ export interface CdpBridgeOptions {
   transport: CdpTransport
   /** Runtime.evaluate 执行器（缺省拒绝——未注入时返回 error） */
   evaluate?: (expression: string) => Promise<unknown>
+  /** ★应用信息提供器（Proteus.appInfo 命令——面板 pages/依赖图数据；缺省返回空对象） */
+  appInfo?: () => unknown
   /** StyleGateRecord 环形缓冲上限（缺省 500；Proteus.getStyleGates 查询用） */
   styleGateBufferSize?: number
   /** 可观测（桥接自身事件：client 命令/推送） */
@@ -108,6 +110,9 @@ export function createCdpBridge(options: CdpBridgeOptions): CdpBridge {
       }
       case 'Proteus.getStyleGates':
         reply(id, { records: gateBuffer })
+        return
+      case 'Proteus.appInfo':
+        reply(id, options.appInfo ? options.appInfo() : {})
         return
       default:
         replyError(id, -32601, `Method not found: ${method}`)

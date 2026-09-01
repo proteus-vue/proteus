@@ -674,3 +674,113 @@ body.pd-body {
   font-family: var(--pd-mono);
   word-break: break-all;
 }
+
+/* ── Components 视图（组件树） ────────────────────────────── */
+.pd-cmp-row {
+  display: flex;
+  align-items: baseline;
+  padding: 2px 6px;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pd-cmp-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-cmp-name {
+  color: var(--pd-t-key);
+}
+
+.pd-cmp-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  padding-right: 8px;
+}
+
+/* ── Pages 视图 ───────────────────────────────────────────── */
+.pd-section-head {
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+
+.pd-page-stack,
+.pd-page-group {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.pd-page-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+}
+
+.pd-page-current {
+  color: var(--pd-accent);
+  font-weight: 600;
+}
+
+.pd-page-depth {
+  color: var(--pd-text-faint);
+  min-width: 14px;
+  text-align: right;
+}
+
+.pd-page-name {
+  color: var(--pd-green);
+}
+
+.pd-page-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+}
+
+/* ── Graph 依赖图视图（路由树） ───────────────────────────── */
+.pd-graph {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.pd-graph-node {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-graph-root .pd-graph-name {
+  color: var(--pd-accent);
+  font-weight: 600;
+}
+
+.pd-graph-line {
+  color: var(--pd-text-faint);
+  white-space: pre;
+}
+
+.pd-graph-name {
+  color: var(--pd-t-key);
+}
+
+.pd-graph-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  padding-right: 8px;
+}

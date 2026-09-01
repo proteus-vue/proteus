@@ -10,6 +10,8 @@ import path from 'node:path'
 import { createHmrDevServer } from '@proteus-vue/hmr/dev-server'
 import type { HmrPayload } from '@proteus-vue/hmr'
 import { compileVueSfc } from '@proteus-vue/compiler'
+// ★devtools 打通：面板 pages/依赖图数据源（Proteus.appInfo 协议）——路由表注入
+import { routes } from '../router/auto-routes'
 
 const ROOT = process.cwd()
 const DEBOUNCE_MS = 300
@@ -101,6 +103,8 @@ async function main(): Promise<void> {
     watchRoots: MONITOR,
     debounceMs: DEBOUNCE_MS,
     compile: incrementalCompile,
+    // ★devtools 打通：Proteus.appInfo（面板 pages/依赖图面板路由表）
+    appInfo: () => ({ routes: routes.map((r) => ({ name: r.name, path: r.path, meta: r.meta, subPackage: r.subPackage })) }),
     onEvent: (e) => {
       if (e.type === 'listening') console.log(`[dev-mp] HMR dev server 就绪：ws://127.0.0.1:${e.port}（PROTEUS_HMR_PORT 可改）`)
       if (e.type === 'client-connect') console.log(`[dev-mp] HMR 客户端接入（当前 ${e.clientCount}）`)

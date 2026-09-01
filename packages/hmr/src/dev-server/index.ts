@@ -34,6 +34,8 @@ export interface HmrDevServerOptions {
   compile: (files: string[]) => HmrPayload[]
   /** ★DevTools 面板 CDP 桥：Runtime.evaluate 执行器（可选——未注入时面板 evaluate 返回错误） */
   evaluate?: (expression: string) => Promise<unknown>
+  /** ★DevTools 面板 CDP 桥：应用信息提供器（Proteus.appInfo 命令——面板 pages/依赖图数据源；缺省返回空对象） */
+  appInfo?: () => unknown
   /** 外部 TraceBus 事件注入（可选——面板 Proteus.event 通道数据源） */
   traceSource?: () => Array<{ source: string; phase: string; name: string; payload?: unknown; timestamp: number; traceId?: string }>
   /** 可观测 */
@@ -171,6 +173,7 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
             },
           },
           evaluate: options.evaluate,
+          appInfo: options.appInfo,
         })
         bridges.set(socket, bridge)
         socket.on('message', (data) => {
