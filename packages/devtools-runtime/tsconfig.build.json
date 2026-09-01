@@ -11,7 +11,7 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node"]
+    "types": ["node", "../shared/src/shims/mp.d.ts"]
   },
   "include": ["src"]
 }

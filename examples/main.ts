@@ -1,7 +1,7 @@
 // examples/main.ts —— Web 端入口（Web 原生、零转换：标准 Vue SPA + Pinia 多端适配工厂）
 // ★pinia-plan M3：createWebPinia() 注入平台标记 + LocalStorage 持久化（player store 持久化声明自动生效）
 // ★lifecycle-plan B1/B2：defineApp 阶段化启动（bootstrap → interactive，超时降级 + trace）
-// ★devtools-plan UI：TraceBus 事件流 → Vue DevTools Timeline 面板（浏览器装 Vue DevTools 扩展可见）
+// ★devtools：一键接入（installProteusDevtools）——Vue DevTools 扩展（Timeline/Inspectors）+ 本地面板浮动窗口双通道
 import { createApp } from 'vue'
 import App from './App.vue'
 import { createWebPinia, defineApp } from '@proteus-vue/runtime'
@@ -10,24 +10,18 @@ import { createApi } from '@proteus-vue/api'
 import { installWebPlatform } from '@proteus-vue/web'
 // 微信默认样式对齐层（button/input 等原生默认外观对齐小程序，双端视觉一致）
 import '@proteus-vue/built-in-components/style.css'
-// ★devtools-plan：TraceBus 事件源 + Vue DevTools Timeline 接入（@vue/devtools-api）
-import { createTraceBusSource, installProteusTimeline, installComponentTrace, installProteusInspectors } from '@proteus-vue/devtools'
-import { createStoreTracer } from '@proteus-vue/devtools-runtime'
-import { setupDevtoolsPlugin } from '@vue/devtools-api'
-// ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
-import { traceBus } from './devtools-bus'
-// ★devtools 打通：capability 探测/降级事件 → traceBus（面板 timeline 能力泳道；未注册能力时零事件）
-import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
+// ★devtools：一键接入（TraceBus 单例 + Vue DevTools 插件 + store/组件追踪 + 本地面板挂载）
+import { installProteusDevtools } from '@proteus-vue/devtools'
+import '@proteus-vue/devtools/style.css'
+import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
 // ★vue-devtools-plan：App Config Inspector 数据源（config-demo 页面 init 后生效；未 init 时安全降级）
 import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
 // ★G-31 style-safety：运行时守卫（业务侧动态 :style 用 guard.patch 包裹 → Inspector 实时拦截记录）
 import { createStyleGuard } from '@proteus-vue/style-safety'
-// ★Web 端本地面板挂载（浮动窗口；与 Vue DevTools 扩展双通道并存——同源 TraceBus 各自独立消费）
-import { mountDevtoolsPanel } from './devtools-panel-mount'
-import '@proteus-vue/devtools/style.css'
-import './devtools-panel.css'
+import { routes } from './router/auto-routes'
 
-setCapabilityTraceBus(traceBus)
+// ★devtools：发射端同源——router/api/capability 共用 getProteusTraceBus 惰性单例（生产 __PROTEUS_DEBUG__=false 零开销）
+const traceBus = getProteusTraceBus()
 
 // ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销
 const styleGuard = createStyleGuard({ mode: 'loose' })
@@ -36,7 +30,6 @@ const styleGuard = createStyleGuard({ mode: 'loose' })
 // ★devtools 打通：请求事件 → traceBus（面板 timeline/network 插件；bus 门控生产零开销）
 const api = createApi({ baseURL: 'https://api.example.com', traceBus })
 
-// ★devtools-plan：TraceBus（开发可观测事件流；生产零开销——setEnabled 门控）
 const emit = (source: 'lifecycle' | 'router' | 'api', phase: 'start' | 'end' | 'point', name: string): void => {
   traceBus.emit(source, phase, name)
 }
@@ -62,37 +55,26 @@ defineApp({
     installWebPlatform(app)
     const pinia = createWebPinia()
     app.use(pinia).mount('#app')
-    // ★devtools 打通：store 变更 → traceBus（面板 state 视图实时快照 + 时间旅行滑块）
-    createStoreTracer(pinia, traceBus)
-    // ★devtools 打通：Vue 组件树 → traceBus（面板 components 视图实时组件树）
-    installComponentTrace(app, traceBus)
-    // ★Web 端本地面板挂载：右下角 ◈ 按钮 → 浮动面板（timeline/flamegraph/state/route/errors/components/pages/graph）
-    mountDevtoolsPanel(traceBus)
-    emit('lifecycle', 'end', 'interactive')
-
-    // ★Vue DevTools 接入：Timeline 面板出现 Proteus layer（编译/路由/API/生命周期事件；
-    //   组件树 + Pinia 状态由 Vue DevTools 原生展示——Web 端即标准 Vue 应用）
-    setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (devtoolsApi) => {
-      installProteusTimeline(devtoolsApi as never, { source: createTraceBusSource(traceBus) })
-      // ★vue-devtools-plan §3：自定义 Inspector——proteus-app-config（当前生效值 + 编辑回写双向调试）
-      installProteusInspectors(devtoolsApi as never, {
-        getConfig: () => {
-          try {
-            return getAppConfig() as unknown as Record<string, unknown>
-          } catch {
-            return {}
-          }
-        },
-        setConfig: (patch) => {
-          try {
-            setAppConfig(patch as never)
-          } catch {
-            // 未 initAppConfig：拒绝回写
-          }
-        },
-        // ★vue-devtools-plan §3：Style Safety Inspector（G-31 guard 拦截记录）
-        getStyleSafetyRecords: () => styleGuard.records(),
-      })
+    // ★devtools 一键接入：TraceBus 单例 + Vue DevTools（Timeline/Inspectors）+ store/组件追踪 + 本地面板浮动窗口
+    installProteusDevtools(app, {
+      pinia: pinia as never,
+      getConfig: () => {
+        try {
+          return getAppConfig() as unknown as Record<string, unknown>
+        } catch {
+          return {}
+        }
+      },
+      setConfig: (patch) => {
+        try {
+          setAppConfig(patch as never)
+        } catch {
+          // 未 initAppConfig：拒绝回写
+        }
+      },
+      styleGuard,
+      pages: { routes: routes.map((r) => ({ name: r.name, path: r.path, meta: r.meta, subPackage: r.subPackage })) },
     })
+    emit('lifecycle', 'end', 'interactive')
   },
 }).run({ launchType: 'cold' })

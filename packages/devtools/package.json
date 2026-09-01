@@ -27,9 +27,16 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js && esbuild src/index.ts --bundle --format=iife --global-name=ProteusDevtools --platform=browser --outfile=dist/panel.js"
   },
   "dependencies": {
+    "@proteus-vue/capabilities": "0.1.0",
     "@proteus-vue/devtools-runtime": "0.1.0"
   },
+  "peerDependencies": {
+    "@vue/devtools-api": "^8.0.0"
+  },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@vue/devtools-api": "^8.0.0",
+    "pinia": "^4.0.0",
+    "vue": "^3.4.0"
   }
 }

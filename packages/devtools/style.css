@@ -652,6 +652,39 @@ body.pd-body {
   border-radius: 4px;
 }
 
+/* ── Web 端浮动挂载（installProteusDevtools：右下角 ◈ 按钮 + 覆盖层） ── */
+.pd-floating-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #252526;
+  color: var(--pd-accent);
+  border: 1px solid var(--pd-border);
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.pd-floating-toggle:hover {
+  border-color: var(--pd-accent);
+}
+
+.pd-floating-host {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 9998;
+  width: min(760px, calc(100vw - 32px));
+  height: min(540px, calc(100vh - 80px));
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+}
+
 /* ── M9 插件：network 瀑布 / 命令面板 / 崩溃占位 ────────────── */
 .pd-net {
   display: flex;

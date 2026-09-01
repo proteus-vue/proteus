@@ -160,6 +160,18 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
   }
 }
 
+/**
+ * 惰性单例 TraceBus（★一键接入收口）：router/api/capability 等发射端与 installProteusDevtools 共享同一实例，
+ * 避免业务侧手动建 bus 传参。enabled 缺省跟随 __PROTEUS_DEBUG__（开发 true；生产 false 零开销）。
+ */
+let singletonBus: TraceBus | null = null
+export function getProteusTraceBus(): TraceBus {
+  if (singletonBus === null) {
+    singletonBus = createTraceBus({ enabled: typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__ })
+  }
+  return singletonBus
+}
+
 export { createTimelineCollector } from './timeline'
 export type {
   TimelineSpan,
