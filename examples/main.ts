@@ -22,6 +22,10 @@ import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
 import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
 // ★G-31 style-safety：运行时守卫（业务侧动态 :style 用 guard.patch 包裹 → Inspector 实时拦截记录）
 import { createStyleGuard } from '@proteus-vue/style-safety'
+// ★Web 端本地面板挂载（浮动窗口；与 Vue DevTools 扩展双通道并存——同源 TraceBus 各自独立消费）
+import { mountDevtoolsPanel } from './devtools-panel-mount'
+import '@proteus-vue/devtools/style.css'
+import './devtools-panel.css'
 
 setCapabilityTraceBus(traceBus)
 
@@ -62,6 +66,8 @@ defineApp({
     createStoreTracer(pinia, traceBus)
     // ★devtools 打通：Vue 组件树 → traceBus（面板 components 视图实时组件树）
     installComponentTrace(app, traceBus)
+    // ★Web 端本地面板挂载：右下角 ◈ 按钮 → 浮动面板（timeline/flamegraph/state/route/errors/components/pages/graph）
+    mountDevtoolsPanel(traceBus)
     emit('lifecycle', 'end', 'interactive')
 
     // ★Vue DevTools 接入：Timeline 面板出现 Proteus layer（编译/路由/API/生命周期事件；

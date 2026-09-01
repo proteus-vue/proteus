@@ -13,11 +13,14 @@
       "default": "./dist/index.js"
     },
     "./panel": "./panel.html",
+    "./style": "./style.css",
+    "./style.css": "./style.css",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "panel.html",
+    "style.css",
     "README.md"
   ],
   "scripts": {
