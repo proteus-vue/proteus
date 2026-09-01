@@ -418,6 +418,10 @@ export const HELP_GROUPS: HelpGroup[] = [
         usage: 'proteus components:audit [dir]',
         desc: '★组件审计：p-* 组件注册表 vs 实际使用（未登记/未使用/标签漂移）',
       },
+      {
+        usage: 'proteus fluid:check [dir|file]',
+        desc: '★柔性布局严格规则（G-22）：FLD001 禁手写 @media / FLD002 禁硬编码断点 / FLD003 p-fluid 须 min·max / FLD004 p-grid 须 min-col-width / FLD006 禁 Dimensions.get\n      （FLD005 固定死尺寸启发式噪音大，MVP 未启用）',
+      },
     ],
   },
   {

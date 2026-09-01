@@ -34,8 +34,8 @@ export { transformStyleToWxss } from './style'
 export { validateJs, validateWxml, CompilerError } from './validate'
 
 // ★G-22 柔性布局（fluid-layout-plan B1）：clamp 生成 / 断点推导 / 网格列数（Web/Skyline 编译期用）
-export { generateClamp, deriveBreakpoints, calcColumns, gridTemplate, DEFAULT_VIEWPORT_RANGE, DEFAULT_BREAKPOINT_RATIOS } from './fluid-layout'
-export type { Breakpoint, ViewportRange } from './fluid-layout'
+export { generateClamp, deriveBreakpoints, calcColumns, gridTemplate, parseFluidExpr, DEFAULT_VIEWPORT_RANGE, DEFAULT_BREAKPOINT_RATIOS } from './fluid-layout'
+export type { Breakpoint, ViewportRange, FluidGroup } from './fluid-layout'
 
 // AI-native 透明定位：编译规则注册表（每条规则一份 AI 说明书）
 export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog } from './transforms/registry'

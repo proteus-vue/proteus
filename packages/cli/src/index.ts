@@ -18,6 +18,7 @@ import { runAuditModule } from './module-audit'
 import { writeModuleConfigSkeleton } from './module-init'
 import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
+import { runFluidCheck, formatFluidCheck } from './fluid-check'
 import { checkI18nUsage, formatI18nCheck } from './i18n-check'
 import { checkConfigFile } from './config-check'
 import { runCssCheck, formatCssCheck } from './css-check'
@@ -161,6 +162,20 @@ async function main(): Promise<void> {
       const result = auditComponents(root)
       console.log(formatComponentAudit(result))
       if (!result.ok) process.exitCode = 1
+      break
+    }
+    case 'fluid:check': {
+      // ★G-22 柔性布局严格规则（FLD001-006）：扫描 pages/src 下 .vue
+      const dir = rest.find((a) => !a.startsWith('-')) ?? '.'
+      if (rest.filter((a) => !a.startsWith('-')).length > 1) throw new Error('proteus fluid:check 只接受一个目录/文件参数')
+      try {
+        const result = runFluidCheck(dir)
+        console.log(formatFluidCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-fluid] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
       break
     }
     case 'config:check': {

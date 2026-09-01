@@ -9,6 +9,12 @@ export interface Breakpoint {
   min: number
 }
 
+export interface FluidGroup {
+  prop: string
+  min: number
+  max: number
+}
+
 export interface ViewportRange {
   min: number
   max: number
@@ -48,6 +54,17 @@ export function deriveBreakpoints(designWidth: number, ratios: Array<{ name: str
 export function calcColumns(viewportWidth: number, minColWidth: number, gap: number): number {
   const per = minColWidth + gap
   return Math.max(1, Math.floor((viewportWidth + gap) / per))
+}
+
+/** 解析 p-fluid 表达式（prop(min,max) 空格分隔组；★CLI fluid:check 与模板规则共用——非法组忽略，FLD003 由调用方判定） */
+export function parseFluidExpr(expr: string): FluidGroup[] {
+  const out: FluidGroup[] = []
+  const re = /([A-Za-z][A-Za-z-]*)\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(expr))) {
+    out.push({ prop: m[1], min: Number(m[2]), max: Number(m[3]) })
+  }
+  return out
 }
 
 /** Web 端 p-grid 的 CSS Grid 模板（repeat(auto-fill, minmax(minColWidth, 1fr))） */

@@ -273,13 +273,16 @@ JSI → 原生布局引擎
 ---
 
 ## 9. 严格规则（新增）
+## 严格规则
 
-| 规则 | 级别 | 说明 |
-|------|------|------|
-| **FLD001** | error | 禁止手写 `@media (min-width: 768px)` — 改用 `p-fluid` / `p-grid` |
-| **FLD002** | error | 禁止硬编码像素断点值 — 用 `app.config.layout.breakpoints` |
-| **FLD003** | warning | `p-fluid` 必须提供 min/max 区间 |
-| **FLD004** | error | `p-grid` 必须声明 `min-col-width` |
+| 规则 | 级别 | 说明 | 状态 |
+|------|------|------|------|
+| FLD001 | error | 禁止手写 `@media` 断点 | ✅ `proteus fluid:check`（style 块扫描） |
+| FLD002 | error | 禁止硬编码断点值（768/1024/1440px） | ✅ fluid:check |
+| FLD003 | warning | `p-fluid` 须提供 min/max | ✅ 编译期模板规则 + fluid:check |
+| FLD004 | error | `p-grid` 须声明 min-col-width | ✅ fluid:check |
+| FLD005 | warning | 避免固定死尺寸 | ⬜ MVP 未启用（启发式噪音大） |
+| FLD006 | error | 禁止 `Dimensions.get()` 手动算 | ✅ fluid:check（script 块扫描） |
 
 ---
 
