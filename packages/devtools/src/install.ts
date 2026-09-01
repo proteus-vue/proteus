@@ -15,6 +15,8 @@ import { createTraceBusSource } from './source'
 import { createTraceBusWsBridge } from './ws-bridge'
 import type { TraceBusWsBridge } from './ws-bridge'
 import { installComponentTrace } from './component-trace'
+import { buildDomTree } from './component-trace'
+import type { DomTreeNode } from './component-trace'
 import { createDevtoolsPanel } from './panel'
 import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
 import type { PagesViewData } from './views/pages'
@@ -126,13 +128,16 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   // ③ 组件树（component.mount/unmount 事件 + 元素 registry——P1 页面高亮）
   const componentTrace = installComponentTrace(app, bus)
 
-  /** ★P1 组件高亮：选中组件 → 滚动到可视区 + 描边闪烁（pd-cmp-highlight 样式，1.5s 消退） */
+  /** ★P1 组件高亮：选中组件 → 滚动到可视区 + 描边闪烁（pd-cmp-highlight 样式，1.5s 消退）+ DOM 树下发（事件流 → 面板详情） */
   function highlightComponent(id: number): void {
     const el = componentTrace.getElement(id)
     if (!el) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.classList.add('pd-cmp-highlight')
     setTimeout(() => el.classList.remove('pd-cmp-highlight'), 1500)
+    // ★P1.5：选中组件 → 渲染元素树摘要经事件流下发（component.inspect）——本地/远程面板同源可见
+    const dom = buildDomTree(el)
+    bus.emit('component', 'point', 'component.inspect', { id, dom }, 'comp-' + id)
   }
 
   // ④ Vue DevTools 插件：Timeline layer + 自定义 Inspector

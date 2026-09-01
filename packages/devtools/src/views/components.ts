@@ -3,6 +3,7 @@
 // ★P1 升级：节点点击选中（高亮行 + 页面元素高亮回调）+ 选中组件 props/state 详情面板（inspector 树复用）
 // 纯函数：data → DOM（happy-dom 可单测）；铁律 1：UI 只消费事件流
 import { renderKeyValue } from './inspector'
+import type { DomTreeNode } from '../component-trace'
 
 export interface ComponentNodeData {
   id: number
@@ -22,6 +23,8 @@ export interface ComponentsViewData {
   nodes: ComponentNodeData[]
   /** 选中组件 id（详情面板展示；缺省不选中） */
   selectedId?: number
+  /** ★P1.5：选中组件的渲染元素 DOM 树（component.inspect 事件下发） */
+  dom?: DomTreeNode
 }
 
 export interface ComponentsViewHooks {
@@ -42,8 +45,8 @@ function buildChildren(nodes: ComponentNodeData[]): Map<number, ComponentNodeDat
   return byParent
 }
 
-/** 详情面板：props / state 两段（inspector 树；空 → 「无」） */
-function renderDetail(container: HTMLElement, node: ComponentNodeData): void {
+/** 详情面板：props / state / DOM 树（inspector 树 + 元素树；空 → 「无」） */
+function renderDetail(container: HTMLElement, node: ComponentNodeData, dom?: DomTreeNode): void {
   const detail = document.createElement('div')
   detail.className = 'pd-cmp-detail'
   const head = document.createElement('div')
@@ -71,7 +74,48 @@ function renderDetail(container: HTMLElement, node: ComponentNodeData): void {
     }
     detail.appendChild(box)
   }
+  // ★P1.5：渲染元素 DOM 树（选中组件时 install 侧经 component.inspect 事件下发）
+  if (dom) {
+    const box = document.createElement('div')
+    box.className = 'pd-cmp-detail-section'
+    const labelEl = document.createElement('div')
+    labelEl.className = 'pd-cmp-detail-label'
+    labelEl.textContent = 'DOM'
+    box.appendChild(labelEl)
+    renderDomTree(box, dom, 0)
+    detail.appendChild(box)
+  }
   container.appendChild(detail)
+}
+
+/** DOM 树行：`div#root.app > span`（缩进 + 折叠子层） */
+function renderDomTree(container: HTMLElement, node: DomTreeNode, depth: number): void {
+  const row = document.createElement('div')
+  row.className = 'pd-dom-node'
+  row.style.paddingLeft = 10 + depth * 14 + 'px'
+  const tag = document.createElement('span')
+  tag.className = 'pd-dom-tag'
+  tag.textContent = node.tag
+  row.appendChild(tag)
+  if (node.id) {
+    const idEl = document.createElement('span')
+    idEl.className = 'pd-dom-id'
+    idEl.textContent = '#' + node.id
+    row.appendChild(idEl)
+  }
+  if (node.cls?.length) {
+    const clsEl = document.createElement('span')
+    clsEl.className = 'pd-dom-cls'
+    clsEl.textContent = '.' + node.cls.join('.')
+    row.appendChild(clsEl)
+  }
+  container.appendChild(row)
+  if (node.children.length) {
+    const box = document.createElement('div')
+    box.className = 'pd-dom-children'
+    for (const child of node.children) renderDomTree(box, child, depth + 1)
+    container.appendChild(box)
+  }
 }
 
 export function renderComponents(container: HTMLElement, data: ComponentsViewData, hooks: ComponentsViewHooks = {}): void {
@@ -133,9 +177,9 @@ export function renderComponents(container: HTMLElement, data: ComponentsViewDat
     container.appendChild(buildRow(r, 0, (byParent.get(r.id)?.length ?? 0) > 0))
   }
 
-  // ★P1：选中组件详情（props/state inspector 树）
+  // ★P1：选中组件详情（props/state inspector 树 + DOM 元素树）
   if (selected !== undefined) {
     const sel = nodes.find((n) => n.id === selected)
-    if (sel) renderDetail(container, sel)
+    if (sel) renderDetail(container, sel, data.dom)
   }
 }

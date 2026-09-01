@@ -18,6 +18,7 @@ import { renderRoute } from './views/route'
 import { renderErrors } from './views/errors'
 import { renderComponents } from './views/components'
 import type { ComponentNodeData } from './views/components'
+import type { DomTreeNode } from './component-trace'
 import { renderPages } from './views/pages'
 import type { PagesViewData, PageRouteData } from './views/pages'
 import { renderGraph } from './views/graph'
@@ -207,6 +208,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   let selectedStore = ''
   /** Components 聚合：component.mount/unmount 事件 → 组件树节点（id → 节点，含 props/state 快照） */
   const componentNodes = new Map<number, ComponentNodeData>()
+  /** ★P1.5：选中组件 DOM 树（component.inspect 事件下发 → 详情面板展示） */
+  const componentDom = new Map<number, DomTreeNode>()
   /** ★P1：选中组件 id（0 = 未选中；详情面板 + 页面高亮） */
   let selectedComponent = 0
 
@@ -287,13 +290,17 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         }
       }
     }
-    // Components 聚合：mount → 建/计数节点；unmount → 移除
+    // Components 聚合：mount → 建/计数节点；unmount → 移除；inspect → DOM 树
     if (e.source === 'component' && e.payload && typeof e.payload === 'object') {
-      const p = e.payload as { id?: number; name?: string; parentId?: number }
+      const p = e.payload as { id?: number; name?: string; parentId?: number; dom?: DomTreeNode }
       if (typeof p.id === 'number') {
-        // ★unmount 先判（'component.unmount' 含 'mount' 子串——顺序反了会误入 mount 分支）
-        if (/unmount/i.test(e.name)) {
+        // ★inspect 先判（含 'mount' 无关词；独立事件）
+        if (/inspect/i.test(e.name)) {
+          componentDom.set(p.id, p.dom ?? { tag: '?', children: [] })
+        } else if (/unmount/i.test(e.name)) {
+          // ★unmount 先判（'component.unmount' 含 'mount' 子串——顺序反了会误入 mount 分支）
           componentNodes.delete(p.id)
+          componentDom.delete(p.id)
         } else if (/mount/i.test(e.name)) {
           const existing = componentNodes.get(p.id)
           componentNodes.set(p.id, {
@@ -450,7 +457,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     // Components / Pages / Graph 视图
     renderComponents(
       containers.get('components') as HTMLElement,
-      { nodes: Array.from(componentNodes.values()), selectedId: selectedComponent || undefined },
+      { nodes: Array.from(componentNodes.values()), selectedId: selectedComponent || undefined, dom: selectedComponent ? componentDom.get(selectedComponent) : undefined },
       {
         // ★P1：点击选中（同 id 再点取消选中）；首次选中 → 页面元素高亮回调
         onSelect: (id) => {

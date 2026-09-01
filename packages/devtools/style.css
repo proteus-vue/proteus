@@ -357,6 +357,28 @@ body.pd-body {
   transition: outline-color 0.3s ease;
 }
 
+/* ★P1.5：DOM 元素树（组件详情面板） */
+.pd-dom-node {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-dom-tag {
+  color: var(--pd-accent);
+}
+
+.pd-dom-id {
+  color: var(--pd-t-key);
+}
+
+.pd-dom-cls {
+  color: var(--pd-text-faint);
+}
+
 .pd-cmp-name {
   flex: 1;
   overflow: hidden;

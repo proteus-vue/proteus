@@ -29,6 +29,7 @@ import {
   createNetworkPlugin,
   serializeStoreSnapshot,
   parseStoreSnapshot,
+  buildDomTree,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
@@ -1253,6 +1254,62 @@ describe('Components / Pages / Graph 视图', () => {
     expect(root2.querySelector('.pd-cmp-detail')).toBeNull()
   })
 
+  it('★P1.5 buildDomTree：渲染元素树摘要（tag/id/class/子元素递归 + 深度/数量上限）', () => {
+    const root = document.createElement('div')
+    root.id = 'app'
+    root.className = 'main container'
+    const child = document.createElement('span')
+    child.className = 'badge'
+    root.appendChild(child)
+    const deep = document.createElement('section')
+    deep.appendChild(document.createElement('p'))
+    root.appendChild(deep)
+    const tree = buildDomTree(root)
+    expect(tree).toEqual({
+      tag: 'div',
+      id: 'app',
+      cls: ['main', 'container'],
+      children: [
+        { tag: 'span', cls: ['badge'], children: [] },
+        { tag: 'section', children: [{ tag: 'p', children: [] }] },
+      ],
+    })
+    // 深度上限：5 层 → 第 5 层截断为 null
+    let el: HTMLElement = document.createElement('a')
+    const deepRoot = document.createElement('div')
+    let cur = deepRoot
+    for (let i = 0; i < 8; i++) {
+      cur.appendChild(el)
+      cur = el
+      el = document.createElement('a')
+    }
+    const deepTree = buildDomTree(deepRoot)
+    let depth = 0
+    let node: DomTreeNode | null = deepTree
+    while (node && node.children.length) {
+      depth++
+      node = node.children[0]
+    }
+    expect(depth).toBeLessThanOrEqual(4)
+  })
+
+  it('★P1.5 renderComponents：dom 数据 → 详情面板 DOM 段（tag#id.cls 行）', () => {
+    const root = document.createElement('div')
+    renderComponents(root, {
+      nodes: [{ id: 1, name: 'App', ts: 1, count: 1 }],
+      selectedId: 1,
+      dom: { tag: 'div', id: 'app', cls: ['main'], children: [{ tag: 'span', children: [] }] },
+    })
+    const detail = root.querySelector('.pd-cmp-detail') as HTMLElement
+    expect(detail.textContent).toContain('DOM')
+    const domNodes = Array.from(detail.querySelectorAll('.pd-dom-node'))
+    expect(domNodes.length).toBe(2)
+    expect(domNodes[0].textContent).toContain('div')
+    expect(domNodes[0].textContent).toContain('#app')
+    expect(domNodes[0].textContent).toContain('.main')
+    expect(domNodes[1].textContent).toContain('span')
+  })
+
   it('renderPages：主包/分包分组 + tab 标记 + 页面栈高亮', () => {
     const root = document.createElement('div')
     renderPages(root, {
@@ -1326,6 +1383,33 @@ describe('Components / Pages / Graph 视图', () => {
     await new Promise((r) => setTimeout(r, 40))
     expect(select).toHaveBeenCalledTimes(1)
     expect(componentsView.querySelector('.pd-cmp-detail')).toBeNull()
+    panel.destroy()
+  })
+
+  it('★P1.5 面板：component.inspect 事件 → 选中组件详情 DOM 树段（unmount 清理）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('component', 'point', 'component.mount', 100, 'comp-1', { id: 1, name: 'App', parentId: undefined }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('components')
+    const componentsView = root.querySelector('.pd-view[data-view="components"]') as HTMLElement
+    ;(componentsView.querySelector('.pd-cmp-row') as HTMLElement).click()
+    await new Promise((r) => setTimeout(r, 40))
+    // 选中后下发 DOM 树 → 详情出现 DOM 段
+    source.push(ev('component', 'point', 'component.inspect', 110, 'comp-1', { id: 1, dom: { tag: 'div', id: 'app', children: [{ tag: 'span', children: [] }] } }))
+    await new Promise((r) => setTimeout(r, 40))
+    const detail = componentsView.querySelector('.pd-cmp-detail') as HTMLElement
+    expect(detail.textContent).toContain('DOM')
+    expect(componentsView.querySelectorAll('.pd-dom-node').length).toBe(2)
+    // unmount → inspect 缓存清理（再选中无 DOM 段）
+    source.push(ev('component', 'point', 'component.unmount', 120, 'comp-1', { id: 1 }))
+    await new Promise((r) => setTimeout(r, 40))
+    source.push(ev('component', 'point', 'component.mount', 130, 'comp-1', { id: 1, name: 'App' }))
+    await new Promise((r) => setTimeout(r, 40))
+    ;(componentsView.querySelector('.pd-cmp-row') as HTMLElement).click()
+    await new Promise((r) => setTimeout(r, 40))
+    expect(componentsView.querySelector('.pd-dom-node')).toBeNull()
     panel.destroy()
   })
 

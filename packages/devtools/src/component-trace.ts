@@ -17,6 +17,36 @@ export interface ComponentSnapshot {
   state?: unknown
 }
 
+/** DOM 树节点（选中组件时构建渲染元素树，事件流下发——远程面板同样可见） */
+export interface DomTreeNode {
+  tag: string
+  id?: string
+  cls?: string[]
+  children: DomTreeNode[]
+}
+
+/**
+ * 构建 DOM 元素树摘要（选中组件 → 渲染结构可视化）：tag/id/class + 子元素递归
+ * ★深度/数量上限防超大 payload（depth ≤ 4、children ≤ 20、class ≤ 10）
+ */
+export function buildDomTree(el: Element, depth = 0): DomTreeNode | null {
+  if (depth > 4) return null
+  const node: DomTreeNode = { tag: el.tagName.toLowerCase(), children: [] }
+  if (el.id) node.id = el.id
+  const cls = Array.from(el.classList)
+  if (cls.length) node.cls = cls.slice(0, 10)
+  let count = 0
+  for (const child of Array.from(el.children)) {
+    if (count >= 20) break
+    const sub = buildDomTree(child, depth + 1)
+    if (sub) {
+      node.children.push(sub)
+      count++
+    }
+  }
+  return node
+}
+
 export interface ComponentTraceHandle {
   dispose(): void
   /** ★P1：按组件 id 取根 DOM 元素（页面高亮；fragment 取首个元素节点） */

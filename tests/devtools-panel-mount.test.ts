@@ -139,6 +139,10 @@ describe('installProteusDevtools 一键接入', () => {
     // ★页面根元素描边闪烁（registry getElement → classList.add）
     const rootEl = document.querySelector('#root-el') as HTMLElement
     expect(rootEl.classList.contains('pd-cmp-highlight')).toBe(true)
+    // ★P1.5：inspect 事件下发 → 面板详情出现 DOM 树段（tag 行）
+    const detail = componentsView.querySelector('.pd-cmp-detail') as HTMLElement
+    expect(detail.textContent).toContain('DOM')
+    expect(componentsView.querySelector('.pd-dom-tag')?.textContent).toBe('div')
     devtools.destroy()
     app.unmount()
     mountEl.remove()
