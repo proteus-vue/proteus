@@ -6,16 +6,25 @@ import type { TraceBus } from '@proteus-vue/devtools-runtime'
 export interface DevtoolsSource {
   /** 订阅事件流，返回取消函数 */
   onEvent(cb: (e: TraceEvent) => void): () => void
+  /** 订阅连接状态（可选）：WS 源连上即通知——面板「已连接」不再等首个事件（避免「连上了但暂无事件」误显示连接中） */
+  onStatus?(cb: (s: DevtoolsSourceStatus) => void): () => void
   /** 应用信息（Proteus.appInfo：pages/依赖图数据源；WS 源请求缓存，TraceBus 源缺省） */
   appInfo?(): unknown
   close(): void
 }
+
+export type DevtoolsSourceStatus = 'connecting' | 'connected' | 'closed'
 
 /** TraceBus 直连源：进程内 TraceBus 事件 → DevtoolsSource（Web 端运行时接入用） */
 export function createTraceBusSource(bus: TraceBus): DevtoolsSource {
   return {
     onEvent(cb: (e: TraceEvent) => void): () => void {
       return bus.on(cb)
+    },
+    // 本地直连：进程内总线，状态恒已连接
+    onStatus(cb: (s: DevtoolsSourceStatus) => void): () => void {
+      cb('connected')
+      return () => {}
     },
     close(): void {
       // TraceBus 由业务持有，close 不关闭总线
@@ -27,11 +36,18 @@ export function createTraceBusSource(bus: TraceBus): DevtoolsSource {
 export function createDevtoolsWsSource(url: string, createSocket?: (url: string) => WebSocket): DevtoolsSource {
   const makeSocket = createSocket ?? ((u: string) => new WebSocket(u))
   const handlers: Array<(e: TraceEvent) => void> = []
+  const statusHandlers: Array<(s: DevtoolsSourceStatus) => void> = []
   let ws: WebSocket | null = null
   let closed = false
   let seq = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let appInfoCache: unknown
+  let status: DevtoolsSourceStatus = 'connecting'
+
+  function setStatus(s: DevtoolsSourceStatus): void {
+    status = s
+    for (const h of statusHandlers) h(s)
+  }
 
   function connect(): void {
     if (closed) return
@@ -43,6 +59,7 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     }
     const sock = ws
     sock.onopen = () => {
+      setStatus('connected')
       sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.enable' }))
       // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
       sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.appInfo' }))
@@ -76,6 +93,7 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       for (const h of handlers) h(event)
     }
     sock.onclose = () => {
+      setStatus('closed')
       if (!closed) scheduleReconnect()
     }
   }
@@ -96,6 +114,14 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       return () => {
         const i = handlers.indexOf(cb)
         if (i >= 0) handlers.splice(i, 1)
+      }
+    },
+    onStatus(cb: (s: DevtoolsSourceStatus) => void): () => void {
+      statusHandlers.push(cb)
+      cb(status)
+      return () => {
+        const i = statusHandlers.indexOf(cb)
+        if (i >= 0) statusHandlers.splice(i, 1)
       }
     },
     close(): void {

@@ -55,6 +55,31 @@ describe('createTraceBusWsBridge', () => {
     bridge.close()
   })
 
+  it('★Proteus.enable → 回放缓冲历史事件（面板后开/重连立即有数据：生命周期等早已 emit）', () => {
+    const ws = mockWs()
+    ws.readyState = 0 // CONNECTING：on 回调丢弃、事件进缓冲（应用 bootstrap/coreReady 阶段）
+    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
+    Fake.OPEN = 1
+    vi.stubGlobal('WebSocket', Fake)
+    const bus = createTraceBus({ enabled: true })
+    const bridge = createTraceBusWsBridge(bus, { url: 'ws://host/proteus-source' })
+    bus.emit('lifecycle', 'start', 'bootstrap')
+    bus.emit('lifecycle', 'end', 'bootstrap')
+    expect(ws.sent.length).toBe(0) // 未 OPEN：不上行，进缓冲
+    // 面板连接（WS OPEN）→ Proteus.enable → 缓冲回放上行
+    ws.readyState = 1
+    ws.onmessage?.({ data: JSON.stringify({ id: 7, method: 'Proteus.enable' }) })
+    const events = ws.sent.map((s) => JSON.parse(s)).filter((m) => m.method === 'Proteus.event')
+    expect(events.map((m) => m.params.name)).toEqual(['bootstrap', 'bootstrap'])
+    // enable 响应仍在
+    expect(ws.sent.map((s) => JSON.parse(s))).toContainEqual({ id: 7, result: {} })
+    // 回放后缓冲已清空：再次 enable 不重复
+    ws.sent.length = 0
+    ws.onmessage?.({ data: JSON.stringify({ id: 8, method: 'Proteus.enable' }) })
+    expect(ws.sent.map((s) => JSON.parse(s)).filter((m) => m.method === 'Proteus.event').length).toBe(0)
+    bridge.close()
+  })
+
   it('bus 未开启 → 无上行（门控零开销）', () => {
     const ws = mockWs()
     const Fake = vi.fn(() => ws) as unknown as typeof WebSocket

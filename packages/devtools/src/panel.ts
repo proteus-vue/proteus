@@ -396,11 +396,24 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     handleEvent(e)
     broadcastToPlugins(e)
     scheduleRender()
-    // ★连接状态：收到首个事件 → 已连接
+    // ★连接状态：收到首个事件 → 已连接（无 onStatus 数据源的兼容路径；WS 源走下方 onStatus）
     if (!statusConnected) {
       statusConnected = true
       dot.classList.add('pd-dot-on')
       statusText.textContent = '已连接'
+    }
+  })
+  // ★连接状态跟随数据源：WS 连上即「已连接」（不再等首个事件——面板先开/应用后跑时避免一直「连接中」）；
+  //   断开显示「已断开」，重连成功自动恢复
+  const offStatus = source.onStatus?.((s) => {
+    if (s === 'connected' && !statusConnected) {
+      statusConnected = true
+      dot.classList.add('pd-dot-on')
+      statusText.textContent = '已连接'
+    } else if (s === 'closed') {
+      statusConnected = false
+      dot.classList.remove('pd-dot-on')
+      statusText.textContent = '已断开'
     }
   })
 
@@ -492,6 +505,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   return {
     destroy() {
       off()
+      offStatus?.()
       unbindTip()
       tooltip.dispose()
       zoom.destroy()

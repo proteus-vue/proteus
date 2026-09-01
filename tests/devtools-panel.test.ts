@@ -311,6 +311,23 @@ describe('面板装配', () => {
     })
   })
 
+  it('WS 源 onStatus connected → 立即「已连接」（不等待事件；面板先开/应用后跑不再一直连接中）', () => {
+    const root = document.createElement('div')
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    const panel = createDevtoolsPanel(root, { source })
+    expect(root.querySelector('.pd-header-status')?.textContent).toContain('连接中')
+    sockets[0].onopen?.() // WS 连上（无任何事件到达）
+    expect(root.querySelector('.pd-header-status')?.textContent).toContain('已连接')
+    expect(root.querySelector('.pd-dot')?.classList.contains('pd-dot-on')).toBe(true)
+    panel.destroy()
+    source.close()
+  })
+
   it('route 视图：router nav 事件聚合为导航记录', () => {
     const root = document.createElement('div')
     const source = mockSource()
@@ -520,6 +537,23 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     // appInfo 命令响应（含 id 且无 method）→ 缓存
     sockets[0].onmessage?.({ data: JSON.stringify({ id: 2, result: { routes: [{ name: 'index', path: 'pages/index' }] } }) })
     expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
+    source.close()
+  })
+
+  it('onStatus：初始 connecting → onopen connected → onclose closed（面板「已连接」不依赖事件到达）', () => {
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    const statuses: string[] = []
+    source.onStatus?.((s) => statuses.push(s))
+    expect(statuses).toEqual(['connecting']) // 注册即回调当前状态
+    sockets[0].onopen?.()
+    expect(statuses).toEqual(['connecting', 'connected'])
+    sockets[0].onclose?.()
+    expect(statuses).toEqual(['connecting', 'connected', 'closed'])
     source.close()
   })
 })
