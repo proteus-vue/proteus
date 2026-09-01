@@ -118,17 +118,26 @@ export interface ProteusInspectors {
   dispose(): void
 }
 
-/** 按 path 构建嵌套 patch（editInspectorState 的 path → setConfig DeepPartial） */
-function pathToPatch(path: string[], value: unknown): Record<string, unknown> {
+/** 按 path 构建嵌套 patch（editInspectorState 的 path → setConfig DeepPartial）
+ * ★groupKey 兼容：Vue DevTools 编辑 Inspector state 的 path 可能含分组名前缀（如 ['resolved','app','name']）——剥掉首段 */
+function pathToPatch(path: string[], value: unknown, groupKey?: string): Record<string, unknown> {
+  let p = path
+  if (groupKey && p[0] === groupKey) p = p.slice(1)
   const root: Record<string, unknown> = {}
   let cur = root
-  for (let i = 0; i < path.length - 1; i++) {
+  for (let i = 0; i < p.length - 1; i++) {
     const next: Record<string, unknown> = {}
-    cur[path[i]] = next
+    cur[p[i]] = next
     cur = next
   }
-  cur[path[path.length - 1]] = value
+  cur[p[p.length - 1]] = value
   return root
+}
+
+/** config 顶层键 → Inspector 状态行（平铺多行，Vue DevTools 分组下直接展示各配置项） */
+function configToStateRows(config: Record<string, unknown>): Array<{ key: string; value: unknown }> {
+  const keys = Object.keys(config)
+  return keys.length ? keys.map((k) => ({ key: k, value: config[k] })) : [{ key: '(empty)', value: {} }]
 }
 
 const APP_CONFIG_INSPECTOR = 'proteus-app-config'
@@ -180,20 +189,26 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
   api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' })
   api.on.getInspectorState((payload) => {
     if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
-    payload.state = { resolved: [{ key: 'value', value: options.getConfig ? options.getConfig() : {} }] }
+    // ★展示优化：config 顶层键平铺成多行（分组「resolved」下直接是各配置项，非单行 value 包裹）
+    payload.state = { resolved: configToStateRows(options.getConfig ? options.getConfig() : {}) }
   })
   if (options.setConfig) {
     api.on.editInspectorState((payload) => {
       if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
       // 面板改路径值 → 构建嵌套 patch 下发（对齐规划 §6：Web 端响应式数据回写）
-      options.setConfig?.(pathToPatch(payload.path, payload.state.value))
+      // ★groupKey 兼容：Vue DevTools 编辑 path 可能带分组名前缀（'resolved'）
+      options.setConfig?.(pathToPatch(payload.path, payload.state.value, 'resolved'))
     })
   }
   if (options.getStyleSafetyRecords) {
     api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' })
     api.on.getInspectorState((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
-      payload.state = { rejected: [{ key: 'records', value: (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)() }] }
+      // ★展示优化：拦截记录平铺成多行（分组「rejected」下每条 prop 一行，展开 value/reason/ts）
+      const records = (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)()
+      payload.state = {
+        rejected: records.map((r, i) => ({ key: r.prop || '#' + i, value: { value: r.value, reason: r.reason, ts: r.ts } })),
+      }
     })
   }
   if (options.pages) {

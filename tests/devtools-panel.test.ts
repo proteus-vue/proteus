@@ -440,11 +440,12 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
-    // getInspectorState → resolved 分组（★对象形态：分组名 → 状态行数组）
+    // getInspectorState → resolved 分组（★对象形态：分组名 → 状态行数组；config 顶层键平铺多行）
     const payload = { inspectorId: 'proteus-app-config', nodeId: 'root' }
     stateCbs[0](payload)
     expect(Object.keys(payload.state ?? {})).toEqual(['resolved'])
-    expect((payload.state?.resolved?.[0].value as { app: { name: string } }).app.name).toBe('Demo')
+    expect(payload.state?.resolved?.[0]).toEqual({ key: 'app', value: { name: 'Demo' } })
+    expect(payload.state?.resolved?.[1]).toEqual({ key: 'features', value: { glass: true } })
     // 非本 inspector → 不响应（state 保持 undefined）
     const otherPayload = { inspectorId: 'other', nodeId: 'root' }
     stateCbs[0](otherPayload)
@@ -452,6 +453,9 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     // editInspectorState → path 构建嵌套 patch 回写
     editCbs[0]({ inspectorId: 'proteus-app-config', nodeId: 'root', path: ['app', 'name'], state: { value: 'Proteus' } })
     expect(config.app.name).toBe('Proteus')
+    // ★path 含分组名前缀（'resolved'）→ 剥掉后 patch（Vue DevTools 编辑 path 语义兼容）
+    editCbs[0]({ inspectorId: 'proteus-app-config', nodeId: 'root', path: ['resolved', 'features', 'glass'], state: { value: false } })
+    expect(config.features.glass).toBe(false)
     inspectors.dispose()
   })
 
@@ -473,8 +477,9 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const last = stateCbs[stateCbs.length - 1]
     const payload = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
     last(payload)
+    // ★展示优化：拦截记录平铺成多行（rejected 分组下每条 prop 一行，展开 value/reason/ts）
     expect(Object.keys(payload.state ?? {})).toEqual(['rejected'])
-    expect(payload.state?.rejected?.[0].value).toEqual(records)
+    expect(payload.state?.rejected?.[0]).toEqual({ key: 'display', value: { value: 'flex', reason: '禁止', ts: 1 } })
     // 不提供 getStyleSafetyRecords → 不注册
     const calls2: Array<{ id: string }> = []
     installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
