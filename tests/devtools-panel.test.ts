@@ -123,7 +123,7 @@ describe('视图渲染函数', () => {
       { snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2, label: 'x', ok: true } }] }, steps: [{ index: 0, storeId: 'cart', type: 'patch', payload: {}, timestamp: 1, before: {}, after: {} }] },
       { onTimeTravel },
     )
-    expect(root.querySelector('.pd-store summary')?.textContent).toBe('cart')
+    expect(root.querySelector('.pd-store-head')?.textContent).toContain('cart')
     // key-value 树：键 + 类型着色值
     const kvs = root.querySelectorAll('.pd-kv')
     expect(kvs.length).toBe(4) // (root) + items + label + ok
@@ -206,6 +206,72 @@ describe('视图渲染函数', () => {
     const root = document.createElement('div')
     renderErrors(root, { reports: [] })
     expect(root.querySelector('.pd-empty')?.textContent).toContain('暂无异常')
+  })
+})
+
+describe('State 视图（对标 Vue DevTools Pinia 面板）', () => {
+  it('store 选择器：多 store chips + 选中高亮 + 点击 → onSelectStore', () => {
+    const root = document.createElement('div')
+    const onSelect = vi.fn()
+    renderState(
+      root,
+      {
+        snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2 } }, { id: 'user', state: { name: 'p' } }] },
+        steps: [],
+        selectedStore: 'cart',
+      },
+      { onSelectStore: onSelect },
+    )
+    const chips = root.querySelectorAll('.pd-store-chip')
+    expect(chips.length).toBe(2)
+    expect(chips[0].classList.contains('pd-store-chip-active')).toBe(true)
+    ;(chips[1] as HTMLElement).click()
+    expect(onSelect).toHaveBeenCalledWith('user')
+    // 详情跟随选中 store
+    expect(root.querySelector('.pd-store-head')?.textContent).toContain('cart')
+  })
+
+  it('actions 时间线：action/patch 徽章 + 名称 + 点击行 → onTimeTravel', () => {
+    const root = document.createElement('div')
+    const onTimeTravel = vi.fn()
+    renderState(
+      root,
+      {
+        snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 1 } }] },
+        steps: [
+          { index: 0, storeId: 'cart', type: 'action', payload: { id: 'cart', name: 'add' }, timestamp: 100, before: {}, after: {} },
+          { index: 1, storeId: 'cart', type: 'patch', payload: { id: 'cart', items: 2 }, timestamp: 200, before: {}, after: {} },
+        ],
+        selectedStore: 'cart',
+      },
+      { onTimeTravel },
+    )
+    const rows = root.querySelectorAll('.pd-tl-row')
+    expect(rows.length).toBe(2)
+    expect(rows[0].querySelector('.pd-tl-badge')?.textContent).toBe('patch') // 倒序：最新（index 1）在上
+    expect(rows[0].querySelector('.pd-tl-name')?.textContent).toBe('?')
+    expect(rows[1].querySelector('.pd-tl-badge')?.textContent).toBe('action')
+    expect(rows[1].querySelector('.pd-tl-name')?.textContent).toBe('add')
+    ;(rows[1] as HTMLElement).click()
+    expect(onTimeTravel).toHaveBeenCalledWith(0)
+  })
+
+  it('面板：store.action → 时间线（action 徽章）；store.patch → 快照 + 时间线', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('store', 'point', 'store.action', 100, undefined, { id: 'cart', name: 'add' }))
+    source.push(ev('store', 'point', 'store.patch', 200, undefined, { id: 'cart', items: 2 }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('state')
+    const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    expect(stateView.querySelectorAll('.pd-tl-row').length).toBe(2)
+    expect(stateView.querySelector('.pd-tl-badge')?.textContent).toBe('patch') // 最新在上（patch 后到）
+    expect(stateView.querySelectorAll('.pd-store-chip').length).toBe(1)
+    // 快照 items 值（根行摘要之外找 items 键）
+    const itemsRow = Array.from(stateView.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items')
+    expect(itemsRow?.querySelector('.pd-kv-value')?.textContent).toBe('2')
+    panel.destroy()
   })
 })
 

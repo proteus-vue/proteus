@@ -340,6 +340,88 @@ body.pd-body {
 .pd-cmp-improvement .pd-cmp-delta { color: var(--pd-green); }
 
 /* ── State 视图（key-value inspector 树） ─────────────────── */
+/* ★Pinia 面板布局：store 选择器 + 详情（state 树 + actions 时间线） */
+.pd-store-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pd-store-chip {
+  background: var(--pd-bg-active);
+  border: 1px solid var(--pd-border);
+  color: var(--pd-text-dim);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-family: var(--pd-mono);
+  cursor: pointer;
+}
+
+.pd-store-chip:hover {
+  color: var(--pd-text);
+}
+
+.pd-store-chip-active {
+  border-color: var(--pd-accent);
+  color: var(--pd-accent);
+}
+
+.pd-store-head {
+  padding: 6px 10px;
+  color: var(--pd-accent);
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pd-store-timeline {
+  margin-top: 4px;
+}
+
+.pd-tl-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 10px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.pd-tl-row:hover {
+  background: var(--pd-bg-hover);
+  border-left-color: var(--pd-accent);
+}
+
+.pd-tl-badge {
+  font-size: 9px;
+  padding: 0 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.pd-tl-action {
+  background: rgba(197, 134, 192, 0.18);
+  color: var(--pd-purple);
+}
+
+.pd-tl-patch {
+  background: rgba(78, 201, 176, 0.15);
+  color: var(--pd-green);
+}
+
+.pd-tl-name {
+  color: var(--pd-text);
+}
+
+.pd-tl-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+}
 .pd-store {
   margin-bottom: 8px;
   background: var(--pd-bg-panel);

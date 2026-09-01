@@ -44,7 +44,8 @@ export interface StateSnapshot {
 export interface PatchStep {
   index: number
   storeId: string
-  type: 'patch' | 'mutation'
+  /** ★devtools 打通：action（createStoreTracer 包装捕获）/ patch / mutation */
+  type: 'patch' | 'mutation' | 'action'
   payload: unknown
   timestamp: number
   before: Record<string, unknown>

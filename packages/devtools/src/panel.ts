@@ -190,8 +190,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   const inflightNav = new Map<string, { record: NavRecord; endTs?: number }>()
   /** State 聚合：store 事件快照（按 storeId 最新） */
   const storeSnapshots = new Map<string, Record<string, unknown>>()
-  const storeSteps: Array<{ index: number; storeId: string; payload: unknown; timestamp: number }> = []
+  const storeSteps: Array<{ index: number; storeId: string; type: 'patch' | 'action'; name: string; payload: unknown; timestamp: number }> = []
   let stepSeq = 0
+  let selectedStore = ''
   /** Components 聚合：component.mount/unmount 事件 → 组件树节点（id → 节点） */
   const componentNodes = new Map<number, ComponentNodeData>()
 
@@ -243,17 +244,26 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         }
       }
     }
-    // State 聚合
+    // State 聚合：store.patch → 快照 + 步骤；store.action → 步骤（action 名）
     if (e.source === 'store') {
-      if (e.phase === 'point' || e.phase === 'end') {
-        const p = e.payload as Record<string, unknown> | undefined
-        if (p && typeof p === 'object' && typeof p.id === 'string') {
-          storeSnapshots.set(p.id, p)
+      if (e.payload && typeof e.payload === 'object') {
+        const p = e.payload as Record<string, unknown>
+        if (typeof p.id === 'string') {
+          if (/patch/i.test(e.name)) {
+            storeSnapshots.set(p.id, p)
+            if (!selectedStore) selectedStore = p.id
+          }
+          const isAction = /action/i.test(e.name)
+          storeSteps.push({
+            index: stepSeq++,
+            storeId: p.id,
+            type: isAction ? 'action' : 'patch',
+            name: isAction ? String(p.name ?? '?') : 'patch',
+            payload: e.payload,
+            timestamp: e.timestamp,
+          })
+          if (storeSteps.length > 1000) storeSteps.shift()
         }
-      }
-      if (e.phase === 'point' && e.payload && typeof e.payload === 'object') {
-        storeSteps.push({ index: stepSeq++, storeId: String((e.payload as { id?: string }).id ?? '?'), payload: e.payload, timestamp: e.timestamp })
-        if (storeSteps.length > 1000) storeSteps.shift()
       }
     }
     // Components 聚合：mount → 建/计数节点；unmount → 移除
@@ -318,9 +328,16 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       containers.get('state') as HTMLElement,
       {
         snapshot: { version: 1, takenAt: Date.now(), stores: Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })) },
-        steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: 'mutation', payload: s.payload, timestamp: s.timestamp, before: {}, after: {} })),
+        steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, payload: s.payload, timestamp: s.timestamp, before: {}, after: {} })),
+        selectedStore,
       },
-      { onTimeTravel },
+      {
+        onTimeTravel,
+        onSelectStore: (id) => {
+          selectedStore = id
+          scheduleRender()
+        },
+      },
     )
     // Components / Pages / Graph 视图
     renderComponents(containers.get('components') as HTMLElement, { nodes: Array.from(componentNodes.values()) })

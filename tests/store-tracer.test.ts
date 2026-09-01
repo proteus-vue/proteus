@@ -21,13 +21,17 @@ describe('createStoreTracer 发射端', () => {
     const off = bus.on((e) => events.push(e))
     const tracer = createStoreTracer(pinia, bus)
     store.add()
-    expect(events.length).toBe(1)
-    expect(events[0]).toMatchObject({ source: 'store', phase: 'point', name: 'store.patch' })
-    expect((events[0] as { payload: { id: string; items: number; label: string } }).payload).toMatchObject({ id: 'cart', items: 2, label: 'cart' })
-    // dispose 后不再发射
+    // ★action 调用 → 2 事件：store.action（包装捕获）+ store.patch（$patch 同步）
+    expect(events.length).toBe(2)
+    expect(events[0]).toMatchObject({ source: 'store', phase: 'point', name: 'store.action' })
+    expect((events[0] as { payload: { id: string; name: string } }).payload).toMatchObject({ id: 'cart', name: 'add' })
+    expect(events[1]).toMatchObject({ source: 'store', phase: 'point', name: 'store.patch' })
+    expect((events[1] as { payload: { id: string; items: number; label: string } }).payload).toMatchObject({ id: 'cart', items: 2, label: 'cart' })
+    // dispose 后：$patch 不再发射 + action 包装还原（调用不再 emit）
     tracer.dispose()
     store.$patch({ items: 3 })
-    expect(events.length).toBe(1)
+    store.add()
+    expect(events.length).toBe(2)
     off()
   })
 
@@ -63,7 +67,7 @@ describe('store → 面板 state 视图（集成）', () => {
     await new Promise((r) => setTimeout(r, 40)) // 16ms 节流渲染
     panel.show('state')
     const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
-    expect(stateView.querySelector('.pd-store summary')?.textContent).toBe('cart')
+    expect(stateView.querySelector('.pd-store-head')?.textContent).toContain('cart')
     const itemsRow = Array.from(stateView.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items')
     expect(itemsRow?.querySelector('.pd-kv-value')?.textContent).toContain('2')
     // 步骤 > 0 → 时间旅行滑块出现

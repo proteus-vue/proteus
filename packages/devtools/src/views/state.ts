@@ -1,10 +1,13 @@
 // packages/devtools/src/views/state.ts
-// DevTools 状态视图：Vue DevTools inspector 风格 —— key-value 树（可折叠嵌套 + 类型着色）+ 时间旅行滑块
+// DevTools 状态视图（★对标 Vue DevTools Pinia 面板）：store 选择器 + 详情（state inspector 树 + actions/patches 时间线）+ 时间旅行滑块
+// 纯函数：data → DOM（selectedStore/onSelectStore 由调用方持有状态）
 import type { StateSnapshot, PatchStep } from '@proteus-vue/devtools-runtime'
 
 export interface StateViewHooks {
   /** 时间旅行回放到第 index 步（index = -1 表示初始快照） */
   onTimeTravel?: (index: number) => void
+  /** 选中 store（Pinia 面板布局：单选详情） */
+  onSelectStore?: (id: string) => void
   /** 导出快照 */
   onExport?: () => void
 }
@@ -12,6 +15,8 @@ export interface StateViewHooks {
 export interface StateViewData {
   snapshot: StateSnapshot
   steps: PatchStep[]
+  /** 当前选中 store（缺省第一个有快照的 store） */
+  selectedStore?: string
 }
 
 type ValueKind = 'number' | 'string' | 'boolean' | 'null' | 'object' | 'array'
@@ -97,7 +102,11 @@ function renderValue(container: HTMLElement, key: string, value: unknown, depth:
 
 export function renderState(container: HTMLElement, data: StateViewData, hooks: StateViewHooks = {}): void {
   container.replaceChildren()
-  // 工具栏：导出 + 步骤计数
+  const stores = data.snapshot.stores
+  // 选中 store：显式 selected 优先，缺省第一个
+  const selected = data.selectedStore !== undefined && stores.some((s) => s.id === data.selectedStore) ? data.selectedStore : (stores[0]?.id ?? '')
+
+  // 工具栏：导出 + 计数
   const toolbar = document.createElement('div')
   toolbar.className = 'pd-toolbar'
   const exportBtn = document.createElement('button')
@@ -106,11 +115,78 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
   exportBtn.addEventListener('click', () => hooks.onExport?.())
   toolbar.appendChild(exportBtn)
   const stepInfo = document.createElement('span')
-  stepInfo.textContent = '步骤 ' + data.steps.length + ' · stores ' + data.snapshot.stores.length
+  stepInfo.textContent = '步骤 ' + data.steps.length + ' · stores ' + stores.length
   toolbar.appendChild(stepInfo)
   container.appendChild(toolbar)
 
-  // 时间旅行滑块
+  // ★Pinia 面板布局：store 选择器（chips 单选）
+  if (stores.length) {
+    const picker = document.createElement('div')
+    picker.className = 'pd-store-picker'
+    for (const s of stores) {
+      const chip = document.createElement('button')
+      chip.className = 'pd-store-chip' + (s.id === selected ? ' pd-store-chip-active' : '')
+      chip.textContent = s.id
+      chip.addEventListener('click', () => hooks.onSelectStore?.(s.id))
+      picker.appendChild(chip)
+    }
+    container.appendChild(picker)
+  }
+
+  // 详情：选中 store 的 state 树 + actions/patches 时间线
+  const sel = stores.find((s) => s.id === selected)
+  if (sel) {
+    const card = document.createElement('div')
+    card.className = 'pd-store'
+    const head = document.createElement('div')
+    head.className = 'pd-store-head'
+    head.textContent = selected + ' · state'
+    card.appendChild(head)
+    const inspector = document.createElement('div')
+    inspector.className = 'pd-inspector'
+    renderValue(inspector, '(root)', sel.state, 0, true)
+    card.appendChild(inspector)
+    container.appendChild(card)
+
+    // ★actions / patches 时间线（该 store 的步骤，点击 → 时间旅行）
+    const mine = data.steps.filter((st) => st.storeId === selected)
+    const tl = document.createElement('div')
+    tl.className = 'pd-store-timeline'
+    const tlHead = document.createElement('div')
+    tlHead.className = 'pd-section-head'
+    tlHead.textContent = 'actions / patches（' + mine.length + '）'
+    tl.appendChild(tlHead)
+    if (mine.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'pd-empty'
+      empty.textContent = '暂无变更'
+      tl.appendChild(empty)
+    }
+    // 倒序（最新在上）
+    for (let i = mine.length - 1; i >= 0; i--) {
+      const st = mine[i]
+      const row = document.createElement('div')
+      row.className = 'pd-tl-row'
+      const badge = document.createElement('span')
+      const isAction = st.type === 'action'
+      badge.className = 'pd-tl-badge ' + (isAction ? 'pd-tl-action' : 'pd-tl-patch')
+      badge.textContent = isAction ? 'action' : 'patch'
+      const name = document.createElement('span')
+      name.className = 'pd-tl-name'
+      name.textContent = String((st.payload as { name?: string } | undefined)?.name ?? '?')
+      const meta = document.createElement('span')
+      meta.className = 'pd-tl-meta'
+      meta.textContent = '#' + st.index + ' · ' + st.timestamp + 'ms'
+      row.appendChild(badge)
+      row.appendChild(name)
+      row.appendChild(meta)
+      row.addEventListener('click', () => hooks.onTimeTravel?.(st.index))
+      tl.appendChild(row)
+    }
+    container.appendChild(tl)
+  }
+
+  // 时间旅行滑块（全局步骤）
   if (data.steps.length > 0) {
     const sliderRow = document.createElement('div')
     sliderRow.className = 'pd-toolbar'
@@ -132,21 +208,7 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
     container.appendChild(sliderRow)
   }
 
-  // store 列表（inspector 树）
-  for (const store of data.snapshot.stores) {
-    const card = document.createElement('details')
-    card.className = 'pd-store'
-    card.open = true
-    const summary = document.createElement('summary')
-    summary.textContent = store.id
-    card.appendChild(summary)
-    const inspector = document.createElement('div')
-    inspector.className = 'pd-inspector'
-    renderValue(inspector, '(root)', store.state, 0, true)
-    card.appendChild(inspector)
-    container.appendChild(card)
-  }
-  if (data.snapshot.stores.length === 0) {
+  if (stores.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'pd-empty'
     empty.textContent = '暂无 store（TraceBus store 事件未上报）'
