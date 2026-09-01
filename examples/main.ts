@@ -11,13 +11,15 @@ import { installWebPlatform } from '@proteus-vue/web'
 // 微信默认样式对齐层（button/input 等原生默认外观对齐小程序，双端视觉一致）
 import '@proteus-vue/built-in-components/style.css'
 // ★devtools-plan：TraceBus 事件源 + Vue DevTools Timeline 接入（@vue/devtools-api）
-import { createTraceBusSource, installProteusTimeline, installComponentTrace } from '@proteus-vue/devtools'
+import { createTraceBusSource, installProteusTimeline, installComponentTrace, installProteusInspectors } from '@proteus-vue/devtools'
 import { createStoreTracer } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
 // ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
 import { traceBus } from './devtools-bus'
 // ★devtools 打通：capability 探测/降级事件 → traceBus（面板 timeline 能力泳道；未注册能力时零事件）
 import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
+// ★vue-devtools-plan：App Config Inspector 数据源（config-demo 页面 init 后生效；未 init 时安全降级）
+import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
 
 setCapabilityTraceBus(traceBus)
 
@@ -61,6 +63,23 @@ defineApp({
     //   组件树 + Pinia 状态由 Vue DevTools 原生展示——Web 端即标准 Vue 应用）
     setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (devtoolsApi) => {
       installProteusTimeline(devtoolsApi as never, { source: createTraceBusSource(traceBus) })
+      // ★vue-devtools-plan §3：自定义 Inspector——proteus-app-config（当前生效值 + 编辑回写双向调试）
+      installProteusInspectors(devtoolsApi as never, {
+        getConfig: () => {
+          try {
+            return getAppConfig() as unknown as Record<string, unknown>
+          } catch {
+            return {}
+          }
+        },
+        setConfig: (patch) => {
+          try {
+            setAppConfig(patch as never)
+          } catch {
+            // 未 initAppConfig：拒绝回写
+          }
+        },
+      })
     })
   },
 }).run({ launchType: 'cold' })

@@ -64,3 +64,69 @@ export function installProteusTimeline(api: VueDevtoolsApiLike, options: VueDevt
     },
   }
 }
+
+// ═══════════ 自定义 Inspector（vue-devtools-plan 四个中的 Web 可落地项）═══════════
+// 规划：proteus-native-tree（App 依赖）/ proteus-jsi·ifr（Skyline 依赖）/ proteus-style-safety
+// （运行时拦截记录器缺失——style-safety 当前为编译期校验）/ **proteus-app-config（本次落地：数据源 getConfig 就绪 + 编辑回写）**
+
+/** 自定义 Inspector 所需的 @vue/devtools-api 形状（结构类型注入，可 mock 单测） */
+export interface VueDevtoolsInspectorApiLike {
+  addInspector(options: { id: string; label: string; icon?: string }): void
+  on: {
+    getInspectorState(cb: (payload: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void): void
+    editInspectorState(cb: (payload: { inspectorId: string; nodeId: string; path: string[]; state: { value: unknown } }) => void): void
+  }
+}
+
+export interface ProteusInspectorsOptions {
+  /** 应用配置读取（缺省空对象；业务侧传 getConfig） */
+  getConfig?: () => Record<string, unknown>
+  /** 配置更新（编辑回写——Web 端响应式更新白给；缺省 no-op） */
+  setConfig?: (patch: Record<string, unknown>) => void
+}
+
+export interface ProteusInspectors {
+  dispose(): void
+}
+
+/** 按 path 构建嵌套 patch（editInspectorState 的 path → setConfig DeepPartial） */
+function pathToPatch(path: string[], value: unknown): Record<string, unknown> {
+  const root: Record<string, unknown> = {}
+  let cur = root
+  for (let i = 0; i < path.length - 1; i++) {
+    const next: Record<string, unknown> = {}
+    cur[path[i]] = next
+    cur = next
+  }
+  cur[path[path.length - 1]] = value
+  return root
+}
+
+const APP_CONFIG_INSPECTOR = 'proteus-app-config'
+
+/**
+ * 注册自定义 Inspector（vue-devtools-plan §3 可落地项）：
+ *   `proteus-app-config`——App Config 当前生效值 + 编辑回写（对齐规划 §6 双向调试的 Web 形态）
+ * 用法（应用侧）：setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (api) => {
+ *   installProteusInspectors(api, { getConfig, setConfig })
+ * })
+ */
+export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
+  api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' })
+  api.on.getInspectorState((payload) => {
+    if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
+    payload.state = [{ key: 'resolved', value: options.getConfig ? options.getConfig() : {} }]
+  })
+  if (options.setConfig) {
+    api.on.editInspectorState((payload) => {
+      if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
+      // 面板改路径值 → 构建嵌套 patch 下发（对齐规划 §6：Web 端响应式数据回写）
+      options.setConfig?.(pathToPatch(payload.path, payload.state.value))
+    })
+  }
+  return {
+    dispose() {
+      // @vue/devtools-api 无卸载 Inspector 的公共 API（随 plugin 生命周期）
+    },
+  }
+}

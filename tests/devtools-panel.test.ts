@@ -7,6 +7,7 @@ import {
   createDevtoolsPanel,
   createDevtoolsWsSource,
   installProteusTimeline,
+  installProteusInspectors,
   createTraceBusSource,
   renderTimeline,
   renderFlamegraph,
@@ -397,6 +398,44 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const evt = calls[1] as { options: { event: { groupId: string } } }
     expect(evt.options.event.groupId).toBe('router')
     tl.dispose()
+  })
+
+  it('installProteusInspectors：注册 app-config inspector + getInspectorState 当前值 + editInspectorState 回写（path → 嵌套 patch）', () => {
+    let config = { app: { name: 'Demo' }, features: { glass: true } }
+    const calls: Array<{ method: string; options: unknown }> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const editCbs: Array<(p: { inspectorId: string; nodeId: string; path: string[]; state: { value: unknown } }) => void> = []
+    const api = {
+      addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
+      on: {
+        getInspectorState: (cb: never) => stateCbs.push(cb as never),
+        editInspectorState: (cb: never) => editCbs.push(cb as never),
+      },
+    }
+    const inspectors = installProteusInspectors(api as never, {
+      getConfig: () => config as Record<string, unknown>,
+      setConfig: (patch) => {
+        config = { ...config, ...(patch as Record<string, unknown>) }
+      },
+    })
+    // 注册
+    const registered = calls[0] as { options: { id: string; label: string } }
+    expect(registered.method).toBe('addInspector')
+    expect(registered.options.id).toBe('proteus-app-config')
+    expect(registered.options.label).toBe('App Config')
+    // getInspectorState → resolved 分组
+    const payload = { inspectorId: 'proteus-app-config', nodeId: 'root' }
+    stateCbs[0](payload)
+    expect(payload.state?.[0].key).toBe('resolved')
+    expect((payload.state?.[0].value as { app: { name: string } }).app.name).toBe('Demo')
+    // 非本 inspector → 不响应（state 保持 undefined）
+    const otherPayload = { inspectorId: 'other', nodeId: 'root' }
+    stateCbs[0](otherPayload)
+    expect(otherPayload.state).toBeUndefined()
+    // editInspectorState → path 构建嵌套 patch 回写
+    editCbs[0]({ inspectorId: 'proteus-app-config', nodeId: 'root', path: ['app', 'name'], state: { value: 'Proteus' } })
+    expect(config.app.name).toBe('Proteus')
+    inspectors.dispose()
   })
 
   it('createTraceBusSource：TraceBus 事件 → DevtoolsSource 分发', () => {
