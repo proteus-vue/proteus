@@ -24,7 +24,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js && esbuild src/index.ts --bundle --format=iife --global-name=ProteusDevtools --platform=browser --outfile=dist/panel.js"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js --external:@proteus-vue/capabilities --external:@proteus-vue/devtools-runtime --external:@vue/devtools-api && esbuild src/index.ts --bundle --format=iife --global-name=ProteusDevtools --platform=browser --outfile=dist/panel.js"
   },
   "dependencies": {
     "@proteus-vue/capabilities": "0.1.0",
