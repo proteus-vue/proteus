@@ -184,3 +184,10 @@ export type {
   RouteBacktrackerOptions,
   RouteBacktracker,
 } from './route-backtrack'
+export { createFlamegraphCollector } from './flamegraph'
+export type {
+  FlameNode,
+  FlamegraphCollectorOptions,
+  FlameCompareEntry,
+  FlamegraphCollector,
+} from './flamegraph'

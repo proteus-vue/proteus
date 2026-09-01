@@ -1,5 +1,7 @@
 # M6 — 性能火焰图
 
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createFlamegraphCollector`（start/end → **全局嵌套栈**跨 source 构建父子树（Lifecycle/Compiler/Router/API）+ inclusive/exclusive 耗时 + 同层 start 排序 + startMs 相对录制基线 + icicle 倒置 + compare 对比模式（±10% → regression/improvement，exclusive 聚合）+ 录制 start/stop 门控 + 缓冲上限 20000），9 用例全绿；UI（泳道格子/源码定位/阈值线）待面板工程（v1.0+）。
+
 ## 目标
 
 把启动阶段、transform、守卫等耗时可视化成火焰图，定位"编译卡点 / 启动慢在哪"。
