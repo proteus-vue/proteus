@@ -17,10 +17,41 @@ class Router {
   constructor(
     private routeMap: Record<string, RouteRecord>,
     private options: RouterOptions = {},
-  ) {}
+  ) {
+    // ★devtools 打通：Web 端非 push 导航（站内 <a> 链接 / 浏览器前进后退）→ TraceBus 补发 router 事件
+    //   （web adapter 的 click 拦截/popstate 直接改 URL + onPageLoad 通知，绕过 push——补 trace 让 route 回溯完整）
+    //   MP 端导航全走 push（小程序原生导航），无需补发；onPageLoad 为可选接口（防御）
+    if (!adapter.isMP && typeof adapter.onPageLoad === 'function') {
+      const pages = adapter.getCurrentPages()
+      this.lastRoute = (pages.length ? (pages[pages.length - 1] as { route?: string }).route ?? '?' : '?') || 'index'
+      adapter.onPageLoad((route, _query, _routeType, _nav) => {
+        // ★web adapter 把根路径（/）归一化为空串——统一回 'index'（RouterView 侧 fallback 约定），trace 可读
+        const normalized = route || 'index'
+        if (this.tracePending) {
+          // push 内部导航：跳过补发（push 已发完整链路），仅同步当前路由
+          this.tracePending = false
+          this.lastRoute = normalized
+          return
+        }
+        const bus = this.options.traceBus
+        const from = this.lastRoute
+        this.lastRoute = normalized
+        if (!bus) return
+        // 非 push 导航：补发简化链路（start/end，无守卫链）
+        const name = 'navigate ' + normalized
+        const traceId = 'nav-' + ++this.traceSeq
+        bus.emit('router', 'start', name, { from: { path: from }, to: { path: normalized } }, traceId)
+        bus.emit('router', 'end', name, undefined, traceId)
+      })
+    }
+  }
 
   /** 导航 traceId 自增（start/end 配对） */
   private traceSeq = 0
+  /** ★Web 端非 push 导航（站内 <a> 链接 / 浏览器前进后退）补发 trace 的去重标志：push 内部导航时置位，onPageLoad 消费 */
+  private tracePending = false
+  /** 当前路由（onPageLoad 维护——非 push 导航的 from 基准） */
+  private lastRoute = '?'
 
   /**
    * 注册前置守卫（M6：实例级 API，三端一致——delegate 到全局守卫注册表）
@@ -97,31 +128,37 @@ class Router {
 
     const url = this.buildUrl(target.path, { ...(options.params as RouteParams | undefined), ...options.query })
 
-    // Skyline 自定义路由（仅 MP + Skyline 环境）
-    if (options.routeType && isSkyline()) {
-      await navigateWithCustomRoute(url, options.routeType)
-    }
-    // TabBar 页面
-    else if (options.switchTab || target.meta?.isTab) {
-      await adapter.switchTab({ url: target.path })
-    }
-    // 替换当前页
-    else if (options.replace) {
-      await adapter.redirectTo({ url })
-    }
-    // 重启
-    else if (options.reLaunch) {
-      await adapter.reLaunch({ url })
-    }
-    // 普通跳转（栈深保护仅 MP 生效；Web 端不受 10 层限制）
-    else {
-      if (adapter.isMP && this.stackDepth >= 9) {
-        // MP 栈深≥9 自动降级为 redirectTo，避免第 10 层报错（平台硬边界）
-        await adapter.redirectTo({ url })
-      } else {
-        // routeType 透传：MP 由 skyline 分支消费，Web 端由 adapter 用于 CSS 转场
-        await adapter.navigateTo({ url, routeType: options.routeType })
+    // ★devtools：push 内部导航标记（onPageLoad 回调消费跳过补发，避免重复 trace）；finally 防残留
+    this.tracePending = true
+    try {
+      // Skyline 自定义路由（仅 MP + Skyline 环境）
+      if (options.routeType && isSkyline()) {
+        await navigateWithCustomRoute(url, options.routeType)
       }
+      // TabBar 页面
+      else if (options.switchTab || target.meta?.isTab) {
+        await adapter.switchTab({ url: target.path })
+      }
+      // 替换当前页
+      else if (options.replace) {
+        await adapter.redirectTo({ url })
+      }
+      // 重启
+      else if (options.reLaunch) {
+        await adapter.reLaunch({ url })
+      }
+      // 普通跳转（栈深保护仅 MP 生效；Web 端不受 10 层限制）
+      else {
+        if (adapter.isMP && this.stackDepth >= 9) {
+          // MP 栈深≥9 自动降级为 redirectTo，避免第 10 层报错（平台硬边界）
+          await adapter.redirectTo({ url })
+        } else {
+          // routeType 透传：MP 由 skyline 分支消费，Web 端由 adapter 用于 CSS 转场
+          await adapter.navigateTo({ url, routeType: options.routeType })
+        }
+      }
+    } finally {
+      this.tracePending = false
     }
 
     await runAfterEach(target, this.routeMap, trace)
