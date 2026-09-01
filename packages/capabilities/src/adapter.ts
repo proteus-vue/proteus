@@ -4,6 +4,11 @@
 // 多实例隔离（§5）：createCapabilityRegistry 工厂——SSR / Worker 场景独立 registry，禁止全局可变副作用
 import type { Capability, CapabilityAPI, CapabilityPlatform } from './types'
 
+/** 能力可观测事件总线（结构与 devtools-runtime TraceBus.emit 兼容；零硬依赖注入） */
+export interface CapabilityTraceBus {
+  emit(source: 'capability', phase: 'point' | 'start' | 'end' | 'error', name: string, payload?: unknown, traceId?: string): void
+}
+
 /** 独立 adapter（capabilities/*.adapter.ts 或描述文件 adapters 展开产物） */
 export interface CapabilityAdapter<C extends CapabilityAPI = CapabilityAPI> {
   /** 所属能力 id */
@@ -45,6 +50,16 @@ export class CapabilityRegistry {
   private adapters = new Map<string, CapabilityAdapter[]>()
   private fallbacks = new Map<string, string>() // capability id → fallback id
   private requireds = new Map<string, boolean>() // ★B4：required——缺失阻断（§4）
+  private traceBus: CapabilityTraceBus | undefined
+
+  /** ★devtools 打通：注入可观测事件总线（capability.detect 探测/降级事件 → 面板 timeline 能力泳道；bus 门控生产零开销） */
+  setTraceBus(bus: CapabilityTraceBus | undefined): void {
+    this.traceBus = bus
+  }
+
+  private emitDetect(id: string, platform: CapabilityPlatform, supported: boolean, fallback?: string): void {
+    this.traceBus?.emit('capability', 'point', 'capability.detect', { name: id, platform, supported, fallback }, 'cap-' + id)
+  }
 
   /** 注册 fallback 关系（capability 描述文件） */
   registerFallback(capability: string, fallback: string | undefined): void {
@@ -108,7 +123,14 @@ export class CapabilityRegistry {
       }
     }
     const fb = this.fallbacks.get(id)
-    if (fb && fb !== id) return this.resolve<C>(fb, platform)
+    if (fb && fb !== id) {
+      // 探测不支持 → 先记录降级事件，再递归 fallback 能力（命中与否都保留探测痕迹）
+      this.emitDetect(id, platform, false, fb)
+      const fbCap = await this.resolve<C>(fb, platform)
+      if (fbCap) return fbCap
+      return undefined
+    }
+    this.emitDetect(id, platform, false)
     return undefined
   }
 
@@ -124,7 +146,14 @@ export class CapabilityRegistry {
       }
     }
     const fb = this.fallbacks.get(id)
-    if (fb && fb !== id) return this.resolveSync<C>(fb, platform)
+    if (fb && fb !== id) {
+      // 探测不支持 → 先记录降级事件，再递归 fallback 能力（命中与否都保留探测痕迹）
+      this.emitDetect(id, platform, false, fb)
+      const fbCap = this.resolveSync<C>(fb, platform)
+      if (fbCap) return fbCap
+      return undefined
+    }
+    this.emitDetect(id, platform, false)
     return undefined
   }
 
@@ -136,10 +165,15 @@ export class CapabilityRegistry {
       isSupported: () => adapter.isSupported(),
     }
     const fb = this.fallbacks.get(adapter.capability)
+    let fallbackId: string | undefined
     if (fb && fb !== adapter.capability) {
       const fbCap = this.resolveSync<C>(fb, platform)
-      if (fbCap) cap.fallback = fbCap
+      if (fbCap) {
+        cap.fallback = fbCap
+        fallbackId = fb
+      }
     }
+    this.emitDetect(adapter.capability, platform, true, fallbackId)
     return cap
   }
 

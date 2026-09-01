@@ -16,6 +16,10 @@ import { createStoreTracer } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
 // ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
 import { traceBus } from './devtools-bus'
+// ★devtools 打通：capability 探测/降级事件 → traceBus（面板 timeline 能力泳道；未注册能力时零事件）
+import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
+
+setCapabilityTraceBus(traceBus)
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 // ★devtools 打通：请求事件 → traceBus（面板 timeline/network 插件；bus 门控生产零开销）

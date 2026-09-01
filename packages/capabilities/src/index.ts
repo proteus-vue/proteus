@@ -5,11 +5,11 @@
 import type { Capability, CapabilityAPI, CapabilityDefinition, CapabilityPlatform } from './types'
 import { CapabilityError } from './types'
 import { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
-import type { CapabilityAdapter } from './adapter'
+import type { CapabilityAdapter, CapabilityTraceBus } from './adapter'
 
 export * from './types'
 export { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
-export type { CapabilityAdapter } from './adapter'
+export type { CapabilityAdapter, CapabilityTraceBus } from './adapter'
 // ★types-plan B4：平台守卫（铁律 #4：matchPlatform/assertPlatform/exhaustiveCheck 替代 #ifdef）
 export { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck } from './guard'
 export type { PlatformCases } from './guard'
@@ -113,6 +113,11 @@ export function clearCapabilities(): void {
 /** 能力是否已注册 */
 export function hasCapability(id: string): boolean {
   return globalRegistry.has(id)
+}
+
+/** ★devtools 打通：全局 registry 注入可观测事件总线（capability.detect 探测/降级事件；业务侧传 createTraceBus 实例） */
+export function setCapabilityTraceBus(bus: CapabilityTraceBus | undefined): void {
+  globalRegistry.setTraceBus(bus)
 }
 
 /** 解析能力（同步：仅同步 isSupported 的 adapter 命中；异步探测请用 resolveCapability） */
