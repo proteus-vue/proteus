@@ -24,10 +24,10 @@ export interface StyleGuardLike {
   records(): Array<{ prop: string; value: unknown; reason: string; ts: number }>
 }
 
-/** pinia 实例结构类型（createStoreTracer 消费） */
+/** pinia 实例结构类型（createStoreTracer 消费 + onApplyState 状态恢复） */
 export interface PiniaLike {
   use(fn: (ctx: { store: unknown }) => void): unknown
-  _s: Map<string, unknown>
+  _s: Map<string, { $patch(state: Record<string, unknown>): void }>
 }
 
 /** vite import.meta.hot 结构类型（HMR 事件 → TraceBus；零硬依赖，业务侧传 import.meta.hot） */
@@ -70,7 +70,11 @@ export interface InstalledDevtools {
 let panelMounted = false
 let panel: { destroy(): void } | null = null
 
-function mountFloatingPanel(bus: TraceBus, pages: PagesViewData | undefined): void {
+function mountFloatingPanel(
+  bus: TraceBus,
+  pages: PagesViewData | undefined,
+  applyState: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void,
+): void {
   if (panelMounted) return
   panelMounted = true
   const btn = document.createElement('button')
@@ -92,6 +96,8 @@ function mountFloatingPanel(bus: TraceBus, pages: PagesViewData | undefined): vo
       panel = createDevtoolsPanel(host, {
         source: createTraceBusSource(bus),
         pages,
+        // ★P0：时间旅行回放 / 导入快照恢复 → 逐 store $patch 写回（结构类型零硬依赖；无 pinia → 仅面板内展示）
+        onApplyState: applyState,
       })
     }
   })
@@ -173,7 +179,15 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   })
 
   // ⑤ 本地面板浮动挂载
-  if (options.mount !== false) mountFloatingPanel(bus, options.pages)
+  if (options.mount !== false) {
+    mountFloatingPanel(bus, options.pages, (stores) => {
+      if (!options.pinia) return
+      for (const s of stores) {
+        const store = options.pinia._s.get(s.id)
+        store?.$patch?.(s.state)
+      }
+    })
+  }
 
   // ⑥ 远程查看桥（移动端/真机：事件流上行 WS → 电脑端 panel.html 下行）
   let remoteBridge: TraceBusWsBridge | null = null

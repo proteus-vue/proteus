@@ -2,14 +2,17 @@
 // DevTools 状态视图（★对标 Vue DevTools Pinia 面板）：store 选择器 + 详情（state inspector 树 + actions/patches 时间线）+ 时间旅行滑块
 // 纯函数：data → DOM（selectedStore/onSelectStore 由调用方持有状态）
 import type { StateSnapshot, PatchStep } from '@proteus-vue/devtools-runtime'
+import { attachTip } from '../tooltip'
 
 export interface StateViewHooks {
   /** 时间旅行回放到第 index 步（index = -1 表示初始快照） */
   onTimeTravel?: (index: number) => void
   /** 选中 store（Pinia 面板布局：单选详情） */
   onSelectStore?: (id: string) => void
-  /** 导出快照 */
+  /** 导出快照（面板侧 Blob 下载） */
   onExport?: () => void
+  /** 导入快照 JSON（view 读文件 → 面板解析校验 + 数据重建 + 应用） */
+  onImport?: (json: string) => void
 }
 
 export interface StateViewData {
@@ -100,13 +103,26 @@ function renderValue(container: HTMLElement, key: string, value: unknown, depth:
   container.appendChild(row)
 }
 
+/** 步骤 before/after 差异行（时间旅行 diff 提示；JSON 相等跳过） */
+function diffLines(before: Record<string, unknown>, after: Record<string, unknown>): string[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)])
+  const lines: string[] = []
+  for (const k of keys) {
+    const b = before[k]
+    const a = after[k]
+    if (JSON.stringify(b) === JSON.stringify(a)) continue
+    lines.push(k + ': ' + summarize(b) + ' → ' + summarize(a))
+  }
+  return lines
+}
+
 export function renderState(container: HTMLElement, data: StateViewData, hooks: StateViewHooks = {}): void {
   container.replaceChildren()
   const stores = data.snapshot.stores
   // 选中 store：显式 selected 优先，缺省第一个
   const selected = data.selectedStore !== undefined && stores.some((s) => s.id === data.selectedStore) ? data.selectedStore : (stores[0]?.id ?? '')
 
-  // 工具栏：导出 + 计数
+  // 工具栏：导出 + 导入 + 计数
   const toolbar = document.createElement('div')
   toolbar.className = 'pd-toolbar'
   const exportBtn = document.createElement('button')
@@ -114,6 +130,25 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
   exportBtn.textContent = '导出快照 JSON'
   exportBtn.addEventListener('click', () => hooks.onExport?.())
   toolbar.appendChild(exportBtn)
+  // ★P0：导入快照（隐藏 file input → FileReader 读文本 → onImport 交给面板解析/重建/应用）
+  const importBtn = document.createElement('button')
+  importBtn.className = 'pd-btn'
+  importBtn.textContent = '导入快照 JSON'
+  const fileInput = document.createElement('input')
+  fileInput.type = 'file'
+  fileInput.accept = '.json,application/json'
+  fileInput.style.display = 'none'
+  importBtn.addEventListener('click', () => fileInput.click())
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0]
+    fileInput.value = ''
+    if (!f) return
+    const reader = new FileReader()
+    reader.onload = () => hooks.onImport?.(String(reader.result ?? ''))
+    reader.readAsText(f)
+  })
+  toolbar.appendChild(importBtn)
+  toolbar.appendChild(fileInput)
   const stepInfo = document.createElement('span')
   stepInfo.textContent = '步骤 ' + data.steps.length + ' · stores ' + stores.length
   toolbar.appendChild(stepInfo)
@@ -180,6 +215,11 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
       row.appendChild(badge)
       row.appendChild(name)
       row.appendChild(meta)
+      // ★P0：真实 before/after diff（hover 提示变更键 + 新旧值）
+      const diff = diffLines(st.before, st.after)
+      if (diff.length > 0) {
+        attachTip(row, { title: st.type + ' #' + st.index, lines: diff })
+      }
       row.addEventListener('click', () => hooks.onTimeTravel?.(st.index))
       tl.appendChild(row)
     }

@@ -27,6 +27,8 @@ import {
   createCommandRegistry,
   resolveActivationOrder,
   createNetworkPlugin,
+  serializeStoreSnapshot,
+  parseStoreSnapshot,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
@@ -274,6 +276,139 @@ describe('State 视图（对标 Vue DevTools Pinia 面板）', () => {
     const itemsRow = Array.from(stateView.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items')
     expect(itemsRow?.querySelector('.pd-kv-value')?.textContent).toBe('2')
     panel.destroy()
+  })
+
+  it('★P0 导出：store.patch 快照（去 id 键）→ exportSnapshot 序列化 stores/steps（Blob 下载）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('store', 'point', 'store.patch', 100, undefined, { id: 'cart', items: 1, user: { name: 'p' } }))
+    await new Promise((r) => setTimeout(r, 40))
+    const json = JSON.parse(panel.exportSnapshot())
+    expect(json.kind).toBe('proteus-store-snapshot')
+    expect(json.version).toBe(1)
+    // ★去 id：快照 stores 的 state 不含元数据 id 键
+    expect(json.stores).toEqual([{ id: 'cart', state: { items: 1, user: { name: 'p' } } }])
+    expect(json.steps).toEqual([{ index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 1, user: { name: 'p' } }, timestamp: 100 }])
+    panel.destroy()
+  })
+
+  it('★P0 导入：importSnapshot 重建数据（视图出 store）+ onApplyState 应用（pinia 恢复）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const apply = vi.fn()
+    const panel = createDevtoolsPanel(root, { source, onApplyState: apply })
+    panel.show('state')
+    const json = serializeStoreSnapshot({
+      stores: [{ id: 'cart', state: { items: 3 } }],
+      steps: [
+        { index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 1 }, timestamp: 100 },
+        { index: 1, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 2 }, timestamp: 200 },
+      ],
+    })
+    panel.importSnapshot(json)
+    await new Promise((r) => setTimeout(r, 40))
+    const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    expect(stateView.querySelectorAll('.pd-store-chip').length).toBe(1)
+    const itemsRow = Array.from(stateView.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items')
+    expect(itemsRow?.querySelector('.pd-kv-value')?.textContent).toBe('3')
+    expect(stateView.querySelectorAll('.pd-tl-row').length).toBe(2)
+    // ★应用：导入的最新快照写回应用侧
+    expect(apply).toHaveBeenCalledWith([{ id: 'cart', state: { items: 3 } }])
+    panel.destroy()
+  })
+
+  it('★P0 导入：非法 JSON / 非快照对象 → 忽略（面板不崩、onApplyState 不调）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const apply = vi.fn()
+    const panel = createDevtoolsPanel(root, { source, onApplyState: apply })
+    panel.importSnapshot('not json')
+    panel.importSnapshot('{"a":1}')
+    panel.importSnapshot('{"kind":"other","stores":[]}')
+    await new Promise((r) => setTimeout(r, 30))
+    expect(apply).not.toHaveBeenCalled()
+    panel.destroy()
+  })
+
+  it('★P0 时间旅行：滑块/步骤行 → onTimeTravel(index) + onApplyState(restoreAt 快照：各 store 在 index 时刻状态)', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const onTT = vi.fn()
+    const apply = vi.fn()
+    const panel = createDevtoolsPanel(root, { source, onTimeTravel: onTT, onApplyState: apply })
+    // cart 两次 patch（步骤 0/1）+ user 一次 patch（步骤 2）
+    source.push(ev('store', 'point', 'store.patch', 100, undefined, { id: 'cart', items: 1 }))
+    source.push(ev('store', 'point', 'store.patch', 200, undefined, { id: 'cart', items: 2 }))
+    source.push(ev('store', 'point', 'store.patch', 300, undefined, { id: 'user', name: 'u' }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('state')
+    const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    const range = stateView.querySelector('.pd-range') as HTMLInputElement
+    // 回放到步骤 0：cart 取 items:1（user 尚无 patch ≤0 → 不出现）
+    range.value = '0'
+    range.dispatchEvent(new Event('input'))
+    expect(onTT).toHaveBeenCalledWith(0)
+    expect(apply).toHaveBeenLastCalledWith([{ id: 'cart', state: { items: 1 } }])
+    // 回放到步骤 2：cart 最新 items:2 + user name
+    range.value = '2'
+    range.dispatchEvent(new Event('input'))
+    expect(apply).toHaveBeenLastCalledWith([{ id: 'cart', state: { items: 2 } }, { id: 'user', state: { name: 'u' } }])
+    panel.destroy()
+  })
+
+  it('★P0 before/after：patch 步骤带真实差异（hover diff 提示挂 data-tip）；action 步骤无 diff', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('store', 'point', 'store.patch', 100, undefined, { id: 'cart', items: 1 }))
+    source.push(ev('store', 'point', 'store.action', 150, undefined, { id: 'cart', name: 'add' }))
+    source.push(ev('store', 'point', 'store.patch', 200, undefined, { id: 'cart', items: 2 }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('state')
+    const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    const rows = Array.from(stateView.querySelectorAll('.pd-tl-row'))
+    // 倒序：patch(#2, items 1→2) 在最上（有 diff）→ action(#1) → patch(#0, 首次无 before)
+    expect(rows[0].getAttribute('data-tip')).not.toBeNull()
+    expect(rows[1].getAttribute('data-tip')).toBeNull() // action 无状态变更
+    panel.destroy()
+  })
+
+  it('renderState：导入快照按钮 → 选文件 → onImport(JSON 文本)', async () => {
+    const root = document.createElement('div')
+    const onImport = vi.fn()
+    renderState(root, { snapshot: { version: 1, takenAt: 1, stores: [] }, steps: [] }, { onImport })
+    const btn = Array.from(root.querySelectorAll('.pd-btn')).find((b) => b.textContent === '导入快照 JSON') as HTMLButtonElement
+    expect(btn).toBeDefined()
+    const input = root.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['{"kind":"proteus-store-snapshot"}'], 'snap.json', { type: 'application/json' })
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    input.files = dt.files
+    input.dispatchEvent(new Event('change'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(onImport).toHaveBeenCalledWith('{"kind":"proteus-store-snapshot"}')
+  })
+})
+
+describe('Store 快照导出/导入（snapshot-io 纯逻辑）', () => {
+  it('serializeStoreSnapshot → parseStoreSnapshot roundtrip 保留 stores + steps', () => {
+    const json = serializeStoreSnapshot({
+      stores: [{ id: 'cart', state: { items: 2, meta: { v: 1 } } }],
+      steps: [{ index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 2 }, timestamp: 100 }],
+    })
+    const parsed = parseStoreSnapshot(json)
+    expect(parsed).toEqual({
+      stores: [{ id: 'cart', state: { items: 2, meta: { v: 1 } } }],
+      steps: [{ index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 2 }, timestamp: 100 }],
+    })
+  })
+
+  it('parseStoreSnapshot：非法 JSON / 非快照对象 / 坏行 → null 或过滤', () => {
+    expect(parseStoreSnapshot('not json')).toBeNull()
+    expect(parseStoreSnapshot('{"a":1}')).toBeNull()
+    expect(parseStoreSnapshot('{"kind":"other","stores":[]}')).toBeNull()
+    expect(parseStoreSnapshot('{"kind":"proteus-store-snapshot","stores":null}')).toBeNull()
   })
 })
 

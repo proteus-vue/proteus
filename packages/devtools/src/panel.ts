@@ -21,6 +21,8 @@ import type { ComponentNodeData } from './views/components'
 import { renderPages } from './views/pages'
 import type { PagesViewData, PageRouteData } from './views/pages'
 import { renderGraph } from './views/graph'
+import { serializeStoreSnapshot, parseStoreSnapshot } from './snapshot-io'
+import type { StoreRestoreEntry } from './snapshot-io'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
 import { createPluginRegistry, createMemoryStorage, createCommandRegistry } from './plugins'
 import type { DevToolsPlugin, KVStorage, PluginContext } from './plugins'
@@ -29,6 +31,8 @@ export interface DevtoolsPanelOptions {
   source: DevtoolsSource
   /** 时间旅行命令下发（缺省 no-op——业务侧适配器接入后生效） */
   onTimeTravel?: (index: number) => void
+  /** ★P0：状态应用（时间旅行回放 / 导入快照恢复共用）——panel 把 restore 快照交给 caller（install → pinia.$patch）；缺省仅面板内回放 */
+  onApplyState?: (stores: StoreRestoreEntry[]) => void
   /** M9 插件：第三方自定义视图/事件订阅/命令（激活拓扑序，循环依赖报错，崩溃隔离） */
   plugins?: DevToolsPlugin[]
   /** 插件持久化存储（缺省内存 KV） */
@@ -41,6 +45,10 @@ export interface DevtoolsPanel {
   destroy(): void
   /** 切换视图（'timeline' | 'flamegraph' | 'state' | 'route' | 'errors'） */
   show(view: string): void
+  /** ★P0：导出 store 快照 JSON（序列化 + Blob 下载，文件名 proteus-store-snapshot.json；返回序列化文本供程序化消费） */
+  exportSnapshot(): string
+  /** ★P0：导入 store 快照 JSON（解析校验 → 数据重建 → 视图刷新 → onApplyState 应用回应用） */
+  importSnapshot(json: string): void
 }
 
 const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph'] as const
@@ -188,8 +196,10 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   /** Route 轻量适配：router nav 事件 → NavRecord */
   const navs: NavRecord[] = []
   const inflightNav = new Map<string, { record: NavRecord; endTs?: number }>()
-  /** State 聚合：store 事件快照（按 storeId 最新） */
+  /** State 聚合：store 事件快照（按 storeId 最新；★去 id 键——payload { id, ...state } 的 id 是元数据非状态） */
   const storeSnapshots = new Map<string, Record<string, unknown>>()
+  /** ★P0：store 补丁历史（storeId → [{ stepIndex, state }]）——时间旅行 restore 快照 / 步骤 before·after diff 的数据源 */
+  const storePatchHistory = new Map<string, Array<{ stepIndex: number; state: Record<string, unknown> }>>()
   const storeSteps: Array<{ index: number; storeId: string; type: 'patch' | 'action'; name: string; payload: unknown; timestamp: number }> = []
   let stepSeq = 0
   let selectedStore = ''
@@ -249,13 +259,20 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       if (e.payload && typeof e.payload === 'object') {
         const p = e.payload as Record<string, unknown>
         if (typeof p.id === 'string') {
-          if (/patch/i.test(e.name)) {
-            storeSnapshots.set(p.id, p)
-            if (!selectedStore) selectedStore = p.id
-          }
+          const index = stepSeq++
           const isAction = /action/i.test(e.name)
+          if (!isAction) {
+            // ★patch：去 id 存 state 快照 + 追加补丁历史（时间旅行 restore / before·after diff 用）
+            const state: Record<string, unknown> = {}
+            for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
+            storeSnapshots.set(p.id, state)
+            if (!selectedStore) selectedStore = p.id
+            const list = storePatchHistory.get(p.id) ?? []
+            list.push({ stepIndex: index, state })
+            storePatchHistory.set(p.id, list)
+          }
           storeSteps.push({
-            index: stepSeq++,
+            index,
             storeId: p.id,
             type: isAction ? 'action' : 'patch',
             name: isAction ? String(p.name ?? '?') : 'patch',
@@ -315,6 +332,75 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   })
   fgControls.appendChild(recBtn)
 
+  // ─── ★P0：状态快照导出 / 导入 / 时间旅行 restore ───────────────────────────────
+  /** 回放到第 index 步时的 restore 快照（各 store 取 stepIndex <= index 的最后一次 patch 状态） */
+  function restoreAt(index: number): StoreRestoreEntry[] {
+    const out: StoreRestoreEntry[] = []
+    for (const [id, history] of storePatchHistory) {
+      let state: Record<string, unknown> | null = null
+      for (const h of history) {
+        if (h.stepIndex <= index) state = h.state
+        else break
+      }
+      if (state) out.push({ id, state })
+    }
+    return out
+  }
+
+  /** 导出快照 JSON（serializeStoreSnapshot 纯逻辑 + Blob 下载；无 createObjectURL 环境仅返回文本） */
+  function exportSnapshot(): string {
+    const json = serializeStoreSnapshot({
+      stores: Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })),
+      steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, name: s.name, payload: s.payload, timestamp: s.timestamp })),
+    })
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return json
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'proteus-store-snapshot.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    return json
+  }
+
+  /** 导入快照 JSON：parseStoreSnapshot 校验 → 数据重建（stores/steps/patch 历史）→ 刷新 → onApplyState 应用回应用 */
+  function importSnapshot(json: string): void {
+    const parsed = parseStoreSnapshot(json)
+    if (!parsed) return
+    storeSnapshots.clear()
+    storePatchHistory.clear()
+    storeSteps.length = 0
+    stepSeq = 0
+    selectedStore = ''
+    for (const s of parsed.stores) {
+      storeSnapshots.set(s.id, s.state)
+      if (!selectedStore) selectedStore = s.id
+    }
+    for (const st of parsed.steps) {
+      const index = stepSeq++
+      storeSteps.push({ index, storeId: st.storeId, type: st.type, name: st.name, payload: st.payload, timestamp: st.timestamp })
+      if (st.type === 'patch' && st.payload && typeof st.payload === 'object') {
+        // ★重建补丁历史：patch 步骤 payload 含 id（与实时记录一致）——去 id 还原 state
+        const p = st.payload as Record<string, unknown>
+        const state: Record<string, unknown> = {}
+        for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
+        const list = storePatchHistory.get(st.storeId) ?? []
+        list.push({ stepIndex: index, state })
+        storePatchHistory.set(st.storeId, list)
+      }
+    }
+    scheduleRender()
+    // ★应用恢复：快照状态写回应用侧（install → pinia.$patch）；无 pinia 时仅面板内展示
+    options.onApplyState?.(Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })))
+  }
+
+  /** 时间旅行（滑块/步骤行）：命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（onApplyState） */
+  function timeTravel(index: number): void {
+    options.onTimeTravel?.(index)
+    options.onApplyState?.(restoreAt(index))
+  }
+
   function rerender(): void {
     tlViewHeight = timelineView.clientHeight || 300
     renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined, virtual: { scrollTop: tlScrollTop, viewHeight: tlViewHeight } })
@@ -328,15 +414,30 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       containers.get('state') as HTMLElement,
       {
         snapshot: { version: 1, takenAt: Date.now(), stores: Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })) },
-        steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, payload: s.payload, timestamp: s.timestamp, before: {}, after: {} })),
+        // ★P0：真实 before/after（patch 步骤：该 store 补丁历史中前一条/本条状态；action 步骤无状态变更）
+        steps: storeSteps.map((s) => {
+          let before: Record<string, unknown> = {}
+          let after: Record<string, unknown> = {}
+          if (s.type === 'patch') {
+            const hist = storePatchHistory.get(s.storeId) ?? []
+            const idx = hist.findIndex((h) => h.stepIndex === s.index)
+            if (idx >= 0) {
+              after = hist[idx].state
+              if (idx > 0) before = hist[idx - 1].state
+            }
+          }
+          return { index: s.index, storeId: s.storeId, type: s.type, payload: s.payload, timestamp: s.timestamp, before, after }
+        }),
         selectedStore,
       },
       {
-        onTimeTravel,
+        onTimeTravel: timeTravel,
         onSelectStore: (id) => {
           selectedStore = id
           scheduleRender()
         },
+        onExport: exportSnapshot,
+        onImport: importSnapshot,
       },
     )
     // Components / Pages / Graph 视图
@@ -516,5 +617,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       root.replaceChildren()
     },
     show,
+    exportSnapshot,
+    importSnapshot,
   }
 }

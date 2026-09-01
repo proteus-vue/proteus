@@ -1,8 +1,9 @@
 // tests/devtools-panel-mount.test.ts —— Web 端本地面板挂载（installProteusDevtools 一键接入）
 // ★一键接入收口：不再需要 devtools-bus.ts / devtools-panel-mount.ts / devtools-panel.css
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createApp } from 'vue'
+import { createPinia, defineStore, setActivePinia } from 'pinia'
 import { installProteusDevtools } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
 
@@ -67,5 +68,48 @@ describe('installProteusDevtools 一键接入', () => {
     expect(hmrListeners.length).toBe(0)
     app.unmount()
     off()
+  })
+
+  it('★P0 状态应用：时间旅行滑块 → pinia store $patch 真实恢复（install 接线 onApplyState）', async () => {
+    // ★模块级 panelMounted 单次挂载 + happy-dom document 跨测试持久 → 清 DOM + resetModules 拿全新模块实例
+    document.body.replaceChildren()
+    vi.resetModules()
+    const { installProteusDevtools: install2 } = await import('@proteus-vue/devtools')
+    const app = createApp({})
+    const pinia = createPinia()
+    app.use(pinia)
+    setActivePinia(pinia)
+    const useCart = defineStore('cart', { state: () => ({ items: 0 }) })
+    const cart = useCart()
+    const bus = createTraceBus({ enabled: true })
+    const devtools = install2(app, { traceBus: bus, pinia, mount: true })
+    // ★先开面板（订阅 bus）再变更——TraceBus on 不自动回放缓冲（决策 #249）
+    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
+    expect(btn).not.toBeNull()
+    btn.click()
+    const host = document.querySelector('.pd-floating-host') as HTMLElement
+    // 变更 → storeTracer 上报 store.patch（面板快照）
+    cart.items = 1
+    await new Promise((r) => setTimeout(r, 60))
+    const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
+    ;(navItems.find((n) => (n as HTMLElement).dataset.view === 'state') as HTMLElement).click()
+    const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    const range = stateView.querySelector('.pd-range') as HTMLInputElement
+    expect(range).not.toBeNull()
+    // 回放到步骤 0（初始快照前）→ 但 restoreAt(0) = cart.items:1（第一步 patch 状态）
+    range.value = '0'
+    range.dispatchEvent(new Event('input'))
+    await new Promise((r) => setTimeout(r, 40))
+    // ★时间旅行应用：面板 restore 快照 → pinia.$patch 写回（items 仍为 1；再次回放同一步幂等）
+    expect(cart.items).toBe(1)
+    // 变更后再回放：items=2 → 回放到步骤 0 → items 恢复为 1
+    cart.items = 2
+    await new Promise((r) => setTimeout(r, 60))
+    range.value = '0'
+    range.dispatchEvent(new Event('input'))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(cart.items).toBe(1)
+    devtools.destroy()
+    app.unmount()
   })
 })
