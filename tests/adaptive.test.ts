@@ -178,26 +178,67 @@ describe('p-adaptive 组件（B2）', () => {
   })
 })
 
-describe('p-modal 组件（B4：形态能力并入弹窗）', () => {
+describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）', () => {
   it('visible=false → 不渲染（mask/panel 均无）', async () => {
     const el = mount(PModal, { visible: false, title: '标题' })
     await nextTick()
     expect(el.querySelector('.p-modal')).toBeNull()
   })
 
-  it('visible=true → 渲染 mask + panel（视口 1024 happy-dom → popover 形态 class）+ 标题/内容/关闭按钮', async () => {
-    const el = mount(PModal, { visible: true, title: '标题', closable: true }, { default: () => h('p', { class: 'body-text' }, '内容') })
+  it('★width 覆盖三档：320 → sheet / 700 → dialog / 1024 → popover（不同窗口大小验证）', async () => {
+    const cases: Array<[number, string]> = [
+      [320, 'p-modal-panel--sheet'],
+      [600, 'p-modal-panel--dialog'], // 边界 [lo, hi) 左闭右开
+      [700, 'p-modal-panel--dialog'],
+      [1024, 'p-modal-panel--popover'],
+    ]
+    for (const [w, expected] of cases) {
+      const el = mount(PModal, { visible: true, width: w })
+      await nextTick()
+      const panel = el.querySelector('.p-modal-panel') as HTMLElement
+      expect(panel.classList.contains(expected)).toBe(true)
+    }
+  })
+
+  it('★p-adaptive 属性（kebab prop）解析形态区间 + title/close/内容渲染', async () => {
+    const el = mount(
+      PModal,
+      { visible: true, 'p-adaptive': 'sheet(0, 600) | dialog(600, 840) | popover(840, ∞)', width: 700, title: '标题', closable: true },
+      { default: () => h('p', { class: 'body-text' }, '内容') },
+    )
     await nextTick()
-    const root = el.querySelector('.p-modal') as HTMLElement
-    expect(root).not.toBeNull()
-    expect(el.querySelector('.p-modal-mask')).not.toBeNull()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    expect(panel).not.toBeNull()
-    // happy-dom innerWidth=1024 → popover（≥840）
-    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
+    expect(panel.classList.contains('p-modal-panel--dialog')).toBe(true)
     expect((el.querySelector('.p-modal-title') as HTMLElement).textContent).toBe('标题')
     expect(el.querySelector('.body-text')).not.toBeNull()
     expect(el.querySelector('.p-modal-close')).not.toBeNull()
+  })
+
+  it('★popover + anchor → 锚定定位（anchor 下方）替代居中降级', async () => {
+    const anchor = { getBoundingClientRect: () => ({ left: 120, top: 80, width: 100, height: 32 }) }
+    const el = mount(PModal, { visible: true, width: 1024, anchor })
+    await nextTick()
+    const panel = el.querySelector('.p-modal-panel') as HTMLElement
+    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
+    expect(panel.style.position).toBe('fixed')
+    expect(panel.style.left).toBe('120px') // anchor.left
+    expect(panel.style.top).toBe('120px') // anchor.bottom + 8 = (80 + 32) + 8
+    expect(panel.style.transform).toBe('') // 非居中降级
+  })
+
+  it('★popover 无 anchor → 居中降级（03 §6）；sheet 底部安全区自动应用', async () => {
+    const el = mount(PModal, { visible: true, width: 1024 })
+    await nextTick()
+    const panel = el.querySelector('.p-modal-panel') as HTMLElement
+    expect(panel.style.transform).toBe('translate(-50%, -50%)')
+    const el2 = mount(PModal, { visible: true, width: 320 })
+    await nextTick()
+    const sheet = el2.querySelector('.p-modal-panel') as HTMLElement
+    expect(sheet.classList.contains('p-modal-panel--sheet')).toBe(true)
+    // ★happy-dom CSS 解析丢弃 env()（p-safe 同坑）——sheet 底部定位验证 + 安全区 padding 与 resolveSafeAreaStyle 同源（envExpr）
+    expect(sheet.style.left).toBe('0px')
+    expect(sheet.style.right).toBe('0px')
+    expect(sheet.style.bottom).toBe('0px')
   })
 
   it('点击遮罩（maskClosable）→ update:visible false', async () => {

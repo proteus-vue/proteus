@@ -61,11 +61,15 @@ const ADAPTIVE_MODES = [
 const viewportWidth = ref(0)
 const adaptiveForm = ref('sheet')
 const showModal = ref(false)
+const modalWidth = ref(0) // 0 = 跟随视口；>0 = 预设宽度验证（p-modal width 覆盖）
+const modalTrigger = ref<HTMLElement | null>(null)
+const PRESET_WIDTHS = [320, 600, 700, 1024]
 let aware: SizeAwareObserver | null = null
 onMounted(() => {
   aware = createSizeAwareObserver(null, { viewportSize: () => window.innerWidth })
   aware.subscribe((s) => {
     viewportWidth.value = s.viewportWidth
+    // ★视口指示器（未打开弹窗时的预览；弹窗打开后以 p-modal 的 form-change 为准）
     const form = computeAdaptiveForm(ADAPTIVE_MODES, s.viewportWidth)
     if (form) adaptiveForm.value = form
   })
@@ -201,8 +205,8 @@ onUnmounted(() => {
 
     <!-- ★p-adaptive 求解演示（adaptive-container-plan B1+B2）：视口宽度 → 弹窗形态（sheet/dialog/popover） -->
     <h3 class="sec-title">p-adaptive · 容器形态自适应（B1 求解 + B2 组件 + B4 p-modal）</h3>
-    <p class="hint">当前视口 <strong>{{ viewportWidth }}px</strong> → 形态 <strong>{{ adaptiveForm }}</strong>
-      （sheet &lt; 600 / dialog 600-840 / popover ≥ 840——拖拽窗口看实时切换）</p>
+    <p class="hint">形态 <strong>{{ adaptiveForm }}</strong>（sheet &lt; 600 / dialog 600-840 / popover ≥ 840）——
+      拖拽窗口实时切换，或用下方预设宽度验证不同窗口大小</p>
     <div class="adaptive-demo">
       <div class="adaptive-form">{{ adaptiveForm }}</div>
       <div class="adaptive-bar">
@@ -210,13 +214,26 @@ onUnmounted(() => {
         <span class="adaptive-seg" :class="{ on: adaptiveForm === 'dialog' }">dialog</span>
         <span class="adaptive-seg" :class="{ on: adaptiveForm === 'popover' }">popover</span>
       </div>
-      <button class="btn" @click="showModal = !showModal">{{ showModal ? '关闭弹窗' : '打开弹窗（B4 p-modal）' }}</button>
+      <!-- ★不同窗口大小验证：预设宽度 → p-modal width 覆盖 → 形态切换（320 手机 / 600·700 平板 / 1024 桌面） -->
+      <div class="presets">
+        <span class="hint">验证窗口大小：</span>
+        <button v-for="w in PRESET_WIDTHS" :key="w" class="preset" :class="{ on: modalWidth === w }" @click="modalWidth = w">{{ w }}px</button>
+        <button class="preset" :class="{ on: modalWidth === 0 }" @click="modalWidth = 0">跟随窗口</button>
+      </div>
+      <button ref="modalTrigger" class="btn" @click="showModal = !showModal">{{ showModal ? '关闭弹窗' : '打开弹窗（p-adaptive 验证）' }}</button>
     </div>
-    <!-- ★B4 p-modal：一次声明，形态随视口自动切换（sheet 底部 / dialog 居中 / popover 居中降级） -->
-    <p-modal v-model:visible="showModal" title="确认操作" :closable="true">
+    <!-- ★B4 p-modal：p-adaptive 属性 + anchor 锚定 + width 覆盖（sheet 底部 / dialog 居中 / popover 锚定 trigger 下方） -->
+    <p-modal
+      v-model:visible="showModal"
+      p-adaptive="sheet(0, 600) | dialog(600, 840) | popover(840, ∞)"
+      :anchor="modalTrigger || undefined"
+      :width="modalWidth"
+      title="确认操作"
+      @form-change="adaptiveForm = $event"
+    >
       <p-stack direction="column" :wrap="true" :gap="12">
-        <p class="hint">当前弹窗形态：<strong>{{ adaptiveForm }}</strong>——拖拽窗口看自动切换</p>
-        <p class="hint">sheet 底部自动避让 Home Indicator（G-09 安全区协同）</p>
+        <p class="hint">当前弹窗形态：<strong>{{ adaptiveForm }}</strong>（{{ modalWidth > 0 ? '预设宽度 ' + modalWidth + 'px' : '跟随窗口 ' + viewportWidth + 'px' }}）</p>
+        <p class="hint">sheet 底部自动避让 Home Indicator（G-09 安全区协同）；popover 锚定「打开弹窗」按钮下方</p>
       </p-stack>
       <template #footer>
         <p-stack direction="row" :wrap="true" :gap="8">
@@ -418,6 +435,29 @@ onUnmounted(() => {
 .adaptive-seg.on {
   background: #1d6fb8;
   color: #fff;
+}
+/* ★不同窗口大小验证预设按钮 */
+.presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 10px 0;
+}
+.preset {
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #333;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.preset.on {
+  border-color: #1d6fb8;
+  color: #1d6fb8;
+  background: #eef4fb;
 }
 /* ★B2 形态层内容 */
 .adaptive-content {
