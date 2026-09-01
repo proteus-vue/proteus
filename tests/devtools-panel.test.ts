@@ -438,10 +438,11 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
       },
     })
     // 注册
-    const registered = calls[0] as { options: { id: string; label: string } }
+    const registered = calls[0] as { options: { id: string; label: string; icon: string } }
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
+    expect(registered.options.icon).toBe('lucide:settings') // ★Iconify 格式（裸名 fallback 默认图标）
     // ★树根节点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
     const treePayload = { inspectorId: 'proteus-app-config' }
     treeCbs[0](treePayload)
@@ -527,9 +528,10 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
       }),
     })
     // 注册 proteus-router
-    const routerInspector = calls.find((c) => (c.options as { id: string }).id === 'proteus-router') as { options: { label: string } }
+    const routerInspector = calls.find((c) => (c.options as { id: string }).id === 'proteus-router') as { options: { label: string; icon: string } }
     expect(routerInspector).toBeDefined()
     expect(routerInspector.options.label).toBe('Router')
+    expect(routerInspector.options.icon).toBe('lucide:route')
     // ★嵌套树：导航记录节点置顶 + index 根 → user（parent index）→ user-profile（parent user）
     // ★取最后一个 tree 回调（app-config 也注册了树根节点）
     const treePayload = { inspectorId: 'proteus-router' }

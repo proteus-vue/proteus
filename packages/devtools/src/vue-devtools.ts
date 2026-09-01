@@ -194,7 +194,7 @@ function buildRouterTree(
  * })
  */
 export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
-  api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' })
+  api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'lucide:settings' })
   // ★必须有树节点可点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
   api.on.getInspectorTree((payload) => {
     if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
@@ -214,7 +214,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     })
   }
   if (options.getStyleSafetyRecords) {
-    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' })
+    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'lucide:shield' })
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
       payload.rootNodes = [{ id: 'root', label: 'Style Safety' }]
@@ -230,7 +230,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
   }
   if (options.pages) {
     // ★Router Inspector：路由嵌套树（parent 父子层级）+ 导航记录（当前路由 + 最近导航历史）
-    api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'route' })
+    api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'lucide:route' })
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== ROUTER_INSPECTOR) return
       const routerState = options.getRouterState?.()
