@@ -8,7 +8,7 @@ import { createStoreTracer, createTraceBus } from '@proteus-vue/devtools-runtime
 import { createDevtoolsPanel, createTraceBusSource } from '@proteus-vue/devtools'
 
 describe('createStoreTracer 发射端', () => {
-  it('已注册 store 变更 → store.patch 事件（payload = { id, ...state 快照 }）+ dispose 卸载', () => {
+  it('已注册 store 变更 → store.patch 事件（payload = { id, ...state 快照 }）+ 初始快照 + dispose 卸载', () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     // ★$subscribe 对 direct mutation 走 vue watch（异步 + 首触发吞事件）；$patch 同步触发 → 测试用 $patch
@@ -20,18 +20,22 @@ describe('createStoreTracer 发射端', () => {
     const events: unknown[] = []
     const off = bus.on((e) => events.push(e))
     const tracer = createStoreTracer(pinia, bus)
+    // ★初始快照：tracer 接入即发 store.patch（store 创建时完整 state——面板时间旅行「拖到最左 = 初始」）
+    expect(events.length).toBe(1)
+    expect(events[0]).toMatchObject({ source: 'store', phase: 'point', name: 'store.patch' })
+    expect((events[0] as { payload: { id: string; items: number; label: string } }).payload).toMatchObject({ id: 'cart', items: 1, label: 'cart' })
     store.add()
     // ★action 调用 → 2 事件：store.action（包装捕获）+ store.patch（$patch 同步）
-    expect(events.length).toBe(2)
-    expect(events[0]).toMatchObject({ source: 'store', phase: 'point', name: 'store.action' })
-    expect((events[0] as { payload: { id: string; name: string } }).payload).toMatchObject({ id: 'cart', name: 'add' })
-    expect(events[1]).toMatchObject({ source: 'store', phase: 'point', name: 'store.patch' })
-    expect((events[1] as { payload: { id: string; items: number; label: string } }).payload).toMatchObject({ id: 'cart', items: 2, label: 'cart' })
+    expect(events.length).toBe(3)
+    expect(events[1]).toMatchObject({ source: 'store', phase: 'point', name: 'store.action' })
+    expect((events[1] as { payload: { id: string; name: string } }).payload).toMatchObject({ id: 'cart', name: 'add' })
+    expect(events[2]).toMatchObject({ source: 'store', phase: 'point', name: 'store.patch' })
+    expect((events[2] as { payload: { id: string; items: number; label: string } }).payload).toMatchObject({ id: 'cart', items: 2, label: 'cart' })
     // dispose 后：$patch 不再发射 + action 包装还原（调用不再 emit）
     tracer.dispose()
     store.$patch({ items: 3 })
     store.add()
-    expect(events.length).toBe(2)
+    expect(events.length).toBe(3)
     off()
   })
 
@@ -44,11 +48,14 @@ describe('createStoreTracer 发射端', () => {
     const events: unknown[] = []
     const off = bus.on((e) => events.push(e))
     const tracer = createStoreTracer(pinia, bus)
-    // tracer 之后再定义 + 实例化 store（use 插件在 store 创建时挂 $subscribe）
+    // tracer 之后再定义 + 实例化 store（use 插件在 store 创建时挂 $subscribe + 发初始快照）
     const late = defineStore('late', { state: () => ({ n: 0 }) })()
-    late.$patch({ n: 5 })
+    // ★初始快照（n:0）——store 创建即 1 事件
     expect(events.length).toBe(1)
-    expect((events[0] as { payload: { id: string; n: number } }).payload).toMatchObject({ id: 'late', n: 5 })
+    expect((events[0] as { payload: { id: string; n: number } }).payload).toMatchObject({ id: 'late', n: 0 })
+    late.$patch({ n: 5 })
+    expect(events.length).toBe(2)
+    expect((events[1] as { payload: { id: string; n: number } }).payload).toMatchObject({ id: 'late', n: 5 })
     tracer.dispose()
     off()
   })

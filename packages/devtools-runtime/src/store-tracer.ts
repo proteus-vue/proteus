@@ -1,7 +1,7 @@
 // packages/devtools-runtime/src/store-tracer.ts
 // devtools-plan M4：store 事件追踪（发射端）——pinia store 变更 → TraceBus `store` 源事件
 // 面板 state 视图（对标 Vue DevTools Pinia 面板）消费协议：
-//   `store.patch`  point  payload { id: storeId, ...state 快照 }   —— state 变更（direct/$patch）
+//   `store.patch`  point  payload { id: storeId, ...state 快照 }   —— 初始快照（store 创建）+ state 变更（direct/$patch）
 //   `store.action` point  payload { id: storeId, name: actionName } —— action 调用（包装捕获）
 // ★type-only pinia 导入（运行时零依赖）；MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构
 import type { Pinia, Store } from 'pinia'
@@ -21,7 +21,8 @@ export interface StoreTracer {
  *   · 已注册 store：遍历 pinia._s 逐个 $subscribe + 包装 actions
  *   · 未来创建 store：pinia.use 插件在 store 创建时挂（★需 pinia 已 install（app.use(pinia)）——
  *     未 install 时 use 插件进 toBeInstalled 延迟到 install 生效；已存在 store 不补跑 → 双路覆盖）
- *   · `store.patch`：$subscribe 的 direct/patch mutation → { id, ...state } 快照（去 $id，逐 key 拷贝防引用逃逸）
+ *   · `store.patch`：★初始快照（store 创建即发——面板时间旅行「滑块最左 = 初始状态」+ state 视图打开即有数据）
+ *     + $subscribe 的 direct/patch mutation → { id, ...state } 快照（去 $id，逐 key 拷贝防引用逃逸）
  *   · `store.action`：★pinia 4.x $subscribe 对 action 只报 type 'direct'（无 actionName）→ 包装 store 实例函数
  *     属性捕获 action 调用（$ 开头跳过；getter 是 computed ref 非函数不误包）；dispose 还原原函数
  * ★注：$subscribe 对 direct mutation 走 vue watch（异步 flush + 首触发吞事件）；$patch 同步触发——面板 16ms 节流渲染无感知
@@ -51,15 +52,26 @@ export function createStoreTracer(pinia: Pinia, bus: StoreTraceBus): StoreTracer
 
   function trace(store: Store): void {
     wrapActions(store)
+    // ★初始快照：store 创建即有完整 state（面板时间旅行「拖到最左 = 初始」+ state 视图打开即有数据）
+    emitSnapshot(store)
     const off = store.$subscribe((_mutation, state) => {
-      const snapshot: Record<string, unknown> = { id: store.$id }
-      for (const key of Object.keys(state)) {
-        if (key === '$id') continue
-        snapshot[key] = (state as Record<string, unknown>)[key]
-      }
-      bus.emit('store', 'point', 'store.patch', snapshot, 'store-' + ++seq)
+      void state
+      emitSnapshot(store)
     })
     offs.push(off)
+  }
+
+  /** 读取 store 当前 state → store.patch 事件（payload { id, ...state }；去 $id，逐 key 拷贝防引用逃逸） */
+  function emitSnapshot(store: Store): void {
+    const snapshot: Record<string, unknown> = { id: store.$id }
+    const state = (store as unknown as { $state?: Record<string, unknown> }).$state
+    if (state) {
+      for (const key of Object.keys(state)) {
+        if (key === '$id') continue
+        snapshot[key] = state[key]
+      }
+    }
+    bus.emit('store', 'point', 'store.patch', snapshot, 'store-' + ++seq)
   }
 
   const registered = (pinia as unknown as { _s: Map<string, Store> })._s

@@ -147,4 +147,51 @@ describe('installProteusDevtools 一键接入', () => {
     app.unmount()
     mountEl.remove()
   })
+
+  it('★时间旅行「拖到最左 = 初始」：面板先开 → store 后建（初始快照进面板）→ 播放/调音量 → 拖 0 恢复初始、拖最右恢复最新', async () => {
+    document.body.replaceChildren()
+    vi.resetModules()
+    const { installProteusDevtools: install2 } = await import('@proteus-vue/devtools')
+    const app = createApp({})
+    const pinia = createPinia()
+    app.use(pinia)
+    setActivePinia(pinia)
+    const bus = createTraceBus({ enabled: true })
+    const devtools = install2(app, { traceBus: bus, pinia, mount: true })
+    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
+    btn.click() // ★面板先开（订阅 bus）——store 初始快照才能进面板（TraceBus on 不自动回放 #249）
+    const host = document.querySelector('.pd-floating-host') as HTMLElement
+    // ★store 在面板创建后才创建（use 插件 trace → 发初始快照 store.patch）
+    const usePlayer = defineStore('player', {
+      state: () => ({ playing: false, volume: 0.8 }),
+      actions: {
+        play() { this.playing = true },
+        setVolume(v: number) { this.volume = v },
+      },
+    })
+    const player = usePlayer()
+    await new Promise((r) => setTimeout(r, 40)) // 初始快照
+    player.play() // direct mutation → action + patch（异步 $subscribe）
+    player.setVolume(0.5)
+    await new Promise((r) => setTimeout(r, 80))
+    const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
+    ;(navItems.find((n) => (n as HTMLElement).dataset.view === 'state') as HTMLElement).click()
+    const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    const range = stateView.querySelector('.pd-range') as HTMLInputElement
+    expect(range).not.toBeNull()
+    // 拖到最左（0）→ 恢复初始（playing false, volume 0.8）——★本次修复核心
+    range.value = '0'
+    range.dispatchEvent(new Event('input'))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(player.playing).toBe(false)
+    expect(player.volume).toBe(0.8)
+    // 拖到最右 → 恢复最新（playing true, volume 0.5）
+    range.value = String(Number(range.max))
+    range.dispatchEvent(new Event('input'))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(player.playing).toBe(true)
+    expect(player.volume).toBe(0.5)
+    devtools.destroy()
+    app.unmount()
+  })
 })
