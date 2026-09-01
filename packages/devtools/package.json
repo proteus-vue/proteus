@@ -1,0 +1,32 @@
+{
+  "name": "@proteus-vue/devtools",
+  "version": "0.1.0",
+  "description": "Proteus DevTools 面板（devtools-plan B3-M7 UI 层）：时间轴/状态快照/路由回溯/火焰图/根因 五视图渲染 + 面板装配 + WS/CDP 数据源——浏览器端 dev 工具，不随业务产物发布",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./panel": "./panel.html",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "panel.html",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js --external:@proteus-vue/devtools-runtime"
+  },
+  "dependencies": {
+    "@proteus-vue/devtools-runtime": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

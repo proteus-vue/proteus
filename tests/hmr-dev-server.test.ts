@@ -79,6 +79,60 @@ describe('HMR Dev Server：WS 服务端', () => {
   })
 })
 
+describe('HMR Dev Server：CDP 桥集成（DevTools 面板通道）', () => {
+  it('Proteus.enable → 文件变更触发 Proteus.event（compiler watch/incremental + hmr broadcast）', async () => {
+    const dir = tmpDir()
+    const server = createHmrDevServer({
+      port: 0,
+      watchRoots: [dir],
+      debounceMs: 30,
+      compile: (files) => files.map((f, i) => ({ id: i + 1, file: path.relative(dir, f), type: 'vue', action: 'update', timestamp: Date.now(), code: 'x' })),
+    })
+    servers.push(server)
+    await server.start()
+
+    const ws = await connect(server.port)
+    const received: Array<{ method: string; params?: Record<string, unknown> }> = []
+    ws.onmessage = (ev) => received.push(JSON.parse(String(ev.data)))
+    await waitFor(() => server.clientCount === 1)
+    // Proteus.enable → 响应
+    ws.send(JSON.stringify({ id: 1, method: 'Proteus.enable' }))
+    await waitFor(() => received.some((m) => m.method === undefined && (m as { result?: unknown }).result !== undefined))
+
+    // 文件变更 → 编译 → 广播 → Proteus.event（compiler 源）
+    fs.writeFileSync(path.join(dir, 'a.vue'), '<template><view>a</view></template>')
+    await waitFor(() => received.some((m) => m.method === 'Proteus.event'))
+    const events = received.filter((m) => m.method === 'Proteus.event')
+    expect(events.length).toBeGreaterThanOrEqual(3)
+    const sources = events.map((e) => (e.params as { source?: string }).source)
+    expect(sources).toContain('compiler')
+    expect(sources).toContain('hmr')
+    // 结构化事件参数
+    const first = events[0].params as { source: string; name: string; phase?: string }
+    expect(first.source).toBe('compiler')
+    expect(first.name).toBe('watch files')
+    ws.close()
+  })
+
+  it('未知 CDP 方法 → -32601；HMR payload（无 method）不走桥', async () => {
+    const server = createHmrDevServer({ port: 0, watchRoots: [], compile: () => [] })
+    servers.push(server)
+    await server.start()
+    const ws = await connect(server.port)
+    const received: unknown[] = []
+    ws.onmessage = (ev) => received.push(JSON.parse(String(ev.data)))
+    await waitFor(() => server.clientCount === 1)
+    ws.send(JSON.stringify({ id: 7, method: 'Unknown.thing' }))
+    await waitFor(() => received.length === 1)
+    expect((received[0] as { error?: { code: number } }).error?.code).toBe(-32601)
+    // HMR payload（对象无 method）不触发 CDP 响应
+    ws.send(JSON.stringify({ file: 'src/a.vue', type: 'vue' }))
+    await new Promise((r) => setTimeout(r, 100))
+    expect(received.length).toBe(1)
+    ws.close()
+  })
+})
+
 describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => {
   it('文件变更 → 防抖合并（一次保存多文件）→ compile 收到文件集合 → payload 广播', async () => {
     const dir = tmpDir()

@@ -1,6 +1,6 @@
 # M3 — 时间轴与泳道
 
-> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createTimelineCollector`（start/end 配对构建 Span + 同 source 嵌套 children 树 + 孤儿 end/point/error 竖线 duration 0 + flushOpen 标 pending + query 过滤 source/name/minDurationMs/traceId + 缓冲上限 10000 + stats），TraceBus `on()` 订阅直喂，11 用例全绿；UI 渲染层（泳道/缩放/虚拟滚动）待面板工程（v1.0+）。
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createTimelineCollector`（start/end 配对构建 Span + 同 source 嵌套 children 树 + 孤儿 end/point/error 竖线 duration 0 + flushOpen 标 pending + query 过滤 source/name/minDurationMs/traceId + 缓冲上限 10000 + stats），TraceBus `on()` 订阅直喂，11 用例全绿；**★UI 层已落地（同日）**——`@proteus-vue/devtools` 包 `renderTimeline` 泳道渲染（按 source 分组 + span 线段相对定位 + pending/竖线类名）；UI 交互（缩放/拖拽/虚拟滚动）待面板工程深化（v1.0+）。
 
 ## 目标
 

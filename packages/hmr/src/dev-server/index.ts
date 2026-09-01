@@ -6,6 +6,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { WebSocketServer, WebSocket } from 'ws'
 import type { HmrPayload } from '../types'
+import { createCdpBridge } from '../cdp'
+import type { CdpBridge, CdpMessage, ProteusDevEvent } from '../cdp'
 
 /** Dev Server 可观测事件（原则 #3 编译透明：编译→推送全链路可见） */
 export type HmrDevServerEvent =
@@ -30,6 +32,10 @@ export interface HmrDevServerOptions {
   debounceMs?: number
   /** ★增量编译回调：变更文件集合 → 增量 payload（编译侧注入） */
   compile: (files: string[]) => HmrPayload[]
+  /** ★DevTools 面板 CDP 桥：Runtime.evaluate 执行器（可选——未注入时面板 evaluate 返回错误） */
+  evaluate?: (expression: string) => Promise<unknown>
+  /** 外部 TraceBus 事件注入（可选——面板 Proteus.event 通道数据源） */
+  traceSource?: () => Array<{ source: string; phase: string; name: string; payload?: unknown; timestamp: number; traceId?: string }>
   /** 可观测 */
   onEvent?: (event: HmrDevServerEvent) => void
 }
@@ -62,12 +68,28 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
   let wss: WebSocketServer | null = null
   const watchers: fs.FSWatcher[] = []
   const clients = new Set<WebSocket>()
+  /** ★DevTools CDP 桥（per-client：transport 直发对应 socket） */
+  const bridges = new Map<WebSocket, CdpBridge>()
   let timer: ReturnType<typeof setTimeout> | null = null
   /** 防抖窗口内收集的变更文件（去重） */
   const pendingFiles = new Set<string>()
 
   function emit(event: HmrDevServerEvent): void {
     onEvent?.(event)
+  }
+
+  /** ★把 Proteus 事件推给所有已启用的 CDP 桥（面板 Proteus.event 通道） */
+  function pushBridges(devEvent: ProteusDevEvent): void {
+    for (const bridge of bridges.values()) bridge.push(devEvent)
+  }
+
+  /** ★外部 TraceBus 事件 → Proteus.event 推送（面板数据源） */
+  function pushTraceEvents(): void {
+    const traces = options.traceSource?.()
+    if (!traces) return
+    for (const t of traces) {
+      pushBridges({ kind: 'trace', event: t })
+    }
   }
 
   /** 防抖窗口结束 → 增量编译 + 广播 */
@@ -84,6 +106,7 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
     pendingFiles.clear()
     if (files.length === 0) return
     emit({ type: 'files-changed', files })
+    pushBridges({ kind: 'trace', event: { source: 'compiler', phase: 'start', name: 'watch files', payload: { count: files.length }, timestamp: Date.now() } })
     let payloads: HmrPayload[]
     try {
       payloads = compile(files)
@@ -93,6 +116,7 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
     }
     if (payloads.length === 0) return
     emit({ type: 'compiled', payloads })
+    pushBridges({ kind: 'trace', event: { source: 'compiler', phase: 'end', name: 'incremental compile', payload: { count: payloads.length }, timestamp: Date.now() } })
     broadcast(payloads)
   }
 
@@ -117,6 +141,7 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
 
   function broadcast(payloads: HmrPayload[]): void {
     emit({ type: 'broadcast', payloads })
+    pushBridges({ kind: 'trace', event: { source: 'hmr', phase: 'point', name: 'hmr broadcast', payload: { count: payloads.length }, timestamp: Date.now() } })
     const data = JSON.stringify(payloads.length === 1 ? payloads[0] : payloads)
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) client.send(data)
@@ -138,10 +163,30 @@ export function createHmrDevServer(options: HmrDevServerOptions): HmrDevServer {
       wss.on('connection', (socket) => {
         clients.add(socket)
         emit({ type: 'client-connect', clientCount: clients.size })
+        // ★DevTools CDP 桥：per-client 实例（transport 直发对应 socket；evaluate 注入）
+        const bridge = createCdpBridge({
+          transport: {
+            send: (m: CdpMessage) => {
+              if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(m))
+            },
+          },
+          evaluate: options.evaluate,
+        })
+        bridges.set(socket, bridge)
+        socket.on('message', (data) => {
+          try {
+            const msg = JSON.parse(String(data)) as CdpMessage
+            if (msg && typeof msg === 'object' && 'method' in msg) bridge.handleMessage(msg)
+          } catch {
+            // 非 CDP 形状消息忽略（HMR payload 走广播通道，不经桥）
+          }
+        })
         socket.on('close', () => {
           clients.delete(socket)
+          bridges.delete(socket)
           emit({ type: 'client-disconnect', clientCount: clients.size })
         })
+        pushTraceEvents()
       })
       await new Promise<void>((resolve) => {
         wss?.once('listening', () => {

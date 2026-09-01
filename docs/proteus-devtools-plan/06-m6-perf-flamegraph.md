@@ -1,6 +1,6 @@
 # M6 — 性能火焰图
 
-> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createFlamegraphCollector`（start/end → **全局嵌套栈**跨 source 构建父子树（Lifecycle/Compiler/Router/API）+ inclusive/exclusive 耗时 + 同层 start 排序 + startMs 相对录制基线 + icicle 倒置 + compare 对比模式（±10% → regression/improvement，exclusive 聚合）+ 录制 start/stop 门控 + 缓冲上限 20000），9 用例全绿；UI（泳道格子/源码定位/阈值线）待面板工程（v1.0+）。
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createFlamegraphCollector`（start/end → **全局嵌套栈**跨 source 构建父子树（Lifecycle/Compiler/Router/API）+ inclusive/exclusive 耗时 + 同层 start 排序 + startMs 相对录制基线 + icicle 倒置 + compare 对比模式（±10% → regression/improvement，exclusive 聚合）+ 录制 start/stop 门控 + 缓冲上限 20000），9 用例全绿；**★UI 层已落地（同日）**——`@proteus-vue/devtools` 包 `renderFlamegraph`（按 depth 分行堆叠块 + 宽度 ∝ 耗时 + selfMs 标注 + 开始/停止录制按钮）；UI（对比模式叠加/阈值线）待面板工程深化（v1.0+）。
 
 ## 目标
 

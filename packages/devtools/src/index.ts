@@ -1,0 +1,16 @@
+// packages/devtools/src/index.ts —— @proteus-vue/devtools 公共入口（devtools-plan UI 层）
+// 浏览器端开发工具面板：五视图渲染（时间轴/状态/路由回溯/火焰图/根因）+ 面板装配 + WS/CDP 数据源
+export { createDevtoolsPanel } from './panel'
+export type { DevtoolsPanel, DevtoolsPanelOptions } from './panel'
+export { createDevtoolsWsSource } from './source'
+export type { DevtoolsSource } from './source'
+export { renderTimeline } from './views/timeline'
+export type { TimelineViewData } from './views/timeline'
+export { renderFlamegraph } from './views/flamegraph'
+export type { FlamegraphViewData } from './views/flamegraph'
+export { renderState } from './views/state'
+export type { StateViewData, StateViewHooks } from './views/state'
+export { renderRoute } from './views/route'
+export type { RouteViewData } from './views/route'
+export { renderErrors } from './views/errors'
+export type { ErrorsViewData } from './views/errors'
