@@ -73,6 +73,7 @@ export function installProteusTimeline(api: VueDevtoolsApiLike, options: VueDevt
 export interface VueDevtoolsInspectorApiLike {
   addInspector(options: { id: string; label: string; icon?: string }): void
   on: {
+    getInspectorTree(cb: (payload: { inspectorId: string; rootNodes?: unknown[] }) => void): void
     getInspectorState(cb: (payload: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void): void
     editInspectorState(cb: (payload: { inspectorId: string; nodeId: string; path: string[]; state: { value: unknown } }) => void): void
   }
@@ -88,6 +89,11 @@ export interface ProteusInspectorsOptions {
    * 对齐 vue-devtools-plan §3：`p.state = [{ key: 'rejected', value: getRejectedRecords() }]`
    */
   getStyleSafetyRecords?: () => Array<{ prop: string; value: unknown; reason: string; ts: number }>
+  /**
+   * 路由表（父引用嵌套树 → proteus-router Inspector：Vue DevTools 内置 Router 面板只认 vue-router，
+   * 我们用自己的路由 → 自定义 Inspector 展示路由树 + 详情）
+   */
+  pages?: { routes: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }> }
 }
 
 export interface ProteusInspectors {
@@ -109,13 +115,45 @@ function pathToPatch(path: string[], value: unknown): Record<string, unknown> {
 
 const APP_CONFIG_INSPECTOR = 'proteus-app-config'
 const STYLE_SAFETY_INSPECTOR = 'proteus-style-safety'
+const ROUTER_INSPECTOR = 'proteus-router'
+
+/** 路由表 → 嵌套树节点（parent 引用构建父子层级；无 parent/父缺失 → 根） */
+function buildRouterTree(
+  routes: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>,
+): Array<{ id: string; label: string; tags?: Array<{ label: string }>; children?: unknown[] }> {
+  const byName = new Map(routes.map((r) => [r.name, r]))
+  const childrenOf = new Map<string, Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>>()
+  const roots: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }> = []
+  for (const r of routes) {
+    if (r.parent && byName.has(r.parent)) {
+      const list = childrenOf.get(r.parent) ?? []
+      list.push(r)
+      childrenOf.set(r.parent, list)
+    } else {
+      roots.push(r)
+    }
+  }
+  const toNode = (r: { name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }): {
+    id: string
+    label: string
+    tags?: Array<{ label: string }>
+    children?: unknown[]
+  } => ({
+    id: r.name,
+    label: (r.meta?.title as string | undefined) ?? r.name,
+    tags: [{ label: r.path }],
+    children: (childrenOf.get(r.name) ?? []).map(toNode),
+  })
+  return roots.map(toNode)
+}
 
 /**
  * 注册自定义 Inspector（vue-devtools-plan §3 可落地项）：
  *   `proteus-app-config`——App Config 当前生效值 + 编辑回写（对齐规划 §6 双向调试的 Web 形态）
  *   `proteus-style-safety`——运行时拦截记录（G-31 guard.records()，需提供 getStyleSafetyRecords）
+ *   `proteus-router`——路由嵌套树 + 详情（★Vue DevTools 内置 Router 面板只认 vue-router，自研路由需自定义 Inspector）
  * 用法（应用侧）：setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (api) => {
- *   installProteusInspectors(api, { getConfig, setConfig, getStyleSafetyRecords })
+ *   installProteusInspectors(api, { getConfig, setConfig, getStyleSafetyRecords, pages })
  * })
  */
 export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
@@ -136,6 +174,28 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     api.on.getInspectorState((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
       payload.state = [{ key: 'rejected', value: (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)() }]
+    })
+  }
+  if (options.pages) {
+    // ★Router Inspector：路由嵌套树（parent 父子层级）+ 选中路由详情（path/parent/subPackage/meta）
+    api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'route' })
+    api.on.getInspectorTree((payload) => {
+      if (payload.inspectorId !== ROUTER_INSPECTOR) return
+      payload.rootNodes = buildRouterTree(options.pages?.routes ?? [])
+    })
+    api.on.getInspectorState((payload) => {
+      if (payload.inspectorId !== ROUTER_INSPECTOR) return
+      const route = (options.pages?.routes ?? []).find((r) => r.name === payload.nodeId)
+      if (!route) {
+        payload.state = []
+        return
+      }
+      payload.state = [
+        { key: 'path', value: route.path },
+        { key: 'parent', value: route.parent ?? '—' },
+        { key: 'subPackage', value: route.subPackage ?? '—' },
+        { key: 'meta', value: route.meta ?? {} },
+      ]
     })
   }
   return {

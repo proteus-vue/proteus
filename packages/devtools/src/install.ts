@@ -124,6 +124,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       getConfig: options.getConfig,
       setConfig: options.setConfig,
       getStyleSafetyRecords: options.styleGuard ? () => options.styleGuard?.records() ?? [] : undefined,
+      pages: options.pages as never,
     })
   })
 

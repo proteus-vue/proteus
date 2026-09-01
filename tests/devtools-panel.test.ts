@@ -481,6 +481,57 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(calls2.some((c) => c.id === 'proteus-style-safety')).toBe(false)
   })
 
+  it('installProteusInspectors：pages 提供 → 注册 proteus-router inspector（parent 嵌套树 + 选中路由详情）', () => {
+    const calls: Array<{ method: string; options: unknown }> = []
+    const treeCbs: Array<(p: { inspectorId: string; rootNodes?: unknown[] }) => void> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const api = {
+      addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
+      on: {
+        getInspectorTree: (cb: never) => treeCbs.push(cb as never),
+        getInspectorState: (cb: never) => stateCbs.push(cb as never),
+        editInspectorState: () => {},
+      },
+    }
+    installProteusInspectors(api as never, {
+      pages: {
+        routes: [
+          { name: 'index', path: 'pages/index', meta: { title: '首页' } },
+          { name: 'user', path: 'pages/user/index', parent: 'index', meta: { title: '用户中心' } },
+          { name: 'user-profile', path: 'pages/user/profile', parent: 'user', meta: { title: '个人资料' } },
+        ],
+      },
+    })
+    // 注册 proteus-router
+    const routerInspector = calls.find((c) => (c.options as { id: string }).id === 'proteus-router') as { options: { label: string } }
+    expect(routerInspector).toBeDefined()
+    expect(routerInspector.options.label).toBe('Router')
+    // 嵌套树：index 根 → user（parent index）→ user-profile（parent user）
+    const treePayload = { inspectorId: 'proteus-router' }
+    treeCbs[0](treePayload)
+    const roots = treePayload.rootNodes as Array<{ id: string; label: string; children?: Array<{ id: string; label: string; children?: unknown[] }> }>
+    expect(roots.length).toBe(1)
+    expect(roots[0].id).toBe('index')
+    expect(roots[0].label).toBe('首页')
+    const user = roots[0].children?.[0]
+    expect(user?.id).toBe('user')
+    expect(user?.label).toBe('用户中心')
+    expect(user?.children?.[0] && (user.children[0] as { id: string }).id).toBe('user-profile')
+    // 选中节点详情（取最后一个 state 回调——app-config 也注册了）
+    const statePayload = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
+    stateCbs[stateCbs.length - 1](statePayload)
+    expect(statePayload.state?.[0]).toEqual({ key: 'path', value: 'pages/user/profile' })
+    expect(statePayload.state?.[1]).toEqual({ key: 'parent', value: 'user' })
+    // 非本 inspector 不响应
+    const other = { inspectorId: 'other', nodeId: 'x' }
+    stateCbs[stateCbs.length - 1](other)
+    expect(other.state).toBeUndefined()
+    // 不提供 pages → 不注册 router inspector
+    const calls2: Array<{ id: string }> = []
+    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
+    expect(calls2.some((c) => c.id === 'proteus-router')).toBe(false)
+  })
+
   it('createTraceBusSource：TraceBus 事件 → DevtoolsSource 分发', () => {
     const bus = createTraceBus()
     bus.setEnabled(true)

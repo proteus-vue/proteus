@@ -77,7 +77,7 @@ defineApp({
         }
       },
       styleGuard,
-      pages: { routes: routes.map((r) => ({ name: r.name, path: r.path, meta: r.meta, subPackage: r.subPackage })) },
+      pages: { routes: routes.map((r) => ({ name: r.name, path: r.path, meta: r.meta, subPackage: r.subPackage, parent: r.parent })) },
       // ★远程查看（移动端/真机）：TraceBus → WS 上行 → 电脑浏览器 panel.html?ws=ws://host/proteus-panel 查看
       remote: true,
       // ★HMR 事件源：vite 热更新（vite:update/full-reload/error）→ TraceBus → timeline 显示热更新记录
