@@ -118,6 +118,23 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   const offComponent = installComponentTrace(app, bus)
 
   // ④ Vue DevTools 插件：Timeline layer + 自定义 Inspector
+  // ★Router Inspector 动态数据：聚合 router 导航记录（当前路由 + 最近导航历史——Vue DevTools 里像 vue-router 面板那样看记录）
+  const navRecords: Array<{ from: string; to: string; durationMs: number; timestamp: number }> = []
+  let navCurrent = ''
+  let navInflight: { from: string; to: string; start: number } | null = null
+  const offNav = bus.on((e) => {
+    if (e.source !== 'router') return
+    if (e.phase === 'start' && /nav/i.test(e.name)) {
+      const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string } }
+      navInflight = { from: p.from?.path ?? '?', to: p.to?.path ?? e.name, start: e.timestamp }
+    } else if (e.phase === 'end' && /nav/i.test(e.name) && navInflight) {
+      const rec = { from: navInflight.from, to: navInflight.to, durationMs: Math.max(0, e.timestamp - navInflight.start), timestamp: e.timestamp }
+      navRecords.push(rec)
+      navCurrent = rec.to
+      if (navRecords.length > 50) navRecords.shift()
+      navInflight = null
+    }
+  })
   setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (devtoolsApi) => {
     installProteusTimeline(devtoolsApi as never, { source: createTraceBusSource(bus) })
     installProteusInspectors(devtoolsApi as never, {
@@ -125,6 +142,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       setConfig: options.setConfig,
       getStyleSafetyRecords: options.styleGuard ? () => options.styleGuard?.records() ?? [] : undefined,
       pages: options.pages as never,
+      getRouterState: () => ({ currentRoute: navCurrent || undefined, records: [...navRecords] }),
     })
   })
 
@@ -166,6 +184,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     destroy() {
       storeTracer?.dispose()
       offComponent()
+      offNav()
       remoteBridge?.close()
       offHmr?.()
     },

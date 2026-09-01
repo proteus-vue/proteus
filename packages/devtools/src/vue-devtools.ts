@@ -94,6 +94,14 @@ export interface ProteusInspectorsOptions {
    * 我们用自己的路由 → 自定义 Inspector 展示路由树 + 详情）
    */
   pages?: { routes: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }> }
+  /**
+   * 导航记录（动态数据 → proteus-router Inspector 的「导航记录」节点：当前路由 + 最近导航历史，
+   * 对齐 vue-router 面板的 Router 记录形态；由 install 侧聚合 router 事件提供）
+   */
+  getRouterState?: () => {
+    currentRoute?: string
+    records: Array<{ from: string; to: string; durationMs: number; timestamp: number }>
+  }
 }
 
 export interface ProteusInspectors {
@@ -177,14 +185,55 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     })
   }
   if (options.pages) {
-    // ★Router Inspector：路由嵌套树（parent 父子层级）+ 选中路由详情（path/parent/subPackage/meta）
+    // ★Router Inspector：路由嵌套树（parent 父子层级）+ 导航记录（当前路由 + 最近导航历史）
     api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'route' })
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== ROUTER_INSPECTOR) return
-      payload.rootNodes = buildRouterTree(options.pages?.routes ?? [])
+      const nodes = buildRouterTree(options.pages?.routes ?? [])
+      // ★「导航记录」节点置顶：动态数据（当前路由 + 最近记录）——对齐 vue-router 面板的路由记录形态
+      if (options.getRouterState) {
+        const state = options.getRouterState()
+        const recordNodes = state.records
+          .slice(-20)
+          .reverse()
+          .map((r) => ({
+            id: 'rec-' + r.timestamp,
+            label: `${r.from} → ${r.to}`,
+            tags: [{ label: r.durationMs + 'ms' }],
+          }))
+        nodes.unshift({
+          id: 'proteus-records',
+          label: `导航记录 (${state.records.length})`,
+          tags: state.currentRoute ? [{ label: '当前: ' + state.currentRoute }] : undefined,
+          children: recordNodes,
+        })
+      }
+      payload.rootNodes = nodes
     })
     api.on.getInspectorState((payload) => {
       if (payload.inspectorId !== ROUTER_INSPECTOR) return
+      // 导航记录分组（点「导航记录」根节点）
+      if (payload.nodeId === 'proteus-records') {
+        const state = options.getRouterState?.()
+        payload.state = [
+          { key: 'currentRoute', value: state?.currentRoute ?? '—' },
+          { key: 'records', value: (state?.records ?? []).slice(-50).reverse() },
+        ]
+        return
+      }
+      // 单条导航记录
+      if (payload.nodeId.startsWith('rec-')) {
+        const rec = (options.getRouterState?.()?.records ?? []).find((r) => 'rec-' + r.timestamp === payload.nodeId)
+        payload.state = rec
+          ? [
+              { key: 'from', value: rec.from },
+              { key: 'to', value: rec.to },
+              { key: 'durationMs', value: rec.durationMs },
+              { key: 'timestamp', value: rec.timestamp },
+            ]
+          : []
+        return
+      }
       const route = (options.pages?.routes ?? []).find((r) => r.name === payload.nodeId)
       if (!route) {
         payload.state = []

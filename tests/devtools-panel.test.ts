@@ -501,23 +501,44 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
           { name: 'user-profile', path: 'pages/user/profile', parent: 'user', meta: { title: '个人资料' } },
         ],
       },
+      getRouterState: () => ({
+        currentRoute: 'pages/user/profile',
+        records: [
+          { from: 'index', to: 'pages/user/index', durationMs: 2, timestamp: 100 },
+          { from: 'pages/user/index', to: 'pages/user/profile', durationMs: 3, timestamp: 200 },
+        ],
+      }),
     })
     // 注册 proteus-router
     const routerInspector = calls.find((c) => (c.options as { id: string }).id === 'proteus-router') as { options: { label: string } }
     expect(routerInspector).toBeDefined()
     expect(routerInspector.options.label).toBe('Router')
-    // 嵌套树：index 根 → user（parent index）→ user-profile（parent user）
+    // ★嵌套树：导航记录节点置顶 + index 根 → user（parent index）→ user-profile（parent user）
     const treePayload = { inspectorId: 'proteus-router' }
     treeCbs[0](treePayload)
     const roots = treePayload.rootNodes as Array<{ id: string; label: string; children?: Array<{ id: string; label: string; children?: unknown[] }> }>
-    expect(roots.length).toBe(1)
-    expect(roots[0].id).toBe('index')
-    expect(roots[0].label).toBe('首页')
-    const user = roots[0].children?.[0]
+    expect(roots[0].id).toBe('proteus-records') // 导航记录置顶
+    expect(roots[0].label).toContain('导航记录 (2)')
+    const recNodes = roots[0].children as Array<{ id: string; label: string }>
+    expect(recNodes[0].label).toBe('pages/user/index → pages/user/profile') // 倒序最新在上
+    expect(recNodes[1].label).toBe('index → pages/user/index')
+    expect(roots.length).toBe(2)
+    expect(roots[1].id).toBe('index')
+    expect(roots[1].label).toBe('首页')
+    const user = roots[1].children?.[0]
     expect(user?.id).toBe('user')
     expect(user?.label).toBe('用户中心')
     expect(user?.children?.[0] && (user.children[0] as { id: string }).id).toBe('user-profile')
-    // 选中节点详情（取最后一个 state 回调——app-config 也注册了）
+    // ★选中导航记录分组 → 当前路由 + 记录数组
+    const recPayload = { inspectorId: 'proteus-router', nodeId: 'proteus-records' }
+    stateCbs[stateCbs.length - 1](recPayload)
+    expect(recPayload.state?.[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
+    expect((recPayload.state?.[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
+    // ★选中单条记录 → from/to/耗时
+    const singlePayload = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
+    stateCbs[stateCbs.length - 1](singlePayload)
+    expect(singlePayload.state?.map((s) => s.key)).toEqual(['from', 'to', 'durationMs', 'timestamp'])
+    // 选中路由节点详情（取最后一个 state 回调——app-config 也注册了）
     const statePayload = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
     stateCbs[stateCbs.length - 1](statePayload)
     expect(statePayload.state?.[0]).toEqual({ key: 'path', value: 'pages/user/profile' })
