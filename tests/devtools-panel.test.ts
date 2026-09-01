@@ -504,8 +504,8 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
       getRouterState: () => ({
         currentRoute: 'pages/user/profile',
         records: [
-          { from: 'index', to: 'pages/user/index', durationMs: 2, timestamp: 100 },
-          { from: 'pages/user/index', to: 'pages/user/profile', durationMs: 3, timestamp: 200 },
+          { from: 'index', to: 'pages/user/index', durationMs: 2, timestamp: 100, traceId: 'nav-1', guards: [{ name: 'guard beforeEach:next', result: 'next' }] },
+          { from: 'pages/user/index', to: 'pages/user/profile', durationMs: 3, timestamp: 200, traceId: 'nav-2', guards: [{ name: 'guard beforeEach:next', result: 'next' }] },
         ],
       }),
     })
@@ -534,10 +534,12 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     stateCbs[stateCbs.length - 1](recPayload)
     expect(recPayload.state?.[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
     expect((recPayload.state?.[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
-    // ★选中单条记录 → from/to/耗时
+    // ★选中单条记录 → 完整导航状态（from/to/耗时/时间/traceId/守卫链）
     const singlePayload = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
     stateCbs[stateCbs.length - 1](singlePayload)
-    expect(singlePayload.state?.map((s) => s.key)).toEqual(['from', 'to', 'durationMs', 'timestamp'])
+    expect(singlePayload.state?.map((s) => s.key)).toEqual(['from', 'to', 'durationMs', 'timestamp', 'traceId', 'guards'])
+    expect(singlePayload.state?.find((s) => s.key === 'traceId')?.value).toBe('nav-2')
+    expect((singlePayload.state?.find((s) => s.key === 'guards')?.value as Array<{ result: string }>)[0].result).toBe('next')
     // 选中路由节点详情（取最后一个 state 回调——app-config 也注册了）
     const statePayload = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
     stateCbs[stateCbs.length - 1](statePayload)

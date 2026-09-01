@@ -97,10 +97,18 @@ export interface ProteusInspectorsOptions {
   /**
    * 导航记录（动态数据 → proteus-router Inspector 的「导航记录」节点：当前路由 + 最近导航历史，
    * 对齐 vue-router 面板的 Router 记录形态；由 install 侧聚合 router 事件提供）
+   * 记录含完整导航状态：from/to/耗时/时间/traceId/守卫链
    */
   getRouterState?: () => {
     currentRoute?: string
-    records: Array<{ from: string; to: string; durationMs: number; timestamp: number }>
+    records: Array<{
+      from: string
+      to: string
+      durationMs: number
+      timestamp: number
+      traceId?: string
+      guards: Array<{ name: string; result: 'next' | 'cancel' | 'redirect' | 'error' }>
+    }>
   }
 }
 
@@ -221,7 +229,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
         ]
         return
       }
-      // 单条导航记录
+      // 单条导航记录（完整状态：from/to/耗时/时间/traceId/守卫链）
       if (payload.nodeId.startsWith('rec-')) {
         const rec = (options.getRouterState?.()?.records ?? []).find((r) => 'rec-' + r.timestamp === payload.nodeId)
         payload.state = rec
@@ -230,6 +238,8 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
               { key: 'to', value: rec.to },
               { key: 'durationMs', value: rec.durationMs },
               { key: 'timestamp', value: rec.timestamp },
+              { key: 'traceId', value: rec.traceId ?? '—' },
+              { key: 'guards', value: rec.guards },
             ]
           : []
         return

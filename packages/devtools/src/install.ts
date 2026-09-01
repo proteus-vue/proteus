@@ -118,17 +118,39 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   const offComponent = installComponentTrace(app, bus)
 
   // ④ Vue DevTools 插件：Timeline layer + 自定义 Inspector
-  // ★Router Inspector 动态数据：聚合 router 导航记录（当前路由 + 最近导航历史——Vue DevTools 里像 vue-router 面板那样看记录）
-  const navRecords: Array<{ from: string; to: string; durationMs: number; timestamp: number }> = []
+  // ★Router Inspector 动态数据：聚合 router 导航记录（当前路由 + 最近导航历史——完整状态：from/to/耗时/守卫链/traceId）
+  interface NavRec {
+    from: string
+    to: string
+    durationMs: number
+    timestamp: number
+    traceId?: string
+    guards: Array<{ name: string; result: 'next' | 'cancel' | 'redirect' | 'error' }>
+  }
+  const navRecords: NavRec[] = []
   let navCurrent = ''
-  let navInflight: { from: string; to: string; start: number } | null = null
+  let navInflight: { from: string; to: string; start: number; traceId?: string; guards: NavRec['guards'] } | null = null
   const offNav = bus.on((e) => {
     if (e.source !== 'router') return
     if (e.phase === 'start' && /nav/i.test(e.name)) {
       const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string } }
-      navInflight = { from: p.from?.path ?? '?', to: p.to?.path ?? e.name, start: e.timestamp }
+      navInflight = { from: p.from?.path ?? '?', to: p.to?.path ?? e.name, start: e.timestamp, traceId: e.traceId, guards: [] }
+    } else if (navInflight && e.phase === 'point' && /guard/i.test(e.name)) {
+      // 守卫事件（point）→ 附加到进行中导航（对齐 panel 的 guards 徽章逻辑）
+      let result: NavRec['guards'][number]['result'] = 'next'
+      if (/redirect/i.test(e.name)) result = 'redirect'
+      else if (/cancel/i.test(e.name)) result = 'cancel'
+      else if (/error/i.test(e.name)) result = 'error'
+      navInflight.guards.push({ name: e.name, result })
     } else if (e.phase === 'end' && /nav/i.test(e.name) && navInflight) {
-      const rec = { from: navInflight.from, to: navInflight.to, durationMs: Math.max(0, e.timestamp - navInflight.start), timestamp: e.timestamp }
+      const rec: NavRec = {
+        from: navInflight.from,
+        to: navInflight.to,
+        durationMs: Math.max(0, e.timestamp - navInflight.start),
+        timestamp: e.timestamp,
+        traceId: e.traceId ?? navInflight.traceId,
+        guards: navInflight.guards,
+      }
       navRecords.push(rec)
       navCurrent = rec.to
       if (navRecords.length > 50) navRecords.shift()
