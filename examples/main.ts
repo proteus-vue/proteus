@@ -20,8 +20,10 @@ import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-v
 import { createStyleGuard } from '@proteus-vue/style-safety'
 import { routes } from './router/auto-routes'
 
-// ★devtools：发射端同源——router/api/capability 共用 getProteusTraceBus 惰性单例（生产 __PROTEUS_DEBUG__=false 零开销）
+// ★devtools：发射端同源——router/api/capability 共用 getProteusTraceBus 惰性单例
+// ★enabled 在业务源码层控制：__PROTEUS_DEBUG__ 被 vite define 替换（dev serve 默认 true；build 默认 false 零开销；PROTEUS_DEBUG=1 强制生产调试）
 const traceBus = getProteusTraceBus()
+if (__PROTEUS_DEBUG__) traceBus.setEnabled(true)
 
 // ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销
 const styleGuard = createStyleGuard({ mode: 'loose' })

@@ -23,7 +23,7 @@ function routeBlocksPlugin(): Plugin {
   }
 }
 
-export default defineConfig(async ({ mode }) => {
+export default defineConfig(async ({ mode, command }) => {
   const platform = mode === 'mp-weixin' || mode === 'web' ? mode : config.platform
   const isMp = platform === 'mp-weixin'
   // ★module-plan B4：扫描模块契约 → 依赖图 → Web manualChunks（module 目录下文件按 chunk 分组；无模块时为空配置零副作用）
@@ -35,7 +35,9 @@ export default defineConfig(async ({ mode }) => {
 
   return {
     define: {
-      __PROTEUS_DEBUG__: process.env.PROTEUS_DEBUG === '1',
+      // ★devtools 打通：dev serve 默认开启可观测（TraceBus/guard/面板有数据）；
+      //   build 默认关闭零开销；PROTEUS_DEBUG=1 可强制生产调试（灰度排查）
+      __PROTEUS_DEBUG__: command === 'serve' || process.env.PROTEUS_DEBUG === '1',
       // Skyline 开关注入：mp 构建时 __PROTEUS_SKYLINE__ = config.skyline（router/skyline 解耦 config）
       __PROTEUS_SKYLINE__: isMp && config.skyline,
     },

@@ -1,7 +1,7 @@
 // tests/devtools-runtime.test.ts
 // ★devtools-plan B1：TraceBus（协议/环形缓冲/订阅/零开销门控）+ redact 脱敏 + 采样（error tail）+ traceId
 import { describe, it, expect } from 'vitest'
-import { createTraceBus, createTraceId, redactValue } from '@proteus-vue/devtools-runtime'
+import { createTraceBus, createTraceId, getProteusTraceBus, redactValue } from '@proteus-vue/devtools-runtime'
 
 describe('TraceBus 零开销门控（生产默认关闭）', () => {
   it('enabled=false → emit noop（缓冲不增长、订阅不触发）', () => {
@@ -101,5 +101,15 @@ describe('createTraceId', () => {
     const ids = new Set<string>()
     for (let i = 0; i < 1000; i++) ids.add(createTraceId())
     expect(ids.size).toBe(1000)
+  })
+})
+
+describe('getProteusTraceBus（惰性单例）', () => {
+  it('多次调用返回同一实例（发射端与面板同源）', () => {
+    expect(getProteusTraceBus()).toBe(getProteusTraceBus())
+  })
+
+  it('默认未开启（enabled=false 零开销——由应用侧源码 __PROTEUS_DEBUG__ 条件显式 setEnabled）', () => {
+    expect(getProteusTraceBus().getEnabled()).toBe(false)
   })
 })
