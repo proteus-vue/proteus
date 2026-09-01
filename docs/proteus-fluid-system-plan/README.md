@@ -4,6 +4,26 @@
 > 框架负责求解。区别于 fluid-layout-plan（G-22，4 原语 + 编译期推导）：本体系是**完整的响应式布局语言**，
 > 核心抽象从「组件」升级为「响应式上下文（FluidContext）」，独立拆包 `@proteus-vue/fluid`。
 
+## 0. 本质定位：柔性 = 系统能力收敛，不是升级版 rpx（★essence 文档）
+
+**柔性框架的本质是把各终端厂商/操作系统的柔性布局能力收敛进框架**（原则 #10 统一语义 + 原生实现），
+**不是升级版 rpx**——rpx 是「单位换算」（值 × 屏幕宽/750，布局结构不变），Proteus 是「布局引擎能力」
+（不同屏幕尺寸/密度/形态/折叠状态下，布局结构自适应）。三层对照：
+
+| 层 | rpx | Proteus |
+|----|-----|---------|
+| 数值缩放 | ✅ 值×屏幕宽/750（无下限/上限） | ✅ `p-fluid` clamp 区间（min/max 兜住） |
+| 结构自适应 | ❌ 列数/换行/方向不变 | ✅ `p-grid` 自适应列数 / `p-stack` 换行 / `p-split` 分栏 |
+| 形态自适应 | ❌ 折叠屏/分屏/多窗口无感知 | ✅ 容器查询 + 断点切换 + display-mode（折叠形态） |
+
+**Proteus 不模拟网格**——让各平台用各自原生容器实现同一语义（iOS UIStackView/UICollectionView、
+Android ConstraintLayout/GridLayoutManager、鸿蒙 Flex/Grid、Web CSS Grid/clamp/container query）。
+与 Glass（G-07 系统级玻璃）、SafeArea（G-09 系统级安全区）是**同一套哲学**：把操作系统的能力搬进框架。
+
+- 本质差异详细论述：`docs/proteus-fluid-layout-essence-plan/01-fluid-vs-rpx.md`
+- 五端原生 API 映射明细 + 降级策略表：`docs/proteus-fluid-layout-essence-plan/02-system-capability-mapping.md`
+- 降级铁律 G-22.2「朴素但正确」落地：`detectFluidCapabilities`（Web CSS.supports 探测）+ p-grid flex-wrap 模拟
+
 ## 1. 为什么是独立体系
 
 | 维度 | fluid-layout（G-22，已落地） | Fluid System（本方案） |
@@ -34,6 +54,9 @@ interface FluidContextState {
 
 运行时：`createContainerQuery(el)`（ResizeObserver 可注入，纯逻辑可单测）+ `createDeviceEnv()`（matchMedia 折叠形态/方向/驾驶模式）。
 
+统一断点入口：**`createSizeAwareObserver(el)`**（essence 02 §2——容器级 + 视口级 + 方向双断点订阅，
+呼应「useBreakpoint() + onLayoutChange 内部桥接各端 API」；组件层组合式入口在此基础上桥接，本包保持纯逻辑）。
+
 ## 3. 原语全家桶
 
 ```
@@ -62,6 +85,8 @@ packages/fluid/                    # @proteus-vue/fluid（独立体系核心）
     context.ts                     # FluidContext 状态模型 + 容器查询运行时（ResizeObserver 可注入）
     env.ts                         # 设备环境：折叠形态/方向/安全区/drive-mode（matchMedia 可注入）
     breakpoint.ts                  # 容器级断点推导（复用 compiler deriveBreakpoints 语义）
+    capabilities.ts                # ★essence 02 §4 能力检测（CSS.supports 探测 clamp/grid/containerQuery/flexGap）
+    layout.ts                      # ★essence 02 §2 统一断点入口（容器 + 视口 + 方向双断点）
     index.ts                       # 导出（纯逻辑——esbuild 可构建）
   package.json                     # exports: "."（逻辑）/ "./components"（.vue 源码，Web alias + MP 组件目录消费）
 ```
@@ -73,7 +98,7 @@ Web alias + MP usingComponents 自动编译）；S2 迁入包内组件目录 + m
 
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
-| S1 | 拆包 + FluidContext（容器查询/断点/方向）+ p-split + p-zone 简化版 | 容器宽度变化 → 断点/分栏实时切换（单测 + demo） | ✅ 已落地（@proteus-vue/fluid + src/components/p-split·p-zone + examples/pages/fluid-system-demo） |
+| S1 | 拆包 + FluidContext（容器查询/断点/方向）+ p-split + p-zone 简化版 + ★essence 定位（能力检测 + 统一断点入口 + p-grid 降级） | 容器宽度变化 → 断点/分栏实时切换；无 grid 环境 flex-wrap 降级（单测 + demo） | ✅ 已落地（@proteus-vue/fluid：context/env/breakpoint/**capabilities/layout** + src/components/p-split·p-zone·p-grid 降级 + examples/pages/fluid-system-demo） |
 | S2 | p-safe（安全区 env()）+ p-aspect + 折叠形态（display-mode） | 折叠屏/刘海 demo | ⬜ |
 | S3 | p-sidebar/p-toolbar + 车机焦点导航 + drive-mode | 窄屏 bottom-bar → 宽屏 side-rail | ⬜ |
 | S4 | p-scale 动态字号/密度 + FLD 规则扩展（fluid:check） | 无障碍 + 治理闭环 | ⬜ |
