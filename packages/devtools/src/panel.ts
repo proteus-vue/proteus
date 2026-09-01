@@ -17,11 +17,17 @@ import { renderState } from './views/state'
 import { renderRoute } from './views/route'
 import { renderErrors } from './views/errors'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
+import { createPluginRegistry, createMemoryStorage, createCommandRegistry } from './plugins'
+import type { DevToolsPlugin, KVStorage, PluginContext } from './plugins'
 
 export interface DevtoolsPanelOptions {
   source: DevtoolsSource
   /** 时间旅行命令下发（缺省 no-op——业务侧适配器接入后生效） */
   onTimeTravel?: (index: number) => void
+  /** M9 插件：第三方自定义视图/事件订阅/命令（激活拓扑序，循环依赖报错，崩溃隔离） */
+  plugins?: DevToolsPlugin[]
+  /** 插件持久化存储（缺省内存 KV） */
+  storage?: KVStorage
 }
 
 export interface DevtoolsPanel {
@@ -80,6 +86,10 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
 
   const views = new Map<string, HTMLElement>()
   const containers = new Map<string, HTMLElement>()
+  // ★M9 插件宿主状态（registerView 引用 pluginViews → 声明先于视图注册）
+  const pluginViews = new Map<string, { name: string; render: (container: HTMLElement) => void }>()
+  const pluginSubs: Array<{ name: string; cb: (e: TraceEvent) => void }> = []
+  const crashedPlugins = new Map<string, string>()
   for (const v of VIEWS) {
     const item = document.createElement('div')
     item.className = 'pd-nav-item'
@@ -98,6 +108,43 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     views.set(v, container)
     containers.set(v, container)
     content.appendChild(container)
+  }
+  /** 动态注册视图（M9 插件 addView → 侧栏导航项 + 内容容器；show 遍历 views Map 天然支持动态项） */
+  function registerView(id: string, label: string, icon: string | undefined, render: (container: HTMLElement) => void, pluginName: string): void {
+    if (views.has(id)) return
+    const item = document.createElement('div')
+    item.className = 'pd-nav-item'
+    item.dataset.view = id
+    const ic = document.createElement('span')
+    ic.className = 'pd-nav-icon'
+    ic.textContent = icon ?? '▸'
+    const lb = document.createElement('span')
+    lb.textContent = label
+    item.appendChild(ic)
+    item.appendChild(lb)
+    sidebar.appendChild(item)
+    const container = document.createElement('div')
+    container.className = 'pd-view'
+    container.dataset.view = id
+    views.set(id, container)
+    containers.set(id, container)
+    pluginViews.set(id, { name: pluginName, render })
+    content.appendChild(container)
+  }
+
+  // ★M9 插件宿主：存储/命令/注册表/广播/崩溃隔离（activateAll 异步 → 激活后 scheduleRender 渲染插件视图）
+  const storage = options.storage ?? createMemoryStorage()
+  const commands = createCommandRegistry()
+  const registry = createPluginRegistry(options.plugins ?? [])
+  function broadcastToPlugins(e: TraceEvent): void {
+    for (const s of pluginSubs.slice()) s.cb(e)
+  }
+  function crashPlugin(name: string, err: unknown): void {
+    crashedPlugins.set(name, err instanceof Error ? err.message : String(err))
+    // 卸载该插件全部订阅（核心与其他插件不受影响）
+    for (let i = pluginSubs.length - 1; i >= 0; i--) {
+      if (pluginSubs[i].name === name) pluginSubs.splice(i, 1)
+    }
   }
 
   // ★timeline 时间窗口交互：wheel 缩放 + 拖拽平移 + 双击重置（窗口变更 → 节流 rerender）
@@ -244,6 +291,37 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       },
       { onTimeTravel },
     )
+    // M9 插件视图渲染（崩溃 → 占位提示；render 抛错 → 当场标记崩溃，核心不崩）
+    for (const [id, pv] of pluginViews) {
+      const container = containers.get(id) as HTMLElement
+      const err = crashedPlugins.get(pv.name)
+      if (err !== undefined) {
+        renderPluginCrash(container, pv.name, err)
+      } else {
+        try {
+          pv.render(container)
+        } catch (e) {
+          crashPlugin(pv.name, e)
+          renderPluginCrash(container, pv.name, e instanceof Error ? e.message : String(e))
+        }
+      }
+    }
+  }
+
+  /** 插件崩溃占位（面板提示「插件崩溃」，核心不受影响） */
+  function renderPluginCrash(container: HTMLElement, name: string, err: string): void {
+    container.replaceChildren()
+    const card = document.createElement('div')
+    card.className = 'pd-plugin-crash'
+    const t = document.createElement('div')
+    t.className = 'pd-plugin-crash-title'
+    t.textContent = '插件崩溃：' + name
+    const m = document.createElement('div')
+    m.className = 'pd-plugin-crash-msg'
+    m.textContent = err
+    card.appendChild(t)
+    card.appendChild(m)
+    container.appendChild(card)
   }
 
   // 渲染节流（事件高频 → 16ms 帧窗口）
@@ -258,6 +336,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   let statusConnected = false
   const off = source.onEvent((e: TraceEvent) => {
     handleEvent(e)
+    broadcastToPlugins(e)
     scheduleRender()
     // ★连接状态：收到首个事件 → 已连接
     if (!statusConnected) {
@@ -270,8 +349,87 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   // 挂载录制按钮（初始：flamegraph 容器最前）
   ;(containers.get('flamegraph') as HTMLElement).insertBefore(fgControls, (containers.get('flamegraph') as HTMLElement).firstChild)
 
+  // ★M9 命令面板（palette）：⚡ 按钮 → 下拉列出已注册命令，点击执行
+  root.style.position = 'relative'
+  const paletteBtn = document.createElement('button')
+  paletteBtn.className = 'pd-btn pd-palette-btn'
+  paletteBtn.textContent = '⚡'
+  paletteBtn.title = '命令面板'
+  const palette = document.createElement('div')
+  palette.className = 'pd-palette'
+  palette.style.display = 'none'
+  function openPalette(): void {
+    palette.replaceChildren()
+    const ids = commands.list()
+    if (ids.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'pd-palette-empty'
+      empty.textContent = '暂无命令'
+      palette.appendChild(empty)
+    } else {
+      for (const id of ids) {
+        const item = document.createElement('div')
+        item.className = 'pd-palette-item'
+        item.textContent = id
+        item.addEventListener('click', () => {
+          commands.run(id)
+          palette.style.display = 'none'
+        })
+        palette.appendChild(item)
+      }
+    }
+    palette.style.display = 'block'
+  }
+  paletteBtn.addEventListener('click', () => {
+    if (palette.style.display === 'none') openPalette()
+    else palette.style.display = 'none'
+  })
+  header.insertBefore(paletteBtn, status)
+  root.appendChild(palette)
+
   show('timeline')
   rerender()
+
+  // ★M9 插件激活：拓扑序（循环依赖 → activateAll 抛错，捕获提示）；单个插件崩溃不阻塞其余
+  if ((options.plugins ?? []).length) {
+    registry
+      .activateAll((plugin) => {
+        const pluginName = plugin.name
+        return {
+          name: pluginName,
+          bus: {
+            on(cb) {
+              const wrapped = (e: TraceEvent) => {
+                try {
+                  cb(e)
+                } catch (err) {
+                  crashPlugin(pluginName, err)
+                }
+              }
+              pluginSubs.push({ name: pluginName, cb: wrapped })
+              return () => {
+                for (let i = pluginSubs.length - 1; i >= 0; i--) {
+                  if (pluginSubs[i].cb === wrapped) pluginSubs.splice(i, 1)
+                }
+              }
+            },
+          },
+          panel: {
+            addView(id, opts) {
+              registerView(id, opts.label, opts.icon, opts.render, pluginName)
+            },
+          },
+          commands,
+          storage,
+        }
+      })
+      .then(() => scheduleRender())
+      .catch((err: unknown) => {
+        // 循环依赖等激活级错误：面板状态区提示，面板主体不受影响
+        console.error('[proteus-devtools] 插件激活失败', err)
+        statusText.textContent = '插件激活失败'
+      })
+  }
 
   return {
     destroy() {
@@ -280,6 +438,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       tooltip.dispose()
       zoom.destroy()
       timelineView.removeEventListener('scroll', onTimelineScroll)
+      pluginSubs.length = 0
       source.close()
       if (renderTimer) clearTimeout(renderTimer)
       root.replaceChildren()

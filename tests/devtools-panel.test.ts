@@ -16,6 +16,11 @@ import {
   createTooltipLayer,
   bindTooltip,
   createTimelineZoom,
+  createPluginRegistry,
+  createMemoryStorage,
+  createCommandRegistry,
+  resolveActivationOrder,
+  createNetworkPlugin,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
@@ -568,5 +573,142 @@ describe('Timeline 窗口过滤', () => {
     expect(spans[0].textContent).toContain('nav')
     // 刻度尺仍按窗口渲染
     expect(root.querySelectorAll('.pd-ruler > span').length).toBe(5)
+  })
+})
+
+describe('M9 插件机制', () => {
+  function ctxOf(p: { name: string; setup: (c: { bus: { on: (cb: (e: never) => void) => () => void }; panel: { addView: (id: string, o: { label: string; render: () => void }) => void }; commands: ReturnType<typeof createCommandRegistry>; storage: ReturnType<typeof createMemoryStorage> }) => void }) {
+    return {
+      name: p.name,
+      bus: { on: () => () => {} },
+      panel: { addView: () => {} },
+      commands: createCommandRegistry(),
+      storage: createMemoryStorage(),
+    }
+  }
+
+  it('resolveActivationOrder：依赖拓扑排序 + 独立插件；循环依赖返回环路径', () => {
+    const a = { name: 'a', version: '1', peerDependencies: ['b'], setup: () => {} }
+    const b = { name: 'b', version: '1', setup: () => {} }
+    const c = { name: 'c', version: '1', setup: () => {} }
+    expect(resolveActivationOrder([a, b, c]).order).toEqual(['b', 'c', 'a']) // 依赖先激活
+    const x = { name: 'x', version: '1', peerDependencies: ['y'], setup: () => {} }
+    const y = { name: 'y', version: '1', peerDependencies: ['z'], setup: () => {} }
+    const z = { name: 'z', version: '1', peerDependencies: ['x'], setup: () => {} }
+    const res = resolveActivationOrder([x, y, z])
+    expect(res.cycle).toEqual(['x', 'y', 'z', 'x']) // 环路径报错提示
+  })
+
+  it('PluginRegistry：拓扑激活 + 崩溃隔离（setup 抛错 → crashed，其余 active）', async () => {
+    const order: string[] = []
+    const good = { name: 'good', version: '1', peerDependencies: ['dep'], setup: () => void order.push('good') }
+    const bad = { name: 'bad', version: '1', setup: () => { order.push('bad'); throw new Error('boom') } }
+    const dep = { name: 'dep', version: '1', setup: () => void order.push('dep') }
+    const registry = createPluginRegistry([good, bad, dep])
+    const entries = await registry.activateAll(ctxOf as never)
+    expect(order.indexOf('dep')).toBeLessThan(order.indexOf('good')) // 依赖先激活
+    const byName = Object.fromEntries(entries.map((e) => [e.name, e]))
+    expect(byName.good.status).toBe('active')
+    expect(byName.dep.status).toBe('active')
+    expect(byName.bad.status).toBe('crashed')
+    expect(byName.bad.error).toBe('boom')
+  })
+
+  it('面板 M9：插件 addView 注册侧栏项 + 事件流入（network 瀑布渲染耗时）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source, plugins: [createNetworkPlugin()] })
+    await new Promise((r) => setTimeout(r, 40)) // 激活 + 渲染
+    const nav = Array.from(root.querySelectorAll('.pd-nav-item')).map((el) => (el as HTMLElement).dataset.view)
+    expect(nav).toContain('network')
+    panel.show('network')
+    source.push(ev('api', 'start', 'fetchOrder', 1000, 't1'))
+    source.push(ev('api', 'end', 'fetchOrder', 1200, 't1'))
+    await new Promise((r) => setTimeout(r, 40))
+    const netView = root.querySelector('.pd-view[data-view="network"]') as HTMLElement
+    expect(netView.querySelectorAll('.pd-net-row').length).toBe(1)
+    expect(netView.querySelector('.pd-net-meta')?.textContent).toContain('200ms')
+    panel.destroy()
+  })
+
+  it('面板 M9：插件 render 抛错 → 崩溃占位 + 核心视图不受影响', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const boom = {
+      name: 'boom-view',
+      version: '1',
+      setup(ctx: { panel: { addView: (id: string, o: { label: string; render: () => void }) => void } }) {
+        ctx.panel.addView('boom', {
+          label: 'boom',
+          render: () => {
+            throw new Error('render boom')
+          },
+        })
+      },
+    }
+    const panel = createDevtoolsPanel(root, { source, plugins: [boom as never] })
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('boom')
+    await new Promise((r) => setTimeout(r, 40)) // rerender → render 抛错 → 崩溃占位
+    expect(root.querySelector('.pd-plugin-crash')?.textContent).toContain('render boom')
+    // 核心仍工作：timeline 视图正常（start+end 配对成 span）
+    panel.show('timeline')
+    source.push(ev('lifecycle', 'start', 'boot', 100))
+    source.push(ev('lifecycle', 'end', 'boot', 200))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(root.querySelector('.pd-span')?.textContent).toContain('boot')
+    panel.destroy()
+  })
+
+  it('面板 M9：插件事件回调抛错 → 崩溃 + 订阅卸载（后续事件不抛，核心继续）', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const badcb = {
+      name: 'bad-cb',
+      version: '1',
+      setup(ctx: { panel: { addView: (id: string, o: { label: string; render: (c: HTMLElement) => void }) => void }; bus: { on: (cb: (e: never) => void) => () => void } }) {
+        ctx.panel.addView('badcb', { label: 'badcb', render: (c) => { c.textContent = 'ok' } })
+        ctx.bus.on(() => {
+          throw new Error('cb boom')
+        })
+      },
+    }
+    const panel = createDevtoolsPanel(root, { source, plugins: [badcb as never] })
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('badcb')
+    source.push(ev('lifecycle', 'point', 'boot', 100)) // 触发回调 → 崩溃 + 卸载
+    await new Promise((r) => setTimeout(r, 40))
+    expect(root.querySelector('.pd-plugin-crash')?.textContent).toContain('cb boom')
+    // 订阅已卸载：再推事件不崩溃，核心视图照常更新
+    source.push(ev('lifecycle', 'point', 'boot2', 200))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(root.querySelectorAll('.pd-span').length).toBeGreaterThanOrEqual(2)
+    panel.destroy()
+  })
+
+  it('面板 M9：插件注册命令 → ⚡ 面板列出并执行；KV 存储读写', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const run = vi.fn()
+    const storage = createMemoryStorage()
+    const plugin = {
+      name: 'cmds',
+      version: '1',
+      setup(ctx: { commands: ReturnType<typeof createCommandRegistry>; storage: ReturnType<typeof createMemoryStorage> }) {
+        ctx.commands.register('proteus.test.cmd', () => run('proteus.test.cmd'))
+        ctx.storage.set('k', 42)
+      },
+    }
+    const panel = createDevtoolsPanel(root, { source, plugins: [plugin as never], storage })
+    await new Promise((r) => setTimeout(r, 40))
+    const btn = root.querySelector('.pd-palette-btn') as HTMLButtonElement
+    btn.click()
+    const items = Array.from(root.querySelectorAll('.pd-palette-item'))
+    expect(items.length).toBe(1)
+    expect(items[0].textContent).toBe('proteus.test.cmd')
+    ;(items[0] as HTMLElement).click()
+    expect(run).toHaveBeenCalledWith('proteus.test.cmd')
+    expect(storage.get('k')).toBe(42)
+    panel.destroy()
   })
 })

@@ -569,3 +569,108 @@ body.pd-body {
   background: var(--pd-border);
   border-radius: 4px;
 }
+
+/* ── M9 插件：network 瀑布 / 命令面板 / 崩溃占位 ────────────── */
+.pd-net {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pd-net-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-left: 3px solid var(--pd-green);
+  border-radius: 3px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+}
+
+.pd-net-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-net-error {
+  border-left-color: var(--pd-red);
+}
+
+.pd-net-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pd-net-meta {
+  flex-shrink: 0;
+  color: var(--pd-text-dim);
+}
+
+.pd-net-error .pd-net-meta {
+  color: var(--pd-red);
+}
+
+.pd-palette-btn {
+  margin-left: auto;
+}
+
+.pd-palette {
+  position: absolute;
+  top: 40px;
+  right: 14px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  z-index: 900;
+  padding: 4px 0;
+}
+
+.pd-palette-item {
+  padding: 5px 12px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text);
+  cursor: pointer;
+}
+
+.pd-palette-item:hover {
+  background: var(--pd-bg-active);
+  color: var(--pd-accent);
+}
+
+.pd-palette-empty {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--pd-text-faint);
+}
+
+.pd-plugin-crash {
+  border: 1px solid var(--pd-red);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: rgba(241, 76, 76, 0.08);
+}
+
+.pd-plugin-crash-title {
+  font-weight: 600;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  color: var(--pd-red);
+}
+
+.pd-plugin-crash-msg {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  font-family: var(--pd-mono);
+  word-break: break-all;
+}
