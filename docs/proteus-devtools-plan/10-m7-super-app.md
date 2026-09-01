@@ -2,17 +2,19 @@
 
 > 对应全局"超级应用"档位：把 DevTools 自身做成可长期运行、可灰度、可降级的基础设施。
 
-## M7.1 缓冲持久化
+## M7.1 缓冲持久化 ⬜ 延后（收尾说明）
 
 - 环形缓冲满时，旧事件写入 IndexedDB（Web）/ `wx.setStorage`（小程序，分片 ≤ 1MB）
 - 面板连接后回放历史，避免"打开 DevTools 时已错过关键事件"
 - 配额策略：默认 10MB，LRU 淘汰；关键错误事件（`phase:'error'`）永不淘汰
 
-## M7.2 大数据集渲染
+> ⬜ 延后理由：应用侧内存缓冲（10000）+ enable 回放已覆盖 dev 场景；磁盘持久化属锦上添花（dev 工具断连/重连场景低频）。
 
-- 万级 span 虚拟滚动（对齐 M3 性能预算）
-- 快照导入导出使用 StreamSaver（浏览器）/`wx.getFileSystemManager`（小程序），不一次性读进内存
-- stateBefore/stateAfter diff 用结构共享，避免深拷贝整棵 store
+## M7.2 大数据集渲染 ⬜ 延后（部分已落地）
+
+- ✅ 万级 span 虚拟滚动（timeline 虚拟滚动已落地）
+- ⬜ 快照导入导出使用 StreamSaver（浏览器）/`wx.getFileSystemManager`（小程序），不一次性读进内存（延后：dev 工具数据量级下一次性读入可接受）
+- ⬜ stateBefore/stateAfter diff 用结构共享（延后：当前步骤级 diff 已够用）
 
 ## M7.3 权限最小化
 

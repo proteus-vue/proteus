@@ -52,4 +52,4 @@ installProteusDevtools(app, { pinia, remote: true }) // ◈ 面板 + Vue DevTool
 
 ## 进度
 
-B1-B10 已落地（面板九视图：timeline/flamegraph/state·时间旅行·值编辑/route/errors/components/pages/graph/device + 开放 API）；**M14 操作录屏回放已排期**（16-record-replay.md，主线 M10/M11 后启用，复用 TraceBus/快照/时间旅行基础）。
+B1-B13 核心已闭环（面板九视图：timeline/flamegraph/state·时间旅行·值编辑/route/errors/components/pages/graph/device + 开放 API + M10 加固 + M11 会话导出/导入）；**M14 操作录屏回放已排期**（16-record-replay.md，复用 TraceBus/快照/时间旅行基础）；M8.3-8.5 明确延后（收尾说明见 00-overview / 11-m8-observability.md）。
