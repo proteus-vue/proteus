@@ -176,6 +176,73 @@ describe('HMR Runtime：状态保留 + HMR001', () => {
   })
 })
 
+describe('HMR Runtime：批量 + 性能基准（★G-34 §6 预算）', () => {
+  it('批量：同文件合并只保留最终状态（merged）+ 乱序按 id 排序应用', () => {
+    const applied: string[] = []
+    const runtime = createHmrRuntime({
+      applyModule: (f, c) => {
+        applied.push(`${f}#${c}`)
+        return true
+      },
+      reload: () => {},
+    })
+    // 同文件 3 次变更（1/2/3）+ 另一文件 1 次 → 合并后 2 条
+    const result = runtime.applyBatch([
+      payload({ id: 1, file: 'src/a.vue', code: 'v1' }),
+      payload({ id: 2, file: 'src/a.vue', code: 'v2' }),
+      payload({ id: 3, file: 'src/a.vue', code: 'v3' }),
+      payload({ id: 4, file: 'src/b.vue', code: 'w1' }),
+    ])
+    expect(result.total).toBe(4)
+    expect(result.merged).toBe(2) // a.vue 两次中间态被丢弃
+    expect(result.applied).toBe(2)
+    expect(applied).toEqual(['src/a.vue#v3', 'src/b.vue#w1']) // 只应用最终状态，且按 id 序
+  })
+
+  it('批量：乱序输入仍按 id 全局有序应用（native-binding 不合并）', () => {
+    const events: string[] = []
+    const runtime = createHmrRuntime({
+      applyModule: (f, c) => {
+        events.push(`apply:${c}`)
+        return true
+      },
+      reload: () => events.push('reload'),
+      onEvent: (e) => {
+        if (e.type === 'rule') events.push(e.rule)
+      },
+    })
+    // 乱序：id 5 先到（native-binding），id 1-3 后到
+    const result = runtime.applyBatch([
+      payload({ id: 3, file: 'src/c.vue', code: 'c3' }),
+      payload({ id: 1, file: 'src/a.vue', code: 'a1' }),
+      payload({ id: 5, file: 'native-bridge', type: 'native-binding' }),
+      payload({ id: 2, file: 'src/b.vue', code: 'b2' }),
+    ])
+    expect(result.total).toBe(4)
+    expect(result.merged).toBe(0)
+    expect(result.applied).toBe(4)
+    // 全局顺序：id 1 → 2 → 3 → 5（native-binding 触发 reload 在最后）
+    expect(events).toEqual(['apply:a1', 'apply:b2', 'apply:c3', 'HMR002', 'reload'])
+  })
+
+  it('性能预算：1000 payload 批量应用 < 100ms（G-34 §6 推送→渲染预算）', () => {
+    const runtime = createHmrRuntime({ applyModule: () => true, reload: () => {} })
+    const batch: HmrPayload[] = []
+    for (let i = 0; i < 1000; i++) {
+      // 50 个文件循环变更（模拟一次保存触发多文件），同文件多次 → 合并只保留最终状态
+      batch.push(payload({ id: i + 1, file: `src/modules/mod-${i % 50}.vue`, code: `code-${i}` }))
+    }
+    const t0 = performance.now()
+    const result = runtime.applyBatch(batch)
+    const elapsed = performance.now() - t0
+    expect(result.total).toBe(1000)
+    expect(result.merged).toBe(950) // 50 文件 × 19 次中间态
+    expect(result.applied).toBe(50)
+    expect(runtime.lastAppliedId).toBe(1000)
+    expect(elapsed).toBeLessThan(100)
+  })
+})
+
 describe('HMR Client：连接 / 分发 / 重连', () => {
   function createSocketMock() {
     const sock: {

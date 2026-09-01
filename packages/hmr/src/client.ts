@@ -66,8 +66,10 @@ export function createHmrClient(options: HmrClientOptions): HmrClient {
     }
     sock.onmessage = (ev) => {
       try {
-        const payload = JSON.parse(String(ev.data)) as HmrPayload
-        runtime.apply(payload)
+        const data = JSON.parse(String(ev.data)) as HmrPayload | HmrPayload[]
+        // ★性能优化：批量消息（同文件合并 + 按序应用）走 applyBatch
+        if (Array.isArray(data)) runtime.applyBatch(data)
+        else runtime.apply(data)
       } catch (err) {
         emit({ type: 'error', message: `payload 解析失败：${String(err)}` })
       }

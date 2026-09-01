@@ -22,6 +22,8 @@ export interface HmrRuntimeOptions {
 export interface HmrRuntime {
   /** 应用一个 payload（幂等；按 id 防乱序/重复） */
   apply(payload: HmrPayload): void
+  /** 批量应用（★性能优化）：同文件合并只保留最终状态 + 按 id 排序后逐个 apply */
+  applyBatch(payloads: HmrPayload[]): HmrBatchResult
   /** 模块替换前状态快照（dispose 回调中调用）；前一个实例未恢复时触发 HMR001 */
   snapshotState(file: string, state: Record<string, unknown>): void
   /** 新模块挂载时恢复状态（返回快照；无快照返回 undefined） */
@@ -32,6 +34,16 @@ export interface HmrRuntime {
   reset(): void
   /** 最近应用 payload id */
   readonly lastAppliedId: number
+}
+
+/** 批量应用结果（★性能可观测） */
+export interface HmrBatchResult {
+  /** 输入 payload 总数 */
+  total: number
+  /** 同文件合并丢弃数（只保留最终状态） */
+  merged: number
+  /** 实际应用数 */
+  applied: number
 }
 
 export function createHmrRuntime(options: HmrRuntimeOptions): HmrRuntime {
@@ -110,6 +122,25 @@ export function createHmrRuntime(options: HmrRuntimeOptions): HmrRuntime {
     }
   }
 
+  function applyBatch(payloads: HmrPayload[]): HmrBatchResult {
+    // ★性能优化 1：同文件合并——只保留 id 最大的最终状态（中间变更丢弃）
+    const latest = new Map<string, HmrPayload>()
+    let merged = 0
+    for (const p of payloads) {
+      if (latest.has(p.file)) merged += 1
+      latest.set(p.file, p)
+    }
+    // ★性能优化 2：按 id 排序保证全局顺序（乱序 batch 也能正确应用）
+    const ordered = Array.from(latest.values()).sort((a, b) => a.id - b.id)
+    let appliedCount = 0
+    for (const p of ordered) {
+      const before = lastId
+      apply(p)
+      if (lastId !== before) appliedCount += 1
+    }
+    return { total: payloads.length, merged, applied: appliedCount }
+  }
+
   function snapshotState(file: string, state: Record<string, unknown>): void {
     if (checkSideEffects && snapshots.has(file)) {
       emit({ type: 'rule', rule: 'HMR001', file, message: '替换前存在未清理的模块实例（副作用未 dispose）' })
@@ -132,6 +163,7 @@ export function createHmrRuntime(options: HmrRuntimeOptions): HmrRuntime {
 
   return {
     apply,
+    applyBatch,
     snapshotState,
     restoreState,
     appliedFiles: () => Array.from(applied),

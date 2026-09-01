@@ -3,7 +3,7 @@
 //       WebSocket 客户端 + 安全 reload。★零依赖：全部接口注入式，纯逻辑可单测（Web 端优先）。
 export type { HmrEvent, HmrPayload, HmrTransport, SafeReload } from './types'
 export { createHmrRuntime } from './runtime'
-export type { HmrRuntime, HmrRuntimeOptions } from './runtime'
+export type { HmrRuntime, HmrRuntimeOptions, HmrBatchResult } from './runtime'
 export { createVueHotAdapter } from './vue-adapter'
 export type { VueHotAdapter, VueHotAdapterOptions, VueHotApiLike } from './vue-adapter'
 export { createHmrClient } from './client'

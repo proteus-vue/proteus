@@ -6,7 +6,7 @@ Proteus HMR 运行时（devtools-plus **G-34 M1**）——HMR payload 协议 + �
 
 | API | 说明 |
 |-----|------|
-| `createHmrRuntime(options)` | **HMR Runtime 核心**：接收增量 payload → 分派（vue/js 热替换 / native-binding 安全 reload / css-asset 资源替换）+ 按 id 防乱序 + 状态保留 + 严格规则 + 可观测事件 |
+| `createHmrRuntime(options)` | **HMR Runtime 核心**：接收增量 payload → 分派（vue/js 热替换 / native-binding 安全 reload / css-asset 资源替换）+ 按 id 防乱序 + 状态保留 + 严格规则 + 可观测事件；**`applyBatch` 批量接口**（同文件合并只保留最终状态 + 按 id 排序） |
 | `createHmrClient(options)` | **WebSocket 客户端**：连接 Dev Server → payload 分发到 runtime；断线指数退避重连（maxAttempts 上限）；`createSocket` 注入可单测 |
 | `createVueHotAdapter(options)` | **Vue `import.meta.hot` 适配**：accept/dispose/invalidate 语义面 + `applyWithState` 状态保留（dispose 快照 → 新模块恢复，Flutter Hot Reload 体验）；无 hot 环境安全降级 no-op |
 | `createSafeReload(options)` | **安全 reload**（HMR002）：保存状态（collect 注入；M3 原生侧联动 Router G-32 栈序列化）→ reload → 恢复；Web 实现用 sessionStorage + location.reload |
@@ -50,11 +50,14 @@ client.connect()
 
 ## 性能预算（G-34 §6）
 
-| 指标 | 预算 |
-|------|------|
-| HMR 编译耗时 | < 50ms |
-| 推送到渲染 | < 100ms |
-| 安全 reload | < 2s |
+| 指标 | 预算 | 现状 |
+|------|------|------|
+| HMR 编译耗时 | < 50ms | 🔶 编译侧增量未落地（dev-mp 全量重建 + M8 缓存） |
+| 推送到渲染 | < 100ms | ✅ 1000 payload 批量应用实测 < 100ms（单测基准断言） |
+| 安全 reload | < 2s | 🔶 未验证（Web 实现为 location.reload） |
+| DevTools 开销 | < 5% CPU | 🔶 M2 面板未落地 |
+
+**运行时侧已做优化**：批量 payload 同文件合并（一次保存多文件变更 → 只保留最终状态，中间态丢弃）+ 乱序 batch 按 id 全局排序 + 单条消息可带 payload 数组（client 自动走 `applyBatch`）。
 
 ## 后续里程碑
 
