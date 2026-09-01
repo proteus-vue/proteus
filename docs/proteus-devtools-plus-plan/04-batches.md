@@ -1,6 +1,6 @@
 # 分批策略（G-34 / M1-M4）
 
-> **★实现状态（2026-08-31）**：**M1 已落地**——`@proteus-vue/hmr` 包（HMR payload 协议 + Runtime 分派/状态保留/HMR001-003 规则 + Vue import.meta.hot 适配 + WebSocket 客户端指数退避重连 + 安全 reload stub/Web 实现），零依赖注入式、纯逻辑可单测，24 用例全绿 + 包构建 7.3kb + check:pkg 23 包 0 error；M2-M4 待后续批次。
+> **★实现状态（2026-08-31）**：**M1 已落地**——`@proteus-vue/hmr` 包（HMR payload 协议 + Runtime 分派/状态保留/HMR001-003 规则 + Vue import.meta.hot 适配 + WebSocket 客户端指数退避重连 + 安全 reload stub/Web 实现），零依赖注入式、纯逻辑可单测，27 用例全绿 + 包构建 7.3kb + check:pkg 23 包 0 error；**★收尾（同日）**：`@proteus-vue/hmr/dev-server` 子路径（Node：WS 服务端 + watch 防抖管线 + 增量编译回调注入，依赖 ws）+ **examples dev-mp 接入**（变更 .vue → compileVueSfc 单文件增量编译 → WS 广播）+ **E2E 真实验证**（dev-mp 启动 → WS 连接 → 改页面 → 收到 `{file: pages/index.vue, type: vue, code}` payload，闭环跑通）+ 运行时批量合并优化（applyBatch，1000 payload < 100ms 基准）；M2-M4 待后续批次。
 
 | 批次 | 内容 | 依赖 | 可单测 | 状态 |
 |------|------|------|--------|------|

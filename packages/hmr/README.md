@@ -11,6 +11,30 @@ Proteus HMR 运行时（devtools-plus **G-34 M1**）——HMR payload 协议 + �
 | `createVueHotAdapter(options)` | **Vue `import.meta.hot` 适配**：accept/dispose/invalidate 语义面 + `applyWithState` 状态保留（dispose 快照 → 新模块恢复，Flutter Hot Reload 体验）；无 hot 环境安全降级 no-op |
 | `createSafeReload(options)` | **安全 reload**（HMR002）：保存状态（collect 注入；M3 原生侧联动 Router G-32 栈序列化）→ reload → 恢复；Web 实现用 sessionStorage + location.reload |
 
+## 子路径：`@proteus-vue/hmr/dev-server`（Node 侧，G-34 收尾）
+
+| API | 说明 |
+|-----|------|
+| `createHmrDevServer(options)` | **HMR Dev Server**：WS 服务端（host 缺省 127.0.0.1）+ 文件 watch 防抖管线 + **增量编译回调注入**（`compile(files) → HmrPayload[]`）→ 广播；链路：保存文件 → watch 收集 → 防抖合并 → 增量编译 → WS 广播 → 客户端 Runtime 应用；`port 0` 随机端口 + 实际端口 getter |
+
+```ts
+import { createHmrDevServer } from '@proteus-vue/hmr/dev-server'
+
+const server = createHmrDevServer({
+  port: 5174,
+  watchRoots: ['pages', 'src'],
+  debounceMs: 300,
+  compile: (files) => files.filter((f) => f.endsWith('.vue')).map((f) => ({
+    id: ++id, file: relative(root, f), type: 'vue', action: 'update', timestamp: Date.now(),
+    code: compileVueSfc(readFileSync(f, 'utf-8')).js, // 单文件增量编译
+  })),
+  onEvent: (e) => console.log('[hmr]', e.type),
+})
+await server.start() // WS 监听 + watch 启动
+```
+
+★生产接入参考 `examples/scripts/dev-mp.ts`（dev-mp 已内置 HMR dev server：改 .vue → compileVueSfc 增量 → WS 广播，E2E 实测闭环通过）。
+
 ## 类型
 
 - `HmrPayload`：`{ id, file, type: 'vue'|'js'|'css'|'asset'|'native-binding', code?, timestamp, action: 'update'|'reload' }`——一次增量更新的传输单元

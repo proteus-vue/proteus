@@ -48,6 +48,7 @@
       "@proteus-vue/renderer-app": ["packages/renderer-app/src/index.ts"],
       "@proteus-vue/security": ["packages/security/src/index.ts"],
       "@proteus-vue/hmr": ["packages/hmr/src/index.ts"],
+      "@proteus-vue/hmr/dev-server": ["packages/hmr/src/dev-server/index.ts"],
       "@proteus-vue/test-core/snapshot": ["packages/test-core/src/snapshot/index.ts"],
       "@proteus-vue/test-core/driver": ["packages/test-core/src/driver/index.ts"],
       "@proteus-vue/test-core": ["packages/test-core/src/index.ts"],

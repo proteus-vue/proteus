@@ -12,6 +12,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./dev-server": {
+      "types": "./dist/dev-server/index.d.ts",
+      "import": "./dist/dev-server/index.js",
+      "default": "./dist/dev-server/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,7 +24,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js && esbuild src/dev-server/index.ts --bundle --format=esm --platform=node --outfile=dist/dev-server/index.js --external:ws"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"
