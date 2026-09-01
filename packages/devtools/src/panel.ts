@@ -446,6 +446,39 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     return out
   }
 
+  /** ★双向调试：路径写入（中间节点缺失 → 中止不改坏结构） */
+  function setPathAt(obj: Record<string, unknown>, path: Array<string | number>, value: unknown): boolean {
+    if (path.length === 0) return false
+    let cur: unknown = obj
+    for (let i = 0; i < path.length - 1; i++) {
+      const k = path[i] as string
+      const next = (cur as Record<string, unknown>)[k]
+      if (next === null || typeof next !== 'object') return false
+      cur = next
+    }
+    const last = path[path.length - 1] as string
+    if (Array.isArray(cur)) {
+      ;(cur as unknown[])[Number(last)] = value
+    } else {
+      ;(cur as Record<string, unknown>)[last] = value
+    }
+    return true
+  }
+
+  /** ★双向调试：值编辑写回（面板快照先更新 + 本地 onApplyState + 远程命令双通道——与 timeTravel 同语义） */
+  function editStoreValue(storeId: string, path: Array<string | number>, value: unknown): void {
+    const cur = storeSnapshots.get(storeId)
+    if (!cur) return
+    // JSON 深克隆（铁律 3：状态必须 JSON-safe）→ 路径写入 → 面板快照更新 + 双通道写回
+    const next = JSON.parse(JSON.stringify(cur)) as Record<string, unknown>
+    if (!setPathAt(next, path, value)) return
+    storeSnapshots.set(storeId, next)
+    options.onApplyState?.([{ id: storeId, state: next }])
+    source.sendCommand?.('Proteus.restoreStores', { stores: [{ id: storeId, state: next }] })
+    // 回声去重：$patch 回声 state 不在历史 → 作为真实变更追加步骤（时间线可见编辑记录）
+    scheduleRender()
+  }
+
   /** 导出快照 JSON（serializeStoreSnapshot 纯逻辑 + Blob 下载；无 createObjectURL 环境仅返回文本） */
   function exportSnapshot(): string {
     const json = serializeStoreSnapshot({
@@ -579,6 +612,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         },
         onExport: exportSnapshot,
         onImport: importSnapshot,
+        // ★双向调试：值编辑 → 面板快照 + 本地/远程双通道写回（$patch 真实状态）
+        onEditValue: editStoreValue,
       },
     )
     // Components / Pages / Graph 视图

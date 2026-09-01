@@ -706,6 +706,30 @@ body.pd-body {
 .pd-t-obj { color: var(--pd-t-obj); }
 .pd-t-key { color: var(--pd-t-key); }
 
+/* ★双向调试：值编辑（可编辑提示 + 输入框） */
+.pd-kv-editable {
+  cursor: text;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.pd-kv-editable:hover {
+  background: var(--pd-bg-active);
+  outline: 1px solid var(--pd-border);
+}
+
+.pd-kv-edit {
+  background: var(--pd-bg-active);
+  border: 1px solid var(--pd-accent);
+  border-radius: 3px;
+  color: var(--pd-text);
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  padding: 0 4px;
+  min-width: 80px;
+  outline: none;
+}
+
 /* ── Route 视图 ────────────────────────────────────────────── */
 .pd-nav {
   border: 1px solid var(--pd-border-soft);

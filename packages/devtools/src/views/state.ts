@@ -14,6 +14,8 @@ export interface StateViewHooks {
   onExport?: () => void
   /** 导入快照 JSON（view 读文件 → 面板解析校验 + 数据重建 + 应用） */
   onImport?: (json: string) => void
+  /** ★双向调试：值编辑提交（点值改 → 应用侧 $patch 写回真实状态） */
+  onEditValue?: (storeId: string, path: Array<string | number>, value: unknown) => void
 }
 
 export interface StateViewData {
@@ -101,7 +103,8 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
     card.appendChild(head)
     const inspector = document.createElement('div')
     inspector.className = 'pd-inspector'
-    renderKeyValue(inspector, '(root)', sel.state, 0, true)
+    // ★双向调试：传 onEdit 钩子 → 原始值可点击编辑（提交带 storeId + path）
+    renderKeyValue(inspector, '(root)', sel.state, 0, true, [], hooks.onEditValue ? { onEdit: (path, value) => hooks.onEditValue?.(selected, path, value) } : undefined)
     card.appendChild(inspector)
     container.appendChild(card)
 

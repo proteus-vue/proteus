@@ -326,6 +326,55 @@ describe('视图渲染函数', () => {
     expect(Array.from(root.querySelectorAll('.pd-kv-key')).some((k) => k.textContent === 'age')).toBe(true)
   })
 
+  it('renderState：★双向调试值编辑——点值 → 输入 → Enter 提交（storeId + path + value）；非法输入还原', () => {
+    const onEditValue = vi.fn()
+    const root = document.createElement('div')
+    renderState(
+      root,
+      { snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2, label: 'x', profile: { name: 'p' } } }] }, steps: [] },
+      { onEditValue },
+    )
+    const itemsRow = Array.from(root.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items') as HTMLElement
+    // 可编辑标记（有钩子才可点）
+    expect(itemsRow.querySelector('.pd-kv-value')?.classList.contains('pd-kv-editable')).toBe(true)
+    // 点值 → 输入框（值去引号：number → '2'）
+    ;(itemsRow.querySelector('.pd-kv-value') as HTMLElement).click()
+    const input = root.querySelector('.pd-kv-edit') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('2')
+    // 改 2 → 3 → Enter 提交：storeId + path + 解析后值
+    input.value = '3'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(onEditValue).toHaveBeenCalledWith('cart', ['items'], 3)
+    // 嵌套路径：profile.name（展开后点值编辑 → path 含父链）
+    const profileRow = Array.from(root.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'profile') as HTMLElement
+    profileRow.dispatchEvent(new Event('click'))
+    const nameRow = Array.from(root.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'name') as HTMLElement
+    ;(nameRow.querySelector('.pd-kv-value') as HTMLElement).click()
+    const input2 = root.querySelector('.pd-kv-edit') as HTMLInputElement
+    input2.value = 'q'
+    input2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(onEditValue).toHaveBeenCalledWith('cart', ['profile', 'name'], 'q')
+    // 非法 number 输入 → 还原（输入框消失，不回调）
+    ;(itemsRow.querySelector('.pd-kv-value') as HTMLElement).click()
+    const input3 = root.querySelector('.pd-kv-edit') as HTMLInputElement
+    input3.value = 'abc'
+    input3.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(onEditValue).toHaveBeenCalledTimes(2) // 无第三次
+    expect(root.querySelector('.pd-kv-edit')).toBeNull()
+    // Esc 取消同样还原
+    ;(itemsRow.querySelector('.pd-kv-value') as HTMLElement).click()
+    const input4 = root.querySelector('.pd-kv-edit') as HTMLInputElement
+    input4.value = '99'
+    input4.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(onEditValue).toHaveBeenCalledTimes(2)
+    expect(root.querySelector('.pd-kv-edit')).toBeNull()
+    // 无钩子 → 不可编辑（components 等只读场景）
+    const root2 = document.createElement('div')
+    renderState(root2, { snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2 } }] }, steps: [] })
+    expect(root2.querySelector('.pd-kv-value')?.classList.contains('pd-kv-editable')).toBe(false)
+  })
+
   it('renderRoute：导航链 + 守卫徽章（next/redirect 类名）+ 耗时', () => {
     const root = document.createElement('div')
     renderRoute(root, {
@@ -630,6 +679,42 @@ describe('面板装配', () => {
     expect(root.querySelector('.pd-dot')?.classList.contains('pd-dot-on')).toBe(true)
     panel.destroy()
     source.close()
+  })
+
+  it('★双向调试：state 值编辑 → 面板快照更新 + 本地 onApplyState + 远程 sendCommand 双通道写回', () => {
+    const root = document.createElement('div')
+    const applyState = vi.fn()
+    const sendCommand = vi.fn()
+    const source = mockSource() as DevtoolsSource & { push: (e: TraceEvent) => void } & { sendCommand?: (m: string, p?: Record<string, unknown>) => void }
+    source.sendCommand = sendCommand
+    const panel = createDevtoolsPanel(root, { source, onApplyState: applyState })
+    // store 事件进面板（store.patch：payload 含 id + 状态）
+    source.push(ev('store', 'point', 'store.patch', 100, 't1', { id: 'cart', items: 2, label: 'x' }))
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        panel.show('state')
+        const stateView = root.querySelector('.pd-view[data-view="state"]') as HTMLElement
+        const itemsRow = Array.from(stateView.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items') as HTMLElement
+        // 点值 → 输入 → Enter 提交
+        ;(itemsRow.querySelector('.pd-kv-value') as HTMLElement).click()
+        const input = stateView.querySelector('.pd-kv-edit') as HTMLInputElement
+        input.value = '9'
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+        // 本地：onApplyState 收到编辑后的完整状态（items 9，label 保留）
+        expect(applyState).toHaveBeenCalledWith([{ id: 'cart', state: { items: 9, label: 'x' } }])
+        // 远程：restoreStores 命令同语义下发
+        expect(sendCommand).toHaveBeenCalledWith('Proteus.restoreStores', { stores: [{ id: 'cart', state: { items: 9, label: 'x' } }] })
+        // 面板快照即时更新（后续 events 携带新状态）
+        source.push(ev('store', 'point', 'store.patch', 200, 't2', { id: 'cart', items: 9, label: 'x' }))
+        setTimeout(() => {
+          // 回声去重：编辑后的状态已在历史 → 不追加步骤
+          const stepInfo = stateView.querySelector('.pd-toolbar span')?.textContent
+          expect(stepInfo).toContain('步骤 2') // 原始变更 + 编辑回声（去重后仅 2 步）
+          panel.destroy()
+          resolve()
+        }, 30)
+      }, 30)
+    })
   })
 
   it('★M8 设备视图：options.deviceInfo 钩子 → 概览/能力表渲染；无钩子 → 空态', () => {
