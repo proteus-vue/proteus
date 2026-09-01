@@ -84,8 +84,10 @@ export function renderDevice(container: HTMLElement, data: DeviceViewData): void
     { label: '屏幕', value: info.screen ? info.screen.width + '×' + info.screen.height + ' @' + info.screen.dpr + 'x' : '—' },
   ]
   if (info.memory) {
-    const usedPct = info.memory.jsHeapLimit > 0 ? Math.round((info.memory.usedJSHeapSize / info.memory.jsHeapLimit) * 100) : 0
-    cards.push({ label: 'JS 堆', value: fmtBytes(info.memory.usedJSHeapSize) + ' / ' + fmtBytes(info.memory.jsHeapLimit), hint: usedPct + '% 已用' })
+    // ★利用率按 used/total（堆实际占用）；toFixed(1) 防 used/limit 大分母四舍五入成 0%
+    const total = info.memory.totalJSHeapSize
+    const usedPct = total > 0 ? (info.memory.usedJSHeapSize / total) * 100 : 0
+    cards.push({ label: 'JS 堆', value: fmtBytes(info.memory.usedJSHeapSize) + ' / ' + fmtBytes(info.memory.jsHeapLimit), hint: usedPct.toFixed(1) + '% 已用（total）' })
   }
   for (const c of cards) {
     const card = document.createElement('div')

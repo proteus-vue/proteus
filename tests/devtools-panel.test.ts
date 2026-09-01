@@ -19,6 +19,9 @@ import {
   renderPages,
   renderGraph,
   renderDevice,
+  detectRuntimePlatform,
+  detectBrowserVersion,
+  detectMpLibVersion,
   installComponentTrace,
   createTooltipLayer,
   bindTooltip,
@@ -85,6 +88,8 @@ describe('视图渲染函数', () => {
     expect(cards[0].textContent).toContain('web')
     expect(cards[2].textContent).toContain('375×812 @2x')
     expect(cards[3].textContent).toContain('5.0 MB')
+    // ★内存利用率按 used/total（1 位小数——防 used/limit 大分母四舍五入成 0%）
+    expect(cards[3].textContent).toContain('50.0% 已用')
     expect(root.querySelector('.pd-dev-ua')?.textContent).toContain('Test UA')
     // 能力表：✅/❌ + 标注（required/fallback/worklet/平台覆盖）
     const capRows = root.querySelectorAll('.pd-dev-cap')
@@ -106,6 +111,22 @@ describe('视图渲染函数', () => {
     const partial = document.createElement('div')
     renderDevice(partial, { info: {} as never, memory: [] })
     expect(partial.querySelector('.pd-dev-cap')).toBeNull()
+  })
+
+  it('★M8 平台/基础库检测：detectRuntimePlatform 优先 window（web 模拟层注册 wx 也不误判 skyline）+ detectBrowserVersion/detectMpLibVersion', () => {
+    // ★用户实测回归：@proteus-vue/web 小程序语义模拟层注册 wx 全局 → detectPlatform 误判 skyline；window 存在 → 必须 web
+    vi.stubGlobal('wx', { setStorageSync: () => {} })
+    expect(detectRuntimePlatform()).toBe('web')
+    vi.unstubAllGlobals()
+    // 浏览器内核版本（web 基础库降级展示）
+    expect(detectBrowserVersion('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36')).toBe('Chrome 126.0.0.0')
+    expect(detectBrowserVersion('Mozilla/5.0 (Macintosh; Intel Mac OS X) Gecko/20100101 Firefox/127.0')).toBe('Firefox 127.0')
+    expect(detectBrowserVersion(undefined)).toBeUndefined()
+    expect(detectBrowserVersion('curl/8.0')).toBeUndefined()
+    // 小程序基础库（wx SDKVersion）
+    expect(detectMpLibVersion({ getAppBaseInfo: () => ({ SDKVersion: '3.2.0' }) })).toBe('3.2.0')
+    expect(detectMpLibVersion({ getSystemInfoSync: () => ({ SDKVersion: '3.1.5' }) })).toBe('3.1.5')
+    expect(detectMpLibVersion({})).toBeUndefined()
   })
 
   it('renderTimeline：泳道分组 + span 线段（宽度/位置 + pending/point 类名）', () => {

@@ -18,9 +18,10 @@ import { installComponentTrace } from './component-trace'
 import { buildDomTree } from './component-trace'
 import type { DomTreeNode } from './component-trace'
 import { createDevtoolsPanel } from './panel'
-import { setCapabilityTraceBus, globalRegistry, detectPlatform } from '@proteus-vue/capabilities'
+import { setCapabilityTraceBus, globalRegistry } from '@proteus-vue/capabilities'
 import type { PagesViewData } from './views/pages'
 import type { DeviceInfo } from './views/device'
+import { detectRuntimePlatform, detectBrowserVersion, detectMpLibVersion } from './device-info'
 
 /** style-safety 守卫的结构类型（零硬依赖——@proteus-vue/style-safety 实例直接可传） */
 export interface StyleGuardLike {
@@ -203,13 +204,19 @@ function mountFloatingPanel(
 /**
  * ★M8 设备面板数据（web 端）：navigator/screen/performance.memory + 能力注册表快照（globalRegistry.snapshot）
  * 本地面板/远程桥共用同一采集闭包——环境与能力始终来自应用进程
+ * ★真实运行平台检测：window/document 存在 → web（小程序逻辑层无 window）——
+ *   ⚠ 勿直接用 capabilities detectPlatform：@proteus-vue/web 小程序语义模拟层会注册 wx 全局 → 误判 skyline
  */
 function collectDeviceInfo(): DeviceInfo {
   const nav = typeof navigator !== 'undefined' ? navigator : undefined
   const scr = typeof window !== 'undefined' && window.screen ? window.screen : undefined
   const win = typeof window !== 'undefined' ? window : undefined
+  // ★真实运行平台（window 优先——web 模拟层注册 wx 全局也不会误判 skyline）
+  const runtimePlatform = detectRuntimePlatform()
   const perf = performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapLimit: number } }
   const mem = typeof perf.memory === 'object' && perf.memory !== null ? perf.memory : undefined
+  // 基础库版本：小程序 → wx SDKVersion；web 无基础库 → 浏览器内核版本（UA 解析，卡片不落空）
+  const libVersion = runtimePlatform === 'web' ? detectBrowserVersion(nav?.userAgent) : detectMpLibVersion((globalThis as { wx?: unknown }).wx)
   // CSS env(safe-area-inset-*)：刘海屏安全区（无则 undefined）
   function safeAreaInset(side: 'top' | 'bottom'): number | undefined {
     if (typeof getComputedStyle !== 'function' || typeof document === 'undefined') return undefined
@@ -218,8 +225,9 @@ function collectDeviceInfo(): DeviceInfo {
     return Number.isFinite(px) ? px : undefined
   }
   return {
-    platform: detectPlatform(),
+    platform: runtimePlatform,
     userAgent: nav?.userAgent,
+    libVersion,
     screen: {
       dpr: win?.devicePixelRatio || 1,
       width: scr?.width ?? 0,
@@ -230,7 +238,8 @@ function collectDeviceInfo(): DeviceInfo {
     memory: mem
       ? { jsHeapLimit: mem.jsHeapLimit, totalJSHeapSize: mem.totalJSHeapSize, usedJSHeapSize: mem.usedJSHeapSize }
       : undefined,
-    capabilities: globalRegistry.snapshot(),
+    // ★能力表按真实运行平台探测（web 有 window → 解析 web adapter）
+    capabilities: globalRegistry.snapshot(runtimePlatform),
   }
 }
 

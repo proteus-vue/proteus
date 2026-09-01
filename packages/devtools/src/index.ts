@@ -36,6 +36,7 @@ export type { ComponentTraceBus, ComponentSnapshot, ComponentTraceHandle, DomTre
 export { buildDomTree } from './component-trace'
 export { installProteusDevtools } from './install'
 export type { InstallDevtoolsOptions, InstalledDevtools, StyleGuardLike } from './install'
+export { detectRuntimePlatform, detectBrowserVersion, detectMpLibVersion } from './device-info'
 export { createTooltipLayer, bindTooltip, attachTip, resolveTipData } from './tooltip'
 export type { TooltipData, TooltipLayer } from './tooltip'
 export { createPluginRegistry, createMemoryStorage, createCommandRegistry, resolveActivationOrder } from './plugins'
