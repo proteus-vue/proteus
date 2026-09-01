@@ -199,3 +199,5 @@ export type {
   ErrorDiagnoserOptions,
   ErrorDiagnoser,
 } from './error-diagnoser'
+export { createStoreTracer } from './store-tracer'
+export type { StoreTraceBus, StoreTracer } from './store-tracer'

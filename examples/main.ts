@@ -12,12 +12,14 @@ import { installWebPlatform } from '@proteus-vue/web'
 import '@proteus-vue/built-in-components/style.css'
 // ★devtools-plan：TraceBus 事件源 + Vue DevTools Timeline 接入（@vue/devtools-api）
 import { createTraceBusSource, installProteusTimeline } from '@proteus-vue/devtools'
+import { createStoreTracer } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
 // ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
 import { traceBus } from './devtools-bus'
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
-const api = createApi({ baseURL: 'https://api.example.com' })
+// ★devtools 打通：请求事件 → traceBus（面板 timeline/network 插件；bus 门控生产零开销）
+const api = createApi({ baseURL: 'https://api.example.com', traceBus })
 
 // ★devtools-plan：TraceBus（开发可观测事件流；生产零开销——setEnabled 门控）
 const emit = (source: 'lifecycle' | 'router' | 'api', phase: 'start' | 'end' | 'point', name: string): void => {
@@ -43,7 +45,10 @@ defineApp({
     // ★小程序语义组件/API 注入（installWebPlatform：view/text/button/input/image + wx.*）
     const app = createApp(App)
     installWebPlatform(app)
-    app.use(createWebPinia()).mount('#app')
+    const pinia = createWebPinia()
+    app.use(pinia).mount('#app')
+    // ★devtools 打通：store 变更 → traceBus（面板 state 视图实时快照 + 时间旅行滑块）
+    createStoreTracer(pinia, traceBus)
     emit('lifecycle', 'end', 'interactive')
 
     // ★Vue DevTools 接入：Timeline 面板出现 Proteus layer（编译/路由/API/生命周期事件；

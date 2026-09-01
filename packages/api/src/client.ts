@@ -1,6 +1,6 @@
 // packages/api/src/client.ts
 // ★api-plan A1：createApi——统一请求客户端（拦截器 + 重试 + 快捷方法 + 错误模型）
-import type { ApiOptions, HttpMethod, IRequestAdapter, RequestConfig, RequestResponse } from './types'
+import type { ApiOptions, ApiTraceBus, HttpMethod, IRequestAdapter, RequestConfig, RequestResponse } from './types'
 import { ApiError } from './types'
 import { createRequestAdapter, ALL_METHODS } from './adapters'
 
@@ -16,6 +16,8 @@ export interface ApiClient {
 /** 创建 API 客户端（业务入口：const api = createApi({ baseURL })） */
 export function createApi(options: ApiOptions = {}): ApiClient {
   const adapter = options.adapter ?? createRequestAdapter()
+  const bus = options.traceBus
+  let reqSeq = 0
 
   async function request<T>(input: RequestConfig): Promise<RequestResponse<T>> {
     const merged: RequestConfig = {
@@ -63,17 +65,32 @@ export function createApi(options: ApiOptions = {}): ApiClient {
     }
   }
 
+  // ★devtools 打通：请求事件发射（start/end/error，traceId 每请求配对；bus 门控生产零开销）
+  async function tracedRequest<T>(input: RequestConfig): Promise<RequestResponse<T>> {
+    const traceId = 'req-' + ++reqSeq
+    const name = (input.method ?? 'GET').toUpperCase() + ' ' + (input.url ?? '')
+    bus?.emit('api', 'start', name, { url: input.url, method: input.method ?? 'GET' }, traceId)
+    try {
+      const res = await request<T>(input)
+      bus?.emit('api', 'end', name, { status: res.status }, traceId)
+      return res
+    } catch (err) {
+      bus?.emit('api', 'error', name, { message: err instanceof Error ? err.message : String(err) }, traceId)
+      throw err
+    }
+  }
+
   const client: ApiClient = {
-    request,
-    get: (url, config) => request({ url, method: 'GET', ...config }),
-    post: (url, data, config) => request({ url, method: 'POST', data, ...config }),
-    put: (url, data, config) => request({ url, method: 'PUT', data, ...config }),
-    delete: (url, config) => request({ url, method: 'DELETE', ...config }),
-    patch: (url, data, config) => request({ url, method: 'PATCH', data, ...config }),
+    request: tracedRequest,
+    get: (url, config) => tracedRequest({ url, method: 'GET', ...config }),
+    post: (url, data, config) => tracedRequest({ url, method: 'POST', data, ...config }),
+    put: (url, data, config) => tracedRequest({ url, method: 'PUT', data, ...config }),
+    delete: (url, config) => tracedRequest({ url, method: 'DELETE', ...config }),
+    patch: (url, data, config) => tracedRequest({ url, method: 'PATCH', data, ...config }),
   }
   return client
 }
 
 export { ALL_METHODS, createRequestAdapter }
-export type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse, ApiOptions }
+export type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse, ApiOptions, ApiTraceBus }
 export { ApiError }

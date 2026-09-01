@@ -29,4 +29,15 @@ export interface ApiOptions {
   adapter?: IRequestAdapter
   /** ★api-plan B3：凭证托管（beforeRequest 后自动加 Authorization；skipAuth 跳过） */
   auth?: AuthManager
+  /**
+   * ★devtools 打通：请求可观测事件总线（结构类型注入，零硬依赖——devtools-runtime createTraceBus 实例直接可传；缺省不发射）。
+   * 协议（面板 timeline / network 插件消费）：
+   *   start `GET <url>` → end（成功）/ error（重试耗尽）  traceId 每请求自增配对
+   */
+  traceBus?: ApiTraceBus
+}
+
+/** 请求可观测事件总线（结构与 devtools-runtime TraceBus.emit 兼容） */
+export interface ApiTraceBus {
+  emit(source: 'api', phase: 'start' | 'end' | 'error', name: string, payload?: unknown, traceId?: string): void
 }
