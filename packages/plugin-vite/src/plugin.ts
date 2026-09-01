@@ -76,6 +76,12 @@ export function defaultScopedPlugin(): Plugin {
         out = out.replace(/<script([^>]*)>/, (m: string) => `${m}${importLine}`)
         out = out.replace('</script>', `${hookCode}</script>`)
       }
+      // ★G-22 柔性布局（Web 端）：p-fluid="font-size(20, 32)" 属性 → v-p-fluid="'font-size(20, 32)'" 指令
+      //   （MP 端由编译器模板规则处理同名属性；Web 端改写为自定义指令——一套源码语法，两端各自求解）
+      out = out.replace(/\sp-fluid=("[^"]*"|'[^']*')/g, (_m: string, q: string) => {
+        const inner = q.slice(1, -1).replace(/'/g, "\\'")
+        return ` v-p-fluid="'${inner}'"`
+      })
       return out === code ? null : { code: out, map: null }
     },
   }
@@ -273,6 +279,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
   const rules = opts.rules ?? cfg.rules
   // ★15-page-scroll-container：页面自动包滚动容器开关（默认 true）
   const autoScrollContainer = cfg.page?.autoScrollContainer ?? true
+  // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（proteus.config.layout，构建期配置）
+  const fluidLayout = cfg.layout ? { designWidth: cfg.layout.designWidth, viewport: cfg.layout.fluidViewport } : undefined
   const isDebug = process.env.PROTEUS_DEBUG === '1'
   let projectRoot = process.cwd()
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
@@ -513,6 +521,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               annotateLines: isDebug,
               debug: isDebug,
               autoScrollContainer,
+              fluidLayout,
             },
             projectRoot,
           )
@@ -535,6 +544,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               debug: isDebug,
               preprocessStyle,
               autoScrollContainer,
+              fluidLayout,
             })
             wxml = result.wxml
             js = result.js
@@ -556,6 +566,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             debug: isDebug,
             preprocessStyle,
             autoScrollContainer,
+            fluidLayout,
           })
           wxml = result.wxml
           js = result.js

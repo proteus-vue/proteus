@@ -67,7 +67,7 @@
 ## 下一步
 
 - ✅ **B1-B3 已落地**（compiler/fluid-layout.ts 三算法 + src/components/p-grid·p-stack·p-fit + examples/pages/fluid-layout-demo.vue）
-- ⬜ `p-fluid` 指令接入（Web 运行时 custom directive / MP 编译期 template 规则生成 clamp）
+- ✅ **p-fluid 指令接入**：MP 编译期模板规则（p-fluid 属性 → style clamp，FLD003 校验剥离）+ Web 运行时 v-p-fluid 指令（defaultScopedPlugin 属性改写 + installFluidLayout）——一套源码语法两端求解
 - ⬜ FLD001-006 严格规则接入 compiler 规则 + CLI check（待 style-safety 白名单扩展 font-size/gap/grid）
-- ⬜ `app.config.layout`（designWidth/breakpoints）配置接入（app-config G-35 扩展）
+- ⬜ `app.config.layout`（designWidth/breakpoints）运行期配置覆盖（Web 指令已支持 designWidth/viewportMax 参数；MP 为构建期 proteus.config.layout）
 - ⬜ B4/B5 原生端延后（无 App Renderer）

@@ -13,6 +13,8 @@ import '@proteus-vue/built-in-components/style.css'
 // ★devtools：一键接入（TraceBus 单例 + Vue DevTools 插件 + store/组件追踪 + 本地面板挂载）
 import { installProteusDevtools } from '@proteus-vue/devtools'
 import '@proteus-vue/devtools/style.css'
+// ★G-22 柔性布局：Web 端 v-p-fluid 指令注册（MP 端编译器模板规则处理同名属性）
+import { installFluidLayout } from '@proteus-vue/components'
 import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
 // ★vue-devtools-plan：App Config Inspector 数据源（启动即初始化——config-demo 页面 init 幂等覆盖 defaults 不破坏已合并层）
 import { initAppConfig, getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
@@ -61,6 +63,8 @@ defineApp({
     // ★小程序语义组件/API 注入（installWebPlatform：view/text/button/input/image + wx.*）
     const app = createApp(App)
     installWebPlatform(app)
+    // ★G-22 柔性布局：Web 端 v-p-fluid 指令（p-fluid="font-size(20,32)" 属性改写；MP 端编译器模板规则处理同名属性）
+    installFluidLayout(app)
     const pinia = createWebPinia()
     app.use(pinia).mount('#app')
     // ★devtools 一键接入：TraceBus 单例 + Vue DevTools（Timeline/Inspectors）+ store/组件追踪 + 本地面板浮动窗口

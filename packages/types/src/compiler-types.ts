@@ -54,6 +54,12 @@ export interface StyleTransformOptions {
   scopeId?: string
 }
 
+/** 柔性布局配置（★G-22 fluid-layout）：p-fluid 编译期 clamp 生成参数（缺省设计稿 375 / 视口 320-1440） */
+export interface FluidLayoutConfig {
+  designWidth?: number
+  viewport?: { min?: number; max?: number }
+}
+
 /** template 转换选项（含反黑盒调试能力） */
 export interface TemplateTransformOptions extends StyleTransformOptions {
   /** 源文件名（行号注释定位） */
@@ -71,6 +77,8 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
     hasOnPullDownRefresh?: boolean
     hasPageScrollTo?: boolean
   }
+  /** ★G-22 柔性布局：p-fluid 指令编译期 clamp 生成（designWidth/viewport） */
+  fluidLayout?: FluidLayoutConfig
 }
 
 /** template → wxml 结果 */
@@ -133,6 +141,8 @@ export interface CompileOptions {
   annotateLines?: boolean
   debug?: boolean
   rules?: TransformRuleOverrides
+  /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数 */
+  fluidLayout?: FluidLayoutConfig
   /** style 预处理器钩子（适配层注入 sass/less，编译器零依赖） */
   preprocessStyle?: (lang: string, content: string) => string
   /** ★module-plan B0：跨模块引用映射 */

@@ -62,6 +62,8 @@ export function compileCacheKey(
     annotateLines: boolean
     debug: boolean
     autoScrollContainer?: boolean
+    /** ★G-22 柔性布局：p-fluid 编译参数（缓存键包含——改 layout 配置失效） */
+    fluidLayout?: unknown
   },
   projectRoot: string,
 ): string {

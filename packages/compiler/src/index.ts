@@ -83,6 +83,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     isComponent: options.isComponent,
     autoScrollContainer: options.autoScrollContainer,
     pageScrollHooks,
+    // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
+    fluidLayout: options.fluidLayout,
     trace: tplTrace,
   })
   const scriptTrace = createTrace('script')

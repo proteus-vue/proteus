@@ -9,6 +9,8 @@ import type {
   TemplateChildNode,
 } from '@vue/compiler-dom'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
+import type { FluidLayoutConfig } from '@proteus-vue/types/compiler-types'
+import { generateClamp } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
 import { executeRule } from './transforms/registry'
@@ -262,6 +264,8 @@ interface SerializeContext {
   transitions: Array<{ ref: string; tName: string; index: number }>
   /** ★pinia-plan 12 P1：模板 store.<field> 引用字段（script 生成 $subscribe → setData 同步） */
   storeBindings: Set<string>
+  /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
+  fluidLayout?: FluidLayoutConfig
 }
 
 /**
@@ -274,6 +278,20 @@ function rewriteStoreRefs(expr: string, ctx: SerializeContext): string {
     ctx.storeBindings.add(field)
     return field
   })
+}
+
+/**
+ * ★G-22 柔性布局：解析 p-fluid 表达式（prop(min,max) 空格分隔组）
+ * `font-size(20, 32) gap(12,20)` → [{ prop: 'font-size', min: 20, max: 32 }, ...]；非法组忽略（FLD003 由调用方告警）
+ */
+function parseFluidExpr(expr: string): Array<{ prop: string; min: number; max: number }> {
+  const out: Array<{ prop: string; min: number; max: number }> = []
+  const re = /([A-Za-z][A-Za-z-]*)\s*\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(expr))) {
+    out.push({ prop: m[1], min: Number(m[2]), max: Number(m[3]) })
+  }
+  return out
 }
 
 /**
@@ -456,6 +474,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // class 源缓冲：静态 class / :class 绑定（发射统一合并为单个 class 属性，见本函数末尾）
   let staticClass: string | undefined
   let bindingClass: string | undefined
+  // ★G-22 柔性布局：static style 缓冲（静态 style 属性 + p-fluid 生成 clamp 合并发射）
+  let staticStyle: string | undefined
 
   for (const prop of node.props) {
     if (prop.type === NodeTypes.ATTRIBUTE) {
@@ -477,6 +497,28 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       if (attr.name === 'class') {
         // 静态 class 缓冲（仅用户类名；语义基础类由末尾统一发射合并——避免重复）
         staticClass = attr.value ? escapeXml(attr.value.content) : ''
+        continue
+      }
+      // ★G-22 柔性布局：静态 style 缓冲（与 p-fluid 生成声明合并发射）
+      if (attr.name === 'style') {
+        staticStyle = attr.value ? attr.value.content : ''
+        continue
+      }
+      // ★G-22 柔性布局：p-fluid 指令 → 编译期 clamp 生成（设计稿/视口取自 fluidLayout 配置）
+      if (attr.name === 'p-fluid') {
+        const expr = attr.value ? attr.value.content : ''
+        const groups = parseFluidExpr(expr)
+        if (!groups.length) {
+          // FLD003：p-fluid 须提供 prop(min, max) 区间——无法解析则剥离 + 告警，不生成样式
+          ctx.warnings.push(`p-fluid="${expr}" 未解析出 prop(min, max) 组（FLD003：须提供 min/max 区间）——已剥离，未生成样式`)
+        } else {
+          const cfg = ctx.fluidLayout
+          const designWidth = cfg?.designWidth ?? 375
+          const viewport = { min: cfg?.viewport?.min ?? 320, max: cfg?.viewport?.max ?? 1440 }
+          const decls = groups.map((g) => `${g.prop}: ${generateClamp(g.min, g.max, designWidth, viewport)}`).join('; ')
+          staticStyle = staticStyle ? staticStyle + '; ' + decls : decls
+          ctx.trace?.add('fluid/p-fluid', { line: node.loc.start.line, before: `p-fluid="${expr}"`, after: `style 追加 ${decls}` })
+        }
         continue
       }
       // ★Batch A（vue-compat）：模板 ref 小程序无对等——显式警告（不再静默无效）
@@ -716,6 +758,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       ctx.trace?.add('component/root-class', { line: node.loc.start.line, before: `<${node.tag} class="${clsValue}">`, after: `<${node.tag} root-class="${clsValue}">` })
     }
   }
+  // ★G-22 柔性布局：static style 发射（用户静态 style + p-fluid 生成 clamp 合并）
+  if (staticStyle) attrs.push(`style="${escapeXml(staticStyle)}"`)
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
   const lineNote = ctx.annotateLines ? `<!-- @${node.loc.start.line} ${node.tag} -->\n` : ''
@@ -776,6 +820,8 @@ export function transformTemplateToWxml(
     usesTransition: false,
     transitions: [],
     storeBindings: new Set<string>(),
+    // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
+    fluidLayout: opts.fluidLayout,
   }
   const root = domParse(source, { onError: () => undefined })
   // ★组件模式：顶层第一个元素为组件根节点（class 追加 {{rootClass}}，接收外部 root-class 透传）

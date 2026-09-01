@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { PGrid, PStack, PFit } from '@proteus-vue/components'
+// ★G-22 柔性布局：Web 端 p-fluid 指令（installFluidLayout 已在 main.ts 注册 v-p-fluid；defaultScopedPlugin 把 p-fluid 属性改写为指令）
 
 const cards = ref([{ id: 1, title: '网格卡片' }])
 const tags = ref([{ id: 1, label: '标签' }])
@@ -25,7 +26,7 @@ function expand(): void {
 
 <template>
   <div class="fluid">
-    <h2>柔性布局（Fluid Layout）</h2>
+    <h2 p-fluid="font-size(20, 32)">柔性布局（Fluid Layout）</h2>
     <p class="sub">
       声明式语义布局：<code>p-grid</code> 只声明每列最小宽度（160px）——320px→1 列、768px→4 列、1440px→8 列，框架自动求解。
     </p>
@@ -49,8 +50,8 @@ function expand(): void {
       <p-fit :max-ratio="0.8" class="fit-chip">内容驱动宽度（fit-content · 最大 80%）</p-fit>
     </div>
 
-    <!-- ★B1 算法预览（纯函数已落地，指令接入后续） -->
-    <pre class="pre">clamp(20px, calc(15.77px + 1.1268vw), 32px)  ← p-fluid="font-size(20,32)" 编译产物</pre>
+    <!-- ★B1 算法预览 + 实际 p-fluid 指令：编译期/运行时生成 clamp（拖动窗口宽度字号实时变化） -->
+    <p class="fluid-title" p-fluid="font-size(14, 20) margin(16, 32)">p-fluid="font-size(14,20) margin(16,32)" —— 字号与外边距随窗口宽度流式变化</p>
   </div>
 </template>
 
@@ -63,6 +64,10 @@ function expand(): void {
 .sub {
   color: #666;
   line-height: 1.7;
+}
+.fluid-title {
+  color: #1d6fb8;
+  font-weight: 600;
 }
 code {
   background: #f2f3f5;

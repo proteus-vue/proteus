@@ -14,6 +14,11 @@ export interface ProteusConfig {
   skylineLayout?: {
     defaultDisplayBlock?: boolean
   }
+  /** ★G-22 柔性布局（fluid-layout-plan）：p-fluid 编译期 clamp 生成参数（构建期配置——编译需要，运行期由 app-config 覆盖 Web 端） */
+  layout?: {
+    designWidth?: number
+    fluidViewport?: { min?: number; max?: number }
+  }
   /** 小程序 AppID——★平台编译标识（构建期写 project.config.json / IDE 导入 / automator 体检）
    *  ★决策 #211 职责边界：区别于 app.config.ts 的 app.id（应用运行时标识）——appid 是构建期消费，必须在此 */
   appid: string

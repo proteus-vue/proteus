@@ -46,5 +46,9 @@ export {
   PStack,
   PFit,
 }
+
+// ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数
+export { installFluidLayout, createFluidDirective, createFluidStyle, parseFluidExpr, applyFluidStyle } from './runtime/fluid'
+export type { FluidGroup } from './runtime/fluid'
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'
