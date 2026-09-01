@@ -19,6 +19,9 @@ class Router {
     private options: RouterOptions = {},
   ) {}
 
+  /** 导航 traceId 自增（start/end 配对） */
+  private traceSeq = 0
+
   /**
    * 注册前置守卫（M6：实例级 API，三端一致——delegate 到全局守卫注册表）
    * 用法：router.beforeEach((to, from) => { if (to.meta?.needLogin && !isLogin()) return false })
@@ -59,15 +62,38 @@ class Router {
     const target = this.resolve(options as NavigateOptions)
     if (!target) throw new Error(`[router] route not found: ${JSON.stringify(options)}`)
 
+    // ★devtools 打通：路由事件 → traceBus（面板 route 回溯；bus 门控生产零开销）
+    const bus = this.options.traceBus
+    const navName = 'navigate ' + (target.name ?? target.path)
+    const traceId = 'nav-' + ++this.traceSeq
+    if (bus) {
+      const pages = adapter.getCurrentPages()
+      const top = pages.length ? (pages[pages.length - 1] as { route?: string }) : undefined
+      bus.emit('router', 'start', navName, { from: { path: top?.route ?? '?' }, to: { path: target.path } }, traceId)
+    }
+
     // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化；trace 输出守卫链路 --trace-router）
     const isDebug = typeof __PROTEUS_DEBUG__ !== 'undefined' && __PROTEUS_DEBUG__
     const trace = isDebug ? (msg: string) => console.log(msg) : undefined
     // ★B11：requiresAuth 自动守卫（先于用户守卫——框架层登录拦截）
-    if (!(await this.authGuard(target, trace))) return
+    if (!(await this.authGuard(target, trace))) {
+      bus?.emit('router', 'point', 'guard requiresAuth:cancel', undefined, traceId)
+      bus?.emit('router', 'end', navName, undefined, traceId)
+      return
+    }
     // ★security M3：permissions 自动守卫（requiresAuth 之后、用户守卫之前）
-    if (!(await this.permissionGuard(target, trace))) return
+    if (!(await this.permissionGuard(target, trace))) {
+      bus?.emit('router', 'point', 'guard permissions:cancel', undefined, traceId)
+      bus?.emit('router', 'end', navName, undefined, traceId)
+      return
+    }
     const guardResult = await runBeforeEach(target, this.routeMap, trace)
-    if (guardResult === false) return
+    if (guardResult === false) {
+      bus?.emit('router', 'point', 'guard beforeEach:cancel', undefined, traceId)
+      bus?.emit('router', 'end', navName, undefined, traceId)
+      return
+    }
+    bus?.emit('router', 'point', 'guard beforeEach:next', undefined, traceId)
 
     const url = this.buildUrl(target.path, { ...(options.params as RouteParams | undefined), ...options.query })
 
@@ -99,6 +125,7 @@ class Router {
     }
 
     await runAfterEach(target, this.routeMap, trace)
+    bus?.emit('router', 'end', navName, undefined, traceId)
   }
 
   /** 后退 */
@@ -139,6 +166,20 @@ export interface RouterOptions {
   /** ★security M3：权限检查器（meta.permissions 页面自动拦截；PermissionRegistry.hasAll 签名兼容可直接传） */
   permissions?: { hasAll: (perms: string[]) => boolean | Promise<boolean> }
   onPermissionFail?: (permission: string) => void
+  /**
+   * ★devtools 打通：路由可观测事件总线（结构类型注入，零硬依赖——@proteus-vue/devtools-runtime 的
+   * createTraceBus 实例直接可传；缺省不发射）。协议（面板 route 回溯消费）：
+   *   start  `navigate <name|path>`  payload { from: { path }, to: { path } }  traceId 配对
+   *   point  `guard <name>:next|cancel`  守卫徽章（面板按 name 推断 result）
+   *   end    `navigate <name|path>`      关闭进行中导航（含被拦截导航——route 回溯展示守卫拦截）
+   * bus 自带 enabled 门控（生产关闭 → emit noop，零开销）
+   */
+  traceBus?: RouterTraceBus
+}
+
+/** 路由可观测事件总线（结构与 devtools-runtime TraceBus.emit 兼容） */
+export interface RouterTraceBus {
+  emit(source: 'router', phase: 'start' | 'end' | 'point' | 'error', name: string, payload?: unknown, traceId?: string): void
 }
 
 /**

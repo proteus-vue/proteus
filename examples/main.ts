@@ -11,15 +11,15 @@ import { installWebPlatform } from '@proteus-vue/web'
 // 微信默认样式对齐层（button/input 等原生默认外观对齐小程序，双端视觉一致）
 import '@proteus-vue/built-in-components/style.css'
 // ★devtools-plan：TraceBus 事件源 + Vue DevTools Timeline 接入（@vue/devtools-api）
-import { createTraceBus } from '@proteus-vue/devtools-runtime'
 import { createTraceBusSource, installProteusTimeline } from '@proteus-vue/devtools'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
+// ★devtools 打通：共享事件总线单例（router 单例同源，避免两处建 bus）
+import { traceBus } from './devtools-bus'
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 const api = createApi({ baseURL: 'https://api.example.com' })
 
 // ★devtools-plan：TraceBus（开发可观测事件流；生产零开销——setEnabled 门控）
-const traceBus = createTraceBus({ enabled: true })
 const emit = (source: 'lifecycle' | 'router' | 'api', phase: 'start' | 'end' | 'point', name: string): void => {
   traceBus.emit(source, phase, name)
 }
