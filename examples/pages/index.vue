@@ -14,7 +14,7 @@ function handleTap() {
   count.value++
 }
 
-function go(name: 'forms' | 'config-demo') {
+function go(name: 'forms' | 'config-demo' | 'user') {
   router.push({ name })
 }
 </script>
@@ -27,7 +27,7 @@ function go(name: 'forms' | 'config-demo') {
     <div v-for="(item, idx) in items" :key="idx" class="item">{{ idx }}. {{ item }}</div>
     <button @click="handleTap">tap</button>
     <div class="links">
-      <a class="link" href="/pages/forms">表单与指令1</a>
+      <a class="link" href="/pages/forms">表单与指令</a>
       <a class="link" href="/pages/config-demo">配置演示</a>
       <a class="link" href="/pages/components-demo">组件演示</a>
       <a class="link" href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
@@ -44,6 +44,15 @@ function go(name: 'forms' | 'config-demo') {
     <div class="router-links">
       <button class="link" @click="go('forms')">router.push → 表单与指令</button>
       <button class="link" @click="go('config-demo')">router.push → 配置演示</button>
+    </div>
+    <!-- ★路由嵌套演示：嵌套链 首页 → 用户中心(user) → 个人资料(user-profile, parent: user)——
+         连续点击后在 devtools route 视图查看两层嵌套导航记录（a 链接补发 + push 完整链路） -->
+    <div class="nest-demo">
+      <h3>路由嵌套演示</h3>
+      <p class="nest-tip">嵌套链：首页 → 用户中心 → 个人资料（user-profile 的 parent 是 user）</p>
+      <a class="link" href="/pages/user/index">① 进入用户中心（a 链接·嵌套入口）</a>
+      <button class="link" @click="go('user')">② router.push → 用户中心（push 路径）</button>
+      <p class="nest-tip">进入用户中心后点「个人资料」→ route 面板连续两条嵌套记录</p>
     </div>
   </div>
 </template>
@@ -62,6 +71,29 @@ function go(name: 'forms' | 'config-demo') {
 .links .link {
   display: block;
   padding: 8px 0;
+  color: #1a7af8;
+}
+/* ★路由嵌套演示区块（route 面板回溯演示入口） */
+.nest-demo {
+  margin: 20px auto;
+  max-width: 360px;
+  padding: 12px 16px;
+  border: 1px dashed #1a7af8;
+  border-radius: 8px;
+  text-align: center;
+}
+.nest-demo h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.nest-tip {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #888;
+}
+.nest-demo .link {
+  display: block;
+  padding: 6px 0;
   color: #1a7af8;
 }
 </style>
