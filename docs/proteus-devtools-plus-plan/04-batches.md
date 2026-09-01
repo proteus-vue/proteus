@@ -1,11 +1,11 @@
 # 分批策略（G-34 / M1-M4）
 
-> **★实现状态（2026-08-31）**：**M1 已落地**——`@proteus-vue/hmr` 包（HMR payload 协议 + Runtime 分派/状态保留/HMR001-003 规则 + Vue import.meta.hot 适配 + WebSocket 客户端指数退避重连 + 安全 reload stub/Web 实现），零依赖注入式、纯逻辑可单测，27 用例全绿 + 包构建 7.3kb + check:pkg 23 包 0 error；**★收尾（同日）**：`@proteus-vue/hmr/dev-server` 子路径（Node：WS 服务端 + watch 防抖管线 + 增量编译回调注入，依赖 ws）+ **examples dev-mp 接入**（变更 .vue → compileVueSfc 单文件增量编译 → WS 广播）+ **E2E 真实验证**（dev-mp 启动 → WS 连接 → 改页面 → 收到 `{file: pages/index.vue, type: vue, code}` payload，闭环跑通）+ 运行时批量合并优化（applyBatch，1000 payload < 100ms 基准）；M2-M4 待后续批次。
+> **★实现状态（2026-08-31）**：**M1 已落地**——`@proteus-vue/hmr`（HMR payload 协议 + Runtime 分派/状态保留/HMR001-003 规则 + Vue import.meta.hot 适配 + WS 客户端重连 + 安全 reload stub + 批量合并优化 <100ms 基准 + dev-server 子路径 WS/watch/增量编译回调注入 + dev-mp 接入 E2E 闭环，27 用例）；**M2 已落地**——`@proteus-vue/hmr/cdp` 子路径（createCdpBridge：CDP 命令子集 Runtime.*/Proteus.* 自定义域 + TraceBus/HMR 事件 → CDP 消息转译 + StyleGateRecord 缓冲）+ `@proteus-vue/hmr/style-gate` 子路径（collectStyleGateRecords：白名单→校验→平台收窄闸门链 + 五端原生值映射可视化数据源，联动 runtime/style-safety）+ 14 用例全绿 + check:pkg 23 包 0 error；M3/M4 待 G-22（原生侧）。
 
 | 批次 | 内容 | 依赖 | 可单测 | 状态 |
 |------|------|------|--------|------|
 | **M1** | HMR Runtime + WebSocket + Vue HMR 适配 | Compiler B1, CLI M1 | ✅（Web 端，jsdom） | ✅ **已落地**（@proteus-vue/hmr，2026-08-31） |
-| **M2** | DevTools 桥接（CDP + Style Safety 可视化） | CLI M2 | ✅ | 🔶 待做 |
+| **M2** | DevTools 桥接（CDP + Style Safety 可视化） | CLI M2 | ✅ | ✅ **已落地**（@proteus-vue/hmr/cdp + /style-gate，2026-08-31） |
 | **M3** | 原生侧安全 reload（iOS/Android/鸿蒙） | App Renderer M2/M3 | 🔶 | 🔶 待 G-22 |
 | **M4** | 原生视图检查器 + LeakRegistry 集成 | Memory M4 | 🔶 | 🔶 待 G-22 |
 

@@ -33,6 +33,38 @@ const server = createHmrDevServer({
 await server.start() // WS 监听 + watch 启动
 ```
 
+## 子路径：`@proteus-vue/hmr/cdp`（G-34 M2：DevTools 桥接）
+
+| API | 说明 |
+|-----|------|
+| `createCdpBridge(options)` | **CDP 桥接**：处理 CDP 命令子集（`Runtime.enable/disable/evaluate` + `Proteus.enable/disable/getStyleGates` 自定义域，未知方法 -32601）+ Proteus 事件（TraceBus trace / HMR hmr / style-gate）→ CDP 消息转译（`Runtime.consoleAPICalled` + 结构化 `Proteus.event` / `Proteus.styleGate`）；`styleGateBufferSize` 环形缓冲（`Proteus.getStyleGates` 查询）；注入式（transport/subscribe/evaluate） |
+
+```ts
+import { createCdpBridge } from '@proteus-vue/hmr/cdp'
+
+const bridge = createCdpBridge({
+  transport: { send: (m) => ws.send(JSON.stringify(m)) }, // CDP 客户端通道
+  evaluate: async (expr) => (0, eval)(expr),             // Runtime.evaluate
+})
+bridge.handleMessage({ id: 1, method: 'Runtime.enable' })
+bridge.push({ kind: 'trace', event: traceEvent })        // TraceBus 事件接入
+bridge.push({ kind: 'style-gate', record: gateRecord })  // Style Gate 可视化
+```
+
+## 子路径：`@proteus-vue/hmr/style-gate`（G-34 M2：Style Safety 可视化数据源）
+
+| API | 说明 |
+|-----|------|
+| `collectStyleGateRecords(style, options)` | **样式闸门链可视化**：每条样式经 白名单 → 校验 → 平台收窄 三道闸门的完整轨迹（`StyleGateRecord { gates, decision: pass\|narrow\|drop, nativeValues, rejectReason }`）；`allPlatforms` 产出五端原生值映射（联动 `@proteus-vue/runtime/style-safety`） |
+
+```ts
+import { collectStyleGateRecords } from '@proteus-vue/hmr/style-gate'
+
+const records = collectStyleGateRecords({ width: '100px', display: 'flex' }, { platform: 'skyline', allPlatforms: true })
+// width  → decision: 'narrow'，nativeValues.skyline = 100（px → 数值）
+// display→ decision: 'drop'，rejectReason 含 STS004（FORBIDDEN）
+```
+
 ★生产接入参考 `examples/scripts/dev-mp.ts`（dev-mp 已内置 HMR dev server：改 .vue → compileVueSfc 增量 → WS 广播，E2E 实测闭环通过）。
 
 ## 类型

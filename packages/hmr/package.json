@@ -17,6 +17,16 @@
       "import": "./dist/dev-server/index.js",
       "default": "./dist/dev-server/index.js"
     },
+    "./cdp": {
+      "types": "./dist/cdp/index.d.ts",
+      "import": "./dist/cdp/index.js",
+      "default": "./dist/cdp/index.js"
+    },
+    "./style-gate": {
+      "types": "./dist/style-gate/index.d.ts",
+      "import": "./dist/style-gate/index.js",
+      "default": "./dist/style-gate/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -24,9 +34,10 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js && esbuild src/dev-server/index.ts --bundle --format=esm --platform=node --outfile=dist/dev-server/index.js --external:ws"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js && esbuild src/dev-server/index.ts --bundle --format=esm --platform=node --outfile=dist/dev-server/index.js --external:ws && esbuild src/cdp/index.ts --bundle --format=esm --platform=node --outfile=dist/cdp/index.js --external:@proteus-vue/runtime --external:ws && esbuild src/style-gate/index.ts --bundle --format=esm --platform=node --outfile=dist/style-gate/index.js --external:@proteus-vue/runtime"
   },
   "dependencies": {
+    "@proteus-vue/runtime": "0.2.0-beta.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

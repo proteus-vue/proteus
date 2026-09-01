@@ -48,7 +48,9 @@ export default defineConfig({
       { find: '@proteus-vue/test-core', replacement: fileURLToPath(new URL('./packages/test-core/src/index.ts', import.meta.url)) },
       // devtools-plan B1：@proteus-vue/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
       { find: '@proteus-vue/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
-      // devtools-plus G-34 M1：@proteus-vue/hmr 包（tests/hmr.test.ts 直接引用）
+      // devtools-plus G-34 M1：@proteus-vue/hmr 包（tests/hmr.test.ts 直接引用；★子路径在父路径前）
+      { find: '@proteus-vue/hmr/style-gate', replacement: fileURLToPath(new URL('./packages/hmr/src/style-gate/index.ts', import.meta.url)) },
+      { find: '@proteus-vue/hmr/cdp', replacement: fileURLToPath(new URL('./packages/hmr/src/cdp/index.ts', import.meta.url)) },
       { find: '@proteus-vue/hmr/dev-server', replacement: fileURLToPath(new URL('./packages/hmr/src/dev-server/index.ts', import.meta.url)) },
       { find: '@proteus-vue/hmr', replacement: fileURLToPath(new URL('./packages/hmr/src/index.ts', import.meta.url)) },
       // security-plan B1-B2：@proteus-vue/security 包（tests/security.test.ts 直接引用）
