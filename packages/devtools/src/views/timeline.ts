@@ -4,10 +4,15 @@
 import type { TimelineSpan } from '@proteus-vue/devtools-runtime'
 import { attachTip } from '../tooltip'
 
+export interface TimelineWindow {
+  start: number
+  end: number
+}
+
 export interface TimelineViewData {
   spans: TimelineSpan[]
   /** 时间轴窗口（缺省自动取 min start ~ max end） */
-  window?: { start: number; end: number }
+  window?: TimelineWindow
 }
 
 export function renderTimeline(container: HTMLElement, data: TimelineViewData): void {
@@ -22,12 +27,20 @@ export function renderTimeline(container: HTMLElement, data: TimelineViewData): 
   }
   let winStart = data.window?.start ?? Infinity
   let winEnd = data.window?.end ?? -Infinity
-  for (const s of spans) {
-    if (s.start < winStart) winStart = s.start
-    const end = s.end !== undefined ? s.end : s.start
-    if (end > winEnd) winEnd = end
+  // 仅未提供窗口时自动取 span 范围（提供窗口（缩放/平移）→ 窗口为权威边界）
+  if (!data.window) {
+    for (const s of spans) {
+      if (s.start < winStart) winStart = s.start
+      const end = s.end !== undefined ? s.end : s.start
+      if (end > winEnd) winEnd = end
+    }
   }
   const total = Math.max(1, winEnd - winStart)
+  // 窗口过滤：缩放/平移时只渲染与窗口相交的 span（万级 span 缩放场景 + 避免负坐标溢出）
+  const visible = data.window ? spans.filter((s) => {
+    const end = s.end !== undefined ? s.end : s.start
+    return end >= winStart && s.start <= winEnd
+  }) : spans
 
   // ★时间刻度尺（Vue DevTools Timeline 风格）：0/25/50/75/100%
   const ruler = document.createElement('div')
@@ -42,7 +55,7 @@ export function renderTimeline(container: HTMLElement, data: TimelineViewData): 
 
   // 泳道：按 source 分组
   const lanes = new Map<string, TimelineSpan[]>()
-  for (const s of spans) {
+  for (const s of visible) {
     const list = lanes.get(s.source)
     if (list) list.push(s)
     else lanes.set(s.source, [s])

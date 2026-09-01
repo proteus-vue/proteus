@@ -15,10 +15,11 @@ import {
   renderErrors,
   createTooltipLayer,
   bindTooltip,
+  createTimelineZoom,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
-import type { TraceEvent, TraceSource } from '@proteus-vue/devtools-runtime'
+import type { TraceEvent, TraceSource, TimelineSpan } from '@proteus-vue/devtools-runtime'
 
 function ev(source: TraceSource, phase: 'start' | 'end' | 'point' | 'error', name: string, timestamp: number, traceId?: string, payload?: unknown): TraceEvent {
   return { source, phase, name, timestamp, traceId, payload }
@@ -401,5 +402,90 @@ describe('Tooltip 浮层', () => {
     expect(document.querySelector('.pd-tooltip-line')?.textContent).toBe('耗时 100ms')
     panel.destroy()
     root.remove()
+  })
+})
+
+describe('Timeline 缩放/平移交互', () => {
+  const rect = { left: 0, top: 0, width: 400, height: 22 }
+
+  function setup() {
+    const container = document.createElement('div')
+    Object.defineProperty(container, 'getBoundingClientRect', { value: () => rect, configurable: true })
+    const spans: TimelineSpan[] = [
+      { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+      { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+    ]
+    const changes: Array<{ start: number; end: number }> = []
+    const zoom = createTimelineZoom(container, () => spans, { onWindowChange: (w) => changes.push(w) })
+    return { container, spans, changes, zoom }
+  }
+
+  it('wheel 上滚 → 以光标为锚点缩小窗口（锚点时刻保持）', () => {
+    const { container, changes, zoom } = setup()
+    // 光标在 50%（clientX=200/宽 400）放大：全窗 0~300 → 250 宽，锚点 150 保持
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    expect(changes.length).toBe(1)
+    const w = zoom.getWindow() as { start: number; end: number }
+    expect(w.end - w.start).toBeCloseTo(300 / 1.2, 5)
+    expect(w.start + (w.end - w.start) * 0.5).toBeCloseTo(150, 5)
+  })
+
+  it('全窗时下滚缩小 → 钳制回全窗（不越界）', () => {
+    const { container, zoom } = setup()
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    const w = zoom.getWindow() as { start: number; end: number }
+    expect(w.start).toBe(0)
+    expect(w.end).toBe(300)
+  })
+
+  it('拖拽平移：左拖（看更晚）→ 窗口右移', () => {
+    const { container, zoom } = setup()
+    // 先放大两次留出平移空间：300/1.2/1.2 ≈ 208.33，窗 45.83~254.17
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    const before = zoom.getWindow() as { start: number; end: number }
+    // 左拖 40px → 时间窗口向晚（start 增大）
+    container.dispatchEvent(new MouseEvent('mousedown', { button: 0, clientX: 200, clientY: 10, bubbles: true }))
+    container.dispatchEvent(new MouseEvent('mousemove', { clientX: 160, clientY: 10, bubbles: true }))
+    container.dispatchEvent(new MouseEvent('mouseup', { clientX: 160, clientY: 10, bubbles: true }))
+    const after = zoom.getWindow() as { start: number; end: number }
+    const span = before.end - before.start
+    expect(after.start).toBeCloseTo(before.start + (40 / 400) * span, 5)
+  })
+
+  it('双击 → 重置回全窗', () => {
+    const { container, zoom } = setup()
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    expect((zoom.getWindow() as { end: number }).end).toBeLessThan(300)
+    container.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    const w = zoom.getWindow() as { start: number; end: number }
+    expect(w.start).toBe(0)
+    expect(w.end).toBe(300)
+  })
+
+  it('destroy 解绑监听：此后 wheel 不再变更窗口', () => {
+    const { container, changes, zoom } = setup()
+    zoom.destroy()
+    container.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 200, clientY: 10, bubbles: true, cancelable: true }))
+    expect(zoom.getWindow()).toBeNull()
+    expect(changes.length).toBe(0)
+  })
+})
+
+describe('Timeline 窗口过滤', () => {
+  it('renderTimeline 提供 window → 只渲染相交 span（缩放场景不渲染窗口外）', () => {
+    const root = document.createElement('div')
+    renderTimeline(root, {
+      spans: [
+        { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+        { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+      ],
+      window: { start: 150, end: 350 },
+    })
+    const spans = root.querySelectorAll('.pd-span')
+    expect(spans.length).toBe(1)
+    expect(spans[0].textContent).toContain('nav')
+    // 刻度尺仍按窗口渲染
+    expect(root.querySelectorAll('.pd-ruler > span').length).toBe(5)
   })
 })

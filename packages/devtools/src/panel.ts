@@ -11,6 +11,7 @@ import {
 import type { TraceEvent, NavRecord } from '@proteus-vue/devtools-runtime'
 import type { DevtoolsSource } from './source'
 import { renderTimeline } from './views/timeline'
+import { createTimelineZoom } from './views/timeline-interaction'
 import { renderFlamegraph } from './views/flamegraph'
 import { renderState } from './views/state'
 import { renderRoute } from './views/route'
@@ -98,6 +99,12 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     containers.set(v, container)
     content.appendChild(container)
   }
+
+  // ★timeline 时间窗口交互：wheel 缩放 + 拖拽平移 + 双击重置（窗口变更 → 节流 rerender）
+  const zoom = createTimelineZoom(containers.get('timeline') as HTMLElement, () => timeline.spans(), {
+    onWindowChange: () => scheduleRender(),
+  })
+
   function show(view: string): void {
     for (const [k, el] of views) el.classList.toggle('pd-view-active', k === view)
     for (const el of Array.from(sidebar.children)) el.classList.toggle('pd-nav-active', (el as HTMLElement).dataset.view === view)
@@ -183,7 +190,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   }
 
   function rerender(): void {
-    renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans() })
+    renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined })
     renderFlamegraph(containers.get('flamegraph') as HTMLElement, { nodes: flame.nodes() })
     renderErrors(containers.get('errors') as HTMLElement, { reports: errors.diagnose() })
     renderRoute(containers.get('route') as HTMLElement, { records: navs })
@@ -245,6 +252,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       off()
       unbindTip()
       tooltip.dispose()
+      zoom.destroy()
       source.close()
       if (renderTimer) clearTimeout(renderTimer)
       root.replaceChildren()
