@@ -16,26 +16,26 @@
 
 ## M7.3 权限最小化
 
-- 面板连接需确认（`proteus.config.ts.devtools.allowFrom` 白名单 origin）
-- 敏感 store 导出需二次确认弹窗（列出将被导出的字段）
-- 远程调试（M8）默认关闭，开启时打印警告"敏感数据可能被传输"
+- ✅ 面板连接确认（`devtoolsRelayPlugin({ allowFrom })` WS Origin 白名单——非白名单来源 upgrade 前拒绝；缺省空数组全放）
+- ⬜ 敏感 store 导出需二次确认弹窗（列出将被导出的字段）
+- ✅ 远程调试（remote: true）需显式开启（install 选项），dev 工具定位
 
 ## M7.4 性能预算
 
-| 指标 | 预算 |
-|------|------|
-| `bus.emit` 单条 | < 0.1ms |
-| 万级 span 首屏 | < 200ms |
-| 火焰图 5000 span | < 100ms |
-| DevTools JS 体积 | < 80KB gzip（按需加载后） |
+| 指标 | 预算 | 烟测 |
+|------|------|------|
+| `bus.emit` 单条 | < 0.1ms | ✅ tests/devtools-budget.test.ts（万次平均 < 1ms 宽松上界） |
+| 万级 span 首屏 | < 200ms | ✅ ingest 烟测 < 1000ms（渲染侧虚拟滚动已落地） |
+| 火焰图 5000 span | < 100ms | ✅ ingest + roots 烟测 < 1000ms |
+| DevTools JS 体积 | < 80KB gzip | ⬜ 待按需加载评估 |
 
-CI 跑 `proteus audit devtools-budget`，超线阻断（对齐 CLI M3 audit 体系）。
+CI 跑 `proteus audit devtools-budget`（CLI audit 体系，超线阻断）——⬜ 待 CLI 接入；当前以 vitest 烟测门禁先行。
 
 ## M7.5 降级策略
 
-- 采集层异常 → 关闭该 source，保留其余（不整体崩）
-- 面板断连 → Runtime 继续缓冲，重连后同步
-- 内存压力（`onMemoryWarning`）→ 丢弃非错误事件，保留错误 + 快照
+- ✅ 采集层异常 → 单订阅者 try/catch 隔离（console.warn 记录，不阻断其余订阅者/缓冲/不向外传播——devtools 订阅者异常不得崩应用）
+- ✅ 面板断连 → Runtime 继续缓冲（enable 回放 + 2s 重发已落地）
+- ⬜ 内存压力（`onMemoryWarning`）→ 丢弃非错误事件（待：performance.memory 阈值采样）
 
 ## M7.6 生命周期对接
 

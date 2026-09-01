@@ -131,7 +131,14 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
       }
       buffer.push(event)
       if (buffer.length > bufferSize) buffer = buffer.slice(buffer.length - bufferSize)
-      for (let i = 0; i < handlers.length; i++) handlers[i](event)
+      // ★M10 降级隔离（M7.5）：单订阅者抛错不阻断其余订阅者/缓冲，也不向外传播（devtools 订阅者异常不得崩应用）
+      for (let i = 0; i < handlers.length; i++) {
+        try {
+          handlers[i](event)
+        } catch (err) {
+          console.warn('[proteus-devtools] 订阅者处理事件异常（已隔离，不影响其他订阅者）：', event.source + '.' + event.name, err instanceof Error ? err.message : String(err))
+        }
+      }
     },
     on(handler) {
       handlers.push(handler)

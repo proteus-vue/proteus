@@ -59,7 +59,7 @@ Compiler   ─────────┤── 状态快照 / 时间旅行
 - **M11** 可观测性（导出/远程/CI）
 - **M12** 测试 + 迁移
 - **M13** 后端开放 API（DevtoolsSource + WS 协议）✅
-- **M14** 操作录屏回放（SessionBundle + 回放引擎 + 中台上行）⬜ 规划中（16-record-replay.md）
+- **M14** 操作录屏回放（SessionBundle + 回放引擎 + 中台上行）⬜ **已排期**（主线 M10/M11 后启用，16-record-replay.md）
 
 ## 验收
 

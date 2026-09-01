@@ -41,7 +41,7 @@ installProteusDevtools(app, { pinia, remote: true }) // ◈ 面板 + Vue DevTool
 13-execution-batches.md  分批策略
 14-landing-evaluation.md 落地评估
 15-open-api.md          后端开放 API（DevtoolsSource + WS 协议）✅
-16-record-replay.md     M14 操作录屏回放（规划中）
+16-record-replay.md     M14 操作录屏回放（已排期）
 ```
 
 ## 防撑爆规则（沿用全局）
@@ -52,4 +52,4 @@ installProteusDevtools(app, { pinia, remote: true }) // ◈ 面板 + Vue DevTool
 
 ## 进度
 
-B1-B10 已落地（面板九视图：timeline/flamegraph/state·时间旅行·值编辑/route/errors/components/pages/graph/device + 开放 API）；**M14 操作录屏回放为后期规划**（16-record-replay.md，复用 TraceBus/快照/时间旅行基础，排期待定）。
+B1-B10 已落地（面板九视图：timeline/flamegraph/state·时间旅行·值编辑/route/errors/components/pages/graph/device + 开放 API）；**M14 操作录屏回放已排期**（16-record-replay.md，主线 M10/M11 后启用，复用 TraceBus/快照/时间旅行基础）。

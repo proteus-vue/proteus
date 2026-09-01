@@ -93,4 +93,4 @@
 | B8 | 设备面板 | ✅（M8：环境概览卡 + 能力表 snapshot + 内存曲线；Proteus.deviceInfo 命令双通道） | — |
 | B9 | 插件 | ✅（M9：DevToolsPlugin 宿主 + addView/commands/storage + network 内置插件） | — |
 | B10 | 加固+可观测+测试 | ⬜ 未排期 | — |
-| B11 | M14 操作录屏回放 | ⬜ **后期规划**（16-record-replay.md：op source 捕获 + SessionBundle + 回放引擎 + 中台上行，复用 TraceBus/快照/时间旅行基础） | — |
+| B11 | M14 操作录屏回放 | ⬜ **已排期**（主线 M10/M11 后启用——16-record-replay.md：op source 捕获 + SessionBundle + 回放引擎 + 中台上行，复用 TraceBus/快照/时间旅行基础） | — |

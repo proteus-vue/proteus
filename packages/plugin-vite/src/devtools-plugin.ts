@@ -15,9 +15,18 @@ import { createProteusRelay } from './devtools-relay'
 export interface DevtoolsRelayOptions {
   /** 显式关闭（缺省 dev serve 模式开启） */
   enabled?: boolean
+  /** ★M10 权限最小化（M7.3）：WS 连接 Origin 白名单（如 ['http://localhost:5173']）——非白名单来源拒绝升级；缺省空数组 = 全放（dev 工具默认信任本机） */
+  allowFrom?: string[]
 }
 
 const require_ = createRequire(import.meta.url)
+
+/** ★M10 权限最小化（M7.3）：Origin 白名单校验（纯函数可单测）——allowFrom 为空 → 全放（dev 默认）；否则精确匹配 */
+export function isOriginAllowed(origin: string | undefined, allowFrom: string[]): boolean {
+  if (!allowFrom || allowFrom.length === 0) return true
+  if (!origin) return false // 无 Origin 头（非浏览器来源）在白名单模式下拒绝
+  return allowFrom.indexOf(origin) >= 0
+}
 
 /** 解析 @proteus-vue/devtools 包目录（panel.html / style.css / dist/panel.js 所在） */
 export function resolveDevtoolsDir(): string {
@@ -87,11 +96,12 @@ export function devtoolsRelayPlugin(opts: DevtoolsRelayOptions = {}): Plugin {
   let wss: WebSocketServer | null = null
   let relay: ReturnType<typeof createProteusRelay> | null = null
   let pageHandler: ReturnType<typeof createPanelPageHandler> | null = null
+  const allowFrom = opts.allowFrom ?? []
 
   /** ★结构类型：ViteDevServer/PreviewServer 的 httpServer 泛型不同——只取 upgrade 事件面 */
   function setup(server: { httpServer?: unknown; middlewares?: unknown }): void {
     const httpServer = server.httpServer as
-      | { on: (event: string, cb: (req: { url?: string }, socket: unknown, head: unknown) => void) => void }
+      | { on: (event: string, cb: (req: { url?: string; headers?: Record<string, string | undefined> }, socket: unknown, head: unknown) => void) => void }
       | null
       | undefined
     if (!httpServer) return
@@ -101,6 +111,13 @@ export function devtoolsRelayPlugin(opts: DevtoolsRelayOptions = {}): Plugin {
       const url = String((req as { url?: string }).url ?? '').split('?')[0]
       const role = url === '/proteus-source' ? ('source' as const) : url === '/proteus-panel' ? ('panel' as const) : null
       if (!role || !relay) return
+      // ★M10 权限最小化（M7.3）：Origin 白名单——非白名单来源在升级前拒绝（dev 工具对外暴露的远程调试面最小化）
+      const origin = (req as { headers?: Record<string, string | undefined> }).headers?.origin
+      if (!isOriginAllowed(origin, allowFrom)) {
+        console.warn(`[proteus-devtools] 拒绝 ${role} 连接：Origin ${origin ?? '(无)'} 不在白名单 ${allowFrom.join(', ')}`)
+        ;(socket as { destroy?: () => void }).destroy?.()
+        return
+      }
       // ★upgrade 回调的 req/socket/head 结构类型收窄后需还原为 ws 期望形状
       wss?.handleUpgrade(req as never, socket as never, head as never, (ws: WebSocket) => {
         wss?.emit('connection', ws, req)

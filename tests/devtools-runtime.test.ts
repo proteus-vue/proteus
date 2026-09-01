@@ -1,6 +1,6 @@
 // tests/devtools-runtime.test.ts
 // ★devtools-plan B1：TraceBus（协议/环形缓冲/订阅/零开销门控）+ redact 脱敏 + 采样（error tail）+ traceId
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createTraceBus, createTraceId, getProteusTraceBus, redactValue } from '@proteus-vue/devtools-runtime'
 
 describe('TraceBus 零开销门控（生产默认关闭）', () => {
@@ -49,6 +49,23 @@ describe('flush（面板推送）', () => {
     const batch = bus.flush()
     expect(batch.length).toBe(1)
     expect(bus.buffer.length).toBe(0)
+  })
+})
+
+describe('★M10 降级隔离（M7.5：订阅者异常不阻断其余订阅者/缓冲，不向外传播）', () => {
+  it('抛错订阅者被隔离：后续订阅者仍触发 + 缓冲完整 + emit 不抛错（应用不崩）', () => {
+    const bus = createTraceBus({ enabled: true })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const seen: string[] = []
+    bus.on(() => {
+      throw new Error('devtools 订阅者炸了')
+    })
+    bus.on((e) => seen.push(e.name))
+    expect(() => bus.emit('api', 'point', 'req.1')).not.toThrow()
+    expect(seen).toEqual(['req.1']) // 第二个订阅者正常触发
+    expect(bus.buffer.map((e) => e.name)).toEqual(['req.1']) // 缓冲完整
+    expect(warn).toHaveBeenCalled() // 异常被记录（可诊断）
+    warn.mockRestore()
   })
 })
 

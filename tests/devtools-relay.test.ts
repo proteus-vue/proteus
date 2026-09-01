@@ -1,7 +1,7 @@
 // tests/devtools-relay.test.ts —— devtools 远程查看中转（devtoolsRelayPlugin / createProteusRelay）
 // 双通道路由：panel 命令（Proteus.enable/appInfo）→ source；source 响应按 id 路由回；source 事件广播 panels
 import { describe, it, expect } from 'vitest'
-import { createProteusRelay } from '@proteus-vue/plugin-vite'
+import { createProteusRelay, isOriginAllowed } from '@proteus-vue/plugin-vite'
 
 /** mock socket（ws 库 WebSocket 结构子集：send/close/readyState/on） */
 function mockSocket() {
@@ -18,6 +18,17 @@ function mockSocket() {
     emit: (event: string, data: unknown) => handlers[event]?.(data),
   }
 }
+
+describe('★M10 权限最小化（M7.3：Origin 白名单 isOriginAllowed）', () => {
+  it('allowFrom 空 → 全放（dev 工具默认信任本机）；非空 → 精确匹配；无 Origin 拒绝', () => {
+    expect(isOriginAllowed('http://localhost:5173', [])).toBe(true) // 缺省全放
+    expect(isOriginAllowed(undefined, [])).toBe(true)
+    expect(isOriginAllowed('http://localhost:5173', ['http://localhost:5173', 'http://127.0.0.1:5173'])).toBe(true)
+    expect(isOriginAllowed('https://evil.example.com', ['http://localhost:5173'])).toBe(false) // 非白名单拒绝
+    expect(isOriginAllowed('http://localhost:5173', ['http://localhost:5173/'])).toBe(false) // 精确匹配（无尾斜杠归一）
+    expect(isOriginAllowed(undefined, ['http://localhost:5173'])).toBe(false) // 无 Origin（非浏览器来源）拒绝
+  })
+})
 
 describe('createProteusRelay 路由', () => {
   it('source 的 Proteus.event → 广播所有 panel', () => {
