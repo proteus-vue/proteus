@@ -26,10 +26,10 @@ export interface StyleGuardLike {
   records(): Array<{ prop: string; value: unknown; reason: string; ts: number }>
 }
 
-/** pinia 实例结构类型（createStoreTracer 消费 + onApplyState 状态恢复） */
+/** pinia 实例结构类型（createStoreTracer 消费 + onApplyState 状态恢复 + 面板创建补发快照） */
 export interface PiniaLike {
   use(fn: (ctx: { store: unknown }) => void): unknown
-  _s: Map<string, { $patch(state: Record<string, unknown>): void }>
+  _s: Map<string, { $patch(state: Record<string, unknown>): void; $state?: Record<string, unknown> }>
 }
 
 /** vite import.meta.hot 结构类型（HMR 事件 → TraceBus；零硬依赖，业务侧传 import.meta.hot） */
@@ -77,6 +77,7 @@ function mountFloatingPanel(
   pages: PagesViewData | undefined,
   applyState: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void,
   selectComponent: (id: number) => void,
+  pinia: PiniaLike | undefined,
 ): void {
   if (panelMounted) return
   panelMounted = true
@@ -104,6 +105,19 @@ function mountFloatingPanel(
         // ★P1：组件视图选中 → 页面元素高亮（scrollIntoView + 描边闪烁）
         onSelectComponent: selectComponent,
       })
+      // ★★时间旅行可恢复起点：面板打开时补发当前 store 快照——面板订阅前创建的 store，其 init 事件已丢
+      //   （TraceBus on 不自动回放缓冲 #249）→ 没有补发则 restoreAt(最左) 返回空、拖滑块页面不变
+      //   补发后「拖到最左 = 面板打开时刻状态」（可恢复的起点）；store 后建场景由 tracer 的 use 插件发 init，无重复
+      if (pinia) {
+        for (const entry of pinia._s) {
+          const id = entry[0]
+          const state = entry[1].$state
+          if (!state) continue
+          const snapshot: Record<string, unknown> = { id }
+          for (const k of Object.keys(state)) if (k !== '$id') snapshot[k] = state[k]
+          bus.emit('store', 'point', 'store.patch', snapshot, 'store-init-' + id)
+        }
+      }
     }
   })
 }
@@ -208,6 +222,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
         }
       },
       highlightComponent,
+      options.pinia,
     )
   }
 

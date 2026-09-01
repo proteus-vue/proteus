@@ -88,7 +88,7 @@ describe('installProteusDevtools 一键接入', () => {
     expect(btn).not.toBeNull()
     btn.click()
     const host = document.querySelector('.pd-floating-host') as HTMLElement
-    // 变更 → storeTracer 上报 store.patch（面板快照）
+    // 变更 → storeTracer 上报 store.patch（面板快照；★面板打开时 install 已补发当前快照 items:0 = 可恢复起点）
     cart.items = 1
     await new Promise((r) => setTimeout(r, 60))
     const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
@@ -96,16 +96,19 @@ describe('installProteusDevtools 一键接入', () => {
     const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
     const range = stateView.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
-    // 回放到步骤 0（初始快照前）→ 但 restoreAt(0) = cart.items:1（第一步 patch 状态）
+    // ★拖到最左（0）→ 恢复面板打开时状态（install 补发快照 items:0）——时间旅行可恢复起点
     range.value = '0'
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
-    // ★时间旅行应用：面板 restore 快照 → pinia.$patch 写回（items 仍为 1；再次回放同一步幂等）
-    expect(cart.items).toBe(1)
-    // 变更后再回放：items=2 → 回放到步骤 0 → items 恢复为 1
+    expect(cart.items).toBe(0)
+    // 变更后再回放：items=2 → 拖 0 仍恢复面板打开时状态（items:0）；拖 1 恢复第一次变更后（items:1）
     cart.items = 2
     await new Promise((r) => setTimeout(r, 60))
     range.value = '0'
+    range.dispatchEvent(new Event('input'))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(cart.items).toBe(0)
+    range.value = '1'
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(1)
@@ -148,7 +151,7 @@ describe('installProteusDevtools 一键接入', () => {
     mountEl.remove()
   })
 
-  it('★时间旅行「拖到最左 = 初始」：面板先开 → store 后建（初始快照进面板）→ 播放/调音量 → 拖 0 恢复初始、拖最右恢复最新', async () => {
+  it('★时间旅行可恢复起点（面板后开场景）：store 先建+操作 → 开面板（install 补发当前快照）→ 再操作 → 拖 0 恢复面板打开时状态', async () => {
     document.body.replaceChildren()
     vi.resetModules()
     const { installProteusDevtools: install2 } = await import('@proteus-vue/devtools')
@@ -158,10 +161,7 @@ describe('installProteusDevtools 一键接入', () => {
     setActivePinia(pinia)
     const bus = createTraceBus({ enabled: true })
     const devtools = install2(app, { traceBus: bus, pinia, mount: true })
-    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
-    btn.click() // ★面板先开（订阅 bus）——store 初始快照才能进面板（TraceBus on 不自动回放 #249）
-    const host = document.querySelector('.pd-floating-host') as HTMLElement
-    // ★store 在面板创建后才创建（use 插件 trace → 发初始快照 store.patch）
+    // ★store 先建 + 操作（init/变更在面板订阅前发出 → TraceBus 不回放缓冲 → 丢）
     const usePlayer = defineStore('player', {
       state: () => ({ playing: false, volume: 0.8 }),
       actions: {
@@ -170,8 +170,15 @@ describe('installProteusDevtools 一键接入', () => {
       },
     })
     const player = usePlayer()
-    await new Promise((r) => setTimeout(r, 40)) // 初始快照
-    player.play() // direct mutation → action + patch（异步 $subscribe）
+    player.play()
+    player.setVolume(0.4)
+    await new Promise((r) => setTimeout(r, 60))
+    // ★面板后开 → install 补发当前 store 快照（可恢复起点 = 面板打开时刻）
+    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
+    btn.click()
+    const host = document.querySelector('.pd-floating-host') as HTMLElement
+    await new Promise((r) => setTimeout(r, 40))
+    // 面板开后再操作
     player.setVolume(0.5)
     await new Promise((r) => setTimeout(r, 80))
     const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
@@ -179,17 +186,16 @@ describe('installProteusDevtools 一键接入', () => {
     const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
     const range = stateView.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
-    // 拖到最左（0）→ 恢复初始（playing false, volume 0.8）——★本次修复核心
+    // 拖到最左 → 恢复面板打开时状态（volume 0.4）
     range.value = '0'
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
-    expect(player.playing).toBe(false)
-    expect(player.volume).toBe(0.8)
-    // 拖到最右 → 恢复最新（playing true, volume 0.5）
+    expect(player.playing).toBe(true)
+    expect(player.volume).toBe(0.4)
+    // 拖到最右 → 最新（volume 0.5）
     range.value = String(Number(range.max))
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
-    expect(player.playing).toBe(true)
     expect(player.volume).toBe(0.5)
     devtools.destroy()
     app.unmount()
