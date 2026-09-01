@@ -440,11 +440,11 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
-    // getInspectorState → resolved 分组
+    // getInspectorState → resolved 分组（★对象形态：分组名 → 状态行数组）
     const payload = { inspectorId: 'proteus-app-config', nodeId: 'root' }
     stateCbs[0](payload)
-    expect(payload.state?.[0].key).toBe('resolved')
-    expect((payload.state?.[0].value as { app: { name: string } }).app.name).toBe('Demo')
+    expect(Object.keys(payload.state ?? {})).toEqual(['resolved'])
+    expect((payload.state?.resolved?.[0].value as { app: { name: string } }).app.name).toBe('Demo')
     // 非本 inspector → 不响应（state 保持 undefined）
     const otherPayload = { inspectorId: 'other', nodeId: 'root' }
     stateCbs[0](otherPayload)
@@ -473,8 +473,8 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const last = stateCbs[stateCbs.length - 1]
     const payload = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
     last(payload)
-    expect(payload.state?.[0].key).toBe('rejected')
-    expect(payload.state?.[0].value).toEqual(records)
+    expect(Object.keys(payload.state ?? {})).toEqual(['rejected'])
+    expect(payload.state?.rejected?.[0].value).toEqual(records)
     // 不提供 getStyleSafetyRecords → 不注册
     const calls2: Array<{ id: string }> = []
     installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
@@ -529,26 +529,26 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(user?.id).toBe('user')
     expect(user?.label).toBe('用户中心')
     expect(user?.children?.[0] && (user.children[0] as { id: string }).id).toBe('user-profile')
-    // ★选中导航记录分组 → 当前路由 + 记录数组
+    // ★选中导航记录分组 → 当前路由 + 记录数组（对象分组形态）
     const recPayload = { inspectorId: 'proteus-router', nodeId: 'proteus-records' }
     stateCbs[stateCbs.length - 1](recPayload)
-    expect(recPayload.state?.[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
-    expect((recPayload.state?.[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
-    // ★选中单条记录 → 完整导航状态（一个「导航状态」分组展开：from/to/耗时/时间/traceId/守卫链）
+    expect(Object.keys(recPayload.state ?? {})).toEqual(['导航记录'])
+    const recGroup = recPayload.state?.['导航记录'] ?? []
+    expect(recGroup[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
+    expect((recGroup[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
+    // ★选中单条记录 → 「导航状态」分组（from/to/耗时/时间/traceId/守卫链）
     const singlePayload = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
     stateCbs[stateCbs.length - 1](singlePayload)
-    expect(singlePayload.state?.length).toBe(1)
-    expect(singlePayload.state?.[0].key).toBe('导航状态')
-    const recState = singlePayload.state?.[0].value as { from: string; to: string; traceId: string; guards: Array<{ result: string }> }
-    expect(recState.from).toBe('pages/user/index')
-    expect(recState.to).toBe('pages/user/profile')
-    expect(recState.traceId).toBe('nav-2')
-    expect(recState.guards[0].result).toBe('next')
+    const singleGroup = singlePayload.state?.['导航状态'] ?? []
+    expect(singleGroup.map((s) => s.key)).toEqual(['from', 'to', 'durationMs', 'timestamp', 'traceId', 'guards'])
+    expect(singleGroup.find((s) => s.key === 'traceId')?.value).toBe('nav-2')
+    expect((singleGroup.find((s) => s.key === 'guards')?.value as Array<{ result: string }>)[0].result).toBe('next')
     // 选中路由节点详情（取最后一个 state 回调——app-config 也注册了）
     const statePayload = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
     stateCbs[stateCbs.length - 1](statePayload)
-    expect(statePayload.state?.[0]).toEqual({ key: 'path', value: 'pages/user/profile' })
-    expect(statePayload.state?.[1]).toEqual({ key: 'parent', value: 'user' })
+    const routeGroup = statePayload.state?.['路由'] ?? []
+    expect(routeGroup[0]).toEqual({ key: 'path', value: 'pages/user/profile' })
+    expect(routeGroup[1]).toEqual({ key: 'parent', value: 'user' })
     // 非本 inspector 不响应
     const other = { inspectorId: 'other', nodeId: 'x' }
     stateCbs[stateCbs.length - 1](other)

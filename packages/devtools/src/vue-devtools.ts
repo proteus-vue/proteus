@@ -69,12 +69,14 @@ export function installProteusTimeline(api: VueDevtoolsApiLike, options: VueDevt
 // 规划：proteus-native-tree（App 依赖）/ proteus-jsi·ifr（Skyline 依赖）/ proteus-style-safety
 // （运行时拦截记录器缺失——style-safety 当前为编译期校验）/ **proteus-app-config（本次落地：数据源 getConfig 就绪 + 编辑回写）**
 
-/** 自定义 Inspector 所需的 @vue/devtools-api 形状（结构类型注入，可 mock 单测） */
+/** 自定义 Inspector 所需的 @vue/devtools-api 形状（结构类型注入，可 mock 单测）
+ * ★state 是「分组名 → 状态行数组」对象（CustomInspectorState：`{ 分组: [{key, value}] }`）——
+ *   传数组会让 Vue DevTools 渲染不出分组详情（2026-09 实测根因） */
 export interface VueDevtoolsInspectorApiLike {
   addInspector(options: { id: string; label: string; icon?: string }): void
   on: {
     getInspectorTree(cb: (payload: { inspectorId: string; rootNodes?: unknown[] }) => void): void
-    getInspectorState(cb: (payload: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void): void
+    getInspectorState(cb: (payload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> }) => void): void
     editInspectorState(cb: (payload: { inspectorId: string; nodeId: string; path: string[]; state: { value: unknown } }) => void): void
   }
 }
@@ -132,11 +134,13 @@ function pathToPatch(path: string[], value: unknown): Record<string, unknown> {
 const APP_CONFIG_INSPECTOR = 'proteus-app-config'
 const STYLE_SAFETY_INSPECTOR = 'proteus-style-safety'
 const ROUTER_INSPECTOR = 'proteus-router'
+/** InspectorNodeTag 颜色（textColor/backgroundColor 必填 number） */
+const TAG_STYLE = { textColor: 0xffffff, backgroundColor: 0x1a7af8 }
 
 /** 路由表 → 嵌套树节点（parent 引用构建父子层级；无 parent/父缺失 → 根） */
 function buildRouterTree(
   routes: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>,
-): Array<{ id: string; label: string; tags?: Array<{ label: string }>; children?: unknown[] }> {
+): Array<{ id: string; label: string; tags?: Array<{ label: string; textColor: number; backgroundColor: number }>; children?: unknown[] }> {
   const byName = new Map(routes.map((r) => [r.name, r]))
   const childrenOf = new Map<string, Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>>()
   const roots: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }> = []
@@ -152,12 +156,12 @@ function buildRouterTree(
   const toNode = (r: { name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }): {
     id: string
     label: string
-    tags?: Array<{ label: string }>
+    tags?: Array<{ label: string; textColor: number; backgroundColor: number }>
     children?: unknown[]
   } => ({
     id: r.name,
     label: (r.meta?.title as string | undefined) ?? r.name,
-    tags: [{ label: r.path }],
+    tags: [{ label: r.path, ...TAG_STYLE }],
     children: (childrenOf.get(r.name) ?? []).map(toNode),
   })
   return roots.map(toNode)
@@ -176,7 +180,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
   api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' })
   api.on.getInspectorState((payload) => {
     if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
-    payload.state = [{ key: 'resolved', value: options.getConfig ? options.getConfig() : {} }]
+    payload.state = { resolved: [{ key: 'value', value: options.getConfig ? options.getConfig() : {} }] }
   })
   if (options.setConfig) {
     api.on.editInspectorState((payload) => {
@@ -189,7 +193,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' })
     api.on.getInspectorState((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
-      payload.state = [{ key: 'rejected', value: (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)() }]
+      payload.state = { rejected: [{ key: 'records', value: (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)() }] }
     })
   }
   if (options.pages) {
@@ -207,12 +211,12 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
           .map((r) => ({
             id: 'rec-' + r.timestamp,
             label: `${r.from} → ${r.to}`,
-            tags: [{ label: r.durationMs + 'ms' }],
+            tags: [{ label: r.durationMs + 'ms', ...TAG_STYLE }],
           }))
         nodes.unshift({
           id: 'proteus-records',
           label: `导航记录 (${state.records.length})`,
-          tags: state.currentRoute ? [{ label: '当前: ' + state.currentRoute }] : undefined,
+          tags: state.currentRoute ? [{ label: '当前: ' + state.currentRoute, ...TAG_STYLE }] : undefined,
           children: recordNodes,
         })
       }
@@ -223,43 +227,44 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
       // 导航记录分组（点「导航记录」根节点）
       if (payload.nodeId === 'proteus-records') {
         const state = options.getRouterState?.()
-        payload.state = [
-          { key: 'currentRoute', value: state?.currentRoute ?? '—' },
-          { key: 'records', value: (state?.records ?? []).slice(-50).reverse() },
-        ]
+        payload.state = {
+          导航记录: [
+            { key: 'currentRoute', value: state?.currentRoute ?? '—' },
+            { key: 'records', value: (state?.records ?? []).slice(-50).reverse() },
+          ],
+        }
         return
       }
-      // 单条导航记录（完整状态：from/to/耗时/时间/traceId/守卫链——★一个分组展开，对齐 vue-router 形态）
+      // 单条导航记录（完整状态：from/to/耗时/时间/traceId/守卫链）
       if (payload.nodeId.startsWith('rec-')) {
         const rec = (options.getRouterState?.()?.records ?? []).find((r) => 'rec-' + r.timestamp === payload.nodeId)
         payload.state = rec
-          ? [
-              {
-                key: '导航状态',
-                value: {
-                  from: rec.from,
-                  to: rec.to,
-                  durationMs: rec.durationMs,
-                  timestamp: rec.timestamp,
-                  traceId: rec.traceId ?? '—',
-                  guards: rec.guards,
-                },
-              },
-            ]
-          : []
+          ? {
+              导航状态: [
+                { key: 'from', value: rec.from },
+                { key: 'to', value: rec.to },
+                { key: 'durationMs', value: rec.durationMs },
+                { key: 'timestamp', value: rec.timestamp },
+                { key: 'traceId', value: rec.traceId ?? '—' },
+                { key: 'guards', value: rec.guards },
+              ],
+            }
+          : {}
         return
       }
       const route = (options.pages?.routes ?? []).find((r) => r.name === payload.nodeId)
       if (!route) {
-        payload.state = []
+        payload.state = {}
         return
       }
-      payload.state = [
-        { key: 'path', value: route.path },
-        { key: 'parent', value: route.parent ?? '—' },
-        { key: 'subPackage', value: route.subPackage ?? '—' },
-        { key: 'meta', value: route.meta ?? {} },
-      ]
+      payload.state = {
+        路由: [
+          { key: 'path', value: route.path },
+          { key: 'parent', value: route.parent ?? '—' },
+          { key: 'subPackage', value: route.subPackage ?? '—' },
+          { key: 'meta', value: route.meta ?? {} },
+        ],
+      }
     })
   }
   return {

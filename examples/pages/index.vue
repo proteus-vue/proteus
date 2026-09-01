@@ -20,7 +20,7 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 </script>
 
 <template>
-  <div class="hmr-probe-home">
+  <div class="home">
     <h1>{{ title }}</h1>
     <p v-if="show">One Vue source. Every form.</p>
     <p class="tapped-count">tapped {{ count }} times</p>
