@@ -1191,15 +1191,20 @@ describe('M9 插件机制', () => {
 })
 
 describe('Components / Pages / Graph 视图', () => {
-  it('renderComponents：parent 关联构建树 + 折叠（点击子行不冒泡触发父折叠）', () => {
+  it('renderComponents：parent 关联构建树 + 折叠（toggle 折叠、行点击选中不冒泡折叠父行）', () => {
     const root = document.createElement('div')
-    renderComponents(root, {
-      nodes: [
-        { id: 1, name: 'App', ts: 1, count: 1 },
-        { id: 2, name: 'Home', parentId: 1, ts: 2, count: 1 },
-        { id: 3, name: 'Card', parentId: 2, ts: 3, count: 2 },
-      ],
-    })
+    const onSelect = vi.fn()
+    renderComponents(
+      root,
+      {
+        nodes: [
+          { id: 1, name: 'App', ts: 1, count: 1 },
+          { id: 2, name: 'Home', parentId: 1, ts: 2, count: 1 },
+          { id: 3, name: 'Card', parentId: 2, ts: 3, count: 2 },
+        ],
+      },
+      { onSelect },
+    )
     const rows = root.querySelectorAll('.pd-cmp-row')
     expect(rows.length).toBe(3)
     expect(rows[0].textContent).toContain('App')
@@ -1207,14 +1212,45 @@ describe('Components / Pages / Graph 视图', () => {
     expect(rows[2].textContent).toContain('×2') // 计数
     // 子行缩进（depth 1 → paddingLeft 22px）
     expect((rows[1] as HTMLElement).style.paddingLeft).toBe('22px')
-    // 折叠根：点击子行 → 不触发父折叠（closest 判定）；点击根行 → 子层隐藏
-    ;(rows[1] as HTMLElement).click()
+    // ★P1 折叠改为 toggle 点击：子行点击 → 选中回调（不触发父折叠）；根行点击 → 选中
     const subEl = (rows[0] as HTMLElement).querySelector('.pd-cmp-children') as HTMLElement
     expect(subEl.childNodes.length).toBeGreaterThan(0)
-    ;(rows[0] as HTMLElement).click()
+    ;(rows[1] as HTMLElement).click()
+    expect(onSelect).toHaveBeenCalledWith(2)
+    expect(subEl.style.display).not.toBe('none')
+    // 点击根行 toggle → 折叠（stopPropagation 不触发选中）
+    const toggle = (rows[0] as HTMLElement).querySelector('.pd-kv-toggle') as HTMLElement
+    toggle.click()
     expect(subEl.style.display).toBe('none')
-    ;(rows[0] as HTMLElement).click()
+    toggle.click()
     expect(subEl.style.display).toBe('block')
+    expect(onSelect).toHaveBeenCalledTimes(1) // toggle 不触发选中
+  })
+
+  it('★P1 renderComponents：选中组件 → 详情面板（props/state inspector 树）+ 高亮行', () => {
+    const root = document.createElement('div')
+    renderComponents(root, {
+      nodes: [
+        { id: 1, name: 'App', ts: 1, count: 1, props: { title: 'demo', n: 1 }, state: { count: 0 } },
+        { id: 2, name: 'Card', parentId: 1, ts: 2, count: 1 },
+      ],
+      selectedId: 1,
+    })
+    const rows = root.querySelectorAll('.pd-cmp-row')
+    expect(rows[0].classList.contains('pd-cmp-active')).toBe(true)
+    expect(rows[1].classList.contains('pd-cmp-active')).toBe(false)
+    // 详情面板：props/state 段 + 值
+    const detail = root.querySelector('.pd-cmp-detail') as HTMLElement
+    expect(detail).not.toBeNull()
+    expect(detail.textContent).toContain('props')
+    const titleRow = Array.from(detail.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'title')
+    expect(titleRow?.querySelector('.pd-kv-value')?.textContent).toBe('"demo"')
+    const countRow = Array.from(detail.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'count')
+    expect(countRow?.querySelector('.pd-kv-value')?.textContent).toBe('0')
+    // 无 selectedId → 无详情
+    const root2 = document.createElement('div')
+    renderComponents(root2, { nodes: [{ id: 1, name: 'App', ts: 1, count: 1 }] })
+    expect(root2.querySelector('.pd-cmp-detail')).toBeNull()
   })
 
   it('renderPages：主包/分包分组 + tab 标记 + 页面栈高亮', () => {
@@ -1267,6 +1303,32 @@ describe('Components / Pages / Graph 视图', () => {
     panel.destroy()
   })
 
+  it('★P1 面板：component.mount 带 props/state 快照 → 点击行 → onSelectComponent 高亮回调 + 详情面板；再点取消选中', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const select = vi.fn()
+    const panel = createDevtoolsPanel(root, { source, onSelectComponent: select })
+    source.push(ev('component', 'point', 'component.mount', 100, 'comp-1', { id: 1, name: 'App', parentId: undefined, props: { title: 'demo' }, state: { count: 1 } }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('components')
+    const componentsView = root.querySelector('.pd-view[data-view="components"]') as HTMLElement
+    const row = componentsView.querySelector('.pd-cmp-row') as HTMLElement
+    row.click()
+    expect(select).toHaveBeenCalledWith(1)
+    await new Promise((r) => setTimeout(r, 40))
+    // ★详情面板出现（props/state 值）
+    const detail = componentsView.querySelector('.pd-cmp-detail') as HTMLElement
+    expect(detail).not.toBeNull()
+    expect(detail.textContent).toContain('demo')
+    expect(Array.from(detail.querySelectorAll('.pd-kv')).some((r) => r.querySelector('.pd-kv-key')?.textContent === 'count')).toBe(true)
+    // 再点同一行 → 取消选中（详情消失，不再回调）
+    row.click()
+    await new Promise((r) => setTimeout(r, 40))
+    expect(select).toHaveBeenCalledTimes(1)
+    expect(componentsView.querySelector('.pd-cmp-detail')).toBeNull()
+    panel.destroy()
+  })
+
   it('面板：pages 注入 → pages 清单 + graph 依赖树渲染', async () => {
     const root = document.createElement('div')
     const source = mockSource()
@@ -1304,8 +1366,11 @@ describe('Components / Pages / Graph 视图', () => {
     const mounts = events.filter((e) => (e as { name: string }).name === 'component.mount')
     expect(mounts.length).toBeGreaterThanOrEqual(2)
     // ★Vue 挂载深度优先（子先）→ 用 find 定位而非顺序
-    const rootMount = mounts.find((m) => (m as { payload: { name: string } }).payload.name === 'Root') as { payload: { id: number; name: string; parentId?: number } }
+    const rootMount = mounts.find((m) => (m as { payload: { name: string } }).payload.name === 'Root') as { payload: { id: number; name: string; parentId?: number; props?: unknown } }
     expect(rootMount.payload.name).toBe('Root')
+    // ★P1：mount payload 带 props/state 快照（无 props/state → props 空对象）
+    expect(rootMount.payload.props).toEqual({})
+    expect('state' in rootMount.payload).toBe(false)
     const child = mounts.find((m) => (m as { payload: { name: string } }).payload.name === 'Child') as { payload: { id: number; parentId?: number } }
     expect(child.payload.parentId).toBe(rootMount.payload.id) // parentId 关联根
     expect(events.some((e) => (e as { name: string }).name === 'component.unmount')).toBe(true)

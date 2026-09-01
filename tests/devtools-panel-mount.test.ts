@@ -112,4 +112,35 @@ describe('installProteusDevtools 一键接入', () => {
     devtools.destroy()
     app.unmount()
   })
+
+  it('★P1 组件高亮：面板选中组件 → 页面元素描边闪烁（install 侧 getElement + pd-cmp-highlight）', async () => {
+    document.body.replaceChildren()
+    vi.resetModules()
+    const { installProteusDevtools: install2 } = await import('@proteus-vue/devtools')
+    const { createApp: createApp2, defineComponent: defineComponent2 } = await import('vue')
+    const app = createApp2(defineComponent2({ name: 'Root', template: '<div id="root-el"><span/></div>' }))
+    const bus = createTraceBus({ enabled: true })
+    const devtools = install2(app, { traceBus: bus, mount: true })
+    // ★先开面板（订阅 bus）再挂载组件——component.mount 事件才能进面板（TraceBus on 不自动回放 #249）
+    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
+    btn.click()
+    const host = document.querySelector('.pd-floating-host') as HTMLElement
+    const mountEl = document.createElement('div')
+    document.body.appendChild(mountEl)
+    app.mount(mountEl)
+    await new Promise((r) => setTimeout(r, 60))
+    const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
+    ;(navItems.find((n) => (n as HTMLElement).dataset.view === 'components') as HTMLElement).click()
+    const componentsView = host.querySelector('.pd-view[data-view="components"]') as HTMLElement
+    expect(componentsView.querySelectorAll('.pd-cmp-row').length).toBeGreaterThanOrEqual(1)
+    const row = componentsView.querySelector('.pd-cmp-row') as HTMLElement
+    row.click()
+    await new Promise((r) => setTimeout(r, 40))
+    // ★页面根元素描边闪烁（registry getElement → classList.add）
+    const rootEl = document.querySelector('#root-el') as HTMLElement
+    expect(rootEl.classList.contains('pd-cmp-highlight')).toBe(true)
+    devtools.destroy()
+    app.unmount()
+    mountEl.remove()
+  })
 })

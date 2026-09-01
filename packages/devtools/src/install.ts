@@ -74,6 +74,7 @@ function mountFloatingPanel(
   bus: TraceBus,
   pages: PagesViewData | undefined,
   applyState: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void,
+  selectComponent: (id: number) => void,
 ): void {
   if (panelMounted) return
   panelMounted = true
@@ -98,6 +99,8 @@ function mountFloatingPanel(
         pages,
         // ★P0：时间旅行回放 / 导入快照恢复 → 逐 store $patch 写回（结构类型零硬依赖；无 pinia → 仅面板内展示）
         onApplyState: applyState,
+        // ★P1：组件视图选中 → 页面元素高亮（scrollIntoView + 描边闪烁）
+        onSelectComponent: selectComponent,
       })
     }
   })
@@ -120,8 +123,17 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     storeTracer = createStoreTracer(options.pinia as never, bus)
   }
 
-  // ③ 组件树（component.mount/unmount 事件）
-  const offComponent = installComponentTrace(app, bus)
+  // ③ 组件树（component.mount/unmount 事件 + 元素 registry——P1 页面高亮）
+  const componentTrace = installComponentTrace(app, bus)
+
+  /** ★P1 组件高亮：选中组件 → 滚动到可视区 + 描边闪烁（pd-cmp-highlight 样式，1.5s 消退） */
+  function highlightComponent(id: number): void {
+    const el = componentTrace.getElement(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('pd-cmp-highlight')
+    setTimeout(() => el.classList.remove('pd-cmp-highlight'), 1500)
+  }
 
   // ④ Vue DevTools 插件：Timeline layer + 自定义 Inspector
   // ★Router Inspector 动态数据：聚合 router 导航记录（当前路由 + 最近导航历史——完整状态：from/to/耗时/守卫链/traceId）
@@ -180,13 +192,18 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
 
   // ⑤ 本地面板浮动挂载
   if (options.mount !== false) {
-    mountFloatingPanel(bus, options.pages, (stores) => {
-      if (!options.pinia) return
-      for (const s of stores) {
-        const store = options.pinia._s.get(s.id)
-        store?.$patch?.(s.state)
-      }
-    })
+    mountFloatingPanel(
+      bus,
+      options.pages,
+      (stores) => {
+        if (!options.pinia) return
+        for (const s of stores) {
+          const store = options.pinia._s.get(s.id)
+          store?.$patch?.(s.state)
+        }
+      },
+      highlightComponent,
+    )
   }
 
   // ⑥ 远程查看桥（移动端/真机：事件流上行 WS → 电脑端 panel.html 下行）
@@ -223,7 +240,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     traceBus: bus,
     destroy() {
       storeTracer?.dispose()
-      offComponent()
+      componentTrace.dispose()
       offNav()
       remoteBridge?.close()
       offHmr?.()

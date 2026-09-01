@@ -31,8 +31,10 @@ export interface DevtoolsPanelOptions {
   source: DevtoolsSource
   /** 时间旅行命令下发（缺省 no-op——业务侧适配器接入后生效） */
   onTimeTravel?: (index: number) => void
-  /** ★P0：状态应用（时间旅行回放 / 导入快照恢复共用）——panel 把 restore 快照交给 caller（install → pinia.$patch）；缺省仅面板内回放 */
+  /** ★P1：状态应用（时间旅行回放 / 导入快照恢复共用）——panel 把 restore 快照交给 caller（install → pinia.$patch）；缺省仅面板内回放 */
   onApplyState?: (stores: StoreRestoreEntry[]) => void
+  /** ★P1：组件视图选中 → 页面元素高亮（install 侧 scrollIntoView + 描边闪烁） */
+  onSelectComponent?: (id: number) => void
   /** M9 插件：第三方自定义视图/事件订阅/命令（激活拓扑序，循环依赖报错，崩溃隔离） */
   plugins?: DevToolsPlugin[]
   /** 插件持久化存储（缺省内存 KV） */
@@ -203,8 +205,10 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   const storeSteps: Array<{ index: number; storeId: string; type: 'patch' | 'action'; name: string; payload: unknown; timestamp: number }> = []
   let stepSeq = 0
   let selectedStore = ''
-  /** Components 聚合：component.mount/unmount 事件 → 组件树节点（id → 节点） */
+  /** Components 聚合：component.mount/unmount 事件 → 组件树节点（id → 节点，含 props/state 快照） */
   const componentNodes = new Map<number, ComponentNodeData>()
+  /** ★P1：选中组件 id（0 = 未选中；详情面板 + 页面高亮） */
+  let selectedComponent = 0
 
   function handleEvent(e: TraceEvent): void {
     timeline.ingest(e)
@@ -298,6 +302,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
             parentId: p.parentId,
             ts: e.timestamp,
             count: (existing?.count ?? 0) + 1,
+            // ★P1：mount 时刻 props/state 快照（序列化后 JSON-safe；详情面板展示）
+            props: (p as { props?: unknown }).props,
+            state: (p as { state?: unknown }).state,
           })
         }
       }
@@ -441,7 +448,22 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       },
     )
     // Components / Pages / Graph 视图
-    renderComponents(containers.get('components') as HTMLElement, { nodes: Array.from(componentNodes.values()) })
+    renderComponents(
+      containers.get('components') as HTMLElement,
+      { nodes: Array.from(componentNodes.values()), selectedId: selectedComponent || undefined },
+      {
+        // ★P1：点击选中（同 id 再点取消选中）；首次选中 → 页面元素高亮回调
+        onSelect: (id) => {
+          if (selectedComponent === id) {
+            selectedComponent = 0
+          } else {
+            selectedComponent = id
+            options.onSelectComponent?.(id)
+          }
+          scheduleRender()
+        },
+      },
+    )
     renderPages(containers.get('pages') as HTMLElement, resolvePagesData())
     renderGraph(containers.get('graph') as HTMLElement, { routes: resolvePagesData().routes })
     // M9 插件视图渲染（崩溃 → 占位提示；render 抛错 → 当场标记崩溃，核心不崩）

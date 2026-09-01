@@ -325,6 +325,38 @@ body.pd-body {
   background: var(--pd-bg-hover);
 }
 
+/* ★P1：选中组件行（高亮 + 详情面板触发） */
+.pd-cmp-active {
+  background: var(--pd-bg-hover);
+  outline: 1px solid var(--pd-accent);
+}
+
+/* ★P1：组件详情面板（props/state inspector 树） */
+.pd-cmp-detail {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-top: 1px dashed var(--pd-border-soft);
+}
+
+.pd-cmp-detail-section {
+  margin-top: 6px;
+}
+
+.pd-cmp-detail-label {
+  font-size: 10px;
+  color: var(--pd-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+/* ★P1：页面元素高亮（install 侧选中组件 → 描边闪烁） */
+.pd-cmp-highlight {
+  outline: 3px solid var(--pd-accent) !important;
+  outline-offset: 2px;
+  transition: outline-color 0.3s ease;
+}
+
 .pd-cmp-name {
   flex: 1;
   overflow: hidden;
