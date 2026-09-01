@@ -48,6 +48,8 @@ export default defineConfig({
       { find: '@proteus-vue/test-core', replacement: fileURLToPath(new URL('./packages/test-core/src/index.ts', import.meta.url)) },
       // devtools-plan B1：@proteus-vue/devtools-runtime 包（tests/devtools-runtime.test.ts 直接引用）
       { find: '@proteus-vue/devtools-runtime', replacement: fileURLToPath(new URL('./packages/devtools-runtime/src/index.ts', import.meta.url)) },
+      // devtools-plus G-34 M1：@proteus-vue/hmr 包（tests/hmr.test.ts 直接引用）
+      { find: '@proteus-vue/hmr', replacement: fileURLToPath(new URL('./packages/hmr/src/index.ts', import.meta.url)) },
       // security-plan B1-B2：@proteus-vue/security 包（tests/security.test.ts 直接引用）
       { find: '@proteus-vue/security', replacement: fileURLToPath(new URL('./packages/security/src/index.ts', import.meta.url)) },
       // types-plan B3：@proteus-vue/types 包（tests/generate-types.test.ts 直接引用）
