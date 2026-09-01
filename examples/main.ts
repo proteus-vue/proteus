@@ -14,11 +14,16 @@ import '@proteus-vue/built-in-components/style.css'
 import { installProteusDevtools } from '@proteus-vue/devtools'
 import '@proteus-vue/devtools/style.css'
 import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
-// ★vue-devtools-plan：App Config Inspector 数据源（config-demo 页面 init 后生效；未 init 时安全降级）
-import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
+// ★vue-devtools-plan：App Config Inspector 数据源（启动即初始化——config-demo 页面 init 幂等覆盖 defaults 不破坏已合并层）
+import { initAppConfig, getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
+import appConfig from './app.config'
 // ★G-31 style-safety：运行时守卫（业务侧动态 :style 用 guard.patch 包裹 → Inspector 实时拦截记录）
-import { createStyleGuard } from '@proteus-vue/style-safety'
+// ★共享实例（examples/style-guard.ts）：页面 guard.patch 记录进同一 guard.records() → devtools Inspector 数据源
+import { styleGuard } from './style-guard'
 import { routes } from './router/auto-routes'
+
+// ★app-config 启动即初始化（App Config Inspector 启动即有数据；config-demo 页面重复 init = 覆盖 defaults 安全）
+initAppConfig(appConfig)
 
 // ★devtools：发射端同源——router/api/capability 共用 getProteusTraceBus 惰性单例
 // ★enabled 在业务源码层控制：import.meta.env.DEV（vite 可靠注入：dev→true/build→false）|| __PROTEUS_DEBUG__（build 期 define 替换，PROTEUS_DEBUG=1 强制生产调试）
@@ -27,8 +32,7 @@ import { routes } from './router/auto-routes'
 const traceBus = getProteusTraceBus()
 if (import.meta.env.DEV || __PROTEUS_DEBUG__) traceBus.setEnabled(true)
 
-// ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销
-const styleGuard = createStyleGuard({ mode: 'loose' })
+// ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销（共享实例见 ./style-guard）
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 // ★devtools 打通：请求事件 → traceBus（面板 timeline/network 插件；bus 门控生产零开销）

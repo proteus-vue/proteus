@@ -12,6 +12,8 @@ import { getDeviceInfo } from '@proteus-vue/api'
 // ★app-config G-35 + 决策 #211：应用级运行时配置（与 proteus.config 职责正交——构建期 vs 运行时）
 import { initAppConfig, useAppConfig, useFeatureFlag, setConfig } from '@proteus-vue/app-config'
 import appConfig from '../app.config'
+// ★G-31 style-safety 演示：共享 guard.patch 包动态样式（main.ts 同一实例 → Vue DevTools Style Safety Inspector 记录）
+import { styleGuard } from '../style-guard'
 
 // ★应用配置初始化：模块级单例，重复调用 = 覆盖默认 + 保留已合并层。
 //   生产建议在启动期初始化一次（Web main.ts / MP 经共享模块）；此处页面级演示（config-demo 自包含）
@@ -49,6 +51,10 @@ function showDevice() {
   const info = getDeviceInfo()
   device.value = { platform: info.platform, screenWidth: info.screenWidth, screenHeight: info.screenHeight, isSkyline: info.isSkyline }
 }
+
+// ★G-31 style-safety 演示：guard.patch 逐属性校验——display 是 forbidden 属性（CSS 矩阵 ❌ 级）→ 拦截剔除 + 记录；
+//   color 合法保留。Vue DevTools Style Safety Inspector 实时看到 rejected 记录（value: flex, reason: 禁止）
+const guardStyle = styleGuard.patch({ display: 'flex', color: '#1a7af8' })
 </script>
 
 <template>
@@ -59,6 +65,9 @@ function showDevice() {
     <!-- customTags 演示：config 里 customTags: { 'demo-box': 'view' } 已启用，
          此标签编译为 <view class="demo-box">；删除 config 中该键即回到"未注册标签原样输出" -->
     <demo-box class="demo-box">customTags：'demo-box' → view（config 启用）</demo-box>
+
+    <!-- ★G-31 style-safety 演示：guard.patch 包动态样式——display:flex 被 forbidden 拦截（Vue DevTools Style Safety Inspector 出记录） -->
+    <div class="guard-demo" :style="guardStyle">style-safety：display:flex 被拦截（color 保留）</div>
 
     <button @click="bump">计数：{{ clicked }}</button>
 
