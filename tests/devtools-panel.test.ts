@@ -80,6 +80,32 @@ describe('视图渲染函数', () => {
     expect((blocks[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
+  it('renderFlamegraph 对比模式：±10% 高亮（regression 红 / improvement 绿）+ 汇总列表 + 浮层 delta', () => {
+    const root = document.createElement('div')
+    renderFlamegraph(root, {
+      nodes: [
+        { id: '1', source: 'lifecycle', name: 'boot', startMs: 0, durationMs: 100, selfMs: 30, children: [], depth: 0 },
+        { id: '2', source: 'api', name: 'req', startMs: 10, durationMs: 40, selfMs: 40, children: [], depth: 1 },
+      ],
+      compare: [
+        { source: 'api', name: 'req', aMs: 20, bMs: 40, deltaPct: 100, verdict: 'regression' },
+        { source: 'lifecycle', name: 'boot', aMs: 60, bMs: 30, deltaPct: -50, verdict: 'improvement' },
+      ],
+    })
+    const reg = root.querySelector('.pd-fg-reg') as HTMLElement
+    const imp = root.querySelector('.pd-fg-imp') as HTMLElement
+    expect(reg).not.toBeNull()
+    expect(reg.textContent).toContain('req')
+    expect(imp).not.toBeNull()
+    expect(imp.textContent).toContain('boot')
+    // 汇总列表：标题含计数 + 行内 delta
+    const cmp = root.querySelector('.pd-cmp') as HTMLElement
+    expect(cmp).not.toBeNull()
+    expect(cmp.querySelector('.pd-cmp-head')?.textContent).toContain('1 处回归')
+    expect(cmp.querySelectorAll('.pd-cmp-row').length).toBe(2)
+    expect(cmp.querySelector('.pd-cmp-regression .pd-cmp-delta')?.textContent).toContain('+100%')
+  })
+
   it('renderState：store 列表 + inspector key-value 树 + 类型着色 + 滑块（steps > 0 时出现）', () => {
     const root = document.createElement('div')
     const onTimeTravel = vi.fn()
@@ -225,6 +251,30 @@ describe('面板装配', () => {
         resolve()
       }, 30)
     })
+  })
+
+  it('火焰图对比模式：两次录制 → 汇总列表 + 回归高亮块（变慢节点标红）', () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    const recBtn = root.querySelector('.pd-fg-controls .pd-btn') as HTMLButtonElement
+    const flameView = root.querySelector('.pd-view[data-view="flamegraph"]') as HTMLElement
+    // 第一次录制：refreshToken 200ms
+    recBtn.click() // 开始
+    source.push(ev('api', 'start', 'refreshToken', 1000))
+    source.push(ev('api', 'end', 'refreshToken', 1200))
+    recBtn.click() // 停止 → baseline
+    // 第二次录制：refreshToken 400ms（变慢 → regression）
+    recBtn.click() // 开始
+    source.push(ev('api', 'start', 'refreshToken', 2000))
+    source.push(ev('api', 'end', 'refreshToken', 2400))
+    recBtn.click() // 停止 → compare vs baseline
+    panel.show('flamegraph')
+    expect(flameView.querySelector('.pd-cmp-head')?.textContent).toContain('1 处回归')
+    const reg = flameView.querySelector('.pd-fg-reg') as HTMLElement
+    expect(reg).not.toBeNull()
+    expect(reg.textContent).toContain('refreshToken')
+    panel.destroy()
   })
 })
 

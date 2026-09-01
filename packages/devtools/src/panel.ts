@@ -8,7 +8,7 @@ import {
   createFlamegraphCollector,
   createErrorDiagnoser,
 } from '@proteus-vue/devtools-runtime'
-import type { TraceEvent, NavRecord } from '@proteus-vue/devtools-runtime'
+import type { TraceEvent, NavRecord, FlameNode, FlameCompareEntry } from '@proteus-vue/devtools-runtime'
 import type { DevtoolsSource } from './source'
 import { renderTimeline } from './views/timeline'
 import { createTimelineZoom } from './views/timeline-interaction'
@@ -189,9 +189,40 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     }
   }
 
+  // 火焰图录制控制（工具按钮）+ 对比模式：上次完成录制为 baseline，再次停止时 diff（±10% 高亮）
+  // ★声明在 rerender 前：rerender 渲染后重挂按钮（renderFlamegraph replaceChildren 会清空容器）
+  const fgControls = document.createElement('div')
+  fgControls.className = 'pd-fg-controls'
+  const recBtn = document.createElement('button')
+  recBtn.className = 'pd-btn'
+  recBtn.textContent = '开始录制'
+  /** 上次完成录制（对比基线）；再次停止 → flame.compare(baseline) */
+  let baseline: FlameNode[] | null = null
+  let compareEntries: FlameCompareEntry[] = []
+  recBtn.addEventListener('click', () => {
+    if (flame.recording) {
+      flame.stop()
+      recBtn.textContent = '开始录制'
+      // 对比模式：有基线 → 本次 vs 上次；当前树成为新基线（支持连续多次录制两两对比）
+      // ★baseline 存 roots()（嵌套树）而非 nodes() 扁平列表——compare 递归遍历，扁平会重复计数 children
+      if (baseline) compareEntries = flame.compare(baseline)
+      else compareEntries = []
+      baseline = flame.roots()
+    } else {
+      compareEntries = []
+      flame.start()
+      recBtn.textContent = '停止录制'
+    }
+    rerender()
+  })
+  fgControls.appendChild(recBtn)
+
   function rerender(): void {
     renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined })
-    renderFlamegraph(containers.get('flamegraph') as HTMLElement, { nodes: flame.nodes() })
+    renderFlamegraph(containers.get('flamegraph') as HTMLElement, { nodes: flame.nodes(), compare: compareEntries.length ? compareEntries : undefined })
+    // ★录制按钮常驻：渲染后重挂到容器最前
+    const flameContainer = containers.get('flamegraph') as HTMLElement
+    flameContainer.insertBefore(fgControls, flameContainer.firstChild)
     renderErrors(containers.get('errors') as HTMLElement, { reports: errors.diagnose() })
     renderRoute(containers.get('route') as HTMLElement, { records: navs })
     renderState(
@@ -225,23 +256,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     }
   })
 
-  // 火焰图录制控制（工具按钮）
-  const fgControls = document.createElement('div')
-  fgControls.className = 'pd-fg-controls'
-  const recBtn = document.createElement('button')
-  recBtn.className = 'pd-btn'
-  recBtn.textContent = '开始录制'
-  recBtn.addEventListener('click', () => {
-    if (flame.recording) {
-      flame.stop()
-      recBtn.textContent = '开始录制'
-    } else {
-      flame.start()
-      recBtn.textContent = '停止录制'
-    }
-    rerender()
-  })
-  fgControls.appendChild(recBtn)
+  // 挂载录制按钮（初始：flamegraph 容器最前）
   ;(containers.get('flamegraph') as HTMLElement).insertBefore(fgControls, (containers.get('flamegraph') as HTMLElement).firstChild)
 
   show('timeline')

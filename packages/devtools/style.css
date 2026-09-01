@@ -280,6 +280,59 @@ body.pd-body {
   border-color: #555;
 }
 
+/* 对比模式：±10% 高亮（regression 红 / improvement 绿） */
+.pd-fg-reg {
+  background: #7b241c;
+  border-color: #e74c3c;
+}
+
+.pd-fg-imp {
+  background: #1e5128;
+  border-color: #27ae60;
+}
+
+.pd-cmp {
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: var(--pd-bg-panel);
+}
+
+.pd-cmp-head {
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  margin-bottom: 4px;
+}
+
+.pd-cmp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+.pd-cmp-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-cmp-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pd-cmp-delta {
+  flex-shrink: 0;
+}
+
+.pd-cmp-regression .pd-cmp-delta { color: var(--pd-red); }
+.pd-cmp-improvement .pd-cmp-delta { color: var(--pd-green); }
+
 /* ── State 视图（key-value inspector 树） ─────────────────── */
 .pd-store {
   margin-bottom: 8px;

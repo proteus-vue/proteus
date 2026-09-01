@@ -11,8 +11,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-/** 等待条件成立（真实 fs.watch / WS 事件均为异步） */
-async function waitFor(fn: () => boolean, timeoutMs = 5000): Promise<void> {
+/** 等待条件成立（真实 fs.watch / WS 事件均为异步；★并行负载下 FSEvents 可能延迟 → 15s 余量） */
+async function waitFor(fn: () => boolean, timeoutMs = 15000): Promise<void> {
   const t0 = Date.now()
   while (!fn()) {
     if (Date.now() - t0 > timeoutMs) throw new Error('waitFor 超时')
