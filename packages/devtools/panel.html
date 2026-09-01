@@ -3,57 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proteus DevTools 面板</title>
-  <style>
-    /* Proteus DevTools 面板基础样式（devtools-plan UI 层） */
-    body { font: 13px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #1e1e1e; color: #d4d4d4; }
-    .pd-panel { max-width: 1200px; margin: 0 auto; padding: 12px; }
-    .pd-tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid #333; }
-    .pd-tab { background: none; border: none; color: #999; padding: 6px 14px; cursor: pointer; font-size: 13px; text-transform: capitalize; }
-    .pd-tab:hover { color: #eee; }
-    .pd-tab-active { color: #4fc3f7; border-bottom: 2px solid #4fc3f7; }
-    .pd-empty { color: #777; padding: 24px; text-align: center; }
-    .pd-lane { display: flex; margin: 2px 0; }
-    .pd-lane-label { width: 100px; flex-shrink: 0; color: #4fc3f7; text-align: right; padding-right: 8px; overflow: hidden; white-space: nowrap; }
-    .pd-lane-track { position: relative; flex: 1; height: 22px; background: #262626; border-radius: 2px; }
-    .pd-span { position: absolute; top: 2px; height: 18px; background: #2e7d32; border-radius: 2px; overflow: hidden; white-space: nowrap; }
-    .pd-span-pending { background: #f9a825; }
-    .pd-span-dot { background: #5c6bc0; }
-    .pd-fg-board { position: relative; background: #222; }
-    .pd-fg-node { position: absolute; background: #1565c0; border-radius: 2px; overflow: hidden; white-space: nowrap; font-size: 11px; }
-    .pd-fg-zero { background: #4a4a4a; }
-    .pd-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-    .pd-btn { background: #2d2d2d; border: 1px solid #444; color: #ccc; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
-    .pd-btn:hover { border-color: #4fc3f7; }
-    .pd-step-info { color: #888; }
-    .pd-slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-    .pd-range { flex: 1; }
-    .pd-slider-hint { color: #888; width: 80px; }
-    .pd-store summary { color: #4fc3f7; cursor: pointer; padding: 2px 0; }
-    .pd-json { background: #111; padding: 6px; border-radius: 3px; overflow: auto; max-height: 200px; font-size: 11px; }
-    .pd-nav { border: 1px solid #333; border-radius: 4px; padding: 6px 8px; margin: 4px 0; }
-    .pd-nav-path { display: flex; align-items: center; gap: 6px; }
-    .pd-route { color: #ce93d8; }
-    .pd-arrow { color: #666; }
-    .pd-nav-meta { color: #888; margin-left: auto; }
-    .pd-guards { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
-    .pd-guard { font-size: 11px; padding: 1px 6px; border-radius: 8px; }
-    .pd-guard-next { background: #1b5e20; color: #a5d6a7; }
-    .pd-guard-redirect { background: #e65100; color: #ffcc80; }
-    .pd-guard-cancel, .pd-guard-error { background: #b71c1c; color: #ffcdd2; }
-    .pd-error-card { border: 1px solid #444; border-left: 3px solid #e53935; border-radius: 4px; padding: 8px; margin: 6px 0; }
-    .pd-error-title { font-weight: 600; }
-    .pd-error-attr { color: #ffb74d; margin-top: 2px; }
-    .pd-error-chain { display: flex; flex-direction: column; align-items: flex-start; margin: 6px 0; }
-    .pd-chain-node { color: #aaa; padding: 2px 8px; }
-    .pd-chain-root { color: #ff8a80; font-weight: 600; }
-    .pd-chain-up { color: #666; font-size: 10px; padding-left: 10px; }
-    .pd-error-impact { display: flex; gap: 4px; margin: 4px 0; }
-    .pd-chip { background: #263238; color: #80cbc4; border-radius: 8px; padding: 1px 8px; font-size: 11px; }
-    .pd-repro { margin: 4px 0 0; color: #b0bec5; }
-  </style>
+  <title>Proteus DevTools</title>
+  <!-- Vue DevTools 质感主题（style.css；file:// 双击可直接打开——普通样式表无 CORS 限制） -->
+  <link rel="stylesheet" href="./style.css" />
 </head>
-<body>
+<body class="pd-body">
   <div id="proteus-devtools"></div>
   <!-- ★IIFE bundle：file:// 双击可直接打开（module 脚本在 file:// 下被浏览器 CORS 拦截 → 黑屏） -->
   <script src="./dist/panel.js"></script>

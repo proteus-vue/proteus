@@ -74,21 +74,43 @@ describe('视图渲染函数', () => {
     expect(blocks[0].textContent).toContain('30ms')
   })
 
-  it('renderState：store 列表 + JSON 预览 + 滑块（steps > 0 时出现）', () => {
+  it('renderState：store 列表 + inspector key-value 树 + 类型着色 + 滑块（steps > 0 时出现）', () => {
     const root = document.createElement('div')
     const onTimeTravel = vi.fn()
     renderState(
       root,
-      { snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2 } }] }, steps: [{ index: 0, storeId: 'cart', type: 'patch', payload: {}, timestamp: 1, before: {}, after: {} }] },
+      { snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2, label: 'x', ok: true } }] }, steps: [{ index: 0, storeId: 'cart', type: 'patch', payload: {}, timestamp: 1, before: {}, after: {} }] },
       { onTimeTravel },
     )
     expect(root.querySelector('.pd-store summary')?.textContent).toBe('cart')
-    expect(root.querySelector('.pd-json')?.textContent).toContain('items')
+    // key-value 树：键 + 类型着色值
+    const kvs = root.querySelectorAll('.pd-kv')
+    expect(kvs.length).toBe(4) // (root) + items + label + ok
+    expect(root.querySelector('.pd-kv-key')?.textContent).toBe('(root)')
+    const itemsRow = Array.from(kvs).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'items')
+    expect(itemsRow?.querySelector('.pd-kv-value')?.classList.contains('pd-t-number')).toBe(true)
+    const okRow = Array.from(kvs).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'ok')
+    expect(okRow?.querySelector('.pd-kv-value')?.classList.contains('pd-t-boolean')).toBe(true)
     const range = root.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
     range.value = '0'
     range.dispatchEvent(new Event('input'))
     expect(onTimeTravel).toHaveBeenCalledWith(0)
+  })
+
+  it('renderState：嵌套对象可折叠（点击展开子键）', () => {
+    const root = document.createElement('div')
+    renderState(root, {
+      snapshot: { version: 1, takenAt: 1, stores: [{ id: 'user', state: { profile: { name: 'p', age: 3 } } }] },
+      steps: [],
+    })
+    const profileRow = Array.from(root.querySelectorAll('.pd-kv')).find((r) => r.querySelector('.pd-kv-key')?.textContent === 'profile')
+    expect(profileRow?.querySelector('.pd-kv-value')?.textContent).toContain('Object')
+    // 展开前子键不可见
+    expect(Array.from(root.querySelectorAll('.pd-kv-key')).some((k) => k.textContent === 'name')).toBe(false)
+    profileRow?.dispatchEvent(new Event('click'))
+    expect(Array.from(root.querySelectorAll('.pd-kv-key')).some((k) => k.textContent === 'name')).toBe(true)
+    expect(Array.from(root.querySelectorAll('.pd-kv-key')).some((k) => k.textContent === 'age')).toBe(true)
   })
 
   it('renderRoute：导航链 + 守卫徽章（next/redirect 类名）+ 耗时', () => {
@@ -146,23 +168,27 @@ describe('视图渲染函数', () => {
 })
 
 describe('面板装配', () => {
-  it('事件流 → 时间轴视图更新 + tab 切换 + destroy 清理', () => {
+  it('事件流 → 时间轴视图更新 + 侧栏导航切换 + 连接状态 + destroy 清理', () => {
     const root = document.createElement('div')
     const source = mockSource()
     const panel = createDevtoolsPanel(root, { source })
-    expect(root.querySelectorAll('.pd-tab').length).toBe(5)
+    expect(root.querySelectorAll('.pd-nav-item').length).toBe(5)
+    expect(root.querySelector('.pd-header-status')?.textContent).toContain('连接中')
     // 推事件（渲染 16ms 节流）
     source.push(ev('lifecycle', 'start', 'boot', 100))
     source.push(ev('lifecycle', 'end', 'boot', 200))
     return new Promise<void>((resolve) => {
       setTimeout(() => {
+        // 已连接状态（收到事件）
+        expect(root.querySelector('.pd-header-status')?.textContent).toContain('已连接')
+        expect(root.querySelector('.pd-dot')?.classList.contains('pd-dot-on')).toBe(true)
         // 默认 timeline 视图可见
         const timelineView = root.querySelector('.pd-view[data-view="timeline"]') as HTMLElement
-        expect(timelineView.style.display).toBe('block')
+        expect(timelineView.classList.contains('pd-view-active')).toBe(true)
         expect(timelineView.querySelectorAll('.pd-span').length).toBe(1)
         // 切到 errors
         panel.show('errors')
-        expect((root.querySelector('.pd-view[data-view="errors"]') as HTMLElement).style.display).toBe('block')
+        expect((root.querySelector('.pd-view[data-view="errors"]') as HTMLElement).classList.contains('pd-view-active')).toBe(true)
         // 推 error → 根因卡片
         source.push(ev('api', 'error', 'refreshToken', 300, 't1', { status: 401 }))
         setTimeout(() => {

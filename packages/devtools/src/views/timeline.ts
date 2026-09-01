@@ -27,6 +27,18 @@ export function renderTimeline(container: HTMLElement, data: TimelineViewData): 
     if (end > winEnd) winEnd = end
   }
   const total = Math.max(1, winEnd - winStart)
+
+  // ★时间刻度尺（Vue DevTools Timeline 风格）：0/25/50/75/100%
+  const ruler = document.createElement('div')
+  ruler.className = 'pd-ruler'
+  for (let i = 0; i <= 4; i++) {
+    const mark = document.createElement('span')
+    mark.style.width = '25%'
+    mark.textContent = Math.round(winStart + (total * i) / 4) + 'ms'
+    ruler.appendChild(mark)
+  }
+  container.appendChild(ruler)
+
   // 泳道：按 source 分组
   const lanes = new Map<string, TimelineSpan[]>()
   for (const s of spans) {

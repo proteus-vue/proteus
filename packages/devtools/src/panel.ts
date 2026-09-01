@@ -30,40 +30,75 @@ export interface DevtoolsPanel {
 
 const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors'] as const
 
+const VIEW_ICONS: Record<string, string> = {
+  timeline: '⊞',
+  flamegraph: '▤',
+  state: '☰',
+  route: '⇄',
+  errors: '✕',
+}
+
 export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOptions): DevtoolsPanel {
   const { source, onTimeTravel } = options
 
-  // 布局骨架
+  // ★布局骨架（Vue DevTools 质感）：顶栏 + 侧栏导航 + 内容区
   root.classList.add('pd-panel')
   root.replaceChildren()
-  const tabs = document.createElement('div')
-  tabs.className = 'pd-tabs'
+
+  const header = document.createElement('div')
+  header.className = 'pd-header'
+  const title = document.createElement('div')
+  title.className = 'pd-header-title'
+  title.textContent = 'Proteus DevTools'
+  header.appendChild(title)
+  const status = document.createElement('div')
+  status.className = 'pd-header-status'
+  const dot = document.createElement('span')
+  dot.className = 'pd-dot'
+  const statusText = document.createElement('span')
+  statusText.textContent = '连接中'
+  status.appendChild(dot)
+  status.appendChild(statusText)
+  header.appendChild(status)
+  root.appendChild(header)
+
+  const bodyRow = document.createElement('div')
+  bodyRow.className = 'pd-body-row'
+  const sidebar = document.createElement('div')
+  sidebar.className = 'pd-sidebar'
+  const content = document.createElement('div')
+  content.className = 'pd-content'
+  bodyRow.appendChild(sidebar)
+  bodyRow.appendChild(content)
+  root.appendChild(bodyRow)
+
   const views = new Map<string, HTMLElement>()
   const containers = new Map<string, HTMLElement>()
   for (const v of VIEWS) {
-    const tab = document.createElement('button')
-    tab.className = 'pd-tab'
-    tab.dataset.view = v
-    tab.textContent = v
-    tabs.appendChild(tab)
+    const item = document.createElement('div')
+    item.className = 'pd-nav-item'
+    item.dataset.view = v
+    const icon = document.createElement('span')
+    icon.className = 'pd-nav-icon'
+    icon.textContent = VIEW_ICONS[v]
+    const label = document.createElement('span')
+    label.textContent = v
+    item.appendChild(icon)
+    item.appendChild(label)
+    sidebar.appendChild(item)
     const container = document.createElement('div')
     container.className = 'pd-view'
     container.dataset.view = v
-    container.style.display = 'none'
     views.set(v, container)
     containers.set(v, container)
-    root.appendChild(container)
+    content.appendChild(container)
   }
-  root.insertBefore(tabs, root.firstChild)
   function show(view: string): void {
-    for (const [k, el] of views) el.style.display = k === view ? 'block' : 'none'
-    for (const tab of Array.from(tabs.children)) {
-      const t = tab as HTMLElement
-      t.classList.toggle('pd-tab-active', t.dataset.view === view)
-    }
+    for (const [k, el] of views) el.classList.toggle('pd-view-active', k === view)
+    for (const el of Array.from(sidebar.children)) el.classList.toggle('pd-nav-active', (el as HTMLElement).dataset.view === view)
   }
-  tabs.addEventListener('click', (e) => {
-    const t = (e.target as HTMLElement).closest('.pd-tab') as HTMLElement | null
+  sidebar.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest('.pd-nav-item') as HTMLElement | null
     if (t?.dataset.view) show(t.dataset.view)
   })
 
@@ -84,8 +119,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     flame.ingest(e)
     errors.ingest(e)
     // Route 适配
-    if (e.source === 'router' && /nav/i.test(e.name)) {
-      if (e.phase === 'start') {
+    if (e.source === 'router') {
+      if (e.phase === 'start' && /nav/i.test(e.name)) {
         const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string } }
         const id = e.traceId ?? e.name + '-' + e.timestamp
         inflightNav.set(id, {
@@ -99,7 +134,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
             timestamp: e.timestamp,
           },
         })
-      } else if (e.phase === 'end') {
+      } else if (e.phase === 'end' && /nav/i.test(e.name)) {
         const id = e.traceId ?? e.name + '-' + e.timestamp
         const nav = inflightNav.get(id)
         if (nav) {
@@ -107,6 +142,23 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
           navs.push(nav.record)
           inflightNav.delete(id)
           if (navs.length > 500) navs.shift()
+        }
+      } else if (/guard/i.test(e.name)) {
+        // ★守卫事件（point/error）→ 附加到最近开始的进行中导航（守卫徽章）
+        let target: { record: NavRecord } | null = null
+        let targetTs = -Infinity
+        for (const nav of inflightNav.values()) {
+          if (nav.record.timestamp > targetTs) {
+            target = nav
+            targetTs = nav.record.timestamp
+          }
+        }
+        if (target) {
+          let result: 'next' | 'redirect' | 'cancel' | 'error' = 'next'
+          if (/redirect/i.test(e.name)) result = 'redirect'
+          else if (/cancel/i.test(e.name)) result = 'cancel'
+          else if (/error/i.test(e.name)) result = 'error'
+          target.record.guards.push({ name: e.name, durationMs: 0, result })
         }
       }
     }
@@ -149,9 +201,16 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       rerender()
     }, 16)
   }
+  let statusConnected = false
   const off = source.onEvent((e: TraceEvent) => {
     handleEvent(e)
     scheduleRender()
+    // ★连接状态：收到首个事件 → 已连接
+    if (!statusConnected) {
+      statusConnected = true
+      dot.classList.add('pd-dot-on')
+      statusText.textContent = '已连接'
+    }
   })
 
   // 火焰图录制控制（工具按钮）
