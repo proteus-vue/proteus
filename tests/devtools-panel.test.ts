@@ -79,19 +79,61 @@ describe('视图渲染函数', () => {
     expect((spans[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
-  it('renderFlamegraph：按 depth 分行堆叠 + 宽度 ∝ 耗时 + selfMs 标注', () => {
+  it('renderFlamegraph：★嵌套堆叠（子块画在父块内相对定位）+ source 配色 + selfMs 标注', () => {
     const root = document.createElement('div')
     renderFlamegraph(root, {
       nodes: [
-        { id: '1', source: 'lifecycle', name: 'boot', startMs: 0, durationMs: 100, selfMs: 30, children: [], depth: 0 },
-        { id: '2', source: 'api', name: 'req', startMs: 10, durationMs: 40, selfMs: 40, children: [], depth: 1 },
+        {
+          id: '1', source: 'lifecycle', name: 'boot', startMs: 0, durationMs: 100, selfMs: 30, depth: 0,
+          children: [{ id: '2', source: 'api', name: 'req', startMs: 10, durationMs: 40, selfMs: 40, depth: 1, children: [] }],
+        },
       ],
     })
     const blocks = root.querySelectorAll('.pd-fg-node')
     expect(blocks.length).toBe(2)
-    expect((blocks[1] as HTMLElement).style.top).toBe('22px') // depth 1 第二行
+    // 根：占满窗口（0-100ms）
+    expect((blocks[0] as HTMLElement).style.left).toBe('0.00%')
+    expect((blocks[0] as HTMLElement).style.width).toBe('100.00%')
+    // ★子块相对父定位（left 10/100=10%、宽 40/100=40%）→ 经典火焰图嵌套堆叠；子容器存在（下一行）
+    expect((blocks[1] as HTMLElement).style.left).toBe('10.00%')
+    expect((blocks[1] as HTMLElement).style.width).toBe('40.00%')
+    expect(root.querySelector('.pd-fg-children')).not.toBeNull()
     expect(blocks[0].textContent).toContain('30ms')
     expect((blocks[0] as HTMLElement).dataset.tip).toBeDefined()
+  })
+
+  it('renderFlamegraph：★点击块 → onFocus（聚焦缩放）；focus 子树渲染 + 面包屑 + 返回上级', () => {
+    const tree = {
+      id: '1', source: 'lifecycle', name: 'boot', startMs: 0, durationMs: 100, selfMs: 30, depth: 0,
+      children: [{ id: '2', source: 'api', name: 'req', startMs: 10, durationMs: 40, selfMs: 40, depth: 1, children: [] }],
+    }
+    const root = document.createElement('div')
+    const onFocus = vi.fn()
+    const onFocusUp = vi.fn()
+    renderFlamegraph(root, { nodes: [tree] }, { onFocus, onFocusUp })
+    // 点击子块 → onFocus(子 id)
+    const blocks = root.querySelectorAll('.pd-fg-node')
+    ;(blocks[1] as HTMLElement).click()
+    expect(onFocus).toHaveBeenCalledWith('2')
+    // 聚焦渲染：只渲染焦点子树 + 面包屑（祖先链）+ 返回上级
+    const root2 = document.createElement('div')
+    renderFlamegraph(
+      root2,
+      {
+        nodes: [tree],
+        focus: tree.children[0],
+        breadcrumb: [
+          { id: '1', name: 'lifecycle.boot' },
+          { id: '2', name: 'api.req' },
+        ],
+      },
+      { onFocus, onFocusUp },
+    )
+    expect(root2.querySelectorAll('.pd-fg-node').length).toBe(1) // 焦点子树只剩 req
+    const crumb = root2.querySelector('.pd-fg-crumb') as HTMLElement
+    expect(crumb.textContent).toContain('api.req')
+    ;(root2.querySelector('.pd-fg-up') as HTMLElement).click()
+    expect(onFocusUp).toHaveBeenCalled()
   })
 
   it('renderFlamegraph 对比模式：±10% 高亮（regression 红 / improvement 绿）+ 汇总列表 + 浮层 delta', () => {

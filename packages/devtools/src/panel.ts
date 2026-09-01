@@ -13,6 +13,7 @@ import type { DevtoolsSource } from './source'
 import { renderTimeline } from './views/timeline'
 import { createTimelineZoom } from './views/timeline-interaction'
 import { renderFlamegraph } from './views/flamegraph'
+import type { FlamegraphViewData } from './views/flamegraph'
 import { renderState } from './views/state'
 import { renderRoute } from './views/route'
 import { renderErrors } from './views/errors'
@@ -360,7 +361,26 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   /** 上次完成录制（对比基线）；再次停止 → flame.compare(baseline) */
   let baseline: FlameNode[] | null = null
   let compareEntries: FlameCompareEntry[] = []
+  /** ★火焰图聚焦（zoom）：点击块聚焦其子树 + 面包屑；新录制/返回上级重置 */
+  let flameFocus: FlameNode | null = null
+  let flamePath: FlameNode[] = []
+  /** 按 id 找火焰图节点 + 祖先链（roots 递归） */
+  function findFlameNode(id: string): { node: FlameNode; path: FlameNode[] } | null {
+    const path: FlameNode[] = []
+    const walk = (n: FlameNode): boolean => {
+      path.push(n)
+      if (n.id === id) return true
+      for (const c of n.children) if (walk(c)) return true
+      path.pop()
+      return false
+    }
+    for (const r of flame.roots()) if (walk(r)) return { node: path[path.length - 1] as FlameNode, path: path.slice() }
+    return null
+  }
   recBtn.addEventListener('click', () => {
+    // ★新录制：清空聚焦（节点 id 重建）
+    flameFocus = null
+    flamePath = []
     if (flame.recording) {
       flame.stop()
       recBtn.textContent = '开始录制'
@@ -454,8 +474,44 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   function rerender(): void {
     tlViewHeight = timelineView.clientHeight || 300
     renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined, virtual: { scrollTop: tlScrollTop, viewHeight: tlViewHeight } })
-    renderFlamegraph(containers.get('flamegraph') as HTMLElement, { nodes: flame.nodes(), compare: compareEntries.length ? compareEntries : undefined })
-    // ★录制按钮常驻：渲染后重挂到容器最前
+    // ★火焰图聚焦数据（焦点子树 + 面包屑）
+    function fgData(): FlamegraphViewData {
+      // ★渲染用 roots（嵌套树）——nodes() 扁平列表会重复渲染 children
+      const data: FlamegraphViewData = { nodes: flame.roots(), compare: compareEntries.length ? compareEntries : undefined }
+      if (flameFocus && flamePath.length) {
+        data.focus = flameFocus
+        data.breadcrumb = flamePath.map((n) => ({ id: n.id, name: n.source + '.' + n.name }))
+      }
+      return data
+    }
+    renderFlamegraph(containers.get('flamegraph') as HTMLElement, fgData(), {
+      // ★点击块 → 聚焦缩放（zoom 到该节点子树）
+      onFocus: (id) => {
+        const found = findFlameNode(id)
+        if (found) {
+          flameFocus = found.node
+          flamePath = found.path
+          scheduleRender()
+        }
+      },
+      // ★返回上级（面包屑上一级；根 → 退出聚焦）
+      onFocusUp: () => {
+        if (flamePath.length > 1) {
+          const parent = findFlameNode(flamePath[flamePath.length - 2].id)
+          if (parent) {
+            flameFocus = parent.node
+            flamePath = parent.path
+          } else {
+            flameFocus = null
+            flamePath = []
+          }
+        } else {
+          flameFocus = null
+          flamePath = []
+        }
+        scheduleRender()
+      },
+    })
     const flameContainer = containers.get('flamegraph') as HTMLElement
     flameContainer.insertBefore(fgControls, flameContainer.firstChild)
     renderErrors(containers.get('errors') as HTMLElement, { reports: errors.diagnose() })

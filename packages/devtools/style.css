@@ -286,6 +286,41 @@ body.pd-body {
   border-color: #555;
 }
 
+/* ★嵌套子容器（子块相对父块定位——经典火焰图堆叠） */
+.pd-fg-children {
+  position: absolute;
+}
+
+/* ★聚焦缩放：面包屑 + 返回上级 */
+.pd-fg-crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.pd-fg-crumb-item {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 3px;
+  color: var(--pd-text-dim);
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.pd-fg-crumb-item:hover {
+  border-color: var(--pd-accent);
+  color: var(--pd-accent);
+}
+
+.pd-fg-up {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 8px;
+}
+
 /* 对比模式：±10% 高亮（regression 红 / improvement 绿） */
 .pd-fg-reg {
   background: #7b241c;
