@@ -43,10 +43,34 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let appInfoCache: unknown
   let status: DevtoolsSourceStatus = 'connecting'
+  // ★命令确认跟踪：enable/appInfo 未收到响应 → 定时重发（面板先开、应用后连也能等到数据；CDP enable 语义）
+  let enableId: number | null = null
+  let appInfoId: number | null = null
+  let enableAcked = false
+  let retryTimer: ReturnType<typeof setInterval> | null = null
 
   function setStatus(s: DevtoolsSourceStatus): void {
     status = s
     for (const h of statusHandlers) h(s)
+  }
+
+  /** 发 enable + appInfo（onopen 及未确认重试时调用） */
+  function sendCommands(sock: { send(d: string): void }): void {
+    enableId = ++seq
+    enableAcked = false
+    sock.send(JSON.stringify({ id: enableId, method: 'Proteus.enable' }))
+    appInfoId = ++seq
+    // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
+    sock.send(JSON.stringify({ id: appInfoId, method: 'Proteus.appInfo' }))
+  }
+
+  function startRetry(): void {
+    if (retryTimer) return
+    retryTimer = setInterval(() => {
+      // ★enable 未确认（relay 里尚无 source 时命令被丢弃）→ 重发，直到应用连上响应
+      if (closed || !ws || ws.readyState !== WebSocket.OPEN || enableAcked) return
+      sendCommands(ws)
+    }, 2000)
   }
 
   function connect(): void {
@@ -60,9 +84,8 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     const sock = ws
     sock.onopen = () => {
       setStatus('connected')
-      sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.enable' }))
-      // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
-      sock.send(JSON.stringify({ id: ++seq, method: 'Proteus.appInfo' }))
+      sendCommands(sock)
+      startRetry()
     }
     sock.onmessage = (ev) => {
       let msg: { id?: number; method?: string; result?: unknown; params?: Record<string, unknown> }
@@ -72,8 +95,13 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
         return
       }
       if (!msg || typeof msg !== 'object') return
-      // appInfo 命令响应（含 id 且无 method）→ 缓存
-      if (msg.id !== undefined && msg.result !== undefined) {
+      // ★enable 响应（bridge 回放后回 result）→ 标记确认；不写 appInfoCache（避免覆盖真实路由表）
+      if (msg.id === enableId && msg.result !== undefined) {
+        enableAcked = true
+        return
+      }
+      // appInfo 命令响应 → 缓存
+      if (msg.id === appInfoId && msg.result !== undefined) {
         appInfoCache = msg.result
         return
       }
@@ -129,6 +157,10 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
         reconnectTimer = null
+      }
+      if (retryTimer) {
+        clearInterval(retryTimer)
+        retryTimer = null
       }
       ws?.close()
       ws = null

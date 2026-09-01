@@ -556,6 +556,46 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     expect(statuses).toEqual(['connecting', 'connected', 'closed'])
     source.close()
   })
+
+  it('★enable 未确认 → 定时重发（面板先开、应用后连也能等到数据）；确认后停止重发', () => {
+    vi.useFakeTimers()
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; readyState: number; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), readyState: 1, onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    sockets[0].onopen?.()
+    expect(sockets[0].send.mock.calls.length).toBe(2) // enable + appInfo
+    // 2s 后未确认 → 重发
+    vi.advanceTimersByTime(2000)
+    expect(sockets[0].send.mock.calls.length).toBe(4)
+    // 收到最新一次 enable 的响应（bridge 回显当前 enableId）→ 确认，停止重发
+    const latestEnableId = JSON.parse(String(sockets[0].send.mock.calls[2][0])).id
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: latestEnableId, result: {} }) })
+    vi.advanceTimersByTime(6000)
+    expect(sockets[0].send.mock.calls.length).toBe(4) // 不再重发
+    source.close()
+    vi.useRealTimers()
+  })
+
+  it('★enable 响应不污染 appInfo 缓存（id 区分：enable 只确认，appInfo 才写缓存）', () => {
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    sockets[0].onopen?.()
+    const enableId = JSON.parse(String(sockets[0].send.mock.calls[0][0])).id
+    const appInfoId = JSON.parse(String(sockets[0].send.mock.calls[1][0])).id
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: appInfoId, result: { routes: [{ name: 'index', path: 'pages/index' }] } }) })
+    expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
+    // enable 响应（result: {}）不得覆盖路由表
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: enableId, result: {} }) })
+    expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
+    source.close()
+  })
 })
 
 describe('Tooltip 浮层', () => {

@@ -27,7 +27,7 @@ function go(name: 'forms' | 'config-demo') {
     <div v-for="(item, idx) in items" :key="idx" class="item">{{ idx }}. {{ item }}</div>
     <button @click="handleTap">tap</button>
     <div class="links">
-      <a class="link" href="/pages/forms">表单与指令11111</a>
+      <a class="link" href="/pages/forms">表单与指令</a>
       <a class="link" href="/pages/config-demo">配置演示</a>
       <a class="link" href="/pages/components-demo">组件演示</a>
       <a class="link" href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
