@@ -27,6 +27,8 @@ import { renderDevice } from './views/device'
 import type { DeviceInfo, DeviceMemorySample } from './views/device'
 import { serializeStoreSnapshot, parseStoreSnapshot, findSensitiveKeys } from './snapshot-io'
 import type { StoreRestoreEntry, SensitiveKeyHit } from './snapshot-io'
+import { serializeSession, parseSession } from './session-io'
+import type { SessionBundle } from './session-io'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
 import { createPluginRegistry, createMemoryStorage, createCommandRegistry } from './plugins'
 import type { DevToolsPlugin, KVStorage, PluginContext } from './plugins'
@@ -51,12 +53,16 @@ export interface DevtoolsPanelOptions {
 
 export interface DevtoolsPanel {
   destroy(): void
-  /** 切换视图（'timeline' | 'flamegraph' | 'state' | 'route' | 'errors'） */
+  /** 切换视图（'timeline' | 'flamegraph' | 'state' | 'route' | 'errors' | 'components' | 'pages' | 'graph' | 'device'） */
   show(view: string): void
   /** ★P0：导出 store 快照 JSON（序列化 + Blob 下载，文件名 proteus-store-snapshot.json；返回序列化文本供程序化消费） */
   exportSnapshot(): string
   /** ★P0：导入 store 快照 JSON（解析校验 → 数据重建 → 视图刷新 → onApplyState 应用回应用） */
   importSnapshot(json: string): void
+  /** ★M11 可观测性（M8.2）：导出 SessionBundle（可重放事件日志 + 设备 + store 快照；Blob 下载 proteus-session.json；返回序列化文本） */
+  exportSession(): string
+  /** ★M11 可观测性（M8.2）：导入 SessionBundle（清空聚合 → 重放事件全视图重建 → onApplyState 应用最新状态） */
+  importSession(json: string): void
 }
 
 const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph', 'device'] as const
@@ -225,6 +231,14 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   /** ★当前时间旅行回放位置（null = 未回放/最新；滑块 change 释放时更新，rerender 后保持） */
   let travelIndex: number | null = null
 
+  // ★M11 可观测性（M8.2）：会话事件日志（导出/导入的唯一真相源——重放即全视图重建；不含回声/去重事件）
+  const sessionEvents: TraceEvent[] = []
+  const SESSION_EVENT_CAP = 20000
+  function pushSessionEvent(e: TraceEvent): void {
+    sessionEvents.push(e)
+    if (sessionEvents.length > SESSION_EVENT_CAP) sessionEvents.shift()
+  }
+
   // ★M8 设备面板：内存采样（面板进程 performance.memory——本地面板与应用同进程数值准确；
   //   远程面板显示面板宿主浏览器内存；无 performance.memory 环境不启动采样）
   const memorySamples: DeviceMemorySample[] = []
@@ -381,6 +395,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         }
       }
     }
+    // ★M11 会话日志（M8.2）：非回声事件进日志（回声已在函数头 return；导出的唯一真相源）
+    pushSessionEvent(e)
     return true
   }
 
@@ -533,6 +549,51 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     options.onApplyState?.(Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })))
   }
 
+  /** ★M11 可观测性（M8.2）：导出 SessionBundle（可重放事件日志 + 设备 + store 快照；Blob 下载 proteus-session.json） */
+  function exportSession(): string {
+    const json = serializeSession({
+      events: sessionEvents,
+      device: options.deviceInfo ? options.deviceInfo() : ((source.deviceInfo?.() as DeviceInfo | undefined) ?? undefined),
+      stores: Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })),
+      steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, name: s.name, payload: s.payload, timestamp: s.timestamp })),
+    })
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return json
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'proteus-session.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    return json
+  }
+
+  /** ★M11 可观测性（M8.2）：导入 SessionBundle——清空聚合 → 重放事件全视图重建（timeline/errors/router-nav/store/组件）→ onApplyState 应用最新状态 */
+  function importSession(json: string): void {
+    const parsed = parseSession(json)
+    if (!parsed) return
+    // 清空全部聚合（collector + 适配聚合）——重放从零重建
+    timeline.clear()
+    errors.clear()
+    navs.length = 0
+    inflightNav.clear()
+    storeSnapshots.clear()
+    storePatchHistory.clear()
+    storeSteps.length = 0
+    stepSeq = 0
+    travelIndex = null
+    selectedStore = ''
+    componentNodes.clear()
+    componentDom.clear()
+    selectedComponent = 0
+    sessionEvents.length = 0
+    // 重放（handleEvent 单真相源：聚合 + 会话日志一起重建；火焰图为录制作用域不重建）
+    for (const e of parsed.events) handleEvent(e)
+    // 应用侧恢复：最新 store 状态写回（对齐 importSnapshot 语义）
+    options.onApplyState?.(Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })))
+    scheduleRender()
+  }
+
   /** 时间旅行（滑块 change 释放触发）：记录回放位置 + 命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（本地 onApplyState / 远程 sendCommand 双通道） */
   function timeTravel(index: number): void {
     travelIndex = index
@@ -618,6 +679,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         },
         onExport: exportSnapshot,
         onImport: importSnapshot,
+        // ★M11 可观测性（M8.2）：会话导出/导入（完整还原另一环境）
+        onExportSession: exportSession,
+        onImportSession: importSession,
         // ★双向调试：值编辑 → 面板快照 + 本地/远程双通道写回（$patch 真实状态）
         onEditValue: editStoreValue,
       },
@@ -824,5 +888,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     show,
     exportSnapshot,
     importSnapshot,
+    exportSession,
+    importSession,
   }
 }

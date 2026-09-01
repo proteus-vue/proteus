@@ -34,6 +34,8 @@ import {
   serializeStoreSnapshot,
   parseStoreSnapshot,
   findSensitiveKeys,
+  serializeSession,
+  parseSession,
   buildDomTree,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
@@ -683,6 +685,44 @@ describe('Store 快照导出/导入（snapshot-io 纯逻辑）', () => {
     expect(findSensitiveKeys([{ id: 'a', state: { ok: true, name: 'x' } }])).toEqual([])
   })
 
+  it('★M11 serializeSession → parseSession roundtrip：事件日志 + 设备 + store 快照保留；非法 → null；坏行过滤', () => {
+    const json = serializeSession({
+      events: [
+        { source: 'router', phase: 'start', name: 'navigate /a', timestamp: 100, traceId: 't1' },
+        { source: 'api', phase: 'error', name: 'req.fail', timestamp: 200, payload: { status: 500 } },
+      ],
+      device: { platform: 'web', capabilities: [] },
+      stores: [{ id: 'cart', state: { items: 2 } }],
+      steps: [{ index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: {}, timestamp: 100 }],
+    })
+    const parsed = parseSession(json)
+    expect(parsed?.events).toEqual([
+      { source: 'router', phase: 'start', name: 'navigate /a', timestamp: 100, traceId: 't1' },
+      { source: 'api', phase: 'error', name: 'req.fail', timestamp: 200, payload: { status: 500 } },
+    ])
+    expect(parsed?.device).toEqual({ platform: 'web', capabilities: [] })
+    expect(parsed?.stores).toEqual([{ id: 'cart', state: { items: 2 } }])
+    expect(parsed?.steps.length).toBe(1)
+    // 非法：非 JSON / 非会话 / 版本不符 → null
+    expect(parseSession('x')).toBeNull()
+    expect(parseSession('{"kind":"other","events":[]}')).toBeNull()
+    expect(parseSession('{"kind":"proteus-session","version":2,"events":[]}')).toBeNull()
+    // 坏行过滤：非法 source/phase/name 行剔除，合法行保留
+    const mixed = parseSession(
+      JSON.stringify({
+        kind: 'proteus-session',
+        version: 1,
+        events: [
+          { source: 'router', phase: 'start', name: 'ok', timestamp: 1 },
+          { source: 'hacker', phase: 'start', name: 'bad', timestamp: 1 },
+          { source: 'router', phase: 'weird', name: 'bad', timestamp: 1 },
+          { source: 'router', phase: 'end', name: '', timestamp: 1 },
+        ],
+      }),
+    )
+    expect(mixed?.events.length).toBe(1)
+  })
+
   it('parseStoreSnapshot：非法 JSON / 非快照对象 / 坏行 → null 或过滤', () => {
     expect(parseStoreSnapshot('not json')).toBeNull()
     expect(parseStoreSnapshot('{"a":1}')).toBeNull()
@@ -777,6 +817,43 @@ describe('面板装配', () => {
         }, 30)
       }, 30)
     })
+  })
+
+  it('★M11 会话导出/导入（M8.2）：导出 SessionBundle → 新面板导入 → 时间轴 + 路由 + store 全视图还原 + 状态恢复', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    // 制造会话：路由导航 + store 变更 + error
+    source.push(ev('router', 'start', 'navigate /admin', 1000, 't1', { from: { path: '/index' }, to: { path: '/admin' } }))
+    source.push(ev('router', 'end', 'navigate /admin', 1050, 't1'))
+    source.push(ev('store', 'point', 'store.patch', 1100, 't2', { id: 'cart', items: 2 }))
+    source.push(ev('api', 'error', 'refreshToken', 1200, 't3', { status: 401 }))
+    await new Promise((r) => setTimeout(r, 40))
+    const sessionJson = panel.exportSession()
+    expect(sessionJson).toContain('proteus-session')
+    expect(sessionJson).toContain('navigate /admin')
+    // 新面板（干净聚合）导入 → 全视图还原
+    const apply = vi.fn()
+    const root2 = document.createElement('div')
+    const panel2 = createDevtoolsPanel(root2, { source: mockSource(), onApplyState: apply })
+    panel2.importSession(sessionJson)
+    await new Promise((r) => setTimeout(r, 40))
+    // 时间轴 span 还原（1 nav + store.patch 竖线 + error 竖线 = 3）
+    panel2.show('timeline')
+    expect((root2.querySelector('.pd-view[data-view="timeline"]') as HTMLElement).querySelectorAll('.pd-span').length).toBe(3)
+    // 路由记录还原
+    panel2.show('route')
+    expect((root2.querySelector('.pd-view[data-view="route"]') as HTMLElement).querySelectorAll('.pd-nav').length).toBe(1)
+    // store 快照/步骤还原 + 应用恢复（最新状态写回）
+    panel2.show('state')
+    const stateView = root2.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    expect(stateView.querySelector('.pd-store-head')?.textContent).toContain('cart')
+    expect(stateView.querySelectorAll('.pd-tl-row').length).toBe(1)
+    expect(apply).toHaveBeenCalledWith([{ id: 'cart', state: { items: 2 } }])
+    // 非法导入 → 不崩
+    panel2.importSession('not json')
+    panel.destroy()
+    panel2.destroy()
   })
 
   it('★M8 设备视图：options.deviceInfo 钩子 → 概览/能力表渲染；无钩子 → 空态', () => {

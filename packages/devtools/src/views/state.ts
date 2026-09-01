@@ -14,6 +14,10 @@ export interface StateViewHooks {
   onExport?: () => void
   /** 导入快照 JSON（view 读文件 → 面板解析校验 + 数据重建 + 应用） */
   onImport?: (json: string) => void
+  /** ★M11 可观测性（M8.2）：导出 SessionBundle（可重放事件日志 + 设备 + store 快照） */
+  onExportSession?: () => void
+  /** ★M11 可观测性（M8.2）：导入 SessionBundle（完整还原另一环境） */
+  onImportSession?: (json: string) => void
   /** ★双向调试：值编辑提交（点值改 → 应用侧 $patch 写回真实状态） */
   onEditValue?: (storeId: string, path: Array<string | number>, value: unknown) => void
 }
@@ -73,6 +77,34 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
   })
   toolbar.appendChild(importBtn)
   toolbar.appendChild(fileInput)
+  // ★M11 可观测性（M8.2）：会话导出/导入（完整还原另一环境——时间轴 + 路由 + 根因 + store）
+  if (hooks.onExportSession || hooks.onImportSession) {
+    const sessionExportBtn = document.createElement('button')
+    sessionExportBtn.className = 'pd-btn'
+    sessionExportBtn.textContent = '导出会话 JSON'
+    sessionExportBtn.title = '导出 SessionBundle（可重放事件日志 + 设备 + store 快照）'
+    sessionExportBtn.addEventListener('click', () => hooks.onExportSession?.())
+    toolbar.appendChild(sessionExportBtn)
+    const sessionImportBtn = document.createElement('button')
+    sessionImportBtn.className = 'pd-btn'
+    sessionImportBtn.textContent = '导入会话 JSON'
+    sessionImportBtn.title = '导入 SessionBundle（清空聚合 → 重放事件全视图重建 → 状态恢复）'
+    const sessionFileInput = document.createElement('input')
+    sessionFileInput.type = 'file'
+    sessionFileInput.accept = '.json,application/json'
+    sessionFileInput.style.display = 'none'
+    sessionImportBtn.addEventListener('click', () => sessionFileInput.click())
+    sessionFileInput.addEventListener('change', () => {
+      const f = sessionFileInput.files?.[0]
+      sessionFileInput.value = ''
+      if (!f) return
+      const reader = new FileReader()
+      reader.onload = () => hooks.onImportSession?.(String(reader.result ?? ''))
+      reader.readAsText(f)
+    })
+    toolbar.appendChild(sessionImportBtn)
+    toolbar.appendChild(sessionFileInput)
+  }
   const stepInfo = document.createElement('span')
   stepInfo.textContent = '步骤 ' + data.steps.length + ' · stores ' + stores.length
   toolbar.appendChild(stepInfo)

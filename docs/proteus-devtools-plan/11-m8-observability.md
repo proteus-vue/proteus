@@ -11,11 +11,11 @@
 ## M8.2 导出 / 导入
 
 ```ts
-devtools.exportSession()  // → SessionBundle
+devtools.exportSession()  // → SessionBundle（Blob 下载 proteus-session.json）
 devtools.importSession(bundle)
 ```
 
-`SessionBundle` 包含：时间轴 span + 状态快照 + 路由记录 + 错误信息 + 设备信息，可完整复现一次 bug。
+`SessionBundle` = **可重放事件日志**（TraceEvent[]：时间轴 + 路由 + 根因 + store + 组件聚合的唯一真相源）+ 设备信息 + store 快照——导入 = 清空聚合 → 重放事件全视图重建 → `onApplyState` 恢复最新状态。✅ 已落地（panel `exportSession()/importSession()` + state 工具栏按钮 + `session-io.ts` 纯逻辑）。
 
 ## M8.3 远程上报（灰度）
 
