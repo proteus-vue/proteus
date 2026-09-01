@@ -6,6 +6,8 @@
 //   FLD004 error   p-grid 须声明 min-col-width
 //   FLD005 warning 避免固定死尺寸（启发式噪音大，MVP 不启用——文档标注）
 //   FLD006 error   禁止 Dimensions.get() 手动算（跨端无此 API，用语义组件）
+//   FLD007 warning 过小字号（font-size ≤ 11px——无障碍风险，用 p-scale 动态字号）
+//   FLD008 warning p-scale level 越界（0-3）/ density 非法（compact/regular/comfortable）
 // 扫描 .vue 的 style / template / script 块（行号定位）；纯逻辑可单测
 import fs from 'node:fs'
 import path from 'node:path'
@@ -65,7 +67,7 @@ export function checkFluidFile(file: string): FluidViolation[] {
     violations.push({ rule, file, line, message })
   }
 
-  // style 块：@media（FLD001）+ 硬编码断点值（FLD002）
+  // style 块：@media（FLD001）+ 硬编码断点值（FLD002）+ 过小字号（FLD007）
   for (const block of extractBlocks(source, 'style')) {
     const lines = block.content.split('\n')
     for (let i = 0; i < lines.length; i++) {
@@ -77,6 +79,11 @@ export function checkFluidFile(file: string): FluidViolation[] {
         if (new RegExp(`\\b${bp}\\s*px\\b`).test(l)) {
           push('FLD002', block.startLine + i, `硬编码断点值 ${bp}px——用 app.config.layout.breakpoints 统一管理`)
         }
+      }
+      // ★S4 FLD007：过小字号（≤11px）——无障碍风险（动态字号缩放下限，App 端跟随系统字号）
+      const fs = l.match(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/)
+      if (fs && Number(fs[1] as string) <= 11) {
+        push('FLD007', block.startLine + i, `font-size ${fs[1]}px 过小（≤11px 无障碍风险）——用 p-scale 动态字号或 ≥12px`)
       }
     }
   }
@@ -99,6 +106,21 @@ export function checkFluidFile(file: string): FluidViolation[] {
       const line = block.startLine + block.content.slice(0, gm.index).split('\n').length - 1
       if (!/min-col-width/.test(gm[1] as string)) {
         push('FLD004', line, '<p-grid> 未声明 min-col-width（列数自动求解的前提）——如 :min-col-width="160"')
+      }
+    }
+    // ★S4 FLD008：p-scale level 越界（0-3）/ density 非法（compact/regular/comfortable）
+    const scaleRe = /<p-scale\b([^>]*)\/?>/g
+    let sm: RegExpExecArray | null
+    while ((sm = scaleRe.exec(block.content))) {
+      const line = block.startLine + block.content.slice(0, sm.index).split('\n').length - 1
+      const attrs = sm[1] as string
+      const lvl = attrs.match(/:?level\s*=\s*"?(\d+)"?/)
+      if (lvl && Number(lvl[1] as string) > 3) {
+        push('FLD008', line, `p-scale level="${lvl[1]}" 越界（0-3）——无障碍字号档位`)
+      }
+      const den = attrs.match(/density\s*=\s*"([^"]+)"/)
+      if (den && !/^(compact|regular|comfortable)$/.test(den[1] as string)) {
+        push('FLD008', line, `p-scale density="${den[1]}" 非法（compact/regular/comfortable）`)
       }
     }
   }
@@ -124,10 +146,10 @@ export function runFluidCheck(target: string): FluidCheckResult {
 }
 
 export function formatFluidCheck(result: FluidCheckResult): string {
-  const lines = [`[proteus-fluid] 柔性布局严格规则（FLD001-006）检查 ${result.fileCount} 个文件：${result.violations.length} 处违规`]
+  const lines = [`[proteus-fluid] 柔性布局严格规则（FLD001-008）检查 ${result.fileCount} 个文件：${result.violations.length} 处违规`]
   for (const v of result.violations) {
     lines.push(`  [${v.rule}] ${v.file}:${v.line} ${v.message}`)
   }
-  lines.push(result.ok ? '[proteus-fluid] ✅ fluid:check 通过（语义布局，无手写断点/死尺寸）' : '[proteus-fluid] ✗ 请改用 p-fluid / p-grid / p-stack 语义（exit 1）')
+  lines.push(result.ok ? '[proteus-fluid] ✅ fluid:check 通过（语义布局，无手写断点/死尺寸/无障碍风险）' : '[proteus-fluid] ✗ 请改用 p-fluid / p-grid / p-stack / p-scale 语义（exit 1）')
   return lines.join('\n')
 }

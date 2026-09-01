@@ -15,8 +15,12 @@ import {
   resolveSafeAreaStyle,
   shouldReduceMotion,
   calcVisibleToolbarItems,
+  SCALE_LEVELS,
+  resolveScaleRatio,
+  resolveDensity,
+  buildScaleStyle,
 } from '@proteus-vue/fluid'
-import { PSplit, PZone, PGrid, PSafe, PAspect, PSidebar, PToolbar } from '@proteus-vue/components'
+import { PSplit, PZone, PGrid, PSafe, PAspect, PSidebar, PToolbar, PScale } from '@proteus-vue/components'
 
 /** fake 尺寸观察器工厂：observe 记录目标；fire 驱动 onSize（真实 RO 的 contentRect 回调等价） */
 function fakeObserverFactory(onSize: (w: number, h: number) => void): { observe: (t: unknown) => void; disconnect: () => void; fire: (w: number, h: number) => void } {
@@ -468,5 +472,68 @@ describe('Fluid System S3 组件（p-sidebar 自适应导航 / p-toolbar 溢出�
     ;(el2.querySelector('.p-toolbar-item') as HTMLElement).click()
     expect(selected).toEqual(['a'])
     root.remove()
+  })
+})
+
+describe('Fluid System S4 纯逻辑（resolveScaleRatio / resolveDensity / buildScaleStyle）', () => {
+  it('resolveScaleRatio：0→0.875 / 1→1 / 2→1.125 / 3→1.25；越界向上钳制；非法输入 → 最小档', () => {
+    expect(SCALE_LEVELS.map((s) => s.ratio)).toEqual([0.875, 1, 1.125, 1.25])
+    expect(resolveScaleRatio(0)).toBe(0.875)
+    expect(resolveScaleRatio(1)).toBe(1)
+    expect(resolveScaleRatio(2)).toBe(1.125)
+    expect(resolveScaleRatio(3)).toBe(1.25)
+    expect(resolveScaleRatio(99)).toBe(1.25) // 越界 → 最大档
+    expect(resolveScaleRatio(-1)).toBe(0.875) // 非法 → 最小档
+    expect(resolveScaleRatio(Number.NaN)).toBe(0.875)
+  })
+
+  it('resolveDensity：compact 1.4/8 · regular 1.6/12 · comfortable 1.8/16；非法 → regular', () => {
+    expect(resolveDensity('compact')).toEqual({ lineHeight: 1.4, gap: 8 })
+    expect(resolveDensity('regular')).toEqual({ lineHeight: 1.6, gap: 12 })
+    expect(resolveDensity('comfortable')).toEqual({ lineHeight: 1.8, gap: 16 })
+    expect(resolveDensity('huge' as never)).toEqual({ lineHeight: 1.6, gap: 12 })
+  })
+
+  it('buildScaleStyle：fontSize = base × 档位 × var(--proteus-font-scale)；密度 token', () => {
+    expect(buildScaleStyle({ level: 1, density: 'regular', baseSize: 16 })).toEqual({
+      fontSize: 'calc(16px * 1 * var(--proteus-font-scale, 1))',
+      lineHeight: '1.6',
+      '--proteus-density-gap': '12px',
+    })
+    expect(buildScaleStyle({ level: 3, density: 'comfortable', baseSize: 14 })).toEqual({
+      fontSize: 'calc(14px * 1.25 * var(--proteus-font-scale, 1))',
+      lineHeight: '1.8',
+      '--proteus-density-gap': '16px',
+    })
+    expect(buildScaleStyle({})).toEqual({
+      fontSize: 'calc(16px * 1 * var(--proteus-font-scale, 1))',
+      lineHeight: '1.6',
+      '--proteus-density-gap': '12px',
+    })
+  })
+})
+
+describe('Fluid System S4 组件（p-scale）', () => {
+  it('p-scale：默认 level 1 / regular → 容器 class + 样式字符串由 buildScaleStyle 纯函数保证', async () => {
+    const el = mount(PScale, {}, { default: () => h('p', { class: 'line' }, '文本') })
+    await nextTick()
+    const root = el.querySelector('.p-scale') as HTMLElement
+    expect(root.classList.contains('p-scale-regular')).toBe(true)
+    expect(el.querySelector('.line')).not.toBeNull()
+  })
+
+  it('p-scale：level 3 + comfortable → p-scale-comfortable 类 + 子项 em 继承', async () => {
+    const el = mount(PScale, { level: 3, density: 'comfortable', baseSize: 14 }, { default: () => h('p', { class: 'line' }, '文本') })
+    await nextTick()
+    const root = el.querySelector('.p-scale') as HTMLElement
+    expect(root.classList.contains('p-scale-comfortable')).toBe(true)
+    // 子项继承（font-size 由纯函数保证；此处验证结构）
+    expect(el.querySelector('.line')).not.toBeNull()
+  })
+
+  it('p-scale：level 0 + compact → p-scale-compact 类', async () => {
+    const el = mount(PScale, { level: 0, density: 'compact' })
+    await nextTick()
+    expect((el.querySelector('.p-scale') as HTMLElement).classList.contains('p-scale-compact')).toBe(true)
   })
 })

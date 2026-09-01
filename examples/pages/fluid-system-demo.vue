@@ -7,7 +7,7 @@
      ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽、p-safe fold 恒不生效） -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar } from '@proteus-vue/components'
+import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale } from '@proteus-vue/components'
 import { createDeviceEnv, shouldReduceMotion } from '@proteus-vue/fluid'
 import type { DeviceEnv, FluidDisplayMode } from '@proteus-vue/fluid'
 
@@ -156,6 +156,25 @@ function onSelect(key: string): void {
     <h3 class="sec-title">S3 · 工具栏溢出折叠（p-toolbar）</h3>
     <p class="hint">容器放不下时多余项收进「更多」（车机/平板有限宽度场景）</p>
     <p-toolbar :items="navItems" :item-width="72" :more-width="56" class="toolbar-demo" @select="onSelect" />
+
+    <!-- ★S4 p-scale：动态字号/密度（无障碍；子项 em 继承随缩放；:root 设 --proteus-font-scale 可全局放大） -->
+    <h3 class="sec-title">S4 · 动态字号/密度（p-scale）</h3>
+    <p class="hint">字号级别 0-3（小/标准/大/特大）+ 密度（compact/regular/comfortable）——子项用 em 继承随缩放；
+      :root 设置 <code>--proteus-font-scale</code> 可叠加系统字号缩放</p>
+    <div class="scale-row">
+      <p-scale :level="0" :density="'compact'" class="scale-box">
+        <p class="scale-line">level 0 · 小字号（compact 密度）</p>
+        <p class="scale-line">行高 1.4 / 间距 8px</p>
+      </p-scale>
+      <p-scale :level="1" class="scale-box">
+        <p class="scale-line">level 1 · 标准（regular 密度）</p>
+        <p class="scale-line">行高 1.6 / 间距 12px</p>
+      </p-scale>
+      <p-scale :level="3" :density="'comfortable'" class="scale-box">
+        <p class="scale-line">level 3 · 特大（comfortable 无障碍密度）</p>
+        <p class="scale-line">行高 1.8 / 间距 16px</p>
+      </p-scale>
+    </div>
   </div>
 </template>
 
@@ -302,5 +321,21 @@ function onSelect(key: string): void {
   padding: 4px;
   position: relative;
   margin-bottom: 8px;
+}
+/* ★S4 demo：动态字号/密度 */
+.scale-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scale-box {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+}
+.scale-line {
+  margin: 0;
+  color: #333;
 }
 </style>

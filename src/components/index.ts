@@ -32,6 +32,8 @@ import PAspect from './p-aspect/index.vue'
 // ★Fluid System（fluid-system-plan S3）：自适应导航栏 / 工具栏溢出折叠
 import PSidebar from './p-sidebar/index.vue'
 import PToolbar from './p-toolbar/index.vue'
+// ★Fluid System（fluid-system-plan S4）：动态字号/密度
+import PScale from './p-scale/index.vue'
 
 export {
   VirtualList,
@@ -63,6 +65,8 @@ export {
   // ★Fluid System S3
   PSidebar,
   PToolbar,
+  // ★Fluid System S4
+  PScale,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

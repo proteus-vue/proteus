@@ -1,6 +1,7 @@
 // tests/fluid-check.test.ts
 // ★G-22 柔性布局严格规则（fluid-layout-plan 01 §9 / 03）：proteus fluid:check
 //   FLD001 禁 @media / FLD002 禁硬编码断点 / FLD003 p-fluid 须 min·max / FLD004 p-grid 须 min-col-width / FLD006 禁 Dimensions.get
+//   ★S4：FLD007 过小字号（≤11px）/ FLD008 p-scale level 越界 · density 非法
 import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -67,6 +68,38 @@ describe('★G-22 fluid:check（FLD001-006）', () => {
       ].join('\n'),
     )
     expect(checkFluidFile(path.join(TMP, 'pages/good.vue'))).toEqual([])
+  })
+
+  it('★S4 FLD007/008：过小字号 + p-scale level 越界/density 非法命中；合规不误报', () => {
+    write(
+      'pages/s4-bad.vue',
+      [
+        '<style scoped>',
+        '.tiny { font-size: 10px; }',
+        '.ok { font-size: 14px; }',
+        '</style>',
+        '<template>',
+        '<p-scale level="5" density="huge">文本</p-scale>',
+        '</template>',
+      ].join('\n'),
+    )
+    const violations = checkFluidFile(path.join(TMP, 'pages/s4-bad.vue'))
+    const rules = violations.map((v) => v.rule).sort()
+    expect(rules).toContain('FLD007')
+    expect(rules.filter((r) => r === 'FLD008').length).toBe(2) // level 越界 + density 非法
+    // 合规：≥12px 字号 + p-scale 合法 level/density 不误报
+    write(
+      'pages/s4-good.vue',
+      [
+        '<style scoped>',
+        '.title { font-size: 14px; }',
+        '</style>',
+        '<template>',
+        '<p-scale level="3" density="comfortable">文本</p-scale>',
+        '</template>',
+      ].join('\n'),
+    )
+    expect(checkFluidFile(path.join(TMP, 'pages/s4-good.vue'))).toEqual([])
   })
 
   it('runFluidCheck：目录递归扫描 + 汇总（坏文件 → ok false；全合规 → ok true）', () => {

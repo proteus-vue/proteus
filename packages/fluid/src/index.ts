@@ -20,3 +20,6 @@ export { shouldReduceMotion } from './motion'
 export type { MotionState } from './motion'
 export { calcVisibleToolbarItems } from './nav'
 export type { ToolbarOverflowOptions } from './nav'
+// ★S4 无障碍：动态字号级别 + 密度语义纯逻辑
+export { SCALE_LEVELS, resolveScaleRatio, resolveDensity, buildScaleStyle } from './scale'
+export type { FluidDensity, ScaleStyleOptions } from './scale'
