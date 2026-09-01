@@ -144,11 +144,12 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   }
 
   // ⑦ HMR 事件源（vite 热更新 → TraceBus：timeline 显示热更新记录；业务侧传 import.meta.hot）
+  // ★事件名用 vite client 实际派发的 custom 事件（vite:beforeUpdate/vite:beforeFullReload/vite:error——vite:update 不存在）
   let offHmr: (() => void) | null = null
   if (options.hmr) {
     const offs: Array<(() => void) | null> = []
-    offs.push(options.hmr.on('vite:update', () => bus.emit('hmr', 'point', 'vite:update')) ?? null)
-    offs.push(options.hmr.on('vite:full-reload', () => bus.emit('hmr', 'point', 'vite:full-reload')) ?? null)
+    offs.push(options.hmr.on('vite:beforeUpdate', () => bus.emit('hmr', 'point', 'vite:update')) ?? null)
+    offs.push(options.hmr.on('vite:beforeFullReload', () => bus.emit('hmr', 'point', 'vite:full-reload')) ?? null)
     offs.push(
       options.hmr.on('vite:error', (err) =>
         bus.emit('hmr', 'error', 'vite:error', { message: err instanceof Error ? err.message : String(err) }),

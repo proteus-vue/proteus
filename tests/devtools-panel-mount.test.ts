@@ -54,12 +54,12 @@ describe('installProteusDevtools 一键接入', () => {
         },
       },
     })
-    expect(hmrListeners.map((l) => l.event)).toEqual(['vite:update', 'vite:full-reload', 'vite:error'])
+    expect(hmrListeners.map((l) => l.event)).toEqual(['vite:beforeUpdate', 'vite:beforeFullReload', 'vite:error'])
     // 触发 HMR 事件 → bus 有 hmr 记录
     const seen: string[] = []
     const off = bus.on((e) => seen.push(e.source + ':' + e.phase + ':' + e.name))
-    hmrListeners[0].cb({ updates: [{ type: 'js-update' }] }) // vite:update
-    hmrListeners[1].cb() // vite:full-reload
+    hmrListeners[0].cb({ updates: [{ type: 'js-update' }] }) // vite:beforeUpdate
+    hmrListeners[1].cb() // vite:beforeFullReload
     hmrListeners[2].cb(new Error('编译失败')) // vite:error
     expect(seen).toEqual(['hmr:point:vite:update', 'hmr:point:vite:full-reload', 'hmr:error:vite:error'])
     // destroy 解绑监听
