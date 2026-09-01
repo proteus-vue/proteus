@@ -64,6 +64,9 @@ jobs:
       - name: 全部 @proteus-vue/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/@proteus-vue/create-proteus → dist）
         run: npm run build --workspaces
 
+      - name: 性能基准回归门禁（G-30：功能基准 >1.5x 基线阻断 / >1.2x 警告）
+        run: npm run bench
+
       - name: 模板快照一致性（快照后 git 无差异 → 模板与主仓同步）
         run: |
           npx tsx scripts/snapshot-template.ts
