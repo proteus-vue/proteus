@@ -28,9 +28,20 @@ describe('createPanelPageHandler', () => {
     expect(hit).toBe(true)
     expect(res.headers['content-type']).toContain('text/html')
     expect(res.body).toContain('ws://localhost:5173/proteus-panel') // 默认 WS 注入当前 host
+    expect(res.body).toContain("typeof 'ws://localhost:5173/proteus-panel' === 'string'") // ★JS 三元主分支被注入（旧实现漏替换 → 面板连 5174 永远连接中）
+    expect(res.body).not.toContain('__PROTEUS_DEFAULT_WS__') // 占位符全部消费（/g 全局替换）
     expect(res.body).toContain('href="/proteus-devtools/style.css"')
     expect(res.body).toContain('src="/proteus-devtools/panel.js"')
     expect(res.body).not.toContain('./style.css') // 不再引用相对路径
+  })
+
+  it('x-forwarded-proto: https → 注入 wss:// 默认 WS（代理/--https 场景防 Mixed Content）', () => {
+    const handler = createPanelPageHandler(resolveDevtoolsDir())
+    const res = mockRes()
+    const hit = handler({ url: '/proteus-devtools', headers: { host: 'example.com', 'x-forwarded-proto': 'https' } }, res)
+    expect(hit).toBe(true)
+    expect(res.body).toContain("typeof 'wss://example.com/proteus-panel' === 'string'")
+    expect(res.body).not.toContain('__PROTEUS_DEFAULT_WS__')
   })
 
   it('资源端点：/proteus-devtools/style.css + /proteus-devtools/panel.js（读包内产物）', () => {

@@ -16,7 +16,9 @@
     //   ① dev-mp HMR/CDP 通道：缺省 ws://127.0.0.1:5174/（小程序开发；PROTEUS_DEVTOOLS_URL 可覆盖）
     //   ② ★Web 远程查看（移动端/真机）：vite dev 起 devtoolsRelayPlugin 后，
     //      连 ws://<vite-host>/proteus-panel——手机跑应用（installProteusDevtools remote: true 上行），电脑开本页查看
-    var url = new URLSearchParams(location.search).get('ws') || 'ws://127.0.0.1:5174/'
+    //   ③ /proteus-devtools 页面端点注入时把默认 WS 占位符替换为当前 host 的 ws://host/proteus-panel；
+    //      file:// 双击未注入时回退 5174（dev-mp 场景）
+    var url = new URLSearchParams(location.search).get('ws') || (typeof __PROTEUS_DEFAULT_WS__ === 'string' ? __PROTEUS_DEFAULT_WS__ : 'ws://127.0.0.1:5174/')
     var source = ProteusDevtools.createDevtoolsWsSource(url)
     ProteusDevtools.createDevtoolsPanel(document.getElementById('proteus-devtools'), { source: source })
   </script>

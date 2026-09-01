@@ -25,7 +25,7 @@ export function resolveDevtoolsDir(): string {
 }
 
 /** 面板页面处理器（纯逻辑，req/res 结构注入可单测）：/proteus-devtools → panel.html（注入 WS 默认 + 资源路径重写） */
-export function createPanelPageHandler(devtoolsDir: string): (req: { url?: string; headers?: { host?: string } }, res: {
+export function createPanelPageHandler(devtoolsDir: string): (req: { url?: string; headers?: Record<string, string | undefined> }, res: {
   setHeader(k: string, v: string): void
   end(data: string | Buffer): void
 }) => boolean {
@@ -33,12 +33,14 @@ export function createPanelPageHandler(devtoolsDir: string): (req: { url?: strin
     const pathname = (req.url ?? '/').split('?')[0]
     const base = '/proteus-devtools'
     if (pathname === base || pathname === base + '/') {
-      // 注入默认 WS 地址（当前 host 的 /proteus-panel；?ws= 显式传入仍优先）+ 资源路径重写为绝对
+      // ★占位符全局唯一替换：panel.html 里 ws://127.0.0.1:5174/ 出现多次（注释+JS 默认值），
+      //   旧实现 replace 只替换第一个（命中注释）→ JS 默认值漏替换 → 面板连 5174 端口永远连接中；
+      //   占位符也用 /g 全局替换（JS 三元里出现两次），避免重复踩坑
       const host = req.headers?.host ?? 'localhost'
-      const proto = (req.headers?.host ?? '').includes('https') ? 'wss' : 'ws'
+      const proto = req.headers?.['x-forwarded-proto'] === 'https' ? 'wss' : 'ws'
       const html = fs
         .readFileSync(path.join(devtoolsDir, 'panel.html'), 'utf8')
-        .replace('ws://127.0.0.1:5174/', `${proto}://${host}/proteus-panel`)
+        .replace(/__PROTEUS_DEFAULT_WS__/g, `'${proto}://${host}/proteus-panel'`)
         .replace('./style.css', base + '/style.css')
         .replace('./dist/panel.js', base + '/panel.js')
       res.setHeader('content-type', 'text/html; charset=utf-8')
@@ -108,7 +110,7 @@ export function devtoolsRelayPlugin(opts: DevtoolsRelayOptions = {}): Plugin {
     // ★面板页面端点（vite 内部中间件之前注册 → 拦截 /proteus-devtools 不被 spa fallback 吞掉）
     pageHandler = createPanelPageHandler(resolveDevtoolsDir())
     const middlewares = server.middlewares as
-      | { use?: (fn: (req: { url?: string; headers?: { host?: string } }, res: { setHeader(k: string, v: string): void; end(d: string | Buffer): void }, next: () => void) => void) => void }
+      | { use?: (fn: (req: { url?: string; headers?: Record<string, string | undefined> }, res: { setHeader(k: string, v: string): void; end(d: string | Buffer): void }, next: () => void) => void) => void }
       | undefined
     middlewares?.use?.((req, res, next) => {
       if (pageHandler && pageHandler(req, res)) return
