@@ -81,7 +81,7 @@ describe('HMR Dev Server：WS 服务端', () => {
 })
 
 describe('HMR Dev Server：CDP 桥集成（DevTools 面板通道）', () => {
-  it('Proteus.enable → 文件变更触发 Proteus.event（compiler watch/incremental + hmr broadcast）', async () => {
+  it('Proteus.enable → 文件变更触发 Proteus.event（compiler watch/incremental + hmr broadcast）', { timeout: 60000 }, async () => {
     const dir = tmpDir()
     const server = createHmrDevServer({
       port: 0,
@@ -135,7 +135,7 @@ describe('HMR Dev Server：CDP 桥集成（DevTools 面板通道）', () => {
 })
 
 describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => {
-  it('文件变更 → 防抖合并（一次保存多文件）→ compile 收到文件集合 → payload 广播', async () => {
+  it('文件变更 → 防抖合并（一次保存多文件）→ compile 收到文件集合 → payload 广播', { timeout: 60000 }, async () => {
     const dir = tmpDir()
     const watchRoots = [dir]
     const received: unknown[] = []
@@ -170,7 +170,7 @@ describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => 
     ws.close()
   })
 
-  it('ignore 规则：node_modules/dist/.git/隐藏文件不触发编译', async () => {
+  it('ignore 规则：node_modules/dist/.git/隐藏文件不触发编译', { timeout: 60000 }, async () => {
     const dir = tmpDir()
     fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true })
     fs.mkdirSync(path.join(dir, '.git'), { recursive: true })
@@ -191,7 +191,7 @@ describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => 
     await waitFor(() => compile.mock.calls.length === 1)
   })
 
-  it('compile 抛错 → error 事件（不崩溃、不广播）', async () => {
+  it('compile 抛错 → error 事件（不崩溃、不广播）', { timeout: 60000 }, async () => {
     const dir = tmpDir()
     const events: string[] = []
     const server = createHmrDevServer({
@@ -211,7 +211,7 @@ describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => 
     expect(events).not.toContain('broadcast')
   })
 
-  it('★真实增量编译：compile 接 compileVueSfc（单文件 .vue → payload.code 编译产物）', async () => {
+  it('★真实增量编译：compile 接 compileVueSfc（单文件 .vue → payload.code 编译产物）', { timeout: 60000 }, async () => {
     const dir = tmpDir()
     const source = `<script setup lang="ts">
 import { ref } from 'vue'

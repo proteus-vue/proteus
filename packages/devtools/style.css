@@ -250,6 +250,12 @@ body.pd-body {
   background: #546e7a;
 }
 
+/* 虚拟滚动（万级 span 分块渲染）：spacer 占位 + 泳道绝对定位 */
+.pd-timeline-spacer {
+  position: relative;
+  width: 100%;
+}
+
 /* ── Flamegraph 视图 ───────────────────────────────────────── */
 .pd-fg-board {
   position: relative;

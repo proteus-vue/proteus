@@ -13,7 +13,14 @@ export interface TimelineViewData {
   spans: TimelineSpan[]
   /** 时间轴窗口（缺省自动取 min start ~ max end） */
   window?: TimelineWindow
+  /** 虚拟滚动（万级 span 分块渲染）：仅渲染视口内泳道；容器由调用方设为 overflow-y 滚动 */
+  virtual?: { scrollTop: number; viewHeight: number }
 }
+
+/** 泳道固定高度（虚拟滚动布局基准） */
+const LANE_H = 26
+/** 视口外预渲染泳道数（滚动提前量） */
+const OVERSCAN = 2
 
 export function renderTimeline(container: HTMLElement, data: TimelineViewData): void {
   container.replaceChildren()
@@ -60,34 +67,66 @@ export function renderTimeline(container: HTMLElement, data: TimelineViewData): 
     if (list) list.push(s)
     else lanes.set(s.source, [s])
   }
-  for (const entry of lanes) {
-    const lane = document.createElement('div')
-    lane.className = 'pd-lane'
-    const label = document.createElement('div')
-    label.className = 'pd-lane-label'
-    label.textContent = entry[0]
-    lane.appendChild(label)
-    const track = document.createElement('div')
-    track.className = 'pd-lane-track'
-    for (const s of entry[1]) {
-      const seg = document.createElement('div')
-      const left = ((s.start - winStart) / total) * 100
-      const end = s.end !== undefined ? s.end : s.start
-      const width = Math.max(0.5, ((end - s.start) / total) * 100)
-      seg.className = 'pd-span' + (s.pending ? ' pd-span-pending' : '') + (s.durationMs === 0 ? ' pd-span-dot' : '')
-      seg.style.left = left.toFixed(2) + '%'
-      seg.style.width = width.toFixed(2) + '%'
-      // hover 浮层（替代原生 title）：来源 + 耗时 + 阶段
-      attachTip(seg, {
-        title: `${s.source}.${s.name}`,
-        lines: [s.durationMs !== undefined ? `耗时 ${s.durationMs}ms` : '瞬时事件', s.pending ? '阶段: pending（进行中）' : '阶段: completed'],
-      })
-      const text = document.createElement('span')
-      text.textContent = s.name + (s.durationMs !== undefined ? ' ' + s.durationMs + 'ms' : '')
-      seg.appendChild(text)
-      track.appendChild(seg)
+  const laneList = Array.from(lanes)
+
+  // 虚拟滚动：spacer 占位总高 + 视口内泳道绝对定位（分块渲染，万级 span 不一次性建 DOM）
+  if (data.virtual) {
+    const scrollTop = Math.max(0, data.virtual.scrollTop)
+    const viewHeight = Math.max(1, data.virtual.viewHeight)
+    container.style.overflowY = 'auto'
+    const spacer = document.createElement('div')
+    spacer.className = 'pd-timeline-spacer'
+    spacer.style.height = laneList.length * LANE_H + 'px'
+    const startIdx = Math.max(0, Math.floor((scrollTop - OVERSCAN * LANE_H) / LANE_H))
+    const endIdx = Math.min(laneList.length, Math.ceil((scrollTop + viewHeight + OVERSCAN * LANE_H) / LANE_H))
+    for (let i = startIdx; i < endIdx; i++) {
+      const entry = laneList[i]
+      const lane = buildLane(entry[0], entry[1], winStart, total)
+      lane.style.position = 'absolute'
+      lane.style.top = i * LANE_H + 'px'
+      lane.style.left = '0'
+      lane.style.right = '0'
+      lane.style.height = LANE_H + 'px'
+      lane.style.margin = '0'
+      spacer.appendChild(lane)
     }
-    lane.appendChild(track)
-    container.appendChild(lane)
+    container.appendChild(spacer)
+    return
   }
+
+  for (const entry of laneList) {
+    container.appendChild(buildLane(entry[0], entry[1], winStart, total))
+  }
+}
+
+/** 构建单条泳道（label + track + spans） */
+function buildLane(source: string, laneSpans: TimelineSpan[], winStart: number, total: number): HTMLElement {
+  const lane = document.createElement('div')
+  lane.className = 'pd-lane'
+  const label = document.createElement('div')
+  label.className = 'pd-lane-label'
+  label.textContent = source
+  lane.appendChild(label)
+  const track = document.createElement('div')
+  track.className = 'pd-lane-track'
+  for (const s of laneSpans) {
+    const seg = document.createElement('div')
+    const left = ((s.start - winStart) / total) * 100
+    const end = s.end !== undefined ? s.end : s.start
+    const width = Math.max(0.5, ((end - s.start) / total) * 100)
+    seg.className = 'pd-span' + (s.pending ? ' pd-span-pending' : '') + (s.durationMs === 0 ? ' pd-span-dot' : '')
+    seg.style.left = left.toFixed(2) + '%'
+    seg.style.width = width.toFixed(2) + '%'
+    // hover 浮层（替代原生 title）：来源 + 耗时 + 阶段
+    attachTip(seg, {
+      title: `${s.source}.${s.name}`,
+      lines: [s.durationMs !== undefined ? `耗时 ${s.durationMs}ms` : '瞬时事件', s.pending ? '阶段: pending（进行中）' : '阶段: completed'],
+    })
+    const text = document.createElement('span')
+    text.textContent = s.name + (s.durationMs !== undefined ? ' ' + s.durationMs + 'ms' : '')
+    seg.appendChild(text)
+    track.appendChild(seg)
+  }
+  lane.appendChild(track)
+  return lane
 }

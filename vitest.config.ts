@@ -6,7 +6,16 @@ import { defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
-  test: {},
+  test: {
+    // ★并行 worker 上限：hmr-dev-server 等真实 fs.watch（macOS FSEvents）测试在满核并行 + 系统负载下事件延迟可超 15s
+    //   （实测 8 核满载 4 连败 / 4 worker 全绿）→ 保守限流，单测稳定性优先于并行吞吐
+    poolOptions: {
+      threads: {
+        maxThreads: 4,
+        minThreads: 2,
+      },
+    },
+  },
   resolve: {
     alias: [
       // 拆包后 src/runtime、src/router import @proteus-vue/shared/runtime（vitest 不加载 vite.config，需独立别名）

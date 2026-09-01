@@ -520,6 +520,37 @@ describe('Timeline 缩放/平移交互', () => {
     expect(zoom.getWindow()).toBeNull()
     expect(changes.length).toBe(0)
   })
+  it('renderTimeline 虚拟滚动：spacer 总高 + 仅视口内泳道分块渲染（万级 span 场景）', () => {
+    const root = document.createElement('div')
+    const spans: TimelineSpan[] = []
+    for (let i = 0; i < 50; i++) {
+      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, selfMs: 0, children: [], depth: 0 })
+    }
+    renderTimeline(root, { spans, virtual: { scrollTop: 0, viewHeight: 300 } })
+    const spacer = root.querySelector('.pd-timeline-spacer') as HTMLElement
+    expect(spacer).not.toBeNull()
+    expect(spacer.style.height).toBe(50 * 26 + 'px') // 1300px 总高
+    // 300px 视口 + 2 泳道 overscan → 14 条泳道（远小于 50）
+    const lanes = root.querySelectorAll('.pd-lane')
+    expect(lanes.length).toBe(14)
+    expect((lanes[0] as HTMLElement).style.position).toBe('absolute')
+    expect((lanes[0] as HTMLElement).style.top).toBe('0px')
+  })
+
+  it('renderTimeline 虚拟滚动：scrollTop 变化 → 渲染不同分块（滚动换页）', () => {
+    const root = document.createElement('div')
+    const spans: TimelineSpan[] = []
+    for (let i = 0; i < 50; i++) {
+      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, selfMs: 0, children: [], depth: 0 })
+    }
+    renderTimeline(root, { spans, virtual: { scrollTop: 0, viewHeight: 300 } })
+    const first = root.querySelector('.pd-lane-label')?.textContent
+    // 滚到第 30 行附近（scrollTop = 26*30）
+    renderTimeline(root, { spans, virtual: { scrollTop: 780, viewHeight: 300 } })
+    const labels = Array.from(root.querySelectorAll('.pd-lane-label')).map((l) => l.textContent)
+    expect(labels).not.toContain(first)
+    expect(labels[0]).toBe('src28') // startIdx = floor((780-52)/26) = 28
+  })
 })
 
 describe('Timeline 窗口过滤', () => {

@@ -105,6 +105,16 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     onWindowChange: () => scheduleRender(),
   })
 
+  // ★timeline 虚拟滚动：容器自身纵向滚动 + scrollTop 跟踪（万级 span 分块渲染）
+  const timelineView = containers.get('timeline') as HTMLElement
+  let tlScrollTop = 0
+  let tlViewHeight = 300
+  const onTimelineScroll = () => {
+    tlScrollTop = timelineView.scrollTop
+    scheduleRender()
+  }
+  timelineView.addEventListener('scroll', onTimelineScroll)
+
   function show(view: string): void {
     for (const [k, el] of views) el.classList.toggle('pd-view-active', k === view)
     for (const el of Array.from(sidebar.children)) el.classList.toggle('pd-nav-active', (el as HTMLElement).dataset.view === view)
@@ -218,7 +228,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   fgControls.appendChild(recBtn)
 
   function rerender(): void {
-    renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined })
+    tlViewHeight = timelineView.clientHeight || 300
+    renderTimeline(containers.get('timeline') as HTMLElement, { spans: timeline.spans(), window: zoom.getWindow() ?? undefined, virtual: { scrollTop: tlScrollTop, viewHeight: tlViewHeight } })
     renderFlamegraph(containers.get('flamegraph') as HTMLElement, { nodes: flame.nodes(), compare: compareEntries.length ? compareEntries : undefined })
     // ★录制按钮常驻：渲染后重挂到容器最前
     const flameContainer = containers.get('flamegraph') as HTMLElement
@@ -268,6 +279,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       unbindTip()
       tooltip.dispose()
       zoom.destroy()
+      timelineView.removeEventListener('scroll', onTimelineScroll)
       source.close()
       if (renderTimer) clearTimeout(renderTimer)
       root.replaceChildren()
