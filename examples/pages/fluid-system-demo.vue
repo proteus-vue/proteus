@@ -7,8 +7,8 @@
      ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽、p-safe fold 恒不生效） -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { PSplit, PZone, PSafe, PAspect } from '@proteus-vue/components'
-import { createDeviceEnv } from '@proteus-vue/fluid'
+import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar } from '@proteus-vue/components'
+import { createDeviceEnv, shouldReduceMotion } from '@proteus-vue/fluid'
 import type { DeviceEnv, FluidDisplayMode } from '@proteus-vue/fluid'
 
 const cards = ref([{ id: 1, title: '分区卡片' }])
@@ -21,20 +21,36 @@ function expand(): void {
 // ★S2 折叠形态指示器：display-mode（fold/span/expand）——DevTools 折叠屏模拟可切换；MP 无 matchMedia → standard
 const displayMode = ref<FluidDisplayMode>('standard')
 const orientation = ref('portrait')
+const reducedMotion = ref(false)
 let env: DeviceEnv | null = null
 onMounted(() => {
   env = createDeviceEnv()
   displayMode.value = env.get().displayMode
   orientation.value = env.get().orientation
+  reducedMotion.value = shouldReduceMotion(env.get())
   env.subscribe((s) => {
     displayMode.value = s.displayMode
     orientation.value = s.orientation
+    reducedMotion.value = shouldReduceMotion(s)
   })
 })
 onUnmounted(() => {
   if (env) env.destroy()
   env = null
 })
+
+// ★S3 p-toolbar 演示数据
+const navItems = [
+  { key: 'home', label: '首页' },
+  { key: 'map', label: '导航' },
+  { key: 'media', label: '媒体' },
+  { key: 'phone', label: '电话' },
+  { key: 'settings', label: '设置' },
+  { key: 'about', label: '关于' },
+]
+function onSelect(key: string): void {
+  console.log('[toolbar] select', key)
+}
 </script>
 
 <template>
@@ -117,7 +133,29 @@ onUnmounted(() => {
       <h3>当前设备形态</h3>
       <p class="hint">display-mode：<strong>{{ displayMode }}</strong>（DevTools 折叠屏模拟 → fold/span/expand）</p>
       <p class="hint">方向：<strong>{{ orientation }}</strong></p>
+      <p class="hint">动效门（drive-mode / prefers-reduced-motion）：<strong>{{ reducedMotion ? '已禁用动效' : '正常' }}</strong></p>
     </div>
+
+    <!-- ★S3 p-sidebar：窄屏 bottom-bar → 宽屏 side-rail（拖宽/拖窄窗口看切换；nav 项支持方向键焦点移动） -->
+    <h3 class="sec-title">S3 · 自适应导航栏（p-sidebar）</h3>
+    <p class="hint">容器 &lt; 640px → 底部导航条；≥ 640px → 左侧侧栏（Arrow 方向键在导航项间移动焦点）</p>
+    <p-sidebar :min-sidebar-width="640" :nav-width="160" class="sidebar-demo">
+      <template #nav>
+        <a class="nav-item" href="#">首页</a>
+        <a class="nav-item" href="#">导航</a>
+        <a class="nav-item" href="#">媒体</a>
+        <a class="nav-item" href="#">设置</a>
+      </template>
+      <div class="sidebar-main">
+        <h3>内容区</h3>
+        <p class="hint">窄屏时导航沉底为 bottom-bar；宽屏（平板/车机/桌面）时左侧垂直 side-rail</p>
+      </div>
+    </p-sidebar>
+
+    <!-- ★S3 p-toolbar：溢出折叠（拖窄看多余项收进「更多」） -->
+    <h3 class="sec-title">S3 · 工具栏溢出折叠（p-toolbar）</h3>
+    <p class="hint">容器放不下时多余项收进「更多」（车机/平板有限宽度场景）</p>
+    <p-toolbar :items="navItems" :item-width="72" :more-width="56" class="toolbar-demo" @select="onSelect" />
   </div>
 </template>
 
@@ -236,5 +274,33 @@ onUnmounted(() => {
 .env-box h3 {
   margin: 0 0 6px;
   font-size: 14px;
+}
+/* ★S3 demo：自适应导航栏 / 工具栏 */
+.sidebar-demo {
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  min-height: 200px;
+  margin-bottom: 20px;
+}
+.nav-item {
+  display: block;
+  padding: 8px 12px;
+  color: #1d6fb8;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.nav-item:hover {
+  background: #eef4fb;
+}
+.sidebar-main {
+  padding: 12px;
+}
+.toolbar-demo {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 4px;
+  position: relative;
+  margin-bottom: 8px;
 }
 </style>

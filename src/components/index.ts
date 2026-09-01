@@ -29,6 +29,9 @@ import PZone from './p-zone/index.vue'
 // ★Fluid System（fluid-system-plan S2）：安全区避让 / 纵横比容器
 import PSafe from './p-safe/index.vue'
 import PAspect from './p-aspect/index.vue'
+// ★Fluid System（fluid-system-plan S3）：自适应导航栏 / 工具栏溢出折叠
+import PSidebar from './p-sidebar/index.vue'
+import PToolbar from './p-toolbar/index.vue'
 
 export {
   VirtualList,
@@ -57,6 +60,9 @@ export {
   // ★Fluid System S2
   PSafe,
   PAspect,
+  // ★Fluid System S3
+  PSidebar,
+  PToolbar,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

@@ -62,7 +62,7 @@ interface FluidContextState {
 ```
 尺寸    p-fluid（流式 clamp ✅）· p-fit（内在尺寸 ✅）· p-scale（动态字号/密度 ⬜ S4）
 布局    p-grid（自适应网格 ✅）· p-stack（弹性栈 ✅）· p-split（自适应分栏 ✅ S1）· p-aspect（纵横比 ✅ S2）
-导航    p-sidebar（窄屏 bottom-bar → 宽屏 side-rail ⬜ S3）· p-toolbar（溢出折叠 ⬜ S3）
+导航    p-sidebar（窄屏 bottom-bar → 宽屏 side-rail ✅ S3）· p-toolbar（溢出折叠 ✅ S3）
 形态    p-safe（安全区：刘海/铰链/圆角 ✅ S2——env() + 折叠屏 hinge）
 响应式  p-zone（容器断点渲染不同子布局 ✅ S1）
 ```
@@ -88,6 +88,8 @@ packages/fluid/                    # @proteus-vue/fluid（独立体系核心）
     capabilities.ts                # ★essence 02 §4 能力检测（CSS.supports 探测 clamp/grid/containerQuery/flexGap/aspectRatio）
     layout.ts                      # ★essence 02 §2 统一断点入口（容器 + 视口 + 方向双断点）
     safe-area.ts                   # ★S2 + G-09 安全区避让样式纯逻辑（env() 映射 + 折叠屏 hinge）
+    motion.ts                      # ★S3 动效门（drive-mode / prefers-reduced-motion → 禁用动效）
+    nav.ts                         # ★S3 导航溢出折叠纯逻辑（calcVisibleToolbarItems）
     index.ts                       # 导出（纯逻辑——esbuild 可构建）
   package.json                     # exports: "."（逻辑）/ "./components"（.vue 源码，Web alias + MP 组件目录消费）
 ```
@@ -101,7 +103,7 @@ Web alias + MP usingComponents 自动编译）；S2 迁入包内组件目录 + m
 |----|------|------|------|
 | S1 | 拆包 + FluidContext（容器查询/断点/方向）+ p-split + p-zone 简化版 + ★essence 定位（能力检测 + 统一断点入口 + p-grid 降级） | 容器宽度变化 → 断点/分栏实时切换；无 grid 环境 flex-wrap 降级（单测 + demo） | ✅ 已落地（@proteus-vue/fluid：context/env/breakpoint/**capabilities/layout** + src/components/p-split·p-zone·p-grid 降级 + examples/pages/fluid-system-demo） |
 | S2 | p-safe（安全区 env()）+ p-aspect + 折叠形态（display-mode） | 折叠屏/刘海 demo | ✅ 已落地（@proteus-vue/fluid safe-area.ts resolveSafeAreaStyle + capabilities aspectRatio + src/components/p-safe·p-aspect + fluid-system-demo S2 区块 + viewport-fit=cover） |
-| S3 | p-sidebar/p-toolbar + 车机焦点导航 + drive-mode | 窄屏 bottom-bar → 宽屏 side-rail | ⬜ |
+| S3 | p-sidebar/p-toolbar + 车机焦点导航 + drive-mode | 窄屏 bottom-bar → 宽屏 side-rail | ✅ 已落地（@proteus-vue/fluid motion.ts/nav.ts + src/components/p-sidebar·p-toolbar + demo S3 区块） |
 | S4 | p-scale 动态字号/密度 + FLD 规则扩展（fluid:check） | 无障碍 + 治理闭环 | ⬜ |
 | S5 | 组件目录入包 + mpTransform 多组件目录 + App 端求解器接口（B4/B5 后接） | 全端消费 | ⬜（★MP 共享模块已自动识别 @proteus-vue/fluid——组件内 import 已可编译，仅模板 ref 降级） |
 

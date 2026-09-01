@@ -13,8 +13,10 @@ import {
   detectFluidCapabilities,
   createSizeAwareObserver,
   resolveSafeAreaStyle,
+  shouldReduceMotion,
+  calcVisibleToolbarItems,
 } from '@proteus-vue/fluid'
-import { PSplit, PZone, PGrid, PSafe, PAspect } from '@proteus-vue/components'
+import { PSplit, PZone, PGrid, PSafe, PAspect, PSidebar, PToolbar } from '@proteus-vue/components'
 
 /** fake 尺寸观察器工厂：observe 记录目标；fire 驱动 onSize（真实 RO 的 contentRect 回调等价） */
 function fakeObserverFactory(onSize: (w: number, h: number) => void): { observe: (t: unknown) => void; disconnect: () => void; fire: (w: number, h: number) => void } {
@@ -366,5 +368,105 @@ describe('Fluid System S2 组件（p-safe 安全区 / p-aspect 纵横比）', ()
     await nextTick()
     const root = el.querySelector('.p-aspect') as HTMLElement
     expect(root.style.aspectRatio).toBe('1.7777777777777777 / 1')
+  })
+})
+
+describe('Fluid System S3 纯逻辑（shouldReduceMotion 动效门 / calcVisibleToolbarItems 溢出折叠）', () => {
+  it('shouldReduceMotion：drive-mode 或 prefers-reduced-motion 任一命中 → true', () => {
+    expect(shouldReduceMotion({})).toBe(false)
+    expect(shouldReduceMotion({ isDriveMode: true })).toBe(true)
+    expect(shouldReduceMotion({ prefersReducedMotion: true })).toBe(true)
+    expect(shouldReduceMotion({ isDriveMode: true, prefersReducedMotion: true })).toBe(true)
+    expect(shouldReduceMotion({ isDriveMode: false, prefersReducedMotion: false })).toBe(false)
+  })
+
+  it('calcVisibleToolbarItems：全部放得下 → 不折叠（返回 count）', () => {
+    // 6 项 × 80 + 更多 48 = 528 ≤ 600
+    expect(calcVisibleToolbarItems({ count: 6, containerWidth: 600, itemWidth: 80, moreWidth: 48 })).toBe(6)
+  })
+
+  it('calcVisibleToolbarItems：溢出 → floor((容器-更多)/项宽) 且钳制 [1, count-1]', () => {
+    // 6 项 × 80 + 48 = 528 > 400 → floor((400-48)/80)=4 → 4 可见 + 2 进更多
+    expect(calcVisibleToolbarItems({ count: 6, containerWidth: 400, itemWidth: 80, moreWidth: 48 })).toBe(4)
+    // 容器极小 → 至少 1
+    expect(calcVisibleToolbarItems({ count: 6, containerWidth: 30, itemWidth: 80, moreWidth: 48 })).toBe(1)
+    // count-1 上界（不可能全可见时）
+    expect(calcVisibleToolbarItems({ count: 3, containerWidth: 100, itemWidth: 80, moreWidth: 48 })).toBe(1)
+  })
+
+  it('calcVisibleToolbarItems：容器不可测（0）/ count≤1 / count=0 边界', () => {
+    // 容器不可测（MP 无 ResizeObserver）→ 不折叠全显示（降级「朴素但正确」）
+    expect(calcVisibleToolbarItems({ count: 6, containerWidth: 0, itemWidth: 80, moreWidth: 48 })).toBe(6)
+    expect(calcVisibleToolbarItems({ count: 6, containerWidth: -1 })).toBe(6)
+    expect(calcVisibleToolbarItems({ count: 1, containerWidth: 10, itemWidth: 80, moreWidth: 48 })).toBe(1)
+    expect(calcVisibleToolbarItems({ count: 0, containerWidth: 500 })).toBe(0)
+  })
+
+  it('calcVisibleToolbarItems：缺省 itemWidth 80 / moreWidth 48', () => {
+    // 5 项 × 80 + 48 = 448 > 300 → floor((300-48)/80)=3
+    expect(calcVisibleToolbarItems({ count: 5, containerWidth: 300 })).toBe(3)
+  })
+})
+
+describe('Fluid System S3 组件（p-sidebar 自适应导航 / p-toolbar 溢出折叠）', () => {
+  it('p-sidebar：无 ResizeObserver 环境 → 默认 bottom-bar（窄屏主场景）', async () => {
+    const el = mount(
+      PSidebar,
+      { minSidebarWidth: 640, navWidth: 160 },
+      { nav: () => h('a', { class: 'n1', href: '#' }, '首页'), default: () => h('div', { class: 'm' }) },
+    )
+    await nextTick()
+    const root = el.querySelector('.p-sidebar') as HTMLElement
+    expect(root.classList.contains('p-sidebar-bottom-bar')).toBe(true)
+    expect(root.style.flexDirection).toBe('column') // bottom-bar：纵向堆叠（main 上 nav 下）
+    const nav = el.querySelector('.p-sidebar-nav') as HTMLElement
+    expect(nav.style.flexDirection).toBe('row')
+    expect(nav.style.width).toBe('100%')
+    expect(el.querySelector('.n1')).not.toBeNull()
+  })
+
+  it('p-sidebar：prefers-reduced-motion（matchMedia 注入）→ no-motion class（drive-mode 动效门）', async () => {
+    const prevMm = (globalThis as { matchMedia?: unknown }).matchMedia
+    ;(globalThis as { matchMedia: unknown }).matchMedia = (q: string) => ({
+      matches: q === '(prefers-reduced-motion: reduce)',
+      addEventListener() {},
+      removeEventListener() {},
+    })
+    try {
+      const el = mount(PSidebar, {}, { nav: () => h('a', { href: '#' }, '首页'), default: () => h('div') })
+      await nextTick()
+      expect((el.querySelector('.p-sidebar') as HTMLElement).classList.contains('p-sidebar-no-motion')).toBe(true)
+    } finally {
+      if (prevMm === undefined) delete (globalThis as { matchMedia?: unknown }).matchMedia
+      else (globalThis as { matchMedia: unknown }).matchMedia = prevMm
+    }
+  })
+
+  it('p-toolbar：无 ResizeObserver 环境 → 容器不可测 → 不折叠全显示（无「更多」）', async () => {
+    const el = mount(
+      PToolbar,
+      { items: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }, { key: 'c', label: 'C' }], itemWidth: 80, moreWidth: 48 },
+    )
+    await nextTick()
+    const items = el.querySelectorAll('.p-toolbar-item')
+    expect(items.length).toBe(3) // 全显示
+    expect(el.querySelector('.p-toolbar-more')).toBeNull()
+  })
+
+  it('p-toolbar：点击可见项 → select emit；「更多」展开/收起', async () => {
+    const el = mount(PToolbar, { items: [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }] })
+    await nextTick()
+    const selected: unknown[] = []
+    const root = el.querySelector('.p-toolbar') as HTMLElement
+    // 通过组件实例订阅 emit：重挂载带 @select 的壳
+    const el2 = document.createElement('div')
+    const app2 = createApp({
+      render: () => h(PToolbar as never, { items: [{ key: 'a', label: 'A' }], onSelect: (k: unknown) => selected.push(k) } as never),
+    })
+    app2.mount(el2)
+    await nextTick()
+    ;(el2.querySelector('.p-toolbar-item') as HTMLElement).click()
+    expect(selected).toEqual(['a'])
+    root.remove()
   })
 })
