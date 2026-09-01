@@ -35,6 +35,8 @@ const SRC_COLORS: Record<string, string> = {
   capability: '#0e7c86',
   component: '#9a3d52',
   hmr: '#3d9a6a',
+  // ★合成「录制会话」根（视图层包装，不落数据/对比）：中性灰
+  session: '#6b7280',
 }
 function srcColor(source: string): string {
   return SRC_COLORS[source] ?? '#555'
@@ -130,6 +132,27 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
   }
   const total = Math.max(1, winEnd - winStart)
 
+  // ★合成「录制会话」根：顶层多个顺序 span（互不重叠 → 全部是根）也呈现经典火焰图堆叠形态
+  //   ——会话宽块 = 整个录制窗口，操作行画在下方；真实重叠仍自然嵌套更深。
+  //   仅视图层包装（不落数据层/不影响 compare），聚焦（zoom）时渲染真实子树不加包装
+  let renderRoots: FlameNode[] = roots
+  if (!data.focus && roots.length >= 2) {
+    let childTotal = 0
+    for (const r of roots) childTotal += r.durationMs
+    renderRoots = [
+      {
+        id: '__session__',
+        source: 'session',
+        name: '录制会话',
+        startMs: winStart,
+        durationMs: total,
+        selfMs: Math.max(0, total - childTotal),
+        children: roots,
+        depth: 0,
+      },
+    ]
+  }
+
   const board = document.createElement('div')
   board.className = 'pd-fg-board'
   let maxDepth = 0
@@ -138,7 +161,7 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
     for (const c of n.children) m = Math.max(m, depthOf(c, d + 1))
     return m
   }
-  for (const n of roots) maxDepth = Math.max(maxDepth, depthOf(n, 0))
+  for (const n of renderRoots) maxDepth = Math.max(maxDepth, depthOf(n, 0))
   board.style.height = (maxDepth + 1) * ROW_HEIGHT + 'px'
 
   /**
@@ -149,7 +172,8 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
     const leftPct = isRoot ? ((node.startMs - winStart) / total) * 100 : ((node.startMs - relStart) / relDur) * 100
     const widthPct = isRoot ? (node.durationMs / total) * 100 : (node.durationMs / relDur) * 100
     const block = document.createElement('div')
-    block.className = 'pd-fg-node' + (node.selfMs === 0 ? ' pd-fg-zero' : '')
+    const isSession = node.id === '__session__'
+    block.className = 'pd-fg-node' + (node.selfMs === 0 ? ' pd-fg-zero' : '') + (isSession ? ' pd-fg-session' : '')
     block.style.background = srcColor(node.source)
     const entry = cmp ? cmp.get(node.source + '\u0000' + node.name) : undefined
     if (entry && entry.verdict !== 'same') block.classList.add(entry.verdict === 'regression' ? 'pd-fg-reg' : 'pd-fg-imp')
@@ -166,8 +190,8 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
     const label = document.createElement('span')
     label.textContent = node.name + ' ' + node.selfMs + 'ms'
     block.appendChild(label)
-    // ★点击块 → 聚焦缩放（zoom 到该节点子树）
-    block.addEventListener('click', () => hooks.onFocus?.(node.id))
+    // ★点击块 → 聚焦缩放（zoom 到该节点子树）；会话根是视图包装不可聚焦（无真实数据 id）
+    if (!isSession) block.addEventListener('click', () => hooks.onFocus?.(node.id))
     box.appendChild(block)
     // 子容器：与块同左/宽、下一行；子块相对父定位 → 经典火焰图嵌套堆叠
     let subDepth = 0
@@ -186,6 +210,6 @@ export function renderFlamegraph(container: HTMLElement, data: FlamegraphViewDat
     return subDepth + 1
   }
 
-  for (const r of roots) renderNode(board, r, 0, winStart, total, true)
+  for (const r of renderRoots) renderNode(board, r, 0, winStart, total, true)
   container.appendChild(board)
 }

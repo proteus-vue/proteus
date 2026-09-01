@@ -102,6 +102,64 @@ describe('视图渲染函数', () => {
     expect((blocks[0] as HTMLElement).dataset.tip).toBeDefined()
   })
 
+  it('renderFlamegraph：★合成「录制会话」根——顶层多根（顺序不重叠）也呈堆叠：会话宽块在下层操作', () => {
+    const root = document.createElement('div')
+    renderFlamegraph(root, {
+      nodes: [
+        { id: '1', source: 'router', name: 'navigate /user', startMs: 0, durationMs: 30, selfMs: 30, children: [], depth: 0 },
+        { id: '2', source: 'api', name: 'GET /list', startMs: 40, durationMs: 20, selfMs: 20, children: [], depth: 0 },
+      ],
+    })
+    const blocks = root.querySelectorAll('.pd-fg-node')
+    // 会话根 + 两个真实操作
+    expect(blocks.length).toBe(3)
+    const session = blocks[0] as HTMLElement
+    expect(session.classList.contains('pd-fg-session')).toBe(true)
+    expect(session.textContent).toContain('录制会话')
+    // 会话宽块 = 整个录制窗口（0-60ms）
+    expect(session.style.left).toBe('0.00%')
+    expect(session.style.width).toBe('100.00%')
+    // 真实操作成为会话根子块：子容器在会话块下方（堆叠），相对会话定位
+    const childrenBox = session.parentElement?.querySelector('.pd-fg-children')
+    expect(childrenBox).not.toBeNull()
+    expect(blocks[1].textContent).toContain('navigate /user')
+    expect(blocks[2].textContent).toContain('GET /list')
+    // 会话根不可聚焦（无真实数据 id）
+    const onFocus = vi.fn()
+    const root2 = document.createElement('div')
+    renderFlamegraph(
+      root2,
+      {
+        nodes: [
+          { id: '1', source: 'router', name: 'navigate /user', startMs: 0, durationMs: 30, selfMs: 30, children: [], depth: 0 },
+          { id: '2', source: 'api', name: 'GET /list', startMs: 40, durationMs: 20, selfMs: 20, children: [], depth: 0 },
+        ],
+      },
+      { onFocus },
+    )
+    const session2 = root2.querySelector('.pd-fg-session') as HTMLElement
+    session2.click()
+    expect(onFocus).not.toHaveBeenCalled()
+    // 点真实操作仍可聚焦
+    const real = root2.querySelectorAll('.pd-fg-node')[1] as HTMLElement
+    real.click()
+    expect(onFocus).toHaveBeenCalledWith('1')
+    // 聚焦（zoom）时渲染真实子树不加会话包装
+    const root3 = document.createElement('div')
+    renderFlamegraph(
+      root3,
+      {
+        nodes: [
+          { id: '1', source: 'router', name: 'navigate /user', startMs: 0, durationMs: 30, selfMs: 30, children: [], depth: 0 },
+        ],
+        focus: { id: '1', source: 'router', name: 'navigate /user', startMs: 0, durationMs: 30, selfMs: 30, children: [], depth: 0 },
+        breadcrumb: [{ id: '1', name: 'router.navigate /user' }],
+      },
+    )
+    expect(root3.querySelector('.pd-fg-session')).toBeNull()
+    expect(root3.querySelectorAll('.pd-fg-node').length).toBe(1)
+  })
+
   it('renderFlamegraph：★点击块 → onFocus（聚焦缩放）；focus 子树渲染 + 面包屑 + 返回上级', () => {
     const tree = {
       id: '1', source: 'lifecycle', name: 'boot', startMs: 0, durationMs: 100, selfMs: 30, depth: 0,

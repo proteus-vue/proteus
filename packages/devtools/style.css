@@ -286,6 +286,13 @@ body.pd-body {
   border-color: #555;
 }
 
+/* ★合成「录制会话」根（视图层包装）：虚线边框 + 降透明度区分容器，与真实节点区分 */
+.pd-fg-session {
+  border-style: dashed;
+  opacity: 0.85;
+  cursor: default;
+}
+
 /* ★嵌套子容器（子块相对父块定位——经典火焰图堆叠） */
 .pd-fg-children {
   position: absolute;
