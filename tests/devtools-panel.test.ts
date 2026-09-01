@@ -417,14 +417,16 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     tl.dispose()
   })
 
-  it('installProteusInspectors：注册 app-config inspector + getInspectorState 当前值 + editInspectorState 回写（path → 嵌套 patch）', () => {
+  it('installProteusInspectors：注册 app-config inspector + 树根节点 + getInspectorState 当前值 + editInspectorState 回写（path → 嵌套 patch）', () => {
     let config = { app: { name: 'Demo' }, features: { glass: true } }
     const calls: Array<{ method: string; options: unknown }> = []
-    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const treeCbs: Array<(p: { inspectorId: string; rootNodes?: unknown[] }) => void> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> }) => void> = []
     const editCbs: Array<(p: { inspectorId: string; nodeId: string; path: string[]; state: { value: unknown } }) => void> = []
     const api = {
       addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
       on: {
+        getInspectorTree: (cb: never) => treeCbs.push(cb as never),
         getInspectorState: (cb: never) => stateCbs.push(cb as never),
         editInspectorState: (cb: never) => editCbs.push(cb as never),
       },
@@ -440,6 +442,10 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
+    // ★树根节点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
+    const treePayload = { inspectorId: 'proteus-app-config' }
+    treeCbs[0](treePayload)
+    expect((treePayload.rootNodes as Array<{ id: string }>)?.[0].id).toBe('root')
     // getInspectorState → resolved 分组（★对象形态：分组名 → 状态行数组；config 顶层键平铺多行）
     const payload = { inspectorId: 'proteus-app-config', nodeId: 'root' }
     stateCbs[0](payload)
@@ -459,12 +465,14 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     inspectors.dispose()
   })
 
-  it('installProteusInspectors：getStyleSafetyRecords 提供 → 注册 proteus-style-safety inspector（rejected 记录）', () => {
+  it('installProteusInspectors：getStyleSafetyRecords 提供 → 注册 proteus-style-safety inspector（树根节点 + rejected 记录）', () => {
     const calls: Array<{ method: string; options: unknown }> = []
-    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const treeCbs: Array<(p: { inspectorId: string; rootNodes?: unknown[] }) => void> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> }) => void> = []
     const api = {
       addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
       on: {
+        getInspectorTree: (cb: never) => treeCbs.push(cb as never),
         getInspectorState: (cb: never) => stateCbs.push(cb as never),
         editInspectorState: () => {},
       },
@@ -473,6 +481,10 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     installProteusInspectors(api as never, { getStyleSafetyRecords: () => records })
     const ids = calls.map((c) => (c.options as { id: string }).id)
     expect(ids).toContain('proteus-style-safety')
+    // ★树根节点（kit 只在 selectedNodeId 非空时请求 state）
+    const treePayload = { inspectorId: 'proteus-style-safety' }
+    treeCbs[treeCbs.length - 1](treePayload)
+    expect((treePayload.rootNodes as Array<{ id: string }>)?.[0].id).toBe('root')
     // ★注册顺序：app-config 先、style-safety 后 → 取最后一个 getInspectorState 回调
     const last = stateCbs[stateCbs.length - 1]
     const payload = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
@@ -482,7 +494,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(payload.state?.rejected?.[0]).toEqual({ key: 'display', value: { value: 'flex', reason: '禁止', ts: 1 } })
     // 不提供 getStyleSafetyRecords → 不注册
     const calls2: Array<{ id: string }> = []
-    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
+    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorTree: () => {}, getInspectorState: () => {}, editInspectorState: () => {} } } as never)
     expect(calls2.some((c) => c.id === 'proteus-style-safety')).toBe(false)
   })
 
@@ -519,8 +531,9 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(routerInspector).toBeDefined()
     expect(routerInspector.options.label).toBe('Router')
     // ★嵌套树：导航记录节点置顶 + index 根 → user（parent index）→ user-profile（parent user）
+    // ★取最后一个 tree 回调（app-config 也注册了树根节点）
     const treePayload = { inspectorId: 'proteus-router' }
-    treeCbs[0](treePayload)
+    treeCbs[treeCbs.length - 1](treePayload)
     const roots = treePayload.rootNodes as Array<{ id: string; label: string; children?: Array<{ id: string; label: string; children?: unknown[] }> }>
     expect(roots[0].id).toBe('proteus-records') // 导航记录置顶
     expect(roots[0].label).toContain('导航记录 (2)')
@@ -560,7 +573,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(other.state).toBeUndefined()
     // 不提供 pages → 不注册 router inspector
     const calls2: Array<{ id: string }> = []
-    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
+    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorTree: () => {}, getInspectorState: () => {}, editInspectorState: () => {} } } as never)
     expect(calls2.some((c) => c.id === 'proteus-router')).toBe(false)
   })
 

@@ -187,6 +187,11 @@ function buildRouterTree(
  */
 export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
   api.addInspector({ id: APP_CONFIG_INSPECTOR, label: 'App Config', icon: 'settings' })
+  // ★必须有树节点可点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
+  api.on.getInspectorTree((payload) => {
+    if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
+    payload.rootNodes = [{ id: 'root', label: 'App Config' }]
+  })
   api.on.getInspectorState((payload) => {
     if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
     // ★展示优化：config 顶层键平铺成多行（分组「resolved」下直接是各配置项，非单行 value 包裹）
@@ -202,6 +207,10 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
   }
   if (options.getStyleSafetyRecords) {
     api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' })
+    api.on.getInspectorTree((payload) => {
+      if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
+      payload.rootNodes = [{ id: 'root', label: 'Style Safety' }]
+    })
     api.on.getInspectorState((payload) => {
       if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
       // ★展示优化：拦截记录平铺成多行（分组「rejected」下每条 prop 一行，展开 value/reason/ts）
