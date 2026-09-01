@@ -175,3 +175,12 @@ export type {
   PatchStep,
   StateSnapshotter,
 } from './state-snapshot'
+export { createRouteBacktracker } from './route-backtrack'
+export type {
+  GuardResult,
+  RouteLocationLike,
+  GuardRecord,
+  NavRecord,
+  RouteBacktrackerOptions,
+  RouteBacktracker,
+} from './route-backtrack'

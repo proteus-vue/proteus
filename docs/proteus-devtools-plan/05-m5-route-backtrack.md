@@ -1,5 +1,7 @@
 # M5 — 路由回溯
 
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createRouteBacktracker`（beginNav/guardStart/guardEnd/finishNav 导航生命周期采集 + 守卫耗时瀑布 + 结果 next/redirect/cancel/error + 环形缓冲 500 + 回溯查询 pathTo/redirects/cancels + onEvent 可观测），9 用例全绿；Router 钩子适配（installRouter 注入采集）与 UI（路由树/时间线/守卫瀑布）待面板工程（v1.0+）。
+
 ## 目标
 
 完整还原导航路径，可视化守卫执行，定位"为什么跳到了这里 / 为什么没跳过去"。
