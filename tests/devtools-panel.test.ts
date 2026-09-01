@@ -1,10 +1,13 @@
 // tests/devtools-panel.test.ts —— @proteus-vue/devtools（devtools-plan UI 层）
 // 五视图渲染函数（时间轴泳道/火焰图/状态/路由/根因）+ 面板装配（事件流 → 视图更新 + tab 切换）+ WS 数据源（CDP Proteus.event 协议）
+// ★Vue DevTools 接入：installProteusTimeline（Timeline layer + 事件映射）+ createTraceBusSource（TraceBus 直连源）
 // @vitest-environment happy-dom（DOM 渲染断言）
 import { describe, it, expect, vi } from 'vitest'
 import {
   createDevtoolsPanel,
   createDevtoolsWsSource,
+  installProteusTimeline,
+  createTraceBusSource,
   renderTimeline,
   renderFlamegraph,
   renderState,
@@ -12,6 +15,7 @@ import {
   renderErrors,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
+import { createTraceBus } from '@proteus-vue/devtools-runtime'
 import type { TraceEvent, TraceSource } from '@proteus-vue/devtools-runtime'
 
 function ev(source: TraceSource, phase: 'start' | 'end' | 'point' | 'error', name: string, timestamp: number, traceId?: string, payload?: unknown): TraceEvent {
@@ -188,6 +192,67 @@ describe('面板装配', () => {
         resolve()
       }, 30)
     })
+  })
+})
+
+describe('Vue DevTools 接入：Timeline 适配器', () => {
+  function mockApi() {
+    const calls: Array<{ method: string; options: unknown }> = []
+    return {
+      calls,
+      api: {
+        addTimelineLayer: (options: unknown) => calls.push({ method: 'addTimelineLayer', options }),
+        addTimelineEvent: (options: unknown) => calls.push({ method: 'addTimelineEvent', options }),
+      },
+    }
+  }
+
+  it('installProteusTimeline：注册 proteus layer + 事件映射（time/title/data/groupId）', () => {
+    const { calls, api } = mockApi()
+    const source = mockSource()
+    const tl = installProteusTimeline(api as never, { source })
+    expect(tl.layerId).toBe('proteus')
+    // layer 注册
+    const layer = calls[0] as { method: string; options: { id: string; label: string } }
+    expect(layer.method).toBe('addTimelineLayer')
+    expect(layer.options.id).toBe('proteus')
+    expect(layer.options.label).toBe('Proteus')
+    // 推事件 → TimelineEvent 映射
+    source.push(ev('api', 'error', 'refreshToken', 1000, 't1', { status: 401 }))
+    const evt = calls[1] as { method: string; options: { layerId: string; event: { time: number; title: string; data: { source: string }; groupId: string } } }
+    expect(evt.method).toBe('addTimelineEvent')
+    expect(evt.options.layerId).toBe('proteus')
+    expect(evt.options.event.time).toBe(1000)
+    expect(evt.options.event.title).toBe('api.refreshToken')
+    expect(evt.options.event.data.source).toBe('api')
+    expect(evt.options.event.groupId).toBe('t1') // 按 traceId 分组
+    tl.dispose()
+    source.push(ev('api', 'point', 'after-dispose', 2000))
+    expect(calls.length).toBe(2) // dispose 后不再推送
+  })
+
+  it('无 traceId → groupId 回退为 source', () => {
+    const { calls, api } = mockApi()
+    const source = mockSource()
+    const tl = installProteusTimeline(api as never, { source })
+    source.push(ev('router', 'start', 'nav', 500))
+    const evt = calls[1] as { options: { event: { groupId: string } } }
+    expect(evt.options.event.groupId).toBe('router')
+    tl.dispose()
+  })
+
+  it('createTraceBusSource：TraceBus 事件 → DevtoolsSource 分发', () => {
+    const bus = createTraceBus()
+    bus.setEnabled(true)
+    const source = createTraceBusSource(bus)
+    const received: TraceEvent[] = []
+    const off = source.onEvent((e) => received.push(e))
+    bus.emit('lifecycle', 'point', 'boot', undefined, 't9')
+    expect(received.length).toBe(1)
+    expect(received[0]).toMatchObject({ source: 'lifecycle', name: 'boot', traceId: 't9' })
+    off()
+    bus.emit('lifecycle', 'point', 'boot-2')
+    expect(received.length).toBe(1)
   })
 })
 

@@ -8,6 +8,8 @@ Proteus DevTools 面板（devtools-plan **B3-M7 UI 层**）——把 TraceBus �
 |-----|------|
 | `createDevtoolsPanel(root, { source, onTimeTravel? })` | **面板装配**：tab 布局（timeline/flamegraph/state/route/errors）+ 数据层收集器 + 五视图渲染（16ms 渲染节流）；`show(view)` 切视图 / `destroy()` 清理 |
 | `createDevtoolsWsSource(url, createSocket?)` | **WS 数据源**：连接 dev server → `Proteus.enable`（CDP 协议，对接 `@proteus-vue/hmr/cdp` 桥）→ `Proteus.event` 重组 TraceEvent 分发；断线 1s 重连 |
+| `createTraceBusSource(bus)` | **TraceBus 直连源**：进程内 TraceBus 事件 → DevtoolsSource（Web 端运行时接入用） |
+| `installProteusTimeline(api, { source })` | **★接入 Vue 官方 DevTools**：注册 `proteus` Timeline layer，把 Proteus 事件流推为 Vue DevTools Timeline 事件（按 traceId 分组） |
 | `renderTimeline` / `renderFlamegraph` / `renderState` / `renderRoute` / `renderErrors` | 五视图**纯渲染函数**（data → DOM，jsdom 可单测） |
 
 ## 视图
@@ -20,17 +22,39 @@ Proteus DevTools 面板（devtools-plan **B3-M7 UI 层**）——把 TraceBus �
 | **route** | 导航链（from → to + 耗时 + traceId）+ 守卫徽章（next 绿 / redirect 橙 / cancel·error 红） |
 | **errors** | 根因卡片（attribution ⚑ 高亮 + causedBy 调用链 + 影响范围 chips + 复现脚本步骤） |
 
-## 使用
+## ★接入 Vue 官方 DevTools（Web 端）
+
+Proteus 的 **Web 端即标准 Vue 应用**——浏览器装 [Vue DevTools 扩展](https://devtools.vuejs.org) 后：
+
+| 能力 | 提供方 | 说明 |
+|------|--------|------|
+| 组件树 / Pinia 状态 / Vue 性能 | **Vue DevTools 原生** | 零代码——Web 端直接可见 |
+| 编译/路由/API/生命周期事件 | **Proteus Timeline layer** | 经 `@vue/devtools-api` 推入 Vue DevTools **Timeline** 面板 |
+| MP 端 / 编译管线 / HMR / 火焰图 / 根因 | **Proteus 独立面板**（本包） | Vue DevTools 看不到的部分 |
+
+```ts
+// 应用侧接入（examples/main.ts 已示范）
+import { setupDevtoolsPlugin } from '@vue/devtools-api'
+import { createTraceBusSource, installProteusTimeline } from '@proteus-vue/devtools'
+
+setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (devtoolsApi) => {
+  installProteusTimeline(devtoolsApi, { source: createTraceBusSource(traceBus) })
+})
+```
+
+**安全降级**：`setupDevtoolsPlugin` 在无扩展/无 hook 时不执行回调（devtools-kit 8.x 机制）——生产零开销（实测无扩展时应用零副作用）。
+
+## 使用（独立面板）
 
 ```html
-<script type="module">
-  import { createDevtoolsPanel, createDevtoolsWsSource } from '@proteus-vue/devtools'
-  const source = createDevtoolsWsSource('ws://127.0.0.1:5174/')
-  createDevtoolsPanel(document.getElementById('root'), { source })
+<script src="@proteus-vue/devtools/panel"></script> <!-- IIFE bundle：file:// 双击可直接打开 -->
+<script>
+  const source = ProteusDevtools.createDevtoolsWsSource('ws://127.0.0.1:5174/')
+  ProteusDevtools.createDevtoolsPanel(document.getElementById('root'), { source })
 </script>
 ```
 
-本地直接打开 `node_modules/@proteus-vue/devtools/panel.html`（`?ws=ws://127.0.0.1:<port>` 覆盖连接地址）。
+本地直接双击打开 `node_modules/@proteus-vue/devtools/panel.html`（`?ws=ws://127.0.0.1:<port>` 覆盖连接地址；需先起 dev server）。
 
 ## 设计约束（对齐 plan 铁律）
 

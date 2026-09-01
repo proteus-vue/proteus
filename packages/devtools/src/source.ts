@@ -1,11 +1,24 @@
 // packages/devtools/src/source.ts
 // DevTools 数据源抽象（注入式）：本地 TraceBus 直连 / WS（CDP Proteus.* 协议，对接 @proteus-vue/hmr/cdp 桥）
 import type { TraceEvent, TracePhase, TraceSource } from '@proteus-vue/devtools-runtime'
+import type { TraceBus } from '@proteus-vue/devtools-runtime'
 
 export interface DevtoolsSource {
   /** 订阅事件流，返回取消函数 */
   onEvent(cb: (e: TraceEvent) => void): () => void
   close(): void
+}
+
+/** TraceBus 直连源：进程内 TraceBus 事件 → DevtoolsSource（Web 端运行时接入用） */
+export function createTraceBusSource(bus: TraceBus): DevtoolsSource {
+  return {
+    onEvent(cb: (e: TraceEvent) => void): () => void {
+      return bus.on(cb)
+    },
+    close(): void {
+      // TraceBus 由业务持有，close 不关闭总线
+    },
+  }
 }
 
 /** WS 数据源：连接 dev server → Proteus.enable → 接收 Proteus.event 重组 TraceEvent（断线 1s 重连） */
