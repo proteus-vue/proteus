@@ -1,7 +1,7 @@
 // tests/devtools-panel-page.test.ts —— devtools 面板页面端点（devtoolsRelayPlugin 的 /proteus-devtools）
 // 开发者浏览器直接打开面板（无需点 node_modules 里的 panel.html）；注入当前 host 的 /proteus-panel 默认 WS + 资源路径重写
 import { describe, it, expect } from 'vitest'
-import { createPanelPageHandler, resolveDevtoolsDir } from '@proteus-vue/plugin-vite'
+import { createPanelPageHandler, resolveDevtoolsDir, printPanelUrl } from '@proteus-vue/plugin-vite'
 
 function mockRes() {
   const headers: Record<string, string> = {}
@@ -50,5 +50,29 @@ describe('createPanelPageHandler', () => {
     const res = mockRes()
     expect(handler({ url: '/other' }, res)).toBe(false)
     expect(res.body).toBe('')
+  })
+})
+
+describe('printPanelUrl', () => {
+  it('listening 后打印面板地址（取实际端口）', () => {
+    let cb: (() => void) | null = null
+    const httpServer = {
+      once: (event: string, fn: () => void) => {
+        if (event === 'listening') cb = fn
+      },
+      address: () => ({ port: 5173 }),
+    }
+    const logs: string[] = []
+    const logger = { info: (m: string) => logs.push(m) }
+    printPanelUrl(httpServer, logger)
+    expect(cb).not.toBeNull()
+    cb?.()
+    expect(logs[0]).toContain('http://localhost:5173/proteus-devtools')
+  })
+
+  it('无 httpServer（preview 场景无 listening）→ 静默不打印', () => {
+    const logs: string[] = []
+    printPanelUrl(null, { info: (m: string) => logs.push(m) })
+    expect(logs.length).toBe(0)
   })
 })

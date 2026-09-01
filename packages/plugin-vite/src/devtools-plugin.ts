@@ -60,6 +60,23 @@ export function createPanelPageHandler(devtoolsDir: string): (req: { url?: strin
 }
 
 /**
+ * 启动后打印面板地址（vite 启动输出里提示开发者：devtools 面板在 /proteus-devtools）
+ * 纯逻辑（httpServer/logger 结构注入可单测）；listening 事件后取实际端口（port 0 随机时准确）
+ */
+export function printPanelUrl(
+  httpServer: { once?: (event: string, cb: () => void) => void; address?: () => unknown } | undefined | null,
+  logger: { info: (msg: string) => void } | undefined | null,
+  defaultPort = 5173,
+): void {
+  if (!httpServer || typeof httpServer.once !== 'function') return
+  httpServer.once('listening', () => {
+    const addr = httpServer.address?.()
+    const port = typeof addr === 'object' && addr !== null ? (addr as { port?: number }).port : undefined
+    logger?.info(`  ➜  Proteus DevTools:  http://localhost:${port ?? defaultPort}/proteus-devtools`)
+  })
+}
+
+/**
  * devtools 远程中转 + 面板页面插件：
  *   `/proteus-source`（应用桥）/ `/proteus-panel`（面板 WS）/ `/proteus-devtools`（面板页面）
  * 仅 dev serve 生效（apply: 'serve'），build 零产物。
@@ -105,10 +122,17 @@ export function devtoolsRelayPlugin(opts: DevtoolsRelayOptions = {}): Plugin {
     configureServer(server) {
       if (opts.enabled === false || relay) return
       setup(server)
+      // ★启动后打印面板地址（开发者无需记 /proteus-devtools 路径）
+      const httpServer = (server as { httpServer?: unknown }).httpServer
+      const logger = (server as { config?: { logger?: { info: (msg: string) => void } } }).config?.logger
+      printPanelUrl(httpServer as never, logger)
     },
     configurePreviewServer(server) {
       if (opts.enabled === false || relay) return
       setup(server)
+      const httpServer = (server as { httpServer?: unknown }).httpServer
+      const logger = (server as { config?: { logger?: { info: (msg: string) => void } } }).config?.logger
+      printPanelUrl(httpServer as never, logger)
     },
     closeBundle() {
       wss?.close()
