@@ -2,7 +2,7 @@
 
 > **执行位**：G-22 补充（柔性布局体系第五个原语 `p-adaptive`）
 > **关联**：`p-grid` / `p-fluid` / `p-stack` / `p-fit`（G-22 四原语）、Compiler Plugin（G-21）、Style Safety（G-16）、Safe Area（G-09）、Glass（G-07）
-> **状态**：规划（M1 后落地，B1 可单测）
+> **状态**：规划（M1 后落地，**B1 已落地**：parse/validate/compute 纯逻辑在 `@proteus-vue/fluid` adaptive.ts + fluid:check FLD007-009）
 
 ---
 

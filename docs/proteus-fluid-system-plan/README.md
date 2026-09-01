@@ -105,7 +105,7 @@ Web alias + MP usingComponents 自动编译）；S2 迁入包内组件目录 + m
 | S1 | 拆包 + FluidContext（容器查询/断点/方向）+ p-split + p-zone 简化版 + ★essence 定位（能力检测 + 统一断点入口 + p-grid 降级） | 容器宽度变化 → 断点/分栏实时切换；无 grid 环境 flex-wrap 降级（单测 + demo） | ✅ 已落地（@proteus-vue/fluid：context/env/breakpoint/**capabilities/layout** + src/components/p-split·p-zone·p-grid 降级 + examples/pages/fluid-system-demo） |
 | S2 | p-safe（安全区 env()）+ p-aspect + 折叠形态（display-mode） | 折叠屏/刘海 demo | ✅ 已落地（@proteus-vue/fluid safe-area.ts resolveSafeAreaStyle + capabilities aspectRatio + src/components/p-safe·p-aspect + fluid-system-demo S2 区块 + viewport-fit=cover） |
 | S3 | p-sidebar/p-toolbar + 车机焦点导航 + drive-mode | 窄屏 bottom-bar → 宽屏 side-rail | ✅ 已落地（@proteus-vue/fluid motion.ts/nav.ts + src/components/p-sidebar·p-toolbar + demo S3 区块） |
-| S4 | p-scale 动态字号/密度 + FLD 规则扩展（fluid:check） | 无障碍 + 治理闭环 | ✅ 已落地（@proteus-vue/fluid scale.ts + src/components/p-scale + FLD007/008 + demo S4 区块） |
+| S4 | p-scale 动态字号/密度 + FLD 规则扩展（fluid:check） | 无障碍 + 治理闭环 | ✅ 已落地（@proteus-vue/fluid scale.ts + src/components/p-scale + FLD012/013 + demo S4 区块；FLD007-011 为 p-adaptive 专项见 adaptive-container-plan） |
 | S5 | 组件目录入包 + mpTransform 多组件目录 + App 端求解器接口（B4/B5 后接） | 全端消费 | ⬜（★MP 共享模块已自动识别 @proteus-vue/fluid——组件内 import 已可编译，仅模板 ref 降级） |
 
 ## 7. 与既有体系关系

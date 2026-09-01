@@ -105,14 +105,14 @@ describe('validateAdaptiveConstraint', () => {
 
 ## 5. 分批策略
 
-### B1：编译器 + 纯逻辑（M1，零依赖）
+### B1：编译器 + 纯逻辑（M1，零依赖）✅ 已落地
 
-- [ ] `compute()` 纯函数（区间查找）
-- [ ] `validateAdaptiveConstraint()`（FLD007/008/009）
-- [ ] `parseAdaptiveExpression()`（字符串 → AST）
-- [ ] 单测覆盖（§3）
+- [x] `compute()` 纯函数（区间查找）——`computeAdaptiveForm`（fluid/adaptive.ts，[lo, hi) 左闭右开 + 越界兜底）
+- [x] `validateAdaptiveConstraint()`（FLD007/008/009）——`validateAdaptiveRanges` + fluid:check 接入
+- [x] `parseAdaptiveExpression()`（字符串 → AST）——支持 ∞/inf/省略端点
+- [x] 单测覆盖（§3）——tests/adaptive.test.ts（12 用例）
 
-**验收**：100% 单测通过，零原生依赖
+**验收**：100% 单测通过，零原生依赖 ✅
 
 ### B2：运行时 Controller（M2）
 

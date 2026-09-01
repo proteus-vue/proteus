@@ -23,3 +23,6 @@ export type { ToolbarOverflowOptions } from './nav'
 // ★S4 无障碍：动态字号级别 + 密度语义纯逻辑
 export { SCALE_LEVELS, resolveScaleRatio, resolveDensity, buildScaleStyle } from './scale'
 export type { FluidDensity, ScaleStyleOptions } from './scale'
+// ★p-adaptive（adaptive-container-plan B1）：容器形态自适应纯逻辑（解析/校验/求解）
+export { parseAdaptiveExpression, validateAdaptiveRanges, computeAdaptiveForm } from './adaptive'
+export type { AdaptiveVariant, AdaptiveDiagnostic } from './adaptive'

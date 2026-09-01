@@ -8,8 +8,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale } from '@proteus-vue/components'
-import { createDeviceEnv, shouldReduceMotion } from '@proteus-vue/fluid'
-import type { DeviceEnv, FluidDisplayMode } from '@proteus-vue/fluid'
+import { createDeviceEnv, shouldReduceMotion, createSizeAwareObserver, computeAdaptiveForm } from '@proteus-vue/fluid'
+import type { DeviceEnv, FluidDisplayMode, SizeAwareObserver } from '@proteus-vue/fluid'
 
 const cards = ref([{ id: 1, title: '分区卡片' }])
 function expand(): void {
@@ -51,6 +51,28 @@ const navItems = [
 function onSelect(key: string): void {
   console.log('[toolbar] select', key)
 }
+
+// ★p-adaptive 求解演示（B1 纯逻辑可视化）：视口宽度 → 形态（sheet/dialog/popover）
+const ADAPTIVE_MODES = [
+  { form: 'sheet', lo: 0, hi: 600 },
+  { form: 'dialog', lo: 600, hi: 840 },
+  { form: 'popover', lo: 840, hi: Infinity },
+]
+const viewportWidth = ref(0)
+const adaptiveForm = ref('sheet')
+let aware: SizeAwareObserver | null = null
+onMounted(() => {
+  aware = createSizeAwareObserver(null, { viewportSize: () => window.innerWidth })
+  aware.subscribe((s) => {
+    viewportWidth.value = s.viewportWidth
+    const form = computeAdaptiveForm(ADAPTIVE_MODES, s.viewportWidth)
+    if (form) adaptiveForm.value = form
+  })
+})
+onUnmounted(() => {
+  if (aware) aware.destroy()
+  aware = null
+})
 </script>
 
 <template>
@@ -174,6 +196,19 @@ function onSelect(key: string): void {
         <p class="scale-line">level 3 · 特大（comfortable 无障碍密度）</p>
         <p class="scale-line">行高 1.8 / 间距 16px</p>
       </p-scale>
+    </div>
+
+    <!-- ★p-adaptive 求解演示（adaptive-container-plan B1）：视口宽度 → 弹窗形态（sheet/dialog/popover） -->
+    <h3 class="sec-title">p-adaptive · 容器形态自适应（B1 求解演示）</h3>
+    <p class="hint">当前视口 <strong>{{ viewportWidth }}px</strong> → 弹窗形态 <strong>{{ adaptiveForm }}</strong>
+      （sheet &lt; 600 / dialog 600-840 / popover ≥ 840——拖拽窗口看切换；形态切换是「换容器」由渲染层 nodeOps 实现）</p>
+    <div class="adaptive-demo">
+      <div class="adaptive-form">{{ adaptiveForm }}</div>
+      <div class="adaptive-bar">
+        <span class="adaptive-seg" :class="{ on: adaptiveForm === 'sheet' }">sheet</span>
+        <span class="adaptive-seg" :class="{ on: adaptiveForm === 'dialog' }">dialog</span>
+        <span class="adaptive-seg" :class="{ on: adaptiveForm === 'popover' }">popover</span>
+      </div>
     </div>
   </div>
 </template>
@@ -337,5 +372,36 @@ function onSelect(key: string): void {
 .scale-line {
   margin: 0;
   color: #333;
+}
+/* ★p-adaptive 求解演示 */
+.adaptive-demo {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  background: #fafafa;
+  margin-bottom: 8px;
+}
+.adaptive-form {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1d6fb8;
+  margin-bottom: 8px;
+}
+.adaptive-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.adaptive-seg {
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: #eee;
+  color: #999;
+  font-size: 12px;
+}
+.adaptive-seg.on {
+  background: #1d6fb8;
+  color: #fff;
 }
 </style>

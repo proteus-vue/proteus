@@ -77,4 +77,4 @@ bash pack.sh
 
 ## 状态
 
-规划完成，待并入 `proteus-architecture` 规约。**B1（compute/validate 纯逻辑）可立即动手，零依赖、可单测。**
+规划完成，待并入 `proteus-architecture` 规约。**B1（compute/validate 纯逻辑）已落地**（`@proteus-vue/fluid` adaptive.ts：parseAdaptiveExpression / validateAdaptiveRanges（FLD007）/ computeAdaptiveForm，零依赖可单测；`proteus fluid:check` 接入 FLD007-009）。B2（AdaptiveController 容器监听）起待组件层。

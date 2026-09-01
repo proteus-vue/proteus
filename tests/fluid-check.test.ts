@@ -1,7 +1,8 @@
 // tests/fluid-check.test.ts
 // ★G-22 柔性布局严格规则（fluid-layout-plan 01 §9 / 03）：proteus fluid:check
 //   FLD001 禁 @media / FLD002 禁硬编码断点 / FLD003 p-fluid 须 min·max / FLD004 p-grid 须 min-col-width / FLD006 禁 Dimensions.get
-//   ★S4：FLD007 过小字号（≤11px）/ FLD008 p-scale level 越界 · density 非法
+//   ★S4：FLD012 过小字号（≤11px）/ FLD013 p-scale level 越界 · density 非法（FLD007-011 为 p-adaptive 专项，见 adaptive-container-plan）
+//   ★p-adaptive（adaptive-container-plan B1）：FLD007 区间连续不重叠 / FLD008 禁手动宽度判断 / FLD009 端点来自 breakpoints
 import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -70,7 +71,7 @@ describe('★G-22 fluid:check（FLD001-006）', () => {
     expect(checkFluidFile(path.join(TMP, 'pages/good.vue'))).toEqual([])
   })
 
-  it('★S4 FLD007/008：过小字号 + p-scale level 越界/density 非法命中；合规不误报', () => {
+  it('★S4 FLD012/013：过小字号 + p-scale level 越界/density 非法命中；合规不误报', () => {
     write(
       'pages/s4-bad.vue',
       [
@@ -85,8 +86,8 @@ describe('★G-22 fluid:check（FLD001-006）', () => {
     )
     const violations = checkFluidFile(path.join(TMP, 'pages/s4-bad.vue'))
     const rules = violations.map((v) => v.rule).sort()
-    expect(rules).toContain('FLD007')
-    expect(rules.filter((r) => r === 'FLD008').length).toBe(2) // level 越界 + density 非法
+    expect(rules).toContain('FLD012')
+    expect(rules.filter((r) => r === 'FLD013').length).toBe(2) // level 越界 + density 非法
     // 合规：≥12px 字号 + p-scale 合法 level/density 不误报
     write(
       'pages/s4-good.vue',
@@ -100,6 +101,38 @@ describe('★G-22 fluid:check（FLD001-006）', () => {
       ].join('\n'),
     )
     expect(checkFluidFile(path.join(TMP, 'pages/s4-good.vue'))).toEqual([])
+  })
+
+  it('★p-adaptive FLD007/008/009：重叠区间 + 手动宽度判断 + 非常用端点命中；合规不误报', () => {
+    write(
+      'pages/adapt-bad.vue',
+      [
+        '<template>',
+        '<p-modal p-adaptive="sheet(0, 600) | dialog(500, 840) | popover(840, 2000)">x</p-modal>',
+        '</template>',
+        '<script setup lang="ts">',
+        'function open() { if (width < 600) showSheet() }',
+        '</script>',
+      ].join('\n'),
+    )
+    const violations = checkFluidFile(path.join(TMP, 'pages/adapt-bad.vue'))
+    const rules = violations.map((v) => v.rule).sort()
+    expect(rules).toContain('FLD007') // 500-600 重叠
+    expect(rules).toContain('FLD008') // if (width < 600) showSheet()
+    expect(rules.filter((r) => r === 'FLD009').length).toBe(2) // 500 / 2000 非常用断点（0 下界豁免）
+    // 合规：连续区间 + 常用断点端点 + 无手动宽度判断
+    write(
+      'pages/adapt-good.vue',
+      [
+        '<template>',
+        '<p-modal p-adaptive="sheet(0, 600) | dialog(600, 840) | popover(840, 1440)">x</p-modal>',
+        '</template>',
+        '<script setup lang="ts">',
+        'function open() { show() }',
+        '</script>',
+      ].join('\n'),
+    )
+    expect(checkFluidFile(path.join(TMP, 'pages/adapt-good.vue'))).toEqual([])
   })
 
   it('runFluidCheck：目录递归扫描 + 汇总（坏文件 → ok false；全合规 → ok true）', () => {
