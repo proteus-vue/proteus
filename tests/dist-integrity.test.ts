@@ -34,4 +34,18 @@ describe('dist 构建产物完整性（共享单例不内联）', () => {
     expect(code).toContain('@proteus-vue/devtools-runtime') // external import 保留
     expect(code).not.toContain('function getProteusTraceBus') // 不内联单例实现
   })
+
+  it('★任何包 dist 不得内联 @vue/runtime-core（CJS 版覆盖全局 __VUE_HMR_RUNTIME__ → HMR map 分叉失效，决策 #254）', () => {
+    const offenders: string[] = []
+    for (const dir of readdirSync(packagesDir)) {
+      const distFile = path.join(packagesDir, dir, 'dist', 'index.js')
+      if (!existsSync(distFile)) continue
+      const code = readFileSync(distFile, 'utf8')
+      // 内联 vue 会连带引入 runtime-core 的 CJS 实现（node platform 解析）
+      if (code.includes('runtime-core/dist/runtime-core.cjs')) offenders.push(`${dir}: 内联 runtime-core.cjs`)
+      // 若内联了 vue 的 ref 等实现（非 external import from 'vue'）也标记
+      if (code.includes('function createRef(') && !code.includes('from "vue"')) offenders.push(`${dir}: 疑似内联 vue`)
+    }
+    expect(offenders).toEqual([])
+  })
 })
