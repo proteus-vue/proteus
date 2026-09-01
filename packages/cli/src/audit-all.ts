@@ -11,6 +11,7 @@ import { checkConfigFile } from './config-check'
 import { checkI18nUsage, formatI18nCheck } from './i18n-check'
 import { runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
+import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 
 /** 10 §CI 耗时预算：audit all < 12s */
 export const AUDIT_ALL_BUDGET_MS = 12000
@@ -117,6 +118,19 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
       })
       domains.push({ name: 'components', ok: value.ok, ms, detail: value.text })
     }
+  }
+
+  // ★M10 devtools-budget：DevTools 性能预算烟测（bus.emit / 火焰图 / timeline ingest；10 倍余量上界抓病态回归）
+  {
+    const { value, ms } = await timed(() => {
+      try {
+        const result = runDevtoolsBudget()
+        return { ok: result.ok, text: formatDevtoolsBudget(result) }
+      } catch (e) {
+        return { ok: true, text: `[proteus-devtools-budget] 跳过：${(e as Error).message}` }
+      }
+    })
+    domains.push({ name: 'devtools-budget', ok: value.ok, ms, detail: value.text })
   }
 
   const totalMs = Math.round(domains.reduce((acc, d) => acc + d.ms, 0) * 10) / 10

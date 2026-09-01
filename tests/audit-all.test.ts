@@ -1,7 +1,7 @@
 // tests/audit-all.test.ts
-// ★test-framework B6：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
-// 六域聚合（route/module/config/i18n/capabilities/components）+ CI 耗时预算 <12s
-// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 src/components 跳过；capabilities 保持 B5 真实门禁
+// ★test-framework B6 + M10：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
+// 七域聚合（route/module/config/i18n/capabilities/components/devtools-budget）+ CI 耗时预算 <12s
+// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 src/components 跳过；capabilities 保持 B5 真实门禁；devtools-budget 性能烟测
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -9,13 +9,13 @@ import path from 'node:path'
 import { runAuditAll, formatAuditAll, AUDIT_ALL_BUDGET_MS } from '../packages/cli/src/audit-all'
 
 describe('proteus audit all（test-framework B6 全量门禁）', () => {
-  it('examples：六域齐全 + 预算内 + 核心域绿（capabilities 如实报 demo 页 B5 违规）', async () => {
+  it('examples：七域齐全 + 预算内 + 核心域绿（capabilities 如实报 demo 页 B5 违规）', async () => {
     const result = await runAuditAll('examples')
-    expect(result.domains.map((d) => d.name).sort()).toEqual(['capabilities', 'components', 'config', 'i18n', 'module', 'route'])
+    expect(result.domains.map((d) => d.name).sort()).toEqual(['capabilities', 'components', 'config', 'devtools-budget', 'i18n', 'module', 'route'])
     expect(result.totalMs).toBeLessThan(AUDIT_ALL_BUDGET_MS)
     expect(result.overBudget).toBe(false)
     // 核心域全绿
-    for (const name of ['route', 'module', 'config', 'i18n']) {
+    for (const name of ['route', 'module', 'config', 'i18n', 'devtools-budget']) {
       expect(result.domains.find((d) => d.name === name)?.ok, name).toBe(true)
     }
     // components 无 src/components → 跳过（非阻断）

@@ -26,6 +26,10 @@ export interface TraceBusOptions {
   redactKeys?: string[]
   /** 采样率 0-1（默认 1 全量）；error 事件强制全采（tail sampling） */
   sampleRate?: number
+  /** ★M10 内存压力降级（M7.5）：内存探针（如 () => performance.memory 的 used/limit）；缺省不启用 */
+  memory?: () => { used: number; limit: number }
+  /** 内存压力阈值（used/limit 超此值 → 丢弃非 error 事件，error 保留；缺省 0.9） */
+  memoryThreshold?: number
 }
 
 export interface TraceBus {
@@ -40,6 +44,8 @@ export interface TraceBus {
   setEnabled(v: boolean): void
   getEnabled(): boolean
   getTraceId(): string
+  /** ★M10 内存压力降级（M7.5）：被丢弃的非 error 事件计数（诊断/面板降级提示） */
+  getMemoryDrops(): number
 }
 
 const DEFAULT_REDACT_KEYS = ['password', 'token', 'authorization', 'idcard', 'phone']
@@ -108,10 +114,26 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
   const bufferSize = options.bufferSize ?? 10000
   const redactKeys = options.redactKeys ?? DEFAULT_REDACT_KEYS
   const sampleRate = options.sampleRate ?? 1
+  const memoryProbe = options.memory
+  const memoryThreshold = options.memoryThreshold ?? 0.9
   let enabled = options.enabled ?? false
   let buffer: TraceEvent[] = []
   let handlers: Array<(e: TraceEvent) => void> = []
   let currentTraceId = createTraceId()
+  let memoryDrops = 0
+
+  /** ★M10 内存压力降级（M7.5）：used/limit 超阈值 → 返回 true（丢弃非 error 事件，保留错误 + 快照语义） */
+  function underMemoryPressure(): boolean {
+    if (!memoryProbe) return false
+    let m: { used: number; limit: number }
+    try {
+      m = memoryProbe()
+    } catch {
+      return false // 探针异常 → 不启用降级
+    }
+    if (!m || m.limit <= 0) return false
+    return m.used / m.limit > memoryThreshold
+  }
 
   return {
     get buffer() {
@@ -121,6 +143,11 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
       if (!enabled) return
       const tid = traceId ?? currentTraceId
       if (phase !== 'error' && !shouldSample(tid, sampleRate)) return
+      // ★M10 内存压力降级（M7.5）：非 error 事件在压力期丢弃（error 恒保留）
+      if (phase !== 'error' && underMemoryPressure()) {
+        memoryDrops += 1
+        return
+      }
       const event: TraceEvent = {
         source,
         phase,
@@ -163,6 +190,9 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
     },
     getTraceId() {
       return currentTraceId
+    },
+    getMemoryDrops() {
+      return memoryDrops
     },
   }
 }

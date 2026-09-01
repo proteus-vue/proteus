@@ -33,6 +33,7 @@ import {
   createNetworkPlugin,
   serializeStoreSnapshot,
   parseStoreSnapshot,
+  findSensitiveKeys,
   buildDomTree,
 } from '@proteus-vue/devtools'
 import type { DevtoolsSource } from '@proteus-vue/devtools'
@@ -569,6 +570,37 @@ describe('State 视图（对标 Vue DevTools Pinia 面板）', () => {
     panel.destroy()
   })
 
+  it('★M10 导出确认（M7.3）：state 含敏感键 → window.confirm 列出字段；拒绝 → 不下发返回空；确认 → 正常导出', async () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, { source })
+    source.push(ev('store', 'point', 'store.patch', 100, 't1', { id: 'user', token: 'abc', name: 'P' }))
+    await new Promise((r) => setTimeout(r, 40))
+    panel.show('state')
+    const origConfirm = window.confirm
+    // 拒绝：confirm 返回 false → 不下载（返回空）
+    window.confirm = () => false
+    expect(panel.exportSnapshot()).toBe('')
+    // 确认：正常导出（快照 JSON）
+    window.confirm = () => true
+    const json = panel.exportSnapshot()
+    expect(json).toContain('proteus-store-snapshot')
+    expect(json).toContain('token')
+    window.confirm = origConfirm
+    // 无敏感键 → 直接导出（无确认弹窗路径不崩）
+    const root2 = document.createElement('div')
+    const source2 = mockSource()
+    const panel2 = createDevtoolsPanel(root2, { source: source2 })
+    source2.push(ev('store', 'point', 'store.patch', 200, 't2', { id: 'cart', items: 1 }))
+    await new Promise((r) => setTimeout(r, 40))
+    const json2 = panel2.exportSnapshot()
+    expect(json2).toContain('proteus-store-snapshot')
+    expect(json2).toContain('items')
+    expect(json2).not.toContain('token')
+    panel.destroy()
+    panel2.destroy()
+  })
+
   it('★P0 时间旅行：滑块/步骤行 → onTimeTravel(index) + onApplyState(restoreAt 快照：各 store 在 index 时刻状态)', async () => {
     const root = document.createElement('div')
     const source = mockSource()
@@ -640,6 +672,15 @@ describe('Store 快照导出/导入（snapshot-io 纯逻辑）', () => {
       stores: [{ id: 'cart', state: { items: 2, meta: { v: 1 } } }],
       steps: [{ index: 0, storeId: 'cart', type: 'patch', name: 'patch', payload: { id: 'cart', items: 2 }, timestamp: 100 }],
     })
+  })
+
+  it('★M10 findSensitiveKeys：递归命中 password/token/authorization/idcard/phone（嵌套/数组）；无命中空', () => {
+    const hits = findSensitiveKeys([
+      { id: 'user', state: { profile: { token: 'x' }, list: [{ password: 'y' }, { apiToken: 'z' }], name: 'P' } },
+      { id: 'safe', state: { count: 1 } },
+    ])
+    expect(hits).toEqual([{ storeId: 'user', keys: ['token', 'password', 'apiToken'] }])
+    expect(findSensitiveKeys([{ id: 'a', state: { ok: true, name: 'x' } }])).toEqual([])
   })
 
   it('parseStoreSnapshot：非法 JSON / 非快照对象 / 坏行 → null 或过滤', () => {

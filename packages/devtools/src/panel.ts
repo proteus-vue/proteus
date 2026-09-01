@@ -25,8 +25,8 @@ import type { PagesViewData, PageRouteData } from './views/pages'
 import { renderGraph } from './views/graph'
 import { renderDevice } from './views/device'
 import type { DeviceInfo, DeviceMemorySample } from './views/device'
-import { serializeStoreSnapshot, parseStoreSnapshot } from './snapshot-io'
-import type { StoreRestoreEntry } from './snapshot-io'
+import { serializeStoreSnapshot, parseStoreSnapshot, findSensitiveKeys } from './snapshot-io'
+import type { StoreRestoreEntry, SensitiveKeyHit } from './snapshot-io'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
 import { createPluginRegistry, createMemoryStorage, createCommandRegistry } from './plugins'
 import type { DevToolsPlugin, KVStorage, PluginContext } from './plugins'
@@ -479,12 +479,18 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     scheduleRender()
   }
 
-  /** 导出快照 JSON（serializeStoreSnapshot 纯逻辑 + Blob 下载；无 createObjectURL 环境仅返回文本） */
+  /** 导出快照 JSON（serializeStoreSnapshot 纯逻辑 + Blob 下载；无 createObjectURL 环境仅返回文本）
+   *  ★M10 权限最小化（M7.3）：state 含敏感键（password/token/authorization/idcard/phone）→ 二次确认弹窗列出字段；拒绝则不下发 */
   function exportSnapshot(): string {
-    const json = serializeStoreSnapshot({
-      stores: Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })),
-      steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, name: s.name, payload: s.payload, timestamp: s.timestamp })),
-    })
+    const stores = Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] }))
+    const json = serializeStoreSnapshot({ stores, steps: storeSteps.map((s) => ({ index: s.index, storeId: s.storeId, type: s.type, name: s.name, payload: s.payload, timestamp: s.timestamp })) })
+    // ★M7.3：敏感键二次确认（列 store + 字段；确认函数缺省 window.confirm，无确认环境直接放行）
+    const sensitive = findSensitiveKeys(stores)
+    if (sensitive.length) {
+      const summary = sensitive.map((h) => `${h.storeId}: ${h.keys.join(', ')}`).join('；')
+      const ok = typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(`快照包含敏感字段（将一并导出）：\n${summary}\n\n确认导出？`) : true
+      if (!ok) return ''
+    }
     if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return json
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)

@@ -31,6 +31,42 @@ export interface ParsedStoreSnapshot {
   steps: StoreStepIO[]
 }
 
+/** 敏感键检测结果（导出二次确认用；对齐 TraceBus 脱敏键规则） */
+export interface SensitiveKeyHit {
+  storeId: string
+  keys: string[]
+}
+
+const SENSITIVE_PATTERNS = ['password', 'token', 'authorization', 'idcard', 'phone']
+
+function isSensitiveKey(key: string): boolean {
+  const k = key.toLowerCase()
+  for (let i = 0; i < SENSITIVE_PATTERNS.length; i++) {
+    if (k.indexOf(SENSITIVE_PATTERNS[i]) >= 0) return true
+  }
+  return false
+}
+
+/** 递归扫描 state 树命中的敏感键（嵌套对象/数组；★M10 权限最小化 M7.3——导出前列出将导出的敏感字段） */
+export function findSensitiveKeys(stores: StoreRestoreEntry[]): SensitiveKeyHit[] {
+  const out: SensitiveKeyHit[] = []
+  const walk = (value: unknown): string[] => {
+    if (value === null || typeof value !== 'object') return []
+    const hits: string[] = []
+    const obj = value as Record<string, unknown>
+    for (const k of Object.keys(obj)) {
+      if (isSensitiveKey(k)) hits.push(k)
+      hits.push.apply(hits, walk(obj[k]))
+    }
+    return hits
+  }
+  for (const s of stores) {
+    const keys = walk(s.state)
+    if (keys.length) out.push({ storeId: s.id, keys: Array.from(new Set(keys)) })
+  }
+  return out
+}
+
 /** 序列化快照（面板导出 / 测试 roundtrip） */
 export function serializeStoreSnapshot(input: { stores: StoreRestoreEntry[]; steps: StoreStepIO[] }): string {
   const data: StoreSnapshotIO = {

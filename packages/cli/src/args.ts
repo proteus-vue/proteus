@@ -400,7 +400,11 @@ export const HELP_GROUPS: HelpGroup[] = [
       },
       {
         usage: 'proteus audit all [root]',
-        desc: '★全量审计门禁（test-framework B6）：route / module / config / i18n / capabilities / components 六域聚合\n      + CI 耗时预算（<12s，超预算阻断）；缺配置文件域跳过（独立编译模式）',
+        desc: '★全量审计门禁（test-framework B6 + M10）：route / module / config / i18n / capabilities / components / devtools-budget 七域聚合\n      + CI 耗时预算（<12s，超预算阻断）；缺配置文件域跳过（独立编译模式）',
+      },
+      {
+        usage: 'proteus audit devtools-budget',
+        desc: '★DevTools 性能预算烟测（M10/M7.4）：bus.emit / 火焰图 5000 span / 万级 timeline ingest 耗时\n      plan 预算 0.1/100/200ms → CI 10 倍余量上界，超限阻断（抓病态回归）',
       },
       {
         usage: 'proteus capabilities:manifest [dir] [--platform <web|skyline|app>]',

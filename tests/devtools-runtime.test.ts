@@ -69,6 +69,32 @@ describe('★M10 降级隔离（M7.5：订阅者异常不阻断其余订阅者/�
   })
 })
 
+describe('★M10 内存压力降级（M7.5：压力期丢非 error 事件，error 恒保留）', () => {
+  it('used/limit 超阈值 → 非 error 事件丢弃计数，error 保留；低于阈值恢复；无探针不启用', () => {
+    let used = 0
+    const limit = 100
+    const bus = createTraceBus({ enabled: true, memory: () => ({ used, limit }), memoryThreshold: 0.9 })
+    // 正常（0/100）
+    bus.emit('router', 'point', 'nav.1')
+    expect(bus.buffer.length).toBe(1)
+    // 压力（95/100 > 0.9）→ 非 error 丢弃 + 计数；error 保留
+    used = 95
+    bus.emit('router', 'point', 'nav.2')
+    bus.emit('api', 'error', 'req.fail', { status: 500 })
+    expect(bus.buffer.map((e) => e.name)).toEqual(['nav.1', 'req.fail'])
+    expect(bus.getMemoryDrops()).toBe(1)
+    // 恢复（50/100）→ 正常
+    used = 50
+    bus.emit('router', 'point', 'nav.3')
+    expect(bus.buffer.map((e) => e.name)).toEqual(['nav.1', 'req.fail', 'nav.3'])
+    // 无探针 → 不启用（恒不丢）
+    const plain = createTraceBus({ enabled: true })
+    plain.emit('router', 'point', 'x')
+    expect(plain.getMemoryDrops()).toBe(0)
+    expect(plain.buffer.length).toBe(1)
+  })
+})
+
 describe('redactValue 脱敏（递归 + 大小写不敏感）', () => {
   it('嵌套对象 / 数组 / Map / Set / Date', () => {
     const out = redactValue(
