@@ -36,6 +36,8 @@ import PToolbar from './p-toolbar/index.vue'
 import PScale from './p-scale/index.vue'
 // ★p-adaptive（adaptive-container-plan B2）：容器形态自适应
 import PAdaptive from './p-adaptive/index.vue'
+// ★p-adaptive（adaptive-container-plan B4）：弹窗（形态能力并入）
+import PModal from './p-modal/index.vue'
 
 export {
   VirtualList,
@@ -71,6 +73,8 @@ export {
   PScale,
   // ★p-adaptive
   PAdaptive,
+  // ★p-adaptive B4
+  PModal,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

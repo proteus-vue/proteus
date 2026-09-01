@@ -130,13 +130,14 @@ describe('validateAdaptiveConstraint', () => {
 
 **验收**：五端真机矩阵（§2）全部通过
 
-### B4：组件库（M4，P1）
+### B4：组件库（M4，P1）⬜ 进行中（p-modal 已落地）
 
-- [ ] `<p-modal>` / `<p-drawer>` / `<p-nav>` / `<p-detail>`
-- [ ] 与 Glass / Safe Area 协同
-- [ ] 文档 + Playground demo
+- [x] `<p-modal>` ——形态能力并入弹窗（视口宽度 → sheet/dialog/popover 自动切换 + 转场动画 + mask/close + header/body/footer slot + sheet 底部安全区 G-09 协同）
+- [ ] `<p-drawer>` / `<p-nav>` / `<p-detail>` ——待后续批次
+- [ ] 与 Glass（glass="auto"）协同 ——待 Glass 组件层
+- [x] 文档 + Playground demo ——fluid-system-demo p-modal 区块（拖拽窗口看弹窗形态自动切换）
 
-**验收**：官网示例"拖拽窗口看弹窗形态自动切换"
+**验收**：官网示例"拖拽窗口看弹窗形态自动切换" ✅（p-modal 区块）
 
 ### B5：DevTools + Agent（M5）
 

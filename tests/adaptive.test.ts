@@ -12,7 +12,7 @@ import {
   resolveAdaptiveFormStyle,
 } from '@proteus-vue/fluid'
 import type { AdaptiveVariant } from '@proteus-vue/fluid'
-import { PAdaptive } from '@proteus-vue/components'
+import { PAdaptive, PModal } from '@proteus-vue/components'
 
 /** fake 尺寸观察器工厂：observe 记录目标；fire 驱动 onSize（真实 RO 的 contentRect 回调等价） */
 function fakeObserverFactory(onSize: (w: number, h: number) => void): { observe: (t: unknown) => void; disconnect: () => void; fire: (w: number, h: number) => void } {
@@ -175,5 +175,40 @@ describe('p-adaptive 组件（B2）', () => {
     expect(formEl).not.toBeNull()
     expect(formEl.classList.contains('p-adaptive-sheet')).toBe(true)
     expect(el.querySelector('.content')).not.toBeNull()
+  })
+})
+
+describe('p-modal 组件（B4：形态能力并入弹窗）', () => {
+  it('visible=false → 不渲染（mask/panel 均无）', async () => {
+    const el = mount(PModal, { visible: false, title: '标题' })
+    await nextTick()
+    expect(el.querySelector('.p-modal')).toBeNull()
+  })
+
+  it('visible=true → 渲染 mask + panel（视口 1024 happy-dom → popover 形态 class）+ 标题/内容/关闭按钮', async () => {
+    const el = mount(PModal, { visible: true, title: '标题', closable: true }, { default: () => h('p', { class: 'body-text' }, '内容') })
+    await nextTick()
+    const root = el.querySelector('.p-modal') as HTMLElement
+    expect(root).not.toBeNull()
+    expect(el.querySelector('.p-modal-mask')).not.toBeNull()
+    const panel = el.querySelector('.p-modal-panel') as HTMLElement
+    expect(panel).not.toBeNull()
+    // happy-dom innerWidth=1024 → popover（≥840）
+    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
+    expect((el.querySelector('.p-modal-title') as HTMLElement).textContent).toBe('标题')
+    expect(el.querySelector('.body-text')).not.toBeNull()
+    expect(el.querySelector('.p-modal-close')).not.toBeNull()
+  })
+
+  it('点击遮罩（maskClosable）→ update:visible false', async () => {
+    const el = document.createElement('div')
+    const updates: boolean[] = []
+    const app = createApp({
+      render: () => h(PModal as never, { visible: true, maskClosable: true, 'onUpdate:visible': (v: boolean) => updates.push(v) } as never),
+    })
+    app.mount(el)
+    await nextTick()
+    ;(el.querySelector('.p-modal-mask') as HTMLElement).click()
+    expect(updates).toEqual([false])
   })
 })
