@@ -438,6 +438,32 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     inspectors.dispose()
   })
 
+  it('installProteusInspectors：getStyleSafetyRecords 提供 → 注册 proteus-style-safety inspector（rejected 记录）', () => {
+    const calls: Array<{ method: string; options: unknown }> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const api = {
+      addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
+      on: {
+        getInspectorState: (cb: never) => stateCbs.push(cb as never),
+        editInspectorState: () => {},
+      },
+    }
+    const records = [{ prop: 'display', value: 'flex', reason: '禁止', ts: 1 }]
+    installProteusInspectors(api as never, { getStyleSafetyRecords: () => records })
+    const ids = calls.map((c) => (c.options as { id: string }).id)
+    expect(ids).toContain('proteus-style-safety')
+    // ★注册顺序：app-config 先、style-safety 后 → 取最后一个 getInspectorState 回调
+    const last = stateCbs[stateCbs.length - 1]
+    const payload = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
+    last(payload)
+    expect(payload.state?.[0].key).toBe('rejected')
+    expect(payload.state?.[0].value).toEqual(records)
+    // 不提供 getStyleSafetyRecords → 不注册
+    const calls2: Array<{ id: string }> = []
+    installProteusInspectors({ addInspector: (o: never) => calls2.push(o as never), on: { getInspectorState: () => {}, editInspectorState: () => {} } } as never)
+    expect(calls2.some((c) => c.id === 'proteus-style-safety')).toBe(false)
+  })
+
   it('createTraceBusSource：TraceBus 事件 → DevtoolsSource 分发', () => {
     const bus = createTraceBus()
     bus.setEnabled(true)

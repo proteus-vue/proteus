@@ -83,6 +83,11 @@ export interface ProteusInspectorsOptions {
   getConfig?: () => Record<string, unknown>
   /** 配置更新（编辑回写——Web 端响应式更新白给；缺省 no-op） */
   setConfig?: (patch: Record<string, unknown>) => void
+  /**
+   * style-safety 拦截记录读取（G-31 runtime guard.records()；提供则注册 proteus-style-safety inspector）
+   * 对齐 vue-devtools-plan §3：`p.state = [{ key: 'rejected', value: getRejectedRecords() }]`
+   */
+  getStyleSafetyRecords?: () => Array<{ prop: string; value: unknown; reason: string; ts: number }>
 }
 
 export interface ProteusInspectors {
@@ -103,12 +108,14 @@ function pathToPatch(path: string[], value: unknown): Record<string, unknown> {
 }
 
 const APP_CONFIG_INSPECTOR = 'proteus-app-config'
+const STYLE_SAFETY_INSPECTOR = 'proteus-style-safety'
 
 /**
  * 注册自定义 Inspector（vue-devtools-plan §3 可落地项）：
  *   `proteus-app-config`——App Config 当前生效值 + 编辑回写（对齐规划 §6 双向调试的 Web 形态）
+ *   `proteus-style-safety`——运行时拦截记录（G-31 guard.records()，需提供 getStyleSafetyRecords）
  * 用法（应用侧）：setupDevtoolsPlugin({ id: 'proteus', label: 'Proteus', app }, (api) => {
- *   installProteusInspectors(api, { getConfig, setConfig })
+ *   installProteusInspectors(api, { getConfig, setConfig, getStyleSafetyRecords })
  * })
  */
 export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, options: ProteusInspectorsOptions = {}): ProteusInspectors {
@@ -122,6 +129,13 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
       if (payload.inspectorId !== APP_CONFIG_INSPECTOR) return
       // 面板改路径值 → 构建嵌套 patch 下发（对齐规划 §6：Web 端响应式数据回写）
       options.setConfig?.(pathToPatch(payload.path, payload.state.value))
+    })
+  }
+  if (options.getStyleSafetyRecords) {
+    api.addInspector({ id: STYLE_SAFETY_INSPECTOR, label: 'Style Safety', icon: 'shield' })
+    api.on.getInspectorState((payload) => {
+      if (payload.inspectorId !== STYLE_SAFETY_INSPECTOR) return
+      payload.state = [{ key: 'rejected', value: (options.getStyleSafetyRecords as () => Array<{ prop: string; value: unknown; reason: string; ts: number }>)() }]
     })
   }
   return {

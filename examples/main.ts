@@ -20,8 +20,13 @@ import { traceBus } from './devtools-bus'
 import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
 // ★vue-devtools-plan：App Config Inspector 数据源（config-demo 页面 init 后生效；未 init 时安全降级）
 import { getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
+// ★G-31 style-safety：运行时守卫（业务侧动态 :style 用 guard.patch 包裹 → Inspector 实时拦截记录）
+import { createStyleGuard } from '@proteus-vue/style-safety'
 
 setCapabilityTraceBus(traceBus)
+
+// ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销
+const styleGuard = createStyleGuard({ mode: 'loose' })
 
 // ★api-plan B1：API 客户端初始化（lifecycle coreReady 阶段——业务零平台分支）
 // ★devtools 打通：请求事件 → traceBus（面板 timeline/network 插件；bus 门控生产零开销）
@@ -79,6 +84,8 @@ defineApp({
             // 未 initAppConfig：拒绝回写
           }
         },
+        // ★vue-devtools-plan §3：Style Safety Inspector（G-31 guard 拦截记录）
+        getStyleSafetyRecords: () => styleGuard.records(),
       })
     })
   },

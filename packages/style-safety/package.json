@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/style-safety",
+  "version": "0.1.0",
+  "description": "Proteus 样式运行时安全（G-31 B1+B2）：属性名白名单 + 值类型校验 + createStyleGuard 拦截记录（DevTools style-safety Inspector 数据源）——纯 TS 零依赖",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
+  }
+}
