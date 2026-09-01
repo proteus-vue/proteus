@@ -11,20 +11,16 @@
 ## 快速接入
 
 ```ts
-// main.mp.ts / main.web.ts
-import { createDevTools } from '@proteus-vue/devtools-runtime'
+// main.ts（Web 端一键接入）
+import { installProteusDevtools } from '@proteus-vue/devtools'
+import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
 
-createDevTools({
-  enabled: import.meta.env.DEV,
-  sources: ['lifecycle', 'router', 'store', 'api', 'capability', 'compiler'],
-})
+const traceBus = getProteusTraceBus()
+if (import.meta.env.DEV || __PROTEUS_DEBUG__) traceBus.setEnabled(true)
+installProteusDevtools(app, { pinia, remote: true }) // ◈ 面板 + Vue DevTools + 远程桥
 ```
 
-面板连接：
-```ts
-import { connectPanel } from '@proteus-vue/devtools-panel'
-connectPanel({ host: 'localhost', port: 7092 })
-```
+面板连接（独立窗口/远程）：`createDevtoolsWsSource('ws://host/proteus-panel')` + `createDevtoolsPanel(root, { source })`；或 dev 模式直接开 `http://localhost:5173/proteus-devtools`。
 
 ## 文档结构
 
@@ -43,6 +39,9 @@ connectPanel({ host: 'localhost', port: 7092 })
 11-m8-observability.md  可观测性
 12-testing-migration.md  测试 + 迁移
 13-execution-batches.md  分批策略
+14-landing-evaluation.md 落地评估
+15-open-api.md          后端开放 API（DevtoolsSource + WS 协议）✅
+16-record-replay.md     M14 操作录屏回放（规划中）
 ```
 
 ## 防撑爆规则（沿用全局）
@@ -53,4 +52,4 @@ connectPanel({ host: 'localhost', port: 7092 })
 
 ## 进度
 
-B1-B10，B1-B2 先行（不依赖运行时层实现），B3-B10 为面板功能叠加。
+B1-B10 已落地（面板九视图：timeline/flamegraph/state·时间旅行·值编辑/route/errors/components/pages/graph/device + 开放 API）；**M14 操作录屏回放为后期规划**（16-record-replay.md，复用 TraceBus/快照/时间旅行基础，排期待定）。
