@@ -12,7 +12,10 @@
   <!-- ★IIFE bundle：file:// 双击可直接打开（module 脚本在 file:// 下被浏览器 CORS 拦截 → 黑屏） -->
   <script src="./dist/panel.js"></script>
   <script>
-    // 连接 dev server HMR/CDP 通道（PROTEUS_DEVTOOLS_URL 可覆盖；缺省 5174）
+    // 数据源：?ws= 覆盖连接地址
+    //   ① dev-mp HMR/CDP 通道：缺省 ws://127.0.0.1:5174/（小程序开发；PROTEUS_DEVTOOLS_URL 可覆盖）
+    //   ② ★Web 远程查看（移动端/真机）：vite dev 起 devtoolsRelayPlugin 后，
+    //      连 ws://<vite-host>/proteus-panel——手机跑应用（installProteusDevtools remote: true 上行），电脑开本页查看
     var url = new URLSearchParams(location.search).get('ws') || 'ws://127.0.0.1:5174/'
     var source = ProteusDevtools.createDevtoolsWsSource(url)
     ProteusDevtools.createDevtoolsPanel(document.getElementById('proteus-devtools'), { source: source })

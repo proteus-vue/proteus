@@ -74,6 +74,8 @@ defineApp({
       },
       styleGuard,
       pages: { routes: routes.map((r) => ({ name: r.name, path: r.path, meta: r.meta, subPackage: r.subPackage })) },
+      // ★远程查看（移动端/真机）：TraceBus → WS 上行 → 电脑浏览器 panel.html?ws=ws://host/proteus-panel 查看
+      remote: true,
     })
     emit('lifecycle', 'end', 'interactive')
   },

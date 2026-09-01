@@ -12,6 +12,8 @@ import type { TraceBus } from '@proteus-vue/devtools-runtime'
 import { setupDevtoolsPlugin } from '@vue/devtools-api'
 import { installProteusTimeline, installProteusInspectors } from './vue-devtools'
 import { createTraceBusSource } from './source'
+import { createTraceBusWsBridge } from './ws-bridge'
+import type { TraceBusWsBridge } from './ws-bridge'
 import { installComponentTrace } from './component-trace'
 import { createDevtoolsPanel } from './panel'
 import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
@@ -41,6 +43,12 @@ export interface InstallDevtoolsOptions {
   pages?: PagesViewData
   /** 是否挂载本地面板浮动窗口（缺省 true；仅挂载一次——重复调用复用） */
   mount?: boolean
+  /**
+   * 远程查看（移动端/真机场景）：TraceBus → WS（devtoolsRelayPlugin 的 /proteus-source 端点）→
+   * 电脑浏览器 panel.html?ws= 下行查看。true = 同源自动（ws://location.host/proteus-source）；
+   * 对象形态可指定 path 与 appInfo（默认取 pages 数据）
+   */
+  remote?: boolean | { path?: string; appInfo?: () => unknown }
   /** 显式 traceBus（缺省 getProteusTraceBus 惰性单例） */
   traceBus?: TraceBus
 }
@@ -115,11 +123,25 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   // ⑤ 本地面板浮动挂载
   if (options.mount !== false) mountFloatingPanel(bus, options.pages)
 
+  // ⑥ 远程查看桥（移动端/真机：事件流上行 WS → 电脑端 panel.html 下行）
+  let remoteBridge: TraceBusWsBridge | null = null
+  if (options.remote) {
+    const remoteOpts = typeof options.remote === 'object' ? options.remote : null
+    const path = remoteOpts !== null && remoteOpts.path ? remoteOpts.path : '/proteus-source'
+    const protocol = typeof location !== 'undefined' && location.protocol === 'https:' ? 'wss' : 'ws'
+    const url = `${protocol}://${typeof location !== 'undefined' ? location.host : 'localhost'}${path}`
+    remoteBridge = createTraceBusWsBridge(bus, {
+      url,
+      appInfo: remoteOpts !== null && remoteOpts.appInfo ? remoteOpts.appInfo : () => options.pages,
+    })
+  }
+
   return {
     traceBus: bus,
     destroy() {
       storeTracer?.dispose()
       offComponent()
+      remoteBridge?.close()
     },
   }
 }

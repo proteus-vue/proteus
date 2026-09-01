@@ -68,6 +68,8 @@ export default defineConfig({
       { find: '@proteus-vue/security', replacement: fileURLToPath(new URL('./packages/security/src/index.ts', import.meta.url)) },
       // G-31 style-safety：@proteus-vue/style-safety 包（tests/style-safety-runtime.test.ts 直接引用）
       { find: '@proteus-vue/style-safety', replacement: fileURLToPath(new URL('./packages/style-safety/src/index.ts', import.meta.url)) },
+      // devtools 远程查看中转：@proteus-vue/plugin-vite 包（tests/devtools-relay.test.ts 直接引用）
+      { find: '@proteus-vue/plugin-vite', replacement: fileURLToPath(new URL('./packages/plugin-vite/src/index.ts', import.meta.url)) },
       // types-plan B3：@proteus-vue/types 包（tests/generate-types.test.ts 直接引用）
       { find: '@proteus-vue/types/capabilities', replacement: fileURLToPath(new URL('./packages/types/src/capabilities.ts', import.meta.url)) },
       { find: '@proteus-vue/types/router-types', replacement: fileURLToPath(new URL('./packages/types/src/router-types.ts', import.meta.url)) },
