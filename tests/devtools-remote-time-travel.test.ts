@@ -117,7 +117,7 @@ describe('远程时间旅行端到端', () => {
 
     // ── 面板拖滑块（最左）→ 命令下行 → relay → bridge → $patch 恢复 ──
     range.value = '0'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await wait(120)
     expect(store.playing).toBe(false)
     expect(store.volume).toBe(0.8)

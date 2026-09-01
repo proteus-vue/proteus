@@ -139,9 +139,27 @@ describe('视图渲染函数', () => {
     expect(okRow?.querySelector('.pd-kv-value')?.classList.contains('pd-t-boolean')).toBe(true)
     const range = root.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
+    // ★拖动（input）只更新提示不触发恢复；释放（change）才触发一次
     range.value = '0'
     range.dispatchEvent(new Event('input'))
+    expect(onTimeTravel).not.toHaveBeenCalled()
+    range.dispatchEvent(new Event('change'))
+    expect(onTimeTravel).toHaveBeenCalledTimes(1)
     expect(onTimeTravel).toHaveBeenCalledWith(0)
+    // ★travelIndex → 滑块初始位置（rerender 后保持）
+    const root2 = document.createElement('div')
+    renderState(
+      root2,
+      {
+        snapshot: { version: 1, takenAt: 1, stores: [{ id: 'cart', state: { items: 2 } }] },
+        steps: [
+          { index: 0, storeId: 'cart', type: 'patch', payload: {}, timestamp: 1, before: {}, after: {} },
+          { index: 1, storeId: 'cart', type: 'patch', payload: {}, timestamp: 2, before: {}, after: {} },
+        ],
+        travelIndex: 0,
+      },
+    )
+    expect((root2.querySelector('.pd-range') as HTMLInputElement).value).toBe('0')
   })
 
   it('renderState：嵌套对象可折叠（点击展开子键）', () => {
@@ -348,12 +366,12 @@ describe('State 视图（对标 Vue DevTools Pinia 面板）', () => {
     const range = stateView.querySelector('.pd-range') as HTMLInputElement
     // 回放到步骤 0：cart 取 items:1（user 尚无 patch ≤0 → 不出现）
     range.value = '0'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     expect(onTT).toHaveBeenCalledWith(0)
     expect(apply).toHaveBeenLastCalledWith([{ id: 'cart', state: { items: 1 } }])
     // 回放到步骤 2：cart 最新 items:2 + user name
     range.value = '2'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     expect(apply).toHaveBeenLastCalledWith([{ id: 'cart', state: { items: 2 } }, { id: 'user', state: { name: 'u' } }])
     panel.destroy()
   })

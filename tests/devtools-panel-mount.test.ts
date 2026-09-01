@@ -99,7 +99,7 @@ describe('installProteusDevtools 一键接入', () => {
     const rowsBefore = stateView.querySelectorAll('.pd-tl-row').length
     // ★拖到最左（0）→ 恢复面板打开时状态（install 补发快照 items:0）——时间旅行可恢复起点
     range.value = '0'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(0)
     // ★回放回声去重：$patch 恢复触发的 store.patch 回声（state=历史值）不新增步骤（时间线不被拖动污染）
@@ -109,11 +109,11 @@ describe('installProteusDevtools 一键接入', () => {
     cart.items = 2
     await new Promise((r) => setTimeout(r, 60))
     range.value = '0'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(0)
     range.value = '1'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(1)
     // 两次拖动（回放回声）不新增步骤：仅 +1（真实变更 items=2）
@@ -195,13 +195,13 @@ describe('installProteusDevtools 一键接入', () => {
     expect(range).not.toBeNull()
     // 拖到最左 → 恢复面板打开时状态（volume 0.4）
     range.value = '0'
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await new Promise((r) => setTimeout(r, 40))
     expect(player.playing).toBe(true)
     expect(player.volume).toBe(0.4)
     // 拖到最右 → 最新（volume 0.5）
     range.value = String(Number(range.max))
-    range.dispatchEvent(new Event('input'))
+    range.dispatchEvent(new Event('change'))
     await new Promise((r) => setTimeout(r, 40))
     expect(player.volume).toBe(0.5)
     devtools.destroy()

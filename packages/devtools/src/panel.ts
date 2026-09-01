@@ -213,7 +213,25 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   /** ★P1：选中组件 id（0 = 未选中；详情面板 + 页面高亮） */
   let selectedComponent = 0
 
-  function handleEvent(e: TraceEvent): void {
+  /** ★当前时间旅行回放位置（null = 未回放/最新；滑块 change 释放时更新，rerender 后保持） */
+  let travelIndex: number | null = null
+
+  function handleEvent(e: TraceEvent): boolean {
+    // ★回放回声：store.patch state 已存在于补丁历史（时间旅行 $patch 恢复触发）——
+    //   只更新快照树（显示回放后应用状态），不追加步骤/历史、不进 timeline（避免 rerender 重建滑块）
+    if (e.source === 'store' && e.payload && typeof e.payload === 'object') {
+      const p = e.payload as Record<string, unknown>
+      if (typeof p.id === 'string' && !/action/i.test(e.name)) {
+        const state: Record<string, unknown> = {}
+        for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
+        const hist = storePatchHistory.get(p.id) ?? []
+        if (hist.some((h) => JSON.stringify(h.state) === JSON.stringify(state))) {
+          storeSnapshots.set(p.id, state)
+          if (!selectedStore) selectedStore = p.id
+          return true
+        }
+      }
+    }
     timeline.ingest(e)
     flame.ingest(e)
     errors.ingest(e)
@@ -268,34 +286,38 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         if (typeof p.id === 'string') {
           const index = stepSeq++
           const isAction = /action/i.test(e.name)
-          // ★回放回声去重：时间旅行 $patch 恢复会触发 store.patch 回声（state = 历史值）——
-          //   state 已存在于补丁历史 → 忽略，不污染时间线/滑块范围（本地/远程面板共用）
-          let duplicate = false
-          if (!isAction) {
-            // ★patch：去 id 存 state 快照 + 追加补丁历史（时间旅行 restore / before·after diff 用）
-            const state: Record<string, unknown> = {}
-            for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
-            const hist = storePatchHistory.get(p.id) ?? []
-            duplicate = hist.some((h) => JSON.stringify(h.state) === JSON.stringify(state))
-            if (!duplicate) {
-              storeSnapshots.set(p.id, state)
-              if (!selectedStore) selectedStore = p.id
-              const list = storePatchHistory.get(p.id) ?? []
-              list.push({ stepIndex: index, state })
-              storePatchHistory.set(p.id, list)
-            }
-          }
-          if (!duplicate) {
+          // ★正常变更（非回声——回声已在函数头处理）：追加快照 + 补丁历史 + 步骤；滑块回到最新
+          if (isAction) {
             storeSteps.push({
               index,
               storeId: p.id,
-              type: isAction ? 'action' : 'patch',
-              name: isAction ? String(p.name ?? '?') : 'patch',
+              type: 'action',
+              name: String(p.name ?? '?'),
+              payload: e.payload,
+              timestamp: e.timestamp,
+            })
+            if (storeSteps.length > 1000) storeSteps.shift()
+          } else {
+            // ★patch：去 id 存 state 快照 + 追加补丁历史（时间旅行 restore / before·after diff 用）
+            const state: Record<string, unknown> = {}
+            for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
+            storeSnapshots.set(p.id, state)
+            if (!selectedStore) selectedStore = p.id
+            const list = storePatchHistory.get(p.id) ?? []
+            list.push({ stepIndex: index, state })
+            storePatchHistory.set(p.id, list)
+            storeSteps.push({
+              index,
+              storeId: p.id,
+              type: 'patch',
+              name: 'patch',
               payload: e.payload,
               timestamp: e.timestamp,
             })
             if (storeSteps.length > 1000) storeSteps.shift()
           }
+          // ★新真实变更 → 时间旅行位置回到最新
+          travelIndex = null
         }
       }
     }
@@ -325,6 +347,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         }
       }
     }
+    return true
   }
 
   // 火焰图录制控制（工具按钮）+ 对比模式：上次完成录制为 baseline，再次停止时 diff（±10% 高亮）
@@ -418,8 +441,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     options.onApplyState?.(Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })))
   }
 
-  /** 时间旅行（滑块/步骤行）：命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（本地 onApplyState / 远程 sendCommand 双通道） */
+  /** 时间旅行（滑块 change 释放触发）：记录回放位置 + 命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（本地 onApplyState / 远程 sendCommand 双通道） */
   function timeTravel(index: number): void {
+    travelIndex = index
     options.onTimeTravel?.(index)
     const restore = restoreAt(index)
     // ★本地悬浮面板：同页直接 $patch；远程面板（WS 源）：命令下发 → relay → 应用侧执行（无 onApplyState 的路径）
@@ -455,6 +479,8 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
           return { index: s.index, storeId: s.storeId, type: s.type, payload: s.payload, timestamp: s.timestamp, before, after }
         }),
         selectedStore,
+        // ★滑块回放位置（rerender 后保持；新真实变更重置为最新）
+        travelIndex: travelIndex ?? undefined,
       },
       {
         onTimeTravel: timeTravel,
@@ -535,7 +561,11 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   }
   let statusConnected = false
   const off = source.onEvent((e: TraceEvent) => {
-    handleEvent(e)
+    // ★回放回声（store.patch 历史值）已提前处理——handleEvent 返回 false 时跳过 rerender（拖动中不重建滑块）
+    if (!handleEvent(e)) {
+      broadcastToPlugins(e)
+      return
+    }
     broadcastToPlugins(e)
     scheduleRender()
     // ★连接状态：收到首个事件 → 已连接（无 onStatus 数据源的兼容路径；WS 源走下方 onStatus）

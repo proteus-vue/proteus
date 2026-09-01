@@ -21,6 +21,8 @@ export interface StateViewData {
   steps: PatchStep[]
   /** 当前选中 store（缺省第一个有快照的 store） */
   selectedStore?: string
+  /** ★当前时间旅行回放位置（rerender 后滑块保持；缺省最新） */
+  travelIndex?: number
 }
 
 /** 步骤 before/after 差异行（时间旅行 diff 提示；JSON 相等跳过） */
@@ -154,14 +156,20 @@ export function renderState(container: HTMLElement, data: StateViewData, hooks: 
     input.type = 'range'
     input.min = '0'
     input.max = String(data.steps.length - 1)
-    input.value = String(data.steps.length - 1)
+    // ★回放位置：travelIndex 优先（面板维护——rerender 重建后滑块保持位置）；缺省最新
+    const initial = data.travelIndex !== undefined && data.travelIndex >= 0 && data.travelIndex <= data.steps.length - 1 ? data.travelIndex : data.steps.length - 1
+    input.value = String(initial)
     input.className = 'pd-range'
     const hint = document.createElement('span')
-    hint.textContent = '回放 1/' + data.steps.length
+    hint.textContent = '回放 ' + (initial + 1) + '/' + data.steps.length
+    // ★拖动中（input）：只更新提示——不触发恢复（避免 $patch 回声 → rerender → 滑块重建 → 拖不动）
     input.addEventListener('input', () => {
       const i = Number(input.value)
       hint.textContent = '回放 ' + (i + 1) + '/' + data.steps.length
-      hooks.onTimeTravel?.(i)
+    })
+    // ★释放（change）：一次恢复（本地 onApplyState / 远程命令）
+    input.addEventListener('change', () => {
+      hooks.onTimeTravel?.(Number(input.value))
     })
     sliderRow.appendChild(input)
     sliderRow.appendChild(hint)
