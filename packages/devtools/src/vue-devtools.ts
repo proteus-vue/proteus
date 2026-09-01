@@ -229,17 +229,22 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
         ]
         return
       }
-      // 单条导航记录（完整状态：from/to/耗时/时间/traceId/守卫链）
+      // 单条导航记录（完整状态：from/to/耗时/时间/traceId/守卫链——★一个分组展开，对齐 vue-router 形态）
       if (payload.nodeId.startsWith('rec-')) {
         const rec = (options.getRouterState?.()?.records ?? []).find((r) => 'rec-' + r.timestamp === payload.nodeId)
         payload.state = rec
           ? [
-              { key: 'from', value: rec.from },
-              { key: 'to', value: rec.to },
-              { key: 'durationMs', value: rec.durationMs },
-              { key: 'timestamp', value: rec.timestamp },
-              { key: 'traceId', value: rec.traceId ?? '—' },
-              { key: 'guards', value: rec.guards },
+              {
+                key: '导航状态',
+                value: {
+                  from: rec.from,
+                  to: rec.to,
+                  durationMs: rec.durationMs,
+                  timestamp: rec.timestamp,
+                  traceId: rec.traceId ?? '—',
+                  guards: rec.guards,
+                },
+              },
             ]
           : []
         return
