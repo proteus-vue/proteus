@@ -66,6 +66,8 @@
 
 ## 下一步
 
-建议 B1 与 Compiler Plugin (G-21) B1 **同期启动**：
-- `generateClamp()` + `deriveBreakpoints()` + `calcColumns()` 三个纯函数
-- 零依赖、可单测、验证通过 → 最快出"自动适配" demo
+- ✅ **B1-B3 已落地**（compiler/fluid-layout.ts 三算法 + src/components/p-grid·p-stack·p-fit + examples/pages/fluid-layout-demo.vue）
+- ⬜ `p-fluid` 指令接入（Web 运行时 custom directive / MP 编译期 template 规则生成 clamp）
+- ⬜ FLD001-006 严格规则接入 compiler 规则 + CLI check（待 style-safety 白名单扩展 font-size/gap/grid）
+- ⬜ `app.config.layout`（designWidth/breakpoints）配置接入（app-config G-35 扩展）
+- ⬜ B4/B5 原生端延后（无 App Renderer）

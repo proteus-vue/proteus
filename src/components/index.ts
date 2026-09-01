@@ -19,6 +19,10 @@ import PLoading from './p-loading/index.vue'
 import PNavBar from './p-nav-bar/index.vue'
 import PSkeleton from './p-skeleton/index.vue'
 import PErrorBoundary from './p-error-boundary/index.vue'
+// ★G-22 柔性布局（fluid-layout-plan B2/B3）：自适应网格 / 弹性栈 / 内在尺寸
+import PGrid from './p-grid/index.vue'
+import PStack from './p-stack/index.vue'
+import PFit from './p-fit/index.vue'
 
 export {
   VirtualList,
@@ -37,6 +41,10 @@ export {
   PNavBar,
   PSkeleton,
   PErrorBoundary,
+  // ★G-22 柔性布局
+  PGrid,
+  PStack,
+  PFit,
 }
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'

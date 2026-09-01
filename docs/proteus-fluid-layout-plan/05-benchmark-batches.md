@@ -21,13 +21,13 @@
 
 ## 3. 分批实施
 
-| 批次 | 内容 | 依赖 | 可测试性 |
-|------|------|------|---------|
-| **B1** | `p-fluid` clamp 生成 + 断点推导 | Compiler (G-02) | ✅ 纯逻辑，零依赖，可单测 |
-| **B2** | `p-grid` Web/Skyline + CSS Grid | B1 | ✅ Web 端 e2e |
-| **B3** | `p-stack` + `p-fit` | B1 | ✅ 纯逻辑 |
-| **B4** | iOS/Android/鸿蒙 原生映射 | B2 + App Renderer (G-07) | 真机验证 |
-| **B5** | 运行时容器监听 + 横竖屏 + 折叠屏 | B4 | 真机验证 |
+| 批次 | 内容 | 依赖 | 状态 |
+|------|------|------|------|
+| **B1** | `p-fluid` clamp 生成 + 断点推导 | Compiler (G-02) | ✅ 已落地（compiler/fluid-layout.ts：generateClamp/deriveBreakpoints/calcColumns/gridTemplate + tests/fluid-layout.test.ts 6 用例） |
+| **B2** | `p-grid` Web/Skyline + CSS Grid | B1 | ✅ Web 已落地（src/components/p-grid：repeat(auto-fill, minmax)；Skyline 降级普通容器） |
+| **B3** | `p-stack` + `p-fit` | B1 | ✅ 已落地（src/components/p-stack / p-fit + 挂载测试） |
+| **B4** | iOS/Android/鸿蒙 原生映射 | B2 + App Renderer (G-07) | ⬜ **延后**（无原生渲染层） |
+| **B5** | 运行时容器监听 + 横竖屏 + 折叠屏 | B4 | ⬜ **延后**（依赖 B4） |
 
 ## 4. B1 可单测用例（MVP 起点）
 
@@ -55,4 +55,6 @@ describe('fluid-layout B1', () => {
 })
 ```
 
-> **B1 三个算法全部已验证通过**（见 `fluid-layout-verify.js`），可直接转为单元测试。
+> **B1 三个算法全部已验证通过**（见 `fluid-layout-verify.js`——脚本未入库，等价断言已转 tests/fluid-layout.test.ts），可直接转为单元测试。
+
+> **★收尾说明（2026-09）**：B1-B3 已落地（纯算法 + Web 组件 + demo 页 examples/pages/fluid-layout-demo.vue）；**B4/B5 延后**——五端原生渲染层（App Renderer G-07）尚不存在，iOS/Android/鸿蒙映射与运行时容器监听无从落地；`p-fluid` 指令的编译期 clamp 生成（Web vite transform / MP template 规则）与 FLD001-006 严格规则接入为后续批次（待 Compiler Plugin G-21 与 style-safety 白名单扩展就绪）。

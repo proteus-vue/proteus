@@ -4,8 +4,11 @@
 // e2e 测试（tests/e2e-web.test.ts）需要真实构建产物 + Chromium，由 npm run test:e2e:web 单独运行
 import { defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
+import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  // ★G-22 柔性布局组件测试：启用 vue 插件（SFC 挂载测试；不影响既有非 SFC 测试）
+  plugins: [vue()],
   test: {
     // ★并行 worker 上限：hmr-dev-server 等真实 fs.watch（macOS FSEvents）测试在满核并行 + 系统负载下事件延迟可超 15s
     //   （实测 8 核满载 4 连败 / 4 worker 全绿）→ 保守限流，单测稳定性优先于并行吞吐
@@ -41,6 +44,8 @@ export default defineConfig({
       // ★发布前收口（决策 #214）：测试统一走包名（去掉 packages 相对路径引入）——缺失 alias 补全
       { find: '@proteus-vue/api', replacement: fileURLToPath(new URL('./packages/api/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/built-in-components', replacement: fileURLToPath(new URL('./packages/built-in-components/src/index.ts', import.meta.url)) },
+      // ★组件库未拆包（决策 #115）：@proteus-vue/components → src/components（examples alias 同源；测试统一走包名）
+      { find: '@proteus-vue/components', replacement: fileURLToPath(new URL('./src/components/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },

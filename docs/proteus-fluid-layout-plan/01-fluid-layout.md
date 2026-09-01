@@ -262,13 +262,13 @@ JSI → 原生布局引擎
 
 ## 8. 分批实施
 
-| 批次 | 内容 | 依赖 | 可测试性 |
-|------|------|------|---------|
-| **B1** | `p-fluid` 编译期 clamp 生成 + 断点推导 | Compiler | ✅ 纯逻辑，零依赖 |
-| **B2** | `p-grid` Web/Skyline + CSS Grid | B1 | ✅ Web 可测 |
-| **B3** | `p-stack` + `p-fit` | B1 | ✅ 纯逻辑 |
-| **B4** | iOS/Android/鸿蒙 原生网格映射 | B2 + App Renderer | 真机验证 |
-| **B5** | 运行时容器监听 + 横竖屏 | B4 | 真机验证 |
+| 批次 | 内容 | 依赖 | 状态 |
+|------|------|------|------|
+| **B1** | `p-fluid` 编译期 clamp 生成 + 断点推导 | Compiler | ✅ 已落地（纯函数 + 单测） |
+| **B2** | `p-grid` Web/Skyline + CSS Grid | B1 | ✅ Web 已落地（Skyline 降级） |
+| **B3** | `p-stack` + `p-fit` | B1 | ✅ 已落地 |
+| **B4** | iOS/Android/鸿蒙 原生网格映射 | B2 + App Renderer | ⬜ 延后 |
+| **B5** | 运行时容器监听 + 横竖屏 | B4 | ⬜ 延后 |
 
 ---
 
