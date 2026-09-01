@@ -739,6 +739,16 @@ body.pd-body {
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
 }
 
+/* ★拖拽把手（面板 header）：光标 + 禁止选中文本 */
+.pd-floating-host .pd-header.pd-floating-draggable {
+  cursor: move;
+  user-select: none;
+}
+
+.pd-floating-host .pd-header.pd-floating-draggable:active {
+  cursor: grabbing;
+}
+
 /* ── M9 插件：network 瀑布 / 命令面板 / 崩溃占位 ────────────── */
 .pd-net {
   display: flex;

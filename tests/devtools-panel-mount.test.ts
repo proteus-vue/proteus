@@ -207,4 +207,47 @@ describe('installProteusDevtools 一键接入', () => {
     devtools.destroy()
     app.unmount()
   })
+
+  it('★悬浮面板拖拽：header 拖动 → 位置移动 + 视口限制 + localStorage 记忆恢复', async () => {
+    document.body.replaceChildren()
+    vi.resetModules()
+    const { installProteusDevtools: install2 } = await import('@proteus-vue/devtools')
+    const app = createApp({})
+    const pinia = createPinia()
+    app.use(pinia)
+    setActivePinia(pinia)
+    const bus = createTraceBus({ enabled: true })
+    const devtools = install2(app, { traceBus: bus, pinia, mount: true })
+    const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
+    btn.click()
+    const host = document.querySelector('.pd-floating-host') as HTMLElement
+    const header = host.querySelector('.pd-header') as HTMLElement
+    expect(header.classList.contains('pd-floating-draggable')).toBe(true)
+    // 拖拽：mousedown（header）→ document mousemove → host 从 right/bottom 切 left/top 跟随
+    header.dispatchEvent(new MouseEvent('mousedown', { clientX: 100, clientY: 100, bubbles: true }))
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 160, clientY: 130, bubbles: true }))
+    expect(host.style.right).toBe('auto')
+    expect(host.style.bottom).toBe('auto')
+    expect(host.style.left).toBe('60px') // origLeft(0) + (160-100)
+    expect(host.style.top).toBe('30px')
+    // 视口限制：拖出左上角 → clamp 到 0
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: -50, clientY: -50, bubbles: true }))
+    expect(host.style.left).toBe('0px')
+    expect(host.style.top).toBe('0px')
+    // 释放 → 记忆位置
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    expect(localStorage.getItem('proteus-devtools-panel-pos')).toContain('"left":0')
+    // 再拖到 (260, 230) → 记忆 (160, 130)
+    header.dispatchEvent(new MouseEvent('mousedown', { clientX: 0, clientY: 0, bubbles: true }))
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 160, clientY: 130, bubbles: true }))
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    expect(host.style.left).toBe('160px')
+    // 关闭再打开 → 恢复记忆位置
+    btn.click()
+    btn.click()
+    expect(host.style.left).toBe('160px')
+    expect(host.style.top).toBe('130px')
+    devtools.destroy()
+    app.unmount()
+  })
 })

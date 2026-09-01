@@ -72,6 +72,69 @@ export interface InstalledDevtools {
 let panelMounted = false
 let panel: { destroy(): void } | null = null
 
+/** ★面板位置记忆（localStorage；隐私模式/异常静默失败） */
+const PANEL_POS_KEY = 'proteus-devtools-panel-pos'
+
+function loadPanelPos(): { left: number; top: number } | null {
+  try {
+    const raw = localStorage.getItem(PANEL_POS_KEY)
+    if (!raw) return null
+    const p = JSON.parse(raw) as { left?: unknown; top?: unknown }
+    if (typeof p?.left === 'number' && typeof p?.top === 'number') return { left: p.left, top: p.top }
+  } catch {
+    /* 隐私模式/禁用存储：忽略 */
+  }
+  return null
+}
+
+function savePanelPos(left: number, top: number): void {
+  try {
+    localStorage.setItem(PANEL_POS_KEY, JSON.stringify({ left, top }))
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** ★悬浮面板拖拽：header 作把手（mousedown 记录偏移 → document mousemove 移动 → mouseup 释放 + 记忆位置） */
+function makeFloatingDraggable(host: HTMLElement, handle: HTMLElement): void {
+  handle.classList.add('pd-floating-draggable')
+  let startX = 0
+  let startY = 0
+  let origLeft = 0
+  let origTop = 0
+  handle.addEventListener('mousedown', (e) => {
+    // header 内交互控件（palette/状态按钮等）不触发拖拽
+    if ((e.target as HTMLElement).closest('button, input, a, .pd-palette-btn')) return
+    startX = e.clientX
+    startY = e.clientY
+    const rect = host.getBoundingClientRect()
+    origLeft = rect.left
+    origTop = rect.top
+    // ★从 right/bottom 定位切换为 left/top（fixed 定位），拖拽期间跟随鼠标
+    host.style.left = origLeft + 'px'
+    host.style.top = origTop + 'px'
+    host.style.right = 'auto'
+    host.style.bottom = 'auto'
+    const onMove = (ev: MouseEvent): void => {
+      // ★视口内限制（保留标题栏可抓取 + 面板主体可读）
+      const maxLeft = Math.max(0, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 160)
+      const maxTop = Math.max(0, (typeof window !== 'undefined' ? window.innerHeight : 768) - 80)
+      const left = Math.max(0, Math.min(origLeft + (ev.clientX - startX), maxLeft))
+      const top = Math.max(0, Math.min(origTop + (ev.clientY - startY), maxTop))
+      host.style.left = left + 'px'
+      host.style.top = top + 'px'
+    }
+    const onUp = (): void => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      savePanelPos(parseFloat(host.style.left) || 0, parseFloat(host.style.top) || 0)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    e.preventDefault()
+  })
+}
+
 function mountFloatingPanel(
   bus: TraceBus,
   pages: PagesViewData | undefined,
@@ -95,6 +158,14 @@ function mountFloatingPanel(
       host.style.display = 'none'
       return
     }
+    // ★恢复上次拖拽位置（记忆；无存档用默认 right/bottom 定位）
+    const saved = loadPanelPos()
+    if (saved) {
+      host.style.left = saved.left + 'px'
+      host.style.top = saved.top + 'px'
+      host.style.right = 'auto'
+      host.style.bottom = 'auto'
+    }
     host.style.display = 'block'
     if (!panel) {
       panel = createDevtoolsPanel(host, {
@@ -105,6 +176,9 @@ function mountFloatingPanel(
         // ★P1：组件视图选中 → 页面元素高亮（scrollIntoView + 描边闪烁）
         onSelectComponent: selectComponent,
       })
+      // ★拖拽：面板 header 作把手（位置记忆 localStorage）
+      const header = host.querySelector('.pd-header')
+      if (header) makeFloatingDraggable(host, header as HTMLElement)
       // ★★时间旅行可恢复起点：面板打开时补发当前 store 快照——面板订阅前创建的 store，其 init 事件已丢
       //   （TraceBus on 不自动回放缓冲 #249）→ 没有补发则 restoreAt(最左) 返回空、拖滑块页面不变
       //   补发后「拖到最左 = 面板打开时刻状态」（可恢复的起点）；store 后建场景由 tracer 的 use 插件发 init，无重复
