@@ -106,6 +106,7 @@ export interface ProteusInspectorsOptions {
     records: Array<{
       from: string
       to: string
+      query?: Record<string, string>
       durationMs: number
       timestamp: number
       traceId?: string
@@ -146,9 +147,11 @@ const ROUTER_INSPECTOR = 'proteus-router'
 /** InspectorNodeTag 颜色（textColor/backgroundColor 必填 number） */
 const TAG_STYLE = { textColor: 0xffffff, backgroundColor: 0x1a7af8 }
 
-/** 路由表 → 嵌套树节点（parent 引用构建父子层级；无 parent/父缺失 → 根） */
+/** 路由表 → 嵌套树节点（parent 引用构建父子层级；无 parent/父缺失 → 根）
+ * ★currentRoute 命中 → 节点加「当前」tag（高亮，Router Inspector 直观看到当前所在路由） */
 function buildRouterTree(
   routes: Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>,
+  currentRoute?: string,
 ): Array<{ id: string; label: string; tags?: Array<{ label: string; textColor: number; backgroundColor: number }>; children?: unknown[] }> {
   const byName = new Map(routes.map((r) => [r.name, r]))
   const childrenOf = new Map<string, Array<{ name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }>>()
@@ -162,6 +165,7 @@ function buildRouterTree(
       roots.push(r)
     }
   }
+  const CURRENT_STYLE = { textColor: 0xffffff, backgroundColor: 0x07c160 }
   const toNode = (r: { name: string; path: string; parent?: string; subPackage?: string; meta?: Record<string, unknown> }): {
     id: string
     label: string
@@ -170,7 +174,11 @@ function buildRouterTree(
   } => ({
     id: r.name,
     label: (r.meta?.title as string | undefined) ?? r.name,
-    tags: [{ label: r.path, ...TAG_STYLE }],
+    // ★当前路由高亮（path 匹配 → 绿色「当前」tag）
+    tags: [
+      ...(r.path === currentRoute ? [{ label: '当前', ...CURRENT_STYLE }] : []),
+      { label: r.path, ...TAG_STYLE },
+    ],
     children: (childrenOf.get(r.name) ?? []).map(toNode),
   })
   return roots.map(toNode)
@@ -225,22 +233,23 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
     api.addInspector({ id: ROUTER_INSPECTOR, label: 'Router', icon: 'route' })
     api.on.getInspectorTree((payload) => {
       if (payload.inspectorId !== ROUTER_INSPECTOR) return
-      const nodes = buildRouterTree(options.pages?.routes ?? [])
+      const routerState = options.getRouterState?.()
+      const nodes = buildRouterTree(options.pages?.routes ?? [], routerState?.currentRoute)
       // ★「导航记录」节点置顶：动态数据（当前路由 + 最近记录）——对齐 vue-router 面板的路由记录形态
-      if (options.getRouterState) {
-        const state = options.getRouterState()
-        const recordNodes = state.records
+      if (routerState) {
+        const recordNodes = routerState.records
           .slice(-20)
           .reverse()
           .map((r) => ({
             id: 'rec-' + r.timestamp,
-            label: `${r.from} → ${r.to}`,
+            // ★带参导航显示 query（如 pages/user/profile?id=1）
+            label: `${r.from} → ${r.to}${r.query && Object.keys(r.query).length ? '?' + new URLSearchParams(r.query).toString() : ''}`,
             tags: [{ label: r.durationMs + 'ms', ...TAG_STYLE }],
           }))
         nodes.unshift({
           id: 'proteus-records',
-          label: `导航记录 (${state.records.length})`,
-          tags: state.currentRoute ? [{ label: '当前: ' + state.currentRoute, ...TAG_STYLE }] : undefined,
+          label: `导航记录 (${routerState.records.length})`,
+          tags: routerState.currentRoute ? [{ label: '当前: ' + routerState.currentRoute, ...TAG_STYLE }] : undefined,
           children: recordNodes,
         })
       }
@@ -267,6 +276,7 @@ export function installProteusInspectors(api: VueDevtoolsInspectorApiLike, optio
               导航状态: [
                 { key: 'from', value: rec.from },
                 { key: 'to', value: rec.to },
+                { key: 'query', value: rec.query ?? {} },
                 { key: 'durationMs', value: rec.durationMs },
                 { key: 'timestamp', value: rec.timestamp },
                 { key: 'traceId', value: rec.traceId ?? '—' },

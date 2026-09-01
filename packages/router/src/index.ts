@@ -102,7 +102,8 @@ class Router {
       const top = pages.length ? (pages[pages.length - 1] as { route?: string }) : undefined
       // ★web 根路径（/ → 空串）统一归一化 index（与 onPageLoad 补发侧一致，route 面板 from 可读）
       const fromPath = top?.route || 'index'
-      bus.emit('router', 'start', navName, { from: { path: fromPath }, to: { path: target.path } }, traceId)
+      // ★query 透传（panel route 视图 / Router Inspector 显示带参导航，如 ?id=1）
+      bus.emit('router', 'start', navName, { from: { path: fromPath }, to: { path: target.path, query: options.query } }, traceId)
     }
 
     // 路由守卫：返回 false 取消导航（routeMap 注入，工厂化；trace 输出守卫链路 --trace-router）

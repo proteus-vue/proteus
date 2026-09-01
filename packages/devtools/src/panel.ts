@@ -203,13 +203,13 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     // Route 适配
     if (e.source === 'router') {
       if (e.phase === 'start' && /nav/i.test(e.name)) {
-        const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string } }
+        const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string; query?: Record<string, string> } }
         const id = e.traceId ?? e.name + '-' + e.timestamp
         inflightNav.set(id, {
           record: {
             id,
             from: { path: p.from?.path ?? '?' },
-            to: { path: p.to?.path ?? e.name },
+            to: { path: p.to?.path ?? e.name, query: p.to?.query },
             guards: [],
             durationMs: 0,
             traceId: e.traceId,

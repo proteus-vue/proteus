@@ -522,7 +522,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
         currentRoute: 'pages/user/profile',
         records: [
           { from: 'index', to: 'pages/user/index', durationMs: 2, timestamp: 100, traceId: 'nav-1', guards: [{ name: 'guard beforeEach:next', result: 'next' }] },
-          { from: 'pages/user/index', to: 'pages/user/profile', durationMs: 3, timestamp: 200, traceId: 'nav-2', guards: [{ name: 'guard beforeEach:next', result: 'next' }] },
+          { from: 'pages/user/index', to: 'pages/user/profile', query: { id: '1' }, durationMs: 3, timestamp: 200, traceId: 'nav-2', guards: [{ name: 'guard beforeEach:next', result: 'next' }] },
         ],
       }),
     })
@@ -538,7 +538,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(roots[0].id).toBe('proteus-records') // 导航记录置顶
     expect(roots[0].label).toContain('导航记录 (2)')
     const recNodes = roots[0].children as Array<{ id: string; label: string }>
-    expect(recNodes[0].label).toBe('pages/user/index → pages/user/profile') // 倒序最新在上
+    expect(recNodes[0].label).toBe('pages/user/index → pages/user/profile?id=1') // 倒序最新在上 + query 显示
     expect(recNodes[1].label).toBe('index → pages/user/index')
     expect(roots.length).toBe(2)
     expect(roots[1].id).toBe('index')
@@ -547,6 +547,11 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(user?.id).toBe('user')
     expect(user?.label).toBe('用户中心')
     expect(user?.children?.[0] && (user.children[0] as { id: string }).id).toBe('user-profile')
+    // ★当前路由高亮：currentRoute=pages/user/profile → user-profile 节点带「当前」tag
+    const profileNode = (user?.children?.[0] as { tags?: Array<{ label: string }> }).tags
+    expect(profileNode?.some((t) => t.label === '当前')).toBe(true)
+    const indexTags = (roots[1] as { tags?: Array<{ label: string }> }).tags
+    expect(indexTags?.some((t) => t.label === '当前')).toBe(false)
     // ★选中导航记录分组 → 当前路由 + 记录数组（对象分组形态）
     const recPayload = { inspectorId: 'proteus-router', nodeId: 'proteus-records' }
     stateCbs[stateCbs.length - 1](recPayload)
@@ -554,11 +559,12 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const recGroup = recPayload.state?.['导航记录'] ?? []
     expect(recGroup[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
     expect((recGroup[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
-    // ★选中单条记录 → 「导航状态」分组（from/to/耗时/时间/traceId/守卫链）
+    // ★选中单条记录 → 「导航状态」分组（from/to/query/耗时/时间/traceId/守卫链）
     const singlePayload = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
     stateCbs[stateCbs.length - 1](singlePayload)
     const singleGroup = singlePayload.state?.['导航状态'] ?? []
-    expect(singleGroup.map((s) => s.key)).toEqual(['from', 'to', 'durationMs', 'timestamp', 'traceId', 'guards'])
+    expect(singleGroup.map((s) => s.key)).toEqual(['from', 'to', 'query', 'durationMs', 'timestamp', 'traceId', 'guards'])
+    expect(singleGroup.find((s) => s.key === 'query')?.value).toEqual({ id: '1' })
     expect(singleGroup.find((s) => s.key === 'traceId')?.value).toBe('nav-2')
     expect((singleGroup.find((s) => s.key === 'guards')?.value as Array<{ result: string }>)[0].result).toBe('next')
     // 选中路由节点详情（取最后一个 state 回调——app-config 也注册了）

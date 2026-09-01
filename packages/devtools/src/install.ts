@@ -122,6 +122,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   interface NavRec {
     from: string
     to: string
+    query?: Record<string, string>
     durationMs: number
     timestamp: number
     traceId?: string
@@ -129,12 +130,12 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   }
   const navRecords: NavRec[] = []
   let navCurrent = ''
-  let navInflight: { from: string; to: string; start: number; traceId?: string; guards: NavRec['guards'] } | null = null
+  let navInflight: { from: string; to: string; query?: Record<string, string>; start: number; traceId?: string; guards: NavRec['guards'] } | null = null
   const offNav = bus.on((e) => {
     if (e.source !== 'router') return
     if (e.phase === 'start' && /nav/i.test(e.name)) {
-      const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string } }
-      navInflight = { from: p.from?.path ?? '?', to: p.to?.path ?? e.name, start: e.timestamp, traceId: e.traceId, guards: [] }
+      const p = (e.payload ?? {}) as { from?: { path?: string }; to?: { path?: string; query?: Record<string, string> } }
+      navInflight = { from: p.from?.path ?? '?', to: p.to?.path ?? e.name, query: p.to?.query, start: e.timestamp, traceId: e.traceId, guards: [] }
     } else if (navInflight && e.phase === 'point' && /guard/i.test(e.name)) {
       // 守卫事件（point）→ 附加到进行中导航（对齐 panel 的 guards 徽章逻辑）
       let result: NavRec['guards'][number]['result'] = 'next'
@@ -146,6 +147,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       const rec: NavRec = {
         from: navInflight.from,
         to: navInflight.to,
+        query: navInflight.query,
         durationMs: Math.max(0, e.timestamp - navInflight.start),
         timestamp: e.timestamp,
         traceId: e.traceId ?? navInflight.traceId,
