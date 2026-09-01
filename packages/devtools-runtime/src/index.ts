@@ -159,3 +159,11 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
     },
   }
 }
+
+export { createTimelineCollector } from './timeline'
+export type {
+  TimelineSpan,
+  TimelineCollector,
+  TimelineCollectorOptions,
+  TimelineFilter,
+} from './timeline'
