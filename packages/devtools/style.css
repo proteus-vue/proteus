@@ -339,6 +339,130 @@ body.pd-body {
   border-color: #27ae60;
 }
 
+/* ── M8 设备面板：概览卡片 + 能力表 + 内存曲线 ────────────────────── */
+.pd-dev-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 4px;
+}
+
+.pd-dev-card {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 120px;
+}
+
+.pd-dev-card-label {
+  font-size: 10px;
+  color: var(--pd-text-faint);
+}
+
+.pd-dev-card-value {
+  font-family: var(--pd-mono);
+  font-size: 13px;
+  color: var(--pd-accent);
+  margin-top: 2px;
+}
+
+.pd-dev-card-hint {
+  font-size: 10px;
+  color: var(--pd-yellow);
+  margin-top: 2px;
+}
+
+.pd-dev-ua {
+  padding: 2px 12px 8px;
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-dev-memory {
+  padding: 0 12px 10px;
+}
+
+.pd-dev-mem-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 64px;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.pd-dev-mem-col {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 2px;
+}
+
+.pd-dev-mem-total {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #3a3a3e;
+}
+
+.pd-dev-mem-used {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--pd-accent);
+  opacity: 0.85;
+}
+
+.pd-dev-mem-stat {
+  margin-top: 4px;
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-dim);
+}
+
+.pd-dev-caps {
+  padding: 0 12px 12px;
+}
+
+.pd-dev-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--pd-border-soft);
+  font-size: 12px;
+}
+
+.pd-dev-cap-mark {
+  width: 18px;
+  text-align: center;
+}
+
+.pd-dev-cap-ok .pd-dev-cap-name {
+  color: var(--pd-green);
+}
+
+.pd-dev-cap-no .pd-dev-cap-name {
+  color: var(--pd-text-dim);
+  text-decoration: line-through;
+}
+
+.pd-dev-cap-meta {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  font-family: var(--pd-mono);
+}
+
 .pd-cmp {
   border: 1px solid var(--pd-border-soft);
   border-radius: 4px;

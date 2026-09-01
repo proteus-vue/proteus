@@ -18,6 +18,7 @@ import {
   renderComponents,
   renderPages,
   renderGraph,
+  renderDevice,
   installComponentTrace,
   createTooltipLayer,
   bindTooltip,
@@ -59,6 +60,54 @@ function mockSource(): DevtoolsSource & { push: (e: TraceEvent) => void } {
 }
 
 describe('视图渲染函数', () => {
+  it('renderDevice：★M8 概览卡片 + 能力表格 + 内存曲线；空态；字段缺失防御', () => {
+    // 完整数据：平台卡 + UA + 能力表（✅/❌ + 标注）+ 内存曲线（采样柱）
+    const root = document.createElement('div')
+    renderDevice(root, {
+      info: {
+        platform: 'web',
+        userAgent: 'Mozilla/5.0 Test UA',
+        screen: { dpr: 2, width: 375, height: 812, safeBottom: 34 },
+        memory: { jsHeapLimit: 2172649472, totalJSHeapSize: 10485760, usedJSHeapSize: 5242880 },
+        capabilities: [
+          { capability: 'clipboard', platform: 'web', priority: 1, required: true, fallback: 'share', supported: true, runsInWorklet: true, platforms: ['web', 'skyline'] },
+          { capability: 'worklet-anim', platform: 'web', priority: 0, required: false, supported: false, platforms: ['skyline'] },
+        ],
+      },
+      memory: [
+        { t: 1, used: 5242880, total: 10485760, limit: 2172649472 },
+        { t: 2, used: 6291456, total: 12582912, limit: 2172649472 },
+      ],
+    })
+    // 概览卡：平台 + 基础库 + 屏幕 + JS 堆（内存信息存在时）
+    const cards = root.querySelectorAll('.pd-dev-card')
+    expect(cards.length).toBe(4)
+    expect(cards[0].textContent).toContain('web')
+    expect(cards[2].textContent).toContain('375×812 @2x')
+    expect(cards[3].textContent).toContain('5.0 MB')
+    expect(root.querySelector('.pd-dev-ua')?.textContent).toContain('Test UA')
+    // 能力表：✅/❌ + 标注（required/fallback/worklet/平台覆盖）
+    const capRows = root.querySelectorAll('.pd-dev-cap')
+    expect(capRows.length).toBe(2)
+    expect(capRows[0].classList.contains('pd-dev-cap-ok')).toBe(true)
+    expect(capRows[0].textContent).toContain('clipboard')
+    expect(capRows[0].textContent).toContain('required')
+    expect(capRows[0].textContent).toContain('→ share')
+    expect(capRows[0].textContent).toContain('worklet')
+    expect(capRows[1].classList.contains('pd-dev-cap-no')).toBe(true)
+    // 内存曲线：采样柱 + 最新统计
+    expect(root.querySelectorAll('.pd-dev-mem-col').length).toBe(2)
+    expect(root.querySelector('.pd-dev-mem-stat')?.textContent).toContain('6.0 MB')
+    // 空态
+    const empty = document.createElement('div')
+    renderDevice(empty, { memory: [] })
+    expect(empty.querySelector('.pd-empty')).not.toBeNull()
+    // ★字段缺失防御（远程桥未配置钩子返回 {} 不崩溃）
+    const partial = document.createElement('div')
+    renderDevice(partial, { info: {} as never, memory: [] })
+    expect(partial.querySelector('.pd-dev-cap')).toBeNull()
+  })
+
   it('renderTimeline：泳道分组 + span 线段（宽度/位置 + pending/point 类名）', () => {
     const root = document.createElement('div')
     renderTimeline(root, {
@@ -536,7 +585,7 @@ describe('面板装配', () => {
     const root = document.createElement('div')
     const source = mockSource()
     const panel = createDevtoolsPanel(root, { source })
-    expect(root.querySelectorAll('.pd-nav-item').length).toBe(8) // timeline/flamegraph/state/route/errors/components/pages/graph
+    expect(root.querySelectorAll('.pd-nav-item').length).toBe(9) // timeline/flamegraph/state/route/errors/components/pages/graph/device
     expect(root.querySelector('.pd-header-status')?.textContent).toContain('连接中')
     // 推事件（渲染 16ms 节流）
     source.push(ev('lifecycle', 'start', 'boot', 100))
@@ -581,6 +630,33 @@ describe('面板装配', () => {
     expect(root.querySelector('.pd-dot')?.classList.contains('pd-dot-on')).toBe(true)
     panel.destroy()
     source.close()
+  })
+
+  it('★M8 设备视图：options.deviceInfo 钩子 → 概览/能力表渲染；无钩子 → 空态', () => {
+    const root = document.createElement('div')
+    const source = mockSource()
+    const panel = createDevtoolsPanel(root, {
+      source,
+      deviceInfo: () => ({
+        platform: 'web',
+        userAgent: 'Mozilla/5.0',
+        screen: { dpr: 1, width: 375, height: 812 },
+        capabilities: [{ capability: 'clipboard', platform: 'web', priority: 0, required: false, supported: true, platforms: ['web'] }],
+      }),
+    })
+    panel.show('device')
+    const deviceView = root.querySelector('.pd-view[data-view="device"]') as HTMLElement
+    expect(deviceView.classList.contains('pd-view-active')).toBe(true)
+    // 概览卡（平台/基础库/屏幕——无 memory 信息则无 JS 堆卡）+ 能力表
+    expect(deviceView.querySelectorAll('.pd-dev-card').length).toBe(3)
+    expect(deviceView.querySelector('.pd-dev-cap-ok')?.textContent).toContain('clipboard')
+    panel.destroy()
+    // 无钩子（远程桥未配置）→ 空态不崩溃
+    const root2 = document.createElement('div')
+    const panel2 = createDevtoolsPanel(root2, { source: mockSource() })
+    panel2.show('device')
+    expect((root2.querySelector('.pd-view[data-view="device"]') as HTMLElement).querySelector('.pd-empty')).not.toBeNull()
+    panel2.destroy()
   })
 
   it('route 视图：router nav 事件聚合为导航记录', () => {
@@ -902,11 +978,15 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     })
     sockets[0].onopen?.()
     const sends = sockets[0].send.mock.calls.map((c) => JSON.parse(c[0]))
-    expect(sends.length).toBe(2)
+    expect(sends.length).toBe(3) // enable + appInfo + deviceInfo
     expect(sends[1].method).toBe('Proteus.appInfo')
+    expect(sends[2].method).toBe('Proteus.deviceInfo')
     // appInfo 命令响应（含 id 且无 method）→ 缓存
     sockets[0].onmessage?.({ data: JSON.stringify({ id: 2, result: { routes: [{ name: 'index', path: 'pages/index' }] } }) })
     expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
+    // ★M8：deviceInfo 命令响应 → 缓存（设备面板数据源）
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: 3, result: { platform: 'web', capabilities: [] } }) })
+    expect(source.deviceInfo?.()).toEqual({ platform: 'web', capabilities: [] })
     source.close()
   })
 
@@ -956,15 +1036,15 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
       return s as unknown as WebSocket
     })
     sockets[0].onopen?.()
-    expect(sockets[0].send.mock.calls.length).toBe(2) // enable + appInfo
+    expect(sockets[0].send.mock.calls.length).toBe(3) // enable + appInfo + deviceInfo
     // 2s 后未确认 → 重发
     vi.advanceTimersByTime(2000)
-    expect(sockets[0].send.mock.calls.length).toBe(4)
+    expect(sockets[0].send.mock.calls.length).toBe(6)
     // 收到最新一次 enable 的响应（bridge 回显当前 enableId）→ 确认，停止重发
-    const latestEnableId = JSON.parse(String(sockets[0].send.mock.calls[2][0])).id
+    const latestEnableId = JSON.parse(String(sockets[0].send.mock.calls[3][0])).id
     sockets[0].onmessage?.({ data: JSON.stringify({ id: latestEnableId, result: {} }) })
     vi.advanceTimersByTime(6000)
-    expect(sockets[0].send.mock.calls.length).toBe(4) // 不再重发
+    expect(sockets[0].send.mock.calls.length).toBe(6) // 不再重发
     source.close()
     vi.useRealTimers()
   })

@@ -18,8 +18,9 @@ import { installComponentTrace } from './component-trace'
 import { buildDomTree } from './component-trace'
 import type { DomTreeNode } from './component-trace'
 import { createDevtoolsPanel } from './panel'
-import { setCapabilityTraceBus } from '@proteus-vue/capabilities'
+import { setCapabilityTraceBus, globalRegistry, detectPlatform } from '@proteus-vue/capabilities'
 import type { PagesViewData } from './views/pages'
+import type { DeviceInfo } from './views/device'
 
 /** style-safety 守卫的结构类型（零硬依赖——@proteus-vue/style-safety 实例直接可传） */
 export interface StyleGuardLike {
@@ -141,6 +142,7 @@ function mountFloatingPanel(
   applyState: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void,
   selectComponent: (id: number) => void,
   pinia: PiniaLike | undefined,
+  deviceInfo: () => DeviceInfo,
 ): void {
   if (panelMounted) return
   panelMounted = true
@@ -171,6 +173,8 @@ function mountFloatingPanel(
       panel = createDevtoolsPanel(host, {
         source: createTraceBusSource(bus),
         pages,
+        // ★M8 设备面板：环境/能力信息（navigator/screen + 能力注册表快照）
+        deviceInfo,
         // ★P0：时间旅行回放 / 导入快照恢复 → 逐 store $patch 写回（结构类型零硬依赖；无 pinia → 仅面板内展示）
         onApplyState: applyState,
         // ★P1：组件视图选中 → 页面元素高亮（scrollIntoView + 描边闪烁）
@@ -194,6 +198,40 @@ function mountFloatingPanel(
       }
     }
   })
+}
+
+/**
+ * ★M8 设备面板数据（web 端）：navigator/screen/performance.memory + 能力注册表快照（globalRegistry.snapshot）
+ * 本地面板/远程桥共用同一采集闭包——环境与能力始终来自应用进程
+ */
+function collectDeviceInfo(): DeviceInfo {
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined
+  const scr = typeof window !== 'undefined' && window.screen ? window.screen : undefined
+  const win = typeof window !== 'undefined' ? window : undefined
+  const perf = performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapLimit: number } }
+  const mem = typeof perf.memory === 'object' && perf.memory !== null ? perf.memory : undefined
+  // CSS env(safe-area-inset-*)：刘海屏安全区（无则 undefined）
+  function safeAreaInset(side: 'top' | 'bottom'): number | undefined {
+    if (typeof getComputedStyle !== 'function' || typeof document === 'undefined') return undefined
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-' + side + ')').trim()
+    const px = /^[\d.]+px$/.test(raw) ? parseFloat(raw) : NaN
+    return Number.isFinite(px) ? px : undefined
+  }
+  return {
+    platform: detectPlatform(),
+    userAgent: nav?.userAgent,
+    screen: {
+      dpr: win?.devicePixelRatio || 1,
+      width: scr?.width ?? 0,
+      height: scr?.height ?? 0,
+      safeTop: safeAreaInset('top'),
+      safeBottom: safeAreaInset('bottom'),
+    },
+    memory: mem
+      ? { jsHeapLimit: mem.jsHeapLimit, totalJSHeapSize: mem.totalJSHeapSize, usedJSHeapSize: mem.usedJSHeapSize }
+      : undefined,
+    capabilities: globalRegistry.snapshot(),
+  }
 }
 
 /**
@@ -297,6 +335,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       },
       highlightComponent,
       options.pinia,
+      collectDeviceInfo,
     )
   }
 
@@ -310,6 +349,8 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     remoteBridge = createTraceBusWsBridge(bus, {
       url,
       appInfo: remoteOpts !== null && remoteOpts.appInfo ? remoteOpts.appInfo : () => options.pages,
+      // ★M8 设备面板：应用侧环境/能力上报（与本地面板同源采集闭包）
+      deviceInfo: collectDeviceInfo,
       // ★远程时间旅行：面板 Proteus.restoreStores 命令 → 应用侧逐 store $patch 恢复（复用 applyState 语义）
       onRestoreStores: (stores) => {
         if (!options.pinia) return

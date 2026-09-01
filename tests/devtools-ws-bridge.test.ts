@@ -71,6 +71,24 @@ describe('createTraceBusWsBridge', () => {
     bridge.close()
   })
 
+  it('★M8 设备面板：Proteus.deviceInfo 命令 → options.deviceInfo 上报（环境/能力）', () => {
+    const ws = mockWs()
+    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
+    Fake.OPEN = 1
+    vi.stubGlobal('WebSocket', Fake)
+    const bus = createTraceBus({ enabled: true })
+    const bridge = createTraceBusWsBridge(bus, {
+      url: 'ws://host/proteus-source',
+      deviceInfo: () => ({ platform: 'web', userAgent: 'Mozilla/5.0', capabilities: [{ capability: 'clipboard', supported: true }] }),
+    })
+    ws.onmessage?.({ data: JSON.stringify({ id: 5, method: 'Proteus.deviceInfo' }) })
+    expect(ws.sent.map((s) => JSON.parse(s))).toContainEqual({
+      id: 5,
+      result: { platform: 'web', userAgent: 'Mozilla/5.0', capabilities: [{ capability: 'clipboard', supported: true }] },
+    })
+    bridge.close()
+  })
+
   it('★Proteus.enable → 回放缓冲历史事件（面板后开/重连立即有数据：生命周期等早已 emit）', () => {
     const ws = mockWs()
     ws.readyState = 0 // CONNECTING：on 回调丢弃、事件进缓冲（应用 bootstrap/coreReady 阶段）

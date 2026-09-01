@@ -9,7 +9,7 @@ import type { CapabilityAdapter, CapabilityTraceBus } from './adapter'
 
 export * from './types'
 export { CapabilityRegistry, defineAdapter, validateAdapter, detectPlatform } from './adapter'
-export type { CapabilityAdapter, CapabilityTraceBus } from './adapter'
+export type { CapabilityAdapter, CapabilityTraceBus, CapabilitySnapshotEntry } from './adapter'
 // ★types-plan B4：平台守卫（铁律 #4：matchPlatform/assertPlatform/exhaustiveCheck 替代 #ifdef）
 export { getPlatform, matchPlatform, assertPlatform, exhaustiveCheck } from './guard'
 export type { PlatformCases } from './guard'

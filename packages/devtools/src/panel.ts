@@ -23,6 +23,8 @@ import type { DomTreeNode } from './component-trace'
 import { renderPages } from './views/pages'
 import type { PagesViewData, PageRouteData } from './views/pages'
 import { renderGraph } from './views/graph'
+import { renderDevice } from './views/device'
+import type { DeviceInfo, DeviceMemorySample } from './views/device'
 import { serializeStoreSnapshot, parseStoreSnapshot } from './snapshot-io'
 import type { StoreRestoreEntry } from './snapshot-io'
 import { createTooltipLayer, bindTooltip, resolveTipData } from './tooltip'
@@ -43,6 +45,8 @@ export interface DevtoolsPanelOptions {
   storage?: KVStorage
   /** ★pages/依赖图面板：应用路由表 + 页面栈（缺省取 source.appInfo() 路由表；均无 → 空态） */
   pages?: PagesViewData
+  /** ★M8 设备面板：环境/能力信息钩子（本地面板 install 侧采集；缺省取 source.deviceInfo() 远程命令缓存；均无 → 空态） */
+  deviceInfo?: () => DeviceInfo
 }
 
 export interface DevtoolsPanel {
@@ -55,7 +59,7 @@ export interface DevtoolsPanel {
   importSnapshot(json: string): void
 }
 
-const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph'] as const
+const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph', 'device'] as const
 
 const VIEW_ICONS: Record<string, string> = {
   timeline: '⊞',
@@ -66,6 +70,7 @@ const VIEW_ICONS: Record<string, string> = {
   components: '◫',
   pages: '▦',
   graph: '⌬',
+  device: '⚙',
 }
 
 export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOptions): DevtoolsPanel {
@@ -187,6 +192,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
   function show(view: string): void {
     for (const [k, el] of views) el.classList.toggle('pd-view-active', k === view)
     for (const el of Array.from(sidebar.children)) el.classList.toggle('pd-nav-active', (el as HTMLElement).dataset.view === view)
+    // ★M8：设备视图激活时采样内存曲线（离开即停）
+    if (view === 'device') startMemorySampling()
+    else stopMemorySampling()
   }
   sidebar.addEventListener('click', (e) => {
     const t = (e.target as HTMLElement).closest('.pd-nav-item') as HTMLElement | null
@@ -216,6 +224,31 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
 
   /** ★当前时间旅行回放位置（null = 未回放/最新；滑块 change 释放时更新，rerender 后保持） */
   let travelIndex: number | null = null
+
+  // ★M8 设备面板：内存采样（面板进程 performance.memory——本地面板与应用同进程数值准确；
+  //   远程面板显示面板宿主浏览器内存；无 performance.memory 环境不启动采样）
+  const memorySamples: DeviceMemorySample[] = []
+  let memoryTimer: ReturnType<typeof setInterval> | null = null
+  const MEMORY_SAMPLE_MS = 1000
+  function sampleMemory(): void {
+    const perf = performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapLimit: number } }
+    const mem = perf.memory
+    if (!mem) return
+    memorySamples.push({ t: Date.now(), used: mem.usedJSHeapSize, total: mem.totalJSHeapSize, limit: mem.jsHeapLimit })
+    if (memorySamples.length > 60) memorySamples.shift()
+    scheduleRender()
+  }
+  function startMemorySampling(): void {
+    if (memoryTimer) return
+    memoryTimer = setInterval(sampleMemory, MEMORY_SAMPLE_MS)
+    sampleMemory()
+  }
+  function stopMemorySampling(): void {
+    if (memoryTimer) {
+      clearInterval(memoryTimer)
+      memoryTimer = null
+    }
+  }
 
   function handleEvent(e: TraceEvent): boolean {
     // ★回放回声：store.patch state 已存在于补丁历史（时间旅行 $patch 恢复触发）——
@@ -549,6 +582,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       },
     )
     // Components / Pages / Graph 视图
+    // ★M8 设备面板：本地面板取 options.deviceInfo 钩子；远程面板取 source.deviceInfo() 命令缓存（均无 → 空态）
+    const deviceInfo = options.deviceInfo ? options.deviceInfo() : ((source.deviceInfo?.() as DeviceInfo | undefined) ?? undefined)
+    renderDevice(containers.get('device') as HTMLElement, { info: deviceInfo, memory: memorySamples.slice() })
     renderComponents(
       containers.get('components') as HTMLElement,
       { nodes: Array.from(componentNodes.values()), selectedId: selectedComponent || undefined, dom: selectedComponent ? componentDom.get(selectedComponent) : undefined },
@@ -738,6 +774,7 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
       tooltip.dispose()
       zoom.destroy()
       timelineView.removeEventListener('scroll', onTimelineScroll)
+      stopMemorySampling()
       pluginSubs.length = 0
       source.close()
       if (renderTimer) clearTimeout(renderTimer)

@@ -10,6 +10,8 @@ export interface DevtoolsSource {
   onStatus?(cb: (s: DevtoolsSourceStatus) => void): () => void
   /** 应用信息（Proteus.appInfo：pages/依赖图数据源；WS 源请求缓存，TraceBus 源缺省） */
   appInfo?(): unknown
+  /** ★M8 设备信息（Proteus.deviceInfo：环境/能力数据源；WS 源请求缓存，TraceBus 源缺省） */
+  deviceInfo?(): unknown
   /** ★远程命令下发（WS 源：面板 → relay → 应用侧执行；如 Proteus.restoreStores 时间旅行恢复） */
   sendCommand?(method: string, params?: Record<string, unknown>): void
   close(): void
@@ -50,6 +52,9 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
   let appInfoId: number | null = null
   let enableAcked = false
   let retryTimer: ReturnType<typeof setInterval> | null = null
+  // ★M8 设备面板：Proteus.deviceInfo 命令响应缓存（应用侧环境/能力上报）
+  let deviceInfoId: number | null = null
+  let deviceInfoCache: unknown
 
   function setStatus(s: DevtoolsSourceStatus): void {
     status = s
@@ -64,6 +69,9 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     appInfoId = ++seq
     // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
     sock.send(JSON.stringify({ id: appInfoId, method: 'Proteus.appInfo' }))
+    deviceInfoId = ++seq
+    // ★M8 设备面板：请求环境/能力信息，响应缓存供 panel 注入
+    sock.send(JSON.stringify({ id: deviceInfoId, method: 'Proteus.deviceInfo' }))
   }
 
   /** ★远程命令下发（时间旅行恢复等：面板 → relay → 应用侧执行） */
@@ -111,6 +119,11 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       // appInfo 命令响应 → 缓存
       if (msg.id === appInfoId && msg.result !== undefined) {
         appInfoCache = msg.result
+        return
+      }
+      // ★M8：deviceInfo 命令响应 → 缓存
+      if (msg.id === deviceInfoId && msg.result !== undefined) {
+        deviceInfoCache = msg.result
         return
       }
       if (msg.method !== 'Proteus.event') return
@@ -175,6 +188,10 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     },
     appInfo() {
       return appInfoCache
+    },
+    /** ★M8：设备信息（环境/能力；Proteus.deviceInfo 命令响应缓存；未确认前 undefined） */
+    deviceInfo() {
+      return deviceInfoCache
     },
     sendCommand,
   }

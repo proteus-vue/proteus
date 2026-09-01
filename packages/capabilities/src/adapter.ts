@@ -23,6 +23,26 @@ export interface CapabilityAdapter<C extends CapabilityAPI = CapabilityAPI> {
   runsInWorklet?: boolean
 }
 
+/** ★devtools 打通：能力状态快照条目（M8 设备面板能力表数据源；resolveSync 探测当前平台命中情况） */
+export interface CapabilitySnapshotEntry {
+  /** 能力 id */
+  capability: string
+  /** 当前探测平台 */
+  platform: CapabilityPlatform
+  /** 该能力在当前平台 adapter 的优先级（无则 0） */
+  priority: number
+  /** ★B4：required 标记（缺失阻断流程） */
+  required: boolean
+  /** 降级能力 id（描述文件 fallback） */
+  fallback?: string
+  /** 当前平台是否支持（resolveSync 探测命中） */
+  supported: boolean
+  /** Worklet 能力标注（Skyline UI 线程可运行） */
+  runsInWorklet?: boolean
+  /** 已注册平台列表（web/skyline/app；展示多平台覆盖） */
+  platforms: CapabilityPlatform[]
+}
+
 /** 校验 adapter（纯函数） */
 export function validateAdapter(input: unknown): { ok: true; value: CapabilityAdapter } | { ok: false; errors: Array<{ field: string; message: string }> } {
   const errors: Array<{ field: string; message: string }> = []
@@ -64,6 +84,31 @@ export class CapabilityRegistry {
   /** 注册 fallback 关系（capability 描述文件） */
   registerFallback(capability: string, fallback: string | undefined): void {
     if (fallback) this.fallbacks.set(capability, fallback)
+  }
+
+  /** 读取 fallback 关系（devtools 能力表标注降级目标） */
+  fallbackOf(capability: string): string | undefined {
+    return this.fallbacks.get(capability)
+  }
+
+  /** ★devtools 打通：能力状态快照（M8 设备面板能力表）——已注册能力逐项按当前平台 resolveSync 探测 */
+  snapshot(platform: CapabilityPlatform = detectPlatform()): CapabilitySnapshotEntry[] {
+    const out: CapabilitySnapshotEntry[] = []
+    for (const [capability, list] of this.adapters) {
+      const cur = list.find((a) => a.platform === platform)
+      const supported = cur !== undefined && this.resolveSync(capability, platform) !== undefined
+      out.push({
+        capability,
+        platform,
+        priority: cur?.priority ?? 0,
+        required: this.requireds.get(capability) ?? false,
+        fallback: this.fallbacks.get(capability),
+        supported,
+        runsInWorklet: cur?.runsInWorklet,
+        platforms: list.map((a) => a.platform),
+      })
+    }
+    return out.sort((a, b) => a.capability.localeCompare(b.capability))
   }
 
   /** ★B4：注册 required 标记（§4 降级级别——required 缺失阻断流程） */

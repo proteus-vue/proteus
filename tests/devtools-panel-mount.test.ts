@@ -23,7 +23,7 @@ describe('installProteusDevtools 一键接入', () => {
     // 点击 → 显示 + 面板 8 视图 + pages 数据
     btn.click()
     expect(host.style.display).toBe('block')
-    expect(document.querySelectorAll('.pd-nav-item').length).toBe(8)
+    expect(document.querySelectorAll('.pd-nav-item').length).toBe(9)
     const pagesView = document.querySelector('.pd-view[data-view="pages"]') as HTMLElement
     expect(pagesView.querySelector('.pd-page-row')).not.toBeNull()
     // 事件流 → 面板 timeline（同源 TraceBus 独立消费）

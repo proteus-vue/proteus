@@ -4,7 +4,7 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { defineCapability, validateCapabilityDefinition, registerCapability, registerCapabilities, clearCapabilities, useCapability, getCapability, detectPlatform } from '@proteus-vue/capabilities'
+import { defineCapability, validateCapabilityDefinition, registerCapability, registerCapabilities, clearCapabilities, useCapability, getCapability, detectPlatform, CapabilityRegistry } from '@proteus-vue/capabilities'
 import { walkCapabilityFiles, scanCapabilities } from '../packages/capabilities/src/scan'
 import { runCapabilityScan } from '../packages/cli/src/capability-manifest'
 
@@ -74,6 +74,29 @@ describe('defineCapability / validateCapabilityDefinition', () => {
 
   it('detectPlatform：无 wx/window 环境 → web', () => {
     expect(detectPlatform()).toBe('web')
+  })
+})
+
+describe('CapabilityRegistry.snapshot（★M8 设备面板能力表数据源）', () => {
+  it('按当前平台逐项探测：supported/required/fallback/priority/runsInWorklet/platforms + 字母序', () => {
+    const registry = new CapabilityRegistry()
+    registry.register({ capability: 'clipboard', platform: 'web', priority: 1, runsInWorklet: true, isSupported: () => true, create: () => ({ isSupported: () => true }) })
+    registry.register({ capability: 'clipboard', platform: 'skyline', isSupported: () => false, create: () => ({ isSupported: () => false }) })
+    registry.register({ capability: 'worklet-anim', platform: 'skyline', isSupported: () => true, create: () => ({ isSupported: () => true }) })
+    registry.registerFallback('clipboard', 'share')
+    registry.registerRequired('clipboard', true)
+    const snap = registry.snapshot('web')
+    const clip = snap.find((s) => s.capability === 'clipboard')
+    expect(clip?.supported).toBe(true)
+    expect(clip?.required).toBe(true)
+    expect(clip?.fallback).toBe('share')
+    expect(clip?.priority).toBe(1)
+    expect(clip?.runsInWorklet).toBe(true)
+    expect(clip?.platforms).toEqual(['web', 'skyline'])
+    // skyline-only 能力在当前平台（web）→ supported false
+    expect(snap.find((s) => s.capability === 'worklet-anim')?.supported).toBe(false)
+    // 字母序
+    expect(snap.map((s) => s.capability)).toEqual(['clipboard', 'worklet-anim'])
   })
 })
 
