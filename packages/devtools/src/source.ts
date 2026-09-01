@@ -10,6 +10,8 @@ export interface DevtoolsSource {
   onStatus?(cb: (s: DevtoolsSourceStatus) => void): () => void
   /** 应用信息（Proteus.appInfo：pages/依赖图数据源；WS 源请求缓存，TraceBus 源缺省） */
   appInfo?(): unknown
+  /** ★远程命令下发（WS 源：面板 → relay → 应用侧执行；如 Proteus.restoreStores 时间旅行恢复） */
+  sendCommand?(method: string, params?: Record<string, unknown>): void
   close(): void
 }
 
@@ -62,6 +64,12 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     appInfoId = ++seq
     // ★appInfo（pages/依赖图数据）：请求路由表，响应缓存供 panel 注入
     sock.send(JSON.stringify({ id: appInfoId, method: 'Proteus.appInfo' }))
+  }
+
+  /** ★远程命令下发（时间旅行恢复等：面板 → relay → 应用侧执行） */
+  function sendCommand(method: string, params?: Record<string, unknown>): void {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ id: ++seq, method, params }))
   }
 
   function startRetry(): void {
@@ -168,5 +176,6 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     appInfo() {
       return appInfoCache
     },
+    sendCommand,
   }
 }

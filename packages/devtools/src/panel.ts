@@ -268,25 +268,34 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
         if (typeof p.id === 'string') {
           const index = stepSeq++
           const isAction = /action/i.test(e.name)
+          // ★回放回声去重：时间旅行 $patch 恢复会触发 store.patch 回声（state = 历史值）——
+          //   state 已存在于补丁历史 → 忽略，不污染时间线/滑块范围（本地/远程面板共用）
+          let duplicate = false
           if (!isAction) {
             // ★patch：去 id 存 state 快照 + 追加补丁历史（时间旅行 restore / before·after diff 用）
             const state: Record<string, unknown> = {}
             for (const k of Object.keys(p)) if (k !== 'id') state[k] = p[k]
-            storeSnapshots.set(p.id, state)
-            if (!selectedStore) selectedStore = p.id
-            const list = storePatchHistory.get(p.id) ?? []
-            list.push({ stepIndex: index, state })
-            storePatchHistory.set(p.id, list)
+            const hist = storePatchHistory.get(p.id) ?? []
+            duplicate = hist.some((h) => JSON.stringify(h.state) === JSON.stringify(state))
+            if (!duplicate) {
+              storeSnapshots.set(p.id, state)
+              if (!selectedStore) selectedStore = p.id
+              const list = storePatchHistory.get(p.id) ?? []
+              list.push({ stepIndex: index, state })
+              storePatchHistory.set(p.id, list)
+            }
           }
-          storeSteps.push({
-            index,
-            storeId: p.id,
-            type: isAction ? 'action' : 'patch',
-            name: isAction ? String(p.name ?? '?') : 'patch',
-            payload: e.payload,
-            timestamp: e.timestamp,
-          })
-          if (storeSteps.length > 1000) storeSteps.shift()
+          if (!duplicate) {
+            storeSteps.push({
+              index,
+              storeId: p.id,
+              type: isAction ? 'action' : 'patch',
+              name: isAction ? String(p.name ?? '?') : 'patch',
+              payload: e.payload,
+              timestamp: e.timestamp,
+            })
+            if (storeSteps.length > 1000) storeSteps.shift()
+          }
         }
       }
     }
@@ -409,10 +418,13 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     options.onApplyState?.(Array.from(storeSnapshots.entries()).map((kv) => ({ id: kv[0], state: kv[1] })))
   }
 
-  /** 时间旅行（滑块/步骤行）：命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（onApplyState） */
+  /** 时间旅行（滑块/步骤行）：命令下发（onTimeTravel 旧语义）+ 真实 restore 应用（本地 onApplyState / 远程 sendCommand 双通道） */
   function timeTravel(index: number): void {
     options.onTimeTravel?.(index)
-    options.onApplyState?.(restoreAt(index))
+    const restore = restoreAt(index)
+    // ★本地悬浮面板：同页直接 $patch；远程面板（WS 源）：命令下发 → relay → 应用侧执行（无 onApplyState 的路径）
+    options.onApplyState?.(restore)
+    source.sendCommand?.('Proteus.restoreStores', { stores: restore })
   }
 
   function rerender(): void {

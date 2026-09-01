@@ -236,6 +236,14 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     remoteBridge = createTraceBusWsBridge(bus, {
       url,
       appInfo: remoteOpts !== null && remoteOpts.appInfo ? remoteOpts.appInfo : () => options.pages,
+      // ★远程时间旅行：面板 Proteus.restoreStores 命令 → 应用侧逐 store $patch 恢复（复用 applyState 语义）
+      onRestoreStores: (stores) => {
+        if (!options.pinia) return
+        for (const s of stores) {
+          const store = options.pinia._s.get(s.id)
+          store?.$patch?.(s.state)
+        }
+      },
     })
   }
 

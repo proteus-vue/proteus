@@ -792,6 +792,26 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     source.close()
   })
 
+  it('★远程时间旅行命令：sendCommand 下发 Proteus.restoreStores（面板 → relay → 应用侧恢复）', () => {
+    const sockets: Array<{ send: ReturnType<typeof vi.fn>; readyState: number; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
+    const source = createDevtoolsWsSource('ws://panel', () => {
+      const s = { send: vi.fn(), readyState: 1, onopen: null, onmessage: null, onclose: null, close: vi.fn() }
+      sockets.push(s)
+      return s as unknown as WebSocket
+    })
+    sockets[0].onopen?.()
+    source.sendCommand?.('Proteus.restoreStores', { stores: [{ id: 'player', state: { playing: false } }] })
+    const sends = sockets[0].send.mock.calls.map((c) => JSON.parse(c[0]))
+    const cmd = sends[sends.length - 1]
+    expect(cmd.method).toBe('Proteus.restoreStores')
+    expect(cmd.params).toEqual({ stores: [{ id: 'player', state: { playing: false } }] })
+    expect(typeof cmd.id).toBe('number')
+    // 未 OPEN 不发（不抛错）
+    source.close()
+    source.sendCommand?.('Proteus.restoreStores', { stores: [] })
+    expect(sockets[0].send.mock.calls.length).toBe(sends.length)
+  })
+
   it('onStatus：初始 connecting → onopen connected → onclose closed（面板「已连接」不依赖事件到达）', () => {
     const sockets: Array<{ send: ReturnType<typeof vi.fn>; onopen: (() => void) | null; onmessage: ((ev: { data: unknown }) => void) | null; onclose: (() => void) | null; close: ReturnType<typeof vi.fn> }> = []
     const source = createDevtoolsWsSource('ws://panel', () => {

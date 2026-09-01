@@ -9,6 +9,8 @@ export interface TraceBusWsBridgeOptions {
   url: string
   /** Proteus.appInfo 响应（面板 pages/依赖图数据；缺省空对象） */
   appInfo?: () => unknown
+  /** ★远程时间旅行：面板 Proteus.restoreStores 命令 → 应用侧恢复（install 传 pinia.$patch 闭包） */
+  onRestoreStores?: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void
 }
 
 export interface TraceBusWsBridge {
@@ -43,6 +45,13 @@ export function createTraceBusWsBridge(bus: TraceBus, options: TraceBusWsBridgeO
       ws.send(JSON.stringify({ id: msg.id, result: {} }))
     } else if (msg.method === 'Proteus.appInfo') {
       ws.send(JSON.stringify({ id: msg.id, result: options.appInfo ? options.appInfo() : {} }))
+    } else if (msg.method === 'Proteus.restoreStores') {
+      // ★远程时间旅行：面板拖滑块 → 命令经 relay 转发 → 应用侧逐 store $patch 恢复
+      const params = (msg as { params?: { stores?: Array<{ id: string; state: Record<string, unknown> }> } }).params
+      if (options.onRestoreStores && Array.isArray(params?.stores)) {
+        options.onRestoreStores(params.stores)
+      }
+      ws.send(JSON.stringify({ id: msg.id, result: {} }))
     }
   }
   return {

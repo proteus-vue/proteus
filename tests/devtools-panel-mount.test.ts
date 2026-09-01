@@ -96,12 +96,16 @@ describe('installProteusDevtools 一键接入', () => {
     const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
     const range = stateView.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
+    const rowsBefore = stateView.querySelectorAll('.pd-tl-row').length
     // ★拖到最左（0）→ 恢复面板打开时状态（install 补发快照 items:0）——时间旅行可恢复起点
     range.value = '0'
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(0)
-    // 变更后再回放：items=2 → 拖 0 仍恢复面板打开时状态（items:0）；拖 1 恢复第一次变更后（items:1）
+    // ★回放回声去重：$patch 恢复触发的 store.patch 回声（state=历史值）不新增步骤（时间线不被拖动污染）
+    await new Promise((r) => setTimeout(r, 60))
+    expect(stateView.querySelectorAll('.pd-tl-row').length).toBe(rowsBefore)
+    // 变更后再回放：items=2（★真实变更 +1 条）→ 拖 0 恢复 items:0、拖 1 恢复 items:1——均为回声去重
     cart.items = 2
     await new Promise((r) => setTimeout(r, 60))
     range.value = '0'
@@ -112,6 +116,9 @@ describe('installProteusDevtools 一键接入', () => {
     range.dispatchEvent(new Event('input'))
     await new Promise((r) => setTimeout(r, 40))
     expect(cart.items).toBe(1)
+    // 两次拖动（回放回声）不新增步骤：仅 +1（真实变更 items=2）
+    await new Promise((r) => setTimeout(r, 60))
+    expect(stateView.querySelectorAll('.pd-tl-row').length).toBe(rowsBefore + 1)
     devtools.destroy()
     app.unmount()
   })

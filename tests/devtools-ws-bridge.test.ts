@@ -55,6 +55,22 @@ describe('createTraceBusWsBridge', () => {
     bridge.close()
   })
 
+  it('★远程时间旅行：Proteus.restoreStores 命令 → onRestoreStores 回调（逐 store $patch）+ result 响应', () => {
+    const ws = mockWs()
+    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
+    Fake.OPEN = 1
+    vi.stubGlobal('WebSocket', Fake)
+    const bus = createTraceBus({ enabled: true })
+    const restore = vi.fn()
+    const bridge = createTraceBusWsBridge(bus, { url: 'ws://host/proteus-source', onRestoreStores: restore })
+    ws.onmessage?.({
+      data: JSON.stringify({ id: 7, method: 'Proteus.restoreStores', params: { stores: [{ id: 'player', state: { playing: false, volume: 0.8 } }] } }),
+    })
+    expect(restore).toHaveBeenCalledWith([{ id: 'player', state: { playing: false, volume: 0.8 } }])
+    expect(ws.sent.map((s) => JSON.parse(s))).toContainEqual({ id: 7, result: {} })
+    bridge.close()
+  })
+
   it('★Proteus.enable → 回放缓冲历史事件（面板后开/重连立即有数据：生命周期等早已 emit）', () => {
     const ws = mockWs()
     ws.readyState = 0 // CONNECTING：on 回调丢弃、事件进缓冲（应用 bootstrap/coreReady 阶段）
