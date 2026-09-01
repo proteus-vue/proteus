@@ -21,9 +21,11 @@ import { createStyleGuard } from '@proteus-vue/style-safety'
 import { routes } from './router/auto-routes'
 
 // ★devtools：发射端同源——router/api/capability 共用 getProteusTraceBus 惰性单例
-// ★enabled 在业务源码层控制：__PROTEUS_DEBUG__ 被 vite define 替换（dev serve 默认 true；build 默认 false 零开销；PROTEUS_DEBUG=1 强制生产调试）
+// ★enabled 在业务源码层控制：import.meta.env.DEV（vite 可靠注入：dev→true/build→false）|| __PROTEUS_DEBUG__（build 期 define 替换，PROTEUS_DEBUG=1 强制生产调试）
+//   ⚠ 勿改用纯 __PROTEUS_DEBUG__ 运行时判断：vite 5.4 dev 模式 config.define 不替换源码（vite:define 跳过 dev），
+//   无 import.meta.env.DEV 短路会导致 ReferenceError；build 产物两常量折叠 → setEnabled 调用 tree-shake 零开销
 const traceBus = getProteusTraceBus()
-if (__PROTEUS_DEBUG__) traceBus.setEnabled(true)
+if (import.meta.env.DEV || __PROTEUS_DEBUG__) traceBus.setEnabled(true)
 
 // ★G-31 运行时 Validator：开发模式 loose（非法剔除+记录），生产 off 零开销
 const styleGuard = createStyleGuard({ mode: 'loose' })

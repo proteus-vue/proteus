@@ -91,7 +91,7 @@ function mountFloatingPanel(bus: TraceBus, pages: PagesViewData | undefined): vo
 }
 
 /**
- * 一键接入 Web 端 devtools（开发模式调用；生产 __PROTEUS_DEBUG__=false 时 bus 零开销 + 本地面板守卫挂载无事件）
+ * 一键接入 Web 端 devtools（开发模式调用；生产 import.meta.env.DEV=false 且无 PROTEUS_DEBUG=1 时 bus 零开销 + 本地面板守卫挂载无事件）
  * 用法（main.ts，interactive 阶段）：
  *   const devtools = installProteusDevtools(app, { pinia, getConfig, setConfig, styleGuard, pages })
  *   // 发射端同源：createRouter(routes, { traceBus: getProteusTraceBus() }) / createApi({ traceBus: getProteusTraceBus() })

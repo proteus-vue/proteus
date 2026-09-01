@@ -162,10 +162,12 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
 
 /**
  * 惰性单例 TraceBus（★一键接入收口）：router/api/capability 等发射端与 installProteusDevtools 共享同一实例，
- * 避免业务侧手动建 bus 传参。★enabled 由**应用侧源码**控制（__PROTEUS_DEBUG__ 在业务源码被 vite define 替换——
- * 本包 dist 是编译产物，vite 不转换 node_modules，内部引用该全局会恒为 undefined → 必须在调用方显式开启）：
+ * 避免业务侧手动建 bus 传参。★enabled 由**应用侧源码**控制（本包 dist 是编译产物，vite 不转换 node_modules，
+ * 内部引用全局会恒为 undefined → 必须在调用方显式开启）：
  *   const bus = getProteusTraceBus()
- *   if (__PROTEUS_DEBUG__) bus.setEnabled(true)
+ *   if (import.meta.env.DEV || __PROTEUS_DEBUG__) bus.setEnabled(true)
+ *   // import.meta.env.DEV：vite 可靠注入（dev→true/build→false）；__PROTEUS_DEBUG__：build 期 define（PROTEUS_DEBUG=1 强制生产调试）
+ *   // ⚠ 勿用纯 __PROTEUS_DEBUG__：vite 5.4 dev 模式 define 不替换源码，未短路会 ReferenceError；build 产物常量折叠 tree-shake 零开销
  */
 let singletonBus: TraceBus | null = null
 export function getProteusTraceBus(): TraceBus {
