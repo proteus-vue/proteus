@@ -46,6 +46,8 @@ export default defineConfig({
       { find: '@proteus-vue/built-in-components', replacement: fileURLToPath(new URL('./packages/built-in-components/src/index.ts', import.meta.url)) },
       // ★组件库未拆包（决策 #115）：@proteus-vue/components → src/components（examples alias 同源；测试统一走包名）
       { find: '@proteus-vue/components', replacement: fileURLToPath(new URL('./src/components/index.ts', import.meta.url)) },
+      // ★Fluid System（fluid-system-plan）：@proteus-vue/fluid 包（tests/fluid-system.test.ts 直接引用）
+      { find: '@proteus-vue/fluid', replacement: fileURLToPath(new URL('./packages/fluid/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },

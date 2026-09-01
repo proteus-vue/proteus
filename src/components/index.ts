@@ -23,6 +23,9 @@ import PErrorBoundary from './p-error-boundary/index.vue'
 import PGrid from './p-grid/index.vue'
 import PStack from './p-stack/index.vue'
 import PFit from './p-fit/index.vue'
+// ★Fluid System（fluid-system-plan S1）：自适应分栏 / 容器断点分区
+import PSplit from './p-split/index.vue'
+import PZone from './p-zone/index.vue'
 
 export {
   VirtualList,
@@ -45,6 +48,9 @@ export {
   PGrid,
   PStack,
   PFit,
+  // ★Fluid System
+  PSplit,
+  PZone,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

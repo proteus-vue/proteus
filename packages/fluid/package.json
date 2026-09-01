@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/fluid",
+  "version": "0.1.0",
+  "description": "Proteus 柔性框架系统（fluid-system-plan）：FluidContext 响应式上下文 + 容器查询/容器断点 + 设备环境（折叠屏/车机）——多形态设备语义布局体系核心，零依赖",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}

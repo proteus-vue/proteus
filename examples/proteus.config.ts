@@ -54,6 +54,7 @@ const config: ProteusConfig = {
       'pinia-demo': { title: '状态管理' },
       'platform-api-demo': { title: 'PlatformAPI 收口' },
       'fluid-layout-demo': { title: '柔性布局' },
+      'fluid-system-demo': { title: 'Fluid System' },
       'devtools-open-api-demo': { title: '开放 API 演示' },
       'provide-inject-demo': { title: '注入演示' },
       'virtual-list-demo': { title: '虚拟列表' },

@@ -25,6 +25,7 @@
     "@proteus-vue/app-config": "^0.1.0",
     "@proteus-vue/devtools": "^0.1.0",
     "@proteus-vue/devtools-runtime": "^0.1.0",
+    "@proteus-vue/fluid": "^0.1.0",
     "@proteus-vue/router": "^0.2.0-beta.0",
     "@proteus-vue/runtime": "^0.2.0-beta.0",
     "@proteus-vue/shared": "^0.2.0-beta.0",
