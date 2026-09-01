@@ -53,6 +53,7 @@ const config: ProteusConfig = {
       'showcase': { title: '转场演示' },
       'pinia-demo': { title: '状态管理' },
       'platform-api-demo': { title: 'PlatformAPI 收口' },
+      'devtools-open-api-demo': { title: '开放 API 演示' },
       'provide-inject-demo': { title: '注入演示' },
       'virtual-list-demo': { title: '虚拟列表' },
       // 目录级示例：user 下全部页面需登录 + 上滑转场

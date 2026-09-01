@@ -32,6 +32,7 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <a class="link" href="/pages/components-demo">组件演示</a>
       <a class="link" href="/pages/mp-semantics-demo">小程序语义（MP 组件/API）</a>
       <a class="link" href="/pages/platform-api-demo">PlatformAPI 收口</a>
+      <a class="link" href="/pages/devtools-open-api-demo">开放 API 演示（第三方面板）</a>
       <a class="link" href="/pages/builtin-components-demo">内置组件</a>
       <a class="link" href="/pages/i18n-demo">国际化</a>
       <a class="link" href="/pages/provide-inject-demo">注入演示</a>

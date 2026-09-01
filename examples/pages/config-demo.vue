@@ -2,6 +2,7 @@
      演示 proteus.config.ts 的 rules 段：改配置即改变编译行为，无需改框架代码 -->
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { CSSProperties } from 'vue'
 // ★platform-plan B1：Capability 能力（业务依赖能力不依赖平台）——Web 端 Vite ESM 可用；MP 端接入待能力包打包放行
 import clipboardCap from '../capabilities/clipboard.capability'
 import type { ClipboardAPI } from '../capabilities/clipboard.capability'
@@ -54,7 +55,11 @@ function showDevice() {
 
 // ★G-31 style-safety 演示：guard.patch 逐属性校验——display 是 forbidden 属性（CSS 矩阵 ❌ 级）→ 拦截剔除 + 记录；
 //   color 合法保留。Vue DevTools Style Safety Inspector 实时看到 rejected 记录（value: flex, reason: 禁止）
-const guardStyle = styleGuard.patch({ display: 'flex', color: '#1a7af8' })
+// ★vue-tsc 修复：patch 返回 Record<string, unknown> 绑 :style 不兼容 StyleValue——断言放方法体内（MP 编译器剥离方法体 as，顶层 as 不剥）
+function makeGuardStyle(): CSSProperties {
+  return styleGuard.patch({ display: 'flex', color: '#1a7af8' }) as CSSProperties
+}
+const guardStyle = makeGuardStyle()
 </script>
 
 <template>
