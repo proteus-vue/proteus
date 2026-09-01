@@ -55,12 +55,13 @@
 </head>
 <body>
   <div id="proteus-devtools"></div>
-  <script type="module">
-    import { createDevtoolsPanel, createDevtoolsWsSource } from './dist/index.js'
+  <!-- ★IIFE bundle：file:// 双击可直接打开（module 脚本在 file:// 下被浏览器 CORS 拦截 → 黑屏） -->
+  <script src="./dist/panel.js"></script>
+  <script>
     // 连接 dev server HMR/CDP 通道（PROTEUS_DEVTOOLS_URL 可覆盖；缺省 5174）
-    const url = new URLSearchParams(location.search).get('ws') || 'ws://127.0.0.1:5174/'
-    const source = createDevtoolsWsSource(url)
-    createDevtoolsPanel(document.getElementById('proteus-devtools'), { source })
+    var url = new URLSearchParams(location.search).get('ws') || 'ws://127.0.0.1:5174/'
+    var source = ProteusDevtools.createDevtoolsWsSource(url)
+    ProteusDevtools.createDevtoolsPanel(document.getElementById('proteus-devtools'), { source: source })
   </script>
 </body>
 </html>
