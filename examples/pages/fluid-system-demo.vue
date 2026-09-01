@@ -7,7 +7,7 @@
      ★MP 安全：无泛型/类型标注（MP 下无 ResizeObserver → p-split 恒堆叠、p-zone 恒 sm 槽、p-safe fold 恒不生效） -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale, PModal } from '@proteus-vue/components'
+import { PSplit, PZone, PSafe, PAspect, PSidebar, PToolbar, PScale, PModal, PGrid, PStack } from '@proteus-vue/components'
 import { createDeviceEnv, shouldReduceMotion, createSizeAwareObserver, computeAdaptiveForm } from '@proteus-vue/fluid'
 import type { DeviceEnv, FluidDisplayMode, SizeAwareObserver } from '@proteus-vue/fluid'
 
