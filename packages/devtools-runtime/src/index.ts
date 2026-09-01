@@ -191,3 +191,11 @@ export type {
   FlameCompareEntry,
   FlamegraphCollector,
 } from './flamegraph'
+export { createErrorDiagnoser } from './error-diagnoser'
+export type {
+  ErrorEventRecord,
+  RootCauseReport,
+  ErrorPattern,
+  ErrorDiagnoserOptions,
+  ErrorDiagnoser,
+} from './error-diagnoser'

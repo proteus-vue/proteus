@@ -1,5 +1,7 @@
 # M7 — 异常根因分析
 
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createErrorDiagnoser`（error 事件收集 + traceId 聚合 + 归因规则：最早 timestamp 为根因 / 内置模式库 401·ChunkLoadError·capability.unsupported 可扩展 / 影响范围 source 推导 / 复现脚本导航步骤序列 + 缓冲上限，无 error 不误报），10 用例全绿；UI（链路图/根因面板）与 API 拦截器/Pinia wrapAction 联动待面板工程（v1.0+）。
+
 ## 目标
 
 一次失败 → 自动串联"哪个请求失败 → 哪个 action 调用 → 哪个守卫拦截 → 哪个页面渲染"，定位根因。
