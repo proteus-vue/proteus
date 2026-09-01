@@ -1,5 +1,7 @@
 # M4 — 状态快照与时间旅行
 
+> **★实现状态（2026-08-31）**：**数据层已落地**——`@proteus-vue/devtools-runtime` 新增 `createStateSnapshotter`（export 收集非 volatile store + redact 敏感键 + route/meta；import 校验 version + 按 id 还原；recordPatch 记录 before/after + 环形缓冲 1000；timeTravel(i) 各 store 取 steps[0..i] 最后一条 after 回放）+ `serializeState/deserializeState`（Date/Map/Set/BigInt type tag 还原 + 循环引用标记降级），11 用例全绿；Pinia 适配插件（$patch 拦截）与 UI（快照列表/滑块）待面板工程（v1.0+）。
+
 ## 目标
 
 对接 Pinia M8.2：导出/导入完整 state，并按 `$patch` 序列做时间旅行。

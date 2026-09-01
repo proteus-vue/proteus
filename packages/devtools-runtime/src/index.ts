@@ -167,3 +167,11 @@ export type {
   TimelineCollectorOptions,
   TimelineFilter,
 } from './timeline'
+export { createStateSnapshotter, serializeState, deserializeState } from './state-snapshot'
+export type {
+  SnapshotStoreLike,
+  StateSnapshotterOptions,
+  StateSnapshot,
+  PatchStep,
+  StateSnapshotter,
+} from './state-snapshot'
