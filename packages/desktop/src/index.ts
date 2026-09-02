@@ -26,6 +26,16 @@ export { clipboardSupported, copyText, pasteText } from './clipboard'
 export type { ClipboardResult, ClipboardEnv } from './clipboard'
 export { parseDeepLink, matchDeepLink } from './deeplink'
 export type { DeepLink, DeepLinkMatch } from './deeplink'
+// ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation + 06 B3）：导航结构四件套
+//   p-master-detail（UISplitViewController 三列）/ p-command（⌘K 面板数据层）/ p-tabs（桌面标签关闭迁移）/ p-breadcrumb（路由栈推导）
+export { computeSplitLayout, applySplitNav } from './master-detail'
+export type { SplitColumn, SplitLayoutOptions, SplitLayout, SplitNavAction, SplitNavOptions, SplitNavResult } from './master-detail'
+export { resolveTabAfterClose, normalizeTabs } from './tabs'
+export type { DesktopTab, TabCloseResult } from './tabs'
+export { filterCommands, moveCommandIndex } from './command'
+export type { CommandItem, CommandFilterResult } from './command'
+export { deriveBreadcrumb, crumbLabel } from './breadcrumb'
+export type { Crumb } from './breadcrumb'
 export {
   createDesktopDirectives,
   createHoverDirective,

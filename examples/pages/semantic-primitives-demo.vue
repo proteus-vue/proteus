@@ -244,6 +244,37 @@
         <p-text class="val">{{ linkOut }}</p-text>
       </div>
     </section>
+
+    <section class="block">
+      <p-heading :level="2">⑪ 导航结构（G-24 B3：p-master-detail / p-tabs / p-command / p-breadcrumb）</p-heading>
+      <p-divider :inset="8" />
+      <p-text class="hint-text">p-master-detail（UISplitViewController 三列——拖窗口看列形态变化，当前视口 {{ viewW }}px）：</p-text>
+      <div class="row">
+        <p-text class="label">列布局 {{ splitCols }}（detail={{ detailOpen ? '开' : '关' }}·inspector={{ inspectorOn ? '开' : '关' }}）：</p-text>
+        <p-button size="small" @click="onSelectMaster">select（进 detail）</p-button>
+        <p-button size="small" @click="onBackSplit">back（回 master）</p-button>
+        <p-button size="small" @click="onToggleInspector">inspector 开关</p-button>
+      </div>
+      <div class="row">
+        <p-text class="label">p-tabs（桌面标签——关闭激活迁移）：</p-text>
+        <span v-for="t in demoTabs" :key="t.id" class="tab-chip" :class="{ on: t.id === demoActive }">{{ t.label }}<button v-if="t.closable !== false" class="tab-x" @click="onCloseTab(t.id)">×</button></span>
+        <p-button size="small" @click="onTabOpen">+ 开新标签</p-button>
+        <p-text class="val">{{ demoState }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-command（⌘K 面板数据层——输入过滤 + ↑↓ 选择）：</p-text>
+        <p-input :model-value="cmdQuery" placeholder="搜索命令（如 build / 新建）" @update:model-value="onCmdQuery" class="cmd-input" />
+        <p-button size="small" @click="onCmdKey(-1)">↑</p-button>
+        <p-button size="small" @click="onCmdKey(1)">↓</p-button>
+        <p-button size="small" @click="onCmdPick">执行</p-button>
+        <p-text class="val">{{ cmdOut || '输入查询过滤命令（title/keywords/分组）' }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-breadcrumb（路由栈推导）：</p-text>
+        <p-button size="small" @click="onBreadcrumb">推导 home/user/profile</p-button>
+        <p-text class="val">{{ demoState2 || '—' }}</p-text>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -283,7 +314,21 @@ import {
 } from '@proteus-vue/components'
 
 // —— G-24 B2 系统集成（p-notify / p-permission / p-clipboard / p-deeplink——Web 接线，MP 无 Notification/Clipboard 降级 Err） ——
-import { sendNotification, requestNotifyPermission, copyText, pasteText, parseDeepLink, matchDeepLink, buildPermissionManifest } from '@proteus-vue/desktop'
+import {
+  sendNotification,
+  requestNotifyPermission,
+  copyText,
+  pasteText,
+  parseDeepLink,
+  matchDeepLink,
+  buildPermissionManifest,
+  computeSplitLayout,
+  applySplitNav,
+  resolveTabAfterClose,
+  filterCommands,
+  moveCommandIndex,
+  deriveBreadcrumb,
+} from '@proteus-vue/desktop'
 
 const manifest = buildPermissionManifest(['notification', 'camera']).map((m) => m.semantic).join('、')
 const notifyState = ref('—')
@@ -314,6 +359,101 @@ function onParseLink(): void {
   const m = matchDeepLink('proteus://order/:id', 'proteus://order/42')
   linkOut.value = `path=/${(dl?.path ?? []).join('/')}·query=${(dl?.query ?? {}).tab ?? ''}·id=${m.params.id ?? ''}`
 }
+
+// —— G-24 B3 导航结构（p-master-detail / p-tabs / p-command / p-breadcrumb——纯逻辑驱动，宽屏/桌面形态） ——
+const viewW = ref(960)
+let splitTimer = 0
+function onResize(): void {
+  // 拖窗口实时 reflow（节流 100ms）
+  if (typeof window === 'undefined') return
+  window.clearTimeout(splitTimer)
+  splitTimer = window.setTimeout(() => {
+    viewW.value = window.innerWidth
+  }, 100)
+}
+if (typeof window !== 'undefined') window.addEventListener('resize', onResize)
+const detailOpen = ref(true)
+const inspectorOn = ref(true)
+const splitCols = ref('')
+function refreshSplit(): void {
+  const l = computeSplitLayout({ width: viewW.value, detailOpen: detailOpen.value, inspector: inspectorOn.value })
+  splitCols.value = `[${l.columns.join(' · ')}]`
+}
+function onSelectMaster(): void {
+  const l = computeSplitLayout({ width: viewW.value, detailOpen: detailOpen.value, inspector: inspectorOn.value })
+  const r = applySplitNav({ type: 'select' }, { layout: l, inspectorOn: inspectorOn.value })
+  detailOpen.value = r.detailOpen
+  inspectorOn.value = r.inspectorOn
+  refreshSplit()
+}
+function onBackSplit(): void {
+  const l = computeSplitLayout({ width: viewW.value, detailOpen: detailOpen.value, inspector: inspectorOn.value })
+  const r = applySplitNav({ type: 'back' }, { layout: l, inspectorOn: inspectorOn.value })
+  detailOpen.value = r.detailOpen
+  inspectorOn.value = r.inspectorOn
+  refreshSplit()
+}
+function onToggleInspector(): void {
+  const l = computeSplitLayout({ width: viewW.value, detailOpen: detailOpen.value, inspector: inspectorOn.value })
+  const r = applySplitNav({ type: 'toggleInspector' }, { layout: l, inspectorOn: inspectorOn.value })
+  detailOpen.value = r.detailOpen
+  inspectorOn.value = r.inspectorOn
+  refreshSplit()
+}
+
+const demoOpen = ref(2)
+const demoActive = ref('t1')
+const demoState = ref('')
+function onCloseTab(id: string): void {
+  if (id === 't0') return // 首 tab 不可关（closable 语义演示）
+  const r = resolveTabAfterClose(demoTabs.value, demoActive.value, id)
+  demoTabs.value = r.tabs
+  demoActive.value = r.activeId ?? ''
+  demoState.value = `已关闭 ${id} → 激活 ${demoActive.value}`
+}
+function onTabOpen(): void {
+  demoOpen.value += 1
+  const id = `t${demoOpen.value}`
+  demoTabs.value.push({ id, label: `标签 ${demoOpen.value}` })
+  demoActive.value = id
+}
+
+const cmdQuery = ref('')
+const cmdIdx = ref(0)
+const cmdOut = ref('')
+function onCmdQuery(v: string): void {
+  cmdQuery.value = v
+  cmdIdx.value = 0
+}
+function onCmdKey(dir: number): void {
+  const list = filterCommands(cmdItems, cmdQuery.value)
+  cmdIdx.value = moveCommandIndex(cmdIdx.value, dir as 1 | -1, list.items.length)
+  cmdOut.value = list.items[cmdIdx.value] ? `选中：${list.items[cmdIdx.value].title}` : '无结果'
+}
+function onCmdPick(): void {
+  const list = filterCommands(cmdItems, cmdQuery.value)
+  const hit = list.items[cmdIdx.value]
+  cmdOut.value = hit ? `执行：${hit.title}（${hit.group ?? ''}）` : '无结果'
+}
+
+const demoState2 = ref('')
+function onBreadcrumb(): void {
+  const c = deriveBreadcrumb(['home', 'user', 'profile'])
+  demoState2.value = c.map((x) => x.label + (x.current ? '›' : '')).join(' / ')
+}
+
+refreshSplit()
+const demoTabs = ref<Array<{ id: string; label: string; closable?: boolean }>>([
+  { id: 't0', label: '首页', closable: false },
+  { id: 't1', label: '用户管理' },
+  { id: 't2', label: '订单详情' },
+])
+const cmdItems: Array<{ id: string; title: string; group?: string; keywords?: string[] }> = [
+  { id: 'new', title: '新建页面', group: '页面', keywords: ['create', 'add'] },
+  { id: 'gen', title: '生成路由', group: '页面' },
+  { id: 'audit', title: '运行 audit 门禁', group: '构建', keywords: ['check'] },
+  { id: 'mp', title: '构建小程序', group: '构建', keywords: ['build'] },
+]
 
 const shortcutCount = ref(0)
 function onShortcutSave(): void {
@@ -512,5 +652,40 @@ function onSheetSelect(value: string): void {
   color: #07c160;
   font-size: 12px;
   margin-top: 4px;
+}
+/* ★⑪ 导航结构区块（G-24 B3） */
+.tab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  margin: 0 4px 4px 0;
+  border: 1px solid #ebedf0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+}
+.tab-chip.on {
+  border-color: #1a7af8;
+  color: #1a7af8;
+  background: rgba(26, 122, 248, 0.06);
+}
+.tab-x {
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.cmd-input {
+  width: 220px;
+}
+.hint-text {
+  display: block;
+  color: #888;
+  font-size: 12px;
+  margin: 6px 0;
 }
 </style>

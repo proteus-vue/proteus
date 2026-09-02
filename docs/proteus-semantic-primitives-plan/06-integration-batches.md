@@ -29,8 +29,10 @@
 - Compiler Plugin 生成权限清单（对接 G-21）——**纯逻辑已就绪（buildPermissionManifest）；编译期自动收集（扫描 v-p-permission 语义 → 清单）待后续批次**
 
 ### B3：导航结构
-- p-master-detail / p-command（⌘K）/ p-tabs
-- 映射 UISplitViewController 三列模式
+- p-master-detail / p-command（⌘K）/ p-tabs —— **✅ 落地（决策 #338）：`@proteus-vue/desktop` 扩展导航结构四件套纯逻辑**
+  - master-detail.ts（computeSplitLayout：窄屏 master/detail 独占（iOS collapse）·双列·三列 inspector——UISplitViewController primary/supplementary/secondary 映射；applySplitNav select/back/inspector 状态机）/ tabs.ts（resolveTabAfterClose 激活迁移右邻优先·末位回退 + normalizeTabs）/ command.ts（filterCommands title/keywords/group 子串过滤稳定序 + moveCommandIndex ↑↓ 循环）/ breadcrumb.ts（deriveBreadcrumb 路由栈推导 + index 归并 + 末段 current + crumbLabel 驼峰化）
+  - demo：semantic-primitives-demo ⑪ 导航结构区块（拖窗口看 master-detail 列形态 reflow / tabs 关闭迁移 / ⌘K 输入过滤 + ↑↓ 选择 / 面包屑推导）；tests/desktop-b3.test.ts 12 用例
+- 映射 UISplitViewController 三列模式 —— **✅ 语义层（computeSplitLayout columns 即 primary/supplementary/secondary；原生控件映射后续 App Renderer 批次）**
 
 ### B4：生命周期 + 设备能力
 - p-state-restoration / p-network-status
