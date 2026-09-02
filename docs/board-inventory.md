@@ -48,7 +48,7 @@
 | `proteus-semantic-primitives-plan` | **G-24** | ⬜ 规划 | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut）可立即动手 |
 | `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
 | （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
-| `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2 已落地** | ★**下一大方向**：`@proteus-vue/render-backend` 包——ProteusRenderBackend SPI + runBackendConformance 自检（RND002）+ HeadlessBackend（内存树/SSR/Agent）+ VueDomBackend（DOM nodeOps，Vue 生态零成本）；B4 Native / B5 Flutter / B6 混合渲染待续 |
+| `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4 已落地** | ★**下一大方向**：`@proteus-vue/render-backend` 包——SPI + runBackendConformance（RND002）+ Headless/VueDom/**Native**（nodeOps→原生视图 + 宿主适配器）后端原型；B5 Flutter / B6 混合渲染待续 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 

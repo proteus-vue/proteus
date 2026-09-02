@@ -7,10 +7,12 @@ import { describe, it, expect } from 'vitest'
 import {
   createHeadlessBackend,
   createVueDomBackend,
+  createNativeBackend,
+  createMockNativeAdapter,
   runBackendConformance,
   toPlainTree,
 } from '@proteus-vue/render-backend'
-import type { ProteusRenderBackend } from '@proteus-vue/render-backend'
+import type { ProteusRenderBackend, NativeViewDescriptor } from '@proteus-vue/render-backend'
 
 describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
   it('完整后端（Headless 参考实现）→ 全部 check 通过', () => {
@@ -160,5 +162,67 @@ describe('G-27 VueDomBackend（B2：DOM nodeOps——Vue 生态零成本复用�
     } finally {
       ;(globalThis as { document?: unknown }).document = orig
     }
+  })
+})
+
+describe('G-27 NativeBackend（B4：nodeOps → 原生视图）', () => {
+  it('CRUD：descriptor 树 + mock adapter ops 日志（验证 nodeOps → UIView 接线）', () => {
+    const adapter = createMockNativeAdapter()
+    const b = createNativeBackend(adapter)
+    const root = b.createElement({ type: 'view', props: {}, children: [] }) as NativeViewDescriptor
+    const btn = b.createElement({ type: 'button', props: {}, children: [] }) as NativeViewDescriptor
+    b.insert(btn, root)
+    expect(root.children.length).toBe(1)
+    expect(btn.parent).toBe(root)
+    b.patchProp(btn, 'onClick', null, () => {})
+    b.setText(btn, '确定')
+    b.remove(btn)
+    expect(root.children.length).toBe(0)
+    // ops 日志断言宿主同步序列（update 值含函数 toString 不稳定 → 只匹配前缀）
+    expect(adapter.ops.length).toBe(6)
+    expect(adapter.ops[0]).toBe('create:view')
+    expect(adapter.ops[1]).toBe('create:button')
+    expect(adapter.ops[2]).toBe('insert:button')
+    expect(adapter.ops[3]?.startsWith('update:onClick=')).toBe(true)
+    expect(adapter.ops[4]).toBe('setText:确定')
+    expect(adapter.ops[5]).toBe('remove:button')
+  })
+
+  it('自定义宿主 adapter（spy）：createView 返回宿主句柄 + 变更同步', () => {
+    const handles: unknown[] = []
+    const updates: string[] = []
+    const adapter = {
+      createView: (d: NativeViewDescriptor) => {
+        handles.push(d.type)
+        return { __host: d.type, id: d.id }
+      },
+      updateView: (_h: unknown, key: string) => updates.push(key),
+      insertView: () => {},
+      removeView: () => {},
+      setViewText: () => {},
+    }
+    const b = createNativeBackend(adapter)
+    const node = b.createElement({ type: 'view', props: {}, children: [] }) as NativeViewDescriptor
+    expect(handles).toEqual(['view'])
+    expect((node.handle as { __host: string }).__host).toBe('view')
+    b.patchProp(node, 'backgroundColor', null, '#fff')
+    expect(updates).toEqual(['backgroundColor'])
+  })
+
+  it('capabilities：原生系统级能力声明（glass L3 / animation native / textureSharing）+ conformance 通过', () => {
+    const b = createNativeBackend()
+    expect(b.capabilities).toMatchObject({ glass: 'L3', blur: 'true', animation: 'native', textureSharing: true, layout: 'native' })
+    expect(runBackendConformance(b).ok).toBe(true)
+  })
+
+  it('insert anchor 定位（anchor 存在时插入其前）', () => {
+    const b = createNativeBackend()
+    const root = b.createElement({ type: 'view', props: {}, children: [] }) as NativeViewDescriptor
+    const a = b.createElement({ type: 'text', props: {}, children: [] }) as NativeViewDescriptor
+    const c = b.createElement({ type: 'text', props: {}, children: [] }) as NativeViewDescriptor
+    b.insert(a, root)
+    b.insert(c, root, a)
+    expect(root.children[0]).toBe(c)
+    expect(root.children[1]).toBe(a)
   })
 })

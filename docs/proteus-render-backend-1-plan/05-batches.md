@@ -5,8 +5,8 @@
 - **B1**：`ProteusRenderBackend` 接口 + `BackendCapabilities` + conformance test → **验证接口完整性** ✅（@proteus-vue/render-backend：spi.ts + conformance.ts，runBackendConformance 自检——必选方法/createElement 唯一句柄/能力枚举/可选方法类型；tests/render-backend.test.ts 残缺假后端验证）
 - **B2**：`VueDomBackend`（复用 `createRenderer`）→ **验证 Vue 生态零成本复用** ✅（vue-dom.ts：DOM nodeOps + onXxx→addEventListener 事件归一化；capabilities 声明 layout:native/glass:L1）
 - **B3**：`HeadlessBackend` + G-23 Agent 回归 → **验证无设备开发** 🟡 内存节点树已落地（headless.ts：createElement/insert/remove/patchProp/setText + toPlainTree 序列化——SSR/测试/AI 快照载体）；G-23 Agent 接入待后续
-- **B4**：`NativeBackend`（iOS UIKit）→ **验证 nodeOps → UIView**
-- **B5**：`FlutterBackend`（Embedder C ABI）→ **验证跨引擎**
+- **B4**：`NativeBackend`（iOS UIKit）→ **验证 nodeOps → UIView** ✅（native.ts：nodeOps → NativeViewDescriptor 树 + NativeViewAdapter 宿主桥（createView/updateView/insertView/removeView/setViewText）——与 @proteus-vue/renderer-app NativeAdapter（Vue host config 层）同构，宿主未来桥接；默认 mock 适配器 ops 日志；capabilities glass L3/animation native/textureSharing 系统级声明）
+- **B5**：`FlutterBackend`（Embedder C ABI）→ **验证跨引擎** ⬜
 - **B6**：混合渲染（Texture Sharing）+ DevTools 可视化
 
 ## 推荐顺序

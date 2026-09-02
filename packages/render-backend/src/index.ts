@@ -20,3 +20,6 @@ export type { ConformanceCheck, ConformanceResult } from './conformance'
 export { createHeadlessBackend, toPlainTree } from './headless'
 export type { HeadlessNode } from './headless'
 export { createVueDomBackend } from './vue-dom'
+// ★G-27 B4：NativeBackend（nodeOps → 原生视图 + 宿主适配器）
+export { createNativeBackend, createMockNativeAdapter } from './native'
+export type { NativeViewDescriptor, NativeViewAdapter, MockNativeAdapter } from './native'
