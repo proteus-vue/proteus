@@ -22,6 +22,9 @@ export type { AnimationEngineering, AnimationEngineeringOptions, AnimationDriver
 // ★G-32 B5 续三：工程化语义（injectable——E24 useDevTools/E25 useInspector/E26 usePerformance/E27 defineComponent/E28 defineCapability）
 export { createToolingEngineering, defineComponent, defineCapability, resolveCapabilityChain, validateComponentMeta, validateCapabilityContract } from './tooling-engineering'
 export type { ToolingEngineering, ToolingEngineeringOptions, DevToolsHandle, DevToolsEvent, UseDevToolsOptions, InspectorHandle, InspectorNode, PerformanceHandle, PerformanceMetricRecord, UsePerformanceOptions, ComponentPropDef, ComponentMeta, CapabilityContract, CapabilityAvailability, CapabilityDefinition, DefineCapabilityOptions } from './tooling-engineering'
+// ★G-32 B6 前置：请求数据层语义面（injectable——R1 request 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe 去重）
+export { createRequestEngineering, defaultCacheKey } from './request-engineering'
+export type { RequestEngineering, RequestEngineeringOptions, RequestExecutor, RequestCacheEntry, QueryState, QueryHandle, QueryOptions, RequestStrategyOptions } from './request-engineering'
 export type {
   CapResult,
   CapabilityHooks,

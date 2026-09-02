@@ -183,6 +183,17 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-req-query" @click="onReqQuery">useQuery</button>
+        <button class="pad-btn" data-testid="pad-req-queue" @click="onReqQueue">enqueue</button>
+        <button class="pad-btn" data-testid="pad-req-cache" @click="onReqCache">request 缓存</button>
+      </view>
+      <text class="pad-log" data-testid="pad-req-log">{{ reqLog }}</text>
+      <text class="pad-sub">注入式请求数据层（mock client + compat storage 缓存底座，无真实网络）——R2 useQuery SWR（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）；R3 enqueue 并发队列（FIFO + 上限 + 失败隔离）；R1 request 策略请求（ttl 缓存 + dedupe 合并 + 可选排队）——与四工厂同族注入式可单测；useQuery 点两次看第二次缓存命中</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -194,8 +205,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract } from '@proteus-vue/api'
-import type { AnimationDriver } from '@proteus-vue/api'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract, createRequestEngineering } from '@proteus-vue/api'
+import type { AnimationDriver, RequestExecutor, RequestResponse, RequestConfig } from '@proteus-vue/api'
 // ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）
 import { PTransition, PAnimate } from '@proteus-vue/components'
 
@@ -705,6 +716,79 @@ async function onCapMp() {
 async function onCapExt() {
   const ext = await cap.useExtension('proteus-kit')
   cap7Log.value = ext.ok ? `useExtension → ${JSON.stringify(ext.data)}（宿主 loadPlugin 桥）` : `useExtension → Err(${ext.error.code})（宿主 loadPlugin 桥未接）`
+}
+
+// ---------- ⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1-R4 注入式） ----------
+// ★MP 编译安全（#307 坑）：字面量内不嵌函数调用——先提为简单顶层 const（简单调用是安全先例）
+const fakeClient = createFakeRequestClient()
+const requestCache = cap.useStorage()
+const req = createRequestEngineering({
+  client: fakeClient,
+  reactivity: { ref, computed, watch: () => () => undefined },
+  cache: requestCache,
+  concurrency: 1,
+}) // ★mock client + compat storage 缓存底座（无真实网络、确定性演示）
+const reqLog = ref('点击按钮演示请求数据层（mock client，无真实网络）')
+let reqFetchCount = 0
+
+// ★Web-only 假的确定性 client（记录请求数 + 延迟返回——可验证缓存命中/去重）
+//   MP 编译安全：函数签名零泛型（<T> 会断 MP 正则）；类型面用双断言一次收口
+function clientRequest(config: RequestConfig): Promise<RequestResponse<unknown>> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      reqFetchCount += 1
+      resolve({ data: { url: config.url, at: Date.now() }, status: 200, headers: {}, config })
+    }, 50)
+  })
+}
+function createFakeRequestClient(): RequestExecutor {
+  return { request: clientRequest } as unknown as RequestExecutor
+}
+
+// ★MP 编译安全：队列任务/顺序数组放顶层（async 函数体内构造受限——#307 惯例）
+const reqQueueOrder: string[] = []
+function mkQueueTask(label: string, delay: number) {
+  return () =>
+    new Promise((r) =>
+      setTimeout(() => {
+        reqQueueOrder.push(label)
+        // ★MP 安全：无 <void> 泛型（MP 正则断）；Promise<unknown> 的 resolve 显式传 undefined
+        r(undefined)
+      }, delay),
+    )
+}
+
+async function onReqQuery() {
+  const q = req.useQuery(
+    'demo-user',
+    () => clientRequest({ url: '/user', method: 'GET' }).then((r) => r.data),
+    { ttl: 20000 },
+  )
+  // 轮询等 init fetch 落定（demo 层；生产走响应式渲染）
+  for (let i = 0; i < 30 && q.state.value.loading; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  const data = q.state.value.data
+  reqLog.value = `useQuery → data=${JSON.stringify(data)} · 请求数=${reqFetchCount}（点两次：第二次缓存命中零重发）`
+}
+async function onReqQueue() {
+  // ★MP 编译安全：队列任务与顺序数组提到顶层（#307 惯例）——
+  //   async 函数体内不允许：带标注 const / 嵌套函数声明 / new Promise 泛型
+  reqQueueOrder.length = 0
+  await Promise.all([
+    req.enqueue(mkQueueTask('A', 20)),
+    req.enqueue(mkQueueTask('B', 30)),
+    req.enqueue(mkQueueTask('C', 40)),
+  ])
+  reqLog.value = `enqueue（并发 1 串行）→ 完成顺序 ${reqQueueOrder.join(' > ')}`
+}
+async function onReqCache() {
+  const before = reqFetchCount
+  const r1 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
+  const afterFirst = reqFetchCount
+  const r2 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
+  const afterSecond = reqFetchCount
+  reqLog.value = `request 缓存 → 首次 ${afterFirst - before} 次请求 · 二次 ${afterSecond - afterFirst} 次（ttl=10s 命中零重发）· data=${JSON.stringify(r2.data)}`
 }
 </script>
 

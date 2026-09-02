@@ -269,6 +269,50 @@ cap.resolve([{ name: 'scan-qr', available: false }, { name: 'manual', available:
 
 **G-32 B5 工程原语 28 全部收口**（E1-E9 状态/生命周期 + E10-E17 路由 + E19-E23 动画 + E24-E28 工程化；E18 router-link 为声明式导航组件形态待后续批次）。
 
+## 请求数据层（G-32 B6 前置）
+
+`createRequestEngineering(options)` 提供**请求数据层语义面 R1-R4**——把「裸请求」收敛为「带策略的请求语义」（缓存/去重/队列/响应式数据获取），业务零手写策略。注入式（client + reactivity + cache + concurrency），同 createEngineering 族**零运行时依赖 vue**；API 层语义**不入 catalog**（同 E21-E28 纪律，不产 C-IR 节点）：
+
+```ts
+import { ref, computed } from 'vue'
+import { createApi, createRequestEngineering } from '@proteus-vue/api'
+
+const api = createApi({ baseURL: '/api' })
+const req = createRequestEngineering({
+  client: api,                    // createApi / adapter 均可注入
+  reactivity: { ref, computed },
+  cache: storage,                 // CompatStorage 底座（localStorage / wx storage / 内存）
+  concurrency: 2,                 // 队列并发上限
+})
+
+// R1 request：策略请求（ttl 缓存 + 去重合并 + 可选排队）
+const res = await req.request({ url: '/user', method: 'GET' }, { ttl: 60000, queue: true })
+
+// R2 useQuery：SWR 响应式数据获取（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）
+const q = req.useQuery('user', () => api.get('/user').then((r) => r.data), { ttl: 60000 })
+q.state.value    // { data, loading, error } 响应式
+await q.refresh() // 强制刷新
+q.mutate(newData) // 乐观写（不发请求）
+q.invalidate()    // 清缓存
+
+// R3 enqueue：并发队列（FIFO + 上限 + 失败隔离）
+await req.enqueue(() => api.post('/log', { ... }))
+
+// R4 dedupe：并发合并（R1/R2 内部共享 in-flight；也可直接 runOnce(key, task)）
+const shared = await req.runOnce('cacheKey', () => api.get('/x').then((r) => r.data))
+```
+
+| 原语 | 语义 | 说明 |
+|------|------|------|
+| `request(config, opts?)` | R1 | 策略请求：`ttl` 缓存命中直接返回 · `cacheKey` 自定义（缺省 method+url+params 序列化）· `queue` 排队执行（真实调用在队列槽位内，去重跨排队生效） |
+| `useQuery(key, fetcher, opts?)` | R2 | SWR 响应式数据获取：命中缓存立即 data（loading=false）· in-flight 去重（同 key 并发单次 fetch）· `refresh` 强制刷新 · `mutate` 乐观写 · `invalidate` 清缓存 |
+| `enqueue(task)` | R3 | 并发队列：FIFO + 并发上限（注入 concurrency）· 失败隔离（一个 reject 不影响后续）· `queued()` 查询排队深度 |
+| `runOnce(key, task)` | R4 | 并发去重：同 key 共享 in-flight（结果一致、仅执行一次）——R1/R2 内部共用 |
+| `clearCache()` | — | 清空全部缓存条目 |
+| `createRequestEngineering(opts)` | — | 工厂：注入 `{ client, reactivity, cache?, concurrency? }` |
+
+**定位**：与路由语义化（跨端收敛）不同，请求语义化的价值在**数据获取策略**——响应式状态机 + 策略注入（可单测）；`useFetch`（C26）可演进为其薄封装。
+
 ## 设计要点
 
 - **业务零平台分支（铁律 1）**：网络层差异全部收敛在 adapter 内部，业务代码不出现 `if (isMp)` 之类判断
