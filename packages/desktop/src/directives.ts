@@ -7,7 +7,21 @@ import { parseShortcutExpr, matchShortcut, shortcutLabel } from './shortcut'
 import { createFocusTrap } from './focus-trap'
 import { buildContextMenu, menuPointFrom } from './context-menu'
 import { resolveHoverClass } from './hover'
+import { checkPermission, requestPermission, defaultPermissionQuery, defaultPermissionRequest } from './permission'
+import type { PermissionState, PermissionEnv } from './permission'
 import type { MenuItem } from './context-menu'
+
+export interface PermissionDirectiveValue {
+  /** 权限语义名（notification/camera/microphone/geolocation/clipboard——PERMISSION_CATALOG 键） */
+  semantic: string
+  /** 状态通知（授权请求后） */
+  onState?: (state: PermissionState) => void
+}
+
+export interface PermissionDirectiveOptions {
+  /** 权限接线注入（测试友好；缺省 web 默认——query/request 走 permission.ts 默认实现） */
+  env?: PermissionEnv
+}
 
 export interface ShortcutDirectiveValue {
   /** 快捷键表达式（"mod+s:save"——id 段 = 触发语义） */
@@ -196,12 +210,61 @@ export function createContextMenuDirective(): Directive<HTMLElement, ContextMenu
   }
 }
 
-/** ★G-24 B1：四指令工厂集（main.ts：Object.entries 注册 v-p-*） */
+/**
+ * ★G-24 B2（proteus-semantic-primitives-plan 04 §权限前置）：v-p-permission——权限门禁指令
+ *   用法：<button v-p-permission="{ semantic: 'notification', onState: (s) => ... }">发送通知</button>
+ *   语义：点击拦截（capture）→ checkPermission：granted → 放行（业务 click 照常）；非 granted → preventDefault + 请求授权
+ *   （env.request 真实实现：通知弹窗/相机流）→ 授权成功 → 重放 el.click()（业务 handler 恰好执行一次——授权前拦截、授权后原生派发）
+ *   MP/原生端不注册（权限由各端原生清单 + 平台授权流程承接——同 v-p-* B1 惯例）；前端只是 Web 门禁体验层
+ */
+export function createPermissionDirective(options: PermissionDirectiveOptions = {}): Directive<HTMLElement, PermissionDirectiveValue> {
+  const env: PermissionEnv = { query: options.env?.query ?? defaultPermissionQuery, request: options.env?.request ?? defaultPermissionRequest }
+  return {
+    mounted(el, binding) {
+      const state = binding.value
+      if (!state || !state.semantic) return
+      // ★同步预检缓存：click 拦截必须同步决策（事件分发是同步的——异步 checkPermission 无法拦已派发的 handler）
+      let cached: PermissionState | null = null
+      void checkPermission(state.semantic, env).then((s) => {
+        cached = s
+        if (state.onState) state.onState(s)
+      })
+      const onCaptureClick = (e: Event) => {
+        const s = cached ?? 'prompt' // 预检未完成 → 按未授权处理（拦截 + 请求）
+        if (s === 'granted') return // 放行——业务 @click 正常触发
+        // 未授权/未知：同步拦截（stopImmediatePropagation 阻止同元素后续 handler——stopPropagation 只停传播不停同节点监听）
+        if (e.preventDefault) e.preventDefault()
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation()
+        else if (e.stopPropagation) e.stopPropagation()
+        void (async () => {
+          const after = await requestPermission(state.semantic, env)
+          cached = after
+          if (state.onState) state.onState(after)
+          if (after === 'granted') {
+            // 授权成功：原生 click 重放（cached 已 granted → 重放放行——业务 handler 恰好执行一次）
+            setTimeout(() => {
+              el.click()
+            }, 0)
+          }
+        })()
+      }
+      el.addEventListener('click', onCaptureClick, true)
+      ;(el as HTMLElement & { __p_permission_click?: (e: Event) => void }).__p_permission_click = onCaptureClick
+    },
+    unmounted(el) {
+      const c = (el as HTMLElement & { __p_permission_click?: (e: Event) => void }).__p_permission_click
+      if (c) el.removeEventListener('click', c, true)
+    },
+  }
+}
+
+/** ★G-24 B1+B2：五指令工厂集（main.ts：Object.entries 注册 v-p-*） */
 export function createDesktopDirectives(): Record<string, Directive> {
   return {
     'p-hover': createHoverDirective(),
     'p-shortcut': createShortcutDirective(),
     'p-focus-trap': createFocusTrapDirective(),
     'p-context-menu': createContextMenuDirective(),
+    'p-permission': createPermissionDirective(),
   }
 }

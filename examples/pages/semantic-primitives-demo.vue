@@ -221,6 +221,29 @@
         </div>
       </div>
     </section>
+
+    <section class="block">
+      <p-heading :level="2">⑩ 系统集成（G-24 B2：p-notify / p-permission / p-clipboard / p-deeplink）</p-heading>
+      <p-divider :inset="8" />
+      <p-text class="hint-text">权限清单（buildPermissionManifest——Compiler 期生成）：{{ manifest }}</p-text>
+      <div class="row">
+        <p-text class="label">p-notify + p-permission 门禁（先授权后发送）：</p-text>
+        <p-button size="small" @click="onRequestNotify">请求通知权限（{{ notifyState }}）</p-button>
+        <p-button variant="primary" size="small" v-p-permission="{ semantic: 'notification', onState: onNotifyState }" @click="onSendNotify">发送通知</p-button>
+        <p-text class="val">{{ notifyResult }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-clipboard（复制/读取——Clipboard API → 降级）：</p-text>
+        <p-button size="small" @click="onCopy">复制</p-button>
+        <p-button size="small" @click="onPaste">粘贴读取</p-button>
+        <p-text class="val">{{ clipOut }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-deeplink（parse + 参数化匹配）：</p-text>
+        <p-button size="small" @click="onParseLink">解析 proteus://order/42?tab=detail</p-button>
+        <p-text class="val">{{ linkOut }}</p-text>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -259,7 +282,39 @@ import {
   PScrollable,
 } from '@proteus-vue/components'
 
-// —— G-24 B1 桌面交互（p-hover / p-shortcut / p-focus-trap / p-context-menu——Web 指令，MP 不注册降级） ——
+// —— G-24 B2 系统集成（p-notify / p-permission / p-clipboard / p-deeplink——Web 接线，MP 无 Notification/Clipboard 降级 Err） ——
+import { sendNotification, requestNotifyPermission, copyText, pasteText, parseDeepLink, matchDeepLink, buildPermissionManifest } from '@proteus-vue/desktop'
+
+const manifest = buildPermissionManifest(['notification', 'camera']).map((m) => m.semantic).join('、')
+const notifyState = ref('—')
+async function onRequestNotify(): Promise<void> {
+  const s = await requestNotifyPermission()
+  notifyState.value = s
+}
+function onNotifyState(s: string): void {
+  notifyState.value = s
+}
+const notifyResult = ref('—')
+function onSendNotify(): void {
+  const r = sendNotification({ title: 'Proteus 演示', body: '系统通知（G-24 B2 p-notify）' })
+  notifyResult.value = r.ok ? '已发送 ✅' : `Err: ${r.error ?? ''}`
+}
+const clipOut = ref('—')
+async function onCopy(): Promise<void> {
+  const r = await copyText(`Proteus 剪贴板演示 ${Date.now()}`)
+  clipOut.value = r.ok ? '已复制 ✅' : `Err: ${r.error ?? ''}`
+}
+async function onPaste(): Promise<void> {
+  const r = await pasteText()
+  clipOut.value = r.ok ? `读到：${r.data}` : `Err: ${r.error ?? ''}`
+}
+const linkOut = ref('')
+function onParseLink(): void {
+  const dl = parseDeepLink('proteus://order/42?tab=detail')
+  const m = matchDeepLink('proteus://order/:id', 'proteus://order/42')
+  linkOut.value = `path=/${(dl?.path ?? []).join('/')}·query=${(dl?.query ?? {}).tab ?? ''}·id=${m.params.id ?? ''}`
+}
+
 const shortcutCount = ref(0)
 function onShortcutSave(): void {
   shortcutCount.value += 1

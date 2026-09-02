@@ -22,8 +22,11 @@
 - **可单测 + 可出 Playground demo（PC 卡片交互）**——落地：`@proteus-vue/desktop` 包（32 包）——shortcut.ts（PRIM005 mod 平台惯例 ⌘/Ctrl）/ focus-trap.ts / context-menu.ts / hover.ts / directives.ts（v-p-hover · v-p-shortcut · v-p-focus-trap · v-p-context-menu 四指令）——Web 接线、MP 剥离降级（同 v-gesture）；tests/desktop.test.ts 14 用例
 
 ### B2：系统集成核心四件套
-- p-notify / p-permission / p-clipboard / p-deeplink
-- Compiler Plugin 生成权限清单（对接 G-21）
+- p-notify / p-permission / p-clipboard / p-deeplink —— **✅ 落地（决策 #337）：`@proteus-vue/desktop` 扩展四纯逻辑模块 + v-p-permission 门禁指令**
+  - notify.ts（Notification 探测/权限/发送——env 注入）/ permission.ts（PERMISSION_CATALOG + buildPermissionManifest（Compiler 期清单对接 G-21）+ check/request 归一）/ clipboard.ts（Clipboard API → execCommand 降级 → Err）/ deeplink.ts（parseDeepLink + 参数化 matchDeepLink）
+  - directives.ts 新增 createPermissionDirective（v-p-permission：同步预检缓存 + stopImmediatePropagation 拦截 → 授权成功重放——业务 click 恰好一次）——createDesktopDirectives 五指令集；MP 不注册降级（同 B1）
+  - demo：semantic-primitives-demo ⑩ 系统集成区块（权限门禁发送通知 / 剪贴板读写降级链 / 深链解析匹配 / 清单展示）；tests/desktop-b2.test.ts 16 用例
+- Compiler Plugin 生成权限清单（对接 G-21）——**纯逻辑已就绪（buildPermissionManifest）；编译期自动收集（扫描 v-p-permission 语义 → 清单）待后续批次**
 
 ### B3：导航结构
 - p-master-detail / p-command（⌘K）/ p-tabs
