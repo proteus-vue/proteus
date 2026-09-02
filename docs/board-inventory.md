@@ -20,7 +20,7 @@
 | 分层 | 版本线（roadmap.md） | 里程碑线（roadmap-2） | 现状 |
 |------|---------------------|----------------------|------|
 | L0 规约 | v0.1+（原则/铁律积累） | M1.1 规约收口 | 🟡 决策已积累（PROJECT_MEMORY 290 条），正式规约收口待 M1.1 |
-| L1 方法论 | v0.4+（G-22 系） | M1 地基（0-3 月） | 🟡 G-22 / G-22.5 ✅ 已落地；G-24/25/26/27/28 ⬜ 规划 |
+| L1 方法论 | v0.4+（G-22 系） | M1 地基（0-3 月） | 🟡 G-22 / G-22.5 / **G-27（SPI+conformance+B1/B2）✅**；G-24/25/26/28 ⬜ 规划 |
 | L2 核心引擎 | v0.2-v0.4 | M1.2-M1.8 | ✅ 大部分已落地（compiler / plugin / types / build / app-config / module / lifecycle） |
 | L3 能力 | v0.3-v0.5 | M2.3-M2.5 | ✅ 大部分已落地（router / pinia / api / platform / component / i18n / security / fluid / css-compat） |
 | L4 工具链 | v0.2-v1.0 | M1.8 / M2.7 | ✅ 大部分已落地（cli / devtools / testing / test-framework / vue-devtools） |
@@ -48,7 +48,7 @@
 | `proteus-semantic-primitives-plan` | **G-24** | ⬜ 规划 | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut）可立即动手 |
 | `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
 | （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
-| `proteus-render-backend-1-plan` | **G-27** | ⬜ **M1.4 待启** | ★**下一大方向**：ProteusRenderBackend SPI（nodeOps 对齐 Vue）+ VueDomBackend 原型（现有 renderer.ts 已有 nodeOps 雏形） |
+| `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2 已落地** | ★**下一大方向**：`@proteus-vue/render-backend` 包——ProteusRenderBackend SPI + runBackendConformance 自检（RND002）+ HeadlessBackend（内存树/SSR/Agent）+ VueDomBackend（DOM nodeOps，Vue 生态零成本）；B4 Native / B5 Flutter / B6 混合渲染待续 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 
@@ -128,6 +128,7 @@
 | 资产 | 位置 | 归属 |
 |------|------|------|
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
+| **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom） | **G-27 🟡 M1.4 B1/B2** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
 | fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
 | 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |

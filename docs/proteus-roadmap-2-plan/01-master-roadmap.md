@@ -129,7 +129,7 @@ L2 types
 | M1.1 | L0 规约收口 | 原则 #10 泛化 + 铁律总表 | ✅ 已完成（docs/proteus-architecture.md，2026-09-02） |
 | M1.2 | compiler（IR 层） | LayoutConstraint IR + Render IR | M1.1 |
 | M1.3 | types + app-config | 核心类型 + 配置 schema | M1.2 |
-| M1.4 | G-27 B1（Backend SPI + conformance test） | `ProteusRenderBackend` 接口 | M1.2 |
+| M1.4 | G-27 B1（Backend SPI + conformance test） | `ProteusRenderBackend` 接口 | ✅ B1/B2 已完成（@proteus-vue/render-backend：SPI + runBackendConformance + Headless/VueDom 原型，2026-09-02） |
 | M1.5 | G-27 B2（VueDomBackend） | `createRenderer(nodeOps)` 复用 | M1.4 |
 | M1.6 | style-safety（三层防御骨架） | FLD/CSS 规则引擎雏形 | M1.2 |
 | M1.7 | G-22 B1（clamp 算法）+ G-21（Plugin API） | 柔性布局最小原型 | M1.2 |

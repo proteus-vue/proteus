@@ -2,9 +2,9 @@
 
 ## 关键里程碑
 
-- **B1**：`ProteusRenderBackend` 接口 + `BackendCapabilities` + conformance test → **验证接口完整性**
-- **B2**：`VueDomBackend`（复用 `createRenderer`）→ **验证 Vue 生态零成本复用**
-- **B3**：`HeadlessBackend` + G-23 Agent 回归 → **验证无设备开发**
+- **B1**：`ProteusRenderBackend` 接口 + `BackendCapabilities` + conformance test → **验证接口完整性** ✅（@proteus-vue/render-backend：spi.ts + conformance.ts，runBackendConformance 自检——必选方法/createElement 唯一句柄/能力枚举/可选方法类型；tests/render-backend.test.ts 残缺假后端验证）
+- **B2**：`VueDomBackend`（复用 `createRenderer`）→ **验证 Vue 生态零成本复用** ✅（vue-dom.ts：DOM nodeOps + onXxx→addEventListener 事件归一化；capabilities 声明 layout:native/glass:L1）
+- **B3**：`HeadlessBackend` + G-23 Agent 回归 → **验证无设备开发** 🟡 内存节点树已落地（headless.ts：createElement/insert/remove/patchProp/setText + toPlainTree 序列化——SSR/测试/AI 快照载体）；G-23 Agent 接入待后续
 - **B4**：`NativeBackend`（iOS UIKit）→ **验证 nodeOps → UIView**
 - **B5**：`FlutterBackend`（Embedder C ABI）→ **验证跨引擎**
 - **B6**：混合渲染（Texture Sharing）+ DevTools 可视化
