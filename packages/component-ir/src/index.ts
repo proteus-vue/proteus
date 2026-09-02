@@ -8,3 +8,6 @@ export type { CIRDiagnostic } from './validate'
 export { SEMANTIC_BACKEND_MAP, mapSemanticToBackend } from './map'
 // ★G-31 B2：模板标签 → C-IR 转换器（G-29 生产端前置纯函数）
 export { toComponentIR, toComponentTree } from './to-ir'
+// ★G-31 B5：组件渲染 conformance（快照 vs 参考表 + 语义树 + 覆盖门禁）
+export { checkComponentSnapshot, extractSemanticTree, checkSemanticCoverage } from './conformance'
+export type { ComponentConformanceResult, ControlMismatch, SemanticTree, CoverageGap } from './conformance'

@@ -51,7 +51,7 @@
 | `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
-| `proteus-component-semantics-plan` | **G-31** | 🟡 **B1/B2 已落地** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + **toComponentIR（模板标签→C-IR）+ VueDom 消费 semantic（IRNode.semantic → proteus-* 语义类）**；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
+| `proteus-component-semantics-plan` | **G-31** | 🟡 **B1-B5 已落地** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + toComponentIR + **全后端消费 semantic（proteus-* 语义类）+ B5 conformance 门禁**（6 后端 × 6 fixtures 渲染快照一致，18 语义覆盖 ≥3 端）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
 
 ### L2 核心引擎
 
@@ -130,7 +130,7 @@
 |------|------|------|
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
 | **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native/flutter） | **G-27 🟡 M1.4 B1/B2/B4/B5** |
-| **G-31 C-IR 语义化** | `@proteus-vue/component-ir`（schema/validate/map） | **G-31 🟡 B1** |
+| **G-31 C-IR 语义化 + conformance** | `@proteus-vue/component-ir`（schema/validate/map/to-ir/conformance） | **G-31 🟡 B1-B5** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
 | fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
 | 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |

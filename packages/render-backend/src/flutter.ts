@@ -36,6 +36,28 @@ const WIDGET_MAP: Record<string, string> = {
   'p-split': 'Row',
 }
 
+/** ★G-31 B5：semantic 语义 → Flutter widget（与 component-ir SEMANTIC_BACKEND_MAP flutter 列同源——语义收敛的运行时映射） */
+const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
+  'layout.box': 'Container',
+  'layout.stack': 'Flex',
+  'layout.grid': 'GridView',
+  'layout.fluid': 'Wrap',
+  'layout.adaptive': 'showModal',
+  'layout.fit': 'IntrinsicWidth',
+  'layout.split': 'Row',
+  'layout.safe': 'SafeArea',
+  'layout.sidebar': 'NavigationRail',
+  'ui.text': 'Text',
+  'ui.button': 'FilledButton',
+  'ui.image': 'Image',
+  'ui.input': 'TextField',
+  'ui.list': 'ListView',
+  'ui.nav': 'Navigator',
+  'capability.scan-qr': 'scanQR',
+  'capability.pick-photo': 'pickPhoto',
+  'capability.location': 'getLocation',
+}
+
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */
 export function mapWidgetType(type: string): string {
   return WIDGET_MAP[type] ?? type
@@ -79,9 +101,11 @@ export function createFlutterBackend(): ProteusRenderBackend {
     capabilities: FLUTTER_CAPABILITIES,
 
     createElement(node: IRNode): NodeHandle {
+      // ★G-31 B5：有 semantic → 按语义映射 widget（layout.grid → GridView）；否则走标签映射（兼容层 view/text/...）
+      const widget = node.semantic ? SEMANTIC_FLUTTER_MAP[node.semantic] ?? mapWidgetType(node.type) : mapWidgetType(node.type)
       const descriptor: FlutterWidgetDescriptor = {
         id: nextId++,
-        widget: mapWidgetType(node.type),
+        widget,
         props: { ...node.props },
         children: [],
         parent: null,

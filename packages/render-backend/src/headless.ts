@@ -24,6 +24,28 @@ export function toPlainTree(root: HeadlessNode): Record<string, unknown> {
   }
 }
 
+/** ★G-31 B5：semantic 语义 → headless 节点类型（与 component-ir SEMANTIC_BACKEND_MAP headless 列同源——SSR/debug/AI Agent 视图语义化） */
+const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
+  'layout.box': 'box',
+  'layout.stack': 'stack',
+  'layout.grid': 'grid',
+  'layout.fluid': 'fluid',
+  'layout.adaptive': 'adaptive',
+  'layout.fit': 'fit',
+  'layout.split': 'split',
+  'layout.safe': 'safe',
+  'layout.sidebar': 'sidebar',
+  'ui.text': 'text',
+  'ui.button': 'button',
+  'ui.image': 'image',
+  'ui.input': 'input',
+  'ui.list': 'list',
+  'ui.nav': 'nav',
+  'capability.scan-qr': 'scan-qr',
+  'capability.pick-photo': 'pick-photo',
+  'capability.location': 'location',
+}
+
 const HEADLESS_CAPABILITIES: BackendCapabilities = {
   layout: 'none', // 框架 IR 求解（headless 无布局器）
   glass: 'none',
@@ -51,9 +73,11 @@ export function createHeadlessBackend(): ProteusRenderBackend {
     capabilities: HEADLESS_CAPABILITIES,
 
     createElement(node: IRNode): NodeHandle {
+      // ★G-31 B5：有 semantic → 按语义映射节点类型（box/grid/...）；否则按 type 原样（兼容层）
+      const viewType = node.semantic ? SEMANTIC_HEADLESS_MAP[node.semantic] ?? node.type : node.type
       const n: HeadlessNode = {
         id: nextId++,
-        type: node.type,
+        type: viewType,
         props: { ...node.props },
         children: [],
         parent: null,

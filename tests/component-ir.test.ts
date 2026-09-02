@@ -91,7 +91,7 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(mapSemanticToBackend('layout.split', 'native-harmony')).toBe('SideBarContainer')
     expect(mapSemanticToBackend('layout.safe', 'native-android')).toBe('WindowInsets')
     expect(mapSemanticToBackend('layout.safe', 'native-harmony')).toBe('getAvoidArea')
-    expect(mapSemanticToBackend('layout.sidebar', 'vue-dom')).toBe('div.sidebar')
+    expect(mapSemanticToBackend('layout.sidebar', 'vue-dom')).toBe('div.proteus-sidebar')
   })
 
   it('mapSemanticToBackend：同一 semantic 在不同后端得到不同原生控件（语义收敛 + 后端实现）', () => {
@@ -100,7 +100,7 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(mapSemanticToBackend('layout.grid', 'native-harmony')).toBe('Grid')
     expect(mapSemanticToBackend('layout.grid', 'skyline')).toBe('grid') // 微信小程序原生 grid 组件
     expect(mapSemanticToBackend('layout.grid', 'flutter')).toBe('GridView')
-    expect(mapSemanticToBackend('layout.grid', 'vue-dom')).toBe('div.grid')
+    expect(mapSemanticToBackend('layout.grid', 'vue-dom')).toBe('div.proteus-grid')
     expect(mapSemanticToBackend('layout.adaptive', 'native-android')).toBe('BottomSheetDialog')
     expect(mapSemanticToBackend('ui.text', 'native-harmony')).toBe('Text')
     expect(mapSemanticToBackend('capability.scan-qr', 'skyline')).toBe('wx.scanCode')
@@ -108,7 +108,7 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(mapSemanticToBackend('unknown.semantic', 'vue-dom')).toBeNull()
   })
 
-  it('SEMANTIC_BACKEND_MAP 覆盖 15 语义枚举（G-31 §3 组件清单）', () => {
+  it('SEMANTIC_BACKEND_MAP 覆盖 18 语义枚举（G-31 §3 组件清单）', () => {
     for (const s of SEMANTIC_ENUM) {
       expect(SEMANTIC_BACKEND_MAP[s], `缺 ${s} 映射`).toBeDefined()
     }

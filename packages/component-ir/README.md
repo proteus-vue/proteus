@@ -1,6 +1,6 @@
 # @proteus-vue/component-ir
 
-> **G-31 组件与 API 语义化**（`docs/proteus-component-semantics-plan/`）· B1
+> **G-31 组件与 API 语义化**（`docs/proteus-component-semantics-plan/`）· B1-B5
 
 ## 一句话
 
@@ -10,9 +10,10 @@
 
 | 模块 | 说明 |
 |------|------|
-| `schema.ts` | `ComponentIR` 类型 + `COMPONENT_IR_SCHEMA`（JSON Schema，对齐 plan component-ir.schema.json）+ `SEMANTIC_ENUM`（15 个语义）+ `TAG_SEMANTIC_MAP`（p-grid → layout.grid） |
+| `schema.ts` | `ComponentIR` 类型 + `COMPONENT_IR_SCHEMA`（JSON Schema，对齐 plan component-ir.schema.json）+ `SEMANTIC_ENUM`（18 个语义）+ `TAG_SEMANTIC_MAP`（p-grid → layout.grid） |
 | `validate.ts` | `validateComponentIR`（CIR_INVALID_TAG：p- 前缀铁律 G-31.1 / CIR_INVALID_SEMANTIC / **CMP006**：capabilities 缺 degradation 声明 G-31.2）+ `validateGridConstraints`（**GRID_CONFLICT**：min-col-width × max-cols > 设计宽 → max-cols 永不达）+ `validateComponentTree`（递归） |
-| `map.ts` | `SEMANTIC_BACKEND_MAP` + `mapSemanticToBackend`（semantic → 各端控件：layout.grid → UICollectionView / GridView / div.grid——**验证「Backend 用 semantic 映射而非 tag」**） |
+| `map.ts` | `SEMANTIC_BACKEND_MAP` + `mapSemanticToBackend`（semantic → 各端控件：layout.grid → UICollectionView / GridView / div.proteus-grid——**验证「Backend 用 semantic 映射而非 tag」**；★B5 与各后端实际产出对齐，是 conformance 门禁标准） |
+| `conformance.ts` | `checkComponentSnapshot`（渲染快照 vs 参考表：error=与参考表不符 / unverified=参考表缺行缺列或 Layer 1 兼容层）+ `extractSemanticTree`（跨端结构同构）+ `checkSemanticCoverage`（G-31.4 覆盖门禁 ≥3 端） |
 
 ## 用法
 
@@ -25,7 +26,18 @@ const diags = validateComponentTree(ir, 375)
 
 mapSemanticToBackend('layout.grid', 'native-ios') // 'UICollectionView'
 mapSemanticToBackend('layout.grid', 'flutter')    // 'GridView'
-mapSemanticToBackend('layout.grid', 'vue-dom')    // 'div.grid'
+mapSemanticToBackend('layout.grid', 'vue-dom')    // 'div.proteus-grid'
+```
+
+## Conformance（B5）
+
+```ts
+import { renderComponentSnapshot, createControlReader } from '@proteus-vue/render-backend'
+import { checkComponentSnapshot, checkSemanticCoverage } from '@proteus-vue/component-ir'
+
+const snap = renderComponentSnapshot(backend, ir, createControlReader(backend.id))
+const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == 参考表？
+checkSemanticCoverage(3) // G-31.4：每语义 ≥3 端映射
 ```
 
 ## 严格规则
@@ -44,4 +56,4 @@ Layer 1：@proteus/compat-miniprogram（旧小程序兼容层，独立包）
 
 ## 路线
 
-B1 C-IR + 校验器 ✅ → B2 布局原语 6 个 + VueDom → B3 Native 映射 → B4 UI 原语 → B5 conformance → B6 compat-miniprogram → B7 API Hook 化
+B1 C-IR + 校验器 ✅ → B2 布局原语 6 个 + VueDom ✅ → B3 Native 映射 ✅ → B4 UI 原语 + Fluid 扩展 ✅ → B5 conformance 三端快照 ✅ → B6 compat-miniprogram → B7 API Hook 化

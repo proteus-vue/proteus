@@ -43,6 +43,12 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'ui.button': { tag: 'button' },
   'ui.image': { tag: 'img' },
   'ui.input': { tag: 'input' },
+  'ui.list': { tag: 'div', className: 'proteus-list' },
+  'ui.nav': { tag: 'nav' },
+  // ★G-31 B5：能力入口（G-28 组件化）——Web 端用标准元素承载，能力实现由 useNative 注入
+  'capability.scan-qr': { tag: 'button', className: 'proteus-scan-qr' },
+  'capability.pick-photo': { tag: 'input', className: 'proteus-pick-photo' },
+  'capability.location': { tag: 'button', className: 'proteus-location' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

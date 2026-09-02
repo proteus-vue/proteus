@@ -26,3 +26,6 @@ export type { NativeViewDescriptor, NativeViewAdapter, MockNativeAdapter, Native
 // ★G-27 B5：FlutterBackend spike（Proteus 语义 → Flutter widget 树映射层）
 export { createFlutterBackend, mapWidgetType, toWidgetTree } from './flutter'
 export type { FlutterWidgetDescriptor } from './flutter'
+// ★G-31 B5：组件渲染快照基础设施（conformance 渲染层——驱动 nodeOps + 控件 readback）
+export { renderComponentSnapshot, createControlReader } from './conformance-component'
+export type { RenderNodeSnapshot, ControlReader } from './conformance-component'

@@ -10,11 +10,18 @@
 
 分三层：
 
-| 层 | 验证内容 | 方式 |
-|----|---------|------|
-| **结构层** | C-IR 树形状、semantic 字段正确 | AST diff |
-| **约束层** | 属性满足 schema + 降级声明存在 | JSON Schema 校验 |
-| **渲染层** | 三端渲染快照一致 | 截图像素差阈值 |
+| 层 | 验证内容 | 方式 | 落地状态 |
+|----|---------|------|---------|
+| **结构层** | C-IR 树形状、semantic 字段正确 | AST diff | ✅ 语义树同构（`extractSemanticTree` 跨端比对） |
+| **约束层** | 属性满足 schema + 降级声明存在 | JSON Schema 校验 | ✅ B1（`validateComponentIR` / GRID_CONFLICT / CMP006） |
+| **渲染层** | 三端渲染快照一致 | 截图像素差阈值 | 🟡 IR 级快照 diff 已落地（控件 readback == 参考表）；截图像素对比待真实宿主（G-27 原生 SDK 桥）后置 |
+
+### 落地实现（B5 ✅）
+
+- **快照基础设施**（render-backend `conformance-component.ts`）：`renderComponentSnapshot(backend, ir, readControl)` 驱动 nodeOps（createElement/patchProp/insert）渲染 C-IR → 归一化 `(type/semantic/control/props)` 快照树；`createControlReader` 提供内置后端句柄的控件 readback（tag.class / 原生视图类型 / widget 名 / headless 类型）
+- **参考表对照**（component-ir `conformance.ts`）：`checkComponentSnapshot(backendId, snapshot)` 递归比对 `SEMANTIC_BACKEND_MAP`（error=与参考表不符；unverified=参考表缺行/缺列或 Layer 1 兼容层标签不设门禁）；`checkSemanticCoverage(min)` 覆盖门禁（G-31.4：语义 ≥3 端映射）
+- **CI 门禁**：`tests/component-conformance.test.ts`——6 后端（VueDom/Native-iOS/Android/Harmony/Flutter/Headless）× 6 L1 fixtures（grid-basic/stack-form/adaptive-modal/list-row/nav-header/sidebar-split）快照一致 + 负例（错映射/未知语义/兼容层）+ 覆盖门禁
+- **B5 同步修正**：vue-dom 参考列与 SEMANTIC_WEB_MAP 实际产出对齐（`div.proteus-*` 语义类）；Headless/Flutter 补 semantic 消费（此前仅按 type 渲染——门禁捕获后补齐，正是 conformance 的职责）
 
 ---
 
@@ -123,3 +130,4 @@ G-31 ComponentBackend.createElement(ir)    → 组件渲染一致  ← 本 plan
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | v1 | 2026-09-02 | 三层验证 + CLI + 4 项验证清单 + fixture + CI 门禁 + 五套 conformance 统一 |
+| v2 | 2026-09-02 | B5 落地：渲染层 IR 级快照 diff（render-backend 基础设施 + component-ir 参考表对照 + 6×6 门禁测试） |

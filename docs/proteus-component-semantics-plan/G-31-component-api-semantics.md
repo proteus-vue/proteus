@@ -259,7 +259,7 @@ Layer 1：@proteus/compat-miniprogram（兼容层，独立包）
 
 ---
 
-## 8. 分批落地（B1-B4）
+## 8. 分批落地（B1-B5）
 
 | 批次 | 内容 | 依赖 | 交付 |
 |------|------|------|------|
@@ -267,8 +267,9 @@ Layer 1：@proteus/compat-miniprogram（兼容层，独立包）
 | **B2** | 布局原语 6 个（p-box/stack/grid/fluid/adaptive/fit）+ VueDom Backend | B1 | 跑通 Web |
 | **C1**（G-28 侧） | 能力入口组件对接 `useNative()` | G-28 | `<p-scan-qr>` 可用 |
 | **B3** | Native Backend 映射（UIKit / Android View） | B2 | iOS/Android 跑通 |
-| **B4** | compat-miniprogram 兼容层 | B3 | 旧小程序可迁移 |
-| **C2** | conformance：三端组件渲染一致性 | B3 | IR 级截图对比 |
+| **B4** | 基础 UI 原语（text/button/image/input/list/nav）+ Fluid 扩展语义 | B2 | 完整 L1 组件集 |
+| **B5** | conformance：三端组件渲染快照一致（B3 后已落地——IR 级快照 diff + 覆盖门禁） | B3 | CI 门禁 |
+| **B6** | compat-miniprogram 兼容层 | B3 | 旧小程序可迁移 |
 
 详见 `batches.md`。
 

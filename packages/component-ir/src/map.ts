@@ -6,11 +6,13 @@
 //   控件名参考：fluid-layout-essence 02-system-capability-mapping + adaptive-container 03-five-end-mapping
 import type { BackendId } from '@proteus-vue/render-backend'
 
-/** 语义类型 → 各端 Backend 控件（布局原语 + UI 原语 + 能力入口——G-31 §3 组件清单） */
+/** 语义类型 → 各端 Backend 控件（布局原语 + UI 原语 + 能力入口——G-31 §3 组件清单）
+ *  ★G-31 B5：vue-dom 列与 render-backend SEMANTIC_WEB_MAP 实际产出一致（div.proteus-* 语义类）——
+ *    参考表即门禁标准，component-conformance 机器校验「快照 control == 参考表」 */
 export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'web', string>>> = {
   // —— 布局原语（G-22 四原语 + box/adaptive）——
   'layout.box': {
-    'vue-dom': 'div',
+    'vue-dom': 'div.proteus-box',
     'native-ios': 'UIView',
     'native-android': 'FrameLayout',
     'native-harmony': 'Stack',
@@ -19,7 +21,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'box',
   },
   'layout.stack': {
-    'vue-dom': 'div.flex',
+    'vue-dom': 'div.proteus-stack',
     'native-ios': 'UIStackView',
     'native-android': 'LinearLayout',
     'native-harmony': 'Flex',
@@ -28,7 +30,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'stack',
   },
   'layout.grid': {
-    'vue-dom': 'div.grid',
+    'vue-dom': 'div.proteus-grid',
     'native-ios': 'UICollectionView',
     'native-android': 'GridLayoutManager',
     'native-harmony': 'Grid',
@@ -37,7 +39,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'grid',
   },
   'layout.fluid': {
-    'vue-dom': 'div.fluid',
+    'vue-dom': 'div.proteus-fluid',
     'native-ios': 'AutoLayout',
     'native-android': 'ConstraintLayout',
     'native-harmony': 'Flex.fluid',
@@ -46,7 +48,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'fluid',
   },
   'layout.adaptive': {
-    'vue-dom': 'dialog',
+    'vue-dom': 'div.proteus-adaptive',
     'native-ios': 'UISheet',
     'native-android': 'BottomSheetDialog',
     'native-harmony': 'Sheet', // @ohos.arkui.advanced
@@ -55,7 +57,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'adaptive',
   },
   'layout.fit': {
-    'vue-dom': 'div.fit',
+    'vue-dom': 'div.proteus-fit',
     'native-ios': 'intrinsicSize',
     'native-android': 'wrapContent',
     'native-harmony': 'fitContent',
@@ -65,7 +67,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
   },
   // ★G-31 B4：Fluid 体系扩展语义（五端映射）
   'layout.split': {
-    'vue-dom': 'div.split',
+    'vue-dom': 'div.proteus-split',
     'native-ios': 'UISplitViewController',
     'native-android': 'SlidingPaneLayout',
     'native-harmony': 'SideBarContainer',
@@ -74,7 +76,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'split',
   },
   'layout.safe': {
-    'vue-dom': 'div.safe',
+    'vue-dom': 'div.proteus-safe',
     'native-ios': 'safeAreaLayoutGuide',
     'native-android': 'WindowInsets',
     'native-harmony': 'getAvoidArea',
@@ -83,7 +85,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'safe',
   },
   'layout.sidebar': {
-    'vue-dom': 'div.sidebar',
+    'vue-dom': 'div.proteus-sidebar',
     'native-ios': 'UISplitViewController.side',
     'native-android': 'NavigationRail',
     'native-harmony': 'SideBarContainer',
@@ -129,7 +131,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'input',
   },
   'ui.list': {
-    'vue-dom': 'div.list',
+    'vue-dom': 'div.proteus-list',
     'native-ios': 'UITableView',
     'native-android': 'RecyclerView',
     'native-harmony': 'List',
@@ -148,7 +150,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
   },
   // —— 能力入口（G-28 组件化）——
   'capability.scan-qr': {
-    'vue-dom': 'dialog.scan',
+    'vue-dom': 'button.proteus-scan-qr',
     'native-ios': 'AVCaptureSession',
     'native-android': 'CameraX',
     'native-harmony': 'ScanKit',
@@ -157,7 +159,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'scan-qr',
   },
   'capability.pick-photo': {
-    'vue-dom': 'input.file',
+    'vue-dom': 'input.proteus-pick-photo',
     'native-ios': 'UIImagePicker',
     'native-android': 'PhotoPicker',
     'native-harmony': 'PhotoViewPicker',
@@ -166,7 +168,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'pick-photo',
   },
   'capability.location': {
-    'vue-dom': 'geolocation',
+    'vue-dom': 'button.proteus-location',
     'native-ios': 'CLLocationManager',
     'native-android': 'FusedLocation',
     'native-harmony': 'geoLocationManager',
