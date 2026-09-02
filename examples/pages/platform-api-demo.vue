@@ -123,6 +123,20 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑪ 路由语义化（G-32 B5 续：createRouterEngineering——E10 useRoute / E11-E15 导航语义 / E16-E17 守卫）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-route-push" @click="onRoutePush">push</button>
+        <button class="pad-btn" data-testid="pad-route-replace" @click="onRouteReplace">replace</button>
+        <button class="pad-btn" data-testid="pad-route-back" @click="onRouteBack">back</button>
+        <button class="pad-btn" data-testid="pad-route-tab" @click="onRouteTab">switchTab</button>
+        <button class="pad-btn" data-testid="pad-route-relaunch" @click="onRouteRelanch">reLaunch</button>
+        <button class="pad-btn" data-testid="pad-route-read" @click="onRouteRead">useRoute</button>
+      </view>
+      <text class="pad-log" data-testid="pad-route-log">{{ routeLog }}</text>
+      <text class="pad-sub">createRouterEngineering 注入兼容 router（mock 录制调用，不真实导航）——E11-E15 语义委托既有 router（replace=replace:true / switchTab / reLaunch 标志）；E10 useRoute 读注入 getCurrentRoute 源；E16/E17 守卫委托（router 缺省时安全 no-op）</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -134,7 +148,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { createPlatformAPI, createCapabilityHooks, createEngineering } from '@proteus-vue/api'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering } from '@proteus-vue/api'
 
 // ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
 const api = createPlatformAPI()
@@ -413,6 +427,42 @@ function onEngParam() {
   const id = eng.usePageParam('demoId')
   const key = eng.usePageParam('demoKey')
   engLog.value = `usePageParam → demoId=${id.value} · demoKey=${key.value}`
+}
+
+// ---------- ⑪ 路由语义化（G-32 B5 续：createRouterEngineering——mock 录制调用，不真实导航） ----------
+const routeLog = ref('点击按钮演示路由语义化（mock router 录制调用）')
+const rx = createRouterEngineering({
+  router: {
+    push: (target) => {
+      routeLog.value = `mockRouter.push → ${JSON.stringify(target)}`
+      return Promise.resolve()
+    },
+    back: (delta) => {
+      routeLog.value = `mockRouter.back → delta=${delta}`
+    },
+  },
+  reactivity: { ref, computed, watch: () => () => undefined },
+  getCurrentRoute: () => ({ path: '/pages/platform-api-demo/index', name: 'platform-api-demo' }),
+}) // ★E11-E15 语义委托 mock router 录制（不真实导航）；E10 useRoute 读注入源；E16/E17 守卫委托缺省安全
+const currentRoute = rx.useRoute()
+function onRoutePush() {
+  rx.push({ name: 'showcase', params: { id: 42 } })
+}
+function onRouteReplace() {
+  rx.replace({ path: '/pages/demo/showcase' })
+}
+function onRouteBack() {
+  rx.back(1)
+}
+function onRouteTab() {
+  rx.switchTab({ path: '/pages/demo/home' })
+}
+function onRouteRelanch() {
+  rx.reLaunch({ path: '/pages/demo/entry' })
+}
+function onRouteRead() {
+  const cur = currentRoute.value
+  routeLog.value = cur ? `useRoute → path=${cur.path} · name=${cur.name}` : 'useRoute → undefined（未注入当前路由源）'
 }
 </script>
 

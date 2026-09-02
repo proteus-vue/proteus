@@ -134,7 +134,47 @@ eng.useReady(() => console.log('ready'))
 | `usePageParam(key)` | E9 | 响应式页面参数（wx options / web query——paramSource 注入） |
 | `createEngineering(opts)` | — | 工厂：注入 `{ reactivity, lifecycle?, paramSource? }` |
 
-后续批次（E10-E17 router 语义化 / E19-E23 动画 / E24-E28 工程化）沿同一「语义面 + 注入」模式扩展。
+后续批次（E19-E23 动画 / E24-E28 工程化）沿同一「语义面 + 注入」模式扩展。
+
+## 路由语义化（G-32 B5 续）
+
+`createRouterEngineering(options)` 提供 **E10-E17 路由语义**——对接既有 `@proteus-vue/router`（注入兼容 router 实例，不修改 router 包；mock 注入可单测）：
+
+```ts
+import { ref, computed, watch } from 'vue'
+import { createRouterEngineering } from '@proteus-vue/api'
+import { createRouter } from '@proteus-vue/router'
+
+const router = createRouter(routes)          // 既有 router
+const rx = createRouterEngineering({
+  router,                                     // RouterLike——语义委托
+  reactivity: { ref, computed, watch },
+  getCurrentRoute: () => ({ path: '/pages/index', name: 'index' }),
+})
+
+const route = rx.useRoute()                   // E10 响应式当前路由
+await rx.push({ name: 'user', params: { id: '42' } })   // E11
+await rx.replace({ path: '/pages/a' })        // E12
+rx.back(1)                                    // E13
+await rx.switchTab({ name: 'mine' })          // E14
+await rx.reLaunch({ path: '/pages/entry' })   // E15
+rx.beforeEach((to, from) => to.path !== '/x') // E16 前置守卫
+rx.afterEach((to) => console.log(to))         // E17 后置守卫
+```
+
+| 原语 | 语义 | 说明 |
+|------|------|------|
+| `useRoute()` | E10 | 响应式当前路由（`getCurrentRoute` 注入源）|
+| `push(opts)` | E11 | 命名/路径跳转（委托 `router.push`）|
+| `replace(opts)` | E12 | 替换当前页（`push({...opts, replace:true})`）|
+| `back(delta?)` | E13 | 后退（委托 `router.back`）|
+| `switchTab(opts)` | E14 | 切 Tab（`push({...opts, switchTab:true})`）|
+| `reLaunch(opts)` | E15 | 重启到某页（`push({...opts, reLaunch:true})`）|
+| `beforeEach(guard)` | E16 | 前置守卫注册（委托 `router.beforeEach`；缺省安全 no-op）|
+| `afterEach(guard)` | E17 | 后置守卫注册（委托 `router.afterEach`）|
+| `createRouterEngineering(opts)` | — | 工厂：注入 `{ router, reactivity, getCurrentRoute? }` |
+
+残余工程原语（E19-E23 动画 / E24-E28 工程化）沿同一「语义面 + 注入」模式在后继批次扩展。
 
 ## 设计要点
 

@@ -13,6 +13,9 @@ export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, c
 // ★G-32 B5：工程原语（injectable——E1 useState/E2 useComputed/E3 useWatch/E6 useLifecycle/E7 useReady/E9 usePageParam）
 export { createEngineering } from './engineering'
 export type { Engineering, EngineeringOptions, Reactivity, LifecycleHandle, LifecycleEvent, ParamSource } from './engineering'
+// ★G-32 B5 续：路由语义化（injectable——E10 useRoute/E11 push/E12 replace/E13 back/E14 switchTab/E15 reLaunch/E16 beforeEach/E17 afterEach）
+export { createRouterEngineering } from './router-engineering'
+export type { RouterEngineering, RouterEngineeringOptions, RouterLike, RouterTargetOptions, CurrentRoute } from './router-engineering'
 export type {
   CapResult,
   CapabilityHooks,
