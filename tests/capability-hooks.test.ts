@@ -823,7 +823,9 @@ describe('G-32 B3 四期：websocket / upload / download / analytics / log / fil
     const read = await fs.readFile('/a.txt')
     expect(read.ok).toBe(true)
     if (read.ok) expect(read.data).toBe('hello')
-    expect((await fs.exists('/a.txt')).data).toBe(true)
+    const before = await fs.exists('/a.txt')
+    expect(before.ok).toBe(true)
+    if (before.ok) expect(before.data).toBe(true)
     await expect(fs.remove('/a.txt')).resolves.toMatchObject({ ok: true })
     const after = await fs.exists('/a.txt')
     expect(after.ok).toBe(true)
@@ -1068,5 +1070,247 @@ describe('G-32 B3 四期 web 桥（WebSocket / fetch FormData / blob / console /
     const r = await hooks.useAnalytics().track('page_view')
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error.code).toBe('analytics.unsupported')
+  })
+})
+
+describe('G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut', () => {
+  it('useNotification：桥 subscribeMessage → MessageSubscription（granted/status）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        subscribeMessage: async (templateId) => ({ templateId, granted: true, status: 'accept' }),
+      }),
+    )
+    const r = await hooks.useNotification('tmpl_1')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ templateId: 'tmpl_1', granted: true, status: 'accept' })
+    // 无桥 → Err
+    const noBridge = createCapabilityHooks(mockBridge())
+    const r2 = await noBridge.useNotification('tmpl_1')
+    expect(r2.ok).toBe(false)
+    if (!r2.ok) expect(r2.error.code).toBe('notification.unsupported')
+  })
+
+  it('useContact：桥 chooseContact → Contact[]；无桥 → Err', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        chooseContact: async () => [{ name: '张三', phone: '13800000000' }],
+      }),
+    )
+    const r = await hooks.useContact()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject([{ name: '张三', phone: '13800000000' }])
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useContact()).ok).toBe(false)
+  })
+
+  it('useCalendar：桥 addCalendarEvent → ok；无桥 → Err', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        addCalendarEvent: async (event) => {
+          void event
+        },
+      }),
+    )
+    const r = await hooks.useCalendar({ title: '会议', startTime: 1700000000000 })
+    expect(r.ok).toBe(true)
+    const noBridge = createCapabilityHooks(mockBridge())
+    const r2 = await noBridge.useCalendar({ title: '会议', startTime: 1700000000000 })
+    expect(r2.ok).toBe(false)
+    if (!r2.ok) expect(r2.error.code).toBe('calendar.unsupported')
+  })
+
+  it('useAppLifecycle：桥 getAppLifecycle → 句柄（onLaunch/onShow/onHide 可订阅取消）', () => {
+    let offLaunch: (() => void) | undefined
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        getAppLifecycle: () => ({
+          phase: 'PENDING' as const,
+          onLaunch: (cb) => {
+            cb()
+            offLaunch = () => undefined
+            return offLaunch
+          },
+          onShow: () => () => undefined,
+          onHide: () => () => undefined,
+        }),
+      }),
+    )
+    const lifecycle = hooks.useAppLifecycle()
+    expect(lifecycle.phase).toBe('PENDING')
+    const launches: number[] = []
+    lifecycle.onLaunch(() => launches.push(1))
+    expect(launches).toEqual([1])
+    expect(typeof lifecycle.onShow).toBe('function')
+    expect(typeof lifecycle.onHide).toBe('function')
+    void offLaunch
+    // 无桥 → 抛错
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect(() => noBridge.useAppLifecycle()).toThrow(/getAppLifecycle/)
+  })
+
+  it('useArchive：桥 compressFile → ok；无桥 → Err', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        compressFile: async (options) => {
+          void options
+        },
+      }),
+    )
+    const r = await hooks.useArchive({ src: '/a.png' })
+    expect(r.ok).toBe(true)
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useArchive({ src: '/a.png' })).ok).toBe(false)
+  })
+
+  it('useShortcut：桥 addShortcut → ok；无桥 → Err', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        addShortcut: async () => undefined,
+      }),
+    )
+    expect((await hooks.useShortcut()).ok).toBe(true)
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useShortcut()).ok).toBe(false)
+  })
+
+  it('probe 五期标志：notification/contact/calendar/appLifecycle/archive/shortcut', async () => {
+    const full = createCapabilityHooks(
+      mockBridge({
+        subscribeMessage: async (id) => ({ templateId: id, granted: true }),
+        chooseContact: async () => [],
+        addCalendarEvent: async () => undefined,
+        getAppLifecycle: () => ({ phase: 'PENDING' as const, onLaunch: () => () => undefined, onShow: () => () => undefined, onHide: () => () => undefined }),
+        compressFile: async () => undefined,
+        addShortcut: async () => undefined,
+      }),
+    )
+    const probe = await full.probe()
+    expect(probe.notification).toBe(true)
+    expect(probe.contact).toBe(true)
+    expect(probe.calendar).toBe(true)
+    expect(probe.appLifecycle).toBe(true)
+    expect(probe.archive).toBe(true)
+    expect(probe.shortcut).toBe(true)
+    const partial = createCapabilityHooks(mockBridge())
+    const probe2 = await partial.probe()
+    expect(probe2.notification).toBe(false)
+    expect(probe2.shortcut).toBe(false)
+  })
+})
+
+describe('G-32 B3 五期 wx 桥（wx.* 归一为 Result——无回调泄漏）', () => {
+  it('wx requestSubscribeMessage/chooseContact/addPhoneCalendar/onAppShow/compressFile/addToDesktop → Promise 归一', async () => {
+    const wx = {
+      requestSubscribeMessage: (opt: { tmplIds: string[]; success: (r: Record<string, string>) => void }) =>
+        opt.success({ [opt.tmplIds[0]]: 'accept' }),
+      chooseContact: (opt: { success: (r: { contactList?: Array<{ name: string; phone?: string }> }) => void }) =>
+        opt.success({ contactList: [{ name: '李四', phone: '13900000000' }] }),
+      addPhoneCalendar: (opt: { title: string; startTime: number; success?: () => void }) => {
+        opt.success?.()
+      },
+      onAppShow: (cb: () => void) => {
+        cb()
+      },
+      compressFile: (opt: { src: string; success?: () => void }) => {
+        opt.success?.()
+      },
+      addToDesktop: (opt: { success?: () => void }) => {
+        opt.success?.()
+      },
+    }
+    const orig = (globalThis as { wx?: unknown }).wx
+    ;(globalThis as { wx?: unknown }).wx = wx
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const notif = await hooks.useNotification('tmpl_a')
+      expect(notif.ok).toBe(true)
+      if (notif.ok) expect(notif.data).toMatchObject({ templateId: 'tmpl_a', granted: true, status: 'accept' })
+      const contact = await hooks.useContact()
+      expect(contact.ok).toBe(true)
+      if (contact.ok) expect(contact.data).toMatchObject([{ name: '李四', phone: '13900000000' }])
+      await expect(hooks.useCalendar({ title: '日程', startTime: 1700000000000 })).resolves.toMatchObject({ ok: true })
+      const lc = hooks.useAppLifecycle()
+      expect(typeof lc.onShow).toBe('function')
+      await expect(hooks.useArchive({ src: '/x.png' })).resolves.toMatchObject({ ok: true })
+      await expect(hooks.useShortcut()).resolves.toMatchObject({ ok: true })
+    } finally {
+      ;(globalThis as { wx?: unknown }).wx = orig
+    }
+  })
+})
+
+describe('G-32 B3 五期 web 桥（Notification API / visibilitychange）', () => {
+  it('web subscribeMessage：Notification.requestPermission granted → MessageSubscription', async () => {
+    const g = globalThis as unknown as { Notification?: unknown; wx?: unknown }
+    const orig = g.Notification
+    g.Notification = class Notification {
+      static requestPermission = vi.fn(async () => 'granted')
+      constructor(public title: string, public options?: { body?: string }) {
+        void title
+        void options
+      }
+    }
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const r = await hooks.useNotification('tmpl_b')
+      expect(r.ok).toBe(true)
+      if (r.ok) expect(r.data).toMatchObject({ templateId: 'tmpl_b', granted: true, status: 'granted' })
+    } finally {
+      g.Notification = orig
+    }
+  })
+
+  it('web subscribeMessage：无 Notification 支持 → Err（非抛异常）', async () => {
+    const g = globalThis as unknown as { Notification?: unknown; wx?: unknown }
+    delete g.Notification
+    const { createCapabilityBridge } = await import('@proteus-vue/api')
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    const r = await hooks.useNotification('tmpl_c')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('notification.unsupported')
+  })
+
+  it('web useAppLifecycle：load/visibilitychange 事件 → onLaunch/onShow/onHide 触发', async () => {
+    const listeners: Array<{ t: string; cb: (e?: unknown) => void }> = []
+    const g = globalThis as unknown as {
+      addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+      removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+      document?: { visibilityState?: string }
+      wx?: unknown
+    }
+    g.addEventListener = (t, cb) => {
+      listeners.push({ t, cb })
+    }
+    g.removeEventListener = (t, cb) => {
+      const i = listeners.findIndex((l) => l.t === t && l.cb === cb)
+      if (i >= 0) listeners.splice(i, 1)
+    }
+    g.document = { visibilityState: 'visible' }
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const lifecycle = hooks.useAppLifecycle()
+      const shown: number[] = []
+      const hidden: number[] = []
+      lifecycle.onShow(() => shown.push(1))
+      lifecycle.onHide(() => hidden.push(1))
+      // 触发 load → launch + show
+      const loadEntry = listeners.find((l) => l.t === 'load')
+      expect(loadEntry).toBeTruthy()
+      loadEntry!.cb()
+      expect(shown).toEqual([1])
+      // 触发 visibilitychange hidden → hide
+      g.document!.visibilityState = 'hidden'
+      const visEntry = listeners.find((l) => l.t === 'visibilitychange')
+      expect(visEntry).toBeTruthy()
+      visEntry!.cb()
+      expect(hidden).toEqual([1])
+    } finally {
+      delete g.addEventListener
+      delete g.removeEventListener
+      delete g.document
+    }
   })
 })

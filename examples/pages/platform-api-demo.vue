@@ -84,6 +84,20 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑧ 能力 Hook 五期（useNotification/useAppLifecycle/useContact/useCalendar/useArchive/useShortcut）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-notification" @click="onCapNotification">useNotification</button>
+        <button class="pad-btn" data-testid="pad-cap-lifecycle" @click="onCapLifecycle">useAppLifecycle</button>
+        <button class="pad-btn" data-testid="pad-cap-contact" @click="onCapContact">useContact</button>
+        <button class="pad-btn" data-testid="pad-cap-calendar" @click="onCapCalendar">useCalendar</button>
+        <button class="pad-btn" data-testid="pad-cap-archive" @click="onCapArchive">useArchive</button>
+        <button class="pad-btn" data-testid="pad-cap-shortcut" @click="onCapShortcut">useShortcut</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap5-log">{{ cap5Log }}</text>
+      <text class="pad-sub">小程序端走 wx.requestSubscribeMessage/chooseContact/addPhoneCalendar/compressFile/addToDesktop + App 钩子；web 端仅 Notification 与 visibilitychange 有原生对应，其余诚实降级 → Err</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -255,6 +269,58 @@ function onCapFS() {
     void fsHandle.readFile('/demo.txt').then((r) => {
       cap4Log.value = r.ok ? `useFileSystem → /demo.txt = ${r.data}` : `useFileSystem → 读取 Err(${r.error.code})`
     })
+  })
+}
+
+// ---------- ⑧ 能力 Hook 五期（G-32 B3 续） ----------
+const cap5Log = ref('点击按钮调用五期能力 Hook')
+const lifecycle = cap.useAppLifecycle() // ★C23：App 生命周期订阅句柄
+function onCapNotification() {
+  // ★C17：模板订阅授权（web Notification.requestPermission——需 HTTPS；wx requestSubscribeMessage）
+  void cap.useNotification('demo_template_1').then((r) => {
+    cap5Log.value = r.ok ? `useNotification → granted=${r.data.granted} status=${r.data.status}` : `useNotification → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapLifecycle() {
+  // ★C23：订阅当前生命周期阶段
+  let count = 0
+  let log = ''
+  const off = lifecycle.onShow(() => {
+    count += 1
+    log = `onShow ×${count}`
+  })
+  cap5Log.value = 'useAppLifecycle → 已订阅 onShow（当前 phase=' + lifecycle.phase + '）'
+  // Web 端已触发过 load → 若 count 未涨说明 handler 尚未被调用，主动展示一次
+  if (count === 0) {
+    cap5Log.value = cap5Log.value + ' · 等待 visibilitychange 触发'
+  }
+  void log
+  void off
+}
+function onCapContact() {
+  // ★C19：wx.chooseContact 直通；web 无标准 → Err
+  void cap.useContact().then((r) => {
+    cap5Log.value = r.ok ? `useContact → ${r.data.map((c) => c.name).join(', ')}` : `useContact → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapCalendar() {
+  // ★C20：wx.addPhoneCalendar 直通；web → Err
+  void cap
+    .useCalendar({ title: 'Proteus 演示', startTime: Date.now() + 3600_000 })
+    .then((r) => {
+      cap5Log.value = r.ok ? 'useCalendar → 已添加到系统日历' : `useCalendar → Err(${r.error.code}) ${r.error.message}`
+    })
+}
+function onCapArchive() {
+  // ★C44：wx.compressFile 直通；web → Err
+  void cap.useArchive({ src: '/demo.png' }).then((r) => {
+    cap5Log.value = r.ok ? 'useArchive → 压缩完成' : `useArchive → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapShortcut() {
+  // ★C45：wx.addToDesktop 直通；web → Err
+  void cap.useShortcut().then((r) => {
+    cap5Log.value = r.ok ? 'useShortcut → 已添加快捷方式' : `useShortcut → Err(${r.error.code}) ${r.error.message}`
   })
 }
 </script>

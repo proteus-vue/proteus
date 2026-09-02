@@ -68,6 +68,12 @@ const { platform, system, version } = getDeviceInfo()
 | `useAnalytics()` | C34 | 埋点句柄（`track(name, params)`——wx.reportEvent；web 无标准 → Err） |
 | `useLog()` | C35 | 日志句柄（`log/warn/error`——console + 上报链） |
 | `useFileSystem()` | C43 | 文件系统句柄（`readFile/writeFile/remove/exists`——wx.getFileSystemManager / web 内存降级） |
+| `useNotification(templateId)` | C17 | 消息订阅授权（wx.requestSubscribeMessage / web Notification.requestPermission） |
+| `useContact()` | C19 | 联系人选择（wx.chooseContact；web 无标准 → Err） |
+| `useCalendar(event)` | C20 | 添加日历事件（wx.addPhoneCalendar；web → Err） |
+| `useAppLifecycle()` | C23 | 应用生命周期订阅句柄（`onLaunch/onShow/onHide`——wx App 钩子 / web visibilitychange+load） |
+| `useArchive(opts)` | C44 | 压缩文件（wx.compressFile；web → Err） |
+| `useShortcut()` | C45 | 添加桌面快捷方式（wx.addToDesktop；web → Err） |
 | `probe()` | — | 能力可用性探测面（降级决策依据：缺失 → 对应 `Err('<cap>.unsupported')` 非抛异常） |
 
 ```ts

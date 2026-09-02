@@ -237,6 +237,64 @@ export interface FSAdapter {
   exists(path: string): Promise<CapResult<boolean>>
 }
 
+// ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut
+
+/** C17 可订阅的消息模板（wx.requestSubscribeMessage / web Notification） */
+export interface MessageSubscription {
+  /** 模板 id（wx 需要先在公众平台申请） */
+  templateId: string
+  /** 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） */
+  granted: boolean
+  /** 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） */
+  status?: string
+}
+
+/** web Notification 构造器形态（注入式——可单测） */
+interface NotificationConstructor {
+  new (title: string, options?: { body?: string }): unknown
+  requestPermission?: () => Promise<'granted' | 'denied' | 'default'>
+  permission?: string
+}
+
+/** C19 联系人（wx.chooseContact / web 无标准 → 降级 undefined） */
+export interface Contact {
+  name: string
+  phone?: string
+  email?: string
+}
+
+/** C23 应用生命周期句柄（wx App 钩子 / web visibilitychange+load 订阅） */
+export interface AppLifecycle {
+  /** 当前阶段：launch/show/hide */
+  phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE'
+  onLaunch(cb: () => void): () => void
+  onShow(cb: () => void): () => void
+  onHide(cb: () => void): () => void
+}
+
+/** C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined） */
+export interface ArchiveOptions {
+  /** 源文件路径 */
+  src: string
+  /** 目标路径（缺省同目录） */
+  dest?: string
+  /** 图片压缩质量 0-100（wx 支持） */
+  quality?: number
+}
+
+/** C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined） */
+export interface CalendarEvent {
+  title: string
+  /** 开始时间戳（ms） */
+  startTime: number
+  /** 结束时间戳（ms） */
+  endTime?: number
+  /** 提前提醒（分钟） */
+  alarms?: number[]
+  location?: string
+  description?: string
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -296,6 +354,19 @@ export interface CapabilityBridge {
   log?(level: LogLevel, message: string, data?: unknown): Promise<void>
   /** C43 文件系统（wx.getFileSystemManager / web 内存降级） */
   getFileSystem?(): FileSystemBridge
+  // ★G-32 B3 五期：new capabilities（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')
+  /** C17 消息订阅授权（wx.requestSubscribeMessage / web Notification.requestPermission） */
+  subscribeMessage?(templateId: string): Promise<MessageSubscription>
+  /** C19 联系人选择（wx.chooseContact / web 无标准 → 缺省） */
+  chooseContact?(): Promise<Contact[]>
+  /** C20 日历事件添加（wx.addPhoneCalendar / web 无标准 → 缺省） */
+  addCalendarEvent?(event: CalendarEvent): Promise<void>
+  /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
+  getAppLifecycle?(): AppLifecycle
+  /** C44 压缩（wx.compressFile / web 无标准 → 缺省） */
+  compressFile?(options: ArchiveOptions): Promise<void>
+  /** C45 桌面快捷方式（wx.addToDesktop / web 无标准 → 缺省） */
+  addShortcut?(): Promise<void>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -348,6 +419,13 @@ export interface CapabilityProbe {
   analytics: boolean
   log: boolean
   fileSystem: boolean
+  /** ★G-32 B3 五期 */
+  notification: boolean
+  contact: boolean
+  calendar: boolean
+  appLifecycle: boolean
+  archive: boolean
+  shortcut: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -464,6 +542,36 @@ interface WxLike {
   }) => WxDownloadTask
   reportEvent?: (opt: { event: string; data?: Record<string, unknown> }) => void
   getFileSystemManager?: () => WxFileSystemManager
+  // ★G-32 B3 五期：新增 wx 能力
+  requestSubscribeMessage?: (opt: {
+    tmplIds: string[]
+    success: (r: { [tmplId: string]: string }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  chooseContact?: (opt: {
+    success: (r: { contactList?: Array<{ name: string; phone?: string; email?: string }> }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  addPhoneCalendar?: (opt: {
+    title: string
+    startTime: number
+    endTime?: number
+    alarms?: number[]
+    location?: string
+    description?: string
+    success?: () => void
+    fail?: (e: unknown) => void
+  }) => void
+  onAppShow?: (cb: () => void) => void
+  onAppHide?: (cb: () => void) => void
+  compressFile?: (opt: {
+    src: string
+    dest?: string
+    quality?: number
+    success?: (r: { tempFilePath?: string }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  addToDesktop?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -797,6 +905,72 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         resolve()
       }),
     getFileSystem: () => wxFileSystem(wx),
+    // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut
+    subscribeMessage: (templateId) =>
+      new Promise((resolve, reject) => {
+        if (!wx.requestSubscribeMessage) return reject(new CapError('notification.unsupported', 'wx.requestSubscribeMessage 缺失'))
+        wx.requestSubscribeMessage({
+          tmplIds: [templateId],
+          success: (r) => {
+            const status = r[templateId] ?? 'reject'
+            resolve({ templateId, granted: status === 'accept', status })
+          },
+          fail: (e) => reject(new CapError('notification.failed', 'wx.requestSubscribeMessage 失败', e)),
+        })
+      }),
+    chooseContact: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.chooseContact) return reject(new CapError('contact.unsupported', 'wx.chooseContact 缺失'))
+        wx.chooseContact({
+          success: (r) => resolve((r.contactList ?? []).map((c) => ({ name: c.name, phone: c.phone, email: c.email }))),
+          fail: (e) => reject(new CapError('contact.failed', 'wx.chooseContact 失败', e)),
+        })
+      }),
+    addCalendarEvent: (event) =>
+      new Promise((resolve, reject) => {
+        if (!wx.addPhoneCalendar) return reject(new CapError('calendar.unsupported', 'wx.addPhoneCalendar 缺失'))
+        wx.addPhoneCalendar({
+          title: event.title,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          alarms: event.alarms,
+          location: event.location,
+          description: event.description,
+          success: () => resolve(),
+          fail: (e) => reject(new CapError('calendar.failed', 'wx.addPhoneCalendar 失败', e)),
+        })
+      }),
+    getAppLifecycle: () => ({
+      phase: 'PENDING',
+      onLaunch: (cb) => {
+        cb()
+        return () => undefined
+      },
+      onShow: (cb) => {
+        wx.onAppShow?.(cb)
+        return () => undefined
+      },
+      onHide: (cb) => {
+        wx.onAppHide?.(cb)
+        return () => undefined
+      },
+    }),
+    compressFile: (options) =>
+      new Promise((resolve, reject) => {
+        if (!wx.compressFile) return reject(new CapError('archive.unsupported', 'wx.compressFile 缺失'))
+        wx.compressFile({
+          src: options.src,
+          dest: options.dest,
+          quality: options.quality,
+          success: () => resolve(),
+          fail: (e) => reject(new CapError('archive.failed', 'wx.compressFile 失败', e)),
+        })
+      }),
+    addShortcut: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.addToDesktop) return reject(new CapError('shortcut.unsupported', 'wx.addToDesktop 缺失'))
+        wx.addToDesktop({ success: () => resolve(), fail: (e) => reject(new CapError('shortcut.failed', 'wx.addToDesktop 失败', e)) })
+      }),
   }
 }
 
@@ -1103,6 +1277,64 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     },
     // C43 file-system：web 无标准同步 FS（OPFS 受限/需安全上下文）→ 内存降级（可读写，非持久）
     getFileSystem: () => memoryFileSystem(),
+    // ★G-32 B3 五期：web 实现（notification=Notification API / app-lifecycle=visibilitychange+load；contact/calendar/archive/shortcut 无标准 → 缺省降级 Err）
+    subscribeMessage: async (templateId) => {
+      const N = (g as { Notification?: NotificationConstructor }).Notification
+      if (typeof N !== 'function') throw new CapError('notification.unsupported', 'Notification API 不支持（需 HTTPS/现代浏览器）')
+      if (!N.requestPermission) throw new CapError('notification.unsupported', 'Notification.requestPermission 缺失')
+      const status = await N.requestPermission()
+      return { templateId, granted: status === 'granted', status }
+    },
+    getAppLifecycle: () => {
+      let phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE' = 'PENDING'
+      const launchCbs: Array<() => void> = []
+      const showCbs: Array<() => void> = []
+      const hideCbs: Array<() => void> = []
+      const gany = g as {
+        addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        document?: { visibilityState?: string }
+      }
+      const onVischange = () => {
+        const hidden = gany.document ? gany.document.visibilityState === 'hidden' : false
+        phase = hidden ? 'HIDE' : 'SHOW'
+        if (hidden) hideCbs.forEach((cb) => cb())
+        else showCbs.forEach((cb) => cb())
+      }
+      const onLoad = () => {
+        phase = 'SHOW'
+        launchCbs.forEach((cb) => cb())
+        showCbs.forEach((cb) => cb())
+      }
+      if (typeof gany.addEventListener === 'function') {
+        gany.addEventListener('visibilitychange', onVischange)
+        gany.addEventListener('load', onLoad)
+      }
+      return {
+        phase,
+        onLaunch: (cb) => {
+          launchCbs.push(cb)
+          return () => {
+            const i = launchCbs.indexOf(cb)
+            if (i >= 0) launchCbs.splice(i, 1)
+          }
+        },
+        onShow: (cb) => {
+          showCbs.push(cb)
+          return () => {
+            const i = showCbs.indexOf(cb)
+            if (i >= 0) showCbs.splice(i, 1)
+          }
+        },
+        onHide: (cb) => {
+          hideCbs.push(cb)
+          return () => {
+            const i = hideCbs.indexOf(cb)
+            if (i >= 0) hideCbs.splice(i, 1)
+          }
+        },
+      }
+    },
   }
 }
 
@@ -1178,6 +1410,19 @@ export interface CapabilityHooks {
   useLog(): Logger
   /** C43 useFileSystem：文件系统句柄（wx.getFileSystemManager / web 内存降级） */
   useFileSystem(): FSAdapter
+  // ★G-32 B3 五期：新增能力 Hook
+  /** C17 useNotification：消息订阅授权（wx.requestSubscribeMessage / web Notification） */
+  useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
+  /** C19 useContact：联系人选择（wx.chooseContact；web 无标准 → Err 降级） */
+  useContact(): Promise<CapResult<Contact[]>>
+  /** C20 useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err） */
+  useCalendar(event: CalendarEvent): Promise<CapResult<void>>
+  /** C23 useAppLifecycle：应用生命周期订阅句柄（wx App 钩子 / web visibilitychange+load） */
+  useAppLifecycle(): AppLifecycle
+  /** C44 useArchive：压缩文件（wx.compressFile；web → Err） */
+  useArchive(options: ArchiveOptions): Promise<CapResult<void>>
+  /** C45 useShortcut：添加桌面快捷方式（wx.addToDesktop；web → Err） */
+  useShortcut(): Promise<CapResult<void>>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -1394,6 +1639,46 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         exists: (path) => wrap(fs.exists(path)),
       }
     },
+    // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut（缺桥 → Err 非抛异常）
+    useNotification: (templateId) =>
+      wrap(
+        (() => {
+          if (!bridge.subscribeMessage) return Promise.reject(new CapError('notification.unsupported', '桥未提供 subscribeMessage（useNotification 不可用）'))
+          return bridge.subscribeMessage(templateId)
+        })(),
+      ),
+    useContact: () =>
+      wrap(
+        (() => {
+          if (!bridge.chooseContact) return Promise.reject(new CapError('contact.unsupported', '桥未提供 chooseContact（useContact 不可用）'))
+          return bridge.chooseContact()
+        })(),
+      ),
+    useCalendar: (event) =>
+      wrap(
+        (() => {
+          if (!bridge.addCalendarEvent) return Promise.reject(new CapError('calendar.unsupported', '桥未提供 addCalendarEvent（useCalendar 不可用）'))
+          return bridge.addCalendarEvent(event)
+        })(),
+      ),
+    useAppLifecycle: () => {
+      if (!bridge.getAppLifecycle) throw new CapError('app-lifecycle.unsupported', '桥未提供 getAppLifecycle（useAppLifecycle 不可用）')
+      return bridge.getAppLifecycle()
+    },
+    useArchive: (options) =>
+      wrap(
+        (() => {
+          if (!bridge.compressFile) return Promise.reject(new CapError('archive.unsupported', '桥未提供 compressFile（useArchive 不可用）'))
+          return bridge.compressFile(options)
+        })(),
+      ),
+    useShortcut: () =>
+      wrap(
+        (() => {
+          if (!bridge.addShortcut) return Promise.reject(new CapError('shortcut.unsupported', '桥未提供 addShortcut（useShortcut 不可用）'))
+          return bridge.addShortcut()
+        })(),
+      ),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -1422,6 +1707,12 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       analytics: bridge.track !== undefined,
       log: bridge.log !== undefined,
       fileSystem: bridge.getFileSystem !== undefined,
+      notification: bridge.subscribeMessage !== undefined,
+      contact: bridge.chooseContact !== undefined,
+      calendar: bridge.addCalendarEvent !== undefined,
+      appLifecycle: bridge.getAppLifecycle !== undefined,
+      archive: bridge.compressFile !== undefined,
+      shortcut: bridge.addShortcut !== undefined,
     }),
   }
 }

@@ -45,4 +45,9 @@ export type {
   Logger,
   FileSystemBridge,
   FSAdapter,
+  MessageSubscription,
+  Contact,
+  CalendarEvent,
+  AppLifecycle,
+  ArchiveOptions,
 } from './capability'
