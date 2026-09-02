@@ -35,8 +35,11 @@
 - 映射 UISplitViewController 三列模式 —— **✅ 语义层（computeSplitLayout columns 即 primary/supplementary/secondary；原生控件映射后续 App Renderer 批次）**
 
 ### B4：生命周期 + 设备能力
-- p-state-restoration / p-network-status
-- p-camera / p-bluetooth（按需）
+- p-state-restoration / p-network-status —— **✅ 落地（决策 #339）：`@proteus-vue/desktop` 扩展生命周期家族四件套纯逻辑（01 §8）**
+  - lifecycle.ts（phaseOf + createLifecycleTracker：visibilitychange/focus → 前后台相位——UIApplicationDelegate/onPause 语义）/ state-restoration.ts（buildRestoreToken 可序列化白名单 + filterRestorable 敏感过滤 + captureState/restoreState/clear 注入 storage——UIStateRestoration/SavedStateHandle 语义）/ network.ts（detectNetwork online+kind（wifi/ethernet/cellular/none/unknown）+effectiveType 归一 + createNetworkTracker 订阅——NWPathMonitor/ConnectivityManager）/ low-power.ts（detectLowPower ≤20% 未充电 + createLowPowerTracker chargingchange——NSProcessInfo lowPowerMode/BatteryManager；无 Battery API → supported:false 诚实降级）
+  - demo：semantic-primitives-demo ⑫ 生命周期/设备区块（页面相位实时 / 网络检测 / 电量检测降级展示 / 状态捕获恢复）；tests/desktop-b4.test.ts 9 用例
+- p-camera / p-bluetooth（按需）——**✅ 由 @proteus-vue/api capability hooks 承接（#318/#323 双桥：useCamera/useBluetooth/useNFC/useSensor/useFileSystem）——G-24 §9 Device 家族不重复建设（原则 #10.8 + 防重复）**
+- **★G-24 家族 B1-B4 全落地（决策 #329/#337/#338/#339）**：`@proteus-vue/desktop` 17 模块（桌面交互 4 + 系统集成 4 + 导航 4 + 生命周期 4 + v-p-permission 门禁）
 
 ## 性能与验收
 

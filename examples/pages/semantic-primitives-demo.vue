@@ -275,6 +275,28 @@
         <p-text class="val">{{ demoState2 || '—' }}</p-text>
       </div>
     </section>
+
+    <section class="block">
+      <p-heading :level="2">⑫ 生命周期/设备（G-24 B4：p-lifecycle / p-state-restoration / p-network-status / p-low-power）</p-heading>
+      <p-divider :inset="8" />
+      <p-text class="hint-text">p-lifecycle：页面相位 = {{ lifePhase }}（切换标签页/窗口实时更新）</p-text>
+      <div class="row">
+        <p-text class="label">p-network-status：</p-text>
+        <p-button size="small" @click="onNetCheck">检测网络</p-button>
+        <p-text class="val">{{ netOut }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-low-power：</p-text>
+        <p-button size="small" @click="onPowerCheck">检测电量</p-button>
+        <p-text class="val">{{ powerOut }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-state-restoration（刷新恢复）：</p-text>
+        <p-button size="small" @click="onCaptureState">捕获当前状态</p-button>
+        <p-button size="small" @click="onRestoreState">恢复</p-button>
+        <p-text class="val">{{ restoreOut }}</p-text>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -328,6 +350,11 @@ import {
   filterCommands,
   moveCommandIndex,
   deriveBreadcrumb,
+  createLifecycleTracker,
+  detectNetwork,
+  detectLowPower,
+  captureState,
+  restoreState,
 } from '@proteus-vue/desktop'
 
 const manifest = buildPermissionManifest(['notification', 'camera']).map((m) => m.semantic).join('、')
@@ -443,6 +470,37 @@ function onBreadcrumb(): void {
 }
 
 refreshSplit()
+// —— G-24 B4 生命周期/设备（p-lifecycle / p-state-restoration / p-network-status / p-low-power——纯逻辑驱动） ——
+const lifePhase = ref('foreground')
+let lifeTracker: { destroy(): void } | null = null
+if (typeof document !== 'undefined') {
+  lifeTracker = createLifecycleTracker({
+    onPhase: (p: string) => {
+      lifePhase.value = p
+    },
+  })
+}
+const netOut = ref('—')
+function onNetCheck(): void {
+  const i = detectNetwork()
+  netOut.value = `online=${i.online} · kind=${i.kind}${i.effectiveType ? ` · ${i.effectiveType}` : ''}`
+}
+const powerOut = ref('—')
+async function onPowerCheck(): Promise<void> {
+  const p = await detectLowPower()
+  powerOut.value = p.supported ? `lowPower=${p.lowPower} · charging=${p.charging} · ${Math.round(p.level * 100)}%` : 'Battery API 不可用（supported:false——诚实降级）'
+}
+const restoreOut = ref('—')
+function onCaptureState(): void {
+  const token = captureState('demo', 'view', { path: typeof location !== 'undefined' ? location.pathname : '', ts: Date.now() })
+  restoreOut.value = `已捕获（token：${token.slice(0, 28)}…）`
+}
+function onRestoreState(): void {
+  const s = restoreState<{ path?: string; ts?: number }>('demo', 'view')
+  restoreOut.value = s ? `恢复：path=${s.path ?? ''}·ts=${s.ts ?? ''}` : '无恢复态（未捕获或非浏览器环境）'
+}
+void lifeTracker
+
 const demoTabs = ref<Array<{ id: string; label: string; closable?: boolean }>>([
   { id: 't0', label: '首页', closable: false },
   { id: 't1', label: '用户管理' },

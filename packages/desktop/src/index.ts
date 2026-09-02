@@ -36,6 +36,17 @@ export { filterCommands, moveCommandIndex } from './command'
 export type { CommandItem, CommandFilterResult } from './command'
 export { deriveBreadcrumb, crumbLabel } from './breadcrumb'
 export type { Crumb } from './breadcrumb'
+// ★G-24 B4（proteus-semantic-primitives-plan 01 §8 Lifecycle + 06 B4）：生命周期/设备家族四件套
+//   p-lifecycle（前后台）/ p-state-restoration（UIStateRestoration 语义）/ p-network-status（NWPathMonitor）/ p-low-power（低电量）
+//   ★§9 Device（camera/bluetooth/nfc/sensor/file-system）由 @proteus-vue/api capability hooks 承接（#318/#323 双桥）——防重复不建 desktop 模块
+export { createLifecycleTracker, phaseOf } from './lifecycle'
+export type { AppPhase, LifecycleEnv, LifecycleTracker } from './lifecycle'
+export { buildRestoreToken, filterRestorable, captureState, restoreState, clearRestoreState, restoreKey } from './state-restoration'
+export type { RestoreStorage } from './state-restoration'
+export { detectNetwork, createNetworkTracker } from './network'
+export type { NetworkInfo, NetworkKind, NetworkEnv, NetworkTracker } from './network'
+export { detectLowPower, createLowPowerTracker } from './low-power'
+export type { PowerInfo, BatteryLike, PowerEnv, LowPowerTracker } from './low-power'
 export {
   createDesktopDirectives,
   createHoverDirective,
