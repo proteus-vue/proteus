@@ -341,6 +341,118 @@ export interface KeyboardLifecycle {
   onChange(cb: (info: KeyboardInfo) => void): () => void
 }
 
+// —— G-32 B3 七期/八期：剩余能力类型（C4 地图 / C22 SMS / C25 后台 / C28 SocketTask / C31 数据通道 / C32 Cookie / C39 人脸 / C46 内购 / C47 小程序 / C48 宿主嵌入 / C49 直播 / C50 扩展） ——
+
+/** C4 地图区域（wx.createMapContext 语义） */
+export interface MapRegion {
+  latitude: number
+  longitude: number
+  scale?: number
+}
+
+/** C4 地图上下文桥（wx MapContext / web 宿主集成） */
+export interface MapContextBridge {
+  getRegion(): Promise<MapRegion>
+  moveTo(latitude: number, longitude: number, scale?: number): Promise<void>
+}
+
+/** C4 useMap 句柄（控制器方法返回 Result<T>——G-32.4） */
+export interface MapController {
+  getRegion(): Promise<CapResult<MapRegion>>
+  moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>
+}
+
+/** C25 后台事件（wx onAppHide/onAppShow / web visibilitychange） */
+export interface BackgroundEvent {
+  type: 'enter-background' | 'enter-foreground'
+  time: number
+}
+
+/** C25 useBackground 句柄（后台/前台切换订阅） */
+export interface BackgroundAPI {
+  onEvent(cb: (e: BackgroundEvent) => void): () => void
+}
+
+/** C28 底层 SocketTask（wx.SocketTask 语义——send/close/onMessage 低层句柄；与 C27 上层连接互补） */
+export interface SocketTaskBridge {
+  send(data: string): Promise<void>
+  close(code?: number, reason?: string): Promise<void>
+  onMessage(cb: (data: string) => void): () => void
+  isConnected(): boolean
+}
+
+/** C28 useSocketTask 句柄（Hook 层——方法包 CapResult，G-32.4） */
+export interface SocketTaskHandle {
+  send(data: string): Promise<CapResult<void>>
+  close(code?: number, reason?: string): Promise<CapResult<void>>
+  onMessage(cb: (data: string) => void): () => void
+  isConnected(): boolean
+}
+
+/** C31 数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级） */
+export interface DataChannelOptions {
+  channelId: string
+}
+
+export interface DataChannelBridge {
+  send(data: string): Promise<void>
+  onMessage(cb: (data: string) => void): () => void
+}
+
+export interface DataChannelHandle {
+  send(data: string): Promise<CapResult<void>>
+  onMessage(cb: (data: string) => void): () => void
+}
+
+/** C32 Cookie 罐（web document.cookie / wx storage 兜底） */
+export interface CookieJar {
+  get(name: string): string | undefined
+  set(name: string, value: string, maxAge?: number): void
+  remove(name: string): void
+  list(): Record<string, string>
+}
+
+/** C46 内购回执（wx 无公开 IAP API——宿主桥接；web 无标准 → Err） */
+export interface IAPReceipt {
+  productId: string
+  transactionId?: string
+  state: 'purchased' | 'restored'
+}
+
+/** C47 小程序跳转（wx.navigateToMiniProgram） */
+export interface MiniProgramNavOptions {
+  appId: string
+  path?: string
+  extraData?: Record<string, unknown>
+}
+
+export interface MiniProgramAPI {
+  navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
+}
+
+/** C48 被宿主嵌入（HostContext——宿主桥注入；缺省 Err 诚实降级） */
+export interface HostContext {
+  provider: string
+  version?: string
+  capabilities?: string[]
+}
+
+/** C49 直播房间（wx live 组件形态/宿主桥——缺省 Err） */
+export interface LiveRoomOptions {
+  roomId: string
+  mode?: 'video' | 'audio'
+}
+
+export interface LiveRoomBridge {
+  leave(): Promise<void>
+  status(): 'joined' | 'left'
+}
+
+export interface LiveRoomHandle {
+  leave(): Promise<CapResult<void>>
+  status(): 'joined' | 'left'
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -426,6 +538,32 @@ export interface CapabilityBridge {
   getMicrophone?(): Promise<MediaAccess>
   /** C14 键盘生命周期（wx.onKeyboardHeightChange / web visualViewport） */
   getKeyboard?(): KeyboardLifecycle
+  // ★G-32 B3 七期：剩余能力（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')——G-32.3 降级语义）
+  /** C4 地图上下文（wx.createMapContext / web 宿主集成；无 → Err） */
+  createMap?(id: string): MapContextBridge
+  /** C22 短信（wx 受限无开放 API / web 无标准 → 缺省 Err） */
+  sendSMS?(phone: string, message: string): Promise<void>
+  /** C25 后台生命周期（wx onAppHide/onAppShow / web visibilitychange） */
+  getBackground?(): BackgroundAPI
+  /** C28 底层 SocketTask（wx.connectSocket → SocketTask / web WebSocket） */
+  createSocketTask?(url: string): SocketTaskBridge
+  /** C32 Cookie 罐（web document.cookie / wx storage 兜底） */
+  getCookieJar?(): CookieJar
+  /** C39 人脸识别认证（wx startSoterAuthentication facial / web WebAuthn） */
+  authenticateFaceID?(prompt?: string): Promise<boolean>
+  /** C46 内购（wx/无公开 API / web 无标准 → 缺省 Err） */
+  requestIAP?(productId: string): Promise<IAPReceipt>
+  /** C47 跳小程序（wx.navigateToMiniProgram） */
+  navigateMiniProgram?(options: MiniProgramNavOptions): Promise<void>
+  // ★G-32 B3 八期：平台私有/宿主桥（缺省 undefined → Err 诚实降级）
+  /** C31 数据通道（直播/实时——宿主桥接） */
+  openDataChannel?(options: DataChannelOptions): DataChannelBridge
+  /** C48 宿主上下文（被嵌入场景——宿主注入） */
+  getHostContext?(): HostContext
+  /** C49 直播房间（wx live 组件形态/宿主桥） */
+  joinLiveRoom?(options: LiveRoomOptions): LiveRoomBridge
+  /** C50 扩展/插件（G-21 扩展点——宿主 loadPlugin 桥） */
+  loadExtension?(extensionId: string): Promise<unknown>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -492,6 +630,19 @@ export interface CapabilityProbe {
   camera: boolean
   microphone: boolean
   keyboard: boolean
+  /** ★G-32 B3 七期/八期 */
+  map: boolean
+  sms: boolean
+  background: boolean
+  socketTask: boolean
+  dataChannel: boolean
+  cookie: boolean
+  faceId: boolean
+  inAppPurchase: boolean
+  miniProgram: boolean
+  embedded: boolean
+  live: boolean
+  extension: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -566,7 +717,13 @@ interface WxLike {
   setScreenBrightness?: (opt: { value: number; fail?: () => void }) => void
   makePhoneCall?: (opt: { phoneNumber: string; success?: () => void; fail: () => void }) => void
   checkIsSupportFingerPrint?: (opt: { success: (r: { errMsg: string; isSupported: boolean }) => void; fail?: () => void }) => void
-  startSoterAuthentication?: (opt: { requestAuthModes: string[]; success: () => void; fail: () => void }) => void
+  startSoterAuthentication?: (opt: {
+    requestAuthModes: string[]
+    challenge?: string
+    authContent?: string
+    success: (r: { authResult?: unknown }) => void
+    fail?: ((e: unknown) => void) | (() => void)
+  }) => void
   requestPayment?: (opt: {
     timeStamp: string
     nonceStr: string
@@ -648,6 +805,24 @@ interface WxLike {
   onKeyboardHeightChange?: (cb: (r: { height: number }) => void) => void
   onPageShow?: (cb: () => void) => void
   onPageHide?: (cb: () => void) => void
+  // ★G-32 B3 七期：新增 wx 能力（地图 / 人脸 / 跳小程序）
+  createMapContext?: (id: string) => WxMapContextLike
+  navigateToMiniProgram?: (opt: {
+    appId: string
+    path?: string
+    extraData?: Record<string, unknown>
+    success?: () => void
+    fail?: (e: unknown) => void
+  }) => void
+}
+
+/** wx MapContext（wx.createMapContext 返回——C4 子集） */
+interface WxMapContextLike {
+  getRegion?: (opt: {
+    success: (r: { latitude: number; longitude: number; scale?: number; latitudeSpan?: number; longitudeSpan?: number }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  moveTo?: (opt: { latitude: number; longitude: number; scale?: number; success?: () => void; fail?: (e: unknown) => void }) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -1138,6 +1313,120 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         },
       }
     },
+    // ★G-32 B3 七期：wx 桥新增能力（map / background / socket-task / cookie / face-id / mini-program；
+    //   sms / iap / data-channel / embedded / live / extension 无 wx 开放 API → 缺省 undefined → Hook Err 诚实降级）
+    createMap: (id) => {
+      if (typeof wx.createMapContext !== 'function') throw new CapError('map.unsupported', 'wx.createMapContext 缺失')
+      const ctx = wx.createMapContext(id)
+      return {
+        getRegion: () =>
+          new Promise((resolve, reject) => {
+            if (!ctx.getRegion) return reject(new CapError('map.unsupported', 'MapContext.getRegion 缺失'))
+            ctx.getRegion({
+              success: (r) => resolve({ latitude: r.latitude, longitude: r.longitude, scale: r.scale }),
+              fail: (e) => reject(new CapError('map.failed', 'wx 地图区域获取失败', e)),
+            })
+          }),
+        moveTo: (latitude, longitude, scale) =>
+          new Promise((resolve, reject) => {
+            if (!ctx.moveTo) return reject(new CapError('map.unsupported', 'MapContext.moveTo 缺失'))
+            ctx.moveTo({ latitude, longitude, scale, success: () => resolve(), fail: (e) => reject(new CapError('map.failed', 'wx 地图移动失败', e)) })
+          }),
+      }
+    },
+    getBackground: () => {
+      const cbs: Array<(e: BackgroundEvent) => void> = []
+      const emit = (type: BackgroundEvent['type']) => cbs.forEach((cb) => cb({ type, time: Date.now() }))
+      if (typeof wx.onAppHide === 'function') wx.onAppHide(() => emit('enter-background'))
+      if (typeof wx.onAppShow === 'function') wx.onAppShow(() => emit('enter-foreground'))
+      return {
+        onEvent: (cb) => {
+          cbs.push(cb)
+          return () => {
+            const i = cbs.indexOf(cb)
+            if (i >= 0) cbs.splice(i, 1)
+          }
+        },
+      }
+    },
+    createSocketTask: (url) => {
+      if (typeof wx.connectSocket !== 'function') throw new CapError('socket-task.unsupported', 'wx.connectSocket 缺失')
+      const task = wx.connectSocket({ url })
+      let connected = false
+      if (task && typeof task.onOpen === 'function') task.onOpen(() => (connected = true))
+      const messageCbs: Array<(data: string) => void> = []
+      if (task && typeof task.onMessage === 'function') {
+        task.onMessage((r) => {
+          const data = typeof r.data === 'string' ? r.data : ''
+          messageCbs.forEach((cb) => cb(data))
+        })
+      }
+      return {
+        send: (data) =>
+          new Promise<void>((resolve, reject) => {
+            if (!task || typeof task.send !== 'function') return reject(new CapError('socket-task.unsupported', 'SocketTask.send 缺失'))
+            task.send({ data })
+            resolve()
+          }),
+        close: (code, reason) =>
+          new Promise<void>((resolve, reject) => {
+            if (!task || typeof task.close !== 'function') return reject(new CapError('socket-task.unsupported', 'SocketTask.close 缺失'))
+            task.close({ code, reason })
+            resolve()
+          }),
+        onMessage: (cb) => {
+          messageCbs.push(cb)
+          return () => {
+            const i = messageCbs.indexOf(cb)
+            if (i >= 0) messageCbs.splice(i, 1)
+          }
+        },
+        isConnected: () => connected,
+      }
+    },
+    getCookieJar: () => {
+      const store = wxStorage(wx)
+      const COOKIE_KEY = '__proteus_cookies'
+      const load = (): Record<string, string> => {
+        const raw = store.get<Record<string, string>>(COOKIE_KEY)
+        return raw !== undefined ? raw : {}
+      }
+      return {
+        get: (name) => load()[name],
+        set: (name, value) => {
+          const all = load()
+          all[name] = value
+          store.set(COOKIE_KEY, all)
+        },
+        remove: (name) => {
+          const all = load()
+          delete all[name]
+          store.set(COOKIE_KEY, all)
+        },
+        list: () => load(),
+      }
+    },
+    authenticateFaceID: (prompt) =>
+      new Promise((resolve, reject) => {
+        if (typeof wx.startSoterAuthentication !== 'function') return reject(new CapError('face-id.unsupported', 'wx.startSoterAuthentication 缺失'))
+        wx.startSoterAuthentication({
+          requestAuthModes: ['facial'],
+          authContent: prompt,
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        })
+      }),
+    navigateMiniProgram: (options) =>
+      new Promise((resolve, reject) => {
+        if (typeof wx.navigateToMiniProgram !== 'function') return reject(new CapError('mini-program.unsupported', 'wx.navigateToMiniProgram 缺失'))
+        wx.navigateToMiniProgram({
+          appId: options.appId,
+          path: options.path,
+          extraData: options.extraData,
+          success: () => resolve(),
+          fail: (e) => reject(new CapError('mini-program.failed', 'wx 跳小程序失败', e)),
+        })
+      }),
   }
 }
 
@@ -1607,6 +1896,114 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         },
       }
     },
+    // ★G-32 B3 七期：web 桥新增能力（background=visibilitychange / socket-task=WebSocket / cookie=document.cookie /
+    //   face-id=WebAuthn；map / sms / iap / mini-program / data-channel / embedded / live / extension 无 web 标准 →
+    //   缺省 undefined → Hook Err 诚实降级）
+    getBackground: () => {
+      const cbs: Array<(e: BackgroundEvent) => void> = []
+      const doc = (g as { document?: { hidden?: boolean; addEventListener?: (t: string, cb: () => void) => void } }).document
+      if (doc && typeof doc.addEventListener === 'function') {
+        doc.addEventListener('visibilitychange', () => {
+          cbs.forEach((cb) => cb({ type: doc.hidden ? 'enter-background' : 'enter-foreground', time: Date.now() }))
+        })
+      }
+      return {
+        onEvent: (cb) => {
+          cbs.push(cb)
+          return () => {
+            const i = cbs.indexOf(cb)
+            if (i >= 0) cbs.splice(i, 1)
+          }
+        },
+      }
+    },
+    createSocketTask: (url) => {
+      const WS = (g as { WebSocket?: new (u: string) => unknown }).WebSocket
+      if (typeof WS !== 'function') throw new CapError('socket-task.unsupported', 'WebSocket 不支持')
+      const ws = new WS(url) as {
+        send?: (d: string) => void
+        close?: (code?: number, reason?: string) => void
+        addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+      }
+      let connected = false
+      const messageCbs: Array<(data: string) => void> = []
+      ws.addEventListener?.('open', () => (connected = true))
+      ws.addEventListener?.('message', (e) => {
+        const payload = e ? (e as { data?: unknown }).data : ''
+        const data = typeof payload === 'string' ? payload : ''
+        messageCbs.forEach((cb) => cb(data))
+      })
+      return {
+        send: (data) =>
+          new Promise<void>((resolve, reject) => {
+            if (!ws.send) return reject(new CapError('socket-task.unsupported', 'WebSocket.send 缺失'))
+            ws.send(data)
+            resolve()
+          }),
+        close: (code, reason) =>
+          new Promise<void>((resolve, reject) => {
+            if (!ws.close) return reject(new CapError('socket-task.unsupported', 'WebSocket.close 缺失'))
+            ws.close(code, reason)
+            resolve()
+          }),
+        onMessage: (cb) => {
+          messageCbs.push(cb)
+          return () => {
+            const i = messageCbs.indexOf(cb)
+            if (i >= 0) messageCbs.splice(i, 1)
+          }
+        },
+        isConnected: () => connected,
+      }
+    },
+    getCookieJar: () => {
+      const doc = (g as { document?: { cookie?: string } }).document
+      const readAll = (): Record<string, string> => {
+        const out: Record<string, string> = {}
+        if (doc && typeof doc.cookie === 'string') {
+          for (const part of doc.cookie.split(';')) {
+            const idx = part.indexOf('=')
+            if (idx > 0) {
+              const name = part.slice(0, idx).trim()
+              const value = part.slice(idx + 1).trim()
+              if (name) out[name] = decodeURIComponent(value)
+            }
+          }
+        }
+        return out
+      }
+      return {
+        get: (name) => readAll()[name],
+        set: (name, value, maxAge) => {
+          if (doc) doc.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}` + (maxAge !== undefined ? `; max-age=${maxAge}` : '') + '; path=/'
+        },
+        remove: (name) => {
+          if (doc) doc.cookie = `${encodeURIComponent(name)}=; max-age=0; path=/`
+        },
+        list: () => readAll(),
+      }
+    },
+    authenticateFaceID: async (prompt) => {
+      const cred = (g as { PublicKeyCredential?: unknown }).PublicKeyCredential
+      if (typeof cred !== 'function') return false
+      const creds = nav?.credentials
+      if (!creds || typeof creds.get !== 'function') return false
+      try {
+        await creds.get({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            rpId: typeof g.location === 'object' && g.location ? g.location.hostname || 'localhost' : 'localhost',
+            userVerification: 'required',
+            timeout: 60000,
+          },
+        })
+        return true
+      } catch {
+        void prompt
+        return false
+      }
+    },
   }
 }
 
@@ -1708,6 +2105,31 @@ export interface CapabilityHooks {
   useMicrophone(): Promise<CapResult<MediaAccess>>
   /** C14 useKeyboard：键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport） */
   useKeyboard(): KeyboardLifecycle
+  // ★G-32 B3 七期：剩余能力 Hook（C4 地图 / C22 短信 / C25 后台 / C28 SocketTask / C31 数据通道 / C32 Cookie / C39 人脸 / C46 内购 / C47 小程序 / C48 宿主嵌入 / C49 直播 / C50 扩展）
+  /** C4 useMap：地图上下文句柄（wx.createMapContext / web 宿主集成；无 → Err） */
+  useMap(id: string): Promise<CapResult<MapController>>
+  /** C22 useSMS：发送短信（wx 受限无开放 API / web 无标准 → Err） */
+  useSMS(phone: string, message: string): Promise<CapResult<void>>
+  /** C25 useBackground：后台/前台切换订阅（wx onAppHide/onAppShow / web visibilitychange） */
+  useBackground(): Promise<CapResult<BackgroundAPI>>
+  /** C28 useSocketTask：底层 SocketTask 句柄（wx.connectSocket→SocketTask / web WebSocket） */
+  useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
+  /** C31 useDataChannel：数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级） */
+  useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle>>
+  /** C32 useCookie：Cookie 罐（web document.cookie / wx storage 兜底） */
+  useCookie(): Promise<CapResult<CookieJar>>
+  /** C39 useFaceID：人脸识别认证（wx startSoterAuthentication facial / web WebAuthn） */
+  useFaceID(prompt?: string): Promise<CapResult<boolean>>
+  /** C46 useInAppPurchase：内购（wx/无公开 API → Err 诚实降级） */
+  useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
+  /** C47 useMiniProgram：跳小程序（wx.navigateToMiniProgram / web → Err） */
+  useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
+  /** C48 useEmbedded：宿主嵌入上下文（被嵌入场景——宿主桥；缺省 Err） */
+  useEmbedded(): Promise<CapResult<HostContext>>
+  /** C49 useLive：直播房间（wx live 组件形态/宿主桥——缺省 Err） */
+  useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
+  /** C50 useExtension：扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺省 Err） */
+  useExtension(extensionId: string): Promise<CapResult<unknown>>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -2001,6 +2423,117 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getKeyboard) throw new CapError('keyboard.unsupported', '桥未提供 getKeyboard（useKeyboard 不可用）')
       return bridge.getKeyboard()
     },
+    // ★G-32 B3 七期：剩余能力 Hook（缺桥 → Err('<cap>.unsupported') 非抛异常——G-32.3 降级语义；C4/C25/C28/C32/C47 有 wx/web 原生可接，其余诚实降级）
+    useMap: (id) =>
+      wrap(
+        (() => {
+          if (!bridge.createMap) return Promise.reject(new CapError('map.unsupported', '桥未提供 createMap（useMap 不可用）'))
+          const ctx = bridge.createMap(id)
+          const controller: MapController = {
+            getRegion: () => wrap(ctx.getRegion()),
+            moveTo: (latitude, longitude, scale) => wrap(ctx.moveTo(latitude, longitude, scale)),
+          }
+          return Promise.resolve(controller)
+        })(),
+      ),
+    useSMS: (phone, message) =>
+      wrap(
+        (() => {
+          if (!bridge.sendSMS) return Promise.reject(new CapError('sms.unsupported', '桥未提供 sendSMS（useSMS 不可用）'))
+          return bridge.sendSMS(phone, message)
+        })(),
+      ),
+    useBackground: () =>
+      wrap(
+        (() => {
+          if (!bridge.getBackground) return Promise.reject(new CapError('background.unsupported', '桥未提供 getBackground（useBackground 不可用）'))
+          return Promise.resolve(bridge.getBackground())
+        })(),
+      ),
+    useSocketTask: (url) =>
+      wrap(
+        (() => {
+          if (!bridge.createSocketTask) return Promise.reject(new CapError('socket-task.unsupported', '桥未提供 createSocketTask（useSocketTask 不可用）'))
+          const task = bridge.createSocketTask(url)
+          const handle: SocketTaskHandle = {
+            send: (data) => wrap(task.send(data)),
+            close: (code, reason) => wrap(task.close(code, reason)),
+            onMessage: (cb) => task.onMessage(cb),
+            isConnected: () => task.isConnected(),
+          }
+          return Promise.resolve(handle)
+        })(),
+      ),
+    useDataChannel: (options) =>
+      wrap(
+        (() => {
+          if (!bridge.openDataChannel) return Promise.reject(new CapError('data-channel.unsupported', '桥未提供 openDataChannel（useDataChannel 不可用）'))
+          const channel = bridge.openDataChannel(options)
+          const handle: DataChannelHandle = {
+            send: (data) => wrap(channel.send(data)),
+            onMessage: (cb) => channel.onMessage(cb),
+          }
+          return Promise.resolve(handle)
+        })(),
+      ),
+    useCookie: () =>
+      wrap(
+        (() => {
+          if (!bridge.getCookieJar) return Promise.reject(new CapError('cookie.unsupported', '桥未提供 getCookieJar（useCookie 不可用）'))
+          return Promise.resolve(bridge.getCookieJar())
+        })(),
+      ),
+    useFaceID: (prompt) =>
+      wrap(
+        (() => {
+          if (!bridge.authenticateFaceID) return Promise.reject(new CapError('face-id.unsupported', '桥未提供 authenticateFaceID（useFaceID 不可用）'))
+          return bridge.authenticateFaceID(prompt)
+        })(),
+      ),
+    useInAppPurchase: (productId) =>
+      wrap(
+        (() => {
+          if (!bridge.requestIAP) return Promise.reject(new CapError('in-app-purchase.unsupported', '桥未提供 requestIAP（useInAppPurchase 不可用）'))
+          return bridge.requestIAP(productId)
+        })(),
+      ),
+    useMiniProgram: () =>
+      wrap(
+        (() => {
+          if (!bridge.navigateMiniProgram) return Promise.reject(new CapError('mini-program.unsupported', '桥未提供 navigateMiniProgram（useMiniProgram 不可用）'))
+          const nav = bridge.navigateMiniProgram
+          const api: MiniProgramAPI = {
+            navigate: (options) => wrap(nav(options)),
+          }
+          return Promise.resolve(api)
+        })(),
+      ),
+    useEmbedded: () =>
+      wrap(
+        (() => {
+          if (!bridge.getHostContext) return Promise.reject(new CapError('embedded.unsupported', '桥未提供 getHostContext（useEmbedded 不可用）'))
+          return Promise.resolve(bridge.getHostContext())
+        })(),
+      ),
+    useLive: (options) =>
+      wrap(
+        (() => {
+          if (!bridge.joinLiveRoom) return Promise.reject(new CapError('live.unsupported', '桥未提供 joinLiveRoom（useLive 不可用）'))
+          const room = bridge.joinLiveRoom(options)
+          const handle: LiveRoomHandle = {
+            leave: () => wrap(room.leave()),
+            status: () => room.status(),
+          }
+          return Promise.resolve(handle)
+        })(),
+      ),
+    useExtension: (extensionId) =>
+      wrap(
+        (() => {
+          if (!bridge.loadExtension) return Promise.reject(new CapError('extension.unsupported', '桥未提供 loadExtension（useExtension 不可用）'))
+          return bridge.loadExtension(extensionId)
+        })(),
+      ),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -2041,6 +2574,18 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       camera: bridge.getCamera !== undefined,
       microphone: bridge.getMicrophone !== undefined,
       keyboard: bridge.getKeyboard !== undefined,
+      map: bridge.createMap !== undefined,
+      sms: bridge.sendSMS !== undefined,
+      background: bridge.getBackground !== undefined,
+      socketTask: bridge.createSocketTask !== undefined,
+      dataChannel: bridge.openDataChannel !== undefined,
+      cookie: bridge.getCookieJar !== undefined,
+      faceId: bridge.authenticateFaceID !== undefined,
+      inAppPurchase: bridge.requestIAP !== undefined,
+      miniProgram: bridge.navigateMiniProgram !== undefined,
+      embedded: bridge.getHostContext !== undefined,
+      live: bridge.joinLiveRoom !== undefined,
+      extension: bridge.loadExtension !== undefined,
     }),
   }
 }

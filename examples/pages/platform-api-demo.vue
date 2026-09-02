@@ -169,6 +169,20 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——map·sms·background·socket-task·data-channel·cookie·face-id·IAP·mini-program·embedded·live·extension）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-cookie" @click="onCapCookie">useCookie</button>
+        <button class="pad-btn" data-testid="pad-cap-bg" @click="onCapBg">useBackground</button>
+        <button class="pad-btn" data-testid="pad-cap-face" @click="onCapFace">useFaceID</button>
+        <button class="pad-btn" data-testid="pad-cap-map" @click="onCapMap">useMap</button>
+        <button class="pad-btn" data-testid="pad-cap-mp" @click="onCapMp">useMiniProgram</button>
+        <button class="pad-btn" data-testid="pad-cap-ext" @click="onCapExt">useExtension</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap7-log">{{ cap7Log }}</text>
+      <text class="pad-sub">Capability 50/50 收官——web 真实能力（cookie=document.cookie / background=visibilitychange / face-id=WebAuthn）+ wx 原生（map=createMapContext / mini-program=navigateToMiniProgram）+ 宿主桥（data-channel / embedded / live / extension）——web 无标准 → 诚实 Err 降级</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -649,6 +663,48 @@ async function onToolDefCap() {
   ])
   const contractErrors = validateCapabilityContract(cap.contract)
   toolLog.value = `defineCapability → probe=${available} · 降级链解析=${chosen}（degraded:${cap.isDegraded(chosen)}）· 合同校验=${contractErrors.length === 0 ? '✅' : contractErrors.join(';')}`
+}
+
+// ---------- ⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——web 真实 + wx 原生 + 宿主桥诚实降级） ----------
+const cap7Log = ref('点击按钮演示收官能力（Capability 50/50）')
+
+async function onCapCookie() {
+  const jar = await cap.useCookie()
+  if (!jar.ok) {
+    cap7Log.value = `useCookie → Err(${jar.error.code})`
+    return
+  }
+  jar.data.set('proteus-demo', 'v1', 3600)
+  const read = jar.data.get('proteus-demo')
+  const all = Object.keys(jar.data.list()).join(', ')
+  cap7Log.value = `useCookie → 写入 proteus-demo=v1 · 读回=${read} · 当前全部=${all}`
+}
+async function onCapBg() {
+  const bg = await cap.useBackground()
+  if (!bg.ok) {
+    cap7Log.value = `useBackground → Err(${bg.error.code})`
+    return
+  }
+  bg.data.onEvent((e) => {
+    cap7Log.value = `useBackground → ${e.type === 'enter-background' ? '切后台（enter-background）' : '回前台（enter-foreground）'} @${e.time}`
+  })
+  cap7Log.value = 'useBackground → 已订阅（切换标签页/窗口失焦即触发事件）'
+}
+async function onCapFace() {
+  const face = await cap.useFaceID('Proteus 验证')
+  cap7Log.value = face.ok ? `useFaceID → ${face.data ? '✅ 认证成功（WebAuthn）' : '认证未通过/取消'}` : `useFaceID → Err(${face.error.code})（需 HTTPS + WebAuthn）`
+}
+async function onCapMap() {
+  const map = await cap.useMap('demo-map')
+  cap7Log.value = map.ok ? 'useMap → 地图控制器可用（wx createMapContext 原生）' : `useMap → Err(${map.error.code})（web 无原生地图——宿主集成或 wx 端可用）`
+}
+async function onCapMp() {
+  const mp = await cap.useMiniProgram()
+  cap7Log.value = mp.ok ? 'useMiniProgram → 可跳转小程序（wx navigateToMiniProgram 原生）' : `useMiniProgram → Err(${mp.error.code})（web 无对等——wx 专属）`
+}
+async function onCapExt() {
+  const ext = await cap.useExtension('proteus-kit')
+  cap7Log.value = ext.ok ? `useExtension → ${JSON.stringify(ext.data)}（宿主 loadPlugin 桥）` : `useExtension → Err(${ext.error.code})（宿主 loadPlugin 桥未接）`
 }
 </script>
 

@@ -80,7 +80,21 @@ const { platform, system, version } = getDeviceInfo()
 | `useCamera()` | C1 | 摄像头访问（wx.authorize scope.camera / web getUserMedia） |
 | `useMicrophone()` | C2 | 麦克风访问（wx.authorize scope.record / web getUserMedia） |
 | `useKeyboard()` | C14 | 键盘生命周期句柄（info + onChange——wx.onKeyboardHeightChange / web visualViewport） |
+| `useMap(id)` | C4 | 地图控制器句柄（`getRegion/moveTo`——wx.createMapContext；web 无原生地图 → Err 宿主集成） |
+| `useSMS(phone, msg)` | C22 | 发送短信（wx/无开放 API → 诚实 Err） |
+| `useBackground()` | C25 | 后台/前台切换订阅（`onEvent`——wx onAppHide/onAppShow / web visibilitychange） |
+| `useSocketTask(url)` | C28 | 底层 SocketTask 句柄（`send/close/onMessage/isConnected`——wx.connectSocket→SocketTask / web WebSocket） |
+| `useDataChannel(opts)` | C31 | 数据通道（直播/实时——宿主桥；缺省 Err 诚实降级） |
+| `useCookie()` | C32 | Cookie 罐（`get/set/remove/list`——web document.cookie / wx storage 兜底） |
+| `useFaceID(prompt?)` | C39 | 人脸识别认证（wx startSoterAuthentication facial / web WebAuthn） |
+| `useInAppPurchase(id)` | C46 | 内购（wx/无公开 API → Err 诚实降级） |
+| `useMiniProgram()` | C47 | 跳小程序（`navigate`——wx.navigateToMiniProgram；web → Err） |
+| `useEmbedded()` | C48 | 宿主嵌入上下文（`HostContext`——宿主桥；缺省 Err） |
+| `useLive(opts)` | C49 | 直播房间（`leave/status`——wx live 组件形态/宿主桥；缺省 Err） |
+| `useExtension(id)` | C50 | 扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺省 Err） |
 | `probe()` | — | 能力可用性探测面（降级决策依据：缺失 → 对应 `Err('<cap>.unsupported')` 非抛异常） |
+
+**★G-32 B3 收官：Capability 50/50 全落地**（设备/硬件 15 + 系统 OS 10 + 通信数据 10 + 扩展 10 + 平台特有 4 + 组合 C33——web 真实能力/原生实现与诚实降级并存，G-32.3 降级语义贯穿）。
 
 ```ts
 import { createCapabilityHooks } from '@proteus-vue/api'
