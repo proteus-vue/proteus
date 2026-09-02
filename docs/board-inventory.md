@@ -51,6 +51,7 @@
 | `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
+| `proteus-component-semantics-plan` | **G-31** | 🟡 **B1 已落地** | ★**入口语义化**：组件/API 由 Proteus 语义 IR（C-IR）定义，非小程序组件集翻译——`@proteus-vue/component-ir`（C-IR schema + 属性约束校验 GRID_CONFLICT/CMP006 + semantic 映射）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向**（现有 proteus-* 模拟/wx.* 入口归 compat 层） |
 
 ### L2 核心引擎
 
@@ -128,7 +129,8 @@
 | 资产 | 位置 | 归属 |
 |------|------|------|
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
-| **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom） | **G-27 🟡 M1.4 B1/B2** |
+| **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native/flutter） | **G-27 🟡 M1.4 B1/B2/B4/B5** |
+| **G-31 C-IR 语义化** | `@proteus-vue/component-ir`（schema/validate/map） | **G-31 🟡 B1** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
 | fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
 | 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |
@@ -158,7 +160,8 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **待启（近期候选）**：M1.1 规约收口 → **M1.4 G-27 SPI 原型（VueDomBackend）** → G-24 B1 桌面原语 → p-drawer（G-22.5 B4 剩余）
+- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → **G-31 B2 布局原语对齐 C-IR**（p-* 已是 Layer 0 语义组件 ✓，补 semantic 字段）→ G-24 B1 桌面原语 → p-drawer（G-22.5 B4 剩余）
+- **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark
 

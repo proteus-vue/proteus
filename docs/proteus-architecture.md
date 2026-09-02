@@ -14,6 +14,7 @@
 ```
 
 - **原则 #0（统一语义收敛，methodology 根原则）**：Proteus 不做跨端翻译，定义与平台无关的语义内核；一切平台差异下沉为「后端实现细节」。同 shape 四投影：编译（G-29）/ UI（G-27）/ 能力（G-28）/ 端接入（G-30）。
+- **原则 #0 第五投影（G-31，开发者书写面）**：框架暴露给开发者的每一个组件与 API，必须先定义语义（Component IR / Hook 接口），再交由各端 Backend 实现；**禁止将任何既有平台的组件名、属性名、API 形态直接上升为框架标准**——小程序组件集（view/text/wx.xxx）降级为 Layer 1 兼容层（`@proteus/compat-miniprogram`），Proteus 语义组件（p-* + useNative/useFetch）是 Layer 0。
 - **五支柱**（详见 methodology §3）：① 语义优先于实现 ② 接口与实现彻底解耦 ③ 验证先于运行（编译期消灭不可能）④ 渐进式覆盖（80/18/1.9/0.1）⑤ 方法论可泛化。
 
 ---
@@ -66,6 +67,10 @@
 | G-30.1-4 | 单一 IR 约束 / Tier 判定 / conformance 强制 / 降级不越权 | universal-backend |
 | RND001 | 禁止业务直调后端专有 API；走 p-* 或 Backend SPI | render-backend |
 | RND002-005 | 后端须通过 conformance test / 能力声明真实 / 热切换可回滚 / 混合渲染走 Texture Sharing | render-backend |
+| **G-31.1** | **内置组件必须 p- 前缀 + 语义命名；禁止引入与小程序/HTML 组件同名的无语义组件（view/scroll-view/swiper 属兼容层）** | component-semantics |
+| **G-31.2** | **每个组件属性须声明 Tier 降级行为（CMP006 编译期拦截）** | component-semantics |
+| **G-31.3** | **Layer 0 所有 API 必须 Promise/Hook 化，禁止回调式/全局对象式（无 wx.xxx）** | component-semantics |
+| **G-31.4** | **新组件进 L1 前须 ≥3 端真实 Backend 通过 conformance test** | component-semantics |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -89,6 +94,7 @@
 | NAT | NAT 系列 | error | 原生能力须走 useNative() | native-backend |
 | AI | AI001-005 | error/warning | Agent 产物须过 `--strict-css` + FLD | ai-fluid-agent |
 | STS | STS 系列 | error | Style Safety 运行时约束 | style-safety |
+| CMP | CMP005-008 | error | 业务直调平台 SDK（005）/组件属性缺降级声明（006）/回调式 API 进 Layer 0（007）/L1 组件不足 3 端 conformance（008） | component-semantics |
 
 ---
 

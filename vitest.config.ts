@@ -50,6 +50,8 @@ export default defineConfig({
       { find: '@proteus-vue/fluid', replacement: fileURLToPath(new URL('./packages/fluid/src/index.ts', import.meta.url)) },
       // ★G-27（render-backend-1-plan M1.4）：@proteus-vue/render-backend 包（tests/render-backend.test.ts 直接引用）
       { find: '@proteus-vue/render-backend', replacement: fileURLToPath(new URL('./packages/render-backend/src/index.ts', import.meta.url)) },
+      // ★G-31（component-semantics-plan B1）：@proteus-vue/component-ir 包（tests/component-ir.test.ts 直接引用）
+      { find: '@proteus-vue/component-ir', replacement: fileURLToPath(new URL('./packages/component-ir/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },
