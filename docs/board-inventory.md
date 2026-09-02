@@ -52,7 +52,7 @@
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 | `proteus-component-semantics-plan` | **G-31** | 🟡 **B1-B5 已落地** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + toComponentIR + **全后端消费 semantic（proteus-* 语义类）+ B5 conformance 门禁**（6 后端 × 6 fixtures 渲染快照一致，18 语义覆盖 ≥3 端）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
-| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 首期 13 组件** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`：12+18+10+10+50+28）+ SEMANTIC_ENUM 18→53（gesture/shell/engineering 三新域）+ 渲染映射补到 26 implemented 语义 × 6 后端 + **`proteus audit coverage` 门禁**（G-32.1 小程序能力 100% + 闭环一致性 C1-C5）；**B2 首期 13 组件双端落地**（p-inline/spacer/divider/scroll/virtual-list/masonry + p-heading/icon/switch/slider + p-nav/tabbar/drawer）+ Playground 演示页（semantic-primitives-demo）；余下 17 组件 + ③ Shell/④ Gesture 待续 |
+| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 布局/UI 双端落地** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`）+ SEMANTIC_ENUM 18→53 + `proteus audit coverage` 门禁（G-32.1 100% + 闭环 C1-C5）；**B2 布局 12 + UI 18 双端全部落地（23 新组件 + 演示页，components:audit 51 组件全过）**；③ Shell 余 7 / ④ Gesture / ⑤ Capability / ⑥ Engineering 待续 |
 
 ### L2 核心引擎
 
@@ -106,7 +106,7 @@
 | `proteus-website-plan` | — | ⬜ | 官网（roadmap-2 附属 01-website-skeleton 已列执行项） |
 | `proteus-style-safety-plan` | G-21 | ✅ | FLD/CSS 三层防御 + 矩阵测试 |
 | `proteus-semantic-primitives-plan`（B1+ 落地产物） | G-24 | ⬜ | 桌面交互原语组件 |
-| `proteus-adaptive-container-plan`（组件层） | G-22.5 | ✅ B4 | p-modal 已落地；p-drawer/p-nav/p-detail 待续 |
+| `proteus-adaptive-container-plan`（组件层） | G-22.5 | ✅ B4 | p-modal 已落地；p-drawer/p-nav 已由 G-32 B2 shell 原语承接（p-detail 待续） |
 | `proteus-device-adaptation-plan`（组件层） | G-25 | ⬜ | 车机/TV/手表原语 |
 | `proteus-native-backend-1-plan`（官方后端） | G-28 | ⬜ | 官方原生后端实现 |
 | `proteus-render-backend-1-plan`（官方后端） | G-27 | ⬜ M1.4 | ★VueDomBackend 原型 → Flutter/Native/Skia/Headless |
@@ -162,7 +162,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → **G-31 B2 布局原语对齐 C-IR**（p-* 已是 Layer 0 语义组件 ✓，补 semantic 字段）→ G-24 B1 桌面原语 → p-drawer（G-22.5 B4 剩余）
+- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → **G-31 B2 布局原语对齐 C-IR**（p-* 已是 Layer 0 语义组件 ✓，补 semantic 字段）→ G-24 B1 桌面原语 → G-32 B2 续（Shell 7/Gesture/Capability/Engineering 组件）
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark

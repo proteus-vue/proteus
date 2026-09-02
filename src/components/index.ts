@@ -54,6 +54,18 @@ import PSlider from './p-slider/index.vue'
 import PNav from './p-nav/index.vue'
 import PTabbar from './p-tabbar/index.vue'
 import PDrawer from './p-drawer/index.vue'
+// ★G-32 B2 续：UI 视图原语（rich-text/avatar/media/canvas/svg）
+import PRichText from './p-rich-text/index.vue'
+import PAvatar from './p-avatar/index.vue'
+import PMedia from './p-media/index.vue'
+import PCanvas from './p-canvas/index.vue'
+import PSvg from './p-svg/index.vue'
+// ★G-32 B2 续：UI 表单原语（select/checkbox/radio/picker/form）
+import PSelect from './p-select/index.vue'
+import PCheckbox from './p-checkbox/index.vue'
+import PRadio from './p-radio/index.vue'
+import PPicker from './p-picker/index.vue'
+import PForm from './p-form/index.vue'
 
 export {
   VirtualList,
@@ -107,6 +119,18 @@ export {
   PNav,
   PTabbar,
   PDrawer,
+  // ★G-32 B2 续：UI 视图原语（rich-text/avatar/media/canvas/svg）
+  PRichText,
+  PAvatar,
+  PMedia,
+  PCanvas,
+  PSvg,
+  // ★G-32 B2 续：UI 表单原语（select/checkbox/radio/picker/form）
+  PSelect,
+  PCheckbox,
+  PRadio,
+  PPicker,
+  PForm,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

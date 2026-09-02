@@ -95,13 +95,65 @@
       </div>
       <div class="row">
         <p-text class="label">p-drawer（侧滑抽屉）：</p-text>
-        <p-button variant="primary" @click="drawerOpen = true">打开抽屉</p-button>
+        <p-button variant="primary" @click="openDrawer">打开抽屉</p-button>
         <p-drawer v-model="drawerOpen" side="left" :width="240">
           <div class="drawer-inner">
             <p-heading :level="3">抽屉内容</p-heading>
             <p-text>从左侧滑出，点击遮罩关闭。</p-text>
           </div>
         </p-drawer>
+      </div>
+    </section>
+
+    <section class="block">
+      <p-heading :level="2">④ 视图/表单原语（UI）</p-heading>
+      <p-divider :inset="8" />
+      <div class="row">
+        <p-text class="label">p-rich-text（富文本）：</p-text>
+        <p-rich-text source="<b>加粗</b> 与 <u>下划线</u> 富文本演示" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-avatar（头像）：</p-text>
+        <p-avatar shape="circle" :size="40" fallback="Proteus" />
+        <p-avatar shape="square" :size="40" fallback="P" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-canvas（画布）：</p-text>
+        <p-canvas :width="120" :height="60" :resolution="2" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-svg（矢量）：</p-text>
+        <p-svg :size="24" color="#07c160" path="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+        <p-svg :size="24" color="#576b95" path="M12 21C7.03 21 3 16.97 3 12C3 7.03 7.03 3 12 3C16.97 3 21 7.03 21 12C21 16.97 16.97 21 12 21Z" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-select（选择器）：</p-text>
+        <p-select v-model="selectVal" :options="selectOptions" placeholder="请选择城市" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-checkbox（多选）：</p-text>
+        <p-checkbox v-model="cbA">选项 A</p-checkbox>
+        <p-checkbox v-model="cbB">选项 B</p-checkbox>
+      </div>
+      <div class="row">
+        <p-text class="label">p-radio（单选）：</p-text>
+        <p-radio value="x" :group="radioVal" @update:group="onRadio('x')">方案 X</p-radio>
+        <p-radio value="y" :group="radioVal" @update:group="onRadio('y')">方案 Y</p-radio>
+      </div>
+      <div class="row">
+        <p-text class="label">p-picker（日期）：</p-text>
+        <p-picker mode="date" v-model="dateVal" :min="'2026-01-01'" :max="'2026-12-31'" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-form（表单）：</p-text>
+        <p-form :model="formModel" :rules="formRules" layout="vertical" @submit="onFormSubmit">
+          <template #default="{ errors }">
+            <p-input :value="formModel.name" placeholder="姓名" @input="onNameInput" />
+            <p-text v-if="errors.name" class="form-error">{{ errors.name }}</p-text>
+            <p-button variant="primary" @click="submitForm">提交</p-button>
+            <p-text v-if="formTip" class="form-tip">{{ formTip }}</p-text>
+          </template>
+        </p-form>
       </div>
     </section>
   </div>
@@ -125,12 +177,58 @@ import {
   PTabbar,
   PDrawer,
   PButton,
+  PRichText,
+  PAvatar,
+  PCanvas,
+  PSvg,
+  PSelect,
+  PCheckbox,
+  PRadio,
+  PPicker,
+  PForm,
+  PInput,
 } from '@proteus-vue/components'
 
 const switchOn = ref(false)
 const sliderVal = ref(40)
 const drawerOpen = ref(false)
 const tabActive = ref('home')
+const selectVal = ref('')
+const cbA = ref(false)
+const cbB = ref(true)
+const radioVal = ref('x')
+const dateVal = ref('2026-09-02')
+
+function openDrawer(): void {
+  drawerOpen.value = true
+}
+function onRadio(v: string): void {
+  radioVal.value = v
+}
+const formModel = ref({ name: '' })
+const formRules = {
+  name: checkName,
+}
+const formTip = ref('')
+
+// ★MP 安全：v-model 不支持点号路径（formModel.name）——用 :value + @input 方法更新
+function onNameInput(payload: { value: string }): void {
+  formModel.value.name = payload.value ?? ''
+}
+
+// ★MP 安全：校验器用 function 声明（对象字面量内箭头+类型标注+方法链会破坏 MP script 转换）
+function checkName(value: string): string | null {
+  if (!value || !value.trim()) return '姓名必填'
+  return null
+}
+
+function submitForm(): void {
+  formTip.value = '提交中…（校验在 p-form submit 统一触发）'
+}
+function onFormSubmit(payload: Record<string, unknown>): void {
+  const errs = (payload.errors as Record<string, string>) ?? {}
+  formTip.value = Object.keys(errs).length ? '校验失败：' + Object.keys(errs).join(',') : '提交成功：' + JSON.stringify(payload.model)
+}
 
 const heights = [60, 90, 48, 76, 110, 66, 84, 52]
 const virtualItems = Array.from({ length: 50 }, (_, i) => ({ title: '虚拟项 ' + (i + 1) }))
@@ -138,6 +236,12 @@ const tabs = [
   { key: 'home', label: '首页', icon: 'home' },
   { key: 'mine', label: '我的', icon: 'user' },
   { key: 'more', label: '更多', icon: 'more', badge: '3' },
+]
+const selectOptions = [
+  { value: 'beijing', label: '北京' },
+  { value: 'shanghai', label: '上海' },
+  { value: 'shenzhen', label: '深圳' },
+  { value: 'hangzhou', label: '杭州' },
 ]
 </script>
 
@@ -205,5 +309,14 @@ const tabs = [
 }
 .drawer-inner {
   padding: 16px;
+}
+.form-error {
+  color: #fa5151;
+  font-size: 12px;
+}
+.form-tip {
+  color: #07c160;
+  font-size: 12px;
+  margin-top: 4px;
 }
 </style>

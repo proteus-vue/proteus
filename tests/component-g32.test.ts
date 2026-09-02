@@ -11,8 +11,19 @@ import { TAG_SEMANTIC_MAP, toComponentIR, SEMANTIC_ENUM } from '@proteus-vue/com
 
 const COMPONENTS_DIR = path.resolve('src/components')
 
-/** G-32 B2 新落地组件（13 个——布局 6 + UI 4 + Shell 3） */
-const NEW_TAGS = ['p-inline', 'p-spacer', 'p-divider', 'p-scroll', 'p-virtual-list', 'p-masonry', 'p-heading', 'p-icon', 'p-switch', 'p-slider', 'p-nav', 'p-tabbar', 'p-drawer']
+/** G-32 B2 新落地组件（23 个——布局 6 + UI 4 + Shell 3 + UI 视图 5 + UI 表单 5） */
+const NEW_TAGS = [
+  // 布局（6）
+  'p-inline', 'p-spacer', 'p-divider', 'p-scroll', 'p-virtual-list', 'p-masonry',
+  // UI 基础（4）
+  'p-heading', 'p-icon', 'p-switch', 'p-slider',
+  // Shell（3）
+  'p-nav', 'p-tabbar', 'p-drawer',
+  // UI 视图（5）
+  'p-rich-text', 'p-avatar', 'p-media', 'p-canvas', 'p-svg',
+  // UI 表单（5）
+  'p-select', 'p-checkbox', 'p-radio', 'p-picker', 'p-form',
+]
 
 /** 各组件应映射到的 G-32 语义 */
 const TAG_TO_SEMANTIC: Record<string, string> = {
@@ -29,9 +40,19 @@ const TAG_TO_SEMANTIC: Record<string, string> = {
   'p-nav': 'shell.nav',
   'p-tabbar': 'shell.tabbar',
   'p-drawer': 'shell.drawer',
+  'p-rich-text': 'ui.rich-text',
+  'p-avatar': 'ui.avatar',
+  'p-media': 'ui.media',
+  'p-canvas': 'ui.canvas',
+  'p-svg': 'ui.svg',
+  'p-select': 'ui.select',
+  'p-checkbox': 'ui.checkbox',
+  'p-radio': 'ui.radio',
+  'p-picker': 'ui.picker',
+  'p-form': 'ui.form',
 }
 
-describe('G-32 B2 组件落地（13 新组件）', () => {
+describe('G-32 B2 组件落地（23 新组件：布局 6 + UI 基础 4 + Shell 3 + UI 视图 5 + UI 表单 5）', () => {
   it('组件目录齐全 + index.vue 存在 + 聚合导出注册（manifest 完备）', () => {
     for (const tag of NEW_TAGS) {
       expect(fs.existsSync(path.join(COMPONENTS_DIR, tag, 'index.vue')), `${tag}/index.vue 缺失`).toBe(true)
@@ -63,7 +84,7 @@ describe('G-32 B2 组件落地（13 新组件）', () => {
     }
   })
 
-  it('MP 编译：13 组件 compileVueSfc 全部产出（isComponent 模式）', () => {
+  it('MP 编译：23 组件 compileVueSfc 全部产出（isComponent 模式）', () => {
     for (const tag of NEW_TAGS) {
       const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
       const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
