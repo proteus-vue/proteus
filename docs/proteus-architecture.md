@@ -40,13 +40,17 @@
 | #10.9 | 断点模型覆盖全部输入形态（touch/cursor/remote/dial/voice） | device-adaptation W×H×F |
 | #11 | 核心能力实现为 Compiler Plugin（dogfooding） | compiler-plugin G-21 |
 | #12 | AI Agent 产物须通过编译期强制校验 | ai-fluid-agent AI001-005 |
-| #13 | 可插拔层可验证性：任何声称「可插拔」的层（渲染 G-37 / 编译 G-38 / 宿主运行时 G-39）须同时提供 SPI + Conformance + ≥2 参考实现（★避让：原稿 #11 与既有 #11 冲突，重编号） | render/compile/host-runtime-spi G-37/38/39 |
+| #13 | 可插拔层可验证性：任何声称「可插拔」的层（渲染 G-37 / 编译 G-38 / 宿主运行时 G-39 / 执行载体 G-40）须同时提供 SPI + Conformance + ≥2 参考实现（★避让：原稿 #11 与既有 #11 冲突，重编号） | render/compile/host-runtime/execution-carrier G-37/38/39/40 |
 | #13.5 | 编译器 IR 为中间表示：编译后端只消费 `SourceFile → ProgramIR → IRModule` 契约，不假设上游框架 | compiler-backend-spi G-38 |
 | #13.6 | 降级等价：Fallback 不改变语义 | compiler-backend-spi G-38 |
 | #13.7 | 确定性：可复现构建（同一 IR 任一后端产物行为一致） | compiler-backend-spi G-38 |
 | #13.8 | 宿主运行时为运行环境抽象，必须可替换（任何宿主实现 ProteusHostRuntime SPI 接入） | host-runtime-spi G-39 |
 | #13.9 | 线程安全由 Runtime 唯一保证（Backend/业务不得直接操作线程） | host-runtime-spi G-39 |
 | #13.10 | 生命周期状态机必须确定性（Runtime 统一定义 bootstrapping→running→suspended→destroyed） | host-runtime-spi G-39 |
+| #13.11 | 执行载体可插拔：不得绑定任何一种执行载体（JSI 只是默认实现而非架构绑定，业务须能在 JSI/AOT/WASM 间切换而无需修改） | execution-carrier G-40 |
+| #13.12 | 实时能力逃逸：实时能力（音频/高频传感器/游戏循环）必须在原生线程闭环运行，禁止由 JS 侧驱动循环 | execution-carrier G-40 |
+| #13.13 | 性能数据必须实测：对外宣称的任何性能数字必须来自实测基准；工程推算必须标注 `measured: false` 且禁止对外引用 | execution-carrier G-40 |
+| #13.14 | 零拷贝降级必须显式：不支持零拷贝时必须返回 `null` 显式降级，禁止静默返回拷贝对象（制造性能谎言） | execution-carrier G-40 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -104,6 +108,12 @@
 | **G-39.4** | **降级可观测：每次降级（后台→主线程/文件→内存/桥→Err）必须触发 `fallback` 事件 + 日志** | host-runtime-spi |
 | **G-39.5** | **原生桥白名单：仅预注册能力可调用 + 参数 schema 校验 + 超时可取消；Native→JS 回调必须切回 JS 线程** | host-runtime-spi |
 | **G-39.6** | **禁止循环依赖：L1 Framework → L4 Runtime 单向，禁止 L4 → L1 回边** | host-runtime-spi |
+| **G-40.1** | **执行载体无关：业务代码不得假设 JS 运行时存在（禁 window/globalThis/eval/jsi::Value 直操/Proxy 拦截，Compiler IR 层静态扫描命中即编译错误）** | execution-carrier |
+| **G-40.2** | **三路径语义等价：同一份源码 JSI / AOT / WASM 三条路径必须产出语义等价行为（G-38.2 的执行层延伸，conformance 验证）** | execution-carrier |
+| **G-40.3** | **实时能力禁止 JS 驱动：回调周期 <100ms 或吞吐 >1MB/s 的能力必须在原生线程闭环，JS 仅 configure/start/stop/onEvent；`rtJsDrivenViolations` 恒为 0** | execution-carrier |
+| **G-40.4** | **大块数据强制零拷贝：>4KB 数据跨界传输必须走 `ArrayBuffer` / `SharedArrayBuffer`，禁止走字符串通道（JSI 字符串转换默认拷贝）** | execution-carrier |
+| **G-40.5** | **RenderBackend 必须支持批处理：所有后端必须实现 `commitBatch(ops)`，框架默认走批处理路径，批内操作不得逐次跨界** | execution-carrier |
+| **G-40.6** | **载体可观测：载体必须暴露 `getMetrics()`；`rtJsDrivenViolations > 0` → CI 构建失败** | execution-carrier |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -132,6 +142,7 @@
 | CMP | CMP023-028 | error | SPI 接口最小化 ≤20 方法（023）/NodeHandle 不透明（024）/差分完整性（025）/资源释放（026）/手势 no-op 兜底（027）/首帧预算（028） | 🆕 render-backend-spi-plan（G-37） |
 | CMP | CMP029-034 | error | 接口完整性（029）/确定性 emit（030）/降级语义一致（031）/缓存键可移植（032）/诊断不抛异常（033）/源码位置保留（034） | 🆕 compiler-backend-spi-plan（G-38） |
 | CMP | CMP035-043 | error | 宿主不假设业务（035）/禁跳层访问（036）/禁循环依赖（037）/能力声明一致（038）/降级可观测（039）/生命周期确定性（040）/线程 postMessage 不共享（041）/资源清理（042）/性能基准强制（043） | 🆕 host-runtime-plan（G-39） |
+| CMP | CMP044-050 | error | 载体须声明 capabilities（044）/实时类能力注册须分类（045）/未实测数据禁止对外宣称（046）/零拷贝不得 slice（047）/不支持须返回 null 显式降级（048）/零拷贝降级须上报指标（049）/批处理不得逐次跨界（050） | 🆕 execution-carrier-plan（G-40） |
 
 ---
 

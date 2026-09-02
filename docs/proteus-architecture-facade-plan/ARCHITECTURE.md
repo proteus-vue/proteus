@@ -79,7 +79,7 @@ Compiler ──▶ Types ◀── CLI
 
 ---
 
-## 4. 全局执行序（G-01 ~ G-39）
+## 4. 全局执行序（G-01 ~ G-40）
 
 LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G，避免 B1-Bn 冲突。
 
@@ -120,12 +120,13 @@ LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G�
 | G-33 | 严格 CLI（编译管线 + dev server + strict 门禁） | L0 | cli-plus |
 | G-34 | HMR + DevTools 协议 + Style Safety 可视化 | L0 | devtools-plus |
 | G-35 | 应用全局配置（运行时配置 + 远端更新 + 五端存储） | L2 横切 | app-config |
-| G-36 | AI Agent 接入（MCP + Agent Kit + 4 Skill + Guardrails） | L3 能力 | ai-agent |
-| G-37 | RenderBackend SPI（G-27 执行契约 + Conformance 42） | L1 方法论 | render-backend-spi |
-| G-38 | CompilerBackend SPI（G-29 执行契约，与 G-37 同形） | L1 方法论 | compiler-backend-spi |
+| G-36 | AI Agent 接入（MCP Server + Agent Kit + 4 Skill + Guardrails） | L3 能力 | ai-agent |
+| G-37 | RenderBackend SPI 规范（G-27 执行契约 + Conformance 42 + 双参考实现） | L1 方法论 | render-backend-spi |
+| G-38 | CompilerBackend SPI 规范（G-29 执行契约，与 G-37 同形设计） | L1 方法论 | compiler-backend-spi |
 | G-39 | Host Runtime SPI（L0-L4 五层唯一拥有者 + Conformance 42） | L1 方法论 | host-runtime |
+| G-40 | Execution Carrier SPI（G-39 执行层：JSI/AOT 双载体 + 批处理差分 + 零拷贝 + 实时逃逸） | L1 方法论 | execution-carrier |
 
-**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-39）各按其依赖插入，不阻塞原始主链。
+**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-40）各按其依赖插入，不阻塞原始主链。
 **并行空间**：G-04 内三联可并行；G-09 两横切可并行；G-16/G-17 双端可并行；G-21/G-24/G-25/G-27 的 M1 纯逻辑批次可与 G-01 地基同期启动。
 
 ---

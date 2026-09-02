@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.6（website-v3 同批 SPI/Agent plan 抽离入库）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 4 份 SPI/Agent plan（G-36~G-39 追加）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.7（G-40 execution-carrier plan 追加）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 5 份 SPI/Agent plan（G-36~G-40 追加）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -154,6 +154,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-37** | render-backend-spi（G-27 RenderBackend SPI 规范：18 方法 + conformance 42 + 参考实现） | G-27、G-29、G-32 | 任何渲染后端实现 SPI + 过 conformance = 合规（G-27 可执行落地） |
 | **G-38** | compiler-backend-spi（G-29 CompilerBackend SPI 规范：parse/transform/emit + 增量 + conformance 42） | G-29、G-32 | 任何编译后端实现 SPI + 过 conformance = 合规（与 G-37 同形） |
 | **G-39** | host-runtime-spi（宿主运行时 SPI：生命周期/线程/JS 引擎/原生桥 + L0-L4 职责矩阵 + conformance 42） | G-27、G-28、G-29、G-30 | 运行载体唯一拥有者 + 跨层合法 + conformance 准入 |
+| **G-40** | execution-carrier（执行载体 SPI：JSICarrier/AOTCarrier 双参考实现 + 批处理差分 + 零拷贝通道 + 实时逃逸 + conformance） | G-39、G-37、G-38 | 执行载体可插拔（JSI 只是当前默认载体）+ JSI 边界治理 + 实时能力原生闭环 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -164,6 +165,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.5）**：app-config（应用全局配置，2026-08 新增 plan）并入本表 **G-35**。其声称的 G-20（= v1.0 全量回归 + 发布）撞号，**一律以本表为准**（app-config→G-35）；旧编号引用重指向：Theme/Font G-13/G-15→G-27、Memorial G-11→G-25、Style Safety G-16→G-31、Cache G-14→G-28、CLI G-18→G-33、DevTools G-19→G-34、Router G-17→G-32、Glass G-12→G-29。
 
 > **追加说明（v3.6）**：website-v3 同批四份新规划文档抽离入库，并入本表 **G-36 / G-37 / G-38 / G-39**（ai-agent / render-backend-spi / compiler-backend-spi / host-runtime-spi）。其原稿声称编号均与已实现 plan 撞号，**一律以本表为准**（ai-agent G-33→G-36、render-backend-spi G-34→G-37、compiler-backend-spi G-35→G-38、host-runtime G-36→G-39；旧编号引用 G-27/G-28/G-29/G-30/G-31/G-32 同前有效）。依赖关系：G-37 与既有 `@proteus-vue/render-backend`（G-27 已落地）互校；G-38 与 `@proteus-vue/compiler-backend`（G-29 B1）互校；G-39 与 `@proteus-vue/renderer-app`·`@proteus-vue/hmr`·platform/capabilities 互校。详见 PROJECT_MEMORY 决策 #312/#313/#314。
+
+> **追加说明（v3.7）**：execution-carrier（执行载体抽象 + JSI 边界治理，2026-09 新增 plan）并入本表 **G-40**，是 G-39 宿主运行时「执行层」的深化（方法论点：不绑定执行载体 = 原则 #0 的第五/六次投影，与 G-31/32 平台 API、G-27/37 渲染、G-29/38 编译、G-39 宿主运行时同族）。其原稿编号 G-37/G-36/G-35/G-34 与已入库 plan 撞号，**一律以本表为准**（原稿 G-37→G-40、G-36→G-39、G-35→G-38、G-34→G-27 系）。依赖关系：G-40 与 G-39（createEngine 执行载体插槽）/ G-38（emit 产物类型：JS bundle/bytecode/AOT 原生）互校。详见 PROJECT_MEMORY 决策 #340。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**

@@ -36,9 +36,9 @@
 
 | plan | 编号 | 状态 | 说明 / 下一动作 |
 |------|------|------|----------------|
-| `proteus-architecture-facade-plan` | 规约层（执行序 G 表 + CI 门禁） | ✅ v3.6 | **`00-architecture.md`（全局执行序 G-01~G-39 + 9 铁律 + 包注册表）/ `ARCHITECTURE.md`（一页全景）/ `01-optimization-log.md`（v3.0~v3.6 变更）三文件**——由 `scripts/check-consistency.js` 校验「三文件 G 表同集合且 G-01~G-N 连续」（CI 门禁 `consistency.yml`）；v3.6（决策 #315）追加 G-36~G-39 四 SPI/Agent 行；★新 plan 入仓必须同步本表（决策 #177/#315 纪律） |
+| `proteus-architecture-facade-plan` | 规约层（执行序 G 表 + CI 门禁） | ✅ v3.7 | **`00-architecture.md`（全局执行序 G-01~G-40 + 9 铁律 + 包注册表）/ `ARCHITECTURE.md`（一页全景）/ `01-optimization-log.md`（v3.0~v3.7 变更）三文件**——由 `scripts/check-consistency.js` 校验「三文件 G 表同集合且 G-01~G-N 连续」（CI 门禁 `consistency.yml`）；v3.6（决策 #315）追加 G-36~G-39 四 SPI/Agent 行；v3.7（决策 #340）追加 G-40 execution-carrier 行；★新 plan 入仓必须同步本表（决策 #177/#315 纪律） |
 | `proteus-methodology-plan` | 方法论提炼（统一语义收敛） | ✅ 已入库 | **哲学根文档**：核心公式「语义定义 + 后端实现」四维度投影（编译 G-29 / UI G-27 / 能力 G-28 / 端接入 G-30）+ 五支柱（语义优先/解耦/验证先于运行/渐进覆盖 80-18-1.9-0.1/可泛化）+ Tier 模型（R+C+J 三元组）+ 原则速查（★#1 与 positioning #10 同义）——onboarding 第一课 / 对外叙事根；§9 关系图已对齐实际目录 |
-| `docs/proteus-architecture.md`（规约） | 原则 #0-#13.10 + 铁律 + FLD/GLS/RND/NAT/PRIM/AI/CMP 规则 | ✅ **M1.1 已收口 + SPI 三系追加** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + #13.x 可插拔可验证 + 分层/能力/落地三类铁律 + 严格规则 + 分层双路线 + 来源更新规则——合并 architecture-update + 决策链；G-37/38/39 SPI 铁律与 CMP017-043 已并入） |
+| `docs/proteus-architecture.md`（规约） | 原则 #0-#13.14 + 铁律 + FLD/GLS/RND/NAT/PRIM/AI/CMP 规则 | ✅ **M1.1 已收口 + SPI 四系追加** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + #13.x 可插拔可验证（含 #13.11-13.14 执行载体子原则）+ 分层/能力/落地三类铁律 + 严格规则 + 分层双路线 + 来源更新规则——合并 architecture-update + 决策链；G-37/38/39/40 SPI 铁律与 CMP017-050 已并入） |
 
 ### L1 方法论（杠杆支点：语义收敛 + 后端实现）
 
@@ -66,6 +66,7 @@
 | `proteus-compiler-backend-1-plan` | **G-29** | 🟡 **B1+B2 已落地** | ★`@proteus-vue/compiler-backend` 包：CompilerIR 契约 + conformance（CMP002/CMP004 + ★G-31.1 语义链接）+ NodeBackend；**B2 RustBackend**：`packages/compiler-backend-rust`（cargo crate + @proteus-vue/compiler-backend-rust bin 壳）——proteus-cc-rust CLI → 同一 CompilerIR JSON（G-29.1 Node/Rust 语义等价 Golden，决策 #330）+ **examples/组件双端等价门禁 81 用例**（决策 #332）+ **编译器插拔消费点**（决策 #333：`config.compiler.backend: 'node'\|'rust'` + `proteus build --compiler rust` + vite 构建内双编译校验——**proteus.config 一个 flag 切后端（§5 最终形态最小闭环）**）；B3 WASM 待续 |
 | `proteus-compiler-backend-spi-plan` | **G-38** | 🟡 **B1 + B2 + B3 前置 全落地（Node 侧）** | ★**编译器的插头标准（与 G-37 RenderBackend SPI 同形设计）**：ProteusCompilerBackend SPI（parse/transform/emit 三阶段 + IncrementalSession 增量 + FallbackBackend 降级 + getCacheKey/getArtifactHash）+ Conformance 套件（42 测试 C-01~C-10）+ Node/Rust/WASM 实现指南 + `conformance-runner.js`（补 `--backend <spec>` 外部后端加载）+ verify.sh/pack.sh 自检；铁律 G-38.1-6 + CMP029-034；**B1 接口冻结 + B2 全落地（#334/#335）**：`g38.ts`（createG38NodeBackend 三阶段 16 方法真实现）+ `g38-fallback.ts`（createG38FallbackBackend 自动降级 + onFallback）+ `g38-conformance.ts`（套件权威 TS 版）+ `proteus conformance` CLI；**B3 前置：真 IncrementalSession（#336）**：`g38-session.ts`（依赖图 + 签名缓存 + invalidate/recompute 局部重算 + commit/rollback 快照——C-06 全 PASS，42 项 PASS=36/SKIP=6（余 SKIP 全诚实能力声明））；Rust native（B3：oxc/swc + napi-rs——★template 无 Rust 官方 parser 待决策）、WASM（B4）待续 |
 | `proteus-host-runtime-plan` | **G-39** | 📋 规划（已入库） | ★**宿主运行时（Host Runtime）SPI 与职责边界**：L0-L4 五层「唯一拥有者」架构（L4 进程/线程/事件循环/JS 引擎/原生桥）+ ProteusHostRuntime 接口（bootstrap/suspend/resume/destroy + createWorker/runOnThread + createEngine + invokeNative/registerNativeHandler + enqueue/nextTick，共 15+3，与 G-37/G-38 同形）+ 职责矩阵（跨层调用机器校验）+ Conformance 42（C-01~C-10）+ `runtime-reference.js`（Web/Terminal 参考实现）+ 自检工具链；铁律 G-39.1-6 + CMP035-043；★编号避让：原稿 G-36/G-34/G-35 已实现 plan 占用（决策 #314） |
+| `proteus-execution-carrier-plan` | **G-40** | 📋 规划（已入库） | ★**G-39 宿主运行时的执行层（Execution Carrier）SPI 与 JSI 边界治理**：执行载体可插拔 = 原则 #0「不绑定」同族投影（平台 API G-31/32 / 渲染 G-27/37 / 编译 G-29/38 / 宿主运行时 G-39 之后，对「执行载体」的应用）；ProteusExecutionCarrier SPI（capabilities/costProfile/load/invoke/invokeBatch/allocShared/invokeBinary/getMetrics + createWorker + 实时注册，与 G-37/G-38 同形）+ **批处理差分**（一次跨界干 N ops，G-40.5）+ **零拷贝通道**（>4KB 走 ArrayBuffer，CMP048 显式降级）+ **实时逃逸**（原生闭环，JS 仅 configure/start/stop/onEvent）+ Conformance 42（C-01~C-10）+ `carrier-reference.js`（**JSICarrier/AOTCarrier 双参考实现**——对照原则 #11 ≥2 参考实现，机器证据 avgBatchSize=100）+ verify.sh/pack.sh 自检；铁律 G-40.1-6 + CMP044-050；★AOT 路径 = G-38 emit 产物第三类（aot-native）：无 JS 边界 + 真并发（实时/并发的终局解）；★编号避让：原稿 G-37/G-36/G-35/G-34 已实现 plan 占用（决策 #340） |
 | `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod（★v1.0 `proteus-types-plan` 已并入本 v2.0，决策 #313） |
 | `proteus-build-plan` | G-04 | ✅ | plugin-vite（mp 编译 + gen-routes + 共享模块/分包）+ 体积门禁 |
 | `proteus-app-config-plan` | G-35 | ✅ | app.config 分层 + schema 校验 + 远程 |
@@ -169,6 +170,8 @@
 | **CMP029-034** | 接口完整性（029）/ 确定性 emit（030）/ 降级语义一致（031）/ 缓存键可移植（032）/ 诊断不抛异常（033）/ 源码位置保留（034） | compiler-backend-spi-plan |
 | **G-39.1-6** | 生命周期唯一拥有 / 线程唯一拥有 / 能力诚实声明 / 降级可观测 / 原生桥白名单 / 禁止循环依赖 | host-runtime-plan |
 | **CMP035-043** | 宿主不假设业务（035）/ 禁跳层（036）/ 禁循环依赖（037）/ 能力声明一致（038）/ 降级可观测（039）/ 生命周期确定性（040）/ 线程安全（041）/ 资源清理（042）/ 性能基准（043） | host-runtime-plan |
+| **G-40.1-6** | 载体无关（禁假设 JS 运行时存在）/ 三路径（JSI/AOT/WASM）语义等价 / 实时能力禁 JS 驱动（原生闭环）/ >4KB 强制零拷贝 / RenderBackend 必须 commitBatch / 载体可观测（rtJsDrivenViolations=0） | execution-carrier-plan |
+| **CMP044-050** | capabilities 声明（044）/ 实时类注册分类（045）/ 未实测禁对外宣称（046）/ 零拷贝禁 slice（047）/ 不支持须显式降级 null（048）/ 降级上报指标（049）/ 批内禁逐次跨界（050） | execution-carrier-plan |
 | 分层铁律 | L1 先于 L3 / 禁跨层反向依赖（并行化前提） | roadmap-2 §6 |
 
 ---
@@ -176,7 +179,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）** → **G-29.1 真实文件双端等价门禁 81 用例（决策 #332）** → **G-29 编译器插拔消费点（决策 #333）** → **G-38 B1/B2-Node（决策 #334）** → **G-38 B2 尾（决策 #335）** → **G-38 B3 前置·真 IncrementalSession（决策 #336）** → **G-24 B2 系统集成四件套（决策 #337）** → **G-24 B3 导航结构（决策 #338）** → **G-24 B4 生命周期/设备（决策 #339：p-lifecycle/p-state-restoration/p-network-status/p-low-power——G-24 家族 B1-B4 全收官，desktop 17 模块）**；**待启**：G-24 余项并入 G-32（B4+ 原语由 capability/G-32 承接）→ G-38 B3（Rust native——先定 template parse 策略）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
+- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）** → **G-29.1 真实文件双端等价门禁 81 用例（决策 #332）** → **G-29 编译器插拔消费点（决策 #333）** → **G-38 B1/B2-Node（决策 #334）** → **G-38 B2 尾（决策 #335）** → **G-38 B3 前置·真 IncrementalSession（决策 #336）** → **G-24 B2 系统集成四件套（决策 #337）** → **G-24 B3 导航结构（决策 #338）** → **G-24 B4 生命周期/设备（决策 #339：p-lifecycle/p-state-restoration/p-network-status/p-low-power——G-24 家族 B1-B4 全收官，desktop 17 模块）**；**待启**：G-24 余项并入 G-32（B4+ 原语由 capability/G-32 承接）→ G-38 B3（Rust native——先定 template parse 策略）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）/ G-40 Execution Carrier B1（JSICarrier/AOTCarrier 参考实现 + G-39 createEngine 载体插槽互校）**
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark
