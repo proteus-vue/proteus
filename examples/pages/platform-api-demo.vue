@@ -98,6 +98,20 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑨ 能力 Hook 六期（usePageLifecycle/useBluetooth/useNFC/useCamera/useMicrophone/useKeyboard——媒体与近场）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-page-lc" @click="onCapPageLC">usePageLifecycle</button>
+        <button class="pad-btn" data-testid="pad-cap-bt" @click="onCapBt">useBluetooth</button>
+        <button class="pad-btn" data-testid="pad-cap-nfc" @click="onCapNfc">useNFC</button>
+        <button class="pad-btn" data-testid="pad-cap-cam" @click="onCapCam">useCamera</button>
+        <button class="pad-btn" data-testid="pad-cap-mic" @click="onCapMic">useMicrophone</button>
+        <button class="pad-btn" data-testid="pad-cap-kb" @click="onCapKb">useKeyboard</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap6-log">{{ cap6Log }}</text>
+      <text class="pad-sub">小程序端走 wx.openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow·onPageHide；web 端蓝牙·NFC 为特性探测，相机·麦克风走 getUserMedia（需 HTTPS），键盘走 visualViewport 启发式</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -322,6 +336,51 @@ function onCapShortcut() {
   void cap.useShortcut().then((r) => {
     cap5Log.value = r.ok ? 'useShortcut → 已添加快捷方式' : `useShortcut → Err(${r.error.code}) ${r.error.message}`
   })
+}
+
+// ---------- ⑨ 能力 Hook 六期（G-32 B3 续） ----------
+const cap6Log = ref('点击按钮调用六期能力 Hook')
+const pageLifecycle = cap.usePageLifecycle() // ★C24：页面生命周期订阅
+const keyboardLifecycle = cap.useKeyboard() // ★C14：键盘生命周期（wx 真实 / web visualViewport 启发式）
+function onCapPageLC() {
+  // ★C24：订阅页面 onShow/onHide（web visibilitychange / wx onPageShow·onPageHide）
+  let count = 0
+  pageLifecycle.onShow(() => {
+    count += 1
+    cap6Log.value = `usePageLifecycle → onShow ×${count}`
+  })
+  cap6Log.value = 'usePageLifecycle → 已订阅 onShow（phase=' + pageLifecycle.phase + '）'
+}
+function onCapBt() {
+  // ★C36：wx.openBluetoothAdapter 直通；web 特性探测（navigator.bluetooth）
+  void cap.useBluetooth().then((r) => {
+    cap6Log.value = r.ok ? `useBluetooth → available=${r.data.available} devices=${r.data.devices.length}` : `useBluetooth → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapNfc() {
+  // ★C37：wx.getHCEState 直通；web NDEFReader 探测
+  void cap.useNFC().then((r) => {
+    cap6Log.value = r.ok ? `useNFC → supported=${r.data.supported} available=${r.data.available}` : `useNFC → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapCam() {
+  // ★C1：wx.authorize scope.camera；web getUserMedia（需 HTTPS + 用户授权）
+  void cap.useCamera().then((r) => {
+    cap6Log.value = r.ok ? `useCamera → supported=${r.data.supported} granted=${r.data.granted}` : `useCamera → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapMic() {
+  // ★C2：wx.authorize scope.record；web getUserMedia audio
+  void cap.useMicrophone().then((r) => {
+    cap6Log.value = r.ok ? `useMicrophone → supported=${r.data.supported} granted=${r.data.granted}` : `useMicrophone → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapKb() {
+  // ★C14：订阅键盘高度变化（wx onKeyboardHeightChange / web visualViewport）
+  keyboardLifecycle.onChange((info) => {
+    cap6Log.value = `useKeyboard → height=${info.height} visible=${info.visible}`
+  })
+  cap6Log.value = `useKeyboard → 已订阅（当前 height=${keyboardLifecycle.info.height}）`
 }
 </script>
 

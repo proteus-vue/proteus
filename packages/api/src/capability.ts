@@ -295,6 +295,52 @@ export interface CalendarEvent {
   description?: string
 }
 
+// ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard
+
+/** C24 页面生命周期句柄（wx Page 钩子 / web load+visibilitychange） */
+export interface PageLifecycle {
+  phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE'
+  onLoad(cb: () => void): () => void
+  onShow(cb: () => void): () => void
+  onHide(cb: () => void): () => void
+}
+
+/** C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia） */
+export interface MediaAccess {
+  kind: 'camera' | 'microphone'
+  /** 平台能力/设备存在 */
+  supported: boolean
+  /** 用户已授权 */
+  granted: boolean
+}
+
+/** C36 蓝牙状态（wx.openBluetoothAdapter / web Web Bluetooth 特性探测） */
+export interface BluetoothInfo {
+  supported: boolean
+  /** 适配器已打开（可用） */
+  available: boolean
+  /** 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） */
+  devices: string[]
+}
+
+/** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
+export interface NfcInfo {
+  supported: boolean
+  available: boolean
+}
+
+/** C14 键盘信息（高度 px + 可见性） */
+export interface KeyboardInfo {
+  height: number
+  visible: boolean
+}
+
+/** C14 键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport） */
+export interface KeyboardLifecycle {
+  info: KeyboardInfo
+  onChange(cb: (info: KeyboardInfo) => void): () => void
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -367,6 +413,19 @@ export interface CapabilityBridge {
   compressFile?(options: ArchiveOptions): Promise<void>
   /** C45 桌面快捷方式（wx.addToDesktop / web 无标准 → 缺省） */
   addShortcut?(): Promise<void>
+  // ★G-32 B3 六期：new capabilities（缺省 undefined → Hook 返回 Err / 句柄抛错）
+  /** C24 页面生命周期订阅（wx Page 钩子 / web load+visibilitychange） */
+  getPageLifecycle?(): PageLifecycle
+  /** C36 蓝牙状态（wx.openBluetoothAdapter / web navigator.bluetooth 特性探测） */
+  getBluetooth?(): Promise<BluetoothInfo>
+  /** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
+  getNfc?(): Promise<NfcInfo>
+  /** C1 摄像头访问（wx.authorize scope.camera / web getUserMedia） */
+  getCamera?(): Promise<MediaAccess>
+  /** C2 麦克风访问（wx.authorize scope.record / web getUserMedia audio） */
+  getMicrophone?(): Promise<MediaAccess>
+  /** C14 键盘生命周期（wx.onKeyboardHeightChange / web visualViewport） */
+  getKeyboard?(): KeyboardLifecycle
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -426,6 +485,13 @@ export interface CapabilityProbe {
   appLifecycle: boolean
   archive: boolean
   shortcut: boolean
+  /** ★G-32 B3 六期 */
+  pageLifecycle: boolean
+  bluetooth: boolean
+  nfc: boolean
+  camera: boolean
+  microphone: boolean
+  keyboard: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -572,6 +638,16 @@ interface WxLike {
     fail?: (e: unknown) => void
   }) => void
   addToDesktop?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  // ★G-32 B3 六期：新增 wx 能力
+  createCameraContext?: () => unknown
+  getRecorderManager?: () => unknown
+  authorize?: (opt: { scope: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  openBluetoothAdapter?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  getBluetoothDevices?: (opt: { success: (r: { devices?: Array<{ name?: string }> }) => void; fail?: (e: unknown) => void }) => void
+  getHCEState?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onKeyboardHeightChange?: (cb: (r: { height: number }) => void) => void
+  onPageShow?: (cb: () => void) => void
+  onPageHide?: (cb: () => void) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -971,6 +1047,97 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         if (!wx.addToDesktop) return reject(new CapError('shortcut.unsupported', 'wx.addToDesktop 缺失'))
         wx.addToDesktop({ success: () => resolve(), fail: (e) => reject(new CapError('shortcut.failed', 'wx.addToDesktop 失败', e)) })
       }),
+    // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard
+    getPageLifecycle: () => ({
+      phase: 'IDLE' as const,
+      onLoad: (cb) => {
+        cb()
+        return () => undefined
+      },
+      onShow: (cb) => {
+        wx.onPageShow?.(cb)
+        return () => undefined
+      },
+      onHide: (cb) => {
+        wx.onPageHide?.(cb)
+        return () => undefined
+      },
+    }),
+    getBluetooth: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.openBluetoothAdapter) return reject(new CapError('bluetooth.unsupported', 'wx.openBluetoothAdapter 缺失'))
+        wx.openBluetoothAdapter({
+          success: () => {
+            const devices: string[] = []
+            if (wx.getBluetoothDevices) {
+              wx.getBluetoothDevices({
+                success: (r) => {
+                  resolve({ supported: true, available: true, devices: (r.devices ?? []).map((d) => d.name ?? 'unnamed') })
+                },
+                fail: () => resolve({ supported: true, available: true, devices }),
+              })
+            } else {
+              resolve({ supported: true, available: true, devices })
+            }
+          },
+          fail: () => resolve({ supported: true, available: false, devices: [] }),
+        })
+      }),
+    getNfc: () =>
+      new Promise((resolve) => {
+        if (!wx.getHCEState) {
+          resolve({ supported: false, available: false })
+          return
+        }
+        wx.getHCEState({
+          success: () => resolve({ supported: true, available: true }),
+          fail: () => resolve({ supported: true, available: false }),
+        })
+      }),
+    getCamera: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.authorize && !wx.createCameraContext) {
+          return reject(new CapError('camera.unsupported', 'wx 摄像头能力缺失'))
+        }
+        const supported = !!wx.createCameraContext || !!wx.authorize
+        if (!wx.authorize) {
+          resolve({ kind: 'camera', supported, granted: true })
+          return
+        }
+        wx.authorize({ scope: 'scope.camera', success: () => resolve({ kind: 'camera', supported: true, granted: true }), fail: () => resolve({ kind: 'camera', supported, granted: false }) })
+      }),
+    getMicrophone: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.authorize && !wx.getRecorderManager) {
+          return reject(new CapError('microphone.unsupported', 'wx 录音能力缺失'))
+        }
+        const supported = !!wx.getRecorderManager || !!wx.authorize
+        if (!wx.authorize) {
+          resolve({ kind: 'microphone', supported, granted: true })
+          return
+        }
+        wx.authorize({ scope: 'scope.record', success: () => resolve({ kind: 'microphone', supported: true, granted: true }), fail: () => resolve({ kind: 'microphone', supported, granted: false }) })
+      }),
+    getKeyboard: () => {
+      let info: KeyboardInfo = { height: 0, visible: false }
+      const cbs: Array<(i: KeyboardInfo) => void> = []
+      if (typeof wx.onKeyboardHeightChange === 'function') {
+        wx.onKeyboardHeightChange((r) => {
+          info = { height: r.height, visible: r.height > 0 }
+          cbs.forEach((cb) => cb(info))
+        })
+      }
+      return {
+        info,
+        onChange: (cb) => {
+          cbs.push(cb)
+          return () => {
+            const i = cbs.indexOf(cb)
+            if (i >= 0) cbs.splice(i, 1)
+          }
+        },
+      }
+    },
   }
 }
 
@@ -1335,6 +1502,111 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         },
       }
     },
+    // ★G-32 B3 六期：web 实现（page-lifecycle=visibilitychange / bluetooth·nfc=特性探测 / camera·mic=getUserMedia / keyboard=visualViewport 启发式）
+    getPageLifecycle: () => {
+      let phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE' = 'IDLE'
+      const loadCbs: Array<() => void> = []
+      const showCbs: Array<() => void> = []
+      const hideCbs: Array<() => void> = []
+      const gany = g as {
+        addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        document?: { visibilityState?: string }
+      }
+      const onVis = () => {
+        const hidden = gany.document ? gany.document.visibilityState === 'hidden' : false
+        phase = hidden ? 'HIDE' : 'SHOW'
+        if (hidden) hideCbs.forEach((cb) => cb())
+        else showCbs.forEach((cb) => cb())
+      }
+      const onLoad = () => {
+        phase = 'SHOW'
+        loadCbs.forEach((cb) => cb())
+        showCbs.forEach((cb) => cb())
+      }
+      if (typeof gany.addEventListener === 'function') {
+        gany.addEventListener('visibilitychange', onVis)
+        gany.addEventListener('load', onLoad)
+      }
+      const unsub = (arr: Array<() => void>, cb: () => void) => {
+        const i = arr.indexOf(cb)
+        if (i >= 0) arr.splice(i, 1)
+      }
+      return {
+        phase,
+        onLoad: (cb) => {
+          loadCbs.push(cb)
+          return () => unsub(loadCbs, cb)
+        },
+        onShow: (cb) => {
+          showCbs.push(cb)
+          return () => unsub(showCbs, cb)
+        },
+        onHide: (cb) => {
+          hideCbs.push(cb)
+          return () => unsub(hideCbs, cb)
+        },
+      }
+    },
+    getBluetooth: async () => {
+      // Web Bluetooth：仅特性探测（真实请求需用户手势 + 权限）——诚实降级
+      const nav = g.navigator as { bluetooth?: unknown } | undefined
+      const supported = typeof nav?.bluetooth === 'object' && nav.bluetooth !== null
+      return { supported, available: supported, devices: [] }
+    },
+    getNfc: async () => {
+      const supported = typeof (g as { NDEFReader?: unknown }).NDEFReader === 'function'
+      return { supported, available: supported }
+    },
+    getCamera: async () => {
+      const nav = g.navigator as (Navigator & { mediaDevices?: { getUserMedia?: (c: Record<string, unknown>) => Promise<{ getTracks(): Array<{ stop(): void }> }> } }) | undefined
+      const gu = nav?.mediaDevices?.getUserMedia
+      if (typeof gu !== 'function') return { kind: 'camera' as const, supported: false, granted: false }
+      try {
+        const stream = await gu({ video: { facingMode: 'user' } })
+        stream.getTracks().forEach((t) => t.stop())
+        return { kind: 'camera' as const, supported: true, granted: true }
+      } catch {
+        return { kind: 'camera' as const, supported: true, granted: false }
+      }
+    },
+    getMicrophone: async () => {
+      const nav = g.navigator as (Navigator & { mediaDevices?: { getUserMedia?: (c: Record<string, unknown>) => Promise<{ getTracks(): Array<{ stop(): void }> }> } }) | undefined
+      const gu = nav?.mediaDevices?.getUserMedia
+      if (typeof gu !== 'function') return { kind: 'microphone' as const, supported: false, granted: false }
+      try {
+        const stream = await gu({ audio: true })
+        stream.getTracks().forEach((t) => t.stop())
+        return { kind: 'microphone' as const, supported: true, granted: true }
+      } catch {
+        return { kind: 'microphone' as const, supported: true, granted: false }
+      }
+    },
+    getKeyboard: () => {
+      let info: KeyboardInfo = { height: 0, visible: false }
+      const cbs: Array<(i: KeyboardInfo) => void> = []
+      const vv = (g as { visualViewport?: { height?: number; addEventListener?: (t: string, cb: () => void) => void; removeEventListener?: (t: string, cb: () => void) => void } }).visualViewport
+      const ih = (g as { innerHeight?: number }).innerHeight ?? 0
+      if (vv && typeof vv.addEventListener === 'function') {
+        const onresize = () => {
+          const vh = vv.height ?? 0
+          const visible = vh > 0 && vh < ih * 0.6
+          info = { height: visible ? ih - vh : 0, visible }
+          cbs.forEach((cb) => cb(info))
+        }
+        vv.addEventListener('resize', onresize)
+      }
+      return {
+        info,
+        onChange: (cb) => {
+          cbs.push(cb)
+          return () => {
+            const i = cbs.indexOf(cb)
+            if (i >= 0) cbs.splice(i, 1)
+          }
+        },
+      }
+    },
   }
 }
 
@@ -1423,6 +1695,19 @@ export interface CapabilityHooks {
   useArchive(options: ArchiveOptions): Promise<CapResult<void>>
   /** C45 useShortcut：添加桌面快捷方式（wx.addToDesktop；web → Err） */
   useShortcut(): Promise<CapResult<void>>
+  // ★G-32 B3 六期：新增能力 Hook
+  /** C24 usePageLifecycle：页面生命周期订阅句柄（wx Page 钩子 / web load+visibilitychange） */
+  usePageLifecycle(): PageLifecycle
+  /** C36 useBluetooth：蓝牙状态（wx.openBluetoothAdapter / web 特性探测） */
+  useBluetooth(): Promise<CapResult<BluetoothInfo>>
+  /** C37 useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
+  useNFC(): Promise<CapResult<NfcInfo>>
+  /** C1 useCamera：摄像头访问（wx.authorize / web getUserMedia） */
+  useCamera(): Promise<CapResult<MediaAccess>>
+  /** C2 useMicrophone：麦克风访问（wx.authorize / web getUserMedia） */
+  useMicrophone(): Promise<CapResult<MediaAccess>>
+  /** C14 useKeyboard：键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport） */
+  useKeyboard(): KeyboardLifecycle
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -1679,6 +1964,43 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           return bridge.addShortcut()
         })(),
       ),
+    // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard（缺桥 → Err 非抛异常 / 句柄抛错）
+    usePageLifecycle: () => {
+      if (!bridge.getPageLifecycle) throw new CapError('page-lifecycle.unsupported', '桥未提供 getPageLifecycle（usePageLifecycle 不可用）')
+      return bridge.getPageLifecycle()
+    },
+    useBluetooth: () =>
+      wrap(
+        (() => {
+          if (!bridge.getBluetooth) return Promise.reject(new CapError('bluetooth.unsupported', '桥未提供 getBluetooth（useBluetooth 不可用）'))
+          return bridge.getBluetooth()
+        })(),
+      ),
+    useNFC: () =>
+      wrap(
+        (() => {
+          if (!bridge.getNfc) return Promise.reject(new CapError('nfc.unsupported', '桥未提供 getNfc（useNFC 不可用）'))
+          return bridge.getNfc()
+        })(),
+      ),
+    useCamera: () =>
+      wrap(
+        (() => {
+          if (!bridge.getCamera) return Promise.reject(new CapError('camera.unsupported', '桥未提供 getCamera（useCamera 不可用）'))
+          return bridge.getCamera()
+        })(),
+      ),
+    useMicrophone: () =>
+      wrap(
+        (() => {
+          if (!bridge.getMicrophone) return Promise.reject(new CapError('microphone.unsupported', '桥未提供 getMicrophone（useMicrophone 不可用）'))
+          return bridge.getMicrophone()
+        })(),
+      ),
+    useKeyboard: () => {
+      if (!bridge.getKeyboard) throw new CapError('keyboard.unsupported', '桥未提供 getKeyboard（useKeyboard 不可用）')
+      return bridge.getKeyboard()
+    },
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -1713,6 +2035,12 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       appLifecycle: bridge.getAppLifecycle !== undefined,
       archive: bridge.compressFile !== undefined,
       shortcut: bridge.addShortcut !== undefined,
+      pageLifecycle: bridge.getPageLifecycle !== undefined,
+      bluetooth: bridge.getBluetooth !== undefined,
+      nfc: bridge.getNfc !== undefined,
+      camera: bridge.getCamera !== undefined,
+      microphone: bridge.getMicrophone !== undefined,
+      keyboard: bridge.getKeyboard !== undefined,
     }),
   }
 }

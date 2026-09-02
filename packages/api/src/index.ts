@@ -50,4 +50,10 @@ export type {
   CalendarEvent,
   AppLifecycle,
   ArchiveOptions,
+  PageLifecycle,
+  MediaAccess,
+  BluetoothInfo,
+  NfcInfo,
+  KeyboardInfo,
+  KeyboardLifecycle,
 } from './capability'

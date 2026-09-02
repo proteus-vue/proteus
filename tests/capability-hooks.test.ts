@@ -4,7 +4,7 @@
 //   桥注入可测（mock/wx/web 三形态）/ 降级探测 probe()
 import { describe, it, expect, vi } from 'vitest'
 import { createCapabilityHooks, createReactiveStorage, capOk, capErr, CapError } from '@proteus-vue/api'
-import type { CapabilityBridge, CompatStorage } from '@proteus-vue/api'
+import type { CapabilityBridge, CompatStorage, KeyboardInfo } from '@proteus-vue/api'
 
 /** 内存 CompatStorage（useStorage 测试底座） */
 function memStorage(): CompatStorage {
@@ -1311,6 +1311,251 @@ describe('G-32 B3 五期 web 桥（Notification API / visibilitychange）', () =
       delete g.addEventListener
       delete g.removeEventListener
       delete g.document
+    }
+  })
+})
+
+describe('G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard', () => {
+  it('mock 桥全能力 + 缺桥 Err + probe 6 标志', async () => {
+    const full = createCapabilityHooks(
+      mockBridge({
+        getPageLifecycle: () => ({ phase: 'IDLE' as const, onLoad: () => () => undefined, onShow: () => () => undefined, onHide: () => () => undefined }),
+        getBluetooth: async () => ({ supported: true, available: true, devices: ['x'] }),
+        getNfc: async () => ({ supported: true, available: true }),
+        getCamera: async () => ({ kind: 'camera', supported: true, granted: true }),
+        getMicrophone: async () => ({ kind: 'microphone', supported: true, granted: true }),
+        getKeyboard: () => ({ info: { height: 0, visible: false }, onChange: () => () => undefined }),
+      }),
+    )
+    // 句柄类（缺桥抛错同 useStorage 惯例）
+    const lc = full.usePageLifecycle()
+    expect(lc.phase).toBe('IDLE')
+    const kb = full.useKeyboard()
+    expect(kb.info).toMatchObject({ height: 0, visible: false })
+    // 一次性类
+    const bt = await full.useBluetooth()
+    expect(bt.ok).toBe(true)
+    if (bt.ok) expect(bt.data).toMatchObject({ supported: true, devices: ['x'] })
+    const nfc = await full.useNFC()
+    expect(nfc.ok).toBe(true)
+    if (nfc.ok) expect(nfc.data.available).toBe(true)
+    const cam = await full.useCamera()
+    expect(cam.ok).toBe(true)
+    if (cam.ok) expect(cam.data).toMatchObject({ kind: 'camera', granted: true })
+    const mic = await full.useMicrophone()
+    expect(mic.ok).toBe(true)
+    if (mic.ok) expect(mic.data).toMatchObject({ kind: 'microphone', granted: true })
+    // 缺桥 → Err / 句柄抛错
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useBluetooth()).ok).toBe(false)
+    expect((await noBridge.useNFC()).ok).toBe(false)
+    expect((await noBridge.useCamera()).ok).toBe(false)
+    expect((await noBridge.useMicrophone()).ok).toBe(false)
+    expect(() => noBridge.usePageLifecycle()).toThrow(/getPageLifecycle/)
+    expect(() => noBridge.useKeyboard()).toThrow(/getKeyboard/)
+    // probe 标志
+    const probe = await full.probe()
+    expect(probe.pageLifecycle).toBe(true)
+    expect(probe.bluetooth).toBe(true)
+    expect(probe.nfc).toBe(true)
+    expect(probe.camera).toBe(true)
+    expect(probe.microphone).toBe(true)
+    expect(probe.keyboard).toBe(true)
+    const probe2 = await noBridge.probe()
+    expect(probe2.bluetooth).toBe(false)
+    expect(probe2.keyboard).toBe(false)
+  })
+})
+
+describe('G-32 B3 六期 wx 桥（wx.* 归一为 Result——无回调泄漏）', () => {
+  it('wx openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow/onPageHide → Promise 归一', async () => {
+    let kbCb: ((r: { height: number }) => void) | undefined
+    let pageShowCb: (() => void) | undefined
+    const wx = {
+      openBluetoothAdapter: (opt: { success?: () => void }) => opt.success?.(),
+      getBluetoothDevices: (opt: { success: (r: { devices?: Array<{ name?: string }> }) => void }) =>
+        opt.success({ devices: [{ name: '耳机' }, { name: '音箱' }] }),
+      getHCEState: (opt: { success?: () => void }) => opt.success?.(),
+      authorize: (opt: { scope: string; success?: () => void }) => opt.success?.(),
+      createCameraContext: () => ({}),
+      getRecorderManager: () => ({}),
+      onKeyboardHeightChange: (cb: (r: { height: number }) => void) => {
+        kbCb = cb
+      },
+      onPageShow: (cb: () => void) => {
+        pageShowCb = cb
+      },
+      onPageHide: (cb: () => void) => {
+        void cb
+      },
+    }
+    const orig = (globalThis as { wx?: unknown }).wx
+    ;(globalThis as { wx?: unknown }).wx = wx
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const bt = await hooks.useBluetooth()
+      expect(bt.ok).toBe(true)
+      if (bt.ok) expect(bt.data).toMatchObject({ supported: true, available: true, devices: ['耳机', '音箱'] })
+      const nfc = await hooks.useNFC()
+      expect(nfc.ok).toBe(true)
+      if (nfc.ok) expect(nfc.data.available).toBe(true)
+      const cam = await hooks.useCamera()
+      expect(cam.ok).toBe(true)
+      if (cam.ok) expect(cam.data).toMatchObject({ kind: 'camera', granted: true })
+      const mic = await hooks.useMicrophone()
+      expect(mic.ok).toBe(true)
+      if (mic.ok) expect(mic.data).toMatchObject({ kind: 'microphone', granted: true })
+      // keyboard：onKeyboardHeightChange 触发 → info 更新 + onChange
+      const kb = hooks.useKeyboard()
+      expect(kb.info).toMatchObject({ height: 0, visible: false })
+      let changed: KeyboardInfo | undefined
+      kb.onChange((i) => {
+        changed = i
+      })
+      kbCb?.({ height: 300 })
+      expect(changed).toMatchObject({ height: 300, visible: true })
+      // page-lifecycle：onShow 订阅 + 触发
+      const lc = hooks.usePageLifecycle()
+      let shown = 0
+      lc.onShow(() => {
+        shown += 1
+      })
+      pageShowCb?.()
+      expect(shown).toBe(1)
+    } finally {
+      ;(globalThis as { wx?: unknown }).wx = orig
+    }
+  })
+})
+
+describe('G-32 B3 六期 web 桥（特性探测 / getUserMedia / visualViewport）', () => {
+  it('web bluetooth/nfc：特性探测（存在 → supported；缺失 → 降级 false 非 Err）', async () => {
+    const g = globalThis as unknown as { navigator?: { bluetooth?: unknown }; NDEFReader?: unknown; wx?: unknown }
+    const origNav = Object.getOwnPropertyDescriptor(g, 'navigator')
+    const origNdef = Object.getOwnPropertyDescriptor(g, 'NDEFReader')
+    try {
+      Object.defineProperty(g, 'navigator', { value: { bluetooth: {} }, configurable: true })
+      Object.defineProperty(g, 'NDEFReader', { value: class NDEFReader {}, configurable: true })
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const bt = await hooks.useBluetooth()
+      expect(bt.ok).toBe(true)
+      if (bt.ok) expect(bt.data).toMatchObject({ supported: true, available: true, devices: [] })
+      const nfc = await hooks.useNFC()
+      expect(nfc.ok).toBe(true)
+      if (nfc.ok) expect(nfc.data.supported).toBe(true)
+    } finally {
+      if (origNav) Object.defineProperty(g, 'navigator', origNav)
+      else delete g.navigator
+      if (origNdef) Object.defineProperty(g, 'NDEFReader', origNdef)
+      else delete g.NDEFReader
+    }
+  })
+
+  it('web camera/microphone：mediaDevices.getUserMedia 存在 → granted；缺失 → supported:false', async () => {
+    const g = globalThis as unknown as { navigator?: unknown; wx?: unknown }
+    const origNav = Object.getOwnPropertyDescriptor(g, 'navigator')
+    try {
+      const nav = {
+        mediaDevices: {
+          getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+        },
+      }
+      Object.defineProperty(g, 'navigator', { value: nav, configurable: true })
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const cam = await hooks.useCamera()
+      expect(cam.ok).toBe(true)
+      if (cam.ok) expect(cam.data).toMatchObject({ kind: 'camera', supported: true, granted: true })
+      const mic = await hooks.useMicrophone()
+      expect(mic.ok).toBe(true)
+      if (mic.ok) expect(mic.data).toMatchObject({ kind: 'microphone', supported: true, granted: true })
+      // 无 mediaDevices → supported:false（非 Err——特征缺失是诚实数据）
+      Object.defineProperty(g, 'navigator', { value: {}, configurable: true })
+      const cam2 = await hooks.useCamera()
+      expect(cam2.ok).toBe(true)
+      if (cam2.ok) expect(cam2.data).toMatchObject({ kind: 'camera', supported: false, granted: false })
+    } finally {
+      if (origNav) Object.defineProperty(g, 'navigator', origNav)
+      else delete g.navigator
+    }
+  })
+
+  it('web page-lifecycle：load/visibilitychange → onLoad/onShow/onHide 触发', async () => {
+    const listeners: Array<{ t: string; cb: (e?: unknown) => void }> = []
+    const g = globalThis as unknown as {
+      addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+      removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+      document?: { visibilityState?: string }
+      wx?: unknown
+    }
+    g.addEventListener = (t, cb) => {
+      listeners.push({ t, cb })
+    }
+    g.removeEventListener = (t, cb) => {
+      const i = listeners.findIndex((l) => l.t === t && l.cb === cb)
+      if (i >= 0) listeners.splice(i, 1)
+    }
+    g.document = { visibilityState: 'visible' }
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const lc = hooks.usePageLifecycle()
+      const shown: number[] = []
+      const hidden: number[] = []
+      let loaded = 0
+      lc.onLoad(() => {
+        loaded += 1
+      })
+      lc.onShow(() => shown.push(1))
+      lc.onHide(() => hidden.push(1))
+      const loadEntry = listeners.find((l) => l.t === 'load')
+      loadEntry?.cb()
+      expect(loaded).toBe(1)
+      expect(shown).toEqual([1])
+      g.document!.visibilityState = 'hidden'
+      const visEntry = listeners.find((l) => l.t === 'visibilitychange')
+      visEntry?.cb()
+      expect(hidden).toEqual([1])
+    } finally {
+      delete g.addEventListener
+      delete g.removeEventListener
+      delete g.document
+    }
+  })
+
+  it('web keyboard：visualViewport resize → onChange（键盘打开启发式）', async () => {
+    const g = globalThis as unknown as {
+      visualViewport?: { height?: number; addEventListener?: (t: string, cb: () => void) => void; removeEventListener?: (t: string, cb: () => void) => void }
+      innerHeight?: number
+      wx?: unknown
+    }
+    let resizeCb: (() => void) | undefined
+    g.visualViewport = {
+      height: 800,
+      addEventListener: (t, cb) => {
+        if (t === 'resize') resizeCb = cb
+      },
+      removeEventListener: () => undefined,
+    }
+    g.innerHeight = 900
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const kb = hooks.useKeyboard()
+      expect(kb.info).toMatchObject({ height: 0, visible: false })
+      let changed: KeyboardInfo | undefined
+      kb.onChange((i) => {
+        changed = i
+      })
+      g.visualViewport!.height = 500 // 键盘打开：较 viewport 被压缩
+      resizeCb?.()
+      expect(changed).toMatchObject({ visible: true })
+      if (changed) expect(changed.height).toBe(400) // 900 - 500
+    } finally {
+      delete g.visualViewport
+      delete g.innerHeight
     }
   })
 })

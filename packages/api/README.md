@@ -74,6 +74,12 @@ const { platform, system, version } = getDeviceInfo()
 | `useAppLifecycle()` | C23 | 应用生命周期订阅句柄（`onLaunch/onShow/onHide`——wx App 钩子 / web visibilitychange+load） |
 | `useArchive(opts)` | C44 | 压缩文件（wx.compressFile；web → Err） |
 | `useShortcut()` | C45 | 添加桌面快捷方式（wx.addToDesktop；web → Err） |
+| `usePageLifecycle()` | C24 | 页面生命周期订阅句柄（onLoad/onShow/onHide——wx Page 钩子 / web load+visibilitychange） |
+| `useBluetooth()` | C36 | 蓝牙状态（wx.openBluetoothAdapter+getBluetoothDevices / web 特性探测） |
+| `useNFC()` | C37 | NFC 状态（wx.getHCEState / web NDEFReader 特性探测） |
+| `useCamera()` | C1 | 摄像头访问（wx.authorize scope.camera / web getUserMedia） |
+| `useMicrophone()` | C2 | 麦克风访问（wx.authorize scope.record / web getUserMedia） |
+| `useKeyboard()` | C14 | 键盘生命周期句柄（info + onChange——wx.onKeyboardHeightChange / web visualViewport） |
 | `probe()` | — | 能力可用性探测面（降级决策依据：缺失 → 对应 `Err('<cap>.unsupported')` 非抛异常） |
 
 ```ts
