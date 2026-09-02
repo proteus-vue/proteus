@@ -15,7 +15,7 @@
 | **C1**（G-28 侧） | 能力入口组件（p-scan-qr 等）对接 `useNative()` | G-28 | 能力组件可用 | 1 人周 |
 | **B5** | conformance：三端渲染快照一致 | B3, conformance.md | CI 门禁 | ✅ 见 `conformance.md` 落地状态——渲染层 IR 级快照（6 后端 × 6 fixtures） |
 | **B6** | `@proteus/compat-miniprogram` 兼容层 + codemod | B4 | 旧小程序可迁移 | 3 人周 |
-| **B7** | API Hook 化（useFetch/useStorage/router）+ lint（CMP007） | B1 | Layer 0 API 完整 | 2 人周 |
+| **B7** | API Hook 化（useFetch/useStorage/router）+ lint（CMP007） | B1 | ✅ **能力 Hook 层骨架 + CMP007 门禁**：`@proteus-vue/api/capability.ts`（CapResult&lt;T&gt; + createCapabilityHooks + CapabilityBridge 双桥 + 10 useXxx 核心 Hook + probe 降级）+ `proteus api-check`（回调式/同步存储/裸全局 → 平台桥/兼容演示豁免）；Layer 0 API 完整化随 G-32 B3 延续 | 2 人周 |
 
 **关键路径**：B1 → B2 → B3 → B5（conformance）→ M2 验收
 

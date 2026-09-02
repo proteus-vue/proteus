@@ -269,6 +269,7 @@ Layer 1：@proteus/compat-miniprogram（兼容层，独立包）
 | **B3** | Native Backend 映射（UIKit / Android View） | B2 | iOS/Android 跑通 |
 | **B4** | 基础 UI 原语（text/button/image/input/list/nav）+ Fluid 扩展语义 | B2 | 完整 L1 组件集 |
 | **B5** | conformance：三端组件渲染快照一致（B3 后已落地——IR 级快照 diff + 覆盖门禁） | B3 | CI 门禁 |
+| **B7** | API Hook 化 + CMP007 lint（✅ 骨架：`@proteus-vue/api/capability.ts` 10 useXxx + `proteus api-check`） | B1 | Layer 0 API 完整 |
 | **B6** | compat-miniprogram 兼容层 | B3 | 旧小程序可迁移 |
 
 详见 `batches.md`。

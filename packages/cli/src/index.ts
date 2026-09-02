@@ -16,6 +16,7 @@ import { checkModuleConfigs } from './module-check'
 import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
 import { runAuditModule } from './module-audit'
 import { runCoverageAudit } from './coverage-audit'
+import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
 import { writeModuleConfigSkeleton } from './module-init'
 import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
@@ -163,6 +164,14 @@ async function main(): Promise<void> {
       const { text, violations } = runCapabilityCheck(root)
       console.log(text)
       if (violations.length) process.exitCode = 1
+      break
+    }
+    case 'api-check': {
+      // ★G-31 B7 / G-32.4：CMP007 门禁——回调式 API / 同步存储 / 裸全局调用（平台桥文件豁免）
+      const arg = rest[0] && !rest[0].startsWith('-') ? rest[0] : '.'
+      const result = runApiHookCheck(arg)
+      console.log(formatApiHookCheck(result))
+      if (!result.ok) process.exitCode = 1
       break
     }
     case 'components:audit': {

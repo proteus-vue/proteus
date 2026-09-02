@@ -1,4 +1,5 @@
 <!-- examples/pages/mp-semantics-demo.vue —— 小程序语义演示（14-mp-first-semantics）
+     @proteus-api-check-ignore：本页刻意演示旧 wx.* API（Layer 1 兼容语义面向）——CMP007 门禁豁免
      以小程序组件/API 为标准：view/text/button/image/input 双端直用（MP 原生 / Web 模拟层对齐）
      open-type 开放能力：MP 原生分享，Web 触发 openshare 事件（开发者自定义处理） -->
 <template>

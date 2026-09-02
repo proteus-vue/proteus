@@ -419,6 +419,10 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★平台原生模块规范静态检查（B5 §6 禁止清单：业务目录禁 wx.*/window.*，平台文件防 API 泄漏）',
       },
       {
+        usage: 'proteus api-check [dir]',
+        desc: '★CMP007 门禁（G-31 B7 / G-32.4）：回调式平台 API（wx.request({ success })）/ 同步存储 / 裸全局能力调用 → 改 useXxx() Hook（Promise/Result）；平台桥文件豁免',
+      },
+      {
         usage: 'proteus components:audit [dir]',
         desc: '★组件审计：p-* 组件注册表 vs 实际使用（未登记/未使用/标签漂移）',
       },

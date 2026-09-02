@@ -47,6 +47,16 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑤ 能力 Hook（G-32：useDevice/useNetwork/useClipboard → Result&lt;T&gt; 无回调）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-device" @click="onCapDevice">useDevice</button>
+        <button class="pad-btn" data-testid="pad-cap-network" @click="onCapNetwork">useNetwork</button>
+        <button class="pad-btn" data-testid="pad-cap-clipboard" @click="onCapClipboard">useClipboard</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap-log">{{ capLog }}</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -58,10 +68,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { createPlatformAPI } from '@proteus-vue/api'
+import { createPlatformAPI, createCapabilityHooks } from '@proteus-vue/api'
 
 // ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
 const api = createPlatformAPI()
+// ★G-32 能力 Hook 层（useXxx → Result<T>，无回调）——演示用每页独立实例
+const cap = createCapabilityHooks()
 
 // ---------- ① request ----------
 const url = ref('https://httpbin.org/get')
@@ -126,6 +138,24 @@ function onLoading() {
 }
 function onHideLoading() {
   api.ui.hideLoading()
+}
+
+// ---------- ⑤ 能力 Hook（G-32：useXxx → Result<T>，无回调） ----------
+const capLog = ref('点击按钮调用能力 Hook')
+function onCapDevice() {
+  void cap.useDevice().then((r) => {
+    capLog.value = r.ok ? `useDevice → ${r.data.platform} · ${r.data.model}` : `useDevice → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapNetwork() {
+  void cap.useNetwork().then((r) => {
+    capLog.value = r.ok ? `useNetwork → online=${r.data.online} · type=${r.data.type}` : `useNetwork → Err(${r.error.code})`
+  })
+}
+function onCapClipboard() {
+  void cap.useClipboard().then((r) => {
+    capLog.value = r.ok ? `useClipboard → ${r.data.slice(0, 40)}` : `useClipboard → Err(${r.error.code}) ${r.error.message}`
+  })
 }
 </script>
 
