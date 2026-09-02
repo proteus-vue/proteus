@@ -27,4 +27,11 @@ export type {
   ShareOptions,
   PermissionState,
   OrientationInfo,
+  SensorKind,
+  SensorSample,
+  PaymentConfig,
+  PaymentReceipt,
+  LoginResult,
+  AuthState,
+  BiometricOptions,
 } from './capability'

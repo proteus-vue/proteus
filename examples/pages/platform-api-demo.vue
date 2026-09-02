@@ -59,6 +59,19 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑥ 能力 Hook 三期（useSensor/useBiometric/useAuth/useQRCode——web 缺能力 → Err 降级）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-sensor" @click="onCapSensor">useSensor</button>
+        <button class="pad-btn" data-testid="pad-cap-biometric" @click="onCapBiometric">useBiometric</button>
+        <button class="pad-btn" data-testid="pad-cap-auth" @click="onCapAuth">useAuth 登录</button>
+        <button class="pad-btn" data-testid="pad-cap-auth-logout" @click="onCapAuthLogout">登出</button>
+        <button class="pad-btn" data-testid="pad-cap-qr" @click="onCapQR">useQRCode</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap3-log">{{ cap3Log }}</text>
+      <text class="pad-sub">useBiometric → web 无 WebAuthn 时 data:false（feature detection）；useQRCode web 需摄像头取流源 → Err · 小程序端 wx.scanCode 直通</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -163,6 +176,39 @@ function onCapFetch() {
   // ★G-32 C26：wx.request → await useFetch(url)（迁移文档标题目标；demo 用 httpbin CORS 端点）
   void cap.useFetch<{ url: string }>('https://httpbin.org/get', { timeout: 8000 }).then((r) => {
     capLog.value = r.ok ? `useFetch → ${JSON.stringify(r.data).slice(0, 60)}` : `useFetch → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+
+// ---------- ⑥ 能力 Hook 三期（G-32 B3 续） ----------
+const cap3Log = ref('点击按钮调用三期能力 Hook')
+const auth = cap.useAuth() // ★C33 组合：token 托管 + login 桥 + storage 桥（业务不读 raw token）
+function onCapSensor() {
+  // ★C5：一次性读取（web 需设备授权；Node 无事件环境 → Err 降级）
+  void cap.useSensor('accelerometer').then((r) => {
+    cap3Log.value = r.ok ? `useSensor → ${JSON.stringify(r.data)}` : `useSensor → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapBiometric() {
+  // ★C38：feature detection——web 无 WebAuthn → data:false
+  void cap.useBiometric().then((r) => {
+    cap3Log.value = r.ok ? `useBiometric → 支持=${r.data}` : `useBiometric → Err(${r.error.code})`
+  })
+}
+function onCapAuth() {
+  // ★C33：login 桥（wx.login / 第三方 provider）→ 存 token；无桥 → Err 降级
+  void auth.login().then((r) => {
+    cap3Log.value = r.ok ? `useAuth.login → token=${r.data} · 已登录=${auth.isAuthenticated}` : `useAuth.login → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapAuthLogout() {
+  void auth.logout().then((r) => {
+    cap3Log.value = r.ok ? `useAuth.logout → 已登出（token=${auth.token}）` : `useAuth.logout → Err(${r.error.code})`
+  })
+}
+function onCapQR() {
+  // ★C42：wx.scanCode 直通；web 无摄像头取流桥 → Err 降级（非抛异常）
+  void cap.useQRCode().then((r) => {
+    cap3Log.value = r.ok ? `useQRCode → ${r.data.slice(0, 40)}` : `useQRCode → Err(${r.error.code}) ${r.error.message}`
   })
 }
 </script>

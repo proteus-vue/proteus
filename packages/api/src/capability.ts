@@ -6,6 +6,8 @@
 //   兼容面：全部 Promise<Result<T>>；平台不支持 → Err('<cap>.unsupported')（G-32.3 降级语义）
 //   MP 产物安全（决策 #32/#36）：无 ?. / ?? （显式检查）；无数组解构
 import type { HttpMethod, RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
+import { createAuth } from './auth'
+import type { AuthStorage } from './auth'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
 export type CapResult<T> =
@@ -84,6 +86,64 @@ export interface OrientationInfo {
   angle: number
 }
 
+// ★G-32 B3 三期：传感器 / 亮度 / 电话 / 生物识别 / 支付 / 登录 / 扫码 / 认证组合
+
+/** C5 传感器类型（wx onAccelerometer/onCompass/onGyroscope / web DeviceMotion/DeviceOrientation） */
+export type SensorKind = 'accelerometer' | 'compass' | 'gyroscope'
+
+/** C5 传感器采样（一次性读取当前值；compass 带 heading） */
+export interface SensorSample {
+  kind: SensorKind
+  x?: number
+  y?: number
+  z?: number
+  /** 罗盘方位（0-360°，参考正北；仅 compass） */
+  heading?: number
+  timestamp?: number
+}
+
+/** C40 支付参数（对齐 wx.requestPayment 核心字段） */
+export interface PaymentConfig {
+  timeStamp: string
+  nonceStr: string
+  package: string
+  signType?: string
+  paySign: string
+}
+
+/** C40 支付结果 */
+export interface PaymentReceipt {
+  provider: string
+  transactionId?: string
+}
+
+/** C41 登录结果（wx.login → code；web/其它 provider → token/授权信息） */
+export interface LoginResult {
+  provider: string
+  code?: string
+  token?: string
+}
+
+/** C33 认证状态（组合：createAuth 凭证托管 + login 桥 + 存储桥；业务只读 AuthState 不读 raw token——铁律 2） */
+export interface AuthState {
+  token: string | null
+  isAuthenticated: boolean
+  /** 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） */
+  login(provider?: string): Promise<CapResult<string>>
+  /** 登出：清 token */
+  logout(): Promise<CapResult<void>>
+  /** 手动设置 token（第三方登录 / 服务端下发的既有会话） */
+  setToken(token: string | null): void
+  /** 订阅登录态变化（响应式 UI 联动） */
+  subscribe(cb: (token: string | null) => void): () => void
+}
+
+/** C38 生物识别认证选项 */
+export interface BiometricOptions {
+  /** 认证提示（原生系统 UI 展示） */
+  prompt?: string
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -111,6 +171,25 @@ export interface CapabilityBridge {
   getPermission?(permission: string): Promise<PermissionState>
   /** 存储句柄（useStorage——wx sync 存储 / localStorage / mock；缺省 undefined → useStorage 抛错） */
   getStorage?(): CompatStorage
+  // ★G-32 B3 三期：新增能力（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')
+  /** C5 传感器一次性读取（wx onXxxChange 首个事件 / web DeviceMotion+DeviceOrientation） */
+  readSensor?(kind: SensorKind): Promise<SensorSample>
+  /** C13 亮度读取（wx.getScreenBrightness；web 无标准 API → 缺省） */
+  getBrightness?(): Promise<number>
+  /** C13 亮度设置（wx.setScreenBrightness） */
+  setBrightness?(value: number): Promise<void>
+  /** C21 拨打电话（wx.makePhoneCall；web 无直通 → tel: 需宿主放行/缺省） */
+  makePhoneCall?(phoneNumber: string): Promise<void>
+  /** C38 生物识别支持性（wx.checkIsSupportFingerPrint / web WebAuthn PublicKeyCredential） */
+  checkBiometricSupport?(): Promise<boolean>
+  /** C38 生物识别认证（wx.startSoterAuthentication / web navigator.credentials.get） */
+  authenticateBiometric?(options?: BiometricOptions): Promise<boolean>
+  /** C40 支付（wx.requestPayment；web 无直通 → 缺省） */
+  requestPayment?(config: PaymentConfig): Promise<PaymentReceipt>
+  /** C41 登录（wx.login → code；web 需集成第三方 provider → 缺省） */
+  login?(provider?: string): Promise<LoginResult>
+  /** C42 扫码（wx.scanCode / web BarcodeDetector 尽力识别） */
+  scanQR?(): Promise<string>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -146,6 +225,16 @@ export interface CapabilityProbe {
   fetch: boolean
   permission: boolean
   storage: boolean
+  /** ★G-32 B3 三期 */
+  sensor: boolean
+  brightness: boolean
+  phoneCall: boolean
+  biometric: boolean
+  payment: boolean
+  login: boolean
+  qrCode: boolean
+  /** C33 认证组合（需 login 桥 + 存储桥齐备才视为完整） */
+  auth: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -173,6 +262,30 @@ interface WxLike {
   getStorageSync?: (key: string) => unknown
   removeStorageSync?: (key: string) => void
   clearStorageSync?: () => void
+  // ★G-32 B3 三期：新增 wx 能力
+  onAccelerometerChange?: (cb: (r: { x: number; y: number; z: number }) => void) => void
+  onCompassChange?: (cb: (r: { direction: number; accuracy?: number | string }) => void) => void
+  onGyroscopeChange?: (cb: (r: { x: number; y: number; z: number }) => void) => void
+  getScreenBrightness?: (opt: { success: (r: { value: number }) => void }) => void
+  setScreenBrightness?: (opt: { value: number; fail?: () => void }) => void
+  makePhoneCall?: (opt: { phoneNumber: string; success?: () => void; fail: () => void }) => void
+  checkIsSupportFingerPrint?: (opt: { success: (r: { errMsg: string; isSupported: boolean }) => void; fail?: () => void }) => void
+  startSoterAuthentication?: (opt: { requestAuthModes: string[]; success: () => void; fail: () => void }) => void
+  requestPayment?: (opt: {
+    timeStamp: string
+    nonceStr: string
+    package: string
+    signType?: string
+    paySign: string
+    success: () => void
+    fail: (e: unknown) => void
+  }) => void
+  login?: (opt: { success: (r: { code: string }) => void; fail?: (e: unknown) => void }) => void
+  scanCode?: (opt: {
+    scanType?: string[]
+    success: (r: { result: string }) => void
+    fail: (e: unknown) => void
+  }) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -300,6 +413,83 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         })
       }),
     getStorage: () => wxStorage(wx),
+    // ★G-32 B3 三期：新增能力（wx → Result；缺能力 → CapError 降级）
+    readSensor: (kind) =>
+      new Promise((resolve, reject) => {
+        if (kind === 'compass') {
+          if (!wx.onCompassChange) return reject(new CapError('sensor.compass.unsupported', 'wx.onCompassChange 缺失'))
+          wx.onCompassChange((r) =>
+            resolve({ kind, heading: typeof r.direction === 'number' ? r.direction : 0, timestamp: Date.now() }),
+          )
+          return
+        }
+        const on = kind === 'gyroscope' ? wx.onGyroscopeChange : wx.onAccelerometerChange
+        if (!on) return reject(new CapError(`sensor.${kind}.unsupported`, 'wx 传感器监听缺失'))
+        on((r) => resolve({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() }))
+      }),
+    getBrightness: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.getScreenBrightness) return reject(new CapError('brightness.unsupported', 'wx.getScreenBrightness 缺失'))
+        wx.getScreenBrightness({ success: (r) => resolve(r.value) })
+      }),
+    setBrightness: (value) =>
+      new Promise((resolve, reject) => {
+        if (!wx.setScreenBrightness) return reject(new CapError('brightness.unsupported', 'wx.setScreenBrightness 缺失'))
+        wx.setScreenBrightness({ value, fail: () => reject(new CapError('brightness.failed', 'wx.setScreenBrightness 失败')) })
+        resolve()
+      }),
+    makePhoneCall: (phoneNumber) =>
+      new Promise((resolve, reject) => {
+        if (!wx.makePhoneCall) return reject(new CapError('phone-call.unsupported', 'wx.makePhoneCall 缺失'))
+        wx.makePhoneCall({
+          phoneNumber,
+          success: () => resolve(),
+          fail: () => reject(new CapError('phone-call.failed', 'wx.makePhoneCall 失败')),
+        })
+      }),
+    checkBiometricSupport: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.checkIsSupportFingerPrint) return reject(new CapError('biometric.unsupported', 'wx.checkIsSupportFingerPrint 缺失'))
+        wx.checkIsSupportFingerPrint({
+          success: (r) => resolve(r.isSupported === true),
+          fail: () => reject(new CapError('biometric.unsupported', 'wx 指纹检测失败')),
+        })
+      }),
+    authenticateBiometric: (options) =>
+      new Promise((resolve, reject) => {
+        if (!wx.startSoterAuthentication) return reject(new CapError('biometric.unsupported', 'wx.startSoterAuthentication 缺失'))
+        wx.startSoterAuthentication({
+          requestAuthModes: ['fingerPrint'],
+          success: () => resolve(true),
+          fail: () => reject(new CapError('biometric.failed', '生物识别认证失败', options)),
+        })
+      }),
+    requestPayment: (config) =>
+      new Promise((resolve, reject) => {
+        if (!wx.requestPayment) return reject(new CapError('payment.unsupported', 'wx.requestPayment 缺失'))
+        wx.requestPayment({
+          timeStamp: config.timeStamp,
+          nonceStr: config.nonceStr,
+          package: config.package,
+          signType: config.signType,
+          paySign: config.paySign,
+          success: () => resolve({ provider: 'wx', transactionId: config.nonceStr }),
+          fail: (e) => reject(new CapError('payment.failed', 'wx.requestPayment 失败', e)),
+        })
+      }),
+    login: (provider) =>
+      new Promise((resolve, reject) => {
+        if (!wx.login) return reject(new CapError('login.unsupported', 'wx.login 缺失'))
+        wx.login({
+          success: (r) => resolve({ provider: provider ?? 'wx', code: r.code }),
+          fail: (e) => reject(new CapError('login.failed', 'wx.login 失败', e)),
+        })
+      }),
+    scanQR: () =>
+      new Promise((resolve, reject) => {
+        if (!wx.scanCode) return reject(new CapError('qr-code.unsupported', 'wx.scanCode 缺失'))
+        wx.scanCode({ success: (r) => resolve(r.result), fail: (e) => reject(new CapError('qr-code.failed', 'wx.scanCode 失败', e)) })
+      }),
   }
 }
 
@@ -450,6 +640,72 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
       }
       return memoryStorage()
     },
+    // ★G-32 B3 三期：新增能力（web——无标准 API 的能力（亮度/电话/支付/登录/扫码）缺省 undefined → Hook Err('<cap>.unsupported')
+    readSensor: (kind) =>
+      new Promise((resolve, reject) => {
+        const gany = g as {
+          addEventListener?: (t: string, cb: (e: unknown) => void) => void
+          removeEventListener?: (t: string, cb: (e: unknown) => void) => void
+        }
+        if (typeof gany.addEventListener !== 'function') {
+          return reject(new CapError('sensor.unsupported', '无事件监听环境（SSR/Node）'))
+        }
+        // 车内一次性读取：devicemotion（加速/陀螺）或 deviceorientation（罗盘）首个事件即 resolve
+        const eventName = kind === 'compass' ? 'deviceorientation' : 'devicemotion'
+        let settled = false
+        const handler = (e: unknown) => {
+          if (settled) return
+          settled = true
+          cleanup()
+          const ev = e as {
+            accelerationIncludingGravity?: { x?: number; y?: number; z?: number }
+            webkitCompassHeading?: number
+            alpha?: number | null
+          }
+          if (kind === 'compass') {
+            const heading = typeof ev.webkitCompassHeading === 'number' ? ev.webkitCompassHeading : typeof ev.alpha === 'number' ? 360 - ev.alpha : 0
+            resolve({ kind, heading, timestamp: Date.now() })
+            return
+          }
+          const a = ev.accelerationIncludingGravity
+          resolve({ kind, x: a ? a.x : undefined, y: a ? a.y : undefined, z: a ? a.z : undefined, timestamp: Date.now() })
+        }
+        const cleanup = () => {
+          if (typeof gany.removeEventListener === 'function') gany.removeEventListener(eventName, handler)
+          clearTimeout(timer)
+        }
+        const timer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          cleanup()
+          reject(new CapError('sensor.timeout', '传感器事件超时（需设备支持/用户授权）'))
+        }, 1500)
+        gany.addEventListener(eventName, handler)
+      }),
+    checkBiometricSupport: async () => {
+      // WebAuthn 可用性 = 平台支持指纹/面容的入口（真正硬件支持由系统认证时判定）
+      const cred = (g as { PublicKeyCredential?: unknown }).PublicKeyCredential
+      return typeof cred === 'function'
+    },
+    authenticateBiometric: async (options) => {
+      const cred = (g as { PublicKeyCredential?: unknown }).PublicKeyCredential
+      if (typeof cred !== 'function') throw new CapError('biometric.unsupported', 'WebAuthn 不支持（需 HTTPS/现代浏览器）')
+      const creds = nav?.credentials
+      if (!creds || typeof creds.get !== 'function') throw new CapError('biometric.unsupported', 'navigator.credentials.get 缺失')
+      try {
+        await creds.get({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            rpId: typeof g.location === 'object' && g.location ? g.location.hostname || 'localhost' : 'localhost',
+            userVerification: 'required',
+            timeout: 60000,
+          },
+        })
+        return true
+      } catch (e) {
+        throw new CapError('biometric.failed', 'WebAuthn 认证失败/用户取消', e)
+      }
+    },
   }
 }
 
@@ -491,6 +747,27 @@ export interface CapabilityHooks {
   usePermission(name: string): Promise<CapResult<PermissionState>>
   /** C15 useStorage：存储句柄（响应式增强见 createReactiveStorage） */
   useStorage(): CompatStorage
+  // ★G-32 B3 三期：新增能力 Hook
+  /** C5 useSensor：传感器一次性读取（accelerometer/compass/gyroscope） */
+  useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
+  /** C13 useBrightness：读取当前亮度（0-1） */
+  useBrightness(): Promise<CapResult<number>>
+  /** C13 setBrightness：设置亮度（0-1） */
+  setBrightness(value: number): Promise<CapResult<void>>
+  /** C21 usePhoneCall：拨打电话 */
+  usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
+  /** C33 useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业务不读 raw token（铁律 2） */
+  useAuth(): AuthState
+  /** C38 useBiometric：生物识别支持性检测 */
+  useBiometric(): Promise<CapResult<boolean>>
+  /** C38 authenticateBiometric：发起生物识别认证 */
+  authenticateBiometric(options?: BiometricOptions): Promise<CapResult<boolean>>
+  /** C40 usePayment：拉起支付（wx.requestPayment 字段） */
+  usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
+  /** C41 useLogin：登录（wx.login → code / 接入第三方 provider） */
+  useLogin(provider?: string): Promise<CapResult<LoginResult>>
+  /** C42 useQRCode：扫码（wx.scanCode；web 需摄像头取流源 → 降级 Err） */
+  useQRCode(): Promise<CapResult<string>>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -533,6 +810,112 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getStorage) throw new CapError('storage.unsupported', '桥未提供 getStorage（useStorage 不可用）')
       return bridge.getStorage()
     },
+    // ★G-32 B3 三期：新增能力 Hook（缺桥 → Err('<cap>.unsupported') 非抛异常——G-32.3 降级语义）
+    useSensor: (kind) =>
+      wrap(
+        (() => {
+          if (!bridge.readSensor) return Promise.reject(new CapError('sensor.unsupported', '桥未提供 readSensor（useSensor 不可用）'))
+          return bridge.readSensor(kind)
+        })(),
+      ),
+    useBrightness: () =>
+      wrap(
+        (() => {
+          if (!bridge.getBrightness) return Promise.reject(new CapError('brightness.unsupported', '桥未提供 getBrightness（useBrightness 不可用）'))
+          return bridge.getBrightness()
+        })(),
+      ),
+    setBrightness: (value) =>
+      wrap(
+        (() => {
+          if (!bridge.setBrightness) return Promise.reject(new CapError('brightness.unsupported', '桥未提供 setBrightness（setBrightness 不可用）'))
+          return bridge.setBrightness(value)
+        })(),
+      ),
+    usePhoneCall: (phoneNumber) =>
+      wrap(
+        (() => {
+          if (!bridge.makePhoneCall) return Promise.reject(new CapError('phone-call.unsupported', '桥未提供 makePhoneCall（usePhoneCall 不可用）'))
+          return bridge.makePhoneCall(phoneNumber)
+        })(),
+      ),
+    useBiometric: () =>
+      wrap(
+        (() => {
+          if (!bridge.checkBiometricSupport) return Promise.reject(new CapError('biometric.unsupported', '桥未提供 checkBiometricSupport（useBiometric 不可用）'))
+          return bridge.checkBiometricSupport()
+        })(),
+      ),
+    authenticateBiometric: (options) =>
+      wrap(
+        (() => {
+          if (!bridge.authenticateBiometric) return Promise.reject(new CapError('biometric.unsupported', '桥未提供 authenticateBiometric 不可用'))
+          return bridge.authenticateBiometric(options)
+        })(),
+      ),
+    usePayment: (config) =>
+      wrap(
+        (() => {
+          if (!bridge.requestPayment) return Promise.reject(new CapError('payment.unsupported', '桥未提供 requestPayment（usePayment 不可用）'))
+          return bridge.requestPayment(config)
+        })(),
+      ),
+    useLogin: (provider) =>
+      wrap(
+        (() => {
+          if (!bridge.login) return Promise.reject(new CapError('login.unsupported', '桥未提供 login（useLogin 不可用）'))
+          return bridge.login(provider)
+        })(),
+      ),
+    useQRCode: () =>
+      wrap(
+        (() => {
+          if (!bridge.scanQR) return Promise.reject(new CapError('qr-code.unsupported', '桥未提供 scanQR（useQRCode 不可用）'))
+          return bridge.scanQR()
+        })(),
+      ),
+    // C33 useAuth：认证状态组合（createAuth 凭证托管 + login 桥 + storage 桥）
+    useAuth: () => {
+      const store = bridge.getStorage ? (bridge.getStorage() as CompatStorage) : undefined
+      const authStorage: AuthStorage = {
+        getItem: (key) => {
+          if (!store) return null
+          const v = store.get<string>(key)
+          return typeof v === 'string' ? v : null
+        },
+        setItem: (key, value) => {
+          if (store) store.set(key, value)
+        },
+      }
+      const manager = createAuth(authStorage)
+      return {
+        get token() {
+          return manager.getToken()
+        },
+        get isAuthenticated() {
+          return manager.isAuthenticated()
+        },
+        login: (provider) =>
+          wrap(
+            (() => {
+              if (!bridge.login) return Promise.reject(new CapError('login.unsupported', '桥未提供 login（useAuth.login 不可用）'))
+              return bridge.login(provider).then((r) => {
+                manager.setToken(r.token ?? r.code ?? null)
+                return r.token ?? r.code ?? ''
+              })
+            })(),
+          ),
+        logout: () =>
+          wrap(
+            (() => {
+              manager.setToken(null)
+              return Promise.resolve()
+            })(),
+          ),
+        setToken: (token) => manager.setToken(token),
+        subscribe: (cb) => manager.subscribe(cb),
+      }
+    },
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -547,6 +930,14 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       fetch: bridge.request !== undefined,
       permission: bridge.getPermission !== undefined,
       storage: bridge.getStorage !== undefined,
+      sensor: bridge.readSensor !== undefined,
+      brightness: bridge.getBrightness !== undefined,
+      phoneCall: bridge.makePhoneCall !== undefined,
+      biometric: bridge.checkBiometricSupport !== undefined,
+      payment: bridge.requestPayment !== undefined,
+      login: bridge.login !== undefined,
+      qrCode: bridge.scanQR !== undefined,
+      auth: bridge.login !== undefined && bridge.getStorage !== undefined,
     }),
   }
 }
