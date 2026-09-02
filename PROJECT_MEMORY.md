@@ -8,10 +8,32 @@
 
 ## 项目概览
 
-- **名称**：Proteus（普罗透斯）—— Vue 跨端编译框架（小程序 Skyline + Web）
-- **核心理念**：一份标准 Vue 源码，编译器化作 Web + 小程序两种形态（命名来源见指南"框架命名"章节）
+- **名称**：Proteus（普罗透斯）—— Vue 跨端编译框架
+- **核心理念（架构方向已定案，决策 #290）**：**一份标准 Vue 源码 → 语义 IR（C-IR/CompilerIR）→ 可插拔渲染后端**（Render anywhere, on any engine）；不再是「小程序编译器」——小程序降级为 Layer 1 兼容层
+- **四层可插拔（原则 #10 终极形态）**：编译（G-29 CompilerBackend）/ 逻辑（JS 引擎）/ UI（G-27 RenderBackend）/ 能力（G-28 NativeBackend）
 - **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
-- **文档**：`LLM_IMPLEMENTATION_GUIDE.md`（v2.2，6 阶段任务拆解；§0 痛点对照是设计决策依据）
+- **包规模**：31 个 @proteus-vue/* workspace 包（check:pkg 0 error）
+- **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
+
+---
+
+## 当前状态速览（最近一次更新：2026-09-02）★新会话以此为准
+
+**架构方向（已定案）**：语义 IR + 双 SPI（G-27 渲染 / G-28 原生）+ 全终端（G-25）+ 任意端（G-30）；slogan **One semantic model. Any render engine.**；小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（`@proteus-vue/compat-miniprogram` 承担，G-31 B6）。
+
+**最近里程碑（决策 #290-#310 链，全部已推送 origin/main）**：
+- **G-27 渲染后端**：`@proteus-vue/render-backend` 五后端原型集齐（Headless/VueDom/Native×3/Flutter）× semantic 消费 + conformance
+- **G-31 语义化**：B1-B6 ✅——C-IR schema（SEMANTIC_ENUM 53）+ toComponentIR + 全后端消费 semantic + B5 conformance 三端快照门禁（42 implemented 语义 × 6 后端）+ B6 compat-miniprogram（wx 桥 + codemod `proteus migrate mp`）
+- **G-29 编译后端 B1**：`@proteus-vue/compiler-backend`——真实模板编译 → C-IR（源码→C-IR 生产端雏形）
+- **G-32 完整语义**：B1 ✅ 128 原语 SSOT（`PRIMITIVE_CATALOG`）+ `proteus audit coverage` 门禁 → **B2 ✅ 布局 12 + UI 18 双端全落地（29 新组件 + Playground 演示页）** → **B4 ✅ Shell 10 全落地 + Gesture 核心**（`@proteus-vue/gesture` 纯识别器：tap/pan/swipe/pinch/rotate + v-gesture 指令 + useGesture）→ **B3 两期 ✅ Capability Hook 13/50**（useFetch/useLocation/useStorage 响应式/createReactiveStorage 等 + CMP007 `api-check` 门禁）
+
+**当前数量**：31 包 · 57 组件（components:audit ✅）· 42 implemented 语义（conformance 门禁 ✅）· **全量 1484/158 测试全绿**（Node 22；首跑偶发 1 flaky 为既有 tooltip 级联污染史，重跑全绿）· 双端构建通过（web vue-tsc 零错误 / mp 主包 615KB < 1200KB 预算）
+
+**G-32 路线图位置**：B1 ✅ · B2 ✅ · B4 ✅（Shell+Gesture 核心）· B3 ✅（13/50）→ **余：B3 续（37 能力：auth/login/sensor 等）· B5 工程原语 28 · B6 对照矩阵自动化**；另 **G-29 B2（RustBackend）· G-27 B6（混合渲染 Texture Sharing）** 候选中
+
+**★待用户决策（未提交）**：`docs/proteus-website-v3-plus/`（G-33 AI Agent 规划入库或抽离——其大部分与已整合 `-v3/` 重复，G-33 为新内容）见「待办/注意事项」。
+
+---
 
 ## 当前进度（更新于 2026-08-28）
 
@@ -369,7 +391,8 @@
 
 ## 验证状态（最近一次）
 
-- ✅ `npm run verify` 全绿：**1043 单测 / 120 文件**（e2e 排除）+ **Web E2E 套件 11/11**（npm run test:e2e:web：路由/渲染 8 + 关键路径 3）+ **MP E2E 冒烟 1/1**（proteus test e2e:mp examples 真机跑通 EXIT=0）+ build:web + build:mp（含 project.config.json 生成）+ build --workspaces（2026-08-31，★需 Node ≥22.12——require(ESM) 支持，web/jsdom 测试在 Node 18/20 下加载失败属环境差异非代码问题）
+- ✅ **当前基线（2026-09-02，决策 #310）**：全量 **1484/158 测试全绿**（Node 22；首跑偶发 1 flaky 为既有 tooltip 级联污染史，重跑全绿）+ **check:pkg 31 包 0 error** + **components:audit 57 组件全过** + **双端构建**（build:web vue-tsc 零错误 / build:mp 主包 615KB < 1200KB 预算 + gen-routes 20 页 + 57 组件 /proteus/ 产物 + _proteus/ 共享模块）；CLI 门禁实测：`api-check` examples ✅ / `migrate mp --dry-run` 报告正确 / `audit coverage` 100% + 闭环一致 / `components:audit` 57 ✅
+- 历史：`npm run verify` 全绿 **1043 单测 / 120 文件** + Web E2E 11/11 + MP E2E 冒烟 1/1（2026-08-31）——★需 Node ≥22.12（require(ESM) 支持，web/jsdom 测试在 Node 18/20 下加载失败属环境差异非代码问题）
 - ✅ 双端构建：web（vue-tsc 零错误 + vite）+ mp（gen-routes → vue-tsc → vite，产出 app.js + 各页四件套 + proteus/ 组件产物 + 共享模块）
 - ✅ 各 @proteus-vue/* 包独立构建（**22 个包**，prepare 钩子 + esbuild bundle）+ **npm 已发布**（2026-08-31：22/22 beta 上线，决策 #215）
 - ✅ CI 门禁齐备：stores 铁律 / capabilities:check / components:audit / i18n:check / generate types --check / config:check / 模板快照一致性
@@ -398,25 +421,38 @@
 - **types-plan（B3-B7 全批）**：✅ 2026-08——@proteus-vue/types 独立包（Platform/PlatformTarget + JSON Schema + generate types --check 防漂移）+ B4 平台守卫（matchPlatform/assertPlatform/exhaustiveCheck，铁律 #4）+ B5 validateConfig（config:check CLI 错误码）+ B6 加固（品牌类型 Brand/配置迁移 migrateConfig/Schema Registry extendConfigSchema）+ B7 migrate types codemod + CI 门禁；四层测试矩阵随批落地
 - **组件类型齐全**：✅ 2026-08——GlobalComponents 模板标签类型注册（16 组件 Pascal+kebab 双名）+ @vue-expect-error 断言 fixture（防退化）；examples vue-tsc 0 错误
 - **类型收口（T1-T4）**：✅ 2026-08——公共类型全部统一到 @proteus-vue/types（compiler-types/capabilities/router-types/api-types/config/index-shared），各实现包 types.ts 为 re-export 兼容层（消费方零改动）；runtime 值（ApiError/CapabilityError class、createTrace）留实现包；CapabilityPlatform = Platform alias；type-only 擦除验证 + 无环依赖；方案见 docs/proteus-types-plan/10-type-consolidation.md
-- ⚠ **根 vue-tsc 零错误**（2026-08-31 清理 web-button multiSelector 既有错误后清零）
+- ⚠ **根 vue-tsc 零错误**（2026-08-31 清理 web-button multiSelector 既有错误后清零；持续保持——见「当前状态速览」build:web vue-tsc 零错误）
 - 文档版本号已到 v2.53（git 仓库关联）
-- ⚠ **新规划文档批次未提交**：12 个新 docs 目录（architecture-facade/css-compat/app-renderer/safe-area/memory-plan/memorial-skeleton/app-capabilities/test-framework/types-plus/design-principle/glass/performance）+ `slider-check.png` 均为 untracked；一致性已修（决策 #157），待用户确认后 git add + 提交
+- ⚠ **★待用户决策（未提交，勿擅动）**：`docs/proteus-website-v3-plus/`（大部分与已整合 `-v3/` 重复 + **新增 G-33 AI Agent 规划**——G-33 是新内容，入库方式由用户定）；`docs/proteus-website-v3 2/`（macOS 重复解压产物）；`docs/proteus-website-v3.zip`（pack.sh 产物，先前用户删过 zip——尊重偏好未跟踪）。详见「后续规划」「当前状态速览」
 
-## 后续规划（2026-08-30 更新）
+## 后续规划（更新于 2026-09-02，★以「当前状态速览」为准）
 
-- **18-picker-swiper（规划 18）**：B1 selector ✅ + B2 multiSelector ✅（749 测试全绿时）；B2 余 **time / date / region**（date 年/月/日三列 fields 裁剪、region 省市区需内置精简行政区划数据标注 partial）；B3-B4 **swiper**（基础：指示点/手势/current 受控 → 进阶：autoplay/circular/vertical/display-multiple-items）；B5 双端实测 + 能力矩阵转 full
-- **14 批次 4 收尾**：picker/swiper 完成后能力矩阵转 full + examples 双端实测
-- **规划 17 方法论复用**：新组件视觉对齐（swiper/checkbox/radio/loading）按 weui-io-alignment 五步走 + --pwu-* 变量组（暗黑适配是默认要求）
-- **已知限制（用户验收时发现，未修）**：tabBar 100vh 遮挡 / 半屏页 / 长列表 list-view 摊平 / 下拉刷新 Web 端未桥接——用户没提先不做
-- 其余 roadmap 大项（v0.5 多端 / v0.6 App+Vapor / v1.0 生产可用）见 docs/roadmap.md，待 npm 发布 + 真实项目验证启动
+**主路线（G-32 完整语义落地，决策 #303-#310 链）**：
+- **G-32 B3 续**：⑤ Capability 余 37 能力 useXxx（auth/login/sensor/bluetooth/nfc/payment 等——桥 + Hook 模式已就绪 `packages/api/src/capability.ts`，逐能力补实现 + probe 标志）
+- **G-32 B5**：⑥ 工程原语 28（useState/useLifecycle/router 语义化（E11-17 对接既有 router）/动画 p-transition/p-animate/useAnimation 等——与 G-17 路由/G-34 HMR 协同）
+- **G-32 B6**：对照矩阵自动化（miniprogram-mapping 与 catalog 自动同步）+ codemod 完善（scroll-view/swiper AI 语义还原 + 路由名表）
+
+**并行候选（按顺序）**：
+- **G-29 B2**：RustBackend（SWC 生态 → 同一 CompilerIR——conformance IR Golden Test 已就绪，接入即可验证）
+- **G-27 B6**：混合渲染（Texture Sharing 抽象 + 页面级切后端 + DevTools 可视化）
+- **G-31 收尾**：B7 续（useFetch/useStorage 已收口——剩 router 语义化对齐）
+
+**★待用户决策（未提交，勿擅动）**：`docs/proteus-website-v3-plus/`（含新增 **G-33 AI Agent 规划**——让 AI 产出符合柔性 IR 的标准代码，依赖 G-29/G-31/G-32；其中大部分与已整合 `-v3/` 重复，仅 G-33 为新内容）——入库方式（抽独立 plan 目录 / 整个 -plus 恢复 / 并入 -v3）由用户定；还有 `docs/proteus-website-v3 2/`（macOS 重复解压产物）与 `docs/proteus-website-v3.zip`（pack.sh 产物，先前用户删过 zip）同样未处理。
+
+**遗留已知限制（未修，用户没提）**：tabBar 100vh 遮挡 / 半屏页 / 长列表 list-view 摊平 / 下拉刷新 Web 端未桥接；其余 roadmap 大项（v0.5 多端 / v0.6 App+Vapor / v1.0 生产可用）见 docs/roadmap.md。
 
 ## 会话恢复指引（新 LLM 按此顺序阅读）
 
-1. `PROJECT_MEMORY.md`（本文件）—— 进度 / 决策 / 偏差
-2. `LLM_IMPLEMENTATION_GUIDE.md` —— §0 痛点对照 + 当前阶段任务指令（§0.5 定位宪章）
-3. `proteus.config.ts` —— 当前配置
-4. `src/router/types.ts` + `src/platform/adapter.ts` —— 接口契约
-5. `packages/compiler/src/transforms/registry.ts` + `README.md` —— 编译规则注册表（AI 说明书，改动编译器前先查）
+1. `PROJECT_MEMORY.md`（本文件）—— **★先读顶部「当前状态速览」（2026-09-02）**：架构方向 / 最近里程碑（决策 #290-#310）/ 当前数量 / 路线图位置 / 待决项；决策链在文末（#1-#310，最近的关键决策 #290 架构定案、#300-#310 G-31/G-32 各批）
+2. `docs/proteus-architecture.md` —— **L0 规约（真理来源）**：原则 #0-#12 + 铁律 + 十系规则总表（G-31.1-4/CMP005-8/RND001-005 等）
+3. `docs/board-inventory.md` —— **架构规划全景（v2）**：六层 plan 分层索引 + 双路线对照 + 资产对照（改新增 plan/包后同步此表）
+4. `docs/proteus-positioning-v3.md` —— 对外门面（slogan One semantic model. Any render engine.）
+5. `docs/roadmap.md` + `docs/roadmap-2-plan/` —— 版本线 + 里程碑线（M1 双 SPI 原型 → M2 能力 → M3 生态）
+6. `LLM_IMPLEMENTATION_GUIDE.md` —— §0 痛点对照 + 阶段任务指令
+7. `packages/compiler/src/transforms/registry.ts` + `README.md` —— 编译规则注册表（AI 说明书，改动编译器前先查）
+8. `proteus.config.ts` —— 当前配置；`examples/pages/` 是 Playground 演示
+
+**关键包地图（决策 #303-#310 后）**：`@proteus-vue/render-backend`（G-27 五后端 + conformance）· `@proteus-vue/component-ir`（G-31 C-IR + G-32 128 原语 SSOT + audit）· `@proteus-vue/compiler-backend`（G-29）· `@proteus-vue/gesture`（G-32 ④）· `@proteus-vue/api/capability.ts`（G-32 ⑤ useXxx）· `@proteus-vue/compat-miniprogram`（G-31 B6 迁移）· `src/components/p-*`（57 组件聚合导出）
 281. **★Fluid System essence 定位落地（★用户「看下我新增的文档，以这个目的来做我们的柔性框架系统」——essence 双文档：柔性=系统能力收敛非单位换算）**：**定位吸收**——`docs/proteus-fluid-layout-essence-plan/`（01-fluid-vs-rpx.md + 02-system-capability-mapping.md + pack.sh）入库；`docs/proteus-fluid-system-plan/README.md` 开篇新增 §0「本质定位：柔性 = 系统能力收敛，不是升级版 rpx」（三层对照：数值缩放/结构自适应/形态自适应 + 原则 #10 与 Glass/SafeArea 同哲学 + 引用 01/02 全路径 + 降级铁律 G-22.2 落地指向）。**三项能力落地**：① **能力检测**——新 `packages/fluid/src/capabilities.ts`：`detectFluidCapabilities(supports?)`（CSS.supports 双参注入可单测；探测 clamp `width:clamp(1px,1vw,10px)` / grid `display:grid` + `grid-template-columns:repeat(auto-fit,minmax(1px,1fr))` / containerQuery `container-type:inline-size` / flexGap `gap:1px`；probe 抛错 → false；**无 CSS.supports（MP 逻辑层/SSR）→ 假设全支持**——渲染端自决降级）；② **统一断点入口**——新 `packages/fluid/src/layout.ts`：`createSizeAwareObserver(el, opts)`（essence 02 §2「useBreakpoint + onLayoutChange 桥接各端」的纯逻辑底座：createContainerQuery 容器级 + viewportSize 注入 + resizeTarget 注入监听 resize/orientationchange → 双断点状态 { containerBreakpoint, viewportBreakpoint, orientation, 双宽 } 订阅；destroy 全量释放）；③ **p-grid 降级（G-22.2 铁律「朴素但正确」）**——`src/components/p-grid/index.vue`：初始化 `detectFluidCapabilities().grid`（MP 无 CSS.supports → 恒 grid）；不支持 → 容器 flex-wrap + gap + `--pgrid-min` 内联注入 + class `p-grid-fallback`，slot 子项 min-width/flex 由 `<style global>` 规则 `.p-grid-fallback > *` 提供（★组件内联样式无法触达 slot 子元素——全局规则按容器类切换是唯一简洁路径；`<style global>` 是 Proteus 扩展双端已支持：Web plugin-vue 改回 `<style>`、MP 编译器显式全局不作用域化）。★踩坑：① happy-dom **自带 CSS.supports 且全返回 true**——既有 p-grid 测试不受影响（grid 模式），降级测试用注入 stub 控制分支；② TS2722 闭包内 css.supports 收窄丢失——先捕获函数引用再闭包；③ vitest 默认 css:false 不注入 SFC 样式——全局规则存在性断言改双端构建产物验证（web css / mp wxss 均含 `.p-grid-fallback > *`，MP 侧 px→rpx 转换 320rpx）。验证：fluid-system +7（能力检测三分支 + 统一断点入口双断点/destroy 释放/同宽去重 + p-grid 降级/既有语义）+ 全量 1330/147 全绿（Node 22）+ check:pkg 26 包 0 error + fluid 构建 8.7kb + 双端 build（web css 含降级规则 / mp 19 页 + proteus/p-grid wxss 含规则 + js gridOk）；**essence 定位落地（能力检测 + 统一断点入口 + p-grid 降级，Flexible=System Capability 收敛闭环）**；下一候选：S2（p-safe 安全区 env()/p-aspect/折叠形态 display-mode demo）或 M14 录屏回放
 282. **★Fluid System S2 落地（★用户「继续S2」——p-safe 安全区 + p-aspect 纵横比 + 折叠形态 demo，验收「折叠屏/刘海 demo」）**：① **capabilities 扩展 aspectRatio**——`detectFluidCapabilities` 新增 `aspectRatio` 探测（`aspect-ratio` / `1 / 1`），ALL_SUPPORTED/全部断言同步五字段；② **p-aspect 组件**——`src/components/p-aspect/index.vue`：`ratio`（宽/高比，非法≤0 兜底 16/9）+ `maxWidth`（0 不限）；aspectRatio 支持 → 原生 `aspect-ratio: N / 1`；不支持 → **padding-top hack 降级**（height:0 + paddingTop:1/ratio% + 子项绝对定位铺满——`<style global>` 规则 `.p-aspect-fallback > *` 按类切换，同 p-grid 降级模式）；③ **p-safe 组件 + 纯逻辑抽包**——新 `packages/fluid/src/safe-area.ts`：`resolveSafeAreaStyle({area,fallback,fold,displayMode})` 纯函数（**essence「把系统能力搬进框架」原则 #10 + G-09 SafeArea 同语义**：area top/bottom/left/right/horizontal/all → `env(safe-area-inset-*)`；fallback>0 → `max(env(...), Npx)`「至少 Npx」包裹；**fold 完整开关**——仅 displayMode fold/span 时 hinge 避让 `paddingLeft: env(fold-left,0px)` + `paddingRight: calc(100% - env(fold-left,0px) - env(fold-width,0px))`（Chrome 折叠屏 env，fold-right 由 fold-left+fold-width 推导），expand/standard → 空（不误伤普通环境），fold=false 恒 area 分支）；`src/components/p-safe/index.vue` 薄壳：displayMode 状态桥接 createDeviceEnv（onMounted 订阅/onUnmounted destroy）+ resolveSafeAreaStyle → CSSProperties；④ **demo**——fluid-system-demo 页扩展 S2 区块（p-safe 顶/底/四边 fallback 演示 + fold hinge 说明 + p-aspect 16:9/1:1 + display-mode/方向指示器 createDeviceEnv）+ examples/index.html **viewport-fit=cover**（env() 生效前提）+ 组件聚合导出 PSafe/PAspect。★踩坑：① **happy-dom CSS 解析器丢弃 env()/max()**（cssstyle 拒绝非标准值——paddingTop 赋值后读回空串，calc() 被解析成 56.25%）→ p-safe 样式字符串断言无法组件级做 → **样式生成抽纯函数 resolveSafeAreaStyle 进 fluid 包**（字符串级断言可靠 + 组件薄壳只做状态桥接，正好符合 essence 定位）；② fold=true 且形态 expand/standard 时首版落入 area 分支（area 默认 top → 误加 paddingTop）——修：fold 为完整开关，非 fold/span 返回空。验证：fluid-system +11（resolveSafeAreaStyle 五组纯函数 + p-safe 组件 class 分支/matchMedia 注入 + p-aspect 原生/降级/兜底 + capabilities aspectRatio）+ 全量 1341/147 全绿（Node 22）+ check:pkg 26 包 0 error + fluid 构建 + 双端 build（web css 含 .p-aspect-fallback / mp 19 页 + proteus/p-safe·p-aspect 组件编译 + wxss 降级规则 + js isFoldActive）；**S2 落地（p-safe env()+折叠 hinge + p-aspect 降级 + 形态 demo）**；下一候选：S3（p-sidebar/p-toolbar + 车机焦点导航 + drive-mode）或 M14 录屏回放
 283. **★Fluid System S3 落地（★用户「继续」——p-sidebar/p-toolbar + 车机焦点导航 + drive-mode，验收「窄屏 bottom-bar → 宽屏 side-rail」）**：① **fluid 包纯逻辑**——`motion.ts`：`shouldReduceMotion({isDriveMode, prefersReducedMotion})`（任一命中 → true，组件据此加 no-motion class 禁用 transition/animation）；`nav.ts`：`calcVisibleToolbarItems({count,containerWidth,itemWidth,moreWidth})`（全部放得下 → count 不折叠；溢出 → floor((容器-more)/项宽) 钳制 [1, count-1]；**容器不可测（MP 无 RO/初始 0）→ 返回 count 不折叠**——铁律 G-22.2「朴素但正确」）；② **p-sidebar**——`src/components/p-sidebar/index.vue`：容器宽 < minSidebarWidth → bottom-bar（column 布局 main 上 nav 下水平）；≥ → side-rail（row 布局 nav 左侧垂直定宽 navWidth）；createContainerQuery 驱动 + **车机 d-pad 焦点导航**（Arrow 方向键在 nav 子项间移动焦点——内部 focusIndex 游标 + focus()，onMounted addEventListener Web only，MP 无 DOM 跳过）+ **drive-mode 动效门**（createDeviceEnv → shouldReduceMotion → no-motion class）；③ **p-toolbar**——`src/components/p-toolbar/index.vue`：items（{key,label}）+ itemWidth/moreWidth/moreLabel；visibleCount computed（单行表达式体）→ 溢出项收进「更多」展开面板（hiddenCount 角标）+ select emit；无 RO → 不折叠全显示；④ **demo**——fluid-system-demo S3 区块（p-sidebar 拖宽/窄看切换 + p-toolbar 溢出折叠 + 动效门状态指示）；⑤ 组件聚合导出 PSidebar/PToolbar。★踩坑：① **组件审计 no-platform-api**——p-sidebar 首版 `document.activeElement` 直接调用被拒（组件只允许 L2 抽象）→ 改内部 focusIndex 游标（不读 document）；② **vue-tsc TS18046**——items prop 是 Array 泛型缺失 → v-for item 为 unknown——首版 `as Array<{ key: string; label: string }>` 内联对象类型含逗号 → **MP 编译器剥 as 后 JS 产物 Unexpected token ','** → 改方法体内简单类型 `as { key?: string }`（无逗号）+ itemKey/itemLabel 方法取字段；③ **computed 箭头表达式体尾逗号**——visibleCount 多行对象参数 `}),)` 双逗号 JS 语法错误 → 单行表达式体（MP computed 按表达式拼接）。验证：fluid-system +9（shouldReduceMotion 组合 + calcVisibleToolbarItems 五组边界 + p-sidebar 默认 bottom-bar/no-motion + p-toolbar 全显示/select emit）+ 全量 1350/147 全绿（Node 22）+ check:pkg 26 包 0 error + fluid 构建 + 双端 build（web vue-tsc 零错误 / mp 19 页 + proteus/p-sidebar·p-toolbar 编译）；**S3 落地（自适应导航 + 溢出折叠 + 车机焦点 + drive-mode 动效门）**；下一候选：S4（p-scale 动态字号/密度 + FLD 规则扩展）或 M14 录屏回放
