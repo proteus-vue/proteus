@@ -1,7 +1,8 @@
 # 小程序全量能力对照矩阵
 
 > **用途**：完整性标尺。「小程序能做的，Proteus 都能做（且 API 更好）」的形式化证明。  
-> **口径**：基于微信小程序官方文档最新稳定版（含基础库全部 API + 全部内置组件）。
+> **口径**：基于微信小程序官方文档最新稳定版（含基础库全部 API + 全部内置组件）。  
+> **★G-32 B6（对照矩阵自动化）**：本文件的**机器事实版本**由 `npm run gen:docs` 自动生成于 `docs/generated/miniprogram-mapping.md`（SSOT = `packages/component-ir/src/audit.ts` 的 `MP_MAPPING_MATRIX`，与 catalog 实时同步）；本文件保留为**规划叙述**（含「说明」列语义分析）。两处冲突时以生成文件为准。
 
 ---
 

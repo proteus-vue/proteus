@@ -12,6 +12,9 @@ import type { WxCompat } from './wx-compat'
 export { AUTO_CODEMOD_TAGS, MANUAL_TAGS, isAutoCodeable, isManualTag } from './tags'
 export { migrateMpSource, countMigration, MANUAL_MARK } from './codemod'
 export type { MigrationStats } from './codemod'
+// ★G-32 B6：路由名表（迁移工具链——wx 导航 → router.push({ name }) 候选表）
+export { collectRouteTargets, routeNameFromPath, buildRouteTable, NAVIGATION_APIS } from './route-table'
+export type { RouteTarget } from './route-table'
 export { createWxCompat } from './wx-compat'
 export type { WxCompat } from './wx-compat'
 

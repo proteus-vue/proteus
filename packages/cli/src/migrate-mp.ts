@@ -3,7 +3,7 @@
 //   纯函数 migrateMpSource（@proteus-vue/compat-miniprogram）驱动：目录递归 / 单文件；--dry-run 只报告
 import fs from 'node:fs'
 import path from 'node:path'
-import { migrateMpSource, countMigration } from '@proteus-vue/compat-miniprogram'
+import { migrateMpSource, countMigration, collectRouteTargets, buildRouteTable } from '@proteus-vue/compat-miniprogram'
 import type { MigrationStats } from '@proteus-vue/compat-miniprogram'
 
 export interface MigrateMpResult {
@@ -26,9 +26,11 @@ export function runMigrateMp(target: string, dryRun = false): MigrateMpResult {
   const files: string[] = fs.existsSync(target) && fs.statSync(target).isFile() ? [target] : []
   if (!files.length && fs.existsSync(target)) walk(target, files)
   const reports: MigrateMpResult['files'] = []
+  const allSources: string[] = []
   const lines = ['[proteus-migrate] 小程序 → Proteus 语义迁移（G-31 B6 codemod）：']
   for (const f of files) {
     const src = fs.readFileSync(f, 'utf-8')
+    allSources.push(src)
     const migrated = migrateMpSource(src)
     const stats = countMigration(src, migrated)
     const changed = migrated !== src
@@ -47,6 +49,16 @@ export function runMigrateMp(target: string, dryRun = false): MigrateMpResult {
   )
   if (totalManual) {
     lines.push('提示：manual 标注项需人工处理（语义识别 scroll-view/swiper / 路由名表 / 能力提升）——详见 docs/proteus-component-semantics-plan/migration.md')
+  }
+  // ★G-32 B6：路由名表（wx.navigateTo → router.push({ name }) 语义化桥的 name 候选）
+  const table = buildRouteTable(allSources)
+  if (table.length) {
+    const totalNav = allSources.reduce((a, src) => a + collectRouteTargets(src).length, 0)
+    lines.push(`[proteus-migrate] 路由名表：扫描到 ${totalNav} 处导航（${table.length} 个去重目标）：`)
+    for (const t of table) {
+      lines.push(`  ${t.path} → name: '${t.name}'（${t.apis.join('/')} ≤ router.push({ name })）`)
+    }
+    lines.push('[proteus-migrate] 提示：若目标路径在 Proteus 工程 pagesDir 无对应页面，需在 gen-routes 的 scan 收录后补 name（约定式路由 derivePath）')
   }
   lines.push('[proteus-migrate] 迁移后建议：npm i @proteus-vue/compat-miniprogram + bindCompatPlatform(createPlatformAPI())（Step 1 兜底）')
   return { ok: true, files: reports, text: lines.join('\n') }
