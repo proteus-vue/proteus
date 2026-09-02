@@ -18,6 +18,8 @@ export type NodeHandle = unknown
 /** 语义节点描述（IR 层：后端消费的中间表示，不绑定任何平台） */
 export interface IRNode {
   type: string
+  /** ★G-31：语义类型（layout.grid/ui.button/...）——Backend 映射 semantic 而非 tag 字符串；缺省用 type */
+  semantic?: string
   props: Record<string, unknown>
   children: IRNode[]
   ref?: unknown

@@ -10,6 +10,8 @@ import {
   SEMANTIC_BACKEND_MAP,
   TAG_SEMANTIC_MAP,
   SEMANTIC_ENUM,
+  toComponentIR,
+  toComponentTree,
 } from '@proteus-vue/component-ir'
 
 describe('G-31 validateComponentIR（B1 结构校验）', () => {
@@ -84,5 +86,31 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     for (const s of SEMANTIC_ENUM) {
       expect(SEMANTIC_BACKEND_MAP[s], `缺 ${s} 映射`).toBeDefined()
     }
+  })
+})
+
+describe('G-31 toComponentIR（B2：模板标签 → C-IR 转换器）', () => {
+  it('p-* 语义组件 → C-IR（semantic 字段）；props 透传', () => {
+    const ir = toComponentIR('p-grid', { minColWidth: 160, maxCols: 4 })
+    expect(ir).toEqual({ tag: 'p-grid', semantic: 'layout.grid', props: { minColWidth: 160, maxCols: 4 }, children: [] })
+    expect(toComponentIR('p-adaptive', {}, []))?.toMatchObject({ semantic: 'layout.adaptive' })
+    expect(toComponentIR('p-button', {})).toMatchObject({ semantic: 'ui.button' })
+  })
+
+  it('非 p- 标签（view/text 等小程序标签）→ null（Layer 1 兼容层不产生 Layer 0 C-IR）', () => {
+    expect(toComponentIR('view', {})).toBeNull()
+    expect(toComponentIR('text', {})).toBeNull()
+    expect(toComponentIR('scroll-view', {})).toBeNull()
+    expect(toComponentIR('unknown-p-tag', {})).toBeNull() // 未知 p- 标签不臆造语义
+  })
+
+  it('toComponentTree：递归转换，兼容层子节点丢弃', () => {
+    const tree = toComponentTree('p-grid', { minColWidth: 160 }, [
+      { tag: 'p-text', props: { variant: 'h1' }, children: [] },
+      { tag: 'view', props: {}, children: [] }, // 兼容层标签丢弃
+    ])
+    expect(tree).toMatchObject({ semantic: 'layout.grid' })
+    expect(tree?.children).toHaveLength(1)
+    expect(tree?.children[0]).toMatchObject({ tag: 'p-text', semantic: 'ui.text' })
   })
 })

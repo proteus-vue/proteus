@@ -6,3 +6,5 @@ export type { ComponentIR } from './schema'
 export { validateComponentIR, validateGridConstraints, validateComponentTree, DEFAULT_DESIGN_WIDTH } from './validate'
 export type { CIRDiagnostic } from './validate'
 export { SEMANTIC_BACKEND_MAP, mapSemanticToBackend } from './map'
+// ★G-31 B2：模板标签 → C-IR 转换器（G-29 生产端前置纯函数）
+export { toComponentIR, toComponentTree } from './to-ir'

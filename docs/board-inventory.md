@@ -51,7 +51,7 @@
 | `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
-| `proteus-component-semantics-plan` | **G-31** | 🟡 **B1 已落地** | ★**入口语义化**：组件/API 由 Proteus 语义 IR（C-IR）定义，非小程序组件集翻译——`@proteus-vue/component-ir`（C-IR schema + 属性约束校验 GRID_CONFLICT/CMP006 + semantic 映射）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向**（现有 proteus-* 模拟/wx.* 入口归 compat 层） |
+| `proteus-component-semantics-plan` | **G-31** | 🟡 **B1/B2 已落地** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + **toComponentIR（模板标签→C-IR）+ VueDom 消费 semantic（IRNode.semantic → proteus-* 语义类）**；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
 
 ### L2 核心引擎
 

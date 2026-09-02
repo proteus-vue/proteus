@@ -157,6 +157,33 @@ describe('G-27 VueDomBackend（B2：DOM nodeOps——Vue 生态零成本复用�
     expect(runBackendConformance(createVueDomBackend(document)).ok).toBe(true)
   })
 
+  it('★G-31 B2：VueDom 消费 semantic——layout.grid → div.proteus-grid（Backend 映射 semantic 非 tag）', () => {
+    const b = createVueDomBackend(document)
+    const grid = b.createElement({ type: 'p-grid', semantic: 'layout.grid', props: {}, children: [] }) as HTMLElement
+    expect(grid.tagName).toBe('DIV')
+    expect(grid.getAttribute('class')).toBe('proteus-grid')
+    const text = b.createElement({ type: 'p-text', semantic: 'ui.text', props: {}, children: [] }) as HTMLElement
+    expect(text.tagName).toBe('SPAN')
+    // 无 semantic → 按 type 原样（兼容层标签）
+    const view = b.createElement({ type: 'view', props: {}, children: [] }) as HTMLElement
+    expect(view.tagName).toBe('VIEW')
+  })
+
+  it('★G-31 B2 端到端：C-IR 树 → VueDom 渲染到 DOM（布局原语 Web 跑通——SPI 侧验证）', () => {
+    const b = createVueDomBackend(document)
+    const root = b.createElement({ type: 'p-box', semantic: 'layout.box', props: {}, children: [] }) as HTMLElement
+    const grid = b.createElement({ type: 'p-grid', semantic: 'layout.grid', props: { minColWidth: 160 }, children: [] }) as HTMLElement
+    const text = b.createElement({ type: 'p-text', semantic: 'ui.text', props: {}, children: [] }) as HTMLElement
+    b.insert(grid, root)
+    b.insert(text, grid)
+    b.setText(text, '你好')
+    b.patchProp(grid, 'style', null, { display: 'grid' })
+    expect(root.children.length).toBe(1)
+    expect((root.children[0] as HTMLElement).className).toBe('proteus-grid')
+    expect((root.children[0] as HTMLElement).style.display).toBe('grid')
+    expect(((root.children[0] as HTMLElement).children[0] as HTMLElement).textContent).toBe('你好')
+  })
+
   it('无 document 环境且未注入 → 抛错（SSR 场景应改用 Headless）', () => {
     const orig = globalThis.document
     ;(globalThis as { document?: unknown }).document = undefined

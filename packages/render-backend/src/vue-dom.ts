@@ -28,6 +28,20 @@ const VUE_DOM_CAPABILITIES: BackendCapabilities = {
   input: ['touch', 'cursor'],
 }
 
+/** ★G-31：semantic 语义 → Web 元素 + 语义类（Backend 消费 semantic 而非 tag——布局语义映射） */
+const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
+  'layout.box': { tag: 'div', className: 'proteus-box' },
+  'layout.stack': { tag: 'div', className: 'proteus-stack' },
+  'layout.grid': { tag: 'div', className: 'proteus-grid' },
+  'layout.fluid': { tag: 'div', className: 'proteus-fluid' },
+  'layout.adaptive': { tag: 'div', className: 'proteus-adaptive' },
+  'layout.fit': { tag: 'div', className: 'proteus-fit' },
+  'ui.text': { tag: 'span' },
+  'ui.button': { tag: 'button' },
+  'ui.image': { tag: 'img' },
+  'ui.input': { tag: 'input' },
+}
+
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {
   const documentLike = doc ?? defaultDocument()
 
@@ -43,6 +57,15 @@ export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {
     capabilities: VUE_DOM_CAPABILITIES,
 
     createElement(node: IRNode): NodeHandle {
+      // ★G-31：有 semantic → 按语义映射元素（proteus-* 语义类）；否则按 type（兼容层/原样）
+      if (node.semantic) {
+        const mapped = SEMANTIC_WEB_MAP[node.semantic]
+        if (mapped) {
+          const el = documentLike.createElement(mapped.tag)
+          if (mapped.className) el.setAttribute('class', mapped.className)
+          return el
+        }
+      }
       return documentLike.createElement(node.type)
     },
 
