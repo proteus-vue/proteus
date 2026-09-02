@@ -39,6 +39,11 @@
 
 ## B3 — Rust 后端（性能标杆，M2）
 
+> **★前置注记（决策 #336）**：真 IncrementalSession 已在 Node 参考落地（`g38-session.ts`——依赖图 + 签名缓存 + 局部重算 + commit/rollback，C-06 全 PASS）——
+> Rust 后端照抄语义即可。**开工前须决策 template parse 策略**：Vue `<template>` 在 Rust 生态无官方 parser（oxc/swc 只解析 JS/TS——
+> 文档「parse 复用 swc/tree-sitter」实际覆盖 <script>/模块层）；候选：①自研完整 Vue template parser（把轻量扫描器升级为真 AST）
+> ②tree-sitter-vue（community grammar，覆盖有限）③JS parse 保留 + Rust transform/emit（增量替换，G-38 本意）。
+
 **目标**：兑现 G-29「Node 遇瓶颈切 Rust」。
 
 | 交付物 | 责任 |

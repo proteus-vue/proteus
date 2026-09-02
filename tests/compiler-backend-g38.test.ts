@@ -6,7 +6,10 @@
 //   ③ emit：code/hash + 确定性（C-05-01/03/05）④ 生命周期 initialize/dispose/幂等（C-02）⑤ session noop 形状（C-06-01）
 //   ⑥ cacheKey/artifactHash（C-09-01）⑦ capabilities 诚实声明（incremental:false → C-06-02~05 SKIP 依据）
 import { describe, it, expect } from 'vitest'
-import { createG38NodeBackend, g38Hash } from '@proteus-vue/compiler-backend'
+import { createG38NodeBackend, g38Hash, scanSfcImports } from '@proteus-vue/compiler-backend'
+import type { G38IncrementalSession } from '@proteus-vue/compiler-backend'
+
+type Session = G38IncrementalSession & { track(file: string, content: string, deps?: string[]): void }
 
 const backend = createG38NodeBackend()
 
@@ -97,7 +100,7 @@ describe('G-38 Node 参考实现：emit / 生命周期 / 会话 / 哈希', () =>
     backend.dispose()
   })
 
-  it('IncrementalSession：noop 会话形状完整（C-06-01/10-02；incremental:false → 02-05 SKIP 依据）', () => {
+  it('IncrementalSession：真会话形状完整（C-06 组；incremental:true 后 02-05 全 PASS 依据）', () => {
     const s = backend.createIncrementalSession('/tmp')
     expect(s.id).toBeTruthy()
     expect(() => {
@@ -111,8 +114,8 @@ describe('G-38 Node 参考实现：emit / 生命周期 / 会话 / 哈希', () =>
     }).not.toThrow()
   })
 
-  it('capabilities 诚实声明（incremental:false/sourceMap:false → 对应组 SKIP）', () => {
-    expect(backend.capabilities).toMatchObject({ incremental: false, sourceMap: false, treeShake: false, backend: 'js', deterministic: true, supportedLanguages: ['sfc', 'vue'] })
+  it('capabilities 诚实声明（incremental:true 决策 #336 / sourceMap·treeShake false → 对应组 SKIP）', () => {
+    expect(backend.capabilities).toMatchObject({ incremental: true, sourceMap: false, treeShake: false, backend: 'js', deterministic: true, supportedLanguages: ['sfc', 'vue'] })
   })
 
   it('cacheKey 随输入变化 / artifactHash 确定性（C-09-01）', () => {
@@ -130,5 +133,61 @@ describe('G-38 Node 参考实现：emit / 生命周期 / 会话 / 哈希', () =>
     expect(backend.id).toBe('node')
     expect(backend.version).toBeTruthy()
     expect(Array.isArray(backend.reportDiagnostics({} as never))).toBe(true)
+  })
+})
+
+describe('G-38 真 IncrementalSession（决策 #336——01 §5/04 依赖图 + 签名缓存 + 局部重算）', () => {
+  it('track 签名缓存：同内容二次 track → 缓存命中零重算（01 §5.3）', () => {
+    const s = backend.createIncrementalSession('/tmp') as Session
+    s.track('a.vue', '<template><p-grid /></template>')
+    s.track('a.vue', '<template><p-grid /></template>') // 内容未变 → 签名命中
+    const st = s.getStats() as { cacheHits: number; recomputes: number }
+    expect(st.cacheHits).toBe(1)
+    expect(st.recomputes).toBe(1)
+  })
+
+  it('invalidate + getContent 注入：内容变更 → recompute 仅重算脏文件', () => {
+    const contents = new Map<string, string>([['a.vue', '<template><p-grid /></template>']])
+    const s = backend.createIncrementalSession('/tmp', { getContent: (f) => contents.get(f) ?? null }) as Session
+    s.track('a.vue', '<template><p-grid /></template>')
+    contents.set('a.vue', '<template><p-stack /></template>') // 变更
+    s.invalidate('a.vue')
+    const diff = s.recompute()
+    expect(diff.changed).toEqual(['a.vue'])
+    expect(diff.affectedFiles).toContain('a.vue')
+    // 再次 recompute（内容已与 track 一致）→ 签名命中 → 空 diff
+    s.invalidate('a.vue')
+    const diff2 = s.recompute()
+    expect(diff2.changed).toEqual([])
+  })
+
+  it('反向依赖闭包：依赖文件变更 → affectedFiles 含依赖方（04 增量语义）', () => {
+    const contents = new Map<string, string>([
+      ['dep.ts', 'export const x = 1'],
+      ['a.vue', '<template><p-grid /></template>'],
+    ])
+    const s = backend.createIncrementalSession('/tmp', { getContent: (f) => contents.get(f) ?? null }) as Session
+    s.track('dep.ts', contents.get('dep.ts')!, [])
+    s.track('a.vue', contents.get('a.vue')!, ['dep.ts']) // a.vue 依赖 dep.ts
+    contents.set('dep.ts', 'export const x = 2') // dep 变更
+    s.invalidate('dep.ts')
+    const diff = s.recompute()
+    expect(diff.affectedFiles).toContain('dep.ts')
+    expect(diff.affectedFiles).toContain('a.vue') // 反向依赖闭包
+    expect(s.getDependents('dep.ts')).toEqual(['a.vue'])
+  })
+
+  it('commit/rollback 快照：rollback 丢弃 commit 后变更', () => {
+    const s = backend.createIncrementalSession('/tmp') as Session
+    s.track('a.vue', '<template><p-grid /></template>')
+    s.commit()
+    s.track('b.vue', '<template><p-text>hi</p-text></template>') // commit 后新增
+    s.rollback()
+    expect(s.getStats().files).toBe(1) // 回到 commit 点（仅 a.vue）
+  })
+
+  it('scanSfcImports：提取 script import 依赖（template 无 import）', () => {
+    expect(scanSfcImports('<template><p-text /></template>')).toEqual([])
+    expect(scanSfcImports(`<script setup>import { x } from './store.ts'\nimport y from '@proteus-vue/api'</script>`)).toEqual(['./store.ts', '@proteus-vue/api'])
   })
 })

@@ -52,6 +52,9 @@ export type {
 // ★G-38 B2 尾：FallbackBackend（01 §6）——preferred 不可用 → 自动降级 node + 可观测事件（决策 #335）
 export { createG38FallbackBackend } from './g38-fallback'
 export type { G38FallbackOptions, G38FallbackResult, G38FallbackLog } from './g38-fallback'
+// ★G-38 B3 前置：真 IncrementalSession（01 §5/04——依赖图 + 签名缓存 + 局部重算；决策 #336）
+export { createG38IncrementalSession, scanSfcImports } from './g38-session'
+export type { G38SessionOptions } from './g38-session'
 // ★G-38 B2 尾：仓库内 conformance 套件（02 §C-01~C-10 权威 TS 版——proteus conformance CLI + vitest 消费）
 export { createG38TerminalBackend, runG38Conformance, formatG38Conformance } from './g38-conformance'
 export type { G38ConformanceResult, G38ConformanceSummary } from './g38-conformance'

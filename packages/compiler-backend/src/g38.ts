@@ -2,8 +2,8 @@
 // ★G-38（proteus-compiler-backend-spi-plan）B1/B2-Node 参考实现：parse/transform/emit 三阶段 SPI 真落地
 //   与 G-29（compiler-backend-1-plan，compile 单入口 → CompilerIR）是两套契约——G-38 是「写编译后端的插头标准」：
 //   parse(source,ctx) → ProgramIR（语法树）/ transform(ProgramIR,ctx) → IRModule（语义 IR，含 ComponentIR→G-37 消费）/
-//   emit(IRModule,ctx) → CompiledArtifact；+ 生命周期 initialize/dispose + IncrementalSession（noop，incremental:false 诚实声明）+
-//   reportDiagnostics/getCacheKey/getArtifactHash
+//   emit(IRModule,ctx) → CompiledArtifact；+ 生命周期 initialize/dispose + IncrementalSession（真实现，决策 #336——
+//   依赖图 + 签名缓存 + 局部重算，见 g38-session.ts）+ reportDiagnostics/getCacheKey/getArtifactHash
 //   参考实现基于 @vue/compiler-sfc + @vue/compiler-dom（真实解析，非 runner mock 的正则扫描）+ @proteus-vue/component-ir 语义表
 //   类型命名加 G38 前缀（G-29 已占用 ProteusCompilerBackend/CompilerCapabilities——同形不同名，文档 01 §2.1 注记）
 //   目标：conformance-runner.js --backend 指向本实现 → 42 项按能力声明 SKIP 合规（决策 #334）
@@ -12,6 +12,8 @@ import { parse as domParse, NodeTypes } from '@vue/compiler-dom'
 import type { AttributeNode, DirectiveNode, ElementNode, TemplateChildNode } from '@vue/compiler-dom'
 import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
 import type { ComponentIR } from '@proteus-vue/component-ir'
+import { createG38IncrementalSession } from './g38-session'
+import type { G38SessionOptions } from './g38-session'
 
 // —— 类型（G-38 01 §2.1/§2.3/§4/§5 同形；命名加前缀防撞 G-29） ——
 
@@ -106,6 +108,8 @@ export interface G38IncrementalSession {
   rollback(): void
   getStats(): Record<string, unknown>
   dispose(): void
+  /** ★宿主驱动扩展（04-incremental-compilation：首次全量构建逐文件注册——非规范必需方法） */
+  track?(file: string, content: string, deps?: string[]): void
 }
 
 export interface G38CompilerContext {
@@ -134,7 +138,7 @@ export interface G38CompilerBackend {
   parse(source: G38SourceFile, ctx?: G38ParseContext): G38ProgramIR
   transform(ast: G38ProgramIR, ctx?: G38TransformContext): G38IRModule
   emit(module: G38IRModule, ctx?: G38EmitContext): G38CompiledArtifact
-  createIncrementalSession(cacheDir: string): G38IncrementalSession
+  createIncrementalSession(cacheDir: string, opts?: G38SessionOptions): G38IncrementalSession
   reportDiagnostics(module: G38IRModule): G38Diagnostic[]
   getCacheKey(input: G38SourceFile): string
   getArtifactHash(artifact: G38CompiledArtifact): string
@@ -283,7 +287,7 @@ export function createG38NodeBackend(): G38CompilerBackend {
     id: 'node',
     version: '0.1.0',
     capabilities: {
-      incremental: false, // 增量会话 noop（诚实声明——真增量属后续批次）
+      incremental: true, // ★决策 #336：真增量会话（g38-session.ts——依赖图+签名缓存+局部重算）
       aot: false,
       sourceMap: false,
       minify: false,
@@ -362,29 +366,9 @@ export function createG38NodeBackend(): G38CompilerBackend {
       return { code, map: null, hash: g38Hash(code) }
     },
 
-    createIncrementalSession(cacheDir) {
-      // ★B1/B2 阶段：noop 会话（incremental:false 诚实声明——真增量（依赖图+签名缓存）属 Rust/WASM 批次）
-      void cacheDir
-      return {
-        id: 'noop',
-        invalidate() {},
-        invalidateAll() {},
-        recompute() {
-          return { changed: [], removed: [], added: [], affectedFiles: [] }
-        },
-        getDependencies() {
-          return []
-        },
-        getDependents() {
-          return []
-        },
-        commit() {},
-        rollback() {},
-        getStats() {
-          return { incremental: false, mode: 'noop' }
-        },
-        dispose() {},
-      }
+    createIncrementalSession(cacheDir, opts) {
+      // ★决策 #336：真增量会话（依赖图 + 签名缓存 + invalidate/recompute 局部重算 + commit/rollback 快照；opts.getContent 宿主注入）
+      return createG38IncrementalSession(backend, cacheDir, opts)
     },
 
     reportDiagnostics(module) {
