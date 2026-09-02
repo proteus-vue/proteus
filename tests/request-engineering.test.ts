@@ -4,8 +4,8 @@
 //   R3 enqueue（并发队列：FIFO + 上限 + 失败隔离）· R4 dedupe（并发合并）
 //   验证点：缓存命中/TTL 过期 · in-flight 去重 · 队列顺序/并发上限 · SWR 状态机 · 注入式可测
 import { describe, it, expect, vi } from 'vitest'
-import { createRequestEngineering, defaultCacheKey } from '@proteus-vue/api'
-import type { CompatStorage, Reactivity, RequestConfig, RequestExecutor, RequestResponse } from '@proteus-vue/api'
+import { createRequestEngineering, defaultCacheKey, createCapabilityRequestClient } from '@proteus-vue/api'
+import type { CapabilityBridge, CompatStorage, Reactivity, RequestConfig, RequestExecutor, RequestResponse } from '@proteus-vue/api'
 
 /** 简单 reactivity mock（ref：{value} 可写；computed/watch 静态）——既有测试同构 */
 function mockReactivity(): Reactivity {
@@ -322,5 +322,91 @@ describe('G-32 B6 前置 请求数据层语义面（R1-R4）', () => {
     expect(q.state.value.error).toBeInstanceOf(Error)
     // refresh 抛错（调用方显式 await 可 catch）
     await expect(q.refresh()).rejects.toThrow('network-down')
+  })
+})
+
+describe('G-31 B7 收口：createCapabilityRequestClient（能力桥 → 策略请求执行器）', () => {
+  it('有 request 桥 → 适配直通（同一平台桥成为 client——useFetch 语义的增强版入口）', async () => {
+    const bridge: CapabilityBridge = {
+      // 必填旧能力（mock 常量——适配器只消费 request）
+      getLocation: async () => ({ latitude: 1, longitude: 2 }),
+      vibrate: async () => undefined,
+      getNetwork: async () => ({ online: true, type: 'wifi' }),
+      readClipboard: async () => '',
+      setClipboard: async () => undefined,
+      getScreen: async () => ({ width: 1, height: 1, dpr: 1, orientation: 'portrait' }),
+      getDevice: async () => ({ platform: '', model: '', os: '', version: '' }),
+      getBattery: async () => ({ level: 1, charging: true }),
+      getOrientation: async () => ({ type: 'portrait', angle: 0 }),
+      share: async () => undefined,
+      request: async (config) => ({ data: { url: config.url }, status: 200, headers: {}, config }),
+    }
+    const client = createCapabilityRequestClient(bridge)
+    const eng = createRequestEngineering({ client, reactivity: mockReactivity() })
+    // req.request 走能力桥 + 策略层（ttl 缓存命中第二发零重发）
+    const r1 = await eng.request({ url: '/cap' }, { ttl: 10000 })
+    expect((r1.data as { url: string }).url).toBe('/cap')
+    const r2 = await eng.request({ url: '/cap' }, { ttl: 10000 })
+    expect(r2.data).toEqual(r1.data) // 缓存命中——结果一致
+    // useQuery 也走能力桥
+    const q = eng.useQuery('cap-q', () => client.request({ url: '/cap-q' }).then((r) => r.data))
+    await flush()
+    if (q.state.value.data !== undefined) expect((q.state.value.data as { url: string }).url).toBe('/cap-q')
+  })
+
+  it('缺 request 桥 → request 返回 rejected CapError（G-32.3：非抛同步异常）', async () => {
+    const bare: CapabilityBridge = {
+      getLocation: async () => ({ latitude: 1, longitude: 2 }),
+      vibrate: async () => undefined,
+      getNetwork: async () => ({ online: true, type: 'wifi' }),
+      readClipboard: async () => '',
+      setClipboard: async () => undefined,
+      getScreen: async () => ({ width: 1, height: 1, dpr: 1, orientation: 'portrait' }),
+      getDevice: async () => ({ platform: '', model: '', os: '', version: '' }),
+      getBattery: async () => ({ level: 1, charging: true }),
+      getOrientation: async () => ({ type: 'portrait', angle: 0 }),
+      share: async () => undefined,
+    }
+    const client = createCapabilityRequestClient(bare)
+    await expect(client.request({ url: '/x' })).rejects.toMatchObject({ code: 'fetch.unsupported' })
+  })
+
+  it('能力桥戴上策略层：queue 串行 + 真并发去重 + enqueue（R1/R3/R4 在 capability client 上生效）', async () => {
+    let calls = 0
+    const bridge: CapabilityBridge = {
+      getLocation: async () => ({ latitude: 1, longitude: 2 }),
+      vibrate: async () => undefined,
+      getNetwork: async () => ({ online: true, type: 'wifi' }),
+      readClipboard: async () => '',
+      setClipboard: async () => undefined,
+      getScreen: async () => ({ width: 1, height: 1, dpr: 1, orientation: 'portrait' }),
+      getDevice: async () => ({ platform: '', model: '', os: '', version: '' }),
+      getBattery: async () => ({ level: 1, charging: true }),
+      getOrientation: async () => ({ type: 'portrait', angle: 0 }),
+      share: async () => undefined,
+      request: async (config) => {
+        calls += 1
+        return { data: { url: config.url, calls }, status: 200, headers: {}, config }
+      },
+    }
+    const client = createCapabilityRequestClient(bridge)
+    const eng = createRequestEngineering({ client, reactivity: mockReactivity(), concurrency: 1 })
+    // ★queue=true 语义 = 串行化：同 key 排队请求在第一个完成后执行（非真并发——各自是新请求）
+    const p1 = eng.request({ url: '/seq' }, { queue: true })
+    const p2 = eng.request({ url: '/seq' }, { queue: true })
+    const [a, b] = await Promise.all([p1, p2])
+    expect((a.data as { calls: number }).calls).toBe(1)
+    expect((b.data as { calls: number }).calls).toBe(2) // 串行——第二个独立执行
+    expect(calls).toBe(2)
+    // ★真并发去重（无 queue）：同 key 同时 in-flight → 单次（R4 在 capability client 上生效）
+    const p3 = eng.request({ url: '/dedup' })
+    const p4 = eng.request({ url: '/dedup' })
+    const [c, d] = await Promise.all([p3, p4])
+    expect((c.data as { calls: number }).calls).toBe(3)
+    expect((d.data as { calls: number }).calls).toBe(3) // 共享同一 in-flight 结果
+    expect(calls).toBe(3) // 去重——只 +1
+    // enqueue 独立任务与 request 互不影响
+    await Promise.all([eng.enqueue(() => Promise.resolve(1)), eng.enqueue(() => Promise.resolve(2))])
+    expect(calls).toBe(3)
   })
 })

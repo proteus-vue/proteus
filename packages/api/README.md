@@ -304,14 +304,27 @@ const shared = await req.runOnce('cacheKey', () => api.get('/x').then((r) => r.d
 
 | 原语 | 语义 | 说明 |
 |------|------|------|
-| `request(config, opts?)` | R1 | 策略请求：`ttl` 缓存命中直接返回 · `cacheKey` 自定义（缺省 method+url+params 序列化）· `queue` 排队执行（真实调用在队列槽位内，去重跨排队生效） |
+| `request(config, opts?)` | R1 | 策略请求：`ttl` 缓存命中直接返回 · `cacheKey` 自定义（缺省 method+url+params 序列化）· `queue` 排队执行（★语义=串行化：真实调用在队列槽位内；去重（R4）只对**真并发** in-flight 生效——queue 串行后同 key 各自新请求） |
 | `useQuery(key, fetcher, opts?)` | R2 | SWR 响应式数据获取：命中缓存立即 data（loading=false）· in-flight 去重（同 key 并发单次 fetch）· `refresh` 强制刷新 · `mutate` 乐观写 · `invalidate` 清缓存 |
 | `enqueue(task)` | R3 | 并发队列：FIFO + 并发上限（注入 concurrency）· 失败隔离（一个 reject 不影响后续）· `queued()` 查询排队深度 |
 | `runOnce(key, task)` | R4 | 并发去重：同 key 共享 in-flight（结果一致、仅执行一次）——R1/R2 内部共用 |
 | `clearCache()` | — | 清空全部缓存条目 |
 | `createRequestEngineering(opts)` | — | 工厂：注入 `{ client, reactivity, cache?, concurrency? }` |
 
-**定位**：与路由语义化（跨端收敛）不同，请求语义化的价值在**数据获取策略**——响应式状态机 + 策略注入（可单测）；`useFetch`（C26）可演进为其薄封装。
+**定位**：与路由语义化（跨端收敛）不同，请求语义化的价值在**数据获取策略**——响应式状态机 + 策略注入（可单测）。
+
+**★G-31 B7 收口（useFetch 演进入口）**：`createCapabilityRequestClient(bridge)` 把能力桥（`wx.request` / web `fetch` 双端）适配为请求执行器——`useFetch` 语义 = `req.request` 的裸版，业务升级只需换入口不换桥：
+
+```ts
+import { createRequestEngineering, createCapabilityRequestClient, createCapabilityBridge } from '@proteus-vue/api'
+
+const req = createRequestEngineering({
+  client: createCapabilityRequestClient(createCapabilityBridge()), // 同一平台桥 + 策略层
+  reactivity: { ref, computed },
+  cache: storage,
+})
+await req.request({ url: '/user' }, { ttl: 60000 }) // 带缓存/去重/队列的 useFetch
+```
 
 ## 设计要点
 

@@ -1,14 +1,17 @@
 // packages/api/src/request-engineering.ts
-// ★G-32 B6 前置：请求数据层语义面（api 层，不入 catalog——同 E21-E28 纪律「API 层语义不产 C-IR 节点」）
+// ★G-32 B6 前置 + G-31 B7 收口：请求数据层语义面（api 层，不入 catalog——同 E21-E28 纪律「API 层语义不产 C-IR 节点」）
 //   动机与路由语义化同族：把「裸请求」收敛为「带策略的请求语义」，业务不手写缓存/去重/排队逻辑
 //   R1 request（策略请求：缓存 + 去重 + 可选排队）· R2 useQuery（SWR 响应式数据获取）
 //   R3 enqueue（并发队列）· R4 dedupe（并发合并——R1/R2 内部共享）
-//   注入式：client（createApi 产物 / adapter——request(config) 执行面）+ reactivity（vue 或 mock）
+//   注入式：client（createApi 产物 / adapter / ★capability 桥适配器——request(config) 执行面）+ reactivity（vue 或 mock）
 //   + cache?（CompatStorage 底座——内存/持久化注入）+ concurrency?（队列并发上限）
+//   ★G-31 B7 收口：createCapabilityRequestClient——把 useFetch 的底层能力桥（wx.request/fetch 双端）
+//     升级为策略请求执行器（useFetch 语义 = req.request 的裸版；增强走缓存/去重/队列）
 //   零运行时依赖 vue；MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 import type { RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 import type { Reactivity } from './engineering'
-import type { CompatStorage } from './capability'
+import { CapError } from './capability'
+import type { CapabilityBridge, CompatStorage } from './capability'
 
 // —— 类型 ——
 
@@ -281,5 +284,21 @@ export function createRequestEngineering(options: RequestEngineeringOptions): Re
       if (cache && cache.clear !== undefined) cache.clear()
     },
     queued: () => queue.length,
+  }
+}
+
+/**
+ * ★G-31 B7 收口：能力桥 → 请求执行器适配（useFetch 的底层桥成为策略请求的 client）
+ * 用法：const req = createRequestEngineering({ client: createCapabilityRequestClient(createCapabilityBridge()), reactivity, cache })
+ *       —— req.request/useQuery 走同一平台桥（wx.request / fetch 双端）+ 缓存/去重/队列增强；
+ *          useFetch 语义 = req.request 的裸版（无策略）——业务升级只需换入口不换桥
+ * 缺桥（bridge.request 缺失）→ request 返回 rejected CapError（G-32.3：非抛同步异常）
+ */
+export function createCapabilityRequestClient(bridge: CapabilityBridge): RequestExecutor {
+  return {
+    request: <T = unknown>(config: RequestConfig) => {
+      if (!bridge.request) return Promise.reject(new CapError('fetch.unsupported', '能力桥未提供 request（capability 请求不可用）'))
+      return bridge.request(config) as Promise<RequestResponse<T>>
+    },
   }
 }
