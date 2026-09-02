@@ -73,6 +73,27 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(TAG_SEMANTIC_MAP['p-scan-qr']).toBe('capability.scan-qr')
   })
 
+  it('★G-31 B4：现有组件标签对齐 L1 语义（p-view/p-list-view/p-nav-bar/p-textarea/p-modal）', () => {
+    expect(TAG_SEMANTIC_MAP['p-view']).toBe('layout.box')
+    expect(TAG_SEMANTIC_MAP['p-list-view']).toBe('ui.list')
+    expect(TAG_SEMANTIC_MAP['p-nav-bar']).toBe('ui.nav')
+    expect(TAG_SEMANTIC_MAP['p-textarea']).toBe('ui.input')
+    expect(TAG_SEMANTIC_MAP['p-modal']).toBe('layout.adaptive')
+  })
+
+  it('★G-31 B4：Fluid 扩展语义（p-split/p-safe/p-sidebar）→ layout.split/safe/sidebar 五端映射', () => {
+    expect(TAG_SEMANTIC_MAP['p-split']).toBe('layout.split')
+    expect(TAG_SEMANTIC_MAP['p-safe']).toBe('layout.safe')
+    expect(TAG_SEMANTIC_MAP['p-sidebar']).toBe('layout.sidebar')
+    // 五端映射
+    expect(mapSemanticToBackend('layout.split', 'native-ios')).toBe('UISplitViewController')
+    expect(mapSemanticToBackend('layout.split', 'native-android')).toBe('SlidingPaneLayout')
+    expect(mapSemanticToBackend('layout.split', 'native-harmony')).toBe('SideBarContainer')
+    expect(mapSemanticToBackend('layout.safe', 'native-android')).toBe('WindowInsets')
+    expect(mapSemanticToBackend('layout.safe', 'native-harmony')).toBe('getAvoidArea')
+    expect(mapSemanticToBackend('layout.sidebar', 'vue-dom')).toBe('div.sidebar')
+  })
+
   it('mapSemanticToBackend：同一 semantic 在不同后端得到不同原生控件（语义收敛 + 后端实现）', () => {
     expect(mapSemanticToBackend('layout.grid', 'native-ios')).toBe('UICollectionView')
     expect(mapSemanticToBackend('layout.grid', 'native-android')).toBe('GridLayoutManager')

@@ -24,6 +24,10 @@ export const SEMANTIC_ENUM = [
   'layout.fluid',
   'layout.adaptive',
   'layout.fit',
+  // ★G-31 B4：Fluid 体系扩展语义（有明确系统原生对应——原则 #10.8）
+  'layout.split',
+  'layout.safe',
+  'layout.sidebar',
   'ui.text',
   'ui.button',
   'ui.image',
@@ -52,21 +56,34 @@ export const COMPONENT_IR_SCHEMA = {
   },
 } as const
 
-/** C-IR 组件标签 → 语义类型（组件清单映射——G-31 §3 布局原语 + UI 原语） */
+/** C-IR 组件标签 → 语义类型（组件清单映射——G-31 §3 布局原语 + UI 原语 + ★B4 现有组件对齐） */
 export const TAG_SEMANTIC_MAP: Record<string, string> = {
+  // G-31 L1 布局原语
   'p-box': 'layout.box',
   'p-stack': 'layout.stack',
   'p-grid': 'layout.grid',
   'p-fluid': 'layout.fluid',
   'p-adaptive': 'layout.adaptive',
   'p-fit': 'layout.fit',
+  // G-31 L1 UI 原语
   'p-text': 'ui.text',
   'p-button': 'ui.button',
   'p-image': 'ui.image',
   'p-input': 'ui.input',
   'p-list': 'ui.list',
   'p-nav': 'ui.nav',
+  // G-31 能力入口
   'p-scan-qr': 'capability.scan-qr',
   'p-pick-photo': 'capability.pick-photo',
   'p-location': 'capability.location',
+  // ★G-31 B4 现有组件对齐（src/components 实际标签 → L1 语义）
+  'p-view': 'layout.box', // 原子容器 = p-box 角色
+  'p-list-view': 'ui.list',
+  'p-nav-bar': 'ui.nav',
+  'p-textarea': 'ui.input',
+  'p-modal': 'layout.adaptive', // 弹窗 = adaptive 语义载体
+  // ★G-31 B4 Fluid 体系扩展语义（有明确系统原生对应——原则 #10.8）
+  'p-split': 'layout.split',
+  'p-safe': 'layout.safe',
+  'p-sidebar': 'layout.sidebar',
 }

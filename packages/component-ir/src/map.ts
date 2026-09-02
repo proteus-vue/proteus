@@ -63,6 +63,34 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'IntrinsicWidth',
     headless: 'fit',
   },
+  // ★G-31 B4：Fluid 体系扩展语义（五端映射）
+  'layout.split': {
+    'vue-dom': 'div.split',
+    'native-ios': 'UISplitViewController',
+    'native-android': 'SlidingPaneLayout',
+    'native-harmony': 'SideBarContainer',
+    skyline: 'view.split',
+    flutter: 'Row',
+    headless: 'split',
+  },
+  'layout.safe': {
+    'vue-dom': 'div.safe',
+    'native-ios': 'safeAreaLayoutGuide',
+    'native-android': 'WindowInsets',
+    'native-harmony': 'getAvoidArea',
+    skyline: 'env.safe-area',
+    flutter: 'SafeArea',
+    headless: 'safe',
+  },
+  'layout.sidebar': {
+    'vue-dom': 'div.sidebar',
+    'native-ios': 'UISplitViewController.side',
+    'native-android': 'NavigationRail',
+    'native-harmony': 'SideBarContainer',
+    skyline: 'view.sidebar',
+    flutter: 'NavigationRail',
+    headless: 'sidebar',
+  },
   // —— 基础 UI 原语 ——
   'ui.text': {
     'vue-dom': 'span',

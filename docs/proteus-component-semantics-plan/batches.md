@@ -11,7 +11,7 @@
 | **B1** | C-IR schema（`component-ir.schema.json`）+ 属性约束校验器 | G-27 SPI | `component-ir.spec.ts`（可单测，零依赖） | ✅ @proteus-vue/component-ir：schema/validate（GRID_CONFLICT/CMP006）/map（semantic→后端） |
 | **B2** | 布局原语 6 个（box/stack/grid/fluid/adaptive/fit）+ VueDom Backend | B1 | Web 跑通 demo | ✅ toComponentIR（模板标签→C-IR）+ IRNode.semantic + VueDom 消费 semantic（proteus-* 语义类）+ C-IR→DOM 端到端 |
 | **B3** | Native Backend 映射（UIKit / Android View） | B2, G-27 B4 | iOS/Android 跑通 | ✅ NativeBackend 消费 semantic（SEMANTIC_NATIVE_MAP：layout.grid→UICollectionView / ui.text→UILabel / ui.button→UIButton...——UIKit 基准，与 SEMANTIC_BACKEND_MAP native-ios 列同源）+ C-IR→Native 端到端（ops 含原生视图类型）；Android/鸿蒙映射同表扩展 |
-| **B4** | 基础 UI 原语（text/button/image/input/list/nav） | B2 | 完整 L1 组件集 | 2 人周 |
+| **B4** | 基础 UI 原语（text/button/image/input/list/nav） | B2 | 完整 L1 组件集 | ✅ 现有组件对齐：p-view→layout.box/p-list-view→ui.list/p-nav-bar→ui.nav/p-textarea→ui.input/p-modal→layout.adaptive；Fluid 扩展语义 layout.split/safe/sidebar（UISplitViewController/SafeArea/NavigationRail——原则 #10.8）+ 五端映射；其余叠加 UI（popup/toast/skeleton 等）标 L2 生态 |
 | **C1**（G-28 侧） | 能力入口组件（p-scan-qr 等）对接 `useNative()` | G-28 | 能力组件可用 | 1 人周 |
 | **B5** | conformance：三端渲染快照一致 | B3, conformance.md | CI 门禁 | 2 人周 |
 | **B6** | `@proteus/compat-miniprogram` 兼容层 + codemod | B4 | 旧小程序可迁移 | 3 人周 |
