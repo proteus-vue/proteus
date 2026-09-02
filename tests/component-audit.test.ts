@@ -31,9 +31,9 @@ describe('G-32 B1 清单冻结（128 原语 SSOT）', () => {
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 40 项（G-32 冻结清单已实现：12 layout + 18 ui + 9 shell + 1 capability）· 其余 planned 待落地', () => {
+  it('implemented 42 项（G-32 冻结清单已实现：12 layout + 18 ui + 9 shell + 2 gesture + 1 capability）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(40)
+    expect(impl.length).toBe(42)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
@@ -46,6 +46,8 @@ describe('G-32 B1 清单冻结（128 原语 SSOT）', () => {
     expect(implSemantics.has('ui.switch')).toBe(true)
     expect(implSemantics.has('ui.form')).toBe(true)
     expect(implSemantics.has('ui.checkbox')).toBe(true)
+    expect(implSemantics.has('gesture.draggable')).toBe(true)
+    expect(implSemantics.has('gesture.scrollable')).toBe(true)
     // planned 不设 ≥3 端门禁（L2 生态）但必须入 enum
     for (const p of PRIMITIVE_CATALOG.filter((x) => x.status === 'planned' && x.tag)) {
       expect((SEMANTIC_ENUM as readonly string[]).indexOf(p.semantic), `${p.id} ${p.semantic} 未入 enum`).toBeGreaterThanOrEqual(0)

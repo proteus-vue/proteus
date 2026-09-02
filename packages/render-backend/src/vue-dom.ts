@@ -80,6 +80,9 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'ui.radio': { tag: 'div', className: 'proteus-radio' },
   'ui.picker': { tag: 'div', className: 'proteus-picker' },
   'ui.form': { tag: 'form' },
+  // ★G-32 B4 ④ Gesture 组件形态
+  'gesture.draggable': { tag: 'div', className: 'proteus-draggable' },
+  'gesture.scrollable': { tag: 'div', className: 'proteus-scrollable' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

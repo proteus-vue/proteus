@@ -87,6 +87,8 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'ui.radio': 'Radio',
   'ui.picker': 'showDatePicker',
   'ui.form': 'Form',
+  'gesture.draggable': 'Draggable',
+  'gesture.scrollable': 'Scrollable',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

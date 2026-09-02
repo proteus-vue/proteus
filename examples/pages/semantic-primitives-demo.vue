@@ -175,6 +175,28 @@
         </p-form>
       </div>
     </section>
+
+    <section class="block">
+      <p-heading :level="2">⑤ 手势原语（Gesture）</p-heading>
+      <p-divider :inset="8" />
+      <div class="row">
+        <p-text class="label">p-draggable（可拖拽）：</p-text>
+        <p-draggable :snap-to-grid="20" @drag="onDrag" @drop="onDrop">
+          <div class="drag-zone">拖动我（吸附 20px 网格）</div>
+        </p-draggable>
+        <p-text class="hint">位置: {{ dragPos }}</p-text>
+      </div>
+      <div class="row">
+        <p-text class="label">p-scrollable（可滚动+触底加载）：</p-text>
+        <p-scrollable :height="140" :load-more="true" :loading="scrollLoading" @load-more="onLoadMore">
+          <div v-for="i in scrollItems" :key="i" class="scroll-item">滚动加载项 {{ i }}</div>
+        </p-scrollable>
+      </div>
+      <div class="row">
+        <p-text class="label">v-gesture（指令）：</p-text>
+        <div v-gesture:tap="onTapG" class="gesture-demo">{{ tapMsg }}</div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -209,6 +231,8 @@ import {
   PSegment,
   PPopover,
   PActionSheet,
+  PDraggable,
+  PScrollable,
 } from '@proteus-vue/components'
 
 const switchOn = ref(false)
@@ -224,6 +248,30 @@ const segVal = ref('news')
 const popoverOpen = ref(false)
 const sheetOpen = ref(false)
 const sheetResult = ref('')
+const dragPos = ref('(0, 0)')
+const scrollItems = ref(Array.from({ length: 10 }, (_, i) => i + 1))
+const scrollLoading = ref(false)
+const tapMsg = ref('点击我（v-gesture:tap）')
+
+function onDrag(payload: { x: number; y: number }): void {
+  dragPos.value = '(' + payload.x + ', ' + payload.y + ')'
+}
+function onDrop(_payload: { x: number; y: number }): void {
+  dragPos.value = '放下 → ' + dragPos.value
+}
+function onLoadMore(): void {
+  if (scrollLoading.value) return
+  scrollLoading.value = true
+  // 模拟异步加载
+  setTimeout(() => {
+    const len = scrollItems.value.length
+    scrollItems.value.push(...Array.from({ length: 5 }, (_, i) => len + i + 1))
+    scrollLoading.value = false
+  }, 600)
+}
+function onTapG(e: { x: number; y: number; count: number }): void {
+  tapMsg.value = 'tap@(' + e.x + ',' + e.y + ') 第' + e.count + '击'
+}
 
 function openDrawer(): void {
   drawerOpen.value = true

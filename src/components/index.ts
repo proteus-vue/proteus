@@ -71,6 +71,9 @@ import PPage from './p-page/index.vue'
 import PSegment from './p-segment/index.vue'
 import PPopover from './p-popover/index.vue'
 import PActionSheet from './p-action-sheet/index.vue'
+// ★G-32 B4 ④ Gesture：可拖拽 / 可滚动（gesture.draggable / gesture.scrollable）
+import PDraggable from './p-draggable/index.vue'
+import PScrollable from './p-scrollable/index.vue'
 
 export {
   VirtualList,
@@ -141,6 +144,9 @@ export {
   PSegment,
   PPopover,
   PActionSheet,
+  // ★G-32 B4 ④ Gesture：可拖拽 / 可滚动（gesture.draggable / gesture.scrollable）
+  PDraggable,
+  PScrollable,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/gesture",
+  "version": "0.1.0",
+  "description": "G-32 B4 ④ 手势原语（proteus-semantic-primitives-plus-plan §6）：纯手势识别器（tap/longpress/pan/swipe/pinch/rotate/press）+ useGesture Hook + v-gesture 指令——手势=声明式约束，事件是 Backend 实现细节",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}

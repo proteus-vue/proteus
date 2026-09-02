@@ -11,7 +11,7 @@ import { TAG_SEMANTIC_MAP, toComponentIR, SEMANTIC_ENUM } from '@proteus-vue/com
 
 const COMPONENTS_DIR = path.resolve('src/components')
 
-/** G-32 B2/B4 新落地组件（27 个——布局 6 + UI 基础 4 + Shell 7 + UI 视图 5 + UI 表单 5） */
+/** G-32 B2/B4 新落地组件（29 个——布局 6 + UI 基础 4 + Shell 7 + UI 视图 5 + UI 表单 5 + Gesture 2） */
 const NEW_TAGS = [
   // 布局（6）
   'p-inline', 'p-spacer', 'p-divider', 'p-scroll', 'p-virtual-list', 'p-masonry',
@@ -25,6 +25,8 @@ const NEW_TAGS = [
   'p-select', 'p-checkbox', 'p-radio', 'p-picker', 'p-form',
   // Shell B4（4）
   'p-page', 'p-segment', 'p-popover', 'p-action-sheet',
+  // Gesture B4（2）
+  'p-draggable', 'p-scrollable',
 ]
 
 /** 各组件应映射到的 G-32 语义 */
@@ -56,9 +58,11 @@ const TAG_TO_SEMANTIC: Record<string, string> = {
   'p-segment': 'shell.segment',
   'p-popover': 'shell.popover',
   'p-action-sheet': 'shell.action-sheet',
+  'p-draggable': 'gesture.draggable',
+  'p-scrollable': 'gesture.scrollable',
 }
 
-describe('G-32 B2/B4 组件落地（27 新组件：布局 6 + UI 基础 4 + Shell 7 + UI 视图 5 + UI 表单 5）', () => {
+describe('G-32 B2/B4 组件落地（29 新组件：布局 6 + UI 基础 4 + Shell 7 + UI 视图 5 + UI 表单 5 + Gesture 2）', () => {
   it('组件目录齐全 + index.vue 存在 + 聚合导出注册（manifest 完备）', () => {
     for (const tag of NEW_TAGS) {
       expect(fs.existsSync(path.join(COMPONENTS_DIR, tag, 'index.vue')), `${tag}/index.vue 缺失`).toBe(true)
@@ -90,7 +94,7 @@ describe('G-32 B2/B4 组件落地（27 新组件：布局 6 + UI 基础 4 + Shel
     }
   })
 
-  it('MP 编译：27 组件 compileVueSfc 全部产出（isComponent 模式）', () => {
+  it('MP 编译：29 组件 compileVueSfc 全部产出（isComponent 模式）', () => {
     for (const tag of NEW_TAGS) {
       const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
       const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })

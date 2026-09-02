@@ -128,6 +128,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.radio': 'UIButton.radio',
     'ui.picker': 'UIDatePicker',
     'ui.form': 'UIView.form',
+    'gesture.draggable': 'UIPanGestureRecognizer',
+    'gesture.scrollable': 'UIScrollView.gesture',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -179,6 +181,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.radio': 'RadioButton',
     'ui.picker': 'DatePicker',
     'ui.form': 'LinearLayout.form',
+    'gesture.draggable': 'GestureDetector',
+    'gesture.scrollable': 'NestedScrollView',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -230,6 +234,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.radio': 'Radio',
     'ui.picker': 'DatePicker',
     'ui.form': 'FormComponent',
+    'gesture.draggable': 'PanGesture',
+    'gesture.scrollable': 'Scroll.gesture',
   },
 }
 

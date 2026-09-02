@@ -75,6 +75,8 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'ui.radio': 'radio',
   'ui.picker': 'picker',
   'ui.form': 'form',
+  'gesture.draggable': 'draggable',
+  'gesture.scrollable': 'scrollable',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

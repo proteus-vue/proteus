@@ -439,6 +439,25 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'Form',
     headless: 'form',
   },
+  // ★G-32 B4 ④ Gesture 组件形态（drag/scrollable——指令/useGesture 属绑定层不产渲染节点）
+  'gesture.draggable': {
+    'vue-dom': 'div.proteus-draggable',
+    'native-ios': 'UIPanGestureRecognizer',
+    'native-android': 'GestureDetector',
+    'native-harmony': 'PanGesture', // ArkUI PanGesture
+    skyline: 'movable-view',
+    flutter: 'Draggable',
+    headless: 'draggable',
+  },
+  'gesture.scrollable': {
+    'vue-dom': 'div.proteus-scrollable',
+    'native-ios': 'UIScrollView.gesture',
+    'native-android': 'NestedScrollView',
+    'native-harmony': 'Scroll.gesture', // ArkUI Scroll + 手势增强
+    skyline: 'scroll-view',
+    flutter: 'Scrollable',
+    headless: 'scrollable',
+  },
 }
 
 /**

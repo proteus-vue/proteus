@@ -93,8 +93,8 @@ const GESTURE: PrimitiveDef[] = [
   { id: 'G5', kind: 'gesture', semantic: 'gesture.pinch', api: 'v-gesture:pinch', props: ['scale', 'onChange'], mpEquiv: 'touchstart/move 组合', tier: 'L1', status: 'planned' },
   { id: 'G6', kind: 'gesture', semantic: 'gesture.rotate', api: 'v-gesture:rotate', props: ['angle'], mpEquiv: '组合', tier: 'L1', status: 'planned' },
   { id: 'G7', kind: 'gesture', semantic: 'gesture.press', api: 'v-gesture:press', props: ['force'], mpEquiv: '3D Touch', tier: 'L1', status: 'planned' },
-  { id: 'G8', kind: 'gesture', semantic: 'gesture.draggable', tag: 'p-draggable', props: ['ghost', 'snapToGrid', 'onDrop'], mpEquiv: 'movable-view', tier: 'L1', status: 'planned' },
-  { id: 'G9', kind: 'gesture', semantic: 'gesture.scrollable', tag: 'p-scrollable', props: ['bounce', 'refresh', 'loadMore'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'planned' },
+  { id: 'G8', kind: 'gesture', semantic: 'gesture.draggable', tag: 'p-draggable', props: ['ghost', 'snapToGrid', 'onDrop'], mpEquiv: 'movable-view', tier: 'L1', status: 'implemented' },
+  { id: 'G9', kind: 'gesture', semantic: 'gesture.scrollable', tag: 'p-scrollable', props: ['bounce', 'refresh', 'loadMore'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
   { id: 'G10', kind: 'gesture', semantic: 'gesture.use-gesture', api: 'useGesture()', props: ['recognizers', 'simultaneous'], mpEquiv: '无', tier: 'L1', status: 'planned' },
 ]
 
