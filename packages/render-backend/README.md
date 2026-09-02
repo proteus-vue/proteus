@@ -17,6 +17,7 @@
 | `vue-dom.ts` | **VueDomBackend**：DOM nodeOps（Web 端官方后端，B2）——事件归一化 onXxx → addEventListener；★B5 补全 18 语义 SEMANTIC_WEB_MAP |
 | `native.ts` | **NativeBackend**（B4）：nodeOps → 原生视图（iOS/Android/鸿蒙三平台语义映射 SEMANTIC_NATIVE_MAPS + 宿主适配器桥 + mock adapter） |
 | `flutter.ts` | **FlutterBackend**（B5 spike）：Proteus 语义 → Flutter widget 树（★B5 补 semantic 消费 SEMANTIC_FLUTTER_MAP） |
+| `hybrid.ts` | **★G-27 B6 混合渲染**：`createHybridRenderer`（多后端统一渲染面——区域级切后端 + 节点归属委托 + 纹理共享广播）· `textureRef`（跨后端纹理引用）· `runHybridConformance`（混合器自检）· DevTools 路由 trace（semantic → 后端 决策记录） |
 
 ## 用法
 

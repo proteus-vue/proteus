@@ -7,7 +7,7 @@
 - **B3**：`HeadlessBackend` + G-23 Agent 回归 → **验证无设备开发** 🟡 内存节点树已落地（headless.ts：createElement/insert/remove/patchProp/setText + toPlainTree 序列化——SSR/测试/AI 快照载体）；G-23 Agent 接入待后续
 - **B4**：`NativeBackend`（iOS UIKit）→ **验证 nodeOps → UIView** ✅（native.ts：nodeOps → NativeViewDescriptor 树 + NativeViewAdapter 宿主桥（createView/updateView/insertView/removeView/setViewText）——与 @proteus-vue/renderer-app NativeAdapter（Vue host config 层）同构，宿主未来桥接；默认 mock 适配器 ops 日志；capabilities glass L3/animation native/textureSharing 系统级声明）
 - **B5**：`FlutterBackend`（Embedder C ABI）→ **验证跨引擎** ✅ spike（flutter.ts：Proteus 语义 → Flutter widget 树映射层——WIDGET_MAP 语义收敛（view→Container/text→Text/button→FilledButton/p-grid→Wrap...）+ toWidgetTree 序列化；真实 Embedder C ABI（FlutterEngineRun + RendererConfig）为宿主工程 B5 后接；capabilities layout:yoga/glass:L3/animation:native/textureSharing）
-- **B6**：混合渲染（Texture Sharing）+ DevTools 可视化
+- **B6**：混合渲染（Texture Sharing）+ DevTools 可视化 ✅（hybrid.ts：`createHybridRenderer` 多后端统一渲染面——区域级切后端（region match → 对应后端 / default 兜底）+ 节点归属委托（WeakMap——insert/remove/patchProp/setText 到归属后端，父子跨后端合法）+ 纹理共享广播（registerExternalTexture 到 textureSharing 后端，id 全局跨后端引用）+ DevTools 路由 trace（createElement 必留痕 semantic→backendId→region）+ `runHybridConformance` 自检；纯逻辑零依赖、宿主后接；tests/hybrid-renderer.test.ts 6 用例）
 
 ## 推荐顺序
 

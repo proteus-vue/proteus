@@ -29,3 +29,6 @@ export type { FlutterWidgetDescriptor } from './flutter'
 // ★G-31 B5：组件渲染快照基础设施（conformance 渲染层——驱动 nodeOps + 控件 readback）
 export { renderComponentSnapshot, createControlReader } from './conformance-component'
 export type { RenderNodeSnapshot, ControlReader } from './conformance-component'
+// ★G-27 B6：混合渲染（Texture Sharing + 页面/区域级切后端 + DevTools 路由 trace）
+export { createHybridRenderer, textureRef, runHybridConformance } from './hybrid'
+export type { HybridRegion, HybridRendererOptions, HybridRouteTrace, HybridRenderer, HybridTextureRef, HybridConformanceResult } from './hybrid'
