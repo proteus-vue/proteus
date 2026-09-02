@@ -19,6 +19,9 @@ export type { RouterEngineering, RouterEngineeringOptions, RouterLike, RouterTar
 // ★G-32 B5 续二：动画语义（injectable——E21 useAnimation/E22 useGestureAnimation/E23 useScrollAnimation；组件形态 E19/E20 在 src/components）
 export { createAnimationEngineering, interpolateAnimationProps } from './animation-engineering'
 export type { AnimationEngineering, AnimationEngineeringOptions, AnimationDriver, AnimationRun, AnimationController, AnimationDescriptor, AnimationKeyframe, AnimationProps, AnimationState, AnimationStepOptions, GestureAnimationHandle, ScrollAnimationHandle, ScrollAnimationRange } from './animation-engineering'
+// ★G-32 B5 续三：工程化语义（injectable——E24 useDevTools/E25 useInspector/E26 usePerformance/E27 defineComponent/E28 defineCapability）
+export { createToolingEngineering, defineComponent, defineCapability, resolveCapabilityChain, validateComponentMeta, validateCapabilityContract } from './tooling-engineering'
+export type { ToolingEngineering, ToolingEngineeringOptions, DevToolsHandle, DevToolsEvent, UseDevToolsOptions, InspectorHandle, InspectorNode, PerformanceHandle, PerformanceMetricRecord, UsePerformanceOptions, ComponentPropDef, ComponentMeta, CapabilityContract, CapabilityAvailability, CapabilityDefinition, DefineCapabilityOptions } from './tooling-engineering'
 export type {
   CapResult,
   CapabilityHooks,

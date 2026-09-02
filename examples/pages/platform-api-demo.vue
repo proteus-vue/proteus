@@ -156,6 +156,19 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑬ 工程化（G-32 B5 续三：useDevTools E24 / useInspector E25 / usePerformance E26 / defineComponent E27 / defineCapability E28）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-tool-dev" @click="onToolDev">useDevTools</button>
+        <button class="pad-btn" data-testid="pad-tool-insp" @click="onToolInsp">useInspector</button>
+        <button class="pad-btn" data-testid="pad-tool-perf" @click="onToolPerf">usePerformance</button>
+        <button class="pad-btn" data-testid="pad-tool-defc" @click="onToolDefComp">defineComponent</button>
+        <button class="pad-btn" data-testid="pad-tool-defcap" @click="onToolDefCap">defineCapability</button>
+      </view>
+      <text class="pad-log" data-testid="pad-tool-log">{{ toolLog }}</text>
+      <text class="pad-sub">E24 useDevTools（dev 事件面）/ E25 useInspector（组件树快照）/ E26 usePerformance（wx.reportPerformance 语义）→ 注入式 Hook；E27 defineComponent（类型化组件定义含 C-IR 元信息 + 声明期校验）/ E28 defineCapability（G-30 降级链声明 + 解析）→ 纯函数声明工具——工程原语 28 收口</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -167,7 +180,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering } from '@proteus-vue/api'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract } from '@proteus-vue/api'
 import type { AnimationDriver } from '@proteus-vue/api'
 // ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）
 import { PTransition, PAnimate } from '@proteus-vue/components'
@@ -576,6 +589,66 @@ function onAnimScroll() {
   scrollAnim.setProgress(1)
   const v100 = scrollAnim.value()
   animLog.value = `useScrollAnimation → p=0.5 插值 y=${v50.y}·opacity=${v50.opacity}（0：y=${v0.y}·o=${v0.opacity} → 1：y=${v100.y}·o=${v100.opacity}）`
+}
+
+// ---------- ⑬ 工程化（G-32 B5 续三：E24-E28——注入式 Hook + 声明工具，工程原语 28 收口） ----------
+const tool = createToolingEngineering({ reactivity: { ref, computed, watch: () => () => undefined } })
+const toolLog = ref('点击按钮演示工程化语义')
+const toolDev = tool.useDevTools({ enabled: true })
+const toolInsp = tool.useInspector()
+const toolPerf = tool.usePerformance()
+
+function onToolDev() {
+  const count = toolDev.events.value.length + 1
+  toolDev.log('demo', { n: count })
+  toolDev.log('state', { visible: animVisible.value })
+  const latest = toolDev.events.value[count]
+  toolLog.value = `useDevTools → ${count + 1} 个 dev 事件（最新：${latest ? latest.type : ''}）`
+}
+function onToolInsp() {
+  toolInsp.register({ id: 'page', name: 'p-page', semantic: 'shell.page' })
+  toolInsp.register({ id: 'box', name: 'p-box', semantic: 'layout.box', parentId: 'page' })
+  toolInsp.register({ id: 'btn', name: 'p-button', semantic: 'ui.button', parentId: 'box', props: { variant: 'primary' } })
+  const tree = toolInsp.snapshot()
+  const root = tree[0]
+  const box = root ? root.children[0] : undefined
+  const btn = box ? box.children[0] : undefined
+  toolLog.value = `useInspector → ${root ? root.name : ''} > ${box ? box.name : ''} > ${btn ? btn.name : ''}（${btn ? String(btn.props.variant) : ''}）`
+}
+function onToolPerf() {
+  toolPerf.mark('start')
+  toolPerf.mark('step1')
+  const ms = toolPerf.measure('loop', 'start')
+  toolPerf.report('frame', 60)
+  const list = toolPerf.metrics.value
+  const last = list[list.length - 1]
+  toolLog.value = `usePerformance → loop=${ms ?? 0}ms · 记录 ${list.length} 条（最新：${last ? last.name : ''}=${last ? last.value : ''}）`
+}
+function onToolDefComp() {
+  const def = tool.defineComponent({
+    name: 'p-demo',
+    semantic: 'layout.box',
+    props: { label: { type: 'String', required: true } },
+    emits: ['select'],
+    slots: ['default'],
+  })
+  const okErrors = validateComponentMeta(def)
+  const badErrors = validateComponentMeta({ name: '', semantic: 'layout.box' })
+  toolLog.value = `defineComponent → ${def.name}(${def.semantic}) 校验：合法=${okErrors.length === 0 ? '✅' : okErrors.join(';')} · 缺名=${badErrors.join(';')}`
+}
+async function onToolDefCap() {
+  const cap = tool.defineCapability(
+    { name: 'scan-qr', fallback: ['scan-qr-input', 'manual'], required: false },
+    { probe: () => Promise.resolve(false) },
+  )
+  const available = await cap.check()
+  const chosen = cap.resolve([
+    { name: 'scan-qr', available: false },
+    { name: 'scan-qr-input', available: false },
+    { name: 'manual', available: true },
+  ])
+  const contractErrors = validateCapabilityContract(cap.contract)
+  toolLog.value = `defineCapability → probe=${available} · 降级链解析=${chosen}（degraded:${cap.isDegraded(chosen)}）· 合同校验=${contractErrors.length === 0 ? '✅' : contractErrors.join(';')}`
 }
 </script>
 

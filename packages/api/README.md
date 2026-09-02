@@ -210,7 +210,50 @@ s.setProgress(0.5)                            // 线性插值 → { opacity: 0.6
 | `interpolateAnimationProps(from,to,p)` | — | 纯函数：属性线性插值（from + (to-from)×p）|
 | `createAnimationEngineering(opts)` | — | 工厂：注入 `{ reactivity, driver? }`（组件形态 E19/E20 在 src/components，IR 语义 engineering.transition/animate 已 implemented）|
 
-残余工程原语（E24-E28 工程化）沿同一「语义面 + 注入」模式在后继批次扩展。
+## 工程化（G-32 B5 续三）
+
+`createToolingEngineering(options)` 提供 **E24-E28 工程化语义**——注入式 Hook（dev/inspector/perf 面）+ 纯声明工具（define 语义），同 createEngineering 族**零运行时依赖 vue**：
+
+```ts
+import { ref, computed } from 'vue'
+import { createToolingEngineering } from '@proteus-vue/api'
+
+const tool = createToolingEngineering({ reactivity: { ref, computed } })
+
+// E24 useDevTools：dev 事件面（devtools 面板/埋点消费）
+const dev = tool.useDevTools({ enabled: true, sink: (e) => console.log(e.type) })
+dev.log('render', { page: 'home' })      // → events 队列 + sink
+
+// E25 useInspector：组件树快照（元素审查——devtools 组件面板）
+const inspector = tool.useInspector()
+inspector.register({ id: 'btn-1', name: 'p-button', semantic: 'ui.button', props: { variant: 'primary' } })
+inspector.snapshot()                       // [{ id, name, semantic, props, children: [] }]
+
+// E26 usePerformance：性能埋点（wx.reportPerformance 语义）
+const perf = tool.usePerformance({ reporter: (name, v) => wx?.reportPerformance?.(name, v) })
+perf.mark('start'); perf.measure('render', 'start')   // → metrics 队列 + reporter
+
+// E27 defineComponent：类型化组件定义（含 C-IR 元信息）+ 声明期校验
+const def = tool.defineComponent({ name: 'p-my', semantic: 'layout.box', props: { label: { type: 'String', required: true } } })
+validateComponentMeta(def)                 // []　合法；空 name/缺 semantic/非法 prop type → 错误列表
+
+// E28 defineCapability：能力降级声明（G-30 降级链）
+const cap = tool.defineCapability({ name: 'scan-qr', fallback: ['scan-qr-input', 'manual'], required: false },
+  { probe: () => navigator.mediaDevices?.getUserMedia !== undefined })
+await cap.check()                          // 自身可用性
+cap.resolve([{ name: 'scan-qr', available: false }, { name: 'manual', available: true }]) // → 'manual'
+```
+
+| 原语 | 语义 | 说明 |
+|------|------|------|
+| `useDevTools(opts?)` | E24 | 开发工具接入：`log(type, detail)` dev 事件面 + 响应式 `events` 队列 + `sink` 转发 |
+| `useInspector()` | E25 | 元素审查：`register`/`unregister` 组件实例 → `snapshot()` 组件树 |
+| `usePerformance(opts?)` | E26 | 性能埋点：`mark`/`measure`（注入 now）+ `report`（委托 reporter）+ 响应式 `metrics` |
+| `defineComponent(meta)` | E27 | 类型化组件定义（类型透传 + C-IR 元信息）；`validateComponentMeta` 声明期校验 |
+| `defineCapability(contract)` | E28 | 能力降级声明（G-30）：`check` 探测 + `resolve` 降级链解析 + `isDegraded` |
+| `createToolingEngineering(opts)` | — | 工厂：注入 `{ reactivity }`（E27/E28 纯函数另独立导出）|
+
+**G-32 B5 工程原语 28 全部收口**（E1-E9 状态/生命周期 + E10-E17 路由 + E19-E23 动画 + E24-E28 工程化；E18 router-link 为声明式导航组件形态待后续批次）。
 
 ## 设计要点
 
