@@ -223,7 +223,7 @@ L4 自定义             → 0.1%  → 仅兜底
 ```
 PROTEUS-METHODOLOGY.md（本文，根目录哲学入口）
     ↑ 提炼自
-proteus-architecture/（规约层：原则 + 铁律——★M1.1 待生成）
+proteus-architecture.md（规约层：原则 + 铁律——★M1.1 已收口 ✅）
     ↑ 落地于
 G-27 渲染后端可插拔（docs/proteus-render-backend-1-plan/）
 G-28 原生能力可插拔（docs/proteus-native-backend-1-plan/）

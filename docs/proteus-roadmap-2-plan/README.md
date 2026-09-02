@@ -96,8 +96,8 @@ bash verify.sh
 ## 下一步
 
 1. ✅ 本路线图（本次交付）
-2. ⬜ **Website 骨架落地**（`01-website-skeleton.md` → 可执行 issue 列表）
-3. ⬜ M1.1 规约收口
+2. ✅ **M1.1 规约收口**（docs/proteus-architecture.md，2026-09-02）
+3. ⬜ **Website 骨架落地**（`01-website-skeleton.md` → 可执行 issue 列表）
 4. ⬜ M1.4 `ProteusRenderBackend` SPI + conformance test 原型
 
 ---

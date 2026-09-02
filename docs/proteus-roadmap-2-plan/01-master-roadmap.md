@@ -126,7 +126,7 @@ L2 types
 
 | 阶段 | Plan | 交付 | 依赖 |
 |------|------|------|------|
-| M1.1 | L0 规约收口 | 原则 #10 泛化 + 铁律总表 | — |
+| M1.1 | L0 规约收口 | 原则 #10 泛化 + 铁律总表 | ✅ 已完成（docs/proteus-architecture.md，2026-09-02） |
 | M1.2 | compiler（IR 层） | LayoutConstraint IR + Render IR | M1.1 |
 | M1.3 | types + app-config | 核心类型 + 配置 schema | M1.2 |
 | M1.4 | G-27 B1（Backend SPI + conformance test） | `ProteusRenderBackend` 接口 | M1.2 |
@@ -282,7 +282,7 @@ L0 规约
 
 1. ✅ 本路线图 + 依赖图 + 里程碑 + 关键路径 + 风险（本次交付）
 2. ⬜ 起 `proteus-website` 骨架（把 positioning §5 杀手特性做成落地页）——**下一个执行项**
-3. ⬜ M1.1 把 L0 规约收口（原则 #10 泛化 + 铁律总表正式定稿）
+3. ✅ M1.1 把 L0 规约收口（docs/proteus-architecture.md：原则 #0-#12 + 铁律 + 规则总表，2026-09-02）
 4. ⬜ M1.4 动手 `ProteusRenderBackend` SPI + conformance test（B1 原型）
 
 **本路线图的交付 = 把"45 份 plan"从清单变成可执行计划**。至此整轮体系完全闭环：规约层 → 方法论层 → 引擎层 → 能力层 → 工具链 → 交付层，每一层都知道自己什么时候做、依赖谁、产出什么。

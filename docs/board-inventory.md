@@ -37,7 +37,7 @@
 | plan | 编号 | 状态 | 说明 / 下一动作 |
 |------|------|------|----------------|
 | `proteus-methodology-plan` | 方法论提炼（统一语义收敛） | ✅ 已入库 | **哲学根文档**：核心公式「语义定义 + 后端实现」四维度投影（编译 G-29 / UI G-27 / 能力 G-28 / 端接入 G-30）+ 五支柱（语义优先/解耦/验证先于运行/渐进覆盖 80-18-1.9-0.1/可泛化）+ Tier 模型（R+C+J 三元组）+ 原则速查（★#1 与 positioning #10 同义）——onboarding 第一课 / 对外叙事根；§9 关系图已对齐实际目录 |
-| `proteus-architecture`（规约，**未生成**） | 原则 #1-#12 + 铁律 + FLD/GLS/RND/NAT/PRIM | 🟡 | 决策已积累（PROJECT_MEMORY），正式规约文档收口 = **M1.1**（roadmap-2 真理来源，仅 roadmap-2 引用） |
+| `docs/proteus-architecture.md`（规约） | 原则 #0-#12 + 铁律 + FLD/GLS/RND/NAT/PRIM 规则 | ✅ **M1.1 已收口** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + 分层/能力/落地三类铁律 + 十系严格规则 + 分层双路线 + 来源更新规则——合并 17 份 architecture-update + PROJECT_MEMORY 决策链） |
 
 ### L1 方法论（杠杆支点：语义收敛 + 后端实现）
 
