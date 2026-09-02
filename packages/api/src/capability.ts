@@ -144,6 +144,99 @@ export interface BiometricOptions {
   prompt?: string
 }
 
+// ★G-32 B3 四期：websocket / upload / download / analytics / log / file-system
+
+/** C27 WebSocket 连接句柄（wx SocketTask / web WebSocket 适配） */
+export interface WebSocketConnection {
+  /** 发送消息（字符串或二进制） */
+  send(data: string | ArrayBuffer): void
+  /** 关闭连接 */
+  close(code?: number, reason?: string): void
+  /** 订阅事件（返回取消订阅函数）——open/message/close/error */
+  on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void
+}
+
+/** C29/C30 传输进度回调（0-100） */
+export type ProgressCallback = (pct: number) => void
+
+/** C29 上传选项（wx.uploadFile / web fetch FormData） */
+export interface UploadOptions {
+  url: string
+  /** wx 临时文件路径（wx.chooseMedia/chooseImage 等产出） */
+  filePath?: string
+  /** web 文件对象 */
+  file?: Blob
+  /** 表单字段名（缺省 'file'） */
+  name?: string
+  formData?: Record<string, string>
+  headers?: Record<string, string>
+  timeout?: number
+}
+
+/** C29 上传结果 */
+export interface UploadResult {
+  status: number
+  data: unknown
+  /** 进度（0-100，若平台支持 onProgressUpdate） */
+  progress?: number
+}
+
+/** C30 下载选项 */
+export interface DownloadOptions {
+  headers?: Record<string, string>
+  timeout?: number
+  /** 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json */
+  responseType?: 'blob' | 'path' | 'text' | 'json'
+}
+
+/** C30 下载结果 */
+export interface DownloadResult {
+  status: number
+  data: unknown
+  /** wx tempFilePath（responseType=path） */
+  path?: string
+  progress?: number
+}
+
+/** C34 分析事件（wx.reportEvent / web 无标准 → 缺省降级） */
+export interface AnalyticsEvent {
+  name: string
+  params?: Record<string, unknown>
+}
+
+/** C34 TrackAPI（useAnalytics 句柄） */
+export interface TrackAPI {
+  track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
+}
+
+/** C35 日志级别 */
+export type LogLevel = 'log' | 'info' | 'warn' | 'error'
+
+/** C35 Logger（useLog 句柄——console + 上报） */
+export interface Logger {
+  log(message: string, data?: unknown): Promise<CapResult<void>>
+  warn(message: string, data?: unknown): Promise<CapResult<void>>
+  error(message: string, data?: unknown): Promise<CapResult<void>>
+}
+
+/** C43 文件系统桥（wx.getFileSystemManager / web 内存降级） */
+export interface FileSystemBridge {
+  readFile(path: string): Promise<string>
+  writeFile(path: string, data: string): Promise<void>
+  remove(path: string): Promise<void>
+  exists(path: string): Promise<boolean>
+}
+
+/** C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>） */
+export interface FSAdapter {
+  /** 能力可用性（内存降级也算可用；false = 完全不可用） */
+  supported: boolean
+  readFile(path: string): Promise<CapResult<string>>
+  writeFile(path: string, data: string): Promise<CapResult<void>>
+  remove(path: string): Promise<CapResult<void>>
+  exists(path: string): Promise<CapResult<boolean>>
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -190,6 +283,19 @@ export interface CapabilityBridge {
   login?(provider?: string): Promise<LoginResult>
   /** C42 扫码（wx.scanCode / web BarcodeDetector 尽力识别） */
   scanQR?(): Promise<string>
+  // ★G-32 B3 四期：新增能力（websocket/upload/download/analytics/log/file-system——缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')
+  /** C27 WebSocket 连接（wx.connectSocket / web WebSocket） */
+  connectWebSocket?(url: string, protocols?: string[]): Promise<WebSocketConnection>
+  /** C29 上传（wx.uploadFile / web fetch FormData） */
+  upload?(options: UploadOptions, onProgress?: ProgressCallback): Promise<UploadResult>
+  /** C30 下载（wx.downloadFile / web fetch blob） */
+  download?(url: string, options?: DownloadOptions, onProgress?: ProgressCallback): Promise<DownloadResult>
+  /** C34 埋点/上报（wx.reportEvent；web 无标准 → 缺省 → Err） */
+  track?(name: string, params?: Record<string, unknown>): Promise<void>
+  /** C35 日志（console + 上报；wx/web 同 console，错误可上报） */
+  log?(level: LogLevel, message: string, data?: unknown): Promise<void>
+  /** C43 文件系统（wx.getFileSystemManager / web 内存降级） */
+  getFileSystem?(): FileSystemBridge
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -235,9 +341,55 @@ export interface CapabilityProbe {
   qrCode: boolean
   /** C33 认证组合（需 login 桥 + 存储桥齐备才视为完整） */
   auth: boolean
+  /** ★G-32 B3 四期 */
+  websocket: boolean
+  upload: boolean
+  download: boolean
+  analytics: boolean
+  log: boolean
+  fileSystem: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
+
+/** wx SocketTask（wx.connectSocket 返回） */
+interface WxSocketTask {
+  send?: (opt: { data: string | ArrayBuffer }) => void
+  close?: (opt?: { code?: number; reason?: string }) => void
+  onOpen?: (cb: () => void) => void
+  onMessage?: (cb: (r: { data: string | ArrayBuffer }) => void) => void
+  onClose?: (cb: (r: { code?: number; reason?: string }) => void) => void
+  onError?: (cb: (e: unknown) => void) => void
+}
+
+/** wx UploadTask（wx.uploadFile 返回） */
+interface WxUploadTask {
+  onProgressUpdate?: (cb: (r: { progress: number }) => void) => void
+}
+
+/** wx DownloadTask（wx.downloadFile 返回） */
+interface WxDownloadTask {
+  onProgressUpdate?: (cb: (r: { progress: number }) => void) => void
+}
+
+/** wx FileSystemManager（wx.getFileSystemManager 返回——子集） */
+interface WxFileSystemManager {
+  readFile?: (opt: {
+    filePath: string
+    encoding?: string
+    success: (r: { data: string | ArrayBuffer }) => void
+    fail: (e: unknown) => void
+  }) => void
+  writeFile?: (opt: {
+    filePath: string
+    data: string | ArrayBuffer
+    encoding?: string
+    success?: () => void
+    fail: (e: unknown) => void
+  }) => void
+  unlink?: (opt: { filePath: string; success?: () => void; fail: (e: unknown) => void }) => void
+  access?: (opt: { path: string; success?: () => void; fail?: (e: unknown) => void }) => void
+}
 
 interface WxLike {
   getLocation?: (opt: { success: (r: Coords) => void; fail: (e: unknown) => void }) => void
@@ -286,6 +438,32 @@ interface WxLike {
     success: (r: { result: string }) => void
     fail: (e: unknown) => void
   }) => void
+  // ★G-32 B3 四期：新增 wx 能力
+  connectSocket?: (opt: {
+    url: string
+    protocols?: string[]
+    success?: () => void
+    fail?: (e: unknown) => void
+  }) => WxSocketTask
+  uploadFile?: (opt: {
+    url: string
+    filePath: string
+    name?: string
+    formData?: Record<string, string>
+    header?: Record<string, string>
+    timeout?: number
+    success: (r: { statusCode: number; data: unknown }) => void
+    fail: (e: unknown) => void
+  }) => WxUploadTask
+  downloadFile?: (opt: {
+    url: string
+    header?: Record<string, string>
+    timeout?: number
+    success: (r: { statusCode: number; tempFilePath: string }) => void
+    fail: (e: unknown) => void
+  }) => WxDownloadTask
+  reportEvent?: (opt: { event: string; data?: Record<string, unknown> }) => void
+  getFileSystemManager?: () => WxFileSystemManager
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -330,6 +508,62 @@ function wxStorage(wx: WxLike): CompatStorage {
     }
   }
   return memoryStorage()
+}
+
+/** web 内存文件系统（C43 降级：可读写但非持久——无标准同步 FS 时的诚实降级） */
+function memoryFileSystem(): FileSystemBridge {
+  const mem = new Map<string, string>()
+  return {
+    readFile: (path) =>
+      new Promise((resolve, reject) => {
+        const v = mem.get(path)
+        if (v === undefined) return reject(new CapError('file-system.read-failed', `内存文件不存在: ${path}`))
+        resolve(v)
+      }),
+    writeFile: (path, data) =>
+      new Promise((resolve) => {
+        mem.set(path, data)
+        resolve()
+      }),
+    remove: (path) =>
+      new Promise((resolve) => {
+        mem.delete(path)
+        resolve()
+      }),
+    exists: (path) =>
+      new Promise((resolve) => {
+        resolve(mem.has(path))
+      }),
+  }
+}
+
+/** wx 文件系统桥（getFileSystemManager 子集——readFile/writeFile/unlink/access） */
+function wxFileSystem(wx: WxLike): FileSystemBridge {
+  const fs = wx.getFileSystemManager?.()
+  const read = (path: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.readFile) return reject(new CapError('file-system.unsupported', 'wx FileSystemManager.readFile 缺失'))
+      fs.readFile({ filePath: path, encoding: 'utf8', success: (r) => resolve(String(r.data)), fail: (e) => reject(new CapError('file-system.read-failed', 'wx 读文件失败', e)) })
+    })
+  const write = (path: string, data: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.writeFile) return reject(new CapError('file-system.unsupported', 'wx FileSystemManager.writeFile 缺失'))
+      fs.writeFile({ filePath: path, data, encoding: 'utf8', success: () => resolve(), fail: (e) => reject(new CapError('file-system.write-failed', 'wx 写文件失败', e)) })
+    })
+  const remove = (path: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.unlink) return reject(new CapError('file-system.unsupported', 'wx FileSystemManager.unlink 缺失'))
+      fs.unlink({ filePath: path, success: () => resolve(), fail: (e) => reject(new CapError('file-system.remove-failed', 'wx unlink 失败', e)) })
+    })
+  const exists = (path: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      if (!fs?.access) {
+        resolve(false)
+        return
+      }
+      fs.access({ path, success: () => resolve(true), fail: () => resolve(false) })
+    })
+  return { readFile: read, writeFile: write, remove, exists }
 }
 
 function wxBridge(wx: WxLike): CapabilityBridge {
@@ -490,6 +724,79 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         if (!wx.scanCode) return reject(new CapError('qr-code.unsupported', 'wx.scanCode 缺失'))
         wx.scanCode({ success: (r) => resolve(r.result), fail: (e) => reject(new CapError('qr-code.failed', 'wx.scanCode 失败', e)) })
       }),
+    // ★G-32 B3 四期：websocket / upload / download / analytics / log / file-system
+    connectWebSocket: (url, protocols) =>
+      new Promise((resolve, reject) => {
+        if (!wx.connectSocket) return reject(new CapError('websocket.unsupported', 'wx.connectSocket 缺失'))
+        const task = wx.connectSocket({ url, protocols: protocols ?? [] })
+        if (!task) return reject(new CapError('websocket.failed', 'wx.connectSocket 返回空'))
+        let settled = false
+        task.onError?.(() => {
+          if (!settled) {
+            settled = true
+            reject(new CapError('websocket.failed', 'wx.connectSocket 连接失败'))
+          }
+        })
+        task.onOpen?.(() => {
+          if (settled) return
+          settled = true
+          resolve({
+            send: (data) => task.send?.({ data }),
+            close: (code, reason) => task.close?.({ code, reason }),
+            on: (event, handler) => {
+              if (event === 'open') task.onOpen?.(() => handler())
+              else if (event === 'message') task.onMessage?.((r) => handler({ data: r.data }))
+              else if (event === 'close') task.onClose?.((r) => handler({ code: r.code, reason: r.reason }))
+              else if (event === 'error') task.onError?.((e) => handler(e))
+              return () => undefined
+            },
+          })
+        })
+      }),
+    upload: (options, onProgress) =>
+      new Promise((resolve, reject) => {
+        if (!wx.uploadFile) return reject(new CapError('upload.unsupported', 'wx.uploadFile 缺失'))
+        if (!options.filePath) return reject(new CapError('upload.failed', 'wx 上传缺少 filePath'))
+        const task = wx.uploadFile({
+          url: options.url,
+          filePath: options.filePath,
+          name: options.name ?? 'file',
+          formData: options.formData,
+          header: options.headers,
+          timeout: options.timeout,
+          success: (r) => resolve({ status: r.statusCode, data: r.data }),
+          fail: (e) => reject(new CapError('upload.failed', 'wx.uploadFile 失败', e)),
+        })
+        task?.onProgressUpdate?.((r) => onProgress?.(r.progress))
+      }),
+    download: (url, options, onProgress) =>
+      new Promise((resolve, reject) => {
+        if (!wx.downloadFile) return reject(new CapError('download.unsupported', 'wx.downloadFile 缺失'))
+        const task = wx.downloadFile({
+          url,
+          header: options?.headers,
+          timeout: options?.timeout,
+          success: (r) => resolve({ status: r.statusCode, path: r.tempFilePath, data: r.tempFilePath }),
+          fail: (e) => reject(new CapError('download.failed', 'wx.downloadFile 失败', e)),
+        })
+        task?.onProgressUpdate?.((r) => onProgress?.(r.progress))
+      }),
+    track: (name, params) =>
+      new Promise((resolve) => {
+        if (!wx.reportEvent) {
+          resolve()
+          return
+        }
+        wx.reportEvent({ event: name, data: params })
+        resolve()
+      }),
+    log: (level, message, data) =>
+      new Promise((resolve) => {
+        const fn = console[level]
+        if (typeof fn === 'function') fn(message, data !== undefined ? data : '')
+        resolve()
+      }),
+    getFileSystem: () => wxFileSystem(wx),
   }
 }
 
@@ -706,6 +1013,96 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         throw new CapError('biometric.failed', 'WebAuthn 认证失败/用户取消', e)
       }
     },
+    // ★G-32 B3 四期：web 实现（websocket=WebSocket / upload=fetch FormData / download=fetch blob / log=console；analytics 无标准 API → 缺省；file-system=内存降级）
+    connectWebSocket: (url, protocols) =>
+      new Promise((resolve, reject) => {
+        const WS = (g as { WebSocket?: new (u: string, p?: string[]) => unknown }).WebSocket
+        if (typeof WS !== 'function') return reject(new CapError('websocket.unsupported', 'WebSocket 不支持'))
+        let ws
+        try {
+          ws = new WS(url, protocols && protocols.length ? protocols : undefined)
+        } catch (e) {
+          return reject(new CapError('websocket.failed', 'WebSocket 构造失败', e))
+        }
+        const target = ws as {
+          send?: (d: string | ArrayBuffer) => void
+          close?: (code?: number, reason?: string) => void
+          addEventListener?: (t: string, cb: (e?: unknown) => void) => void
+          removeEventListener?: (t: string, cb: (e?: unknown) => void) => void
+        }
+        let settled = false
+        target.addEventListener?.('open', () => {
+          if (settled) return
+          settled = true
+          resolve({
+            send: (data) => target.send?.(data),
+            close: (code, reason) => target.close?.(code, reason),
+            on: (event, handler) => {
+              const cb = (e?: unknown) => handler(e)
+              if (event === 'message') target.addEventListener?.('message', cb)
+              else if (event === 'error') target.addEventListener?.('error', cb)
+              else if (event === 'close') target.addEventListener?.('close', cb)
+              else target.addEventListener?.(event, cb)
+              return () => target.removeEventListener?.(event, cb)
+            },
+          })
+        })
+        target.addEventListener?.('error', () => {
+          if (!settled) {
+            settled = true
+            reject(new CapError('websocket.failed', 'WebSocket 连接失败'))
+          }
+        })
+      }),
+    upload: async (options, onProgress) => {
+      const form = new FormData()
+      const file = options.file ?? new Blob([''], { type: 'application/octet-stream' })
+      form.append(options.name ?? 'file', file)
+      if (options.formData) {
+        for (const k of Object.keys(options.formData)) form.append(k, options.formData[k])
+      }
+      const headers = { ...(options.headers ?? {}) }
+      const resp = await g.fetch(options.url, { method: 'POST', headers, body: form })
+      const text = await resp.text()
+      let data: unknown = text
+      try {
+        data = JSON.parse(text)
+      } catch {
+        /* 非 JSON 原样 */
+      }
+      onProgress?.(100)
+      return { status: resp.status, data, progress: 100 }
+    },
+    download: async (url, options, onProgress) => {
+      const resp = await g.fetch(url, { headers: options?.headers })
+      const rt = options?.responseType ?? 'blob'
+      if (rt === 'text') {
+        const text = await resp.text()
+        onProgress?.(100)
+        return { status: resp.status, data: text, progress: 100 }
+      }
+      if (rt === 'json') {
+        const text = await resp.text()
+        let data: unknown = text
+        try {
+          data = JSON.parse(text)
+        } catch {
+          /* 非 JSON 原样 */
+        }
+        onProgress?.(100)
+        return { status: resp.status, data, progress: 100 }
+      }
+      const blob = await resp.blob()
+      onProgress?.(100)
+      return { status: resp.status, data: blob, progress: 100 }
+    },
+    // C34 analytics：web 无标准事件上报 API（sendBeacon 需服务端约定）→ 缺省（useAnalytics 返回 Err）
+    log: async (level, message, data) => {
+      const fn = console[level]
+      if (typeof fn === 'function') fn(message, data !== undefined ? data : '')
+    },
+    // C43 file-system：web 无标准同步 FS（OPFS 受限/需安全上下文）→ 内存降级（可读写，非持久）
+    getFileSystem: () => memoryFileSystem(),
   }
 }
 
@@ -768,6 +1165,19 @@ export interface CapabilityHooks {
   useLogin(provider?: string): Promise<CapResult<LoginResult>>
   /** C42 useQRCode：扫码（wx.scanCode；web 需摄像头取流源 → 降级 Err） */
   useQRCode(): Promise<CapResult<string>>
+  // ★G-32 B3 四期：新增能力 Hook
+  /** C27 useWebSocket：WebSocket 连接句柄（wx.connectSocket / web WebSocket） */
+  useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConnection>>
+  /** C29 useUpload：上传文件（wx.uploadFile / web fetch FormData） */
+  useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapResult<UploadResult>>
+  /** C30 useDownload：下载文件（wx.downloadFile / web fetch blob） */
+  useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallback): Promise<CapResult<DownloadResult>>
+  /** C34 useAnalytics：埋点句柄（wx.reportEvent；web 无标准 → track 返回 Err） */
+  useAnalytics(): TrackAPI
+  /** C35 useLog：日志句柄（console + 上报） */
+  useLog(): Logger
+  /** C43 useFileSystem：文件系统句柄（wx.getFileSystemManager / web 内存降级） */
+  useFileSystem(): FSAdapter
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -916,6 +1326,74 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         subscribe: (cb) => manager.subscribe(cb),
       }
     },
+    // ★G-32 B3 四期：websocket / upload / download / analytics / log / file-system（缺桥 → Err('<cap>.unsupported') 非抛异常）
+    useWebSocket: (url, protocols) =>
+      wrap(
+        (() => {
+          if (!bridge.connectWebSocket) return Promise.reject(new CapError('websocket.unsupported', '桥未提供 connectWebSocket（useWebSocket 不可用）'))
+          return bridge.connectWebSocket(url, protocols)
+        })(),
+      ),
+    useUpload: (options, onProgress) =>
+      wrap(
+        (() => {
+          if (!bridge.upload) return Promise.reject(new CapError('upload.unsupported', '桥未提供 upload（useUpload 不可用）'))
+          return bridge.upload(options, onProgress)
+        })(),
+      ),
+    useDownload: (url, options, onProgress) =>
+      wrap(
+        (() => {
+          if (!bridge.download) return Promise.reject(new CapError('download.unsupported', '桥未提供 download（useDownload 不可用）'))
+          return bridge.download(url, options, onProgress)
+        })(),
+      ),
+    // C34 useAnalytics：埋点句柄（缺桥 → track 返回 Err）
+    useAnalytics: () => ({
+      track: (name, params) =>
+        wrap(
+          (() => {
+            if (!bridge.track) return Promise.reject(new CapError('analytics.unsupported', '桥未提供 track（useAnalytics 不可用）'))
+            return bridge.track(name, params)
+          })(),
+        ),
+    }),
+    // C35 useLog：日志句柄（console + 上报）
+    useLog: () => ({
+      log: (message, data) =>
+        wrap(
+          (() => {
+            if (!bridge.log) return Promise.reject(new CapError('log.unsupported', '桥未提供 log（useLog 不可用）'))
+            return bridge.log('log', message, data)
+          })(),
+        ),
+      warn: (message, data) =>
+        wrap(
+          (() => {
+            if (!bridge.log) return Promise.reject(new CapError('log.unsupported', '桥未提供 log（useLog 不可用）'))
+            return bridge.log('warn', message, data)
+          })(),
+        ),
+      error: (message, data) =>
+        wrap(
+          (() => {
+            if (!bridge.log) return Promise.reject(new CapError('log.unsupported', '桥未提供 log（useLog 不可用）'))
+            return bridge.log('error', message, data)
+          })(),
+        ),
+    }),
+    // C43 useFileSystem：文件系统句柄（缺桥 → 抛错，同 useStorage 惯例）
+    useFileSystem: () => {
+      if (!bridge.getFileSystem) throw new CapError('file-system.unsupported', '桥未提供 getFileSystem（useFileSystem 不可用）')
+      const fs = bridge.getFileSystem()
+      return {
+        supported: true,
+        readFile: (path) => wrap(fs.readFile(path)),
+        writeFile: (path, data) => wrap(fs.writeFile(path, data)),
+        remove: (path) => wrap(fs.remove(path)),
+        exists: (path) => wrap(fs.exists(path)),
+      }
+    },
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -938,6 +1416,12 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       login: bridge.login !== undefined,
       qrCode: bridge.scanQR !== undefined,
       auth: bridge.login !== undefined && bridge.getStorage !== undefined,
+      websocket: bridge.connectWebSocket !== undefined,
+      upload: bridge.upload !== undefined,
+      download: bridge.download !== undefined,
+      analytics: bridge.track !== undefined,
+      log: bridge.log !== undefined,
+      fileSystem: bridge.getFileSystem !== undefined,
     }),
   }
 }

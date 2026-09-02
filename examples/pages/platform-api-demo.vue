@@ -72,6 +72,18 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑦ 能力 Hook 四期（useWebSocket/useAnalytics/useLog/useFileSystem——网络与工程类）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-ws" @click="onCapWS">useWebSocket</button>
+        <button class="pad-btn" data-testid="pad-cap-analytics" @click="onCapAnalytics">useAnalytics 埋点</button>
+        <button class="pad-btn" data-testid="pad-cap-log" @click="onCapLog">useLog</button>
+        <button class="pad-btn" data-testid="pad-cap-fs" @click="onCapFS">useFileSystem</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap4-log">{{ cap4Log }}</text>
+      <text class="pad-sub">useWebSocket/useAnalytics 小程序端走 wx.connectSocket/reportEvent；useFileSystem web 端内存降级（非持久）· useUpload/useDownload 见 @proteus-vue/api/capability.ts</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -209,6 +221,40 @@ function onCapQR() {
   // ★C42：wx.scanCode 直通；web 无摄像头取流桥 → Err 降级（非抛异常）
   void cap.useQRCode().then((r) => {
     cap3Log.value = r.ok ? `useQRCode → ${r.data.slice(0, 40)}` : `useQRCode → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+
+// ---------- ⑦ 能力 Hook 四期（G-32 B3 续） ----------
+const cap4Log = ref('点击按钮调用四期能力 Hook')
+const analytics = cap.useAnalytics() // ★C34：句柄（web 无标准 → track 返回 Err）
+const logger = cap.useLog() // ★C35：console + 上报
+const fsHandle = cap.useFileSystem() // ★C43：wx FS / web 内存降级
+function onCapWS() {
+  // ★C27：wss 连接句柄（demo 用不存在的 echo 端点——验证连接流程/降级；web 无 WebSocket 支持则 Err）
+  void cap.useWebSocket('wss://echo.example.invalid/ws').then((r) => {
+    cap4Log.value = r.ok ? `useWebSocket → 已连接（send/close/on 可用）` : `useWebSocket → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapAnalytics() {
+  void analytics.track('demo_click', { block: 7 }).then((r) => {
+    cap4Log.value = r.ok ? 'useAnalytics → track ok（wx.reportEvent 已上报）' : `useAnalytics → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapLog() {
+  void logger.log('proteus demo', { block: 7 }).then((r) => {
+    cap4Log.value = r.ok ? 'useLog → console.log 已输出（可接上报链）' : `useLog → Err(${r.error.code})`
+  })
+}
+function onCapFS() {
+  // C43：写读往返（web 内存降级 / wx getFileSystemManager）
+  void fsHandle.writeFile('/demo.txt', 'hello').then((w) => {
+    if (!w.ok) {
+      cap4Log.value = `useFileSystem → 写入 Err(${w.error.code})`
+      return
+    }
+    void fsHandle.readFile('/demo.txt').then((r) => {
+      cap4Log.value = r.ok ? `useFileSystem → /demo.txt = ${r.data}` : `useFileSystem → 读取 Err(${r.error.code})`
+    })
   })
 }
 </script>

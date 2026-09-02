@@ -691,3 +691,382 @@ describe('G-32 B3 三期 web 桥（真实浏览器能力——DeviceMotion/WebAu
     }
   })
 })
+
+describe('G-32 B3 四期：websocket / upload / download / analytics / log / file-system', () => {
+  it('useWebSocket：桥 connectWebSocket → 连接句柄（send/close/on）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        connectWebSocket: async (url, protocols) => ({
+          send: () => undefined,
+          close: () => undefined,
+          on: () => () => undefined,
+          _url: url,
+          _protocols: protocols,
+        } as never),
+      }),
+    )
+    const r = await hooks.useWebSocket('wss://x', ['p1'])
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(typeof r.data.send).toBe('function')
+      expect(typeof r.data.close).toBe('function')
+      expect(typeof r.data.on).toBe('function')
+    }
+    // 无桥 → Err
+    const noBridge = createCapabilityHooks(mockBridge())
+    const r2 = await noBridge.useWebSocket('wss://x')
+    expect(r2.ok).toBe(false)
+    if (!r2.ok) expect(r2.error.code).toBe('websocket.unsupported')
+  })
+
+  it('useUpload：桥 upload → UploadResult（status/data/progress）；无 filePath（wx）→ 由桥负责，mock 直通', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        upload: async (options, onProgress) => {
+          onProgress?.(50)
+          onProgress?.(100)
+          return { status: 200, data: { ok: true }, progress: 100 }
+        },
+      }),
+    )
+    const progress: number[] = []
+    const r = await hooks.useUpload({ url: '/up', filePath: '/tmp/a.png' }, (p) => progress.push(p))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ status: 200, data: { ok: true }, progress: 100 })
+    expect(progress).toEqual([50, 100])
+    // 无桥 → Err
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useUpload({ url: '/up', filePath: '/tmp/a.png' })).ok).toBe(false)
+  })
+
+  it('useDownload：桥 download → DownloadResult（status/data/path）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        download: async (url, options) => ({ status: 200, data: 'blob', path: '/tmp/d.bin', progress: 100 }),
+      }),
+    )
+    const r = await hooks.useDownload('/down', { responseType: 'path' })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ status: 200, path: '/tmp/d.bin' })
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useDownload('/down')).ok).toBe(false)
+    if (!(await noBridge.useDownload('/down')).ok) {
+      const r2 = await noBridge.useDownload('/down')
+      if (!r2.ok) expect(r2.error.code).toBe('download.unsupported')
+    }
+  })
+
+  it('useAnalytics：桥 track → ok；无桥 → track 返回 Err（句柄本身不抛）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        track: async (name, params) => {
+          void name
+          void params
+        },
+      }),
+    )
+    const analytics = hooks.useAnalytics()
+    const r = await analytics.track('page_view', { page: '/' })
+    expect(r.ok).toBe(true)
+    const noBridge = createCapabilityHooks(mockBridge())
+    const r2 = await noBridge.useAnalytics().track('x')
+    expect(r2.ok).toBe(false)
+    if (!r2.ok) expect(r2.error.code).toBe('analytics.unsupported')
+  })
+
+  it('useLog：桥 log → ok；无桥 → Err', async () => {
+    const lines: Array<{ level: string; message: string }> = []
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        log: async (level, message) => {
+          lines.push({ level, message })
+        },
+      }),
+    )
+    const logger = hooks.useLog()
+    await expect(logger.log('info-msg')).resolves.toMatchObject({ ok: true })
+    await expect(logger.warn('warn-msg')).resolves.toMatchObject({ ok: true })
+    await expect(logger.error('err-msg')).resolves.toMatchObject({ ok: true })
+    expect(lines).toEqual([
+      { level: 'log', message: 'info-msg' },
+      { level: 'warn', message: 'warn-msg' },
+      { level: 'error', message: 'err-msg' },
+    ])
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect((await noBridge.useLog().log('x')).ok).toBe(false)
+  })
+
+  it('useFileSystem：桥 getFileSystem → FSAdapter（read/write/remove/exists 往返；方法均返回 Result）', async () => {
+    const mem = new Map<string, string>()
+    const fsBridge = {
+      readFile: async (path: string) => {
+        const v = mem.get(path)
+        if (v === undefined) throw new Error('not found')
+        return v
+      },
+      writeFile: async (path: string, data: string) => {
+        mem.set(path, data)
+      },
+      remove: async (path: string) => {
+        mem.delete(path)
+      },
+      exists: async (path: string) => mem.has(path),
+    }
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        getFileSystem: () => fsBridge,
+      }),
+    )
+    const fs = hooks.useFileSystem()
+    expect(fs.supported).toBe(true)
+    await expect(fs.writeFile('/a.txt', 'hello')).resolves.toMatchObject({ ok: true })
+    const read = await fs.readFile('/a.txt')
+    expect(read.ok).toBe(true)
+    if (read.ok) expect(read.data).toBe('hello')
+    expect((await fs.exists('/a.txt')).data).toBe(true)
+    await expect(fs.remove('/a.txt')).resolves.toMatchObject({ ok: true })
+    const after = await fs.exists('/a.txt')
+    expect(after.ok).toBe(true)
+    if (after.ok) expect(after.data).toBe(false)
+    // 无桥 → useFileSystem 抛错（同 useStorage 惯例）
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect(() => noBridge.useFileSystem()).toThrow(/getFileSystem/)
+  })
+
+  it('probe 四期标志：websocket/upload/download/analytics/log/fileSystem', async () => {
+    const full = createCapabilityHooks(
+      mockBridge({
+        connectWebSocket: async () => ({ send: () => undefined, close: () => undefined, on: () => () => undefined } as never),
+        upload: async () => ({ status: 200, data: null }),
+        download: async () => ({ status: 200, data: null }),
+        track: async () => undefined,
+        log: async () => undefined,
+        getFileSystem: () => ({
+          readFile: async () => '',
+          writeFile: async () => undefined,
+          remove: async () => undefined,
+          exists: async () => true,
+        }),
+      }),
+    )
+    const probe = await full.probe()
+    expect(probe.websocket).toBe(true)
+    expect(probe.upload).toBe(true)
+    expect(probe.download).toBe(true)
+    expect(probe.analytics).toBe(true)
+    expect(probe.log).toBe(true)
+    expect(probe.fileSystem).toBe(true)
+    const partial = createCapabilityHooks(mockBridge())
+    const probe2 = await partial.probe()
+    expect(probe2.websocket).toBe(false)
+    expect(probe2.upload).toBe(false)
+    expect(probe2.fileSystem).toBe(false)
+  })
+})
+
+describe('G-32 B3 四期 wx 桥（wx.* 归一为 Result——无回调泄漏）', () => {
+  it('wx connectSocket/uploadFile/downloadFile/reportEvent/getFileSystemManager → Promise 归一', async () => {
+    // wx SocketTask mock：on* 注册回调，*Cb 保存供测试驱动
+    type WxSocketMock = {
+      onOpenCb?: () => void
+      onMessageCb?: (r: { data: string }) => void
+      onCloseCb?: (r: { code: number }) => void
+      onErrorCb?: (e: unknown) => void
+      onOpen: (cb: () => void) => void
+      onMessage: (cb: (r: { data: string }) => void) => void
+      onClose: (cb: (r: { code: number }) => void) => void
+      onError: (cb: (e: unknown) => void) => void
+      send: () => void
+      close: () => void
+    }
+    let task: WxSocketMock | undefined
+    const wx = {
+      connectSocket: (opt: { url: string; success?: () => void }) => {
+        const t = {
+          onOpen: (cb: () => void) => {
+            t.onOpenCb = cb
+          },
+          onMessage: (cb: (r: { data: string }) => void) => {
+            t.onMessageCb = cb
+          },
+          onClose: (cb: (r: { code: number }) => void) => {
+            t.onCloseCb = cb
+          },
+          onError: (cb: (e: unknown) => void) => {
+            t.onErrorCb = cb
+          },
+          send: () => undefined,
+          close: () => undefined,
+        } as unknown as WxSocketMock
+        task = t
+        return t
+      },
+      uploadFile: (opt: {
+        filePath: string
+        success: (r: { statusCode: number; data: unknown }) => void
+      }) => {
+        opt.success({ statusCode: 200, data: { uploaded: true } })
+        return { onProgressUpdate: () => undefined }
+      },
+      downloadFile: (opt: {
+        success: (r: { statusCode: number; tempFilePath: string }) => void
+      }) => {
+        opt.success({ statusCode: 200, tempFilePath: '/tmp/d.bin' })
+        return { onProgressUpdate: () => undefined }
+      },
+      reportEvent: (opt: { event: string; data?: Record<string, unknown> }) => {
+        void opt
+      },
+      getFileSystemManager: () => ({
+        readFile: (opt: {
+          filePath: string
+          success: (r: { data: string }) => void
+        }) => opt.success({ data: 'wx-file-content' }),
+        writeFile: (opt: { filePath: string; data: string; success?: () => void }) => {
+          opt.success?.()
+        },
+        unlink: (opt: { filePath: string; success?: () => void }) => {
+          opt.success?.()
+        },
+        access: (opt: { path: string; success?: () => void; fail?: () => void }) => {
+          opt.success?.()
+        },
+      }),
+    }
+    const orig = (globalThis as { wx?: unknown }).wx
+    ;(globalThis as { wx?: unknown }).wx = wx
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      // websocket：连接成功后可用；未触发 open 前不 resolve
+      const wsP = hooks.useWebSocket('wss://x')
+      await new Promise((r) => setTimeout(r, 0))
+      task?.onOpenCb?.()
+      const ws = await wsP
+      expect(ws.ok).toBe(true)
+      if (ws.ok) expect(typeof ws.data.send).toBe('function')
+      // websocket on 订阅
+      let gotMsg: unknown
+      if (ws.ok) {
+        ws.data.on?.('message', (payload) => {
+          gotMsg = (payload as { data?: string }).data
+        })
+      }
+      task?.onMessageCb?.({ data: 'hi' })
+      expect(gotMsg).toBe('hi')
+      // upload
+      const up = await hooks.useUpload({ url: '/up', filePath: '/tmp/a.png' })
+      expect(up.ok).toBe(true)
+      if (up.ok) expect(up.data).toMatchObject({ status: 200, data: { uploaded: true } })
+      // download
+      const dl = await hooks.useDownload('/down')
+      expect(dl.ok).toBe(true)
+      if (dl.ok) expect(dl.data).toMatchObject({ status: 200, path: '/tmp/d.bin' })
+      // analytics
+      expect((await hooks.useAnalytics().track('evt')).ok).toBe(true)
+      // log
+      expect((await hooks.useLog().log('m')).ok).toBe(true)
+      // file-system
+      const fs = hooks.useFileSystem()
+      const fr = await fs.readFile('/a.txt')
+      expect(fr.ok).toBe(true)
+      if (fr.ok) expect(fr.data).toBe('wx-file-content')
+      await expect(fs.writeFile('/b.txt', 'x')).resolves.toMatchObject({ ok: true })
+      await expect(fs.exists('/b.txt')).resolves.toMatchObject({ ok: true, data: true })
+    } finally {
+      ;(globalThis as { wx?: unknown }).wx = orig
+    }
+  })
+})
+
+describe('G-32 B3 四期 web 桥（WebSocket / fetch FormData / blob / console / 内存 FS）', () => {
+  it('web connectWebSocket：WebSocket open → 连接句柄', async () => {
+    const g = globalThis as unknown as { WebSocket?: unknown; wx?: unknown; fetch?: unknown }
+    const orig = g.WebSocket
+    const listeners: Record<string, Array<(e?: unknown) => void>> = {}
+    class FakeWS {
+      static instances: FakeWS[] = []
+      url: string
+      protocols?: string[]
+      constructor(u: string, p?: string[]) {
+        this.url = u
+        this.protocols = p
+        FakeWS.instances.push(this)
+      }
+      addEventListener(t: string, cb: (e?: unknown) => void) {
+        ;(listeners[t] ??= []).push(cb)
+      }
+      removeEventListener(t: string, cb: (e?: unknown) => void) {
+        const arr = listeners[t]
+        if (arr) {
+          const i = arr.indexOf(cb)
+          if (i >= 0) arr.splice(i, 1)
+        }
+      }
+      send() {
+        return undefined
+      }
+      close() {
+        return undefined
+      }
+    }
+    g.WebSocket = FakeWS
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const p = hooks.useWebSocket('wss://x')
+      await new Promise((r) => setTimeout(r, 0))
+      FakeWS.instances[0].addEventListener('open' as 'open', () => ({}))
+      ;(listeners['open'] ?? []).forEach((cb) => cb())
+      const r = await p
+      expect(r.ok).toBe(true)
+      if (r.ok) expect(typeof r.data.send).toBe('function')
+    } finally {
+      g.WebSocket = orig
+    }
+  })
+
+  it('web upload：fetch FormData → UploadResult；web download：fetch blob → DownloadResult', async () => {
+    const g = globalThis as unknown as { fetch?: unknown; wx?: unknown }
+    const orig = g.fetch
+    g.fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () => JSON.stringify({ ok: true }),
+      blob: async () => new Blob(['data']),
+    })) as never
+    try {
+      const { createCapabilityBridge } = await import('@proteus-vue/api')
+      const hooks = createCapabilityHooks(createCapabilityBridge())
+      const up = await hooks.useUpload({ url: '/up', file: new Blob(['x']), name: 'file' })
+      expect(up.ok).toBe(true)
+      if (up.ok) expect(up.data).toMatchObject({ status: 200, data: { ok: true }, progress: 100 })
+      const dl = await hooks.useDownload('/down')
+      expect(dl.ok).toBe(true)
+      if (dl.ok) {
+        expect(dl.data.status).toBe(200)
+        expect(dl.data.data).toBeInstanceOf(Blob)
+      }
+    } finally {
+      g.fetch = orig
+    }
+  })
+
+  it('web file-system：内存降级（可读写非持久）——useFileSystem 句柄往返', async () => {
+    const { createCapabilityBridge } = await import('@proteus-vue/api')
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    const fs = hooks.useFileSystem()
+    expect(fs.supported).toBe(true)
+    await expect(fs.writeFile('/w.txt', 'web-fs')).resolves.toMatchObject({ ok: true })
+    const r = await fs.readFile('/w.txt')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toBe('web-fs')
+  })
+
+  it('web analytics：无标准 API → track 返回 Err（useAnalytics 句柄可用）', async () => {
+    const { createCapabilityBridge } = await import('@proteus-vue/api')
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    const r = await hooks.useAnalytics().track('page_view')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('analytics.unsupported')
+  })
+})

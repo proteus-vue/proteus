@@ -62,6 +62,12 @@ const { platform, system, version } = getDeviceInfo()
 | `usePayment(config)` | C40 | 支付（wx.requestPayment；web → Err） |
 | `useLogin(provider?)` | C41 | 登录（wx.login → code；web 需集成第三方 provider → Err） |
 | `useQRCode()` | C42 | 扫码（wx.scanCode；web 需摄像头取流源 → Err） |
+| `useWebSocket(url, protocols?)` | C27 | WebSocket 连接句柄（send/close/on——wx.connectSocket / web `WebSocket`） |
+| `useUpload(opts, onProgress?)` | C29 | 上传文件（wx.uploadFile / web fetch FormData；进度回调） |
+| `useDownload(url, opts?, onProgress?)` | C30 | 下载文件（wx.downloadFile tempFilePath / web fetch blob） |
+| `useAnalytics()` | C34 | 埋点句柄（`track(name, params)`——wx.reportEvent；web 无标准 → Err） |
+| `useLog()` | C35 | 日志句柄（`log/warn/error`——console + 上报链） |
+| `useFileSystem()` | C43 | 文件系统句柄（`readFile/writeFile/remove/exists`——wx.getFileSystemManager / web 内存降级） |
 | `probe()` | — | 能力可用性探测面（降级决策依据：缺失 → 对应 `Err('<cap>.unsupported')` 非抛异常） |
 
 ```ts
