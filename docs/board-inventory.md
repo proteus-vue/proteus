@@ -52,7 +52,7 @@
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 | `proteus-component-semantics-plan` | **G-31** | 🟡 **B1-B6 已落地 + B7 骨架** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + toComponentIR + **全后端消费 semantic（proteus-* 语义类）+ B5 conformance 门禁** + **B7 能力 Hook 层骨架**（@proteus-vue/api/capability.ts + CMP007 `api-check`）+ **B6 兼容层 + codemod**（@proteus-vue/compat-miniprogram：createWxCompat 桥 + migrateMpSource 幂等转换 + `proteus migrate mp`）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
-| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 ✅ + B4 Shell/Gesture + B3 Hook 层首期** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`）+ SEMANTIC_ENUM 18→53 + `proteus audit coverage` 门禁 + **布局 12 + UI 18 + Shell 10 + Gesture 核心全双端落地（31 新组件 + `@proteus-vue/gesture` 纯识别器包 + v-gesture 指令，components:audit 57 组件全过，42 implemented 语义 × 6 后端 conformance）+ ⑤ Capability Hook 层首期（10 useXxx + CMP007 api-check）**；⑤ Capability 余 40 / ⑥ Engineering 28 待续 |
+| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 ✅ + B4 Shell/Gesture + B3 Hook 两期** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`）+ SEMANTIC_ENUM 18→53 + `proteus audit coverage` 门禁 + **布局 12 + UI 18 + Shell 10 + Gesture 核心全双端落地（31 新组件 + `@proteus-vue/gesture` + v-gesture，audit 57 组件全过，42 implemented 语义）× 6 后端 conformance + ⑤ Capability Hook 两期（13 useXxx：一期 10 + 二期 useFetch/usePermission/useStorage/createReactiveStorage + bridge 全能力 + CMP007 api-check）**；⑤ Capability 余 37 / ⑥ Engineering 28 待续 |
 
 ### L2 核心引擎
 

@@ -3,8 +3,47 @@
 //   验证点（G-32.4 铁律）：Promise<Result<T>> / 无回调风格 / 平台缺失 → Err 非抛异常 /
 //   桥注入可测（mock/wx/web 三形态）/ 降级探测 probe()
 import { describe, it, expect, vi } from 'vitest'
-import { createCapabilityHooks, capOk, capErr, CapError } from '@proteus-vue/api'
-import type { CapabilityBridge } from '@proteus-vue/api'
+import { createCapabilityHooks, createReactiveStorage, capOk, capErr, CapError } from '@proteus-vue/api'
+import type { CapabilityBridge, CompatStorage } from '@proteus-vue/api'
+
+/** 内存 CompatStorage（useStorage 测试底座） */
+function memStorage(): CompatStorage {
+  const m = new Map<string, string>()
+  return {
+    get: <T>(key: string) => {
+      const raw = m.get(key)
+      return raw === undefined ? undefined : (JSON.parse(raw) as T)
+    },
+    set: (key, value) => m.set(key, JSON.stringify(value)),
+    remove: (key) => m.delete(key),
+    clear: () => m.clear(),
+  }
+}
+
+/** 简单响应式代理（模拟 vue reactive——set 时触发副作用） */
+function simpleReactive<T extends object>(target: T): T {
+  const seen = new Set<string>()
+  const tracked = new Set<() => void>()
+  const proxy = new Proxy(target, {
+    get(obj, key) {
+      if (typeof key === 'string' && !seen.has(key)) {
+        void seen
+      }
+      return Reflect.get(obj, key)
+    },
+    set(obj, key, val) {
+      const r = Reflect.set(obj, key, val)
+      if (typeof key === 'string') {
+        const fns = tracked
+        for (const fn of fns) fn()
+        void tracked
+      }
+      return r
+    },
+  })
+  void tracked
+  return proxy
+}
 
 /** mock 桥（全部能力可用——确定性数据） */
 function mockBridge(partial?: Partial<CapabilityBridge>): CapabilityBridge {
@@ -157,5 +196,88 @@ describe('G-32 ⑤ web 桥（navigator API 适配）', () => {
     } finally {
       Object.defineProperty(g, 'navigator', { value: orig, configurable: true })
     }
+  })
+})
+
+describe('G-32 B3 续：useFetch / usePermission / useStorage / createReactiveStorage', () => {
+  it('useFetch：桥 request → CapResult<T>（成功 .data = 载荷，迁移文档解构兼容）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        request: async (config) => ({ data: { url: config.url, method: config.method ?? 'GET' }, status: 200, headers: {}, config }),
+      }),
+    )
+    const r = await hooks.useFetch<{ url: string; method: string }>('/api/x', { method: 'POST' })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ url: '/api/x', method: 'POST' })
+    const { data } = await hooks.useFetch<{ url: string }>('/api/y')
+    expect(data).toMatchObject({ url: '/api/y' }) // migration.md `const { data } = await useFetch(url)`
+  })
+
+  it('useFetch：桥无 request → Err（非抛异常——G-32.3 降级）', async () => {
+    const hooks = createCapabilityHooks(mockBridge()) // mock 未提供 request
+    const r = await hooks.useFetch('/x')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('fetch.unsupported')
+  })
+
+  it('usePermission：桥 getPermission → PermissionState（granted/denied/prompt）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        getPermission: async (name) => ({ permission: name, state: 'granted' }),
+      }),
+    )
+    const r = await hooks.usePermission('geolocation')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ permission: 'geolocation', state: 'granted' })
+    // 无桥 → Err
+    const noBridge = createCapabilityHooks(mockBridge())
+    const r2 = await noBridge.usePermission('geolocation')
+    expect(r2.ok).toBe(false)
+  })
+
+  it('useStorage：桥 getStorage → CompatStorage（set/get/remove/clear 往返）', () => {
+    const storage = memStorage()
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        getStorage: () => storage,
+      }),
+    )
+    const store = hooks.useStorage()
+    store.set('k', { a: 1 })
+    expect(store.get('k')).toEqual({ a: 1 })
+    store.remove('k')
+    expect(store.get('k')).toBeUndefined()
+    // 无桥 → 抛错（明确提示）
+    const noBridge = createCapabilityHooks(mockBridge())
+    expect(() => noBridge.useStorage()).toThrow(/getStorage/)
+  })
+
+  it('createReactiveStorage：set/remove 同步 state（注入式响应式；非注入时普通对象）', () => {
+    const storage = memStorage()
+    const plain = createReactiveStorage(storage)
+    plain.set('name', 'Proteus')
+    expect(plain.state.name).toBe('Proteus')
+
+    const reactive = createReactiveStorage<{ count?: number }>(storage, simpleReactive)
+    reactive.set('count', 42)
+    expect(reactive.state.count).toBe(42)
+    reactive.remove('count')
+    expect(reactive.state.count).toBeUndefined()
+    // 底座持久化不受影响
+    expect(storage.get('name')).toBe('Proteus')
+  })
+
+  it('probe 补 fetch/permission/storage 标志（G-32.3 降级决策依据）', async () => {
+    const hooks = createCapabilityHooks(
+      mockBridge({
+        request: async (config) => ({ data: null, status: 200, headers: {}, config }),
+        getPermission: async (name) => ({ permission: name, state: 'prompt' }),
+        getStorage: () => memStorage(),
+      }),
+    )
+    const probe = await hooks.probe()
+    expect(probe.fetch).toBe(true)
+    expect(probe.permission).toBe(true)
+    expect(probe.storage).toBe(true)
   })
 })

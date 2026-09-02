@@ -52,8 +52,10 @@
         <button class="pad-btn" data-testid="pad-cap-device" @click="onCapDevice">useDevice</button>
         <button class="pad-btn" data-testid="pad-cap-network" @click="onCapNetwork">useNetwork</button>
         <button class="pad-btn" data-testid="pad-cap-clipboard" @click="onCapClipboard">useClipboard</button>
+        <button class="pad-btn" data-testid="pad-cap-fetch" @click="onCapFetch">useFetch</button>
       </view>
       <text class="pad-log" data-testid="pad-cap-log">{{ capLog }}</text>
+      <text class="pad-sub">useFetch = G-32 C26（迁移文档：wx.request → await useFetch(url)）· usePermission/useStorage 见 @proteus-vue/api/capability.ts（probe 降级 + createReactiveStorage 响应式）</text>
     </view>
 
     <view class="pad-box">
@@ -155,6 +157,12 @@ function onCapNetwork() {
 function onCapClipboard() {
   void cap.useClipboard().then((r) => {
     capLog.value = r.ok ? `useClipboard → ${r.data.slice(0, 40)}` : `useClipboard → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapFetch() {
+  // ★G-32 C26：wx.request → await useFetch(url)（迁移文档标题目标；demo 用 httpbin CORS 端点）
+  void cap.useFetch<{ url: string }>('https://httpbin.org/get', { timeout: 8000 }).then((r) => {
+    capLog.value = r.ok ? `useFetch → ${JSON.stringify(r.data).slice(0, 60)}` : `useFetch → Err(${r.error.code}) ${r.error.message}`
   })
 }
 </script>

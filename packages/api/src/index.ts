@@ -9,5 +9,22 @@ export { createPlatformAPI } from './platform'
 export type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse, ApiOptions } from './types'
 export type { PlatformAPI, RouterAPI, StorageAPI, UIAPI } from './types'
 // ★G-32 B3：useXxx 能力 Hook 层（无回调/无全局对象/全类型/Result<T>）
-export { createCapabilityHooks, createCapabilityBridge, capOk, capErr, CapError } from './capability'
-export type { CapResult, CapabilityHooks, CapabilityBridge, CapabilityProbe, Coords, NetworkType, BatteryInfo, CapDeviceInfo, ScreenInfo, ShareOptions, PermissionState, OrientationInfo } from './capability'
+export { createCapabilityHooks, createCapabilityBridge, createReactiveStorage, capOk, capErr, CapError } from './capability'
+export type {
+  CapResult,
+  CapabilityHooks,
+  CapabilityBridge,
+  CapabilityProbe,
+  CompatStorage,
+  ReactiveStorage,
+  ReactiveFactory,
+  FetchConfig,
+  Coords,
+  NetworkType,
+  BatteryInfo,
+  CapDeviceInfo,
+  ScreenInfo,
+  ShareOptions,
+  PermissionState,
+  OrientationInfo,
+} from './capability'

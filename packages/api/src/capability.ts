@@ -5,6 +5,7 @@
 //   与 createPlatformAPI（request/storage/router/ui 四域）分层：本层是「能力」面（设备/系统/通信/扩展）
 //   兼容面：全部 Promise<Result<T>>；平台不支持 → Err('<cap>.unsupported')（G-32.3 降级语义）
 //   MP 产物安全（决策 #32/#36）：无 ?. / ?? （显式检查）；无数组解构
+import type { HttpMethod, RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 
 /** ★Result<T> 契约（G-32.4：能力原语全部返回 Result<T>，禁止回调） */
 export type CapResult<T> =
@@ -104,6 +105,29 @@ export interface CapabilityBridge {
   getOrientation(): Promise<OrientationInfo>
   /** 通知/分享（wx.shareAppMessage / navigator.share / mock） */
   share(options: ShareOptions): Promise<void>
+  // ★G-32 B3 续：通信/网络请求（useFetch——wx.request / fetch / mock；缺省 undefined → useFetch 返回 Err）
+  request?(config: RequestConfig): Promise<RequestResponse<unknown>>
+  /** 权限（web Permissions API / mock；缺省 undefined → usePermission 返回 Err） */
+  getPermission?(permission: string): Promise<PermissionState>
+  /** 存储句柄（useStorage——wx sync 存储 / localStorage / mock；缺省 undefined → useStorage 抛错） */
+  getStorage?(): CompatStorage
+}
+
+/** 存储契约（useStorage / reactive storage 底座） */
+export interface CompatStorage {
+  get<T = unknown>(key: string): T | undefined
+  set(key: string, value: unknown): void
+  remove(key: string): void
+  clear(): void
+}
+
+/** useFetch 配置（对齐 RequestConfig 高频字段） */
+export interface FetchConfig {
+  method?: HttpMethod
+  data?: unknown
+  params?: Record<string, unknown>
+  headers?: Record<string, string>
+  timeout?: number
 }
 
 /** 该能力是否可用（降级探测——G-32.3：缺失 → Err 非抛异常） */
@@ -118,6 +142,10 @@ export interface CapabilityProbe {
   battery: boolean
   orientation: boolean
   share: boolean
+  /** ★G-32 B3 续 */
+  fetch: boolean
+  permission: boolean
+  storage: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -132,6 +160,63 @@ interface WxLike {
   getBatteryInfo?: (opt: { success: (r: { level: number; isCharging: boolean }) => void }) => void
   onDeviceOrientationChange?: (cb: (r: { value: string }) => void) => void
   shareAppMessage?: (opt: { title?: string }) => void
+  // ★G-32 B3 续：request / 存储
+  request?: (opt: {
+    url: string
+    method?: string
+    data?: unknown
+    header?: Record<string, string>
+    success: (r: { statusCode: number; data: unknown; header?: Record<string, string> }) => void
+    fail: (e: unknown) => void
+  }) => void
+  setStorageSync?: (key: string, value: unknown) => void
+  getStorageSync?: (key: string) => unknown
+  removeStorageSync?: (key: string) => void
+  clearStorageSync?: () => void
+}
+
+/** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
+function memoryStorage(): CompatStorage {
+  const mem = new Map<string, string>()
+  return {
+    get: <T>(key: string) => {
+      const raw = mem.get(key)
+      if (raw === undefined) return undefined
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return undefined
+      }
+    },
+    set: (key, value) => {
+      mem.set(key, JSON.stringify(value))
+    },
+    remove: (key) => {
+      mem.delete(key)
+    },
+    clear: () => {
+      mem.clear()
+    },
+  }
+}
+
+/** wx 存储适配（sync 存储缺失 → 内存兜底） */
+function wxStorage(wx: WxLike): CompatStorage {
+  if (typeof wx.setStorageSync === 'function') {
+    return {
+      get: <T>(key: string) => wx.getStorageSync ? (wx.getStorageSync(key) as T) : undefined,
+      set: (key, value) => {
+        if (wx.setStorageSync) wx.setStorageSync(key, value)
+      },
+      remove: (key) => {
+        if (wx.removeStorageSync) wx.removeStorageSync(key)
+      },
+      clear: () => {
+        if (wx.clearStorageSync) wx.clearStorageSync()
+      },
+    }
+  }
+  return memoryStorage()
 }
 
 function wxBridge(wx: WxLike): CapabilityBridge {
@@ -195,6 +280,26 @@ function wxBridge(wx: WxLike): CapabilityBridge {
       if (!wx.shareAppMessage) throw new CapError('share.unsupported', 'wx.shareAppMessage 缺失')
       wx.shareAppMessage({ title: options.title })
     },
+    // ★G-32 B3 续：request → wx.request 回调桥
+    request: (config) =>
+      new Promise((resolve, reject) => {
+        if (!wx.request) return reject(new CapError('fetch.unsupported', 'wx.request 缺失'))
+        wx.request({
+          url: config.url,
+          method: config.method,
+          data: config.data,
+          header: config.headers,
+          success: (r) =>
+            resolve({
+              data: r.data,
+              status: r.statusCode,
+              headers: r.header ?? {},
+              config,
+            }),
+          fail: (e) => reject(new CapError('fetch.failed', 'wx.request 失败', e)),
+        })
+      }),
+    getStorage: () => wxStorage(wx),
   }
 }
 
@@ -282,7 +387,81 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
       if (!share) throw new CapError('share.unsupported', 'navigator.share 不支持（需 HTTPS + 用户手势）')
       await share({ title: options.title, text: options.text, url: options.url })
     },
+    // ★G-32 B3 续：request → fetch 桥（RequestResponse 契约）
+    request: async (config) => {
+      if (typeof g.fetch !== 'function') throw new CapError('fetch.unsupported', 'fetch 不支持（Node<18/SSR）')
+      const url = encodedUrl(config.url, config.params)
+      const resp = await g.fetch(url, {
+        method: config.method ?? 'GET',
+        headers: config.headers as Record<string, string> | undefined,
+        body: config.data !== undefined ? JSON.stringify(config.data) : undefined,
+      })
+      if (!resp.ok) throw new CapError('fetch.failed', `HTTP ${resp.status}`)
+      const text = await resp.text()
+      let data: unknown = text
+      try {
+        data = JSON.parse(text)
+      } catch {
+        /* 非 JSON 原样 */
+      }
+      const headers: Record<string, string> = {}
+      resp.headers.forEach((v, k) => {
+        headers[k] = v
+      })
+      return { data, status: resp.status, headers, config }
+    },
+    getPermission: async (permission) => {
+      const perms = nav?.permissions
+      if (!perms?.query) throw new CapError('permission.unsupported', 'navigator.permissions 不支持')
+      let result: PermissionState
+      try {
+        const st = await perms.query({ name: permission as PermissionName })
+        result = { permission, state: st.state as PermissionState['state'] }
+      } catch (e) {
+        // 未知权限名 → 视为 prompt（非拒绝）
+        result = { permission, state: 'prompt' }
+        void e
+      }
+      return result
+    },
+    getStorage: () => {
+      const ls = (g as { localStorage?: Storage }).localStorage
+      if (ls && typeof ls.getItem === 'function') {
+        return {
+          get: <T>(key: string) => {
+            const raw = ls.getItem(key)
+            if (raw === null) return undefined
+            try {
+              return JSON.parse(raw) as T
+            } catch {
+              return undefined
+            }
+          },
+          set: (key, value) => {
+            ls.setItem(key, JSON.stringify(value))
+          },
+          remove: (key) => {
+            ls.removeItem(key)
+          },
+          clear: () => {
+            ls.clear()
+          },
+        }
+      }
+      return memoryStorage()
+    },
   }
+}
+
+/** params → query 拼接（useFetch） */
+function encodedUrl(url: string, params?: Record<string, unknown>): string {
+  if (!params) return url
+  const qs = Object.keys(params)
+    .filter((k) => params[k] !== undefined)
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`)
+    .join('&')
+  if (!qs) return url
+  return url + (url.includes('?') ? '&' : '?') + qs
 }
 
 /** 运行时探测：wx 存在 → wx 桥；否则 web 桥（Node/SSR 可注入 mock） */
@@ -305,6 +484,13 @@ export interface CapabilityHooks {
   useBattery(): Promise<CapResult<BatteryInfo>>
   useOrientation(): Promise<CapResult<OrientationInfo>>
   useShare(options: ShareOptions): Promise<CapResult<void>>
+  // ★G-32 B3 续：通信/权限/存储
+  /** C26 useFetch：网络请求（成功 .data = 载荷——migration.md `const { data } = await useFetch(url)` 解构兼容） */
+  useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
+  /** C16 usePermission：权限状态（web Permissions API） */
+  usePermission(name: string): Promise<CapResult<PermissionState>>
+  /** C15 useStorage：存储句柄（响应式增强见 createReactiveStorage） */
+  useStorage(): CompatStorage
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -328,6 +514,25 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
     useBattery: () => wrap(bridge.getBattery()),
     useOrientation: () => wrap(bridge.getOrientation()),
     useShare: (options) => wrap(bridge.share(options)),
+    // ★G-32 B3 续：通信/权限/存储（缺桥 → Err 非抛异常——G-32.3 降级语义）
+    useFetch: <T>(url: string, config?: FetchConfig) =>
+      wrap(
+        (() => {
+          if (!bridge.request) return Promise.reject(new CapError('fetch.unsupported', '桥未提供 request（useFetch 不可用）'))
+          return bridge.request({ url, method: config?.method, data: config?.data, params: config?.params, headers: config?.headers, timeout: config?.timeout }).then((r) => r.data as T)
+        })(),
+      ),
+    usePermission: (name) =>
+      wrap(
+        (() => {
+          if (!bridge.getPermission) return Promise.reject(new CapError('permission.unsupported', '桥未提供 getPermission（usePermission 不可用）'))
+          return bridge.getPermission(name)
+        })(),
+      ),
+    useStorage: () => {
+      if (!bridge.getStorage) throw new CapError('storage.unsupported', '桥未提供 getStorage（useStorage 不可用）')
+      return bridge.getStorage()
+    },
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -339,6 +544,58 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       battery: bridge.getBattery !== undefined,
       orientation: bridge.getOrientation !== undefined,
       share: bridge.share !== undefined,
+      fetch: bridge.request !== undefined,
+      permission: bridge.getPermission !== undefined,
+      storage: bridge.getStorage !== undefined,
     }),
+  }
+}
+
+// —— ★useStorage 响应式增强（注入式 reactivity——api 包零运行时依赖 vue） ——
+
+export interface ReactiveStorage<TState extends Record<string, unknown> = Record<string, unknown>> {
+  /** 响应式状态对象（reactive 注入时）；未注入时 = 普通对象（非响应） */
+  state: TState
+  get<T = unknown>(key: string): T | undefined
+  set(key: string, value: unknown): void
+  remove(key: string): void
+  clear(): void
+}
+
+/** 注入式 reactivity（消费方传 vue reactive 或任何响应式代理工厂；缺省 = 恒等——非响应但类型一致） */
+export type ReactiveFactory = <T extends object>(target: T) => T
+
+/**
+ * ★createReactiveStorage：响应式存储（零依赖注入式）
+ * @param storage 底座（bridge.getStorage() / platform.storage）
+ * @param reactive reactive 工厂（vue reactive / 自定义；缺省恒等——state 为普通对象）
+ * 用法：const store = createReactiveStorage(cap.useStorage(), reactive)
+ */
+export function createReactiveStorage<TState extends Record<string, unknown> = Record<string, unknown>>(
+  storage: CompatStorage,
+  reactive?: ReactiveFactory,
+): ReactiveStorage<TState> {
+  const plain: Record<string, unknown> = {}
+  const state = (reactive ? reactive<Record<string, unknown>>(plain) : plain) as TState
+  return {
+    state,
+    get: <T = unknown>(key: string) => storage.get<T>(key),
+    set: (key, value) => {
+      storage.set(key, value)
+      // 始终同步 state（新增 + 更新——响应式镜像）= storage 写入
+      ;(state as Record<string, unknown>)[key] = value
+    },
+    remove: (key) => {
+      storage.remove(key)
+      if (key in state) {
+        delete (state as Record<string, unknown>)[key]
+      }
+    },
+    clear: () => {
+      storage.clear()
+      for (const k of Object.keys(state)) {
+        delete (state as Record<string, unknown>)[k]
+      }
+    },
   }
 }
