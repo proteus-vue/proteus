@@ -287,6 +287,24 @@ describe('G-27 NativeBackend（B4：nodeOps → 原生视图）', () => {
     expect(adapter.ops[1]).toBe('create:UICollectionView')
     expect(adapter.ops[2]).toBe('create:UILabel')
   })
+
+  it('★G-31 B3 三平台：createNativeBackend(adapter, platform) 按平台映射 + id', () => {
+    const ios = createNativeBackend(undefined, 'ios')
+    expect(ios.id).toBe('native-ios')
+    expect((ios.createElement({ type: 'p-grid', semantic: 'layout.grid', props: {}, children: [] }) as NativeViewDescriptor).type).toBe('UICollectionView')
+    const android = createNativeBackend(undefined, 'android')
+    expect(android.id).toBe('native-android')
+    expect((android.createElement({ type: 'p-grid', semantic: 'layout.grid', props: {}, children: [] }) as NativeViewDescriptor).type).toBe('GridLayoutManager')
+    expect((android.createElement({ type: 'p-adaptive', semantic: 'layout.adaptive', props: {}, children: [] }) as NativeViewDescriptor).type).toBe('BottomSheetDialog')
+    const harmony = createNativeBackend(undefined, 'harmony')
+    expect(harmony.id).toBe('native-harmony')
+    expect((harmony.createElement({ type: 'p-grid', semantic: 'layout.grid', props: {}, children: [] }) as NativeViewDescriptor).type).toBe('Grid')
+    expect((harmony.createElement({ type: 'p-text', semantic: 'ui.text', props: {}, children: [] }) as NativeViewDescriptor).type).toBe('Text')
+    // 三平台均通过 conformance
+    expect(runBackendConformance(ios).ok).toBe(true)
+    expect(runBackendConformance(android).ok).toBe(true)
+    expect(runBackendConformance(harmony).ok).toBe(true)
+  })
 })
 
 describe('G-27 FlutterBackend（B5 spike：Proteus 语义 → Flutter widget 树）', () => {

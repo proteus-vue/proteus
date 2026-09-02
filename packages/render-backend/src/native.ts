@@ -73,33 +73,75 @@ const NATIVE_CAPABILITIES: BackendCapabilities = {
   input: ['touch', 'cursor', 'remote'],
 }
 
-/** ★G-31 B3：semantic 语义 → 原生视图类型（UIKit 基准——与 component-ir SEMANTIC_BACKEND_MAP 的 native-ios 列同源） */
-const SEMANTIC_NATIVE_MAP: Record<string, string> = {
-  'layout.box': 'UIView',
-  'layout.stack': 'UIStackView',
-  'layout.grid': 'UICollectionView',
-  'layout.fluid': 'UIView.fluid',
-  'layout.adaptive': 'UISheet',
-  'layout.fit': 'UIView.fit',
-  'ui.text': 'UILabel',
-  'ui.button': 'UIButton',
-  'ui.image': 'UIImageView',
-  'ui.input': 'UITextField',
-  'ui.list': 'UITableView',
-  'ui.nav': 'UINavigationController',
-  'capability.scan-qr': 'AVCaptureSession',
-  'capability.pick-photo': 'UIImagePicker',
-  'capability.location': 'CLLocationManager',
+/** 原生平台（iOS UIKit / Android Jetpack / 鸿蒙 ArkUI） */
+export type NativePlatform = 'ios' | 'android' | 'harmony'
+
+/** ★G-31 B3：semantic 语义 → 原生视图类型（三平台——与 component-ir SEMANTIC_BACKEND_MAP 对应列同源） */
+const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
+  ios: {
+    'layout.box': 'UIView',
+    'layout.stack': 'UIStackView',
+    'layout.grid': 'UICollectionView',
+    'layout.fluid': 'UIView.fluid',
+    'layout.adaptive': 'UISheet',
+    'layout.fit': 'UIView.fit',
+    'ui.text': 'UILabel',
+    'ui.button': 'UIButton',
+    'ui.image': 'UIImageView',
+    'ui.input': 'UITextField',
+    'ui.list': 'UITableView',
+    'ui.nav': 'UINavigationController',
+    'capability.scan-qr': 'AVCaptureSession',
+    'capability.pick-photo': 'UIImagePicker',
+    'capability.location': 'CLLocationManager',
+  },
+  android: {
+    'layout.box': 'FrameLayout',
+    'layout.stack': 'LinearLayout',
+    'layout.grid': 'GridLayoutManager',
+    'layout.fluid': 'ConstraintLayout',
+    'layout.adaptive': 'BottomSheetDialog',
+    'layout.fit': 'wrapContent',
+    'ui.text': 'TextView',
+    'ui.button': 'Button',
+    'ui.image': 'ImageView',
+    'ui.input': 'EditText',
+    'ui.list': 'RecyclerView',
+    'ui.nav': 'NavigationRail',
+    'capability.scan-qr': 'CameraX',
+    'capability.pick-photo': 'PhotoPicker',
+    'capability.location': 'FusedLocation',
+  },
+  harmony: {
+    'layout.box': 'Stack',
+    'layout.stack': 'Flex',
+    'layout.grid': 'Grid',
+    'layout.fluid': 'Flex.fluid',
+    'layout.adaptive': 'Sheet',
+    'layout.fit': 'fitContent',
+    'ui.text': 'Text',
+    'ui.button': 'Button',
+    'ui.image': 'Image',
+    'ui.input': 'TextInput',
+    'ui.list': 'List',
+    'ui.nav': 'Navigation',
+    'capability.scan-qr': 'ScanKit',
+    'capability.pick-photo': 'PhotoViewPicker',
+    'capability.location': 'geoLocationManager',
+  },
 }
 
 /**
- * NativeBackend：nodeOps → 原生视图（B4——验证「nodeOps → UIView」抽象层）
+ * NativeBackend：nodeOps → 原生视图（B4——验证「nodeOps → UIView」抽象层；G-31 B3 三平台语义映射）
  * - 维护 NativeViewDescriptor 树（nodeOps 层句柄，唯一 id）
  * - 所有变更同步宿主 adapter（createView/updateView/insertView/removeView/setViewText）
  * - adapter 缺省 mock（ops 日志）；真实平台注入 SDK 桥
+ * - platform：ios（UIKit 基准）/ android（Jetpack）/ harmony（ArkUI）——决定 id + semantic 映射表
  */
-export function createNativeBackend(adapter?: NativeViewAdapter): ProteusRenderBackend {
+export function createNativeBackend(adapter?: NativeViewAdapter, platform: NativePlatform = 'ios'): ProteusRenderBackend {
   const viewAdapter: NativeViewAdapter = adapter ?? createMockNativeAdapter()
+  const semanticMap = SEMANTIC_NATIVE_MAPS[platform]
+  const id = platform === 'ios' ? 'native-ios' : platform === 'android' ? 'native-android' : 'native-harmony'
   let nextId = 1
   const nodes = new Map<number, NativeViewDescriptor>()
 
@@ -110,13 +152,13 @@ export function createNativeBackend(adapter?: NativeViewAdapter): ProteusRenderB
   }
 
   return {
-    id: 'native-ios', // B4 以 iOS UIKit 为语义基准（type 映射见 plan 03-official-backends.md）
+    id,
     version: '0.1.0',
     capabilities: NATIVE_CAPABILITIES,
 
     createElement(node: IRNode): NodeHandle {
-      // ★G-31 B3：有 semantic → 按语义映射原生视图类型（layout.grid → UICollectionView）；否则按 type 原样
-      const viewType = node.semantic ? SEMANTIC_NATIVE_MAP[node.semantic] ?? node.type : node.type
+      // ★G-31 B3：有 semantic → 按平台语义映射原生视图类型（layout.grid → GridLayoutManager / Grid）；否则按 type 原样
+      const viewType = node.semantic ? semanticMap[node.semantic] ?? node.type : node.type
       const descriptor: NativeViewDescriptor = {
         id: nextId++,
         type: viewType,

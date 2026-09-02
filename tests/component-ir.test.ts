@@ -75,9 +75,14 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
 
   it('mapSemanticToBackend：同一 semantic 在不同后端得到不同原生控件（语义收敛 + 后端实现）', () => {
     expect(mapSemanticToBackend('layout.grid', 'native-ios')).toBe('UICollectionView')
+    expect(mapSemanticToBackend('layout.grid', 'native-android')).toBe('GridLayoutManager')
+    expect(mapSemanticToBackend('layout.grid', 'native-harmony')).toBe('Grid')
+    expect(mapSemanticToBackend('layout.grid', 'skyline')).toBe('grid') // 微信小程序原生 grid 组件
     expect(mapSemanticToBackend('layout.grid', 'flutter')).toBe('GridView')
     expect(mapSemanticToBackend('layout.grid', 'vue-dom')).toBe('div.grid')
-    expect(mapSemanticToBackend('ui.button', 'flutter')).toBe('FilledButton')
+    expect(mapSemanticToBackend('layout.adaptive', 'native-android')).toBe('BottomSheetDialog')
+    expect(mapSemanticToBackend('ui.text', 'native-harmony')).toBe('Text')
+    expect(mapSemanticToBackend('capability.scan-qr', 'skyline')).toBe('wx.scanCode')
     expect(mapSemanticToBackend('layout.grid', 'headless')).toBe('grid')
     expect(mapSemanticToBackend('unknown.semantic', 'vue-dom')).toBeNull()
   })

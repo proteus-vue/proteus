@@ -8,6 +8,7 @@ export type BackendId =
   | 'native-ios'
   | 'native-android'
   | 'native-harmony'
+  | 'skyline' // 微信小程序原生渲染引擎
   | 'skia'
   | 'canvas2d'
   | 'headless'
