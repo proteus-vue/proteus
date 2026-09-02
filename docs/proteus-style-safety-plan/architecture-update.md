@@ -104,7 +104,7 @@
 - [ ] 执行位清单新增 G-31（P1）
 - [ ] 全景图 Layer 1 更新
 - [ ] ADR-016 录入 `adr/` 目录
-- [ ] `proteus-positioning.md` 第 5 章"六大杀手特性"补充"全端样式运行时安全"
+- [ ] `proteus-positioning-v3.md` 第 5 章"六大杀手特性"补充"全端样式运行时安全"
 - [ ] `proteus-css-compat` 主文档交叉引用本方案
 - [ ] `proteus-app-renderer-plan` 03-renderer-pipeline 更新 `patchStyle`
 - [ ] CI 新增 `check-style-report.mjs`
@@ -113,7 +113,7 @@
 
 ## 8. 对定位文档的影响
 
-`proteus-positioning.md` 对标矩阵新增一行：
+`proteus-positioning-v3.md` 对标矩阵新增一行：
 
 | 能力 | uni-app x | RN | Flutter | **Proteus** |
 |------|-----------|-----|---------|------------|

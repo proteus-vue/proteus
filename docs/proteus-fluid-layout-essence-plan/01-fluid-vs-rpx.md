@@ -164,7 +164,7 @@ Proteus 能搬到框架里的原因是 **原则 #10：统一语义 + 原生实�
 ## 8. 后续动作
 
 - [ ] 将此文档内容合并进 `01-fluid-layout.md` 第 2 章「为什么需要柔性布局」
-- [ ] 在 `proteus-positioning.md` 对标矩阵新增「布局适配」行，四列：rpx / Flutter / RN / **Proteus**
+- [ ] 在 `proteus-positioning-v3.md` 对标矩阵新增「布局适配」行，四列：rpx / Flutter / RN / **Proteus**
 - [ ] G-22 Compiler Plugin 增加 `systemCapability` 检测：编译期校验目标端是否支持对应原生容器，不支持则降级（对接 `08-degradation.md`）
 
 ---

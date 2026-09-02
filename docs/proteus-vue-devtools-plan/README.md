@@ -1,6 +1,6 @@
 # Proteus × Vue DevTools 接入方案（G-19 补充）
 
-> 将「Vue DevTools 接入策略」落地到 G-19 DevTools plan，并同步更新 `proteus-positioning.md` 第 5 章。
+> 将「Vue DevTools 接入策略」落地到 G-19 DevTools plan，并同步更新 `proteus-positioning-v3.md` 第 5 章。
 
 ## 文件清单
 

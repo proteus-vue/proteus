@@ -76,7 +76,7 @@
 | `proteus-cli-plan` | 新增插件子命令（见 `08-cli-integration.md`） |
 | `proteus-devtools-plan` | TraceBus 接入插件钩子上报 |
 | `proteus-style-safety` | transform 产物经 Validator（协同） |
-| `proteus-positioning.md` | 第 5 章杀手特性补「插件化编译器」 |
+| `proteus-positioning-v3.md` | 第 5 章杀手特性补「插件化编译器」 |
 
 ## 六、验收
 

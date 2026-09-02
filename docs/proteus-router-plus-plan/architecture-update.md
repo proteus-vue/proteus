@@ -40,6 +40,6 @@ Layer 0  IR        统一中间表示
 
 ## 5. 关联更新
 
-- `proteus-positioning.md`：杀手特性清单新增「声明式路由 + 原生转场」
+- `proteus-positioning-v3.md`：杀手特性清单新增「声明式路由 + 原生转场」
 - CSS 矩阵：路由组件样式同样受 G-31 管控（无新增属性）
 - Memory Plan：转场内存增量预算（< 5MB）

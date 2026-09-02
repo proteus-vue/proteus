@@ -212,4 +212,4 @@ router.present('/modal')  // 语义：模态弹出
 - `proteus-glass-plan`：导航栏玻璃映射
 - `proteus-style-safety`：路由组件样式也受 Validator 管控
 - Architecture 原则 #10：路由语义 → 原生实现
-- `proteus-positioning.md`：杀手特性之一（声明式路由 + 原生转场）
+- `proteus-positioning-v3.md`：杀手特性之一（声明式路由 + 原生转场）

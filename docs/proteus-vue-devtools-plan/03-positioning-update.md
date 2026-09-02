@@ -2,7 +2,7 @@
 title: "positioning.md 第 5 章补充"
 ---
 
-# 对外话术更新（proteus-positioning.md）
+# 对外话术更新（proteus-positioning-v3.md）
 
 ## 第 5 章「杀手特性」新增一条
 

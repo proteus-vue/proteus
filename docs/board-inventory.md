@@ -1,46 +1,165 @@
-# 规划板块权威状态总表（17 板块盘点）
+# Proteus 架构规划全景（Board Inventory · v2）
 
-> 本文是 17 个 `docs/proteus-*-plan/` 板块的**唯一状态源**（2026-08 全仓盘点）。
-> 每个板块 README 的 ★实现状态 与本表保持一致；新增/完成批次必须同步本表。
-> 测试基线：**616 单测 + 8 Web e2e**（`npm run verify` 全绿）。
+> **定位**：全部 plan / 六层分层 / 双路线 / 实现状态的**单一权威索引**（替代 2026-08 的 17 板块盘点表）
+> **关联**：`docs/proteus-positioning-v3.md`（对外门面）· `docs/roadmap.md`（版本线 v0.1→v2.0）· `docs/proteus-roadmap-2-plan/`（里程碑线 M1-M3）· `proteus-architecture`（规约）
+> **更新规则**：新增/完成批次必须同步本表；分层归属以本表为准（roadmap-2 §1 六层口径）
 
-| # | 板块 | 状态 | 已实现范围 | 未实现/延后 |
-|---|------|------|-----------|------------|
-| 1 | api-plan | ✅ 已实现 | B1-B4：createApi 请求抽象（wx/fetch adapter + 拦截器/重试/错误模型）+ getDeviceInfo + createAuth 凭证托管（自动 Authorization/skipAuth/登录态订阅） | P1 业务模块（文件/支付/UI，A5 支付标注依赖） |
-| 2 | app-plan | ✅ B1 核心已落地（B2-B5 标 v0.6 正式启动）| @proteus-vue/renderer-app：NativeAdapter 抽象 + createRenderer host config + mock adapter——Vue 官方渲染器接线可测（无需真机）；标准 Vue SFC 三端复用的 App 运行时通道 | B2-B5（iOS/Android 原生视图/样式 rpx→dp/路由桥/能力桥/demo）需 npm 发布 + 原生工程；Vapor 双模式（B6）依赖 @vue/vapor 实验版 |
-| 3 | build-plan | ✅ 已实现 | @proteus-vue/plugin-vite（mp 编译插件 + gen-routes + 共享模块/分包/能力包）+ 双端构建 + CI 流水线 + 体积预算门禁（bundle-report strict，随 build:mp 进 CI）+ build 产物契约测试（contract-build：subPackages 一致性/组件产物存在性） | 增量 HMR/磁盘远程缓存（M8）/分包并行构建（04 文档标注后续） |
-| 4 | cli-plan | ✅ 已实现 | @proteus-vue/cli：build/explain/rules/router:check/module:check/module:duplicates/audit module/init module/capabilities:manifest/capabilities:check/**components:audit** | dev/preview 命令（M2 规划） |
-| 5 | compiler-plan | ✅ 已实现 | 编译管线 + 69 条规则注册表 + explain/trace + 产物自校验 + sourcemap + **4 项增强**（props 源 watch→observers / ref 多行 RHS 修复 / 组件 onUnmounted→detached / 未映射钩子显式警告） | computed 写路径/类型提示尾项 |
-| 6 | component-plan | ✅ P0 全批 | B1-B8：16 组件（15 个 p-* + virtual-list 兼容）+ 4 runtime 共享模块（capability/event/virtual-window/observability）+ `components:audit` 门禁（CI）+ demo 页 | 业务组件（player-bar/payment-sheet 依赖 appBar/支付）；Worklet 转场 v0.6；组件库拆包 v2.0 |
-| 7 | devtools-plan | ✅ 已实现（B1-B2）| TraceBus 统一事件协议（@proteus-vue/devtools-runtime：环形缓冲/脱敏/采样/零开销门控）+ 六源接入两源示范（lifecycle + componentRender，type-only 注入）| 面板（时间轴/快照/火焰图/根因/设备）标 v1.0+；router/store/api/capability/compiler 四源同模式后续 |
-| 8 | i18n-plan | ✅ 已实现（B1-B3）| @proteus-vue/i18n（类型安全 t() + ICU 子集：插值/复数/select/# 占位）+ CLI i18n:check 审计门禁 + demo（双端共享模块链路验证）| 分包加载/完整 ICU/Intl 日期货币/RTL 自动应用/AST 提取标后续批次 |
-| 9 | lifecycle-plan | ✅ 已实现 | B1-B6：defineApp 五阶段 + LifecycleOrchestrator（超时/降级/错误隔离/trace）+ Web demo + appSkeleton onShow/onHide + 页面 onUnload 自动 $dispose | B7-B9 尾项 |
-| 10 | module-plan | ✅ 已实现 | B0-B9：跨模块引用（import→require）+ @proteus-vue/module（契约/图谱/编排器）+ Web manualChunks/分包 preload + 体积/去重/审计门禁 | 模块化 DevTools 联动 |
-| 11 | pinia-plan | ✅ 已实现 | M1-M8 + MP P1-P3：多端工厂/持久化/分片/版本迁移/快照时间旅行/协同 @proteus-vue/pinia-sync/可观测 + MP 模板绑定桥/事件包装/白名单放行 | DevTools 面板联动 |
-| 12 | platform-plan | ✅ 已实现 | B1-B5 + B8/B9：能力契约/Registry/编译期分叉/运行时降级/平台规范 + 矩阵测试 + CI 门禁 | B6/B7 ⏳ 延后（超级应用可靠性/可观测待 DevTools 基建） |
-| 13 | router-plan | ✅ 已实现 | B1-B11：scan/tree/codegen/guards/tabBar + Router M7.1 chunk + requiresAuth 自动守卫 + 透明化规则/决策链 | B5 app codegen（appBar）⬜ 待 v0.6 |
-| 14 | security-plan | ✅ 已实现（M1-M3）| M1 SecretStorage 敏感字段加密存储（@proteus-vue/security：WebCrypto AES-GCM+PBKDF2 / DemoCipher 降级 / volatile 跳过 / redact / migrate）+ M2 凭证托管（@proteus-vue/api createAuth）+ M3 PermissionRegistry 权限最小化（withPermission/PermissionDenied/持久化）| M4-M8（注入防护/网络安全/脱敏/audit security）标后续；Router 权限守卫自动生成 / PermissionGate 组件 / 编译期字段校验 transform |
-| 15 | testing-plan | ✅ 已实现 | 四层金字塔（L1 单测 587 + L2 集成快照 + 跨层契约 + e2e 8）+ CI 门禁（stores 铁律/能力门禁/模板快照/组件审计） | e2e 真机矩阵 |
-| 16 | types-plan | ✅ 全批收官（B1-B7）| shims + 各包 IR 类型 + ProteusConfig TS + 平台守卫（铁律 #4）+ validateConfig（config:check）+ @proteus-vue/types 独立包（Platform 共享类型 + JSON Schema + generate types --check）+ 超级应用加固（品牌类型/配置迁移/Schema Registry）+ migrate types codemod（CI 门禁）| 独立 @proteus-vue/types 包 Registry .d.ts codegen 深化（远期）|
-| 17 | website-plan | ⬜ 未实现 | — | 官网（文档系统/playground/showcase），v1.0+ |
+---
 
-## 汇总
+## 0. 一句话架构
 
-- ✅ 已实现 **16** 个板块（api/app(B1 核心)/build/cli/compiler/component/devtools/i18n/lifecycle/module/pinia/platform/router/security/testing/types）
-- ⬜ 未实现 **1** 个（website 为远期）
+> **Proteus = 语义 IR + 双 SPI（渲染 G-27 / 原生 G-28）+ 全终端（G-25）+ 任意端接入（G-30）**
+> slogan：**Render anywhere, on any engine.**（v3：*One semantic model. Any render engine. Zero native glue.*）
 
-> devtools（面板 B3-B8）、i18n（分包/完整 ICU）、security（M4-M8）、app（B2-B5 原生工程）的「未实现」内容均标注依赖基建/长期方向，当前可落地批次已完成。
+不锁渲染引擎、不锁原生能力：上层语义模型（p-* 原语 + IR）为标准，各端 Backend 通过 SPI + conformance 接入。现有实现（编译器 + Vue DOM + MP 产物）即 **G-27 的 VueDomBackend**——架构方向已定案，后续沿路线图扩展后端矩阵。
 
-## 交叉能力（编译器 4 增强，跨板块复用）
+---
 
-组件库 B3/B5/B6/B7 沉淀的编译器能力同时服务所有板块：
-1. `script/watch-props`：watch props 源 → WeChat observers（组件响应自身属性变化）
-2. `script/ref-write` 多行 RHS 修复（ref 赋值含箭头函数体）
-3. 组件模式 `onUnmounted → detached`（MP 组件真实销毁钩子）
-4. 未映射 `onXxx` 钩子显式警告（反黑盒）
+## 1. 双路线对照（两条时间线如何串联）
 
-## 下一步候选
+| 分层 | 版本线（roadmap.md） | 里程碑线（roadmap-2） | 现状 |
+|------|---------------------|----------------------|------|
+| L0 规约 | v0.1+（原则/铁律积累） | M1.1 规约收口 | 🟡 决策已积累（PROJECT_MEMORY 290 条），正式规约收口待 M1.1 |
+| L1 方法论 | v0.4+（G-22 系） | M1 地基（0-3 月） | 🟡 G-22 / G-22.5 ✅ 已落地；G-24/25/26/27/28 ⬜ 规划 |
+| L2 核心引擎 | v0.2-v0.4 | M1.2-M1.8 | ✅ 大部分已落地（compiler / plugin / types / build / app-config / module / lifecycle） |
+| L3 能力 | v0.3-v0.5 | M2.3-M2.5 | ✅ 大部分已落地（router / pinia / api / platform / component / i18n / security / fluid / css-compat） |
+| L4 工具链 | v0.2-v1.0 | M1.8 / M2.7 | ✅ 大部分已落地（cli / devtools / testing / test-framework / vue-devtools） |
+| L5 交付 | v1.0-v2.0 | M2-M3 | ⬜ 大部分未启动（★render-backend / native-backend 为核心方向） |
 
-1. **全仓收尾**：PROJECT_MEMORY 校对 + npm 发布清单执行（changesets version → 模板同步 → publish，现覆盖 16 包）
-2. **security M4-M8 评估**（注入防护/网络安全/脱敏）或 **app B2 预研**（原生视图样式系统 rpx→dp 契约设计）
-3. **website-plan 评估**（官网文档系统——远期，依赖 v1.0）
+**关键路径（18 月）**：规约 → G-27 SPI → compiler IR → NativeBackend → FlutterBackend → 混合渲染 → G-28 生态 → benchmark。**G-27 B5 FlutterBackend 是唯一技术不确定项（最早 spike）。**
+
+---
+
+## 2. 六层全景总表
+
+### L0 规约
+
+| plan | 编号 | 状态 | 说明 / 下一动作 |
+|------|------|------|----------------|
+| `proteus-architecture`（规约，**未生成**） | 原则 #1-#12 + 铁律 + FLD/GLS/RND/NAT/PRIM | 🟡 | 决策已积累（PROJECT_MEMORY），正式规约文档收口 = **M1.1**（roadmap-2 真理来源，仅 roadmap-2 引用） |
+
+### L1 方法论（杠杆支点：语义收敛 + 后端实现）
+
+| plan | 编号 | 状态 | 说明 / 下一动作 |
+|------|------|------|----------------|
+| `proteus-fluid-layout-plan` / `proteus-fluid-system-plan` / `proteus-fluid-layout-essence-plan` | **G-22** | ✅ 已落地 | S1-S4 全原语（p-fluid/p-fit/p-scale/p-grid/p-stack/p-split/p-aspect/p-sidebar/p-toolbar/p-safe/p-zone）+ `@proteus-vue/fluid` 包 + FLD001-013 + fluid:check 门禁 |
+| `proteus-adaptive-container-plan` | **G-22.5** | ✅ B1/B2/B4 | p-adaptive 纯逻辑 + Controller + p-modal（sheet/dialog/popover 形态自动切换 + anchor 锚定）；B3 原生映射待 App Renderer |
+| `proteus-semantic-primitives-plan` | **G-24** | ⬜ 规划 | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut）可立即动手 |
+| `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
+| （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
+| `proteus-render-backend-1-plan` | **G-27** | ⬜ **M1.4 待启** | ★**下一大方向**：ProteusRenderBackend SPI（nodeOps 对齐 Vue）+ VueDomBackend 原型（现有 renderer.ts 已有 nodeOps 雏形） |
+| `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
+| `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
+
+### L2 核心引擎
+
+| plan | 编号 | 状态 | 说明 |
+|------|------|------|------|
+| `proteus-compiler-plan` | G-02 | ✅ | 编译管线 + 规则注册表 + explain/trace + 自校验 |
+| `proteus-compiler-plugin-plan` | **G-21** | ✅ | Compiler Plugin API（IR 可编程访问） |
+| `proteus-compiler-backend-1-plan` | **G-29** | ⬜ 规划 | 编译器后端可插拔（与 G-27/28 同哲学） |
+| `proteus-types-plan` / `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod |
+| `proteus-build-plan` | G-04 | ✅ | plugin-vite（mp 编译 + gen-routes + 共享模块/分包）+ 体积门禁 |
+| `proteus-app-config-plan` | G-35 | ✅ | app.config 分层 + schema 校验 + 远程 |
+| `proteus-app-renderer-plan` | G-07/22 | ✅ B1 核心 | @proteus-vue/renderer-app：NativeAdapter + createRenderer host config（★G-27 NativeBackend 的既有底座） |
+| `proteus-module-plan` | G-05 | ✅ | @proteus-vue/module：契约/图谱/编排器 + 分包 + 审计 |
+| `proteus-lifecycle-plan` | G-06 | ✅ | defineApp 五阶段 + 编排器 + 错误隔离 + trace |
+| `proteus-app-plan` | — | ✅ B1 | 框架本体拆包 + installWebPlatform |
+
+### L3 能力（语义原语 + 系统能力）
+
+| plan | 编号 | 状态 | 说明 |
+|------|------|------|------|
+| `proteus-glass-plan` | G-07 | ⬜ 规划 | pg-glass 系统级玻璃（L1/L2/L3 降级） |
+| `proteus-safe-area-plan` | G-09 | 🟡 | p-safe 语义已落地（fluid-system S2）；App 端安全区待渲染层 |
+| `proteus-fluid-layout-plan`（四原语） | G-22 | ✅ | 见 L1 |
+| `proteus-css-compat-plan` | G-08 | ✅ | CSS 矩阵 + 布局语义 + 矩阵测试 |
+| `proteus-memorial-skeleton-plan` | G-11 | ⬜ 规划 | 纪念日置灰 + 骨架屏 |
+| `proteus-router-plan` / `proteus-router-plus-plan` | G-17 | ✅ | 声明式路由 + 守卫/tabBar/分包 + 深链 |
+| `proteus-pinia-plan` | G-15 | ✅ | M1-M8 + MP 桥 + 快照时间旅行 + 协同 |
+| `proteus-api-plan` | G-14 | ✅ | createApi 跨端请求 + 凭证托管 |
+| `proteus-platform-plan` | G-13 | ✅ | Capability 契约/Registry/降级 + 矩阵测试 |
+| `proteus-component-plan` | G-10 | ✅ | 16 内置组件 + runtime 共享模块 + components:audit 门禁 |
+| `proteus-performance-plan` / `proteus-memory-plan` | G-12/G-18 | ✅ | 虚拟列表/体积预算 + 内存规范（disposer） |
+| `proteus-i18n-plan` | G-19 | ✅ | @proteus-vue/i18n + i18n:check 门禁 |
+| `proteus-security-plan` | G-20 | ✅ M1-M3 | 加密存储 + 凭证托管 + 权限最小化 |
+| `proteus-api-plan`（设备信息） | — | ✅ | getDeviceInfo 等 |
+
+### L4 工具链
+
+| plan | 编号 | 状态 | 说明 |
+|------|------|------|------|
+| `proteus-cli-plan` / `proteus-cli-plus-plan` | G-17 | ✅ | build/explain/rules/check 全家 + 健康检查 + 美观 help |
+| `proteus-devtools-plan` / `proteus-devtools-plus-plan` | G-19 | ✅ | TraceBus + 九视图 + 双向调试 + 远程中转 + 会话导出导入 |
+| `proteus-vue-devtools-plan` | G-19 | ✅ | vue devtools 面板（Router/App Config/Style Safety）+ 本地面板双通道 |
+| `proteus-testing-plan` / `proteus-test-framework-plan` | G-16 | ✅ | 四层金字塔 + 统一测试 API + 双端驱动 |
+| `proteus-app-capabilities-plan` | — | ✅ | 应用级能力（hooks/能力检查） |
+
+### L5 交付层
+
+| plan | 编号 | 状态 | 说明 |
+|------|------|------|------|
+| `proteus-blueprint-plan` | — | ⬜ | 完整业务参考实现（M2 验收载体） |
+| `proteus-website-plan` | — | ⬜ | 官网（roadmap-2 附属 01-website-skeleton 已列执行项） |
+| `proteus-style-safety-plan` | G-21 | ✅ | FLD/CSS 三层防御 + 矩阵测试 |
+| `proteus-semantic-primitives-plan`（B1+ 落地产物） | G-24 | ⬜ | 桌面交互原语组件 |
+| `proteus-adaptive-container-plan`（组件层） | G-22.5 | ✅ B4 | p-modal 已落地；p-drawer/p-nav/p-detail 待续 |
+| `proteus-device-adaptation-plan`（组件层） | G-25 | ⬜ | 车机/TV/手表原语 |
+| `proteus-native-backend-1-plan`（官方后端） | G-28 | ⬜ | 官方原生后端实现 |
+| `proteus-render-backend-1-plan`（官方后端） | G-27 | ⬜ M1.4 | ★VueDomBackend 原型 → Flutter/Native/Skia/Headless |
+| （dev-efficiency） | G-26 | ⬜ | benchmark 数据 |
+| `proteus-positioning-v3.md` | — | ✅ | 对外门面（v2 存档 archive/） |
+| `proteus-ai-fluid-agent-plan` | G-23 | ⬜ 规划 | AI Agent 操作 LayoutConstraint IR + FLD 校验闭环 |
+
+### 其他文档（非 plan）
+
+| 文件 | 说明 |
+|------|------|
+| `docs/roadmap.md` | 版本线（v0.1→v2.0，对标 uni-app/Taro）——与本表 §1 双路线对照 |
+| `docs/routing.md` / `compiler.md` / `configuration.md` / `types.md` / `packages.md` / `getting-started.md` | 使用文档 |
+| `docs/vue-compat-plan.md` / `vue-compat-advance.md` | Vue 兼容性文档（能力已落地） |
+| `docs/archive/proteus-positioning-v2.md` | positioning v2 存档（v3 为权威门面） |
+
+---
+
+## 3. 现有实现资产对照（已落地清单，2026-09）
+
+| 资产 | 位置 | 归属 |
+|------|------|------|
+| Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
+| p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
+| fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
+| 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |
+| Vue 自定义渲染器 host config（NativeAdapter） | `@proteus-vue/renderer-app` | **G-27 NativeBackend 底座** 🟡 |
+| nodeOps 雏形（onClick→bindtap 映射） | `packages/runtime/src/renderer.ts` | **G-27 VueDomBackend 底座** 🟡 |
+| MP 编译器 + 规则注册表（69 条） | `packages/compiler` | G-02/G-21 ✅ |
+| devtools 全链路（TraceBus/面板/远程/会话） | `@proteus-vue/devtools*` | G-19 ✅ |
+| 测试框架统一 API + 双端驱动 | `@proteus-vue/test-core` | G-16 ✅ |
+
+---
+
+## 4. 严格规则 / 铁律总览
+
+| 系列 | 内容 | 载体 |
+|------|------|------|
+| FLD001-013 | 柔性布局治理（断点/死尺寸/p-fluid/p-grid/p-scale/p-adaptive） | `proteus fluid:check` |
+| CSS017/018 | backdrop-filter 裸写 / 无障碍缺失 | style-safety |
+| GLS001-006 | Glass 须走 `<pg-glass>` 入口 | glass-plan |
+| PRIM001-005 | 禁止手动 `if (isDesktop)` | semantic-primitives |
+| VEH001 / TV001 / WATCH001 | 车机 driving-safe / TV 焦点 / 手表单列 | device-adaptation |
+| RND001-005 | 禁止绕过 SPI 直调渲染引擎 / 后端须过 conformance | render-backend |
+| AI001-005 | Agent 产物须过 `--strict-css` + FLD | ai-fluid-agent |
+| 分层铁律 | L1 先于 L3 / 禁跨层反向依赖（并行化前提） | roadmap-2 §6 |
+
+---
+
+## 5. 状态速览（一句话）
+
+- **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
+- **待启（近期候选）**：M1.1 规约收口 → **M1.4 G-27 SPI 原型（VueDomBackend）** → G-24 B1 桌面原语 → p-drawer（G-22.5 B4 剩余）
+- **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
+- **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark
+
+---
+
+*Board Inventory v2 · 2026-09 · 与 positioning-v3 / roadmap.md / roadmap-2-plan 口径对齐*

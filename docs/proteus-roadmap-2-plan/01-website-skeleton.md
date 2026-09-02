@@ -1,13 +1,13 @@
 # Proteus Website 骨架（L5 交付层）
 
-> 配套：`proteus-positioning.md` v3（门面层归纳）+ `proteus-router-plan`（路由）+ `proteus-component-plan`（组件）。
+> 配套：`proteus-positioning-v3.md` v3（门面层归纳）+ `proteus-router-plan`（路由）+ `proteus-component-plan`（组件）。
 > 本文件是 Website 骨架的**设计文档**，可直接交给实现团队落地。
 
 ---
 
 ## 0. 定位
 
-**Website = 对外门面的技术载体。** 它的任务是把 `proteus-positioning.md` §5 的七条杀手特性 + 45 份 plan 的体系，变成**开发者能体验、能上手、能信任**的产品。
+**Website = 对外门面的技术载体。** 它的任务是把 `proteus-positioning-v3.md` §5 的七条杀手特性 + 45 份 plan 的体系，变成**开发者能体验、能上手、能信任**的产品。
 
 **一句话定位**：`One semantic model. Any render engine. Zero native glue.` —— 官网每一页都服务这句话。
 

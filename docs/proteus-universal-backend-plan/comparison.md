@@ -1,6 +1,6 @@
 # Comparison: 小程序 API 映射 vs 语义 IR
 
-> 对外"降维打击"话术素材，建议同步进 `proteus-positioning.md` FAQ。
+> 对外"降维打击"话术素材，建议同步进 `proteus-positioning-v3.md` FAQ。
 
 ---
 
@@ -107,7 +107,7 @@ plus.barcode.scan({ ... })
 
 ## 5. 对标定位（positioning 用）
 
-建议在 `proteus-positioning.md` §6 对标矩阵新增：
+建议在 `proteus-positioning-v3.md` §6 对标矩阵新增：
 
 | 维度 | uni-app / Taro | Flutter | RN | **Proteus** |
 |------|---------------|---------|-----|-------------|

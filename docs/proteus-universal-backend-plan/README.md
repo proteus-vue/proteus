@@ -77,7 +77,7 @@ Tier 4: 仅 J   → Headless（SSR/Agent）
 合并进规约 + 更新 positioning（建议一次性收口）：
 
 1. `architecture-update.md` → 合并进 `proteus-architecture.md`（原则 #10 泛化 + 铁律）
-2. `proteus-positioning.md`：
+2. `proteus-positioning-v3.md`：
    - §4 架构分层补「任意端接入（G-30）」
    - §5 杀手特性补「**任意端：只要实现 Backend 即一等公民**」
    - §6 对标矩阵补「新端接入成本 / 端差异处理 / 能力缺失时机」

@@ -273,7 +273,7 @@ const result = await native.scanQR()   // ← 用到了相机能力
 
 ## 8. 对标：小程序 API 映射 vs 语义 IR（FAQ 素材）
 
-> 这是对外讲"降维打击"的核心话术，建议同步进 `proteus-positioning.md` FAQ。
+> 这是对外讲"降维打击"的核心话术，建议同步进 `proteus-positioning-v3.md` FAQ。
 
 | | 传统框架（uni-app / Taro / Rax） | **Proteus** |
 |--|----------------------------------|-------------|

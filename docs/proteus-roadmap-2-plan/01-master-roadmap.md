@@ -274,7 +274,7 @@ L0 规约
 - **`proteus-architecture`**：真理来源，本路线图的分层即源于规约
 - **`proteus-positioning` v3**：对外门面，本路线图的"可演示产物"即对外话术弹药
 - **各 G-XX / M-X plan**：具体执行细则，本路线图只做编排、不重复细节
-- **`PROTEUS_PLANS_OVERVIEW.md`**：45 份 plan 的索引，与本路线图 §1 分层互为参照
+- **`docs/board-inventory.md`（v2 架构规划全景）**：全部 plan / 六层分层 / 双路线 / 实现状态的单一权威索引，与本路线图 §1 分层互为参照（替代原 PROTEUS_PLANS_OVERVIEW）
 
 ---
 
