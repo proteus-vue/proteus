@@ -458,6 +458,16 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'Scrollable',
     headless: 'scrollable',
   },
+  // ★G-32 B5 尾巴：E18 声明式导航组件形态（p-router-link——语义「导航目标」；点击 emit('navigate') 由工程层执行）
+  'engineering.router-link': {
+    'vue-dom': 'a.proteus-router-link',
+    'native-ios': 'UIButton.link',
+    'native-android': 'TextView.link',
+    'native-harmony': 'Text.link',
+    skyline: 'navigator', // Skyline <navigator> 声明式导航
+    flutter: 'TextButton',
+    headless: 'router-link',
+  },
   // ★G-32 B5 续二：工程原语动画组件形态（E19 transition / E20 animate——纯 CSS 声明语义；Hook 归 API 层不产节点）
   'engineering.transition': {
     'vue-dom': 'div.proteus-transition',

@@ -130,6 +130,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'UIView.form',
     'gesture.draggable': 'UIPanGestureRecognizer',
     'gesture.scrollable': 'UIScrollView.gesture',
+    // ★G-32 B5 尾巴：E18 声明式导航（p-router-link）
+    'engineering.router-link': 'UIButton.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'UIView.transition',
     'engineering.animate': 'CAKeyframeAnimation',
@@ -186,6 +188,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'LinearLayout.form',
     'gesture.draggable': 'GestureDetector',
     'gesture.scrollable': 'NestedScrollView',
+    // ★G-32 B5 尾巴：E18 声明式导航（p-router-link）
+    'engineering.router-link': 'TextView.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'View.animate.transition',
     'engineering.animate': 'ValueAnimator',
@@ -242,6 +246,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'FormComponent',
     'gesture.draggable': 'PanGesture',
     'gesture.scrollable': 'Scroll.gesture',
+    // ★G-32 B5 尾巴：E18 声明式导航（p-router-link）
+    'engineering.router-link': 'Text.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'animateTo.transition',
     'engineering.animate': 'Animator.transition',

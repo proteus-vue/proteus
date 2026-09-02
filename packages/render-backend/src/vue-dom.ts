@@ -83,6 +83,8 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   // ★G-32 B4 ④ Gesture 组件形态
   'gesture.draggable': { tag: 'div', className: 'proteus-draggable' },
   'gesture.scrollable': { tag: 'div', className: 'proteus-scrollable' },
+  // ★G-32 B5 尾巴：E18 声明式导航（p-router-link——a 元素语义）
+  'engineering.router-link': { tag: 'a', className: 'proteus-router-link' },
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20——纯 CSS 声明）
   'engineering.transition': { tag: 'div', className: 'proteus-transition' },
   'engineering.animate': { tag: 'div', className: 'proteus-animate' },

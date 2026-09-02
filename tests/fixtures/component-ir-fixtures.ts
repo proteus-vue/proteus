@@ -55,6 +55,11 @@ export const ANIMATE_ENTRANCE: ComponentIR = toComponentTree('p-animate', { keyf
   { tag: 'p-text', props: {} },
 ])!
 
+/** router-link-nav：p-router-link(to)——E18 声明式导航组件形态（工程原语最后闭环节点） */
+export const ROUTER_LINK_NAV: ComponentIR = toComponentTree('p-router-link', { to: 'user', replace: false }, [
+  { tag: 'p-text', props: {} },
+])!
+
 /** L1 组件 fixtures 全集（conformance 门禁逐 fixture × 逐后端跑） */
 export const COMPONENT_FIXTURES: Record<string, ComponentIR> = {
   'grid-basic': GRID_BASIC,
@@ -65,4 +70,5 @@ export const COMPONENT_FIXTURES: Record<string, ComponentIR> = {
   'sidebar-split': SIDEBAR_SPLIT,
   'transition-fade': TRANSITION_FADE,
   'animate-entrance': ANIMATE_ENTRANCE,
+  'router-link-nav': ROUTER_LINK_NAV,
 }

@@ -194,6 +194,17 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑯ 声明式导航（G-32 B5 尾巴：p-router-link E18——点击 emit navigate → createRouterEngineering 响应）</text>
+      <view class="pad-row">
+        <p-router-link data-testid="pad-link-home" to="home" @navigate="onLinkNavigate">首页</p-router-link>
+        <p-router-link data-testid="pad-link-user" to="user" @navigate="onLinkNavigate">个人中心</p-router-link>
+        <p-router-link data-testid="pad-link-mine" to="mine" switch-tab @navigate="onLinkNavigate">我的（switchTab）</p-router-link>
+      </view>
+      <text class="pad-log" data-testid="pad-link-log">{{ linkLog }}</text>
+      <text class="pad-sub">E18 p-router-link 声明式导航（engineering.router-link，B5 工程原语最后节点）——点击 emit('navigate', { to, replace, switchTab })；父级 @navigate 调 rx.push/replace/switchTab（E11-E14 语义委托 mock router 录制，不真实导航）；组件零平台依赖（审计合规）+ web role="link" 可访问性 · MP bindtap</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -207,8 +218,8 @@
 import { ref, computed } from 'vue'
 import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract, createRequestEngineering } from '@proteus-vue/api'
 import type { AnimationDriver, RequestExecutor, RequestResponse, RequestConfig } from '@proteus-vue/api'
-// ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）
-import { PTransition, PAnimate } from '@proteus-vue/components'
+// ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）+ E18 声明式导航
+import { PTransition, PAnimate, PRouterLink } from '@proteus-vue/components'
 
 // ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
 const api = createPlatformAPI()
@@ -789,6 +800,21 @@ async function onReqCache() {
   const r2 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
   const afterSecond = reqFetchCount
   reqLog.value = `request 缓存 → 首次 ${afterFirst - before} 次请求 · 二次 ${afterSecond - afterFirst} 次（ttl=10s 命中零重发）· data=${JSON.stringify(r2.data)}`
+}
+
+// ---------- ⑯ 声明式导航（G-32 B5 尾巴：E18 p-router-link——emit navigate → rx.push 语义委托） ----------
+const linkLog = ref('点击链接演示声明式导航（p-router-link → rx.push 录制）')
+function onLinkNavigate(payload: { to: string; replace: boolean; switchTab: boolean }) {
+  if (payload.replace) {
+    rx.replace({ name: payload.to })
+    linkLog.value = `p-router-link → rx.replace({ name: '${payload.to}' })（E12）`
+  } else if (payload.switchTab) {
+    rx.switchTab({ name: payload.to })
+    linkLog.value = `p-router-link → rx.switchTab({ name: '${payload.to}' })（E14）`
+  } else {
+    rx.push({ name: payload.to })
+    linkLog.value = `p-router-link → rx.push({ name: '${payload.to}' })（E11）`
+  }
 }
 </script>
 

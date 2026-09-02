@@ -12,14 +12,15 @@ import { TAG_SEMANTIC_MAP, toComponentIR, SEMANTIC_ENUM } from '@proteus-vue/com
 
 const COMPONENTS_DIR = path.resolve('src/components')
 
-const NEW_TAGS = ['p-transition', 'p-animate']
+const NEW_TAGS = ['p-transition', 'p-animate', 'p-router-link']
 
 const TAG_TO_SEMANTIC: Record<string, string> = {
   'p-transition': 'engineering.transition',
   'p-animate': 'engineering.animate',
+  'p-router-link': 'engineering.router-link',
 }
 
-describe('G-32 B5 续二 动画组件形态落地（E19 p-transition / E20 p-animate）', () => {
+describe('G-32 B5 续二/尾巴 工程原语组件形态落地（E19/E20 动画 + E18 声明式导航）', () => {
   it('组件目录齐全 + index.vue 存在 + 聚合导出注册（manifest 完备）', () => {
     for (const tag of NEW_TAGS) {
       expect(fs.existsSync(path.join(COMPONENTS_DIR, tag, 'index.vue')), `${tag}/index.vue 缺失`).toBe(true)
@@ -47,7 +48,7 @@ describe('G-32 B5 续二 动画组件形态落地（E19 p-transition / E20 p-ani
     }
   })
 
-  it('SFC 声明语义：p-transition 带 name/mode/duration/visible；p-animate 带 keyframes/duration/loop/delay', () => {
+  it('SFC 声明语义：p-transition 带 name/mode/duration/visible；p-animate 带 keyframes/duration/loop/delay；p-router-link 带 to/replace/switchTab', () => {
     const transition = fs.readFileSync(path.join(COMPONENTS_DIR, 'p-transition', 'index.vue'), 'utf-8')
     for (const prop of ['name', 'mode', 'duration', 'visible']) {
       expect(transition, `p-transition 缺 prop ${prop}`).toContain(prop + ':')
@@ -56,9 +57,16 @@ describe('G-32 B5 续二 动画组件形态落地（E19 p-transition / E20 p-ani
     for (const prop of ['keyframes', 'duration', 'loop', 'delay']) {
       expect(animate, `p-animate 缺 prop ${prop}`).toContain(prop + ':')
     }
+    const link = fs.readFileSync(path.join(COMPONENTS_DIR, 'p-router-link', 'index.vue'), 'utf-8')
+    for (const prop of ['to', 'replace', 'switchTab']) {
+      expect(link, `p-router-link 缺 prop ${prop}`).toContain(prop + ':')
+    }
+    // E18 声明式导航：点击 emit('navigate') 载荷
+    expect(link).toContain("defineEmits(['navigate'])")
+    expect(link).toContain("emit('navigate'")
   })
 
-  it('MP 编译：两组件 compileVueSfc 全部产出（isComponent 模式——wxml/js/wxss 非空）', () => {
+  it('MP 编译：全部组件 compileVueSfc 产出（isComponent 模式——wxml/js/wxss 非空）', () => {
     for (const tag of NEW_TAGS) {
       const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
       const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })

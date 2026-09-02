@@ -148,7 +148,8 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-draggable': 'gesture.draggable',
   'p-scrollable': 'gesture.scrollable',
   // G-32 ⑥ Engineering 组件形态（3）
-  'router-link': 'engineering.router-link',
+  'p-router-link': 'engineering.router-link', // ★E18 组件形态（p- 前缀产 C-IR）
+  'router-link': 'engineering.router-link', // ★兼容别名（Vue Router 风格 <router-link> 标签；非 catalog 条目——p-view 先例 G-31 B4）
   'p-transition': 'engineering.transition',
   'p-animate': 'engineering.animate',
   // G-31 能力入口

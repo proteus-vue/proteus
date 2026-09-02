@@ -27,7 +27,7 @@ import {
   toComponentTree,
 } from '@proteus-vue/component-ir'
 import type { IRNode } from '@proteus-vue/render-backend'
-import { COMPONENT_FIXTURES, GRID_BASIC, TRANSITION_FADE, ANIMATE_ENTRANCE } from './fixtures/component-ir-fixtures'
+import { COMPONENT_FIXTURES, GRID_BASIC, TRANSITION_FADE, ANIMATE_ENTRANCE, ROUTER_LINK_NAV } from './fixtures/component-ir-fixtures'
 
 /** Tier-1 渲染后端矩阵（B5 门禁覆盖面——conformance.md §2 CLI: VueDom/Native-iOS/Native-Android/Flutter + Harmony/Headless） */
 function buildBackends(): Array<{ id: string; backend: ProteusRenderBackend }> {
@@ -102,12 +102,22 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
     expect(animate['headless'].control).toBe('animate')
   })
 
+  it('★G-32 B5 尾巴 spot check：E18 p-router-link 六端 readback（声明式导航组件形态）', () => {
+    const link = renderAll(ROUTER_LINK_NAV)
+    expect(link['vue-dom'].control).toBe('a.proteus-router-link')
+    expect(link['native-ios'].control).toBe('UIButton.link')
+    expect(link['native-android'].control).toBe('TextView.link')
+    expect(link['native-harmony'].control).toBe('Text.link')
+    expect(link['flutter'].control).toBe('TextButton')
+    expect(link['headless'].control).toBe('router-link')
+  })
+
   it('G-31.4/G-32.3 覆盖门禁：所有 implemented 语义 ≥3 端映射（不足 → 降级 L2 禁入 core）', () => {
     const gaps = checkSemanticCoverage(3)
     expect(gaps).toEqual([])
-    // ★G-32 B1/B2/B4/B5：implemented 语义 = 44（G-32 冻结清单已实现部分；planned 不设门禁）
+    // ★G-32 B1/B2/B4/B5/B5尾巴：implemented 语义 = 45（G-32 冻结清单已实现部分；planned 不设门禁）
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(44)
+    expect(impl.length).toBe(45)
     for (const p of impl) {
       expect(Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length, `${p.semantic} 参考行不足`).toBeGreaterThanOrEqual(3)
     }

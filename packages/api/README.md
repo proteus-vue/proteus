@@ -267,7 +267,7 @@ cap.resolve([{ name: 'scan-qr', available: false }, { name: 'manual', available:
 | `defineCapability(contract)` | E28 | 能力降级声明（G-30）：`check` 探测 + `resolve` 降级链解析 + `isDegraded` |
 | `createToolingEngineering(opts)` | — | 工厂：注入 `{ reactivity }`（E27/E28 纯函数另独立导出）|
 
-**G-32 B5 工程原语 28 全部收口**（E1-E9 状态/生命周期 + E10-E17 路由 + E19-E23 动画 + E24-E28 工程化；E18 router-link 为声明式导航组件形态待后续批次）。
+**G-32 B5 工程原语 28 全部收口**（E1-E9 状态/生命周期 + E10-E17 路由 + E19-E23 动画 + E24-E28 工程化 + **E18 声明式导航组件形态**——`<p-router-link to replace switchTab>` 点击 emit('navigate') 由 createRouterEngineering 响应（决策 #326）；IR 语义 engineering.router-link 已 implemented，工程原语组件形态 3/3 全闭环）。
 
 ## 请求数据层（G-32 B6 前置）
 

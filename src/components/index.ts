@@ -77,6 +77,8 @@ import PScrollable from './p-scrollable/index.vue'
 // ★G-32 B5 续二：动画组件形态（engineering.transition / engineering.animate）
 import PTransition from './p-transition/index.vue'
 import PAnimate from './p-animate/index.vue'
+// ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
+import PRouterLink from './p-router-link/index.vue'
 
 export {
   VirtualList,
@@ -153,6 +155,8 @@ export {
   // ★G-32 B5 续二：动画组件形态（engineering.transition / engineering.animate）
   PTransition,
   PAnimate,
+  // ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
+  PRouterLink,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

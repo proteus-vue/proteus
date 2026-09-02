@@ -180,7 +180,7 @@ const ENGINEERING: PrimitiveDef[] = [
   { id: 'E15', kind: 'engineering', semantic: 'engineering.router-relaunch', api: 'router.reLaunch()', mpEquiv: 'wx.reLaunch', tier: 'L1', status: 'planned' },
   { id: 'E16', kind: 'engineering', semantic: 'engineering.router-before-each', api: 'router.beforeEach()', mpEquiv: 'onLaunch 手动', tier: 'L1', status: 'planned' },
   { id: 'E17', kind: 'engineering', semantic: 'engineering.router-after-each', api: 'router.afterEach()', mpEquiv: '无', tier: 'L1', status: 'planned' },
-  { id: 'E18', kind: 'engineering', semantic: 'engineering.router-link', tag: 'router-link', props: ['to'], mpEquiv: '<navigator>', tier: 'L1', status: 'planned' },
+  { id: 'E18', kind: 'engineering', semantic: 'engineering.router-link', tag: 'p-router-link', props: ['to', 'replace', 'switchTab'], mpEquiv: '<navigator>', tier: 'L1', status: 'implemented' },
   { id: 'E19', kind: 'engineering', semantic: 'engineering.transition', tag: 'p-transition', props: ['name', 'mode'], mpEquiv: 'transition CSS', tier: 'L1', status: 'implemented' },
   { id: 'E20', kind: 'engineering', semantic: 'engineering.animate', tag: 'p-animate', props: ['keyframes', 'duration'], mpEquiv: 'animation CSS', tier: 'L1', status: 'implemented' },
   { id: 'E21', kind: 'engineering', semantic: 'engineering.animation', api: 'useAnimation()', mpEquiv: 'wx.createAnimation', tier: 'L1', status: 'planned' },

@@ -89,6 +89,8 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'ui.form': 'Form',
   'gesture.draggable': 'Draggable',
   'gesture.scrollable': 'Scrollable',
+  // ★G-32 B5 尾巴：E18 声明式导航（p-router-link）
+  'engineering.router-link': 'TextButton',
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
   'engineering.transition': 'AnimatedOpacity',
   'engineering.animate': 'AnimationController',
