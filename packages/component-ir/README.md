@@ -10,10 +10,13 @@
 
 | 模块 | 说明 |
 |------|------|
-| `schema.ts` | `ComponentIR` 类型 + `COMPONENT_IR_SCHEMA`（JSON Schema，对齐 plan component-ir.schema.json）+ `SEMANTIC_ENUM`（18 个语义）+ `TAG_SEMANTIC_MAP`（p-grid → layout.grid） |
-| `validate.ts` | `validateComponentIR`（CIR_INVALID_TAG：p- 前缀铁律 G-31.1 / CIR_INVALID_SEMANTIC / **CMP006**：capabilities 缺 degradation 声明 G-31.2）+ `validateGridConstraints`（**GRID_CONFLICT**：min-col-width × max-cols > 设计宽 → max-cols 永不达）+ `validateComponentTree`（递归） |
-| `map.ts` | `SEMANTIC_BACKEND_MAP` + `mapSemanticToBackend`（semantic → 各端控件：layout.grid → UICollectionView / GridView / div.proteus-grid——**验证「Backend 用 semantic 映射而非 tag」**；★B5 与各后端实际产出对齐，是 conformance 门禁标准） |
-| `conformance.ts` | `checkComponentSnapshot`（渲染快照 vs 参考表：error=与参考表不符 / unverified=参考表缺行缺列或 Layer 1 兼容层）+ `extractSemanticTree`（跨端结构同构）+ `checkSemanticCoverage`（G-31.4 覆盖门禁 ≥3 端） |
+| `schema.ts` | `ComponentIR` 类型 + `COMPONENT_IR_SCHEMA`（JSON Schema，对齐 plan component-ir.schema.json）+ `SEMANTIC_ENUM`（★G-32 扩展至 53 个语义：layout 15 / ui 21 / shell 9 / gesture 2 / engineering 3 / capability 3） + `TAG_SEMANTIC_MAP`（p-grid → layout.grid；★G-32 组件原语全量登记） |
+| `validate.ts` | `validateComponentIR`（CIR_INVALID_TAG：p- 前缀铁律 G-31.1 / CIR_INVALID_SEMANTIC / **CMP006**：capabilities 缺 degradation 声明 G-31.2）+ `validateGridConstraints`（**GRID_CONFLICT**）+ `validateComponentTree`（递归） |
+| `map.ts` | `SEMANTIC_BACKEND_MAP` + `mapSemanticToBackend`（semantic → 各端控件：layout.grid → UICollectionView / GridView / div.proteus-grid——**验证「Backend 用 semantic 映射而非 tag」**；★B5 与各后端实际产出对齐，是 conformance 门禁标准；★G-32 补至 26 implemented 语义） |
+| `primitives.ts` | ★G-32 完整语义原语清单 SSOT：`PRIMITIVE_CATALOG`（128 原语——6 大类 12+18+10+10+50+28）+ 选取器（componentPrimitives/implementedPrimitives）+ 自检（checkPrimitiveCatalog：128/唯一性） |
+| `conformance.ts` | `checkComponentSnapshot`（渲染快照 vs 参考表）+ `extractSemanticTree`（跨端结构同构）+ `checkSemanticCoverage`（★G-32：catalog-aware——仅 implemented 语义 ≥3 端门禁） |
+| `audit.ts` | ★G-32 B1 audit:coverage：`auditMiniprogramCoverage`（G-32.1 小程序能力 100%——对照矩阵 0 缺失 CI 红）+ `auditCatalogConsistency`（闭环 C1-C5：catalog↔enum↔tag↔render-map 四向不漂移）+ `formatCoverageReport` |
+| `to-ir.ts` | `toComponentIR` / `toComponentTree`（模板标签 → C-IR——G-29 生产端前置纯函数） |
 
 ## 用法
 
@@ -56,4 +59,4 @@ Layer 1：@proteus/compat-miniprogram（旧小程序兼容层，独立包）
 
 ## 路线
 
-B1 C-IR + 校验器 ✅ → B2 布局原语 6 个 + VueDom ✅ → B3 Native 映射 ✅ → B4 UI 原语 + Fluid 扩展 ✅ → B5 conformance 三端快照 ✅ → B6 compat-miniprogram → B7 API Hook 化
+B1 C-IR + 校验器 ✅ → B2 布局原语 6 个 + VueDom ✅ → B3 Native 映射 ✅ → B4 UI 原语 + Fluid 扩展 ✅ → B5 conformance 三端快照 ✅ → **G-32 B1 完整语义闭环（128 原语 SSOT + audit:coverage 100% + 26 implemented 语义）✅** → B6 compat-miniprogram → B7 API Hook 化

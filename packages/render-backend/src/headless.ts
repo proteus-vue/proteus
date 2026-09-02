@@ -44,6 +44,22 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'capability.scan-qr': 'scan-qr',
   'capability.pick-photo': 'pick-photo',
   'capability.location': 'location',
+  // ★G-32 B1：新增 implemented 语义（与 component-ir SEMANTIC_BACKEND_MAP headless 列同源）
+  'layout.inline': 'inline',
+  'layout.spacer': 'spacer',
+  'layout.divider': 'divider',
+  'layout.scroll': 'scroll',
+  'layout.virtual-list': 'virtual-list',
+  'layout.masonry': 'masonry',
+  'ui.heading': 'heading',
+  'ui.icon': 'icon',
+  'ui.textarea': 'textarea',
+  'ui.switch': 'switch',
+  'ui.slider': 'slider',
+  'shell.nav': 'nav',
+  'shell.tabbar': 'tabbar',
+  'shell.drawer': 'drawer',
+  'shell.modal': 'modal',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

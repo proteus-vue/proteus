@@ -17,7 +17,15 @@ import {
   createControlReader,
 } from '@proteus-vue/render-backend'
 import type { RenderNodeSnapshot, ProteusRenderBackend } from '@proteus-vue/render-backend'
-import { checkComponentSnapshot, extractSemanticTree, checkSemanticCoverage, SEMANTIC_ENUM } from '@proteus-vue/component-ir'
+import {
+  checkComponentSnapshot,
+  extractSemanticTree,
+  checkSemanticCoverage,
+  SEMANTIC_ENUM,
+  SEMANTIC_BACKEND_MAP,
+  implementedPrimitives,
+  toComponentTree,
+} from '@proteus-vue/component-ir'
 import type { IRNode } from '@proteus-vue/render-backend'
 import { COMPONENT_FIXTURES, GRID_BASIC } from './fixtures/component-ir-fixtures'
 
@@ -77,11 +85,37 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
     expect(snaps['headless'].control).toBe('grid')
   })
 
-  it('G-31.4 覆盖门禁：18 语义枚举每项 ≥3 端映射（不足 → 降级 L2 禁入 core）', () => {
+  it('G-31.4/G-32.3 覆盖门禁：所有 implemented 语义 ≥3 端映射（不足 → 降级 L2 禁入 core）', () => {
     const gaps = checkSemanticCoverage(3)
     expect(gaps).toEqual([])
-    // 语义枚举与参考表行一一对应（全量 18 项都有参考行）
-    expect(Object.keys(SEMANTIC_ENUM).length).toBe(18)
+    // ★G-32 B1：implemented 语义 = 26（G-32 冻结清单已实现部分；planned 不设门禁）
+    const impl = implementedPrimitives()
+    expect(impl.length).toBe(26)
+    for (const p of impl) {
+      expect(Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length, `${p.semantic} 参考行不足`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('★G-32 B1 闭环：新增 implemented 语义 × 6 后端渲染快照一致（toComponentIR → conformance）', () => {
+    // 新语义代表性 fixture：shell tabbar + drawer + modal + layout scroll/masonry + ui switch/slider
+    const ir = toComponentTree('p-tabbar', { tabs: JSON.stringify([{ label: '首页' }, { label: '我的' }]) }, [
+      { tag: 'p-icon', props: { name: 'home' } },
+      { tag: 'p-text', props: {} },
+    ])
+    expect(ir).not.toBeNull()
+    for (const { id, backend } of buildBackends()) {
+      const snap = renderComponentSnapshot(backend, ir as Parameters<typeof renderComponentSnapshot>[1], createControlReader(id))
+      const result = checkComponentSnapshot(id, snap)
+      expect(result.ok, `${id}: ${JSON.stringify(result.errors)}`).toBe(true)
+    }
+    // 渲染树 spot check：p-tabbar → 各端控件
+    const snaps = renderAll(ir as Parameters<typeof renderComponentSnapshot>[1])
+    expect(snaps['vue-dom'].control).toBe('nav.proteus-tabbar')
+    expect(snaps['native-ios'].control).toBe('UITabBar')
+    expect(snaps['native-android'].control).toBe('BottomNavigationView')
+    expect(snaps['flutter'].control).toBe('BottomNavigationBar')
+    expect(snaps['headless'].control).toBe('tabbar')
+    expect(snaps['vue-dom'].children[0].control).toBe('span.proteus-icon')
   })
 })
 

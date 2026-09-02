@@ -11,3 +11,9 @@ export { toComponentIR, toComponentTree } from './to-ir'
 // ★G-31 B5：组件渲染 conformance（快照 vs 参考表 + 语义树 + 覆盖门禁）
 export { checkComponentSnapshot, extractSemanticTree, checkSemanticCoverage } from './conformance'
 export type { ComponentConformanceResult, ControlMismatch, SemanticTree, CoverageGap } from './conformance'
+// ★G-32 B1：完整语义原语清单 SSOT（128——it 唯一事实源）
+export { PRIMITIVE_CATALOG, componentPrimitives, implementedPrimitives, primitiveById, primitiveBySemantic, primitiveByTag, checkPrimitiveCatalog } from './primitives'
+export type { PrimitiveDef, PrimitiveKind, PrimitiveStatus } from './primitives'
+// ★G-32 B1：audit:coverage 工具 + 闭环一致性门禁（G-32.1 小程序能力 100%）
+export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditCatalogConsistency, formatCoverageReport } from './audit'
+export type { CoverageReport, MpCoverageStatus, MpMatrixItem, ConsistencyIssue } from './audit'

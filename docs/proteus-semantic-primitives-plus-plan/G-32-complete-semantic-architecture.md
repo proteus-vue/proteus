@@ -393,7 +393,7 @@ __AddClass(el, 'A') / __AddClass(el, 'B') / __AddClass(el, 'C')
 
 | 批次 | 范围 | 依赖 | 交付 |
 |------|------|------|------|
-| **B1** | L1 清单冻结（本表 128）+ C-IR schema 扩展 + `audit:coverage` 工具 | G-31 Component IR | 覆盖率报告 = 100% |
+| **B1** | L1 清单冻结（本表 128）+ C-IR schema 扩展 + `audit:coverage` 工具 | G-31 Component IR | ✅ 覆盖率报告 = 100%——清单 SSOT `PRIMITIVE_CATALOG` + 渲染映射补到 26 implemented 语义 + `proteus audit coverage`（100% + 闭环 C1-C5） |
 | **B2** | ① 布局 12 + ② UI 18（Web/DOM Backend 全实现） | G-27 VueDomBackend | Playground 可用 |
 | **B3** | ⑤ 能力 50（Native Backend iOS/Android 实现） | G-28 NativeBackend | 真机跑通 Top 30 |
 | **B4** | ③ Shell 10 + ④ Gesture 10（含手势识别器映射） | G-27 + G-30 | 完整 App demo |

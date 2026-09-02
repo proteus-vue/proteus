@@ -49,6 +49,22 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'capability.scan-qr': { tag: 'button', className: 'proteus-scan-qr' },
   'capability.pick-photo': { tag: 'input', className: 'proteus-pick-photo' },
   'capability.location': { tag: 'button', className: 'proteus-location' },
+  // ★G-32 B1：新增 implemented 语义（与 component-ir SEMANTIC_BACKEND_MAP vue-dom 列同源）
+  'layout.inline': { tag: 'div', className: 'proteus-inline' },
+  'layout.spacer': { tag: 'div', className: 'proteus-spacer' },
+  'layout.divider': { tag: 'hr', className: 'proteus-divider' },
+  'layout.scroll': { tag: 'div', className: 'proteus-scroll' },
+  'layout.virtual-list': { tag: 'div', className: 'proteus-virtual-list' },
+  'layout.masonry': { tag: 'div', className: 'proteus-masonry' },
+  'ui.heading': { tag: 'div', className: 'proteus-heading' },
+  'ui.icon': { tag: 'span', className: 'proteus-icon' },
+  'ui.textarea': { tag: 'textarea' },
+  'ui.switch': { tag: 'div', className: 'proteus-switch' },
+  'ui.slider': { tag: 'div', className: 'proteus-slider' },
+  'shell.nav': { tag: 'nav', className: 'proteus-nav' },
+  'shell.tabbar': { tag: 'nav', className: 'proteus-tabbar' },
+  'shell.drawer': { tag: 'aside', className: 'proteus-drawer' },
+  'shell.modal': { tag: 'div', className: 'proteus-modal' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

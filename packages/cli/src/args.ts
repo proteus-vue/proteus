@@ -407,6 +407,10 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★DevTools 性能预算烟测（M10/M7.4）：bus.emit / 火焰图 5000 span / 万级 timeline ingest 耗时\n      plan 预算 0.1/100/200ms → CI 10 倍余量上界，超限阻断（抓病态回归）',
       },
       {
+        usage: 'proteus audit coverage',
+        desc: '★完整语义覆盖审计（G-32 B1 / G-32.1 门禁）：小程序能力 100% 覆盖 + 闭环一致性（catalog ↔ enum ↔ tag ↔ render-map 四向不漂移）+ 128 清单自检',
+      },
+      {
         usage: 'proteus capabilities:manifest [dir] [--platform <web|skyline|app>]',
         desc: '★扫描 capabilities/*.capability.ts → capability-manifest.json（B1 能力清单审计）\n      --platform   能力缺失报告（B3 编译期分叉：该平台无 adapter 的能力 + 业务引用警告）',
       },

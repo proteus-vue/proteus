@@ -176,6 +176,142 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'getLocation',
     headless: 'location',
   },
+  // ★G-32 B1：新增 implemented 语义（16 个——布局补齐 6 + UI 补齐 4(+textarea) + Shell 4）
+  'layout.inline': {
+    'vue-dom': 'div.proteus-inline',
+    'native-ios': 'UITextAttachment',
+    'native-android': 'TextView.inline',
+    'native-harmony': 'Span',
+    skyline: 'view.inline',
+    flutter: 'InlineSpan',
+    headless: 'inline',
+  },
+  'layout.spacer': {
+    'vue-dom': 'div.proteus-spacer',
+    'native-ios': 'UILayoutGuide',
+    'native-android': 'Space',
+    'native-harmony': 'Blank', // ArkUI Blank 弹性空白
+    skyline: 'view.spacer',
+    flutter: 'Spacer',
+    headless: 'spacer',
+  },
+  'layout.divider': {
+    'vue-dom': 'hr.proteus-divider',
+    'native-ios': 'UIView.divider',
+    'native-android': 'View.divider',
+    'native-harmony': 'Divider', // ArkUI Divider
+    skyline: 'view.divider',
+    flutter: 'Divider',
+    headless: 'divider',
+  },
+  'layout.scroll': {
+    'vue-dom': 'div.proteus-scroll',
+    'native-ios': 'UIScrollView',
+    'native-android': 'ScrollView',
+    'native-harmony': 'Scroll', // ArkUI Scroll
+    skyline: 'scroll-view',
+    flutter: 'ScrollView',
+    headless: 'scroll',
+  },
+  'layout.virtual-list': {
+    'vue-dom': 'div.proteus-virtual-list',
+    'native-ios': 'UICollectionView',
+    'native-android': 'RecyclerView',
+    'native-harmony': 'List',
+    skyline: 'list-view',
+    flutter: 'ListView',
+    headless: 'virtual-list',
+  },
+  'layout.masonry': {
+    'vue-dom': 'div.proteus-masonry',
+    'native-ios': 'UICollectionView.masonry',
+    'native-android': 'StaggeredGridLayoutManager',
+    'native-harmony': 'WaterFlow', // ArkUI WaterFlow 瀑布流
+    skyline: 'grid.masonry',
+    flutter: 'SliverMasonryGrid',
+    headless: 'masonry',
+  },
+  'ui.heading': {
+    'vue-dom': 'div.proteus-heading',
+    'native-ios': 'UILabel.heading',
+    'native-android': 'TextView.heading',
+    'native-harmony': 'Text.heading',
+    skyline: 'text.heading',
+    flutter: 'Text.heading',
+    headless: 'heading',
+  },
+  'ui.icon': {
+    'vue-dom': 'span.proteus-icon',
+    'native-ios': 'UIImageView.icon',
+    'native-android': 'ImageView.icon',
+    'native-harmony': 'SymbolGlyph', // ArkUI 符号图标
+    skyline: 'icon',
+    flutter: 'Icon',
+    headless: 'icon',
+  },
+  'ui.textarea': {
+    'vue-dom': 'textarea',
+    'native-ios': 'UITextView',
+    'native-android': 'EditText.multiline',
+    'native-harmony': 'TextArea', // ArkUI TextArea
+    skyline: 'textarea',
+    flutter: 'TextField.multiline',
+    headless: 'textarea',
+  },
+  'ui.switch': {
+    'vue-dom': 'div.proteus-switch',
+    'native-ios': 'UISwitch',
+    'native-android': 'Switch',
+    'native-harmony': 'Toggle', // ArkUI Toggle
+    skyline: 'switch',
+    flutter: 'Switch',
+    headless: 'switch',
+  },
+  'ui.slider': {
+    'vue-dom': 'div.proteus-slider',
+    'native-ios': 'UISlider',
+    'native-android': 'SeekBar',
+    'native-harmony': 'Slider', // ArkUI Slider
+    skyline: 'slider',
+    flutter: 'Slider',
+    headless: 'slider',
+  },
+  'shell.nav': {
+    'vue-dom': 'nav.proteus-nav',
+    'native-ios': 'UINavigationBar',
+    'native-android': 'Toolbar',
+    'native-harmony': 'NavigationBar',
+    skyline: 'navigator',
+    flutter: 'AppBar',
+    headless: 'nav',
+  },
+  'shell.tabbar': {
+    'vue-dom': 'nav.proteus-tabbar',
+    'native-ios': 'UITabBar',
+    'native-android': 'BottomNavigationView',
+    'native-harmony': 'Tabs', // ArkUI Tabs
+    skyline: 'tabbar',
+    flutter: 'BottomNavigationBar',
+    headless: 'tabbar',
+  },
+  'shell.drawer': {
+    'vue-dom': 'aside.proteus-drawer',
+    'native-ios': 'UIView.drawer',
+    'native-android': 'DrawerLayout',
+    'native-harmony': 'Panel',
+    skyline: 'view.drawer',
+    flutter: 'Drawer',
+    headless: 'drawer',
+  },
+  'shell.modal': {
+    'vue-dom': 'div.proteus-modal',
+    'native-ios': 'UIAlertController',
+    'native-android': 'Dialog',
+    'native-harmony': 'CustomDialog',
+    skyline: 'modal',
+    flutter: 'showDialog',
+    headless: 'modal',
+  },
 }
 
 /**

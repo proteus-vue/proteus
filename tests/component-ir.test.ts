@@ -12,6 +12,8 @@ import {
   SEMANTIC_ENUM,
   toComponentIR,
   toComponentTree,
+  PRIMITIVE_CATALOG,
+  implementedPrimitives,
 } from '@proteus-vue/component-ir'
 
 describe('G-31 validateComponentIR（B1 结构校验）', () => {
@@ -73,12 +75,24 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(TAG_SEMANTIC_MAP['p-scan-qr']).toBe('capability.scan-qr')
   })
 
-  it('★G-31 B4：现有组件标签对齐 L1 语义（p-view/p-list-view/p-nav-bar/p-textarea/p-modal）', () => {
+  it('★G-31 B4 + G-32 对齐：现有组件标签对齐 L1 语义（p-view/p-list-view/p-nav-bar/p-textarea/p-modal）', () => {
     expect(TAG_SEMANTIC_MAP['p-view']).toBe('layout.box')
     expect(TAG_SEMANTIC_MAP['p-list-view']).toBe('ui.list')
     expect(TAG_SEMANTIC_MAP['p-nav-bar']).toBe('ui.nav')
-    expect(TAG_SEMANTIC_MAP['p-textarea']).toBe('ui.input')
-    expect(TAG_SEMANTIC_MAP['p-modal']).toBe('layout.adaptive')
+    // ★G-32 对齐：p-textarea → ui.textarea（多行输入 U11）、p-modal → shell.modal（模态弹窗 S6）
+    expect(TAG_SEMANTIC_MAP['p-textarea']).toBe('ui.textarea')
+    expect(TAG_SEMANTIC_MAP['p-modal']).toBe('shell.modal')
+    expect(TAG_SEMANTIC_MAP['p-button']).toBe('ui.button')
+  })
+
+  it('★G-32 B1：新增语义标签映射（shell/layout 补齐/工程组件）', () => {
+    expect(TAG_SEMANTIC_MAP['p-tabbar']).toBe('shell.tabbar')
+    expect(TAG_SEMANTIC_MAP['p-drawer']).toBe('shell.drawer')
+    expect(TAG_SEMANTIC_MAP['p-scroll']).toBe('layout.scroll')
+    expect(TAG_SEMANTIC_MAP['p-masonry']).toBe('layout.masonry')
+    expect(TAG_SEMANTIC_MAP['p-draggable']).toBe('gesture.draggable')
+    expect(TAG_SEMANTIC_MAP['p-transition']).toBe('engineering.transition')
+    expect(TAG_SEMANTIC_MAP['router-link']).toBe('engineering.router-link')
   })
 
   it('★G-31 B4：Fluid 扩展语义（p-split/p-safe/p-sidebar）→ layout.split/safe/sidebar 五端映射', () => {
@@ -108,10 +122,26 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(mapSemanticToBackend('unknown.semantic', 'vue-dom')).toBeNull()
   })
 
-  it('SEMANTIC_BACKEND_MAP 覆盖 18 语义枚举（G-31 §3 组件清单）', () => {
+  it('SEMANTIC_ENUM 全量生存在 map 或 catalog（G-32 闭环：无孤立语义）+ implemented 语义全覆盖 map+多端', () => {
+    // ★G-32 B1：enum 里每个语义要么已映射（SEMANTIC_BACKEND_MAP），要么是 catalog planned（L2 生态待落地）
     for (const s of SEMANTIC_ENUM) {
-      expect(SEMANTIC_BACKEND_MAP[s], `缺 ${s} 映射`).toBeDefined()
+      const mapped = SEMANTIC_BACKEND_MAP[s] !== undefined
+      const catalogued = PRIMITIVE_CATALOG.some((p) => p.semantic === s)
+      expect(mapped || catalogued, `孤立语义 ${s}（不在 map 也不在 catalog）`).toBe(true)
     }
+    // implemented 语义必须全覆盖参考表（≥3 端由 checkSemanticCoverage 门禁）
+    for (const p of implementedPrimitives()) {
+      expect(SEMANTIC_BACKEND_MAP[p.semantic], `implemented ${p.semantic} 缺映射`).toBeDefined()
+    }
+    // 新增 implemented 语义六端映射 spot check（G-32 落地证明）
+    expect(mapSemanticToBackend('layout.scroll', 'native-ios')).toBe('UIScrollView')
+    expect(mapSemanticToBackend('layout.masonry', 'native-android')).toBe('StaggeredGridLayoutManager')
+    expect(mapSemanticToBackend('layout.masonry', 'native-harmony')).toBe('WaterFlow')
+    expect(mapSemanticToBackend('shell.modal', 'native-ios')).toBe('UIAlertController')
+    expect(mapSemanticToBackend('shell.tabbar', 'flutter')).toBe('BottomNavigationBar')
+    expect(mapSemanticToBackend('ui.switch', 'native-ios')).toBe('UISwitch')
+    expect(mapSemanticToBackend('ui.slider', 'native-harmony')).toBe('Slider')
+    expect(mapSemanticToBackend('ui.icon', 'vue-dom')).toBe('span.proteus-icon')
   })
 })
 

@@ -56,6 +56,22 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'capability.scan-qr': 'scanQR',
   'capability.pick-photo': 'pickPhoto',
   'capability.location': 'getLocation',
+  // ★G-32 B1：新增 implemented 语义
+  'layout.inline': 'InlineSpan',
+  'layout.spacer': 'Spacer',
+  'layout.divider': 'Divider',
+  'layout.scroll': 'ScrollView',
+  'layout.virtual-list': 'ListView',
+  'layout.masonry': 'SliverMasonryGrid',
+  'ui.heading': 'Text.heading',
+  'ui.icon': 'Icon',
+  'ui.textarea': 'TextField.multiline',
+  'ui.switch': 'Switch',
+  'ui.slider': 'Slider',
+  'shell.nav': 'AppBar',
+  'shell.tabbar': 'BottomNavigationBar',
+  'shell.drawer': 'Drawer',
+  'shell.modal': 'showDialog',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

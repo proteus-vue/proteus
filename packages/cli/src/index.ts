@@ -15,6 +15,7 @@ import { checkRoutes, formatRouterCheck } from './router-check'
 import { checkModuleConfigs } from './module-check'
 import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
 import { runAuditModule } from './module-audit'
+import { runCoverageAudit } from './coverage-audit'
 import { writeModuleConfigSkeleton } from './module-init'
 import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
@@ -137,7 +138,14 @@ async function main(): Promise<void> {
         if (!result.ok) process.exitCode = 1
         break
       }
-      if (rest[0] !== 'module') throw new Error('proteus audit 支持 module / devtools-budget / all（proteus audit module [root] [--dist] | audit devtools-budget | audit all [root]）')
+      // ★G-32 B1：audit coverage（G-32.1 小程序能力 100% 覆盖 + 闭环一致性门禁）
+      if (rest[0] === 'coverage') {
+        const result = runCoverageAudit()
+        console.log(result.text)
+        if (!result.ok) process.exitCode = 1
+        break
+      }
+      if (rest[0] !== 'module') throw new Error('proteus audit 支持 module / devtools-budget / coverage / all（proteus audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
       const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
       const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
       console.log(text)

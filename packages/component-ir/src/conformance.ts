@@ -7,6 +7,7 @@
 import type { BackendId, RenderNodeSnapshot } from '@proteus-vue/render-backend'
 import { SEMANTIC_BACKEND_MAP } from './map'
 import { SEMANTIC_ENUM } from './schema'
+import { implementedPrimitives } from './primitives'
 
 /** 控件映射偏差：error=与参考表不符（门禁阻断）；unverified=参考表未声明该后端/语义，或 Layer 1 兼容层标签（不强制） */
 export interface ControlMismatch {
@@ -75,7 +76,9 @@ export function checkComponentSnapshot(backendId: string, snapshot: RenderNodeSn
   return { ok: errors.length === 0, backendId, nodes, errors, unverified }
 }
 
-/** 参考表覆盖缺口（G-31.4：新组件进 L1 须 ≥3 端映射；不足 → 降级 L2，禁入 core） */
+/** 参考表覆盖缺口（G-31.4：新组件进 L1 须 ≥3 端映射；不足 → 降级 L2，禁入 core）
+ *  ★G-32 B1：仅对 catalog 中 status='implemented' 的原语设门禁——planned（L2 生态/待落地）不阻断
+ */
 export interface CoverageGap {
   semantic: string
   backends: string[]
@@ -83,10 +86,10 @@ export interface CoverageGap {
 
 export function checkSemanticCoverage(minBackends = 3): CoverageGap[] {
   const gaps: CoverageGap[] = []
-  for (const s of SEMANTIC_ENUM) {
-    const row = SEMANTIC_BACKEND_MAP[s]
+  for (const p of implementedPrimitives()) {
+    const row = SEMANTIC_BACKEND_MAP[p.semantic]
     const backends = row ? Object.keys(row) : []
-    if (backends.length < minBackends) gaps.push({ semantic: s, backends })
+    if (backends.length < minBackends) gaps.push({ semantic: p.semantic, backends })
   }
   return gaps
 }
