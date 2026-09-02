@@ -1,0 +1,47 @@
+# G-29 跨 plan 协同与分批
+
+## 1. 跨体系协同
+
+```
+G-29 编译 → 产出 LayoutConstraint IR / Semantic IR / Render IR
+                ↓
+G-21 Compiler Plugin → 拦截并注入 IR
+G-27 nodeOps → 消费 Render IR
+G-28 JSI → 消费能力调用
+G-23 AI Agent → 操作 Compiler IR（生成/优化/修复）
+G-26 开发效率 → Rust 10x 吞吐 + WASM Playground
+```
+
+## 2. 与 G-27/G-28 同构
+
+| 层 | SPI | 后端 |
+|----|-----|------|
+| G-29 编译 | `ProteusCompilerBackend` | Node/Rust/WASM |
+| G-27 UI | `ProteusRenderBackend` | VueDom/Native/Flutter/Skia |
+| G-28 能力 | `ProteusNativeBackend` | iOS/Android/Harmony/Mock |
+
+共用：`BackendCapabilities` / conformance test / 版本协商。
+
+## 3. 分批落地
+
+| 批次 | 内容 | 依赖 |
+|------|------|------|
+| B1 | CompilerIR 契约 + NodeBackend 产出合规 IR | G-21 |
+| B2 | RustBackend 对接 SWC-ecosystem → 同一 IR | B1 |
+| B3 | WASM Backend（Playground） | B1 |
+| B4 | HMR 三端一致 + Source Map + Tree-shaking | B2, B3 |
+
+**B1 最快出原型**：纯逻辑、零依赖、可单测（diff IR）。
+
+## 4. 单测用例
+
+1. IR 语义等价：同一 SFC 两 Backend diff IR → 一致
+2. HMR 一致性：连续 hotUpdate 三端等价
+3. Source Map：映射回源行号正确
+4. Tree-shaking：未用导出消除
+
+## 5. 路线图落点
+
+- **M1**：B1（与 G-27 B1 nodeOps 同期，都是"定义 SPI shape"）
+- **M2**：B2、B3
+- **M3**：B4 + 生态完整
