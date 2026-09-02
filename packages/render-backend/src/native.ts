@@ -130,6 +130,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'UIView.form',
     'gesture.draggable': 'UIPanGestureRecognizer',
     'gesture.scrollable': 'UIScrollView.gesture',
+    // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
+    'engineering.transition': 'UIView.transition',
+    'engineering.animate': 'CAKeyframeAnimation',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -183,6 +186,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'LinearLayout.form',
     'gesture.draggable': 'GestureDetector',
     'gesture.scrollable': 'NestedScrollView',
+    // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
+    'engineering.transition': 'View.animate.transition',
+    'engineering.animate': 'ValueAnimator',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -236,6 +242,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.form': 'FormComponent',
     'gesture.draggable': 'PanGesture',
     'gesture.scrollable': 'Scroll.gesture',
+    // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
+    'engineering.transition': 'animateTo.transition',
+    'engineering.animate': 'Animator.transition',
   },
 }
 

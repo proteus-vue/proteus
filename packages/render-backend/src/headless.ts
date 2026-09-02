@@ -77,6 +77,9 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'ui.form': 'form',
   'gesture.draggable': 'draggable',
   'gesture.scrollable': 'scrollable',
+  // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
+  'engineering.transition': 'transition',
+  'engineering.animate': 'animate',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

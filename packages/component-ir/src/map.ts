@@ -458,6 +458,25 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'Scrollable',
     headless: 'scrollable',
   },
+  // ★G-32 B5 续二：工程原语动画组件形态（E19 transition / E20 animate——纯 CSS 声明语义；Hook 归 API 层不产节点）
+  'engineering.transition': {
+    'vue-dom': 'div.proteus-transition',
+    'native-ios': 'UIView.transition', // UIView transition(with:duration:options:) 显隐过渡
+    'native-android': 'View.animate.transition', // ObjectAnimator alpha/translation 组合
+    'native-harmony': 'animateTo.transition', // ArkUI animateTo 显隐过渡
+    skyline: 'view.transition', // Skyline transition CSS
+    flutter: 'AnimatedOpacity',
+    headless: 'transition',
+  },
+  'engineering.animate': {
+    'vue-dom': 'div.proteus-animate',
+    'native-ios': 'CAKeyframeAnimation', // 核心动画关键帧
+    'native-android': 'ValueAnimator', // 属性动画
+    'native-harmony': 'Animator.transition', // ArkUI Animator
+    skyline: 'view.animation', // Skyline animation CSS
+    flutter: 'AnimationController',
+    headless: 'animate',
+  },
 }
 
 /**

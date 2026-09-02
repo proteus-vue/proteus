@@ -45,6 +45,16 @@ export const SIDEBAR_SPLIT: ComponentIR = toComponentTree('p-sidebar', {}, [
   { tag: 'p-split', props: {}, children: [{ tag: 'p-safe', props: {} }, { tag: 'p-box', props: {} }] },
 ])!
 
+/** transition-fade：p-transition(name/mode)——工程原语动画组件形态（E19，纯 CSS 显隐过渡） */
+export const TRANSITION_FADE: ComponentIR = toComponentTree('p-transition', { name: 'fade', mode: 'both', duration: 300 }, [
+  { tag: 'p-text', props: {} },
+])!
+
+/** animate-entrance：p-animate(keyframes/duration)——工程原语动画组件形态（E20，CSS 动画声明） */
+export const ANIMATE_ENTRANCE: ComponentIR = toComponentTree('p-animate', { keyframes: 'fade', duration: 600 }, [
+  { tag: 'p-text', props: {} },
+])!
+
 /** L1 组件 fixtures 全集（conformance 门禁逐 fixture × 逐后端跑） */
 export const COMPONENT_FIXTURES: Record<string, ComponentIR> = {
   'grid-basic': GRID_BASIC,
@@ -53,4 +63,6 @@ export const COMPONENT_FIXTURES: Record<string, ComponentIR> = {
   'list-row': LIST_ROW,
   'nav-header': NAV_HEADER,
   'sidebar-split': SIDEBAR_SPLIT,
+  'transition-fade': TRANSITION_FADE,
+  'animate-entrance': ANIMATE_ENTRANCE,
 }

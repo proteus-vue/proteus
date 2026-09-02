@@ -174,7 +174,43 @@ rx.afterEach((to) => console.log(to))         // E17 后置守卫
 | `afterEach(guard)` | E17 | 后置守卫注册（委托 `router.afterEach`）|
 | `createRouterEngineering(opts)` | — | 工厂：注入 `{ router, reactivity, getCurrentRoute? }` |
 
-残余工程原语（E19-E23 动画 / E24-E28 工程化）沿同一「语义面 + 注入」模式在后继批次扩展。
+## 动画语义（G-32 B5 续二）
+
+`createAnimationEngineering(options)` 提供 **E21-E23 动画语义面**——注入式（reactivity + driver），同 createEngineering 族**零运行时依赖 vue**；组件形态 **E19 `<p-transition>` / E20 `<p-animate>`** 在 `src/components`（纯 CSS 声明双端通用）：
+
+```ts
+import { ref, computed } from 'vue'
+import { createAnimationEngineering } from '@proteus-vue/api'
+
+// 注入 reactivity + Web WAAPI driver（demo 页 Web-only；MP 借 CSS 声明，无需 driver）
+const ax = createAnimationEngineering({ reactivity: { ref, computed } }) // driver 缺省 → play 安全 no-op
+
+// E21 useAnimation（wx.createAnimation 语义——声明式关键帧构建器）
+const c = ax.useAnimation({ duration: 300 })
+c.set({ opacity: 0, y: 16 }).step()          // 合并属性 → 关键帧 1
+c.set({ opacity: 1, y: 0 }).step({ duration: 600 }) // 关键帧 2（可覆盖时长）
+const run = c.play(el)                        // driver 注入 → 播放；无 driver → undefined
+
+// E22 useGestureAnimation（手势驱动：增量累积 → 提交帧）
+const g = ax.useGestureAnimation()
+g.apply({ x: 20 }); g.commit()
+g.apply({ x: 60, rotate: 12 }); g.commit()
+g.export()                                    // 2 关键帧（手势会话语义）
+
+// E23 useScrollAnimation（滚动驱动：进度 → 插值关键帧）
+const s = ax.useScrollAnimation({ from: { opacity: 1, y: 0 }, to: { opacity: 0.2, y: -60 } })
+s.setProgress(0.5)                            // 线性插值 → { opacity: 0.6, y: -30 }
+```
+
+| 原语 | 语义 | 说明 |
+|------|------|------|
+| `useAnimation(opts?)` | E21 | 关键帧构建器（wx.createAnimation 语义：`set` 累积属性 / `step` 提交帧 / `export` 描述 / `play` 播放）|
+| `useGestureAnimation()` | E22 | 手势驱动（`apply` 增量累积 → `commit` 提交帧；`reset` 新会话）|
+| `useScrollAnimation(range)` | E23 | 滚动驱动（`setProgress(0..1)` → 线性插值属性；`export` 区间关键帧）|
+| `interpolateAnimationProps(from,to,p)` | — | 纯函数：属性线性插值（from + (to-from)×p）|
+| `createAnimationEngineering(opts)` | — | 工厂：注入 `{ reactivity, driver? }`（组件形态 E19/E20 在 src/components，IR 语义 engineering.transition/animate 已 implemented）|
+
+残余工程原语（E24-E28 工程化）沿同一「语义面 + 注入」模式在后继批次扩展。
 
 ## 设计要点
 

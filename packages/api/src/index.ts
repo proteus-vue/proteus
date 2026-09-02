@@ -16,6 +16,9 @@ export type { Engineering, EngineeringOptions, Reactivity, LifecycleHandle, Life
 // ★G-32 B5 续：路由语义化（injectable——E10 useRoute/E11 push/E12 replace/E13 back/E14 switchTab/E15 reLaunch/E16 beforeEach/E17 afterEach）
 export { createRouterEngineering } from './router-engineering'
 export type { RouterEngineering, RouterEngineeringOptions, RouterLike, RouterTargetOptions, CurrentRoute } from './router-engineering'
+// ★G-32 B5 续二：动画语义（injectable——E21 useAnimation/E22 useGestureAnimation/E23 useScrollAnimation；组件形态 E19/E20 在 src/components）
+export { createAnimationEngineering, interpolateAnimationProps } from './animation-engineering'
+export type { AnimationEngineering, AnimationEngineeringOptions, AnimationDriver, AnimationRun, AnimationController, AnimationDescriptor, AnimationKeyframe, AnimationProps, AnimationState, AnimationStepOptions, GestureAnimationHandle, ScrollAnimationHandle, ScrollAnimationRange } from './animation-engineering'
 export type {
   CapResult,
   CapabilityHooks,

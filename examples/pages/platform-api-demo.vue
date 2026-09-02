@@ -137,6 +137,25 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑫ 动画语义（G-32 B5 续二：p-transition E19 / p-animate E20 / useAnimation E21-E23 注入式）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-anim-toggle" @click="onAnimToggle">p-transition 显隐</button>
+        <button class="pad-btn" data-testid="pad-anim-run" @click="onAnimRun">useAnimation</button>
+        <button class="pad-btn" data-testid="pad-anim-gesture" @click="onAnimGesture">useGestureAnimation</button>
+        <button class="pad-btn" data-testid="pad-anim-scroll" @click="onAnimScroll">useScrollAnimation</button>
+      </view>
+      <view class="pad-anim-stage">
+        <p-transition name="slide-up" mode="both" :duration="300" :visible="animVisible">
+          <p-animate keyframes="bounce" :duration="800" :loop="false">
+            <text class="pad-anim-box">Proteus</text>
+          </p-animate>
+        </p-transition>
+      </view>
+      <text class="pad-log" data-testid="pad-anim-log">{{ animLog }}</text>
+      <text class="pad-sub">E19 p-transition（CSS 显隐过渡）· E20 p-animate（CSS 动画声明——组件形态，纯 CSS 双端）；E21 useAnimation（wx.createAnimation 语义构建器）/ E22 useGestureAnimation（增量累积→提交帧）/ E23 useScrollAnimation（进度→插值）——reactivity/driver 注入式，web 端 WAAPI 播放（MP/无 driver 安全 no-op）</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -148,7 +167,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering } from '@proteus-vue/api'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering } from '@proteus-vue/api'
+import type { AnimationDriver } from '@proteus-vue/api'
+// ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）
+import { PTransition, PAnimate } from '@proteus-vue/components'
 
 // ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
 const api = createPlatformAPI()
@@ -464,6 +486,97 @@ function onRouteRead() {
   const cur = currentRoute.value
   routeLog.value = cur ? `useRoute → path=${cur.path} · name=${cur.name}` : 'useRoute → undefined（未注入当前路由源）'
 }
+
+// ---------- ⑫ 动画语义（G-32 B5 续二：E19 p-transition / E20 p-animate / E21-E23 useXxx 注入式） ----------
+const anim = createAnimationEngineering({
+  reactivity: { ref, computed, watch: () => () => undefined },
+  driver: typeof document !== 'undefined' ? createWebAnimationDriver() : undefined,
+}) // ★E21-E23 语义面：构建器/句柄产出 AnimationDescriptor；driver 注入 Web WAAPI（MP/SSR 无 document → no-op）
+const animVisible = ref(true)
+const animLog = ref('点击按钮演示动画语义（web 端 WAAPI 真实播放；MP 走组件 CSS 声明）')
+// E22/E23 持久句柄（手势会话 / 滚动进度跨调用保持）
+const gestureAnim = anim.useGestureAnimation()
+const scrollAnim = anim.useScrollAnimation({
+  from: { opacity: 1, y: 0 },
+  to: { opacity: 0.2, y: -60 },
+})
+
+// ★Web-only 驱动（demo 页非组件不受 no-platform-api 审计约束）：script 顶层 typeof document 守卫——MP 逻辑层无 document → undefined
+//   ★MP 编译安全：返回类型标注在函数声明上（contextual typing——对象字面量内 arrow 不写内联类型标注，避 #307 坑）
+function createWebAnimationDriver(): AnimationDriver {
+  return {
+    run: (target, descriptor) => {
+      const el = target as HTMLElement
+      const frames = descriptor.keyframes.map((k) => {
+        const f: Record<string, string | number> = { offset: k.offset, easing: k.easing ?? 'ease' }
+        const ops: string[] = []
+        if (k.props.x !== undefined) ops.push(`translateX(${k.props.x}px)`)
+        if (k.props.y !== undefined) ops.push(`translateY(${k.props.y}px)`)
+        if (k.props.scale !== undefined) ops.push(`scale(${k.props.scale})`)
+        if (k.props.rotate !== undefined) ops.push(`rotate(${k.props.rotate}deg)`)
+        if (k.props.opacity !== undefined) f.opacity = String(k.props.opacity)
+        if (ops.length > 0) f.transform = ops.join(' ')
+        return f
+      })
+      const wa = el.animate(frames, {
+        duration: descriptor.duration,
+        easing: descriptor.timingFunction,
+        delay: descriptor.delay,
+        iterations: descriptor.iterations,
+        fill: 'forwards',
+      })
+      return {
+        play: () => wa.play(),
+        pause: () => wa.pause(),
+        reverse: () => wa.reverse(),
+        cancel: () => wa.cancel(),
+        finish: () => wa.finish(),
+        seek: (t) => {
+          wa.currentTime = t
+        },
+        onFinish: (cb) => {
+          wa.onfinish = () => cb()
+        },
+      }
+    },
+  }
+}
+
+function onAnimToggle() {
+  animVisible.value = !animVisible.value
+  animLog.value = `p-transition → visible=${animVisible.value}（CSS 类切换显隐过渡）`
+}
+function onAnimRun() {
+  if (typeof document === 'undefined') {
+    animLog.value = 'useAnimation → 无 document（MP 逻辑层）——组件 CSS 声明承担动画'
+    return
+  }
+  const stage = document.querySelector('.pad-anim-stage')
+  const c = anim.useAnimation({ duration: 400 })
+  c.set({ opacity: 0, x: 0 }).step()
+  c.set({ opacity: 1, x: 120, rotate: 30 }).step({ duration: 500 })
+  c.set({ x: 0, rotate: 0 }).step({ duration: 400 })
+  const run = c.play(stage)
+  animLog.value = run ? `useAnimation → 3 步关键帧播放（state=${c.state.value}；末帧 rotate=0 回位）` : 'useAnimation → 无 driver 安全 no-op'
+}
+function onAnimGesture() {
+  gestureAnim.reset()
+  gestureAnim.apply({ x: 20 })
+  gestureAnim.commit({ duration: 200 })
+  gestureAnim.apply({ x: 60, rotate: 12 })
+  gestureAnim.commit({ duration: 200 })
+  const d = gestureAnim.export()
+  animLog.value = `useGestureAnimation → ${d.keyframes.length} 关键帧（手势增量 x=60 · rotate=12 累积）· state=${gestureAnim.state.value}`
+}
+function onAnimScroll() {
+  scrollAnim.setProgress(0)
+  const v0 = scrollAnim.value()
+  scrollAnim.setProgress(0.5)
+  const v50 = scrollAnim.value()
+  scrollAnim.setProgress(1)
+  const v100 = scrollAnim.value()
+  animLog.value = `useScrollAnimation → p=0.5 插值 y=${v50.y}·opacity=${v50.opacity}（0：y=${v0.y}·o=${v0.opacity} → 1：y=${v100.y}·o=${v100.opacity}）`
+}
 </script>
 
 <style scoped>
@@ -522,6 +635,26 @@ function onRouteRead() {
   font-size: 13px;
   margin-top: 6px;
   word-break: break-all;
+}
+/* ⑫ 动画语义舞台（useAnimation WAAPI 播放目标） */
+.pad-anim-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88px;
+  margin: 8px 0;
+  border: 1px dashed rgba(26, 122, 248, 0.35);
+  border-radius: 8px;
+  background: rgba(26, 122, 248, 0.06);
+}
+.pad-anim-box {
+  display: inline-block;
+  padding: 10px 22px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a7af8, #7b5ce0);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 /* 暗黑模式：页面深底（RouterView .page #111）——配色适配 */
