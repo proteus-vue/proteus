@@ -23,3 +23,6 @@ export { createVueDomBackend } from './vue-dom'
 // ★G-27 B4：NativeBackend（nodeOps → 原生视图 + 宿主适配器）
 export { createNativeBackend, createMockNativeAdapter } from './native'
 export type { NativeViewDescriptor, NativeViewAdapter, MockNativeAdapter } from './native'
+// ★G-27 B5：FlutterBackend spike（Proteus 语义 → Flutter widget 树映射层）
+export { createFlutterBackend, mapWidgetType, toWidgetTree } from './flutter'
+export type { FlutterWidgetDescriptor } from './flutter'

@@ -9,10 +9,13 @@ import {
   createVueDomBackend,
   createNativeBackend,
   createMockNativeAdapter,
+  createFlutterBackend,
+  mapWidgetType,
+  toWidgetTree,
   runBackendConformance,
   toPlainTree,
 } from '@proteus-vue/render-backend'
-import type { ProteusRenderBackend, NativeViewDescriptor } from '@proteus-vue/render-backend'
+import type { ProteusRenderBackend, NativeViewDescriptor, FlutterWidgetDescriptor } from '@proteus-vue/render-backend'
 
 describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
   it('完整后端（Headless 参考实现）→ 全部 check 通过', () => {
@@ -224,5 +227,46 @@ describe('G-27 NativeBackend（B4：nodeOps → 原生视图）', () => {
     b.insert(c, root, a)
     expect(root.children[0]).toBe(c)
     expect(root.children[1]).toBe(a)
+  })
+})
+
+describe('G-27 FlutterBackend（B5 spike：Proteus 语义 → Flutter widget 树）', () => {
+  it('语义标签 → Flutter widget 映射（语义收敛的运行时对应）', () => {
+    expect(mapWidgetType('view')).toBe('Container')
+    expect(mapWidgetType('text')).toBe('Text')
+    expect(mapWidgetType('button')).toBe('FilledButton')
+    expect(mapWidgetType('scroll-view')).toBe('SingleChildScrollView')
+    expect(mapWidgetType('p-grid')).toBe('Wrap')
+    expect(mapWidgetType('unknown-custom')).toBe('unknown-custom') // 未映射透传
+  })
+
+  it('IR 树 → widget 树：端到端语义收敛路径（spike 可行性验证）', () => {
+    const b = createFlutterBackend()
+    const root = b.createElement({ type: 'view', props: {}, children: [] }) as FlutterWidgetDescriptor
+    const text = b.createElement({ type: 'text', props: { fontSize: 16 }, children: [] }) as FlutterWidgetDescriptor
+    const btn = b.createElement({ type: 'button', props: {}, children: [] }) as FlutterWidgetDescriptor
+    b.insert(text, root)
+    b.insert(btn, root)
+    b.setText(text, '你好')
+    b.patchProp(btn, 'onPressed', null, () => {})
+    const tree = toWidgetTree(root)
+    expect(tree.widget).toBe('Container')
+    expect((tree.children as Array<{ widget: string; text: string; props: Record<string, unknown> }>)[0]).toMatchObject({
+      widget: 'Text',
+      text: '你好',
+      props: { fontSize: 16 },
+    })
+    expect((tree.children as Array<{ widget: string }>)[1].widget).toBe('FilledButton')
+  })
+
+  it('CRUD + capabilities（layout yoga——Flutter 自带布局）+ conformance 通过', () => {
+    const b = createFlutterBackend()
+    expect(b.capabilities).toMatchObject({ layout: 'yoga', glass: 'L3', blur: 'true', animation: 'native', textureSharing: true })
+    const root = b.createElement({ type: 'view', props: {}, children: [] }) as FlutterWidgetDescriptor
+    const child = b.createElement({ type: 'text', props: {}, children: [] }) as FlutterWidgetDescriptor
+    b.insert(child, root)
+    b.remove(child)
+    expect(root.children.length).toBe(0)
+    expect(runBackendConformance(b).ok).toBe(true)
   })
 })
