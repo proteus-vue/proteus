@@ -12,7 +12,7 @@
 | **B1** | M1.1 | L1 清单冻结（128）+ C-IR schema 扩展 + `audit:coverage` | G-31 Component IR | ✅ 覆盖率报告 = 100%——`PRIMITIVE_CATALOG` SSOT（128 原语：12+18+10+10+50+28）+ SEMANTIC_ENUM 扩展至 53 + `proteus audit coverage` 门禁（G-32.1 100% + 闭环一致性 C1-C5） | 2 人月 |
 | **B2** | M1.2-M2 | ① 布局 12 + ② UI 18（Web/DOM Backend） | G-27 VueDomBackend | ✅ **布局 12 + UI 18 双端全部落地（23 新组件）**：布局 6（p-inline/p-spacer/p-divider/p-scroll/p-virtual-list/p-masonry——p-fluid 为指令形态）+ UI 基础 4（p-heading/p-icon/p-switch/p-slider）+ UI 视图 5（p-rich-text/p-avatar/p-media/p-canvas/p-svg）+ UI 表单 5（p-select/p-checkbox/p-radio/p-picker/p-form）+ Shell 3（p-nav/p-tabbar/p-drawer）；演示页 semantic-primitives-demo（双端构建通过）；③ Shell 余 7/④ Gesture/⑤ Capability 后续批次 | 3 人月 |
 | **B3** | M2 | ⑤ 能力 50（Native Backend iOS/Android） | G-28 NativeBackend | 真机跑通 Top 30 | 6 人月 |
-| **B4** | M2-M3 | ③ Shell 10 + ④ Gesture 10 | G-27 + G-30 | 完整 App demo | 4 人月 |
+| **B4** | M2-M3 | ③ Shell 10 + ④ Gesture 10 | G-27 + G-30 | ✅ **③ Shell 10 全落地**（3 B2 + 4 新：p-page/p-segment/p-popover/p-action-sheet——p-modal/p-toast/p-split 既有）；④ Gesture 10（v-gesture:* 指令 + p-draggable/p-scrollable + useGesture）待续 | 4 人月 |
 | **B5** | M3 | ⑥ 工程 28（路由/动画/生命周期） | G-17 + Vue | DevTools 集成 | 3 人月 |
 | **B6** | M3 | 对照矩阵自动化 + codemod + conformance 全绿 | G-31 migration | 迁移工具链 | 2 人月 |
 

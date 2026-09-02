@@ -60,6 +60,21 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'shell.tabbar': 'tabbar',
   'shell.drawer': 'drawer',
   'shell.modal': 'modal',
+  // ★G-32 B4：Shell 补齐 + UI 补齐（与 SEMANTIC_BACKEND_MAP headless 列同源）
+  'shell.page': 'page',
+  'shell.segment': 'segment',
+  'shell.popover': 'popover',
+  'shell.action-sheet': 'action-sheet',
+  'ui.rich-text': 'rich-text',
+  'ui.avatar': 'avatar',
+  'ui.media': 'media',
+  'ui.canvas': 'canvas',
+  'ui.svg': 'svg',
+  'ui.select': 'select',
+  'ui.checkbox': 'checkbox',
+  'ui.radio': 'radio',
+  'ui.picker': 'picker',
+  'ui.form': 'form',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

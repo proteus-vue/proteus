@@ -72,6 +72,21 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'shell.tabbar': 'BottomNavigationBar',
   'shell.drawer': 'Drawer',
   'shell.modal': 'showDialog',
+  // ★G-32 B4：Shell 补齐 + UI 补齐
+  'shell.page': 'Scaffold',
+  'shell.segment': 'SegmentedButton',
+  'shell.popover': 'showMenu',
+  'shell.action-sheet': 'showModalBottomSheet',
+  'ui.rich-text': 'RichText',
+  'ui.avatar': 'CircleAvatar',
+  'ui.media': 'VideoPlayer',
+  'ui.canvas': 'CustomPaint',
+  'ui.svg': 'SvgPicture',
+  'ui.select': 'DropdownButton',
+  'ui.checkbox': 'Checkbox',
+  'ui.radio': 'Radio',
+  'ui.picker': 'showDatePicker',
+  'ui.form': 'Form',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

@@ -103,6 +103,25 @@
           </div>
         </p-drawer>
       </div>
+      <div class="row">
+        <p-text class="label">p-segment（分段）：</p-text>
+        <p-segment v-model:active="segVal" :options="segmentOptions" />
+      </div>
+      <div class="row">
+        <p-text class="label">p-popover（气泡）：</p-text>
+        <p-popover v-model="popoverOpen" placement="bottom">
+          <template #trigger>
+            <p-button variant="ghost" size="small">触发气泡</p-button>
+          </template>
+          <p-text>气泡内容——点击遮罩关闭。</p-text>
+        </p-popover>
+      </div>
+      <div class="row">
+        <p-text class="label">p-action-sheet（动作面板）：</p-text>
+        <p-button variant="ghost" size="small" @click="sheetOpen = true">打开动作面板</p-button>
+        <p-action-sheet v-model="sheetOpen" :actions="sheetActions" @select="onSheetSelect" />
+        <p-text v-if="sheetResult" class="hint">{{ sheetResult }}</p-text>
+      </div>
     </section>
 
     <section class="block">
@@ -187,6 +206,9 @@ import {
   PPicker,
   PForm,
   PInput,
+  PSegment,
+  PPopover,
+  PActionSheet,
 } from '@proteus-vue/components'
 
 const switchOn = ref(false)
@@ -198,6 +220,10 @@ const cbA = ref(false)
 const cbB = ref(true)
 const radioVal = ref('x')
 const dateVal = ref('2026-09-02')
+const segVal = ref('news')
+const popoverOpen = ref(false)
+const sheetOpen = ref(false)
+const sheetResult = ref('')
 
 function openDrawer(): void {
   drawerOpen.value = true
@@ -243,6 +269,20 @@ const selectOptions = [
   { value: 'shenzhen', label: '深圳' },
   { value: 'hangzhou', label: '杭州' },
 ]
+const segmentOptions = [
+  { label: '资讯', value: 'news' },
+  { label: '关注', value: 'follow' },
+  { label: '热门', value: 'hot' },
+]
+const sheetActions = [
+  { label: '分享', value: 'share' },
+  { label: '复制链接', value: 'copy' },
+  { label: '删除', value: 'delete', color: '#fa5151' },
+]
+
+function onSheetSelect(value: string): void {
+  sheetResult.value = '选择：' + value
+}
 </script>
 
 <style scoped>

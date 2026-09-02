@@ -65,6 +65,21 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'shell.tabbar': { tag: 'nav', className: 'proteus-tabbar' },
   'shell.drawer': { tag: 'aside', className: 'proteus-drawer' },
   'shell.modal': { tag: 'div', className: 'proteus-modal' },
+  // ★G-32 B4：Shell 补齐 + UI 补齐（与 SEMANTIC_BACKEND_MAP vue-dom 列同源）
+  'shell.page': { tag: 'div', className: 'proteus-page' },
+  'shell.segment': { tag: 'div', className: 'proteus-segment' },
+  'shell.popover': { tag: 'div', className: 'proteus-popover' },
+  'shell.action-sheet': { tag: 'div', className: 'proteus-action-sheet' },
+  'ui.rich-text': { tag: 'div', className: 'proteus-rich-text' },
+  'ui.avatar': { tag: 'div', className: 'proteus-avatar' },
+  'ui.media': { tag: 'div', className: 'proteus-media' },
+  'ui.canvas': { tag: 'canvas' },
+  'ui.svg': { tag: 'svg' },
+  'ui.select': { tag: 'div', className: 'proteus-select' },
+  'ui.checkbox': { tag: 'div', className: 'proteus-checkbox' },
+  'ui.radio': { tag: 'div', className: 'proteus-radio' },
+  'ui.picker': { tag: 'div', className: 'proteus-picker' },
+  'ui.form': { tag: 'form' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

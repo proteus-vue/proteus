@@ -312,6 +312,133 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'showDialog',
     headless: 'modal',
   },
+  // ★G-32 B4：Shell 补齐（page/segment/popover/action-sheet）+ UI 补齐（rich-text/avatar/media/canvas/svg/select/checkbox/radio/picker/form）
+  'shell.page': {
+    'vue-dom': 'div.proteus-page',
+    'native-ios': 'UIViewController',
+    'native-android': 'Activity',
+    'native-harmony': 'Page', // ArkUI Page
+    skyline: 'page',
+    flutter: 'Scaffold',
+    headless: 'page',
+  },
+  'shell.segment': {
+    'vue-dom': 'div.proteus-segment',
+    'native-ios': 'UISegmentedControl',
+    'native-android': 'TabLayout',
+    'native-harmony': 'Segmented', // ArkUI 分段器
+    skyline: 'segment',
+    flutter: 'SegmentedButton',
+    headless: 'segment',
+  },
+  'shell.popover': {
+    'vue-dom': 'div.proteus-popover',
+    'native-ios': 'UIPopoverController',
+    'native-android': 'PopupWindow',
+    'native-harmony': 'Popup', // ArkUI Popup
+    skyline: 'view.popover',
+    flutter: 'showMenu',
+    headless: 'popover',
+  },
+  'shell.action-sheet': {
+    'vue-dom': 'div.proteus-action-sheet',
+    'native-ios': 'UIAlertController.actionSheet',
+    'native-android': 'BottomSheet',
+    'native-harmony': 'ActionSheet', // ArkUI ActionSheetDialog
+    skyline: 'action-sheet',
+    flutter: 'showModalBottomSheet',
+    headless: 'action-sheet',
+  },
+  'ui.rich-text': {
+    'vue-dom': 'div.proteus-rich-text',
+    'native-ios': 'UITextView.attributed',
+    'native-android': 'TextView.html',
+    'native-harmony': 'RichText', // ArkUI RichText
+    skyline: 'rich-text',
+    flutter: 'RichText',
+    headless: 'rich-text',
+  },
+  'ui.avatar': {
+    'vue-dom': 'div.proteus-avatar',
+    'native-ios': 'UIImageView.avatar',
+    'native-android': 'ImageView.avatar',
+    'native-harmony': 'Image.avatar',
+    skyline: 'image.avatar',
+    flutter: 'CircleAvatar',
+    headless: 'avatar',
+  },
+  'ui.media': {
+    'vue-dom': 'div.proteus-media',
+    'native-ios': 'AVPlayerView',
+    'native-android': 'VideoView',
+    'native-harmony': 'Video', // ArkUI Video
+    skyline: 'video',
+    flutter: 'VideoPlayer',
+    headless: 'media',
+  },
+  'ui.canvas': {
+    'vue-dom': 'canvas',
+    'native-ios': 'UIView.canvas',
+    'native-android': 'SurfaceView',
+    'native-harmony': 'Canvas', // ArkUI Canvas
+    skyline: 'canvas',
+    flutter: 'CustomPaint',
+    headless: 'canvas',
+  },
+  'ui.svg': {
+    'vue-dom': 'svg',
+    'native-ios': 'UIView.svg',
+    'native-android': 'VectorDrawable',
+    'native-harmony': 'Shape', // ArkUI Shape
+    skyline: 'view.svg',
+    flutter: 'SvgPicture',
+    headless: 'svg',
+  },
+  'ui.select': {
+    'vue-dom': 'div.proteus-select',
+    'native-ios': 'UIPickerView',
+    'native-android': 'Spinner',
+    'native-harmony': 'Select', // ArkUI Select
+    skyline: 'picker',
+    flutter: 'DropdownButton',
+    headless: 'select',
+  },
+  'ui.checkbox': {
+    'vue-dom': 'div.proteus-checkbox',
+    'native-ios': 'UIButton.checkbox',
+    'native-android': 'CheckBox',
+    'native-harmony': 'Checkbox', // ArkUI Checkbox
+    skyline: 'checkbox',
+    flutter: 'Checkbox',
+    headless: 'checkbox',
+  },
+  'ui.radio': {
+    'vue-dom': 'div.proteus-radio',
+    'native-ios': 'UIButton.radio',
+    'native-android': 'RadioButton',
+    'native-harmony': 'Radio', // ArkUI Radio
+    skyline: 'radio',
+    flutter: 'Radio',
+    headless: 'radio',
+  },
+  'ui.picker': {
+    'vue-dom': 'div.proteus-picker',
+    'native-ios': 'UIDatePicker',
+    'native-android': 'DatePicker',
+    'native-harmony': 'DatePicker', // ArkUI DatePicker
+    skyline: 'picker-view',
+    flutter: 'showDatePicker',
+    headless: 'picker',
+  },
+  'ui.form': {
+    'vue-dom': 'form',
+    'native-ios': 'UIView.form',
+    'native-android': 'LinearLayout.form',
+    'native-harmony': 'FormComponent', // ArkUI FormComponent
+    skyline: 'form',
+    flutter: 'Form',
+    headless: 'form',
+  },
 }
 
 /**
