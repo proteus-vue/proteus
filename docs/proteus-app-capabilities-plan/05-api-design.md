@@ -123,4 +123,4 @@ export interface CacheOptions {
 }
 ```
 
-**对接 Types v2.1**：所有 API 严格类型化，Platform 判别联合（见 `proteus-types-plan`）。
+**对接 Types v2.1**：所有 API 严格类型化，Platform 判别联合（见 `proteus-types-plus-plan`）。

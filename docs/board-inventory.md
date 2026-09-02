@@ -36,23 +36,26 @@
 
 | plan | 编号 | 状态 | 说明 / 下一动作 |
 |------|------|------|----------------|
+| `proteus-architecture-facade-plan` | 规约层（执行序 G 表 + CI 门禁） | ✅ v3.6 | **`00-architecture.md`（全局执行序 G-01~G-39 + 9 铁律 + 包注册表）/ `ARCHITECTURE.md`（一页全景）/ `01-optimization-log.md`（v3.0~v3.6 变更）三文件**——由 `scripts/check-consistency.js` 校验「三文件 G 表同集合且 G-01~G-N 连续」（CI 门禁 `consistency.yml`）；v3.6（决策 #315）追加 G-36~G-39 四 SPI/Agent 行；★新 plan 入仓必须同步本表（决策 #177/#315 纪律） |
 | `proteus-methodology-plan` | 方法论提炼（统一语义收敛） | ✅ 已入库 | **哲学根文档**：核心公式「语义定义 + 后端实现」四维度投影（编译 G-29 / UI G-27 / 能力 G-28 / 端接入 G-30）+ 五支柱（语义优先/解耦/验证先于运行/渐进覆盖 80-18-1.9-0.1/可泛化）+ Tier 模型（R+C+J 三元组）+ 原则速查（★#1 与 positioning #10 同义）——onboarding 第一课 / 对外叙事根；§9 关系图已对齐实际目录 |
-| `docs/proteus-architecture.md`（规约） | 原则 #0-#12 + 铁律 + FLD/GLS/RND/NAT/PRIM 规则 | ✅ **M1.1 已收口** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + 分层/能力/落地三类铁律 + 十系严格规则 + 分层双路线 + 来源更新规则——合并 17 份 architecture-update + PROJECT_MEMORY 决策链） |
+| `docs/proteus-architecture.md`（规约） | 原则 #0-#13.10 + 铁律 + FLD/GLS/RND/NAT/PRIM/AI/CMP 规则 | ✅ **M1.1 已收口 + SPI 三系追加** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + #13.x 可插拔可验证 + 分层/能力/落地三类铁律 + 严格规则 + 分层双路线 + 来源更新规则——合并 architecture-update + 决策链；G-37/38/39 SPI 铁律与 CMP017-043 已并入） |
 
 ### L1 方法论（杠杆支点：语义收敛 + 后端实现）
 
 | plan | 编号 | 状态 | 说明 / 下一动作 |
 |------|------|------|----------------|
 | `proteus-fluid-layout-plan` / `proteus-fluid-system-plan` / `proteus-fluid-layout-essence-plan` | **G-22** | ✅ 已落地 | S1-S4 全原语（p-fluid/p-fit/p-scale/p-grid/p-stack/p-split/p-aspect/p-sidebar/p-toolbar/p-safe/p-zone）+ `@proteus-vue/fluid` 包 + FLD001-013 + fluid:check 门禁 |
+| `proteus-design-principle-plan` | —（原则补充） | ✅ 已入库 | **全局设计原则 #10「统一语义 + 原生实现」显式化**：architecture-principle（原则定义）/ app-renderer-layout（布局归属）/ component-layout-semantics（p-flex/p-stack/p-grid 语义）/ config-update；facade 规约「+1 份原则补充」即指本目录；2026-08 规范化（决策 #177 统一 -plan 后缀）
 | `proteus-adaptive-container-plan` | **G-22.5** | ✅ B1/B2/B4 | p-adaptive 纯逻辑 + Controller + p-modal（sheet/dialog/popover 形态自动切换 + anchor 锚定）；B3 原生映射待 App Renderer |
 | `proteus-semantic-primitives-plan` | **G-24** | ⬜ 规划 | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut）可立即动手 |
 | `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
 | （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
 | `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
+| `proteus-render-backend-spi-plan` | **G-37** | 📋 规划（已入库） | ★**G-27 的可执行落地**：RenderBackend SPI 规范（18 方法接口 + 生命周期 + C-IR 消费契约 + 布局分工 + 手势桥 + 线程模型）+ Conformance 套件（42 测试 C-01~C-10）+ 5 步实现指南 + B1-B5 分批；铁律 G-37.1-6 + CMP023-028；★与既有 `@proteus-vue/render-backend` 实现（M1.4 B1/B2 已落地）互为印证 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 | `proteus-component-semantics-plan` | **G-31** | 🟡 **B1-B6 已落地 + B7 骨架** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + toComponentIR + **全后端消费 semantic（proteus-* 语义类）+ B5 conformance 门禁** + **B7 能力 Hook 层骨架**（@proteus-vue/api/capability.ts + CMP007 `api-check`）+ **B6 兼容层 + codemod**（@proteus-vue/compat-miniprogram：createWxCompat 桥 + migrateMpSource 幂等转换 + `proteus migrate mp`）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
-| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 ✅ + B4 Shell/Gesture + B3 Hook 两期** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`）+ SEMANTIC_ENUM 18→53 + `proteus audit coverage` 门禁 + **布局 12 + UI 18 + Shell 10 + Gesture 核心全双端落地（31 新组件 + `@proteus-vue/gesture` + v-gesture，audit 57 组件全过，42 implemented 语义）× 6 后端 conformance + ⑤ Capability Hook 两期（13 useXxx：一期 10 + 二期 useFetch/usePermission/useStorage/createReactiveStorage + bridge 全能力 + CMP007 api-check）**；⑤ Capability 余 37 / ⑥ Engineering 28 待续 |
+| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 ✅ + B4 Shell/Gesture + B3 Hook 三期** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`）+ SEMANTIC_ENUM 18→53 + `proteus audit coverage` 门禁 + **布局 12 + UI 18 + Shell 10 + Gesture 核心全双端落地（31 新组件 + `@proteus-vue/gesture` + v-gesture，audit 57 组件全过，42 implemented 语义）× 6 后端 conformance + ⑤ Capability Hook 三期（21 useXxx：一期 10 + 二期 useFetch/usePermission/useStorage/createReactiveStorage + 三期 sensor/brightness/phone-call/biometric(WebAuthn)/payment/login/qr-code/useAuth 组合 + bridge 全能力 + CMP007 api-check）**；⑤ Capability 余 29 / ⑥ Engineering 28 待续 |
 
 ### L2 核心引擎
 
@@ -61,7 +64,9 @@
 | `proteus-compiler-plan` | G-02 | ✅ | 编译管线 + 规则注册表 + explain/trace + 自校验 |
 | `proteus-compiler-plugin-plan` | **G-21** | ✅ | Compiler Plugin API（IR 可编程访问） |
 | `proteus-compiler-backend-1-plan` | **G-29** | 🟡 **B1 已落地** | ★`@proteus-vue/compiler-backend` 包：CompilerIR 契约（render/semantic/bindings）+ conformance（CMP002/CMP004 + ★G-31.1 语义链接）+ **NodeBackend（真实模板编译 → C-IR 语义树——源码→C-IR 生产端雏形）**；B2 Rust/WASM 待续 |
-| `proteus-types-plan` / `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod |
+| `proteus-compiler-backend-spi-plan` | **G-38** | 📋 规划（已入库） | ★**编译器的插头标准（与 G-37 RenderBackend SPI 同形设计）**：ProteusCompilerBackend SPI（parse/transform/emit 三阶段 + IncrementalSession 增量 + FallbackBackend 降级 + getCacheKey/getArtifactHash）+ Conformance 套件（42 测试 C-01~C-10）+ Node/Rust/WASM 实现指南 + `conformance-runner.js` + verify.sh/pack.sh 自检；铁律 G-38.1-6 + CMP029-034；与既有 `@proteus-vue/compiler-backend`（G-29 B1）互为印证；B3 RustBackend、B4 WASM 浏览器内编译待续 |
+| `proteus-host-runtime-plan` | **G-39** | 📋 规划（已入库） | ★**宿主运行时（Host Runtime）SPI 与职责边界**：L0-L4 五层「唯一拥有者」架构（L4 进程/线程/事件循环/JS 引擎/原生桥）+ ProteusHostRuntime 接口（bootstrap/suspend/resume/destroy + createWorker/runOnThread + createEngine + invokeNative/registerNativeHandler + enqueue/nextTick，共 15+3，与 G-37/G-38 同形）+ 职责矩阵（跨层调用机器校验）+ Conformance 42（C-01~C-10）+ `runtime-reference.js`（Web/Terminal 参考实现）+ 自检工具链；铁律 G-39.1-6 + CMP035-043；★编号避让：原稿 G-36/G-34/G-35 已实现 plan 占用（决策 #314） |
+| `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod（★v1.0 `proteus-types-plan` 已并入本 v2.0，决策 #313） |
 | `proteus-build-plan` | G-04 | ✅ | plugin-vite（mp 编译 + gen-routes + 共享模块/分包）+ 体积门禁 |
 | `proteus-app-config-plan` | G-35 | ✅ | app.config 分层 + schema 校验 + 远程 |
 | `proteus-app-renderer-plan` | G-07/22 | ✅ B1 核心 | @proteus-vue/renderer-app：NativeAdapter + createRenderer host config（★G-27 NativeBackend 的既有底座） |
@@ -113,6 +118,7 @@
 | （dev-efficiency） | G-26 | ⬜ | benchmark 数据 |
 | `proteus-positioning-v3.md` | — | ✅ | 对外门面（v2 存档 archive/） |
 | `proteus-ai-fluid-agent-plan` | G-23 | ⬜ 规划 | AI Agent 操作 LayoutConstraint IR + FLD 校验闭环 |
+| `proteus-ai-agent-plan` | **G-36** | 📋 规划（已入库） | ★**G-23 的第一个具体落地**：AI Agent 接入——让 AI 自动产出符合柔性 IR 的标准业务代码（MCP Server 11 工具 + Agent Kit SDK + 4 Skill + 三层 Guardrails + 自修复循环 + Token 优化 + B1-B6）；铁律 G-36.1-7 + CMP017-022；与 G-31 B6 迁移 / G-32 原语库 / G-37 RenderBackend SPI 协同 |
 
 ### 其他文档（非 plan）
 
@@ -155,6 +161,14 @@
 | VEH001 / TV001 / WATCH001 | 车机 driving-safe / TV 焦点 / 手表单列 | device-adaptation |
 | RND001-005 | 禁止绕过 SPI 直调渲染引擎 / 后端须过 conformance | render-backend |
 | AI001-005 | Agent 产物须过 `--strict-css` + FLD | ai-fluid-agent |
+| **G-36.1-7** | AI Agent 输出必经 conformance / 禁小程序组件名 / 禁裸平台 API / Skill 组合性审查 / MCP 按需上下文 / 自修复上限 / 代码可追溯 IR | ai-agent-plan |
+| **G-37.1-6** | Backend 基于 semantic 分发 / C-IR 只读 / capabilities 诚实声明 / 单线程调用 / conformance 准入 / 降级可见 | render-backend-spi-plan |
+| **CMP017-022** | Agent 取色限 tokens（017）/ 页面类型声明（018）/ 迁移映射日志（019）/ adapt-device 不改语义（020）/ MCP 鉴权（021）/ 评测含车机+手表（022） | ai-agent-plan |
+| **CMP023-028** | SPI 方法数 ≤20（023）/ NodeHandle 不透明（024）/ 差分完整性（025）/ 资源释放（026）/ 手势 no-op（027）/ 首帧预算（028） | render-backend-spi-plan |
+| **G-38.1-6** | 编译后端 IR 不可知 / 产物语义等价 / 能力诚实声明 / 降级可观测 / 性能基准强制 / 确定性产出 | compiler-backend-spi-plan |
+| **CMP029-034** | 接口完整性（029）/ 确定性 emit（030）/ 降级语义一致（031）/ 缓存键可移植（032）/ 诊断不抛异常（033）/ 源码位置保留（034） | compiler-backend-spi-plan |
+| **G-39.1-6** | 生命周期唯一拥有 / 线程唯一拥有 / 能力诚实声明 / 降级可观测 / 原生桥白名单 / 禁止循环依赖 | host-runtime-plan |
+| **CMP035-043** | 宿主不假设业务（035）/ 禁跳层（036）/ 禁循环依赖（037）/ 能力声明一致（038）/ 降级可观测（039）/ 生命周期确定性（040）/ 线程安全（041）/ 资源清理（042）/ 性能基准（043） | host-runtime-plan |
 | 分层铁律 | L1 先于 L3 / 禁跨层反向依赖（并行化前提） | roadmap-2 §6 |
 
 ---
@@ -162,7 +176,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → **G-31 B2 布局原语对齐 C-IR**（p-* 已是 Layer 0 语义组件 ✓，补 semantic 字段）→ G-24 B1 桌面原语 → G-32 B2 续（Shell 7/Gesture/Capability/Engineering 组件）
+- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → G-31 B7 续 router 语义化 → G-24 B1 桌面原语 → G-32 B3 续（Capability 余 29）+ G-32 B5（Engineering 28 工程原语）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark

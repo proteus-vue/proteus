@@ -11,7 +11,7 @@ proteus-music/                    ← 验证应用（本蓝图产物）
 ├── packages/
 │   ├── compiler/                 ← proteus-compiler-plan
 │   ├── cli/                      ← proteus-cli-plan
-│   ├── types/                    ← proteus-types-plan
+│   ├── types/                    ← proteus-types-plus-plan
 │   ├── testing/                  ← proteus-testing-plan
 │   ├── devtools/                 ← proteus-devtools-plan
 │   ├── build/                    ← proteus-build-plan
@@ -118,7 +118,7 @@ export default defineConfig({
 })
 ```
 
-**关键**：所有 plan 的 config 字段**统一收敛到这一个文件**（对齐 `proteus-types-plan/02-m2-config-schema.md`），禁止各自定义。
+**关键**：所有 plan 的 config 字段**统一收敛到这一个文件**（对齐 `proteus-types-plus-plan/02-m2-config-schema.md`），禁止各自定义。
 
 ## 2.4 三端入口
 

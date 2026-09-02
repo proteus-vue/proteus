@@ -15,6 +15,7 @@
 
 - **原则 #0（统一语义收敛，methodology 根原则）**：Proteus 不做跨端翻译，定义与平台无关的语义内核；一切平台差异下沉为「后端实现细节」。同 shape 四投影：编译（G-29）/ UI（G-27）/ 能力（G-28）/ 端接入（G-30）。
 - **原则 #0 第五投影（G-31，开发者书写面）**：框架暴露给开发者的每一个组件与 API，必须先定义语义（Component IR / Hook 接口），再交由各端 Backend 实现；**禁止将任何既有平台的组件名、属性名、API 形态直接上升为框架标准**——小程序组件集（view/text/wx.xxx）降级为 Layer 1 兼容层（`@proteus/compat-miniprogram`），Proteus 语义组件（p-* + useNative/useFetch）是 Layer 0。
+- **原则 #0 第六投影（G-36，Agent 书写面）**：代码的生成过程也必须服从语义收敛——AI 产出的是符合 IR 契约的标准代码，而非自由文本。Agent 是语义层的「自动化生产者」。五支柱覆盖完整生命周期：设计（语义定义）→ 生成（Agent）→ 验证（conformance）→ 运行（六端渲染）。
 - **五支柱**（详见 methodology §3）：① 语义优先于实现 ② 接口与实现彻底解耦 ③ 验证先于运行（编译期消灭不可能）④ 渐进式覆盖（80/18/1.9/0.1）⑤ 方法论可泛化。
 
 ---
@@ -39,6 +40,13 @@
 | #10.9 | 断点模型覆盖全部输入形态（touch/cursor/remote/dial/voice） | device-adaptation W×H×F |
 | #11 | 核心能力实现为 Compiler Plugin（dogfooding） | compiler-plugin G-21 |
 | #12 | AI Agent 产物须通过编译期强制校验 | ai-fluid-agent AI001-005 |
+| #13 | 可插拔层可验证性：任何声称「可插拔」的层（渲染 G-37 / 编译 G-38 / 宿主运行时 G-39）须同时提供 SPI + Conformance + ≥2 参考实现（★避让：原稿 #11 与既有 #11 冲突，重编号） | render/compile/host-runtime-spi G-37/38/39 |
+| #13.5 | 编译器 IR 为中间表示：编译后端只消费 `SourceFile → ProgramIR → IRModule` 契约，不假设上游框架 | compiler-backend-spi G-38 |
+| #13.6 | 降级等价：Fallback 不改变语义 | compiler-backend-spi G-38 |
+| #13.7 | 确定性：可复现构建（同一 IR 任一后端产物行为一致） | compiler-backend-spi G-38 |
+| #13.8 | 宿主运行时为运行环境抽象，必须可替换（任何宿主实现 ProteusHostRuntime SPI 接入） | host-runtime-spi G-39 |
+| #13.9 | 线程安全由 Runtime 唯一保证（Backend/业务不得直接操作线程） | host-runtime-spi G-39 |
+| #13.10 | 生命周期状态机必须确定性（Runtime 统一定义 bootstrapping→running→suspended→destroyed） | host-runtime-spi G-39 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -71,6 +79,31 @@
 | **G-31.2** | **每个组件属性须声明 Tier 降级行为（CMP006 编译期拦截）** | component-semantics |
 | **G-31.3** | **Layer 0 所有 API 必须 Promise/Hook 化，禁止回调式/全局对象式（无 wx.xxx）** | component-semantics |
 | **G-31.4** | **新组件进 L1 前须 ≥3 端真实 Backend 通过 conformance test** | component-semantics |
+| **G-36.1** | **AI Agent 输出必须通过 conformance + `verify-llm.js`，否则不得交付** | ai-agent |
+| **G-36.2** | **Agent 不得生成小程序组件名（view/scroll-view/swiper 等），必须走 G-32 原语** | ai-agent |
+| **G-36.3** | **Agent 不得裸写平台 API（wx.*/uni.*），必须走 Hook / `useMiniProgram()`** | ai-agent |
+| **G-36.4** | **新增 Skill 必须经受组合性审查，能用现有 Skill 组合则不得新增** | ai-agent |
+| **G-36.5** | **Agent 上下文必须走 MCP 按需查询，禁止全量塞入 system prompt** | ai-agent |
+| **G-36.6** | **失败自修复必须有上限（≤3 次），超限转人工** | ai-agent |
+| **G-36.7** | **Agent 生成的代码必须可追溯到 Component IR（保留 IR 注释/source map）** | ai-agent |
+| **G-37.1** | **Backend 必须基于 `semantic` 字段分发渲染，禁止基于标签名字符串** | render-backend-spi |
+| **G-37.2** | **Backend 对 C-IR 只读消费，不得修改 IR 节点** | render-backend-spi |
+| **G-37.3** | **`capabilities` 必须诚实声明，未声明 = 不支持** | render-backend-spi |
+| **G-37.4** | **所有 SPI 方法必须从同一线程调用；Backend 内部多线程自行同步** | render-backend-spi |
+| **G-37.5** | **Conformance 测试必须 0 失败；声明支持的能力必须全部通过** | render-backend-spi |
+| **G-37.6** | **降级必须可见（开发期警告 + 生产期日志），不得静默** | render-backend-spi |
+| **G-38.1** | **编译后端 IR 不可知：不得假设任何前端框架**（只消费 `SourceFile → ProgramIR → IRModule` 契约） | compiler-backend-spi |
+| **G-38.2** | **产物语义等价：同一份 IRModule 经任何合规后端 emit，运行行为必须一致** | compiler-backend-spi |
+| **G-38.3** | **`compilerCapabilities` 必须诚实声明，未声明 = 不支持** | compiler-backend-spi |
+| **G-38.4** | **降级必须可观测：FallbackBackend 生效须显式警告 + 日志** | compiler-backend-spi |
+| **G-38.5** | **性能基准强制：编译耗时/内存须过 benchmark，超预算不得宣称合规** | compiler-backend-spi |
+| **G-38.6** | **确定性产出：同输入同配置必须产出逐字节一致的产物（可复现构建）** | compiler-backend-spi |
+| **G-39.1** | **生命周期唯一拥有：Backend 不得自己监听平台前后台事件，只能 `runtime.on('suspend'\|'resume', cb)` 订阅** | host-runtime-spi |
+| **G-39.2** | **线程唯一拥有：Backend 不得直接创建线程（pthread/new Thread/dispatch_async），耗时任务走 `runOnThread`** | host-runtime-spi |
+| **G-39.3** | **`capabilities` 必须如实反映宿主能力，不得虚报（未声明组 conformance 自动 SKIP）** | host-runtime-spi |
+| **G-39.4** | **降级可观测：每次降级（后台→主线程/文件→内存/桥→Err）必须触发 `fallback` 事件 + 日志** | host-runtime-spi |
+| **G-39.5** | **原生桥白名单：仅预注册能力可调用 + 参数 schema 校验 + 超时可取消；Native→JS 回调必须切回 JS 线程** | host-runtime-spi |
+| **G-39.6** | **禁止循环依赖：L1 Framework → L4 Runtime 单向，禁止 L4 → L1 回边** | host-runtime-spi |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -95,6 +128,10 @@
 | AI | AI001-005 | error/warning | Agent 产物须过 `--strict-css` + FLD | ai-fluid-agent |
 | STS | STS 系列 | error | Style Safety 运行时约束 | style-safety |
 | CMP | CMP005-008 | error | 业务直调平台 SDK（005）/组件属性缺降级声明（006）/回调式 API 进 Layer 0（007）/L1 组件不足 3 端 conformance（008） | component-semantics |
+| CMP | CMP017-022 | error | Agent 取色限 tokens（017）/页面类型声明（018）/迁移映射日志（019）/adapt-device 不改语义（020）/MCP 鉴权（021）/评测含车机+手表（022） | 🆕 ai-agent-plan（G-36） |
+| CMP | CMP023-028 | error | SPI 接口最小化 ≤20 方法（023）/NodeHandle 不透明（024）/差分完整性（025）/资源释放（026）/手势 no-op 兜底（027）/首帧预算（028） | 🆕 render-backend-spi-plan（G-37） |
+| CMP | CMP029-034 | error | 接口完整性（029）/确定性 emit（030）/降级语义一致（031）/缓存键可移植（032）/诊断不抛异常（033）/源码位置保留（034） | 🆕 compiler-backend-spi-plan（G-38） |
+| CMP | CMP035-043 | error | 宿主不假设业务（035）/禁跳层访问（036）/禁循环依赖（037）/能力声明一致（038）/降级可观测（039）/生命周期确定性（040）/线程 postMessage 不共享（041）/资源清理（042）/性能基准强制（043） | 🆕 host-runtime-plan（G-39） |
 
 ---
 

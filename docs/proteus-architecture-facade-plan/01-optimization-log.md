@@ -13,10 +13,11 @@
 | v3.3 | style-safety 追加 | 新增 style-safety（全端样式运行时安全）plan 并入 **G-31**；其声称的 G-16 与 blueprint 撞号 → 一律以本表为准（G-16 = blueprint B1-B5、style-safety = G-31）；依赖 G-21（CSS 矩阵 ✅）/ G-22（App Renderer patchStyle）/ G-10（Compiler IR） | 规约表 G-01~G-31 · style-safety 12 文档 G-16→G-31 重指向 |
 | v3.4 | plus 系列追加 | 新增 router-plus / cli-plus / devtools-plus（P0，第 33-35 份）并入 **G-32 / G-33 / G-34**；声称的 G-17/G-18/G-19 与 blueprint/website 撞号 → 一律以本表为准（重指向 + 交叉引用同步：router-plus G-17→G-32、cli-plus G-18→G-33、devtools-plus G-19→G-34、Style Safety 引用 G-16→G-31、CLI 引用 G-18→G-33、Router 引用 G-17→G-32；cli-plus 的「G-07~G-16 横切区间」保留原编号） | 规约表 G-01~G-34 · plus 三 plan 文档编号重指向（46 处） |
 | v3.5 | app-config 追加 | 新增 app-config（应用全局配置：运行时配置 + 远端更新 + 五端存储）并入 **G-35**；声称的 G-20（v1.0 发布）撞号 → 一律以本表为准；旧编号引用重指向：Theme/Font G-13/G-15→G-27、Memorial G-11→G-25、Style Safety G-16→G-31、Cache G-14→G-28、CLI G-18→G-33、DevTools G-19→G-34、Router G-17→G-32、Glass G-12→G-29 | 规约表 G-01~G-35 · app-config 9 文档编号重指向（42 处） |
+| v3.6 | website-v3 同批四 plan 追加 | website-v3 未跟踪目录/zip 的新内容（决策 #312/#313/#314）抽离并入 **G-36（ai-agent）/ G-37（render-backend-spi）/ G-38（compiler-backend-spi）/ G-39（host-runtime-spi）**；原稿声称的 G-33/G-34/G-35/G-36 与已实现 plan（CLI/HMR/app-config/AI-Agent）撞号 → 一律以本表为准；原则 #11→#13（含 #13.5-10 编译/运行时子原则）、铁律 G-36~39.1-6、规则 CMP017-043 合并进 `proteus-architecture` L0 规约；同步删除冗余 `proteus-types-plan`（v1 并入 types-plus v2.0）+ `proteus-llm-rules-plan`（并入 website-v3）+ 3 `.DS_Store` | 规约表 G-01~G-39 · 四 plan 文档编号重指向（G-36→G-39 系列）+ board-inventory 登记 |
 
 ---
 
-## 二、G-01 ~ G-35 全局执行序（权威版）
+## 二、G-01 ~ G-39 全局执行序（权威版）
 
 | 序号 | 内容 | 前置 | 备注 |
 |------|------|------|------|
@@ -55,6 +56,10 @@
 | G-33 | cli-plus（严格 CLI） | G-07,G-21,G-31 | CLI（原声称 G-18 与 website 撞号，重指向 G-33） |
 | G-34 | devtools-plus（HMR + 协议 + 可视化） | G-08,G-31,G-33 | DevTools（原声称 G-19 与 website 撞号，重指向 G-34） |
 | G-35 | app-config（应用全局配置） | G-27,G-28,G-25 | 应用配置（原声称 G-20 与 v1.0 发布撞号，重指向 G-35） |
+| G-36 | ai-agent（AI Agent 接入） | G-29,G-31,G-32 | AI 代码生成 SPI（原稿 G-33 与 cli-plus 撞号，重指向 G-36，决策 #312） |
+| G-37 | render-backend-spi（G-27 RenderBackend SPI 规范） | G-27,G-29,G-32 | 渲染插头标准（原稿 G-34 与 devtools-plus 撞号，重指向 G-37，决策 #312） |
+| G-38 | compiler-backend-spi（G-29 CompilerBackend SPI 规范） | G-29,G-32 | 编译插头标准（原稿 G-35 与 app-config 撞号，重指向 G-38，决策 #312） |
+| G-39 | host-runtime-spi（宿主运行时 SPI + L0-L4 职责矩阵） | G-27,G-28,G-29,G-30 | 运行载体插头（原稿 G-36 与 ai-agent 撞号，重指向 G-39，决策 #314） |
 
 ---
 

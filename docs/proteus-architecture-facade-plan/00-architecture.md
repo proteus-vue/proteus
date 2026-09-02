@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.5（全局缝合 + 新 plan 追加）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.6（website-v3 同批 SPI/Agent plan 抽离入库）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 4 份 SPI/Agent plan（G-36~G-39 追加）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -150,6 +150,10 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-33** | cli-plus（严格 CLI：编译管线 + dev server + strict 开关） | G-07（CLI 骨架）、G-21/G-31 | CLI 集成 strict 门禁 + 增量编译 |
 | **G-34** | devtools-plus（HMR + DevTools 协议 + 可视化） | G-08（TraceBus）、G-31、G-33 | HMR 生效 + Style Safety 闸门可见 |
 | **G-35** | app-config（应用全局配置：运行时配置 + 远端更新 + 五端存储） | G-27（theme）、G-28（cache）、G-25 | 应用级配置统一管理 + 可远端更新 |
+| **G-36** | ai-agent（AI Agent 接入：MCP Server + Agent Kit + 4 Skill + Guardrails） | G-29、G-31、G-32 | AI 产出符合柔性 IR 的标准代码 + conformance 准入 |
+| **G-37** | render-backend-spi（G-27 RenderBackend SPI 规范：18 方法 + conformance 42 + 参考实现） | G-27、G-29、G-32 | 任何渲染后端实现 SPI + 过 conformance = 合规（G-27 可执行落地） |
+| **G-38** | compiler-backend-spi（G-29 CompilerBackend SPI 规范：parse/transform/emit + 增量 + conformance 42） | G-29、G-32 | 任何编译后端实现 SPI + 过 conformance = 合规（与 G-37 同形） |
+| **G-39** | host-runtime-spi（宿主运行时 SPI：生命周期/线程/JS 引擎/原生桥 + L0-L4 职责矩阵 + conformance 42） | G-27、G-28、G-29、G-30 | 运行载体唯一拥有者 + 跨层合法 + conformance 准入 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -158,6 +162,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.4）**：router-plus / cli-plus / devtools-plus（2026-08 新增 P0 plan，第 33-35 份）并入本表 **G-32 / G-33 / G-34**。其声称的 G-17 / G-18 / G-19 与 blueprint（G-17 = blueprint B6-B10、G-18 = website B1-B5、G-19 = website B6-B8 + test-framework）撞号，**一律以本表为准**（router-plus→G-32、cli-plus→G-33、devtools-plus→G-34；旧编号引用 G-05/G-06/G-09/G-11/G-12/G-13/G-16 同前重指向：G-05→G-22 系、G-06→G-22 系、G-09→G-23 系、G-11/G-12→G-12、G-13→G-08/G-11、G-16→G-31）。
 
 > **追加说明（v3.5）**：app-config（应用全局配置，2026-08 新增 plan）并入本表 **G-35**。其声称的 G-20（= v1.0 全量回归 + 发布）撞号，**一律以本表为准**（app-config→G-35）；旧编号引用重指向：Theme/Font G-13/G-15→G-27、Memorial G-11→G-25、Style Safety G-16→G-31、Cache G-14→G-28、CLI G-18→G-33、DevTools G-19→G-34、Router G-17→G-32、Glass G-12→G-29。
+
+> **追加说明（v3.6）**：website-v3 同批四份新规划文档抽离入库，并入本表 **G-36 / G-37 / G-38 / G-39**（ai-agent / render-backend-spi / compiler-backend-spi / host-runtime-spi）。其原稿声称编号均与已实现 plan 撞号，**一律以本表为准**（ai-agent G-33→G-36、render-backend-spi G-34→G-37、compiler-backend-spi G-35→G-38、host-runtime G-36→G-39；旧编号引用 G-27/G-28/G-29/G-30/G-31/G-32 同前有效）。依赖关系：G-37 与既有 `@proteus-vue/render-backend`（G-27 已落地）互校；G-38 与 `@proteus-vue/compiler-backend`（G-29 B1）互校；G-39 与 `@proteus-vue/renderer-app`·`@proteus-vue/hmr`·platform/capabilities 互校。详见 PROJECT_MEMORY 决策 #312/#313/#314。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**

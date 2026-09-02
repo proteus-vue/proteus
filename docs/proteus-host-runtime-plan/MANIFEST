@@ -1,0 +1,19 @@
+# MANIFEST - G-39 宿主运行时（校验唯一事实源）
+# 格式: 每行一个相对路径; # 开头为注释; 空行忽略
+# 重要: pack.sh 直接读此文件打包, 保证"磁盘有 + MANIFEST列 + zip里有"三处一致
+
+01-host-runtime.md
+02-responsibility-matrix.md
+03-lifecycle-threading.md
+04-native-bridge.md
+05-conformance-suite.md
+conformance-runner.js
+runtime-reference.js
+06-batches.md
+07-rules.md
+00-architecture-update.md
+README.md
+verify.sh
+pack.sh
+run-all-verify.sh
+CHECKSUM.md
