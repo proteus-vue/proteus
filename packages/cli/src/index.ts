@@ -32,6 +32,7 @@ import { parseTestArgs, runTest } from './test'
 import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
 import { generateTypes, formatGenerateTypes } from './generate-types'
 import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
+import { runMigrateMp } from './migrate-mp'
 import { parseCiArgs, planCiInit } from './ci'
 import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
@@ -392,7 +393,15 @@ async function main(): Promise<void> {
       break
     }
     case 'migrate': {
-      if (rest[0] !== 'types') throw new Error('proteus migrate 目前仅支持 types（proteus migrate types <proteus.config.ts> [--dry-run]）')
+      // ★G-31 B6：proteus migrate mp <file|dir> [--dry-run]（小程序 → Proteus 语义迁移 codemod）
+      if (rest[0] === 'mp') {
+        const target = rest.find((a) => a !== 'mp' && !a.startsWith('-')) ?? '.'
+        const dryRun = rest.includes('--dry-run')
+        const result = runMigrateMp(target, dryRun)
+        console.log(result.text)
+        break
+      }
+      if (rest[0] !== 'types') throw new Error('proteus migrate 支持 types（配置）/ mp（小程序语义迁移）：proteus migrate types <file> | migrate mp <file|dir> [--dry-run]')
       const { file, dryRun } = parseMigrateTypesArgs(rest.slice(1))
       try {
         const { changed } = migrateTypesFile(file, dryRun)

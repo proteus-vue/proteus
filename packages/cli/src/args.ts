@@ -457,6 +457,10 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★迁移助手：旧类型写法 → 新收口类型（types-plan 10 类型收口）',
       },
       {
+        usage: 'proteus migrate mp <file|dir> [--dry-run]',
+        desc: '★G-31 B6 小程序迁移 codemod：标签自动（view→p-box 等）+ 同步存储直改（→useStorage）\n      + 回调式 API/语义识别标签 manual 标注（幂等；--dry-run 只报告不写回）',
+      },
+      {
         usage: 'proteus gen config [file]',
         desc: '★生成 app.config.ts 骨架（G-35 M5）：defineAppConfig 类型安全形态；缺省 app.config.ts',
       },

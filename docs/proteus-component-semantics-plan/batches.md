@@ -14,7 +14,7 @@
 | **B4** | 基础 UI 原语（text/button/image/input/list/nav） | B2 | 完整 L1 组件集 | ✅ 现有组件对齐：p-view→layout.box/p-list-view→ui.list/p-nav-bar→ui.nav/p-textarea→ui.input/p-modal→layout.adaptive；Fluid 扩展语义 layout.split/safe/sidebar（UISplitViewController/SafeArea/NavigationRail——原则 #10.8）+ 五端映射；其余叠加 UI（popup/toast/skeleton 等）标 L2 生态 |
 | **C1**（G-28 侧） | 能力入口组件（p-scan-qr 等）对接 `useNative()` | G-28 | 能力组件可用 | 1 人周 |
 | **B5** | conformance：三端渲染快照一致 | B3, conformance.md | CI 门禁 | ✅ 见 `conformance.md` 落地状态——渲染层 IR 级快照（6 后端 × 6 fixtures） |
-| **B6** | `@proteus/compat-miniprogram` 兼容层 + codemod | B4 | 旧小程序可迁移 | 3 人周 |
+| **B6** | `@proteus/compat-miniprogram` 兼容层 + codemod | B4 | ✅ **`@proteus-vue/compat-miniprogram`（31 包）**：`createWxCompat` 运行时桥（wx.* → PlatformAPI/CapabilityHooks 委托——旧代码跑通）+ `migrateMpSource` 幂等 codemod（标签自动 12 个 1:1 → p-* / 同步存储 → useStorage / 回调式 API + 语义识别标签 manual 标注）+ `useStorage()` 迁移目标绑定 + CLI `proteus migrate mp`；旧小程序可迁移 | 3 人周 |
 | **B7** | API Hook 化（useFetch/useStorage/router）+ lint（CMP007） | B1 | ✅ **能力 Hook 层骨架 + CMP007 门禁**：`@proteus-vue/api/capability.ts`（CapResult&lt;T&gt; + createCapabilityHooks + CapabilityBridge 双桥 + 10 useXxx 核心 Hook + probe 降级）+ `proteus api-check`（回调式/同步存储/裸全局 → 平台桥/兼容演示豁免）；Layer 0 API 完整化随 G-32 B3 延续 | 2 人周 |
 
 **关键路径**：B1 → B2 → B3 → B5（conformance）→ M2 验收

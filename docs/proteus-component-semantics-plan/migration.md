@@ -49,12 +49,13 @@ codemod 工具：`proteus-migrate`（计划内，见 `batches.md` B4）。
 
 ```
 Step 1：装 compat 层，旧代码原样跑通
-        npm i @proteus/compat-miniprogram
-        → 全部 wx.xxx 可用
+        npm i @proteus-vue/compat-miniprogram   （plan 文档原名 @proteus/compat-miniprogram——组织 scope 收口）
+        → 全部 wx.xxx 可用（bindCompatPlatform(createPlatformAPI()) + createWxCompat）
 
 Step 2：跑 codemod，批量转原生语义
-        npx proteus-migrate --from miniprogram --to native
-        → 70-90% 自动转换
+        npx proteus migrate mp <file|dir> [--dry-run]
+        → 标签自动（view→p-box 等 12 个 1:1）+ 同步存储直改（→useStorage）+ 回调式 API/语义识别标签 manual 标注
+          （70-90% 自动转换，已落地 @proteus-vue/compat-miniprogram migrateMpSource）
 
 Step 3：人工处理剩余（语义还原 + 路由名表 + 能力 reason）
         → 完成
@@ -90,3 +91,4 @@ proteus test:component --backend all
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | v1 | 2026-09-02 | 三步迁移 + 组件/API 对照 + codemod 覆盖度 + 人工处理项 + 验收 |
+| v2 | 2026-09-02 | B6 落地：`@proteus-vue/compat-miniprogram`（createWxCompat 桥 + migrateMpSource 幂等 codemod + useStorage 目标）+ CLI `proteus migrate mp` |
