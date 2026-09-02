@@ -10,7 +10,7 @@
 | 批次 | 周期 | 范围 | 依赖 | 交付 | 工时估 |
 |------|------|------|------|------|--------|
 | **B1** | M1.1 | L1 清单冻结（128）+ C-IR schema 扩展 + `audit:coverage` | G-31 Component IR | ✅ 覆盖率报告 = 100%——`PRIMITIVE_CATALOG` SSOT（128 原语：12+18+10+10+50+28）+ SEMANTIC_ENUM 扩展至 53 + `proteus audit coverage` 门禁（G-32.1 100% + 闭环一致性 C1-C5） | 2 人月 |
-| **B2** | M1.2-M2 | ① 布局 12 + ② UI 18（Web/DOM Backend） | G-27 VueDomBackend | Playground 可用 | 3 人月 |
+| **B2** | M1.2-M2 | ① 布局 12 + ② UI 18（Web/DOM Backend） | G-27 VueDomBackend | ✅ 首期 13 组件落地（布局 6：p-inline/p-spacer/p-divider/p-scroll/p-virtual-list/p-masonry + UI 4：p-heading/p-icon/p-switch/p-slider + Shell 3：p-nav/p-tabbar/p-drawer）+ 演示页 semantic-primitives-demo（双端构建通过）；p-fluid 为指令形态（v-p-fluid）；余下 17 组件 + ③ Shell/④ Gesture 后续批次 | 3 人月 |
 | **B3** | M2 | ⑤ 能力 50（Native Backend iOS/Android） | G-28 NativeBackend | 真机跑通 Top 30 | 6 人月 |
 | **B4** | M2-M3 | ③ Shell 10 + ④ Gesture 10 | G-27 + G-30 | 完整 App demo | 4 人月 |
 | **B5** | M3 | ⑥ 工程 28（路由/动画/生命周期） | G-17 + Vue | DevTools 集成 | 3 人月 |

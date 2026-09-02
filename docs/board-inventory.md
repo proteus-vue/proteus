@@ -52,7 +52,7 @@
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
 | `proteus-component-semantics-plan` | **G-31** | 🟡 **B1-B5 已落地** | ★**入口语义化**：C-IR schema + 属性约束（GRID_CONFLICT/CMP006）+ semantic 映射 + toComponentIR + **全后端消费 semantic（proteus-* 语义类）+ B5 conformance 门禁**（6 后端 × 6 fixtures 渲染快照一致，18 语义覆盖 ≥3 端）；G-31.1-4 + CMP005-8；**小程序组件集降级为 Layer 1 兼容层方向** |
-| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 已落地** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`：12+18+10+10+50+28）+ SEMANTIC_ENUM 18→53（gesture/shell/engineering 三新域）+ 渲染映射补到 26 implemented 语义 × 6 后端 + **`proteus audit coverage` 门禁**（G-32.1 小程序能力 100% + 闭环一致性 C1-C5）；B2-B6 待续 |
+| `proteus-semantic-primitives-plus-plan` | **G-32** | 🟡 **B1 ✅ + B2 首期 13 组件** | ★**完整语义落地闭环 IR**：128 原语清单 SSOT（`PRIMITIVE_CATALOG`：12+18+10+10+50+28）+ SEMANTIC_ENUM 18→53（gesture/shell/engineering 三新域）+ 渲染映射补到 26 implemented 语义 × 6 后端 + **`proteus audit coverage` 门禁**（G-32.1 小程序能力 100% + 闭环一致性 C1-C5）；**B2 首期 13 组件双端落地**（p-inline/spacer/divider/scroll/virtual-list/masonry + p-heading/icon/switch/slider + p-nav/tabbar/drawer）+ Playground 演示页（semantic-primitives-demo）；余下 17 组件 + ③ Shell/④ Gesture 待续 |
 
 ### L2 核心引擎
 

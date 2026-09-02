@@ -38,6 +38,22 @@ import PScale from './p-scale/index.vue'
 import PAdaptive from './p-adaptive/index.vue'
 // ★p-adaptive（adaptive-container-plan B4）：弹窗（形态能力并入）
 import PModal from './p-modal/index.vue'
+// ★G-32 B2：布局原语补齐（layout.inline/spacer/divider/scroll/virtual-list/masonry）
+import PInline from './p-inline/index.vue'
+import PSpacer from './p-spacer/index.vue'
+import PDivider from './p-divider/index.vue'
+import PScroll from './p-scroll/index.vue'
+import PVirtualList from './p-virtual-list/index.vue'
+import PMasonry from './p-masonry/index.vue'
+// ★G-32 B2：UI 原语补齐（ui.heading/icon/switch/slider）
+import PHeading from './p-heading/index.vue'
+import PIcon from './p-icon/index.vue'
+import PSwitch from './p-switch/index.vue'
+import PSlider from './p-slider/index.vue'
+// ★G-32 B2：Shell 原语（shell.nav/tabbar/drawer）
+import PNav from './p-nav/index.vue'
+import PTabbar from './p-tabbar/index.vue'
+import PDrawer from './p-drawer/index.vue'
 
 export {
   VirtualList,
@@ -75,6 +91,22 @@ export {
   PAdaptive,
   // ★p-adaptive B4
   PModal,
+  // ★G-32 B2：布局原语补齐（layout.inline/spacer/divider/scroll/virtual-list/masonry）
+  PInline,
+  PSpacer,
+  PDivider,
+  PScroll,
+  PVirtualList,
+  PMasonry,
+  // ★G-32 B2：UI 原语补齐（ui.heading/icon/switch/slider）
+  PHeading,
+  PIcon,
+  PSwitch,
+  PSlider,
+  // ★G-32 B2：Shell 原语（shell.nav/tabbar/drawer）
+  PNav,
+  PTabbar,
+  PDrawer,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数
