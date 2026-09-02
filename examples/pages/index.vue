@@ -35,6 +35,7 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <a class="link" href="/pages/fluid-layout-demo">柔性布局（Fluid）</a>
       <a class="link" href="/pages/fluid-system-demo">Fluid System（折叠屏/车机）</a>
       <a class="link" href="/pages/semantic-primitives-demo">G-32 语义原语（B2）</a>
+      <a class="link" href="/pages/render-backend-demo">渲染后端可插拔（G-27）</a>
       <a class="link" href="/pages/devtools-open-api-demo">开放 API 演示（第三方面板）</a>
       <a class="link" href="/pages/builtin-components-demo">内置组件</a>
       <a class="link" href="/pages/i18n-demo">国际化</a>

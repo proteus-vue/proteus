@@ -36,7 +36,7 @@
     "bench:update": "tsx scripts/benchmark.ts --update",
     "gen:docs": "tsx scripts/gen-docs.ts",
     "test": "vitest run --exclude \"tests/e2e-*.test.ts\"",
-    "test:e2e:web": "npm run build:web && vitest run --no-file-parallelism tests/e2e-web.test.ts tests/e2e-web-keypaths.test.ts",
+    "test:e2e:web": "npm run build:web && vitest run --no-file-parallelism tests/e2e-web.test.ts tests/e2e-web-keypaths.test.ts tests/e2e-render-backend-demo.test.ts",
     "test:update": "vitest run -u --exclude \"tests/e2e-*.test.ts\""
   },
   "dependencies": {

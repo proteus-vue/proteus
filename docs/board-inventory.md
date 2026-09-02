@@ -50,7 +50,7 @@
 | `proteus-semantic-primitives-plan` | **G-24** | 🟡 **B1 已落地（决策 #329）** | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut/p-focus-trap/p-context-menu）→ `@proteus-vue/desktop` 包（32 包）——`v-p-*` 四指令 Pure logic + Web 接线；B2 系统集成四件套待续 |
 | `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
 | （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
-| `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
+| `proteus-render-backend-1-plan` | **G-27** | 🟡 **B1-B6 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native×3/Flutter widget 映射）+ **B6 混合渲染**（Texture Sharing + 区域级切后端 + DevTools 路由 trace）+ **可视化 demo 页** `render-backend-demo`（换 flag 切后端——M1 退出标准；E2E 实测 7 例） |
 | `proteus-render-backend-spi-plan` | **G-37** | 📋 规划（已入库） | ★**G-27 的可执行落地**：RenderBackend SPI 规范（18 方法接口 + 生命周期 + C-IR 消费契约 + 布局分工 + 手势桥 + 线程模型）+ Conformance 套件（42 测试 C-01~C-10）+ 5 步实现指南 + B1-B5 分批；铁律 G-37.1-6 + CMP023-028；★与既有 `@proteus-vue/render-backend` 实现（M1.4 B1/B2 已落地）互为印证 |
 | `proteus-native-backend-1-plan` | **G-28** | ⬜ 规划 | 原生能力 SPI + Top30 目录 + 权限自动生成 → 99% 业务零原生 |
 | `proteus-universal-backend-plan` | **G-30** | 📋 Draft | Platform=(R,C,J) 三元组 + Tier 1-4 + conformance；待 G-27/28 后启用 |
@@ -136,7 +136,7 @@
 | 资产 | 位置 | 归属 |
 |------|------|------|
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
-| **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native/flutter） | **G-27 🟡 M1.4 B1/B2/B4/B5** |
+| **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native×3/flutter/hybrid） | **G-27 🟡 B1-B6 全落地** |
 | **G-31 C-IR 语义化 + conformance** | `@proteus-vue/component-ir`（schema/validate/map/to-ir/conformance） | **G-31 🟡 B1-B5** |
 | **G-29 编译器可插拔后端（B1+B2）** | `@proteus-vue/compiler-backend`（spi/conformance/node）+ `packages/compiler-backend-rust`（cargo） | **G-29 🟡 B1 NodeBackend + B2 RustBackend（同一 CompilerIR——G-29.1 语义等价）** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
@@ -176,7 +176,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语 `@proteus-vue/desktop`（决策 #329）→ **G-29 B2 RustBackend（决策 #330）**；**待启**：G-24 B2 系统集成四件套（p-notify/p-permission/p-clipboard/p-deeplink）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
+- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语 `@proteus-vue/desktop`（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）**；**待启**：G-24 B2 系统集成四件套（p-notify/p-permission/p-clipboard/p-deeplink）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark
