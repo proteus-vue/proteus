@@ -192,7 +192,7 @@ L4 自定义             → 0.1%  → 仅兜底
 
 | 编号 | 原则 | 落地 |
 |------|------|------|
-| #1 | 统一语义 + 后端实现 | G-27 / G-28 / G-29 / G-30 |
+| #1 | 统一语义 + 后端实现（★与 positioning 原则 #10 同义） | G-27 / G-28 / G-29 / G-30 |
 | #2 | 语义优先于实现 | 一切 IR 先行 |
 | #3 | 接口与实现解耦 | SPI 模式 |
 | #4 | 验证先于运行 | conformance + 编译期约束 |
@@ -223,16 +223,18 @@ L4 自定义             → 0.1%  → 仅兜底
 ```
 PROTEUS-METHODOLOGY.md（本文，根目录哲学入口）
     ↑ 提炼自
-proteus-architecture/（规约层：原则 + 铁律）
+proteus-architecture/（规约层：原则 + 铁律——★M1.1 待生成）
     ↑ 落地于
-G-27 渲染后端可插拔
-G-28 原生能力可插拔
-G-29 编译器后端可插拔
-G-30 任意端接入
+G-27 渲染后端可插拔（docs/proteus-render-backend-1-plan/）
+G-28 原生能力可插拔（docs/proteus-native-backend-1-plan/）
+G-29 编译器后端可插拔（docs/proteus-compiler-backend-1-plan/）
+G-30 任意端接入（docs/proteus-universal-backend-plan/）
     ↑ 编排于
-proteus-roadmap/（M1/M2/M3）
+proteus-roadmap-2-plan/（M1/M2/M3 里程碑线）· docs/roadmap.md（v0.x 版本线）
+    ↑ 全景索引
+docs/board-inventory.md（六层分层 + 双路线 + 状态总表）
     ↑ 叙事出口
-proteus-positioning/（七杀手特性 + 对标矩阵）
+proteus-positioning-v3.md（七杀手特性 + 对标矩阵）
 ```
 
 ---
