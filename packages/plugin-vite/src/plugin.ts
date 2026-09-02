@@ -17,6 +17,7 @@ import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
 import { compileVueSfc } from '@proteus-vue/compiler'
+import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
@@ -286,6 +287,13 @@ export default function mpTransform(opts: PluginOptions): Plugin {
   /** 各文件编译警告汇总（buildEnd 打印摘要，反黑盒：警告可见、可统计） */
   const warningReport: Array<{ file: string; warnings: string[] }> = []
 
+  // ★G-29 编译器后端插拔（compiler-backend-1-plan 01 §5）：config.compiler.backend='rust' 或 env PROTEUS_COMPILER=rust
+  //   → 每文件 Node/Rust 双编译语义等价校验（G-29.1）——mismatch 构建红；Rust CLI 缺失 → 降级提示一次
+  const rustCompiler = process.env.PROTEUS_COMPILER === 'rust' || cfg.compiler?.backend === 'rust'
+  const rustCliBin = rustCompiler ? resolveRustCliBin(projectRoot) : null
+  let dualOk = 0
+  let dualSkipped = 0
+  let dualSkippedReason = ''
   return {
     name: 'vite-plugin-mp-transform',
     enforce: 'pre',
@@ -498,6 +506,18 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       }
       for (const { file, rel } of files) {
         const source = fs.readFileSync(file, 'utf-8')
+        // ★G-29：compiler=rust → 先跑 Node/Rust 双编译语义等价校验（fail fast——不等价不产出）
+        if (rustCompiler) {
+          const v = verifyDualCompilerEquivalence(source, { rustBin: rustCliBin, filename: file })
+          if (v.status === 'ok') {
+            dualOk++
+          } else if (v.status === 'skipped') {
+            dualSkipped++
+            if (!dualSkippedReason) dualSkippedReason = v.reason ?? ''
+          } else {
+            throw new Error(`[mp-transform] G-29.1 双编译语义不等价：${rel}\n  ${v.details.join('\n  ')}（${v.reason}）——产物未生成；config.compiler.backend 改回 'node' 可降级`)
+          }
+        }
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
         // ★build-plan M8：编译缓存（PROTEUS_NO_CACHE=1 关闭；debug 构建跳过——sourcemap/行号注入与缓存互斥）
         const cacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
@@ -598,6 +618,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         if (warnings.length) warningReport.push({ file: rel, warnings })
         console.log(`[mp-transform] ${rel} → wxml/js/wxss 已输出`)
+      }
+      // ★G-29 compiler=rust：双编译等价校验统计（mismatch 已在循环内抛红）
+      if (rustCompiler) {
+        if (dualOk) console.log(`[mp-transform] compiler=rust：${dualOk} 个文件 Node/Rust 双编译语义等价（G-29.1）✅`)
+        if (dualSkipped) console.warn(`[mp-transform] compiler=rust：${dualSkipped} 个文件跳过双编译校验（${dualSkippedReason || '未知'}）`)
       }
       // ★build-plan M8：缓存统计（PROTEUS_NO_CACHE=1 或 debug 时无统计）
       if (!process.env.PROTEUS_NO_CACHE && !isDebug) {

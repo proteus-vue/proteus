@@ -82,6 +82,12 @@ interface ProteusCompilerBackend {
 }
 ```
 
+> **✅ 落地注记（决策 #334）**：参考实现 `@proteus-vue/compiler-backend/src/g38.ts`（`createG38NodeBackend`）实现本接口全部 16 方法——
+> parse（@vue/compiler-sfc + compiler-dom 真解析，裸模板片段/SFC 双态、loc、诊断不抛）/ transform（→ IRModule.components =
+> component-ir ComponentIR，直接交 G-37）/ emit（code + hash）。**类型以 `G38` 前缀导出**（仓库 G-29 的 compiler-backend 已占用
+> `ProteusCompilerBackend`/`CompilerCapabilities` 命名——接口同形不同名）；跑法：
+> `node conformance-runner.js --backend ../../packages/compiler-backend/dist/index.js#createG38NodeBackend` → 42 项 FAIL=0（能力 SKIP 合规）。
+
 ### 2.2 三个可插拔点（关键洞察）
 
 **不是"整个编译器换掉"，而是每个阶段可独立换实现：**

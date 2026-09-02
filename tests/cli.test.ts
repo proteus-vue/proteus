@@ -33,6 +33,13 @@ describe('parseBuildArgs', () => {
     const args = parseBuildArgs(['x', '--rules', 'tests/fixtures/rules-override.json'])
     expect(args.rules?.customTags).toEqual({ 'demo-box': 'view' })
   })
+
+  it('★G-29 --compiler node|rust（缺省 node）；非法值报错', () => {
+    expect(parseBuildArgs([]).compiler).toBeUndefined()
+    expect(parseBuildArgs(['--compiler', 'rust']).compiler).toBe('rust')
+    expect(parseBuildArgs(['--compiler', 'node']).compiler).toBe('node')
+    expect(() => parseBuildArgs(['--compiler', 'wasm'])).toThrow(/--compiler 需为 node\/rust/)
+  })
 })
 
 describe('parseExplainArgs / parseRulesArgs', () => {

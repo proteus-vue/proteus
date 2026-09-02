@@ -37,6 +37,13 @@ export const proteusConfigSchema = {
         customTags: { type: 'object', additionalProperties: { type: 'string' } },
       },
     },
+    // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend 'node' | 'rust'（缺省 node）
+    compiler: {
+      type: 'object',
+      properties: {
+        backend: { enum: ['node', 'rust'] },
+      },
+    },
     setDataBridge: {
       type: 'object',
       properties: {

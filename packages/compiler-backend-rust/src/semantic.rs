@@ -8,6 +8,7 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
     match tag {
         // 布局（12）
         "p-box" => Some("layout.box"),
+        "p-view" => Some("layout.box"), // ★G-31 B4 别名（与 Node TAG_SEMANTIC_MAP 同步——p-box 角色）
         "p-inline" => Some("layout.inline"),
         "p-stack" => Some("layout.stack"),
         "p-grid" => Some("layout.grid"),
@@ -50,7 +51,6 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-drawer" => Some("shell.drawer"),
         "p-modal" => Some("shell.modal"),
         "p-toast" => Some("shell.toast"),
-        "p-split-panels" => Some("shell.split-panels"),
         "p-page" => Some("shell.page"),
         "p-segment" => Some("shell.segment"),
         "p-popover" => Some("shell.popover"),
@@ -66,8 +66,6 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-scan-qr" => Some("capability.scan-qr"),
         "p-pick-photo" => Some("capability.pick-photo"),
         "p-location" => Some("capability.location"),
-        "p-share" => Some("capability.share"),
-        "p-payment" => Some("capability.payment"),
         _ => None, // 未知 p- / 非 p- 标签（view/text/scroll-view——Layer 1 兼容层不产 C-IR）
     }
 }

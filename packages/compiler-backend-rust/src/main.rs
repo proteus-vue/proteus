@@ -13,27 +13,114 @@ use semantic::{
 use std::io::Read;
 use template::TmplElement;
 
-/// 提取 <template> 块内容（支持带属性的开标签 `<template lang="...">`；无 template → 空）
+/// 提取最外层 <template> 块内容（支持带属性的开标签 `<template lang="...">`；槽模板 `<template #x>` 不截断——深度感知；无 template → 空）
 fn extract_template(source: &str) -> Option<String> {
-    let open_at = source.find("<template")?;
-    let after_open = &source[open_at..];
-    // 校验 <template 后紧跟的是 '>' 或空白（真标签——防 `<template-foo` 误匹配）
-    if !after_open.starts_with("<template") {
-        return None;
+    let bytes = source.as_bytes();
+    // 1) 找第一个真正的 <template 开标签（<template 后须是 '>' 或空白——防 `<template-foo` 误匹配；跳过注释）
+    let mut i = 0usize;
+    let mut open_at: Option<usize> = None;
+    while i < source.len() {
+        if source[i..].starts_with("<!--") {
+            match source[i..].find("-->") {
+                Some(e) => i += e + 3,
+                None => break,
+            }
+            continue;
+        }
+        match source[i..].find("<template") {
+            Some(rel) => {
+                let abs = i + rel;
+                let after = &source[abs + "<template".len()..];
+                let first = after.chars().next();
+                let ok_tag = first == Some('>')
+                    || first == Some(' ')
+                    || first == Some('\t')
+                    || first == Some('\n')
+                    || first == Some('\r');
+                if ok_tag {
+                    open_at = Some(abs);
+                    break;
+                }
+                i = abs + 1;
+            }
+            None => break,
+        }
     }
-    let after_tpl = after_open.get(9..).unwrap_or("");
-    let first = after_tpl.chars().next();
-    let ok_tag = first == Some('>')
-        || first == Some(' ')
-        || first == Some('\t')
-        || first == Some('\n')
-        || first == Some('\r');
-    if !ok_tag {
-        return None;
+    let open_at = open_at?;
+    // 2) 开标签结束 '>'（引号感知——属性值可含 '>'）
+    let mut quote: Option<u8> = None;
+    let mut j = open_at;
+    let open_end = loop {
+        if j >= source.len() {
+            return None;
+        }
+        let b = bytes[j];
+        match quote {
+            Some(q) => {
+                if b == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if b == b'"' || b == b'\'' {
+                    quote = Some(b);
+                } else if b == b'>' {
+                    break j;
+                }
+            }
+        }
+        j += 1;
+    };
+    // 3) 深度感知找外层 </template>：槽模板 <template #x>…</template> 开闭自抵消；depth 归 0 即外层闭合
+    let mut depth = 0usize;
+    let mut k = open_end + 1;
+    while k < source.len() {
+        if source[k..].starts_with("<!--") {
+            match source[k..].find("-->") {
+                Some(e) => {
+                    k += e + 3;
+                    continue;
+                }
+                None => break,
+            }
+        }
+        let is_close = source[k..].starts_with("</template");
+        let is_open = !is_close && source[k..].starts_with("<template");
+        if is_close || is_open {
+            let marker_len = if is_close {
+                "</template".len()
+            } else {
+                "<template".len()
+            };
+            let after_marker = &source[k + marker_len..];
+            let next = after_marker.chars().next();
+            let ok_tag = next == Some('>')
+                || next == Some(' ')
+                || next == Some('\t')
+                || next == Some('\n')
+                || next == Some('\r');
+            if ok_tag {
+                if is_close {
+                    if depth == 0 {
+                        return Some(source[open_end + 1..k].to_string());
+                    }
+                    depth -= 1;
+                } else {
+                    depth += 1;
+                }
+                k += marker_len;
+                continue;
+            }
+        }
+        // 按字符推进（字节 +1 会切进多字节 UTF-8 字符）
+        let ch_len = source[k..]
+            .chars()
+            .next()
+            .map(|c| c.len_utf8())
+            .unwrap_or(1);
+        k += ch_len;
     }
-    let gt = source[open_at..].find('>')? + open_at;
-    let close = source[gt + 1..].find("</template>")? + gt + 1;
-    Some(source[gt + 1..close].to_string())
+    None
 }
 
 /// 遍历元素树收集 handlers（@click="fn"）与 models（v-model="x"）——与 Node elementToRenderNode 的 acc 对齐

@@ -20,6 +20,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   subPackages: 'router',
   customRoute: 'router',
   rules: 'compiler',
+  compiler: 'compiler', // ★G-29 编译器后端插拔（§5 config.compiler.backend）
   setDataBridge: 'build',
   style: 'compiler',
   budget: 'build',

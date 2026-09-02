@@ -60,25 +60,60 @@ fn position_at(src: &str, idx: usize) -> (usize, usize) {
     (line, col)
 }
 
+/// 找标签结束 '>'（引号感知——属性值可含 '<'/'<' 字符，如 source="<b>加粗</b>"）
+fn find_tag_end(rest: &str) -> Option<usize> {
+    let bytes = rest.as_bytes();
+    let mut i = 0usize;
+    let mut quote: Option<u8> = None;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match quote {
+            Some(q) => {
+                if b == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if b == b'"' || b == b'\'' {
+                    quote = Some(b);
+                } else if b == b'>' {
+                    return Some(i);
+                }
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
 /// 扫描 template 源码 → 根元素（含嵌套子树；DOM 友好：跳过注释/文本；自闭合根元素正确返回）
+/// ★Node 单根语义对齐（G-29.1）：Node 以编译产物的「第一个顶层元素」为 render 根、后续顶层兄弟
+///   （v-if/v-else 的 else 分支等）丢弃——本扫描器同样只保留首根，后续顶层元素整个子树丢弃（discard_depth）
 pub fn scan_template(template: &str) -> Option<TmplElement> {
     let mut stack: Vec<TmplElement> = Vec::new();
-    // 首根候选：自闭合/单根元素 pop 后栈空时记下（避免最终 stack.pop() 返回 None）
+    // 首根候选：顶层元素闭合/自闭合时记下（v-if/v-else 多顶层 → 只取第一个，与 Node flatten + 单根一致）
     let mut first_root: Option<TmplElement> = None;
+    // 丢弃计数：second+ 顶层元素子树（其内部开闭标签配对计数；归零后恢复正常扫描）
+    let mut discard_depth = 0usize;
     let mut rest = template;
     let mut offset = 0usize;
 
-    // 栈空时 push 的元素即根候选
+    // 栈空时 push 的元素即根候选（已有首根 → 丢弃——Node 单根语义）
     fn attach_or_root(
         el: TmplElement,
         stack: &mut Vec<TmplElement>,
         first_root: &mut Option<TmplElement>,
-    ) {
+    ) -> bool {
         if stack.is_empty() {
-            *first_root = Some(el);
+            if first_root.is_none() {
+                *first_root = Some(el);
+            } else {
+                return false; // 第二顶层兄弟 → 丢弃
+            }
         } else if let Some(parent) = stack.last_mut() {
             parent.children.push(el);
         }
+        true
     }
 
     while !rest.is_empty() {
@@ -102,23 +137,32 @@ pub fn scan_template(template: &str) -> Option<TmplElement> {
             continue;
         }
         if after.starts_with("</") {
-            // 闭合标签：弹栈（栈底兜底——多余闭合忽略）
+            // 闭合标签：丢弃计数内 → 只配对不建树；否则弹栈（栈底=顶层根闭合 → 定稿首根）
             let close_gt = match after.find('>') {
                 Some(i) => i,
                 None => break,
             };
             rest = &rest[lt + close_gt + 1..];
             offset += lt + close_gt + 1;
-            if stack.len() > 1 {
+            if discard_depth > 0 {
+                discard_depth -= 1;
+            } else if stack.len() > 1 {
                 let popped = stack.pop().unwrap();
                 if let Some(parent) = stack.last_mut() {
                     parent.children.push(popped);
                 }
+            } else if stack.len() == 1 {
+                // 顶层根闭合：定稿首根（不留栈——后续顶层兄弟走丢弃）
+                let popped = stack.pop().unwrap();
+                if first_root.is_none() {
+                    first_root = Some(popped);
+                }
             }
+            // 多余闭合（栈空）忽略
             continue;
         }
-        // 开始标签 <tag ...>
-        let open_gt = match after.find('>') {
+        // 开始标签 <tag ...>（结束 '>' 引号感知——属性值可含 '<'/>'）
+        let open_gt = match find_tag_end(after) {
             Some(i) => i,
             None => break,
         };
@@ -144,23 +188,31 @@ pub fn scan_template(template: &str) -> Option<TmplElement> {
             line,
             column,
         };
-        // 自闭合：立即挂父（栈空则记首根）——不留在栈上；否则入栈等待子元素
-        if self_closing {
+        if discard_depth > 0 {
+            // 丢弃子树内部：继续配对计数（不建树）
+            if !self_closing {
+                discard_depth += 1;
+            }
+        } else if self_closing {
+            // 自闭合：立即挂父（栈空则记首根）——不留在栈上；第二顶层 → 丢弃
             attach_or_root(element, &mut stack, &mut first_root);
+        } else if stack.is_empty() && first_root.is_some() {
+            // 第二+ 顶层非自闭合元素 → 整体丢弃（Node 单根语义：v-else 分支不产树）
+            discard_depth = 1;
         } else {
             stack.push(element);
         }
         rest = &rest[lt + open_gt + 1..];
         offset += lt + open_gt + 1;
     }
-    // 关闭剩余栈（栈底即根）
+    // 关闭剩余栈（栈底即根——根未显式闭合到文件尾）
     while stack.len() > 1 {
         let popped = stack.pop().unwrap();
         if let Some(parent) = stack.last_mut() {
             parent.children.push(popped);
         }
     }
-    // 返回首根：常规栈底 / 自闭合根（first_root）
+    // 返回首根：常规栈底 / 自闭合/顶层闭合定稿（first_root）
     stack.pop().or(first_root)
 }
 

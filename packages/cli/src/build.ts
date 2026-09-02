@@ -2,10 +2,20 @@
 // proteus build —— 编译引擎独立可用（脱离 Vite）：扫描目录 .vue → 小程序四件套中的三件（wxml/js/wxss）
 // 说明：.json（page.json/app.json）由路由生成器负责（框架内 scripts/gen-routes.ts），CLI 专注页面编译
 // ★cli-plus M2：--target web|skyline|all 工程构建（复用项目 Vite 管线，spawn 计划纯函数）
+// ★G-29 阶段 A：--compiler rust → 每页 Node/Rust 双编译语义等价校验（verifyDualCompilerEquivalence）——不一致构建红
 import fs from 'node:fs'
 import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
+import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
+
+/** ★G-29：Rust CLI 定位缓存（按 root 键控——buildDir 全目录共享一次 resolve，避免逐文件 require.resolve） */
+const rustBinCache = new Map<string, string | null>()
+
+function rustBin(projectRoot: string): string | null {
+  if (!rustBinCache.has(projectRoot)) rustBinCache.set(projectRoot, resolveRustCliBin(projectRoot))
+  return rustBinCache.get(projectRoot) ?? null
+}
 
 export interface BuildOptions {
   outDir: string
@@ -14,12 +24,18 @@ export interface BuildOptions {
   /** 调试构建：行号注释 + 决策 trace 落盘 */
   debug: boolean
   rules?: TransformRuleOverrides
+  /** ★G-29 编译器后端插拔：'rust' → 每页 Node/Rust 双编译等价校验（G-29.1）——不一致构建红 */
+  compiler?: 'node' | 'rust'
+  /** Rust CLI 定位基准根（缺省 cwd——测试注入） */
+  root?: string
 }
 
 export interface BuildResult {
   files: string[]
   warnings: number
   traceFiles: string[]
+  /** ★G-29 rust 校验统计（compiler=rust 时） */
+  dualCheck?: { ok: number; skipped: number; skippedReason?: string }
 }
 
 /** ★cli-plus M2：target → 项目构建脚本名（模板约定，create-proteus 生成的标准脚本） */
@@ -68,6 +84,25 @@ export function buildDir(inputDir: string, opts: BuildOptions): BuildResult {
   if (!files.length) throw new Error(`目录下没有 .vue 文件：${inputDir}`)
   let warnings = 0
   const traceFiles: string[] = []
+  const root = opts.root ?? process.cwd()
+  // ★G-29：compiler=rust → 每页先跑 Node/Rust 双编译语义等价校验（fail fast——不一致不产出）
+  const useRust = opts.compiler === 'rust'
+  const rustBinPath = useRust ? rustBin(root) : null
+  const dualCheck: { ok: number; skipped: number; skippedReason?: string } | undefined = useRust ? { ok: 0, skipped: 0 } : undefined
+  for (const file of files) {
+    if (useRust) {
+      const source = fs.readFileSync(file, 'utf-8')
+      const v = verifyDualCompilerEquivalence(source, { rustBin: rustBinPath, filename: file })
+      if (v.status === 'ok') {
+        dualCheck!.ok++
+      } else if (v.status === 'skipped') {
+        dualCheck!.skipped++
+        dualCheck!.skippedReason = v.reason
+      } else {
+        throw new Error(`[proteus] G-29.1 双编译语义不等价：${path.relative(root, file)}\n  ${v.details.join('\n  ')}（${v.reason}）——产物未生成；如需 Node 引擎请用 --compiler node`)
+      }
+    }
+  }
   for (const file of files) {
     const rel = path.relative(inputDir, file).replace(/\\/g, '/').replace(/\.vue$/, '')
     const source = fs.readFileSync(file, 'utf-8')
@@ -98,5 +133,5 @@ export function buildDir(inputDir: string, opts: BuildOptions): BuildResult {
     }
     warnings += result.warnings.length
   }
-  return { files, warnings, traceFiles }
+  return { files, warnings, traceFiles, dualCheck }
 }

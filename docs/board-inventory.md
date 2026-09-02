@@ -63,8 +63,8 @@
 |------|------|------|------|
 | `proteus-compiler-plan` | G-02 | ✅ | 编译管线 + 规则注册表 + explain/trace + 自校验 |
 | `proteus-compiler-plugin-plan` | **G-21** | ✅ | Compiler Plugin API（IR 可编程访问） |
-| `proteus-compiler-backend-1-plan` | **G-29** | 🟡 **B1+B2 已落地** | ★`@proteus-vue/compiler-backend` 包：CompilerIR 契约 + conformance（CMP002/CMP004 + ★G-31.1 语义链接）+ NodeBackend；**B2 RustBackend**：`packages/compiler-backend-rust`（cargo crate + @proteus-vue/compiler-backend-rust bin 壳）——proteus-cc-rust CLI → 同一 CompilerIR JSON（G-29.1 Node/Rust 语义等价 Golden，决策 #330）；B3 WASM 待续 |
-| `proteus-compiler-backend-spi-plan` | **G-38** | 📋 规划（已入库） | ★**编译器的插头标准（与 G-37 RenderBackend SPI 同形设计）**：ProteusCompilerBackend SPI（parse/transform/emit 三阶段 + IncrementalSession 增量 + FallbackBackend 降级 + getCacheKey/getArtifactHash）+ Conformance 套件（42 测试 C-01~C-10）+ Node/Rust/WASM 实现指南 + `conformance-runner.js` + verify.sh/pack.sh 自检；铁律 G-38.1-6 + CMP029-034；与既有 `@proteus-vue/compiler-backend`（G-29 B1）互为印证；B3 RustBackend、B4 WASM 浏览器内编译待续 |
+| `proteus-compiler-backend-1-plan` | **G-29** | 🟡 **B1+B2 已落地** | ★`@proteus-vue/compiler-backend` 包：CompilerIR 契约 + conformance（CMP002/CMP004 + ★G-31.1 语义链接）+ NodeBackend；**B2 RustBackend**：`packages/compiler-backend-rust`（cargo crate + @proteus-vue/compiler-backend-rust bin 壳）——proteus-cc-rust CLI → 同一 CompilerIR JSON（G-29.1 Node/Rust 语义等价 Golden，决策 #330）+ **examples/组件双端等价门禁 81 用例**（决策 #332）+ **编译器插拔消费点**（决策 #333：`config.compiler.backend: 'node'\|'rust'` + `proteus build --compiler rust` + vite 构建内双编译校验——**proteus.config 一个 flag 切后端（§5 最终形态最小闭环）**）；B3 WASM 待续 |
+| `proteus-compiler-backend-spi-plan` | **G-38** | 🟡 **B1 + B2 全落地（Node 侧）** | ★**编译器的插头标准（与 G-37 RenderBackend SPI 同形设计）**：ProteusCompilerBackend SPI（parse/transform/emit 三阶段 + IncrementalSession 增量 + FallbackBackend 降级 + getCacheKey/getArtifactHash）+ Conformance 套件（42 测试 C-01~C-10）+ Node/Rust/WASM 实现指南 + `conformance-runner.js`（补 `--backend <spec>` 外部后端加载）+ verify.sh/pack.sh 自检；铁律 G-38.1-6 + CMP029-034；**B1 接口冻结 + B2 全落地（决策 #334/#335）**：`@proteus-vue/compiler-backend/src/g38.ts`（createG38NodeBackend 三阶段 16 方法真实现）+ `g38-fallback.ts`（createG38FallbackBackend——rust 不可用自动降级 node + onFallback 可观测）+ `g38-conformance.ts`（套件权威 TS 版）+ **`proteus conformance` CLI**（默认 Node 参考 42 项 FAIL=0（capability SKIP）；FAIL>0 exit 1）；Rust native（B3，oxc/swc + napi-rs）、真 IncrementalSession、WASM（B4）待续 |
 | `proteus-host-runtime-plan` | **G-39** | 📋 规划（已入库） | ★**宿主运行时（Host Runtime）SPI 与职责边界**：L0-L4 五层「唯一拥有者」架构（L4 进程/线程/事件循环/JS 引擎/原生桥）+ ProteusHostRuntime 接口（bootstrap/suspend/resume/destroy + createWorker/runOnThread + createEngine + invokeNative/registerNativeHandler + enqueue/nextTick，共 15+3，与 G-37/G-38 同形）+ 职责矩阵（跨层调用机器校验）+ Conformance 42（C-01~C-10）+ `runtime-reference.js`（Web/Terminal 参考实现）+ 自检工具链；铁律 G-39.1-6 + CMP035-043；★编号避让：原稿 G-36/G-34/G-35 已实现 plan 占用（决策 #314） |
 | `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod（★v1.0 `proteus-types-plan` 已并入本 v2.0，决策 #313） |
 | `proteus-build-plan` | G-04 | ✅ | plugin-vite（mp 编译 + gen-routes + 共享模块/分包）+ 体积门禁 |
@@ -138,7 +138,7 @@
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
 | **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native×3/flutter/hybrid） | **G-27 🟡 B1-B6 全落地** |
 | **G-31 C-IR 语义化 + conformance** | `@proteus-vue/component-ir`（schema/validate/map/to-ir/conformance） | **G-31 🟡 B1-B5** |
-| **G-29 编译器可插拔后端（B1+B2）** | `@proteus-vue/compiler-backend`（spi/conformance/node）+ `packages/compiler-backend-rust`（cargo） | **G-29 🟡 B1 NodeBackend + B2 RustBackend（同一 CompilerIR——G-29.1 语义等价）** |
+| **G-29 编译器可插拔后端（B1+B2）** | `@proteus-vue/compiler-backend`（spi/conformance/node/dual-check）+ `packages/compiler-backend-rust`（cargo）+ `@proteus-vue/plugin-vite`·`@proteus-vue/cli`（消费接线） | **G-29 🟡 B1 NodeBackend + B2 RustBackend（同一 CompilerIR——G-29.1 语义等价；examples/组件双端门禁 81 + config.compiler.backend flag 消费点 10，决策 #332/#333）** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
 | fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
 | 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |
@@ -176,7 +176,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语 `@proteus-vue/desktop`（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）**；**待启**：G-24 B2 系统集成四件套（p-notify/p-permission/p-clipboard/p-deeplink）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
+- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语 `@proteus-vue/desktop`（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）** → **G-29.1 examples/组件级双端跑通门禁 81 用例（决策 #332）** → **G-29 编译器插拔消费点（决策 #333）** → **G-38 B1/B2-Node（决策 #334：三阶段参考实现 + runner --backend 42 项 FAIL=0）** → **G-38 B2 尾（决策 #335：FallbackBackend 降级 + `proteus conformance` CLI + 套件 TS 权威版）**；**待启**：G-24 B2 系统集成四件套（p-notify/p-permission/p-clipboard/p-deeplink）→ G-29 B3（WASM Playground）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark

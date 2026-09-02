@@ -123,6 +123,11 @@ export default defineConfig({
 
 业务零感知，一个 flag 切换。
 
+> **✅ 阶段 A 已落地（决策 #333）**：`config.compiler.backend: 'node' | 'rust'` + `proteus build --compiler rust` + env `PROTEUS_COMPILER=rust`
+> 均已接线——切 'rust' 时构建（proteus build / build:mp）对每个 .vue 跑 **Node/Rust 双编译语义等价校验**（G-29.1，不一致构建红）。
+> 阶段定位：产物（wxml/js/wxss）仍由 Node 引擎生成，Rust 当前作为语义等价校验源；**产物级 Rust codegen（同一 IR → 同一输出）
+> 属 B3/B4 路线**。
+
 ---
 
 ## 6. 对比：编译器 SPI vs Rust 重写

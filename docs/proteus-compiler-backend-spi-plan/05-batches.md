@@ -14,9 +14,9 @@
 | `IncrementalSession` 接口 | @proteus-vue/core |
 
 **DoD**：
-- [ ] 接口在 `@proteus-vue/core` 导出
-- [ ] IR schema 有 JSON Schema + TS 类型双份
-- [ ] 与 G-37 `ComponentIRNode` 对接验证（下游可消费）
+- [x] 接口在 @proteus-vue/core 导出 —— **✅ 决策 #334：`packages/compiler-backend/src/g38.ts` 导出 G38* 类型（G-29 已占用 ProteusCompilerBackend 名——G38 前缀同形，见 01 §2.1 注记）**
+- [ ] IR schema 有 JSON Schema + TS 类型双份 —— TS 类型已有（G38ProgramIR/G38IRModule/G38CompiledArtifact…）；JSON Schema 待补
+- [x] 与 G-37 `ComponentIRNode` 对接验证（下游可消费）—— **✅ IRModule.components = component-ir ComponentIR（tag/semantic/props/children——G-31 C-IR 同构，render-backend/component-ir 消费同款）**
 - [ ] 架构评审通过（原则 #13.5）
 
 ## B2 — Conformance 测试套件 + FallbackBackend（M1）
@@ -32,10 +32,10 @@
 | `FallbackBackend` | @proteus-vue/core |
 
 **DoD**：
-- [ ] `TerminalCompilerBackend` 跑通 42/42（或仅 capability SKIP）
-- [ ] `NodeCompilerBackend` 跑通 42/42
-- [ ] Fallback：Rust 不可用 → Node 自动降级，日志可观测
-- [ ] CI 集成：`proteus conformance` 失败 → PR 阻断
+- [x] `TerminalCompilerBackend` 跑通 42/42（或仅 capability SKIP）—— **✅ runner 内置 Terminal mock 照常（无 --backend 时）；仓库内套件 createG38TerminalBackend FAIL=0（tests/compiler-backend-g38-b2.test.ts）**
+- [x] `NodeCompilerBackend` 跑通 42/42 —— **✅ 决策 #334：runner 补 `--backend <spec>` 外部后端加载；真实 Node 参考实现（`createG38NodeBackend`）实测 42 项 FAIL=0（incremental/sourceMap 等能力声明 SKIP——同 Terminal 规则）**
+- [x] Fallback：Rust 不可用 → Node 自动降级，日志可观测 —— **✅ 决策 #335：`createG38FallbackBackend`（01 §6 selectCompilerBackend 真实现：preferred 可用不降级 / 不可用或 loader 抛错 → node + fallback 记录 + onFallback 事件可观测，C-07-01/02）；`proteus conformance --demo` 可见降级演示**
+- [x] CI 集成：`proteus conformance` 失败 → PR 阻断 —— **✅ 决策 #335：`proteus conformance [--backend <spec>] [--only <C-xx>] [--demo]` CLI（默认 G-38 Node 参考 42 项 PASS=32 SKIP=10 FAIL=0；FAIL>0 → exit 1）——套件权威 TS 版在 `@proteus-vue/compiler-backend/src/g38-conformance.ts`（docs/conformance-runner.js 为自包含演示脚本；C-09-02 SKIP 注记：Node↔Rust 语义等价由 G-29.1 examples 门禁 81 用例覆盖）**
 
 ## B3 — Rust 后端（性能标杆，M2）
 

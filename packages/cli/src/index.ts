@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild } from './build'
+import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
@@ -71,8 +72,14 @@ async function main(): Promise<void> {
         rpxRatio: args.rpxRatio,
         debug: args.debug,
         rules: args.rules,
+        compiler: args.compiler,
       })
       console.log(`[proteus] build：${result.files.length} 个页面 → ${args.outDir}`)
+      // ★G-29 编译器后端插拔：rust 模式的双编译校验统计（skipped → 降级提示；mismatch 已在 buildDir 抛红）
+      if (args.compiler === 'rust' && result.dualCheck) {
+        if (result.dualCheck.ok) console.log(`[proteus] compiler=rust：${result.dualCheck.ok} 页 Node/Rust 双编译语义等价（G-29.1）✅`)
+        if (result.dualCheck.skipped) console.warn(`[proteus] compiler=rust：${result.dualCheck.skipped} 页跳过双编译校验（${result.dualCheck.skippedReason ?? '未知'}）`)
+      }
       if (args.debug) console.log(`[proteus] 决策 trace 已落盘：${result.traceFiles.length} 个（.transform-debug/）`)
       if (result.warnings) console.warn(`[proteus] ⚠ ${result.warnings} 条编译警告（详见各文件，--debug 可看决策链）`)
       break
@@ -435,6 +442,26 @@ async function main(): Promise<void> {
         console.log('下一步：proteus app-config:check app.config.ts 校验 → 编辑 env/api/features 后接入运行时')
       } catch (e) {
         console.error(`[proteus-app-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'conformance': {
+      // ★G-38 B2 尾：42 项 conformance（C-01~C-10）——默认 G-38 Node 参考；--backend 外部后端；--demo Terminal+Fallback 演示
+      const args = parseConformanceArgs(rest.filter((a) => a !== '--demo'))
+      try {
+        const demo = rest.includes('--demo')
+        if (demo) {
+          const { text, ok } = await runConformanceDemo()
+          console.log(text)
+          if (!ok) process.exitCode = 1
+          break
+        }
+        const { text, ok } = await runConformance(args)
+        console.log(text)
+        if (!ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-conformance] ${(e as Error).message}`)
         process.exitCode = 1
       }
       break

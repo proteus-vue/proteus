@@ -7,11 +7,15 @@
  *   node conformance-runner.js                 # 跑全部
  *   node conformance-runner.js --only C-06     # 仅某组
  *   node conformance-runner.js --report out.json
+ *   node conformance-runner.js --backend ../packages/compiler-backend/dist/index.js#createG38NodeBackend
+ *                                            # ★G-38 B2：加载外部真实后端跑 42 项（决策 #334）
  *
  * ★入库整合（决策 #312）：原稿为 CommonJS（require），仓库根 package.json 为
  *   "type": "module" → 改为 ESM import。
  */
 import fs from 'fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /* ============ IR 类型（对应 IRModule 标准） ============ */
 function hash(s) {
@@ -198,7 +202,7 @@ C08('03', b => { if (b.id !== 'wasm') return 'SKIP'; });
 
 /* ---- C-09 确定性 ---- */
 C09('01', b => { const m = b.transform(b.parse({ content: '<p-grid></p-grid>' })); const h1 = b.getArtifactHash(b.emit(m)); const h2 = b.getArtifactHash(b.emit(m)); if (h1 !== h2) throw new Error(`not deterministic: ${h1} != ${h2}`); });
-C09('02', async b => { if (b.id !== 'node') return 'SKIP'; const RustStub = class extends NodeCompilerBackend { constructor(){ super(); this.id='rust'; } }; const rust = new RustStub(); const ir1 = b.transform(b.parse({ content: '<p-grid></p-grid>' })); const ir2 = rust.transform(rust.parse({ content: '<p-grid></p-grid>' })); if (JSON.stringify(ir1) !== JSON.stringify(ir2)) throw new Error('Node≠Rust IR'); });
+C09('02', async b => { if (b.id !== 'node' || hasExternalBackend()) return 'SKIP'; /* 外部真实后端与 Rust 语义等价由 G-29.1 examples 门禁覆盖（本项仅演示内置 mock 的 Node↔Rust 对比） */ const RustStub = class extends NodeCompilerBackend { constructor(){ super(); this.id='rust'; } }; const rust = new RustStub(); const ir1 = b.transform(b.parse({ content: '<p-grid></p-grid>' })); const ir2 = rust.transform(rust.parse({ content: '<p-grid></p-grid>' })); if (JSON.stringify(ir1) !== JSON.stringify(ir2)) throw new Error('Node≠Rust IR'); });
 
 /* ---- C-10 可观测性 ---- */
 C10('01', b => { const d = b.reportDiagnostics({}); if (!Array.isArray(d)) throw new Error('not array'); });
@@ -215,6 +219,10 @@ function selectCompilerBackend(preferred) {
 }
 
 /* ============ 执行 ============ */
+/** ★外部真实后端（--backend <spec>）模式标记：C-09-02 跳过（Node↔Rust 语义等价由 G-29.1 真实门禁覆盖） */
+let externalMode = false;
+function hasExternalBackend() { return externalMode; }
+
 async function runBackend(name, backend) {
   const results = [];
   for (const t of tests) {
@@ -232,11 +240,23 @@ async function runBackend(name, backend) {
 (async () => {
   const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
   const reportPath = process.argv.includes('--report') ? process.argv[process.argv.indexOf('--report') + 1] : null;
+  // ★G-38 B2：--backend <spec> 加载外部真实后端跑 42 项（spec = 模块路径[#具名导出]；default/具名导出须为 async/同步工厂或后端实例）
+  const extSpecIdx = process.argv.indexOf('--backend');
+  const extSpec = extSpecIdx >= 0 ? process.argv[extSpecIdx + 1] : null;
 
   const backends = [
     ['Terminal', new TerminalCompilerBackend()],
     ['Node', new NodeCompilerBackend()],
   ];
+  if (extSpec) {
+    const [modPath, exportName] = extSpec.split('#');
+    const mod = await import(pathToFileURL(path.resolve(modPath)).href);
+    const factory = exportName ? mod[exportName] : (mod.default ?? mod.createBackend);
+    if (typeof factory !== 'function') throw new Error(`--backend ${extSpec}：未找到后端工厂（需 default 或 #具名导出返回实例）`);
+    const ext = await factory();
+    backends.push([`external:${ext.id}`, ext]);
+    externalMode = true;
+  }
 
   let totalPass = 0, totalFail = 0, totalSkip = 0;
   const all = [];

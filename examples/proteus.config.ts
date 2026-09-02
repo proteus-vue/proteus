@@ -5,6 +5,12 @@ import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 const config: ProteusConfig = {
   platform: 'mp-weixin',
   skyline: true,
+  // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend: 'node' | 'rust'（缺省 node 零开销）
+  //   改 'rust' → 每次 build:mp 对每个 .vue 跑 Node/Rust 双编译语义等价校验（G-29.1）——不一致构建红
+  //   （等价 CLI：proteus build --compiler rust；或临时 env：PROTEUS_COMPILER=rust npm run build:mp）
+  compiler: {
+    backend: 'node',
+  },
   appid: 'wx33bc04a52024def7',
   pagesDir: 'pages',
   routesOutput: 'router/auto-routes.ts',

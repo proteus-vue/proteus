@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/compiler --external:@proteus-vue/router --external:esbuild --external:sass --external:vite --external:ws"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@proteus-vue/compiler-backend --external:@proteus-vue/compiler --external:@proteus-vue/router --external:esbuild --external:sass --external:vite --external:ws"
   },
   "dependencies": {
     "@proteus-vue/compiler": "0.3.0-beta.0",
@@ -29,7 +29,8 @@
     "@proteus-vue/types": "0.1.0",
     "esbuild": "^0.28.2",
     "sass": "^1.103.1",
-    "ws": "^8.0.0"
+    "ws": "^8.0.0",
+    "@proteus-vue/compiler-backend": "0.1.0"
   },
   "peerDependencies": {
     "vite": "^5.0.0"

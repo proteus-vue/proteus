@@ -4,9 +4,18 @@
 import type { TransformRuleOverrides } from './compiler-types'
 import type { RouteMeta } from './router-types'
 
+/** ★G-29 编译器后端选择（compiler-backend-1-plan §5「切换方式」）：'node' 默认；'rust' → 构建内双编译语义等价校验 */
+export type CompilerBackend = 'node' | 'rust'
+
 export interface ProteusConfig {
   /** 目标平台 */
   platform: 'mp-weixin' | 'web'
+  /** ★G-29 编译器后端插拔：backend 选 'rust' 时，构建（proteus build / build:mp）对每个 .vue 跑 Node/Rust
+   *  双编译语义等价校验（G-29.1）——不一致构建红；产物仍由 Node 引擎生成（阶段定位，产物级 Rust codegen 后续批次）
+   *  缺省 'node'（不校验——零开销）；CLI 可用 `proteus build --compiler rust` 临时覆盖 */
+  compiler?: {
+    backend?: CompilerBackend
+  }
   /** 是否启用 Skyline 渲染（仅 mp-weixin 生效） */
   skyline: boolean
   /** ★Skyline 布局对齐（2026-08 真机实测：Skyline 节点默认 flex 布局——switch/slider/icon 等表单元素被 stretch 占满一行且居中，

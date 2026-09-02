@@ -18,6 +18,8 @@ export interface BuildArgs {
   rules?: TransformRuleOverrides
   /** ★cli-plus M2：工程构建目标（--target web|skyline|all；缺省 = 独立编译） */
   target?: 'web' | 'skyline' | 'all'
+  /** ★G-29 编译器后端插拔：--compiler node|rust（缺省 node；rust → 双编译语义等价校验） */
+  compiler?: 'node' | 'rust'
 }
 
 export function parseBuildArgs(argv: string[]): BuildArgs {
@@ -25,7 +27,11 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
   let i = 0
   while (i < argv.length) {
     const a = argv[i]
-    if (a === '--out' || a === '-o') {
+    if (a === '--compiler') {
+      const c = argv[++i]
+      if (c !== 'node' && c !== 'rust') throw new Error(`--compiler 需为 node/rust（${c ?? '空'}）`)
+      args.compiler = c
+    } else if (a === '--out' || a === '-o') {
       args.outDir = argv[++i]
       if (args.outDir == null) throw new Error('--out 需要目录参数')
     } else if (a === '--debug') {
@@ -44,7 +50,7 @@ export function parseBuildArgs(argv: string[]): BuildArgs {
       if (!file) throw new Error('--rules 需要 JSON 文件路径')
       args.rules = readRulesJson(file)
     } else if (a.startsWith('-')) {
-      throw new Error(`未知选项：${a}（可用 --out/-o、--debug、--no-px2rpx、--rpx-ratio、--rules）`)
+      throw new Error(`未知选项：${a}（可用 --out/-o、--debug、--no-px2rpx、--rpx-ratio、--rules、--compiler、--target）`)
     } else if (!args.inputDir || args.inputDir === '.') {
       // 第一个位置参数 = 输入目录
       args.inputDir = a
@@ -346,8 +352,8 @@ export const HELP_GROUPS: HelpGroup[] = [
     title: '构建与开发',
     entries: [
       {
-        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--target <web|skyline|all>]',
-        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译',
+        usage: 'proteus build <dir> [--out <dir>] [--debug] [--no-px2rpx] [--rpx-ratio <n>] [--rules <json>] [--compiler <node|rust>] [--target <web|skyline|all>]',
+        desc: '扫描 <dir> 下所有 .vue，编译为小程序四件套（.wxml / .js / .wxss）到 <out>\n      --debug    产物注入源码行号注释 + 决策 trace 落盘（.transform-debug/）\n      --rules    JSON 规则覆盖文件（disabled / mapping / customTags）\n      --compiler 编译器后端（G-29）：node（缺省）/ rust（每页 Node/Rust 双编译语义等价校验，G-29.1）\n      --target   工程构建（G-33 M2）：spawn 项目 build:web / build:mp 脚本（复用 Vite 管线）；缺省 = 独立编译',
       },
       {
         usage: 'proteus dev [--target <web|skyline>]',
@@ -361,6 +367,10 @@ export const HELP_GROUPS: HelpGroup[] = [
       {
         usage: 'proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]',
         desc: '★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合\n      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）',
+      },
+      {
+        usage: 'proteus conformance [--backend <spec>] [--only <C-xx>] [--demo]',
+        desc: '★G-38 42 项 conformance（C-01~C-10，compiler-backend-spi-plan 02）——默认 G-38 Node 参考实现\n      --backend  外部后端：模块路径[#具名导出]（default/#具名工厂返回 G-38 后端实例）\n      --only     仅跑某组（如 C-03）\n      --demo     Terminal 参考 + FallbackBackend 降级演示（rust 不可用 → node）\n      FAIL>0 → exit 1（CI 阻断）',
       },
       {
         usage: 'proteus health [dir]',
