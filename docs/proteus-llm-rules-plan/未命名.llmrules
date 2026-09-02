@@ -1,0 +1,117 @@
+# Proteus Website v3 — LLM Rules
+# 用途：指导 LLM（Cursor/Copilot/Claude Code 等）生成官网代码时强制遵守。
+# 优先级：MUST > MUST_NOT > SHOULD。违反 MUST_NOT 一律拒绝生成/修正。
+# 配套：design-tokens.json（确定值，禁止自由发挥）/ llm-style-guide.md / verify-llm.js
+
+# ======================================================================
+# 1. 设计 Token（颜色 / 字号 / 间距）—— 唯一事实源
+# ======================================================================
+- rule: MUST read design-tokens.json before generating any UI.
+  why: 颜色、字号、圆角、间距均以该文件为唯一事实源。禁止凭直觉写十六进制或 px。
+- rule: MUST use CSS custom properties mapped 1:1 to tokens, e.g. var(--bg), var(--brand), var(--ink).
+  why: 与现有 index.html 一致，保证整站 Token 统一可改。
+- rule: MUST_NOT invent new colors outside the palette (bg/panel/line/ink/muted/dim/brand/brand2/accent/ok/warn/rec + backend.*).
+  why: 若出现 #3b82f6、#ff0000 等 token 外颜色，即视为违规。
+- rule: MUST_NOT use px for font-size in body; use tokens.font.size (15px base, h1 clamp, etc.).
+  why: 响应式 h1 用 clamp() 是既定规范。
+- rule: MUST use spacing from space.scale; common pairs: gap=12/16, padding=14/16/22/24, section=40/60/72.
+  why: 现有页面间距体系（features/playground 实测值）。
+
+# ======================================================================
+# 2. 布局约束
+# ======================================================================
+- rule: Every page section MUST be centered with max-width: var(--container, 1180px) and horizontal padding 24px.
+  pattern: ".section { max-width:1180px; margin:0 auto; padding:40px 24px; }"
+- rule: MUST use semantic primitives in class names, not div+utility hacks.
+  why: W-1 dogfooding —— 官网禁止手写 `<view class="flex-col">` 式模拟。
+  pattern: "<div class='pw3-grid'> ... <div class='pw3-card'>"
+- rule: MUST_NOT use flexbox/grid utility classnames like 'flex-col', 'grid-cols-3' as final API; wrap them in a semantic class.
+  why: 体现"语义优先"，与 G-31 p-grid/p-stack 对齐。
+- rule: MUST collapse to single column at breakpointStack (820px) for features / editor / dimensions.
+  pattern: "@media(max-width:820px){ .features{grid-template-columns:1fr} }"
+
+# ======================================================================
+# 3. 视觉风格
+# ======================================================================
+- rule: MUST use dark-first theme (bg #0a0a0c). No light-only page.
+- rule: MUST use brand gradient ONLY for hero h1 <em> and primary logo mark.
+  pattern: "background: linear-gradient(100deg, var(--brand), var(--brand2)); -webkit-background-clip:text; color:transparent;"
+- rule: MUST use monospace (var(--font-mono)) for code, IR panel, editor.
+- rule: MUST add 1px solid var(--line) border + border-radius:14-16px on every panel/card.
+- rule: MUST use eyebrow chip (uppercase, brand2 color, outlined) for section kicker.
+  pattern: "<span class='pw3-eyebrow'>◆ v3 · Semantic Model</span>"
+- rule: MUST use backend color tokens (vue/ios/android/flutter/skia) when visualizing a backend.
+  why: 对标 index.html —— iOS 永远 #0a84ff，不得换色。
+- rule: MUST mark non-browser backend preview as "RECORDED ON DEVICE" —— never simulate.
+  why: W-3 诚实原则（flexible-multi-device.html 已落地）。
+
+# ======================================================================
+# 4. 文案 / 术语（内容层铁律）
+# ======================================================================
+- rule: MUST use exact slogan: "One semantic model. Any engine — at every layer."
+- rule: MUST refer to framework as "Proteus", never "proteus.js" or "the framework".
+- rule: MUST use semantic primitive names: p-grid, p-stack, p-adaptive, useFetch, useNative, router.push.
+  why: G-31/32 —— 禁止出现 view/text/button 小程序式标签名作为首选示例。
+- rule: MUST_NOT use wx.* / uni.* as primary API in examples; put them in "小程序对照" appendix only.
+  why: G-32 语义优先，wx.request → useFetch()。
+- rule: MUST mention the five architecture layers in copy: 编译(G-29) / 渲染(G-27) / 能力(G-28) / 端(G-30) / 语义(G-31/32).
+- rule: MUST reference plan IDs (G-27 … G-32) wherever an architecture claim is made.
+
+# ======================================================================
+# 5. 可交互性（Playground / 柔性 Demo）
+# ======================================================================
+- rule: Every interactive demo MUST expose a "source不变 / backend切换 → 结果变" pattern.
+  why: 这是官网的核心说服力（01 §3.1, §4）。
+- rule: MUST provide exactly the four dimensions on playground: Render / Compiler / Device / Capability.
+- rule: MUST show an IR / capability panel reflecting current selection.
+- rule: MUST handle Tier 2 degradation explicitly (e.g. car → scanQR supported:false → @conditional fallback).
+  why: G-30 conformance 可视化。
+- rule: MUST_NOT hardcode backend output strings; derive from design-tokens.json device.* or a backend map.
+- rule: MUST include a RECORDED ON DEVICE notice for native/flutter/skia panes.
+
+# ======================================================================
+# 6. 可访问性 / 性能
+# ======================================================================
+- rule: MUST set lang on <html>, charset UTF-8, viewport meta, <title> with slogan.
+- rule: MUST use semantic HTML (nav/main/section/article/table) over div soup.
+- rule: MUST ensure color contrast ≥ AA for body text (ink #f2f2f5 on bg #0a0a0c passes).
+- rule: SHOULD keep first paint < 2s; lazy-load heavy device frames.
+
+# ======================================================================
+# 7. 结构 / 文件命名
+# ======================================================================
+- rule: One page = one self-contained .html (or .md + Vue SFC in monorepo later). No external CSS/JS deps unless documented.
+  why: 现有 index.html / flexible-multi-device.html 均为单文件可双击运行。
+- rule: Filename MUST be kebab-case, English, descriptive: flexible-multi-device.html, primitives-grid.html.
+- rule: MUST include a verify-llm.js (or extend existing) self-test asserting MUST_NOT rules.
+
+# ======================================================================
+# 8. 禁止清单（MUST_NOT 汇总，LLM 自检用）
+# ======================================================================
+banned:
+  - "hardcoded hex color outside design-tokens.json palette"
+  - "class='flex-col' / 'grid-cols-N' as public API"
+  - "light-only theme"
+  - "wx.* / uni.* as primary example API"
+  - "simulating native rendering without RECORDED ON DEVICE notice"
+  - "source code changes when switching backend (violates不变式)"
+  - "static screenshot where an interactive switch is promised"
+  - "claiming a feature with no in-page proof (violates W-4 证明先于宣称)"
+  - "any <table> comparison row without a clickable evidence link"
+  - "font-family containing Comic Sans / serif for body"
+  - "box-shadow heavy neumorphism (keep flat, 1px line borders)"
+
+# 示例：一个合规的「原语卡片」生成结果（LLM 应对齐此结构）
+example_card: |
+  <div class="pw3-card" data-primitive="p-grid">
+    <span class="pw3-eyebrow">Layout</span>
+    <h4><code>&lt;p-grid&gt;</code></h4>
+    <p>二维网格，按 min-col-width 自动分列。</p>
+    <div class="pw3-backend-map">
+      <span style="color:var(--ios)">iOS UICollectionView</span>
+      <span style="color:var(--and)">Android LazyLayout</span>
+      <span style="color:var(--flutter)">Flutter GridView</span>
+      <span style="color:var(--skia)">Skia drawRect</span>
+    </div>
+    <a href="/primitives/layout/grid">查看多后端剖面 →</a>
+  </div>
