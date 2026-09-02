@@ -73,6 +73,25 @@ const NATIVE_CAPABILITIES: BackendCapabilities = {
   input: ['touch', 'cursor', 'remote'],
 }
 
+/** ★G-31 B3：semantic 语义 → 原生视图类型（UIKit 基准——与 component-ir SEMANTIC_BACKEND_MAP 的 native-ios 列同源） */
+const SEMANTIC_NATIVE_MAP: Record<string, string> = {
+  'layout.box': 'UIView',
+  'layout.stack': 'UIStackView',
+  'layout.grid': 'UICollectionView',
+  'layout.fluid': 'UIView.fluid',
+  'layout.adaptive': 'UISheet',
+  'layout.fit': 'UIView.fit',
+  'ui.text': 'UILabel',
+  'ui.button': 'UIButton',
+  'ui.image': 'UIImageView',
+  'ui.input': 'UITextField',
+  'ui.list': 'UITableView',
+  'ui.nav': 'UINavigationController',
+  'capability.scan-qr': 'AVCaptureSession',
+  'capability.pick-photo': 'UIImagePicker',
+  'capability.location': 'CLLocationManager',
+}
+
 /**
  * NativeBackend：nodeOps → 原生视图（B4——验证「nodeOps → UIView」抽象层）
  * - 维护 NativeViewDescriptor 树（nodeOps 层句柄，唯一 id）
@@ -96,9 +115,11 @@ export function createNativeBackend(adapter?: NativeViewAdapter): ProteusRenderB
     capabilities: NATIVE_CAPABILITIES,
 
     createElement(node: IRNode): NodeHandle {
+      // ★G-31 B3：有 semantic → 按语义映射原生视图类型（layout.grid → UICollectionView）；否则按 type 原样
+      const viewType = node.semantic ? SEMANTIC_NATIVE_MAP[node.semantic] ?? node.type : node.type
       const descriptor: NativeViewDescriptor = {
         id: nextId++,
-        type: node.type,
+        type: viewType,
         props: { ...node.props },
         children: [],
         parent: null,

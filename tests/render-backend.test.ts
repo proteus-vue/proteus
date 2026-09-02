@@ -255,6 +255,38 @@ describe('G-27 NativeBackend（B4：nodeOps → 原生视图）', () => {
     expect(root.children[0]).toBe(c)
     expect(root.children[1]).toBe(a)
   })
+
+  it('★G-31 B3：Native 消费 semantic——layout.grid → UICollectionView（UIKit 基准）', () => {
+    const b = createNativeBackend()
+    const grid = b.createElement({ type: 'p-grid', semantic: 'layout.grid', props: {}, children: [] }) as NativeViewDescriptor
+    expect(grid.type).toBe('UICollectionView')
+    const text = b.createElement({ type: 'p-text', semantic: 'ui.text', props: {}, children: [] }) as NativeViewDescriptor
+    expect(text.type).toBe('UILabel')
+    const btn = b.createElement({ type: 'p-button', semantic: 'ui.button', props: {}, children: [] }) as NativeViewDescriptor
+    expect(btn.type).toBe('UIButton')
+    // 无 semantic → 按 type 原样（兼容层标签）
+    const view = b.createElement({ type: 'view', props: {}, children: [] }) as NativeViewDescriptor
+    expect(view.type).toBe('view')
+    // 未知 semantic → 回退 type
+    const unknown = b.createElement({ type: 'p-x', semantic: 'unknown.sem', props: {}, children: [] }) as NativeViewDescriptor
+    expect(unknown.type).toBe('p-x')
+  })
+
+  it('★G-31 B3 端到端：C-IR 树 → Native 渲染（grid>text 层级 + mock ops 含原生视图类型）', () => {
+    const adapter = createMockNativeAdapter()
+    const b = createNativeBackend(adapter)
+    const root = b.createElement({ type: 'p-box', semantic: 'layout.box', props: {}, children: [] }) as NativeViewDescriptor
+    const grid = b.createElement({ type: 'p-grid', semantic: 'layout.grid', props: { minColWidth: 160 }, children: [] }) as NativeViewDescriptor
+    const label = b.createElement({ type: 'p-text', semantic: 'ui.text', props: {}, children: [] }) as NativeViewDescriptor
+    b.insert(grid, root)
+    b.insert(label, grid)
+    b.setText(label, '你好')
+    expect(root.children[0]).toBe(grid)
+    expect((grid.children[0] as NativeViewDescriptor).type).toBe('UILabel')
+    expect(adapter.ops[0]).toBe('create:UIView') // layout.box → UIView
+    expect(adapter.ops[1]).toBe('create:UICollectionView')
+    expect(adapter.ops[2]).toBe('create:UILabel')
+  })
 })
 
 describe('G-27 FlutterBackend（B5 spike：Proteus 语义 → Flutter widget 树）', () => {
