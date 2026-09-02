@@ -27,7 +27,7 @@ G-26 开发效率 → Rust 10x 吞吐 + WASM Playground
 | 批次 | 内容 | 依赖 |
 |------|------|------|
 | B1 | CompilerIR 契约 + NodeBackend 产出合规 IR | ✅ `@proteus-vue/compiler-backend`：spi（CompilerIR render/semantic/bindings + CompilerCapabilities）/ conformance（CMP002 契约 + CMP004 版本 + ★G-31.1 语义链接——与 G-27 runBackendConformance 同构）/ node（真实模板编译 @vue/compiler-sfc+dom → C-IR 语义树，toComponentIR 衔接；v-model/v-on/capability 绑定收集） |
-| B2 | RustBackend 对接 SWC-ecosystem → 同一 IR | B1 |
+| B2 | RustBackend 对接 SWC-ecosystem → 同一 IR | B1 | ✅ `packages/compiler-backend-rust`（cargo crate，@proteus-vue/compiler-backend-rust 占位包）：proteus-cc-rust CLI——轻量模板扫描器（Vue SFC template 提取→元素树）→ 语义链接（p-* → semantic 常量表）→ CompilerIR JSON（与 NodeBackend 同契约 version:1/render+C-IR 树/bindings）；**G-29.1 语义等价（Node/Rust Golden）**：DEFAULT_CONFORMANCE_SFC 双端产出 render 树 semantic 序列 + C-IR 树语义序列一致；决策 #330 |
 | B3 | WASM Backend（Playground） | B1 |
 | B4 | HMR 三端一致 + Source Map + Tree-shaking | B2, B3 |
 

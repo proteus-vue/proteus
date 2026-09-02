@@ -1,0 +1,17 @@
+[package]
+name = "proteus-compiler-backend-rust"
+version = "0.1.0"
+edition = "2021"
+description = "G-29 B2 RustBackend：同一份 Vue SFC → 语义等价的 CompilerIR（G-29.1 铁律）——Node/Rust/WASM 三端产出同一 IR；SWC/oxc 为 JS 侧生态，Vue template 的 Rust 解析用轻量扫描器过渡"
+license = "Apache-2.0"
+
+[[bin]]
+name = "proteus-cc-rust"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 2
