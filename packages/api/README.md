@@ -97,6 +97,45 @@ auth.subscribe((token) => console.log('登录态变化', token))
 
 **降级语义（G-32.3）**：平台不支持的能力返回 `Err('<cap>.unsupported')`，**不抛异常**；桥方法缺省 undefined 时对应 Hook 返回 Err（可经 `probe()` 预检后降级 UI）。
 
+## 工程原语（G-32 B5）
+
+`createEngineering(options)` 提供**注入式**工程原语 `useState/useComputed/useWatch/useLifecycle/useReady/usePageParam`——api 包**零运行时依赖 vue**，由消费方注入 reactivity（与 `createReactiveStorage` 同先例）：
+
+```ts
+import { ref, computed } from 'vue'
+import { createEngineering } from '@proteus-vue/api'
+
+// 注入 Vue reactivity（也可注入自定义 mock——单测友好）
+const eng = createEngineering({
+  reactivity: { ref, computed, watch },
+  paramSource: () => ({ id: '42' }),
+})
+
+// E1 useState（ref 语义）
+const count = eng.useState(0)
+count.value += 1            // 响应式
+const double = eng.useComputed(() => count.value * 2) // E2 computed
+
+// E3 useWatch：变化监听（返回停止函数）
+const stop = eng.useWatch(() => count.value, (v, old) => console.log(v, old))
+
+// E6/E7 生命周期：usePageParam 页面参数 + useLifecycle/useReady 钩子
+const id = eng.usePageParam('id')   // 响应式页面参数
+eng.useReady(() => console.log('ready'))
+```
+
+| 原语 | 语义 | 说明 |
+|------|------|------|
+| `useState(initial)` | E1 | 响应式状态（ref 语义） |
+| `useComputed(getter)` | E2 | 派生状态（computed 语义） |
+| `useWatch(getter, cb)` | E3 | 副作用监听（返回停止函数） |
+| `useLifecycle()` | E6 | 生命周期订阅句柄（onLoad/onShow/onHide/onUnload） |
+| `useReady(cb)` | E7 | 挂载就绪回调（onReady 语义） |
+| `usePageParam(key)` | E9 | 响应式页面参数（wx options / web query——paramSource 注入） |
+| `createEngineering(opts)` | — | 工厂：注入 `{ reactivity, lifecycle?, paramSource? }` |
+
+后续批次（E10-E17 router 语义化 / E19-E23 动画 / E24-E28 工程化）沿同一「语义面 + 注入」模式扩展。
+
 ## 设计要点
 
 - **业务零平台分支（铁律 1）**：网络层差异全部收敛在 adapter 内部，业务代码不出现 `if (isMp)` 之类判断

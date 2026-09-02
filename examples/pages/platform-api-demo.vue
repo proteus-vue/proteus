@@ -112,6 +112,17 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑩ 工程原语（G-32 B5：useState/useComputed/usePageParam——injectable vue reactivity）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-eng-inc" @click="onEngInc">useState 自增</button>
+        <button class="pad-btn" data-testid="pad-eng-log" @click="onEngLog">useState/Computed 读</button>
+        <button class="pad-btn" data-testid="pad-eng-param" @click="onEngParam">usePageParam</button>
+      </view>
+      <text class="pad-log" data-testid="pad-eng-log-out">{{ engLog }}</text>
+      <text class="pad-sub">createEngineering 注入 Vue reactivity——useState=ref 语义 / useComputed=computed / usePageParam 读页面参数（api 包零 vue 依赖，消费方注入）</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -122,8 +133,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { createPlatformAPI, createCapabilityHooks } from '@proteus-vue/api'
+import { ref, computed } from 'vue'
+import { createPlatformAPI, createCapabilityHooks, createEngineering } from '@proteus-vue/api'
 
 // ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
 const api = createPlatformAPI()
@@ -381,6 +392,27 @@ function onCapKb() {
     cap6Log.value = `useKeyboard → height=${info.height} visible=${info.visible}`
   })
   cap6Log.value = `useKeyboard → 已订阅（当前 height=${keyboardLifecycle.info.height}）`
+}
+
+// ---------- ⑩ 工程原语（G-32 B5：injectable reactivity） ----------
+const eng = createEngineering({
+  reactivity: { ref, computed, watch: () => () => undefined },
+  paramSource: () => ({ demoId: '42', demoKey: 'hello' }),
+}) // ★useState=ref / useComputed=computed；watch 演示页不注入（测试覆盖），lifecycle 缺省
+const engCount = eng.useState(0)
+const engDouble = eng.useComputed(() => engCount.value * 2)
+const engLog = ref('点击按钮演示工程原语')
+function onEngInc() {
+  engCount.value += 1
+  engLog.value = `useState → count=${engCount.value} · useComputed → double=${engDouble.value}`
+}
+function onEngLog() {
+  engLog.value = `useState → count=${engCount.value} · useComputed → double=${engDouble.value}`
+}
+function onEngParam() {
+  const id = eng.usePageParam('demoId')
+  const key = eng.usePageParam('demoKey')
+  engLog.value = `usePageParam → demoId=${id.value} · demoKey=${key.value}`
 }
 </script>
 
