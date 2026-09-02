@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proteus — One semantic model. Any engine, at every layer.</title>
+<style>
+:root{
+  --bg:#0a0a0c; --panel:#121216; --panel2:#1a1a20; --line:#26262e;
+  --ink:#f2f2f5; --muted:#8a8a99; --dim:#5c5c6a;
+  --brand:#7c5cff; --brand2:#00e0c6; --accent:#ff8a5c;
+  --ok:#3ddc97; --warn:#ffb454; --rec:#ff6b6b;
+  --vue:#42b883; --ios:#0a84ff; --and:#3ddc84; --flu:#54c5f8; --ska:#ffd54f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"SF Pro","WenQuanYi Micro Hei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.nav{position:sticky;top:0;z-index:50;background:rgba(10,10,12,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;text-decoration:none}
+.logo .mark{width:28px;height:28px;border-radius:8px;background:conic-gradient(from 180deg,var(--brand),var(--brand2),var(--accent),var(--brand));position:relative}
+.logo .mark::after{content:"";position:absolute;inset:6px;border-radius:4px;background:var(--bg)}
+.logo span{color:var(--brand2)}
+.nav-links{display:flex;gap:22px;margin-left:auto;font-size:14px;color:var(--muted)}
+.nav-links a:hover{color:var(--ink)}
+.nav-links .github{margin-left:8px;padding:6px 12px;border:1px solid var(--line);border-radius:6px}
+.hero{max-width:1180px;margin:0 auto;padding:72px 24px 40px;text-align:center}
+.eyebrow{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand2);background:rgba(0,224,198,.08);border:1px solid rgba(0,224,198,.25);padding:5px 12px;border-radius:20px;margin-bottom:22px}
+h1{font-size:clamp(34px,5.4vw,60px);line-height:1.08;letter-spacing:-.025em;font-weight:800;max-width:960px;margin:0 auto}
+h1 em{font-style:normal;background:linear-gradient(100deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font-size:clamp(16px,2vw,19px);color:var(--muted);max-width:700px;margin:22px auto 30px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{font:inherit;font-weight:600;font-size:15px;padding:13px 24px;border-radius:10px;cursor:pointer;border:1px solid transparent;text-decoration:none;transition:.15s}
+.btn.primary{background:var(--brand);color:#fff}
+.btn.primary:hover{background:#6a4cf0}
+.btn.ghost{background:transparent;border-color:var(--line);color:var(--ink)}
+.btn.ghost:hover{border-color:var(--brand)}
+.pills{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:26px;font-size:13px;color:var(--muted)}
+.pill{border:1px solid var(--line);border-radius:20px;padding:4px 12px}
+.playground-wrap{max-width:1180px;margin:24px auto 60px;padding:0 24px}
+.playground{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel)}
+.pg-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pg-head h3{font-size:14px;font-weight:600}
+.tag{font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(124,92,255,.14);color:#b6a3ff;border:1px solid rgba(124,92,255,.3)}
+.tag.live{background:rgba(61,220,151,.12);color:var(--ok);border-color:rgba(61,220,151,.3)}
+.dimensions{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.dim label{display:block;font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.dim select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:8px 10px;border-radius:7px;font:inherit;font-size:13px;cursor:pointer}
+.editor-layout{display:grid;grid-template-columns:1fr 1fr;min-height:360px}
+.editor{padding:16px;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;line-height:1.7;border-right:1px solid var(--line);background:#0d0d10}
+.editor .kw{color:#c792ea}.editor .tag-n{color:#e06c75}.editor .attr{color:#d19a66}.editor .str{color:#98c379}.editor .com{color:#5c6370;font-style:italic}.editor .fn{color:#61afef}
+.editor pre{white-space:pre-wrap;word-break:break-word}
+.render-pane{padding:22px;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+.render-pane .backend-label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.demo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.demo-card{border:1px solid var(--line);border-radius:9px;padding:12px 8px;text-align:center;font-size:12px;background:var(--panel);transition:.18s}
+.demo-card:hover{border-color:var(--brand)}
+.demo-card .thumb{height:42px;margin-bottom:8px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.ir-panel{border-top:1px solid var(--line);background:#0d0d10;padding:14px 18px;font-family:"SF Mono",Menlo,monospace;font-size:12px;line-height:1.7;color:#a6a6b8}
+.ir-panel .ir-title{font-family:-apple-system,system-ui,sans-serif;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.ir-line{margin-left:0}
+.ir-line .k{color:#e06c75}.ir-line .s{color:#98c379}.ir-line .c{color:#5c6370}
+.ir-foot{margin-top:8px;font-size:11px;color:var(--dim)}
+.features{max-width:1180px;margin:0 auto;padding:40px 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feat{border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--panel)}
+.feat .num{font-size:12px;color:var(--brand2);font-weight:700;letter-spacing:.08em}
+.feat h4{font-size:17px;margin:8px 0 8px}
+.feat p{color:var(--muted);font-size:14px}
+.compare{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
+.compare h2{font-size:26px;text-align:center;margin-bottom:8px}
+.compare .lead{text-align:center;color:var(--muted);margin-bottom:26px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+td.yes{color:var(--ok)}td.no{color:var(--rec)}td.part{color:var(--warn)}
+tr:hover td{background:var(--panel)}
+.slogan{max-width:1180px;margin:0 auto;padding:60px 24px;text-align:center;border-top:1px solid var(--line)}
+.slogan blockquote{font-size:clamp(22px,3.2vw,34px);line-height:1.4;font-weight:700;max-width:900px;margin:0 auto;color:var(--ink)}
+.slogan blockquote span{color:var(--brand)}
+footer{border-top:1px solid var(--line);padding:30px 24px;color:var(--dim);font-size:13px;text-align:center}
+@media(max-width:820px){
+  .dimensions{grid-template-columns:repeat(2,1fr)}
+  .editor-layout{grid-template-columns:1fr}
+  .editor{border-right:none;border-bottom:1px solid var(--line)}
+  .features{grid-template-columns:1fr}
+  .nav-links a:not(.github){display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-in">
+    <a class="logo" href="#"><span class="mark"></span>Proteus <span>/ semantic engine</span></a>
+    <div class="nav-links">
+      <a href="#playground">Playground</a>
+      <a href="#primitives">Primitives</a>
+      <a href="#compare">Compare</a>
+      <a href="#migrate">Migrate</a>
+      <a href="#" class="github">GitHub →</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <span class="eyebrow">◆ v3 · Semantic Model Architecture</span>
+  <h1>One semantic model.<br><em>Any engine — at every layer.</em></h1>
+  <p class="sub">不是又一个「小程序跨端框架」。Proteus 定义跨端语义内核，让编译、UI 渲染、原生能力、端接入全部成为可插拔后端。Lynx、UIKit、Android View、Web、车机——都是 SPI 的一种实现。</p>
+  <div class="cta">
+    <a class="btn primary" href="#playground">▶ 体验四维度切换</a>
+    <a class="btn ghost" href="#compare">对比 uni-app / Lynx</a>
+  </div>
+  <div class="pills">
+    <span class="pill">G-27 渲染可插拔</span>
+    <span class="pill">G-28 能力可插拔</span>
+    <span class="pill">G-29 编译可插拔</span>
+    <span class="pill">G-30 任意端</span>
+    <span class="pill">G-31 / G-32 语义原语</span>
+  </div>
+</section>
+
+<!-- ============ PLAYGROUND ============ -->
+<section class="playground-wrap" id="playground">
+  <div class="playground">
+    <div class="pg-head">
+      <h3>◆ Mini Playground</h3>
+      <span class="tag live">● LIVE</span>
+      <span class="tag">改源码 → 看四端如何渲染同一个 &lt;p-grid&gt;</span>
+    </div>
+
+    <div class="dimensions">
+      <div class="dim">
+        <label>Render Backend (UI)</label>
+        <select id="sel-render">
+          <option value="vue">VueDomBackend (Web)</option>
+          <option value="ios">NativeBackend · iOS (UICollectionView)</option>
+          <option value="and">NativeBackend · Android (LazyLayout)</option>
+          <option value="flu">FlutterBackend (GridView)</option>
+          <option value="ska">SkiaBackend (录制)</option>
+        </select>
+      </div>
+      <div class="dim">
+        <label>Compiler Backend</label>
+        <select id="sel-compiler">
+          <option value="node">Node (TS)</option>
+          <option value="rust">Rust (SWC / rolldown)</option>
+          <option value="wasm">WASM (in-browser)</option>
+        </select>
+      </div>
+      <div class="dim">
+        <label>Device / Platform</label>
+        <select id="sel-device">
+          <option value="web">Web</option>
+          <option value="ios">iOS</option>
+          <option value="and">Android</option>
+          <option value="harmony">Harmony</option>
+          <option value="car">车机 (Tier 2)</option>
+        </select>
+      </div>
+      <div class="dim">
+        <label>Capability Backend</label>
+        <select id="sel-cap">
+          <option value="native">Native (JSI)</option>
+          <option value="mock">Mock (Dev)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="editor-layout">
+      <div class="editor">
+<pre><span class="com">&lt;!-- 业务只写语义，不写任何平台 API --&gt;</span>
+<span class="tag-n">&lt;p-grid</span> <span class="attr">:min-col-width</span>=<span class="str">"160"</span> <span class="attr">:max-cols</span>=<span class="str">"4"</span><span class="tag-n">&gt;</span>
+  <span class="tag-n">&lt;p-card</span> <span class="attr">v-for</span>=<span class="str">"item in items"</span> <span class="attr">:key</span>=<span class="str">"item.id"</span><span class="tag-n">&gt;</span>
+    <span class="tag-n">&lt;p-text&gt;</span>{{ item.title }}<span class="tag-n">&lt;/p-text&gt;</span>
+    <span class="tag-n">&lt;p-button</span> <span class="attr">@click</span>=<span class="str">"scan"</span><span class="tag-n">&gt;</span>扫码<span class="tag-n">&lt;/p-button&gt;</span>
+  <span class="tag-n">&lt;/p-card&gt;</span>
+<span class="tag-n">&lt;/p-grid&gt;</span>
+
+<span class="tag-n">&lt;script</span> <span class="attr">setup</span><span class="tag-n">&gt;</span>
+<span class="kw">const</span> native = <span class="fn">useNative</span>()
+<span class="kw">async function</span> <span class="fn">scan</span>() {
+  <span class="kw">const</span> { text } = <span class="kw">await</span> native.<span class="fn">scanQR</span>()  <span class="com">// ← 不是 wx.scanCode</span>
+}
+<span class="tag-n">&lt;/script&gt;</span></pre>
+      </div>
+
+      <div class="render-pane">
+        <div class="backend-label"><span class="dot"></span>
+          Render: <strong id="lbl-render">VueDomBackend</strong> ·
+          Compiler: <strong id="lbl-compiler">Node</strong> ·
+          Device: <strong id="lbl-device">Web</strong> ·
+          Cap: <strong id="lbl-cap">Native</strong>
+        </div>
+        <div class="demo-grid" id="demo-grid"></div>
+        <div class="backend-label" id="note" style="font-size:12px"></div>
+      </div>
+    </div>
+
+    <div class="ir-panel">
+      <div class="ir-title">↓ Component IR → Render IR (后端实际消费的契约，非 &lt;p-grid&gt; 字符串)</div>
+<pre id="ir-code"></pre>
+      <div class="ir-foot" id="ir-foot"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURES ============ -->
+<section class="features" id="primitives">
+  <div class="feat">
+    <div class="num">01 · 语义优先</div>
+    <h4>组件即语义，不是 div 别名</h4>
+    <p>&lt;p-grid&gt; 表达「网格意图」，属性是约束描述。swiper / scroll-view / movable-view 被还原为布局属性组合——不再有独立组件。</p>
+  </div>
+  <div class="feat">
+    <div class="num">02 · 四层 SPI</div>
+    <h4>编译 · UI · 能力 · 端，全部可插拔</h4>
+    <p>Node 遇瓶颈一键切 Rust/WASM；渲染换 Native/Flutter/Skia；原生能力走 JSI；任意端实现 Backend 即一等公民。</p>
+  </div>
+  <div class="feat">
+    <div class="num">03 · 证明先于宣称</div>
+    <h4>conformance test，编译期拦截</h4>
+    <p>能力缺失不是运行时崩溃，是编译期报错。三端 Backend 对同份 IR 必须产出等价结果，CI 自动校验。</p>
+  </div>
+</section>
+
+<!-- ============ COMPARE ============ -->
+<section class="compare" id="compare">
+  <h2>与「翻译派」的本质分水岭</h2>
+  <p class="lead">传统框架把小程序 API 当标准去翻译；Proteus 定义自己的语义 IR，各端来实现。</p>
+  <table>
+    <thead><tr><th>维度</th><th>小程序 / uni-app / Taro</th><th>Lynx</th><th>Proteus</th></tr></thead>
+    <tbody>
+      <tr><td>「标准」归属</td><td>微信 API</td><td>Lynx 引擎/PAPI</td><td class="yes">框架语义 IR</td></tr>
+      <tr><td>渲染层</td><td>条件编译 #ifdef</td><td>原生渲染 + 双线程</td><td class="yes">RenderBackend SPI</td></tr>
+      <tr><td>编译器</td><td>固定(Node)</td><td>框架内置</td><td class="yes">Node / Rust / WASM</td></tr>
+      <tr><td>能力缺失</td><td class="no">运行时崩溃</td><td>引擎约束</td><td class="yes">编译期 capabilities 报错</td></tr>
+      <tr><td>新端成本</td><td class="no">重写映射表</td><td>接 Lynx 宿主</td><td class="yes">实现 SPI + conformance</td></tr>
+      <tr><td>API 风格</td><td class="part">wx.* 回调</td><td>Element PAPI</td><td class="yes">Hook / Promise / 全类型</td></tr>
+      <tr><td>__CreateElement</td><td>—</td><td class="part">语义入口</td><td class="yes">某个 Backend 的输出</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ SLOGAN ============ -->
+<section class="slogan" id="migrate">
+  <blockquote>
+    「我们用 Proteus 建了 Proteus 官网」<br>
+    你审查这份页面的源码，看到真实的 <span>&lt;p-grid&gt;</span>——<br>
+    它正在渲染你眼前的页面。这就是 <span>dogfooding</span>。
+  </blockquote>
+</section>
+
+<footer>
+  Proteus · 49 plans + 1 methodology + 1 spec · 原则 #0「统一语义收敛」<br>
+  本页本身即一个 Proteus App，运行在 VueDomBackend 上 · 源码：/proteus-positioning-website/
+</footer>
+
+<script>
+const RENDER = {
+  vue: {name:'VueDomBackend (Web)',       note:'编译为 DOM + CSS Grid `auto-fit`',                   color:'var(--vue)'},
+  ios:  {name:'NativeBackend · iOS',       note:'→ UICollectionView，FlowLayout 自动换行 · RECORDED ON DEVICE', color:'var(--ios)'},
+  and:  {name:'NativeBackend · Android',   note:'→ LazyLayout GridLayoutManager · RECORDED ON DEVICE', color:'var(--and)'},
+  flu:  {name:'FlutterBackend',            note:'→ GridView.builder() · RECORDED ON DEVICE',          color:'var(--flu)'},
+  ska:  {name:'SkiaBackend',               note:'→ 计算网格几何 → SkCanvas::drawRect · 录制帧',        color:'var(--ska)'},
+};
+const COMPILER = { node:'Node (TS)', rust:'Rust (SWC / rolldown)', wasm:'WASM (in-browser)' };
+const DEVICE   = { web:'Web', ios:'iOS', and:'Android', harmony:'Harmony', car:'车机 (Tier 2)' };
+const CAP      = { native:'Native (JSI)', mock:'Mock (Dev)' };
+
+const selR=document.getElementById('sel-render'),
+      selC=document.getElementById('sel-compiler'),
+      selD=document.getElementById('sel-device'),
+      selP=document.getElementById('sel-cap');
+
+function renderGrid(backend){
+  const grid=document.getElementById('demo-grid');
+  grid.innerHTML='';
+  const colors=['#7c5cff','#00e0c6','#ff8a5c','#54c5f8','#3ddc97','#ffd54f'];
+  const n = backend==='ska' ? 4 : (backend==='ios'||backend==='and' ? 6 : 6);
+  for(let i=0;i<n;i++){
+    const c=document.createElement('div');
+    c.className='demo-card';
+    c.innerHTML=`<div class="thumb" style="background:${colors[i%colors.length]}22;border:1px solid ${colors[i%colors.length]}55">▦</div>Card ${i+1}`;
+    grid.appendChild(c);
+  }
+}
+
+function buildIR(){
+  const r=selR.value,c=selC.value,d=selD.value,p=selP.value;
+  const cols = (r==='ios'||r==='and') ? 3 : (r==='ska'?2:4);
+  const ir = `{
+  <span class="k">"type"</span>: <span class="s">"layout.grid"</span>,
+  <span class="k">"constraints"</span>: { <span class="k">"minColWidth"</span>: <span class="s">160</span>, <span class="k">"maxCols"</span>: <span class="s">${cols}</span> },
+  <span class="k">"renderBackend"</span>: <span class="s">"${r}"</span>,
+  <span class="k">"compilerBackend"</span>: <span class="s">"${c}"</span>,
+  <span class="k">"device"</span>: <span class="c">"${d}"</span>,
+  <span class="k">"capability"</span>: { <span class="k">"scanQR"</span>: { <span class="k">"supported"</span>: <span class="s">${d!=='car'}</span> } }
+}`;
+  document.getElementById('ir-code').innerHTML = ir;
+  document.getElementById('ir-foot').innerHTML =
+    `scanQR 能力检查：${d==='car' ? '⚠ 车机 Tier 2 → 编译期提示 "需外接扫码设备"，业务可 @conditional 降级' : '✅ NativeBackend 已声明支持 → useNative().scanQR() 直通 JSI'}`;
+}
+
+function update(){
+  const r=selR.value,c=selC.value,d=selD.value,p=selP.value;
+  document.getElementById('lbl-render').textContent = RENDER[r].name;
+  document.getElementById('lbl-compiler').textContent = COMPILER[c];
+  document.getElementById('lbl-device').textContent = DEVICE[d];
+  document.getElementById('lbl-cap').textContent = CAP[p];
+  document.getElementById('note').innerHTML =
+    `<span style="color:${RENDER[r].color}">●</span> ${RENDER[r].note}`;
+  renderGrid(r);
+  buildIR();
+}
+
+[selR,selC,selD,selP].forEach(s=>s.addEventListener('change',update));
+update();
+</script>
+</body>
+</html>
