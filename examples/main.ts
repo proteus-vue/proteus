@@ -16,6 +16,8 @@ import '@proteus-vue/devtools/style.css'
 // ★G-22 柔性布局：Web 端 v-p-fluid 指令注册（MP 端编译器模板规则处理同名属性）
 import { installFluidLayout } from '@proteus-vue/components'
 import { createGestureDirective } from '@proteus-vue/gesture'
+// ★G-24 B1 桌面交互：v-p-hover / v-p-shortcut / v-p-focus-trap / v-p-context-menu 指令（PC 卡片演示）
+import { createDesktopDirectives } from '@proteus-vue/desktop'
 import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
 // ★vue-devtools-plan：App Config Inspector 数据源（启动即初始化——config-demo 页面 init 幂等覆盖 defaults 不破坏已合并层）
 import { initAppConfig, getConfig as getAppConfig, setConfig as setAppConfig } from '@proteus-vue/app-config'
@@ -68,6 +70,10 @@ defineApp({
     installFluidLayout(app)
     // ★G-32 B4 ④ Gesture：v-gesture 指令（Web Pointer Events 识别器；MP 端由平台手势承接）
     app.directive('gesture', createGestureDirective())
+    // ★G-24 B1 桌面交互：v-p-hover / v-p-shortcut / v-p-focus-trap / v-p-context-menu 指令（PC 卡片演示；MP 不注册天然降级）
+    for (const [name, dir] of Object.entries(createDesktopDirectives())) {
+      app.directive(name, dir)
+    }
     const pinia = createWebPinia()
     app.use(pinia).mount('#app')
     // ★devtools 一键接入：TraceBus 单例 + Vue DevTools（Timeline/Inspectors）+ store/组件追踪 + 本地面板浮动窗口

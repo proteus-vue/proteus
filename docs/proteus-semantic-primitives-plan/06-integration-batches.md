@@ -16,10 +16,10 @@
 
 ## 分批策略
 
-### B1：桌面交互原语（推荐首发，零依赖可单测）
+### B1：桌面交互原语（推荐首发，零依赖可单测）✅ 已落地（决策 #329）
 - p-hover / p-context-menu / p-shortcut / p-focus-trap
 - 纯逻辑：keydown 注册、菜单构建、焦点陷阱
-- **可单测 + 可出 Playground demo（PC 卡片交互）**
+- **可单测 + 可出 Playground demo（PC 卡片交互）**——落地：`@proteus-vue/desktop` 包（32 包）——shortcut.ts（PRIM005 mod 平台惯例 ⌘/Ctrl）/ focus-trap.ts / context-menu.ts / hover.ts / directives.ts（v-p-hover · v-p-shortcut · v-p-focus-trap · v-p-context-menu 四指令）——Web 接线、MP 剥离降级（同 v-gesture）；tests/desktop.test.ts 14 用例
 
 ### B2：系统集成核心四件套
 - p-notify / p-permission / p-clipboard / p-deeplink

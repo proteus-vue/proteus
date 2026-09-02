@@ -197,6 +197,30 @@
         <div v-gesture:tap="onTapG" class="gesture-demo">{{ tapMsg }}</div>
       </div>
     </section>
+
+    <section class="block">
+      <p-heading :level="2">⑨ 桌面交互（G-24 B1：p-hover / p-shortcut / p-focus-trap / p-context-menu）</p-heading>
+      <p-divider :inset="8" />
+      <div class="row">
+        <p-text class="label">v-p-hover（悬停 lift）：</p-text>
+        <div v-p-hover="'lift'" class="hover-card">悬停我（lift 提升）</div>
+      </div>
+      <div class="row">
+        <p-text class="label">v-p-shortcut（mod+s 保存）：</p-text>
+        <p-button variant="primary" v-p-shortcut="shortcutSave" @click="onShortcutSave">保存 ⌘S/Ctrl+S（{{ shortcutCount }}）</p-button>
+      </div>
+      <div class="row">
+        <p-text class="label">v-p-context-menu（右键菜单）：</p-text>
+        <div v-p-context-menu="cardMenu" class="ctx-card">右键我（{{ ctxLog }}）</div>
+      </div>
+      <div class="row">
+        <p-text class="label">v-p-focus-trap（焦点陷阱）：</p-text>
+        <div v-p-focus-trap class="trap-dialog">
+          <p-input :model-value="trapVal" placeholder="Tab 在框内循环" @update:model-value="onTrapInput" />
+          <p-button size="small" @click="onTrap">确定</p-button>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -234,6 +258,33 @@ import {
   PDraggable,
   PScrollable,
 } from '@proteus-vue/components'
+
+// —— G-24 B1 桌面交互（p-hover / p-shortcut / p-focus-trap / p-context-menu——Web 指令，MP 不注册降级） ——
+const shortcutCount = ref(0)
+function onShortcutSave(): void {
+  shortcutCount.value += 1
+}
+// ★MP 安全：对象字面量内不嵌带标注箭头（#310 惯例）——handler 用方法引用
+const shortcutSave = { expr: 'mod+s:save', handler: onShortcutSave }
+const ctxLog = ref('—')
+function onMenuSelect(value: string | undefined): void {
+  ctxLog.value = value ?? ''
+}
+const cardMenu = {
+  items: [
+    { label: '编辑', value: 'edit' },
+    { label: '复制', value: 'copy' },
+    { label: '删除', value: 'del', danger: true },
+  ],
+  onSelect: onMenuSelect,
+}
+const trapVal = ref('')
+function onTrapInput(v: string): void {
+  trapVal.value = v
+}
+function onTrap(): void {
+  trapVal.value = '已确认'
+}
 
 const switchOn = ref(false)
 const sliderVal = ref(40)

@@ -47,7 +47,7 @@
 | `proteus-fluid-layout-plan` / `proteus-fluid-system-plan` / `proteus-fluid-layout-essence-plan` | **G-22** | ✅ 已落地 | S1-S4 全原语（p-fluid/p-fit/p-scale/p-grid/p-stack/p-split/p-aspect/p-sidebar/p-toolbar/p-safe/p-zone）+ `@proteus-vue/fluid` 包 + FLD001-013 + fluid:check 门禁 |
 | `proteus-design-principle-plan` | —（原则补充） | ✅ 已入库 | **全局设计原则 #10「统一语义 + 原生实现」显式化**：architecture-principle（原则定义）/ app-renderer-layout（布局归属）/ component-layout-semantics（p-flex/p-stack/p-grid 语义）/ config-update；facade 规约「+1 份原则补充」即指本目录；2026-08 规范化（决策 #177 统一 -plan 后缀）
 | `proteus-adaptive-container-plan` | **G-22.5** | ✅ B1/B2/B4 | p-adaptive 纯逻辑 + Controller + p-modal（sheet/dialog/popover 形态自动切换 + anchor 锚定）；B3 原生映射待 App Renderer |
-| `proteus-semantic-primitives-plan` | **G-24** | ⬜ 规划 | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut）可立即动手 |
+| `proteus-semantic-primitives-plan` | **G-24** | 🟡 **B1 已落地（决策 #329）** | 六大家族 + 原则 #10.8（须有系统原生对应才进核心 p-*）；B1 桌面交互原语（p-hover/p-shortcut/p-focus-trap/p-context-menu）→ `@proteus-vue/desktop` 包（32 包）——`v-p-*` 四指令 Pure logic + Web 接线；B2 系统集成四件套待续 |
 | `proteus-device-adaptation-plan` | **G-25** | ⬜ 规划 | 三维断点 W×H×F（车机/TV/手表）；VEH001/TV001/WATCH001 |
 | （dev-efficiency） | **G-26** | ⬜ 规划 | 开发效率度量 + benchmark 基线（roadmap-2 提及，目录待建） |
 | `proteus-render-backend-1-plan` | **G-27** | 🟡 **M1.4 B1/B2/B4/B5 已落地** | ★`@proteus-vue/render-backend` 包：SPI + conformance（RND002）+ **五官方后端原型集齐**（Headless/VueDom/Native/Flutter widget 映射）；B6 混合渲染（Texture Sharing）+ DevTools 待续 |
@@ -110,7 +110,7 @@
 | `proteus-blueprint-plan` | — | ⬜ | 完整业务参考实现（M2 验收载体） |
 | `proteus-website-plan` | — | ⬜ | 官网（roadmap-2 附属 01-website-skeleton 已列执行项） |
 | `proteus-style-safety-plan` | G-21 | ✅ | FLD/CSS 三层防御 + 矩阵测试 |
-| `proteus-semantic-primitives-plan`（B1+ 落地产物） | G-24 | ⬜ | 桌面交互原语组件 |
+| `proteus-semantic-primitives-plan`（B1+ 落地产物） | G-24 | 🟡 B1 | `@proteus-vue/desktop`：p-hover / p-shortcut / p-focus-trap / p-context-menu（v-p-* 指令 + 纯逻辑） |
 | `proteus-adaptive-container-plan`（组件层） | G-22.5 | ✅ B4 | p-modal 已落地；p-drawer/p-nav 已由 G-32 B2 shell 原语承接（p-detail 待续） |
 | `proteus-device-adaptation-plan`（组件层） | G-25 | ⬜ | 车机/TV/手表原语 |
 | `proteus-native-backend-1-plan`（官方后端） | G-28 | ⬜ | 官方原生后端实现 |
@@ -176,7 +176,7 @@
 ## 5. 状态速览（一句话）
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
-- **待启（近期候选）**：M1.4 G-27 B6 混合渲染 → G-31 B7 续 router 语义化 → G-24 B1 桌面原语 → G-32 B3 续（Capability 余 29）+ G-32 B5（Engineering 28 工程原语）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
+- **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语 `@proteus-vue/desktop`（决策 #329）；**待启**：G-24 B2 系统集成四件套（p-notify/p-permission/p-clipboard/p-deeplink）→ G-29 B2（RustBackend）→ **G-36 AI Agent B1（MCP Server）/ G-37 RenderBackend SPI B1 / G-38 CompilerBackend SPI B1 / G-39 Host Runtime B1（均可与既有 render-backend·compiler-backend·renderer-app·hmr 实现互为印证）**
 - **方向调整（G-31）**：小程序组件/API 从「一等公民」降级为 **Layer 1 兼容层**（现有 built-in-components proteus-* 模拟 + wx.* 入口 → compat-miniprogram 演进方向）；源码入口语义化（C-IR）
 - **规划（中期）**：G-25 全终端 / G-28 原生后端 / G-26 度量 / G-23 AI Agent / G-29 编译器后端 / G-30 Universal
 - **远期**：FlutterBackend（关键路径唯一不确定项）/ 生态 / benchmark

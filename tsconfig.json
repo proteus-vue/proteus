@@ -60,6 +60,7 @@
       "@proteus-vue/components/*": ["src/components/*"],
       "@proteus-vue/compiler-backend": ["packages/compiler-backend/src/index.ts"],
       "@proteus-vue/gesture": ["packages/gesture/src/index.ts"],
+      "@proteus-vue/desktop": ["packages/desktop/src/index.ts"],
       "@proteus-vue/compat-miniprogram": ["packages/compat-miniprogram/src/index.ts"]
     }
   },

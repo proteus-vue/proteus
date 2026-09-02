@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/desktop",
+  "version": "0.1.0",
+  "description": "G-24 B1 桌面交互原语（proteus-semantic-primitives-plan 03）：p-hover / p-context-menu / p-shortcut / p-focus-trap——纯逻辑（keydown 解析/焦点陷阱/菜单构建/悬停语义）+ Vue 指令工厂；防手动 if(isDesktop)（PRIM001）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}
