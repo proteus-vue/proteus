@@ -150,7 +150,7 @@ export default defineConfig({
 
 | 批次 | 内容 |
 |------|------|
-| B1 | CompilerIR 契约 + NodeBackend 产出合规 IR（零依赖可单测） |
+| B1 | CompilerIR 契约 + NodeBackend 产出合规 IR（✅ `@proteus-vue/compiler-backend` 已落地：真实模板编译 → C-IR 语义树 + conformance 门禁） |
 | B2 | RustBackend 对接 SWC-ecosystem → 同一 IR |
 | B3 | WASM Backend（Playground 用） |
 | B4 | HMR 三端一致 + Source Map + Tree-shaking |

@@ -57,7 +57,8 @@
       "@proteus-vue/test-core": ["packages/test-core/src/index.ts"],
       "@proteus-vue/types/define-proteus": ["packages/types/src/define-proteus.ts"],
       "@proteus-vue/components": ["src/components/index.ts"],
-      "@proteus-vue/components/*": ["src/components/*"]
+      "@proteus-vue/components/*": ["src/components/*"],
+      "@proteus-vue/compiler-backend": ["packages/compiler-backend/src/index.ts"]
     }
   },
   "include": [

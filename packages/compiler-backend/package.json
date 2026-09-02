@@ -1,0 +1,36 @@
+{
+  "name": "@proteus-vue/compiler-backend",
+  "version": "0.1.0",
+  "description": "G-29 编译器可插拔后端：CompilerIR 契约 + conformance（CMP002/CMP004 + G-31.1 语义链接）+ NodeBackend 参考实现（真实模板编译 → C-IR 语义树）——编译、逻辑、UI、能力四维可插拔（原则 #10 终极形态）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/component-ir"
+  },
+  "dependencies": {
+    "@proteus-vue/component-ir": "0.1.0"
+  },
+  "peerDependencies": {
+    "@vue/compiler-dom": "^3.4",
+    "@vue/compiler-sfc": "^3.4"
+  },
+  "devDependencies": {
+    "@vue/compiler-dom": "^3.5.42",
+    "@vue/compiler-sfc": "^3.5.42"
+  }
+}

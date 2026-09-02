@@ -59,7 +59,7 @@
 |------|------|------|------|
 | `proteus-compiler-plan` | G-02 | ✅ | 编译管线 + 规则注册表 + explain/trace + 自校验 |
 | `proteus-compiler-plugin-plan` | **G-21** | ✅ | Compiler Plugin API（IR 可编程访问） |
-| `proteus-compiler-backend-1-plan` | **G-29** | ⬜ 规划 | 编译器后端可插拔（与 G-27/28 同哲学） |
+| `proteus-compiler-backend-1-plan` | **G-29** | 🟡 **B1 已落地** | ★`@proteus-vue/compiler-backend` 包：CompilerIR 契约（render/semantic/bindings）+ conformance（CMP002/CMP004 + ★G-31.1 语义链接）+ **NodeBackend（真实模板编译 → C-IR 语义树——源码→C-IR 生产端雏形）**；B2 Rust/WASM 待续 |
 | `proteus-types-plan` / `proteus-types-plus-plan` | G-03 | ✅ | @proteus-vue/types + Schema + config:check + migrate codemod |
 | `proteus-build-plan` | G-04 | ✅ | plugin-vite（mp 编译 + gen-routes + 共享模块/分包）+ 体积门禁 |
 | `proteus-app-config-plan` | G-35 | ✅ | app.config 分层 + schema 校验 + 远程 |
@@ -131,6 +131,7 @@
 | Fluid System 全原语（S1-S4） | `@proteus-vue/fluid` + `src/components/p-*` | G-22 ✅ |
 | **G-27 渲染后端 SPI + 官方后端原型** | `@proteus-vue/render-backend`（spi/conformance/headless/vue-dom/native/flutter） | **G-27 🟡 M1.4 B1/B2/B4/B5** |
 | **G-31 C-IR 语义化 + conformance** | `@proteus-vue/component-ir`（schema/validate/map/to-ir/conformance） | **G-31 🟡 B1-B5** |
+| **G-29 编译器可插拔后端（B1）** | `@proteus-vue/compiler-backend`（spi/conformance/node） | **G-29 🟡 B1：CompilerIR + conformance + NodeBackend（真实模板编译 → C-IR）** |
 | p-adaptive 形态求解（B1/B2/B4） | `@proteus-vue/fluid` adaptive.ts + `src/components/p-adaptive` + `p-modal` | G-22.5 ✅ |
 | fluid:check 严格门禁（FLD001-013） | `packages/cli/src/fluid-check.ts` | G-21 ✅ |
 | 组件审计（no-platform-api 等） | `components:audit` CLI | G-10 ✅ |
