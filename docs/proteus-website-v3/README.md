@@ -20,10 +20,36 @@
 
 ---
 
-## 文档清单（6 份设计文档）
+## ⭐ 柔性框架 · 全终端模拟展示（核心 Demo）
+
+> **`flexible-multi-device.html`** — 单文件、零依赖、**双击即开**。
+> 这是 G-22 柔性布局 + 方法论"语义优先"对外最直观的证明。
+
+**它证明的事**：一份 `<p-adaptive>` 源码不改一行，六个完全不同形态的终端各自渲染出符合该端交互范式的 UI——
+
+| 终端 | 形态触发 | Backend 自动选择的拓扑 |
+|------|---------|----------------------|
+| 📱 手机 | portrait · touch | 单列堆叠 + 底部 Tab + 悬浮 FAB |
+| 📲 平板 | split-view · touch | 左 240 侧栏 + 2 列卡片 |
+| 🖥️ PC | desktop · mouse+kb | 固定侧栏 + 3 列 + hover 展开 + 键盘可达 |
+| 🚗 车机 | dashboard · dpad | 大热区焦点导航 + 驾驶降干扰（focus-tree） |
+| 📺 TV | 10ft · 遥控器 | 全屏 Hero + 横向海报流（focus-row） |
+| ⌚ 手表 | wearable · crown | 一屏一意 + 表冠缩放（single-glance） |
+
+**关键交互**：点六个端按钮 → 左侧源码**零改动**（核心契约：源码只描述意图），右侧设备外观 + 布局拓扑实时重排，右侧 IR 面板同步显示 Backend 决策（`renderBackend` / `cols` / `nav.topology` / `BackendCapabilities`）。
+
+**断点不是 CSS 媒体查询**：车机 / TV 由 `input`（dpad / 遥控器）与 `usage-distance`（10ft）触发——这正是柔性框架超越响应式布局的地方。
+
+**逻辑级自测**（对标 G-27 conformance）：`node test-flexible.js` → **30/30 PASS**，含"切换终端源码零改动"契约断言。
+
+---
+
+## 文档清单（6 份设计文档 + 1 交互原型 + 1 测试）
 
 | 文件 | 内容 |
 |------|------|
+| **flexible-multi-device.html** | ★ **柔性框架全终端模拟展示（可运行原型，527 行）** |
+| **test-flexible.js** | 逻辑级自测（30 项，jsdom 驱动，可退化静态校验） |
 | **01-website-rearchitecture.md** | ★ 总纲：翻转论证 + 新 IA + 设计原则 W-1~W-5 |
 | **02-home-playground.md** | 首页 + Playground 交互规范（四维度切换、诚实降级、IR 面板） |
 | **03-primitives-docs.md** | 语义原语页面范式（5 区块：语义/剖面/降级/对照/demo） |

@@ -1,4 +1,11 @@
-index.html
+design-tokens.json
+.llmrules
+llm-style-guide.md
+LLM-DESIGN-RULES.md
+verify-llm.js
+primitives-grid.html
+__fixture-good.html
+__fixture-bad.html
 01-website-rearchitecture.md
 02-home-playground.md
 03-primitives-docs.md
@@ -6,8 +13,13 @@ index.html
 05-dogfooding-conformance.md
 06-roadmap-launch.md
 README.md
+index.html
+flexible-multi-device.html
+test-flexible.js
+test-logic.js
 verify-site.sh
-MANIFEST
 verify.sh
+run-all-verify.sh
 pack.sh
+shot.js
 CHECKSUM.md

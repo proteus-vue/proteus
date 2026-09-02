@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proteus — &lt;p-grid&gt; 语义原语 · 多后端剖面</title>
+<style>
+:root{
+  --bg:#0a0a0c; --panel:#121216; --panel2:#1a1a20; --line:#26262e;
+  --ink:#f2f2f5; --muted:#8a8a99; --dim:#5c5c6a;
+  --brand:#7c5cff; --brand2:#00e0c6; --accent:#ff8a5c;
+  --ok:#3ddc97; --warn:#ffb454; --rec:#ff6b6b;
+  --ios:#0a84ff; --and:#3ddc84; --flutter:#54c5f8; --skia:#ffd54f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"SF Pro","WenQuanYi Micro Hei",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:.92em}
+.pw3-section{max-width:1180px;margin:0 auto;padding:60px 24px}
+.pw3-eyebrow{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand2);background:rgba(0,224,198,.08);border:1px solid rgba(0,224,198,.25);padding:5px 12px;border-radius:20px;margin-bottom:18px}
+h1{font-size:clamp(34px,5.4vw,60px);line-height:1.08;letter-spacing:-.025em;font-weight:800;margin-bottom:16px}
+h1 em{font-style:normal;background:linear-gradient(100deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);font-size:17px;max-width:720px;margin-bottom:30px}
+.pw3-card{border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--panel);margin-bottom:16px}
+.pw3-card h3{font-size:17px;margin-bottom:10px;color:var(--ink)}
+.pw3-card p{color:var(--muted);font-size:14px}
+.pw3-backend-map{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+.pw3-backend-map div{font-size:13px;color:var(--muted)}
+.pw3-backend-map b{display:inline-block;width:70px}
+.pw3-tag{font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(124,92,255,.14);color:#b6a3ff;border:1px solid rgba(124,92,255,.3)}
+.pw3-tag.live{background:rgba(61,220,151,.12);color:var(--ok);border-color:rgba(61,220,151,.3)}
+.ir-panel{border:1px solid var(--line);border-radius:14px;background:#0d0d10;padding:18px;font-family:"SF Mono",Menlo,monospace;font-size:12px;line-height:1.7;color:#a6a6b8;margin-top:16px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+td.yes{color:var(--ok)} td.part{color:var(--warn)} td.no{color:var(--rec)}
+tr:hover td{background:var(--panel)}
+@media(max-width:820px){ .pw3-backend-map{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<section class="pw3-section">
+  <span class="pw3-eyebrow">Layout Primitive · G-32</span>
+  <h1>One semantic model.<br><em>&lt;p-grid&gt; 多后端剖面</em></h1>
+  <p class="sub">二维网格布局，按 <code>min-col-width</code> 自动分列。同一份语义，由四层渲染后端各自实现。</p>
+
+  <div class="pw3-card">
+    <span class="pw3-tag">语义定义</span>
+    <h3 style="margin-top:10px">&lt;p-grid&gt; 属性与 IR 约束</h3>
+    <p><code>min-col-width</code>（必填，&gt;0）· <code>max-cols</code>（≥1）· <code>gap</code> · <code>auto-rows</code></p>
+    <p>IR 约束：<code>min-col-width &gt; 0</code>；<code>max-cols ≥ 1</code>；冲突 → 编译期报错（G-32 支柱③）。</p>
+  </div>
+
+  <div class="pw3-card">
+    <span class="pw3-tag live">● 多后端实现剖面</span>
+    <h3 style="margin-top:10px">同一语义，五端实现（W-2 可视化证据）</h3>
+    <div class="pw3-backend-map">
+      <div><b style="color:var(--ios)">iOS</b> → UICollectionViewCompositionalLayout</div>
+      <div><b style="color:var(--and)">Android</b> → GridLayoutManager / LazyLayout</div>
+      <div><b style="color:var(--flutter)">Flutter</b> → GridView.builder</div>
+      <div><b style="color:var(--skia)">Skia</b> → 几何计算 + SkCanvas::drawRect</div>
+      <div><b style="color:var(--brand)">VueDom</b> → CSS Grid: repeat(auto-fit, minmax(160px,1fr))</div>
+    </div>
+  </div>
+
+  <div class="pw3-card">
+    <span class="pw3-tag">降级 · Tier 2/3</span>
+    <h3 style="margin-top:10px">@conditional：后端不支持 grid 时</h3>
+    <p>自动降级为 <code>&lt;p-stack&gt;</code> 单列（G-30 capabilities 声明）。开发者代码零修改。</p>
+  </div>
+
+  <div class="pw3-card">
+    <span class="pw3-tag">小程序对照（附录，非主体）</span>
+    <h3 style="margin-top:10px">能力还原，非 API 翻译</h3>
+    <table>
+      <tr><th>小程序</th><th>Proteus 语义</th><th>备注</th></tr>
+      <tr><td>swiper</td><td class="yes">&lt;p-stack snap="mandatory" loop&gt;</td><td>组件被消灭</td></tr>
+      <tr><td>scroll-view</td><td class="part">&lt;p-scroll axis="x"&gt;</td><td>滚动是容器属性</td></tr>
+      <tr><td>grid-view (Skyline)</td><td class="yes">&lt;p-grid&gt;（原生虚拟化）</td><td>直映</td></tr>
+    </table>
+    <p style="margin-top:12px">小程序项目迁移：<code>useFetch()</code> 替代 <code>wx.request</code>（详见 <a href="#migrate" style="color:var(--brand2)">/migrate</a>）。</p>
+  </div>
+
+  <div class="ir-panel">
+    <div style="font-family:system-ui,sans-serif;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Component IR（编译期产出，受 IR 约束校验）</div>
+{<br>
+  &nbsp;&nbsp;"type": "layout.grid",<br>
+  &nbsp;&nbsp;"props": { "minColWidth": 160, "maxCols": 4, "gap": 12 },<br>
+  &nbsp;&nbsp;"renderBackend": "auto",<br>
+  &nbsp;&nbsp;"constraints": [ "min-col-width &gt; 0" ]<br>
+}
+  </div>
+</section>
+</body>
+</html>
