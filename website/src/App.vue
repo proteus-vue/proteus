@@ -17,12 +17,13 @@ const links = [
 <template>
   <p-page class="site">
     <header class="nav-shell">
-      <p-view v-p-fluid="'padding(14, 28)'" class="nav">
+      <!-- ★header 布局走柔性框架（#381）：p-stack row+wrap 内联 style——窄屏整链接换行不折字 -->
+      <p-stack v-p-fluid="'padding(14, 28)'" direction="row" :gap="8" wrap class="nav">
         <router-link to="/" class="brand">
           <span class="brand-mark">◆</span>
           <p-text class="brand-name">Proteus</p-text>
         </router-link>
-        <p-stack direction="row" :gap="4" class="nav-links">
+        <p-stack direction="row" :gap="4" wrap class="nav-links">
           <router-link
             v-for="l in links"
             :key="l.key"
@@ -39,8 +40,8 @@ const links = [
             <p-text class="nav-text">GitHub ↗</p-text>
           </a>
         </p-stack>
-      </p-view>
-    </header>
+        </p-stack>
+      </header>
 
     <main class="main">
       <router-view />
@@ -65,14 +66,13 @@ const links = [
   border-bottom: 1px solid var(--line);
 }
 .nav {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center;
+  /* p-stack 内联 style 已定 row/wrap/gap——页面类只补两端对齐（内联未设 justify） */
   justify-content: space-between;
   max-width: 1180px;
   margin: 0 auto;
+  width: 100%;
 }
-.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
 .brand-mark {
   color: var(--brand);
   font-size: 16px;
@@ -81,10 +81,11 @@ const links = [
   background-clip: text;
   color: transparent;
 }
-.brand-name { color: var(--ink); font-weight: 700; font-size: 17px; letter-spacing: 0.4px; }
+.brand-name { color: var(--ink); font-weight: 700; font-size: 17px; letter-spacing: 0.4px; white-space: nowrap; }
 .nav-links { display: flex; align-items: center; flex-wrap: wrap; }
 .nav-link { text-decoration: none; padding: 7px 12px; border-radius: 8px; position: relative; }
-.nav-text { color: var(--muted); font-size: 14px; transition: color 0.15s; }
+/* ★#381：链接文字禁折字（首/页 竖排两字的根因）——窄屏整链接换行 */
+.nav-text { color: var(--muted); font-size: 14px; transition: color 0.15s; white-space: nowrap; }
 .nav-link:hover { background: var(--panel2); }
 .nav-link:hover .nav-text { color: var(--ink); }
 /* active：品牌色文字 + 底部短下划线（替代大药丸） */

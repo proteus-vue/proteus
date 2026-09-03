@@ -56,7 +56,7 @@ const capabilities = [
     <!-- 1. Hero（01-home §1） -->
     <p-view v-p-fluid="'padding(56, 96)'" class="hero">
       <span class="eyebrow">◆ Proteus · 语义收敛的跨端应用框架</span>
-      <p-heading :level="1" v-p-fluid="'font-size(30, 58)'" class="hero-title">
+      <p-heading :level="1" v-p-fluid="'font-size(22, 58)'" class="hero-title">
         One semantic model.<br /><em>Any render engine.</em> Zero native glue.
       </p-heading>
       <p-text v-p-fluid="'font-size(15, 19)'" class="hero-sub">
@@ -176,6 +176,7 @@ npm run build:mp     <span class="qs-dim"># 小程序端：Skyline 原生四件�
 .hero { max-width: 860px; }
 .eyebrow {
   color: var(--brand2);
+  white-space: nowrap;
   font-size: 12px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -201,14 +202,14 @@ npm run build:mp     <span class="qs-dim"># 小程序端：Skyline 原生四件�
   border-radius: 10px;
   text-decoration: none;
 }
-.cta-text { color: #0a0a0c; font-weight: 600; font-size: 14px; }
+.cta-text { color: #0a0a0c; font-weight: 600; font-size: 14px; white-space: nowrap; }
 .cta-ghost {
   border: 1px solid var(--line);
   padding: 10px 20px;
   border-radius: 10px;
   text-decoration: none;
 }
-.cta-ghost .cta-text { color: var(--ink); font-size: 14px; }
+.cta-ghost .cta-text { color: var(--ink); font-size: 14px; white-space: nowrap; }
 .cta-ghost:hover, .cta-primary:hover { filter: brightness(1.1); }
 
 .section-title { color: var(--ink); margin: 14px 0 22px; }
