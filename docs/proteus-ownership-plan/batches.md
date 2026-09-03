@@ -64,7 +64,7 @@
 - 活跃借用被强制失效
 - 配额归零
 
-**已完成**：✅ 参考实现已演示（`destroyPage` 函数）
+**已完成**：✅ **B3 已落地（决策 #354）**：`@proteus-vue/render-backend` 新增 `page-ownership.ts`（**页面所有权上下文 `createPageOwnership(owner, { graph, quotaBytes? })`**——页面 = 所有权 scope：`alloc`/`register` 登记该页 Owned 资源（配额记账 + 所有权图），`destroy({ force })` = **Drop 协议 forceDrop 语义**（遍历该页资源逐个 Drop 五阶段——活跃借用被强制失效，Managed 框架代管资源 disposeAll，⑤ reclaim 与 G-42 releaseQuota 合并兜底归零；force:false drop 语义下活跃借用资源列入 leaked + 保留配额供重试——drop-protocol §6.3）+ **StackContainer 集成**（`StackContainerOptions.ownership` 启用 → 每页伴随所有权上下文，**五原子第 3 步 releaseResources 委托 Drop 协议**，freedBytes 计入 DestroyReport.reclaimedBytes，配额未归零即抛错不静默；`container.ownershipOf(pageId)` 业务登记入口）+ **SuperAppContainer ownership pass-through**；未启用 ownership 的容器零变化（向后兼容）。验收三连端到端通过：① 页面销毁后该页资源计数 = 0（graph/ctx 双口径）② 活跃借用被强制失效（borrow.valid=false）③ 配额归零（quotaRemaining=0）；测试 `tests/page-ownership.test.ts` 10 用例；全量 1774/172 无回归。
 
 ---
 

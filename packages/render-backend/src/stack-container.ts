@@ -17,6 +17,9 @@ import {
   CONTAINER_PROFILES,
   DEFAULT_STACK_POLICY,
 } from './container-spi'
+import { createPageOwnership } from './page-ownership'
+import type { PageOwnership } from './page-ownership'
+import type { OwnershipGraph } from './ownership'
 import type {
   BizManifest,
   BusinessSandbox,
@@ -184,6 +187,8 @@ interface PageRecord extends PageHandle {
   alive: boolean
   /** keep-alive 标记（配额仅统计此类页面——普通栈页不回收） */
   keepAlive: boolean
+  /** ★G-43 B3：页面所有权上下文（ownership 选项启用时——页面 Owned 资源随销毁 forceDrop） */
+  ownership: PageOwnership | null
 }
 
 function setPageState(page: PageRecord, to: PageState): void {
@@ -202,6 +207,12 @@ export interface StackContainerOptions {
   quotaLimitBytes?: number
   /** 页面 IR 工厂（config.irId → IR 实例；容器持有但不解析内容——G-42.4） */
   createIR?: (config: PageConfig) => unknown
+  /** ★G-43 B3：所有权图接入——启用后每页创建所有权上下文（G-42 五原子第 3 步委托 G-43 Drop 协议） */
+  ownership?: {
+    graph: OwnershipGraph
+    /** 页面所有权配额上限（bytes；缺省不限额——destroy 兜底归零仍生效） */
+    quotaBytes?: number
+  }
 }
 
 export interface StackContainer extends ProteusHostContainer {
@@ -210,6 +221,8 @@ export interface StackContainer extends ProteusHostContainer {
   readonly stackView: readonly PageHandle[]
   /** 内部事件（'overflow-destroyed'/'page-destroyed' 等——CMP060 显式事件） */
   events: Record<string, Array<(payload: unknown) => void>>
+  /** ★G-43 B3：页面所有权上下文（ownership 选项启用时可用——业务经它 alloc/登记该页 Owned 资源） */
+  ownershipOf(pageId: string): PageOwnership | null
 }
 
 /** ★G-42 B2：StackContainer 参考实现（页面栈 + 五原子销毁 + 资源代管 + 深度治理 + keep-alive 配额） */
@@ -247,6 +260,8 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
       alive: true,
       // keepAlive 标记（keep-alive 配额仅统计此类页面）
       keepAlive: config.keepAlive ?? false,
+      // ★G-43 B3：ownership 选项启用 → 页面 = 所有权 scope（页面销毁时该页资源 forceDrop 回收）
+      ownership: opts.ownership ? createPageOwnership(pageId, { graph: opts.ownership.graph, quotaBytes: opts.ownership.quotaBytes }) : null,
     }
     pages.set(pageId, page)
     emit('page-created', { pageId })
@@ -285,8 +300,18 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
     page.eventRegistry.unbindAll()
     steps.push(FIVE_ATOMIC_STEPS[1])
 
-    // ③ 清定时器/订阅（框架代管——业务无需手动）
-    const { timersCleared } = page.resourcePool.releaseAll()
+    // ③ 清定时器/订阅（框架代管——业务无需手动）+ ★G-43 B3：委托 G-43 Drop 协议
+    //    （该页 Owned 资源 forceDrop 强制回收 + Managed 自动释放 + 配额兜底归还——drop-protocol §3.2）
+    page.resourcePool.releaseAll()
+    let reclaimedBytes = 0
+    const ownershipReport = page.ownership ? page.ownership.destroy({ force: true }) : null
+    if (ownershipReport) {
+      reclaimedBytes += ownershipReport.freedBytes
+      if (ownershipReport.quotaRemaining !== 0) {
+        // force 语义下不应有泄漏（drop-protocol §6.3：仍失败 → 报告给宿主）——诚实暴露而非静默
+        throw new Error(`G-43 页面销毁后配额未归零：${page.pageId} 剩余 ${ownershipReport.quotaRemaining}B`)
+      }
+    }
     steps.push(FIVE_ATOMIC_STEPS[2])
 
     // ④ 销毁 IR 实例（唯一真相 G-42.1）
@@ -299,7 +324,7 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
     steps.push(FIVE_ATOMIC_STEPS[4])
 
     // 校验五原子（G-42.2 铁律——步序用 FIVE_ATOMIC_STEPS 顺序，顺序错即抛错）
-    const report: DestroyReport = { pageId: page.pageId, steps, leaked: [], reclaimedBytes: 0, durationMs: 0 }
+    const report: DestroyReport = { pageId: page.pageId, steps, leaked: [], reclaimedBytes, durationMs: 0 }
     assertAtomicDestroy(report)
 
     page.alive = false
@@ -397,6 +422,10 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
     },
     get events() {
       return events
+    },
+    ownershipOf(pageId: string) {
+      const page = pages.get(pageId)
+      return page ? page.ownership : null
     },
   }
   return container

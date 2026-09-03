@@ -92,3 +92,6 @@ export type { OwnedState, GraphNode, GraphEdge, LeakInfo, OwnershipErrorCode } f
 // ★G-43 B2：借用检查器（源码级静态分析——B-01~B-08 + PSS strict/loose/off）
 export { analyzeOwnershipSource } from './borrow-checker'
 export type { BorrowDiagnostic, BorrowAnalysisResult, BorrowRule, BorrowSeverity, PssMode, BorrowCheckerOptions } from './borrow-checker'
+// ★G-43 B3：与 G-42 五原子销毁集成（页面所有权上下文——releaseResources 委托 Drop 协议 + forceDrop）
+export { createPageOwnership } from './page-ownership'
+export type { PageOwnership, PageOwnershipOptions, PageAllocOptions, PageOwnershipDestroyReport } from './page-ownership'

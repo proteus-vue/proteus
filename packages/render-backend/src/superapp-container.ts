@@ -9,6 +9,8 @@
 import { createStackContainer } from './stack-container'
 import { checkBizManifest } from './container-conformance'
 import { CONTAINER_PROFILES } from './container-spi'
+import type { OwnershipGraph } from './ownership'
+import type { PageOwnership } from './page-ownership'
 import type {
   BizManifest,
   BusinessSandbox,
@@ -85,6 +87,8 @@ function validateManifest(manifest: BizManifest, policy: SuperAppPolicy): void {
 export interface SuperAppOptions {
   policy?: Partial<SuperAppPolicy>
   quotaLimitBytes?: number
+  /** ★G-43 B3：所有权图接入 pass-through（页面销毁时该页 Owned 资源 forceDrop——委托内部 StackContainer） */
+  ownership?: { graph: OwnershipGraph; quotaBytes?: number }
 }
 
 export interface SuperAppContainer extends ProteusHostContainer {
@@ -93,6 +97,8 @@ export interface SuperAppContainer extends ProteusHostContainer {
   /** 崩溃隔离执行器：业务 fn 抛错 → 捕获 + 事件 + 自动重启，宿主与其他业务不受影响 */
   executeInSandbox<T>(bizId: string, fn: () => T): SandboxExecutionResult<T>
   readonly sandboxView: readonly SuperSandbox[]
+  /** ★G-43 B3：页面所有权上下文（ownership 选项启用时——委托内部 StackContainer） */
+  ownershipOf(pageId: string): PageOwnership | null
 }
 
 const DEFAULT_SUPERAPP_POLICY: SuperAppPolicy = {
@@ -115,8 +121,8 @@ export function createSuperAppContainer(opts: SuperAppOptions = {}): SuperAppCon
     security: { ...DEFAULT_SUPERAPP_POLICY.security, ...(opts.policy?.security ?? {}) },
   }
 
-  // 页面栈/页面管理/配额：委托内部 StackContainer（复用 B2 五原子/资源池/LRU）
-  const stack = createStackContainer({ policy, quotaLimitBytes: opts.quotaLimitBytes })
+  // 页面栈/页面管理/配额：委托内部 StackContainer（复用 B2 五原子/资源池/LRU + G-43 B3 ownership 接入）
+  const stack = createStackContainer({ policy, quotaLimitBytes: opts.quotaLimitBytes, ownership: opts.ownership })
 
   const sandboxes = new Map<string, SuperSandbox>()
   const crashLog: SuperAppContainer['crashLog'] = []
@@ -150,6 +156,8 @@ export function createSuperAppContainer(opts: SuperAppOptions = {}): SuperAppCon
     pop: stack.pop,
     getCurrent: stack.getCurrent,
     getStackDepth: stack.getStackDepth,
+    // ★G-43 B3：页面所有权上下文（委托内部 Stack 页面记录）
+    ownershipOf: stack.ownershipOf,
 
     // —— 业务沙箱（SuperApp 核心） ——
     async createSandbox(bizId, manifest): Promise<BusinessSandbox> {
