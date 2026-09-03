@@ -56,7 +56,7 @@ const capabilities = [
     <!-- 1. Hero（01-home §1） -->
     <p-view v-p-fluid="'padding(56, 96)'" class="hero">
       <span class="eyebrow">◆ Proteus · 语义收敛的跨端应用框架</span>
-      <p-heading level="1" v-p-fluid="'font-size(30, 58)'" class="hero-title">
+      <p-heading :level="1" v-p-fluid="'font-size(30, 58)'" class="hero-title">
         One semantic model.<br /><em>Any render engine.</em> Zero native glue.
       </p-heading>
       <p-text v-p-fluid="'font-size(15, 19)'" class="hero-sub">
@@ -77,7 +77,7 @@ const capabilities = [
     <p-view v-p-fluid="'padding(24, 48)'" class="points">
       <div class="point-grid">
         <p-view v-for="p in sellingPoints" :key="p.title" class="point-card">
-          <p-heading level="3" class="point-title">{{ p.title }}</p-heading>
+          <p-heading :level="3" class="point-title">{{ p.title }}</p-heading>
           <p-text class="point-desc">{{ p.desc }}</p-text>
         </p-view>
       </div>
@@ -86,7 +86,7 @@ const capabilities = [
     <!-- 3. ★实时 Transform 演示（01-home §3 全站最核心交互） -->
     <p-view v-p-fluid="'padding(24, 48)'" class="live-demo">
       <span class="eyebrow">◆ 实时演示 · 透明编译</span>
-      <p-heading level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
       <TransformDemo compact />
       <p-text class="live-note">
         浏览器内实时编译——与本地 build 同一套 @proteus-vue/compiler；IR 为 G-29 NodeBackend 真实中间表示，非示意图。
@@ -107,11 +107,11 @@ const capabilities = [
 
     <p-view v-p-fluid="'padding(24, 48)'" class="features">
       <span class="eyebrow">◆ 杀手特性</span>
-      <p-heading level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">语义是内核，后端是驱动</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">语义是内核，后端是驱动</p-heading>
       <p-grid :min-col-width="280" :gap="14">
         <p-view v-for="c in capabilities" :key="c.tag" v-p-hover class="feature-card">
           <p-text class="feature-tag">{{ c.tag }}</p-text>
-          <p-heading level="3" class="feature-title">{{ c.title }}</p-heading>
+          <p-heading :level="3" class="feature-title">{{ c.title }}</p-heading>
           <p-text class="feature-desc">{{ c.desc }}</p-text>
         </p-view>
       </p-grid>
@@ -120,7 +120,7 @@ const capabilities = [
     <!-- 对标矩阵（B4：positioning v3 §6——Proteus 列状态诚实标注） -->
     <p-view v-p-fluid="'padding(24, 48)'" class="compare">
       <span class="eyebrow">◆ 对标</span>
-      <p-heading level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">不是又一个跨端方案，是方法论代际差</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">不是又一个跨端方案，是方法论代际差</p-heading>
       <div class="table-wrap">
         <table class="cmp-table">
           <thead>
@@ -143,7 +143,7 @@ const capabilities = [
     <!-- 方法论 -->
     <p-view v-p-fluid="'padding(24, 48)'" class="method">
       <span class="eyebrow">◆ 方法论</span>
-      <p-heading level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">SPI-First：九次泛化的同一个动作</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">SPI-First：九次泛化的同一个动作</p-heading>
       <p-text class="method-body">
         找到系统中所有「换 X 要改很多文件」的 X，把它们逐一提升为
         <strong>语义接口 + ≥2 后端 + conformance + 诚实边界</strong>，直到业务层对任何具体实现零知识。
@@ -159,7 +159,7 @@ const capabilities = [
     <!-- 5. 快速开始（01-home §5：3 步） -->
     <p-view v-p-fluid="'padding(24, 48)'" class="quickstart">
       <span class="eyebrow">◆ 快速开始</span>
-      <p-heading level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">两分钟跑通双端</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">两分钟跑通双端</p-heading>
       <pre class="qs-code"><code>npm create @proteus-vue/proteus my-app
 cd my-app
 npm run dev:web      <span class="qs-dim"># Web 端：标准 Vue SPA 直跑</span>
@@ -172,7 +172,7 @@ npm run build:mp     <span class="qs-dim"># 小程序端：Skyline 原生四件�
   </p-page>
 </template>
 
-<style>
+<style scoped>
 .hero { max-width: 860px; }
 .eyebrow {
   color: var(--brand2);

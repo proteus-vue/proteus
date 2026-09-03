@@ -12,7 +12,7 @@ const currentSlug = computed(() => (route.params.slug as string | undefined) ?? 
 
 <template>
   <p-page class="site">
-    <p-view v-p-fluid="'padding(16, 28)'" class="nav">
+    <p-view v-p-fluid="'padding(16, 28)'" class="nav nav-row">
       <router-link to="/" class="brand">
         <p-text class="brand-mark">◆</p-text>
         <p-text class="brand-name">Proteus</p-text>
@@ -50,10 +50,11 @@ const currentSlug = computed(() => (route.params.slug as string | undefined) ?? 
   </p-page>
 </template>
 
-<style>
+<style scoped>
+/* p-view 默认 flex-column——行向布局用更高特异性显式覆盖（组件默认 + 页面修饰 = 预期用法） */
 .nav {
-  display: flex;
-  flex-direction: row;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
   justify-content: space-between;
   max-width: 1180px;
@@ -71,6 +72,7 @@ const currentSlug = computed(() => (route.params.slug as string | undefined) ?? 
 .nav-link.active { background: rgba(124, 92, 255, 0.12); border-radius: 8px; }
 .main { max-width: 1180px; margin: 0 auto; width: calc(100% - 48px); flex: 1; }
 .footer {
+  display: flex !important;
   max-width: 1180px;
   margin: 0 auto;
   width: calc(100% - 48px);

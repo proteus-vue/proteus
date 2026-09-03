@@ -37,8 +37,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 
     <!-- 正文：docs 引擎构建期产物 -->
     <p-view class="doc">
-      <p-heading level="1" class="doc-title">{{ current?.title }}</p-heading>
-      <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css -->
+      <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
       <p-view class="doc-body" v-html="docHtml"></p-view>
 
       <!-- 页内 TOC + 上下篇 -->
@@ -54,9 +53,9 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   </p-view>
 </template>
 
-<style>
+<style scoped>
 .guide {
-  display: grid;
+  display: grid !important;
   /* ★柔性网格（W-6）：侧边栏固定最小宽 + 正文弹性，窄容器自动单列——零 @media */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 32px;

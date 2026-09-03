@@ -110,10 +110,10 @@ function copyShareLink(): void {
   </p-view>
 </template>
 
-<style>
+<style scoped>
 .demo-root { width: 100%; }
 .pg-grid {
-  display: grid;
+  display: grid !important;
   /* ★柔性网格（W-6）：双栏自适应，窄容器自动堆叠——零 @media */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 16px;
@@ -128,7 +128,8 @@ function copyShareLink(): void {
   min-width: 0;
 }
 .pane-head {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;

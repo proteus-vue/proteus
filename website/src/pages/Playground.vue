@@ -22,7 +22,7 @@ const ruleList = ref(rules)
   <div class="playground">
     <header v-p-fluid="'padding(28, 48)'" class="pg-head">
       <span class="eyebrow">◆ Playground · 透明编译</span>
-      <p-heading level="1" class="pg-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
+      <p-heading :level="1" class="pg-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
       <p-text class="pg-sub">
         浏览器内实时编译——同一套 @proteus-vue/compiler（与本地 build 同源）：
         Skyline 产物、CompilerIR 中间表示、决策 trace（哪一行触发了哪条规则）、
@@ -33,7 +33,7 @@ const ruleList = ref(rules)
     <TransformDemo :initial-source="initialSource" />
 
     <p-view v-p-fluid="'padding(16, 24)'" class="rules-section">
-      <p-heading level="2" class="rules-title">规则注册表 · AI 说明书（{{ ruleList.length }} 条）</p-heading>
+      <p-heading :level="2" class="rules-title">规则注册表 · AI 说明书（{{ ruleList.length }} 条）</p-heading>
       <p-text class="pg-dim">每条规则自带 what / why / when / example / verify——产物可枚举、可查询、可反查源码。</p-text>
       <p-view class="rules-list">
         <p-view v-for="r in ruleList" :key="r.id" class="rule-item">
@@ -45,7 +45,7 @@ const ruleList = ref(rules)
   </div>
 </template>
 
-<style>
+<style scoped>
 .playground { padding-bottom: 48px; }
 .pg-head { max-width: 1180px; }
 .pg-title { color: var(--ink); margin: 14px 0 10px; }

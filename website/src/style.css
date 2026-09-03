@@ -2,6 +2,8 @@
    ★W-6 柔性框架优先：本文件零 @media——响应式全部由 v-p-fluid clamp + 柔性网格承担 */
 
 :root {
+  /* ★p-page 背景钩子（组件默认 #f7f8fa 浅色——官网深色优先，经组件变量钩子统一） */
+  --p-page-bg: var(--bg);
   --bg: #0a0a0c;
   --panel: #121216;
   --panel2: #1a1a20;
