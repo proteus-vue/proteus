@@ -31,7 +31,7 @@ npm install
 | `npm run dev:mp` | 小程序端 Vite dev（插件直出产物；日常迭代建议用 build:mp / debug:mp） |
 | `npm run build:mp` | 小程序端正式构建（gen-routes → vue-tsc → vite build） |
 | `npm run debug:mp` | 小程序端**全链路调试构建**（`PROTEUS_DEBUG=1`，注入 `[proteus][环节]` 日志） |
-| `npm test` | 79 个单元测试 |
+| `npm test` | 1764 个单测（全量：编译/运行时/能力/路由/组件/桌面原语/渲染后端 SPI/容器/所有权等） |
 | `npm run test:e2e:web` | 8 个 Web e2e（Playwright Chromium） |
 | `npm run verify` | `test + build:web + build:mp` 一键全量验证 |
 

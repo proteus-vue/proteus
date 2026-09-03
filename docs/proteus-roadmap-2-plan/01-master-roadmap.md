@@ -124,13 +124,15 @@ L2 types
 
 **核心命题**：证明"语义 IR + 双 SPI"真能跑通，而不是纸上架构。
 
+**★2026-09 提前落地注记**：M1 地基期主体在框架侧已大幅提前收官——G-27（M1.4/M1.5/M2.1 段）**B1-B6 全落地**（`@proteus-vue/render-backend`：SPI + conformance + 五官方后端原型 Headless/VueDom/Native×3/Flutter + B6 混合渲染 `createHybridRenderer` + demo 页 render-backend-demo「换 flag 切后端」+ E2E 7 例，决策 #293-#331）；宿主层 **G-41（接入）/ G-42（容器）/ G-43（所有权）** 的 B1-B5 亦提前落地（决策 #342-#353，同包：Dispatcher / Host Conformance / vue-bridge / StackContainer / SuperAppContainer / Owned+借用检查器）；**剩余主体 = 真机原生宿主工程接线**（iOS/Android/Flutter/Harmony 宿主实现 RenderBackend 并接入 `createProteusRenderer`）。
+
 | 阶段 | Plan | 交付 | 依赖 |
 |------|------|------|------|
 | M1.1 | L0 规约收口 | 原则 #10 泛化 + 铁律总表 | ✅ 已完成（docs/proteus-architecture.md，2026-09-02） |
 | M1.2 | compiler（IR 层） | LayoutConstraint IR + Render IR | M1.1 |
 | M1.3 | types + app-config | 核心类型 + 配置 schema | M1.2 |
-| M1.4 | G-27 B1（Backend SPI + conformance test） | `ProteusRenderBackend` 接口 | ✅ B1/B2 已完成（@proteus-vue/render-backend：SPI + runBackendConformance + Headless/VueDom 原型，2026-09-02） |
-| M1.5 | G-27 B2（VueDomBackend） | `createRenderer(nodeOps)` 复用 | M1.4 |
+| M1.4 | G-27 B1（Backend SPI + conformance test） | `ProteusRenderBackend` 接口 | ✅ **B1-B6 全部完成**（@proteus-vue/render-backend：SPI + runBackendConformance + 五官方后端原型集齐（Headless/VueDom/Native×3/Flutter）+ B6 混合渲染 + demo 页 render-backend-demo（换 flag 切后端，E2E 实测 7 例），2026-09） |
+| M1.5 | G-27 B2（VueDomBackend） | `createRenderer(nodeOps)` 复用 | M1.4 → ✅ 已完成（并入 G-27 B1-B6 批次；另有 G-41 vue-bridge 真实 Vue3 createRenderer 接入） |
 | M1.6 | style-safety（三层防御骨架） | FLD/CSS 规则引擎雏形 | M1.2 |
 | M1.7 | G-22 B1（clamp 算法）+ G-21（Plugin API） | 柔性布局最小原型 | M1.2 |
 | M1.8 | devtools M1（TraceBus） | 调试可追溯 | M1.2 |
@@ -148,7 +150,7 @@ L2 types
 
 | 阶段 | Plan | 交付 |
 |------|------|------|
-| M2.1 | G-27 B4（NativeBackend）+ B5（FlutterBackend） | **混合渲染**：同 App 原生 + 自绘 |
+| M2.1 | G-27 B4（NativeBackend）+ B5（FlutterBackend） | **混合渲染**：同 App 原生 + 自绘 —— 🟡 框架侧已提前落地（B4 Native×3 + B5 Flutter widget 映射 + B6 混合渲染 `createHybridRenderer` 区域级切后端 + demo 页；剩余 = 真机原生宿主工程接线，2026-09） |
 | M2.2 | G-28 B1-B3（Top30 语义接口 + 三端实现） | 扫码/定位/分享/通知 可用 |
 | M2.3 | G-22 完整 + G-22.5（p-adaptive 五端） | Sheet/Dialog/Popover 自动切换 |
 | M2.4 | G-25（车机/TV/手表三维断点） | 五端真机跑通 |
@@ -283,6 +285,6 @@ L0 规约
 1. ✅ 本路线图 + 依赖图 + 里程碑 + 关键路径 + 风险（本次交付）
 2. ⬜ 起 `proteus-website` 骨架（把 positioning §5 杀手特性做成落地页）——**下一个执行项**
 3. ✅ M1.1 把 L0 规约收口（docs/proteus-architecture.md：原则 #0-#12 + 铁律 + 规则总表，2026-09-02）
-4. ⬜ M1.4 动手 `ProteusRenderBackend` SPI + conformance test（B1 原型）
+4. ✅ M1.4 `ProteusRenderBackend` SPI + conformance 已落地并扩展至 **B1-B6**（五官方后端原型 + 混合渲染 + demo 页，2026-09；下一执行项 = M2.1 真机宿主工程接线）
 
 **本路线图的交付 = 把"45 份 plan"从清单变成可执行计划**。至此整轮体系完全闭环：规约层 → 方法论层 → 引擎层 → 能力层 → 工具链 → 交付层，每一层都知道自己什么时候做、依赖谁、产出什么。

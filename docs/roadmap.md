@@ -18,6 +18,8 @@
 | v1.0 生产可用 | M2 完成（6 类终端 + AI 闭环） | 全层 |
 | v2.0 生态成熟 | M3（官方 Backend 生态 + benchmark） | L5 |
 
+**★2026-09 提前落地注记**：G-27（渲染后端 SPI + 五官方后端原型 + 混合渲染，决策 #293-#331）、G-41（宿主接入：Dispatcher/Conformance/vue-bridge/WebHostRuntime，决策 #342-#346）、G-42（宿主容器：Stack/SuperApp/仓库治理，决策 #347-#351）、G-43（资源所有权，决策 #352-#353）的框架侧地基已实现于 `@proteus-vue/render-backend` 等包——**「业务 SFC → Vue createRenderer → 任意后端」已是可运行代码**（含真实 Vue3 渲染器接入 demo）；v0.6 的剩余工作从「定义插槽」变为「真机宿主工程接线」（iOS/Android/Flutter/Harmony 原生宿主实现 RenderBackend）。
+
 **一句话**：版本线按「交付物」编排（对标竞品叙事），里程碑线按「依赖链」编排（关键路径 18 月）——**v0.6 起即 G-27 可插拔渲染后端时代**（现有 Vue DOM/MP 产物 = VueDomBackend）。
 
 ---
@@ -49,7 +51,7 @@ Proteus 与 uni-app / Taro 的核心差异，也是规划路线的主轴：
 | 4 | **状态管理**：Pinia 集成 / 持久化 | ✅ | ✅ | ✅ pinia-plan M1-M8 全批（Web 原生 Pinia + MP store 桥 + 四端工厂 + 持久化/分片/版本迁移/配额淘汰 + 快照时间旅行 + 协同 @proteus-vue/pinia-sync + 可观测）+ MP 编译 P1-P3（模板 store 绑定桥 $subscribe→setData + 方法事件包装 proteusStoreXxx + pinia 白名单放行，主包 83KB） | v0.4 + pinia-plan ✅ |
 | 5 | **组件生态**：内置 UI 组件库 / 三方组件适配 | ✅ | ✅ | ✅ 组件库 P0 全批（B1-B8，2026-08）：16 个内置组件（p-view/p-text/p-image/p-button/p-scroll-view/p-list-view/p-input/p-textarea/p-mask/p-popup/p-toast/p-loading/p-nav-bar/p-skeleton/p-error-boundary + virtual-list 兼容别名）+ 4 个 runtime 共享模块（capability 探测/event 归一/virtual-window 窗口/observability 埋点）+ `components:audit` 门禁（no-platform-api/no-sync-storage/manifest-complete，入 CI）+ 编译器 4 增强（props 源 watch→observers/多行 RHS 修复/组件 detached/未映射钩子警告）；🟡 业务组件（player-bar/payment-sheet 依赖 appBar/支付）标注 v0.6+ | v0.3 适配层 + v2.0 组件库拆包 |
 | 6 | **原生能力**：原生组件 / 插件体系 / 原生事件桥 | ✅ | ✅ | 🟡 `v-html→rich-text` 等兜底 + ★能力体系（platform-plan B1-B5：Capability 契约/Adapter Registry/降级/平台规范，MP 端 capability 可用）+ ✅ api-plan B1-B4（createApi 跨端请求抽象：wx/fetch adapter + 拦截器/重试/错误模型 + 设备信息 + createAuth 凭证托管，业务零平台分支）；❌ 插件体系 | v0.5 |
-| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 616 单测 + CI（拆包完成：14 个 @proteus-vue/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）+ lifecycle-plan（defineApp 五阶段编排/超时降级/错误隔离/trace，B1-B6）+ security M2 凭证托管 + 组件库 audit 门禁（components:audit）+ i18n:check 消息审计门禁；🟡 npm 发包配置就绪（changesets 已配，待真实发布） | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
+| 7 | **工程化**：CI / monorepo / 测试 / 规范 / 版本发布 | ✅ | ✅ | ✅ 1764 单测 + CI（拆包完成：14 个 @proteus-vue/* 包独立构建 + 模板快照一致性检查）；✅ 框架本体拆包（8 步全落地，决策 #98-#105）+ module-plan 模块化（跨模块/契约/图谱/编排器/分包/审计，B0-B9）+ platform-plan 能力体系（B1-B5）+ lifecycle-plan（defineApp 五阶段编排/超时降级/错误隔离/trace，B1-B6）+ security M2 凭证托管 + 组件库 audit 门禁（components:audit）+ i18n:check 消息审计门禁；🟡 npm 发包配置就绪（changesets 已配，待真实发布） | v0.2 + 拆包尾 + module-plan + platform-plan ✅ |
 | 8 | **性能**：setData 优化 / 虚拟列表 / 渲染性能 / 包体积 | ✅ | 🟡 | ✅ setData 深层 diff + 批量 + 虚拟列表 + 性能基准 + 包体积仪表 + 分包体积监控（B7a）+ 组件库性能加固（B7：getVirtualWindow 虚拟窗口纯函数 10k→恒定行数 / start 守卫零 setData / 定时器 detached 清理 / 降级 warn-once） | — |
 | 9 | **多端覆盖**：微信 / 支付宝 / 抖音 / 鸿蒙 / **App 原生（Vue 自定义渲染器）** / H5 | ✅（11 端） | ✅（12 端） | 🟡 微信 Skyline + Web | v0.5 起 + v0.6 App/Vapor |
 
@@ -142,6 +144,8 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 **架构要点**：App 端 = **运行时渲染通道**（Vue 官方渲染器，非自研 diff），与 Web/MP 的编译期通道并列；"编译期为主"原则约束 Web/MP（不引入运行时 DOM 模拟），App 端用 Vue 官方能力属平台适配层扩展而非原则妥协。Vapor 与 Proteus 哲学同构（都拒绝虚拟 DOM），互为镜像：Vapor 的 codegen 借鉴进 setData（v0.4），Proteus 的产物契约可作为 Vapor 多端化的参考。
 
 **★批次执行规划**：详见 [docs/proteus-app-plan/](proteus-app-plan/00-overview.md)（00 总览 / 01 App 渲染器 / 02 Vapor / 09 批次 B1-B6——实现待 v0.5 稳定 + npm 发布后启动）。
+
+**★2026-09 提前落地**：本节的「App 端自定义渲染器」框架侧已远超规划——`@proteus-vue/render-backend` 的 **G-41 vue-bridge**（`createProteusRenderer`：真实 `createRenderer(nodeOps)` 接入，业务 `h()`/SFC 落到 Headless/vue-dom/Flutter 任意后端，swap 后端 = 换 `currentBackend`）+ **G-41 WebHostRuntime**（Web 宿主骨架）；既有 `packages/renderer-app/`（`@proteus-vue/renderer-app` createRenderer + NativeAdapter）是原生宿主接线的底座；v0.6 剩余 = 原生宿主工程（iOS/Android）实现 RenderBackend + 接入 `createProteusRenderer`——「标准 Vue SFC 直接运行在原生端」的渲染器机制已就绪。
 
 ### v1.0 生产可用（能力矩阵达标）
 
