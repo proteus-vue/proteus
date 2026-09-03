@@ -4,6 +4,8 @@
 
 ## B1 — 契约定义（M1，与 G-27/35/36/37 B1 同批）
 
+> **✅ B1 已落地（决策 #342）**：`@proteus-vue/render-backend` 新增 `dispatcher.ts`——**ProteusNodeOpsDispatcher 方案 B 全局转发层**（`currentBackend` 一次间接调用，热切换 = 赋值）+ `toIRNode`（G-32 原语表驱动：未知标签 DispatcherError 运行期拖底，编译期拦截）+ `switchBackend` 热切换（历史记录 + trace 日志）+ nodeOps 兼容对象（createElement/insert/patchProp/setText/...）；**H-03-04 双引擎一致**：同一 IR 在 Headless/Flutter 两引擎渲染，nodeOps 调用日志逐条一致（机器证据「渲染驱动与引擎无关」）+ 各引擎类型映射正确；测试 `tests/dispatcher.test.ts` 10 用例全过（全量 1670/160 无回归）。
+
 | 项 | 内容 |
 |----|------|
 | 交付 | `ProteusNodeOpsDispatcher` 接口 + PRIMITIVE_TABLE 绑定 + 方案 B 定型 |

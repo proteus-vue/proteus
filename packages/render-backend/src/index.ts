@@ -32,3 +32,6 @@ export type { RenderNodeSnapshot, ControlReader } from './conformance-component'
 // ★G-27 B6：混合渲染（Texture Sharing + 页面/区域级切后端 + DevTools 路由 trace）
 export { createHybridRenderer, textureRef, runHybridConformance } from './hybrid'
 export type { HybridRegion, HybridRendererOptions, HybridRouteTrace, HybridRenderer, HybridTextureRef, HybridConformanceResult } from './hybrid'
+// ★G-41 B1：ProteusNodeOpsDispatcher（方案 B 全局转发层 + 热切换 + H-03 双引擎验证）
+export { createNodeOpsDispatcher, renderIRTree, semanticSequence, DispatcherError } from './dispatcher'
+export type { ProteusNodeOpsDispatcher, DispatcherNodeOps, NodeOpsCall } from './dispatcher'

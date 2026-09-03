@@ -1,9 +1,12 @@
 {
   "name": "@proteus-vue/render-backend",
   "version": "0.1.0",
-  "description": "G-27 ProteusRenderBackend SPI：可插拔渲染后端接口 + conformance test + 官方后端原型（Headless/VueDom）——Render anywhere, on any engine（M1.4）",
+  "description": "G-27 ProteusRenderBackend SPI：可插拔渲染后端接口 + conformance test + 官方后端原型（Headless/VueDom） + G-41 nodeOps Dispatcher——Render anywhere, on any engine（M1.4）",
   "type": "module",
   "license": "Apache-2.0",
+  "dependencies": {
+    "@proteus-vue/component-ir": "0.1.0"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -20,6 +23,6 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
   }
 }
