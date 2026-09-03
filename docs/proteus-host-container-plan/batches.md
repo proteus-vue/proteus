@@ -73,6 +73,8 @@
 
 ## B4 SuperAppContainer
 
+> **✅ B4 已落地（决策 #350）**：`@proteus-vue/render-backend` 新增 `superapp-container.ts`（`createSuperAppContainer(opts?)`——SuperAppContainer 权威 TS 版，页面栈委托 StackContainer）：**① 业务沙箱**（独立 scope——业务间不共享可变全局状态，G-42.5 崩溃隔离前提；`createSandbox` 校验 maxSandboxes G39_LIMIT）+ **② 崩溃隔离 L1-L3**（`executeInSandbox(bizId, fn)`：try/catch 捕获 → crashLog + sandbox-crashed 事件 + **hostAlive=true + 其他业务不受影响** + **自动重启 maxRestartCount**（超限 crashed 永久禁用）+ **③ 资源配额**（继承 Stack 配额 + 沙箱内存预算）+ **④ 安全网关**（`validateManifest` 复用 B3 `checkBizManifest`：G39_SIGN 无签名拒绝 / G39_CAP 越权能力拒绝）；capabilities = superapp 画像（multiBusiness/crashIsolation=policy 等级）；**C-07 沙箱组转 PASS**（conformance 能力门控放行 + 真断言）；测试 `tests/superapp-container.test.ts` 7 用例全过（沙箱 A/B 创建 + scope 隔离 + 网关 G39_SIGN/G39_CAP/G39_LIMIT + 崩溃隔离 hostAlive/其他存活 + 自动重启 3 次语义 + 画像 + C-07 转 PASS + destroySandbox 清理）；全量 1733 无回归。
+
 **目标**：超级应用加固
 
 | 任务 | 产出 |

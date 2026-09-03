@@ -268,11 +268,12 @@ C07('01', async ({ container }) => assert((container.capabilities as unknown as 
 C07('02', async ({ container }) => assert((container.capabilities as unknown as { crashIsolation: number }).crashIsolation > 0, '崩溃隔离能力：crashIsolation>0'))
 C07('03', async ({ container }) => assert(typeof container.createSandbox === 'function', '应可创建沙箱'))
 C07('04', async ({ container }) => {
-  const sb = await container.createSandbox('biz-a', { bizId: 'biz-a' })
+  // 带签名 + 空能力声明（对任何白名单合规，不触发 G39_SIGN/G39_CAP）
+  const sb = await container.createSandbox('biz-a', { bizId: 'biz-a', signature: 'test-sig', requiredCapabilities: [] })
   assert(sb !== null, '沙箱 A 应创建')
 })
 C07('05', async ({ container }) => {
-  const sb = await container.createSandbox('biz-b', { bizId: 'biz-b' })
+  const sb = await container.createSandbox('biz-b', { bizId: 'biz-b', signature: 'test-sig', requiredCapabilities: [] })
   assert(sb !== null, '沙箱 B 应创建')
 })
 C07('06', async ({ container }) => {
