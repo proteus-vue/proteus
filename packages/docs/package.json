@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/docs",
+  "version": "0.1.0",
+  "description": "G-36 B2 / website B2 文档引擎：Markdown → Docs IR（语义块 AST）→ HTML/Vue SFC——零依赖手写 docs 子集解析器 + 轻量高亮器 + TOC/frontmatter/搜索索引；产出的 SFC 可直接喂框架编译器 compileVueSfc（文档也是编译产物）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+  }
+}

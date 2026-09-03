@@ -50,6 +50,8 @@ Website 内部依赖：
 - [ ] 侧边栏自动生成
 - [ ] codegen 从 .d.ts 生成 1 个 API 页
 
+> **✅ 引擎件落地（决策 #365）**：新包 **`@proteus-vue/docs`**（36 包，零依赖）——**Markdown → Docs IR（语义块 AST）→ HTML/Vue SFC**：块级解析（标题锚点 kebab+中文/代码围栏/列表一层嵌套/表格对齐/引用/分隔线）+ 行内（code/strong/em/link/image）+ YAML-lite frontmatter（块式/行内数组、布尔数字归一）+ **零依赖轻量高亮器**（js/ts/vue/json/bash/css/html；内容全转义防注入）+ TOC（平铺/嵌套 h2-h3 可配）+ 搜索索引（构建期条目 + 子串评分检索）+ **toSfc**（DocsCode v-pre 包裹 + {{}} 实体化 + p-page 语义根 + 恒 script setup）；**核心证据**：md → toSfc → **框架编译器 compileVueSfc 编译通过** → mountWebComponent 真实渲染（docs-* 语义类在 DOM）——「文档也是编译产物」（第九次泛化叙事）；vite md 虚拟模块接入待下一批。测试 tests/docs-engine.test.ts 17 用例；全量 1904/181 无回归。
+
 ### B3 · Playground 内核
 **文件**：`05-playground` + `compiler-plan` WASM 集成
 **输入**：Compiler IR + TraceBus

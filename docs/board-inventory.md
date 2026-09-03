@@ -105,6 +105,7 @@
 | `proteus-devtools-plan` / `proteus-devtools-plus-plan` | G-19 | ✅ | TraceBus + 九视图 + 双向调试 + 远程中转 + 会话导出导入 |
 | `proteus-vue-devtools-plan` | G-19 | ✅ | vue devtools 面板（Router/App Config/Style Safety）+ 本地面板双通道 |
 | `proteus-testing-plan` / `proteus-test-framework-plan` | G-16 | ✅ | 四层金字塔 + 统一测试 API + 双端驱动 |
+| `@proteus-vue/docs` 文档引擎 | —（官网 B2 核心件） | ✅ **B1 落地（#365）** | Markdown → Docs IR（语义块 AST：标题锚点/代码围栏/列表/表格/引用）→ HTML（docs-* 语义类）/ **Vue SFC**（直喂框架编译器 compileVueSfc——「文档也是编译产物」）+ 零依赖轻量高亮器 + TOC/搜索索引/frontmatter；vite md 虚拟模块接入待下一批 |
 | `proteus-testing-framework-plan` | **G-44** | 📋 **规划（已入库，#364）** | ★**验证层第八次泛化**：Test IR（可序列化断言——eq/match/exists/count/throws/**notLeak**（消费 G-43 所有权图）/conforms + ActOp render·transfer·press·resize 等 + Profile3D W×H×F）+ **TestBackend SPI 五官方后端**（Node/JSCarrier/AOT/Host/Device——旧 test-framework 降格为 DeviceBackend 实现）+ **跨层集成 INT 套件**（Compiler→Render→Host→Carrier→Container→Ownership 链路——G-44.3 禁跳过）+ **G-25 三维断点自动化**（100 profiles 参数化生成——G-25 首次被自动化）+ 统一 conformance runner（七套汇总）+ 铁律 G-44.1-6 + CMP074-081；**参考实现 testing-reference.js 零依赖可跑**（断点矩阵 100/100 + 跨层集成 14/14 + 负向用例有牙齿，verify.sh 10/10 PASS）；★编号避让：原稿 G-41 与 host-integration 撞号、CMP067-074 与 ownership 撞号（→G-44 + CMP074-081，决策 #364） |
 | `proteus-app-capabilities-plan` | — | ✅ | 应用级能力（hooks/能力检查） |
 
