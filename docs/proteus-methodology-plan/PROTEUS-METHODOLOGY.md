@@ -221,6 +221,8 @@ L4 自定义             → 0.1%  → 仅兜底
 ## 9. 文档关系
 
 ```
+SPI-First 五步法（docs/spi-first-methodology/，元方法论：五步法的抽象定义——新泛化先在此登记）
+    ↑ 抽象自
 PROTEUS-METHODOLOGY.md（本文，根目录哲学入口）
     ↑ 提炼自
 proteus-architecture.md（规约层：原则 + 铁律——★M1.1 已收口 ✅）

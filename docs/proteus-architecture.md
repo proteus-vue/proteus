@@ -226,6 +226,8 @@ L0 规约（本文） → L1 方法论（G-22/22.5/24/25/26/27/28/30） → L2 �
 ## 6. 文档关系（真理来源位置）
 
 ```
+SPI-First 五步法（docs/spi-first-methodology/——元方法论：九次泛化的抽象定义，新泛化先在此登记）
+    ↓ 实例化为
 PROTEUS-METHODOLOGY.md（哲学根：统一语义收敛）
     ↓ 提炼为
 proteus-architecture.md（本文：原则 + 铁律 + 规则 = 真理来源）
