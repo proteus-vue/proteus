@@ -51,6 +51,8 @@
 
 ## B5 — 热切换与混合渲染（M2）
 
+> **✅ B5 已落地（决策 #346）**：`@proteus-vue/render-backend` 新增 `hot-switch.ts`（`createBackendSwitcher(dispatch)`：mount/switchBackend/destroy 管理活跃挂载点 + 当前 IR）——**switchBackend 生产级三策略**：`rebuild`（销毁重建——DevTools 开发期；返回 null 由调用方处置旧树）/ `rehydrate`（**同一 IR 在新引擎重建，保业务状态**——生产期路由切换；返回新 root，onBefore/onAfter 钩子）/ `hybrid`（同页面多引擎——复用 G-27 B6 `createHybridRenderer` 区域路由，**切到 hybrid 面**作为策略表达）；dispatcher.switchBackend 支持 `strategy` 参数（向后兼容默认 rebuild），trace 的 switchBackend 条目记录 strategy；测试 `tests/hot-switch.test.ts` 4 用例全过（rebuild 返回 null + trace 记录 / rehydrate 新 root 树语义等价（grid→GridView）+ currentIR 保留 / 钩子按序 before→after / hybrid 区域路由 canvas→Flutter box→Headless）；全量 1693 无回归。
+
 | 项 | 内容 |
 |----|------|
 | 交付 | `switchBackend` 生产级实现（rehydrate / rebuild / hybrid 三策略）+ 同页面多引擎 |

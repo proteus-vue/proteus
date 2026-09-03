@@ -31,7 +31,7 @@ export type NodeOpsCall =
   | { seq: number; op: 'createComment'; text: string }
   | { seq: number; op: 'parentNode'; node: number; result: number | null }
   | { seq: number; op: 'nextSibling'; node: number; result: number | null }
-  | { seq: number; op: 'switchBackend'; from: string; to: string }
+  | { seq: number; op: 'switchBackend'; from: string; to: string; strategy?: HotSwitchStrategy }
 
 /** Vue createRenderer(nodeOps) 兼容子集（签名对齐 vue-binding-architecture §3.2：createElement(type, props)） */
 export interface DispatcherNodeOps {
@@ -46,11 +46,14 @@ export interface DispatcherNodeOps {
   nextSibling(node: NodeHandle): NodeHandle | null
 }
 
+/** ★G-41 B5：热切换策略（rebuild=销毁重建·开发期 / rehydrate=同一 IR 在新引擎重建·保状态 / hybrid=同页面多引擎·区域路由） */
+export type HotSwitchStrategy = 'rebuild' | 'rehydrate' | 'hybrid'
+
 /** ★G-41 方案 B 定型：全局转发层（currentBackend 一次间接调用，热切换 = 赋值） */
 export interface ProteusNodeOpsDispatcher {
   readonly currentBackend: ProteusRenderBackend
-  /** 热切换：换 currentBackend；旧节点由调用方决定 rehydrate/rebuild（Backend.capabilities 无关，G-41 B5 定义三策略） */
-  switchBackend(next: ProteusRenderBackend): void
+  /** 热切换（G-41 B5）：换 currentBackend；strategy 决定已渲染节点处理 */
+  switchBackend(next: ProteusRenderBackend, opts?: { strategy?: HotSwitchStrategy }): void
   readonly switchHistory: ProteusRenderBackend[]
   /** 节点操作集（Vue createRenderer 消费；全部转发到 currentBackend） */
   readonly nodeOps: DispatcherNodeOps
@@ -146,9 +149,10 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
     get currentBackend() {
       return current
     },
-    switchBackend(next) {
+    switchBackend(next, opts) {
+      const strategy: HotSwitchStrategy = opts?.strategy ?? 'rebuild'
       history.push(current)
-      trace.push({ seq: ++seq, op: 'switchBackend', from: current.id, to: next.id })
+      trace.push({ seq: ++seq, op: 'switchBackend', from: current.id, to: next.id, strategy })
       current = next
     },
     get switchHistory() {
