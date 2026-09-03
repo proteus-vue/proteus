@@ -56,3 +56,40 @@ export type {
   FeatureFlag,
   AbiCacheKeyInput,
 } from './abi'
+
+export {
+  canonicalJson,
+  computeManifestHash,
+  computeBundleHash,
+} from './protocol'
+export type {
+  ProtocolEnvelope,
+  ProtocolReportReason,
+  HelloMessage,
+  HelloAckMessage,
+  ModulePushMessage,
+  LoadReportMessage,
+} from './protocol'
+
+export {
+  DevServer,
+  createDevServer,
+} from './dev-server'
+export type {
+  DevServerOptions,
+  AuditEntry,
+  PushOutcome,
+  PushStage,
+  PushInput,
+  DeviceConnection,
+} from './dev-server'
+
+export {
+  DeviceLink,
+  connectInMemory,
+} from './device-session'
+export type {
+  DeviceLinkOptions,
+  InMemoryLinkOptions,
+  InMemoryLink,
+} from './device-session'

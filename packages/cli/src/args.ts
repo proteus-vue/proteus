@@ -373,6 +373,10 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★G-38 42 项 conformance（C-01~C-10，compiler-backend-spi-plan 02）——默认 G-38 Node 参考实现\n      --backend  外部后端：模块路径[#具名导出]（default/#具名工厂返回 G-38 后端实例）\n      --only     仅跑某组（如 C-03）\n      --demo     Terminal 参考 + FallbackBackend 降级演示（rust 不可用 → node）\n      --repo     ★G-42 B5 仓库治理扫描（G-42.6 严禁 fork——宿主仓库 fork 命中 → FAIL，CI 阻断）\n      FAIL>0 → exit 1（CI 阻断）',
       },
       {
+        usage: 'proteus host push <module-dir>',
+        desc: '★G-45 B3 调试基座：插件模块前置校验（proteus.plugin.json 完整性/签名 sig-*/conformance 覆盖率 CMP084/087）\n      + push 信封生成（manifestHash/bundleHash——G-45.8 完整性）\n      FAIL → exit 1；devices/logs/serve 随 B4 transport 适配器落地',
+      },
+      {
         usage: 'proteus health [dir]',
         desc: '★工程/环境健康检查（与 check 领域门禁正交）：Node 版本 / 工程结构 / 依赖 / 产物 / appid / pagesDir / workspace 链接 / IDE\n      一次性诊断（✅/⚠/✗）；error 级 → exit 1（warn 不阻断）',
       },

@@ -10,6 +10,7 @@ const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-aut
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
+import { parseHostArgs, runHostPush } from './host'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
@@ -443,6 +444,20 @@ async function main(): Promise<void> {
         console.log('下一步：proteus app-config:check app.config.ts 校验 → 编辑 env/api/features 后接入运行时')
       } catch (e) {
         console.error(`[proteus-app-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'host': {
+      // ★G-45 B3：调试基座 CLI——host push <module-dir>（插件目录前置校验 CMP084/087 + push 信封生成）
+      //   devices/logs/serve 随 B4 transport 适配器落地
+      try {
+        const args = parseHostArgs(rest)
+        if (args.sub === 'push') {
+          process.exitCode = runHostPush(args)
+        }
+      } catch (e) {
+        console.error(`[proteus] ${e instanceof Error ? e.message : String(e)}`)
         process.exitCode = 1
       }
       break

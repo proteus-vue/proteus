@@ -233,7 +233,7 @@ proteus/
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
 ├── docs/                           # 60 份 plan + 规约 + positioning v3 + methodology + board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
-├── tests/                          # 1948 单测 / 184 文件 + Web e2e 18 例
+├── tests/                          # 1980 单测 / 185 文件 + Web e2e 18 例
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
@@ -241,7 +241,7 @@ proteus/
 ## 测试与验证
 
 ```bash
-npm test                # 1948 个单测 / 184 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / dev-host / conformance / …）
+npm test                # 1980 个单测 / 185 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / dev-host / conformance / …）
 npm run test:e2e:web    # Web e2e 18 例（Playwright：基础流 + 关键路径 + 渲染后端 demo）
 npm run verify          # test + build:web + build:mp 一键全过
 npm run check:pkg       # 38 包依赖一致性 0 error
@@ -262,7 +262,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 
 ## 开发状态与路线图
 
-- **已落地**（38 包 / 1948 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B2（Install-Once Host：动态后端装载 + pending 回放，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
+- **已落地**（38 包 / 1980 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
 - **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议
@@ -281,4 +281,4 @@ Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等�
 
 ---
 
-**文档版本**：v3.1（37→38 包：+@proteus-vue/dev-host；G-45 调试基座 B1-B2）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+
+**文档版本**：v3.1（38 包；G-45 调试基座 B1-B3a：三态生命周期 + ABI 冻结 + 推送协议）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+

@@ -80,14 +80,16 @@ interface DynamicBackendModule {
 | NAT-C-07 | 资源释放 | unload 后无残留句柄（G-43 所有权图 0 孤儿） |
 | NAT-C-08 | 热升级无感 | vN → vN+1 切换期间 pending 调用全部回放成功（C-03/C-06） |
 
-## 4. 推送协议（B3 定义，此处冻结语义）
+## 4. 推送协议（B3a 已落地 #372；transport 适配器 B4）
 
 ```
-dev server → 设备：{ type: 'module-push', manifest, bundle: ArrayBuffer, signature }
+dev server → 设备：{ type: 'module-push', manifest, bundle, signature, manifestHash, bundleHash }
 设备 → dev server：{ type: 'load-report', ...LoadReport }   // 秒级回传，CLI 可见
 语义：push 不重启 JS 上下文；装载失败不污染能力注册表（C-05 机器证明）
 安全：通道必须 TLS + token；bundle 必须签名（CMP088 审计日志）
 ```
+
+**B3a 落地注记（#372）**：协议层已实现在 `@proteus-vue/dev-host`（transport 无关——in-memory 全链 e2e 验证：推送→装载→回放→report + MITM 双向拦截 + 超时兑底）；token 门禁与签名审计在协议层；**TLS 由 transport 适配器/反向代理终结**（诚实边界——协议层不做加密）；`proteus host push` 提供模块前置校验 + push 信封生成；HTTP/WS 适配器与 `host serve/devices/logs` 守护进程随 B4 落地。
 
 ## 5. 实现指南（B4/B5 摘要）
 
