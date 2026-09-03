@@ -413,23 +413,34 @@ describe('Fluid System S3 纯逻辑（shouldReduceMotion 动效门 / calcVisible
 })
 
 describe('Fluid System S3 组件（p-sidebar 自适应导航 / p-toolbar 溢出折叠）', () => {
-  it('p-sidebar：无 ResizeObserver 环境 → 默认 bottom-bar（窄屏主场景）', async () => {
+  it('p-sidebar：无 ResizeObserver 环境 → collapsed 折叠（#384：窄容器默认收起 + 切换条）', async () => {
     const el = mount(
       PSidebar,
-      { minSidebarWidth: 640, navWidth: 160 },
+      { minSidebarWidth: 640, navWidth: 160, toggleLabel: '指南' },
       { nav: () => h('a', { class: 'n1', href: '#' }, '首页'), default: () => h('div', { class: 'm' }) },
     )
     await nextTick()
     const root = el.querySelector('.p-sidebar') as HTMLElement
-    expect(root.classList.contains('p-sidebar-bottom-bar')).toBe(true)
-    expect(root.style.flexDirection).toBe('column') // bottom-bar：纵向堆叠（main 上 nav 下）
+    expect(root.classList.contains('p-sidebar-collapsed')).toBe(true)
+    expect(root.style.flexDirection).toBe('column') // collapsed：纵向（toggle 上、main 下）
+    // 切换条可见（组件内建，业务零代码）+ aria
+    const toggle = el.querySelector('.p-sidebar-toggle') as HTMLElement
+    expect(toggle).not.toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toContain('指南')
+    // 收起态 nav 隐藏
     const nav = el.querySelector('.p-sidebar-nav') as HTMLElement
-    expect(nav.style.flexDirection).toBe('row')
-    expect(nav.style.width).toBe('100%')
-    // ★#380：面板间距组件承担（bottom-bar 导航↔主内容行间距 24 / side-rail 列间距 32）
+    expect(nav.style.display).toBe('none')
+    // 面板间距组件承担（#380）：collapsed-open 态导航↔主内容行间距 24 / side-rail 列间距 32
     expect(root.style.rowGap).toBe('24px')
     expect(root.style.columnGap).toBe('32px')
-    expect(el.querySelector('.n1')).not.toBeNull()
+    // 点击切换 → collapsed-open（nav 显示 + aria true）
+    toggle.click()
+    await nextTick()
+    expect(root.classList.contains('p-sidebar-collapsed-open')).toBe(true)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(nav.style.display).toBe('flex')
+    expect((el.querySelector('.n1') as HTMLElement)).not.toBeNull()
   })
 
   it('p-sidebar：prefers-reduced-motion（matchMedia 注入）→ no-motion class（drive-mode 动效门）', async () => {
