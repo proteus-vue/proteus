@@ -20,6 +20,8 @@
 
 ## B1 容器 SPI + 类型定义
 
+> **✅ B1 已落地（决策 #347）**：`@proteus-vue/render-backend` 新增 `container-spi.ts`——**容器 SPI + 类型定义权威 TS 版**（对齐 container-spi.md §1-7：`ProteusHostContainer` 接口（id/version/capabilities + initialize/dispose + createPage/destroyPage + push/pop + createSandbox + quota + onMemoryPressure + on）与 G-27/G-39/G-40 同形）+ `ContainerCapabilities`（CMP065 诚实声明）/ `PageHandle`/`PageState`/`DestroyReport`（五原子）/ `ResourcePool`（G-42.3 框架代管）/ `QuotaManager`（CMP061 超限 null）/ `StackPolicy`/`SuperAppPolicy`；**可测纯逻辑**：页面生命周期状态机（`PAGE_STATE_TRANSITIONS` + `canTransitionPageState`——created→mounted→hidden↔mounted→destroyed→recycled + mounted→crashed 异常路径，G-42.2 入口任意态→destroyed）+ 五原子校验（`FIVE_ATOMIC_STEPS` + `assertAtomicDestroy`——步数≠5 或顺序错抛错，G-42.2 铁律）+ 六种容器能力画像（`CONTAINER_PROFILES`：singlepage/stack/superapp(L2 隔离)/miniprogram/window/embedded——CMP065 诚实默认）；测试 `tests/container-spi.test.ts` 12 用例全过（类型可编译 + 状态机合法/非法/崩溃路径 + 五原子步数/顺序校验 + 容器画像/未知诚实默认）；全量 1705 无回归（一次 flaky 复跑全绿）。
+
 **目标**：定义插头形状
 
 | 任务 | 产出 |

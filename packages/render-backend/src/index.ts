@@ -47,3 +47,33 @@ export type { WebHostRuntime, WebWorkerHandle, WebHostOptions } from './web-host
 // ★G-41 B5：热切换生产级（switchBackend 三策略——rebuild/rehydrate/hybrid）
 export { createBackendSwitcher } from './hot-switch'
 export type { BackendSwitcher, HotSwitchOptions } from './hot-switch'
+// ★G-42 B1：HostContainer 容器 SPI + 类型定义（插头形状）
+export {
+  CONTAINER_PROFILES,
+  PAGE_STATE_TRANSITIONS,
+  canTransitionPageState,
+  FIVE_ATOMIC_STEPS,
+  assertAtomicDestroy,
+  createDestroyReport,
+  DEFAULT_STACK_POLICY,
+  profileOfContainer,
+} from './container-spi'
+export type {
+  ContainerCapabilities,
+  PageState,
+  PageHandle,
+  ResourcePool,
+  DestroyReport,
+  DestroyStep,
+  QuotaManager,
+  QuotaHandle,
+  QuotaUsage,
+  PressureLevel,
+  StackPolicy,
+  SuperAppPolicy,
+  BizManifest,
+  BusinessSandbox,
+  ContainerContext,
+  ContainerEvent,
+  ProteusHostContainer,
+} from './container-spi'
