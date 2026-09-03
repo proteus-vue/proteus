@@ -11,6 +11,8 @@ import {
   shapeOf,
   shapeEquals,
   fnv1a,
+  checkAbiCompat,
+  stableLayerCacheKey,
   type DevHostEventType,
 } from '@proteus-vue/dev-host'
 
@@ -349,5 +351,212 @@ describe('可观测（C-09/C-10 / G-45.5）', () => {
     expect(m2.pendingNow).toBe(0)
     expect(m2.events).toBeGreaterThan(0)
     expect(m2.uptimeMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+/* ================= 补丁一/二：三态生命周期 + ABI 冻结协议（#371） ================= */
+
+const BASE_ABI = {
+  abi: { major: 1, minor: 3, patch: 0 },
+  features: ['camera', 'scanQR', 'haptic_feedback'],
+  signatureChain: 'chain-proteus-official',
+}
+
+describe('ABI 兼容矩阵（补丁二 §2 / checkAbiCompat）', () => {
+  it('ABI-01：同 major + 插件 minor ≤ 基座 → 兼容', () => {
+    const r = checkAbiCompat(BASE_ABI, {
+      abi: { major: 1, minor: 2, patch: 5 },
+      features: ['camera'],
+      signatureChain: 'chain-proteus-official',
+    })
+    expect(r.compatible).toBe(true)
+    // minor 相等也兼容
+    const rEq = checkAbiCompat(BASE_ABI, { ...BASE_ABI })
+    expect(rEq.compatible).toBe(true)
+  })
+
+  it('ABI-02：major 不一致 → 链接失败（明确报错）', () => {
+    const r = checkAbiCompat(BASE_ABI, {
+      abi: { major: 2, minor: 0, patch: 0 },
+      features: [],
+      signatureChain: 'chain-proteus-official',
+    })
+    expect(r.compatible).toBe(false)
+    expect(r.reason).toBe('G45_ABI_MAJOR_MISMATCH')
+  })
+
+  it('ABI-02b：插件 minor > 基座 minor → 拒绝（G45_ABI_MINOR_NEWER）', () => {
+    const r = checkAbiCompat(BASE_ABI, {
+      abi: { major: 1, minor: 4, patch: 0 },
+      features: [],
+      signatureChain: 'chain-proteus-official',
+    })
+    expect(r.compatible).toBe(false)
+    expect(r.reason).toBe('G45_ABI_MINOR_NEWER')
+  })
+
+  it('ABI-03：插件声明未 expose 的 feature → 拒绝', () => {
+    const r = checkAbiCompat(BASE_ABI, {
+      abi: { major: 1, minor: 3, patch: 0 },
+      features: ['camera', 'sms_send'],
+      signatureChain: 'chain-proteus-official',
+    })
+    expect(r.compatible).toBe(false)
+    expect(r.reason).toBe('G45_ABI_FEATURE_NOT_EXPOSED')
+    expect(r.detail).toContain('sms_send')
+  })
+
+  it('ABI-06：签名证书链不同源 → 拒绝（G-45.7）', () => {
+    const r = checkAbiCompat(BASE_ABI, {
+      abi: { major: 1, minor: 3, patch: 0 },
+      features: [],
+      signatureChain: 'chain-third-party',
+    })
+    expect(r.compatible).toBe(false)
+    expect(r.reason).toBe('G45_ABI_SIGN_CHAIN_MISMATCH')
+  })
+
+  it('ABI-04：末尾新增字段，旧消费方可忽略 → 运行正常', async () => {
+    // 基座 v1.3 新增 diagnostics 末尾字段；旧插件（v1.2 期编译）只消费 nodeTree
+    const newBaseResult = { nodeTree: { id: 'n1' }, diagnostics: [{ code: 'FLD003' }] }
+    function oldConsumer(result: { nodeTree: { id: string } }) {
+      return result.nodeTree.id // 旧插件不读 diagnostics
+    }
+    expect(oldConsumer(newBaseResult)).toBe('n1') // 运行正常
+    // 旧基座上新插件：新字段为 undefined → 防御性判断
+    const oldBaseResult = { nodeTree: { id: 'n2' } } as { nodeTree: { id: string }; diagnostics?: unknown[] }
+    expect(oldBaseResult.diagnostics).toBeUndefined()
+  })
+})
+
+describe('三态生命周期门禁（补丁一 §2.3 / G-45.10）', () => {
+  it('ABI-05：冻结 ABI 后不兼容插件 → 拒绝装载 + pending 转降级（不崩溃）', async () => {
+    const host = createDevHost()
+    host.registerFallback('scanQR', async () => ({ text: null, degraded: true }))
+    host.freezeAbi(BASE_ABI)
+    const p = host.createStub('scanQR', 'scanQR').call()
+
+    const report = await host.loadModule({
+      manifest: {
+        id: 'oldplug', version: '1.0.0', capabilities: ['scanQR'], signature: 'sig-ok',
+        abi: { major: 2, minor: 0, patch: 0 }, // major 不一致
+        features: ['scanQR'], signatureChain: 'chain-proteus-official',
+      },
+      conformance: [checkResultShape('scanQR', 'scanQR', [{}], { text: 'string' })],
+      factory: () => ({ scanQR: async () => ({ text: 'X' }) }),
+    })
+    expect(report.ok).toBe(false)
+    expect(report.reason).toBe('G45_ABI_MAJOR_MISMATCH')
+
+    const r = (await p) as { degraded: boolean }
+    expect(r.degraded).toBe(true)
+  })
+
+  it('ABI-08：runtime 态尝试装载未预注册模块 → 拒绝执行（G-45.10）', async () => {
+    const host = createDevHost()
+    await host.loadModule(scannerModule('1.0.0', 'A')) // dev 态正常装载
+    host.setMode('runtime')
+
+    const report = await host.loadModule({
+      manifest: { id: 'newplug', version: '1.0.0', capabilities: ['useNFC'], signature: 'sig-ok' },
+      conformance: [{ name: 'nfc', check: () => true }],
+      factory: () => ({}),
+    })
+    expect(report.ok).toBe(false)
+    expect(report.reason).toBe('G45_MODE_FORBIDDEN')
+    expect(host.capabilityOf('useNFC')).toBeNull() // 能力注册表未被污染
+  })
+
+  it('release 态热加载新插件 → 拒绝装载（补丁一 §2.3）', async () => {
+    const host = createDevHost()
+    host.setMode('release')
+    host.freezeAbi(BASE_ABI)
+    const report = await host.loadModule(scannerModule('2.0.0', 'B'))
+    expect(report.ok).toBe(false)
+    expect(report.reason).toBe('G45_MODE_FORBIDDEN')
+    expect(report.reasonDetail).toContain('release')
+  })
+
+  it('dev 态全流程不受三态门禁影响（向后兼容）', async () => {
+    const host = createDevHost()
+    expect(host.currentMode).toBe('dev')
+    const report = await host.loadModule(scannerModule('1.0.0', 'A'))
+    expect(report.ok).toBe(true)
+  })
+
+  it('ABI-07：manifest 哈希不匹配推送清单 → 拒绝装载（G-45.8 防 MITM）', async () => {
+    const host = createDevHost()
+    host.registerPushManifest('scanner', 'hash-expected')
+
+    const report = await host.loadModule({
+      manifest: {
+        id: 'scanner', version: '1.0.0', capabilities: ['scanQR'], signature: 'sig-ok',
+        manifestHash: 'hash-tampered',
+      },
+      conformance: [checkResultShape('scanQR', 'scanQR', [{}], { text: 'string' })],
+      factory: () => ({ scanQR: async () => ({ text: 'X' }) }),
+    })
+    expect(report.ok).toBe(false)
+    expect(report.reason).toBe('G45_MANIFEST_HASH_MISMATCH')
+
+    // 哈希一致 → 正常装载
+    const okReport = await host.loadModule({
+      manifest: {
+        id: 'scanner', version: '1.0.0', capabilities: ['scanQR'], signature: 'sig-ok',
+        manifestHash: 'hash-expected',
+      },
+      conformance: [checkResultShape('scanQR', 'scanQR', [{}], { text: 'string' })],
+      factory: () => ({ scanQR: async () => ({ text: 'OK' }) }),
+    })
+    expect(okReport.ok).toBe(true)
+  })
+
+  it('运行态参数灰度合法（setFeatureFlag 非代码下发 + mode:changed/config:applied 事件）', () => {
+    const host = createDevHost()
+    const modes: string[] = []
+    const configs: string[] = []
+    host.on('mode:changed', (p) => modes.push(String(p.mode)))
+    host.on('config:applied', (p) => configs.push(String(p.name)))
+
+    host.setMode('runtime')
+    host.setFeatureFlag('glass_material', { enabled: true, level: 'L2' })
+    host.setFeatureFlag('video_stream', { enabled: false })
+
+    expect(modes).toEqual(['runtime'])
+    expect(configs).toEqual(['glass_material', 'video_stream'])
+    expect(host.getFeatureFlags()['glass_material']).toEqual({ enabled: true, level: 'L2' })
+  })
+
+  it('冻结 ABI 后 dev 态装载兼容插件成功（ABI 冻结不阻断合规插件）', async () => {
+    const host = createDevHost()
+    host.freezeAbi(BASE_ABI)
+    const report = await host.loadModule({
+      manifest: {
+        id: 'scanner', version: '1.0.0', capabilities: ['scanQR'], signature: 'sig-ok',
+        abi: { major: 1, minor: 2, patch: 0 }, features: ['scanQR'],
+        signatureChain: 'chain-proteus-official',
+      },
+      conformance: [checkResultShape('scanQR', 'scanQR', [{}], { text: 'string' })],
+      factory: () => ({ scanQR: async () => ({ text: 'OK' }) }),
+    })
+    expect(report.ok).toBe(true)
+  })
+})
+
+describe('stableLayerCacheKey 精确化（补丁二 §5）', () => {
+  it('manifest/签名链哈希参与稳定层 key；页面规模永远不参与（CMP086）', () => {
+    const k1 = stableLayerCacheKey({ frameworkVersion: 'v1.0', abi: '1.3' })
+    expect(k1).toBe('base:v1.0:1.3')
+
+    const k2 = stableLayerCacheKey({ frameworkVersion: 'v1.0', abi: '1.3', backendManifestHash: 'm1', signatureChainHash: 's1' })
+    expect(k2).toBe('base:v1.0:1.3:m:m1:s:s1')
+
+    // 任一插件 manifest 变更 → 稳定层 key 变化（触发发布构建）
+    const k3 = stableLayerCacheKey({ frameworkVersion: 'v1.0', abi: '1.3', backendManifestHash: 'm2', signatureChainHash: 's1' })
+    expect(k3).not.toBe(k2)
+
+    // 与页面数无关：同输入同 key
+    const k4 = stableLayerCacheKey({ frameworkVersion: 'v1.0', abi: '1.3', backendManifestHash: 'm1', signatureChainHash: 's1' })
+    expect(k4).toBe(k2)
   })
 })

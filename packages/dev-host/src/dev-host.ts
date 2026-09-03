@@ -22,6 +22,8 @@ import type {
   PendingEntry,
   ProteusDevHost,
 } from './types'
+import type { AbiContract, DevHostMode, FeatureFlag } from './abi'
+import { checkAbiCompat } from './abi'
 
 /** 装载门禁能解析出的目标（stub 直调用） */
 interface ResolveTarget {
@@ -93,8 +95,53 @@ export class DevHost implements ProteusDevHost {
   }
   private readonly createdAt = Date.now()
 
+  /** ★补丁一：三态生命周期（dev 全功能 / release 静态链接 / runtime 仅参数灰度） */
+  private mode: DevHostMode = 'dev'
+  private abiContract: AbiContract | null = null
+  private pushManifests = new Map<string, string>()
+  private featureFlags = new Map<string, FeatureFlag>()
+
   /** ★ 基座重打次数：动态装载路径下恒为 0（G-45.4），>0 即违规 */
   readonly baseRebuildCount = 0
+
+  /* ---- 三态生命周期（补丁一） ---- */
+
+  get currentMode(): DevHostMode {
+    return this.mode
+  }
+
+  /**
+   * 状态切换：dev → release（发布构建）→ runtime（商店审核通过）。
+   * release/runtime 态 loadModule 一律拒绝（G-45.10，G45_MODE_FORBIDDEN）。
+   */
+  setMode(mode: DevHostMode): void {
+    this.mode = mode
+    this.emit('mode:changed', { mode })
+  }
+
+  /** 发布构建 freezeStableLayer：冻结基座 ABI 契约（后续装载按此校验，05-abi-versioning） */
+  freezeAbi(contract: AbiContract): void {
+    this.abiContract = contract
+  }
+
+  get frozenAbi(): AbiContract | null {
+    return this.abiContract
+  }
+
+  /** dev server 推送清单登记（G-45.8 防 MITM：装载时比对 manifestHash） */
+  registerPushManifest(moduleId: string, manifestHash: string): void {
+    this.pushManifests.set(moduleId, manifestHash)
+  }
+
+  /** 运行态参数灰度（Remote Config 形态——非代码下发，G-45.10） */
+  setFeatureFlag(name: string, flag: FeatureFlag): void {
+    this.featureFlags.set(name, { ...flag })
+    this.emit('config:applied', { name, enabled: flag.enabled, level: flag.level ?? null })
+  }
+
+  getFeatureFlags(): Record<string, FeatureFlag> {
+    return Object.fromEntries(this.featureFlags)
+  }
 
   /* ---- stub 与降级 ---- */
 
@@ -165,6 +212,15 @@ export class DevHost implements ProteusDevHost {
       replayed: 0,
     }
 
+    // 门禁 0：三态越界（补丁一 §2.3 / G-45.10）——release/runtime 态禁止动态装载
+    if (this.mode !== 'dev') {
+      report.reasonDetail =
+        this.mode === 'release'
+          ? 'release 态：稳定层已静态链接，动态装载拒绝（热加载走下一版本发布）'
+          : 'runtime 态：禁止下载执行新原生代码，仅允许已链接能力的参数灰度'
+      return this.reject(report, 'G45_MODE_FORBIDDEN')
+    }
+
     // 门禁 1：manifest 完整性（CMP084）
     if (
       !manifest ||
@@ -179,6 +235,31 @@ export class DevHost implements ProteusDevHost {
     // 门禁 2：签名（CMP084，G-42 安全网关同源）
     if (typeof manifest.signature !== 'string' || !/^sig-[a-z0-9]+$/.test(manifest.signature)) {
       return this.reject(report, 'G45_SIGN')
+    }
+
+    // 门禁 2.5：ABI 兼容性（补丁二——基座已冻结 ABI 且模块声明 abi 时校验，ABI-01~03/05/06）
+    if (this.abiContract && manifest.abi) {
+      const abiReport = checkAbiCompat(this.abiContract, {
+        abi: manifest.abi,
+        features: manifest.features ?? [],
+        signatureChain: manifest.signatureChain ?? manifest.signature,
+      })
+      if (!abiReport.compatible) {
+        report.reasonDetail = abiReport.detail
+        const rejected = this.reject(report, abiReport.reason)
+        // ABI-05：不兼容模块永远不会服务这些能力 → pending 转降级兜底（不崩溃）
+        this.drainPendingToFallback(manifest.capabilities)
+        return rejected
+      }
+    }
+
+    // 门禁 2.6：推送清单哈希（补丁二 G-45.8 防 MITM，ABI-07）
+    if (manifest.manifestHash !== undefined) {
+      const expected = this.pushManifests.get(manifest.id)
+      if (expected !== undefined && expected !== manifest.manifestHash) {
+        report.reasonDetail = `manifestHash ${manifest.manifestHash} ≠ 推送清单 ${expected}`
+        return this.reject(report, 'G45_MANIFEST_HASH_MISMATCH')
+      }
     }
 
     // 门禁 3：conformance 覆盖率——每能力至少一例（CMP087）

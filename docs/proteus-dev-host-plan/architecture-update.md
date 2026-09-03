@@ -22,6 +22,12 @@ G-45.1-6 全文见 `rules.md`（基座零插件知识 / pending 非抛语义 / �
 |------|------|------|------|------|
 | CMP | CMP082-088 | error | 基座禁引用插件（082）/未装载调用走 pending 非抛（083）/manifest+签名缺一拒绝（084）/装载必跑快检 FAIL 拒绝+降级（085）/cacheKey 禁规模因子（086）/快检覆盖率≥能力数（087）/推送通道 TLS+token+审计（088） | 🆕 dev-host-plan（G-45） |
 
+## 3.5 铁律补丁追加（v3.11，三态生命周期 + ABI 冻结协议）
+
+> 来源：`04-lifecycle-three-state.md` + `05-abi-versioning.md`（原稿旧编号已重指向：宿主运行时 G-36→G-39、容器 G-39→G-42、所有权 G-40→G-43）
+
+G-45.7（签名证书链同源）/ G-45.8（manifest 哈希防 MITM）/ G-45.9（Install-Once 禁宣称线上热更新）/ G-45.10（运行态禁引入未预注册能力，仅参数灰度）——全文见 plan `rules.md` §3；规约 §2.2 铁律总表已同步。ABI 兼容矩阵（major 相等 + minor 向后兼容 + features 子集 + 签名链同源）与 ABI-01~08 conformance 见 `05-abi-versioning.md`。
+
 ## 4. 全局执行序追加（facade v3.10）
 
 | G 序 | plan | 依赖 | 验证点 |

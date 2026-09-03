@@ -21,6 +21,14 @@ export interface BackendManifest {
   minHostVersion?: string
   /** 同能力多插件时的优先级（复用 G-28 Adapter Registry 语义） */
   priority?: number
+  /** ★补丁二：插件 ABI 版本（提供时与基座冻结契约校验） */
+  abi?: { major: number; minor: number; patch: number }
+  /** ★补丁二：插件声明依赖的 feature 集（须 ⊆ 基座 expose） */
+  features?: string[]
+  /** ★补丁二：插件签名证书链标识（同源校验 G-45.7） */
+  signatureChain?: string
+  /** ★补丁二：manifest 哈希（与 dev server 推送清单比对，G-45.8 防 MITM） */
+  manifestHash?: string
 }
 
 export interface ConformanceCase {
@@ -41,6 +49,12 @@ export type LoadRejectReason =
   | 'G45_CONFORMANCE_COVERAGE'
   | 'G45_CONFORMANCE_FAIL'
   | 'G45_FACTORY_THROWN'
+  | 'G45_MODE_FORBIDDEN'
+  | 'G45_ABI_MAJOR_MISMATCH'
+  | 'G45_ABI_MINOR_NEWER'
+  | 'G45_ABI_FEATURE_NOT_EXPOSED'
+  | 'G45_ABI_SIGN_CHAIN_MISMATCH'
+  | 'G45_MANIFEST_HASH_MISMATCH'
 
 export interface ConformanceResult {
   name: string
@@ -79,6 +93,8 @@ export type DevHostEventType =
   | 'module:rejected'
   | 'module:unloaded'
   | 'fallback'
+  | 'mode:changed'
+  | 'config:applied'
 
 export interface DevHostEventRecord {
   type: DevHostEventType

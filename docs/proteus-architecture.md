@@ -160,6 +160,10 @@
 | **G-45.4** | **双层产物强制分离：基座 cacheKey = f(框架版本, ABI)，禁止含页面数/插件数等业务规模因子；基座构建频次必须为「每框架版本 1 次」** | dev-host |
 | **G-45.5** | **动态装载全链可观测：loaded/upgraded/rejected/fallback/pending/replay 必须发事件（TraceBus 同源），禁止静默降级** | dev-host |
 | **G-45.6** | **发布形态诚实边界：商店发布包必须回静态链接（每版本一次）；动态装载通道禁止用于规避商店审核或绕过分发合规** | dev-host |
+| **G-45.7** | **动态模块签名证书链必须与基座同源：不同源拒绝装载（G45_ABI_SIGN_CHAIN_MISMATCH）** | dev-host |
+| **G-45.8** | **manifest 哈希须与 dev server 推送清单一致（防 MITM）：不匹配拒绝装载（G45_MANIFEST_HASH_MISMATCH）** | dev-host |
+| **G-45.9** | **Install-Once 仅限开发态与内部分发，禁止宣称「线上热更新」** | dev-host |
+| **G-45.10** | **发布态 ABI 冻结后，运行态禁止引入未预注册的原生能力：release/runtime 态 loadModule 一律拒绝（G45_MODE_FORBIDDEN）；运行态仅参数灰度（非代码）** | dev-host |
 
 ### 2.3 落地约束（既有，合并保留）
 

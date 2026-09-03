@@ -43,6 +43,8 @@ Proteus（Install-Once Host）：
 | `01-problem.md` | ★ 痛点解剖：自定义基座循环的根因四条 + 竞品横向 |
 | `02-architecture.md` | ★ 核心解法：基座即宿主 + 三端动态装载分级 + 发布诚实边界 |
 | `03-spi.md` | ★ DevHost SPI + DynamicBackendModule 契约 + 推送协议 + NAT-C conformance |
+| `04-lifecycle-three-state.md` | ★ 补丁一：三态生命周期（dev/release/runtime）+ ABI 冻结协议 + 平台差异诚实边界 |
+| `05-abi-versioning.md` | ★ 补丁二：ABI 版本三元组 + 兼容矩阵 + 四类变更 + cacheKey 精确化 + ABI-01~08 conformance |
 | `rules.md` | 铁律 G-45.1-6 + CMP082-088 |
 | `batches.md` | B1-B6 分批 + DoD |
 | **`dev-host-reference.cjs`** | ★ 可运行参考实现（模拟器：装载/回放/热升级/门禁/双层缓存） |

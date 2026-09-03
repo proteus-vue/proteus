@@ -42,3 +42,17 @@ export {
   fnv1a,
 } from './build-planner'
 export type { BuildState, BuildPlan, BuildLayer, LayerPlan, PluginLayerPlan } from './build-planner'
+
+export {
+  checkAbiCompat,
+  stableLayerCacheKey,
+} from './abi'
+export type {
+  AbiVersion,
+  AbiContract,
+  AbiRejectReason,
+  AbiCompatReport,
+  DevHostMode,
+  FeatureFlag,
+  AbiCacheKeyInput,
+} from './abi'

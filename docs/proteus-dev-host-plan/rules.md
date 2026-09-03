@@ -25,7 +25,26 @@
 | CMP087 | error | 插件 conformance 覆盖率：用例数 ≥ 能力数；每能力至少一条 shape 契约 | 插件 CI + 装载门禁 |
 | CMP088 | error | 调试推送通道必须 TLS + token + bundle 签名，全量审计日志（防通道滥用注入） | dev server |
 
-## 3. 原则增量（#13.28-13.30，见 architecture-update.md）
+## 3. 铁律补丁（G-45.7-10，三态生命周期 + ABI 冻结协议）
+
+> 来源：`04-lifecycle-three-state.md` + `05-abi-versioning.md`（★原稿旧编号已重指向：宿主运行时 G-36→G-39、容器 G-39→G-42、所有权 G-40→G-43）
+
+| 编号 | 铁律 | 理由 |
+|------|------|------|
+| **G-45.7** | **动态模块签名证书链必须与基座同源：证书链不同源 → 拒绝装载（G45_ABI_SIGN_CHAIN_MISMATCH）** | 防第三方插件伪装推送；与 G-42 签名网关同源 |
+| **G-45.8** | **manifest 哈希须与 dev server 推送清单一致（防 MITM）：不匹配 → 拒绝装载（G45_MANIFEST_HASH_MISMATCH）** | 推送通道完整性校验，与 CMP088 TLS+token 互补 |
+| **G-45.9** | **Install-Once 仅限开发态与内部分发，禁止宣称「线上热更新」** | 三态建模的诚实边界——对外叙事合规是铁律不是建议 |
+| **G-45.10** | **发布态 ABI 冻结后，运行态禁止引入未预注册的原生能力：release/runtime 态 loadModule 一律拒绝（G45_MODE_FORBIDDEN）；运行态只允许已链接能力的参数灰度（Remote Config，非代码）** | App Store 2.5.2 / Play 动态代码政策的机器化门禁 |
+
+**三态装载门禁矩阵**（DevHost.mode 实现）：
+
+| mode | loadModule | 合法操作 |
+|------|-----------|---------|
+| dev（默认） | 全门禁链放行 | push / 回放 / 热升级 / 卸载 |
+| release | **拒绝**（G45_MODE_FORBIDDEN） | freezeAbi + registerPushManifest + 静态链接产物构建 |
+| runtime | **拒绝**（G45_MODE_FORBIDDEN，G-45.10） | setFeatureFlag 参数灰度（非代码）+ 降级兑底 |
+
+## 4. 原则增量（#13.28-13.30，见 architecture-update.md）
 
 - **#13.28 基座零插件知识**（G-45）
 - **#13.29 变化层与稳定层构建隔离**（G-45）
