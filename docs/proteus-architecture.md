@@ -61,6 +61,9 @@
 | #13.22 | 确定性 Drop：边界资源释放时机必须确定，不得依赖 GC | ownership G-43 |
 | #13.23 | 所有权关系 100% 可观测：所有权图必须完整维护 Owner/Borrow/Weak + 源码位置 + 生命周期，并在 DevTools 可视化 | ownership G-43 |
 | #13.24 | 所有权可验证：所有权实现必须通过 Conformance 测试 | ownership G-43 |
+| #13.25 | 测试语义可插拔：期望行为必须用可序列化的 Test IR 描述，执行必须是可插拔的 TestBackend（禁止逻辑塞进运行器闭包） | testing-framework G-44 |
+| #13.26 | 跨层组合正确性必须被自动化验证：七套 conformance 之外，跨层集成（Compiler→Render→Host→Carrier→Container→Ownership）必须有 INT 套件且 100% 通过（无暂时跳过） | testing-framework G-44 |
+| #13.27 | 任一 Backend conformance FAIL 即阻断：任何后端的失败都阻断合并，报告必须含 trace 链（定位到 IR 节点 + 源码行） | testing-framework G-44 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -142,6 +145,12 @@
 | **G-43.4** | **默认路径框架代管：99% 场景（定时器/订阅/请求）走 Managed<T>，业务零心智负担** | ownership |
 | **G-43.5** | **所有权关系必须 100% 可观测：所有权图维护 Owner/Borrow/Weak + 源码位置 + 生命周期，DevTools 全展示** | ownership |
 | **G-43.6** | **确定性 Drop：释放必须确定性（显式 drop()/作用域结束/页面强制回收），禁止依赖 GC 时机** | ownership |
+| **G-44.1** | **断言必须可序列化为 AssertionNode：禁止把逻辑塞进测试运行器闭包（跨 Backend/跨进程的前提）** | testing-framework |
+| **G-44.2** | **任一 Backend 的 conformance FAIL → 阻断合并（体系正确性不容降级）** | testing-framework |
+| **G-44.3** | **跨层集成测试必须 100% 通过（无「暂时跳过」——INT 套件是链路正确性核心）** | testing-framework |
+| **G-44.4** | **同一份 Test IR 必须在 ≥2 个 Backend 上可执行（可插拔的可验证性）** | testing-framework |
+| **G-44.5** | **性能基准退化 > 5% → 阻断（基准值固化 .proteus/benchmark.json，改动须 Owner 审批）** | testing-framework |
+| **G-44.6** | **失败报告必须含 trace 链：定位到 IR 节点 + 源码行（可调试性）** | testing-framework |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -174,6 +183,7 @@
 | CMP | CMP051-058 | error | 宿主注册先于 bootstrap（051）/业务禁直接引用 RenderBackend/nodeOps（052）/业务禁直接调 HostRuntime.createWorker/invokeNative（053）/引擎禁 import vue（054）/框架禁 import 平台 SDK（055）/宿主禁 IR 字段分支判断（056）/引擎切换须过 H-05 热切换验证（057）/宿主上线须 host-conformance 0 失败（058） | 🆕 host-integration-plan（G-41） |
 | CMP | CMP059-066 | error | 容器策略可声明式配置（059）/深度超限不得静默丢弃（060）/配额超限返回 null（061）/沙箱作用域完全隔离（062）/崩溃后必须上报宿主（063）/安全网关拒绝而非降级（064）/容器必须声明 capabilities（065）/销毁报告可观测 DestroYReport（066） | 🆕 host-container-plan（G-42） |
 | CMP | CMP067-073 | error | 业务禁直接释放框架代管资源（067）/跨设备转移必须原子（068）/不可转移资源显式拒绝（069）/释放失败不得静默（070）/Owned<T> 禁被 ref/reactive 包装（071）/PSS strict 禁引入未声明第三方库（072）/配额记账须与所有权图一致（073） | 🆕 ownership-plan（G-43） |
+| CMP | CMP074-081 | error | 跨 Backend 同语义必须产出结构一致 state（074）/Test IR 文件（.tir.json）必须进 git（075）/arrange·act·assert 必须 JSON 可序列化（076）/跨 Backend 结果不一致 = 语义分歧必须修复（077）/三维断点矩阵必须有自动化覆盖（078）/新 plan 落地必须同步提供 Test IR（079）/Agent 产物须过 TestBackend 门禁（080）/性能基准固化且改动须 Owner 审批（081） | 🆕 testing-framework-plan（G-44） |
 
 ---
 

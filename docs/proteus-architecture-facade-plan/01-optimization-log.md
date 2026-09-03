@@ -16,10 +16,11 @@
 | v3.6 | website-v3 同批四 plan 追加 | website-v3 未跟踪目录/zip 的新内容（决策 #312/#313/#314）抽离并入 **G-36（ai-agent）/ G-37（render-backend-spi）/ G-38（compiler-backend-spi）/ G-39（host-runtime-spi）**；原稿声称的 G-33/G-34/G-35/G-36 与已实现 plan（CLI/HMR/app-config/AI-Agent）撞号 → 一律以本表为准；原则 #11→#13（含 #13.5-10 编译/运行时子原则）、铁律 G-36~39.1-6、规则 CMP017-043 合并进 `proteus-architecture` L0 规约；同步删除冗余 `proteus-types-plan`（v1 并入 types-plus v2.0）+ `proteus-llm-rules-plan`（并入 website-v3）+ 3 `.DS_Store` | 规约表 G-01~G-39 · 四 plan 文档编号重指向（G-36→G-39 系列）+ board-inventory 登记 |
 | v3.7 | execution-carrier 追加 | 新增 execution-carrier（执行载体抽象 + JSI 边界治理：JSICarrier/AOTCarrier 双载体 + 批处理差分 + 零拷贝通道 + 实时逃逸 + conformance 42）并入 **G-40**（决策 #340）；原稿声称 G-37/G-36/G-35/G-34 撞号 → 一律以本表为准（G-37→G-40、G-36→G-39、G-35→G-38、G-34→G-27 系）；原则 #13.11-13.14、铁律 G-40.1-6、规则 CMP044-050 合并进 `proteus-architecture` L0 规约 | 规约表 G-01~G-40 · execution-carrier-plan 编号重指向 + board-inventory 登记 |
 | v3.8 | 宿主层三 plan 追加 | 新增宿主层三份 plan（决策 #341）并入 **G-41（host-integration）/ G-42（host-container）/ G-43（ownership）**；原稿声称 G-38/G-39/G-40 与 compiler-backend-spi / host-runtime / execution-carrier 撞号，内部沿用 execution-carrier 原稿旧编号体系（宿主运行时 G-36 / 执行载体 G-37 / 渲染 G-34 / 编译 G-35 / AI-Agent G-33）→ 一律以本表为准（G-38→G-41、G-39→G-42、G-40→G-43、G-37→G-40、G-36→G-39、G-35→G-38、G-34→G-27 渲染本体/G-37 渲染 SPI、G-33→G-36）；原则 #13.15-24、铁律 G-41/42/43.1-6、规则 CMP051-073 合并进 `proteus-architecture` L0 规约；三份参考实现 CJS 改 .cjs（type:module 兼容） | 规约表 G-01~G-43 · 三 plan 文档编号重指向 + board-inventory 登记 |
+| v3.9 | testing-framework 追加 | 新增自动化测试框架 plan（第八次泛化：Test IR + TestBackend SPI，决策 #364）并入 **G-44**；原稿声称 G-41 与 host-integration 撞号、CMP067-074 与 ownership（G-43）撞号 → 一律以本表为准（G-41→G-44、CMP067-074→CMP074-081）；原稿旧编号引用（宿主运行时 G-36/执行载体 G-37/接入 G-38/容器 G-39/所有权 G-40/编译 G-35/渲染 G-34）全量重指向；原稿「第七次泛化」漏计所有权修正为第八次；原则 #13.25-13.27、铁律 G-44.1-6、规则 CMP074-081 合并进 `proteus-architecture` L0 规约；陈旧 00-12 副本删除（repo proteus-test-framework-plan 版本更新——含 #204/#205 TestDriver 落地增量） | 规约表 G-01~G-44 · plan 编号避让 + board-inventory 登记 |
 
 ---
 
-## 二、G-01 ~ G-43 全局执行序（权威版）
+## 二、G-01 ~ G-44 全局执行序（权威版）
 
 | 序号 | 内容 | 前置 | 备注 |
 |------|------|------|------|
@@ -66,6 +67,7 @@
 | G-41 | host-integration（宿主接入契约 + Vue 绑定架构） | G-27,G-39,G-40,G-38 | 宿主接入插头（原稿 G-38 与 compiler-backend-spi 撞号，重指向 G-41，决策 #341） |
 | G-42 | host-container（容器 SPI + 页面生命周期 + 严禁 fork） | G-39,G-41,G-40,G-27 | 容器插头（原稿 G-39 与 host-runtime 撞号，重指向 G-42，决策 #341） |
 | G-43 | ownership（资源所有权 SPI + 借用检查 + 确定性 Drop） | G-42,G-40,G-39,G-38 | 所有权插头（原稿 G-40 与 execution-carrier 撞号，重指向 G-43，决策 #341） |
+| G-44 | testing-framework（Test IR 可序列化断言 + TestBackend SPI 五后端 + 八次泛化统一 runner） | G-27,G-29,G-39,G-40,G-41,G-42,G-43,G-25 | 验证层插头（原稿 G-41 与 host-integration 撞号、CMP067-074 与 ownership 撞号 → G-44 + CMP074-081，决策 #364） |
 
 ---
 
