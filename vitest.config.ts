@@ -66,6 +66,7 @@ export default defineConfig({
       { find: '@proteus-vue/agent', replacement: fileURLToPath(new URL('./packages/agent/src/index.ts', import.meta.url)) },
       // ★G-36 B2/官网 B2：@proteus-vue/docs 文档引擎包（tests/docs-engine.test.ts 直接引用）
       { find: '@proteus-vue/docs', replacement: fileURLToPath(new URL('./packages/docs/src/index.ts', import.meta.url)) },
+      { find: '@proteus-vue/test-ir', replacement: fileURLToPath(new URL('./packages/test-ir/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },

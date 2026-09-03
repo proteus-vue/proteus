@@ -28,6 +28,8 @@ B1 (SPI 骨架) ──▶ B2 (断点矩阵) ──▶ B3 (跨层集成)
 
 **依赖**：G-43（所有权图，供 `notLeak` 断言消费）
 
+> **✅ B1 已落地（决策 #367）**：新包 **`@proteus-vue/test-ir`**（37 包，零依赖）——**① 类型层** `types.ts`：TestIR（id/target/arrange/act/assert/profile/backend/tags/xfail——JSON 可序列化，G-44.1 禁闭包）/ AssertionNode（eq/match/exists/count/throws/notLeak/conforms/and·or 八种）/ ActOp 十操作（render/update/destroy/transfer/borrow/press/injectState/resize/setFormFactor/callNative）/ Profile3D / TestReport（含 trace 链 G-44.6）/ BackendCaps / ProteusTestBackend SPI 接口；**② 断言解释器** `assertion-runner.ts`：getPath（JSONPath 子集：点 + [n] 索引）/ evalAssertion（八种 + and·or 组合；**eq 宽松相等——null≈undefined 对齐 moved 资源语义**）/ applyAct（transfer=Move 语义模拟、destroy=五原子清零、setFormFactor/resize/injectState）——**★run() 先 arrange 合并（深拷贝——多后端复用同一 Test IR 不突变 arrange）→ base 状态补缺 → act → 断言**；**③ 五官方后端** `backends.ts`：Node/JSCarrier/AOT/Host/Device（**supports 门控：Device 专属 breakpoint 层，其余后端排除**；Device buildState 按宽度档位求解 p-adaptive form）+ renderState 统一状态工厂（CMP074 跨后端结构一致）+ officialBackends() 实例集；**④ ConformanceRunner** `conformance-runner.ts`：逐后端筛选兼容用例执行 + merge byBackend 汇总（G-44.4 多后端覆盖统计）；**⑤ 断点矩阵** `breakpoint.ts`：W/H/F 常量 + formForWidth 档位求解 + **generateBreakpointSuite 参数化 100 个 Test IR**；**⑥ 跨层集成套件** `integration.ts`：INT-01~05（Compiler→Render 交界/AOT 下所有权/引擎切换转移/五原子 Drop/TV 焦点）。**验证（DoD）**：NodeBackend 10 示例用例全 PASS + **JSON 序列化往返后执行语义不变**（可序列化机器证据）+ 断点矩阵 100/100（边界档位 320/840/1200 形态正确）+ INT-01~05 零失败 + 负向用例失败含 trace（G-44.6）；测试 `tests/test-ir.test.ts` 14 用例；全量 1923/183 无回归。
+
 ---
 
 ## B2 — 三维断点矩阵（★ M1 核心）
