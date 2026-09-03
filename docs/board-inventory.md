@@ -132,7 +132,7 @@
 | `docs/roadmap.md` | 版本线（v0.1→v2.0，对标 uni-app/Taro）——与本表 §1 双路线对照 |
 | `docs/routing.md` / `compiler.md` / `configuration.md` / `types.md` / `packages.md` / `getting-started.md` | 使用文档 |
 | `docs/vue-compat-plan.md` / `vue-compat-advance.md` | Vue 兼容性文档（能力已落地） |
-| `docs/archive/proteus-positioning-v2.md` | positioning v2 存档（v3 为权威门面） |
+| ~~`docs/archive/proteus-positioning-v2.md`~~ | 已删除（决策 #364 尾——v3 为权威门面，v2 零引用归档历史化） |
 
 ---
 
