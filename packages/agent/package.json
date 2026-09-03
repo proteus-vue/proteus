@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@proteus-vue/component-ir": "0.1.0",
-    "@proteus-vue/mcp": "0.1.0"
+    "@proteus-vue/mcp": "0.1.0",
+    "@proteus-vue/compat-miniprogram": "0.1.0"
   }
 }

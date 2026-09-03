@@ -11,6 +11,7 @@ import {
   withProteusRules,
   intentToFlex,
   matchBlocks,
+  migrateMiniprogram,
 } from '@proteus-vue/agent'
 import { createMcpServer } from '@proteus-vue/mcp'
 import type { BuiltPage } from '@proteus-vue/agent'
@@ -175,6 +176,89 @@ describe('G-36 B2 AgentKit 门面（不绑 LLM 独立运行）', () => {
 
   it('不支持 Skill 显式报错（B3/B5 未落地不静默）', async () => {
     const kit = new AgentKit()
-    await expect(kit.generatePage({ intent: 'x', skills: ['migrate-miniprogram'] })).rejects.toThrow(/B3\/B5/)
+    await expect(kit.generatePage({ intent: 'x', skills: ['adapt-device'] })).rejects.toThrow(/B3\/B5/)
+  })
+})
+
+describe('G-36 B3 migrate-miniprogram Skill（G-31 B6 codemod 复用 + CMP019 日志 + 覆盖率）', () => {
+  const MP_SOURCE = [
+    '<template>',
+    '  <view class="page">',
+    '    <text>标题</text>',
+    '    <scroll-view scroll-y>内容</scroll-view>',
+    '    <swiper indicator-dots>轮播</swiper>',
+    '  </view>',
+    '</template>',
+    '<script>',
+    'export default {',
+    '  methods: {',
+    '    load() {',
+    '      wx.setStorageSync("k", 1)',
+    '      wx.request({ url: "/api" })',
+    '      wx.getSystemInfoSync()',
+    '      wx.navigateTo({ url: "/pages/next" })',
+    '    },',
+    '  },',
+    '}',
+    '</script>',
+  ].join('\n')
+
+  it('迁移替换生效（codemod 复用：标签 auto + 存储直改 + manual 标注）+ 幂等', async () => {
+    const r = await migrateMiniprogram({ source: MP_SOURCE, name: 'legacy' }, { mcp: createMcpServer() })
+    expect(r.name).toBe('legacy')
+    expect(r.code).toContain('<p-box class="page">') // view → p-box
+    expect(r.code).toContain('<p-text>标题</p-text>')
+    expect(r.code).toContain('useStorage().set') // 同步存储直改
+    expect(r.code).toContain('[proteus-migrate:manual]') // scroll-view/swiper 语义标注
+    // 幂等：重复跑零变化
+    const again = await migrateMiniprogram({ source: r.code }, { mcp: createMcpServer() })
+    expect(again.code).toBe(r.code)
+  })
+
+  it('CMP019 映射日志：auto/manual 状态 + wx API → Hook 映射', async () => {
+    const r = await migrateMiniprogram({ source: MP_SOURCE }, { mcp: createMcpServer() })
+    const byFrom = new Map(r.log.map((e) => [e.from, e]))
+    // tag auto
+    expect(byFrom.get('<view>')?.status).toBe('auto')
+    expect(byFrom.get('<view>')?.to).toBe('<p-box>')
+    // tag manual（语义识别）
+    expect(byFrom.get('<scroll-view>')?.status).toBe('manual')
+    // 存储（codemod 直改）不入日志（auto 集中在 tag）
+    expect(byFrom.get('wx.request')?.status).toBe('auto')
+    expect(byFrom.get('wx.request')?.to).toBe('useFetch()')
+    expect(byFrom.get('wx.navigateTo')?.to).toBe('router.push()')
+    // 私有 API → useMiniProgram()
+    expect(byFrom.get('wx.getSystemInfoSync')?.to).toBe('useMiniProgram()')
+    expect(byFrom.get('wx.getSystemInfoSync')?.status).toBe('manual')
+  })
+
+  it('覆盖率统计（≥80% 目标口径）+ wx API 计数', async () => {
+    const r = await migrateMiniprogram({ source: MP_SOURCE }, { mcp: createMcpServer() })
+    expect(r.stats.tagsReplaced).toBeGreaterThanOrEqual(2) // view/text/button
+    expect(r.stats.storageReplaced).toBeGreaterThanOrEqual(1)
+    expect(r.stats.manualAnnotations).toBeGreaterThanOrEqual(2) // scroll-view + swiper
+    expect(r.stats.wxApisFound).toBe(4) // setStorageSync/request/getSystemInfoSync/navigateTo
+    expect(r.coverage).toBeGreaterThan(0)
+    expect(r.coverage).toBeLessThanOrEqual(1)
+  })
+
+  it('useMiniProgram 接线声明（私有 API 检测头部指引）', async () => {
+    const r = await migrateMiniprogram({ source: 'wx.getFileSystemManager()', name: 'p' }, { mcp: createMcpServer() })
+    expect(r.code).toContain('useMiniProgram()')
+    expect(r.code).toContain('wx.getFileSystemManager')
+  })
+
+  it('AgentKit.migrate 门面（skill 校验 + 同结果）', async () => {
+    const kit = new AgentKit()
+    const r = await kit.migrate('<view>x</view>', { name: 'mini' })
+    expect(r.code).toContain('<p-box>')
+    expect(r.coverage).toBe(1) // 全 auto
+    await expect(kit.migrate('x', { skill: 'nope' })).rejects.toThrow(/未知迁移 Skill/)
+  })
+
+  it('空源码：coverage=1 + 空日志（除零防护）', async () => {
+    const r = await migrateMiniprogram({ source: '' }, { mcp: createMcpServer() })
+    expect(r.coverage).toBe(1)
+    expect(r.log).toHaveLength(0)
   })
 })

@@ -7,6 +7,8 @@ import { withProteusRules } from './rules'
 import type { SystemRule } from './rules'
 import { intentToFlex } from './skills/intent-to-flex'
 import type { IntentToFlexInput, IntentToFlexResult } from './skills/intent-to-flex'
+import { migrateMiniprogram } from './skills/migrate-miniprogram'
+import type { MigrateMiniprogramInput, MigrateMiniprogramResult } from './skills/migrate-miniprogram'
 import { createMcpServer } from '@proteus-vue/mcp'
 import type { ProteusMcpServer } from '@proteus-vue/mcp'
 
@@ -86,5 +88,14 @@ export class AgentKit {
       { mcp: this._mcp },
     )
     return { name: result.name, code: result.code, ir: result.page.ir, adaptation: result.page.adaptation, blocks: result.blocks }
+  }
+
+  /** ★G-36 B3：小程序迁移（migrate-miniprogram Skill——G-31 B6 codemod 复用 + CMP019 映射日志 + 覆盖率） */
+  async migrate(code: string, options: { skill?: string; name?: string } = {}): Promise<MigrateMiniprogramResult> {
+    const skill = options.skill ?? 'migrate-miniprogram'
+    if (skill !== 'migrate-miniprogram') {
+      throw new Error(`未知迁移 Skill：${skill}（B3 支持 migrate-miniprogram）`)
+    }
+    return migrateMiniprogram({ source: code, name: options.name }, { mcp: this._mcp })
   }
 }
