@@ -43,11 +43,11 @@ const links = [
         </p-stack>
       </header>
 
-    <main class="main">
+    <main v-p-fluid="'padding(12, 24)'" class="main">
       <router-view />
     </main>
 
-    <p-view v-p-fluid="'padding(28, 48)'" class="footer">
+    <p-view v-p-fluid="'padding(20, 28)'" class="footer">
       <p-text class="footer-line">Proteus — One semantic model. Any render engine. Zero native glue.</p-text>
       <p-text class="footer-dim">官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）</p-text>
     </p-view>
@@ -104,11 +104,11 @@ const links = [
 /* GitHub：描边按钮形态（与页面内 CTA 同语言） */
 .nav-github { border: 1px solid var(--line); margin-left: 6px; }
 .nav-github:hover { border-color: var(--brand2); }
-.main { max-width: 1180px; margin: 0 auto; width: calc(100% - 48px); flex: 1; }
+.main { max-width: 1180px; margin: 0 auto; width: 100%; flex: 1; }
 .footer {
   max-width: 1180px;
   margin: 0 auto;
-  width: calc(100% - 48px);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;

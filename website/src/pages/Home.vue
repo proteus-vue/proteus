@@ -54,7 +54,7 @@ const capabilities = [
 <template>
   <p-page class="home">
     <!-- 1. Hero（01-home §1） -->
-    <p-view v-p-fluid="'padding(56, 96)'" class="hero">
+    <p-view v-p-fluid="'padding-top(40, 96) padding-bottom(40, 96)'" class="hero">
       <span class="eyebrow">◆ Proteus · 语义收敛的跨端应用框架</span>
       <p-heading :level="1" v-p-fluid="'font-size(22, 58)'" class="hero-title">
         One semantic model.<br /><em>Any render engine.</em> Zero native glue.
@@ -74,7 +74,7 @@ const capabilities = [
     </p-view>
 
     <!-- 2. 三大卖点（01-home §2，≤20 字/条） -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="points">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="points">
       <div class="point-grid">
         <p-view v-for="p in sellingPoints" :key="p.title" class="point-card">
           <p-heading :level="3" class="point-title">{{ p.title }}</p-heading>
@@ -84,7 +84,7 @@ const capabilities = [
     </p-view>
 
     <!-- 3. ★实时 Transform 演示（01-home §3 全站最核心交互） -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="live-demo">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="live-demo">
       <span class="eyebrow">◆ 实时演示 · 透明编译</span>
       <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
       <TransformDemo compact />
@@ -95,7 +95,7 @@ const capabilities = [
     </p-view>
 
     <!-- 4. 数字背书（stats.ts 可追溯） + 能力矩阵 -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="stats">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="stats">
       <div class="stat-grid">
         <p-view v-for="s in STATS" :key="s.label" class="stat">
           <p-text class="stat-value">{{ s.value }}</p-text>
@@ -105,7 +105,7 @@ const capabilities = [
       </div>
     </p-view>
 
-    <p-view v-p-fluid="'padding(24, 48)'" class="features">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="features">
       <span class="eyebrow">◆ 杀手特性</span>
       <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">语义是内核，后端是驱动</p-heading>
       <p-grid :min-col-width="280" :gap="14">
@@ -118,7 +118,7 @@ const capabilities = [
     </p-view>
 
     <!-- 对标矩阵（B4：positioning v3 §6——Proteus 列状态诚实标注） -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="compare">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="compare">
       <span class="eyebrow">◆ 对标</span>
       <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">不是又一个跨端方案，是方法论代际差</p-heading>
       <div class="table-wrap">
@@ -141,7 +141,7 @@ const capabilities = [
     </p-view>
 
     <!-- 方法论 -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="method">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="method">
       <span class="eyebrow">◆ 方法论</span>
       <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">SPI-First：九次泛化的同一个动作</p-heading>
       <p-text class="method-body">
@@ -157,7 +157,7 @@ const capabilities = [
     </p-view>
 
     <!-- 5. 快速开始（01-home §5：3 步） -->
-    <p-view v-p-fluid="'padding(24, 48)'" class="quickstart">
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" class="quickstart">
       <span class="eyebrow">◆ 快速开始</span>
       <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title">两分钟跑通双端</p-heading>
       <pre class="qs-code"><code>npm create @proteus-vue/proteus my-app

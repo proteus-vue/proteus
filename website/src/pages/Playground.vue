@@ -20,7 +20,7 @@ const ruleList = ref(rules)
 
 <template>
   <div class="playground">
-    <header v-p-fluid="'padding(28, 48)'" class="pg-head">
+    <header v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" class="pg-head">
       <span class="eyebrow">◆ Playground · 透明编译</span>
       <p-heading :level="1" class="pg-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
       <p-text class="pg-sub">

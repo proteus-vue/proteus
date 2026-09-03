@@ -81,9 +81,11 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 }
 .p-sidebar-bottom-bar .toc-nav {
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px 10px;
+  overflow-x: auto;
 }
+.p-sidebar-bottom-bar .toc-link { flex-shrink: 0; white-space: nowrap; }
 .p-sidebar-bottom-bar .eyebrow { display: none; }
 .toc-nav { display: flex; flex-direction: column; gap: 2px; }
 .toc-link { text-decoration: none; border-radius: 8px; }
