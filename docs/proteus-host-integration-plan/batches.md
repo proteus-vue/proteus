@@ -28,6 +28,8 @@
 
 ## B3 — Vue 绑定层实现（M1→M2）
 
+> **✅ B3 已落地（决策 #344）**：`@proteus-vue/render-backend` 新增 `vue-bridge.ts`——**真实 Vue 3 `createRenderer` 接入 Dispatcher**（`createVueRendererOptions(dispatch)` 把 B1 Dispatcher 包装成 Vue `RendererOptions`——对齐 renderer-app host.ts 模型；`createProteusRenderer`/`createProteusRendererForBackend`）；标准 Vue 渲染路径（`h()` → `renderer.render(vnode, 后端容器)` 或 `createApp().mount()`）落到任意后端：Headless（无 DOM 全链路：mount/diff/setText/patchProp）、vue-dom（happy-dom 真实 DOM：`\.proteus-grid`/`span`/`button` 完整渲染——B3 验收）、Flutter（热切换后同 VNode 树重建 Scaffold/GridView/FilledButton）；测试 `tests/vue-bridge.test.ts` 6 用例全过（含非 p-* 标签运行期拦截 + update diff 路径；全量 1682/162 无回归）；★esbuild `--external:@vue/runtime-core`（peer dep 外置——避免与消费方重复实例，bundle 78.6KB）。
+
 | 项 | 内容 |
 |----|------|
 | 交付 | 真实 `createRenderer(proteusNodeOps)` 接入 Vue 3 |

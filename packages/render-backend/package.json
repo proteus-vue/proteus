@@ -7,6 +7,9 @@
   "dependencies": {
     "@proteus-vue/component-ir": "0.1.0"
   },
+  "peerDependencies": {
+    "@vue/runtime-core": "^3.4.0"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -23,6 +26,6 @@
   ],
   "scripts": {
     "prepare": "npm run build",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js --external:@vue/runtime-core"
   }
 }

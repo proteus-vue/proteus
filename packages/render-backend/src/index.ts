@@ -38,3 +38,6 @@ export type { ProteusNodeOpsDispatcher, DispatcherNodeOps, NodeOpsCall } from '.
 // ★G-41 B2：Host Conformance 套件（H-01~H-08 32 项权威 TS 版——CMP058 上线门禁）
 export { runHostConformance, formatHostConformance, createHostRuntimeStub, createCarrierStub } from './host-conformance'
 export type { HostConformanceResult, HostConformanceSummary, HostConformanceOptions, HostRuntimeLike, CarrierLike } from './host-conformance'
+// ★G-41 B3：真实 Vue createRenderer 接入（Dispatcher → RendererOptions → renderer——标准 SFC/App 落到任意后端）
+export { createVueRendererOptions, createProteusRenderer, createProteusRendererForBackend } from './vue-bridge'
+export type { ProteusRenderer } from './vue-bridge'
