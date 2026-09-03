@@ -27,8 +27,11 @@
   pattern: "<div class='pw3-grid'> ... <div class='pw3-card'>"
 - rule: MUST_NOT use flexbox/grid utility classnames like 'flex-col', 'grid-cols-3' as final API; wrap them in a semantic class.
   why: 体现"语义优先"，与 G-31 p-grid/p-stack 对齐。
-- rule: MUST collapse to single column at breakpointStack (820px) for features / editor / dimensions.
-  pattern: "@media(max-width:820px){ .features{grid-template-columns:1fr} }"
+- rule: MUST implement responsiveness via Fluid primitives (W-6 柔性框架优先, #374): v-p-fluid clamp expressions (font-size/padding/gap) + intrinsic fluid grid (repeat(auto-fill, minmax(min-col-width,1fr))) — zero @media, zero breakpoint jumps.
+  why: 断点逻辑归语义原语（G-22 p-fluid/p-grid），官网自己写 @media 则柔性布局说服力归零（FLD001/002/008 同源）。
+  pattern: "<h1 v-p-fluid=\"'font-size(28,56)'\"> · .cards { grid-template-columns: repeat(auto-fill, minmax(260px,1fr)) }"
+- rule: MUST_NOT write @media breakpoints in new pages（存量 v3 静态 demo 页 legacy 白名单至 B4 迁移）.
+  why: @media 是"平台 API 式断点"；C8 校验器 error 级拦截。
 
 # ======================================================================
 # 3. 视觉风格

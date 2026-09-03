@@ -1,0 +1,25 @@
+{
+  "name": "@proteus-vue/website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Proteus 官网（dogfooding：用 Proteus 自身构建——@proteus-vue/docs 文档引擎 + @proteus-vue/fluid 柔性布局 + v-p-hover 桌面原语；W-6 柔性框架优先：响应式零 @media）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@proteus-vue/desktop": "0.1.0",
+    "@proteus-vue/docs": "0.1.0",
+    "miniprogram-api-typings": "^3.12.2",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

@@ -52,6 +52,8 @@ Website 内部依赖：
 
 > **✅ 引擎件落地（决策 #365）**：新包 **`@proteus-vue/docs`**（36 包，零依赖）——**Markdown → Docs IR（语义块 AST）→ HTML/Vue SFC**：块级解析（标题锚点 kebab+中文/代码围栏/列表一层嵌套/表格对齐/引用/分隔线）+ 行内（code/strong/em/link/image）+ YAML-lite frontmatter（块式/行内数组、布尔数字归一）+ **零依赖轻量高亮器**（js/ts/vue/json/bash/css/html；内容全转义防注入）+ TOC（平铺/嵌套 h2-h3 可配）+ 搜索索引（构建期条目 + 子串评分检索）+ **toSfc**（DocsCode v-pre 包裹 + {{}} 实体化 + p-page 语义根 + 恒 script setup）；**核心证据**：md → toSfc → **框架编译器 compileVueSfc 编译通过** → mountWebComponent 真实渲染（docs-* 语义类在 DOM）——「文档也是编译产物」（第九次泛化叙事）；vite md 虚拟模块接入待下一批。测试 tests/docs-engine.test.ts 17 用例；全量 1904/181 无回归。
 
+> **✅ B2 部分落地（决策 #374）**：`website/` 官网应用落地——① docs 引擎（#365）消费接线：10 篇指南 md（guides/*.md，frontmatter title/order）构建期编译（docsMdPlugin），运行时零解析；② **侧边栏自动生成**（`import.meta.glob` 收集 md 模块 → frontmatter 排序——新增指南零改动）；③ Home（Hero + 六大能力卡 + 快速开始）+ Guide（侧边栏 + 正文 + TOC + 上下篇）；④ **★柔性框架优先（W-6/D-5）**：响应式全走 v-p-fluid clamp + 柔性网格 auto-fill/minmax，**全站零 @media**（`.llmrules` 原_BREAK 断点规则改写 + `verify-llm.cjs` **C8** error 门禁 + 存量 v3 三页 legacy 白名单至 B4）；⑤ 桌面原语 v-p-hover（G-24）；验证：vue-tsc 零错误 + vite build 135KB（gzip 53KB）+ verify-llm 31→（C8 后）全绿；诚实边界：路由用 vue-router（@proteus-vue/router 路由模型面向双端页面工程——差距登记，B4 评估回填）；SSG/sitemap 归 B7；codegen 从 .d.ts 生成 API 页待 types 集成
+
 ### B3 · Playground 内核
 **文件**：`05-playground` + `compiler-plan` WASM 集成
 **输入**：Compiler IR + TraceBus
@@ -133,8 +135,8 @@ Website 内部依赖：
 
 | 批 | 状态 | 依赖 | PR |
 |----|------|------|-----|
-| B1 | ⬜ | - | - |
-| B2 | ⬜ | B1 | - |
+| B1 | 🟡 部分（website/ 骨架落地，design tokens 沿用 v3） | - | #374 |
+| B2 | 🟡 部分（文档系统 MVP：引擎 #365 + 10 指南/侧边栏/官网应用 #374；codegen API 页待） | B1 | #374 |
 | B3 | ⬜ | Compiler | - |
 | B4 | ⬜ | Blueprint | - |
 | B5 | ⬜ | B2 + i18n-plan | - |

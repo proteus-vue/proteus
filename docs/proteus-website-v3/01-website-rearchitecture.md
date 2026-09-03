@@ -121,7 +121,18 @@ Proteus 页面：
 - codemod 自动转 70-90%
 - 剩下的"语义还原"部分（如 `wx.request` → `useFetch`）用 AI Agent（G-23）辅助
 
-**显式标注成本比"无缝迁移"的口号更可信**——开发者信的是"我知道要改什么"，不是"官方说不用改"。
+**显式标注成本比“无缝迁移”的口号更可信**——开发者信的是“我知道要改什么”，不是“官方说不用改”。
+
+### 原则 W-6：柔性框架优先（Fluid-First）★ #374 新增
+
+> **官网的响应式必须用 Proteus 自己的柔性框架（G-22 `@proteus-vue/fluid`）实现，禁止手写 `@media` 断点。**
+
+这是 W-1（dogfooding）在布局层的落地——**官网自己用 `@media` 写响应式，柔性布局的说服力归零**：
+
+- **排版/间距**：`v-p-fluid` 指令（`font-size(28, 56)` / `padding(24, 64)`）→ 编译为 `clamp()` 流式插值，**零断点、零跳变**
+- **网格列数**：柔性网格语义（`repeat(auto-fill, minmax(min-col-width, 1fr))`——p-grid `min-col-width` 的 CSS 等价形态），**列数随容器宽度自动伸缩**，不写 820px/1024px 魔法数
+- **禁止**：手写 `@media (max-width: …)` 断点分支、JS 宽度判断（`window.innerWidth`）、rpx 等比缩放——这三者正是 G-22 要淘汰的“单位换算/断点跳变”范式（FLD001/002/008 同源）
+- **校验**：`verify-llm.js` **C8**（手写 `@media` = error）；存量 v3 静态 demo 页 legacy 白名单豁免，B4 迁移后移除
 
 ---
 

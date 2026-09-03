@@ -12,7 +12,7 @@ LLM 规则包
 ├── design-tokens.json      ★ 唯一事实源（颜色/字号/间距/后端色/设备色，确定值）
 ├── .llmrules               ★ MUST/MUST_NOT 硬规则（Cursor 等直接消费）
 ├── llm-style-guide.md      ★ 人类可读执行手册（组件规范/页面骨架/示例/反例）
-├── verify-llm.js           ★ 自动化校验器（把规则变成 CI gate）
+├── verify-llm.cjs           ★ 自动化校验器（把规则变成 CI gate）
 ├── primitives-grid.html    ✅ 合规示例（用规则生成的 /primitives/layout/grid 页）
 ├── __fixture-good.html     ✅ 合规 fixture（校验器应 0 错误）
 ├── __fixture-bad.html      ❌ 违规 fixture（校验器应报错 —— 自证有效性）
@@ -23,7 +23,7 @@ LLM 规则包
 1. 读 `design-tokens.json` → 取颜色/字号/间距（**禁止自由发挥数值**）
 2. 读 `.llmrules` → 明确 MUST / MUST_NOT
 3. 读 `llm-style-guide.md` §5~§7 → 复用组件 class / 套页面骨架
-4. 写代码 → 跑 `node verify-llm.js <file>` → 0 errors 才提交
+4. 写代码 → 跑 `node verify-llm.cjs <file>` → 0 errors 才提交
 
 ---
 
@@ -31,13 +31,13 @@ LLM 规则包
 
 ```bash
 # 校验单个文件
-node verify-llm.js index.html
+node verify-llm.cjs index.html
 
 # 校验本目录全部 .html
-node verify-llm.js --all
+node verify-llm.cjs --all
 
 # CI gate（errors>0 退出码 1）
-node verify-llm.js --all || exit 1
+node verify-llm.cjs --all || exit 1
 ```
 
 **退出码约定：** `0` = 通过，`1` = 有 error（**warning 不阻断**，仅提示）。
@@ -55,6 +55,7 @@ node verify-llm.js --all || exit 1
 | C5 | slogan 缺失 / `wx.*` 作为首选 API | warning | 页内首选 `wx.request` |
 | C6 | 缺少关键 CSS 变量定义 | warning | 未声明 `--brand` |
 | C7 | 结构缺失（DOCTYPE/lang/viewport/title） | error | 无 `<title>` |
+| C8 | **柔性框架优先（W-6/D-5）**：手写 `@media` 断点 | error | `@media (max-width:820px)` |
 
 **放行项（合规）：**
 - `:root { --x: #hex }` 变量声明 → 视为局部 token 定义
@@ -90,18 +91,19 @@ node verify-llm.js --all || exit 1
 ## 6. 自测（fixture 自证校验器有效性）
 
 ```
-$ node verify-llm.js __fixture-bad.html
+$ node verify-llm.cjs __fixture-bad.html
 ▶ __fixture-bad.html
   ✗ [C1] 裸色值 #3b82f6 …
   ✗ [C1] 裸色值 #ff0000 …
   ✗ [C2] 交互 Demo 不得改写源码节点 …
-  → errors: 3, warnings: 5        ← 证明：规则确实能抓违规
+  ✗ [C8] 手写 @media 断点 …
+  → errors: 4, warnings: 5        ← 证明：规则确实能抓违规
 
-$ node verify-llm.js __fixture-good.html
+$ node verify-llm.cjs __fixture-good.html
 ▶ __fixture-good.html
   → errors: 0, warnings: 0        ← 证明：合规代码不被误杀
 
-$ node verify-llm.js index.html primitives-grid.html flexible-multi-device.html
+$ node verify-llm.cjs index.html primitives-grid.html flexible-multi-device.html
   → errors: 0, warnings: 0 (×3)   ← 存量页全部合规
 ```
 
@@ -114,11 +116,11 @@ $ node verify-llm.js index.html primitives-grid.html flexible-multi-device.html
 ```
 - 官网代码必须遵守 ./website-v3/.llmrules
 - 颜色/间距必须来自 ./website-v3/design-tokens.json
-- 生成后跑 node ./website-v3/verify-llm.js <file>，0 errors 才可提交
+- 生成后跑 node ./website-v3/verify-llm.cjs <file>，0 errors 才可提交
 ```
 **GitHub Actions：**
 ```yaml
-- run: cd proteus-website-v3 && node verify-llm.js --all
+- run: cd proteus-website-v3 && node verify-llm.cjs --all
 ```
 
 ---

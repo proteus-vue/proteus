@@ -28,6 +28,7 @@ Proteus 框架官网 = **门面 + 文档站 + Blueprint 成果展示 + 透明编
 4. **双端同源**：Web + Skyline 共用 Markdown 内容，差异收敛在渲染后端
 5. **透明可验证**：Playground 展示真实 Compiler IR + transform 链路，绝不伪造输出
 6. **性能预算**：首页 LCP < 2s，文档页 TTI < 1.5s，Core Web Vitals 全绿
+7. **柔性框架优先（W-6/D-5，#374）**：响应式必须走 `@proteus-vue/fluid`（`v-p-fluid` clamp 表达式 + 柔性网格 auto-fill/minmax），**禁止手写 `@media` 断点 / JS 宽度分支 / rpx 缩放**——官网自己写 `@media`，柔性布局的说服力归零（CI：`verify-llm.cjs` C8）
 
 ## 里程碑
 

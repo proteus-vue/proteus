@@ -48,6 +48,7 @@ proteus/
 | **D-2** | 官网布局**必须**全部使用 `<p-*>` 语义原语，**禁止**手写 `<view class="flex-col">` 式 div + CSS 模拟 | CI：AST 扫描，违例 = 构建失败 |
 | **D-3** | 官网**必须**声明使用 `VueDomBackend`，且能在 Playground 里**切换为 Native/Flutter/Skia** 预览（即便只是录屏） | CI：backend.config.ts 校验 |
 | **D-4** | 官网**必须**跑与业务项目**完全相同的 conformance test**，结果公开在 `/backends/conformance` | CI：conformance 报告自动发布 |
+| **D-5** | **柔性框架优先（W-6，#374）**：官网响应式**必须**走 `@proteus-vue/fluid`（`v-p-fluid` clamp 表达式 + 柔性网格 auto-fill/minmax），**禁止**手写 `@media` 断点 / JS 宽度分支 / rpx 缩放 | CI：`verify-llm.js` **C8**（@media = error，存量 v3 静态页 legacy 白名单至 B4） |
 
 **D-2 是关键**——如果官网自己都在写 `<view class="grid">`，那「消灭 view、语义优先」的说服力归零。这条用 AST 扫描强制，无可绕过。
 

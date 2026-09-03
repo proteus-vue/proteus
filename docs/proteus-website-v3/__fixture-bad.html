@@ -19,5 +19,9 @@ body{ background:var(--bg); }
     /* 违反 C2：切换 Backend 时改写源码节点 */
     document.getElementById('src').innerHTML = 'MUTATED';
   </script>
+  <style>
+    /* 违反 C8：手写 @media 断点（W-6 柔性框架优先——响应式应走 v-p-fluid clamp + 柔性网格） */
+    @media (max-width: 820px) { .pw3-features { grid-template-columns: 1fr; } }
+  </style>
 </body>
 </html>

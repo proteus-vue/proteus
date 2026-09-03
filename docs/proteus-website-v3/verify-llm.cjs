@@ -16,6 +16,7 @@
  *   C5  文案铁律（slogan / wx.* 不得作为首选 / plan ID）
  *   C6  Token 锚点（关键 CSS custom property 存在）
  *   C7  DOCTYPE / lang / viewport / title
+ *   C8  柔性框架优先（W-6/D-5，#374）：禁止手写 @media 断点（legacy 白名单豁免）
  */
 const fs = require('fs');
 const path = require('path');
@@ -84,6 +85,19 @@ function check(file){
   if(!/<html[^>]*lang=/i.test(src)) report(1,'C7','<html> 缺少 lang 属性');
   if(!/name="viewport"/i.test(src)) report(1,'C7','缺少 viewport meta');
   if(!/<title>/i.test(src)) report(1,'C7','缺少 <title>');
+
+  // ---- C8 柔性框架优先（W-6/D-5，#374）：禁止手写 @media 断点 ----
+  // 响应式必须走 v-p-fluid clamp 表达式 + 柔性网格（auto-fill/minmax）；
+  // 存量 v3 静态 demo 页 legacy 白名单（B4 迁移 p-fluid 后移除）。
+  const LEGACY_MEDIA = new Set(['index.html', 'primitives-grid.html', 'flexible-multi-device.html']);
+  if (!LEGACY_MEDIA.has(path.basename(file))) {
+    const mediaRe = /@media\b/g;
+    let mm;
+    while ((mm = mediaRe.exec(src))) {
+      const ln = src.slice(0, mm.index).split('\n').length;
+      report(ln, 'C8', '手写 @media 断点（W-6 柔性框架优先：响应式用 v-p-fluid clamp 表达式 + 柔性网格 auto-fill/minmax，断点逻辑归语义原语 G-22）');
+    }
+  }
 
   // ---- C5 slogan ----
   if(!src.includes(SLOGAN)) warn.push(`  ${file}  [C5]  未出现精确 slogan "${SLOGAN}..."（页面级建议）`);

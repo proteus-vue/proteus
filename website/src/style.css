@@ -1,0 +1,76 @@
+/* website/src/style.css —— 设计 token（取自 docs/proteus-website-v3/design-tokens.json 深色子集）
+   ★W-6 柔性框架优先：本文件零 @media——响应式全部由 v-p-fluid clamp + 柔性网格承担 */
+
+:root {
+  --bg: #0a0a0c;
+  --panel: #121216;
+  --panel2: #1a1a20;
+  --line: #26262e;
+  --ink: #f2f2f5;
+  --muted: #8a8a99;
+  --dim: #5c5c6a;
+  --brand: #7c5cff;
+  --brand2: #00e0c6;
+  --accent: #ff8a5c;
+  --container: 1180px;
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--bg); }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { min-height: 100vh; }
+.site { min-height: 100vh; display: flex; flex-direction: column; }
+.main { flex: 1; width: 100%; padding: 0 24px; }
+.site > .nav, .site > .footer { width: calc(100% - 48px); max-width: var(--container); }
+
+/* ---- 文档引擎产物样式（docs-* 语义类，@proteus-vue/docs renderDocHtml 输出） ---- */
+.doc-body { color: var(--ink); line-height: 1.75; }
+.doc-body h2 { color: var(--ink); font-size: 20px; margin: 28px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.doc-body h3 { color: var(--ink); font-size: 16px; margin: 22px 0 8px; }
+.doc-body p { color: var(--muted); margin: 10px 0; }
+.doc-body a { color: var(--brand2); }
+.doc-body strong { color: var(--ink); }
+.doc-body ul, .doc-body ol { color: var(--muted); padding-left: 22px; }
+.doc-body li { margin: 4px 0; }
+.doc-body code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--brand2);
+}
+.doc-body pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+.doc-body pre code { background: none; border: none; padding: 0; color: var(--ink); line-height: 1.7; }
+.doc-body blockquote {
+  margin: 12px 0;
+  border-left: 3px solid var(--brand);
+  padding: 6px 14px;
+  color: var(--muted);
+  background: var(--panel);
+  border-radius: 0 10px 10px 0;
+}
+.doc-body table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+.doc-body th, .doc-body td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+.doc-body th { color: var(--ink); background: var(--panel2); }
+.doc-body td { color: var(--muted); }
+.doc-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+.doc-body h2[id], .doc-body h3[id] { scroll-margin-top: 80px; }
