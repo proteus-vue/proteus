@@ -12,7 +12,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/router --external:@proteus-vue/module --external:@proteus-vue/compiler --external:@proteus-vue/capabilities --external:@proteus-vue/css-compat --external:@proteus-vue/runtime --external:@proteus-vue/app-config --external:@proteus-vue/devtools-runtime --external:esbuild --banner:js=\"#!/usr/bin/env node\""
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@vue/runtime-core --external:@proteus-vue/router --external:@proteus-vue/module --external:@proteus-vue/compiler --external:@proteus-vue/capabilities --external:@proteus-vue/css-compat --external:@proteus-vue/runtime --external:@proteus-vue/app-config --external:@proteus-vue/devtools-runtime --external:@proteus-vue/render-backend --external:esbuild --banner:js=\"#!/usr/bin/env node\""
   },
   "dependencies": {
     "@proteus-vue/app-config": "0.1.0",
@@ -26,7 +26,8 @@
     "@proteus-vue/router": "0.2.0-beta.0",
     "@proteus-vue/runtime": "0.2.0-beta.0",
     "@proteus-vue/types": "0.1.0",
-    "@proteus-vue/compiler-backend": "0.1.0"
+    "@proteus-vue/compiler-backend": "0.1.0",
+    "@proteus-vue/render-backend": "0.1.0"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",

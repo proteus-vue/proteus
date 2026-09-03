@@ -90,6 +90,8 @@
 
 ## B5 安全网关 + 仓库治理工具
 
+> **✅ B5 已落地（决策 #351）**：**① CLI `proteus conformance --repo <dir>`**（cli 包新增 `repo-conformance.ts`：collectSourceFiles 递归收集（跳过 node_modules/.git/dist/.proteus）+ scanRepoDirectory 读文件 → `scanRepoForFork`（复用 B3 指纹集）+ formatRepoReport（合规 0 命中 PASS / fork 列出文件+指纹 FAIL 阻断）；parseConformanceArgs 加 --repo（不破坏 --backend/--only）；args.ts usage + index.ts case 分发；cli 加 `@proteus-vue/render-backend` 依赖 + esbuild external（含 @vue/runtime-core））+ **② 权限网关纯函数 `checkCapabilityAuthorization`**（render-backend；SENSITIVE_CAPABILITIES 敏感集 location/camera/contacts/phone-call/biometric/payment/storage/clipboard——敏感能力须宿主授权 G39_AUTH，G-28 协同；非敏感能力不要求授权）；验收 C-08 全过 + fork 检出/合规零误报机器化；测试 `tests/cli-repo-conformance.test.ts` 8 用例全过（--repo 解析/缺参报错 + 目录扫描合规 0 命中/fork 命中/跳目录 + 报告 PASS/FAIL + 权限网关授权拒绝/放行/敏感集）；全量 1741 无回归。
+
 **目标**：G-42.6 可执行
 
 | 任务 | 产出 |

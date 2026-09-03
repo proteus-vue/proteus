@@ -42,6 +42,7 @@ export function scanRepoForFork(fileContents: Record<string, string>): ForkHit[]
 // ============================================================
 
 /** 业务清单签名/能力白名单校验（C-08-01 无签名拒绝 / C-08-02 越权能力拒绝） */
+/** 合规清单放行 */
 export function checkBizManifest(input: { bizId: string; signature?: string; capabilities?: readonly string[] }, opts: { requireSignature: boolean; whitelist: readonly string[] }): { ok: true } | { ok: false; code: 'G39_SIGN' | 'G39_CAP' | 'G39_LIMIT'; message: string } {
   if (opts.requireSignature && !input.signature) {
     return { ok: false, code: 'G39_SIGN', message: `business ${input.bizId} missing signature` }
@@ -50,6 +51,16 @@ export function checkBizManifest(input: { bizId: string; signature?: string; cap
   if (illegal.length > 0) {
     return { ok: false, code: 'G39_CAP', message: `business ${input.bizId} illegal capabilities: ${illegal.join(',')}` }
   }
+  return { ok: true }
+}
+
+/** ★G-42 B5 权限网关（G-28 协同）：敏感能力须宿主显式授权（白名单之外的敏感集） */
+export const SENSITIVE_CAPABILITIES: readonly string[] = ['location', 'camera', 'contacts', 'phone-call', 'biometric', 'payment', 'storage', 'clipboard']
+
+export function checkCapabilityAuthorization(capabilities: readonly string[], opts: { granted: readonly string[]; sensitive?: readonly string[] }): { ok: true } | { ok: false; code: 'G39_AUTH'; denied: string[] } {
+  const sensitive = opts.sensitive ?? SENSITIVE_CAPABILITIES
+  const denied = capabilities.filter((c) => sensitive.includes(c) && !opts.granted.includes(c))
+  if (denied.length > 0) return { ok: false, code: 'G39_AUTH', denied }
   return { ok: true }
 }
 

@@ -81,7 +81,7 @@ export type {
 export { createStackContainer, createResourcePool, createQuotaManager } from './stack-container'
 export type { StackContainer, StackContainerOptions } from './stack-container'
 // ★G-42 B3：容器 Conformance 套件（C-01~C-08 + 仓库治理扫描 + 安全网关纯函数）
-export { runContainerConformance, formatContainerConformance, scanRepoForFork, checkBizManifest, FORK_SIGNATURES } from './container-conformance'
+export { runContainerConformance, formatContainerConformance, scanRepoForFork, checkBizManifest, checkCapabilityAuthorization, FORK_SIGNATURES, SENSITIVE_CAPABILITIES } from './container-conformance'
 export type { ContainerConformanceResult, ContainerConformanceSummary, ForkHit } from './container-conformance'
 // ★G-42 B4：SuperAppContainer（业务沙箱 + 崩溃隔离 + 安全网关——C-07 组转 PASS）
 export { createSuperAppContainer } from './superapp-container'

@@ -369,8 +369,8 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合\n      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）',
       },
       {
-        usage: 'proteus conformance [--backend <spec>] [--only <C-xx>] [--demo]',
-        desc: '★G-38 42 项 conformance（C-01~C-10，compiler-backend-spi-plan 02）——默认 G-38 Node 参考实现\n      --backend  外部后端：模块路径[#具名导出]（default/#具名工厂返回 G-38 后端实例）\n      --only     仅跑某组（如 C-03）\n      --demo     Terminal 参考 + FallbackBackend 降级演示（rust 不可用 → node）\n      FAIL>0 → exit 1（CI 阻断）',
+        usage: 'proteus conformance [--backend <spec>] [--only <C-xx>] [--demo] [--repo <dir>]',
+        desc: '★G-38 42 项 conformance（C-01~C-10，compiler-backend-spi-plan 02）——默认 G-38 Node 参考实现\n      --backend  外部后端：模块路径[#具名导出]（default/#具名工厂返回 G-38 后端实例）\n      --only     仅跑某组（如 C-03）\n      --demo     Terminal 参考 + FallbackBackend 降级演示（rust 不可用 → node）\n      --repo     ★G-42 B5 仓库治理扫描（G-42.6 严禁 fork——宿主仓库 fork 命中 → FAIL，CI 阻断）\n      FAIL>0 → exit 1（CI 阻断）',
       },
       {
         usage: 'proteus health [dir]',

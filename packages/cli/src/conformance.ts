@@ -11,6 +11,7 @@ import type { G38CompilerBackend, G38ConformanceSummary } from '@proteus-vue/com
 export interface ConformanceArgs {
   backendSpec?: string
   only?: string
+  repoDir?: string
 }
 
 /** 解析参数（纯函数可单测） */
@@ -25,8 +26,12 @@ export function parseConformanceArgs(argv: string[]): ConformanceArgs {
     } else if (a === '--only') {
       args.only = argv[++i]
       if (!args.only) throw new Error('--only 需要组号（如 C-03）')
+    } else if (a === '--repo') {
+      // ★G-42 B5：仓库治理扫描（G-42.6 严禁 fork）
+      args.repoDir = argv[++i]
+      if (!args.repoDir) throw new Error('--repo 需要目录（宿主仓库根）')
     } else if (a.startsWith('-')) {
-      throw new Error(`未知选项：${a}（可用 --backend <spec>、--only <C-xx>）`)
+      throw new Error(`未知选项：${a}（可用 --backend <spec>、--only <C-xx>、--repo <dir>）`)
     } else {
       throw new Error(`多余参数：${a}`)
     }

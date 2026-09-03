@@ -10,6 +10,7 @@ const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-aut
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
+import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
 import { explainTarget } from './explain'
 import { listRules } from './rules'
 import { checkRoutes, formatRouterCheck } from './router-check'
@@ -448,11 +449,20 @@ async function main(): Promise<void> {
     }
     case 'conformance': {
       // ★G-38 B2 尾：42 项 conformance（C-01~C-10）——默认 G-38 Node 参考；--backend 外部后端；--demo Terminal+Fallback 演示
+      // ★G-42 B5：--repo <dir> 仓库治理扫描（G-42.6 严禁 fork）
       const args = parseConformanceArgs(rest.filter((a) => a !== '--demo'))
       try {
         const demo = rest.includes('--demo')
         if (demo) {
           const { text, ok } = await runConformanceDemo()
+          console.log(text)
+          if (!ok) process.exitCode = 1
+          break
+        }
+        if (args.repoDir) {
+          // G-42 B5：--repo 分支——fork 扫描宿主仓库
+          const result = scanRepoDirectory(args.repoDir)
+          const { text, ok } = formatRepoReport(args.repoDir, result)
           console.log(text)
           if (!ok) process.exitCode = 1
           break
