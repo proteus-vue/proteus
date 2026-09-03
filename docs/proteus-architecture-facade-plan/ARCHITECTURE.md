@@ -79,7 +79,7 @@ Compiler ──▶ Types ◀── CLI
 
 ---
 
-## 4. 全局执行序（G-01 ~ G-44）
+## 4. 全局执行序（G-01 ~ G-45）
 
 LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G，避免 B1-Bn 冲突。
 
@@ -129,8 +129,9 @@ LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G�
 | G-42 | Host Container（容器 SPI：五层容器栈 + 六容器策略 + 五原子销毁 + 严禁 fork） | L1 方法论 | host-container |
 | G-43 | Resource Ownership（所有权 SPI：Owned/Borrow/Weak + 借用检查 PSS + 确定性 Drop） | L1 方法论 | ownership |
 | G-44 | Testing Framework（Test IR 可序列化断言 + TestBackend SPI 五后端 + 八次泛化统一 runner） | L4 工具链 | testing-framework |
+| G-45 | Dev Host（调试基座即宿主：Install-Once + 动态后端装载 + 转发桩 pending + 双层构建缓存 + 装载即验证） | L2 核心引擎 | dev-host |
 
-**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-44）各按其依赖插入，不阻塞原始主链。
+**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-45）各按其依赖插入，不阻塞原始主链。
 **并行空间**：G-04 内三联可并行；G-09 两横切可并行；G-16/G-17 双端可并行；G-21/G-24/G-25/G-27 的 M1 纯逻辑批次可与 G-01 地基同期启动。
 
 ---

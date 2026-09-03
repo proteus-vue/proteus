@@ -64,6 +64,9 @@
 | #13.25 | 测试语义可插拔：期望行为必须用可序列化的 Test IR 描述，执行必须是可插拔的 TestBackend（禁止逻辑塞进运行器闭包） | testing-framework G-44 |
 | #13.26 | 跨层组合正确性必须被自动化验证：七套 conformance 之外，跨层集成（Compiler→Render→Host→Carrier→Container→Ownership）必须有 INT 套件且 100% 通过（无暂时跳过） | testing-framework G-44 |
 | #13.27 | 任一 Backend conformance FAIL 即阻断：任何后端的失败都阻断合并，报告必须含 trace 链（定位到 IR 节点 + 源码行） | testing-framework G-44 |
+| #13.28 | 基座零插件知识：基座是 SPI 宿主而非业务载体，新插件接入禁止修改基座代码 | dev-host G-45 |
+| #13.29 | 变化层与稳定层构建隔离：构建时间必须随「改动」而非「规模」伸缩（基座 cacheKey 禁含规模因子） | dev-host G-45 |
+| #13.30 | 动态装载必须先验证：签名 + conformance 快检通过才可注册能力，失败拒绝并降级（降级不崩溃） | dev-host G-45 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -151,6 +154,12 @@
 | **G-44.4** | **同一份 Test IR 必须在 ≥2 个 Backend 上可执行（可插拔的可验证性）** | testing-framework |
 | **G-44.5** | **性能基准退化 > 5% → 阻断（基准值固化 .proteus/benchmark.json，改动须 Owner 审批）** | testing-framework |
 | **G-44.6** | **失败报告必须含 trace 链：定位到 IR 节点 + 源码行（可调试性）** | testing-framework |
+| **G-45.1** | **基座零插件知识：基座禁止静态依赖/感知任何具体插件（只依赖 DevHost SPI + 装载协议）；新插件接入禁止修改基座一行代码** | dev-host |
+| **G-45.2** | **未装载能力的语义调用必须走转发桩 pending 语义（装载后回放），禁止抛同步异常、禁止要求业务写重试** | dev-host |
+| **G-45.3** | **装载即验证：动态模块必须过签名校验 + conformance 快检（每能力 ≥1 用例），任一 FAIL 拒绝装载并降级，禁止带伤注册** | dev-host |
+| **G-45.4** | **双层产物强制分离：基座 cacheKey = f(框架版本, ABI)，禁止含页面数/插件数等业务规模因子；基座构建频次必须为「每框架版本 1 次」** | dev-host |
+| **G-45.5** | **动态装载全链可观测：loaded/upgraded/rejected/fallback/pending/replay 必须发事件（TraceBus 同源），禁止静默降级** | dev-host |
+| **G-45.6** | **发布形态诚实边界：商店发布包必须回静态链接（每版本一次）；动态装载通道禁止用于规避商店审核或绕过分发合规** | dev-host |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -184,6 +193,7 @@
 | CMP | CMP059-066 | error | 容器策略可声明式配置（059）/深度超限不得静默丢弃（060）/配额超限返回 null（061）/沙箱作用域完全隔离（062）/崩溃后必须上报宿主（063）/安全网关拒绝而非降级（064）/容器必须声明 capabilities（065）/销毁报告可观测 DestroYReport（066） | 🆕 host-container-plan（G-42） |
 | CMP | CMP067-073 | error | 业务禁直接释放框架代管资源（067）/跨设备转移必须原子（068）/不可转移资源显式拒绝（069）/释放失败不得静默（070）/Owned<T> 禁被 ref/reactive 包装（071）/PSS strict 禁引入未声明第三方库（072）/配额记账须与所有权图一致（073） | 🆕 ownership-plan（G-43） |
 | CMP | CMP074-081 | error | 跨 Backend 同语义必须产出结构一致 state（074）/Test IR 文件（.tir.json）必须进 git（075）/arrange·act·assert 必须 JSON 可序列化（076）/跨 Backend 结果不一致 = 语义分歧必须修复（077）/三维断点矩阵必须有自动化覆盖（078）/新 plan 落地必须同步提供 Test IR（079）/Agent 产物须过 TestBackend 门禁（080）/性能基准固化且改动须 Owner 审批（081） | 🆕 testing-framework-plan（G-44） |
+| CMP | CMP082-088 | error | 基座禁引用插件（082）/未装载调用走 pending 非抛（083）/manifest+签名缺一拒绝（084）/装载必跑快检 FAIL 拒绝+降级（085）/cacheKey 禁规模因子（086）/快检覆盖率≥能力数（087）/推送通道 TLS+token+审计（088） | 🆕 dev-host-plan（G-45） |
 
 ---
 
@@ -232,4 +242,4 @@ proteus-positioning-v3.md
 
 ---
 
-*Architecture Contract v1 · 2026-09-02 · M1.1 规约收口完成*
+*Architecture Contract v1 · 2026-09-03 · M1.1 规约收口完成（v3.10 dev-host G-45 追加）*

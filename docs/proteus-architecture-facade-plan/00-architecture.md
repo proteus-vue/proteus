@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.9（testing-framework 追加：G-44）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 9 份 SPI/Agent plan（G-36~G-44 追加）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.10（dev-host 追加：G-45）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -159,6 +159,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-42** | host-container（宿主容器 SPI + 页面生命周期：五层容器栈 + 六容器策略 + 五原子销毁 + 严禁 fork + conformance 38） | G-39、G-41、G-40、G-27 | 页面组织不绑容器形态 + IR 单一 Owner 消灭栈泄漏 + 超级应用隔离 |
 | **G-43** | ownership（资源所有权 SPI + 内存治理：Owned/Borrow/Weak + 借用检查器 PSS + 确定性 Drop + 所有权图 conformance 42） | G-42、G-40、G-39、G-38 | GC 盲区资源归谁清晰 + 泄漏可定位 + 跨设备所有权转移 |
 | **G-44** | testing-framework（测试方法论：Test IR 可序列化断言 + TestBackend SPI 五后端（Node/JSI/AOT/Host/Device）+ 八次泛化 + conformance 统一 runner） | G-27、G-29、G-39、G-40、G-41、G-42、G-43、G-25 | 验证层可插拔（同一 Test IR 多后端执行报告一致）+ 跨层集成自动化 + G-25 三维断点首次自动化 + 性能基准门禁 |
+| **G-45** | dev-host（调试基座即宿主：Install-Once Host + 动态后端装载 + 转发桩 pending 语义 + 双层构建缓存 + 装载即验证 conformance） | G-39、G-42、G-28、G-38、G-44 | 基座与插件解耦（改原生插件零重打基座，baseRebuildCount=0 机器证明）+ 构建时间 O(改动) 非 O(规模) + 动态模块装载即验证 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -175,6 +176,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.8）**：宿主层三份新规划文档抽离入库，并入本表 **G-41 / G-42 / G-43**（host-integration / host-container / ownership）。其原稿声称编号 G-38/G-39/G-40 与已入库 plan（compiler-backend-spi / host-runtime / execution-carrier）撞号，内部沿用 execution-carrier 原稿旧编号体系（宿主运行时 G-36、执行载体 G-37、渲染 G-34、编译 G-35、AI-Agent G-33），**一律以本表为准**（原稿 G-38→G-41、G-39→G-42、G-40→G-43、G-37→G-40、G-36→G-39、G-35→G-38、G-34→G-27 渲染本体/G-37 渲染 SPI、G-33→G-36）。依赖关系：G-41 与 G-27（RenderBackend）/ G-40（载体）互校；G-42 与 G-39（运行时）/ G-41（接入）互校；G-43 与 G-42（五原子销毁）/ G-40（零拷贝 ArrayBuffer 归属）互校。详见 PROJECT_MEMORY 决策 #341。
 
 > **追加说明（v3.9）**：testing-framework（自动化测试框架第八次泛化：Test IR + TestBackend SPI，2026-09 新增 plan）并入本表 **G-44**。其原稿声称编号 G-41 与 host-integration 撞号，且 CMP067-074 与 ownership（G-43，CMP067-073）撞号，**一律以本表为准（G-41→G-44、CMP067-074→CMP074-081）**；原稿内部沿用 execution-carrier 旧编号体系（宿主运行时 G-36、执行载体 G-37、接入 G-38、容器 G-39、所有权 G-40、编译 G-35、渲染 G-34），已全量重指向（G-36→G-39、G-37→G-40、G-38→G-41、G-39→G-42、G-40→G-43、G-35→G-29、G-34→G-27）；原稿「第七次泛化」漏计所有权（G-43），修正为第八次。依赖关系：G-44 与 G-27/29/39/40/41/42/43（七套 conformance 统一 runner）/ G-25（三维断点自动化）/ G-36（AI 产码门禁 AI005）互校。详见 PROJECT_MEMORY 决策 #364。
+
+> **追加说明（v3.10）**：dev-host（调试基座即宿主，2026-09 新增 plan）并入本表 **G-45**——原则 #0「不绑定」系列第九次投影（不绑定基座形态，沿 G-44 计数）。根因级解法：uni-app 式「自定义基座循环」（改原生插件 → 云打包 → 重装 → 循环往复，页面越多越慢）在「基座 = 构建产物」范式内无解，G-45 换范式为「基座 = 常驻宿主」：插件 = DynamicBackendModule（manifest + 签名 + conformance + factory）运行时装载 + 转发桩 pending 语义（未装载调用回放，业务零感知）+ 双层产物（基座 cacheKey = f(框架版本, ABI) 与页面数/插件数无关——构建 O(改动) 非 O(规模)）；三端分级：Android/鸿蒙全热替换（Tier A）/ iOS 增量重签（Tier B，App Store 2.5.2 诚实边界）/ 模拟先行（Tier C 全端）。依赖关系：G-45 与 G-39（DevHost = 宿主运行时调试形态）/ G-28（插件 factory 返回 NativeBackend）/ G-42（签名网关同源）/ G-38（cacheKey/getArtifactHash 预留）/ G-44（NAT-C 快检跑 test-ir runner）/ G-40（pending 回放走批处理零拷贝）互校。铁律 G-45.1-6 + CMP082-088 + 原则 #13.28-30。参考实现 dev-host-reference.cjs（12 自检 PASS）。详见 PROJECT_MEMORY 决策 #369。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**
