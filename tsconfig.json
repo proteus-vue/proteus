@@ -62,7 +62,8 @@
       "@proteus-vue/gesture": ["packages/gesture/src/index.ts"],
       "@proteus-vue/desktop": ["packages/desktop/src/index.ts"],
       "@proteus-vue/compat-miniprogram": ["packages/compat-miniprogram/src/index.ts"],
-      "@proteus-vue/mcp": ["packages/mcp/src/index.ts"]
+      "@proteus-vue/mcp": ["packages/mcp/src/index.ts"],
+      "@proteus-vue/agent": ["packages/agent/src/index.ts"]
     }
   },
   "include": [

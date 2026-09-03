@@ -62,6 +62,8 @@ export default defineConfig({
       { find: '@proteus-vue/desktop', replacement: fileURLToPath(new URL('./packages/desktop/src/index.ts', import.meta.url)) },
       // ★G-36 B1：@proteus-vue/mcp MCP Server 包（tests/mcp-server.test.ts 直接引用）
       { find: '@proteus-vue/mcp', replacement: fileURLToPath(new URL('./packages/mcp/src/index.ts', import.meta.url)) },
+      // ★G-36 B2：@proteus-vue/agent Agent Kit SDK 包（tests/agent-kit.test.ts 直接引用）
+      { find: '@proteus-vue/agent', replacement: fileURLToPath(new URL('./packages/agent/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/create-proteus', replacement: fileURLToPath(new URL('./packages/create-proteus/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/pinia-sync', replacement: fileURLToPath(new URL('./packages/pinia-sync/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/renderer-app', replacement: fileURLToPath(new URL('./packages/renderer-app/src/index.ts', import.meta.url)) },
