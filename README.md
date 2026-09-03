@@ -1,13 +1,11 @@
-# Proteus（普罗透斯）—— AI-native 透明跨端编译框架
+# Proteus（普罗透斯）—— 语义收敛的跨端应用框架
 
-> **一份标准 Vue 源码，编译器化作千端形态。**
-> Web 端零转换直跑标准 SPA；微信小程序端编译为 Skyline 原生四件套（`.wxml` / `.wxss` / `.js` / `.json`）。
+> **One semantic model. Any render engine. Zero native glue.**
+> 一套语义内核，任意渲染引擎，任意原生能力。业务代码只和语义层对话——渲染底座、编译器、宿主容器、执行载体全部可插拔。
 >
-> **AI-native 透明编译**：所有转换规则集中为自描述的**规则注册表**（`src/compiler/transforms/`），
-> 每条规则自带一份 AI 说明书（what / why / when / example / verify / 决策号），
-> 产物可枚举、可查询、可反查源码——编译器对 AI 代理与人类开发者都是透明的，拒绝黑盒。
+> **不跨端翻译，做跨端操作系统：语义是内核，后端是驱动。**
 
-[文档导航](#文档导航) · [快速开始](docs/getting-started.md) · [配置参考](docs/configuration.md) · [编译原理](docs/compiler.md) · [路由与转场](docs/routing.md)
+[方法论哲学](#方法论哲学统一语义收敛) · [杀手特性](#杀手特性) · [快速开始](docs/getting-started.md) · [架构全景](docs/board-inventory.md) · [对外定位](docs/proteus-positioning-v3.md)
 
 ---
 
@@ -17,43 +15,123 @@
 
 | 普罗透斯的神格 | 框架的差异化优势 |
 |---|---|
-| **变形**：同一存在变换出多种形态 | **编译转换**：一份标准 Vue SFC → Web 形态 + 小程序形态，形态可变、本质不变 |
-| **先知**：预知未来 | **编译期为主**：一切转换在 build-time 完成，运行期零虚拟 DOM |
-| **本质恒定**：变形后本体仍是普罗透斯 | **标准写法**：业务代码始终是标准 Vue + 标准 HTML，平台差异由编译器吸收 |
-| **通晓万物**：知过去、现在、未来 | **双端一致**：一套代码在 Web 与小程序两端行为一致 |
-| **化身为光**：变形即显形，无所遁形 | **透明编译**：所有转换规则自描述、可枚举、可查询（AI 说明书），产物可反查源码，拒绝黑盒 |
+| **变形**：同一存在变换出多种形态 | **一套语义，多端形态**：同一份业务语义 → Vue DOM / 原生 / Flutter / Skia / 小程序，形态可变、本质不变 |
+| **先知**：预知未来 | **编译期优先**：语义 IR 在 build-time 校验收敛，能编译期发现的问题绝不留到运行时 |
+| **本质恒定**：变形后本体仍是普罗透斯 | **语义恒定**：业务代码只依赖语义内核，平台差异全部下沉为后端实现细节 |
+| **通晓万物**：知过去、现在、未来 | **可验证**：每层 SPI 都有 conformance 门禁，后端实现是否合规机器可判、CI 强制 |
+| **化身为光**：变形即显形，无所遁形 | **透明编译**：转换规则自描述（AI 说明书）、决策 trace 可枚举可反查，拒绝黑盒 |
 
-## 主流国产跨端框架的痛点，与 Proteus 的对策
+## 方法论哲学：统一语义收敛（Unified Semantic Convergence）
 
-| # | 主流痛点 | 代表框架 | Proteus 对策 |
+> **Proteus 不做跨端翻译，而是定义与平台无关的语义内核；一切平台差异下沉为"后端实现细节"。**
+
+核心公式：
+
+```
+任何跨端问题 = 语义定义（框架做） + 后端实现（平台做）
+```
+
+框架只做两件事：**定义"你要什么"**（语义接口 / IR），**定义"怎么验证做对了"**（conformance / 铁律 / 编译期约束）。平台只做一件事：提供"怎么做"（Backend 实现）。**业务开发者只消费语义接口，对后端零感知。**
+
+**同一个 shape，贯穿全部架构维度**——这正是"框架不绑定任何单一平台"的来源（原则 #0 的同族投影）：
+
+| 「不绑定」系列 | 语义层（框架定义） | 后端 SPI（可插拔实现） | 状态 |
 |---|---|---|---|
-| 1 | 非标准 DSL（必须写 `<view>/<text>`） | uni-app | 业务代码只写**标准 HTML 标签 + 标准 Vue SFC**，`div→view` 等映射全部收敛在编译器内部 |
-| 2 | 工具链锁定（强依赖 HBuilderX） | uni-app | 纯 Vite 插件 + 标准 npm scripts，无 IDE 依赖，任何 CI 可跑 |
-| 3 | 编译黑盒、产物不可读、报错难定位 | uni-app | 产物贴近手写 + **产物自校验**（坏产物当场报错指明文件）+ `PROTEUS_DEBUG=1` 全链路日志 |
-| 4 | 运行时模拟 DOM + 自研 diff，首屏差 | Taro 3 | **编译期为主**：静态模板全部编译成 WXML，运行期无虚拟 DOM |
-| 5 | setData 全量大对象同步，高频更新卡顿 | uni-app | 脏路径收集 + 16ms 批量 + 路径合并 + 值比较去重 |
-| 6 | Vue 版本滞后 / 升级被工具链绑架 | uni-app | 直接绑定官方 Vue 3.4+ 主线，编译器用官方 `@vue/compiler-sfc` |
-| 7 | 条件编译 `#ifdef` 散落业务代码 | uni-app | 平台差异收敛到 `proteus.config.ts` + `platform/adapter.ts`，**业务代码零条件编译** |
-| 8 | 类型安全缺失 | 多数 | 路由表、路由参数、事件全链路 TS 类型推导 |
-| 9 | 跨端 CSS 不一致 | uni-app | MP 端编译期 px→rpx；**Web 端保持标准 CSS 不转换**，差异由编译器吸收 |
-| 10 | 主包 2MB 限制 | 微信平台 | 分包声明写入配置，编译期生成 `app.json` subPackages |
-| 11 | 生态锁定（私有插件市场） | uni-app | 标准 Vue 组件体系 + npm 生态，无私有市场 |
+| 不绑定平台 API（G-31/32） | p-* 语义组件 + 128 原语 SSOT + Capability Hook | 各端语义实现（小程序降级为 Layer 1 兼容层） | ✅ |
+| 不绑定渲染引擎（G-27/37） | VNode / Component IR / LayoutConstraint IR | `ProteusRenderBackend`（VueDom / Native×3 / Flutter / Headless） | ✅ |
+| 不绑定编译器（G-29/38） | Compiler IR（SFC → 中间表示） | `ProteusCompilerBackend`（Node ✅ / Rust ✅ / WASM 📋） | 🟡 |
+| 不绑定容器形态（G-42） | 页面生命周期状态机 + IR 单一 Owner | 六容器策略（Stack / SuperApp / Window / MiniProgram / Embedded / SinglePage） | ✅ |
+| 不绑定宿主运行时（G-39） | Host Runtime 接口（bootstrap / worker / engine / native 桥） | 宿主实现（Web / Terminal 参考实现已备） | 📋 |
+| 不绑定执行载体（G-40） | Execution Carrier SPI + 批处理差分 + 零拷贝通道 | JSI（默认）/ bytecode / AOT——载体只是插槽上的当前实现 | 📋 |
+| 不绑定端（G-30） | Platform = (R, C, J) 三元组 + Tier 1-4 | 任意能提供渲染宿主/能力宿主/JS 运行时之一的端 | 📋 |
 
-## 核心特性
+**验证先于运行**：每层 SPI 都有 conformance 套件（Render / Compiler / Host / Container / Ownership / Test 各 32-42 项），CI 自动校验。约束挂在 IR 上而不是挂在某个平台上——这也是 AI Agent 能安全介入的原因：它操作的是 IR，IR 上有约束。
 
-- **标准 Vue 3 SFC 开发**：`<div>`/`<p>`/`<h1>`/`<a>` 照写不误，映射到小程序标签由编译器完成；`h1-h6/p/a` 自动注入对齐 Web UA 的语义基础样式（大标题/段距/链接色），两端视觉一致
-- **AI-native 透明编译**：编译引擎内置**规则注册表**（`packages/compiler/src/transforms/`），69 条转换规则每条自带 AI 说明书（what/why/when/example/verify/决策号），`listTransformRules()` / `getTransformRule(id)` 可枚举可查询；`explainTransform()` 对任意 Vue 文件输出**决策 trace**（该文件触发的全部转换规则 + 行号）；**分派层 `executeRule()`**（阶段三）——implemented 规则可携带 `apply()`，AI 覆盖规则实现即获得新能力，无需改框架代码（底线循环 ① 完全形态）——AI 代理与开发者都可读懂编译器的每一个决定，映射表与实现同源引用防漂移
-- **底线三循环（规则覆盖）**：`proteus.config.ts` 的 `rules` 段（`disabled` / `mapping` / `customTags`）按规则 ID 开关编译行为，改配置即生效、无需改框架代码——AI 写规则 → 框架获得新能力；debug 构建 `.transform-debug/` 携带完整决策链，产物问题一处定位到规则
-- **Web 零转换**：Web 端直接跑标准 Vite SPA（完整 devtools + HMR），不做二等公民
-- **Vue 能力渐进兼容（vue-compat-advance 全批）**：provide/inject 页面级注入桥（值传递 + 裸 ref 响应式联动 + pageId 隔离）、`<transition>` 进入+离开动画（编译注入 class + 状态机延迟移除）、作用域插槽平台限制确认（MP/Skyline 无模板传参机制，替代模式 props+事件）——三大运行期能力闭环
-- **模块化（module-plan B0-B9）**：跨模块引用编译期 import→require（共享模块独立产物）、`proteus-module.config.ts` 契约（defineModule + 校验）、依赖图谱（环检测/拓扑/chunk）、运行时编排器（createModuleSystem + 懒加载）、Web/Skyline 分包（manualChunks / subPackages 依赖 / preloadRule）、CI 审计门禁（`proteus audit module`：契约/图谱/体积/去重全硬卡）
-- **能力体系（platform-plan B1-B5）**：业务依赖能力不依赖平台——Capability 契约（defineCapability + 描述文件）、Adapter Registry（多实例 + 优先级选择 + fallback）、编译期分叉（`capabilities:manifest --platform` 能力缺失可见）、运行时降级（UnsupportedAPI / required 阻断）、平台原生模块规范（`capabilities:check` 禁止清单：业务零平台 API）；**MP 端 capability 已可用**（@proteus-vue/* 框架包共享模块放行）
-- **Skyline 一等公民**：页面默认 `"renderer": "skyline"`，`wx.router` 自定义路由转场（半屏 / 上滑 / 层叠缩放）作为一等能力；Web 端用 Vue `<Transition>` 复刻同一套 `routeType` API
-- **反编译黑盒**：产物自校验 + 调试日志 + 源码行号注释 + 转换函数独立可单测，坏产物当场报错
-- **运行时极简**：只做数据桥接（setData 批量合并）与路由导航，无运行时 DOM 模拟
-- **类型安全全链路**：`gen-routes` 编译期生成路由表与类型，`router.push({ name, params })` 全程推导
-- **分包内置**：主包 / 分包从目录结构 + 配置推导，编译期生成 `app.json`
-- **全链路调试**：`npm run debug:mp` 一键注入 `[proteus][环节]` 日志，正式构建零残留
+方法论全文：[PROTEUS-METHODOLOGY.md](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) · 原则与铁律总表：[proteus-architecture.md](docs/proteus-architecture.md)
+
+## 杀手特性
+
+> 状态标注：✅ 已落地可验证 · 🟡 部分落地 · 📋 规划已入库（plan + 参考实现，无可运行集成）
+
+### ① 可插拔渲染底座（G-27）✅
+
+`@proteus-vue/render-backend`：RenderBackend SPI + conformance 门禁，五官方后端原型集齐（Headless / VueDom / Native×3 / Flutter widget 映射）。**同一个 App 按页面选引擎**：商品详情 → Native（体验优先）、品牌动效 → Flutter（一致性）、数据大屏 → Skia（高频绘制）、H5 落地页 → Vue DOM（Web 生态）——业务代码完全一样。nodeOps Dispatcher 热切换（切换 = 一次赋值）+ 混合渲染（区域级切后端 + 纹理共享 + DevTools 路由 trace）。Flutter 锁死 Skia、RN 锁死原生——只有"上层模型 + 可插拔后端"这条路线能做到渲染引擎自由。
+
+### ② 可插拔编译器（G-29/G-38）🟡
+
+`proteus.config.ts` 一个 flag 切编译后端：`config.compiler.backend: 'node' | 'rust'`（或 `proteus build --compiler rust`）。RustBackend 是独立 cargo crate（proteus-cc-rust CLI → **同一份 CompilerIR JSON**），Node/Rust 语义等价 Golden 门禁 81 用例双端对齐。CompilerBackend SPI 已冻结（parse/transform/emit 三阶段 + IncrementalSession 增量 + FallbackBackend 自动降级），conformance 42 项。WASM 后端规划中。
+
+### ③ 语义原语 SSOT + 能力 Hook（G-31/G-32）✅
+
+128 语义原语清单（`PRIMITIVE_CATALOG` 单一事实源）→ 59 个 p-* 语义组件双端落地 → 45 个 implemented 语义 × 6 后端 conformance 门禁 → 50 个 Capability Hook（useCamera / useLocation / usePayment / useBiometric… 双端真实实现，缺桥诚实降级不崩溃）+ 28 个工程原语（useQuery / useRouter / useAnimation…）+ `proteus audit coverage` / `api-check` 编译期门禁。**业务依赖能力，不依赖平台。**
+
+### ④ 宿主层三件套（G-41/42/43）✅
+
+- **宿主接入（G-41）**：三方正交（框架 × 渲染引擎 × 宿主），6 宿主 × 6 引擎 = 36 组合矩阵 Tier 1 全部 conformance 验证
+- **宿主容器（G-42）**：六容器策略可插拔——超级应用容器（业务沙箱 + 崩溃隔离 + 自动重启 + 签名/白名单安全网关）、Stack / Window / MiniProgram / Embedded / SinglePage；IR 单一 Owner + 五原子销毁；严禁 fork（`proteus conformance --repo` 仓库治理 CLI 一键扫描）
+- **资源所有权（G-43）**：Owned / Borrow / Weak 语义层 + 借用检查器（PSS strict 编译期完备——use-after-move / double-move / 借用逃逸编译期拦截）+ Drop 五阶段协议 + DevTools 所有权图。**GC 管可达性，所有权管意图。**
+
+### ⑤ AI-native 全链路（G-21/23/36）✅
+
+编译器内置规则注册表（69 条转换规则，每条自带 AI 说明书 what / why / when / example / verify）+ `proteus explain` 决策 trace + Compiler Plugin API（IR 可编程访问，AI 覆盖规则实现即获得新能力）。Agent 基建：MCP Server（11 工具 + 5 Resources + 鉴权）、Agent Kit SDK（IRBuilder + withProteusRules + generateWithRetry 自修复循环）、migrate-miniprogram Skill、三层护栏（L1 IR Schema / L2 风格 / L3 六端 conformance）。**AI 产出的是符合 IR 契约的标准代码，而非自由文本。**
+
+### ⑥ 小程序 = Layer 1 兼容层（G-31 B6）✅
+
+业务代码只写标准 HTML 标签 + 标准 Vue SFC，**业务零条件编译**；`@proteus-vue/compat-miniprogram` 提供 wx 桥 + `proteus migrate mp` codemod（wx.* API 扫描 + 映射日志 + 覆盖率）。编译器 mpTransform 管线生成 Skyline 原生四件套：脏路径收集 + 16ms 批量 setData、编译期 px→rpx、分包声明写入 app.json、路由表全链路 TS 类型推导。纯 Vite 插件，无 IDE 锁定，任何 CI 可跑。**小程序不是标准，是兼容层。**
+
+### ⑦ 桌面交互原语（G-24）✅
+
+p-hover / p-shortcut（mod+s 平台惯例自动映射 ⌘S/Ctrl+S）/ p-focus-trap / p-context-menu / p-notify / p-permission / p-deeplink / p-command（⌘K）/ p-master-detail / p-breadcrumb 等 17 模块 + v-p-* 指令，Pure logic 双端接线。全终端三维断点 W×H×F（车机 driving-safe / TV 焦点引擎 / 手表表冠，G-25）📋 规划中。
+
+### ⑧ 测试即架构（G-44）🟡
+
+`@proteus-vue/test-ir`：Test IR + TestBackend SPI（vue-test-utils / jsdom / happy-dom / node / native-web / mp-mock）+ conformance runner + 断点矩阵——**测试断言本身成为可插拔 IR**，一套断言跨后端复用，后端合规性由机器判定。
+
+### ⑨ 执行载体可插拔（G-39/G-40）📋
+
+`createEngine(config)`：JSI 只是"执行载体"插槽上的默认实现，不是架构绑定。emit 产物三选一（JS bundle / bytecode / **AOT 原生代码**——AOT 路径下 JS 跨边界成本归零 + 真并发）；批处理差分（一帧 N 次属性变更聚合为一次跨界提交）；零拷贝通道（大块数据强制 ArrayBuffer）；实时能力原生闭环（音频/传感器高频流由原生线程驱动，JS 只下发配置 + 接收事件）。规划已入库（双参考实现 JSICarrier / AOTCarrier + verify 14/14）。
+
+### ⑩ 柔性布局 / 自适应容器 / 系统级玻璃（G-22 / G-22.5 / G-07）🟡
+
+p-fluid / p-grid / p-stack / p-fit 柔性布局——把 iOS `UICollectionView` / Android `GridLayoutManager` / CSS Grid 的系统级布局能力收敛为语义原语，屏幕越宽自动排越多列，折叠屏展开、窗口拖拽实时 reflow（✅ `@proteus-vue/fluid` + FLD 门禁）；p-adaptive 弹窗整个形态随宽度自动切换（`sheet | dialog | popover` 映射各端原生容器）（✅ B1/B2/B4）；系统级玻璃材质 `<pg-glass>`（iOS UIGlassEffect / 鸿蒙 fractal / RenderEffect / backdrop-filter，L1/L2/L3 降级不崩溃）（📋 规划中）。
+
+### ⑪ 99% 零原生代码（G-28）📋
+
+语义接口 + NativeBackend SPI 帕累托分层：Top 30 能力框架内置（80%）+ 官方 Backend（+18%）+ 社区包（+1.9%）= 99% 业务场景不写 Swift/Kotlin/Java 桥接；Compiler 扫描 `capabilities` 自动生成 iOS `Info.plist` / Android `AndroidManifest.xml` / 鸿蒙 `module.json5` 权限声明。规划已入库（native-backend-1-plan）。
+
+### 工程化基座 ✅
+
+路由（命名路由 + 守卫 + Skyline 自定义转场，Web 端 Vue Transition 复刻同一套 API）、分包（编译期生成 subPackages）、模块化（契约 / 依赖图谱 / 懒加载 / CI 审计门禁）、状态（pinia-sync：LWW 零依赖默认 + CRDT 接口）、i18n（类型安全 t() + ICU 子集 + 审计）、DevTools（十视图：TraceBus / 所有权图 / 性能…）、CLI（build / explain / rules / audit / conformance / migrate / capabilities / i18n:check）、create-proteus 一键双端工程。
+
+## 对标矩阵（核心差异）
+
+| 维度 | uni-app | React Native | Flutter | **Proteus** |
+|------|---------|--------------|---------|-------------|
+| 渲染底座 | WebView | 原生（锁定） | Skia（锁定） | **可插拔（Vue/Native/Flutter/Skia）✅** |
+| 同 App 多后端 | ❌ | ❌ | ❌ | **✅ 按页面切换 + 混合渲染** |
+| 编译器 | 锁定 | 锁定（Metro） | 锁定 | **可插拔 SPI（Node/Rust 一个 flag）✅** |
+| 业务写法 | `view/text` DSL | JSX + 原生组件 | Dart | **标准 HTML + 标准 Vue SFC** |
+| 布局适配 | rpx（单位换算） | LayoutBuilder | AdaptiveScaffold | **系统级柔性布局（p-*）✅** |
+| 手写原生插件 | 插件市场碰运气 | 必须写 Native Module | 必须写 Plugin | **语义接口 + NativeBackend（📋 规划）** |
+| 权限声明 | 手动配 | 手动配 | 手动 | **Compiler 自动生成（📋 规划）** |
+| 内存治理 | GC 兜底 | GC 兜底 | GC + 手动 | **所有权 + 借用检查编译期拦截 ✅** |
+| AI 介入方式 | 无 IR，只能文本替换 | 同左 | 同左 | **操作 IR + 强制校验 + 自修复 ✅** |
+| 工具链 | HBuilderX 依赖 | RN CLI | Flutter SDK | **纯 Vite 插件，任何 CI 可跑** |
+
+**结论**：竞品缺的不是某个 API，而是"显式语义 + 可编程 IR + 后端原生映射 + 强制校验"这套方法论。普通 DSL 映射是"换种语法写原生代码"；Proteus 是"定义语义，让任何后端实现它"——这是语法翻译与架构方法论的代际差。
+
+## 架构分层
+
+```
+┌─ 应用层（业务）         标准 Vue SFC / 路由 / 状态 / 页面
+├─ 语义层（框架核心）     p-* 原语 / 128 原语 SSOT / Capability Hook / Fluid / Adaptive / Glass
+├─ 编译层                Compiler + Plugin API + CompilerBackend SPI（Node / Rust / WASM）
+├─ 渲染层                RenderBackend SPI（VueDom / Native / Flutter / Skia / Headless）+ Dispatcher 热切换
+├─ 宿主层                HostRuntime SPI + 六容器策略 + 所有权/借用检查 + ExecutionCarrier（JSI/AOT）
+└─ 能力层                NativeBackend SPI（规划）+ Capability Hook 50（iOS / Android / Harmony / Web / MP）
+```
+
+**核心洞察**：框架通过 IR 层只描述"要什么"（一个毛玻璃卡片、一次扫码调用、一个编译产物），后端决定"怎么做"（UIGlassEffect 还是 backdrop-filter、AVCapture 还是 CameraX、Node 还是 Rust）。**两套后端共用同一套 SPI 方法论，这正是"天然适配任意渲染引擎 + 任意原生能力 + 任意编译器"的来源。**
 
 ## 快速开始
 
@@ -72,6 +150,9 @@ npm run dev:web
 
 # 小程序端（构建后导入微信开发者工具）
 npm run build:mp
+
+# 切换编译后端（node 默认 / rust）
+# proteus.config.ts → config.compiler.backend: 'node' | 'rust'
 ```
 
 构建产物：
@@ -108,7 +189,7 @@ function handleTap() {
 </style>
 ```
 
-同样的源码在 Web 端由 Vue 原生渲染，在小程序端由编译器转为 WXML + WXSS + `Page()` JS。完整示例见 `examples/pages/`。
+标准写法，无平台 DSL。同样的源码在 Web 端由渲染后端直出 Vue DOM，在小程序端由编译器转为 WXML + WXSS + `Page()` JS——将来接入 Native / Flutter 后端时，这份代码一行不改。完整示例见 `examples/pages/`。
 
 ## 路由与自定义转场
 
@@ -116,7 +197,7 @@ function handleTap() {
 import { router } from '@proteus-vue/router'
 import { beforeEach } from '@proteus-vue/router/guards'
 
-// 命名路由 + 参数（自动序列化为 query）
+// 命名路由 + 参数（自动序列化为 query，全链路 TS 类型推导）
 router.push({ name: 'user-profile', params: { id: 1 } })
 
 // Skyline 自定义路由转场（Web 端自动映射为 Vue Transition 等价转场）
@@ -126,79 +207,77 @@ router.push({ name: 'user-profile', routeType: 'halfScreen' })
 beforeEach((to, from) => to.meta?.requiresAuth ? !!getToken() : true)
 ```
 
-内置转场预设：`halfScreen`（半屏弹层）/ `slideUp`（底部上滑）/ `scaleDown`（层叠缩放），配置在 `proteus.config.ts`，可在 `examples/main.mp.ts` 手写覆盖（**极简入口**：只需写自定义 builder，app 骨架由框架自动生成），也可用微信预设 `routeType: 'wx://bottom-sheet'`。详见[路由与转场](docs/routing.md)。
+内置转场预设：`halfScreen`（半屏弹层）/ `slideUp`（底部上滑）/ `scaleDown`（层叠缩放），配置在 `proteus.config.ts`。详见[路由与转场](docs/routing.md)。
 
 ## 目录结构
 
 ```
 proteus/
-├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 样式策略 / 规则覆盖）
-├── vite-plugin-mp-transform.ts     # 小程序编译 Vite 插件（薄适配层，@proteus-vue/plugin-vite 前身）
-├── scripts/gen-routes.ts           # 编译期路由生成器（app.json / page.json / 路由表）
-├── packages/shared/               # ★ @proteus-vue/shared 公共层（平台适配器 + 全局类型声明）
-├── packages/compiler/              # ★ @proteus-vue/compiler 编译引擎独立包（v0.2 起 monorepo）
-│   └── src/                        #   纯函数引擎 + transforms 规则注册表（69 条 AI 说明书，含 apply 分派层）
-├── packages/runtime/               # ★ @proteus-vue/runtime 运行时（setData 桥接 / 生命周期 / store 桥 / app 骨架）
-├── packages/router/                # ★ @proteus-vue/router 路由包（工厂化 createRouter + 守卫 + 预设 builders + 透明化规则）
-├── packages/plugin-vite/           # ★ @proteus-vue/plugin-vite Vite 插件（mp-weixin 编译管线 + gen-routes 路由生成器）
-├── packages/module/                # ★ @proteus-vue/module 模块化包（module-plan B0-B9：契约/图谱/编排器/审计/Web 分包）
-├── packages/capabilities/          # ★ @proteus-vue/capabilities 能力体系（platform-plan B1-B5：契约/Registry/编译期分叉/降级/规范）
-├── packages/api/                   # ★ @proteus-vue/api 跨端 API 抽象（createApi 请求 + 设备信息 + createAuth 凭证托管）
-├── packages/pinia-sync/            # ★ @proteus-vue/pinia-sync 多端状态协同（LWW 零依赖默认 + CRDT 接口占位）
-├── packages/i18n/                  # ★ @proteus-vue/i18n 国际化（类型安全 t() + ICU 子集 + i18n:check 审计）
-├── packages/devtools-runtime/      # ★ @proteus-vue/devtools-runtime 可观测（TraceBus 统一事件协议 + 脱敏/采样）
-├── packages/cli/                   # ★ @proteus-vue/cli（v0.2：build / explain / rules / module:check / audit / capabilities:* / i18n:check / components:audit）
-├── packages/create-proteus/        # ★ @proteus-vue/create-proteus（v0.2：npm create @proteus-vue/proteus 一键双端工程）
-├── src/
-│   ├── components/                   # ★ 框架内置组件库（组件库 P0 全批：16 个组件 p-view/p-text/…/p-list-view/… + virtual-list 兼容别名，聚合入口 index.ts + 产物 proteus/ 前缀）
-│   ├── platform/                   # 平台适配层（adapter / web-adapter / mp-adapter）
-│   ├── router/                     # 路由（index / guards / skyline / presets 内置转场）
-│   ├── runtime/                    # 运行时桥接（setData 批量 / 页面生命周期 / app 骨架 / 调试）
-│   └── shims/                      # wx / Page / RouteBuilder 类型声明
-├── examples/                       # 示例应用（能力矩阵活文档：表单指令 / config 规则演示 / 转场 / 分包 / capability）
-├── tests/                          # 1764 个单测（npm test 全量，e2e 除外）+ Web e2e（e2e-web 8 + keypaths 3 + render-backend-demo 7）
-├── .github/workflows/ci.yml        # CI：test / vue-tsc / build:web / build:mp / 独立包构建 / e2e
+├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 规则覆盖 / compiler.backend）
+├── packages/                       # 37 个 @proteus-vue/* workspace 包
+│   ├── compiler/                   #   编译引擎 + 规则注册表（69 条 AI 说明书 + apply 分派层）
+│   ├── compiler-backend/           #   CompilerIR 契约 + NodeBackend + 双端等价 Golden
+│   ├── compiler-backend-rust/      #   Rust 编译后端（cargo crate proteus-cc-rust → 同一 CompilerIR）
+│   ├── plugin-vite/                #   Vite 插件（mpTransform 管线 + gen-routes + webOnly 排除）
+│   ├── render-backend/             #   渲染 SPI + 五后端 + 混合渲染 + 容器/所有权/宿主层（G-27/41/42/43）
+│   ├── compat-miniprogram/         #   wx 桥 + migrate codemod（Layer 1 兼容层，G-31 B6）
+│   ├── component-ir/ contracts/ types/ shared/    # C-IR schema / 契约 / 全局类型 / 公共层
+│   ├── built-in-components/        #   59 个 p-* 语义组件（128 原语 SSOT）
+│   ├── fluid/ desktop/ gesture/    #   G-22 柔性布局 / G-24 桌面原语 / 手势识别器
+│   ├── api/ capabilities/ security/ #  Capability Hook 50 / Adapter Registry / 安全
+│   ├── router/ runtime/ module/    #   路由 / setData 桥接 / 模块化
+│   ├── pinia-sync/ i18n/ css-compat/ style-safety/ # 状态协同 / 国际化 / CSS 兼容 / 样式安全
+│   ├── app-config/ hmr/ web/ renderer-app/ devtools/ devtools-runtime/ # 配置 / 热更 / Web 壳 / 渲染壳 / DevTools
+│   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
+│   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
+├── docs/                           # 60 份 plan + 规约 + positioning v3 + methodology + board-inventory
+├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
+├── tests/                          # 1923 单测 / 183 文件 + Web e2e 18 例
+├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
 
 ## 测试与验证
 
 ```bash
-npm test                # 1764 个单测（compiler / module / capabilities / api / runtime / router / plugin / cli / golden / pinia / storage / bundle-report / perf / component / i18n / devtools / desktop / render-backend / dispatcher / conformance 等）
-npm run test:e2e:web    # 8 个 Web 端 e2e（Playwright）
+npm test                # 1923 个单测 / 183 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / conformance / …）
+npm run test:e2e:web    # Web e2e 18 例（Playwright：基础流 + 关键路径 + 渲染后端 demo）
 npm run verify          # test + build:web + build:mp 一键全过
-npm run debug:mp        # 小程序全链路调试构建（注入 [proteus][环节] 日志）
-npm run proteus -- explain <vue-file | rule-id>   # CLI：决策 trace / AI 说明书
+npm run check:pkg       # 37 包依赖一致性 0 error
+npm run proteus -- explain <vue-file | rule-id>     # 决策 trace / AI 说明书
+npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理扫描
 ```
 
 ## 文档导航
 
 | 文档 | 内容 |
 |---|---|
-| [快速开始](docs/getting-started.md) | 环境、命令、首个页面、开发者工具导入、调试 |
-| [配置参考](docs/configuration.md) | `proteus.config.ts` 全量字段说明 |
-| [编译原理](docs/compiler.md) | 编译管线、标签/指令映射表、样式转换、反黑盒机制 |
-| [路由与转场](docs/routing.md) | 路由生成、Router API、守卫、自定义转场、平台硬边界 |
-| [规划路线](docs/roadmap.md) | 对标 uni-app / Taro 的分里程碑路线：能力矩阵、架构演进、性能目标 |
-| `src/compiler/README.md` | 编译引擎模块边界与独立开源提取路径 |
+| [PROTEUS-METHODOLOGY](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) | 方法论哲学：统一语义收敛、五支柱、Tier 模型（onboarding 第一课） |
+| [定位 v3](docs/proteus-positioning-v3.md) | 对外定位：一句话定位 + 杀手特性详解 + 对标矩阵 + 对外话术 |
+| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 60 份 plan 状态总表（单一权威索引） |
+| [规约](docs/proteus-architecture.md) | 原则 #0-#13 + 铁律总表 + 严格规则（真理来源） |
+| [快速开始](docs/getting-started.md) / [配置参考](docs/configuration.md) / [编译原理](docs/compiler.md) / [路由与转场](docs/routing.md) | 开发者文档 |
+| [路线图](docs/roadmap.md) · [里程碑线](docs/proteus-roadmap-2-plan/01-master-roadmap.md) | 版本线 v0.1→v2.0 · M1-M3 里程碑线 |
 
 ## 开发状态与路线图
 
-- **MVP 已完成**：Web + 微信 Skyline 双端编译、路由/导航/分包/tabBar、自定义路由转场、setData 桥接（深层 diff + 批量）、反黑盒调试、AI-native 规则注册表（69 条 AI 说明书 + apply 分派层）+ 决策 trace（explainTransform）+ 底线三循环（规则覆盖 config 开关）+ v0.3 编译能力（computed/watch/组件系统/scoped CSS/sourcemap）+ v0.4 运行时性能（虚拟列表/Pinia/store 桥/性能基准/包体积仪表）+ **vue-compat-advance 全批** + **module-plan 模块化 B0-B9** + **platform-plan 能力体系 B1-B5**（MP 端 capability 已可用）+ pinia-plan M1-M8 + **lifecycle-plan B1-B6** + **api-plan B1-B4** + **组件库 P0 全批（B1-B8）** + **i18n-plan B1-B3** + **devtools-plan B1-B2** + **G-27 渲染后端可插拔（B1-B6）**（`@proteus-vue/render-backend`：RenderBackend SPI + conformance + 五官方后端原型（Headless/VueDom/Native×3/Flutter/混合渲染 demo 页））+ **宿主层三 plan 落地（G-41/G-42/G-43）**（`@proteus-vue/render-backend`：nodeOps Dispatcher 方案 B + Host Conformance 32 项 + 真实 Vue3 createRenderer 接入 + WebHostRuntime + 热切换三策略 / 容器 SPI + StackContainer + 容器 Conformance 38 项 + SuperAppContainer 沙箱崩溃隔离 + `proteus conformance --repo` 仓库治理 CLI / Owned 所有权类型 + 借用检查器 B 规则集）、1764 单测（+ Web e2e 三文件）
-- **规划**：v0.3 尾项（CSS 预处理器/类型提示/computed 写路径）、多端扩展（支付宝/抖音/鸿蒙/**App 原生 via 自定义渲染器**——G-27/G-41 渲染器与宿主接入地基已落地，原生宿主工程接线待续）、**Vapor 兼容**、npm 发布（changesets 配置就绪，待真实发布）——完整对标大厂跨端框架（uni-app / Taro）的**分里程碑路线见 [docs/roadmap.md](docs/roadmap.md)**
+- **已落地**（37 包 / 1923 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → 文档引擎（Markdown→IR→双端渲染）
+- **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议
 
 Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等核心自由），并附**专利授权**条款——对采用者与贡献者都更友好，适合作为被嵌入商业项目的基建类框架。
 
-## 已知限制（MVP）
+## 已知限制（诚实边界）
 
-- 支持微信小程序（Skyline 优先，WebView 降级仅保证可运行）；支付宝 / 抖音 / 快手为非目标
-- `computed`（读路径已支持：`computed(() => 表达式)` → data 派生 + 写入合并重算）/ `watch` / 跨模块引用、复杂事件表达式暂不支持（编译期警告）
-- 自定义路由转场是 Skyline 平台能力：**不能从 tabBar 页发起**；Web 端用 Vue Transition 复刻同一套 API
+- 支持 Web 全功能 + 微信小程序（Skyline 优先，WebView 降级仅保证可运行）；支付宝 / 抖音 / 快手为非目标
+- **规划已入库、尚未有可运行实现**：G-28 NativeBackend（零原生代码）、G-39/G-40 宿主运行时与执行载体（AOT 路径）、G-25 全终端（车机/TV/手表）、G-30 任意端——plan + conformance 套件 + 参考实现已备，按路线图分批落地
+- 渲染后端五后端中 Native×3 / Flutter 为原型映射（widget 级），原生工程接线待 G-37 分批推进
+- 自定义路由转场是 Skyline 平台能力：不能从 tabBar 页发起；Web 端用 Vue Transition 复刻同一套 API
 - 运行时禁止动态注册页面 / 路由（编译期静态声明）
-- **Skyline 在 iOS 真机偶发白屏**（微信平台已知问题）：降级兜底策略（能力兼容清单 + 页面级 WebView 降级通道）已规划在 [roadmap.md](docs/roadmap.md) v0.5，v1.0 真机验收覆盖
+- Skyline 在 iOS 真机偶发白屏（微信平台已知问题）：降级兜底策略已规划在 roadmap v0.5
+- 强实时 / 强安全隔离场景（航空、医疗）不适合（方法论诚实边界：见 [PROTEUS-METHODOLOGY §8](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md)）
 
 ---
 
-**文档版本**：v2.54（欠账清理：v0.2-v0.4 能力同步）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+
+**文档版本**：v3.0（重构：对齐定位 v3 + 方法论哲学「统一语义收敛」；37 包 / 1923 测试 / 60 plan）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+
