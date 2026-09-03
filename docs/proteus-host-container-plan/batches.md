@@ -119,6 +119,8 @@
 
 **验收**：6 种容器全部通过 conformance；真实 App 无泄漏（profiling 验证）
 
+> **✅ B6 已落地（决策 #358，除「真实 App 验证」需生产 App 诚实延后）**：`@proteus-vue/render-backend` 新增 `basic-containers.ts`——**① SinglePageContainer**（单页/卡片/IoT：单槽 replace 语义——push 先销毁旧页再挂新页，同一时刻至多一个页面；hidden↔mounted 往返；事件 page-created/destroyed）**② EmbeddedContainer**（嵌入宿主页面：复用单槽 + `getHostMountPoint` 宿主挂载点工厂——G-30 Tier 3）**③ WindowContainer**（桌面多窗口：每窗口一个完整页面栈（委托 createStackContainer）+ createWindow/destroyWindow（窗口内页面五原子销毁）/focusWindow/listWindows/focusedWindow + SPI 页面操作代理聚焦窗口 + ownershipOf 跨窗口查找 + onWindow 事件）**④ MiniProgramContainer**（小程序容器：navigateTo（10 层上限——reject 拒绝/destroy-oldest 两策略）/redirectTo（替换栈顶）/reLaunch（清栈）/switchTab（**非 tab 页全销毁 + 其他 tab 页保活出栈 hidden——同实例往返 IR 保留**）/navigateBack/registerTab + **L1 沙箱**（scope 隔离——业务间不共享可变状态；崩溃网关归 SuperApp L2）+ 页面生命周期/五原子/ownership 委托内部 StackContainer）；**conformance 能力门控扩展**（runner：C-04 页面栈治理仅 pageStack=true、C-06 配额仅 resourceQuota=true——与 C-07 沙箱门控同构，未声明诚实 SKIP；stack/superapp 画像两者皆 true 计数零变化）；**resourceQuota=false 容器诚实拒绝配额**（request/release throw 而非静默无限——CMP065）；四容器全过 conformance 零 FAIL（singlepage/embedded：pass 23/skip 15；window：31/7 同 stack；miniprogram：37/1——仅 C-08-02 无网关 SKIP）；G-43 B3 ownership 全容器接入（单槽内联/委托）。测试 `tests/basic-containers.test.ts` 18 用例（conformance×4 + 单槽/嵌入/窗口/小程序语义×14）；全量 1831/177 无回归。
+
 ---
 
 ## 跨 Plan 协同矩阵

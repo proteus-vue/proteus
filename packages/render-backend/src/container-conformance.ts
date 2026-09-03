@@ -322,9 +322,18 @@ export async function runContainerConformance(container: ProteusHostContainer): 
   const results: ContainerConformanceResult[] = []
 
   for (const t of tests) {
-    // 能力门控：C-07（沙箱）仅 multiBusiness 容器；C-08-01 仅声明网关容器
-    if (t.group === 'C-07' && !(container.capabilities as unknown as { multiBusiness: boolean }).multiBusiness) {
+    // 能力门控：未声明能力组 SKIP + reason（诚实原则——CMP065；B6 四容器落地时补 C-04/C-06 门控）
+    const caps = container.capabilities as unknown as { multiBusiness: boolean; pageStack: boolean; resourceQuota: boolean }
+    if (t.group === 'C-07' && !caps.multiBusiness) {
       results.push({ id: t.id, status: 'SKIP', reason: 'multiBusiness=false（容器无沙箱能力——诚实声明 CMP065）' })
+      continue
+    }
+    if (t.group === 'C-04' && !caps.pageStack) {
+      results.push({ id: t.id, status: 'SKIP', reason: 'pageStack=false（容器无页面栈治理——singlepage/embedded 单槽语义，CMP065）' })
+      continue
+    }
+    if (t.group === 'C-06' && !caps.resourceQuota) {
+      results.push({ id: t.id, status: 'SKIP', reason: 'resourceQuota=false（容器无配额治理——CMP065）' })
       continue
     }
     if (t.id === 'C-08-01' || t.id === 'C-08-02') {

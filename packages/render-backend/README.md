@@ -27,6 +27,7 @@
 | `stack-container.ts` | **★G-42 B2 + G-43 B3**：`createStackContainer`（页面栈 + 五原子销毁 + 框架代管资源池 + LRU；`StackContainerOptions.ownership` 启用后每页伴随所有权上下文）· `createResourcePool` / `createQuotaManager` |
 | `container-conformance.ts` | **★G-42 B3**：`runContainerConformance`（C-01~C-08 38 项）+ `scanRepoForFork`（严禁 fork 机器指纹）+ `checkBizManifest` 安全网关 |
 | `superapp-container.ts` | **★G-42 B4**：`createSuperAppContainer`（业务沙箱 + 崩溃隔离 L1-L3 + 自动重启 + 签名/白名单网关——页面栈委托 Stack + ownership pass-through） |
+| `basic-containers.ts` | **★G-42 B6 其余 4 容器**：`createSinglePageContainer`（单页/卡片/IoT 单槽 replace）/ `createEmbeddedContainer`（宿主挂载点工厂——Tier 3）/ `createWindowContainer`（多窗口各持栈 + 聚焦代理）/ `createMiniProgramContainer`（navigateTo/redirectTo/reLaunch/switchTab tab 保活/navigateBack + 10 层治理 + L1 沙箱）——全部过 conformance（能力门控诚实 SKIP）+ G-43 B3 ownership 接入 |
 | `ownership.ts` | **★G-43 B1**：`Owned<T>`（Move 语义）/ `Borrow` / `Weak` / `Managed` + `OwnershipGraph`（孤儿/泄漏检测）+ Drop 五阶段协议 |
 | `borrow-checker.ts` | **★G-43 B2**：`analyzeOwnershipSource`（源码级借用检查 B-01~B-08 + PSS strict/loose/off——编译期拦截 use-after-move/double-move/借用逃逸） |
 | `page-ownership.ts` | **★G-43 B3**：`createPageOwnership`（页面所有权上下文——G-42 五原子第 3 步 releaseResources 委托 Drop 协议：forceDrop 强制回收 + Managed 自动释放 + 配额兜底归零；`container.ownershipOf(pageId)` 登记入口） |
@@ -70,4 +71,4 @@ const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == SE
 
 B1 SPI+conformance ✅ → B2 VueDom ✅ → B3 Headless（Agent 回归）→ B4 Native（UIKit nodeOps）→ B5 Flutter（Embedder C ABI）+ **G-31 B5 conformance 快照基础设施 ✅** → B6 混合渲染 + DevTools
 
-**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch，B1-B5，#342-#346）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI，B1-B5，#347-#351）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability/pss，B1-B5，#352-#357；余 B6 跨设备转移需真机）
+**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch，B1-B5，#342-#346；余 B6 组合矩阵）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI + **basic-containers 四容器**，B1-B6，#347-#358；余「真实 App 验证」需生产 App）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability/pss，B1-B5，#352-#357；余 B6 跨设备转移需真机）
