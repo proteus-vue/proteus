@@ -75,7 +75,7 @@ function copyShareLink(): void {
 
 <template>
   <p-view class="demo-root">
-    <p-view class="pg-grid">
+    <p-split :min-split-width="880" :gap="16" class="pg-grid">
       <!-- 编辑器：标准 Vue SFC -->
       <p-view class="pg-pane">
         <p-view class="pane-head">
@@ -106,17 +106,14 @@ function copyShareLink(): void {
           {{ compiled.warnings.join(' · ') }}
         </p-text>
       </p-view>
-    </p-view>
+    </p-split>
   </p-view>
 </template>
 
 <style scoped>
 .demo-root { width: 100%; }
 .pg-grid {
-  display: grid !important;
-  /* ★柔性网格（W-6）：双栏自适应，窄容器自动堆叠——零 @media */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 16px;
+  /* ★#384：双栏布局归 p-split 原语（容器查询 stacked/split）——页面零布局代码 */
   align-items: stretch;
 }
 .pg-pane {
@@ -160,6 +157,7 @@ function copyShareLink(): void {
 .editor {
   flex: 1;
   min-height: 420px;
+  max-width: 100%;
   background: var(--panel);
   color: var(--ink);
   border: none;
@@ -174,6 +172,7 @@ function copyShareLink(): void {
 .output {
   flex: 1;
   min-height: 420px;
+  max-width: 100%;
   margin: 0;
   padding: 14px 16px;
   overflow: auto;

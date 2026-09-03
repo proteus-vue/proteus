@@ -57,11 +57,23 @@ const ruleList = ref(rules)
 .rule-item {
   display: flex;
   gap: 12px;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 12px;
   background: var(--panel);
 }
-.rule-id { color: var(--brand2); font-family: ui-monospace, Menlo, monospace; font-size: 12px; min-width: 180px; }
+.rule-id {
+  color: var(--brand2);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  flex: 0 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rule-desc {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .rule-desc { color: var(--muted); font-size: 12px; }
 </style>

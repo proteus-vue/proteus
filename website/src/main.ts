@@ -15,6 +15,7 @@ import {
   PDivider,
   PPage,
   PSidebar,
+  PSplit,
   installFluidLayout,
 } from '@proteus-vue/components'
 // ★G-24 B1 桌面交互原语：v-p-hover（官网卡片 hover 语义——Pure logic 双端接线）
@@ -34,6 +35,7 @@ const components: Record<string, unknown> = {
   'p-divider': PDivider,
   'p-page': PPage,
   'p-sidebar': PSidebar,
+  'p-split': PSplit,
 }
 for (const [name, comp] of Object.entries(components)) {
   app.component(name, comp as never)

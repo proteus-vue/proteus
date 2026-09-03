@@ -58,11 +58,10 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 </template>
 
 <style scoped>
-/* 布局（方向/换行/宽度）全部由 p-sidebar 组件承担——页面只写卡片视觉 + 按模式适配呈现 */
+/* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
+   页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
 .sidebar-card {
-  position: sticky;
-  top: calc(var(--nav-h) + 16px);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -71,21 +70,11 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   padding: 16px;
   background: var(--panel);
 }
-/* ★bottom-bar 模式（窄容器）：导航卡横向紧凑化（组件根类 p-sidebar-bottom-bar 暴露状态——页面按状态适配呈现） */
-.p-sidebar-bottom-bar .sidebar-card {
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: 12px 16px;
+/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky） */
+.p-sidebar-side-rail .sidebar-card {
+  position: sticky;
+  top: calc(var(--nav-h) + 16px);
 }
-.p-sidebar-bottom-bar .toc-nav {
-  flex-direction: row;
-  flex-wrap: nowrap;
-  gap: 2px 10px;
-}
-.p-sidebar-bottom-bar .toc-link { flex-shrink: 0; white-space: nowrap; }
-.p-sidebar-bottom-bar .eyebrow { display: none; }
 .toc-nav { display: flex; flex-direction: column; gap: 2px; }
 .toc-link { text-decoration: none; border-radius: 8px; }
 .toc-text { color: var(--muted); font-size: 13px; }
