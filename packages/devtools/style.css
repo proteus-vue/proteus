@@ -1153,3 +1153,96 @@ body.pd-body {
   font-size: 10px;
   padding-right: 8px;
 }
+
+/* ── Ownership 所有权视图（G-43 B4） ─────────────────────── */
+.pd-ownership {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.pd-own-card-title {
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0 4px;
+  border-bottom: 1px solid var(--pd-border-soft);
+  padding-bottom: 2px;
+}
+
+.pd-own-summary:first-child .pd-own-card-title {
+  margin-top: 0;
+}
+
+.pd-own-stats {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text-strong);
+}
+
+.pd-own-types {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  margin-top: 2px;
+}
+
+.pd-own-alert {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-own-alert-orphan {
+  color: #f87171;
+}
+
+.pd-own-alert-leak,
+.pd-own-alert-crosspage {
+  color: #fbbf24;
+}
+
+.pd-own-alert-longborrow {
+  color: var(--pd-accent);
+}
+
+.pd-own-chain {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  white-space: pre-wrap;
+}
+
+.pd-own-ok {
+  font-size: 11px;
+  color: #4ade80;
+}
+
+.pd-own-owner {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-t-key);
+  font-weight: 600;
+  padding: 2px 0 1px;
+}
+
+.pd-own-resource {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text-mute);
+  padding-left: 10px;
+}
+
+.pd-own-tl {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-mute);
+  padding: 1px 0 1px 10px;
+}
+
+.pd-own-tl-unpaired {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+}

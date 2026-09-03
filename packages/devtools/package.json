@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/devtools",
   "version": "0.1.0",
-  "description": "Proteus DevTools 面板（devtools-plan UI 层）：九视图（时间轴/火焰图/状态·时间旅行·值编辑/路由/根因/组件/页面/依赖图/设备）+ 一键接入 + Vue DevTools 插件（Timeline/Inspectors）+ 开放数据源（WS/CDP 协议）——浏览器端 dev 工具，不随业务产物发布",
+  "description": "Proteus DevTools 面板（devtools-plan UI 层）：十视图（时间轴/火焰图/状态·时间旅行·值编辑/路由/根因/组件/页面/依赖图/设备/所有权）+ 一键接入 + Vue DevTools 插件（Timeline/Inspectors）+ 开放数据源（WS/CDP 协议）——浏览器端 dev 工具，不随业务产物发布",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -24,11 +24,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js --external:@proteus-vue/capabilities --external:@proteus-vue/devtools-runtime --external:@vue/devtools-api && esbuild src/index.ts --bundle --format=iife --global-name=ProteusDevtools --platform=browser --outfile=dist/panel.js"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js --external:@proteus-vue/capabilities --external:@proteus-vue/devtools-runtime --external:@proteus-vue/render-backend --external:@vue/devtools-api && esbuild src/index.ts --bundle --format=iife --global-name=ProteusDevtools --platform=browser --outfile=dist/panel.js"
   },
   "dependencies": {
     "@proteus-vue/capabilities": "0.1.0",
-    "@proteus-vue/devtools-runtime": "0.1.0"
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/render-backend": "0.1.0"
   },
   "peerDependencies": {
     "@vue/devtools-api": "^8.0.0"

@@ -25,6 +25,8 @@ import type { PagesViewData, PageRouteData } from './views/pages'
 import { renderGraph } from './views/graph'
 import { renderDevice } from './views/device'
 import type { DeviceInfo, DeviceMemorySample } from './views/device'
+import { renderOwnership } from './views/ownership'
+import type { OwnershipViewData } from './views/ownership'
 import { serializeStoreSnapshot, parseStoreSnapshot, findSensitiveKeys } from './snapshot-io'
 import type { StoreRestoreEntry, SensitiveKeyHit } from './snapshot-io'
 import { serializeSession, parseSession } from './session-io'
@@ -49,11 +51,13 @@ export interface DevtoolsPanelOptions {
   pages?: PagesViewData
   /** ★M8 设备面板：环境/能力信息钩子（本地面板 install 侧采集；缺省取 source.deviceInfo() 远程命令缓存；均无 → 空态） */
   deviceInfo?: () => DeviceInfo
+  /** ★G-43 B4 所有权面板：视图数据钩子（本地面板 install 侧 tracer 采集；缺省取 source.ownership() 远程命令缓存；均无 → 空态） */
+  ownershipData?: () => OwnershipViewData | undefined
 }
 
 export interface DevtoolsPanel {
   destroy(): void
-  /** 切换视图（'timeline' | 'flamegraph' | 'state' | 'route' | 'errors' | 'components' | 'pages' | 'graph' | 'device'） */
+  /** 切换视图（'timeline' | 'flamegraph' | 'state' | 'route' | 'errors' | 'components' | 'pages' | 'graph' | 'device' | 'ownership'） */
   show(view: string): void
   /** ★P0：导出 store 快照 JSON（序列化 + Blob 下载，文件名 proteus-store-snapshot.json；返回序列化文本供程序化消费） */
   exportSnapshot(): string
@@ -65,7 +69,7 @@ export interface DevtoolsPanel {
   importSession(json: string): void
 }
 
-const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph', 'device'] as const
+const VIEWS = ['timeline', 'flamegraph', 'state', 'route', 'errors', 'components', 'pages', 'graph', 'device', 'ownership'] as const
 
 const VIEW_ICONS: Record<string, string> = {
   timeline: '⊞',
@@ -77,6 +81,7 @@ const VIEW_ICONS: Record<string, string> = {
   pages: '▦',
   graph: '⌬',
   device: '⚙',
+  ownership: '⬡',
 }
 
 export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOptions): DevtoolsPanel {
@@ -690,6 +695,9 @@ export function createDevtoolsPanel(root: HTMLElement, options: DevtoolsPanelOpt
     // ★M8 设备面板：本地面板取 options.deviceInfo 钩子；远程面板取 source.deviceInfo() 命令缓存（均无 → 空态）
     const deviceInfo = options.deviceInfo ? options.deviceInfo() : ((source.deviceInfo?.() as DeviceInfo | undefined) ?? undefined)
     renderDevice(containers.get('device') as HTMLElement, { info: deviceInfo, memory: memorySamples.slice() })
+    // ★G-43 B4 所有权面板：本地面板 options.ownershipData 钩子；远程 source.ownership() 缓存（均无 → 空态）
+    const ownershipData = options.ownershipData ? options.ownershipData() : ((source.ownership?.() as OwnershipViewData | undefined) ?? undefined)
+    renderOwnership(containers.get('ownership') as HTMLElement, ownershipData)
     renderComponents(
       containers.get('components') as HTMLElement,
       { nodes: Array.from(componentNodes.values()), selectedId: selectedComponent || undefined, dom: selectedComponent ? componentDom.get(selectedComponent) : undefined },

@@ -11,9 +11,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const packagesDir = path.join(root, 'packages')
 
 /** 共享单例实现的所有者包（只有它能定义这些函数；其他包必须 external 引用） */
-const SINGLETON_OWNERS = new Set(['devtools-runtime'])
+const SINGLETON_OWNERS = new Set(['devtools-runtime', 'render-backend'])
 /** 共享单例实现特征（内联 = 双实例风险）——带括号精确匹配（避免命中 createTraceBusSource/WsBridge 前缀） */
-const SINGLETON_FNS = ['function getProteusTraceBus(', 'function createTraceBus(']
+const SINGLETON_FNS = ['function getProteusTraceBus(', 'function createTraceBus(', 'function getProteusOwnershipGraph(']
 
 describe('dist 构建产物完整性（共享单例不内联）', () => {
   it('getProteusTraceBus/createTraceBus 实现只存在于 devtools-runtime，其余包 dist 零内联', () => {
@@ -29,10 +29,12 @@ describe('dist 构建产物完整性（共享单例不内联）', () => {
     expect(offenders).toEqual([])
   })
 
-  it('devtools dist 必须 external 引用 devtools-runtime（import 而非内联实现）', () => {
+  it('devtools dist 必须 external 引用 devtools-runtime 与 render-backend（import 而非内联实现——G-43 B4）', () => {
     const code = readFileSync(path.join(packagesDir, 'devtools', 'dist', 'index.js'), 'utf8')
     expect(code).toContain('@proteus-vue/devtools-runtime') // external import 保留
+    expect(code).toContain('@proteus-vue/render-backend') // ★G-43 B4：所有权图单例必须同源（getProteusOwnershipGraph）
     expect(code).not.toContain('function getProteusTraceBus') // 不内联单例实现
+    expect(code).not.toContain('function getProteusOwnershipGraph') // 不内联单例实现
   })
 
   it('★任何包 dist 不得内联 @vue/runtime-core（CJS 版覆盖全局 __VUE_HMR_RUNTIME__ → HMR map 分叉失效，决策 #254）', () => {

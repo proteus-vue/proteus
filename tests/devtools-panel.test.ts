@@ -736,7 +736,7 @@ describe('面板装配', () => {
     const root = document.createElement('div')
     const source = mockSource()
     const panel = createDevtoolsPanel(root, { source })
-    expect(root.querySelectorAll('.pd-nav-item').length).toBe(9) // timeline/flamegraph/state/route/errors/components/pages/graph/device
+    expect(root.querySelectorAll('.pd-nav-item').length).toBe(10) // timeline/flamegraph/state/route/errors/components/pages/graph/device/ownership
     expect(root.querySelector('.pd-header-status')?.textContent).toContain('连接中')
     // 推事件（渲染 16ms 节流）
     source.push(ev('lifecycle', 'start', 'boot', 100))
@@ -1202,15 +1202,19 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
     })
     sockets[0].onopen?.()
     const sends = sockets[0].send.mock.calls.map((c) => JSON.parse(c[0]))
-    expect(sends.length).toBe(3) // enable + appInfo + deviceInfo
+    expect(sends.length).toBe(4) // enable + appInfo + deviceInfo + ownership
     expect(sends[1].method).toBe('Proteus.appInfo')
     expect(sends[2].method).toBe('Proteus.deviceInfo')
+    expect(sends[3].method).toBe('Proteus.ownership')
     // appInfo 命令响应（含 id 且无 method）→ 缓存
     sockets[0].onmessage?.({ data: JSON.stringify({ id: 2, result: { routes: [{ name: 'index', path: 'pages/index' }] } }) })
     expect(source.appInfo?.()).toEqual({ routes: [{ name: 'index', path: 'pages/index' }] })
     // ★M8：deviceInfo 命令响应 → 缓存（设备面板数据源）
     sockets[0].onmessage?.({ data: JSON.stringify({ id: 3, result: { platform: 'web', capabilities: [] } }) })
     expect(source.deviceInfo?.()).toEqual({ platform: 'web', capabilities: [] })
+    // ★G-43 B4：ownership 命令响应 → 缓存（所有权面板数据源）
+    sockets[0].onmessage?.({ data: JSON.stringify({ id: 4, result: { summary: { alive: 2 } } }) })
+    expect(source.ownership?.()).toEqual({ summary: { alive: 2 } })
     source.close()
   })
 
@@ -1260,15 +1264,15 @@ describe('WS 数据源（CDP Proteus.event 协议）', () => {
       return s as unknown as WebSocket
     })
     sockets[0].onopen?.()
-    expect(sockets[0].send.mock.calls.length).toBe(3) // enable + appInfo + deviceInfo
+    expect(sockets[0].send.mock.calls.length).toBe(4) // enable + appInfo + deviceInfo + ownership
     // 2s 后未确认 → 重发
     vi.advanceTimersByTime(2000)
-    expect(sockets[0].send.mock.calls.length).toBe(6)
+    expect(sockets[0].send.mock.calls.length).toBe(8)
     // 收到最新一次 enable 的响应（bridge 回显当前 enableId）→ 确认，停止重发
-    const latestEnableId = JSON.parse(String(sockets[0].send.mock.calls[3][0])).id
+    const latestEnableId = JSON.parse(String(sockets[0].send.mock.calls[4][0])).id
     sockets[0].onmessage?.({ data: JSON.stringify({ id: latestEnableId, result: {} }) })
     vi.advanceTimersByTime(6000)
-    expect(sockets[0].send.mock.calls.length).toBe(6) // 不再重发
+    expect(sockets[0].send.mock.calls.length).toBe(8) // 不再重发
     source.close()
     vi.useRealTimers()
   })

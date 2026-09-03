@@ -459,3 +459,19 @@ export class ManagedRegistry {
     return this._items.size
   }
 }
+
+// ============================================================
+// 全局惰性单例图（G-43 B4 面板零配置数据源——对齐 getProteusTraceBus 先例）
+// ============================================================
+
+let singletonGraph: OwnershipGraph | null = null
+
+/**
+ * ★G-43 B4：全局默认所有权图（惰性单例）——业务/容器零配置挂接的面板数据源。
+ * 宿主也可显式建图传给容器（StackContainerOptions.ownership）或 installProteusDevtools({ ownership: { graph } })；
+ * 未显式建图时容器/面板默认消费本单例。
+ */
+export function getProteusOwnershipGraph(): OwnershipGraph {
+  if (!singletonGraph) singletonGraph = new OwnershipGraph()
+  return singletonGraph
+}

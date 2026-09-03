@@ -12,6 +12,8 @@ export interface DevtoolsSource {
   appInfo?(): unknown
   /** ★M8 设备信息（Proteus.deviceInfo：环境/能力数据源；WS 源请求缓存，TraceBus 源缺省） */
   deviceInfo?(): unknown
+  /** ★G-43 B4 所有权图（Proteus.ownership：视图数据源；WS 源请求缓存，TraceBus 源缺省） */
+  ownership?(): unknown
   /** ★远程命令下发（WS 源：面板 → relay → 应用侧执行；如 Proteus.restoreStores 时间旅行恢复） */
   sendCommand?(method: string, params?: Record<string, unknown>): void
   close(): void
@@ -55,6 +57,9 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
   // ★M8 设备面板：Proteus.deviceInfo 命令响应缓存（应用侧环境/能力上报）
   let deviceInfoId: number | null = null
   let deviceInfoCache: unknown
+  // ★G-43 B4 所有权面板：Proteus.ownership 命令响应缓存
+  let ownershipId: number | null = null
+  let ownershipCache: unknown
 
   function setStatus(s: DevtoolsSourceStatus): void {
     status = s
@@ -72,6 +77,9 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     deviceInfoId = ++seq
     // ★M8 设备面板：请求环境/能力信息，响应缓存供 panel 注入
     sock.send(JSON.stringify({ id: deviceInfoId, method: 'Proteus.deviceInfo' }))
+    ownershipId = ++seq
+    // ★G-43 B4 所有权面板：请求所有权视图数据，响应缓存供 panel 注入
+    sock.send(JSON.stringify({ id: ownershipId, method: 'Proteus.ownership' }))
   }
 
   /** ★远程命令下发（时间旅行恢复等：面板 → relay → 应用侧执行） */
@@ -124,6 +132,11 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
       // ★M8：deviceInfo 命令响应 → 缓存
       if (msg.id === deviceInfoId && msg.result !== undefined) {
         deviceInfoCache = msg.result
+        return
+      }
+      // ★G-43 B4：ownership 命令响应 → 缓存
+      if (msg.id === ownershipId && msg.result !== undefined) {
+        ownershipCache = msg.result
         return
       }
       if (msg.method !== 'Proteus.event') return
@@ -192,6 +205,10 @@ export function createDevtoolsWsSource(url: string, createSocket?: (url: string)
     /** ★M8：设备信息（环境/能力；Proteus.deviceInfo 命令响应缓存；未确认前 undefined） */
     deviceInfo() {
       return deviceInfoCache
+    },
+    /** ★G-43 B4：所有权视图数据（Proteus.ownership 命令响应缓存；未确认前 undefined） */
+    ownership() {
+      return ownershipCache
     },
     sendCommand,
   }

@@ -11,6 +11,8 @@ export interface TraceBusWsBridgeOptions {
   appInfo?: () => unknown
   /** ★M8 设备面板：Proteus.deviceInfo 响应（环境/能力上报；缺省空对象） */
   deviceInfo?: () => unknown
+  /** ★G-43 B4 所有权面板：Proteus.ownership 响应（视图数据上报；缺省空对象） */
+  ownership?: () => unknown
   /** ★远程时间旅行：面板 Proteus.restoreStores 命令 → 应用侧恢复（install 传 pinia.$patch 闭包） */
   onRestoreStores?: (stores: Array<{ id: string; state: Record<string, unknown> }>) => void
 }
@@ -50,6 +52,9 @@ export function createTraceBusWsBridge(bus: TraceBus, options: TraceBusWsBridgeO
     } else if (msg.method === 'Proteus.deviceInfo') {
       // ★M8 设备面板：应用侧环境/能力上报（install 传 collectDeviceInfo 闭包）
       ws.send(JSON.stringify({ id: msg.id, result: options.deviceInfo ? options.deviceInfo() : {} }))
+    } else if (msg.method === 'Proteus.ownership') {
+      // ★G-43 B4 所有权面板：应用侧视图数据上报（install 传 tracer.collect 闭包）
+      ws.send(JSON.stringify({ id: msg.id, result: options.ownership ? options.ownership() : {} }))
     } else if (msg.method === 'Proteus.restoreStores') {
       // ★远程时间旅行：面板拖滑块 → 命令经 relay 转发 → 应用侧逐 store $patch 恢复
       const params = (msg as { params?: { stores?: Array<{ id: string; state: Record<string, unknown> }> } }).params

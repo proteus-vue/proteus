@@ -22,6 +22,10 @@ import { setCapabilityTraceBus, globalRegistry } from '@proteus-vue/capabilities
 import type { PagesViewData } from './views/pages'
 import type { DeviceInfo } from './views/device'
 import { detectRuntimePlatform, detectBrowserVersion, detectMpLibVersion } from './device-info'
+import { createOwnershipTracer } from './ownership-info'
+import type { OwnershipViewData } from './views/ownership'
+import type { OwnershipGraph, OwnershipHistory } from '@proteus-vue/render-backend'
+import { getProteusOwnershipGraph } from '@proteus-vue/render-backend'
 
 /** style-safety 守卫的结构类型（零硬依赖——@proteus-vue/style-safety 实例直接可传） */
 export interface StyleGuardLike {
@@ -60,6 +64,12 @@ export interface InstallDevtoolsOptions {
    * 对象形态可指定 path 与 appInfo（默认取 pages 数据）
    */
   remote?: boolean | { path?: string; appInfo?: () => unknown }
+  /**
+   * ★G-43 B4 所有权面板（缺省 true——挂全局默认图 getProteusOwnershipGraph + 内部 history）：
+   * 业务/容器已显式建图时可传 { graph }（或同时传 history 复用既有历史）；false 关闭。
+   * 数据进面板第十视图（本地面板）+ Proteus.ownership 远程命令（远程面板）。
+   */
+  ownership?: boolean | { graph?: OwnershipGraph; history?: OwnershipHistory }
   /** 显式 traceBus（缺省 getProteusTraceBus 惰性单例） */
   traceBus?: TraceBus
 }
@@ -144,6 +154,7 @@ function mountFloatingPanel(
   selectComponent: (id: number) => void,
   pinia: PiniaLike | undefined,
   deviceInfo: () => DeviceInfo,
+  ownershipData: (() => OwnershipViewData | undefined) | undefined,
 ): void {
   if (panelMounted) return
   panelMounted = true
@@ -176,6 +187,8 @@ function mountFloatingPanel(
         pages,
         // ★M8 设备面板：环境/能力信息（navigator/screen + 能力注册表快照）
         deviceInfo,
+        // ★G-43 B4 所有权面板：视图数据（tracer 采集闭包）
+        ownershipData,
         // ★P0：时间旅行回放 / 导入快照恢复 → 逐 store $patch 写回（结构类型零硬依赖；无 pinia → 仅面板内展示）
         onApplyState: applyState,
         // ★P1：组件视图选中 → 页面元素高亮（scrollIntoView + 描边闪烁）
@@ -263,6 +276,12 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
   // ③ 组件树（component.mount/unmount 事件 + 元素 registry——P1 页面高亮）
   const componentTrace = installComponentTrace(app, bus)
 
+  // ③' ★G-43 B4 所有权面板：tracer（history + counters 常驻挂接；缺省挂全局默认图）
+  const ownershipDisabled = options.ownership === false
+  const ownershipOpts = typeof options.ownership === 'object' ? options.ownership : undefined
+  const ownershipTracer = ownershipDisabled ? null : createOwnershipTracer({ graph: ownershipOpts?.graph, history: ownershipOpts?.history })
+  const collectOwnershipData = ownershipTracer ? () => ownershipTracer.collect() : undefined
+
   /** ★P1 组件高亮：选中组件 → 滚动到可视区 + 描边闪烁（pd-cmp-highlight 样式，1.5s 消退）+ DOM 树下发（事件流 → 面板详情） */
   function highlightComponent(id: number): void {
     const el = componentTrace.getElement(id)
@@ -345,6 +364,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       highlightComponent,
       options.pinia,
       collectDeviceInfo,
+      collectOwnershipData,
     )
   }
 
@@ -360,6 +380,8 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
       appInfo: remoteOpts !== null && remoteOpts.appInfo ? remoteOpts.appInfo : () => options.pages,
       // ★M8 设备面板：应用侧环境/能力上报（与本地面板同源采集闭包）
       deviceInfo: collectDeviceInfo,
+      // ★G-43 B4 所有权面板：应用侧视图数据上报（与本地面板同源 tracer）
+      ownership: collectOwnershipData,
       // ★远程时间旅行：面板 Proteus.restoreStores 命令 → 应用侧逐 store $patch 恢复（复用 applyState 语义）
       onRestoreStores: (stores) => {
         if (!options.pinia) return
@@ -393,6 +415,7 @@ export function installProteusDevtools(app: App, options: InstallDevtoolsOptions
     destroy() {
       storeTracer?.dispose()
       componentTrace.dispose()
+      ownershipTracer?.dispose()
       offNav()
       remoteBridge?.close()
       offHmr?.()

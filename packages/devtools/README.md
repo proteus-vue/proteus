@@ -1,6 +1,6 @@
 # @proteus-vue/devtools
 
-Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染成可交互调试面板。**浏览器端开发工具，不随业务产物发布**；数据层消费 `@proteus-vue/devtools-runtime`（六源 → TraceBus → **九视图**）。
+Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染成可交互调试面板。**浏览器端开发工具，不随业务产物发布**；数据层消费 `@proteus-vue/devtools-runtime`（六源 → TraceBus → **十视图**）。
 
 ## 导出
 
@@ -8,7 +8,7 @@ Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染
 
 | API | 说明 |
 |-----|------|
-| `createDevtoolsPanel(root, options)` | **面板装配**：tab 布局（九视图）+ 数据层收集器 + 渲染节流；`show(view)` 切视图 / `exportSnapshot()/importSnapshot()` 快照 / `destroy()` 清理 |
+| `createDevtoolsPanel(root, options)` | **面板装配**：tab 布局（十视图）+ 数据层收集器 + 渲染节流；`show(view)` 切视图 / `exportSnapshot()/importSnapshot()` 快照 / `destroy()` 清理 |
 | `createDevtoolsWsSource(url, createSocket?)` | **WS 数据源**：连 relay（CDP 协议 `Proteus.enable/event/appInfo/deviceInfo`）→ 事件流重组 + 元数据缓存 + `sendCommand()` 下发；断线 1s 重连 + enable 未确认 2s 重发 |
 | `createTraceBusSource(bus)` | **TraceBus 直连源**：进程内事件流 → DevtoolsSource（Web 端接入用） |
 | `createTraceBusWsBridge(bus, options)` | **远程查看桥**：应用侧 TraceBus → WS（`/proteus-source`）上行 → 电脑端面板下行；处理 enable 回放 / appInfo / deviceInfo / restoreStores |
@@ -25,7 +25,7 @@ Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染
 
 ### 视图渲染（纯函数 data → DOM，jsdom 可单测）
 
-`renderTimeline` / `renderFlamegraph` / `renderState` / `renderRoute` / `renderErrors` / `renderComponents` / `renderPages` / `renderGraph` / `renderDevice` + 配套类型。
+`renderTimeline` / `renderFlamegraph` / `renderState` / `renderRoute` / `renderErrors` / `renderComponents` / `renderPages` / `renderGraph` / `renderDevice` / `renderOwnership` + 配套类型。
 
 ### 插件 / 工具
 
@@ -37,7 +37,7 @@ Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染
 | `createTooltipLayer / bindTooltip / attachTip / resolveTipData` | hover 浮层 |
 | `detectRuntimePlatform / detectBrowserVersion / detectMpLibVersion` | 设备信息采集纯函数（真实平台/基础库探测） |
 
-## 九视图
+## 十视图
 
 | 视图 | 渲染内容 |
 |------|---------|
@@ -50,6 +50,7 @@ Proteus DevTools（devtools-plan **UI 层**）——把 TraceBus 事件流渲染
 | **pages** | 当前页面栈 + 主包/分包路由清单（Proteus.appInfo 数据源） |
 | **graph** | 页面依赖图（appInfo 路由表 → 父子关系） |
 | **device** | ★M8 环境概览卡（平台/基础库/屏幕/JS 堆）+ 能力表（✅/❌ + required/fallback/worklet）+ 内存曲线（每秒采样） |
+| **ownership** | ★G-43 B4 所有权概要（alive/total/bytes）+ 四类告警（🔴 无主/⚠️ 泄漏路径含引用链/🟡 长期借用/跨页强引用/✅ 无异常）+ 资源树（owner 分组 + 📍 源码行 + 🟡 借用方）+ alloc/drop 时间线（配对 ↔ + 未配对 ⚠️ 高亮）——数据源 `createOwnershipTracer` / `Proteus.ownership` 远程命令 |
 
 ## ★一键接入（Web 端，examples/main.ts 已示范）
 

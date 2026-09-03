@@ -284,8 +284,8 @@ export interface OwnershipTimeline {
   readonly unpairedAllocs: readonly OwnershipRecord[]
 }
 
-/** ★G-43 B4：alloc/drop 配对时间线（V-06——输入 history.records，输出可渲染事件序列 + 可疑未配对） */
-export function buildOwnershipTimeline(history: OwnershipHistory, graph: OwnershipGraph): OwnershipTimeline {
+/** ★G-43 B4：alloc/drop 配对时间线（V-06——输入记录序列，输出可渲染事件序列 + 可疑未配对） */
+export function buildOwnershipTimeline(history: Pick<OwnershipHistory, 'records'>, graph: OwnershipGraph): OwnershipTimeline {
   const events: TimelineEvent[] = []
   const allocById = new Map<string, OwnershipRecord>()
 
