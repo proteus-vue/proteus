@@ -38,6 +38,8 @@
 
 ## B2 StackContainer 参考实现
 
+> **✅ B2 已落地（决策 #348）**：`@proteus-vue/render-backend` 新增 `stack-container.ts`（`createStackContainer(opts?)`——StackContainer 参考实现权威 TS 版）：**页面栈 push/pop**（基础导航 + 状态机校验：created→mounted 非法转换拒绝）+ **五原子销毁**（G-42.2：unmount→unbindEvents→releaseResources→destroyIR→releaseQuota，`assertAtomicDestroy` 校验步数与顺序——DestroyReport steps=5）+ **框架代管资源池**（G-42.3：`createResourcePool`——timer/interval/on/bus/fetch/subscribe 登记 + 页面销毁 `releaseAll` 自动清零）+ **配额管理**（`createQuotaManager`——CMP061 超限 request→null + 压力分级 warning 80%/critical 100%）+ **深度治理**（destroy-oldest LRU 销毁栈底 / reject 抛错——CMP060 显式 overflow 事件）+ **keep-alive 配额**（maxCount 超限 LRU 销毁栈底）+ 事件（page-created/page-destroyed/overflow）+ `createSandbox` 能力外诚实报错（stack 画像 multiBusiness=false）；测试 `tests/stack-container.test.ts` 11 用例全过（资源池 releaseAll 清零 / 配额记账+超限 null+压力分级 / push-pop 栈深度 / destroyPage 五原子步序 / 事件触发 / LRU 淘汰 / reject 抛错 / 画像断言）；全量 1716 无回归。
+
 **目标**：最常用容器跑通
 
 | 任务 | 产出 |

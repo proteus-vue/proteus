@@ -77,3 +77,6 @@ export type {
   ContainerEvent,
   ProteusHostContainer,
 } from './container-spi'
+// ★G-42 B2：StackContainer 参考实现（页面栈 + 五原子销毁 + 资源代管 + 配额）
+export { createStackContainer, createResourcePool, createQuotaManager } from './stack-container'
+export type { StackContainer, StackContainerOptions } from './stack-container'
