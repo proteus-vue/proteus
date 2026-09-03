@@ -63,6 +63,8 @@ Website 内部依赖：
 - [ ] Trace 链路与 `--trace-transform` 一致
 - [ ] 分享链接可复现
 
+> **✅ B3 内核落地（决策 #375）**：`website/src/playground/` + `/playground` 页——① **浏览器内实时编译**（@proteus-vue/compiler 零 node 内置依赖 + peer @vue/compiler-sfc browser-safe——**与本地 build 同一套 compiler**，v-p-fluid 同源公式已在编译器 fluid-layout.ts）；② 双栏柔性布局（W-6：auto-fit/minmax + v-p-fluid，零 @media）；③ 五 Tab：WXML / JS / WXSS / **Trace**（决策事件按 phase 分组：ruleId + 行号 + before→after）/ **规则目录**（listTransformRules AI 说明书入口）；④ **分享链接可复现**（源码 → UTF-8 → base64 → ?code=，编辑同步 replaceState）；⑤ 200ms debounce 实时编译 + 残缺源码容错不崩；⑥ 拆包：@vue/compiler-sfc 独立 chunk（624KB 按需），首屏 246KB（gzip 95KB）；验证：tests/website-playground.test.ts 6 用例（分享往返 + wx:if/wx:for/bind:tap 产物 + trace 结构 + 规则目录 ≥60）→ 全量 1986/186 + vue-tsc 零错误；诚实边界：编辑器 MVP textarea（Monaco B4 评估）、编译主线程（Worker 随大文档评估）、Trace 链路与 --trace-transform 同源（trace 事件结构一致——CLI 深度对账随 B4）
+
 ### B4 · 首页 + Showcase
 **文件**：`01-home` `06-showcase-blueprint`
 **输入**：Blueprint 验收数据（mock 起步）
@@ -137,7 +139,7 @@ Website 内部依赖：
 |----|------|------|-----|
 | B1 | 🟡 部分（website/ 骨架落地，design tokens 沿用 v3） | - | #374 |
 | B2 | 🟡 部分（文档系统 MVP：引擎 #365 + 10 指南/侧边栏/官网应用 #374；codegen API 页待） | B1 | #374 |
-| B3 | ⬜ | Compiler | - |
+| B3 | 🟡 内核落地（#375；Monaco/Worker/CLI 深度对账随 B4） | Compiler | #375 |
 | B4 | ⬜ | Blueprint | - |
 | B5 | ⬜ | B2 + i18n-plan | - |
 | B6 | ⬜ | B1 + DevTools | - |

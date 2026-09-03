@@ -18,8 +18,9 @@ const currentSlug = computed(() => (route.params.slug as string | undefined) ?? 
       </router-link>
       <nav class="nav-links">
         <router-link to="/" class="nav-link" :class="{ active: route.name === 'home' }">首页</router-link>
+        <router-link to="/playground" class="nav-link" :class="{ active: route.name === 'playground' }">Playground</router-link>
         <router-link
-          v-for="g in guides.slice(0, 4)"
+          v-for="g in guides.slice(0, 3)"
           :key="g.slug"
           :to="`/docs/${g.slug}`"
           class="nav-link"

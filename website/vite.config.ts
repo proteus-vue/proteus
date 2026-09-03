@@ -18,5 +18,13 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // ★拆包：@vue/compiler-sfc（Playground 编译内核 ~500KB）独立 chunk——首屏不拉
+        manualChunks(id: string) {
+          if (id.includes('@vue/compiler-sfc') || id.includes('@vue/compiler-dom') || id.includes('@vue/compiler-core')) return 'compiler-sfc'
+        },
+      },
+    },
   },
 })

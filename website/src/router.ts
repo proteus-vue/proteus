@@ -6,11 +6,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from './pages/Home.vue'
 import Guide from './pages/Guide.vue'
+import Playground from './pages/Playground.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: Home },
+    { path: '/playground', name: 'playground', component: Playground },
     { path: '/docs', redirect: '/docs/intro' },
     { path: '/docs/:slug', name: 'guide', component: Guide },
     { path: '/:pathMatch(.*)*', redirect: '/' },

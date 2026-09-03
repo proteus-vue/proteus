@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@proteus-vue/compiler": "0.3.0-beta.0",
     "@proteus-vue/desktop": "0.1.0",
     "@proteus-vue/docs": "0.1.0",
     "miniprogram-api-typings": "^3.12.2",
