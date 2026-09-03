@@ -91,6 +91,8 @@ interface PageInfo {
   chunk?: string
   /** <route> 块 params 声明：字段名 → 类型名（string/number/boolean），生成 RouteParamsByName */
   params?: Record<string, string>
+  /** ★G-42/官网：仅 Web 路由（<route> 块 webOnly: true）——MP app.json 不收录 + mpTransform 跳过编译 */
+  webOnly?: boolean
 }
 
 /** 递归收集目录下所有 .vue 文件（跳过隐藏目录）——组件扫描用 */
@@ -145,6 +147,7 @@ function scanPages(): PageInfo[] {
       params: b.params,
       pageJson: b.pageJson,
       customRouteKeyName: b.customRouteKeyName,
+      webOnly: b.webOnly,
     })
   }
 
@@ -168,6 +171,7 @@ function scanPages(): PageInfo[] {
         pageJson: b.pageJson,
         customRouteKeyName: b.customRouteKeyName,
         chunk: b.chunk,
+        webOnly: b.webOnly,
       })
       // ★Router M7.1（module-plan 05）：分包页面声明 chunk → 必须与分包名对齐（页面→模块映射；不一致 → 透明化警告）
       if (b.chunk && b.chunk !== spName) {
@@ -307,7 +311,9 @@ function tsType(t: string): string {
 }
 
 /** 生成 dist/mp-weixin/app.json */
-function writeAppJson(pages: PageInfo[], routes: RouteRecord[]): void {
+function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
+  // ★G-42/官网：webOnly 页面不进 MP app.json（仅 Web 路由——官网文档页等无 MP 对等）
+  const pages = allPages.filter(p => !(p as { webOnly?: boolean }).webOnly)
   const mainPages = pages.filter(p => !p.subPackage).map(p => p.mpPath)
   // ★默认首页一致性（2026-08）：主包根 index 页（如 pages/index）置顶——小程序 pages[0] = 冷启动默认页，
   //   对齐 Web 端 RouterView 初始路由回退（'pages/index'）；约定 pagesDir/index.vue 为默认首页

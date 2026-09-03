@@ -29,6 +29,8 @@ export interface RouteBlock {
   customRouteKeyName?: string
   /** ★Router M7.1：页面归属模块分包（与 proteus-module.config.ts chunk 对齐校验） */
   chunk?: string
+  /** ★G-42/官网：仅 Web 路由——收录 web 路由表，MP app.json 不收录 + mpTransform 跳过编译 */
+  webOnly?: boolean
 }
 
 /** M2：嵌套路由树节点（tree.ts） */

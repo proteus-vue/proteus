@@ -150,8 +150,12 @@ export function resolveSharedModule(
   }
   if (!source.startsWith('.')) return null // 其余裸模块（vue/pinia 等第三方）不参与
   const base = path.resolve(path.dirname(absFrom), source)
+  // ★B2 修复（决策 #365）：扩展名白名单——仅 JS/TS 参与共享模块 bundle；
+  //   非代码资源（.md/.json/.txt/图片等）不走 esbuild bundle（此前 .md 命中 base 原样文件 → esbuild 裸错 "No loader"）
+  const JS_EXTS = new Set(['.ts', '.js', '.mjs', '.cjs'])
   for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
     if (cand.endsWith('.vue')) continue
+    if (!JS_EXTS.has(path.extname(cand).toLowerCase())) continue
     // ★B3 修复：必须是文件（existsSync 会把同名目录误匹配 → EISDIR）
     let isFile = false
     try {
@@ -307,10 +311,29 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       // ★build-plan M8：编译缓存（磁盘 node_modules/.cache/proteus/compile；PROTEUS_NO_CACHE=1 关闭）
       const compileCache = createCompileCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'compile'))
       const bundleCache = createBundleCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'bundle'))
+      // ★G-42/官网：webOnly 页面（<route> 块 webOnly: true）——MP 不编译不收录（仅 Web 路由，
+      //   如文档引擎 demo 的 v-html 页/官网专属页）；auto-routes.ts（web 路由表）照常收录
+      const webOnlyPages = new Set<string>()
+      const detectWebOnly = (file: string): void => {
+        try {
+          const src = fs.readFileSync(file, 'utf-8')
+          const m = src.match(/<route>\s*([\s\S]*?)<\/route>/)
+          if (m && /"?webOnly"?\s*:\s*true/.test(m[1])) webOnlyPages.add(file)
+        } catch {
+          /* 读失败不影响编译 */
+        }
+      }
+      for (const pagesRoot of [path.join(projectRoot, cfg.pagesDir), ...(cfg.subPackages ?? []).map((sp) => path.join(projectRoot, sp.root))]) {
+        for (const f of walkVueFiles(pagesRoot)) detectWebOnly(f)
+      }
       // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
       const files: Array<{ file: string; rel: string }> = []
       const pushRel = (dir: string) => {
         for (const f of walkVueFiles(dir)) {
+          if (webOnlyPages.has(f)) {
+            console.log(`[mp-transform] 跳过 webOnly 页面：${path.relative(projectRoot, f).replace(/\\/g, '/')}`)
+            continue
+          }
           files.push({ file: f, rel: path.relative(appDir, f).replace(/\\/g, '/').replace(/\.vue$/, '') })
         }
       }
@@ -462,6 +485,19 @@ export default function mpTransform(opts: PluginOptions): Plugin {
                     if (!rel.startsWith('.')) rel = `./${rel}`
                     return { path: rel, external: true }
                   })
+                  // ★G-36/官网 B2：非 JS 资源 onLoad——文本资源（.md/.txt/.json）以字符串导出；
+                  //   二进制扩展（图片/字体/音视频）显式中文报错（MP 产物无资源管线——替代 esbuild 裸 "No loader"）
+                  b.onLoad({ filter: /\.(md|txt|json)$/ }, (args) => ({
+                    contents: `export default ${JSON.stringify(fs.readFileSync(args.path, 'utf-8'))}`,
+                    loader: 'js',
+                  }))
+                  b.onLoad({ filter: /\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp3|mp4|wav|zip)$/ }, (args) => ({
+                    errors: [
+                      {
+                        text: `MP 产物不支持二进制资源 import：${path.relative(projectRoot, args.path)}——请改用网络 URL 或 base64 内联`,
+                      },
+                    ],
+                  }))
                 },
               },
             ],

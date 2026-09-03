@@ -112,6 +112,15 @@ export function validateSchema(
     lazy = parsed.lazy
   }
 
+  // ★G-42/官网：webOnly——仅 Web 路由（MP app.json 不收录 + mpTransform 跳过编译）
+  let webOnly: boolean | undefined
+  if (parsed.webOnly !== undefined && parsed.webOnly !== null) {
+    if (typeof parsed.webOnly !== 'boolean') {
+      throw new RouteValidationError('webOnly 必须是布尔值', loc)
+    }
+    webOnly = parsed.webOnly
+  }
+
   // params：可选对象（字段名 → 类型名 string/number/boolean），供 RouteParamsByName 类型表
   let params: Record<string, string> | undefined
   if (parsed.params !== undefined && parsed.params !== null) {
@@ -152,7 +161,7 @@ export function validateSchema(
     chunk = parsed.chunk
   }
 
-  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, chunk, componentPath: loc.file }
+  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, chunk, webOnly, componentPath: loc.file }
 }
 
 /** 全局唯一性校验：path / name 重复报错（指向两个文件:行号） */

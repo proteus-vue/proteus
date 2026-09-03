@@ -1,4 +1,9 @@
 <!-- examples/pages/docs-engine-demo.vue —— ★文档引擎演示（官网 B2：md → 编译 → 渲染闭环可视化） -->
+<route>
+{
+  "webOnly": true
+}
+</route>
 <template>
   <view class="page">
     <view class="hero">
