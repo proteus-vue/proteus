@@ -69,6 +69,8 @@
 | 验收 | 每一组合 `runConformance().failed === 0` |
 | 工时 | 约 15 人日 |
 
+> **✅ B6 已落地（决策 #359）**：`@proteus-vue/render-backend` 新增 `host-matrix.ts`（组合矩阵验证权威 TS 版）——**矩阵声明**：6 宿主（web/ios/android/harmony/flutter/miniprogram——host-guide 五平台 + G-30 Tier 1 小程序）× 6 引擎（vue-dom/headless/native×3/flutter——G-27 官方后端原型）= 36 组合 + **HOST_ENGINE_MATRIX Tier 声明**（1=承诺验证 13 组：各宿主原生引擎 + headless 通用验证引擎 + iOS/Android×Flutter 混入；3=混入可行不承诺；0=跨生态不合法——web×native-ios 等；规划估算「约 25」含 skia/skyline 未实现引擎，诚实注记）；**组合级 conformance** `runComboConformance({host, engine})` 7 项引擎无关断言：引擎级 runBackendConformance（RND002）+ 注册先于 bootstrap（G-41.6，web 用真实 WebHostRuntime、其余 G-39 stub 诚实边界）+ 语义指纹（G-32 六节点 product IR）+ 渲染完整性（引擎节点数 == IR 节点数）+ **semantic 控件映射**（grid → UICollectionView/GridLayoutManager/Grid/GridView/proteus-grid/grid——SEMANTIC_*_MAP 消费证据）+ **热切换语义等价**（switchBackend 第二引擎重渲染：节点数等 + 控件映射成立——H-03 核心「渲染驱动与引擎无关」）；**验收达成**：`runHostEngineMatrix()` 全部 13 个 Tier 1 组合 `failed === 0`（Tier 0/3 诚实标注未验证）+ `formatMatrixReport` 报告（✅T1/⚪T3/⬛T0 逐行）。测试 `tests/host-matrix.test.ts` 8 用例全过；全量 1839/178 无回归。
+
 ---
 
 ## Definition of Done

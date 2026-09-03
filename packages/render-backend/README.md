@@ -23,6 +23,7 @@
 | `vue-bridge.ts` | **★G-41 B3**：真实 Vue3 `createRenderer` 接入——`createVueRendererOptions(dispatch)` / `createProteusRenderer`（标准 SFC/App 落到任意后端） |
 | `web-host.ts` | **★G-41 B4**：`createWebHostRuntime`（Web 宿主骨架——Main + Worker + EventLoop + bindPageVisibility） |
 | `hot-switch.ts` | **★G-41 B5**：`createBackendSwitcher`（热切换生产级三策略——rebuild 开发期 / rehydrate 保状态 / hybrid 复用 G-27 B6） |
+| `host-matrix.ts` | **★G-41 B6 组合矩阵**：6 宿主 × 6 引擎 = 36 组合 Tier 声明（HOST_ENGINE_MATRIX）+ `runComboConformance`（组合级 7 项：注册顺序/语义指纹/渲染完整性/控件映射/热切换等价 + 引擎级 conformance）+ `runHostEngineMatrix`（Tier 1 全部验证 failed===0）+ `formatMatrixReport` |
 | `container-spi.ts` | **★G-42 B1**：`ProteusHostContainer` 插头（页面生命周期状态机 + 五原子销毁 FIVE_ATOMIC_STEPS 校验 + 六容器画像 CONTAINER_PROFILES） |
 | `stack-container.ts` | **★G-42 B2 + G-43 B3**：`createStackContainer`（页面栈 + 五原子销毁 + 框架代管资源池 + LRU；`StackContainerOptions.ownership` 启用后每页伴随所有权上下文）· `createResourcePool` / `createQuotaManager` |
 | `container-conformance.ts` | **★G-42 B3**：`runContainerConformance`（C-01~C-08 38 项）+ `scanRepoForFork`（严禁 fork 机器指纹）+ `checkBizManifest` 安全网关 |
@@ -71,4 +72,4 @@ const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == SE
 
 B1 SPI+conformance ✅ → B2 VueDom ✅ → B3 Headless（Agent 回归）→ B4 Native（UIKit nodeOps）→ B5 Flutter（Embedder C ABI）+ **G-31 B5 conformance 快照基础设施 ✅** → B6 混合渲染 + DevTools
 
-**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch，B1-B5，#342-#346；余 B6 组合矩阵）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI + **basic-containers 四容器**，B1-B6，#347-#358；余「真实 App 验证」需生产 App）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability/pss，B1-B5，#352-#357；余 B6 跨设备转移需真机）
+**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch/**host-matrix**，B1-B6，#342-#359）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI + **basic-containers 四容器**，B1-B6，#347-#358；余「真实 App 验证」需生产 App）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability/pss，B1-B5，#352-#357；余 B6 跨设备转移需真机）

@@ -130,3 +130,17 @@ export { resolvePssMode, analyzePss, insertScopeDrops, runPss } from './pss'
 export type { PssRule, PssDiagnostic, PssAnalysisResult, PssAnalysisOptions, ScopeDropInsertion, ScopeDropResult, PssPipelineOptions, PssPipelineResult } from './pss'
 // ★G-43 B5：Owned 状态订阅（useOwned/useBorrow 响应式底座）
 export type { OwnedStateListener } from './ownership'
+// ★G-41 B6：宿主×引擎组合矩阵验证（6×6=36 组合 Tier 声明 + 组合级 conformance + 矩阵报告）
+export { HOSTS, ENGINES, HOST_ENGINE_MATRIX, matrixCombos, createEngine, runComboConformance, runHostEngineMatrix, formatMatrixReport } from './host-matrix'
+export type {
+  HostId,
+  EngineId,
+  ComboTier,
+  MatrixCombo,
+  ComboCheck,
+  ComboConformanceResult,
+  ComboConformanceOptions,
+  MatrixRow,
+  MatrixReport,
+  MatrixOptions,
+} from './host-matrix'
