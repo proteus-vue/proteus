@@ -5,6 +5,8 @@
 | 批次 | 内容 | 依赖 | 落点 |
 |------|------|------|------|
 | **B1** | MCP Server + design-token 工具 + search_primitives | G-32 原语库完备 | **M1** |
+
+> **✅ B1 已落地（决策 #360）**：新包 **`@proteus-vue/mcp`**（34 包）——**传输无关 MCP Server 核心**（11 工具 + 5 Resources + 3 Prompts + CMP021 策略；`@modelcontextprotocol/sdk` stdio/HTTP 适配为后续薄壳）：**① 11 工具**（03-mcp-server §2 清单全量）：只读 10——search_primitives（原语目录子串匹配+分类+截断）/get_primitive/list_primitives（128 统计）/get_design_token（点路径/分组/全树——**tokens.ts 初版 SSOT**）/check_capability/get_capability_matrix（**六引擎 capabilities 运行时派生**，非手写）/lookup_miniprogram（G-32 对照矩阵）/validate_ir（G-31 契约）/run_conformance（**六端渲染 conformance**——ComponentIR→IRNode 适配 + renderComponentSnapshot + checkComponentSnapshot）/generate_code（json/ts 两格式+禁改注记）；写入 1——write_file（**双闸：server 级 writeEnabled + 调用级 confirmed**，缺一拒绝；**防路径逃逸**：workspaceRoot resolve 后必须在根内——绝对/相对均可、../ 穿越拒绝；写后读回自证）；**② CMP021 策略**——轻量 Schema 参数校验（required/type/maxLength/enum——拒绝超长注入）/滑动窗口限流（60/min）/unknown_tool 等错误码；**③ 5 Resources**（原语目录/token 树/能力矩阵/C-IR Schema/商品详情页 IR 范例 few-shot）+ **3 Prompts**（proteus-flex-layout/proteus-migrate-wx/proteus-token-only SOP）；数据源全 SSOT 消费（component-ir/render-backend 运行时派生）。测试 `tests/mcp-server.test.ts` 16 用例；全量 1855/179 无回归；check:pkg **34 包** 0 error。
 | B2 | Agent Kit SDK + intent-to-flex | B1 | M1 |
 | B3 | migrate-miniprogram Skill | B2 + G-31 | M2 |
 | B4 | Guardrails + 自修复循环 | B2 | M2 |
