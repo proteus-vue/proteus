@@ -8,9 +8,17 @@
 ## 运行方式
 
 ```bash
-node host-reference.cjs          # 运行参考实现 + 全套 conformance
+node host-reference.cjs          # 运行参考实现 + 全套 conformance（自包含 CJS 演示）
 # 输出： PASS=32  FAIL=0  SKIP=0
 # 退出码：0（合规）/ 1（不合规）
+```
+
+**★权威 TS 版（决策 #343）**：`@proteus-vue/render-backend` 的 `runHostConformance()`（H-01~H-08 32 项，消费 B1 Dispatcher + Headless/Flutter 正式后端）——供 `proteus conformance` CLI / vitest 门禁 / 真实宿主接入验证消费：
+
+```ts
+import { runHostConformance, formatHostConformance } from '@proteus-vue/render-backend'
+const s = runHostConformance({ host: myHost, carrier: myCarrier })  // 注入真实宿主
+if (s.fail > 0) throw new Error('Host Conformance 未达标：' + formatHostConformance(s))
 ```
 
 真实宿主：

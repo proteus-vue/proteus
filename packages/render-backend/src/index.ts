@@ -35,3 +35,6 @@ export type { HybridRegion, HybridRendererOptions, HybridRouteTrace, HybridRende
 // ★G-41 B1：ProteusNodeOpsDispatcher（方案 B 全局转发层 + 热切换 + H-03 双引擎验证）
 export { createNodeOpsDispatcher, renderIRTree, semanticSequence, DispatcherError } from './dispatcher'
 export type { ProteusNodeOpsDispatcher, DispatcherNodeOps, NodeOpsCall } from './dispatcher'
+// ★G-41 B2：Host Conformance 套件（H-01~H-08 32 项权威 TS 版——CMP058 上线门禁）
+export { runHostConformance, formatHostConformance, createHostRuntimeStub, createCarrierStub } from './host-conformance'
+export type { HostConformanceResult, HostConformanceSummary, HostConformanceOptions, HostRuntimeLike, CarrierLike } from './host-conformance'

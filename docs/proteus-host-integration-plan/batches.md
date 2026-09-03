@@ -17,6 +17,8 @@
 
 ## B2 — Host Conformance 套件（M1）
 
+> **✅ B2 已落地（决策 #343）**：`@proteus-vue/render-backend` 新增 `host-conformance.ts`——**H-01~H-08 共 32 项权威 TS 版**（register 组 + runHostConformance + formatHostConformance，与 G-38 g38-conformance.ts 同构）；消费 B1 Dispatcher + 仓库正式后端（Headless/Flutter）；G-39/G-40 极简 stub（createHostRuntimeStub/createCarrierStub）可注入真实宿主；阈值 **PASS=32 FAIL=0**（CMP058 上线门禁）；报告输出 PASS/FAIL/SKIP + 原因；测试 `tests/host-conformance.test.ts` 6 用例全过（仅 host-conformance 独立运行 `node -e "import('@proteus-vue/render-backend').then(m=>console.log(m.formatHostConformance(m.runHostConformance())))"` 亦可——全量 1676/161 无回归）。
+
 | 项 | 内容 |
 |----|------|
 | 交付 | H-01~H-08 共 32 项 + CI 门禁 |
