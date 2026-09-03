@@ -18,22 +18,26 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 </script>
 
 <template>
-  <p-stack direction="row" :gap="32" wrap class="guide">
-    <!-- 侧边栏：guides.ts 自动生成（新增 md 零改动） -->
-    <p-view class="sidebar">
-      <span class="eyebrow">◆ 指南</span>
-      <p-view class="toc-nav">
-        <router-link
-          v-for="g in guides"
-          :key="g.slug"
-          :to="`/docs/${g.slug}`"
-          class="toc-link"
-          :class="{ active: g.slug === slug }"
-        >
-          <p-text class="toc-text">{{ g.title }}</p-text>
-        </router-link>
+  <!-- ★p-sidebar（G-22 Fluid System S3）：自适应侧边栏原语——容器 ≥720px 走左侧栏、
+       窄容器自动切顶部横向导航（createContainerQuery 按容器而非视口求解——分屏/多窗口自适应）；
+       附送车机 d-pad 焦点导航 + reduced-motion。业务页面零布局代码（W-1/W-6 兑现） -->
+  <p-sidebar :min-sidebar-width="720" :nav-width="240" class="guide">
+    <template #nav>
+      <p-view class="sidebar-card">
+        <span class="eyebrow">◆ 指南</span>
+        <p-view class="toc-nav">
+          <router-link
+            v-for="g in guides"
+            :key="g.slug"
+            :to="`/docs/${g.slug}`"
+            class="toc-link"
+            :class="{ active: g.slug === slug }"
+          >
+            <p-text class="toc-text">{{ g.title }}</p-text>
+          </router-link>
+        </p-view>
       </p-view>
-    </p-view>
+    </template>
 
     <!-- 正文：docs 引擎构建期产物 -->
     <p-view class="doc">
@@ -50,19 +54,13 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
         <router-link v-if="next" :to="`/docs/${next.slug}`" class="pager-link">下一篇 →</router-link>
       </p-stack>
     </p-view>
-  </p-stack>
+  </p-sidebar>
 </template>
 
 <style scoped>
-.guide {
-  /* ★柔性侧边栏（W-6 零 @media）：p-stack row+wrap 承担方向/换行/间距（内联 style 必赢级联），
-     页面类只管对齐与子项弹性——侧边栏 flex 0 1 240px、正文 flex 1 1 480px（不够宽自动堆叠） */
-  align-items: flex-start;
-  padding-bottom: 48px;
-}
-.sidebar {
-  flex: 0 1 240px;
-  min-width: 200px;
+/* 布局（方向/换行/宽度）全部由 p-sidebar 组件承担——页面只写卡片视觉 */
+.guide { padding-bottom: 48px; }
+.sidebar-card {
   position: sticky;
   top: 16px;
   display: flex;
