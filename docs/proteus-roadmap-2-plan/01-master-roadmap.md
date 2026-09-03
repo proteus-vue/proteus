@@ -44,9 +44,10 @@
 │                 security）                                    │
 │     ↑ 具体能力，全部走 L1 语义 + L2 引擎                     │
 ├─────────────────────────────────────────────────────────────┤
-│ L4 工具链（6 份：devtools / vue-devtools / cli / testing /   │
-│                 test-framework / app-capabilities）            │
-│     ↑ 开发体验、调试、测试、可观测                            │
+│ L4 工具链（6 份 + G-44：devtools / vue-devtools / cli /       │
+│                 testing / test-framework / app-capabilities   │
+│                 + testing-framework）                          │
+│     ↑ 开发体验、调试、测试、可观测、验证层（G-44）             │
 ├─────────────────────────────────────────────────────────────┤
 │ L5 交付层（10 份：blueprint / website / style-safety /       │
 │                 semantic-primitives / adaptive-container /    │

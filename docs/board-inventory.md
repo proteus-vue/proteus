@@ -38,7 +38,7 @@
 |------|------|------|----------------|
 | `proteus-architecture-facade-plan` | 规约层（执行序 G 表 + CI 门禁） | ✅ v3.9 | **`00-architecture.md`（全局执行序 G-01~G-44 + 9 铁律 + 包注册表）/ `ARCHITECTURE.md`（一页全景）/ `01-optimization-log.md`（v3.0~v3.9 变更）三文件**——由 `scripts/check-consistency.js` 校验「三文件 G 表同集合且 G-01~G-N 连续」（CI 门禁 `consistency.yml`）；v3.6（决策 #315）追加 G-36~G-39 四 SPI/Agent 行；v3.7（决策 #340）追加 G-40 execution-carrier 行；v3.8（决策 #341）追加 G-41/G-42/G-43 宿主层三 plan 行；v3.9（决策 #364）追加 G-44 testing-framework 行；★新 plan 入仓必须同步本表（决策 #177/#315 纪律） |
 | `proteus-methodology-plan` | 方法论提炼（统一语义收敛） | ✅ 已入库 | **哲学根文档**：核心公式「语义定义 + 后端实现」四维度投影（编译 G-29 / UI G-27 / 能力 G-28 / 端接入 G-30）+ 五支柱（语义优先/解耦/验证先于运行/渐进覆盖 80-18-1.9-0.1/可泛化）+ Tier 模型（R+C+J 三元组）+ 原则速查（★#1 与 positioning #10 同义）——onboarding 第一课 / 对外叙事根；§9 关系图已对齐实际目录 |
-| `docs/proteus-architecture.md`（规约） | 原则 #0-#13.24 + 铁律 + FLD/GLS/RND/NAT/PRIM/AI/CMP 规则 | ✅ **M1.1 已收口 + SPI 七系追加** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + #13.x 可插拔可验证（含 #13.11-13.24 宿主层子原则）+ 分层/能力/落地三类铁律 + 严格规则 + 分层双路线 + 来源更新规则——合并 architecture-update + 决策链；G-37/38/39/40/41/42/43 SPI 铁律与 CMP017-073 已并入） |
+| `docs/proteus-architecture.md`（规约） | 原则 #0-#13.27 + 铁律 + FLD/GLS/RND/NAT/PRIM/AI/CMP 规则 | ✅ **M1.1 已收口 + SPI 八系追加** | **真理来源**（原则 #0 统一语义收敛根 + 五支柱 + #13.x 可插拔可验证（含 #13.11-13.24 宿主层子原则 + #13.25-13.27 测试验证层）+ 分层/能力/落地三类铁律 + 严格规则 + 分层双路线 + 来源更新规则——合并 architecture-update + 决策链；G-37/38/39/40/41/42/43 SPI 铁律与 CMP017-073、G-44 铁律与 CMP074-081 已并入） |
 
 ### L1 方法论（杠杆支点：语义收敛 + 后端实现）
 
