@@ -89,3 +89,6 @@ export type { SuperAppContainer, SuperAppOptions, SuperSandbox, SandboxExecution
 // ★G-43 B1：所有权核心类型 + Tracker（Owned/Borrow/Weak/Managed + 所有权图 + Drop 五阶段）
 export { OwnershipGraph, Owned, Borrow, Weak, Managed, ManagedRegistry, createQuotaTracker, OWNERSHIP_ERRORS, OwnershipError } from './ownership'
 export type { OwnedState, GraphNode, GraphEdge, LeakInfo, OwnershipErrorCode } from './ownership'
+// ★G-43 B2：借用检查器（源码级静态分析——B-01~B-08 + PSS strict/loose/off）
+export { analyzeOwnershipSource } from './borrow-checker'
+export type { BorrowDiagnostic, BorrowAnalysisResult, BorrowRule, BorrowSeverity, PssMode, BorrowCheckerOptions } from './borrow-checker'

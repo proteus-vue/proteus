@@ -48,6 +48,8 @@
 
 **状态**：📋 待实施
 
+> **✅ B2 已落地（决策 #353）**：`@proteus-vue/render-backend` 新增 `borrow-checker.ts`（`analyzeOwnershipSource(source, {mode})`——源码级借用检查器权威 TS 版）：**状态格分析**（Uninit/Alive/Moved/Dropped + activeBorrow——borrow-checker.md §3.2 的顺序流实现，完整 CFG 归 B5 编译器接入）+ **规则 B-01~B-08**（B-01 use-after-move（read/borrow × moved/dropped → G4001 error）/ B-02 double-move（G4002）/ **B-03 borrow 逃逸**（写入 globalCache/store/eventBus + 闭包捕获 setTimeout/箭头函数 → G4003）/ B-04 借用生命周期越界 / B-05 drop 活跃借用（G4005，force 跳过）/ B-06 未处置 Owned（G4006 warning）/ B-07 跨页强引用 / B-08 循环引用）+ **PSS 三级**（strict → error 阻断构建（blocksBuild）；loose → 主路径 error + 其余 warning；off → 跳编译期运行时兜底）+ `blocksBuild`/`ownedVars` 输出（G-38 transform 插件接入接口，文档 §5.1）；测试 `tests/borrow-checker.test.ts` 11 用例全过（B-01 transferTo 后 read/drop 后 read/合规零 error + B-02 double + B-05 活跃借用/force 跳过 + B-03 全局写入/闭包捕获 + B-06 未处置 + off/loose 分级 + ownedVars）；全量 1764 无回归。
+
 ---
 
 ## 4. B3：与 G-42 五原子销毁集成
