@@ -208,6 +208,9 @@ export function createQuotaTracker(): { request(owner: string, bytes: number): n
 
 export type OwnedState = 'alive' | 'moved' | 'dropped'
 
+/** ★G-43 B5：Owned 状态变化订阅（useOwned/useBorrow 响应式元信息的底座） */
+export type OwnedStateListener = (state: OwnedState) => void
+
 export class Owned<T> {
   readonly id: string
   readonly resourceType: string
@@ -222,6 +225,7 @@ export class Owned<T> {
   private readonly _graph: OwnershipGraph
   private readonly _value: T
   private readonly _sourceLocation: string | null
+  private readonly _listeners = new Set<OwnedStateListener>()
 
   constructor(opts: { id: string; resourceType: string; byteSize: number; owner: string; value: T; graph: OwnershipGraph; transferable?: boolean; releaseHook?: (value: T) => void; sourceLocation?: string | null }) {
     this.id = opts.id
@@ -242,6 +246,18 @@ export class Owned<T> {
 
   get activeBorrows(): number {
     return this._activeBorrows
+  }
+
+  /** ★G-43 B5：订阅状态变化（moved/dropped 时通知——返回解绑） */
+  subscribe(cb: OwnedStateListener): () => void {
+    this._listeners.add(cb)
+    return () => {
+      this._listeners.delete(cb)
+    }
+  }
+
+  private _notify(): void {
+    for (const fn of this._listeners) fn(this._state)
   }
 
   /** 存活断言（G-43.2/43.6：Move/Drop 后禁访问） */
@@ -271,6 +287,7 @@ export class Owned<T> {
     this._movedTo = targetOwner
     this._graph.setState(this.id, 'moved')
     this._graph.addEdge({ kind: 'moved-from', from: targetOwner, to: this.id })
+    this._notify()
 
     // 目标接管（同图内转移——返回值带目标 owner 的活体；派生 id 避免覆盖原 moved 节点）
     return new Owned<T>({
@@ -337,6 +354,7 @@ export class Owned<T> {
     // ④ unregister —— 从所有权图移除
     this._state = 'dropped'
     this._graph.setState(this.id, 'dropped')
+    this._notify()
 
     // ⑤ reclaim —— 归还配额（由调用方 QuotaTracker 记账——CMP073 一致性在集成层）
     return { ok: true, freedBytes, freedHandles: 1, invalidatedBorrows: invalidated }

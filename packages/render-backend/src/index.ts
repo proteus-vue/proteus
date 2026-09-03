@@ -113,3 +113,8 @@ export type {
 } from './ownership-observability'
 // graph mutation 事件（B4 数据层订阅源——history/计数器/诊断）
 export type { OwnershipMutation } from './ownership'
+// ★G-43 B5：PSS 编译器支持（P1~P9 限制 + CMP071 + 作用域自动 drop + 管线组合）
+export { resolvePssMode, analyzePss, insertScopeDrops, runPss } from './pss'
+export type { PssRule, PssDiagnostic, PssAnalysisResult, PssAnalysisOptions, ScopeDropInsertion, ScopeDropResult, PssPipelineOptions, PssPipelineResult } from './pss'
+// ★G-43 B5：Owned 状态订阅（useOwned/useBorrow 响应式底座）
+export type { OwnedStateListener } from './ownership'

@@ -102,6 +102,7 @@ export function analyzeOwnershipSource(source: string, opts: BorrowCheckerOption
   const diagnostics: BorrowDiagnostic[] = []
   const vars = new Map<string, VarInfo>()
   const borrowVars = new Map<string, { source: string; line: number }>()
+  const refEdges: Array<{ from: string; to: string; line: number }> = []
 
   const add = (rule: BorrowRule, severity: BorrowSeverity, line: number, message: string): void => {
     // PSS 分级：strict 全量；loose 只查主路径（B-01/B-02/B-04/B-05 error，其余 warning 化）；off 跳过编译期
@@ -181,13 +182,21 @@ export function analyzeOwnershipSource(source: string, opts: BorrowCheckerOption
       continue
     }
 
-    // —— B-03：Borrow 逃逸（存全局/store/eventBus/闭包）——
+    // —— B-03/B-07：逃逸容器写入（borrow → B-03；Owned → B-07 跨页强引用，G-43 B5 补全）——
     const esc = txt.match(ESCAPE_ASSIGN_RE)
     if (esc) {
       const varName = esc[2]
       if (borrowVars.has(varName)) {
         add('B-03', 'error', line.num, `G4003: borrow escapes scope——${varName} 被写入更长寿容器`)
+      } else if (vars.get(varName)?.state === 'alive') {
+        add('B-07', 'error', line.num, `G4007: 跨页面强引用——Owned ${varName} 被写入跨页容器（生命周期越界，应 transferTo/weak）`)
       }
+      continue
+    }
+    // ★B-07 store.set 形态（`store.set('k', owned)` —— 跨页容器 API 写入）
+    const storeSet = txt.match(/\b(?:store|stores|globalCache|windowStore|moduleScope|eventBus)\s*\.\s*(?:set|add|push|write)\s*\(\s*[^,()]+,\s*([A-Za-z_$][\w$]*)/)
+    if (storeSet && vars.get(storeSet[1])?.state === 'alive') {
+      add('B-07', 'error', line.num, `G4007: 跨页面强引用——Owned ${storeSet[1]} 被存入跨页容器（生命周期越界，应 transferTo/weak）`)
       continue
     }
     // 闭包捕获逃逸：`setTimeout(() => view.get())` / `.then(() => view...)`
@@ -195,6 +204,11 @@ export function analyzeOwnershipSource(source: string, opts: BorrowCheckerOption
       if (closureCaptureLine(txt, name)) {
         add('B-03', 'error', line.num, `G4003: borrow escapes scope——${name} 被闭包捕获（source ${borrow.source}）`)
       }
+    }
+    // —— B-08：对象互指（循环引用的源码表现——`a.x = b` + `b.y = a`；G-43 B5 补全）——
+    const assign = txt.match(/^([A-Za-z_$][\w$]*)\s*\.\s*[\w$]+\s*=\s*([A-Za-z_$][\w$]*);?$/)
+    if (assign && assign[1] !== assign[2]) {
+      refEdges.push({ from: assign[1], to: assign[2], line: line.num })
     }
   }
 
@@ -205,6 +219,15 @@ export function analyzeOwnershipSource(source: string, opts: BorrowCheckerOption
     if (info.state === 'alive') {
       // 简化：顶层声明未处置 → warning（strict 也仅 warning——文档 B-06 loose 是警告，strict 主路径 error）
       add('B-06', mode === 'strict' ? 'warning' : 'warning', info.line, `G4006: owned resource not disposed——${name} 既未 drop 也未 transferTo`)
+    }
+  }
+
+  // —— B-08：循环引用（互指环检测——from→to 有向图找回边；B-08 strict/loose 均 warning）——
+  for (const e of refEdges) {
+    // 自引用（a.x = a）或互指（a.x = b 且 b.y = a）→ 环
+    const back = refEdges.find((r) => r.from === e.to && r.to === e.from)
+    if (back || e.from === e.to) {
+      add('B-08', 'warning', e.line, `G4008: 循环引用——${e.from} ⇄ ${e.to}（打破循环用 Weak）`)
     }
   }
 

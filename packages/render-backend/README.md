@@ -31,6 +31,7 @@
 | `borrow-checker.ts` | **★G-43 B2**：`analyzeOwnershipSource`（源码级借用检查 B-01~B-08 + PSS strict/loose/off——编译期拦截 use-after-move/double-move/借用逃逸） |
 | `page-ownership.ts` | **★G-43 B3**：`createPageOwnership`（页面所有权上下文——G-42 五原子第 3 步 releaseResources 委托 Drop 协议：forceDrop 强制回收 + Managed 自动释放 + 配额兜底归零；`container.ownershipOf(pageId)` 登记入口） |
 | `ownership-observability.ts` | **★G-43 B4 DevTools 所有权图数据层**：`OwnershipGraph.subscribe` mutation 事件流 → `createOwnershipHistory`（alloc/drop 时间线）/ `createOwnershipCounters`（生产采样 O(1)）/ `diagnoseOwnershipIssues`（V-02 泄漏路径·V-03 长期借用·V-04 跨页强引用（strong 边）·V-05 无主资源）/ `buildOwnershipTimeline`（V-06 alloc/drop 配对）/ `formatOwnershipDiagnosis`（面板/CLI 报告契约） |
+| `pss.ts` | **★G-43 B5 PSS 编译器支持**：`resolvePssMode`（文件头 pragma `@proteus-pss:` 三级声明）/ `analyzePss`（P1~P9 限制 + CMP071 ref(Owned) 拦截）/ `insertScopeDrops`（作用域自动 drop 插入——strict 不写 drop 也能正确释放）/ `runPss`（B 规则 + P 限制 + autoDrop 管线，strict 阻断构建） |
 
 ## 用法
 
@@ -69,4 +70,4 @@ const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == SE
 
 B1 SPI+conformance ✅ → B2 VueDom ✅ → B3 Headless（Agent 回归）→ B4 Native（UIKit nodeOps）→ B5 Flutter（Embedder C ABI）+ **G-31 B5 conformance 快照基础设施 ✅** → B6 混合渲染 + DevTools
 
-**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch，B1-B5，#342-#346）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI，B1-B5，#347-#351）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability，B1-B4，#352-#355）
+**G-27 B1-B6 全落地（#293-#331）**；宿主层三 plan 亦已落地：**G-41**（dispatcher/conformance/vue-bridge/web-host/hot-switch，B1-B5，#342-#346）· **G-42**（container-spi/stack-container/conformance/superapp/repo CLI，B1-B5，#347-#351）· **G-43**（ownership/borrow-checker/page-ownership/ownership-observability/pss，B1-B5，#352-#357；余 B6 跨设备转移需真机）

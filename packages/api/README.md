@@ -326,6 +326,21 @@ const req = createRequestEngineering({
 await req.request({ url: '/user' }, { ttl: 60000 }) // 带缓存/去重/队列的 useFetch
 ```
 
+## 所有权响应式 Hook（G-43 B5）
+
+`createOwnershipEngineering({ reactivity })` 提供 **useOwned / useBorrow**（borrow-checker.md §6 Vue 响应式集成）——**CMP071**：`Owned<T>` 默认禁止 ref/reactive 包装（Proxy 破坏所有权语义），useOwned 提供响应式**元信息**替代。注入式零 vue 依赖、结构类型 OwnedLike/BorrowLike 零硬依赖 render-backend（实例直接可传）：
+
+```ts
+import { createOwnershipEngineering } from '@proteus-vue/api'
+
+const owner = createOwnershipEngineering({ reactivity: { ref } })
+const view = owner.useOwned(buf) // { state: Ref<'alive'|'moved'|'dropped'>, byteSize, borrow(), stop() }
+watchEffect(() => console.log(view.state.value)) // drop/move 后响应式更新
+
+const handle = owner.useBorrow(buf) // Ref<Borrow | undefined>
+// 所有者释放时 handle.value 自动变为 undefined（Owned.subscribe 驱动）
+```
+
 ## 设计要点
 
 - **业务零平台分支（铁律 1）**：网络层差异全部收敛在 adapter 内部，业务代码不出现 `if (isMp)` 之类判断

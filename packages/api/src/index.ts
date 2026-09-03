@@ -25,6 +25,8 @@ export type { ToolingEngineering, ToolingEngineeringOptions, DevToolsHandle, Dev
 // ★G-32 B6 前置：请求数据层语义面（injectable——R1 request 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe 去重）+ G-31 B7 收口适配器
 export { createRequestEngineering, defaultCacheKey, createCapabilityRequestClient } from './request-engineering'
 export type { RequestEngineering, RequestEngineeringOptions, RequestExecutor, RequestCacheEntry, QueryState, QueryHandle, QueryOptions, RequestStrategyOptions } from './request-engineering'
+export { createOwnershipEngineering } from './ownership-engineering'
+export type { OwnershipEngineering, OwnershipEngineeringOptions, OwnershipReactivity, OwnedStateLike, OwnedLike, BorrowLike, OwnedView } from './ownership-engineering'
 export type {
   CapResult,
   CapabilityHooks,
