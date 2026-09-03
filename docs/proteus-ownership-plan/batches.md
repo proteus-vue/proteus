@@ -30,6 +30,8 @@
 
 **已完成**：✅ 参考实现已通过 33 项
 
+> **✅ 权威 TS 版落地（决策 #352）**：`@proteus-vue/render-backend` 新增 `ownership.ts`——**Owned/Borrow/Weak/Managed + OwnershipGraph + QuotaTracker + Drop 五阶段**（对齐 ownership-reference.cjs 33 项语义 + ownership-spi.md）：`Owned<T>`（唯一所有权——`read`/`transferTo` Move 语义 G-43.2（use_after_move/double_move 拦截）/ `borrow` 借用 G-43.3 / `weak` 弱引用 / `drop` 五阶段 G-43.6）+ `OwnershipGraph`（register/resourcesOf/findOrphans/detectLeaks（反向引用链=泄漏定位）/backTrace/stats——G-43.5 可观测）+ `createQuotaTracker`（CMP073 记账）+ `Borrow<T>`（作用域临时借用，drop 后失效）+ `Weak<T>`（打破循环）/ `Managed` + `ManagedRegistry`（框架代管 G-43.4，disposeAll 批量释放）+ `OWNERSHIP_ERRORS`（use_after_move/use_after_drop/double_move/has_active_borrows/already_dropped 错误码）；Drop 五阶段：prepare → invalidate（借用失效）→ release（releaseHook）→ unregister（图移除）→ reclaim（配额）；测试 `tests/ownership.test.ts` 12 用例全过（Move 语义/借用作用域/drop 强制失效+重复拒绝/Weak upgrade 失效/Managed 批量释放/图孤儿+泄漏链+QuotaTracker 记账/错误码负向）；全量 1753 无回归。
+
 ---
 
 ## 3. B2：借用检查器规则集

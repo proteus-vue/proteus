@@ -86,3 +86,6 @@ export type { ContainerConformanceResult, ContainerConformanceSummary, ForkHit }
 // ★G-42 B4：SuperAppContainer（业务沙箱 + 崩溃隔离 + 安全网关——C-07 组转 PASS）
 export { createSuperAppContainer } from './superapp-container'
 export type { SuperAppContainer, SuperAppOptions, SuperSandbox, SandboxExecutionResult } from './superapp-container'
+// ★G-43 B1：所有权核心类型 + Tracker（Owned/Borrow/Weak/Managed + 所有权图 + Drop 五阶段）
+export { OwnershipGraph, Owned, Borrow, Weak, Managed, ManagedRegistry, createQuotaTracker, OWNERSHIP_ERRORS, OwnershipError } from './ownership'
+export type { OwnedState, GraphNode, GraphEdge, LeakInfo, OwnershipErrorCode } from './ownership'
