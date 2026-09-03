@@ -81,7 +81,9 @@
 - V-01 ~ V-07 全通过
 - 生产期开销 < 2%
 
-**状态**：📋 待实施
+**状态**：✅ **数据层已落地（决策 #355）**；面板 UI 视图属后续批次（devtools 视图线——数据层已含 `formatOwnershipDiagnosis` 文本报告契约）
+
+> **✅ B4 数据层（决策 #355）**：`@proteus-vue/render-backend` 新增 `ownership-observability.ts`（DevTools 所有权图数据层权威 TS 版）——**图 mutation 事件流**（`OwnershipGraph.subscribe` 动态订阅 + `OwnershipMutation`：register/state/edge，B1 图零破坏扩展）→ **① 历史时间线** `createOwnershipHistory(graph, { limit?, enabled? })`（alloc/drop/moved/borrow/weak/strong 记录含字节/源码行；环形缓冲裁剪 + clear/dispose；生产期 enabled=false 关闭）**② 计数器采样** `createOwnershipCounters(graph)`（V-07：O(1) 每资源、先快照存量再订阅、`consistent()` 与 stats 自证——V-01）**③ 四类检测** `diagnoseOwnershipIssues(graph, { destroyedScopes?, longBorrowMs=1000, now? })`（V-02 泄漏路径 = 已销毁 scope 仍存活资源 + 反向引用链 + 源码行 / V-03 长期借用 = borrows edge.since 距今超阈值（now 注入可测）/ V-04 跨页面强引用 = **GraphEdge.kind 新增 'strong'**（显式跨页强持有登记）且引用方 ≠ 资源 owner / V-05 无主资源 = owner null 存活节点）**④ alloc/drop 配对时间线** `buildOwnershipTimeline`（V-06：drop/moved 带 matchedAlloc 可点到源码行 + alive 未配对高亮，页面销毁 force-drop 后消失）+ `formatOwnershipDiagnosis` 可读报告（面板/CLI 展示契约）。测试 `tests/ownership-observability.test.ts` 11 用例（V-01 一致性×2（含图已有后挂载）/V-07 万级 alloc/drop 开销烟测 <2s + 历史关计数开/V-06 事件序+配对+裁剪+dispose/V-02~V-05 各检测/空诊断+报告）；全量 1785/173 无回归。面板 UI（Graph/Leaks/Timeline/Quota 视图）待 devtools 视图批次（可消费本数据层 + `formatOwnershipDiagnosis`）。
 
 ---
 

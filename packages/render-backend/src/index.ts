@@ -95,3 +95,21 @@ export type { BorrowDiagnostic, BorrowAnalysisResult, BorrowRule, BorrowSeverity
 // ★G-43 B3：与 G-42 五原子销毁集成（页面所有权上下文——releaseResources 委托 Drop 协议 + forceDrop）
 export { createPageOwnership } from './page-ownership'
 export type { PageOwnership, PageOwnershipOptions, PageAllocOptions, PageOwnershipDestroyReport } from './page-ownership'
+// ★G-43 B4：DevTools 所有权图数据层（mutation 事件流 → 历史时间线/计数器/四类诊断/alloc-drop 配对）
+export { createOwnershipHistory, createOwnershipCounters, diagnoseOwnershipIssues, buildOwnershipTimeline, formatOwnershipDiagnosis } from './ownership-observability'
+export type {
+  OwnershipHistory,
+  OwnershipHistoryOptions,
+  OwnershipRecord,
+  OwnershipRecordKind,
+  OwnershipCounters,
+  TypeCounter,
+  OwnershipDiagnosis,
+  OwnershipDiagnosisOptions,
+  LongBorrow,
+  CrossPageRef,
+  OwnershipTimeline,
+  TimelineEvent,
+} from './ownership-observability'
+// graph mutation 事件（B4 数据层订阅源——history/计数器/诊断）
+export type { OwnershipMutation } from './ownership'

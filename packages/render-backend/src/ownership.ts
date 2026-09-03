@@ -48,11 +48,24 @@ export interface GraphNode {
 }
 
 export interface GraphEdge {
-  kind: 'owns' | 'borrows' | 'weak' | 'moved-from'
+  kind: 'owns' | 'borrows' | 'weak' | 'moved-from' | 'strong' // strong = 显式跨页强引用登记（G-43 B4 V-04 输入）
   from: string
   to: string
   since?: number
 }
+
+/** ★G-43 B4：所有权图 mutation 事件（图变化通知——history/计数器/诊断的订阅源） */
+export type OwnershipMutation =
+  | { kind: 'register'; id: string; owner: string | null; type: string; byteSize: number; sourceLocation: string | null; ts: number }
+  | { kind: 'state'; id: string; state: 'alive' | 'moved' | 'dropped'; ts: number }
+  | { kind: 'edge'; edge: GraphEdge; ts: number }
+
+export interface OwnershipGraphOptions {
+  /** ★G-43 B4：图变化订阅（history/counters/诊断的单一事件源；不提供则零开销） */
+  onMutate?: (m: OwnershipMutation) => void
+}
+
+type MutateListener = (m: OwnershipMutation) => void
 
 export interface LeakInfo {
   resourceId: string
@@ -66,9 +79,26 @@ export class OwnershipGraph {
   readonly nodes = new Map<string, GraphNode>()
   readonly edges: GraphEdge[] = []
   private _nextId = 1
+  private readonly _listeners = new Set<MutateListener>()
+
+  constructor(opts: OwnershipGraphOptions = {}) {
+    if (opts.onMutate) this._listeners.add(opts.onMutate)
+  }
 
   nextId(): string {
     return `res_${this._nextId++}`
+  }
+
+  /** ★G-43 B4：动态订阅图 mutation（可任意时刻挂接；返回解绑） */
+  subscribe(cb: MutateListener): () => void {
+    this._listeners.add(cb)
+    return () => {
+      this._listeners.delete(cb)
+    }
+  }
+
+  private _emit(m: OwnershipMutation): void {
+    for (const fn of this._listeners) fn(m)
   }
 
   register(opts: { id: string; type: string; byteSize: number; owner?: string | null; sourceLocation?: string | null }): GraphNode {
@@ -85,16 +115,19 @@ export class OwnershipGraph {
     if (opts.owner) {
       this.edges.push({ kind: 'owns', from: opts.owner, to: opts.id })
     }
+    this._emit({ kind: 'register', id: opts.id, owner: node.owner, type: node.type, byteSize: node.byteSize, sourceLocation: node.sourceLocation, ts: Date.now() })
     return node
   }
 
   addEdge(edge: GraphEdge): void {
     this.edges.push(edge)
+    this._emit({ kind: 'edge', edge, ts: Date.now() })
   }
 
   setState(id: string, state: GraphNode['state']): void {
     const node = this.nodes.get(id)
     if (node) node.state = state
+    this._emit({ kind: 'state', id, state, ts: Date.now() })
   }
 
   resourcesOf(owner: string): GraphNode[] {
