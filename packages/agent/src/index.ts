@@ -11,3 +11,15 @@ export { intentToFlex, matchBlocks } from './skills/intent-to-flex'
 export type { IntentToFlexInput, IntentToFlexResult } from './skills/intent-to-flex'
 export { migrateMiniprogram } from './skills/migrate-miniprogram'
 export type { MigrateMiniprogramInput, MigrateMiniprogramResult, MigrationLogEntry } from './skills/migrate-miniprogram'
+export { validateGuardrails, generateWithRetry, repairSource, detectBareColors, detectWxUsage, detectMpTags, enrichIntent } from './guardrails'
+export type {
+  GuardrailCategory,
+  GuardrailError,
+  GuardrailReport,
+  GuardrailsInput,
+  GuardrailsOptions,
+  RetryInput,
+  ConstructInput,
+  Constructor,
+  RetryResult,
+} from './guardrails'

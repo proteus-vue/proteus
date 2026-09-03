@@ -1,7 +1,9 @@
 // tests/agent-kit.test.ts
-// ★G-36 B2（proteus-ai-agent-plan 04-agent-kit）：Agent Kit SDK 权威 TS 版
+// ★G-36 B2/B3/B4（proteus-ai-agent-plan 04-agent-kit + 05-guardrails）：Agent Kit SDK 权威 TS 版
 //   验收：「Agent Kit SDK 可独立运行（不绑 LLM 也能走 IRBuilder）」
-//   + IRBuilder 链式构造（semantic→tag SSOT 反查）+ generateCode 规则引擎 + withProteusRules + intent-to-flex
+//   + IRBuilder 链式构造（semantic→tag SSOT 反查）+ generateCode 规则引擎 + withProteusRules
+//   + intent-to-flex / migrate-miniprogram Skills + 三层护栏 + 自修复循环
+// @vitest-environment happy-dom（L3 六端 conformance 的 vue-dom 引擎需要 document）
 import { describe, it, expect } from 'vitest'
 import {
   AgentKit,
@@ -12,8 +14,16 @@ import {
   intentToFlex,
   matchBlocks,
   migrateMiniprogram,
+  validateGuardrails,
+  generateWithRetry,
+  repairSource,
+  detectBareColors,
+  detectWxUsage,
+  detectMpTags,
+  enrichIntent,
 } from '@proteus-vue/agent'
 import { createMcpServer } from '@proteus-vue/mcp'
+import { toComponentTree } from '@proteus-vue/component-ir'
 import type { BuiltPage } from '@proteus-vue/agent'
 import { validateComponentIR } from '@proteus-vue/component-ir'
 
@@ -260,5 +270,145 @@ describe('G-36 B3 migrate-miniprogram Skill（G-31 B6 codemod 复用 + CMP019 �
     const r = await migrateMiniprogram({ source: '' }, { mcp: createMcpServer() })
     expect(r.coverage).toBe(1)
     expect(r.log).toHaveLength(0)
+  })
+})
+
+describe('G-36 B4 三层护栏（L1 结构 / L2 风格 / L3 语义）', () => {
+  const validIR = () => toComponentTree('p-grid', { minColWidth: 160 }, [{ tag: 'p-text', props: { content: 'A' } }]) as never
+
+  it('L1：非法 IR（非 p- tag）→ schema 错误；合法 IR 零诊断', async () => {
+    const mcp = createMcpServer()
+    const bad = await validateGuardrails({ ir: { tag: 'div', semantic: 'layout.box', props: {}, children: [] } as never }, { mcp })
+    expect(bad.layers[0].ok).toBe(false)
+    expect(bad.errors.some((e) => e.category === 'schema' && e.layer === 'L1')).toBe(true)
+
+    const good = await validateGuardrails({ ir: validIR() }, { mcp })
+    expect(good.layers[0].ok).toBe(true)
+    expect(good.errors.filter((e) => e.category === 'schema')).toHaveLength(0)
+  })
+
+  it('L2：裸色值（token）+ wx.*（capability）+ 小程序组件（naming）逐类检出', async () => {
+    const mcp = createMcpServer()
+    const source = [
+      '<template>',
+      '  <view style="color: #FFFFFF; border-color: #AABBCC">',
+      '    <text>标题</text>',
+      '  </view>',
+      '</template>',
+      '<script>',
+      'wx.request({ url: "/api" })',
+      '</script>',
+    ].join('\n')
+    const r = await validateGuardrails({ source }, { mcp })
+    expect(r.layers[1].ok).toBe(false)
+    const tokens = r.errors.filter((e) => e.category === 'token')
+    expect(tokens.length).toBe(2)
+    expect(tokens[0].repairable).toBe(true) // #FFFFFF 精确匹配 color.surface
+    expect(tokens[1].repairable).toBe(false) // #AABBCC 未登记
+    expect(r.errors.some((e) => e.category === 'capability' && e.message.includes('wx.request'))).toBe(true)
+    expect(r.errors.some((e) => e.category === 'naming' && e.message.includes('<view>'))).toBe(true)
+  })
+
+  it('L3：六端 conformance（合法 IR 全过；经 MCP run_conformance 协议面）', async () => {
+    const r = await validateGuardrails({ ir: validIR() }, { mcp: createMcpServer() })
+    expect(r.layers[2].ok).toBe(true)
+    expect(r.layers[2].detail).toContain('六端渲染一致')
+  })
+
+  it('单检测器：detectBareColors/detectWxUsage/detectMpTags + token 反查', () => {
+    expect(detectBareColors('color:#fff;border:#4F7CFF')).toEqual([
+      { raw: '#fff', tokenPath: null },
+      { raw: '#4F7CFF', tokenPath: 'color.primary' },
+    ])
+    expect(detectWxUsage('const a = wx . request(); wx.showToast()')).toEqual(['wx.request', 'wx.showToast'])
+    expect(detectMpTags('<view><text>x</text></view>')).toEqual(['view', 'text']) // text 也在 AUTO 集（text→p-text）
+  })
+
+  it('repairSource：token 精确匹配 → var(--p-*) 替换；未登记保留', () => {
+    const source = 'color: #FFFFFF; border-color: #AABBCC;'
+    const errors = [
+      { layer: 'L2' as const, category: 'token' as const, message: '裸色值 #FFFFFF → 应使用 token color.surface', repairable: true },
+      { layer: 'L2' as const, category: 'token' as const, message: '裸色值 #AABBCC 未登记于 design token' },
+    ]
+    const { code, repaired } = repairSource(source, errors)
+    expect(repaired).toBe(1)
+    expect(code).toContain('var(--p-color-surface)')
+    expect(code).toContain('#AABBCC') // 未登记保留（诚实——不臆造 token）
+  })
+
+  it('enrichIntent：修正指令附加', () => {
+    const enriched = enrichIntent('商品页', [{ layer: 'L2', category: 'token', message: '裸色值' }])
+    expect(enriched).toContain('[fix:token]')
+    expect(enriched.startsWith('商品页')).toBe(true)
+  })
+})
+
+describe('G-36 B4 自修复循环（G-36.6 上限 3 超限转人工）', () => {
+  it('首次通过：干净产物 attempts=1 status=delivered', async () => {
+    const mcp = createMcpServer()
+    const r = await generateWithRetry(
+      { intent: '商品详情页，主图+价格+加入购物车' },
+      { construct: ({ intent }) => intentToFlex({ intent }, { mcp }), mcp },
+    )
+    expect(r.ok).toBe(true)
+    expect(r.status).toBe('delivered')
+    expect(r.attempts).toBe(1)
+    expect(r.trail[0].ok).toBe(true)
+  })
+
+  it('token 错误循环内自动修复（修复不计 attempt）后交付', async () => {
+    const mcp = createMcpServer()
+    let called = 0
+    const r = await generateWithRetry(
+      { intent: 'x' },
+      {
+        construct: () => {
+          called++
+          const ir = toComponentTree('p-text', { content: 'x' }, []) as never
+          return { intent: 'x', source: 'color: #FFFFFF;', ir }
+        },
+        mcp,
+      },
+    )
+    expect(r.status).toBe('delivered')
+    expect(called).toBe(1) // 修复内联完成——未重试构造
+    expect(r.code).toContain('var(--p-color-surface)')
+    expect(r.attempts).toBe(1)
+  })
+
+  it('不可修复错误重试至超限 → need-human-review（G-36.6）+ enrichIntent 递进', async () => {
+    const mcp = createMcpServer()
+    const intents: string[] = []
+    const r = await generateWithRetry(
+      { intent: 'bad page', max: 3 },
+      {
+        construct: ({ intent }) => {
+          intents.push(intent)
+          const ir = { tag: 'div', semantic: 'layout.box', props: {}, children: [] } as never
+          return { intent, ir }
+        },
+        mcp,
+      },
+    )
+    expect(r.status).toBe('need-human-review')
+    expect(r.code).toBeNull()
+    expect(r.attempts).toBe(3)
+    expect(intents[1]).toContain('[fix:schema]')
+    expect(intents[2]).toContain('[fix:schema]') // 规则引擎构造器不消费修正指令 → 同错误确定性 enrich（LLM 版构造器消费后错误才会变化）
+    expect(r.errors.some((e) => e.category === 'schema')).toBe(true)
+    expect(r.trail).toHaveLength(3)
+  })
+
+  it('max 可配（2 次即转人工）', async () => {
+    const mcp = createMcpServer()
+    const r = await generateWithRetry(
+      { intent: 'x', max: 2 },
+      {
+        construct: ({ intent }) => ({ intent, ir: { tag: 'div', semantic: 'layout.box', props: {}, children: [] } as never }),
+        mcp,
+      },
+    )
+    expect(r.attempts).toBe(2)
+    expect(r.status).toBe('need-human-review')
   })
 })

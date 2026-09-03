@@ -13,7 +13,9 @@
 | **B3** | migrate-miniprogram Skill | B2 + G-31 | M2 |
 
 > **✅ B3 已落地（决策 #362）**：`@proteus-vue/agent` 新增 `skills/migrate-miniprogram.ts` + `AgentKit.migrate(code, { skill, name? })` 门面——**迁移引擎 = G-31 B6 codemod 复用**（migrateMpSource 幂等转换：自动标签 12 组 + 同步存储直改 + manual 标注——不重复造轮子）；Skill 增值：**① wx.* API 扫描**（正则归一）**② MCP lookup_miniprogram 映射核对**（B1 知识面协议化）**③ CMP019 映射日志**（tag auto（12 组）+ tag manual（MANUAL_TAGS 语义识别）+ api auto（HOOKED_APIS 10 组：wx.request→useFetch/navigateTo→router.push/showToast→useUI().toast 等）+ api manual（微信私有 → useMiniProgram() 接线声明——头部指引注释不改写调用形态，避免破坏业务逻辑））**④ 覆盖率**（auto/(auto+manual+wxApis)，除零防护——plan 目标 ≥80% 口径）；幂等（重复跑零变化）。测试 agent-kit 扩至 22 用例（B3×6：迁移替换+幂等/CMP019 日志 auto+manual/覆盖率+wxApi 计数/useMiniProgram 接线/门面+skill 校验/空源码）；全量 1877/180 无回归。
-| B4 | Guardrails + 自修复循环 | B2 | M2 |
+| **B4** | Guardrails + 自修复循环 | B2 | M2 |
+
+> **✅ B4 已落地（决策 #363）**：`@proteus-vue/agent` 新增 `guardrails.ts`——**三层护栏**（05-guardrails.md）：**L1 结构**（validateComponentIR——拒绝未知原语/非法属性）/ **L2 风格**（C1 裸色值 detectBareColors（hex/rgb 字面量 + **DESIGN_TOKENS 色值反查表**——SSOT 派生非手写）/ C5 禁 wx.* 首选 detectWxUsage（G-36.3）/ G-36.2 小程序组件残留 detectMpTags（AUTO_CODEMOD_TAGS 扫描，G-31.1 命名））/ **L3 语义**（**经 MCP run_conformance 协议面跑六端渲染**——B1 知识面复用，非重复实现）；**错误分类 diagnose**（§6 五类：schema/token/naming/capability/conformance——修复策略表）；**修复器 repairSource**（design-token-fix 策略：裸色值精确匹配 token → var(--p-color-*) 替换，未登记保留不臆造——repairable 标记驱动）；**自修复循环 generateWithRetry**（construct→三层校验→修复/enrichIntent→重试；**token 类可修复错误循环内自动修复不计 attempt**；**G-36.6 上限 3 次超限 → need-human-review 诚实转人工**；trail 修复轨迹可观测）；**AgentKit 产物可直通**（intentToFlex 产码首次即过三层——「Agent 不是自由发挥，是在约束系统里求解」机器化）。测试 agent-kit 扩至 32 用例（B4×10：L1/L2 三类检出/L3 六端/单检测器+token 反查/repairSource/enrichIntent/自修复四路径（首过/token 内联修复/超限转人工/max 可配））；全量 1887/180 无回归。
 | B5 | adapt-device Skill（接柔性框架） | B4 + G-22 | M2 |
 | B6 | 评测集 + Agent Playground 官网页 | B5 | M2-M3 |
 
