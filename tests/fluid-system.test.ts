@@ -426,6 +426,9 @@ describe('Fluid System S3 组件（p-sidebar 自适应导航 / p-toolbar 溢出�
     const nav = el.querySelector('.p-sidebar-nav') as HTMLElement
     expect(nav.style.flexDirection).toBe('row')
     expect(nav.style.width).toBe('100%')
+    // ★#380：面板间距组件承担（bottom-bar 导航↔主内容行间距 24 / side-rail 列间距 32）
+    expect(root.style.rowGap).toBe('24px')
+    expect(root.style.columnGap).toBe('32px')
     expect(el.querySelector('.n1')).not.toBeNull()
   })
 

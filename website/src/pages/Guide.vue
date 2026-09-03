@@ -62,7 +62,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 .guide { padding-bottom: 48px; }
 .sidebar-card {
   position: sticky;
-  top: 16px;
+  top: calc(var(--nav-h) + 16px);
   display: flex;
   flex-direction: column;
   gap: 10px;

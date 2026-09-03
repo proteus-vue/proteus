@@ -15,6 +15,8 @@
   --brand2: #00e0c6;
   --accent: #ff8a5c;
   --container: 1180px;
+  /* ★sticky 导航高度（sidebar sticky / 标题锚点避让用——CDP 实测 97px：v-p-fluid padding(14,28) 在宽视口端 clamp 取上限 28px×2 + 链接行高） */
+  --nav-h: 97px;
 }
 
 * { box-sizing: border-box; }
@@ -75,4 +77,4 @@ body {
 .doc-body th { color: var(--ink); background: var(--panel2); }
 .doc-body td { color: var(--muted); }
 .doc-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
-.doc-body h2[id], .doc-body h3[id] { scroll-margin-top: 80px; }
+.doc-body h2[id], .doc-body h3[id] { scroll-margin-top: calc(var(--nav-h) + 24px); }

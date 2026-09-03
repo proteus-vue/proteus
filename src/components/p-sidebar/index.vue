@@ -79,10 +79,13 @@ function onNavKeydown(e: KeyboardEvent): void {
 }
 
 // ★断言放方法体内（MP 编译器剥离方法体 as；CSSProperties 字面量类型）
+// ★#380：面板间距由组件承担（D-2：业务零布局代码）——side-rail 侧栏↔主内容列间距 32px；bottom-bar 导航↔主内容行间距 24px
 const layoutStyle = computed(() => {
   const style: CSSProperties = {
     display: 'flex',
     flexDirection: (mode.value === 'side-rail' ? 'row' : 'column') as CSSProperties['flexDirection'],
+    columnGap: '32px',
+    rowGap: '24px',
   }
   return style as CSSProperties
 })
