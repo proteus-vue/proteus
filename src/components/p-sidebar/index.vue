@@ -110,6 +110,13 @@ const navStyle = computed(() => {
   flex: 1;
   min-width: 0;
 }
+/* ★#383：bottom-bar 模式 nav 横排容器必须可收缩（flex item min-width:auto 会让
+   nowrap 子内容撑破整页——横向滚动根因）；横向滚动收敛在 nav 自身 */
+.p-sidebar-bottom-bar .p-sidebar-nav {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
 .p-sidebar-nav {
   gap: 4px;
 }

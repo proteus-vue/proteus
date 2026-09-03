@@ -78,3 +78,6 @@ body {
 .doc-body td { color: var(--muted); }
 .doc-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 .doc-body h2[id], .doc-body h3[id] { scroll-margin-top: calc(var(--nav-h) + 24px); }
+/* ★#383：v-html 宽内容（表格/pre）横向滚动收敛在自身，不撑破页面 */
+.doc-body table { display: block; overflow-x: auto; width: 100%; }
+.doc-body pre { max-width: 100%; }
