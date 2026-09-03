@@ -44,6 +44,23 @@ describe('浏览器同源编译（compileLive = 本地 build 同一套 compiler�
     expect(ids.length).toBeGreaterThan(0)
   })
 
+  it('IR Tab：NodeBackend 产出真实 CompilerIR JSON（B4——01-home.md §3 IR 面板）', async () => {
+    const { createNodeCompilerBackend } = await import('@proteus-vue/compiler-backend/node')
+    const backend = createNodeCompilerBackend()
+    // 演示源码含标准 HTML（demo 是面向访客的「标准写法」——HTML 进 compat 计数）
+    const ir = backend.compile({ source: DEMO_SOURCE, filename: 'playground.vue' })
+    expect(ir.version).toBe(1)
+    expect(ir.semantic.semanticCount).toBeGreaterThanOrEqual(0)
+    expect(JSON.stringify(ir.render)).toContain('v-if') // 模板指令进 render 树
+    // p-* 语义标签 → semantic 树带语义标注（G-31 toComponentIR）
+    const irSemantic = backend.compile({
+      source: '<template><p-view><p-text>hi</p-text></p-view></template>',
+      filename: 's.vue',
+    })
+    expect(irSemantic.semantic.semanticCount).toBe(2)
+    expect(JSON.stringify(irSemantic.semantic)).toContain('ui.text')
+  })
+
   it('规则目录非空（AI 说明书——透明编译展示核心）', () => {
     const r = compileLive(DEMO_SOURCE)
     expect(r.ruleCount).toBeGreaterThanOrEqual(60) // 69 条注册表（版本演进容忍）

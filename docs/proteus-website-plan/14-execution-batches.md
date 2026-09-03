@@ -75,6 +75,8 @@ Website 内部依赖：
 
 > **✅ B4 部分落地（决策 #376）**：① **首页深化**（Home v2：**数据条 8 项**——数字单一来源 `stats.ts`，每项注明权威验证脚本 =「Showcase 数字可追溯到脚本」的 v1 形态 + **对标矩阵** 8 维（positioning v3 §6，Proteus 列 ✅/🟡/📋 状态诚实标注）+ **方法论节**（SPI-First 一句话 + 链接））；② **D-2 dogfooding AST 审计 CI**（`website/audit-d2.mjs` + 根 `npm run audit:website`）：@vue/compiler-sfc 模板 AST 扫描——第三方 UI import（D2-UI）/ 手写 @media（W-6/C8，★只扫 style 块真实代码排除注释误报）/ wx.* uni.* 直调（D2-PLATFORM）= error + 语义原语使用统计（v-p-fluid/语义指令/p-* 标签计数——覆盖率阈值随 B5）；官网自身审计 PASS；③ **Monaco/Worker 评估结论（诚实暂缓）**：编辑器 textarea + 200ms debounce 已满足小文档（编译 <10ms），Monaco ~2MB 依赖损害 LCP 预算、Worker 隔离随大文档真实场景——均 B5 按需评估；验证：tests/website-audit-d2.test.ts 5 用例（正向 PASS+统计 / 三类违规逐项 / 多文件聚合）→ 全量 1991/187 + vue-tsc 零错误；诚实边界：Showcase 页待 Blueprint 数据（B5+）、LCP 实测归 B7
 
+> **★B4 补强（#377，用户审查驱动）**：**① p-* 标签真实落地（D-2 兑现）**——首版官网模板是「原生 HTML + v-p-fluid 点缀」，D-2 审计暴露 p-* 标签 0 使用 → main.ts 全局注册 PView/PText/PHeading/PGrid/PStack/PButton/PDivider/PPage → App/Home/Guide/Playground 模板重写为 p-* 标签（审计 19/52 p-* 标签 + v-p-fluid 3 文件）；**② 内容对齐 01-home.md**——首页重排为 plan 结构：Hero（副标题「透明编译 · AI-native · 产物可审计」+ 双 CTA）→ 三大卖点（≤20 字/条）→ **★实时 Transform 演示内嵌**（新 `TransformDemo.vue` 组件：编辑器 + Skyline/**IR（G-29 NodeBackend 真实 CompilerIR JSON——新 `./node` 浏览器安全子入口，index 全量含 fs 仅 node 侧）**/Web/WXSS/Trace 五 Tab，首页 compact 形态与 /playground 全功能页复用）→ 数字背书（stats.ts）→ 对标矩阵 → 方法论 → 快速开始 3 步；**③ compiler-backend 加 `./node` 子路径 exports**（esbuild platform=neutral 独立构建）——vitest 字符串 alias 前缀误吞 /node 后缀 → 改正则 alias + 子路径 alias；IR 语义断言修正（标准 HTML 进 compat 计数、p-* 才进 semantic 树——G-31 语义映射的真实行为）；验证：playground 7/7 → 全量 1992/187 + vue-tsc 零错误 + D-2 审计 PASS
+
 ### B5 · 博客 + 搜索 + i18n
 **文件**：`07-blog-changelog` `09-search-i18n`
 **输入**：changeset 流程 + i18n-plan
@@ -142,7 +144,7 @@ Website 内部依赖：
 | B1 | 🟡 部分（website/ 骨架落地，design tokens 沿用 v3） | - | #374 |
 | B2 | 🟡 部分（文档系统 MVP：引擎 #365 + 10 指南/侧边栏/官网应用 #374；codegen API 页待） | B1 | #374 |
 | B3 | 🟡 内核落地（#375；Monaco/Worker/CLI 深度对账随 B4） | Compiler | #375 |
-| B4 | 🟡 部分落地（#376：首页深化 + D-2 审计 CI；Showcase 页待 Blueprint） | Blueprint | #376 |
+| B4 | 🟡 部分落地（#376/#377：首页深化对齐 01-home + p-* 标签真实落地 + IR Tab + D-2 审计 CI；Showcase 页待 Blueprint） | Blueprint | #376/#377 |
 | B5 | ⬜ | B2 + i18n-plan | - |
 | B6 | ⬜ | B1 + DevTools | - |
 | B7 | ⬜ | Build plan | - |

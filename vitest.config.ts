@@ -53,7 +53,9 @@ export default defineConfig({
       // ★G-31（component-semantics-plan B1）：@proteus-vue/component-ir 包（tests/component-ir.test.ts 直接引用）
       { find: '@proteus-vue/component-ir', replacement: fileURLToPath(new URL('./packages/component-ir/src/index.ts', import.meta.url)) },
       // ★G-29（compiler-backend-1-plan B1）：@proteus-vue/compiler-backend 包（tests/compiler-backend.test.ts 直接引用）
-      { find: '@proteus-vue/compiler-backend', replacement: fileURLToPath(new URL('./packages/compiler-backend/src/index.ts', import.meta.url)) },
+      //   正则形式：精确匹配包根 + ./node 子路径（B4 官网 IR Tab 用浏览器安全单入口——字符串 alias 会前缀误吞 /node）
+      { find: /^@proteus-vue\/compiler-backend$/, replacement: fileURLToPath(new URL('./packages/compiler-backend/src/index.ts', import.meta.url)) },
+      { find: '@proteus-vue/compiler-backend/node', replacement: fileURLToPath(new URL('./packages/compiler-backend/src/node.ts', import.meta.url)) },
       // ★G-32 B4 ④ Gesture：@proteus-vue/gesture 包（tests/gesture.test.ts 直接引用）
       { find: '@proteus-vue/gesture', replacement: fileURLToPath(new URL('./packages/gesture/src/index.ts', import.meta.url)) },
       // ★G-31 B6：@proteus-vue/compat-miniprogram 兼容层包（tests/compat-miniprogram.test.ts 直接引用）
