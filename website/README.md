@@ -36,6 +36,7 @@ website/
 | 文档 | @proteus-vue/docs（md → Docs IR → 渲染） | ✅ |
 | 柔性布局 | v-p-fluid（G-22 clamp 流式）+ 柔性网格 | ✅ |
 | 桌面原语 | v-p-hover（G-24） | ✅ |
+| 自适应侧边栏 | p-sidebar（G-22 Fluid System S3——容器查询按容器求解，≥720px 左侧栏 / 窄容器自动顶部导航 + 车机 d-pad 焦点） | ✅ |
 | p-* 使用须知 | p-view 默认 flex-column（行向用 class 覆盖）；p-heading level 用 :level 数字绑定；页面样式一律 scoped（防组件 scoped 级联）；p-page 深色经 --p-page-bg 变量钩子 | ✅ |
 | 路由 | vue-router（@proteus-vue/router 路由模型面向双端页面工程——差距已登记，B4 评估回填） | ⚠️ |
 | SSG / SEO | 构建期渲染已具备，sitemap/SSG 输出随 B7 | ⬜ |
