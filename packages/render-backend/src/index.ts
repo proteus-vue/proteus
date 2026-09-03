@@ -41,3 +41,6 @@ export type { HostConformanceResult, HostConformanceSummary, HostConformanceOpti
 // ★G-41 B3：真实 Vue createRenderer 接入（Dispatcher → RendererOptions → renderer——标准 SFC/App 落到任意后端）
 export { createVueRendererOptions, createProteusRenderer, createProteusRendererForBackend } from './vue-bridge'
 export type { ProteusRenderer } from './vue-bridge'
+// ★G-41 B4：WebHostRuntime（Web 宿主骨架：Main + Worker + Event Loop——host-guide §5 落地）
+export { createWebHostRuntime } from './web-host'
+export type { WebHostRuntime, WebWorkerHandle, WebHostOptions } from './web-host'

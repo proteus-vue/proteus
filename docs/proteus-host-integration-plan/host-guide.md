@@ -158,21 +158,26 @@ onBackground() { (AppStorage.get('proteusApp') as ProteusApp).suspend() }
 
 | 步骤 | 做法 |
 |------|------|
-| 1 | npm：`@proteus-vue/runtime` |
-| 2 | `WebHostRuntime`：Main + Worker + Event Loop |
+| 1 | npm：`@proteus-vue/render-backend`（B3 vue-bridge + B4 WebHostRuntime） |
+| 2 | `createWebHostRuntime()`：Main + Worker + Event Loop（microtask flush） |
 | 3 | 载体：`JSCarrier`（V8）或 `WasmCarrier` |
-| 4 | Backend：`vue-dom`（内置，零成本） |
+| 4 | Backend：`createVueDomBackend()`（内置，零成本）+ `createProteusRendererForBackend` |
 | 5 | `web-capability`：Geolocation / MediaDevices / … |
-| 6 | `visibilitychange` 事件 |
+| 6 | `host.bindPageVisibility()`：visibilitychange → suspend/resume |
 | 7 | 加载 bundle（或 SSR 直出 HTML） |
 | 8 | `attachToHost(document.getElementById('app'))` |
 
-```js
-const app = new ProteusApp(new WebHostRuntime(), new JSCarrier())
-app.register(new VueDomBackend())      // ★ 基于 Vue createRenderer，零成本
-app.register(new WebCapabilityBackend())
-await app.bootstrap()
-app.attachToHost(document.getElementById('app'))
+```ts
+// ★B4 已落地（决策 #344 尾 #345）：Web 端完整链路
+import { createWebHostRuntime, createVueDomBackend, createProteusRendererForBackend } from '@proteus-vue/render-backend'
+
+const host = createWebHostRuntime()
+host.bootstrap()                                          // G-41.6：注册先于 bootstrap
+
+const { renderer } = createProteusRendererForBackend(createVueDomBackend())   // ★基于 Vue createRenderer，零成本
+const app = document.getElementById('app')!
+renderer.render(h('p-page', {}, [/* ... */]), app)
+host.bindPageVisibility()                                 // visibilitychange → suspend/resume
 ```
 
 **SSR**：`HeadlessBackend` 产出 HTML 字符串， hydration 时切回 `VueDomBackend`。
