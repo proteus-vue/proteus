@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// website/src/pages/Home.vue —— 官网首页（B2：Hero + 六大能力 + 快速开始）
+// website/src/pages/Home.vue —— 官网首页（B2：Hero + 能力卡；B4 深化：数据条 + 对标矩阵 + 方法论）
 // ★W-6 柔性框架优先：Hero 排版 v-p-fluid clamp 流式插值；能力卡网格 = 柔性网格
 //   （repeat(auto-fill, minmax(260px,1fr))——p-grid min-col-width 语义的 CSS 等价，列数随容器自动伸缩）
 // ★G-24 桌面原语：v-p-hover 悬停语义（触屏天然降级）
+import { STATS, COMPARE_MATRIX } from '../stats'
+
 const capabilities = [
   {
     tag: 'G-27',
@@ -57,6 +59,17 @@ const slogan = 'One semantic model. Any render engine. Zero native glue.'
       </div>
     </section>
 
+    <!-- 数据条（B4：数字可追溯到 stats.ts——来源注释指向验证脚本） -->
+    <section v-p-fluid="'padding(24, 48)'" class="stats">
+      <div class="stat-grid">
+        <div v-for="s in STATS" :key="s.label" class="stat">
+          <span class="stat-value">{{ s.value }}</span>
+          <span class="stat-label">{{ s.label }}</span>
+          <span class="stat-source">{{ s.source }}</span>
+        </div>
+      </div>
+    </section>
+
     <!-- 能力矩阵：柔性网格（列数随宽度自动伸缩） -->
     <section v-p-fluid="'padding(24, 48)'" class="features">
       <span class="eyebrow">◆ 杀手特性</span>
@@ -67,6 +80,45 @@ const slogan = 'One semantic model. Any render engine. Zero native glue.'
           <h3 class="feature-title">{{ c.title }}</h3>
           <p class="feature-desc">{{ c.desc }}</p>
         </article>
+      </div>
+    </section>
+
+    <!-- 对标矩阵（B4：positioning v3 §6——Proteus 列状态诚实标注） -->
+    <section v-p-fluid="'padding(24, 48)'" class="compare">
+      <span class="eyebrow">◆ 对标</span>
+      <h2 v-p-fluid="'font-size(20, 30)'" class="section-title">不是又一个跨端方案，是方法论代际差</h2>
+      <div class="table-wrap">
+        <table class="cmp-table">
+          <thead>
+            <tr><th>维度</th><th>uni-app</th><th>React Native</th><th>Flutter</th><th>Proteus</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in COMPARE_MATRIX" :key="row.dim">
+              <td class="cmp-dim">{{ row.dim }}</td>
+              <td>{{ row.uniapp }}</td>
+              <td>{{ row.rn }}</td>
+              <td>{{ row.flutter }}</td>
+              <td class="cmp-proteus">{{ row.proteus }} <span class="cmp-status">{{ row.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp-note">状态标注：✅ 已落地可验证 · 🟡 部分落地 · 📋 规划已入库——明确边界比无限承诺更有说服力。</p>
+    </section>
+
+    <!-- 方法论 -->
+    <section v-p-fluid="'padding(24, 48)'" class="method">
+      <span class="eyebrow">◆ 方法论</span>
+      <h2 v-p-fluid="'font-size(20, 30)'" class="section-title">SPI-First：九次泛化的同一个动作</h2>
+      <p class="method-body">
+        找到系统中所有「换 X 要改很多文件」的 X，把它们逐一提升为
+        <strong>语义接口 + ≥2 后端 + conformance + 诚实边界</strong>，直到业务层对任何具体实现零知识。
+        操作系统长出驱动模型、数据库长出存储引擎、编辑器长出插件系统——
+        Proteus 只是把这个结构显式化、可重复、配上了验证手段。
+      </p>
+      <div class="method-links">
+        <router-link to="/docs/semantic-model" class="method-link">统一语义收敛 →</router-link>
+        <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">SPI-First 五步法 →</a>
       </div>
     </section>
 
@@ -151,6 +203,42 @@ npm run build:mp     <span class="qs-dim"># 小程序端：Skyline 原生四件�
 .feature-desc { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0; }
 
 .quickstart { padding-bottom: 64px; }
+
+/* ---- B4 数据条 ---- */
+.stats { max-width: 1180px; }
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--panel);
+}
+.stat-value { color: var(--brand); font-size: 26px; font-weight: 700; }
+.stat-label { color: var(--ink); font-size: 13px; }
+.stat-source { color: var(--dim); font-size: 11px; }
+
+/* ---- B4 对标矩阵 ---- */
+/* ---- B4 对标矩阵 ---- */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+.cmp-table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
+.cmp-table th { color: var(--ink); background: var(--panel2); padding: 10px 14px; text-align: left; white-space: nowrap; }
+.cmp-table td { color: var(--muted); border-top: 1px solid var(--line); padding: 10px 14px; }
+.cmp-dim { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.cmp-proteus { color: var(--ink); }
+.cmp-status { color: var(--brand2); font-size: 11px; }
+.cmp-note { color: var(--dim); font-size: 12px; margin-top: 10px; }
+.method-body { color: var(--muted); font-size: 14px; line-height: 1.8; max-width: 720px; }
+.method-body strong { color: var(--ink); }
+.method-links { display: flex; gap: 18px; margin-top: 14px; }
+.method-link { color: var(--brand2); text-decoration: none; font-size: 14px; }
+.method-link:hover { text-decoration: underline; }
 .qs-code {
   background: var(--panel);
   border: 1px solid var(--line);

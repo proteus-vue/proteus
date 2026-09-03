@@ -40,7 +40,8 @@
     "test:update": "vitest run -u --exclude \"tests/e2e-*.test.ts\"",
     "dev:website": "cd website && npm run dev",
     "build:website": "cd website && npm run build",
-    "preview:website": "cd website && npm run preview"
+    "preview:website": "cd website && npm run preview",
+    "audit:website": "node website/audit-d2.mjs website/src"
   },
   "dependencies": {
     "pinia": "^4.0.3",
