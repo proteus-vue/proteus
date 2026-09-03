@@ -80,3 +80,6 @@ export type {
 // ★G-42 B2：StackContainer 参考实现（页面栈 + 五原子销毁 + 资源代管 + 配额）
 export { createStackContainer, createResourcePool, createQuotaManager } from './stack-container'
 export type { StackContainer, StackContainerOptions } from './stack-container'
+// ★G-42 B3：容器 Conformance 套件（C-01~C-08 + 仓库治理扫描 + 安全网关纯函数）
+export { runContainerConformance, formatContainerConformance, scanRepoForFork, checkBizManifest, FORK_SIGNATURES } from './container-conformance'
+export type { ContainerConformanceResult, ContainerConformanceSummary, ForkHit } from './container-conformance'

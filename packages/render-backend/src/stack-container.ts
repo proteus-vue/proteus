@@ -182,6 +182,8 @@ interface PageRecord extends PageHandle {
   budgetBytes: number
   quotaHandle: QuotaHandle | null
   alive: boolean
+  /** keep-alive 标记（配额仅统计此类页面——普通栈页不回收） */
+  keepAlive: boolean
 }
 
 function setPageState(page: PageRecord, to: PageState): void {
@@ -243,6 +245,8 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
       budgetBytes: config.budgetBytes ?? 0,
       quotaHandle: null,
       alive: true,
+      // keepAlive 标记（keep-alive 配额仅统计此类页面）
+      keepAlive: config.keepAlive ?? false,
     }
     pages.set(pageId, page)
     emit('page-created', { pageId })
@@ -251,8 +255,8 @@ export function createStackContainer(opts: StackContainerOptions = {}): StackCon
 
   async function mountPage(handle: PageHandle): Promise<void> {
     const page = pageRecordOf(handle)
-    // keep-alive 配额：超 maxCount → 按 LRU 完全销毁栈底
-    const keepAlivePages = [...pages.values()].filter((p) => p.state !== 'destroyed' && p.state !== 'created')
+    // keep-alive 配额（G-42：仅统计标记 keepAlive 的页面——普通栈页不受配额回收，可到 maxDepth）
+    const keepAlivePages = [...pages.values()].filter((p) => p.state !== 'destroyed' && p.state !== 'created' && (p as { keepAlive?: boolean }).keepAlive)
     if (keepAlivePages.length > policy.keepAlive.maxCount) {
       const oldest = stack[0]
       if (oldest) await destroyPage(oldest)

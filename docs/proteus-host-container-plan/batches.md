@@ -56,6 +56,8 @@
 
 ## B3 Conformance 套件
 
+> **✅ B3 已落地（决策 #349）**：`@proteus-vue/render-backend` 新增 `container-conformance.ts`——**C-01~C-08 38 项权威 TS 版套件**（register 组 + `runContainerConformance(container)` + `formatContainerConformance` 报告，与 G-38/G-41 同构）：C-01 身份能力（4）/ C-02 页面生命周期（5）/ **C-03 五原子销毁（6，G-42.2 核心）** / C-04 页面栈治理（4）/ **C-05 泄漏检测（5，页面销毁无残留机器证据）** / C-06 配额管理（4）/ **C-07 沙箱崩溃隔离（6，SuperApp 能力——B4 落地后全过）** / C-08 安全网关+仓库治理（4）+ **`scanRepoForFork`（G-42.6 严禁 fork 机器指纹——4 个签名正则独立纯函数）** + **`checkBizManifest`（安全网关纯函数：G39_SIGN 无签名/G39_CAP 越权拒绝）**；★**能力门控（诚实原则，对齐 G-38/G-40）**：C-07 仅 multiBusiness 容器、C-08-01/02 仅声明安全网关的容器——未声明能力 SKIP + reason（Stack 容器 PASS=31 FAIL=0 SKIP=7；声明的能力必须全过）；★顺带修复 B2 的 keep-alive 配额 bug（mounted 页全计数 → 只统计 keepAlive 标记页）；测试 `tests/container-conformance.test.ts` +10（scanRepoForFork 指纹/checkBizManifest 三态/套件零 FAIL + C-03·C-05 组全 PASS + 假容器 C-01-01 FAIL 抓不合规 + 报告格式）；全量 1726 无回归。
+
 **目标**：让"合规"可机器判定
 
 | 任务 | 产出 |

@@ -125,9 +125,17 @@
 
 ## 跳过规则
 
-容器 Conformance **不允许跳过任何项**——所有 38 项均为准入必需。
+容器 Conformance **不允许伪 PASS**——声明能力必须全部通过（准入必需），**未声明能力组 SKIP + reason（诚实原则，对齐 G-38/G-40）**：
 
-（对比：G-27/G-40 允许按 `capabilities` 跳过不适用的项；但容器层的能力是"治理能力"，缺失即不合规。）
+```
+C-07（沙箱/崩溃隔离）  —— 仅 multiBusiness=true 容器（SuperApp/MiniProgram）；Stack 容器 SKIP（reason: multiBusiness=false）
+C-08-01/02（安全网关）—— 仅声明安全网关能力的容器；未声明 SKIP（reason: requireSignature=false）
+C-08-03/04（仓库治理） —— scanRepoForFork 独立纯函数，所有容器都跑（G-42.6 铁律不依赖容器能力）
+```
+
+**SKIP 必须在报告中显式列出 reason**，不得省略。（参考实现 container-reference.cjs 38 项全过因为它内含 SuperApp 容器 + 网关——完整能力容器零 SKIP。）
+
+权威 TS 版（决策 #349）：`runContainerConformance(container)` 在 `@proteus-vue/render-backend`（C-01~C-08 + scanRepoForFork + checkBizManifest）。
 
 ---
 
