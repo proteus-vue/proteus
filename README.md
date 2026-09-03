@@ -214,7 +214,7 @@ beforeEach((to, from) => to.meta?.requiresAuth ? !!getToken() : true)
 ```
 proteus/
 ├── proteus.config.ts               # 框架统一配置（平台 / 路由 / 转场 / 规则覆盖 / compiler.backend）
-├── packages/                       # 37 个 @proteus-vue/* workspace 包
+├── packages/                       # 38 个 @proteus-vue/* workspace 包
 │   ├── compiler/                   #   编译引擎 + 规则注册表（69 条 AI 说明书 + apply 分派层）
 │   ├── compiler-backend/           #   CompilerIR 契约 + NodeBackend + 双端等价 Golden
 │   ├── compiler-backend-rust/      #   Rust 编译后端（cargo crate proteus-cc-rust → 同一 CompilerIR）
@@ -229,10 +229,11 @@ proteus/
 │   ├── pinia-sync/ i18n/ css-compat/ style-safety/ # 状态协同 / 国际化 / CSS 兼容 / 样式安全
 │   ├── app-config/ hmr/ web/ renderer-app/ devtools/ devtools-runtime/ # 配置 / 热更 / Web 壳 / 渲染壳 / DevTools
 │   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
+│   ├── dev-host/                   #   调试基座即宿主（G-45：Install-Once Host + 动态后端装载 + pending 回放）
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
 ├── docs/                           # 60 份 plan + 规约 + positioning v3 + methodology + board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
-├── tests/                          # 1923 单测 / 183 文件 + Web e2e 18 例
+├── tests/                          # 1948 单测 / 184 文件 + Web e2e 18 例
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
 └── CONTRIBUTING.md                 # 贡献指南（规则改动同步约定）
 ```
@@ -240,10 +241,10 @@ proteus/
 ## 测试与验证
 
 ```bash
-npm test                # 1923 个单测 / 183 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / conformance / …）
+npm test                # 1948 个单测 / 184 文件（compiler / render-backend / compiler-backend / 容器 / 所有权 / dev-host / conformance / …）
 npm run test:e2e:web    # Web e2e 18 例（Playwright：基础流 + 关键路径 + 渲染后端 demo）
 npm run verify          # test + build:web + build:mp 一键全过
-npm run check:pkg       # 37 包依赖一致性 0 error
+npm run check:pkg       # 38 包依赖一致性 0 error
 npm run proteus -- explain <vue-file | rule-id>     # 决策 trace / AI 说明书
 npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理扫描
 ```
@@ -261,7 +262,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 
 ## 开发状态与路线图
 
-- **已落地**（37 包 / 1923 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → 文档引擎（Markdown→IR→双端渲染）
+- **已落地**（38 包 / 1948 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B2（Install-Once Host：动态后端装载 + pending 回放，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
 - **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议
@@ -280,4 +281,4 @@ Proteus 使用 [Apache-2.0](LICENSE) 协议：宽松可商用（与 MIT 同等�
 
 ---
 
-**文档版本**：v3.0（重构：对齐定位 v3 + 方法论哲学「统一语义收敛」；37 包 / 1923 测试 / 60 plan）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+
+**文档版本**：v3.1（37→38 包：+@proteus-vue/dev-host；G-45 调试基座 B1-B2）· **适用框架**：Vue 3.4+ / Vite 5+ / TypeScript 5.4+ / 微信基础库 2.29.2+

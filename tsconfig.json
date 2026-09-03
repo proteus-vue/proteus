@@ -65,6 +65,7 @@
       "@proteus-vue/mcp": ["packages/mcp/src/index.ts"],
       "@proteus-vue/agent": ["packages/agent/src/index.ts"],
       "@proteus-vue/docs": ["packages/docs/src/index.ts"],
+      "@proteus-vue/dev-host": ["packages/dev-host/src/index.ts"],
       "@proteus-vue/test-ir": ["packages/test-ir/src/index.ts"]
     }
   },
