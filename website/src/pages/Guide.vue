@@ -18,7 +18,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 </script>
 
 <template>
-  <p-view class="guide">
+  <p-stack direction="row" :gap="32" wrap class="guide">
     <!-- 侧边栏：guides.ts 自动生成（新增 md 零改动） -->
     <p-view class="sidebar">
       <span class="eyebrow">◆ 指南</span>
@@ -50,19 +50,19 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
         <router-link v-if="next" :to="`/docs/${next.slug}`" class="pager-link">下一篇 →</router-link>
       </p-stack>
     </p-view>
-  </p-view>
+  </p-stack>
 </template>
 
 <style scoped>
 .guide {
-  display: grid !important;
-  /* ★柔性网格（W-6）：侧边栏固定最小宽 + 正文弹性，窄容器自动单列——零 @media */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 32px;
-  align-items: start;
+  /* ★柔性侧边栏（W-6 零 @media）：p-stack row+wrap 承担方向/换行/间距（内联 style 必赢级联），
+     页面类只管对齐与子项弹性——侧边栏 flex 0 1 240px、正文 flex 1 1 480px（不够宽自动堆叠） */
+  align-items: flex-start;
   padding-bottom: 48px;
 }
 .sidebar {
+  flex: 0 1 240px;
+  min-width: 200px;
   position: sticky;
   top: 16px;
   display: flex;
@@ -80,7 +80,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 .toc-link:hover .toc-text { color: var(--ink); }
 .toc-link.active { background: rgba(124, 92, 255, 0.12); }
 .toc-link.active .toc-text { color: var(--brand); }
-.doc { min-width: 0; }
+.doc { flex: 1 1 480px; min-width: 0; }
 .doc-title { color: var(--ink); font-size: 28px; margin: 8px 0 18px; }
 .page-toc {
   margin-top: 32px;
