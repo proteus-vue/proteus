@@ -79,7 +79,7 @@ Compiler ──▶ Types ◀── CLI
 
 ---
 
-## 4. 全局执行序（G-01 ~ G-40）
+## 4. 全局执行序（G-01 ~ G-43）
 
 LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G，避免 B1-Bn 冲突。
 
@@ -125,8 +125,11 @@ LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G�
 | G-38 | CompilerBackend SPI 规范（G-29 执行契约，与 G-37 同形设计） | L1 方法论 | compiler-backend-spi |
 | G-39 | Host Runtime SPI（L0-L4 五层唯一拥有者 + Conformance 42） | L1 方法论 | host-runtime |
 | G-40 | Execution Carrier SPI（G-39 执行层：JSI/AOT 双载体 + 批处理差分 + 零拷贝 + 实时逃逸） | L1 方法论 | execution-carrier |
+| G-41 | Host Integration（宿主接入契约 + Vue 绑定：三方正交 + nodeOps Dispatcher 热切换） | L1 方法论 | host-integration |
+| G-42 | Host Container（容器 SPI：五层容器栈 + 六容器策略 + 五原子销毁 + 严禁 fork） | L1 方法论 | host-container |
+| G-43 | Resource Ownership（所有权 SPI：Owned/Borrow/Weak + 借用检查 PSS + 确定性 Drop） | L1 方法论 | ownership |
 
-**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-40）各按其依赖插入，不阻塞原始主链。
+**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-43）各按其依赖插入，不阻塞原始主链。
 **并行空间**：G-04 内三联可并行；G-09 两横切可并行；G-16/G-17 双端可并行；G-21/G-24/G-25/G-27 的 M1 纯逻辑批次可与 G-01 地基同期启动。
 
 ---

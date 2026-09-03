@@ -40,7 +40,7 @@
 | #10.9 | 断点模型覆盖全部输入形态（touch/cursor/remote/dial/voice） | device-adaptation W×H×F |
 | #11 | 核心能力实现为 Compiler Plugin（dogfooding） | compiler-plugin G-21 |
 | #12 | AI Agent 产物须通过编译期强制校验 | ai-fluid-agent AI001-005 |
-| #13 | 可插拔层可验证性：任何声称「可插拔」的层（渲染 G-37 / 编译 G-38 / 宿主运行时 G-39 / 执行载体 G-40）须同时提供 SPI + Conformance + ≥2 参考实现（★避让：原稿 #11 与既有 #11 冲突，重编号） | render/compile/host-runtime/execution-carrier G-37/38/39/40 |
+| #13 | 可插拔层可验证性：任何声称「可插拔」的层（渲染 G-37 / 编译 G-38 / 宿主运行时 G-39 / 执行载体 G-40 / 宿主接入 G-41 / 宿主容器 G-42 / 资源所有权 G-43）须同时提供 SPI + Conformance + ≥2 参考实现（★避让：原稿 #11 与既有 #11 冲突，重编号） | render/compile/host-runtime/execution-carrier/host-integration/host-container/ownership |
 | #13.5 | 编译器 IR 为中间表示：编译后端只消费 `SourceFile → ProgramIR → IRModule` 契约，不假设上游框架 | compiler-backend-spi G-38 |
 | #13.6 | 降级等价：Fallback 不改变语义 | compiler-backend-spi G-38 |
 | #13.7 | 确定性：可复现构建（同一 IR 任一后端产物行为一致） | compiler-backend-spi G-38 |
@@ -51,6 +51,16 @@
 | #13.12 | 实时能力逃逸：实时能力（音频/高频传感器/游戏循环）必须在原生线程闭环运行，禁止由 JS 侧驱动循环 | execution-carrier G-40 |
 | #13.13 | 性能数据必须实测：对外宣称的任何性能数字必须来自实测基准；工程推算必须标注 `measured: false` 且禁止对外引用 | execution-carrier G-40 |
 | #13.14 | 零拷贝降级必须显式：不支持零拷贝时必须返回 `null` 显式降级，禁止静默返回拷贝对象（制造性能谎言） | execution-carrier G-40 |
+| #13.15 | 宿主接入必须有组合验证：单插槽 conformance 通过 ≠ 三方组合正确，必须有跨层 Host Conformance（H-01~H-08） | host-integration G-41 |
+| #13.16 | 绑定层必须插槽化：框架与前端框架（Vue）的绑定必须通过 nodeOps 等标准插槽，禁止直接依赖具体渲染实现 | host-integration G-41 |
+| #13.17 | 注册先于启动：宿主必须在 bootstrap 前完成 Runtime / Carrier / Backend / Capability 全部注册 | host-integration G-41 |
+| #13.18 | 页面生命周期必须有单一 Owner：页面状态必须由 IR 实例唯一持有，禁止「JS 状态 ↔ 原生 View」双边持有 | host-container G-42 |
+| #13.19 | 资源必须由框架代管：定时器/监听/订阅/请求必须走框架代管接口，禁止业务裸用全局 API | host-container G-42 |
+| #13.20 | 容器形态必须可插拔：页面组织方式（单页/栈/超级应用/小程序/窗口/嵌入）必须是可替换策略，禁止硬编码 | host-container G-42 |
+| #13.21 | 资源所有权可插拔：边界资源（GC 管不到的）所有权管理必须是框架定义的语义层能力，不得依赖特定语言/运行时的内存范式 | ownership G-43 |
+| #13.22 | 确定性 Drop：边界资源释放时机必须确定，不得依赖 GC | ownership G-43 |
+| #13.23 | 所有权关系 100% 可观测：所有权图必须完整维护 Owner/Borrow/Weak + 源码位置 + 生命周期，并在 DevTools 可视化 | ownership G-43 |
+| #13.24 | 所有权可验证：所有权实现必须通过 Conformance 测试 | ownership G-43 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -114,6 +124,24 @@
 | **G-40.4** | **大块数据强制零拷贝：>4KB 数据跨界传输必须走 `ArrayBuffer` / `SharedArrayBuffer`，禁止走字符串通道（JSI 字符串转换默认拷贝）** | execution-carrier |
 | **G-40.5** | **RenderBackend 必须支持批处理：所有后端必须实现 `commitBatch(ops)`，框架默认走批处理路径，批内操作不得逐次跨界** | execution-carrier |
 | **G-40.6** | **载体可观测：载体必须暴露 `getMetrics()`；`rtJsDrivenViolations > 0` → CI 构建失败** | execution-carrier |
+| **G-41.1** | **框架不碰线程/原生 View/平台 SDK：框架代码不得直接创建线程、访问原生 View、调用平台 SDK** | host-integration |
+| **G-41.2** | **宿主不解析 IR/不干预 Diff：宿主不得读取 IR 内容或干预 Diff 结果** | host-integration |
+| **G-41.3** | **引擎不感知 Vue：引擎不得 import vue/@vue/*，不得感知响应式/SFC 存在** | host-integration |
+| **G-41.4** | **业务无平台判断：业务代码不得出现平台判断或原生 SDK 直接调用** | host-integration |
+| **G-41.5** | **业务不假设 JS 运行时：复用 G-40.1（禁假设宿主运行时执行环境）** | host-integration |
+| **G-41.6** | **注册先于 bootstrap：宿主必须在 bootstrap 前完成 Runtime + Carrier + Backend 注册，且通过 host-conformance（H-01~H-08）** | host-integration |
+| **G-42.1** | **IR 是页面唯一真相：Backend 挂载点不得独立持有业务状态** | host-container |
+| **G-42.2** | **页面销毁必须五原子：unmount→unbindEvents→releaseResources→destroyIR→releaseQuota 不可部分执行** | host-container |
+| **G-42.3** | **资源由框架代管：业务不得裸用 `setTimeout`/`setInterval`/`addEventListener`，走 pageContext 代管接口** | host-container |
+| **G-42.4** | **容器不得解析 IR/干预 Diff：容器只管生命周期时机** | host-container |
+| **G-42.5** | **超级应用容器必须崩溃隔离 + 资源配额：业务崩溃后宿主必须存活** | host-container |
+| **G-42.6** | **宿主仓库严禁 fork 框架源码：禁止复制/内嵌框架源码，定制走官方扩展点/依赖替换/组合配置（扫描器 CI）** | host-container |
+| **G-43.1** | **边界资源必须归属某个 Owner：GC 管不到的资源创建即登记所有权图，禁止无主资源** | ownership |
+| **G-43.2** | **Move 后原所有者不得再访问：transferTo() 后状态为 moved，任何 read/write 必须拦截（PSS strict 编译期报错）** | ownership |
+| **G-43.3** | **借用不得逃逸其作用域：Borrow<T> 存入全局/store/闭包均为逃逸（PSS strict 编译期报错）** | ownership |
+| **G-43.4** | **默认路径框架代管：99% 场景（定时器/订阅/请求）走 Managed<T>，业务零心智负担** | ownership |
+| **G-43.5** | **所有权关系必须 100% 可观测：所有权图维护 Owner/Borrow/Weak + 源码位置 + 生命周期，DevTools 全展示** | ownership |
+| **G-43.6** | **确定性 Drop：释放必须确定性（显式 drop()/作用域结束/页面强制回收），禁止依赖 GC 时机** | ownership |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -143,6 +171,9 @@
 | CMP | CMP029-034 | error | 接口完整性（029）/确定性 emit（030）/降级语义一致（031）/缓存键可移植（032）/诊断不抛异常（033）/源码位置保留（034） | 🆕 compiler-backend-spi-plan（G-38） |
 | CMP | CMP035-043 | error | 宿主不假设业务（035）/禁跳层访问（036）/禁循环依赖（037）/能力声明一致（038）/降级可观测（039）/生命周期确定性（040）/线程 postMessage 不共享（041）/资源清理（042）/性能基准强制（043） | 🆕 host-runtime-plan（G-39） |
 | CMP | CMP044-050 | error | 载体须声明 capabilities（044）/实时类能力注册须分类（045）/未实测数据禁止对外宣称（046）/零拷贝不得 slice（047）/不支持须返回 null 显式降级（048）/零拷贝降级须上报指标（049）/批处理不得逐次跨界（050） | 🆕 execution-carrier-plan（G-40） |
+| CMP | CMP051-058 | error | 宿主注册先于 bootstrap（051）/业务禁直接引用 RenderBackend/nodeOps（052）/业务禁直接调 HostRuntime.createWorker/invokeNative（053）/引擎禁 import vue（054）/框架禁 import 平台 SDK（055）/宿主禁 IR 字段分支判断（056）/引擎切换须过 H-05 热切换验证（057）/宿主上线须 host-conformance 0 失败（058） | 🆕 host-integration-plan（G-41） |
+| CMP | CMP059-066 | error | 容器策略可声明式配置（059）/深度超限不得静默丢弃（060）/配额超限返回 null（061）/沙箱作用域完全隔离（062）/崩溃后必须上报宿主（063）/安全网关拒绝而非降级（064）/容器必须声明 capabilities（065）/销毁报告可观测 DestroYReport（066） | 🆕 host-container-plan（G-42） |
+| CMP | CMP067-073 | error | 业务禁直接释放框架代管资源（067）/跨设备转移必须原子（068）/不可转移资源显式拒绝（069）/释放失败不得静默（070）/Owned<T> 禁被 ref/reactive 包装（071）/PSS strict 禁引入未声明第三方库（072）/配额记账须与所有权图一致（073） | 🆕 ownership-plan（G-43） |
 
 ---
 

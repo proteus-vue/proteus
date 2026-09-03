@@ -1,0 +1,16 @@
+# G-41 打包白名单（pack.sh 唯一事实源，verify.sh 校验依据）
+# 以 # 开头为注释，不参与校验
+G-41-host-integration.md
+vue-binding-architecture.md
+host-guide.md
+responsibility-contract.md
+host-conformance.md
+host-reference.cjs
+rules.md
+batches.md
+architecture-update.md
+README.md
+CHECKSUM.md
+pack.sh
+verify.sh
+run-all-verify.sh

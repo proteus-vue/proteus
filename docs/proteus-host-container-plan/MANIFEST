@@ -1,0 +1,16 @@
+G-42-host-container.md
+page-lifecycle.md
+superapp-hardening.md
+repo-governance.md
+container-spi.md
+conformance-suite.md
+container-reference.cjs
+rules.md
+batches.md
+architecture-update.md
+README.md
+MANIFEST
+CHECKSUM.md
+verify.sh
+pack.sh
+run-all-verify.sh
