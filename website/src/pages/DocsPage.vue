@@ -25,25 +25,26 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 </script>
 
 <template>
-  <!-- ★p-sidebar（G-22 Fluid System S3）：自适应侧边栏原语——容器 ≥720px 走左侧栏、
-       窄容器自动切折叠导航（createContainerQuery 按容器而非视口求解）；
-       附送车机 d-pad 焦点导航 + reduced-motion。业务页面零布局代码（W-1/W-6 兑现） -->
+  <!-- ★#390iii 分区横条（参考小程序文档 IA）：大分类（四区）顶部横条切换，小分类（分组）留在左侧栏——侧栏不再两套层级拥挤 -->
+  <p-view class="docs-shell">
+    <p-view class="docs-topbar">
+      <p-stack direction="row" :gap="4" wrap class="section-switch">
+        <router-link
+          v-for="s in sections"
+          :key="s.key"
+          :to="`${s.base}/${s.items[0]?.slug ?? ''}`"
+          class="section-tab"
+          :class="{ active: s.key === sectionKey }"
+        >
+          <p-text class="section-tab-text">{{ s.name }}</p-text>
+          <span class="section-tab-count">{{ s.items.length }}</span>
+        </router-link>
+      </p-stack>
+    </p-view>
   <p-sidebar :min-sidebar-width="720" :nav-width="224" class="guide">
     <template #nav>
       <p-view class="sidebar-card">
-        <span class="eyebrow">◆ 文档</span>
-        <!-- ★四区切换：指南 / 组件 / 能力 / 柔性系统——各区独立侧边栏，不再全部堆一栏 -->
-        <p-view class="section-switch">
-          <router-link
-            v-for="s in sections"
-            :key="s.key"
-            :to="`${s.base}/${s.items[0]?.slug ?? ''}`"
-            class="section-tab"
-            :class="{ active: s.key === sectionKey }"
-          >
-            {{ s.name }}
-          </router-link>
-        </p-view>
+        <span class="eyebrow">◆ {{ section.name }}</span>
         <!-- 当前区分组导航 -->
         <p-view v-for="grp in section.groups" :key="grp.name" class="toc-group">
           <p-text class="toc-group-name">{{ grp.name }}</p-text>
@@ -85,27 +86,62 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
       </p-stack>
     </p-view>
   </p-sidebar>
+  </p-view>
 </template>
 
 <style scoped>
 /* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
    页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
-.sidebar-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  padding: var(--sp-16);
-  background: var(--panel);
+/* ★#390iii 分区横条（小程序文档式）：大分类顶部切换——sticky 遮底色，滚动时随时可切区 */
+.docs-shell { display: block; }
+.docs-topbar {
+  position: sticky;
+  top: var(--nav-h);
+  z-index: 15;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 24px;
+  margin: 0 -24px 18px; /* 抵消 main 的横向 padding——横条通栏 */
 }
-/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky）；
-   四区 140+ 页长清单 → 卡片限高滚动 */
+.section-switch { align-items: center; }
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  position: relative;
+}
+.section-tab-text { color: var(--muted); font-size: 14px; transition: color 0.15s; }
+.section-tab-count {
+  font-size: 11px;
+  color: var(--dim);
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+.section-tab:hover .section-tab-text { color: var(--ink); }
+.section-tab.active .section-tab-text { color: var(--brand); font-weight: 600; }
+.section-tab.active .section-tab-count { color: var(--brand); background: var(--brand-soft); }
+/* 激活态底部短条（同顶部导航 active 语言） */
+.section-tab::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+.section-tab.active::after { background: var(--brand); }
+/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航——现在还要避开分区横条（约 49px） */
 .p-sidebar-side-rail .sidebar-card {
   position: sticky;
-  top: calc(var(--nav-h) + 16px);
-  max-height: calc(100vh - var(--nav-h) - 32px);
+  top: calc(var(--nav-h) + 64px);
+  max-height: calc(100vh - var(--nav-h) - 80px);
   overflow-y: auto;
 }
 /* ★四区切换 tabs（指南/组件/能力/柔性系统） */
