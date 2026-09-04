@@ -45,17 +45,24 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 
     <!-- 正文：docs 引擎构建期产物 -->
     <p-view class="doc">
-      <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
-      <p-view class="doc-body" v-html="docHtml"></p-view>
+      <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
+      <p-stack direction="row" :gap="28" wrap class="doc-area">
+        <p-view class="doc-main">
+          <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
+          <p-view class="doc-body" v-html="docHtml"></p-view>
 
-      <!-- 页内 TOC + 上下篇 -->
-      <p-view v-if="current?.doc.tocFlat.length" class="page-toc">
-        <span class="eyebrow">◆ 本页目录</span>
-        <a v-for="t in current.doc.tocFlat" :key="t.id" :href="`#${t.id}`" class="page-toc-link" :class="`depth-${t.depth}`">{{ t.text }}</a>
-      </p-view>
-      <p-stack direction="row" :gap="12" class="pager">
-        <router-link v-if="prev" :to="`/docs/${prev.slug}`" class="pager-link">← 上一篇</router-link>
-        <router-link v-if="next" :to="`/docs/${next.slug}`" class="pager-link">下一篇 →</router-link>
+          <!-- 上下篇 -->
+          <p-stack direction="row" :gap="12" class="pager">
+            <router-link v-if="prev" :to="`/docs/${prev.slug}`" class="pager-link">← 上一篇</router-link>
+            <router-link v-if="next" :to="`/docs/${next.slug}`" class="pager-link">下一篇 →</router-link>
+          </p-stack>
+        </p-view>
+
+        <!-- 页内导读（右栏粘性——滚动到哪一节一目了然） -->
+        <p-view v-if="current?.doc.tocFlat.length" class="page-toc">
+          <span class="eyebrow">◆ 本页导读</span>
+          <a v-for="t in current.doc.tocFlat" :key="t.id" :href="`#${t.id}`" class="page-toc-link" :class="`depth-${t.depth}`">{{ t.text }}</a>
+        </p-view>
       </p-stack>
     </p-view>
   </p-sidebar>
@@ -117,9 +124,17 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   background: var(--brand);
 }
 .doc { flex: 1 1 480px; min-width: 0; }
-.doc-title { color: var(--ink); font-size: 28px; margin: 8px 0 18px; }
+/* ★本页导读右栏：p-stack row+wrap 双栏（行向语义归组件——不用 p-view 再跟框架默认打优先级） */
+.doc-main { flex: 1 1 480px; min-width: 0; }
 .page-toc {
-  margin-top: 32px;
+  flex: 1 1 224px;
+  max-width: 300px;
+  box-sizing: border-box; /* p-view 默认 content-box——宽+padding 组合必须显式（铁律） */
+  align-self: flex-start;
+  position: sticky;
+  top: calc(var(--nav-h) + 16px);
+  max-height: calc(100vh - var(--nav-h) - 32px);
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   padding: var(--sp-16);
