@@ -19,7 +19,6 @@
     "README.md"
   ],
   "scripts": {
-    "prepare": "npm run build",
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
   },
   "dependencies": {

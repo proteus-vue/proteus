@@ -24,7 +24,6 @@
     "README.md"
   ],
   "scripts": {
-    "prepare": "npm run build",
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/component-ir && esbuild src/node.ts --bundle --format=esm --platform=neutral --outfile=dist/node.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/component-ir"
   },
   "dependencies": {
@@ -36,6 +35,7 @@
   },
   "devDependencies": {
     "@vue/compiler-dom": "^3.5.42",
-    "@vue/compiler-sfc": "^3.5.42"
+    "@vue/compiler-sfc": "^3.5.42",
+    "@proteus-vue/types": "workspace:*"
   }
 }

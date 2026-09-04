@@ -24,7 +24,6 @@
     "README.md"
   ],
   "scripts": {
-    "prepare": "npm run build",
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts"
   },
   "peerDependencies": {

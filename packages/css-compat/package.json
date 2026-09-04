@@ -24,7 +24,6 @@
     "README.md"
   ],
   "scripts": {
-    "prepare": "npm run build",
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/layout-semantics/index.ts --bundle --format=esm --platform=node --outdir=dist --external:postcss --external:@vue/compiler-sfc"
   },
   "peerDependencies": {
