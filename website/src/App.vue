@@ -127,7 +127,7 @@ const cursorGlowOptions = {
       </div>
     </pg-glass>
 
-    <main v-p-fluid="'padding(12, 24)'" class="main">
+    <main v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs }">
       <router-view />
     </main>
 
@@ -265,6 +265,8 @@ const cursorGlowOptions = {
 .nav-github { border: 1px solid var(--line); margin-left: 6px; }
 .nav-github:hover { border-color: var(--brand2); }
 .main { max-width: 1180px; margin: 0 auto; width: 100%; flex: 1; }
+/* ★文档页三栏（左导航+正文+右导读）需要更宽的容器——isDocs 时放开（首页/Playground 维持 1180） */
+.main.is-docs { max-width: 1320px; }
 .footer {
   max-width: 1180px;
   margin: 0 auto;
