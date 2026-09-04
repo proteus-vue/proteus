@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install",
-  "buildCommand": "npm run gen:content --prefix website && npm run build:website",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm run gen:content --filter website && pnpm --filter website build",
   "outputDirectory": "website/dist",
   "framework": null
 }
