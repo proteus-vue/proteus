@@ -34,13 +34,14 @@ const ruleList = ref(rules)
 
     <p-view v-p-fluid="'padding(16, 24)'" class="rules-section">
       <p-heading :level="2" class="rules-title">规则注册表 · AI 说明书（{{ ruleList.length }} 条）</p-heading>
+      <!-- ★#386 对比度：13px 说明文字不用 dim -->
       <p-text class="pg-dim">每条规则自带 what / why / when / example / verify——产物可枚举、可查询、可反查源码。</p-text>
-      <p-view class="rules-list">
-        <p-view v-for="r in ruleList" :key="r.id" class="rule-item">
+      <p-stack direction="column" :gap="6" class="rules-list">
+        <p-stack v-for="r in ruleList" :key="r.id" direction="row" :gap="12" class="rule-item">
           <p-text class="rule-id">{{ r.id }}</p-text>
           <p-text class="rule-desc">{{ r.description }}</p-text>
-        </p-view>
-      </p-view>
+        </p-stack>
+      </p-stack>
     </p-view>
   </div>
 </template>
@@ -52,15 +53,14 @@ const ruleList = ref(rules)
 .pg-sub { color: var(--muted); font-size: 14px; line-height: 1.7; display: block; max-width: 720px; }
 .rules-section { max-width: 1180px; }
 .rules-title { color: var(--ink); margin: 10px 0 6px; }
-.pg-dim { color: var(--dim); font-size: 13px; display: block; }
-.rules-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.pg-dim { color: var(--muted); font-size: 13px; display: block; }
+/* ★#386 布局归 p-stack 原语——页面类只留视觉 */
+.rules-list { margin-top: 12px; }
 .rule-item {
-  display: flex;
-  gap: 12px;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  padding: var(--sp-8) var(--sp-12);
   background: var(--panel);
 }
 .rule-id {

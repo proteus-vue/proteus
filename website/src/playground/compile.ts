@@ -40,7 +40,8 @@ export function compileLive(source: string): PlaygroundCompileResult {
   }
 }
 
-/** 默认演示 SFC：覆盖 v-if→wx:if / v-for→wx:for / @tap→bindtap / px→rpx / 插值 全核心转换 */
+/** 默认演示 SFC（★#388 语义化版：p-* 标签 → C-IR 语义树 → 各渲染后端真实映射 UIView/Widget……）
+    覆盖 v-if→wx:if / v-for→wx:for / @tap→bind:tap / 插值 / p-grid 柔性网格全核心转换 */
 export const DEMO_SOURCE = `<script setup lang="ts">
 import { ref } from 'vue'
 
@@ -54,14 +55,16 @@ function handleTap() {
 </script>
 
 <template>
-  <div class="demo">
-    <h1>Hello Proteus</h1>
-    <p v-if="visible">tapped {{ count }} times</p>
-    <button @tap="handleTap">tap me</button>
-    <ul>
-      <li v-for="(item, i) in items" :key="i">{{ item }}</li>
-    </ul>
-  </div>
+  <p-view class="demo">
+    <p-heading :level="1">Hello Proteus</p-heading>
+    <p-stack>
+      <p-text v-if="visible">tapped {{ count }} times</p-text>
+      <p-button @tap="handleTap">tap me</p-button>
+    </p-stack>
+    <p-grid :min-col-width="120">
+      <p-text v-for="(item, i) in items" :key="i">{{ item }}</p-text>
+    </p-grid>
+  </p-view>
 </template>
 
 <style>

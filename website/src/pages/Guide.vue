@@ -66,8 +66,8 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   flex-direction: column;
   gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
   background: var(--panel);
 }
 /* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky） */
@@ -76,19 +76,19 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   top: calc(var(--nav-h) + 16px);
 }
 .toc-nav { display: flex; flex-direction: column; gap: 2px; }
-.toc-link { text-decoration: none; border-radius: 8px; }
+.toc-link { text-decoration: none; border-radius: var(--radius-sm); }
 .toc-text { color: var(--muted); font-size: 13px; }
 .toc-link:hover { background: var(--panel2); }
 .toc-link:hover .toc-text { color: var(--ink); }
-.toc-link.active { background: rgba(124, 92, 255, 0.12); }
+.toc-link.active { background: var(--brand-soft); }
 .toc-link.active .toc-text { color: var(--brand); }
 .doc { flex: 1 1 480px; min-width: 0; }
 .doc-title { color: var(--ink); font-size: 28px; margin: 8px 0 18px; }
 .page-toc {
   margin-top: 32px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
   display: flex;
   flex-direction: column;
   gap: 6px;

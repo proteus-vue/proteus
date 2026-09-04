@@ -1,6 +1,6 @@
-# Proteus 九次泛化 → SPI-First 五步法映射
+# Proteus 十六次泛化 → SPI-First 五步法映射
 
-> 本文证明：Proteus 的九次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
+> 本文证明：Proteus 的十六次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
 > 阅读本文 = 同时理解"方法论"与"它的第一性证明"。
 
 ---
@@ -18,6 +18,13 @@
 | G-43 | 内存管理范式 | Ownership SPI | `Owned<T>`/`Borrow<T>` | JS GC + 边界资源 | use-after-move 等 | JS 无法全编译期检查（PSS 分级） |
 | G-44 | 测试实现 | TestBackend | Test IR | Node, JSI, AOT, Host, Device | G-44 跨层 INT 套件（INT-01~05） | 模拟器 ≠ 真机（需 Device 后端） |
 | G-45 | 基座形态 | DevHost / DynamicBackendModule | 装载协议 | 静态链接 / 动态模块 | NAT-C 快检 | **Install-Once 仅开发态，非线上热更新** |
+| G-46 | 资源容器形态 / 数据一致 | ResourcePool | 登录态 / Cookie / Token | Android CookieManager / iOS WKHTTPCookieStore / 鸿蒙 Header（reference-impl） | G-46 conformance（CMP089-096：双轨降级 / OWN 所有权 / RSC 安全） | 真实原生桥接待 B3 |
+| G-47 | 测试层级（单层→组合） | CombinedTest | 切后端数据链不断（INV-01~06） | Backend × Pool 组合（reference-impl） | G-47 conformance（CMP097-102：23 断言 / 六不变量） | 多进程 / 真并发（B3/B4） |
+| G-48 | 小程序运行时形态 | Runtime SPI + PlatformAdapter SPI | setData / 生命周期 / 代码包 | 微信 / 鸿蒙 Adapter（MVP）+ 标准运行时 | G-48 conformance（CMP103-109 + RT/ADAPT/CAP/SBX-L1，26 断言） | MVP 单进程模拟双线程；支付宝/抖音 Adapter 待补 |
+| G-49 | 隔离强度 | SandboxBackend / CapabilityBridge | IsolationLevel L1-L4 + 权限声明 | Android（android:process）/ Harmony（Ability）/ iOS（系统 WebContent） | G-49 conformance（CMP110-117 + SBX-01~08，30 断言） | WebBackend 仅供 conformance；L4 留给 G-50 |
+| G-50 | 平台 / 生态形态 | DeveloperPlatform SPI + AppPackage | 注册→审核→双签名→分发→治理 | A 工具链 CLI / B 门户+分发（结构自检） | G-50 conformance（CMP118-131：39 断言清单，文档化） | plan only：B 生态依赖 G-49 L3 |
+| G-51 | 验证执行环境 | TestIRRunner / Backend | execute(suite): report | L0 selfcheck / L1 InMemory / L2 NativeAdapter | G-51 三阶梯度 + self-test 36/36（CMP132-139） | NativeAdapter 真实现属阶段 2 |
+| G-52 | 设备形态 / 验证维度 | DeviceMatrixRunner（executeOn） | 等价类 + DriftFingerprint + ε | 代表设备采样（reference-impl 44/44） | G-52 conformance（CMP140-146 + INV-D1~D5） | 云端真机调度留 G-53 |
 
 ---
 
@@ -58,7 +65,7 @@ G-45 NAT-C 快检        → 同上
 
 **这是"先有方法论、再有实例"的红利**：新 SPI 不需重新发明验证手段，直接套五步法即可。这也是为什么我们说 ——
 
-> **九次泛化不是九份独立设计，而是同一套五步法重复执行九次。**
+> **十六次泛化不是十六份独立设计，而是同一套五步法重复执行十六次。**
 
 ---
 

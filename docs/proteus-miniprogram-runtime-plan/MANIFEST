@@ -1,0 +1,36 @@
+# G-48 兼容式小程序运行容器 —— MANIFEST
+
+NAME=proteus-miniprogram-runtime
+VERSION=1.0.0
+INTERNAL_ID=G-48
+GLOBAL_ID=G-48
+METHODOLOGY_NO=12
+
+[core-documents]
+01-problem.md
+02-architecture.md
+03-spi.md
+04-standard-runtime.md
+05-adapter-pattern.md
+06-capability-bridge.md
+07-sandbox-isolation.md
+08-security.md
+conformance.md
+rules.md
+architecture-update.md
+
+[implementation]
+reference-impl.cjs
+verify.sh
+
+[packaging]
+MANIFEST
+pack.sh
+README.md
+# CHECKSUM 不存在于目录：由 pack.sh 在打包时生成（完整性断言可选，不纳入静态清单）
+
+[checksum]
+# 完整性断言可选：pack.sh 生成 CHECKSUM 后可用 shasum -c 校验
+SHA256_CHECKSUM=CHECKSUM
+PACK_SCRIPT=pack.sh
+INTEGRITY_ASSERTION=all-core-documents-must-be-present

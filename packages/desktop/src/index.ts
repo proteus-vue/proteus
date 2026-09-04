@@ -25,6 +25,8 @@ export type { NotifyPayload, NotifyResult, NotifyEnv, NotificationCtor, Notifica
 export { clipboardSupported, copyText, pasteText } from './clipboard'
 export type { ClipboardResult, ClipboardEnv } from './clipboard'
 export { parseDeepLink, matchDeepLink } from './deeplink'
+export { createCursorGlow, prefersReducedMotion as prefersReducedMotionCursor, hasFinePointer, CURSOR_GLOW_DEFAULTS } from './cursor-glow'
+export type { CursorGlowOptions, CursorGlowHandle } from './cursor-glow'
 export type { DeepLink, DeepLinkMatch } from './deeplink'
 // ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation + 06 B3）：导航结构四件套
 //   p-master-detail（UISplitViewController 三列）/ p-command（⌘K 面板数据层）/ p-tabs（桌面标签关闭迁移）/ p-breadcrumb（路由栈推导）

@@ -1,0 +1,41 @@
+PASS  file:01-problem.md
+PASS  file:02-architecture.md
+PASS  file:03-spi.md
+PASS  file:04-security.md
+PASS  file:conformance.md
+PASS  file:reference-impl.cjs
+PASS  file:rules.md
+PASS  file:architecture-update.md
+PASS  file:MANIFEST
+PASS  manifest
+  OK: INT-A1 VueDom 读取 Cookie 轨
+  OK: INT-A2 Flutter 读取同一 Cookie 轨（切后端不丢）
+  OK: INT-A3 VueDom 无 Cookie 时走 Token 轨
+  OK: INT-A4 Flutter Token 轨等价
+  OK: INT-A5 Native 接管后 Cookie 轨仍在
+  OK: INT-A6 Native 接管后 Token 轨仍在
+  OK: INT-A7 三后端 IR 资源视图 kind 一致
+  OK: INT-A8 三后端 IR 资源视图 value 一致
+  OK: INT-B1 VueDom 读缓存
+  OK: INT-B2 Flutter 读同一缓存（切后端不丢）
+  OK: INT-B3 Native 重挂载后缓存仍在
+  OK: INT-C1 登出后 VueDom 读不到登录态
+  OK: INT-C2 登出后 Flutter 读不到登录态
+  OK: INT-C3 登出后缓存已清空
+  OK: INT-C4 先切后登出：最终登录态清空
+  OK: INT-C5 先切后登出：最终缓存清空
+  OK: INT-D1 600 次并发挂载+读资源不崩溃
+  OK: INT-D2 并发后最终状态可预测（登出后清空）
+  OK: INT-E1 不可用后端装载失败（不静默吞错）
+  OK: INT-E2 降级到回退后端后登录态可用
+  OK: NEG-01 未登录时任何后端均读不到登录态
+  OK: NEG-02 后端销毁后共享登录态仍存活（OWN-06：资源归宿主）
+  OK: NEG-03 重挂载后端可重新读到同一登录态
+
+=== G-47 Combined Conformance ===
+PASS: 23 / 23
+PASS  参考实现运行（exit 0）
+PASS  负向判别力：错误实现能被检出
+PASS  inv05-kind
+PASS  inv05-value
+PASS  inv04

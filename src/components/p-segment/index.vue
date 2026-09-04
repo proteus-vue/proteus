@@ -43,22 +43,23 @@ function onSelect(opt: unknown): void {
 </script>
 
 <style scoped>
+/* ★#389 主题变量钩子（默认值 = 原浅色，零破坏；暗色主题侧注变量——同 p-page --p-page-bg 范式） */
 .p-segment {
   display: inline-flex;
   padding: 2px;
-  background: #f2f3f5;
+  background: var(--seg-bg, #f2f3f5);
   border-radius: 8px;
   font-size: 14px;
 }
 .p-segment-item {
   padding: 6px 16px;
   border-radius: 6px;
-  color: #646566;
+  color: var(--seg-item-color, #646566);
   transition: all 0.15s;
 }
 .p-segment-on {
-  background: #fff;
-  color: #323233;
+  background: var(--seg-on-bg, #fff);
+  color: var(--seg-on-color, #323233);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }

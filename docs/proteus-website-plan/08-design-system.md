@@ -91,3 +91,31 @@ CI 检查（`proteus audit website`）：
 - `pinia-plan`（主题/阅读进度持久化）
 - `i18n-plan`（RTL + 多语言主题）
 - `12-performance-seo.md`（a11y 影响 SEO）
+
+---
+
+## 落地差距登记（决策 #386 · 风格对齐批次）
+
+> 本节是 2026-09-04 官网实现（`website/`）与本设计系统规范的**逐项对照结论**：已对齐项、差距项与归属，避免「规范写了、落地没人认领」。
+
+### ✅ 已对齐（#386 后）
+
+| 规范要求 | 落地状态 |
+|---|---|
+| token 单一事实源 | `website/src/style.css` 补全：**状态色 ok/warn/rec、后端色 bk-*（6）、语法色 syn-*（6）、品牌柔色 brand-soft、玻璃 bg-glass、radius 语义化（chip6/sm7/md9/lg12/xl14/pill）、间距 scale sp-***——数值全部取自 `proteus-website-v3/design-tokens.json` |
+| 语法高亮用 token 色 | docs 引擎 `docs-tok-*` → `--syn-*` 接线（keyword/string/comment/tag/number） |
+| 布局必须 p-* 语义 | Home 三大卖点/数字区裸 div 网格 → `p-grid`；Playground 规则列表裸 div → `p-stack`（D-2 统计 19→21/57） |
+| 状态层用色 | 对标矩阵 ✅→ok / 🟡→warn / 📋→dim（替代单色 brand2） |
+| 圆角/间距禁裸 px | 页面级 radius 全部 token 化（唯一例外：nav active 下划线 2px 装饰微元素） |
+| a11y 对比度 | 11–13px 小字不再使用 dim（#5c5c6a 对比度不足 AA）——footer/cmp-note/stat-source/pg-meta/pg-dim/qs-dim 提级 muted |
+| Glass-light | nav blur 12px（原 14px 校准回规范值）+ `--glass-bg` token |
+
+### ⚠️ 差距与归属（认领后再关闭）
+
+| 差距 | 现状 | 归属 |
+|---|---|---|
+| **主题：双主题 vs Dark-first** | 08 原文要求「prefers-color-scheme + 手动切换 + 持久化」；但 v3 `llm-style-guide.md` 明确 **Dark-first、禁止浅色主体**，官网实现为 dark-only（#378 决策：深色专业形态）。两份规范冲突 | **裁定：当前阶段 Dark-first**（浅色主题与切换器列为后续批次待办，待产品决策后启用；届时需 no-flash 内联脚本 + Pinia 持久化 + `useColorScheme()`） |
+| **缺失 p-​​组件**（08 组件清单 vs 框架实际 61 组件） | p-table / p-code-block / p-code-editor（Monaco）/ p-stats / p-search / p-hero / p-feature-card / p-cta / p-tabs / p-badge / p-callout / p-chart / p-progress / p-container / p-section / p-aside / p-accordion / p-link / p-space / p-icon 均不存在 | 组件族扩充批次（G-32/G-22 续批）立项；落地前官网对标表/代码块用语义化 HTML（table/pre/code）过渡 |
+| p-* 覆盖率阈值 | D-2 现状 21/57 标签（布局原语已归 p-grid/p-stack/p-sidebar/p-split；table/pre 因缺原语保留语义化 HTML） | B5 定阈值（14-execution-batches B4 验收项） |
+| Monaco / p-code-editor | textarea MVP（编译 <10ms，Monaco ~2MB 损害 LCP） | B5 按需评估（#376 诚实暂缓） |
+| /reference（codegen）、/blog、/showcase、Cmd+K 搜索 | 未建 | B5（blog/search/i18n）/ B4 余量（codegen 待 types 集成）/ Showcase 待 Blueprint |

@@ -145,6 +145,64 @@ describe('G-36/官网 B2 高亮器（零依赖 tokenizer）', () => {
     expect(highlight('<script>alert(1)</script>', 'text')).toBe(escapeHtml('<script>alert(1)</script>'))
   })
 
+  it('#386 vue/html 属性名 attr token + 闭合标签同 tag 色', () => {
+    const html = highlight('<view wx:if="{{a}}" class="x">hi</view>', 'vue')
+    // 属性名 → attr（wx:if / class）
+    expect(html).toContain('<span class="docs-tok-attr">wx:if</span>')
+    expect(html).toContain('<span class="docs-tok-attr">class</span>')
+    // 属性值仍为 string
+    expect(html).toContain('<span class="docs-tok-string">&quot;{{a}}&quot;</span>')
+    // 开/闭合标签均为 tag（闭合含 /）
+    expect(html).toContain('<span class="docs-tok-tag">&lt;view</span>')
+    expect(html).toContain('<span class="docs-tok-tag">&lt;/view</span>')
+    // 标签名后的 > 与文本保持 plain（hi 无任何 span 包裹）
+    expect(html).toContain('&gt;hi<span')
+    // class 等 JS 关键字在标签内不再误染 keyword 紫
+    expect(html).not.toContain('<span class="docs-tok-keyword">class</span>')
+  })
+
+  it('#386 script 块内 JS 不受 attr 影响（inTag 已归位；script 上的 setup 本身是属性）', () => {
+    const html = highlight('<script setup>\nconst visible = ref(true)\n</' + 'script>', 'vue')
+    expect(html).toContain('<span class="docs-tok-keyword">const</span>')
+    // 标签头上的 setup 是合法属性名 → attr；但 script 内容里（inTag 归位后）不得再产生 attr
+    expect(html).toContain('<span class="docs-tok-attr">setup</span>')
+    const rest = html.slice(html.indexOf('&gt;\n'))
+    expect(rest).not.toContain('docs-tok-attr')
+  })
+
+  it('#386c 函数名 fn：非关键字 word 紧跟 "(" → fn；关键字/对象键不误染', () => {
+    const html = highlight('const visible = ref(true)\nfunction handleTap() {\n  if (visible) console.log(handleTap)\n}', 'ts')
+    expect(html).toContain('<span class="docs-tok-fn">ref</span>')
+    expect(html).toContain('<span class="docs-tok-fn">handleTap</span>')
+    expect(html).toContain('<span class="docs-tok-fn">log</span>')
+    // 关键字不被 fn 抢走；可见 = 与对象属性不误染
+    expect(html).toContain('<span class="docs-tok-keyword">const</span>')
+    expect(html).toContain('<span class="docs-tok-keyword">function</span>')
+    expect(html).toContain('<span class="docs-tok-keyword">if</span>')
+    expect(html).not.toContain('<span class="docs-tok-fn">visible</span>')
+  })
+
+  it('#386c vue SFC 拆块：<style> 体按 css（选择器 fn / 属性名 attr / 数值带单位）', () => {
+    const html = highlight('<style>\n.demo { padding: 24px 32px; color: #333; }\n</' + 'style>', 'vue')
+    // 选择器 → fn；CSS 属性名（含 -）→ attr；数值连单位一体 number
+    expect(html).toContain('<span class="docs-tok-fn">.demo</span>')
+    expect(html).toContain('<span class="docs-tok-attr">padding</span>')
+    expect(html).toContain('<span class="docs-tok-attr">color</span>')
+    expect(html).toContain('<span class="docs-tok-number">24px</span>')
+    expect(html).toContain('<span class="docs-tok-number">333</span>')
+    // 开/闭合 style 标签仍为 tag
+    expect(html).toContain('<span class="docs-tok-tag">&lt;style</span>')
+    expect(html).toContain('<span class="docs-tok-tag">&lt;/style</span>')
+  })
+
+  it('#386d 成员属性 .word → attr（count.value / obj.class 不误紫；fn 优先）', () => {
+    const html = highlight('const c = ref(0)\nc.value++\nx.class\nc.log(1)', 'ts')
+    expect(html).toContain('<span class="docs-tok-attr">value</span>')
+    expect(html).toContain('<span class="docs-tok-attr">class</span>')
+    expect(html).toContain('<span class="docs-tok-fn">log</span>')
+    expect(html).not.toContain('<span class="docs-tok-keyword">class</span>')
+  })
+
   it('XSS 防护：恶意内容全转义', () => {
     const html = highlight('<img src=x onerror=alert(1)>', 'ts')
     expect(html).not.toContain('<img')

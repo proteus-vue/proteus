@@ -1,0 +1,16 @@
+# G-49 MANIFEST
+version: 1
+plan: G-49-miniprogram-sandbox-isolation
+# CHECKSUM 不存在于目录（本包 pack.sh 不产出该校验文件）——完整性断言可选，故不计入文件清单
+files:
+  - 01-problem.md
+  - 03-spi.md
+  - conformance.md
+  - reference-impl.cjs
+  - verify.sh
+  - rules.md
+  - architecture-update.md
+  - README.md
+  - MANIFEST
+  - pack.sh
+expected_count: 10

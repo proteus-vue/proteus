@@ -8,6 +8,7 @@ import { createFocusTrap } from './focus-trap'
 import { buildContextMenu, menuPointFrom } from './context-menu'
 import { resolveHoverClass } from './hover'
 import { checkPermission, requestPermission, defaultPermissionQuery, defaultPermissionRequest } from './permission'
+import { createCursorGlow, type CursorGlowOptions, type CursorGlowHandle } from './cursor-glow'
 import type { PermissionState, PermissionEnv } from './permission'
 import type { MenuItem } from './context-menu'
 
@@ -258,7 +259,25 @@ export function createPermissionDirective(options: PermissionDirectiveOptions = 
   }
 }
 
-/** ★G-24 B1+B2：五指令工厂集（main.ts：Object.entries 注册 v-p-*） */
+/**
+ * ★G-24 B5：v-p-cursor-glow——指针跟随光晕（环境光随指针——AI 科技感的指针交互反馈）
+ *   用法：<p-page v-p-cursor-glow>（宿主级一层；可选 value: CursorGlowOptions）
+ *   降级：reduced-motion / 触屏（pointer:coarse）/ 无 DOM → 不启用（静默）
+ */
+export function createCursorGlowDirective(): Directive<HTMLElement, CursorGlowOptions | undefined> {
+  return {
+    mounted(el, binding) {
+      const handle: CursorGlowHandle | null = createCursorGlow(el, binding.value ?? {})
+      ;(el as HTMLElement & { __p_cursor_glow?: CursorGlowHandle | null }).__p_cursor_glow = handle
+    },
+    unmounted(el) {
+      const h = (el as HTMLElement & { __p_cursor_glow?: CursorGlowHandle | null }).__p_cursor_glow
+      if (h) h.destroy()
+    },
+  }
+}
+
+/** ★G-24 B1+B2+B5：指令工厂集（main.ts：Object.entries 注册 v-p-*） */
 export function createDesktopDirectives(): Record<string, Directive> {
   return {
     'p-hover': createHoverDirective(),
@@ -266,5 +285,6 @@ export function createDesktopDirectives(): Record<string, Directive> {
     'p-focus-trap': createFocusTrapDirective(),
     'p-context-menu': createContextMenuDirective(),
     'p-permission': createPermissionDirective(),
+    'p-cursor-glow': createCursorGlowDirective(),
   }
 }

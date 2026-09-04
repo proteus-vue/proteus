@@ -79,6 +79,8 @@ import PTransition from './p-transition/index.vue'
 import PAnimate from './p-animate/index.vue'
 // ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
 import PRouterLink from './p-router-link/index.vue'
+// ★G-07 液态玻璃统一入口（glass-plan B1 · Web L1+L2 首落地，消费方：官网导航/面板）
+import PgGlass from './pg-glass/index.vue'
 
 export {
   VirtualList,
@@ -157,6 +159,8 @@ export {
   PAnimate,
   // ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
   PRouterLink,
+  // ★G-07 液态玻璃
+  PgGlass,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

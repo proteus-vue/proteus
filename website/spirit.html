@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Proteus 海神精灵</title>
+    <style>
+      /* ★iframe 专用页：全透明背景——3D 海神悬浮在官网之上；webgl 缺失时显示 2D 回退 */
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+      }
+      #app {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      canvas { display: block; cursor: pointer; }
+      .spirit-label {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 2px;
+        text-align: center;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10.5px;
+        color: #67e8f9;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .spirit-fallback {
+        display: none;
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+      }
+      .spirit-fallback.on { display: flex; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="spirit-canvas"></canvas>
+      <div class="spirit-label" id="spirit-label">Proteus · 本体 · 点我变身</div>
+      <div class="spirit-fallback" id="spirit-fallback">
+        <svg width="120" height="132" viewBox="0 0 120 132">
+          <!-- ★#389j 同款 2D 形象：果冻水滴 + 浪花卷 + 大眼 + 粉腮红 + 底浪（第一个 path = 身体，变身同步色） -->
+          <path d="M60,14 C86,26 104,54 104,80 C104,106 84,122 60,122 C36,122 16,106 16,80 C16,54 34,26 60,14 Z" fill="#3ec9e8"/>
+          <ellipse cx="42" cy="48" rx="13" ry="19" fill="#ffffff" opacity="0.35" transform="rotate(-18 42 48)"/>
+          <path d="M52,16 C50,6 62,2 66,9 C69,15 63,19 58,16" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+          <path d="M68,16 C70,6 58,2 54,9" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+          <path d="M12,104 C22,96 32,114 45,108 C58,102 62,116 75,110 C88,104 98,114 108,106" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+          <circle cx="42" cy="66" r="15" fill="#ffffff"/><circle cx="78" cy="66" r="15" fill="#ffffff"/>
+          <circle cx="43" cy="67" r="10" fill="#1877e6"/><circle cx="79" cy="67" r="10" fill="#1877e6"/>
+          <circle cx="44" cy="68" r="6.2" fill="#0a1430"/><circle cx="80" cy="68" r="6.2" fill="#0a1430"/>
+          <circle cx="40.5" cy="63" r="3.4" fill="#ffffff"/><circle cx="76.5" cy="63" r="3.4" fill="#ffffff"/>
+          <ellipse cx="30" cy="90" rx="8.5" ry="6.5" fill="#ff9db0" opacity="0.9"/>
+          <ellipse cx="90" cy="90" rx="8.5" ry="6.5" fill="#ff9db0" opacity="0.9"/>
+          <path d="M52,90 Q60,97 68,90" fill="none" stroke="#1a1a20" stroke-width="3.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <script type="module" src="/src/spirit/main.ts"></script>
+  </body>
+</html>

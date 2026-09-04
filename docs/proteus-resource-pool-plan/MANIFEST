@@ -1,0 +1,39 @@
+# G-46 ResourcePool — MANIFEST
+
+Plan: G-46 混合App超级应用加固（宿主级统一资源池）
+Methodology: 原则 #0「不绑定」第 10 次泛化 — 不绑定资源容器形态
+Parent: 体系 G-27（外·渲染一致性）的对偶 — 内·数据一致性
+Status: v1
+
+## Core（核心交付物，完整性断言必检）
+01-problem.md
+02-architecture.md
+03-spi.md
+04-cross-page-ownership.md
+05-security.md
+reference-impl.cjs
+verify.sh
+rules.md
+
+## Conformance
+conformance.md
+
+## Meta
+README.md
+MANIFEST
+CHECKSUM.md
+pack.sh
+architecture-update.md
+
+## 依赖关系（与全局 G 表互校）
+G-27 渲染后端      — 对偶：外(渲染)一致 ↔ 内(登录态)一致
+G-39 宿主运行时（host-runtime） — 资源池生命周期归属宿主
+G-42 宿主容器（host-container） — 能力调用过网关（签名同源）
+G-43 资源所有权（ownership） — ★ 跨页资源所有权（Rc/Weak 应用）
+RSC-01~05（本包）   — 凭证/登录安全铁律（HttpOnly/SSO/同源），CMP089-096 位于全库连续段
+G-44 测试 IR       — conformance 用例复用 runner
+G-45 动态装载      — 资源模块可插件化（pending 回放）
+
+## 编号说明
+本批 G-46~G-52 统一入库，编号以 facade G 表为准。
+本包正式编号 G-46 = 原则 #0「不绑定」第 10 次泛化（不绑定资源容器形态）；CMP089-096 位于全库连续段；铁律 G-46.1-8 + RSC-01~05。登记见 rules.md「编号避让登记」。

@@ -231,7 +231,7 @@ proteus/
 │   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
 │   ├── dev-host/                   #   调试基座即宿主（G-45：Install-Once Host + 动态后端装载 + pending 回放）
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
-├── docs/                           # 60 份 plan + 规约 + positioning v3 + methodology + board-inventory
+├── docs/                           # 69 份 plan 文档（G-01~G-52 连续 + 规约/方法论/白皮书）+ board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
 ├── tests/                          # 1980 单测 / 185 文件 + Web e2e 18 例
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
@@ -255,7 +255,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 |---|---|
 | [PROTEUS-METHODOLOGY](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) | 方法论哲学：统一语义收敛、五支柱、Tier 模型（onboarding 第一课） |
 | [定位 v3](docs/proteus-positioning-v3.md) | 对外定位：一句话定位 + 杀手特性详解 + 对标矩阵 + 对外话术 |
-| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 60 份 plan 状态总表（单一权威索引） |
+| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 69 份 plan 文档状态总表（单一权威索引） |
 | [规约](docs/proteus-architecture.md) | 原则 #0-#13 + 铁律总表 + 严格规则（真理来源） |
 | [快速开始](docs/getting-started.md) / [配置参考](docs/configuration.md) / [编译原理](docs/compiler.md) / [路由与转场](docs/routing.md) | 开发者文档 |
 | [路线图](docs/roadmap.md) · [里程碑线](docs/proteus-roadmap-2-plan/01-master-roadmap.md) | 版本线 v0.1→v2.0 · M1-M3 里程碑线 |
@@ -263,7 +263,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 ## 开发状态与路线图
 
 - **已落地**（38 包 / 1980 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
-- **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
+- **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、**G-46~G-52 七 plan 规划入库（2026-09 批次：宿主级资源池 / 组合一致性 / 兼容式小程序运行容器 / 进程级沙箱 / 开发者平台 / 验证执行 runner / 跨设备一致性——文档规划，B 批次待启）**、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议
 

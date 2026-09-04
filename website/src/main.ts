@@ -16,6 +16,10 @@ import {
   PPage,
   PSidebar,
   PSplit,
+  PSegment,
+  PToast,
+  PAnimate,
+  PgGlass,
   installFluidLayout,
 } from '@proteus-vue/components'
 // ★G-24 B1 桌面交互原语：v-p-hover（官网卡片 hover 语义——Pure logic 双端接线）
@@ -36,6 +40,10 @@ const components: Record<string, unknown> = {
   'p-page': PPage,
   'p-sidebar': PSidebar,
   'p-split': PSplit,
+  'p-segment': PSegment,
+  'p-toast': PToast,
+  'p-animate': PAnimate,
+  'pg-glass': PgGlass,
 }
 for (const [name, comp] of Object.entries(components)) {
   app.component(name, comp as never)

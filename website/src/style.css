@@ -1,5 +1,7 @@
-/* website/src/style.css —— 设计 token（取自 docs/proteus-website-v3/design-tokens.json 深色子集）
-   ★W-6 柔性框架优先：本文件零 @media——响应式全部由 v-p-fluid clamp + 柔性网格承担 */
+/* website/src/style.css —— 设计 token（唯一事实源：docs/proteus-website-v3/design-tokens.json）
+   ★W-6 柔性框架优先：本文件零 @media——响应式全部由 v-p-fluid clamp + 柔性网格承担
+   ★#386 风格对齐 website-plan/08-design-system：radius/状态/后端/语法色 token 化（禁止页面硬编码取值），
+     数值一律取自 design-tokens.json（radius sm4/md7/lg9/xl14/pill20/chip6 · 状态 ok/warn/rec · 语法 kw/tag/attr/str/com/fn） */
 
 :root {
   /* ★p-page 背景钩子（组件默认 #f7f8fa 浅色——官网深色优先，经组件变量钩子统一） */
@@ -14,12 +16,59 @@
   --brand: #7c5cff;
   --brand2: #00e0c6;
   --accent: #ff8a5c;
+  /* ★#386 状态/强调层（design-tokens.json color.ok/warn/rec） */
+  --ok: #3ddc97;
+  --warn: #ffb454;
+  --rec: #ff6b6b;
+  /* ★#386 品牌柔色（tag/active 底色——替代页面散落的 rgba 硬编码） */
+  --brand-soft: rgba(124, 92, 255, 0.12);
+  /* ★#386 玻璃拟态（llm-style-guide：Glass-light 仅 nav，blur 12px） */
+  --glass-bg: rgba(10, 10, 12, 0.72);
+  /* ★#386 后端色（多后端剖面的可读性根基——后端名出现时必须用其后端色） */
+  --bk-vue: #42b883;
+  --bk-ios: #0a84ff;
+  --bk-android: #3ddc84;
+  --bk-flutter: #54c5f8;
+  --bk-skia: #ffd54f;
+  --bk-harmony: #ff8a5c;
+  --bk-native: #7c5cff;
+  /* ★#386 语法高亮色（docs 引擎 docs-tok-* 的取色源） */
+  --syn-kw: #c792ea;
+  --syn-tag: #e06c75;
+  --syn-attr: #d19a66;
+  --syn-str: #98c379;
+  --syn-com: #5c6370;
+  --syn-fn: #61afef;
+  /* ★#386 圆角语义化（radius sm4/md7/lg9/xl14/pill20/chip6——页面禁写裸 px） */
+  --radius-chip: 6px;
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+  /* ★#386 间距 scale（design-tokens space.scale，供页面取用；不在 scale 上的值待 B5 清扫） */
+  --sp-4: 4px;
+  --sp-6: 6px;
+  --sp-8: 8px;
+  --sp-10: 10px;
+  --sp-12: 12px;
+  --sp-14: 14px;
+  --sp-16: 16px;
+  --sp-18: 18px;
+  --sp-24: 24px;
+  --sp-28: 28px;
   --container: 1180px;
   /* ★sticky 导航高度（sidebar sticky / 标题锚点避让用——CDP 实测 97px：v-p-fluid padding(14,28) 在宽视口端 clamp 取上限 28px×2 + 链接行高） */
   --nav-h: 97px;
 }
 
 * { box-sizing: border-box; }
+
+/* ★#389f 移动端布局视口保护：任何 absolute 负 inset 溢出都会撑大 layout viewport（横向溢出反馈环——
+   canvas 引擎读 clientWidth 会被放大值固化）；overflow-x: clip 裁剪溢出且不产生滚动容器（不破坏 sticky） */
+html, body {
+  overflow-x: clip;
+}
 
 html { background: var(--bg); }
 
@@ -38,6 +87,12 @@ body {
 .main { flex: 1; width: 100%; padding: 0 24px; }
 .site > .nav, .site > .footer { width: calc(100% - 48px); max-width: var(--container); }
 
+/* ★#389e 页面内容面透明化：.main 内的 p-page（.home 等）默认不透明背景会盖住全站粒子/光晕层——
+   页面表面归 .site 底层（--p-page-bg = --bg），内容层透明让「语义粒子场」在所有区块可见 */
+.main .p-page {
+  background: transparent;
+}
+
 /* ---- 文档引擎产物样式（docs-* 语义类，@proteus-vue/docs renderDocHtml 输出） ---- */
 .doc-body { color: var(--ink); line-height: 1.75; }
 .doc-body h2 { color: var(--ink); font-size: 20px; margin: 28px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
@@ -52,25 +107,33 @@ body {
   font-size: 13px;
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-chip);
   padding: 1px 6px;
   color: var(--brand2);
 }
 .doc-body pre {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: var(--radius-xl);
+  padding: var(--sp-14) var(--sp-16);
   overflow-x: auto;
 }
 .doc-body pre code { background: none; border: none; padding: 0; color: var(--ink); line-height: 1.7; }
+/* ★#386 语法高亮接线（docs 引擎 span.docs-tok-* → design-tokens syntax 色；#386b 补 attr、#386c 补 fn） */
+.doc-body .docs-tok-keyword { color: var(--syn-kw); }
+.doc-body .docs-tok-string { color: var(--syn-str); }
+.doc-body .docs-tok-comment { color: var(--syn-com); }
+.doc-body .docs-tok-tag { color: var(--syn-tag); }
+.doc-body .docs-tok-fn { color: var(--syn-fn); }
+.doc-body .docs-tok-number,
+.doc-body .docs-tok-attr { color: var(--syn-attr); }
 .doc-body blockquote {
   margin: 12px 0;
   border-left: 3px solid var(--brand);
   padding: 6px 14px;
   color: var(--muted);
   background: var(--panel);
-  border-radius: 0 10px 10px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 .doc-body table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
 .doc-body th, .doc-body td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }

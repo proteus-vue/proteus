@@ -18,10 +18,11 @@
 | v3.8 | 宿主层三 plan 追加 | 新增宿主层三份 plan（决策 #341）并入 **G-41（host-integration）/ G-42（host-container）/ G-43（ownership）**；原稿声称 G-38/G-39/G-40 与 compiler-backend-spi / host-runtime / execution-carrier 撞号，内部沿用 execution-carrier 原稿旧编号体系（宿主运行时 G-36 / 执行载体 G-37 / 渲染 G-34 / 编译 G-35 / AI-Agent G-33）→ 一律以本表为准（G-38→G-41、G-39→G-42、G-40→G-43、G-37→G-40、G-36→G-39、G-35→G-38、G-34→G-27 渲染本体/G-37 渲染 SPI、G-33→G-36）；原则 #13.15-24、铁律 G-41/42/43.1-6、规则 CMP051-073 合并进 `proteus-architecture` L0 规约；三份参考实现 CJS 改 .cjs（type:module 兼容） | 规约表 G-01~G-43 · 三 plan 文档编号重指向 + board-inventory 登记 |
 | v3.9 | testing-framework 追加 | 新增自动化测试框架 plan（第八次泛化：Test IR + TestBackend SPI，决策 #364）并入 **G-44**；原稿声称 G-41 与 host-integration 撞号、CMP067-074 与 ownership（G-43）撞号 → 一律以本表为准（G-41→G-44、CMP067-074→CMP074-081）；原稿旧编号引用（宿主运行时 G-36/执行载体 G-37/接入 G-38/容器 G-39/所有权 G-40/编译 G-35/渲染 G-34）全量重指向；原稿「第七次泛化」漏计所有权修正为第八次；原则 #13.25-13.27、铁律 G-44.1-6、规则 CMP074-081 合并进 `proteus-architecture` L0 规约；陈旧 00-12 副本删除（repo proteus-test-framework-plan 版本更新——含 #204/#205 TestDriver 落地增量） | 规约表 G-01~G-44 · plan 编号避让 + board-inventory 登记 |
 | v3.10 | dev-host 追加 | 新增调试基座 plan（原则 #0 第九次投影：不绑定基座形态，决策 #369）并入 **G-45**——打破 uni-app 式「自定义基座循环」：插件 = DynamicBackendModule 动态装载（签名 + conformance 快检门禁）+ 转发桩 pending 语义 + 双层产物（基座 cacheKey 与业务规模无关）；三端分级 Android/鸿蒙 Tier A 全热替换 / iOS Tier B 增量重签（2.5.2 诚实边界）/ Tier C 模拟先行；原则 #13.28-13.30、铁律 G-45.1-6、规则 CMP082-088 合并进 `proteus-architecture` L0 规约；参考实现 dev-host-reference.cjs 12 自检 PASS | 规约表 G-01~G-45 · board-inventory L2 登记 |
+| v3.11 | 七 plan + 白皮书追加 | 新增七份 plan（决策 #385）并入 **G-46（resource-pool，宿主级统一资源池，第十次投影：不绑资源容器形态）/ G-47（combined-conformance，组合一致性，第十一次投影：不绑测试层级）/ G-48（miniprogram-runtime，兼容式小程序运行容器，第十二次投影）/ G-49（sandbox-isolation，进程级沙箱隔离，第十三次投影：不绑隔离强度）/ G-50（developer-platform，开发者平台 A+B，第十四次投影：不绑平台/生态形态）/ G-51（test-ir-runner，验证执行环境插拔，第十五次投影）/ G-52（cross-device-verification，跨设备一致性，第十六次投影）** + 白皮书（docs/proteus-whitepaper-plan，不占 G 序）；编号避让：七包原稿 execution-carrier 旧号体系全量重指向官方位（G-36→G-39、G-37→G-40、G-39→G-42、G-40→G-43、G-41→G-44）+ 原稿 CMP 高位段互相撞号（G-48 110-116 vs G-49 109-117）→ 定案全库连续段 CMP089-146（G-46=089-096 / G-47=097-102 / G-48=103-109 / G-49=110-117 / G-50=118-131 / G-51=132-139 / G-52=140-146）+ 泛化序修正（G-51/G-52 原稿误作 12/14 → 15/16）；原则 #13.31-56、铁律 G-46~G-52.1-x、规则 CMP089-146 合并进 `proteus-architecture` L0 规约；跨包去重（G-48 沙箱/能力桥 → G-49 权威化 + 引用；白皮书方法论章节 → 引用 spi-first/methodology SSOT）；spi-first 映射表登记第 10~16 次泛化 | 规约表 G-01~G-52 · 七 plan 编号重指向 + CMP 平移 + board-inventory 登记 |
 
 ---
 
-## 二、G-01 ~ G-45 全局执行序（权威版）
+## 二、G-01 ~ G-52 全局执行序（权威版）
 
 | 序号 | 内容 | 前置 | 备注 |
 |------|------|------|------|
@@ -70,6 +71,13 @@
 | G-43 | ownership（资源所有权 SPI + 借用检查 + 确定性 Drop） | G-42,G-40,G-39,G-38 | 所有权插头（原稿 G-40 与 execution-carrier 撞号，重指向 G-43，决策 #341） |
 | G-44 | testing-framework（Test IR 可序列化断言 + TestBackend SPI 五后端 + 八次泛化统一 runner） | G-27,G-29,G-39,G-40,G-41,G-42,G-43,G-25 | 验证层插头（原稿 G-41 与 host-integration 撞号、CMP067-074 与 ownership 撞号 → G-44 + CMP074-081，决策 #364） |
 | G-45 | dev-host（调试基座即宿主：Install-Once + 动态后端 + 转发桩 pending + 双层构建 + 装载即验证） | G-39,G-42,G-28,G-38,G-44 | 基座插头（打破自定义基座循环：baseRebuildCount=0 + 构建 O(改动)，决策 #369） |
+| G-46 | resource-pool（宿主级统一资源池：登录态/凭证三层池 + 双轨降级 + 跨页所有权 + RSC） | G-27,G-39,G-42,G-43,G-44,G-45 | 资源池插头（内一致性 = G-27 对偶；原稿建议顺延 G-47 → 定案 G-46 + CMP089-096，决策 #385） |
+| G-47 | combined-conformance（组合一致性：G-27×G-46 交界 + 接缝层 + 六不变量） | G-27,G-44,G-45,G-46 | 组合验证插头（不绑测试层级；原稿 CMP103-108 → CMP097-102，决策 #385） |
+| G-48 | miniprogram-runtime（兼容式小程序运行容器 + PlatformAdapter SPI + 兼容矩阵） | G-27,G-28,G-39,G-42,G-43,G-44,G-45,G-46,G-47 | 小程序运行时插头（不绑运行时形态；原稿 CMP110-116 → CMP103-109，决策 #385） |
+| G-49 | sandbox-isolation（进程级沙箱隔离：IsolationLevel L1-L4 + CapabilityBridge） | G-42,G-43,G-45,G-46,G-47,G-48 | 隔离强度插头（机制强制；原稿 CMP109-117 去重 → CMP110-117，决策 #385） |
+| G-50 | developer-platform（开发者平台：A 工具链 + B 生态 + AppPackage 双签名） | G-48,G-49,G-44,G-45 | 平台插头（不绑平台/生态形态；CMP118-131，决策 #385） |
+| G-51 | test-ir-runner（验证执行环境：L0 文档/L1 模拟/L2 真机 + NativeAdapter） | G-44,G-46,G-47,G-48,G-49,G-50 | 验证执行插头（不绑验证执行环境；CMP132-139，决策 #385） |
+| G-52 | cross-device-verification（跨设备一致性：等价类 + 指纹归因 + ε diff） | G-51,G-44,G-25,G-46~G-50 | 跨设备插头（不绑设备形态；CMP140-146，决策 #385） |
 
 ---
 

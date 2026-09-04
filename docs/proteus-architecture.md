@@ -67,6 +67,32 @@
 | #13.28 | 基座零插件知识：基座是 SPI 宿主而非业务载体，新插件接入禁止修改基座代码 | dev-host G-45 |
 | #13.29 | 变化层与稳定层构建隔离：构建时间必须随「改动」而非「规模」伸缩（基座 cacheKey 禁含规模因子） | dev-host G-45 |
 | #13.30 | 动态装载必须先验证：签名 + conformance 快检通过才可注册能力，失败拒绝并降级（降级不崩溃） | dev-host G-45 |
+| #13.31 | 内（数据）一致性与外（渲染）一致性同等重要：G-27 与 G-46 形成内外闭环（切端数据链不断） | resource-pool G-46 |
+| #13.32 | 登录态归宿主所有、页面借用：所有权模型（G-43）应用于资源层，登出须级联清理 L1→L2→L3 + 跨页引用 | resource-pool G-46 |
+| #13.33 | 双轨降级不崩溃：Cookie⇄Token 双轨，同根域优先 Cookie、跨域降级 Token，禁止手写平台分支 | resource-pool G-46 |
+| #13.34 | 组合正确性：跨层组合的正确性必须由独立 conformance 套件证明，不得由各自单层 PASS 推导 | combined-conformance G-47 |
+| #13.35 | 资源归宿主：登录态/Cookie/Token 属于共享 ResourcePool 而非任何 RenderBackend；Backend unmount 不得销毁资源 | combined-conformance G-47 |
+| #13.36 | 切换原子性：渲染后端切换是原子事务，且与登出操作串行化 | combined-conformance G-47 |
+| #13.37 | 小程序运行时中立：宿主运行时不得绑定特定小程序平台，平台差异封装在 Platform Adapter，业务代码零平台分支 | miniprogram-runtime G-48 |
+| #13.38 | 双线程语义：小程序逻辑层与视图层必须经序列化通道（setData）通信，逻辑层禁直操作 DOM、视图层禁直改逻辑状态 | miniprogram-runtime G-48 |
+| #13.39 | 凭证派生：小程序凭证必须为宿主登录态派生值（scopedToken，绑定 AppID + 过期），禁止暴露原始登录态 | miniprogram-runtime G-48 |
+| #13.40 | 兼容分级声明：每个 Platform Adapter 必须为每个能力声明兼容级别（L0-L3），L2/L3 必须有显式降级路径，禁止静默失败 | miniprogram-runtime G-48 |
+| #13.41 | 不绑定隔离强度：隔离以能力声明（IsolationLevel）呈现，后端按平台返回可达级别（L1~L4），上层 Runtime 只依赖接口 | sandbox-isolation G-49 |
+| #13.42 | 机制强制优于规范约定：跨小程序隔离/权限控制由运行时机制保证，不由文档/约定约束 | sandbox-isolation G-49 |
+| #13.43 | 隔离语义等价：各平台隔离强度语义等价（一崩不拖垮宿主），实现机制允许不同（iOS 系统 WebContent 诚实边界） | sandbox-isolation G-49 |
+| #13.44 | 开放平台以进程隔离为前提：开发者平台「运行任意第三方代码」资格以 G-49 L3 落地为硬前置 | sandbox-isolation G-49 |
+| #13.45 | 配额拒绝是业务错误非异常：资源配额超限走 CapabilityBridge 拒绝通道，不得未捕获抛出拖垮宿主 | sandbox-isolation G-49 |
+| #13.46 | 平台以应用包为原子：开发者平台最小可治理单元是 AppPackage（manifest + 代码 + 双签名） | developer-platform G-50 |
+| #13.47 | 工具链与生态解耦：A（工具链）可独立使用不依赖 B（生态）；B 关键路径依赖 G-49 L3 | developer-platform G-50 |
+| #13.48 | 审核过的包才可运行：运行时只加载双签名包（开发者 + 平台），未审核/自签名包一律拒装 | developer-platform G-50 |
+| #13.49 | 撤销是级联销毁的应用级投影：revoke = G-46 清凭证 + G-43 Drop 级联，无泄漏 | developer-platform G-50 |
+| #13.50 | 平台能力声明式：审核/风控/结算以 SPI 暴露、后端可替换，框架只定义机制不绑定运营策略 | developer-platform G-50 |
+| #13.51 | 三层验证体系：SPI 的 conformance 必须在 L0（文档自检）/ L1（IR 模拟）/ L2（真运行时）三阶梯度上可验证，前一阶是后一阶的回归测试 | test-ir-runner G-51 |
+| #13.52 | 验证不绑定执行环境：TestSuite 对后端无感知，经统一 Backend 接口注入，L1/L2 替换不修改用例代码 | test-ir-runner G-51 |
+| #13.53 | 门槛机制：L1 必须 100%；L2 覆盖率可渐进（30%→80%）；L2 失败先 DEGRADED，不阻塞 L1 回归 | test-ir-runner G-51 |
+| #13.54 | 跨设备一致性：验证必须跨越设备形态（screen/os/input/env），不做单设备单环境执行 | cross-device-verification G-52 |
+| #13.55 | 不绑定设备形态：同一 TestSuite 跨设备可比对（等价类 + 代表采样 + ε 容差） | cross-device-verification G-52 |
+| #13.56 | 基线可复现：等价类定义 + ε 阈值版本化，保证跨设备幂等（INV-D1） | cross-device-verification G-52 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -164,6 +190,54 @@
 | **G-45.8** | **manifest 哈希须与 dev server 推送清单一致（防 MITM）：不匹配拒绝装载（G45_MANIFEST_HASH_MISMATCH）** | dev-host |
 | **G-45.9** | **Install-Once 仅限开发态与内部分发，禁止宣称「线上热更新」** | dev-host |
 | **G-45.10** | **发布态 ABI 冻结后，运行态禁止引入未预注册的原生能力：release/runtime 态 loadModule 一律拒绝（G45_MODE_FORBIDDEN）；运行态仅参数灰度（非代码）** | dev-host |
+| **G-46.1** | **页面必须经 ResourceFacade 取登录态，禁止直读 Cookie** | resource-pool |
+| **G-46.2** | **禁止绕过双轨桥接手写平台分支（`if (isIOS) ...`）** | resource-pool |
+| **G-46.3** | **禁止绕过网关直调 PlatformBackend** | resource-pool |
+| **G-46.4** | **登录态必须走 Rc/Weak 所有权，页面销毁必须归还** | resource-pool |
+| **G-46.5** | **logout() 必须级联清理 L1→L2→L3 + 跨页引用** | resource-pool |
+| **G-46.6** | **PlatformBackend 必须通过 conformance（CMP089-096）方可接入** | resource-pool |
+| **G-46.7** | **禁止用 localStorage / 全局变量存 Token（无 TTL/吊销）** | resource-pool |
+| **G-46.8** | **动态资源模块必须同签名链 + manifest 哈希校验** | resource-pool |
+| **G-47.1** | **（=CCI-01）Backend 不得缓存 readAuth 结果，每次查共享池** | combined-conformance |
+| **G-47.2** | **（=CCI-02）unmount() 不得销毁池内任何资源** | combined-conformance |
+| **G-47.3** | **（=CCI-03）切后端须原子事务（mount 新 + unmount 旧不可分割）** | combined-conformance |
+| **G-47.4** | **（=CCI-04）登出与切后端须串行化（同一锁）** | combined-conformance |
+| **G-47.5** | **（=CCI-05）不可用后端必须显式抛错（禁止静默吞错）** | combined-conformance |
+| **G-47.6** | **（=CCI-06）组合 conformance 必须 100% PASS，0 warning** | combined-conformance |
+| **G-48.1** | **不绑定运行时形态：运行时只定义标准接口，平台差异全部封装在 Platform Adapter** | miniprogram-runtime |
+| **G-48.2** | **不绑定小程序平台：业务逻辑零平台分支，跨 Adapter 结果 shape 一致** | miniprogram-runtime |
+| **G-48.3** | **双线程语义不可绕过：逻辑层不得直连视图层，唯一通道 = setData** | miniprogram-runtime |
+| **G-48.4** | **setData 数据必须可序列化：禁函数/循环引用/undefined** | miniprogram-runtime |
+| **G-48.5** | **凭证最小化：小程序只拿 scopedToken，不拿原始登录态** | miniprogram-runtime |
+| **G-48.6** | **AppID 隔离：存储/凭证按 AppID 分桶、跨桶拒绝（MVP = L1 逻辑隔离，开放平台需 G-49）** | miniprogram-runtime |
+| **G-48.7** | **降级不崩溃：L2 部分支持 → 降级 + 警告；L3 不支持 → 明确 reject（不静默）** | miniprogram-runtime |
+| **G-48.8** | **装载即验证：Adapter 装载跑 conformance，不过门禁 → 拒绝 + 降级兜底** | miniprogram-runtime |
+| **G-49.1** | **deny-by-default：任何小程序 API 调用未在其 manifest 声明即拒绝，不得先放行后审计** | sandbox-isolation |
+| **G-49.2** | **无开放 bridge：原生能力只通过 CapabilityBridge 消息通道暴露，绝不暴露原生对象引用（addJavascriptInterface 式禁止）** | sandbox-isolation |
+| **G-49.3** | **跨小程序零共享：跨域访问 → ISOLATION_BREACH → 终止该小程序 + 审计日志** | sandbox-isolation |
+| **G-49.4** | **Drop 级联（G-43 复用）：destroyContext 释放存储 + 权限 + 配额，销毁后重建须得到全新空状态** | sandbox-isolation |
+| **G-49.5** | **配额超限不抛到宿主：QUOTA_EXCEEDED 是业务错误，走 CapabilityBridge 拒绝通道** | sandbox-isolation |
+| **G-49.6** | **诚实边界：不承诺三平台机制一致，只承诺隔离语义等价（iOS 靠系统 WebContent）** | sandbox-isolation |
+| **G-50.1** | **审计是发布的硬前置：未过审计的产物不得进入分发链路** | developer-platform |
+| **G-50.2** | **packageId 资源隔离：宿主凭证与小程序凭证永不通透（对齐 G-46 appId / G-49 零共享）** | developer-platform |
+| **G-50.3** | **配额/审核拒绝是业务错误非异常（沿用 G-49.6）** | developer-platform |
+| **G-50.4** | **运行时仅信任双签名 + manifest 索引：缺开发者或平台签名 → 拒装（G-45 防 MITM）** | developer-platform |
+| **G-50.5** | **restricted 能力强制人工审核：无 rationale/无资质一律驳回，无 skip 路径** | developer-platform |
+| **G-50.6** | **撤销是优雅终止非崩溃：revoke 走 G-43 Drop 级联（清凭证 G-46 + 清存储 + terminate）** | developer-platform |
+| **G-50.7** | **审计日志不可篡改（append-only）：状态迁移须可举证** | developer-platform |
+| **G-50.8** | **B 生态以 G-49 L3 为硬前置：L3 未落地前「运行第三方」为受限灰度** | developer-platform |
+| **G-51.1** | **execute 唯一入口：TestIRRunner 只暴露 execute(suite): report，禁止绕过 runner 直接执行用例** | test-ir-runner |
+| **G-51.2** | **降级不崩溃：后端缺能力必须返回 DEGRADED，禁止抛异常退出** | test-ir-runner |
+| **G-51.3** | **报告必有 total/passed/failed 字段** | test-ir-runner |
+| **G-51.4** | **FAIL 必有分类与定位：category（ASSERTION/ISOLATION_BREACH）+ loc** | test-ir-runner |
+| **G-51.5** | **可序列化：Report 必须可 JSON.stringify 且无字段丢失（CI diff 前提）** | test-ir-runner |
+| **G-51.6** | **Runner 有回归基线：runner-regression.gold 随改动同步，结构变化须显式批准** | test-ir-runner |
+| **G-52.1** | **等价类覆盖优先：不穷举设备，等价类 + 代表采样是唯一可扩展策略** | cross-device-verification |
+| **G-52.2** | **允许偏差用 ε：DRIFT_EXCEEDED 判定必须 ε 比对，禁止 `===`** | cross-device-verification |
+| **G-52.3** | **FAIL 必归因四维：跨设备漂移必须经 DriftFingerprint 定位到 screen/os/input/env 之一** | cross-device-verification |
+| **G-52.4** | **归一化结果可 diff：矩阵报告可 JSON 序列化、可 diff，作为 CI 门槛** | cross-device-verification |
+| **G-52.5** | **本地优先：核心验证不依赖云端真机（ProfileSource 按需补充非必需）** | cross-device-verification |
+| **G-52.6** | **基线可复现：等价类定义 + ε 阈值必须版本化（INV-D1 幂等）** | cross-device-verification |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -198,6 +272,13 @@
 | CMP | CMP067-073 | error | 业务禁直接释放框架代管资源（067）/跨设备转移必须原子（068）/不可转移资源显式拒绝（069）/释放失败不得静默（070）/Owned<T> 禁被 ref/reactive 包装（071）/PSS strict 禁引入未声明第三方库（072）/配额记账须与所有权图一致（073） | 🆕 ownership-plan（G-43） |
 | CMP | CMP074-081 | error | 跨 Backend 同语义必须产出结构一致 state（074）/Test IR 文件（.tir.json）必须进 git（075）/arrange·act·assert 必须 JSON 可序列化（076）/跨 Backend 结果不一致 = 语义分歧必须修复（077）/三维断点矩阵必须有自动化覆盖（078）/新 plan 落地必须同步提供 Test IR（079）/Agent 产物须过 TestBackend 门禁（080）/性能基准固化且改动须 Owner 审批（081） | 🆕 testing-framework-plan（G-44） |
 | CMP | CMP082-088 | error | 基座禁引用插件（082）/未装载调用走 pending 非抛（083）/manifest+签名缺一拒绝（084）/装载必跑快检 FAIL 拒绝+降级（085）/cacheKey 禁规模因子（086）/快检覆盖率≥能力数（087）/推送通道 TLS+token+审计（088） | 🆕 dev-host-plan（G-45） |
+| CMP | CMP089-096 | error | 登录态经 ResourceFacade 共享访问（089）/HttpOnly Cookie 隔离（090）/Cookie 同根域双轨（091）/Token 管控含吊销（092）/缓存按 origin 分桶（093）/能力网关白名单（094）/吊销即时生效（095）/SSO 一次性令牌（096） | 🆕 resource-pool-plan（G-46） |
+| CMP | CMP097-102 | error | Backend 不缓存认证视图（097）/unmount 不触池资源（098）/切换原子事务（099）/登出与切端串行化（100）/装载错误显式（101）/组合 conformance 100% PASS（102） | 🆕 combined-conformance-plan（G-47） |
+| CMP | CMP103-109 | error | 凭证最小化 scopedToken（103）/AppID 隔离跨桶拒绝（104）/代码包签名 + manifest 哈希（105）/销毁级联释放（106）/能力白名单（107）/敏感能力需用户触发（108）/MVP=L1 逻辑隔离诚实边界（109） | 🆕 miniprogram-runtime-plan（G-48） |
+| CMP | CMP110-117 | error | MANIFEST_INVALID（110）/PERMISSION_DENIED（111）/QUOTA_EXCEEDED（112）/INVALID_APP_ID（113）/ISOLATION_BREACH（114）/TOKEN_EXPIRED（115）/SANDBOX_CRASHED（116）/平台差异诚实边界（117） | 🆕 sandbox-isolation-plan（G-49） |
+| CMP | CMP118-131 | error | 审计失败阻断 publish（118）/packageId 资源隔离（119）/配额拒绝是业务错误（120）/双签名必填（121）/restricted 强制人工审核（122）/撤销优雅终止（123）/审计 append-only（124）/B 生态需 G-49 L3（125）/密钥轮换立即失效（126）/灰度严格隔离（127）/hotfix 不得新增 capability（128）/全局配额池上限（129）/manifest 与源码一致（130）/负向自检有判别力（131） | 🆕 developer-platform-plan（G-50） |
+| CMP | CMP132-139 | error | execute 存在且返回 Report（132）/能力缺失 DEGRADED（133）/Report 有 total（134）/超时可恢复（135）/ISOLATION_BREACH 分类（136）/Report 可序列化（137）/Runner 有回归基线（138）/接缝+隔离组合命题（139） | 🆕 test-ir-runner-plan（G-51） |
+| CMP | CMP140-146 | error | 设备等价类 + 代表采样（140）/ε 容差判定禁 ===（141）/DriftFingerprint 四维归因（142）/报告归一化可 diff（143）/本地优先不强制联网（144）/等价类与 ε 版本化（145）/跨层接缝组合命题（146） | 🆕 cross-device-verification-plan（G-52） |
 
 ---
 

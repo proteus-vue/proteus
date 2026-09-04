@@ -134,10 +134,10 @@ describe('G-24 B1 p-hover（悬停纯逻辑）', () => {
   })
 })
 
-describe('G-24 B1 指令工厂（四原语集）', () => {
-  it('createDesktopDirectives：返回 v-p-hover / v-p-shortcut / v-p-focus-trap / v-p-context-menu 四指令', () => {
+describe('G-24 指令工厂（六原语集）', () => {
+  it('createDesktopDirectives：返回 v-p-hover / v-p-shortcut / v-p-focus-trap / v-p-context-menu / v-p-permission / v-p-cursor-glow 六指令（#389d 新增指针跟随光晕）', () => {
     const dirs = createDesktopDirectives()
-    expect(Object.keys(dirs).sort()).toEqual(['p-context-menu', 'p-focus-trap', 'p-hover', 'p-permission', 'p-shortcut'])
+    expect(Object.keys(dirs).sort()).toEqual(['p-context-menu', 'p-cursor-glow', 'p-focus-trap', 'p-hover', 'p-permission', 'p-shortcut'])
     for (const d of Object.values(dirs)) {
       expect(typeof d.mounted).toBe('function')
       expect(typeof d.unmounted).toBe('function')
