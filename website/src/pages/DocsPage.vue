@@ -104,8 +104,8 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
   justify-content: center;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
-  padding: 14px 24px;
-  margin: 0 -24px 24px; /* 抵消 main 的横向 padding——横条通栏 */
+  padding: 10px 24px;
+  margin: 0 -24px 20px; /* 抵消 main 的横向 padding——横条通栏 */
 }
 .section-switch { align-items: stretch; }
 .section-tab {
