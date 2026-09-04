@@ -24,6 +24,8 @@ export default defineConfig({
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         spirit: fileURLToPath(new URL('./spirit.html', import.meta.url)),
       },
+      // ★Vercel 构建沙箱稳定性：限制 rollup 并行文件读取（默认 20 并发 fd+内存峰值，OOM-kill 无输出死掉的高危点）
+      maxParallelFileOps: 4,
       output: {
         // ★拆包：@vue/compiler-sfc（Playground 编译内核 ~500KB）独立 chunk——首屏不拉
         manualChunks(id: string) {
