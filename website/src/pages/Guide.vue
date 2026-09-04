@@ -92,12 +92,30 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   margin-bottom: 4px;
 }
 .toc-nav { display: flex; flex-direction: column; gap: 2px; }
-.toc-link { text-decoration: none; border-radius: var(--radius-sm); }
-.toc-text { color: var(--muted); font-size: 13px; }
+.toc-link {
+  display: block;
+  position: relative;
+  padding: 5px 10px;
+  margin: 0 -10px; /* 内边距外扩用负 margin 回补——链接文字与组标题左对齐 */
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+.toc-text { color: var(--muted); font-size: 13px; transition: color 0.15s; }
 .toc-link:hover { background: var(--panel2); }
 .toc-link:hover .toc-text { color: var(--ink); }
 .toc-link.active { background: var(--brand-soft); }
-.toc-link.active .toc-text { color: var(--brand); }
+.toc-link.active .toc-text { color: var(--brand); font-weight: 600; }
+/* ★激活态左侧品牌色竖条（不挤占文本位置——absolute 悬浮） */
+.toc-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brand);
+}
 .doc { flex: 1 1 480px; min-width: 0; }
 .doc-title { color: var(--ink); font-size: 28px; margin: 8px 0 18px; }
 .page-toc {
