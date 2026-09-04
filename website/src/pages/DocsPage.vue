@@ -93,69 +93,63 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 /* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
    页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
-/* ★#390iii 分区横条（小程序文档式）：大分类顶部切换——sticky 遮底色，滚动时随时可切区 */
+/* ★#390iii 分区横条（小程序文档式）：居中大字 + 激活底部品牌渐变下划线——层级醒目 */
 .docs-shell { display: block; }
 .docs-topbar {
   position: sticky;
   top: var(--nav-h);
   z-index: 15;
+  display: flex;
+  justify-content: center;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
-  padding: 8px 24px;
-  margin: 0 -24px 18px; /* 抵消 main 的横向 padding——横条通栏 */
+  padding: 0 24px;
+  margin: 0 -24px 24px; /* 抵消 main 的横向 padding——横条通栏 */
 }
-.section-switch { align-items: center; }
+.section-switch { align-items: stretch; }
 .section-tab {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
+  align-items: baseline;
+  gap: 5px;
+  padding: 19px 30px 15px;
   text-decoration: none;
   position: relative;
 }
-.section-tab-text { color: var(--muted); font-size: 14px; transition: color 0.15s; }
-.section-tab-count {
-  font-size: 11px;
-  color: var(--dim);
-  background: var(--panel2);
-  border-radius: 8px;
-  padding: 1px 6px;
-}
+.section-tab-text { color: var(--muted); font-size: 15px; transition: color 0.15s; }
+.section-tab-count { font-size: 12px; color: var(--dim); }
 .section-tab:hover .section-tab-text { color: var(--ink); }
-.section-tab.active .section-tab-text { color: var(--brand); font-weight: 600; }
-.section-tab.active .section-tab-count { color: var(--brand); background: var(--brand-soft); }
-/* 激活态底部短条（同顶部导航 active 语言） */
+/* 激活态：文字加粗变亮 + 底部品牌渐变长下划线（贴 tab 底缘，与顶部导航 active 同语言但更醒目） */
+.section-tab.active .section-tab-text { color: var(--ink); font-weight: 700; }
+.section-tab.active .section-tab-count { color: var(--brand); }
 .section-tab::after {
   content: '';
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 24px;
+  right: 24px;
   bottom: 0;
-  height: 2px;
-  border-radius: 1px;
-  background: transparent;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+  opacity: 0;
+  transition: opacity 0.15s;
 }
-.section-tab.active::after { background: var(--brand); }
-/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航——现在还要避开分区横条（约 49px） */
+.section-tab.active::after { opacity: 1; }
+.sidebar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
+  background: var(--panel);
+}
+/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航——现在还要避开分区横条（约 60px） */
 .p-sidebar-side-rail .sidebar-card {
   position: sticky;
-  top: calc(var(--nav-h) + 64px);
-  max-height: calc(100vh - var(--nav-h) - 80px);
+  top: calc(var(--nav-h) + 72px);
+  max-height: calc(100vh - var(--nav-h) - 88px);
   overflow-y: auto;
 }
-/* ★四区切换 tabs（指南/组件/能力/柔性系统） */
-.section-switch { display: flex; gap: 4px; flex-wrap: wrap; }
-.section-tab {
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--muted);
-  text-decoration: none;
-  border: 1px solid transparent;
-}
-.section-tab:hover { background: var(--panel2); color: var(--ink); }
-.section-tab.active { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
 .toc-group { display: flex; flex-direction: column; gap: 2px; }
 .toc-group + .toc-group { margin-top: 12px; }
 .toc-group-name {
