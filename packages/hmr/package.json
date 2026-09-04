@@ -41,6 +41,8 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.0",
+    "@proteus-vue/types": "workspace:*"
   }
 }

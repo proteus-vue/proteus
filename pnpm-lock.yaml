@@ -385,9 +385,15 @@ importers:
         specifier: ^8.18.0
         version: 8.21.3
     devDependencies:
+      '@proteus-vue/types':
+        specifier: workspace:*
+        version: link:../types
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      '@types/ws':
+        specifier: ^8.18.0
+        version: 8.18.1
 
   packages/i18n:
     devDependencies:
@@ -453,6 +459,9 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      '@types/ws':
+        specifier: ^8.18.0
+        version: 8.18.1
       vite:
         specifier: ^5.0.0
         version: 5.4.21(@types/node@20.19.43)(sass@1.104.0)
@@ -503,6 +512,9 @@ importers:
       '@proteus-vue/devtools-runtime':
         specifier: workspace:*
         version: link:../devtools-runtime
+      '@proteus-vue/types':
+        specifier: workspace:*
+        version: link:../types
       pinia:
         specifier: ^4.0.3
         version: 4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3))
