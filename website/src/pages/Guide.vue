@@ -21,7 +21,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   <!-- ★p-sidebar（G-22 Fluid System S3）：自适应侧边栏原语——容器 ≥720px 走左侧栏、
        窄容器自动切顶部横向导航（createContainerQuery 按容器而非视口求解——分屏/多窗口自适应）；
        附送车机 d-pad 焦点导航 + reduced-motion。业务页面零布局代码（W-1/W-6 兑现） -->
-  <p-sidebar :min-sidebar-width="720" :nav-width="240" class="guide">
+  <p-sidebar :min-sidebar-width="720" :nav-width="224" class="guide">
     <template #nav>
       <p-view class="sidebar-card">
         <span class="eyebrow">◆ 指南</span>
@@ -126,10 +126,10 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 .doc { flex: 1 1 480px; min-width: 0; }
 /* ★本页导读右栏：p-stack row+wrap 双栏（行向语义归组件——不用 p-view 再跟框架默认打优先级） */
 .doc-main { flex: 1 1 480px; min-width: 0; }
-.page-toc {
-  flex: 1 1 224px;
-  max-width: 300px;
-  box-sizing: border-box; /* p-view 默认 content-box——宽+padding 组合必须显式（铁律） */
+/* ★双类选择器提特异性：p-view 自带 scoped 的 content-box/flex-column（同特异性但级联靠后）——border-box 必须显式打赢（铁律） */
+.page-toc.page-toc {
+  flex: 0 0 220px; /* 定宽不参与增长——多余空间全部让给正文 */
+  box-sizing: border-box;
   align-self: flex-start;
   position: sticky;
   top: calc(var(--nav-h) + 16px);
