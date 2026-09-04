@@ -20,7 +20,11 @@ npm run build:website   # vue-tsc 类型检查 + vite 构建
 
 ```
 website/
-├── guides/*.md          # 28 篇指南（内容即数据——frontmatter: title/order/group，六分组侧边栏）
+├── guides/*.md          # 28 篇指南（frontmatter: title/order/group，六分组侧边栏）
+├── content/             # ★生成的参考文档（gen-content.mjs 从源码 SSOT 生成，勿手改）
+│   ├── components/      #   60 页：p-* 逐组件参考（props/events/语义映射/MP 等价）
+│   ├── capabilities/    #   51 页：50 能力原语逐个参考 + 总览
+│   └── system/          #   5 页：柔性系统专区（容器查询/柔性网格/自适应侧边栏/断点形态）
 ├── spirit.html          # ★#389i 3D 海神精灵 iframe 专页（透明背景——three 隔离在独立 chunk）
 ├── src/
 │   ├── spirit/main.ts   # ★#389i Three.js 3D 萌宠（果冻质感/点击变身/鼠标跟随/postMessage 气泡）

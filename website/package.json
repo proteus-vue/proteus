@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:content": "tsx scripts/gen-content.mjs"
   },
   "dependencies": {
     "@proteus-vue/compiler": "0.3.0-beta.0",

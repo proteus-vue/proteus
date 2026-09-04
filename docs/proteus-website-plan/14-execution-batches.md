@@ -93,6 +93,8 @@ Website 内部依赖：
 
 > **★#390i 官网内容填充（用户「现在官网就差内容填充了……离真正的框架官网内容量差得远」）**：指南从 10 篇骨架扩到 **28 篇实质内容**（2741 行），按 frontmatter `group` 分六组（入门 3/布局与组件 7/渲染引擎 4/能力与平台 2/工程化 10/参考 2）；侧边栏分组导航（guides.ts 导出 guideGroups 组序=组内最小 order，Guide.vue 组标题+限高滚动，28 页长清单 sticky 卡片不溢出）；内容全部源码取证后撰写（7 个并行 sub-agent + 手工补齐，准确性契约：只写源文件能证实的内容、API/props/命令逐一读源码、诚实分级 ✅🟡📋——中途发现并修正旧 05 篇 useNative() 不存在的错误，改为真实的 createCapabilityHooks()+50 Hook）；新篇：组件总览/布局组件/反馈动效/桌面原语/液态玻璃/Flutter 后端/Headless 语义快照/能力系统/平台 API/编译管线/路由/状态管理/所有权工程/容器与宿主/CLI/一致性验证/语义版本与兼容性/FAQ；验证：build 28 篇全编译 + D-2 PASS + CDP 实测（6 组侧栏/长文页表格代码/锚点 TOC/移动端零横滚/零 console 报错），截图 docs-groups-*.png 入档，回归脚本 website/cdp-docs.mjs
 
+> **★#390ii 文档 IA 重构 + 参考文档生成器（用户「所有内容都堆在一个 sidebar 拥挤；组件/能力需要逐个文档；柔性框架系统没体现出来」）**：**四区 IA**——指南 28 篇（/docs/:slug）+ **组件区 60 页**（/docs/component/:slug——总览 + 59 个 p-* 逐个参考页）+ **能力区 51 页**（/docs/capability/:slug——总览 + 50 能力原语逐个）+ **柔性系统区 5 页**（/docs/system/:slug——总览/容器查询/柔性网格/自适应侧边栏/断点与形态），共 144 页；DocsPage.vue 四区通用（区切换 tabs + 分区侧边栏 + 右栏导读），旧 Guide.vue/guides.ts 删除（docs-registry.ts 四区注册表取代）；**生成器 website/scripts/gen-content.mjs**（内容即数据——SSOT = 框架源码，勿手改产物）：组件页解析 defineProps（JSDoc 可选 + 花括号平衡提取 + 顶层键分割解析 type/default/required——踩坑：prop 自身尾花括号/外层}）双尾部剥离、JSDoc 可选正则 m[1] ?? ''）+ defineEmits + TAG_SEMANTIC_MAP + MP_MAPPING_MATRIX；能力页从 PRIMITIVE_CATALOG kind=capability + CapabilityHooks 接口 JSDoc；npm script: gen:content；柔性系统 5 页由 sub-agent 从 fluid-system-plan/fluid 包源码取证撰写（formForWidth 实际为 sheet/dialog/popover 三档——按源码诚实写，非 DEVICE 五档）；验证：build 144 页全编译 + CDP 实测四区切换/各区抽页 H1/移动端零横滚/零报错，截图 docs-four-sections.png 入档
+
 ### B5 · 博客 + 搜索 + i18n
 **文件**：`07-blog-changelog` `09-search-i18n`
 **输入**：changeset 流程 + i18n-plan

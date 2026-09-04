@@ -1,38 +1,57 @@
 <script setup lang="ts">
-// website/src/pages/Guide.vue —— 文档页（B2 验收：侧边栏自动生成 + md 构建期编译渲染）
-// ★内容即数据：guides/*.md 由 @proteus-vue/docs 引擎在 vite 构建期编译（frontmatter/html/toc），
-//   运行时只做 v-html + TOC 渲染，零 markdown 解析
-// ★D-2（#377）：布局标签 p-view/p-text 语义组件
-// ★W-6 柔性框架优先：柔性网格 + v-p-fluid，零 @media
+// website/src/pages/DocsPage.vue —— 文档页（★#390ii 四区通用：指南/组件/能力/柔性系统）
+// 内容即数据：各区 md 由 @proteus-vue/docs 引擎构建期编译（frontmatter/html/toc），运行时 v-html 零解析
+// 布局三栏：左分区侧边栏（分组）+ 正文 + 右侧「本页导读」粘性栏（p-stack row+wrap，窄容器自动换行）
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { findGuide, guideGroups, guides } from '../guides'
+import { findDoc, sections } from '../docs-registry'
 
 const route = useRoute()
+// 区 key 从路由前缀推导：/docs/component/:slug → components
+const sectionKey = computed(() => {
+  const first = route.path.split('/').filter(Boolean)[1] ?? ''
+  if (first === 'component') return 'components'
+  if (first === 'capability') return 'capabilities'
+  if (first === 'system') return 'system'
+  return 'guide'
+})
+const section = computed(() => sections.find((s) => s.key === sectionKey.value) ?? sections[0]!)
 const slug = computed(() => (route.params.slug as string) ?? '')
-const current = computed(() => findGuide(slug.value) ?? guides[0])
+const current = computed(() => findDoc(section.value.base, slug.value) ?? section.value.items[0])
 const docHtml = computed(() => current.value?.doc.html ?? '')
-const idx = computed(() => guides.findIndex((g) => g.slug === slug.value))
-const prev = computed(() => (idx.value > 0 ? guides[idx.value - 1] : undefined))
-const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? guides[idx.value + 1] : undefined))
+const idx = computed(() => section.value.items.findIndex((g) => g.slug === slug.value))
+const prev = computed(() => (idx.value > 0 ? section.value.items[idx.value - 1] : undefined))
+const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.length - 1 ? section.value.items[idx.value + 1] : undefined))
 </script>
 
 <template>
   <!-- ★p-sidebar（G-22 Fluid System S3）：自适应侧边栏原语——容器 ≥720px 走左侧栏、
-       窄容器自动切顶部横向导航（createContainerQuery 按容器而非视口求解——分屏/多窗口自适应）；
+       窄容器自动切折叠导航（createContainerQuery 按容器而非视口求解）；
        附送车机 d-pad 焦点导航 + reduced-motion。业务页面零布局代码（W-1/W-6 兑现） -->
   <p-sidebar :min-sidebar-width="720" :nav-width="224" class="guide">
     <template #nav>
       <p-view class="sidebar-card">
-        <span class="eyebrow">◆ 指南</span>
-        <!-- ★分组导航：frontmatter.group → 组标题 + 组内链接（组序 = 组内最小 order） -->
-        <p-view v-for="grp in guideGroups" :key="grp.name" class="toc-group">
+        <span class="eyebrow">◆ 文档</span>
+        <!-- ★四区切换：指南 / 组件 / 能力 / 柔性系统——各区独立侧边栏，不再全部堆一栏 -->
+        <p-view class="section-switch">
+          <router-link
+            v-for="s in sections"
+            :key="s.key"
+            :to="`${s.base}/${s.items[0]?.slug ?? ''}`"
+            class="section-tab"
+            :class="{ active: s.key === sectionKey }"
+          >
+            {{ s.name }}
+          </router-link>
+        </p-view>
+        <!-- 当前区分组导航 -->
+        <p-view v-for="grp in section.groups" :key="grp.name" class="toc-group">
           <p-text class="toc-group-name">{{ grp.name }}</p-text>
           <p-view class="toc-nav">
             <router-link
               v-for="g in grp.items"
               :key="g.slug"
-              :to="`/docs/${g.slug}`"
+              :to="`${section.base}/${g.slug}`"
               class="toc-link"
               :class="{ active: g.slug === slug }"
             >
@@ -45,16 +64,15 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
 
     <!-- 正文：docs 引擎构建期产物 -->
     <p-view class="doc">
-      <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
-      <p-stack direction="row" :gap="28" wrap class="doc-area">
+      <p-view class="doc-area">
         <p-view class="doc-main">
           <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
           <p-view class="doc-body" v-html="docHtml"></p-view>
 
           <!-- 上下篇 -->
           <p-stack direction="row" :gap="12" class="pager">
-            <router-link v-if="prev" :to="`/docs/${prev.slug}`" class="pager-link">← 上一篇</router-link>
-            <router-link v-if="next" :to="`/docs/${next.slug}`" class="pager-link">下一篇 →</router-link>
+            <router-link v-if="prev" :to="`${section.base}/${prev.slug}`" class="pager-link">← 上一篇</router-link>
+            <router-link v-if="next" :to="`${section.base}/${next.slug}`" class="pager-link">下一篇 →</router-link>
           </p-stack>
         </p-view>
 
@@ -63,7 +81,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
           <span class="eyebrow">◆ 本页导读</span>
           <a v-for="t in current.doc.tocFlat" :key="t.id" :href="`#${t.id}`" class="page-toc-link" :class="`depth-${t.depth}`">{{ t.text }}</a>
         </p-view>
-      </p-stack>
+      </p-view>
     </p-view>
   </p-sidebar>
 </template>
@@ -82,13 +100,25 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   background: var(--panel);
 }
 /* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky）；
-   29 页长清单 → 卡片限高滚动 */
+   四区 140+ 页长清单 → 卡片限高滚动 */
 .p-sidebar-side-rail .sidebar-card {
   position: sticky;
   top: calc(var(--nav-h) + 16px);
   max-height: calc(100vh - var(--nav-h) - 32px);
   overflow-y: auto;
 }
+/* ★四区切换 tabs（指南/组件/能力/柔性系统） */
+.section-switch { display: flex; gap: 4px; flex-wrap: wrap; }
+.section-tab {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.section-tab:hover { background: var(--panel2); color: var(--ink); }
+.section-tab.active { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
 .toc-group { display: flex; flex-direction: column; gap: 2px; }
 .toc-group + .toc-group { margin-top: 12px; }
 .toc-group-name {
