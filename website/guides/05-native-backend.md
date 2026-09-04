@@ -1,42 +1,103 @@
 ---
 title: 原生能力
 order: 5
+group: 渲染引擎
 ---
 
-# 原生能力即语义（G-28：99% 零原生代码）
+# 原生能力
 
-## 业务调用语义，后端提供实现
+传统跨端框架里，「原生能力」意味着自己写桥：Swift/Kotlin 各一份，常年维护。Proteus 把渲染后端的 SPI 方法论泛化到一切原生实现——**原生能力也是一行语义映射**。扫码、定位不是 `if (platform)` 分支，而是映射表里的 `capability.*` 行，与 `ui.*`、`shell.*` 同表同源。
 
-传统跨端框架要求开发者自己封装原生插件：写 Swift/Kotlin 桥接 + 三端各一份 + 持续维护。Proteus 把渲染后端的 SPI 方法论泛化到**一切原生能力**：
+> **业务调用语义，后端提供实现。**
+> NativeBackend 的三平台映射表 `SEMANTIC_NATIVE_MAPS` 每平台 52 行，覆盖 layout / ui / shell / capability / gesture / engineering 六族。
+
+## 三平台语义映射
+
+`createNativeBackend(adapter, platform)` 按平台选用映射表（iOS UIKit 基准 / Android Jetpack / 鸿蒙 ArkUI），`createElement` 把 `semantic` 映射为原生视图类型：
+
+| 语义 | iOS（UIKit） | Android（Jetpack） | 鸿蒙（ArkUI） |
+|---|---|---|---|
+| `layout.box` | UIView | FrameLayout | Stack |
+| `layout.stack` | UIStackView | LinearLayout | Flex |
+| `layout.grid` | UICollectionView | GridLayoutManager | Grid |
+| `layout.scroll` | UIScrollView | ScrollView | Scroll |
+| `ui.text` | UILabel | TextView | Text |
+| `ui.button` | UIButton | Button | Button |
+| `ui.input` | UITextField | EditText | TextInput |
+| `ui.list` | UITableView | RecyclerView | List |
+| `shell.tabbar` | UITabBar | BottomNavigationView | Tabs |
+| `shell.modal` | UIAlertController | Dialog | CustomDialog |
+| `layout.split` | UISplitViewController | SlidingPaneLayout | SideBarContainer |
+| `ui.nav` | UINavigationController | NavigationRail | Navigation |
+| `gesture.draggable` | UIPanGestureRecognizer | GestureDetector | PanGesture |
+| `capability.scan-qr` | AVCaptureSession | CameraX | ScanKit |
+| `capability.location` | CLLocationManager | FusedLocation | geoLocationManager |
+
+表为节选。全部行与 component-ir 的 `SEMANTIC_BACKEND_MAP` 各端列**同源**——映射表是 SSOT，后端实现与 conformance 参考表都从它对齐，不允许各写一份。
+
+## 产物是平台描述树（诚实边界）
+
+NativeBackend 维护一棵 `NativeViewDescriptor` 树（`type` 已是原生视图名），并把每次变更同步给宿主适配器——宿主要实现的全部接口就是它：
 
 ```ts
-const native = useNative()
-const { text } = await native.scanQR()   // ← 完了，iOS/Android/鸿蒙全端可用
+export interface NativeViewAdapter {
+  createView(descriptor: NativeViewDescriptor): unknown // 宿主句柄：UIView / View / ArkUI Node
+  updateView(handle: unknown, key: string, prev: unknown, next: unknown): void
+  insertView(child: unknown, parent: unknown, anchor?: unknown): void
+  removeView(child: unknown): void
+  setViewText(handle: unknown, text: string): void
+}
 ```
 
-## 帕累托分层（99% 覆盖）
+当前代码现状，如实分级：
 
-| 层 | 内容 | 覆盖 | 开发者写原生？ |
-|----|------|------|---------------|
-| L1 内置 | Top 30 能力（相机/定位/扫码/分享/通知/存储/蓝牙/NFC/生物识别…） | 80% | ❌ 零 |
-| L2 官方 Backend | 平台 SDK 直映射（独立包按需安装） | +18% | ❌ 零 |
-| L3 社区包 | 生态贡献，签名审计 | +1.9% | ⚠️ 社区写 |
-| L4 自定义 | 仅长尾 | 0.1% | ✅ 兜底 |
+- ✅ **语义映射 + 描述树 + 接线验证**：`semantic → 原生视图类型` 真实生效；缺省适配器 `createMockNativeAdapter()` 用 ops 日志在无宿主环境下断言 create / update / insert / remove / setText 的调用序列。
+- 📋 **真机渲染（bridge）**：把 adapter 换成 iOS / Android / 鸿蒙 SDK 桥即可上真机——`NativeViewAdapter` 与 `@proteus-vue/renderer-app` 的 NativeAdapter 同构。宿主工程落地前，产物停在**描述树**，不是真机视图。
 
-## Capability Hook（已落地 50 个）
+渲染侧的接缝只有这一个接口：自研跨端壳接入 = 实现这五个方法，把描述树同步到自己的视图系统。mock 适配器就是照着这个面写的第一个「宿主」。
 
 ```ts
-useCamera() / useLocation() / usePayment() / useBiometric()
-useBluetooth() / useNFC() / useFileSystem() / useWebSocket()
-// …50 个，双端真实实现；缺桥诚实降级（CapError，非抛同步异常）
+import { createNativeBackend, createMockNativeAdapter, renderIRTree } from '@proteus-vue/render-backend'
+
+const adapter = createMockNativeAdapter()
+renderIRTree(createNativeBackend(adapter, 'ios'), ir) // ir = p-grid > p-text
+adapter.ops
+// ['create:UICollectionView', 'create:UILabel', 'insert:UILabel', …]——接线序列可断言
 ```
 
-## 权限声明自动化
+## 能力语义也在同一张表
 
-Compiler 扫描 `app.config.ts` 的 `capabilities` → **自动生成** iOS `Info.plist` / Android `AndroidManifest.xml` / 鸿蒙 `module.json5` 权限声明——杜绝运行时才发现漏配权限。
+`capability.*` 行说明**渲染与原生能力共用同一语义模型**：扫码 → `AVCaptureSession` / `CameraX` / `ScanKit`，拍照 → `UIImagePicker` / `PhotoPicker` / `PhotoViewPicker`，定位 → `CLLocationManager` / `FusedLocation` / `geoLocationManager`。
 
-```bash
-proteus capabilities:manifest --platform ios
+两条消费路径收敛到同一份目录（128 原语 SSOT，capability 族 50 项）：
+
+- **模板里**是能力入口语义——`capability.scan-qr` 在 vue-dom 端渲染为 `button.proteus-scan-qr`（能力实现由 Hook 注入）；
+- **脚本里**是 Hook——`createCapabilityHooks()` 返回 50 个 `useXxx()`（`useCamera()` / `useLocation()` / `useQRCode()` …）。
+
+详见[能力系统](/docs/18-capability-system)与[平台 API](/docs/19-platform-api)。
+
+## 不是 wx.xxx 全局对象
+
+G-31 对 API 面的改造与组件面同源：**API = Hook / Promise**（`useCamera()` / `useLocation()` / `router.push()`），没有 `wx.xxx` 全局对象。能力调用进绑定层而不是散落在业务里——编译器能扫描、类型系统能检查、conformance 能验证。这也正是映射表能「一表三端」的前提：入口是语义，实现才可能被后端接管。
+
+## 怎么验证映射没漂
+
+组件快照 conformance（G-31 渲染层）对每个后端做**控件 readback**，与参考表逐节点比对——后端实际产出什么控件，必须与 `SEMANTIC_BACKEND_MAP` 声明的一致：
+
+```ts
+import { createNativeBackend, renderComponentSnapshot, createControlReader } from '@proteus-vue/render-backend'
+import { checkComponentSnapshot } from '@proteus-vue/component-ir'
+
+const backend = createNativeBackend(undefined, 'android')
+const snap = renderComponentSnapshot(backend, ir, createControlReader(backend.id))
+// snap.control === 'GridLayoutManager'（ir 根为 p-grid 时）——readback 即真实产物
+const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == 参考表？
 ```
 
-> G-28 NativeBackend SPI 为规划已入库（native-backend-1-plan），Capability Hook 50 个已落地（G-32 B3）。
+CI 门禁覆盖 6 后端 × L1 fixtures（`tests/component-conformance.test.ts`）——错映射直接红，`unverified` 诚实标注参考表未覆盖的组合而非放行。验证体系全貌见[一致性验证](/docs/26-conformance)。
+
+## 下一步
+
+- [渲染后端](/docs/04-render-backend)：SPI 契约与六后端全景
+- [Flutter 后端](/docs/16-flutter-backend)：同一套语义的另一张映射表
+- [一致性验证](/docs/26-conformance)：语义控件映射的门禁

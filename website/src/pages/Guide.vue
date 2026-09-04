@@ -6,7 +6,7 @@
 // ★W-6 柔性框架优先：柔性网格 + v-p-fluid，零 @media
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { findGuide, guides } from '../guides'
+import { findGuide, guideGroups, guides } from '../guides'
 
 const route = useRoute()
 const slug = computed(() => (route.params.slug as string) ?? '')
@@ -25,16 +25,20 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
     <template #nav>
       <p-view class="sidebar-card">
         <span class="eyebrow">◆ 指南</span>
-        <p-view class="toc-nav">
-          <router-link
-            v-for="g in guides"
-            :key="g.slug"
-            :to="`/docs/${g.slug}`"
-            class="toc-link"
-            :class="{ active: g.slug === slug }"
-          >
-            <p-text class="toc-text">{{ g.title }}</p-text>
-          </router-link>
+        <!-- ★分组导航：frontmatter.group → 组标题 + 组内链接（组序 = 组内最小 order） -->
+        <p-view v-for="grp in guideGroups" :key="grp.name" class="toc-group">
+          <p-text class="toc-group-name">{{ grp.name }}</p-text>
+          <p-view class="toc-nav">
+            <router-link
+              v-for="g in grp.items"
+              :key="g.slug"
+              :to="`/docs/${g.slug}`"
+              class="toc-link"
+              :class="{ active: g.slug === slug }"
+            >
+              <p-text class="toc-text">{{ g.title }}</p-text>
+            </router-link>
+          </p-view>
         </p-view>
       </p-view>
     </template>
@@ -70,10 +74,22 @@ const next = computed(() => (idx.value >= 0 && idx.value < guides.length - 1 ? g
   padding: var(--sp-16);
   background: var(--panel);
 }
-/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky） */
+/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航（collapsed 态随文档流，无需 sticky）；
+   29 页长清单 → 卡片限高滚动 */
 .p-sidebar-side-rail .sidebar-card {
   position: sticky;
   top: calc(var(--nav-h) + 16px);
+  max-height: calc(100vh - var(--nav-h) - 32px);
+  overflow-y: auto;
+}
+.toc-group { display: flex; flex-direction: column; gap: 2px; }
+.toc-group + .toc-group { margin-top: 12px; }
+.toc-group-name {
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
 }
 .toc-nav { display: flex; flex-direction: column; gap: 2px; }
 .toc-link { text-decoration: none; border-radius: var(--radius-sm); }

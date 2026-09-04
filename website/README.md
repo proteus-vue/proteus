@@ -20,7 +20,7 @@ npm run build:website   # vue-tsc 类型检查 + vite 构建
 
 ```
 website/
-├── guides/*.md          # 10 篇指南（内容即数据——frontmatter: title/order）
+├── guides/*.md          # 28 篇指南（内容即数据——frontmatter: title/order/group，六分组侧边栏）
 ├── spirit.html          # ★#389i 3D 海神精灵 iframe 专页（透明背景——three 隔离在独立 chunk）
 ├── src/
 │   ├── spirit/main.ts   # ★#389i Three.js 3D 萌宠（果冻质感/点击变身/鼠标跟随/postMessage 气泡）
