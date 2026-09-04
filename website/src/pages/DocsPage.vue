@@ -27,8 +27,8 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 <template>
   <!-- ★#390iii 分区横条（参考小程序文档 IA）：大分类（四区）顶部横条切换，小分类（分组）留在左侧栏——侧栏不再两套层级拥挤 -->
   <p-view class="docs-shell">
-    <p-view class="docs-topbar">
-      <p-stack direction="row" :gap="4" wrap class="section-switch">
+    <div class="docs-topbar">
+      <p-stack direction="row" :gap="16" wrap class="section-switch">
         <router-link
           v-for="s in sections"
           :key="s.key"
@@ -40,7 +40,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
           <span class="section-tab-count">{{ s.items.length }}</span>
         </router-link>
       </p-stack>
-    </p-view>
+    </div>
   <p-sidebar :min-sidebar-width="720" :nav-width="224" class="guide">
     <template #nav>
       <p-view class="sidebar-card">
