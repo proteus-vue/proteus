@@ -93,7 +93,8 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 /* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
    页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
-/* ★#390iii 分区横条（小程序文档式）：居中大字 + 激活底部品牌渐变下划线——层级醒目 */
+/* ★#390iii 分区横条（小程序文档式按钮卡片版）：居中一排明显的大按钮卡片——
+   未激活 = 卡片描边（panel2 底 + muted 文字）；激活 = 品牌实心 + 白字（对应参考图绿色实心钮） */
 .docs-shell { display: block; }
 .docs-topbar {
   position: sticky;
@@ -103,37 +104,34 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
   justify-content: center;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
-  padding: 0 24px;
+  padding: 14px 24px;
   margin: 0 -24px 24px; /* 抵消 main 的横向 padding——横条通栏 */
 }
 .section-switch { align-items: stretch; }
 .section-tab {
   display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 19px 30px 15px;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  padding: 12px 24px;
   text-decoration: none;
-  position: relative;
+  border-radius: var(--radius-sm);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  transition: background 0.15s, border-color 0.15s;
 }
-.section-tab-text { color: var(--muted); font-size: 15px; transition: color 0.15s; }
-.section-tab-count { font-size: 12px; color: var(--dim); }
+.section-tab-text { color: var(--muted); font-size: 15px; font-weight: 600; transition: color 0.15s; }
+.section-tab-count { margin-left: 8px; font-size: 12px; color: var(--dim); }
+.section-tab:hover { background: var(--panel); border-color: var(--brand); }
 .section-tab:hover .section-tab-text { color: var(--ink); }
-/* 激活态：文字加粗变亮 + 底部品牌渐变长下划线（贴 tab 底缘，与顶部导航 active 同语言但更醒目） */
-.section-tab.active .section-tab-text { color: var(--ink); font-weight: 700; }
-.section-tab.active .section-tab-count { color: var(--brand); }
-.section-tab::after {
-  content: '';
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 0;
-  height: 3px;
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(90deg, var(--brand), var(--brand2));
-  opacity: 0;
-  transition: opacity 0.15s;
+/* 激活态：品牌实心 + 白字（明显可点的那个） */
+.section-tab.active {
+  background: var(--brand);
+  border-color: var(--brand);
 }
-.section-tab.active::after { opacity: 1; }
+.section-tab.active .section-tab-text { color: #fff; }
+.section-tab.active .section-tab-count { color: rgba(255, 255, 255, 0.75); }
+.section-tab.active:hover { background: var(--brand); }
 .sidebar-card {
   display: flex;
   flex-direction: column;
