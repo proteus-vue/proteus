@@ -112,7 +112,7 @@ const cursorGlowOptions = {
             >
               <p-text class="nav-text">{{ l.label }}</p-text>
             </router-link>
-            <router-link to="/docs/intro" class="nav-link" :class="{ active: isDocs }">
+            <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
               <p-text class="nav-text">文档</p-text>
             </router-link>
             <a class="nav-link nav-github" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">

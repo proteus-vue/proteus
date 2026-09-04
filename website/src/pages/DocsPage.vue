@@ -64,7 +64,8 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 
     <!-- 正文：docs 引擎构建期产物 -->
     <p-view class="doc">
-      <p-view class="doc-area">
+      <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
+      <p-stack direction="row" :gap="28" wrap class="doc-area">
         <p-view class="doc-main">
           <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
           <p-view class="doc-body" v-html="docHtml"></p-view>
@@ -81,7 +82,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
           <span class="eyebrow">◆ 本页导读</span>
           <a v-for="t in current.doc.tocFlat" :key="t.id" :href="`#${t.id}`" class="page-toc-link" :class="`depth-${t.depth}`">{{ t.text }}</a>
         </p-view>
-      </p-view>
+      </p-stack>
     </p-view>
   </p-sidebar>
 </template>
