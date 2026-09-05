@@ -59,7 +59,7 @@ const primitiveModules = import.meta.glob<{ default: DocsModule }>('../content/p
 // ★#468 英文内容变体（overlay：en/<分区目录>/<slug>.md——试点指南区；缺失变体 → 页面提示回中文）
 const enModules = import.meta.glob<{ default: DocsModule }>('../en/**/*.md', { eager: true })
 /** 分区 base → en 变体目录（试点子集随翻译推进扩列） */
-const EN_DIR_BY_BASE: Record<string, string> = { '/docs': 'guides', '/docs/framework': 'framework', '/docs/component': 'components' }
+const EN_DIR_BY_BASE: Record<string, string> = { '/docs': 'guides', '/docs/framework': 'framework', '/docs/component': 'components', '/docs/capability': 'capabilities' }
 
 /** 英文变体模块（未翻译 → undefined） */
 export function enModule(base: string, slug: string): DocsModule | undefined {

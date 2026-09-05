@@ -73,7 +73,7 @@ export const OVERVIEW_EN = {
 }
 
 /**
- * 页面级 EN 字段：slug → { desc, notes?, props? }
+ /** 页面级 EN 字段：slug → { desc, notes?, props? }
  *  - desc: 页面首行说明（对应 zh extractComponentDesc.short）
  *  - notes: 「实现要点」子弹（对应 zh desc.notes）
  *  - props: { 属性名: 说明EN } —— 仅覆盖需翻译的 props 行文案（缺省回退 SHARED prop 词典）
@@ -917,5 +917,203 @@ export const COMP_EN = {
       "★MP-safe: generic ref fallback (no ResizeObserver on MP → always the sm slot)",
     ],
     props: { designWidth: "Design-spec width (baseline for deriving container breakpoints; 375 by default)" },
+  },
+}
+
+// ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════
+
+/** 能力页共享文案 EN（生成器镜像 zh 模板——标题/表头/图例/铁律/降级语义） */
+export const CAP_SHARED_EN = {
+  callout: (id, semantic, ret) =>
+    `> Capability primitive ${id} · \`${semantic}\` · returns \`${ret}\` · **Hook implemented** (API ready — target bridges in the table below)`,
+  hSignature: '## Signature',
+  hParams: '## Parameters',
+  hReturns: '## Returns',
+  hErrors: '## Error codes',
+  hCompat: '## Compat rollout',
+  hUsage: '## Usage',
+  paramCols: '| Parameter | Type | Required | Doc |',
+  propCols: '| Property | Type | Required | Doc |',
+  retCols: '| Property | Type | Doc |',
+  errCols: '| code | Doc |',
+  nestedPropsTitle: (name) => `#### Properties of \`${name}\``,
+  paramsIntro: '',
+  returnsIntro: '`Promise<CapResult<T>>` — iron rule: no callbacks, no try/catch duty; branch on `res.ok`:',
+  retOk: 'Succeeded `true` / failed `false`',
+  retDataGeneric: 'Success payload — generic, inferred from the response body (e.g. JSON auto-deserialized)',
+  retDataVoid: 'No payload on success',
+  retError: 'Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception)',
+  unsupportedNote: '> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.',
+  directReturn: (t) => `Returns \`${t}\` (synchronous handle/state object).`,
+  dataPropsTitle: (name) => `#### Properties of the \`data\` (\`${name}\`) object`,
+  directPropsTitle: (t) => `#### Properties of \`${t}\``,
+  noDataGeneric: '—',
+  capLegend:
+    '> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).',
+  ironRule: '> Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.',
+  // 兼容进度行逐端注记（镜像 zh switch）
+  endNote: {
+    mp: (missing, mpEquiv) =>
+      missing.length
+        ? `wx bridge missing ${missing.join('/')} → explicit Err degradation`
+        : `wx bridge → ${mpEquiv}`,
+    webNoRefs: 'webBridge platform bridge (injected by default when wx is absent)',
+    webMissing: (missing) => `webBridge missing ${missing.join('/')} → explicit Err degradation (no direct platform API)`,
+    webOk: 'webBridge implementation (direct platform API)',
+    headless: 'mock bridge injected (testing / SSR tier)',
+    flutter: 'same JS logic layer — capability bridge not wired',
+    'quick-app': 'target not started',
+    prototype: 'prototype mapping — capability bridge not wired',
+  },
+}
+
+/** 用法示例 EN 覆盖（仅 zh 手写示例的 hook 需要；其余由生成器默认 EN 分支模板生成） */
+export const CAP_USAGE_EN = {
+  useFetch: [
+    "const res = await useFetch<{ id: number; name: string }>('/api/user/1')",
+    '',
+    'if (res.ok) {',
+    '  console.log(res.data.name) // response auto-deserialized from JSON',
+    "} else if (res.error.code === 'fetch.unsupported') {",
+    '  // bridge has no request → degradation path',
+    '}',
+  ],
+  direct: (api, handle) => [
+    `const ${handle} = ${api}`,
+    `// ${handle} is a synchronous ${'handle'} — property/method structure in the Returns table (no await, no res.ok)`,
+  ],
+  generic: (call) => [
+    `const res = await ${call}`,
+    '',
+    'if (res.ok) {',
+    '  console.log(res.data)',
+    "} else if (res.error.code.endsWith('.unsupported')) {",
+    '  // platform unsupported → degradation path',
+    '}',
+  ],
+}
+
+/** 能力类别名 EN（总览/分区标题用；与侧栏 GROUP_NAME 一致） */
+export const CAP_CAT_EN = {
+  '网络与通信': 'Network & Communication',
+  '设备与系统': 'Device & System',
+  '存储与文件': 'Storage & Files',
+  '位置与地图': 'Location & Maps',
+  '媒体与扫码': 'Media & Scanning',
+  '账号与支付': 'Account & Payment',
+  '通知与分享': 'Notifications & Sharing',
+  '应用与生命周期': 'App & Lifecycle',
+  '可观测与调试': 'Observability & Debugging',
+  '其他': 'Other',
+}
+
+export const CAP_OVERVIEW_EN = {
+  title: 'Capabilities overview',
+  group: '总览',
+  order: 0,
+  intro: (count) =>
+    `> ${count} capability primitives — SSOT = \`PRIMITIVE_CATALOG\` (capability kind) + \`CapabilityHooks\` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).`,
+  cols: '| # | Capability | API | Returns | Mini Program equivalent |',
+}
+
+/**
+ * 能力页页面级 EN 字段：slug → { desc, params?, dataProps?, directProps?, errors?, statusCallout? }
+ *  - desc: H1 下说明行（zh hook JSDoc 首行）
+ *  - params: { 参数名: 说明 } + 嵌套接口属性用 `${参数名}.${属性名}` 扁平键
+ *  - dataProps: 具名 data 类型（如非 T 泛型）的属性行说明 { 属性名 }
+ *  - directProps: 同步句柄类型属性行说明 { 属性名 }
+ *  - errors: { 错误码: 说明 }
+ *  - statusCallout?: 覆盖默认 callout（如状态不是「Hook implemented」）
+ */
+export const CAP_EN = {
+  // —— 网络与通信（★#481 首批）——
+  fetch: {
+    desc: '★ G-32 B3 (continued): communication / permission / storage — a missing bridge → Err instead of throwing (G-32.3 degradation semantics)',
+    params: {
+      url: 'Target URL (HTTPS)',
+      config: 'useFetch configuration (aligned with RequestConfig high-frequency fields)',
+      'config.method': 'HTTP method (defaults to GET)',
+      'config.data': 'Request body (POST/PUT; objects are JSON-serialized automatically)',
+      'config.params': 'URL query parameters (appended to the query string)',
+      'config.headers': 'Custom request headers',
+      'config.timeout': 'Timeout in ms (timeout → Err)',
+    },
+    errors: { 'fetch.unsupported': 'The bridge does not provide request (useFetch unavailable)' },
+  },
+  websocket: {
+    desc: 'useWebSocket: WebSocket connection handle (wx.connectSocket / web WebSocket)',
+    params: { url: 'Target URL (HTTPS)', protocols: 'WebSocket subprotocols (optional)' },
+    errors: {
+      'websocket.unsupported': 'The bridge does not provide connectWebSocket (useWebSocket unavailable)',
+      'websocket.failed': 'WebSocket construction failed',
+    },
+  },
+  upload: {
+    desc: 'useUpload: upload files (wx.uploadFile / web fetch FormData)',
+    params: {
+      options: 'C29 upload options (wx.uploadFile / web fetch FormData)',
+      onProgress: 'Progress callback (0-100; optional)',
+      'options.url': 'Upload target URL (HTTPS)',
+      'options.filePath': 'wx temporary file path (produced by wx.chooseMedia/chooseImage, etc.)',
+      'options.file': 'Web file object',
+      'options.name': "Form field name (defaults to 'file')",
+      'options.formData': 'Additional form fields',
+      'options.headers': 'Custom request headers',
+      'options.timeout': 'Timeout in ms (timeout → Err)',
+    },
+    dataProps: {
+      status: 'HTTP status code',
+      data: 'Response body (text/JSON is decided by the server)',
+      progress: 'Progress (0-100, if the platform supports onProgressUpdate)',
+    },
+    errors: { 'upload.unsupported': 'The bridge does not provide upload (useUpload unavailable)' },
+  },
+  download: {
+    desc: 'useDownload: download files (wx.downloadFile / web fetch blob)',
+    params: {
+      url: 'Target URL (HTTPS)',
+      options: 'C30 download options',
+      onProgress: 'Progress callback (0-100; optional)',
+      'options.headers': 'Custom request headers',
+      'options.timeout': 'Timeout in ms (timeout → Err)',
+      'options.responseType': 'Return data type: blob (web) / path (wx tempFilePath) / text / json',
+    },
+    dataProps: {
+      status: 'HTTP status code',
+      data: 'Response body (its form is determined by responseType)',
+      path: 'wx tempFilePath (responseType=path)',
+      progress: 'Progress (0-100)',
+    },
+    errors: { 'download.unsupported': 'The bridge does not provide download (useDownload unavailable)' },
+  },
+  'socket-task': {
+    desc: 'useSocketTask: low-level SocketTask handle (wx.connectSocket → SocketTask / web WebSocket)',
+    params: { url: 'Target URL (HTTPS)' },
+    errors: { 'socket-task.unsupported': 'Bridge does not provide createSocketTask (useSocketTask unavailable)' },
+  },
+  'data-channel': {
+    desc: 'useDataChannel: data channel (live/real-time — bridged by the host; honest Err fallback by default)',
+    params: {
+      options: 'C31 data channel (live/real-time — bridged by the host; honest Err fallback by default)',
+      'options.channelId': 'Channel identifier (business-defined; used for cross-end routing)',
+    },
+    errors: { 'data-channel.unsupported': 'Bridge does not provide openDataChannel (useDataChannel unavailable)' },
+  },
+  bluetooth: {
+    desc: 'useBluetooth: Bluetooth status (wx.openBluetoothAdapter / web feature detection)',
+    dataProps: {
+      supported: 'Whether the platform supports Bluetooth',
+      available: 'The adapter is open (available)',
+      devices: 'Names of paired/discovered devices (wx.getBluetoothDevices; on the web, listed only after a user gesture)',
+    },
+    errors: { 'bluetooth.unsupported': 'Bridge does not provide getBluetooth (useBluetooth unavailable)' },
+  },
+  nfc: {
+    desc: 'useNFC: NFC status (wx.getHCEState / web NDEFReader feature detection)',
+    dataProps: {
+      supported: 'Whether the platform supports NFC',
+      available: 'NFC is currently available (enabled)',
+    },
+    errors: { 'nfc.unsupported': 'Bridge does not provide getNfc (useNFC unavailable)' },
   },
 }

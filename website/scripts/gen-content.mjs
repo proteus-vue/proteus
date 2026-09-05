@@ -8,7 +8,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN } from './gen-content-en.mjs'
+import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN } from './gen-content-en.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const COMP_DIR = path.join(ROOT, 'src', 'components')
@@ -506,23 +506,19 @@ function genComponents(ir, ends) {
 }
 
 // —— ② 能力页 ——
-function genCapabilities(ir, ends) {
-  fs.mkdirSync(OUT_CAP, { recursive: true })
+// ★#481 数据准备抽共享（zh 路径行为不变——同一函数输出必须与重构前逐字节一致）：zh 与 EN pass 同源
+function capContext(ir) {
   const caps = ir.PRIMITIVE_CATALOG.filter((p) => p.kind === 'capability')
   const apiSrc = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability.ts'), 'utf8')
-  // ★兼容进度表 SSOT：wxBridge/webBridge 实际实现的方法集（Web 列 ⚠️ = webBridge 未提供 → Err 显式降级）
   const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
   const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
-  // ★#406 颗粒度批：接口属性表（参数/返回值展开）+ 桥实现体（错误码提取）SSOT 解析
   const ifaces = extractInterfaces(apiSrc)
   const bridgeBodies = { ...extractBridgeBodies(apiSrc, 'wxBridge'), ...extractBridgeBodies(apiSrc, 'webBridge') }
   const iface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityHooks'))
   const hookDocs = {}
-  // JSDoc 体 tempered 模式：禁止跨 */ 边界（否则从更早的 /** 起配，拼接出跨块垃圾文本——payment 页曾中招）
   const JSDOC = '\\*\\*((?:[^*]|\\*(?!/))*)\\*\\/'
   const re = new RegExp(`${JSDOC}\\s*\\n\\s*(use[A-Z]\\w*|set[A-Z]\\w*)\\(`, 'g')
   let m
-  // ★能力页开头说明：接口 JSDoc 多为空，三级兑底——接口 JSDoc → hook 体行注释 → 桥方法 JSDoc（CapabilityBridge 逐方法都有）
   const cleanDoc = (t) => t.split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
   while ((m = re.exec(iface))) hookDocs[m[2]] = cleanDoc(m[1])
   const hooksBody = apiSrc.slice(apiSrc.indexOf('export function createCapabilityHooks'))
@@ -543,7 +539,6 @@ function genCapabilities(ir, ends) {
     const bm = refs[0]
     if (bm && bridgeDocs[bm]) hookDocs[hook] = bridgeDocs[bm].replace(/^C\d+\s+/, '')
   }
-  // ★侧栏分组：能力页 frontmatter group/order（order = 类序 × 1000 + 类内 catalog 序）
   const catOf = {}
   for (const c of caps) {
     const slug = c.semantic.replace('capability.', '')
@@ -555,6 +550,12 @@ function genCapabilities(ir, ends) {
     perCat[catOf[c.semantic]] = (perCat[catOf[c.semantic]] ?? 0) + 1
     orderOfCap[c.semantic] = CAP_CAT_ORDER.indexOf(catOf[c.semantic]) * 1000 + perCat[catOf[c.semantic]]
   }
+  return { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap }
+}
+
+function genCapabilities(ir, ends) {
+  fs.mkdirSync(OUT_CAP, { recursive: true })
+  const { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap } = capContext(ir)
   // ★#407：旗舰 hook 的真实用法示例（SSOT = 签名；示例值按参数语义给典型值）
   const USAGE_EXAMPLES = {
     useFetch: [
@@ -931,10 +932,227 @@ async function genComponentsEn(ir, ends) {
   return ok
 }
 
+// —— ②-EN 能力 overlay（★#481 生成器双语输出——zh 数据准备与 genCapabilities 同源 capContext；文案查 CAP_EN/CAP_SHARED_EN） ——
+// 登记在 CAP_EN 的 slug 额外产出 website/en/capabilities/<slug>.md；未登记的走 #noEn 回退。
+async function genCapabilitiesEn(ir, ends) {
+  const OUT = path.join(ROOT, 'website', 'en', 'capabilities')
+  const { caps, wxKeys, webKeys, ifaces, iface, hookDocs, hooksBody, bridgeBodies, hookRefs, catOf, orderOfCap } = capContext(ir)
+  const esc = (s) => String(s).replace(/\|/g, '\\|')
+  const docEn = (page, key, fallback = '—') => (page && page.params && page.params[key]) || fallback
+  let ok = 0
+  const done = []
+  for (const c of caps) {
+    const slug = c.semantic.replace('capability.', '')
+    const page = CAP_EN[slug]
+    if (!page) continue
+    const hook = c.api.replace('()', '')
+    const sigM = iface.match(new RegExp(`${hook}(?:<[^>(]*>)?\\([^)]*\\):\\s*[^\\n]+`))
+    const lines = []
+    lines.push('---')
+    lines.push(`title: ${hook} (${c.semantic})`)
+    lines.push(`group: ${catOf[c.semantic]}`)
+    lines.push(`order: ${orderOfCap[c.semantic]}`)
+    lines.push('---')
+    lines.push('')
+    lines.push(`# ${hook}`)
+    lines.push('')
+    lines.push(page.desc || CAP_SHARED_EN.noDataGeneric)
+    lines.push('')
+    lines.push(CAP_SHARED_EN.callout(c.id, c.semantic, (c.props ?? [])[0] ?? 'Result<T>'))
+    lines.push('')
+    lines.push(CAP_SHARED_EN.hSignature)
+    lines.push('')
+    lines.push('```ts')
+    lines.push(sigM ? sigM[0] : `${c.api} → ${c.props?.[0] ?? 'Result<T>'}`)
+    lines.push('```')
+    lines.push('')
+    const sigLine = sigM ? sigM[0] : ''
+    const paramM = sigLine.match(/\(([^)]*)\)/)
+    const params = []
+    if (paramM && paramM[1].trim()) {
+      for (const raw of paramM[1].split(',')) {
+        const pm = raw.trim().match(/^(\w+)(\?)?:\s*(.+)$/)
+        if (pm) params.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim() })
+      }
+    }
+    if (params.length) {
+      lines.push(CAP_SHARED_EN.hParams)
+      lines.push('')
+      lines.push(CAP_SHARED_EN.paramCols)
+      lines.push('|---|---|---|---|')
+      for (const p of params) {
+        lines.push(`| \`${p.name}\` | \`${esc(p.type)}\` | ${p.optional ? 'No' : 'Yes'} | ${esc(docEn(page, p.name))} |`)
+      }
+      lines.push('')
+      for (const p of params) {
+        const ti = ifaces[p.type]
+        if (!ti || !ti.props.length) continue
+        lines.push(CAP_SHARED_EN.nestedPropsTitle(p.name))
+        lines.push('')
+        lines.push(CAP_SHARED_EN.propCols)
+        lines.push('|---|---|---|---|')
+        for (const pr of ti.props) {
+          lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc(docEn(page, `${p.name}.${pr.name}`))} |`)
+        }
+        lines.push('')
+      }
+    }
+    const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
+    const dataT = retT ? retT[1].trim() : ''
+    const voidRet = /CapResult<void>/.test(sigLine)
+    const directT = ['AuthState', 'CompatStorage'].find((t) => sigLine.includes(`: ${t}`))
+    lines.push(CAP_SHARED_EN.hReturns)
+    lines.push('')
+    if (directT) {
+      lines.push(CAP_SHARED_EN.directReturn(directT))
+      lines.push('')
+    } else {
+      lines.push(CAP_SHARED_EN.returnsIntro)
+      lines.push('')
+      lines.push(CAP_SHARED_EN.retCols)
+      lines.push('|---|---|---|')
+      lines.push(`| \`ok\` | \`boolean\` | ${esc(CAP_SHARED_EN.retOk)} |`)
+      if (dataT === 'T') lines.push(`| \`data\` | \`T\` | ${esc(CAP_SHARED_EN.retDataGeneric)} |`)
+      else if (voidRet) lines.push(`| \`data\` | \`void\` | ${esc(CAP_SHARED_EN.retDataVoid)} |`)
+      else lines.push(`| \`data\` | \`${esc(dataT)}\` | Success payload${ifaces[dataT]?.props.length ? ' (structure below)' : ''} |`)
+      lines.push(`| \`error\` | \`CapError\` | ${esc(CAP_SHARED_EN.retError)} |`)
+      lines.push('')
+    }
+    if (dataT && ifaces[dataT]?.props.length) {
+      lines.push(CAP_SHARED_EN.dataPropsTitle(dataT))
+      lines.push('')
+      lines.push(CAP_SHARED_EN.propCols)
+      lines.push('|---|---|---|---|')
+      for (const pr of ifaces[dataT].props) {
+        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc((page.dataProps && page.dataProps[pr.name]) || '—')} |`)
+      }
+      lines.push('')
+    } else if (directT && ifaces[directT]?.props.length) {
+      lines.push(CAP_SHARED_EN.directPropsTitle(directT))
+      lines.push('')
+      lines.push(CAP_SHARED_EN.retCols)
+      lines.push('|---|---|---|')
+      for (const pr of ifaces[directT].props) {
+        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue
+        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${esc((page.directProps && page.directProps[pr.name]) || '—')} |`)
+      }
+      lines.push('')
+    }
+    const hookStart = hooksBody.indexOf(`${hook}:`)
+    const hookEnd = (() => {
+      const hits = [...hooksBody.matchAll(/\b(use[A-Z]\w*|set[A-Z]\w*):/g)]
+      const hit = hits.find((h) => h.index === hookStart)
+      const idx0 = hits.indexOf(hit)
+      return idx0 >= 0 && idx0 + 1 < hits.length ? hits[idx0 + 1].index : hooksBody.length
+    })()
+    const refs = hookRefs[hook] ?? []
+    const errBodies = refs.map((r) => bridgeBodies[r]).filter(Boolean)
+    const errCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    if (errCodes.length) {
+      lines.push(CAP_SHARED_EN.hErrors)
+      lines.push('')
+      lines.push(CAP_SHARED_EN.errCols)
+      lines.push('|---|---|')
+      for (const e of errCodes) lines.push(`| \`${e.code}\` | ${esc((page.errors && page.errors[e.code]) || '—')} |`)
+      lines.push('')
+      lines.push(CAP_SHARED_EN.unsupportedNote)
+      lines.push('')
+    }
+    const wxMissing = refs.filter((r) => !wxKeys.has(r))
+    const webMissing = refs.filter((r) => !webKeys.has(r))
+    lines.push(CAP_SHARED_EN.hCompat)
+    lines.push('')
+    lines.push('| Target | Status | Notes |')
+    lines.push('|---|---|---|')
+    for (const end of ends) {
+      let status = STATUS_MARK[end.status] ?? '⬜'
+      let note
+      switch (end.id) {
+        case 'mp-weixin':
+          status = wxMissing.length ? '⚠️' : '✅'
+          note = CAP_SHARED_EN.endNote.mp(wxMissing, c.mpEquiv)
+          break
+        case 'web':
+          if (!refs.length) note = CAP_SHARED_EN.endNote.webNoRefs
+          else if (webMissing.length) {
+            status = '⚠️'
+            note = CAP_SHARED_EN.endNote.webMissing(webMissing)
+          } else note = CAP_SHARED_EN.endNote.webOk
+          break
+        case 'headless': note = CAP_SHARED_EN.endNote.headless; break
+        case 'flutter': note = CAP_SHARED_EN.endNote.flutter; break
+        case 'quick-app': note = CAP_SHARED_EN.endNote['quick-app']; break
+        default: note = CAP_SHARED_EN.endNote.prototype
+      }
+      const endEn = ENDS_EN[end.id]
+      lines.push(`| ${endEn?.name ?? end.name} | ${status} | ${endEn?.engine ?? end.engine} · ${note} |`)
+    }
+    lines.push('')
+    lines.push(CAP_SHARED_EN.capLegend)
+    lines.push('')
+    lines.push(CAP_SHARED_EN.ironRule)
+    lines.push('')
+    lines.push(CAP_SHARED_EN.hUsage)
+    lines.push('')
+    lines.push('```ts')
+    if (CAP_USAGE_EN[hook]) {
+      lines.push(...CAP_USAGE_EN[hook])
+    } else if (directT) {
+      const varName = hook.replace(/^use/, '').replace(/^set[A-Z]/, (m0) => m0.toLowerCase()) || 'handle'
+      const lv = varName.charAt(0).toLowerCase() + varName.slice(1)
+      lines.push(...CAP_USAGE_EN.direct(c.api, lv))
+    } else {
+      const required = params.filter((p) => !p.optional).map((p) => p.name)
+      const call = required.length ? c.api.replace('()', `(${required.join(', ')})`) : c.api
+      lines.push(...CAP_USAGE_EN.generic(call))
+    }
+    lines.push('```')
+    lines.push('')
+    lines.push('<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')
+    fs.mkdirSync(OUT, { recursive: true })
+    fs.writeFileSync(path.join(OUT, `${slug}.md`), lines.join('\n'))
+    done.push({ slug, semantic: c.semantic, api: c.api, mpEquiv: c.mpEquiv, id: c.id })
+    ok++
+  }
+  // 能力总览 EN overlay（只列 CAP_EN 已登记 slug——未翻译能力在 EN 态走 #noEn，总览不混排）
+  const vis = caps.filter((c) => CAP_EN[c.semantic.replace('capability.', '')])
+  const idx = []
+  idx.push('---')
+  idx.push(`title: ${CAP_OVERVIEW_EN.title}`)
+  idx.push(`group: ${CAP_OVERVIEW_EN.group}`)
+  idx.push(`order: ${CAP_OVERVIEW_EN.order}`)
+  idx.push('---')
+  idx.push('')
+  idx.push(`# ${CAP_OVERVIEW_EN.title}`)
+  idx.push('')
+  idx.push(CAP_OVERVIEW_EN.intro(vis.length))
+  idx.push('')
+  const byCat = {}
+  for (const c of vis) (byCat[catOf[c.semantic]] ??= []).push(c)
+  for (const cat of Object.keys(byCat).sort((a, b) => CAP_CAT_ORDER.indexOf(a) - CAP_CAT_ORDER.indexOf(b))) {
+    idx.push(`## ${CAP_CAT_EN[cat] ?? cat} (${byCat[cat].length})`)
+    idx.push('')
+    idx.push(CAP_OVERVIEW_EN.cols)
+    idx.push('|---|---|---|---|---|')
+    for (const c of byCat[cat]) {
+      const slug = c.semantic.replace('capability.', '')
+      const mpEn = /[\u4e00-\u9fff]/.test(c.mpEquiv) ? '—' : c.mpEquiv // 目录 mpEquiv 含中文时 EN 降级（zh 总览保留原文）
+      idx.push(`| ${c.id} | [${c.semantic}](/docs/capability/${slug}) | \`${c.api}\` | \`${(c.props ?? [])[0] ?? '—'}\` | ${mpEn} |`)
+    }
+    idx.push('')
+  }
+  if (done.length) {
+    fs.mkdirSync(OUT, { recursive: true })
+    fs.writeFileSync(path.join(OUT, '00-capabilities-overview.md'), idx.join('\n'))
+  }
+  return ok
+}
+
 // —— main ——
 const ir = await loadIr()
 const ends = await loadEnds()
 const nComp = genComponents(ir, ends)
 const nCap = genCapabilities(ir, ends)
 const nCompEn = await genComponentsEn(ir, ends)
-console.log(`generated: components ${nComp} · capabilities ${nCap} · en components ${nCompEn}`)
+const nCapEn = await genCapabilitiesEn(ir, ends)
+console.log(`generated: components ${nComp} · capabilities ${nCap} · en components ${nCompEn} · en capabilities ${nCapEn}`)
