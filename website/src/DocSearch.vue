@@ -7,7 +7,8 @@ import { useRouter } from 'vue-router'
 import { sections } from './docs-registry'
 import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
 // ★#444 桌面语义原语全收口：快捷键 = v-p-shortcut 指令（内部封装 window 监听）；焦点陷阱 = createFocusTrap——页面零裸 window.*
-import { createFocusTrap, shortcutLabel, detectShortcutPlatform } from '@proteus-vue/desktop'
+// ★#449 锚点跳转 = desktop scrollToId（元素查询/scrollIntoView 在框架包内）
+import { createFocusTrap, shortcutLabel, detectShortcutPlatform, scrollToId } from '@proteus-vue/desktop'
 
 interface Hit extends SearchIndexEntry {
   /** 所属页标题（面包屑 分区 · 页） */
@@ -102,7 +103,7 @@ function go(hit: Hit): void {
   toggle(false)
   q.value = ''
   void router.push(url).then(() => {
-    if (hit.anchor) setTimeout(() => document.getElementById(hit.anchor as string)?.scrollIntoView({ behavior: 'smooth' }), 60)  // d2-exempt: v-html 锚点定位（元素查询原语缺口）
+    if (hit.anchor) scrollToId(hit.anchor, { behavior: 'smooth', delayMs: 60 }) // desktop 锚点原语（等新页 v-html 渲染后再滚）
   })
 }
 

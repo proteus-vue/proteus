@@ -4,11 +4,14 @@
 //   指南清单归文档侧边栏（guides.ts）——长标题进导航是杂乱根源
 // ★D-2：布局标签 p-view/p-text；★W-6：v-p-fluid clamp，零 @media
 // ★#389c 滚动上下文：顶部渐变进度条（scaleX 合成器）+ 导航滚动态（scrolled 投影）
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 // ★#389b 全站固定语义粒子场（背景层）
 import ParticleField from './components/ParticleField.vue'
 import DocSearch from './DocSearch.vue'
+// ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer；spirit 跨窗消息 = subscribeWindowMessage
+//   ——window/document 监听与 origin 校验收口到框架包，页面零裸平台 API
+import { createScrollObserver, subscribeWindowMessage, type ScrollState } from '@proteus-vue/desktop'
 // ★#389i 海神精灵（Three.js 3D 果冻萌宠——spirit.html iframe 嵌入右下角；three 隔离在独立 chunk，主应用 bundle 零增量）
 // ★#389d 指针跟随光晕（G-24 B5 新桌面原语 v-p-cursor-glow——全局注册的指令）
 
@@ -21,41 +24,33 @@ const links = [
 
 // ★#389i 海神精灵：iframe 源（BASE_URL 绝对路径——web history 下相对路径会被 /docs/* 破坏）
 const spiritSrc = import.meta.env.BASE_URL + 'spirit.html'
-// 形态主题气泡：iframe postMessage → 父页弹出（3.4s 自动收起；同源校验）
+// 形态主题气泡：iframe postMessage → 父页弹出（3.4s 自动收起；同源校验 + type 过滤 = desktop 跨窗消息原语）
 const spiritBubble = ref<{ name: string; theme: string } | null>(null)
 let bubbleTimer: ReturnType<typeof setTimeout> | undefined
-function onSpiritMessage(e: MessageEvent): void {
-  if (e.origin !== window.location.origin) return  // d2-exempt: spirit iframe 消息来源校验——跨窗消息原语缺口（desktop 待补）
-  const d = e.data as { type?: string; name?: string; theme?: string } | null
-  if (d?.type !== 'proteus-spirit-morph' || !d.name || !d.theme) return
-  spiritBubble.value = { name: d.name, theme: d.theme }
-  clearTimeout(bubbleTimer)
-  bubbleTimer = setTimeout(() => (spiritBubble.value = null), 3400)
-}
+const spiritMsg = subscribeWindowMessage({
+  types: ['proteus-spirit-morph'],
+  onMessage: (msg) => {
+    const d = msg.data as { name?: string; theme?: string } | null
+    if (!d?.name || !d.theme) return
+    spiritBubble.value = { name: d.name, theme: d.theme }
+    clearTimeout(bubbleTimer)
+    bubbleTimer = setTimeout(() => (spiritBubble.value = null), 3400)
+  },
+})
 
-// ★#389c 滚动进度（0→1）+ scrolled 态（rAF 节流）
+// ★#389c 滚动进度（0→1）+ scrolled 态（desktop p-scroll-observer——监听注册 + rAF 节流 + 几何全在框架包内）
 const progress = ref(0)
 const scrolled = ref(false)
-let scrollRaf = 0
-function onScroll(): void {
-  if (scrollRaf) return
-  scrollRaf = requestAnimationFrame(() => {
-    scrollRaf = 0
-    const y = window.scrollY  // d2-exempt: 页面滚动进度观测——scroll-observer 原语缺口（#389c 自绘待收口）
-    scrolled.value = y > 12
-    const max = document.documentElement.scrollHeight - window.innerHeight  // d2-exempt: 同滚动进度（视口/文档几何——scroll-observer 原语缺口）
-    progress.value = max > 0 ? Math.min(1, y / max) : 0
-  })
-}
-onMounted(() => {
-  window.addEventListener('scroll', onScroll, { passive: true })  // d2-exempt: 同滚动进度监听注册
-  window.addEventListener('message', onSpiritMessage)  // d2-exempt: spirit iframe 跨窗消息——cross-window 原语缺口
-  onScroll()
+const scrollObs = createScrollObserver({
+  immediate: true,
+  onChange: (s: ScrollState) => {
+    scrolled.value = s.y > 12
+    progress.value = s.progress
+  },
 })
 onUnmounted(() => {
-  if (scrollRaf) cancelAnimationFrame(scrollRaf)
-  window.removeEventListener('scroll', onScroll)  // d2-exempt: 同滚动进度监听清理
-  window.removeEventListener('message', onSpiritMessage)  // d2-exempt: 同跨窗消息监听清理
+  scrollObs.destroy()
+  spiritMsg.destroy()
   clearTimeout(bubbleTimer)
 })
 

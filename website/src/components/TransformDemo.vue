@@ -18,8 +18,8 @@ import { highlight } from '@proteus-vue/docs'
 import { RENDER_BACKENDS, COMPILE_BACKENDS, DEVICES, renderWithBackend, deviceForm, type TreeJsonNode } from '../playground/backends'
 import { decodeSource, encodeSource, playgroundUrl } from '../playground/share'
 import RenderBox from './RenderBox.vue'
-// ★#445 剪贴板原语（desktop/p-clipboard——Clipboard API + 降级；env 省略回落真实全局，页面零裸 navigator）
-import { copyText } from '@proteus-vue/desktop'
+// ★#445/#449 桌面原语（豁免回收）：剪贴板 copyText + 页面 URL 读写（location/history 收口）——env 省略回落真实全局，页面零裸平台 API
+import { copyText, currentPageOrigin, currentPagePathname, replacePageUrl } from '@proteus-vue/desktop'
 // ★#389 框架内置能力消费：p-segment（分段控件替代手写 Tab 按钮）+ p-toast（复制反馈）+ p-animate（LIVE 脉冲）——G-32 语义组件
 const motionOk = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
 
@@ -108,8 +108,8 @@ watch(source, (src) => {
   clearTimeout(timer)
   timer = setTimeout(() => {
     run(src)
-    // 分享链接随编辑同步（replaceState 不产生历史记录——可复制即复现）
-    if (!props.compact) history.replaceState(null, '', playgroundUrl(location.origin, location.pathname, src))  // d2-exempt: 分享 URL 地址栏同步（history/location 原语缺口——p-deeplink 待扩包裹）
+    // 分享链接随编辑同步（desktop replacePageUrl = history.replaceState 收口——不产生历史记录，可复制即复现）
+    if (!props.compact) replacePageUrl(playgroundUrl(currentPageOrigin(), currentPagePathname(), src))
   }, 200)
 })
 
@@ -175,7 +175,7 @@ function syncEditorScroll(e: Event): void {
 }
 
 function copyShareLink(): void {
-  const url = playgroundUrl(location.origin, location.pathname, source.value)  // d2-exempt: 分享 URL 需当前地址（location 原语缺口）
+  const url = playgroundUrl(currentPageOrigin(), currentPagePathname(), source.value)
   void copyText(url) // desktop/p-clipboard 原语（Clipboard API + 降级）
   // ★#389 p-toast 反馈（框架内置轻提示）
   toastVisible.value = true

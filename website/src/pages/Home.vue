@@ -11,6 +11,8 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { STATS, COMPARE_MATRIX } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
+// ★#449 desktop p-scroll-observer：滚动观测收口（监听注册 + rAF 节流在框架包内）——Hero 滚动联动豁免回收
+import { createScrollObserver, type ScrollState } from '@proteus-vue/desktop'
 // ★#389b 粒子场已上移至 App 壳（全站固定背景层）；Hero 保留辉光 + 内容滚动联动
 
 const homeEl = ref<{ $el?: HTMLElement } | null>(null)
@@ -18,18 +20,14 @@ const homeEl = ref<{ $el?: HTMLElement } | null>(null)
 const motionOk = ref(true)
 let revealObserver: IntersectionObserver | null = null
 
-// ★#389c Hero 滚动联动：--sp（0→1）驱动粒子/辉光/内容视差淡出（合成器属性，rAF 节流）
+// ★#389c Hero 滚动联动：--sp（0→1）驱动粒子/辉光/内容视差淡出（合成器属性；desktop 原语按帧回调）
 const scrollP = ref(0)
-let scrollRaf = 0
-function onScroll(): void {
-  if (scrollRaf) return
-  scrollRaf = requestAnimationFrame(() => {
-    scrollRaf = 0
-    const root = (homeEl.value?.$el as HTMLElement | undefined) ?? (homeEl.value as unknown as HTMLElement | null)
-    if (!root) return
-    const heroH = root.querySelector('.hero')?.getBoundingClientRect().height || 1
-    scrollP.value = Math.max(0, Math.min(1, window.scrollY / heroH))  // d2-exempt: 首页 Hero 滚动进度（显现动画）——scroll-observer 原语缺口
-  })
+let scrollObs: ReturnType<typeof createScrollObserver> | null = null
+function onScrollState(s: ScrollState): void {
+  const root = (homeEl.value?.$el as HTMLElement | undefined) ?? (homeEl.value as unknown as HTMLElement | null)
+  if (!root) return
+  const heroH = root.querySelector('.hero')?.getBoundingClientRect().height || 1
+  scrollP.value = Math.max(0, Math.min(1, s.y / heroH))
 }
 
 // ★#389c 数字滚动计数（数据背书卡进入视口时 0→N 补间；reduced-motion 直接终值）
@@ -76,14 +74,14 @@ onMounted(() => {
     { threshold: 0.12 },
   )
   targets.forEach((el) => revealObserver?.observe(el))
-  // ★#389c 滚动联动（motion-ok 才绑——reduced-motion 恒 0）
-  if (motionOk.value) window.addEventListener('scroll', onScroll, { passive: true })  // d2-exempt: 同滚动监听注册
+  // ★#389c 滚动联动（motion-ok 才绑——reduced-motion 恒 0；desktop 原语 rAF 节流）
+  if (motionOk.value) scrollObs = createScrollObserver({ onChange: onScrollState })
 })
 onUnmounted(() => {
   revealObserver?.disconnect()
   revealObserver = null
-  if (scrollRaf) cancelAnimationFrame(scrollRaf)
-  window.removeEventListener('scroll', onScroll)  // d2-exempt: 同滚动监听清理
+  scrollObs?.destroy()
+  scrollObs = null
 })
 
 // ★#386 对标状态色接入 design-tokens 状态层（ok/warn/rec——llm-style-guide §2：✓ 用 ok / partial 用 warn / 规划用 dim）

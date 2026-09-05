@@ -27,6 +27,21 @@ export type { ClipboardResult, ClipboardEnv } from './clipboard'
 export { parseDeepLink, matchDeepLink } from './deeplink'
 export { createCursorGlow, prefersReducedMotion as prefersReducedMotionCursor, hasFinePointer, CURSOR_GLOW_DEFAULTS } from './cursor-glow'
 export type { CursorGlowOptions, CursorGlowHandle } from './cursor-glow'
+// ★#449 G-24 B5 网页原语四件套（官网豁免回收——scroll/cross-window/元素查询/URL 地址栏）：纯逻辑 + env 回落全局
+//   p-scroll-observer（滚动进度/滚动态 rAF 节流）/ 跨窗消息订阅（origin 校验 + type 过滤）/ 锚点定位 / 页面 URL 读写
+//   与 G-24 B4 network/lifecycle 同族：desktop 承担 Web 接线，页面零裸 window/document/navigator/location/history
+// ★#449 p-scroll-observer：页面滚动观测（window/document 几何收口——App 顶部进度条 / Home Hero 联动）
+export { createScrollObserver, readPageScroll } from './scroll'
+export type { ScrollState, ScrollObserverEnv, ScrollObserver } from './scroll'
+// ★#449 跨窗消息原语（spirit iframe postMessage——origin 校验 + type 过滤收口）
+export { subscribeWindowMessage } from './window-message'
+export type { WindowMessage, WindowMessageEnv, WindowMessageOptions, WindowMessageHandle } from './window-message'
+// ★#449 锚点定位原语（scrollToId——SPA 后 v-html 锚点跳转）
+export { scrollToId } from './anchor'
+export type { AnchorScrollEnv } from './anchor'
+// ★#449 页面 URL 读写原语（location/history 收口——分享链接地址栏伴侣）
+export { currentPageOrigin, currentPagePathname, replacePageUrl } from './page-url'
+export type { PageUrlEnv } from './page-url'
 export type { DeepLink, DeepLinkMatch } from './deeplink'
 // ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation + 06 B3）：导航结构四件套
 //   p-master-detail（UISplitViewController 三列）/ p-command（⌘K 面板数据层）/ p-tabs（桌面标签关闭迁移）/ p-breadcrumb（路由栈推导）
