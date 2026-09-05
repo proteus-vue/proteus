@@ -39,7 +39,7 @@
     "dev:website": "pnpm --filter website dev",
     "build:website": "pnpm --filter website build",
     "preview:website": "pnpm --filter website preview",
-    "audit:website": "node website/audit-d2.mjs website/src",
+    "audit:website": "tsx packages/cli/src/index.ts audit d2 website/src",
     "build:packages": "node scripts/build-packages.mjs",
     "check:deps": "node scripts/check-deps.mjs"
   },

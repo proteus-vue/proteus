@@ -31,7 +31,7 @@ const config: ProteusConfig = {
   customRoute: { registerPresets: false, builders: {} },
   setDataBridge: { batchWindow: 16, perComponent: false },
   style: { px2rpx: false, rpxRatio: 2 },
-  // ★#447 D-2 dogfooding 门禁（audit-d2.mjs 消费——官网=验证场：四规则全 error 零容忍；开发者工程可按需降级/关闭）
+  // ★#447/#448 D-2 dogfooding 门禁（`proteus audit d2` 消费——官网=验证场：四规则全 error 零容忍；开发者工程可按需降级/关闭）
   audit: {
     dir: 'src',
     rules: {

@@ -168,7 +168,7 @@ const config: ProteusConfig = {
 }
 ```
 
-> 豁免登记仍生效：Web 平台规则允许逐行 `// d2-exempt: <原因>` 与整文件标注（原生视觉资产页）——豁免原因随审计报告输出。当前消费者为官网 dogfooding 审计 `website/audit-d2.mjs`（`npm run audit:website`）；CLI 命令化归后续批次。
+> 豁免登记仍生效：Web 平台规则允许逐行 `// d2-exempt: <原因>` 与整文件标注（原生视觉资产页）——豁免原因随审计报告输出。运行方式：`proteus audit d2`（工程内省略目录参数 → 扫 `audit.dir ?? src`，规则来自本配置）；官网门禁 = `npm run audit:website`。
 
 ### 校验与工具
 

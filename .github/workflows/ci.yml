@@ -96,7 +96,10 @@ jobs:
         run: cd website && npm run check:reference && npm run check:css-compat
 
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
-        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/website-audit-d2.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
+        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
+
+      - name: D-2 页面门禁（★#448：audit d2——官网=验证场零容忍）
+        run: npx tsx packages/cli/src/index.ts audit d2 website/src
 
   e2e-web:
     name: Web E2E（Playwright，需 Chromium）

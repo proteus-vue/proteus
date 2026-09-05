@@ -145,6 +145,17 @@ proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-jso
 ### `proteus audit`
 
 ```bash
+proteus audit d2 [dir]
+```
+
+★D-2 dogfooding 门禁（05-dogfooding-conformance D-2 机器化）：页面不裸写平台 API（wx.*/window.* 等）/ 手写 @media / 引第三方 UI 库
+      规则级可配（proteus.config audit.rules：off/warn/error，缺省全 error fail-closed）
+      dir 缺省 = 读 audit.dir ?? src（需在工程内运行）；逐行 // d2-exempt 与整文件 d2-exempt-file 豁免登记
+      FAIL（error 级）→ exit 1（warn 不阻断）
+
+### `proteus audit`
+
+```bash
 proteus audit all [root]
 ```
 

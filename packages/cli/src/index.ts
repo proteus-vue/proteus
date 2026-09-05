@@ -7,7 +7,7 @@ import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 // ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
@@ -40,6 +40,7 @@ import { parseCiArgs, planCiInit } from './ci'
 import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
+import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 
 async function main(): Promise<void> {
@@ -163,7 +164,21 @@ async function main(): Promise<void> {
         if (!result.ok) process.exitCode = 1
         break
       }
-      if (rest[0] !== 'module') throw new Error('proteus audit 支持 module / devtools-budget / coverage / all（proteus audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
+      // ★#448：audit d2（D-2 dogfooding 门禁——05-dogfooding-conformance D-2 机器化；规则级可配 proteus.config audit.rules）
+      if (rest[0] === 'd2') {
+        const { dir } = parseD2AuditArgs(rest.slice(1))
+        try {
+          const { scanDir, configFile } = await resolveD2Target(dir)
+          const report = await runD2Audit(scanDir, { configFile })
+          console.log(formatD2Audit(report))
+          if (!report.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      if (rest[0] !== 'module') throw new Error('proteus audit 支持 d2 / module / devtools-budget / coverage / all（proteus audit d2 [dir] | audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
       const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
       const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
       console.log(text)

@@ -133,6 +133,21 @@ export interface ModuleAuditArgs {
   graphJsonPath: string
 }
 
+export interface D2AuditArgs {
+  /** 审计目录（★#448：缺省读工程 proteus.config 的 audit.dir ?? src——resolveD2Target 解析） */
+  dir?: string
+}
+
+export function parseD2AuditArgs(argv: string[]): D2AuditArgs {
+  const positional: string[] = []
+  for (const a of argv) {
+    if (a.startsWith('-')) throw new Error(`未知参数：${a}`)
+    positional.push(a)
+  }
+  if (positional.length > 1) throw new Error(`多余参数：${positional.slice(1).join(' ')}`)
+  return { dir: positional[0] ? path.resolve(positional[0]) : undefined }
+}
+
 export function parseModuleAuditArgs(argv: string[]): ModuleAuditArgs {
   const rootArg = argv.find((a) => !a.startsWith('-')) ?? '.'
   let distDir: string | undefined
@@ -411,6 +426,10 @@ export const HELP_GROUPS: HelpGroup[] = [
       {
         usage: 'proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-json]',
         desc: '★综合审计门禁（M8.6，全部硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist：分包体积/重复）\n      --dist         产物目录（分包体积阈值 + 去重检测）\n      --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）',
+      },
+      {
+        usage: 'proteus audit d2 [dir]',
+        desc: '★D-2 dogfooding 门禁（05-dogfooding-conformance D-2 机器化）：页面不裸写平台 API（wx.*/window.* 等）/ 手写 @media / 引第三方 UI 库\n      规则级可配（proteus.config audit.rules：off/warn/error，缺省全 error fail-closed）\n      dir 缺省 = 读 audit.dir ?? src（需在工程内运行）；逐行 // d2-exempt 与整文件 d2-exempt-file 豁免登记\n      FAIL（error 级）→ exit 1（warn 不阻断）',
       },
       {
         usage: 'proteus audit all [root]',

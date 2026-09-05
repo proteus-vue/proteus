@@ -17,7 +17,7 @@ export type ViteUserConfig = UserConfig
 /** ★G-29 编译器后端选择（compiler-backend-1-plan §5「切换方式」）：'node' 默认；'rust' → 构建内双编译语义等价校验 */
 export type CompilerBackend = 'node' | 'rust'
 
-// ============ ★#447 D-2 dogfooding 门禁规则（05-dogfooding-conformance D-2 机器化，website/audit-d2.mjs 消费） ============
+// ============ ★#447 D-2 dogfooding 门禁规则（05-dogfooding-conformance D-2 机器化，CLI `audit d2` 消费） ============
 
 /** D-2 门禁规则 id（缺省全部 error——关/降级在审计报告明示，PASS = 启用规则集零违规） */
 export const AUDIT_RULE_IDS = ['no-third-party-ui', 'no-media-query', 'no-platform-api', 'no-web-platform-api'] as const
@@ -113,6 +113,6 @@ export interface ProteusConfig {
    *   ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后删除 */
   frameworkComponentsDir?: string
   /** ★#447 D-2 dogfooding 门禁（05-dogfooding-conformance D-2）：页面不裸写平台 API / 手写 @media / 引第三方 UI
-   *   规则级可配（off/warn/error——缺省全部 error）；消费者：官网 dogfooding 审计 website/audit-d2.mjs */
+   *   规则级可配（off/warn/error——缺省全部 error）；消费者：CLI `proteus audit d2`（★#448 官网/开发者双场景单引擎） */
   audit?: AuditConfig
 }
