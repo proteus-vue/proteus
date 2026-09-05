@@ -244,6 +244,8 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
           <div class="frame-host">
             <div class="frame" :class="{ 'has-notch': target.notch, 'watch-round': target.key === 'watch' }" :style="frameStyle">
               <div v-if="target.notch" class="notch" style="width: 38%; height: 7px" />
+              <div v-if="target.key === 'watch'" class="watch-crown" />
+              <div v-if="target.key === 'watch'" class="watch-btn" />
               <div class="screen">
                 <div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
                 <div class="app-body">
@@ -433,10 +435,83 @@ pre .kw { color: #ff9b73; }
 .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #000; border-radius: 0 0 12px 12px; z-index: 5; }
 .screen { width: 100%; aspect-ratio: var(--ar, 9/16); background: #f6f8fc; overflow: hidden; display: flex; flex-direction: column; color: #1a2238; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); border: 2px solid #2a365e; border-radius: 14px; }
 .frame.has-notch .screen { border-top-left-radius: 22px; border-top-right-radius: 22px; }
-/* 手表：圆形表盘 */
-.watch-round .screen { border-radius: 50%; border: 3px solid #2a365e; }
+/* 手表：拟真圆盘（金属表圈 / 表冠 / 按钮 / 表带） */
+.watch-round { margin: 44px 24px 46px; }
+.watch-round .screen {
+  position: relative;
+  border-radius: 50%;
+  border: none;
+  box-shadow:
+    0 0 0 6px #2a303c,
+    0 0 0 8px #0b0d12,
+    0 0 0 10px #3a4150,
+    0 0 0 12px #171b24,
+    0 24px 48px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.05),
+    inset 0 0 16px rgba(0, 0, 0, 0.14);
+}
+.watch-round .screen::after {
+  content: '';
+  position: absolute;
+  left: 9%;
+  top: 5%;
+  width: 46%;
+  height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
+}
 .watch-round .statusbar { display: none; }
 .watch-round .app-body { padding: 2px; }
+/* 表带（frame 前后伪元素，z 在盘面之下） */
+.frame.watch-round::before,
+.frame.watch-round::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 42%;
+  height: 52px;
+  border-radius: 16px 16px 9px 9px;
+  background: linear-gradient(180deg, #343947, #1b1f29 55%, #10131b);
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.1), inset 0 -3px 6px rgba(0, 0, 0, 0.55);
+  z-index: 0;
+}
+.frame.watch-round::before { top: -46px; }
+.frame.watch-round::after { bottom: -46px; transform: translateX(-50%) rotate(180deg); }
+/* 表冠 + 侧键 */
+.watch-crown {
+  position: absolute;
+  right: -15px;
+  top: 33%;
+  width: 11px;
+  height: 28px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #565f72, #232833);
+  box-shadow: inset 1px 0 1px rgba(255, 255, 255, 0.25), 0 2px 5px rgba(0, 0, 0, 0.5);
+  z-index: 7;
+}
+.watch-crown::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 6px;
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: #1b1f29;
+}
+.watch-btn {
+  position: absolute;
+  right: -12px;
+  top: 62%;
+  width: 9px;
+  height: 15px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #4a5262, #262b36);
+  box-shadow: inset 1px 0 1px rgba(255, 255, 255, 0.18);
+  z-index: 7;
+}
 .statusbar { height: 22px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 9px; color: #556; border-bottom: 1px solid #eef0f6; flex-shrink: 0; }
 .app-body { flex: 1; overflow: hidden; position: relative; }
 .ui { height: 100%; padding: 9px; overflow: hidden; }
