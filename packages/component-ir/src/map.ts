@@ -4,7 +4,7 @@
 //   ★覆盖五端（G-31 B3 补全）：vue-dom（Web）/ native-ios（UIKit）/ native-android（Jetpack）/
 //     native-harmony（ArkUI）/ skyline（微信小程序原生渲染）/ flutter / headless
 //   控件名参考：fluid-layout-essence 02-system-capability-mapping + adaptive-container 03-five-end-mapping
-import type { BackendId } from '@proteus-vue/render-backend'
+import type { BackendId } from '@proteus-vue/contracts'
 
 /** 语义类型 → 各端 Backend 控件（布局原语 + UI 原语 + 能力入口——G-31 §3 组件清单）
  *  ★G-31 B5：vue-dom 列与 render-backend SEMANTIC_WEB_MAP 实际产出一致（div.proteus-* 语义类）——

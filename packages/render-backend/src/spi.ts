@@ -2,16 +2,9 @@
 // ★G-27 ProteusRenderBackend SPI（render-backend-1-plan 02-backend-spi.md —— 接口唯一事实源）
 //   后端实现者只需实现本接口即可接入任意渲染引擎；nodeOps 刻意对齐 Vue（createElement/insert/remove/patchProp/setText）
 //   —— Vue Custom Renderer 即零成本后端（B2）。纯类型 + 零依赖。
-export type BackendId =
-  | 'vue-dom'
-  | 'flutter'
-  | 'native-ios'
-  | 'native-android'
-  | 'native-harmony'
-  | 'skyline' // 微信小程序原生渲染引擎
-  | 'skia'
-  | 'canvas2d'
-  | 'headless'
+// ★#425：BackendId 下沉 contracts（破 component-ir ↔ render-backend 循环依赖）——本文件 re-export 保外部兼容
+import type { BackendId } from '@proteus-vue/contracts'
+export type { BackendId } from '@proteus-vue/contracts'
 
 /** 节点句柄（后端自己的节点表示——DOM 元素 / Flutter Element / 内存树节点……） */
 export type NodeHandle = unknown

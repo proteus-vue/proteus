@@ -350,10 +350,10 @@ importers:
   packages/compiler-backend-rust: {}
 
   packages/component-ir:
-    devDependencies:
-      '@proteus-vue/render-backend':
+    dependencies:
+      '@proteus-vue/contracts':
         specifier: 0.1.0
-        version: link:../render-backend
+        version: link:../contracts
 
   packages/contracts:
     devDependencies:
@@ -521,6 +521,9 @@ importers:
       '@proteus-vue/component-ir':
         specifier: 0.1.0
         version: link:../component-ir
+      '@proteus-vue/contracts':
+        specifier: 0.1.0
+        version: link:../contracts
       '@vue/runtime-core':
         specifier: ^3.4.0
         version: 3.5.42

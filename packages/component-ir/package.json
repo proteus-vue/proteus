@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
   },
-  "devDependencies": {
-    "@proteus-vue/render-backend": "0.1.0"
+  "dependencies": {
+    "@proteus-vue/contracts": "0.1.0"
   }
 }

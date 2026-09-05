@@ -4,10 +4,21 @@
 //   跨端结构同构（同一 C-IR → 各端 semantic 路径一致）用 extractSemanticTree 比对
 //   分层职责：快照产出在 render-backend（renderComponentSnapshot/createControlReader——句柄形状归属）；
 //             本文件只做「快照 vs 参考表」纯逻辑对照（零运行时依赖——render-backend 仅类型引用）
-import type { BackendId, RenderNodeSnapshot } from '@proteus-vue/render-backend'
+import type { BackendId } from '@proteus-vue/contracts'
 import { SEMANTIC_BACKEND_MAP } from './map'
 import { SEMANTIC_ENUM } from './schema'
 import { implementedPrimitives } from './primitives'
+
+/** ★#425 破 type-only 环：渲染快照的本地鸭子视图（只读 component-ir 所需字段——结构与 render-backend
+ *   RenderNodeSnapshot 对齐，结构兼容即可传参；component-ir 零 import render-backend，build 序单向可排） */
+export interface RenderNodeSnapshotView {
+  type: string
+  semantic: string
+  control: string
+  children: RenderNodeSnapshotView[]
+  props?: Record<string, unknown>
+  text?: string
+}
 
 /** 控件映射偏差：error=与参考表不符（门禁阻断）；unverified=参考表未声明该后端/语义，或 Layer 1 兼容层标签（不强制） */
 export interface ControlMismatch {
@@ -36,7 +47,7 @@ export interface SemanticTree {
 }
 
 /** 提取语义树（忽略控件/属性——只比结构形状） */
-export function extractSemanticTree(snap: RenderNodeSnapshot): SemanticTree {
+export function extractSemanticTree(snap: RenderNodeSnapshotView): SemanticTree {
   return { semantic: snap.semantic, children: snap.children.map(extractSemanticTree) }
 }
 
@@ -45,12 +56,12 @@ export function extractSemanticTree(snap: RenderNodeSnapshot): SemanticTree {
  * - Layer 0 语义节点（semantic ≠ type）：参考表命中 → 控件必须一致（error）；参考表缺该语义/后端列 → unverified（不臆造门禁）
  * - Layer 1 兼容层节点（无 semantic，semantic === type）：各后端自定义 compat 映射 → 不设门禁（unverified）
  */
-export function checkComponentSnapshot(backendId: string, snapshot: RenderNodeSnapshot): ComponentConformanceResult {
+export function checkComponentSnapshot(backendId: string, snapshot: RenderNodeSnapshotView): ComponentConformanceResult {
   const errors: ControlMismatch[] = []
   const unverified: ControlMismatch[] = []
   let nodes = 0
 
-  function visit(snap: RenderNodeSnapshot, path: string): void {
+  function visit(snap: RenderNodeSnapshotView, path: string): void {
     nodes++
     if (snap.semantic !== snap.type) {
       // —— Layer 0 语义节点：必须与参考表一致 ——

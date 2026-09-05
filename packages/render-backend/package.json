@@ -5,7 +5,8 @@
   "type": "module",
   "license": "Apache-2.0",
   "dependencies": {
-    "@proteus-vue/component-ir": "0.1.0"
+    "@proteus-vue/component-ir": "0.1.0",
+    "@proteus-vue/contracts": "0.1.0"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.4.0"
