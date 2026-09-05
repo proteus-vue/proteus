@@ -18,15 +18,55 @@ const fullIndex: SearchIndexEntry[] = sections.flatMap((s) =>
 )
 const q = ref('')
 const results = ref<SearchIndexEntry[]>([])
+const open = ref(false)
+const debounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 watch(
   q,
   (v) => {
-    results.value = v.trim().length >= 2 ? searchDocs(fullIndex, v, 10) : []
+    // ★#441 防抖 150ms（万级条目子串评分——键入不卡）
+    if (debounceTimer.value) clearTimeout(debounceTimer.value)
+    debounceTimer.value = setTimeout(() => {
+      const qq = v.trim()
+      results.value = qq.length >= 2 ? searchDocs(fullIndex, qq, 10) : []
+      open.value = qq.length >= 2
+    }, 150)
   },
   { immediate: true },
 )
+// 分区名（path 前缀 → 大分区）——结果 badge 标注所在分区
+function sectionNameOf(path: string): string {
+  const m = path.match(/^\/docs\/([a-z-]+)/)
+  const map: Record<string, string> = {
+    docs: '指南',
+    framework: '框架',
+    component: '组件',
+    capability: '能力',
+    system: '柔性系统',
+    plugin: '插件 API',
+    reference: '工具链',
+  }
+  return map[m?.[1] ?? 'docs'] ?? ''
+}
+// 命中词分片（v-for spans 渲染——不 v-html 防注入）
+function splitHit(text: string, qq: string): Array<{ t: string; hit: boolean }> {
+  const lq = qq.trim().toLowerCase()
+  if (!lq) return [{ t: text, hit: false }]
+  const out: Array<{ t: string; hit: boolean }> = []
+  const low = text.toLowerCase()
+  let i = 0
+  let pos = low.indexOf(lq)
+  while (pos >= 0 && i < text.length) {
+    if (pos > i) out.push({ t: text.slice(i, pos), hit: false })
+    out.push({ t: text.slice(pos, pos + qq.trim().length), hit: true })
+    i = pos + qq.trim().length
+    pos = low.indexOf(lq, i)
+  }
+  if (i < text.length) out.push({ t: text.slice(i), hit: false })
+  return out
+}
 function go(e: SearchIndexEntry): void {
   q.value = ''
+  open.value = false
   const url = e.anchor ? `${e.path}#${e.anchor}` : e.path
   void router.push(url).then(() => {
     if (e.anchor) {
@@ -34,6 +74,14 @@ function go(e: SearchIndexEntry): void {
       setTimeout(() => document.getElementById(e.anchor as string)?.scrollIntoView({ behavior: 'smooth' }), 60)
     }
   })
+}
+function onKeydown(ev: KeyboardEvent): void {
+  if (ev.key === 'Escape') {
+    q.value = ''
+    open.value = false
+  } else if (ev.key === 'Enter' && results.value.length) {
+    go(results.value[0])
+  }
 }
 // 区 key 从路由前缀推导：/docs/component/:slug → components
 const sectionKey = computed(() => {
@@ -101,16 +149,18 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
       <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
       <p-stack direction="row" :gap="28" wrap class="doc-area">
         <p-view class="doc-main">
-          <!-- ★#440 本地全文搜索（全站索引，零网络——引擎 searchDocs 子串评分） -->
+          <!-- ★#440/#441 本地全文搜索（全站索引零网络——引擎 searchDocs 评分；分区 badge + 命中高亮 + 键盘交互） -->
           <p-view class="doc-search">
-            <input v-model="q" class="search-input" type="search" placeholder="搜索全站文档…（输入 ≥2 字符）" />
-            <p-view v-if="q.trim().length >= 2 && results.length" class="search-results">
+            <input v-model="q" class="search-input" type="search" placeholder="搜索全站文档…（≥2 字符；Enter 跳首个，Esc 关闭）" @keydown="onKeydown" @blur="open = false" @focus="open = q.trim().length >= 2 && !!results.length" />
+            <p-view v-if="open && q.trim().length >= 2" class="search-results" @mousedown.prevent="">
+              <p-text v-if="results.length" class="search-meta">{{ results.length }} 条结果</p-text>
               <button v-for="r in results" :key="r.path + r.anchor" class="search-hit" @click="go(r)">
-                <p-text class="hit-heading">{{ r.heading }}</p-text>
-                <p-text class="hit-text">{{ r.text }}</p-text>
+                <span class="hit-badge">{{ sectionNameOf(r.path) }}</span>
+                <p-text class="hit-heading"><template v-for="(c, i) in splitHit(r.heading, q)" :key="i"><span :class="{ 'hl': c.hit }">{{ c.t }}</span></template></p-text>
+                <p-text class="hit-text" v-if="r.anchor === '' && r.text !== r.heading"><template v-for="(c, i) in splitHit(r.text, q)" :key="i"><span :class="{ 'hl': c.hit }">{{ c.t }}</span></template></p-text>
               </button>
+              <p-text v-if="!results.length" class="search-empty">无匹配结果</p-text>
             </p-view>
-            <p-text v-else-if="q.trim().length >= 2" class="search-empty">无匹配结果</p-text>
           </p-view>
           <!-- ★#415 端落地进度表（frontmatter.ends 声明的页面）：与组件/能力页兼容表同构 -->
           <p-view v-if="ends" class="ends-progress">
@@ -342,4 +392,22 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 .hit-heading { color: var(--ink); font-size: 13px; font-weight: 600; }
 .hit-text { color: var(--muted); font-size: 12px; }
 .search-empty { color: var(--dim); font-size: 13px; padding: 4px 2px; }
+/* ★#441 搜索体验：分区 badge / 命中高亮 / 结果计数 */
+.search-meta { color: var(--dim); font-size: 11px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+.hit-badge {
+  align-self: flex-start;
+  font-size: 10px;
+  color: var(--brand);
+  border: 1px solid var(--brand-soft);
+  background: var(--brand-soft);
+  border-radius: var(--radius-chip);
+  padding: 0 6px;
+}
+.hl {
+  color: var(--brand);
+  font-weight: 600;
+  background: var(--brand-soft);
+  border-radius: 2px;
+}
+.search-hit .hit-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
