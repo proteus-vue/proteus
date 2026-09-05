@@ -1,7 +1,7 @@
 ---
 title: 能力系统
 order: 18
-group: 能力与平台
+group: 渲染与能力
 ---
 
 # 能力系统
@@ -112,10 +112,10 @@ proteus capabilities:check
 - **渲染后端（G-27）**：`BackendCapabilities` 八字段诚实声明，**未声明 = 不支持**，框架按能力降级（L3→L2→L1→solid），不按 if/else 判平台。
 - **能力系统（本篇）**：adapter 必须实现 `isSupported()` 探测，缺失能力走显式降级链，不静默失败。
 
-模板侧还有一个能力入口：`p-scan-qr` / `p-pick-photo` / `p-location` 等 `capability.*` 语义组件会被编译器收集进 `CompilerIR.bindings.capabilities`（见[编译管线](/docs/20-compiler-pipeline)），供 G-28 能力调用链消费——声明式与命令式两条路共享同一张能力表。
+模板侧还有一个能力入口：`p-scan-qr` / `p-pick-photo` / `p-location` 等 `capability.*` 语义组件会被编译器收集进 `CompilerIR.bindings.capabilities`（见[编译管线](/docs/26-compiler-pipeline)），供 G-28 能力调用链消费——声明式与命令式两条路共享同一张能力表。
 
 ## 下一步
 
 - [平台 API](/docs/19-platform-api)：storage / router / ui / request 四域的统一运行时
-- [一致性验证](/docs/26-conformance)：能力声明如何锚定每层 conformance
-- [容器与宿主](/docs/24-containers-hosts)：能力宿主在 Platform 三元组中的位置
+- [一致性验证](/docs/29-conformance)：能力声明如何锚定每层 conformance
+- [容器与宿主](/docs/33-containers-hosts)：能力宿主在 Platform 三元组中的位置

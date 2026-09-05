@@ -1,7 +1,7 @@
 ---
 title: 语义组件总览
-order: 11
-group: 布局与组件
+order: 12
+group: 基础概念
 ---
 
 # 语义组件总览
@@ -30,7 +30,7 @@ Proteus 的组件不是「又一套跨端 UI 库」，而是**语义组件**：�
 
 | 组件 | 一句话定位 |
 |---|---|
-| `p-view` | 通用容器：默认 flex 纵向 + content-box（铁律见[布局组件](/docs/12-layout-components)） |
+| `p-view` | 通用容器：默认 flex 纵向 + content-box（铁律见[布局组件](/docs/13-layout-components)） |
 | `p-stack` | 弹性栈：方向 + 间距 + 空间不足自动换行 |
 | `p-grid` | 自适应网格：只声明 `min-col-width`，列数自动求解 |
 | `p-split` | 自适应分栏：窄容器堆叠、宽容器并排（容器查询求解） |
@@ -89,7 +89,7 @@ Proteus 的组件不是「又一套跨端 UI 库」，而是**语义组件**：�
 | `p-nav-bar` / `p-nav` | 导航栏 / 导航（左右插槽） |
 | `p-tabbar` | 底部标签栏 |
 | `p-drawer` | 抽屉 |
-| `p-segment` | 分段控制器（见[反馈与动效](/docs/13-feedback-components)） |
+| `p-segment` | 分段控制器（见[反馈与动效](/docs/14-feedback-components)） |
 | `p-popover` / `p-action-sheet` | 气泡 / 动作面板 |
 
 ### 反馈与动效
@@ -106,8 +106,8 @@ Proteus 的组件不是「又一套跨端 UI 库」，而是**语义组件**：�
 
 | 入口 | 定位 |
 |---|---|
-| `v-p-hover` / `v-p-shortcut` / `v-p-focus-trap` / `v-p-context-menu` / `v-p-permission` / `v-p-cursor-glow` | 桌面交互指令（见[桌面端原语](/docs/14-desktop-primitives)） |
-| `pg-glass` | 液态玻璃统一入口（见[液态玻璃](/docs/15-liquid-glass)） |
+| `v-p-hover` / `v-p-shortcut` / `v-p-focus-trap` / `v-p-context-menu` / `v-p-permission` / `v-p-cursor-glow` | 桌面交互指令（见[桌面端原语](/docs/30-desktop-primitives)） |
+| `pg-glass` | 液态玻璃统一入口（见[液态玻璃](/docs/31-liquid-glass)） |
 
 ## 如何使用
 
@@ -130,6 +130,6 @@ app.component('pg-glass', PgGlass)
 
 ## 下一步
 
-- [布局组件](/docs/12-layout-components)：p-view / p-stack / p-split / p-sidebar 逐个拆解 + 配方
-- [反馈与动效](/docs/13-feedback-components)：p-segment / p-toast / p-animate
-- [柔性布局](/docs/06-fluid-layout)：布局组件背后的响应式求解体系
+- [布局组件](/docs/13-layout-components)：p-view / p-stack / p-split / p-sidebar 逐个拆解 + 配方
+- [反馈与动效](/docs/14-feedback-components)：p-segment / p-toast / p-animate
+- [柔性布局](/docs/17-fluid-layout)：布局组件背后的响应式求解体系

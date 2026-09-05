@@ -1,7 +1,7 @@
 ---
 title: 桌面端原语
-order: 14
-group: 布局与组件
+order: 30
+group: 专题深入
 ---
 
 # 桌面端原语
@@ -121,6 +121,6 @@ const cursorGlowOptions = {
 
 ## 下一步
 
-- [液态玻璃](/docs/15-liquid-glass)：玻璃质感与桌面光晕是官网氛围层组合
-- [柔性布局](/docs/06-fluid-layout)：布局维度的自适应（本篇是输入维度）
-- [容器与宿主](/docs/24-containers-hosts)：桌面多窗口容器形态
+- [液态玻璃](/docs/31-liquid-glass)：玻璃质感与桌面光晕是官网氛围层组合
+- [柔性布局](/docs/17-fluid-layout)：布局维度的自适应（本篇是输入维度）
+- [容器与宿主](/docs/33-containers-hosts)：桌面多窗口容器形态

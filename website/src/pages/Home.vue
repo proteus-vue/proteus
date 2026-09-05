@@ -173,7 +173,7 @@ const capabilities = [
         Web、小程序、Flutter、原生 UIKit / Jetpack / ArkUI，都是 SPI 的一种实现。
       </p-text>
       <p-stack direction="row" :gap="14" class="hero-cta">
-        <router-link to="/docs/02-quick-start" class="cta-primary">
+        <router-link to="/docs/04-requirements" class="cta-primary">
           <p-text class="cta-text">⚡ 快速开始</p-text>
         </router-link>
         <router-link to="/playground" class="cta-ghost">
@@ -280,7 +280,7 @@ const capabilities = [
       </p-heading>
       <p-text class="quote-sub">这就是 <strong class="grad">dogfooding</strong>。</p-text>
       <p-stack direction="row" :gap="18" class="quote-links">
-        <router-link to="/docs/03-semantic-model" class="method-link">统一语义收敛 →</router-link>
+        <router-link to="/docs/11-semantic-model" class="method-link">统一语义收敛 →</router-link>
         <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">SPI-First 五步法 →</a>
       </p-stack>
     </p-view>

@@ -1,7 +1,7 @@
 ---
 title: 原生能力
-order: 5
-group: 渲染引擎
+order: 20
+group: 渲染与能力
 ---
 
 # 原生能力
@@ -94,10 +94,10 @@ const snap = renderComponentSnapshot(backend, ir, createControlReader(backend.id
 const result = checkComponentSnapshot(backend.id, snap) // 控件 readback == 参考表？
 ```
 
-CI 门禁覆盖 6 后端 × L1 fixtures（`tests/component-conformance.test.ts`）——错映射直接红，`unverified` 诚实标注参考表未覆盖的组合而非放行。验证体系全貌见[一致性验证](/docs/26-conformance)。
+CI 门禁覆盖 6 后端 × L1 fixtures（`tests/component-conformance.test.ts`）——错映射直接红，`unverified` 诚实标注参考表未覆盖的组合而非放行。验证体系全貌见[一致性验证](/docs/29-conformance)。
 
 ## 下一步
 
-- [渲染后端](/docs/04-render-backend)：SPI 契约与六后端全景
-- [Flutter 后端](/docs/16-flutter-backend)：同一套语义的另一张映射表
-- [一致性验证](/docs/26-conformance)：语义控件映射的门禁
+- [渲染后端](/docs/23-render-backend)：SPI 契约与六后端全景
+- [Flutter 后端](/docs/24-flutter-backend)：同一套语义的另一张映射表
+- [一致性验证](/docs/29-conformance)：语义控件映射的门禁

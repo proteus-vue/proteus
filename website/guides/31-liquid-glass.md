@@ -1,7 +1,7 @@
 ---
 title: 液态玻璃：pg-glass
-order: 15
-group: 布局与组件
+order: 31
+group: 专题深入
 ---
 
 # 液态玻璃：pg-glass
@@ -89,6 +89,6 @@ group: 布局与组件
 
 ## 下一步
 
-- [桌面端原语](/docs/14-desktop-primitives)：光晕 + 玻璃 = 桌面氛围层
-- [布局组件](/docs/12-layout-components)：玻璃卡放进 p-grid / p-sidebar 的组合方式
-- [语义组件总览](/docs/11-components-overview)：组件全景与分类表
+- [桌面端原语](/docs/30-desktop-primitives)：光晕 + 玻璃 = 桌面氛围层
+- [布局组件](/docs/13-layout-components)：玻璃卡放进 p-grid / p-sidebar 的组合方式
+- [语义组件总览](/docs/12-components-intro)：组件全景与分类表

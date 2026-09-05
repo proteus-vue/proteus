@@ -1,7 +1,7 @@
 ---
 title: 一致性验证
-order: 26
-group: 工程化
+order: 29
+group: 架构与工程
 ---
 
 # 一致性验证
@@ -64,7 +64,7 @@ npm run test:e2e:web              # 浏览器 E2E
 proteus conformance --repo        # 仓库级一致性报告（CLI）
 ```
 
-AI 场景下同一套门禁通过 MCP 暴露：`validate_ir` → `run_conformance`（见 [AI 原生开发](/docs/08-ai-agent)）。
+AI 场景下同一套门禁通过 MCP 暴露：`validate_ir` → `run_conformance`（见 [AI 原生开发](/docs/32-ai-agent)）。
 
 ## 原则 #0
 
@@ -73,6 +73,6 @@ AI 场景下同一套门禁通过 MCP 暴露：`validate_ir` → `run_conformanc
 
 ## 下一步
 
-- [Headless 后端与语义快照](/docs/17-headless-backend) —— 无设备环境跑一致性
-- [测试与部署](/docs/10-testing-deploy) —— 工程内测试分层
-- [容器与宿主](/docs/24-containers-hosts) —— 被验证的六容器画像
+- [Headless 后端与语义快照](/docs/25-headless-backend) —— 无设备环境跑一致性
+- [测试与部署](/docs/27-testing-deploy) —— 工程内测试分层
+- [容器与宿主](/docs/33-containers-hosts) —— 被验证的六容器画像

@@ -1,7 +1,7 @@
 ---
 title: CLI 与工程命令
-order: 25
-group: 工程化
+order: 28
+group: 架构与工程
 ---
 
 # CLI 与工程命令
@@ -18,7 +18,7 @@ group: 工程化
 | `proteus dev` | 启动开发服务（复用项目 Vite） | `--target web\|skyline`（缺省 web） |
 | `proteus build <dir>` | 独立编译：目录内 `.vue` → 小程序三件套（wxml / js / wxss） | `--out` `--debug`（决策 trace 落盘 `.transform-debug/`）`--rules <json>` `--no-px2rpx` `--rpx-ratio <n>` `--compiler node\|rust` |
 | `proteus build --target` | 工程构建：spawn 项目 `build:web` / `build:mp` 脚本 | `--target web\|skyline\|all` |
-| `proteus test` | 测试编排（详见[测试与部署](/docs/10-testing-deploy)） | `unit`（缺省）`e2e:web` `e2e:mp [root]`；`--ide` `--port` `--debugger <模块>` |
+| `proteus test` | 测试编排（详见[测试与部署](/docs/27-testing-deploy)） | `unit`（缺省）`e2e:web` `e2e:mp [root]`；`--ide` `--port` `--debugger <模块>` |
 
 `--compiler rust` 开启后，每页先跑 **Node/Rust 双编译语义等价校验**（G-29.1），不一致即构建红——这是编译器可插拔的安全网。
 
@@ -86,6 +86,6 @@ npx proteus check && npx proteus test e2e:web
 
 ## 下一步
 
-- [快速开始](/docs/02-quick-start)：两分钟跑通 Web + 小程序双端
-- [测试与部署](/docs/10-testing-deploy)：测试矩阵与 CI 门禁
-- [编译管线](/docs/20-compiler-pipeline)：build / explain 背后的编译器
+- [快速开始](/docs/05-create-project)：两分钟跑通 Web + 小程序双端
+- [测试与部署](/docs/27-testing-deploy)：测试矩阵与 CI 门禁
+- [编译管线](/docs/26-compiler-pipeline)：build / explain 背后的编译器

@@ -1,7 +1,7 @@
 ---
 title: AI 原生开发
-order: 8
-group: 工程化
+order: 32
+group: 专题深入
 ---
 
 # AI 原生开发
@@ -67,6 +67,6 @@ Proteus 的语义模型不只是给人用的——**语义 IR 是 AI 与框架�
 
 ## 下一步
 
-- [一致性验证](/docs/26-conformance) —— AI 产物的机器验收体系
-- [语义模型](/docs/03-semantic-model) —— AI 消费的 IR 从哪来
-- [CLI 与工程命令](/docs/25-cli) —— 本地跑 MCP / 门禁的命令
+- [一致性验证](/docs/29-conformance) —— AI 产物的机器验收体系
+- [语义模型](/docs/11-semantic-model) —— AI 消费的 IR 从哪来
+- [CLI 与工程命令](/docs/28-cli) —— 本地跑 MCP / 门禁的命令

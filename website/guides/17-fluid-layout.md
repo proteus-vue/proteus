@@ -1,7 +1,7 @@
 ---
 title: 柔性布局
-order: 6
-group: 布局与组件
+order: 17
+group: 渲染与能力
 ---
 
 # 柔性布局（G-22：比 rpx 高一个代际）

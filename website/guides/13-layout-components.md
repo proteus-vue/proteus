@@ -1,7 +1,7 @@
 ---
 title: 布局组件：p-view / p-stack / p-split / p-sidebar
-order: 12
-group: 布局与组件
+order: 13
+group: 基础概念
 ---
 
 # 布局组件：p-view / p-stack / p-split / p-sidebar
@@ -155,6 +155,6 @@ group: 布局与组件
 
 ## 下一步
 
-- [柔性布局](/docs/06-fluid-layout)：v-p-fluid clamp 表达式与断点体系
-- [反馈与动效](/docs/13-feedback-components)：p-segment / p-toast / p-animate
-- [液态玻璃](/docs/15-liquid-glass)：pg-glass 与布局组件的组合
+- [柔性布局](/docs/17-fluid-layout)：v-p-fluid clamp 表达式与断点体系
+- [反馈与动效](/docs/14-feedback-components)：p-segment / p-toast / p-animate
+- [液态玻璃](/docs/31-liquid-glass)：pg-glass 与布局组件的组合

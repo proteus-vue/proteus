@@ -1,7 +1,7 @@
 ---
 title: 平台 API
 order: 19
-group: 能力与平台
+group: 渲染与能力
 ---
 
 # 平台 API
@@ -101,5 +101,5 @@ const res = await api.request<{ echoed: string }>({ url: '/ping', method: 'GET' 
 ## 下一步
 
 - [能力系统](/docs/18-capability-system)：平台独占能力的声明、探测与降级
-- [状态管理](/docs/22-state-management)：Pinia 与 Storage 适配的协作
-- [一致性验证](/docs/26-conformance)：平台契约的机器验证
+- [状态管理](/docs/15-state-management)：Pinia 与 Storage 适配的协作
+- [一致性验证](/docs/29-conformance)：平台契约的机器验证

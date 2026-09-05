@@ -1,7 +1,7 @@
 ---
 title: Flutter 后端
-order: 16
-group: 渲染引擎
+order: 24
+group: 架构与工程
 ---
 
 # Flutter 后端
@@ -96,10 +96,10 @@ const snap = renderComponentSnapshot(backend, ir, createControlReader('flutter')
 checkComponentSnapshot('flutter', snap) // 错映射直接红
 ```
 
-仓库门禁（`tests/component-conformance.test.ts`）覆盖 6 后端 × L1 fixtures——flutter 与 native、vue-dom、headless 同在被验之列。详见[一致性验证](/docs/26-conformance)。
+仓库门禁（`tests/component-conformance.test.ts`）覆盖 6 后端 × L1 fixtures——flutter 与 native、vue-dom、headless 同在被验之列。详见[一致性验证](/docs/29-conformance)。
 
 ## 下一步
 
-- [渲染后端](/docs/04-render-backend)：SPI 契约与切换全景
-- [Headless 后端与语义快照](/docs/17-headless-backend)：先在内存树里验证同一份 IR
-- [一致性验证](/docs/26-conformance)：flutter 列的快照门禁
+- [渲染后端](/docs/23-render-backend)：SPI 契约与切换全景
+- [Headless 后端与语义快照](/docs/25-headless-backend)：先在内存树里验证同一份 IR
+- [一致性验证](/docs/29-conformance)：flutter 列的快照门禁

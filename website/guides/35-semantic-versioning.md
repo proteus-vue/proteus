@@ -1,7 +1,7 @@
 ---
 title: 语义版本与兼容性
-order: 27
-group: 参考
+order: 35
+group: 专题深入
 ---
 
 # 语义版本与兼容性
@@ -21,7 +21,7 @@ Proteus 对兼容性的立场：**承诺不靠口头，靠机制锚定**。框�
 | CCI-05 | 不可用后端必须显式抛错（禁止静默吞错） | error |
 | CCI-06 | 组合 conformance 必须 100% PASS，0 warning | error |
 
-同样的锚定遍布各层：跨后端同语义必须产出结构一致 state（CMP074）、跨后端结果不一致即语义分歧必须修复（CMP077）、任一 Backend conformance FAIL 即阻断合并（G-44.2）。因此**升级框架版本或替换后端时，「是否兼容」不是读文档猜出来的，而是跑出来的**：同一份 Test IR 在新版本上复跑（同一份断言须在 ≥2 个后端可执行，G-44.4），PASS 即证明行为契约未变。详见 [一致性验证](/docs/26-conformance)。
+同样的锚定遍布各层：跨后端同语义必须产出结构一致 state（CMP074）、跨后端结果不一致即语义分歧必须修复（CMP077）、任一 Backend conformance FAIL 即阻断合并（G-44.2）。因此**升级框架版本或替换后端时，「是否兼容」不是读文档猜出来的，而是跑出来的**：同一份 Test IR 在新版本上复跑（同一份断言须在 ≥2 个后端可执行，G-44.4），PASS 即证明行为契约未变。详见 [一致性验证](/docs/29-conformance)。
 
 ## 已落地的版本化机制
 
@@ -90,5 +90,5 @@ npm run changeset:publish    # 按依赖拓扑自动发布全部包
 
 ## 相关页面
 
-- [一致性验证](/docs/26-conformance)：兼容性契约如何被机器强制
-- [可插拔架构](/docs/09-architecture)：版本演进背后的 SPI 分层
+- [一致性验证](/docs/29-conformance)：兼容性契约如何被机器强制
+- [可插拔架构](/docs/22-architecture)：版本演进背后的 SPI 分层

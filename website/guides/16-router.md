@@ -1,7 +1,7 @@
 ---
 title: 路由
-order: 21
-group: 工程化
+order: 16
+group: 基础概念
 ---
 
 # 路由
@@ -109,6 +109,6 @@ if (isDeepLinkAllowed(parseDeepLinkUrl('deeplink://app/user/7'), config)) {
 
 ## 下一步
 
-- [容器与宿主](/docs/24-containers-hosts)：页面栈与容器形态的关系
-- [测试与部署](/docs/10-testing-deploy)：路由表与双端产物的验证
-- [编译管线](/docs/20-compiler-pipeline)：`<route>` 块在编译期如何被消费
+- [容器与宿主](/docs/33-containers-hosts)：页面栈与容器形态的关系
+- [测试与部署](/docs/27-testing-deploy)：路由表与双端产物的验证
+- [编译管线](/docs/26-compiler-pipeline)：`<route>` 块在编译期如何被消费

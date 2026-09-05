@@ -1,7 +1,7 @@
 ---
 title: 编译管线
-order: 20
-group: 工程化
+order: 26
+group: 架构与工程
 ---
 
 # 编译管线
@@ -86,10 +86,10 @@ G-38 则是「写编译后端的插头标准」：`parse(source) → ProgramIR`�
 
 ## conformance：写后端的验收门
 
-任何 CompilerBackend 接入前必须跑 `runCompilerConformance(backend)`：CMP004 版本协商、CMP002 IR 契约合规（render 树 shape + semantic 计数交叉核对）、G-31.1 语义链接（`p-*` 元素必须映射到 `TAG_SEMANTIC_MAP` 语义）、bindings shape、parse/generate 可用性。G-38 套件共 42 项（C-01~C-10），**按能力声明门控：`capabilities.x = false` 的项 SKIP 而非 FAIL**——诚实声明让「未实现」与「实现坏了」机器可分。详见[一致性验证](/docs/26-conformance)。
+任何 CompilerBackend 接入前必须跑 `runCompilerConformance(backend)`：CMP004 版本协商、CMP002 IR 契约合规（render 树 shape + semantic 计数交叉核对）、G-31.1 语义链接（`p-*` 元素必须映射到 `TAG_SEMANTIC_MAP` 语义）、bindings shape、parse/generate 可用性。G-38 套件共 42 项（C-01~C-10），**按能力声明门控：`capabilities.x = false` 的项 SKIP 而非 FAIL**——诚实声明让「未实现」与「实现坏了」机器可分。详见[一致性验证](/docs/29-conformance)。
 
 ## 下一步
 
-- [语义模型](/docs/03-semantic-model)：IR 与语义链接的上游
-- [路由](/docs/21-router)：`<route>` 块如何被编译成双端路由表
-- [一致性验证](/docs/26-conformance)：编译层 conformance 的完整清单
+- [语义模型](/docs/11-semantic-model)：IR 与语义链接的上游
+- [路由](/docs/16-router)：`<route>` 块如何被编译成双端路由表
+- [一致性验证](/docs/29-conformance)：编译层 conformance 的完整清单

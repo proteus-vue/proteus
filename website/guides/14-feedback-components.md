@@ -1,7 +1,7 @@
 ---
 title: 反馈与动效：p-segment / p-toast / p-animate
-order: 13
-group: 布局与组件
+order: 14
+group: 基础概念
 ---
 
 # 反馈与动效：p-segment / p-toast / p-animate
@@ -115,6 +115,6 @@ const motionOk = !(typeof matchMedia === 'function'
 
 ## 下一步
 
-- [桌面端原语](/docs/14-desktop-primitives)：v-p-cursor-glow 与桌面交互指令
-- [液态玻璃](/docs/15-liquid-glass)：pg-glass 质感与玻璃语义单入口
-- [语义组件总览](/docs/11-components-overview)：回到组件全景图
+- [桌面端原语](/docs/30-desktop-primitives)：v-p-cursor-glow 与桌面交互指令
+- [液态玻璃](/docs/31-liquid-glass)：pg-glass 质感与玻璃语义单入口
+- [语义组件总览](/docs/12-components-intro)：回到组件全景图
