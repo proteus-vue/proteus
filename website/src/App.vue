@@ -22,7 +22,14 @@ const isDocs = computed(() => route.path.startsWith('/docs'))
 const links = [
   { to: '/', label: '首页', key: 'home' },
   { to: '/playground', label: 'Playground', key: 'playground' },
+  { to: '/multi-device', label: '多端同屏', key: 'multidev' },
 ]
+/** 导航文案（双语 key） */
+function navText(l: { key: string; label: string }): string {
+  if (l.key === 'home') return t('app.home')
+  if (l.key === 'multidev') return t('app.multidev')
+  return l.label
+}
 
 // ★#389i 海神精灵：iframe 源（BASE_URL 绝对路径——web history 下相对路径会被 /docs/* 破坏）
 const spiritSrc = import.meta.env.BASE_URL + 'spirit.html'
@@ -125,7 +132,7 @@ const cursorGlowOptions = {
               class="nav-link"
               :class="{ active: route.name === l.key }"
             >
-              <p-text class="nav-text">{{ l.key === 'home' ? t('app.home') : l.label }}</p-text>
+              <p-text class="nav-text">{{ navText(l) }}</p-text>
             </router-link>
             <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
               <p-text class="nav-text">{{ t('app.docs') }}</p-text>

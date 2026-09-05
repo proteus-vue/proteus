@@ -46,9 +46,16 @@ const zh = {
   // —— App 壳（★#475）——
   'app.home': '首页',
   'app.docs': '文档',
+  'app.multidev': '多端同屏',
   'app.footer': '官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）',
   // —— 海神精灵（★#488）——
   'spirit.title': 'Proteus 海神精灵（点击变身）',
+  // —— Multi-device 同屏墙（★#489）——
+  'mdev.subtitle': '同一份源码 · 六端同屏',
+  'mdev.sub': '一份标准 Vue SFC → 真实 CompilerIR → 同时喂给六个渲染后端（VueDom / Headless / Native×3 / Flutter）。每个设备帧都在跑真实输出树——零伪造：把 design 期原型 flexible-multi-device.html 的价值收进来，用 Proteus 自己重写。',
+  'mdev.scenario': '场景预设',
+  'mdev.edit': '编辑源码（改完实时重渲六端）',
+  'mdev.empty': '（无输出）',
   // —— Mini Playground（TransformDemo，★#477）——
   'pd.tip': '左侧改代码 · 右侧实时看真实编译产物与 IR',
   'pd.file': 'playground.vue（标准 Vue SFC，无平台 DSL）',
@@ -107,9 +114,16 @@ const en = {
   // —— App shell（★#475）——
   'app.home': 'Home',
   'app.docs': 'Docs',
+  'app.multidev': 'Multi-device',
   'app.footer': 'This site is built with Proteus itself (dogfooding): p-* semantic components + the @proteus-vue/docs engine + G-22 fluid layout (zero @media)',
   // —— Spirit pet（★#488）——
   'spirit.title': 'Proteus spirit pet (click to morph)',
+  // —— Multi-device wall（★#489）——
+  'mdev.subtitle': 'One source · six targets on one wall',
+  'mdev.sub': 'One standard Vue SFC → real CompilerIR → fed to all six render backends (VueDom / Headless / Native×3 / Flutter) at once. Every device frame runs a real output tree — zero fake pixels: the design-stage flexible-multi-device.html prototype, rewritten with Proteus itself.',
+  'mdev.scenario': 'Scenarios',
+  'mdev.edit': 'Edit the source (the six targets re-render live)',
+  'mdev.empty': '(no output)',
   // —— Mini Playground（TransformDemo，★#477）——
   'pd.tip': 'Edit code on the left · watch real compile output & IR live on the right',
   'pd.file': 'playground.vue (standard Vue SFC, no platform DSL)',
