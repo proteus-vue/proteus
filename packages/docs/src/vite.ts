@@ -5,6 +5,7 @@
 //   ?raw 后缀走 vite 原生 raw（不拦截）
 import type { Plugin } from 'vite'
 import { parseMarkdown } from './index'
+import { buildSearchIndex } from './search'
 import { renderDocHtml } from './render'
 import { buildToc, flatToc } from './toc'
 
@@ -23,6 +24,8 @@ export interface DocsModule {
   toc: Array<{ depth: number; text: string; id: string; children: unknown[] }>
   tocFlat: Array<{ depth: number; text: string; id: string }>
   searchEntries: Array<{ anchor: string; text: string }>
+  /** ★#440 全文搜索索引条目（段落级——客户端 searchDocs 消费；行内 code 与链接文本纳入） */
+  searchIndex: Array<{ anchor: string; heading: string; text: string }>
   /** ★#415 端指令展开：ends 指令注入的端表（frontmatter.ends 存在时） */
   ends?: Array<{ id: string; name: string; status: string; note: string }>
 }
@@ -35,6 +38,8 @@ export function mdToModule(mdSource: string, id: string, options: DocsVitePlugin
   const tocFlat = flatToc(doc.blocks, { minDepth: options.tocMinDepth ?? 2, maxDepth: options.tocMaxDepth ?? 3 })
   const title = typeof doc.frontmatter.title === 'string' ? doc.frontmatter.title : tocFlat[0]?.text ?? ''
   const searchEntries = tocFlat.map((t) => ({ anchor: t.id, text: t.text }))
+  // ★#440 全文搜索：段落级索引（heading 锚点 + 归属标题 + 正文 cap 90——体积权衡，客户端 searchDocs 子串评分）
+  const searchIndex = buildSearchIndex([{ path: id, doc }], { textCap: 90 }).map((e) => ({ anchor: e.anchor, heading: e.heading, text: e.text }))
   // ★#415 端指令展开：frontmatter.ends = 机制名 → 逐端说明（端/状态取 ends.ts SSOT，说明按机制注入）——
   //   手写页的端表与组件/能力页兼容表同构，且状态零漂移（SSOT 单源）
   const endsSpec = typeof doc.frontmatter.ends === 'string' ? doc.frontmatter.ends : ''
@@ -48,9 +53,10 @@ export function mdToModule(mdSource: string, id: string, options: DocsVitePlugin
     `const toc = ${JSON.stringify(toc)}`,
     `const tocFlat = ${JSON.stringify(tocFlat)}`,
     `const searchEntries = ${JSON.stringify(searchEntries)}`,
+    `const searchIndex = ${JSON.stringify(searchIndex)}`,
     `const ends = ${JSON.stringify(ends)}`,
-    `export { frontmatter, title, html, toc, tocFlat, searchEntries, ends }`,
-    `export default { frontmatter, title, html, toc, tocFlat, searchEntries, ends }`,
+    `export { frontmatter, title, html, toc, tocFlat, searchEntries, searchIndex, ends }`,
+    `export default { frontmatter, title, html, toc, tocFlat, searchEntries, searchIndex, ends }`,
     ``,
   ].join('\n')
 }

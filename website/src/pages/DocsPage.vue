@@ -2,11 +2,39 @@
 // website/src/pages/DocsPage.vue —— 文档页（★#390ii 四区通用：指南/组件/能力/柔性系统）
 // 内容即数据：各区 md 由 @proteus-vue/docs 引擎构建期编译（frontmatter/html/toc），运行时 v-html 零解析
 // 布局三栏：左分区侧边栏（分组）+ 正文 + 右侧「本页导读」粘性栏（p-stack row+wrap，窄容器自动换行）
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { findDoc, sections } from '../docs-registry'
+import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
 
 const route = useRoute()
+const router = useRouter()
+
+// ★#440 本地全文搜索：聚合全站分区的段落索引（构建期引擎产出 doc.searchIndex）→ searchDocs 子串评分，零网络
+const fullIndex: SearchIndexEntry[] = sections.flatMap((s) =>
+  s.items.flatMap((it) =>
+    (it.doc.searchIndex ?? []).map((e) => ({ path: `${s.base}/${it.slug}`, anchor: e.anchor, heading: e.heading, text: e.text })),
+  ),
+)
+const q = ref('')
+const results = ref<SearchIndexEntry[]>([])
+watch(
+  q,
+  (v) => {
+    results.value = v.trim().length >= 2 ? searchDocs(fullIndex, v, 10) : []
+  },
+  { immediate: true },
+)
+function go(e: SearchIndexEntry): void {
+  q.value = ''
+  const url = e.anchor ? `${e.path}#${e.anchor}` : e.path
+  void router.push(url).then(() => {
+    if (e.anchor) {
+      // v-html 页面锚点：原生 id 存在——push 后手动滚（浏览器原生跳转不覆盖 hash 路由）
+      setTimeout(() => document.getElementById(e.anchor as string)?.scrollIntoView({ behavior: 'smooth' }), 60)
+    }
+  })
+}
 // 区 key 从路由前缀推导：/docs/component/:slug → components
 const sectionKey = computed(() => {
   const first = route.path.split('/').filter(Boolean)[1] ?? ''
@@ -73,6 +101,17 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
       <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
       <p-stack direction="row" :gap="28" wrap class="doc-area">
         <p-view class="doc-main">
+          <!-- ★#440 本地全文搜索（全站索引，零网络——引擎 searchDocs 子串评分） -->
+          <p-view class="doc-search">
+            <input v-model="q" class="search-input" type="search" placeholder="搜索全站文档…（输入 ≥2 字符）" />
+            <p-view v-if="q.trim().length >= 2 && results.length" class="search-results">
+              <button v-for="r in results" :key="r.path + r.anchor" class="search-hit" @click="go(r)">
+                <p-text class="hit-heading">{{ r.heading }}</p-text>
+                <p-text class="hit-text">{{ r.text }}</p-text>
+              </button>
+            </p-view>
+            <p-text v-else-if="q.trim().length >= 2" class="search-empty">无匹配结果</p-text>
+          </p-view>
           <!-- ★#415 端落地进度表（frontmatter.ends 声明的页面）：与组件/能力页兼容表同构 -->
           <p-view v-if="ends" class="ends-progress">
             <p-text class="ends-title">终端落地进度</p-text>
@@ -259,4 +298,48 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 .ends-note { color: var(--muted); }
 .ends-footnote { color: var(--dim); font-size: 12px; }
 .ends-footnote a { color: var(--brand2); text-decoration: none; }
+/* ★#440 本地全文搜索条 */
+.doc-search { position: relative; margin-bottom: 20px; }
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-input:focus { border-color: var(--brand); }
+.search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.search-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+}
+.search-hit:last-child { border-bottom: none; }
+.search-hit:hover { background: var(--brand-soft); }
+.hit-heading { color: var(--ink); font-size: 13px; font-weight: 600; }
+.hit-text { color: var(--muted); font-size: 12px; }
+.search-empty { color: var(--dim); font-size: 13px; padding: 4px 2px; }
 </style>

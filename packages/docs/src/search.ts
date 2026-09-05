@@ -21,8 +21,9 @@ function inlineText(nodes: InlineNode[]): string {
   return inlineToText(nodes)
 }
 
-/** ★构建搜索索引（cap 文本长度防超长条目） */
-export function buildSearchIndex(pages: Array<{ path: string; doc: DocsDocument | MdBlock[] }>): SearchIndexEntry[] {
+/** ★构建搜索索引（cap 文本长度防超长条目；textCap 可配——站点按体积权衡） */
+export function buildSearchIndex(pages: Array<{ path: string; doc: DocsDocument | MdBlock[] }>, opts: { textCap?: number } = {}): SearchIndexEntry[] {
+  const textCap = opts.textCap ?? 200
   const entries: SearchIndexEntry[] = []
   for (const page of pages) {
     const blocks = blocksOf(page.doc)
@@ -32,7 +33,7 @@ export function buildSearchIndex(pages: Array<{ path: string; doc: DocsDocument 
       } else if (b.type === 'paragraph') {
         const text = inlineText(b.inline)
         if (text.trim() !== '') {
-          entries.push({ path: page.path, anchor: '', heading: headingOf(blocks, idx), text: text.slice(0, 200) })
+          entries.push({ path: page.path, anchor: '', heading: headingOf(blocks, idx), text: text.slice(0, textCap) })
         }
       }
     })
