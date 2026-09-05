@@ -19,6 +19,8 @@ import { locale, setLocale, t } from './i18n'
 
 const route = useRoute()
 const isDocs = computed(() => route.path.startsWith('/docs'))
+// ★#489 全宽演示页（multi-device 撑满屏宽）
+const isWide = computed(() => route.path.startsWith('/multi-device'))
 interface NavLink {
   key: string
   label: string
@@ -161,7 +163,7 @@ const cursorGlowOptions = {
       </div>
     </pg-glass>
 
-    <main v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs }">
+    <main v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
       <router-view />
     </main>
 
@@ -313,6 +315,8 @@ const cursorGlowOptions = {
 .nav-github { border: 1px solid var(--line); margin-left: 6px; }
 .nav-github:hover { border-color: var(--brand2); }
 .main { max-width: 1180px; margin: 0 auto; width: 100%; flex: 1; }
+/* ★#489 全宽演示页：multi-device 用更宽的舞台（两端不再留白） */
+.main.is-wide { max-width: 1720px; }
 /* ★文档页三栏（左导航+正文+右导读）需要更宽的容器——isDocs 时放开（首页/Playground 维持 1180） */
 .main.is-docs { max-width: 1320px; }
 .footer {

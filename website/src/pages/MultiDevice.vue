@@ -152,6 +152,29 @@ const TARGETS: Target[] = [
   },
 ]
 const active = ref('phone')
+
+/** ★固定能力清单（同原版：列出全部能力，不同设备勾选不同） */
+const CAPS_DEF = [
+  { k: 'sku', zh: 'SKU 多选 / 精简', en: 'SKU picker (full / condensed)' },
+  { k: 'tabs', zh: '底部 Tab', en: 'bottom tabs' },
+  { k: 'hover', zh: '悬停态', en: 'hover' },
+  { k: 'dpad', zh: 'd-pad / 遥控焦点', en: 'd-pad / remote focus' },
+  { k: 'crown', zh: '表冠 / 旋钮', en: 'crown / rotary' },
+  { k: 'dense', zh: '高密度信息', en: 'dense info' },
+  { k: 'focusTree', zh: '焦点树 / 大热区', en: 'focus tree / big hit areas' },
+  { k: 'focusRow', zh: '横向焦点行（海报流）', en: 'focus rows (poster rail)' },
+  { k: 'cols', zh: '多列并排', en: 'multi-column' },
+  { k: 'rail', zh: '侧栏', en: 'side rail' },
+]
+/** ★每端勾选态（true = Backend 声明支持；false = 需条件降级/无）——对齐原版 DEVICES.caps */
+const CAP_STATE: Record<string, Record<string, boolean>> = {
+  phone: { sku: true, tabs: true, dense: true },
+  tablet: { sku: true, cols: true, rail: true },
+  pc: { sku: true, hover: true, cols: true, rail: true },
+  car: { dpad: true, crown: true, dense: true, focusTree: true },
+  tv: { dpad: true, focusRow: true, cols: true },
+  watch: { tabs: true, crown: true, dense: true },
+}
 const p = computed(() => P[isEn.value ? 'en' : 'zh'])
 const target = computed(() => TARGETS.find((x) => x.key === active.value) ?? TARGETS[0]!)
 const T = (v: { zh: string; en: string }) => (isEn.value ? v.en : v.zh)
@@ -333,9 +356,9 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
         <div class="col-title"><span class="dot" />{{ isEn ? 'Render decisions / capabilities' : '渲染决策 / 能力' }}</div>
         <div class="ir">
           <div v-for="r in irRows" :key="r.k" class="row"><span class="k">{{ r.k }}</span><span class="v">{{ r.v }}</span></div>
-          <h4>{{ isEn ? 'Capability declarations' : '能力声明' }}</h4>
-          <div v-for="(c, i) in target.caps" :key="i" class="cap-line">
-            <span class="st" :class="c.ok ? 'ok-s' : 'no-s'">{{ c.ok ? '✓' : '—' }}</span>{{ isEn ? c.en : c.zh }}
+          <h4>{{ isEn ? 'Capability declarations (per target)' : '能力声明（按端勾选）' }}</h4>
+          <div v-for="c in CAPS_DEF" :key="c.k" class="cap-line">
+            <span class="st" :class="CAP_STATE[target.key]?.[c.k] ? 'ok-s' : 'no-s'">{{ CAP_STATE[target.key]?.[c.k] ? '✓' : '—' }}</span>{{ isEn ? c.en : c.zh }}
           </div>
           <div class="note">{{ isEn ? '● green = declared & supported by the Backend · ● orange = needs conditional degradation (e.g. watch has no full SKU multi-select, in-car hides long product copy).' : '● 绿 = Backend 已声明支持 · ● 橙 = 需 @conditional 降级（如手表无 SKU 多选、车机隐藏详情长文）。' }}</div>
         </div>
