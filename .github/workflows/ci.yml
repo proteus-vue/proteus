@@ -72,6 +72,26 @@ jobs:
           npx tsx scripts/snapshot-template.ts
           git diff --exit-code -- packages/create-proteus/templates
 
+  website-docs:
+    name: 官网文档门禁（G-60 文档即契约：WIT 漂移阻断 + 生成器幂等）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
+        run: cd website && npm run check:plugin-docs
+
+      - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
+        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/website-audit-d2.test.ts tests/website-docs-engine.test.ts
+
   e2e-web:
     name: Web E2E（Playwright，需 Chromium）
     runs-on: ubuntu-latest

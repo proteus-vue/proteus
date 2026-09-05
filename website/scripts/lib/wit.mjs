@@ -52,9 +52,22 @@ export function parseWit(text, { version } = {}) {
       continue
     }
 
-    // 类型声明开始：record x { / enum x { / variant x {
+    // 类型声明开始：record x { / enum x { / variant x {（多行）
     const kind = line.match(/^(record|enum|variant)\s+([\w-]+)\s*\{$/)
     if (kind) { flushBlock(); block = { kind: kind[1], name: kind[2], fields: [] }; depth = 2; continue }
+
+    // 单行类型声明：record x { a: t, b } / enum x { a, b }（一行内闭合）
+    const one = line.match(/^(record|enum|variant)\s+([\w-]+)\s*\{\s*(.*)\s*\}\s*;?$/)
+    if (one) {
+      flushBlock()
+      const fields = one[3].split(',').filter((s) => s.trim()).map((s) => {
+        const m = s.trim().match(/^([\w-]+)\s*(?:\(([^)]*)\))?\s*(?::\s*(.+?))?$/)
+        return m ? (m[2] !== undefined ? { name: m[1], type: m[2] } : m[3] ? { name: m[1], type: m[3] } : { name: m[1] }) : null
+      }).filter(Boolean)
+      cur.items.push({ kind: one[1], name: one[2], doc: doc.join(' ').trim(), fields })
+      doc = []
+      continue
+    }
 
     // func 声明：name: func(a: t) -> r; 或无返回值 name: func(a: t);（单行）
     const fn = line.match(/^([\w-]+)\s*:\s*func\s*\((.*)\)\s*(?:->\s*(.+?))?;?$/)
@@ -154,4 +167,95 @@ export function renderSpecMd(spec, ifaceName, { sourceHash: hash, order = 90 } =
 export function checkDrift(committed, generated) {
   if (committed === generated) return { status: 'fresh' }
   return { status: 'stale', message: '生成物与 WIT 源不一致——重新运行 gen:plugin-docs 并提交' }
+}
+
+/**
+ * SPEC_DIFF（★ INV-W7：破坏性变更必须被拦截）——两版 ApiSpec 逐 interface·逐条目比对。
+ * 分类规则（WIT 位置参数语义）
+ *   移除条目 → breaking；参数增删/类型变更/结果类型变更 → breaking；
+ *   新增条目 → additive；纯文档变化 → doc。
+ * 返回 { added, removed, changed, breaking }——breaking 非空即 CI 阻断。
+ */
+export function diffSpecs(oldSpec, newSpec) {
+  const oldIf = new Map(oldSpec.interfaces.map((i) => [i.name, i]))
+  const newIf = new Map(newSpec.interfaces.map((i) => [i.name, i]))
+  const added = []
+  const removed = []
+  const changed = []
+  const breaking = []
+
+  // interface 级：新增/移除
+  for (const [name] of newIf) if (!oldIf.has(name)) added.push(name)
+  for (const [name, iface] of oldIf) {
+    if (!newIf.has(name)) {
+      const c = { name, kind: 'removed', breaking: true, detail: 'API 被移除' }
+      removed.push(name)
+      changed.push(c)
+      breaking.push(c)
+    }
+  }
+
+  // interface 内部：逐条目比对（func 签名敏感；类型块字段敏感）
+  for (const [name, iface] of newIf) {
+    const old = oldIf.get(name)
+    if (!old) continue
+    const oldItems = new Map(old.items.map((e) => [e.name, e]))
+    const newItems = new Map(iface.items.map((e) => [e.name, e]))
+
+    for (const [itemName] of newItems) if (!oldItems.has(itemName)) added.push(`${name}.${itemName}`)
+    for (const [itemName, oe] of oldItems) {
+      if (!newItems.has(itemName)) {
+        const c = { name: `${name}.${itemName}`, kind: 'removed', breaking: true, detail: 'API 被移除' }
+        removed.push(`${name}.${itemName}`)
+        changed.push(c)
+        breaking.push(c)
+      }
+    }
+
+    for (const [itemName, ne] of newItems) {
+      const oe = oldItems.get(itemName)
+      if (!oe) continue
+      const details = []
+
+      if (oe.kind === 'func' && ne.kind === 'func') {
+        // 位置参数：新增/删除/类型变更均 breaking（WIT 按位置传参）
+        if (ne.params.length !== oe.params.length) {
+          details.push({ breaking: true, detail: `参数数量 ${oe.params.length} → ${ne.params.length}` })
+        } else {
+          for (let i = 0; i < ne.params.length; i++) {
+            if (ne.params[i].type !== oe.params[i].type) {
+              details.push({ breaking: true, detail: `参数 ${ne.params[i].name} 类型 ${oe.params[i].type} → ${ne.params[i].type}` })
+            }
+          }
+        }
+        if (oe.result !== ne.result) details.push({ breaking: true, detail: `返回类型 ${oe.result} → ${ne.result}` })
+      } else if (oe.kind !== ne.kind) {
+        details.push({ breaking: true, detail: `条目形态 ${oe.kind} → ${ne.kind}` })
+      } else {
+        // 类型块字段：新增字段 = additive；删除/类型变更 = breaking
+        const oldF = new Map((oe.fields || []).map((f) => [f.name, f]))
+        const newF = new Map((ne.fields || []).map((f) => [f.name, f]))
+        for (const [fname] of newF) if (!oldF.has(fname)) added.push(`${name}.${itemName}.${fname}`)
+        for (const [fname, ofield] of oldF) {
+          if (!newF.has(fname)) {
+            const c = { name: `${name}.${itemName}.${fname}`, kind: 'removed', breaking: true, detail: '字段被移除' }
+            changed.push(c)
+            breaking.push(c)
+          } else if ((ofield.type ?? '') !== (newF.get(fname).type ?? '')) {
+            const c = { name: `${name}.${itemName}.${fname}`, kind: 'changed', breaking: true, detail: `字段类型 ${ofield.type ?? ''} → ${newF.get(fname).type ?? ''}` }
+            changed.push(c)
+            breaking.push(c)
+          }
+        }
+      }
+
+      if (oe.doc !== ne.doc) details.push({ breaking: false, detail: '描述更新' })
+      for (const d of details) {
+        const c = { name: `${name}.${itemName}`, kind: 'changed', breaking: d.breaking, detail: d.detail }
+        changed.push(c)
+        if (d.breaking) breaking.push(c)
+      }
+    }
+  }
+  return { added, removed, changed, breaking }
 }

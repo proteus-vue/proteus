@@ -6,10 +6,63 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseWit, lintSpec, renderSpecMd, sourceHash, checkDrift } from '../website/scripts/lib/wit.mjs'
+import { parseWit, lintSpec, renderSpecMd, sourceHash, checkDrift, diffSpecs } from '../website/scripts/lib/wit.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WIT = fs.readFileSync(path.join(root, 'website/api/wit/since_v0_1_0.wit'), 'utf8')
+
+describe('G-60 B2 SPEC_DIFF（★ INV-W7 破坏性分类）', () => {
+  const wit = (body) => `package p:q@0.1.0;\ninterface a {\n${body}\n}`
+  const oldW = wit('/// f 文档\n  f: func(x: string) -> string;')
+
+  it('函数移除 → breaking', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('')))  // f 没了
+    expect(d.breaking.some((c) => c.name === 'a.f' && c.kind === 'removed')).toBe(true)
+  })
+
+  it('函数新增 → additive（非 breaking）', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('/// f 文档\n  f: func(x: string) -> string;\n  /// g 文档\n  g: func();')))
+    expect(d.breaking.length).toBe(0)
+    expect(d.added).toContain('a.g')
+  })
+
+  it('参数类型变更 → breaking', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('/// f 文档\n  f: func(x: u32) -> string;')))
+    expect(d.breaking.some((c) => c.detail.includes('类型 string → u32'))).toBe(true)
+  })
+
+  it('参数数量变更 → breaking（位置参数语义）', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('/// f 文档\n  f: func(x: string, y: u32) -> string;')))
+    expect(d.breaking.some((c) => c.detail.includes('参数数量'))).toBe(true)
+  })
+
+  it('返回类型变更 → breaking', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('/// f 文档\n  f: func(x: string) -> u32;')))
+    expect(d.breaking.some((c) => c.detail.includes('返回类型'))).toBe(true)
+  })
+
+  it('纯描述更新 → 非 breaking', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(wit('/// f 文档（更新）\n  f: func(x: string) -> string;')))
+    expect(d.breaking.length).toBe(0)
+    expect(d.changed.some((c) => c.detail === '描述更新')).toBe(true)
+  })
+
+  it('类型块字段删除/类型变更 → breaking；新增字段 → additive', () => {
+    const oldS = parseWit(wit('  /// limits 文档\n  record limits { memory-mb: option<u32>, }'))
+    const del = parseWit(wit('  /// limits 文档\n  record limits { }'))
+    expect(diffSpecs(oldS, del).breaking.some((c) => c.detail === '字段被移除')).toBe(true)
+    const add = parseWit(wit('  /// limits 文档\n  record limits { memory-mb: option<u32>, cpu-ms: option<u32>, }'))
+    const dAdd = diffSpecs(oldS, add)
+    expect(dAdd.breaking.length).toBe(0)
+    expect(dAdd.added).toContain('a.limits.cpu-ms')
+  })
+
+  it('完全一致 → 零差异', () => {
+    const d = diffSpecs(parseWit(oldW), parseWit(oldW))
+    expect(d.breaking.length).toBe(0)
+    expect(d.changed.length).toBe(0)
+  })
+})
 
 describe('G-60 B1 WIT 解析器', () => {
   const spec = parseWit(WIT)
