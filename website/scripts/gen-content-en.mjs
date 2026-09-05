@@ -1116,4 +1116,297 @@ export const CAP_EN = {
     },
     errors: { 'nfc.unsupported': 'Bridge does not provide getNfc (useNFC unavailable)' },
   },
+  // —— 设备与系统（#481 批次 ②）——
+  device: {
+    desc: 'Device (wx.getSystemInfo / navigator.userAgent / mock)',
+    dataProps: {
+      platform: 'Platform identifier (ios / android / devtools / desktop …)',
+      model: 'Device model (e.g. iPhone 15 Pro)',
+      os: 'Operating system name (iOS / Android / Windows / macOS)',
+      version: 'System version (e.g. 17.4)',
+      browser: 'Browser/container name (present on the web; omitted in Mini Programs)',
+    },
+  },
+  screen: {
+    desc: 'Screen (wx.getSystemInfo / window.screen + matchMedia / mock)',
+    dataProps: {
+      width: 'Screen width (px, CSS pixels)',
+      height: 'Screen height (px, CSS pixels)',
+      dpr: 'Device pixel ratio (physical pixels / CSS pixels)',
+      orientation: 'Current orientation',
+    },
+    errors: { 'screen.unsupported': 'window.screen does not exist (SSR)' },
+  },
+  battery: {
+    desc: 'Battery (wx.getBatteryInfo / navigator.getBattery / mock)',
+    dataProps: {
+      level: 'Battery level (0-1, float)',
+      charging: 'Whether charging is in progress',
+      chargingTime: 'Seconds needed to fully charge (only present while charging; omitted when unsupported)',
+      dischargingTime: 'Remaining usable seconds (only present while discharging; omitted when unsupported)',
+    },
+    errors: { 'battery.unsupported': 'navigator.getBattery is not supported', 'battery.failed': 'getBattery returned empty' },
+  },
+  orientation: {
+    desc: 'Screen orientation (wx.onDeviceOrientationChange / matchMedia / mock)',
+    dataProps: { type: 'Screen orientation', angle: 'Rotation angle (0/90/180/-90 degrees)' },
+  },
+  brightness: {
+    desc: 'useBrightness: read the current brightness (0-1)',
+    errors: { 'brightness.unsupported': 'The bridge does not provide getBrightness (useBrightness unavailable)' },
+  },
+  sensor: {
+    desc: 'useSensor: one-shot sensor read (accelerometer/compass/gyroscope)',
+    params: { kind: 'Sensor type (accelerometer / compass / gyroscope)' },
+    dataProps: {
+      kind: 'Sensor type (echoes the requested kind)',
+      x: 'X-axis acceleration/component (accelerometer/gyroscope)',
+      y: 'Y-axis acceleration/component',
+      z: 'Z-axis acceleration/component',
+      heading: 'Compass heading (0-360°, relative to true north; compass only)',
+      timestamp: 'Sample timestamp (ms)',
+    },
+    errors: { 'sensor.unsupported': 'Bridge does not provide readSensor (useSensor unavailable)', 'sensor.timeout': 'Sensor event timed out (requires device support / user permission)' },
+  },
+  vibrate: {
+    desc: 'Vibration (wx.vibrateShort / navigator.vibrate / mock)',
+    params: { durationMs: 'Vibration duration (ms)' },
+    errors: { 'vibrate.unsupported': 'navigator.vibrate is not supported' },
+  },
+  network: {
+    desc: 'Network (wx.getNetworkType / navigator.onLine / mock)',
+    dataProps: {
+      online: 'Whether the device is online (normalized from navigator.onLine / wx.getNetworkType)',
+      type: 'Network type (web has no finer granularity → unknown; offline → none)',
+    },
+  },
+  keyboard: {
+    desc: 'useKeyboard: keyboard lifecycle handle (wx.onKeyboardHeightChange / web visualViewport)',
+    errors: { 'keyboard.unsupported': 'Bridge does not provide getKeyboard (useKeyboard unavailable)' },
+  },
+  clipboard: {
+    desc: 'Clipboard (wx.getClipboardData / navigator.clipboard.readText / mock)',
+    errors: {
+      'clipboard.read.unsupported': 'navigator.clipboard.readText is not supported',
+      'clipboard.read.failed': 'Clipboard read was rejected (requires permission / focus)',
+    },
+  },
+  // —— 存储与文件 + 位置与地图（#481 批次 ③）——
+  storage: {
+    desc: 'useStorage: storage handle (see createReactiveStorage for the reactive enhancement)',
+    errors: { 'storage.unsupported': 'Bridge does not provide getStorage (useStorage unavailable)' },
+  },
+  cookie: {
+    desc: 'useCookie: cookie jar (web document.cookie / wx storage fallback)',
+    errors: { 'cookie.unsupported': 'Bridge does not provide getCookieJar (useCookie unavailable)' },
+  },
+  'file-system': {
+    desc: 'useFileSystem: file system handle (wx.getFileSystemManager / web in-memory fallback)',
+    errors: { 'file-system.unsupported': 'Bridge does not provide getFileSystem (useFileSystem unavailable)' },
+  },
+  archive: {
+    desc: 'useArchive: compress files (wx.compressFile; web → Err)',
+    params: {
+      options: 'C44 compression options (wx.compressFile; web has no standard API → degrades to undefined)',
+      'options.src': 'source file path',
+      'options.dest': 'destination path (defaults to the same directory as the source)',
+      'options.quality': 'image compression quality 0-100 (supported by wx)',
+    },
+    errors: { 'archive.unsupported': 'Bridge does not provide compressFile (useArchive unavailable)', 'archive.failed': 'wx.compressFile failed' },
+  },
+  location: {
+    desc: 'Location (wx.getLocation / navigator.geolocation / mock)',
+    dataProps: {
+      latitude: 'latitude (WGS84, in floating-point degrees)',
+      longitude: 'longitude (WGS84, in floating-point degrees)',
+      accuracy: 'positioning accuracy (radius in meters; smaller means more accurate)',
+      altitude: 'altitude (meters; omitted when unsupported by the platform)',
+      speed: 'speed (meters/second; omitted when unsupported by the platform)',
+    },
+    errors: { 'location.unsupported': 'geolocation not supported', 'location.failed': 'geolocation failed' },
+  },
+  map: {
+    desc: 'useMap: map context handle (wx.createMapContext / web host integration; → Err when none is available)',
+    params: { id: 'map instance ID (distinguishes instances in multi-map scenarios)' },
+    errors: { 'map.unsupported': 'Bridge does not provide createMap (useMap unavailable)', 'map.failed': 'wx map region retrieval failed' },
+  },
+  // —— 媒体与扫码 + 账号与支付（#481 批次 ④⑤）——
+  camera: {
+    desc: 'useCamera: camera access (wx.authorize / web getUserMedia)',
+    dataProps: { kind: 'Media device type', supported: 'Platform capability/device is present', granted: 'User has granted access' },
+    errors: { 'camera.unsupported': 'The bridge does not provide getCamera (useCamera unavailable)' },
+  },
+  microphone: {
+    desc: 'useMicrophone: microphone access (wx.authorize / web getUserMedia)',
+    dataProps: { kind: 'Media device type', supported: 'Platform capability/device is present', granted: 'User has granted access' },
+    errors: { 'microphone.unsupported': 'The bridge does not provide getMicrophone (useMicrophone unavailable)' },
+  },
+  live: {
+    desc: 'useLive: live room (wx live component form / host bridge — Err by default)',
+    params: {
+      options: 'C49 live room (wx live component form / host bridge — Err by default)',
+      'options.roomId': 'Live room ID',
+      'options.mode': 'Stream mode',
+    },
+    errors: { 'live.unsupported': 'The bridge does not provide joinLiveRoom (useLive unavailable)' },
+  },
+  'qr-code': {
+    desc: 'useQRCode: scan a QR code (wx.scanCode; web needs a camera capture source → Err fallback)',
+    errors: { 'qr-code.unsupported': 'The bridge does not provide scanQR (useQRCode unavailable)', 'qr-code.failed': 'wx.scanCode failed' },
+  },
+  login: {
+    desc: 'useLogin: login (wx.login → code / integrate a third-party provider)',
+    params: { provider: 'Service provider identifier (wechat / web / host-defined)' },
+    dataProps: {
+      provider: 'Login channel (wechat / host-provider …)',
+      code: 'Login credential (wx code; the server exchanges it for a session)',
+      token: 'Token (when a third-party provider issues the token directly)',
+    },
+    errors: { 'login.unsupported': 'The bridge does not provide login (useLogin unavailable)', 'login.failed': 'wx.login failed' },
+  },
+  auth: {
+    desc: 'useAuth: authentication state composition (token custody + login/logout + subscription) — business code never reads the raw token (iron rule 2)',
+    directProps: {
+      token: 'Current token (null when not logged in; reactive — bind directly in the UI)',
+      isAuthenticated: 'Whether the user is logged in (true when the token is non-empty)',
+    },
+  },
+  biometric: {
+    desc: 'useBiometric: biometric support detection',
+    errors: {
+      'biometric.unsupported': 'The bridge does not provide checkBiometricSupport (useBiometric unavailable)',
+      'biometric.failed': 'WebAuthn authentication failed / cancelled by the user',
+    },
+  },
+  'face-id': {
+    desc: 'useFaceID: facial recognition authentication (wx startSoterAuthentication facial / web WebAuthn)',
+    params: { prompt: 'Authentication prompt text (shown by the native system UI)' },
+    errors: { 'face-id.unsupported': 'The bridge does not provide authenticateFaceID (useFaceID unavailable)' },
+  },
+  permission: {
+    desc: 'usePermission: Permission status (web Permissions API)',
+    params: { name: 'Permission name (standard web Permissions API name)' },
+    dataProps: {
+      permission: 'Permission name (web Permissions API name, e.g. geolocation / camera)',
+      state: 'Authorization state (prompt = not yet asked)',
+    },
+    errors: { 'permission.unsupported': 'Bridge does not provide getPermission (usePermission unavailable)' },
+  },
+  payment: {
+    desc: 'usePayment: Launch payment (wx.requestPayment fields)',
+    params: {
+      config: 'C40 payment parameters (aligned with wx.requestPayment core fields — issued by the server after the order is placed)',
+      'config.timeStamp': 'Timestamp (seconds-level string, generated by the server)',
+      'config.nonceStr': 'Random string (server-generated, within 32 characters)',
+      'config.package': 'prepay_id returned by the unified order API (format paySign=...)',
+      'config.signType': 'Signature method (defaults to MD5/platform default when omitted; RSA recommended)',
+      'config.paySign': 'Signature (computed by the server with the merchant private key)',
+    },
+    dataProps: {
+      provider: 'Payment channel (wechat / alipay / host … — tagged by the host bridge)',
+      transactionId: 'Transaction ID (returned by the channel; omitted when unsupported)',
+    },
+    errors: { 'payment.unsupported': 'Bridge does not provide requestPayment (usePayment unavailable)', 'payment.failed': 'wx.requestPayment failed' },
+  },
+  'in-app-purchase': {
+    desc: 'useInAppPurchase: In-app purchase (wx — no public API → honest Err degradation)',
+    params: { productId: 'In-app purchase product ID (registered in the app store)' },
+    dataProps: {
+      productId: 'In-app purchase product ID (registered in the app store)',
+      transactionId: 'Transaction ID (returned by the store)',
+      state: 'Transaction state (purchased = new purchase / restored = restored purchase)',
+    },
+    errors: { 'in-app-purchase.unsupported': 'Bridge does not provide requestIAP (useInAppPurchase unavailable)' },
+  },
+  // —— 通知与分享（#481 批次 ⑤）——
+  notification: {
+    desc: 'useNotification: Message subscription authorization (wx.requestSubscribeMessage / web Notification)',
+    params: { templateId: 'Subscription message template ID (registered on the Official Platform)' },
+    dataProps: {
+      templateId: 'Template ID (for wx, must first be applied for on the Official Platform)',
+      granted: 'Whether authorization was granted (wx: the status of this template in tmplIds; web: Notification.requestPermission granted)',
+      status: "Raw status text (wx: 'accept'/'reject'/'ban'; web: 'granted'/'denied'/'default')",
+    },
+    errors: { 'notification.unsupported': 'Bridge does not provide subscribeMessage (useNotification unavailable)' },
+  },
+  share: {
+    desc: 'Sharing (wx.shareAppMessage / navigator.share / mock)',
+    params: {
+      options: 'Options object (fields in the table below)',
+      'options.title': 'Share title',
+      'options.text': 'Share text (used by web navigator.share; omitted on Mini Program)',
+      'options.url': 'Share link (must be an HTTPS URL on web)',
+    },
+    errors: { 'share.unsupported': 'navigator.share is not supported (requires HTTPS + a user gesture)' },
+  },
+  shortcut: {
+    desc: 'useShortcut: Add a desktop shortcut (wx.addToDesktop; web → Err)',
+    errors: { 'shortcut.unsupported': 'Bridge does not provide addShortcut (useShortcut unavailable)', 'shortcut.failed': 'wx.addToDesktop failed' },
+  },
+  sms: {
+    desc: 'useSMS: Send SMS (wx restricted — no open API / web has no standard → Err)',
+    params: { phone: "Recipient's phone number", message: 'Message content text' },
+    errors: { 'sms.unsupported': 'Bridge does not provide sendSMS (useSMS unavailable)' },
+  },
+  contact: {
+    desc: 'useContact: Contact picking (wx.chooseContact; web has no standard → Err degradation)',
+    errors: { 'contact.unsupported': 'Bridge does not provide chooseContact (useContact unavailable)', 'contact.failed': 'wx.chooseContact failed' },
+  },
+  'phone-call': {
+    desc: 'usePhoneCall: Make a phone call',
+    params: { phoneNumber: 'Phone number' },
+    errors: { 'phone-call.unsupported': 'Bridge does not provide makePhoneCall (usePhoneCall unavailable)', 'phone-call.failed': 'wx.makePhoneCall failed' },
+  },
+  calendar: {
+    desc: 'useCalendar: Add a calendar event (wx.addPhoneCalendar; web → Err)',
+    params: {
+      event: 'C20 calendar event (wx.addPhoneCalendar / web has no standard → degrades to undefined)',
+      'event.title': 'Calendar event title',
+      'event.startTime': 'Start timestamp (ms)',
+      'event.endTime': 'End timestamp (ms)',
+      'event.alarms': 'Advance reminders (minutes)',
+      'event.location': 'Location',
+      'event.description': 'Notes/description',
+    },
+    errors: { 'calendar.unsupported': 'Bridge does not provide addCalendarEvent (useCalendar unavailable)', 'calendar.failed': 'wx.addPhoneCalendar failed' },
+  },
+  // —— 应用与生命周期 + 可观测与调试（#481 批次 ⑥）——
+  'app-lifecycle': {
+    desc: 'useAppLifecycle: app lifecycle subscription handle (wx App hooks / web visibilitychange + load)',
+    errors: { 'app-lifecycle.unsupported': 'The bridge does not provide getAppLifecycle (useAppLifecycle unavailable)' },
+  },
+  'page-lifecycle': {
+    desc: 'usePageLifecycle: page lifecycle subscription handle (wx Page hooks / web load + visibilitychange)',
+    errors: { 'page-lifecycle.unsupported': 'The bridge does not provide getPageLifecycle (usePageLifecycle unavailable)' },
+  },
+  background: {
+    desc: 'useBackground: background/foreground switch subscription (wx onAppHide/onAppShow / web visibilitychange)',
+    errors: { 'background.unsupported': 'The bridge does not provide getBackground (useBackground unavailable)' },
+  },
+  'mini-program': {
+    desc: 'useMiniProgram: jump to a mini program (wx.navigateToMiniProgram / web → Err)',
+    errors: { 'mini-program.unsupported': 'The bridge does not provide navigateMiniProgram (useMiniProgram unavailable)' },
+  },
+  embedded: {
+    desc: 'useEmbedded: host embedding context (embedded scenario — host bridge; Err by default)',
+    dataProps: {
+      provider: 'Host channel identifier (wechat / web / studio …)',
+      version: 'Host/base library version',
+      capabilities: 'Set of capability names declared by the host',
+    },
+    errors: { 'embedded.unsupported': 'The bridge does not provide getHostContext (useEmbedded unavailable)' },
+  },
+  extension: {
+    desc: 'useExtension: extension/plugin (G-21 extension point — host loadPlugin bridge; Err by default)',
+    params: { extensionId: 'Extension/plugin ID (registered name of the G-21 extension point)' },
+    errors: { 'extension.unsupported': 'The bridge does not provide loadExtension (useExtension unavailable)' },
+  },
+  analytics: {
+    desc: 'useAnalytics: analytics tracking handle (wx.reportEvent; no web standard → track returns Err)',
+    errors: { 'analytics.unsupported': 'The bridge does not provide track (useAnalytics unavailable)' },
+  },
+  log: {
+    desc: 'useLog: log handle (console + reporting)',
+    errors: { 'log.unsupported': 'The bridge does not provide log (useLog unavailable)' },
+  },
 }

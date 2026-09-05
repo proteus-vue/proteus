@@ -1060,6 +1060,7 @@ async function genCapabilitiesEn(ir, ends) {
     }
     const wxMissing = refs.filter((r) => !wxKeys.has(r))
     const webMissing = refs.filter((r) => !webKeys.has(r))
+    const mpEquivEn = /[\u4e00-\u9fff]/.test(c.mpEquiv) ? '(wx-native equivalent; exact mapping in the zh version)' : c.mpEquiv // 目录 mpEquiv 含中文时 EN 降级
     lines.push(CAP_SHARED_EN.hCompat)
     lines.push('')
     lines.push('| Target | Status | Notes |')
@@ -1070,7 +1071,7 @@ async function genCapabilitiesEn(ir, ends) {
       switch (end.id) {
         case 'mp-weixin':
           status = wxMissing.length ? '⚠️' : '✅'
-          note = CAP_SHARED_EN.endNote.mp(wxMissing, c.mpEquiv)
+          note = CAP_SHARED_EN.endNote.mp(wxMissing, mpEquivEn)
           break
         case 'web':
           if (!refs.length) note = CAP_SHARED_EN.endNote.webNoRefs
