@@ -1,6 +1,6 @@
-# Proteus 二十二次泛化 → SPI-First 五步法映射
+# Proteus 二十三次泛化 → SPI-First 五步法映射
 
-> 本文证明：Proteus 的二十二次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
+> 本文证明：Proteus 的二十三次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
 > 阅读本文 = 同时理解"方法论"与"它的第一性证明"。
 
 ---
@@ -31,6 +31,7 @@
 | G-57 | 可观测性来源 | InspectorService / 扩展注册表 | 三层数据模型（L0 宿主探针 / L1 语义增强 / L2 框架语义）+ ext. 命名规约 | VM Service / Flipper / CDP / 自起服务（reference-impl 64/64） | G-57 conformance（CMP179-186 + INV-INSP-01~08） | L0 为模拟数据；真实宿主接入未实现 |
 | G-58 | 扩展来源 | PluginHost / PluginManifest / Capability / ApiVersionSpec | 能力白名单 + 声明式 Tier 0 + WIT 版本化并存 | 内置功能走 API / 官方插件 / 第三方 WASM（reference-impl 104/104） | G-58 conformance（CMP187-194 + INV-EX-01~08） | wasmtime 真集成属阶段 2；市场签名体系未设计 |
 | G-59 | 生态治理模式 | 激活契约 / 数据敏感度分级 / 信任模型 | 三层契约（激活/版本/数据）+ 破坏率看板 | 内置同构 / 第三方分级授权 / 哈希重授权（reference-impl 78/78） | G-59 conformance（CMP195-206 + INV-ECO-01~08） | 激活耗时为声明估算；破坏率无真实历史数据 |
+| G-60 | 文档形态 | ApiSpec / VersionRegistry / checkDrift / 下载矩阵 | 三形态单一事实（生成/手写/共享引用）+ 漂移阻断 + 版本可寻址 | WIT 生成 / 人工指南 / shared transclusion（reference-impl 91/91） | G-60 conformance（CMP207-227 + INV-W1~8） | WIT parser 未实现；未真实构建站点；数字均标注目标 |
 
 ---
 
@@ -71,7 +72,7 @@ G-45 NAT-C 快检        → 同上
 
 **这是"先有方法论、再有实例"的红利**：新 SPI 不需重新发明验证手段，直接套五步法即可。这也是为什么我们说 ——
 
-> **二十二次泛化不是二十二份独立设计，而是同一套五步法重复执行二十二次。**
+> **二十三次泛化不是二十三份独立设计，而是同一套五步法重复执行二十三次。**
 
 ---
 

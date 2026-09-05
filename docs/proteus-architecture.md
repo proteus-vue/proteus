@@ -116,6 +116,10 @@
 | #13.77 | ★ 信任不可继承：更新即重新授权 | plugin-ecosystem G-59 |
 | #13.78 | 废弃必须提供替代，不留生态真空 | plugin-ecosystem G-59 |
 | #13.79 | 不可度量的承诺等于没有承诺（破坏率必须公开） | plugin-ecosystem G-59 |
+| #13.80 | 文档即契约：对外文档与代码同等地位，漂移等同缺陷 | studio-website-landing G-60 |
+| #13.81 | 参考页是 renderer：可推导内容一律生成，人只写不可推导部分 | studio-website-landing G-60 |
+| #13.82 | 版本可寻址：任何已发布 URL 永久可访问，删除即破坏外链 | studio-website-landing G-60 |
+| #13.83 | 宣称可验证：对外数字必须带"目标/实测"标注（G-37 的官网延伸） | studio-website-landing G-60 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -319,6 +323,15 @@
 | **G-59.7** | **废弃必须提供替代：replacement 为 null 必须拒绝** | plugin-ecosystem |
 | **G-59.8** | **内置插件与第三方同构：capability 不得超额，assertBuiltinParity 进 CI** | plugin-ecosystem |
 | **G-59.9** | **数字三分类标注：官方/社区实测/二手转述分级，二手须以原文为准** | plugin-ecosystem |
+| **G-60.1** | **API 文档必须是 renderer 不是副本（红线）：可从 WIT 推导的内容一律生成，手写在 review 直接拒绝** | studio-website-landing |
+| **G-60.2** | **漂移即阻断不警告：checkDrift 返回 stale 时 CI 必须失败（警告会被忽略）** | studio-website-landing |
+| **G-60.3** | **未知版本返回 null 禁静默降级："没有答案"和"答案是最新"是两回事** | studio-website-landing |
+| **G-60.4** | **未命中即未命中不猜测：错误的下载比没有下载更危险** | studio-website-landing |
+| **G-60.5** | **版本无关内容单一源：/shared + transclusion，复制 N 份 = 绑定 N 次** | studio-website-landing |
+| **G-60.6** | **废弃标记元数据驱动：构建系统注入横幅与 noindex，禁止手编 markdown** | studio-website-landing |
+| **G-60.7** | **★数字不粉饰（官网专项）：所有性能数字必须标注目标/实测，未实测不得删除标注发布** | studio-website-landing |
+| **G-60.8** | **★更新私钥不可恢复先备份再生成：私钥永不入仓库、离线冷备份异地多份、旧公钥保留——全套体系唯一不可逆风险** | studio-website-landing |
+| **G-60.9** | **删除页面等于制造 404：已移除 API 保留页标注 removed，归档只加 noindex 不删文件** | studio-website-landing |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -367,6 +380,7 @@
 | CMP | CMP179-186 | error | L0 独立性（179）/降级不减损（180）/扩展命名规范（181）/语义关联（182）/报告可序列化（183）/Debug-only 编译期剔除（184）/鉴权（185）/宿主无关（186） | 🆕 inspector-plan（G-57） |
 | CMP | CMP187-194 | error | apiSurface 快照不变（187）/未声明能力拒绝（188）/Tier 0 声明式零实例（189）/稳定 WIT 冻结（190）/插件崩溃隔离（191）/资源限额强制（192）/能力探测纯元数据（193）/提案 API 禁发布（194） | 🆕 plugin-api-plan（G-58） |
 | CMP | CMP195-206 | error | 通配符拒绝+超预算拒绝（195）/去激活审计（196）/老版本可解析（197）/破坏率可度量（198）/数据分级判定（199）/内置不得超额（200）/废弃无替代拒绝（201）/哈希变化重授权（202）/反模式断言×3（203-205）/沙箱∧数据分级接缝（206） | 🆕 plugin-ecosystem-plan（G-59） |
+| CMP | CMP207-227 | error | WIT 单源生成漂移阻断（207）/release tag 触发（208）/shared 单一源（209）/版本横幅深链（210）/元数据驱动 noindex（211）/未知版本 null（212）/破坏性变更 diff 拦截（213）/缺签名拒分发（214）/反模式断言×6（215-220）/接缝命题×7（221-227） | 🆕 studio-website-landing-plan（G-60） |
 
 ---
 
