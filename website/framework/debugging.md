@@ -8,19 +8,7 @@ ends: debugging
 # 调试与可观测
 
 Proteus 的调试面由三层组成：**编译期决策链**（为什么产物长这样）、**运行时 trace**（发生了什么）、**DevTools 面板**（可视化消费）。各端落地状态见上方「终端落地进度」（遵循 G-57 Inspector 叠加原则：L0 用宿主已有调试器，语义增强在 L1/L2）。
-
-## 终端落地进度
-
-| 端 | 状态 | 调试面说明 |
-|---|---|---|
-| Web SPA | ✅ | Vue devtools + HMR + TraceBus + 本地浮动面板 |
-| 微信小程序 | ✅ | 开发者工具断点（逻辑层）+ debug:mp 决策链 + `__PROTEUS_STORES__()` 快照 + 远程 WS 面板 |
-| Headless（SSR / 测试） | ✅ | Node 直连 TraceBus |
-| iOS / Android / 鸿蒙 | 🟡 | 端原型映射——G-57 Inspector L0 叠加宿主调试器（VM Service / Flipper / CDP）待接线 |
-| Flutter 混合 | 🟡 | 宿主 Flutter DevTools——语义叠加待接 |
-| 快应用 | ⬜ | 端未开始 |
-
-> 调试面遵循 Inspector 叠加原则（G-57）：**L0 用宿主已有调试器，绝不重新实现**——框架语义增强在 L1/L2。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+Proteus 的调试面由三层组成：**编译期决策链**（为什么产物长这样）、**运行时 trace**（发生了什么）、**DevTools 面板**（可视化消费）。各端落地状态见上方「终端落地进度」（遵循 G-57 Inspector 叠加原则：L0 用宿主已有调试器，语义增强在 L1/L2）。
 
 ## 编译期：决策链
 
