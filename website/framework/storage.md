@@ -8,6 +8,19 @@ group: 基础能力
 
 跨端存储两条规则：**持久化配置化**（不直连存储 API）与**响应式增强**（createReactiveStorage）。
 
+## 终端落地进度
+
+| 端 | 状态 | 载体说明 |
+|---|---|---|
+| 微信小程序 | ✅ | wx sync 存储（getStorage 桥） |
+| Web SPA | ✅ | localStorage（webBridge.getStorage 已实现） |
+| Headless（SSR / 测试） | ✅ | 内存存储（mock / createMockContext 内置） |
+| iOS / Android / 鸿蒙 | 🟡 | 端原型映射——NativeKVAdapter（MMKV）待接入 |
+| Flutter 混合 | 🟡 | 桥待接 |
+| 快应用 | ⬜ | 端未开始 |
+
+> store 持久化载体另有平台工厂选择（Web localStorage / MP wx storage 写盘防抖——见[状态工厂](/docs/framework/state-factories)）。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+
 ## useStorage（能力句柄）
 
 ```ts
@@ -17,7 +30,7 @@ storage.get('key')
 ```
 
 - 句柄缺平台桥时抛错（宿主未安装存储能力）
-- 双端后端：小程序 `wx.sync 存储` / Web `localStorage` / 测试 mock
+- 桥实现：小程序 `wx sync 存储` / Web `localStorage` / 测试 mock（其余端随桥接线逐个启用）
 
 ## 不直连存储的铁律
 

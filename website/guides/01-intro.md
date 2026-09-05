@@ -6,10 +6,14 @@ group: 起步
 
 # Proteus 简介
 
-Proteus 是一个**语义收敛的跨端应用框架**：业务代码只写一份**标准 Vue SFC + 标准 HTML 标签**，同时跑在两个端——
+Proteus 是一个**语义收敛的跨端应用框架**：业务代码只写一份**标准 Vue SFC + 标准 HTML 标签**，渲染到多个终端——
 
-- **Web 端**：标准 Vite + Vue，零转换直跑，devtools / HMR / 代码分割全部可用
-- **微信小程序端**：编译器把同一份源码转为 Skyline 原生四件套（WXML / WXSS / `Page()` JS / JSON）
+- **Web 端**（✅ 已落地）：标准 Vite + Vue，零转换直跑，devtools / HMR / 代码分割全部可用
+- **微信小程序端**（✅ 已落地）：编译器把同一份源码转为 Skyline 原生四件套（WXML / WXSS / `Page()` JS / JSON）
+- **App（iOS / Android / 鸿蒙）**（🟡 原型映射）：RenderBackend SPI 原生控件——按路线图接线
+- **Flutter / 快应用**（🟡 / ⬜）：同一语义模型，端实现按路线图推进
+
+> 全部 8 端的状态与架构对照见 [端与成熟度](/docs/framework/ends-matrix)；组件/能力页自带终端兼容表。
 
 > **One semantic model. Any render engine. Zero native glue.**
 > 一套语义内核，任意渲染引擎，任意原生能力。
@@ -32,7 +36,7 @@ Proteus 是一个**语义收敛的跨端应用框架**：业务代码只写一�
 
 **适合**：
 
-- 需要 **Web + 微信小程序双端交付**的团队（Web 全功能，小程序 Skyline 优先）
+- 需要 **Web + 微信小程序双端交付**的团队（Web 全功能，小程序 Skyline 优先；App/鸿蒙按路线图接线）
 - 想让 **AI Agent 参与开发**的团队（AI 产出符合 IR 契约的标准代码，编译期强制校验）
 - 有**存量小程序**要渐进迁移（兼容层 + `proteus migrate mp` codemod）
 

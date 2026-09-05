@@ -6,7 +6,9 @@ group: 运行期
 
 # 启动流程与更新机制
 
-## 小程序端启动流程
+## 各端启动流程
+
+### 小程序端（mp-weixin）
 
 ```
 npm run build:mp
@@ -19,6 +21,27 @@ npm run build:mp
 
 - `app.js` 骨架由构建期自动拼装：应用生命周期注册 + `getApp().__proteusProvides` 全局注册表初始化
 - 页面按需注入：Skyline 下 `lazyCodeLoading` 由 gen-routes 写入，未访问页面代码不注入
+
+### Web 端（web）
+
+```
+npm run dev:web（Vite dev + HMR）    /    npm run build:web（vue-tsc + vite build）
+        │
+main.ts：createApp → installWebPlatform（内置组件 + wx API 模拟）→ router → 挂载
+```
+
+标准 Vite SPA——启动无额外框架层。
+
+### 其他端
+
+| 端 | 启动载体 | 状态 |
+|---|---|---|
+| Headless（SSR / 测试） | Node 直启（mock 桥注入） | ✅ |
+| iOS / Android / 鸿蒙 | JSI 载体（G-40）——JS 逻辑层随宿主启动 | 🟡 端原型映射 |
+| Flutter 混合 | 同一 JS 逻辑层（Flutter 引擎侧宿主） | 🟡 |
+| 快应用 | 待定 | ⬜ |
+
+> 端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 更新机制
 
@@ -33,8 +56,3 @@ npm run build:mp
 | `npm run debug:mp` | 全链路调试构建（`PROTEUS_DEBUG=1`：`[proteus][环节]` 日志 + 决策链文件） |
 | `npx proteus explain <file>` | 单文件编译决策 trace |
 | `npx proteus rules` | 规则能力清单 |
-| 微信开发者工具 | 逻辑层断点 / WXML 面板 / Skyline 调试 |
-
-## 下一步
-
-- [渲染层：RenderBackend SPI](/docs/framework/23-render-backend)

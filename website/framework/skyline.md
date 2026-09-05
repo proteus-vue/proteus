@@ -8,6 +8,8 @@ group: 运行期
 
 小程序端 Skyline 是新一代原生渲染引擎（自绘，非 WebView）。Proteus 以 Skyline 优先：**Web 全功能 + 小程序 Skyline 优先，WebView 降级仅保证可运行**。
 
+> **端范围**：本页描述 **mp-weixin** 端内的双渲染引擎。跨端视角：Web = vue-dom（DOM）、App = UIKit/Jetpack/ArkUI 原生、Flutter = Widget——同一语义模型、各端各自的原生引擎，对照见 [端与成熟度](/docs/framework/ends-matrix)。
+
 ## 工程里的 Skyline 字段（全部自动生成）
 
 | 字段 | 位置 | 生成方 |

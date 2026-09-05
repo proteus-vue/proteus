@@ -6,7 +6,9 @@ group: 编译期
 
 # 模板转换
 
-`<template>` 的标签映射由编译规则表驱动（`transforms/template.ts`）。业务写标准 HTML，产物是合法 WXML。每次编译触发的规则可在 trace 里逐条观察（`proteus explain <file>` / Playground 转换面板）。
+`<template>` 的标签映射由编译规则表驱动（`transforms/template.ts`）。业务写标准 HTML，产物是合法 WXML。
+
+> **端范围**：本页描述 **mp-weixin** 目标的编译管线（Layer 1 兼容层）。Web 端无此管线——标准 Vue 直跑（p-* 语义组件原生渲染）；其余端随桥接线启用。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。每次编译触发的规则可在 trace 里逐条观察（`proteus explain <file>` / Playground 转换面板）。
 
 ## 标签映射规则
 

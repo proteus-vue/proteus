@@ -12,8 +12,10 @@ group: 总览
 
 | 段 | 角色 | 跑在哪 |
 |---|---|---|
-| `<script setup>` | **逻辑层**：状态、事件处理、能力调用 | Web：同线程 Vue 运行时 / 小程序：独立 JS 运行时（逻辑层） |
-| `<template>` + `<style>` | **视图层**：界面结构与样式声明 | Web：DOM（同线程渲染）/ 小程序：WebView 或 Skyline 原生渲染（独立线程） |
+| `<script setup>` | **逻辑层**：状态、事件处理、能力调用 | 同一 JS 逻辑层——Web 同线程 Vue 运行时 / 小程序独立逻辑层 / App 经 JSI 载体 / SSR Node |
+| `<template>` + `<style>` | **视图层**：界面结构与样式声明 | 各端各自渲染引擎：Web DOM（vue-dom）/ 小程序 WebView 或 Skyline / iOS·Android·鸿蒙 原生控件 / Flutter Widget |
+
+逻辑层与视图层的耦合方式（同线程直驱 vs setData 桥）是各端唯一差异，收敛在渲染后端与桥接层——语义与业务代码零分支。全部端的状态见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 小程序的双线程模型
 

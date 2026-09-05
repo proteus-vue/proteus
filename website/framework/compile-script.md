@@ -8,6 +8,8 @@ group: 编译期
 
 `<script setup>` 的响应式代码在小程序端没有直接对等物（无 Proxy 响应式、无 computed/watch 原生概念）——编译器把它重写为 `Page()` / `Component()` 构造器 + `setData` 调用。每次转换触发规则可在 trace 逐条观察。
 
+> **端范围**：本页描述 **mp-weixin** 目标的编译管线（Layer 1）。Web 端 `ref`/`computed`/`watch` 是真实 Vue 响应式零重写；其余端随桥接线启用。
+
 ## 核心规则
 
 | 规则 ID | 业务写法 | 产物 |

@@ -6,16 +6,30 @@ group: 数据与状态
 
 # 数据更新策略
 
-小程序视图层数据的唯一入口是 `setData`——它的成本与**数据量**和**调用次数**正相关。Proteus 的策略：编译期重写 + 运行时合并，双端业务代码一致。
+跨端数据更新的统一契约：**响应式写入自动驱动视图更新，业务不手推**。各端的「推送通道」不同——Web 无桥、小程序 setData、App 走 Bridge——差异由框架**编译期重写 + 运行时合并**吸收，业务代码一致。
 
-## 运行时：setDataBridge（16ms 批量窗口）
+## 终端落地进度
 
-`@proteus-vue/runtime` 的 `setDataBridge` 按页面粒度收集脏路径：
+| 端 | 状态 | 推送通道说明 |
+|---|---|---|
+| Web SPA | ✅ | Vue Proxy 原生——无桥零成本 |
+| 微信小程序 | ✅ | setDataBridge：16ms 批量窗口 + 深层 diff 叶路径补丁 |
+| Headless（SSR / 测试） | ✅ | 内存态直更（无视图推送） |
+| iOS / Android / 鸿蒙 | 🟡 | 端原型映射——Bridge setData 通道（JSI）待接线 |
+| Flutter 混合 | 🟡 | 同一 JS 逻辑层——状态通道待接线 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+
+## 小程序端：setDataBridge（16ms 批量窗口）
+
+小程序视图层数据的唯一入口是 `setData`——成本与**数据量**和**调用次数**正相关。`@proteus-vue/runtime` 的 `setDataBridge` 按页面粒度收集脏路径：
 
 - **路径合并**：`a.b` / `a[0].c` 等点号与数组路径精确合并（同一窗口内 `count.value++` 两次 → 一次 `setData({ count: 2 })`）
 - **值去重**：同路径同值写入跳过
+- **深层 diff**：对象/数组变更递归出叶路径补丁——只推送变化的子路径
 - **flushSync**：需要立即上屏的场景显式冲刷
-- batchWindow 由工厂注入（默认 16 ≈ 1 帧），`PROTEUS_NO_CACHE` 类似的环境开关不介入
+- batchWindow 由工厂注入（默认 16 ≈ 1 帧）
 
 ## 编译期：写入点重写
 
