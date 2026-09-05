@@ -40,7 +40,7 @@ proteus gate ls [--group=<族>] | gate run <id|preset> [dir]
 ```
 
 ★统一门禁系统（★#453/#454 Gate 注册表单一来源）：ls = 全量门禁目录（族/scope/●接线态）；run = 统一执行
-      preset：check（快速）/ audit（深度八域）；已接线：d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/devtools-budget/coverage
+      preset：check（快速）/ audit（深度十域，域集同 audit all）；已接线：d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/devtools-budget/coverage
       未接线（○：写型/诊断/多旗标工具）经独立命令——新门禁先补录注册表再接线
 
 ### `proteus check`
