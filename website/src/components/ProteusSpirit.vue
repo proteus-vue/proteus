@@ -9,7 +9,7 @@
     </Transition>
 
     <!-- ★Q 版小海神（SVG 矢量——身体渐变随形态色） -->
-    <svg class="sprite" viewBox="0 0 120 132" role="button" :aria-label="`切换形态，当前：${form.name}`" @click="onMorph">
+    <svg ref="spriteEl" class="sprite" viewBox="0 0 120 132" role="button" :aria-label="`切换形态，当前：${form.name}`" @click="onMorph">
       <defs>
         <linearGradient id="spirit-body-grad" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" :stop-color="form.color" />
@@ -54,7 +54,8 @@
 </template>
 
 <script setup lang="ts">
-// website/src/components/ProteusSpirit.vue —— ★#389h Q 版小海神（拟人化形象 + 形态主题气泡）
+/* d2-exempt-file: #389h SVG 拟人形象参考实现（#389i 起由 spirit.html Three.js iframe 承接，按决策保留未引用）——手绘 SVG 视觉资产内部实现（瞳孔视线/眨眼调度），不走框架页面语义 */
+// website/src/components/ProteusSpirit.vue —— ★#389h Q 版小海神（拟人化形象 + 形态主题气泡；★#389i 后为参考实现——现行吉祥物 = spirit.html iframe）
 //   点击角色 → 循环切换形态（本体/Web/iOS/Android/鸿蒙/Flutter/小程序）+ 气泡弹出当前形态主题思想
 //   瞳孔跟随鼠标（G-24 指针语义）+ 偶发眨眼 + 变身时 O 型嘴惊喜
 //   降级：reduced-motion → 无浮动/无眨眼动画（气泡仍为信息性显示）
@@ -106,13 +107,14 @@ function onMorph(): void {
 // 瞳孔跟随（rAF 节流）
 let eyeTarget = { x: 0, y: 0 }
 let eyeRaf = 0
+const spriteEl = ref<SVGSVGElement | null>(null)
 function onMove(e: PointerEvent): void {
   eyeTarget = { x: e.clientX, y: e.clientY }
   if (!eyeRaf) eyeRaf = requestAnimationFrame(applyEye)
 }
 function applyEye(): void {
   eyeRaf = 0
-  const svg = document.querySelector('.site-spirit .sprite') as SVGElement | null  // d2-exempt: SVG 内部节点选择（视觉资产内部实现）
+  const svg = spriteEl.value
   if (!svg) return
   const r = svg.getBoundingClientRect()
   const cx = r.left + r.width / 2
@@ -149,13 +151,14 @@ function onMoveThrottled(e: PointerEvent): void {
 onMounted(() => {
   motionOk.value = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
   if (motionOk.value) {
-    window.addEventListener('pointermove', onMoveThrottled, { passive: true })  // d2-exempt: 指针视线跟随（视觉资产内部——pointer 运动原语缺口）
+    // 指针视线跟随（视觉资产内部——整文件资产豁免登记于文件头）
+    window.addEventListener('pointermove', onMoveThrottled, { passive: true })
     scheduleBlink()
   }
 })
 
 onUnmounted(() => {
-  window.removeEventListener('pointermove', onMoveThrottled)  // d2-exempt: 同指针视线跟随清理
+  window.removeEventListener('pointermove', onMoveThrottled)
   clearTimeout(blinkT)
   clearTimeout(blinkHold)
   clearTimeout(bubbleTimer)
