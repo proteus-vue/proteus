@@ -1,5 +1,7 @@
 ---
 title: useEmbedded（capability.embedded）
+group: 应用与生命周期
+order: 7005
 ---
 
 # useEmbedded

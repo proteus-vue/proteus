@@ -1,5 +1,7 @@
 ---
 title: useWebSocket（capability.websocket）
+group: 网络与通信
+order: 2
 ---
 
 # useWebSocket

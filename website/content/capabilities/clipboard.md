@@ -1,5 +1,7 @@
 ---
 title: useClipboard（capability.clipboard）
+group: 设备与系统
+order: 1005
 ---
 
 # useClipboard

@@ -1,5 +1,7 @@
 ---
 title: useQRCode（capability.qr-code）
+group: 媒体与扫码
+order: 4003
 ---
 
 # useQRCode

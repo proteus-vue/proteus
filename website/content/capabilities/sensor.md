@@ -1,5 +1,7 @@
 ---
 title: useSensor（capability.sensor）
+group: 设备与系统
+order: 1001
 ---
 
 # useSensor

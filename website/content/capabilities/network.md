@@ -1,5 +1,7 @@
 ---
 title: useNetwork（capability.network）
+group: 设备与系统
+order: 1004
 ---
 
 # useNetwork

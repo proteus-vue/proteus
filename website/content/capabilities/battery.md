@@ -1,5 +1,7 @@
 ---
 title: useBattery（capability.battery）
+group: 设备与系统
+order: 1003
 ---
 
 # useBattery

@@ -1,5 +1,7 @@
 ---
 title: useKeyboard（capability.keyboard）
+group: 设备与系统
+order: 1010
 ---
 
 # useKeyboard

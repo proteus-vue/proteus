@@ -1,5 +1,7 @@
 ---
 title: p-masonry
+group: 布局
+order: 7
 ---
 
 # p-masonry

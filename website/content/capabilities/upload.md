@@ -1,5 +1,7 @@
 ---
 title: useUpload（capability.upload）
+group: 网络与通信
+order: 4
 ---
 
 # useUpload

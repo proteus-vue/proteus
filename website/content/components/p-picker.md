@@ -1,5 +1,7 @@
 ---
 title: p-picker
+group: 内容与表单
+order: 1016
 ---
 
 # p-picker

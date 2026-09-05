@@ -1,5 +1,7 @@
 ---
 title: p-scrollable
+group: 手势
+order: 3002
 ---
 
 # p-scrollable

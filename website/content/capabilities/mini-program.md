@@ -1,5 +1,7 @@
 ---
 title: useMiniProgram（capability.mini-program）
+group: 应用与生命周期
+order: 7004
 ---
 
 # useMiniProgram

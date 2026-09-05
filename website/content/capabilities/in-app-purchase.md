@@ -1,5 +1,7 @@
 ---
 title: useInAppPurchase（capability.in-app-purchase）
+group: 账号与支付
+order: 5007
 ---
 
 # useInAppPurchase

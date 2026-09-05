@@ -1,5 +1,7 @@
 ---
 title: usePayment（capability.payment）
+group: 账号与支付
+order: 5005
 ---
 
 # usePayment

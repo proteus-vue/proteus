@@ -1,5 +1,7 @@
 ---
 title: p-divider
+group: 布局
+order: 3
 ---
 
 # p-divider

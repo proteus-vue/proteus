@@ -1,5 +1,7 @@
 ---
 title: p-slider
+group: 内容与表单
+order: 1022
 ---
 
 # p-slider

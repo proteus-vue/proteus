@@ -1,5 +1,7 @@
 ---
 title: useDataChannel（capability.data-channel）
+group: 网络与通信
+order: 6
 ---
 
 # useDataChannel

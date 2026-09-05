@@ -1,5 +1,7 @@
 ---
 title: useAppLifecycle（capability.app-lifecycle）
+group: 应用与生命周期
+order: 7001
 ---
 
 # useAppLifecycle

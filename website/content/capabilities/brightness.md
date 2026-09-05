@@ -1,5 +1,7 @@
 ---
 title: useBrightness（capability.brightness）
+group: 设备与系统
+order: 1009
 ---
 
 # useBrightness

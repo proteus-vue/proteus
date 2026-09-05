@@ -1,5 +1,7 @@
 ---
 title: useAuth（capability.auth）
+group: 账号与支付
+order: 5002
 ---
 
 # useAuth

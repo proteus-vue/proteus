@@ -1,5 +1,7 @@
 ---
 title: p-toolbar
+group: 页面外壳
+order: 2012
 ---
 
 # p-toolbar

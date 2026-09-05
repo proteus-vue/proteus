@@ -1,5 +1,7 @@
 ---
 title: useDownload（capability.download）
+group: 网络与通信
+order: 5
 ---
 
 # useDownload

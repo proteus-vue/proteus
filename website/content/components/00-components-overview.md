@@ -1,12 +1,14 @@
 ---
 title: 组件总览
+group: 总览
+order: 0
 ---
 
 # 组件总览
 
-> 59 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
+> 59 个语义组件（5 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
 
-## 布局（13）
+## 布局（16）
 
 | 组件 | Props | Events |
 |---|---|---|
@@ -17,18 +19,22 @@ title: 组件总览
 | [p-grid](/docs/component/p-grid) | 2 | 0 |
 | [p-inline](/docs/component/p-inline) | 4 | 0 |
 | [p-masonry](/docs/component/p-masonry) | 2 | 0 |
+| [p-safe](/docs/component/p-safe) | 3 | 0 |
 | [p-scroll](/docs/component/p-scroll) | 4 | 0 |
 | [p-scroll-view](/docs/component/p-scroll-view) | 9 | 3 |
+| [p-sidebar](/docs/component/p-sidebar) | 4 | 0 |
 | [p-spacer](/docs/component/p-spacer) | 3 | 0 |
 | [p-stack](/docs/component/p-stack) | 3 | 0 |
+| [p-view](/docs/component/p-view) | 3 | 0 |
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## 内容与表单（23）
+## 内容与表单（26）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
+| [p-button](/docs/component/p-button) | 5 | 1 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 3 | 0 |
 | [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
@@ -37,9 +43,11 @@ title: 组件总览
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
 | [p-image](/docs/component/p-image) | 8 | 2 |
 | [p-input](/docs/component/p-input) | 8 | 4 |
+| [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
+| [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
 | [p-picker](/docs/component/p-picker) | 4 | 0 |
 | [p-radio](/docs/component/p-radio) | 3 | 0 |
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
@@ -83,14 +91,3 @@ title: 组件总览
 | [p-animate](/docs/component/p-animate) | 4 | 0 |
 | [p-router-link](/docs/component/p-router-link) | 3 | 1 |
 | [p-transition](/docs/component/p-transition) | 4 | 0 |
-
-## —（6）
-
-| 组件 | Props | Events |
-|---|---|---|
-| [p-button](/docs/component/p-button) | 5 | 1 |
-| [p-list-view](/docs/component/p-list-view) | 9 | 0 |
-| [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
-| [p-safe](/docs/component/p-safe) | 3 | 0 |
-| [p-sidebar](/docs/component/p-sidebar) | 4 | 0 |
-| [p-view](/docs/component/p-view) | 3 | 0 |

@@ -1,5 +1,7 @@
 ---
 title: useLog（capability.log）
+group: 可观测与调试
+order: 8002
 ---
 
 # useLog

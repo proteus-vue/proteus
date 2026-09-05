@@ -1,5 +1,7 @@
 ---
 title: p-rich-text
+group: 内容与表单
+order: 1018
 ---
 
 # p-rich-text

@@ -1,5 +1,7 @@
 ---
 title: p-action-sheet
+group: 页面外壳
+order: 2001
 ---
 
 # p-action-sheet

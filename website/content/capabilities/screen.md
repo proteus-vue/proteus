@@ -1,5 +1,7 @@
 ---
 title: useScreen（capability.screen）
+group: 设备与系统
+order: 1006
 ---
 
 # useScreen

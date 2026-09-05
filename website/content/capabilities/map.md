@@ -1,5 +1,7 @@
 ---
 title: useMap（capability.map）
+group: 位置与地图
+order: 3002
 ---
 
 # useMap

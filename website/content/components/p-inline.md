@@ -1,5 +1,7 @@
 ---
 title: p-inline
+group: 布局
+order: 6
 ---
 
 # p-inline

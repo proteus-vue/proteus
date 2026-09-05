@@ -1,5 +1,7 @@
 ---
 title: useOrientation（capability.orientation）
+group: 设备与系统
+order: 1008
 ---
 
 # useOrientation

@@ -1,5 +1,7 @@
 ---
 title: useBluetooth（capability.bluetooth）
+group: 网络与通信
+order: 7
 ---
 
 # useBluetooth

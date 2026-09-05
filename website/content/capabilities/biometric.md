@@ -1,5 +1,7 @@
 ---
 title: useBiometric（capability.biometric）
+group: 账号与支付
+order: 5003
 ---
 
 # useBiometric

@@ -1,5 +1,7 @@
 ---
 title: p-button
+group: 内容与表单
+order: 1002
 ---
 
 # p-button

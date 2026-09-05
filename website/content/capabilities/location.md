@@ -1,5 +1,7 @@
 ---
 title: useLocation（capability.location）
+group: 位置与地图
+order: 3001
 ---
 
 # useLocation

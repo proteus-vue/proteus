@@ -1,5 +1,7 @@
 ---
 title: useFaceID（capability.face-id）
+group: 账号与支付
+order: 5004
 ---
 
 # useFaceID

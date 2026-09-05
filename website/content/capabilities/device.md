@@ -1,5 +1,7 @@
 ---
 title: useDevice（capability.device）
+group: 设备与系统
+order: 1007
 ---
 
 # useDevice

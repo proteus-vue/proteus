@@ -1,5 +1,7 @@
 ---
 title: p-modal
+group: 页面外壳
+order: 2003
 ---
 
 # p-modal

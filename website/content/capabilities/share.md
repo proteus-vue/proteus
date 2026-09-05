@@ -1,5 +1,7 @@
 ---
 title: useShare（capability.share）
+group: 通知与分享
+order: 6002
 ---
 
 # useShare

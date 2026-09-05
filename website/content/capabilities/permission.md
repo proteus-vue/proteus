@@ -1,5 +1,7 @@
 ---
 title: usePermission（capability.permission）
+group: 账号与支付
+order: 5001
 ---
 
 # usePermission

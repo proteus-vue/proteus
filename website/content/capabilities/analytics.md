@@ -1,5 +1,7 @@
 ---
 title: useAnalytics（capability.analytics）
+group: 可观测与调试
+order: 8001
 ---
 
 # useAnalytics

@@ -1,5 +1,7 @@
 ---
 title: useShortcut（capability.shortcut）
+group: 通知与分享
+order: 6007
 ---
 
 # useShortcut

@@ -1,5 +1,7 @@
 ---
 title: useBackground（capability.background）
+group: 应用与生命周期
+order: 7003
 ---
 
 # useBackground

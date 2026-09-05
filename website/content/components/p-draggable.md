@@ -1,5 +1,7 @@
 ---
 title: p-draggable
+group: 手势
+order: 3001
 ---
 
 # p-draggable

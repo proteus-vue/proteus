@@ -1,5 +1,7 @@
 ---
 title: p-avatar
+group: 内容与表单
+order: 1001
 ---
 
 # p-avatar

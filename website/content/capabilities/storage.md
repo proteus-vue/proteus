@@ -1,5 +1,7 @@
 ---
 title: useStorage（capability.storage）
+group: 存储与文件
+order: 2001
 ---
 
 # useStorage

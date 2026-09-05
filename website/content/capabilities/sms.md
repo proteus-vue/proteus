@@ -1,5 +1,7 @@
 ---
 title: useSMS（capability.sms）
+group: 通知与分享
+order: 6006
 ---
 
 # useSMS

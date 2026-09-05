@@ -1,5 +1,7 @@
 ---
 title: useNFC（capability.nfc）
+group: 网络与通信
+order: 8
 ---
 
 # useNFC

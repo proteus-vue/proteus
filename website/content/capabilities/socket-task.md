@@ -1,5 +1,7 @@
 ---
 title: useSocketTask（capability.socket-task）
+group: 网络与通信
+order: 3
 ---
 
 # useSocketTask

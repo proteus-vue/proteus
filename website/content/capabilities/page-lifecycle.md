@@ -1,5 +1,7 @@
 ---
 title: usePageLifecycle（capability.page-lifecycle）
+group: 应用与生命周期
+order: 7002
 ---
 
 # usePageLifecycle

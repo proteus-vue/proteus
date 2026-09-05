@@ -1,5 +1,7 @@
 ---
 title: p-toast
+group: 页面外壳
+order: 2011
 ---
 
 # p-toast

@@ -1,5 +1,7 @@
 ---
 title: useVibrate（capability.vibrate）
+group: 设备与系统
+order: 1002
 ---
 
 # useVibrate

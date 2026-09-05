@@ -1,5 +1,7 @@
 ---
 title: useNotification（capability.notification）
+group: 通知与分享
+order: 6001
 ---
 
 # useNotification
