@@ -35,7 +35,7 @@ describe('TestDriver 统一测试 API（Web 端真实浏览器）', () => {
     const driver = createDriver({ platform: 'web', page })
     await runSharedSmoke(driver, {
       route: `${BASE}/pages/index`,
-      tapSelector: 'button',
+      tapSelector: 'button.proteus-web-button:not(.link)',
       shotPath: '/tmp/proteus-e2e-driver-web.png',
     })
   }, 60_000)
@@ -46,7 +46,7 @@ describe('TestDriver 统一测试 API（Web 端真实浏览器）', () => {
     const count = driver.element('.tapped-count')
     await count.waitFor({ timeout: 10_000 })
     expect(await count.text()).toContain('tapped 0 times')
-    await driver.element('button').tap()
+    await driver.element('button.proteus-web-button:not(.link)').tap()
     // ★web 渲染更新在微任务队列 → 轮询等待（driver.waitFor 固定等待 + 重读）
     for (let i = 0; i < 10; i++) {
       if ((await count.text()).includes('tapped 1 times')) break

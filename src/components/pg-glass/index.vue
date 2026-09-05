@@ -58,21 +58,24 @@ const PRESET_TINT: Record<string, string> = {
 // ★无障碍优先：prefers-reduced-transparency 自动关玻璃（降级实色——铁律 4）
 // ★MP 安全：逻辑层无 matchMedia → 恒 false（不降级即玻璃）；探测走 globalThis 而非裸 window（components:audit no-platform-api）
 const reducedTransparency = ref(false)
+// ★MP 编译安全：函数体内不用 as 断言与箭头参数标注（编译器限制）——回调提为函数声明（p-sidebar 同款）
+function onMediaChange(e: MediaQueryListEvent): void {
+  reducedTransparency.value = e.matches
+}
 onMounted(() => {
-  const mm = (globalThis as { matchMedia?: (q: string) => MediaQueryList | undefined }).matchMedia?.('(prefers-reduced-transparency: reduce)')
+  const g = globalThis
+  const mm = g.matchMedia ? g.matchMedia('(prefers-reduced-transparency: reduce)') : undefined
   if (mm) {
     reducedTransparency.value = mm.matches
-    mm.addEventListener?.('change', (e: MediaQueryListEvent) => {
-      reducedTransparency.value = e.matches
-    })
+    mm.addEventListener?.('change', onMediaChange)
   }
 })
 
 const blurPx = computed(() => {
-  const base = PRESET_BLUR[props.preset] ?? PRESET_BLUR.custom!
+  const base = PRESET_BLUR[props.preset] ?? PRESET_BLUR.custom ?? 20
   return Math.round(base * (INTENSITY_SCALE[props.intensity] ?? 1))
 })
-const tint = computed(() => props.tint || PRESET_TINT[props.preset] || PRESET_TINT.custom!)
+const tint = computed(() => props.tint || PRESET_TINT[props.preset] || PRESET_TINT.custom || "")
 const radiusPx = computed(() => (props.radius > 0 ? props.radius + 'px' : undefined))
 
 const glassStyle = computed(() => ({

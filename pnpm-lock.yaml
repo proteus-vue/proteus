@@ -84,9 +84,24 @@ importers:
 
   examples:
     dependencies:
+      '@proteus-vue/api':
+        specifier: workspace:*
+        version: link:../packages/api
       '@proteus-vue/app-config':
         specifier: workspace:*
         version: link:../packages/app-config
+      '@proteus-vue/built-in-components':
+        specifier: workspace:*
+        version: link:../packages/built-in-components
+      '@proteus-vue/capabilities':
+        specifier: workspace:*
+        version: link:../packages/capabilities
+      '@proteus-vue/compat-miniprogram':
+        specifier: workspace:*
+        version: link:../packages/compat-miniprogram
+      '@proteus-vue/desktop':
+        specifier: workspace:*
+        version: link:../packages/desktop
       '@proteus-vue/dev-host':
         specifier: workspace:*
         version: link:../packages/dev-host
@@ -102,6 +117,18 @@ importers:
       '@proteus-vue/fluid':
         specifier: workspace:*
         version: link:../packages/fluid
+      '@proteus-vue/gesture':
+        specifier: workspace:*
+        version: link:../packages/gesture
+      '@proteus-vue/i18n':
+        specifier: workspace:*
+        version: link:../packages/i18n
+      '@proteus-vue/module':
+        specifier: workspace:*
+        version: link:../packages/module
+      '@proteus-vue/render-backend':
+        specifier: workspace:*
+        version: link:../packages/render-backend
       '@proteus-vue/router':
         specifier: workspace:*
         version: link:../packages/router
@@ -111,9 +138,15 @@ importers:
       '@proteus-vue/shared':
         specifier: workspace:*
         version: link:../packages/shared
+      '@proteus-vue/style-safety':
+        specifier: workspace:*
+        version: link:../packages/style-safety
       '@proteus-vue/test-ir':
         specifier: workspace:*
         version: link:../packages/test-ir
+      '@proteus-vue/web':
+        specifier: workspace:*
+        version: link:../packages/web
       '@vue/devtools-api':
         specifier: ^8.0.0
         version: 8.2.1
