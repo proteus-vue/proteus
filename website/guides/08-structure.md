@@ -19,7 +19,9 @@ group: 代码构成
 | `src/pages/` | 页面目录（`pagesDir`），每个 `.vue` 即一个页面 |
 | `src/router/` | RouterView / 路由实例 / `auto-routes.ts`（编译期生成，勿手动编辑） |
 | `src/shims/` | wx / 事件 / Vue 类型声明 |
-| `.github/workflows/proteus.yml` | CI 模板（双端构建） |
+| `.github/workflows/proteus.yml` | CI 模板（check 门禁 → 双端构建 → 产物归档） |
+
+> 模板未含但推荐新建的目录：`src/components/`（业务组件——plugin-vite 扫描自动写入 usingComponents）、`src/stores/`（Pinia store——纯逻辑，stores-purity CI 硬卡口）、`src/capabilities/`（能力声明——audit 门禁消费）。
 
 ## 三个关键约定
 

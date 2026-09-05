@@ -2,9 +2,12 @@
 title: 运行与预览
 order: 6
 group: 开始
+ends: startup
 ---
 
 # 运行与预览
+
+双端各一条命令跑通（各端启动载体与状态见上方「终端落地进度」）。
 
 ## 跑通 Web 端
 
@@ -32,6 +35,10 @@ npm run build:mp
 4. Skyline 所需字段无需手配：`app.json` 的 `lazyCodeLoading`、各页 `page.json` 的 `"renderer": "skyline"` 均由 gen-routes 自动生成
 
 看到脚手架首页在模拟器里渲染出来，双端就都跑通了。
+
+## 其余端
+
+App（iOS / Android / 鸿蒙）与 Flutter 宿主载体为原型映射（🟡）——按路线图接线后，同一份 `src/` 源码加入对应端入口即可；无需改页面代码。
 
 ## 下一步
 

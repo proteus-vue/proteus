@@ -22,9 +22,16 @@ group: 开始
 
 ## 发布到各端
 
-- **Web 端**：`dist/web/` 是标准静态 SPA 产物，任意静态托管 / CDN / 容器均可部署
-- **小程序端**：`dist/mp-weixin/` 在微信开发者工具中「上传代码」后，走小程序正常的提审与发布流程
+| 端 | 产物 | 发布方式 | 状态 |
+|---|---|---|---|
+| Web | `dist/web/`（标准静态 SPA） | 任意静态托管 / CDN / 容器 | ✅ |
+| 微信小程序 | `dist/mp-weixin/` | 开发者工具「上传代码」→ 提审 → 发布（微信平台流程） | ✅ |
+| App（iOS / Android / 鸿蒙） | 原生工程（JSI 载体，G-40） | 随端宿主发布流程 | 🟡 原型映射 |
+| Flutter | Flutter 工程嵌入 | Flutter 发布流程 | 🟡 |
+| 快应用 | 待定 | 待定 | ⬜ |
+
 - **调试**：行为异常时先跑 `npm run debug:mp`，产物里带 `[proteus][环节]` 日志与决策链文件；`npx proteus explain <file>` 可查单文件编译决策。更多见 [CLI 与工程命令](/docs/28-cli)
+- **体积门禁**：`build:mp` 尾部自动输出体积报告（主包预算 `budget.mainPackageKB`，分包微信硬限 2048KB）——见[体积预算](/docs/framework/perf-budget)
 
 ## 下一步
 
