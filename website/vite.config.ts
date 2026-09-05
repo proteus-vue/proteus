@@ -4,11 +4,27 @@ import vue from '@vitejs/plugin-vue'
 // ★官网 B2（决策 #374）：内容即数据——md 由 @proteus-vue/docs 引擎构建期编译为组件
 //   （frontmatter/title/html/toc 构建期产出，运行时零解析——文档也是编译产物）
 import { docsMdPlugin } from '@proteus-vue/docs/vite'
+// ★#415 端指令 SSOT：端注册表 + 逐机制端表（手写页 frontmatter.ends → 兼容进度表，状态零漂移）
+import { ENDS } from './src/ends'
+import { END_MECHANISM_NOTES } from './src/end-notes'
+
+const STATUS_MARK: Record<string, string> = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
+
+function resolveEnds(spec: string) {
+  const notes = END_MECHANISM_NOTES[spec]
+  if (!notes) return undefined
+  return ENDS.map((e) => ({
+    id: e.id,
+    name: e.name,
+    status: STATUS_MARK[e.status] ?? '⬜',
+    note: notes[e.id] ?? '',
+  }))
+}
 
 export default defineConfig({
   plugins: [
     vue(),
-    docsMdPlugin(),
+    docsMdPlugin({ resolveEnds }),
   ],
   resolve: {
     alias: [

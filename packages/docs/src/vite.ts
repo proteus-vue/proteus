@@ -12,6 +12,8 @@ export interface DocsVitePluginOptions {
   /** TOC 深度范围（缺省 h2-h3） */
   tocMinDepth?: number
   tocMaxDepth?: number
+  /** ★#415 端指令解析器：frontmatter.ends（机制名）→ 逐端表（端/状态来自端注册表 SSOT）；未注入则忽略 ends 指令 */
+  resolveEnds?: (spec: string) => Array<{ id: string; name: string; status: string; note: string }> | undefined
 }
 
 export interface DocsModule {
@@ -21,6 +23,8 @@ export interface DocsModule {
   toc: Array<{ depth: number; text: string; id: string; children: unknown[] }>
   tocFlat: Array<{ depth: number; text: string; id: string }>
   searchEntries: Array<{ anchor: string; text: string }>
+  /** ★#415 端指令展开：ends 指令注入的端表（frontmatter.ends 存在时） */
+  ends?: Array<{ id: string; name: string; status: string; note: string }>
 }
 
 /** md 源码 → 组件模块 JS 代码（transform 用） */
@@ -31,6 +35,10 @@ export function mdToModule(mdSource: string, id: string, options: DocsVitePlugin
   const tocFlat = flatToc(doc.blocks, { minDepth: options.tocMinDepth ?? 2, maxDepth: options.tocMaxDepth ?? 3 })
   const title = typeof doc.frontmatter.title === 'string' ? doc.frontmatter.title : tocFlat[0]?.text ?? ''
   const searchEntries = tocFlat.map((t) => ({ anchor: t.id, text: t.text }))
+  // ★#415 端指令展开：frontmatter.ends = 机制名 → 逐端说明（端/状态取 ends.ts SSOT，说明按机制注入）——
+  //   手写页的端表与组件/能力页兼容表同构，且状态零漂移（SSOT 单源）
+  const endsSpec = typeof doc.frontmatter.ends === 'string' ? doc.frontmatter.ends : ''
+  const ends = options.resolveEnds && endsSpec ? options.resolveEnds(endsSpec) : undefined
 
   return [
     `// 由 @proteus-vue/docs vite 插件生成（源：${JSON.stringify(id)}）`,
@@ -40,8 +48,9 @@ export function mdToModule(mdSource: string, id: string, options: DocsVitePlugin
     `const toc = ${JSON.stringify(toc)}`,
     `const tocFlat = ${JSON.stringify(tocFlat)}`,
     `const searchEntries = ${JSON.stringify(searchEntries)}`,
-    `export { frontmatter, title, html, toc, tocFlat, searchEntries }`,
-    `export default { frontmatter, title, html, toc, tocFlat, searchEntries }`,
+    `const ends = ${JSON.stringify(ends)}`,
+    `export { frontmatter, title, html, toc, tocFlat, searchEntries, ends }`,
+    `export default { frontmatter, title, html, toc, tocFlat, searchEntries, ends }`,
     ``,
   ].join('\n')
 }

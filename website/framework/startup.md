@@ -2,11 +2,12 @@
 title: 启动流程与更新机制
 order: 15
 group: 运行期
+ends: startup
 ---
 
 # 启动流程与更新机制
 
-## 各端启动流程
+各端启动载体与更新机制如下（各端落地状态见上方「终端落地进度」）。
 
 ### 小程序端（mp-weixin）
 
@@ -31,17 +32,6 @@ main.ts：createApp → installWebPlatform（内置组件 + wx API 模拟）→ 
 ```
 
 标准 Vite SPA——启动无额外框架层。
-
-### 其他端
-
-| 端 | 启动载体 | 状态 |
-|---|---|---|
-| Headless（SSR / 测试） | Node 直启（mock 桥注入） | ✅ |
-| iOS / Android / 鸿蒙 | JSI 载体（G-40）——JS 逻辑层随宿主启动 | 🟡 端原型映射 |
-| Flutter 混合 | 同一 JS 逻辑层（Flutter 引擎侧宿主） | 🟡 |
-| 快应用 | 待定 | ⬜ |
-
-> 端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 更新机制
 

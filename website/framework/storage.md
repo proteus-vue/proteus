@@ -2,24 +2,12 @@
 title: 存储
 order: 31
 group: 基础能力
+ends: storage
 ---
 
 # 存储
 
-跨端存储两条规则：**持久化配置化**（不直连存储 API）与**响应式增强**（createReactiveStorage）。
-
-## 终端落地进度
-
-| 端 | 状态 | 载体说明 |
-|---|---|---|
-| 微信小程序 | ✅ | wx sync 存储（getStorage 桥） |
-| Web SPA | ✅ | localStorage（webBridge.getStorage 已实现） |
-| Headless（SSR / 测试） | ✅ | 内存存储（mock / createMockContext 内置） |
-| iOS / Android / 鸿蒙 | 🟡 | 端原型映射——NativeKVAdapter（MMKV）待接入 |
-| Flutter 混合 | 🟡 | 桥待接 |
-| 快应用 | ⬜ | 端未开始 |
-
-> store 持久化载体另有平台工厂选择（Web localStorage / MP wx storage 写盘防抖——见[状态工厂](/docs/framework/state-factories)）。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+跨端存储两条规则：**持久化配置化**（不直连存储 API）与**响应式增强**（createReactiveStorage）。（各端载体见上方「终端落地进度」——store 持久化载体另有平台工厂选择，见[状态工厂](/docs/framework/state-factories)。）
 
 ## useStorage（能力句柄）
 

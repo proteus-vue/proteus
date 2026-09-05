@@ -22,6 +22,8 @@ const section = computed(() => sections.find((s) => s.key === sectionKey.value) 
 const slug = computed(() => (route.params.slug as string) ?? '')
 const current = computed(() => findDoc(section.value.base, slug.value) ?? section.value.items[0])
 const docHtml = computed(() => current.value?.doc.html ?? '')
+// ★#415 端指令：frontmatter.ends 展开的端表（SSOT = ends.ts + end-notes，构建期展开零漂移）
+const ends = computed(() => current.value?.doc.ends ?? undefined)
 const idx = computed(() => section.value.items.findIndex((g) => g.slug === slug.value))
 const prev = computed(() => (idx.value > 0 ? section.value.items[idx.value - 1] : undefined))
 const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.length - 1 ? section.value.items[idx.value + 1] : undefined))
@@ -71,6 +73,21 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
       <!-- ★本页导读右栏化：p-stack row+wrap 双栏——宽容器正文+右侧粘性 TOC，窄容器自动换行到正文下方（容器驱动，零 @media） -->
       <p-stack direction="row" :gap="28" wrap class="doc-area">
         <p-view class="doc-main">
+          <!-- ★#415 端落地进度表（frontmatter.ends 声明的页面）：与组件/能力页兼容表同构 -->
+          <p-view v-if="ends" class="ends-progress">
+            <p-text class="ends-title">终端落地进度</p-text>
+            <table class="ends-table">
+              <thead><tr><th>端</th><th>状态</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr v-for="e in ends" :key="e.id">
+                  <td>{{ e.name }}</td>
+                  <td class="ends-status">{{ e.status }}</td>
+                  <td class="ends-note">{{ e.note || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p-text class="ends-footnote">端状态取自端注册表；端架构对照见 <a href="#/docs/framework/ends-matrix">端与成熟度</a>。</p-text>
+          </p-view>
           <!-- 文档引擎 html：块级/行内全转义 + 语义类名（docs-*），样式见 style.css（md 内含 H1，页面头不再重复） -->
           <p-view class="doc-body" v-html="docHtml"></p-view>
 
@@ -211,4 +228,24 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
 .pager { margin-top: 20px; }
 .pager-link { color: var(--brand); text-decoration: none; font-size: 14px; }
 .pager-link:hover { text-decoration: underline; }
+/* ★#415 端落地进度表（frontmatter.ends 声明的页面——与组件/能力页兼容表同构） */
+.ends-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  padding: var(--sp-16);
+  margin-bottom: 20px;
+}
+.ends-title { color: var(--ink); font-size: 15px; font-weight: 700; }
+.ends-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.ends-table th, .ends-table td { border: 1px solid var(--line); padding: 7px 12px; text-align: left; }
+.ends-table th { color: var(--ink); background: var(--panel2); }
+.ends-table td { color: var(--muted); }
+.ends-status { white-space: nowrap; color: var(--ink); }
+.ends-note { color: var(--muted); }
+.ends-footnote { color: var(--dim); font-size: 12px; }
+.ends-footnote a { color: var(--brand2); text-decoration: none; }
 </style>
