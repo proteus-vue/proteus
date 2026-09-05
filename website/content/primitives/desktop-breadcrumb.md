@@ -6,11 +6,28 @@ group: 桌面原语
 
 # p-breadcrumb
 
+路由栈推导面包屑链（kebab → 可读 label）
+
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation p-breadcrumb）：面包屑纯逻辑（路由栈推导）**
 · deriveBreadcrumb(segments)：路径段 → 面包屑（末段为当前——home 归并/驼峰化显示名，对齐 deriveNameFromFile 惯例）
 纯函数（数据来自路由栈——宿主把当前路由 path 分段传入）
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：Pure logic + env 回落全局；v-p-* 指令（createDesktopDirectives 注册） |
+| 微信小程序 | 🟡 | 纯逻辑可单测；指令不注册（桌面交互无对等——编译剥离），页面接线由宿主决定 |
+| Headless（SSR / 测试） | ✅ | 纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 映射规划——官方接线未开始（原生识别/系统 API 对应 G-24 规划） |
+| Android 原生 | 🟡 | 映射规划——官方接线未开始 |
+| 鸿蒙 | 🟡 | 映射规划——官方接线未开始 |
+| Flutter 混合 | 🟡 | widget/系统映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/desktop/src/breadcrumb.ts`）
 

@@ -38,14 +38,14 @@ app.use(createWebPinia())
 | `debounce` | `number` | `50` | 写盘防抖窗口（ms，`0` 关闭） |
 | `scheduler` | `PersistSchedulerOptions` | — | 调度器（maxWait / 高频合并——M7.2） |
 | `quota` | `QuotaOptions` | — | 存储配额管理（M7.3） |
-| `scope` | `'app' \| 'page'` | `'app'` | 生命周期作用域（`page` 级在 dispose 时清除） |
+| `scope` | `'app' 或 'page'` | `'app'` | 生命周期作用域（`page` 级在 dispose 时清除） |
 | `eager` | `boolean` | `true` | 启动即 hydrate；`false` 惰性（首次 `$hydrate()`） |
 | `lazy` | `boolean` | — | 同 eager=false（语义更明确）；`$hydrated` 状态供组件 loading |
 | `keys` | `string[]` | — | hydrate 只恢复指定字段（减少反序列化量——M7.1 分片） |
 | `version` | `number` | `0` | 持久化 schema 版本（配合 migrations 做版本迁移） |
 | `migrations` | `Migration[]` | — | 迁移链（按 from 排序逐条执行） |
 | `volatile` | `string[]` | — | 不落盘字段（内存保留，hydrate/persist 均跳过） |
-| `encrypted` | `string[] \| SecureFields` | — | 加密字段（默认加密实现或自定义 encrypt/decrypt） |
+| `encrypted` | `string[] 或 SecureFields` | — | 加密字段（默认加密实现或自定义 encrypt/decrypt） |
 
 ## store 纯逻辑约定
 

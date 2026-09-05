@@ -37,7 +37,7 @@ Proteus 的全部家当本质是 **一张语义目录（136 原语 SSOT，`PRIMI
 
 **工程原语（engineering——本分区）**：E1-E28 + R1-R4 的六个**注入式工厂**（`createEngineering` 基础 / `createRouterEngineering` / `createAnimationEngineering` / `createToolingEngineering` / `createRequestEngineering` R1-R4 / `createOwnershipEngineering` PSS）——消费方注入 reactivity 等，api 包零 vue 依赖；MP 产物安全子集。
 
-每条都是：**定位（模块头原文）→ 核心导出表（API 面）→ 真实用法（dogfooding 出处）→ 用法与降级**。手把手示例见[桌面端原语](/docs/30-desktop-primitives)与[质量门禁违规速查](/docs/29-quality-gates)（官网自己就在用这些原语）。
+每条都是：**一句话定位（做什么）→ 端兼容进度（家族级口径）→ 定位原文（模块头）→ 核心导出表 → 真实用法（dogfooding 出处）→ 用法与降级**。手把手示例见[桌面端原语](/docs/30-desktop-primitives)与[质量门禁违规速查](/docs/29-quality-gates)（官网自己就在用这些原语）。
 
 ## 去哪看下一层
 

@@ -6,12 +6,29 @@ group: 手势原语
 
 # useGesture Hook + v-gesture 指令（Web 接线）
 
+手势 Web 官方接线：useGesture Hook + v-gesture:<kind>="onX" 指令
+
 > 来源模块 `@proteus-vue/gesture`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-32 B4 ④ Gesture：useGesture() Hook（G10）+ v-gesture 指令（G1-G7 Web 端）**
 平台接线层：Web Pointer Events → GestureInput → 识别器 → 语义手势事件
 「事件是 Backend 实现细节」：开发者写 v-gesture:tap="onTap"（声明式约束），不碰 touchstart/bindtap
 **★MP/原生：识别器映射由各端 Backend 承接（iOS UIGestureRecognizer 等）——本文件是 Web 官方接线**
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：v-gesture 指令 / useGesture Hook（Pointer Events） |
+| 微信小程序 | 🟡 | 识别器映射由各端 Backend 承接（规划中）——纯识别器可在逻辑层单测 |
+| Headless（SSR / 测试） | ✅ | 识别器纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | UIGestureRecognizer 映射规划 |
+| Android 原生 | 🟡 | GestureDetector 映射规划 |
+| 鸿蒙 | 🟡 | 手势系统映射规划 |
+| Flutter 混合 | 🟡 | 手势映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/gesture/src/use-gesture.ts`）
 

@@ -1,10 +1,12 @@
 ---
-title: p-deeplink
+title: 页面 URL 读写原语（location / history 收口）
 order: 25
 group: 桌面原语
 ---
 
-# p-deeplink
+# 页面 URL 读写原语（location / history 收口）
+
+页面地址读写：origin / pathname + replaceState 收口（分享链接同步在用）
 
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
@@ -12,6 +14,21 @@ group: 桌面原语
 语义：当前地址 origin/pathname 读取 + 同址替换（history.replaceState——不产生历史记录）
 消费：TransformDemo 分享链接（当前地址拼 Playground URL + 随编辑同步地址栏）——location/history 缺口回收
 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实 location/history——同 network/lifecycle 族惯例）
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：Pure logic + env 回落全局；v-p-* 指令（createDesktopDirectives 注册） |
+| 微信小程序 | 🟡 | 纯逻辑可单测；指令不注册（桌面交互无对等——编译剥离），页面接线由宿主决定 |
+| Headless（SSR / 测试） | ✅ | 纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 映射规划——官方接线未开始（原生识别/系统 API 对应 G-24 规划） |
+| Android 原生 | 🟡 | 映射规划——官方接线未开始 |
+| 鸿蒙 | 🟡 | 映射规划——官方接线未开始 |
+| Flutter 混合 | 🟡 | widget/系统映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/desktop/src/page-url.ts`）
 

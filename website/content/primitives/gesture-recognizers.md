@@ -6,12 +6,29 @@ group: 手势原语
 
 # Gesture 识别器（tap/pan/swipe/pinch/rotate）
 
+手势识别器：Web Pointer / MP touch 归一 GestureInput → tap/pan/swipe/pinch/rotate 等语义事件
+
 > 来源模块 `@proteus-vue/gesture`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-32 B4 ④ Gesture（proteus-semantic-primitives-plus-plan §6）：手势识别器（纯逻辑零依赖——可单测）**
 手势 = 声明式约束（G-32 原则）：平台事件（Web Pointer / MP touch）归一为 GestureInput 喂入，
 识别器输出语义手势事件（tap/longpress/pan/swipe/pinch/rotate/press）——「事件是 Backend 实现细节」
 Backend 映射：Web 用 Pointer Events；iOS UIGestureRecognizer / Android GestureDetector / 鸿蒙手势系统后续批次
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：v-gesture 指令 / useGesture Hook（Pointer Events） |
+| 微信小程序 | 🟡 | 识别器映射由各端 Backend 承接（规划中）——纯识别器可在逻辑层单测 |
+| Headless（SSR / 测试） | ✅ | 识别器纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | UIGestureRecognizer 映射规划 |
+| Android 原生 | 🟡 | GestureDetector 映射规划 |
+| 鸿蒙 | 🟡 | 手势系统映射规划 |
+| Flutter 混合 | 🟡 | 手势映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/gesture/src/recognizers.ts`）
 

@@ -37,7 +37,7 @@ group: 编译期
 | `isTab` | boolean | tab 页（收进 tabBar 声明） |
 | `requiresAuth` | boolean | 登录守卫（createRouter auth 检查器） |
 | `permissions` | string[] | 权限守卫（`resource:action`，permissions 检查器） |
-| `transition` | `'slideUp' \| 'slideDown' \| 'halfScreen' \| 'scaleDown' \| 'none'` | MP `routeType` 转场（Skyline 自定义路由） |
+| `transition` | `'slideUp' 或 'slideDown' 或 'halfScreen' 或 'scaleDown' 或 'none'` | MP `routeType` 转场（Skyline 自定义路由） |
 | 任意扩展 | JSON 可序列化 | 保留在 meta（集中式配置合并产物） |
 
 ## 顶层字段

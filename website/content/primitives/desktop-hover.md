@@ -6,12 +6,29 @@ group: 桌面原语
 
 # p-hover
 
+悬停态语义（brighten/lift/underline）——触屏自动降级 tap 高亮
+
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-24 B1（proteus-semantic-primitives-plan 03 §1 p-hover）：指针悬停纯逻辑**
 · resolveHoverClass(preset) → 'p-hover-brighten' 等（CSS 类——渲染层定义过渡）
 · isHoverPointer(pointerType) → mouse/pen → true；touch → false（p-hover 降级为 tap 高亮——plan §1）
 纯逻辑零 DOM 依赖；MP 产物安全：无 ?. / ??；无数组解构
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：Pure logic + env 回落全局；v-p-* 指令（createDesktopDirectives 注册） |
+| 微信小程序 | 🟡 | 纯逻辑可单测；指令不注册（桌面交互无对等——编译剥离），页面接线由宿主决定 |
+| Headless（SSR / 测试） | ✅ | 纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 映射规划——官方接线未开始（原生识别/系统 API 对应 G-24 规划） |
+| Android 原生 | 🟡 | 映射规划——官方接线未开始 |
+| 鸿蒙 | 🟡 | 映射规划——官方接线未开始 |
+| Flutter 混合 | 🟡 | widget/系统映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/desktop/src/hover.ts`）
 

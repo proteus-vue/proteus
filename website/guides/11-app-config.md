@@ -63,7 +63,7 @@ export default defineAppConfig({
 
 | 字段 | 类型 | 必填 | 校验规则 | 说明 |
 |---|---|---|---|---|
-| `env` | `'dev' \| 'staging' \| 'prod'` | 是 | 三值枚举 | 当前环境；驱动 `app.config.{env}.ts` 覆盖层选择 |
+| `env` | `'dev' 或 'staging' 或 'prod'` | 是 | 三值枚举 | 当前环境；驱动 `app.config.{env}.ts` 覆盖层选择 |
 
 ### `api`（接口层）
 
@@ -82,14 +82,14 @@ export default defineAppConfig({
 | `glassEffect` | `boolean` | 是 | 玻璃拟态效果开关（G-07 液态玻璃） |
 | `skeletonScreen` | `boolean` | 是 | 骨架屏开关（p-skeleton） |
 | `memorialGray` | `boolean` | 是 | 置灰模式（公祭日等场景） |
-| `newHomePage` | `'control' \| 'variant-a' \| 'variant-b'` | 是 | A/B 实验分组值 |
-| `[key: string]` | `boolean \| string \| number` | 否 | 业务自定义开关（useFeatureFlag 消费） |
+| `newHomePage` | `'control' 或 'variant-a' 或 'variant-b'` | 是 | A/B 实验分组值 |
+| `[key: string]` | `boolean 或 string 或 number` | 否 | 业务自定义开关（useFeatureFlag 消费） |
 
 ### `theme` / `font` / `safeArea`（表现层）
 
 | 字段 | 类型 | 必填 | 校验规则 | 说明 |
 |---|---|---|---|---|
-| `theme.default` | `'light' \| 'dark' \| 'system'` | 是 | 三值枚举 | 缺省主题（system 跟随系统） |
+| `theme.default` | `'light' 或 'dark' 或 'system'` | 是 | 三值枚举 | 缺省主题（system 跟随系统） |
 | `theme.allowUserToggle` | `boolean` | 是 | 布尔 | 是否允许用户切换主题 |
 | `font.defaultScale` | `number` | 是 | `0.5-2.0` | 缺省字号缩放（联动 p-scale 无障碍档位） |
 | `font.allowUserAdjust` | `boolean` | 是 | 布尔 | 是否允许用户调字号 |
@@ -100,7 +100,7 @@ export default defineAppConfig({
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `platform` | `Partial<Record<Platform, DeepPartial<AppConfig>>>` | 否 | 按端深层覆盖（Platform = `mp-weixin` / `web` / `ios` / `android` / `harmony`），见 [运行时配置消费](/docs/framework/app-config-runtime) |
-| `remote` | `RemoteConfigConfig` | 否 | 远端下发策略：`enabled` / `source.type`（`'https' \| 'local'`）/ `source.url` / `strategy`（`fetchOnLaunch` / `fetchInterval` / `cacheToDisk`）/ `fallback`（`'last-cached' \| 'defaults'`） |
+| `remote` | `RemoteConfigConfig` | 否 | 远端下发策略：`enabled` / `source.type`（`'https' 或 'local'`）/ `source.url` / `strategy`（`fetchOnLaunch` / `fetchInterval` / `cacheToDisk`）/ `fallback`（`'last-cached' 或 'defaults'`） |
 
 ## 校验
 

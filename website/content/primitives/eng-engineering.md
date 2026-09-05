@@ -6,6 +6,8 @@ group: 工程原语
 
 # 基础工程原语（E1-E9：useState/useComputed/useWatch/useLifecycle…）
 
+工程原语 E1-E9：注入式 useState/useComputed/useWatch/useLifecycle…（api 包零 vue 依赖）
+
 > 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。
 
 **★G-32 B5（proteus-semantic-primitives-plus-plan §8）：工程原语 28——injectable 设计（api 包零运行时依赖 vue）**
@@ -13,6 +15,21 @@ E1 useState / E2 useComputed / E3 useWatch / E6 useLifecycle / E7 useReady / E9 
 注入式：消费方注入 reactivity（vue reactive 工厂或自定义）——同 createReactiveStorage 零依赖先例（决策 #310）
 MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 * 注入式响应式（vue composables 语义面——useState/useComputed/useWatch 的底座） */
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方 demo 接线（examples/platform-api-demo 全工厂调用） |
+| 微信小程序 | 🟡 | 注入式可在逻辑层跑（MP 产物安全子集）；组件形态接线部分先行 |
+| Headless（SSR / 测试） | ✅ | Node 注入 reactivity 等即可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 原生端验证未开始（E 系注入面随宿主批次） |
+| Android 原生 | 🟡 | 原生端验证未开始 |
+| 鸿蒙 | 🟡 | 原生端验证未开始 |
+| Flutter 混合 | 🟡 | 同一 JS 逻辑层——接线未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/api/src/engineering.ts`）
 

@@ -6,12 +6,29 @@ group: 桌面原语
 
 # p-clipboard
 
+剪贴板读写：Clipboard API → execCommand 降级 → 诚实 Err
+
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-24 B2（proteus-semantic-primitives-plan 04-system-integration §1 p-clipboard）：剪贴板纯逻辑**
 · clipboardSupported / copyText / pasteText：Web Clipboard API（secure context）→ execCommand('copy') 降级 → Err
 映射：iOS UIPasteboard / Android ClipboardManager / 鸿蒙 pasteboard / Web Clipboard API（04 §1）
 env 注入可单测；env 省略 → 回落真实浏览器全局（typeof 守卫——封装只在框架包内，页面零裸平台 API）
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方接线：Pure logic + env 回落全局；v-p-* 指令（createDesktopDirectives 注册） |
+| 微信小程序 | 🟡 | 纯逻辑可单测；指令不注册（桌面交互无对等——编译剥离），页面接线由宿主决定 |
+| Headless（SSR / 测试） | ✅ | 纯逻辑 Node 可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 映射规划——官方接线未开始（原生识别/系统 API 对应 G-24 规划） |
+| Android 原生 | 🟡 | 映射规划——官方接线未开始 |
+| 鸿蒙 | 🟡 | 映射规划——官方接线未开始 |
+| Flutter 混合 | 🟡 | widget/系统映射未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/desktop/src/clipboard.ts`）
 

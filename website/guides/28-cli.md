@@ -15,9 +15,9 @@ group: 架构与工程
 | 命令 | 用途 | 关键 flag |
 |---|---|---|
 | `npm create @proteus-vue/proteus <name>` | 复制模板工程（Web + Skyline 双端脚本 + CI 模板），替换项目名 | —— |
-| `proteus dev` | 启动开发服务（复用项目 Vite） | `--target web\|skyline`（缺省 web） |
-| `proteus build <dir>` | 独立编译：目录内 `.vue` → 小程序三件套（wxml / js / wxss） | `--out` `--debug`（决策 trace 落盘 `.transform-debug/`）`--rules <json>` `--no-px2rpx` `--rpx-ratio <n>` `--compiler node\|rust` |
-| `proteus build --target` | 工程构建：spawn 项目 `build:web` / `build:mp` 脚本 | `--target web\|skyline\|all` |
+| `proteus dev` | 启动开发服务（复用项目 Vite） | `--target web 或 skyline`（缺省 web） |
+| `proteus build <dir>` | 独立编译：目录内 `.vue` → 小程序三件套（wxml / js / wxss） | `--out` `--debug`（决策 trace 落盘 `.transform-debug/`）`--rules <json>` `--no-px2rpx` `--rpx-ratio <n>` `--compiler node 或 rust` |
+| `proteus build --target` | 工程构建：spawn 项目 `build:web` / `build:mp` 脚本 | `--target web 或 skyline 或 all` |
 | `proteus test` | 测试编排（详见[测试与部署](/docs/27-testing-deploy)） | `unit`（缺省）`e2e:web` `e2e:mp [root]`；`--ide` `--port` `--debugger <模块>` |
 
 `--compiler rust` 开启后，每页先跑 **Node/Rust 双编译语义等价校验**（G-29.1），不一致即构建红——这是编译器可插拔的安全网。
@@ -67,7 +67,7 @@ proteus conformance --repo .          # 仓库治理扫描：严禁 fork 框架�
 
 | 命令 | 用途 |
 |---|---|
-| `proteus migrate mp <file\|dir> [--dry-run]` | 小程序 → Proteus 语义 codemod（`view→p-box` 自动替换 + 同步存储直改 + 手工项标注） |
+| `proteus migrate mp <file 或 dir> [--dry-run]` | 小程序 → Proteus 语义 codemod（`view→p-box` 自动替换 + 同步存储直改 + 手工项标注） |
 | `proteus migrate types <file>` | 旧类型写法 → 收口类型 |
 | `proteus gen config` | 生成 `app.config.ts` 类型安全骨架 |
 | `proteus init module [dir]` | 生成模块契约骨架 |

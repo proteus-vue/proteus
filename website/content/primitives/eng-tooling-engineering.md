@@ -6,6 +6,8 @@ group: 工程原语
 
 # 工具工程原语（E24-E28：useDevTools/defineComponent…）
 
+工具工程原语 E24-E28：useDevTools/useInspector/defineComponent/defineCapability
+
 > 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。
 
 **★G-32 B5 续三（proteus-semantic-primitives-plus-plan §8 ④）：E24-E28 工程化语义面——injectable 设计**
@@ -14,6 +16,21 @@ E26 usePerformance（性能埋点——wx.reportPerformance 语义）/ E27 defin
 E28 defineCapability（能力降级声明——G-30 降级链解析）
 注入式：reactivity（vue 或 mock）+ 各句柄可注入时间源/上报器/探测函数——同 createEngineering 族零运行时依赖 vue
 MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | 官方 demo 接线（examples/platform-api-demo 全工厂调用） |
+| 微信小程序 | 🟡 | 注入式可在逻辑层跑（MP 产物安全子集）；组件形态接线部分先行 |
+| Headless（SSR / 测试） | ✅ | Node 注入 reactivity 等即可跑（工具/测试档） |
+| iOS 原生 | 🟡 | 原生端验证未开始（E 系注入面随宿主批次） |
+| Android 原生 | 🟡 | 原生端验证未开始 |
+| 鸿蒙 | 🟡 | 原生端验证未开始 |
+| Flutter 混合 | 🟡 | 同一 JS 逻辑层——接线未开始 |
+| 快应用 | ⬜ | 端未开始 |
+
+> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
 
 ## 核心导出（SSOT：`packages/api/src/tooling-engineering.ts`）
 

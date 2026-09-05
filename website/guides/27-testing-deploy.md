@@ -36,7 +36,7 @@ function increment() { count.value++ }
 
 | API | 说明 |
 |---|---|
-| `mountComponent(sfc, { platform: 'web' \| 'mp' })` | 统一挂载：Web 走 @vue/test-utils 真实渲染；MP 走逻辑层归一化 host（instance 摊平 + WXML 顶层暴露） |
+| `mountComponent(sfc, { platform: 'web' 或 'mp' })` | 统一挂载：Web 走 @vue/test-utils 真实渲染；MP 走逻辑层归一化 host（instance 摊平 + WXML 顶层暴露） |
 | `stateOf(host)` / `textOf(host)` | 统一断言：状态读取（Web setupState / MP data）、文本读取（Web wrapper.text() / MP wxml 规范化）——**06 铁律：状态跨端共用** |
 | `tap(el, selector?)` | 统一事件分发（Web `trigger('click')` / MP automator `tap()`） |
 | `mountMpComponent(sfc)` | MP 专项：真实编译 SFC → 执行逻辑层 → 返回 `{ instance, wxml, js, context }`，逻辑 + WXML 双断言 |

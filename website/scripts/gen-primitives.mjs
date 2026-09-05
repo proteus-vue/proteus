@@ -28,6 +28,79 @@ const TITLE_OVERRIDES = {
   'tooling-engineering': '工具工程原语（E24-E28：useDevTools/defineComponent…）',
   'request-engineering': '请求工程（R1-R4：request/useQuery/enqueue/runOnce）',
   'ownership-engineering': '所有权工程原语（PSS：useOwned/useBorrow…）',
+  scroll: '滚动观测原语（页面滚动进度 / 滚动态）',
+  'window-message': '跨窗消息原语（iframe postMessage 收口）',
+  anchor: '锚点定位原语（scrollToId）',
+  'page-url': '页面 URL 读写原语（location / history 收口）',
+  directives: '桌面指令工厂（createDesktopDirectives：v-p-* 注册）',
+}
+
+/** ★#466 一句话定位（页头说明——知道这个原语做什么；fallback = 模块头首行） */
+const SUMMARY_MAP = {
+  shortcut: '键盘快捷键语义：mod+s → ⌘S / Ctrl+S（PRIM005 平台惯例），绑定动作触发',
+  'focus-trap': '弹层焦点圈闭：Tab 循环 / Shift+Tab 反向 / 关闭后恢复焦点',
+  'context-menu': '右键 / 长按菜单：防溢出翻转定位 + 一步构建',
+  hover: '悬停态语义（brighten/lift/underline）——触屏自动降级 tap 高亮',
+  directives: '把 B1-B4 原语注册成 v-p-* Vue 指令（Web 接线薄层；MP 不注册天然降级）',
+  'cursor-glow': '指针跟随环境光晕（品牌紫/青双光斑，lerp 插值拖尾）',
+  notify: '系统通知：探测 / 权限 / 发送归一（Notification API；无实现诚实 Err）',
+  permission: '权限门禁：六语义目录 + check/request 归一 + v-p-permission 拦截重放',
+  clipboard: '剪贴板读写：Clipboard API → execCommand 降级 → 诚实 Err',
+  deeplink: '深链解析与参数化匹配（scheme://host/path?query + :param）',
+  'master-detail': '大屏三栏 / 窄屏独占布局状态机（UISplitViewController 语义）',
+  tabs: '桌面标签关闭迁移：激活右邻优先 · 末位回退左邻',
+  command: '⌘K 命令面板数据层：过滤排序 + 上下移动索引',
+  breadcrumb: '路由栈推导面包屑链（kebab → 可读 label）',
+  lifecycle: '前后台生命周期观测（visibilitychange/focus——app 相位）',
+  'state-restoration': 'UI 状态恢复令牌：capture / restore / 过滤可恢复（永续场景）',
+  network: '网络状态：online + 连接类型归一 + 变化订阅',
+  'low-power': '低电量 / 省电模式探测（Battery API）',
+  scroll: '页面滚动观测：rAF 节流 + y/max/progress（App 顶部进度条与 Home 联动在用）',
+  'window-message': '跨窗消息订阅：origin 白名单 + type 过滤 + destroy（spirit iframe 气泡在用）',
+  anchor: '按 id 锚点平滑滚动（SPA 新页 v-html 文档跳转，可延时）',
+  'page-url': '页面地址读写：origin / pathname + replaceState 收口（分享链接同步在用）',
+  recognizers: '手势识别器：Web Pointer / MP touch 归一 GestureInput → tap/pan/swipe/pinch/rotate 等语义事件',
+  'use-gesture': '手势 Web 官方接线：useGesture Hook + v-gesture:<kind>="onX" 指令',
+  engineering: '工程原语 E1-E9：注入式 useState/useComputed/useWatch/useLifecycle…（api 包零 vue 依赖）',
+  'router-engineering': '路由工程原语 E10-E18：useRoute/push/back/守卫 + p-router-link',
+  'animation-engineering': '动画工程原语 E19-E23：useAnimation/useGestureAnimation/useScrollAnimation + p-animate',
+  'tooling-engineering': '工具工程原语 E24-E28：useDevTools/useInspector/defineComponent/defineCapability',
+  'request-engineering': '请求工程 R1-R4：request 策略 / useQuery / enqueue / runOnce',
+  'ownership-engineering': '所有权工程原语（PSS）：useOwned / useBorrow / 自动 drop',
+}
+
+/** ★#466 端兼容表（家族级口径——与组件/能力页同构；状态四档对齐 ENDS 注册表） */
+const ENDS_FAMILY = {
+  desktop: [
+    ['Web SPA', '✅', '官方接线：Pure logic + env 回落全局；v-p-* 指令（createDesktopDirectives 注册）'],
+    ['微信小程序', '🟡', '纯逻辑可单测；指令不注册（桌面交互无对等——编译剥离），页面接线由宿主决定'],
+    ['Headless（SSR / 测试）', '✅', '纯逻辑 Node 可跑（工具/测试档）'],
+    ['iOS 原生', '🟡', '映射规划——官方接线未开始（原生识别/系统 API 对应 G-24 规划）'],
+    ['Android 原生', '🟡', '映射规划——官方接线未开始'],
+    ['鸿蒙', '🟡', '映射规划——官方接线未开始'],
+    ['Flutter 混合', '🟡', 'widget/系统映射未开始'],
+    ['快应用', '⬜', '端未开始'],
+  ],
+  gesture: [
+    ['Web SPA', '✅', '官方接线：v-gesture 指令 / useGesture Hook（Pointer Events）'],
+    ['微信小程序', '🟡', '识别器映射由各端 Backend 承接（规划中）——纯识别器可在逻辑层单测'],
+    ['Headless（SSR / 测试）', '✅', '识别器纯逻辑 Node 可跑（工具/测试档）'],
+    ['iOS 原生', '🟡', 'UIGestureRecognizer 映射规划'],
+    ['Android 原生', '🟡', 'GestureDetector 映射规划'],
+    ['鸿蒙', '🟡', '手势系统映射规划'],
+    ['Flutter 混合', '🟡', '手势映射未开始'],
+    ['快应用', '⬜', '端未开始'],
+  ],
+  api: [
+    ['Web SPA', '✅', '官方 demo 接线（examples/platform-api-demo 全工厂调用）'],
+    ['微信小程序', '🟡', '注入式可在逻辑层跑（MP 产物安全子集）；组件形态接线部分先行'],
+    ['Headless（SSR / 测试）', '✅', 'Node 注入 reactivity 等即可跑（工具/测试档）'],
+    ['iOS 原生', '🟡', '原生端验证未开始（E 系注入面随宿主批次）'],
+    ['Android 原生', '🟡', '原生端验证未开始'],
+    ['鸿蒙', '🟡', '原生端验证未开始'],
+    ['Flutter 混合', '🟡', '同一 JS 逻辑层——接线未开始'],
+    ['快应用', '⬜', '端未开始'],
+  ],
 }
 
 const COMMENT_LINE = /^\s*(\/\/|\*|\/\*|\s*\*\/)/
@@ -129,6 +202,8 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   body.push('')
   body.push(`# ${title}`)
   body.push('')
+  body.push(SUMMARY_MAP[file.replace(/\.ts$/, '')] || header[0] || '') // 页头一句话：这个原语做什么
+  body.push('')
   if (rel === 'packages/api') {
     body.push('> 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。')
   } else {
@@ -136,6 +211,20 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   }
   body.push('')
   if (header.length) body.push(...header.map((l) => l.startsWith('★') ? `**${l}**` : l), '')
+
+  // ★#466 端兼容进度（家族级口径——与组件/能力页同构；生成自 ENDS 注册表同名端序）
+  const family = rel === 'packages/desktop' ? 'desktop' : rel === 'packages/gesture' ? 'gesture' : 'api'
+  const endsRows = ENDS_FAMILY[family]
+  if (endsRows) {
+    body.push('## 兼容进度')
+    body.push('')
+    body.push('| 端 | 兼容 | 说明 |')
+    body.push('|---|---|---|')
+    for (const [name, mark, note] of endsRows) body.push(`| ${name} | ${mark} | ${note} |`)
+    body.push('')
+    body.push('> 状态口径：✅ 端已落地·本原语可用；🟡 端原型映射·接线未开始；⬜ 端未开始。本表为家族级机制口径（非逐端真机验证矩阵）；端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。')
+    body.push('')
+  }
   body.push(`## 核心导出（SSOT：\`${rel}/src/${file}\`）`)
   body.push('')
   if (exports.length) {

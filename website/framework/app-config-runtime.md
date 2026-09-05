@@ -33,7 +33,7 @@ platform: {
 | `useAppConfig()` | `() => AppConfig` | 页面/组件 setup 内 | 响应式读全量配置（ref 代理；setup 外调用报错，同 useRoute 语义） |
 | `useFeatureFlag(key)` | `(key: string) => FeatureFlagResult` | 页面/组件 setup 内 | 功能开关：读 `features[key]`，返回 `{ enabled, variant }` |
 | `getConfig()` | `() => AppConfig` | 工具层/启动期 | 非响应式读取（未初始化抛错——启动必须 init） |
-| `setConfig(input)` | `(DeepPartial<AppConfig> \| ((cur) => DeepPartial)) => { ok, errors }` | 运行时更新 | 深合并 → 校验：非法**拒绝更新 + 告警**（不抛错），合法则触发响应式通知 |
+| `setConfig(input)` | `(DeepPartial<AppConfig> 或 ((cur) => DeepPartial)) => { ok, errors }` | 运行时更新 | 深合并 → 校验：非法**拒绝更新 + 告警**（不抛错），合法则触发响应式通知 |
 | `getFeatureFlag(config, key)` | 纯函数 | 测试/非响应式场景 | `useFeatureFlag` 的纯函数版（setup 外可测） |
 | `initAppConfig(defaults)` | `(AppConfig) => void` | 应用启动 | 初始化配置存储（重复调用 = 覆盖默认 + 保留已合并层） |
 
@@ -42,7 +42,7 @@ platform: {
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `enabled` | `boolean` | 值非 `false` 且非 `undefined` 即 true |
-| `variant` | `boolean \| string \| number \| undefined` | 开关值原样（布尔开关 / A/B 分组字符串） |
+| `variant` | `boolean 或 string 或 number 或 undefined` | 开关值原样（布尔开关 / A/B 分组字符串） |
 
 ```ts
 // 典型消费

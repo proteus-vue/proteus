@@ -18,7 +18,7 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 
 | 字段 | 类型 | 必填 | 归属层 | 说明 |
 |---|---|---|---|---|
-| `platform` | `'mp-weixin' \| 'web'` | 是 | compiler | 目标平台 |
+| `platform` | `'mp-weixin' 或 'web'` | 是 | compiler | 目标平台 |
 | `skyline` | `boolean` | 是 | compiler | 是否启用 Skyline 渲染（仅 mp-weixin 生效） |
 | `appid` | `string` | 是 | build | 小程序 AppID（模板占位 `wx0000000000`，上线前必须替换）。构建期写入 project.config.json / IDE 导入 / automator 体检。**≠ app.config 的 `app.id`**（那是运行时应用标识） |
 | `pagesDir` | `string` | 是 | compiler | 页面根目录（主包路由扫描起点），默认 `src/pages` |
@@ -34,7 +34,7 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `page` | `object` | 否 | compiler | 页面模式（自动滚动容器），见下表 |
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
 | `router` | `object` | 否 | router | 路由通用配置（tabBar / 集中式 meta），见下表 |
-| `vite` | `object \| 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
+| `vite` | `object 或 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
 | `audit` | `object` | 否 | build | **D-2 页面门禁规则**（★#447）：off/warn/error 自选——见下表 |
 | `gates` | `object` | 否 | build | **统一门禁开关**（★#456）：`gates.disabled` 自选关闭门禁/聚合域——见下表 |
 
@@ -65,7 +65,7 @@ const config: ProteusConfig = {
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `backend` | `'node' \| 'rust'` | 否 | 选 `'rust'` 时构建对每个 .vue 跑 Node/Rust **双编译语义等价校验**（G-29.1，不一致构建红）；产物仍由 Node 引擎生成。缺省 `'node'`（零开销）；CLI 可 `proteus build --compiler rust` 临时覆盖 |
+| `backend` | `'node' 或 'rust'` | 否 | 选 `'rust'` 时构建对每个 .vue 跑 Node/Rust **双编译语义等价校验**（G-29.1，不一致构建红）；产物仍由 Node 引擎生成。缺省 `'node'`（零开销）；CLI 可 `proteus build --compiler rust` 临时覆盖 |
 
 **`skylineLayout`（Skyline 布局对齐）**
 
@@ -222,7 +222,7 @@ proteus generate types                    # 生成 JSON Schema（.proteus/proteu
 | `isTab` | `boolean` | 否 | 是否 tab 页（tabBar.list 由 proteus.config 的 `router.tabBar` 声明） |
 | `requiresAuth` | `boolean` | 否 | 登录守卫（路由跳转前校验） |
 | `permissions` | `string[]` | 否 | 权限守卫（格式 `resource:action`，security M3） |
-| `transition` | `'slideUp' \| 'slideDown' \| 'halfScreen' \| 'scaleDown' \| 'none'` | 否 | 转场动画 |
+| `transition` | `'slideUp' 或 'slideDown' 或 'halfScreen' 或 'scaleDown' 或 'none'` | 否 | 转场动画 |
 | `[key: string]` | `unknown` | 否 | 任意扩展字段（仅 JSON 可序列化——业务自定义守卫读取） |
 
 集中式 meta（`proteus.config.ts` 的 `router.meta`）与页面 `<route>` 就近声明**可并存**：匹配优先级 精确路径 > 目录前缀 > 默认；显式声明永远优先。
