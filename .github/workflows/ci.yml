@@ -95,6 +95,9 @@ jobs:
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则与源一致）
         run: cd website && npm run check:reference && npm run check:css-compat
 
+      - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
+        run: cd website && npm run check:primitives
+
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
         run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
 

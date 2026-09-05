@@ -55,12 +55,14 @@ const capabilityModules = import.meta.glob<{ default: DocsModule }>('../content/
 const systemModules = import.meta.glob<{ default: DocsModule }>('../content/system/*.md', { eager: true })
 const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plugins/*.md', { eager: true })
 const referenceModules = import.meta.glob<{ default: DocsModule }>('../content/reference/*.md', { eager: true })
+const primitiveModules = import.meta.glob<{ default: DocsModule }>('../content/primitives/*.md', { eager: true })
 
 export const sections: DocSection[] = [
   buildSection('guide', '指南', '/docs', guideModules, '指南'),
   buildSection('framework', '框架', '/docs/framework', frameworkModules, '总览'),
   buildSection('components', '组件', '/docs/component', componentModules, '组件'),
   buildSection('capabilities', '能力', '/docs/capability', capabilityModules, '能力'),
+  buildSection('primitives', '原语', '/docs/primitives', primitiveModules, '原语'), // ★#460 原语分区：组件/能力的第三张脸——非组件形态家族逐条（desktop 模块由 gen-primitives 生成）
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),
   buildSection('plugins', '插件 API', '/docs/plugin', pluginModules, '插件 API'),
   buildSection('reference', '工具链', '/docs/reference', referenceModules, '工程参考'), // ★#438：参考升级为工具链分区（CLI/规则/兼容参考 + devtools/dev-host/MCP/模块化回归）

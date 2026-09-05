@@ -14,6 +14,8 @@
     "postinstall": "node ../scripts/build-packages.mjs",
     "gen:reference": "tsx scripts/gen-reference.mjs",
     "check:reference": "tsx scripts/gen-reference.mjs --check",
+    "gen:primitives": "node scripts/gen-primitives.mjs",
+    "check:primitives": "node scripts/gen-primitives.mjs --check",
     "gen:css-compat": "tsx scripts/gen-css-compat.mjs",
     "check:css-compat": "tsx scripts/gen-css-compat.mjs --check"
   },

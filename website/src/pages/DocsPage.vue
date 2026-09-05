@@ -13,6 +13,7 @@ const sectionKey = computed(() => {
   if (first === 'component') return 'components'
   if (first === 'capability') return 'capabilities'
   if (first === 'system') return 'system'
+  if (first === 'primitives') return 'primitives'
   if (first === 'plugin') return 'plugins'
   if (first === 'reference') return 'reference'
   if (first === 'framework') return 'framework'

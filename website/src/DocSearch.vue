@@ -18,7 +18,7 @@ interface Hit extends SearchIndexEntry {
 const router = useRouter()
 const SECTION_NAME: Record<string, string> = {
   docs: '指南', framework: '框架', component: '组件', capability: '能力',
-  system: '柔性系统', plugin: '插件 API', reference: '工具链',
+  primitives: '原语', system: '柔性系统', plugin: '插件 API', reference: '工具链',
 }
 function sectionNameOf(path: string): string {
   const m = path.match(/^\/docs\/([a-z-]+)/)
@@ -166,7 +166,7 @@ const placeholder = computed(() => `搜索文档…（${shortcutKbd}）`)
             </button>
           </div>
         </div>
-        <div v-else class="docsearch-hint">输入 ≥2 字符全站搜索（指南 / 框架 / 组件 / 能力 / 柔性系统 / 插件 API / 工具链）</div>
+        <div v-else class="docsearch-hint">输入 ≥2 字符全站搜索（指南 / 框架 / 组件 / 能力 / 原语 / 柔性系统 / 插件 API / 工具链）</div>
       </div>
     </div>
   </Teleport>
