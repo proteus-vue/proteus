@@ -45,7 +45,7 @@ function handleTap() {
 </style>
 ```
 
-## 四个部分，两端产物
+## 四个部分，一套语义 → 各端产物
 
 | SFC 部分 | Web 端产物 | 小程序端产物 |
 |---|---|---|
@@ -54,11 +54,13 @@ function handleTap() {
 | `<style>` | 原样 CSS | WXSS（px→rpx 转换可配） |
 | `<route>` 块 | Web 路由表 | `app.json` / `page.json` |
 
+> 上表以 **Web / 小程序两类编译形态**为例说明一份 SFC 的各端去向；iOS / Android / 鸿蒙 / Flutter 等原生端不经过 WXML 这类中间形态——各渲染后端**直接消费同一份 SFC 的语义 IR**（见[渲染后端](/docs/framework/23-render-backend)），业务代码零改动。
+
 ## 三个要点
 
 1. **业务代码零条件编译**：没有任何 `#ifdef`——标签映射、响应式重写、样式转换全部由编译器完成
 2. **`<route>` 块可选**：`title` / `isTab` 等页面元信息就近声明；不写也能跑，路由由文件位置推导
-3. **新建页面**：在 `src/pages/` 下添加 `.vue` 文件，重新 `npm run build:mp`，Web 与小程序两端同时生效
+3. **新建页面**：在 `src/pages/` 下添加 `.vue` 文件，重新 `npm run build:mp`，**所有目标端同时生效**——Web 直出 DOM、小程序出编译产物、原生/Flutter 渲染后端消费同一语义（业务代码不因目标端而分叉）
 
 ## 下一步
 

@@ -45,7 +45,7 @@ function handleTap() {
 </style>
 ```
 
-## Four parts, output on both targets
+## Four parts, one semantic set → artifacts per target
 
 | SFC part | On Web | On Mini Program |
 |---|---|---|
@@ -54,11 +54,13 @@ function handleTap() {
 | `<style>` | CSS as-is | WXSS (px→rpx conversion configurable) |
 | `<route>` block | Web route table | `app.json` / `page.json` |
 
+> The table above illustrates where one SFC goes using the **two compiled forms: Web / Mini Program**. Native targets (iOS / Android / HarmonyOS / Flutter) skip WXML-like intermediate forms — each render backend **consumes the same SFC's semantic IR directly** (see [Render backend](/docs/framework/23-render-backend)), business code unchanged.
+
 ## Three key points
 
 1. **Zero conditional compilation in business code**: no `#ifdef` anywhere — tag mapping, reactive rewriting, and style conversion are all done by the compiler.
 2. **The `<route>` block is optional**: page metadata such as `title` / `isTab` is declared on the page itself; the page runs fine without it — the route is derived from the file location.
-3. **Creating a new page**: add a `.vue` file under `src/pages/` and re-run `npm run build:mp` — it takes effect on both the Web and Mini Program targets at the same time.
+3. **Creating a new page**: add a `.vue` file under `src/pages/` and re-run `npm run build:mp` — it takes effect on **every target at once**: Web renders DOM directly, Mini Programs get compiled artifacts, and native/Flutter render backends consume the same semantics (business code never branches on the target).
 
 ## Next steps
 

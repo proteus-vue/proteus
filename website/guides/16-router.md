@@ -6,10 +6,10 @@ group: 基础概念
 
 # 路由
 
-跨端路由的麻烦在于：Web 是 SPA 路由表（history），小程序是页面栈（`app.json` pages + tabBar）——两套心智、两份配置，改一个页面要动多处。Proteus 路由（`@proteus-vue/router`）的答案是**编译期页面表 + 双端工程**：页面 `<route>` 块是唯一真相源，扫描收敛成一棵路由树，再分别生成 Web 路由表与小程序页面配置。
+跨端路由的麻烦在于：Web 是 SPA 路由表（history），小程序是页面栈（`app.json` pages + tabBar）——两套心智、两份配置，改一个页面要动多处。Proteus 路由（`@proteus-vue/router`）的答案是**编译期页面表 + 按端 codegen**：页面 `<route>` 块是唯一真相源，扫描收敛成一棵路由树，再为每个目标端生成各自形态——当前已接线 Web（路由表）与小程序（页面配置）；iOS / Android / 鸿蒙 / Flutter 消费同一棵树的端语义（渲染层按后端实现，见[渲染后端](/docs/framework/23-render-backend)）。
 
-> **`<route>` 就近声明 → scan + validate → 嵌套树 → 双端 codegen。**
-> 配置零手写、双端不漂移、产物可反查源码（每条记录含 `loc`）。
+> **`<route>` 就近声明 → scan + validate → 嵌套树 → 按端 codegen（Web / 小程序已接线，其余端同树语义）。**
+> 配置零手写、各端不漂移、产物可反查源码（每条记录含 `loc`）。
 
 ## 路由模型：一棵树，两种形态
 
@@ -19,6 +19,8 @@ group: 基础概念
 |---|---|---|
 | Web | SPA 路由表 | `generateWebRoutes(nodes)` → vue-router `RouteRecordRaw` 代码（lazy → `() => import()` 代码分割，嵌套 → children 递归） |
 | 小程序 | 页面栈 | `generateMpConfig(nodes)` → `app.json` 页配置（Skyline 是 MPA：嵌套降级平铺 + `meta.__parent` 保留父链；`meta.transition` → `routeType`） |
+
+> 原生/Flutter 端不生成 `RouteRecordRaw` / `app.json`——由各渲染后端对同一棵路由树做端适配（导航语义/转场映射，见[渲染后端](/docs/framework/23-render-backend)与[路由的端适配](/docs/framework/33-containers-hosts)）。
 
 页面声明走**零样板**路线：`<route>` 块完全可选——`path` / `name` 可从文件位置推导（`pages/user/profile.vue` → path `pages/user/profile`、name `user-profile`；`index.vue` 归并为目录路径），无块页面也收录，meta 由配置集中注入；显式声明永远优先：
 

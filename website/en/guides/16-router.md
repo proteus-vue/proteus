@@ -6,10 +6,10 @@ group: 基础概念
 
 # Routing & navigation
 
-Cross-platform routing is awkward: on the Web it is an SPA route table (history); in a Mini Program it is a page stack (`app.json` pages + tabBar) — two mental models and two configurations, and changing one page means touching several places. Proteus routing (`@proteus-vue/router`) answers with a **build-time page table + dual-end generation**: the `<route>` block on a page is the single source of truth; scanning folds everything into one route tree, from which the Web route table and the Mini Program page configuration are generated separately.
+Cross-platform routing is awkward: on the Web it is an SPA route table (history); in a Mini Program it is a page stack (`app.json` pages + tabBar) — two mental models and two configurations, and changing one page means touching several places. Proteus routing (`@proteus-vue/router`) answers with a **build-time page table + per-target codegen**: the `<route>` block on a page is the single source of truth; scanning folds everything into one route tree, from which every target gets its own form — Web (route table) and Mini Program (page configuration) are wired today; iOS / Android / HarmonyOS / Flutter consume the same tree's target semantics (implemented per backend in the rendering layer — see [Render backend](/docs/framework/23-render-backend)).
 
-> **`<route>` declared next to the page → scan + validate → nested tree → dual-end codegen.**
-> Zero hand-written configuration, no drift between the two ends, and the artifacts can be traced back to their source (every record carries a `loc`).
+> **`<route>` declared next to the page → scan + validate → nested tree → per-target codegen (Web / Mini Program wired today; other targets consume the same tree semantics).**
+> Zero hand-written configuration, no drift across targets, and the artifacts can be traced back to their source (every record carries a `loc`).
 
 ## Route model: one tree, two forms
 
@@ -19,6 +19,8 @@ At build time, the CLI scans `<route>` blocks in page files (reusing `@vue/compi
 |---|---|---|
 | Web | SPA route table | `generateWebRoutes(nodes)` → vue-router `RouteRecordRaw` code (lazy → `() => import()` code splitting; nesting → recursive `children`) |
 | Mini Program | Page stack | `generateMpConfig(nodes)` → `app.json` page configuration (Skyline is an MPA: nesting degrades to a flat list, with `meta.__parent` keeping the parent chain; `meta.transition` → `routeType`) |
+
+> Native / Flutter targets do not generate `RouteRecordRaw` / `app.json` — each render backend adapts the same route tree to its target (navigation semantics / transition mapping; see [Render backend](/docs/framework/23-render-backend) and [Containers & hosts](/docs/framework/33-containers-hosts)).
 
 Page declarations take the **zero-boilerplate** route: the `<route>` block is entirely optional — `path` / `name` can be derived from the file location (`pages/user/profile.vue` → path `pages/user/profile`, name `user-profile`; `index.vue` collapses into the directory path). Pages without the block are included too, with `meta` injected centrally from configuration; an explicit declaration always takes precedence:
 
