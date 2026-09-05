@@ -6,7 +6,7 @@ group: 编译期
 
 # 编译管线总览
 
-小程序端编译管线（`@proteus-vue/compiler`，纯函数实现）把一份标准 Vue SFC 转为小程序四件套。Web 端**不走此管线**。
+小程序端编译管线（`@proteus-vue/compiler`，纯函数实现）把一份标准 Vue SFC 转为小程序四件套。Web 端**不走此管线**（标准 Vite + Vue 零转换直跑）；原生/Flutter 渲染后端同样不走 WXML 编译——直食同一份 SFC 的语义 IR（见[渲染后端](/docs/framework/23-render-backend)）。
 
 ## 管线全景
 
@@ -51,5 +51,5 @@ Node 与 Rust 两个编译后端对同一份 SFC 必须产出**语义等价**的
 - [模板转换](/docs/framework/compile-template)：标签与指令映射
 - [脚本转换](/docs/framework/compile-script)：响应式重写为 setData
 - [样式转换](/docs/framework/compile-style)：px→rpx 与选择器重写
-- [路由生成](/docs/framework/compile-routes)：gen-routes 双端配置
+- [路由生成](/docs/framework/compile-routes)：gen-routes 按端生成配置（Web 路由表 / 小程序 `app.json`）
 - [编译规则与决策链](/docs/framework/compile-rules)：反黑盒与 explain

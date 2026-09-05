@@ -6,12 +6,12 @@ group: 编译期
 
 # 路由生成
 
-跨端路由的麻烦：Web 是 SPA 路由表（history），小程序是页面栈（`app.json` pages + tabBar）——两套心智、两份配置。`gen-routes` 的答案是**编译期页面表**：页面 `<route>` 块是唯一真相源，扫描收敛成一棵路由树，再分别生成双端配置。
+跨端路由的麻烦：Web 是 SPA 路由表（history），小程序是页面栈（`app.json` pages + tabBar）——两套心智、两份配置。`gen-routes` 的答案是**编译期页面表**：页面 `<route>` 块是唯一真相源，扫描收敛成一棵路由树，再按目标端生成各自配置——Web（路由表）与小程序（`app.json`）已接线；原生/Flutter 消费同一棵树的端语义（渲染后端实现，见[渲染后端](/docs/framework/23-render-backend)）。
 
 ## 管线
 
 ```
-<route> 就近声明 → scan + validate → 嵌套树 → 双端 codegen
+<route> 就近声明 → scan + validate → 嵌套树 → 按端 codegen（Web / 小程序已接线，其余端同树语义）
 ```
 
 - **扫描**：CLI 递归扫描 `pagesDir`，`<route>` 块复用 `@vue/compiler-sfc` 解析（天然拿到文件与行号）

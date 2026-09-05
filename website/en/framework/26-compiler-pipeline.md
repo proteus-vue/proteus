@@ -6,7 +6,7 @@ group: 编译期
 
 # Compiler pipeline
 
-The Mini Program compile pipeline (`@proteus-vue/compiler`, implemented as pure functions) turns one standard Vue SFC into the Mini Program four-file set. The Web target does **not** run through this pipeline.
+The Mini Program compile pipeline (`@proteus-vue/compiler`, implemented as pure functions) turns one standard Vue SFC into the Mini Program four-file set. The Web target does **not** run through this pipeline (standard Vite + Vue, zero transformation); native/Flutter render backends likewise skip WXML compilation — they consume the same SFC's semantic IR directly (see [Render backend](/docs/framework/23-render-backend)).
 
 ## The pipeline at a glance
 
@@ -51,5 +51,5 @@ The Node and Rust compile backends must produce **semantically equivalent** Comp
 - [Template transform](/docs/framework/compile-template): tag and directive mapping
 - [Script transform](/docs/framework/compile-script): reactivity rewritten into setData
 - [Style transform](/docs/framework/compile-style): px→rpx and selector rewriting
-- [Route generation](/docs/framework/compile-routes): dual-target config via gen-routes
+- [Route generation](/docs/framework/compile-routes): per-target config via gen-routes (Web route table / Mini Program `app.json`)
 - [Compile rules & decision chain](/docs/framework/compile-rules): anti-black-box and explain

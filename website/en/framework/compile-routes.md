@@ -6,12 +6,12 @@ group: 编译期
 
 # Route generation
 
-The cross-target routing headache: Web is an SPA route table (history), the Mini Program is a page stack (`app.json` pages + tabBar) — two mental models, two configs. `gen-routes`'s answer is a **compile-time page table**: the page's `<route>` block is the single source of truth; scanning converges it into a single route tree, which then generates both targets' configs separately.
+The cross-target routing headache: Web is an SPA route table (history), the Mini Program is a page stack (`app.json` pages + tabBar) — two mental models, two configs. `gen-routes`'s answer is a **compile-time page table**: the page's `<route>` block is the single source of truth; scanning converges it into a single route tree, which then generates each target's own config — Web (route table) and Mini Program (`app.json`) are wired today; native/Flutter consume the same tree's target semantics (implemented by render backends — see [Render backend](/docs/framework/23-render-backend)).
 
 ## Pipeline
 
 ```
-<route> local declarations → scan + validate → nested tree → dual-target codegen
+<route> local declarations → scan + validate → nested tree → per-target codegen (Web / Mini Program wired today; other targets consume the same tree semantics)
 ```
 
 - **Scan**: the CLI recursively scans `pagesDir`; `<route>` blocks reuse `@vue/compiler-sfc` parsing (which naturally yields the file and line numbers)
