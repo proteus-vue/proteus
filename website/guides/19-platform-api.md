@@ -94,7 +94,7 @@ const res = await api.request<{ echoed: string }>({ url: '/ping', method: 'GET' 
 | 面 | 形态 | 覆盖 |
 |---|---|---|
 | 命令式（本篇） | `createPlatformAPI()` 四域方法调用 | request / storage / router / ui 高频域 |
-| 声明式（G-31/32） | `p-*` 语义组件 + 128 原语 SSOT + 50 Capability Hook | 布局 / UI / 设备 / 系统 / 通信 / 扩展 |
+| 声明式（G-31/32） | `p-*` 语义组件 + 136 原语 SSOT + 50 Capability Hook | 布局 / UI / 设备 / 系统 / 通信 / 扩展 |
 
 分界规则：**有明确 UI 语义的走 `p-*` 组件**（编译进 `ComponentIR`，由渲染后端映射）；**命令式动作走 PlatformAPI / useXxx Hook**。能力 Hook 层（G-32：`useLocation` / `useNetwork` / `useBattery`…）全部返回 `Promise<Result<T>>`——平台不支持时返回 `Err('<cap>.unsupported')` 而非抛异常，与[能力系统](/docs/18-capability-system)的降级语义对齐。平台独占能力（蓝牙、生物认证等）**不塞进 PlatformAPI**，走能力系统声明。
 

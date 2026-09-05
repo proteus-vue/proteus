@@ -20,7 +20,7 @@ Proteus 的组件不是「又一套跨端 UI 库」，而是**语义组件**：�
 | 平台差异 | 运行时 `if (isXxx)` 分支 | 后端实现，业务零分支（PRIM001 禁手动平台判断） |
 | 跨端一致 | 人肉对齐 | conformance 快照门禁 |
 
-组件层之下是 **128 原语 SSOT**（layout / ui / shell / gesture / capability / engineering 六族）：组件是原语的 `p-*` 组件形态，能力 Hook（`useXxx`）是原语的 API 形态——两层共享同一份语义清单。
+组件层之下是 **136 原语 SSOT**（layout / ui / shell / gesture / capability / engineering 六族）：组件是原语的 `p-*` 组件形态，能力 Hook（`useXxx`）是原语的 API 形态——两层共享同一份语义清单。
 
 ## 组件分类总表
 

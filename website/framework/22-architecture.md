@@ -20,7 +20,7 @@ Proteus 的架构只有一个母题：**不绑定**。「不绑定任何单一�
 | 渲染引擎（G-27/37） | VNode / Component IR / LayoutConstraint IR | RenderBackend：VueDom / Native×3 / Flutter / Headless | ✅ |
 | 编译器（G-29/38） | CompilerIR：`SourceFile → ProgramIR → IRModule` | CompilerBackend：Node ✅ / Rust ✅ / WASM | 🟡 |
 | 柔性布局（G-22） | p-fluid / p-grid / p-stack / p-fit / p-adaptive 声明式原语 | `@proteus-vue/fluid` + FLD001-013 门禁 | ✅ |
-| 桌面与系统原语（G-24） | p-hover / p-shortcut / p-notify / p-master-detail 等 17 模块 | `@proteus-vue/desktop`（Pure logic 双端接线） | ✅ |
+| 桌面与系统原语（G-24） | p-hover / p-shortcut / p-notify / p-master-detail 等 21 模块（★#449 +滚动观测/跨窗消息/锚点定位/页面 URL） | `@proteus-vue/desktop`（Pure logic 双端接线） | ✅ |
 | AI 生成（G-36） | IR 契约 + 三层护栏（IR Schema / 风格 / conformance） | MCP Server / Agent Kit / Skill | ✅ |
 | 宿主接入（G-41） | 三方正交（框架 × 渲染引擎 × 宿主）+ nodeOps Dispatcher | 6 宿主 × 6 引擎 = 36 组合矩阵 | ✅ |
 | 容器形态（G-42） | 页面生命周期状态机 + IR 单一 Owner | 六容器策略：Stack / SuperApp / Window / MiniProgram / Embedded / SinglePage | ✅ |
