@@ -13,7 +13,9 @@
     "check:plugin-docs": "tsx scripts/gen-plugin-docs.mjs --check",
     "postinstall": "node ../scripts/build-packages.mjs",
     "gen:reference": "tsx scripts/gen-reference.mjs",
-    "check:reference": "tsx scripts/gen-reference.mjs --check"
+    "check:reference": "tsx scripts/gen-reference.mjs --check",
+    "gen:css-compat": "tsx scripts/gen-css-compat.mjs",
+    "check:css-compat": "tsx scripts/gen-css-compat.mjs --check"
   },
   "dependencies": {
     "@proteus-vue/compiler": "workspace:*",
