@@ -17,6 +17,14 @@ for (const app of ['examples', 'website']) {
   if (fs.existsSync(path.join(ROOT, app, 'package.json'))) TARGETS.push(app)
 }
 
+// ★#423 模板子目标：packages/<pkg>/templates 自带 package.json（生成给用户的骨架）——
+//   以模板自身 package.json 为声明集，扫描 templates/**（npm files 会打进发布包）
+const TPL_TARGETS = []
+for (const t of TARGETS) {
+  const tplPkg = path.join(ROOT, t, 'templates', 'package.json')
+  if (fs.existsSync(tplPkg)) TPL_TARGETS.push({ tpl: path.join(ROOT, t, 'templates'), pkgFile: tplPkg, label: `${t}/templates` })
+}
+
 const SCAN_DIRS = ['src', 'scripts']
 const EXCLUDE = new Set(['node_modules', 'dist', '.proteus'])
 
@@ -49,6 +57,17 @@ const BARE_RE = /(?:from\s*|import\s*\(|require\s*\()\s*['"]([^'"]+)['"]/g
 const findings = {}
 // ★#422 豁免：@proteus-vue/components 未拆包（决策 #115）——examples/website 用 vite resolve.alias 指向仓库 src/components（非 node_modules 依赖）
 const ALIAS_VIRTUAL = new Set(['@proteus-vue/components'])
+// 模板目标：扫描 templates/**（无 src/scripts 约定）——声明集 = 模板自带 package.json
+const TPL_FILES = []
+for (const tt of TPL_TARGETS) {
+  const dir = tt.tpl
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith('.') || ['node_modules', 'dist'].includes(e.name)) continue
+    if (e.isDirectory()) scanFiles(path.join(dir, e.name), TPL_FILES)
+    else if (/package\.json$/.test(e.name)) continue
+    else if (/\.(ts|tsx|mjs|vue)$/.test(e.name)) TPL_FILES.push(path.join(dir, e.name))
+  }
+}
 for (const rel of TARGETS) {
   const dir = path.join(ROOT, rel)
   const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
@@ -103,6 +122,39 @@ for (const rel of TARGETS) {
   if (missing.length) findings[rel] = missing
 }
 
+// 模板目标检查（声明集 = 模板 package.json）
+for (const tt of TPL_TARGETS) {
+  const pkg = JSON.parse(fs.readFileSync(tt.pkgFile, 'utf8'))
+  const declared = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+    ...Object.keys(pkg.peerDependencies ?? {}),
+  ])
+  const used = new Map()
+  for (const f of TPL_FILES) {
+    const src = fs.readFileSync(f, 'utf8')
+    for (const line of src.split('\n')) {
+      const t = line.trim()
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue
+      if (t.includes('${')) continue
+      if (/["']import \{|\\nimport/.test(t)) continue
+      if (t.includes('@proteus/container') || t.includes('@proteus/core') || t.includes('<相对产物路径>')) continue
+      for (const m of line.matchAll(BARE_RE)) {
+        const mod = extractBare(m[1])
+        if (!mod || mod.length <= 1 || /^[\s|:;,.'"]+$/.test(mod) || ALIAS_VIRTUAL.has(mod)) continue
+        if (mod.startsWith('@types/')) continue
+        if (!used.has(mod)) used.set(mod, [])
+        used.get(mod).push(path.relative(ROOT, f))
+      }
+    }
+  }
+  const missing = []
+  for (const [mod, usages] of used) {
+    if (!declared.has(mod)) missing.push({ mod, usages: usages.slice(0, 3) })
+  }
+  if (missing.length) findings[tt.label] = missing
+}
+
 const FIX_LIST = process.argv.includes('--fix-list')
 let total = 0
 for (const [rel, missing] of Object.entries(findings)) {
@@ -112,12 +164,16 @@ for (const [rel, missing] of Object.entries(findings)) {
     console.log(`  ✗ ${mod}   （如 ${usages[0] ?? ''}）`)
   }
   if (FIX_LIST) {
-    const pkgFile = path.join(ROOT, rel, 'package.json')
+    const isTpl = rel.endsWith('/templates')
+    const base = isTpl ? rel.replace('/templates', '') : rel
+    const pkgFile = isTpl
+      ? path.join(ROOT, base, 'templates', 'package.json')
+      : path.join(ROOT, rel, 'package.json')
     const pkg = JSON.parse(fs.readFileSync(pkgFile, 'utf8'))
     const dd = (pkg.devDependencies ??= {})
     for (const { mod } of missing) dd[mod] = 'workspace:*'
     fs.writeFileSync(pkgFile, JSON.stringify(pkg, null, 2) + '\n')
-    console.log(`  → 已补入 ${rel}/package.json devDependencies（workspace:*，发布版请按实际版本）`)
+    console.log(`  → 已补入 ${path.relative(ROOT, pkgFile)} devDependencies（workspace:*，发布版请按实际版本）`)
   }
 }
 console.log(`\n[check-deps] ${TARGETS.length} 个目标 · 缺失依赖 ${total} 个${total ? '（--fix-list 可自动补 devDeps）' : '——零缺失，pnpm 严格解析安全'}`)

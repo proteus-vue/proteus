@@ -27,6 +27,7 @@
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "vite": "^5.0.0",
-    "vue-tsc": "^2.0.0"
+    "vue-tsc": "^2.0.0",
+    "@proteus-vue/devtools-runtime": "^0.1.0"
   }
 }
