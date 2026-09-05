@@ -133,6 +133,32 @@ export interface ModuleAuditArgs {
   graphJsonPath: string
 }
 
+export interface GateArgs {
+  /** 子命令：ls 目录 / run 执行 */
+  sub: 'ls' | 'run'
+  /** run：门禁 id 或 preset（check/audit） */
+  id?: string
+  /** run：目标目录/工程根（缺省当前目录） */
+  root?: string
+  /** ls：按族过滤（快速聚合/深度聚合/专项检查/框架自检） */
+  group?: string
+}
+
+export function parseGateArgs(argv: string[]): GateArgs {
+  const sub = argv[0]
+  if (sub !== 'ls' && sub !== 'run') throw new Error('proteus gate 需要子命令：ls（目录）/ run <id|preset> [dir]')
+  if (sub === 'ls') {
+    const groupFlag = argv.find((a) => a.startsWith('--group='))
+    const group = groupFlag ? groupFlag.slice('--group='.length) : undefined
+    for (const a of argv.slice(1)) if (!a.startsWith('--group=') && !a.startsWith('-')) throw new Error(`多余参数：${a}`)
+    return { sub, group }
+  }
+  const positional = argv.slice(1).filter((a) => !a.startsWith('-'))
+  for (const a of argv.slice(1)) if (a.startsWith('-') && !a.startsWith('--')) throw new Error(`未知参数：${a}`)
+  if (positional.length < 1 || positional.length > 2) throw new Error('proteus gate run <id|preset> [dir]——id 必填，dir 可省')
+  return { sub, id: positional[0], root: positional[1] ? path.resolve(positional[1]) : '.' }
+}
+
 export interface D2AuditArgs {
   /** 审计目录（★#448：缺省读工程 proteus.config 的 audit.dir ?? src——resolveD2Target 解析） */
   dir?: string
@@ -379,6 +405,10 @@ export const HELP_GROUPS: HelpGroup[] = [
   {
     title: '检查与门禁',
     entries: [
+      {
+        usage: 'proteus gate ls [--group=<族>] | gate run <id|preset> [dir]',
+        desc: '★统一门禁系统（★#453 Gate 注册表单一来源）：ls = 全量门禁目录（族/scope/入口）；run = 统一执行\n      preset：check（快速四域）/ audit（深度八域）；已接线：d2 / devtools-budget / coverage\n      未接线门禁（○）经其独立命令运行（目录即注记）——新门禁先补录注册表再接线',
+      },
       {
         usage: 'proteus check [dir] [--no-strict-css|--no-strict-style|--no-strict-router|--no-strict-cli]',
         desc: '★一键全量门禁（G-33 M1）：css:check + style:check + router:check + config:check 四域聚合\n      任一域失败 → exit 1（默认全开，--no-* 关闭对应域）',

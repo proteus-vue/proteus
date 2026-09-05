@@ -29,6 +29,17 @@ proteus check [dir]   # ★一键全量门禁：css + style + router + config �
                       # 默认全开，--no-strict-css 等可按域关闭；任一域失败 exit 1
 ```
 
+**★统一门禁系统（#453）**：`proteus gate` 是门禁的唯一入口——`gate ls` 全量目录（分族：快速聚合/深度聚合/专项检查/框架自检，标注 scope 与接线态），`gate run <id|preset> [dir]` 统一执行。
+
+```bash
+proteus gate ls                  # 门禁注册表（单一来源——新增门禁在此补录后自动入目录）
+proteus gate run check [dir]     # preset：快速聚合（css/style/router/cli 同 check）
+proteus gate run audit [root]    # preset：深度聚合（八域同 audit all）
+proteus gate run d2 [dir]        # 专项：D-2 页面门禁（与 audit d2 同一引擎）
+```
+
+> 门禁逻辑零重复：preset 复用既有聚合引擎，已接线门禁复用各自独立 runner；未接线门禁（○）经其独立命令运行。
+
 专项命令可单独跑，也可被 `proteus audit all` 八域聚合（route / module / config / i18n / capabilities / components / **d2（D-2 页面门禁——opt-in：proteus.config 声明 `audit` 才跑）** / devtools-budget + CI 耗时预算）：
 
 | 命令 | 检查内容 |

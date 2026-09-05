@@ -7,7 +7,7 @@ import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 // ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
-import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, formatHelpText } from './args'
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
@@ -41,6 +41,7 @@ import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
+import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 
 async function main(): Promise<void> {
@@ -136,6 +137,23 @@ async function main(): Promise<void> {
       console.log('下一步：proteus module:check 校验 → proteus audit module 审计（详见 docs/proteus-module-plan/10-migration.md）')
       break
     }
+      case 'gate': {
+        // ★#453 统一门禁系统：gate ls（注册表目录）/ gate run <id|preset> [dir]（统一执行）
+        const args = parseGateArgs(rest)
+        try {
+          if (args.sub === 'ls') {
+            console.log(formatGateList(args.group))
+            break
+          }
+          const r = await runGate(args.id!, args.root ?? '.')
+          console.log(r.text)
+          if (!r.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-gate] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
       case 'audit': {
       // proteus audit module（M8.6 CI 门禁）；★B6：audit all 全量门禁（test-framework B6）；★M10：audit devtools-budget（性能预算）
       if (rest[0] === 'all') {
