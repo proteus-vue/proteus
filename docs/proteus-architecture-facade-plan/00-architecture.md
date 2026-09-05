@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.16（本批追加：G-58 plugin-api，决策 #395）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 1 份可观测 plan（G-57 追加，决策 #394）+ 1 份生态 plan（G-58 追加，决策 #395）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.17（本批追加：G-59 plugin-ecosystem，决策 #396）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 1 份可观测 plan（G-57 追加，决策 #394）+ 1 份生态 plan（G-58 追加，决策 #395）+ 1 份治理 plan（G-59 追加，决策 #396）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -173,6 +173,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-56** | studio（Proteus Studio 自有宿主壳：第四宿主 + 移动端伴侣——Tauri 壳 + CodeMirror 6 + libmpv 设备嵌入，内核零改动） | G-55、G-54、G-53 | 自有宿主不享有内核特权——宿主来源可换（INV-ST-01~08）+ CMP171-178 |
 | **G-57** | inspector（Proteus Inspector：三层可观测性叠加——L0 宿主探针 / L1 语义增强 / L2 框架语义，出口协议化） | G-19、G-51、G-54、G-56 | 可观测性来源可换——叠加不替代（INV-INSP-01~08）+ CMP179-186 |
 | **G-58** | plugin-api（Proteus Studio 插件 API 与扩展生态：PluginHost + 能力权限模型 + WIT 版本化，WASM 隔离） | G-56、G-55、G-54、G-51 | 扩展来源无关——内置功能走同一 API（INV-EX-01~08）+ CMP187-194 |
+| **G-59** | plugin-ecosystem（插件生态治理与性能契约：激活契约 + 数据敏感度分级 + 信任不可继承 + 破坏率看板） | G-58、G-55、G-37 | 治理形态可替换可度量可验证——首个治理轴（INV-ECO-01~08）+ CMP195-206 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -203,6 +204,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.15）**：G-57 新入库（2026-09，决策 #394）：**G-57**（inspector，Proteus Inspector 三层可观测性叠加——**第 20 次泛化：不绑可观测性来源**）：叠加不替代（L0 探针用宿主已有的 VM Service/Flipper/CDP，绝不重新实现）+ L1 语义增强（指标 × 框架拓扑——把数字变成带结构的数字，本份核心增量）+ L2 框架语义（SPI 拓扑/隔离域/conformance 独占数据）+ 扩展协议（ext.<package>.<command> 命名规约）+ 安全红线（Debug-only 编译期剔除/localhost+一次性 token/绝不采集用户数据）。编号避让：原稿自编 G-58（旧序接续）→ 定案 G-57 + CMP-187~194→179~186 + 原则 #13.60-62→#13.69-71（第三次撞号，60-62 已被 G-54 占用）+ 泛化"第 17 次"→第 20 次。原则 #13.69-71、铁律 G-57.1-8、规则 CMP179-186 并入 L0 规约；spi-first 映射表登记第 20 次。详见 PROJECT_MEMORY 决策 #394。
 
 > **追加说明（v3.16）**：G-58 新入库（2026-09，决策 #395）：**G-58**（plugin-api，Proteus Studio 插件 API 与扩展生态——**第 21 次泛化：不绑扩展来源**，内置功能/官方插件/第三方插件同权）：内置功能走插件 API（G-58.1 红线：apiSurface 快照 S1===S2 机器试金石）+ 默认零权限（capability 白名单 + 越权 denied 不终止）+ 声明式优先（Tier 0 零 WASM）+ API 只增不改（WIT 版本化并存）+ WASM 崩溃隔离 + 资源限额强制 + 提案 API 禁发布。编号避让：原稿自编 G-59（studio 原稿预留号）→ 定案 G-58 + CMP-195~202→187~194 + 原则 #13.60-62→#13.72-74（**第四次撞号**）+ 泛化"第 18 次"→第 21 次。原则 #13.72-74、铁律 G-58.1-8、规则 CMP187-194 并入 L0 规约；spi-first 映射表登记第 21 次。详见 PROJECT_MEMORY 决策 #395。
+
+> **追加说明（v3.17）**：G-59 新入库（2026-09，决策 #396）：**G-59**（plugin-ecosystem，插件生态治理与性能契约——**第 22 次泛化：不绑生态治理模式**，首个治理形态轴）：激活时机是契约（禁通配符/超预算拒绝加载）+ **权限建在数据敏感度上不建在 API 危险度上**（有限集合建模收敛，未登记 API 保守按 secrets）+ **信任不可继承**（代码哈希变化即撤销重授权——不检测恶意而是切断信任继承假设）+ 废弃必须提供替代 + 破坏率公开看板 + 去激活对称审计 + 版本并存不跟随 + 内置第三方同构。编号避让：原稿自编 G-60（旧序接续）→ 定案 G-59 + CMP-203~214→195~206 + 原则 #13.60-64→#13.75-79（**第五次撞号**，60-62 撞 G-54、63-64 撞 G-55）+ 泛化"第 19 次"→第 22 次。原则 #13.75-79、铁律 G-59.1-9、规则 CMP195-206 并入 L0 规约；spi-first 映射表登记第 22 次。详见 PROJECT_MEMORY 决策 #396。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**
