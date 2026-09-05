@@ -9,7 +9,7 @@
 //   COMPILED BACKEND（Node 真实；Rust 诚实禁用——浏览器无 Rust 运行时）
 //   DEVICE（预览框真实宽高 + G-25 formForWidth 档位真求解）
 import { computed, ref, watch } from 'vue'
-import { compileLive, DEMO_SOURCE } from '../playground/compile'
+import { compileLive, DEMO_SOURCE, DEMO_SOURCE_EN } from '../playground/compile'
 // ★IR Tab：G-29 NodeBackend 真实 CompilerIR（./node 子路径——浏览器安全单入口，index 全量含 fs 仅 node 侧）
 import { createNodeCompilerBackend } from '@proteus-vue/compiler-backend/node'
 // ★语法色（@proteus-vue/docs 公共导出：code → span.docs-tok-*，内容全转义防注入；样式见 style.css --syn-*）
@@ -18,6 +18,8 @@ import { highlight } from '@proteus-vue/docs'
 import { RENDER_BACKENDS, COMPILE_BACKENDS, DEVICES, renderWithBackend, deviceForm, type TreeJsonNode } from '../playground/backends'
 import { decodeSource, encodeSource, playgroundUrl } from '../playground/share'
 import RenderBox from './RenderBox.vue'
+// ★#477 Mini Playground chrome 双语
+import { locale, t } from '../i18n'
 // ★#445/#449 桌面原语（豁免回收）：剪贴板 copyText + 页面 URL 读写（location/history 收口）——env 省略回落真实全局，页面零裸平台 API
 import { copyText, currentPageOrigin, currentPagePathname, replacePageUrl } from '@proteus-vue/desktop'
 // ★#389 框架内置能力消费：p-segment（分段控件替代手写 Tab 按钮）+ p-toast（复制反馈）+ p-animate（LIVE 脉冲）——G-32 语义组件
@@ -34,10 +36,52 @@ const props = defineProps({
 
 const backend = createNodeCompilerBackend()
 
-const source = ref(props.initialSource || DEMO_SOURCE)
+function demoSource(): string {
+  return locale.value === 'en' ? DEMO_SOURCE_EN : DEMO_SOURCE
+}
+const source = ref(props.initialSource || demoSource())
+// ★#477 语言切换时，若编辑器仍是默认示例（未编辑）→ 跟随新语言；用户改过则保留
+watch(locale, () => {
+  if (props.initialSource) return
+  if (source.value === DEMO_SOURCE || source.value === DEMO_SOURCE_EN) source.value = demoSource()
+})
 
 const TABS = ['Skyline', 'IR', 'Web', 'WXSS', 'Render', 'Trace'] as const
 const activeTab = ref<(typeof TABS)[number]>('Skyline')
+
+const isEn = computed(() => locale.value === 'en')
+/** ★#477 Tab 说明英文层（中文见 TAB_INFO） */
+const TAB_INFO_EN: Record<(typeof TABS)[number], string> = {
+  Skyline: 'Mini-program output (WXML) — the standard Vue template after the compiler: v-if→wx:if, @tap→bind:tap, p-* semantic tags rendered directly',
+  IR: 'CompilerIR intermediate representation — the compiler-internal semantic structure (render tree + C-IR semantic tree + bindings capability entries), the G-29 contract every render backend consumes',
+  Web: 'Web output = the standard Vue SFC itself (zero transform) — the Web render backend consumes the same IR with no platform rewriting',
+  WXSS: 'Mini-program style output — after scoped isolation + px→rpx + selector semanticization (.proteus-*)',
+  Render: 'Render-backend output — the real view tree from feeding the same IR to the selected backend above (VueDom / Headless / Native × 3 / Flutter)',
+  Trace: 'Compile decision chain — which rule transformed what and where: effective transformations highlighted, untouched ones folded (same source as CLI --trace-transform)',
+}
+function tabInfo(tab: (typeof TABS)[number]): string {
+  return isEn.value ? TAB_INFO_EN[tab] : TAB_INFO[tab]
+}
+/** ★#477 渲染后端/编译后端/设备英文标签（中文在 backends.ts 数据层） */
+const BACKEND_EN: Record<string, string> = {
+  vuedom: 'VueDomBackend (Web)',
+  headless: 'HeadlessBackend (in-memory tree)',
+  'native-ios': 'NativeBackend · iOS (UIKit)',
+  'native-android': 'NativeBackend · Android (Jetpack)',
+  'native-harmony': 'NativeBackend · HarmonyOS (ArkUI)',
+  flutter: 'FlutterBackend (Widget)',
+}
+const COMPILE_EN: Record<string, string> = { node: 'Node (TS)', rust: 'Rust (native · local CLI required)' }
+const DEVICE_EN: Record<string, string> = { web: 'Web 1440', tablet: 'Tablet 834', phone: 'Phone 390', tv: 'Car 1280', watch: 'Watch 198' }
+function backendLabel(r: { id: string; label: string }): string {
+  return isEn.value ? (BACKEND_EN[r.id] ?? r.label) : r.label
+}
+function compileLabel(c: { id: string; label: string }): string {
+  return isEn.value ? (COMPILE_EN[c.id] ?? c.label) : c.label
+}
+function deviceLabel(d: { id: string; label: string }): string {
+  return isEn.value ? (DEVICE_EN[d.id] ?? d.label) : d.label
+}
 
 /** ★#388c 每个 Tab 的自解释说明（切换即读——透明编译的用户教育内建于 UI） */
 const TAB_INFO: Record<(typeof TABS)[number], string> = {
@@ -198,31 +242,31 @@ run(source.value)
         <span v-else class="live-dot" />
         LIVE
       </span>
-      <p-text class="panel-tip">左侧改代码 · 右侧实时看真实编译产物与 IR</p-text>
+      <p-text class="panel-tip">{{ t('pd.tip') }}</p-text>
     </p-stack>
     <!-- ★#388 后端切换工具栏（v3 四组 select——全部真实调用，零伪造） -->
     <p-stack direction="row" :gap="12" wrap class="toolbar">
       <label class="tool-group">
         <span class="tool-label">RENDER BACKEND</span>
         <select v-model="renderBackendId" class="tool-select" :style="{ color: activeRenderBackend.color }">
-          <option v-for="r in RENDER_BACKENDS" :key="r.id" :value="r.id">{{ r.label }}</option>
+          <option v-for="r in RENDER_BACKENDS" :key="r.id" :value="r.id">{{ backendLabel(r) }}</option>
         </select>
       </label>
       <label class="tool-group">
         <span class="tool-label">COMPILED BACKEND</span>
         <select class="tool-select" :value="'node'" :disabled="true">
-          <option v-for="c in COMPILE_BACKENDS" :key="c.id" :value="c.id" :disabled="c.disabled">{{ c.label }}</option>
+          <option v-for="c in COMPILE_BACKENDS" :key="c.id" :value="c.id" :disabled="c.disabled">{{ compileLabel(c) }}</option>
         </select>
       </label>
       <label class="tool-group">
         <span class="tool-label">DEVICE</span>
         <select v-model="device" class="tool-select">
-          <option v-for="d in DEVICES" :key="d.id" :value="d">{{ d.label }}</option>
+          <option v-for="d in DEVICES" :key="d.id" :value="d">{{ deviceLabel(d) }}</option>
         </select>
       </label>
       <label class="tool-group">
         <span class="tool-label">CAPABILITY</span>
-        <span class="tool-static">见 IR · bindings.capabilities</span>
+        <span class="tool-static">{{ t('pd.seeCap') }}</span>
       </label>
     </p-stack>
     <p-split :min-split-width="880" :gap="16" class="pg-grid">
@@ -230,9 +274,9 @@ run(source.value)
       <template #aside>
         <p-view class="pg-pane">
           <p-view class="pane-head">
-            <p-text class="pane-label">playground.vue（标准 Vue SFC，无平台 DSL）</p-text>
-            <button v-if="!compact" class="pane-btn" @click="copyShareLink">复制分享链接</button>
-            <button class="pane-btn" @click="source = DEMO_SOURCE">重置示例</button>
+            <p-text class="pane-label">{{ t('pd.file') }}</p-text>
+            <button v-if="!compact" class="pane-btn" @click="copyShareLink">{{ t('pd.copy') }}</button>
+            <button class="pane-btn" @click="source = demoSource()">{{ t('pd.reset') }}</button>
           </p-view>
           <p-view class="editor-shell" :class="{ composing }">
             <!-- 高亮垫底（aria-hidden：仅供视觉，真实输入在 textarea） -->
@@ -249,7 +293,7 @@ run(source.value)
             />
           </p-view>
           <p-text class="pg-meta">
-            {{ compiled.error ? '✗ ' + compiled.error : '实时编译 · 触发规则 ' + compiled.trace.length + ' 条（有效转换 ' + traceChanged.length + ' 条）' }}
+            {{ compiled.error ? '✗ ' + compiled.error : t('pd.trace', { n: String(compiled.trace.length), m: String(traceChanged.length) }) }}
           </p-text>
         </p-view>
       </template>
@@ -266,7 +310,7 @@ run(source.value)
           />
         </p-view>
         <!-- ★#388c Tab 自解释说明条（切换即读） -->
-        <p-text class="tab-desc"><span class="tab-desc-key">{{ activeTab }}</span>{{ TAB_INFO[activeTab] }}</p-text>
+        <p-text class="tab-desc"><span class="tab-desc-key">{{ activeTab }}</span>{{ tabInfo(activeTab) }}</p-text>
         <!-- ★#388 Render Tab：选中渲染后端的真实输出（设备框预览 + 后端语义标签） -->
         <p-view v-if="activeTab === 'Render'" class="render-view">
           <p-view class="device-frame" :style="{ '--frame-w': device.width + 'px', '--frame-h': device.height + 'px' }">

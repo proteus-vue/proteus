@@ -47,6 +47,13 @@ const zh = {
   'app.home': '首页',
   'app.docs': '文档',
   'app.footer': '官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）',
+  // —— Mini Playground（TransformDemo，★#477）——
+  'pd.tip': '左侧改代码 · 右侧实时看真实编译产物与 IR',
+  'pd.file': 'playground.vue（标准 Vue SFC，无平台 DSL）',
+  'pd.copy': '复制分享链接',
+  'pd.reset': '重置示例',
+  'pd.seeCap': '见 IR · bindings.capabilities',
+  'pd.trace': '实时编译 · 触发规则 {n} 条（有效转换 {m} 条）',
 } as const
 
 const en = {
@@ -93,6 +100,13 @@ const en = {
   'app.home': 'Home',
   'app.docs': 'Docs',
   'app.footer': 'This site is built with Proteus itself (dogfooding): p-* semantic components + the @proteus-vue/docs engine + G-22 fluid layout (zero @media)',
+  // —— Mini Playground（TransformDemo，★#477）——
+  'pd.tip': 'Edit code on the left · watch real compile output & IR live on the right',
+  'pd.file': 'playground.vue (standard Vue SFC, no platform DSL)',
+  'pd.copy': 'Copy share link',
+  'pd.reset': 'Reset sample',
+  'pd.seeCap': 'see IR · bindings.capabilities',
+  'pd.trace': 'Live compile · {n} rules fired ({m} effective)',
 } as const
 
 type MessageKey = keyof typeof zh

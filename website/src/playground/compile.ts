@@ -72,3 +72,35 @@ function handleTap() {
 h1 { font-size: 20px; color: #333; }
 </style>
 `
+
+/** ★#477 英文示例源（chrome 双语——EN 初始/重置用） */
+export const DEMO_SOURCE_EN = `<script setup lang="ts">
+import { ref } from 'vue'
+
+const count = ref(0)
+const visible = ref(true)
+const items = ref(['semantic kernel', 'pluggable backends', 'transparent compilation'])
+
+function handleTap() {
+  count.value++
+}
+</script>
+
+<template>
+  <p-view class="demo">
+    <p-heading :level="1">Hello Proteus</p-heading>
+    <p-stack>
+      <p-text v-if="visible">tapped {{ count }} times</p-text>
+      <p-button @tap="handleTap">tap me</p-button>
+    </p-stack>
+    <p-grid :min-col-width="120">
+      <p-text v-for="(item, i) in items" :key="i">{{ item }}</p-text>
+    </p-grid>
+  </p-view>
+</template>
+
+<style>
+.demo { padding: 24px 32px; }
+h1 { font-size: 20px; color: #333; }
+</style>
+`
