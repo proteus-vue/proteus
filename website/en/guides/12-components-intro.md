@@ -9,7 +9,7 @@ group: 基础概念
 Proteus's components are not "yet another cross-target UI library" — they are **semantic components**: every `p-*` tag only declares "what you want" — semantics + constraints (a props contract). At compile time, **G-31 semantic mapping** translates the semantics into each target's native controls: `div` / `button` on Web, `view` / `text` in Mini Programs, `UIView` / `UIButton` on iOS, `FrameLayout` / `TextView` on Android. Business code has zero awareness of the rendering target.
 
 > **A component is a semantic in component form, not a container for styles.**
-> The same source: `p-view` renders `div` on Web and maps to Mini Program `view` at compile time (the same source for both targets); `p-button`'s `@click` compiles to `bind:tap`. The semantics → native control mapping is locked by the seven-target reference table, and a conformance snapshot gate (implemented semantics × 6 render backends) prevents it from drifting.
+> The same source: `p-view` renders `div` on Web and maps to Mini Program `view` at compile time (the same source for both targets); `p-button`'s `@click` compiles to `bind:tap`. The [semantics → native control mapping](/docs/framework/11-semantic-model) (Semantic Model section) is locked by the seven-target reference table, and a [conformance snapshot gate](/docs/framework/29-conformance) (implemented semantics × 6 render backends) prevents it from drifting.
 
 ## Why not a "style library"
 

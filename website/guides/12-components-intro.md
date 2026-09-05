@@ -9,7 +9,7 @@ group: 基础概念
 Proteus 的组件不是「又一套跨端 UI 库」，而是**语义组件**：每个 `p-*` 标签只声明「你要什么」——语义 + 约束（props 契约）。编译期由 **G-31 语义映射**把语义翻译成各端原生控件：Web 的 `div` / `button`、小程序的 `view` / `text`、iOS 的 `UIView` / `UIButton`、Android 的 `FrameLayout` / `TextView`。业务代码对渲染端零感知。
 
 > **组件是语义的组件形态，不是样式的容器。**
-> 同一份源码：`p-view` 在 Web 渲染 `div`、编译期映射为小程序 `view`（双端同源码）；`p-button` 的 `@click` 编译为 `bind:tap`。语义 → 原生控件的映射由七端对照表锁定，并用 conformance 快照门禁（implemented 语义 × 6 渲染后端）防止漂移。
+> 同一份源码：`p-view` 在 Web 渲染 `div`、编译期映射为小程序 `view`（双端同源码）；`p-button` 的 `@click` 编译为 `bind:tap`。[语义 → 原生控件映射](/docs/framework/11-semantic-model)（语义模型分区）由七端对照表锁定，并用 [conformance 快照门禁](/docs/framework/29-conformance)（implemented 语义 × 6 渲染后端）防止漂移。
 
 ## 为什么不是「样式库」
 
