@@ -1,6 +1,6 @@
 ---
 title: 组件引用与注册
-order: 16
+order: 17
 group: 组件框架
 ---
 
