@@ -6,6 +6,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { sections } from './docs-registry'
 import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
+// ★#443 桌面语义原语：快捷键匹配/平台标签/焦点陷阱全部收口 @proteus-vue/desktop（G-24）——不裸写 window keydown 判定
+import { matchShortcut, parseShortcutExpr, shortcutLabel, createFocusTrap, type KeyEventLike } from '@proteus-vue/desktop'
 
 interface Hit extends SearchIndexEntry {
   /** 所属页标题（面包屑 分区 · 页） */
@@ -35,8 +37,16 @@ const q = ref('')
 const results = ref<Hit[]>([])
 const active = ref(0)
 const inputEl = ref<HTMLInputElement | null>(null)
+const modalEl = ref<HTMLDivElement | null>(null)
 const listEl = ref<HTMLDivElement | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
+let trap: ReturnType<typeof createFocusTrap> | null = null
+
+// 快捷键语义（desktop/shortcut 原语：mod 平台归一——Mac ⌘ / Win Ctrl）
+const OPEN_KEYS = parseShortcutExpr('mod+k')!.keys
+const ESC_KEYS = parseShortcutExpr('escape')!.keys
+const PLATFORM = typeof navigator !== 'undefined' ? navigator.platform : 'web'
+const shortcutKbd = shortcutLabel('mod+k', PLATFORM) // ⌘K / Ctrl+K（平台自适应——原语归一，不手判）
 
 watch(q, (v) => {
   if (timer) clearTimeout(timer)
@@ -47,26 +57,40 @@ watch(q, (v) => {
   }, 120)
 })
 
-function toggle(force?: boolean): void {
-  open.value = force ?? !open.value
-  if (open.value) {
+watch(open, (v) => {
+  if (v) {
     nextTick(() => {
       inputEl.value?.focus()
       inputEl.value?.select()
+      // 弹层焦点圈闭（desktop/focus-trap——无障碍刚需，对标 VitePress modal）
+      trap = modalEl.value ? createFocusTrap(modalEl.value) : null
     })
+  } else {
+    trap = null
   }
+})
+
+function toggle(force?: boolean): void {
+  open.value = force ?? !open.value
 }
 
+// 全局键：快捷键语义由 desktop shortcut 原语判定（mod+k 开 / escape 关）
 function onGlobalKey(ev: KeyboardEvent): void {
-  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') {
+  if (matchShortcut(ev as KeyEventLike, OPEN_KEYS)) {
     ev.preventDefault()
-    toggle()
-  } else if (ev.key === 'Escape' && open.value) {
+    toggle(true)
+  } else if (open.value && matchShortcut(ev as KeyEventLike, ESC_KEYS)) {
     toggle(false)
   }
 }
 
 function onInputKey(ev: KeyboardEvent): void {
+  // Tab 循环由焦点陷阱接管（弹层内不逃逸到页面）
+  if (ev.key === 'Tab') {
+    const handled = trap?.trapTab({ shiftKey: ev.shiftKey, preventDefault: () => ev.preventDefault() }) ?? false
+    if (handled) ev.preventDefault()
+    return
+  }
   if (ev.key === 'ArrowDown') {
     ev.preventDefault()
     active.value = Math.min(active.value + 1, results.value.length - 1)
@@ -117,19 +141,19 @@ function splitHit(text: string, qq: string): Array<{ t: string; hit: boolean }> 
 onMounted(() => window.addEventListener('keydown', onGlobalKey, true))
 onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey, true))
 
-const placeholder = computed(() => `搜索文档…（${navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl+K'}）`)
+const placeholder = computed(() => `搜索文档…（${shortcutKbd}）`)
 </script>
 
 <template>
   <button class="docsearch-trigger" type="button" aria-label="搜索文档" @click="toggle(true)">
     <span class="ds-icon" aria-hidden="true">⌕</span>
     <span class="ds-placeholder">搜索文档…</span>
-    <kbd class="ds-kbd">⌘K</kbd>
+    <kbd class="ds-kbd">{{ shortcutKbd }}</kbd>
   </button>
 
   <Teleport to="body">
     <div v-if="open" class="docsearch-overlay" @click.self="toggle(false)">
-      <div class="docsearch-modal" role="dialog" aria-modal="true">
+      <div ref="modalEl" class="docsearch-modal" role="dialog" aria-modal="true">
         <div class="docsearch-inputrow">
           <span class="ds-icon" aria-hidden="true">⌕</span>
           <input ref="inputEl" v-model="q" type="search" class="docsearch-input" :placeholder="placeholder" @keydown="onInputKey" />
