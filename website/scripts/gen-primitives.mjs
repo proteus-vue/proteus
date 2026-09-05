@@ -16,11 +16,18 @@ const check = process.argv.includes('--check')
 const SOURCES = [
   { id: 'desktop', rel: 'packages/desktop', group: '桌面原语', prefix: 'desktop-', orderBase: 10 },
   { id: 'gesture', rel: 'packages/gesture', group: '手势原语', prefix: 'gesture-', orderBase: 60 },
+  { id: 'api', rel: 'packages/api', group: '工程原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$/, pkg: '@proteus-vue/api' },
 ]
 
 const TITLE_OVERRIDES = {
   recognizers: 'Gesture 识别器（tap/pan/swipe/pinch/rotate）',
   'use-gesture': 'useGesture Hook + v-gesture 指令（Web 接线）',
+  engineering: '基础工程原语（E1-E9：useState/useComputed/useWatch/useLifecycle…）',
+  'router-engineering': '路由工程原语（E10-E18：useRoute/push/back/守卫…）',
+  'animation-engineering': '动画工程原语（E19-E23：useAnimation/useScrollAnimation…）',
+  'tooling-engineering': '工具工程原语（E24-E28：useDevTools/defineComponent…）',
+  'request-engineering': '请求工程（R1-R4：request/useQuery/enqueue/runOnce）',
+  'ownership-engineering': '所有权工程原语（PSS：useOwned/useBorrow…）',
 }
 
 const COMMENT_LINE = /^\s*(\/\/|\*|\/\*|\s*\*\/)/
@@ -66,11 +73,11 @@ function readExports(src) {
 }
 
 function humanName(file, header) {
+  const base = file.replace(/\.ts$/, '')
+  if (TITLE_OVERRIDES[base]) return TITLE_OVERRIDES[base]
   const alias = header.map((l) => l.match(/(p-[a-z][a-z0-9-]*)/)?.[1]).find(Boolean)
   if (alias) return alias
-  if (TITLE_OVERRIDES[file.replace(/\.ts$/, '')]) return TITLE_OVERRIDES[file.replace(/\.ts$/, '')]
-  return file
-    .replace(/\.ts$/, '')
+  return base
     .split('-')
     .map((s) => (s ? s[0].toUpperCase() + s.slice(1) : s))
     .join(' ')
@@ -79,6 +86,11 @@ function humanName(file, header) {
 /** ★#460 真实用法（dogfooding 出处——官网自身/示例工程真实调用，非示意图）：模块 basename → 用法条目 */
 const USAGE_MAP = {
   'use-gesture': [{ code: `<div v-gesture:tap="onTapG" class="gesture-demo">{{ tapMsg }}</div>`, src: 'examples/pages/semantic-primitives-demo.vue:197' }],
+  engineering: [{ code: `const eng = createEngineering({ reactivity: { ref, computed, watch } })\nconst engCount = eng.useState(0)`, src: 'examples/pages/platform-api-demo.vue:483·487' }],
+  'router-engineering': [{ code: `const rx = createRouterEngineering({ routerLike: { … } })`, src: 'examples/pages/platform-api-demo.vue:505' }],
+  'animation-engineering': [{ code: `const anim = createAnimationEngineering({ … })\nconst gestureAnim = anim.useGestureAnimation()`, src: 'examples/pages/platform-api-demo.vue:540·547' }],
+  'tooling-engineering': [{ code: `const tool = createToolingEngineering({ reactivity: { ref, computed, watch } })`, src: 'examples/pages/platform-api-demo.vue:631' }],
+  'request-engineering': [{ code: `const req = createRequestEngineering({ … })`, src: 'examples/pages/platform-api-demo.vue:736' }],
   anchor: [{ code: `scrollToId(hit.anchor, { behavior: 'smooth', delayMs: 60 }) // 等新页 v-html 渲染后再滚`, src: 'website/src/DocSearch.vue:106' }],
   breadcrumb: [{ code: `deriveBreadcrumb(['home', 'user', 'profile'])`, src: 'examples/pages/semantic-primitives-demo.vue:468' }],
   clipboard: [{ code: `void copyText(url) // Clipboard API + 降级`, src: 'website/src/components/TransformDemo.vue:179' }],
@@ -117,7 +129,11 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   body.push('')
   body.push(`# ${title}`)
   body.push('')
-  body.push(`> 来源模块 \`@proteus-vue/${rel.replace('packages/', '')}\`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。`)
+  if (rel === 'packages/api') {
+    body.push('> 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。')
+  } else {
+    body.push(`> 来源模块 \`@proteus-vue/${rel.replace('packages/', '')}\`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。`)
+  }
   body.push('')
   if (header.length) body.push(...header.map((l) => l.startsWith('★') ? `**${l}**` : l), '')
   body.push(`## 核心导出（SSOT：\`${rel}/src/${file}\`）`)
@@ -150,6 +166,10 @@ function renderPage(srcDirAbs, rel, file, order, group) {
     body.push('- 识别器纯逻辑零依赖：Web Pointer / MP touch 归一为 `GestureInput` → 语义手势事件（tap/pan/swipe/pinch/rotate/longpress…）——可单测')
     body.push('- Web 官方接线：`useGesture()` Hook 与 `v-gesture:<kind>="onX"` 指令；MP/原生端映射由各端 Backend 承接——「事件是 Backend 实现细节」')
     body.push('- 真实示例：`examples/pages/semantic-primitives-demo.vue`（v-gesture:tap）')
+  } else if (rel === 'packages/api') {
+    body.push('- **工厂注入式**：`createXxxEngineering({ reactivity, driver, routerLike… }) → 实例`——消费方注入 reactivity（api 包零 vue 依赖），实例方法即 E 系原语')
+    body.push('- 组件形态（如 E20 p-animate / E18 p-router-link）编译期进 C-IR；注入式 Hook（E1-E28/R1-R4）运行时按注入面接线')
+    body.push('- 真实示例：`examples/pages/platform-api-demo.vue`（E 系/R 系工厂全调用，见「真实用法」出处）')
   } else {
     body.push('- 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）')
     body.push('- 指令/组件形态：经 `createDesktopDirectives()` 注册的 `v-p-*`（MP 端不注册天然降级）')
@@ -162,10 +182,14 @@ function renderPage(srcDirAbs, rel, file, order, group) {
 
 const modules = SOURCES.flatMap((src) => {
   const dir = path.join(WEBSITE, '..', src.rel, 'src')
-  return fs.readdirSync(dir).filter((f) => f.endsWith('.ts') && f !== 'index.ts').sort().map((f, i) => [
-    `${src.prefix}${f.replace(/\.ts$/, '')}.md`,
-    renderPage(dir, src.rel, f, src.orderBase + i, src.group),
-  ])
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.ts') && f !== 'index.ts' && (!src.files || src.files.test(f)))
+    .sort()
+    .map((f, i) => [
+      `${src.prefix}${f.replace(/\.ts$/, '')}.md`,
+      renderPage(dir, src.rel, f, src.orderBase + i, src.group),
+    ])
 })
 const generated = new Map(modules)
 

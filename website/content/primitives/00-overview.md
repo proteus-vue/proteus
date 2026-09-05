@@ -19,7 +19,7 @@ Proteus 的全部家当本质是 **一张语义目录（136 原语 SSOT，`PRIMI
 | 柔性布局 | fluid（G-22） | `p-fluid` `p-fit` `p-scale`… | `v-p-fluid` | [柔性系统](/docs/system/01-overview) |
 | 桌面/系统 | desktop（G-24，21 模块） | —— | `createScrollObserver` `copyText` `v-p-shortcut`… | **本分区（下）** |
 | 手势 | gesture（G-32 B4） | `p-*` 手势组件 | `v-gesture` `useGesture` | **本分区（下）** |
-| 工程原语 | engineering（E1-E28） | —— | `useState` `createRouterEngineering`… | 见框架/能力 |
+| 工程原语 | engineering（E1-E28 + R1-R4） | `p-animate` `p-router-link`（组件形态） | `createEngineering` 系工厂注入式 | **本分区（下）** |
 
 > 形态不是复制：同一个语义（如 `layout.grid`）既可以是 `p-grid`（组件形态），也在目录条目中登记——**两份消费面共享同一份语义清单**（136 SSOT），这就是「语义收敛」。
 
@@ -34,6 +34,8 @@ Proteus 的全部家当本质是 **一张语义目录（136 原语 SSOT，`PRIMI
 - **B5 网页原语（#449）**：滚动观测 · 跨窗消息 · 锚点定位 · 页面 URL
 
 **手势原语（gesture——本分区）**：`Gesture 识别器`（tap/pan/swipe/pinch/rotate… 纯逻辑零依赖，Web Pointer / MP touch 归一 GestureInput）+ `useGesture Hook / v-gesture 指令`（Web 官方接线）——「事件是 Backend 实现细节」，MP/原生端由各端 Backend 承接。
+
+**工程原语（engineering——本分区）**：E1-E28 + R1-R4 的六个**注入式工厂**（`createEngineering` 基础 / `createRouterEngineering` / `createAnimationEngineering` / `createToolingEngineering` / `createRequestEngineering` R1-R4 / `createOwnershipEngineering` PSS）——消费方注入 reactivity 等，api 包零 vue 依赖；MP 产物安全子集。
 
 每条都是：**定位（模块头原文）→ 核心导出表（API 面）→ 真实用法（dogfooding 出处）→ 用法与降级**。手把手示例见[桌面端原语](/docs/30-desktop-primitives)与[质量门禁违规速查](/docs/29-quality-gates)（官网自己就在用这些原语）。
 
