@@ -376,7 +376,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
         「{{ t('home.quote1') }}」<br />
         {{ t('home.quote2a') }}<em>&lt;p-grid&gt;</em>{{ t('home.quote2b') }}
       </p-heading>
-      <p-text class="quote-sub">这就是 <strong class="grad">dogfooding</strong>。</p-text>
+      <p-text class="quote-sub">{{ t('home.quoteSubPre') }}<strong class="grad">dogfooding</strong>{{ t('home.quoteSubPost') }}</p-text>
       <p-stack direction="row" :gap="18" class="quote-links">
         <router-link to="/docs/framework/11-semantic-model" class="method-link">{{ t('home.linkSemantic') }}</router-link>
         <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">{{ t('home.linkSpi') }}</a>
