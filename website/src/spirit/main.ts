@@ -26,6 +26,30 @@ const FORMS: SpiritForm[] = [
   { name: '任意端 · Universal', color: '#ffd54f', theme: 'Tier 1-4 任意端——车机 / TV / 手表都是目标' },
 ]
 
+/** ★#488 英文形态目录（index 与 FORMS 对齐——name/theme 供 EN 态气泡与标签） */
+const FORMS_EN: SpiritForm[] = [
+  { name: 'Proteus · Core', color: '#7c5cff', theme: 'One semantic set, endless forms — morphing is my nature' },
+  { name: 'Web · VueDom', color: '#42b883', theme: 'Semantics straight to the DOM — standard Vue runs as-is in the browser' },
+  { name: 'iOS · UIKit', color: '#0a84ff', theme: 'UILabel / UIStackView — native controls, native feel' },
+  { name: 'Android · Jetpack', color: '#3ddc84', theme: 'Jetpack view tree — Material polish rendered by me' },
+  { name: 'HarmonyOS · ArkUI', color: '#ff8a5c', theme: 'ArkUI declarative — one codebase, many devices' },
+  { name: 'Flutter · Widget', color: '#54c5f8', theme: 'A Widget tree growing on a Skia canvas' },
+  { name: 'Mini Program · Skyline', color: '#00e0c6', theme: 'Skyline syntax straight out — that is where wx:if comes from' },
+  { name: 'Universal', color: '#ffd54f', theme: 'Tier 1-4 targets — in-car / TV / watch are all in scope' },
+]
+
+// ★#488 语言态（父页 proteus-spirit-lang 消息驱动；缺省 zh）
+let lang: 'zh' | 'en' = 'zh'
+function formAt(idx: number): SpiritForm {
+  return lang === 'en' ? FORMS_EN[idx] ?? FORMS_EN[0]! : FORMS[idx] ?? FORMS[0]!
+}
+function morphHint(): string {
+  return lang === 'en' ? 'click me to morph' : '点我变身'
+}
+function paintLabel(idx = formIdx): void {
+  if (labelEl) labelEl.textContent = `${formAt(idx).name} · ${morphHint()}`
+}
+
 const labelEl = document.getElementById('spirit-label') as HTMLElement
 const canvas = document.getElementById('spirit-canvas') as HTMLCanvasElement
 
@@ -252,13 +276,14 @@ for (let i = 0; i < 2; i++) {
 // —— 交互 ——
 function onMorph(): void {
   formIdx = (formIdx + 1) % FORMS.length
-  targetColor.set(FORMS[formIdx]!.color)
+  const f = formAt(formIdx)
+  targetColor.set(f.color)
   innerTarget.copy(targetColor).multiplyScalar(0.7)
   popT = 0
   rippleT = 0
   surprised = true
-  labelEl.textContent = `${FORMS[formIdx]!.name} · 点我变身`
-  window.parent.postMessage({ type: 'proteus-spirit-morph', name: FORMS[formIdx]!.name, theme: FORMS[formIdx]!.theme }, '*')
+  paintLabel(formIdx)
+  window.parent.postMessage({ type: 'proteus-spirit-morph', name: f.name, theme: f.theme }, '*')
   clearTimeout(mouthTimer)
   mouthTimer = setTimeout(() => (surprised = false), 750)
   // ★reduced-motion：无 rAF 链——立即以目标色单帧重绘
@@ -401,6 +426,18 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) ensure()
 })
 
+// ★#488 语言握手：父页切换语言 → 刷新标签/标题/后续形态消息
+window.addEventListener('message', (e: MessageEvent) => {
+  const d = e.data as { type?: string; lang?: 'zh' | 'en' } | null
+  if (d?.type !== 'proteus-spirit-lang') return
+  if (d.lang === 'en' || d.lang === 'zh') {
+    lang = d.lang
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN'
+    document.title = lang === 'en' ? 'Proteus spirit pet' : 'Proteus 海神精灵'
+    paintLabel()
+  }
+})
+
 // —— 2D SVG 回退：点击仍可循环形态（label + postMessage + 身体色同步） ——
 function fallback(): void {
   canvas.style.display = 'none'
@@ -409,7 +446,7 @@ function fallback(): void {
   fb.classList.add('on')
   const tint = (): void => {
     const path = fb.querySelector('path')
-    if (path) path.setAttribute('fill', FORMS[formIdx]!.color)
+    if (path) path.setAttribute('fill', formAt(formIdx).color)
   }
   tint()
   fb.addEventListener('click', () => {
@@ -419,6 +456,7 @@ function fallback(): void {
 }
 
 // —— 启动 / 降级 ——
+paintLabel(0)
 if (renderer) {
   resize()
   if (reduced) {

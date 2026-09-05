@@ -47,6 +47,8 @@ const zh = {
   'app.home': '首页',
   'app.docs': '文档',
   'app.footer': '官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）',
+  // —— 海神精灵（★#488）——
+  'spirit.title': 'Proteus 海神精灵（点击变身）',
   // —— Mini Playground（TransformDemo，★#477）——
   'pd.tip': '左侧改代码 · 右侧实时看真实编译产物与 IR',
   'pd.file': 'playground.vue（标准 Vue SFC，无平台 DSL）',
@@ -106,6 +108,8 @@ const en = {
   'app.home': 'Home',
   'app.docs': 'Docs',
   'app.footer': 'This site is built with Proteus itself (dogfooding): p-* semantic components + the @proteus-vue/docs engine + G-22 fluid layout (zero @media)',
+  // —— Spirit pet（★#488）——
+  'spirit.title': 'Proteus spirit pet (click to morph)',
   // —— Mini Playground（TransformDemo，★#477）——
   'pd.tip': 'Edit code on the left · watch real compile output & IR live on the right',
   'pd.file': 'playground.vue (standard Vue SFC, no platform DSL)',

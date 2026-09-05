@@ -4,7 +4,7 @@
 //   指南清单归文档侧边栏（guides.ts）——长标题进导航是杂乱根源
 // ★D-2：布局标签 p-view/p-text；★W-6：v-p-fluid clamp，零 @media
 // ★#389c 滚动上下文：顶部渐变进度条（scaleX 合成器）+ 导航滚动态（scrolled 投影）
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 // ★#389b 全站固定语义粒子场（背景层）
 import ParticleField from './components/ParticleField.vue'
@@ -50,6 +50,12 @@ const scrollObs = createScrollObserver({
     progress.value = s.progress
   },
 })
+// ★#488 小精灵 i18n：iframe 语言握手（lang 消息 → spirit 双语形态目录）
+const spiritFrame = ref<HTMLIFrameElement | null>(null)
+function sendSpiritLang(): void {
+  spiritFrame.value?.contentWindow?.postMessage({ type: 'proteus-spirit-lang', lang: locale.value }, location.origin)
+}
+watch(locale, sendSpiritLang)
 onUnmounted(() => {
   scrollObs.destroy()
   spiritMsg.destroy()
@@ -84,10 +90,12 @@ const cursorGlowOptions = {
         </pg-glass>
       </Transition>
       <iframe
+        ref="spiritFrame"
         class="site-spirit"
         :src="spiritSrc"
-        title="Proteus 海神精灵（点击变身）"
-        aria-label="Proteus 海神精灵（点击变身）"
+        :title="t('spirit.title')"
+        :aria-label="t('spirit.title')"
+        @load="sendSpiritLang"
       ></iframe>
     </div>
     <!-- ★#389 液态玻璃语义落地（G-07）：导航栏走 <pg-glass preset="navigationBar">——
