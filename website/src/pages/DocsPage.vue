@@ -129,8 +129,11 @@ function itemTitle(slugOf: string, zhTitle: string): string {
 </template>
 
 <style scoped>
-/* ★#384：布局与折叠交互全部归 p-sidebar 组件；页面只写卡片视觉 */
+/* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
+   页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
+/* ★#390iii 分区横条（小程序文档式按钮卡片版）：居中一排明显的大按钮卡片——
+   未激活 = 卡片描边（panel2 底 + muted 文字）；激活 = 品牌实心 + 白字（对应参考图绿色实心钮） */
 .docs-shell { display: block; }
 .docs-topbar {
   position: sticky;
@@ -138,13 +141,147 @@ function itemTitle(slugOf: string, zhTitle: string): string {
   z-index: 15;
   display: flex;
   justify-content: center;
-  align-items: center;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
-  padding: 10px 64px 10px 24px;
+  padding: 10px 24px;
   margin: 0 -24px 20px; /* 抵消 main 的横向 padding——横条通栏 */
 }
-/* ★#468 语言切换（横条右缘） */
+.section-switch {
+  align-items: stretch;
+  /* ★#434 移动端：单行横向滚动（不换行占多行）——微信 docs/小程序文档移动端同款 */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.section-switch::-webkit-scrollbar { display: none; }
+/* 居中 + 溢出左对齐（flex 居中在溢出时会把开头裁到滚不到——first/last margin auto 经典解法） */
+.section-switch > :first-child { margin-left: auto; }
+.section-switch > :last-child { margin-right: auto; }
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto; /* 不收缩不换行——横滑由容器承担 */
+  min-width: 128px;
+  padding: 12px 24px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  transition: background 0.15s, border-color 0.15s;
+}
+.section-tab-text { color: var(--muted); font-size: 15px; font-weight: 600; transition: color 0.15s; }
+.section-tab-count { margin-left: 8px; font-size: 12px; color: var(--dim); }
+.section-tab:hover { background: var(--panel); border-color: var(--brand); }
+.section-tab:hover .section-tab-text { color: var(--ink); }
+/* 激活态：品牌实心 + 白字（明显可点的那个） */
+.section-tab.active {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.section-tab.active .section-tab-text { color: #fff; }
+.section-tab.active .section-tab-count { color: rgba(255, 255, 255, 0.75); }
+.section-tab.active:hover { background: var(--brand); }
+.sidebar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
+  background: var(--panel);
+}
+/* side-rail（宽容器）态：侧栏卡片 sticky 避让导航——现在还要避开分区横条（约 60px） */
+.p-sidebar-side-rail .sidebar-card {
+  position: sticky;
+  top: calc(var(--nav-h) + 72px);
+  max-height: calc(100vh - var(--nav-h) - 88px);
+  overflow-y: auto;
+}
+.toc-group { display: flex; flex-direction: column; gap: 2px; }
+.toc-group + .toc-group { margin-top: 12px; }
+.toc-group-name {
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.toc-nav { display: flex; flex-direction: column; gap: 2px; }
+.toc-link {
+  display: block;
+  position: relative;
+  padding: 5px 10px;
+  margin: 0 -10px; /* 内边距外扩用负 margin 回补——链接文字与组标题左对齐 */
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+.toc-text { color: var(--muted); font-size: 13px; transition: color 0.15s; }
+.toc-link:hover { background: var(--panel2); }
+.toc-link:hover .toc-text { color: var(--ink); }
+.toc-link.active { background: var(--brand-soft); }
+.toc-link.active .toc-text { color: var(--brand); font-weight: 600; }
+/* ★激活态左侧品牌色竖条（不挤占文本位置——absolute 悬浮） */
+.toc-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--brand);
+}
+.doc { flex: 1 1 480px; min-width: 0; }
+/* ★本页导读右栏：p-stack row+wrap 双栏（行向语义归组件——不用 p-view 再跟框架默认打优先级） */
+.doc-main { flex: 1 1 480px; min-width: 0; }
+/* ★双类选择器提特异性：p-view 自带 scoped 的 content-box/flex-column（同特异性但级联靠后）——border-box 必须显式打赢（铁律） */
+.page-toc.page-toc {
+  flex: 0 0 220px; /* 定宽不参与增长——多余空间全部让给正文 */
+  box-sizing: border-box;
+  align-self: flex-start;
+  position: sticky;
+  top: calc(var(--nav-h) + 16px);
+  max-height: calc(100vh - var(--nav-h) - 32px);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-16);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.page-toc-link { color: var(--muted); text-decoration: none; font-size: 13px; }
+.page-toc-link:hover { color: var(--brand); }
+.page-toc-link.depth-3 { padding-left: 16px; }
+.pager { margin-top: 20px; }
+.pager-link { color: var(--brand); text-decoration: none; font-size: 14px; }
+.pager-link:hover { text-decoration: underline; }
+/* ★#415 端落地进度表（frontmatter.ends 声明的页面——与组件/能力页兼容表同构） */
+.ends-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  padding: var(--sp-16);
+  margin-bottom: 20px;
+}
+.ends-title { color: var(--ink); font-size: 15px; font-weight: 700; }
+.ends-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.ends-table th, .ends-table td { border: 1px solid var(--line); padding: 7px 12px; text-align: left; }
+.ends-table th { color: var(--ink); background: var(--panel2); }
+.ends-table td { color: var(--muted); }
+.ends-status { white-space: nowrap; color: var(--ink); }
+.ends-note { color: var(--muted); }
+.ends-footnote { color: var(--dim); font-size: 12px; }
+.ends-footnote a { color: var(--brand2); text-decoration: none; }
+</style>
+<style scoped>
+/* ★#468 叠加（原样式之上）：顶栏给语言切换留位 */
+.docs-topbar { padding: 10px 64px 10px 24px; align-items: center; }
 .lang-switch {
   position: absolute;
   right: 24px;
