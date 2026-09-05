@@ -12,6 +12,8 @@ import DocSearch from './DocSearch.vue'
 // ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer；spirit 跨窗消息 = subscribeWindowMessage
 //   ——window/document 监听与 origin 校验收口到框架包，页面零裸平台 API
 import { createScrollObserver, subscribeWindowMessage, type ScrollState } from '@proteus-vue/desktop'
+// ★#472 语言切换（全局顶栏——chrome 双语状态）
+import { locale, setLocale } from './i18n'
 // ★#389i 海神精灵（Three.js 3D 果冻萌宠——spirit.html iframe 嵌入右下角；three 隔离在独立 chunk，主应用 bundle 零增量）
 // ★#389d 指针跟随光晕（G-24 B5 新桌面原语 v-p-cursor-glow——全局注册的指令）
 
@@ -100,6 +102,14 @@ const cursorGlowOptions = {
           </router-link>
           <p-stack direction="row" :gap="4" wrap class="nav-links">
             <DocSearch />
+            <button
+              type="button"
+              class="lang-switch"
+              :aria-label="locale === 'zh' ? 'Switch to English' : '切换中文'"
+              @click="setLocale(locale === 'zh' ? 'en' : 'zh')"
+            >
+              {{ locale === 'zh' ? 'EN' : '中文' }}
+            </button>
             <router-link
               v-for="l in links"
               :key="l.key"
@@ -168,6 +178,20 @@ const cursorGlowOptions = {
   background: transparent;
   pointer-events: auto;
 }
+/* ★#472 语言切换（顶栏 pill——与导航一致的轻量样式） */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lang-switch:hover { border-color: var(--brand); color: var(--brand); }
 /* ★#389i 形态主题气泡（pg-glass floating 玻璃——玻璃语义单入口，页面零裸写 backdrop-filter） */
 .spirit-speech {
   position: absolute;

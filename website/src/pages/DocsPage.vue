@@ -56,9 +56,6 @@ function itemTitle(slugOf: string, zhTitle: string): string {
           <span class="section-tab-count">{{ s.items.length }}</span>
         </router-link>
       </p-stack>
-      <button type="button" class="lang-switch" :aria-label="locale === 'zh' ? 'Switch to English' : '切换中文'" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">
-        {{ locale === 'zh' ? 'EN' : '中文' }}
-      </button>
     </div>
   <p-sidebar :min-sidebar-width="720" :nav-width="224" :toggle-label="t('nav.toggle')" class="guide">
     <template #nav>
@@ -280,23 +277,7 @@ function itemTitle(slugOf: string, zhTitle: string): string {
 .ends-footnote a { color: var(--brand2); text-decoration: none; }
 </style>
 <style scoped>
-/* ★#468 叠加（原样式之上）：顶栏给语言切换留位 */
-.docs-topbar { padding: 10px 64px 10px 24px; align-items: center; }
-.lang-switch {
-  position: absolute;
-  right: 24px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--ink);
-  border-radius: var(--radius-pill);
-  padding: 5px 12px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.lang-switch:hover { border-color: var(--brand); color: var(--brand); }
-/* ★#468 未翻译提示条（诚实降级） */
+/* ★#468 叠加：未翻译提示条（诚实降级） */
 .no-en {
   border: 1px dashed var(--line);
   background: var(--panel2);
