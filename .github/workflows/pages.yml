@@ -62,22 +62,21 @@ jobs:
         if: steps.gate.outputs.ok == 'true'
         run: node scripts/build-packages.mjs
 
-      - name: 生成内容 + 构建（子路径 base 注入）
+      - name: 生成内容 + 构建（自定义域名 proteus-vue.cn = 根路径——不注入子路径 base）
         if: steps.gate.outputs.ok == 'true'
         env:
-          PROTEUS_BASE: /proteus/
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
           pnpm --filter website run gen:content
           pnpm --filter website build
           cp website/dist/index.html website/dist/404.html # GitHub Pages SPA 刷新兜底（无服务端 rewrite）
 
-      - name: 检查产物（双入口 + 子路径 assets 前缀）
+      - name: 检查产物（双入口 + 根路径 assets 前缀）
         if: steps.gate.outputs.ok == 'true'
         run: |
           test -f website/dist/index.html
           test -f website/dist/spirit.html
-          grep -q '"/proteus/' website/dist/index.html && echo 'base 前缀注入 ✓'
+          grep -q 'src="/assets/' website/dist/index.html && echo '根路径 assets ✓'
 
       - uses: actions/configure-pages@v5
         if: steps.gate.outputs.ok == 'true'
