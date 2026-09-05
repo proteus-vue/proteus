@@ -79,10 +79,28 @@ export function t<K extends MessageKey>(key: K, params?: Record<string, string>)
   return ui.t(key, params ?? {})
 }
 
-/** 分区名双语（docs-registry sections.name 是 zh——按 key 取显示名） */
+/** 分区名双语（兼容两套键：registry section.key（guide/components…）与 DocSearch 路径前缀（docs/component…）——都映射到同一显示名） */
 const SECTION_NAME: Record<SiteLocale, Record<string, string>> = {
-  zh: { docs: '指南', framework: '框架', component: '组件', capability: '能力', primitives: '原语', system: '柔性系统', plugin: '插件 API', reference: '工具链' },
-  en: { docs: 'Guides', framework: 'Framework', component: 'Components', capability: 'Capabilities', primitives: 'Primitives', system: 'Flex System', plugin: 'Plugin API', reference: 'Tooling' },
+  zh: {
+    guide: '指南', docs: '指南',
+    framework: '框架',
+    components: '组件', component: '组件',
+    capabilities: '能力', capability: '能力',
+    primitives: '原语',
+    system: '柔性系统',
+    plugins: '插件 API', plugin: '插件 API',
+    reference: '工具链',
+  },
+  en: {
+    guide: 'Guides', docs: 'Guides',
+    framework: 'Framework',
+    components: 'Components', component: 'Components',
+    capabilities: 'Capabilities', capability: 'Capabilities',
+    primitives: 'Primitives',
+    system: 'Flex System',
+    plugins: 'Plugin API', plugin: 'Plugin API',
+    reference: 'Tooling',
+  },
 }
 export function sectionName(key: string): string {
   return SECTION_NAME[locale.value]?.[key] ?? key
