@@ -122,6 +122,17 @@ function genComponents(ir) {
   const dirs = fs.readdirSync(COMP_DIR).filter((d) => fs.statSync(path.join(COMP_DIR, d)).isDirectory() && d.startsWith('p-'))
   const semanticMap = ir.TAG_SEMANTIC_MAP ?? ir.SEMANTIC_TAG_MAP ?? {}
   const mpComp = (ir.MP_MAPPING_MATRIX ?? []).filter((i) => i.group === 'component')
+  // ★组件 tab 重构：tag → kind（域分类 SSOT = PRIMITIVE_CATALOG）
+  const tagKind = {}
+  for (const p of ir.PRIMITIVE_CATALOG) if (p.tag) tagKind[p.tag] = p.kind
+  const KIND_DOMAIN = { layout: '布局', ui: '内容与表单', shell: '页面外壳', gesture: '手势', engineering: '工程', capability: '能力入口' }
+  // ★catalog 外组件的域兜底（W-7：语义登记待补 TAG_SEMANTIC_MAP，分类先行）
+  const EXTRA_KIND = {
+    'p-error-boundary': 'ui', 'p-loading': 'ui', 'p-skeleton': 'ui', 'p-mask': 'ui',
+    'p-popup': 'shell', 'p-toast': 'ui', 'p-toolbar': 'shell', 'p-zone': 'layout',
+    'p-aspect': 'layout', 'p-scale': 'ui', 'p-scroll-view': 'layout', 'p-action-sheet': 'shell',
+    'p-drawer': 'shell', 'p-modal': 'shell', 'p-popover': 'shell',
+  }
   let ok = 0
   const indexRows = []
   for (const dir of dirs) {
@@ -130,7 +141,10 @@ function genComponents(ir) {
     const src = fs.readFileSync(vueFile, 'utf8')
     const props = parseProps(extractCall(src, 'defineProps') ?? '')
     const emits = parseEmits(src)
-    const semantic = semanticMap[dir] ?? '—'
+    const semantic = semanticMap[dir] ?? null
+    // ★域推导优先级：catalog kind → semantic 前缀 → EXTRA_KIND 兑底（catalog 外组件）→ '—'
+    const kind = tagKind[dir] ?? (semantic ? semantic.split('.')[0] : null) ?? EXTRA_KIND[dir] ?? '—'
+    const domain = KIND_DOMAIN[kind] ?? kind
     const mpRow = mpComp.find((i) => i.proteus === dir)
     const mpEquiv = mpRow ? `${mpRow.mp}（${mpRow.status}）` : '—'
     const lines = []
@@ -140,11 +154,11 @@ function genComponents(ir) {
     lines.push('')
     lines.push(`# ${dir}`)
     lines.push('')
-    lines.push('> 语义组件（Layer 0）——编译期映射到各端原生控件，业务零平台分支。')
+    lines.push(`> 语义组件（Layer 0）· 域 **${domain}** · 编译期映射到各端原生控件，业务零平台分支。`)
     lines.push('')
-    lines.push('| 语义 | 小程序等价 |')
-    lines.push('|---|---|')
-    lines.push(`| \`${semantic}\` | ${mpEquiv} |`)
+    lines.push('| 语义 | 域 | 小程序等价 |')
+    lines.push('|---|---|---|')
+    lines.push(`| ${semantic ?? '—'} | ${domain} | ${mpEquiv} |`)
     lines.push('')
     if (props.length) {
       lines.push('## Props')
@@ -175,7 +189,13 @@ function genComponents(ir) {
     indexRows.push({ dir, props: props.length, emits: emits.length })
     ok++
   }
-  // 总览页
+  // ★组件 tab 重构：总览按语义域分组（对齐 PRIMITIVE_CATALOG 六域；EXTRA_KIND 兑底同组件页）
+  const byDomain = {}
+  for (const r of indexRows) {
+    const kind = tagKind[r.dir] ?? EXTRA_KIND[r.dir] ?? '—'
+    const domain = KIND_DOMAIN[kind] ?? kind
+    ;(byDomain[domain] ??= []).push(r)
+  }
   const idx = []
   idx.push('---')
   idx.push('title: 组件总览')
@@ -183,12 +203,21 @@ function genComponents(ir) {
   idx.push('')
   idx.push('# 组件总览')
   idx.push('')
-  idx.push(`> ${ok} 个语义组件——props/events 由源码 SSOT 生成（\`website/scripts/gen-content.mjs\`），与框架实现实时一致。`)
+  idx.push(`> ${ok} 个语义组件（6 域）——props/events 由源码 SSOT 生成（\`website/scripts/gen-content.mjs\`），与框架实现实时一致。`)
   idx.push('')
-  idx.push('| 组件 | Props | Events |')
-  idx.push('|---|---|---|')
-  for (const r of indexRows.sort((a, b) => a.dir.localeCompare(b.dir))) idx.push(`| [${r.dir}](/docs/component/${r.dir}) | ${r.props} | ${r.emits} |`)
-  idx.push('')
+  for (const domain of Object.keys(byDomain).sort((a, b) => {
+    const order = ['布局', '内容与表单', '页面外壳', '手势', '工程', '能力入口', '—']
+    return order.indexOf(a) - order.indexOf(b)
+  })) {
+    idx.push(`## ${domain}（${byDomain[domain].length}）`)
+    idx.push('')
+    idx.push('| 组件 | Props | Events |')
+    idx.push('|---|---|---|')
+    for (const r of byDomain[domain].sort((a, b) => a.dir.localeCompare(b.dir))) {
+      idx.push(`| [${r.dir}](/docs/component/${r.dir}) | ${r.props} | ${r.emits} |`)
+    }
+    idx.push('')
+  }
   fs.writeFileSync(path.join(OUT_COMP, '00-components-overview.md'), idx.join('\n'))
   return ok
 }
@@ -215,7 +244,7 @@ function genCapabilities(ir) {
     lines.push('')
     lines.push(`# ${hook}`)
     lines.push('')
-    lines.push(`> 能力原语 ${c.id} · \`${c.semantic}\` · 返回 \`${(c.props ?? [])[0] ?? 'Result<T>'}\` · 状态 ${c.status === 'implemented' ? '✅ 已实现' : '📋 规划中'}`)
+    lines.push(`> 能力原语 ${c.id} · \`${c.semantic}\` · 返回 \`${(c.props ?? [])[0] ?? 'Result<T>'}\` · **Hook 已实现**（API 就绪，双端桥见下表）`)
     lines.push('')
     if (doc) {
       lines.push(doc)
@@ -236,6 +265,27 @@ function genCapabilities(ir) {
     lines.push('')
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
+    lines.push('## 用法')
+    lines.push('')
+    lines.push('```ts')
+    lines.push(`const res = await ${c.api}`)
+    lines.push('')
+    lines.push("if (res.ok) {")
+    lines.push('  console.log(res.data)')
+    lines.push('} else if (res.error.code.endsWith(\'.unsupported\')) {')
+    lines.push('  // 平台不支持 → 降级路径')
+    lines.push('}')
+    lines.push('```')
+    lines.push('')
+    lines.push('## 用法')
+    lines.push('')
+    lines.push('```ts')
+    lines.push(`import { useAppConfig } from '@proteus-vue/api'`)
+    lines.push('')
+    lines.push(`const res = await ${c.api.replace(/^use/, 'use(').replace('()', '()')}`.replace(c.api, c.api))
+    lines.push('// 平台不支持 → Err 显式降级（不用 try/catch 也能处理）')
+    lines.push('```')
+    lines.push('')
     lines.push('<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')
     fs.writeFileSync(path.join(OUT_CAP, `${c.semantic.replace('capability.', '')}.md`), lines.join('\n'))
     ok++
@@ -247,13 +297,13 @@ function genCapabilities(ir) {
   idx.push('')
   idx.push('# 能力总览')
   idx.push('')
-  idx.push(`> ${caps.length} 个能力原语——SSOT = \`PRIMITIVE_CATALOG\`（capability kind），签名取自 \`CapabilityHooks\` 接口。✅ ${caps.filter((c) => c.status === 'implemented').length} · 📋 ${caps.filter((c) => c.status !== 'implemented').length}`)
+  idx.push(`> ${caps.length} 个能力原语——SSOT = \`PRIMITIVE_CATALOG\`（capability kind）+ \`CapabilityHooks\` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页平台等价表）`)
   idx.push('')
-  idx.push('| # | 能力 | API | 返回 | 小程序等价 | 状态 |')
-  idx.push('|---|---|---|---|---|---|')
+  idx.push('| # | 能力 | API | 返回 | 小程序等价 |')
+  idx.push('|---|---|---|---|---|')
   for (const c of caps) {
     const slug = c.semantic.replace('capability.', '')
-    idx.push(`| ${c.id} | [${c.semantic}](/docs/capability/${slug}) | \`${c.api}\` | \`${(c.props ?? [])[0] ?? '—'}\` | ${c.mpEquiv} | ${c.status === 'implemented' ? '✅' : '📋'} |`)
+    idx.push(`| ${c.id} | [${c.semantic}](/docs/capability/${slug}) | \`${c.api}\` | \`${(c.props ?? [])[0] ?? '—'}\` | ${c.mpEquiv} |`)
   }
   idx.push('')
   fs.writeFileSync(path.join(OUT_CAP, '00-capabilities-overview.md'), idx.join('\n'))

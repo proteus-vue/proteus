@@ -4,11 +4,11 @@ title: p-draggable
 
 # p-draggable
 
-> 语义组件（Layer 0）——编译期映射到各端原生控件，业务零平台分支。
+> 语义组件（Layer 0）· 域 **手势** · 编译期映射到各端原生控件，业务零平台分支。
 
-| 语义 | 小程序等价 |
-|---|---|
-| `gesture.draggable` | — |
+| 语义 | 域 | 小程序等价 |
+|---|---|---|
+| gesture.draggable | 手势 | — |
 
 ## Props
 

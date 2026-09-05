@@ -4,11 +4,11 @@ title: p-animate
 
 # p-animate
 
-> 语义组件（Layer 0）——编译期映射到各端原生控件，业务零平台分支。
+> 语义组件（Layer 0）· 域 **工程** · 编译期映射到各端原生控件，业务零平台分支。
 
-| 语义 | 小程序等价 |
-|---|---|
-| `engineering.animate` | — |
+| 语义 | 域 | 小程序等价 |
+|---|---|---|
+| engineering.animate | 工程 | — |
 
 ## Props
 
