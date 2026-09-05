@@ -33,7 +33,7 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
   <!-- ★#390iii 分区横条（参考小程序文档 IA）：大分类（四区）顶部横条切换，小分类（分组）留在左侧栏——侧栏不再两套层级拥挤 -->
   <p-view class="docs-shell">
     <div class="docs-topbar">
-      <p-stack direction="row" :gap="16" wrap class="section-switch">
+      <p-stack direction="row" :gap="16" class="section-switch">
         <router-link
           v-for="s in sections"
           :key="s.key"
@@ -127,11 +127,22 @@ const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.l
   padding: 10px 24px;
   margin: 0 -24px 20px; /* 抵消 main 的横向 padding——横条通栏 */
 }
-.section-switch { align-items: stretch; }
+.section-switch {
+  align-items: stretch;
+  /* ★#434 移动端：单行横向滚动（不换行占多行）——微信 docs/小程序文档移动端同款 */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.section-switch::-webkit-scrollbar { display: none; }
+/* 居中 + 溢出左对齐（flex 居中在溢出时会把开头裁到滚不到——first/last margin auto 经典解法） */
+.section-switch > :first-child { margin-left: auto; }
+.section-switch > :last-child { margin-right: auto; }
 .section-tab {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto; /* 不收缩不换行——横滑由容器承担 */
   min-width: 128px;
   padding: 12px 24px;
   text-decoration: none;
