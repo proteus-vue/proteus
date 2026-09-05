@@ -7,6 +7,8 @@ import { useRoute } from 'vue-router'
 import TransformDemo from '../components/TransformDemo.vue'
 import { listTransformRules } from '@proteus-vue/compiler'
 import { decodeSource } from '../playground/share'
+// ★#478 Playground 页 chrome 双语（规则注册表数据为框架层中文——EN 完整版随编译器注册表双语落地）
+import { t } from '../i18n'
 
 const route = useRoute()
 
@@ -21,21 +23,19 @@ const ruleList = ref(rules)
 <template>
   <div class="playground">
     <header v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" class="pg-head">
-      <span class="eyebrow">◆ Playground · 透明编译</span>
-      <p-heading :level="1" class="pg-title">左边写标准 Vue，右边看编译器在想什么</p-heading>
+      <span class="eyebrow">{{ t('pg.eyebrow') }}</span>
+      <p-heading :level="1" class="pg-title">{{ t('pg.title') }}</p-heading>
       <p-text class="pg-sub">
-        浏览器内实时编译——同一套 @proteus-vue/compiler（与本地 build 同源）：
-        Skyline 产物、CompilerIR 中间表示、决策 trace（哪一行触发了哪条规则）、
-        {{ ruleList.length }} 条规则的 AI 说明书全部可查——拒绝黑盒。
+        {{ t('pg.sub', { n: String(ruleList.length) }) }}
       </p-text>
     </header>
 
     <TransformDemo :initial-source="initialSource" />
 
     <p-view v-p-fluid="'padding(16, 24)'" class="rules-section">
-      <p-heading :level="2" class="rules-title">规则注册表 · AI 说明书（{{ ruleList.length }} 条）</p-heading>
+      <p-heading :level="2" class="rules-title">{{ t('pg.rulesTitle', { n: String(ruleList.length) }) }}</p-heading>
       <!-- ★#386 对比度：13px 说明文字不用 dim -->
-      <p-text class="pg-dim">每条规则自带 what / why / when / example / verify——产物可枚举、可查询、可反查源码。</p-text>
+      <p-text class="pg-dim">{{ t('pg.rulesDim') }}</p-text>
       <p-stack direction="column" :gap="6" class="rules-list">
         <p-stack v-for="r in ruleList" :key="r.id" direction="row" :gap="12" class="rule-item">
           <p-text class="rule-id">{{ r.id }}</p-text>

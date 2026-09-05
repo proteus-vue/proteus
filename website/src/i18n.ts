@@ -54,6 +54,12 @@ const zh = {
   'pd.reset': '重置示例',
   'pd.seeCap': '见 IR · bindings.capabilities',
   'pd.trace': '实时编译 · 触发规则 {n} 条（有效转换 {m} 条）',
+  // —— Playground 页 chrome（★#478）——
+  'pg.eyebrow': '◆ Playground · 透明编译',
+  'pg.title': '左边写标准 Vue，右边看编译器在想什么',
+  'pg.sub': '浏览器内实时编译——同一套 @proteus-vue/compiler（与本地 build 同源）：Skyline 产物、CompilerIR 中间表示、决策 trace（哪一行触发了哪条规则）、{n} 条规则的 AI 说明书全部可查——拒绝黑盒。',
+  'pg.rulesTitle': '规则注册表 · AI 说明书（{n} 条）',
+  'pg.rulesDim': '每条规则自带 what / why / when / example / verify——产物可枚举、可查询、可反查源码。',
 } as const
 
 const en = {
@@ -107,6 +113,12 @@ const en = {
   'pd.reset': 'Reset sample',
   'pd.seeCap': 'see IR · bindings.capabilities',
   'pd.trace': 'Live compile · {n} rules fired ({m} effective)',
+  // —— Playground page chrome（★#478）——
+  'pg.eyebrow': '◆ Playground · Transparent Compilation',
+  'pg.title': 'Write standard Vue on the left, watch what the compiler is thinking on the right',
+  'pg.sub': 'Real-time in-browser compilation — the same @proteus-vue/compiler as local builds: Skyline output, CompilerIR intermediate representation, decision trace (which line fired which rule), plus AI explainers for all {n} rules — no black box.',
+  'pg.rulesTitle': 'Rule registry · AI explainers ({n})',
+  'pg.rulesDim': 'Every rule ships its own what / why / when / example / verify — output is enumerable, queryable and traceable back to source.',
 } as const
 
 type MessageKey = keyof typeof zh
