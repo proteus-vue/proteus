@@ -36,6 +36,7 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `router` | `object` | 否 | router | 路由通用配置（tabBar / 集中式 meta），见下表 |
 | `vite` | `object \| 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
 | `audit` | `object` | 否 | build | **D-2 页面门禁规则**（★#447）：off/warn/error 自选——见下表 |
+| `gates` | `object` | 否 | build | **统一门禁开关**（★#456）：`gates.disabled` 自选关闭门禁/聚合域——见下表 |
 
 ### `vite`（透传——完全兼容 vite）
 
@@ -169,6 +170,26 @@ const config: ProteusConfig = {
 ```
 
 > 豁免登记仍生效：Web 平台规则允许逐行 `// d2-exempt: <原因>` 与整文件标注（原生视觉资产页）——豁免原因随审计报告输出。运行方式：`proteus audit d2`（工程内省略目录参数 → 扫 `audit.dir ?? src`，规则来自本配置）；官网门禁 = `npm run audit:website`。
+
+**`gates`（统一门禁开关——★#456，全部门禁一个配置面）**
+
+> 门禁目录 = `proteus gate ls`（注册表单一来源）。`gates.disabled` 列出要关闭的门禁 id / preset id / 聚合域 id——`proteus gate run`、`proteus check`、`proteus audit all` 统一生效（缺省全部启用；禁用的门禁跳过并注记，不阻断 exit 0）。
+
+| 子字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `disabled` | `string[]` | 否 | 关闭列表：门禁/preset id（`proteus gate ls` 目录：check/audit/d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/coverage/devtools-budget…）+ 聚合域 id（audit：route/module/config/i18n/capabilities/components/d2/devtools-budget · check：css/style/router/cli/app-config） |
+
+```ts
+// proteus.config.ts
+const config: ProteusConfig = {
+  // …必填字段…
+  gates: {
+    disabled: ['capabilities', 'devtools-budget'], // 演示页违规域与性能烟测暂不纳入门禁
+  },
+}
+```
+
+> 语义分层：`audit.rules` 管 **D-2 内部规则级别**（off/warn/error）；`gates.disabled` 管 **门禁/聚合域开关**（整域跳过）——两层可叠加。
 
 ### 校验与工具
 

@@ -44,6 +44,7 @@ const KNOWN_FIELDS = new Set([
   'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）
   'frameworkComponentsDir', // 决策 #115：框架内置组件目录（组件库拆包前过渡字段）
   'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
+  'gates', // ★#456 统一门禁开关（gates.disabled——check/audit all 消费）
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -106,6 +107,18 @@ export function validateConfig(config: unknown): ConfigValidationResult {
             }
           }
         }
+      }
+    }
+  }
+
+  // ★#456 gates（统一门禁开关）：disabled 须为字符串数组
+  if (cfg.gates !== undefined) {
+    const gates = cfg.gates as Record<string, unknown>
+    if (!isPlainObject(gates)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'gates', message: 'gates 应为对象（{ disabled?: string[] }）' })
+    } else if (gates.disabled !== undefined) {
+      if (!Array.isArray(gates.disabled) || !gates.disabled.every((x) => typeof x === 'string')) {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'gates.disabled', message: 'gates.disabled 应为门禁/聚合域 id 字符串数组' })
       }
     }
   }

@@ -21,6 +21,7 @@ import { runCapabilityCheck } from './capability-manifest'
 import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
 import { auditComponents, formatComponentAudit } from './component-audit'
 import { checkModuleConfigs } from './module-check'
+import { readDisabledGates } from './gate-config'
 
 /** 门禁族（分组展示） */
 export type GateGroup = '快速聚合' | '深度聚合' | '专项检查' | '框架自检'
@@ -308,12 +309,17 @@ export const GATE_COMMAND_HELP = {
   desc: '★统一门禁系统（★#453/#454 Gate 注册表单一来源）：ls = 全量门禁目录；run = 统一执行（● 已接线 / ○ 经独立命令）',
 }
 
-/** ★runGate：执行单个门禁/preset（root = 工程/目录根） */
+/** ★runGate：执行单个门禁/preset（root = 工程/目录根；★#456 gates.disabled 禁用 → 跳过不阻断） */
 export async function runGate(id: string, root: string): Promise<GateRunResult> {
   const gate = findGate(id)
   if (!gate) throw new Error(`未知门禁：${id}（proteus gate ls 查看注册表；可用 preset：check / audit）`)
   if (!gate.run) throw new Error(`门禁 ${id} 尚未接线统一执行器——请用其独立命令运行：${gate.usage}`)
-  const result = await gate.run(root === '.' ? process.cwd() : path.resolve(root))
+  const targetRoot = root === '.' ? process.cwd() : path.resolve(root)
+  const disabled = await readDisabledGates(targetRoot)
+  if (disabled.has(id)) {
+    return { ok: true, text: `[proteus-gate] 门禁 ${id} 已在 proteus.config gates.disabled 禁用——跳过（exit 0）` }
+  }
+  const result = await gate.run(targetRoot)
   if (typeof result.ok !== 'boolean' || typeof result.text !== 'string') throw new Error(`门禁 ${id} 执行器返回异常`)
   return result
 }

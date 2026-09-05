@@ -28,6 +28,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   vite: 'build', // ★#418 配置收敛：vite 透传字段（构建工具链配置）
   frameworkComponentsDir: 'component', // 决策 #115：框架内置组件目录（组件库拆包前过渡字段）
   audit: 'build', // ★#447 D-2 dogfooding 门禁（构建期质量门禁——audit-d2 消费，紧邻 budget 同层）
+  gates: 'build', // ★#456 统一门禁开关（gates.disabled——check/audit all 聚合门禁配置）
 }
 
 /**

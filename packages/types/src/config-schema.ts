@@ -81,6 +81,13 @@ export const proteusConfigSchema = {
         },
       },
     },
+    // ★#456 统一门禁开关：gates.disabled（门禁/聚合域 id 列表——缺省全部启用）
+    gates: {
+      type: 'object',
+      properties: {
+        disabled: { type: 'array', items: { type: 'string' } },
+      },
+    },
   },
 } as const
 

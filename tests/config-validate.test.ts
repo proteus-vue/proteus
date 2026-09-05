@@ -117,6 +117,22 @@ describe('validateConfig：audit 字段（★#447 D-2 门禁规则）', () => {
   })
 })
 
+describe('validateConfig：gates 字段（★#456 统一门禁开关）', () => {
+  it('合法 gates.disabled 字符串数组 → ok', () => {
+    expect(validateConfig({ ...VALID, gates: { disabled: ['capabilities', 'd2'] } })).toEqual({ ok: true })
+    expect(validateConfig({ ...VALID, gates: {} })).toEqual({ ok: true })
+  })
+
+  it('gates 非对象 / disabled 非字符串数组 → CONFIG_INVALID_TYPE', () => {
+    const g1 = validateConfig({ ...VALID, gates: 'all' })
+    expect(g1.ok).toBe(false)
+    if (!g1.ok) expect(g1.errors.some((e) => e.path === 'gates')).toBe(true)
+    const g2 = validateConfig({ ...VALID, gates: { disabled: ['d2', 42] } })
+    expect(g2.ok).toBe(false)
+    if (!g2.ok) expect(g2.errors.some((e) => e.path === 'gates.disabled')).toBe(true)
+  })
+})
+
 describe('config:check CLI（TS 配置加载 + 校验报告）', () => {
   it('examples/proteus.config.ts 加载校验通过（真实配置）', async () => {
     const { result, text } = await checkConfigFile(path.resolve('examples/proteus.config.ts'))

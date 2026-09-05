@@ -124,3 +124,54 @@ describe('proteus gate run（统一执行）', () => {
     }
   })
 })
+
+describe('proteus gate run：gates.disabled 跳过（★#456）', () => {
+  function writeDisabledConfig(dir: string, disabled: string[]): void {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'gate-fixture', private: true }))
+    fs.writeFileSync(
+      path.join(dir, 'proteus.config.ts'),
+      `export default {
+  platform: 'web',
+  skyline: false,
+  appid: '',
+  pagesDir: 'src/pages',
+  routesOutput: 'src/router/auto-routes.ts',
+  customRoute: { registerPresets: false, builders: {} },
+  setDataBridge: { batchWindow: 16, perComponent: false },
+  style: { px2rpx: false, rpxRatio: 2 },
+  gates: { disabled: ${JSON.stringify(disabled)} },
+}
+`,
+    )
+  }
+
+  it('禁用单门禁 → 跳过不阻断（exit 0 语义）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-gate-dis-'))
+    try {
+      writeDisabledConfig(dir, ['d2'])
+      const r = await runGate('d2', dir)
+      expect(r.ok).toBe(true)
+      expect(r.text).toContain('gates.disabled 禁用')
+      expect(r.text).toContain('exit 0')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('禁用 preset（audit/check）→ 同样跳过', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-gate-dis-'))
+    try {
+      writeDisabledConfig(dir, ['audit'])
+      const r = await runGate('audit', dir)
+      expect(r.ok).toBe(true)
+      expect(r.text).toContain('audit 已在 proteus.config gates.disabled 禁用')
+      writeDisabledConfig(dir, ['check'])
+      const r2 = await runGate('check', dir)
+      expect(r2.ok).toBe(true)
+      expect(r2.text).toContain('check 已在 proteus.config gates.disabled 禁用')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

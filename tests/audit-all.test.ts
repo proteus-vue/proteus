@@ -9,8 +9,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { runAuditAll, formatAuditAll, AUDIT_ALL_BUDGET_MS } from '../packages/cli/src/audit-all'
 
-/** 合法工程骨架（config 域校验通过）+ 可选 audit 声明与页面文件 */
-function writeProject(dir: string, auditTs: string | null, pages: Record<string, string>): void {
+/** 合法工程骨架（config 域校验通过）+ 可选 audit/gates 声明与页面文件 */
+function writeProject(dir: string, auditTs: string | null, pages: Record<string, string>, gatesTs?: string): void {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'audit-all-fixture', private: true }))
   fs.writeFileSync(
@@ -25,6 +25,7 @@ function writeProject(dir: string, auditTs: string | null, pages: Record<string,
   setDataBridge: { batchWindow: 16, perComponent: false },
   style: { px2rpx: false, rpxRatio: 2 },
   ${auditTs ?? ''}
+  ${gatesTs ?? ''}
 }
 `,
   )
@@ -124,6 +125,37 @@ describe('proteus audit all：D-2 域 opt-in 语义（★#450）', () => {
       expect(d2?.ok).toBe(true)
       expect(d2?.detail).toContain('warn 1')
       expect(result.ok).toBe(true)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('proteus audit all：gates.disabled 域级/preset 级过滤（★#456）', () => {
+  it('禁用域 → 从聚合中移除（余域照跑，结果 ok）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-gates-'))
+    try {
+      writeProject(dir, null, {}, `gates: { disabled: ['components', 'd2'] },`)
+      const result = await runAuditAll(dir)
+      const names = result.domains.map((d) => d.name)
+      expect(names).not.toContain('components')
+      expect(names).not.toContain('d2')
+      expect(names.sort()).toEqual(['capabilities', 'config', 'devtools-budget', 'i18n', 'module', 'route'])
+      expect(result.ok).toBe(true)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('禁用 preset audit → 单条 gates 域跳过注记 + ok（exit 0）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-gates-'))
+    try {
+      writeProject(dir, null, {}, `gates: { disabled: ['audit'] },`)
+      const result = await runAuditAll(dir)
+      expect(result.ok).toBe(true)
+      expect(result.domains).toHaveLength(1)
+      expect(result.domains[0]?.name).toBe('gates')
+      expect(result.domains[0]?.detail).toContain('gates.disabled 禁用')
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

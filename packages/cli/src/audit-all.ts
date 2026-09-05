@@ -14,6 +14,7 @@ import { auditComponents, formatComponentAudit } from './component-audit'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { loadProjectConfig } from './config-loader'
 import { runD2Audit, formatD2AuditDetail } from './d2-audit'
+import { readDisabledGates } from './gate-config'
 
 /** 10 §CI 耗时预算：audit all < 12s */
 export const AUDIT_ALL_BUDGET_MS = 12000
@@ -41,18 +42,29 @@ async function timed<T>(fn: () => Promise<T> | T): Promise<{ value: T; ms: numbe
   return { value, ms: Math.round((performance.now() - start) * 10) / 10 }
 }
 
-/** 全量审计：六域聚合 + 计时预算门禁 */
+/** 全量审计：八域聚合 + 计时预算门禁（★#456 gates.disabled 域级/preset 级过滤） */
 export async function runAuditAll(root: string): Promise<AuditAllResult> {
   const domains: AuditAllDomain[] = []
+  const disabled = await readDisabledGates(root)
+  if (disabled.has('audit')) {
+    const result: AuditAllResult = {
+      domains: [{ name: 'gates', ok: true, ms: 0, detail: '[proteus-gate] preset audit 已在 proteus.config gates.disabled 禁用——跳过', skipped: true }],
+      ok: true,
+      totalMs: 0,
+      budgetMs: AUDIT_ALL_BUDGET_MS,
+      overBudget: false,
+    }
+    return result
+  }
 
   // route：路由合规（ROUTE001-004；★扫 pages 目录对齐 gen-routes，避免把 App.vue/RouterView 当页面）
-  {
+  if (!disabled.has('route')) {
     const { value, ms } = await timed(() => checkRoutes(resolvePagesDir(root)))
     domains.push({ name: 'route', ok: value.ok, ms, detail: formatRouterCheck(value) })
   }
 
   // module：模块契约 + 图谱 + 产物（缺模块契约 → 跳过）
-  {
+  if (!disabled.has('module')) {
     const { value, ms } = await timed(async () => {
       try {
         const { text, audit } = await runAuditModule({ root, graphJson: false })
@@ -65,7 +77,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // config：proteus.config.ts 校验（缺文件 → 跳过，独立编译模式）
-  {
+  if (!disabled.has('config')) {
     const { value, ms } = await timed(async () => {
       const file = path.join(root, 'proteus.config.ts')
       try {
@@ -79,7 +91,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // i18n：硬编码文案 + catalog 对照（缺目录 → 空结果不失败）
-  {
+  if (!disabled.has('i18n')) {
     const { value, ms } = await timed(() => {
       try {
         const result = checkI18nUsage(root)
@@ -92,7 +104,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // capabilities：平台规范静态检查（B5 §6 禁止清单）
-  {
+  if (!disabled.has('capabilities')) {
     const { value, ms } = await timed(() => {
       try {
         const { text, violations } = runCapabilityCheck(root)
@@ -105,7 +117,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // components：p-* 组件注册表 vs 使用（无 src/components 目录 → 跳过，非阻断）
-  {
+  if (!disabled.has('components')) {
     const componentsDir = path.join(root, 'src/components')
     if (!fs.existsSync(componentsDir)) {
       domains.push({ name: 'components', ok: true, ms: 0, detail: '[proteus-components] 无 src/components 目录——跳过', skipped: true })
@@ -123,7 +135,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // ★#450 d2：D-2 页面门禁（opt-in——proteus.config 声明 audit 才跑；未声明/无配置 → 跳过不阻断）
-  {
+  if (!disabled.has('d2')) {
     const { value, ms } = await timed(async () => {
       const file = path.resolve(root, 'proteus.config.ts')
       if (!fs.existsSync(file)) return { ok: true, skipped: true, text: '[proteus-d2] 无 proteus.config.ts——跳过（D-2 门禁需 audit 声明）' }
@@ -150,7 +162,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
   }
 
   // ★M10 devtools-budget：DevTools 性能预算烟测（bus.emit / 火焰图 / timeline ingest；10 倍余量上界抓病态回归）
-  {
+  if (!disabled.has('devtools-budget')) {
     const { value, ms } = await timed(() => {
       try {
         const result = runDevtoolsBudget()

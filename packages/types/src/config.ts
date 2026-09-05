@@ -35,6 +35,12 @@ export interface AuditConfig {
   rules?: Partial<Record<AuditRuleId, AuditSeverity>>
 }
 
+/** ★#456 统一门禁开关（Gate 注册表单一来源的 config 消费面——开发者自选启用集） */
+export interface GatesConfig {
+  /** 禁用的门禁/聚合域 id 列表（值域 = CLI `proteus gate ls` 目录 + 聚合域 route/module/config/i18n/capabilities/components/d2/devtools-budget 与 css/style/router/cli/app-config；缺省全部启用） */
+  disabled?: string[]
+}
+
 export interface ProteusConfig {
   /** 目标平台 */
   platform: 'mp-weixin' | 'web'
@@ -115,4 +121,6 @@ export interface ProteusConfig {
   /** ★#447 D-2 dogfooding 门禁（05-dogfooding-conformance D-2）：页面不裸写平台 API / 手写 @media / 引第三方 UI
    *   规则级可配（off/warn/error——缺省全部 error）；消费者：CLI `proteus audit d2`（★#448 官网/开发者双场景单引擎） */
   audit?: AuditConfig
+  /** ★#456 统一门禁开关（gates.disabled：自选关闭门禁/聚合域——check/audit all/gate run 统一生效；缺省全部启用） */
+  gates?: GatesConfig
 }

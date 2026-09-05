@@ -9,6 +9,7 @@ import { checkRoutes, formatRouterCheck, resolvePagesDir } from './router-check'
 import { checkConfigFile, loadTsConfig } from './config-check'
 import { checkRequiredTargets, checkFeatureConflicts, checkProteusDirConsistency } from './strict-cli'
 import { appConfigCheckSummary } from './app-config-check'
+import { readDisabledGates } from './gate-config'
 
 export interface CheckOptions {
   strictCss: boolean
@@ -28,12 +29,16 @@ export interface CheckSummary {
   ok: boolean
 }
 
-/** 聚合四域检查（CLI001-004 语义：CLI 配置/目标/开关/产物一致性） */
+/** 聚合四域检查（CLI001-004 语义：CLI 配置/目标/开关/产物一致性；★#456 gates.disabled 域级/preset 级过滤） */
 export async function runCheck(root: string, opts: CheckOptions): Promise<CheckSummary> {
   const domains: CheckDomainResult[] = []
+  const disabled = await readDisabledGates(root)
+  if (disabled.has('check')) {
+    return { domains: [{ name: 'gates', ok: true, detail: '[proteus-gate] preset check 已在 proteus.config gates.disabled 禁用——跳过' }], ok: true }
+  }
 
   // --strict-css（G-21）：样式兼容校验 + 预算门禁
-  if (opts.strictCss) {
+  if (opts.strictCss && !disabled.has('css')) {
     try {
       const result = runCssCheck(root, { strict: true, fix: false })
       domains.push({ name: 'css', ok: result.ok, detail: formatCssCheck(result) })
@@ -43,7 +48,7 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
   }
 
   // --strict-style（G-31）：:style 白名单 + 覆盖率
-  if (opts.strictStyle) {
+  if (opts.strictStyle && !disabled.has('style')) {
     try {
       const result = runStyleCheck(root, { platform: 'web' })
       domains.push({ name: 'style', ok: result.ok, detail: formatStyleCheck(result) })
@@ -53,13 +58,13 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
   }
 
   // --strict-router（CLI002 语义：路由目标配置完整）：router:check（★resolvePagesDir：扫 pages 目录对齐 gen-routes）
-  if (opts.strictRouter) {
+  if (opts.strictRouter && !disabled.has('router')) {
     const result = checkRoutes(resolvePagesDir(root))
     domains.push({ name: 'router', ok: result.ok, detail: formatRouterCheck(result) })
   }
 
   // --strict-cli（CLI001-004）：配置校验 + 能力冲突 + .proteus/ 一致性
-  if (opts.strictCli) {
+  if (opts.strictCli && !disabled.has('cli')) {
     const configFile = path.join(root, 'proteus.config.ts')
     const lines: string[] = []
     let ok = true
@@ -90,7 +95,7 @@ export async function runCheck(root: string, opts: CheckOptions): Promise<CheckS
   }
 
   // ★app-config（G-35 M3）：应用全局配置校验（06-cli-integration.md §1，并入 check 全量门禁）
-  if (opts.strictCli) {
+  if (opts.strictCli && !disabled.has('app-config')) {
     try {
       const { ok, text } = await appConfigCheckSummary(root)
       domains.push({ name: 'app-config', ok, detail: text })
