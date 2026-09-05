@@ -53,7 +53,9 @@ jobs:
 
       - name: 安装
         if: steps.gate.outputs.ok == 'true'
-        run: pnpm install --frozen-lockfile
+        # ★#430：--ignore-scripts——postinstall（build-packages 全量构建）移交给下方显式步；
+        #   fresh 环境 install 期构建易失败且会中止整 run（types/api TS2307 子路径 dist 时序）
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # ★#428/#429：proteus bin 依赖 @proteus-vue/cli dist——显式两遍拓扑构建（build-packages.mjs = postinstall 同款）
       - name: 构建 workspace 包（cli/component-ir/render-backend dist）
