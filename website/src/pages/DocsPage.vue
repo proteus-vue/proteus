@@ -83,14 +83,14 @@ function itemTitle(slugOf: string, zhTitle: string): string {
     <p-view class="doc">
       <p-stack direction="row" :gap="28" wrap class="doc-area">
         <p-view class="doc-main">
-          <!-- ★#468 未翻译提示（英文态下中文页——诚实降级：Vue docs 同款） -->
+          <!-- ★#468 未翻译提示（英文态下隐藏中文正文——诚实降级，不混排） -->
           <p-view v-if="noEn" class="no-en">
             <p-text class="no-en-title">{{ t('doc.noen.title') }}</p-text>
             <p-text class="no-en-body">{{ t('doc.noen.body') }}</p-text>
             <button type="button" class="no-en-back" @click="setLocale('zh')">{{ t('doc.noen.back') }}</button>
           </p-view>
           <!-- ★#415 端落地进度表（frontmatter.ends 声明的页面） -->
-          <p-view v-if="ends" class="ends-progress">
+          <p-view v-if="ends && !noEn" class="ends-progress">
             <p-text class="ends-title">{{ t('doc.ends.title') }}</p-text>
             <table class="ends-table">
               <thead><tr><th>端</th><th>状态</th><th>说明</th></tr></thead>
@@ -104,18 +104,18 @@ function itemTitle(slugOf: string, zhTitle: string): string {
             </table>
             <p-text class="ends-footnote">端状态取自端注册表；端架构对照见 <a href="#/docs/framework/ends-matrix">端与成熟度</a>。</p-text>
           </p-view>
-          <!-- 文档引擎 html（md 内含 H1，页面头不再重复） -->
-          <p-view class="doc-body" v-html="docHtml"></p-view>
+          <!-- 文档引擎 html（md 内含 H1，页面头不再重复）——未翻译页在英文态下不渲染中文正文 -->
+          <p-view v-if="!noEn" class="doc-body" v-html="docHtml"></p-view>
 
           <!-- 上下篇 -->
-          <p-stack direction="row" :gap="12" class="pager">
+          <p-stack v-if="!noEn" direction="row" :gap="12" class="pager">
             <router-link v-if="prev" :to="`${section.base}/${prev.slug}`" class="pager-link">{{ t('doc.prev') }}</router-link>
             <router-link v-if="next" :to="`${section.base}/${next.slug}`" class="pager-link">{{ t('doc.next') }}</router-link>
           </p-stack>
         </p-view>
 
-        <!-- 页内导读（右栏粘性） -->
-        <p-view v-if="tocFlat.length" class="page-toc">
+        <!-- 页内导读（右栏粘性）——未翻译页在英文态下不显示中文 TOC -->
+        <p-view v-if="tocFlat.length && !noEn" class="page-toc">
           <span class="eyebrow">{{ t('toc.onthepage') }}</span>
           <a v-for="toc in tocFlat" :key="toc.id" :href="`#${toc.id}`" class="page-toc-link" :class="`depth-${toc.depth}`">{{ toc.text }}</a>
         </p-view>
