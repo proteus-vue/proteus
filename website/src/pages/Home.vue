@@ -119,6 +119,46 @@ const pillars = [
   },
 ]
 
+// 学习路径（★#398：对齐指南区 8 组旅程 IA——首页直达初学者线性路径）
+const journey = [
+  {
+    no: '01',
+    title: '起步',
+    desc: '是什么、为什么：三分钟理解 Proteus 与传统跨端框架的本质区别。',
+    to: '/docs/01-intro',
+  },
+  {
+    no: '02',
+    title: '开始',
+    desc: '创建工程 → 运行与预览 → 构建与发布：四个微页跑通 Web 与小程序双端。',
+    to: '/docs/04-requirements',
+  },
+  {
+    no: '03',
+    title: '代码构成',
+    desc: '目录结构、页面四段式、两层配置——认识工程里每个文件的职责。',
+    to: '/docs/08-structure',
+  },
+  {
+    no: '04',
+    title: '基础概念',
+    desc: '语义模型、p-* 语义组件、状态与路由：写页面前需要的心智模型。',
+    to: '/docs/11-semantic-model',
+  },
+  {
+    no: '05',
+    title: '渲染与能力',
+    desc: '柔性布局、50 个能力 Hook、全终端适配——业务代码对后端零感知。',
+    to: '/docs/17-fluid-layout',
+  },
+  {
+    no: '06',
+    title: '架构与工程',
+    desc: '可插拔 SPI 全景、编译管线、测试与一致性验证——深入框架内部。',
+    to: '/docs/22-architecture',
+  },
+]
+
 const capabilities = [
   {
     tag: 'G-27',
@@ -297,6 +337,27 @@ npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre
         接入 Native / Flutter 后端时，这行代码不改。
       </p-text>
     </p-view>
+
+    <!-- 9. 学习路径（★#398 对齐小程序文档旅程 IA：初学者从首页直接进入线性学习路径） -->
+    <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(48, 80)'" data-reveal class="journey">
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">学习路径</p-heading>
+      <p-text class="section-sub center">从零到双端跑通的完整旅程——以小程序开放文档的颗粒度标准组织，每页只讲一件事。</p-text>
+      <p-grid :min-col-width="220" :gap="12">
+        <router-link
+          v-for="(s, i) in journey"
+          :key="s.title"
+          :to="s.to"
+          v-p-hover
+          class="journey-card"
+          :style="{ '--stagger-i': String(i) }"
+        >
+          <p-text class="pillar-no">{{ s.no }}</p-text>
+          <p-heading :level="3" class="pillar-title">{{ s.title }}</p-heading>
+          <p-text class="pillar-desc">{{ s.desc }}</p-text>
+          <p-text class="journey-go">进入 →</p-text>
+        </router-link>
+      </p-grid>
+    </p-view>
   </p-page>
 </template>
 
@@ -379,7 +440,8 @@ npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre
 }
 .pillars .pillar-card,
 .stats .stat,
-.features .feature-card {
+.features .feature-card,
+.journey .journey-card {
   opacity: 0;
   transform: translateY(14px);
   transition:
@@ -390,13 +452,15 @@ npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre
 }
 .revealed .pillar-card,
 .revealed .stat,
-.revealed .feature-card {
+.revealed .feature-card,
+.revealed .journey-card {
   opacity: 1;
   transform: none;
 }
 .no-motion .pillar-card,
 .no-motion .stat,
-.no-motion .feature-card {
+.no-motion .feature-card,
+.no-motion .journey-card {
   opacity: 1;
   transform: none;
   transition: none;
@@ -460,6 +524,11 @@ npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre
 .pillar-no { color: var(--brand2); font-size: 12px; letter-spacing: 1px; }
 .pillar-title { color: var(--ink); margin: 8px 0; }
 .pillar-desc { color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+/* ---- 学习路径（★#398：同语言编号卡，router-link 整卡可点） ---- */
+.journey-card { display: block; text-decoration: none; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: var(--sp-18); background: var(--panel); height: 100%; transition: border-color 0.15s; }
+.journey-card:hover { border-color: var(--brand); }
+.journey-go { color: var(--brand2); font-size: 12px; margin: 10px 0 0; display: block; }
 
 /* ---- 数字背书 ---- */
 /* ---- 数字背书（★#389 pg-glass 卡：布局归 grid，视觉归玻璃组件；hover 微交互对齐 v3） ---- */
