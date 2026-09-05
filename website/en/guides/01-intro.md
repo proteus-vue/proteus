@@ -24,7 +24,7 @@ Teams shipping both Web and Mini Programs today maintain two mental models:
 | Pain point | Traditional approach | Proteus |
 |---|---|---|
 | Two syntaxes | HTML on Web; WXML + `setData` in Mini Programs | Write standard Vue SFC once; the compiler does the mapping |
-| Two configs | A vue-router table plus an `app.json` page config | Declare per-page `<route>` blocks; the compiler generates both configs |
+| Two configs | A vue-router table plus an `app.json` page config | Declare per-page `<route>` blocks; the compiler generates **configs per target** (Web route table / Mini Program `app.json`…) |
 | Two style worlds | Manually keep CSS and WXSS in sync | One style sheet transformed at compile time (px→rpx configurable) |
 
 ## The core mechanism (in one paragraph)

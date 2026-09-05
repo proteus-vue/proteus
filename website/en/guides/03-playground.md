@@ -6,7 +6,7 @@ group: 起步
 
 # Try the Playground
 
-Don't want to set up an environment yet? Open the [Playground](/playground) and experience Proteus's compilation live in your browser — write a standard Vue SFC on the left and watch, side by side, **what it becomes on each target** on the right.
+Don't want to set up an environment yet? Open the [Playground](/playground) and experience Proteus's compilation live in your browser — write a standard Vue SFC on the left and watch, side by side, **what it becomes on each target** on the right (Web runs as-is / Mini Program artifacts / native · Flutter via the rendering layer).
 
 ## Use this minimal example
 

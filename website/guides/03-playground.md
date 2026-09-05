@@ -6,7 +6,7 @@ group: 起步
 
 # 体验 Playground
 
-不想先装环境？打开 [Playground](/playground)，在浏览器里实时体验 Proteus 的编译过程——左边写一份标准 Vue SFC，右边同屏看到它**在双端分别变成了什么**。
+不想先装环境？打开 [Playground](/playground)，在浏览器里实时体验 Proteus 的编译过程——左边写一份标准 Vue SFC，右边同屏看到它**在每个目标端分别变成了什么**（Web 直出 / 小程序四件套 / 原生·Flutter 见渲染层）。
 
 ## 用这个最小例子
 
