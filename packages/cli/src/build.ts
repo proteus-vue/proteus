@@ -5,9 +5,13 @@
 // ★G-29 阶段 A：--compiler rust → 每页 Node/Rust 双编译语义等价校验（verifyDualCompilerEquivalence）——不一致构建红
 import fs from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { createRequire } from 'node:module'
 import { compileVueSfc } from '@proteus-vue/compiler'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
+import { resolveProteusViteConfig, runGenRoutes } from '@proteus-vue/plugin-vite'
+import { loadTsConfig } from './config-check'
 
 /** ★G-29：Rust CLI 定位缓存（按 root 键控——buildDir 全目录共享一次 resolve，避免逐文件 require.resolve） */
 const rustBinCache = new Map<string, string | null>()
@@ -42,6 +46,70 @@ export interface BuildResult {
 export const TARGET_BUILD_SCRIPTS: Record<'web' | 'skyline', string> = {
   web: 'build:web',
   skyline: 'build:mp', // mp-weixin = Skyline 小程序包
+}
+
+/** 从工程根解析 vite（vite 随工程 devDeps；CLI 只声明驱动）——CJS/ESM 互操作解包 */
+async function importViteFrom(root: string): Promise<typeof import('vite')> {
+  const req = createRequire(path.join(root, 'package.json'))
+  const resolved = req.resolve('vite')
+  const mod = (await import(pathToFileURL(resolved).href)) as unknown as { default?: typeof import('vite') } & typeof import('vite')
+  // vite 5 CJS 产物：named export 经互操作可能缺失——default 即完整模块
+  return (mod.default && typeof mod.default.build === 'function' ? mod.default : mod) as typeof import('vite')
+}
+
+/** 工程是否有 vue-tsc（类型检查步骤；缺省跳过 + 提示，不阻断） */
+function hasVueTsc(root: string): boolean {
+  try {
+    createRequire(path.join(root, 'package.json')).resolve('vue-tsc')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * ★#418 程序化工程构建（无 vite.config.ts 的主路径）：加载 proteus.config.ts →
+ * gen-routes（mp，in-process）→ vue-tsc（工程有则跑）→ vite build（框架组装配置）
+ * 返回 { ok, target, outDir }——纯异步（测试注入 root）
+ */
+export async function runTargetedBuildProgrammatic(
+  target: 'web' | 'skyline' | 'all',
+  root = process.cwd(),
+): Promise<{ ok: boolean; results: Array<{ target: string; ok: boolean }> }> {
+  const cfgFile = path.join(root, 'proteus.config.ts')
+  if (!fs.existsSync(cfgFile)) throw new Error(`缺少 ${path.relative(root, cfgFile)}——proteus build 需要框架配置驱动（create-proteus 模板自带）`)
+  const config = (await loadTsConfig(cfgFile)) as Record<string, unknown>
+  const targets = target === 'all' ? (['web', 'skyline'] as const) : ([target] as const)
+  const results: Array<{ target: string; ok: boolean }> = []
+  for (const t of targets) {
+    const mode = t === 'skyline' ? 'mp-weixin' : 'web'
+    console.log(`[proteus] build --target ${t}（${mode}）`)
+    const resolved = await resolveProteusViteConfig({ root, command: 'build', mode }, config as never)
+    if (resolved.needsGenRoutes) {
+      runGenRoutes({ config: config as never, root })
+    }
+    // 类型检查（工程有 vue-tsc 才跑；与模板 build:web/build:mp 的 vue-tsc --noEmit 对齐）
+    if (hasVueTsc(root)) {
+      const { spawnSync } = await import('node:child_process')
+      const r = spawnSync('npx', ['vue-tsc', '--noEmit'], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' })
+      if (r.status !== 0) {
+        console.error(`[proteus] vue-tsc 类型检查失败（exit ${r.status}）`)
+        results.push({ target: t, ok: false })
+        continue
+      }
+    } else {
+      console.warn('[proteus] 工程未安装 vue-tsc——跳过类型检查（建议安装以对齐模板门禁）')
+    }
+    const vite = await importViteFrom(root)
+    try {
+      await vite.build(resolved.config)
+      results.push({ target: t, ok: true })
+    } catch (e) {
+      console.error(`[proteus] vite build 失败：${(e as Error).message}`)
+      results.push({ target: t, ok: false })
+    }
+  }
+  return { ok: results.every((r) => r.ok), results }
 }
 
 /** 工程构建计划（纯函数）：校验 package.json 脚本存在性 → spawn 参数列表（M2，复用 Vite 管线） */

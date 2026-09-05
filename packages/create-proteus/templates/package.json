@@ -5,12 +5,12 @@
   "type": "module",
   "description": "Proteus 应用：一份标准 Vue 源码 → Web + 微信小程序（Skyline）",
   "scripts": {
-    "dev:web": "vite --mode web",
-    "build:web": "vue-tsc --noEmit && vite build --mode web",
-    "dev:mp": "tsx scripts/gen-routes.ts && vite --mode mp-weixin",
-    "build:mp": "tsx scripts/gen-routes.ts && vue-tsc --noEmit && vite build --mode mp-weixin",
-    "debug:mp": "PROTEUS_DEBUG=1 npm run build:mp",
-    "proteus": "npx proteus"
+    "dev:web": "proteus dev --target web",
+    "build:web": "proteus build --target web",
+    "dev:mp": "proteus dev --target skyline",
+    "build:mp": "proteus build --target skyline",
+    "debug:mp": "PROTEUS_DEBUG=1 proteus build --target skyline",
+    "proteus": "proteus"
   },
   "dependencies": {
     "@proteus-vue/router": "^0.2.0-beta.0",
@@ -19,6 +19,7 @@
     "vue": "^3.4.0"
   },
   "devDependencies": {
+    "@proteus-vue/cli": "^0.2.1-beta.0",
     "@proteus-vue/compiler": "^0.3.0-beta.0",
     "@proteus-vue/plugin-vite": "^0.2.0-beta.0",
     "@types/node": "^20.0.0",

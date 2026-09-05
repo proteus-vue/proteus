@@ -10,10 +10,7 @@ group: 代码构成
 
 | 路径 | 作用 |
 |---|---|
-| `proteus.config.ts` | 框架统一配置：appid / skyline / pagesDir / rules 规则覆盖 / setDataBridge / style（px→rpx）；编译期读取，改完需重新 `npm run build:mp` |
-| `vite.config.ts` | 双端 Vite 配置：Web 端走 `@vitejs/plugin-vue`，小程序端走 `mpTransform` 编译管线 |
-| `scripts/gen-routes.ts` | 递归扫描 `pagesDir`，按目录结构推导路由，生成 `app.json` / `page.json` / 路由表 |
-| `scripts/mp-entry-stub.ts` | 小程序构建的 rollup 占位入口（真实 `app.js` 由插件直出） |
+| `proteus.config.ts` | **唯一配置文件**：platform / skyline / appid / pagesDir / rules / setDataBridge / style + `vite` 透传字段（vite 配置由框架组装，无需 vite.config.ts）；编译期读取，改完需重新 `npm run build:mp` |
 | `src/main.ts` | Web 入口 |
 | `src/main.mp.ts` | 小程序极简入口：不写 `App()`，app 骨架由框架自动生成 |
 | `src/pages/` | 页面目录（`pagesDir`），每个 `.vue` 即一个页面 |

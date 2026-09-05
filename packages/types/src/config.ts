@@ -74,4 +74,9 @@ export interface ProteusConfig {
     /** 集中式 meta（决策 #113）：精确路径 > 目录前缀 > 默认 */
     meta?: Record<string, RouteMeta>
   }
+  /** ★#418 vite 透传（配置收敛——开发者不写 vite.config.ts）：
+   *   框架用 resolveProteusViteConfig 组装 vite 配置（vue/mpTransform/别名/构建参数全内置），
+   *   本字段做开发者扩展：对象（{ plugins, server, resolve… }，全 vite 兼容）或函数
+   *   （(ctx: { command, mode }) => 对象 | void）。运行时由 @proteus-vue/plugin-vite 消费（类型见其 vite-config 文档） */
+  vite?: unknown
 }

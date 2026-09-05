@@ -25,6 +25,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   style: 'compiler',
   budget: 'build',
   router: 'router',
+  vite: 'build', // ★#418 配置收敛：vite 透传字段（构建工具链配置）
 }
 
 /**

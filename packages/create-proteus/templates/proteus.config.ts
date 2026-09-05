@@ -1,4 +1,4 @@
-// proteus.config.ts —— Proteus 框架统一配置（拆包步骤 7：类型契约来自 @proteus-vue/plugin-vite npm 包）
+// proteus.config.ts —— Proteus 统一配置（★#418：唯一配置文件——vite 配置由框架组装，不再有 vite.config.ts）
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
 
 const config: ProteusConfig = {
@@ -30,6 +30,12 @@ const config: ProteusConfig = {
     px2rpx: true,
     rpxRatio: 2,
   },
+  // vite 透传（可选）：完全兼容 vite 的字段——plugins / server / resolve / build 等按需追加。
+  // 例：server: { port: 5173 }, plugins: [myVitePlugin()]
+  // （函数形态：vite: ({ command, mode }) => ({ ... })；省略则全用框架默认组装）
+  // vite: {
+  //   server: { port: 5173 },
+  // },
 }
 
 export default config

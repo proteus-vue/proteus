@@ -10,13 +10,15 @@ group: 开始
 
 | 命令 | 作用 |
 |---|---|
-| `npm run dev:web` | Web 端开发（Vite dev server，完整 HMR + devtools） |
-| `npm run build:web` | Web 构建（vue-tsc 类型检查 + vite build）→ `dist/web/` |
-| `npm run dev:mp` | 小程序 Vite dev（gen-routes + `vite --mode mp-weixin`；日常迭代建议用 build:mp） |
-| `npm run build:mp` | 小程序正式构建（gen-routes → vue-tsc → vite build）→ `dist/mp-weixin/` |
+| `npm run dev:web` | Web 端开发（`proteus dev --target web`——完整 HMR + devtools） |
+| `npm run build:web` | Web 构建（`proteus build --target web`：vue-tsc + vite build）→ `dist/web/` |
+| `npm run dev:mp` | 小程序 dev（`proteus dev --target skyline`：gen-routes + vite dev；日常迭代建议用 build:mp） |
+| `npm run build:mp` | 小程序正式构建（`proteus build --target skyline`：gen-routes → vue-tsc → vite build）→ `dist/mp-weixin/` |
 | `npm run debug:mp` | 全链路调试构建（`PROTEUS_DEBUG=1`，产物注入 `[proteus][环节]` 日志与决策链文件） |
 | `npx proteus explain src/pages/index.vue` | 查看该文件实际触发的全部编译规则决策 trace |
 | `npx proteus rules` | 编译器规则能力清单（每条规则自带 AI 说明书） |
+
+> 命令全部走 CLI——CLI 加载 `proteus.config.ts`、框架组装 vite 配置（`vite.config.ts` 不是工程文件）。npm scripts 只是 CLI 命令别名。
 
 > 本仓库（monorepo 根目录）另有 `npm run preview:web`（预览 Web 构建产物）与 `npm run verify`（test + 双端构建一键全量验证）。
 

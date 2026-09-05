@@ -34,6 +34,28 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `page` | `object` | 否 | compiler | 页面模式（自动滚动容器），见下表 |
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
 | `router` | `object` | 否 | router | 路由通用配置（tabBar / 集中式 meta），见下表 |
+| `vite` | `object \| 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
+
+### `vite`（透传——完全兼容 vite）
+
+| 形态 | 说明 |
+|---|---|
+| 对象 | `{ plugins, server, resolve, build… }`——字段语义与 vite 完全一致（`plugins` 追加在框架插件之后，其余键覆盖框架默认） |
+| 函数 | `({ command, mode }) => 对象`——按命令/模式返回不同扩展 |
+
+```ts
+// proteus.config.ts
+const config: ProteusConfig = {
+  // …必填字段…
+  vite: {
+    server: { port: 5173, open: true },          // dev server 偏好
+    resolve: { alias: { '@lib': './src/lib' } }, // 追加别名
+    plugins: [myVitePlugin()],                    // 任意 vite 插件
+  },
+}
+```
+
+> 遗留工程若仍持有 `vite.config.ts`，CLI 自动走旧兼容路径（仍可运行）；新工程无需也不该再建 vite.config.ts。
 
 ### 子字段明细
 

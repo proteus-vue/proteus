@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 // ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, formatHelpText } from './args'
-import { buildDir, planTargetedBuild } from './build'
+import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
 import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
 import { parseHostArgs, runHostPush } from './host'
 import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
@@ -29,7 +29,7 @@ import { checkConfigFile } from './config-check'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
-import { parseDevArgs, runDev } from './dev'
+import { parseDevArgs, runDev, hasLegacyViteConfig, runDevProgrammatic } from './dev'
 import { runHealthCheck, formatHealthReport } from './health'
 import { parseTestArgs, runTest } from './test'
 import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
@@ -48,18 +48,25 @@ async function main(): Promise<void> {
   switch (cmd) {
     case 'build': {
       const args = parseBuildArgs(rest)
-      // ★cli-plus M2：--target web|skyline|all → 工程构建（复用项目 Vite 管线）；缺省 = 独立编译
+      // ★#418 配置收敛：--target web|skyline|all → 工程构建。
+      //   无 vite.config.ts（新形态）→ 程序化驱动（resolveProteusViteConfig + vite build，CLI 组装全部配置）；
+      //   有 vite.config.ts（遗留工程）→ 旧路径（spawn 工程构建脚本）
       if (args.target) {
         try {
-          const plans = planTargetedBuild(process.cwd(), args.target)
-          const { spawnSync } = await import('node:child_process')
-          for (const plan of plans) {
-            console.log(`[proteus] build --target：${plan.script}（${plan.command} ${plan.args.join(' ')}）`)
-            const r = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
-            if (r.status !== 0) {
-              console.error(`[proteus] build 失败（${plan.script} exit ${r.status}）`)
-              process.exitCode = r.status ?? 1
-              break
+          if (!hasLegacyViteConfig(process.cwd())) {
+            const r = await runTargetedBuildProgrammatic(args.target)
+            if (!r.ok) process.exitCode = 1
+          } else {
+            const plans = planTargetedBuild(process.cwd(), args.target)
+            const { spawnSync } = await import('node:child_process')
+            for (const plan of plans) {
+              console.log(`[proteus] build --target：${plan.script}（${plan.command} ${plan.args.join(' ')}）`)
+              const rr = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+              if (rr.status !== 0) {
+                console.error(`[proteus] build 失败（${plan.script} exit ${rr.status}）`)
+                process.exitCode = rr.status ?? 1
+                break
+              }
             }
           }
         } catch (e) {
@@ -300,17 +307,23 @@ async function main(): Promise<void> {
     case 'dev': {
       const { target } = parseDevArgs(rest)
       try {
-        const plan = runDev({ target })
-        console.log(`[proteus] dev --target ${target}：${plan.command} ${plan.args.join(' ')}`)
-        const { spawn } = await import('node:child_process')
-        const child = spawn(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
-        child.on('error', (e) => {
-          console.error(`[proteus] dev 启动失败：${e.message}`)
-          process.exitCode = 1
-        })
-        // 保持进程存活（dev server 长驻）
-        process.on('SIGINT', () => child.kill('SIGINT'))
-        process.on('SIGTERM', () => child.kill('SIGTERM'))
+        // ★#418 配置收敛：无 vite.config.ts（新形态）→ 程序化驱动（框架组装 vite 配置）；有 → 遗留 spawn
+        if (!hasLegacyViteConfig(process.cwd())) {
+          const close = await runDevProgrammatic({ target })
+          process.on('SIGINT', () => void close().then(() => process.exit(0)))
+          process.on('SIGTERM', () => void close().then(() => process.exit(0)))
+        } else {
+          const plan = runDev({ target })
+          console.log(`[proteus] dev --target ${target}：${plan.command} ${plan.args.join(' ')}`)
+          const { spawn } = await import('node:child_process')
+          const child = spawn(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+          child.on('error', (e) => {
+            console.error(`[proteus] dev 启动失败：${e.message}`)
+            process.exitCode = 1
+          })
+          process.on('SIGINT', () => child.kill('SIGINT'))
+          process.on('SIGTERM', () => child.kill('SIGTERM'))
+        }
       } catch (e) {
         console.error(`[proteus-dev] ${(e as Error).message}`)
         process.exitCode = 1
