@@ -16,16 +16,16 @@ import {
   formatCoverageReport,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（128 原语 SSOT）', () => {
-  it('128 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（136 原语 SSOT）', () => {
+  it('136 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
-    // 各类数量（G-32 分布：12/18/10/10/50/28）
+    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8：layout+2/ui+3/shell+3）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
-    expect(count('layout')).toBe(12)
-    expect(count('ui')).toBe(18)
-    expect(count('shell')).toBe(10)
+    expect(count('layout')).toBe(14)
+    expect(count('ui')).toBe(21)
+    expect(count('shell')).toBe(13)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(50)
     expect(count('engineering')).toBe(28)

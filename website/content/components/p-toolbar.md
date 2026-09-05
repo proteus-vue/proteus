@@ -1,7 +1,7 @@
 ---
 title: p-toolbar
 group: 页面外壳
-order: 2012
+order: 2013
 ---
 
 # p-toolbar
@@ -12,7 +12,7 @@ order: 2012
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| — | 页面外壳 | — |
+| shell.toolbar | 页面外壳 | — |
 
 ## 兼容进度
 

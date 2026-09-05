@@ -1,7 +1,7 @@
 ---
 title: p-radio
 group: 内容与表单
-order: 1017
+order: 1015
 ---
 
 # p-radio

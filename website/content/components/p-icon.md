@@ -1,7 +1,7 @@
 ---
 title: p-icon
 group: 内容与表单
-order: 1008
+order: 1007
 ---
 
 # p-icon

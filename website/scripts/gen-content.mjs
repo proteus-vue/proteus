@@ -195,22 +195,16 @@ function genComponents(ir, ends) {
   const tagKind = {}
   for (const p of ir.PRIMITIVE_CATALOG) if (p.tag) tagKind[p.tag] = p.kind
   const KIND_DOMAIN = { layout: '布局', ui: '内容与表单', shell: '页面外壳', gesture: '手势', engineering: '工程', capability: '能力入口' }
-  // ★catalog 外组件的域兜底（W-7：语义登记待补 TAG_SEMANTIC_MAP，分类先行）
-  const EXTRA_KIND = {
-    'p-error-boundary': 'ui', 'p-loading': 'ui', 'p-skeleton': 'ui', 'p-mask': 'ui',
-    'p-popup': 'shell', 'p-toast': 'ui', 'p-toolbar': 'shell', 'p-zone': 'layout',
-    'p-aspect': 'layout', 'p-scale': 'ui', 'p-scroll-view': 'layout', 'p-action-sheet': 'shell',
-    'p-drawer': 'shell', 'p-modal': 'shell', 'p-popover': 'shell',
-  }
-  // ★侧栏/总览分组统一域推导：与单页同构（tagKind → 语义前缀 → EXTRA_KIND 兑底）——
-  //   旧总览漏了语义前缀层，p-view/p-button 等有语义的基础组件全掉进「—」无分类组
+  // ★#405：TAG_SEMANTIC_MAP 已全量登记 59 组件（catalog 同步 +9 条目），EXTRA_KIND 文档兑底退役
+  //   域推导两级：catalog kind → semantic 前缀
+  // ★侧栏/总览分组统一域推导：与单页同构（catalog kind → semantic 前缀）
   const DOMAIN_ORDER = ['布局', '内容与表单', '页面外壳', '手势', '工程', '能力入口', '—']
   const domainOf = {}
   for (const dir of dirs) {
     const vueFile = path.join(COMP_DIR, dir, 'index.vue')
     if (!fs.existsSync(vueFile)) continue
     const semantic = semanticMap[dir] ?? null
-    const kind = tagKind[dir] ?? (semantic ? semantic.split('.')[0] : null) ?? EXTRA_KIND[dir] ?? '—'
+    const kind = tagKind[dir] ?? (semantic ? semantic.split('.')[0] : null) ?? '—'
     domainOf[dir] = KIND_DOMAIN[kind] ?? kind
   }
   // order = 域序 × 1000 + 域内字母序（侧栏组按 min(order) 排序 → 域顺序确定，组内字母序）

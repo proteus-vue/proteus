@@ -1,7 +1,7 @@
 ---
 title: p-heading
 group: 内容与表单
-order: 1007
+order: 1006
 ---
 
 # p-heading

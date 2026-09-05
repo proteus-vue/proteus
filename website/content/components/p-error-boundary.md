@@ -1,18 +1,18 @@
 ---
 title: p-error-boundary
-group: 内容与表单
-order: 1005
+group: 工程
+order: 4002
 ---
 
 # p-error-boundary
 
 错误兜底
 
-> 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
+> 语义组件（Layer 0）· 域 **工程** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| — | 内容与表单 | — |
+| engineering.error-boundary | 工程 | — |
 
 ## 兼容进度
 

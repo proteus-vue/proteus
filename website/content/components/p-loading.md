@@ -1,7 +1,7 @@
 ---
 title: p-loading
 group: 内容与表单
-order: 1012
+order: 1011
 ---
 
 # p-loading
@@ -12,7 +12,7 @@ order: 1012
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| — | 内容与表单 | — |
+| ui.loading | 内容与表单 | — |
 
 ## 兼容进度
 

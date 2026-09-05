@@ -66,6 +66,17 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-scan-qr" => Some("capability.scan-qr"),
         "p-pick-photo" => Some("capability.pick-photo"),
         "p-location" => Some("capability.location"),
+        // ★#405 语义登记批（与 Node TAG_SEMANTIC_MAP 同步——剩余 10 组件全量入图）
+        "p-aspect" => Some("layout.aspect"),
+        "p-zone" => Some("layout.zone"),
+        "p-loading" => Some("ui.loading"),
+        "p-scale" => Some("ui.scale"),
+        "p-skeleton" => Some("ui.skeleton"),
+        "p-mask" => Some("shell.mask"),
+        "p-popup" => Some("shell.popup"),
+        "p-toolbar" => Some("shell.toolbar"),
+        "p-scroll-view" => Some("layout.scroll"), // 滚动容器 = p-scroll 角色（p-view 别名先例）
+        "p-error-boundary" => Some("engineering.error-boundary"), // E8 原语组件形态
         _ => None, // 未知 p- / 非 p- 标签（view/text/scroll-view——Layer 1 兼容层不产 C-IR）
     }
 }

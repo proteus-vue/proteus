@@ -37,7 +37,7 @@
 
 | 「不绑定」系列 | 语义层（框架定义） | 后端 SPI（可插拔实现） | 状态 |
 |---|---|---|---|
-| 不绑定平台 API（G-31/32） | p-* 语义组件 + 128 原语 SSOT + Capability Hook | 各端语义实现（小程序降级为 Layer 1 兼容层） | ✅ |
+| 不绑定平台 API（G-31/32） | p-* 语义组件 + 136 原语 SSOT + Capability Hook | 各端语义实现（小程序降级为 Layer 1 兼容层） | ✅ |
 | 不绑定渲染引擎（G-27/37） | VNode / Component IR / LayoutConstraint IR | `ProteusRenderBackend`（VueDom / Native×3 / Flutter / Headless） | ✅ |
 | 不绑定编译器（G-29/38） | Compiler IR（SFC → 中间表示） | `ProteusCompilerBackend`（Node ✅ / Rust ✅ / WASM 📋） | 🟡 |
 | 不绑定容器形态（G-42） | 页面生命周期状态机 + IR 单一 Owner | 六容器策略（Stack / SuperApp / Window / MiniProgram / Embedded / SinglePage） | ✅ |
@@ -124,7 +124,7 @@ p-fluid / p-grid / p-stack / p-fit 柔性布局——把 iOS `UICollectionView` 
 
 ```
 ┌─ 应用层（业务）         标准 Vue SFC / 路由 / 状态 / 页面
-├─ 语义层（框架核心）     p-* 原语 / 128 原语 SSOT / Capability Hook / Fluid / Adaptive / Glass
+├─ 语义层（框架核心）     p-* 原语 / 136 原语 SSOT / Capability Hook / Fluid / Adaptive / Glass
 ├─ 编译层                Compiler + Plugin API + CompilerBackend SPI（Node / Rust / WASM）
 ├─ 渲染层                RenderBackend SPI（VueDom / Native / Flutter / Skia / Headless）+ Dispatcher 热切换
 ├─ 宿主层                HostRuntime SPI + 六容器策略 + 所有权/借用检查 + ExecutionCarrier（JSI/AOT）
@@ -222,7 +222,7 @@ proteus/
 │   ├── render-backend/             #   渲染 SPI + 五后端 + 混合渲染 + 容器/所有权/宿主层（G-27/41/42/43）
 │   ├── compat-miniprogram/         #   wx 桥 + migrate codemod（Layer 1 兼容层，G-31 B6）
 │   ├── component-ir/ contracts/ types/ shared/    # C-IR schema / 契约 / 全局类型 / 公共层
-│   ├── built-in-components/        #   59 个 p-* 语义组件（128 原语 SSOT）
+│   ├── built-in-components/        #   59 个 p-* 语义组件（136 原语 SSOT）
 │   ├── fluid/ desktop/ gesture/    #   G-22 柔性布局 / G-24 桌面原语 / 手势识别器
 │   ├── api/ capabilities/ security/ #  Capability Hook 50 / Adapter Registry / 安全
 │   ├── router/ runtime/ module/    #   路由 / setData 桥接 / 模块化
@@ -262,7 +262,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 
 ## 开发状态与路线图
 
-- **已落地**（38 包 / 1980 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（128 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
+- **已落地**（38 包 / 1980 单测全绿 / 双端构建通过）：语义 IR + 双 SPI 定案（#290）→ G-27 渲染后端 B1-B6（五后端 + 混合渲染）→ G-31/G-32 语义 SSOT（136 原语 + 59 组件 + 50 Hook）→ G-29/G-38 编译双后端（Node/Rust 等价门禁 + SPI 冻结）→ G-41/42/43 宿主层（36 组合矩阵 + 六容器 + 所有权/借用检查）→ G-36 AI 基建（MCP / Agent Kit / Skill / 护栏）→ G-24 桌面原语 B1-B4 → G-44 测试 IR B1 → G-45 调试基座 B1-B3a（Install-Once Host：动态后端装载 + pending 回放 + 推送协议 + MITM 完整性门禁，打破自定义基座循环）→ 文档引擎（Markdown→IR→双端渲染）
 - **进行中 / 规划**：G-38 B3 Rust native 深化（oxc/swc + napi-rs）与 B4 WASM Playground、G-28 NativeBackend 实现（99% 零原生）、G-39/G-40 宿主运行时与执行载体实现、**G-46~G-52 七 plan 规划入库（2026-09 批次：宿主级资源池 / 组合一致性 / 兼容式小程序运行容器 / 进程级沙箱 / 开发者平台 / 验证执行 runner / 跨设备一致性——文档规划，B 批次待启）**、G-25 全终端（车机/TV/手表）、G-30 任意端接入、npm 发布（changesets 就绪）——完整分里程碑路线见 [roadmap](docs/roadmap.md) 与 [board-inventory](docs/board-inventory.md)
 
 ## 开源协议

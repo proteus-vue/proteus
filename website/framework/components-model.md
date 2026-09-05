@@ -14,7 +14,7 @@ p-* 语义组件是 Proteus 组件框架的基本单元。它就是**标准 Vue 
 
 ## 语义即 IR
 
-每个 p-* 组件经 `toComponentIR` 产出 **C-IR 语义节点**：`tag → semantic`（如 `p-grid → layout.grid`）+ props + children。渲染后端消费 **semantic 字段**而非标签字符串——这正是「后端按语义实现」的落点（128 原语 SSOT 见 [PRIMITIVE_CATALOG](/docs/framework/22-architecture)）。
+每个 p-* 组件经 `toComponentIR` 产出 **C-IR 语义节点**：`tag → semantic`（如 `p-grid → layout.grid`）+ props + children。渲染后端消费 **semantic 字段**而非标签字符串——这正是「后端按语义实现」的落点（136 原语 SSOT 见 [PRIMITIVE_CATALOG](/docs/framework/22-architecture)）。
 
 ## 组件审计
 

@@ -1,6 +1,8 @@
 // packages/component-ir/src/primitives.ts
-// ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——128 原语唯一事实源（SSOT）
-//   6 大类：layout(12) / ui(18) / shell(10) / gesture(10) / capability(50) / engineering(28)
+// ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——136 原语唯一事实源（SSOT）
+//   6 大类：layout(14) / ui(21) / shell(13) / gesture(10) / capability(50) / engineering(28)
+//   ★#405 语义登记批：+8 planned（layout.aspect/zone + ui.loading/scale/skeleton + shell.mask/popup/toolbar）
+//     + engineering.error-boundary 组件形态补登（E8 加 tag，总数不变）——src/components 59 组件全部入图
 //   ★闭环 IR 设计：本清单是「语义全集」的唯一来源——
 //     · SEMANTIC_ENUM（C-IR 合法语义）⊇ 本清单组件原语（layout/ui/shell + gesture 组件 + engineering 组件）
 //     · TAG_SEMANTIC_MAP（p-* 标签 → 语义）与本清单 tag 条目逐条对齐
@@ -46,6 +48,9 @@ const LAYOUT: PrimitiveDef[] = [
   { id: 'L10', kind: 'layout', semantic: 'layout.scroll', tag: 'p-scroll', props: ['axis', 'paging', 'refresh', 'indicator'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
   { id: 'L11', kind: 'layout', semantic: 'layout.virtual-list', tag: 'p-virtual-list', props: ['itemSize', 'buffer', 'direction'], mpEquiv: '<scroll-view> + 手动回收', tier: 'L1', status: 'implemented' },
   { id: 'L12', kind: 'layout', semantic: 'layout.masonry', tag: 'p-masonry', props: ['colCount', 'gap'], mpEquiv: '第三方瀑布流', tier: 'L1', status: 'implemented' },
+  // ★#405 语义登记批：Fluid 体系剩余组件（语义层待多端映射 → planned L2——G-31.4 不足 3 端降级）
+  { id: 'L13', kind: 'layout', semantic: 'layout.aspect', tag: 'p-aspect', props: ['ratio', 'maxWidth'], mpEquiv: '无（纵横比容器）', tier: 'L2', status: 'planned' },
+  { id: 'L14', kind: 'layout', semantic: 'layout.zone', tag: 'p-zone', props: ['designWidth'], mpEquiv: '无（容器断点分区）', tier: 'L2', status: 'planned' },
 ]
 
 /** G-32 §4 ② 基础 UI 原语（18）——视图/内容 + 输入/表单 */
@@ -68,6 +73,10 @@ const UI: PrimitiveDef[] = [
   { id: 'U16', kind: 'ui', semantic: 'ui.slider', tag: 'p-slider', props: ['min', 'max', 'step', 'range'], mpEquiv: '<slider>', tier: 'L1', status: 'implemented' },
   { id: 'U17', kind: 'ui', semantic: 'ui.picker', tag: 'p-picker', props: ['mode', 'start', 'end'], mpEquiv: '<picker>', tier: 'L1', status: 'implemented' },
   { id: 'U18', kind: 'ui', semantic: 'ui.form', tag: 'p-form', props: ['model', 'rules', 'layout'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
+  // ★#405 语义登记批：反馈/状态类组件
+  { id: 'U19', kind: 'ui', semantic: 'ui.loading', tag: 'p-loading', props: ['size', 'text'], mpEquiv: 'wx.showLoading 部分', tier: 'L2', status: 'planned' },
+  { id: 'U20', kind: 'ui', semantic: 'ui.scale', tag: 'p-scale', props: ['level', 'density', 'baseSize'], mpEquiv: '无（无障碍档位）', tier: 'L2', status: 'planned' },
+  { id: 'U21', kind: 'ui', semantic: 'ui.skeleton', tag: 'p-skeleton', props: ['rows', 'avatar', 'animated'], mpEquiv: '无', tier: 'L2', status: 'planned' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */
@@ -82,6 +91,10 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S8', kind: 'shell', semantic: 'shell.toast', tag: 'p-toast', props: ['message', 'duration', 'type'], mpEquiv: 'wx.showToast', tier: 'L1', status: 'planned' },
   { id: 'S9', kind: 'shell', semantic: 'shell.action-sheet', tag: 'p-action-sheet', props: ['actions', 'cancel'], mpEquiv: 'wx.showActionSheet', tier: 'L1', status: 'implemented' },
   { id: 'S10', kind: 'shell', semantic: 'layout.split', tag: 'p-split', props: ['breakpoint', 'ratio', 'collapse'], mpEquiv: '无（分栏布局）', tier: 'L1', status: 'implemented' }, // ★已落地绑定：分栏语义由 layout.split 承载（G-32 文档为 shell.split——机器事实以实现为准）
+  // ★#405 语义登记批：弹层/工具栏组件
+  { id: 'S11', kind: 'shell', semantic: 'shell.mask', tag: 'p-mask', props: ['visible', 'transparent'], mpEquiv: '组合（遮罩层）', tier: 'L2', status: 'planned' },
+  { id: 'S12', kind: 'shell', semantic: 'shell.popup', tag: 'p-popup', props: ['position', 'round', 'overlay'], mpEquiv: '组合（弹层）', tier: 'L2', status: 'planned' },
+  { id: 'S13', kind: 'shell', semantic: 'shell.toolbar', tag: 'p-toolbar', props: ['items', 'itemWidth', 'moreWidth'], mpEquiv: '无（溢出折叠）', tier: 'L2', status: 'planned' },
 ]
 
 /** G-32 §6 ④ 交互/手势原语 Gesture（10）——手势是声明式约束（v-gesture:* 指令 + 组件 + Hook） */
@@ -170,7 +183,7 @@ const ENGINEERING: PrimitiveDef[] = [
   { id: 'E5', kind: 'engineering', semantic: 'engineering.provide-inject', api: 'useProvide()/useInject()', mpEquiv: '无', tier: 'L1', status: 'planned' },
   { id: 'E6', kind: 'engineering', semantic: 'engineering.lifecycle', api: 'useLifecycle()', mpEquiv: 'onLoad/onShow/onHide/onUnload', tier: 'L1', status: 'planned' },
   { id: 'E7', kind: 'engineering', semantic: 'engineering.ready', api: 'useReady()', mpEquiv: 'onReady', tier: 'L1', status: 'planned' },
-  { id: 'E8', kind: 'engineering', semantic: 'engineering.error-boundary', api: 'useErrorBoundary()', mpEquiv: 'onError', tier: 'L1', status: 'planned' },
+  { id: 'E8', kind: 'engineering', semantic: 'engineering.error-boundary', api: 'useErrorBoundary()', tag: 'p-error-boundary', mpEquiv: 'onError', tier: 'L1', status: 'planned' }, // ★#405：组件形态补登（双形态：Hook + p- 标签）
   { id: 'E9', kind: 'engineering', semantic: 'engineering.page-param', api: 'usePageParam()', mpEquiv: 'onLoad(options)', tier: 'L1', status: 'planned' },
   { id: 'E10', kind: 'engineering', semantic: 'engineering.route', api: 'useRoute()', mpEquiv: 'getCurrentPages()', tier: 'L1', status: 'planned' },
   { id: 'E11', kind: 'engineering', semantic: 'engineering.router-push', api: 'router.push()', mpEquiv: 'wx.navigateTo', tier: 'L1', status: 'planned' },
@@ -223,10 +236,10 @@ export function primitiveByTag(tag: string): PrimitiveDef | undefined {
   return PRIMITIVE_CATALOG.find((p) => p.tag === tag)
 }
 
-/** 清单自检：128 项 / id 唯一 / semantic 唯一 / 编号连续 */
+/** 清单自检：136 项 / id 唯一 / semantic 唯一 / 编号连续 */
 export function checkPrimitiveCatalog(): string[] {
   const errors: string[] = []
-  if (PRIMITIVE_CATALOG.length !== 128) errors.push(`清单长度 ${PRIMITIVE_CATALOG.length} ≠ 128`)
+  if (PRIMITIVE_CATALOG.length !== 136) errors.push(`清单长度 ${PRIMITIVE_CATALOG.length} ≠ 136`)
   const ids = new Set(PRIMITIVE_CATALOG.map((p) => p.id))
   if (ids.size !== PRIMITIVE_CATALOG.length) errors.push('id 重复')
   const sems = new Set(PRIMITIVE_CATALOG.map((p) => p.semantic))

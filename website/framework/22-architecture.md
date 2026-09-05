@@ -16,7 +16,7 @@ Proteus 的架构只有一个母题：**不绑定**。「不绑定任何单一�
 
 | 维度（G 系列） | 语义层接口（框架定义） | 后端 SPI（可插拔实现） | 状态 |
 |---|---|---|---|
-| 平台 API（G-31/32） | p-* 语义组件 + 128 原语 SSOT + 50 Capability Hook | 各端语义实现；小程序组件集 = Layer 1 兼容层 | ✅ |
+| 平台 API（G-31/32） | p-* 语义组件 + 136 原语 SSOT + 50 Capability Hook | 各端语义实现；小程序组件集 = Layer 1 兼容层 | ✅ |
 | 渲染引擎（G-27/37） | VNode / Component IR / LayoutConstraint IR | RenderBackend：VueDom / Native×3 / Flutter / Headless | ✅ |
 | 编译器（G-29/38） | CompilerIR：`SourceFile → ProgramIR → IRModule` | CompilerBackend：Node ✅ / Rust ✅ / WASM | 🟡 |
 | 柔性布局（G-22） | p-fluid / p-grid / p-stack / p-fit / p-adaptive 声明式原语 | `@proteus-vue/fluid` + FLD001-013 门禁 | ✅ |

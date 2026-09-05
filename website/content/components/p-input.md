@@ -1,7 +1,7 @@
 ---
 title: p-input
 group: 内容与表单
-order: 1010
+order: 1009
 ---
 
 # p-input

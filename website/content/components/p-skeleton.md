@@ -1,7 +1,7 @@
 ---
 title: p-skeleton
 group: 内容与表单
-order: 1021
+order: 1019
 ---
 
 # p-skeleton
@@ -12,7 +12,7 @@ order: 1021
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| — | 内容与表单 | — |
+| ui.skeleton | 内容与表单 | — |
 
 ## 兼容进度
 

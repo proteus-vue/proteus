@@ -29,7 +29,7 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## 内容与表单（26）
+## 内容与表单（24）
 
 | 组件 | Props | Events |
 |---|---|---|
@@ -37,7 +37,6 @@ order: 0
 | [p-button](/docs/component/p-button) | 5 | 1 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 3 | 0 |
-| [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
@@ -45,7 +44,6 @@ order: 0
 | [p-input](/docs/component/p-input) | 8 | 4 |
 | [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
-| [p-mask](/docs/component/p-mask) | 6 | 1 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
 | [p-picker](/docs/component/p-picker) | 4 | 0 |
@@ -60,12 +58,13 @@ order: 0
 | [p-text](/docs/component/p-text) | 4 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 7 | 4 |
 
-## 页面外壳（12）
+## 页面外壳（13）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-action-sheet](/docs/component/p-action-sheet) | 3 | 2 |
 | [p-drawer](/docs/component/p-drawer) | 4 | 0 |
+| [p-mask](/docs/component/p-mask) | 6 | 1 |
 | [p-modal](/docs/component/p-modal) | 8 | 1 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |
 | [p-page](/docs/component/p-page) | 3 | 0 |
@@ -84,10 +83,11 @@ order: 0
 | [p-draggable](/docs/component/p-draggable) | 2 | 2 |
 | [p-scrollable](/docs/component/p-scrollable) | 5 | 2 |
 
-## 工程（3）
+## 工程（4）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-animate](/docs/component/p-animate) | 4 | 0 |
+| [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
 | [p-router-link](/docs/component/p-router-link) | 3 | 1 |
 | [p-transition](/docs/component/p-transition) | 4 | 0 |

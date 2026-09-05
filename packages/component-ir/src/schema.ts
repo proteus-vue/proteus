@@ -35,6 +35,9 @@ export const SEMANTIC_ENUM = [
   'layout.split',
   'layout.safe',
   'layout.sidebar',
+  // ★#405 语义登记批：组件库扩展组件（Fluid S1-S4 + 工程兜底，语义层待 L2 落地——G-31.4 降级 planned）
+  'layout.aspect',
+  'layout.zone',
   // —— 基础 UI 原语（G-32 ② UI 18 + 既有按钮）——
   'ui.text',
   'ui.heading',
@@ -58,6 +61,10 @@ export const SEMANTIC_ENUM = [
   // ★G-31 B4：既有组件对齐（p-list-view/p-nav-bar）
   'ui.list',
   'ui.nav',
+  // ★#405 语义登记批：反馈/状态类组件
+  'ui.loading',
+  'ui.scale',
+  'ui.skeleton',
   // —— 容器/导航原语（G-32 ③ Shell 10）——
   'shell.page',
   'shell.nav',
@@ -68,13 +75,18 @@ export const SEMANTIC_ENUM = [
   'shell.popover',
   'shell.toast',
   'shell.action-sheet',
+  // ★#405 语义登记批：弹层/工具栏组件
+  'shell.mask',
+  'shell.popup',
+  'shell.toolbar',
   // —— 交互/手势原语（G-32 ④ Gesture——组件形态 2 个；v-gesture: 指令归绑定层不产生 C-IR 节点）——
   'gesture.draggable',
   'gesture.scrollable',
-  // —— 工程原语（G-32 ⑥ Engineering——组件形态 3 个；Hook/路由方法归 API 层）——
+  // —— 工程原语（G-32 ⑥ Engineering——组件形态 3 个 + ★#405 错误兑底；Hook/路由方法归 API 层不产生 C-IR 节点）——
   'engineering.router-link',
   'engineering.transition',
   'engineering.animate',
+  'engineering.error-boundary',
   // —— 能力入口（G-28 组件化：p-* 能力入口组件；useXxx Hook 归 API 层不产生 C-IR 节点）——
   'capability.scan-qr',
   'capability.pick-photo',
@@ -163,4 +175,16 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   // ★G-31 B4 Fluid 体系扩展语义（有明确系统原生对应——原则 #10.8）
   'p-safe': 'layout.safe',
   'p-sidebar': 'layout.sidebar',
+  // ★#405 语义登记批：剩余 10 组件全量入图（EXTRA_KIND 文档兑底退役）——
+  //   9 个新语义（catalog planned L2：语义层待多端映射）+ p-scroll-view 复用 layout.scroll（p-view 先例）
+  'p-aspect': 'layout.aspect',
+  'p-zone': 'layout.zone',
+  'p-loading': 'ui.loading',
+  'p-scale': 'ui.scale',
+  'p-skeleton': 'ui.skeleton',
+  'p-mask': 'shell.mask',
+  'p-popup': 'shell.popup',
+  'p-toolbar': 'shell.toolbar',
+  'p-scroll-view': 'layout.scroll', // 滚动容器 = p-scroll 角色
+  'p-error-boundary': 'engineering.error-boundary', // E8 原语组件形态（useErrorBoundary API 形态并存）
 }
