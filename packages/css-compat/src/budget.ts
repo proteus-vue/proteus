@@ -4,6 +4,8 @@
 export interface CssBudgetMetric {
   key: string
   label: string
+  /** ★#485 英文指标名变体（必填；缺省回退中文） */
+  labelEn?: string
   /** 上限（≤）；semanticRatio 为下限（≥） */
   limit: number
   direction: 'max' | 'min'
@@ -11,12 +13,48 @@ export interface CssBudgetMetric {
 
 /** 预算指标表（10 §一） */
 export const CSS_BUDGETS: CssBudgetMetric[] = [
-  { key: 'bundleCssBytes', label: '全量样式字节数 (gzip)', limit: 60_000, direction: 'max' },
-  { key: 'criticalCssBytes', label: '首屏关键 CSS 字节数', limit: 14_000, direction: 'max' },
-  { key: 'styleIRObjects', label: 'Style IR 运行时对象数', limit: 1500, direction: 'max' },
-  { key: 'selectors', label: '选择器数量（编译前）', limit: 800, direction: 'max' },
-  { key: 'semanticRatio', label: '语义组件占比', limit: 0.7, direction: 'min' },
-  { key: 'forbiddenCount', label: '--strict-css 违规（CSS001-007）', limit: 0, direction: 'max' },
+  {
+    key: 'bundleCssBytes',
+    label: '全量样式字节数 (gzip)',
+    labelEn: 'Total style bytes (gzip)',
+    limit: 60_000,
+    direction: 'max',
+  },
+  {
+    key: 'criticalCssBytes',
+    label: '首屏关键 CSS 字节数',
+    labelEn: 'Above-the-fold critical CSS bytes',
+    limit: 14_000,
+    direction: 'max',
+  },
+  {
+    key: 'styleIRObjects',
+    label: 'Style IR 运行时对象数',
+    labelEn: 'Style IR runtime objects',
+    limit: 1500,
+    direction: 'max',
+  },
+  {
+    key: 'selectors',
+    label: '选择器数量（编译前）',
+    labelEn: 'Selector count (pre-compile)',
+    limit: 800,
+    direction: 'max',
+  },
+  {
+    key: 'semanticRatio',
+    label: '语义组件占比',
+    labelEn: 'Semantic component ratio',
+    limit: 0.7,
+    direction: 'min',
+  },
+  {
+    key: 'forbiddenCount',
+    label: '--strict-css 违规（CSS001-007）',
+    labelEn: '--strict-css violations (CSS001-007)',
+    limit: 0,
+    direction: 'max',
+  },
 ]
 
 /** 全局聚合报告（10 §四 check-css-report 输入；CLI 聚合多文件产出） */

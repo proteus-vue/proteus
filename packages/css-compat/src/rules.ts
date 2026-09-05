@@ -7,9 +7,13 @@ import type { CssViolation, StrictCssOptions } from './types'
 export interface CssRule {
   code: string
   name: string
+  /** ★#485 英文规则名变体（必填——官网 EN css-compat 页消费；缺省回退中文） */
+  nameEn?: string
   /** strict 模式级别（02 表） */
   severity: 'error' | 'warn'
   description: string
+  /** ★#485 英文说明变体（必填；缺省回退中文） */
+  descriptionEn?: string
   fixable: boolean
   /** 选择器类规则：返回违规（含 selector 定位） */
   checkSelector?: (selector: string, opts: Required<StrictCssOptions>) => string | null
@@ -68,16 +72,20 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS001',
     name: 'float 禁止',
+    nameEn: 'float forbidden',
     severity: 'error',
     description: 'float 在 Skyline/原生端无对应，五端无法统一',
+    descriptionEn: 'float has no equivalent on Skyline/native renderers — cannot unify across all five targets',
     fixable: false,
     checkDeclaration: (prop) => (prop === 'float' ? '使用 float：五端无法统一（Skyline/原生端不支持）' : null),
   },
   {
     code: 'CSS002',
     name: 'display: inline 禁止',
+    nameEn: 'display: inline forbidden',
     severity: 'error',
     description: 'inline/inline-block 仅 Web 语义（文本内嵌套除外）',
+    descriptionEn: 'inline/inline-block is Web-only semantics (except nesting inside text)',
     fixable: false,
     checkDeclaration: (prop, value) =>
       prop === 'display' && /^inline(-block)?$/.test(value.trim())
@@ -87,24 +95,30 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS003',
     name: '通用选择器禁止',
+    nameEn: 'Universal selector forbidden',
     severity: 'error',
     description: '* 在 Skyline/原生端无选择器概念',
+    descriptionEn: 'No selector concept for * on Skyline/native renderers',
     fixable: false,
     checkSelector: (selector) => (UNIVERSAL_SELECTOR_RE.test(selector) ? '通用选择器 *：Skyline/原生端不支持' : null),
   },
   {
     code: 'CSS004',
     name: '属性选择器禁止',
+    nameEn: 'Attribute selector forbidden',
     severity: 'error',
     description: '[attr] 在 Skyline/原生端无对应',
+    descriptionEn: 'No equivalent for [attr] on Skyline/native renderers',
     fixable: false,
     checkSelector: (selector) => (selector.includes('[') ? '属性选择器 [attr]：Skyline/原生端不支持（用类名 + 变体）' : null),
   },
   {
     code: 'CSS005',
     name: '元素选择器禁止',
+    nameEn: 'Element selector forbidden',
     severity: 'error',
     description: 'div{} / span{} 等元素选择器依赖 UA 样式，原生端无',
+    descriptionEn: 'Element selectors such as div{} / span{} rely on UA styles, which native renderers lack',
     fixable: false,
     checkSelector: (selector) => {
       // ★exec 而非 match：带 g 标志的 match 不返回捕获组（m[2] 拿不到标签名）
@@ -115,8 +129,10 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS006',
     name: '深层后代组合禁止',
+    nameEn: 'Deep descendant combinator forbidden',
     severity: 'error',
     description: '超过 2 级后代/子代组合（.a .b .c）',
+    descriptionEn: 'More than 2 levels of descendant/child combinators (.a .b .c)',
     fixable: false,
     checkSelector: (selector) => {
       const depth = countCascadeDepth(selector)
@@ -126,16 +142,20 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS007',
     name: 'z-index 依赖 stacking context',
+    nameEn: 'z-index depends on stacking context',
     severity: 'warn',
     description: '跨父级 stacking 无法五端统一（B1 保守提示，精确判定需 IR 上下文）',
+    descriptionEn: 'Cross-parent stacking contexts cannot be unified across all five targets (B1 conservative hint — precise judgement needs IR context)',
     fixable: false,
     checkDeclaration: (prop) => (prop === 'z-index' ? 'z-index 依赖 stacking context：跨父级无法五端统一（B1 保守提示，精确判定需 IR 上下文）' : null),
   },
   {
     code: 'CSS008',
     name: 'calc()/vh/vw 需编译期重写',
+    nameEn: 'calc()/vh/vw need compile-time rewriting',
     severity: 'error',
     description: 'ArkUI 早期不支持 calc；vh/vw 键盘弹出不收缩',
+    descriptionEn: 'Early ArkUI lacks calc() support; vh/vw do not shrink when the keyboard pops up',
     fixable: true,
     checkDeclaration: (prop, value) => {
       if (CALC_RE.test(value)) return 'calc() 需编译期求值/拆分（简单数值可 --fix 折叠；含百分比走 <p-* 布局语义>）'
@@ -147,16 +167,20 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS009',
     name: '裸 backdrop-filter 禁止',
+    nameEn: 'Bare backdrop-filter forbidden',
     severity: 'error',
     description: '必须走 <p-glass> 语义组件',
+    descriptionEn: 'Must go through the <p-glass> semantic component',
     fixable: true,
     checkDeclaration: (prop) => (prop === 'backdrop-filter' ? '裸 backdrop-filter：必须走 <p-glass blur="…"> 语义组件（--fix 仅提示，需改模板）' : null),
   },
   {
     code: 'CSS010',
     name: ':nth-child 复杂表达式',
+    nameEn: 'Complex :nth-child expressions',
     severity: 'warn',
     description: '仅 :first/:last 形态可跨端（B2 展开）',
+    descriptionEn: 'Only the :first/:last forms are cross-platform (B2 expansion)',
     fixable: false,
     checkSelector: (selector) => {
       const m = selector.match(/:nth-child\(([^)]*)\)/)
@@ -168,8 +192,10 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS011',
     name: 'box-shadow rgba 需 ARGB 重写',
+    nameEn: 'box-shadow rgba needs ARGB rewriting',
     severity: 'warn',
     description: 'shadow 高级参数各端吃 ARGB',
+    descriptionEn: 'Advanced shadow parameters are consumed as ARGB on every target',
     fixable: true,
     checkDeclaration: (prop, value) =>
       prop === 'box-shadow' && /rgba?\(/i.test(value) ? 'box-shadow 含 rgba：各端 shadow API 吃 ARGB（--fix 转 #RRGGBBAA）' : null,
@@ -177,8 +203,10 @@ export const CSS_RULES: CssRule[] = [
   {
     code: 'CSS012',
     name: '@media 非白名单',
+    nameEn: 'Non-whitelisted @media',
     severity: 'warn',
     description: '仅 dark + 断点预设（sm/md/lg）',
+    descriptionEn: 'Only dark + breakpoint presets (sm/md/lg)',
     fixable: false,
     checkAtRule: (params, opts) =>
       isMediaWhitelisted(params, opts.mediaWhitelist) ? null : `@media(${params.trim()}) 非白名单（允许：${opts.mediaWhitelist.join(', ')}）——用 <p-dark>/<p-breakpoint> 语义组件`,
