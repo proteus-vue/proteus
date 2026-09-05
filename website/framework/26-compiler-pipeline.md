@@ -1,6 +1,6 @@
 ---
 title: 编译管线总览
-order: 4
+order: 5
 group: 编译期
 ---
 

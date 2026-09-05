@@ -1,6 +1,6 @@
 ---
 title: 状态管理四端工厂
-order: 24
+order: 33
 group: 数据与状态
 ---
 

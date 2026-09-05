@@ -1,6 +1,6 @@
 ---
 title: 分包与按需注入
-order: 30
+order: 32
 group: 基础能力
 ---
 

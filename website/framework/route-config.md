@@ -1,6 +1,6 @@
 ---
 title: `<route>` 配置参考
-order: 9
+order: 10
 group: 编译期
 ---
 

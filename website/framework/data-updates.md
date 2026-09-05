@@ -1,6 +1,6 @@
 ---
 title: 数据更新策略
-order: 25
+order: 34
 group: 数据与状态
 ---
 
