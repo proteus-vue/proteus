@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { GATES, findGate, formatGateList, runGate } from '../packages/cli/src/gate'
+import { GATES, findGate, formatGateList, runGate, gateUsages, GATE_COMMAND_HELP } from '../packages/cli/src/gate'
+import { HELP_GROUPS } from '../packages/cli/src/args'
 
 describe('Gate 注册表（★#453 单一来源）', () => {
   it('全量登记：两 preset + 专项/框架族齐全（散落命令收敛目录）', () => {
@@ -38,8 +39,20 @@ describe('Gate 注册表（★#453 单一来源）', () => {
 
   it('#454 专项全部接线（○ 仅剩写型/诊断/多旗标工具）', () => {
     const notWired = GATES.filter((g) => !g.run).map((g) => g.id)
-    // 写型（manifest/module-duplicates 产物）/ 诊断（health）/ 多旗标（conformance）保持独立命令形态
-    expect(notWired.sort()).toEqual(['capabilities-manifest', 'conformance', 'health', 'module-duplicates'])
+    // 写型（manifest/module-duplicates 产物）/ 诊断（health）/ 多旗标（conformance/audit-module/host-push）保持独立命令形态
+    expect(notWired.sort()).toEqual(['audit-module', 'capabilities-manifest', 'conformance', 'health', 'host-push', 'module-duplicates'])
+  })
+
+  it('B4-lite：HELP「检查与门禁」组与 GATES 目录 usage 集一致（双目录防漂移守卫）', () => {
+    const group = HELP_GROUPS.find((g) => g.title === '检查与门禁')
+    expect(group).toBeTruthy()
+    const helpUsages = group!.entries.map((e) => e.usage)
+    const gateMeta = GATE_COMMAND_HELP.usage // gate 命令本身非门禁——守卫排除
+    const registry = new Set(gateUsages())
+    for (const u of helpUsages) {
+      if (u !== gateMeta) expect(registry.has(u), `HELP 独有（注册表漏录）：${u}`).toBe(true)
+    }
+    for (const u of registry) expect(helpUsages.includes(u), `注册表独有（HELP 漏录）：${u}`).toBe(true)
   })
 })
 

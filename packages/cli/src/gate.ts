@@ -181,6 +181,13 @@ export const GATES: GateInfo[] = [
       }, 'module'),
   },
   {
+    id: 'audit-module',
+    group: '专项检查',
+    scope: 'project',
+    usage: 'proteus audit module [root] [--dist <dir>] [--graph-json <path> | --no-graph-json]',
+    desc: '★模块审计（M8.6 硬卡）：契约校验 + 图谱（环/重名/版本冲突）+ 可选产物（--dist 分包体积/重复）\n      --dist         产物目录（分包体积阈值 + 去重检测）\n      --graph-json   落盘 module-graph.json（缺省 .proteus/module-graph.json）',
+  },
+  {
     id: 'module-duplicates',
     group: '专项检查',
     scope: 'project',
@@ -270,6 +277,13 @@ export const GATES: GateInfo[] = [
       }, 'components'),
   },
   {
+    id: 'host-push',
+    group: '专项检查',
+    scope: 'project',
+    usage: 'proteus host push <module-dir>',
+    desc: '★G-45 B3 调试基座：插件模块前置校验（proteus.plugin.json 完整性/签名 sig-*/conformance 覆盖率）\n      + push 信封生成（manifestHash/bundleHash——完整性）',
+  },
+  {
     id: 'conformance',
     group: '框架自检',
     scope: 'framework',
@@ -281,6 +295,17 @@ export const GATES: GateInfo[] = [
 /** 可 run 的门禁（已接线执行器） */
 export function findGate(id: string): GateInfo | undefined {
   return GATES.find((g) => g.id === id)
+}
+
+/** 注册表 usage 集合（★#454 B4-lite：与 HELP「检查与门禁」组一致性守卫用） */
+export function gateUsages(): string[] {
+  return GATES.map((g) => g.usage)
+}
+
+/** 帮助文本入口（HELP「检查与门禁」组的 gate 命令元条目——一致性守卫排除项） */
+export const GATE_COMMAND_HELP = {
+  usage: 'proteus gate ls [--group=<族>] | gate run <id|preset> [dir]',
+  desc: '★统一门禁系统（★#453/#454 Gate 注册表单一来源）：ls = 全量门禁目录；run = 统一执行（● 已接线 / ○ 经独立命令）',
 }
 
 /** ★runGate：执行单个门禁/preset（root = 工程/目录根） */
