@@ -116,6 +116,28 @@ function parseEmits(src) {
   return [...new Set(names)]
 }
 
+// ★组件 tab 重构：提取组件源码头部的说明注释（「是做什么的」）
+// 形态：<!-- <路径> —— <短描述>（批次）\n<设计注记行> -->
+function extractComponentDesc(src) {
+  const m = src.match(/^<!--[\s\S]*?-->/)
+  if (!m) return { short: '', notes: [] }
+  const lines = m[0]
+    .replace(/^<!--/, '')
+    .replace(/-->$/, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  // 首行：路径 —— 短描述（批次）
+  const first = lines[0] ?? ''
+  let short = first
+  const dash = first.indexOf('——')
+  if (dash >= 0) short = first.slice(dash + 2).trim()
+  // 剥尾部批次括号（内部里程碑编号不对外）+ 剥首部集数编号（E20 等内部序号，与能力页剥 C\d+ 同理）
+  short = short.replace(/（[^）]*）\s*$/, '').trim().replace(/^E\d+\s+/, '')
+  const notes = lines.slice(1).filter((l) => !l.startsWith('src/components'))
+  return { short, notes }
+}
+
 // —— ① 组件页 ——
 function genComponents(ir) {
   fs.mkdirSync(OUT_COMP, { recursive: true })
@@ -147,12 +169,16 @@ function genComponents(ir) {
     const domain = KIND_DOMAIN[kind] ?? kind
     const mpRow = mpComp.find((i) => i.proteus === dir)
     const mpEquiv = mpRow ? `${mpRow.mp}（${mpRow.status}）` : '—'
+    // ★组件 tab 重构：h1 后输出组件自身说明（源码头注释 SSOT），替换千篇一律的通用语
+    const desc = extractComponentDesc(src)
     const lines = []
     lines.push('---')
     lines.push(`title: ${dir}`)
     lines.push('---')
     lines.push('')
     lines.push(`# ${dir}`)
+    lines.push('')
+    lines.push(desc.short || '通用语义组件（Layer 0），编译期映射到各端原生控件，业务零平台分支。')
     lines.push('')
     lines.push(`> 语义组件（Layer 0）· 域 **${domain}** · 编译期映射到各端原生控件，业务零平台分支。`)
     lines.push('')
@@ -174,6 +200,13 @@ function genComponents(ir) {
       lines.push('## Events')
       lines.push('')
       lines.push(emits.map((e) => `\`${e}\``).join(' · '))
+      lines.push('')
+    }
+    // ★组件 tab 重构：源码头注释的设计注记 → 「实现要点」段（无则跳过）
+    if (desc.notes.length) {
+      lines.push('## 实现要点')
+      lines.push('')
+      for (const n of desc.notes) lines.push(`- ${n}`)
       lines.push('')
     }
     lines.push('## 用法')
@@ -231,11 +264,28 @@ function genCapabilities(ir) {
   const hookDocs = {}
   const re = /\/\*\*([\s\S]*?)\*\/\s*\n\s*(use[A-Z]\w*|set[A-Z]\w*)\(/g
   let m
-  while ((m = re.exec(iface))) hookDocs[m[2]] = m[1].trim()
+  // ★能力页开头说明：接口 JSDoc 多为空，三级兜底——接口 JSDoc → hook 体行注释 → 桥方法 JSDoc（CapabilityBridge 逐方法都有）
+  const cleanDoc = (t) => t.split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
+  while ((m = re.exec(iface))) hookDocs[m[2]] = cleanDoc(m[1])
+  const hooksBody = apiSrc.slice(apiSrc.indexOf('export function createCapabilityHooks'))
+  const reLine = /\/\/\s*(.+?)\s*\n\s*(use[A-Z]\w*|set[A-Z]\w*):/g
+  while ((m = reLine.exec(hooksBody))) if (!hookDocs[m[2]]) hookDocs[m[2]] = m[1].trim()
+  const bridgeIface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityBridge'), apiSrc.indexOf('export interface CapabilityHooks'))
+  const bridgeDocs = {}
+  const reBridge = /\/\*\*([\s\S]*?)\*\/\s*\n\s*(\w+)\??\s*\(/g
+  while ((m = reBridge.exec(bridgeIface))) bridgeDocs[m[2]] = cleanDoc(m[1])
+  const keyHits = [...hooksBody.matchAll(/\b(use[A-Z]\w*|set[A-Z]\w*):/g)]
+  for (let k = 0; k < keyHits.length; k++) {
+    const hook = keyHits[k][1]
+    if (hookDocs[hook]) continue
+    const end = k + 1 < keyHits.length ? keyHits[k + 1].index : hooksBody.length
+    const bm = hooksBody.slice(keyHits[k].index, end).match(/bridge\.(\w+)\(/)
+    if (bm && bridgeDocs[bm[1]]) hookDocs[hook] = bridgeDocs[bm[1]].replace(/^C\d+\s+/, '')
+  }
   let ok = 0
   for (const c of caps) {
     const hook = c.api.replace('()', '')
-    const doc = hookDocs[hook] ?? ''
+    const doc = (hookDocs[hook] ?? '').replace(/^C\d+\s+/, '')
     const sigM = iface.match(new RegExp(`${hook}\\([^)]*\\):\\s*[^\\n]+`))
     const lines = []
     lines.push('---')
@@ -244,12 +294,12 @@ function genCapabilities(ir) {
     lines.push('')
     lines.push(`# ${hook}`)
     lines.push('')
-    lines.push(`> 能力原语 ${c.id} · \`${c.semantic}\` · 返回 \`${(c.props ?? [])[0] ?? 'Result<T>'}\` · **Hook 已实现**（API 就绪，双端桥见下表）`)
-    lines.push('')
     if (doc) {
       lines.push(doc)
       lines.push('')
     }
+    lines.push(`> 能力原语 ${c.id} · \`${c.semantic}\` · 返回 \`${(c.props ?? [])[0] ?? 'Result<T>'}\` · **Hook 已实现**（API 就绪，双端桥见下表）`)
+    lines.push('')
     lines.push('## 签名')
     lines.push('')
     lines.push('```ts')
@@ -270,20 +320,11 @@ function genCapabilities(ir) {
     lines.push('```ts')
     lines.push(`const res = await ${c.api}`)
     lines.push('')
-    lines.push("if (res.ok) {")
+    lines.push('if (res.ok) {')
     lines.push('  console.log(res.data)')
-    lines.push('} else if (res.error.code.endsWith(\'.unsupported\')) {')
+    lines.push("} else if (res.error.code.endsWith('.unsupported')) {")
     lines.push('  // 平台不支持 → 降级路径')
     lines.push('}')
-    lines.push('```')
-    lines.push('')
-    lines.push('## 用法')
-    lines.push('')
-    lines.push('```ts')
-    lines.push(`import { useAppConfig } from '@proteus-vue/api'`)
-    lines.push('')
-    lines.push(`const res = await ${c.api.replace(/^use/, 'use(').replace('()', '()')}`.replace(c.api, c.api))
-    lines.push('// 平台不支持 → Err 显式降级（不用 try/catch 也能处理）')
     lines.push('```')
     lines.push('')
     lines.push('<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')

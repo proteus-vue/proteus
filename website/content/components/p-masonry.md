@@ -4,6 +4,8 @@ title: p-masonry
 
 # p-masonry
 
+瀑布流
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,12 @@ title: p-masonry
 |---|---|---|---|
 | `colCount` | 列数（默认 2） | `Number` | `2` |
 | `gap` | 列与行间距 px | `Number` | `12` |
+
+## 实现要点
+
+- CSS columns 实现（col-count/column-gap + 子项 break-inside:avoid + 纵向 gap via CSS 变量）
+- 双端同源码：div → view；MP 安全（columns 未支持时退化为单列堆叠——朴素但正确 G-22.2）
+- ★踩坑：scoped style 内不写 v-bind()（compileVueSfc style 转换不处理）——gap 经 CSS 变量由根样式注入
 
 ## 用法
 

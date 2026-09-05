@@ -4,6 +4,8 @@ title: p-skeleton
 
 # p-skeleton
 
+骨架屏
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,12 @@ title: p-skeleton
 | `visible` | — | `Boolean` | `true` |
 | `avatar` | — | `Boolean` | `false` |
 | `lines` | — | `Array as any` | `() => [90, 70, 80]` |
+
+## 实现要点
+
+- 矩阵 10 业务组件：绑定加载态（:visible="loading"），不自带定时器（C4）
+- lines 为数组 prop（宽度百分比），规避 MP range v-for 不可用（wx:for 需数组）
+- shimmer 动画走 CSS keyframes（双端）
 
 ## 用法
 

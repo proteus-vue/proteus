@@ -4,6 +4,8 @@ title: p-grid
 
 # p-grid
 
+自适应网格
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,14 @@ title: p-grid
 |---|---|---|---|
 | `minColWidth` | 每列最小宽度（px）——列数自动求解 | `Number` | `160` |
 | `gap` | 列间距（px） | `Number` | `12` |
+
+## 实现要点
+
+- 只声明「每列最小宽度」+ 间距，列数自动：Web = CSS Grid repeat(auto-fill, minmax(minColWidth, 1fr))
+- （320px→1 / 768px→4 / 1440px→8 列；calcColumns 纯算法见 compiler/fluid-layout.ts）
+- 双端同源码：div → view（编译期映射）；MP webview 渲染支持 grid，Skyline 降级为普通容器
+- ★G-22.2 降级铁律「朴素但正确」：Web 端 CSS.supports 探测 grid 不支持 → flex-wrap 模拟 auto-fit
+- （MP 逻辑层无 CSS.supports → 假设支持 → 恒 grid 模式，渲染端自决降级）
 
 ## 用法
 

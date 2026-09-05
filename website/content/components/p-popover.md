@@ -4,6 +4,8 @@ title: p-popover
 
 # p-popover
 
+气泡浮层
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,12 @@ title: p-popover
 | `modelValue` | 显隐（v-model） | `Boolean` | `false` |
 | `trigger` | 触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click） | `String` | `'click'` |
 | `placement` | 位置：top / bottom / left / right | `String` | `'bottom'` |
+
+## 实现要点
+
+- trigger click/hover/focus + placement 位置（top/bottom/left/right）
+- ★B2/B4 薄壳：v-model 显隐受控 + 自绘定位（智能定位批次接入）
+- 双端同源码：div → view；MP 安全（遮罩点关闭，避 document 监听）
 
 ## 用法
 

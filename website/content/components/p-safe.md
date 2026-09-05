@@ -4,6 +4,8 @@ title: p-safe
 
 # p-safe
 
+安全区避让
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,14 @@ title: p-safe
 | `area` | 避让方向：top / bottom / left / right / horizontal / all（默认 top） | `String` | `'top'` |
 | `fold` | 折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭） | `Boolean` | `false` |
 | `fallback` | 兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底） | `Number` | `0` |
+
+## 实现要点
+
+- 只声明「避让方向」：Web = env(safe-area-inset-*)（前提 viewport-fit=cover）+ 折叠屏 hinge 避让
+- （display-mode: fold/span 时内容避开折叠区域 env(fold-left/fold-width)——把系统能力搬进框架，原则 #10）
+- 薄壳组件：displayMode 状态桥接 @proteus-vue/fluid（createDeviceEnv + resolveSafeAreaStyle 纯逻辑）
+- MP：Skyline 部分支持 env()；逻辑层无 matchMedia → displayMode 恒 standard → hinge 不生效（渲染端自决）
+- 与 App 端 SafeArea（G-09 safeAreaLayoutGuide/WindowInsets）同语义：开发者只写 <p-safe area="top">
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-aspect
 
 # p-aspect
 
+纵横比容器
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,12 @@ title: p-aspect
 |---|---|---|---|
 | `ratio` | 宽/高比（如 16/9 = 1.777；默认 1.777） | `Number` | `16 / 9` |
 | `maxWidth` | 最大宽度（px；0 = 不限） | `Number` | `0` |
+
+## 实现要点
+
+- 只声明「宽/高比」：Web = CSS aspect-ratio（Chrome 88+ 原生）；不支持 → padding-top hack 降级
+- （height:0 + paddingTop:1/ratio% + 子项绝对定位——全端 CSS2 技术「朴素但正确」，铁律 G-22.2）
+- MP：aspect-ratio Skyline 部分支持；逻辑层无 CSS.supports → 假设支持（渲染端自决）
 
 ## 用法
 

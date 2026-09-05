@@ -4,6 +4,8 @@ title: p-page
 
 # p-page
 
+页面根容器
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,12 @@ title: p-page
 | `title` | 页面标题（导航栏/文档标题语义声明） | `String` | `''` |
 | `statusBar` | 沉浸式状态栏（内容延伸至状态栏区域） | `Boolean` | `false` |
 | `pullRefresh` | 下拉刷新（页面级滚动接入批次使用） | `Boolean` | `false` |
+
+## 实现要点
+
+- 页面根 = route component（G-17）：title 语义 + statusBar 沉浸 + pullRefresh 声明
+- ★B2/B4 薄壳：内容插槽透传；title/statusBar/pullRefresh 为语义声明（宿主导航/滚动批次接入）
+- 双端同源码：div → view；MP 安全（无平台 API）
 
 ## 用法
 

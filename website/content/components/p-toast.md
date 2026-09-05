@@ -4,6 +4,8 @@ title: p-toast
 
 # p-toast
 
+轻提示
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -25,6 +27,11 @@ title: p-toast
 ## Events
 
 `close`
+
+## 实现要点
+
+- 矩阵 01 §8：text + duration 自动关闭（0 = 不自动关）+ enter 淡入；visible 驱动（B3 原语）
+- 转场：CSS animation；Worklet 自定义组件（避开原生 showToast 限制）标注 v0.6
 
 ## 用法
 

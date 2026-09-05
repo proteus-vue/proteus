@@ -4,6 +4,8 @@ title: p-media
 
 # p-media
 
+媒体统一入口
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -23,6 +25,12 @@ title: p-media
 | `muted` | 静音 | `Boolean` | `false` |
 | `width` | 宽 px（0=自适应） | `Number` | `0` |
 | `height` | 高 px（0=自适应） | `Number` | `0` |
+
+## 实现要点
+
+- kind image/video/audio/live 统一入口（消灭 video/audio 分离组件）
+- ★B2 Web-first：kind 决定元素（img/video/audio 显式 v-if——MP 编译器不支持动态标签）
+- 双端同源码；无平台 API（controls/autoplay/loop/muted 透传原生属性）
 
 ## 用法
 

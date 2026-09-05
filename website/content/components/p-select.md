@@ -4,6 +4,8 @@ title: p-select
 
 # p-select
 
+选择器 / 弹层型
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,12 @@ title: p-select
 | `placeholder` | 占位文本 | `String` | `'请选择'` |
 | `searchable` | 搜索（B2 占位声明——后续批次实现） | `Boolean` | `false` |
 | `cascader` | 级联（B2 占位声明——后续批次实现） | `Boolean` | `false` |
+
+## 实现要点
+
+- options[{value,label}] + multiple + searchable + cascader（B2 基础：单选/多选面板；searchable/cascader 后续批次）
+- ★B2 Web-first：自绘下拉面板（div）；MP 端映射 picker/弹层后续批次
+- 双端同源码；无平台 API（文档级监听禁——用遮罩点击关闭，对齐 p-drawer 模式）
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-action-sheet
 
 # p-action-sheet
 
+动作面板
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -21,6 +23,11 @@ title: p-action-sheet
 ## Events
 
 `select` · `cancel`
+
+## 实现要点
+
+- actions[{label,value?,color?}] + cancel + v-model 显隐 + select/cancel emit
+- 双端同源码：div → view；MP 安全（遮罩 + 面板；无平台 API）
 
 ## 用法
 

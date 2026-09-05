@@ -4,6 +4,8 @@ title: p-scale
 
 # p-scale
 
+动态字号/密度
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,12 @@ title: p-scale
 | `level` | 字号级别：0 小 / 1 标准 / 2 大 / 3 特大（无障碍档位） | `Number` | `1` |
 | `density` | 密度：compact（紧凑）/ regular / comfortable（宽松无障碍） | `String` | `'regular'` |
 | `baseSize` | 基准字号（px）——子项用 em 继承即随缩放 | `Number` | `16` |
+
+## 实现要点
+
+- 只声明「字号级别 + 密度」：容器 font-size = base × 级别倍率 × 全局字号缩放（var(--proteus-font-scale, 1)
+- 宿主/系统注入——折叠屏/平板密度适配），子项用 em 继承即随缩放；密度 → 行高 + --proteus-density-gap 间距 token
+- 纯逻辑在 @proteus-vue/fluid scale.ts（buildScaleStyle 字符串级可单测）；MP 安全：无类型标注
 
 ## 用法
 

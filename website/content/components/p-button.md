@@ -4,6 +4,8 @@ title: p-button
 
 # p-button
 
+按钮
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -23,6 +25,11 @@ title: p-button
 ## Events
 
 `click`
+
+## 实现要点
+
+- 矩阵 01 §7：disabled/loading 原生映射 + throttle 防重复点击（runtime 内置）
+- 双端同源码：button 原生透传（tag/passthrough）；@click → bindtap
 
 ## 用法
 

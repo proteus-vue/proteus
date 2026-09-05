@@ -4,6 +4,8 @@ title: p-zone
 
 # p-zone
 
+容器断点分区
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -15,6 +17,12 @@ title: p-zone
 | Prop | 说明 | 类型 | 默认值 |
 |---|---|---|---|
 | `designWidth` | 设计稿宽度（容器断点推导基准；缺省 375） | `Number` | `375` |
+
+## 实现要点
+
+- 容器断点（sm/md/lg/xl，按容器宽度非视口）→ 渲染对应命名槽（sm/md/lg/xl；缺省 xl 槽兜底）
+- 薄壳引用 @proteus-vue/fluid（createContainerQuery）
+- ★MP 安全：泛型 ref 降级（MP 下无 ResizeObserver → 恒 sm 槽）
 
 ## 用法
 

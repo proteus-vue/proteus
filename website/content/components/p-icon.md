@@ -4,6 +4,8 @@ title: p-icon
 
 # p-icon
 
+图标
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-icon
 | `size` | 尺寸 px | `Number` | `16` |
 | `color` | 颜色 | `String` | `'currentColor'` |
 | `spin` | 旋转动画 | `Boolean` | `false` |
+
+## 实现要点
+
+- 矢量优先：内置字形映射（unicode 自包含，零资源）；name/size/color/spin 约束
+- 双端同源码：span → text；MP 安全（纯文本字形 + 样式）
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-nav
 
 # p-nav
 
+导航栏
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,11 @@ title: p-nav
 |---|---|---|---|
 | `title` | 标题文本（插槽内容优先） | `String` | `''` |
 | `transparent` | 透明模式（随背景融合） | `Boolean` | `false` |
+
+## 实现要点
+
+- 声明式导航栏：title 居中 + left/right 插槽（返回/操作区）+ transparent 透明模式
+- 双端同源码：nav → view；MP 编译器映射原生导航（navigationStyle custom 场景）
 
 ## 用法
 

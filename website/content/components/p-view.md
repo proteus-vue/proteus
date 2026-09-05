@@ -4,6 +4,8 @@ title: p-view
 
 # p-view
 
+通用容器
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,11 @@ title: p-view
 | `pid` | — | `String` | `''` |
 | `disabled` | — | `Boolean` | `false` |
 | `ariaLabel` | — | `String` | `''` |
+
+## 实现要点
+
+- 矩阵 01 §1：display 统一 flex 纵向；box-sizing 统一 content-box（Skyline 默认，Web 侧对齐）
+- 双端同源码：div → view（编译期映射）；Web 原生 div + 插槽
 
 ## 用法
 

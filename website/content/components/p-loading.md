@@ -4,6 +4,8 @@ title: p-loading
 
 # p-loading
 
+加载中
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -19,6 +21,11 @@ title: p-loading
 | `ariaLabel` | — | `String` | `''` |
 | `visible` | — | `Boolean` | `false` |
 | `text` | — | `String` | `''` |
+
+## 实现要点
+
+- 矩阵 01 §8：visible + text + spinner（CSS 旋转动画）；不自动关闭（由页面控制）
+- 转场：CSS animation；Worklet 自定义组件标注 v0.6
 
 ## 用法
 

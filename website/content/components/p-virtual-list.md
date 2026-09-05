@@ -4,6 +4,8 @@ title: p-virtual-list
 
 # p-virtual-list
 
+虚拟化长列表
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,11 @@ title: p-virtual-list
 | `items` | 列表数据（渲染 item 数组） | `Array as () => unknown[]` | `() => []` |
 | `itemHeight` | 固定行高 px（虚拟化前提） | `Number` | `44` |
 | `height` | 可视区高度 px | `Number` | `400` |
+
+## 实现要点
+
+- 薄转发层（同 virtual-list 模式）：API 表面 items/itemHeight/height → p-list-view 单实现
+- 语义命名对齐 G-32（p-virtual-list）；旧标签 virtual-list 保留兼容
 
 ## 用法
 

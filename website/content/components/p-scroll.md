@@ -4,6 +4,8 @@ title: p-scroll
 
 # p-scroll
 
+显式滚动容器
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,12 @@ title: p-scroll
 | `paging` | 翻页吸附（能力约束——B2 仅声明） | `Boolean` | `false` |
 | `refresh` | 下拉刷新（能力约束——B2 仅声明） | `Boolean` | `false` |
 | `indicator` | 滚动指示器 | `Boolean` | `true` |
+
+## 实现要点
+
+- 仅当需「滚动」语义时使用（对齐 scroll-view）；axis 控制方向，CSS overflow 实现 Web 滚动
+- ★B2 范围：基础滚动容器（paging/refresh/indicator 为能力约束——随后续批次接入）
+- 双端同源码：div → view；Web overflow 滚动
 
 ## 用法
 

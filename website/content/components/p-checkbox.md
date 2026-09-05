@@ -4,6 +4,8 @@ title: p-checkbox
 
 # p-checkbox
 
+多选
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,11 @@ title: p-checkbox
 | `modelValue` | 选中态（受控 v-model） | `Boolean` | `false` |
 | `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` |
 | `disabled` | 禁用 | `Boolean` | `false` |
+
+## 实现要点
+
+- checked 受控（v-model）+ indeterminate 半选 + group 归一（v-model:group 数组）
+- ★简化：单选态 v-model（checked），group 数组态由父级持有（modelValue 数组时进入群选）
 
 ## 用法
 

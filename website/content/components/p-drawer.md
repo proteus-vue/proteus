@@ -4,6 +4,8 @@ title: p-drawer
 
 # p-drawer
 
+侧滑抽屉
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-drawer
 | `side` | 侧向：left / right | `String` | `'left'` |
 | `width` | 抽屉宽度 px | `Number` | `300` |
 | `overlay` | 遮罩（点击关闭） | `Boolean` | `true` |
+
+## 实现要点
+
+- open 受控（v-model:open ←→ modelValue）+ side 方向 + width + overlay 遮罩点击关闭
+- 双端同源码：div → view；CSS transform 滑入滑出（MP 安全）
 
 ## 用法
 

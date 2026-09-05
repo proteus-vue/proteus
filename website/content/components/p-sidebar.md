@@ -4,6 +4,8 @@ title: p-sidebar
 
 # p-sidebar
 
+自适应导航栏
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,14 @@ title: p-sidebar
 | `navWidth` | side-rail 模式导航栏宽度（px） | `Number` | `200` |
 | `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` |
 | `toggleLabel` | ★collapsed 模式切换条文案（#384） | `String` | `'导航'` |
+
+## 实现要点
+
+- 容器宽 < minSidebarWidth → 底部水平导航条（移动端主场景）；≥ → 左侧垂直侧栏（平板/车机/桌面）
+- 按容器而非视口求解（createContainerQuery——车机分屏/多窗口按自身容器）
+- ★车机：Arrow 方向键在导航项间移动焦点（d-pad 映射，Web onMounted 监听——MP 无真实 DOM 跳过）；
+- drive-mode / prefers-reduced-motion → no-motion class（CSS 禁用动效）
+- ★MP 安全：无 ResizeObserver → 恒 bottom-bar；焦点监听无 DOM → 跳过
 
 ## 用法
 

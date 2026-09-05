@@ -4,6 +4,8 @@ title: p-tabbar
 
 # p-tabbar
 
+底部标签栏
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,11 @@ title: p-tabbar
 ## Events
 
 `select`
+
+## 实现要点
+
+- tabs（{key,label,badge?,icon?}[]）+ active 受控（v-model:active）+ select emit
+- 双端同源码：nav → view；item 字段经方法取（MP 安全：避免数组泛型 TS18046）
 
 ## 用法
 

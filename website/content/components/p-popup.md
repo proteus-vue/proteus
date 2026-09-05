@@ -4,6 +4,8 @@ title: p-popup
 
 # p-popup
 
+弹层
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -26,6 +28,13 @@ title: p-popup
 ## Events
 
 `close`
+
+## 实现要点
+
+- 矩阵 01 §8：visible + position（bottom/center/top）+ close-on-mask + 转场动画
+- 转场：CSS animation（enter 自动播放 / leave 播完 emit close）——Worklet applyAnimatedStyle 标注 v0.6
+- 可见性驱动：watch(() => props.visible)（B3 原语：Web Vue watch / MP observers）
+- 双端同源码：view + fixed 定位；Skyline fixed 支持基础库 2.26+
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-radio
 
 # p-radio
 
+单选
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,12 @@ title: p-radio
 | `value` | 本项值 | `[String, Number]` | `''` |
 | `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` |
 | `disabled` | 禁用 | `Boolean` | `false` |
+
+## 实现要点
+
+- value 本项值 + group 当前选中值（父级持有）→ 命中即选中
+- ★B2 简形：value + group 受控；切换 emit('update:group', value)
+- 双端同源码；MP 安全（无平台 API）
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-scrollable
 
 # p-scrollable
 
+可滚动区域
+
 > 语义组件（Layer 0）· 域 **手势** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -23,6 +25,12 @@ title: p-scrollable
 ## Events
 
 `load-more` · `refresh`
+
+## 实现要点
+
+- 滚动容器 + bounce（弹性） + refresh（下拉刷新 emit）+ loadMore（触底加载 emit）
+- Web 实现：overflow 滚动 + scroll 事件判定（refresher 下拉后续批次接入原生手势）
+- 双端同源码：div → view；MP/原生 refresh/bounce 由平台滚动组件承接
 
 ## 用法
 

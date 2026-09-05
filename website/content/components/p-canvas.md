@@ -4,6 +4,8 @@ title: p-canvas
 
 # p-canvas
 
+画布
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,12 @@ title: p-canvas
 | `width` | CSS 宽 px（0=自适应） | `Number` | `300` |
 | `height` | CSS 高 px（0=自适应） | `Number` | `150` |
 | `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` |
+
+## 实现要点
+
+- engine 2d/webgl/skia + resolution 分辨率感知
+- ★B2 Web-first：标准 canvas 元素承载 + width/height（devicePixelRatio 缩放后续批次）；
+- 宿主上下文经 slots/ref 透出（帧渲染属能力批次）
 
 ## 用法
 

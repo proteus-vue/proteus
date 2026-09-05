@@ -4,6 +4,8 @@ title: p-list-view
 
 # p-list-view
 
+虚拟长列表
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -23,6 +25,15 @@ title: p-list-view
 | `bufferSize` | — | `Number` | `2 }, // 可视区外缓冲行数（平滑滚动的提前量）` |
 | `virtual` | — | `Boolean` | `true }, // 虚拟开关（false = 全量渲染，小列表省组件切片开销）` |
 | `lazy` | — | `Boolean` | `false }, // 懒挂载：首屏不渲染，首次滚动才计算` |
+
+## 实现要点
+
+- 矩阵 01 §5：items / item-key / virtual / lazy-mount / buffer-size / item-size 预估
+- 高性能设计：只渲染可视窗口（数据切片 + 顶部占位），万级数据渲染行数恒定；scroll 守卫：窗口未跨行跳过 setData（intra-row 滚动零更新）
+- items 变化（分页/加载更多）→ watch 重算窗口：Web 标准 Vue watch（全响应式）；MP 编译器 props 源 watch → WeChat observers
+- lazy：首屏不渲染，首次滚动才计算（列表在首屏外/多层嵌套时省首帧）；virtual=false：全量渲染（小列表省切片开销）
+- ★B4 事件归一：onScroll 用 eventScrollTop（MP e.detail.scrollTop / Web e.target.scrollTop）
+- ★注意：watch 回调必须花括号体（编译器仅支持 => { body }）；虚拟窗口必须搭配 scroll-view（Skyline 禁全局滚动）
 
 ## 用法
 

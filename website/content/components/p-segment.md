@@ -4,6 +4,8 @@ title: p-segment
 
 # p-segment
 
+分段控制器
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,11 @@ title: p-segment
 ## Events
 
 `select`
+
+## 实现要点
+
+- options[{label,value?}] + active 受控（v-model:active）+ select emit
+- 双端同源码：div → view；MP 安全（v-for + 方法取字段——S3 p-tabbar 惯例）
 
 ## 用法
 

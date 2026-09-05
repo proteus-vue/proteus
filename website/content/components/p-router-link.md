@@ -4,6 +4,8 @@ title: p-router-link
 
 # p-router-link
 
+声明式导航
+
 > 语义组件（Layer 0）· 域 **工程** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -21,6 +23,15 @@ title: p-router-link
 ## Events
 
 `navigate`
+
+## 实现要点
+
+- to：导航目标（路由名或路径——createRouterEngineering.push({ name|path }) 语义，E11）
+- replace：替换当前页（E12 语义）
+- switchTab：切 Tab 页（E14 语义）
+- 行为：点击 emit('navigate', { to, replace, switchTab })——父级用 createRouterEngineering（#320）响应；
+- 组件零平台依赖（不 import router、不碰 wx/document——审计合规）；web role="link" 可访问性
+- MP：@click → bindtap；对齐 p-radio defineEmits + emit 既有链路
 
 ## 用法
 

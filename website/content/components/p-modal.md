@@ -4,6 +4,8 @@ title: p-modal
 
 # p-modal
 
+弹窗
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -26,6 +28,15 @@ title: p-modal
 ## Events
 
 `formChange`
+
+## 实现要点
+
+- 一次声明：<p-modal v-model:visible p-adaptive="sheet(0,600) | dialog(600,840) | popover(840,∞)" :anchor="triggerRef">
+- 视口宽度 → 形态自动切换（手机 Sheet 底部滑入 / 平板 Dialog 居中 / 桌面 Popover 锚定 anchor——无 anchor 居中降级，03 §6）
+- ★width 覆盖：>0 时形态求解用指定宽度（预览/验证/测试不同窗口大小）；0 = 跟随视口（拖窗口实时 reflow）
+- 内部布局用 p-stack/p-grid 柔性原语（FLD010：禁硬编码固定宽度）；sheet 形态自动应用底部安全区（G-09 协同）
+- MP：逻辑层无 innerWidth → 形态恒首区间（sheet 兜底——手机主场景，渲染端自决）
+- 与 App 端 B3 原生容器（UISheet/BottomSheet/SideBarContainer）同语义
 
 ## 用法
 

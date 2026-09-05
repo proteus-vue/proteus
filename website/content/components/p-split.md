@@ -4,6 +4,8 @@ title: p-split
 
 # p-split
 
+自适应分栏
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,12 @@ title: p-split
 | `minSplitWidth` | 容器宽度达到此值 → 并排分栏（px；窄于此 → 堆叠） | `Number` | `640` |
 | `gap` | 分栏/堆叠间距（px） | `Number` | `16` |
 | `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` |
+
+## 实现要点
+
+- 容器宽度 < minSplitWidth → 堆叠（column）；≥ → 并排（row）——按容器而非视口求解
+- 薄壳引用 @proteus-vue/fluid（createContainerQuery 容器查询运行时）
+- ★MP 安全：泛型 ref 降级（MP 下无 ResizeObserver → 保持堆叠默认）；方法体 as 可剥
 
 ## 用法
 

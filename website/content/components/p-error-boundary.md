@@ -4,6 +4,8 @@ title: p-error-boundary
 
 # p-error-boundary
 
+错误兜底
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-error-boundary
 | `disabled` | — | `Boolean` | `false` |
 | `ariaLabel` | — | `String` | `''` |
 | `fallbackText` | — | `String` | `'页面出错了，请重试'` |
+
+## 实现要点
+
+- 矩阵 10：Vue errorCaptured 捕获后代错误（Web）；MP 端无 Vue 运行时 → onErrorCaptured 被编译器剥离，退化为透传容器（平台限制标注）
+- fallback：默认文案 or #fallback 具名插槽（插槽为 Web 能力，MP 端不触发错误态故不涉及）
 
 ## 用法
 

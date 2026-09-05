@@ -4,6 +4,8 @@ title: p-adaptive
 
 # p-adaptive
 
+容器形态自适应
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,13 @@ title: p-adaptive
 ## Events
 
 `formChange`
+
+## 实现要点
+
+- 只声明「形态区间」：容器宽度 → sheet/dialog/popover 自动切换（computeAdaptiveForm 求解，B1 纯逻辑）
+- Web 端形态层样式由 resolveAdaptiveFormStyle 提供（sheet 底部全宽 / dialog·popover 居中降级——03 §6 降级链）
+- ★visible 控制形态层渲染（v-model 风格）；MP：无 ResizeObserver → 形态恒首区间兜底（渲染端自决）
+- ★与 App 端 B3 原生容器（UISheet/BottomSheet/SideBarContainer）同语义：开发者只写形态区间
 
 ## 用法
 

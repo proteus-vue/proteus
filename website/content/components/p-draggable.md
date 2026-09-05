@@ -4,6 +4,8 @@ title: p-draggable
 
 # p-draggable
 
+可拖拽元素
+
 > 语义组件（Layer 0）· 域 **手势** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -20,6 +22,12 @@ title: p-draggable
 ## Events
 
 `drag` · `drop`
+
+## 实现要点
+
+- 基于 useGesture 的 pan 识别（Web Pointer Events）；ghost 半透明拖影 + snapToGrid 网格吸附 + drag/drop emit
+- 双端同源码：div → view；MP/原生端识别器映射后续批次（无手势 → 元素静态）
+- ★MP 安全：顶层函数调用 const（useGesture({...})）编译成运行时初始化会断——调用移入 onMounted（已验证模式）
 
 ## 用法
 

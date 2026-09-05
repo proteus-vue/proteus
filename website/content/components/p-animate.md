@@ -4,6 +4,8 @@ title: p-animate
 
 # p-animate
 
+动画声明——animation CSS 语义面
+
 > 语义组件（Layer 0）· 域 **工程** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,15 @@ title: p-animate
 | `duration` | 动画时长（ms） | `Number` | `600` |
 | `loop` | 循环播放（缺省 true——装饰动画；false 播一次） | `Boolean` | `true` |
 | `delay` | 延迟（ms） | `Number` | `0` |
+
+## 实现要点
+
+- keyframes：预设动画名（fade/bounce/pulse/shake/zoom-in/spin——@keyframes p-animate-{keyframes}）
+- duration：动画时长 ms（缺省 600）
+- loop：是否循环（缺省 true——声明式装饰动画；false → 播一次）
+- delay：延迟 ms（缺省 0）
+- ★跨端：Web 原生 CSS animation；Skyline 支持 animation（同 transition）——纯 CSS 声明语义；
+- MP 编译器安全——:class 走单 computed 表达式体（同 p-scale 'p-scale-' + density 惯例）
 
 ## 用法
 

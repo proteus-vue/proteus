@@ -4,6 +4,8 @@ title: p-input
 
 # p-input
 
+输入框
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -26,6 +28,12 @@ title: p-input
 ## Events
 
 `input` · `confirm` · `focus` · `blur`
+
+## 实现要点
+
+- 矩阵 01 §6：value / type / maxlength / placeholder / focus / disabled + @input/@confirm/@focus/@blur
+- 事件契约：`:value` + `@input`（载荷 { value } 跨端归一，替代 v-model——MP 自定义组件 v-model 仅覆盖原生 input/textarea）
+- 双端同源码：input 原生透传（tag/passthrough）；maxlength ≤ 0 = 不限（MP/Web 均忽略非法负值）
 
 ## 用法
 

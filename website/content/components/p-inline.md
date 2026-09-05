@@ -4,6 +4,8 @@ title: p-inline
 
 # p-inline
 
+行内容器
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-inline
 | `gap` | 元素间距 px | `Number` | `0` |
 | `justify` | 主轴对齐（flex-start/center/end/space-between/space-around） | `String` | `'flex-start'` |
 | `align` | 交叉轴对齐（flex-start/center/end/stretch） | `String` | `'center'` |
+
+## 实现要点
+
+- 内联盒语义（对齐 CSS inline-flex）：内容按行排列，wrap 开启允许折行
+- 双端同源码：div → view（编译期映射）；MP 安全（纯 class/style 计算，无平台 API）
 
 ## 用法
 

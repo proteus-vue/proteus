@@ -4,6 +4,8 @@ title: p-form
 
 # p-form
 
+表单容器
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -21,6 +23,12 @@ title: p-form
 ## Events
 
 `submit`
+
+## 实现要点
+
+- model + rules（字段→校验器）→ validate() 聚合校验 + submit 事件 + errors 状态
+- ★B2 简形：同步校验聚合（Promise 校验后续批次）+ layout 横竖排
+- 双端同源码；MP 安全（无平台 API）
 
 ## 用法
 

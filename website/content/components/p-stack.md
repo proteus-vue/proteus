@@ -4,6 +4,8 @@ title: p-stack
 
 # p-stack
 
+弹性栈
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,11 @@ title: p-stack
 | `direction` | 主轴方向：row（横向）/ column（纵向） | `String` | `'column'` |
 | `wrap` | 空间不足自动换行（仅 row） | `Boolean` | `false` |
 | `gap` | 子项间距（px） | `Number` | `0` |
+
+## 实现要点
+
+- 方向 + 间距 + 智能换行：Web = flex + gap（wrap 时空间不足自动换行）
+- 双端同源码：div → view（编译期映射）
 
 ## 用法
 

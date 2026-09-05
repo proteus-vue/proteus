@@ -4,6 +4,8 @@ title: p-scroll-view
 
 # p-scroll-view
 
+滚动容器
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -27,6 +29,11 @@ title: p-scroll-view
 ## Events
 
 `scroll` · `scrolltolower` · `refresherrefresh`
+
+## 实现要点
+
+- 矩阵 01 §4：Skyline 必备（页面滚动禁全局滚动）；scroll-x/y、scroll-top/left、refresher、lower-threshold
+- 性能约束（超大数量复用场景）：薄包装 —— 不引入组件层逻辑，事件透传，无节流/无状态
 
 ## 用法
 

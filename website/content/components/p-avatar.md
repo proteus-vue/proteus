@@ -4,6 +4,8 @@ title: p-avatar
 
 # p-avatar
 
+头像
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-avatar
 | `shape` | 形状：circle 圆形 / square 圆角方形 | `String` | `'circle'` |
 | `size` | 尺寸 px | `Number` | `44` |
 | `fallback` | 兜底文本（缺图/加载失败显示——首字符） | `String` | `''` |
+
+## 实现要点
+
+- 图片头像 + shape（circle/square）+ size + fallback（缺图显首字符）
+- 双端同源码：img → image；MP 安全（纯 props/样式；binderror 事件归一后续批次）
 
 ## 用法
 

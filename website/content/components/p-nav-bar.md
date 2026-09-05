@@ -4,6 +4,8 @@ title: p-nav-bar
 
 # p-nav-bar
 
+导航栏
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -24,6 +26,12 @@ title: p-nav-bar
 ## Events
 
 `back`
+
+## 实现要点
+
+- 矩阵 01 §9：title / back / fixed + left/right 插槽
+- ★appBar 集成标注 v0.6（Router B5 ⬜）；本组件为普通 view 态导航栏
+- C3：组件不直接调路由 —— back 仅 emit，由页面决定导航（api.navigator A8 未实现前）
 
 ## 用法
 

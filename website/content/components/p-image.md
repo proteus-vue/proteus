@@ -4,6 +4,8 @@ title: p-image
 
 # p-image
 
+图片
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -26,6 +28,12 @@ title: p-image
 ## Events
 
 `load` · `error`
+
+## 实现要点
+
+- 矩阵 01 §3：mode 裁剪（Web object-fit 映射 / MP 原生 mode 透传）+ lazy-load（Web loading=lazy / MP lazy-load）+ placeholder
+- 双端同源码：img → image（编译期映射）；@load/@error 事件归一
+- 注意：不用 computed 块体（编译器仅支持箭头表达式体），mode 的 Web 映射走 CSS 类（p-image--<mode>）
 
 ## 用法
 

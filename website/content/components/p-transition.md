@@ -4,6 +4,8 @@ title: p-transition
 
 # p-transition
 
+过渡（显隐）——transition CSS 语义面
+
 > 语义组件（Layer 0）· 域 **工程** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,15 @@ title: p-transition
 | `mode` | 过渡方向：in（仅进入）/ out（仅退出）/ both（双向） | `String` | `'both'` |
 | `duration` | 过渡时长（ms） | `Number` | `300` |
 | `visible` | 显隐开关（父级控制） | `Boolean` | `true` |
+
+## 实现要点
+
+- name：过渡预设（fade/slide-up/slide-down/slide-left/slide-right/zoom——CSS 类 p-transition-{name}）
+- mode：in（进入）/ out（退出）/ both（缺省 both）
+- duration：过渡时长 ms（缺省 300）
+- visible：显隐开关——false 且 mode=out/both → 加 p-transition-hidden 类触发退出过渡
+- ★跨端：Web 原生 CSS transition；Skyline 支持 transition——同一类切换（朴素但正确，G-22.2）；
+- 纯 CSS 无 JS 依赖；MP 编译器安全——:class 走单 computed 表达式体（同 p-safe safeClass 惯例）
 
 ## 用法
 

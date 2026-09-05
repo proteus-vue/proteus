@@ -4,6 +4,8 @@ title: p-divider
 
 # p-divider
 
+分隔线
+
 > 语义组件（Layer 0）· 域 **布局** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -17,6 +19,11 @@ title: p-divider
 | `orientation` | 方向：horizontal 水平 / vertical 垂直 | `String` | `'horizontal'` |
 | `inset` | 内缩距离 px（水平=上下外边距；垂直=左右外边距） | `Number` | `0` |
 | `color` | 线色（缺省随主题变量） | `String` | `''` |
+
+## 实现要点
+
+- 水平/垂直分隔线：orientation 控制方向，inset 控制内缩（水平=上下边距，垂直=左右边距）
+- 双端同源码：div → view；MP 安全（border 样式计算）
 
 ## 用法
 

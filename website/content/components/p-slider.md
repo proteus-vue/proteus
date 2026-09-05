@@ -4,6 +4,8 @@ title: p-slider
 
 # p-slider
 
+滑块
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-slider
 | `min` | — | `Number` | `0` |
 | `max` | — | `Number` | `100` |
 | `step` | — | `Number` | `1` |
+
+## 实现要点
+
+- min/max/step 约束 + v-model（modelValue ←→ update:modelValue）
+- 双端同源码：Web input[type=range]；MP 编译器后续批次映射 slider 内置
 
 ## 用法
 

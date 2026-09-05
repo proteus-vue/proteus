@@ -4,6 +4,8 @@ title: p-switch
 
 # p-switch
 
+开关
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,11 @@ title: p-switch
 |---|---|---|---|
 | `modelValue` | — | `Boolean` | `false` |
 | `loading` | 加载中（禁切换） | `Boolean` | `false` |
+
+## 实现要点
+
+- checked 受控 v-model（modelValue ←→ update:modelValue）；loading 期间禁点
+- 双端同源码：div → view（Web 自绘开关；MP 编译器后续批次映射 switch 内置）
 
 ## 用法
 

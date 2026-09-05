@@ -4,6 +4,8 @@ title: p-rich-text
 
 # p-rich-text
 
+富文本
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -16,6 +18,12 @@ title: p-rich-text
 |---|---|---|---|
 | `source` | HTML/markdown 源 | `String` | `''` |
 | `schema` | 渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化） | `String` | `'html'` |
+
+## 实现要点
+
+- source HTML/markdown → 渲染；Web v-html 直渲，MP 编译器映射 rich-text node
+- ★B2 Web-first：source 透传 v-html（MP 端待 rich-text node 映射后续批次）
+- 双端同源码：div → view；无平台 API
 
 ## 用法
 

@@ -4,6 +4,8 @@ title: p-toolbar
 
 # p-toolbar
 
+工具栏溢出折叠
+
 > 语义组件（Layer 0）· 域 **页面外壳** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -22,6 +24,12 @@ title: p-toolbar
 ## Events
 
 `select`
+
+## 实现要点
+
+- 导航项超出容器 → 多余项收进「更多」（展开面板）——calcVisibleToolbarItems 纯计算（fluid 包）
+- 按容器而非视口求解（createContainerQuery）；容器不可测（MP 无 ResizeObserver）→ 不折叠全显示（铁律 G-22.2）
+- ★车机：drive-mode / prefers-reduced-motion → no-motion class（CSS 禁用动效）
 
 ## 用法
 

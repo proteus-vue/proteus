@@ -4,6 +4,8 @@ title: p-text
 
 # p-text
 
+文本
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-text
 | `disabled` | — | `Boolean` | `false` |
 | `ariaLabel` | — | `String` | `''` |
 | `selectable` | — | `Boolean` | `false` |
+
+## 实现要点
+
+- 矩阵 01 §2：selectable 映射 —— Web user-select: text（.is-selectable 类）；MP 原生 text 的 selectable 属性
+- 双端同源码：span → text（编译期映射）
 
 ## 用法
 

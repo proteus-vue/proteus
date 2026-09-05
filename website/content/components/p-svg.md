@@ -4,6 +4,8 @@ title: p-svg
 
 # p-svg
 
+矢量图形
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,11 @@ title: p-svg
 | `viewbox` | 视盒 "x y w h"（缺省 0 0 24 24） | `String` | `'0 0 24 24'` |
 | `size` | 尺寸 px | `Number` | `24` |
 | `color` | 颜色 | `String` | `'currentColor'` |
+
+## 实现要点
+
+- path（SVG path d 数据）+ viewbox 渲染；矢量优先（无位图）
+- ★B2 Web-first：内联 svg 元素（MP 端 Skia 矢量映射后续批次）
 
 ## 用法
 

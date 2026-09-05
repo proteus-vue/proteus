@@ -4,6 +4,8 @@ title: p-mask
 
 # p-mask
 
+遮罩
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -24,6 +26,11 @@ title: p-mask
 ## Events
 
 `close`
+
+## 实现要点
+
+- 矩阵 01 §8 弹层体系：visible + close-on-tap + opacity；无动画（动画由弹层组件自行编排）
+- 双端同源码：view + fixed 定位；Skyline fixed 支持（基础库 2.26+，真机异常时降级 absolute + 全屏容器，v0.6 评估编译器 transform）
 
 ## 用法
 

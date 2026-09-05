@@ -4,6 +4,8 @@ title: p-picker
 
 # p-picker
 
+原生日期/时间/城市选择
+
 > 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
 
 | 语义 | 域 | 小程序等价 |
@@ -18,6 +20,12 @@ title: p-picker
 | `modelValue` | 值（date=YYYY-MM-DD；time=HH:mm；region=经纬度/文本） | `String` | `''` |
 | `min` | 最小值边界（date/time 原生 min） | `String` | `''` |
 | `max` | 最大值边界 | `String` | `''` |
+
+## 实现要点
+
+- mode date/time/region + start/end 边界
+- ★B2 Web-first：date/time 用原生 input（type=date/time）；region 待内置精简行政区划数据（partial 标注）
+- 双端同源码（input → 编译映射）；无平台 API
 
 ## 用法
 
