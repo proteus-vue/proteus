@@ -242,7 +242,7 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
             <span class="backend-tag">{{ T(target.backend) }}</span>
           </div>
           <div class="frame-host">
-            <div class="frame" :class="{ 'has-notch': target.notch }" :style="frameStyle">
+            <div class="frame" :class="{ 'has-notch': target.notch, 'watch-round': target.key === 'watch' }" :style="frameStyle">
               <div v-if="target.notch" class="notch" style="width: 38%; height: 7px" />
               <div class="screen">
                 <div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
@@ -433,6 +433,10 @@ pre .kw { color: #ff9b73; }
 .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #000; border-radius: 0 0 12px 12px; z-index: 5; }
 .screen { width: 100%; aspect-ratio: var(--ar, 9/16); background: #f6f8fc; overflow: hidden; display: flex; flex-direction: column; color: #1a2238; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); border: 2px solid #2a365e; border-radius: 14px; }
 .frame.has-notch .screen { border-top-left-radius: 22px; border-top-right-radius: 22px; }
+/* 手表：圆形表盘 */
+.watch-round .screen { border-radius: 50%; border: 3px solid #2a365e; }
+.watch-round .statusbar { display: none; }
+.watch-round .app-body { padding: 2px; }
 .statusbar { height: 22px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 9px; color: #556; border-bottom: 1px solid #eef0f6; flex-shrink: 0; }
 .app-body { flex: 1; overflow: hidden; position: relative; }
 .ui { height: 100%; padding: 9px; overflow: hidden; }
