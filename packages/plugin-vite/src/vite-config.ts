@@ -75,7 +75,7 @@ export async function resolveProteusViteConfig(
   // —— 框架内置插件（目标端各一）——
   let plugins: Plugin[]
   if (isMp) {
-    plugins = [virtualMpEntryPlugin(), mpTransform({ config })]
+    plugins = [virtualMpEntryPlugin(), mpTransform({ config, frameworkComponentsDir: (config as { frameworkComponentsDir?: string }).frameworkComponentsDir })]
   } else {
     const vueMod = await importFromRoot<{ default: (opts?: Record<string, unknown>) => Plugin }>(root, '@vitejs/plugin-vue')
     plugins = [vueMod.default(), routeBlocksPlugin()]

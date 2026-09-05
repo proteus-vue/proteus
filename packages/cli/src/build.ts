@@ -11,7 +11,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import { resolveProteusViteConfig, runGenRoutes } from '@proteus-vue/plugin-vite'
-import { loadTsConfig } from './config-check'
+import { loadProjectConfig } from './config-loader'
 
 /** ★G-29：Rust CLI 定位缓存（按 root 键控——buildDir 全目录共享一次 resolve，避免逐文件 require.resolve） */
 const rustBinCache = new Map<string, string | null>()
@@ -78,7 +78,7 @@ export async function runTargetedBuildProgrammatic(
 ): Promise<{ ok: boolean; results: Array<{ target: string; ok: boolean }> }> {
   const cfgFile = path.join(root, 'proteus.config.ts')
   if (!fs.existsSync(cfgFile)) throw new Error(`缺少 ${path.relative(root, cfgFile)}——proteus build 需要框架配置驱动（create-proteus 模板自带）`)
-  const config = (await loadTsConfig(cfgFile)) as Record<string, unknown>
+  const config = (await loadProjectConfig(cfgFile)) as Record<string, unknown>
   const targets = target === 'all' ? (['web', 'skyline'] as const) : ([target] as const)
   const results: Array<{ target: string; ok: boolean }> = []
   for (const t of targets) {

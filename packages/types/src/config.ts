@@ -79,4 +79,7 @@ export interface ProteusConfig {
    *   本字段做开发者扩展：对象（{ plugins, server, resolve… }，全 vite 兼容）或函数
    *   （(ctx: { command, mode }) => 对象 | void）。运行时由 @proteus-vue/plugin-vite 消费（类型见其 vite-config 文档） */
   vite?: unknown
+  /** ★框架内置组件目录（决策 #115 过渡：组件库未拆包时显式指向共享组件目录；缺省 root/src/components）
+   *   ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后删除 */
+  frameworkComponentsDir?: string
 }

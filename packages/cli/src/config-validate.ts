@@ -42,6 +42,7 @@ const KNOWN_FIELDS = new Set([
   'budget',
   'router',
   'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）
+  'frameworkComponentsDir', // 决策 #115：框架内置组件目录（组件库拆包前过渡字段）
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
