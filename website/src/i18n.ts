@@ -52,8 +52,8 @@ const zh = {
   'spirit.title': 'Proteus 海神精灵（点击变身）',
   // —— Multi-device 同屏墙（★#489）——
   'mdev.subtitle': '同一份源码 · 六端同屏',
-  'mdev.sub': '一份真实 Vue 组件，六种设备形态下真实渲染（Web DOM 运行时）：手机/平板/手表窄屏与桌面/车机宽屏跑同一份代码，柔性容器自适应换行收紧；真正的多后端输出树与 IR 见 Playground。',
-  'mdev.scenario': '场景预设',
+  'mdev.sub': '同一份 ProductDetail 语义，六端由 RenderBackend 推导形态：每帧是真实 DOM 渲染，并附该端「形态 / 输入 / 拓扑推导 + 能力声明」（绿 = 已声明支持 · 橙 = 需条件降级）——差异来自语义推导（layout / columns / nav / input），不是把页面缩放，也不是 #ifdef 条件编译。',
+  'mdev.theme': '主题',
   'mdev.edit': '编辑源码（改完实时重渲六端）',
   'mdev.empty': '（无输出）',
   // —— Mini Playground（TransformDemo，★#477）——
@@ -120,8 +120,8 @@ const en = {
   'spirit.title': 'Proteus spirit pet (click to morph)',
   // —— Multi-device wall（★#489）——
   'mdev.subtitle': 'One source · six targets on one wall',
-  'mdev.sub': 'One real Vue component rendered live in six device forms (Web DOM runtime): the same code adapts from narrow phone/tablet/watch screens to wide desktop/in-car screens via fluid containers. Real multi-backend trees & IR live in the Playground.',
-  'mdev.scenario': 'Scenarios',
+  'mdev.sub': 'The same ProductDetail semantics — six targets, each shaped by its RenderBackend. Every frame is a real DOM render, annotated with that target’s form / input / topology derivation and its capability declarations (green = declared & supported · orange = needs conditional degradation). The differences come from semantic derivation (layout / columns / nav / input) — not page scaling, not #ifdef.',
+  'mdev.theme': 'Theme',
   'mdev.edit': 'Edit the source (the six targets re-render live)',
   'mdev.empty': '(no output)',
   // —— Mini Playground（TransformDemo，★#477）——
