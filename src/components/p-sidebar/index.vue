@@ -75,6 +75,7 @@ onMounted(() => {
   // ★车机 d-pad 焦点导航（Web only）：Arrow 方向键在导航项间移动焦点
   const nav = navEl.value
   if (nav) nav.addEventListener('keydown', onNavKeydown)
+  if (nav) nav.addEventListener('click', onNavClick) // ★#467 移动端：collapsed-open 下点击导航项自动收起
 })
 onUnmounted(() => {
   if (query) query.destroy()
@@ -82,6 +83,7 @@ onUnmounted(() => {
   if (env) env.destroy()
   env = null
   if (navEl.value) navEl.value.removeEventListener('keydown', onNavKeydown)
+  if (navEl.value) navEl.value.removeEventListener('click', onNavClick)
 })
 
 /** Arrow 方向键焦点移动：side-rail 纵向（上/下）、collapsed-open 横向（左/右）——内部游标 + focus() */
@@ -98,6 +100,11 @@ function onNavKeydown(e: KeyboardEvent): void {
     target.focus()
     e.preventDefault()
   }
+}
+
+/** ★#467 移动端体验（VitePress 同款）：折叠展开态下点击导航项后自动收起——导航即离开，回到正文沉浸阅读 */
+function onNavClick(): void {
+  if (mode.value === 'collapsed-open') userExpanded.value = false
 }
 
 // ★三态根类（页面按状态适配呈现的官方信号）：p-sidebar-side-rail / p-sidebar-collapsed / p-sidebar-collapsed-open
