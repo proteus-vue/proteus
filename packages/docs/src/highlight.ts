@@ -13,8 +13,10 @@ const KEYWORDS_JS = new Set(
 )
 const KEYWORDS_BASH = new Set('if then else elif fi for while do done echo cd npm npx node pnpm yarn export source sudo mkdir rm cp mv ls cat grep'.split(' '))
 const KEYWORDS_CSS = new Set('important media supports keyframes import from to and not'.split(' '))
+// ★#408 TS 类型着色：原始类型 + 大写开头标识符（Promise/Coords/FetchConfig）→ type 金
+const TYPE_PRIMITIVES = new Set('string number boolean object symbol bigint unknown any never'.split(' '))
 
-export type DocTokenType = 'comment' | 'string' | 'keyword' | 'number' | 'tag' | 'attr' | 'fn'
+export type DocTokenType = 'comment' | 'string' | 'keyword' | 'number' | 'tag' | 'attr' | 'fn' | 'type'
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -200,6 +202,24 @@ function tokenize(code: string, lang: string): Token[] {
       const canFn = lang === 'js' || lang === 'ts' || lang === 'vue' || isCss
       let k = j
       while (k < code.length && code[k] === ' ') k++
+      // 泛型感知：word<...>( → fn（useFetch<T = unknown>(url…)——跳过一段平衡的 <…> 再看是否 "(）
+      if (canFn && (!keywords.has(word) || isMember) && code[k] === '<') {
+        let d = 1
+        let k2 = k + 1
+        while (k2 < code.length && d > 0) {
+          if (code[k2] === '<') d++
+          else if (code[k2] === '>') d--
+          k2++
+        }
+        let k3 = k2
+        while (k3 < code.length && code[k3] === ' ') k3++
+        if (d === 0 && code[k3] === '(') {
+          flush()
+          tokens.push({ cls: 'fn', text: word })
+          i = j
+          continue
+        }
+      }
       if (canFn && (!keywords.has(word) || isMember) && code[k] === '(') {
         flush()
         tokens.push({ cls: 'fn', text: word })
@@ -211,6 +231,23 @@ function tokenize(code: string, lang: string): Token[] {
         tokens.push({ cls: 'attr', text: word })
         i = j
         continue
+      }
+      // ★#408 ts 类型标注位：参数名/对象键（word 紧跟 ":" 或 "?:"）→ attr 橙；原始类型/大写开头标识符 → type 金
+      if (lang === 'ts' && !keywords.has(word)) {
+        let k4 = j
+        if (code[k4] === '?') k4++
+        if (code[k4] === ':') {
+          flush()
+          tokens.push({ cls: 'attr', text: word })
+          i = j
+          continue
+        }
+        if (TYPE_PRIMITIVES.has(word) || /^[A-Z]/.test(word)) {
+          flush()
+          tokens.push({ cls: 'type', text: word })
+          i = j
+          continue
+        }
       }
       flush()
       tokens.push({ cls: keywords.has(word) ? 'keyword' : null, text: word })

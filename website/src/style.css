@@ -39,6 +39,7 @@
   --syn-str: #98c379;
   --syn-com: #5c6370;
   --syn-fn: #61afef;
+  --syn-type: #e5c07b;
   /* ★#386 圆角语义化（radius sm4/md7/lg9/xl14/pill20/chip6——页面禁写裸 px） */
   --radius-chip: 6px;
   --radius-sm: 7px;
@@ -126,7 +127,7 @@ body {
   overflow-x: auto;
 }
 .doc-body pre code { background: none; border: none; padding: 0; color: var(--ink); line-height: 1.7; }
-/* ★#386 语法高亮接线（docs 引擎 span.docs-tok-* → design-tokens syntax 色；#386b 补 attr、#386c 补 fn） */
+/* ★#386 语法高亮接线（docs 引擎 span.docs-tok-* → design-tokens syntax 色；#386b 补 attr、#386c 补 fn；★#408 补 type） */
 .doc-body .docs-tok-keyword { color: var(--syn-kw); }
 .doc-body .docs-tok-string { color: var(--syn-str); }
 .doc-body .docs-tok-comment { color: var(--syn-com); }
@@ -134,6 +135,7 @@ body {
 .doc-body .docs-tok-fn { color: var(--syn-fn); }
 .doc-body .docs-tok-number,
 .doc-body .docs-tok-attr { color: var(--syn-attr); }
+.doc-body .docs-tok-type { color: var(--syn-type); }
 .doc-body blockquote {
   margin: 12px 0;
   border-left: 3px solid var(--brand);

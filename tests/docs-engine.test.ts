@@ -139,6 +139,27 @@ describe('G-36/官网 B2 高亮器（零依赖 tokenizer）', () => {
     expect(html).toContain('<span class="docs-tok-string">&quot;str&quot;</span>')
   })
 
+  it('#408 ts 类型标注位高亮：原始类型/大写标识符 → type 金；参数名/对象键 → attr；泛型感知 fn（useFetch<T>(...)）', () => {
+    const sig = highlight('useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>', 'ts')
+    expect(sig).toContain('<span class="docs-tok-fn">useFetch</span>') // 泛型后仍识别 fn
+    expect(sig).toContain('<span class="docs-tok-type">Promise</span>')
+    expect(sig).toContain('<span class="docs-tok-type">T</span>')
+    expect(sig).toContain('<span class="docs-tok-attr">url</span>')
+    expect(sig).toContain('<span class="docs-tok-attr">config</span>')
+    expect(sig).toContain('<span class="docs-tok-type">string</span>')
+    expect(sig).toContain('<span class="docs-tok-type">FetchConfig</span>')
+    expect(highlight('useLocation(): Promise<CapResult<Coords>>', 'ts')).toContain('<span class="docs-tok-type">Coords</span>')
+  })
+
+  it('#408 回归：旧示例不受影响（keyword/number/comment/string/member）', () => {
+    const html = highlight('const n = 42 // 注释\nconst s = "str"', 'ts')
+    expect(html).toContain('<span class="docs-tok-keyword">const</span>')
+    expect(html).toContain('<span class="docs-tok-number">42</span>')
+    expect(html).toContain('<span class="docs-tok-comment">// 注释</span>')
+    expect(html).toContain('<span class="docs-tok-string">&quot;str&quot;</span>')
+    expect(highlight('if (res.ok) {', 'ts')).toContain('<span class="docs-tok-keyword">if</span>')
+  })
+
   it('bash + vue 标签 + 未知语言纯转义', () => {
     expect(highlight('npm run build', 'bash')).toContain('docs-tok-keyword')
     expect(highlight('<p-grid />', 'vue')).toContain('docs-tok-tag')
