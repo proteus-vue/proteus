@@ -17,7 +17,7 @@ describe('Gate 注册表（★#453 单一来源）', () => {
     for (const g of GATES) {
       expect(g.group).toBeTruthy()
       expect(['project', 'framework', 'self']).toContain(g.scope)
-      expect(g.usage.startsWith('proteus ')).toBe(true)
+      expect(g.usage.length).toBeGreaterThan(3)
       expect(g.desc.length).toBeGreaterThan(5)
     }
   })
@@ -37,18 +37,18 @@ describe('Gate 注册表（★#453 单一来源）', () => {
     expect(filtered).not.toContain('── 专项检查')
   })
 
-  it('#454 专项全部接线（○ 仅剩写型/诊断/多旗标工具）', () => {
+  it('#454 专项全部接线（○ 仅剩写型/诊断/多旗标/耗时型工具）', () => {
     const notWired = GATES.filter((g) => !g.run).map((g) => g.id)
-    // 写型（manifest/module-duplicates 产物）/ 诊断（health）/ 多旗标（conformance/audit-module/host-push）保持独立命令形态
-    expect(notWired.sort()).toEqual(['audit-module', 'capabilities-manifest', 'conformance', 'health', 'host-push', 'module-duplicates'])
+    // 写型（manifest/module-duplicates）/ 诊断（health）/ 多旗标（conformance/audit-module/host-push）/ 耗时（bench）保持独立命令形态
+    expect(notWired.sort()).toEqual(['audit-module', 'bench', 'capabilities-manifest', 'conformance', 'health', 'host-push', 'module-duplicates'])
   })
 
-  it('B4-lite：HELP「检查与门禁」组与 GATES 目录 usage 集一致（双目录防漂移守卫）', () => {
+  it('B4-lite：HELP「检查与门禁」组与 GATES 目录 usage 集一致（仓库治理族为 npm/脚本面——守卫排除）', () => {
     const group = HELP_GROUPS.find((g) => g.title === '检查与门禁')
     expect(group).toBeTruthy()
     const helpUsages = group!.entries.map((e) => e.usage)
     const gateMeta = GATE_COMMAND_HELP.usage // gate 命令本身非门禁——守卫排除
-    const registry = new Set(gateUsages())
+    const registry = new Set(gateUsages().filter((_u, i) => GATES[i]?.group !== '仓库治理')) // ★#457 仓库治理族（npm/CI 脚本面）不入 HELP CLI 组
     for (const u of helpUsages) {
       if (u !== gateMeta) expect(registry.has(u), `HELP 独有（注册表漏录）：${u}`).toBe(true)
     }
@@ -122,6 +122,22 @@ describe('proteus gate run（统一执行）', () => {
     for (const id of ['d2', 'fluid', 'css', 'style', 'router', 'module', 'config', 'components', 'i18n', 'api-check', 'capabilities']) {
       expect(typeof findGate(id)?.run, id).toBe('function')
     }
+  })
+
+  it('#457 仓库治理族入册：目录含 check-pkg/check-deps/stores-purity/bench（CI/scripts 无 CLI 面治理门禁收敛）', () => {
+    const repo = GATES.filter((g) => g.group === '仓库治理')
+    expect(repo.map((g) => g.id).sort()).toEqual(['bench', 'check-deps', 'check-pkg', 'stores-purity'])
+    for (const g of repo) expect(g.scope).toBe('framework')
+    const text = formatGateList()
+    expect(text).toContain('── 仓库治理')
+  })
+
+  it('#457 仓库治理可统一执行：framework 仓根（vitest cwd）跑 check-deps 与 stores-purity 通过', async () => {
+    const deps = await runGate('check-deps', process.cwd())
+    expect(deps.ok).toBe(true)
+    const purity = await runGate('stores-purity', process.cwd())
+    expect(purity.ok).toBe(true)
+    expect(purity.text).toContain('examples/stores 纯净')
   })
 })
 

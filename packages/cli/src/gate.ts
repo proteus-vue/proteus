@@ -6,6 +6,7 @@
 //   B2（聚合引擎遍历注册表）随 audit-all/check 重构批次；B4 HELP 组派生、B5 仓库治理入册、B6 config 开关随后续批次。
 import path from 'node:path'
 import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { runCheck, formatCheck, type CheckOptions } from './check'
 import { runAuditAll, formatAuditAll } from './audit-all'
 import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
@@ -24,7 +25,7 @@ import { checkModuleConfigs } from './module-check'
 import { readDisabledGates } from './gate-config'
 
 /** 门禁族（分组展示） */
-export type GateGroup = '快速聚合' | '深度聚合' | '专项检查' | '框架自检'
+export type GateGroup = '快速聚合' | '深度聚合' | '专项检查' | '框架自检' | '仓库治理'
 /** 门禁作用域：project=开发者工程 / framework=框架仓自检 / self=独立烟测任意目录 */
 export type GateScope = 'project' | 'framework' | 'self'
 
@@ -291,6 +292,38 @@ export const GATES: GateInfo[] = [
     usage: 'proteus conformance [--backend <spec>] [--only <C-xx>] [--demo] [--repo <dir>]',
     desc: '★G-38 42 项 conformance（C-01~C-10）+ G-42 仓库治理扫描（多旗标参考实现门禁——经独立命令运行）',
   },
+  // —— 仓库治理（★#457 B5：CI yml/scripts 里无 CLI 面的治理门禁入册——框架仓语境 spawn 既有脚本，零逻辑复制） ——
+  {
+    id: 'check-pkg',
+    group: '仓库治理',
+    scope: 'framework',
+    usage: 'npm run check:pkg（node scripts/check-package-health.js）',
+    desc: '★包健康审计：包名/字段完整/check-pkg 合规（framework 仓根运行——gate run check-pkg 经 node spawn 既有脚本）',
+    run: (root) => runRepoScript(root, ['scripts/check-package-health.js'], 'check-pkg'),
+  },
+  {
+    id: 'check-deps',
+    group: '仓库治理',
+    scope: 'framework',
+    usage: 'npm run check:deps（node scripts/check-deps.mjs）',
+    desc: '★依赖声明完整性审计：import vs package.json 零缺失（pnpm 严格解析；#422 治理持续门禁）',
+    run: (root) => runRepoScript(root, ['scripts/check-deps.mjs'], 'check-deps'),
+  },
+  {
+    id: 'stores-purity',
+    group: '仓库治理',
+    scope: 'framework',
+    usage: 'CI stores 铁律门禁（examples/stores 纯净性 grep）',
+    desc: '★stores 铁律（M8.4）：禁平台分支（if process.env）/ 直连存储（wx.setStorage/localStorage/sessionStorage）——注册表内纯实现替代 CI grep',
+    run: (root) => scanStoresPurity(root),
+  },
+  {
+    id: 'bench',
+    group: '仓库治理',
+    scope: 'framework',
+    usage: 'npm run bench（性能基准回归门禁 G-30：>1.5x 阻断 / >1.2x 警告）',
+    desc: '★性能基准回归门禁（G-30：功能基准 >1.5x 基线阻断 / >1.2x 警告）——耗时型，经独立命令运行',
+  },
 ]
 
 /** 可 run 的门禁（已接线执行器） */
@@ -322,6 +355,44 @@ export async function runGate(id: string, root: string): Promise<GateRunResult> 
   const result = await gate.run(targetRoot)
   if (typeof result.ok !== 'boolean' || typeof result.text !== 'string') throw new Error(`门禁 ${id} 执行器返回异常`)
   return result
+}
+
+/** ★#457 仓库治理脚本执行（spawn node——framework 仓根语境；缺脚本/失败 → 结果对象不抛） */
+function runRepoScript(root: string, script: string[], prefix: string): GateRunResult {
+  try {
+    const r = spawnSync(process.execPath, script, { cwd: root, encoding: 'utf8' })
+    if (r.error) return { ok: false, text: `[proteus-${prefix}] 脚本执行失败：${r.error.message}（需 framework 仓根运行——该门禁 scope=framework）` }
+    const text = [r.stdout, r.stderr].filter(Boolean).join('').trim() || `[proteus-${prefix}] 无输出`
+    return { ok: r.status === 0, text }
+  } catch (e) {
+    return { ok: false, text: `[proteus-${prefix}] ${e instanceof Error ? e.message : String(e)}` }
+  }
+}
+
+/** ★#457 stores 纯净性（M8.4——注册表内实现，替代 CI grep）：禁平台分支与直连存储 */
+function scanStoresPurity(root: string): GateRunResult {
+  const dir = path.join(root, 'examples', 'stores')
+  if (!fs.existsSync(dir)) return { ok: true, text: '[proteus-stores-purity] 无 examples/stores 目录——跳过（需 framework 仓根运行）' }
+  const bad = [
+    [/wx\.setStorage|localStorage\.setItem|sessionStorage/, '直连存储'],
+    [/if.*process\.env/, '平台分支（process.env）'],
+  ] as const
+  const hits: string[] = []
+  const walk = (d: string): void => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const full = path.join(d, e.name)
+      if (e.isDirectory()) walk(full)
+      else if (/\.(ts|vue|js|mjs)$/.test(e.name)) {
+        const lines = fs.readFileSync(full, 'utf8').split('\n')
+        lines.forEach((line, i) => {
+          for (const [re, why] of bad) if (re.test(line)) hits.push(`${path.relative(root, full)}:${i + 1} ${why}：${line.trim().slice(0, 80)}`)
+        })
+      }
+    }
+  }
+  walk(dir)
+  const text = hits.length ? `[proteus-stores-purity] ✗ ${hits.length} 处违规（stores/ 禁止平台分支与直连存储）：\n  ` + hits.join('\n  ') : `[proteus-stores-purity] ✅ examples/stores 纯净（零平台分支/直连存储）`
+  return { ok: hits.length === 0, text }
 }
 
 /** ★formatGateList：注册表目录（按族分组；--group 过滤） */
