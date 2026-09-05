@@ -8,6 +8,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 // ★#389b 全站固定语义粒子场（背景层）
 import ParticleField from './components/ParticleField.vue'
+import DocSearch from './DocSearch.vue'
 // ★#389i 海神精灵（Three.js 3D 果冻萌宠——spirit.html iframe 嵌入右下角；three 隔离在独立 chunk，主应用 bundle 零增量）
 // ★#389d 指针跟随光晕（G-24 B5 新桌面原语 v-p-cursor-glow——全局注册的指令）
 
@@ -103,6 +104,7 @@ const cursorGlowOptions = {
             <span class="brand-tag">/ semantic engine</span>
           </router-link>
           <p-stack direction="row" :gap="4" wrap class="nav-links">
+            <DocSearch />
             <router-link
               v-for="l in links"
               :key="l.key"
