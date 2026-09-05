@@ -5,7 +5,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { findDoc, sections, enModule, enTitleFor } from '../docs-registry'
-import { locale, setLocale, t, sectionName } from '../i18n'
+import { locale, setLocale, t, sectionName, groupName } from '../i18n'
 
 const route = useRoute()
 // 区 key 从路由前缀推导：/docs/component/:slug → components
@@ -63,7 +63,7 @@ function itemTitle(slugOf: string, zhTitle: string): string {
         <span class="eyebrow">{{ t('toc.sidebar', { name: sectionName(section.key) }) }}</span>
         <!-- 当前区分组导航 -->
         <p-view v-for="grp in section.groups" :key="grp.name" class="toc-group">
-          <p-text class="toc-group-name">{{ grp.name }}</p-text>
+          <p-text class="toc-group-name">{{ groupName(grp.name) }}</p-text>
           <p-view class="toc-nav">
             <router-link
               v-for="g in grp.items"
@@ -90,7 +90,7 @@ function itemTitle(slugOf: string, zhTitle: string): string {
             <button type="button" class="no-en-back" @click="setLocale('zh')">{{ t('doc.noen.back') }}</button>
           </p-view>
           <!-- ★#415 端落地进度表（frontmatter.ends 声明的页面） -->
-          <p-view v-if="ends && !noEn" class="ends-progress">
+          <p-view v-if="ends && !noEn && (!isEn || variant?.ends)" class="ends-progress">
             <p-text class="ends-title">{{ t('doc.ends.title') }}</p-text>
             <table class="ends-table">
               <thead><tr><th>端</th><th>状态</th><th>说明</th></tr></thead>

@@ -105,3 +105,18 @@ const SECTION_NAME: Record<SiteLocale, Record<string, string>> = {
 export function sectionName(key: string): string {
   return SECTION_NAME[locale.value]?.[key] ?? key
 }
+
+/** 指南侧栏分组名双语（起步/开始/…——未收录的组名回退原样） */
+const GROUP_NAME: Record<SiteLocale, Record<string, string>> = {
+  zh: {
+    起步: '起步', 开始: '开始', 代码构成: '代码构成', 基础概念: '基础概念',
+    渲染与能力: '渲染与能力', 架构与工程: '架构与工程', 专题深入: '专题深入', 参考: '参考',
+  },
+  en: {
+    起步: 'Getting Started', 开始: 'Start', 代码构成: 'Code Anatomy', 基础概念: 'Core Concepts',
+    渲染与能力: 'Rendering & Capabilities', 架构与工程: 'Architecture & Engineering', 专题深入: 'Deep Dives', 参考: 'Reference',
+  },
+}
+export function groupName(name: string): string {
+  return GROUP_NAME[locale.value]?.[name] ?? name
+}
