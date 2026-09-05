@@ -27,16 +27,17 @@ Proteus 的内核是一台「语义机器」：业务代码声明**要什么**�
 
 每层 SPI 都配 conformance 套件并由 CI 强制校验——**约束挂在 IR 上，而不是挂在某个平台上**。
 
-## 一次编写，两端产物
+## 一次编写，多端产物
 
 ```
                     ┌─ Web 端 ─── 标准 Vite + Vue ──► DOM（零转换）
-page.vue（标准 SFC）─┤
-                    └─ 小程序端 ─ 编译管线 ────────► WXML / WXSS / Page() JS / JSON
+page.vue（标准 SFC）─┼─ 小程序端 ─ 编译管线 ─────► WXML / WXSS / Page() JS / JSON
+                    └─ 原生/Flutter/Headless ──► RenderBackend SPI 按语义实现
 ```
 
 - **Web 端零转换**：标准 Vite + `@vitejs/plugin-vue`，devtools / HMR / 代码分割全部可用
 - **小程序端编译期转换**：标签映射 / 响应式重写 / 样式转换 / 路由生成，四条管线在编译期完成
+- **端全集与状态**：见[端与成熟度](/docs/framework/ends-matrix)（W-7 端注册表，禁止手写第二份清单）
 
 ## 本分区导航
 
