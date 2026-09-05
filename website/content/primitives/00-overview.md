@@ -18,7 +18,7 @@ Proteus 的全部家当本质是 **一张语义目录（136 原语 SSOT，`PRIMI
 | 能力 Hook | capability（50 useXxx） | —— | `useFetch` `useStorage` `useCamera`… | [能力](/docs/18-capability-system) |
 | 柔性布局 | fluid（G-22） | `p-fluid` `p-fit` `p-scale`… | `v-p-fluid` | [柔性系统](/docs/system/01-overview) |
 | 桌面/系统 | desktop（G-24，21 模块） | —— | `createScrollObserver` `copyText` `v-p-shortcut`… | **本分区（下）** |
-| 手势 | gesture（G-32 B4） | `p-*` 手势组件 | `v-gesture` `useGesture` | 见组件/框架 |
+| 手势 | gesture（G-32 B4） | `p-*` 手势组件 | `v-gesture` `useGesture` | **本分区（下）** |
 | 工程原语 | engineering（E1-E28） | —— | `useState` `createRouterEngineering`… | 见框架/能力 |
 
 > 形态不是复制：同一个语义（如 `layout.grid`）既可以是 `p-grid`（组件形态），也在目录条目中登记——**两份消费面共享同一份语义清单**（136 SSOT），这就是「语义收敛」。
@@ -33,7 +33,9 @@ Proteus 的全部家当本质是 **一张语义目录（136 原语 SSOT，`PRIMI
 - **B4 生命周期/设备**：`p-lifecycle` · `p-state-restoration` · `p-network-status` · `p-low-power`
 - **B5 网页原语（#449）**：滚动观测 · 跨窗消息 · 锚点定位 · 页面 URL
 
-每条都是：**定位（模块头原文）→ 核心导出表（API 面）→ 用法与降级**。手把手示例见[桌面端原语](/docs/30-desktop-primitives)与[质量门禁违规速查](/docs/29-quality-gates)（官网自己就在用这些原语）。
+**手势原语（gesture——本分区）**：`Gesture 识别器`（tap/pan/swipe/pinch/rotate… 纯逻辑零依赖，Web Pointer / MP touch 归一 GestureInput）+ `useGesture Hook / v-gesture 指令`（Web 官方接线）——「事件是 Backend 实现细节」，MP/原生端由各端 Backend 承接。
+
+每条都是：**定位（模块头原文）→ 核心导出表（API 面）→ 真实用法（dogfooding 出处）→ 用法与降级**。手把手示例见[桌面端原语](/docs/30-desktop-primitives)与[质量门禁违规速查](/docs/29-quality-gates)（官网自己就在用这些原语）。
 
 ## 去哪看下一层
 
