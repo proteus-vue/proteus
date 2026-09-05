@@ -63,7 +63,7 @@ export const sections: DocSection[] = [
   buildSection('capabilities', '能力', '/docs/capability', capabilityModules, '能力'),
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),
   buildSection('plugins', '插件 API', '/docs/plugin', pluginModules, '插件 API'),
-  buildSection('reference', '参考', '/docs/reference', referenceModules, '参考'),
+  buildSection('reference', '工具链', '/docs/reference', referenceModules, '工程参考'), // ★#438：参考升级为工具链分区（CLI/规则/兼容参考 + devtools/dev-host/MCP/模块化回归）
 ]
 
 export function findDoc(base: string, slug: string): DocEntry | undefined {

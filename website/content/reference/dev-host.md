@@ -54,5 +54,5 @@ FAIL → exit 1（CI 阻断）
 
 ## 下一步
 
-- [DevTools 面板与扩展](/docs/framework/devtools-open-api)：调试消费面
+- [DevTools 面板与扩展](/docs/reference/devtools-open-api)：调试消费面
 - [插件 API](/docs/plugin/host)：G-58 插件形态
