@@ -12,6 +12,21 @@ title: p-zone
 |---|---|---|
 | — | 布局 | — |
 
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · 双端同源码编译目标（编译期映射 + 事件归一） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · Proteus 扩展组件——无小程序对应 |
+| Headless（SSR / 测试） | ✅ | headless · IR 渲染测试档（工具端） |
+| iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——组件级接线未开始 |
+| Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——组件级接线未开始 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI） · 端原型映射——组件级接线未开始 |
+| Flutter 混合 | 🟡 | flutter · widget 级映射——组件级未验证 |
+| 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
+
+> 状态口径：✅ 端已落地·本组件可用；🟡 端原型映射·组件级接线未开始；⬜ 端未开始。端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
+
 ## Props
 
 | Prop | 说明 | 类型 | 默认值 |

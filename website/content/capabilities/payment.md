@@ -4,7 +4,7 @@ title: usePayment（capability.payment）
 
 # usePayment
 
-authenticateBiometric：发起生物识别认证 */ authenticateBiometric(options?: BiometricOptions): Promise<CapResult<boolean>> /** C40 usePayment：拉起支付（wx.requestPayment 字段）
+usePayment：拉起支付（wx.requestPayment 字段）
 
 > 能力原语 C40 · `capability.payment` · 返回 `Result<PayResult>` · **Hook 已实现**（API 就绪，双端桥见下表）
 
@@ -14,12 +14,20 @@ authenticateBiometric：发起生物识别认证 */ authenticateBiometric(option
 usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 ```
 
-## 平台等价
+## 兼容进度
 
-| 端 | 等价物 |
-|---|---|
-| 小程序 | wx.requestPayment |
-| Web | 平台桥（wx 缺席时 webBridge 实现；不支持 → `Err('capability.payment.unsupported')`） |
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ⚠️ | vue-dom · webBridge 未提供 requestPayment → Err 显式降级（平台无直通 API） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.requestPayment |
+| Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
+| iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——能力桥未接线 |
+| Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——能力桥未接线 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI） · 端原型映射——能力桥未接线 |
+| Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
+| 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
+
+> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 端原型映射·能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 

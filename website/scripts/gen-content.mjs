@@ -20,6 +20,39 @@ async function loadIr() {
   return mod
 }
 
+// —— 端注册表 SSOT（W-7 L-B：兼容进度表的端列/状态 = website/src/ends.ts） ——
+async function loadEnds() {
+  const mod = await import(pathToFileURL(path.join(ROOT, 'website', 'src', 'ends.ts')).href)
+  return mod.ENDS
+}
+
+const STATUS_MARK = { '✅ 已落地': '✅', '🟡 部分落地': '🟡', '📋 规划已入库': '📋', '⬜ 未开始': '⬜' }
+const MP_STATUS_LABEL = { ok: 'L1 原语', compat: 'L2 兼容层', private: '平台私有', missing: '缺失' }
+
+// 兼容进度表（uni-app 式全端对照）：端列/状态来自 ENDS 注册表，说明 = 引擎（注册表） + 逐项注记
+function compatSection(rows, footer) {
+  const lines = []
+  lines.push('## 兼容进度')
+  lines.push('')
+  lines.push('| 端 | 兼容 | 说明 |')
+  lines.push('|---|---|---|')
+  for (const r of rows) lines.push(`| ${r.name} | ${r.status} | ${r.note} |`)
+  lines.push('')
+  lines.push(footer)
+  lines.push('')
+  return lines
+}
+
+// 解析 api.ts 内 wxBridge/webBridge 实现的方法名集合（能力页 Web 列 ✅/⚠️ 的 SSOT——未实现 → Err 显式降级）
+function extractFnKeys(src, fnName) {
+  const start = src.indexOf(`function ${fnName}`)
+  if (start < 0) return []
+  const rest = src.slice(start)
+  const endM = rest.search(/^}/m)
+  const body = endM >= 0 ? rest.slice(0, endM) : rest
+  return [...body.matchAll(/^ {4}([a-zA-Z]+):/gm)].map((x) => x[1])
+}
+
 // —— defineProps 块提取（平衡花括号/括号/字符串） ——
 function extractCall(src, fnName) {
   const idx = src.indexOf(`${fnName}(`)
@@ -139,7 +172,7 @@ function extractComponentDesc(src) {
 }
 
 // —— ① 组件页 ——
-function genComponents(ir) {
+function genComponents(ir, ends) {
   fs.mkdirSync(OUT_COMP, { recursive: true })
   const dirs = fs.readdirSync(COMP_DIR).filter((d) => fs.statSync(path.join(COMP_DIR, d)).isDirectory() && d.startsWith('p-'))
   const semanticMap = ir.TAG_SEMANTIC_MAP ?? ir.SEMANTIC_TAG_MAP ?? {}
@@ -167,8 +200,12 @@ function genComponents(ir) {
     // ★域推导优先级：catalog kind → semantic 前缀 → EXTRA_KIND 兑底（catalog 外组件）→ '—'
     const kind = tagKind[dir] ?? (semantic ? semantic.split('.')[0] : null) ?? EXTRA_KIND[dir] ?? '—'
     const domain = KIND_DOMAIN[kind] ?? kind
-    const mpRow = mpComp.find((i) => i.proteus === dir)
-    const mpEquiv = mpRow ? `${mpRow.mp}（${mpRow.status}）` : '—'
+    // ★兼容进度表：MP_MAPPING_MATRIX.proteus 存的是语义名（'layout.box / layout.stack'）而非 p-* 目录名——
+    //   旧代码 i.proteus === dir 永不命中（小程序等价列全灭），改语义包含匹配
+    const mpMatches = semantic ? mpComp.filter((i) => i.proteus.split(' / ').some((s) => s.includes(semantic))) : []
+    const mpLabel = (i) => `\`${i.mp}\`（${MP_STATUS_LABEL[i.status] ?? i.status}）`
+    const mpText = mpMatches.slice(0, 4).map(mpLabel).join(' · ') + (mpMatches.length > 4 ? ` 等 ${mpMatches.length} 项` : '')
+    const mpEquiv = mpMatches.length ? mpText : '—'
     // ★组件 tab 重构：h1 后输出组件自身说明（源码头注释 SSOT），替换千篇一律的通用语
     const desc = extractComponentDesc(src)
     const lines = []
@@ -186,6 +223,21 @@ function genComponents(ir) {
     lines.push('|---|---|---|')
     lines.push(`| ${semantic ?? '—'} | ${domain} | ${mpEquiv} |`)
     lines.push('')
+    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表 SSOT，小程序行注入真实映射
+    const compRows = []
+    for (const end of ends) {
+      let note = ''
+      switch (end.id) {
+        case 'web': note = '双端同源码编译目标（编译期映射 + 事件归一）'; break
+        case 'mp-weixin': note = mpMatches.length ? `原生控件映射 → ${mpText}` : 'Proteus 扩展组件——无小程序对应'; break
+        case 'headless': note = 'IR 渲染测试档（工具端）'; break
+        case 'flutter': note = 'widget 级映射——组件级未验证'; break
+        case 'quick-app': note = '端未开始'; break
+        default: note = '端原型映射——组件级接线未开始'
+      }
+      compRows.push({ name: end.name, status: STATUS_MARK[end.status] ?? '⬜', note: `${end.engine} · ${note}` })
+    }
+    lines.push(...compatSection(compRows, '> 状态口径：✅ 端已落地·本组件可用；🟡 端原型映射·组件级接线未开始；⬜ 端未开始。端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。'))
     if (props.length) {
       lines.push('## Props')
       lines.push('')
@@ -256,15 +308,20 @@ function genComponents(ir) {
 }
 
 // —— ② 能力页 ——
-function genCapabilities(ir) {
+function genCapabilities(ir, ends) {
   fs.mkdirSync(OUT_CAP, { recursive: true })
   const caps = ir.PRIMITIVE_CATALOG.filter((p) => p.kind === 'capability')
   const apiSrc = fs.readFileSync(path.join(ROOT, 'packages', 'api', 'src', 'capability.ts'), 'utf8')
+  // ★兼容进度表 SSOT：wxBridge/webBridge 实际实现的方法集（Web 列 ⚠️ = webBridge 未提供 → Err 显式降级）
+  const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
+  const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
   const iface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityHooks'))
   const hookDocs = {}
-  const re = /\/\*\*([\s\S]*?)\*\/\s*\n\s*(use[A-Z]\w*|set[A-Z]\w*)\(/g
+  // JSDoc 体 tempered 模式：禁止跨 */ 边界（否则从更早的 /** 起配，拼接出跨块垃圾文本——payment 页曾中招）
+  const JSDOC = '\\*\\*((?:[^*]|\\*(?!/))*)\\*\\/'
+  const re = new RegExp(`${JSDOC}\\s*\\n\\s*(use[A-Z]\\w*|set[A-Z]\\w*)\\(`, 'g')
   let m
-  // ★能力页开头说明：接口 JSDoc 多为空，三级兜底——接口 JSDoc → hook 体行注释 → 桥方法 JSDoc（CapabilityBridge 逐方法都有）
+  // ★能力页开头说明：接口 JSDoc 多为空，三级兑底——接口 JSDoc → hook 体行注释 → 桥方法 JSDoc（CapabilityBridge 逐方法都有）
   const cleanDoc = (t) => t.split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
   while ((m = re.exec(iface))) hookDocs[m[2]] = cleanDoc(m[1])
   const hooksBody = apiSrc.slice(apiSrc.indexOf('export function createCapabilityHooks'))
@@ -272,15 +329,18 @@ function genCapabilities(ir) {
   while ((m = reLine.exec(hooksBody))) if (!hookDocs[m[2]]) hookDocs[m[2]] = m[1].trim()
   const bridgeIface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityBridge'), apiSrc.indexOf('export interface CapabilityHooks'))
   const bridgeDocs = {}
-  const reBridge = /\/\*\*([\s\S]*?)\*\/\s*\n\s*(\w+)\??\s*\(/g
+  const reBridge = new RegExp(`${JSDOC}\\s*\\n\\s*(\\w+)\\??\\s*\\(`, 'g')
   while ((m = reBridge.exec(bridgeIface))) bridgeDocs[m[2]] = cleanDoc(m[1])
   const keyHits = [...hooksBody.matchAll(/\b(use[A-Z]\w*|set[A-Z]\w*):/g)]
+  const hookRefs = {}
   for (let k = 0; k < keyHits.length; k++) {
     const hook = keyHits[k][1]
-    if (hookDocs[hook]) continue
     const end = k + 1 < keyHits.length ? keyHits[k + 1].index : hooksBody.length
-    const bm = hooksBody.slice(keyHits[k].index, end).match(/bridge\.(\w+)\(/)
-    if (bm && bridgeDocs[bm[1]]) hookDocs[hook] = bridgeDocs[bm[1]].replace(/^C\d+\s+/, '')
+    const refs = [...hooksBody.slice(keyHits[k].index, end).matchAll(/bridge\.(\w+)\(/g)].map((x) => x[1])
+    hookRefs[hook] = [...new Set(refs)]
+    if (hookDocs[hook]) continue
+    const bm = refs[0]
+    if (bm && bridgeDocs[bm]) hookDocs[hook] = bridgeDocs[bm].replace(/^C\d+\s+/, '')
   }
   let ok = 0
   for (const c of caps) {
@@ -306,13 +366,37 @@ function genCapabilities(ir) {
     lines.push(sigM ? sigM[0] : `${c.api} → ${c.props?.[0] ?? 'Result<T>'}`)
     lines.push('```')
     lines.push('')
-    lines.push('## 平台等价')
-    lines.push('')
-    lines.push('| 端 | 等价物 |')
-    lines.push('|---|---|')
-    lines.push(`| 小程序 | ${c.mpEquiv} |`)
-    lines.push(`| Web | 平台桥（wx 缺席时 webBridge 实现；不支持 → \`Err('${c.semantic}.unsupported')\`） |`)
-    lines.push('')
+    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表；Web 列 ✅/⚠️ 由 webBridge 实际方法集推导
+    const refs = hookRefs[hook] ?? []
+    const wxMissing = refs.filter((r) => !wxKeys.has(r))
+    const webMissing = refs.filter((r) => !webKeys.has(r))
+    const capRows = []
+    for (const end of ends) {
+      let status = STATUS_MARK[end.status] ?? '⬜'
+      let note = ''
+      switch (end.id) {
+        case 'mp-weixin':
+          status = wxMissing.length ? '⚠️' : '✅'
+          note = wxMissing.length ? `wx 桥未提供 ${wxMissing.join('/')} → Err 显式降级` : `wx 桥 → ${c.mpEquiv}`
+          break
+        case 'web':
+          if (!refs.length) {
+            note = 'webBridge 平台桥（wx 缺席时默认注入）'
+          } else if (webMissing.length) {
+            status = '⚠️'
+            note = `webBridge 未提供 ${webMissing.join('/')} → Err 显式降级（平台无直通 API）`
+          } else {
+            note = 'webBridge 实现（平台 API 直连）'
+          }
+          break
+        case 'headless': note = 'mock 桥注入（测试 / SSR 档）'; break
+        case 'flutter': note = '同一 JS 逻辑层——能力桥未接线'; break
+        case 'quick-app': note = '端未开始'; break
+        default: note = '端原型映射——能力桥未接线'
+      }
+      capRows.push({ name: end.name, status, note: `${end.engine} · ${note}` })
+    }
+    lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 端原型映射·能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
     lines.push('## 用法')
@@ -353,6 +437,7 @@ function genCapabilities(ir) {
 
 // —— main ——
 const ir = await loadIr()
-const nComp = genComponents(ir)
-const nCap = genCapabilities(ir)
+const ends = await loadEnds()
+const nComp = genComponents(ir, ends)
+const nCap = genCapabilities(ir, ends)
 console.log(`generated: components ${nComp} · capabilities ${nCap}`)
