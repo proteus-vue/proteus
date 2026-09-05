@@ -1,6 +1,6 @@
 ---
 title: 小程序运行时
-order: 10
+order: 12
 group: 运行期
 ---
 

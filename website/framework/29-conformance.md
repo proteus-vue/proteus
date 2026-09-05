@@ -1,6 +1,6 @@
 ---
 title: 一致性验证
-order: 21
+order: 24
 group: 质量与兼容
 ---
 

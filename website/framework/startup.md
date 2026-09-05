@@ -1,6 +1,6 @@
 ---
 title: 启动流程与更新机制
-order: 11
+order: 13
 group: 运行期
 ---
 

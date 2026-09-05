@@ -1,6 +1,6 @@
 ---
 title: 可插拔架构
-order: 1
+order: 2
 group: 总览
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: 组件生命周期与事件
-order: 14
+order: 17
 group: 组件框架
 ---
 

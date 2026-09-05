@@ -1,6 +1,6 @@
 ---
 title: 编译规则与决策链
-order: 8
+order: 10
 group: 编译期
 ---
 

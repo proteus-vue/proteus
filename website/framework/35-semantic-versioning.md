@@ -1,6 +1,6 @@
 ---
 title: 语义版本与兼容性
-order: 22
+order: 25
 group: 质量与兼容
 ---
 
