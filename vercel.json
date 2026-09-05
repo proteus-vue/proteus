@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install",
-  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm run gen:content --filter website && NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter website build",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter website run gen:content && NODE_OPTIONS='--max-old-space-size=4096' pnpm --filter website build",
   "outputDirectory": "website/dist",
   "framework": null
 }
