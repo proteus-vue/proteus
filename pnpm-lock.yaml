@@ -668,6 +668,9 @@ importers:
       '@proteus-vue/gesture':
         specifier: 0.1.0
         version: link:../packages/gesture
+      '@proteus-vue/i18n':
+        specifier: 0.1.0
+        version: link:../packages/i18n
       '@proteus-vue/render-backend':
         specifier: 0.1.0
         version: link:../packages/render-backend

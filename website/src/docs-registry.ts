@@ -56,6 +56,22 @@ const systemModules = import.meta.glob<{ default: DocsModule }>('../content/syst
 const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plugins/*.md', { eager: true })
 const referenceModules = import.meta.glob<{ default: DocsModule }>('../content/reference/*.md', { eager: true })
 const primitiveModules = import.meta.glob<{ default: DocsModule }>('../content/primitives/*.md', { eager: true })
+// ★#468 英文内容变体（overlay：en/<分区目录>/<slug>.md——试点指南区；缺失变体 → 页面提示回中文）
+const enModules = import.meta.glob<{ default: DocsModule }>('../en/**/*.md', { eager: true })
+/** 分区 base → en 变体目录（试点子集随翻译推进扩列） */
+const EN_DIR_BY_BASE: Record<string, string> = { '/docs': 'guides' }
+
+/** 英文变体模块（未翻译 → undefined） */
+export function enModule(base: string, slug: string): DocsModule | undefined {
+  const dir = EN_DIR_BY_BASE[base]
+  if (!dir) return undefined
+  return enModules[`../en/${dir}/${slug}.md`]?.default
+}
+
+/** 变体标题（sidebar 显示用——无变体回退 zh 标题） */
+export function enTitleFor(base: string, slug: string): string | undefined {
+  return enModule(base, slug)?.title
+}
 
 export const sections: DocSection[] = [
   buildSection('guide', '指南', '/docs', guideModules, '指南'),

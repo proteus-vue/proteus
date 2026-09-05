@@ -8,7 +8,9 @@ import { sections } from './docs-registry'
 import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
 // ★#444 桌面语义原语全收口：快捷键 = v-p-shortcut 指令（内部封装 window 监听）；焦点陷阱 = createFocusTrap——页面零裸 window.*
 // ★#449 锚点跳转 = desktop scrollToId（元素查询/scrollIntoView 在框架包内）
+// ★#468 chrome 双语（doc.i18n）
 import { createFocusTrap, shortcutLabel, detectShortcutPlatform, scrollToId } from '@proteus-vue/desktop'
+import { t, sectionName } from './i18n'
 
 interface Hit extends SearchIndexEntry {
   /** 所属页标题（面包屑 分区 · 页） */
@@ -16,13 +18,9 @@ interface Hit extends SearchIndexEntry {
 }
 
 const router = useRouter()
-const SECTION_NAME: Record<string, string> = {
-  docs: '指南', framework: '框架', component: '组件', capability: '能力',
-  primitives: '原语', system: '柔性系统', plugin: '插件 API', reference: '工具链',
-}
 function sectionNameOf(path: string): string {
   const m = path.match(/^\/docs\/([a-z-]+)/)
-  return SECTION_NAME[m?.[1] ?? 'docs'] ?? ''
+  return sectionName(m?.[1] ?? 'docs') ?? ''
 }
 
 // 聚合索引（模块级一次构建——全站 7 分区段落条目）
@@ -126,13 +124,16 @@ function splitHit(text: string, qq: string): Array<{ t: string; hit: boolean }> 
   return out
 }
 
-const placeholder = computed(() => `搜索文档…（${shortcutKbd}）`)
+const placeholder = computed(() => t('search.placeholder', { kbd: shortcutKbd }))
+const triggerLabel = computed(() => t('search.trigger'))
+const emptyText = computed(() => t('search.empty'))
+const hintText = computed(() => t('search.hint'))
 </script>
 
 <template>
-  <button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }" class="docsearch-trigger" type="button" aria-label="搜索文档" @click="toggle(true)">
+  <button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }" class="docsearch-trigger" type="button" :aria-label="triggerLabel" @click="toggle(true)">
     <span class="ds-icon" aria-hidden="true">⌕</span>
-    <span class="ds-placeholder">搜索文档…</span>
+    <span class="ds-placeholder">{{ triggerLabel }}</span>
     <kbd class="ds-kbd">{{ shortcutKbd }}</kbd>
   </button>
 
@@ -145,7 +146,7 @@ const placeholder = computed(() => `搜索文档…（${shortcutKbd}）`)
           <kbd class="ds-kbd">Esc</kbd>
         </div>
         <div v-if="q.trim().length >= 2" class="docsearch-body">
-          <p-text v-if="!results.length" class="docsearch-empty">无匹配结果——换个关键词试试</p-text>
+          <p-text v-if="!results.length" class="docsearch-empty">{{ emptyText }}</p-text>
           <div v-else ref="listEl" class="docsearch-list">
             <button
               v-for="(r, i) in results"
@@ -166,7 +167,7 @@ const placeholder = computed(() => `搜索文档…（${shortcutKbd}）`)
             </button>
           </div>
         </div>
-        <div v-else class="docsearch-hint">输入 ≥2 字符全站搜索（指南 / 框架 / 组件 / 能力 / 原语 / 柔性系统 / 插件 API / 工具链）</div>
+        <div v-else class="docsearch-hint">{{ hintText }}</div>
       </div>
     </div>
   </Teleport>
