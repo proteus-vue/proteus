@@ -9,7 +9,7 @@
 - [x] Debug-only + token 鉴权（接口层）
 - [x] 参考实现 + verify.sh
 
-## 阶段 2：真实宿主接入（G-58 候选）
+## 阶段 2：真实宿主接入（后续 plan 候选，按当时段位另定）
 
 - [ ] Flutter/Dart 路径：`registerExtension` 真实接入 + DevTools 扩展包
 - [ ] Flipper 路径：Desktop + Client 双插件

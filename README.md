@@ -231,7 +231,7 @@ proteus/
 │   ├── agent/ mcp/ docs/ test-ir/ test-core/      # Agent Kit / MCP Server / 文档引擎 / 测试 IR / 测试核心
 │   ├── dev-host/                   #   调试基座即宿主（G-45：Install-Once Host + 动态后端装载 + pending 回放）
 │   └── cli/ create-proteus/        #   CLI（build/explain/audit/conformance/migrate）/ 一键工程
-├── docs/                           # 74 份 plan 文档（G-01~G-57 连续 + 规约/方法论/白皮书）+ board-inventory
+├── docs/                           # 75 份 plan 文档（G-01~G-58 连续 + 规约/方法论/白皮书）+ board-inventory
 ├── examples/                       # 示例应用（20 页能力矩阵活文档 + 文档引擎 demo）
 ├── tests/                          # 1980 单测 / 185 文件 + Web e2e 18 例
 ├── .github/workflows/              # CI：test / vue-tsc / 双端构建 / 独立包构建 / e2e / consistency
@@ -255,7 +255,7 @@ npm run proteus -- conformance --repo .             # 严禁 fork 仓库治理�
 |---|---|
 | [PROTEUS-METHODOLOGY](docs/proteus-methodology-plan/PROTEUS-METHODOLOGY.md) | 方法论哲学：统一语义收敛、五支柱、Tier 模型（onboarding 第一课） |
 | [定位 v3](docs/proteus-positioning-v3.md) | 对外定位：一句话定位 + 杀手特性详解 + 对标矩阵 + 对外话术 |
-| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 74 份 plan 文档状态总表（单一权威索引） |
+| [架构全景](docs/board-inventory.md) | 六层分层 + 双路线 + 75 份 plan 文档状态总表（单一权威索引） |
 | [规约](docs/proteus-architecture.md) | 原则 #0-#13 + 铁律总表 + 严格规则（真理来源） |
 | [快速开始](docs/getting-started.md) / [配置参考](docs/configuration.md) / [编译原理](docs/compiler.md) / [路由与转场](docs/routing.md) | 开发者文档 |
 | [路线图](docs/roadmap.md) · [里程碑线](docs/proteus-roadmap-2-plan/01-master-roadmap.md) | 版本线 v0.1→v2.0 · M1-M3 里程碑线 |

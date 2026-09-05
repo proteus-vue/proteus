@@ -127,7 +127,7 @@ Zed MCP       ← Zed 用户
 |--------|---------|------|
 | **Pylance / C# Dev Kit 等闭源专有扩展不可用** | Python / C# 重度用户 | 走 VSCode 宿主路线 |
 | **OpenVSX 覆盖率低于官方市场** | 部分扩展只有官方市场有 | 同上 |
-| 新生态从零建设 | 所有 Studio 用户 | 插件 API 方案见后续插件生态 plan（未编号，见 rules.md 编号避让登记） |
+| 新生态从零建设 | 所有 Studio 用户 | 插件 API 方案见 **G-58**（plugin-api plan，#395 入库） |
 
 > **若目标用户重度依赖闭源专有工具链，Studio 短期不适合他们。**
 > 这句话必须对外明说，不能用"兼容性良好"含糊带过。
@@ -138,7 +138,7 @@ Zed MCP       ← Zed 用户
 
 既然不复用 VSCode 生态，就必须回答：**Studio 自己的插件生态怎么做？**
 
-→ **后续 plan《Proteus Studio 插件 API 与扩展生态》（未编号，入库时按当时连续段位定号）**
+→ **G-58《插件 API 与扩展生态》（proteus-plugin-api-plan，#395 入库）**
 
 核心设计：
 - **WASM 插件运行时**（Zed 实证，非 Node 进程）

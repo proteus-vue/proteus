@@ -40,7 +40,7 @@
 | **04-editor-integration.md** | CodeMirror 6 / xterm.js+pty / libmpv 集成方案 |
 | **05-mobile-companion.md** | ★ 移动端伴侣——三个宿主做不到的独特价值 |
 | **06-risks-degradation.md** | 八条风险与降级路径；R8（自研 GUI）是唯一无降级的 |
-| **07-ecosystem-compat.md** | ★ 能否接 VSCode 插件生态？不能，及为什么不追求（→ 后续插件生态 plan，未编号） |
+| **07-ecosystem-compat.md** | ★ 能否接 VSCode 插件生态？不能，及为什么不追求（→ G-58 插件生态 plan） |
 | **conformance.md** | INV-ST-01~08 / CMP-171~178 / 67 cases / NEG-01~09 |
 | **rules.md** | G-56.1~9 铁律 + AP-ST-01~08 反模式 |
 | **architecture-update.md** | 原则 #13.66~68；成熟度 L5；已知缺口 |
