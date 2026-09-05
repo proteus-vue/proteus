@@ -1,6 +1,6 @@
 // packages/cli/src/audit-all.ts
 // ★test-framework B6：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
-// 聚合 route / module / config / i18n / capabilities / components / d2 / devtools-budget 八域 + CI 耗时预算（<12s，超预算阻断）
+// 聚合 route / module / config / i18n / capabilities / components / d2 / api-check / fluid / devtools-budget 十域 + CI 耗时预算（<12s，超预算阻断）
 // 复用各检查函数（try/catch + 计时）；缺配置文件/未声明 audit 的域跳过（独立编译模式语义，对齐 check 聚合）
 import path from 'node:path'
 import fs from 'node:fs'
@@ -15,6 +15,8 @@ import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { loadProjectConfig } from './config-loader'
 import { runD2Audit, formatD2AuditDetail } from './d2-audit'
 import { readDisabledGates } from './gate-config'
+import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
+import { runFluidCheck, formatFluidCheck } from './fluid-check'
 
 /** 10 §CI 耗时预算：audit all < 12s */
 export const AUDIT_ALL_BUDGET_MS = 12000
@@ -159,6 +161,32 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
       }
     })
     domains.push({ name: 'd2', ok: value.ok, ms, detail: value.text, skipped: value.skipped })
+  }
+
+  // ★#458 api-check：CMP007 门禁（回调式平台 API / 同步存储 / 裸全局能力调用——开发者典型不规范，抓 useXxx 迁移）
+  if (!disabled.has('api-check')) {
+    const { value, ms } = await timed(() => {
+      try {
+        const result = runApiHookCheck(root)
+        return { ok: result.ok, text: formatApiHookCheck(result) }
+      } catch (e) {
+        return { ok: true, text: `[proteus-api-check] 跳过：${(e as Error).message}` }
+      }
+    })
+    domains.push({ name: 'api-check', ok: value.ok, ms, detail: value.text })
+  }
+
+  // ★#458 fluid：柔性布局严格规则（FLD001-013——手写 @media/硬编码断点/无障碍字号/死尺寸）
+  if (!disabled.has('fluid')) {
+    const { value, ms } = await timed(() => {
+      try {
+        const result = runFluidCheck(root)
+        return { ok: result.ok, text: formatFluidCheck(result) }
+      } catch (e) {
+        return { ok: true, text: `[proteus-fluid] 跳过：${(e as Error).message}` }
+      }
+    })
+    domains.push({ name: 'fluid', ok: value.ok, ms, detail: value.text })
   }
 
   // ★M10 devtools-budget：DevTools 性能预算烟测（bus.emit / 火焰图 / timeline ingest；10 倍余量上界抓病态回归）

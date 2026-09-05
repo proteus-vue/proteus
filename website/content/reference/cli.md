@@ -169,7 +169,7 @@ proteus audit d2 [dir]
 proteus audit all [root]
 ```
 
-★全量审计门禁（test-framework B6 + M10 + ★#450 D-2）：route / module / config / i18n / capabilities / components / d2 / devtools-budget 八域聚合
+★全量审计门禁（test-framework B6 + M10 + ★#450/#458 D-2/api-check/fluid）：route / module / config / i18n / capabilities / components / d2 / api-check / fluid / devtools-budget 十域聚合
       + CI 耗时预算（<12s，超预算阻断）；缺配置文件/未声明 audit 的域跳过（独立编译模式；D-2 为 opt-in——声明 audit 即启用）
 
 ### `proteus audit`

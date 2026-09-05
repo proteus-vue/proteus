@@ -62,7 +62,7 @@ describe('proteus gate run（统一执行）', () => {
     try {
       const r = await runGate('audit', dir)
       expect(r.ok).toBe(true)
-      expect(r.text).toContain('8 域')
+      expect(r.text).toContain('10 域')
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

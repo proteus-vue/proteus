@@ -40,7 +40,7 @@ proteus gate run d2 [dir]        # 专项：D-2 页面门禁（与 audit d2 同�
 
 > 门禁逻辑零重复：preset 复用既有聚合引擎，已接线门禁复用各自独立 runner；未接线门禁（○）经其独立命令运行。
 
-专项命令可单独跑，也可被 `proteus audit all` 八域聚合（route / module / config / i18n / capabilities / components / **d2（D-2 页面门禁——opt-in：proteus.config 声明 `audit` 才跑）** / devtools-budget + CI 耗时预算）：
+专项命令可单独跑，也可被 `proteus audit all` 十域聚合（route / module / config / i18n / capabilities / components / **d2（D-2 页面门禁——opt-in：proteus.config 声明 `audit` 才跑）** / **api-check（CMP007）** / **fluid（布局规范）** / devtools-budget + CI 耗时预算）：
 
 | 命令 | 检查内容 |
 |---|---|

@@ -177,7 +177,7 @@ const config: ProteusConfig = {
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `disabled` | `string[]` | 否 | 关闭列表：门禁/preset id（`proteus gate ls` 目录：check/audit/d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/coverage/devtools-budget…）+ 聚合域 id（audit：route/module/config/i18n/capabilities/components/d2/devtools-budget · check：css/style/router/cli/app-config） |
+| `disabled` | `string[]` | 否 | 关闭列表：门禁/preset id（`proteus gate ls` 目录：check/audit/d2/fluid/api-check/capabilities/i18n/router/module/css/style/config/components/coverage/devtools-budget…）+ 聚合域 id（audit 十域：route/module/config/i18n/capabilities/components/d2/api-check/fluid/devtools-budget · check：css/style/router/cli/app-config） |
 
 ```ts
 // proteus.config.ts

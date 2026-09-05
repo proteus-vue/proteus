@@ -74,7 +74,7 @@ export const GATES: GateInfo[] = [
     group: '深度聚合',
     scope: 'project',
     usage: 'proteus audit all [root]',
-    desc: '★全量审计门禁（B6 + M10 + D-2）：八域聚合 + CI 耗时预算（<12s）；缺配置/未声明 audit 的域跳过（D-2 opt-in）',
+    desc: '★全量审计门禁（B6 + M10 + D-2/api-check/fluid）：十域聚合 + CI 耗时预算（<12s）；缺配置/未声明 audit 的域跳过（D-2 opt-in）',
     run: async (root) => {
       const result = await runAuditAll(path.resolve(root))
       return { ok: result.ok, text: formatAuditAll(result) }
