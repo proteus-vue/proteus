@@ -47,6 +47,9 @@ export type { HttpMethod, RequestConfig, RequestResponse, IRequestAdapter } from
 export type { PlatformAPI, StorageAPI, RouterAPI, UIAPI } from './platform-api'
 // ★运行时实现归 @proteus-vue/api（createApi + 三端 adapter）；本文件仅类型契约（规划 M9）
 export type { ProteusConfig } from './config'
+// ★#447 D-2 门禁规则配置（id/severity 单一来源——CLI config:validate + website/audit-d2 同源消费）
+export { AUDIT_RULE_IDS, AUDIT_SEVERITIES } from './config'
+export type { AuditRuleId, AuditSeverity, AuditConfig } from './config'
 
 // ============ B8 小程序端类型（mp/ 子目录：组件 schema + 版本对齐） ============
 export type { MpComponentProp, MpComponentSchema, MpComponentRegistry } from './mp/component-schema'

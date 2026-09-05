@@ -69,6 +69,18 @@ export const proteusConfigSchema = {
       type: 'object',
       properties: { meta: { type: 'object' } },
     },
+    // ★#447 D-2 dogfooding 门禁（audit-d2）：规则级可配——rules 子键 severity 枚举；未列规则默认 error
+    audit: {
+      type: 'object',
+      properties: {
+        dir: { type: 'string' },
+        rules: {
+          type: 'object',
+          propertyNames: { enum: ['no-third-party-ui', 'no-media-query', 'no-platform-api', 'no-web-platform-api'] },
+          additionalProperties: { enum: ['off', 'warn', 'error'] },
+        },
+      },
+    },
   },
 } as const
 

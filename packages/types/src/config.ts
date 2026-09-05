@@ -17,6 +17,24 @@ export type ViteUserConfig = UserConfig
 /** ★G-29 编译器后端选择（compiler-backend-1-plan §5「切换方式」）：'node' 默认；'rust' → 构建内双编译语义等价校验 */
 export type CompilerBackend = 'node' | 'rust'
 
+// ============ ★#447 D-2 dogfooding 门禁规则（05-dogfooding-conformance D-2 机器化，website/audit-d2.mjs 消费） ============
+
+/** D-2 门禁规则 id（缺省全部 error——关/降级在审计报告明示，PASS = 启用规则集零违规） */
+export const AUDIT_RULE_IDS = ['no-third-party-ui', 'no-media-query', 'no-platform-api', 'no-web-platform-api'] as const
+export type AuditRuleId = (typeof AUDIT_RULE_IDS)[number]
+
+/** 规则级别：error = 违规阻断（默认）· warn = 报告不阻断 · off = 不启用 */
+export const AUDIT_SEVERITIES = ['off', 'warn', 'error'] as const
+export type AuditSeverity = (typeof AUDIT_SEVERITIES)[number]
+
+/** ★#447 配置 audit 字段（开发者自选 D-2 规则——rules 未列出的规则沿用默认 error，防静默关闭） */
+export interface AuditConfig {
+  /** 被审计页面目录（相对工程根；缺省 src——对齐 pagesDir 扫描语义） */
+  dir?: string
+  /** 规则门禁：缺省 'error'（列出的规则改级别；未列 = error） */
+  rules?: Partial<Record<AuditRuleId, AuditSeverity>>
+}
+
 export interface ProteusConfig {
   /** 目标平台 */
   platform: 'mp-weixin' | 'web'
@@ -94,4 +112,7 @@ export interface ProteusConfig {
   /** ★框架内置组件目录（决策 #115 过渡：组件库未拆包时显式指向共享组件目录；缺省 root/src/components）
    *   ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后删除 */
   frameworkComponentsDir?: string
+  /** ★#447 D-2 dogfooding 门禁（05-dogfooding-conformance D-2）：页面不裸写平台 API / 手写 @media / 引第三方 UI
+   *   规则级可配（off/warn/error——缺省全部 error）；消费者：官网 dogfooding 审计 website/audit-d2.mjs */
+  audit?: AuditConfig
 }

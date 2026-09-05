@@ -82,6 +82,41 @@ describe('validateConfig（types-plan B5）', () => {
   })
 })
 
+describe('validateConfig：audit 字段（★#447 D-2 门禁规则）', () => {
+  it('合法 audit（四规则 severity + dir）→ ok', () => {
+    const r = validateConfig({
+      ...VALID,
+      audit: {
+        dir: 'src',
+        rules: { 'no-third-party-ui': 'off', 'no-media-query': 'warn', 'no-platform-api': 'error', 'no-web-platform-api': 'error' },
+      },
+    })
+    expect(r).toEqual({ ok: true })
+  })
+
+  it('audit 空对象（全默认 error）→ ok', () => {
+    expect(validateConfig({ ...VALID, audit: {} })).toEqual({ ok: true })
+  })
+
+  it('未知规则 id → CONFIG_UNKNOWN_FIELD（path=audit.rules.xxx）', () => {
+    const r = validateConfig({ ...VALID, audit: { rules: { 'no-jquery': 'off' } } })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      const e = r.errors.find((x) => x.code === 'CONFIG_UNKNOWN_FIELD')
+      expect(e?.path).toBe('audit.rules.no-jquery')
+    }
+  })
+
+  it('非法 severity → CONFIG_INVALID_ENUM；dir 非字符串 → CONFIG_INVALID_TYPE', () => {
+    const en = validateConfig({ ...VALID, audit: { rules: { 'no-media-query': 'silent' } } })
+    expect(en.ok).toBe(false)
+    if (!en.ok) expect(en.errors.some((e) => e.code === 'CONFIG_INVALID_ENUM' && e.path === 'audit.rules.no-media-query')).toBe(true)
+    const tp = validateConfig({ ...VALID, audit: { dir: 42 } })
+    expect(tp.ok).toBe(false)
+    if (!tp.ok) expect(tp.errors.some((e) => e.code === 'CONFIG_INVALID_TYPE' && e.path === 'audit.dir')).toBe(true)
+  })
+})
+
 describe('config:check CLI（TS 配置加载 + 校验报告）', () => {
   it('examples/proteus.config.ts 加载校验通过（真实配置）', async () => {
     const { result, text } = await checkConfigFile(path.resolve('examples/proteus.config.ts'))

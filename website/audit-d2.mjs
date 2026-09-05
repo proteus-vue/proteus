@@ -8,18 +8,41 @@
  *   ✗ error  平台 API 直调（wx.* / uni.*——D-2/平台铁律，官网无小程序分支）
  *   ✗ error  Web 平台 API 裸调（window./document./navigator./location./fetch 等——★#445：封装只在 @proteus-vue/* 框架包，页面零裸写）
  *   ℹ 豁免   逐行 `// d2-exempt: <原因>`（仅 Web 平台规则可豁免）· 整文件 d2-exempt-file 块注释标注（原生视觉资产页）——登记透明可审计
+ *   ℹ 规则   四规则可配（★#447：proteus.config.ts 的 `audit.rules`，off/warn/error——缺省全 error，关/降级在报告明示）
  *   ℹ 统计   语义原语使用（v-p-fluid / v-p-hover / p-* 标签）→ 覆盖率报告（阈值随 B5 定）
  *
+ * ★配置来源：从被审计目录向上找 proteus.config.ts（内置 esbuild TS 加载器求值——与 packages/cli
+ *  config-loader 同构，独立工具零 cli 依赖）；配置缺失/未声明 audit → 全部默认 error（fail-closed）
+ *
  * ★审计范围 = .vue SFC 页面语义；src/spirit 是独立多入口原生 iframe 资产页（spirit.html 直挂
- *   Three.js 入口 .ts——canvas/WebGL 原生实现不走框架 p-* 页面语义），由宿主组件逐行豁免 + 资产头声明
+ *  Three.js 入口 .ts——canvas/WebGL 原生实现不走框架 p-* 页面语义），由宿主组件逐行豁免 + 资产头声明
  *
  * 用法：node website/audit-d2.mjs [dir]   （缺省 website/src）
  * 退出码：0 = 通过（CI 可挂），1 = 有 error
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import esbuildPkg from 'esbuild'
 import { parse as sfcParse } from '@vue/compiler-sfc'
+
+const { transformSync } = esbuildPkg
+
+// ★#447 D-2 规则元数据（id 与 @proteus-vue/types AUDIT_RULE_IDS 单一来源一致）
+const RULE_ORDER = ['no-third-party-ui', 'no-media-query', 'no-platform-api', 'no-web-platform-api']
+const DEFAULT_RULES = { 'no-third-party-ui': 'error', 'no-media-query': 'error', 'no-platform-api': 'error', 'no-web-platform-api': 'error' }
+/** 未知/非法值 fail-closed（保持 error——config:check 会单独拦拼写错误） */
+function normalizeRules(rawRules) {
+  const sev = { ...DEFAULT_RULES }
+  if (rawRules && typeof rawRules === 'object') {
+    for (const [id, v] of Object.entries(rawRules)) {
+      if (!(id in DEFAULT_RULES)) continue
+      sev[id] = v === 'off' || v === 'warn' ? v : 'error'
+    }
+  }
+  return sev
+}
 
 const FORBIDDEN_UI = /from\s+['"](element-plus|vant|ant-design-vue|@arco-design|naive-ui|quasar|vuetify|antd)['"]/
 const PLATFORM_API = /\b(wx|uni)\s*\.\s*(request|login|scanCode|getLocation|pay|navigateTo|createCameraContext)\b/
@@ -78,12 +101,93 @@ function webCodeOnly(src) {
     .join('\n')
 }
 
-/** 审计单个 .vue 文件 */
-export function auditVueFile(file) {
+/* ============ ★#447 配置来源：proteus.config.ts 的 audit 字段（向上发现 + esbuild TS 加载） ============ */
+// 与 packages/cli/src/config-loader.ts 同构（独立工具零 cli 依赖——配置里可能 import 相对 TS 子模块/包，如官网 ends.ts）
+const tsCache = new Map()
+function loadTsModule(abs) {
+  if (tsCache.has(abs)) return tsCache.get(abs)
+  const src = fs.readFileSync(abs, 'utf-8')
+  const { code } = transformSync(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
+  const mod = { exports: {} }
+  const dir = path.dirname(abs)
+  const req = createRequire(path.join(dir, 'package.json'))
+  const localRequire = (id) => {
+    if (id.startsWith('.')) {
+      let resolved = ''
+      try {
+        resolved = req.resolve(id)
+      } catch {
+        const cand = [id, `${id}.ts`, `${id}.mts`, path.join(id, 'index.ts')]
+        for (const c of cand) if (fs.existsSync(c)) { resolved = c; break }
+      }
+      if (!resolved) throw new Error(`相对子模块解析失败：${id}`)
+      if (/\.(ts|mts|tsx)$/.test(resolved)) return loadTsModule(resolved)
+      const m = req(resolved)
+      return m?.default ?? m
+    }
+    return req(id)
+  }
+  new Function('module', 'exports', 'require', code)(mod, mod.exports, localRequire)
+  const value = mod.exports.default ?? mod.exports
+  tsCache.set(abs, value)
+  return value
+}
+
+function loadAuditConfig(file) {
+  const src = fs.readFileSync(file, 'utf-8')
+  const { code } = transformSync(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
+  const mod = { exports: {} }
+  const dir = path.dirname(file)
+  const req = createRequire(path.join(dir, 'package.json'))
+  const fileRequire = (id) => {
+    if (id.startsWith('.')) {
+      let resolved = ''
+      try {
+        resolved = req.resolve(id)
+      } catch {
+        const cand = [path.resolve(dir, id), path.resolve(dir, `${id}.ts`), path.resolve(dir, `${id}.mts`)]
+        for (const c of cand) if (fs.existsSync(c)) { resolved = c; break }
+      }
+      if (!resolved) throw new Error(`相对子模块解析失败：${id}`)
+      if (/\.(ts|mts|tsx)$/.test(resolved)) return loadTsModule(resolved)
+      const m = req(resolved)
+      return m?.default ?? m
+    }
+    const resolved = req.resolve(id)
+    const m = req(resolved)
+    return m?.default ?? m
+  }
+  new Function('module', 'exports', 'require', '__dirname', '__filename', code)(mod, mod.exports, fileRequire, dir, file)
+  return mod.exports.default
+}
+
+/** 从被审计目录向上找 proteus.config.ts（最多 6 层，防扫到无关目录） */
+function discoverConfigFile(dir) {
+  let cur = path.resolve(dir)
+  for (let i = 0; i < 6; i++) {
+    const cand = path.join(cur, 'proteus.config.ts')
+    if (fs.existsSync(cand)) return cand
+    const next = path.dirname(cur)
+    if (next === cur) break
+    cur = next
+  }
+  return null
+}
+
+/** 审计单个 .vue 文件（rules: 规则 id → 'error' | 'warn' | 'off'，缺省全 error） */
+export function auditVueFile(file, rules = DEFAULT_RULES) {
   const src = fs.readFileSync(file, 'utf8')
   const rel = path.relative(process.cwd(), file)
   const errors = []
+  const warnings = []
   const stats = { directives: new Set(), attrs: new Set(), tags: new Set() }
+
+  // 违规上报按规则级别分流：error → 阻断（errors）/ warn → 报告不阻断（warnings）/ off → 跳过
+  const hit = (ruleId, text) => {
+    const sev = rules[ruleId]
+    if (sev === 'off') return
+    ;(sev === 'warn' ? warnings : errors).push(text)
+  }
 
   // ★#445 整文件豁免（原生视觉资产页——文件头 `/* d2-exempt-file: <原因> */`）：平台 API 家族整体豁免，登记透明
   const fileExempt = src.match(FILE_EXEMPT_RE)?.[1]?.trim() ?? null
@@ -105,16 +209,16 @@ export function auditVueFile(file) {
         .join('\n')
 
   // ① 第三方 UI 库（D-2：禁引入 Element/Vant 等）
-  if (FORBIDDEN_UI.test(src)) errors.push(`${rel} [D2-UI] 引入第三方 UI 库（官网必须用 p-* 语义组件 / 自有 tokens）`)
+  if (FORBIDDEN_UI.test(src)) hit('no-third-party-ui', `${rel} [D2-UI] 引入第三方 UI 库（官网必须用 p-* 语义组件 / 自有 tokens）`)
 
   // ② 手写 @media（W-6 柔性框架优先）——只扫 <style> 块内真实样式代码（排除注释；不可豁免）
-  if (MEDIA_RE.test(styleCodeOnly(src))) errors.push(`${rel} [W-6/C8] 手写 @media 断点（响应式归 v-p-fluid clamp + 柔性网格）`)
+  if (MEDIA_RE.test(styleCodeOnly(src))) hit('no-media-query', `${rel} [W-6/C8] 手写 @media 断点（响应式归 v-p-fluid clamp + 柔性网格）`)
 
   // ③ 平台 API 直调（wx.*/uni.*——业务只走语义接口；d2-exempt-file 整文件豁免可放行——原生资产页）
-  if (!fileExempt && PLATFORM_API.test(src)) errors.push(`${rel} [D2-PLATFORM] 平台 API 直调（wx.*/uni.*——业务只走语义接口）`)
+  if (!fileExempt && PLATFORM_API.test(src)) hit('no-platform-api', `${rel} [D2-PLATFORM] 平台 API 直调（wx.*/uni.*——业务只走语义接口）`)
 
   // ④ ★#445 Web 平台 API 裸调（window./document./navigator./location./fetch/localStorage…——封装只在框架包；注释剥除防文档头误报；行豁免需带原因）
-  if (!fileExempt && WEB_PLATFORM_RE.test(webCodeOnly(scrubbed))) errors.push(`${rel} [D2-PLATFORM-WEB] Web 平台 API 裸调（window./document./navigator./location./fetch 等——须走 @proteus-vue/* 原语；确无原语处逐行 // d2-exempt: <原因>）`)
+  if (!fileExempt && WEB_PLATFORM_RE.test(webCodeOnly(scrubbed))) hit('no-web-platform-api', `${rel} [D2-PLATFORM-WEB] Web 平台 API 裸调（window./document./navigator./location./fetch 等——须走 @proteus-vue/* 原语；确无原语处逐行 // d2-exempt: <原因>）`)
 
   // ⑤ 模板 AST：语义原语使用统计
   try {
@@ -124,14 +228,32 @@ export function auditVueFile(file) {
     // 解析失败不阻断（vue-tsc 已把关语法）——统计尽力而为
   }
 
-  return { file: rel, errors, stats, exemptions }
+  return { file: rel, errors, warnings, stats, exemptions }
 }
 
-/** 审计目录 → 报告 */
-export function auditWebsiteDir(dir) {
+/** 审计目录 → 报告（自动发现并加载目录所属 proteus.config.ts 的 audit 字段；opts.configFile 可显式指定/禁用手动） */
+export function auditWebsiteDir(dir, opts = {}) {
+  const configFile = opts.configFile === undefined ? discoverConfigFile(dir) : opts.configFile || null
+  // 配置来源处理：加载成功 → 取 audit.rules；失败/缺失 → fail-closed 全 error + 原因入报告
+  const notes = []
+  let rules = DEFAULT_RULES
+  if (configFile) {
+    try {
+      const cfg = loadAuditConfig(configFile)
+      const audit = cfg?.audit
+      if (audit && typeof audit === 'object' && audit.rules && typeof audit.rules === 'object') rules = normalizeRules(audit.rules)
+      else notes.push(`⚠ ${path.relative(process.cwd(), configFile)} 未声明 audit.rules——四规则默认 error`)
+    } catch (e) {
+      notes.push(`⚠ audit 配置加载失败 ${configFile}——按默认全 error（fail-closed）：${e?.message ?? e}`)
+    }
+  } else {
+    notes.push('ℹ 未发现 proteus.config.ts——四规则默认 error（可在 audit.rules 自选级别）')
+  }
+
   const files = collectVue(dir)
-  const results = files.map(auditVueFile)
+  const results = files.map((f) => auditVueFile(f, rules))
   const errors = results.flatMap((r) => r.errors)
+  const warnings = results.flatMap((r) => r.warnings)
   const exemptions = results.flatMap((r) => r.exemptions.map((reason) => `${r.file}: ${reason}`))
 
   // 语义原语使用统计（v1 报告——覆盖率阈值随 B5 定）
@@ -153,21 +275,27 @@ export function auditWebsiteDir(dir) {
     }
   }
 
-  return { dir, files: results, errors, usage, exemptions, ok: errors.length === 0 }
+  return { dir, configFile, rules, notes, files: results, errors, warnings, usage, exemptions, ok: errors.length === 0 }
 }
 
 /** 格式化报告 */
 export function formatAuditReport(report) {
   const lines = []
   lines.push(`[proteus audit website · D-2] 目录：${report.dir} · ${report.usage.files} 个 .vue`)
+  const active = RULE_ORDER.map((id) => `${id}=${report.rules[id]}`).join(' · ')
+  lines.push(`  规则：${active}${report.configFile ? `（来源 ${path.relative(process.cwd(), report.configFile)}）` : ''}`)
+  for (const n of report.notes) lines.push(`  ${n}`)
   for (const e of report.errors) lines.push(`  ✗ ${e}`)
+  for (const w of report.warnings) lines.push(`  ⚠ ${w}`)
   lines.push(`  语义原语统计：v-p-fluid ${report.usage.fluidDirectives} 文件 · 语义指令 ${report.usage.semanticDirectives} 处 · p-* 标签 ${report.usage.semanticTags}/${report.usage.totalTags}`)
   if (report.exemptions?.length) {
     lines.push(`  ℹ Web 平台豁免 ${report.exemptions.length} 处（登记原因，缺口待补原语）：`)
     for (const ex of report.exemptions) lines.push(`    · ${ex}`)
   }
-  if (report.ok) lines.push(`  ✅ PASS——D-2 dogfooding 审计通过（第三方 UI / @media / 平台 API 零违规）`)
-  else lines.push(`  ❌ FAIL——${report.errors.length} 项违规（D-2 不可绕过）`)
+  const skip = RULE_ORDER.filter((id) => report.rules[id] === 'off')
+  const soft = report.warnings.length ? `（另 ${report.warnings.length} 项 warn 级）` : ''
+  if (report.ok) lines.push(`  ✅ PASS——启用规则集零 error${skip.length ? `（关闭：${skip.join(' / ')}）` : ''}${soft}`)
+  else lines.push(`  ❌ FAIL——${report.errors.length} 项违规（D-2 不可绕过；warn 级 ${report.warnings.length} 项）`)
   return lines
 }
 

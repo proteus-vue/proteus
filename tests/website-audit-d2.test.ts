@@ -24,6 +24,38 @@ function writeVue(rel: string, content: string): void {
   fs.writeFileSync(full, content)
 }
 
+/** 写 proteus.config.ts（TS 由 audit 内置 esbuild 加载器求值）——含 package.json 让 createRequire 基址确定 */
+function writeConfig(rulesTs?: string): void {
+  fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'd2-fixture', private: true }))
+  const audit = rulesTs ? `audit: { rules: { ${rulesTs} } },` : ''
+  fs.writeFileSync(
+    path.join(tmp, 'proteus.config.ts'),
+    `export default {
+  platform: 'web',
+  skyline: false,
+  appid: '',
+  pagesDir: 'src/pages',
+  routesOutput: 'src/router/auto-routes.ts',
+  customRoute: { registerPresets: false, builders: {} },
+  setDataBridge: { batchWindow: 16, perComponent: false },
+  style: { px2rpx: false, rpxRatio: 2 },
+  ${audit}
+}
+`,
+  )
+}
+
+const MEDIA_VIOLATION = `<template><div class="x">y</div></template>
+<style>
+@media (max-width: 820px) { .x { color: red; } }
+</style>`
+const WEB_PLATFORM_VIOLATION = `<script setup lang="ts">
+function f() {
+  const y = window.scrollY
+}
+</script>
+<template><div>w</div></template>`
+
 describe('D-2 审计：正向（合规页面）', () => {
   it('语义原语 + 柔性布局 → PASS + 使用统计', () => {
     writeVue(
@@ -176,6 +208,60 @@ import { ElButton } from 'element-plus'
     expect(report.errors.some((e) => e.includes('[D2-UI]'))).toBe(true)
     expect(report.errors.some((e) => e.includes('[W-6/C8]'))).toBe(true)
     expect(report.errors.some((e) => e.includes('D2-PLATFORM'))).toBe(false)
+  })
+})
+
+describe('D-2 审计：配置化规则（★#447 proteus.config audit.rules——开发者自选级别）', () => {
+  it('规则设 off → 不检查不阻断（报告 rules 明示关闭）', () => {
+    writeConfig(`'no-media-query': 'off'`)
+    writeVue('pages/Media.vue', MEDIA_VIOLATION)
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(true)
+    expect(report.rules['no-media-query']).toBe('off')
+    expect(report.errors).toEqual([])
+    expect(report.warnings).toEqual([])
+  })
+
+  it('只关一条规则 → 其余规则仍按默认 error 拦截', () => {
+    writeConfig(`'no-media-query': 'off'`)
+    writeVue('pages/Media.vue', MEDIA_VIOLATION)
+    writeVue('pages/Web.vue', WEB_PLATFORM_VIOLATION)
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(false)
+    expect(report.errors.some((e) => e.includes('[W-6/C8]'))).toBe(false) // 已关
+    expect(report.errors.some((e) => e.includes('[D2-PLATFORM-WEB]'))).toBe(true) // 仍拦
+  })
+
+  it('规则设 warn → 报告不阻断（warnings 分流）', () => {
+    writeConfig(`'no-media-query': 'warn'`)
+    writeVue('pages/Media.vue', MEDIA_VIOLATION)
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(true)
+    expect(report.errors).toEqual([])
+    expect(report.warnings.some((e) => e.includes('[W-6/C8]'))).toBe(true)
+  })
+
+  it('配置存在但未声明 audit → 四规则默认 error（fail-closed）', () => {
+    writeConfig()
+    writeVue('pages/Media.vue', MEDIA_VIOLATION)
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(false)
+    expect(report.rules['no-media-query']).toBe('error')
+    expect(report.errors.some((e) => e.includes('[W-6/C8]'))).toBe(true)
+  })
+
+  it('配置加载失败（如相对 import 目标缺失）→ fail-closed 默认全 error + 报告登记', () => {
+    fs.writeFileSync(
+      path.join(tmp, 'proteus.config.ts'),
+      `import './nope'
+export default { audit: { rules: { 'no-media-query': 'off' } } }
+`,
+    )
+    writeVue('pages/Media.vue', MEDIA_VIOLATION)
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(false)
+    expect(report.rules['no-media-query']).toBe('error')
+    expect(report.notes.some((n) => n.includes('加载失败'))).toBe(true)
   })
 })
 

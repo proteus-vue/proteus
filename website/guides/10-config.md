@@ -35,6 +35,7 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
 | `router` | `object` | 否 | router | 路由通用配置（tabBar / 集中式 meta），见下表 |
 | `vite` | `object \| 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
+| `audit` | `object` | 否 | build | **D-2 页面门禁规则**（★#447）：off/warn/error 自选——见下表 |
 
 ### `vite`（透传——完全兼容 vite）
 
@@ -133,6 +134,41 @@ const config: ProteusConfig = {
 |---|---|---|---|
 | `tabBar` | `object` | 否 | tabBar 唯一声明源：`color` / `selectedColor` / `list`（`{ name, text, icon? }[]`） |
 | `meta` | `Record<string, RouteMeta>` | 否 | 集中式 meta（决策 #113）：匹配优先级 精确路径 > 目录前缀 > 默认 |
+
+**`audit`（D-2 页面门禁——开发者自选规则级别）**
+
+> D-2（05-dogfooding-conformance）机器化门禁：页面不得裸写平台 API / 手写 `@media` / 引入第三方 UI 库——封装只在框架包，页面零裸写。官网作为「验证场」全规则 `error`；开发者工程可按需把某条降为 `warn`（报告不阻断）或 `off`（不启用）。**关/降级的规则在审计报告明示**——PASS = 启用规则集零违规，未声明的规则一律默认 `error`（fail-closed，防静默关闭）。
+
+| 子字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `dir` | `string` | 否 | 被审计页面目录（相对工程根；缺省 `src`） |
+| `rules` | `object` | 否 | 规则 → 级别（未列出的规则默认 `error`） |
+
+`rules` 的四条规则 id（单一来源 `@proteus-vue/types` 的 `AUDIT_RULE_IDS`）：
+
+| 规则 id | 拦什么 | 报告标记 |
+|---|---|---|
+| `no-third-party-ui` | 引入第三方 UI 库（element-plus/vant/antd/naive-ui/quasar…） | `[D2-UI]` |
+| `no-media-query` | 手写 `@media` 断点（响应式归 v-p-fluid clamp + 柔性网格） | `[W-6/C8]` |
+| `no-platform-api` | 小程序平台 API 直调（`wx.request` 等） | `[D2-PLATFORM]` |
+| `no-web-platform-api` | Web 平台 API 裸调（`window.`/`document.`/`navigator.`/`location.`/`fetch` 等） | `[D2-PLATFORM-WEB]` |
+
+```ts
+// proteus.config.ts
+const config: ProteusConfig = {
+  // …必填字段…
+  audit: {
+    dir: 'src',
+    rules: {
+      'no-media-query': 'warn', // 允许手写 @media？降到 warn——报告但不阻断
+      'no-web-platform-api': 'off', // 完全不启用 Web 平台裸调检查
+      // 其余两条未声明 → 默认 error
+    },
+  },
+}
+```
+
+> 豁免登记仍生效：Web 平台规则允许逐行 `// d2-exempt: <原因>` 与整文件标注（原生视觉资产页）——豁免原因随审计报告输出。当前消费者为官网 dogfooding 审计 `website/audit-d2.mjs`（`npm run audit:website`）；CLI 命令化归后续批次。
 
 ### 校验与工具
 

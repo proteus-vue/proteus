@@ -4,7 +4,7 @@
 // 错误码：CONFIG_INVALID_ROOT / CONFIG_MISSING_REQUIRED / CONFIG_INVALID_TYPE / CONFIG_INVALID_ENUM / CONFIG_UNKNOWN_FIELD
 // ★source map 行列定位为后续批次（需配置源文件解析；当前 path 已可定位）
 
-import { checkConfigLayerViolations } from '@proteus-vue/types'
+import { checkConfigLayerViolations, AUDIT_RULE_IDS, AUDIT_SEVERITIES } from '@proteus-vue/types'
 
 export interface ConfigValidationError {
   code: string
@@ -43,6 +43,7 @@ const KNOWN_FIELDS = new Set([
   'router',
   'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）
   'frameworkComponentsDir', // 决策 #115：框架内置组件目录（组件库拆包前过渡字段）
+  'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
 ])
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -78,6 +79,32 @@ export function validateConfig(config: unknown): ConfigValidationResult {
         const sp = cfg.subPackages[i]
         if (!isPlainObject(sp) || typeof sp.root !== 'string') {
           errors.push({ code: 'CONFIG_INVALID_TYPE', path: `subPackages[${i}].root`, message: `分包 ${i} 的 root 必须为字符串（如 "src/subpackages/order"）` })
+        }
+      }
+    }
+  }
+
+  // ★#447 audit（D-2 dogfooding 门禁）：dir 字符串 + rules 子键合法 id × severity 枚举
+  if (cfg.audit !== undefined) {
+    const audit = cfg.audit as Record<string, unknown>
+    if (!isPlainObject(audit)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'audit', message: 'audit 应为对象（{ dir?, rules? }）' })
+    } else {
+      if (audit.dir !== undefined && typeof audit.dir !== 'string') {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'audit.dir', message: 'audit.dir 应为字符串（被审计页面目录）' })
+      }
+      if (audit.rules !== undefined) {
+        const rules = audit.rules as Record<string, unknown>
+        if (!isPlainObject(rules)) {
+          errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'audit.rules', message: 'audit.rules 应为对象（规则 id → severity）' })
+        } else {
+          for (const [ruleId, sev] of Object.entries(rules)) {
+            if (!AUDIT_RULE_IDS.includes(ruleId as never)) {
+              errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: `audit.rules.${ruleId}`, message: `未知 D-2 规则 "${ruleId}"（合法规则：${AUDIT_RULE_IDS.join(' / ')}）` })
+            } else if (!AUDIT_SEVERITIES.includes(sev as never)) {
+              errors.push({ code: 'CONFIG_INVALID_ENUM', path: `audit.rules.${ruleId}`, message: `规则 ${ruleId} 级别仅支持 ${AUDIT_SEVERITIES.join(' / ')}，实际 ${JSON.stringify(sev)}` })
+            }
+          }
         }
       }
     }

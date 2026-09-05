@@ -31,6 +31,16 @@ const config: ProteusConfig = {
   customRoute: { registerPresets: false, builders: {} },
   setDataBridge: { batchWindow: 16, perComponent: false },
   style: { px2rpx: false, rpxRatio: 2 },
+  // ★#447 D-2 dogfooding 门禁（audit-d2.mjs 消费——官网=验证场：四规则全 error 零容忍；开发者工程可按需降级/关闭）
+  audit: {
+    dir: 'src',
+    rules: {
+      'no-third-party-ui': 'error',
+      'no-media-query': 'error',
+      'no-platform-api': 'error',
+      'no-web-platform-api': 'error',
+    },
+  },
   // 官网专属 vite 扩展（全 vite 兼容——plugins 追加、build 深合并、resolve.alias 拼接保框架 @）
   // ★GitHub Pages 子路径部署：PROTEUS_BASE=/proteus/ 注入 base（Vercel/本地根路径缺省 '/' 不变）
   vite: () => ({
