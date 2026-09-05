@@ -8,6 +8,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN } from './gen-content-en.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const COMP_DIR = path.join(ROOT, 'src', 'components')
@@ -787,9 +788,152 @@ function genCapabilities(ir, ends) {
   return ok
 }
 
+// —— ①-EN 组件 overlay（★#481 生成器双语输出——zh 路径零改动，EN 变体由 COMP_EN 字段驱动） ——
+// 对 COMP_EN 登记的 slug 额外产出 website/en/components/<slug>.md：文案全部取 EN 字段（desc/notes/props/events），
+// 未登记的组件在英文态走 #noEn 回退（诚实降级，不混排中文）。
+async function genComponentsEn(ir, ends) {
+  const OUT = path.join(ROOT, 'website', 'en', 'components')
+  const dirs = fs.readdirSync(COMP_DIR).filter((d) => fs.statSync(path.join(COMP_DIR, d)).isDirectory() && d.startsWith('p-'))
+  const semanticMap = ir.TAG_SEMANTIC_MAP ?? ir.SEMANTIC_TAG_MAP ?? {}
+  const mpComp = (ir.MP_MAPPING_MATRIX ?? []).filter((i) => i.group === 'component')
+  const tagKind = {}
+  for (const p of ir.PRIMITIVE_CATALOG) if (p.tag) tagKind[p.tag] = p.kind
+  const KIND_DOMAIN = { layout: '布局', ui: '内容与表单', shell: '页面外壳', gesture: '手势', engineering: '工程', capability: '能力入口' }
+  const DOMAIN_ORDER = ['布局', '内容与表单', '页面外壳', '手势', '工程', '能力入口', '—']
+  const domainOf = {}
+  for (const dir of dirs) {
+    const semantic = semanticMap[dir] ?? null
+    const kind = tagKind[dir] ?? (semantic ? semantic.split('.')[0] : null) ?? '—'
+    domainOf[dir] = KIND_DOMAIN[kind] ?? kind
+  }
+  const perDomain = {}
+  const orderOf = {}
+  for (const dir of Object.keys(domainOf).sort()) {
+    perDomain[domainOf[dir]] = (perDomain[domainOf[dir]] ?? 0) + 1
+    orderOf[dir] = DOMAIN_ORDER.indexOf(domainOf[dir]) * 1000 + perDomain[domainOf[dir]]
+  }
+  const mpLabelEn = (i) => `\`${i.mp}\` (${MP_STATUS_EN[i.status] ?? i.status})`
+  let ok = 0
+  const indexRows = []
+  for (const dir of dirs) {
+    const page = COMP_EN[dir]
+    if (!page) continue
+    const vueFile = path.join(COMP_DIR, dir, 'index.vue')
+    if (!fs.existsSync(vueFile)) continue
+    const src = fs.readFileSync(vueFile, 'utf8')
+    const props = parseProps(extractCall(src, 'defineProps') ?? '')
+    const emits = parseEmits(src)
+    const semantic = semanticMap[dir] ?? null
+    const domain = domainOf[dir]
+    const mpMatches = semantic ? mpComp.filter((i) => i.proteus.split(' / ').some((s) => s.includes(semantic))) : []
+    const mpTextEn = mpMatches.slice(0, 4).map(mpLabelEn).join(' · ') + (mpMatches.length > 4 ? SHARED_EN.andMore(mpMatches.length) : '')
+    const mpEquivEn = mpMatches.length ? mpTextEn : '—'
+    const domainEn = DOMAIN_EN[domain] ?? domain
+    const lines = []
+    lines.push('---')
+    lines.push(`title: ${dir}`)
+    lines.push(`group: ${domain}`)
+    lines.push(`order: ${orderOf[dir]}`)
+    lines.push('---')
+    lines.push('')
+    lines.push(`# ${dir}`)
+    lines.push('')
+    lines.push(page.desc || SHARED_EN.genericDesc)
+    lines.push('')
+    lines.push(SHARED_EN.semanticCallout(domainEn))
+    lines.push('')
+    lines.push(SHARED_EN.semanticCols)
+    lines.push('|---|---|---|')
+    lines.push(`| ${semantic ?? '—'} | ${domainEn} | ${mpEquivEn} |`)
+    lines.push('')
+    const rows = []
+    for (const end of ends) {
+      let note
+      if (end.id === 'mp-weixin') note = END_NOTE_EN['mp-weixin'](mpEquivEn !== '—' ? mpTextEn : '')
+      else note = END_NOTE_EN[end.id] ?? END_NOTE_EN.prototype
+      const endEn = ENDS_EN[end.id]
+      rows.push({ name: endEn?.name ?? end.name, status: STATUS_MARK[end.status] ?? '⬜', note: `${endEn?.engine ?? end.engine} · ${note}` })
+    }
+    lines.push(SHARED_EN.hCompat)
+    lines.push('')
+    lines.push(SHARED_EN.compatCols)
+    lines.push('|---|---|---|')
+    for (const r of rows) lines.push(`| ${r.name} | ${r.status} | ${r.note} |`)
+    lines.push('')
+    lines.push(COMP_LEGEND_EN)
+    lines.push('')
+    if (props.length) {
+      lines.push(SHARED_EN.hProps)
+      lines.push('')
+      lines.push(SHARED_EN.propsCols)
+      lines.push('|---|---|---|---|---|')
+      for (const p of props) {
+        const doc = page.props?.[p.name] ?? '—'
+        lines.push(`| \`${p.name}\` | ${doc} | \`${p.type}\` | ${p.default ? `\`${p.default}\`` : p.required ? `**${SHARED_EN.requiredYes}**` : '—'} | ${p.required ? `**${SHARED_EN.requiredYes}**` : SHARED_EN.requiredNo} |`)
+      }
+      lines.push('')
+    }
+    if (emits.length) {
+      lines.push(SHARED_EN.hEvents)
+      lines.push('')
+      lines.push(SHARED_EN.eventsCols)
+      lines.push('|---|---|')
+      for (const e of emits) lines.push(`| \`${e}\` | ${page.events?.[e] ?? '—'} |`)
+      lines.push('')
+    }
+    if (page.notes?.length) {
+      lines.push(SHARED_EN.hNotes)
+      lines.push('')
+      for (const n of page.notes) lines.push(`- ${n}`)
+      lines.push('')
+    }
+    lines.push(SHARED_EN.hUsage)
+    lines.push('')
+    lines.push('```vue')
+    lines.push(SHARED_EN.usageSample(dir, props[0]?.name))
+    lines.push('```')
+    lines.push('')
+    lines.push('<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: src/components/' + dir + '/index.vue -->')
+    fs.mkdirSync(OUT, { recursive: true })
+    fs.writeFileSync(path.join(OUT, `${dir}.md`), lines.join('\n'))
+    indexRows.push({ dir, props: props.length, emits: emits.length, domain })
+    ok++
+  }
+  // 总览页 EN overlay（与 zh 00-components-overview 同源数据）
+  const byDomain = {}
+  for (const r of indexRows) (byDomain[r.domain] ??= []).push(r)
+  const idx = []
+  idx.push('---')
+  idx.push(`title: ${OVERVIEW_EN.title}`)
+  idx.push(`group: ${OVERVIEW_EN.group}`)
+  idx.push(`order: ${OVERVIEW_EN.order}`)
+  idx.push('---')
+  idx.push('')
+  idx.push(`# ${OVERVIEW_EN.title}`)
+  idx.push('')
+  idx.push(OVERVIEW_EN.intro(ok, Object.keys(byDomain).length))
+  idx.push('')
+  for (const domain of Object.keys(byDomain).sort((a, b) => DOMAIN_ORDER.indexOf(a) - DOMAIN_ORDER.indexOf(b))) {
+    idx.push(`## ${DOMAIN_EN[domain] ?? domain} (${byDomain[domain].length})`)
+    idx.push('')
+    idx.push(OVERVIEW_EN.cols)
+    idx.push('|---|---|---|')
+    for (const r of byDomain[domain].sort((a, b) => a.dir.localeCompare(b.dir))) {
+      idx.push(`| [${r.dir}](/docs/component/${r.dir}) | ${r.props} | ${r.emits} |`)
+    }
+    idx.push('')
+  }
+  if (indexRows.length) {
+    fs.mkdirSync(OUT, { recursive: true })
+    fs.writeFileSync(path.join(OUT, '00-components-overview.md'), idx.join('\n'))
+  }
+  return ok
+}
+
 // —— main ——
 const ir = await loadIr()
 const ends = await loadEnds()
 const nComp = genComponents(ir, ends)
 const nCap = genCapabilities(ir, ends)
-console.log(`generated: components ${nComp} · capabilities ${nCap}`)
+const nCompEn = await genComponentsEn(ir, ends)
+console.log(`generated: components ${nComp} · capabilities ${nCap} · en components ${nCompEn}`)
