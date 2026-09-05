@@ -55,11 +55,10 @@ jobs:
         if: steps.gate.outputs.ok == 'true'
         run: pnpm install --frozen-lockfile
 
-      # ★#428：proteus bin 依赖 @proteus-vue/cli 的 dist——CI 中 postinstall 构建链不可靠，显式全量构建 workspace 包
-      #   （仅 packages/*——examples/website 的 build 也调 proteus，排除防递归；依赖序由 build-packages.mjs 拓扑保证）
+      # ★#428/#429：proteus bin 依赖 @proteus-vue/cli dist——显式两遍拓扑构建（build-packages.mjs = postinstall 同款）
       - name: 构建 workspace 包（cli/component-ir/render-backend dist）
         if: steps.gate.outputs.ok == 'true'
-        run: pnpm -r --filter './packages/*' build
+        run: node scripts/build-packages.mjs
 
       - name: 生成内容 + 构建（子路径 base 注入）
         if: steps.gate.outputs.ok == 'true'
