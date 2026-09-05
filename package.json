@@ -40,6 +40,7 @@
     "build:website": "pnpm --filter website build",
     "preview:website": "pnpm --filter website preview",
     "audit:website": "tsx packages/cli/src/index.ts audit d2 website/src",
+    "check:live": "node website/scripts/verify-live.mjs",
     "build:packages": "node scripts/build-packages.mjs",
     "check:deps": "node scripts/check-deps.mjs"
   },

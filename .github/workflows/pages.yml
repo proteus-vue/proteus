@@ -89,3 +89,9 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
         if: steps.gate.outputs.ok == 'true'
+
+      # ★#465 部署后自检：线上产物 hash == 本次构建 hash（重试抗 CDN 传播；不一致即红）
+      #   防「部署被 cancel / 缓存滞留」静默不同步——直接回答官网内容是否真上线
+      - name: 部署后核验（verify-live：线上 main hash = 本次构建）
+        if: steps.gate.outputs.ok == 'true'
+        run: node website/scripts/verify-live.mjs
