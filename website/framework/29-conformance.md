@@ -1,7 +1,7 @@
 ---
 title: 一致性验证
-order: 29
-group: 架构与工程
+order: 17
+group: 质量与兼容
 ---
 
 # 一致性验证
@@ -73,6 +73,6 @@ AI 场景下同一套门禁通过 MCP 暴露：`validate_ir` → `run_conformanc
 
 ## 下一步
 
-- [Headless 后端与语义快照](/docs/25-headless-backend) —— 无设备环境跑一致性
+- [Headless 后端与语义快照](/docs/framework/25-headless-backend) —— 无设备环境跑一致性
 - [测试与部署](/docs/27-testing-deploy) —— 工程内测试分层
-- [容器与宿主](/docs/33-containers-hosts) —— 被验证的六容器画像
+- [容器与宿主](/docs/framework/33-containers-hosts) —— 被验证的六容器画像

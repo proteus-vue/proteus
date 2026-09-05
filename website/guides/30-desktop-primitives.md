@@ -123,4 +123,4 @@ const cursorGlowOptions = {
 
 - [液态玻璃](/docs/31-liquid-glass)：玻璃质感与桌面光晕是官网氛围层组合
 - [柔性布局](/docs/17-fluid-layout)：布局维度的自适应（本篇是输入维度）
-- [容器与宿主](/docs/33-containers-hosts)：桌面多窗口容器形态
+- [容器与宿主](/docs/framework/33-containers-hosts)：桌面多窗口容器形态

@@ -143,7 +143,7 @@ const journey = [
     no: '04',
     title: '基础概念',
     desc: '语义模型、p-* 语义组件、状态与路由：写页面前需要的心智模型。',
-    to: '/docs/11-semantic-model',
+    to: '/docs/framework/11-semantic-model',
   },
   {
     no: '05',
@@ -155,7 +155,7 @@ const journey = [
     no: '06',
     title: '架构与工程',
     desc: '可插拔 SPI 全景、编译管线、测试与一致性验证——深入框架内部。',
-    to: '/docs/22-architecture',
+    to: '/docs/framework/22-architecture',
   },
 ]
 
@@ -320,7 +320,7 @@ const capabilities = [
       </p-heading>
       <p-text class="quote-sub">这就是 <strong class="grad">dogfooding</strong>。</p-text>
       <p-stack direction="row" :gap="18" class="quote-links">
-        <router-link to="/docs/11-semantic-model" class="method-link">统一语义收敛 →</router-link>
+        <router-link to="/docs/framework/11-semantic-model" class="method-link">统一语义收敛 →</router-link>
         <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">SPI-First 五步法 →</a>
       </p-stack>
     </p-view>

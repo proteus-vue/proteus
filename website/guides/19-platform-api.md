@@ -102,4 +102,4 @@ const res = await api.request<{ echoed: string }>({ url: '/ping', method: 'GET' 
 
 - [能力系统](/docs/18-capability-system)：平台独占能力的声明、探测与降级
 - [状态管理](/docs/15-state-management)：Pinia 与 Storage 适配的协作
-- [一致性验证](/docs/29-conformance)：平台契约的机器验证
+- [一致性验证](/docs/framework/29-conformance)：平台契约的机器验证

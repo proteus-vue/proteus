@@ -20,7 +20,8 @@ npm run build:website   # vue-tsc 类型检查 + vite 构建
 
 ```
 website/
-├── guides/*.md          # 36 篇指南（frontmatter: title/order/group，8 组初学者旅程：起步/开始/代码构成/基础概念/渲染与能力/架构与工程/专题深入/参考）
+├── guides/*.md          # 26 篇指南（8 组初学者旅程）
+├── framework/*.md       # 19 页框架内核深潜（总览/语义模型/编译期/运行期/渲染层/宿主与内存/质量与兼容）
 ├── content/             # ★生成的参考文档（gen-content.mjs 从源码 SSOT 生成，勿手改）
 │   ├── components/      #   60 页：p-* 逐组件参考（props/events/语义映射/MP 等价）
 │   ├── capabilities/    #   51 页：50 能力原语逐个参考 + 总览

@@ -110,5 +110,5 @@ SSR 状态泄漏是跨请求安全事故，三条约束堵死：
 ## 下一步
 
 - [路由](/docs/16-router)：页面导航与路由检查
-- [所有权工程](/docs/34-ownership)：页面级资源的确定性回收
+- [所有权工程](/docs/framework/34-ownership)：页面级资源的确定性回收
 - [测试与部署](/docs/27-testing-deploy)：跨端矩阵测试与 CI 门禁

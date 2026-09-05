@@ -1,7 +1,7 @@
 ---
 title: 渲染后端
-order: 23
-group: 架构与工程
+order: 12
+group: 渲染层
 ---
 
 # 渲染后端
@@ -54,7 +54,7 @@ export interface ProteusRenderBackend {
 | `native-harmony` | 鸿蒙（ArkUI） | 描述树（`Text` / `Grid`…） | ✅ 描述树 / 📋 真机桥 |
 | `flutter` | Flutter | `FlutterWidgetDescriptor` widget 树 | ✅ 映射 spike / 📋 Embedder 桥 |
 
-成熟度诚实分级：**✅ = 代码已落地、可机器验证**（描述树 / 内存树 / 真实 DOM 都是真跑）；**📋 = 需要宿主工程**（原生 SDK 桥、Flutter Embedder——见[原生能力](/docs/20-native-backend)与[Flutter 后端](/docs/24-flutter-backend)）。SPI 还预留了 `skyline` / `skia` / `canvas2d` 三个 `BackendId`，引擎实例尚未实现。
+成熟度诚实分级：**✅ = 代码已落地、可机器验证**（描述树 / 内存树 / 真实 DOM 都是真跑）；**📋 = 需要宿主工程**（原生 SDK 桥、Flutter Embedder——见[原生能力](/docs/20-native-backend)与[Flutter 后端](/docs/framework/24-flutter-backend)）。SPI 还预留了 `skyline` / `skia` / `canvas2d` 三个 `BackendId`，引擎实例尚未实现。
 
 各后端的能力声明不同——这正是「按能力降级」的数据源：
 
@@ -118,12 +118,12 @@ semanticSequence(ir)
 在此之上还有两件武器：
 
 - **混合渲染**：`createHybridRenderer` 按区域路由后端（视频区走 native、其余走 vue-dom）+ 纹理共享（`registerExternalTexture`）+ 路由 trace 供 DevTools 可视化。
-- **conformance 门禁**：接口完整性自检 + G-31 组件渲染快照（6 后端 × L1 fixtures，控件 readback 对照参考表）——详见[一致性验证](/docs/29-conformance)。
+- **conformance 门禁**：接口完整性自检 + G-31 组件渲染快照（6 后端 × L1 fixtures，控件 readback 对照参考表）——详见[一致性验证](/docs/framework/29-conformance)。
 
 **同一个 App 按页面选引擎**：商品详情 → Native、品牌动效 → Flutter、H5 落地页 → VueDom、测试/SSR → Headless——业务代码完全一样。Flutter 锁死 Skia、RN 锁死原生，只有「上层语义模型 + 可插拔后端」这条路线换来了渲染引擎自由。
 
 ## 下一步
 
 - [原生能力](/docs/20-native-backend)：三平台语义映射与诚实边界
-- [Flutter 后端](/docs/24-flutter-backend)：语义 → widget 树的映射层
-- [一致性验证](/docs/29-conformance)：后端与语义映射的门禁
+- [Flutter 后端](/docs/framework/24-flutter-backend)：语义 → widget 树的映射层
+- [一致性验证](/docs/framework/29-conformance)：后端与语义映射的门禁

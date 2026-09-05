@@ -1,7 +1,7 @@
 ---
 title: 语义模型
-order: 11
-group: 基础概念
+order: 2
+group: 语义模型
 ---
 
 # 语义模型
@@ -97,10 +97,10 @@ Proteus 的组件与 API **不由任何既有平台的组件集翻译而来**，
 - **渲染一致性**：`checkComponentSnapshot` 对每个后端做控件 readback 与参考表比对；`checkSemanticCoverage` 强制每个 implemented 语义 ≥3 端有真实映射（G-31.4）
 - **编译等价性**：同一份 SFC 经 Node / Rust 后端产出的 IR 必须语义等价（G-29.1），任一后端 conformance FAIL 即阻断合并
 
-完整验证体系见[一致性验证](/docs/29-conformance)。
+完整验证体系见[一致性验证](/docs/framework/29-conformance)。
 
 ## 下一步
 
-- [渲染后端](/docs/23-render-backend)：RenderBackend SPI、五官方后端与混合渲染
-- [编译管线](/docs/26-compiler-pipeline)：规则注册表、决策 trace 与产物自校验
-- [一致性验证](/docs/29-conformance)：conformance 套件与 CI 门禁
+- [渲染后端](/docs/framework/23-render-backend)：RenderBackend SPI、五官方后端与混合渲染
+- [编译管线](/docs/framework/26-compiler-pipeline)：规则注册表、决策 trace 与产物自校验
+- [一致性验证](/docs/framework/29-conformance)：conformance 套件与 CI 门禁

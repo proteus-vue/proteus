@@ -109,6 +109,6 @@ if (isDeepLinkAllowed(parseDeepLinkUrl('deeplink://app/user/7'), config)) {
 
 ## 下一步
 
-- [容器与宿主](/docs/33-containers-hosts)：页面栈与容器形态的关系
+- [容器与宿主](/docs/framework/33-containers-hosts)：页面栈与容器形态的关系
 - [测试与部署](/docs/27-testing-deploy)：路由表与双端产物的验证
-- [编译管线](/docs/26-compiler-pipeline)：`<route>` 块在编译期如何被消费
+- [编译管线](/docs/framework/26-compiler-pipeline)：`<route>` 块在编译期如何被消费

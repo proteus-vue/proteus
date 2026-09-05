@@ -1,7 +1,7 @@
 ---
 title: 可插拔架构
-order: 22
-group: 架构与工程
+order: 1
+group: 总览
 ---
 
 # 可插拔架构
@@ -31,7 +31,7 @@ Proteus 的架构只有一个母题：**不绑定**。「不绑定任何单一�
 | 原生能力（G-28） | NativeBackend SPI + Top30 能力目录 | iOS / Android / 鸿蒙官方后端 | 📋 |
 | 端接入（G-30） | Platform = (R, C, J) 三元组 + Tier 1-4 | 任意能提供渲染宿主 / 能力宿主 / JS 运行时之一的端 | 📋 |
 
-状态口径：**✅** 已落地可验证 · **🟡** 部分落地 · **📋** 规划已入库（plan + 参考实现，无可运行集成）。其中渲染后端五官方实现里 Native×3 / Flutter 当前为原型映射（widget 级），原生工程接线随 G-37 分批推进——升级节奏见 [一致性验证](/docs/29-conformance)。
+状态口径：**✅** 已落地可验证 · **🟡** 部分落地 · **📋** 规划已入库（plan + 参考实现，无可运行集成）。其中渲染后端五官方实现里 Native×3 / Flutter 当前为原型映射（widget 级），原生工程接线随 G-37 分批推进——升级节奏见 [一致性验证](/docs/framework/29-conformance)。
 
 ## SPI-First 三件套
 
@@ -96,6 +96,6 @@ Proteus 官网（你正在看的这个站点）用框架自身构建——竞品
 
 ## 相关页面
 
-- [语义模型](/docs/11-semantic-model)：语义定义 + 后端实现的核心公式
-- [渲染后端](/docs/23-render-backend)：RenderBackend SPI 与五官方后端
-- [一致性验证](/docs/29-conformance)：conformance 如何锚定每层可插拔
+- [语义模型](/docs/framework/11-semantic-model)：语义定义 + 后端实现的核心公式
+- [渲染后端](/docs/framework/23-render-backend)：RenderBackend SPI 与五官方后端
+- [一致性验证](/docs/framework/29-conformance)：conformance 如何锚定每层可插拔

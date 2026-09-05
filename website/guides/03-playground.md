@@ -48,4 +48,4 @@ const count = ref(0)
 ## 下一步
 
 - [创建你的第一个工程](/docs/05-create-project)：从浏览器走到本地双端工程
-- [语义模型](/docs/11-semantic-model)：看懂 IR Tab 里的语义树
+- [语义模型](/docs/framework/11-semantic-model)：看懂 IR Tab 里的语义树

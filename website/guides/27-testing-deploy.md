@@ -15,7 +15,7 @@ group: 架构与工程
 | 单元测试 | vitest | 纯逻辑（store/工具函数/编译器） |
 | 组件双端挂载 | `@proteus-vue/test-core` | 同一份 SFC 在 Web 与小程序的行为一致 |
 | E2E | `createDriver`（playwright / automator） | 真浏览器与真小程序的用户路径 |
-| 一致性门禁 | test-ir / conformance | 语义树在六端渲染一致（见[一致性验证](/docs/29-conformance)） |
+| 一致性门禁 | test-ir / conformance | 语义树在六端渲染一致（见[一致性验证](/docs/framework/29-conformance)） |
 
 ## 双端挂载：@proteus-vue/test-core
 
@@ -76,6 +76,6 @@ npm run build:mp        # → dist/mp-weixin/（微信小程序产物）
 
 ## 下一步
 
-- [一致性验证](/docs/29-conformance) —— 六端渲染一致的机器门禁
+- [一致性验证](/docs/framework/29-conformance) —— 六端渲染一致的机器门禁
 - [CLI 与工程命令](/docs/28-cli) —— 命令全景
 - [状态管理](/docs/15-state-management) —— store 的跨端测试姿势

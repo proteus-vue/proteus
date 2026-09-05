@@ -14,6 +14,7 @@ const sectionKey = computed(() => {
   if (first === 'capability') return 'capabilities'
   if (first === 'system') return 'system'
   if (first === 'plugin') return 'plugins'
+  if (first === 'framework') return 'framework'
   return 'guide'
 })
 const section = computed(() => sections.find((s) => s.key === sectionKey.value) ?? sections[0]!)

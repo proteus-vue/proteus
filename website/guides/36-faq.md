@@ -93,5 +93,5 @@ TypeScript 是一等公民，不是「顺便支持」：
 ## 相关页面
 
 - [什么是 Proteus](/docs/01-intro)：核心公式与设计哲学
-- [可插拔架构](/docs/22-architecture)：G 系列分层与 SPI-First 三件套
-- [一致性验证](/docs/29-conformance)：上述所有承诺的机器判定机制
+- [可插拔架构](/docs/framework/22-architecture)：G 系列分层与 SPI-First 三件套
+- [一致性验证](/docs/framework/29-conformance)：上述所有承诺的机器判定机制

@@ -1,7 +1,7 @@
 ---
 title: Headless 后端与语义快照
-order: 25
-group: 架构与工程
+order: 14
+group: 渲染层
 ---
 
 # Headless 后端与语义快照
@@ -82,10 +82,10 @@ const snap = renderComponentSnapshot(createHeadlessBackend(), ir, createControlR
 - **组合矩阵的通用验证引擎**：G-41 宿主 × 引擎矩阵（6 × 6 = 36 组合）中，每个宿主都配一台 Headless 作通用验证引擎——组合级 conformance 从它起步，再扩展到真实引擎。
 - **AI Agent 的无设备回归**：Agent 改完代码不必起模拟器——语义快照 diff 即回归证据（见[AI 原生开发](/docs/32-ai-agent)）。
 
-工程化接入（测试命令、部署链路）见[测试与部署](/docs/27-testing-deploy)；验证体系全貌（结构层 / 约束层 / 渲染层三层验证与门禁清单）见[一致性验证](/docs/29-conformance)。
+工程化接入（测试命令、部署链路）见[测试与部署](/docs/27-testing-deploy)；验证体系全貌（结构层 / 约束层 / 渲染层三层验证与门禁清单）见[一致性验证](/docs/framework/29-conformance)。
 
 ## 下一步
 
-- [渲染后端](/docs/23-render-backend)：Headless 在六后端中的位置
-- [一致性验证](/docs/29-conformance)：语义快照如何变成门禁
+- [渲染后端](/docs/framework/23-render-backend)：Headless 在六后端中的位置
+- [一致性验证](/docs/framework/29-conformance)：语义快照如何变成门禁
 - [测试与部署](/docs/27-testing-deploy)：接入 CI 工程链路

@@ -1,14 +1,14 @@
 ---
 title: 容器与宿主
-order: 33
-group: 专题深入
+order: 15
+group: 宿主与内存
 ---
 
 # 容器与宿主
 
 容器、宿主运行时、执行载体是运行期的三层「唯一拥有者」：**容器（G-42）**管页面生命周期与资源回收，**宿主运行时（G-39）**管进程、线程与原生桥，**执行载体（G-40）**管 JS 代码在哪条路径上跑。三层都是可插拔 SPI——业务只依赖页面语义，不感知实现。
 
-> **容器管「页面怎么销毁」，所有权（G-43）管「资源归谁」**——两者合并才是完整的运行期内存治理（见[所有权工程](/docs/34-ownership)）。
+> **容器管「页面怎么销毁」，所有权（G-43）管「资源归谁」**——两者合并才是完整的运行期内存治理（见[所有权工程](/docs/framework/34-ownership)）。
 
 ## 六容器形态
 
@@ -95,10 +95,10 @@ C-08 的 fork 扫描（`proteus conformance --repo <dir>`）机器检测宿主�
 
 ## Tier 组合声明
 
-宿主 × 引擎的每个组合按 **Tier** 声明并机器验证（Tier 1 = 承诺验证 / Tier 3 = 混入可行不承诺 / Tier 0 = 跨生态不合法），详见[一致性验证](/docs/29-conformance)。
+宿主 × 引擎的每个组合按 **Tier** 声明并机器验证（Tier 1 = 承诺验证 / Tier 3 = 混入可行不承诺 / Tier 0 = 跨生态不合法），详见[一致性验证](/docs/framework/29-conformance)。
 
 ## 下一步
 
-- [一致性验证](/docs/29-conformance)：Tier 矩阵与 conformance 套件
+- [一致性验证](/docs/framework/29-conformance)：Tier 矩阵与 conformance 套件
 - [路由](/docs/16-router)：页面栈之上的导航语义
-- [所有权工程](/docs/34-ownership)：页面销毁如何做到不可泄漏
+- [所有权工程](/docs/framework/34-ownership)：页面销毁如何做到不可泄漏

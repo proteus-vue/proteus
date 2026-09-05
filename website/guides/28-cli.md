@@ -88,4 +88,4 @@ npx proteus check && npx proteus test e2e:web
 
 - [快速开始](/docs/05-create-project)：两分钟跑通 Web + 小程序双端
 - [测试与部署](/docs/27-testing-deploy)：测试矩阵与 CI 门禁
-- [编译管线](/docs/26-compiler-pipeline)：build / explain 背后的编译器
+- [编译管线](/docs/framework/26-compiler-pipeline)：build / explain 背后的编译器

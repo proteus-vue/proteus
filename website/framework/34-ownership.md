@@ -1,7 +1,7 @@
 ---
 title: 所有权工程
-order: 34
-group: 专题深入
+order: 16
+group: 宿主与内存
 ---
 
 # 所有权工程
@@ -118,6 +118,6 @@ const handle = useBorrow(buf) // Ref<Borrow | undefined>——所有者释放时
 
 ## 下一步
 
-- [容器与宿主](/docs/33-containers-hosts)：五原子销毁如何委托 Drop 协议
+- [容器与宿主](/docs/framework/33-containers-hosts)：五原子销毁如何委托 Drop 协议
 - [状态管理](/docs/15-state-management)：store 与页面级资源的边界
-- [一致性验证](/docs/29-conformance)：所有权 conformance 全套件
+- [一致性验证](/docs/framework/29-conformance)：所有权 conformance 全套件

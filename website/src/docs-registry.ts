@@ -47,8 +47,9 @@ function buildSection(key: string, name: string, base: string, modules: Record<s
   return { key, name, base, groups, items }
 }
 
-// —— 五区内容 ——（插件 API 参考页由 gen-plugin-docs.mjs 从 WIT SSOT 生成，勿手改）
+// —— 六区内容 ——（插件 API 参考页由 gen-plugin-docs.mjs 从 WIT SSOT 生成，勿手改；框架分区为内核深潜区）
 const guideModules = import.meta.glob<{ default: DocsModule }>('../guides/*.md', { eager: true })
+const frameworkModules = import.meta.glob<{ default: DocsModule }>('../framework/*.md', { eager: true })
 const componentModules = import.meta.glob<{ default: DocsModule }>('../content/components/*.md', { eager: true })
 const capabilityModules = import.meta.glob<{ default: DocsModule }>('../content/capabilities/*.md', { eager: true })
 const systemModules = import.meta.glob<{ default: DocsModule }>('../content/system/*.md', { eager: true })
@@ -56,6 +57,7 @@ const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plug
 
 export const sections: DocSection[] = [
   buildSection('guide', '指南', '/docs', guideModules, '指南'),
+  buildSection('framework', '框架', '/docs/framework', frameworkModules, '总览'),
   buildSection('components', '组件', '/docs/component', componentModules, '组件'),
   buildSection('capabilities', '能力', '/docs/capability', capabilityModules, '能力'),
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),

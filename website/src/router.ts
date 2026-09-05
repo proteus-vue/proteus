@@ -19,6 +19,7 @@ export const router = createRouter({
     { path: '/docs/component/:slug', name: 'doc-component', component: DocsPage },
     { path: '/docs/capability/:slug', name: 'doc-capability', component: DocsPage },
     { path: '/docs/system/:slug', name: 'doc-system', component: DocsPage },
+    { path: '/docs/framework/:slug', name: 'doc-framework', component: DocsPage },
     { path: '/docs/plugin/:slug', name: 'doc-plugin', component: DocsPage },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
