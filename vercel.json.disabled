@@ -1,3 +1,5 @@
+// ★Vercel 部署已屏蔽（决策 #427）：每日 100 部署配额触发后改投 GitHub Pages（.github/workflows/pages.yml，[deploy] 触发门）。
+// 恢复方法：git mv vercel.json.disabled vercel.json 后 push（并确认 Vercel 项目 Git 集成未关闭）。
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install",
