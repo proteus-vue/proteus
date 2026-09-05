@@ -35,12 +35,16 @@ export interface TransformRule {
   phase: TransformPhase
   /** 人类可读标题 */
   title: string
+  /** ★#483 英文标题变体（仅含中文的标题必填——语言中立标题可省略，回退 title） */
+  titleEn?: string
   /** what：输入 → 输出 */
   description: string
   /** ★#480 英文变体 of description（官网 Playground/EN 态取用；缺省回退中文）——新增规则必填，tests/transforms.test.ts 硬卡全覆盖 */
   descriptionEn?: string
   /** why：平台约束 / 设计决策（关联 PROJECT_MEMORY.md 决策号） */
   why: string
+  /** ★#483 英文 why 变体（必填——官网 EN rules 目录消费；缺省回退中文） */
+  whyEn?: string
   /** when：触发条件 */
   when: string
   /** 前后对照示例（真实源码 / 真实产物） */

@@ -42,6 +42,21 @@ describe('transforms 规则注册表', () => {
     }
   })
 
+  it('每条规则带英文 whyEn / 含中文标题带 titleEn（★#483——官网 EN rules 目录消费）', () => {
+    for (const rule of TRANSFORM_RULES) {
+      expect(typeof rule.whyEn, `${rule.id} 缺 whyEn`).toBe('string')
+      expect((rule.whyEn ?? '').length, `${rule.id} whyEn 为空`).toBeGreaterThan(0)
+      const hasCjkWhy = /[\u4e00-\u9fff]/.test(rule.why)
+      expect(rule.whyEn === rule.why && hasCjkWhy, `${rule.id} whyEn 疑似漏译（照抄中文）`).toBe(false)
+      const hasCjkTitle = /[\u4e00-\u9fff]/.test(rule.title)
+      if (hasCjkTitle) {
+        expect(typeof rule.titleEn, `${rule.id} 含中文标题缺 titleEn`).toBe('string')
+        expect((rule.titleEn ?? '').length, `${rule.id} titleEn 为空`).toBeGreaterThan(0)
+        expect(rule.titleEn, `${rule.id} titleEn 疑似漏译`).not.toBe(rule.title)
+      }
+    }
+  })
+
   it('id 命名规范：<category>/<name>（category=tag/event/directive/script/style/validate/...）', () => {
     for (const rule of TRANSFORM_RULES) {
       expect(rule.id, `${rule.id} 不符合 <category>/<name> 格式`).toMatch(/^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/)
