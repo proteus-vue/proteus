@@ -23,6 +23,13 @@ env 注入可单测；env 省略 → 回落真实浏览器全局（typeof 守卫
 | `copyText` | function | ★copyText：写剪贴板——Clipboard API（异步 Promise）→ execCommand('copy') 降级（textarea 临时选择）→ unsuppor |
 | `pasteText` | function | ★pasteText：读剪贴板——Clipboard API readText（execCommand('paste') 无可靠降级——诚实 Err） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+void copyText(url) // Clipboard API + 降级
+```
+> 出处：`website/src/components/TransformDemo.vue:179`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

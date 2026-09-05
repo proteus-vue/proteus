@@ -22,6 +22,13 @@ group: 桌面原语
 | `currentPagePathname` | function | 当前页 pathname（无 location 环境 → ''） |
 | `replacePageUrl` | function | ★replacePageUrl：同址替换地址栏（history.replaceState——不产生历史记录；无 history 环境静默） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+replacePageUrl(playgroundUrl(currentPageOrigin(), currentPagePathname(), src))
+```
+> 出处：`website/src/components/TransformDemo.vue:112`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

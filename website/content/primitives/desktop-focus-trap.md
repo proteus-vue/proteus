@@ -23,6 +23,18 @@ group: 桌面原语
 | `FocusTrap` | interface | — |
 | `createFocusTrap` | function | / |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+trap = modalEl.value ? createFocusTrap(modalEl.value) : null
+```
+> 出处：`website/src/DocSearch.vue:64`
+
+```ts
+<div v-p-focus-trap class="trap-dialog">…</div>
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:218`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

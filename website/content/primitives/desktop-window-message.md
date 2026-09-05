@@ -23,6 +23,13 @@ group: 桌面原语
 | `WindowMessageHandle` | interface | — |
 | `subscribeWindowMessage` | function | ★subscribeWindowMessage：跨窗消息订阅（origin 白名单校验 + type 过滤；destroy 清理） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+subscribeWindowMessage({ types: ['proteus-spirit-morph'], onMessage })
+```
+> 出处：`website/src/App.vue:30`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

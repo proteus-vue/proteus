@@ -23,6 +23,13 @@ group: 桌面原语
 | `readPageScroll` | function | 真实窗口/文档几何（SSR/无 DOM → 全零诚实态） |
 | `createScrollObserver` | function | ★createScrollObserver：订阅页面滚动（rAF 节流——一帧至多一次回调；immediate 首帧即回调） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const scrollObs = createScrollObserver({ immediate: true, onChange: (s) => { progress.value = s.progress } })
+```
+> 出处：`website/src/App.vue:44`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

@@ -27,6 +27,18 @@ group: 桌面原语
 | `restoreState` | function | ★restoreState：读取 + 反序列化（无记录/解析失败 → null——不抛） |
 | `clearRestoreState` | function | 清除恢复态 |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const token = captureState('demo', 'view', { path, ts: Date.now() })
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:495`
+
+```ts
+restoreState('demo', 'view')
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:499`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

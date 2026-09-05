@@ -28,6 +28,13 @@ Web 官方接线（同 gesture 包 createGestureDirective 模式）；MP 端不�
 | `createCursorGlowDirective` | function | / |
 | `createDesktopDirectives` | function | ★G-24 B1+B2+B5：指令工厂集（main.ts：Object.entries 注册 v-p-*） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+<button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }">⌘K 搜索</button>
+```
+> 出处：`website/src/DocSearch.vue:133（createDesktopDirectives 注册于 website/src/main.ts）`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

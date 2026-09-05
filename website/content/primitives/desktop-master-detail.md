@@ -27,6 +27,18 @@ group: 桌面原语
 | `SplitNavResult` | interface | — |
 | `applySplitNav` | function | ★applySplitNav：窄屏 list/detail 切换与 inspector 开关的纯状态机（demo/宿主接线） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+computeSplitLayout({ width: viewW.value, detailOpen, inspector: inspectorOn })
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:406`
+
+```ts
+applySplitNav({ type: 'select' }, { layout: l, inspectorOn })
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:411`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

@@ -28,6 +28,13 @@ group: 桌面原语
 | `requestNotifyPermission` | function | ★requestNotifyPermission：请求通知授权（Notification.requestPermission 归一） |
 | `sendNotification` | function | ★sendNotification：发送系统通知（new Notification——web 真实呈现） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const r = sendNotification({ title: 'Proteus 演示', body: '系统通知' })
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:371`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

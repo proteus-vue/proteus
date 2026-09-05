@@ -23,6 +23,13 @@ group: 桌面原语
 | `LifecycleTracker` | interface | — |
 | `createLifecycleTracker` | function | ★createLifecycleTracker：订阅 visibilitychange/focus → onPhase（页面切后台/回前台即时通知） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+lifeTracker = createLifecycleTracker({ onChange: (phase) => … })
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:477`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

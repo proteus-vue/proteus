@@ -24,6 +24,13 @@ group: 桌面原语
 | `hasFinePointer` | function | 是否精确指针环境（mouse/pen——触屏不启用；无 matchMedia 环境 = 非 Web，禁用） |
 | `createCursorGlow` | function | / |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+<p-page v-p-cursor-glow="cursorGlowOptions" …> // size/color/accent 品牌光晕
+```
+> 出处：`website/src/App.vue:67`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

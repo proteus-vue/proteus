@@ -30,6 +30,18 @@ group: 桌面原语
 | `requestPermission` | function | ★requestPermission：授权请求（env.request 注入真实实现——通知弹窗/相机流；缺实现 → unsupported 诚实降级） |
 | `defaultPermissionRequest` | function | 常用 web 默认请求实现（供宿主/指令工厂接线）：notification → Notification.requestPermission；其余无统一通道 → false |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const manifest = buildPermissionManifest(['notification', 'camera'])
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:360`
+
+```ts
+<p-button v-p-permission="{ semantic: 'notification' }" @click="onSendNotify">发送通知</p-button>
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:232`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

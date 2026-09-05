@@ -20,6 +20,13 @@ group: 桌面原语
 | `AnchorScrollEnv` | interface | 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实 document——同 network/lifecycle 族惯例） |
 | `scrollToId` | function | / |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+scrollToId(hit.anchor, { behavior: 'smooth', delayMs: 60 }) // 等新页 v-html 渲染后再滚
+```
+> 出处：`website/src/DocSearch.vue:106`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

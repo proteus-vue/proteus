@@ -24,6 +24,18 @@ Compiler 侧：iOS Associated Domains + apple-app-site-association / Android int
 | `parseDeepLink` | function | 解析深链 URL：'proteus://user/profile?id=1' → { scheme, host, path, query }；相对 '/user/1' → sche |
 | `matchDeepLink` | function | 参数化匹配：':name' 段捕获；字面量段须相等；scheme/host 缺省不约束（相对 path 模式通配任意 scheme） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const dl = parseDeepLink('proteus://order/42?tab=detail')
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:385`
+
+```ts
+matchDeepLink('proteus://order/:id', 'proteus://order/42')
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:386`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

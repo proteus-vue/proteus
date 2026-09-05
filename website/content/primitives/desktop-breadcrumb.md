@@ -20,6 +20,13 @@ group: 桌面原语
 | `crumbLabel` | function | 段 → 显示名：kebab/下划线 → 空格首字母大写（'user-profile' → 'User Profile'；'index' 归并为空由宿主处理） |
 | `deriveBreadcrumb` | function | ★deriveBreadcrumb：路由路径段（不含根 'index'）→ 面包屑链（末段 current=true） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+deriveBreadcrumb(['home', 'user', 'profile'])
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:468`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

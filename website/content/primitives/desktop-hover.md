@@ -24,6 +24,13 @@ group: 桌面原语
 | `normalizePointerType` | function | 事件 pointerType 归一（Web PointerEvent.pointerType / 测试注入） |
 | `canHover` | function | 悬停态切换判定（mouseenter/mouseleave 语义——注入 pointer 是否可悬停） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+<p-view v-for="p in pillars" v-p-hover class="pillar-card">…</p-view>
+```
+> 出处：`website/src/pages/Home.vue:244`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

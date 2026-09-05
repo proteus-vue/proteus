@@ -22,6 +22,13 @@ group: 桌面原语
 | `resolveTabAfterClose` | function | ★resolveTabAfterClose：关闭 tab 后的激活迁移 |
 | `normalizeTabs` | function | ★normalizeTabs：激活合法性归一（激活 id 缺失/不存在 → 首个；空 → null） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+resolveTabAfterClose(demoTabs.value, demoActive.value, id)
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:436`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

@@ -26,6 +26,13 @@ group: 桌面原语
 | `menuPointFrom` | function | 长按/右键归一触发点（注入坐标——Web contextmenu e.clientX/Y / 触摸长按合成） |
 | `buildContextMenu` | function | 菜单构建（校验 + 危险项归一 + 定位合并一步到位——指令层薄封装） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+<div v-p-context-menu="cardMenu" class="ctx-card">右键我</div>
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:214`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

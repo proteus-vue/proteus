@@ -29,6 +29,18 @@ group: 桌面原语
 | `matchShortcut` | function | / |
 | `shortcutLabel` | function | 快捷键标签（菜单栏显示——PRIM005 验收）：mod+s → '⌘S'（darwin）/ 'Ctrl+S' |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+<button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }">
+```
+> 出处：`website/src/DocSearch.vue:133`
+
+```ts
+const kbd = shortcutLabel('mod+k', detectShortcutPlatform())
+```
+> 出处：`website/src/DocSearch.vue:47`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）

@@ -22,6 +22,18 @@ group: 桌面原语
 | `filterCommands` | function | ★filterCommands：子串过滤（title + keywords + group；大小写不敏感；稳定序） |
 | `moveCommandIndex` | function | ★moveCommandIndex：键盘 ↑↓ 移动（循环；空/越界回 0；无结果 -1） |
 
+## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+
+```ts
+const list = filterCommands(cmdItems, cmdQuery.value)
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:456`
+
+```ts
+cmdIdx.value = moveCommandIndex(cmdIdx.value, dir, list.items.length)
+```
+> 出处：`examples/pages/semantic-primitives-demo.vue:457`
+
 ## 用法与降级
 
 - 纯逻辑函数：env 注入测试、浏览器缺省回落（`typeof` 守卫——封装只在框架包内，页面零裸平台 API）
