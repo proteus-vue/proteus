@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.14（本批追加：G-56 studio，决策 #393）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.15（本批追加：G-57 inspector，决策 #394）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 1 份落地 plan（G-55 追加，决策 #392）+ 1 份宿主 plan（G-56 追加，决策 #393）+ 1 份可观测 plan（G-57 追加，决策 #394）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -171,6 +171,7 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-54** | devtools-suite（框架配套开发者工具·编码期：FrameworkKnowledgeProvider 六项能力内核 + LSP/DAP/RPC/CLI/raw 五档适配） | G-19、G-50、G-51、G-53 | 编码期辅助——分层守护/断言内联先行（INV-DT-01~08）+ CMP155-162 |
 | **G-55** | devtools-landing（开发者工具落地形态与性能工程：G-54 的工程落地——宿主适配绝不 fork + Rust 常驻内核 + 确定性性能预算） | G-54、G-51、G-53、G-27 | 性能与不绑定 IDE 不冲突——内核唯一常驻 + 宿主可换（INV-PF-01~08）+ CMP163-170 |
 | **G-56** | studio（Proteus Studio 自有宿主壳：第四宿主 + 移动端伴侣——Tauri 壳 + CodeMirror 6 + libmpv 设备嵌入，内核零改动） | G-55、G-54、G-53 | 自有宿主不享有内核特权——宿主来源可换（INV-ST-01~08）+ CMP171-178 |
+| **G-57** | inspector（Proteus Inspector：三层可观测性叠加——L0 宿主探针 / L1 语义增强 / L2 框架语义，出口协议化） | G-19、G-51、G-54、G-56 | 可观测性来源可换——叠加不替代（INV-INSP-01~08）+ CMP179-186 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -197,6 +198,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.13）**：G-55 新入库（2026-09，决策 #392）：**G-55**（devtools-landing，开发者工具落地形态与性能工程——**G-54 的工程落地，不占泛化序**，沿 G-37→G-27 先例）：宿主层可换绝不 fork（Cursor/Windsurf 停在 VSCode 1.99.3、80+ NVD 漏洞、8+ 工程师合并的结构性滞后实证）+ 内核层唯一 Rust 常驻守护进程（性能瓶颈在内核不在编辑器——增量索引 O(affected) + deps 精确失效 + LRU 淘汰只降性能不丢正确性）+ 六项性能预算确定性断言（计数阻断/墙钟仅 warn）+ 架构试金石（加第二宿主适配器不改内核 = apiSurface 冻结，INV-PF-06）。编号避让：原稿自编 G-56（基于旧序 suite=G-55）→ 定案 G-55 + CMP-171~178→163~170 + 原则 #13.60-62→#13.63-65（与 G-54 原稿撞号）+ 泛化"第 16 次"宣称修正（不占序）。原则 #13.63-65、铁律 G-55.1-8、规则 CMP163-170 并入 L0 规约。详见 PROJECT_MEMORY 决策 #392。
 
 > **追加说明（v3.14）**：G-56 新入库（2026-09，决策 #393）：**G-56**（studio，Proteus Studio 自有宿主壳——**第 19 次泛化：不绑宿主来源**，自有与第三方宿主可互换）：绝不自研编辑器内核/GUI（G-56.1 红线，xi/Lapce/Floem 实证）+ StudioShell 仅新增 3 类型（StudioShell/EmbedStrategy/CompanionLink，其余全复用）+ 四宿主共用内核零改动（架构试金石加强——自有宿主最易开后门，恰最能验证分层）+ 移动端伴侣（form.mobile 唯一 ✅）+ 生态边界诚实（不兼容 .vsix/Marketplace，语言智能走 LSP/DAP）。编号避让：原稿自编 G-57（旧序接续）→ 定案 G-56 + CMP-179~186→171~178 + 原则 #13.57-59→#13.66-68（与 G-53 撞号）+ 泛化"第 16 次"→第 19 次 + G-59 预留取消。原则 #13.66-68、铁律 G-56.1-9、规则 CMP171-178 并入 L0 规约；spi-first 映射表登记第 19 次。详见 PROJECT_MEMORY 决策 #393。
+
+> **追加说明（v3.15）**：G-57 新入库（2026-09，决策 #394）：**G-57**（inspector，Proteus Inspector 三层可观测性叠加——**第 20 次泛化：不绑可观测性来源**）：叠加不替代（L0 探针用宿主已有的 VM Service/Flipper/CDP，绝不重新实现）+ L1 语义增强（指标 × 框架拓扑——把数字变成带结构的数字，本份核心增量）+ L2 框架语义（SPI 拓扑/隔离域/conformance 独占数据）+ 扩展协议（ext.<package>.<command> 命名规约）+ 安全红线（Debug-only 编译期剔除/localhost+一次性 token/绝不采集用户数据）。编号避让：原稿自编 G-58（旧序接续）→ 定案 G-57 + CMP-187~194→179~186 + 原则 #13.60-62→#13.69-71（第三次撞号，60-62 已被 G-54 占用）+ 泛化"第 17 次"→第 20 次。原则 #13.69-71、铁律 G-57.1-8、规则 CMP179-186 并入 L0 规约；spi-first 映射表登记第 20 次。详见 PROJECT_MEMORY 决策 #394。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**

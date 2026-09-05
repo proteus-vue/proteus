@@ -1,6 +1,6 @@
-# Proteus 十九次泛化 → SPI-First 五步法映射
+# Proteus 二十次泛化 → SPI-First 五步法映射
 
-> 本文证明：Proteus 的十九次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
+> 本文证明：Proteus 的二十次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
 > 阅读本文 = 同时理解"方法论"与"它的第一性证明"。
 
 ---
@@ -28,6 +28,7 @@
 | G-53 | 设备供给方式 | SimulatorBackend / Orchestrator / CoverageGate | 设备档位能力声明 + 覆盖率门槛 | in-memory、web/DOM、ios-sim 本地/远程、cloud-device（reference-impl 41/41） | G-53 conformance（CMP147-154 + INV-M1~M8） | 云真机 Provider 未实现；Apple EULA 仅限内部共享 |
 | G-54/55 | IDE 形态 | FrameworkKnowledgeProvider / ProtocolAdapter（G-55 落地：+HostAdapter / PerfBudget / Rust 常驻内核） | 六项纯查询能力（导航/分层/断言/拓扑/影响面/预览） | LSP、RPC、DAP、CLI、raw（reference-impl 51/51 + 58/58） | G-54 conformance（CMP155-162 + INV-DT-01~08）/ G-55 conformance（CMP163-170 + INV-PF-01~08） | 能力⑤⑥数据 Mock；仅 VSCode 参考适配未实测；预算为对标目标值 |
 | G-56 | 宿主来源（含自有宿主） | StudioShell / EmbedStrategy / CompanionLink | 能力边界矩阵 + 归一化坐标 + 五档嵌入降级 | Tauri 壳 / VSCode / Web（reference-impl 67/67） | G-56 conformance（CMP171-178 + INV-ST-01~08） | libmpv 真嵌入需 PoC；Tauri 数字为对标未实测 |
+| G-57 | 可观测性来源 | InspectorService / 扩展注册表 | 三层数据模型（L0 宿主探针 / L1 语义增强 / L2 框架语义）+ ext. 命名规约 | VM Service / Flipper / CDP / 自起服务（reference-impl 64/64） | G-57 conformance（CMP179-186 + INV-INSP-01~08） | L0 为模拟数据；真实宿主接入未实现 |
 
 ---
 
@@ -68,7 +69,7 @@ G-45 NAT-C 快检        → 同上
 
 **这是"先有方法论、再有实例"的红利**：新 SPI 不需重新发明验证手段，直接套五步法即可。这也是为什么我们说 ——
 
-> **十九次泛化不是十九份独立设计，而是同一套五步法重复执行十九次。**
+> **二十次泛化不是二十份独立设计，而是同一套五步法重复执行二十次。**
 
 ---
 
