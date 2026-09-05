@@ -813,6 +813,7 @@ async function genComponentsEn(ir, ends) {
     orderOf[dir] = DOMAIN_ORDER.indexOf(domainOf[dir]) * 1000 + perDomain[domainOf[dir]]
   }
   const mpLabelEn = (i) => `\`${i.mp}\` (${MP_STATUS_EN[i.status] ?? i.status})`
+  const esc = (s) => String(s).replace(/\|/g, '\\|') // 表格单元格转义（docs 引擎按 | 分列）
   let ok = 0
   const indexRows = []
   for (const dir of dirs) {
@@ -869,7 +870,7 @@ async function genComponentsEn(ir, ends) {
       lines.push('|---|---|---|---|---|')
       for (const p of props) {
         const doc = page.props?.[p.name] ?? '—'
-        lines.push(`| \`${p.name}\` | ${doc} | \`${p.type}\` | ${p.default ? `\`${p.default}\`` : p.required ? `**${SHARED_EN.requiredYes}**` : '—'} | ${p.required ? `**${SHARED_EN.requiredYes}**` : SHARED_EN.requiredNo} |`)
+        lines.push(`| \`${p.name}\` | ${esc(doc)} | \`${esc(p.type)}\` | ${p.default ? `\`${esc(p.default)}\`` : p.required ? `**${SHARED_EN.requiredYes}**` : '—'} | ${p.required ? `**${SHARED_EN.requiredYes}**` : SHARED_EN.requiredNo} |`)
       }
       lines.push('')
     }
@@ -878,7 +879,7 @@ async function genComponentsEn(ir, ends) {
       lines.push('')
       lines.push(SHARED_EN.eventsCols)
       lines.push('|---|---|')
-      for (const e of emits) lines.push(`| \`${e}\` | ${page.events?.[e] ?? '—'} |`)
+      for (const e of emits) lines.push(`| \`${e}\` | ${esc(page.events?.[e] ?? '—')} |`)
       lines.push('')
     }
     if (page.notes?.length) {
