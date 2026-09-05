@@ -212,6 +212,40 @@ describe('D-2 门禁：配置化规则（proteus.config audit.rules——off/war
   })
 })
 
+describe('D-2 门禁：语义原语使用统计（★#451 dogfooding 覆盖率报告回填）', () => {
+  it('模板块 distinct 集合统计（v-p-fluid 文件数 / 语义指令 / p-* 标签与全标签）', async () => {
+    writeVue(
+      'pages/Home.vue',
+      `<template>
+  <div v-p-fluid="'padding(24, 48)'" class="hero">
+    <p-view v-p-hover class="card"><p-text>hi</p-text></p-view>
+    <span class="muted">x</span>
+  </div>
+</template>
+<style>
+.hero { max-width: 1180px; }
+</style>`,
+    )
+    const report = await runD2Audit(tmp)
+    expect(report.usage).toEqual({ files: 1, fluidFiles: 1, semanticDirectives: 2, semanticTags: 2, totalTags: 4 })
+  })
+
+  it('withUsage=false → 省略统计（audit all 紧凑域不背负载）', async () => {
+    writeVue('pages/Home.vue', `<template><div v-p-fluid="'padding(24, 48)'">x</div></template>`)
+    const report = await runD2Audit(tmp, { withUsage: false })
+    expect(report.usage).toBeUndefined()
+  })
+
+  it('多文件聚合 + formatD2Audit 输出统计行', async () => {
+    writeVue('pages/A.vue', `<template><div v-p-fluid="'padding(24, 48)'"><p-view>x</p-view></div></template>`)
+    writeVue('pages/B.vue', `<template><p-stack><p-text>y</p-text><span>z</span></p-stack></template>`)
+    const report = await runD2Audit(tmp)
+    expect(report.usage?.fluidFiles).toBe(1) // 仅 A
+    expect(report.usage?.semanticTags).toBe(3) // p-view/p-stack/p-text distinct
+    expect(formatD2Audit(report)).toContain('语义原语统计')
+  })
+})
+
 describe('D-2 门禁：报告形态与单文件', () => {
   it('多文件聚合：扫描计数 + 错误逐条', async () => {
     writeVue('pages/Good.vue', `<template><div v-p-fluid="'font-size(14, 18)'">x</div></template>`)

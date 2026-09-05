@@ -140,7 +140,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
       const scanDir = path.resolve(root, dir)
       if (!fs.existsSync(scanDir)) return { ok: true, skipped: true, text: `[proteus-d2] 审计目录不存在 ${scanDir}——跳过` }
       try {
-        const report = await runD2Audit(scanDir, { configFile: file })
+        const report = await runD2Audit(scanDir, { configFile: file, withUsage: false })
         return { ok: report.ok, skipped: false, text: formatD2AuditDetail(report) }
       } catch (e) {
         return { ok: true, skipped: true, text: `[proteus-d2] 跳过：${(e as Error).message}` }

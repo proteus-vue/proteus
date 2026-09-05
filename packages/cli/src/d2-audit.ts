@@ -118,6 +118,65 @@ export function scanD2VueFile(file: string, rules: D2Rules): D2FileViolations {
   return { file: rel, errors, warnings, exemptions }
 }
 
+/* ============ ★#451 语义原语使用统计（dogfooding 覆盖率报告——#448 退役尾巴回填） ============ */
+// 编译器 AST（@vue/compiler-sfc walkTemplate）计数的轻量等价：只扫 <template> 块真实代码（剥 <!-- 注释 -->），
+// 逐文件 distinct 集合（同旧官网报告口径：v-p-fluid 文件数 / 语义指令名 ∑ / p-* 标签名 ∑ / 全部标签名 ∑）
+// 零运行时依赖（编译器-sfc 不入 CLI）——语法范围限制在模板块，script/style/注释不计数
+const SEMANTIC_DIRECTIVE_RE = /\bv-(p-fluid|p-hover|p-shortcut|p-focus-trap|p-context-menu|gesture)(?=[\s=:>])/g
+const P_TAG_RE = /<p-[a-z][a-z0-9-]*(?=[\s/>])/g
+const ANY_TAG_RE = /<([a-z][a-z0-9-]*|[A-Z][A-Za-z0-9]*)(?=[\s/>])/g
+
+function templateBlock(src: string): string {
+  // 贪婪到最后一个 </template>（根模板块内可嵌 <template #slot> 子块——懒匹配会在第一个闭合处截断）
+  const m = src.match(/<template[^>]*>([\s\S]*)<\/template>/)
+  return m ? m[1] : ''
+}
+
+/** 单文件模板使用（distinct 集合） */
+export function templateUsageOf(src: string): { fluid: boolean; directives: Set<string>; tags: Set<string> } {
+  const body = templateBlock(src).replace(/<!--[\s\S]*?-->/g, '')
+  const directives = new Set<string>()
+  for (const m of body.matchAll(SEMANTIC_DIRECTIVE_RE)) directives.add(m[1]!)
+  const tags = new Set<string>()
+  for (const m of body.matchAll(P_TAG_RE)) tags.add(m[0].slice(1))
+  for (const m of body.matchAll(ANY_TAG_RE)) tags.add(m[1]!)
+  return { fluid: directives.has('p-fluid'), directives, tags }
+}
+
+export interface D2UsageStats {
+  /** 审计文件数 */
+  files: number
+  /** 用到 v-p-fluid 的文件数 */
+  fluidFiles: number
+  /** 语义指令名出现（每文件 distinct 名求和） */
+  semanticDirectives: number
+  /** p-* 标签名出现（每文件 distinct 名求和） */
+  semanticTags: number
+  /** 全部标签名出现（每文件 distinct 名求和——语义覆盖率分母） */
+  totalTags: number
+}
+
+/** 聚合目录使用统计（读源码重扫模板块——文件已小，直接读免缓存复杂度） */
+export function computeD2Usage(files: string[]): D2UsageStats {
+  const usage: D2UsageStats = { files: files.length, fluidFiles: 0, semanticDirectives: 0, semanticTags: 0, totalTags: 0 }
+  for (const f of files) {
+    let src = ''
+    try {
+      src = fs.readFileSync(f, 'utf8')
+    } catch {
+      continue
+    }
+    const u = templateUsageOf(src)
+    if (u.fluid) usage.fluidFiles++
+    usage.semanticDirectives += u.directives.size
+    for (const t of u.tags) {
+      if (t.startsWith('p-')) usage.semanticTags++
+      usage.totalTags++
+    }
+  }
+  return usage
+}
+
 /** 从被审计目录向上找 proteus.config.ts（最多 6 层，防扫到无关目录） */
 export function discoverD2ConfigFile(dir: string): string | null {
   let cur = path.resolve(dir)
@@ -144,6 +203,8 @@ export interface D2AuditReport {
   errors: string[]
   warnings: string[]
   exemptions: string[]
+  /** ★#451 语义原语使用统计（dogfooding 覆盖率报告；withUsage=false 时缺省） */
+  usage?: D2UsageStats
   ok: boolean
 }
 
@@ -152,8 +213,9 @@ export interface D2AuditReport {
  *  · opts.configFile 省略 → 从 dir 向上发现 proteus.config.ts
  *  · 显式传 null → 禁用配置（纯默认全 error）
  * 加载失败 / 未声明 audit.rules → fail-closed 全 error + 原因入 notes
+ *  · opts.withUsage=false 跳过语义原语统计（audit all 紧凑域）
  */
-export async function runD2Audit(dir: string, opts: { configFile?: string | null } = {}): Promise<D2AuditReport> {
+export async function runD2Audit(dir: string, opts: { configFile?: string | null; withUsage?: boolean } = {}): Promise<D2AuditReport> {
   const configFile = opts.configFile === undefined ? discoverD2ConfigFile(dir) : opts.configFile || null
   const notes: string[] = []
   let rules = D2_DEFAULT_RULES
@@ -170,12 +232,14 @@ export async function runD2Audit(dir: string, opts: { configFile?: string | null
     notes.push('ℹ 未发现 proteus.config.ts——四规则默认 error（可在 audit.rules 自选级别）')
   }
 
-  const files = collectVue(dir).map((f) => scanD2VueFile(f, rules))
+  const vueFiles = collectVue(dir)
+  const files = vueFiles.map((f) => scanD2VueFile(f, rules))
   const errors = files.flatMap((f) => f.errors)
   const warnings = files.flatMap((f) => f.warnings)
   const exemptions = files.flatMap((f) => f.exemptions.map((reason) => `${f.file}: ${reason}`))
-
-  return { dir, configFile, rules, notes, scanned: files.length, files, errors, warnings, exemptions, ok: errors.length === 0 }
+  const report: D2AuditReport = { dir, configFile, rules, notes, scanned: files.length, files, errors, warnings, exemptions, ok: errors.length === 0 }
+  if (opts.withUsage !== false) report.usage = computeD2Usage(vueFiles)
+  return report
 }
 
 /**
@@ -210,6 +274,9 @@ export function formatD2Audit(report: D2AuditReport): string {
   lines.push(`[proteus] audit d2 —— D-2 dogfooding 门禁 · 目录：${report.dir} · ${report.scanned} 个 .vue`)
   const active = AUDIT_RULE_IDS.map((id) => `${id}=${report.rules[id]}`).join(' · ')
   lines.push(`  规则：${active}${report.configFile ? `（来源 ${path.relative(process.cwd(), report.configFile)}）` : ''}`)
+  if (report.usage) {
+    lines.push(`  语义原语统计：v-p-fluid ${report.usage.fluidFiles} 文件 · 语义指令 ${report.usage.semanticDirectives} 处 · p-* 标签 ${report.usage.semanticTags}/${report.usage.totalTags}`)
+  }
   for (const n of report.notes) lines.push(`  ${n}`)
   for (const e of report.errors) lines.push(`  ✗ ${e}`)
   for (const w of report.warnings) lines.push(`  ⚠ ${w}`)
