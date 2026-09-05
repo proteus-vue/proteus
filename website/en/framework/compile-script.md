@@ -70,4 +70,4 @@ Derived/computed linkage merges into the same window — a `count` write trigger
 ## Next steps
 
 - [Style transform](/docs/framework/compile-style)
-- [setData bridge](/docs/framework/runtime-mp)
+- [Mini Program runtime](/docs/framework/runtime-mp)

@@ -96,6 +96,6 @@ The counterexample is worth remembering: an early version hand-wrote "compact ho
 
 ## Next steps
 
-- [Breakpoints and form factors](/docs/system/05-breakpoints): formForWidth and the G-25 three-dimensional breakpoints
-- [Layout components](/docs/13-layout-components): recipes for p-view / p-stack / p-split / p-sidebar
-- [Container queries](/docs/system/02-container-query): the solving baseline of the three-state switching
+- [Breakpoints & form factors](/docs/system/05-breakpoints): formForWidth and the G-25 three-dimensional breakpoints
+- [Layout components: p-view / p-stack / p-split / p-sidebar](/docs/13-layout-components): recipes for p-view / p-stack / p-split / p-sidebar
+- [Container queries: solved against the container](/docs/system/02-container-query): the solving baseline of the three-state switching

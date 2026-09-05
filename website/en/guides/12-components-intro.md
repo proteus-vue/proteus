@@ -130,6 +130,6 @@ Mini Program target: **zero imports** — write `<p-view>` directly in the templ
 
 ## Next steps
 
-- [Layout components](/docs/13-layout-components): p-view / p-stack / p-split / p-sidebar, dissected one by one + recipes
-- [Feedback & motion](/docs/14-feedback-components): p-segment / p-toast / p-animate
+- [Layout components: p-view / p-stack / p-split / p-sidebar](/docs/13-layout-components): p-view / p-stack / p-split / p-sidebar, dissected one by one + recipes
+- [Feedback & motion: p-segment / p-toast / p-animate](/docs/14-feedback-components): p-segment / p-toast / p-animate
 - [Fluid layout](/docs/17-fluid-layout): the responsive-solving system behind the layout components

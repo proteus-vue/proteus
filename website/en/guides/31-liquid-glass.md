@@ -90,5 +90,5 @@ When degraded, the noise layer and the highlight edge are turned off as well, wh
 ## Next steps
 
 - [Desktop primitives](/docs/30-desktop-primitives): cursor glow + glass = the desktop ambience layer
-- [Layout components](/docs/13-layout-components): ways to combine glass cards with p-grid / p-sidebar
+- [Layout components: p-view / p-stack / p-split / p-sidebar](/docs/13-layout-components): ways to combine glass cards with p-grid / p-sidebar
 - [Semantic components overview](/docs/12-components-intro): the full component landscape and category tables

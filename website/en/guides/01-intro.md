@@ -51,6 +51,6 @@ Proteus is the sea god of Greek myth: one being that shifts between many forms w
 
 ## Next steps
 
-- [How Proteus differs from traditional cross-platform frameworks](/docs/02-difference): design trade-offs in a minute
+- [Proteus vs. traditional cross-platform frameworks](/docs/02-difference): design trade-offs in a minute
 - [Try the Playground](/docs/03-playground): run your first page in the browser, no install
 - [Create your first project](/docs/05-create-project): scaffold and run both targets end to end

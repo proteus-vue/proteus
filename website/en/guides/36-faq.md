@@ -92,6 +92,6 @@ Migration is gradual, not a rewrite. `@proteus-vue/compat-miniprogram` provides 
 
 ## Related pages
 
-- [What is Proteus](/docs/01-intro): the core formula and design philosophy
+- [What is Proteus?](/docs/01-intro): the core formula and design philosophy
 - [Pluggable architecture](/docs/framework/22-architecture): the G-series layering and the SPI-First trio
 - [Conformance](/docs/framework/29-conformance): the machine-verdict mechanism behind every promise above

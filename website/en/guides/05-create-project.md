@@ -91,4 +91,4 @@ If `@proteus-vue/*` packages fail to install (version not yet published to npm),
 ## Next steps
 
 - [Run & preview](/docs/06-run-preview): bring up both targets
-- [Global config](/docs/10-config): full field reference for proteus.config.ts
+- [Global & page configuration](/docs/10-config): full field reference for proteus.config.ts

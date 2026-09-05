@@ -49,4 +49,4 @@ TraceBus / DevTools events
 ## Next steps
 
 - [Debugging & observability](/docs/framework/debugging): the three debug layers and the Inspector overlay principle (G-57)
-- [Runtime trace](/docs/framework/runtime-js): the TraceBus event surface
+- [JavaScript support & runtime environment](/docs/framework/runtime-js): the TraceBus event surface

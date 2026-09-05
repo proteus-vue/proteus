@@ -53,4 +53,4 @@ The Web render backend is **VueDom** (the `RenderBackend` SPI): nodeOps maps dir
 ## Next steps
 
 - [Mini Program runtime](/docs/framework/runtime-mp)
-- [Logic layer & view layer](/docs/framework/logic-view)
+- [Logic & view layers](/docs/framework/logic-view)

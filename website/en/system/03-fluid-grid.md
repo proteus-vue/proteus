@@ -91,4 +91,4 @@ The grid is solved in pure CSS and needs no JS size listening; degradation happe
 
 - [Adaptive sidebar](/docs/system/04-sidebar): the three-state state machine of navigation layouts
 - [Fluid layout](/docs/17-fluid-layout): the four G-22 primitives and the FLD iron rules
-- [Layout components](/docs/13-layout-components): recipes for p-view / p-stack / p-split / p-sidebar
+- [Layout components: p-view / p-stack / p-split / p-sidebar](/docs/13-layout-components): recipes for p-view / p-stack / p-split / p-sidebar

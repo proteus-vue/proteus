@@ -156,5 +156,5 @@ Built-in capabilities (given by the component — nothing to write):
 ## Next steps
 
 - [Fluid layout](/docs/17-fluid-layout): v-p-fluid clamp expressions and the breakpoint system
-- [Feedback & motion](/docs/14-feedback-components): p-segment / p-toast / p-animate
+- [Feedback & motion: p-segment / p-toast / p-animate](/docs/14-feedback-components): p-segment / p-toast / p-animate
 - [Liquid glass](/docs/31-liquid-glass): combining pg-glass with the layout components

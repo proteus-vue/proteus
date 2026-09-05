@@ -55,4 +55,4 @@ Later capabilities land with the B4 transport adapter: `devices/logs/serve`.
 ## Next steps
 
 - [DevTools panels & extensions](/docs/reference/devtools-open-api): the debugging consumption surface
-- [Plugin API](/docs/plugin/host): the G-58 plugin form
+- [host (v0.1.0)](/docs/plugin/host): the G-58 plugin form

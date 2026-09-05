@@ -60,5 +60,5 @@ Proteus model:  plugin ⊂ WASM sandbox ⇒ zero permissions by default + capabi
 
 ## Next steps
 
-- [host API reference](/docs/plugin/host): method-by-method signatures for activate/suspend/invoke/api-surface
-- [manifest reference](/docs/plugin/manifest): the complete field set
+- [host (v0.1.0)](/docs/plugin/host): method-by-method signatures for activate/suspend/invoke/api-surface
+- [manifest (v0.1.0)](/docs/plugin/manifest): the complete field set
