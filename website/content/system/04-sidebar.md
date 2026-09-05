@@ -97,5 +97,5 @@ mode = isWide ? 'side-rail' : (userExpanded === true ? 'collapsed-open' : 'colla
 ## 下一步
 
 - [断点与形态](/docs/system/05-breakpoints)：formForWidth 与 G-25 三维断点
-- [布局组件](/docs/12-layout-components)：p-view / p-stack / p-split / p-sidebar 配方
+- [布局组件](/docs/13-layout-components)：p-view / p-stack / p-split / p-sidebar 配方
 - [容器查询](/docs/system/02-container-query)：三态切换的求解底座

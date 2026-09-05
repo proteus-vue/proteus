@@ -84,11 +84,11 @@ gap: 12px;
 | 需求 | 用谁 | 理由 |
 |---|---|---|
 | 一维内容流、空间不足换行 | `p-stack`（`:wrap="true"`） | 标签 / 按钮组不需要等宽列 |
-| 两栏分屏（编辑器 + 产物） | [p-split](/docs/12-layout-components) | 堆叠 / 并排切换，不是多列等分 |
-| 单属性流式缩放（字号 / 间距） | `p-fluid`（`v-p-fluid` 指令） | 见[柔性布局指南](/docs/06-fluid-layout) |
+| 两栏分屏（编辑器 + 产物） | [p-split](/docs/13-layout-components) | 堆叠 / 并排切换，不是多列等分 |
+| 单属性流式缩放（字号 / 间距） | `p-fluid`（`v-p-fluid` 指令） | 见[柔性布局指南](/docs/17-fluid-layout) |
 
 ## 下一步
 
 - [自适应侧边栏](/docs/system/04-sidebar)：导航布局的三态状态机
-- [柔性布局](/docs/06-fluid-layout)：G-22 四原语与 FLD 铁律
-- [布局组件](/docs/12-layout-components)：p-view / p-stack / p-split / p-sidebar 配方
+- [柔性布局](/docs/17-fluid-layout)：G-22 四原语与 FLD 铁律
+- [布局组件](/docs/13-layout-components)：p-view / p-stack / p-split / p-sidebar 配方

@@ -73,7 +73,7 @@ rpx 也不是答案。rpx 是「单位换算」（值 × 屏幕宽 / 750），�
 
 | 旗舰 | 原语 | 一句话 | 深入阅读 |
 |---|---|---|---|
-| 分屏 | `p-split` | 窄容器堆叠、宽容器并排——平板 / 车机 / 多窗口核心原语 | [容器查询](/docs/system/02-container-query) · [布局组件](/docs/12-layout-components) |
+| 分屏 | `p-split` | 窄容器堆叠、宽容器并排——平板 / 车机 / 多窗口核心原语 | [容器查询](/docs/system/02-container-query) · [布局组件](/docs/13-layout-components) |
 | 柔性网格 | `p-grid` | 只声明最小列宽，列数自动求解 | [柔性网格](/docs/system/03-fluid-grid) |
 | 自适应侧边栏 | `p-sidebar` | 宽容器 side-rail、窄容器折叠切换条（VitePress 同款交互） | [自适应侧边栏](/docs/system/04-sidebar) |
 

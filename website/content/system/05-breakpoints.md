@@ -103,6 +103,6 @@ G-44 测试层已把三维矩阵参数化：`W_BREAK [320,600,840,1200,1920] × 
 
 ## 下一步
 
-- [全终端适配](/docs/07-device-adaptation)：G-24 桌面原语 + G-25 全终端
+- [全终端适配](/docs/21-device-adaptation)：G-24 桌面原语 + G-25 全终端
 - [柔性系统总览](/docs/system/01-overview)：回到全景
-- [容器与宿主](/docs/24-containers-hosts)：容器形态与宿主运行时
+- [容器与宿主](/docs/framework/33-containers-hosts)：容器形态与宿主运行时
