@@ -52,7 +52,7 @@ const zh = {
   'spirit.title': 'Proteus 海神精灵（点击变身）',
   // —— Multi-device 同屏墙（★#489）——
   'mdev.subtitle': '同一份源码 · 六端同屏',
-  'mdev.sub': '一份标准 Vue SFC → 真实 CompilerIR → 同时喂给六个渲染后端（VueDom / Headless / Native×3 / Flutter）。每个设备帧都在跑真实输出树——零伪造：把 design 期原型 flexible-multi-device.html 的价值收进来，用 Proteus 自己重写。',
+  'mdev.sub': '一份真实 Vue 组件，六种设备形态下真实渲染（Web DOM 运行时）：手机/平板/手表窄屏与桌面/车机宽屏跑同一份代码，柔性容器自适应换行收紧；真正的多后端输出树与 IR 见 Playground。',
   'mdev.scenario': '场景预设',
   'mdev.edit': '编辑源码（改完实时重渲六端）',
   'mdev.empty': '（无输出）',
@@ -120,7 +120,7 @@ const en = {
   'spirit.title': 'Proteus spirit pet (click to morph)',
   // —— Multi-device wall（★#489）——
   'mdev.subtitle': 'One source · six targets on one wall',
-  'mdev.sub': 'One standard Vue SFC → real CompilerIR → fed to all six render backends (VueDom / Headless / Native×3 / Flutter) at once. Every device frame runs a real output tree — zero fake pixels: the design-stage flexible-multi-device.html prototype, rewritten with Proteus itself.',
+  'mdev.sub': 'One real Vue component rendered live in six device forms (Web DOM runtime): the same code adapts from narrow phone/tablet/watch screens to wide desktop/in-car screens via fluid containers. Real multi-backend trees & IR live in the Playground.',
   'mdev.scenario': 'Scenarios',
   'mdev.edit': 'Edit the source (the six targets re-render live)',
   'mdev.empty': '(no output)',

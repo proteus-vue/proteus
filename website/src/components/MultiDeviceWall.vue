@@ -1,207 +1,93 @@
 <script setup lang="ts">
-// website/src/components/MultiDeviceWall.vue —— ★#489 一套源码 · 六端同屏墙
-// 把 design 期原型 flexible-multi-device.html 的价值收进官网，且零伪造：
-// 一份标准 Vue SFC → createNodeCompilerBackend 真实 CompilerIR → renderIRTree 同时喂给六个渲染后端
-// （VueDom / Headless / Native × 3 / Flutter），每个帧都是真实输出树——复用 Playground 同源管线。
-// 原语优先：布局全走 p-*（p-segment 场景切换 / p-grid 自适应列 / p-view / p-stack / p-text），页面零裸平台 API。
-import { computed, onMounted, ref, watch } from 'vue'
-// G-29 NodeBackend（浏览器安全单入口——与 Playground 同源）
-import { createNodeCompilerBackend } from '@proteus-vue/compiler-backend/node'
+// website/src/components/MultiDeviceWall.vue —— ★#489 一套源码 · 六端同屏墙（v2：真实渲染，非色块）
+// 把 design 期原型 flexible-multi-device.html 的价值收进官网：同一份真实 Vue 组件
+// 在六种设备形态框里**真实渲染**（Web DOM 运行时 + 柔性容器自适应——小屏自然换行/收紧），
+// 而不是画色块树。真实多后端输出树/IR 仍由 Playground（TransformDemo Render/Trace）负责。
+// 原语优先：p-grid 墙 / p-segment 场景 / p-view / p-stack / p-text；设备框 chrome 仅页面级视觉。
+import { computed, ref } from 'vue'
 import { locale, t } from '../i18n'
-import { RENDER_BACKENDS, DEVICES, renderWithBackend, deviceForm, type TreeJsonNode } from '../playground/backends'
-import RenderBox from './RenderBox.vue'
+import { DEVICES, deviceForm } from '../playground/backends'
+import ProductScene from './mdev/ProductScene.vue'
+import FeedScene from './mdev/FeedScene.vue'
+import ShellScene from './mdev/ShellScene.vue'
 
-const backend = createNodeCompilerBackend()
-
-/** 场景预设（EN 示例文案——两种语言下源码一致，改完六端实时重渲） */
-interface Scenario {
+interface Scene {
   key: string
   labelZh: string
   labelEn: string
-  source: string
+  comp: unknown
 }
-const SCENARIOS: Scenario[] = [
-  {
-    key: 'product',
-    labelZh: '商品详情',
-    labelEn: 'Product detail',
-    source: `<script setup lang="ts">
-import { ref } from 'vue'
-
-const count = ref(1)
-const price = '¥ 299'
-<\/script>
-
-<template>
-  <p-view class="card">
-    <p-heading :level="1">Mono speaker</p-heading>
-    <p-text class="price">{{ price }}</p-text>
-    <p-stack direction="row" :gap="8" wrap>
-      <p-button @tap="count = Math.max(1, count - 1)">−</p-button>
-      <p-text class="qty">× {{ count }}</p-text>
-      <p-button @tap="count = count + 1">＋</p-button>
-    </p-stack>
-    <p-text class="note">One semantic card, six targets — same source.</p-text>
-  </p-view>
-</template>
-
-<style scoped>
-.card { padding: 24px 28px; }
-.price { color: #0e0e10; font-size: 18px; }
-.qty { align-self: center; }
-.note { color: #666; font-size: 12px; }
-</style>
-`,
-  },
-  {
-    key: 'feed',
-    labelZh: '信息流',
-    labelEn: 'Feed grid',
-    source: `<script setup lang="ts">
-const items = ['Semantic core', 'Pluggable backends', 'Transparent compile', 'Zero native glue']
-<\/script>
-
-<template>
-  <p-view class="feed">
-    <p-heading :level="2">Capabilities</p-heading>
-    <p-grid :min-col-width="160" :gap="10">
-      <p-view v-for="(it, i) in items" :key="i" class="tile">
-        <p-text>{{ i + 1 }} · {{ it }}</p-text>
-      </p-view>
-    </p-grid>
-  </p-view>
-</template>
-
-<style scoped>
-.feed { padding: 20px 22px; }
-.tile { padding: 14px 12px; border: 1px solid #e2e2ea; border-radius: 10px; }
-</style>
-`,
-  },
-  {
-    key: 'shell',
-    labelZh: '应用壳',
-    labelEn: 'App shell',
-    source: `<template>
-  <p-view class="shell">
-    <p-view class="bar">
-      <p-text class="bar-title">Proteus</p-text>
-    </p-view>
-    <p-stack class="body" :gap="10">
-      <p-heading :level="1">Hello, every target</p-heading>
-      <p-text>Web renders DOM; mini programs compile to WXML; native hosts draw UIKit / Jetpack / ArkUI / Widget trees from the same IR.</p-text>
-    </p-stack>
-  </p-view>
-</template>
-
-<style scoped>
-.shell { min-height: 320px; }
-.bar { padding: 12px 16px; border-bottom: 1px solid #d9d9e3; }
-.bar-title { font-weight: 700; }
-.body { padding: 20px 16px; }
-</style>
-`,
-  },
+const SCENES: Scene[] = [
+  { key: 'product', labelZh: '商品详情', labelEn: 'Product detail', comp: ProductScene },
+  { key: 'feed', labelZh: '能力信息流', labelEn: 'Capabilities feed', comp: FeedScene },
+  { key: 'shell', labelZh: '应用壳', labelEn: 'App shell', comp: ShellScene },
 ]
 
-/** 六个帧 = 六个渲染后端 × 端形态（device 档位真实宽高/形态档） */
+/** 六个设备帧：端形态 + 屏幕几何/机型 chrome（真实宽高/F 档来自 DEVICES） */
 const FRAMES = [
-  { id: 'web', device: 'web', backendId: 'vuedom', nameZh: 'Web · 桌面', nameEn: 'Web · Desktop' },
-  { id: 'tablet', device: 'tablet', backendId: 'native-android', nameZh: 'Android · 平板', nameEn: 'Android · Tablet' },
-  { id: 'phone', device: 'phone', backendId: 'native-ios', nameZh: 'iOS · 手机', nameEn: 'iOS · Phone' },
-  { id: 'car', device: 'tv', backendId: 'native-harmony', nameZh: 'ArkUI · 车机', nameEn: 'ArkUI · In-car' },
-  { id: 'watch', device: 'watch', backendId: 'flutter', nameZh: 'Flutter · 手表', nameEn: 'Flutter · Watch' },
-  { id: 'ssr', device: 'tablet', backendId: 'headless', nameZh: 'Headless · SSR/测试', nameEn: 'Headless · SSR/test' },
+  { id: 'web', device: 'web', nameZh: 'Web · 桌面', nameEn: 'Web · Desktop', kind: 'full', chrome: 'none' },
+  { id: 'tablet', device: 'tablet', nameZh: 'Android · 平板', nameEn: 'Android · Tablet', kind: 'mini', chrome: 'notch' },
+  { id: 'phone', device: 'phone', nameZh: 'iOS · 手机', nameEn: 'iOS · Phone', kind: 'mini', chrome: 'notch' },
+  { id: 'car', device: 'tv', nameZh: 'ArkUI · 车机', nameEn: 'ArkUI · In-car', kind: 'full', chrome: 'none' },
+  { id: 'watch', device: 'watch', nameZh: 'Flutter · 手表', nameEn: 'Flutter · Watch', kind: 'mini', chrome: 'pill' },
+  { id: 'ssr', device: 'tablet', nameZh: 'Headless · SSR/测试', nameEn: 'Headless · SSR/test', kind: 'full', chrome: 'dash' },
 ]
 
 const isEn = computed(() => locale.value === 'en')
-const scenarioKey = ref(SCENARIOS[0]!.key)
-const source = ref(SCENARIOS[0]!.source)
-const scenario = computed(() => SCENARIOS.find((s) => s.key === scenarioKey.value) ?? SCENARIOS[0]!)
-
-/** 每帧真实输出树（ir 编译一次，六后端各跑 renderIRTree） */
-interface FrameState {
-  cfg: (typeof FRAMES)[number]
-  tree: TreeJsonNode | null
-  error: string
+const activeKey = ref(SCENES[0]!.key)
+const activeScene = computed(() => SCENES.find((s) => s.key === activeKey.value) ?? SCENES[0]!)
+const sceneOptions = computed(() => SCENES.map((s) => ({ label: isEn.value ? s.labelEn : s.labelZh, value: s.key })))
+function pick(key: string): void {
+  activeKey.value = key
 }
-const frames = ref<FrameState[]>([])
-let treeErr = ''
 
-function refresh(): void {
-  treeErr = ''
-  try {
-    const ir = backend.compile({ source: source.value, filename: 'wall.vue' })
-    frames.value = FRAMES.map((cfg) => {
-      try {
-        const { tree } = renderWithBackend(ir.render.root as never, cfg.backendId)
-        return { cfg, tree, error: '' }
-      } catch (e) {
-        return { cfg, tree: null, error: String(e instanceof Error ? e.message : e) }
-      }
-    })
-  } catch (e) {
-    treeErr = String(e instanceof Error ? e.message : e)
-    frames.value = []
+/** 迷你屏（手表/手机/平板）给内容套 p-scale level 0——小屏字号档真实生效 */
+function isMini(f: (typeof FRAMES)[number]): boolean {
+  return f.kind === 'mini'
+}
+function screenStyle(f: (typeof FRAMES)[number]): Record<string, string> {
+  // mini 屏固定设备 px（放缩前，供视觉/比例）；全宽帧自适应卡内宽度
+  if (f.kind === 'mini') {
+    const dev = DEVICES.find((d) => d.id === f.device)
+    const ratio = dev ? dev.height / dev.width : 1.9
+    const w = f.device === 'watch' ? 112 : 172
+    return { width: `${w}px`, aspectRatio: `1 / ${(ratio * 1.35).toFixed(2)}` }
   }
+  const h = f.device === 'tv' ? 178 : 236
+  return { width: '100%', height: `${h}px` }
 }
-
-function pickScenario(key: string): void {
-  const s = SCENARIOS.find((x) => x.key === key)
-  if (s) {
-    scenarioKey.value = key
-    source.value = s.source
-  }
-}
-const scenarioOptions = computed(() => SCENARIOS.map((s) => ({ label: isEn.value ? s.labelEn : s.labelZh, value: s.key })))
-const segmentOptions = computed(() => SCENARIOS.map((s) => ({ label: isEn.value ? s.labelEn : s.labelZh, value: s.key })))
-
-let timer: ReturnType<typeof setTimeout> | undefined
-watch(source, () => {
-  clearTimeout(timer)
-  timer = setTimeout(refresh, 200)
-})
-
-function backendColor(id: string): string {
-  return RENDER_BACKENDS.find((r) => r.id === id)?.color ?? 'var(--brand)'
-}
-function frameName(cfg: (typeof FRAMES)[number]): string {
-  return isEn.value ? cfg.nameEn : cfg.nameZh
-}
-function frameMeta(cfg: (typeof FRAMES)[number]): string {
-  const dev = DEVICES.find((d) => d.id === cfg.device)
+function frameMeta(f: (typeof FRAMES)[number]): string {
+  const dev = DEVICES.find((d) => d.id === f.device)
   return dev ? `${dev.width}×${dev.height} · F=${deviceForm(dev.width)}` : ''
 }
-
-onMounted(refresh)
 </script>
 
 <template>
   <p-view class="wall">
     <p-stack direction="row" :gap="14" wrap class="wall-head">
-      <!-- 场景预设（p-segment——手写 Tab 禁用的既有约定） -->
       <p-view class="seg">
         <p-text class="wall-label">{{ t('mdev.scenario') }}</p-text>
-        <p-segment :options="scenarioOptions" :active="scenarioKey" @update:active="pickScenario($event as string)" />
+        <p-segment :options="sceneOptions" :active="activeKey" @update:active="pick($event as string)" />
       </p-view>
       <p-text class="wall-note">{{ t('mdev.sub') }}</p-text>
     </p-stack>
 
-    <p-grid :min-col-width="240" :gap="14" class="grid">
-      <p-view v-for="f in frames" :key="f.cfg.id" class="frame" :class="'frame-' + f.cfg.id">
+    <p-grid :min-col-width="236" :gap="14" class="grid">
+      <p-view v-for="f in FRAMES" :key="f.id" class="frame" :class="'frame-' + f.id">
         <p-view class="frame-head">
-          <p-text class="frame-name">{{ frameName(f.cfg) }}</p-text>
-          <p-text class="frame-meta">{{ frameMeta(f.cfg) }}</p-text>
+          <p-text class="frame-name">{{ isEn ? f.nameEn : f.nameZh }}</p-text>
+          <p-text class="frame-meta">{{ frameMeta(f) }}</p-text>
         </p-view>
-        <p-view class="screen" :style="{ borderColor: backendColor(f.cfg.backendId) }">
-          <p-text v-if="f.error" class="frame-err">✗ {{ f.error }}</p-text>
-          <RenderBox v-else-if="f.tree" :node="f.tree" :color="backendColor(f.cfg.backendId)" :root="true" />
-          <p-text v-else class="frame-err">{{ t('mdev.empty') }}</p-text>
+        <p-view class="stage">
+          <p-view class="screen" :class="'chrome-' + f.chrome" :style="screenStyle(f)">
+            <p-scale :level="isMini(f) ? 0 : 1">
+              <component :is="activeScene.comp" />
+            </p-scale>
+          </p-view>
         </p-view>
-        <p-text class="frame-backend">{{ f.cfg.backendId }}</p-text>
+        <p-text class="frame-rt">{{ isEn ? 'Web DOM runtime · real render' : 'Web DOM 运行时 · 真实渲染' }}</p-text>
       </p-view>
     </p-grid>
-    <p-text v-if="treeErr" class="wall-err">✗ {{ treeErr }}</p-text>
   </p-view>
 </template>
 
@@ -228,22 +114,43 @@ onMounted(refresh)
 }
 .frame-name { font-size: 12.5px; font-weight: 650; color: var(--ink); }
 .frame-meta { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+.stage { padding: 12px 12px 4px; display: flex; justify-content: center; }
 .screen {
-  margin: 10px 10px 4px;
-  border: 1px solid;
-  border-radius: 10px;
-  padding: 8px;
-  max-height: 230px;
-  overflow: auto;
-  background: rgba(255, 255, 255, 0.5);
+  position: relative;
+  border-radius: 14px;
+  background: #fff;
+  color: #14141a;
+  overflow: hidden;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
-.frame-err { color: var(--warn); font-size: 12px; }
-.frame-backend {
+/* 机型 chrome（纯视觉，零布局逻辑） */
+.chrome-notch::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44%;
+  height: 5px;
+  border-radius: 999px;
+  background: #101018;
+  z-index: 2;
+}
+.chrome-pill {
+  border-radius: 30px;
+  border: 3px solid #3a3a46;
+  box-shadow: 0 0 0 1px #2a2a34, 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+.chrome-dash {
+  border: 1.5px dashed #8a93b8;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.frame-rt {
   display: block;
-  padding: 0 12px 10px;
-  font-size: 11px;
+  padding: 4px 12px 12px;
+  font-size: 10.5px;
   color: var(--dim);
   font-family: ui-monospace, Menlo, monospace;
 }
-.wall-err { color: var(--warn); font-size: 12.5px; }
 </style>
