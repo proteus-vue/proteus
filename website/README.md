@@ -5,7 +5,7 @@
 ## 本批落地（Website B2 · 决策 #374）
 
 - **文档系统 MVP**：10 篇指南（`guides/*.md`）由 `@proteus-vue/docs` 引擎在 vite 构建期编译（frontmatter/title/html/toc），运行时零解析——**文档也是编译产物**
-- **侧边栏自动生成**：`src/guides.ts` 用 `import.meta.glob` 收集全部 md 模块，按 frontmatter.order 排序——**新增指南 = 放一个 md 文件，侧边栏零改动**
+- **侧边栏自动生成**：`src/docs-registry.ts` 用 `import.meta.glob` 收集全部 md 模块，按 frontmatter.order 排序——**新增指南 = 放一个 md 文件，侧边栏零改动**
 - **柔性框架优先（W-6/D-5）**：响应式全部走 `v-p-fluid` clamp 表达式 + 柔性网格（auto-fill/minmax），**全站零 @media 断点**（`verify-llm.cjs` C8 机器门禁）
 - **桌面交互原语**（G-24）：`v-p-hover` 卡片悬停语义
 
@@ -20,7 +20,7 @@ npm run build:website   # vue-tsc 类型检查 + vite 构建
 
 ```
 website/
-├── guides/*.md          # 28 篇指南（frontmatter: title/order/group，六分组侧边栏）
+├── guides/*.md          # 36 篇指南（frontmatter: title/order/group，8 组初学者旅程：起步/开始/代码构成/基础概念/渲染与能力/架构与工程/专题深入/参考）
 ├── content/             # ★生成的参考文档（gen-content.mjs 从源码 SSOT 生成，勿手改）
 │   ├── components/      #   60 页：p-* 逐组件参考（props/events/语义映射/MP 等价）
 │   ├── capabilities/    #   51 页：50 能力原语逐个参考 + 总览
@@ -28,7 +28,7 @@ website/
 ├── spirit.html          # ★#389i 3D 海神精灵 iframe 专页（透明背景——three 隔离在独立 chunk）
 ├── src/
 │   ├── spirit/main.ts   # ★#389i Three.js 3D 萌宠（果冻质感/点击变身/鼠标跟随/postMessage 气泡）
-│   ├── guides.ts        # 侧边栏自动生成（glob + frontmatter 排序）
+│   ├── docs-registry.ts # 文档注册表（五区：指南/组件/能力/柔性系统/插件 API）
 │   ├── pages/Home.vue   # Hero + 能力矩阵 + 快速开始
 │   ├── pages/Guide.vue  # 侧边栏 + 文档渲染 + TOC + 上下篇
 │   └── style.css        # design tokens（深色优先，v3 tokens 子集）——零 @media

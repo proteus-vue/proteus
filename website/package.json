@@ -9,6 +9,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "gen:content": "tsx scripts/gen-content.mjs",
+    "gen:plugin-docs": "node scripts/gen-plugin-docs.mjs",
+    "check:plugin-docs": "node scripts/gen-plugin-docs.mjs --check",
     "postinstall": "node ../scripts/build-packages.mjs"
   },
   "dependencies": {

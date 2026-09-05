@@ -1,0 +1,95 @@
+// Proteus Studio 插件 API · v0.1.0（初始稳定版）
+// ─────────────────────────────────────────────────────────────
+// 本文件是插件 API 参考文档的唯一事实来源（G-60.1 文档即契约）：
+//   参考页由 scripts/gen-plugin-docs.mjs 从本文件生成，禁止手改生成物。
+// 版本演进规则（G-58.4 / API 只增不改）：新能力 = 新增 since_vX_Y_Z.wit 文件并存，
+//   稳定版本冻结永不修改。首版接口面固化自 docs/proteus-plugin-api-plan/03-spi.md。
+// 注：WIT 位置暂挂 website/api/（文档管线消费方）；独立 plugin-api 包落地后迁移，
+//   迁移由漂移门禁（gen-plugin-docs.mjs --check）强制同步。
+
+package proteus:plugin@0.1.0;
+
+/// 插件清单（PluginManifest）——Tier 0/1/2 三层形态的声明入口。
+interface manifest {
+  /// 三层插件形态：Tier 0 纯数据（零代码）/ Tier 1 声明式 WASM / Tier 2 完整 WASM。
+  enum tier {
+    declarative,
+    wasm,
+    full,
+  }
+
+  /// 能力授权单元（默认零权限：未声明 = 拒绝）。
+  /// 网络能力强制 host 白名单——禁止不带 hosts 的 network 声明。
+  variant capability {
+    read-workspace,
+    write-workspace(list<string>),
+    network(list<string>),
+    spawn-process(list<string>),
+    kernel-spi-topology,
+    kernel-layer-rules,
+    kernel-conformance,
+    kernel-device-impact,
+    device-attach(list<string>),
+    device-input,
+    run-external-process,
+  }
+
+  /// 资源限额（Tier 1/2 必填，缺省值由宿主强制：64MB / 50ms / 5000ms）。
+  record limits {
+    memory-mb: option<u32>,
+    cpu-ms-per-call: option<u32>,
+    timeout-ms: option<u32>,
+  }
+}
+
+/// 插件贡献点（ContributionPoints）——Tier 0 数据由宿主直接应用，Tier 1/2 需要运行时。
+interface contributions {
+  /// 命令贡献：面板/菜单触发的行为入口（Tier 1+）。
+  record command-def {
+    id: string,
+    title: string,
+    icon: option<string>,
+  }
+
+  /// 面板贡献（Studio 特有：框架语义面板挂载点）。
+  record panel-def {
+    id: string,
+    title: string,
+    where: string,
+  }
+
+  /// 主题贡献（Tier 0：纯数据，宿主读取后直接应用）。
+  record theme-def {
+    id: string,
+    name: string,
+    css: string,
+  }
+}
+
+/// 插件宿主（PluginHost）——生命周期 + 能力探测 + 运行时调用 + 治理。
+interface host {
+  /// 激活插件。宿主按 activationEvents 决定时机（激活时机是契约，不是优化项）。
+  activate: func(plugin-id: string) -> result<string, string>;
+
+  /// 挂起插件。deactivate 必须对称清理资源（未清理项记入审计并降信任分）。
+  suspend: func(plugin-id: string);
+
+  /// 卸载插件。
+  uninstall: func(plugin-id: string);
+
+  /// ★ 能力探测：纯元数据查询，零副作用、零网络、零内核调用。
+  /// 严禁"发一个请求看会不会崩"——用有副作用的调用探测能力是设计错误。
+  supports: func(cap: string) -> bool;
+
+  /// 运行时调用。越权返回 denied（权限系统的正常输出，非错误——宿主记录并继续）。
+  invoke: func(plugin-id: string, call: string) -> result<string, string>;
+
+  /// 治理：查询插件资源用量（内存 / CPU / 超时）。
+  get-usage: func(plugin-id: string) -> string;
+
+  /// 治理：终止失控插件（资源超限强制执行，只杀该插件不影响其他）。
+  kill-plugin: func(plugin-id: string, reason: string);
+
+  /// ★ 架构试金石：内核 API 面快照。加自有宿主/内置插件不得改变此快照。
+  api-surface: func() -> list<string>;
+}

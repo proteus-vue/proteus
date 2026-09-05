@@ -47,17 +47,19 @@ function buildSection(key: string, name: string, base: string, modules: Record<s
   return { key, name, base, groups, items }
 }
 
-// —— 四区内容 ——
+// —— 五区内容 ——（插件 API 参考页由 gen-plugin-docs.mjs 从 WIT SSOT 生成，勿手改）
 const guideModules = import.meta.glob<{ default: DocsModule }>('../guides/*.md', { eager: true })
 const componentModules = import.meta.glob<{ default: DocsModule }>('../content/components/*.md', { eager: true })
 const capabilityModules = import.meta.glob<{ default: DocsModule }>('../content/capabilities/*.md', { eager: true })
 const systemModules = import.meta.glob<{ default: DocsModule }>('../content/system/*.md', { eager: true })
+const pluginModules = import.meta.glob<{ default: DocsModule }>('../content/plugins/*.md', { eager: true })
 
 export const sections: DocSection[] = [
   buildSection('guide', '指南', '/docs', guideModules, '指南'),
   buildSection('components', '组件', '/docs/component', componentModules, '组件'),
   buildSection('capabilities', '能力', '/docs/capability', capabilityModules, '能力'),
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),
+  buildSection('plugins', '插件 API', '/docs/plugin', pluginModules, '插件 API'),
 ]
 
 export function findDoc(base: string, slug: string): DocEntry | undefined {
