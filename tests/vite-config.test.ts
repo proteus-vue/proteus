@@ -76,9 +76,10 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     expect((config.define as Record<string, unknown>).__CUSTOM__).toBe(true)
   })
 
-  it('legacy 兼容探测：hasLegacyViteConfig', async () => {
+  it('legacy 兼容探测：hasLegacyViteConfig（#420：examples/website 已迁移——全仓零 vite.config.ts）', async () => {
     const { hasLegacyViteConfig } = await import('../packages/cli/src/dev')
-    expect(hasLegacyViteConfig(ROOT)).toBe(false) // 仓库根无 vite.config
-    expect(hasLegacyViteConfig(path.join(ROOT, 'website'))).toBe(true) // website 仍是遗留形态（有 vite.config.ts）
+    expect(hasLegacyViteConfig(ROOT)).toBe(false) // 仓库根
+    expect(hasLegacyViteConfig(path.join(ROOT, 'website'))).toBe(false) // website 已迁移（#420）
+    expect(hasLegacyViteConfig(path.join(ROOT, 'examples'))).toBe(false) // examples 已迁移（#420）
   })
 })

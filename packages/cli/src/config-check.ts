@@ -1,32 +1,16 @@
 // packages/cli/src/config-check.ts
-// ★types-plan B5：proteus config:check —— 加载 proteus.config.ts（esbuild transform + Function 注入 eval）→ validateConfig → 报告
-// 对齐 capabilities 描述文件加载模式（@proteus-vue/plugin-vite import 剥离——配置为类型/纯数据，无运行时框架依赖）
+// ★types-plan B5：proteus config:check —— 加载 proteus.config.ts → validateConfig → 报告
+// ★#420 配置收敛：配置可携带 vite 插件（运行时 import 是合法形态）——加载委托 loadProjectConfig（宽松加载器）
 import fs from 'node:fs'
 import path from 'node:path'
-import { transform } from 'esbuild'
 import { validateConfig } from './config-validate'
 import type { ConfigValidationResult } from './config-validate'
 import { configNeedsMigration, CONFIG_VERSION } from '@proteus-vue/types'
+import { loadProjectConfig } from './config-loader'
 
-/** 加载 TS 配置：transform → CJS → 剥离 @proteus-vue/plugin-vite require → Function eval → 取 .default */
+/** 加载 TS 配置（宽松——兼容 vite 插件字段；同名保留供 health/app-config-check 消费） */
 export async function loadTsConfig(file: string): Promise<unknown> {
-  const src = fs.readFileSync(file, 'utf-8')
-  const { code } = await transform(src, { loader: 'ts', format: 'cjs', platform: 'node', logLevel: 'silent' })
-  // 剥离 @proteus-vue/plugin-vite require 行（config 文件只应类型引用；运行时无框架依赖）
-  const finalCode = code
-    .split('\n')
-    .filter((l) => !l.includes("require('@proteus-vue/plugin-vite')") && !l.includes('require("@proteus-vue/plugin-vite")'))
-    .join('\n')
-  const mod: { exports: Record<string, unknown> } = { exports: {} }
-  const fileRequire = (id: string): unknown => {
-    // 相对路径 require（配置内如引本地 JSON）：基于文件目录解析
-    if (id.startsWith('.')) return require(path.resolve(path.dirname(file), id))
-    // ★G-35 M5：defineAppConfig 为纯 identity（Vite defineConfig 模式），沙箱注入 stub——app.config.ts 保持 canonical 形态
-    if (id === '@proteus-vue/app-config') return { defineAppConfig: (c: unknown) => c }
-    throw new Error(`配置引用了运行时依赖 ${id}（仅允许类型导入与本地相对导入）`)
-  }
-  new Function('module', 'exports', 'require', finalCode)(mod, mod.exports, fileRequire)
-  return mod.exports.default
+  return loadProjectConfig(path.resolve(file))
 }
 
 /** config:check 纯函数入口：加载 + 校验 + 版本迁移提示 + 报告 */

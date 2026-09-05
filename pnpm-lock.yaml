@@ -274,6 +274,9 @@ importers:
       '@proteus-vue/module':
         specifier: 0.1.0
         version: link:../module
+      '@proteus-vue/plugin-vite':
+        specifier: 0.2.0-beta.0
+        version: link:../plugin-vite
       '@proteus-vue/render-backend':
         specifier: 0.1.0
         version: link:../render-backend
@@ -290,9 +293,6 @@ importers:
       '@proteus-vue/compat-miniprogram':
         specifier: workspace:*
         version: link:../compat-miniprogram
-      '@proteus-vue/plugin-vite':
-        specifier: workspace:*
-        version: link:../plugin-vite
       '@vue/compiler-dom':
         specifier: ^3.5.42
         version: 3.5.42
@@ -657,6 +657,9 @@ importers:
         specifier: ^4.3.0
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
+      '@proteus-vue/cli':
+        specifier: workspace:*
+        version: link:../packages/cli
       '@types/three':
         specifier: ^0.160.0
         version: 0.160.0

@@ -20,7 +20,7 @@ let browser: Browser
 let page: Page
 
 beforeAll(async () => {
-  server = await preview({ root: EXAMPLES_ROOT, mode: 'web', preview: { port: 4175 } })
+  server = await preview({ root: EXAMPLES_ROOT, mode: 'web', build: { outDir: path.join(EXAMPLES_ROOT, 'dist/web') }, preview: { port: 4175 } })
   browser = await chromium.launch()
   page = await browser.newPage()
 }, 120_000)

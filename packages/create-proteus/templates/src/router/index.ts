@@ -3,8 +3,10 @@
 // 应用开发者视角：只需这一行单例；换应用换路由表，框架零改动
 import { createRouter } from '@proteus-vue/router'
 import { routes } from './auto-routes'
+// ★devtools 打通：路由事件 → TraceBus（惰性单例与 installProteusDevtools 同源；bus 门控生产零开销）
+import { getProteusTraceBus } from '@proteus-vue/devtools-runtime'
 
-export const router = createRouter(routes)
+export const router = createRouter(routes, { traceBus: getProteusTraceBus() })
 
 // 类型契约透传（应用页面可直接 import type { PageOnLoad } from './router'，无需深路径）
 export type {

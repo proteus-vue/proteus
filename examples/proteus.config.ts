@@ -1,6 +1,12 @@
 // examples/proteus.config.ts —— Proteus 示例工程配置（完整工程形态，自包含）
 // ★配置不再挂在仓库根：示例 = 独立工程（对应 create-proteus 生成的工程结构）
 import type { ProteusConfig } from '@proteus-vue/plugin-vite'
+// ★#420 配置收敛：Web 端工程专属插件（框架内建 vue + route-blocks，此处补 defaultScoped/devtools 中继/docs 引擎）
+import { defaultScopedPlugin, devtoolsRelayPlugin } from '@proteus-vue/plugin-vite'
+import { docsMdPlugin } from '@proteus-vue/docs/vite'
+// ★module-plan B4：模块图谱 → Web manualChunks（有 modules/ 目录时自动生效）
+import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus-vue/module'
+import path from 'node:path'
 
 const config: ProteusConfig = {
   platform: 'mp-weixin',
@@ -39,6 +45,8 @@ const config: ProteusConfig = {
     px2rpx: true,
     rpxRatio: 2,
   },
+  // ★#420 配置收敛：框架内置组件目录（组件库未拆包共享——monorepo 根 src/components；相对 root 解析）
+  frameworkComponentsDir: '../src/components',
   // 包体积预算：主包 ≤1.2MB（微信上限 2MB）；strict 时超限构建失败
   budget: {
     mainPackageKB: 1200,
@@ -72,6 +80,29 @@ const config: ProteusConfig = {
       // 分包页面（relInSub 去 pages/ 前缀）
       'list': { title: '订单列表' },
     },
+  },
+  // ★#420 配置收敛（原 vite.config.ts 内容收归此处——vite 配置由框架组装，本字段做工程专属扩展）：
+  //   Web：框架内建 vue + route-blocks，此处补 defaultScoped（<style> 默认 scoped 对齐 MP 语义）/ devtools 中继 / docs 引擎；
+  //   mp：框架内建 mpTransform（frameworkComponentsDir 上方已声明）；
+  //   module-plan B4：Web manualChunks（有 modules/ 时自动生效）为 async 扫描——vite 字段支持 async 函数
+  vite: async (ctx: { command: string; mode: string }) => {
+    const isMp = ctx.mode === 'mp-weixin'
+    const plugins: unknown[] = []
+    if (!isMp) {
+      plugins.push(defaultScopedPlugin(), devtoolsRelayPlugin(), docsMdPlugin())
+    }
+    const scan = await scanModuleConfigs(__dirname)
+    const graph = DependencyGraph.fromConfigs(
+      scan.modules.filter((m) => m.ok && m.name).map((m) => ({ name: m.name!, version: m.version ?? '0.0.0', chunk: m.chunk, dependencies: m.dependencies })),
+    )
+    const rollupOptions = isMp ? undefined : generateRollupOptions(graph).rollupOptions
+    return {
+      plugins,
+      resolve: {
+        alias: [{ find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') }],
+      },
+      build: rollupOptions ? { rollupOptions } : undefined,
+    }
   },
 }
 

@@ -5,7 +5,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import config from '../proteus.config'
 // ★module-plan B7a/B8：分包体积统计/阈值评估抽到 @proteus-vue/module（bundle-report 与 CLI audit 共用）
 import { scanSubPackages, evaluateSubPackageSizes } from '@proteus-vue/module'
 import type { SubPackageStat } from '@proteus-vue/module'
@@ -85,26 +84,34 @@ export function formatBundleReport(stat: BundleStat, budgetKB: number, strict: b
 }
 
 function main(): void {
-  // 分包产物路径：源码 root（examples/subpackages/order）去掉 appDir 前缀（examples/）→ subpackages/order
-  const appDir = path.dirname(config.pagesDir)
-  const roots = (config.subPackages ?? []).map((sp) => sp.root.replace(`${appDir}/`, ''))
-  const stat = scanMainPackage(OUT_DIR, roots)
-  const subPackages = scanSubPackages(OUT_DIR, roots)
-  // budget 可选（拆包步骤 5：ProteusConfig 归包后为可选段，缺省走 roadmap 目标值）
-  const budget = config.budget ?? { mainPackageKB: 1200, strict: false }
-  console.log(formatBundleReport(stat, budget.mainPackageKB, budget.strict, subPackages))
-  // ★B7a：分包体积门禁（微信硬限 error 阻断）
-  if (checkSubPackageLimits(subPackages)) process.exitCode = 1
-  const kb = stat.totalBytes / 1024
-  if (kb > budget.mainPackageKB) {
-    const msg = `⚠ 主包 ${kb.toFixed(0)} KB 超过预算 ${budget.mainPackageKB} KB（微信上限 2048 KB）——考虑分包 / 按需注入`
-    if (budget.strict) {
-      console.error(`[proteus] ${msg}`)
-      process.exitCode = 1
-    } else {
-      console.warn(`[proteus] ${msg}`)
+  // ★#420：config 惰性加载（顶层 import 会连带 vite 插件副作用——纯数据消费者只碰 data 字段）
+  void (async () => {
+    const config = (await import('../proteus.config')).default as {
+      pagesDir: string
+      subPackages?: Array<{ root: string }>
+      budget?: { mainPackageKB?: number; strict?: boolean }
     }
-  }
+    // 分包产物路径：源码 root（examples/subpackages/order）去掉 appDir 前缀（examples/）→ subpackages/order
+    const appDir = path.dirname(config.pagesDir)
+    const roots = (config.subPackages ?? []).map((sp) => sp.root.replace(`${appDir}/`, ''))
+    const stat = scanMainPackage(OUT_DIR, roots)
+    const subPackages = scanSubPackages(OUT_DIR, roots)
+    // budget 可选（拆包步骤 5：ProteusConfig 归包后为可选段，缺省走 roadmap 目标值）
+    const budget = config.budget ?? { mainPackageKB: 1200, strict: false }
+    console.log(formatBundleReport(stat, budget.mainPackageKB ?? 1200, budget.strict ?? false, subPackages))
+    // ★B7a：分包体积门禁（微信硬限 error 阻断）
+    if (checkSubPackageLimits(subPackages)) process.exitCode = 1
+    const kb = stat.totalBytes / 1024
+    if (kb > (budget.mainPackageKB ?? 1200)) {
+      const msg = `⚠ 主包 ${kb.toFixed(0)} KB 超过预算 ${budget.mainPackageKB} KB（微信上限 2048 KB）——考虑分包 / 按需注入`
+      if (budget.strict) {
+        console.error(`[proteus] ${msg}`)
+        process.exitCode = 1
+      } else {
+        console.warn(`[proteus] ${msg}`)
+      }
+    }
+  })()
 }
 
 main()

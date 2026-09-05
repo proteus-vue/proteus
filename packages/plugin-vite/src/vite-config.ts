@@ -72,10 +72,10 @@ export async function resolveProteusViteConfig(
   const isMp = platform === 'mp-weixin'
   const isDebug = process.env.PROTEUS_DEBUG === '1'
 
-  // —— 框架内置插件（目标端各一）——
   let plugins: Plugin[]
   if (isMp) {
-    plugins = [virtualMpEntryPlugin(), mpTransform({ config, frameworkComponentsDir: (config as { frameworkComponentsDir?: string }).frameworkComponentsDir })]
+    const fcd = (config as { frameworkComponentsDir?: string }).frameworkComponentsDir
+    plugins = [virtualMpEntryPlugin(), mpTransform({ config, frameworkComponentsDir: fcd ? path.resolve(root, fcd) : undefined })]
   } else {
     const vueMod = await importFromRoot<{ default: (opts?: Record<string, unknown>) => Plugin }>(root, '@vitejs/plugin-vue')
     plugins = [vueMod.default(), routeBlocksPlugin()]
@@ -107,18 +107,46 @@ export async function resolveProteusViteConfig(
     },
   }
 
-  // —— 开发者扩展合并（proteus.config.vite：对象或 (ctx) => 对象；plugins 追加、其余覆盖）——
+  // —— 开发者扩展合并（proteus.config.vite：对象或 (ctx) => 对象；plugins 追加、build 深合并）——
   const userVite = (config as { vite?: unknown }).vite
   let user: UserConfig | undefined | void
   if (typeof userVite === 'function') {
-    user = (userVite as (c: { command: 'serve' | 'build'; mode: string }) => UserConfig | void)({ command, mode })
+    // ★async 支持（examples module manualChunks 需 async 扫描）
+    user = await (userVite as (c: { command: 'serve' | 'build'; mode: string }) => UserConfig | Promise<UserConfig> | void)({ command, mode })
   } else if (userVite && typeof userVite === 'object') {
     user = userVite as UserConfig
   }
   if (user) {
-    const { plugins: userPlugins, resolve: userResolve, define: userDefine, ...rest } = user
+    const { plugins: userPlugins, resolve: userResolve, define: userDefine, build: userBuild, ...rest } = user
     Object.assign(frameworkConfig, rest)
-    // 框架默认不可被覆盖的键：别名 @（用户 alias concat）与 define 注入（merge，用户键优先）
+    // build 深合并（3 层）：保留框架默认 outDir/emptyOutDir/minify/cssCodeSplit/target；
+    //   rollupOptions 深合并（用户 input/maxParallelFileOps/output.manualChunks 逐键生效，mp 的 entryFileNames 保留）
+    if (userBuild) {
+      const fwBuild = (frameworkConfig.build ?? {}) as Record<string, unknown>
+      const merged = { ...fwBuild }
+      const ub = userBuild as Record<string, unknown>
+      for (const k of Object.keys(ub)) {
+        const uv = ub[k]
+        if (k === 'rollupOptions' && uv && typeof uv === 'object') {
+          const fwRo = (fwBuild.rollupOptions ?? {}) as Record<string, unknown>
+          const uRo = uv as Record<string, unknown>
+          const ro = { ...fwRo }
+          for (const rk of Object.keys(uRo)) {
+            const rv = uRo[rk]
+            if (rk === 'output' && rv && typeof rv === 'object' && fwRo.output && typeof fwRo.output === 'object') {
+              ro.output = { ...(fwRo.output as object), ...(rv as object) }
+            } else {
+              ro[rk] = rv
+            }
+          }
+          merged.rollupOptions = ro
+        } else {
+          merged[k] = uv
+        }
+      }
+      frameworkConfig.build = merged as InlineConfig['build']
+    }
+    // resolve/define/plugins 追加语义（框架默认别名 @ 与 define 注入不可被覆盖）
     if (userResolve) {
       const baseAlias = (frameworkConfig.resolve as { alias?: unknown })?.alias
       frameworkConfig.resolve = {

@@ -10,6 +10,9 @@ import path from 'node:path'
 import { createHmrDevServer } from '@proteus-vue/hmr/dev-server'
 import type { HmrPayload } from '@proteus-vue/hmr'
 import { compileVueSfc } from '@proteus-vue/compiler'
+// ★#420 配置收敛：gen-routes 与 vite build 走程序化（不再依赖 vite.config.ts / scripts/gen-routes.ts）
+import { resolveProteusViteConfig, runGenRoutes } from '@proteus-vue/plugin-vite'
+import { loadProjectConfig } from '../../packages/cli/src/config-loader'
 // ★devtools 打通：面板 pages/依赖图数据源（Proteus.appInfo 协议）——路由表注入
 import { routes } from '../router/auto-routes'
 
@@ -23,7 +26,6 @@ const MONITOR = [
   'subpackages',
   'src',
   'proteus.config.ts',
-  'vite.config.ts',
   path.resolve(ROOT, '../src/components'), // 框架内置组件（monorepo 根）
 ].map((p) => path.resolve(ROOT, p))
 
@@ -76,9 +78,16 @@ async function rebuild(): Promise<void> {
   }
   building = true
   try {
-    await runStep('gen-routes（路由表/app.json/page.json）', ['tsx', 'scripts/gen-routes.ts'])
-    await runStep('vite build（页面/组件/共享模块 → dist/mp-weixin）', ['vite', 'build', '--mode', 'mp-weixin'])
+    console.log('[dev-mp] gen-routes（路由表/app.json/page.json）...')
+    const config = (await loadProjectConfig(path.join(ROOT, 'proteus.config.ts'))) as Record<string, unknown>
+    runGenRoutes({ config: config as never, root: ROOT })
+    console.log('[dev-mp] vite build（页面/组件/共享模块 → dist/mp-weixin）...')
+    const resolved = await resolveProteusViteConfig({ root: ROOT, command: 'build', mode: 'mp-weixin' }, config as never)
+    const { build } = await import('vite')
+    await build(resolved.config)
     console.log('[dev-mp] ✅ 产物已更新（微信开发者工具将自动刷新；M8 缓存只重编译变更文件）')
+  } catch (err) {
+    console.warn(`[dev-mp] ⚠ 重建失败：${(err as Error).message}`)
   } finally {
     building = false
     if (pending) {
