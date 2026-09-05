@@ -67,7 +67,8 @@ function handleTap() {
   </p-view>
 </template>
 
-<style>
+<!-- ★scoped：Proteus 默认局部作用域——demo 从初始态就零警告（EN 态不泄中文编译器消息） -->
+<style scoped>
 .demo { padding: 24px 32px; }
 h1 { font-size: 20px; color: #333; }
 </style>
@@ -99,7 +100,8 @@ function handleTap() {
   </p-view>
 </template>
 
-<style>
+<!-- scoped: Proteus local scope by default—demo starts warning-free (no Chinese compiler msg in EN mode) -->
+<style scoped>
 .demo { padding: 24px 32px; }
 h1 { font-size: 20px; color: #333; }
 </style>
