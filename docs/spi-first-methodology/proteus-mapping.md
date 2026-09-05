@@ -1,6 +1,6 @@
-# Proteus 十六次泛化 → SPI-First 五步法映射
+# Proteus 十八次泛化 → SPI-First 五步法映射
 
-> 本文证明：Proteus 的十六次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
+> 本文证明：Proteus 的十八次"不绑 X"泛化，全部是 SPI-First 五步法的实例。
 > 阅读本文 = 同时理解"方法论"与"它的第一性证明"。
 
 ---
@@ -25,6 +25,8 @@
 | G-50 | 平台 / 生态形态 | DeveloperPlatform SPI + AppPackage | 注册→审核→双签名→分发→治理 | A 工具链 CLI / B 门户+分发（结构自检） | G-50 conformance（CMP118-131：39 断言清单，文档化） | plan only：B 生态依赖 G-49 L3 |
 | G-51 | 验证执行环境 | TestIRRunner / Backend | execute(suite): report | L0 selfcheck / L1 InMemory / L2 NativeAdapter | G-51 三阶梯度 + self-test 36/36（CMP132-139） | NativeAdapter 真实现属阶段 2 |
 | G-52 | 设备形态 / 验证维度 | DeviceMatrixRunner（executeOn） | 等价类 + DriftFingerprint + ε | 代表设备采样（reference-impl 44/44） | G-52 conformance（CMP140-146 + INV-D1~D5） | 云端真机调度留 G-53 |
+| G-53 | 设备供给方式 | SimulatorBackend / Orchestrator / CoverageGate | 设备档位能力声明 + 覆盖率门槛 | in-memory、web/DOM、ios-sim 本地/远程、cloud-device（reference-impl 41/41） | G-53 conformance（CMP147-154 + INV-M1~M8） | 云真机 Provider 未实现；Apple EULA 仅限内部共享 |
+| G-54 | IDE 形态 | FrameworkKnowledgeProvider / ProtocolAdapter | 六项纯查询能力（导航/分层/断言/拓扑/影响面/预览） | LSP、RPC、DAP、CLI、raw（reference-impl 51/51） | G-54 conformance（CMP155-162 + INV-DT-01~08） | 能力⑤⑥数据 Mock；仅 VSCode 参考适配未实测 |
 
 ---
 
@@ -65,7 +67,7 @@ G-45 NAT-C 快检        → 同上
 
 **这是"先有方法论、再有实例"的红利**：新 SPI 不需重新发明验证手段，直接套五步法即可。这也是为什么我们说 ——
 
-> **十六次泛化不是十六份独立设计，而是同一套五步法重复执行十六次。**
+> **十八次泛化不是十八份独立设计，而是同一套五步法重复执行十八次。**
 
 ---
 

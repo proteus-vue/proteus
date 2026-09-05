@@ -79,7 +79,7 @@ Compiler ──▶ Types ◀── CLI
 
 ---
 
-## 4. 全局执行序（G-01 ~ G-52）
+## 4. 全局执行序（G-01 ~ G-54）
 
 LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G，避免 B1-Bn 冲突。
 
@@ -137,8 +137,10 @@ LLM 按 **G 序号**推进，同 G 内可并行。批次号跨 plan 统一为 G�
 | G-50 | Developer Platform（A 工具链 + B 开放生态 + AppPackage 双签名 + DeveloperPlatform SPI） | L4 工具链 | developer-platform |
 | G-51 | TestIRRunner（验证执行环境：L0 文档 / L1 IR 模拟 / L2 真机三阶梯度 + NativeAdapter） | L4 工具链 | test-ir-runner |
 | G-52 | Cross-Device Verification（等价类 + DriftFingerprint 四维归因 + ε 归一化 diff） | L4 工具链 | cross-device-verification |
+| G-53 | Mobile Verification（设备供给编排：本地/池化/云四档 + 覆盖率门槛） | L4 工具链 | mobile-verification |
+| G-54 | DevTools Suite（编码期开发者工具：能力内核唯一 + IDE 适配可换） | L4 工具链 | devtools-suite |
 
-**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-52）各按其依赖插入，不阻塞原始主链。
+**关键路径**：G-01 → G-02 → G-03 → G-04 → G-07 → G-08 → G-10 → G-16/G-17 → G-18 → G-20；新增能力（G-21~G-54）各按其依赖插入，不阻塞原始主链。
 **并行空间**：G-04 内三联可并行；G-09 两横切可并行；G-16/G-17 双端可并行；G-21/G-24/G-25/G-27 的 M1 纯逻辑批次可与 G-01 地基同期启动。
 
 ---

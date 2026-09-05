@@ -1,6 +1,7 @@
 # G-53 移动端验证编排
 
-> 原则 #0「不绑定」系列，**第 15 次泛化**：不绑定设备供给方式。
+> 原则 #0「不绑定」系列，**第 17 次泛化**（沿官方链：G-51=15、G-52=16；决策 #391 修正，原稿误作第 15 次）：不绑定设备供给方式。
+> **Status: Draft · 决策 #391 补登记（原随 #390ii 批次顺带入库未登记——board-inventory/facade/规约/spi-first 映射四路同步补齐）**
 
 ## 一句话
 
@@ -9,10 +10,9 @@
 ## 快速验证
 
 ```bash
-unzip proteus-mobile-verification.zip
-cd proteus-mobile-verification
+cd docs/proteus-mobile-verification-plan
 node reference-impl.cjs   # → self-test: 41/41
-bash verify.sh             # → PASS=17 FAIL=0
+bash verify.sh             # → PASS=58 FAIL=0
 ```
 
 ## 文件导航
@@ -96,4 +96,4 @@ score = 加权市场份额 × 执行率
 
 ## 编号
 
-G-53 · CMP-147~154 · 原则 #13.57-59 · 反模式 AP-26~30
+G-53 · CMP-147~154 · 原则 #13.57-59 · 反模式 AP-26~30（泛化序 15→17 修正，决策 #391）

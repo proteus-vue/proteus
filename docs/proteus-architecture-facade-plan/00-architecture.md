@@ -9,8 +9,8 @@
 
 - **框架对外名称**：Proteus
 - **npm scope**：`@proteus-vue`（与 GitHub org `proteus-vue` 对齐，避开被占用的 `@proteus`）
-- **文档版本**：v3.11（本批追加：G-46~G-52 + 白皮书）
-- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 本规约 + 1 份原则补充（design-principle）
+- **文档版本**：v3.12（本批追加：G-53 补登记 + G-54 devtools-suite，决策 #391）
+- **规约文档数**：18 份原始 plan（G-01~G-20）+ 15 份新增 plan（G-21~G-35 追加）+ 10 份 SPI/宿主/验证 plan（G-36~G-45 追加）+ 7 份本批 plan（G-46~G-52 追加）+ 2 份验证/工具 plan（G-53/G-54 追加，决策 #391）+ 本规约 + 1 份原则补充（design-principle）
 
 ---
 
@@ -167,6 +167,8 @@ L5 验证+门面 : blueprint / website / test-framework
 | **G-50** | developer-platform（小程序开发者平台：A 工具链 + B 开放生态，共用 AppPackage + DeveloperPlatform SPI + 双签名） | G-48、G-49（L3 硬前置）、G-44、G-45 | 从「能跑/安全跑」到「开发→审核→发布→治理」生态闭环 + CMP118-131 |
 | **G-51** | test-ir-runner（TestIRRunner 与真运行时验证：L0 文档 / L1 IR 模拟 / L2 真机三阶梯度 + NativeAdapter 契约） | G-44、G-46、G-47、G-48、G-49、G-50 | 验证执行环境可插拔——断言从文档层落到可运行 + CMP132-139 |
 | **G-52** | cross-device-verification（跨设备一致性验证：DeviceEquivalenceClass + DriftFingerprint 四维归因 + ε 归一化 diff） | G-51、G-44、G-25、G-46~G-50 | 同 suite 跨设备结果稳定——等价类替代穷举（INV-D1~D5）+ CMP140-146 |
+| **G-53** | mobile-verification（移动端验证编排：模拟器池化 + 云真机 + CoverageGate 覆盖率门槛） | G-51、G-52 | 设备供给可插拔——本地/池化/云四档降级统一调度（INV-M1~M8）+ CMP147-154 |
+| **G-54** | devtools-suite（框架配套开发者工具·编码期：FrameworkKnowledgeProvider 六项能力内核 + LSP/DAP/RPC/CLI/raw 五档适配） | G-19、G-50、G-51、G-53 | 编码期辅助——分层守护/断言内联先行（INV-DT-01~08）+ CMP155-162 |
 
 > **追加说明（v3.2）**：G-21~G-30 为 2026-08 新增 10 份 plan（css-compat / app-renderer / safe-area / memory-plan / memorial-skeleton / app-capabilities / test-framework / types-plus / glass / performance）的全局执行位。其中 test-framework 已并入 G-07、types-plus 已并入 G-01（B1-B2 先行），不再单独占位。各 plan 声称的旧编号（css G-04、renderer G-05、safe-area G-05/G-08、memorial G-11/G-12、app-capabilities G-13~G-15、glass 里程碑 G-04~G-18、performance G-10/G-05）与本表冲突，一律以本表为准（对应关系：css→G-21、renderer→G-22、safe-area→G-22/G-23、memorial→G-25/G-26、theme/fontscale→G-27、cache→G-28、glass→G-29、performance→G-30）。
 
@@ -187,6 +189,8 @@ L5 验证+门面 : blueprint / website / test-framework
 > **追加说明（v3.10）**：dev-host（调试基座即宿主，2026-09 新增 plan）并入本表 **G-45**——原则 #0「不绑定」系列第九次投影（不绑定基座形态，沿 G-44 计数）。根因级解法：uni-app 式「自定义基座循环」（改原生插件 → 云打包 → 重装 → 循环往复，页面越多越慢）在「基座 = 构建产物」范式内无解，G-45 换范式为「基座 = 常驻宿主」：插件 = DynamicBackendModule（manifest + 签名 + conformance + factory）运行时装载 + 转发桩 pending 语义（未装载调用回放，业务零感知）+ 双层产物（基座 cacheKey = f(框架版本, ABI) 与页面数/插件数无关——构建 O(改动) 非 O(规模)）；三端分级：Android/鸿蒙全热替换（Tier A）/ iOS 增量重签（Tier B，App Store 2.5.2 诚实边界）/ 模拟先行（Tier C 全端）。依赖关系：G-45 与 G-39（DevHost = 宿主运行时调试形态）/ G-28（插件 factory 返回 NativeBackend）/ G-42（签名网关同源）/ G-38（cacheKey/getArtifactHash 预留）/ G-44（NAT-C 快检跑 test-ir runner）/ G-40（pending 回放走批处理零拷贝）互校。铁律 G-45.1-6 + CMP082-088 + 原则 #13.28-30。参考实现 dev-host-reference.cjs（12 自检 PASS）。详见 PROJECT_MEMORY 决策 #369。
 
 > **追加说明（v3.11）**：本批七份新 plan + 白皮书一并入库（2026-09，决策 #385）：**G-46**（resource-pool，宿主级统一资源池——原则 #0 第十次投影：不绑资源容器形态）/ **G-47**（combined-conformance，组合一致性——第十一次投影：不绑测试层级）/ **G-48**（miniprogram-runtime，兼容式小程序运行容器——第十二次投影）/ **G-49**（sandbox-isolation，进程级沙箱隔离——第十三次投影：不绑隔离强度）/ **G-50**（developer-platform，开发者平台——第十四次投影：不绑平台/生态形态）/ **G-51**（test-ir-runner，验证执行环境插拔——第十五次投影）/ **G-52**（cross-device-verification，跨设备一致性——第十六次投影）+ 对外叙事文档 docs/proteus-whitepaper-plan（**不占 G 序**）。编号避让纪律：七包原稿内部沿用 execution-carrier 旧编号体系（宿主 G-36、载体 G-37、容器 G-39、所有权 G-40、测试 G-41 系）→ 全量重指向官方位（G-36→G-39、G-37→G-40、G-39→G-42、G-40→G-43、G-41→G-44）；CMP 原稿自占高位段且互相撞号（G-48 的 110-116 vs G-49 的 109-117）→ 定案全库连续段 **CMP089-146**（G-46=089-096 / G-47=097-102 / G-48=103-109 / G-49=110-117 / G-50=118-131 / G-51=132-139 / G-52=140-146）；泛化序修正（G-51/G-52 原稿误作第 12/14 次，定案第 15/16 次）；原则 #13.31-56、铁律 G-46.1-8~G-52.1-6、规则 CMP089-146 并入 L0 规约；跨包去重（G-48 沙箱/能力桥章节 → G-49 权威化 + 引用；白皮书方法论/叙事章节 → 引用 spi-first/methodology SSOT）。详见 PROJECT_MEMORY 决策 #385。
+
+> **追加说明（v3.12）**：G-53 补登记 + G-54 新入库（2026-09，决策 #391）：**G-53**（mobile-verification，移动端验证编排——原则 #0 第十七次投影：不绑设备供给方式；原随 #390ii 官网批次顺带入库未登记，本批补齐 board-inventory/facade/规约/spi-first 四路登记，泛化序修正 15→17）/ **G-54**（devtools-suite，框架配套开发者工具·编码期——第十八次投影：不绑 IDE 形态；原稿自编 G-55 基于假想兄弟 plan「DevTools 加固 = G-54/CMP-155~162」的接续，而 G-53 已占用 147~154 且门禁要求 G 序连续 → 重编 **G-54**、CMP-163~170 → **CMP-155~162**、泛化序 15 → **18**；假想「DevTools 加固」降级为未编号后续规划，消费面前指 G-51/G-52，编号避让全记录见该包 rules.md）；原则 #13.57-62、铁律 G-53.1-8/G-54.1-8、规则 CMP147-154/CMP155-162 并入 L0 规约；spi-first 映射表登记第 17~18 次泛化。详见 PROJECT_MEMORY 决策 #391。
 
 ### 执行原则
 - **每批 = 1 PR = LLM 单次 ≤ 3 文件**

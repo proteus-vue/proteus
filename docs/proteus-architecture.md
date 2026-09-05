@@ -93,6 +93,12 @@
 | #13.54 | 跨设备一致性：验证必须跨越设备形态（screen/os/input/env），不做单设备单环境执行 | cross-device-verification G-52 |
 | #13.55 | 不绑定设备形态：同一 TestSuite 跨设备可比对（等价类 + 代表采样 + ε 容差） | cross-device-verification G-52 |
 | #13.56 | 基线可复现：等价类定义 + ε 阈值版本化，保证跨设备幂等（INV-D1） | cross-device-verification G-52 |
+| #13.57 | 设备供给可编排：同一测试在本地 / 池化 / 云端跑出可比对结果 | mobile-verification G-53 |
+| #13.58 | 覆盖率可度量：验证充分性必须是**可计算数字**，不是感觉 | mobile-verification G-53 |
+| #13.59 | 不可用即 SKIP：验证基础设施自身的缺失不表现为被测代码的失败 | mobile-verification G-53 |
+| #13.60 | 编码期辅助优先：框架知识应在开发者敲键时生效，而非等到 CI | devtools-suite G-54 |
+| #13.61 | 不绑定 IDE 形态：能力内核唯一，适配层可换 | devtools-suite G-54 |
+| #13.62 | 知识垄断即护城河：框架独占知识（IR/分层/断言/拓扑/等价类/渲染语义）应主动工具化，否则锁在文档里等于没有 | devtools-suite G-54 |
 
 > ★编号体系说明：methodology 原则速查 #1-#10 为本表 #0-#9 的映射（methodology #1 = 本表 #10），以本表为准。
 
@@ -238,6 +244,22 @@
 | **G-52.4** | **归一化结果可 diff：矩阵报告可 JSON 序列化、可 diff，作为 CI 门槛** | cross-device-verification |
 | **G-52.5** | **本地优先：核心验证不依赖云端真机（ProfileSource 按需补充非必需）** | cross-device-verification |
 | **G-52.6** | **基线可复现：等价类定义 + ε 阈值必须版本化（INV-D1 幂等）** | cross-device-verification |
+| **G-53.1** | **平台不可用必须返回 SKIP：缺 Xcode/缺 endpoint/额度耗尽一律 SKIP + reason，严禁抛异常/FAIL/静默通过** | mobile-verification |
+| **G-53.2** | **能力缺失必须返回 DEGRADED + missing[]：严禁静默按 PASS 处理** | mobile-verification |
+| **G-53.3** | **覆盖率不得虚报：加权份额取上限 1、SKIP 不计入 PASS 分子、空输入 pass=false** | mobile-verification |
+| **G-53.4** | **报告必须携带 skipped 列表：严禁只报一个覆盖率数字** | mobile-verification |
+| **G-53.5** | **编排器按能力需求自动选档，严禁测试代码硬编码档位** | mobile-verification |
+| **G-53.6** | **云真机额度耗尽不得阻断 CI：QUOTA_EXCEEDED → 降级/SKIP + 覆盖率标注** | mobile-verification |
+| **G-53.7** | **模拟器档不得宣称硬件能力：hardware/realRom 恒 false** | mobile-verification |
+| **G-53.8** | **份额数据是运营数据，必须作可配置 profile 数据源，严禁写死进架构常量** | mobile-verification |
+| **G-54.1** | **内核唯一：六项能力只允许一份实现（FrameworkKnowledgeProvider），适配器不得重新实现业务逻辑** | devtools-suite |
+| **G-54.2** | **适配器只做翻译：适配器内禁止业务判定（分层规则/断言逻辑），违反即设计错误** | devtools-suite |
+| **G-54.3** | **SKIP ≠ FAIL：协议不支持是预期事件，降级并标注 degraded，禁止阻断开发流程** | devtools-suite |
+| **G-54.4** | **越层必报，豁免显式：分层违规默认必报，豁免必须显式标注 + 理由，禁止静默放行** | devtools-suite |
+| **G-54.5** | **断言必带定位：下发给 IDE 的断言失败必须含 file + line，无定位禁止展示** | devtools-suite |
+| **G-54.6** | **循环可检测不崩溃：依赖环返回 GRAPH_CYCLE 并列出环路径，禁止抛异常/无限递归** | devtools-suite |
+| **G-54.7** | **不重复 G-19：运行时诊断一律复用 G-19，G-54 只做入口跳转** | devtools-suite |
+| **G-54.8** | **数字不虚报：覆盖率/IDE 支持数必须实测（G-37），禁止把理论支持当已验证** | devtools-suite |
 
 ### 2.3 落地约束（既有，合并保留）
 
@@ -279,6 +301,8 @@
 | CMP | CMP118-131 | error | 审计失败阻断 publish（118）/packageId 资源隔离（119）/配额拒绝是业务错误（120）/双签名必填（121）/restricted 强制人工审核（122）/撤销优雅终止（123）/审计 append-only（124）/B 生态需 G-49 L3（125）/密钥轮换立即失效（126）/灰度严格隔离（127）/hotfix 不得新增 capability（128）/全局配额池上限（129）/manifest 与源码一致（130）/负向自检有判别力（131） | 🆕 developer-platform-plan（G-50） |
 | CMP | CMP132-139 | error | execute 存在且返回 Report（132）/能力缺失 DEGRADED（133）/Report 有 total（134）/超时可恢复（135）/ISOLATION_BREACH 分类（136）/Report 可序列化（137）/Runner 有回归基线（138）/接缝+隔离组合命题（139） | 🆕 test-ir-runner-plan（G-51） |
 | CMP | CMP140-146 | error | 设备等价类 + 代表采样（140）/ε 容差判定禁 ===（141）/DriftFingerprint 四维归因（142）/报告归一化可 diff（143）/本地优先不强制联网（144）/等价类与 ε 版本化（145）/跨层接缝组合命题（146） | 🆕 cross-device-verification-plan（G-52） |
+| CMP | CMP147-154 | error | 平台不可用 SKIP 不崩（147）/能力缺失 DEGRADED+missing（148）/按能力自动选档（149）/加权份额上限 1（150）/空覆盖阻断（151）/SKIP 不计 PASS（152）/额度耗尽降级不阻断 CI（153）/报告带 skipped 列表（154） | 🆕 mobile-verification-plan（G-53） |
+| CMP | CMP155-162 | error | 跨适配器结果一致·内核唯一（155）/未知能力 SKIP 不崩（156）/语义导航定位后端实现（157）/越层必报·显式豁免不误报（158）/断言失败必带定位（159）/依赖环可检测返回 GRAPH_CYCLE（160）/设备影响面可列等价类（161）/适配器全挂降 raw 仍可用（162） | 🆕 devtools-suite-plan（G-54） |
 
 ---
 
