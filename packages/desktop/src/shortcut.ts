@@ -28,6 +28,14 @@ export interface KeyEventLike {
 
 const MOD_RE = /^(ctrl|meta|mod|alt|shift|option|cmd|command)$/i
 
+/** ★#445 平台探测原语（纯函数注入式；调用方免碰 navigator——短标签用：Darwin/mac/iPhone/iPad → 'Mac'，其余 'web'） */
+export function detectShortcutPlatform(env: { platform?: string; userAgent?: string } = {}): string {
+  const plat = env.platform ?? (typeof navigator !== 'undefined' ? navigator.platform : '')
+  if (plat) return plat
+  const ua = env.userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '')
+  return /Mac|iPhone|iPad/.test(ua) ? 'Mac' : 'web'
+}
+
 /** 解析 "mod+s:save" / "mod+shift+a" / "escape" → binding（大小写/空白容忍；非法段跳过） */
 export function parseShortcutExpr(expr: string): ShortcutBinding | null {
   if (!expr || expr.trim() === '') return null

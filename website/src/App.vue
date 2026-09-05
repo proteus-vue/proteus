@@ -25,7 +25,7 @@ const spiritSrc = import.meta.env.BASE_URL + 'spirit.html'
 const spiritBubble = ref<{ name: string; theme: string } | null>(null)
 let bubbleTimer: ReturnType<typeof setTimeout> | undefined
 function onSpiritMessage(e: MessageEvent): void {
-  if (e.origin !== window.location.origin) return
+  if (e.origin !== window.location.origin) return  // d2-exempt: spirit iframe 消息来源校验——跨窗消息原语缺口（desktop 待补）
   const d = e.data as { type?: string; name?: string; theme?: string } | null
   if (d?.type !== 'proteus-spirit-morph' || !d.name || !d.theme) return
   spiritBubble.value = { name: d.name, theme: d.theme }
@@ -41,21 +41,21 @@ function onScroll(): void {
   if (scrollRaf) return
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = 0
-    const y = window.scrollY
+    const y = window.scrollY  // d2-exempt: 页面滚动进度观测——scroll-observer 原语缺口（#389c 自绘待收口）
     scrolled.value = y > 12
-    const max = document.documentElement.scrollHeight - window.innerHeight
+    const max = document.documentElement.scrollHeight - window.innerHeight  // d2-exempt: 同滚动进度（视口/文档几何——scroll-observer 原语缺口）
     progress.value = max > 0 ? Math.min(1, y / max) : 0
   })
 }
 onMounted(() => {
-  window.addEventListener('scroll', onScroll, { passive: true })
-  window.addEventListener('message', onSpiritMessage)
+  window.addEventListener('scroll', onScroll, { passive: true })  // d2-exempt: 同滚动进度监听注册
+  window.addEventListener('message', onSpiritMessage)  // d2-exempt: spirit iframe 跨窗消息——cross-window 原语缺口
   onScroll()
 })
 onUnmounted(() => {
   if (scrollRaf) cancelAnimationFrame(scrollRaf)
-  window.removeEventListener('scroll', onScroll)
-  window.removeEventListener('message', onSpiritMessage)
+  window.removeEventListener('scroll', onScroll)  // d2-exempt: 同滚动进度监听清理
+  window.removeEventListener('message', onSpiritMessage)  // d2-exempt: 同跨窗消息监听清理
   clearTimeout(bubbleTimer)
 })
 

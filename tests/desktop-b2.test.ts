@@ -170,6 +170,19 @@ describe('G-24 B2 p-clipboard（剪贴板——04 §1 Clipboard API + 降级）'
     expect(r).toEqual({ ok: false, error: 'clipboard.unsupported' })
   })
 
+  it('copyText：省略 env → 回落真实全局（页面即用形态——零注入可直接复制）', async () => {
+    const writeText = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    try {
+      const r = await copyText('hello')
+      expect(r.ok).toBe(true)
+      expect(writeText).toHaveBeenCalledWith('hello')
+      expect(clipboardSupported()).toBe(true)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('pasteText：readText ok / 无 API read-unsupported', async () => {
     const r = await pasteText({ navigator: { clipboard: { writeText: async () => undefined, readText: async () => 'pasted' } } })
     expect(r).toEqual({ ok: true, data: 'pasted' })

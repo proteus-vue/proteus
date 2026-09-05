@@ -1,4 +1,5 @@
 // website/src/spirit/main.ts —— ★#389i Three.js 3D 海神精灵（iframe 专用页——three 隔离在 spirit chunk，主应用零增量）
+// /* d2-exempt-file: 独立多入口原生 iframe 视觉资产入口（spirit.html 直挂）——canvas/WebGL/postMessage 原生实现，不走框架 p-* 页面语义 */
 // ★#389j 参考形象重制：果冻水滴形（球体几何重排）+ 大眼白蓝虹膜双高光 + 粉腮红 + 顶部白浪花卷 + 底部白浪环
 // 果冻质感：MeshPhysicalMaterial clearcoat + RoomEnvironment PMREM 环境反射 + 每帧顶点谐波位移 + 紫/青双点光
 // 交互：点击 iframe = 变身下一形态（颜色插值 + squash 弹跳 + 涟漪环 + O 嘴惊喜）

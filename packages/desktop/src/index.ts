@@ -1,6 +1,6 @@
 // packages/desktop/src/index.ts —— @proteus-vue/desktop 公共入口（G-24 B1 桌面交互原语 + B2 系统集成四件套）
 //   纯逻辑（可单测）+ Vue 指令工厂（Web 接线；MP 端不注册——桌面交互无对等天然降级）
-export { parseShortcutExpr, normalizeMod, matchShortcut, shortcutLabel } from './shortcut'
+export { parseShortcutExpr, normalizeMod, matchShortcut, shortcutLabel, detectShortcutPlatform } from './shortcut'
 export type { ShortcutBinding, KeyEventLike, ShortcutMod, ShortcutKey } from './shortcut'
 export { createFocusTrap, FOCUSABLE_SELECTOR } from './focus-trap'
 export type { FocusTrapOptions, FocusTrap, FocusableElement } from './focus-trap'

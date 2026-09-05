@@ -112,7 +112,7 @@ function onMove(e: PointerEvent): void {
 }
 function applyEye(): void {
   eyeRaf = 0
-  const svg = document.querySelector('.site-spirit .sprite') as SVGElement | null
+  const svg = document.querySelector('.site-spirit .sprite') as SVGElement | null  // d2-exempt: SVG 内部节点选择（视觉资产内部实现）
   if (!svg) return
   const r = svg.getBoundingClientRect()
   const cx = r.left + r.width / 2
@@ -149,13 +149,13 @@ function onMoveThrottled(e: PointerEvent): void {
 onMounted(() => {
   motionOk.value = !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
   if (motionOk.value) {
-    window.addEventListener('pointermove', onMoveThrottled, { passive: true })
+    window.addEventListener('pointermove', onMoveThrottled, { passive: true })  // d2-exempt: 指针视线跟随（视觉资产内部——pointer 运动原语缺口）
     scheduleBlink()
   }
 })
 
 onUnmounted(() => {
-  window.removeEventListener('pointermove', onMoveThrottled)
+  window.removeEventListener('pointermove', onMoveThrottled)  // d2-exempt: 同指针视线跟随清理
   clearTimeout(blinkT)
   clearTimeout(blinkHold)
   clearTimeout(bubbleTimer)

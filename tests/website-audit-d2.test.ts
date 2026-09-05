@@ -92,6 +92,93 @@ function load() {
   })
 })
 
+describe('D-2 审计：Web 平台 API 裸调（★#445 全端覆盖）', () => {
+  it.each([
+    ['window', `const y = window.scrollY`],
+    ['document', `document.getElementById('x')`],
+    ['navigator', `navigator.clipboard.writeText('hi')`],
+    ['location', `const u = location.origin`],
+    ['history', `history.replaceState(null, '', url)`],
+    ['fetch', `const r = fetch('/api')`],
+    ['localStorage', `localStorage.getItem('k')`],
+  ])('%s 裸调用 → D2-PLATFORM-WEB error', (_name, line) => {
+    writeVue(
+      'pages/Web.vue',
+      `<script setup lang="ts">
+function f() {
+  ${line}
+}
+</script>
+<template><div>w</div></template>`
+    )
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(false)
+    expect(report.errors.some((e) => e.includes('[D2-PLATFORM-WEB]'))).toBe(true)
+  })
+
+  it('文档头注释提及「页面零裸 window.*」不误报（剥注释只看真实代码）', () => {
+    writeVue(
+      'pages/Comment.vue',
+      `<script setup lang="ts">
+// 框架原则：页面不裸写 window.* / document.* / navigator.*（封装只在框架包内）
+const y = 1
+</script>
+<template><div>{{ y }}</div></template>`
+    )
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(true)
+    expect(report.errors).toEqual([])
+  })
+
+  it('逐行 // d2-exempt → 豁免 + 原因随报告登记（防静默扩散）', () => {
+    writeVue(
+      'pages/Scroll.vue',
+      `<script setup lang="ts">
+function onScroll() {
+  const y = window.scrollY  // d2-exempt: 滚动进度观测——scroll-observer 原语缺口
+}
+</script>
+<template><div>w</div></template>`
+    )
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(true)
+    expect(report.exemptions.some((e) => e.includes('scroll-observer 原语缺口'))).toBe(true)
+  })
+
+  it('整文件 /* d2-exempt-file */ → 平台 API 家族豁免 + 登记（原生视觉资产页）', () => {
+    writeVue(
+      'assets/Sprite.vue',
+      `<script setup lang="ts">
+/* d2-exempt-file: 独立 WebGL 视觉资产页——canvas 原生实现不走框架页面语义 */
+const c = document.querySelector('canvas')
+</script>
+<template><div>w</div></template>`
+    )
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(true)
+    expect(report.exemptions.some((e) => e.includes('整文件豁免'))).toBe(true)
+  })
+
+  it('整文件豁免不影响第三方 UI/@media 门禁（仍须守规则）', () => {
+    writeVue(
+      'assets/Bad.vue',
+      `<script setup lang="ts">
+/* d2-exempt-file: 原生资产页 */
+import { ElButton } from 'element-plus'
+</script>
+<template><el-button /></template>
+<style>
+@media (max-width: 820px) { .x { color: red; } }
+</style>`
+    )
+    const report = auditWebsiteDir(tmp)
+    expect(report.ok).toBe(false)
+    expect(report.errors.some((e) => e.includes('[D2-UI]'))).toBe(true)
+    expect(report.errors.some((e) => e.includes('[W-6/C8]'))).toBe(true)
+    expect(report.errors.some((e) => e.includes('D2-PLATFORM'))).toBe(false)
+  })
+})
+
 describe('D-2 审计：报告形态', () => {
   it('多文件聚合：错误逐条 + 统计聚合', () => {
     writeVue('pages/Good.vue', `<template><div v-p-fluid="'font-size(14, 18)'">x</div></template>`)

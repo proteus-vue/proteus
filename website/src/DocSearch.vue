@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router'
 import { sections } from './docs-registry'
 import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
 // ★#444 桌面语义原语全收口：快捷键 = v-p-shortcut 指令（内部封装 window 监听）；焦点陷阱 = createFocusTrap——页面零裸 window.*
-import { createFocusTrap, shortcutLabel } from '@proteus-vue/desktop'
+import { createFocusTrap, shortcutLabel, detectShortcutPlatform } from '@proteus-vue/desktop'
 
 interface Hit extends SearchIndexEntry {
   /** 所属页标题（面包屑 分区 · 页） */
@@ -42,8 +42,8 @@ const listEl = ref<HTMLDivElement | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
 let trap: ReturnType<typeof createFocusTrap> | null = null
 
-// 快捷键由 v-p-shortcut 指令承载（trigger: mod+k 开 / modal: escape 关）；此处仅平台标签展示（Mac ⌘K / Win Ctrl+K——归一在框架内）
-const shortcutKbd = shortcutLabel('mod+k', typeof navigator !== 'undefined' ? navigator.platform : 'web')
+// 快捷键由 v-p-shortcut 指令承载（trigger: mod+k 开 / modal: escape 关）；此处仅平台标签展示（平台探测 = desktop 原语，零 navigator）
+const shortcutKbd = shortcutLabel('mod+k', detectShortcutPlatform())
 
 watch(q, (v) => {
   if (timer) clearTimeout(timer)
@@ -102,7 +102,7 @@ function go(hit: Hit): void {
   toggle(false)
   q.value = ''
   void router.push(url).then(() => {
-    if (hit.anchor) setTimeout(() => document.getElementById(hit.anchor as string)?.scrollIntoView({ behavior: 'smooth' }), 60)
+    if (hit.anchor) setTimeout(() => document.getElementById(hit.anchor as string)?.scrollIntoView({ behavior: 'smooth' }), 60)  // d2-exempt: v-html 锚点定位（元素查询原语缺口）
   })
 }
 
