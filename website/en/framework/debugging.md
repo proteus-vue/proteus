@@ -8,7 +8,6 @@ ends: debugging
 # Debugging & observability
 
 Proteus's debugging surface is made up of three layers: the **compile-time decision chain** (why the artifact looks this way), the **runtime trace** (what happened), and the **DevTools panels** (visual consumption). Each target's rollout status is in the “Terminal rollout” table above (following the G-57 Inspector overlay principle: L0 uses the host's existing debugger, semantic enhancement lives in L1/L2).
-Proteus's debugging surface is made up of three layers: the **compile-time decision chain** (why the artifact looks this way), the **runtime trace** (what happened), and the **DevTools panels** (visual consumption). Each target's rollout status is in the “Terminal rollout” table above (following the G-57 Inspector overlay principle: L0 uses the host's existing debugger, semantic enhancement lives in L1/L2).
 
 ## Compile time: the decision chain
 

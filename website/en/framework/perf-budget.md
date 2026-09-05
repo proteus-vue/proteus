@@ -26,7 +26,7 @@ Mini Program main-package size is a hard constraint of the WeChat platform (2MB 
 
 ## How the numbers are measured
 
-Size figures are **measured from real build artifacts** (printed automatically at the end of a build), not estimates — consistent with the G-60.9 figure-annotation discipline. Historical main-package measurements live in the examples builds (e.g., 709KB under the 1200KB budget).
+Size figures are **measured from real build artifacts** (printed automatically at the end of a build), not estimates — consistent with the G-60.7 no-embellishment discipline. Historical main-package measurements live in the examples builds (e.g., 709KB under the 1200KB budget).
 
 ## Next steps
 

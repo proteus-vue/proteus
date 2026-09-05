@@ -29,7 +29,7 @@ const sync = createSyncEngine({
 ## Key contracts (the store domain of `@proteus-vue/contracts`)
 
 - `SyncOp`: the unit of a sync operation (serializable across targets)
-- `SyncTransport`: the transport abstraction (send / onMessage) — websocket, BroadcastChannel, and the DevTools relay can all implement the same interface
+- `SyncTransport`: the transport abstraction (send / onReceive, optional onStatus) — websocket, BroadcastChannel, and the DevTools relay can all implement the same interface (onStatus feeds offline buffering / reconnect flush)
 - `MemoryOpStore`: an in-memory op log (for tests and offline buffering)
 
 ## Relationship to DevTools time travel

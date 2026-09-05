@@ -1,6 +1,6 @@
 <!-- src/components/p-heading/index.vue —— 标题（★G-32 B2：ui.heading U2）
-     语义级标题（对齐 h1-h6）：level 控制级别 → 字号/字重（双端安全：div → view，
-     不禁用动态标签而用 class 表达级别——MP 编译器不支持动态标签名） -->
+     语义级标题（对齐 h1-h6）：level 控制级别 → 字号/字重；双端安全（div → view）
+     不用动态标签而用 class 表达级别——MP 编译器不支持动态标签名。 -->
 <template>
   <div class="p-heading" :class="'p-heading-' + level" :style="headingStyle">
     <slot />

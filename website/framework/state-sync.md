@@ -29,7 +29,7 @@ const sync = createSyncEngine({
 ## 关键契约（`@proteus-vue/contracts` store 域）
 
 - `SyncOp`：同步操作单元（跨端可序列化）
-- `SyncTransport`：传输抽象（send / onMessage）——websocket、BroadcastChannel、DevTools relay 都可实现同一接口
+- `SyncTransport`：传输抽象（send / onReceive，可选 onStatus）——websocket、BroadcastChannel、DevTools relay 都可实现同一接口（onStatus 供离线缓冲 / 重连 flush 消费）
 - `MemoryOpStore`：内存操作日志（测试与离线缓冲）
 
 ## 与 DevTools 时间旅行的关系
