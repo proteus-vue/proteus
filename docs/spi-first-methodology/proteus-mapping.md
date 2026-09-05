@@ -26,7 +26,7 @@
 | G-51 | 验证执行环境 | TestIRRunner / Backend | execute(suite): report | L0 selfcheck / L1 InMemory / L2 NativeAdapter | G-51 三阶梯度 + self-test 36/36（CMP132-139） | NativeAdapter 真实现属阶段 2 |
 | G-52 | 设备形态 / 验证维度 | DeviceMatrixRunner（executeOn） | 等价类 + DriftFingerprint + ε | 代表设备采样（reference-impl 44/44） | G-52 conformance（CMP140-146 + INV-D1~D5） | 云端真机调度留 G-53 |
 | G-53 | 设备供给方式 | SimulatorBackend / Orchestrator / CoverageGate | 设备档位能力声明 + 覆盖率门槛 | in-memory、web/DOM、ios-sim 本地/远程、cloud-device（reference-impl 41/41） | G-53 conformance（CMP147-154 + INV-M1~M8） | 云真机 Provider 未实现；Apple EULA 仅限内部共享 |
-| G-54 | IDE 形态 | FrameworkKnowledgeProvider / ProtocolAdapter | 六项纯查询能力（导航/分层/断言/拓扑/影响面/预览） | LSP、RPC、DAP、CLI、raw（reference-impl 51/51） | G-54 conformance（CMP155-162 + INV-DT-01~08） | 能力⑤⑥数据 Mock；仅 VSCode 参考适配未实测 |
+| G-54/55 | IDE 形态 | FrameworkKnowledgeProvider / ProtocolAdapter（G-55 落地：+HostAdapter / PerfBudget / Rust 常驻内核） | 六项纯查询能力（导航/分层/断言/拓扑/影响面/预览） | LSP、RPC、DAP、CLI、raw（reference-impl 51/51 + 58/58） | G-54 conformance（CMP155-162 + INV-DT-01~08）/ G-55 conformance（CMP163-170 + INV-PF-01~08） | 能力⑤⑥数据 Mock；仅 VSCode 参考适配未实测；预算为对标目标值 |
 
 ---
 

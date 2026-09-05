@@ -2,7 +2,7 @@
 
 > **原则 #0「不绑定」系列——同一套动作，重复十八次。**
 
-> **来源注**：本文为对外叙事；库内映射（每行 G 的"不绑定 X"口径）SSOT = `docs/spi-first-methodology/proteus-mapping.md`（已扩至 G-54），编号为**官方唯一 G 表**（G-01~G-54，`docs/board-inventory.md`）。
+> **来源注**：本文为对外叙事；库内映射（每行 G 的"不绑定 X"口径）SSOT = `docs/spi-first-methodology/proteus-mapping.md`（已扩至 G-55），编号为**官方唯一 G 表**（G-01~G-55，`docs/board-inventory.md`）。
 
 ---
 
@@ -43,7 +43,7 @@
 | 17 | **G-53** | 设备供给方式 | SimulatorBackend SPI + CoverageGate | in-memory / web·DOM / ios-sim 本地·远程 / cloud-device |
 | 18 | **G-54** | IDE 形态 | FrameworkKnowledgeProvider（六项纯查询能力内核） | LSP / RPC / DAP / CLI / raw |
 
-> **注**：G-27/G-29/G-31 各自的 **SPI 物化 / 支撑 plan**（G-37 RenderBackend SPI、G-38 CompilerBackend SPI、G-32 原语库）是同一泛化的实现层落地——**SPI 化不占泛化序**；泛化序只按官方 G 号计（共 **18 次**，第 1~9 次 = G-27/29/31/39/40/42/43/44/45，第 10~18 次 = G-46~G-54）。
+> **注**：G-27/G-29/G-31 各自的 **SPI 物化 / 支撑 plan**（G-37 RenderBackend SPI、G-38 CompilerBackend SPI、G-32 原语库）是同一泛化的实现层落地——**SPI 化不占泛化序**；泛化序只按官方 G 号计（共 **18 次**，第 1~9 次 = G-27/29/31/39/40/42/43/44/45，第 10~18 次 = G-46~G-54；G-55 为 G-54 的工程落地，不占序）。
 
 ---
 
