@@ -69,7 +69,7 @@ useArchive(options: ArchiveOptions): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useArchive()
+const res = await useArchive(options)
 
 if (res.ok) {
   console.log(res.data)

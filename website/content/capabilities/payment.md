@@ -78,7 +78,7 @@ usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 ## 用法
 
 ```ts
-const res = await usePayment()
+const res = await usePayment(config)
 
 if (res.ok) {
   console.log(res.data)

@@ -72,7 +72,7 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useCalendar()
+const res = await useCalendar(event)
 
 if (res.ok) {
   console.log(res.data)

@@ -68,7 +68,7 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useShare()
+const res = await useShare(options)
 
 if (res.ok) {
   console.log(res.data)

@@ -72,7 +72,7 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 ## 用法
 
 ```ts
-const res = await useSensor()
+const res = await useSensor(kind)
 
 if (res.ok) {
   console.log(res.data)

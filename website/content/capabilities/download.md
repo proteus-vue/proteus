@@ -79,7 +79,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 ## 用法
 
 ```ts
-const res = await useDownload()
+const res = await useDownload(url)
 
 if (res.ok) {
   console.log(res.data)

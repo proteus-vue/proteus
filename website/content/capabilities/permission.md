@@ -67,7 +67,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 ## 用法
 
 ```ts
-const res = await usePermission()
+const res = await usePermission(name)
 
 if (res.ok) {
   console.log(res.data)

@@ -23,7 +23,7 @@ useQRCode(): Promise<CapResult<string>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `string` | 成功载荷（结构见下） |
+| `data` | `string` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 错误码

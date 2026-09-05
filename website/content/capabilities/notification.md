@@ -68,7 +68,7 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ## 用法
 
 ```ts
-const res = await useNotification()
+const res = await useNotification(templateId)
 
 if (res.ok) {
   console.log(res.data)

@@ -36,7 +36,7 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `LiveRoomHandle` | 成功载荷（结构见下） |
+| `data` | `LiveRoomHandle` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 错误码
@@ -67,7 +67,7 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 ## 用法
 
 ```ts
-const res = await useLive()
+const res = await useLive(options)
 
 if (res.ok) {
   console.log(res.data)

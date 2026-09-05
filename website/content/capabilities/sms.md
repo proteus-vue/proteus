@@ -61,7 +61,7 @@ useSMS(phone: string, message: string): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useSMS()
+const res = await useSMS(phone, message)
 
 if (res.ok) {
   console.log(res.data)

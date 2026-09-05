@@ -81,7 +81,7 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 ## 用法
 
 ```ts
-const res = await useUpload()
+const res = await useUpload(options)
 
 if (res.ok) {
   console.log(res.data)

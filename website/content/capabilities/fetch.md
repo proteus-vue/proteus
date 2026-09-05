@@ -13,8 +13,25 @@ order: 1
 ## 签名
 
 ```ts
-useFetch() → Promise<T>
+useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
 ```
+
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `url` | `string` | 是 | 目标 URL（HTTPS） |
+| `config` | `FetchConfig` | 否 | useFetch 配置（对齐 RequestConfig 高频字段） |
+
+#### `config` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `method` | `HttpMethod` | 否 | HTTP 方法（缺省 GET） |
+| `data` | `unknown` | 否 | 请求体（POST/PUT；对象自动 JSON 序列化） |
+| `params` | `Record<string, unknown>` | 否 | URL 查询参数（拼接到 query string） |
+| `headers` | `Record<string, string>` | 否 | 自定义请求头 |
+| `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
 
 ## 返回值
 
@@ -23,7 +40,7 @@ useFetch() → Promise<T>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `T` | 成功载荷（结构见下） |
+| `data` | `T` | 成功载荷——泛型，由响应内容推导（如 JSON 自动反序列化） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 错误码
@@ -54,12 +71,12 @@ useFetch() → Promise<T>
 ## 用法
 
 ```ts
-const res = await useFetch()
+const res = await useFetch<{ id: number; name: string }>('/api/user/1')
 
 if (res.ok) {
-  console.log(res.data)
-} else if (res.error.code.endsWith('.unsupported')) {
-  // 平台不支持 → 降级路径
+  console.log(res.data.name) // 响应自动 JSON 反序列化
+} else if (res.error.code === 'fetch.unsupported') {
+  // 桥未提供 request → 降级路径
 }
 ```
 

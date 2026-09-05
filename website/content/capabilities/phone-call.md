@@ -61,7 +61,7 @@ usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await usePhoneCall()
+const res = await usePhoneCall(phoneNumber)
 
 if (res.ok) {
   console.log(res.data)

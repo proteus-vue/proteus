@@ -68,7 +68,7 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 ## 用法
 
 ```ts
-const res = await useInAppPurchase()
+const res = await useInAppPurchase(productId)
 
 if (res.ok) {
   console.log(res.data)

@@ -29,7 +29,7 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `SocketTaskHandle` | 成功载荷（结构见下） |
+| `data` | `SocketTaskHandle` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
 ## 错误码
@@ -60,7 +60,7 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 ## 用法
 
 ```ts
-const res = await useSocketTask()
+const res = await useSocketTask(url)
 
 if (res.ok) {
   console.log(res.data)
