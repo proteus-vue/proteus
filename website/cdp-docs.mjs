@@ -18,6 +18,35 @@ const groups = await page.locator('.toc-group-name').allTextContents()
 const links = await page.locator('.toc-link').count()
 console.log(JSON.stringify({ groups, linkCount: links }))
 
+// 1.5 ★#469 样式回归断言（防整文件重写丢 scoped 样式——大分类卡片/sidebar 不是裸文字）
+const style = await page.evaluate(() => {
+  const tab = document.querySelector('.section-tab.active')
+  const card = document.querySelector('.sidebar-card')
+  const tocL = document.querySelector('.toc-link')
+  const ts = tab ? getComputedStyle(tab) : null
+  const cs = card ? getComputedStyle(card) : null
+  const tl = tocL ? getComputedStyle(tocL) : null
+  return {
+    tabBg: ts ? ts.backgroundColor : null,
+    tabRadius: ts ? ts.borderRadius : null,
+    cardBg: cs ? cs.backgroundColor : null,
+    cardBorder: cs ? cs.borderTopStyle : null,
+    tocFont: tl ? tl.fontSize : null,
+    hasLangSwitch: !!document.querySelector('.lang-switch'),
+    langSwitchBg: document.querySelector('.lang-switch') ? getComputedStyle(document.querySelector('.lang-switch')).backgroundColor : null,
+  }
+})
+const styleOk =
+  style.tabBg === 'rgb(124, 92, 255)' && // 激活大分类卡 = 品牌实心（非裸文字）
+  parseFloat(style.tabRadius || '0') > 4 &&
+  style.cardBg !== 'rgba(0, 0, 0, 0)' &&
+  style.cardBorder !== 'none' &&
+  parseFloat(style.tocFont || '0') > 10 &&
+  style.hasLangSwitch &&
+  style.langSwitchBg !== 'rgba(0, 0, 0, 0)'
+if (!styleOk) errors.push('style-regression: ' + JSON.stringify(style))
+console.log(JSON.stringify({ styleOk, style }))
+
 // 2. 内容量抽查：12 布局组件（最长篇）+ 26 一致性（新增）+ 28 FAQ
 for (const slug of ['12-layout-components', '26-conformance', '28-faq']) {
   await page.goto(base + '/docs/' + slug, { waitUntil: 'networkidle' })
