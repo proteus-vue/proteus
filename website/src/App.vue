@@ -13,7 +13,7 @@ import DocSearch from './DocSearch.vue'
 //   ——window/document 监听与 origin 校验收口到框架包，页面零裸平台 API
 import { createScrollObserver, subscribeWindowMessage, type ScrollState } from '@proteus-vue/desktop'
 // ★#472 语言切换（全局顶栏——chrome 双语状态）
-import { locale, setLocale } from './i18n'
+import { locale, setLocale, t } from './i18n'
 // ★#389i 海神精灵（Three.js 3D 果冻萌宠——spirit.html iframe 嵌入右下角；three 隔离在独立 chunk，主应用 bundle 零增量）
 // ★#389d 指针跟随光晕（G-24 B5 新桌面原语 v-p-cursor-glow——全局注册的指令）
 
@@ -117,10 +117,10 @@ const cursorGlowOptions = {
               class="nav-link"
               :class="{ active: route.name === l.key }"
             >
-              <p-text class="nav-text">{{ l.label }}</p-text>
+              <p-text class="nav-text">{{ l.key === 'home' ? t('app.home') : l.label }}</p-text>
             </router-link>
             <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
-              <p-text class="nav-text">文档</p-text>
+              <p-text class="nav-text">{{ t('app.docs') }}</p-text>
             </router-link>
             <a class="nav-link nav-github" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">
               <p-text class="nav-text">GitHub ↗</p-text>
@@ -140,7 +140,7 @@ const cursorGlowOptions = {
 
     <p-view v-p-fluid="'padding(20, 28)'" class="footer">
       <p-text class="footer-line">Proteus — One semantic model. Any render engine. Zero native glue.</p-text>
-      <p-text class="footer-dim">官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）</p-text>
+      <p-text class="footer-dim">{{ t('app.footer') }}</p-text>
     </p-view>
   </p-page>
 </template>

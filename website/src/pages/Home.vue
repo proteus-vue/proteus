@@ -8,11 +8,13 @@
 //   5. 对标表（与「翻译派」的本质分水岭）+ dogfooding 金句 + 快速开始
 // ★D-2：布局标签 p-view/p-grid/p-stack/p-heading/p-text（禁裸 div 布局；table/pre 为内容语义标签）
 // ★W-6 柔性框架优先：v-p-fluid clamp + p-grid/p-stack，零 @media
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { STATS, COMPARE_MATRIX } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
 // ★#449 desktop p-scroll-observer：滚动观测收口（监听注册 + rAF 节流在框架包内）——Hero 滚动联动豁免回收
 import { createScrollObserver, type ScrollState } from '@proteus-vue/desktop'
+// ★#475 首页国际化（chrome t() + 数据数组 locale 双份）
+import { locale, t } from '../i18n'
 // ★#389b 粒子场已上移至 App 壳（全站固定背景层）；Hero 保留辉光 + 内容滚动联动
 
 const homeEl = ref<{ $el?: HTMLElement } | null>(null)
@@ -90,7 +92,7 @@ function statusClass(status: string): string {
 }
 
 // G 系 pills（v3 hero 下方信息钉子——每个 pill 对应真实入库 plan）
-const gPills = [
+const gPillsZh = [
   'G-27 渲染可插拔',
   'G-28 能力可插拔',
   'G-29 编译可插拔',
@@ -99,7 +101,7 @@ const gPills = [
 ]
 
 // 编号三支柱（v3 三卡构图；文案对齐方法论三句话）
-const pillars = [
+const pillarsZh = [
   {
     no: '01',
     title: '语义优先',
@@ -118,7 +120,7 @@ const pillars = [
 ]
 
 // 学习路径（★#398：对齐指南区 8 组旅程 IA——首页直达初学者线性路径）
-const journey = [
+const journeyZh = [
   {
     no: '01',
     title: '起步',
@@ -157,7 +159,7 @@ const journey = [
   },
 ]
 
-const capabilities = [
+const capabilitiesZh = [
   {
     tag: 'G-27',
     title: '可插拔渲染底座',
@@ -189,6 +191,65 @@ const capabilities = [
     desc: 'MCP Server + Agent Kit 自修复循环 + 三层护栏——AI 产出符合 IR 契约的标准代码，而非自由文本。',
   },
 ]
+
+/* ============ ★#475 首页国际化：英文数据层（locale 双份）+ 计算暴露（模板变量名不变） ============ */
+const gPillsEn = ['G-27 Rendering pluggable', 'G-28 Capability pluggable', 'G-29 Compiler pluggable', 'G-30 Any target', 'G-31/32 Semantic primitives']
+
+const pillarsEn = [
+  { no: '01', title: 'Semantics first', desc: 'Components are semantics, not div aliases. p-grid says “grid intent”, p-stack says “flow” — layout semantics are checked at compile time, not patched with CSS afterwards.' },
+  { no: '02', title: 'SPI at every layer', desc: 'Compiler · UI · capabilities · targets — all pluggable. Node/Rust compile backends × VueDom/Native/Flutter render backends × capability bridges — one semantic IR, zero business changes when swapping backends.' },
+  { no: '03', title: 'Proof before claims', desc: 'conformance tests + compile-time interception. Every backend passes the same contract suite; semantic violations fail at compile time — every number on this site traces to a verification script.' },
+]
+
+const journeyEn = [
+  { no: '01', title: 'Getting Started', desc: 'What & why: grasp Proteus’s fundamental difference from traditional cross-platform frameworks in three minutes.', to: '/docs/01-intro' },
+  { no: '02', title: 'Start', desc: 'Create project → run & preview → build & release: four micro-pages get both Web and Mini Program running.', to: '/docs/04-requirements' },
+  { no: '03', title: 'Code Anatomy', desc: 'Directory structure, page anatomy, two config layers — know what every file in the project is for.', to: '/docs/08-structure' },
+  { no: '04', title: 'Core Concepts', desc: 'Semantic model, p-* semantic components, state and routing — the mental model you need before writing pages.', to: '/docs/framework/11-semantic-model' },
+  { no: '05', title: 'Rendering & Capabilities', desc: 'Fluid layout, 50 capability Hooks, full-terminal adaptation — business code stays unaware of backends.', to: '/docs/17-fluid-layout' },
+  { no: '06', title: 'Architecture & Engineering', desc: 'Pluggable SPI panorama, compile pipeline, testing & consistency — go deep inside the framework.', to: '/docs/framework/22-architecture' },
+]
+
+const capabilitiesEn = [
+  { tag: 'G-27', title: 'Pluggable rendering', desc: 'RenderBackend SPI + five official backends (VueDom / Native×3 / Flutter) + hybrid rendering — pick an engine per page in the same app, business code unchanged.' },
+  { tag: 'G-29/38', title: 'Pluggable compiler', desc: 'config.compiler.backend — one flag switches Node / Rust (same CompilerIR, semantic-equivalence Golden 81 cases), frozen SPI + incremental sessions.' },
+  { tag: 'G-31/32', title: 'Semantic primitives SSOT', desc: '136 semantic primitives SSOT → 59 p-* components → 45 implemented semantics × 6 backends under conformance gates + 50 capability Hooks.' },
+  { tag: 'G-41/42/43', title: 'Host layer trio', desc: '36-combination matrix hot-swap + six container strategies (super-app sandbox / crash isolation) + ownership with borrow-checking intercepting use-after-move at compile time.' },
+  { tag: 'G-45', title: 'Dev host as host', desc: 'Install-Once Host: dynamic plugin loading (signature + conformance quick check) + pending replay — native plugin changes never re-package the host.' },
+  { tag: 'G-36', title: 'AI-native end to end', desc: 'MCP Server + Agent Kit self-repair loop + three guard rails — AI emits IR-contract-conforming standard code, not free text.' },
+]
+
+/** stats 英文层（数字与 zh 同源同值——只翻 label/source） */
+const STATS_EN = [
+  { value: '38', label: '@proteus-vue/* packages', source: 'npm run check:pkg (38 packages, 0 errors)' },
+  { value: '2006', label: 'unit tests green', source: 'npm test (official gate, e2e excluded)' },
+  { value: '128', label: 'semantic primitives SSOT', source: 'PRIMITIVE_CATALOG (proteus audit coverage)' },
+  { value: '45', label: 'implemented semantics × 6 backends', source: 'conformance gates' },
+  { value: '59', label: 'p-* semantic components', source: 'proteus components:audit' },
+  { value: '69', label: 'compile rules with AI explainers', source: 'listTransformRules (compiler transforms registry)' },
+  { value: '8', label: 'conformance suites', source: 'RND/H/C/CMP/ABI/NAT-C series' },
+  { value: '69', label: 'plan documents', source: 'docs/*-plan dirs (board-inventory index)' },
+]
+
+/** 对标矩阵英文层（状态列与 zh 同——只翻文案列） */
+const COMPARE_EN = [
+  { dim: 'Rendering base', uniapp: 'WebView', rn: 'Native (locked)', flutter: 'Skia (locked)', proteus: 'Pluggable (Vue/Native/Flutter/Skia)', status: '✅' },
+  { dim: 'Multi-backend per app', uniapp: '❌', rn: '❌', flutter: '❌', proteus: 'Per-page switch + hybrid rendering', status: '✅' },
+  { dim: 'Compiler', uniapp: 'Locked', rn: 'Locked (Metro)', flutter: 'Locked', proteus: 'SPI pluggable (Node/Rust, one flag)', status: '🟡' },
+  { dim: 'Authoring', uniapp: 'view/text DSL', rn: 'JSX + native components', flutter: 'Dart', proteus: 'Standard HTML + standard Vue SFC', status: '✅' },
+  { dim: 'Layout adaptation', uniapp: 'rpx (unit conversion)', rn: 'LayoutBuilder', flutter: 'AdaptiveScaffold', proteus: 'System fluid layout (p-*)', status: '✅' },
+  { dim: 'Memory governance', uniapp: 'GC fallback', rn: 'GC fallback', flutter: 'GC + manual', proteus: 'Ownership + borrow-check interception at compile time', status: '✅' },
+  { dim: 'AI involvement', uniapp: 'No IR, text replace', rn: 'Same', flutter: 'Same', proteus: 'Operates IR + enforced validation + self-repair', status: '✅' },
+  { dim: 'Hand-written native plugins', uniapp: 'Plugin-market lottery', rn: 'Must write Native Module', flutter: 'Must write Plugin', proteus: 'Semantic interface + NativeBackend', status: '📋' },
+]
+
+const enOn = (): boolean => locale.value === 'en'
+const gPills = computed(() => (enOn() ? gPillsEn : gPillsZh))
+const pillars = computed(() => (enOn() ? pillarsEn : pillarsZh))
+const journey = computed(() => (enOn() ? journeyEn : journeyZh))
+const capabilities = computed(() => (enOn() ? capabilitiesEn : capabilitiesZh))
+const statItems = computed(() => (enOn() ? STATS_EN : STATS))
+const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 </script>
 
 <template>
@@ -207,15 +268,14 @@ const capabilities = [
         <em>Any engine — at every layer.</em>
       </p-heading>
       <p-text v-p-fluid="'font-size(14, 17)'" class="hero-sub">
-        不是又一个「小程序跨端框架」。Proteus 定义跨端语义内核，让编译、UI 渲染、原生能力、端接入全部成为可插拔后端——
-        Web、小程序、Flutter、原生 UIKit / Jetpack / ArkUI，都是 SPI 的一种实现。
+        {{ t('home.heroSub') }}
       </p-text>
       <p-stack direction="row" :gap="14" class="hero-cta">
         <router-link to="/docs/04-requirements" class="cta-primary">
-          <p-text class="cta-text">⚡ 快速开始</p-text>
+          <p-text class="cta-text">{{ t('home.ctaStart') }}</p-text>
         </router-link>
         <router-link to="/playground" class="cta-ghost">
-          <p-text class="cta-text">在线体验</p-text>
+          <p-text class="cta-text">{{ t('home.ctaPlay') }}</p-text>
         </router-link>
       </p-stack>
       <p-stack direction="row" :gap="8" wrap class="hero-pills">
@@ -253,7 +313,7 @@ const capabilities = [
     <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" data-reveal class="stats">
       <p-grid :min-col-width="200" :gap="12">
         <pg-glass
-          v-for="(s, i) in STATS"
+          v-for="(s, i) in statItems"
           :key="s.label"
           preset="card"
           intensity="thin"
@@ -271,7 +331,7 @@ const capabilities = [
 
     <!-- 能力矩阵 -->
     <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" data-reveal class="features">
-      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">语义是内核，后端是驱动</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">{{ t('home.featuresTitle') }}</p-heading>
       <p-grid :min-col-width="280" :gap="14">
         <p-view
           v-for="(c, i) in capabilities"
@@ -289,15 +349,15 @@ const capabilities = [
 
     <!-- 5. 对标表（v3：与「翻译派」的本质分水岭） -->
     <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(20, 44)'" data-reveal class="compare">
-      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">与「翻译派」的本质分水岭</p-heading>
-      <p-text class="section-sub center">传统框架把小程序 API 当标准去翻译；Proteus 定义自己的语义 IR，各端来实现。</p-text>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">{{ t('home.compareTitle') }}</p-heading>
+      <p-text class="section-sub center">{{ t('home.compareSub') }}</p-text>
       <div class="table-wrap">
         <table class="cmp-table">
           <thead>
-            <tr><th>维度</th><th>uni-app</th><th>React Native</th><th>Flutter</th><th class="cmp-proteus-head">Proteus</th></tr>
+            <tr><th>{{ t('home.dim') }}</th><th>uni-app</th><th>React Native</th><th>Flutter</th><th class="cmp-proteus-head">Proteus</th></tr>
           </thead>
           <tbody>
-            <tr v-for="row in COMPARE_MATRIX" :key="row.dim">
+            <tr v-for="row in compareRows" :key="row.dim">
               <td class="cmp-dim">{{ row.dim }}</td>
               <td>{{ row.uniapp }}</td>
               <td>{{ row.rn }}</td>
@@ -307,39 +367,38 @@ const capabilities = [
           </tbody>
         </table>
       </div>
-      <p-text class="cmp-note center-block">状态标注：✅ 已落地可验证 · 🟡 部分落地 · 📋 规划已入库——明确边界比无限承诺更有说服力。</p-text>
+      <p-text class="cmp-note center-block">{{ t('home.cmpNote') }}</p-text>
     </p-view>
 
     <!-- 6. dogfooding 金句（v3 收尾构图） -->
     <p-view v-p-fluid="'padding-top(36, 72) padding-bottom(36, 72)'" data-reveal class="quote">
       <p-heading :level="2" v-p-fluid="'font-size(20, 34)'" class="quote-line">
-        「我们用 Proteus 建了 Proteus 官网」<br />
-        你审查这份页面的源码，看到真实的 <em>&lt;p-grid&gt;</em>——它正在渲染你眼前的页面。
+        「{{ t('home.quote1') }}」<br />
+        {{ t('home.quote2a') }}<em>&lt;p-grid&gt;</em>{{ t('home.quote2b') }}
       </p-heading>
       <p-text class="quote-sub">这就是 <strong class="grad">dogfooding</strong>。</p-text>
       <p-stack direction="row" :gap="18" class="quote-links">
-        <router-link to="/docs/framework/11-semantic-model" class="method-link">统一语义收敛 →</router-link>
-        <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">SPI-First 五步法 →</a>
+        <router-link to="/docs/framework/11-semantic-model" class="method-link">{{ t('home.linkSemantic') }}</router-link>
+        <a class="method-link" href="https://github.com/proteus-vue/proteus/tree/main/docs/spi-first-methodology" target="_blank" rel="noreferrer">{{ t('home.linkSpi') }}</a>
       </p-stack>
     </p-view>
 
     <!-- 7. 快速开始（01-home §5：3 步） -->
     <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(36, 64)'" data-reveal class="quickstart">
-      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">两分钟跑通双端</p-heading>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">{{ t('home.quickTitle') }}</p-heading>
       <pre class="qs-code"><code>npm create @proteus-vue/proteus my-app
 cd my-app
-npm run dev:web      <span class="qs-dim"># Web SPA 直跑</span>
-npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre>
+npm run dev:web      <span class="qs-dim">{{ t('home.qsWeb') }}</span>
+npm run build:mp     <span class="qs-dim">{{ t('home.qsMp') }}</span></code></pre>
       <p-text class="qs-note center-block">
-        同一份标准 Vue SFC：Web 端由渲染后端直出 DOM，小程序端由编译器生成 WXML/WXSS/JS——
-        接入 Native / Flutter 后端时，这行代码不改。
+        {{ t('home.quickNote') }}
       </p-text>
     </p-view>
 
     <!-- 9. 学习路径（★#398 对齐小程序文档旅程 IA：初学者从首页直接进入线性学习路径） -->
     <p-view v-p-fluid="'padding-top(20, 44) padding-bottom(48, 80)'" data-reveal class="journey">
-      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">学习路径</p-heading>
-      <p-text class="section-sub center">从零到双端跑通的完整旅程——以小程序开放文档的颗粒度标准组织，每页只讲一件事。</p-text>
+      <p-heading :level="2" v-p-fluid="'font-size(20, 30)'" class="section-title center">{{ t('home.journeyTitle') }}</p-heading>
+      <p-text class="section-sub center">{{ t('home.journeySub') }}</p-text>
       <p-grid :min-col-width="220" :gap="12">
         <router-link
           v-for="(s, i) in journey"
@@ -352,7 +411,7 @@ npm run build:mp     <span class="qs-dim"># Skyline 四件套</span></code></pre
           <p-text class="pillar-no">{{ s.no }}</p-text>
           <p-heading :level="3" class="pillar-title">{{ s.title }}</p-heading>
           <p-text class="pillar-desc">{{ s.desc }}</p-text>
-          <p-text class="journey-go">进入 →</p-text>
+          <p-text class="journey-go">{{ t('home.journeyGo') }}</p-text>
         </router-link>
       </p-grid>
     </p-view>
