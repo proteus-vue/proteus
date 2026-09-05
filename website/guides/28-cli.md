@@ -29,7 +29,7 @@ proteus check [dir]   # ★一键全量门禁：css + style + router + config �
                       # 默认全开，--no-strict-css 等可按域关闭；任一域失败 exit 1
 ```
 
-专项命令可单独跑，也可被 `proteus audit all` 七域聚合（route / module / config / i18n / capabilities / components / devtools-budget + CI 耗时预算）：
+专项命令可单独跑，也可被 `proteus audit all` 八域聚合（route / module / config / i18n / capabilities / components / **d2（D-2 页面门禁——opt-in：proteus.config 声明 `audit` 才跑）** / devtools-budget + CI 耗时预算）：
 
 | 命令 | 检查内容 |
 |---|---|

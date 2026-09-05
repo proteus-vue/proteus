@@ -31,7 +31,7 @@
 | 火焰图 5000 span | < 100ms | ✅ ingest + roots 烟测 < 1000ms |
 | DevTools JS 体积 | < 80KB gzip | ⬜ 待按需加载评估 |
 
-CI 跑 `proteus audit devtools-budget`（CLI audit 体系，超线阻断）——✅ `audit devtools-budget` 子命令 + `audit all` 第七域（10 倍余量上界；node 直测 devtools-runtime）。
+CI 跑 `proteus audit devtools-budget`（CLI audit 体系，超线阻断）——✅ `audit devtools-budget` 子命令 + `audit all` 第八域（10 倍余量上界；node 直测 devtools-runtime）。
 
 ## M7.5 降级策略
 

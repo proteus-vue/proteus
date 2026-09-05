@@ -1,7 +1,7 @@
 // packages/cli/src/audit-all.ts
 // ★test-framework B6：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
-// 聚合 route / module / config / i18n / capabilities / components 六域 + CI 耗时预算（<12s，超预算阻断）
-// 复用各检查函数（try/catch + 计时）；缺配置文件域跳过（独立编译模式语义，对齐 check 聚合）
+// 聚合 route / module / config / i18n / capabilities / components / d2 / devtools-budget 八域 + CI 耗时预算（<12s，超预算阻断）
+// 复用各检查函数（try/catch + 计时）；缺配置文件/未声明 audit 的域跳过（独立编译模式语义，对齐 check 聚合）
 import path from 'node:path'
 import fs from 'node:fs'
 import { performance } from 'node:perf_hooks'
@@ -12,6 +12,8 @@ import { checkI18nUsage, formatI18nCheck } from './i18n-check'
 import { runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
+import { loadProjectConfig } from './config-loader'
+import { runD2Audit, formatD2AuditDetail } from './d2-audit'
 
 /** 10 §CI 耗时预算：audit all < 12s */
 export const AUDIT_ALL_BUDGET_MS = 12000
@@ -120,6 +122,33 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
     }
   }
 
+  // ★#450 d2：D-2 页面门禁（opt-in——proteus.config 声明 audit 才跑；未声明/无配置 → 跳过不阻断）
+  {
+    const { value, ms } = await timed(async () => {
+      const file = path.resolve(root, 'proteus.config.ts')
+      if (!fs.existsSync(file)) return { ok: true, skipped: true, text: '[proteus-d2] 无 proteus.config.ts——跳过（D-2 门禁需 audit 声明）' }
+      let audit: unknown
+      try {
+        const cfg = (await loadProjectConfig(file)) as { audit?: unknown } | undefined
+        audit = cfg?.audit
+      } catch (e) {
+        return { ok: true, skipped: true, text: `[proteus-d2] 配置加载失败——跳过：${(e as Error).message}` }
+      }
+      if (audit === undefined) return { ok: true, skipped: true, text: '[proteus-d2] proteus.config 未声明 audit——跳过（D-2 opt-in：声明即启用，未声明规则默认 error）' }
+      let dir = 'src'
+      if (audit && typeof audit === 'object' && typeof (audit as { dir?: unknown }).dir === 'string') dir = (audit as { dir: string }).dir
+      const scanDir = path.resolve(root, dir)
+      if (!fs.existsSync(scanDir)) return { ok: true, skipped: true, text: `[proteus-d2] 审计目录不存在 ${scanDir}——跳过` }
+      try {
+        const report = await runD2Audit(scanDir, { configFile: file })
+        return { ok: report.ok, skipped: false, text: formatD2AuditDetail(report) }
+      } catch (e) {
+        return { ok: true, skipped: true, text: `[proteus-d2] 跳过：${(e as Error).message}` }
+      }
+    })
+    domains.push({ name: 'd2', ok: value.ok, ms, detail: value.text, skipped: value.skipped })
+  }
+
   // ★M10 devtools-budget：DevTools 性能预算烟测（bus.emit / 火焰图 / timeline ingest；10 倍余量上界抓病态回归）
   {
     const { value, ms } = await timed(() => {
@@ -141,7 +170,7 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
 /** 聚合文本报告（10 §输出：路由矩阵 + 模块依赖图 + 状态注册表 + 能力覆盖矩阵 的 CLI 汇总形态） */
 export function formatAuditAll(result: AuditAllResult): string {
   const lines: string[] = []
-  lines.push('[proteus] audit all —— 全量审计门禁（test-framework B6）：')
+  lines.push('[proteus] audit all —— 全量审计门禁（test-framework B6 + M10 + #450 D-2）：')
   for (const d of result.domains) {
     lines.push(`\n── ${d.name}（${d.ok ? '✅' : '✗'}，${d.ms}ms）`)
     lines.push(d.detail)

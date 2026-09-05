@@ -222,3 +222,11 @@ export function formatD2Audit(report: D2AuditReport): string {
   lines.push(report.ok ? `  ✅ PASS——启用规则集零 error${skip.length ? `（关闭：${skip.join(' / ')}）` : ''}${soft}` : `  ❌ FAIL——${report.errors.length} 项违规（D-2 不可绕过；warn 级 ${report.warnings.length} 项）`)
   return lines.join('\n')
 }
+
+/** ★#450 audit all 域详情（紧凑——省略豁免清单与规则逐项，只报门禁结论） */
+export function formatD2AuditDetail(report: D2AuditReport): string {
+  const lines: string[] = []
+  lines.push(`[proteus-d2] ${report.scanned} 个 .vue · error ${report.errors.length} · warn ${report.warnings.length} · 豁免 ${report.exemptions.length}`)
+  for (const e of report.errors) lines.push(`  ✗ ${e}`)
+  return lines.join('\n')
+}
