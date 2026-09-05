@@ -19,15 +19,23 @@ import { locale, setLocale, t } from './i18n'
 
 const route = useRoute()
 const isDocs = computed(() => route.path.startsWith('/docs'))
-const links = [
+interface NavLink {
+  key: string
+  label: string
+  to?: string
+  external?: boolean
+  href?: string
+}
+const links: NavLink[] = [
   { to: '/', label: '首页', key: 'home' },
   { to: '/playground', label: 'Playground', key: 'playground' },
-  { to: '/multi-device', label: '多端同屏', key: 'multidev' },
+  // ★#489 原版六端呈现演示（独立 html 入口——同一份语义，六端形态各异的真实还原）
+  { label: '多端同屏', key: 'flexible', external: true, href: import.meta.env.BASE_URL + 'flexible-multi-device.html' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
   if (l.key === 'home') return t('app.home')
-  if (l.key === 'multidev') return t('app.multidev')
+  if (l.key === 'flexible') return t('app.multidev')
   return l.label
 }
 
@@ -125,15 +133,19 @@ const cursorGlowOptions = {
             >
               {{ locale === 'zh' ? 'EN' : '中文' }}
             </button>
-            <router-link
-              v-for="l in links"
-              :key="l.key"
-              :to="l.to"
-              class="nav-link"
-              :class="{ active: route.name === l.key }"
-            >
-              <p-text class="nav-text">{{ navText(l) }}</p-text>
-            </router-link>
+            <template v-for="l in links" :key="l.key">
+              <a
+                v-if="l.external"
+                class="nav-link"
+                :href="l.href"
+                :aria-label="l.key === 'flexible' ? t('app.multidev') : ''"
+              >
+                <p-text class="nav-text">{{ navText(l) }}</p-text>
+              </a>
+              <router-link v-else :to="l.to ?? '/'" class="nav-link" :class="{ active: route.name === l.key }">
+                <p-text class="nav-text">{{ navText(l) }}</p-text>
+              </router-link>
+            </template>
             <router-link to="/docs/01-intro" class="nav-link" :class="{ active: isDocs }">
               <p-text class="nav-text">{{ t('app.docs') }}</p-text>
             </router-link>

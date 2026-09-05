@@ -56,9 +56,11 @@ const config: ProteusConfig = {
       outDir: 'dist', // 官网部署产物目录（vercel outputDirectory=website/dist 不变）
       rollupOptions: {
         // ★#389i 多页入口：spirit.html = Three.js 3D 海神精灵（iframe 嵌入——three 隔离独立 chunk）
+        // ★#489 多页入口：flexible-multi-device.html = 六端呈现原版演示（一份语义 → 各端形态差异还原）
         input: {
           main: path.join(__dirname, 'index.html'),
           spirit: path.join(__dirname, 'spirit.html'),
+          flexible: path.join(__dirname, 'flexible-multi-device.html'),
         },
         // ★Vercel 构建沙箱稳定性：限制 rollup 并行文件读取（OOM-kill 无输出死掉的高危点）
         maxParallelFileOps: 4,
