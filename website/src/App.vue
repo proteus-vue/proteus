@@ -315,8 +315,8 @@ const cursorGlowOptions = {
 .nav-github { border: 1px solid var(--line); margin-left: 6px; }
 .nav-github:hover { border-color: var(--brand2); }
 .main { max-width: 1180px; margin: 0 auto; width: 100%; flex: 1; }
-/* ★#489 全宽演示页：multi-device 用更宽的舞台（两端不再留白） */
-.main.is-wide { max-width: 1720px; }
+/* ★#489 全宽演示页：蓝底通栏全屏（max-width 放开 + 水平 padding 清零，内边距交给 .six-root） */
+.main.is-wide { max-width: none; width: 100%; padding-left: 0 !important; padding-right: 0 !important; }
 /* ★文档页三栏（左导航+正文+右导读）需要更宽的容器——isDocs 时放开（首页/Playground 维持 1180） */
 .main.is-docs { max-width: 1320px; }
 .footer {

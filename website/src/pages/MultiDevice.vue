@@ -387,6 +387,11 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
   background: var(--bg); color: var(--txt);
   font-family: 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   line-height: 1.6;
+  /* 通栏沉浸：宽度铺满视口，内部再留呼吸 */
+  box-sizing: border-box !important;
+  width: 100%;
+  min-height: calc(100vh - 96px);
+  padding: 0 clamp(18px, 2.4vw, 44px) 0;
 }
 .hero { padding: 20px 4px 10px; text-align: center; }
 .hero h1 { font-size: 22px; font-weight: 850; margin-bottom: 6px; }
