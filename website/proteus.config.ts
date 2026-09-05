@@ -32,7 +32,9 @@ const config: ProteusConfig = {
   setDataBridge: { batchWindow: 16, perComponent: false },
   style: { px2rpx: false, rpxRatio: 2 },
   // 官网专属 vite 扩展（全 vite 兼容——plugins 追加、build 深合并、resolve.alias 拼接保框架 @）
-  vite: {
+  // ★GitHub Pages 子路径部署：PROTEUS_BASE=/proteus/ 注入 base（Vercel/本地根路径缺省 '/' 不变）
+  vite: () => ({
+    base: process.env.PROTEUS_BASE ?? '/',
     plugins: [docsMdPlugin({ resolveEnds })],
     resolve: {
       alias: [
@@ -59,7 +61,7 @@ const config: ProteusConfig = {
         },
       },
     },
-  },
+  }),
 }
 
 export default config

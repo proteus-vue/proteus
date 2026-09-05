@@ -1,0 +1,85 @@
+# ★#425 GitHub Pages 部署（替代 Vercel 每日 100 部署限额——public 仓库 Actions 无限）
+# 触发自控：workflow_dispatch（手动）或 push main 且 commit message 含 [deploy]——日常 push 零部署
+# 构建：pnpm --filter website（配置收敛形态，无 vite.config）→ website/dist → Pages
+# 子路径部署：PROTEUS_BASE=/proteus/（vite base + router BASE_URL 跟随）；404.html = index（SPA 刷新兜底）
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # ① 触发门：手动 dispatch 直接部署；push 需 commit message 含 [deploy]
+      - name: 触发门（[deploy] 标记或手动 dispatch）
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          elif echo "${{ github.event.head_commit.message }}" | grep -q '\[deploy\]'; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ok == 'true'
+
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装
+        if: steps.gate.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: 生成内容 + 构建（子路径 base 注入）
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          PROTEUS_BASE: /proteus/
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          pnpm --filter website run gen:content
+          pnpm --filter website build
+          cp website/dist/index.html website/dist/404.html # GitHub Pages SPA 刷新兜底（无服务端 rewrite）
+
+      - name: 检查产物（双入口 + 子路径 assets 前缀）
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          test -f website/dist/index.html
+          test -f website/dist/spirit.html
+          grep -q '"/proteus/' website/dist/index.html && echo 'base 前缀注入 ✓'
+
+      - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.ok == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          path: website/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.ok == 'true'

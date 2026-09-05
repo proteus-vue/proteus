@@ -10,7 +10,8 @@ import DocsPage from './pages/DocsPage.vue'
 import Playground from './pages/Playground.vue'
 
 export const router = createRouter({
-  history: createWebHistory(),
+  // ★GitHub Pages 子路径部署：base 跟随 vite（import.meta.env.BASE_URL——Vercel 根路径 = '/' 行为不变）
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'home', component: Home },
     { path: '/playground', name: 'playground', component: Playground },
