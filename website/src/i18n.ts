@@ -186,15 +186,35 @@ export function sectionName(key: string): string {
   return SECTION_NAME[locale.value]?.[key] ?? key
 }
 
-/** 指南侧栏分组名双语（起步/开始/…——未收录的组名回退原样） */
+/** 指南/框架/分区侧栏分组名双语（未收录的组名回退原样；★#479 扩到全部七个分区） */
 const GROUP_NAME: Record<SiteLocale, Record<string, string>> = {
   zh: {
     起步: '起步', 开始: '开始', 代码构成: '代码构成', 基础概念: '基础概念',
     渲染与能力: '渲染与能力', 架构与工程: '架构与工程', 专题深入: '专题深入', 参考: '参考',
+    总览: '总览', 语义模型: '语义模型', 编译期: '编译期', 运行期: '运行期',
+    渲染层: '渲染层', 组件框架: '组件框架', 自定义组件: '自定义组件', 数据与状态: '数据与状态',
+    基础能力: '基础能力', 质量与兼容: '质量与兼容', 宿主与内存: '宿主与内存',
+    内容与表单: '内容与表单', 工程: '工程', 布局: '布局', 手势: '手势', 页面外壳: '页面外壳',
+    位置与地图: '位置与地图', 可观测与调试: '可观测与调试', 媒体与扫码: '媒体与扫码',
+    存储与文件: '存储与文件', 应用与生命周期: '应用与生命周期', 网络与通信: '网络与通信',
+    设备与系统: '设备与系统', 账号与支付: '账号与支付', 通知与分享: '通知与分享',
+    工程原语: '工程原语', 手势原语: '手势原语', 桌面原语: '桌面原语',
+    '柔性系统': '柔性系统', '插件 API': '插件 API', '工程参考': '工程参考', 工程命令: '工程命令',
+    开发者工具: '开发者工具', 模块化: '模块化',
   },
   en: {
     起步: 'Getting Started', 开始: 'Start', 代码构成: 'Code Anatomy', 基础概念: 'Core Concepts',
     渲染与能力: 'Rendering & Capabilities', 架构与工程: 'Architecture & Engineering', 专题深入: 'Deep Dives', 参考: 'Reference',
+    总览: 'Overview', 语义模型: 'Semantic Model', 编译期: 'Compile Time', 运行期: 'Runtime',
+    渲染层: 'Rendering Layer', 组件框架: 'Component Framework', 自定义组件: 'Custom Components', 数据与状态: 'Data & State',
+    基础能力: 'Core Capabilities', 质量与兼容: 'Quality & Compatibility', 宿主与内存: 'Hosts & Memory',
+    内容与表单: 'Content & Forms', 工程: 'Engineering', 布局: 'Layout', 手势: 'Gestures', 页面外壳: 'Page Shell',
+    位置与地图: 'Location & Maps', 可观测与调试: 'Observability & Debugging', 媒体与扫码: 'Media & Scanning',
+    存储与文件: 'Storage & Files', 应用与生命周期: 'App & Lifecycle', 网络与通信: 'Network & Communication',
+    设备与系统: 'Device & System', 账号与支付: 'Account & Payment', 通知与分享: 'Notifications & Sharing',
+    工程原语: 'Engineering Primitives', 手势原语: 'Gesture Primitives', 桌面原语: 'Desktop Primitives',
+    '柔性系统': 'Flex System', '插件 API': 'Plugin API', '工程参考': 'Engineering Reference', 工程命令: 'Engineering Commands',
+    开发者工具: 'Developer Tools', 模块化: 'Modularity',
   },
 }
 export function groupName(name: string): string {
