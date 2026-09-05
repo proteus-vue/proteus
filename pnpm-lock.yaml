@@ -85,67 +85,67 @@ importers:
   examples:
     dependencies:
       '@proteus-vue/api':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/api
       '@proteus-vue/app-config':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/app-config
       '@proteus-vue/built-in-components':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/built-in-components
       '@proteus-vue/capabilities':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/capabilities
       '@proteus-vue/compat-miniprogram':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/compat-miniprogram
       '@proteus-vue/desktop':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/desktop
       '@proteus-vue/dev-host':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/dev-host
       '@proteus-vue/devtools':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/devtools
       '@proteus-vue/devtools-runtime':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/devtools-runtime
       '@proteus-vue/docs':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/docs
       '@proteus-vue/fluid':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/fluid
       '@proteus-vue/gesture':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/gesture
       '@proteus-vue/i18n':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/i18n
       '@proteus-vue/module':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/module
       '@proteus-vue/render-backend':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/render-backend
       '@proteus-vue/router':
-        specifier: workspace:*
+        specifier: 0.2.0-beta.0
         version: link:../packages/router
       '@proteus-vue/runtime':
-        specifier: workspace:*
+        specifier: 0.2.0-beta.0
         version: link:../packages/runtime
       '@proteus-vue/shared':
-        specifier: workspace:*
+        specifier: 0.2.0-beta.0
         version: link:../packages/shared
       '@proteus-vue/style-safety':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/style-safety
       '@proteus-vue/test-ir':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/test-ir
       '@proteus-vue/web':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/web
       '@vue/devtools-api':
         specifier: ^8.0.0
@@ -158,13 +158,16 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: workspace:*
+        specifier: 0.2.1-beta.0
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: workspace:*
+        specifier: 0.3.0-beta.0
         version: link:../packages/compiler
+      '@proteus-vue/hmr':
+        specifier: 0.1.0
+        version: link:../packages/hmr
       '@proteus-vue/plugin-vite':
-        specifier: workspace:*
+        specifier: 0.2.0-beta.0
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -289,9 +292,12 @@ importers:
       '@proteus-vue/types':
         specifier: 0.1.0
         version: link:../types
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
     devDependencies:
       '@proteus-vue/compat-miniprogram':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../compat-miniprogram
       '@vue/compiler-dom':
         specifier: ^3.5.42
@@ -299,6 +305,9 @@ importers:
       '@vue/compiler-sfc':
         specifier: ^3.5.42
         version: 3.5.42
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@20.19.43)(sass@1.104.0)
 
   packages/compat-miniprogram:
     dependencies:
@@ -329,7 +338,7 @@ importers:
         version: link:../component-ir
     devDependencies:
       '@proteus-vue/types':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../types
       '@vue/compiler-dom':
         specifier: ^3.5.42
@@ -364,7 +373,11 @@ importers:
         specifier: ^3.5.42
         version: 3.5.42
 
-  packages/desktop: {}
+  packages/desktop:
+    dependencies:
+      vue:
+        specifier: ^3.4.0
+        version: 3.5.42(typescript@5.9.3)
 
   packages/dev-host: {}
 
@@ -394,6 +407,10 @@ importers:
         version: 3.5.42(typescript@5.9.3)
 
   packages/devtools-runtime:
+    dependencies:
+      pinia:
+        specifier: ^2.0.0
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -419,7 +436,7 @@ importers:
         version: 8.21.3
     devDependencies:
       '@proteus-vue/types':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../types
       '@types/node':
         specifier: ^20.0.0
@@ -543,10 +560,10 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/devtools-runtime':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../devtools-runtime
       '@proteus-vue/types':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../types
       pinia:
         specifier: ^4.0.3
@@ -558,7 +575,11 @@ importers:
         specifier: ^20.0.0
         version: 20.19.43
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      vue:
+        specifier: ^3.4.0
+        version: 3.5.42(typescript@5.9.3)
 
   packages/style-safety: {}
 
@@ -609,7 +630,7 @@ importers:
         version: link:../built-in-components
     devDependencies:
       '@proteus-vue/shared':
-        specifier: workspace:*
+        specifier: 0.2.0-beta.0
         version: link:../shared
       '@types/node':
         specifier: ^20.0.0
@@ -621,31 +642,31 @@ importers:
   website:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: workspace:*
+        specifier: 0.3.0-beta.0
         version: link:../packages/compiler
       '@proteus-vue/compiler-backend':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/compiler-backend
       '@proteus-vue/desktop':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/desktop
       '@proteus-vue/devtools-runtime':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/devtools-runtime
       '@proteus-vue/docs':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/docs
       '@proteus-vue/fluid':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/fluid
       '@proteus-vue/gesture':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/gesture
       '@proteus-vue/render-backend':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/render-backend
       '@proteus-vue/test-ir':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../packages/test-ir
       miniprogram-api-typings:
         specifier: ^3.12.2
@@ -661,8 +682,11 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: workspace:*
+        specifier: 0.2.1-beta.0
         version: link:../packages/cli
+      '@proteus-vue/plugin-vite':
+        specifier: 0.2.0-beta.0
+        version: link:../packages/plugin-vite
       '@types/three':
         specifier: ^0.160.0
         version: 0.160.0
@@ -2271,6 +2295,15 @@ packages:
     resolution: {integrity: sha512-uB80kBFb/tfd68bVleG9T5GGsGPjJrLAUpR5PZIrhBnIaRTQRjqdJSsIKkOP6OAIFbj7GOrcudc5pNjZ+geV2g==}
     engines: {node: '>=6'}
 
+  pinia@2.3.1:
+    resolution: {integrity: sha512-khUlZSwt9xXCaTbbxFYBKDc/bWAGWJjOgvxETwkTN7KRm66EeT1ZdZj6i2ceh9sP2Pzqsbc704r2yngBrxBVug==}
+    peerDependencies:
+      typescript: '>=4.4.4'
+      vue: ^2.7.0 || ^3.5.11
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   pinia@4.0.3:
     resolution: {integrity: sha512-XMQqpvjgG7LMqVhhFUzKLT4KEbsYbfZZ0CZU9PgdFm1O2VKBmIkykL8+SfNhOaT7sR0wT6BEgKT0YNDYWgmVRA==}
     peerDependencies:
@@ -2583,6 +2616,17 @@ packages:
 
   vue-component-type-helpers@3.3.11:
     resolution: {integrity: sha512-LwcxzeliO9fkQcpJG0PoX8X5kmAhKmH9wkpDLxNabwzkQ9Zeib2YVHwFV4pcWmMLfXVfjr/dSV+DaJ3cIPgSNA==}
+
+  vue-demi@0.14.10:
+    resolution: {integrity: sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg==}
+    engines: {node: '>=12'}
+    hasBin: true
+    peerDependencies:
+      '@vue/composition-api': ^1.0.0-rc.1
+      vue: ^3.0.0-0 || ^2.6.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
 
   vue-router@4.6.4:
     resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
@@ -4285,6 +4329,16 @@ snapshots:
 
   pify@4.0.1: {}
 
+  pinia@2.3.1(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)):
+    dependencies:
+      '@vue/devtools-api': 6.6.4
+      vue: 3.5.42(typescript@5.9.3)
+      vue-demi: 0.14.10(vue@3.5.42(typescript@5.9.3))
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@vue/composition-api'
+
   pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)):
     dependencies:
       '@vue/devtools-api': 8.2.1
@@ -4572,6 +4626,10 @@ snapshots:
   vscode-uri@3.2.0: {}
 
   vue-component-type-helpers@3.3.11: {}
+
+  vue-demi@0.14.10(vue@3.5.42(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.42(typescript@5.9.3)
 
   vue-router@4.6.4(vue@3.5.42(typescript@5.9.3)):
     dependencies:

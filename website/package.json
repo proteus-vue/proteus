@@ -18,18 +18,18 @@
     "check:css-compat": "tsx scripts/gen-css-compat.mjs --check"
   },
   "dependencies": {
-    "@proteus-vue/compiler": "workspace:*",
-    "@proteus-vue/compiler-backend": "workspace:*",
-    "@proteus-vue/desktop": "workspace:*",
-    "@proteus-vue/docs": "workspace:*",
+    "@proteus-vue/compiler": "0.3.0-beta.0",
+    "@proteus-vue/compiler-backend": "0.1.0",
+    "@proteus-vue/desktop": "0.1.0",
+    "@proteus-vue/docs": "0.1.0",
     "miniprogram-api-typings": "^3.12.2",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
-    "@proteus-vue/fluid": "workspace:*",
-    "@proteus-vue/gesture": "workspace:*",
-    "@proteus-vue/devtools-runtime": "workspace:*",
-    "@proteus-vue/render-backend": "workspace:*",
-    "@proteus-vue/test-ir": "workspace:*",
+    "@proteus-vue/fluid": "0.1.0",
+    "@proteus-vue/gesture": "0.1.0",
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/render-backend": "0.1.0",
+    "@proteus-vue/test-ir": "0.1.0",
     "three": "^0.160.0"
   },
   "devDependencies": {
@@ -38,6 +38,7 @@
     "vite": "^5.0.0",
     "vue-tsc": "^2.0.0",
     "@types/three": "^0.160.0",
-    "@proteus-vue/cli": "workspace:*"
+    "@proteus-vue/cli": "0.2.1-beta.0",
+    "@proteus-vue/plugin-vite": "0.2.0-beta.0"
   }
 }

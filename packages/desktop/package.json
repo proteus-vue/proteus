@@ -20,5 +20,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
   }
 }

@@ -29,6 +29,9 @@ jobs:
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: npm test
 
+      - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
+        run: node scripts/check-deps.mjs
+
       - name: stores 铁律门禁（M8.4：禁平台分支/直连存储）
         run: |
           if grep -rEn "wx\.setStorage|localStorage\.setItem|sessionStorage|if.*process\.env" examples/stores/ 2>/dev/null; then

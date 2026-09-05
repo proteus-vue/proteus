@@ -28,7 +28,7 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
-    "verify": "pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm -r build && pnpm run check:pkg",
+    "verify": "pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm -r build && pnpm run check:pkg && pnpm run check:deps",
     "check:pkg": "node scripts/check-package-health.js",
     "bench": "tsx scripts/benchmark.ts",
     "bench:update": "tsx scripts/benchmark.ts --update",
@@ -40,7 +40,8 @@
     "build:website": "pnpm --filter website build",
     "preview:website": "pnpm --filter website preview",
     "audit:website": "node website/audit-d2.mjs website/src",
-    "build:packages": "node scripts/build-packages.mjs"
+    "build:packages": "node scripts/build-packages.mjs",
+    "check:deps": "node scripts/check-deps.mjs"
   },
   "dependencies": {
     "pinia": "^4.0.3",

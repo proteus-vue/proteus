@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "pinia": "^4.0.3",
-    "@proteus-vue/devtools-runtime": "workspace:*",
-    "@proteus-vue/types": "workspace:*"
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/types": "0.1.0"
   }
 }

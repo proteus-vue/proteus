@@ -36,6 +36,6 @@
   "devDependencies": {
     "@vue/compiler-dom": "^3.5.42",
     "@vue/compiler-sfc": "^3.5.42",
-    "@proteus-vue/types": "workspace:*"
+    "@proteus-vue/types": "0.1.0"
   }
 }
