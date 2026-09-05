@@ -6,7 +6,7 @@ group: 开始
 
 # Create your first project
 
-One scaffold command creates a **Web + WeChat Mini Program dual-target project**. Everything below is sourced from `packages/create-proteus` and its templates.
+One scaffold command creates a **Web + WeChat Mini Program dual-target template project** (the scaffold currently targets the two wired ends, Web / Mini Program; native/Flutter render-backend rollout is tracked in [Ends & maturity](/docs/framework/ends-matrix)). Everything below is sourced from `packages/create-proteus` and its templates.
 
 ## Create
 

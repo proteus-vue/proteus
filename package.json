@@ -39,6 +39,7 @@
     "dev:website": "pnpm --filter website dev",
     "build:website": "pnpm --filter website build",
     "preview:website": "pnpm --filter website preview",
+    "check:alltarget": "node scripts/check-all-target-wording.mjs",
     "audit:website": "tsx packages/cli/src/index.ts audit d2 website/src",
     "check:live": "node website/scripts/verify-live.mjs",
     "build:packages": "node scripts/build-packages.mjs",

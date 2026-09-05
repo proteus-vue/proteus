@@ -26,6 +26,9 @@ jobs:
       - name: 示例工程类型检查（examples 独立 tsconfig，完整工程形态）
         run: cd examples && npx vue-tsc --noEmit -p tsconfig.json
 
+      - name: 文档全端视角写作门禁（#487：双端世界观句式回归阻断——guides/framework zh+en）
+        run: node scripts/check-all-target-wording.mjs
+
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: npm test
 

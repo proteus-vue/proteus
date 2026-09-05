@@ -6,7 +6,7 @@ group: 开始
 
 # 创建你的第一个工程
 
-一条脚手架命令，创建一个 **Web + 微信小程序双端工程**。本页的命令与生成物以 `packages/create-proteus` 源码与模板为准。
+一条脚手架命令，创建一个 **Web + 微信小程序双端模板工程**（脚手架当前面向已接线的 Web/小程序；原生/Flutter 渲染后端接入进度见[端与成熟度](/docs/framework/ends-matrix)）。本页的命令与生成物以 `packages/create-proteus` 源码与模板为准。
 
 ## 创建
 

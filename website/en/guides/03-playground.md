@@ -47,5 +47,5 @@ const count = ref(0)
 
 ## Next steps
 
-- [Create your first project](/docs/05-create-project): move from the browser to a local dual-target project
+- [Create your first project](/docs/05-create-project): move from the browser to a local dual-target template project (Web / Mini Program)
 - [Semantic model](/docs/framework/11-semantic-model): read the semantic tree inside the IR tab

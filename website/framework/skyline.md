@@ -29,7 +29,7 @@ group: 运行期
 | 嵌套页面 | 降级平铺 + `meta.__parent` 保留父链 | children 嵌套 |
 | 转场 | `meta.transition` → `routeType`（自定义路由 + builder） | CSS 转场 |
 
-Proteus 的 gen-routes 把这些差异吸收在**编译期**：同一份 `<route>` 声明，双端各自生成正确的结构。
+Proteus 的 gen-routes 把这些差异吸收在**编译期**：同一份 `<route>` 声明，按已接线形态各自生成正确的结构（Web 路由表 / 小程序页面栈；其余端同树语义见[渲染后端](/docs/framework/23-render-backend)）。
 
 ## 诚实边界
 
