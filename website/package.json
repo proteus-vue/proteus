@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Proteus 官网（dogfooding：用 Proteus 自身构建——@proteus-vue/docs 文档引擎 + @proteus-vue/fluid 柔性布局 + v-p-hover 桌面原语；W-6 柔性框架优先：响应式零 @media）",
   "scripts": {
-    "dev": "node_modules/.bin/proteus dev --target web",
-    "build": "node scripts/gen-plugin-docs.mjs --check && node_modules/.bin/proteus build --target web",
-    "preview": "node_modules/.bin/proteus build --target web && vite preview dist",
+    "dev": "node ../packages/cli/dist/index.js dev --target web",
+    "build": "node scripts/gen-plugin-docs.mjs --check && node ../packages/cli/dist/index.js build --target web",
+    "preview": "node ../packages/cli/dist/index.js build --target web && vite preview dist",
     "gen:content": "tsx scripts/gen-content.mjs",
     "gen:plugin-docs": "tsx scripts/gen-plugin-docs.mjs",
     "check:plugin-docs": "tsx scripts/gen-plugin-docs.mjs --check",
