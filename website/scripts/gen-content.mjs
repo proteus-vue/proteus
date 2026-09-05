@@ -67,6 +67,62 @@ function extractFnKeys(src, fnName) {
   return [...body.matchAll(/^ {4}([a-zA-Z]+):/gm)].map((x) => x[1])
 }
 
+// ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
+//   提取 export interface X { ... } 的逐属性：名称/类型/可选(?)/前置 JSDoc 首行
+function extractInterfaces(src) {
+  const out = {}
+  const re = /(?:\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\n)?export interface (\w+)(?:<[^>]*>)? \{([^\0]*?)\n\}/g
+  let m
+  while ((m = re.exec(src))) {
+    const [, jsdoc, name, body] = m
+    const props = []
+    // 逐属性：前置 JSDoc（可跨行，tempered）或行尾 // 注释；方法成员/JSDoc 内文行不入表（CapabilityBridge.tel 假阳性教训）
+    const pre = /((?:\/\*\*(?:[^*]|\*(?!\/))*\*\/\s*\n)?)(\s*)(\w+)(\?)?:\s*([^\n]+)/g
+    let p
+    while ((p = pre.exec(body))) {
+      if (/\):\s/.test(p[5])) continue // 方法参数碎片（login(provider?: string): Promise<...> 的内参）——真实属性类型不含 '): '
+      let doc = ''
+      if (p[1]) {
+        doc = p[1].replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
+      } else if (/\/\//.test(p[5])) {
+        doc = p[5].split('//').pop().trim()
+      }
+      props.push({ name: p[3], optional: p[4] === '?', type: p[5].replace(/\/\/.*$/, '').trim(), doc })
+    }
+    out[name] = {
+      doc: jsdoc ? jsdoc.replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ') : '',
+      props,
+    }
+  }
+  return out
+}
+
+// 从实现体提取 CapError('code', 'msg') 错误码（能力页错误码表 SSOT）
+function extractErrorCodes(body) {
+  const out = []
+  for (const m of body.matchAll(/CapError\(\s*'([^']+)'\s*,\s*'([^']+)'/g)) {
+    if (!out.some((e) => e.code === m[1])) out.push({ code: m[1], message: m[2] })
+  }
+  return out
+}
+
+// 桥方法实现体切片（wxBridge/webBridge 内 methodName: ... 到同级下一方法）——错误码提取用
+function extractBridgeBodies(apiSrc, fnName) {
+  const start = apiSrc.indexOf(`function ${fnName}`)
+  if (start < 0) return {}
+  const rest = apiSrc.slice(start)
+  const endM = rest.search(/^}/m)
+  const body = endM >= 0 ? rest.slice(0, endM) : rest
+  const bodies = {}
+  const keyRe = /^ {4}([a-zA-Z]+):/gm
+  const hits = [...body.matchAll(keyRe)]
+  for (let k = 0; k < hits.length; k++) {
+    const end = k + 1 < hits.length ? hits[k + 1].index : body.length
+    bodies[hits[k][1]] = body.slice(hits[k].index, end)
+  }
+  return bodies
+}
+
 // —— defineProps 块提取（平衡花括号/括号/字符串） ——
 function extractCall(src, fnName) {
   const idx = src.indexOf(`${fnName}(`)
@@ -123,7 +179,22 @@ function splitTopLevel(block) {
 }
 
 function parseValue(seg) {
-  return seg.trim().replace(/,\s*$/, '').replace(/\s+/g, ' ')
+  // ★#406：剥行内注释——字符串字面量内的 // 不误伤（'http://x' 等场景：只剥引号外的 //）
+  let out = ''
+  let q = null
+  for (let i = 0; i < seg.length; i++) {
+    const ch = seg[i]
+    if (q) {
+      out += ch
+      if (ch === '\\') { out += seg[++i] ?? ''; continue }
+      if (ch === q) q = null
+      continue
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') { q = ch; out += ch; continue }
+    if (ch === '/' && seg[i + 1] === '/') break
+    out += ch
+  }
+  return out.trim().replace(/[},\s]+$/, '').replace(/\s+/g, ' ').replace(/\{\s+$/, '{}')
 }
 
 // 解析 props：/** jsdoc */ name: { … } 逐项——顶层键分割后逐键解析 type/default/required
@@ -183,6 +254,105 @@ function extractComponentDesc(src) {
   short = short.replace(/（[^）]*）\s*$/, '').trim().replace(/^E\d+\s+/, '')
   const notes = lines.slice(1).filter((l) => !l.startsWith('src/components'))
   return { short, notes }
+}
+
+// ★#406 颗粒度批：框架通用属性/事件说明（SSOT = 各组件 defineProps JSDoc；此处只收敛跨组件的公约属性——
+//   pid/disabled/ariaLabel 等在 15+ 组件重复出现且无 JSDoc，公约说明此处写一次全站消费）
+const COMMON_PROP_DOCS = {
+  pid: '组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）',
+  disabled: '禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）',
+  ariaLabel: '无障碍标签（读屏器朗读文本）',
+  visible: '是否可见（显隐由响应式数据驱动，零平台分支）',
+  placeholder: '占位提示文本',
+  value: '绑定值',
+  text: '显示文本',
+  position: '位置/方位',
+  modelValue: '双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约）',
+  maxlength: '最大输入长度（≤ 0 = 不限）',
+  focus: '自动聚焦',
+  duration: '持续时间（ms）',
+  title: '标题',
+  type: '类型变体',
+  mode: '模式/裁剪方式（各组件枚举见类型列）',
+  height: '高度（px）',
+  min: '最小值',
+  max: '最大值',
+  step: '步长',
+  src: '资源地址（网络/本地/临时路径）',
+  alt: '替代文本（图片加载失败/无障碍）',
+  loading: '加载中状态',
+  fixed: '是否固定定位（吸顶/吸底）',
+  lazy: '懒挂载（首屏不渲染，首次滚动/可见才渲染）',
+  lazyLoad: '懒加载（进入视口才加载资源）',
+  virtual: '虚拟化开关（false = 全量渲染，小列表省切片开销）',
+  itemHeight: '单项高度（px，虚拟窗口计算基准）',
+  bufferSize: '可视区外缓冲行数（平滑滚动的提前量）',
+  items: '数据项数组',
+  selectable: '是否可选中文本',
+  scrollX: '允许横向滚动',
+  scrollY: '允许纵向滚动',
+  scrollLeft: '横向滚动位置（px）',
+  scrollTop: '纵向滚动位置（px）',
+  lowerThreshold: '距底部多少 px 触发 scrolltolower 事件',
+  refresherEnabled: '启用自定义下拉刷新',
+  maskOpacity: '遮罩透明度（0-1）',
+  mask: '是否显示遮罩',
+  closeOnMask: '点遮罩是否关闭',
+  closeOnTap: '点击后是否自动关闭',
+  throttle: '点击节流间隔（ms，防重复触发——runtime 内置）',
+  fallbackText: '加载失败/空态的兑底文案',
+  avatar: '是否头部头像形状（骨架屏）',
+  lines: '行数（骨架屏占位行数）',
+  opacity: '透明度（0-1）',
+  back: '是否显示返回按钮（仅 emit 事件，导航由页面自决——组件不直接调路由）',
+  navigate: '点击导航后触发（载荷 { to, replace, switchTab }）',
+}
+
+// 通用事件说明（emit 名 → 说明；跨组件公约事件收敛于此，组件特有事件看各组件 JSDoc/实现要点）
+const COMMON_EVENT_DOCS = {
+  click: '点击/轻触（throttle 节流后触发）',
+  input: '输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约）',
+  confirm: '键盘确认（回车/完成键）',
+  focus: '获得焦点',
+  blur: '失去焦点',
+  change: '选中值变化',
+  select: '选中某项',
+  cancel: '取消/关闭',
+  close: '关闭',
+  load: '加载完成',
+  error: '加载/执行失败',
+  scroll: '滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop）',
+  scrolltolower: '滚动到底部（lowerThreshold 触发）',
+  refresh: '刷新触发',
+  refresherrefresh: '自定义下拉刷新触发',
+  'load-more': '加载更多（触底翻页）',
+  drag: '拖拽中（gesture.draggable）',
+  drop: '拖拽释放',
+  submit: '表单提交',
+  formChange: '表单项变化',
+  back: '点击返回按钮（导航由页面自决——组件不直接调路由）',
+}
+
+// ★#406：常见能力参数说明兑底（自解释参数名的公约语义——与组件 COMMON_PROP_DOCS 同模式）
+const COMMON_PARAM_DOCS = {
+  url: '目标 URL（HTTPS）',
+  onProgress: '进度回调（0-100；可省）',
+  extensionId: '扩展/插件 ID（G-21 扩展点登记名）',
+  prompt: '认证提示文案（原生系统 UI 展示）',
+  productId: '内购商品 ID（应用商店登记）',
+  provider: '服务提供方标识（wechat / web / 宿主自定义）',
+  id: '地图实例 ID（多地图场景区分）',
+  templateId: '订阅消息模板 ID（公众平台登记）',
+  name: '权限名（web Permissions API 标准名）',
+  phoneNumber: '电话号码',
+  roomId: '直播间 ID',
+  phone: '对方电话号码',
+  message: '内容文本',
+  protocols: 'WebSocket 子协议（可省）',
+  durationMs: '震动时长（ms）',
+  cb: '状态变化回调（返回取消订阅函数）',
+  kind: '传感器类型（accelerometer 加速度计 / compass 罗盘 / gyroscope 陀螺仪）',
+  options: '选项对象（字段见下表）',
 }
 
 // —— ① 组件页 ——
@@ -267,17 +437,23 @@ function genComponents(ir, ends) {
     if (props.length) {
       lines.push('## Props')
       lines.push('')
-      lines.push('| Prop | 说明 | 类型 | 默认值 |')
-      lines.push('|---|---|---|---|')
+      lines.push('| 属性 | 说明 | 类型 | 默认值 | 必填 |')
+      lines.push('|---|---|---|---|---|')
       for (const p of props) {
-        lines.push(`| \`${p.name}\` | ${p.doc} | \`${p.type}\` | ${p.default ? `\`${p.default}\`` : p.required ? '**必填**' : '—'} |`)
+        // 说明：源码 JSDoc 优先，公约属性兑底（COMMON_PROP_DOCS——pid/disabled 等跨组件公约语义）
+        const doc = p.doc !== '—' ? p.doc : COMMON_PROP_DOCS[p.name] ?? '—'
+        lines.push(`| \`${p.name}\` | ${doc} | \`${p.type}\` | ${p.default ? `\`${p.default}\`` : p.required ? '**是**' : '—'} | ${p.required ? '**是**' : '否'} |`)
       }
       lines.push('')
     }
     if (emits.length) {
       lines.push('## Events')
       lines.push('')
-      lines.push(emits.map((e) => `\`${e}\``).join(' · '))
+      lines.push('| 事件 | 说明 |')
+      lines.push('|---|---|')
+      for (const e of emits) {
+        lines.push(`| \`${e}\` | ${COMMON_EVENT_DOCS[e] ?? '—'} |`)
+      }
       lines.push('')
     }
     // ★组件 tab 重构：源码头注释的设计注记 → 「实现要点」段（无则跳过）
@@ -336,6 +512,9 @@ function genCapabilities(ir, ends) {
   // ★兼容进度表 SSOT：wxBridge/webBridge 实际实现的方法集（Web 列 ⚠️ = webBridge 未提供 → Err 显式降级）
   const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
   const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
+  // ★#406 颗粒度批：接口属性表（参数/返回值展开）+ 桥实现体（错误码提取）SSOT 解析
+  const ifaces = extractInterfaces(apiSrc)
+  const bridgeBodies = { ...extractBridgeBodies(apiSrc, 'wxBridge'), ...extractBridgeBodies(apiSrc, 'webBridge') }
   const iface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityHooks'))
   const hookDocs = {}
   // JSDoc 体 tempered 模式：禁止跨 */ 边界（否则从更早的 /** 起配，拼接出跨块垃圾文本——payment 页曾中招）
@@ -401,8 +580,104 @@ function genCapabilities(ir, ends) {
     lines.push(sigM ? sigM[0] : `${c.api} → ${c.props?.[0] ?? 'Result<T>'}`)
     lines.push('```')
     lines.push('')
-    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表；Web 列 ✅/⚠️ 由 webBridge 实际方法集推导
+    // ★#406 颗粒度批：参数表 + 返回值属性表 + 错误码表（对齐小程序文档颗粒度，SSOT = capability.ts 接口 JSDoc）
     const refs = hookRefs[hook] ?? []
+    const sigLine = sigM ? sigM[0] : ''
+    const paramM = sigLine.match(/\(([^)]*)\)/)
+    const params = []
+    if (paramM && paramM[1].trim()) {
+      for (const raw of paramM[1].split(',')) {
+        const pm = raw.trim().match(/^(\w+)(\?)?:\s*(.+)$/)
+        if (pm) params.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim() })
+      }
+    }
+    if (params.length) {
+      lines.push('## 参数')
+      lines.push('')
+      lines.push('| 参数 | 类型 | 必填 | 说明 |')
+      lines.push('|---|---|---|---|')
+      for (const p of params) {
+        const t = p.type
+        const ti = ifaces[t]
+        const desc = ti?.doc || COMMON_PARAM_DOCS[p.name] || '—'
+        lines.push(`| \`${p.name}\` | \`${t}\` | ${p.optional ? '否' : '是'} | ${desc} |`)
+      }
+      lines.push('')
+      // 对象参数展开：属性表（对齐小程序「对象参数展开」粒度）
+      for (const p of params) {
+        const ti = ifaces[p.type]
+        if (!ti || !ti.props.length) continue
+        lines.push(`#### \`${p.name}\` 的属性`)
+        lines.push('')
+        lines.push('| 属性 | 类型 | 必填 | 说明 |')
+        lines.push('|---|---|---|---|')
+        for (const pr of ti.props) {
+          lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+        }
+        lines.push('')
+      }
+    }
+    // 返回值：CapResult<T> → ok/data/error + T 的接口属性表（AuthState/CompatStorage 等非 Promise 返回另行识别）
+    const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
+    const dataT = retT ? retT[1].trim() : ''
+    const voidRet = /CapResult<void>/.test(sigLine)
+    const directT = ['AuthState', 'CompatStorage'].find((t) => sigLine.includes(`: ${t}`))
+    lines.push('## 返回值')
+    lines.push('')
+    if (directT) {
+      lines.push(`返回 \`${directT}\`（同步句柄/状态对象）。`)
+      lines.push('')
+    } else {
+      lines.push('`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：')
+      lines.push('')
+      lines.push('| 属性 | 类型 | 说明 |')
+      lines.push('|---|---|---|')
+      lines.push(`| \`ok\` | \`boolean\` | 成功 \`true\` / 失败 \`false\` |`)
+      lines.push(voidRet ? '| \`data\` | \`void\` | 成功时无载荷 |' : `| \`data\` | \`${dataT || 'T'}\` | 成功载荷（结构见下） |`)
+      lines.push('| \`error\` | \`CapError\` | 失败时存在：\`code\`（机器码）/ \`message\`（人读原因）/ \`cause\`（原始异常） |')
+      lines.push('')
+    }
+    if (dataT && ifaces[dataT]?.props.length) {
+      lines.push(`#### \`data\`（\`${dataT}\`）的属性`)
+      lines.push('')
+      lines.push('| 属性 | 类型 | 必填 | 说明 |')
+      lines.push('|---|---|---|---|')
+      for (const pr of ifaces[dataT].props) {
+        lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+      }
+      lines.push('')
+    } else if (directT && ifaces[directT]?.props.length) {
+      lines.push(`#### \`${directT}\` 的属性`)
+      lines.push('')
+      lines.push('| 属性 | 类型 | 说明 |')
+      lines.push('|---|---|---|')
+      for (const pr of ifaces[directT].props) {
+        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // 方法成员不入属性表（useAuth 的 login/logout 等——句柄方法）
+        lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.doc || '—'} |`)
+      }
+      lines.push('')
+    }
+    // 错误码表：hook 条目切片 + 关联桥方法实现体中 CapError('code', 'msg') 全量提取
+    const hookStart = hooksBody.indexOf(`${hook}:`)
+    const hookEnd = (() => {
+      const hits = [...hooksBody.matchAll(/\b(use[A-Z]\w*|set[A-Z]\w*):/g)]
+      const hit = hits.find((h) => h.index === hookStart)
+      const idx0 = hits.indexOf(hit)
+      return idx0 >= 0 && idx0 + 1 < hits.length ? hits[idx0 + 1].index : hooksBody.length
+    })()
+    const errBodies = refs.map((r) => bridgeBodies[r]).filter(Boolean)
+    const errCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    if (errCodes.length) {
+      lines.push('## 错误码')
+      lines.push('')
+      lines.push('| code | 说明 |')
+      lines.push('|---|---|')
+      for (const e of errCodes) lines.push(`| \`${e.code}\` | ${e.message} |`)
+      lines.push('')
+      lines.push('> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。')
+      lines.push('')
+    }
+    // ★兼容进度（uni-app 式全端对照）：端列/状态 = ENDS 注册表；Web 列 ✅/⚠️ 由 webBridge 实际方法集推导
     const wxMissing = refs.filter((r) => !wxKeys.has(r))
     const webMissing = refs.filter((r) => !webKeys.has(r))
     const capRows = []

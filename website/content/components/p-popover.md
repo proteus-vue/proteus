@@ -31,11 +31,11 @@ order: 2007
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | 显隐（v-model） | `Boolean` | `false` |
-| `trigger` | 触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click） | `String` | `'click'` |
-| `placement` | 位置：top / bottom / left / right | `String` | `'bottom'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 显隐（v-model） | `Boolean` | `false` | 否 |
+| `trigger` | 触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click） | `String` | `'click'` | 否 |
+| `placement` | 位置：top / bottom / left / right | `String` | `'bottom'` | 否 |
 
 ## 实现要点
 

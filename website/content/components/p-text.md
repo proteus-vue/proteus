@@ -31,12 +31,12 @@ order: 1023
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `selectable` | — | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `selectable` | 是否可选中文本 | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

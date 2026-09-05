@@ -31,11 +31,11 @@ order: 2006
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `title` | 页面标题（导航栏/文档标题语义声明） | `String` | `''` |
-| `statusBar` | 沉浸式状态栏（内容延伸至状态栏区域） | `Boolean` | `false` |
-| `pullRefresh` | 下拉刷新（页面级滚动接入批次使用） | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `title` | 页面标题（导航栏/文档标题语义声明） | `String` | `''` | 否 |
+| `statusBar` | 沉浸式状态栏（内容延伸至状态栏区域） | `Boolean` | `false` | 否 |
+| `pullRefresh` | 下拉刷新（页面级滚动接入批次使用） | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

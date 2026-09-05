@@ -16,6 +16,39 @@ useLogin：登录（wx.login → code / 接入第三方 provider）
 useLogin(provider?: string): Promise<CapResult<LoginResult>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `provider` | `string` | 否 | 服务提供方标识（wechat / web / 宿主自定义） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `LoginResult` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`LoginResult`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `provider` | `string` | 是 | 登录渠道（wechat / host-provider …） |
+| `code` | `string` | 否 | 登录凭证（wx code，服务端换 session 用） |
+| `token` | `string` | 否 | 令牌（第三方 provider 直接下发 token 时） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `login.unsupported` | 桥未提供 login（useLogin 不可用） |
+| `login.failed` | wx.login 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

@@ -31,11 +31,11 @@ order: 1015
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `value` | 本项值 | `[String, Number]` | `''` |
-| `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` |
-| `disabled` | 禁用 | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `value` | 本项值 | `[String, Number]` | `''` | 否 |
+| `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` | 否 |
+| `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

@@ -31,12 +31,12 @@ order: 1021
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `path` | SVG path d 数据（无 fill 语义——随 currentColor） | `String` | `''` |
-| `viewbox` | 视盒 "x y w h"（缺省 0 0 24 24） | `String` | `'0 0 24 24'` |
-| `size` | 尺寸 px | `Number` | `24` |
-| `color` | 颜色 | `String` | `'currentColor'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `path` | SVG path d 数据（无 fill 语义——随 currentColor） | `String` | `''` | 否 |
+| `viewbox` | 视盒 "x y w h"（缺省 0 0 24 24） | `String` | `'0 0 24 24'` | 否 |
+| `size` | 尺寸 px | `Number` | `24` | 否 |
+| `color` | 颜色 | `String` | `'currentColor'` | 否 |
 
 ## 实现要点
 

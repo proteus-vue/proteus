@@ -31,14 +31,17 @@ order: 3001
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `ghost` | 拖拽拖影（半透明跟随） | `Boolean` | `false` |
-| `snapToGrid` | 网格吸附步长 px（0=自由拖拽） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `ghost` | 拖拽拖影（半透明跟随） | `Boolean` | `false` | 否 |
+| `snapToGrid` | 网格吸附步长 px（0=自由拖拽） | `Number` | `0` | 否 |
 
 ## Events
 
-`drag` · `drop`
+| 事件 | 说明 |
+|---|---|
+| `drag` | 拖拽中（gesture.draggable） |
+| `drop` | 拖拽释放 |
 
 ## 实现要点
 

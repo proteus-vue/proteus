@@ -16,6 +16,25 @@ useContact：联系人选择（wx.chooseContact；web 无标准 → Err 降级�
 useContact(): Promise<CapResult<Contact[]>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `Contact[]` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `contact.unsupported` | 桥未提供 chooseContact（useContact 不可用） |
+| `contact.failed` | wx.chooseContact 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

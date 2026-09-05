@@ -31,17 +31,20 @@ order: 3002
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `bounce` | 弹性滚动（iOS 橡皮筋） | `Boolean` | `false` |
-| `refresh` | 下拉刷新（语义声明——原生实现批次接入） | `Boolean` | `false` |
-| `loadMore` | 触底加载更多 | `Boolean` | `false` |
-| `loading` | 加载中（footer 文案切换） | `Boolean` | `false` |
-| `height` | 可视高度 px（0=继承/自适应） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `bounce` | 弹性滚动（iOS 橡皮筋） | `Boolean` | `false` | 否 |
+| `refresh` | 下拉刷新（语义声明——原生实现批次接入） | `Boolean` | `false` | 否 |
+| `loadMore` | 触底加载更多 | `Boolean` | `false` | 否 |
+| `loading` | 加载中（footer 文案切换） | `Boolean` | `false` | 否 |
+| `height` | 可视高度 px（0=继承/自适应） | `Number` | `0` | 否 |
 
 ## Events
 
-`load-more` · `refresh`
+| 事件 | 说明 |
+|---|---|
+| `load-more` | 加载更多（触底翻页） |
+| `refresh` | 刷新触发 |
 
 ## 实现要点
 

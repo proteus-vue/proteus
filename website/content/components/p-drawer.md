@@ -31,12 +31,12 @@ order: 2002
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | 展开状态（v-model:open） | `Boolean` | `false` |
-| `side` | 侧向：left / right | `String` | `'left'` |
-| `width` | 抽屉宽度 px | `Number` | `300` |
-| `overlay` | 遮罩（点击关闭） | `Boolean` | `true` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 展开状态（v-model:open） | `Boolean` | `false` | 否 |
+| `side` | 侧向：left / right | `String` | `'left'` | 否 |
+| `width` | 抽屉宽度 px | `Number` | `300` | 否 |
+| `overlay` | 遮罩（点击关闭） | `Boolean` | `true` | 否 |
 
 ## 实现要点
 

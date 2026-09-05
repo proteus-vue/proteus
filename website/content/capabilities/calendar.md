@@ -16,6 +16,42 @@ useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err）
 useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `event` | `CalendarEvent` | 是 | C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined） |
+
+#### `event` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `title` | `string` | 是 | 日历事件标题 |
+| `startTime` | `number` | 是 | 开始时间戳（ms） |
+| `endTime` | `number` | 否 | 结束时间戳（ms） |
+| `alarms` | `number[]` | 否 | 提前提醒（分钟） |
+| `location` | `string` | 否 | 地点 |
+| `description` | `string` | 否 | 备注/描述 |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `void` | 成功时无载荷 |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `calendar.unsupported` | 桥未提供 addCalendarEvent（useCalendar 不可用） |
+| `calendar.failed` | wx.addPhoneCalendar 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

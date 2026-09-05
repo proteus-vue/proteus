@@ -16,6 +16,48 @@ usePayment：拉起支付（wx.requestPayment 字段）
 usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `config` | `PaymentConfig` | 是 | C40 支付参数（对齐 wx.requestPayment 核心字段——服务端下单后下发） |
+
+#### `config` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `timeStamp` | `string` | 是 | 时间戳（秒级字符串，服务端生成） |
+| `nonceStr` | `string` | 是 | 随机串（服务端生成，32 字符内） |
+| `package` | `string` | 是 | 统一下单接口返回的 prepay_id（格式 paySign=...） |
+| `signType` | `string` | 否 | 签名方式（缺省 MD5/平台默认；建议 RSA） |
+| `paySign` | `string` | 是 | 签名（服务端按商户私钥计算） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `PaymentReceipt` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`PaymentReceipt`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `provider` | `string` | 是 | 支付渠道（wechat / alipay / host …由宿主桥标注） |
+| `transactionId` | `string` | 否 | 交易单号（渠道返回；不支持缺省） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `payment.unsupported` | 桥未提供 requestPayment（usePayment 不可用） |
+| `payment.failed` | wx.requestPayment 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

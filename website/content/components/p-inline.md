@@ -31,12 +31,12 @@ order: 6
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `wrap` | 允许折行（默认不折行） | `Boolean` | `false` |
-| `gap` | 元素间距 px | `Number` | `0` |
-| `justify` | 主轴对齐（flex-start/center/end/space-between/space-around） | `String` | `'flex-start'` |
-| `align` | 交叉轴对齐（flex-start/center/end/stretch） | `String` | `'center'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `wrap` | 允许折行（默认不折行） | `Boolean` | `false` | 否 |
+| `gap` | 元素间距 px | `Number` | `0` | 否 |
+| `justify` | 主轴对齐（flex-start/center/end/space-between/space-around） | `String` | `'flex-start'` | 否 |
+| `align` | 交叉轴对齐（flex-start/center/end/stretch） | `String` | `'center'` | 否 |
 
 ## 实现要点
 

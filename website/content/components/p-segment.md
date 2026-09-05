@@ -31,14 +31,16 @@ order: 2009
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `options` | 分段项 [{label,value?}?]（value 缺省=label） | `Array as () => unknown[]` | `() => []` |
-| `active` | 当前激活项 value | `[String, Number]` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `options` | 分段项 [{label,value?}?]（value 缺省=label） | `Array as () => unknown[]` | `() => []` | 否 |
+| `active` | 当前激活项 value | `[String, Number]` | `''` | 否 |
 
 ## Events
 
-`select`
+| 事件 | 说明 |
+|---|---|
+| `select` | 选中某项 |
 
 ## 实现要点
 

@@ -31,12 +31,12 @@ order: 1020
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | — | `Number` | `0` |
-| `min` | — | `Number` | `0` |
-| `max` | — | `Number` | `100` |
-| `step` | — | `Number` | `1` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约） | `Number` | `0` | 否 |
+| `min` | 最小值 | `Number` | `0` | 否 |
+| `max` | 最大值 | `Number` | `100` | 否 |
+| `step` | 步长 | `Number` | `1` | 否 |
 
 ## 实现要点
 

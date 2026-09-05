@@ -31,15 +31,18 @@ order: 2001
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | 显隐（v-model） | `Boolean` | `false` |
-| `actions` | 动作项 [{label,value?,color?}] | `Array as () => unknown[]` | `() => []` |
-| `cancelText` | 取消文案 | `String` | `'取消'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 显隐（v-model） | `Boolean` | `false` | 否 |
+| `actions` | 动作项 [{label,value?,color?}] | `Array as () => unknown[]` | `() => []` | 否 |
+| `cancelText` | 取消文案 | `String` | `'取消'` | 否 |
 
 ## Events
 
-`select` · `cancel`
+| 事件 | 说明 |
+|---|---|
+| `select` | 选中某项 |
+| `cancel` | 取消/关闭 |
 
 ## 实现要点
 

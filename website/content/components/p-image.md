@@ -31,20 +31,23 @@ order: 1008
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `src` | — | `String` | `''` |
-| `alt` | — | `String` | `''` |
-| `mode` | — | `String` | `'aspectFill' }, // aspectFill / widthFix / scaleToFill` |
-| `lazyLoad` | — | `Boolean` | `false` |
-| `placeholder` | — | `String` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `src` | 资源地址（网络/本地/临时路径） | `String` | `''` | 否 |
+| `alt` | 替代文本（图片加载失败/无障碍） | `String` | `''` | 否 |
+| `mode` | 模式/裁剪方式（各组件枚举见类型列） | `String` | `'aspectFill'` | 否 |
+| `lazyLoad` | 懒加载（进入视口才加载资源） | `Boolean` | `false` | 否 |
+| `placeholder` | 占位提示文本 | `String` | `''` | 否 |
 
 ## Events
 
-`load` · `error`
+| 事件 | 说明 |
+|---|---|
+| `load` | 加载完成 |
+| `error` | 加载/执行失败 |
 
 ## 实现要点
 

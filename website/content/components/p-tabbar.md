@@ -31,14 +31,16 @@ order: 2011
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `tabs` | 标签项数组（{key,label,badge?,icon?}） | `Array as () => unknown[]` | `() => []` |
-| `active` | 当前激活项 key | `[String, Number]` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `tabs` | 标签项数组（{key,label,badge?,icon?}） | `Array as () => unknown[]` | `() => []` | 否 |
+| `active` | 当前激活项 key | `[String, Number]` | `''` | 否 |
 
 ## Events
 
-`select`
+| 事件 | 说明 |
+|---|---|
+| `select` | 选中某项 |
 
 ## 实现要点
 

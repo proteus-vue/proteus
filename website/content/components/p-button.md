@@ -31,17 +31,19 @@ order: 1002
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `loading` | — | `Boolean` | `false` |
-| `throttle` | — | `Number` | `0 }, // 防重复点击间隔 ms（0 = 不节流）` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `loading` | 加载中状态 | `Boolean` | `false` | 否 |
+| `throttle` | 点击节流间隔（ms，防重复触发——runtime 内置） | `Number` | `0` | 否 |
 
 ## Events
 
-`click`
+| 事件 | 说明 |
+|---|---|
+| `click` | 点击/轻触（throttle 节流后触发） |
 
 ## 实现要点
 

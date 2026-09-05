@@ -31,12 +31,12 @@ order: 9
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `axis` | 滚动轴：x 水平 / y 垂直 / both | `String` | `'y'` |
-| `paging` | 翻页吸附（能力约束——B2 仅声明） | `Boolean` | `false` |
-| `refresh` | 下拉刷新（能力约束——B2 仅声明） | `Boolean` | `false` |
-| `indicator` | 滚动指示器 | `Boolean` | `true` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `axis` | 滚动轴：x 水平 / y 垂直 / both | `String` | `'y'` | 否 |
+| `paging` | 翻页吸附（能力约束——B2 仅声明） | `Boolean` | `false` | 否 |
+| `refresh` | 下拉刷新（能力约束——B2 仅声明） | `Boolean` | `false` | 否 |
+| `indicator` | 滚动指示器 | `Boolean` | `true` | 否 |
 
 ## 实现要点
 

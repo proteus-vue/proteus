@@ -31,17 +31,17 @@ order: 1010
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `items` | — | `Array as any` | `() => []` |
-| `itemHeight` | — | `Number` | `44` |
-| `height` | — | `Number` | `400` |
-| `bufferSize` | — | `Number` | `2 }, // 可视区外缓冲行数（平滑滚动的提前量）` |
-| `virtual` | — | `Boolean` | `true }, // 虚拟开关（false = 全量渲染，小列表省组件切片开销）` |
-| `lazy` | — | `Boolean` | `false }, // 懒挂载：首屏不渲染，首次滚动才计算` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `items` | 数据项数组 | `Array as any` | `() => []` | 否 |
+| `itemHeight` | 单项高度（px，虚拟窗口计算基准） | `Number` | `44` | 否 |
+| `height` | 高度（px） | `Number` | `400` | 否 |
+| `bufferSize` | 可视区外缓冲行数（平滑滚动的提前量） | `Number` | `2` | 否 |
+| `virtual` | 虚拟化开关（false = 全量渲染，小列表省切片开销） | `Boolean` | `true` | 否 |
+| `lazy` | 懒挂载（首屏不渲染，首次滚动/可见才渲染） | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

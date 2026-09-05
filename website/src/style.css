@@ -98,7 +98,14 @@ body {
 .doc-body h2 { color: var(--ink); font-size: 20px; margin: 28px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .doc-body h3 { color: var(--ink); font-size: 16px; margin: 22px 0 8px; }
 .doc-body p { color: var(--muted); margin: 10px 0; }
-.doc-body a { color: var(--brand2); }
+.doc-body a {
+  color: var(--brand2);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.doc-body a:hover { color: var(--brand); border-bottom-color: var(--brand); }
 .doc-body strong { color: var(--ink); }
 .doc-body ul, .doc-body ol { color: var(--muted); padding-left: 22px; }
 .doc-body li { margin: 4px 0; }
@@ -135,10 +142,21 @@ body {
   background: var(--panel);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
-.doc-body table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
-.doc-body th, .doc-body td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+.doc-body table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+.doc-body th, .doc-body td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; }
 .doc-body th { color: var(--ink); background: var(--panel2); }
 .doc-body td { color: var(--muted); }
+/* ★#406 表格内链接：去默认下划线 + 放大到正文可读字号（总览表/兼容表的组件链是主入口） */
+.doc-body td a,
+.doc-body th a {
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: none;
+  color: var(--brand2);
+}
+.doc-body td a:hover,
+.doc-body th a:hover { color: var(--brand); border-bottom: 1px solid var(--brand); }
 .doc-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 .doc-body h2[id], .doc-body h3[id] { scroll-margin-top: calc(var(--nav-h) + 24px); }
 /* ★#383：v-html 宽内容（表格/pre）横向滚动收敛在自身，不撑破页面 */

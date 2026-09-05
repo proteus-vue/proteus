@@ -16,6 +16,26 @@ order: 1007
 useDevice(): Promise<CapResult<CapDeviceInfo>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `CapDeviceInfo` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`CapDeviceInfo`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `platform` | `string` | 是 | 平台标识（ios / android / devtools / desktop …） |
+| `model` | `string` | 是 | 设备型号（如 iPhone 15 Pro） |
+| `os` | `string` | 是 | 操作系统名（iOS / Android / Windows / macOS） |
+| `version` | `string` | 是 | 系统版本号（如 17.4） |
+| `browser` | `string` | 否 | 浏览器/容器名（web 端有；MP 缺省） |
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

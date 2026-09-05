@@ -31,11 +31,11 @@ order: 15
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `items` | 列表数据（渲染 item 数组） | `Array as () => unknown[]` | `() => []` |
-| `itemHeight` | 固定行高 px（虚拟化前提） | `Number` | `44` |
-| `height` | 可视区高度 px | `Number` | `400` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `items` | 列表数据（渲染 item 数组） | `Array as () => unknown[]` | `() => []` | 否 |
+| `itemHeight` | 固定行高 px（虚拟化前提） | `Number` | `44` | 否 |
+| `height` | 可视区高度 px | `Number` | `400` | 否 |
 
 ## 实现要点
 

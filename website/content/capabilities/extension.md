@@ -16,6 +16,30 @@ useExtension：扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺�
 useExtension(extensionId: string): Promise<CapResult<unknown>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `extensionId` | `string` | 是 | 扩展/插件 ID（G-21 扩展点登记名） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `unknown` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `extension.unsupported` | 桥未提供 loadExtension（useExtension 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

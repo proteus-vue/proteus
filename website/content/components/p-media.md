@@ -31,17 +31,17 @@ order: 1012
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `kind` | 媒体类型：image / video / audio / live | `String` | `'image'` |
-| `src` | 资源地址 | `String` | `''` |
-| `poster` | 封面（video/live） | `String` | `''` |
-| `controls` | 显示控制条 | `Boolean` | `true` |
-| `autoplay` | 自动播放 | `Boolean` | `false` |
-| `loop` | 循环 | `Boolean` | `false` |
-| `muted` | 静音 | `Boolean` | `false` |
-| `width` | 宽 px（0=自适应） | `Number` | `0` |
-| `height` | 高 px（0=自适应） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `kind` | 媒体类型：image / video / audio / live | `String` | `'image'` | 否 |
+| `src` | 资源地址 | `String` | `''` | 否 |
+| `poster` | 封面（video/live） | `String` | `''` | 否 |
+| `controls` | 显示控制条 | `Boolean` | `true` | 否 |
+| `autoplay` | 自动播放 | `Boolean` | `false` | 否 |
+| `loop` | 循环 | `Boolean` | `false` | 否 |
+| `muted` | 静音 | `Boolean` | `false` | 否 |
+| `width` | 宽 px（0=自适应） | `Number` | `0` | 否 |
+| `height` | 高 px（0=自适应） | `Number` | `0` | 否 |
 
 ## 实现要点
 

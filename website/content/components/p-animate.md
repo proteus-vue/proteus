@@ -31,12 +31,12 @@ order: 4001
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `keyframes` | 动画预设名（fade/bounce/pulse/shake/zoom-in/spin） | `String` | `'fade'` |
-| `duration` | 动画时长（ms） | `Number` | `600` |
-| `loop` | 循环播放（缺省 true——装饰动画；false 播一次） | `Boolean` | `true` |
-| `delay` | 延迟（ms） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `keyframes` | 动画预设名（fade/bounce/pulse/shake/zoom-in/spin） | `String` | `'fade'` | 否 |
+| `duration` | 动画时长（ms） | `Number` | `600` | 否 |
+| `loop` | 循环播放（缺省 true——装饰动画；false 播一次） | `Boolean` | `true` | 否 |
+| `delay` | 延迟（ms） | `Number` | `0` | 否 |
 
 ## 实现要点
 

@@ -16,6 +16,23 @@ order: 1004
 useNetwork(): Promise<CapResult<NetworkType>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `NetworkType` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`NetworkType`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `online` | `boolean` | 是 | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
+| `type` | `'unknown' | 'wifi' | 'cellular' | 'none'` | 是 | 网络类型（web 无细分 → unknown；离线 → none） |
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

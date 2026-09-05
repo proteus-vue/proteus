@@ -31,11 +31,11 @@ order: 1017
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `level` | 字号级别：0 小 / 1 标准 / 2 大 / 3 特大（无障碍档位） | `Number` | `1` |
-| `density` | 密度：compact（紧凑）/ regular / comfortable（宽松无障碍） | `String` | `'regular'` |
-| `baseSize` | 基准字号（px）——子项用 em 继承即随缩放 | `Number` | `16` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `level` | 字号级别：0 小 / 1 标准 / 2 大 / 3 特大（无障碍档位） | `Number` | `1` | 否 |
+| `density` | 密度：compact（紧凑）/ regular / comfortable（宽松无障碍） | `String` | `'regular'` | 否 |
+| `baseSize` | 基准字号（px）——子项用 em 继承即随缩放 | `Number` | `16` | 否 |
 
 ## 实现要点
 

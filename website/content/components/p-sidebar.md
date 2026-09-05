@@ -31,12 +31,12 @@ order: 11
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `minSidebarWidth` | 容器宽度达到此值 → side-rail 侧栏；窄于此 → collapsed 折叠（px） | `Number` | `640` |
-| `navWidth` | side-rail 模式导航栏宽度（px） | `Number` | `200` |
-| `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` |
-| `toggleLabel` | ★collapsed 模式切换条文案（#384） | `String` | `'导航'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `minSidebarWidth` | 容器宽度达到此值 → side-rail 侧栏；窄于此 → collapsed 折叠（px） | `Number` | `640` | 否 |
+| `navWidth` | side-rail 模式导航栏宽度（px） | `Number` | `200` | 否 |
+| `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` | 否 |
+| `toggleLabel` | ★collapsed 模式切换条文案（#384） | `String` | `'导航'` | 否 |
 
 ## 实现要点
 

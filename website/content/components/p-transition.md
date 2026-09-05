@@ -31,12 +31,12 @@ order: 4004
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `name` | 过渡预设名（fade/slide-up/slide-down/slide-left/slide-right/zoom） | `String` | `'fade'` |
-| `mode` | 过渡方向：in（仅进入）/ out（仅退出）/ both（双向） | `String` | `'both'` |
-| `duration` | 过渡时长（ms） | `Number` | `300` |
-| `visible` | 显隐开关（父级控制） | `Boolean` | `true` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `name` | 过渡预设名（fade/slide-up/slide-down/slide-left/slide-right/zoom） | `String` | `'fade'` | 否 |
+| `mode` | 过渡方向：in（仅进入）/ out（仅退出）/ both（双向） | `String` | `'both'` | 否 |
+| `duration` | 过渡时长（ms） | `Number` | `300` | 否 |
+| `visible` | 显隐开关（父级控制） | `Boolean` | `true` | 否 |
 
 ## 实现要点
 

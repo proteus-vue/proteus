@@ -16,6 +16,17 @@ useAuth：认证状态组合（token 托管 + 登录/登出 + 订阅）——业
 useAuth(): AuthState
 ```
 
+## 返回值
+
+返回 `AuthState`（同步句柄/状态对象）。
+
+#### `AuthState` 的属性
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `token` | `string | null` | 当前令牌（未登录 null；响应式——UI 直接绑定） |
+| `isAuthenticated` | `boolean` | 是否已登录（token 非空即真） |
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

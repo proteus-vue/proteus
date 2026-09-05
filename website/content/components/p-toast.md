@@ -31,19 +31,21 @@ order: 2012
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `visible` | — | `Boolean` | `false` |
-| `text` | — | `String` | `''` |
-| `duration` | — | `Number` | `2000 }, // ms，0 = 不自动关` |
-| `position` | — | `String` | `'center' }, // center / top / bottom` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `visible` | 是否可见（显隐由响应式数据驱动，零平台分支） | `Boolean` | `false` | 否 |
+| `text` | 显示文本 | `String` | `''` | 否 |
+| `duration` | 持续时间（ms） | `Number` | `2000` | 否 |
+| `position` | 位置/方位 | `String` | `'center'` | 否 |
 
 ## Events
 
-`close`
+| 事件 | 说明 |
+|---|---|
+| `close` | 关闭 |
 
 ## 实现要点
 

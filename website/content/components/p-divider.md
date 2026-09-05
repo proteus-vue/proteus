@@ -31,11 +31,11 @@ order: 3
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `orientation` | 方向：horizontal 水平 / vertical 垂直 | `String` | `'horizontal'` |
-| `inset` | 内缩距离 px（水平=上下外边距；垂直=左右外边距） | `Number` | `0` |
-| `color` | 线色（缺省随主题变量） | `String` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `orientation` | 方向：horizontal 水平 / vertical 垂直 | `String` | `'horizontal'` | 否 |
+| `inset` | 内缩距离 px（水平=上下外边距；垂直=左右外边距） | `Number` | `0` | 否 |
+| `color` | 线色（缺省随主题变量） | `String` | `''` | 否 |
 
 ## 实现要点
 

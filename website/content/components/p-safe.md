@@ -31,11 +31,11 @@ order: 8
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `area` | 避让方向：top / bottom / left / right / horizontal / all（默认 top） | `String` | `'top'` |
-| `fold` | 折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭） | `Boolean` | `false` |
-| `fallback` | 兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `area` | 避让方向：top / bottom / left / right / horizontal / all（默认 top） | `String` | `'top'` | 否 |
+| `fold` | 折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭） | `Boolean` | `false` | 否 |
+| `fallback` | 兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底） | `Number` | `0` | 否 |
 
 ## 实现要点
 

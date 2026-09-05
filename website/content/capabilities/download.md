@@ -16,6 +16,49 @@ useDownload：下载文件（wx.downloadFile / web fetch blob）
 useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallback): Promise<CapResult<DownloadResult>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `url` | `string` | 是 | 目标 URL（HTTPS） |
+| `options` | `DownloadOptions` | 否 | C30 下载选项 |
+| `onProgress` | `ProgressCallback` | 否 | 进度回调（0-100；可省） |
+
+#### `options` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `headers` | `Record<string, string>` | 否 | 自定义请求头 |
+| `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
+| `responseType` | `'blob' | 'path' | 'text' | 'json'` | 否 | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `DownloadResult` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`DownloadResult`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `status` | `number` | 是 | HTTP 状态码 |
+| `data` | `unknown` | 是 | 响应体（形态由 responseType 决定） |
+| `path` | `string` | 否 | wx tempFilePath（responseType=path） |
+| `progress` | `number` | 否 | 进度（0-100） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `download.unsupported` | 桥未提供 download（useDownload 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

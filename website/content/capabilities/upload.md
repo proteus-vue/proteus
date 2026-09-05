@@ -16,6 +16,51 @@ useUpload：上传文件（wx.uploadFile / web fetch FormData）
 useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapResult<UploadResult>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `UploadOptions` | 是 | C29 上传选项（wx.uploadFile / web fetch FormData） |
+| `onProgress` | `ProgressCallback` | 否 | 进度回调（0-100；可省） |
+
+#### `options` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `url` | `string` | 是 | 上传目标 URL（HTTPS） |
+| `filePath` | `string` | 否 | wx 临时文件路径（wx.chooseMedia/chooseImage 等产出） |
+| `file` | `Blob` | 否 | web 文件对象 |
+| `name` | `string` | 否 | 表单字段名（缺省 'file'） |
+| `formData` | `Record<string, string>` | 否 | 附加表单字段 |
+| `headers` | `Record<string, string>` | 否 | 自定义请求头 |
+| `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `UploadResult` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`UploadResult`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `status` | `number` | 是 | HTTP 状态码 |
+| `data` | `unknown` | 是 | 响应体（文本/JSON 由服务端决定） |
+| `progress` | `number` | 否 | 进度（0-100，若平台支持 onProgressUpdate） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `upload.unsupported` | 桥未提供 upload（useUpload 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

@@ -31,12 +31,12 @@ order: 1014
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `mode` | 模式：date / time / region | `String` | `'date'` |
-| `modelValue` | 值（date=YYYY-MM-DD；time=HH:mm；region=经纬度/文本） | `String` | `''` |
-| `min` | 最小值边界（date/time 原生 min） | `String` | `''` |
-| `max` | 最大值边界 | `String` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `mode` | 模式：date / time / region | `String` | `'date'` | 否 |
+| `modelValue` | 值（date=YYYY-MM-DD；time=HH:mm；region=经纬度/文本） | `String` | `''` | 否 |
+| `min` | 最小值边界（date/time 原生 min） | `String` | `''` | 否 |
+| `max` | 最大值边界 | `String` | `''` | 否 |
 
 ## 实现要点
 

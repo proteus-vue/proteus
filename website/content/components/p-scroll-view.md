@@ -31,21 +31,25 @@ order: 10
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `scrollX` | — | `Boolean` | `false` |
-| `scrollY` | — | `Boolean` | `true` |
-| `scrollTop` | — | `Number` | `0` |
-| `scrollLeft` | — | `Number` | `0` |
-| `refresherEnabled` | — | `Boolean` | `false` |
-| `lowerThreshold` | — | `Number` | `50` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `scrollX` | 允许横向滚动 | `Boolean` | `false` | 否 |
+| `scrollY` | 允许纵向滚动 | `Boolean` | `true` | 否 |
+| `scrollTop` | 纵向滚动位置（px） | `Number` | `0` | 否 |
+| `scrollLeft` | 横向滚动位置（px） | `Number` | `0` | 否 |
+| `refresherEnabled` | 启用自定义下拉刷新 | `Boolean` | `false` | 否 |
+| `lowerThreshold` | 距底部多少 px 触发 scrolltolower 事件 | `Number` | `50` | 否 |
 
 ## Events
 
-`scroll` · `scrolltolower` · `refresherrefresh`
+| 事件 | 说明 |
+|---|---|
+| `scroll` | 滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop） |
+| `scrolltolower` | 滚动到底部（lowerThreshold 触发） |
+| `refresherrefresh` | 自定义下拉刷新触发 |
 
 ## 实现要点
 

@@ -31,14 +31,16 @@ order: 1
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modes` | 形态区间表达式：`sheet(0, 600) | dialog(600, 840) | popover(840, ∞)` | `String` | `''` |
-| `visible` | 形态层是否渲染（false → 不渲染） | `Boolean` | `true` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modes` | 形态区间表达式：`sheet(0, 600) | dialog(600, 840) | popover(840, ∞)` | `String` | `''` | 否 |
+| `visible` | 形态层是否渲染（false → 不渲染） | `Boolean` | `true` | 否 |
 
 ## Events
 
-`formChange`
+| 事件 | 说明 |
+|---|---|
+| `formChange` | 表单项变化 |
 
 ## 实现要点
 

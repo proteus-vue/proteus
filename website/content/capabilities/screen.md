@@ -16,6 +16,33 @@ order: 1006
 useScreen(): Promise<CapResult<ScreenInfo>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `ScreenInfo` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`ScreenInfo`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `width` | `number` | 是 | 屏幕宽度（px，CSS 像素） |
+| `height` | `number` | 是 | 屏幕高度（px，CSS 像素） |
+| `dpr` | `number` | 是 | 设备像素比（物理像素 / CSS 像素） |
+| `orientation` | `'portrait' | 'landscape'` | 是 | 当前方向 |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `screen.unsupported` | window.screen 不存在（SSR） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

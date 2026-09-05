@@ -16,6 +16,31 @@ useMap：地图上下文句柄（wx.createMapContext / web 宿主集成；无 �
 useMap(id: string): Promise<CapResult<MapController>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | `string` | 是 | 地图实例 ID（多地图场景区分） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `MapController` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `map.unsupported` | 桥未提供 createMap（useMap 不可用） |
+| `map.failed` | wx 地图区域获取失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

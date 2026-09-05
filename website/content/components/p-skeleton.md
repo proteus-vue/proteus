@@ -31,14 +31,14 @@ order: 1019
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `visible` | — | `Boolean` | `true` |
-| `avatar` | — | `Boolean` | `false` |
-| `lines` | — | `Array as any` | `() => [90, 70, 80]` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `visible` | 是否可见（显隐由响应式数据驱动，零平台分支） | `Boolean` | `true` | 否 |
+| `avatar` | 是否头部头像形状（骨架屏） | `Boolean` | `false` | 否 |
+| `lines` | 行数（骨架屏占位行数） | `Array as any` | `() => [90, 70, 80]` | 否 |
 
 ## 实现要点
 

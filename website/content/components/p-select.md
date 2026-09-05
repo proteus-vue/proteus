@@ -31,14 +31,14 @@ order: 1018
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `options` | 选项 [{value,label}?] | `Array as () => unknown[]` | `() => []` |
-| `modelValue` | 单选值 或 多选值数组 | `[String, Number, Array]` | `''` |
-| `multiple` | 多选模式 | `Boolean` | `false` |
-| `placeholder` | 占位文本 | `String` | `'请选择'` |
-| `searchable` | 搜索（B2 占位声明——后续批次实现） | `Boolean` | `false` |
-| `cascader` | 级联（B2 占位声明——后续批次实现） | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `options` | 选项 [{value,label}?] | `Array as () => unknown[]` | `() => []` | 否 |
+| `modelValue` | 单选值 或 多选值数组 | `[String, Number, Array]` | `''` | 否 |
+| `multiple` | 多选模式 | `Boolean` | `false` | 否 |
+| `placeholder` | 占位文本 | `String` | `'请选择'` | 否 |
+| `searchable` | 搜索（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
+| `cascader` | 级联（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

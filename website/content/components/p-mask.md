@@ -31,18 +31,20 @@ order: 2003
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `visible` | — | `Boolean` | `false` |
-| `opacity` | — | `Number` | `0.5` |
-| `closeOnTap` | — | `Boolean` | `true` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `visible` | 是否可见（显隐由响应式数据驱动，零平台分支） | `Boolean` | `false` | 否 |
+| `opacity` | 透明度（0-1） | `Number` | `0.5` | 否 |
+| `closeOnTap` | 点击后是否自动关闭 | `Boolean` | `true` | 否 |
 
 ## Events
 
-`close`
+| 事件 | 说明 |
+|---|---|
+| `close` | 关闭 |
 
 ## 实现要点
 

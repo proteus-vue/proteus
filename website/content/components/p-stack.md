@@ -31,11 +31,11 @@ order: 13
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `direction` | 主轴方向：row（横向）/ column（纵向） | `String` | `'column'` |
-| `wrap` | 空间不足自动换行（仅 row） | `Boolean` | `false` |
-| `gap` | 子项间距（px） | `Number` | `0` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `direction` | 主轴方向：row（横向）/ column（纵向） | `String` | `'column'` | 否 |
+| `wrap` | 空间不足自动换行（仅 row） | `Boolean` | `false` | 否 |
+| `gap` | 子项间距（px） | `Number` | `0` | 否 |
 
 ## 实现要点
 

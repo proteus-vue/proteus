@@ -16,6 +16,35 @@ order: 3001
 useLocation(): Promise<CapResult<Coords>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `Coords` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`Coords`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `latitude` | `number` | 是 | 纬度（WGS84，浮点度数） |
+| `longitude` | `number` | 是 | 经度（WGS84，浮点度数） |
+| `accuracy` | `number` | 否 | 定位精度（米，半径；越小越准） |
+| `altitude` | `number` | 否 | 海拔（米；平台不支持时缺省） |
+| `speed` | `number` | 否 | 速度（米/秒；平台不支持时缺省） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `location.unsupported` | geolocation 不支持 |
+| `location.failed` | geolocation 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

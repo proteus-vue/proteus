@@ -16,6 +16,39 @@ useArchive：压缩文件（wx.compressFile；web → Err）
 useArchive(options: ArchiveOptions): Promise<CapResult<void>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `ArchiveOptions` | 是 | C44 压缩选项（wx.compressFile / web 无标准 → 降级 undefined） |
+
+#### `options` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `src` | `string` | 是 | 源文件路径 |
+| `dest` | `string` | 否 | 目标路径（缺省同目录） |
+| `quality` | `number` | 否 | 图片压缩质量 0-100（wx 支持） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `void` | 成功时无载荷 |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `archive.unsupported` | 桥未提供 compressFile（useArchive 不可用） |
+| `archive.failed` | wx.compressFile 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

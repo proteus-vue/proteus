@@ -16,6 +16,38 @@ order: 6002
 useShare(options: ShareOptions): Promise<CapResult<void>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `ShareOptions` | 是 | 选项对象（字段见下表） |
+
+#### `options` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `title` | `string` | 否 | 分享标题 |
+| `text` | `string` | 否 | 分享文本（Web navigator.share 用；MP 缺省） |
+| `url` | `string` | 否 | 分享链接（web 必传 HTTPS URL） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `void` | 成功时无载荷 |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `share.unsupported` | navigator.share 不支持（需 HTTPS + 用户手势） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

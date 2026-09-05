@@ -31,11 +31,11 @@ order: 1004
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | 选中态（受控 v-model） | `Boolean` | `false` |
-| `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` |
-| `disabled` | 禁用 | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 选中态（受控 v-model） | `Boolean` | `false` | 否 |
+| `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` | 否 |
+| `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

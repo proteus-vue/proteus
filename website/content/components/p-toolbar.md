@@ -31,16 +31,18 @@ order: 2013
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `items` | 导航项（{ key, label }） | `Array` | `() => []` |
-| `itemWidth` | 单导航项宽度（px；溢出计算用） | `Number` | `80` |
-| `moreWidth` | 「更多」按钮宽度（px） | `Number` | `48` |
-| `moreLabel` | 「更多」文案 | `String` | `'更多'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `items` | 导航项（{ key, label }） | `Array` | `() => []` | 否 |
+| `itemWidth` | 单导航项宽度（px；溢出计算用） | `Number` | `80` | 否 |
+| `moreWidth` | 「更多」按钮宽度（px） | `Number` | `48` | 否 |
+| `moreLabel` | 「更多」文案 | `String` | `'更多'` | 否 |
 
 ## Events
 
-`select`
+| 事件 | 说明 |
+|---|---|
+| `select` | 选中某项 |
 
 ## 实现要点
 

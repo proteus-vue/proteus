@@ -16,6 +16,37 @@ useLive：直播房间（wx live 组件形态/宿主桥——缺省 Err）
 useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `LiveRoomOptions` | 是 | C49 直播房间（wx live 组件形态/宿主桥——缺省 Err） |
+
+#### `options` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `roomId` | `string` | 是 | 直播间 ID |
+| `mode` | `'video' | 'audio'` | 否 | 拉流模式 |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `LiveRoomHandle` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `live.unsupported` | 桥未提供 joinLiveRoom（useLive 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

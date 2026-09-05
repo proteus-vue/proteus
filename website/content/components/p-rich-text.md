@@ -31,10 +31,10 @@ order: 1016
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `source` | HTML/markdown 源 | `String` | `''` |
-| `schema` | 渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化） | `String` | `'html'` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `source` | HTML/markdown 源 | `String` | `''` | 否 |
+| `schema` | 渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化） | `String` | `'html'` | 否 |
 
 ## 实现要点
 

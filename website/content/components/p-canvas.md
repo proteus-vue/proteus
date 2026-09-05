@@ -31,12 +31,12 @@ order: 1003
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `engine` | 渲染引擎：2d / webgl / skia | `String` | `'2d'` |
-| `width` | CSS 宽 px（0=自适应） | `Number` | `300` |
-| `height` | CSS 高 px（0=自适应） | `Number` | `150` |
-| `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `engine` | 渲染引擎：2d / webgl / skia | `String` | `'2d'` | 否 |
+| `width` | CSS 宽 px（0=自适应） | `Number` | `300` | 否 |
+| `height` | CSS 高 px（0=自适应） | `Number` | `150` | 否 |
+| `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` | 否 |
 
 ## 实现要点
 

@@ -31,12 +31,12 @@ order: 1007
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `name` | 图标名（内置字形表；未知 → '?'） | `String` | `'info'` |
-| `size` | 尺寸 px | `Number` | `16` |
-| `color` | 颜色 | `String` | `'currentColor'` |
-| `spin` | 旋转动画 | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `name` | 图标名（内置字形表；未知 → '?'） | `String` | `'info'` | 否 |
+| `size` | 尺寸 px | `Number` | `16` | 否 |
+| `color` | 颜色 | `String` | `'currentColor'` | 否 |
+| `spin` | 旋转动画 | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

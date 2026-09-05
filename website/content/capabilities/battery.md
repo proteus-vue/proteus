@@ -16,6 +16,34 @@ order: 1003
 useBattery(): Promise<CapResult<BatteryInfo>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `BatteryInfo` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`BatteryInfo`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `level` | `number` | 是 | 电量（0-1，浮点） |
+| `charging` | `boolean` | 是 | 是否充电中 |
+| `chargingTime` | `number` | 否 | 充满所需秒数（充电中才有；不支持缺省） |
+| `dischargingTime` | `number` | 否 | 剩余可用秒数（放电中才有；不支持缺省） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `battery.unsupported` | navigator.getBattery 不支持 |
+| `battery.failed` | getBattery 返回空 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

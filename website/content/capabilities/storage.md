@@ -16,6 +16,18 @@ useStorage：存储句柄（响应式增强见 createReactiveStorage）
 useStorage(): CompatStorage
 ```
 
+## 返回值
+
+返回 `CompatStorage`（同步句柄/状态对象）。
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `storage.unsupported` | 桥未提供 getStorage（useStorage 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

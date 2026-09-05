@@ -16,6 +16,23 @@ order: 1008
 useOrientation(): Promise<CapResult<OrientationInfo>>
 ```
 
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `OrientationInfo` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`OrientationInfo`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `'portrait' | 'landscape'` | 是 | 屏幕方向 |
+| `angle` | `number` | 是 | 旋转角度（0/90/180/-90 度） |
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

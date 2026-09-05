@@ -31,10 +31,10 @@ order: 1022
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `modelValue` | — | `Boolean` | `false` |
-| `loading` | 加载中（禁切换） | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `modelValue` | 双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约） | `Boolean` | `false` | 否 |
+| `loading` | 加载中（禁切换） | `Boolean` | `false` | 否 |
 
 ## 实现要点
 

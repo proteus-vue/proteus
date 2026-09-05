@@ -31,19 +31,24 @@ order: 1024
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `pid` | — | `String` | `''` |
-| `disabled` | — | `Boolean` | `false` |
-| `ariaLabel` | — | `String` | `''` |
-| `value` | — | `String` | `''` |
-| `maxlength` | — | `Number` | `-1 }, // ≤0 = 不限` |
-| `placeholder` | — | `String` | `''` |
-| `focus` | — | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `value` | 绑定值 | `String` | `''` | 否 |
+| `maxlength` | 最大输入长度（≤ 0 = 不限） | `Number` | `-1` | 否 |
+| `placeholder` | 占位提示文本 | `String` | `''` | 否 |
+| `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
 
 ## Events
 
-`input` · `confirm` · `focus` · `blur`
+| 事件 | 说明 |
+|---|---|
+| `input` | 输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约） |
+| `confirm` | 键盘确认（回车/完成键） |
+| `focus` | 获得焦点 |
+| `blur` | 失去焦点 |
 
 ## 实现要点
 

@@ -31,15 +31,17 @@ order: 4003
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `to` | 导航目标（路由名或路径）——createRouterEngineering.push({ name: to | path: to }) | `String` | `''` |
-| `replace` | 替换当前页（E12 语义——push({...to, replace:true})） | `Boolean` | `false` |
-| `switchTab` | 切 Tab 页（E14 语义——push({...to, switchTab:true})） | `Boolean` | `false` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `to` | 导航目标（路由名或路径）——createRouterEngineering.push({ name: to | path: to }) | `String` | `''` | 否 |
+| `replace` | 替换当前页（E12 语义——push({...to, replace:true})） | `Boolean` | `false` | 否 |
+| `switchTab` | 切 Tab 页（E14 语义——push({...to, switchTab:true})） | `Boolean` | `false` | 否 |
 
 ## Events
 
-`navigate`
+| 事件 | 说明 |
+|---|---|
+| `navigate` | — |
 
 ## 实现要点
 

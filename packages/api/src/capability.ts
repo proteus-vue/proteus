@@ -36,53 +36,80 @@ export function capErr<T = never>(code: string, message: string, cause?: unknown
 // —— 能力类型（对齐 G-32 §7 返回类型列） ——
 
 export interface Coords {
+  /** 纬度（WGS84，浮点度数） */
   latitude: number
+  /** 经度（WGS84，浮点度数） */
   longitude: number
+  /** 定位精度（米，半径；越小越准） */
   accuracy?: number
+  /** 海拔（米；平台不支持时缺省） */
   altitude?: number
+  /** 速度（米/秒；平台不支持时缺省） */
   speed?: number
 }
 
 export interface NetworkType {
+  /** 是否联网（navigator.onLine / wx.getNetworkType 归一） */
   online: boolean
+  /** 网络类型（web 无细分 → unknown；离线 → none） */
   type: 'unknown' | 'wifi' | 'cellular' | 'none'
 }
 
 export interface BatteryInfo {
-  level: number // 0-1
+  /** 电量（0-1，浮点） */
+  level: number
+  /** 是否充电中 */
   charging: boolean
+  /** 充满所需秒数（充电中才有；不支持缺省） */
   chargingTime?: number
+  /** 剩余可用秒数（放电中才有；不支持缺省） */
   dischargingTime?: number
 }
 
 export interface CapDeviceInfo {
+  /** 平台标识（ios / android / devtools / desktop …） */
   platform: string
+  /** 设备型号（如 iPhone 15 Pro） */
   model: string
+  /** 操作系统名（iOS / Android / Windows / macOS） */
   os: string
+  /** 系统版本号（如 17.4） */
   version: string
+  /** 浏览器/容器名（web 端有；MP 缺省） */
   browser?: string
 }
 
 export interface ScreenInfo {
+  /** 屏幕宽度（px，CSS 像素） */
   width: number
+  /** 屏幕高度（px，CSS 像素） */
   height: number
+  /** 设备像素比（物理像素 / CSS 像素） */
   dpr: number
+  /** 当前方向 */
   orientation: 'portrait' | 'landscape'
 }
 
 export interface ShareOptions {
+  /** 分享标题 */
   title?: string
+  /** 分享文本（Web navigator.share 用；MP 缺省） */
   text?: string
+  /** 分享链接（web 必传 HTTPS URL） */
   url?: string
 }
 
 export interface PermissionState {
+  /** 权限名（web Permissions API 名，如 geolocation / camera） */
   permission: string
+  /** 授权状态（prompt = 未询问） */
   state: 'granted' | 'denied' | 'prompt'
 }
 
 export interface OrientationInfo {
+  /** 屏幕方向 */
   type: 'portrait' | 'landscape'
+  /** 旋转角度（0/90/180/-90 度） */
   angle: number
 }
 
@@ -93,40 +120,57 @@ export type SensorKind = 'accelerometer' | 'compass' | 'gyroscope'
 
 /** C5 传感器采样（一次性读取当前值；compass 带 heading） */
 export interface SensorSample {
+  /** 传感器类型（回显请求的 kind） */
   kind: SensorKind
+  /** X 轴加速度/分量（accelerometer/gyroscope） */
   x?: number
+  /** Y 轴加速度/分量 */
   y?: number
+  /** Z 轴加速度/分量 */
   z?: number
   /** 罗盘方位（0-360°，参考正北；仅 compass） */
   heading?: number
+  /** 采样时间戳（ms） */
   timestamp?: number
 }
 
-/** C40 支付参数（对齐 wx.requestPayment 核心字段） */
+/** C40 支付参数（对齐 wx.requestPayment 核心字段——服务端下单后下发） */
 export interface PaymentConfig {
+  /** 时间戳（秒级字符串，服务端生成） */
   timeStamp: string
+  /** 随机串（服务端生成，32 字符内） */
   nonceStr: string
+  /** 统一下单接口返回的 prepay_id（格式 paySign=...） */
   package: string
+  /** 签名方式（缺省 MD5/平台默认；建议 RSA） */
   signType?: string
+  /** 签名（服务端按商户私钥计算） */
   paySign: string
 }
 
 /** C40 支付结果 */
 export interface PaymentReceipt {
+  /** 支付渠道（wechat / alipay / host …由宿主桥标注） */
   provider: string
+  /** 交易单号（渠道返回；不支持缺省） */
   transactionId?: string
 }
 
 /** C41 登录结果（wx.login → code；web/其它 provider → token/授权信息） */
 export interface LoginResult {
+  /** 登录渠道（wechat / host-provider …） */
   provider: string
+  /** 登录凭证（wx code，服务端换 session 用） */
   code?: string
+  /** 令牌（第三方 provider 直接下发 token 时） */
   token?: string
 }
 
 /** C33 认证状态（组合：createAuth 凭证托管 + login 桥 + 存储桥；业务只读 AuthState 不读 raw token——铁律 2） */
 export interface AuthState {
+  /** 当前令牌（未登录 null；响应式——UI 直接绑定） */
   token: string | null
+  /** 是否已登录（token 非空即真） */
   isAuthenticated: boolean
   /** 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） */
   login(provider?: string): Promise<CapResult<string>>
@@ -161,6 +205,7 @@ export type ProgressCallback = (pct: number) => void
 
 /** C29 上传选项（wx.uploadFile / web fetch FormData） */
 export interface UploadOptions {
+  /** 上传目标 URL（HTTPS） */
   url: string
   /** wx 临时文件路径（wx.chooseMedia/chooseImage 等产出） */
   filePath?: string
@@ -168,14 +213,19 @@ export interface UploadOptions {
   file?: Blob
   /** 表单字段名（缺省 'file'） */
   name?: string
+  /** 附加表单字段 */
   formData?: Record<string, string>
+  /** 自定义请求头 */
   headers?: Record<string, string>
+  /** 超时（ms；超时 → Err） */
   timeout?: number
 }
 
 /** C29 上传结果 */
 export interface UploadResult {
+  /** HTTP 状态码 */
   status: number
+  /** 响应体（文本/JSON 由服务端决定） */
   data: unknown
   /** 进度（0-100，若平台支持 onProgressUpdate） */
   progress?: number
@@ -183,7 +233,9 @@ export interface UploadResult {
 
 /** C30 下载选项 */
 export interface DownloadOptions {
+  /** 自定义请求头 */
   headers?: Record<string, string>
+  /** 超时（ms；超时 → Err） */
   timeout?: number
   /** 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json */
   responseType?: 'blob' | 'path' | 'text' | 'json'
@@ -191,16 +243,21 @@ export interface DownloadOptions {
 
 /** C30 下载结果 */
 export interface DownloadResult {
+  /** HTTP 状态码 */
   status: number
+  /** 响应体（形态由 responseType 决定） */
   data: unknown
   /** wx tempFilePath（responseType=path） */
   path?: string
+  /** 进度（0-100） */
   progress?: number
 }
 
 /** C34 分析事件（wx.reportEvent / web 无标准 → 缺省降级） */
 export interface AnalyticsEvent {
+  /** 事件名（埋点埋点约定，如 page_view / button_click） */
   name: string
+  /** 事件参数（自由键值对） */
   params?: Record<string, unknown>
 }
 
@@ -258,8 +315,11 @@ interface NotificationConstructor {
 
 /** C19 联系人（wx.chooseContact / web 无标准 → 降级 undefined） */
 export interface Contact {
+  /** 联系人姓名 */
   name: string
+  /** 电话号码 */
   phone?: string
+  /** 邮箱 */
   email?: string
 }
 
@@ -284,6 +344,7 @@ export interface ArchiveOptions {
 
 /** C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined） */
 export interface CalendarEvent {
+  /** 日历事件标题 */
   title: string
   /** 开始时间戳（ms） */
   startTime: number
@@ -291,7 +352,9 @@ export interface CalendarEvent {
   endTime?: number
   /** 提前提醒（分钟） */
   alarms?: number[]
+  /** 地点 */
   location?: string
+  /** 备注/描述 */
   description?: string
 }
 
@@ -299,6 +362,7 @@ export interface CalendarEvent {
 
 /** C24 页面生命周期句柄（wx Page 钩子 / web load+visibilitychange） */
 export interface PageLifecycle {
+  /** 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） */
   phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE'
   onLoad(cb: () => void): () => void
   onShow(cb: () => void): () => void
@@ -307,6 +371,7 @@ export interface PageLifecycle {
 
 /** C1/C2 媒体访问（camera/microphone——wx authorize / web getUserMedia） */
 export interface MediaAccess {
+  /** 媒体设备类型 */
   kind: 'camera' | 'microphone'
   /** 平台能力/设备存在 */
   supported: boolean
@@ -316,6 +381,7 @@ export interface MediaAccess {
 
 /** C36 蓝牙状态（wx.openBluetoothAdapter / web Web Bluetooth 特性探测） */
 export interface BluetoothInfo {
+  /** 平台是否支持蓝牙 */
   supported: boolean
   /** 适配器已打开（可用） */
   available: boolean
@@ -325,18 +391,23 @@ export interface BluetoothInfo {
 
 /** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
 export interface NfcInfo {
+  /** 平台是否支持 NFC */
   supported: boolean
+  /** NFC 当前可用（已开启） */
   available: boolean
 }
 
 /** C14 键盘信息（高度 px + 可见性） */
 export interface KeyboardInfo {
+  /** 键盘高度（px） */
   height: number
+  /** 键盘是否可见 */
   visible: boolean
 }
 
 /** C14 键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport） */
 export interface KeyboardLifecycle {
+  /** 当前键盘状态（高度/可见性快照） */
   info: KeyboardInfo
   onChange(cb: (info: KeyboardInfo) => void): () => void
 }
@@ -345,8 +416,11 @@ export interface KeyboardLifecycle {
 
 /** C4 地图区域（wx.createMapContext 语义） */
 export interface MapRegion {
+  /** 中心纬度 */
   latitude: number
+  /** 中心经度 */
   longitude: number
+  /** 缩放级别（4-20，越大越细） */
   scale?: number
 }
 
@@ -364,7 +438,9 @@ export interface MapController {
 
 /** C25 后台事件（wx onAppHide/onAppShow / web visibilitychange） */
 export interface BackgroundEvent {
+  /** 事件类型（退后台 / 回前台） */
   type: 'enter-background' | 'enter-foreground'
+  /** 事件时间戳（ms） */
   time: number
 }
 
@@ -391,6 +467,7 @@ export interface SocketTaskHandle {
 
 /** C31 数据通道（直播/实时——宿主桥接；缺省 Err 诚实降级） */
 export interface DataChannelOptions {
+  /** 通道标识（业务自定义，跨端路由用） */
   channelId: string
 }
 
@@ -414,15 +491,21 @@ export interface CookieJar {
 
 /** C46 内购回执（wx 无公开 IAP API——宿主桥接；web 无标准 → Err） */
 export interface IAPReceipt {
+  /** 内购商品 ID（应用商店登记） */
   productId: string
+  /** 交易单号（商店返回） */
   transactionId?: string
+  /** 交易状态（purchased 新购 / restored 恢复购买） */
   state: 'purchased' | 'restored'
 }
 
 /** C47 小程序跳转（wx.navigateToMiniProgram） */
 export interface MiniProgramNavOptions {
+  /** 目标小程序 appId */
   appId: string
+  /** 目标页路径（缺省首页） */
   path?: string
+  /** 传递给目标小程序的数据（target app onLoad options.extraData） */
   extraData?: Record<string, unknown>
 }
 
@@ -432,14 +515,19 @@ export interface MiniProgramAPI {
 
 /** C48 被宿主嵌入（HostContext——宿主桥注入；缺省 Err 诚实降级） */
 export interface HostContext {
+  /** 宿主渠道标识（wechat / web / studio …） */
   provider: string
+  /** 宿主/基础库版本 */
   version?: string
+  /** 宿主声明的能力名集合 */
   capabilities?: string[]
 }
 
 /** C49 直播房间（wx live 组件形态/宿主桥——缺省 Err） */
 export interface LiveRoomOptions {
+  /** 直播间 ID */
   roomId: string
+  /** 拉流模式 */
   mode?: 'video' | 'audio'
 }
 
@@ -576,72 +664,122 @@ export interface CompatStorage {
 
 /** useFetch 配置（对齐 RequestConfig 高频字段） */
 export interface FetchConfig {
+  /** HTTP 方法（缺省 GET） */
   method?: HttpMethod
+  /** 请求体（POST/PUT；对象自动 JSON 序列化） */
   data?: unknown
+  /** URL 查询参数（拼接到 query string） */
   params?: Record<string, unknown>
+  /** 自定义请求头 */
   headers?: Record<string, string>
+  /** 超时（ms；超时 → Err） */
   timeout?: number
 }
 
 /** 该能力是否可用（降级探测——G-32.3：缺失 → Err 非抛异常） */
+/** 运行时能力探测（probe() 返回——降级查询面：业务预判能力可用性，无需 try/catch） */
 export interface CapabilityProbe {
+  /** 定位（wx.getLocation / geolocation） */
   location: boolean
+  /** 震动 */
   vibrate: boolean
+  /** 网络状态 */
   network: boolean
+  /** 剪贴板读取 */
   clipboardRead: boolean
+  /** 剪贴板写入 */
   clipboardWrite: boolean
+  /** 屏幕信息 */
   screen: boolean
+  /** 设备信息 */
   device: boolean
+  /** 电池 */
   battery: boolean
+  /** 屏幕方向 */
   orientation: boolean
+  /** 分享 */
   share: boolean
   /** ★G-32 B3 续 */
   fetch: boolean
+  /** 权限状态查询 */
   permission: boolean
+  /** 键值存储 */
   storage: boolean
   /** ★G-32 B3 三期 */
   sensor: boolean
+  /** 屏幕亮度读取/设置 */
   brightness: boolean
+  /** 拨打电话 */
   phoneCall: boolean
+  /** 生物识别 */
   biometric: boolean
+  /** 支付 */
   payment: boolean
+  /** 登录 */
   login: boolean
+  /** 扫码 */
   qrCode: boolean
   /** C33 认证组合（需 login 桥 + 存储桥齐备才视为完整） */
   auth: boolean
   /** ★G-32 B3 四期 */
   websocket: boolean
+  /** 文件上传 */
   upload: boolean
+  /** 文件下载 */
   download: boolean
+  /** 埋点上报 */
   analytics: boolean
+  /** 日志 */
   log: boolean
+  /** 文件系统 */
   fileSystem: boolean
   /** ★G-32 B3 五期 */
   notification: boolean
+  /** 联系人 */
   contact: boolean
+  /** 日历 */
   calendar: boolean
+  /** App 生命周期 */
   appLifecycle: boolean
+  /** 文件压缩/解压 */
   archive: boolean
+  /** 桌面快捷方式 */
   shortcut: boolean
   /** ★G-32 B3 六期 */
   pageLifecycle: boolean
+  /** 蓝牙 */
   bluetooth: boolean
+  /** NFC */
   nfc: boolean
+  /** 相机 */
   camera: boolean
+  /** 麦克风 */
   microphone: boolean
+  /** 键盘 */
   keyboard: boolean
   /** ★G-32 B3 七期/八期 */
   map: boolean
+  /** 短信 */
   sms: boolean
+  /** 后台事件 */
   background: boolean
+  /** SocketTask 句柄 */
   socketTask: boolean
+  /** 数据通道 */
   dataChannel: boolean
+  /** Cookie */
   cookie: boolean
+  /** 人脸识别 */
   faceId: boolean
+  /** 应用内购 */
   inAppPurchase: boolean
+  /** 小程序互跳/开放能力 */
   miniProgram: boolean
+  /** 内嵌 web/混合容器 */
   embedded: boolean
+  /** 直播 */
   live: boolean
+  /** 扩展/插件 */
   extension: boolean
 }
 

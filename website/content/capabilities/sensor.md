@@ -16,6 +16,42 @@ useSensor：传感器一次性读取（accelerometer/compass/gyroscope）
 useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kind` | `SensorKind` | 是 | 传感器类型（accelerometer 加速度计 / compass 罗盘 / gyroscope 陀螺仪） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `SensorSample` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`SensorSample`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kind` | `SensorKind` | 是 | 传感器类型（回显请求的 kind） |
+| `x` | `number` | 否 | X 轴加速度/分量（accelerometer/gyroscope） |
+| `y` | `number` | 否 | Y 轴加速度/分量 |
+| `z` | `number` | 否 | Z 轴加速度/分量 |
+| `heading` | `number` | 否 | 罗盘方位（0-360°，参考正北；仅 compass） |
+| `timestamp` | `number` | 否 | 采样时间戳（ms） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `sensor.unsupported` | 桥未提供 readSensor（useSensor 不可用） |
+| `sensor.timeout` | 传感器事件超时（需设备支持/用户授权） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

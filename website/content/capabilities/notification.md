@@ -16,6 +16,38 @@ useNotification：消息订阅授权（wx.requestSubscribeMessage / web Notifica
 useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ```
 
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `templateId` | `string` | 是 | 订阅消息模板 ID（公众平台登记） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `MessageSubscription` | 成功载荷（结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`MessageSubscription`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `templateId` | `string` | 是 | 模板 id（wx 需要先在公众平台申请） |
+| `granted` | `boolean` | 是 | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
+| `status` | `string` | 否 | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `notification.unsupported` | 桥未提供 subscribeMessage（useNotification 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

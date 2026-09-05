@@ -31,12 +31,12 @@ order: 1001
 
 ## Props
 
-| Prop | 说明 | 类型 | 默认值 |
-|---|---|---|---|
-| `src` | 头像图源 | `String` | `''` |
-| `shape` | 形状：circle 圆形 / square 圆角方形 | `String` | `'circle'` |
-| `size` | 尺寸 px | `Number` | `44` |
-| `fallback` | 兜底文本（缺图/加载失败显示——首字符） | `String` | `''` |
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `src` | 头像图源 | `String` | `''` | 否 |
+| `shape` | 形状：circle 圆形 / square 圆角方形 | `String` | `'circle'` | 否 |
+| `size` | 尺寸 px | `Number` | `44` | 否 |
+| `fallback` | 兜底文本（缺图/加载失败显示——首字符） | `String` | `''` | 否 |
 
 ## 实现要点
 
