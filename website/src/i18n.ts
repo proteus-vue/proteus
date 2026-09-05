@@ -51,8 +51,8 @@ const zh = {
   // —— 海神精灵（★#488）——
   'spirit.title': 'Proteus 海神精灵（点击变身）',
   // —— Multi-device 同屏墙（★#489）——
-  'mdev.subtitle': '同一份源码 · 六端同屏',
-  'mdev.sub': '同一份 ProductDetail 语义，六端由 RenderBackend 推导形态：每帧是真实 DOM 渲染，并附该端「形态 / 输入 / 拓扑推导 + 能力声明」（绿 = 已声明支持 · 橙 = 需条件降级）——差异来自语义推导（layout / columns / nav / input），不是把页面缩放，也不是 #ifdef 条件编译。',
+  'mdev.subtitle': '同一份语义 · 六端各自的样子',
+  'mdev.sub': '同一份商品数据，由渲染后端按端形态推导出各自该有的界面——手机单列+底部导航、平板侧栏双列、PC 侧栏三列可悬停、车机大热区焦点、电视 Hero+海报流、手表一屏一意。这不是页面缩放，也不是 #ifdef。',
   'mdev.theme': '主题',
   'mdev.edit': '编辑源码（改完实时重渲六端）',
   'mdev.empty': '（无输出）',
@@ -119,8 +119,8 @@ const en = {
   // —— Spirit pet（★#488）——
   'spirit.title': 'Proteus spirit pet (click to morph)',
   // —— Multi-device wall（★#489）——
-  'mdev.subtitle': 'One source · six targets on one wall',
-  'mdev.sub': 'The same ProductDetail semantics — six targets, each shaped by its RenderBackend. Every frame is a real DOM render, annotated with that target’s form / input / topology derivation and its capability declarations (green = declared & supported · orange = needs conditional degradation). The differences come from semantic derivation (layout / columns / nav / input) — not page scaling, not #ifdef.',
+  'mdev.subtitle': 'One semantic set · a different shape on each target',
+  'mdev.sub': 'The same product data takes the shape each target deserves, derived by the render backend: phone single-column + bottom tabs, tablet rail + two columns, desktop side-nav + three columns with hover, in-car large hit areas + focus navigation, TV hero + poster rows, watch one screen, one meaning. Not page scaling — not #ifdef.',
   'mdev.theme': 'Theme',
   'mdev.edit': 'Edit the source (the six targets re-render live)',
   'mdev.empty': '(no output)',

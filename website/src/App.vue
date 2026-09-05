@@ -29,13 +29,13 @@ interface NavLink {
 const links: NavLink[] = [
   { to: '/', label: '首页', key: 'home' },
   { to: '/playground', label: 'Playground', key: 'playground' },
-  // ★#489 原版六端呈现演示（独立 html 入口——同一份语义，六端形态各异的真实还原）
-  { label: '多端同屏', key: 'flexible', external: true, href: import.meta.env.BASE_URL + 'flexible-multi-device.html' },
+  // ★#489 同一份语义 → 六端形态（站内页——同壳同风格、双语）
+  { to: '/multi-device', label: '多端同屏', key: 'multidev' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
   if (l.key === 'home') return t('app.home')
-  if (l.key === 'flexible') return t('app.multidev')
+  if (l.key === 'multidev') return t('app.multidev')
   return l.label
 }
 

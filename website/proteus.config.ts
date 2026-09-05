@@ -56,7 +56,7 @@ const config: ProteusConfig = {
       outDir: 'dist', // 官网部署产物目录（vercel outputDirectory=website/dist 不变）
       rollupOptions: {
         // ★#389i 多页入口：spirit.html = Three.js 3D 海神精灵（iframe 嵌入——three 隔离独立 chunk）
-        // ★#489 多页入口：flexible-multi-device.html = 六端呈现原版演示（一份语义 → 各端形态差异还原）
+        // ★#489 原版六端呈现（iframe 嵌入官网壳——自身顶条已去掉，导航由官网接管）
         input: {
           main: path.join(__dirname, 'index.html'),
           spirit: path.join(__dirname, 'spirit.html'),
