@@ -20,11 +20,12 @@
 
 1. **改实现**：`template.ts` / `script.ts` / `style.ts` / `validate.ts`（纯函数）
 2. **改 AI 说明书**：`transforms/*.ts` 中对应规则的 what/why/when/example/verify/decision 字段
-3. **改映射表**：`tags.ts`（TAG_MAP/EVENT_MAP/SEMANTIC_CLASS）——`tests/transforms.test.ts` 会校验每个键都被规则覆盖
-4. **跑测试**：`tests/transforms.test.ts`（防漂移）+ `tests/explain.test.ts`（trace 可解析）+ 对应单测
-5. **配置演示**（如涉及）：`examples/` + `proteus.config.ts` 的 rules 段
+3. **补英文说明**：同时填写该规则 `descriptionEn`（★#480 注册表双语——官网 EN 态 Playground 规则目录消费；`tests/transforms.test.ts` 硬卡每条规则必带，新增规则漏填会红）
+4. **改映射表**：`tags.ts`（TAG_MAP/EVENT_MAP/SEMANTIC_CLASS）——`tests/transforms.test.ts` 会校验每个键都被规则覆盖
+5. **跑测试**：`tests/transforms.test.ts`（防漂移）+ `tests/explain.test.ts`（trace 可解析）+ 对应单测
+6. **配置演示**（如涉及）：`examples/` + `proteus.config.ts` 的 rules 段
 
-> 规则注册表 = 能力清单 + AI 说明书 + trace 键，三处同源——改一处漏三处会被测试当场拦住。
+> 规则注册表 = 能力清单 + AI 说明书 + trace 键，三处同源——改一处漏三处会被测试当场拦住；descriptionEn 必填由 transforms 测试强制。
 
 ## PR 流程
 

@@ -9,6 +9,7 @@ export const VALIDATE_RULES: TransformRule[] = [
     status: 'implemented',
     title: 'JS 产物语法自校验',
     description: 'new Function(js) 仅解析不执行，语法错误 → 校验失败并携带错误信息',
+    descriptionEn: 'new Function(js) is parsed only and never executed; a syntax error → validation fails and carries the error message',
     why: '反编译黑盒机制（决策 #17）：坏产物当场报错指明文件，绝不静默输出不可用的产物（对比 uni-app 产物无法定位问题）',
     when: '每次整包编译后（assertValidResult 内）',
     example: {
@@ -25,6 +26,7 @@ export const VALIDATE_RULES: TransformRule[] = [
     status: 'implemented',
     title: 'WXML 标签配对自校验',
     description: '栈式扫描 WXML 标签配对（先剥离注释，避免行号注释干扰），未闭合/错配 → 校验失败',
+    descriptionEn: 'Stack-based scan of WXML tag pairing (comments are stripped first to keep line-number comments from interfering); unclosed/mismatched tags → validation fails',
     why: '反编译黑盒机制（决策 #17）：模板转换出错的常见形态就是标签不配对，编译期拦截比真机报错好定位',
     when: '每次整包编译后（assertValidResult 内）',
     example: {
@@ -41,6 +43,7 @@ export const VALIDATE_RULES: TransformRule[] = [
     status: 'implemented',
     title: '坏产物抛 CompilerError 指明文件',
     description: '校验失败 → 抛 CompilerError（携带源文件名，消息含 [proteus-compiler] 前缀）',
+    descriptionEn: 'Validation failure → throws CompilerError (carrying the source file name; the message includes the [proteus-compiler] prefix)',
     why: '反黑盒机制的统一错误通道：AI/开发者拿到错误即可定位到具体文件（错误 = 可操作的反馈，而非黑盒失败）',
     when: 'js 或 wxml 校验不通过时',
     example: {

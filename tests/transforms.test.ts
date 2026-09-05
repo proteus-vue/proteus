@@ -32,6 +32,16 @@ describe('transforms 规则注册表', () => {
     }
   })
 
+  it('每条规则带英文说明 descriptionEn（★#480 注册表双语——官网 EN 态 Playground 规则目录消费；新增规则必补）', () => {
+    for (const rule of TRANSFORM_RULES) {
+      expect(typeof rule.descriptionEn, `${rule.id} 缺 descriptionEn`).toBe('string')
+      expect((rule.descriptionEn ?? '').length, `${rule.id} descriptionEn 为空`).toBeGreaterThan(0)
+      // 语言中立的说明（纯代码映射，如 v-if → wx:if）zh=en 天然相同属合法；含中文却照抄=漏译
+      const hasCjk = /[\u4e00-\u9fff]/.test(rule.description)
+      expect(rule.descriptionEn === rule.description && hasCjk, `${rule.id} descriptionEn 疑似漏译（照抄中文）`).toBe(false)
+    }
+  })
+
   it('id 命名规范：<category>/<name>（category=tag/event/directive/script/style/validate/...）', () => {
     for (const rule of TRANSFORM_RULES) {
       expect(rule.id, `${rule.id} 不符合 <category>/<name> 格式`).toMatch(/^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/)

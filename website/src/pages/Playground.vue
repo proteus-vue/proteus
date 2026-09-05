@@ -7,8 +7,8 @@ import { useRoute } from 'vue-router'
 import TransformDemo from '../components/TransformDemo.vue'
 import { listTransformRules } from '@proteus-vue/compiler'
 import { decodeSource } from '../playground/share'
-// ★#478 Playground 页 chrome 双语（规则注册表数据为框架层中文——EN 完整版随编译器注册表双语落地）
-import { t } from '../i18n'
+// ★#478 Playground 页 chrome 双语；★#480 规则行按 locale 取 descriptionEn（注册表双语字段）
+import { locale, t } from '../i18n'
 
 const route = useRoute()
 
@@ -18,6 +18,10 @@ const initialSource =
 
 const rules = listTransformRules()
 const ruleList = ref(rules)
+/** ★#480 规则说明按语言取注册表变体（EN 缺省回退中文——诚实降级） */
+function ruleDesc(r: { description: string; descriptionEn?: string }): string {
+  return locale.value === 'en' && r.descriptionEn ? r.descriptionEn : r.description
+}
 </script>
 
 <template>
@@ -39,7 +43,7 @@ const ruleList = ref(rules)
       <p-stack direction="column" :gap="6" class="rules-list">
         <p-stack v-for="r in ruleList" :key="r.id" direction="row" :gap="12" class="rule-item">
           <p-text class="rule-id">{{ r.id }}</p-text>
-          <p-text class="rule-desc">{{ r.description }}</p-text>
+          <p-text class="rule-desc">{{ ruleDesc(r) }}</p-text>
         </p-stack>
       </p-stack>
     </p-view>

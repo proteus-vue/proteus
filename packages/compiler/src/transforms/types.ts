@@ -37,6 +37,8 @@ export interface TransformRule {
   title: string
   /** what：输入 → 输出 */
   description: string
+  /** ★#480 英文变体 of description（官网 Playground/EN 态取用；缺省回退中文）——新增规则必填，tests/transforms.test.ts 硬卡全覆盖 */
+  descriptionEn?: string
   /** why：平台约束 / 设计决策（关联 PROJECT_MEMORY.md 决策号） */
   why: string
   /** when：触发条件 */
