@@ -414,4 +414,508 @@ export const COMP_EN = {
       blur: 'Lost focus',
     },
   },
+  // —— 批次 D（#481 续）——
+  'p-list-view': {
+    desc: "Virtual list",
+    notes: [
+      "Matrix 01 §5: items / item-key / virtual / lazy-mount / buffer-size / item-size estimation",
+      "High-performance design: only the visible window is rendered (data slicing + top placeholder), keeping a constant rendered-row count even with tens of thousands of items; scroll guard: setData is skipped when the window has not crossed a row (zero updates for intra-row scrolling)",
+      "items changes (pagination / load-more) → watch recomputes the window: standard Vue watch on Web (fully reactive); on MP the compiler watches the props source → WeChat observers",
+      "lazy: nothing renders on the first screen, computation happens only at the first scroll (saves the first frame when the list is below the fold / deeply nested); virtual=false: renders everything (saves slicing overhead for small lists)",
+      "★B4 event normalization: onScroll uses eventScrollTop (MP e.detail.scrollTop / Web e.target.scrollTop)",
+      "★Note: watch callbacks must use a braced body (the compiler only supports => { body }); a virtual window must be paired with scroll-view (Skyline forbids global scrolling)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      items: "Array of data items",
+      itemHeight: "Item height in px (basis of the virtual-window calculation)",
+      height: "Height in px",
+      bufferSize: "Number of buffer rows beyond the visible area (headroom for smooth scrolling)",
+      virtual: "Virtualization toggle (false = full render; saves slicing overhead for small lists)",
+      lazy: "Lazy mount (does not render on the first screen; renders on the first scroll / when it first becomes visible)",
+    },
+  },
+  'p-loading': {
+    desc: "Loading",
+    notes: [
+      "Matrix 01 §8: visible + text + spinner (CSS rotation animation); does not auto-close (controlled by the page)",
+      "Transition: CSS animation; Worklet custom components flagged v0.6",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      visible: "Whether visible (show/hide is driven by reactive data - zero platform branching)",
+      text: "Display text",
+    },
+  },
+  'p-mask': {
+    desc: "Mask",
+    notes: [
+      "Matrix 01 §8 overlay system: visible + close-on-tap + opacity; no animation (animation is choreographed by the overlay components themselves)",
+      "Same source for both ends: view + fixed positioning; Skyline fixed support (base library 2.26+; falls back to absolute + a full-screen container when it misbehaves on real devices; v0.6 evaluates a compiler transform)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      visible: "Whether visible (show/hide is driven by reactive data - zero platform branching)",
+      opacity: "Opacity (0-1)",
+      closeOnTap: "Whether to auto-close after a tap",
+    },
+    events: { close: "Close" },
+  },
+  'p-masonry': {
+    desc: "Masonry",
+    notes: [
+      "CSS columns implementation (col-count/column-gap + break-inside:avoid on children + vertical gap via CSS variables)",
+      "Same source for both ends: div → view; MP-safe (degrades to a single-column stack when columns is unsupported - plain but correct, G-22.2)",
+      "★Gotcha: do not write v-bind() inside scoped styles (the compileVueSfc style transform does not process it) - gap is injected via CSS variables from the root style",
+    ],
+    props: { colCount: "Column count (default 2)", gap: "Column and row spacing in px" },
+  },
+  'p-media': {
+    desc: "Unified media entry",
+    notes: [
+      "Unified entry for image/video/audio/live via kind (eliminates the separate video/audio components)",
+      "★B2 Web-first: kind decides the element (img/video/audio with explicit v-if - the MP compiler does not support dynamic tags)",
+      "Same source for both ends; no platform API (controls/autoplay/loop/muted are passed through as native attributes)",
+    ],
+    props: {
+      kind: "Media type: image / video / audio / live",
+      src: "Resource address",
+      poster: "Poster (video/live)",
+      controls: "Show the control bar",
+      autoplay: "Autoplay",
+      loop: "Loop",
+      muted: "Muted",
+      width: "Width in px (0 = auto)",
+      height: "Height in px (0 = auto)",
+    },
+  },
+  'p-modal': {
+    desc: "Modal",
+    notes: [
+      "Single declaration: <p-modal v-model:visible p-adaptive=\"sheet(0,600) | dialog(600,840) | popover(840,∞)\" :anchor=\"triggerRef\">",
+      "Viewport width → the form auto-switches (phone: Sheet slides in from the bottom / tablet: Dialog centered / desktop: Popover anchored to anchor - no anchor falls back to centered, 03 §6)",
+      "★width override: when > 0, form resolution uses the specified width (to preview / validate / test different window sizes); 0 = follow the viewport (live reflow while dragging the window)",
+      "Internal layout uses the p-stack/p-grid flexible primitives (FLD010: hardcoded fixed widths are forbidden); the sheet form automatically applies the bottom safe area (G-09 synergy)",
+      "MP: no innerWidth on the logic layer → the form always lands in the first range (sheet as the fallback - the primary phone scenario, decided by the rendering end)",
+      "Same semantics as the App-side B3 native containers (UISheet/BottomSheet/SideBarContainer)",
+    ],
+    props: {
+      visible: "Modal visibility (v-model:visible)",
+      pAdaptive: "★Form-range declaration: in the template write p-adaptive=\"sheet(0, 600) | dialog(600, 840) | popover(840, ∞)\" (planned API) → the pAdaptive prop",
+      anchor: "Anchor to the trigger source for the popover form (an element reference; when omitted → the popover falls back to centered, the 03 §6 fallback chain)",
+      width: "Width override for form resolution (0 = follow the viewport; > 0 = force a specified width - to preview / validate / test different window sizes)",
+      title: "Title (the header slot takes precedence when present)",
+      closable: "Close button in the top-right corner",
+      maskClosable: "Close on mask tap",
+      maskOpacity: "Mask opacity",
+    },
+    events: { formChange: "Form field changes" },
+  },
+  'p-nav': {
+    desc: "Navigation bar",
+    notes: [
+      "Declarative navigation bar: centered title + left/right slots (back / action areas) + transparent mode",
+      "Same source for both ends: nav → view; the MP compiler maps it to the native navigation (navigationStyle custom scenarios)",
+    ],
+    props: { title: "Title text (slot content takes precedence)", transparent: "Transparent mode (blends with the background)" },
+  },
+  'p-nav-bar': {
+    desc: "Navigation bar",
+    notes: [
+      "Matrix 01 §9: title / back / fixed + left/right slots",
+      "★appBar integration flagged v0.6 (Router B5 ⬜); this component is a plain view-level navigation bar",
+      "C3: the component never calls routing directly - back only emits, and the page decides the navigation (until api.navigator A8 is implemented)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      title: "Title",
+      back: "Whether to show a back button (only emits the event; navigation is decided by the page - the component never calls routing directly)",
+      fixed: "Whether to use fixed positioning (sticky top / sticky bottom)",
+    },
+    events: { back: "Back button tap (navigation is decided by the page - the component never calls routing directly)" },
+  },
+  'p-page': {
+    desc: "Page root container",
+    notes: [
+      "The page root is the route component (G-17): title semantics + immersive statusBar + pullRefresh declaration",
+      "★B2/B4 thin shell: the content slot is passed through; title/statusBar/pullRefresh are semantic declarations (to be wired up by the host navigation / scroll batches)",
+      "Same source for both ends: div → view; MP-safe (no platform API)",
+    ],
+    props: {
+      title: "Page title (semantic declaration of the navigation-bar / document title)",
+      statusBar: "Immersive status bar (content extends into the status-bar area)",
+      pullRefresh: "Pull-to-refresh (consumed by the page-level scroll integration batches)",
+    },
+  },
+  // —— 批次 E（#481 续）——
+  'p-picker': {
+    desc: "Native date/time/city picker",
+    notes: [
+      "mode date/time/region + start/end boundaries",
+      "★B2 Web-first: date/time use the native input (type=date/time); region awaits built-in compact administrative-division data (marked partial)",
+      "Dual-end single source (input → compile-time mapping); no platform API",
+    ],
+    props: {
+      mode: "Mode: date / time / region",
+      modelValue: "Value (date=YYYY-MM-DD; time=HH:mm; region=geolocation/text)",
+      min: "Minimum boundary (native min for date/time)",
+      max: "Maximum boundary",
+    },
+  },
+  'p-popover': {
+    desc: "Bubble popover",
+    notes: [
+      "trigger click/hover/focus + placement (top/bottom/left/right)",
+      "★B2/B4 thin shell: v-model controlled visibility + self-drawn positioning (smart positioning wired in a later batch)",
+      "Dual-end single source: div → view; MP-safe (closes on mask tap, avoids document listeners)",
+    ],
+    props: {
+      modelValue: "Visibility (v-model)",
+      trigger: "Trigger mode: click / hover / focus (hover/focus wired in later batches - B4 thin shell: click only)",
+      placement: "Placement: top / bottom / left / right",
+    },
+  },
+  'p-popup': {
+    desc: "Popup layer",
+    notes: [
+      "Matrix 01 §8: visible + position (bottom/center/top) + close-on-mask + transition animation",
+      "Transition: CSS animation (enter auto-plays / leave emits close when finished) - Worklet applyAnimatedStyle marked v0.6",
+      "Visibility driven by watch(() => props.visible) (B3 primitive: Web Vue watch / MP observers)",
+      "Dual-end single source: view + fixed positioning; Skyline fixed requires base library 2.26+",
+    ],
+    props: {
+      pid: "Component instance id (for debugging/observability/test targeting - D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction + dims visuals; native disabled passed through on MP)",
+      ariaLabel: "A11y label (text read aloud by screen readers)",
+      visible: "Whether visible (visibility driven by reactive data, zero platform branching)",
+      position: "Position/placement",
+      closeOnMask: "Whether tapping the mask closes it",
+      maskOpacity: "Mask opacity (0-1)",
+      duration: "Duration (ms)",
+    },
+    events: { close: "Close" },
+  },
+  'p-radio': {
+    desc: "Radio (single choice)",
+    notes: [
+      "value is this item's value + group is the currently selected value (held by the parent) → matched item is selected",
+      "★B2 simple form: value + group are controlled; on switch emit('update:group', value)",
+      "Dual-end single source; MP-safe (no platform API)",
+    ],
+    props: { value: "Value of this item", group: "Current selected value (held by the parent group)", disabled: "Disabled" },
+  },
+  'p-rich-text': {
+    desc: "Rich text",
+    notes: [
+      "source HTML/markdown → rendered; Web renders directly with v-html, the MP compiler maps it to a rich-text node",
+      "★B2 Web-first: source is passed through to v-html (MP side awaits rich-text node mapping in a later batch)",
+      "Dual-end single source: div → view; no platform API",
+    ],
+    props: { source: "HTML/markdown source", schema: "Render schema (HTML/MARKDOWN - B2 pass-through, to be strictly enforced in later batches)" },
+  },
+  'p-router-link': {
+    desc: "Declarative navigation",
+    notes: [
+      "to: navigation target (route name or path - createRouterEngineering.push({ name|path }) semantics, E11)",
+      "replace: replaces the current page (E12 semantics)",
+      "switchTab: switches to a Tab page (E14 semantics)",
+      "Behavior: on click, emit('navigate', { to, replace, switchTab }) - the parent responds via createRouterEngineering (#320)",
+      "Zero platform dependencies (no router import, no wx/document access - audit compliant); web role=\"link\" accessibility",
+      "MP: @click → bindtap; aligned with the existing p-radio defineEmits + emit pipeline",
+    ],
+    props: {
+      to: "Navigation target (route name or path) - createRouterEngineering.push({ name: to | path: to })",
+      replace: "Replaces the current page (E12 semantics - push({...to, replace:true}))",
+      switchTab: "Switches to a Tab page (E14 semantics - push({...to, switchTab:true}))",
+    },
+    events: { navigate: '—' },
+  },
+  'p-safe': {
+    desc: "Safe-area avoidance",
+    notes: [
+      "Only the avoidance direction is declared: Web = env(safe-area-inset-*) (requires viewport-fit=cover) + foldable-screen hinge avoidance",
+      "When display-mode is fold/span, content stays clear of the fold area via env(fold-left/fold-width) - bringing a system capability into the framework, principle #10",
+      "Thin-shell component: displayMode state bridged from @proteus-vue/fluid (createDeviceEnv + resolveSafeAreaStyle pure logic)",
+      "MP: Skyline only partially supports env(); the logic layer has no matchMedia → displayMode is always standard → hinge never applies (left to the renderer to decide)",
+      "Same semantics as App-side SafeArea (G-09 safeAreaLayoutGuide/WindowInsets): developers just write <p-safe area=\"top\">",
+    ],
+    props: {
+      area: "Avoidance direction: top / bottom / left / right / horizontal / all (defaults to top)",
+      fold: "Foldable-screen hinge avoidance: when display-mode is fold/span, keep clear of the fold area on both sides (off by default)",
+      fallback: "Fallback px: when env() is 0 on desktop/notch-less screens, force at least this value (wrapped in max(); 0 = no fallback)",
+    },
+  },
+  'p-scale': {
+    desc: "Dynamic font size / density",
+    notes: [
+      "Declares only the font-size level + density: container font-size = base × level multiplier × global font scaling (var(--proteus-font-scale, 1), injected by the host/system for foldable/tablet density adaptation); children inherit via em and scale along; density → line-height + the --proteus-density-gap spacing token",
+      "Pure logic lives in @proteus-vue/fluid scale.ts (buildScaleStyle is unit-testable at the string level); MP-safe: no type annotations",
+    ],
+    props: {
+      level: "Font-size level: 0 small / 1 standard / 2 large / 3 extra large (a11y levels)",
+      density: "Density: compact / regular / comfortable (roomy, for a11y)",
+      baseSize: "Base font size (px) - children inherit it via em and scale along",
+    },
+  },
+  'p-scroll': {
+    desc: "Explicit scroll container",
+    notes: [
+      "Use only when a scroll semantic is needed (aligned with scroll-view); axis controls the direction, CSS overflow implements Web scrolling",
+      "★B2 scope: basic scroll container (paging/refresh/indicator are capability constraints - to be wired in later batches)",
+      "Dual-end single source: div → view; Web scrolls via overflow",
+    ],
+    props: {
+      axis: "Scroll axis: x horizontal / y vertical / both",
+      paging: "Paging snap (capability constraint - B2 declaration only)",
+      refresh: "Pull-to-refresh (capability constraint - B2 declaration only)",
+      indicator: "Scroll indicator",
+    },
+  },
+  // —— 批次 F（#481 续）——
+  'p-scroll-view': {
+    desc: "Scroll container",
+    notes: [
+      "Matrix 01 §4: Skyline must-have (page-level scrolling, global scroll disabled); scroll-x/y, scroll-top/left, refresher, lower-threshold",
+      "Performance constraint (very-large-count reuse scenarios): thin wrapper -- no component-layer logic introduced, events passed through, no throttling/no state",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging/observability/test targeting -- the D-2 dogfooding contract)",
+      disabled: "Disabled state (interaction disabled + dimmed visuals; MP native disabled is passed through)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      scrollX: "Allows horizontal scrolling",
+      scrollY: "Allows vertical scrolling",
+      scrollTop: "Vertical scroll position (px)",
+      scrollLeft: "Horizontal scroll position (px)",
+      refresherEnabled: "Enables the custom pull-down refresher",
+      lowerThreshold: "Distance in px from the bottom that triggers the scrolltolower event",
+    },
+    events: {
+      scroll: "Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop)",
+      scrolltolower: "Scrolled to the bottom (triggered by lowerThreshold)",
+      refresherrefresh: "Custom pull-down refresher triggered",
+    },
+  },
+  'p-scrollable': {
+    desc: "Scrollable area",
+    notes: [
+      "Scroll container + bounce (elastic) + refresh (emit on pull-down refresher) + loadMore (emit load when scrolled to the bottom)",
+      "Web implementation: overflow scrolling + scroll event detection (the refresher pull will be wired to native gestures in a later batch)",
+      "Same source for both ends: div → view; refresh/bounce on MP/native are handled by the platform scroll component",
+    ],
+    props: {
+      bounce: "Elastic scrolling (iOS rubber-band)",
+      refresh: "Pull-down refresher (semantic declaration -- native implementation lands in a later batch)",
+      loadMore: "Load more when scrolled to the bottom",
+      loading: "Loading state (footer text toggling)",
+      height: "Visible height in px (0 = inherit/adapt)",
+    },
+    events: { 'load-more': "Load more (pagination on reaching the bottom)", refresh: "Refresh triggered" },
+  },
+  'p-segment': {
+    desc: "Segmented control",
+    notes: [
+      "options[{label,value?}] + controlled active (v-model:active) + select emit",
+      "Same source for both ends: div → view; MP-safe (v-for + method to read fields -- S3 p-tabbar convention)",
+    ],
+    props: { options: "Segment items [{label,value?}?] (defaults to label when value is omitted)", active: "The value of the currently active item" },
+    events: { select: "An item is selected" },
+  },
+  'p-select': {
+    desc: "Selector / overlay type",
+    notes: [
+      "options[{value,label}] + multiple + searchable + cascader (B2 base: single/multi-select panel; searchable/cascader in later batches)",
+      "★B2 Web-first: self-drawn dropdown panel (div); mapping to picker/overlay on the MP side comes in a later batch",
+      "Same source for both ends; no platform APIs (document-level listeners are forbidden -- close via mask click, aligning with the p-drawer pattern)",
+    ],
+    props: {
+      options: "Options [{value,label}?]",
+      modelValue: "Single-select value or an array of multi-select values",
+      multiple: "Multi-select mode",
+      placeholder: "Placeholder text",
+      searchable: "Search (B2 placeholder declaration -- implemented in a later batch)",
+      cascader: "Cascade (B2 placeholder declaration -- implemented in a later batch)",
+    },
+  },
+  'p-skeleton': {
+    desc: "Skeleton",
+    notes: [
+      "Matrix 10 business component: bind the loading state (:visible=\"loading\"), no built-in timer (C4)",
+      "lines is an array prop (width percentages) to work around the unavailable range-form v-for on MP (wx:for requires an array)",
+      "Shimmer animation goes through CSS keyframes (both ends)",
+    ],
+    props: {
+      pid: "Component instance identifier (for debugging/observability/test targeting -- the D-2 dogfooding contract)",
+      disabled: "Disabled state (interaction disabled + dimmed visuals; MP native disabled is passed through)",
+      ariaLabel: "Accessibility label (text read aloud by screen readers)",
+      visible: "Whether visible (show/hide driven by reactive data, zero platform branches)",
+      avatar: "Whether the header is avatar-shaped (skeleton)",
+      lines: "Row count (number of skeleton placeholder rows)",
+    },
+  },
+  'p-slider': {
+    desc: "Slider",
+    notes: [
+      "min/max/step constraints + v-model (modelValue ←→ update:modelValue)",
+      "Same source for both ends: Web input[type=range]; the MP compiler maps to the built-in slider in a later batch",
+    ],
+    props: {
+      modelValue: "Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract)",
+      min: "Minimum value",
+      max: "Maximum value",
+      step: "Step",
+    },
+  },
+  'p-spacer': {
+    desc: "Spacer",
+    notes: [
+      "Flexibly fills the remaining space (equivalent to flex:1): pushes the layout open so subsequent elements sit at the edge; grow/shrink adjustable",
+      "Same source for both ends: div → view; MP-safe (pure inline styles)",
+    ],
+    props: { grow: "Flex grow ratio (default 1 -- fills the remaining space)", shrink: "Shrink ratio (default 1)", minSize: "Own size lower bound in px (keeps it visible/tappable)" },
+  },
+  'p-svg': {
+    desc: "SVG graphics",
+    notes: [
+      "path (SVG path d data) + viewbox rendering; vector-first (no bitmaps)",
+      "★B2 Web-first: inline svg element (Skia vector mapping on the MP side in a later batch)",
+    ],
+    props: {
+      path: "SVG path d data (no fill semantics -- follows currentColor)",
+      viewbox: "View box \"x y w h\" (defaults to 0 0 24 24)",
+      size: "Size in px",
+      color: "Color",
+    },
+  },
+  'p-switch': {
+    desc: "Switch",
+    notes: [
+      "checked controlled v-model (modelValue ←→ update:modelValue); taps disabled while loading",
+      "Same source for both ends: div → view (Web self-draws the switch; the MP compiler maps to the built-in switch in a later batch)",
+    ],
+    props: { modelValue: "Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract)", loading: "Loading (switching disabled)" },
+  },
+  // —— 批次 G（#481 续）——
+  'p-tabbar': {
+    desc: "Bottom tab bar",
+    notes: [
+      "tabs ({key,label,badge?,icon?}[]) plus controlled active (v-model:active) plus select emit",
+      "Dual-end same-source: nav → view; item fields are read via methods (MP-safe: avoids the generic array typing TS18046)",
+    ],
+    props: { tabs: "Tab items array ({key,label,badge?,icon?})", active: "Key of the currently active item" },
+    events: { select: "An item is selected" },
+  },
+  'p-text': {
+    desc: "Text",
+    notes: [
+      "Matrix 01 §2: selectable mapping — Web user-select: text (.is-selectable class); the selectable attribute of MP native text",
+      "Dual-end same-source: span → text (compile-time mapping)",
+    ],
+    props: {
+      pid: "Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)",
+      ariaLabel: "Accessibility label (the text read aloud by a screen reader)",
+      selectable: "Whether the text is selectable",
+    },
+  },
+  'p-textarea': {
+    desc: "Multiline textarea",
+    notes: [
+      "Matrix 01 §6: value / maxlength / placeholder / focus / disabled + @input/@confirm/@focus/@blur",
+      "Event contract: :value + @input (payload { value } normalized cross-end, replacing v-model)",
+      "Dual-end same-source: textarea native passthrough (tag/passthrough); MP textarea natively supports bindconfirm",
+    ],
+    props: {
+      pid: "Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)",
+      ariaLabel: "Accessibility label (the text read aloud by a screen reader)",
+      value: "Bound value",
+      maxlength: "Maximum input length (<= 0 = unlimited)",
+      placeholder: "Placeholder hint text",
+      focus: "Auto focus",
+    },
+    events: {
+      input: "Input changes (payload { value } normalized cross-end — MP custom-component v-model only covers native input/textarea, hence the explicit event contract)",
+      confirm: "Keyboard confirm (Enter/Done key)",
+      focus: "Gains focus",
+      blur: "Loses focus",
+    },
+  },
+  'p-toast': {
+    desc: "Toast",
+    notes: [
+      "Matrix 01 §8: text plus duration auto-close (0 = do not auto-close) plus enter fade-in; driven by visible (B3 primitive)",
+      "Transition: CSS animation; Worklet custom component (bypassing the native showToast limitations) marked v0.6",
+    ],
+    props: {
+      pid: "Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)",
+      disabled: "Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)",
+      ariaLabel: "Accessibility label (the text read aloud by a screen reader)",
+      visible: "Whether it is visible (visibility driven by reactive data, zero platform branching)",
+      text: "Text to display",
+      duration: "Duration (ms)",
+      position: "Position",
+    },
+    events: { close: "Close" },
+  },
+  'p-toolbar': {
+    desc: "Toolbar overflow fold",
+    notes: [
+      "Navigation items exceeding the container → overflow items are folded into 'More' (an expandable panel); calcVisibleToolbarItems is a pure computation (fluid package)",
+      "Resolved against the container rather than the viewport (createContainerQuery); when the container is unmeasurable (MP has no ResizeObserver) → no folding, show all (iron rule G-22.2)",
+      "★In-vehicle: drive-mode / prefers-reduced-motion → no-motion class (motion disabled via CSS)",
+    ],
+    props: {
+      items: "Navigation items ({ key, label })",
+      itemWidth: "Single navigation item width (px; used for overflow calculation)",
+      moreWidth: "'More' button width (px)",
+      moreLabel: "'More' label text",
+    },
+    events: { select: "An item is selected" },
+  },
+  'p-transition': {
+    desc: "Transition (show/hide) — the semantics surface of CSS transition",
+    notes: [
+      "name: the transition preset (fade/slide-up/slide-down/slide-left/slide-right/zoom; CSS class p-transition-{name})",
+      "mode: in (enter) / out (exit) / both (both by default)",
+      "duration: transition duration in ms (300 by default)",
+      "visible: the show/hide switch — when false with mode out/both → the p-transition-hidden class is added to trigger the exit transition",
+      "★Cross-end: Web uses native CSS transition; Skyline supports transition — the same class toggle (plain but correct, G-22.2)",
+      "Pure CSS with no JS dependency; MP-compiler-safe — :class uses a single computed expression body (following the same convention as the p-safe safeClass)",
+    ],
+    props: {
+      name: "Transition preset name (fade/slide-up/slide-down/slide-left/slide-right/zoom)",
+      mode: "Transition direction: in (enter only) / out (exit only) / both (both directions)",
+      duration: "Transition duration (ms)",
+      visible: "Show/hide switch (controlled by the parent)",
+    },
+  },
+  'p-virtual-list': {
+    desc: "Virtualized long list",
+    notes: [
+      "Thin forwarding layer (same pattern as virtual-list): API surface items/itemHeight/height → single p-list-view implementation",
+      "Semantic naming aligned with G-32 (p-virtual-list); legacy tag virtual-list kept for compatibility",
+    ],
+    props: {
+      items: "List data (the array of items to render)",
+      itemHeight: "Fixed row height in px (prerequisite for virtualization)",
+      height: "Height of the visible viewport in px",
+    },
+  },
+  'p-zone': {
+    desc: "Container-breakpoint zone",
+    notes: [
+      "Container breakpoints (sm/md/lg/xl, based on container width rather than the viewport) → renders the corresponding named slot (sm/md/lg/xl; the xl slot serves as the fallback by default)",
+      "Thin shell referencing @proteus-vue/fluid (createContainerQuery)",
+      "★MP-safe: generic ref fallback (no ResizeObserver on MP → always the sm slot)",
+    ],
+    props: { designWidth: "Design-spec width (baseline for deriving container breakpoints; 375 by default)" },
+  },
 }
