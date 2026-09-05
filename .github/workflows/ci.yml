@@ -89,8 +89,11 @@ jobs:
       - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
         run: cd website && npm run check:plugin-docs
 
+      - name: 参考文档漂移门禁（CLI/编译规则目录与源一致）
+        run: cd website && npm run check:reference
+
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
-        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/website-audit-d2.test.ts tests/website-docs-engine.test.ts
+        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/website-audit-d2.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
 
   e2e-web:
     name: Web E2E（Playwright，需 Chromium）

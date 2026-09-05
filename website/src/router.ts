@@ -21,6 +21,7 @@ export const router = createRouter({
     { path: '/docs/system/:slug', name: 'doc-system', component: DocsPage },
     { path: '/docs/framework/:slug', name: 'doc-framework', component: DocsPage },
     { path: '/docs/plugin/:slug', name: 'doc-plugin', component: DocsPage },
+    { path: '/docs/reference/:slug', name: 'doc-reference', component: DocsPage },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
   // ★切页自动回顶——侧边栏/上下篇点击后从新页顶部阅读；后退/前进保留浏览器原位
