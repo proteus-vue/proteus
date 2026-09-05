@@ -6,6 +6,7 @@ import { defaultScopedPlugin, devtoolsRelayPlugin } from '@proteus-vue/plugin-vi
 import { docsMdPlugin } from '@proteus-vue/docs/vite'
 // ★module-plan B4：模块图谱 → Web manualChunks（有 modules/ 目录时自动生效）
 import { scanModuleConfigs, DependencyGraph, generateRollupOptions } from '@proteus-vue/module'
+import type { PluginOption } from 'vite'
 import path from 'node:path'
 
 const config: ProteusConfig = {
@@ -85,9 +86,9 @@ const config: ProteusConfig = {
   //   Web：框架内建 vue + route-blocks，此处补 defaultScoped（<style> 默认 scoped 对齐 MP 语义）/ devtools 中继 / docs 引擎；
   //   mp：框架内建 mpTransform（frameworkComponentsDir 上方已声明）；
   //   module-plan B4：Web manualChunks（有 modules/ 时自动生效）为 async 扫描——vite 字段支持 async 函数
-  vite: async (ctx: { command: string; mode: string }) => {
+  vite: async (ctx) => {
     const isMp = ctx.mode === 'mp-weixin'
-    const plugins: unknown[] = []
+    const plugins: PluginOption[] = []
     if (!isMp) {
       plugins.push(defaultScopedPlugin(), devtoolsRelayPlugin(), docsMdPlugin())
     }

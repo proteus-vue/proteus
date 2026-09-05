@@ -108,13 +108,13 @@ export async function resolveProteusViteConfig(
   }
 
   // —— 开发者扩展合并（proteus.config.vite：对象或 (ctx) => 对象；plugins 追加、build 深合并）——
-  const userVite = (config as { vite?: unknown }).vite
+  const userVite = config.vite
   let user: UserConfig | undefined | void
   if (typeof userVite === 'function') {
     // ★async 支持（examples module manualChunks 需 async 扫描）
-    user = await (userVite as (c: { command: 'serve' | 'build'; mode: string }) => UserConfig | Promise<UserConfig> | void)({ command, mode })
+    user = await userVite({ command, mode })
   } else if (userVite && typeof userVite === 'object') {
-    user = userVite as UserConfig
+    user = userVite
   }
   if (user) {
     const { plugins: userPlugins, resolve: userResolve, define: userDefine, build: userBuild, ...rest } = user

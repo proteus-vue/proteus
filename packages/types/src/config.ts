@@ -1,8 +1,18 @@
 // packages/types/src/config.ts
 // ★类型收口（10-type-consolidation）：ProteusConfig（原 @proteus-vue/plugin-vite/src/config.ts 的 interface）
 // runtime 值（defineConfig 等助手）留 @proteus-vue/plugin-vite
+// ★#421：vite 字段类型 = vite 官方 UserConfig（仅类型 import——vite 为本包类型依赖，零运行时）
+import type { UserConfig } from 'vite'
 import type { TransformRuleOverrides } from './compiler-types'
 import type { RouteMeta } from './router-types'
+
+export interface ViteConfigContext {
+  command: 'serve' | 'build'
+  mode: string
+}
+
+/** vite 官方配置别名（ProteusConfig.vite 字段语义） */
+export type ViteUserConfig = UserConfig
 
 /** ★G-29 编译器后端选择（compiler-backend-1-plan §5「切换方式」）：'node' 默认；'rust' → 构建内双编译语义等价校验 */
 export type CompilerBackend = 'node' | 'rust'
@@ -74,11 +84,13 @@ export interface ProteusConfig {
     /** 集中式 meta（决策 #113）：精确路径 > 目录前缀 > 默认 */
     meta?: Record<string, RouteMeta>
   }
-  /** ★#418 vite 透传（配置收敛——开发者不写 vite.config.ts）：
+  /** ★#418/★#421 vite 透传（配置收敛——开发者不写 vite.config.ts）：
    *   框架用 resolveProteusViteConfig 组装 vite 配置（vue/mpTransform/别名/构建参数全内置），
-   *   本字段做开发者扩展：对象（{ plugins, server, resolve… }，全 vite 兼容）或函数
-   *   （(ctx: { command, mode }) => 对象 | void）。运行时由 @proteus-vue/plugin-vite 消费（类型见其 vite-config 文档） */
-  vite?: unknown
+   *   本字段做开发者扩展——**类型即 vite 官方 UserConfig**（plugins/server/resolve/build…全兼容）：
+   *   对象形态直接给；函数形态 (ctx) => 对象（ctx 携带 command/mode，async 可用——module manualChunks 场景）。
+   *   合并语义：plugins 追加在框架插件后、resolve.alias 拼接保框架 @、define/build 深合并。
+   *   类型依赖：@proteus-vue/types 依赖 vite（仅类型引用，零运行时） */
+  vite?: ViteUserConfig | ((ctx: ViteConfigContext) => ViteUserConfig | void | Promise<ViteUserConfig | void>)
   /** ★框架内置组件目录（决策 #115 过渡：组件库未拆包时显式指向共享组件目录；缺省 root/src/components）
    *   ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后删除 */
   frameworkComponentsDir?: string

@@ -83,6 +83,22 @@ export async function runDevProgrammatic(opts: DevOptions, root = process.cwd())
   if (resolved.needsGenRoutes) runGenRoutes({ config: config as never, root })
   const vite = await importViteFrom(root)
   const server = await vite.createServer(resolved.config)
-  await server.listen() // vite 5 监听后自动打印本地 URL
+  await server.listen()
+  // ★#421 dev 体验：CLI 显式打印本地/网络地址（vite CJS 下原生 printUrls 易被优化/警告输出淹没——地址是 dev 的第一诉求）
+  const urls = server.resolvedUrls
+  console.log('')
+  console.log('[proteus] dev server 就绪：')
+  if (urls?.local?.length) {
+    for (const u of urls.local) console.log(`  ➜ Local:   ${u}`)
+  }
+  if (urls?.network?.length) {
+    for (const u of urls.network) console.log(`  ➜ Network: ${u}`)
+  }
+  if (!urls?.local?.length) {
+    const addr = server.httpServer?.address()
+    if (addr && typeof addr === 'object') console.log(`  ➜ Local:   http://localhost:${addr.port}/`)
+  }
+  console.log('  Ctrl+C 退出')
+  console.log('')
   return () => server.close()
 }

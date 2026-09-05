@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/types",
   "version": "0.1.0",
-  "description": "Proteus 框架级共享类型单一来源（types-plan B3）：Platform/PlatformTarget + ProteusConfig JSON Schema",
+  "description": "Proteus \u6846\u67b6\u7ea7\u5171\u4eab\u7c7b\u578b\u5355\u4e00\u6765\u6e90\uff08types-plan B3\uff09\uff1aPlatform/PlatformTarget + ProteusConfig JSON Schema",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -87,7 +87,8 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/lifecycle-types.ts src/utils.ts src/ir-guards.ts src/config.ts src/config-schema.ts src/define-proteus.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
   },
   "dependencies": {
-    "@proteus-vue/contracts": "0.1.0"
+    "@proteus-vue/contracts": "0.1.0",
+    "vite": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -591,6 +591,9 @@ importers:
       '@proteus-vue/contracts':
         specifier: 0.1.0
         version: link:../contracts
+      vite:
+        specifier: ^5.0.0
+        version: 5.4.21(@types/node@20.19.43)(sass@1.104.0)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
