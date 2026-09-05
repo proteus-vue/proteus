@@ -33,7 +33,7 @@ Then in WeChat DevTools:
 3. Details → Local settings → enable "Debug base library" and pick ≥ 2.29.2
 4. No need to hand-configure Skyline fields: `lazyCodeLoading` in `app.json` and `"renderer": "skyline"` in each page's `page.json` are generated automatically by gen-routes
 
-When the scaffold home page renders in the simulator, both targets are up.
+When the scaffold home page renders in the simulator, the two wired targets — Web and Mini Program — are both up (other targets join as render backends are wired; see [Ends & maturity](/docs/framework/ends-matrix)).
 
 ## Other targets
 

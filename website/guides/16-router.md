@@ -107,7 +107,7 @@ if (isDeepLinkAllowed(parseDeepLinkUrl('deeplink://app/user/7'), config)) {
 
 ## 诚实边界：官网现状
 
-本官网自身**当前用 vue-router 承载**——`website/src/router.ts` 的头注如实写道：`@proteus-vue/router` 的路由模型面向「编译期页面表 + 双端工程」（gen-routes 页面路由 / 小程序页面栈），而官网是纯 Web SPA + 动态文档段（`/docs/:slug`），这批页面用 vue-router 过渡。这个差距是刻意公开的 dogfooding 信号：官网没有把自家路由包装成已经全量落地，替换工作已登记评估（W-1 可审计缺口）——与「写官网回填 Router plan」的预期一致。路由框架本身的三端能力是真实落地的：scan / tree / codegen / 守卫 / 转场映射均有测试覆盖，小程序侧由编译期产物（`app.json` + 页面栈）承载。
+本官网自身**当前用 vue-router 承载**——`website/src/router.ts` 的头注如实写道：`@proteus-vue/router` 的路由模型面向「编译期页面表 + 按端 codegen（已接线 Web / 小程序）」（gen-routes 页面路由 / 小程序页面栈），而官网是纯 Web SPA + 动态文档段（`/docs/:slug`），这批页面用 vue-router 过渡。这个差距是刻意公开的 dogfooding 信号：官网没有把自家路由包装成已经全量落地，替换工作已登记评估（W-1 可审计缺口）——与「写官网回填 Router plan」的预期一致。路由框架本身的端能力是真实落地的：scan / tree / codegen / 守卫 / 转场映射均有测试覆盖，小程序侧由编译期产物（`app.json` + 页面栈）承载。
 
 ## 下一步
 

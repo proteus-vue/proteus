@@ -34,7 +34,7 @@ npm run build:mp
 3. 「详情 → 本地设置」勾选「调试基础库」并选择 ≥ 2.29.2
 4. Skyline 所需字段无需手配：`app.json` 的 `lazyCodeLoading`、各页 `page.json` 的 `"renderer": "skyline"` 均由 gen-routes 自动生成
 
-看到脚手架首页在模拟器里渲染出来，双端就都跑通了。
+看到脚手架首页在模拟器里渲染出来，Web 与小程序两个已接线端就都跑通了（其余端随渲染后端接线，见[端与成熟度](/docs/framework/ends-matrix)）。
 
 ## 其余端
 
