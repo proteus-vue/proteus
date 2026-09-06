@@ -990,6 +990,24 @@ describe('产物自校验（反编译黑盒）', () => {
 })
 
 describe('组件 class 透传（component/root-class，2026-08 真机实测）', () => {
+  it('★#496 柔性语义编译：p-grid 语义元素 → flex 档位产物（容器 flex + 子项档位容器 + basis 绑定）', () => {
+    const { wxml, js } = compileVueSfc(
+      "<script setup>const cards = ref([{ id: 1 }])</script>\n<template><p-grid :min-col-width=\"160\" :gap=\"12\" class=\"demo\"><view v-for=\"c in cards\" :key=\"c.id\" class=\"cell\">{{ c.id }}</view></p-grid></template>\n<style scoped>.demo { margin: 8px; }</style>",
+      { filename: 'pages/fluid.vue', fluidLayout: { designWidth: 375 } },
+    )
+    expect(wxml).not.toMatch(/<p-grid/)
+    expect(wxml).toMatch(/style="display:flex;flex-wrap:wrap;gap:12px"/)
+    expect(wxml).toMatch(/class="p-grid-item[^"]* cell[^"]*" style="flex:0 0 \{\{pgridBasis0\}\}px"/)
+    expect(js).toContain('pgridBasis0: 181.5')
+    expect(js).toContain('wx.getWindowInfo')
+  })
+
+  it('★#496 柔性语义编译：动态 props 回退运行时组件（警告 + 标签保留）', () => {
+    const { wxml, warnings } = compileVueSfc('<template><p-grid :min-col-width="n">x</p-grid></template>', { filename: 'pages/fluid2.vue' })
+    expect(wxml).toMatch(/<p-grid/)
+    expect(warnings.join('\n')).toContain('回退运行时组件')
+  })
+
   it('页面模式：组件标签 class → root-class 属性（scope class + 用户 class + :class 绑定合并）', () => {
     const { wxml } = compileVueSfc(
       '<script setup>const on = ref(true)</script>\n<template><p-view class="box" :class="{ on: on }">x</p-view></template>\n<style scoped>.box { padding: 8px; }</style>',

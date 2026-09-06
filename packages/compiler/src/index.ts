@@ -101,6 +101,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     transitions: tplResult.transitions,
     storeBindings: tplResult.storeBindings,
     templateRefs: tplResult.templateRefs,
+    semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
     trace: scriptTrace,
   })

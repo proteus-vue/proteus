@@ -10,7 +10,7 @@ import type {
 } from '@vue/compiler-dom'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
 import type { FluidLayoutConfig } from '@proteus-vue/types/compiler-types'
-import { generateClamp } from './fluid-layout'
+import { generateClamp, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
 import { executeRule } from './transforms/registry'
@@ -268,6 +268,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
+  /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位变量与求解段；index = basis 变量序） */
+  semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultBasis: number }>
 }
 
 /**
@@ -393,7 +395,153 @@ function serializeProgress(node: ElementNode, ctx: SerializeContext): string {
   )
 }
 
+// ★#496 柔性语义编译 helper（p-grid）
+
+/** 语义编译标签集合（本轮 p-grid；p-stack/p-fit 后续 #496 M2——flex 语义可先留运行时组件） */
+const SEMANTIC_COMPILE_TAGS = new Set(['p-grid'])
+
+/** 需迁移到合成包装节点的指令（循环/条件/渲染 key——包装承载渲染，内容节点剥离） */
+const LOOP_DIRECTIVES = new Set(['for', 'if', 'else-if', 'else', 'key'])
+
+/** 解析 p-grid 语义 props（MVP：静态属性或 :bind 数字字面量；其它形态 → 回退运行时组件并警告） */
+function tryParseSemanticGrid(node: ElementNode): { minColWidth: number; gap: number } | null {
+  let minColWidth = 160
+  let gap = 12
+  for (const p of node.props) {
+    const d = p as { type: number; name?: string; arg?: { content: string } | null; exp?: { content: string } | null; value?: { content: string } | null }
+    if (d.type === NodeTypes.ATTRIBUTE) {
+      const name = d.name ?? ''
+      if (name !== 'min-col-width' && name !== 'minColWidth' && name !== 'gap') continue
+      const raw = d.value ? d.value.content : undefined
+      if (raw === undefined) continue
+      const num = Number(raw.trim())
+      if (!Number.isFinite(num)) return null
+      if (name === 'gap') gap = num
+      else minColWidth = num
+      continue
+    }
+    // :bind 数字字面量（:min-col-width="160"）——arg 即属性名（kebab 原文），exp 即字面量
+    if (d.type === NodeTypes.DIRECTIVE) {
+      if (d.name !== 'bind') continue
+      const propName = exprContent(d.arg) // 'min-col-width' / 'minColWidth' / 'gap'
+      if (propName !== 'min-col-width' && propName !== 'minColWidth' && propName !== 'gap') continue
+      const raw = exprContent(d.exp)
+      const num = Number(raw.trim())
+      if (!Number.isFinite(num)) return null
+      if (propName === 'gap') gap = num
+      else minColWidth = num
+    }
+  }
+  return { minColWidth, gap }
+}
+
+/** 合成元素（走标准递归序列化——class/scope/v-for 处理自动一致） */
+function makeSemanticElement(src: ElementNode, tag: string, props: unknown[], children: unknown[]): ElementNode {
+  return { type: NodeTypes.ELEMENT, tag, tagType: src.tagType, props: props as never, children: children as never, loc: src.loc } as unknown as ElementNode
+}
+
+/** 静态属性节点 */
+function attrValue(name: string, value: string): AttributeNode {
+  return { type: NodeTypes.ATTRIBUTE, name, value: { content: value, loc: { start: { line: 1, column: 1, offset: 0 }, end: { line: 1, column: 1, offset: 0 }, source: '' } } } as AttributeNode
+}
+
+/**
+ * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
+ * basis 运行时由 script 档位段 setData（pgridBasis{index}），子项 flex-basis 共享变量一次刷新
+ */
+function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: { minColWidth: number; gap: number }): string {
+  const index = ctx.semanticGrids.length
+  const designWidth = ctx.fluidLayout?.designWidth ?? 375
+  const cols = calcColumns(designWidth, grid.minColWidth, grid.gap)
+  const defaultBasis = Math.round(((designWidth - (cols - 1) * grid.gap) / cols) * 10) / 10
+  ctx.semanticGrids.push({ minColWidth: grid.minColWidth, gap: grid.gap, index, defaultBasis })
+  ctx.trace?.add('fluid/semantic-grid', {
+    line: node.loc.start.line,
+    before: `<p-grid min-col-width="${grid.minColWidth}" gap="${grid.gap}">…</p-grid>`,
+    after: `容器 flex(row/wrap/gap ${grid.gap}px) + 子项 p-grid-item（basis {{pgridBasis${index}}}px——档位运行时求解，#496）`,
+  })
+
+  const semanticProp = (dirName: string): boolean => dirName === 'min-col-width' || dirName === 'minColWidth' || dirName === 'gap'
+
+  // 容器 props：p-grid 自身 v-if/v-for/用户 class/style 保留；仅剥语义 props（静态/bind min-col-width·gap）
+  const containerProps: unknown[] = []
+  for (const p of node.props) {
+    const d = p as { type: number; name?: string; arg?: { content: string } | null }
+    const isDir = d.type === NodeTypes.DIRECTIVE
+    if (isDir) {
+      const dirName = d.name ?? ''
+      if (dirName === 'bind' && (semanticProp(exprContent(d.arg)) || exprContent(d.arg) === 'style')) continue
+      containerProps.push(p)
+      continue
+    }
+    if (semanticProp(d.name ?? '') || d.name === 'style') continue
+    containerProps.push(p)
+  }
+  containerProps.push(attrValue('style', `display:flex;flex-wrap:wrap;gap:${grid.gap}px`))
+  if (!containerProps.some((p) => (p as { type: number; name?: string }).type === NodeTypes.ATTRIBUTE && (p as { name?: string }).name === 'class')) {
+    containerProps.push(attrValue('class', 'p-grid'))
+  } else {
+    // 用户 class 与 p-grid 并存：class 属性追加（Scope 后缀由序列化统一处理）
+    for (let i = 0; i < containerProps.length; i++) {
+      const p = containerProps[i] as { type: number; name?: string; value?: { content: string } }
+      if (p.type === NodeTypes.ATTRIBUTE && p.name === 'class' && p.value) p.value.content += ' p-grid'
+    }
+  }
+  const container = makeSemanticElement(node, 'view', containerProps, [])
+
+  // 直接子元素 → 包档位容器（循环/条件迁移到包装）；class 合并（'p-grid-item ' + 子类）；style 合并（子 style + basis）
+  const children: unknown[] = []
+  for (const child of node.children) {
+    if (child.type !== NodeTypes.ELEMENT) {
+      children.push(child)
+      continue
+    }
+    const el = child as ElementNode
+    const loop: unknown[] = []
+    const rest: unknown[] = []
+    let childClass = ''
+    let childStyle = ''
+    for (const p of el.props) {
+      const d = p as { type: number; name?: string; arg?: { content: string } | null; value?: { content: string } }
+      const isDir = d.type === NodeTypes.DIRECTIVE
+      if (isDir) {
+        // 指令名在 name（v-for/if/else…）；bind-key 经 arg 识别
+        if (LOOP_DIRECTIVES.has(d.name ?? '') || (d.name === 'bind' && exprContent(d.arg) === 'key')) {
+          loop.push(p)
+          continue
+        }
+        rest.push(p)
+        continue
+      }
+      if (d.name === 'class' && d.value) {
+        childClass = d.value.content.trim()
+        continue
+      }
+      if (d.name === 'style' && d.value) {
+        childStyle = d.value.content.trim()
+        continue
+      }
+      rest.push(p)
+    }
+    const wrapProps: unknown[] = [...loop, attrValue('class', childClass ? `p-grid-item ${childClass}` : 'p-grid-item')]
+    if (childStyle) wrapProps.push(attrValue('style', `${childStyle}; flex:0 0 {{pgridBasis${index}}}px`))
+    else wrapProps.push(attrValue('style', `flex:0 0 {{pgridBasis${index}}}px`))
+    wrapProps.push(...rest)
+    const item = makeSemanticElement(el, 'view', wrapProps, [{ ...el, props: [...rest] } as unknown as ElementNode])
+    children.push(item)
+  }
+  ;(container as unknown as { children: unknown[] }).children = children
+  return serializeElement(container, ctx)
+}
+
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
+  // ★#496 柔性语义编译：<p-grid> 语义元素——MP 按端 codegen（容器 flex + 子项档位容器，basis 运行档位 setData）
+  if (SEMANTIC_COMPILE_TAGS.has(node.tag)) {
+    const grid = tryParseSemanticGrid(node)
+    if (grid) return serializeSemanticGrid(node, ctx, grid)
+    ctx.warnings.push(`<p-grid> 的 min-col-width/gap 需为静态数值（动态 props 语义编译暂不支持 #496 MVP）——已回退运行时组件（仅 Web 可用）`)
+    ctx.trace?.add('fluid/semantic-grid', { line: node.loc.start.line, before: '<p-grid 动态 props>', after: '回退运行时组件（#496 MVP 限制）' })
+  }
   // ★Batch A（vue-compat）：平台无对等标签——显式警告（反黑盒，不再静默输出无效产物）
   if (node.tag === 'component') {
     ctx.warnings.push(
@@ -825,6 +973,8 @@ export function transformTemplateToWxml(
     transitions: [],
     storeBindings: new Set<string>(),
     templateRefs: new Set<string>(),
+    // ★#496 柔性语义编译：p-grid 收集
+    semanticGrids: [],
     // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
     fluidLayout: opts.fluidLayout,
   }
@@ -884,6 +1034,7 @@ export function transformTemplateToWxml(
     // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
     storeBindings: [...ctx.storeBindings],
     templateRefs: [...ctx.templateRefs],
+    semanticGrids: ctx.semanticGrids,
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,
     warnings: ctx.warnings,

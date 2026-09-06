@@ -824,6 +824,27 @@ function watchTail(w: WatchInfo | undefined): string {
 }
 
 /**
+ * ★#496 柔性语义编译：p-grid 档位求解段（注入 onLoad/attached 最前）——小程序窗口宽固定
+ * （wx.getWindowInfo 读一次），calcColumns 内联（运行期不可 import 编译器工具）；各组按
+ * minColWidth/gap 求列数 → basis px，一次 setData。Web 不走本通道（真实 Vue 组件 CSS grid）。
+ */
+function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
+  if (!grids.length) return ''
+  const perGrid = grids
+    .map((g) => {
+      const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / (${g.minColWidth} + ${g.gap})))`
+      return `__sb[${JSON.stringify(`pgridBasis${g.index}`)}] = Math.round(((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) * 10) / 10`
+    })
+    .join('\n')
+  return [
+    "const __pw = (typeof wx !== 'undefined' && wx.getWindowInfo) ? wx.getWindowInfo().screenWidth : 375",
+    'const __sb = {}',
+    perGrid,
+    'this.setData(__sb)',
+  ].join('\n')
+}
+
+/**
  * ★#494 方法体 TS 类型语法统一剥除器（打法收敛：不再按形态追加 as/注解/泛型正则——
  * 断言/注解可任意嵌套（函数类型/泛型/对象字面量/索引访问/数组后缀），正则组合追不完）：
  *  ① as 断言（深度平衡单遍剥离）② 泛型调用注入 fn<Type>(x) ③ const/let 类型注解 ④ 块内箭头参数/返回注解
@@ -1321,6 +1342,13 @@ export function transformScriptToPage(
     if (bridgeHooks.hasPageScrollTo) dataExtra.__proteusPageScrollTop = 0
   }
 
+  const semanticGrids = extra.semanticGrids ?? []
+  const semanticGridInit = semanticGridInitCode(semanticGrids) // ★#496 档位求解段（init 最前）
+  // ★#496 p-grid 默认 basis（首帧/无 wx 时用设计稿档——防渲染 0 宽）
+  if (!disabled.has('fluid/semantic-grid') && semanticGrids.length) {
+    for (const g of semanticGrids) dataExtra[`pgridBasis${g.index}`] = g.defaultBasis
+  }
+
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra)]
   if (dataEntries.length) {
     lines.push('  data: {')
@@ -1461,7 +1489,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
   }
   // ★#495c 初始化序：顶层副作用 → runtimeInits（先于 computed——computed 可依赖 runtimeInit 值如 gridClass→gridOk）→ computed（含 runtimeInit 裸名/props 改写）→ store/app-config 桥 → 快照 → immediate watch → provide/inject
   const initLineSeq = (): string[] =>
-    [topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+    [semanticGridInit, topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -1470,7 +1498,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
       lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
     }
     // ★#495c 组件 attached：runtimeInit 先于 computed（顺序同页面 initLineSeq）
-    const initLines = [runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
+    const initLines = [semanticGridInit, runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }

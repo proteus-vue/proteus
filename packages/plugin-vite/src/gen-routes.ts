@@ -442,13 +442,15 @@ function collectComponents(file: string): Record<string, string> {
   const src = fs.readFileSync(file, 'utf-8')
   const tpl = src.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] ?? ''
   const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
+  // ★#496 语义编译标签：MP 模板转换在产物层展开（非组件），不注入 usingComponents（collectComponents 扫源模板会误收）
+  const semanticTags = new Set(['p-grid'])
   const used = new Set<string>()
   const tagRe = /<([a-z][\w-]*)/g
   let m: RegExpExecArray | null
   while ((m = tagRe.exec(tpl))) {
     const tag = m[1]
     if (tag.startsWith('!')) continue // 注释
-    if (NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag)) continue
+    if (NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag) || semanticTags.has(tag)) continue
     used.add(tag)
   }
   const out: Record<string, string> = {}
