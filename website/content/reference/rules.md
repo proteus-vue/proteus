@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 78 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 79 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（42）
 
@@ -558,7 +558,7 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 
 > why: Skyline 组件支持表 progress 暂不考虑（真机实测不渲染）——降级自定义结构双端一致 + Skyline 可用（16-progress-skyline-degrade）
 
-## 脚本转换（25）
+## 脚本转换（26）
 
 ### `script/const-to-data`
 
@@ -678,6 +678,19 @@ after:  onLoad: this.setData({ appConf: getConfig() }) + onAppConfigChange(() =>
 ```
 
 > why: Pinia store 桥（$subscribe → setData）的对位物——app-config 无 $subscribe，新增 onAppConfigChange 订阅 API 作为桥的数据源；web 端 useAppConfig 响应式语义不变（守卫保留）
+
+### `script/runtime-init-snapshot`
+
+**模板引用的 runtimeInit 快照进 data（★#494）**
+
+模板表达式引用了 runtimeInit 变量名（templateRefs ∩ runtimeInits）→ onLoad 在赋值后 setData({ name: this.name }) 快照进 data；app-config 桥覆盖的不重复。实例属性模板读不到——不快照则 {{ x }}/:style="x" 落空（config-demo 的 :style="guardStyle"）
+
+```
+before: :style="guardStyle"（guardStyle = makeGuardStyle() runtimeInit）
+after:  onLoad: this.setData({ guardStyle: this.guardStyle })
+```
+
+> why: runtimeInit 通道的既定限制是「实例属性：模板绑定不支持」——快照把一次性初始化值（guard.patch 产物等）带进 data，模板绑定可用；响应式场景仍应用 Pinia store 桥/app-config 桥
 
 ### `script/store-binding`
 

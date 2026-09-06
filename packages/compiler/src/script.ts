@@ -563,9 +563,38 @@ interface MethodInfo {
   line: number
 }
 
-/** 剥离方法参数 TS 类型标注（产物是 JS；e: { detail?: number } → e） */
+/** 剥离方法参数 TS 类型标注（产物是 JS；e: { detail?: number } → e）
+ *  ★#494 兼容泛型参数（Record<string, unknown>）：深度计数扫描——旧实现 [^,)]+ 被逗号截断，
+ *  泛型含逗号时残留碎片混进参数名（devtools-open-api-demo 语法错误）。尾部逗号由后续 trim 收口 */
 function stripParamTypes(params: string): string {
-  return params.replace(/:\s*[^,)]+/g, '').trim()
+  let depth = 0
+  let out = ''
+  let i = 0
+  while (i < params.length) {
+    const ch = params[i]
+    if (ch === '<' || ch === '[' || ch === '(') depth++
+    else if (ch === '>' || ch === ']' || ch === ')') depth = Math.max(0, depth - 1)
+    else if (ch === ':' && depth === 0) {
+      i++
+      while (i < params.length) {
+        const c2 = params[i]
+        if (c2 === '<' || c2 === '[' || c2 === '(') depth++
+        else if (c2 === '>' || c2 === ']' || c2 === ')') depth = Math.max(0, depth - 1)
+        else if (c2 === ',' && depth === 0) break
+        i++
+      }
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+    .split(',')
+    .map((p) => p.trim().replace(/\?$/, '')) // ★#494 剥参数可选标记 ?（JS 无此语法——TS 可选参数）
+    .filter(Boolean)
+    .join(', ')
+    .replace(/,\s*,/g, ',')
+    .trim()
 }
 
 /**
@@ -595,7 +624,7 @@ function checkDefineExpose(
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
 function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, MethodInfo> {
   const methods: Record<string, MethodInfo> = {}
-  const fnRe = /(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/g
+  const fnRe = /(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]]*)?\s*\{/g
   let m: RegExpExecArray | null
   if (!disabled?.has('script/function-to-methods')) {
     while ((m = fnRe.exec(source))) {
@@ -653,9 +682,20 @@ function computedInitLine(computeds: Record<string, ComputedInfo>): string {
   return `this.setData({ ${entries.map(([n, c]) => `${n}: ${c.expr}`).join(', ')} })`
 }
 
-/** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行） */
-function runtimeInitLine(inits: Array<{ name: string; call: string }>): string {
-  return inits.map((i) => `this.${i.name} = ${i.call}`).join('\n')
+/** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
+ *  ★#494 call 为本页方法名（methodNames 命中）→ this.<method>() 裸调用改写——
+ *  微信 Page 顶层方法必须 this 调用（词法查找必 ReferenceError：config-demo 的 makeGuardStyle 白屏根因之一） */
+function runtimeInitLine(inits: Array<{ name: string; call: string }>, methodNames?: Set<string>): string {
+  return inits
+    .map((i) => {
+      let call = i.call
+      if (methodNames) {
+        const m = call.match(/^([A-Za-z_$][\w$]*)\s*\(/)
+        if (m && methodNames.has(m[1])) call = `this.${call}`
+      }
+      return `this.${i.name} = ${call}`
+    })
+    .join('\n')
 }
 
 /**
@@ -772,14 +812,98 @@ function watchTail(w: WatchInfo | undefined): string {
 }
 
 /**
+ * ★#494 方法体 TS 类型语法统一剥除器（打法收敛：不再按形态追加 as/注解/泛型正则——
+ * 断言/注解可任意嵌套（函数类型/泛型/对象字面量/索引访问/数组后缀），正则组合追不完）：
+ *  ① as 断言（深度平衡单遍剥离）② 泛型调用注入 fn<Type>(x) ③ const/let 类型注解 ④ 块内箭头参数/返回注解
+ * 产物是 JS——类型语法必须全剥，否则语法错误（页面真实编译后暴露的存量缺口：
+ * 此前带类型注解的顶层函数被 fnRe 漏掉整段静默丢弃，fnRe 修复后积压形态集中暴露）。
+ */
+function stripTypeSyntax(body: string): string {
+  let out = body
+  // ① as 断言：单遍扫描，类型表达式按括号/尖括号/花括号/方括号深度平衡消费；字符串字面量整段跳过；
+  //   零深度遇语句边界（; , 换行）或外层闭合（) } ]）即停——数组后缀 [] 在深度内一并剥除
+  let res = ''
+  let i = 0
+  while (i < out.length) {
+    const hit = out.indexOf(' as ', i)
+    if (hit < 0) {
+      res += out.slice(i)
+      break
+    }
+    res += out.slice(i, hit)
+    i = hit + 4
+    let depth = 0
+    let prev = ''
+    let stopped = false
+    while (i < out.length && !stopped) {
+      const ch = out[i]
+      if (ch === "'" || ch === '"' || ch === '`') {
+        const q = ch
+        i++
+        while (i < out.length && out[i] !== q) {
+          if (out[i] === '\\') i++
+          i++
+        }
+        i++
+        prev = q
+        continue
+      }
+      // 箭头函数 '=>' 的 > 不是类型闭合（Record<..., (v: unknown) => string | null> 内嵌箭头类型）
+      if (ch === '>' && prev === '=') {
+        prev = ch
+        i++
+        continue
+      }
+      if (ch === '<' || ch === '(' || ch === '{' || ch === '[') depth++
+      else if (ch === '>' || ch === ')' || ch === '}' || ch === ']') {
+        if (depth === 0) {
+          stopped = true
+          continue
+        }
+        depth--
+      } else if (depth === 0) {
+        // 类型词法集合：标识符/./|/&/空格；换行与其余字符（; , + - * / = ?）视为语句边界
+        // ★换行必须停止：类型后的 \n 被吞会与下一行粘行（方法闭 } 粘进 RHS 扫描 → ref 写入双 } 嵌套错误）
+        if (ch === '\n' || ch === '\r' || ch === '\t' || !/[A-Za-z0-9_$.|& ]/.test(ch)) {
+          stopped = true
+          continue
+        }
+      }
+      prev = ch
+      i++
+    }
+  }
+  out = res
+  // ② 泛型调用注入剥离：fn<{ ... }>(args) / fn<Type>(args) → fn(args)
+  out = out.replace(/([A-Za-z_$][\w$]*)<\{[^\n]*?\}\s*>\s*\(/g, '$1(')
+  out = out.replace(/([A-Za-z_$][\w$]*)<[A-Za-z_$][\w$]*>\s*\(/g, '$1(')
+  // ③ 块内 const/let 类型注解剥离：const f: Record<string, number> = {...} → const f = {...}
+  out = out.replace(/\b(const|let)\s+([A-Za-z_$][\w$]*)\s*:\s*[^=\n]+=/g, (m, kw, name) => `${kw} ${name} =`)
+  // ④ 块内箭头函数参数/返回类型注解剥离：(n: IRNode): void => → (n) =>
+  out = out.replace(/\(([^(){}]*)\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
+  return out
+}
+
+/**
  * 方法体裸调用改写：已知组件方法名 → this.name(（真机修复：微信组件方法必须在 methods 且须 this 调用，
  * 裸标识符调用是词法查找 → 顶层/全局找不到 → ReferenceError / 事件报 does not have a method）
  * methodNames 白名单精确区分：组件方法（改写）vs 模块函数/内置（setTimeout/eventValue 等 → 保持裸调用）
+ * ★#494 runtimeInitNames：runtimeInit 变量的裸标识符引用 → this.<name>（toggleGlass 内的 appConf.features
+ *   原样词法查找必 ReferenceError——变量是实例属性 this.appConf）
  */
-function rewriteBareMethodCalls(body: string, methodNames: Set<string>): string {
+function rewriteBareMethodCalls(body: string, methodNames: Set<string>, runtimeInitNames?: Set<string>): string {
   let out = body
   for (const name of methodNames) {
     out = out.replace(new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g'), `this.${name}(`)
+  }
+  if (runtimeInitNames) {
+    for (const name of runtimeInitNames) {
+      // 裸标识符 → this.<name>；三例外：属性访问（.name）、声明处（const/let/var name）、保持原样
+      out = out.replace(
+        new RegExp(`(?<!\\.)\\b(const\\s+|let\\s+|var\\s+)?${name}\\b`, 'g'),
+        (m, decl) => (decl ? m : `this.${name}`),
+      )
+    }
   }
   return out
 }
@@ -798,9 +922,10 @@ function rewriteRefAccess(
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
-  // ★platform-plan B1：方法体内 TS 类型断言剥离（as unknown/any/never/标识符/单层泛型——产物是 JS；复杂嵌套断言仍 MVP 限制）
-  out = out.replace(/\s+as\s+(?:unknown|any|never)\b/g, '')
-  out = out.replace(/\s+as\s+[A-Za-z_$][\w$]*(?:<[^;\n]*?>)?/g, '')
+  // TS 类型语法剥离（产物是 JS）：统一由确定性扫描器处理——断言/注解/泛型
+  // ★#494 打法收敛：此前按形态逐个打正则补丁（as 标识符/对象/字符串/数组/嵌套函数类型…追不完）——
+  //  替换为括号/尖括号深度平衡的剥除器（stripTypeSyntax），任意嵌套一次覆盖；不再新增形态正则
+  out = stripTypeSyntax(out)
   // 组件事件（v0.3）：emit('xxx', payload) → this.triggerEvent('xxx', payload)（微信组件方法）
   if (emitEnabled) out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
@@ -1166,6 +1291,8 @@ export function transformScriptToPage(
   }
   // ★方法名白名单：方法体裸调用改写 this.x()（模块函数/内置不在白名单 → 保持裸调用）
   const methodNames = new Set<string>(Object.keys(methods))
+  // ★#494 runtimeInit 变量名（方法体/生命周期体内裸标识符引用 → this.<name>——实例属性不在词法作用域）
+  const runtimeInitNames = new Set<string>(runtimeInits.map((i) => i.name))
 
   // ★15-page-scroll-container 批次2/3：页面滚动 API 桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
   //   页面级钩子（onPageScroll/onReachBottom/onPullDownRefresh/wx.pageScrollTo）靠自动包装 scroll-view 事件触发（template 侧绑定）
@@ -1234,7 +1361,7 @@ export function transformScriptToPage(
   if (extra.isComponent && propWatches.length) {
     lines.push('  observers: {')
     for (const w of propWatches) {
-      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
+      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
       const bodyLines = observerBody.split('\n')
       lines.push(`    ${w.propField}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
@@ -1272,7 +1399,7 @@ export function transformScriptToPage(
   }
 
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
@@ -1291,7 +1418,7 @@ export function transformScriptToPage(
   if (lifecycles.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
-    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
+    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
@@ -1305,9 +1432,23 @@ ${unloadBody}` : unloadBody)}
 ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
   },`)
   }
-  // ★#494 onLoad 初始化序：顶层副作用调用（initAppConfig 等）→ computed → runtimeInits（已含改写后的命令式调用）→ store 桥 → app-config 桥 → immediate watch → provide/inject
+  // ★#494 onLoad 初始化序：顶层副作用调用（initAppConfig 等）→ computed → runtimeInits（已含方法调用 this 改写 + 命令式改写）→ store 桥 → app-config 桥 → 模板引用快照 → immediate watch → provide/inject
+  // 模板引用的 runtimeInit 变量 → 快照进 data（实例属性模板读不到；app-config 桥已自带快照的不重复）
+  const templateRefNames = new Set(extra.templateRefs ?? [])
+  const runtimeInitSnapshots = runtimeInits
+    .filter((i) => templateRefNames.has(i.name) && !appConfigBindings.some((b) => b.name === i.name))
+    .map((i) => i.name)
+  const runtimeInitSnapshotLine = runtimeInitSnapshots.length
+    ? `this.setData({ ${runtimeInitSnapshots.map((n) => `${n}: this.${n}`).join(', ')} })`
+    : ''
+  if (runtimeInitSnapshots.length) {
+    trace?.add('script/runtime-init-snapshot', {
+      before: `模板引用 runtimeInit 变量：${runtimeInitSnapshots.join(' / ')}`,
+      after: 'onLoad：setData(快照) 进 data（实例属性模板读不到，#494）',
+    })
+  }
   const initLineSeq = (): string[] =>
-    [topLevelCalls.length ? topLevelCalls.join('\n') : '', computedInitLine(computeds), runtimeInitLine(runtimeInits), storeBindingInit, appConfigBindingInit, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+    [topLevelCalls.length ? topLevelCalls.join('\n') : '', computedInitLine(computeds), runtimeInitLine(runtimeInits, methodNames), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -1327,7 +1468,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
     const initLines = initLineSeq()
-    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)
+    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -1373,7 +1514,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
     const braceIdx = m.src.indexOf('{')
     const sig = m.src.slice(0, braceIdx + 1)
     const body = m.src.slice(braceIdx + 1)
-    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames)},`, m.line)
+    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)},`, m.line)
   }
   // ★15-page-scroll-container 批次2/3：桥接方法生成（dataExtra 已在 dataEntries 前赋值）
   if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
@@ -1403,14 +1544,14 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
   for (const w of Object.values(watches)) {
     if (w.propField && !w.immediate) continue
     methodNames.add(`proteusWatch${w.id}`)
-    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${src}`, w.line)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {
     if (!c.setter) continue
     methodNames.add(`proteusSet${capitalize(cname)}`)
-    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames))}\n  },`
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发

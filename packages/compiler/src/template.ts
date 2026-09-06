@@ -264,6 +264,8 @@ interface SerializeContext {
   transitions: Array<{ ref: string; tName: string; index: number }>
   /** ★pinia-plan 12 P1：模板 store.<field> 引用字段（script 生成 $subscribe → setData 同步） */
   storeBindings: Set<string>
+  /** ★#494 模板表达式中的裸标识符（与 script runtimeInits 求交 → 快照 setData——实例属性模板读不到） */
+  templateRefs: Set<string>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
 }
@@ -274,6 +276,8 @@ interface SerializeContext {
  * 语义：store 经 useXxxStore() 编译为实例属性（runtimeInit），模板绑定经 onLoad 的 $subscribe → setData 同步
  */
 function rewriteStoreRefs(expr: string, ctx: SerializeContext): string {
+  // ★#494 收集表达式裸标识符（script 侧与 runtimeInits 求交 → 快照 setData）
+  for (const id of expr.match(/\b[A-Za-z_$][\w$]*\b/g) ?? []) ctx.templateRefs.add(id)
   return expr.replace(/\bstore\.([A-Za-z_$][\w$]*)/g, (m, field: string) => {
     ctx.storeBindings.add(field)
     return field
@@ -820,6 +824,7 @@ export function transformTemplateToWxml(
     usesTransition: false,
     transitions: [],
     storeBindings: new Set<string>(),
+    templateRefs: new Set<string>(),
     // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
     fluidLayout: opts.fluidLayout,
   }
@@ -878,6 +883,7 @@ export function transformTemplateToWxml(
     transitions: ctx.transitions,
     // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
     storeBindings: [...ctx.storeBindings],
+    templateRefs: [...ctx.templateRefs],
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,
     warnings: ctx.warnings,

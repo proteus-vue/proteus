@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 78 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 79 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (42)
 
@@ -558,7 +558,7 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 
 > why: progress is not currently on the Skyline component-support list (real-device tests show it does not render) — the downgraded custom structure keeps both ends consistent and is usable on Skyline (16-progress-skyline-degrade)
 
-## Script transforms (25)
+## Script transforms (26)
 
 ### `script/const-to-data`
 
@@ -678,6 +678,19 @@ after:  onLoad: this.setData({ appConf: getConfig() }) + onAppConfigChange(() =>
 ```
 
 > why: The counterpart of the Pinia store bridge ($subscribe → setData) — app-config has no $subscribe, so the new onAppConfigChange subscription API serves as the bridge data source; web useAppConfig reactive semantics unchanged (guard retained)
+
+### `script/runtime-init-snapshot`
+
+**Snapshot of template-referenced runtimeInits into data (#494)**
+
+When a template expression references a runtimeInit variable name (templateRefs ∩ runtimeInits), onLoad issues setData({ name: this.name }) after assignment; names already covered by the app-config bridge are skipped. Instance properties are unreachable from templates — without the snapshot {{ x }} / :style="x" renders empty (config-demo :style="guardStyle")
+
+```
+before: :style="guardStyle"（guardStyle = makeGuardStyle() runtimeInit）
+after:  onLoad: this.setData({ guardStyle: this.guardStyle })
+```
+
+> why: The established runtimeInit limitation is "instance property: template binding unsupported" — the snapshot brings one-shot initialized values (e.g. guard.patch results) into data so template bindings work; reactive scenarios should still use the Pinia store bridge / app-config bridge
 
 ### `script/store-binding`
 

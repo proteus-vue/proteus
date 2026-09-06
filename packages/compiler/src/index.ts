@@ -100,6 +100,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     rules: options.rules,
     transitions: tplResult.transitions,
     storeBindings: tplResult.storeBindings,
+    templateRefs: tplResult.templateRefs,
     moduleImports: options.moduleImports,
     trace: scriptTrace,
   })
