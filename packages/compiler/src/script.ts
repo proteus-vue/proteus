@@ -843,12 +843,14 @@ function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; i
 }
 
 /**
- * ★#496c 柔性语义编译：p-grid 档位精修段（页面 onReady——SelectorQuery 实测容器宽，#496b 容器 padding 教训：
- * 列数基准必须是容器实际宽而非屏幕宽）。回调 ES5 风格（Skyline 基础库兼容）。
+ * ★#496d 柔性语义编译：p-grid 档位函数 + resize 重算（onReady 注入）——
+ * ①SelectorQuery 实测容器宽（页面 padding 下屏宽近似会溢出，#496b）②wx.onWindowResize 重算：
+ * 模拟器拖动宽度/真机旋转后 onLoad/onReady 不重跑，旧 px 档会让大容器一列且不满（复测根因）
+ * ③onUnload 注销 resize（this.__pgOff）。回调 ES5 风格。
  */
 function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
   if (!grids.length) return ''
-  const blocks = grids
+  const refreshBody = grids
     .map((g) => {
       const MC = g.minColWidth
       const GP = g.gap
@@ -864,7 +866,22 @@ function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; 
       ].join('\n')
     })
     .join('\n')
-  return `var __self = this\n${blocks}`
+  return [
+    'var __self = this',
+    '__self.__pgRefresh = function () {',
+    refreshBody,
+    '}',
+    '__self.__pgRefresh()',
+    "if (typeof wx !== 'undefined' && wx.onWindowResize) {",
+    '  __self.__pgOnResize = function () { __self.__pgRefresh() }',
+    '  wx.onWindowResize(__self.__pgOnResize)',
+    '}',
+  ].join('\n')
+}
+
+/** onUnload 注销 resize 监听（页面卸载防泄漏） */
+function semanticGridOffLine(): string {
+  return "if (this.__pgOnResize && typeof wx !== 'undefined' && wx.offWindowResize) { wx.offWindowResize(this.__pgOnResize); this.__pgOnResize = null }"
 }
 
 /**
@@ -1480,7 +1497,9 @@ export function transformScriptToPage(
       : ''
   // ★#494 app-config 订阅退订：onUnload 显式存在时注入 unsubscribe；无 onUnload 时 needsPageCleanup 承载生成
   const appConfigUnsubLine = appConfigBindings.length ? 'if (this.__appConfigUnsub) { this.__appConfigUnsub(); this.__appConfigUnsub = null }' : ''
-  const needsPageCleanup = hasInjects || providedRefs.size > 0 || Boolean(storeDisposeLine) || Boolean(appConfigUnsubLine)
+  // ★#496d 页面 p-grid resize 监听注销（拖宽/旋转重算档位）
+  const semGridOffLine = !extra.isComponent && semanticGrids.length ? semanticGridOffLine() : ''
+  const needsPageCleanup = hasInjects || providedRefs.size > 0 || Boolean(storeDisposeLine) || Boolean(appConfigUnsubLine) || Boolean(semGridOffLine)
   const pageCleanupLine = 'const __reg = getApp().__proteusProvides; if (__reg && this.__proteusPageId) delete __reg[this.__proteusPageId]'
   const unsubLine = hasInjects ? 'this.proteusUnsubscribeProvide()' : ''
   if (lifecycles.onUnload) {
@@ -1488,16 +1507,16 @@ export function transformScriptToPage(
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
     const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
     const isComp = extra.isComponent
-    const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
+    const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
     lines.push(`  ${hook}() {
 ${indentBody(pre ? `${pre}
 ${unloadBody}` : unloadBody)}
   },`)
   } else if (needsPageCleanup && !extra.isComponent) {
-    // 页面级 provide/inject/store/app-config 但无显式 onUnload：生成承载清理的 onUnload（组件模式用 detached，见组件分支）
+    // 页面级 provide/inject/store/app-config/p-grid 但无显式 onUnload：生成承载清理的 onUnload（组件模式用 detached，见组件分支）
     lines.push(`  onUnload() {
-${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
+${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
   },`)
   }
   // ★#494 onLoad 初始化序：顶层副作用调用（initAppConfig 等）→ computed → runtimeInits（已含方法调用 this 改写 + 命令式改写）→ store 桥 → app-config 桥 → 模板引用快照 → immediate watch → provide/inject
