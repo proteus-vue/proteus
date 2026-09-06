@@ -20,9 +20,16 @@ export type FluidSupportsFn = (property: string, value: string) => boolean
 /** 无探测能力时的缺省：假设全支持（WebView/SSR——渲染端自决降级，不在逻辑层误判） */
 const ALL_SUPPORTED: FluidCapabilities = { clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true }
 
-/** Skyline 渲染端判定（★#495c）：小程序自研引擎仅 flex/block 子集——grid/columns/container-query/aspect-ratio 不支持；
- *  CSS.supports 只在浏览器存在，逻辑层必须显式判 Skyline（否则恒全真 → 组件输 grid style 被渲染端忽略 = 布局丢失） */
+// ★#495c Skyline 渲染端判定：小程序自研引擎仅 flex/block 子集——grid/columns/container-query/aspect-ratio 不支持；
+//   CSS.supports 只在浏览器存在，逻辑层必须显式判 Skyline（否则恒全真 → 组件输 grid style 被渲染端忽略 = 布局丢失）
+//   判定双通道：①构建期宏 __PROTEUS_SKYLINE__（vite define 注入 config.skyline——fluid 为共享模块走 vite transform ✓）
+//   ②fallback 运行时 renderer（无宏替换的消费路径）
+declare const __PROTEUS_SKYLINE__: boolean
+
 function skylineRenderer(): boolean {
+  // 构建期宏（同 router skyline.ts isSkyline 模式：typeof 守卫——非 mp 产物无此全局）
+  if (typeof __PROTEUS_SKYLINE__ !== 'undefined' && __PROTEUS_SKYLINE__) return true
+  // fallback：运行时 getSystemInfoSync().renderer（直接 require 产物/工具环境未注入宏时）
   const g = globalThis as { wx?: { getSystemInfoSync?: () => { renderer?: string } } }
   const wxApi = g.wx
   if (!wxApi || typeof wxApi.getSystemInfoSync !== 'function') return false

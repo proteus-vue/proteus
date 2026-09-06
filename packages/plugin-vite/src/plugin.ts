@@ -457,7 +457,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         let code = ''
         let bundleHit = false
         if (bundleCacheEnabled) {
-          const bKey = bundleCacheKey(sharedFile, projectRoot)
+          const bKey = bundleCacheKey(sharedFile, projectRoot) + `-sky${cfg.skyline ? 1 : 0}` // ★#495c define 输入纳入缓存键（skyline 切换防 stale）
           const cachedBundle = bundleCache.get(bKey)
           if (cachedBundle) {
             code = cachedBundle.output
@@ -476,6 +476,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             logLevel: 'silent',
             minify: true,
             metafile: true,
+            // ★#495c define 注入：esbuild 直出资产不经 vite define——宏在此替换（config.skyline → __PROTEUS_SKYLINE__）
+            define: {
+              __PROTEUS_DEBUG__: isDebug ? 'true' : 'false',
+              __PROTEUS_SKYLINE__: cfg.skyline ? 'true' : 'false',
+            },
             // ★@proteus-vue/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
             external: ['@proteus-vue/*'],
             plugins: [

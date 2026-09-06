@@ -184,6 +184,22 @@ describe('能力检测 detectFluidCapabilities（essence 02 §4 降级策略）'
     }
   })
 
+  it('★#495c 构建期宏 __PROTEUS_SKYLINE__=true → Skyline 能力集（无 wx 也生效——共享模块产物 define 替换）', () => {
+    const prevCss = (globalThis as { CSS?: unknown }).CSS
+    const prevMacro = (globalThis as { __PROTEUS_SKYLINE__?: unknown }).__PROTEUS_SKYLINE__
+    ;(globalThis as { CSS?: unknown }).CSS = undefined
+    ;(globalThis as { __PROTEUS_SKYLINE__?: unknown }).__PROTEUS_SKYLINE__ = true
+    try {
+      expect(detectFluidCapabilities(null).grid).toBe(false)
+      expect(detectFluidCapabilities(null).aspectRatio).toBe(false)
+    } finally {
+      if (prevMacro === undefined) delete (globalThis as { __PROTEUS_SKYLINE__?: unknown }).__PROTEUS_SKYLINE__
+      else (globalThis as { __PROTEUS_SKYLINE__?: unknown }).__PROTEUS_SKYLINE__ = prevMacro
+      if (prevCss === undefined) delete (globalThis as { CSS?: unknown }).CSS
+      else (globalThis as { CSS?: unknown }).CSS = prevCss
+    }
+  })
+
   it('无 CSS.supports 且 WebView 渲染（renderer=webview）→ 全支持（WebView CSS 完整）', () => {
     const prevWx = (globalThis as { wx?: unknown }).wx
     ;(globalThis as { wx?: unknown }).wx = { getSystemInfoSync: () => ({ renderer: 'webview' }) }
