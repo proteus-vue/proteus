@@ -28,12 +28,15 @@ export function slugify(text: string, taken: Set<string>): string {
 }
 
 function splitTableRow(line: string): string[] {
+  // GFM 表格：`\|` 为字面竖线（代码 span 内同）——先保护再断列，单元格内恢复（`string \| null` 不断列）
+  const ESC = '\u0000'
   return line
     .trim()
+    .replace(/\\\|/g, ESC)
     .replace(/^\|/, '')
     .replace(/\|$/, '')
     .split('|')
-    .map((c) => c.trim())
+    .map((c) => c.trim().split(ESC).join('|'))
 }
 
 function parseTableAlign(sepLine: string): TableAlign[] {

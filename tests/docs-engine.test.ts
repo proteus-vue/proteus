@@ -111,6 +111,31 @@ describe('G-36/官网 B2 块级解析（Docs IR）', () => {
     expect(table.rows[0][0][0].href).toBe('/docs/grid')
   })
 
+  it('表格：`\\|` 转义竖线不断列（GFM——含代码 span 内，签名/联合类型单元格）', () => {
+    const md = [
+      '| 名称 | 类型 | 说明 |',
+      '|---|---|---|',
+      '| `token` | `string \\| null` | 当前令牌 |',
+      '| `status` | `\'joined\' \\| \'left\'` | 房间状态 |',
+    ].join('\n')
+    const d = parseMarkdown(md)
+    const table = d.blocks.find((b) => b.type === 'table') as { header: unknown[]; rows: Array<Array<Array<{ type: string; value?: string }>>> }
+    expect(table.rows).toHaveLength(2)
+    expect(table.rows[0]).toHaveLength(3) // `string \| null` 不断成 4 列
+    const code0 = table.rows[0][1].find((n) => n.type === 'code') as { value: string }
+    expect(code0.value).toBe('string | null') // 单元格内恢复为字面竖线
+    const code1 = table.rows[1][1].find((n) => n.type === 'code') as { value: string }
+    expect(code1.value).toBe("'joined' | 'left'")
+  })
+
+  it('表格渲染：转义竖线输出单个 td（docs-table）', () => {
+    const md = '| a | b |\n|---|---|\n| `x \\| y` | z |'
+    const html = renderDocHtml(parseMarkdown(md))
+    const row = html.split('<tbody>')[1]?.split('</tr>')[0] ?? ''
+    expect(row.match(/<td>/g)).toHaveLength(2) // 两列而非三列
+    expect(row).toContain('x | y')
+  })
+
   it('引用 + 分隔线', () => {
     const quote = doc.blocks.find((b) => b.type === 'blockquote') as { children: Array<{ type: string }> }
     expect(quote.children[0].type).toBe('paragraph')
