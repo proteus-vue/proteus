@@ -27,12 +27,13 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts"
   },
   "peerDependencies": {
-    "@vue/compiler-sfc": "^3.4",
-    "@vue/compiler-dom": "^3.4"
+    "@vue/compiler-dom": "^3.4",
+    "@vue/compiler-sfc": "^3.4"
   },
   "devDependencies": {
-    "@vue/compiler-sfc": "^3.5.42",
-    "@vue/compiler-dom": "^3.5.42"
+    "@babel/parser": "7.29.8",
+    "@vue/compiler-dom": "^3.5.42",
+    "@vue/compiler-sfc": "^3.5.42"
   },
   "dependencies": {
     "@proteus-vue/contracts": "0.1.0",

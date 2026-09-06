@@ -15,6 +15,9 @@ importers:
         specifier: ^3.4.0
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
+      '@babel/parser':
+        specifier: 7.29.8
+        version: 7.29.8
       '@changesets/cli':
         specifier: ^2.31.1
         version: 2.31.1(@types/node@20.19.43)
@@ -327,6 +330,9 @@ importers:
         specifier: 0.1.0
         version: link:../types
     devDependencies:
+      '@babel/parser':
+        specifier: 7.29.8
+        version: 7.29.8
       '@vue/compiler-dom':
         specifier: ^3.5.42
         version: 3.5.42

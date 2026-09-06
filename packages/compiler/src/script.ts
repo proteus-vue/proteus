@@ -5,6 +5,38 @@ import type { ScriptTransformOptions, ScriptTransformResult, StyleTransformOptio
 import type { TransformTrace } from './trace'
 import { lineAt } from './trace'
 import { resolveOverrides } from './overrides'
+// ★#497 动作二批 1：结构发现 AST 化（@babel/parser——尾注释/TS 类型/泛型/返回注解天然不污染；解析失败回退旧文本路径，永不比现状差）
+import { parse as babelParse } from '@babel/parser'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let astCacheSrc = ''
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let astCacheBody: any[] | null = null
+
+/** 解析 script 顶层语句（TS 插件；失败 → null 触发回退） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function topLevelAst(source: string): any[] | null {
+  if (astCacheSrc === source) return astCacheBody
+  astCacheSrc = source
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    astCacheBody = (babelParse(source, { sourceType: 'module', plugins: ['typescript'] }) as any).program.body as any[]
+  } catch {
+    astCacheBody = null
+  }
+  return astCacheBody
+}
+
+/** 方法参数 AST → 产物参数文本（类型注解天然剔除；保留 ? 可选 / 默认值 / 展开；解构参数剥类型注解切片） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function astParamText(source: string, p: any): string {
+  if (p.type === 'Identifier') return p.name // TS 可选参数 optional=true（? 是类型语法——产物 JS 无可选标记）
+  if (p.type === 'AssignmentPattern') return `${astParamText(source, p.left)} = ${source.slice(p.right.start, p.right.end)}`
+  if (p.type === 'RestElement') return '...' + astParamText(source, p.argument)
+  // Object/Array 解构参数：去 typeAnnotation 后切片（含注解时按注解前区间拼）
+  if (p.typeAnnotation) return source.slice(p.start, p.typeAnnotation.start).trimEnd()
+  return source.slice(p.start, p.end)
+}
 
 /**
  * ★#497 剥行尾注释（双斜杠 与 块注释）：括号/引号感知——深度 0（顶层）才剥，字符串/括号内不误伤。
@@ -512,6 +544,54 @@ function extractComputedFromInit(
 }
 
 /** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 + ★B0 运行时初始化（函数调用） */
+/** ★#497 动作二批 1：单条顶层 const 分类（AST 与文本回退共用）——宏跳过/函数跳过/computed 收集/ref·字面量→data/调用→runtimeInit */
+function handleConstToData(
+  name: string,
+  init: string,
+  line: number,
+  out: { data: Record<string, unknown>; runtimeInits: Array<{ name: string; call: string }>; rawComputed: Array<{ name: string; init: string; line: number }> },
+  warnings: string[],
+  trace?: TransformTrace,
+): void {
+  // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\()/.test(init)) return
+  // 跳过函数/箭头函数（属于 methods）
+  if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
+  // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
+  if (/^computed(?:<[^>]*>)?\s*\(/.test(init)) {
+    out.rawComputed.push({ name, init, line })
+    return
+  }
+  trace?.add('script/const-to-data', {
+    line,
+    before: `const ${name} = ${init.slice(0, 40)}${init.length > 40 ? '…' : ''}`,
+    after: `data.${name}`,
+  })
+  const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
+  const raw = inner ? inner[1] : init
+  const value = evalLiteral(raw)
+  const isCall = /^[\w$.]+\(/.test(raw.trim())
+  if (isCall && value === undefined && !/^inject\s*\(/.test(raw.trim())) {
+    // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
+    // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
+    out.runtimeInits.push({ name, call: raw.trim() })
+    trace?.add('script/runtime-init', {
+      line,
+      before: `const ${name} = ${raw.slice(0, 40)}`,
+      after: `this.${name} = ${raw.trim()}（onLoad/attached 运行时初始化，实例属性；模板绑定不支持）`,
+    })
+    warnings.push(
+      `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用——已编译为运行时初始化 this.${name}（onLoad/attached 执行，实例属性：模板绑定不支持，逻辑层可用；共享逻辑请用模块 import，见 docs/proteus-module-plan/）`,
+    )
+    return // 不进 data（运行时实例属性）
+  }
+  if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
+    warnings.push(`const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`)
+  }
+  out.data[name] = value
+}
+
+/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 + ★B0 运行时初始化（函数调用） */
 function extractData(
   source: string,
   warnings: string[],
@@ -520,56 +600,32 @@ function extractData(
   const data: Record<string, unknown> = {}
   const runtimeInits: Array<{ name: string; call: string }> = []
   const rawComputed: Array<{ name: string; init: string; line: number }> = []
-  // 只提取行首（缩进 0）的顶层 const：函数体/生命周期体/块内的局部 const 天然跳过
-  const re = /const\s+([A-Za-z_$][\w$]*)\s*=\s*/gm
-  let m: RegExpExecArray | null
-  while ((m = re.exec(source))) {
-    // 只提取行首（零缩进）的顶层 const：函数体/生命周期体/块内的局部 const 天然跳过
-    const lineStart = source.lastIndexOf('\n', m.index) + 1
-    if (source.slice(lineStart, m.index) !== '') continue
-    const name = m[1]
-    const initRaw = extractInitializer(source, m.index + m[0].length)
-    if (!initRaw) continue
-    // ★#497 剥行尾注释（const x = ref(0) // 说明——带尾注释时静态求值正则要求 ) 收尾不匹配 → 误判 runtimeInit → 产物裸调 ref）
-    const init = stripTrailingComment(initRaw)
-    const line = lineAt(source, m.index)
-    // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
-    if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\()/.test(init)) continue
-    // 跳过函数/箭头函数（属于 methods）
-    if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
-    // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
-    if (/^computed(?:<[^>]*>)?\s*\(/.test(init)) {
-      rawComputed.push({ name, init, line })
-      continue
+  const out = { data, runtimeInits, rawComputed }
+  // ★#497 动作二：AST 发现（顶层 const，天然剥注释/类型/泛型）；失败回退文本正则（永不比现状差）
+  const body = topLevelAst(source)
+  if (body) {
+    for (const st of body) {
+      if (st.type !== 'VariableDeclaration' || st.kind !== 'const') continue
+      for (const d of st.declarations) {
+        if (!d.id || d.id.type !== 'Identifier' || !d.init) continue
+        // AST 区间切片——行尾注释不在 init 范围（#497 根因）、TS 类型在类型节点不在文本
+        const init = source.slice(d.init.start, d.init.end)
+        handleConstToData(d.id.name, init, st.loc.start.line, out, warnings, trace)
+      }
     }
-    trace?.add('script/const-to-data', {
-      line,
-      before: `const ${name} = ${init.slice(0, 40)}${init.length > 40 ? '…' : ''}`,
-      after: `data.${name}`,
-    })
-    // 解构/嵌套 const（如 const { a } = ...）在 regex 上已天然跳过
-    const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
-    const raw = inner ? inner[1] : init
-    const value = evalLiteral(raw)
-    const isCall = /^[\w$.]+\(/.test(raw.trim())
-    if (isCall && value === undefined && !/^inject\s*\(/.test(raw.trim())) {
-      // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
-      // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
-      runtimeInits.push({ name, call: raw.trim() })
-      trace?.add('script/runtime-init', {
-        line,
-        before: `const ${name} = ${raw.slice(0, 40)}`,
-        after: `this.${name} = ${raw.trim()}（onLoad/attached 运行时初始化，实例属性；模板绑定不支持）`,
-      })
-      warnings.push(
-        `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用——已编译为运行时初始化 this.${name}（onLoad/attached 执行，实例属性：模板绑定不支持，逻辑层可用；共享逻辑请用模块 import，见 docs/proteus-module-plan/）`,
-      )
-      continue // 不进 data（运行时实例属性）
+  } else {
+    // 只提取行首（缩进 0）的顶层 const：函数体/生命周期体/块内的局部 const 天然跳过（文本回退路径）
+    const re = /const\s+([A-Za-z_$][\w$]*)\s*=\s*/gm
+    let m: RegExpExecArray | null
+    while ((m = re.exec(source))) {
+      const lineStart = source.lastIndexOf('\n', m.index) + 1
+      if (source.slice(lineStart, m.index) !== '') continue
+      const name = m[1]
+      const initRaw = extractInitializer(source, m.index + m[0].length)
+      if (!initRaw) continue
+      const init = stripTrailingComment(initRaw)
+      handleConstToData(name, init, lineAt(source, m.index), out, warnings, trace)
     }
-    if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
-      warnings.push(`const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`)
-    }
-    data[name] = value
   }
   // 二次处理 computed（此时 data 已完整，可校验依赖）
   const computed: Record<string, ComputedInfo> = {}
@@ -658,32 +714,61 @@ function checkDefineExpose(
 /** 顶层函数（function 声明 / const 箭头）→ methods 源码 */
 function extractMethods(source: string, warnings: string[], trace?: TransformTrace, disabled?: Set<string>): Record<string, MethodInfo> {
   const methods: Record<string, MethodInfo> = {}
-  const fnRe = /(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]]*)?\s*\{/g
-  let m: RegExpExecArray | null
-  if (!disabled?.has('script/function-to-methods')) {
-    while ((m = fnRe.exec(source))) {
-      const name = m[2]
-      const isAsync = Boolean(m[1])
-      const params = stripParamTypes(m[3])
-      const body = extractBracedBody(source, m.index + m[0].length - 1)
-      const line = lineAt(source, m.index)
-      trace?.add('script/function-to-methods', { line, before: `function ${name}(${m[3]})`, after: `${name}(${params})` })
-      // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明；async 保留——方法体 await 合法）
-      if (body !== null) methods[name] = { src: `${isAsync ? 'async ' : ''}${name}(${params}) {\n${body}\n}`, line }
-      else warnings.push(`函数 ${name} 体解析失败，已跳过`)
+  // ★#497 动作二批 1：共享方法入册（AST 与文本回退共用）
+  const addMethod = (kind: 'fn' | 'arrow', name: string, paramsText: string, isAsync: boolean, line: number, body: string | null): void => {
+    if (body === null) {
+      if (kind === 'fn') warnings.push(`函数 ${name} 体解析失败，已跳过`)
+      return
     }
+    trace?.add(kind === 'fn' ? 'script/function-to-methods' : 'script/arrow-to-methods', {
+      line,
+      before: kind === 'fn' ? `function ${name}(...)` : `const ${name} = (...) =>`,
+      after: `${name}(${paramsText})`,
+    })
+    // 对象字面量方法简写：handleTap() {...}（不能输出裸 function 声明；async 保留——方法体 await 合法）
+    methods[name] = { src: `${isAsync ? 'async ' : ''}${name}(${paramsText}) {\n${body}\n}`, line }
   }
-  const arrowRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(async\s*)?\(([^)]*)\)\s*=>\s*\{/g
-  if (!disabled?.has('script/arrow-to-methods')) {
-    while ((m = arrowRe.exec(source))) {
-      const name = m[1]
-      const isAsync = Boolean(m[2])
-      const params = stripParamTypes(m[3])
-      const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
-      const body = extractBracedBody(source, braceIdx)
-      const line = lineAt(source, m.index)
-      trace?.add('script/arrow-to-methods', { line, before: `const ${name} = (...) =>`, after: `${name}(...)` })
-      if (body !== null) methods[name] = { src: `${isAsync ? 'async ' : ''}${name}(${params}) {\n${body}\n}`, line }
+  const fnEnabled = !disabled?.has('script/function-to-methods')
+  const arrowEnabled = !disabled?.has('script/arrow-to-methods')
+  const body = topLevelAst(source)
+  if (body) {
+    for (const st of body) {
+      if (st.type === 'FunctionDeclaration' && fnEnabled && st.id) {
+        const params = st.params.map((p: any) => astParamText(source, p)).join(', ')
+        addMethod('fn', st.id.name, params, Boolean(st.async), st.loc.start.line, extractBracedBody(source, st.body.start))
+        continue
+      }
+      if (st.type === 'VariableDeclaration' && arrowEnabled && st.kind === 'const') {
+        for (const d of st.declarations) {
+          if (!d.id || d.id.type !== 'Identifier' || !d.init) continue
+          const init = d.init
+          if (init.type !== 'ArrowFunctionExpression' && init.type !== 'FunctionExpression') continue
+          const fnLike = init
+          const params = fnLike.params.map((p: any) => astParamText(source, p)).join(', ')
+          if (fnLike.body.type === 'BlockStatement') {
+            addMethod('arrow', d.id.name, params, Boolean(fnLike.async), st.loc.start.line, extractBracedBody(source, fnLike.body.start))
+          }
+        }
+      }
+    }
+  } else {
+    // 文本回退路径
+    if (fnEnabled) {
+      const fnRe = /(async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]]*)?\s*\{/g
+      let m: RegExpExecArray | null
+      while ((m = fnRe.exec(source))) {
+        const params = stripParamTypes(m[3])
+        addMethod('fn', m[2], params, Boolean(m[1]), lineAt(source, m.index), extractBracedBody(source, m.index + m[0].length - 1))
+      }
+    }
+    if (arrowEnabled) {
+      const arrowRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*(async\s*)?\(([^)]*)\)\s*=>\s*\{/g
+      let m: RegExpExecArray | null
+      while ((m = arrowRe.exec(source))) {
+        const params = stripParamTypes(m[3])
+        const braceIdx = source.indexOf('{', m.index + m[0].length - 1)
+        addMethod('arrow', m[1], params, Boolean(m[2]), lineAt(source, m.index), extractBracedBody(source, braceIdx))
+      }
     }
   }
   return methods

@@ -51,7 +51,9 @@
     "vue": "^3.4.0"
   },
   "devDependencies": {
+    "@babel/parser": "7.29.8",
     "@changesets/cli": "^2.31.1",
+    "@proteus-vue/cli": "0.2.1-beta.0",
     "@proteus-vue/devtools-runtime": "workspace:*",
     "@proteus-vue/fluid": "workspace:*",
     "@proteus-vue/gesture": "workspace:*",
@@ -72,8 +74,7 @@
     "vite": "^5.0.0",
     "vitest": "^1.0.0",
     "vue-tsc": "^2.0.0",
-    "ws": "^8.18.0",
-    "@proteus-vue/cli": "0.2.1-beta.0"
+    "ws": "^8.18.0"
   },
   "packageManager": "pnpm@9.15.9"
 }
