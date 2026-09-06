@@ -455,7 +455,8 @@ function attrValue(name: string, value: string): AttributeNode {
  */
 function buildGridItemStyle(containerWidth: number, minColWidth: number, gap: number): string {
   const cols = calcColumns(containerWidth, minColWidth, gap)
-  const basis = Math.round(((containerWidth - (cols - 1) * gap) / cols) * 10) / 10
+  // ★#496f 整 px 向下取整：小数 basis 两卡+gap 恰=容器宽，Skyline 小数 px 取整方向不定（向上→总和>容器→wrap 成单列不满，日志 w=393.4 basis=190.7 实证）
+  const basis = Math.floor((containerWidth - (cols - 1) * gap) / cols)
   return `flex-grow:0; flex-shrink:0; flex-basis:${basis}px`
 }
 

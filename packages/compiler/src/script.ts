@@ -831,7 +831,7 @@ function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; i
   const perGrid = grids
     .map((g) => {
       const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / (${g.minColWidth} + ${g.gap})))`
-      return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.round(((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) * 10) / 10 + 'px'`
+      return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.floor((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) + 'px'`
     })
     .join('\n')
   return [
@@ -860,7 +860,8 @@ function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; 
         '  if (rect && rect.width > 0) {',
         '    var w = rect.width',
         `    var cols = Math.max(1, Math.floor((w + ${GP}) / (${MC} + ${GP})))`,
-        `    var basis = Math.round(((w - (cols - 1) * ${GP}) / cols) * 10) / 10`,
+        // ★#496f 整 px 向下取整（小数 basis 总和=容器宽在 Skyline 取整方向不确定 → 溢出 wrap 单列不满）
+        `    var basis = Math.floor((w - (cols - 1) * ${GP}) / cols)`,
         `    console.log('[proteus][pgrid${g.index}] w=' + w + ' cols=' + cols + ' basis=' + basis + 'px')`,
         `    __self.setData({ ${JSON.stringify(`pgridStyle${g.index}`)}: 'flex-grow:0; flex-shrink:0; flex-basis:' + basis + 'px' })`,
         '  }',
@@ -874,7 +875,7 @@ function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; 
     refreshBody,
     '}',
     '__self.__pgRefresh()',
-    // ★#496e Skyline onReady 首帧布局未稳时 rect 偏小（复测 430 下判 1 列不满）——延时二次重测兜底
+    // ★#496e Skyline onReady 首帧布局未稳时 rect 偏小——延时二次重测兜底
     'setTimeout(function () { __self.__pgRefresh() }, 150)',
     "if (typeof wx !== 'undefined' && wx.onWindowResize) {",
     '  __self.__pgOnResize = function () { __self.__pgRefresh() }',
