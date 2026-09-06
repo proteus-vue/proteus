@@ -23,39 +23,22 @@ const props = defineProps({
   gap: { type: Number, default: 12 },
 })
 
-// ★G-22.2 能力检测（组件初始化一次）：MP 无 CSS.supports → grid 恒真（渲染端自决）
+// ★G-22.2 能力检测（组件初始化一次）：MP 无 CSS.supports → fluid 层按渲染端判（Skyline grid 不可用 → flex 降级；WebView/Web grid）
 const gridOk = detectFluidCapabilities().grid
 
 const gridClass = computed(() => (gridOk ? '' : 'p-grid-fallback'))
 
-// ★断言放方法体内（MP 编译器剥离方法体 as；字符串模板拼接满足 CSSProperties 字面量类型）
-const gridStyle = computed(() => {
-  if (!gridOk) {
-    // ★降级：flex-wrap 模拟 repeat(auto-fit, minmax(N, 1fr))——slot 子项 min-width/flex 由 <style global> 规则按类提供
-    const style: CSSProperties = {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: props.gap + 'px',
-      alignItems: 'stretch',
-    }
-    const custom = style as CSSProperties & { ['--pgrid-min']?: string }
-    custom['--pgrid-min'] = props.minColWidth + 'px'
-    return custom
-  }
-  const style: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(' + props.minColWidth + 'px, 1fr))',
-    gap: props.gap + 'px',
-  }
-  return style as CSSProperties
-})
+// ★#495c 单表达式（MP 编译器不支持块体 computed）；gridStyle 内联 props/gridOk（编译期 this.data/this 改写）
+//   Skyline（gridOk=false）：flex 换行（slot 子项宽度不可控——朴素正确 G-22.2）；WebView/Web：CSS grid auto-fill
+//   注：不写 as 断言（MP 编译器顶层 as 不剥，方法体内才剥）——类型由模板 :style 消费侧校验
+const gridStyle = computed<CSSProperties>(() =>
+  gridOk
+    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(' + props.minColWidth + 'px, 1fr))', gap: props.gap + 'px' }
+    : { display: 'flex', flexWrap: 'wrap', gap: props.gap + 'px' },
+)
 </script>
 
 <style global>
-/* ★G-22.2 降级：grid 不支持时 flex-wrap 模拟 auto-fit——slot 子元素无法从组件内联样式触达，
-     全局规则按容器类切换生效（min-width 经 --pgrid-min 由组件内联注入，默认 160px 兜底） */
-.p-grid-fallback > * {
-  min-width: var(--pgrid-min, 160px);
-  flex: 1 1 auto;
-}
+/* ★G-22.2 降级：grid 不支持（旧浏览器/Skyline）→ flex-wrap 容器。slot 子项样式受组件模型限制
+   （Web 端子选择器可用但为保持双端一致语义，子项宽度由调用方 class 自决——朴素但正确） */
 </style>

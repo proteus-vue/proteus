@@ -449,7 +449,7 @@ function extractComputedFromInit(
   warnings: string[],
 ): ComputedInfo | null {
   // 箭头简写：computed(() => 表达式)（表达式体；块体拦截）
-  const arrow = init.match(/^computed\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
+  const arrow = init.match(/^computed(?:<[^>]*>)?\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
   // 对象形式（v0.3 尾写路径）：computed({ get: () => expr[, set: (v) => { body }] })
   let rawExpr: string | undefined
   let setter: { param: string; body: string } | undefined
@@ -457,7 +457,7 @@ function extractComputedFromInit(
     rawExpr = arrow[1]
     if (rawExpr.trim().startsWith('{')) return null // 块体拦截
   } else {
-    const objM = init.match(/^computed\s*\(\s*\{/)
+    const objM = init.match(/^computed(?:<[^>]*>)?\s*\(\s*\{/)
     if (!objM) return null
     const body = extractBracedBody(init, (objM.index ?? 0) + objM[0].length - 1)
     if (body === null) return null
@@ -504,7 +504,7 @@ function extractData(
     // 跳过函数/箭头函数（属于 methods）
     if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) continue
     // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
-    if (init.startsWith('computed(')) {
+    if (/^computed(?:<[^>]*>)?\s*\(/.test(init)) {
       rawComputed.push({ name, init, line })
       continue
     }
@@ -676,10 +676,22 @@ function computedPatch(writtenRef: string, computeds: Record<string, ComputedInf
 }
 
 /** onLoad 初始化行：一次性计算全部 computed 派生字段（首次渲染前 data 就绪） */
-function computedInitLine(computeds: Record<string, ComputedInfo>): string {
+function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNames?: Set<string>, propsVar?: string): string {
   const entries = Object.entries(computeds)
   if (!entries.length) return ''
-  return `this.setData({ ${entries.map(([n, c]) => `${n}: ${c.expr}`).join(', ')} })`
+  // ★#495c computed 表达式内 runtimeInit 裸名 → this.x（gridClass 依赖 gridOk=detectFluidCapabilities() runtimeInit——
+  //  裸名词法查找 ReferenceError：p-grid attached 崩）；props.gap → this.data.gap（与方法体 propsVar 重写一致）
+  const rewrite = (expr: string): string => {
+    let out = expr
+    if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
+    if (runtimeInitNames) {
+      for (const name of runtimeInitNames) {
+        out = out.replace(new RegExp(`(?<!\\.)\\b${name}\\b`, 'g'), `this.${name}`)
+      }
+    }
+    return out
+  }
+  return `this.setData({ ${entries.map(([n, c]) => `${n}: ${rewrite(c.expr)}`).join(', ')} })`
 }
 
 /** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
@@ -1447,8 +1459,9 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
       after: 'onLoad：setData(快照) 进 data（实例属性模板读不到，#494）',
     })
   }
+  // ★#495c 初始化序：顶层副作用 → runtimeInits（先于 computed——computed 可依赖 runtimeInit 值如 gridClass→gridOk）→ computed（含 runtimeInit 裸名/props 改写）→ store/app-config 桥 → 快照 → immediate watch → provide/inject
   const initLineSeq = (): string[] =>
-    [topLevelCalls.length ? topLevelCalls.join('\n') : '', computedInitLine(computeds), runtimeInitLine(runtimeInits, methodNames), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+    [topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -1456,7 +1469,8 @@ ${indentBody([unsubLine, appConfigUnsubLine, storeDisposeLine, pageCleanupLine].
     if (piBlocks.provide) {
       lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
     }
-    const initLines = [computedInitLine(computeds), runtimeInitLine(runtimeInits), storeBindingInit, immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
+    // ★#495c 组件 attached：runtimeInit 先于 computed（顺序同页面 initLineSeq）
+    const initLines = [runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }

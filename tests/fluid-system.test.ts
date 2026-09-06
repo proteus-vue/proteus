@@ -163,6 +163,33 @@ describe('能力检测 detectFluidCapabilities（essence 02 §4 降级策略）'
     expect(detectFluidCapabilities(null)).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
   })
 
+  it('★#495c 无 CSS.supports 且 Skyline 渲染（getSystemInfoSync.renderer=skyline）→ grid/container/aspect 不可用（自研引擎 flex 子集），flexGap/clamp 可用', () => {
+    const prevWx = (globalThis as { wx?: unknown }).wx
+    const prevCss = (globalThis as { CSS?: unknown }).CSS
+    ;(globalThis as { wx?: unknown }).wx = { getSystemInfoSync: () => ({ renderer: 'skyline' }) }
+    ;(globalThis as { CSS?: unknown }).CSS = undefined // 测试环境（happy-dom）有 CSS.supports——需清掉才走 Skyline 分支
+    try {
+      expect(detectFluidCapabilities(null)).toEqual({ clamp: true, grid: false, containerQuery: false, flexGap: true, aspectRatio: false })
+    } finally {
+      if (prevWx === undefined) delete (globalThis as { wx?: unknown }).wx
+      else (globalThis as { wx?: unknown }).wx = prevWx
+      if (prevCss === undefined) delete (globalThis as { CSS?: unknown }).CSS
+      else (globalThis as { CSS?: unknown }).CSS = prevCss
+    }
+  })
+
+  it('无 CSS.supports 且 WebView 渲染（renderer=webview）→ 全支持（WebView CSS 完整）', () => {
+    const prevWx = (globalThis as { wx?: unknown }).wx
+    ;(globalThis as { wx?: unknown }).wx = { getSystemInfoSync: () => ({ renderer: 'webview' }) }
+    try {
+      expect(detectFluidCapabilities(null).grid).toBe(true)
+      expect(detectFluidCapabilities(null).aspectRatio).toBe(true)
+    } finally {
+      if (prevWx === undefined) delete (globalThis as { wx?: unknown }).wx
+      else (globalThis as { wx?: unknown }).wx = prevWx
+    }
+  })
+
   it('缺省读全局 CSS.supports（happy-dom 全真 → 全支持）', () => {
     expect(detectFluidCapabilities()).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
   })
@@ -258,9 +285,7 @@ describe('Fluid System 组件降级（G-22.2 铁律「朴素但正确」：p-gri
       expect(root.style.display).toBe('flex')
       expect(root.style.flexWrap).toBe('wrap')
       expect(root.style.gap).toBe('12px')
-      expect(root.style.getPropertyValue('--pgrid-min')).toBe('160px')
-      // ★slot 子项 min-width/flex 由 <style global> 规则提供（组件内联样式无法触达 slot 子元素）——
-      //   vitest 默认不注入 CSS（css:false），规则存在性改由双端构建产物验证（web css / mp wxss 含 .p-grid-fallback > *）
+      // ★#495c 降级边界收敛：slot 子项宽度由调用方 class 自决（flex 换行容器）——子选择器机制双端不通用（Skyline WXSS 拒绝通配，已移除）
     } finally {
       if (prevCss === undefined) delete (globalThis as { CSS?: unknown }).CSS
       else (globalThis as { CSS: unknown }).CSS = prevCss
