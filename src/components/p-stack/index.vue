@@ -9,7 +9,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CSSProperties } from 'vue'
+import { styleToString } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
 const props = defineProps({
@@ -21,14 +21,13 @@ const props = defineProps({
   gap: { type: Number, default: 0 },
 })
 
-// ★断言放方法体内（MP 编译器剥离方法体 as；CSSProperties 字面量类型）
-const stackStyle = computed(() => {
-  const style: CSSProperties = {
+// ★#495c/d：单表达式 + style 字符串（MP 编译器不支持块体 computed；Skyline 只认字符串 style）
+const stackStyle = computed<string>(() =>
+  styleToString({
     display: 'flex',
-    flexDirection: (props.direction === 'row' ? 'row' : 'column') as CSSProperties['flexDirection'],
-    flexWrap: (props.wrap ? 'wrap' : 'nowrap') as CSSProperties['flexWrap'],
+    flexDirection: props.direction === 'row' ? 'row' : 'column',
+    flexWrap: props.wrap ? 'wrap' : 'nowrap',
     gap: props.gap + 'px',
-  }
-  return style as CSSProperties
-})
+  }),
+)
 </script>

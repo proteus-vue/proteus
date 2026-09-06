@@ -12,8 +12,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CSSProperties } from 'vue'
-import { detectFluidCapabilities } from '@proteus-vue/fluid'
+import { detectFluidCapabilities, styleToString } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
 const props = defineProps({
@@ -29,12 +28,15 @@ const gridOk = detectFluidCapabilities().grid
 const gridClass = computed(() => (gridOk ? '' : 'p-grid-fallback'))
 
 // ★#495c 单表达式（MP 编译器不支持块体 computed）；gridStyle 内联 props/gridOk（编译期 this.data/this 改写）
-//   Skyline（gridOk=false）：flex 换行（slot 子项宽度不可控——朴素正确 G-22.2）；WebView/Web：CSS grid auto-fill
-//   注：不写 as 断言（MP 编译器顶层 as 不剥，方法体内才剥）——类型由模板 :style 消费侧校验
-const gridStyle = computed<CSSProperties>(() =>
-  gridOk
-    ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(' + props.minColWidth + 'px, 1fr))', gap: props.gap + 'px' }
-    : { display: 'flex', flexWrap: 'wrap', gap: props.gap + 'px' },
+//   Skyline（gridOk=false）：flex row wrap（★Skyline 默认 flex-direction: column——必须显式 row；slot 子项宽度由内容/调用方 class 自决——朴素正确 G-22.2）
+//   WebView/Web：CSS grid auto-fill
+//   ★#495d 输出 style 字符串（Skyline 只认 style 字符串——对象绑定不生效）
+const gridStyle = computed<string>(() =>
+  styleToString(
+    gridOk
+      ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(' + props.minColWidth + 'px, 1fr))', gap: props.gap + 'px' }
+      : { display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: props.gap + 'px' },
+  ),
 )
 </script>
 

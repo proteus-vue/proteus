@@ -9,7 +9,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CSSProperties } from 'vue'
+import { styleToString } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
 const props = defineProps({
@@ -17,12 +17,11 @@ const props = defineProps({
   maxRatio: { type: Number, default: 0.8 },
 })
 
-// ★断言放方法体内（MP 编译器剥离方法体 as；CSSProperties 字面量类型）
-const fitStyle = computed(() => {
-  const style: CSSProperties = {
+// ★#495c/d：单表达式 + style 字符串。Skyline 无 fit-content——width 走 auto（内容驱动天然），maxWidth 上限仍生效
+const fitStyle = computed<string>(() =>
+  styleToString({
     width: 'fit-content',
     maxWidth: Math.max(0, Math.min(1, props.maxRatio)) * 100 + '%',
-  }
-  return style as CSSProperties
-})
+  }),
+)
 </script>

@@ -10,6 +10,8 @@ export type { DeviceEnv, DeviceEnvState, DeviceEnvDeps, FluidDisplayMode, MatchM
 // ★essence 02 §4 能力检测 + §2 统一断点入口（柔性系统定位补充）
 export { detectFluidCapabilities } from './capabilities'
 export type { FluidCapabilities, FluidSupportsFn } from './capabilities'
+// ★#495d Skyline style 字符串序列化（对象绑定 Skyline 不生效——柔性组件 computed 输出字符串）
+export { styleToString } from './style'
 export { createSizeAwareObserver } from './layout'
 export type { SizeAwareObserver, SizeAwareState, SizeAwareOptions, ResizeTargetLike } from './layout'
 // ★S2 + G-09 SafeArea：安全区避让样式纯逻辑（Web env() 映射 + 折叠屏 hinge）

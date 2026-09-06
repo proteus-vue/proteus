@@ -11,6 +11,7 @@ import {
   createDeviceEnv,
   readDisplayMode,
   detectFluidCapabilities,
+  styleToString,
   createSizeAwareObserver,
   resolveSafeAreaStyle,
   shouldReduceMotion,
@@ -141,6 +142,11 @@ describe('Fluid System 组件（S1：p-split / p-zone）', () => {
 })
 
 describe('能力检测 detectFluidCapabilities（essence 02 §4 降级策略）', () => {
+  it('styleToString：camelCase → kebab + 空值跳过（Skyline 只认字符串 style，#495d）', () => {
+    expect(styleToString({ display: 'flex', flexDirection: 'row', gap: 12, maxWidth: undefined })).toBe('display: flex; flex-direction: row; gap: 12')
+    expect(styleToString({})).toBe('')
+    expect(styleToString({ opacity: 0, width: 'auto' })).toBe('opacity: 0; width: auto')
+  })
   it('supports 注入：全支持 / 部分不支持 / probe 抛错兑底（单能力 false 不牵连其余）', () => {
     const all = detectFluidCapabilities(() => true)
     expect(all).toEqual({ clamp: true, grid: true, containerQuery: true, flexGap: true, aspectRatio: true })
