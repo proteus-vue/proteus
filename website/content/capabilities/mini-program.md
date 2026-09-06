@@ -23,8 +23,14 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `MiniProgramAPI` | 成功载荷 |
+| `data` | `MiniProgramAPI` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`MiniProgramAPI`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
 
 ## 错误码
 
@@ -57,9 +63,9 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 const res = await useMiniProgram()
 
 if (res.ok) {
-  console.log(res.data)
+  await res.data.navigate({ appId: 'wx1234567890abcdef', path: 'pages/index', extraData: { from: 'proteus' } })
 } else if (res.error.code.endsWith('.unsupported')) {
-  // 平台不支持 → 降级路径
+  // web 无对等 API → Err 显式降级
 }
 ```
 

@@ -32,7 +32,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | `data` | `PermissionState` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`PermissionState`) object
+#### Properties of the `PermissionState` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -67,10 +67,10 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 ## Usage
 
 ```ts
-const res = await usePermission(name)
+const res = await usePermission('geolocation')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.permission, res.data.state)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

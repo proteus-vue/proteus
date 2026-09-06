@@ -26,7 +26,7 @@ useNFC(): Promise<CapResult<NfcInfo>>
 | `data` | `NfcInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`NfcInfo`) object
+#### Properties of the `NfcInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -64,7 +64,7 @@ useNFC(): Promise<CapResult<NfcInfo>>
 const res = await useNFC()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('nfc:', res.data.supported, res.data.available)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

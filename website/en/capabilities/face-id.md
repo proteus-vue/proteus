@@ -60,10 +60,10 @@ useFaceID(prompt?: string): Promise<CapResult<boolean>>
 ## Usage
 
 ```ts
-const res = await useFaceID()
+const res = await useFaceID('Verify it is you')
 
 if (res.ok) {
-  console.log(res.data)
+  if (res.data) console.log('face authentication passed')
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -58,7 +58,7 @@ useShortcut(): Promise<CapResult<void>>
 const res = await useShortcut()
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

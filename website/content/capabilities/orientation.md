@@ -30,7 +30,7 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `type` | `'portrait' | 'landscape'` | 是 | 屏幕方向 |
+| `type` | `'portrait' \| 'landscape'` | 是 | 屏幕方向 |
 | `angle` | `number` | 是 | 旋转角度（0/90/180/-90 度） |
 
 ## 兼容进度
@@ -56,7 +56,7 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 const res = await useOrientation()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.type, res.data.angle)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

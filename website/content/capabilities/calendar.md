@@ -72,10 +72,10 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useCalendar(event)
+const res = await useCalendar({ title: '项目周会', startTime: Date.now() + 3600000 })
 
 if (res.ok) {
-  console.log(res.data)
+  // 调用成功（void 无载荷）
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

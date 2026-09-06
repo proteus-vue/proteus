@@ -60,10 +60,10 @@ useVibrate(durationMs?: number): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await useVibrate()
+const res = await useVibrate(30)
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -29,8 +29,17 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `SocketTaskHandle` | 成功载荷 |
+| `data` | `SocketTaskHandle` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`SocketTaskHandle`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | — |
+| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | — |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
+| `isConnected` | `isConnected(): boolean` | — |
 
 ## 错误码
 
@@ -60,10 +69,13 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 ## 用法
 
 ```ts
-const res = await useSocketTask(url)
+const res = await useSocketTask('wss://echo.example.com')
 
 if (res.ok) {
-  console.log(res.data)
+  const task = res.data
+  task.onMessage((msg) => console.log('收到:', msg))
+  await task.send('hello')
+  // await task.close(1000, 'done')；task.isConnected() 查询连接态
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

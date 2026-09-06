@@ -32,7 +32,7 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 | `data` | `MessageSubscription` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`MessageSubscription`) object
+#### Properties of the `MessageSubscription` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -68,10 +68,10 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ## Usage
 
 ```ts
-const res = await useNotification(templateId)
+const res = await useNotification('tmpl-123456')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('subscribe:', res.data.templateId, 'granted:', res.data.granted)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -58,7 +58,7 @@ useQRCode(): Promise<CapResult<string>>
 const res = await useQRCode()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('scan result:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

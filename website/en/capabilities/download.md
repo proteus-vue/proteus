@@ -42,7 +42,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 | `data` | `DownloadResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`DownloadResult`) object
+#### Properties of the `DownloadResult` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -79,10 +79,10 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 ## Usage
 
 ```ts
-const res = await useDownload(url)
+const res = await useDownload('https://cdn.example.com/pkg.apk', { responseType: 'path' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('downloaded:', res.data.status, res.data.path ?? '(blob/text)')
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

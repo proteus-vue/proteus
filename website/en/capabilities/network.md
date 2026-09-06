@@ -26,7 +26,7 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | `data` | `NetworkType` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`NetworkType`) object
+#### Properties of the `NetworkType` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -56,7 +56,7 @@ useNetwork(): Promise<CapResult<NetworkType>>
 const res = await useNetwork()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.online ? 'online' : 'offline', res.data.type)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

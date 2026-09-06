@@ -68,10 +68,10 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await useShare(options)
+const res = await useShare({ title: 'Proteus framework', url: 'https://proteus-vue.cn' })
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

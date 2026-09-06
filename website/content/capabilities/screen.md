@@ -33,7 +33,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | `width` | `number` | 是 | 屏幕宽度（px，CSS 像素） |
 | `height` | `number` | 是 | 屏幕高度（px，CSS 像素） |
 | `dpr` | `number` | 是 | 设备像素比（物理像素 / CSS 像素） |
-| `orientation` | `'portrait' | 'landscape'` | 是 | 当前方向 |
+| `orientation` | `'portrait' \| 'landscape'` | 是 | 当前方向 |
 
 ## 错误码
 
@@ -66,7 +66,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 const res = await useScreen()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(`${res.data.width}x${res.data.height} @${res.data.dpr}x`)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

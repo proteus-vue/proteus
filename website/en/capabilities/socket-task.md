@@ -29,8 +29,17 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `SocketTaskHandle` | Success payload |
+| `data` | `SocketTaskHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `SocketTaskHandle`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | — |
+| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | — |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
+| `isConnected` | `isConnected(): boolean` | — |
 
 ## Error codes
 
@@ -60,10 +69,13 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 ## Usage
 
 ```ts
-const res = await useSocketTask(url)
+const res = await useSocketTask('wss://echo.example.com')
 
 if (res.ok) {
-  console.log(res.data)
+  const task = res.data
+  task.onMessage((msg) => console.log('received:', msg))
+  await task.send('hello')
+  // await task.close(1000, 'done'); task.isConnected() checks the connection state
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

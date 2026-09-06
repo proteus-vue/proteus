@@ -72,10 +72,10 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await useCalendar(event)
+const res = await useCalendar({ title: 'Team sync', startTime: Date.now() + 3600000 })
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

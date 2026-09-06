@@ -45,7 +45,7 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 | `data` | `UploadResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`UploadResult`) object
+#### Properties of the `UploadResult` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -81,10 +81,10 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 ## Usage
 
 ```ts
-const res = await useUpload(options)
+const res = await useUpload({ url: 'https://api.example.com/upload', filePath })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('uploaded:', res.data.status, res.data.progress ?? 100)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -65,7 +65,7 @@ useEmbedded(): Promise<CapResult<HostContext>>
 const res = await useEmbedded()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('宿主:', res.data.provider)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

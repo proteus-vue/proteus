@@ -31,7 +31,7 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `online` | `boolean` | 是 | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
-| `type` | `'unknown' | 'wifi' | 'cellular' | 'none'` | 是 | 网络类型（web 无细分 → unknown；离线 → none） |
+| `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | 是 | 网络类型（web 无细分 → unknown；离线 → none） |
 
 ## 兼容进度
 
@@ -56,7 +56,7 @@ useNetwork(): Promise<CapResult<NetworkType>>
 const res = await useNetwork()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.online ? '在线' : '离线', res.data.type)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

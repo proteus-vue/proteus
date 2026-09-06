@@ -23,8 +23,14 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `BackgroundAPI` | 成功载荷 |
+| `data` | `BackgroundAPI` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`BackgroundAPI`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
 
 ## 错误码
 
@@ -57,7 +63,9 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 const res = await useBackground()
 
 if (res.ok) {
-  console.log(res.data)
+  const bg = res.data
+  const off = bg.onEvent((e) => console.log(e.type === 'enter-background' ? '进入后台' : '回到前台', e.time))
+  // off() 取消订阅
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

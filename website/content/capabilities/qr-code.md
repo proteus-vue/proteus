@@ -58,7 +58,7 @@ useQRCode(): Promise<CapResult<string>>
 const res = await useQRCode()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('扫码结果:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

@@ -69,10 +69,10 @@ useArchive(options: ArchiveOptions): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await useArchive(options)
+const res = await useArchive({ src: 'wxfile://tmp/photo.jpg', quality: 80 })
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

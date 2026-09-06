@@ -58,7 +58,7 @@ useShortcut(): Promise<CapResult<void>>
 const res = await useShortcut()
 
 if (res.ok) {
-  console.log(res.data)
+  // 调用成功（void 无载荷）
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

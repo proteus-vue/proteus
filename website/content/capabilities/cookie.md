@@ -23,8 +23,17 @@ useCookie(): Promise<CapResult<CookieJar>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `CookieJar` | 成功载荷 |
+| `data` | `CookieJar` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`CookieJar`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `get` | `get(name: string): string \| undefined` | — |
+| `set` | `set(name: string, value: string, maxAge?: number): void` | — |
+| `remove` | `remove(name: string): void` | — |
+| `list` | `list(): Record<string, string>` | — |
 
 ## 错误码
 
@@ -57,7 +66,10 @@ useCookie(): Promise<CapResult<CookieJar>>
 const res = await useCookie()
 
 if (res.ok) {
-  console.log(res.data)
+  const jar = res.data
+  jar.set('theme', 'dark', 86400)
+  console.log('theme =', jar.get('theme'), '· 共', Object.keys(jar.list()).length, '条')
+  // jar.remove('theme') 删除
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

@@ -58,7 +58,7 @@ useClipboard(): Promise<CapResult<string>>
 const res = await useClipboard()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('clipboard:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

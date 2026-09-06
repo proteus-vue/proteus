@@ -23,8 +23,17 @@ useCookie(): Promise<CapResult<CookieJar>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `CookieJar` | Success payload |
+| `data` | `CookieJar` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `CookieJar`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `get` | `get(name: string): string \| undefined` | — |
+| `set` | `set(name: string, value: string, maxAge?: number): void` | — |
+| `remove` | `remove(name: string): void` | — |
+| `list` | `list(): Record<string, string>` | — |
 
 ## Error codes
 
@@ -57,7 +66,10 @@ useCookie(): Promise<CapResult<CookieJar>>
 const res = await useCookie()
 
 if (res.ok) {
-  console.log(res.data)
+  const jar = res.data
+  jar.set('theme', 'dark', 86400)
+  console.log('theme =', jar.get('theme'), '·', Object.keys(jar.list()).length, 'cookies total')
+  // jar.remove('theme') deletes
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

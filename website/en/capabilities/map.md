@@ -29,8 +29,15 @@ useMap(id: string): Promise<CapResult<MapController>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `MapController` | Success payload |
+| `data` | `MapController` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `MapController`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
+| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
 
 ## Error codes
 
@@ -61,12 +68,15 @@ useMap(id: string): Promise<CapResult<MapController>>
 ## Usage
 
 ```ts
-const res = await useMap(id)
+const res = await useMap('map-1')
 
 if (res.ok) {
-  console.log(res.data)
+  const map = res.data
+  await map.moveTo(31.2304, 121.4737, 12) // Shanghai, zoom 12
+  const region = await map.getRegion()
+  if (region.ok) console.log('center:', region.data.latitude, region.data.longitude)
 } else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+  // map requires host integration → degradation path
 }
 ```
 

@@ -26,7 +26,7 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `data` | `OrientationInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`OrientationInfo`) object
+#### Properties of the `OrientationInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -56,7 +56,7 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 const res = await useOrientation()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.type, res.data.angle)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

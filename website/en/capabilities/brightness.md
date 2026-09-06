@@ -57,7 +57,7 @@ useBrightness(): Promise<CapResult<number>>
 const res = await useBrightness()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('brightness:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

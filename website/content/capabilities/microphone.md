@@ -30,7 +30,7 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `kind` | `'camera' | 'microphone'` | 是 | 媒体设备类型 |
+| `kind` | `'camera' \| 'microphone'` | 是 | 媒体设备类型 |
 | `supported` | `boolean` | 是 | 平台能力/设备存在 |
 | `granted` | `boolean` | 是 | 用户已授权 |
 
@@ -65,7 +65,7 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 const res = await useMicrophone()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('麦克风:', res.data.supported, '授权:', res.data.granted)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

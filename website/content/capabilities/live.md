@@ -27,7 +27,7 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `roomId` | `string` | 是 | 直播间 ID |
-| `mode` | `'video' | 'audio'` | 否 | 拉流模式 |
+| `mode` | `'video' \| 'audio'` | 否 | 拉流模式 |
 
 ## 返回值
 
@@ -36,8 +36,15 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `LiveRoomHandle` | 成功载荷 |
+| `data` | `LiveRoomHandle` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`LiveRoomHandle`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `leave` | `leave(): Promise<CapResult<void>>` | — |
+| `status` | `status(): 'joined' \| 'left'` | — |
 
 ## 错误码
 
@@ -67,12 +74,13 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 ## 用法
 
 ```ts
-const res = await useLive(options)
+const res = await useLive({ roomId: 'room-42', mode: 'video' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('房间状态:', res.data.status())
+  // await res.data.leave() 退出房间
 } else if (res.error.code.endsWith('.unsupported')) {
-  // 平台不支持 → 降级路径
+  // 直播需宿主桥 → 降级路径
 }
 ```
 

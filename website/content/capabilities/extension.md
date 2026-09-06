@@ -60,10 +60,10 @@ useExtension(extensionId: string): Promise<CapResult<unknown>>
 ## 用法
 
 ```ts
-const res = await useExtension(extensionId)
+const res = await useExtension('com.acme.exporter')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('扩展返回:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

@@ -26,7 +26,7 @@ useLocation(): Promise<CapResult<Coords>>
 | `data` | `Coords` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`Coords`) object
+#### Properties of the `Coords` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -68,7 +68,7 @@ useLocation(): Promise<CapResult<Coords>>
 const res = await useLocation()
 
 if (res.ok) {
-  console.log(res.data)
+  const { latitude, longitude } = res.data
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

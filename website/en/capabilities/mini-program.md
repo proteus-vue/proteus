@@ -23,8 +23,14 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `MiniProgramAPI` | Success payload |
+| `data` | `MiniProgramAPI` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `MiniProgramAPI`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
 
 ## Error codes
 
@@ -57,9 +63,9 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 const res = await useMiniProgram()
 
 if (res.ok) {
-  console.log(res.data)
+  await res.data.navigate({ appId: 'wx1234567890abcdef', path: 'pages/index', extraData: { from: 'proteus' } })
 } else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+  // web has no equivalent API → explicit Err degradation
 }
 ```
 

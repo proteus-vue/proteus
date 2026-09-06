@@ -81,10 +81,10 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 ## 用法
 
 ```ts
-const res = await useUpload(options)
+const res = await useUpload({ url: 'https://api.example.com/upload', filePath })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('上传完成:', res.data.status, res.data.progress ?? 100)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

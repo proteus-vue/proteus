@@ -26,7 +26,7 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 | `data` | `BatteryInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`BatteryInfo`) object
+#### Properties of the `BatteryInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -67,7 +67,7 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 const res = await useBattery()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(`battery ${(res.data.level * 100).toFixed(0)}%`, res.data.charging)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

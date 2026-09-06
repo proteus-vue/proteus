@@ -23,8 +23,14 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `BackgroundAPI` | Success payload |
+| `data` | `BackgroundAPI` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `BackgroundAPI`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
 
 ## Error codes
 
@@ -57,7 +63,9 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 const res = await useBackground()
 
 if (res.ok) {
-  console.log(res.data)
+  const bg = res.data
+  const off = bg.onEvent((e) => console.log(e.type === 'enter-background' ? 'entered background' : 'returned to foreground', e.time))
+  // off() unsubscribes
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -58,7 +58,7 @@ useBiometric(): Promise<CapResult<boolean>>
 const res = await useBiometric()
 
 if (res.ok) {
-  console.log(res.data)
+  if (res.data) console.log('biometrics supported')
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

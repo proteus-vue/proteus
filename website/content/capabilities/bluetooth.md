@@ -65,7 +65,7 @@ useBluetooth(): Promise<CapResult<BluetoothInfo>>
 const res = await useBluetooth()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('蓝牙可用:', res.data.available)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

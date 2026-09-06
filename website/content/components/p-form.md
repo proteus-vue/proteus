@@ -34,7 +34,7 @@ order: 1005
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
 | `model` | 表单数据模型（校验对象） | `Object` | `() => ({` | 否 |
-| `rules` | 校验规则 {field: (value) => string | null}（返回错误文案；null=通过） | `Object` | `() => ({` | 否 |
+| `rules` | 校验规则 {field: (value) => string \| null}（返回错误文案；null=通过） | `Object` | `() => ({` | 否 |
 | `layout` | 布局：horizontal 横排 / vertical 纵排 | `String` | `'vertical'` | 否 |
 
 ## Events

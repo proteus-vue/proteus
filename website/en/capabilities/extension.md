@@ -60,10 +60,10 @@ useExtension(extensionId: string): Promise<CapResult<unknown>>
 ## Usage
 
 ```ts
-const res = await useExtension(extensionId)
+const res = await useExtension('com.acme.exporter')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('extension returned:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

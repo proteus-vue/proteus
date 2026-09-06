@@ -23,8 +23,16 @@ useContact(): Promise<CapResult<Contact[]>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `Contact[]` | Success payload |
+| `data` | `Contact[]` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Properties of the `Contact[]` object
+
+| Property | Type | Required | Doc |
+|---|---|---|---|
+| `name` | `string` | Yes | — |
+| `phone` | `string` | No | — |
+| `email` | `string` | No | — |
 
 ## Error codes
 
@@ -58,7 +66,7 @@ useContact(): Promise<CapResult<Contact[]>>
 const res = await useContact()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('contacts:', res.data.map((c) => c.name))
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -32,7 +32,7 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 | `data` | `SensorSample` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`SensorSample`) object
+#### Properties of the `SensorSample` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -72,10 +72,10 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 ## Usage
 
 ```ts
-const res = await useSensor(kind)
+const res = await useSensor('accelerometer')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.kind, res.data.x, res.data.y, res.data.z)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

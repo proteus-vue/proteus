@@ -35,8 +35,15 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `DataChannelHandle` | Success payload |
+| `data` | `DataChannelHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `DataChannelHandle`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `send` | `send(data: string): Promise<CapResult<void>>` | — |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
 
 ## Error codes
 
@@ -66,12 +73,14 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 ## Usage
 
 ```ts
-const res = await useDataChannel(options)
+const res = await useDataChannel({ channelId: 'room-42' })
 
 if (res.ok) {
-  console.log(res.data)
+  const channel = res.data
+  channel.onMessage((msg) => console.log('channel message:', msg))
+  await channel.send('hello')
 } else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+  // data channel requires a host bridge → degradation path
 }
 ```
 

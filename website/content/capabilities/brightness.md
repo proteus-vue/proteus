@@ -57,7 +57,7 @@ useBrightness(): Promise<CapResult<number>>
 const res = await useBrightness()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('当前亮度:', res.data)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

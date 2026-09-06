@@ -23,8 +23,16 @@ useContact(): Promise<CapResult<Contact[]>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `Contact[]` | 成功载荷 |
+| `data` | `Contact[]` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`Contact[]`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `string` | 是 | 联系人姓名 |
+| `phone` | `string` | 否 | 电话号码 |
+| `email` | `string` | 否 | 邮箱 |
 
 ## 错误码
 
@@ -58,7 +66,7 @@ useContact(): Promise<CapResult<Contact[]>>
 const res = await useContact()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('联系人:', res.data.map((c) => c.name))
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

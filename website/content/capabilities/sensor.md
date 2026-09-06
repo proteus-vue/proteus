@@ -72,10 +72,10 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 ## 用法
 
 ```ts
-const res = await useSensor(kind)
+const res = await useSensor('accelerometer')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.kind, res.data.x, res.data.y, res.data.z)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

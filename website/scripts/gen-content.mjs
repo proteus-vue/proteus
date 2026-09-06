@@ -8,7 +8,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN } from './gen-content-en.mjs'
+import { COMP_EN, DOMAIN_EN, MP_STATUS_EN, ENDS_EN, END_NOTE_EN, COMP_LEGEND_EN, SHARED_EN, OVERVIEW_EN, CAP_SHARED_EN, CAP_USAGE_EN, CAP_ARGS_EN, CAP_DATA_HINTS_EN, CAP_METHODS_EN, CAP_EN, CAP_CAT_EN, CAP_OVERVIEW_EN } from './gen-content-en.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const COMP_DIR = path.join(ROOT, 'src', 'components')
@@ -70,6 +70,7 @@ function extractFnKeys(src, fnName) {
 
 // ★#406 颗粒度批：TS 接口解析（能力页参数/返回值属性表的 SSOT——capability.ts 内 60+ 接口属性带 JSDoc）
 //   提取 export interface X { ... } 的逐属性：名称/类型/可选(?)/前置 JSDoc 首行
+//   ★#490 补方法成员：句柄型接口（CookieJar/BackgroundAPI/FSAdapter…）的结构本体是方法——属性通道排除 '): ' 行，这里成对补齐
 function extractInterfaces(src) {
   const out = {}
   const re = /(?:\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\n)?export interface (\w+)(?:<[^>]*>)? \{([^\0]*?)\n\}/g
@@ -90,12 +91,45 @@ function extractInterfaces(src) {
       }
       props.push({ name: p[3], optional: p[4] === '?', type: p[5].replace(/\/\/.*$/, '').trim(), doc })
     }
+    // 方法成员（行级解析——capability.ts 接口成员均为单行；JSDoc 缓冲遇非注释行即清零）
+    const methods = []
+    let mdoc = ''
+    for (const raw of body.split('\n')) {
+      const t = raw.trim()
+      if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
+        mdoc += (mdoc ? ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
+        continue
+      }
+      const mm = t.match(/^(\w+)\s*\((.*)\)\s*:\s*(.+?);?$/)
+      if (mm) methods.push({ name: mm[1], sig: `${mm[1]}(${mm[2]}): ${mm[3].replace(/;$/, '')}`, doc: mdoc.trim() })
+      mdoc = ''
+    }
     out[name] = {
       doc: jsdoc ? jsdoc.replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ') : '',
       props,
+      methods,
     }
   }
   return out
+}
+
+// 表格单元格内类型/签名/描述竖线转义（'joined' | 'left' / string | null / 形态区间表达式——否则断列）
+const escMd = (s) => String(s).replace(/\|/g, '\\|')
+
+// ★#490 返回形态判定（zh/EN 同源）：Promise<CapResult<T>> 数据型 / Promise<CapResult<句柄>> 句柄型 / 同步句柄
+//   旧版 directT 硬编码 ['AuthState','CompatStorage'] 漏掉 6 个同步句柄（TrackAPI/Logger/AppLifecycle/PageLifecycle/FSAdapter/KeyboardLifecycle）
+//   → data 行渲染成空类型 + 用法误配 await 模板；Contact[] 数组后缀不剥 → 元素接口查表落空。均由本函数签名推导收口
+function hookShape(sigLine, ifaces) {
+  const retM = sigLine.match(/\)\s*:\s*([^\n]+)$/)
+  const retType = retM ? retM[1].trim() : ''
+  const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
+  const dataT = retT ? retT[1].trim() : ''
+  const voidRet = /CapResult<void>/.test(sigLine)
+  const handleT = !/^Promise</.test(retType) && /^[A-Z]\w*$/.test(retType) ? retType : ''
+  const dataElemT = dataT.endsWith('[]') ? dataT.slice(0, -2) : dataT
+  const dataIface = dataElemT ? ifaces[dataElemT] : undefined
+  const handleIface = handleT ? ifaces[handleT] : undefined
+  return { retType, dataT, voidRet, handleT, dataElemT, dataIface, handleIface }
 }
 
 // 从实现体提取 CapError('code', 'msg') 错误码（能力页错误码表 SSOT）
@@ -441,9 +475,9 @@ function genComponents(ir, ends) {
       lines.push('| 属性 | 说明 | 类型 | 默认值 | 必填 |')
       lines.push('|---|---|---|---|---|')
       for (const p of props) {
-        // 说明：源码 JSDoc 优先，公约属性兑底（COMMON_PROP_DOCS——pid/disabled 等跨组件公约语义）
+        // 说明：源码 JSDoc 优先，公约属性兑底（COMMON_PROP_DOCS——pid/disabled 等跨组件公约语义）；escMd 防描述/默认值竖线断列
         const doc = p.doc !== '—' ? p.doc : COMMON_PROP_DOCS[p.name] ?? '—'
-        lines.push(`| \`${p.name}\` | ${doc} | \`${p.type}\` | ${p.default ? `\`${p.default}\`` : p.required ? '**是**' : '—'} | ${p.required ? '**是**' : '否'} |`)
+        lines.push(`| \`${p.name}\` | ${escMd(doc)} | \`${escMd(p.type)}\` | ${p.default ? `\`${escMd(p.default)}\`` : p.required ? '**是**' : '—'} | ${p.required ? '**是**' : '否'} |`)
       }
       lines.push('')
     }
@@ -557,6 +591,8 @@ function genCapabilities(ir, ends) {
   fs.mkdirSync(OUT_CAP, { recursive: true })
   const { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap } = capContext(ir)
   // ★#407：旗舰 hook 的真实用法示例（SSOT = 签名；示例值按参数语义给典型值）
+  // ★#490 扩全：句柄型 hook（返回方法集/同步状态）通用模板完全失效或误导（await 非句柄）——逐个手写；
+  //   纯数据/void 型由 CAP_ARGS（真实参数值）+ CAP_DATA_HINTS（按返回类型的 data 用法行）差异化生成，不再 50 页一版
   const USAGE_EXAMPLES = {
     useFetch: [
       "const res = await useFetch<{ id: number; name: string }>('/api/user/1')",
@@ -567,6 +603,205 @@ function genCapabilities(ir, ends) {
       '  // 桥未提供 request → 降级路径',
       '}',
     ],
+    useWebSocket: [
+      "const res = await useWebSocket('wss://echo.example.com')",
+      '',
+      'if (res.ok) {',
+      '  const ws = res.data',
+      "  const off = ws.on('message', (payload) => console.log('收到:', payload))",
+      "  ws.send('hello')",
+      "  // off() 取消订阅；ws.close(1000, 'done') 关闭连接",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 平台不支持 → 降级路径',
+      '}',
+    ],
+    useSocketTask: [
+      "const res = await useSocketTask('wss://echo.example.com')",
+      '',
+      'if (res.ok) {',
+      '  const task = res.data',
+      "  task.onMessage((msg) => console.log('收到:', msg))",
+      "  await task.send('hello')",
+      "  // await task.close(1000, 'done')；task.isConnected() 查询连接态",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 平台不支持 → 降级路径',
+      '}',
+    ],
+    useDataChannel: [
+      "const res = await useDataChannel({ channelId: 'room-42' })",
+      '',
+      'if (res.ok) {',
+      '  const channel = res.data',
+      "  channel.onMessage((msg) => console.log('通道消息:', msg))",
+      "  await channel.send('hello')",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 数据通道需宿主桥 → 降级路径',
+      '}',
+    ],
+    useCookie: [
+      'const res = await useCookie()',
+      '',
+      'if (res.ok) {',
+      '  const jar = res.data',
+      "  jar.set('theme', 'dark', 86400)",
+      "  console.log('theme =', jar.get('theme'), '· 共', Object.keys(jar.list()).length, '条')",
+      "  // jar.remove('theme') 删除",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 平台不支持 → 降级路径',
+      '}',
+    ],
+    useBackground: [
+      'const res = await useBackground()',
+      '',
+      'if (res.ok) {',
+      '  const bg = res.data',
+      "  const off = bg.onEvent((e) => console.log(e.type === 'enter-background' ? '进入后台' : '回到前台', e.time))",
+      '  // off() 取消订阅',
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 平台不支持 → 降级路径',
+      '}',
+    ],
+    useLive: [
+      "const res = await useLive({ roomId: 'room-42', mode: 'video' })",
+      '',
+      'if (res.ok) {',
+      "  console.log('房间状态:', res.data.status())",
+      '  // await res.data.leave() 退出房间',
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 直播需宿主桥 → 降级路径',
+      '}',
+    ],
+    useMap: [
+      "const res = await useMap('map-1')",
+      '',
+      'if (res.ok) {',
+      '  const map = res.data',
+      '  await map.moveTo(31.2304, 121.4737, 12) // 上海人民广场，缩放 12',
+      '  const region = await map.getRegion()',
+      "  if (region.ok) console.log('中心:', region.data.latitude, region.data.longitude)",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // 地图需宿主集成 → 降级路径',
+      '}',
+    ],
+    useMiniProgram: [
+      'const res = await useMiniProgram()',
+      '',
+      'if (res.ok) {',
+      "  await res.data.navigate({ appId: 'wx1234567890abcdef', path: 'pages/index', extraData: { from: 'proteus' } })",
+      "} else if (res.error.code.endsWith('.unsupported')) {",
+      '  // web 无对等 API → Err 显式降级',
+      '}',
+    ],
+    useAnalytics: [
+      'const analytics = useAnalytics() // 同步句柄——无 await、无 res.ok',
+      '',
+      "await analytics.track('page_view', { page: '/home' })",
+      '// web 无标准上报 API → track 返回 Err（诚实降级，不抛异常）',
+    ],
+    useLog: [
+      'const logger = useLog() // 同步句柄——无 await、无 res.ok',
+      '',
+      "await logger.log('启动完成', { ts: Date.now() })",
+      "await logger.warn('内存偏高')",
+      "await logger.error('请求失败', { code: 500 })",
+    ],
+    useAppLifecycle: [
+      'const app = useAppLifecycle() // 同步句柄——无 await、无 res.ok',
+      '',
+      "console.log('当前阶段:', app.phase)",
+      "const off = app.onShow(() => console.log('回到前台'))",
+      '// app.onLaunch(...) / app.onHide(...)；off() 取消订阅',
+    ],
+    usePageLifecycle: [
+      'const page = usePageLifecycle() // 同步句柄——无 await、无 res.ok',
+      '',
+      "console.log('页面阶段:', page.phase)",
+      "const off = page.onShow(() => console.log('页面可见'))",
+      '// page.onLoad(...) / page.onHide(...)；off() 取消订阅',
+    ],
+    useFileSystem: [
+      'const fs = useFileSystem() // 同步句柄——无 await、无 res.ok',
+      '',
+      "const res = await fs.writeFile('logs/app.log', 'hello proteus')",
+      'if (res.ok) {',
+      "  const read = await fs.readFile('logs/app.log')",
+      "  if (read.ok) console.log('内容:', read.data)",
+      '}',
+      "// fs.exists(path) / fs.remove(path)；web 无 FS Access API → 内存降级（supported 仍为 true）",
+    ],
+    useKeyboard: [
+      'const kb = useKeyboard() // 同步句柄——无 await、无 res.ok',
+      '',
+      "console.log('键盘高度:', kb.info.height, '可见:', kb.info.visible)",
+      "const off = kb.onChange((info) => console.log('键盘高度变化:', info.height, info.visible))",
+      '// off() 取消订阅',
+    ],
+    useAuth: [
+      'const auth = useAuth() // 同步状态——auth.isAuthenticated 可直接绑定 UI',
+      '',
+      'if (!auth.isAuthenticated) {',
+      '  const res = await auth.login() // 渠道由宿主桥决定；无 login 桥 → Err 显式降级',
+      "  if (res.ok) console.log('登录成功，token 已托管')",
+      '}',
+      '// auth.setToken(token) 手动接管会话；await auth.logout() 登出；auth.subscribe(cb) 订阅登录态',
+    ],
+    useStorage: [
+      'const store = useStorage() // 同步句柄——无 await、无 res.ok',
+      '',
+      "store.set('theme', 'dark')",
+      "console.log('theme =', store.get('theme'))",
+      "// store.remove(key) / store.clear()；响应式增强：createReactiveStorage(store, reactive)",
+    ],
+  }
+  // 纯数据/void 型 hook 的参数典型值（SSOT = 签名；句柄型走 USAGE_EXAMPLES 不经此表）
+  const CAP_ARGS = {
+    useVibrate: '30',
+    useShare: "{ title: 'Proteus 跨端框架', url: 'https://proteus-vue.cn' }",
+    setClipboard: "'要复制的文本'",
+    usePermission: "'geolocation'",
+    useSensor: "'accelerometer'",
+    setBrightness: '0.8',
+    usePhoneCall: "'10086'",
+    usePayment: "{ timeStamp: '1725600000', nonceStr: 'a1b2c3d4', package: 'prepay_id=wx2501010001', paySign: 'SIGN' }",
+    useLogin: "'wechat'",
+    useUpload: "{ url: 'https://api.example.com/upload', filePath }",
+    useDownload: "'https://cdn.example.com/pkg.apk', { responseType: 'path' }",
+    useNotification: "'tmpl-123456'",
+    useCalendar: "{ title: '项目周会', startTime: Date.now() + 3600000 }",
+    useArchive: "{ src: 'wxfile://tmp/photo.jpg', quality: 80 }",
+    useSMS: "'10086', '您的验证码是 1234'",
+    useFaceID: "'验证本人操作'",
+    useInAppPurchase: "'com.example.premium'",
+    useExtension: "'com.acme.exporter'",
+  }
+  // 成功分支的 data 用法行（按返回类型给真实字段访问——替换千篇一律的 console.log(res.data)）
+  const CAP_DATA_HINTS = {
+    useLocation: ['  const { latitude, longitude } = res.data'],
+    useNetwork: ["  console.log(res.data.online ? '在线' : '离线', res.data.type)"],
+    useClipboard: ['  console.log(\'剪贴板内容:\', res.data)'],
+    useQRCode: ['  console.log(\'扫码结果:\', res.data)'],
+    useBiometric: ['  if (res.data) console.log(\'设备支持生物识别\')'],
+    useBrightness: ['  console.log(\'当前亮度:\', res.data)'],
+    useFaceID: ['  if (res.data) console.log(\'人脸认证通过\')'],
+    useContact: ['  console.log(\'联系人:\', res.data.map((c) => c.name))'],
+    useLogin: ['  console.log(\'登录渠道:\', res.data.provider, res.data.code ?? res.data.token ?? \'\')'],
+    useUpload: ['  console.log(\'上传完成:\', res.data.status, res.data.progress ?? 100)'],
+    useDownload: ['  console.log(\'下载完成:\', res.data.status, res.data.path ?? \'(blob/text)\')'],
+    usePayment: ['  console.log(\'支付:\', res.data.provider, res.data.transactionId ?? \'\')'],
+    useInAppPurchase: ['  console.log(\'内购:\', res.data.productId, res.data.state)'],
+    useSensor: ['  console.log(res.data.kind, res.data.x, res.data.y, res.data.z)'],
+    useNotification: ['  console.log(\'订阅:\', res.data.templateId, \'授权:\', res.data.granted)'],
+    useCamera: ['  console.log(\'摄像头:\', res.data.supported, \'授权:\', res.data.granted)'],
+    useMicrophone: ['  console.log(\'麦克风:\', res.data.supported, \'授权:\', res.data.granted)'],
+    useDevice: ['  console.log(res.data.platform, res.data.os, res.data.version)'],
+    useScreen: ['  console.log(`${res.data.width}x${res.data.height} @${res.data.dpr}x`)'],
+    useOrientation: ['  console.log(res.data.type, res.data.angle)'],
+    useBattery: ['  console.log(`电量 ${(res.data.level * 100).toFixed(0)}%`, res.data.charging)'],
+    useBluetooth: ['  console.log(\'蓝牙可用:\', res.data.available)'],
+    useNFC: ['  console.log(\'NFC:\', res.data.supported, res.data.available)'],
+    usePermission: ['  console.log(res.data.permission, res.data.state)'],
+    useEmbedded: ['  console.log(\'宿主:\', res.data.provider)'],
+    useExtension: ['  console.log(\'扩展返回:\', res.data)'],
   }
   let ok = 0
   for (const c of caps) {
@@ -615,7 +850,7 @@ function genCapabilities(ir, ends) {
         const t = p.type
         const ti = ifaces[t]
         const desc = ti?.doc || COMMON_PARAM_DOCS[p.name] || '—'
-        lines.push(`| \`${p.name}\` | \`${t}\` | ${p.optional ? '否' : '是'} | ${desc} |`)
+        lines.push(`| \`${p.name}\` | \`${escMd(t)}\` | ${p.optional ? '否' : '是'} | ${desc} |`)
       }
       lines.push('')
       // 对象参数展开：属性表（对齐小程序「对象参数展开」粒度）
@@ -627,20 +862,20 @@ function genCapabilities(ir, ends) {
         lines.push('| 属性 | 类型 | 必填 | 说明 |')
         lines.push('|---|---|---|---|')
         for (const pr of ti.props) {
-          lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
         }
         lines.push('')
       }
     }
-    // 返回值：CapResult<T> → ok/data/error + T 的接口属性表（AuthState/CompatStorage 等非 Promise 返回另行识别）
-    const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
-    const dataT = retT ? retT[1].trim() : ''
-    const voidRet = /CapResult<void>/.test(sigLine)
-    const directT = ['AuthState', 'CompatStorage'].find((t) => sigLine.includes(`: ${t}`))
+    // 返回值：三形态（★#490 hookShape 签名推导——Promise<CapResult<T>> 数据型 / Promise<CapResult<句柄>> 句柄型 / 同步句柄）
+    const shape = hookShape(sigLine, ifaces)
+    const dataT = shape.dataT
+    const voidRet = shape.voidRet
+    const handleT = shape.handleT
     lines.push('## 返回值')
     lines.push('')
-    if (directT) {
-      lines.push(`返回 \`${directT}\`（同步句柄/状态对象）。`)
+    if (handleT) {
+      lines.push(`返回 \`${handleT}\`（同步句柄——无 Promise、无 await，结构见下）。`)
       lines.push('')
     } else {
       lines.push('`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：')
@@ -648,31 +883,50 @@ function genCapabilities(ir, ends) {
       lines.push('| 属性 | 类型 | 说明 |')
       lines.push('|---|---|---|')
       lines.push(`| \`ok\` | \`boolean\` | 成功 \`true\` / 失败 \`false\` |`)
-      lines.push(dataT === 'T'
-        ? '| \`data\` | \`T\` | 成功载荷——泛型，由响应内容推导（如 JSON 自动反序列化） |'
-        : voidRet ? '| \`data\` | \`void\` | 成功时无载荷 |' : `| \`data\` | \`${dataT}\` | 成功载荷${ifaces[dataT]?.props.length ? '（结构见下）' : ''} |`)
-      lines.push('| \`error\` | \`CapError\` | 失败时存在：\`code\`（机器码）/ \`message\`（人读原因）/ \`cause\`（原始异常） |')
+      // data 行说明：有属性结构 →（结构见下）；仅方法（句柄）→（方法结构见下）；数组 →（元素结构见下）
+      const di = shape.dataIface
+      const dataNote = dataT === 'T' ? '成功载荷——泛型，由响应内容推导（如 JSON 自动反序列化）'
+        : voidRet ? '成功时无载荷'
+        : `成功载荷${di?.props.length ? '（结构见下）' : di?.methods.length ? '（方法结构见下）' : ''}`
+      lines.push(`| \`data\` | \`${dataT}\` | ${dataNote} |`)
+      lines.push('| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |')
       lines.push('')
     }
-    if (dataT && ifaces[dataT]?.props.length) {
-      lines.push(`#### \`data\`（\`${dataT}\`）的属性`)
+    // 结构表（★#490 属性 + 方法双通道——句柄型接口的方法是结构本体；Contact[] 剥数组后缀按元素接口查）
+    const renderMethods = (title, ti) => {
+      lines.push(title)
       lines.push('')
-      lines.push('| 属性 | 类型 | 必填 | 说明 |')
-      lines.push('|---|---|---|---|')
-      for (const pr of ifaces[dataT].props) {
-        lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
-      }
-      lines.push('')
-    } else if (directT && ifaces[directT]?.props.length) {
-      lines.push(`#### \`${directT}\` 的属性`)
-      lines.push('')
-      lines.push('| 属性 | 类型 | 说明 |')
+      lines.push('| 方法 | 签名 | 说明 |')
       lines.push('|---|---|---|')
-      for (const pr of ifaces[directT].props) {
-        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // 方法成员不入属性表（useAuth 的 login/logout 等——句柄方法）
-        lines.push(`| \`${pr.name}\` | \`${pr.type}\` | ${pr.doc || '—'} |`)
-      }
+      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc ? mm.doc.replace(/^C\d+\s+/, '') : '—'} |`)
       lines.push('')
+    }
+    if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
+      if (shape.dataIface.props.length) {
+        lines.push(`#### \`data\`（\`${dataT}\`）的属性`)
+        lines.push('')
+        lines.push('| 属性 | 类型 | 必填 | 说明 |')
+        lines.push('|---|---|---|---|')
+        for (const pr of shape.dataIface.props) {
+          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+        }
+        lines.push('')
+      }
+      if (shape.dataIface.methods.length) renderMethods(`#### \`data\`（\`${shape.dataElemT}\`）的方法`, shape.dataIface)
+    }
+    if (handleT && shape.handleIface && (shape.handleIface.props.length || shape.handleIface.methods.length)) {
+      if (shape.handleIface.props.length) {
+        lines.push(`#### \`${handleT}\` 的属性`)
+        lines.push('')
+        lines.push('| 属性 | 类型 | 说明 |')
+        lines.push('|---|---|---|')
+        for (const pr of shape.handleIface.props) {
+          if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // 函数类型属性不入表（方法成员走下方方法表）
+          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+        }
+        lines.push('')
+      }
+      if (shape.handleIface.methods.length) renderMethods(`#### \`${handleT}\` 的方法`, shape.handleIface)
     }
     // 错误码表：hook 条目切片 + 关联桥方法实现体中 CapError('code', 'msg') 全量提取
     const hookStart = hooksBody.indexOf(`${hook}:`)
@@ -728,33 +982,31 @@ function genCapabilities(ir, ends) {
     lines.push('')
     lines.push('## 用法')
     lines.push('')
+    lines.push('```ts')
     if (USAGE_EXAMPLES[hook]) {
-      // 旗舰 hook 手写示例（值取典型场景——参数契约以「参数」表为准）
-      lines.push('```ts')
+      // 句柄型/旗舰 hook 手写示例（值取典型场景——参数契约以「参数」表为准）
       lines.push(...USAGE_EXAMPLES[hook])
-      lines.push('```')
-    } else if (directT) {
-      // 同步句柄/状态对象：无 Promise 无 res.ok——按返回值结构用
-      const varName = hook.replace(/^use/, '').replace(/^set[A-Z]/, (m0) => m0.toLowerCase()) || 'handle'
-      const lv = varName.charAt(0).toLowerCase() + varName.slice(1)
-      lines.push('```ts')
+    } else if (handleT) {
+      // 同步句柄兑底：无 Promise 无 res.ok——按返回值结构用
+      const lv = (hook.replace(/^use/, '') || 'handle').charAt(0).toLowerCase() + hook.replace(/^use/, '').slice(1)
       lines.push(`const ${lv} = ${c.api}`)
-      lines.push(`// ${directT} 同步句柄——属性/方法结构见「返回值」表（无 await、无 res.ok）`)
-      lines.push('```')
+      lines.push(`// ${handleT} 同步句柄——无 await、无 res.ok（方法/属性结构见「返回值」表）`)
     } else {
-      // 带参 hook：传必填参数名（契约见「参数」表）；无参 hook 保持无参调用
+      // 数据/void 型：真实参数值（CAP_ARGS）+ 按返回类型的 data 用法行（CAP_DATA_HINTS）
       const required = params.filter((p) => !p.optional).map((p) => p.name)
-      const call = required.length ? c.api.replace('()', `(${required.join(', ')})`) : c.api
-      lines.push('```ts')
+      const args = CAP_ARGS[hook] ?? required.join(', ')
+      const call = c.api.replace('()', `(${args})`)
       lines.push(`const res = await ${call}`)
       lines.push('')
       lines.push('if (res.ok) {')
-      lines.push('  console.log(res.data)')
+      if (CAP_DATA_HINTS[hook]) lines.push(...CAP_DATA_HINTS[hook])
+      else if (voidRet) lines.push('  // 调用成功（void 无载荷）')
+      else lines.push('  console.log(res.data)')
       lines.push("} else if (res.error.code.endsWith('.unsupported')) {")
       lines.push('  // 平台不支持 → 降级路径')
       lines.push('}')
-      lines.push('```')
     }
+    lines.push('```')
     lines.push('')
     lines.push('<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->')
     fs.writeFileSync(path.join(OUT_CAP, `${c.semantic.replace('capability.', '')}.md`), lines.join('\n'))
@@ -997,14 +1249,14 @@ async function genCapabilitiesEn(ir, ends) {
         lines.push('')
       }
     }
-    const retT = sigLine.match(/CapResult<([^<>]+(?:<[^<>]+>)?)>/)
-    const dataT = retT ? retT[1].trim() : ''
-    const voidRet = /CapResult<void>/.test(sigLine)
-    const directT = ['AuthState', 'CompatStorage'].find((t) => sigLine.includes(`: ${t}`))
+    const shape = hookShape(sigLine, ifaces)
+    const dataT = shape.dataT
+    const voidRet = shape.voidRet
+    const handleT = shape.handleT
     lines.push(CAP_SHARED_EN.hReturns)
     lines.push('')
-    if (directT) {
-      lines.push(CAP_SHARED_EN.directReturn(directT))
+    if (handleT) {
+      lines.push(CAP_SHARED_EN.directReturn(handleT))
       lines.push('')
     } else {
       lines.push(CAP_SHARED_EN.returnsIntro)
@@ -1012,31 +1264,51 @@ async function genCapabilitiesEn(ir, ends) {
       lines.push(CAP_SHARED_EN.retCols)
       lines.push('|---|---|---|')
       lines.push(`| \`ok\` | \`boolean\` | ${esc(CAP_SHARED_EN.retOk)} |`)
-      if (dataT === 'T') lines.push(`| \`data\` | \`T\` | ${esc(CAP_SHARED_EN.retDataGeneric)} |`)
-      else if (voidRet) lines.push(`| \`data\` | \`void\` | ${esc(CAP_SHARED_EN.retDataVoid)} |`)
-      else lines.push(`| \`data\` | \`${esc(dataT)}\` | Success payload${ifaces[dataT]?.props.length ? ' (structure below)' : ''} |`)
+      const di = shape.dataIface
+      const dataNote = dataT === 'T' ? esc(CAP_SHARED_EN.retDataGeneric)
+        : voidRet ? esc(CAP_SHARED_EN.retDataVoid)
+        : `Success payload${di?.props.length ? ' (structure below)' : di?.methods.length ? ' (methods below)' : ''}`
+      lines.push(`| \`data\` | \`${esc(dataT)}\` | ${dataNote} |`)
       lines.push(`| \`error\` | \`CapError\` | ${esc(CAP_SHARED_EN.retError)} |`)
       lines.push('')
     }
-    if (dataT && ifaces[dataT]?.props.length) {
-      lines.push(CAP_SHARED_EN.dataPropsTitle(dataT))
+    const renderMethodsEn = (title, tiName, ti) => {
+      lines.push(title)
       lines.push('')
-      lines.push(CAP_SHARED_EN.propCols)
-      lines.push('|---|---|---|---|')
-      for (const pr of ifaces[dataT].props) {
-        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc((page.dataProps && page.dataProps[pr.name]) || '—')} |`)
-      }
-      lines.push('')
-    } else if (directT && ifaces[directT]?.props.length) {
-      lines.push(CAP_SHARED_EN.directPropsTitle(directT))
-      lines.push('')
-      lines.push(CAP_SHARED_EN.retCols)
+      lines.push(CAP_SHARED_EN.methodCols)
       lines.push('|---|---|---|')
-      for (const pr of ifaces[directT].props) {
-        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue
-        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${esc((page.directProps && page.directProps[pr.name]) || '—')} |`)
+      for (const mm of ti.methods) {
+        const doc = (CAP_METHODS_EN[tiName] && CAP_METHODS_EN[tiName][mm.name]) || '—'
+        lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${esc(doc)} |`)
       }
       lines.push('')
+    }
+    if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
+      if (shape.dataIface.props.length) {
+        lines.push(CAP_SHARED_EN.dataPropsTitle(dataT))
+        lines.push('')
+        lines.push(CAP_SHARED_EN.propCols)
+        lines.push('|---|---|---|---|')
+        for (const pr of shape.dataIface.props) {
+          lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc((page.dataProps && page.dataProps[pr.name]) || '—')} |`)
+        }
+        lines.push('')
+      }
+      if (shape.dataIface.methods.length) renderMethodsEn(CAP_SHARED_EN.methodsTitle(shape.dataElemT), shape.dataElemT, shape.dataIface)
+    }
+    if (handleT && shape.handleIface && (shape.handleIface.props.length || shape.handleIface.methods.length)) {
+      if (shape.handleIface.props.length) {
+        lines.push(CAP_SHARED_EN.directPropsTitle(handleT))
+        lines.push('')
+        lines.push(CAP_SHARED_EN.retCols)
+        lines.push('|---|---|---|')
+        for (const pr of shape.handleIface.props) {
+          if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // function-typed members go to the methods table
+          lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${esc((page.directProps && page.directProps[pr.name]) || '—')} |`)
+        }
+        lines.push('')
+      }
+      if (shape.handleIface.methods.length) renderMethodsEn(CAP_SHARED_EN.methodsTitle(handleT), handleT, shape.handleIface)
     }
     const hookStart = hooksBody.indexOf(`${hook}:`)
     const hookEnd = (() => {
@@ -1098,14 +1370,14 @@ async function genCapabilitiesEn(ir, ends) {
     lines.push('```ts')
     if (CAP_USAGE_EN[hook]) {
       lines.push(...CAP_USAGE_EN[hook])
-    } else if (directT) {
-      const varName = hook.replace(/^use/, '').replace(/^set[A-Z]/, (m0) => m0.toLowerCase()) || 'handle'
-      const lv = varName.charAt(0).toLowerCase() + varName.slice(1)
+    } else if (handleT) {
+      const lv = (hook.replace(/^use/, '') || 'handle').charAt(0).toLowerCase() + hook.replace(/^use/, '').slice(1)
       lines.push(...CAP_USAGE_EN.direct(c.api, lv))
     } else {
       const required = params.filter((p) => !p.optional).map((p) => p.name)
-      const call = required.length ? c.api.replace('()', `(${required.join(', ')})`) : c.api
-      lines.push(...CAP_USAGE_EN.generic(call))
+      const args = CAP_ARGS_EN[hook] ?? required.join(', ')
+      const call = c.api.replace('()', `(${args})`)
+      lines.push(...CAP_USAGE_EN.generic(call, CAP_DATA_HINTS_EN[hook], voidRet))
     }
     lines.push('```')
     lines.push('')

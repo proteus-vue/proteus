@@ -61,10 +61,10 @@ useSMS(phone: string, message: string): Promise<CapResult<void>>
 ## 用法
 
 ```ts
-const res = await useSMS(phone, message)
+const res = await useSMS('10086', '您的验证码是 1234')
 
 if (res.ok) {
-  console.log(res.data)
+  // 调用成功（void 无载荷）
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

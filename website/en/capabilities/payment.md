@@ -42,7 +42,7 @@ usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 | `data` | `PaymentReceipt` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`PaymentReceipt`) object
+#### Properties of the `PaymentReceipt` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -78,10 +78,10 @@ usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 ## Usage
 
 ```ts
-const res = await usePayment(config)
+const res = await usePayment({ timeStamp: '1725600000', nonceStr: 'a1b2c3d4', package: 'prepay_id=wx2501010001', paySign: 'SIGN' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('payment:', res.data.provider, res.data.transactionId ?? '')
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

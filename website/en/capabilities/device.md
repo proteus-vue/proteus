@@ -26,7 +26,7 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `data` | `CapDeviceInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`CapDeviceInfo`) object
+#### Properties of the `CapDeviceInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -59,7 +59,7 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 const res = await useDevice()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.platform, res.data.os, res.data.version)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

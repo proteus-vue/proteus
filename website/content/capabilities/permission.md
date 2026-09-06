@@ -37,7 +37,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `permission` | `string` | 是 | 权限名（web Permissions API 名，如 geolocation / camera） |
-| `state` | `'granted' | 'denied' | 'prompt'` | 是 | 授权状态（prompt = 未询问） |
+| `state` | `'granted' \| 'denied' \| 'prompt'` | 是 | 授权状态（prompt = 未询问） |
 
 ## 错误码
 
@@ -67,10 +67,10 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 ## 用法
 
 ```ts
-const res = await usePermission(name)
+const res = await usePermission('geolocation')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.permission, res.data.state)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

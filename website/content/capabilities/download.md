@@ -30,7 +30,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 |---|---|---|---|
 | `headers` | `Record<string, string>` | 否 | 自定义请求头 |
 | `timeout` | `number` | 否 | 超时（ms；超时 → Err） |
-| `responseType` | `'blob' | 'path' | 'text' | 'json'` | 否 | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
+| `responseType` | `'blob' \| 'path' \| 'text' \| 'json'` | 否 | 返回数据类型：blob（web）/ path（wx tempFilePath）/ text / json |
 
 ## 返回值
 
@@ -79,10 +79,10 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 ## 用法
 
 ```ts
-const res = await useDownload(url)
+const res = await useDownload('https://cdn.example.com/pkg.apk', { responseType: 'path' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('下载完成:', res.data.status, res.data.path ?? '(blob/text)')
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

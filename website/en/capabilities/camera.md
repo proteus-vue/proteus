@@ -26,7 +26,7 @@ useCamera(): Promise<CapResult<MediaAccess>>
 | `data` | `MediaAccess` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`MediaAccess`) object
+#### Properties of the `MediaAccess` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -65,7 +65,7 @@ useCamera(): Promise<CapResult<MediaAccess>>
 const res = await useCamera()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('camera:', res.data.supported, 'granted:', res.data.granted)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -26,7 +26,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | `data` | `ScreenInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`ScreenInfo`) object
+#### Properties of the `ScreenInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -66,7 +66,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 const res = await useScreen()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(`${res.data.width}x${res.data.height} @${res.data.dpr}x`)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

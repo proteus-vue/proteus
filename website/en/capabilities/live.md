@@ -36,8 +36,15 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `LiveRoomHandle` | Success payload |
+| `data` | `LiveRoomHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `LiveRoomHandle`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `leave` | `leave(): Promise<CapResult<void>>` | — |
+| `status` | `status(): 'joined' \| 'left'` | — |
 
 ## Error codes
 
@@ -67,12 +74,13 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 ## Usage
 
 ```ts
-const res = await useLive(options)
+const res = await useLive({ roomId: 'room-42', mode: 'video' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('room status:', res.data.status())
+  // await res.data.leave() exits the room
 } else if (res.error.code.endsWith('.unsupported')) {
-  // platform unsupported → degradation path
+  // live streaming requires a host bridge → degradation path
 }
 ```
 

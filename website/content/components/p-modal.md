@@ -34,7 +34,7 @@ order: 2004
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
 | `visible` | 弹窗可见（v-model:visible） | `Boolean` | `false` | 否 |
-| `pAdaptive` | ★形态区间声明：模板写 p-adaptive="sheet(0, 600) | dialog(600, 840) | popover(840, ∞)"（计划 API）→ pAdaptive prop | `String` | `'sheet(0, 600) | dialog(600, 840) | popover(840, ∞)'` | 否 |
+| `pAdaptive` | ★形态区间声明：模板写 p-adaptive="sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)"（计划 API）→ pAdaptive prop | `String` | `'sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)'` | 否 |
 | `anchor` | popover 形态锚定触发源（元素引用；缺省 → popover 居中降级，03 §6 降级链） | `Object` | `null` | 否 |
 | `width` | 形态求解宽度覆盖（0 = 跟随视口；>0 = 强制指定——预览/验证/测试不同窗口大小） | `Number` | `0` | 否 |
 | `title` | 标题（header slot 存在时优先） | `String` | `''` | 否 |

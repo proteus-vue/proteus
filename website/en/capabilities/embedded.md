@@ -26,7 +26,7 @@ useEmbedded(): Promise<CapResult<HostContext>>
 | `data` | `HostContext` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`HostContext`) object
+#### Properties of the `HostContext` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -65,7 +65,7 @@ useEmbedded(): Promise<CapResult<HostContext>>
 const res = await useEmbedded()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('host:', res.data.provider)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -78,10 +78,10 @@ usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 ## 用法
 
 ```ts
-const res = await usePayment(config)
+const res = await usePayment({ timeStamp: '1725600000', nonceStr: 'a1b2c3d4', package: 'prepay_id=wx2501010001', paySign: 'SIGN' })
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('支付:', res.data.provider, res.data.transactionId ?? '')
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

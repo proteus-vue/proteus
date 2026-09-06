@@ -67,7 +67,7 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 const res = await useBattery()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(`电量 ${(res.data.level * 100).toFixed(0)}%`, res.data.charging)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

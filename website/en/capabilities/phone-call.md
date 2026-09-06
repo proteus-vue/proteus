@@ -61,10 +61,10 @@ usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await usePhoneCall(phoneNumber)
+const res = await usePhoneCall('10086')
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

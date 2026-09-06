@@ -26,7 +26,7 @@ useBluetooth(): Promise<CapResult<BluetoothInfo>>
 | `data` | `BluetoothInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`BluetoothInfo`) object
+#### Properties of the `BluetoothInfo` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -65,7 +65,7 @@ useBluetooth(): Promise<CapResult<BluetoothInfo>>
 const res = await useBluetooth()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('bluetooth available:', res.data.available)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

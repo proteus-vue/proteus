@@ -32,7 +32,7 @@ useLogin(provider?: string): Promise<CapResult<LoginResult>>
 | `data` | `LoginResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`LoginResult`) object
+#### Properties of the `LoginResult` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -69,10 +69,10 @@ useLogin(provider?: string): Promise<CapResult<LoginResult>>
 ## Usage
 
 ```ts
-const res = await useLogin()
+const res = await useLogin('wechat')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('provider:', res.data.provider, res.data.code ?? res.data.token ?? '')
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

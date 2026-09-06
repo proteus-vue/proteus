@@ -29,8 +29,15 @@ useMap(id: string): Promise<CapResult<MapController>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `MapController` | 成功载荷 |
+| `data` | `MapController` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`MapController`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
+| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
 
 ## 错误码
 
@@ -61,12 +68,15 @@ useMap(id: string): Promise<CapResult<MapController>>
 ## 用法
 
 ```ts
-const res = await useMap(id)
+const res = await useMap('map-1')
 
 if (res.ok) {
-  console.log(res.data)
+  const map = res.data
+  await map.moveTo(31.2304, 121.4737, 12) // 上海人民广场，缩放 12
+  const region = await map.getRegion()
+  if (region.ok) console.log('中心:', region.data.latitude, region.data.longitude)
 } else if (res.error.code.endsWith('.unsupported')) {
-  // 平台不支持 → 降级路径
+  // 地图需宿主集成 → 降级路径
 }
 ```
 

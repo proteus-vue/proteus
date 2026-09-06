@@ -68,7 +68,7 @@ useLocation(): Promise<CapResult<Coords>>
 const res = await useLocation()
 
 if (res.ok) {
-  console.log(res.data)
+  const { latitude, longitude } = res.data
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

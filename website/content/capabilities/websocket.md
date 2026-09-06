@@ -30,8 +30,16 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `WebSocketConnection` | 成功载荷 |
+| `data` | `WebSocketConnection` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`WebSocketConnection`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `send` | `send(data: string \| ArrayBuffer): void` | 发送消息（字符串或二进制） |
+| `close` | `close(code?: number, reason?: string): void` | 关闭连接 |
+| `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）——open/message/close/error |
 
 ## 错误码
 
@@ -62,10 +70,13 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 ## 用法
 
 ```ts
-const res = await useWebSocket(url)
+const res = await useWebSocket('wss://echo.example.com')
 
 if (res.ok) {
-  console.log(res.data)
+  const ws = res.data
+  const off = ws.on('message', (payload) => console.log('收到:', payload))
+  ws.send('hello')
+  // off() 取消订阅；ws.close(1000, 'done') 关闭连接
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

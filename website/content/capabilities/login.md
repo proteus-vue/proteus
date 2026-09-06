@@ -69,10 +69,10 @@ useLogin(provider?: string): Promise<CapResult<LoginResult>>
 ## 用法
 
 ```ts
-const res = await useLogin()
+const res = await useLogin('wechat')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('登录渠道:', res.data.provider, res.data.code ?? res.data.token ?? '')
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

@@ -38,7 +38,7 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 |---|---|---|---|
 | `productId` | `string` | 是 | 内购商品 ID（应用商店登记） |
 | `transactionId` | `string` | 否 | 交易单号（商店返回） |
-| `state` | `'purchased' | 'restored'` | 是 | 交易状态（purchased 新购 / restored 恢复购买） |
+| `state` | `'purchased' \| 'restored'` | 是 | 交易状态（purchased 新购 / restored 恢复购买） |
 
 ## 错误码
 
@@ -68,10 +68,10 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 ## 用法
 
 ```ts
-const res = await useInAppPurchase(productId)
+const res = await useInAppPurchase('com.example.premium')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('内购:', res.data.productId, res.data.state)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

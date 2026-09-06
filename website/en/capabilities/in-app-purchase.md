@@ -32,7 +32,7 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 | `data` | `IAPReceipt` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `data` (`IAPReceipt`) object
+#### Properties of the `IAPReceipt` object
 
 | Property | Type | Required | Doc |
 |---|---|---|---|
@@ -68,10 +68,10 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 ## Usage
 
 ```ts
-const res = await useInAppPurchase(productId)
+const res = await useInAppPurchase('com.example.premium')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('iap:', res.data.productId, res.data.state)
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

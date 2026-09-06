@@ -58,7 +58,7 @@ useBiometric(): Promise<CapResult<boolean>>
 const res = await useBiometric()
 
 if (res.ok) {
-  console.log(res.data)
+  if (res.data) console.log('设备支持生物识别')
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

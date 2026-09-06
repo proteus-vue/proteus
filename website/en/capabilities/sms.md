@@ -61,10 +61,10 @@ useSMS(phone: string, message: string): Promise<CapResult<void>>
 ## Usage
 
 ```ts
-const res = await useSMS(phone, message)
+const res = await useSMS('10086', 'Your verification code is 1234')
 
 if (res.ok) {
-  console.log(res.data)
+  // success — void payload
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }

@@ -60,10 +60,10 @@ useFaceID(prompt?: string): Promise<CapResult<boolean>>
 ## 用法
 
 ```ts
-const res = await useFaceID()
+const res = await useFaceID('验证本人操作')
 
 if (res.ok) {
-  console.log(res.data)
+  if (res.data) console.log('人脸认证通过')
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

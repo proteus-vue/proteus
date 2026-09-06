@@ -68,10 +68,10 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ## 用法
 
 ```ts
-const res = await useNotification(templateId)
+const res = await useNotification('tmpl-123456')
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('订阅:', res.data.templateId, '授权:', res.data.granted)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

@@ -64,7 +64,7 @@ useNFC(): Promise<CapResult<NfcInfo>>
 const res = await useNFC()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log('NFC:', res.data.supported, res.data.available)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

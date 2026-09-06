@@ -59,7 +59,7 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 const res = await useDevice()
 
 if (res.ok) {
-  console.log(res.data)
+  console.log(res.data.platform, res.data.os, res.data.version)
 } else if (res.error.code.endsWith('.unsupported')) {
   // 平台不支持 → 降级路径
 }

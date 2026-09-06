@@ -30,8 +30,16 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `WebSocketConnection` | Success payload |
+| `data` | `WebSocketConnection` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `WebSocketConnection`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `send` | `send(data: string \| ArrayBuffer): void` | Send a message (string or binary) |
+| `close` | `close(code?: number, reason?: string): void` | Close the connection |
+| `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
 
 ## Error codes
 
@@ -62,10 +70,13 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 ## Usage
 
 ```ts
-const res = await useWebSocket(url)
+const res = await useWebSocket('wss://echo.example.com')
 
 if (res.ok) {
-  console.log(res.data)
+  const ws = res.data
+  const off = ws.on('message', (payload) => console.log('received:', payload))
+  ws.send('hello')
+  // off() unsubscribes; ws.close(1000, 'done') closes the connection
 } else if (res.error.code.endsWith('.unsupported')) {
   // platform unsupported → degradation path
 }
