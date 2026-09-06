@@ -409,23 +409,156 @@ function mapTsType(t: string, warnings: string[], name: string): { type: string;
   return { type: 'String', value: '' }
 }
 
-/** defineProps 对象形式 → Component properties 字段（仅组件模式；含 v0.3 尾 TS 泛型形式） */
+/** 剥 TS as 断言 / 非空断言 / 括号（defineProps 对象形式常见 `Array as any` / `(String as any)`） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tsUnwrap(n: any): any {
+  if (!n) return n
+  if (
+    n.type === 'TSAsExpression' ||
+    n.type === 'TSTypeAssertion' ||
+    n.type === 'TSNonNullExpression' ||
+    n.type === 'ParenthesizedExpression'
+  ) {
+    return tsUnwrap(n.expression)
+  }
+  return n
+}
+
+/** defineProps 对象形式 → Component properties 字段（仅组件模式；含 v0.3 尾 TS 泛型形式）
+ *  ★#497 批 2b：AST 发现 + 属性级解析（注释/跨行/含逗号默认值/嵌套 default 天然正确）；解析失败回退旧文本路径 */
 function extractProps(source: string, warnings: string[], trace?: TransformTrace): Record<string, PropInfo> {
   const out: Record<string, PropInfo> = {}
   const add = (name: string, info: PropInfo, before: string): void => {
     out[name] = info
     trace?.add('script/define-props', { before, after: `properties.${name}（type: ${info.type}）` })
   }
+  /** 对象形式 prop 归一（AST 与文本回退共用语义）：类型白名单校验 + 函数 default 丢弃 + 无 default 按类型兜底 */
+  const normalize = (name: string, typeIn: string, valueIn: unknown, fnDefault: boolean): void => {
+    let type = typeIn
+    let value = valueIn
+    if (!['String', 'Number', 'Boolean', 'Object', 'Array', 'Function'].includes(type)) {
+      warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
+      type = 'String'
+    }
+    // 无 default 时按类型给默认值（微信 properties.value）；函数默认值（如 () => []）不适用，跳过
+    if (fnDefault || typeof value === 'function') {
+      warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
+      value = undefined
+    }
+    if (value === undefined) {
+      if (type === 'String') value = ''
+      else if (type === 'Number') value = 0
+      else if (type === 'Boolean') value = false
+    }
+    out[name] = { type, value }
+  }
+  const body = topLevelAst(source)
+  if (body) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isFnDefault = (n: any): boolean => {
+      const u = tsUnwrap(n)
+      return u.type === 'ArrowFunctionExpression' || u.type === 'FunctionExpression'
+    }
+    /** 对象配置对象 { type, default } 中取指定键值（default 是任意表达式 → AST 区间切片喂 evalLiteral——逗号/嵌套天然正确） */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const objValueOf = (obj: any, key: string): any | undefined => {
+      for (const p of obj.properties ?? []) {
+        if (p.type !== 'ObjectProperty' || p.computed) continue
+        const k = p.key
+        if (k && ((k.type === 'Identifier' && k.name === key) || (k.type === 'StringLiteral' && k.value === key))) return p.value
+      }
+      return undefined
+    }
+    /** 单条 runtime 形式 prop（简写构造器 label: String / 配置对象 { type, default }）→ 归一入册 */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleRuntimeEntry = (name: string, valueNode: any): void => {
+      const u = tsUnwrap(valueNode)
+      let type = 'String'
+      let value: unknown
+      let fnDefault = false
+      if (u.type === 'ObjectExpression') {
+        const tv = objValueOf(u, 'type')
+        if (tv) {
+          const tu = tsUnwrap(tv)
+          if (tu.type === 'Identifier') type = tu.name
+          else if (tu.type === 'ArrayExpression' && tu.elements[0]) {
+            // 多构造器 type: [String, Number] → 首构造器（旧文本语义取 type: 后首标识符）
+            const e0 = tsUnwrap(tu.elements[0])
+            if (e0 && e0.type === 'Identifier') type = e0.name
+          }
+        }
+        const dv = objValueOf(u, 'default')
+        if (dv) {
+          fnDefault = isFnDefault(dv)
+          if (!fnDefault) value = evalLiteral(source.slice(dv.start, dv.end).trim())
+        }
+      } else if (u.type === 'Identifier') {
+        type = u.name // 简写构造器（label: String）；自定义类型走白名单警告
+      } else {
+        return // 其他形态（如 'String' 字面量）：维持旧行为静默忽略
+      }
+      normalize(name, type, value, fnDefault)
+      add(name, out[name], `defineProps({ ${name}: ... })`)
+    }
+    // 全树扫描 defineProps 调用（宏可能位于 const 初始化 / withDefaults 参数 / 表达式语句）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const calls: any[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const walk = (n: any): void => {
+      if (!n || typeof n.type !== 'string') return
+      if (n.type === 'CallExpression' && n.callee && n.callee.type === 'Identifier' && n.callee.name === 'defineProps') calls.push(n)
+      for (const k of Object.keys(n)) {
+        const v = n[k]
+        if (Array.isArray(v)) for (const c of v) walk(c)
+        else if (v && typeof v === 'object') walk(v)
+      }
+    }
+    for (const st of body) walk(st)
+    for (const call of calls) {
+      // 对象形式优先（旧文本顺序语义）；无对象参数再看 TS 泛型形式
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const objArg = (call.arguments ?? []).find((a: any) => a && a.type === 'ObjectExpression')
+      if (objArg) {
+        for (const p of objArg.properties ?? []) {
+          if (p.type !== 'ObjectProperty' || p.computed) continue
+          const k = p.key
+          if (!k || (k.type !== 'Identifier' && k.type !== 'StringLiteral')) continue
+          const name = k.type === 'Identifier' ? k.name : k.value
+          if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) continue
+          handleRuntimeEntry(name, p.value)
+        }
+        continue
+      }
+      // TS 泛型形式（v0.3 尾）：defineProps<{ label: string; count?: number }>()——typeParameters（@babel/parser TS 插件）；成员含注释/跨行天然正确
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const typeLit = ((call as any).typeParameters?.params ?? []).find((p: any) => p && p.type === 'TSTypeLiteral')
+      if (!typeLit) continue
+      for (const mm of typeLit.members) {
+        if (!mm || mm.type !== 'TSPropertySignature') continue
+        const k = mm.key
+        if (!k || (k.type !== 'Identifier' && k.type !== 'StringLiteral')) continue
+        const name = k.type === 'Identifier' ? k.name : k.value
+        if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) continue
+        const tn = mm.typeAnnotation?.typeAnnotation
+        if (!tn) continue
+        const t = source.slice(tn.start, tn.end).trim()
+        const info = mapTsType(t, warnings, name)
+        add(name, info, `defineProps<{ ${name}${mm.optional ? '?' : ''}: ${t} }>()`)
+      }
+    }
+    return out
+  }
+  // —— 文本回退路径 ——
   const m = source.match(/\bdefineProps\s*\(\s*\{/)
   if (m) {
-    const body = extractBracedBody(source, (m.index ?? 0) + m[0].length - 1)
-    if (body === null) {
+    const fbBody = extractBracedBody(source, (m.index ?? 0) + m[0].length - 1)
+    if (fbBody === null) {
       warnings.push('defineProps 解析失败（MVP 仅支持对象形式 defineProps({...})），已忽略')
       return out
     }
     const re = /(['"]?)([A-Za-z_$][\w$]*)\1\s*:\s*(\{[^}]*\}|[A-Za-z_$][\w$]*)/g
     let pm: RegExpExecArray | null
-    while ((pm = re.exec(body))) {
+    while ((pm = re.exec(fbBody))) {
       const name = pm[2]
       const spec = pm[3].trim()
       let type = 'String'
@@ -442,7 +575,6 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
         warnings.push(`prop ${name} 的类型 ${type} 无法映射到微信 properties（MVP 支持 String/Number/Boolean/Object/Array），已按 String 处理`)
         type = 'String'
       }
-      // 无 default 时按类型给默认值（微信 properties.value）；函数默认值（如 () => []）不适用，跳过
       if (typeof value === 'function') {
         warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
         value = undefined
@@ -459,20 +591,54 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
   // TS 泛型形式（v0.3 尾）：defineProps<{ label: string; count?: number }>()
   const tsM = source.match(/\bdefineProps\s*<\{([\s\S]*?)\}\s*>/)
   if (!tsM) return out
-  const re = /([A-Za-z_$][\w$]*)\s*(\?)?\s*:\s*([^;]+)/g
-  let pm: RegExpExecArray | null
-  while ((pm = re.exec(tsM[1]))) {
-    const name = pm[1]
-    const info = mapTsType(pm[3], warnings, name)
-    add(name, info, `defineProps<{ ${name}${pm[2] ?? ''}: ${pm[3].trim()} }>()`)
+  const re2 = /([A-Za-z_$][\w$]*)\s*(\?)?\s*:\s*([^;]+)/g
+  let pm2: RegExpExecArray | null
+  while ((pm2 = re2.exec(tsM[1]))) {
+    const name = pm2[1]
+    const info = mapTsType(pm2[3], warnings, name)
+    add(name, info, `defineProps<{ ${name}${pm2[2] ?? ''}: ${pm2[3].trim()} }>()`)
   }
   return out
+}
+
+/** ★#497 批 2b watch 辅助：props 成员源（props.x → 字段名；非 props 对象 / 计算属性返回 undefined） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function propsMemberField(n: any): string | undefined {
+  if (!n || n.type !== 'MemberExpression' || n.computed) return undefined
+  if (!n.object || n.object.type !== 'Identifier' || n.object.name !== 'props') return undefined
+  if (!n.property || n.property.type !== 'Identifier') return undefined
+  return n.property.name
+}
+
+/** ★#497 批 2b watch 辅助：getter 箭头的返回表达式——表达式体直接返回；块体仅支持单 return（多语句 getter 无法编译期内联 → null） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function arrowGetterExpr(node: any): any | null {
+  if (!node || node.type !== 'ArrowFunctionExpression') return null
+  if (node.body.type !== 'BlockStatement') return node.body
+  const sts = (node.body.body ?? []).filter((s: any) => s.type !== 'EmptyStatement')
+  if (sts.length === 1 && sts[0].type === 'ReturnStatement' && sts[0].argument) return sts[0].argument
+  return null
+}
+
+/** ★#497 批 2b watch 辅助：options 参数 immediate: true 定位（AST——旧文本 120 字符尾扫在大尾注释时会漏） */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function watchOptionsImmediate(args: any[]): boolean {
+  for (const a of args) {
+    if (!a || a.type !== 'ObjectExpression') continue
+    for (const p of a.properties ?? []) {
+      if (p.type === 'ObjectProperty' && !p.computed && p.key && p.key.type === 'Identifier' && p.key.name === 'immediate') {
+        if (p.value && p.value.type === 'BooleanLiteral' && p.value.value === true) return true
+      }
+    }
+  }
+  return false
 }
 
 /**
  * 提取顶层 watch 调用：watch(源, (newVal, oldVal) => { ... }[, { immediate: true }])
  * 源：单 ref（count）| 数组（[a, b]）| 函数（() => expr，依赖从 expr 的 x.value 提取）| ★props 源（props.x / () => props.x → WeChat observers）
- * MVP：箭头函数回调；function 回调警告
+ * ★#497 批 2b：AST 顶层发现——回调参数 TS 类型/解构天然剥除（astParamText）、options AST 定位、
+ *   单参简写 (v => {}) 与 getter 块体（单 return）补支持；解析失败回退旧文本路径（永不比现状差）
  */
 function extractWatch(
   source: string,
@@ -482,6 +648,98 @@ function extractWatch(
   allowPropWatch = true,
 ): Record<string, WatchInfo> {
   const out: Record<string, WatchInfo> = {}
+  const body = topLevelAst(source)
+  if (body) {
+    for (const st of body) {
+      if (st.type !== 'ExpressionStatement') continue
+      const call = st.expression
+      if (!call || call.type !== 'CallExpression') continue
+      if (!call.callee || call.callee.type !== 'Identifier' || call.callee.name !== 'watch') continue
+      const args = call.arguments ?? []
+      const srcNode = args[0]
+      const cbNode = args[1]
+      if (!srcNode || !cbNode) continue
+      if (cbNode.type !== 'ArrowFunctionExpression' && cbNode.type !== 'FunctionExpression') continue
+      // MVP 仅块体回调（表达式体 watch 维持既有契约静默跳过）；async 回调旧文本不识别——同样跳过
+      if (!cbNode.body || cbNode.body.type !== 'BlockStatement' || cbNode.async) continue
+      const params = cbNode.params.map((p: any) => astParamText(source, p))
+      const rawSrc = source.slice(srcNode.start, srcNode.end).trim()
+      const line = st.loc.start.line
+      const cbBody = extractBracedBody(source, cbNode.body.start)
+      if (cbBody === null) {
+        warnings.push(`watch ${rawSrc} 回调体解析失败，已跳过`)
+        continue
+      }
+      const immediate = watchOptionsImmediate(args)
+      // ★props 源（组件监听自身属性变化）：watch(props.x, cb) / watch(() => props.x, cb)
+      //   Web 端即标准 Vue watch（全响应式）；MP 端编译为 Component observers（属性变化触发回调）
+      let propField: string | undefined
+      if (allowPropWatch) {
+        propField = propsMemberField(srcNode)
+        if (!propField && srcNode.type === 'ArrowFunctionExpression') {
+          const g = arrowGetterExpr(srcNode)
+          if (g) propField = propsMemberField(g)
+        }
+      }
+      if (propField) {
+        const id = `Prop${capitalize(propField)}`
+        if (out[id]) {
+          warnings.push(`watch ${rawSrc} 与已有 watch 重名（${id}），后者覆盖前者`)
+        }
+        trace?.add('script/watch-props', {
+          line,
+          before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
+          after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（attached 初始化调用一次）' : ''} }`,
+        })
+        out[id] = { id, deps: [], params, body: cbBody, immediate, line, propField }
+        continue
+      }
+      // 解析源 → deps + 函数源 getter
+      let deps: string[] = []
+      let expr: string | undefined
+      if (srcNode.type === 'Identifier') {
+        // 单 ref
+        deps = [srcNode.name]
+      } else if (srcNode.type === 'ArrayExpression') {
+        // 数组源 [a, b]（元素为顶层 ref 标识符；其他元素形态不参与依赖）
+        deps = srcNode.elements.filter((el: any) => el && el.type === 'Identifier').map((el: any) => el.name)
+      } else if (srcNode.type === 'ArrowFunctionExpression') {
+        // 函数源 () => expr：依赖从 expr 的 x.value 提取；getter 转写为 this.data 形式
+        const g = arrowGetterExpr(srcNode)
+        if (!g) {
+          warnings.push(`watch 源无法解析依赖（${rawSrc.slice(0, 40)}），已跳过`)
+          continue
+        }
+        const getter = source.slice(g.start, g.end).trim()
+        deps = [...new Set(Array.from(getter.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+        expr = getter.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
+      } else {
+        // 其余形态（props.x 成员在 script/watch-props 禁用时 / 方法调用源等）：按文本源名走缺失校验（旧文本单 ref 语义）
+        deps = [rawSrc]
+      }
+      const missing = deps.filter((d) => !(d in data))
+      if (missing.length) {
+        warnings.push(`watch 依赖 ${missing.join('/')} 未在顶层 data 中定义（watch 的源必须是本文件顶层 ref/reactive）`)
+        continue
+      }
+      if (!deps.length) {
+        warnings.push(`watch 源无法解析依赖（${rawSrc.slice(0, 40)}），已跳过`)
+        continue
+      }
+      const id = deps.map((d) => capitalize(d)).join('And')
+      if (out[id]) {
+        warnings.push(`watch ${rawSrc} 与已有 watch 重名（${id}），后者覆盖前者`)
+      }
+      trace?.add('script/watch-to-methods', {
+        line,
+        before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
+        after: `proteusWatch${id}（${deps.join('/')} 写入 setData 后自动调用${immediate ? '，immediate 初始化一次' : ''}）`,
+      })
+      out[id] = { id, deps, params, body: cbBody, immediate, line, expr }
+    }
+    return out
+  }
+  // —— 文本回退路径 ——
   const re = /^watch\s*\(\s*([\s\S]*?)\s*,\s*(?:\(([^)]*)\)\s*=>|function\s*\(([^)]*)\)\s*)\s*\{/gm
   let m: RegExpExecArray | null
   while ((m = re.exec(source))) {
@@ -489,8 +747,6 @@ function extractWatch(
     if (source.slice(lineStart, m.index) !== '') continue
     const rawSrc = m[1].trim()
     const params = (m[2] ?? m[3] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    // ★props 源（组件监听自身属性变化）：watch(props.x, cb) / watch(() => props.x, cb)
-    //   Web 端即标准 Vue watch（全响应式）；MP 端编译为 Component observers（属性变化触发回调）
     let propField: string | undefined
     if (allowPropWatch && rawSrc.startsWith('props.')) {
       propField = rawSrc.slice('props.'.length).trim().replace(/\.value$/, '')
@@ -501,12 +757,12 @@ function extractWatch(
     }
     if (propField) {
       const braceIdx = m.index + m[0].length - 1
-      const body = extractBracedBody(source, braceIdx)
-      if (body === null) {
+      const fbBody = extractBracedBody(source, braceIdx)
+      if (fbBody === null) {
         warnings.push(`watch ${rawSrc} 回调体解析失败，已跳过`)
         continue
       }
-      const after = source.slice(braceIdx + body.length + 1, braceIdx + body.length + 120)
+      const after = source.slice(braceIdx + fbBody.length + 1, braceIdx + fbBody.length + 120)
       const immediate = /immediate\s*:\s*true/.test(after)
       const id = `Prop${capitalize(propField)}`
       if (out[id]) {
@@ -517,22 +773,18 @@ function extractWatch(
         before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
         after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（attached 初始化调用一次）' : ''} }`,
       })
-      out[id] = { id, deps: [], params, body, immediate, line: lineAt(source, m.index), propField }
+      out[id] = { id, deps: [], params, body: fbBody, immediate, line: lineAt(source, m.index), propField }
       continue
     }
-    // 解析源 → deps + 函数源 getter
     let deps: string[] = []
     let expr: string | undefined
     if (rawSrc.startsWith('[')) {
-      // 数组源 [a, b]
       deps = Array.from(rawSrc.matchAll(/\b([A-Za-z_$][\w$]*)\b/g), (mm) => mm[1])
     } else if (rawSrc.startsWith('()')) {
-      // 函数源 () => expr：依赖从 expr 的 x.value 提取，getter 转写为 this.data 形式
       const getter = rawSrc.replace(/^\(\)\s*=>\s*/, '')
       deps = [...new Set(Array.from(getter.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
       expr = getter.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
     } else {
-      // 单 ref
       deps = [rawSrc]
     }
     const missing = deps.filter((d) => !(d in data))
@@ -546,12 +798,12 @@ function extractWatch(
     }
     const id = deps.map((d) => capitalize(d)).join('And')
     const braceIdx = m.index + m[0].length - 1
-    const body = extractBracedBody(source, braceIdx)
-    if (body === null) {
+    const fbBody = extractBracedBody(source, braceIdx)
+    if (fbBody === null) {
       warnings.push(`watch ${rawSrc} 回调体解析失败，已跳过`)
       continue
     }
-    const after = source.slice(braceIdx + body.length + 1, braceIdx + body.length + 120)
+    const after = source.slice(braceIdx + fbBody.length + 1, braceIdx + fbBody.length + 120)
     const immediate = /immediate\s*:\s*true/.test(after)
     if (out[id]) {
       warnings.push(`watch ${rawSrc} 与已有 watch 重名（${id}），后者覆盖前者`)
@@ -561,7 +813,7 @@ function extractWatch(
       before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
       after: `proteusWatch${id}（${deps.join('/')} 写入 setData 后自动调用${immediate ? '，immediate 初始化一次' : ''}）`,
     })
-    out[id] = { id, deps, params, body, immediate, line: lineAt(source, m.index), expr }
+    out[id] = { id, deps, params, body: fbBody, immediate, line: lineAt(source, m.index), expr }
   }
   return out
 }

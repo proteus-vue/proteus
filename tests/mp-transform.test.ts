@@ -1192,3 +1192,81 @@ describe('页面滚动 API 桥接（page/scroll-bridge，15-page-scroll-containe
     expect(wxml).not.toContain('proteus-progress')
   })
 })
+
+describe('★#497 批 2b：watch / defineProps AST 结构发现（文本解析缺口回归）', () => {
+  it('watch 回调参数 TS 类型/行内注释剥离（产物方法签名纯 JS——旧文本把 n: number 原样进签名）', () => {
+    const src = `const count = ref(0)
+// 源/回调上方注释不影响结构发现
+watch(count, (n: number /* 新值 */) => {
+  log(n)
+})`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusWatchCount(n) {')
+    expect(js).not.toContain('n: number')
+  })
+
+  it('watch 单参简写回调 v => { body }（旧文本仅括号形态识别）', () => {
+    const src = `const count = ref(0)
+watch(count, v => {
+  log(v)
+})`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusWatchCount(v) {')
+  })
+
+  it('watch 函数源块体 getter（() => { return expr }）——旧文本产物为语法错误（裸 return 串）', () => {
+    const src = `const count = ref(0)
+watch(() => {
+  return count.value * 2
+}, (n) => {
+  log(n)
+})
+function setN() {
+  count.value = 5
+}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('proteusWatchCount(n) {')
+    expect(js).toContain('this.proteusWatchCount(this.data.count * 2, oldCount)')
+    expect(js).not.toContain('{ return this.data')
+  })
+
+  it('watch props 源：getter 块体单 return（() => { return props.x }）同样分类 observers', () => {
+    const src = `const props = defineProps({ items: { type: Array as any } })\nwatch(() => { return props.items }, () => { calc() })`
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('observers: {')
+    expect(js).toContain('items(n, o) {')
+  })
+
+  it('defineProps 对象形式 default 含逗号字符串不被截断（旧文本 [^,}]+ 截到首个逗号）', () => {
+    const src = "const props = defineProps({ msg: { type: String, default: 'a,b' } })"
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('msg: { type: String, value: "a,b" }')
+  })
+
+  it('defineProps 对象形式多行调用 + prop 注释/行尾注释不干扰（旧文本 ( 与 { 间有注释即整体漏提取）', () => {
+    const src = `const props = defineProps(
+  // 弹层配置
+  {
+    /** 标题 */
+    label: { type: String, default: '' },
+    count: { type: Number, default: 5 }, // 计数
+  },
+)`
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('label: { type: String, value: "" }')
+    expect(js).toContain('count: { type: Number, value: 5 }')
+  })
+
+  it('defineProps TS 泛型多行 + 成员注释 + 无分号分隔（旧文本 [^;]+ 吞并后序成员）', () => {
+    const src = `const props = defineProps<{
+  /** 标签 */
+  label: string
+  kind: 'a' | 'b'
+  tags?: string[]
+}>()`
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('label: { type: String, value: "" }')
+    expect(js).toContain('kind: { type: String, value: "" }')
+    expect(js).toContain('tags: { type: Array }')
+  })
+})
