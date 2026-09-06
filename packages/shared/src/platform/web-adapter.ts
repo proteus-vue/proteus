@@ -22,11 +22,14 @@ export function createWebAdapter(): PlatformAdapter {
       nav?: 'forward' | 'back' | 'replace' | 'reLaunch' | 'switchTab',
     ) => void
   > = []
-  let current: PageInstance & { routeType?: string } = { route: location.pathname.replace(/^\//, '') }
+  // ★#491 环境守卫：adapter 是模块顶层单例——SSR/测试/预打包预求值场景无 location/history，
+  //   裸引用会启动即崩（mp 白屏同源）；无浏览器环境时初始 route 置空（首个 onPageLoad 会重新赋值）
+  const hasBrowserEnv = typeof location !== 'undefined' && typeof history !== 'undefined'
+  let current: PageInstance & { routeType?: string } = { route: hasBrowserEnv ? location.pathname.replace(/^\//, '') : '' }
   // 导航方向：history.state.proteusIndex 记录栈深，popstate 时判断前进/后退
   // ⚠ 刷新后 historyIndex 不能从 0 开始：浏览器 history 保留旧条目（state.proteusIndex），
   //   否则在转场页刷新后首次后退会被误判为 forward（stateIndex < 0 不成立）→ 无反向动画
-  let historyIndex = (history.state as { proteusIndex?: number } | null)?.proteusIndex ?? 0
+  let historyIndex = hasBrowserEnv ? ((history.state as { proteusIndex?: number } | null)?.proteusIndex ?? 0) : 0
 
   const emit = (
     url: string,
@@ -37,7 +40,8 @@ export function createWebAdapter(): PlatformAdapter {
     listeners.forEach((l) => l(current.route, parseQuery(url), routeType, nav))
   }
 
-  // 浏览器前进/后退（state 无 proteusIndex 时视为前进，如外部跳入）
+  // 浏览器前进/后退（state 无 proteusIndex 时视为前进，如外部跳入）——无浏览器环境（SSR/测试）跳过事件接线
+  if (hasBrowserEnv) {
   window.addEventListener('popstate', (e) => {
     const stateIndex = (e.state as { proteusIndex?: number } | null)?.proteusIndex
     let nav: 'forward' | 'back' = 'forward'
@@ -63,6 +67,7 @@ export function createWebAdapter(): PlatformAdapter {
     history.pushState({ proteusIndex: historyIndex }, '', href)
     emit(href, routeType, 'forward')
   })
+  }
 
   return {
     isMP: false,
