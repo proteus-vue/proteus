@@ -200,7 +200,7 @@ export default defineAppConfig({
 
 | 语义 | CSS 矩阵档位 | 说明 |
 |------|-------------|------|
-| `p-fluid` → `clamp()` | ✅ Web/WebView 直映射 | ★Skyline 无 `clamp()` 长度函数（官方表）——Skyline 忽略该声明走类样式兑底；calc 变体生成待后续批次 |
+| `p-fluid` → `clamp()` | ✅ Web/WebView 直映射 | ★#496 M3 已落地：MP 产物（Skyline/WebView 共用）p-fluid 生成 calc 线性（`calc(15.77px + 1.1268vw)`，vw 随窗流式零运行时）；Skyline 无 clamp/min/max（官方表），clamp 边界夹取仅 Web 真实 CSS 引擎保留 |
 | `p-grid` → `grid-template-columns` | ✅ Web 直映射 | Skyline/WebView：★#496 编译器 flex 档位（断点求解 + px basis）；iOS/Android/鸿蒙用原生网格 |
 | `p-stack` → `flex-wrap` | ✅ 直映射 | 五端均支持（flex 各端一致——保持运行时组件，不迁语义编译） |
 | `p-fit` → `min-content` | 🔶 语义封装 | Skyline 无 `fit-content`/块级 inline-block → 上限 maxRatio 生效、内容宽退化为块宽（诚实降级）；iOS/Android 原生 |
@@ -241,7 +241,7 @@ JSI → 原生布局引擎
 
 | 语义 | Web | Skyline | iOS | Android | 鸿蒙 |
 |------|-----|---------|-----|---------|------|
-| `p-fluid` | `clamp()` + `vw` | calc 变体待做（clamp 不支持，当前类兑底） | Auto Layout 约束 | ConstraintLayout | `LayoutConstraint` |
+| `p-fluid` | `clamp()` + `vw` | ★#496 M3 calc 线性（`calc(… + vw)`——MP 共用产物，Skyline/WebView 均流式） | Auto Layout 约束 | ConstraintLayout | `LayoutConstraint` |
 | `p-grid` | CSS Grid | ★#496 flex 档位（编译器断点 + px basis + resize 重算） | `UICollectionView` | `RecyclerView` | `Grid` |
 | `p-stack` | Flexbox wrap | Flexbox wrap | `UIStackView` | `FlexboxLayout` | `Flex` |
 | `p-fit` | `min-content` | 上限 maxRatio 生效（无 fit-content，内容宽→块宽降级） | `systemLayoutSizeFitting` | `wrap_content` | `wrapContent` |

@@ -35,6 +35,6 @@
 
 ## 5. 遗留边界（诚实清单）
 
-- Skyline 无 `clamp()` → p-fluid 流式字号在 Skyline 走类样式兜底（calc 变体生成待后续批次）。
+- ★M3 已落地：p-fluid MP 产物 calc 线性（`calc(intercept + slope vw)`）——Skyline/WebView 均流式零运行时；clamp 边界夹取仅 Web 保留（超界屏 ±1-2px，小程序宽度域可忽略）。
 - 语义编译 MVP：动态 props（非字面量 min-col-width/gap）回退运行时组件；多子项各自静态 style 警告剥离（改用 class）。
 - 组件模板内 p-grid 回退运行时组件（SelectorQuery 需页面 onReady）。

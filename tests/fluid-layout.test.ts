@@ -2,7 +2,7 @@
 // ★G-22 柔性布局 B1（fluid-layout-plan 05 §4 可单测用例，期望值来自 01/05 文档「已验证」输出）
 // @vitest-environment happy-dom（applyFluidStyle 用 document）
 import { describe, it, expect } from 'vitest'
-import { generateClamp, deriveBreakpoints, calcColumns, gridTemplate, transformTemplateToWxml } from '@proteus-vue/compiler'
+import { generateClamp, linearFluid, deriveBreakpoints, calcColumns, gridTemplate, transformTemplateToWxml } from '@proteus-vue/compiler'
 import { createFluidStyle, parseFluidExpr, applyFluidStyle } from '@proteus-vue/components'
 import { defaultScopedPlugin } from '@proteus-vue/plugin-vite'
 
@@ -15,6 +15,11 @@ describe('fluid-layout B1（纯算法）', () => {
     expect(generateClamp(20, 32, 375)).toBe('clamp(20px, calc(15.77px + 1.1268vw), 32px)')
     // 区间退化（maxVw == designWidth）→ slope 0，preferred = min
     expect(generateClamp(20, 20, 375)).toBe('clamp(20px, calc(20.00px + 0.0000vw), 20px)')
+  })
+
+  it('linearFluid：calc 线性段（Skyline/WebView 共用产物——无 clamp，vw 随窗流式，#496 M3）', () => {
+    expect(linearFluid(20, 32, 375)).toBe('calc(15.77px + 1.1268vw)')
+    expect(linearFluid(20, 20, 375)).toBe('calc(20.00px + 0.0000vw)') // 区间退化 → 平值
   })
 
   it('deriveBreakpoints：设计稿 375 → sm 188 / md 328 / lg 469 / xl 609（01 §4.2 已验证）', () => {
@@ -46,9 +51,9 @@ describe('fluid-layout B1（纯算法）', () => {
 })
 
 describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
-  it('transformTemplateToWxml：p-fluid 属性 → style 追加 clamp 声明；属性本身剥离', () => {
+  it('transformTemplateToWxml：p-fluid 属性 → style 追加 calc 线性声明（★#496 M3 Skyline 无 clamp）；属性本身剥离', () => {
     const result = transformTemplateToWxml('<h1 p-fluid="font-size(20, 32)">标题</h1>', {})
-    expect(result.wxml).toContain('style="font-size: clamp(20px, calc(15.77px + 1.1268vw), 32px)"')
+    expect(result.wxml).toContain('style="font-size: calc(15.77px + 1.1268vw)"')
     expect(result.wxml).not.toContain('p-fluid')
     expect(result.warnings.length).toBe(0)
   })
@@ -58,7 +63,7 @@ describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
       fluidLayout: { designWidth: 400, viewport: { min: 320, max: 1280 } },
     })
     // slope(gap)=(20-12)/(1280-400)=0.00909；intercept=12-0.00909*400=8.36；margin slope=0.01818，intercept=16-0.01818*400=8.73
-    expect(result.wxml).toContain('style="color:red; gap: clamp(12px, calc(8.36px + 0.9091vw), 20px); margin: clamp(16px, calc(8.73px + 1.8182vw), 32px)"')
+    expect(result.wxml).toContain('style="color:red; gap: calc(8.36px + 0.9091vw); margin: calc(8.73px + 1.8182vw)"')
   })
 
   it('FLD003：无法解析的表达式 → 剥离 + 警告，不生成样式', () => {

@@ -32,17 +32,26 @@ export const DEFAULT_BREAKPOINT_RATIOS: Array<{ name: string; ratio: number }> =
 ]
 
 /**
- * 流式尺寸 clamp 生成：设计稿宽度处 = min，视口 maxVw 处 = max，中间线性插值（vw）
+ * 流式尺寸线性段（calc + vw）：设计稿宽度处 = min，视口 maxVw 处 = max，中间线性插值
+ * ★#496 M3 Skyline：无 clamp/min/max（官方表），MP 共用产物（Skyline/WebView 同一 wxml）→ p-fluid 用线性 calc，
+ *   vw 天然随窗口流式、零运行时；clamp 边界夹取在真实 CSS 引擎才有意义（<minVw/>maxVw 屏 ±1-2px，小程序宽度域可忽略）。
+ *   例：linearFluid(20, 32, 375) → "calc(15.77px + 1.1268vw)"
+ */
+export function linearFluid(min: number, max: number, designWidth: number, viewportRange: ViewportRange = DEFAULT_VIEWPORT_RANGE): string {
+  const range = viewportRange.max - designWidth
+  const slope = range > 0 ? (max - min) / range : 0
+  const intercept = min - slope * designWidth
+  return `calc(${intercept.toFixed(2)}px + ${(slope * 100).toFixed(4)}vw)`
+}
+
+/**
+ * 流式尺寸 clamp 生成（Web 真实 CSS 引擎用——clamp 夹取；MP 模板产物用 linearFluid，#496 M3）
  * 例：generateClamp(20, 32, 375, [320, 1440])
  *   slope = (32-20)/(1440-375) = 0.011268；intercept = 20 - 0.011268*375 = 15.77
  *   → "clamp(20px, calc(15.77px + 1.1268vw), 32px)"
  */
 export function generateClamp(min: number, max: number, designWidth: number, viewportRange: ViewportRange = DEFAULT_VIEWPORT_RANGE): string {
-  const range = viewportRange.max - designWidth
-  const slope = range > 0 ? (max - min) / range : 0
-  const intercept = min - slope * designWidth
-  const preferred = `calc(${intercept.toFixed(2)}px + ${(slope * 100).toFixed(4)}vw)`
-  return `clamp(${min}px, ${preferred}, ${max}px)`
+  return `clamp(${min}px, ${linearFluid(min, max, designWidth, viewportRange)}, ${max}px)`
 }
 
 /** 断点推导：设计稿宽度 × 比例 → sm/md/lg/xl（四舍五入） */

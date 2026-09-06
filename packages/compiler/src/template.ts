@@ -10,7 +10,7 @@ import type {
 } from '@vue/compiler-dom'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
 import type { FluidLayoutConfig } from '@proteus-vue/types/compiler-types'
-import { generateClamp, calcColumns } from './fluid-layout'
+import { linearFluid, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
 import { executeRule } from './transforms/registry'
@@ -689,7 +689,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           const cfg = ctx.fluidLayout
           const designWidth = cfg?.designWidth ?? 375
           const viewport = { min: cfg?.viewport?.min ?? 320, max: cfg?.viewport?.max ?? 1440 }
-          const decls = groups.map((g) => `${g.prop}: ${generateClamp(g.min, g.max, designWidth, viewport)}`).join('; ')
+          // ★#496 M3：MP 产物用 calc 线性（Skyline/WebView 共用 wxml——Skyline 无 clamp，WebView 支持 calc+vw；clamp 边界仅超界屏 ±1-2px）
+          const decls = groups.map((g) => `${g.prop}: ${linearFluid(g.min, g.max, designWidth, viewport)}`).join('; ')
           staticStyle = staticStyle ? staticStyle + '; ' + decls : decls
           ctx.trace?.add('fluid/p-fluid', { line: node.loc.start.line, before: `p-fluid="${expr}"`, after: `style 追加 ${decls}` })
         }
