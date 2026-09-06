@@ -917,6 +917,16 @@ function handleConstToData(
   if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
     warnings.push(`const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`)
   }
+  // ★#502 反黑盒：非有限数（Infinity/NaN）进 data → 微信 setData 序列化约束整次放弃/静默变 null（p-modal variants 真机根因）——编译期显式警告
+  const hasNonFinite = (o: unknown): boolean => {
+    if (typeof o === 'number') return !Number.isFinite(o)
+    if (Array.isArray(o)) return o.some(hasNonFinite)
+    if (o && typeof o === 'object') return Object.values(o).some(hasNonFinite)
+    return false
+  }
+  if (hasNonFinite(value)) {
+    warnings.push(`const ${name} 含非有限数（Infinity/NaN）——小程序 setData 数据须可 JSON 序列化，整次 setData 会被放弃/字段静默变 null：请改用 Number.MAX_SAFE_INTEGER 表达无上界`)
+  }
   out.data[name] = value
 }
 

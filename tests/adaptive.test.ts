@@ -36,7 +36,7 @@ function mount(comp: unknown, props: Record<string, unknown>, slots?: Record<str
 const VARIANTS: AdaptiveVariant[] = [
   { form: 'sheet', lo: 0, hi: 600 },
   { form: 'dialog', lo: 600, hi: 840 },
-  { form: 'popover', lo: 840, hi: Infinity },
+  { form: 'popover', lo: 840, hi: Number.MAX_SAFE_INTEGER },
 ]
 
 describe('p-adaptive parseAdaptiveExpression（B1 解析）', () => {
@@ -45,13 +45,13 @@ describe('p-adaptive parseAdaptiveExpression（B1 解析）', () => {
     expect(modes).toEqual([
       { form: 'sheet', lo: 0, hi: 600 },
       { form: 'dialog', lo: 600, hi: 840 },
-      { form: 'popover', lo: 840, hi: Infinity },
+      { form: 'popover', lo: 840, hi: Number.MAX_SAFE_INTEGER },
     ])
   })
 
   it('上界省略/∞/inf/空白 → Infinity；下界省略 → 0；空/格式非法 → 空数组', () => {
-    expect(parseAdaptiveExpression('sidebar(840,)')).toEqual([{ form: 'sidebar', lo: 840, hi: Infinity }])
-    expect(parseAdaptiveExpression('topnav(1280, inf)')).toEqual([{ form: 'topnav', lo: 1280, hi: Infinity }])
+    expect(parseAdaptiveExpression('sidebar(840,)')).toEqual([{ form: 'sidebar', lo: 840, hi: Number.MAX_SAFE_INTEGER }])
+    expect(parseAdaptiveExpression('topnav(1280, inf)')).toEqual([{ form: 'topnav', lo: 1280, hi: Number.MAX_SAFE_INTEGER }])
     expect(parseAdaptiveExpression('fullscreen(, 768)')).toEqual([{ form: 'fullscreen', lo: 0, hi: 768 }])
     expect(parseAdaptiveExpression('')).toEqual([])
     expect(parseAdaptiveExpression('not-a-range')).toEqual([])
@@ -62,7 +62,7 @@ describe('p-adaptive parseAdaptiveExpression（B1 解析）', () => {
 describe('p-adaptive validateAdaptiveRanges（B1 校验 FLD007）', () => {
   it('连续区间 → 零诊断', () => {
     expect(validateAdaptiveRanges(VARIANTS)).toEqual([])
-    expect(validateAdaptiveRanges([{ form: 'a', lo: 0, hi: 600 }, { form: 'b', lo: 600, hi: Infinity }])).toEqual([])
+    expect(validateAdaptiveRanges([{ form: 'a', lo: 0, hi: 600 }, { form: 'b', lo: 600, hi: Number.MAX_SAFE_INTEGER }])).toEqual([])
   })
 
   it('重叠区间 → FLD007（06 §3 用例）', () => {

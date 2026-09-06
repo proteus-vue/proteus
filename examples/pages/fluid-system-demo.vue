@@ -53,10 +53,11 @@ function onSelect(key: string): void {
 }
 
 // ★p-adaptive 求解演示（B1 纯逻辑可视化）：视口宽度 → 形态（sheet/dialog/popover）
+// ★#502 hi 用 MAX_SAFE_INTEGER（JSON 安全：Infinity 进小程序 data 会被 setData 放弃/静默变 null，popover 档永不匹配）
 const ADAPTIVE_MODES = [
   { form: 'sheet', lo: 0, hi: 600 },
   { form: 'dialog', lo: 600, hi: 840 },
-  { form: 'popover', lo: 840, hi: Infinity },
+  { form: 'popover', lo: 840, hi: Number.MAX_SAFE_INTEGER },
 ]
 const viewportWidth = ref(0)
 const adaptiveForm = ref('sheet')

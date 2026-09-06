@@ -55,9 +55,10 @@ const form = ref('sheet')
 let aware: SizeAwareObserver | null = null
 
 // ★解析形态区间（组件初始化一次；空 → sheet 兜底）——pAdaptive 由模板 p-adaptive attr camelize 匹配
+// ★#502 兜底 hi 用 MAX_SAFE_INTEGER（JSON 安全——结果进小程序 data，Infinity 会被 setData 序列化约束整次放弃）
 const variants = computed<AdaptiveVariant[]>(() => {
   const modes = parseAdaptiveExpression(props.pAdaptive)
-  return modes.length ? modes : [{ form: 'sheet', lo: 0, hi: Infinity }]
+  return modes.length ? modes : [{ form: 'sheet', lo: 0, hi: Number.MAX_SAFE_INTEGER }]
 })
 
 watch(() => props.visible, () => {

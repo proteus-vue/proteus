@@ -12,7 +12,8 @@ export interface AdaptiveVariant {
   form: string
   /** 区间下界（含）——逻辑点 pt */
   lo: number
-  /** 区间上界（不含）；Infinity = 无上界（∞） */
+  /** 区间上界（不含）；无上界（∞）= Number.MAX_SAFE_INTEGER（★#502 JSON 安全：Infinity 进小程序 data 会被
+   *  setData 序列化约束整次放弃（p-modal 弹窗定位/样式全丢真机根因），比较语义与 Infinity 等价） */
   hi: number
 }
 
@@ -24,7 +25,8 @@ export interface AdaptiveDiagnostic {
 
 /**
  * 解析 p-adaptive 表达式：`sheet(0, 600) | dialog(600, 840) | popover(840, ∞)` → 有序形态区间
- * - 上界省略/∞/inf → Infinity；下界省略 → 0；格式非法项跳过
+ * - 上界省略/∞/inf → Number.MAX_SAFE_INTEGER（★#502 JSON 安全——解析结果可能进小程序 data，Infinity 非法；
+ *   对所有真实宽度比较语义与 Infinity 等价）；下界省略 → 0；格式非法项跳过
  */
 export function parseAdaptiveExpression(expr: string): AdaptiveVariant[] {
   const out: AdaptiveVariant[] = []
@@ -36,7 +38,7 @@ export function parseAdaptiveExpression(expr: string): AdaptiveVariant[] {
     const form = m[1] as string
     const lo = m[2] && m[2].length ? Number(m[2]) : 0
     const hiRaw = m[3] as string | null
-    const hi = hiRaw == null || hiRaw === '' || /^(∞|inf)$/i.test(hiRaw) ? Infinity : Number(hiRaw)
+    const hi = hiRaw == null || hiRaw === '' || /^(∞|inf)$/i.test(hiRaw) ? Number.MAX_SAFE_INTEGER : Number(hiRaw)
     out.push({ form, lo, hi })
   }
   return out
