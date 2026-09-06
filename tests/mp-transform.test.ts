@@ -35,6 +35,12 @@ describe('v-show（v0.3 指令补全）', () => {
     expect(wxml).toContain('class="proteus-p"')
   })
 
+  it('★#500 v-show 复合表达式加括号（!a || b 语义——旧产物 (!a)||b → p-sidebar nav 恒可见真机根因）', () => {
+    const { wxml } = transformTemplateToWxml('<view v-show="mode === \'side-rail\' || mode === \'collapsed-open\'">x</view>', opts)
+    expect(wxml).toContain("hidden=\"{{!(mode === 'side-rail' || mode === 'collapsed-open')}}\"")
+    expect(wxml).not.toContain('{{!mode')
+  })
+
   it('v-show 不再警告（原为 limitation 规则，已升级 implemented）', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     transformTemplateToWxml('<p v-show="show">a</p>', opts)
@@ -1396,5 +1402,34 @@ function setN() {
 }`
     const { js } = transformScriptToPage(src, opts)
     expect(js).toContain('this.data.count = 5; this.setData({ count: this.data.count, double: this.data.count * 2 })')
+  })
+
+  it('★#500 自定义组件 v-model:visible="show" → visible="{{show}}" + bind:update:visible 回写（旧产物 bindinput → 组件永不生效）', () => {
+    const r = compileVueSfc(
+      '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)</script>\n<template><p-modal v-model:visible="show">x</p-modal></template>',
+      { filename: 'pages/vmodel.vue' },
+    )
+    expect(r.wxml).toContain('visible="{{show}}"')
+    expect(r.wxml).toContain('bind:update:visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).not.toContain('bindinput')
+    expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
+  })
+
+  it('★#500 赋值型内联事件 x = !x / x = 字面量 → setData 包装方法（旧产物整句当方法名 → 点击无反应）', () => {
+    const r = compileVueSfc(
+      '<script setup lang="ts">import { ref } from "vue"\nconst showModal = ref(false)\nconst w = ref(0)</script>\n<template><button @click="showModal = !showModal">开</button><button @click="w = 600">600</button></template>',
+      { filename: 'pages/assign.vue' },
+    )
+    expect(r.wxml).toContain('bindtap="proteusInlineSetShowModalShowModal"')
+    expect(r.wxml).toContain('bindtap="proteusInlineSetW600"')
+    expect(r.js).toContain('this.data.showModal = !this.data.showModal; this.setData({ showModal: this.data.showModal })')
+    expect(r.js).toContain('this.data.w = 600; this.setData({ w: this.data.w })')
+  })
+
+  it('★#500 赋值 RHS 为裸标识符（可能是 v-for 项变量）→ 不包装走反黑盒警告（data-* 捕获机制另行登记）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { wxml } = transformTemplateToWxml('<button v-for="w in list" @click="modalWidth = w">x</button>', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('不是简单方法引用'))
+    expect(wxml).toContain('bindtap="modalWidth = w"')
   })
 })

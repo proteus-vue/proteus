@@ -268,6 +268,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings: Set<string>
+  /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData） */
+  vModelComponentHandlers: Array<{ name: string; model: string }>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
   /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
@@ -333,6 +335,19 @@ function tryInlineHandler(exp: string): { name: string; code: string } | null {
     return {
       name: `proteusInline${capitalize(m[1])}${key}`,
       code: `this.${m[1]}(${m[2]})`,
+    }
+  }
+  // ★#500 赋值型内联事件：x = !x / x = 字面量 → setData 方法（旧产物把整句当方法名 → bindtap="x = !x" 点击无反应）
+  //   裸标识符 RHS（可能是 wx:for 项变量）排除——方法作用域取不到，须走 data-* 捕获，另行登记（反黑盒警告兜底）
+  m = t.match(/^([\w$]+)\s*=\s*(![\w$]+|true|false|null|undefined|-?\d+(?:\.\d+)?|'(?:[^']*)'|"(?:[^"]*)")(?:;?)$/)
+  if (m) {
+    const target = m[1]
+    const rhs = m[2]
+    const rhsJs = rhs.startsWith('!') ? `!this.data.${rhs.slice(1)}` : rhs
+    const key = rhs.replace(/[^A-Za-z0-9]/g, '') || 'Val'
+    return {
+      name: `proteusInlineSet${capitalize(target)}${capitalize(key)}`,
+      code: `this.data.${target} = ${rhsJs}; this.setData({ ${target}: this.data.${target} })`,
     }
   }
   // ★pinia-plan 12 P2：store 方法调用——store.toggle() / store.play({...}) / store.setVolume(store.volume - 0.1)
@@ -877,6 +892,26 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         if (ctx.disabled.has('directive/v-model')) { ctx.warnings.push('规则 directive/v-model 已被禁用（rules.disabled），v-model 已忽略'); break }
         const model = exprContent(dir.exp)
         if (model && !ctx.vModelBindings.includes(model)) ctx.vModelBindings.push(model)
+        // ★#500 自定义组件 v-model[:arg] → 组件 prop + update:arg 事件（bind:update:xxx → 页面 setData 回写）——
+        //   Vue 组件双向绑定核心语义；旧产物无脑 bindinput → p-modal v-model:visible 永不生效（点击无反应真机实证）
+        const modelArg = exprContent(dir.arg)
+        const isCompModel = !isInputLike && !NATIVE_TAGS.has(tag)
+        if (isCompModel) {
+          const propName = modelArg || 'modelValue'
+          const cap = propName.charAt(0).toUpperCase() + propName.slice(1)
+          const handlerName = `proteusUpdate${cap}Model`
+          attrs.push(`${propName}="{{${model}}}"`)
+          attrs.push(`bind:update:${propName}="${handlerName}"`)
+          if (!ctx.vModelComponentHandlers.some((h) => h.name === handlerName)) {
+            ctx.vModelComponentHandlers.push({ name: handlerName, model })
+          }
+          ctx.trace?.add('directive/v-model', {
+            line: node.loc.start.line,
+            before: `v-model${modelArg ? ':' + modelArg : ''}="${model}"`,
+            after: `${propName}="{{${model}}}" + bind:update:${propName}="${handlerName}"（组件 prop + 事件回写）`,
+          })
+          break
+        }
         if (isInputLike) attrs.push(`value="{{${model}}}"`)
         // 方法名不用 __ 前缀（微信保留前缀，真机绑定可能失效）
         attrs.push(`bindinput="proteusOn${capitalize(model)}Input"`)
@@ -891,8 +926,11 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       case 'show':
         if (ctx.disabled.has('directive/v-show')) break
         // v-show → hidden 属性（小程序 hidden = display:none，元素始终渲染，语义对齐 v-show）
-        attrs.push(`hidden="{{!${exprContent(dir.exp)}}}"`)
-        ctx.trace?.add('directive/v-show', { line: node.loc.start.line, before: `v-show="${exprContent(dir.exp)}"`, after: `hidden="{{!${exprContent(dir.exp)}}}"` })
+        // ★#500 复合表达式加括号：!a || b 语义——旧产物 (!a)||b → p-sidebar nav 恒可见真机根因；裸标识符保持无括号
+        const showExpr = exprContent(dir.exp)
+        const showNeg = /^[\w$.]+$/.test(showExpr.trim()) ? `!${showExpr.trim()}` : `!(${showExpr})`
+        attrs.push(`hidden="{{${showNeg}}}"`)
+        ctx.trace?.add('directive/v-show', { line: node.loc.start.line, before: `v-show="${showExpr}"`, after: `hidden="{{${showNeg}}}"` })
         break
       default:
         // ★Batch A（vue-compat）：自定义指令（v-focus 等）小程序无对等——显式警告（反黑盒，不再静默剥离）
@@ -1029,6 +1067,7 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#500 :style 动态标识符绑定收集
     styleBindings: new Set<string>(),
+    vModelComponentHandlers: [],
     // ★#496 柔性语义编译：p-grid 收集
     semanticGrids: [],
     isPage: opts.isComponent !== true,
@@ -1093,6 +1132,8 @@ export function transformTemplateToWxml(
     templateRefs: [...ctx.templateRefs],
     // ★#500 :style 动态标识符绑定（script 侧同名 computed 派生值自动序列化）
     styleBindings: [...ctx.styleBindings],
+    // ★#500 自定义组件 v-model 回写处理器
+    vModelComponentHandlers: ctx.vModelComponentHandlers,
     semanticGrids: ctx.semanticGrids,
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,

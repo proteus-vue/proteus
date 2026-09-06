@@ -42,6 +42,8 @@ const aspectStyle = computed(() => {
     return style
   }
   // ★降级：padding-top hack——height 0 + paddingTop = 1/ratio%（内层绝对定位铺满）
+  //   ★#500 显式 box-sizing: content-box（padding hack 依赖高度=0+padding 撑起盒高；若渲染端默认 border-box 则总高恒 0 → 宽高全丢）
+  style.boxSizing = 'content-box'
   style.height = '0px'
   style.paddingTop = 100 / ratio + '%'
   return style

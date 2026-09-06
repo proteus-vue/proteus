@@ -2066,6 +2066,14 @@ export function transformScriptToPage(
       pushMethod(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
     }
   }
+  // ★#500 自定义组件 v-model[:arg] 回写 handler：proteusUpdate<Arg>Model(e) { this.setData({ model: e.detail }) }
+  //   （组件 triggerEvent('update:xxx', 值) → e.detail 直接为新值；非 input 形态不走 e.detail.value）
+  for (const h of extra.vModelComponentHandlers ?? []) {
+    if (!vmodelDisabled) {
+      methodNames.add(h.name)
+      pushMethod(`  ${h.name}(e) { this.setData({ ${h.model}: e.detail }) },`)
+    }
+  }
   if (vModelBindings.length && !vmodelDisabled) {
     trace?.add('script/vmodel-handler', {
       before: `v-model="${vModelBindings.join('", "')}"`,

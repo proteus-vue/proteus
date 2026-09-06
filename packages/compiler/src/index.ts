@@ -103,6 +103,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     templateRefs: tplResult.templateRefs,
     // ★#500 :style 动态标识符绑定 → 同名 computed 派生值自动序列化字符串
     styleBindings: tplResult.styleBindings,
+    // ★#500 自定义组件 v-model 回写处理器
+    vModelComponentHandlers: tplResult.vModelComponentHandlers,
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
     trace: scriptTrace,

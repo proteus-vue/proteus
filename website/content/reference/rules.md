@@ -312,16 +312,16 @@ after:  wx:key="idx"
 
 ### `directive/v-model`
 
-**v-model → value + bindinput 自动 handler**
+**v-model → 双向绑定编译（input 走 value+bindinput；★#500 自定义组件走 prop + update:arg 事件）**
 
-input/textarea 的 v-model="x" → value="{{x}}" + bindinput="proteusOnXInput"（handler 由 script 阶段注入 setData）
+input/textarea 的 v-model="x" → value="{{x}}" + bindinput="proteusOnXInput"；★#500 自定义组件 v-model[:arg]="x"（p-modal v-model:visible）→ {{arg}}="{{x}}" + bind:update:arg="proteusUpdateArgModel"（页面 setData 回写 e.detail）——旧产物无脑 bindinput → 组件双向绑定永不生效（点击无反应真机根因）
 
 ```
-before: <input v-model="name" />
-after:  <input value="{{name}}" bindinput="proteusOnNameInput" />
+before: <input v-model="name" /> / <p-modal v-model:visible="show" />
+after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
 ```
 
-> why: 小程序无 v-model 语法，需双向绑定的两半：value 绑定 + 输入事件回写（script/vmodel-handler）
+> why: 小程序无 v-model 语法，需双向绑定的两半：value/prop 绑定 + 事件回写（script/vmodel-handler / vModelComponentHandlers）；★#500 Vue 组件 v-model 是核心语义（prop + update:arg 事件契约），必须按规范编译
 
 ### `directive/v-html`
 
@@ -377,16 +377,16 @@ after:  警告 + 原样输出（无效标签）
 
 ### `event/inline-expression`
 
-**内联事件表达式 → 包装方法（vue-compat Batch B）**
+**内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）**
 
-@click="count++"（自增/自减）与 @click="fn(1)"（简单方法调用）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；复杂表达式仍警告
+@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
 
 ```
-before: @click="count++"
-after:  bindtap="proteusInlineIncCount" + 方法 setData({ count: this.data.count + 1 })
+before: @click="count++" / @click="showModal = !showModal"
+after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData
 ```
 
-> why: Vue 常见写法支持（决策 #116 Batch B）：不再原样输出无效 bindtap；对齐 ref 重写（this.data.x ± 1，决策 #36）
+> why: Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应）：不再原样输出无效 bindtap
 
 ### `slot/scoped-slot`
 

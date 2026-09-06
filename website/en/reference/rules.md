@@ -312,16 +312,16 @@ after:  wx:key="idx"
 
 ### `directive/v-model`
 
-**v-model → value + an automatic bindinput handler**
+**v-model → two-way binding compilation (input → value+bindinput; ★#500 custom components → prop + update:arg event)**
 
-v-model="x" on input/textarea → value="{{x}}" + bindinput="proteusOnXInput" (the handler that performs the setData is injected by the script phase)
+v-model="x" on input/textarea → value="{{x}}" + bindinput="proteusOnXInput"; ★#500 v-model[:arg]="x" on a custom component (p-modal v-model:visible) → {{arg}}="{{x}}" + bind:update:arg="proteusUpdateArgModel" (the page writes back e.detail via setData) — the old output blindly emitted bindinput, so component two-way binding never worked (the real-device root cause of unresponsive clicks)
 
 ```
-before: <input v-model="name" />
-after:  <input value="{{name}}" bindinput="proteusOnNameInput" />
+before: <input v-model="name" /> / <p-modal v-model:visible="show" />
+after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
 ```
 
-> why: Mini Programs have no v-model syntax; the two halves of two-way binding are needed: a value binding + a write-back on the input event (script/vmodel-handler)
+> why: Mini Programs have no v-model syntax; the two halves of two-way binding are needed: a value/prop binding + an event write-back (script/vmodel-handler / vModelComponentHandlers); ★#500 v-model on Vue components is core semantics (prop + update:arg event contract) and must be compiled per spec
 
 ### `directive/v-html`
 
@@ -377,16 +377,16 @@ after:  警告 + 原样输出（无效标签）
 
 ### `event/inline-expression`
 
-**inline event expressions → wrapper methods (vue-compat Batch B)**
+**inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments)**
 
-@click="count++" (increment/decrement) and @click="fn(1)" (a simple method call) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; complex expressions still warn
+@click="count++" (increment/decrement), @click="fn(1)" (a simple method call) and ★#500 assignments (x = !x / x = literal) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning
 
 ```
-before: @click="count++"
-after:  bindtap="proteusInlineIncCount" + 方法 setData({ count: this.data.count + 1 })
+before: @click="count++" / @click="showModal = !showModal"
+after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData
 ```
 
-> why: support for common Vue patterns (decision #116 Batch B): no longer emitting an invalid bindtap as-is; aligned with the ref rewriting (this.data.x ± 1, decision #36)
+> why: support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap): no longer emitting an invalid bindtap as-is
 
 ### `slot/scoped-slot`
 
