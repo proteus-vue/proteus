@@ -605,16 +605,16 @@ after:  data: {
 
 ### `script/computed-to-data`
 
-**computed read path → derived data field (v0.3)**
+**computed read path → derived data field (v0.3; ★#499 adds whole-block evaluation)**
 
-Top-level const x = computed(() => expr) → not stored in data: initialized in onLoad and recomputed synchronously when a dependency ref is written to setData (x.value within expr → this.data.x)
+Top-level const x = computed(() => expr) → not stored in data: initialized in component onReady / page onLoad and recomputed synchronously when a dependency ref is written to setData (x.value within expr → this.data.x, props.x → this.data.x); ★#499 block-bodied computed (() => { statements; return expr }) compiles to a whole-block evaluation method proteusCalcX() (derived expr = this.proteusCalcX()) — previously block bodies were ignored, leaving dangling references (ReferenceError); if the final statement is not a return, it warns and is ignored
 
 ```
 before: const double = computed(() => count.value * 2)
 after:  data 不含 double；this.setData({ count: ..., double: this.data.count * 2 })（count 写入时合并，onLoad 初始化一次）
 ```
 
-> why: Mini programs have no computed concept, so the compiler turns the getter into a data derivation: the ref dependencies in the getter are statically extracted, and when a dependency is written the recompute expression is merged into the same setData (v0.3 implements the read path first; watch/write paths come later)
+> why: Mini programs have no computed concept, so the compiler turns the getter into a data derivation: the ref dependencies in the getter are statically extracted, and when a dependency is written the recompute expression is merged into the same setData (v0.3 implements the read path first; ★#499 block bodies are evaluated as whole methods to match Vue reactivity semantics — multi-statement locals/branches/module functions all work)
 
 ### `script/watch-to-methods`
 

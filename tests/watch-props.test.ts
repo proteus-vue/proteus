@@ -47,4 +47,13 @@ describe('watch props 源 → WeChat observers（script/watch-props）', () => {
     const { js } = transformScriptToPage(src, opts, { isComponent: false })
     expect(js).not.toContain('observers: {')
   })
+
+  it('★#499 回调参数归一：watch(() => props.width, (w) => { if (w > 0) log(w) }) → observers 体引用 n（旧产物体残留 w → ReferenceError）', () => {
+    const src = `const props = defineProps({ width: { type: Number, default: 0 } })\nwatch(() => props.width, (w) => {\n  if (w > 0) log(w)\n})`
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('observers: {')
+    expect(js).toContain('width(n, o) {')
+    expect(js).toContain('if (n > 0) log(n)')
+    expect(js).not.toContain('w > 0')
+  })
 })

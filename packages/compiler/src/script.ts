@@ -366,6 +366,8 @@ interface ComputedInfo {
   expr: string
   /** 显式 setter（对象形式 computed({ get, set }) → proteusSetX 方法；无 = 只读） */
   setter?: { param: string; body: string }
+  /** ★#499 块体 computed：整段求值方法体（proteusCalcX()——内部语句任意，末语句 return expr）；expr = this.proteusCalcX() */
+  blockBody?: string
 }
 
 /** watch 信息（v0.3 起：单 ref / 数组源 / 函数源，依赖写入后自动调用回调；★B3 起：props 源 → observers） */
@@ -689,7 +691,7 @@ function extractWatch(
         trace?.add('script/watch-props', {
           line,
           before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
-          after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（attached 初始化调用一次）' : ''} }`,
+          after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（onReady 初始化调用一次——父传属性 attached 后才到位，#499）' : ''} }`,
         })
         out[id] = { id, deps: [], params, body: cbBody, immediate, line, propField }
         continue
@@ -771,7 +773,7 @@ function extractWatch(
       trace?.add('script/watch-props', {
         line: lineAt(source, m.index),
         before: `watch(${rawSrc}, (${params.join(', ')}) => ...)`,
-        after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（attached 初始化调用一次）' : ''} }`,
+        after: `observers: { ${propField}(n, o) { ... }${immediate ? ' + proteusWatchPropX 方法（onReady 初始化调用一次——父传属性 attached 后才到位，#499）' : ''} }`,
       })
       out[id] = { id, deps: [], params, body: fbBody, immediate, line: lineAt(source, m.index), propField }
       continue
@@ -824,15 +826,29 @@ function extractComputedFromInit(
   init: string,
   data: Record<string, unknown>,
   warnings: string[],
+  computedNames?: Set<string>,
 ): ComputedInfo | null {
-  // 箭头简写：computed(() => 表达式)（表达式体；块体拦截）
+  // 箭头简写：computed(() => 表达式)（表达式体；块体 → 整段求值方法）
   const arrow = init.match(/^computed(?:<[^>]*>)?\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
   // 对象形式（v0.3 尾写路径）：computed({ get: () => expr[, set: (v) => { body }] })
   let rawExpr: string | undefined
   let setter: { param: string; body: string } | undefined
   if (arrow) {
     rawExpr = arrow[1]
-    if (rawExpr.trim().startsWith('{')) return null // 块体拦截
+    if (rawExpr.trim().startsWith('{')) {
+      // ★#499 块体 computed 支持：整段求值编译为 proteusCalcX() 方法（内部语句任意：局部变量/分支/模块函数），
+      //   依赖=全文 x.value 读取（与 Vue 响应依赖语义对齐）；末语句须为 return 表达式（否则无派生值 → 旧警告路径）
+      const blockBody = extractBracedBody(init, init.indexOf('{', init.indexOf('=>')))
+      if (blockBody === null || !/\breturn\s+[\s\S]*$/.test(blockBody)) return null
+      const depsB = [...new Set(Array.from(blockBody.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+      const missingB = depsB.filter((d) => !(d in data) && !(computedNames?.has(d)))
+      if (missingB.length) {
+        warnings.push(
+          `computed ${name} 依赖 ${missingB.join('/')} 未在顶层 data 中定义（${name} 的依赖必须是本文件顶层 ref/reactive）`,
+        )
+      }
+      return { name, deps: depsB, expr: `this.proteusCalc${capitalize(name)}()`, blockBody }
+    }
   } else {
     const objM = init.match(/^computed(?:<[^>]*>)?\s*\(\s*\{/)
     if (!objM) return null
@@ -845,7 +861,7 @@ function extractComputedFromInit(
     if (setM) setter = { param: setM[1].trim(), body: setM[2] }
   }
   const deps = [...new Set(Array.from(rawExpr.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
-  const missing = deps.filter((d) => !(d in data))
+  const missing = deps.filter((d) => !(d in data) && !(computedNames?.has(d)))
   if (missing.length) {
     warnings.push(
       `computed ${name} 依赖 ${missing.join('/')} 未在顶层 data 中定义（${name} 的依赖必须是本文件顶层 ref/reactive）`,
@@ -904,26 +920,50 @@ function handleConstToData(
   out.data[name] = value
 }
 
-/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 + ★B0 运行时初始化（函数调用） */
+/** 顶层 const（ref/reactive/字面量）→ data 初始值 + computed 派生信息 + ★B0 运行时初始化（函数调用）
+ *  ★#499 另收顶层 let（null 初始化句柄 aware/query/env）→ letHandles（实例属性通道——裸引用/赋值由 rewriteBareMethodCalls 改 this.x；
+ *  此前 let 整个丢失 → 方法体裸引用 ReferenceError：p-modal aware 真机崩） */
 function extractData(
   source: string,
   warnings: string[],
   trace?: TransformTrace,
-): { data: Record<string, unknown>; computed: Record<string, ComputedInfo>; runtimeInits: Array<{ name: string; call: string }> } {
+): {
+  data: Record<string, unknown>
+  computed: Record<string, ComputedInfo>
+  runtimeInits: Array<{ name: string; call: string }>
+  letHandles: string[]
+} {
   const data: Record<string, unknown> = {}
   const runtimeInits: Array<{ name: string; call: string }> = []
+  const letHandles: string[] = []
   const rawComputed: Array<{ name: string; init: string; line: number }> = []
   const out = { data, runtimeInits, rawComputed }
+  /** let 句柄判定：顶层 null/undefined 初始化（声明后方法体内赋值使用）——其它形态维持旧行为 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addLetHandle = (name: string, init: string | null, line: number): void => {
+    if (!name || letHandles.includes(name)) return
+    if (init !== null && init !== 'null' && init !== 'undefined') return
+    letHandles.push(name)
+    trace?.add('script/const-to-data', {
+      line,
+      before: `let ${name} = ${init ?? 'null'}`,
+      after: `实例属性句柄（方法体裸引用/赋值改 this.${name}；不进 data）`,
+    })
+  }
   // ★#497 动作二：AST 发现（顶层 const，天然剥注释/类型/泛型）；失败回退文本正则（永不比现状差）
   const body = topLevelAst(source)
   if (body) {
     for (const st of body) {
-      if (st.type !== 'VariableDeclaration' || st.kind !== 'const') continue
+      if (st.type !== 'VariableDeclaration') continue
       for (const d of st.declarations) {
-        if (!d.id || d.id.type !== 'Identifier' || !d.init) continue
-        // AST 区间切片——行尾注释不在 init 范围（#497 根因）、TS 类型在类型节点不在文本
-        const init = source.slice(d.init.start, d.init.end)
-        handleConstToData(d.id.name, init, st.loc.start.line, out, warnings, trace)
+        if (!d.id || d.id.type !== 'Identifier') continue
+        if (st.kind === 'const' && d.init) {
+          // AST 区间切片——行尾注释不在 init 范围（#497 根因）、TS 类型在类型节点不在文本
+          const init = source.slice(d.init.start, d.init.end)
+          handleConstToData(d.id.name, init, st.loc.start.line, out, warnings, trace)
+        } else if (st.kind === 'let') {
+          addLetHandle(d.id.name, d.init ? source.slice(d.init.start, d.init.end) : null, st.loc.start.line)
+        }
       }
     }
   } else {
@@ -939,11 +979,21 @@ function extractData(
       const init = stripTrailingComment(initRaw)
       handleConstToData(name, init, lineAt(source, m.index), out, warnings, trace)
     }
+    // 顶层 let 句柄（文本回退）
+    const letRe = /let\s+([A-Za-z_$][\w$]*)\s*=\s*(null|undefined)\s*;?/gm
+    let lm: RegExpExecArray | null
+    while ((lm = letRe.exec(source))) {
+      const lineStart = source.lastIndexOf('\n', lm.index) + 1
+      if (source.slice(lineStart, lm.index) !== '') continue
+      addLetHandle(lm[1], lm[2], lineAt(source, lm.index))
+    }
   }
   // 二次处理 computed（此时 data 已完整，可校验依赖）
   const computed: Record<string, ComputedInfo> = {}
+  // ★#499 computed 链（visibleItems 依赖 visibleCount）：缺依赖校验须容忍另一 computed——链 dep 不再误报
+  const computedNames = new Set(rawComputed.map((c) => c.name))
   for (const c of rawComputed) {
-    const info = extractComputedFromInit(c.name, c.init, data, warnings)
+    const info = extractComputedFromInit(c.name, c.init, data, warnings, computedNames)
     if (info) {
       computed[c.name] = info
       trace?.add('script/computed-to-data', {
@@ -952,10 +1002,10 @@ function extractData(
         after: `派生字段（依赖 ${info.deps.join('/') || '无'}，写入时合并重算）`,
       })
     } else {
-      warnings.push(`computed ${c.name} 仅支持箭头简写 + 表达式体（computed(() => expr)），已忽略`)
+      warnings.push(`computed ${c.name} 仅支持箭头简写表达式体（computed(() => expr)）或块体（末语句 return 表达式），已忽略`)
     }
   }
-  return { data, computed, runtimeInits }
+  return { data, computed, runtimeInits, letHandles }
 }
 
 /** 顶层方法（源码 + 起始行号，供 sourcemap / 行号注释） */
@@ -1099,11 +1149,29 @@ function numOrZero(expr: string): string {
   return `(${expr} === undefined || ${expr} === null ? 0 : ${expr})`
 }
 
+/** ★#499 派生/联动表达式 propsVar 归一：props.x → this.data.x（computedPatch/watchTail/immediate 共用；computedInitLine 已自带该改写） */
+function rewritePropsInExpr(expr: string, propsVar?: string): string {
+  if (!propsVar) return expr
+  return expr.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
+}
+
+/** ★#499 observers 回调参数归一：开发者回调参数 (w) → (n, o)（微信 observers 形参固定 n/o 语义——旧产物签名 (n,o) 但回调体仍引用 w → ReferenceError：p-modal width 真机崩） */
+function renameWatchParamsToNo(body: string, params: string[]): string {
+  const names = ['n', 'o']
+  let out = body
+  for (let i = 0; i < params.length && i < names.length; i++) {
+    const p = params[i].trim()
+    if (!p || p === names[i] || !/^[A-Za-z_$][\w$]*$/.test(p)) continue
+    out = out.replace(new RegExp(`\\b${p}\\b`, 'g'), names[i])
+  }
+  return out
+}
+
 /** computed 派生补丁：写入 ref 时把依赖它的 computed 重算表达式合并进同一 setData（v0.3 读路径） */
-function computedPatch(writtenRef: string, computeds: Record<string, ComputedInfo>): string {
+function computedPatch(writtenRef: string, computeds: Record<string, ComputedInfo>, propsVar?: string): string {
   const patches = Object.entries(computeds)
     .filter(([, c]) => c.deps.includes(writtenRef))
-    .map(([n, c]) => `${n}: ${c.expr}`)
+    .map(([n, c]) => `${n}: ${rewritePropsInExpr(c.expr, propsVar)}`)
   return patches.length ? `, ${patches.join(', ')}` : ''
 }
 
@@ -1123,7 +1191,15 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
     }
     return out
   }
-  return `this.setData({ ${entries.map(([n, c]) => `${n}: ${rewrite(c.expr)}`).join(', ')} })`
+  const rewritten = entries.map(([n, c]) => [n, rewrite(c.expr)] as const)
+  // ★#499 computed 链（visibleItems 依赖 visibleCount）：单对象 setData 内求值读不到前驱新值（setData 未应用）——
+  //   链存在时先顺序写入 this.data 再统一 setData（源码声明序即依赖序：JS TDZ 保证被引用 computed 在前）
+  const hasChain = entries.some(([, c]) => c.deps.some((d) => d in computeds))
+  if (hasChain) {
+    const assigns = rewritten.map(([n, expr]) => `this.data.${n} = ${expr}`)
+    return `${assigns.join('\n')}\nthis.setData({ ${rewritten.map(([n]) => `${n}: this.data.${n}`).join(', ')} })`
+  }
+  return `this.setData({ ${rewritten.map(([n, expr]) => `${n}: ${expr}`).join(', ')} })`
 }
 
 /** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
@@ -1219,17 +1295,18 @@ function storeBindingLine(fields: string[], storeVar: string): string {
   ].join('\n')
 }
 
-/** immediate watch 初始化行：onLoad 时调用一次（单源标量 / 多源数组，oldVal = undefined） */
-function immediateWatchLine(watches: Record<string, WatchInfo>): string {
+/** immediate watch 初始化行：onLoad/就绪时调用一次（单源标量 / 多源数组，oldVal = undefined；函数源 expr 含 props 时归一） */
+function immediateWatchLine(watches: Record<string, WatchInfo>, propsVar?: string): string {
   const lines = Object.entries(watches)
     .filter(([, w]) => w.immediate)
     .map(([, w]) => {
       const single = w.deps.length === 1
+      const getter = w.expr ? rewritePropsInExpr(w.expr, propsVar) : undefined
       const newVals = w.propField
         ? `this.data.${w.propField}`
         : single
-          ? (w.expr ?? `this.data.${w.deps[0]}`)
-          : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
+          ? (getter ?? `this.data.${w.deps[0]}`)
+          : `[${(getter ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
       const oldVals = w.propField ? 'undefined' : single ? 'undefined' : `[${w.deps.map(() => 'undefined').join(', ')}]`
       return `this.proteusWatch${w.id}(${newVals}, ${oldVals})`
     })
@@ -1247,10 +1324,11 @@ function writeSetData(name: string, valueExpr: string, patch: string, hasWatch =
 }
 
 /** watch 联动调用：setData 后追加分号 + proteusWatch<id>（单源回调标量 / 多源回调数组，旧值由调用方在写入前保存） */
-function watchTail(w: WatchInfo | undefined): string {
+function watchTail(w: WatchInfo | undefined, propsVar?: string): string {
   if (!w) return ''
   const single = w.deps.length === 1
-  const newVals = single ? (w.expr ?? `this.data.${w.deps[0]}`) : `[${(w.expr ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
+  const getter = w.expr ? rewritePropsInExpr(w.expr, propsVar) : undefined
+  const newVals = single ? (getter ?? `this.data.${w.deps[0]}`) : `[${(getter ?? w.deps.map((d) => `this.data.${d}`).join(', '))}]`
   const oldVals = single ? `old${capitalize(w.deps[0])}` : `[${w.deps.map((d) => `old${capitalize(d)}`).join(', ')}]`
   return `; this.proteusWatch${w.id}(${newVals}, ${oldVals})`
 }
@@ -1458,13 +1536,13 @@ function rewriteRefAccess(
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
-    const patch = computedPatch(name, computeds)
+    const patch = computedPatch(name, computeds, propsVar)
     // 命中依赖此 ref 的 watch（多源/函数源 deps 匹配；MVP 每 ref 至多一个 watch）
     const w = Object.values(watches).find((ww) => ww.deps.includes(name) && !skip('script/watch-to-methods'))
     const oldSave = w
       ? `const ${w.deps.map((d) => `old${capitalize(d)} = this.data.${d}`).join(', ')}; `
       : ''
-    const tail = watchTail(w)
+    const tail = watchTail(w, propsVar)
     // ★Batch 4：裸 ref 被 provide → 写入后同步注册表值 + 通知订阅者（proteusSyncProvide 由 transformScriptToPage 生成）
     const sync = providedRefs && providedRefs.get(name)
       ? `; this.proteusSyncProvide(${JSON.stringify(providedRefs.get(name))}, ${JSON.stringify(name)})`
@@ -1749,7 +1827,9 @@ export function transformScriptToPage(
   }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
-  const { data, computed, runtimeInits } = disabled.has('script/const-to-data') ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }> } : extractData(source, warnings, trace)
+  const { data, computed, runtimeInits, letHandles } = disabled.has('script/const-to-data')
+    ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, letHandles: [] as string[] }
+    : extractData(source, warnings, trace)
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
@@ -1763,7 +1843,9 @@ export function transformScriptToPage(
   if (extra.isComponent) checkDefineExpose(source, data, warnings, trace)
   const lifecycles = extractLifecycles(source, trace, disabled, warnings)
   const vModelBindings = extra.vModelBindings ?? []
-  const refNames = new Set(Object.keys(data))
+  // ★#499：改写集合含 computeds——派生字段 ready/onLoad 已进 data，方法体读取 x.value → this.data.x（p-modal
+  //   observers/onReady 内 variants.value 此前裸引用 ReferenceError；表达式体 computed 写入路径由 setter 循环先行接管）
+  const refNames = new Set([...Object.keys(data), ...Object.keys(computed)])
 
   // ★vue-compat-advance Batch 3：provide/inject 提取 + 注入块构建（禁用规则时整体跳过）
   // ★Batch 4：裸 ref 提供 → provideRefs（ref→key），ref 写入点同步注册表 + 通知订阅者；inject 侧订阅 __subs
@@ -1854,7 +1936,8 @@ export function transformScriptToPage(
   // ★方法名白名单：方法体裸调用改写 this.x()（模块函数/内置不在白名单 → 保持裸调用）
   const methodNames = new Set<string>(Object.keys(methods))
   // ★#494 runtimeInit 变量名（方法体/生命周期体内裸标识符引用 → this.<name>——实例属性不在词法作用域）
-  const runtimeInitNames = new Set<string>(runtimeInits.map((i) => i.name))
+  // ★#499 let 句柄同通道（顶层 let aware/query = null → 方法体裸引用/赋值改 this.<name>）
+  const runtimeInitNames = new Set<string>([...runtimeInits.map((i) => i.name), ...letHandles])
 
   // ★15-page-scroll-container 批次2/3：页面滚动 API 桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
   //   页面级钩子（onPageScroll/onReachBottom/onPullDownRefresh/wx.pageScrollTo）靠自动包装 scroll-view 事件触发（template 侧绑定）
@@ -1930,7 +2013,8 @@ export function transformScriptToPage(
   if (extra.isComponent && propWatches.length) {
     lines.push('  observers: {')
     for (const w of propWatches) {
-      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
+      // ★#499：回调参数先归一为 n/o（微信 observers 实参固定 — 回调体引用开发者参数名如 w 必须同步改名）
+      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(renameWatchParamsToNo(w.body, w.params), refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
       const bodyLines = observerBody.split('\n')
       lines.push(`    ${w.propField}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
@@ -1967,13 +2051,23 @@ export function transformScriptToPage(
     )
   }
 
+  // ★#499 props 组件派生/immediate 初始化放 onReady（微信父传属性 attached 后才到位——attached 读 this.data.items 为 undefined，p-toolbar 真机崩）；
+  //   无 props 组件保持 attached（既有验证时序不变）；运行时初始化/注入仍留 attached（先于 ready 执行）
+  const compDerivedReady =
+    extra.isComponent && propEntries.length > 0
+      ? [computedInitLine(computeds, runtimeInitNames, propsVar), immediateWatchLine(watches, propsVar)].filter(Boolean).join('\n')
+      : ''
   // ★#496c onReady 精修段（页面 p-grid 档位——SelectorQuery 实测容器宽）
   const semanticGridReady = !extra.isComponent ? semanticGridReadyCode(semanticGrids) : ''
   if (lifecycles.onReady) {
-    const readyBody = semanticGridReady ? `${semanticGridReady}\n${lifecycles.onReady}` : lifecycles.onReady
+    const readyBody = semanticGridReady
+      ? `${semanticGridReady}\n${compDerivedReady ? `${compDerivedReady}\n` : ''}${lifecycles.onReady}`
+      : compDerivedReady
+        ? `${compDerivedReady}\n${lifecycles.onReady}`
+        : lifecycles.onReady
     lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(readyBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`)
-  } else if (semanticGridReady) {
-    lines.push(`  onReady() {\n${indentBody(semanticGridReady)}\n  },`)
+  } else if (semanticGridReady || compDerivedReady) {
+    lines.push(`  onReady() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
@@ -2025,7 +2119,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   }
   // ★#495c 初始化序：顶层副作用 → runtimeInits（先于 computed——computed 可依赖 runtimeInit 值如 gridClass→gridOk）→ computed（含 runtimeInit 裸名/props 改写）→ store/app-config 桥 → 快照 → immediate watch → provide/inject
   const initLineSeq = (): string[] =>
-    [semanticGridInit, topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches), piBlocks.page].filter(Boolean)
+    [semanticGridInit, topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -2034,7 +2128,15 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
       lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
     }
     // ★#495c 组件 attached：runtimeInit 先于 computed（顺序同页面 initLineSeq）
-    const initLines = [semanticGridInit, runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, immediateWatchLine(watches), piBlocks.inject].filter(Boolean)
+    // ★#499：props 组件 computed/immediate 已移至 onReady（微信父传属性 attached 后才到位）——attached 仅保留运行时初始化/注入
+    const initLines = [
+      semanticGridInit,
+      runtimeInitLine(runtimeInits, methodNames),
+      compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar),
+      storeBindingInit,
+      compDerivedReady ? '' : immediateWatchLine(watches, propsVar),
+      piBlocks.inject,
+    ].filter(Boolean)
     if (initLines.length) {
       lines.push(`  attached() {\n${indentBody(initLines.join('\n'))}\n  },`)
     }
@@ -2118,12 +2220,21 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     }
   }
   // watch 回调方法：proteusWatch<id>(newVal, oldVal)（方法名避开 __ 前缀，微信保留前缀决策 #29）
-  // ★props 源非 immediate watch 只走 observers，不生成方法（避免无用产物）；immediate 需要方法（attached 初始化调用）
+  // ★props 源非 immediate watch 只走 observers，不生成方法（避免无用产物）；immediate 需要方法（onReady 初始化调用，#499）
   for (const w of Object.values(watches)) {
     if (w.propField && !w.immediate) continue
     methodNames.add(`proteusWatch${w.id}`)
     const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${src}`, w.line)
+  }
+  // ★#499 块体 computed 整段求值方法：proteusCalcX()（内部语句任意，末语句 return 表达式；派生 expr = this.proteusCalcX()——
+  //   p-modal variants 等块体 computed 此前被忽略 → 依赖方引用悬空 ReferenceError）
+  for (const [cname, c] of Object.entries(computeds)) {
+    if (!c.blockBody) continue
+    const mcalc = `proteusCalc${capitalize(cname)}`
+    methodNames.add(mcalc)
+    const bsrc = `${mcalc}() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.blockBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
+    pushMethod(`  ${bsrc}`, 1)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {

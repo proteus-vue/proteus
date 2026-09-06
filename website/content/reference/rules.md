@@ -605,16 +605,16 @@ after:  data: {
 
 ### `script/computed-to-data`
 
-**computed 读路径 → data 派生字段（v0.3）**
+**computed 读路径 → data 派生字段（v0.3；★#499 支持块体整段求值）**
 
-顶层 const x = computed(() => expr) → data 不存；onLoad 初始化 + 依赖 ref 写入 setData 时同步重算（expr 中 x.value → this.data.x）
+顶层 const x = computed(() => expr) → data 不存；组件 onReady / 页面 onLoad 初始化 + 依赖 ref 写入 setData 时同步重算（expr 中 x.value → this.data.x、props.x → this.data.x）；★#499 块体 computed（() => { 语句; return expr }）编译为 proteusCalcX() 整段求值方法（派生 expr = this.proteusCalcX()）——此前块体被忽略，依赖方引用悬空 ReferenceError；末语句非 return → 警告忽略
 
 ```
 before: const double = computed(() => count.value * 2)
 after:  data 不含 double；this.setData({ count: ..., double: this.data.count * 2 })（count 写入时合并，onLoad 初始化一次）
 ```
 
-> why: 小程序无 computed 概念，编译期把 getter 转 data 派生：静态提取 getter 中的 ref 依赖 → 依赖写入时把重算表达式合并进同一 setData（v0.3 先做读路径，watch/写路径后续）
+> why: 小程序无 computed 概念，编译期把 getter 转 data 派生：静态提取 getter 中的 ref 依赖 → 依赖写入时把重算表达式合并进同一 setData（v0.3 先做读路径；★#499 块体以整段方法求值对齐 Vue 响应语义——多语句局部变量/分支/模块函数均可）
 
 ### `script/watch-to-methods`
 

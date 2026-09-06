@@ -77,10 +77,22 @@ describe('computed 读路径（v0.3）', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('依赖 count 未在顶层 data 中定义'))
   })
 
-  it('块体 computed（computed(() => { return ... })）→ 编译期警告', () => {
+  it('★#499 块体 computed（computed(() => { const m = c.value * 2; return m + 1 })）→ 整段求值方法 proteusCalcD（不再忽略）', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { js } = transformScriptToPage('const c = ref(1)\nconst d = computed(() => { return c.value + 1 })', opts)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('仅支持箭头简写'))
+    const { js } = transformScriptToPage('const c = ref(1)\nconst d = computed(() => { const m = c.value * 2; return m + 1 })\nfunction setC() {\n  c.value = 5\n}', opts)
+    expect(js).toContain('proteusCalcD() {')
+    expect(js).toContain('return m + 1')
+    expect(js).toContain('this.setData({ d: this.proteusCalcD() })')
+    // 依赖写入联动：setC 写 c → 派生重算走整段求值方法
+    expect(js).toContain('this.data.c = 5; this.setData({ c: this.data.c, d: this.proteusCalcD() })')
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('computed d'))
+  })
+
+  it('块体 computed 无 return → 编译期警告（无派生值）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { js } = transformScriptToPage('const c = ref(1)\nconst d = computed(() => { const x = c.value + 1 })\nfunction go() {\n  c.value++\n}', opts)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('已忽略'))
+    expect(js).not.toContain('proteusCalcD')
     expect(js).not.toContain('d:')
   })
 
@@ -389,6 +401,22 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     const { js } = transformScriptToPage(src, opts)
     expect(js).toContain('handle(e) {')
     expect(js).not.toContain('e: {')
+  })
+
+  it('★#499 props 组件派生初始化放 onReady（微信父传属性 attached 后才到位——attached 读 this.data.items 为 undefined 真机实证）', () => {
+    const src = 'const props = defineProps({ items: { type: Array as any, default: () => [] } })\nconst count = computed(() => props.items.length)\nconst base = ref(1)'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('onReady() {')
+    expect(js).toContain('this.setData({ count: this.data.items.length })')
+    // 无 runtimeInit/注入时不再生成 attached（派生整体移 ready）
+    expect(js).not.toContain('attached() {')
+  })
+
+  it('★#499 无 props 组件派生仍走 attached（既有验证时序不变）', () => {
+    const src = 'const c = ref(0)\nconst d = computed(() => c.value * 2)'
+    const { js } = transformScriptToPage(src, opts, { isComponent: true })
+    expect(js).toContain('attached() {')
+    expect(js).toContain('this.setData({ d: this.data.c * 2 })')
   })
 
   it('props 访问重写：props.xxx → this.data.xxx', () => {
@@ -1290,5 +1318,28 @@ function setN() {
     expect(js).toContain('label: { type: String, value: "" }')
     expect(js).toContain('kind: { type: String, value: "" }')
     expect(js).toContain('tags: { type: Array }')
+  })
+})
+
+describe('★#499：顶层 let 句柄实例属性通道（注册后组件真机执行暴露的编译器存量缺口）', () => {
+  it('let aware = null → 方法体裸引用/赋值改 this.aware（声明剥离，不再 ReferenceError）', () => {
+    const src = `let aware = null
+function setupWatch() {
+  aware = create()
+  aware.subscribe(() => go())
+}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('this.aware = create()')
+    expect(js).toContain('this.aware.subscribe')
+    expect(js).not.toContain('let aware')
+  })
+
+  it('let 非 null 初始化不误入句柄（保持旧行为——仅 null/undefined 句柄形态）', () => {
+    const src = `let acc = 0
+function add() {
+  acc = acc + 1
+}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).not.toContain('this.acc')
   })
 })
