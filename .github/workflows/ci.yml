@@ -29,6 +29,9 @@ jobs:
       - name: 文档全端视角写作门禁（#487：双端世界观句式回归阻断——guides/framework zh+en）
         run: node scripts/check-all-target-wording.mjs
 
+      - name: 全量 script 编译门禁（#497：examples+组件全部 .vue 一次整包编译 + js 语法校验——防 demo 逐个暴露编译器形态缺口）
+        run: node scripts/check-script-compile.mjs
+
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
         run: npm test
 
