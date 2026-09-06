@@ -6,15 +6,21 @@ const config: ProteusConfig = {
   skyline: true,
   appid: 'wx0000000000', // 替换为真实 AppID
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
-  customRoute: {
-    registerPresets: true,
-    // 内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
-    builders: {
-      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
-      slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
-      scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + meta）
+  router: {
+    // 路由表产物路径（编译期 gen-routes 生成）
+    routesOutput: 'src/router/auto-routes.ts',
+    // wx.router 自定义路由：内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
+    customRoute: {
+      registerPresets: true,
+      builders: {
+        halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+        slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+        scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+      },
     },
+    // 集中式 meta（可选）：精确路径 > 目录前缀 > 默认
+    // meta: { 'index': { title: '首页', isTab: true } },
   },
   // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
   rules: {

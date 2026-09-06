@@ -71,6 +71,9 @@ export { asStoreId, asModuleDomain, asRouteName, asCapabilityId } from './brand'
 export { CONFIG_VERSION, configMigrations, migrateConfig, configNeedsMigration } from './migration'
 export type { Migration } from './migration'
 export { proteusConfigSchema, proteusConfigSchemaJson, extendConfigSchema, getConfigSchema } from './config-schema'
+// ★#492 项目级路由管理：统一 router 段类型 + 生效配置解析器（gen-routes/plugin 消费）
+export { resolveRouterConfig, hasLegacyRouterAliases, DEFAULT_ROUTES_OUTPUT } from './router-config'
+export type { RouterSection, EffectiveRouterConfig, SubPackageDecl, CustomRouteConfig } from './router-config'
 export type { ProteusConfigSchema } from './config-schema'
 
 // ============ config-layers（B2 §4 字段归属 + B5 §3 跨层检测） ============

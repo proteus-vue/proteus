@@ -16,6 +16,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   skyline: 'compiler',
   appid: 'build',
   pagesDir: 'compiler',
+  // ★#492 三字段已收编 router 段（router.routesOutput/subPackages/customRoute）——顶层保留为向后兼容别名
   routesOutput: 'router',
   subPackages: 'router',
   customRoute: 'router',

@@ -7,15 +7,16 @@ export const proteusConfigSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'ProteusConfig',
   type: 'object',
-  required: ['platform', 'skyline', 'appid', 'pagesDir', 'routesOutput', 'customRoute', 'setDataBridge', 'style'],
+  required: ['platform', 'skyline', 'appid', 'pagesDir', 'setDataBridge', 'style'],
   properties: {
     platform: { enum: ['mp-weixin', 'web'] },
     skyline: { type: 'boolean' },
     appid: { type: 'string' },
     pagesDir: { type: 'string' },
-    routesOutput: { type: 'string' },
+    routesOutput: { type: 'string', description: '★#492 已收编 router 段（向后兼容别名）' },
     subPackages: {
       type: 'array',
+      description: '★#492 已收编 router 段（向后兼容别名）',
       items: {
         type: 'object',
         required: ['root'],
@@ -24,6 +25,7 @@ export const proteusConfigSchema = {
     },
     customRoute: {
       type: 'object',
+      description: '★#492 已收编 router 段（向后兼容别名）',
       properties: {
         registerPresets: { type: 'boolean' },
         builders: { type: 'object', additionalProperties: { type: 'string' } },
@@ -67,7 +69,42 @@ export const proteusConfigSchema = {
     },
     router: {
       type: 'object',
-      properties: { meta: { type: 'object' } },
+      description: '★#492 项目级路由管理（统一路由配置面）：结构 + tabBar + meta 唯一声明处',
+      properties: {
+        routesOutput: { type: 'string' },
+        subPackages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['root'],
+            properties: { root: { type: 'string' }, name: { type: 'string' } },
+          },
+        },
+        customRoute: {
+          type: 'object',
+          properties: {
+            registerPresets: { type: 'boolean' },
+            builders: { type: 'object', additionalProperties: { type: 'string' } },
+          },
+        },
+        tabBar: {
+          type: 'object',
+          required: ['list'],
+          properties: {
+            color: { type: 'string' },
+            selectedColor: { type: 'string' },
+            list: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['name', 'text'],
+                properties: { name: { type: 'string' }, text: { type: 'string' }, icon: { type: 'string' } },
+              },
+            },
+          },
+        },
+        meta: { type: 'object' },
+      },
     },
     // ★#447 D-2 dogfooding 门禁（audit-d2）：规则级可配——rules 子键 severity 枚举；未列规则默认 error
     audit: {

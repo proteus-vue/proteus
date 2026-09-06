@@ -20,42 +20,24 @@ const config: ProteusConfig = {
   },
   appid: 'wx33bc04a52024def7',
   pagesDir: 'pages',
-  routesOutput: 'router/auto-routes.ts',
-  subPackages: [{ root: 'subpackages/order', name: 'order' }], // 分包示例：订单模块
-  customRoute: {
-    registerPresets: true,
-    // 内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
-    builders: {
-      halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
-      slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
-      scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
-    },
-  },
-  // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
-  rules: {
-    disabled: [],
-    mapping: {},
-    // 已启用：<demo-box> → <view>（config-demo 页演示）；删除此键即回到未注册标签原样输出
-    customTags: { 'demo-box': 'view' },
-  },
-  setDataBridge: {
-    batchWindow: 16, // ~1 帧
-    perComponent: true,
-  },
-  style: {
-    px2rpx: true,
-    rpxRatio: 2,
-  },
-  // ★#420 配置收敛：框架内置组件目录（组件库未拆包共享——monorepo 根 src/components；相对 root 解析）
-  frameworkComponentsDir: '../src/components',
-  // 包体积预算：主包 ≤1.2MB（微信上限 2MB）；strict 时超限构建失败
-  budget: {
-    mainPackageKB: 1200,
-    strict: false,
-  },
-  // ★决策 #113 集中式 meta：页面零 <route> 声明也能获得 meta（精确路径 > 目录前缀 > 默认）
-  // ★约定式路由收口（决策 #112/#113）：path/name 从文件路径推导，meta 全部集中在此（<route> 块仅剩 params 等特殊声明）
+  // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + meta）——
+  //   routesOutput/subPackages/customRoute 已从顶层收编此处，顶层写法仍兼容（router.* 优先）
   router: {
+    // 路由表产物路径（编译期 gen-routes 生成）
+    routesOutput: 'router/auto-routes.ts',
+    // 分包：各分包独立扫描树
+    subPackages: [{ root: 'subpackages/order', name: 'order' }], // 分包示例：订单模块
+    // wx.router 自定义路由：内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
+    customRoute: {
+      registerPresets: true,
+      builders: {
+        halfScreen: 'node_modules/@proteus-vue/router/src/presets/halfScreen.ts',
+        slideUp: 'node_modules/@proteus-vue/router/src/presets/slideUp.ts',
+        scaleDown: 'node_modules/@proteus-vue/router/src/presets/scaleDown.ts',
+      },
+    },
+    // ★决策 #113 集中式 meta：页面零 <route> 声明也能获得 meta（精确路径 > 目录前缀 > 默认）
+    // ★约定式路由收口（决策 #112/#113）：path/name 从文件路径推导，meta 全部集中在此（<route> 块仅剩 params 等特殊声明）
     meta: {
       // 主包页面（pageRel：pages/ 去前缀；index.vue → 目录路径归并）
       'index': { title: '首页', isTab: true },
@@ -82,6 +64,29 @@ const config: ProteusConfig = {
       'list': { title: '订单列表' },
     },
   },
+  // ★底线循环 ①③：规则覆盖（改这里立即改变编译行为）
+  rules: {
+    disabled: [],
+    mapping: {},
+    // 已启用：<demo-box> → <view>（config-demo 页演示）；删除此键即回到未注册标签原样输出
+    customTags: { 'demo-box': 'view' },
+  },
+  setDataBridge: {
+    batchWindow: 16, // ~1 帧
+    perComponent: true,
+  },
+  style: {
+    px2rpx: true,
+    rpxRatio: 2,
+  },
+  // ★#420 配置收敛：框架内置组件目录（组件库未拆包共享——monorepo 根 src/components；相对 root 解析）
+  frameworkComponentsDir: '../src/components',
+  // 包体积预算：主包 ≤1.2MB（微信上限 2MB）；strict 时超限构建失败
+  budget: {
+    mainPackageKB: 1200,
+    strict: false,
+  },
+  // ★决策 #113 集中式 meta 已迁入上方 router.meta（★#492 项目级路由管理）
   // ★#420 配置收敛（原 vite.config.ts 内容收归此处——vite 配置由框架组装，本字段做工程专属扩展）：
   //   Web：框架内建 vue + route-blocks，此处补 defaultScoped（<style> 默认 scoped 对齐 MP 语义）/ devtools 中继 / docs 引擎；
   //   mp：框架内建 mpTransform（frameworkComponentsDir 上方已声明）；

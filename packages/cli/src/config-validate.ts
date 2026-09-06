@@ -20,11 +20,18 @@ const REQUIRED_FIELDS: Array<[string, string]> = [
   ['skyline', 'boolean'],
   ['appid', 'string'],
   ['pagesDir', 'string'],
-  ['routesOutput', 'string'],
-  ['customRoute', 'object'],
   ['setDataBridge', 'object'],
   ['style', 'object'],
 ]
+
+/** ★#492 路由字段二选一存在：顶层（遗留别名）或 router.* 段（统一形态）至少声明一处 */
+const ROUTER_REQUIRED_EITHER: Array<[string, string]> = [
+  ['routesOutput', 'string'],
+  ['customRoute', 'object'],
+]
+
+/** router 段已知子键白名单（统一路由管理——未知子键 = 拼写错误，阻断） */
+const ROUTER_SECTION_FIELDS = new Set(['routesOutput', 'subPackages', 'customRoute', 'tabBar', 'meta'])
 
 /** 顶层已知字段白名单（未知字段 = 拼写错误，阻断） */
 const KNOWN_FIELDS = new Set([
@@ -51,6 +58,42 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
 }
 
+/** 分包数组校验（顶层 subPackages 与 router.subPackages 共用——同形） */
+function validateSubPackages(v: unknown, path: string, errors: ConfigValidationError[]): void {
+  if (!Array.isArray(v)) {
+    errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为数组` })
+    return
+  }
+  for (let i = 0; i < v.length; i++) {
+    const sp = v[i]
+    if (!isPlainObject(sp) || typeof sp.root !== 'string') {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: `${path}[${i}].root`, message: `分包 ${i} 的 root 必须为字符串（如 "src/subpackages/order"）` })
+    }
+  }
+}
+
+/** customRoute 校验（顶层遗留别名与 router.customRoute 共用——同形；两字段均可选） */
+function validateCustomRoute(v: unknown, path: string, errors: ConfigValidationError[]): void {
+  if (!isPlainObject(v)) {
+    errors.push({ code: 'CONFIG_INVALID_TYPE', path, message: `${path} 应为对象（{ registerPresets?, builders? }）` })
+    return
+  }
+  if (v.registerPresets !== undefined && typeof v.registerPresets !== 'boolean') {
+    errors.push({ code: 'CONFIG_INVALID_TYPE', path: `${path}.registerPresets`, message: `${path}.registerPresets 应为 boolean` })
+  }
+  if (v.builders !== undefined) {
+    if (!isPlainObject(v.builders)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: `${path}.builders`, message: `${path}.builders 应为 Record<string, string>（builder 名 → 预设源码文件）` })
+    } else {
+      for (const [name, file] of Object.entries(v.builders)) {
+        if (typeof file !== 'string') {
+          errors.push({ code: 'CONFIG_INVALID_TYPE', path: `${path}.builders.${name}`, message: `${path}.builders.${name} 应为字符串（预设源码文件路径）` })
+        }
+      }
+    }
+  }
+}
+
 /** 校验 ProteusConfig（纯函数；返回错误码 + 字段路径，供 CLI/CI 门禁消费） */
 export function validateConfig(config: unknown): ConfigValidationResult {
   const errors: ConfigValidationError[] = []
@@ -73,16 +116,63 @@ export function validateConfig(config: unknown): ConfigValidationResult {
   }
 
   if (cfg.subPackages !== undefined) {
-    if (!Array.isArray(cfg.subPackages)) {
-      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'subPackages', message: 'subPackages 应为数组' })
+    validateSubPackages(cfg.subPackages, 'subPackages', errors)
+  }
+
+  // ★#492 router 段（项目级路由管理）：子键白名单 + 类型校验 + 二选一存在性
+  if (cfg.router !== undefined) {
+    if (!isPlainObject(cfg.router)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router', message: 'router 应为对象（项目级路由管理段）' })
     } else {
-      for (let i = 0; i < cfg.subPackages.length; i++) {
-        const sp = cfg.subPackages[i]
-        if (!isPlainObject(sp) || typeof sp.root !== 'string') {
-          errors.push({ code: 'CONFIG_INVALID_TYPE', path: `subPackages[${i}].root`, message: `分包 ${i} 的 root 必须为字符串（如 "src/subpackages/order"）` })
+      const router = cfg.router as Record<string, unknown>
+      for (const k of Object.keys(router)) {
+        if (!ROUTER_SECTION_FIELDS.has(k)) {
+          errors.push({ code: 'CONFIG_UNKNOWN_FIELD', path: `router.${k}`, message: `router 段未知字段 "${k}"（合法字段：${[...ROUTER_SECTION_FIELDS].join(' / ')}）` })
+        }
+      }
+      if (router.routesOutput !== undefined && typeof router.routesOutput !== 'string') {
+        errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.routesOutput', message: 'router.routesOutput 应为字符串（路由表产物路径）' })
+      }
+      if (router.subPackages !== undefined) {
+        validateSubPackages(router.subPackages, 'router.subPackages', errors)
+      }
+      if (router.customRoute !== undefined) validateCustomRoute(router.customRoute, 'router.customRoute', errors)
+      if (router.tabBar !== undefined) {
+        const tb = router.tabBar as Record<string, unknown>
+        if (!isPlainObject(tb)) {
+          errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.tabBar', message: 'router.tabBar 应为对象（{ color?, selectedColor?, list }）' })
+        } else {
+          if (!Array.isArray(tb.list)) {
+            errors.push({ code: 'CONFIG_INVALID_TYPE', path: 'router.tabBar.list', message: 'router.tabBar.list 应为数组（{ name, text, icon? }）' })
+          } else {
+            for (let i = 0; i < tb.list.length; i++) {
+              const item = tb.list[i]
+              if (!isPlainObject(item) || typeof item.name !== 'string' || typeof item.text !== 'string') {
+                errors.push({ code: 'CONFIG_INVALID_TYPE', path: `router.tabBar.list[${i}]`, message: `tab 项 ${i} 须为 { name: string, text: string, icon?: string }` })
+              }
+            }
+          }
         }
       }
     }
+  }
+
+  // ★#492 路由字段二选一存在性：顶层或 router.* 至少一处（两处声明合法——router.* 优先，构建期提示收敛）
+  for (const [field, type] of ROUTER_REQUIRED_EITHER) {
+    const top = cfg[field]
+    const nested = isPlainObject(cfg.router) ? (cfg.router as Record<string, unknown>)[field] : undefined
+    if (top === undefined && nested === undefined) {
+      errors.push({ code: 'CONFIG_MISSING_REQUIRED', path: `router.${field}`, message: `缺少路由字段 ${field}——请在 router 段声明（router.${field}），顶层写法为兼容别名` })
+    } else if (top !== undefined && type === 'string' && typeof top !== 'string') {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: field, message: `${field} 应为 ${type}，实际 ${typeof top}` })
+    } else if (top !== undefined && type === 'object' && !isPlainObject(top)) {
+      errors.push({ code: 'CONFIG_INVALID_TYPE', path: field, message: `${field} 应为 ${type}，实际 ${Array.isArray(top) ? 'array' : typeof top}` })
+    }
+  }
+
+  // ★顶层遗留 customRoute 兼容校验（router.customRoute 校验见上）
+  if (cfg.customRoute !== undefined) {
+    validateCustomRoute(cfg.customRoute, 'customRoute', errors)
   }
 
   // ★#447 audit（D-2 dogfooding 门禁）：dir 字符串 + rules 子键合法 id × severity 枚举

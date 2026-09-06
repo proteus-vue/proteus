@@ -67,15 +67,18 @@ export interface ProteusConfig {
   appid: string
   /** 页面根目录（主包路由扫描起点） */
   pagesDir: string
-  /** 路由输出文件（编译期生成） */
-  routesOutput: string
-  /** 分包配置（可选） */
+  /** 路由输出文件（编译期生成）
+   *  ★#492 已收编 router 段（router.routesOutput）——顶层写法保留为向后兼容别名，建议统一到 router 段（项目级路由管理） */
+  routesOutput?: string
+  /** 分包配置（可选）
+   *  ★#492 已收编 router 段（router.subPackages）——顶层写法保留为向后兼容别名，建议统一到 router 段 */
   subPackages?: Array<{ root: string; name?: string }>
-  /** wx.router 自定义路由配置 */
-  customRoute: {
-    registerPresets: boolean
+  /** wx.router 自定义路由配置
+   *  ★#492 已收编 router 段（router.customRoute）——顶层写法保留为向后兼容别名，建议统一到 router 段 */
+  customRoute?: {
+    registerPresets?: boolean
     /** 内置预设 builders 注册表：name → 预设源码文件 */
-    builders: Record<string, string>
+    builders?: Record<string, string>
   }
   /** ★底线循环 ①③：规则覆盖（AI/config 改写或禁用规则） */
   rules?: TransformRuleOverrides
@@ -98,8 +101,21 @@ export interface ProteusConfig {
     mainPackageKB: number
     strict: boolean
   }
-  /** 路由通用配置（tabBar 唯一声明源 / 集中式 meta） */
+  /** ★#492 项目级路由管理（统一路由配置面——路由相关配置唯一声明处）：
+   *  结构（routesOutput/subPackages/customRoute）+ tabBar + 集中式 meta 全部在此；
+   *  顶层三字段为向后兼容别名，双处同时声明时 router.* 优先（config:check 提示收敛）。
+   *  消费方（gen-routes / app 骨架）经 resolveRouterConfig() 取生效配置——禁止散读顶层字段 */
   router?: {
+    /** 路由表产物路径（编译期 gen-routes 生成；缺省 src/router/auto-routes.ts） */
+    routesOutput?: string
+    /** 分包配置（各分包独立扫描树） */
+    subPackages?: Array<{ root: string; name?: string }>
+    /** wx.router 自定义路由（转场 builders；缺省 registerPresets: true） */
+    customRoute?: {
+      registerPresets?: boolean
+      builders?: Record<string, string>
+    }
+    /** tabBar 声明（list.name 对应路由名；缺省按 meta.isTab 推导） */
     tabBar?: {
       color?: string
       selectedColor?: string

@@ -14,14 +14,12 @@ afterAll(() => {
 })
 
 describe('JSON Schema 单一来源（config-schema.ts）', () => {
-  it('必填字段与 ProteusConfig 对齐（platform/skyline/appid/pagesDir/routesOutput/customRoute/setDataBridge/style）', () => {
+  it('必填字段与 ProteusConfig 对齐（★#492 routesOutput/customRoute 移出顶层必填——router 段二选一由 validateConfig 管）', () => {
     expect(proteusConfigSchema.required).toEqual([
       'platform',
       'skyline',
       'appid',
       'pagesDir',
-      'routesOutput',
-      'customRoute',
       'setDataBridge',
       'style',
     ])

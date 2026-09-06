@@ -89,11 +89,14 @@ function main(): void {
     const config = (await import('../proteus.config')).default as {
       pagesDir: string
       subPackages?: Array<{ root: string }>
+      router?: { subPackages?: Array<{ root: string }> }
       budget?: { mainPackageKB?: number; strict?: boolean }
     }
     // 分包产物路径：源码 root（examples/subpackages/order）去掉 appDir 前缀（examples/）→ subpackages/order
+    // ★#492 分包声明统一 router 段（顶层 subPackages 为兼容别名）
     const appDir = path.dirname(config.pagesDir)
-    const roots = (config.subPackages ?? []).map((sp) => sp.root.replace(`${appDir}/`, ''))
+    const spRoots = config.router?.subPackages ?? config.subPackages ?? []
+    const roots = spRoots.map((sp) => sp.root.replace(`${appDir}/`, ''))
     const stat = scanMainPackage(OUT_DIR, roots)
     const subPackages = scanSubPackages(OUT_DIR, roots)
     // budget 可选（拆包步骤 5：ProteusConfig 归包后为可选段，缺省走 roadmap 目标值）

@@ -13,6 +13,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
+import { resolveRouterConfig } from '@proteus-vue/types'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
@@ -226,13 +227,16 @@ export function filterOverriddenPresets(
   return presets.filter((p) => !new RegExp(`addRouteBuilder\\s*\\(\\s*['"]${p.name}['"]`).test(mainCode))
 }
 
-/** 读取并转译内置预设 builders（供内联进 app.js）；config 由调用方注入（拆包步骤 5） */
+/** 读取并转译内置预设 builders（供内联进 app.js）；config 由调用方注入（拆包步骤 5）
+ *  ★#492 customRoute 生效值经 resolveRouterConfig 解析（router.customRoute 优先，顶层别名兼容；缺省 registerPresets: true + 空 builders） */
 async function loadPresetBuilders(
   projectRoot: string,
   cfg: ProteusConfig,
 ): Promise<Array<{ name: string; fnName: string; source: string }>> {
   const presets: Array<{ name: string; fnName: string; source: string }> = []
-  for (const [name, modPath] of Object.entries(cfg.customRoute.builders)) {
+  const { router: rc, duplicates } = resolveRouterConfig(cfg as never)
+  for (const d of duplicates) console.warn(`[mp-transform] 路由字段 "${d}" 在顶层与 router 段同时声明——已取 router.${d}（#492 统一路由管理：建议删除顶层遗留写法）`)
+  for (const [name, modPath] of Object.entries(rc.customRoute.builders)) {
     const abs = resolvePkgPath(projectRoot, modPath)
     if (!fs.existsSync(abs)) {
       console.warn(`[mp-transform] 预设 builder ${name} 不存在：${modPath}`)

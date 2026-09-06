@@ -12,7 +12,7 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 
 ## 全局配置：proteus.config.ts
 
-类型契约 `ProteusConfig`（`@proteus-vue/types/config` 单一来源）。**必填 6 项**：`platform` / `skyline` / `appid` / `pagesDir` / `routesOutput` / `customRoute`（+ `setDataBridge` / `style`），其余可选。
+类型契约 `ProteusConfig`（`@proteus-vue/types/config` 单一来源）。**必填 6 项**：`platform` / `skyline` / `appid` / `pagesDir` / `setDataBridge` / `style` + **路由字段**（`routesOutput` / `customRoute`——★#492 在 `router` 段声明，顶层写法为兼容别名），其余可选。
 
 ### 顶层字段
 
@@ -22,18 +22,19 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `skyline` | `boolean` | 是 | compiler | 是否启用 Skyline 渲染（仅 mp-weixin 生效） |
 | `appid` | `string` | 是 | build | 小程序 AppID（模板占位 `wx0000000000`，上线前必须替换）。构建期写入 project.config.json / IDE 导入 / automator 体检。**≠ app.config 的 `app.id`**（那是运行时应用标识） |
 | `pagesDir` | `string` | 是 | compiler | 页面根目录（主包路由扫描起点），默认 `src/pages` |
-| `routesOutput` | `string` | 是 | router | 路由输出文件（编译期 gen-routes 生成） |
-| `customRoute` | `object` | 是 | router | wx.router 自定义路由配置，见下表 |
+| `routesOutput` | `string` | 否 | router | ★#492 已收编 `router.routesOutput`——顶层写法保留为兼容别名 |
+| `customRoute` | `object` | 否 | router | ★#492 已收编 `router.customRoute`——顶层写法保留为兼容别名 |
+| `subPackages` | `array` | 否 | router | ★#492 已收编 `router.subPackages`——顶层写法保留为兼容别名 |
 | `setDataBridge` | `object` | 是 | build | 响应式 → setData 桥接策略，见下表 |
 | `style` | `object` | 是 | compiler | 样式换算策略，见下表 |
 | `compiler` | `object` | 否 | compiler | 编译器后端插拔，见下表 |
 | `skylineLayout` | `object` | 否 | compiler | Skyline 布局对齐，见下表 |
 | `layout` | `object` | 否 | compiler | 柔性布局编译参数，见下表 |
-| `subPackages` | `array` | 否 | router | 分包配置，见下表 |
+| `subPackages`（顶层别名） | `array` | 否 | router | ★#492 已收编 `router.subPackages`，见下表 |
 | `rules` | `object` | 否 | compiler | 编译规则覆盖，见下表 |
 | `page` | `object` | 否 | compiler | 页面模式（自动滚动容器），见下表 |
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
-| `router` | `object` | 否 | router | 路由通用配置（tabBar / 集中式 meta），见下表 |
+| `router` | `object` | 否 | router | ★#492 **项目级路由管理**（统一路由配置面：结构 + tabBar + meta），见下表 |
 | `vite` | `object 或 函数` | 否 | build | **vite 透传**（★#418）：vite 配置由框架组装（vue/mpTransform/别名/构建参数内建），此字段做开发者扩展——见下表 |
 | `audit` | `object` | 否 | build | **D-2 页面门禁规则**（★#447）：off/warn/error 自选——见下表 |
 | `gates` | `object` | 否 | build | **统一门禁开关**（★#456）：`gates.disabled` 自选关闭门禁/聚合域——见下表 |
@@ -80,12 +81,12 @@ const config: ProteusConfig = {
 | `designWidth` | `number` | 否 | 设计稿宽度（p-fluid clamp 生成基准） |
 | `fluidViewport` | `{ min?, max? }` | 否 | 视口范围（clamp 上下界） |
 
-**`customRoute`（wx.router 自定义路由）**
+**`customRoute`（顶层兼容别名——★#492 已收编 `router.customRoute`；wx.router 自定义路由）**
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `registerPresets` | `boolean` | 是 | 是否注册内置预设 builders |
-| `builders` | `Record<string, string>` | 是 | 预设 builders 注册表：name → 预设源码文件 |
+| `registerPresets` | `boolean` | 否 | 是否注册内置预设 builders（缺省 true） |
+| `builders` | `Record<string, string>` | 否 | 预设 builders 注册表：name → 预设源码文件 |
 
 **`setDataBridge`（setData 桥接策略）**
 
@@ -101,7 +102,7 @@ const config: ProteusConfig = {
 | `px2rpx` | `boolean` | 是 | px → rpx 转换开关 |
 | `rpxRatio` | `number` | 是 | 换算比例（默认按 375 设计稿 2:1，见 [样式转换](/docs/framework/compile-style)） |
 
-**`subPackages`（分包）**
+**`subPackages`（顶层兼容别名——★#492 已收编 `router.subPackages`）**
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -129,11 +130,16 @@ const config: ProteusConfig = {
 | `mainPackageKB` | `number` | 否 | 主包体积上限（KB，超限告警/阻断） |
 | `strict` | `boolean` | 否 | 严格模式：超限直接构建失败（非仅告警） |
 
-**`router`（路由通用配置）**
+**`router`（★#492 项目级路由管理——路由相关配置唯一声明处）**
+
+> 三项路由结构字段（`routesOutput` / `subPackages` / `customRoute`）已从顶层收编至此；顶层写法保留为向后兼容别名（`router.*` 优先，双处同时声明时构建期提示收敛）。消费方（gen-routes / app 骨架）经 `resolveRouterConfig()` 取生效配置。
 
 | 子字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `tabBar` | `object` | 否 | tabBar 唯一声明源：`color` / `selectedColor` / `list`（`{ name, text, icon? }[]`） |
+| `routesOutput` | `string` | 否 | 路由表产物路径（编译期 gen-routes 生成；缺省 `src/router/auto-routes.ts`）——与顶层 `routesOutput` 二选一（至少一处声明） |
+| `subPackages` | `array` | 否 | 分包配置：`root`（独立扫描树）/ `name`（app.json 展示 + 模块映射），见下表 |
+| `customRoute` | `object` | 否 | wx.router 自定义路由，见下表——与顶层 `customRoute` 二选一 |
+| `tabBar` | `object` | 否 | tabBar 声明：`color` / `selectedColor` / `list`（`{ name, text, icon? }[]`，`name` 对应路由名）。**未声明时按 meta.isTab 推导**（list 顺序与文案优先） |
 | `meta` | `Record<string, RouteMeta>` | 否 | 集中式 meta（决策 #113）：匹配优先级 精确路径 > 目录前缀 > 默认 |
 
 **`audit`（D-2 页面门禁——开发者自选规则级别）**
@@ -197,6 +203,8 @@ const config: ProteusConfig = {
 proteus config:check proteus.config.ts   # 必填字段 + 跨层依赖（CONFIG_LAYER_VIOLATION）+ 版本迁移提示
 proteus generate types                    # 生成 JSON Schema（.proteus/proteus.config.schema.json，IDE 补全）
 ```
+
+> ★#492 存量工程迁移：顶层 `routesOutput` / `subPackages` / `customRoute` 写法继续可用（向后兼容，双处同时声明时 `router.*` 优先并在构建期提示）；新工程直接在 `router` 段声明（create-proteus 模板已是统一形态）。配置版本 v3：显式声明 `version: 2` 的工程由迁移链自动收编。
 
 字段归属表（compiler / router / build / pinia…）由 `CONFIG_FIELD_LAYERS` 单一来源驱动：**新增顶层字段必须标注归属层**，跨层语义（如 router 字段里写 pinia 键）报 `CONFIG_LAYER_VIOLATION`。
 

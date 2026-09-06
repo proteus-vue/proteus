@@ -29,23 +29,25 @@ describe('品牌类型（B6 §2：防混淆）', () => {
 })
 
 describe('配置版本迁移（B6 §3）', () => {
-  it('CONFIG_VERSION = 2；迁移注册表 v1→v2 链', () => {
-    expect(CONFIG_VERSION).toBe(2)
+  it('CONFIG_VERSION = 3；迁移注册表 v1→v2→v3 链（★#492 v3 = 路由字段收编 router 段）', () => {
+    expect(CONFIG_VERSION).toBe(3)
     expect(configMigrations[0]).toMatchObject({ from: 1, to: 2 })
+    expect(configMigrations[1]).toMatchObject({ from: 2, to: 3 })
   })
 
   it('migrateConfig：v1 → v2 补默认字段；v2 原样返回', () => {
     const r = migrateConfig({ platform: 'mp-weixin' }, 1)
-    expect(r.version).toBe(2)
+    expect(r.version).toBe(3) // 链式迁到最新
     expect(r.config.setDataBridge).toEqual({ batchWindow: 16, perComponent: true })
     const r2 = migrateConfig({ platform: 'mp-weixin', setDataBridge: { batchWindow: 8, perComponent: false } }, 2)
-    expect(r2.version).toBe(2)
+    expect(r2.version).toBe(3)
     expect(r2.config.setDataBridge).toEqual({ batchWindow: 8, perComponent: false })
   })
 
   it('configNeedsMigration：显式 version < 最新 → true；无 version / 最新 → false', () => {
     expect(configNeedsMigration({ version: 1 })).toBe(true)
-    expect(configNeedsMigration({ version: 2 })).toBe(false)
+    expect(configNeedsMigration({ version: 2 })).toBe(true) // ★#492 v3 起 v2 也需迁移
+    expect(configNeedsMigration({ version: 3 })).toBe(false)
     expect(configNeedsMigration({})).toBe(false) // 未声明 version → 当前形态
   })
 })
