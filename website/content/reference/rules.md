@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 80 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 82 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（42）
+## 模板转换（44）
 
 ### `tag/div-to-view`
 
@@ -400,6 +400,32 @@ after:  <slot /> + 警告（替代：props 传子 + triggerEvent 事件回调）
 ```
 
 > why: 反黑盒（vue-compat-advance Batch 1/7，决策 #117）：不再静默输出无效属性；运行时等价受 MP 平台能力限制（非待办，替代模式 props+事件已由组件系统完整支持）
+
+### `slot/named-template`
+
+**具名插槽 MP 接线：<template #name> → <view slot="name">（微信 slot 机制；默认插槽解壳内联）**
+
+自定义组件子级的 <template #aside>（含多子元素/默认内容共存）旧产物丢 slot 名并包在 <template>（WXML 不渲染内容）→ 整段不可见（fluid-system-demo 侧边栏/容器全丢真机根因）——现在具名插槽发射 <view slot="aside"> 包装（微信父侧 slot 属性机制，组件侧 <slot name> 对位），默认插槽（#default/无参）解壳内联（微信默认插槽接受直接子节点）；<template v-if>/v-for 包装形态不受影响
+
+```
+before: <p-split><template #aside>…</template>…</p-split>
+after:  <p-split><view slot="aside">…</view>…</p-split>
+```
+
+> why: 跨端插槽语义等价（2026-09 真机实测）：Vue 命名插槽在微信的自定义组件机制是对位可映射的（slot 属性 ↔ <slot name>），此前编译器把内容丢进不渲染的 <template> 等于静默丢弃——违背反黑盒与双端同源码
+
+### `slot/scoped-template`
+
+**作用域默认插槽内容警告（#default="{ errors }"：内容渲染但参数不可用）**
+
+消费侧 <template #default="{ errors }"> 作用域默认插槽：微信 slot 不向内容传参——内容解壳按普通默认插槽渲染（不再包不渲染的 <template>），{ errors } 恒不可用：编译期警告 + 替代模式（props 传子 + 事件回调；与组件侧 <slot :errors> 的 slot/scoped-slot 警告同源）
+
+```
+before: <p-form><template #default="{ errors }">…</template></p-form>
+after:  解壳渲染 + 警告（{ errors } 不可用；替代：props 传子 + 事件回调）
+```
+
+> why: 反黑盒（vue-compat-advance Batch 7 平台限制）：作用域数据在 MP/Skyline 无模板传参机制，静默丢参等于假等价——内容仍渲染（视觉等价），参数不可用显式警告
 
 ### `transition/component`
 

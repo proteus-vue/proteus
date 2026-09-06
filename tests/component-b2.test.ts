@@ -132,4 +132,32 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('pv-button'))
     warnSpy.mockRestore()
   })
+
+  it('★具名插槽之后的组件同样注册（旧模板体正则被内层 </template> 截断 → 后序组件漏 usingComponents 整块不渲染）', () => {
+    const root = path.join(TMP, 'slots')
+    // p-split 内先出现 <template #aside>（首个内层 </template>）——其后 p-zone/p-sidebar/p-modal 必须全量注册
+    writeFixture(
+      root,
+      'src/pages/index.vue',
+      `<template><p-split min-split-width="640"><template #aside><view class="a">侧栏</view></template><view class="b">主区</view></p-split><p-zone design-width="375" /><p-sidebar min-sidebar-width="640" /><p-modal /></template>\n`,
+    )
+    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    for (const tag of ['p-split', 'p-zone', 'p-sidebar', 'p-modal']) {
+      expect(pageJson.usingComponents[tag]).toBe(`/proteus/${tag}/index`)
+    }
+  })
+
+  it('HTML 注释里的 <p-xxx> 示例文本不误注册（标签扫描跳过注释块）', () => {
+    const root = path.join(TMP, 'comment')
+    writeFixture(
+      root,
+      'src/pages/index.vue',
+      `<template><!-- 示例：<p-view class="box">（注释文本不是真实使用） --><p-button>ok</p-button></template>\n`,
+    )
+    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJson.usingComponents['p-button']).toBe('/proteus/p-button/index')
+    expect(pageJson.usingComponents['p-view']).toBeUndefined()
+  })
 })

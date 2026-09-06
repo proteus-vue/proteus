@@ -594,6 +594,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     )
     ctx.trace?.add('template/no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（无对等，原样输出）' })
   }
+  // ★2026-09 fluid-system 真机缺口：自定义组件子级插槽内容 <template #name> MP 接线——
+  //   旧产物丢 slot 名并包在 <template>（WXML 不渲染内容）→ 整段不可见（侧边栏/容器全丢同源）。
+  //   微信机制：具名插槽 → 内容须带 slot 属性（<view slot="name">）；默认插槽 → 解壳内联（微信默认插槽接受直接子节点）
+  const slotDir = node.tag === 'template'
+    ? node.props.find((p): p is DirectiveNode => p.type === NodeTypes.DIRECTIVE && p.name === 'slot')
+    : undefined
+  if (slotDir) {
+    const arg = exprContent(slotDir.arg)
+    const slotName = arg && arg !== 'default' ? arg : ''
+    // 作用域插槽参数（#default="{ errors }"）——微信 slot 不向内容传参，反黑盒警告 + 按普通插槽渲染
+    const scopeText = exprContent(slotDir.exp).trim()
+    if (scopeText) {
+      ctx.warnings.push(`作用域插槽 <template #${arg || 'default'}${scopeText ? `="${scopeText}"` : ''}> 的数据在 MP/Skyline 无对等机制（微信 slot 不向内容传参）——已按普通插槽渲染，${scopeText} 恒不可用（vue-compat-advance Batch 7 平台限制）；请改 props 传子 + 事件回调`)
+      ctx.trace?.add('slot/scoped-template', { line: node.loc.start.line, before: `<template #${arg || 'default'}="${scopeText}">`, after: '（解壳按普通插槽渲染；作用域参数不可用）' })
+    } else {
+      ctx.trace?.add('slot/named-template', {
+        line: node.loc.start.line,
+        before: `<template #${slotName || 'default'}>`,
+        after: slotName ? `<view slot="${slotName}">（微信 slot 机制：组件侧 <slot name> 对位）` : '解壳内联（微信默认插槽接受直接子节点）',
+      })
+    }
+    const inner = node.children.map((c) => serializeNode(c, ctx)).join('\n')
+    if (!slotName) return inner // 默认插槽：解壳内联
+    const hasEl = node.children.some((c) => c.type === NodeTypes.ELEMENT)
+    return hasEl ? `<view slot="${slotName}">\n${inner}\n</view>` : `<view slot="${slotName}">${inner}</view>`
+  }
   const hasVHtml = node.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'html')
   const hasClick = node.props.some((p) => p.type === NodeTypes.DIRECTIVE && p.name === 'on')
   // 导航链接：<a href> / <router-link to>（元素上有 @click 时不作为导航链接，交给事件映射）

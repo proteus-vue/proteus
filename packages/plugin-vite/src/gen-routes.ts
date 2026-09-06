@@ -433,6 +433,68 @@ const HTML_TAGS = new Set([
 ])
 
 /**
+ * SFC 根 <template> 体提取（深度配对）：内层 <template #slot> / <template v-if> 不截断——
+ * 旧实现 /<template[^>]*>([\s\S]*?)<\/template>/ 被首个内层具名插槽 </template> 截断 →
+ * 其后的自定义组件标签漏扫描 → page.json usingComponents 缺失 → MP 整块不渲染（fluid-system-demo 侧边栏/容器全丢）。
+ * HTML 注释与 <script>/<style> 整块跳过（其中可能含 '<template>' 字面量文本——首配对正则同样误取）
+ */
+function extractTemplateBody(src: string): string {
+  const n = src.length
+  let i = 0
+  while (i < n) {
+    const lt = src.indexOf('<', i)
+    if (lt < 0) return ''
+    if (src.startsWith('<!--', lt)) {
+      const e = src.indexOf('-->', lt + 4)
+      i = e < 0 ? n : e + 3
+      continue
+    }
+    // <script ...> / <style ...> 整块跳过
+    const block = /^<(script|style)\b/i.exec(src.slice(lt, lt + 32))
+    if (block) {
+      const tag = block[1].toLowerCase()
+      const end = src.toLowerCase().indexOf(`</${tag}`, lt + block[0].length)
+      if (end < 0) return ''
+      const gt = src.indexOf('>', end)
+      i = gt < 0 ? n : gt + 1
+      continue
+    }
+    if (/^<template[\s>]/i.test(src.slice(lt, lt + 16))) {
+      const gt = src.indexOf('>', lt)
+      if (gt < 0) return ''
+      let depth = 1
+      let j = gt + 1
+      while (j < n) {
+        const l2 = src.indexOf('<', j)
+        if (l2 < 0) return src.slice(gt + 1)
+        if (src.startsWith('<!--', l2)) {
+          const e = src.indexOf('-->', l2 + 4)
+          j = e < 0 ? n : e + 3
+          continue
+        }
+        const seg = src.slice(l2, l2 + 16)
+        if (/^<\/template[\s>]/i.test(seg)) {
+          depth--
+          if (depth === 0) return src.slice(gt + 1, l2)
+          j = l2 + '</template>'.length
+          continue
+        }
+        if (/^<template[\s>]/i.test(seg)) {
+          depth++
+          const g2 = src.indexOf('>', l2)
+          j = g2 < 0 ? n : g2 + 1
+          continue
+        }
+        j = l2 + 1
+      }
+      return src.slice(gt + 1)
+    }
+    i = lt + 1
+  }
+  return ''
+}
+
+/**
  * 扫描页面模板中的自定义组件标签（非原生/HTML 标签）→ usingComponents 映射
  * 解析顺序：应用组件 <appRoot>/components/<tag>/index(.vue) → 框架内置组件 src/components/<tag>/index(.vue)
  * 路径：应用 /components/<tag>/index；框架 /proteus/<tag>/index（插件产物 rel 前缀 proteus/，与应用隔离）
@@ -440,18 +502,33 @@ const HTML_TAGS = new Set([
  */
 function collectComponents(file: string, skipSemantic = false): Record<string, string> {
   const src = fs.readFileSync(file, 'utf-8')
-  const tpl = src.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] ?? ''
+  const tpl = extractTemplateBody(src)
   const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
   // ★#496 语义编译标签（仅页面——产物层展开为 flex 档位容器，不注入 usingComponents；组件模板保留运行时组件需注册）
   const semanticTags = skipSemantic ? new Set(['p-grid']) : new Set()
   const used = new Set<string>()
-  const tagRe = /<([a-z][\w-]*)/g
-  let m: RegExpExecArray | null
-  while ((m = tagRe.exec(tpl))) {
-    const tag = m[1]
-    if (tag.startsWith('!')) continue // 注释
-    if (NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag) || semanticTags.has(tag)) continue
-    used.add(tag)
+  // 标签扫描跳过 HTML 注释块（注释里可能出现 <p-xxx> 示例文本——旧正则直接扫文本会把注释示例误当使用）
+  let idx = 0
+  while (idx < tpl.length) {
+    const lt = tpl.indexOf('<', idx)
+    if (lt < 0) break
+    if (tpl.startsWith('<!--', lt)) {
+      const e = tpl.indexOf('-->', lt + 4)
+      idx = e < 0 ? tpl.length : e + 3
+      continue
+    }
+    if (tpl.startsWith('</', lt)) {
+      idx = lt + 2
+      continue
+    }
+    const mm = /^([a-z][\w-]*)/.exec(tpl.slice(lt + 1))
+    if (!mm) {
+      idx = lt + 1
+      continue
+    }
+    const tag = mm[1]
+    if (!(NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag) || semanticTags.has(tag))) used.add(tag)
+    idx = lt + 1 + mm[0].length
   }
   const out: Record<string, string> = {}
   for (const tag of used) {

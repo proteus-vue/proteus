@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 80 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 82 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (42)
+## Template transforms (44)
 
 ### `tag/div-to-view`
 
@@ -400,6 +400,32 @@ after:  <slot /> + 警告（替代：props 传子 + triggerEvent 事件回调）
 ```
 
 > why: anti-black-box (vue-compat-advance Batch 1/7, decision #117): no longer silently emitting invalid attributes; runtime equivalence is limited by MP platform capabilities (not a TODO — the props + events alternative is fully supported by the component system)
+
+### `slot/named-template`
+
+**named-slot MP wiring: <template #name> → <view slot="name"> (WeChat slot mechanism; the default slot is unwrapped inline)**
+
+custom-component child content declared as <template #aside> (including multi-element content coexisting with default content) used to lose the slot name and be wrapped in a plain <template> (WXML does not render the content inline) → the whole section became invisible (root cause of the fluid-system-demo sidebar/container loss on device) — named slots now emit a <view slot="aside"> wrapper (WeChat parent-side slot-attribute mechanism, counterpart of <slot name> on the child side), while the default slot (#default/nameless) is unwrapped inline (WeChat default slots accept direct children); <template v-if>/v-for wrapper forms are unaffected
+
+```
+before: <p-split><template #aside>…</template>…</p-split>
+after:  <p-split><view slot="aside">…</view>…</p-split>
+```
+
+> why: cross-platform slot-semantics equivalence (2026-09 device-verified): Vue named slots map 1:1 onto WeChat custom-component slots (slot attribute ↔ <slot name>); wrapping content in a non-rendering <template> was an implicit drop — violating anti-black-box and same-source-for-both-ends
+
+### `slot/scoped-template`
+
+**scoped default-slot content warning (#default="{ errors }": content renders but the parameter is unavailable)**
+
+consumer-side scoped default slot <template #default="{ errors }">: WeChat slots pass no data to their content — the content is unwrapped and rendered as a normal default slot (no longer wrapped in a non-rendering <template>), while { errors } is permanently unavailable: compile-time warning + alternative pattern (props down + event callbacks back up; same root as the child-side slot/scoped-slot warning for <slot :errors>)
+
+```
+before: <p-form><template #default="{ errors }">…</template></p-form>
+after:  解壳渲染 + 警告（{ errors } 不可用；替代：props 传子 + 事件回调）
+```
+
+> why: anti-black-box (vue-compat-advance Batch 7 platform limitation): scoped data has no template parameter-passing mechanism on MP/Skyline, and silently dropping the parameter would fake equivalence — the content still renders (visual equivalence) while the unavailable parameter is explicitly warned
 
 ### `transition/component`
 

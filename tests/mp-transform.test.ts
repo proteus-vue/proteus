@@ -416,6 +416,28 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     expect(result.js).toContain('label: { type: String, value: "" }')
   })
 
+  it('具名插槽 <template #aside> → <view slot="aside">（微信 slot 机制；旧产物包 <template> 内容不渲染）', () => {
+    const { wxml } = transformTemplateToWxml('<p-split><template #aside><view class="a">侧栏</view></template><view class="b">主区</view></p-split>', opts)
+    expect(wxml).toContain('<view slot="aside">')
+    expect(wxml).toContain('>侧栏</view>')
+    expect(wxml).not.toContain('<template')
+  })
+
+  it('具名插槽多子元素 + 默认插槽直接子节点共存', () => {
+    const { wxml } = transformTemplateToWxml('<p-nav title="t"><template #left><view class="a">L</view></template><view class="b">标题槽</view></p-nav>', opts)
+    expect(wxml).toContain('<view slot="left">')
+    expect(wxml).toContain('>L</view>')
+    expect(wxml).toContain('>标题槽</view>')
+  })
+
+  it('作用域默认插槽 #default="{ errors }" → 解壳内联 + 反黑盒警告（微信 slot 不传参）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { wxml } = transformTemplateToWxml('<p-form><template #default="{ errors }"><text>{{ errors }}</text></template></p-form>', opts)
+    expect(wxml).not.toContain('<template')
+    expect(wxml).toContain('<text>{{ errors }}</text>')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('作用域插槽'))
+  })
+
   it('CSS 预处理器（v0.3 尾）：lang=scss 经 preprocessStyle 钩子转 css 进 WXSS', () => {
     const src = '<template><div class="a">x</div></template>\n<style lang="scss">\n$c: red;\n.a { color: $c; }\n</style>'
     const preprocessStyle = vi.fn((_lang: string, content: string) => content.replace('$c: red;\n', '').replace('$c', 'red'))
