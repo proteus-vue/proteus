@@ -860,7 +860,9 @@ function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; 
         '  if (rect && rect.width > 0) {',
         '    var w = rect.width',
         `    var cols = Math.max(1, Math.floor((w + ${GP}) / (${MC} + ${GP})))`,
-        `    __self.setData({ ${JSON.stringify(`pgridStyle${g.index}`)}: 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.round(((w - (cols - 1) * ${GP}) / cols) * 10) / 10 + 'px' })`,
+        `    var basis = Math.round(((w - (cols - 1) * ${GP}) / cols) * 10) / 10`,
+        `    console.log('[proteus][pgrid${g.index}] w=' + w + ' cols=' + cols + ' basis=' + basis + 'px')`,
+        `    __self.setData({ ${JSON.stringify(`pgridStyle${g.index}`)}: 'flex-grow:0; flex-shrink:0; flex-basis:' + basis + 'px' })`,
         '  }',
         '}).exec()',
       ].join('\n')
@@ -872,6 +874,8 @@ function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; 
     refreshBody,
     '}',
     '__self.__pgRefresh()',
+    // ★#496e Skyline onReady 首帧布局未稳时 rect 偏小（复测 430 下判 1 列不满）——延时二次重测兜底
+    'setTimeout(function () { __self.__pgRefresh() }, 150)',
     "if (typeof wx !== 'undefined' && wx.onWindowResize) {",
     '  __self.__pgOnResize = function () { __self.__pgRefresh() }',
     '  wx.onWindowResize(__self.__pgOnResize)',
