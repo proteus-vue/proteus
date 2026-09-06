@@ -268,6 +268,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
+  /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
+  isPage?: boolean
   /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位 style 变量与求解段；index = style 变量序） */
   semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
 }
@@ -447,27 +449,29 @@ function attrValue(name: string, value: string): AttributeNode {
 
 /**
  * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
- * ★#496b 子项宽度用 calc 百分比（相对 flex 容器实际宽——页面容器 padding 下 px 基准溢出换行成单列空档）：
- *   flex-basis: calc((100% - gap×(cols-1)px) / cols)——cols 运行时求（档位），百分比自动适配容器内容宽。
+ * ★#496c 宽度用 px 档（Skyline 实测 calc 百分比在 flex-basis 不可靠——320 宽被算出 3 列内容宽并排）：
+ *   flex-basis 由运行档 setData（px——Skyline 已验证可靠）；列数基准 = 容器实测宽（SelectorQuery），
+ *   非屏幕宽（页面 padding 会让 px 溢出换行成单列空档，#496b 教训）。
  */
-function buildGridItemStyle(cols: number, gap: number): string {
-  return `flex-grow:0; flex-shrink:0; flex-basis: calc((100% - ${(cols - 1) * gap}px) / ${cols})`
+function buildGridItemStyle(containerWidth: number, minColWidth: number, gap: number): string {
+  const cols = calcColumns(containerWidth, minColWidth, gap)
+  const basis = Math.round(((containerWidth - (cols - 1) * gap) / cols) * 10) / 10
+  return `flex-grow:0; flex-shrink:0; flex-basis:${basis}px`
 }
 
 /**
  * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
- * basis 运行时由 script 档位段 setData（pgridStyle{index}），子项共享 style 变量一次刷新
+ * 档位 style 由 script 段 setData（pgridStyle{index}）——页面 onLoad 屏幕宽近似 + onReady SelectorQuery 实测精修
  */
 function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: { minColWidth: number; gap: number }): string {
   const index = ctx.semanticGrids.length
   const designWidth = ctx.fluidLayout?.designWidth ?? 375
-  const cols = calcColumns(designWidth, grid.minColWidth, grid.gap)
-  const defaultStyle = buildGridItemStyle(cols, grid.gap)
+  const defaultStyle = buildGridItemStyle(designWidth, grid.minColWidth, grid.gap)
   ctx.semanticGrids.push({ minColWidth: grid.minColWidth, gap: grid.gap, index, defaultStyle })
   ctx.trace?.add('fluid/semantic-grid', {
     line: node.loc.start.line,
     before: `<p-grid min-col-width="${grid.minColWidth}" gap="${grid.gap}">…</p-grid>`,
-    after: `容器 flex(row/wrap/gap ${grid.gap}px) + 子项 p-grid-item（style 绑 {{pgridStyle${index}}}——calc 百分比档位，#496b）`,
+    after: `容器 flex(row/wrap/gap ${grid.gap}px) id=pgrid${index} + 子项 p-grid-item（style 绑 {{pgridStyle${index}}}——px 档位实测容器宽，#496c）`,
   })
 
   const semanticProp = (dirName: string): boolean => dirName === 'min-col-width' || dirName === 'minColWidth' || dirName === 'gap'
@@ -487,6 +491,7 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
     containerProps.push(p)
   }
   containerProps.push(attrValue('style', `display:flex;flex-wrap:wrap;gap:${grid.gap}px`))
+  containerProps.push(attrValue('id', `pgrid${index}`)) // ★#496c SelectorQuery 实测容器宽（页面级）
   if (!containerProps.some((p) => (p as { type: number; name?: string }).type === NodeTypes.ATTRIBUTE && (p as { name?: string }).name === 'class')) {
     containerProps.push(attrValue('class', 'p-grid'))
   } else {
@@ -547,12 +552,16 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
-  // ★#496 柔性语义编译：<p-grid> 语义元素——MP 按端 codegen（容器 flex + 子项档位容器，basis 运行档位 setData）
+  // ★#496 柔性语义编译：<p-grid> 语义元素——仅页面（Skyline SelectorQuery 需页面 onReady；组件内 p-grid 回退运行时组件）
   if (SEMANTIC_COMPILE_TAGS.has(node.tag)) {
-    const grid = tryParseSemanticGrid(node)
-    if (grid) return serializeSemanticGrid(node, ctx, grid)
-    ctx.warnings.push(`<p-grid> 的 min-col-width/gap 需为静态数值（动态 props 语义编译暂不支持 #496 MVP）——已回退运行时组件（仅 Web 可用）`)
-    ctx.trace?.add('fluid/semantic-grid', { line: node.loc.start.line, before: '<p-grid 动态 props>', after: '回退运行时组件（#496 MVP 限制）' })
+    if (ctx.isPage) {
+      const grid = tryParseSemanticGrid(node)
+      if (grid) return serializeSemanticGrid(node, ctx, grid)
+      ctx.warnings.push(`<p-grid> 的 min-col-width/gap 需为静态数值（动态 props 语义编译暂不支持 #496 MVP）——已回退运行时组件（仅 Web 可用）`)
+      ctx.trace?.add('fluid/semantic-grid', { line: node.loc.start.line, before: '<p-grid 动态 props>', after: '回退运行时组件（#496 MVP 限制）' })
+    } else {
+      ctx.warnings.push(`组件模板内 <p-grid> 暂不走语义编译（#496c：SelectorQuery 需页面上下文）——回退运行时组件，请改为页面级或后续批次支持`)
+    }
   }
   // ★Batch A（vue-compat）：平台无对等标签——显式警告（反黑盒，不再静默输出无效产物）
   if (node.tag === 'component') {
@@ -987,6 +996,7 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#496 柔性语义编译：p-grid 收集
     semanticGrids: [],
+    isPage: opts.isComponent !== true,
     // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
     fluidLayout: opts.fluidLayout,
   }

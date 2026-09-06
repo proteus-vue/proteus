@@ -824,15 +824,14 @@ function watchTail(w: WatchInfo | undefined): string {
 }
 
 /**
- * ★#496b 柔性语义编译：p-grid 档位求解段（注入 onLoad/attached 最前）——小程序窗口宽固定
- * （wx.getWindowInfo 读一次），calcColumns 内联；组数按 minColWidth/gap 求列 → calc 百分比 style 串一次 setData。
+ * ★#496c 柔性语义编译：p-grid 档位求解段——onLoad 屏幕宽近似（px，首帧即近似不错闪）
  */
 function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
   if (!grids.length) return ''
   const perGrid = grids
     .map((g) => {
       const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / (${g.minColWidth} + ${g.gap})))`
-      return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = ${JSON.stringify('flex-grow:0; flex-shrink:0; flex-basis: calc((100% - ')} + (${cols} - 1) * ${g.gap} + ${JSON.stringify('px) / ')} + ${cols}`
+      return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.round(((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) * 10) / 10 + 'px'`
     })
     .join('\n')
   return [
@@ -841,6 +840,31 @@ function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; i
     perGrid,
     'this.setData(__sb)',
   ].join('\n')
+}
+
+/**
+ * ★#496c 柔性语义编译：p-grid 档位精修段（页面 onReady——SelectorQuery 实测容器宽，#496b 容器 padding 教训：
+ * 列数基准必须是容器实际宽而非屏幕宽）。回调 ES5 风格（Skyline 基础库兼容）。
+ */
+function semanticGridReadyCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
+  if (!grids.length) return ''
+  const blocks = grids
+    .map((g) => {
+      const MC = g.minColWidth
+      const GP = g.gap
+      return [
+        "var __q = wx.createSelectorQuery()",
+        `__q.select('#pgrid${g.index}').boundingClientRect(function (rect) {`,
+        '  if (rect && rect.width > 0) {',
+        '    var w = rect.width',
+        `    var cols = Math.max(1, Math.floor((w + ${GP}) / (${MC} + ${GP})))`,
+        `    __self.setData({ ${JSON.stringify(`pgridStyle${g.index}`)}: 'flex-grow:0; flex-shrink:0; flex-basis:' + Math.round(((w - (cols - 1) * ${GP}) / cols) * 10) / 10 + 'px' })`,
+        '  }',
+        '}).exec()',
+      ].join('\n')
+    })
+    .join('\n')
+  return `var __self = this\n${blocks}`
 }
 
 /**
@@ -1437,8 +1461,13 @@ export function transformScriptToPage(
     )
   }
 
+  // ★#496c onReady 精修段（页面 p-grid 档位——SelectorQuery 实测容器宽）
+  const semanticGridReady = !extra.isComponent ? semanticGridReadyCode(semanticGrids) : ''
   if (lifecycles.onReady) {
-    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onReady, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`)
+    const readyBody = semanticGridReady ? `${semanticGridReady}\n${lifecycles.onReady}` : lifecycles.onReady
+    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(readyBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`)
+  } else if (semanticGridReady) {
+    lines.push(`  onReady() {\n${indentBody(semanticGridReady)}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)

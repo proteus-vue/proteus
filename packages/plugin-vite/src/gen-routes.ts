@@ -438,12 +438,12 @@ const HTML_TAGS = new Set([
  * 路径：应用 /components/<tag>/index；框架 /proteus/<tag>/index（插件产物 rel 前缀 proteus/，与应用隔离）
  * config.rules.customTags 的标签是自定义映射（非组件），加入白名单
  */
-function collectComponents(file: string): Record<string, string> {
+function collectComponents(file: string, skipSemantic = false): Record<string, string> {
   const src = fs.readFileSync(file, 'utf-8')
   const tpl = src.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] ?? ''
   const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
-  // ★#496 语义编译标签：MP 模板转换在产物层展开（非组件），不注入 usingComponents（collectComponents 扫源模板会误收）
-  const semanticTags = new Set(['p-grid'])
+  // ★#496 语义编译标签（仅页面——产物层展开为 flex 档位容器，不注入 usingComponents；组件模板保留运行时组件需注册）
+  const semanticTags = skipSemantic ? new Set(['p-grid']) : new Set()
   const used = new Set<string>()
   const tagRe = /<([a-z][\w-]*)/g
   let m: RegExpExecArray | null
@@ -485,7 +485,8 @@ function writePageJsons(pages: PageInfo[]): void {
     // <route> 块 pageJson 扩展（如半屏页透明背景 backgroundColorContent）
     if (p.pageJson) Object.assign(pageJson, p.pageJson)
     // 组件系统（v0.3）：扫描模板中的自定义组件标签 → usingComponents 注入
-    const components = collectComponents(p.file)
+    // ★#496 页面源 p-grid 已被语义编译（产物无标签）——skipSemantic 排除；组件文件需注册保留
+    const components = collectComponents(p.file, true)
     if (Object.keys(components).length) pageJson.usingComponents = components
     // 注意：不再输出 customRouteKeyName —— 真机校验报"无效的 page.json [customRouteKeyName]"；
     // 自定义路由仅靠 wx.navigateTo({ routeType }) + 已注册 builder 生效，page.json 无需声明
