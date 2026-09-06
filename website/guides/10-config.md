@@ -30,7 +30,6 @@ Proteus 的配置分两层：**全局配置**（`proteus.config.ts`，管整个�
 | `compiler` | `object` | 否 | compiler | 编译器后端插拔，见下表 |
 | `skylineLayout` | `object` | 否 | compiler | Skyline 布局对齐，见下表 |
 | `layout` | `object` | 否 | compiler | 柔性布局编译参数，见下表 |
-| `subPackages`（顶层别名） | `array` | 否 | router | ★#492 已收编 `router.subPackages`，见下表 |
 | `rules` | `object` | 否 | compiler | 编译规则覆盖，见下表 |
 | `page` | `object` | 否 | compiler | 页面模式（自动滚动容器），见下表 |
 | `budget` | `object` | 否 | build | 包体积预算，见下表 |
