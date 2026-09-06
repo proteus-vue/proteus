@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 79 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 80 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（42）
 
@@ -945,7 +945,7 @@ after:  onLoad: const provides = (getApp().__proteusProvides || (getApp().__prot
 
 > why: 小程序组件树无 provide/inject 机制（决策 #117）：全局注册表桥让页面向组件传值（含深层嵌套组件）；MVP 值快照（非响应式联动）+ 全局注册表（重名 key 后写覆盖），页面级隔离/响应式为后续
 
-## 样式转换（8）
+## 样式转换（9）
 
 ### `style/px-to-rpx`
 
@@ -1026,6 +1026,19 @@ after:  警告：WXSS 检测到 Skyline 不支持的属性：position: fixed（�
 ```
 
 > why: Skyline 自研渲染引擎不支持这些布局属性，编译期警告让开发者提前知道（反黑盒原则：警告可见、可统计）
+
+### `style/skyline-selector`
+
+**Skyline 不兼容选择器规则级剔除（★#495b）**
+
+WXSS 产物中剔除含通配符 * 或 :deep 残留的选择器规则（Web 降级规则 .x-fallback > *、:deep(*) 编译后 .x *——微信 Skyline WXSS 编译器拒绝 token *，报 WXSS 文件编译错误）；Web 端保留（真浏览器可用）；剔除告警 + trace
+
+```
+before: .p-grid-fallback > * { min-width: ... }
+after:  该规则不出现在 wxss 产物 + 告警「WXSS 剔除 N 条 Skyline 不支持选择器规则」
+```
+
+> why: 跨端同源码：组件 slot 模型下 Web 真浏览器子选择器可用、Skyline WXSS 编译器拒绝通配——同规则双端语义不同，编译期按端剔除是唯一零运行时方案（Skyline 无对等能力时组件走自降级普通容器，G-22.2 朴素但正确）
 
 ### `style/scoped-css`
 

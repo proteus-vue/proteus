@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 79 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 80 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (42)
 
@@ -945,7 +945,7 @@ after:  onLoad: const provides = (getApp().__proteusProvides || (getApp().__prot
 
 > why: The mini program component tree has no provide/inject mechanism (decision #117): the global registry bridge lets a page pass values down to components (including deeply nested ones); MVP is value snapshots (no reactive linkage) + a global registry (duplicate keys are overwritten by the later write); page-level isolation/reactive linkage come later
 
-## Style transforms (8)
+## Style transforms (9)
 
 ### `style/px-to-rpx`
 
@@ -1026,6 +1026,19 @@ after:  警告：WXSS 检测到 Skyline 不支持的属性：position: fixed（�
 ```
 
 > why: The self-developed Skyline rendering engine does not support these layout properties; a compile-time warning lets developers know in advance (anti-black-box principle: warnings are visible and countable)
+
+### `style/skyline-selector`
+
+**Rule-level removal of Skyline-incompatible selectors (#495b)**
+
+Drops selector rules containing the wildcard * or residual :deep from WXSS output (Web degradation rules like .x-fallback > * and :deep(*) compiling to .x * — the WeChat Skyline WXSS compiler rejects the * token with a WXSS compile error); the Web build keeps them (they work in real browsers); removal logs a warning plus trace
+
+```
+before: .p-grid-fallback > * { min-width: ... }
+after:  该规则不出现在 wxss 产物 + 告警「WXSS 剔除 N 条 Skyline 不支持选择器规则」
+```
+
+> why: Same source across targets: child selectors work in real browsers under the component slot model, while the Skyline WXSS compiler rejects wildcards — the same rule has different semantics per target, so removing it per target at compile time is the only zero-runtime approach (components degrade to plain containers on Skyline, G-22.2 plain-but-correct)
 
 ### `style/scoped-css`
 

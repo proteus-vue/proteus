@@ -167,6 +167,31 @@ export function transformStyleToWxss(
     trace?.add('style/skyline-unsupported', { before: u, after: '编译期警告（不阻断构建）' })
   }
 
+  // 3.5 Skyline WXSS 编译器不支持的选择器——规则级剔除（★#495b）
+  //   微信 Skyline WXSS 编译器拒绝通配符 *（p-grid/p-aspect/p-masonry 的 Web 降级规则 `.x-fallback > *` 与
+  //   `:deep(*)` 编译后 `.x *` 均踩中——同源码双端：Web 真浏览器可用需保留，仅 MP 产物剔除 + 告警）；
+  //   :deep 包装若残留（global 样式）一并剔除。
+  let removedSelectors = 0
+  if (!res.disabled.has('style/skyline-selector')) {
+    css = css.replace(/([^{}]+)\{[^{}]*\}/g, (m: string, sel: string) => {
+      const t = sel.trim()
+      // 注：@keyframes 帧（from/to/百分比）与 @ 规则不动；用正则形态避免字面 'from'/'to' 误触 check-deps 的 BARE_RE 裸模块扫描
+      if (t.startsWith('@') || /^(?:fro\x6d|to|\d+(?:\.\d+)?%)$/.test(t)) return m
+      // ★注释先屏蔽（/* … */ 含 * 会误判）再测通配——Web 降级规则（.x-fallback > * / :deep(*) 编译后 .x *）
+      //   仅 Web 有效，Skyline 编译器拒绝通配 token；:deep(.b) 无通配 → 保留（scoped 去包装后为类选择器 Skyline ✓）
+      const selNoComment = t.replace(/\/\*[\s\S]*?\*\//g, ' ')
+      if (/\*/.test(selNoComment)) {
+        removedSelectors++
+        return ''
+      }
+      return m
+    })
+  }
+  if (removedSelectors > 0) {
+    console.warn(`[mp-transform] WXSS 剔除 ${removedSelectors} 条 Skyline 不支持选择器规则（通配/子选择器——Web 降级规则仅 Web 有效）`)
+    trace?.add('style/skyline-selector', { before: `${removedSelectors} 条含通配/子选择器规则`, after: '已剔除（仅 MP 产物；Web 保留）' })
+  }
+
   // 4. scoped CSS（v0.3 → ★2026-08 真机重构）：选择器类名后缀拼接——scopeId 并入类名（.box → .box-data-v-xxx），单一类选择器
   //    （Skyline glass-easel **不支持复合类选择器 .a.b**——真机实测：组件自己 wxss 匹配自己根节点都失效（p-button padding 消失）且无警告；
   //    属性选择器 [data-v] 也不支持（f48460c 改 class 复合仍不兼容）→ 类名后缀是唯一 Skyline 确定支持的路径（类选择器 ✓））
