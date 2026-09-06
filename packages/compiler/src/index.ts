@@ -101,6 +101,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     transitions: tplResult.transitions,
     storeBindings: tplResult.storeBindings,
     templateRefs: tplResult.templateRefs,
+    // ★#500 :style 动态标识符绑定 → 同名 computed 派生值自动序列化字符串
+    styleBindings: tplResult.styleBindings,
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
     trace: scriptTrace,

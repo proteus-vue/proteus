@@ -266,6 +266,8 @@ interface SerializeContext {
   storeBindings: Set<string>
   /** ★#494 模板表达式中的裸标识符（与 script runtimeInits 求交 → 快照 setData——实例属性模板读不到） */
   templateRefs: Set<string>
+  /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
+  styleBindings: Set<string>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
   /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
@@ -853,8 +855,11 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           ctx.trace?.add('directive/v-bind-class', { line: node.loc.start.line, before: `:class="${exp}"`, after: bindingClass })
         } else if (arg === 'style') {
           if (ctx.disabled.has('directive/v-bind-style')) break
-          attrs.push(`style="${formatStyleBinding(exp)}"`)
-          ctx.trace?.add('directive/v-bind-style', { line: node.loc.start.line, before: `:style="${exp}"`, after: formatStyleBinding(exp) })
+          const styleOut = formatStyleBinding(exp)
+          // ★#500：动态标识符绑定（非字面量对象/非模板拼接）→ 收集给 script 侧（同名 computed 派生对象自动序列化字符串）
+          if (/^[A-Za-z_$][\w$]*$/.test(exp.trim())) ctx.styleBindings.add(exp.trim())
+          attrs.push(`style="${styleOut}"`)
+          ctx.trace?.add('directive/v-bind-style', { line: node.loc.start.line, before: `:style="${exp}"`, after: styleOut })
         } else if (arg === 'key') {
           if (ctx.disabled.has('directive/v-bind-key')) break
           if (/^[\w$]+$/.test(exp)) attrs.push(`wx:key="${exp}"`)
@@ -1022,6 +1027,8 @@ export function transformTemplateToWxml(
     transitions: [],
     storeBindings: new Set<string>(),
     templateRefs: new Set<string>(),
+    // ★#500 :style 动态标识符绑定收集
+    styleBindings: new Set<string>(),
     // ★#496 柔性语义编译：p-grid 收集
     semanticGrids: [],
     isPage: opts.isComponent !== true,
@@ -1084,6 +1091,8 @@ export function transformTemplateToWxml(
     // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
     storeBindings: [...ctx.storeBindings],
     templateRefs: [...ctx.templateRefs],
+    // ★#500 :style 动态标识符绑定（script 侧同名 computed 派生值自动序列化）
+    styleBindings: [...ctx.styleBindings],
     semanticGrids: ctx.semanticGrids,
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,

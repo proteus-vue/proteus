@@ -1,16 +1,18 @@
 <!-- src/components/p-aspect/index.vue —— 纵横比容器（★Fluid System S2：内容驱动宽高比盒）
      只声明「宽/高比」：Web = CSS aspect-ratio（Chrome 88+ 原生）；不支持 → padding-top hack 降级
-     （height:0 + paddingTop:1/ratio% + 子项绝对定位——全端 CSS2 技术「朴素但正确」，铁律 G-22.2）
-     MP：aspect-ratio Skyline 部分支持；逻辑层无 CSS.supports → 假设支持（渲染端自决） -->
+     （height:0 + paddingTop:1/ratio% + 内层绝对定位铺满——★#500 内层包装替代 > * 全局规则：
+       MP 产物通配/子选择器被剔除（style/skyline-selector），slot 子元素必须由组件内层节点承载定位）
+     MP：逻辑层无 CSS.supports → Skyline 构建期宏判不支持（padding hack）；WebView 假设支持（渲染端自决） -->
 <template>
   <div class="p-aspect" :class="aspectClass" :style="aspectStyle">
-    <slot />
+    <div class="p-aspect-inner" :style="innerStyle">
+      <slot />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CSSProperties } from 'vue'
 import { detectFluidCapabilities } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
@@ -21,39 +23,41 @@ const props = defineProps({
   maxWidth: { type: Number, default: 0 },
 })
 
-// ★能力检测（组件初始化一次）：MP 无 CSS.supports → aspectRatio 恒真（渲染端自决）
+// ★能力检测（组件初始化一次）：MP 无 CSS.supports → Skyline 构建期宏判不支持（padding hack）；WebView/SSR 假设支持
 const aspectOk = detectFluidCapabilities().aspectRatio
 
 const aspectClass = computed(() => (aspectOk ? '' : 'p-aspect-fallback'))
 
-// ★断言放方法体内（MP 编译器剥离方法体 as；CSSProperties 字面量类型）
+// ★断言放方法体内（MP 编译器剥离方法体 as；返回对象 → :style 绑定由编译器自动序列化字符串 #500）
 const aspectStyle = computed(() => {
   const ratio = props.ratio > 0 ? props.ratio : 16 / 9
-  const style: CSSProperties = {
+  const style: Record<string, string> = {
     position: 'relative',
     width: '100%',
   }
   if (props.maxWidth > 0) style.maxWidth = props.maxWidth + 'px'
   if (aspectOk) {
-    // 原生：aspect-ratio 保持盒比例（子项随内容自然填充）
+    // 原生：aspect-ratio 保持盒比例（内层撑满即可）
     style.aspectRatio = ratio + ' / 1'
-    return style as CSSProperties
+    return style
   }
-  // ★降级：padding-top hack——height 0 + paddingTop = 1/ratio%，子项绝对定位铺满（<style global> 规则）
+  // ★降级：padding-top hack——height 0 + paddingTop = 1/ratio%（内层绝对定位铺满）
   style.height = '0px'
   style.paddingTop = 100 / ratio + '%'
-  return style as CSSProperties
+  return style
+})
+
+// ★#500 内层节点：承载 slot 子元素——原生模式撑满；降级模式绝对定位铺满（替代 > * 全局规则，MP 无选择器可达 slot 内容）
+const innerStyle = computed(() => {
+  if (aspectOk) {
+    return { width: '100%', height: '100%' } as Record<string, string>
+  }
+  return {
+    position: 'absolute',
+    top: '0px',
+    left: '0px',
+    width: '100%',
+    height: '100%',
+  } as Record<string, string>
 })
 </script>
-
-<style global>
-/* ★S2 降级：aspect-ratio 不支持时 padding-top hack——slot 子元素无法从组件内联样式触达，
-     全局规则按容器类切换生效（子项绝对定位铺满容器内容区） */
-.p-aspect-fallback > * {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-</style>

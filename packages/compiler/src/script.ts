@@ -1167,12 +1167,31 @@ function renameWatchParamsToNo(body: string, params: string[]): string {
   return out
 }
 
-/** computed 派生补丁：写入 ref 时把依赖它的 computed 重算表达式合并进同一 setData（v0.3 读路径） */
-function computedPatch(writtenRef: string, computeds: Record<string, ComputedInfo>, propsVar?: string): string {
-  const patches = Object.entries(computeds)
-    .filter(([, c]) => c.deps.includes(writtenRef))
-    .map(([n, c]) => `${n}: ${rewritePropsInExpr(c.expr, propsVar)}`)
-  return patches.length ? `, ${patches.join(', ')}` : ''
+/** ★#500 computed 派生补丁条目：BFS 闭包（依赖链：写 c.value 的 computed 也随依赖 ref 写入重算——p-sidebar toggle 后 rootClass/layoutStyle 链式刷新）；expr 已做 propsVar 归一；chained = 存在补丁项依赖另一补丁项 */
+function computedPatchEntries(
+  writtenRef: string,
+  computeds: Record<string, ComputedInfo>,
+  propsVar?: string,
+): { entries: Array<{ n: string; expr: string }>; chained: boolean } {
+  const names: string[] = []
+  let level = [writtenRef]
+  const seen = new Set([writtenRef])
+  while (level.length) {
+    const next: string[] = []
+    for (const [n, c] of Object.entries(computeds)) {
+      if (seen.has(n)) continue
+      if (c.deps.some((d) => level.includes(d))) {
+        next.push(n)
+        seen.add(n)
+      }
+    }
+    for (const n of next) names.push(n)
+    level = next
+  }
+  const entries = names.map((n) => ({ n, expr: rewritePropsInExpr(computeds[n].expr, propsVar) }))
+  const entryNames = new Set(names)
+  const chained = entries.some((e) => computeds[e.n].deps.some((d) => d !== writtenRef && entryNames.has(d)))
+  return { entries, chained }
 }
 
 /** onLoad 初始化行：一次性计算全部 computed 派生字段（首次渲染前 data 就绪） */
@@ -1316,11 +1335,24 @@ function immediateWatchLine(watches: Record<string, WatchInfo>, propsVar?: strin
 /**
  * setData 写入模板：有派生补丁 / watch 联动 / 前置写时先更新 this.data.name 再 setData——
  * 保证同一 setData 对象里的派生表达式读到该 ref 的**新值**（setData 异步批量，对象内求值用当前 this.data）
+ * ★#500 computed 链（补丁项依赖另一补丁项）：单对象内求值读不到前驱新值 → 先顺序赋值 this.data 再统一 setData（无链保持既有产物形态）
  */
-function writeSetData(name: string, valueExpr: string, patch: string, hasWatch = false, forceWrite = false): string {
-  const needWrite = forceWrite || Boolean(patch) || hasWatch
+function writeSetData(
+  name: string,
+  valueExpr: string,
+  patch: { entries: Array<{ n: string; expr: string }>; chained: boolean },
+  hasWatch = false,
+  forceWrite = false,
+): string {
+  const needWrite = forceWrite || patch.entries.length > 0 || hasWatch
   if (!needWrite) return `this.setData({ ${name}: ${valueExpr} })`
-  return `this.data.${name} = ${valueExpr}; this.setData({ ${name}: this.data.${name}${patch} })`
+  if (!patch.chained) {
+    const map = patch.entries.map((e) => `${e.n}: ${e.expr}`).join(', ')
+    return `this.data.${name} = ${valueExpr}; this.setData({ ${name}: this.data.${name}${map ? `, ${map}` : ''} })`
+  }
+  const assigns = [`this.data.${name} = ${valueExpr}`, ...patch.entries.map((e) => `this.data.${e.n} = ${e.expr}`)]
+  const map = [name, ...patch.entries.map((e) => e.n)].map((n) => `${n}: this.data.${n}`).join(', ')
+  return `${assigns.join('; ')}; this.setData({ ${map} })`
 }
 
 /** watch 联动调用：setData 后追加分号 + proteusWatch<id>（单源回调标量 / 多源回调数组，旧值由调用方在写入前保存） */
@@ -1536,7 +1568,7 @@ function rewriteRefAccess(
   for (const name of refNames) {
     const prop = `this.data.${name}`
     const line = lineAt(body, Math.max(0, body.indexOf(name)))
-    const patch = computedPatch(name, computeds, propsVar)
+    const patch = computedPatchEntries(name, computeds, propsVar)
     // 命中依赖此 ref 的 watch（多源/函数源 deps 匹配；MVP 每 ref 至多一个 watch）
     const w = Object.values(watches).find((ww) => ww.deps.includes(name) && !skip('script/watch-to-methods'))
     const oldSave = w
@@ -1552,7 +1584,7 @@ function rewriteRefAccess(
     // 自增/自减（含前置 ++name.value / --name.value：前置需先写 this.data，表达式值 = 新值）
     if (!skip('script/ref-incdec')) {
       if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
-        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch || w ? ' + 派生/联动' : ''} })` })
+        trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch.entries.length || w ? ' + 派生/联动' : ''} })` })
       }
       out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
       out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
@@ -1563,7 +1595,7 @@ function rewriteRefAccess(
     // ★B5 修复：RHS 支持多行表达式（箭头函数体/对象字面量含换行）——旧捕获 [^;\n]+ 遇多行箭头只截到首行
     if (!skip('script/ref-write')) {
       if (new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`).test(out)) {
-        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch || w ? ' + 派生/联动' : ''} })` })
+        trace?.add('script/ref-write', { line, before: `${name}.value = expr`, after: `this.setData({ ${name}: expr${patch.entries.length || w ? ' + 派生/联动' : ''} })` })
       }
       // 平衡扫描 RHS：花括号/括号/方括号配对 + 字符串跳过，深度 0 遇 ; 或行尾结束
       const assignRe = new RegExp(`\\b${name}\\.value\\s*=\\s*(?!=)`)
@@ -1832,6 +1864,15 @@ export function transformScriptToPage(
     : extractData(source, warnings, trace)
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
+  // ★#500 :style 绑定的 computed 派生对象自动序列化（MP 双渲染器 style 属性仅收字符串——对象绑定静默失效，WebView 亦然）
+  const styleBindingNames = new Set(extra.styleBindings ?? [])
+  let needsStyleStringHelper = false
+  for (const sn of styleBindingNames) {
+    const c = computeds[sn]
+    if (!c) continue
+    c.expr = `__proteusStyleString(${c.expr})`
+    needsStyleStringHelper = true
+  }
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace, !disabled.has('script/watch-props'))
   // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
@@ -1919,7 +1960,31 @@ export function transformScriptToPage(
   lines.push('// AUTO-GENERATED by vite-plugin-mp-transform.ts. DO NOT EDIT.', '')
   // ★module-plan B0：跨模块引用 require 语句（共享模块产物，页面/组件顶部声明）
   if (requireLines.length) lines.push(...requireLines, '')
+  // ★#500 编译期注入：style 属性仅收字符串（MP 双渲染器对象绑定静默失效）——派生对象自动序列化
+  if (needsStyleStringHelper) {
+    lines.push(
+      '// ★#500 编译期注入：style 属性仅收字符串（MP 双渲染器对象绑定静默失效）——派生对象自动序列化',
+      'function __proteusStyleString(o) {',
+      '  if (typeof o === "string") return o',
+      '  const parts = []',
+      '  const keys = o ? Object.keys(o) : []',
+      '  for (let i = 0; i < keys.length; i++) {',
+      '    const k = keys[i]',
+      '    const v = o[k]',
+      '    if (v === undefined || v === null || v === "") continue',
+      "    parts.push(k.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase() }) + ': ' + v)",
+      '  }',
+      "  return parts.join('; ')",
+      '}',
+      '',
+    )
+  }
   lines.push(extra.isComponent ? 'Component({' : 'Page({')
+  if (extra.isComponent) {
+    // ★#500 微信自定义组件默认单插槽——具名插槽（<slot name>）需显式开启 multipleSlots，否则按名路由失效（glass-easel 组件框架层，双渲染器一致）
+    lines.push('  options: { multipleSlots: true },')
+    trace?.add('component/multi-slot', { before: 'Component({ ... })（默认单插槽）', after: 'options.multipleSlots = true（具名插槽按名路由）' })
+  }
 
   // ★真机修复：方法类行收集到 methodLines——组件模式包进 methods: {}（微信组件方法必须在此，顶层不识别）；
   //   页面模式方法保留顶层（Page 支持）；sourcemap 映射独立维护，最后合并（methods 块插入后重定位）
@@ -2109,7 +2174,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     .filter((i) => templateRefNames.has(i.name) && !appConfigBindings.some((b) => b.name === i.name))
     .map((i) => i.name)
   const runtimeInitSnapshotLine = runtimeInitSnapshots.length
-    ? `this.setData({ ${runtimeInitSnapshots.map((n) => `${n}: this.${n}`).join(', ')} })`
+    ? `this.setData({ ${runtimeInitSnapshots.map((n) => `${n}: ${styleBindingNames.has(n) ? `__proteusStyleString(this.${n})` : `this.${n}`}`).join(', ')} })`
     : ''
   if (runtimeInitSnapshots.length) {
     trace?.add('script/runtime-init-snapshot', {

@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 82 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 83 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（44）
+## 模板转换（45）
 
 ### `tag/div-to-view`
 
@@ -286,16 +286,16 @@ after:  <text class="proteus-p {{((activeClass)?(activeClass)+' ':'')+(on?'activ
 
 ### `directive/v-bind-style`
 
-**:style 绑定（对象语法 → prop:{{expr}} 拼接）**
+**:style 绑定（对象语法 → prop:{{expr}} 拼接；动态标识符派生对象自动序列化字符串 ★#500）**
 
-:style="{ color: c }" → style="color:{{c}}"；属性名 camelCase → kebab-case
+:style="{ color: c }" → style="color:{{c}}"；属性名 camelCase → kebab-case；★#500 动态标识符绑定（:style="boxStyle"，boxStyle 为 computed）→ 模板侧收集，script 侧同名 computed 派生值自动包 __proteusStyleString() 序列化为字符串（MP 双渲染器 style 属性仅收字符串——对象绑定静默失效，WebView 亦然，#496b 记录修正）
 
 ```
-before: :style="{ backgroundColor: bg }"
-after:  style="background-color:{{bg}}"
+before: :style="{ backgroundColor: bg }" / :style="boxStyle"（computed 返回对象）
+after:  style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleString(...) 字符串
 ```
 
-> why: 小程序 style 属性支持内联插值，逐属性编译可静态验证
+> why: 小程序 style 属性支持内联插值，逐属性编译可静态验证；★#500 用户 WebView 实测修正：MP 产物 style 绑定对象在双渲染器均静默失效（p-split gap/p-aspect 比例全死）——动态派生对象必须在数据侧序列化为字符串，编译器自动注入避免每个组件手写 styleToString
 
 ### `directive/v-bind-key`
 
@@ -557,6 +557,19 @@ after:  <p-view root-class="data-v-abc123 box" />（组件根节点 class="… {
 ```
 
 > why: Vue 的 class 继承语义（父组件 class 作用于子组件根节点）在微信无原生对等——组件 host 节点 class 合并后，页面 wxss 无法可靠作用（真机实测：p-view 外层容器 box 样式不生效，即使 styleIsolation: apply-shared）——编译期等价：class 经 root-class 属性传入组件，根节点绑定 {{rootClass}}，配合 apply-shared 让页面样式作用组件根节点
+
+### `component/multi-slot`
+
+**具名插槽开启 multipleSlots：Component options（微信默认单插槽）**
+
+微信自定义组件默认仅支持单个插槽（glass-easel 组件框架层，双渲染器一致）——不开启 multipleSlots 时 <slot name> 与内容 slot="name" 标记不按名路由，全部落入单一默认槽；编译器对所有 Component 产物注入 options: { multipleSlots: true }（单插槽组件不受影响）
+
+```
+before: Component({ properties… })
+after:  Component({ options: { multipleSlots: true }, properties… })
+```
+
+> why: Vue 具名插槽语义（#498 fluid-system-demo 真机实证：p-zone 选槽错乱 / p-sidebar nav 泄漏进默认插槽）依赖微信 multipleSlots 机制——不开启则具名插槽内容错位，双渲染器一致
 
 ### `layout/auto-flex-row`
 

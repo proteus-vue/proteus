@@ -1343,3 +1343,58 @@ function add() {
     expect(js).not.toContain('this.acc')
   })
 })
+
+describe('★#500：具名插槽 multipleSlots / :style 派生对象自动序列化 / computed 链 patch', () => {
+  it('Component 产物注入 options.multipleSlots（微信默认单插槽——具名插槽不开启则不按名路由）', () => {
+    const { js } = transformScriptToPage('const props = defineProps({ label: String })', opts, { isComponent: true })
+    expect(js).toContain('options: { multipleSlots: true },')
+    expect(js).toContain('Component({')
+  })
+
+  it('Page 产物不注入 multipleSlots', () => {
+    const { js } = transformScriptToPage('const c = ref(0)', opts, { isComponent: false })
+    expect(js).not.toContain('multipleSlots')
+  })
+
+  it(':style 绑定 computed 派生对象 → 编译器自动 __proteusStyleString 序列化（双渲染器 style 仅收字符串）', () => {
+    const r = compileVueSfc(
+      '<script setup lang="ts">import { computed } from "vue"\nconst boxStyle = computed(() => ({ display: "flex", flexDirection: "column", gap: "12px" }))</script>\n<template><div :style="boxStyle">x</div></template>',
+      { filename: 'pages/style-demo.vue' },
+    )
+    expect(r.js).toContain('function __proteusStyleString(o) {')
+    expect(r.js).toContain('boxStyle: __proteusStyleString(')
+    expect(r.wxml).toContain('style="{{boxStyle}}"')
+  })
+
+  it(':style 字面量对象仍走编译期拼接（不受序列化影响）', () => {
+    const r = compileVueSfc(
+      '<script setup lang="ts">import { ref } from "vue"\nconst width = ref(100)</script>\n<template><div :style="{ width: width + \'px\' }">x</div></template>',
+      { filename: 'pages/style-literal.vue' },
+    )
+    expect(r.wxml).toContain("style=\"width:{{width + 'px'}}\"")
+    expect(r.js).not.toContain('__proteusStyleString')
+  })
+
+  it('computed 链 patch：写 isWide → mode/label 链式重算（顺序赋值 this.data 再 setData）', () => {
+    const src = `const isWide = ref(false)
+const mode = computed(() => isWide.value ? 'a' : 'b')
+const label = computed(() => mode.value === 'a' ? '宽' : '窄')
+function setWide() {
+  isWide.value = true
+}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain(
+      'this.data.isWide = true; this.data.mode = this.data.isWide ? \'a\' : \'b\'; this.data.label = this.data.mode === \'a\' ? \'宽\' : \'窄\'; this.setData({ isWide: this.data.isWide, mode: this.data.mode, label: this.data.label })',
+    )
+  })
+
+  it('computed 无链 patch 保持既有产物形态（内联合并）', () => {
+    const src = `const count = ref(0)
+const double = computed(() => count.value * 2)
+function setN() {
+  count.value = 5
+}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).toContain('this.data.count = 5; this.setData({ count: this.data.count, double: this.data.count * 2 })')
+  })
+})

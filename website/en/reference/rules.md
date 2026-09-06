@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 82 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 83 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (44)
+## Template transforms (45)
 
 ### `tag/div-to-view`
 
@@ -286,16 +286,16 @@ after:  <text class="proteus-p {{((activeClass)?(activeClass)+' ':'')+(on?'activ
 
 ### `directive/v-bind-style`
 
-**:style binding (object syntax → prop:{{expr}} concatenation)**
+**:style binding (object syntax → prop:{{expr}} concatenation; dynamic identifier-derived objects auto-serialized to strings ★#500)**
 
-:style="{ color: c }" → style="color:{{c}}"; camelCase property names → kebab-case
+:style="{ color: c }" → style="color:{{c}}"; camelCase property names → kebab-case; ★#500 dynamic identifier bindings (:style="boxStyle" where boxStyle is a computed) are collected on the template side, and on the script side the same-named computed's derived value is automatically wrapped with __proteusStyleString() and serialized to a string (the MP style attribute accepts strings only on both renderers — object bindings fail silently, WebView included; corrects the #496b record)
 
 ```
-before: :style="{ backgroundColor: bg }"
-after:  style="background-color:{{bg}}"
+before: :style="{ backgroundColor: bg }" / :style="boxStyle"（computed 返回对象）
+after:  style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleString(...) 字符串
 ```
 
-> why: the Mini Program style attribute supports inline interpolation, so compiling per-property can be statically validated
+> why: the Mini Program style attribute supports inline interpolation, so compiling per-property can be statically validated; ★#500 user correction from WebView testing: object style bindings in MP output fail silently on BOTH renderers (p-split gap / p-aspect ratios all dead) — dynamically derived objects must be serialized to strings at the data level, and the compiler injects this automatically instead of hand-writing styleToString in every component
 
 ### `directive/v-bind-key`
 
@@ -557,6 +557,19 @@ after:  <p-view root-class="data-v-abc123 box" />（组件根节点 class="… {
 ```
 
 > why: Vue class-inheritance semantics (the parent class applies to the child root node) has no native equivalent in WeChat — once the class is merged onto the component host node, page wxss cannot reliably apply (real-device test: the box style on the p-view outer container does not take effect, even with styleIsolation: apply-shared) — the compile-time equivalent: the class enters the component via the root-class attribute, the root node binds {{rootClass}}, and together with apply-shared page styles reach the component root node
+
+### `component/multi-slot`
+
+**named slots enable multipleSlots in Component options (WeChat defaults to a single slot)**
+
+WeChat custom components support only a single slot by default (glass-easel component-framework layer, consistent across both renderers) — without multipleSlots, <slot name> and content slot="name" markers are not routed by name and everything falls into the single default slot; the compiler injects options: { multipleSlots: true } into every Component output (single-slot components are unaffected)
+
+```
+before: Component({ properties… })
+after:  Component({ options: { multipleSlots: true }, properties… })
+```
+
+> why: Vue named-slot semantics (#498 real-device evidence on fluid-system-demo: p-zone picked the wrong slot / p-sidebar nav leaked into the default slot) rely on the WeChat multipleSlots mechanism — without it named content misroutes, identically on both renderers
 
 ### `layout/auto-flex-row`
 

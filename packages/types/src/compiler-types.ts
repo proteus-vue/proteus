@@ -104,6 +104,8 @@ export interface TemplateTransformResult {
   storeBindings?: string[]
   /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位变量/求解段） */
   semanticGrids?: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
+  /** ★#500 :style 绑定的动态标识符（computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
+  styleBindings?: string[]
   /** ★15-page-scroll-container：页面已自动包滚动容器（compileVueSfc 据此注入高度样式） */
   pageScrollWrapped?: boolean
   warnings: string[]
@@ -127,6 +129,8 @@ export interface ScriptTransformOptions {
   semanticGrids?: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
   /** ★#494 模板表达式裸标识符（与 runtimeInits 求交 → 快照 setData——实例属性模板读不到） */
   templateRefs?: string[]
+  /** ★#500 :style 绑定的动态标识符（同名 computed 派生值自动 styleToString 化——MP 双渲染器 style 仅收字符串） */
+  styleBindings?: string[]
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
   moduleImports?: Array<{ source: string; requirePath: string }>
   trace?: TransformTrace

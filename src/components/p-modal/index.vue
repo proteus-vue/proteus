@@ -131,14 +131,21 @@ const panelStyle = computed(() => {
   if (form.value === 'popover' && props.anchor) {
     const anchored = computeAnchorStyle(props.anchor)
     if (anchored.position) {
-      return anchored as CSSProperties
+      return anchored as Record<string, string>
     }
   }
   const base = resolveAdaptiveFormStyle(form.value)
   for (const k of Object.keys(base)) style[k] = base[k]
   // ★G-09 协同：sheet 底部自动避让 Home Indicator（开发者无需手动 env()）
-  if (form.value === 'sheet') style.paddingBottom = 'env(safe-area-inset-bottom, 0px)'
-  return style as CSSProperties
+  if (form.value === 'sheet') {
+    style.paddingBottom = 'env(safe-area-inset-bottom, 0px)'
+    // ★#500 sheet 形态关键样式内联（动态 :class 在 MP 无法 scoped 后缀——面板定位不依赖类名，双端一致）
+    style.width = '100%'
+    style.maxWidth = 'none'
+    style.borderRadius = '12px 12px 0px 0px'
+    style.maxHeight = '80vh'
+  }
+  return style as Record<string, string>
 })
 </script>
 
