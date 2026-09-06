@@ -11,6 +11,17 @@ const compile = (src: string, name = 'mi.vue', moduleImports?: Array<{ source: s
 }
 
 describe('module-plan B0：跨模块引用（import → require）', () => {
+  it('★#497 批 2 AST：跨行 named import（文本行级无法覆盖）→ require + type import 剥离', () => {
+    const r = compile(
+      '<script setup>\nimport {\n  formatTime,\n  pad2,\n} from "../utils/format"\nimport type { Foo } from "../utils/format"\nconst now = ref("x")\n</script>',
+      'pages/a.vue',
+      [{ source: '../utils/format', requirePath: '../utils/format.js' }],
+    )
+    expect(r.js).toContain("const { formatTime, pad2 } = require('../utils/format.js')")
+    // type import：纯类型剥离（不产生 require）——同源只保留值导入一条
+    expect(r.js.match(/require\('\.\.\/utils\/format\.js'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(1)
+  })
+
   it('named import → require 语句（产物顶部）+ 不再警告', () => {
     const r = compile(
       '<script setup>\nimport { formatTime, pad2 } from "../utils/format"\nconst now = ref("x")\n</script>',

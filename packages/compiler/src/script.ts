@@ -93,6 +93,33 @@ function extractProvideInject(
 } {
   const provides: Array<{ key: string; expr: string; line: number }> = []
   const injects: Array<{ name: string; key: string; def?: string; line: number }> = []
+  // ★#497 批 2：AST 顶层（provide(...) 调用 / const x = inject(...)）
+  const body = topLevelAst(source)
+  if (body) {
+    for (const st of body) {
+      if (st.type === 'ExpressionStatement' && st.expression?.type === 'CallExpression' && st.expression.callee?.name === 'provide') {
+        const args = st.expression.arguments
+        const keyNode = args[0]
+        const valNode = args[1]
+        if (!keyNode || keyNode.type !== 'StringLiteral' || !valNode) continue
+        provides.push({ key: keyNode.value, expr: source.slice(valNode.start, valNode.end), line: st.loc.start.line })
+        continue
+      }
+      if (st.type === 'VariableDeclaration' && st.kind === 'const') {
+        for (const d of st.declarations) {
+          if (!d.id || d.id.type !== 'Identifier' || !d.init || d.init.type !== 'CallExpression' || d.init.callee?.name !== 'inject') continue
+          const args = d.init.arguments
+          const keyNode = args[0]
+          if (!keyNode || keyNode.type !== 'StringLiteral') continue
+          const inj: { name: string; key: string; def?: string; line: number } = { name: d.id.name, key: keyNode.value, line: st.loc.start.line }
+          if (args[1]) inj.def = source.slice(args[1].start, args[1].end)
+          injects.push(inj)
+        }
+      }
+    }
+    return { provides, injects }
+  }
+  // —— 文本回退路径 ——
   // provide("key", expr)（顶层调用，单行）
   const pRe = /^provide\s*\(\s*['"]([^'"]+)['"]\s*,\s*([^)]+)\)/gm
   let m: RegExpExecArray | null
@@ -205,6 +232,40 @@ interface ImportSpec {
   typeOnly: boolean
 }
 function extractImports(source: string): ImportSpec[] {
+  // ★#497 批 2：AST 解析 import（跨行 named/type/别名天然正确；side-effect 无 specifier）
+  const body = topLevelAst(source)
+  if (body) {
+    const out: ImportSpec[] = []
+    for (const st of body) {
+      if (st.type !== 'ImportDeclaration') continue
+      const src = st.source.value as string
+      const line = st.loc.start.line
+      if (st.importKind === 'type') {
+        out.push({ source: src, kind: 'named', names: [], line, typeOnly: true })
+        continue
+      }
+      const defaults: string[] = []
+      const named: string[] = []
+      const ns: string[] = []
+      for (const sp of st.specifiers) {
+        if (sp.type === 'ImportDefaultSpecifier') defaults.push(sp.local.name)
+        else if (sp.type === 'ImportNamespaceSpecifier') ns.push(sp.local.name)
+        else named.push(sp.imported?.name ?? sp.imported?.value ?? sp.local.name) // as 别名：现语义用原导入名（剥 as）
+      }
+      if (ns.length) out.push({ source: src, kind: 'namespace', names: ns, line, typeOnly: false })
+      if (defaults.length && named.length) {
+        out.push({ source: src, kind: 'default', names: defaults, line, typeOnly: false })
+        out.push({ source: src, kind: 'named', names: named, line, typeOnly: false })
+      } else if (defaults.length) out.push({ source: src, kind: 'default', names: defaults, line, typeOnly: false })
+      else if (named.length) out.push({ source: src, kind: 'named', names: named, line, typeOnly: false })
+      else if (ns.length) {
+        // default + * as 组合：default 已在 ns 分支外独立 push（上述 ns 先 push）；补 default
+        if (defaults.length) out.push({ source: src, kind: 'default', names: defaults, line, typeOnly: false })
+      } else if (!st.specifiers.length) out.push({ source: src, kind: 'side', names: [], line, typeOnly: false })
+    }
+    return out
+  }
+  // —— 文本回退路径 ——
   const out: ImportSpec[] = []
   const lines = source.split('\n')
   for (let i = 0; i < lines.length; i++) {
@@ -1227,6 +1288,58 @@ function rewriteRefAccess(
 function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>, warnings: string[] = []): { onReady?: string; onUnload?: string; onLoad?: string } {
   const out: { onReady?: string; onUnload?: string; onLoad?: string } = {}
   if (disabled?.has('script/lifecycle-map')) return out
+  // ★#497 批 2：AST 顶层回调发现（onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad）+ 未映射 onXxx 警告（全树扫描）
+  const body = topLevelAst(source)
+  if (body) {
+    const hooks = [
+      { name: 'onMounted', key: 'onReady' as const },
+      { name: 'onUnmounted', key: 'onUnload' as const },
+      { name: 'onLoad', key: 'onLoad' as const },
+    ]
+    const mapped = new Set(['onMounted', 'onUnmounted', 'onLoad'])
+    // 递归全树：未映射 onXxx（回调形态）警告 + 顶层回调体提取
+    const seen = new Map<string, { args: unknown[]; line: number }[]>()
+    const walk = (node: { type: string; callee?: { name?: string }; arguments?: unknown[]; body?: unknown[]; expression?: unknown }): void => {
+      if (!node || typeof node.type !== 'string') return
+      if (node.type === 'CallExpression') {
+        const name = node.callee && 'name' in node.callee ? node.callee.name : ''
+        if (typeof name === 'string' && /^on[A-Z]/.test(name)) {
+          const args = (node.arguments ?? []) as Array<{ type?: string }>
+          const cb = args[0]
+          if (cb && (cb.type === 'ArrowFunctionExpression' || cb.type === 'FunctionExpression')) {
+            const arr = seen.get(name) ?? []
+            arr.push({ args, line: (node as { loc?: { start?: { line?: number } } }).loc?.start?.line ?? 0 })
+            seen.set(name, arr)
+          }
+        }
+      }
+      for (const k of Object.keys(node)) {
+        const v = (node as Record<string, unknown>)[k]
+        if (Array.isArray(v)) for (const c of v) walk(c as never)
+        else if (v && typeof v === 'object') walk(v as never)
+      }
+    }
+    for (const st of body) walk(st)
+    for (const name of seen.keys()) {
+      if (!mapped.has(name)) {
+        warnings.push(`未映射的生命周期钩子 ${name}() 已剥离（小程序无对等钩子；Web 端保留原生语义）——如组件内需要降级说明请注释标注`)
+      }
+    }
+    for (const h of hooks) {
+      const hits = seen.get(h.name)
+      if (!hits?.length) continue
+      const first = hits[0]
+      const cb = (first.args[0] as { body?: { start?: number } }).body
+      if (!cb || typeof cb.start !== 'number') continue
+      const inner = extractBracedBody(source, cb.start)
+      if (inner !== null) {
+        out[h.key] = inner
+        trace?.add('script/lifecycle-map', { line: first.line, before: `${h.name}()`, after: h.key })
+      }
+    }
+    return out
+  }
+  // —— 文本回退路径 ——
   const hooks = [
     { re: /onMounted\s*\(/g, key: 'onReady' as const },
     { re: /onUnmounted\s*\(/g, key: 'onUnload' as const },
