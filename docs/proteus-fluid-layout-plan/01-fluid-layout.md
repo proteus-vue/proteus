@@ -111,8 +111,9 @@ h1 {
 
 | 端 | 实现方式 |
 |----|---------|
-| Web | CSS Grid：`grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))` |
-| Skyline | CSS Grid（Skyline 支持） |
+| Web | CSS Grid：`grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))`（真实 Vue 组件直跑） |
+| Skyline | ★#496 语义编译 flex 档位：编译器把 minColWidth/gap 求解为断点档，产物 = 容器 flex(row/wrap/gap) + 子项档位容器（px flex-basis，运行时 SelectorQuery 实测容器宽求列）——Skyline 自研引擎**不支持 CSS Grid**（2026-09 实测），原「Skyline CSS Grid（Skyline 支持）」为错误承诺，以本行为准 |
+| WebView（mp） | 同 Skyline flex 档位产物（与 Skyline 一致，避免双形态） |
 | iOS | `UICollectionViewCompositionalLayout` + `NSCollectionLayoutDimension.estimated` |
 | Android | `StaggeredGridLayoutManager` / `GridLayoutManager` + SpanSizeLookup |
 | 鸿蒙 | `Grid` 组件 + `columnsTemplate` |
@@ -199,10 +200,10 @@ export default defineAppConfig({
 
 | 语义 | CSS 矩阵档位 | 说明 |
 |------|-------------|------|
-| `p-fluid` → `clamp()` | ✅ 直映射（Web/Skyline） | App 端由原生布局引擎求解 |
-| `p-grid` → `grid-template-columns` | ✅ 直映射 | iOS/Android/鸿蒙用原生网格 |
-| `p-stack` → `flex-wrap` | ✅ 直映射 | 五端均支持 |
-| `p-fit` → `min-content` | 🔶 语义封装 | 部分端需 polyfill |
+| `p-fluid` → `clamp()` | ✅ Web/WebView 直映射 | ★Skyline 无 `clamp()` 长度函数（官方表）——Skyline 忽略该声明走类样式兑底；calc 变体生成待后续批次 |
+| `p-grid` → `grid-template-columns` | ✅ Web 直映射 | Skyline/WebView：★#496 编译器 flex 档位（断点求解 + px basis）；iOS/Android/鸿蒙用原生网格 |
+| `p-stack` → `flex-wrap` | ✅ 直映射 | 五端均支持（flex 各端一致——保持运行时组件，不迁语义编译） |
+| `p-fit` → `min-content` | 🔶 语义封装 | Skyline 无 `fit-content`/块级 inline-block → 上限 maxRatio 生效、内容宽退化为块宽（诚实降级）；iOS/Android 原生 |
 
 ---
 
@@ -210,7 +211,8 @@ export default defineAppConfig({
 
 ### 5.1 容器尺寸监听（仅 App 端需要）
 
-Web/Skyline：`clamp()` / `vw` **CSS 原生响应式**，零 JS 开销。
+Web：`clamp()` / `vw` CSS 原生响应式，零 JS 开销。
+Skyline/WebView（★#496 实测）：**无 `clamp()`、无 CSS Grid、style 仅字符串、小数 px 取整不定**——p-grid 走编译器 flex 档位（SelectQuery 实测容器宽 → 整 px basis，onWindowResize 重算）；clamp 类流式字号 Skyline 暂忽略走类兑底。
 App 端：需要监听容器尺寸变化 → 重算布局。
 
 ```typescript
@@ -239,10 +241,10 @@ JSI → 原生布局引擎
 
 | 语义 | Web | Skyline | iOS | Android | 鸿蒙 |
 |------|-----|---------|-----|---------|------|
-| `p-fluid` | `clamp()` + `vw` | `clamp()` + `vw` | Auto Layout 约束 | ConstraintLayout | `LayoutConstraint` |
-| `p-grid` | CSS Grid | CSS Grid | `UICollectionView` | `RecyclerView` | `Grid` |
+| `p-fluid` | `clamp()` + `vw` | calc 变体待做（clamp 不支持，当前类兑底） | Auto Layout 约束 | ConstraintLayout | `LayoutConstraint` |
+| `p-grid` | CSS Grid | ★#496 flex 档位（编译器断点 + px basis + resize 重算） | `UICollectionView` | `RecyclerView` | `Grid` |
 | `p-stack` | Flexbox wrap | Flexbox wrap | `UIStackView` | `FlexboxLayout` | `Flex` |
-| `p-fit` | `min-content` | `min-content` | `systemLayoutSizeFitting` | `wrap_content` | `wrapContent` |
+| `p-fit` | `min-content` | 上限 maxRatio 生效（无 fit-content，内容宽→块宽降级） | `systemLayoutSizeFitting` | `wrap_content` | `wrapContent` |
 
 ---
 

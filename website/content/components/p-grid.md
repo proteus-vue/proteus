@@ -40,9 +40,11 @@ order: 5
 
 - 只声明「每列最小宽度」+ 间距，列数自动：Web = CSS Grid repeat(auto-fill, minmax(minColWidth, 1fr))
 - （320px→1 / 768px→4 / 1440px→8 列；calcColumns 纯算法见 compiler/fluid-layout.ts）
-- 双端同源码：div → view（编译期映射）；MP webview 渲染支持 grid，Skyline 降级为普通容器
-- ★G-22.2 降级铁律「朴素但正确」：Web 端 CSS.supports 探测 grid 不支持 → flex-wrap 模拟 auto-fit
-- （MP 逻辑层无 CSS.supports → 假设支持 → 恒 grid 模式，渲染端自决降级）
+- ★#496 退役状态：MP 产物已走语义编译（编译器在产物层展开为 flex 档位 + px basis 档位容器，见
+- docs/proteus-fluid-layout-plan/06-semantic-compile.md）——本组件 **Web-only**（真实 Vue CSS grid
+- auto-fill 为 Web 最优解）+ 兼容别名保留；WebView/Skyline 不再经本组件。
+- ★G-22.2 降级铁律「朴素但正确」：Web 端 CSS.supports 探测 grid 不支持 → flex-wrap 降级（slot 子项
+- 宽度由调用方 class 自决——子选择器机制跨端不通用，Skyline WXSS 拒绝通配，#495b 剔除）
 
 ## 用法
 
