@@ -38,6 +38,42 @@ collect(path.join(ROOT, 'src/components'), files) // proteus 内置组件（fram
 
 let pass = 0
 const failures = []
+/** ★#503 ES5 tripwire：产物中出现 ?? / ?.（ES2020）→ 微信预览上传期 SyntaxError（node --check 认识该语法抓不到）。
+ *  简化扫描（跳过字符串/模板/注释/正则），报告首处行号 */
+function scanEs5Unsafe(js) {
+  let i = 0
+  let line = 1
+  let prevSig = ''
+  while (i < js.length) {
+    const c = js[i]
+    const next = js[i + 1]
+    if (c === '\n') { line++; i++; continue }
+    if (c === '/' && next === '/') { const e = js.indexOf('\n', i); i = e < 0 ? js.length : e; continue }
+    if (c === '/' && next === '*') { const e = js.indexOf('*/', i + 2); i = e < 0 ? js.length : e + 2; continue }
+    if (c === '\'' || c === '"') { let j = i + 1; while (j < js.length) { if (js[j] === '\\') { j += 2; continue } if (js[j] === c) break; j++ } i = j + 1; continue }
+    if (c === '`') {
+      let depth = 0
+      let j = i + 1
+      while (j < js.length) {
+        const cc = js[j]
+        if (cc === '\\') { j += 2; continue }
+        if (depth === 0 && cc === '`') break
+        if (cc === '$' && js[j + 1] === '{') depth++
+        else if (depth > 0 && cc === '}') depth--
+        else if (depth === 0 && (cc === '\'' || cc === '"')) { let k = j + 1; while (k < js.length) { if (js[k] === '\\') { k += 2; continue } if (js[k] === cc) break; k++ } j = k }
+        else if (depth === 0 && cc === '`') { j-- }
+        j++
+      }
+      i = j + 1
+      continue
+    }
+    if (c === '?' && next === '?') return { kind: '??', line, col: i }
+    if (c === '?' && next === '.' && !/[0-9]/.test(js[i + 2] ?? '')) return { kind: '?.', line, col: i }
+    if (!/\s/.test(c)) prevSig = c
+    i++
+  }
+  return null
+}
 for (const f of files.sort()) {
   const src = fs.readFileSync(f, 'utf8')
   const hasScript = /<script[^>]*>/.test(src)
@@ -49,6 +85,11 @@ for (const f of files.sort()) {
     fs.mkdirSync(path.dirname(tmp), { recursive: true })
     fs.writeFileSync(tmp, r.js ?? '')
     execFileSync('node', ['--check', tmp], { stdio: 'pipe' })
+    const bad = scanEs5Unsafe(r.js ?? '')
+    if (bad) {
+      failures.push(`${path.relative(ROOT, f)}:${bad.line}  ES5-unsafe 「${bad.kind}」残留（微信预览编译不解析）`)
+      continue
+    }
     pass++
   } catch (e) {
     const msg = String(e.stderr || e.message || e)

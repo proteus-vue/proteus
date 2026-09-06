@@ -24,7 +24,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts"
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/contracts --external:@babel/core --external:@babel/plugin-transform-nullish-coalescing-operator --external:@babel/plugin-transform-optional-chaining --external:@babel/plugin-transform-logical-assignment-operators --external:@babel/plugin-transform-object-rest-spread"
   },
   "peerDependencies": {
     "@vue/compiler-dom": "^3.4",
@@ -32,10 +32,16 @@
   },
   "devDependencies": {
     "@babel/parser": "7.29.8",
+    "@types/babel__core": "^7.20.5",
     "@vue/compiler-dom": "^3.5.42",
     "@vue/compiler-sfc": "^3.5.42"
   },
   "dependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/plugin-transform-logical-assignment-operators": "^7.29.0",
+    "@babel/plugin-transform-nullish-coalescing-operator": "^7.29.0",
+    "@babel/plugin-transform-object-rest-spread": "^7.29.0",
+    "@babel/plugin-transform-optional-chaining": "^7.29.0",
     "@proteus-vue/contracts": "0.1.0",
     "@proteus-vue/types": "0.1.0"
   }

@@ -7,6 +7,8 @@ import { lineAt } from './trace'
 import { resolveOverrides } from './overrides'
 // ★#497 动作二批 1：结构发现 AST 化（@babel/parser——尾注释/TS 类型/泛型/返回注解天然不污染；解析失败回退旧文本路径，永不比现状差）
 import { parse as babelParse } from '@babel/parser'
+// ★#504 语言层转译交还 babel（方法论：不自研成熟工具链，只自建语义层）
+import { transpileMpSafe } from './es5'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let astCacheSrc = ''
@@ -714,6 +716,7 @@ function extractWatch(
         }
         const getter = source.slice(g.start, g.end).trim()
         deps = [...new Set(Array.from(getter.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+        // ★#503 es5-safe：getter 表达式内 ?? / ?. → 显式 null 检查（进产物 watchTail/immediate）
         expr = getter.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
       } else {
         // 其余形态（props.x 成员在 script/watch-props 禁用时 / 方法调用源等）：按文本源名走缺失校验（旧文本单 ref 语义）
@@ -867,7 +870,7 @@ function extractComputedFromInit(
       `computed ${name} 依赖 ${missing.join('/')} 未在顶层 data 中定义（${name} 的依赖必须是本文件顶层 ref/reactive）`,
     )
   }
-  // 转写：x.value → this.data.x（与 ref 读取重写一致）
+  // 转写：x.value → this.data.x（与 ref 读取重写一致）；★#503 es5-safe（?? / ?. → 显式 null 检查）
   const expr = rawExpr.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
   return { name, deps, expr, setter }
 }
@@ -903,6 +906,7 @@ function handleConstToData(
   if (isCall && value === undefined && !/^inject\s*\(/.test(raw.trim())) {
     // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
     // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
+    // ★#503 es5-safe：运行时初始化调用串内 ?? / ?. → 显式 null 检查（原样进产物 onLoad/attached）
     out.runtimeInits.push({ name, call: raw.trim() })
     trace?.add('script/runtime-init', {
       line,
@@ -2438,5 +2442,10 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   const jsFinal = js.replace(/\bwx\.pageScrollTo\s*\(/g, 'this.proteusPageScrollTo(')
   // sourcemap v3（VLQ）：产物每行 → 源码行（无映射行为空 segment）
   const sourcemap = buildSourceMap(jsFinal, extra.file, source, lineMappings)
-  return { js: jsFinal, warnings, sourcemap }
+  // ★#504 语言层转译交还 babel：?? / ?. / ??= ||= &&= / 对象展开 → ES5 安全产物（微信编译器不解析 ES2020，
+  //   预览上传期 SyntaxError——devtools-open-api-demo 真机实证）；inputSourceMap 组合保 sourcemap 指向 Vue 源
+  const es5 = transpileMpSafe(jsFinal, sourcemap)
+  if (es5.error) warnings.push(`es5-safe 转译失败（产物保留原样，预览可能报语法错误）：${es5.error}`)
+  if (es5.changed) trace?.add('script/es5-safe', { before: '?? / ?. / ??= / ||= / &&= / 对象展开残留', after: 'babel 表达式级转译（ES2020→ES5 安全产物，方法论：不自研成熟工具链）' })
+  return { js: es5.code, warnings, sourcemap: es5.sourcemap ?? sourcemap }
 }

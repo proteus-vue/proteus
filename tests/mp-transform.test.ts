@@ -1432,4 +1432,20 @@ function setN() {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('不是简单方法引用'))
     expect(wxml).toContain('bindtap="modalWidth = w"')
   })
+
+  it('★#504 es5-safe（babel）：开发者方法体 ?? / ?. → babel ES5 转译（微信预览编译不解析 ES2020，devtools-open-api-demo 真机根因）', () => {
+    const src = `const count = ref(0)\nfunction onEvent(e) {\n  const v = e?.detail?.value ?? 0\n  count.value = v\n}`
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).not.toMatch(/\?\./)
+    expect(js).not.toContain('??')
+    expect(js).toContain('void 0')
+  })
+
+  it('★#504 es5-safe（babel）：真实 demo 页全量编译零 ?? / ?. 残留（devtools-open-api-demo）', () => {
+    const src = fs.readFileSync(path.resolve('examples/pages/devtools-open-api-demo.vue'), 'utf-8')
+    const r = compileVueSfc(src, { file: 'pages/devtools-open-api-demo.vue' })
+    expect(r.js).not.toMatch(/\?\?/)
+    expect(r.js).not.toMatch(/\?\./)
+    expect(r.js).toContain('String((_p$source = p.source) !== null && _p$source !== void 0 ? _p$source :')
+  })
 })
