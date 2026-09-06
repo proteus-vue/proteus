@@ -268,8 +268,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
-  /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位变量与求解段；index = basis 变量序） */
-  semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultBasis: number }>
+  /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位 style 变量与求解段；index = style 变量序） */
+  semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
 }
 
 /**
@@ -447,18 +447,27 @@ function attrValue(name: string, value: string): AttributeNode {
 
 /**
  * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
- * basis 运行时由 script 档位段 setData（pgridBasis{index}），子项 flex-basis 共享变量一次刷新
+ * ★#496b 子项宽度用 calc 百分比（相对 flex 容器实际宽——页面容器 padding 下 px 基准溢出换行成单列空档）：
+ *   flex-basis: calc((100% - gap×(cols-1)px) / cols)——cols 运行时求（档位），百分比自动适配容器内容宽。
+ */
+function buildGridItemStyle(cols: number, gap: number): string {
+  return `flex-grow:0; flex-shrink:0; flex-basis: calc((100% - ${(cols - 1) * gap}px) / ${cols})`
+}
+
+/**
+ * p-grid → 容器 flex（静态 gap）+ 直接子元素逐包档位容器（子 v-for/v-if 迁移到包装层）
+ * basis 运行时由 script 档位段 setData（pgridStyle{index}），子项共享 style 变量一次刷新
  */
 function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: { minColWidth: number; gap: number }): string {
   const index = ctx.semanticGrids.length
   const designWidth = ctx.fluidLayout?.designWidth ?? 375
   const cols = calcColumns(designWidth, grid.minColWidth, grid.gap)
-  const defaultBasis = Math.round(((designWidth - (cols - 1) * grid.gap) / cols) * 10) / 10
-  ctx.semanticGrids.push({ minColWidth: grid.minColWidth, gap: grid.gap, index, defaultBasis })
+  const defaultStyle = buildGridItemStyle(cols, grid.gap)
+  ctx.semanticGrids.push({ minColWidth: grid.minColWidth, gap: grid.gap, index, defaultStyle })
   ctx.trace?.add('fluid/semantic-grid', {
     line: node.loc.start.line,
     before: `<p-grid min-col-width="${grid.minColWidth}" gap="${grid.gap}">…</p-grid>`,
-    after: `容器 flex(row/wrap/gap ${grid.gap}px) + 子项 p-grid-item（basis {{pgridBasis${index}}}px——档位运行时求解，#496）`,
+    after: `容器 flex(row/wrap/gap ${grid.gap}px) + 子项 p-grid-item（style 绑 {{pgridStyle${index}}}——calc 百分比档位，#496b）`,
   })
 
   const semanticProp = (dirName: string): boolean => dirName === 'min-col-width' || dirName === 'minColWidth' || dirName === 'gap'
@@ -524,8 +533,11 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
       rest.push(p)
     }
     const wrapProps: unknown[] = [...loop, attrValue('class', childClass ? `p-grid-item ${childClass}` : 'p-grid-item')]
-    if (childStyle) wrapProps.push(attrValue('style', `${childStyle}; flex:0 0 {{pgridBasis${index}}}px`))
-    else wrapProps.push(attrValue('style', `flex:0 0 {{pgridBasis${index}}}px`))
+    if (childStyle) {
+      // 子项静态 style 与档位 style 变量冲突（同 index 多子异 style 无法合入变量）——警告剥离（MVP；给子项用 class 代替 style）
+      ctx.warnings.push(`p-grid 子项静态 style 已剥离（档位 style 由 {{pgridStyle${index}}} 变量承载，语义编译 #496）——请改用 class`)
+    }
+    wrapProps.push(attrValue('style', `{{pgridStyle${index}}}`))
     wrapProps.push(...rest)
     const item = makeSemanticElement(el, 'view', wrapProps, [{ ...el, props: [...rest] } as unknown as ElementNode])
     children.push(item)

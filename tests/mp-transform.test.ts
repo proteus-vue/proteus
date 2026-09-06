@@ -997,8 +997,9 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     )
     expect(wxml).not.toMatch(/<p-grid/)
     expect(wxml).toMatch(/style="display:flex;flex-wrap:wrap;gap:12px"/)
-    expect(wxml).toMatch(/class="p-grid-item[^"]* cell[^"]*" style="flex:0 0 \{\{pgridBasis0\}\}px"/)
-    expect(js).toContain('pgridBasis0: 181.5')
+    expect(wxml).toMatch(/class="p-grid-item[^"]* cell[^"]*" style="\{\{pgridStyle0\}\}"/)
+    expect(js).toContain('pgridStyle0')
+    expect(js).toContain('flex-basis: calc((100% - ')
     expect(js).toContain('wx.getWindowInfo')
   })
 

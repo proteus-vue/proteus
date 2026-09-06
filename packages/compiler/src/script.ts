@@ -824,16 +824,15 @@ function watchTail(w: WatchInfo | undefined): string {
 }
 
 /**
- * ★#496 柔性语义编译：p-grid 档位求解段（注入 onLoad/attached 最前）——小程序窗口宽固定
- * （wx.getWindowInfo 读一次），calcColumns 内联（运行期不可 import 编译器工具）；各组按
- * minColWidth/gap 求列数 → basis px，一次 setData。Web 不走本通道（真实 Vue 组件 CSS grid）。
+ * ★#496b 柔性语义编译：p-grid 档位求解段（注入 onLoad/attached 最前）——小程序窗口宽固定
+ * （wx.getWindowInfo 读一次），calcColumns 内联；组数按 minColWidth/gap 求列 → calc 百分比 style 串一次 setData。
  */
 function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; index: number }>): string {
   if (!grids.length) return ''
   const perGrid = grids
     .map((g) => {
       const cols = `Math.max(1, Math.floor((__pw + ${g.gap}) / (${g.minColWidth} + ${g.gap})))`
-      return `__sb[${JSON.stringify(`pgridBasis${g.index}`)}] = Math.round(((__pw - (${cols} - 1) * ${g.gap}) / ${cols}) * 10) / 10`
+      return `__sb[${JSON.stringify(`pgridStyle${g.index}`)}] = ${JSON.stringify('flex-grow:0; flex-shrink:0; flex-basis: calc((100% - ')} + (${cols} - 1) * ${g.gap} + ${JSON.stringify('px) / ')} + ${cols}`
     })
     .join('\n')
   return [
@@ -1344,9 +1343,9 @@ export function transformScriptToPage(
 
   const semanticGrids = extra.semanticGrids ?? []
   const semanticGridInit = semanticGridInitCode(semanticGrids) // ★#496 档位求解段（init 最前）
-  // ★#496 p-grid 默认 basis（首帧/无 wx 时用设计稿档——防渲染 0 宽）
+  // ★#496b p-grid 默认 style（首帧/无 wx 时设计稿档——calc 百分比串）
   if (!disabled.has('fluid/semantic-grid') && semanticGrids.length) {
-    for (const g of semanticGrids) dataExtra[`pgridBasis${g.index}`] = g.defaultBasis
+    for (const g of semanticGrids) dataExtra[`pgridStyle${g.index}`] = g.defaultStyle
   }
 
   const dataEntries = [...Object.entries(data), ...Object.entries(dataExtra)]
