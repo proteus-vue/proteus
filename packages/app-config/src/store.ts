@@ -10,6 +10,26 @@ import { validateAppConfig } from './validate'
 
 let configRef: Ref<AppConfig> | null = null
 
+// ★#494 配置变更监听器（MP 页面绑定桥的数据源——Pinia $subscribe 的对位物）：
+//   编译器将 useAppConfig()/useFeatureFlag() 桥接为快照 setData + onAppConfigChange 订阅刷新
+const listeners: Array<(config: AppConfig) => void> = []
+
+/**
+ * 订阅配置变更（★#494）：setConfig/initAppConfig 更新时触发；返回取消订阅函数。
+ * 不依赖 Vue 实例/watch——MP 页面 onLoad 内可直接使用。
+ */
+export function onAppConfigChange(cb: (config: AppConfig) => void): () => void {
+  listeners.push(cb)
+  return () => {
+    const i = listeners.indexOf(cb)
+    if (i >= 0) listeners.splice(i, 1)
+  }
+}
+
+function notifyListeners(config: AppConfig): void {
+  for (let i = 0; i < listeners.length; i++) listeners[i](config)
+}
+
 /** 初始化配置存储（应用启动时调用一次；重复调用 = 覆盖默认 + 保留已合并层） */
 export function initAppConfig(defaults: AppConfig): void {
   if (configRef === null) {
@@ -17,6 +37,7 @@ export function initAppConfig(defaults: AppConfig): void {
   } else {
     configRef.value = defaults
   }
+  notifyListeners(configRef.value)
 }
 
 /** 当前配置（未初始化时抛错——应用启动必须 init） */
@@ -48,6 +69,7 @@ export function setConfig(input: SetConfigInput): { ok: boolean; errors: string[
     return { ok: false, errors: errors.map((e) => e.message) }
   }
   ref_.value = merged
+  notifyListeners(merged)
   return { ok: true, errors: [] }
 }
 

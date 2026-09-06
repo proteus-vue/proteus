@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 76 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 78 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（42）
 
@@ -558,7 +558,7 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 
 > why: Skyline 组件支持表 progress 暂不考虑（真机实测不渲染）——降级自定义结构双端一致 + Skyline 可用（16-progress-skyline-degrade）
 
-## 脚本转换（23）
+## 脚本转换（25）
 
 ### `script/const-to-data`
 
@@ -652,6 +652,32 @@ after:  onLoad: this.store = usePlayerStore()（data 不含 store）
 ```
 
 > why: 旧行为：函数调用初始化静态求值失败 → data.x = undefined 且调用丢失（静默坏）；B0 配合跨模块 require 让 useStore()/createX() 真实执行
+
+### `script/top-level-calls`
+
+**顶层副作用语句保留（★#494：零缩进调用注入 onLoad 最前）**
+
+零缩进顶层表达式语句（initAppConfig(x) / registerCapability(x) 等调用形态）按源码顺序注入 onLoad 最前（先于 runtimeInits——初始化先于读取）；此前这类语句被静默丢弃，initAppConfig 不执行则后续 getConfig 必炸（config-demo 白屏根因之二）
+
+```
+before: initAppConfig(appConfig)
+after:  onLoad 最前：initAppConfig(appConfig)
+```
+
+> why: MP 页面无模块级作用域，<script setup> 顶层副作用必须显式注入生命周期才有执行时机——静默丢弃违背反黑盒红线
+
+### `script/app-config-binding`
+
+**app-config 模板绑定桥（★#494：快照 setData + onAppConfigChange 订阅）**
+
+const x = useAppConfig() / useFeatureFlag(k) 编译为命令式等价（getConfig() / getFeatureFlag(getConfig(), k)——无 Vue 实例要求）+ onLoad 快照 setData + onAppConfigChange 订阅刷新 + onUnload 退订；原样发射会在 onLoad 撞 useAppConfig 的 getCurrentInstance() 守卫（config-demo 白屏根因之一），且实例属性进不了 data、模板 {{ appConf.x }} 落空
+
+```
+before: const appConf = useAppConfig()
+after:  onLoad: this.setData({ appConf: getConfig() }) + onAppConfigChange(() => setData 刷新)
+```
+
+> why: Pinia store 桥（$subscribe → setData）的对位物——app-config 无 $subscribe，新增 onAppConfigChange 订阅 API 作为桥的数据源；web 端 useAppConfig 响应式语义不变（守卫保留）
 
 ### `script/store-binding`
 

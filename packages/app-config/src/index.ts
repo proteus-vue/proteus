@@ -6,7 +6,7 @@ export { validateAppConfig, validateAndApply } from './validate'
 export type { ConfigError, ValidateResult } from './validate'
 
 // ★G-35 M2：运行时 API（02-runtime-api.md）
-export { initAppConfig, getConfig, setConfig, useAppConfig, useFeatureFlag, getFeatureFlag } from './store'
+export { initAppConfig, getConfig, setConfig, useAppConfig, useFeatureFlag, getFeatureFlag, onAppConfigChange } from './store'
 export type { SetConfigInput, FeatureFlagResult } from './store'
 export { defineAppConfig } from './define'
 

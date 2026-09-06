@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 76 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 78 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (42)
 
@@ -558,7 +558,7 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 
 > why: progress is not currently on the Skyline component-support list (real-device tests show it does not render) — the downgraded custom structure keeps both ends consistent and is usable on Skyline (16-progress-skyline-degrade)
 
-## Script transforms (23)
+## Script transforms (25)
 
 ### `script/const-to-data`
 
@@ -652,6 +652,32 @@ after:  onLoad: this.store = usePlayerStore()（data 不含 store）
 ```
 
 > why: Old behavior: when static evaluation of a function-call initializer failed, data.x became undefined and the call was silently dropped; with cross-module require, B0 makes useStore()/createX() actually execute
+
+### `script/top-level-calls`
+
+**Top-level side-effect statements preserved (#494: zero-indent calls injected at the start of onLoad)**
+
+Zero-indent top-level expression statements (initAppConfig(x) / registerCapability(x) and other call forms) are injected at the start of onLoad in source order (before runtimeInits — initialization before reads); previously these statements were silently dropped — without initAppConfig running, a later getConfig was guaranteed to throw (second root cause of the config-demo white screen)
+
+```
+before: initAppConfig(appConfig)
+after:  onLoad 最前：initAppConfig(appConfig)
+```
+
+> why: MP pages have no module-level scope, so top-level side effects in <script setup> must be explicitly injected into a lifecycle to ever run — silently dropping them violates the anti-black-box red line
+
+### `script/app-config-binding`
+
+**app-config template binding bridge (#494: snapshot setData + onAppConfigChange subscription)**
+
+const x = useAppConfig() / useFeatureFlag(k) compile to imperative equivalents (getConfig() / getFeatureFlag(getConfig(), k) — no Vue instance required) + onLoad snapshot setData + onAppConfigChange subscription refresh + onUnload unsubscribe; emitting them verbatim hit the getCurrentInstance() guard of useAppConfig inside onLoad (first root cause of the config-demo white screen), and instance properties never reach data so template {{ appConf.x }} rendered empty
+
+```
+before: const appConf = useAppConfig()
+after:  onLoad: this.setData({ appConf: getConfig() }) + onAppConfigChange(() => setData 刷新)
+```
+
+> why: The counterpart of the Pinia store bridge ($subscribe → setData) — app-config has no $subscribe, so the new onAppConfigChange subscription API serves as the bridge data source; web useAppConfig reactive semantics unchanged (guard retained)
 
 ### `script/store-binding`
 
