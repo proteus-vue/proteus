@@ -6,6 +6,38 @@ import type { TransformTrace } from './trace'
 import { lineAt } from './trace'
 import { resolveOverrides } from './overrides'
 
+/**
+ * ★#497 剥行尾注释（双斜杠 与 块注释）：括号/引号感知——深度 0（顶层）才剥，字符串/括号内不误伤。
+ * const 初始值提取后调用：ref(0) 后接行尾注释 → ref(0)（静态求值正则需右括号收尾；带注释误判 runtimeInit → 产物裸调 ref）
+ */
+function stripTrailingComment(code: string): string {
+  let depth = 0
+  let inS: string | null = null
+  for (let i = 0; i < code.length - 1; i++) {
+    const ch = code[i]
+    if (inS) {
+      if (ch === '\\') {
+        i++
+        continue
+      }
+      if (ch === inS) inS = null
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inS = ch
+      continue
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth = Math.max(0, depth - 1)
+    else if (ch === '/' && code[i + 1] === '/' && depth === 0) return code.slice(0, i).trimEnd()
+    else if (ch === '/' && code[i + 1] === '*' && depth === 0) {
+      const end = code.indexOf('*/', i + 2)
+      return code.slice(0, end >= 0 ? end : i).trimEnd()
+    }
+  }
+  return code
+}
+
 /** 构建期求值开发者自身源码中的字面量表达式（与 babel 插件同信任域） */
 function evalLiteral(expr: string): unknown {
   try {
@@ -496,8 +528,10 @@ function extractData(
     const lineStart = source.lastIndexOf('\n', m.index) + 1
     if (source.slice(lineStart, m.index) !== '') continue
     const name = m[1]
-    const init = extractInitializer(source, m.index + m[0].length)
-    if (!init) continue
+    const initRaw = extractInitializer(source, m.index + m[0].length)
+    if (!initRaw) continue
+    // ★#497 剥行尾注释（const x = ref(0) // 说明——带尾注释时静态求值正则要求 ) 收尾不匹配 → 误判 runtimeInit → 产物裸调 ref）
+    const init = stripTrailingComment(initRaw)
     const line = lineAt(source, m.index)
     // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
     if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\()/.test(init)) continue

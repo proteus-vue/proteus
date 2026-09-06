@@ -1011,6 +1011,18 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     expect(warnings.join('\n')).toContain('回退运行时组件')
   })
 
+  it('★#497 带行尾注释的 ref 初始化 → 静态 data（不误判 runtimeInit 裸调 ref）', () => {
+    const r = compileVueSfc('<script setup>const modalWidth = ref(0) // 0 = 跟随视口；>0 = 预设宽度验证</script>\n<template><view>{{ modalWidth }}</view></template>', { filename: 'pages/comment-ref.vue' })
+    expect(r.js).toContain('modalWidth: 0')
+    expect(r.js).not.toContain('this.modalWidth = ref(')
+    expect(r.js).not.toContain('runtime 初始化')
+  })
+
+  it('★#497 字符串内含双斜杠不误剥（ref(http 链接) 形态注释在括号外才剥）', () => {
+    const r = compileVueSfc("<script setup>const url = ref('http://a/b')</script>\n<template><view>{{ url }}</view></template>", { filename: 'pages/str.vue' })
+    expect(r.js).not.toContain('this.url = ref(')
+  })
+
   it('页面模式：组件标签 class → root-class 属性（scope class + 用户 class + :class 绑定合并）', () => {
     const { wxml } = compileVueSfc(
       '<script setup>const on = ref(true)</script>\n<template><p-view class="box" :class="{ on: on }">x</p-view></template>\n<style scoped>.box { padding: 8px; }</style>',
