@@ -80,7 +80,10 @@ export async function runDevProgrammatic(opts: DevOptions, root = process.cwd())
   const config = (await loadProjectConfig(cfgFile)) as Record<string, unknown>
   const mode = opts.target === 'skyline' ? 'mp-weixin' : 'web'
   const resolved = await resolveProteusViteConfig({ root, command: 'serve', mode }, config as never)
-  if (resolved.needsGenRoutes) runGenRoutes({ config: config as never, root })
+  if (resolved.needsGenRoutes) {
+    // ★#495 同 build.ts：frameworkComponentsDir 传 gen-routes（组件目录/component.json 一致性）
+    runGenRoutes({ config: config as never, root, frameworkComponentsDir: (config as Record<string, unknown>).frameworkComponentsDir as string | undefined })
+  }
   const vite = await importViteFrom(root)
   const server = await vite.createServer(resolved.config)
   await server.listen()

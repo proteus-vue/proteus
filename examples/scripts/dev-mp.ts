@@ -80,7 +80,8 @@ async function rebuild(): Promise<void> {
   try {
     console.log('[dev-mp] gen-routes（路由表/app.json/page.json）...')
     const config = (await loadProjectConfig(path.join(ROOT, 'proteus.config.ts'))) as Record<string, unknown>
-    runGenRoutes({ config: config as never, root: ROOT })
+    // ★#495 传 frameworkComponentsDir（config 相对 ROOT）——否则页面 usingComponents/组件 component.json 缺失，p-* 组件整块不渲染
+    runGenRoutes({ config: config as never, root: ROOT, frameworkComponentsDir: config.frameworkComponentsDir as string | undefined })
     console.log('[dev-mp] vite build（页面/组件/共享模块 → dist/mp-weixin）...')
     const resolved = await resolveProteusViteConfig({ root: ROOT, command: 'build', mode: 'mp-weixin' }, config as never)
     const { build } = await import('vite')

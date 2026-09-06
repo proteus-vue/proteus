@@ -54,7 +54,11 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
   const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
   // ★框架内置组件目录（@proteus-vue/components 未拆包时的定位方式，决策 #115）
-  const FW_COMPONENTS = options.frameworkComponentsDir ?? path.join(ROOT, 'src', 'components')
+  // ★#495 修复：config.frameworkComponentsDir（相对 root）此前从未被 CLI 传入 → FW_COMPONENTS 落空
+  //  （examples 的组件目录是仓库根 ../src/components）→ 页面 usingComponents 与组件 component.json 双双缺失 →
+  //  WXML 未注册组件整块不渲染（柔性布局等全部 p-* 组件在 MP 失效，Web 正常）。相对路径基于 ROOT 归一。
+  const fwDir = options.frameworkComponentsDir
+  const FW_COMPONENTS = fwDir && path.isAbsolute(fwDir) ? fwDir : path.resolve(ROOT, fwDir ?? path.join('src', 'components'))
   // ★module-plan B5：模块契约（分包依赖 / preloadRule）——模块名→chunk 映射 + 分包→模块映射
   const moduleChunks = new Map<string, string>() // 模块名 → chunk（缺省 = 模块名）
   for (const mc of options.moduleConfigs ?? []) moduleChunks.set(mc.name, mc.chunk ?? mc.name)

@@ -86,7 +86,8 @@ export async function runTargetedBuildProgrammatic(
     console.log(`[proteus] build --target ${t}（${mode}）`)
     const resolved = await resolveProteusViteConfig({ root, command: 'build', mode }, config as never)
     if (resolved.needsGenRoutes) {
-      runGenRoutes({ config: config as never, root })
+      // ★#495 传 frameworkComponentsDir（config 相对 root）——否则 gen-routes 组件目录落空 → usingComponents/component.json 缺失
+      runGenRoutes({ config: config as never, root, frameworkComponentsDir: (config as Record<string, unknown>).frameworkComponentsDir as string | undefined })
     }
     // 类型检查（工程有 vue-tsc 才跑；与模板 build:web/build:mp 的 vue-tsc --noEmit 对齐）
     if (hasVueTsc(root)) {
