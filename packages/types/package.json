@@ -1,7 +1,7 @@
 {
   "name": "@proteus-vue/types",
   "version": "0.1.0",
-  "description": "Proteus \u6846\u67b6\u7ea7\u5171\u4eab\u7c7b\u578b\u5355\u4e00\u6765\u6e90\uff08types-plan B3\uff09\uff1aPlatform/PlatformTarget + ProteusConfig JSON Schema",
+  "description": "Proteus 框架级共享类型单一来源（types-plan B3）：Platform/PlatformTarget + ProteusConfig JSON Schema",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -14,67 +14,83 @@
     },
     "./mp": {
       "types": "./dist/mp/index.d.ts",
-      "import": "./dist/mp/index.js"
+      "import": "./dist/mp/index.js",
+      "default": "./dist/mp/index.js"
     },
     "./mp/component-schema": {
       "types": "./dist/mp/component-schema.d.ts",
-      "import": "./dist/mp/component-schema.js"
+      "import": "./dist/mp/component-schema.js",
+      "default": "./dist/mp/component-schema.js"
     },
     "./mp/sdk-version": {
       "types": "./dist/mp/sdk-version.d.ts",
-      "import": "./dist/mp/sdk-version.js"
+      "import": "./dist/mp/sdk-version.js",
+      "default": "./dist/mp/sdk-version.js"
     },
     "./mp/official-typings": {
       "types": "./dist/mp/official-typings.d.ts",
-      "import": "./dist/mp/official-typings.js"
+      "import": "./dist/mp/official-typings.js",
+      "default": "./dist/mp/official-typings.js"
     },
     "./index-shared": {
       "types": "./dist/index-shared.d.ts",
-      "import": "./dist/index-shared.js"
+      "import": "./dist/index-shared.js",
+      "default": "./dist/index-shared.js"
     },
     "./compiler-types": {
       "types": "./dist/compiler-types.d.ts",
-      "import": "./dist/compiler-types.js"
+      "import": "./dist/compiler-types.js",
+      "default": "./dist/compiler-types.js"
     },
     "./capabilities": {
       "types": "./dist/capabilities.d.ts",
-      "import": "./dist/capabilities.js"
+      "import": "./dist/capabilities.js",
+      "default": "./dist/capabilities.js"
     },
     "./router-types": {
       "types": "./dist/router-types.d.ts",
-      "import": "./dist/router-types.js"
+      "import": "./dist/router-types.js",
+      "default": "./dist/router-types.js"
     },
     "./api-types": {
       "types": "./dist/api-types.d.ts",
-      "import": "./dist/api-types.js"
+      "import": "./dist/api-types.js",
+      "default": "./dist/api-types.js"
     },
     "./platform-api": {
       "types": "./dist/platform-api.d.ts",
-      "import": "./dist/platform-api.js"
+      "import": "./dist/platform-api.js",
+      "default": "./dist/platform-api.js"
     },
     "./lifecycle-types": {
       "types": "./dist/lifecycle-types.d.ts",
-      "import": "./dist/lifecycle-types.js"
+      "import": "./dist/lifecycle-types.js",
+      "default": "./dist/lifecycle-types.js"
     },
     "./utils": {
       "types": "./dist/utils.d.ts",
-      "import": "./dist/utils.js"
+      "import": "./dist/utils.js",
+      "default": "./dist/utils.js"
     },
     "./ir-guards": {
       "types": "./dist/ir-guards.d.ts",
-      "import": "./dist/ir-guards.js"
+      "import": "./dist/ir-guards.js",
+      "default": "./dist/ir-guards.js"
     },
     "./config": {
       "types": "./dist/config.d.ts",
-      "import": "./dist/config.js"
+      "import": "./dist/config.js",
+      "default": "./dist/config.js"
     },
     "./define-proteus": {
       "types": "./dist/define-proteus.d.ts",
-      "import": "./dist/define-proteus.js"
+      "import": "./dist/define-proteus.js",
+      "default": "./dist/define-proteus.js"
     },
     "./config-schema": {
       "types": "./dist/config-schema.d.ts",
-      "import": "./dist/config-schema.js"
+      "import": "./dist/config-schema.js",
+      "default": "./dist/config-schema.js"
     },
     "./proteus.config.schema.json": "./src/config-schema.ts",
     "./package.json": "./package.json"

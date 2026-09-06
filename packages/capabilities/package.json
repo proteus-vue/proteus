@@ -14,11 +14,13 @@
     },
     "./scan": {
       "types": "./dist/scan.d.ts",
-      "import": "./dist/scan.js"
+      "import": "./dist/scan.js",
+      "default": "./dist/scan.js"
     },
     "./check": {
       "types": "./dist/check.d.ts",
-      "import": "./dist/check.js"
+      "import": "./dist/check.js",
+      "default": "./dist/check.js"
     },
     "./package.json": "./package.json"
   },

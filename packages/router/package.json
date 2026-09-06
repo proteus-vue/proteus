@@ -12,48 +12,56 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./types": {
-      "types": "./dist/types.d.ts"
-    },
+    "./types": "./dist/types.d.ts",
     "./scan": {
       "types": "./dist/scan.d.ts",
-      "import": "./dist/scan.js"
+      "import": "./dist/scan.js",
+      "default": "./dist/scan.js"
     },
     "./tree": {
       "types": "./dist/tree.d.ts",
-      "import": "./dist/tree.js"
+      "import": "./dist/tree.js",
+      "default": "./dist/tree.js"
     },
     "./rules": {
       "types": "./dist/rules.d.ts",
-      "import": "./dist/rules.js"
+      "import": "./dist/rules.js",
+      "default": "./dist/rules.js"
     },
     "./schema": {
       "types": "./dist/schema.d.ts",
-      "import": "./dist/schema.js"
+      "import": "./dist/schema.js",
+      "default": "./dist/schema.js"
     },
     "./merge": {
       "types": "./dist/merge.d.ts",
-      "import": "./dist/merge.js"
+      "import": "./dist/merge.js",
+      "default": "./dist/merge.js"
     },
     "./transforms/transform-transition": {
       "types": "./dist/transforms/transform-transition.d.ts",
-      "import": "./dist/transforms/transform-transition.js"
+      "import": "./dist/transforms/transform-transition.js",
+      "default": "./dist/transforms/transform-transition.js"
     },
     "./codegen": {
       "types": "./dist/codegen/index.d.ts",
-      "import": "./dist/codegen/index.js"
+      "import": "./dist/codegen/index.js",
+      "default": "./dist/codegen/index.js"
     },
     "./navigation": {
       "types": "./dist/navigation.d.ts",
-      "import": "./dist/navigation.js"
+      "import": "./dist/navigation.js",
+      "default": "./dist/navigation.js"
     },
     "./stack-diff": {
       "types": "./dist/stack-diff.d.ts",
-      "import": "./dist/stack-diff.js"
+      "import": "./dist/stack-diff.js",
+      "default": "./dist/stack-diff.js"
     },
     "./deep-link": {
       "types": "./dist/deep-link.d.ts",
-      "import": "./dist/deep-link.js"
+      "import": "./dist/deep-link.js",
+      "default": "./dist/deep-link.js"
     },
     "./package.json": "./package.json"
   },
