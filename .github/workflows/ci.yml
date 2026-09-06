@@ -101,6 +101,9 @@ jobs:
       - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
         run: cd website && npm run check:primitives
 
+      - name: 双语对齐门禁（★#493：EN overlay 与 zh 结构签名漂移阻断——章节/表格/围栏）
+        run: cd website && npm run check:en-drift
+
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
         run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
 

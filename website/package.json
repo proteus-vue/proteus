@@ -17,7 +17,8 @@
     "gen:primitives": "node scripts/gen-primitives.mjs",
     "check:primitives": "node scripts/gen-primitives.mjs --check",
     "gen:css-compat": "tsx scripts/gen-css-compat.mjs",
-    "check:css-compat": "tsx scripts/gen-css-compat.mjs --check"
+    "check:css-compat": "tsx scripts/gen-css-compat.mjs --check",
+    "check:en-drift": "node scripts/check-en-drift.mjs"
   },
   "dependencies": {
     "@proteus-vue/compiler": "0.3.0-beta.0",
