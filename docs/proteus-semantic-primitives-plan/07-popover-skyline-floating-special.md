@@ -60,7 +60,18 @@ p-popover 的面板必须锚定在 trigger 旁 → 无法直接套用 fixed 容�
 2. **中期（A 立项）**：以「官方 root-portal 页面级用法实证」为第一里程碑（需官方文档 + 页面级
    最小复现）；通过后再评估 B 坐标通道。
 
-## 5. 决策请求
+## 5. 终案（2026-09-07 真机/模拟器全部验证通过 ✅）
 
-- ① 短期按 C 显式降级（推荐，符合框架降级哲学）？
-- ② 还是直接投入中期 A 官方同层实证（涉及官方语义调研，工期另估）？
+1. **gen-routes 组件 json 补 `componentFramework: glass-easel`**（Skyline）：此前只给页面加——组件内
+   悬浮/portal 渲染依赖它（V4 实证）。
+2. **p-popover 浮层结构终案**：**弃 `wx:if` 与 `<root-portal>`**，改**常驻 overlay + visibility 类切换**
+   （对齐 p-drawer 常驻模式）：
+   - `wx:if` 子树在 glass-easel 下不可靠（多轮实证不渲染）；
+   - `root-portal` 可渲染但**脱离树破坏锚定**（面板落左上角，portal 内容脱离后 containing block 丢失）；
+   - 常驻 overlay + `.p-popover-overlay--on` visibility（含方向性过渡保留显隐）→ **气泡锚定正常 + 遮罩点关正常**。
+3. 真机/模拟器最终状态：触发 → 气泡现于按钮下 ✅；点外关闭 ✅；定位/关闭/产物契约（P8d）全部锁定。
+
+## 6. 决策请求（历史存档）
+
+原建议 ①短期 C 显式降级 ②中期 A 官方同层实证——实际执行合并路线：A 调研 + componentFramework 修复 + 结构终案，
+未走 C 降级（无需）。Web 端不受影响（portal 标签移除后 Web 结构即常驻 overlay + visibility，行为一致）。
