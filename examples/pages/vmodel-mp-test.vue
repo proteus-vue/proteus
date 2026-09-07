@@ -32,8 +32,8 @@
     </view>
 
     <view class="card">
-      <text class="card-title">④ p-input v-model（update-modelValue 契约）</text>
-      <p-input v-model="txt" placeholder="输入文字测回传" />
+      <text class="card-title">④ p-input（受控组件：:value + @input，非 v-model）</text>
+      <p-input :value="txt" placeholder="输入文字测回传" @input="onTxtInput" />
       <text class="state-line">txt：{{ txt || '（空）' }}</text>
     </view>
   </view>
@@ -49,6 +49,11 @@ const txt = ref('')
 
 function openModal(): void {
   modalVisible.value = true
+}
+
+// ★p-input 事件契约：载荷 { value }（跨端归一）——受控回显
+function onTxtInput(e: { detail: { value?: string } }): void {
+  txt.value = e?.detail?.value ?? ''
 }
 </script>
 
