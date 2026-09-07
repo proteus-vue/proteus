@@ -569,7 +569,7 @@ before: <div class="card">…</div>
 after:  <view class="card-data-v-abc123">…</view>
 ```
 
-> why: 小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径
+> why: 小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径；★#505 M5：禁用须与 style/scoped-css 配对（两相分别门控，单禁一侧 = 模板类与 wxss 选择器失配——模板侧禁用时显式配对警告）
 
 ### `component/root-class`
 

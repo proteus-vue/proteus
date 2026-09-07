@@ -792,7 +792,7 @@ export const TEMPLATE_RULES: TransformRule[] = [
     titleEn: 'scoped CSS: user class and scopeId merged into one class (★2026-08 real-device refactor: class-name suffix)',
     description: '<style scoped> 存在时，模板元素 class 值 token 追加 -scopeId（.box → box-data-v-xxx）；:class 字符串字面量/对象键同样后缀（动态变量类名编译期警告）；样式侧选择器 .box-data-v-xxx 匹配',
     descriptionEn: 'when <style scoped> is present, every class-value token on a template element gets -scopeId appended (.box → box-data-v-xxx); :class string literals and object keys are suffixed the same way (dynamic variable class names warn at compile time); the selector .box-data-v-xxx then matches on the style side',
-    why: '小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径',
+    why: '小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径；★#505 M5：禁用须与 style/scoped-css 配对（两相分别门控，单禁一侧 = 模板类与 wxss 选择器失配——模板侧禁用时显式配对警告）',
     whyEn: 'Mini Programs have no native scoped-CSS mechanism, so a compile-time class-name suffix is the equivalent (v0.3, decision #77); ★2026-08 real-device refactor: Skyline does not support attribute selectors/compound class selectors → the class is merged into a single unique single-class-selector path',
     when: 'SFC 含 <style scoped>（compileVueSfc 生成 scopeId 并注入）时',
     example: { before: '<div class="card">…</div>', after: '<view class="card-data-v-abc123">…</view>' },

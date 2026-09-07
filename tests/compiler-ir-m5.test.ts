@@ -10,6 +10,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { listTransformRules, executeRule, compileVueSfc } from '@proteus-vue/compiler'
 
+/** 实现文件（分派点扫描面） */
+const IMPL_FILES = ['packages/compiler/src/template.ts', 'packages/compiler/src/script.ts', 'packages/compiler/src/style.ts', 'packages/compiler/src/validate.ts', 'packages/compiler/src/index.ts']
+
 type RulePhase = 'template' | 'script' | 'style' | 'validate'
 type TransformRule = ReturnType<typeof listTransformRules>[number]
 
@@ -72,12 +75,8 @@ describe('★#505 M5 批 1：规则治理门禁——总数/分相快照 + verif
 
 describe('★#505 M5 批 2：apply 规则 example 产物断言 harness——每条执行层规则 = 可编译 fixture + 启/禁用差分 + after 标记', () => {
   const opts = { px2rpx: true, rpxRatio: 2 }
-  /** 差分 harness 排除集：disabled 语义未接线/不适用差分验证的 apply 规则（须带原因——防止静默豁免）
-   * template/scope-attr：executeRule 在 scopeId 分支无条件执行（disabled 不查——scope 后缀是编译核心
-   *   语义，禁用需连带 style 侧一致处理；半接线状态与 #505 M3 批 3 前 fluid/semantic-grid 同源，独立批次接线） */
-  const DIFF_EXCLUDED: Record<string, string> = {
-    'template/scope-attr': 'disabled 半接线（scope 后缀核心语义，禁用语义待独立接线批）——apply 集快照仍覆盖',
-  }
+  /** 差分 harness 排除集：disabled 语义未接线/不适用差分验证的 apply 规则（须带原因——防止静默豁免） */
+  const DIFF_EXCLUDED: Record<string, string> = {}
   /** 派生自 registry example 的「可编译最小形态」fixture（example 为片段/散文——fixture 是其语义最小化；
    *  after 标记 = 说明书 after 的可判据子串——说明书示例与真实产物机器绑定） */
   const CASES: Array<{ id: string; phase: 'template' | 'style'; sfc: string; marker: string }> = [
@@ -86,6 +85,12 @@ describe('★#505 M5 批 2：apply 规则 example 产物断言 harness——每�
       phase: 'style',
       sfc: '<template><view class="a">x</view></template>\n<style>.a { padding: 48px; }</style>',
       marker: 'padding: 96rpx',
+    },
+    {
+      id: 'template/scope-attr',
+      phase: 'template',
+      sfc: '<template><div class="card">x</div></template>\n<style>.card { color: red; }</style>',
+      marker: 'card-data-v-',
     },
     {
       id: 'directive/v-bind-style',
@@ -132,5 +137,13 @@ describe('★#505 M5 批 2：apply 规则 example 产物断言 harness——每�
       [...CASES.map((c) => c.id), ...Object.keys(DIFF_EXCLUDED)].sort(),
       '新增 apply 规则必须补入 CASES（或带原因豁免 DIFF_EXCLUDED）',
     ).toEqual([...applies].sort())
+  })
+})
+
+describe('★#505 M5 批 4：变换点覆盖——apply 规则必须在实现文件有 executeRule 分派点（禁硬编码旁路）', () => {
+  it('六条 apply 规则各 ≥1 处 executeRule("<id>") 分派点（登记 apply 却无分派点 = 规则未真正接线）', () => {
+    const src = IMPL_FILES.map((f) => `${f}\n${fs.readFileSync(path.resolve(f), 'utf-8')}`).join('\n')
+    const missing = APPLY_RULES.filter((id) => !src.includes(`executeRule('${id}'`))
+    expect(missing, `无 executeRule 分派点（登记 apply 但实现未接线）：${missing.join(', ')}`).toEqual([])
   })
 })

@@ -651,8 +651,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // scoped CSS（v0.3，★Skyline 兼容修复）：作用域 **class**（glass-easel 不支持属性选择器）
   //   ★仅计算、末尾统一发射（2026-08 真机实测修复：WXML 重复 class 属性只保留其一——独立 scope class 属性会丢掉用户 class，
   //   scoped 复合选择器 .a.data-v-xxx 失配 → 样式全丢）
+  //   ★#505 M5：补 disabled 检查（旧：scopeId 存在即无条件 executeRule——禁用不生效 = 半接线；
+  //   现禁用 → 模板类名不再后缀；须与 style/scoped-css 配对禁用保持 wxss 一致，配对警告见 transformTemplateToWxml）
   let scopeClass = ''
-  if (ctx.scopeId) {
+  if (ctx.scopeId && !ctx.disabled.has('template/scope-attr')) {
     const scopeCtx: RuleContext = { input: { tag: node.tag, scopeId: ctx.scopeId } }
     executeRule('template/scope-attr', scopeCtx)
     scopeClass = (scopeCtx.output as string | undefined) ?? ctx.scopeId
@@ -1157,6 +1159,11 @@ export function transformTemplateToWxml(
     ctx.warnings.push(
       '歧义警告：页面声明 onPageScroll/onReachBottom 且顶层是 scroll-view（用户显式滚动容器）——页面级滚动钩子不会被 scroll-view 触发，请用 bindscroll/bindscrolltolower 或交由自动包装（15-page-scroll-container）',
     )
+  }
+  // ★#505 M5：template/scope-attr 禁用配对警告（模板类名不再后缀 → wxss 若仍 scoped（style/scoped-css 未禁用）
+  //   选择器带后缀 → 失配样式全丢——两相规则须配对禁用/启用；仅提示一次）
+  if (opts.scopeId && ctx.disabled.has('template/scope-attr') && !ctx.disabled.has('style/scoped-css')) {
+    ctx.warnings.push('规则 template/scope-attr 已被禁用但 style/scoped-css 仍启用——模板类名不再后缀而 wxss 选择器仍带后缀（scoped 样式失配）；请一并禁用 style/scoped-css 或恢复 template/scope-attr')
   }
   for (const w of ctx.warnings) console.warn(`[mp-transform] ${w}`)
   return {
