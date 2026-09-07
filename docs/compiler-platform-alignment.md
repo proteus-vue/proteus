@@ -83,7 +83,7 @@ ParseErrorKind: 40+ 具名错误码（带静态消息 + 位置）
 **落地意义**：validate 阶段下一步 = wxml 平台标准校验（草案 M5 的「wxml 平台标准」候选），
 直接以官方错误码为蓝本登记规则（`validate/wxml-platform` 族），比我们自想校验清单可靠得多。
 
-**已落地六项检查的官方级别对照（★2026-09-07 官方仓逐码核对 mod.rs L580-623）**：
+**已落地七项检查的官方级别对照（★2026-09-07 官方仓逐码核对 mod.rs L580-623）**：
 
 | 我们已落地检查 | 官方错误码 | 官方级别 | 说明 |
 |---|---|---|---|
@@ -93,6 +93,7 @@ ParseErrorKind: 40+ 具名错误码（带静态消息 + 位置）
 | ④UnsupportedSyntax（`?.`） | `UnsupportedSyntax`（预留码）/ 实际 `?.` 触发路径 = 表达式解析失败 → `MissingExpressionEnd`/`UnexpectedExpressionCharacter` | **Error**（预留码）/ **Fatal**（实际路径） | 官方对绑定内不支持语法：值置空 + Fatal（阻断）；我们编译期拦截 = 语义同向 |
 | ⑤InvalidAttribute（wx:key/for-item/for-index 无 for） | `InvalidAttribute` | Warn | 官方 ForList 提取仅 wx:for 存在时消费三者，否则告警 + 忽略（键/作用域语义丢失）；我们 Error 拦截（命中 = codegen 回归） |
 | ⑥InvalidAttribute（wx:elif/wx:else 悬挂） | `InvalidAttribute` | Warn | 官方分支组 find_if_element_index 找不到前置 If → 告警 + 分支语义错位；我们 Error 拦截（Vue v-else 已保证配对，命中 = codegen 回归） |
+| ⑦DuplicatedStylePropertyNames | `DuplicatedStylePropertyNames` | **Error** | 官方 tag.rs 仅对 Value::Static style 拆分查重（含 {{}} 动态值不静态分析——动态 base + style: 前缀 → IncompatibleWithStyleColonAttributes）；我们同范围（纯静态串）拦截；引号内分号不误拆 |
 
 **收紧标准印证**：官方 Note/Warn 的处理 = 「告警 + 自动修正或丢弃」——丢弃即静默语义丢失；我们把 Note/Warn/Error 类都按编译 Error 拦截，宁可编译期报错也不让坏绑定进产物（呼应用户「校验器按平台标准，不是编译成功就行」）。
 
@@ -179,7 +180,7 @@ DuplicatedStylePropertyNames——均 Error 级）。
 | G6 | class:/style:/mut-bind/capture/mark/let/slot: 官方能力面未用 | — | 官方前缀体系（深扒实证 slot 事件六态全支持：bind/catch/mut-bind/capture-bind/capture-catch/capture-mut-bind） | 对齐表维护（需求出现才映射，不超前造） | P2 | 维护中 |
 | G7 | 自造 vs 官方**语义冲突暂无系统性核查** | 本次抽查 1 处（G1）即命中 | — | 建「产物形态 → 官方 parser 验收」抽查门禁（可选跑官方 wasm parser 校验产物） | P2（远期） | ⬜ 开放 |
 | G8 | **绑定表达式含 `?.` 可选链**（官方 expr.rs 运算符表无 ?.——含 ??/函数调用/typeof/void/位运算但无可选链、无 in/模板字符串） | 模板 `{{ a?.b }}` 原样透传产物；87 文件普查零命中（存量全在 script 段，安全） | 官方 UnsupportedSyntax（预留 Error 级码；?. 实际触发 = 表达式解析失败 → MissingExpressionEnd Fatal） | **已落地**：validate/wxml-platform 第四项扫描 `{{ }}` 内 ?. → 编译报错提示守卫写法 | P1 | ✅ 已落地（本批） |
-| G9 | **style 串重复属性名风险**（DuplicatedStylePropertyNames 官方 Error 级——用户 style 与 :style/派生拼接同键可能重复） | 静态 style 与 p-fluid/派生合并 emission 单串 | 官方 Element::parse style 合并段（tag.rs）：静态 style 与 style:xxx 拼接时按 `;` 拆分查重（DuplicatedStylePropertyNames/InvalidInlineStyleString Error） | 校验候选：产物 style 串按 `;` 拆分查重（P2——当前拼接场景同键重复罕见） | P2 | ⬜ 候选 |
+| G9 | **style 串重复属性名风险**（DuplicatedStylePropertyNames 官方 Error 级——用户 style 与 :style/派生拼接同键可能重复） | 87 文件产物普查：49 处 style 属性（纯静态 5/整串动态 34/混合 10）静态段重复**零**——编译器已用 G-22 静态缓冲合并 + p-grid 子项剥离警告避免同键；用户手写 style="a:1;a:2" 为残留入口 | 官方 Element::parse style 合并段（tag.rs）：静态 style 与 style:xxx 拼接时按 `;` 拆分查重（DuplicatedStylePropertyNames/InvalidInlineStyleString Error）；**查重仅限 Value::Static——含 {{}} 动态值官方不静态分析** | **已落地**：validate/wxml-platform 第⑦项 DuplicatedStylePropertyNames（纯静态 style 串重复键 → 编译报错；引号内分号不误拆——font-family:'A;B' 测试；含 {{}} 串跳过对齐官方范围） | P2 | ✅ 已落地（本批） |
 | G10 | **wx:else/elif 悬挂形态**（无前置 wx:if 兄弟——Vue v-else 语义已保证配对，但产物人工改写/边缘形态可能悬挂） | 87 文件产物普查**零命中**（v-else 链恒配对） | 官方 If 分支组合并（find_if_element_index 找不到前置 If → InvalidAttribute Warn + 元素照常输出——悬挂不报 Fatal 但语义错位） | **已落地**：validate/wxml-platform 第⑥项 InvalidAttribute（wx:elif/wx:else 悬挂——栈模拟同层兄弟 if 态；配对链/注释夹链/自闭合零误报测试） | P2 | ✅ 已落地（本批） |
 | G11 | **wx:key / wx:for-item / wx:for-index 悬挂**（元素无 wx:for 却带这三者——官方仅 for 存在时消费，否则 InvalidAttribute Warn） | 87 文件产物普查**零命中**（我们 wx:key 恒随 v-for 同元素发射） | 官方 ForList 提取（tag.rs）：wx_for 缺席时 for-item/index/key 逐项 InvalidAttribute | **已落地**：validate/wxml-platform 第⑤项 InvalidAttribute（同标签 wx:key/for-item/index 无 wx:for → 编译报错——防 codegen 收敛重构回归） | P2 | ✅ 已落地（本批） |
 | G12 | **双冒号事件名 bind:update:\*（v-model 组件契约载体）**——官方事件名单段标识符语法，双冒号 → InvalidAttributePrefix（Warn）+ 属性丢弃 = 事件不注册 | 87 文件产物普查 **13 种 p-* 组件 v-model 全部发射双冒号事件**（semantic-primitives-demo/fluid-system-demo 实证：bind:update:modelValue/visible/active/group/model-value）；**官方全仓零双冒号事件测试**（grep 实证：事件测试全部单段名 customEv 等） | 官方 tag.rs：parse_colon_separated 切三段 → 前缀 Invalid → Warn + 属性丢弃；事件合法形态 = bind:name 单段（含 `my-event` 连字符）；官方双绑不走事件（model:xxx + setData 回写，见 G5 lvalue 实证） | **设计专项（G5 联动，不擅自改产物）**：①旧引擎/开发者工具实测可用（#500 系列真机验证过）但 glass-easel 语法面不认——Skyline 真机待实测；②候选 A = 组件双绑迁官方 `model:xxx`（G5）；候选 B = 事件名归一单段（如 update-visible，语法合法且旧引擎兼容）；③真机复测清单加「Skyline 模式 p-modal/p-input v-model」 | P1 | 🔶 设计专项（G5 联动） |
