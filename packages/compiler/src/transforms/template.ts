@@ -22,6 +22,71 @@ function tagRule(
   }
 }
 
+/** 首字母大写（自包含副本——transforms 层不可反向 import template.ts，防循环依赖；template.ts 另有一份，收口待 M5 共享 util） */
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/**
+ * ★#505 内联事件表达式 → 包装方法（event/inline-expression 规则 apply 的实现，自 template.ts tryInlineHandler 迁入——逻辑单点化）。
+ * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2) / x = !x / x = 字面量 / store.method(...)。
+ * 返回 null = 不可校准形态 → 调用方走 cleanHandler 警告原样输出。
+ */
+function tryInlineExpressionToWrapper(exp: string): { name: string; code: string } | null {
+  const t = exp.trim()
+  // 自增/自减（对齐 ref 重写：this.data.x ± 1，决策 #36）
+  let m = t.match(/^([\w$]+)\+\+$/) ?? t.match(/^\+\+([\w$]+)$/)
+  if (m) {
+    return {
+      name: `proteusInlineInc${capitalize(m[1])}`,
+      code: `this.setData({ ${m[1]}: this.data.${m[1]} + 1 })`,
+    }
+  }
+  m = t.match(/^([\w$]+)--$/) ?? t.match(/^--([\w$]+)$/)
+  if (m) {
+    return {
+      name: `proteusInlineDec${capitalize(m[1])}`,
+      code: `this.setData({ ${m[1]}: this.data.${m[1]} - 1 })`,
+    }
+  }
+  // 简单方法调用：fn(字面量参数)——无 . 链（store.xxx 等链式走警告）
+  m = t.match(/^([\w$]+)\(([^()]*)\)$/)
+  if (m && /^[\w$,'"\s]*$/.test(m[2])) {
+    const key = m[2].replace(/\W/g, '') || 'NoArgs'
+    return {
+      name: `proteusInline${capitalize(m[1])}${key}`,
+      code: `this.${m[1]}(${m[2]})`,
+    }
+  }
+  // ★#500 赋值型内联事件：x = !x / x = 字面量 → setData 方法（旧产物把整句当方法名 → bindtap="x = !x" 点击无反应）
+  //   裸标识符 RHS（可能是 wx:for 项变量）排除——方法作用域取不到，须走 data-* 捕获，另行登记（反黑盒警告兜底）
+  m = t.match(/^([\w$]+)\s*=\s*(![\w$]+|true|false|null|undefined|-?\d+(?:\.\d+)?|'(?:[^']*)'|"(?:[^"]*)")(?:;?)$/)
+  if (m) {
+    const target = m[1]
+    const rhs = m[2]
+    const rhsJs = rhs.startsWith('!') ? `!this.data.${rhs.slice(1)}` : rhs
+    const key = rhs.replace(/[^A-Za-z0-9]/g, '') || 'Val'
+    return {
+      name: `proteusInlineSet${capitalize(target)}${capitalize(key)}`,
+      code: `this.data.${target} = ${rhsJs}; this.setData({ ${target}: this.data.${target} })`,
+    }
+  }
+  // ★pinia-plan 12 P2：store 方法调用——store.toggle() / store.play({...}) / store.setVolume(store.volume - 0.1)
+  //   store 是 useXxxStore() 编译的实例属性（this.store）；事件表达式中 store. 引用改写为 this.store.
+  m = t.match(/^store\.([A-Za-z_$][\w$]*)\s*\(([^()]*)\)$/)
+  if (m) {
+    const method = m[1]
+    const args = m[2].trim()
+    // key 保留 +/- 语义（store.volume - 0.1 vs + 0.1 区分；否则同名方法冲突覆盖）
+    const key = args.replace(/[^A-Za-z0-9_$+-]/g, '').replace(/-/g, 'Minus').replace(/\+/g, 'Plus') || 'NoArgs'
+    return {
+      name: `proteusStore${capitalize(method)}${key}`,
+      code: `this.store.${method}(${args.replace(/\bstore\./g, 'this.store.')})`,
+    }
+  }
+  return null
+}
+
 export const TEMPLATE_RULES: TransformRule[] = [
   // ============ 标签映射（TAG_MAP） ============
   tagRule('tag/div-to-view', 'div → view', ['div'], {
@@ -203,8 +268,27 @@ export const TEMPLATE_RULES: TransformRule[] = [
       after: 'bindtap="proteusSelfHandleTap" / bindtap="proteusOnceHandleTap"（包装方法生成于 Page methods）',
     },
     verify: 'tests/mp-transform.test.ts 事件修饰符用例',
-    source: 'packages/compiler/src/template.ts（on 分支）+ script.ts（proteusSelf/Once 生成）',
+    source: 'packages/compiler/src/transforms/template.ts → resolveSelfOnceWrap（★#505 命名+判定迁入规则）+ template.ts → serializeElement（on 分支组装）',
     decision: '#88（v0.3 尾指令补全）',
+    // ★#505 校准族第三批：.self/.once 包装判定与命名迁入规则（第六条真实 apply）——
+    //   input { handler, isSelf, isOnce } → output { kind, target, wrap } | null：
+    //   简单方法名 + self/once → wrap = proteusSelf/Once<Cap>（script 侧生成方法：self 事件源判断 / once data 标记）；
+    //   复杂表达式 → null（调用方原样输出 + cleanHandler 既有警告）。禁用规则 → 不包装（.self/.once 语义丢失警告）。
+    apply: (ctx: RuleContext) => {
+      const input = (ctx.input ?? {}) as { handler?: string; isSelf?: boolean; isOnce?: boolean }
+      const handler = input.handler ?? ''
+      const isSelf = input.isSelf ?? false
+      const isOnce = input.isOnce ?? false
+      if ((isSelf || isOnce) && /^[\w$]+$/.test(handler)) {
+        ctx.output = {
+          kind: isSelf ? 'self' : 'once',
+          target: handler,
+          wrap: `${isSelf ? 'proteusSelf' : 'proteusOnce'}${capitalize(handler)}`,
+        }
+      } else {
+        ctx.output = null
+      }
+    },
   },
   {
     id: 'event/handler-simple-ref',
@@ -333,21 +417,31 @@ export const TEMPLATE_RULES: TransformRule[] = [
     example: { before: ':style="{ backgroundColor: bg }" / :style="boxStyle"（computed 返回对象）', after: 'style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleString(...) 字符串' },
     verify: 'tests/mp-transform.test.ts :style 用例',
     source: 'src/compiler/template.ts → formatStyleBinding + styleBindings 收集；packages/compiler/src/script.ts → transformScriptToPage（__proteusStyleString 注入）',
+    // ★#505 M2 试点：描述层 → 执行层（第三条真实 apply）——派生序列化决策经分派层执行，
+    //   规则判定「动态裸标识符 → script 侧同名 computed 派生值需序列化字符串」（MP style 值域 string-only）。
+    //   调用点：template.ts style 分支（executeRule）；输出 { target, derived } 供调用方收集进 styleBindings。
+    //   禁用本规则 → 不收集 → script 不注入 __proteusStyleString → 对象直进 setData 静默失效（删规则即红反向验证）。
+    apply: (ctx: RuleContext) => {
+      const input = (ctx.input ?? {}) as { exp?: string }
+      const t = (input.exp ?? '').trim()
+      ctx.output = /^[A-Za-z_$][\w$]*$/.test(t) ? { target: t, derived: true } : { derived: false }
+    },
   },
   {
     id: 'directive/v-bind-key',
     phase: 'template',
     status: 'implemented',
-    title: ':key → wx:key（仅简单标识符）',
-    titleEn: ':key → wx:key (simple identifiers only)',
-    description: ':key="idx" → wx:key="idx"；非简单标识符编译期警告并忽略',
-    descriptionEn: ':key="idx" → wx:key="idx"; identifiers that are not simple trigger a compile-time warning and are ignored',
-    why: '小程序列表复用标识是 wx:key，仅接受简单标识符',
-    whyEn: 'the Mini Program list-reuse key is wx:key, which accepts only simple identifiers',
+    title: ':key → wx:key（标识符/属性路径/*this——★#505 对齐官方 StaticStr 语义）',
+    titleEn: ':key → wx:key (identifier / property path / *this — ★#505 aligned with the official StaticStr semantics)',
+    description: ':key="idx" → wx:key="idx"、:key="item.id" → wx:key="item.id"、:key="item"（基础值列表）→ wx:key="*this"；含 {{}}/运算/括号的表达式编译期警告并忽略',
+    descriptionEn: ':key="idx" → wx:key="idx", :key="item.id" → wx:key="item.id", and :key="item" (a list of primitives) → wx:key="*this"; expressions containing {{}}/operators/parentheses trigger a compile-time warning and are ignored',
+    why: '官方 glass-easel parse 中 wx:key 是 StaticStr 形态（接受属性路径/*this，仅 {{}} 触发 DataBindingNotAllowed）——★#505 对齐实证：旧实现仅接受简单标识符，:key="t.id" 整个被丢（比产物无效更糟的编译期丢代码）',
+    whyEn: 'in the official glass-easel parser wx:key is a StaticStr form (it accepts property paths /*this; only {{}} triggers DataBindingNotAllowed) — ★#505 alignment evidence: the old implementation accepted only simple identifiers, so :key="t.id" was dropped entirely (losing code at compile time is worse than an invalid artifact)',
     when: '元素上有 :key 绑定（通常在 v-for 内）时',
-    example: { before: ':key="idx"', after: 'wx:key="idx"' },
-    verify: 'tests/mp-transform.test.ts「v-for」',
+    example: { before: ':key="idx" / :key="item.id"', after: 'wx:key="idx" / wx:key="item.id"' },
+    verify: 'tests/mp-transform.test.ts「v-for」+ tests/compiler-ir-key.test.ts',
     source: 'src/compiler/template.ts → serializeElement（key 分支）',
+    decision: '#505 G1（官方 StaticStr 对齐）',
   },
   {
     id: 'directive/v-model',
@@ -362,8 +456,35 @@ export const TEMPLATE_RULES: TransformRule[] = [
     when: 'input/textarea 或自定义组件标签上有 v-model[:arg] 指令时',
     example: { before: '<input v-model="name" /> / <p-modal v-model:visible="show" />', after: '<input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />' },
     verify: 'tests/mp-transform.test.ts v-model 用例',
-    source: 'src/compiler/template.ts → serializeElement（model 分支）+ script.ts → vModelComponentHandlers 注入',
+    source: 'src/compiler/transforms/template.ts → resolveVModelContract（★#505 形态判定+命名迁入规则）+ template.ts → serializeElement（model 分支组装）',
     decision: '#29 / #500',
+    // ★#505 校准族第二批：v-model 形态判定与契约命名整体迁入规则（第五条真实 apply）——
+    //   input { model, arg, isInputLike, isNativeTag }（布尔自 template.ts 上下文传入，本层不反向依赖）
+    //   → output { kind, model, propName?, updateHandler?, inputHandler? }：
+    //   组件形态（非 input-like 且非原生标签）= prop + update:arg 事件契约；原生/input = value + bindinput。
+    //   禁用规则 → v-model 忽略（既有 disabled 分支：警告 + 不输出绑定）。
+    apply: (ctx: RuleContext) => {
+      const input = (ctx.input ?? {}) as { model?: string; arg?: string; isInputLike?: boolean; isNativeTag?: boolean }
+      const model = input.model ?? ''
+      const arg = input.arg ?? ''
+      const isComponent = !input.isInputLike && !input.isNativeTag
+      if (isComponent) {
+        const propName = arg || 'modelValue'
+        const cap = propName.charAt(0).toUpperCase() + propName.slice(1)
+        ctx.output = {
+          kind: 'component',
+          model,
+          propName,
+          updateHandler: `proteusUpdate${cap}Model`,
+        }
+      } else {
+        ctx.output = {
+          kind: 'input',
+          model,
+          inputHandler: `proteusOn${capitalize(model)}Input`,
+        }
+      }
+    },
   },
   {
     id: 'directive/v-html',
@@ -440,8 +561,15 @@ export const TEMPLATE_RULES: TransformRule[] = [
     when: '事件处理器为自增/自减、简单方法调用（无 . 链）或赋值型（RHS 为字面量/!标识符）时',
     example: { before: '@click="count++" / @click="showModal = !showModal"', after: 'bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData' },
     verify: 'tests/vue-compat.test.ts 内联表达式用例 + tests/mp-transform.test.ts #500 赋值用例',
-    source: 'packages/compiler/src/template.ts → tryInlineHandler + script.ts → inlineHandlers 注入',
+    source: 'packages/compiler/src/transforms/template.ts → tryInlineExpressionToWrapper（★#505 自 template.ts 迁入，逻辑单点）+ template.ts 调用点 executeRule + script.ts → inlineHandlers 注入',
     decision: '#116 / #500',
+    // ★#505：描述层 → 执行层（第四条真实 apply）——内联表达式校准判定整体迁入规则：
+    //   input { exp } → output { name, code } | null（null = 不可校准形态 → 调用方走 cleanHandler 警告原样）。
+    //   禁用本规则 → 不包装 → bindtap="x = !x" 原样输出（#500 缺陷形态）+ 反黑盒警告（删规则即红）。
+    apply: (ctx: RuleContext) => {
+      const input = (ctx.input ?? {}) as { exp?: string }
+      ctx.output = tryInlineExpressionToWrapper(input.exp ?? '')
+    },
   },
   {
     id: 'slot/scoped-slot',
@@ -554,6 +682,22 @@ export const TEMPLATE_RULES: TransformRule[] = [
     verify: 'tests/vue-compat.test.ts 无对等组件用例',
     source: 'packages/compiler/src/template.ts → serializeElement（no-peer 分支）',
     decision: '#116',
+  },
+  {
+    id: 'template/svg-no-peer',
+    phase: 'template',
+    status: 'implemented',
+    title: 'SVG 命名空间标签在小程序无对等组件——警告',
+    titleEn: 'SVG namespace tags have no equivalent components in Mini Programs — warning',
+    description: 'svg/path/circle/rect 等 SVG 标签在小程序无对等组件（微信无 <svg>，不渲染）——警告（原样输出但无效）；Skia 矢量映射为后续批次',
+    descriptionEn: 'SVG tags such as svg/path/circle/rect have no equivalent components in Mini Programs (WeChat has no <svg>, so they do not render) — a warning is raised (kept as-is but ineffective); the Skia vector mapping is a later batch',
+    why: '反黑盒（★#505 G2 平台校验抓真实产物：p-svg 组件模板写 <svg>，旧行为静默当未注册自定义组件输出 → 产物无效标签真机不渲染）；矢量组件（p-svg/ui.svg mpEquiv 无）请用 image/背景图或等矢量批次',
+    whyEn: 'anti-black-box (★#505 G2 platform check caught a real artifact: the p-svg component template writes <svg>, and the old behavior silently emitted it as an unregistered custom component → an invalid tag that does not render on device); for vector components (p-svg/ui.svg has no mpEquiv), use image/background-image or wait for the vector batch',
+    when: '模板出现 SVG 命名空间标签（svg/path/circle/rect/line/ellipse/g/defs/use/symbol/mask/text/tspan 等）',
+    example: { before: '<svg viewBox="…"><path d="…"/></svg>', after: '警告 + 原样输出（不渲染）' },
+    verify: 'tests/compiler-validate-wxml-platform.test.ts（p-svg SVG 标签警告）',
+    source: 'packages/compiler/src/template.ts → serializeElement（SVG_NAMESPACE_TAGS 分支）',
+    decision: '#505 G2',
   },
 
   // ============ 导航链接 ============

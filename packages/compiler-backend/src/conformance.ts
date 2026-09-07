@@ -110,6 +110,11 @@ export function runCompilerConformance(backend: ProteusCompilerBackend, fixture 
             linkBroken.push(`${n.type}: 非 p- 元素不应携带 semantic`)
           }
         } else if (n.type !== '#text' && n.type !== '#interpolation' && n.type !== '#comment') {
+          // ★#505 M3 收紧：p-* 无 semantic = TAG_SEMANTIC_MAP 未登记（「p-* 存在但空白」）——
+          //   旧行为静默计入 compat；现在是编译产物里的语义缺口，必须显式失败而非静默兼容层
+          if (n.type.startsWith('p-')) {
+            linkBroken.push(`${n.type}（TAG_SEMANTIC_MAP 未登记——p-* 语义空白，勿静默当兼容层）`)
+          }
           compatElements++
         }
       })
@@ -118,16 +123,21 @@ export function runCompilerConformance(backend: ProteusCompilerBackend, fixture 
     }
     check('render.semanticLink', linkBroken.length === 0, linkBroken.length ? linkBroken.join('; ') : undefined)
 
-    // semantic IR：C-IR 树形状 + 计数交叉核对（渲染树 semantic 节点数 == semanticCount == C-IR 树节点数）
+    // semantic IR：C-IR 树形状 + 计数交叉核对（render 树语义节点数 == semanticCount；C-IR 树存在时计数一致）
     const sem = ir.semantic
     if (!sem) {
       check('ir.semantic', false, '缺失 semantic IR')
     } else {
       check('ir.semantic.tree', sem.tree === null || (typeof sem.tree.tag === 'string' && typeof sem.tree.semantic === 'string'), sem.tree ? `root=${sem.tree.tag}→${sem.tree.semantic}` : 'tree=null')
       const irCount = sem.tree ? countCIR(sem.tree) : 0
-      check('ir.semantic.countMatch', irCount === sem.semanticCount, `C-IR 树 ${irCount} 节点 vs semanticCount=${sem.semanticCount}`)
+      // ★#505 M3 口径：semanticCount = 渲染树全树语义元素数（compat 根页面语义非空合法）；
+      //   C-IR 树存在（根为 p-*）时须覆盖全部语义（嵌套 compat 包装内的 p-* 未被 C-IR 树承载 → 计数不一致即红）；
+      //   tree=null（compat 根页面）时语义内容以渲染树 + 计数为准——countMatch 不适用，见 unrooted
+      check('ir.semantic.countMatch', sem.tree === null || irCount === sem.semanticCount, sem.tree ? `C-IR 树 ${irCount} 节点 vs semanticCount=${sem.semanticCount}` : 'tree=null（compat 根页面——语义以渲染树+计数为准）')
       check('ir.semantic.renderMatch', sem.semanticCount === semanticNodes, `semanticCount=${sem.semanticCount} vs 渲染树语义节点 ${semanticNodes}`)
       check('ir.semantic.compatCount', sem.compatCount === compatElements, `compatCount=${sem.compatCount} vs 渲染树兼容元素 ${compatElements}`)
+      // ★#505 M3：compat 根但含语义内容 → 信息性核对（真实页面主形态——语义存在但无单根 C-IR 树，页级 C-IR 森林留后续批次；不视为失败）
+      check('ir.semantic.unrooted', true, sem.tree === null && sem.semanticCount > 0 ? `tree=null 但 semanticCount=${sem.semanticCount}（compat 根页面：语义在渲染树，单根 C-IR 树不适用）` : undefined)
     }
 
     // bindings shape（G-28 消费）

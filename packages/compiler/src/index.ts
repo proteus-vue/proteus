@@ -7,6 +7,7 @@ import { transformScriptToPage } from './script'
 import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
 import { createTrace } from './trace'
+import { buildCompileIR } from './ir/build'
 import type { CompileOptions, CompileResult } from './types'
 
 /** djb2 哈希 → scoped 属性名（稳定：同文件同 scopeId；零依赖纯函数） */
@@ -26,20 +27,27 @@ export type {
   TemplateTransformResult,
   ScriptTransformOptions,
   ScriptTransformResult,
+  CompileIR,
+  TemplateIR,
+  ScriptIR,
 } from './types'
 
 export { transformTemplateToWxml } from './template'
 export { transformScriptToPage } from './script'
 export { transformStyleToWxss } from './style'
-export { validateJs, validateWxml, CompilerError } from './validate'
+export { validateJs, validateWxml, validateWxmlPlatform, scanWxmlPlatformIssues, validateMpJsPlatform, scanMpUnsafeEs5, assertValidResult, CompilerError } from './validate'
+export type { WxmlPlatformIssue } from './validate'
 
 // ★G-22 柔性布局（fluid-layout-plan B1）：clamp 生成 / 断点推导 / 网格列数（Web/Skyline 编译期用）
 export { generateClamp, linearFluid, deriveBreakpoints, calcColumns, gridTemplate, parseFluidExpr, DEFAULT_VIEWPORT_RANGE, DEFAULT_BREAKPOINT_RATIOS } from './fluid-layout'
 export type { Breakpoint, ViewportRange, FluidGroup } from './fluid-layout'
 
+// ★#505 CompileIR 构建（M1 骨架搬迁：TemplateTransformResult → TemplateIR 投影）
+export { buildTemplateIR, buildCompileIR } from './ir/build'
+
 // AI-native 透明定位：编译规则注册表（每条规则一份 AI 说明书）
-export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog } from './transforms/registry'
-export type { TransformRule, TransformPhase, RuleStatus } from './transforms/types'
+export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog, executeRule } from './transforms/registry'
+export type { TransformRule, TransformPhase, RuleStatus, RuleContext, RuleApplier } from './transforms/types'
 export type { TransformRuleOverrides } from './types'
 
 // 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）
@@ -155,5 +163,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
 
   // 反黑盒：产物自校验，坏产物当场抛错并指明文件（绝不静默输出）
   assertValidResult(result, options.filename ?? 'anonymous.vue')
+  // ★#505 M1：CompileIR 语义快照（旁路字段投影；不改变 wxml/js/wxss——产物逐字节等价）
+  result.ir = buildCompileIR(tplResult)
   return result
 }

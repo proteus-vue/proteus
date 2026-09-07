@@ -13,4 +13,7 @@ export type {
   ScriptTransformResult,
   CompileOptions,
   CompileResult,
+  CompileIR,
+  TemplateIR,
+  ScriptIR,
 } from '@proteus-vue/types/compiler-types'

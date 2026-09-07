@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 83 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 86 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（45）
+## 模板转换（46）
 
 ### `tag/div-to-view`
 
@@ -299,16 +299,16 @@ after:  style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleSt
 
 ### `directive/v-bind-key`
 
-**:key → wx:key（仅简单标识符）**
+**:key → wx:key（标识符/属性路径/*this——★#505 对齐官方 StaticStr 语义）**
 
-:key="idx" → wx:key="idx"；非简单标识符编译期警告并忽略
+:key="idx" → wx:key="idx"、:key="item.id" → wx:key="item.id"、:key="item"（基础值列表）→ wx:key="*this"；含 {{}}/运算/括号的表达式编译期警告并忽略
 
 ```
-before: :key="idx"
-after:  wx:key="idx"
+before: :key="idx" / :key="item.id"
+after:  wx:key="idx" / wx:key="item.id"
 ```
 
-> why: 小程序列表复用标识是 wx:key，仅接受简单标识符
+> why: 官方 glass-easel parse 中 wx:key 是 StaticStr 形态（接受属性路径/*this，仅 {{}} 触发 DataBindingNotAllowed）——★#505 对齐实证：旧实现仅接受简单标识符，:key="t.id" 整个被丢（比产物无效更糟的编译期丢代码）
 
 ### `directive/v-model`
 
@@ -478,6 +478,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-no-peer`
+
+**SVG 命名空间标签在小程序无对等组件——警告**
+
+svg/path/circle/rect 等 SVG 标签在小程序无对等组件（微信无 <svg>，不渲染）——警告（原样输出但无效）；Skia 矢量映射为后续批次
+
+```
+before: <svg viewBox="…"><path d="…"/></svg>
+after:  警告 + 原样输出（不渲染）
+```
+
+> why: 反黑盒（★#505 G2 平台校验抓真实产物：p-svg 组件模板写 <svg>，旧行为静默当未注册自定义组件输出 → 产物无效标签真机不渲染）；矢量组件（p-svg/ui.svg mpEquiv 无）请用 image/背景图或等矢量批次
 
 ### `nav/navigate-link`
 
@@ -1105,7 +1118,7 @@ after:  wxss 含 .proteus-transition-fade + @keyframes proteus-fade-in
 
 > why: vue-compat-advance Batch 2（决策 #117）：<transition> 进入动画运行时等价（元素 wx:if 重建时 animation 自动播放）；离开动画 MP 无钩子
 
-## 产物校验（3）
+## 产物校验（5）
 
 ### `validate/js-syntax`
 
@@ -1119,6 +1132,32 @@ after:  CompilerError: [proteus-compiler] xxx.vue: js 产物语法错误：Unexp
 ```
 
 > why: 反编译黑盒机制（决策 #17）：坏产物当场报错指明文件，绝不静默输出不可用的产物（对比 uni-app 产物无法定位问题）
+
+### `validate/js-platform-es5`
+
+**JS 产物按平台标准校验（微信 = ES5）**
+
+扫描产物残留的 ES2020 语法（?? ?. ??= ||= &&=，跳过字符串/模板/注释）→ 校验失败并报行号；校验器按平台标准而非宿主 Node 标准（new Function 认识 ES2020，?? / ?. 语法过但微信开发者工具 babel 不解析）
+
+```
+before: // 产物 js 含 p?.source ?? "?"（babel 失败路径残留）
+after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES2020 语法「??」残留于第 N 行第 M 列
+```
+
+> why: 决策 #504 用户点名盲区：node --check / new Function 认识 ES2020 → ?? 产物语法校验永远通过，微信预览上传期才 SyntaxError；把 ES5 tripwire 从外部门禁脚本内建进 compileVueSfc 自校验链，兜底 es5.ts babel 转译失败路径（error 时返回原样代码）
+
+### `validate/wxml-platform`
+
+**WXML 产物按平台标准校验（蓝本 glass-easel 官方错误码）**
+
+三项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）
+
+```
+before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal>
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed] …
+```
+
+> why: ★#505 G2 平台语义对齐：自造 IR 语义会错（wx:key 曾把 :key="t.id" 整句丢弃）——平台标准 = glass-easel 官方 parser 错误码（docs/compiler-platform-alignment.md §1.3）；产物正常形态永不命中，命中即编译器 bug（呼应「校验器按平台标准而非宿主标准」收紧）
 
 ### `validate/wxml-pairing`
 

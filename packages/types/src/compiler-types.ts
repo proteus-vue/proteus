@@ -176,4 +176,71 @@ export interface CompileResult {
   /** 决策 trace（本次编译实际触发的规则） */
   trace?: TransformTraceEvent[]
   sourcemap?: string
+  /** ★#505 CompileIR 语义快照（M1 骨架：TemplateIR 投影；ScriptIR M4 迁入）——主编译路径经框架 IR 的第一段接线 */
+  ir?: CompileIR
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★#505 CompileIR（编译管线阶段间语义 IR，草案 docs/compiler-ir-contract-draft.md）
+// 定位：主编译管线的「框架自研边界 #1」——与 C-IR（component-ir，p-* 组件语义）/
+// CompilerIR（compiler-backend，后端产物契约）平级第三套，但语义词表引用 C-IR，不重复建设。
+// M1 只落 TemplateIR 结构投影（把 TemplateTransformResult 旁路字段提升为声明）；
+// 表达式级语义丰富（elementKind/arg/modifiers 补全）随 M2 试点 / M4 ScriptIR 逐条迁入。
+// 产物侧：wxml/js/wxss 文本仍由 codegen 直出（M1 codegen 出口不变，逐字节等价）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 编译 IR 容器（主编译路径中间表示） */
+export interface CompileIR {
+  /** 契约版本（与 TemplateIR/脚本侧演进同步 bump） */
+  version: 1
+  /** 模板语义声明（由 TemplateTransformResult 投影） */
+  template: TemplateIR
+  /** 脚本语义声明（M4 迁入：data/computed/watch/props/lifecycle/methods 结构化） */
+  script?: ScriptIR
+}
+
+/** 模板语义声明（M1 范围：TemplateTransformResult 14 旁路字段的结构化投影） */
+export interface TemplateIR {
+  /** v-model 绑定目标字段（含组件形态；组件回写见 vModelComponentHandlers） */
+  vModelTargets: string[]
+  /** 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件契约 → script 注入 setData 方法） */
+  vModelComponentHandlers: Array<{ name: string; model: string }>
+  /** 事件适配器（.self/.once 修饰符包装方法名） */
+  eventWrappers: { self: string[]; once: string[] }
+  /** 内联事件表达式包装方法（name + 代码段，script 原样发射） */
+  inlineHandlers: Array<{ name: string; code: string }>
+  /** 离开动画状态机声明（v-if 裸 ref 的 transition 子元素） */
+  transitions: Array<{ ref: string; tName: string; index: number }>
+  /**
+   * :style 动态标识符绑定（同名 computed 派生对象 → script 侧自动序列化字符串）。
+   * ★#505 M2：从 string[] 升级为声明对象——valueKind 携带平台序列化约束（MP 双渲染器 style 仅收字符串，
+   *   对象直进 setData 静默失效 #500/#496b），供未来 conformance 断言「valueKind: string-only 的绑定
+   *   产物必须走字符串化通道（__proteusStyleString 或编译期拼接）」；target = 派生值来源（computed/data）。
+   */
+  styleBindings: Array<{ target: string; valueKind: 'string-only' }>
+  /** 模板表达式对组件实例属性依赖面（与 runtimeInits 求交 → 快照进 data） */
+  templateRefs: string[]
+  /** 模板 store.<field> 引用（Pinia MP 桥 $subscribe → setData） */
+  storeBindings: string[]
+  /** p-grid 语义布局元素声明（script 注入档位变量/求解段） */
+  semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
+  /** 页面能力开关（各驱动一个注入段） */
+  capabilities: {
+    /** 模板出现导航链接 → 注入 proteusNavigateTo */
+    navigate: boolean
+    /** 模板使用 <transition> → style 侧注入 keyframes */
+    transition: boolean
+    /** 页面已自动包滚动容器 → 注入 .proteus-page-scroll 高度样式 */
+    scrollContainer: boolean
+  }
+}
+
+/** 脚本语义声明（★#505：类型先落地，M4 随逐条迁入填充） */
+export interface ScriptIR {
+  /** data 声明（ref/reactive/顶层 let） */
+  data?: Array<{ name: string }>
+  /** computed 派生声明 */
+  computeds?: Array<{ name: string }>
+  /** 生命周期钩子映射（onMounted→onReady 等） */
+  lifecycles?: string[]
 }

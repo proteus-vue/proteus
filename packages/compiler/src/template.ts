@@ -59,6 +59,13 @@ const INLINE_CONTROL_TAGS = new Set([
   'switch', 'slider', 'icon', 'image', 'button', 'input', 'textarea', 'checkbox', 'radio', 'label', 'navigator', 'progress',
 ])
 
+/** ★#505 G2：SVG 命名空间标签（微信无对等组件——<svg> 不渲染；Skia 矢量映射为后续批次）。
+ *   不含 image/text（SVG 的 <image>/<text> 与小程序原生 image/text 同名冲突——原生高频标签优先，业务 SVG 内 image/text 罕见不覆盖） */
+const SVG_NAMESPACE_TAGS = new Set([
+  'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'defs',
+  'lineargradient', 'radialgradient', 'stop', 'use', 'symbol', 'mask', 'clippath', 'tspan',
+])
+
 /**
  * ★TS 类型断言剥离（2026-08-31 B5 真机实测暴露：'primary' as any 原样进 WXML → 微信编译器
  *   Fatal: unmatched parenthesis → 小程序包无法编译）：类型断言是编译期擦除的 TS 语法，不应进产物。
@@ -304,66 +311,6 @@ function parseFluidExpr(expr: string): Array<{ prop: string; min: number; max: n
     out.push({ prop: m[1], min: Number(m[2]), max: Number(m[3]) })
   }
   return out
-}
-
-/**
- * vue-compat Batch B：尝试将内联事件表达式转包装方法（自增/自减/简单方法调用）
- * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2)
- * 其余（含 store 链式引用等）返回 null → 走 cleanHandler 警告原样
- */
-function tryInlineHandler(exp: string): { name: string; code: string } | null {
-  const t = exp.trim()
-  // 自增/自减（对齐 ref 重写：this.data.x ± 1，决策 #36）
-  let m = t.match(/^([\w$]+)\+\+$/) ?? t.match(/^\+\+([\w$]+)$/)
-  if (m) {
-    return {
-      name: `proteusInlineInc${capitalize(m[1])}`,
-      code: `this.setData({ ${m[1]}: this.data.${m[1]} + 1 })`,
-    }
-  }
-  m = t.match(/^([\w$]+)--$/) ?? t.match(/^--([\w$]+)$/)
-  if (m) {
-    return {
-      name: `proteusInlineDec${capitalize(m[1])}`,
-      code: `this.setData({ ${m[1]}: this.data.${m[1]} - 1 })`,
-    }
-  }
-  // 简单方法调用：fn(字面量参数)——无 . 链（store.xxx 等链式走警告）
-  m = t.match(/^([\w$]+)\(([^()]*)\)$/)
-  if (m && /^[\w$,'"\s]*$/.test(m[2])) {
-    const key = m[2].replace(/\W/g, '') || 'NoArgs'
-    return {
-      name: `proteusInline${capitalize(m[1])}${key}`,
-      code: `this.${m[1]}(${m[2]})`,
-    }
-  }
-  // ★#500 赋值型内联事件：x = !x / x = 字面量 → setData 方法（旧产物把整句当方法名 → bindtap="x = !x" 点击无反应）
-  //   裸标识符 RHS（可能是 wx:for 项变量）排除——方法作用域取不到，须走 data-* 捕获，另行登记（反黑盒警告兜底）
-  m = t.match(/^([\w$]+)\s*=\s*(![\w$]+|true|false|null|undefined|-?\d+(?:\.\d+)?|'(?:[^']*)'|"(?:[^"]*)")(?:;?)$/)
-  if (m) {
-    const target = m[1]
-    const rhs = m[2]
-    const rhsJs = rhs.startsWith('!') ? `!this.data.${rhs.slice(1)}` : rhs
-    const key = rhs.replace(/[^A-Za-z0-9]/g, '') || 'Val'
-    return {
-      name: `proteusInlineSet${capitalize(target)}${capitalize(key)}`,
-      code: `this.data.${target} = ${rhsJs}; this.setData({ ${target}: this.data.${target} })`,
-    }
-  }
-  // ★pinia-plan 12 P2：store 方法调用——store.toggle() / store.play({...}) / store.setVolume(store.volume - 0.1)
-  //   store 是 useXxxStore() 编译的实例属性（this.store）；事件表达式中 store. 引用改写为 this.store.
-  m = t.match(/^store\.([A-Za-z_$][\w$]*)\s*\(([^()]*)\)$/)
-  if (m) {
-    const method = m[1]
-    const args = m[2].trim()
-    // key 保留 +/- 语义（store.volume - 0.1 vs + 0.1 区分；否则同名方法冲突覆盖）
-    const key = args.replace(/[^A-Za-z0-9_$+-]/g, '').replace(/-/g, 'Minus').replace(/\+/g, 'Plus') || 'NoArgs'
-    return {
-      name: `proteusStore${capitalize(method)}${key}`,
-      code: `this.store.${method}(${args.replace(/\bstore\./g, 'this.store.')})`,
-    }
-  }
-  return null
 }
 
 /** ★16-progress-skyline-degrade：<progress> → 自定义 view 进度条（Skyline 官方不支持原生 progress，真机实测不渲染）
@@ -654,6 +601,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (tag === 'progress' && !ctx.disabled.has('component/progress-degrade')) {
     return serializeProgress(node, ctx)
   }
+  // ★#505 G2 补：SVG 命名空间标签在小程序无对等组件（微信无 <svg>，Skia 矢量映射为后续批次）——
+  //   旧行为静默当未注册自定义组件原样输出 → 产物无效标签（p-svg 真机不渲染实证）；反黑盒显式警告
+  if (SVG_NAMESPACE_TAGS.has(node.tag.toLowerCase()) && !ctx.disabled.has('template/svg-no-peer')) {
+    ctx.warnings.push(
+      `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>；p-svg 等矢量组件 MP 端 Skia 映射为后续批次）——已原样输出但不会渲染，请改用 image/背景图或等待矢量批次`,
+    )
+    ctx.trace?.add('template/svg-no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（MP 无对等：SVG 标签不渲染）' })
+  }
   // 决策 trace：标签映射
   if (!ctx.disabled.has('tag/unknown-kebab') && !(tagRuleId && ctx.disabled.has(tagRuleId))) {
     ctx.trace?.add(
@@ -693,6 +648,13 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   let bindingClass: string | undefined
   // ★G-22 柔性布局：static style 缓冲（静态 style 属性 + p-fluid 生成 clamp 合并发射）
   let staticStyle: string | undefined
+
+  // ★#505 G1：预扫描本元素 v-for 项名（:key="item.id" 剥前缀用——微信 wx:key 语义 = item 的字段名，非路径）。
+  //   仅同元素 v-for（最常见形态）；嵌套/外层引用因无作用域链保持原样（诚实边界：无法静态判定则警告）。
+  const forDirective = node.props.find(
+    (p) => p.type === NodeTypes.DIRECTIVE && p.name === 'for' && !ctx.disabled.has('directive/v-for'),
+  )
+  const forItemName = forDirective ? parseForExpr(exprContent((forDirective as DirectiveNode).exp)).item : undefined
 
   for (const prop of node.props) {
     if (prop.type === NodeTypes.ATTRIBUTE) {
@@ -821,11 +783,18 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         // .self / .once（v0.3 尾）：仅对简单方法名 handler 做包装（script 侧生成 proteusSelf/Once 方法）
         const isSelf = mods.includes('self') && !isCatch
         const isOnce = mods.includes('once') && !isCatch
-        // ★vue-compat Batch B：内联表达式（count++ / fn(1)）→ 包装方法；其余走 cleanHandler（警告原样）
+        // ★vue-compat Batch B + #505 迁执行层：内联表达式（count++ / fn(1) / x = 字面量）→ 包装方法，
+        //   判定经规则 apply（event/inline-expression）；其余走 cleanHandler（警告原样）。
+        //   禁用规则 → 不包装 → bindtap="x = !x" 原样输出（#500 缺陷形态 + 反黑盒警告——删规则即红）。
         const rawHandler = exprContent(dir.exp)
-        const inline = tryInlineHandler(rawHandler)
+        let inline: { name: string; code: string } | null = null
+        if (!isSelf && !isOnce && !ctx.disabled.has('event/inline-expression')) {
+          const inlineCtx: RuleContext = { input: { exp: rawHandler } }
+          executeRule('event/inline-expression', inlineCtx)
+          inline = (inlineCtx.output as { name: string; code: string } | null | undefined) ?? null
+        }
         let handler: string
-        if (inline && !isSelf && !isOnce) {
+        if (inline) {
           handler = inline.name
           if (!ctx.inlineHandlers.some((h) => h.name === inline.name)) ctx.inlineHandlers.push(inline)
           ctx.trace?.add('event/inline-expression', { line: node.loc.start.line, before: `@${exprContent(dir.arg)}="${rawHandler}"`, after: `${inline.name}（包装方法）` })
@@ -840,12 +809,21 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
         const isCustomEvent = !(raw in ctx.eventMap)
         const prefix = `${isCatch ? 'catch' : 'bind'}${isCustomEvent ? ':' : ''}`
-        if ((isSelf || isOnce) && /^[\w$]+$/.test(handler)) {
-          if (isSelf) ctx.selfHandlers.add(handler)
-          if (isOnce) ctx.onceHandlers.add(handler)
-          const wrap = `${isSelf ? 'proteusSelf' : 'proteusOnce'}${capitalize(handler)}`
-          attrs.push(`${prefix}${mapped}="${wrap}"`)
+        // ★#505 校准族：.self/.once 包装判定与命名经规则 apply（event/modifier-self-once）——
+        //   简单方法名 + self/once → proteusSelf/Once<Cap>（script 生成包装方法）；复杂表达式 → null（原样）。
+        //   禁用规则 → 不包装 → .self/.once 语义丢失（显式警告，删规则即红）。
+        const selfOnceCtx: RuleContext = { input: { handler, isSelf, isOnce } }
+        const wrapped = !ctx.disabled.has('event/modifier-self-once')
+        if (wrapped) executeRule('event/modifier-self-once', selfOnceCtx)
+        const wrapDecision = (selfOnceCtx.output as { kind: string; target: string; wrap: string } | null | undefined) ?? null
+        if (wrapDecision) {
+          if (isSelf) ctx.selfHandlers.add(wrapDecision.target)
+          if (isOnce) ctx.onceHandlers.add(wrapDecision.target)
+          attrs.push(`${prefix}${mapped}="${wrapDecision.wrap}"`)
         } else {
+          if (!wrapped && (isSelf || isOnce)) {
+            ctx.warnings.push(`规则 event/modifier-self-once 已被禁用（rules.disabled），.self/.once 语义已丢失（事件直接绑定 ${handler}，无目标限制/单次标记）`)
+          }
           attrs.push(`${prefix}${mapped}="${handler}"`)
         }
         ctx.trace?.add(
@@ -871,15 +849,49 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         } else if (arg === 'style') {
           if (ctx.disabled.has('directive/v-bind-style')) break
           const styleOut = formatStyleBinding(exp)
-          // ★#500：动态标识符绑定（非字面量对象/非模板拼接）→ 收集给 script 侧（同名 computed 派生对象自动序列化字符串）
-          if (/^[A-Za-z_$][\w$]*$/.test(exp.trim())) ctx.styleBindings.add(exp.trim())
+          // ★#500 + #505 M2 试点：动态标识符绑定（非字面量对象/非模板拼接）→ 收集给 script 侧
+          //   （同名 computed 派生对象自动序列化字符串）。判定经注册表规则 apply 分派（directive/v-bind-style）——
+          //   删规则/禁用规则即不收集 → script 不注入 __proteusStyleString → 对象直进 setData 静默失效（删规则即红）。
+          const styleCtx: RuleContext = { input: { exp } }
+          executeRule('directive/v-bind-style', styleCtx)
+          const styleDecision = styleCtx.output as { target?: string; derived?: boolean } | undefined
+          if (styleDecision?.derived && styleDecision.target) ctx.styleBindings.add(styleDecision.target)
           attrs.push(`style="${styleOut}"`)
           ctx.trace?.add('directive/v-bind-style', { line: node.loc.start.line, before: `:style="${exp}"`, after: styleOut })
         } else if (arg === 'key') {
           if (ctx.disabled.has('directive/v-bind-key')) break
-          if (/^[\w$]+$/.test(exp)) attrs.push(`wx:key="${exp}"`)
-          else ctx.warnings.push(`:key="${exp}" 不是简单标识符（MVP），wx:key 已忽略`)
-          ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${exp}"` })
+          // ★#505 G1（官方 wx:key 语义对齐——微信文档：wx:key 直接指定 item 的字段名字符串，禁止数据绑定；
+          //   item 为字符串/数值时用 *this）。映射：
+          //   :key="item.id"（forItemName 前缀）→ wx:key="id"（微信自动从 item 取 id 字段）
+          //   :key="idx"/:key="id"（裸标识符）→ wx:key="idx"（既有形态；微信解释为 item.idx 字段）
+          //   :key="item"（基础值数组，forItemName 本身）→ wx:key="*this"
+          //   :key="*this" → wx:key="*this"；表达式（含运算/括号/{{}}）→ 警告忽略（不静默丢代码）
+          const t = exp.trim()
+          const isExpr = /[^\w$.]/.test(t) || /{{/.test(t) // 含非标识符字符 = 表达式（. 允许——多级路径走剥前缀逻辑）
+          if (isExpr) {
+            ctx.warnings.push(`:key="${exp}" 是表达式（含运算/括号/{{}}），wx:key 需静态字段名或 *this（微信规范：wx:key 直接指定 item 的字段名，禁用数据绑定）——已忽略`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: '（忽略：wx:key 仅静态字段名/*this）' })
+          } else if (t === '*this') {
+            attrs.push(`wx:key="*this"`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: 'wx:key="*this"' })
+          } else if (forItemName && t === forItemName) {
+            // :key="item"（基础值数组——项本身作 key）→ *this
+            attrs.push(`wx:key="*this"`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: 'wx:key="*this"（for 项本身——基础值数组）' })
+          } else if (forItemName && t.startsWith(`${forItemName}.`)) {
+            // :key="item.id" → wx:key="id"（剥 v-for 项前缀，微信从 item 取字段）
+            const field = t.slice(forItemName.length + 1)
+            attrs.push(`wx:key="${field}"`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${field}"（剥 v-for 项前缀——微信 wx:key = item 的字段名）` })
+          } else if (/^[\w$]+(?:\.[\w$]+)*$/.test(t) && /^[\w$]+\.[\w$]+/.test(t)) {
+            // 多级路径但前缀不是本元素 forItemName（可能引用外层 v-for 项）——无法静态判定，诚实警告原样
+            ctx.warnings.push(`:key="${exp}" 引用非本元素 v-for 项（${forItemName ? `本元素项名 ${forItemName}` : '本元素无 v-for'}）——wx:key 需指定当前 item 的字段名，已忽略（嵌套 v-for 的 key 请引用最内层项）`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: '（忽略：嵌套/外层项引用无法静态映射为 wx:key 字段名）' })
+          } else {
+            // 裸标识符（idx / id——微信解释为 item 的该字段名）
+            attrs.push(`wx:key="${t}"`)
+            ctx.trace?.add('directive/v-bind-key', { line: node.loc.start.line, before: `:key="${exp}"`, after: `wx:key="${t}"` })
+          }
         } else {
           if (ctx.disabled.has('directive/v-bind')) break
           // ★pinia-plan 12 P1：:prop="store.x" 同样剥离前缀
@@ -892,30 +904,36 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         if (ctx.disabled.has('directive/v-model')) { ctx.warnings.push('规则 directive/v-model 已被禁用（rules.disabled），v-model 已忽略'); break }
         const model = exprContent(dir.exp)
         if (model && !ctx.vModelBindings.includes(model)) ctx.vModelBindings.push(model)
-        // ★#500 自定义组件 v-model[:arg] → 组件 prop + update:arg 事件（bind:update:xxx → 页面 setData 回写）——
-        //   Vue 组件双向绑定核心语义；旧产物无脑 bindinput → p-modal v-model:visible 永不生效（点击无反应真机实证）
+        // ★#500 + #505 校准族：形态判定与契约命名经规则 apply（directive/v-model）——
+        //   组件形态（非 input-like 且非原生标签）= prop + update:arg 事件（Vue 组件双向绑定核心语义；
+        //   旧产物无脑 bindinput → p-modal v-model:visible 永不生效真机实证）；原生/input = value + bindinput。
+        //   禁用规则 → 上面既有 disabled 分支已忽略（删规则即红）。
         const modelArg = exprContent(dir.arg)
-        const isCompModel = !isInputLike && !NATIVE_TAGS.has(tag)
-        if (isCompModel) {
-          const propName = modelArg || 'modelValue'
-          const cap = propName.charAt(0).toUpperCase() + propName.slice(1)
-          const handlerName = `proteusUpdate${cap}Model`
+        const vmodelCtx: RuleContext = {
+          input: { model, arg: modelArg, isInputLike, isNativeTag: NATIVE_TAGS.has(tag) },
+        }
+        executeRule('directive/v-model', vmodelCtx)
+        const vmodel = vmodelCtx.output as
+          | { kind: 'component'; model: string; propName: string; updateHandler: string }
+          | { kind: 'input'; model: string; inputHandler: string }
+        if (vmodel.kind === 'component') {
+          const { propName, updateHandler } = vmodel
           attrs.push(`${propName}="{{${model}}}"`)
-          attrs.push(`bind:update:${propName}="${handlerName}"`)
-          if (!ctx.vModelComponentHandlers.some((h) => h.name === handlerName)) {
-            ctx.vModelComponentHandlers.push({ name: handlerName, model })
+          attrs.push(`bind:update:${propName}="${updateHandler}"`)
+          if (!ctx.vModelComponentHandlers.some((h) => h.name === updateHandler)) {
+            ctx.vModelComponentHandlers.push({ name: updateHandler, model })
           }
           ctx.trace?.add('directive/v-model', {
             line: node.loc.start.line,
             before: `v-model${modelArg ? ':' + modelArg : ''}="${model}"`,
-            after: `${propName}="{{${model}}}" + bind:update:${propName}="${handlerName}"（组件 prop + 事件回写）`,
+            after: `${propName}="{{${model}}}" + bind:update:${propName}="${updateHandler}"（组件 prop + 事件回写）`,
           })
           break
         }
         if (isInputLike) attrs.push(`value="{{${model}}}"`)
         // 方法名不用 __ 前缀（微信保留前缀，真机绑定可能失效）
-        attrs.push(`bindinput="proteusOn${capitalize(model)}Input"`)
-        ctx.trace?.add('directive/v-model', { line: node.loc.start.line, before: `v-model="${model}"`, after: `bindinput="proteusOn${capitalize(model)}Input"` })
+        attrs.push(`bindinput="${vmodel.inputHandler}"`)
+        ctx.trace?.add('directive/v-model', { line: node.loc.start.line, before: `v-model="${model}"`, after: `bindinput="${vmodel.inputHandler}"` })
         break
       }
       case 'html':

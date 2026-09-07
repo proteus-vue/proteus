@@ -133,7 +133,10 @@ function buildIR(template: string): { render: RenderNode; semantic: { tree: Comp
   const render = elementToRenderNode(rootEl, acc)
   // 语义链接登记（render 树 semantic 与 C-IR 同源）：capability.* 入口进 bindings
   const tree = renderToComponentIR(render)
-  const semanticCount = tree ? countCIR(tree) : 0
+  // ★#505 M3：semanticCount = 渲染树全树语义元素数（不再取“根为 p-* 的 C-IR 树”计数）——
+  //   compat 根页面的嵌套 p-*（真实产物主形态）从此计入；C-IR 树仍仅根为 p-* 时存在，
+  //   语义内容以渲染树 + 计数为准（conformance 交叉核对 renderMatch 因此对真实页面成立）
+  const semanticCount = countSemantic(render)
   const compatCount = countCompat(render)
   if (tree) {
     collectCapabilities(tree, acc)
@@ -141,8 +144,17 @@ function buildIR(template: string): { render: RenderNode; semantic: { tree: Comp
   return { render, semantic: { tree, semanticCount, compatCount }, bindings: acc }
 }
 
+/** C-IR 树节点计数（★#505 M3 后：semanticCount 改按渲染树全树统计，本函数供树级断言复用） */
 function countCIR(node: ComponentIR): number {
   return 1 + node.children.reduce((acc, c) => acc + countCIR(c), 0)
+}
+
+/** 语义元素计数（渲染树全树带 semantic 的元素）——★#505 M3：conformance 对准真实产物，
+ * compat 根页面（view 壳 + 嵌套 p-*）的真实页面语义内容从此非 0（此前根非 p-* → 整个空白） */
+function countSemantic(node: RenderNode): number {
+  let n = node.semantic ? 1 : 0
+  for (const c of node.children) n += countSemantic(c)
+  return n
 }
 
 /** 兼容层元素计数（渲染树元素无 semantic——view/text/scroll-view 及未知 p- 标签；#text/#interpolation 不计） */

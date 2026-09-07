@@ -135,7 +135,9 @@ fn props_map(node: &RenderNode) -> serde_json::Map<String, serde_json::Value> {
     }
 }
 
-/// C-IR 树节点计数（conformance 交叉核对：semanticCount == C-IR 树节点数）
+/// C-IR 树节点计数（★#505 M3 后：conformance 的 C-IR 树覆盖核对该函数不再由 CLI 使用——
+/// semantic_count 已改按渲染树全树统计；保留供树级断言/单元测试复用）
+#[allow(dead_code)]
 pub fn count_cir(node: &serde_json::Value) -> usize {
     let mut n = 1usize;
     if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
@@ -154,6 +156,17 @@ pub fn count_compat(node: &RenderNode) -> usize {
     }
     for c in &node.children {
         n += count_compat(c);
+    }
+    n
+}
+
+/// 语义元素计数（渲染树全树带 semantic 的元素——★#505 M3 conformance 对准真实产物）
+/// 与 Node countSemantic 对齐：语义内容按渲染树全量统计，不再只统计「根为 p-* 的 C-IR 树」
+/// ——compat 根页面（view 壳 + 嵌套 p-*）的真实产物从此语义计数非 0（此前整个空白）
+pub fn count_semantic(node: &RenderNode) -> usize {
+    let mut n = if node.semantic.is_some() { 1 } else { 0 };
+    for c in &node.children {
+        n += count_semantic(c);
     }
     n
 }

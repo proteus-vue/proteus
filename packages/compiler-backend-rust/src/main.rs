@@ -8,7 +8,7 @@ mod template;
 
 use ir::{BindingsIR, CompilerIR, RenderIR};
 use semantic::{
-    collect_capabilities, count_cir, count_compat, render_to_component_ir, semantic_for_tag,
+    collect_capabilities, count_compat, count_semantic, render_to_component_ir, semantic_for_tag,
 };
 use std::io::Read;
 use template::TmplElement;
@@ -191,10 +191,9 @@ fn main() {
             let render_root = template::element_to_render_node(&root_el, &semantic_for_tag);
             let (handlers, models) = collect_bindings(&root_el);
             let c_ir = render_to_component_ir(&render_root);
-            let semantic_count = match &c_ir {
-                Some(tree) => count_cir(tree),
-                None => 0,
-            };
+            // ★#505 M3：semantic_count = 渲染树全树语义元素数（conformance 对准真实产物——
+            //   compat 根页面嵌套 p-* 亦计入；C-IR 树仅根为 p-* 时存在，语义内容以渲染树+计数为准）
+            let semantic_count = count_semantic(&render_root);
             let compat_count = count_compat(&render_root);
             let mut capabilities = Vec::new();
             if let Some(tree) = &c_ir {

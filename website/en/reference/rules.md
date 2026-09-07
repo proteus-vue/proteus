@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 83 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 86 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (45)
+## Template transforms (46)
 
 ### `tag/div-to-view`
 
@@ -299,16 +299,16 @@ after:  style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleSt
 
 ### `directive/v-bind-key`
 
-**:key → wx:key (simple identifiers only)**
+**:key → wx:key (identifier / property path / *this — ★#505 aligned with the official StaticStr semantics)**
 
-:key="idx" → wx:key="idx"; identifiers that are not simple trigger a compile-time warning and are ignored
+:key="idx" → wx:key="idx", :key="item.id" → wx:key="item.id", and :key="item" (a list of primitives) → wx:key="*this"; expressions containing {{}}/operators/parentheses trigger a compile-time warning and are ignored
 
 ```
-before: :key="idx"
-after:  wx:key="idx"
+before: :key="idx" / :key="item.id"
+after:  wx:key="idx" / wx:key="item.id"
 ```
 
-> why: the Mini Program list-reuse key is wx:key, which accepts only simple identifiers
+> why: in the official glass-easel parser wx:key is a StaticStr form (it accepts property paths /*this; only {{}} triggers DataBindingNotAllowed) — ★#505 alignment evidence: the old implementation accepted only simple identifiers, so :key="t.id" was dropped entirely (losing code at compile time is worse than an invalid artifact)
 
 ### `directive/v-model`
 
@@ -478,6 +478,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-no-peer`
+
+**SVG namespace tags have no equivalent components in Mini Programs — warning**
+
+SVG tags such as svg/path/circle/rect have no equivalent components in Mini Programs (WeChat has no <svg>, so they do not render) — a warning is raised (kept as-is but ineffective); the Skia vector mapping is a later batch
+
+```
+before: <svg viewBox="…"><path d="…"/></svg>
+after:  警告 + 原样输出（不渲染）
+```
+
+> why: anti-black-box (★#505 G2 platform check caught a real artifact: the p-svg component template writes <svg>, and the old behavior silently emitted it as an unregistered custom component → an invalid tag that does not render on device); for vector components (p-svg/ui.svg has no mpEquiv), use image/background-image or wait for the vector batch
 
 ### `nav/navigate-link`
 
@@ -1105,7 +1118,7 @@ after:  wxss 含 .proteus-transition-fade + @keyframes proteus-fade-in
 
 > why: vue-compat-advance Batch 2 (decision #117): runtime equivalence of <transition> enter animations (the animation auto-plays when the element is rebuilt via wx:if); leave animations have no hook on the MP side
 
-## Output validation (3)
+## Output validation (5)
 
 ### `validate/js-syntax`
 
@@ -1119,6 +1132,32 @@ after:  CompilerError: [proteus-compiler] xxx.vue: js 产物语法错误：Unexp
 ```
 
 > why: Anti-black-box mechanism (decision #17): broken output errors out on the spot and names the file; it never silently emits unusable output (unlike uni-app, whose artifacts make problems impossible to locate)
+
+### `validate/js-platform-es5`
+
+**JS output checked against the target platform standard (WeChat = ES5)**
+
+Scans the output for leftover ES2020 syntax (?? ?. ??= ||= &&=, skipping strings/templates/comments) → validation fails and reports the line; the validator follows the target platform standard rather than the host Node standard (new Function accepts ES2020, so ?? / ?. pass syntax checks even though WeChat DevTools babel does not parse them)
+
+```
+before: // 产物 js 含 p?.source ?? "?"（babel 失败路径残留）
+after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES2020 语法「??」残留于第 N 行第 M 列
+```
+
+> why: Decision #504 user-flagged blind spot: node --check / new Function accept ES2020, so ?? output always passes syntax checks and only fails as a SyntaxError at WeChat preview/upload time; the ES5 tripwire moves from the external gate script into the compileVueSfc self-check chain, backstopping the es5.ts babel failure path (which returns code unchanged on error)
+
+### `validate/wxml-platform`
+
+**WXML output checked against the platform standard (glass-easel official error codes as blueprint)**
+
+three official-error-code checks: ① DataBindingNotAllowed — wx:key contains {{}} (official: wx:key forbids data binding; specify the item field name or *this directly); ② DuplicatedAttribute — the same attribute appears twice (WeChat keeps only one); ③ AvoidUppercaseLetters — a tag name contains uppercase (custom-component tags in output should be all-lowercase kebab-case; uppercase attribute names are exempt — camelCase custom attributes like modelValue are legal bindings, and the official level is Note)
+
+```
+before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal>
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed] …
+```
+
+> why: ★#505 G2 platform-semantic alignment: inventing IR semantics by ourselves goes wrong (wx:key used to drop :key="t.id" entirely) — the platform standard is the glass-easel official parser error codes (docs/compiler-platform-alignment.md §1.3); normal output never hits these, so any hit is a compiler bug (echoing the tightening: validators follow platform standards, not host standards)
 
 ### `validate/wxml-pairing`
 

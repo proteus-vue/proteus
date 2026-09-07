@@ -51,10 +51,13 @@ export interface RenderIR {
   root: RenderNode
 }
 
-/** 语义 IR（G-31 C-IR 树——真实模板编译 → toComponentIR；非 p- 标签不产生 Layer 0 C-IR） */
+/** 语义 IR（G-31 C-IR 树——真实模板编译 → toComponentIR；非 p- 标签不产生 Layer 0 C-IR）
+ * ★#505 M3：semanticCount 定义 = 渲染树**全树**带 semantic 的元素数（不再取“根为 p-* 的 C-IR 树”计数）
+ *   —— compat 根页面（view 壳 + 嵌套 p-*）的真实产物语义内容从此如实计入；
+ *   tree 仅当模板根为 p-*（组件级语义树）时存在；compat 根的页面 tree=null，语义内容以渲染树 + 计数为准。 */
 export interface SemanticIR {
   tree: ComponentIR | null
-  /** C-IR 树节点数（= 渲染树中带 semantic 的元素数——conformance 交叉核对） */
+  /** 渲染树中带 semantic 的元素总数（全树——conformance 交叉核对 renderMatch） */
   semanticCount: number
   /** 兼容层元素数（渲染树中无 semantic 的元素——view/text/scroll-view 等） */
   compatCount: number
