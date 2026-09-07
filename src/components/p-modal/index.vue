@@ -6,6 +6,9 @@
      MP：逻辑层无 innerWidth → 形态恒首区间（sheet 兜底——手机主场景，渲染端自决）
      与 App 端 B3 原生容器（UISheet/BottomSheet/SideBarContainer）同语义 -->
 <template>
+  <!-- ★2026-09-07 布局专项②：弹层容器 fixed 全屏（视口坐标系，mask 已实证可靠）+ 内部 absolute 定位——
+       panel 自身 fixed+bottom 在 Skyline/WebView 渲染引擎定位不可靠（左上/中上）；容器 = 坐标基准后
+       mask/panel absolute 相对容器（弹层常规结构） -->
   <view v-if="shown" class="p-modal">
     <view class="p-modal-mask" @click="onMaskTap" />
     <view class="p-modal-panel" :class="panelClass" :style="panelStyle">
@@ -24,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { createSizeAwareObserver, computeAdaptiveForm, parseAdaptiveExpression, resolveAdaptiveFormStyle } from '@proteus-vue/fluid'
+import { createSizeAwareObserver, computeAdaptiveForm, parseAdaptiveExpression } from '@proteus-vue/fluid'
 import type { SizeAwareObserver, AdaptiveVariant } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）——★pAdaptive camel prop：模板 p-adaptive="..." attr 经 Vue camelize 匹配（标准映射）
@@ -124,44 +127,48 @@ function computeAnchorStyle(anchor: unknown): Record<string, string> {
 const panelClass = computed(() => 'p-modal-panel--' + form.value)
 
 const panelStyle = computed(() => {
+  // ★2026-09-07 布局专项②：位置/形态全由形态类承担（global：.p-modal-panel--sheet 底部 / --dialog·--popover 居中——
+  //   absolute 相对 .p-modal 容器）；inline 只承载形态补充（sheet Home Indicator 避让）。不再内联 position:fixed——
+  //   会覆盖类 absolute 并把面板拉回不可靠的 fixed 坐标系（Skyline/WebView 引擎 bottom 定位失效实证）。
   const style: Record<string, string> = {}
-  // ★popover + anchor → 锚定（anchor 下方）；否则 resolveAdaptiveFormStyle（sheet 底部 / dialog·popover 居中）
+  // ★popover + anchor → 锚定（anchor 下方，Web 场景；MP 恒 sheet 不走此分支）——anchored 用 fixed 相对视口（真 Vue 支持）
   if (form.value === 'popover' && props.anchor) {
     const anchored = computeAnchorStyle(props.anchor)
     if (anchored.position) {
       return anchored as Record<string, string>
     }
   }
-  const base = resolveAdaptiveFormStyle(form.value)
-  for (const k of Object.keys(base)) style[k] = base[k]
   // ★G-09 协同：sheet 底部自动避让 Home Indicator（开发者无需手动 env()）
   if (form.value === 'sheet') {
     style.paddingBottom = 'env(safe-area-inset-bottom, 0px)'
-    // ★#500 sheet 形态关键样式内联（动态 :class 在 MP 无法 scoped 后缀——面板定位不依赖类名，双端一致）
-    style.width = '100%'
-    style.maxWidth = 'none'
-    style.borderRadius = '12px 12px 0px 0px'
-    style.maxHeight = '80vh'
   }
-  return style as Record<string, string>
+  return style
 })
 </script>
 
 <style scoped>
-.p-modal-mask {
+.p-modal {
+  /* 弹层容器：fixed 全屏 = 视口坐标系（mask 用同模式实证可靠）；子元素 absolute 相对本容器定位 */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 1000;
-  /* ★2026-09-07 布局专项：静态半透明（不依赖动态 style——MP 产物动态 style 若失效则全黑不透明）
-     maskOpacity prop 保留（默认 0.5）；自定义透明度在产物层不再单独输出（登记：需求出现再恢复 Web inline） */
+}
+.p-modal-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  /* ★2026-09-07 布局专项①：静态半透明（不依赖动态 style）maskOpacity prop 自定义在产物层不再输出 */
   background: rgba(0, 0, 0, 0.5);
 }
 .p-modal-panel {
-  position: fixed;
-  z-index: 1001;
+  position: absolute;
+  z-index: 2;
   background: #fff;
   border-radius: 12px;
   max-width: 480px;
@@ -196,8 +203,8 @@ const panelStyle = computed(() => {
 }
 </style>
 
-<!-- ★2026-09-07 布局专项：形态类全局声明（global 非 scoped）——MP 动态 :class={{panelClass}} 无法带 scoped 后缀，
-     类名全局唯一即可；scoped 段保留静态类（p-modal-panel/mask/header… 模板字面量可加后缀） -->
+<!-- ★2026-09-07 布局专项①：形态类全局声明（global 非 scoped）——MP 动态 :class={{panelClass}} 无法带 scoped 后缀，
+     类名全局唯一即可（absolute 相对 .p-modal 容器）；scoped 段保留静态类（p-modal/mask/panel 基础等模板字面量可加后缀） -->
 <style global>
 .p-modal-panel--sheet {
   left: 0;
@@ -208,5 +215,11 @@ const panelStyle = computed(() => {
   border-radius: 12px 12px 0 0;
   max-height: 80vh;
   overflow: auto;
+}
+.p-modal-panel--dialog,
+.p-modal-panel--popover {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 </style>
