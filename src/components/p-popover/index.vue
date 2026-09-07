@@ -11,10 +11,20 @@
          skyline 下纯背景/无绘制子节点不参与命中。popover 为透明浮层：layer 几何全屏 + 微透明底
          兜底绘制（Web 透明即可命中）；面板 anchored 于 trigger 保持原位（非 layer 子级，点击不冒泡到 layer） -->
     <template v-if="modelValue">
-      <div class="p-popover-layer" @click="close" />
-      <div class="p-popover-panel" :class="'p-popover-' + placement">
+      <view class="p-popover-layer" @click="close" />
+      <!-- placement 静态分支（同 p-popup 位置类教训：动态类 Skyline 无 scoped 匹配 → 面板左上角） -->
+      <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom">
         <slot />
-      </div>
+      </view>
+      <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top">
+        <slot />
+      </view>
+      <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left">
+        <slot />
+      </view>
+      <view v-else class="p-popover-panel p-popover-right">
+        <slot />
+      </view>
     </template>
   </div>
 </template>

@@ -6,15 +6,16 @@
 <template>
   <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）：根容器 fixed 全屏 = 可靠命中层（关闭事件挂容器），
        遮罩纯视觉（背景被合成进容器层 → 自身不参与 skyline 命中），面板 @tap.stop 吞自身冒泡
-       ★位置类静态字面量（p-modal 布局专项④同款）：动态拼接类/动态 style 在 Skyline 均不可靠（面板左上角），
-       按 position 三形态各渲染一个静态类面板 → scoped 必命中 -->
+       ★位置类静态字面量（p-modal 布局专项④同款）：动态拼接类在 Skyline 无 scoped 匹配（编译器对
+       类拼接字面量插 scope 后缀会插到半截 → 畸形类永不命中）→ 按 position 三形态各渲染一个静态类面板；
+       ★phase 动画类走 computed 裸类名（模板无类字面量 → 不插后缀）+ <style global> 规则匹配 -->
   <view v-if="shown" class="p-popup" @tap="onLayerTap">
     <view class="p-popup-mask" :style="{ opacity: maskOpacity }" />
     <!-- bottom -->
     <view
       v-if="position === 'bottom'"
       class="p-popup-panel p-popup-panel--bottom"
-      :class="phase ? 'p-popup-panel--' + phase : ''"
+      :class="panelPhaseCls"
       @tap.stop="noop"
     >
       <slot />
@@ -23,7 +24,7 @@
     <view
       v-else-if="position === 'top'"
       class="p-popup-panel p-popup-panel--top"
-      :class="phase ? 'p-popup-panel--' + phase : ''"
+      :class="panelPhaseCls"
       @tap.stop="noop"
     >
       <slot />
@@ -32,7 +33,7 @@
     <view
       v-else
       class="p-popup-panel p-popup-panel--center"
-      :class="phase ? 'p-popup-panel--' + phase : ''"
+      :class="panelPhaseCls"
       @tap.stop="noop"
     >
       <slot />
@@ -41,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { capabilityWarnOnce } from '../runtime/capability'
 
 const props = defineProps({
@@ -60,6 +61,17 @@ const emit = defineEmits(['close'])
 const shown = ref(false)
 const phase = ref('')
 const timer = ref(0)
+
+/**
+ * ★2026-09-07 phase 动画类用 computed 裸类名：模板内动态拼接类字面量会被编译器插 scope 后缀到半截
+ * （'p-popup-panel--' + phase → ---data-v-x 畸形类永不命中）→ 由 data 值产出完整类名（不插后缀），
+ * 与 <style global> 规则匹配（center 走 fade 专用类，时长 250 与 requestClose 一致）
+ */
+const panelPhaseCls = computed(() => {
+  if (!phase.value) return ''
+  if (props.position === 'center') return 'p-popup-panel--fade-' + phase.value
+  return 'p-popup-panel--' + phase.value
+})
 
 // 可见性驱动：enter 动画自动播放；父级直接隐藏时立即移除（不播 leave——leave 只用于组件主动关闭的收尾）
 // ★B7 降级显式（C6）：Worklet 未实现 → CSS animation（warn 一次）
@@ -142,6 +154,12 @@ onUnmounted(() => {
   top: 50%;
   transform: translateY(-50%);
 }
+</style>
+
+<!-- ★2026-09-07 MP 动画恢复：phase 类走 computed 裸类名（模板无类字面量 → 编译器不插 scope 后缀），
+     动画规则放 <style global>（Proteus 扩展：不作用域化，类名全局唯一），双端生效；
+     center 用专用 fade 类（避免与 scoped 静态 center 类组合选择器不匹配） -->
+<style global>
 /* 转场（enter 自动 / leave 播完由 setTimeout 收尾 emit close）；keyframes 名全局唯一防冲突 */
 .p-popup-panel--enter {
   animation: proteus-popup-in 320ms ease-out;
@@ -149,11 +167,11 @@ onUnmounted(() => {
 .p-popup-panel--leave {
   animation: proteus-popup-out 320ms ease-in;
 }
-.p-popup-panel--center.p-popup-panel--enter {
-  animation-name: proteus-popup-fade-in;
+.p-popup-panel--fade-enter {
+  animation: proteus-popup-fade-in 250ms ease-out;
 }
-.p-popup-panel--center.p-popup-panel--leave {
-  animation-name: proteus-popup-fade-out;
+.p-popup-panel--fade-leave {
+  animation: proteus-popup-fade-out 250ms ease-in;
 }
 @keyframes proteus-popup-in {
   from { transform: translateY(100%); }
