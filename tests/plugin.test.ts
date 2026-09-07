@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule } from '../packages/plugin-vite/src/plugin'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule, scanSourceImports } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
@@ -105,6 +105,41 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
 
     it('@proteus-vue/* 未构建（无 dist）→ null', () => {
       expect(resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus-vue/ghost')).toBeNull()
+    })
+  })
+
+  describe('★共享模块 import 扫描（scanSourceImports：多行 named 不漏扫——semantic 页 desktop 白屏根因）', () => {
+    it('多行 named import（import {\n  a,\n} from \'m\'）→ 源模块命中（★2026-09-07 修复：旧正则 .*? 无 s 标志不跨行 → 漏扫）', () => {
+      const src = "import {\n  sendNotification,\n  buildPermissionManifest,\n} from '@proteus-vue/desktop'"
+      expect(scanSourceImports(src)).toEqual([{ source: '@proteus-vue/desktop', typeOnly: false }])
+    })
+
+    it('单行 named / default / 副作用 / type import → 不回归', () => {
+      expect(scanSourceImports("import { ref } from 'vue'")).toEqual([{ source: 'vue', typeOnly: false }])
+      expect(scanSourceImports("import def from 'm'")).toEqual([{ source: 'm', typeOnly: false }])
+      expect(scanSourceImports("import 'side'")).toEqual([{ source: 'side', typeOnly: false }])
+      expect(scanSourceImports("import type { T } from 'z'")).toEqual([{ source: 'z', typeOnly: true }])
+    })
+
+    it('default + named 组合跨行（import def, {\n  a\n} from \'m\'）→ 命中一次', () => {
+      const src = "import def, {\n  a,\n  b\n} from '@proteus-vue/x'"
+      expect(scanSourceImports(src)).toEqual([{ source: '@proteus-vue/x', typeOnly: false }])
+    })
+
+    it('多 import 混合（单行 + 跨行 + 副作用）→ 全部命中且顺序保留', () => {
+      const src = [
+        "import { ref } from 'vue'",
+        'import {',
+        '  PHeading,',
+        '  PText,',
+        "} from '@proteus-vue/components'",
+        "import 'proteus/style-guard'",
+      ].join('\n')
+      expect(scanSourceImports(src)).toEqual([
+        { source: 'vue', typeOnly: false },
+        { source: '@proteus-vue/components', typeOnly: false },
+        { source: 'proteus/style-guard', typeOnly: false },
+      ])
     })
   })
 

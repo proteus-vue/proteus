@@ -1,13 +1,32 @@
 # 小程序 E2E 真机指南（proteus test e2e:mp）
 
+## ★执行链路铁律（违反 = 违规操作）
+
+**每进入一个页面，第一动作 = 抓 console 运行日志做零报错门禁；门禁绿后才允许抓元素/断言。**
+完整链路定义见框架 plan **15-mp-e2e-console-gate.md**（本文件是它的速查版）。
+
+```
+0 环境门禁（wechatide CLI + 登录 + 授权）
+1 开窗编译（open_project_window --window-mode fullMode → simulator_open_page <页>）
+2 ★console 零错门禁（get_simulator_console grep error）——红即停，先修产物，严禁越步
+3 运行时确认（automation_runtime_info currentPage）
+4 data 就绪断言（automation_evaluate 读 page data——最稳通道）
+5 元素断言（querySelectorAll → text/attribute → tap）
+6 交互回读（evaluate 再读 data）
+7 截图取证 + 复位
+```
+
+> 反面教材（2026-09-07）：页面白屏（onLoad ReferenceError: buildPermissionManifest is not defined）仍去抓元素——
+> 无规范乱跑浪费轮次。规范动作：进页 → console 门禁立即红 → 定位产物丢 require（plugin 跨行 import 漏扫）→ 修 → 重编 → 绿 → 才继续。
+
 ## 前置门禁（缺一不可）
 
 | 项 | 要求 | 缺失表现 |
 |----|------|----------|
 | 真实 appid | `proteus.config.ts` 配 wx+16 位十六进制（占位 `wx0000000000`/touristappid 无效） | 体检 ✗ appid error；IDE `gettestpublib 41002 appid missing` |
-| 构建产物 | `npm run build:mp`（`dist/mp-weixin` 含 project.config.json） | 体检 ✗ build-output；automator 无项目可开 |
-| IDE CLI | `--ide <cli>` 或 `PROTEUS_IDE_CLI`（darwin/win32 默认路径探测） | 体检 ✗ ide-cli |
-| 服务端口 | GUI「设置 → 安全设置 → 服务端口」已开 | automator `Connection closed`（CLI 无法代开 GUI 开关） |
+| 构建产物 | `npm run build:mp`（`dist/mp-weixin` 含 project.config.json） | 体检 ✗ build-output；无项目可开 |
+| Electron 版 IDE | wechatide CLI（新版 Electron 重构版，非旧 NWJS） | `wechatide` 命令不可用 → 确认安装路径 |
+| 授权 | 首次 `wechatide -c <client> <tool>` 触发 auth，轮询 `polling_task_result` 至 `authorization_success` | 用户拒绝 → 停 |
 
 ## CLI 全链路（自动）
 
