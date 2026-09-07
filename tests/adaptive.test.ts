@@ -226,19 +226,21 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     expect(panel.style.transform).toBe('') // 非居中降级
   })
 
-  it('★popover 无 anchor → 居中降级（03 §6）；sheet 底部安全区自动应用', async () => {
+  it('★popover 无 anchor → 居中降级（03 §6，形态类承担——inline 不再内联定位）；sheet 底部安全区自动应用', async () => {
     const el = mount(PModal, { visible: true, width: 1024 })
     await nextTick()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    expect(panel.style.transform).toBe('translate(-50%, -50%)')
+    // ★2026-09-07 布局专项②：居中定位归形态类（global .p-modal-panel--popover { left50/top50/translate }）——
+    //   inline 不再内联 position:fixed 定位（Skyline/WebView 引擎 fixed bottom 失效实证）；class 承载形态
+    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
+    expect(panel.style.transform).toBe('') // inline 无 transform（居中由样式类承担）
     const el2 = mount(PModal, { visible: true, width: 320 })
     await nextTick()
     const sheet = el2.querySelector('.p-modal-panel') as HTMLElement
     expect(sheet.classList.contains('p-modal-panel--sheet')).toBe(true)
-    // ★happy-dom CSS 解析丢弃 env()（p-safe 同坑）——sheet 底部定位验证 + 安全区 padding 与 resolveSafeAreaStyle 同源（envExpr）
-    expect(sheet.style.left).toBe('0px')
-    expect(sheet.style.right).toBe('0px')
-    expect(sheet.style.bottom).toBe('0px')
+    // 底部定位在 global .p-modal-panel--sheet（left/right/bottom 0）——inline 仅承载安全区 padding（env 解析丢）
+    expect(sheet.style.left).toBe('')
+    expect(sheet.style.bottom).toBe('')
   })
 
   it('点击遮罩（maskClosable）→ update:visible false', async () => {
