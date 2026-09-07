@@ -186,7 +186,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(wxss).toMatch(/\.p-popup-panel--fade-enter \{\s*animation: proteus-popup-fade-in/)
   })
 
-  it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位，placement 静态四分支', () => {
+  it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位，placement 静态四分支，常驻 overlay+visibility（skyline 终案：弃 wx:if/portal——wx:if 子树不渲染、portal 脱离破锚定）', () => {
     const r = compileComponent('src/components/p-popover/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
@@ -201,5 +201,11 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
       expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
     }
     expect(wxml).not.toContain("+ placement")
+    // ★skyline 终案契约：无 wx:if 开合、无 root-portal（脱离破锚定）；overlay 常驻 + visibility 类切换
+    expect(wxml).not.toContain('wx:if="{{modelValue}}"')
+    expect(wxml).not.toContain('root-portal')
+    expect(wxml).toMatch(/class="p-popover-overlay-data-v-[\w]+ \{\{/)
+    expect(wxss).toMatch(/\.p-popover-overlay-data-v-[\w]+\s*\{[\s\S]*?visibility: hidden/)
+    expect(wxss).toMatch(/\.p-popover-overlay--on-data-v-[\w]+\s*\{[\s\S]*?visibility: visible/)
   })
 })

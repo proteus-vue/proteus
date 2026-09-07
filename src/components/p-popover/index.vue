@@ -7,28 +7,24 @@
     <div class="p-popover-trigger" @click="onTrigger">
       <slot name="trigger" />
     </div>
-    <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）+ Skyline 悬浮层：
-         ① layer/面板包 <root-portal>（官方「整棵子树脱离页面，类 fixed，用于弹窗/弹出层」——组件需
-           componentFramework: glass-easel 声明才能生效，见 gen-routes writeComponentJsons）；
-         ② 关闭事件挂全屏 layer（可靠命中层）；面板 anchored 于 trigger（portal 内坐标语义保持） -->
-    <template v-if="modelValue">
-      <root-portal>
-        <view class="p-popover-layer" @click="close" />
-        <!-- placement 静态分支（同 p-popup 位置类教训：动态类 Skyline 无 scoped 匹配 → 面板左上角） -->
-        <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom">
-          <slot />
-        </view>
-        <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top">
-          <slot />
-        </view>
-        <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left">
-          <slot />
-        </view>
-        <view v-else class="p-popover-panel p-popover-right">
-          <slot />
-        </view>
-      </root-portal>
-    </template>
+    <!-- ★2026-09-07 Skyline 悬浮层：常驻 overlay + visibility 切换（对齐 p-drawer 常驻模式；wx:if 子树在
+         glass-easel 不可靠）。portal 版曾实证可渲染但「脱离导致锚定失效（面板左上角）」→ 去 portal，
+         面板 absolute 锚定留在原组件树（containing block = .p-popover 根，定位不破坏） -->
+    <view class="p-popover-overlay" :class="{ 'p-popover-overlay--on': modelValue }">
+      <view class="p-popover-layer" @click="close" />
+      <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom">
+        <slot />
+      </view>
+      <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top">
+        <slot />
+      </view>
+      <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left">
+        <slot />
+      </view>
+      <view v-else class="p-popover-panel p-popover-right">
+        <slot />
+      </view>
+    </view>
   </div>
 </template>
 
@@ -57,6 +53,15 @@ function close(): void {
 .p-popover {
   position: relative;
   display: inline-block;
+}
+.p-popover-overlay {
+  /* 常驻 overlay：关闭态隐藏（不拦截不绘制），打开态可见——portal 内 visibility 控制（skyline portal+wx:if 不可用） */
+  visibility: hidden;
+  transition: visibility 0s linear 0.25s;
+}
+.p-popover-overlay--on {
+  visibility: visible;
+  transition: visibility 0s linear 0s;
 }
 .p-popover-layer {
   /* 全屏可靠命中层：显式四边定位（skyline 不认 inset）；popover 非模态 → 透明底 + 微透明兜底绘制 */
