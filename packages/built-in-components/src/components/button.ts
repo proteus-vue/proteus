@@ -25,10 +25,13 @@ export const WebButton = defineComponent({
     }
     return () => {
       const { class: cls, openType, hoverClass, type, size, disabled, loading, plain, ...rest } = attrs as Record<string, unknown>
-      // ★布尔属性：小程序无值属性在 attrs 是空字符串（falsy）——用 !== undefined 判断存在性
-      const isDisabled = disabled !== undefined
-      const isLoading = loading !== undefined
-      const isPlain = plain !== undefined
+      // ★布尔属性三态：true/'true'/'（小程序无值属性空串）→ 启用；false/undefined → 不启用。
+      //   ★2026-09-07 e2e 弹层复测抓到：p-button 显式 :disabled=false/:loading=false 传 Vue 组件 attrs=false，
+      //   旧 `!== undefined` 判定把 false 当「存在」→ Web 端全部按钮 disabled+loading（点不动）——改显式真值判定
+      const boolOn = (v: unknown): boolean => v === true || v === '' || v === 'true'
+      const isDisabled = boolOn(disabled)
+      const isLoading = boolOn(loading)
+      const isPlain = boolOn(plain)
       // hover-class：小程序按下加类（默认 button-hover 背景变暗）；Web 用 pointer 事件切换
       const hoverCls = (hoverClass as string) || 'proteus-web-button--hover'
       // ★变体类（对齐微信原生 button + weui-btn 视觉）：type/size/disabled/loading/plain

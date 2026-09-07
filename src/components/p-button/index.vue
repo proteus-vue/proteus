@@ -5,8 +5,8 @@
   <button
     class="p-button"
     :class="{ 'is-loading': loading }"
-    :disabled="disabled || loading"
-    :loading="loading ? 'true' : ''"
+    :disabled="disabled || loading || undefined"
+    :loading="loading || undefined"
     :aria-label="ariaLabel"
     @click="onClick"
   >

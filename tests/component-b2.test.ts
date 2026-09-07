@@ -70,7 +70,10 @@ describe('p-button（按钮）', () => {
     const { wxml, js } = compileComponent('p-button')
     expect(wxml).toContain('<button')
     expect(wxml).toMatch(/class="[^"]*\bp-button\b/)
-    expect(wxml).toContain('disabled="{{disabled || loading}}"')
+    // ★2026-09-07 e2e 弹层复测修复：false 时传 undefined（不输出 loading/disabled 假属性——WebButton
+    //   三态判定防 :disabled=false 被当存在 → Web 端全按钮 disabled）
+    expect(wxml).toContain('disabled="{{disabled || loading || undefined}}"')
+    expect(wxml).toContain('loading="{{loading || undefined}}"')
     expect(wxml).toContain('bindtap="onClick"')
     expect(js).toContain('throttle: { type: Number, value: 0 }')
     // 节流：时间戳防抖，emit → triggerEvent
