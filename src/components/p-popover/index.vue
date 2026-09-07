@@ -7,8 +7,11 @@
     <div class="p-popover-trigger" @click="onTrigger">
       <slot name="trigger" />
     </div>
+    <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）：关闭事件挂全屏 layer（可靠命中层）而非遮罩元素——
+         skyline 下纯背景/无绘制子节点不参与命中。popover 为透明浮层：layer 几何全屏 + 微透明底
+         兜底绘制（Web 透明即可命中）；面板 anchored 于 trigger 保持原位（非 layer 子级，点击不冒泡到 layer） -->
     <template v-if="modelValue">
-      <div class="p-popover-mask" @click="close" />
+      <div class="p-popover-layer" @click="close" />
       <div class="p-popover-panel" :class="'p-popover-' + placement">
         <slot />
       </div>
@@ -42,9 +45,14 @@ function close(): void {
   position: relative;
   display: inline-block;
 }
-.p-popover-mask {
+.p-popover-layer {
+  /* 全屏可靠命中层：显式四边定位（skyline 不认 inset）；popover 非模态 → 透明底 + 微透明兜底绘制 */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.01);
   z-index: 998;
 }
 .p-popover-panel {

@@ -179,6 +179,7 @@ skyline 页面在 webview 下降级渲染会报此类错）→ 先切 skyline �
 | pages/semantic-primitives-demo | dist/mp-weixin（skyline） | ✅ 绿（2026-09-07） | **渲染模式坑**：webview 下报 `[渲染层错误] Cannot set properties of undefined (setting 'textContent')`（rich-text 等 glass-easel 降级）——skyline 正常；根因 private `skylineRenderEnable: false` 残留 → 已改 true 消失（见门禁 0「渲染模式指定」） |
 | pages/semantic-primitives-demo（skyline） | dist/mp-weixin | ✅ 绿（2026-09-07 e2e 回归） | **v-model handler 撞名修复后真机回归**：开→读→关→读 驱动 drawer/popover/sheet/switch/slider/tabbar/segment 全部独立回写通过（12 handler 逐一验证，产物 handler 名 `proteusUpdate{Model}Model` 不撞）；截图 `.proteus/e2e-mp/shot-drawer-open.png` |
 | pages/semantic-primitives-demo（skyline）抽屉遮罩 | dist/mp-weixin | ✅ 已修（2026-09-07） | **p-drawer 点遮罩关不掉（skyline 真机）**：探针实证——组件内遮罩元素自身不参与命中（wx:if/常驻挂载均无效，事件落根容器；面板常驻却正常）；修法：事件挂可靠层（根容器收非面板区点击关闭 + 面板 `catchtap` 吞冒泡防误关），遮罩仅视觉层 + 容器 `visibility` 显隐。**弹层族通用教训：skyline 遮罩交互不要绑在遮罩元素上**（见下「Skyline 弹层命中测试实证」） |
+| 弹层族批（skyline）action-sheet/modal/popup/popover 遮罩 | dist/mp-weixin | ✅ 已修（2026-09-07） | **P7 模式批量**：action-sheet/modal/popup 真机抽检遮罩点关 ✅（popover 结构同改，其 MP 触发缺口见下）；**popup 面板左上角** = 动态拼接类与动态 style 在 Skyline 均不可靠（p-modal 布局专项③④ 同因）→ 位置类改**静态字面量三形态分支**（bottom/top/center，scoped 必命中）后真机底部 ✅；p-popover MP trigger（slot 内 p-button 组件边界吞事件）点开无反应为**既有缺口**待专项（产物结构仍按 P7 改好） |
 
 ### Skyline 弹层命中测试实证（2026-09-07 p-drawer）
 

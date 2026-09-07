@@ -4,11 +4,36 @@
      可见性驱动：watch(() => props.visible)（B3 原语：Web Vue watch / MP observers）
      双端同源码：view + fixed 定位；Skyline fixed 支持基础库 2.26+ -->
 <template>
-  <view v-if="shown" class="p-popup">
-    <view class="p-popup-mask" :style="{ opacity: maskOpacity }" @tap="onMaskTap" />
+  <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）：根容器 fixed 全屏 = 可靠命中层（关闭事件挂容器），
+       遮罩纯视觉（背景被合成进容器层 → 自身不参与 skyline 命中），面板 @tap.stop 吞自身冒泡
+       ★位置类静态字面量（p-modal 布局专项④同款）：动态拼接类/动态 style 在 Skyline 均不可靠（面板左上角），
+       按 position 三形态各渲染一个静态类面板 → scoped 必命中 -->
+  <view v-if="shown" class="p-popup" @tap="onLayerTap">
+    <view class="p-popup-mask" :style="{ opacity: maskOpacity }" />
+    <!-- bottom -->
     <view
-      class="p-popup-panel"
-      :class="'p-popup-panel--' + position + (phase ? ' p-popup-panel--' + phase : '')"
+      v-if="position === 'bottom'"
+      class="p-popup-panel p-popup-panel--bottom"
+      :class="phase ? 'p-popup-panel--' + phase : ''"
+      @tap.stop="noop"
+    >
+      <slot />
+    </view>
+    <!-- top -->
+    <view
+      v-else-if="position === 'top'"
+      class="p-popup-panel p-popup-panel--top"
+      :class="phase ? 'p-popup-panel--' + phase : ''"
+      @tap.stop="noop"
+    >
+      <slot />
+    </view>
+    <!-- center（默认兜底） -->
+    <view
+      v-else
+      class="p-popup-panel p-popup-panel--center"
+      :class="phase ? 'p-popup-panel--' + phase : ''"
+      @tap.stop="noop"
     >
       <slot />
     </view>
@@ -50,9 +75,12 @@ watch(() => props.visible, () => {
   }
 })
 
-function onMaskTap() {
+function onLayerTap() {
   if (props.closeOnMask) requestClose()
 }
+
+/** 面板内点击仅需阻止冒泡（MP catchtap 无值形式不可编译 → 显式方法承载 .stop） */
+function noop(): void {}
 
 // 组件主动关闭：播 leave 动画 → 时长后 emit close（父置 visible=false）
 function requestClose() {
@@ -71,18 +99,28 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.p-popup-mask {
+.p-popup {
+  /* 弹层常规结构：根容器 fixed 全屏 = 视口坐标 + 可靠命中层 */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 1000;
+}
+.p-popup-mask {
+  /* 显式四边定位（skyline 不认 inset 简写）；纯视觉（背景合成进容器） */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: #000;
+  z-index: 1;
 }
 .p-popup-panel {
-  position: fixed;
-  z-index: 1001;
+  position: absolute;
+  z-index: 2;
   background: #fff;
   border-radius: 12px;
 }
