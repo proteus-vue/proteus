@@ -183,11 +183,51 @@ DuplicatedStylePropertyNames——均 Error 级）。
 | G9 | **style 串重复属性名风险**（DuplicatedStylePropertyNames 官方 Error 级——用户 style 与 :style/派生拼接同键可能重复） | 87 文件产物普查：49 处 style 属性（纯静态 5/整串动态 34/混合 10）静态段重复**零**——编译器已用 G-22 静态缓冲合并 + p-grid 子项剥离警告避免同键；用户手写 style="a:1;a:2" 为残留入口 | 官方 Element::parse style 合并段（tag.rs）：静态 style 与 style:xxx 拼接时按 `;` 拆分查重（DuplicatedStylePropertyNames/InvalidInlineStyleString Error）；**查重仅限 Value::Static——含 {{}} 动态值官方不静态分析** | **已落地**：validate/wxml-platform 第⑦项 DuplicatedStylePropertyNames（纯静态 style 串重复键 → 编译报错；引号内分号不误拆——font-family:'A;B' 测试；含 {{}} 串跳过对齐官方范围） | P2 | ✅ 已落地（本批） |
 | G10 | **wx:else/elif 悬挂形态**（无前置 wx:if 兄弟——Vue v-else 语义已保证配对，但产物人工改写/边缘形态可能悬挂） | 87 文件产物普查**零命中**（v-else 链恒配对） | 官方 If 分支组合并（find_if_element_index 找不到前置 If → InvalidAttribute Warn + 元素照常输出——悬挂不报 Fatal 但语义错位） | **已落地**：validate/wxml-platform 第⑥项 InvalidAttribute（wx:elif/wx:else 悬挂——栈模拟同层兄弟 if 态；配对链/注释夹链/自闭合零误报测试） | P2 | ✅ 已落地（本批） |
 | G11 | **wx:key / wx:for-item / wx:for-index 悬挂**（元素无 wx:for 却带这三者——官方仅 for 存在时消费，否则 InvalidAttribute Warn） | 87 文件产物普查**零命中**（我们 wx:key 恒随 v-for 同元素发射） | 官方 ForList 提取（tag.rs）：wx_for 缺席时 for-item/index/key 逐项 InvalidAttribute | **已落地**：validate/wxml-platform 第⑤项 InvalidAttribute（同标签 wx:key/for-item/index 无 wx:for → 编译报错——防 codegen 收敛重构回归） | P2 | ✅ 已落地（本批） |
-| G12 | **双冒号事件名 bind:update:\*（v-model 组件契约载体）**——官方事件名单段标识符语法，双冒号 → InvalidAttributePrefix（Warn）+ 属性丢弃 = 事件不注册 | 87 文件产物普查 **13 种 p-* 组件 v-model 全部发射双冒号事件**（semantic-primitives-demo/fluid-system-demo 实证：bind:update:modelValue/visible/active/group/model-value）；**官方全仓零双冒号事件测试**（grep 实证：事件测试全部单段名 customEv 等） | 官方 tag.rs：parse_colon_separated 切三段 → 前缀 Invalid → Warn + 属性丢弃；事件合法形态 = bind:name 单段（含 `my-event` 连字符）；官方双绑不走事件（model:xxx + setData 回写，见 G5 lvalue 实证） | **设计专项（G5 联动，不擅自改产物）**：①旧引擎/开发者工具实测可用（#500 系列真机验证过）但 glass-easel 语法面不认——Skyline 真机待实测；②候选 A = 组件双绑迁官方 `model:xxx`（G5）；候选 B = 事件名归一单段（如 update-visible，语法合法且旧引擎兼容）；③真机复测清单加「Skyline 模式 p-modal/p-input v-model」 | P1 | 🔶 设计专项（G5 联动） |
+| G12 | **双冒号事件名 bind:update:\*（v-model 组件契约载体）**——官方事件名单段标识符语法，双冒号 → InvalidAttributePrefix（Warn）+ 属性丢弃 = 事件不注册 | 87 文件产物普查 **13 种 p-* 组件 v-model 全部发射双冒号事件**（semantic-primitives-demo/fluid-system-demo 实证：bind:update:modelValue/visible/active/group/model-value）；**官方全仓零双冒号事件测试**（grep 实证：事件测试全部单段名 customEv 等） | 官方 tag.rs：parse_colon_separated 切三段 → 前缀 Invalid → Warn + 属性丢弃；事件合法形态 = bind:name 单段（含 `my-event` 连字符）；官方双绑不走事件（model:xxx + setData 回写，见 G5 lvalue 实证） | **决策书见 §3**：步骤 1 = 用户 Skyline 复测（正常 → 决策 C 保持；失效 → 默认候选 B 单段归一）；A（迁 model:xxx）存远期官方对齐 | P1 | 🔶 设计专项（§3 决策书待拍板） |
 
 ---
 
-## 3. 与草案的关系
+## 3. G12 决策书：p-* v-model 双绑产物形态（2026-09-07，待用户真机复测后拍板）
+
+**全链路现状取证**（三轮/四轮后补全）：
+
+```
+业务源码 <p-modal v-model:visible="show">
+  → 页面产物：visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel"   ← template.ts L947
+       + js：proteusUpdateVisibleModel(e){ this.setData({ show: e.detail }) }（e.detail 直通）
+p-* 组件自身（framework 组件，独立编译单元）：defineEmits(['update:visible', …]) + emit('update:visible', v)
+  → 组件产物 js：this.triggerEvent('update:visible', v)（script.ts L1564 emit→triggerEvent 文本替换）
+运行时：triggerEvent 名 ↔ bind:update:* 名匹配 → 父 setData（Vue v-model 契约的 MP 兼容桥）
+范围：13 个框架组件 emit update:*（30 调用点；arg ∈ modelValue×8 / visible×2 / active×2 / group×1）
+```
+
+**官方语义面**（glass-easel template-compiler，本表 §1.7②）：事件名 = 单段标识符；双冒号 bind:update:* →
+切三段 → InvalidAttributePrefix（Warn）+ **属性丢弃**；官方双绑不走事件（model:xxx + 子 setData property 自动回写父
+lvalue，§1.7⑤ + G5 lvalue 实证）。**官方全仓零双冒号事件测试**。
+
+**关键未知（只能真机/开发者工具实测，本机无法离线确证）**：我们产物走微信开发者工具编译链（非
+glass-easel-template-compiler）——WebView 旧引擎已实测可用（#500 系列）；**Skyline 渲染下 bind:update:* 是否被微信
+编译链接受未知**（开源 parser 拒绝 ≠ 微信生产编译链行为）。
+
+**候选对比**（均不改变 Vue 源码层语义；Web 端零影响——真 Vue 编译不走此协议）：
+
+| | 保持现状（C） | 候选 B：事件名单段归一 | 候选 A：迁官方 model:xxx |
+|---|---|---|---|
+| 产物形态 | prop + bind:update:* | prop + bind:update-\*（连字符单段） | model:{arg}="{{x}}"（无事件） |
+| 组件侧改造 | 无 | script.ts emit→triggerEvent 对 'update:X' 字面量归一（update-\*）——13 组件/30 点自动 | emit('update:X',v) → this.setData({x:v})（组件自改 property 触发微信 model 回写） |
+| 页面侧改造 | 无 | template.ts L947 事件名单段化（handler 不变） | template.ts 契约发射改 model: 前缀 |
+| IR/规则 | 保持 | arg 语义保留（仅产物序列化名变） | vModel 契约语义变（arg→property 名） |
+| 改动风险 | 零（若 Skyline OK） | 中（两端一致改名 + golden/87 重跑 + 真机重验） | 大（Vue prop 单向流语义桥接最远：子自改 prop 仅 MP 成立；properties setData 真机行为待验；与 Web 语义分化最深） |
+| 官方语法面 | 不认（已知） | ✅ 兼容 | ✅ 完全对齐 |
+
+**推荐路径（两步）**：
+1. **步骤 1（用户，开发者工具 Skyline 模式复测）**：①p-modal v-model:visible 开合（semantic-primitives-demo「打开抽屉」/fluid-system-demo L149）；②p-input/p-switch/p-slider v-model（bind:update:model-value）；③若工作正常 → **决策 C（保持 + 登记观察，官方语法面风险存档）**，本决策书关闭；若事件不触发/控制台 InvalidAttributePrefix 警告 → 步骤 2。
+2. **步骤 2（若失效，默认选 B）**：事件名归一 `update:{arg}` → `update-{arg}`（连字符单段——官方 ident 后续符含 '-'，测试 customEv 大写亦合法；比驼峰更贴合 wxml kebab 风格）；实施面 = script.ts 字面量归一 + template.ts 契约发射 + IR arg 语义保留 + 规则双语注记 + golden/87 重跑；真机重验 WebView + Skyline。
+3. **A 存档为远期官方对齐候选**（Skyline 全面接管后 model: 是终局形态；届时 IR vModel 契约与组件协议一起迁，属独立专项）。
+
+---
+
+## 4. 与草案的关系
 
 - 草案 §4.1 TemplateIR 节点结构：节点分类（M3）参考官方 ElementKind（见 G4）；
 - 草案 §4.4 conformance 对准真实产物：产物形态对齐官方 parser 是「平台侧 conformance」的判定基准（G7 远期）；
