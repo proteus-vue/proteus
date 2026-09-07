@@ -7,24 +7,27 @@
     <div class="p-popover-trigger" @click="onTrigger">
       <slot name="trigger" />
     </div>
-    <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）：关闭事件挂全屏 layer（可靠命中层）而非遮罩元素——
-         skyline 下纯背景/无绘制子节点不参与命中。popover 为透明浮层：layer 几何全屏 + 微透明底
-         兜底绘制（Web 透明即可命中）；面板 anchored 于 trigger 保持原位（非 layer 子级，点击不冒泡到 layer） -->
+    <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）+ Skyline 悬浮层：
+         ① layer/面板包 <root-portal>（官方「整棵子树脱离页面，类 fixed，用于弹窗/弹出层」——组件需
+           componentFramework: glass-easel 声明才能生效，见 gen-routes writeComponentJsons）；
+         ② 关闭事件挂全屏 layer（可靠命中层）；面板 anchored 于 trigger（portal 内坐标语义保持） -->
     <template v-if="modelValue">
-      <view class="p-popover-layer" @click="close" />
-      <!-- placement 静态分支（同 p-popup 位置类教训：动态类 Skyline 无 scoped 匹配 → 面板左上角） -->
-      <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom">
-        <slot />
-      </view>
-      <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top">
-        <slot />
-      </view>
-      <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left">
-        <slot />
-      </view>
-      <view v-else class="p-popover-panel p-popover-right">
-        <slot />
-      </view>
+      <root-portal>
+        <view class="p-popover-layer" @click="close" />
+        <!-- placement 静态分支（同 p-popup 位置类教训：动态类 Skyline 无 scoped 匹配 → 面板左上角） -->
+        <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom">
+          <slot />
+        </view>
+        <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top">
+          <slot />
+        </view>
+        <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left">
+          <slot />
+        </view>
+        <view v-else class="p-popover-panel p-popover-right">
+          <slot />
+        </view>
+      </root-portal>
     </template>
   </div>
 </template>
