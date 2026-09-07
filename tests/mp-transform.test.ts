@@ -1404,13 +1404,13 @@ function setN() {
     expect(js).toContain('this.data.count = 5; this.setData({ count: this.data.count, double: this.data.count * 2 })')
   })
 
-  it('★#500 自定义组件 v-model:visible="show" → visible="{{show}}" + bind:update:visible 回写（旧产物 bindinput → 组件永不生效）', () => {
+  it('★#500 自定义组件 v-model:visible="show" → visible="{{show}}" + bind:update-visible 回写（旧产物 bindinput → 组件永不生效）', () => {
     const r = compileVueSfc(
       '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)</script>\n<template><p-modal v-model:visible="show">x</p-modal></template>',
       { filename: 'pages/vmodel.vue' },
     )
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update:visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
     expect(r.wxml).not.toContain('bindinput')
     expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
   })

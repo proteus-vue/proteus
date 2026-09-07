@@ -325,13 +325,13 @@ after:  wx:key="idx" / wx:key="item.id"
 
 ### `directive/v-model`
 
-**v-model → 双向绑定编译（input 走 value+bindinput；★#500 自定义组件走 prop + update:arg 事件）**
+**v-model → 双向绑定编译（input 走 value+bindinput；★#500/#G12 自定义组件走 prop + 单段事件 update-arg）**
 
-input/textarea 的 v-model="x" → value="{{x}}" + bindinput="proteusOnXInput"；★#500 自定义组件 v-model[:arg]="x"（p-modal v-model:visible）→ {{arg}}="{{x}}" + bind:update:arg="proteusUpdateArgModel"（页面 setData 回写 e.detail）——旧产物无脑 bindinput → 组件双向绑定永不生效（点击无反应真机根因）
+input/textarea 的 v-model="x" → value="{{x}}" + bindinput="proteusOnXInput"；★#500 自定义组件 v-model[:arg]="x"（p-modal v-model:visible）→ {{arg}}="{{x}}" + bind:update-arg="proteusUpdateArgModel"（页面 setData 回写 e.detail）——旧产物无脑 bindinput → 组件双向绑定永不生效；★G12 候选 B（2026-09-07 Skyline 真机实证：双冒号 bind:update:* 被 glass-easel/微信编译链丢弃——p-modal 关不掉/p-switch/p-input 不回传）→ 事件名单段化 update:{arg} → update-{arg}（arg 语义在 IR 保留 vModelComponentHandlers.arg）
 
 ```
 before: <input v-model="name" /> / <p-modal v-model:visible="show" />
-after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
+after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update-visible="proteusUpdateVisibleModel" />
 ```
 
 > why: 小程序无 v-model 语法，需双向绑定的两半：value/prop 绑定 + 事件回写（script/vmodel-handler / vModelComponentHandlers）；★#500 Vue 组件 v-model 是核心语义（prop + update:arg 事件契约），必须按规范编译；★#505 M4：契约完整入 CompileIR（arg/propName 随声明携带，IR 快照单点自足可重建产物——不再旁路手抄丢字段）
@@ -816,7 +816,7 @@ after:  properties: {
 
 **defineEmits + emit() → triggerEvent（v0.3 组件系统）**
 
-组件模式：emit("xxx", payload) → this.triggerEvent("xxx", payload)；父组件 @xxx（非 EVENT_MAP）→ bind:xxx
+组件模式：emit("xxx", payload) → this.triggerEvent("xxx", payload)；父组件 @xxx（非 EVENT_MAP）→ bind:xxx；★G12 候选 B：v-model 契约事件 'update:xxx' 首参归一单段 'update-xxx'（与父 bind:update-xxx 同口径——双冒号事件名被 Skyline/glass-easel 编译链丢弃）；非 update: 前缀事件名不动
 
 ```
 before: emit('change', count.value)

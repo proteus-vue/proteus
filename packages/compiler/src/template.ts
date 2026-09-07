@@ -943,8 +943,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           | { kind: 'input'; model: string; inputHandler: string }
         if (vmodel.kind === 'component') {
           const { propName, updateHandler } = vmodel
+          // ★G12 候选 B（2026-09-07 Skyline 真机实证）：事件名单段归一 update:{arg} → update-{arg}——
+          //   glass-easel/微信编译链事件名 = 单段标识符（双冒号 bind:update:* 被丢弃 → Skyline 下 v-model
+          //   关不掉/不回传：p-modal 遮罩关、p-switch、p-input 三实证）；arg 语义在 IR 保留（见 vModelComponentHandlers.arg）
+          const updateEvent = propName ? `update-${propName}` : 'update-model' // propName = modelValue/visible/active…（含 kebab 变体）
           attrs.push(`${propName}="{{${model}}}"`)
-          attrs.push(`bind:update:${propName}="${updateHandler}"`)
+          attrs.push(`bind:${updateEvent}="${updateHandler}"`)
           if (!ctx.vModelComponentHandlers.some((h) => h.name === updateHandler)) {
             // ★#505 M4：完整契约入旁路/IR——arg + propName 不再丢失（script 仅消费 name/model，产物等价）
             ctx.vModelComponentHandlers.push({ name: updateHandler, model, propName, ...(modelArg ? { arg: modelArg } : {}) })
@@ -952,7 +956,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           ctx.trace?.add('directive/v-model', {
             line: node.loc.start.line,
             before: `v-model${modelArg ? ':' + modelArg : ''}="${model}"`,
-            after: `${propName}="{{${model}}}" + bind:update:${propName}="${updateHandler}"（组件 prop + 事件回写）`,
+            after: `${propName}="{{${model}}}" + bind:${updateEvent}="${updateHandler}"（组件 prop + 单段事件回写——G12 候选 B）`,
           })
           break
         }

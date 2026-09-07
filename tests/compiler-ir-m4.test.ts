@@ -36,11 +36,11 @@ describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/pr
     ])
     // 产物等价锚点（#500 形态不变——行为零变化）
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update:visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
     expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
   })
 
-  it('IR 快照自足：仅凭声明可重建产物契约（propName → {{model}} 绑定 + bind:update:propName 事件；name → 回写方法）', () => {
+  it('IR 快照自足：仅凭声明可重建产物契约（propName → {{model}} 绑定 + bind:update-propName 事件；name → 回写方法）', () => {
     const src = '<script setup lang="ts">import { ref } from "vue"\nconst visible = ref(false)\nconst title = ref("")</script>\n'
       + '<template><p-modal v-model:visible="visible" /><p-modal v-model="title" /></template>'
     const r = compileVueSfc(src, { filename: 'pages/m4self.vue', ...opts })
@@ -48,9 +48,9 @@ describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/pr
     // 每个组件 v-model 站点 = 一条完整契约
     expect(entries.length).toBe(2)
     for (const e of entries) {
-      // template 侧：{{propName}}="{{model}}" + bind:update:propName="{{name}}"
+      // template 侧：{{propName}}="{{model}}" + bind:update-propName="{{name}}"
       expect(r.wxml).toContain(`${e.propName}="{{${e.model}}}"`)
-      expect(r.wxml).toContain(`bind:update:${e.propName}="${e.name}"`)
+      expect(r.wxml).toContain(`bind:update-${e.propName}="${e.name}"`)
       // script 侧：name 方法回写 e.detail → setData({ model })
       expect(r.js).toContain(`${e.name}(e) { this.setData({ ${e.model}: e.detail }) }`)
     }
@@ -64,7 +64,7 @@ describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/pr
       { name: 'proteusUpdateModelValueModel', model: 'title', propName: 'modelValue' },
     ])
     expect(r.wxml).toContain('modelValue="{{title}}"')
-    expect(r.wxml).toContain('bind:update:modelValue="proteusUpdateModelValueModel"')
+    expect(r.wxml).toContain('bind:update-modelValue="proteusUpdateModelValueModel"')
   })
 
   it('input 形态不进组件契约（value+bindinput 路径——vModelTargets 仍收集目标字段）', () => {
@@ -130,7 +130,7 @@ describe('★#505 M4 首条对照②：契约声明与规则/禁用一致（删�
     const r = compileVueSfc(src, { filename: 'pages/m4off.vue', ...opts, rules: { disabled: ['directive/v-model'] } })
     expect(r.ir?.template.vModelComponentHandlers).toEqual([])
     expect(r.ir?.template.vModelTargets).toEqual([])
-    expect(r.wxml).not.toContain('bind:update:visible')
+    expect(r.wxml).not.toContain('bind:update-visible')
   })
 })
 
