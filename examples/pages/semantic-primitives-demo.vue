@@ -96,10 +96,18 @@
       <div class="row">
         <p-text class="label">p-drawer（侧滑抽屉）：</p-text>
         <p-button variant="primary" @click="openDrawer">打开抽屉</p-button>
+        <p-button variant="ghost" size="small" @click="rightOpen = true">右抽屉</p-button>
         <p-drawer v-model="drawerOpen" side="left" :width="240">
           <div class="drawer-inner">
             <p-heading :level="3">抽屉内容</p-heading>
             <p-text>从左侧滑出，点击遮罩关闭。</p-text>
+          </div>
+        </p-drawer>
+        <!-- ★右侧抽屉用例（side=right 静态分支真机验证） -->
+        <p-drawer v-model="rightOpen" side="right" :width="240">
+          <div class="drawer-inner">
+            <p-heading :level="3">右抽屉</p-heading>
+            <p-text>从右侧滑出，点击遮罩关闭。</p-text>
           </div>
         </p-drawer>
       </div>
@@ -542,6 +550,7 @@ function onTrap(): void {
 const switchOn = ref(false)
 const sliderVal = ref(40)
 const drawerOpen = ref(false)
+const rightOpen = ref(false)
 const tabActive = ref('home')
 const selectVal = ref('')
 const cbA = ref(false)
