@@ -7,7 +7,7 @@
      与 App 端 B3 原生容器（UISheet/BottomSheet/SideBarContainer）同语义 -->
 <template>
   <view v-if="shown" class="p-modal">
-    <view class="p-modal-mask" :style="maskStyle" @click="onMaskTap" />
+    <view class="p-modal-mask" @click="onMaskTap" />
     <view class="p-modal-panel" :class="panelClass" :style="panelStyle">
       <view v-if="title || closable" class="p-modal-header">
         <text v-if="title" class="p-modal-title">{{ title }}</text>
@@ -24,7 +24,6 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import type { CSSProperties } from 'vue'
 import { createSizeAwareObserver, computeAdaptiveForm, parseAdaptiveExpression, resolveAdaptiveFormStyle } from '@proteus-vue/fluid'
 import type { SizeAwareObserver, AdaptiveVariant } from '@proteus-vue/fluid'
 
@@ -118,13 +117,11 @@ function computeAnchorStyle(anchor: unknown): Record<string, string> {
   }
 }
 
-// ★断言放方法体内（MP 编译器剥离方法体 as；字符串拼接满足 class/CSSProperties 字面量类型）
+// ★断言放方法体内（MP 编译器剥离方法体 as）
+// ★2026-09-07 布局专项：panel 形态类（--sheet/--dialog/--popover）声明在非 scoped 全局 style 块——
+//   动态 :class="{{panelClass}}" 在 MP 产物无法加 scoped 后缀（wxss .xxx-data-v 失配 → sheet 底部定位丢失
+//   → 面板落左上/中上）；全局类名唯一（p-modal-panel--*），Web 端同命中。panelStyle（inline）保留兜底。
 const panelClass = computed(() => 'p-modal-panel--' + form.value)
-
-const maskStyle = computed(() => {
-  const style: CSSProperties = { opacity: String(props.maskOpacity) }
-  return style as CSSProperties
-})
 
 const panelStyle = computed(() => {
   const style: Record<string, string> = {}
@@ -158,7 +155,9 @@ const panelStyle = computed(() => {
   right: 0;
   bottom: 0;
   z-index: 1000;
-  background: #000;
+  /* ★2026-09-07 布局专项：静态半透明（不依赖动态 style——MP 产物动态 style 若失效则全黑不透明）
+     maskOpacity prop 保留（默认 0.5）；自定义透明度在产物层不再单独输出（登记：需求出现再恢复 Web inline） */
+  background: rgba(0, 0, 0, 0.5);
 }
 .p-modal-panel {
   position: fixed;
@@ -168,16 +167,6 @@ const panelStyle = computed(() => {
   max-width: 480px;
   width: 92%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-.p-modal-panel--sheet {
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  max-width: none;
-  border-radius: 12px 12px 0 0;
-  max-height: 80vh;
-  overflow: auto;
 }
 .p-modal-header {
   display: flex;
@@ -204,5 +193,20 @@ const panelStyle = computed(() => {
 @keyframes proteus-modal-in {
   from { opacity: 0; transform: translateY(24px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+</style>
+
+<!-- ★2026-09-07 布局专项：形态类全局声明（global 非 scoped）——MP 动态 :class={{panelClass}} 无法带 scoped 后缀，
+     类名全局唯一即可；scoped 段保留静态类（p-modal-panel/mask/header… 模板字面量可加后缀） -->
+<style global>
+.p-modal-panel--sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  border-radius: 12px 12px 0 0;
+  max-height: 80vh;
+  overflow: auto;
 }
 </style>
