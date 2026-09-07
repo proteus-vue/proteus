@@ -16,6 +16,7 @@
 | `04-system-integration.md` | 系统集成映射（p-notify/p-permission/p-window 等） |
 | `05-mapping-spec.md` | 映射规范 + Compiler Plugin 机制 |
 | `06-integration-batches.md` | 跨 plan 协同 + B1-B4 分批 + 单测 |
+| `07-popover-skyline-floating-special.md` | ★ p-popover Skyline 悬浮层专项（立项设计：实证/路线评估/决策请求） |
 | `architecture-update.md` | 规约：G-24 + 原则#10.8 + PRIM001-005 |
 
 ## 核心主张
