@@ -26,10 +26,10 @@
     </view>
 
     <view class="card">
-      <text class="card-title">③ slider 回传（MP 原生 slider——p-slider 的 MP range-input 映射未落地，见下注）</text>
-      <slider :value="sliderVal" :min="0" :max="100" :step="1" @change="onSliderChange" />
+      <text class="card-title">③ p-slider v-model（update-modelValue 契约——MP 映射已落地：原生 slider 双端）</text>
+      <p-slider v-model="sliderVal" :min="0" :max="100" :step="1" />
       <text class="state-line">sliderVal：{{ sliderVal }}</text>
-      <text class="page-sub note">注：p-slider（input type=range）MP 映射未落地（组件头注「后续批次映射 slider 内置」）——Web 可用；MP 用原生 slider 测回传</text>
+      <text class="page-sub note">注：p-slider 模板已换原生 slider 标签（Web = proteus-slider 模拟 / MP = 微信原生）——拖动测回传</text>
     </view>
 
     <view class="card">
@@ -55,11 +55,6 @@ function openModal(): void {
 // ★p-input 事件契约：载荷 { value }（跨端归一）——受控回显（非 v-model 契约）
 function onTxtInput(e: { detail: { value?: string } }): void {
   txt.value = e?.detail?.value ?? ''
-}
-
-// ★MP 原生 slider：bindchange → e.detail.value（数值）
-function onSliderChange(e: { detail: { value?: number } }): void {
-  sliderVal.value = typeof e?.detail?.value === 'number' ? e.detail.value : sliderVal.value
 }
 </script>
 
