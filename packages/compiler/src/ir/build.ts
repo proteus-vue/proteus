@@ -46,5 +46,5 @@ export function buildCompileIR(tpl: TemplateTransformResult): CompileIR {
 
 /** ScriptIR 缺省（确定性——纯模板/提取禁用时 script 段 = 全空数组而非 undefined） */
 export function emptyScriptIR(): ScriptIR {
-  return { data: [], computeds: [], runtimeInits: [], lifecycles: [], watchers: [], props: [] }
+  return { data: [], computeds: [], runtimeInits: [], lifecycles: [], watchers: [], props: [], provides: [], injects: [], methods: [] }
 }

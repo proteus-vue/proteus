@@ -2464,10 +2464,16 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
       kind: w.propField ? ('props' as const) : w.expr !== undefined ? ('getter' as const) : (w.deps?.length ?? 0) > 1 ? ('array' as const) : ('ref' as const),
       immediate: w.immediate ?? false,
       observers: w.propField !== undefined,
+      params: (w.params ?? []).slice(),
       ...(w.propField ? { propField: w.propField } : {}),
     })),
     // props 声明（defineProps → properties：name + 微信类型——组件模式且 script/define-props 未禁用时提取）
     props: Object.entries(props).map(([name, p]) => ({ name, type: p.type })),
+    // provide/inject 键表（★Batch 4：裸 ref 提供 → reactive 联动；inject 订阅取消）——规则禁用态如实
+    provides: piEnabled ? provides.map((p) => ({ key: p.key, reactive: [...providedRefs.values()].includes(p.key) })) : [],
+    injects: piEnabled ? injects.map((i) => ({ key: i.key, name: i.name })) : [],
+    // methods 名册（顶层函数/箭头 —— 产物方法；模板 @handler 回显关联面）
+    methods: Object.keys(methods).map((name) => ({ name })),
   }
   return { js: es5.code, warnings, sourcemap: es5.sourcemap ?? sourcemap, ir: scriptIR }
 }

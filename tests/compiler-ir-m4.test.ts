@@ -97,7 +97,7 @@ describe('★#505 M4 ScriptIR 首条：script 语义结构化投影（data/compu
 
   it('纯模板（无 script）→ script 段确定性缺省（全空数组，非 undefined）', () => {
     const r = compileVueSfc('<template><view>hi</view></template>', { filename: 'pages/m4plain.vue', ...opts })
-    expect(r.ir?.script).toEqual({ data: [], computeds: [], runtimeInits: [], lifecycles: [], watchers: [], props: [] })
+    expect(r.ir?.script).toEqual({ data: [], computeds: [], runtimeInits: [], lifecycles: [], watchers: [], props: [], provides: [], injects: [], methods: [] })
   })
 
   it('编译两次 → script 快照深等（确定性）', () => {
@@ -124,8 +124,8 @@ describe('★#505 M4 watch 声明投影：源形态/deps/immediate/observers 入
     const src = '<script setup lang="ts">import { ref, watch } from "vue"\nconst count = ref(0)\nconst tag = ref("")\nwatch(count, (n, o) => { console.log(n, o) })\nwatch([count, tag], () => { count.value }, { immediate: true })\n</script>\n<template><view>{{ count }}</view></template>'
     const r = compileVueSfc(src, { filename: 'pages/m4watch.vue', ...opts })
     const ws = r.ir?.script?.watchers ?? []
-    expect(ws).toContainEqual({ deps: ['count'], kind: 'ref', immediate: false, observers: false })
-    expect(ws).toContainEqual({ deps: ['count', 'tag'], kind: 'array', immediate: true, observers: false })
+    expect(ws).toContainEqual({ deps: ['count'], kind: 'ref', immediate: false, observers: false, params: ['n', 'o'] })
+    expect(ws).toContainEqual({ deps: ['count', 'tag'], kind: 'array', immediate: true, observers: false, params: [] })
     // 产物等价锚点：既有 codegen 形态不变（proteusWatch 方法 + immediate 初始化调用）
     expect(r.js).toContain('proteusWatchCount')
     expect(r.js).toContain('proteusWatchCountAndTag')
@@ -135,7 +135,7 @@ describe('★#505 M4 watch 声明投影：源形态/deps/immediate/observers 入
     const src = '<script setup lang="ts">\nconst props = defineProps<{ width: number }>()\nwatch(() => props.width, (w) => { console.log(w) })\n</script>\n<template><view>{{ width }}</view></template>'
     const r = compileVueSfc(src, { filename: 'components/m4watch-props.vue', ...opts, isComponent: true })
     const ws = r.ir?.script?.watchers ?? []
-    expect(ws).toContainEqual({ deps: [], kind: 'props', immediate: false, observers: true, propField: 'width' })
+    expect(ws).toContainEqual({ deps: [], kind: 'props', immediate: false, observers: true, propField: 'width', params: ['w'] })
     // 产物等价锚点：observers 段在位
     expect(r.js).toContain('observers: {')
     expect(r.js).toContain('width(n, o)')
@@ -170,5 +170,56 @@ describe('★#505 M4 props 契约入 IR：defineProps 对象/泛型 → properti
     const src = '<script setup lang="ts">\nconst props = defineProps<{ label: string }>()\n</script>\n<template><view>{{ label }}</view></template>'
     const r = compileVueSfc(src, { filename: 'components/m4props-off.vue', ...opts, isComponent: true, rules: { disabled: ['script/define-props'] } })
     expect(r.ir?.script?.props).toEqual([])
+  })
+})
+
+describe('★#505 M4 provide/inject 键表入 IR：provide key（reactive 联动）+ inject 接收名', () => {
+  const opts = { px2rpx: true, rpxRatio: 2 }
+  it('裸 ref provide + inject 接收 → provides reactive:true / injects 键表（产物注册表段在位）', () => {
+    const src = '<script setup lang="ts">import { ref } from "vue"\nconst theme = ref("light")\nprovide("theme", theme)\nconst t = inject("theme")\n</script>\n<template><view>{{ t }}</view></template>'
+    const r = compileVueSfc(src, { filename: 'pages/m4pi.vue', ...opts })
+    const s = r.ir?.script
+    expect(s?.provides).toEqual([{ key: 'theme', reactive: true }])
+    expect(s?.injects).toEqual([{ key: 'theme', name: 't' }])
+    // 产物等价锚点：全局注册表注入段在位
+    expect(r.js).toContain('__proteusProvides')
+  })
+
+  it('静态值 provide → reactive:false（非裸 ref 提供 = 值快照不联动）', () => {
+    const src = '<script setup lang="ts">\nprovide("mode", "dark")\n</script>\n<template><view>hi</view></template>'
+    const r = compileVueSfc(src, { filename: 'pages/m4pi2.vue', ...opts })
+    expect(r.ir?.script?.provides).toEqual([{ key: 'mode', reactive: false }])
+    expect(r.ir?.script?.injects).toEqual([])
+  })
+
+  it('禁用 script/provide-inject → provides/injects 全空（产物同退）', () => {
+    const src = '<script setup lang="ts">import { ref } from "vue"\nconst theme = ref("light")\nprovide("theme", theme)\nconst t = inject("theme")\n</script>\n<template><view>{{ t }}</view></template>'
+    const r = compileVueSfc(src, { filename: 'pages/m4pi3.vue', ...opts, rules: { disabled: ['script/provide-inject'] } })
+    expect(r.ir?.script?.provides).toEqual([])
+    expect(r.ir?.script?.injects).toEqual([])
+  })
+})
+
+describe('★#505 M4 methods 名册 + observers 参数归一声明', () => {
+  const opts = { px2rpx: true, rpxRatio: 2 }
+  it('顶层函数/箭头 → methods 名册（模板 @handler 回显关联面）；产物方法在位', () => {
+    const src = '<script setup lang="ts">import { ref } from "vue"\nconst count = ref(0)\nfunction addOne() { count.value++ }\nconst go = (v) => { count.value = v }\n</script>\n<template><view @click="addOne" @tap="go">{{ count }}</view></template>'
+    const r = compileVueSfc(src, { filename: 'pages/m4methods.vue', ...opts })
+    const names = (r.ir?.script?.methods ?? []).map((m) => m.name)
+    expect(names).toContain('addOne')
+    expect(names).toContain('go')
+    // 产物等价锚点：方法体在产物
+    expect(r.js).toContain('addOne() {')
+    expect(r.js).toContain('go(v) {')
+  })
+
+  it('props 源 watch 原始参数名入 params（产物 observers 回调恒归一 n/o——#499 契约在 IR 声明）', () => {
+    const src = '<script setup lang="ts">\nconst props = defineProps<{ width: number }>()\nwatch(() => props.width, (w) => { console.log(w) })\n</script>\n<template><view>{{ width }}</view></template>'
+    const r = compileVueSfc(src, { filename: 'components/m4obs.vue', ...opts, isComponent: true })
+    const ws = r.ir?.script?.watchers ?? []
+    const obs = ws.find((w) => w.observers)
+    expect(obs?.params).toEqual(['w']) // 原始开发者参数名
+    // 产物锚点：observers 回调签名归一 n/o（#499 renameWatchParamsToNo）
+    expect(r.js).toContain('width(n, o) {')
   })
 })

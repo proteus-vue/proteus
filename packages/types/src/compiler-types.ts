@@ -264,8 +264,15 @@ export interface ScriptIR {
   runtimeInits?: Array<{ name: string }>
   /** 生命周期钩子（Vue → MP 映射后命中目标名） */
   lifecycles?: string[]
-  /** watch 声明（源形态/依赖/immediate/observers——★props 源 = WeChat observers） */
-  watchers?: Array<{ deps: string[]; kind: 'ref' | 'array' | 'getter' | 'props'; immediate: boolean; observers: boolean; propField?: string }>
+  /** watch 声明（源形态/依赖/immediate/observers——★props 源 = WeChat observers；params = 原始回调参数名
+   *   ——observers 形态产物回调参数恒归一为 n/o（#499 renameWatchParamsToNo），原始名在 params 保留） */
+  watchers?: Array<{ deps: string[]; kind: 'ref' | 'array' | 'getter' | 'props'; immediate: boolean; observers: boolean; propField?: string; params?: string[] }>
   /** props 声明（defineProps 对象/泛型 → Component properties：name + 微信类型） */
   props?: Array<{ name: string; type: string }>
+  /** provide 键表（key + 是否响应式 ref 提供——裸 ref → 写入点联动通知） */
+  provides?: Array<{ key: string; reactive: boolean }>
+  /** inject 键表（接收名 → 源 key） */
+  injects?: Array<{ key: string; name: string }>
+  /** methods 名册（顶层函数/箭头 → 产物方法——模板事件处理器回显关联面） */
+  methods?: Array<{ name: string }>
 }
