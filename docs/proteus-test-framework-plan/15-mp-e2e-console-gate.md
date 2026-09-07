@@ -130,6 +130,11 @@ skyline 页面在 webview 下降级渲染会报此类错）→ 先切 skyline �
 > 门禁红是「自动化提前抓到 bug」的价值时刻（本次 buildPermissionManifest 白屏即此门禁该拦下）——
 > 修复后该页面必须能在本门禁下稳定绿，再谈后续。
 
+**⚠ console 探针漏抓（2026-09-07 实测）**：`get_simulator_console` 对运行时 `console.log`（GUI Console 面板
+可见，如组件内探针日志）**可能漏抓**——探针性验证（交互是否到达组件层）**勿用本工具判定**，改看 GUI 或
+用状态断言（evaluate 读 data）。error 级行（ReferenceError/MiniProgramError 等）此前可被本工具捕获，
+门禁「以 error 行数为 0」的判定仍可用。
+
 ### 3 · 运行时确认
 
 `automation_runtime_info --action currentPage` → 断言 `route == pages/<目标>`。
@@ -173,5 +178,16 @@ skyline 页面在 webview 下降级渲染会报此类错）→ 先切 skyline �
 | pages/semantic-primitives-demo | dist/mp-weixin | ✅ 绿（2026-09-07 修后） | 曾红：`buildPermissionManifest is not defined`（plugin 跨行 import 漏扫 → 丢 desktop require）→ 已修 |
 | pages/semantic-primitives-demo | dist/mp-weixin（skyline） | ✅ 绿（2026-09-07） | **渲染模式坑**：webview 下报 `[渲染层错误] Cannot set properties of undefined (setting 'textContent')`（rich-text 等 glass-easel 降级）——skyline 正常；根因 private `skylineRenderEnable: false` 残留 → 已改 true 消失（见门禁 0「渲染模式指定」） |
 | pages/semantic-primitives-demo（skyline） | dist/mp-weixin | ✅ 绿（2026-09-07 e2e 回归） | **v-model handler 撞名修复后真机回归**：开→读→关→读 驱动 drawer/popover/sheet/switch/slider/tabbar/segment 全部独立回写通过（12 handler 逐一验证，产物 handler 名 `proteusUpdate{Model}Model` 不撞）；截图 `.proteus/e2e-mp/shot-drawer-open.png` |
+| pages/semantic-primitives-demo（skyline）抽屉遮罩 | dist/mp-weixin | ✅ 已修（2026-09-07） | **p-drawer 点遮罩关不掉（skyline 真机）**：探针实证——组件内遮罩元素自身不参与命中（wx:if/常驻挂载均无效，事件落根容器；面板常驻却正常）；修法：事件挂可靠层（根容器收非面板区点击关闭 + 面板 `catchtap` 吞冒泡防误关），遮罩仅视觉层 + 容器 `visibility` 显隐。**弹层族通用教训：skyline 遮罩交互不要绑在遮罩元素上**（见下「Skyline 弹层命中测试实证」） |
+
+### Skyline 弹层命中测试实证（2026-09-07 p-drawer）
+
+- **遮罩元素（absolute/fixed 全屏子节点）在 skyline 下可能完全不参与命中测试**：wx:if 动态插入、
+  常驻挂载 + class 显隐、fixed 容器 + absolute 布局（p-modal 同款）均试过，点遮罩只触发根容器事件，
+  mask 自身 handler 永不触发；面板（同容器子节点）命中却正常。
+- **可靠事件层 = 根容器**：fixed 全屏容器上 bindtap 收「非面板区」点击关闭；面板 catchtap（`.stop`）
+  吞自身冒泡防误关；遮罩退化为纯视觉层。
+- 验证手段：产物内插分层探针（根 catchtap / 面板 tap / mask handler 各打日志）——日志在 **GUI Console
+  可见但 `get_simulator_console` 可能漏抓**，由用户回报日志归属判定命中层。
 
 新增被测页 → 先在本台账登记 + 门禁绿，再写元素断言。
