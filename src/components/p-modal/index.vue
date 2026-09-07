@@ -11,7 +11,7 @@
        mask/panel absolute 相对容器（弹层常规结构） -->
   <view v-if="shown" class="p-modal">
     <view class="p-modal-mask" @click="onMaskTap" />
-    <view class="p-modal-panel" :data-form="form" :style="panelStyle">
+    <view class="p-modal-panel p-modal-panel--sheet" :data-form="form" :style="panelStyle">
       <view v-if="title || closable" class="p-modal-header">
         <text v-if="title" class="p-modal-title">{{ title }}</text>
         <text v-if="closable" class="p-modal-close" @click="onCloseTap">✕</text>
@@ -125,21 +125,39 @@ function computeAnchorStyle(anchor: unknown): Record<string, string> {
 //   动态值天然命中）+ scoped 规则 .p-modal-panel[data-form=...]（class 静态部分照常 hash）——彻底绕开
 //   「动态 class 无法 scoped 后缀」；不再依赖 JS 设 panelClass。Web 端 Vue 响应式 data-form 同机制。
 const panelStyle = computed(() => {
-  // ★位置/形态全由 data-form 属性选择器承担（sheet 底部 / dialog·popover 居中——absolute 相对 .p-modal 容器）；
-  //   inline 只承载形态补充（sheet Home Indicator 避让）。不再内联 position:fixed——会覆盖属性选择器的 absolute
-  //   并把面板拉回不可靠的 fixed 坐标系（Skyline/WebView 引擎 fixed bottom 定位失效实证）。
+  // ★2026-09-07 布局专项④（Skyline 收官）：MP 恒 sheet → 底部定位由**静态类** .p-modal-panel--sheet（scoped
+  //   模板字面量必命中——Skyline 支持类选择器；属性选择器 WebView 生效但 Skyline 不支持/被剔除）；inline 全形态
+  //   覆盖（Web dialog/popover 须清零静态 sheet 类的 right/bottom/width——dialog 有静态 --sheet 类在模板上）。
+  //   不含 position：absolute 由 .p-modal-panel 类；popover+anchor 分支例外（真 Vue fixed 相对视口）。
   const style: Record<string, string> = {}
-  // ★popover + anchor → 锚定（anchor 下方，Web 场景；MP 恒 sheet 不走此分支）——anchored 用 fixed 相对视口（真 Vue 支持）
   if (form.value === 'popover' && props.anchor) {
     const anchored = computeAnchorStyle(props.anchor)
     if (anchored.position) {
-      return anchored as Record<string, string>
+      return anchored as Record<string, string> // Web anchored：fixed left/top（覆盖 absolute）
     }
   }
-  // ★G-09 协同：sheet 底部自动避让 Home Indicator（开发者无需手动 env()）
   if (form.value === 'sheet') {
-    style.paddingBottom = 'env(safe-area-inset-bottom, 0px)'
+    // 与静态 .p-modal-panel--sheet 同值（双保险：inline 若在 MP 生效则同值无冲突；Web 亦同）
+    style.left = '0px'
+    style.right = '0px'
+    style.bottom = '0px'
+    style.width = '100%'
+    style.maxWidth = 'none'
+    style.borderRadius = '12px 12px 0px 0px'
+    style.maxHeight = '80vh'
+    style.paddingBottom = 'env(safe-area-inset-bottom, 0px)' // G-09 Home Indicator 避让
+    return style
   }
+  // dialog / popover 无 anchor（居中降级）：清零静态 --sheet 类残留（right/bottom/width/radius/maxHeight）
+  style.left = '50%'
+  style.top = '50%'
+  style.transform = 'translate(-50%, -50%)'
+  style.right = 'auto'
+  style.bottom = 'auto'
+  style.width = '92%'
+  style.maxWidth = '480px'
+  style.borderRadius = '12px'
+  style.maxHeight = 'none'
   return style
 })
 </script>
@@ -173,9 +191,10 @@ const panelStyle = computed(() => {
   width: 92%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
-/* ★2026-09-07 布局专项③：形态定位用属性选择器（:data-form 动态值无需 scoped hash）——
-   sheet 底部全宽 / dialog·popover 居中（absolute 相对 .p-modal 容器）；绕开动态 class scoped 后缀坑 */
-.p-modal-panel[data-form='sheet'] {
+/* ★2026-09-07 布局专项④：sheet 底部定位用**静态类**（模板字面量 scoped 命中——Skyline 类选择器必支持；
+   属性选择器 [data-form] 已被实证 WebView 生效而 Skyline 不认）；MP 恒 sheet 走此路，Web dialog/popover
+   由 panelStyle inline 覆盖清零（见 calcPanelStyle） */
+.p-modal-panel--sheet {
   left: 0;
   right: 0;
   bottom: 0;
@@ -184,12 +203,6 @@ const panelStyle = computed(() => {
   border-radius: 12px 12px 0 0;
   max-height: 80vh;
   overflow: auto;
-}
-.p-modal-panel[data-form='dialog'],
-.p-modal-panel[data-form='popover'] {
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
 }
 .p-modal-header {
   display: flex;
