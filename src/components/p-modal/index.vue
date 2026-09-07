@@ -8,10 +8,11 @@
 <template>
   <!-- ★2026-09-07 布局专项②：弹层容器 fixed 全屏（视口坐标系，mask 已实证可靠）+ 内部 absolute 定位——
        panel 自身 fixed+bottom 在 Skyline/WebView 渲染引擎定位不可靠（左上/中上）；容器 = 坐标基准后
-       mask/panel absolute 相对容器（弹层常规结构） -->
-  <view v-if="shown" class="p-modal">
-    <view class="p-modal-mask" @click="onMaskTap" />
-    <view class="p-modal-panel p-modal-panel--sheet" :data-form="form" :style="panelStyle">
+       mask/panel absolute 相对容器（弹层常规结构）
+       ★弹层命中契约（p-drawer P7 同款）：关闭事件挂容器（可靠命中层），遮罩纯视觉，面板 @click.stop 吞冒泡 -->
+  <view v-if="shown" class="p-modal" @click="onMaskTap">
+    <view class="p-modal-mask" />
+    <view class="p-modal-panel p-modal-panel--sheet" :data-form="form" :style="panelStyle" @click.stop="noop">
       <view v-if="title || closable" class="p-modal-header">
         <text v-if="title" class="p-modal-title">{{ title }}</text>
         <text v-if="closable" class="p-modal-close" @click="onCloseTap">✕</text>
@@ -105,6 +106,9 @@ function onMaskTap(): void {
 function onCloseTap(): void {
   emit('update:visible', false)
 }
+
+/** 面板内点击仅需阻止冒泡（MP catchtap 无值形式不可编译 → 显式方法承载 .stop） */
+function noop(): void {}
 
 /** popover 锚定定位：anchor 下方弹出（无 anchor / 无 rect → 空 = 走居中降级） */
 function computeAnchorStyle(anchor: unknown): Record<string, string> {

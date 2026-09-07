@@ -134,3 +134,54 @@ describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契�
     expect(m![0]).toContain('rgba(0, 0, 0, 0.45)')
   })
 })
+
+describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命中层（p-drawer P7 同款批量）', () => {
+  // 2026-09-07 批量：p-action-sheet / p-modal / p-popup / p-popover 关闭事件原绑遮罩元素
+  // （skyline 下纯背景子节点不参与命中）→ 改挂全屏容器/layer + 面板 catch 吞冒泡 + 遮罩纯视觉
+  it('P8a：p-action-sheet——layer 收 onCancel（wx:if modelValue），mask 无事件，panel catchtap=noop', () => {
+    const r = compileComponent('src/components/p-action-sheet/index.vue')
+    const wxml = r.wxml ?? ''
+    expect(wxml).toMatch(/<view wx:if="\{\{modelValue\}\}" bindtap="onCancel" class="p-as-layer-data-v-[\w]+/)
+    expect(wxml).toMatch(/<view class="p-as-mask-data-v-[\w]+[^"]*" \/>/)
+    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-as-panel-data-v-/)
+    expect(wxml).not.toMatch(/p-as-mask[^>]*bindtap/)
+    expect(wxml).not.toMatch(/p-as-mask[^>]*catchtap/)
+  })
+
+  it('P8b：p-modal——关闭事件挂容器（onMaskTap），mask 无事件，panel catchtap=noop', () => {
+    const r = compileComponent('src/components/p-modal/index.vue')
+    const wxml = r.wxml ?? ''
+    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bindtap="onMaskTap" class="p-modal-data-v-[\w]+/)
+    expect(wxml).not.toMatch(/p-modal-mask[^>]*bindtap/)
+    expect(wxml).not.toMatch(/p-modal-mask[^>]*catchtap/)
+    expect(wxml).toMatch(/catchtap="noop"[^>]*class="p-modal-panel-data-v-/)
+  })
+
+  it('P8c：p-popup——关闭事件挂容器（onLayerTap），mask 无事件，面板 catch:tap=noop；位置类静态字面量（skyline 动态类/动态 style 不可靠 → 左上角，修复实证）', () => {
+    const r = compileComponent('src/components/p-popup/index.vue')
+    const wxml = r.wxml ?? ''
+    const wxss = r.wxss ?? ''
+    expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bind:tap="onLayerTap" class="p-popup-data-v-[\w]+/)
+    expect(wxml).not.toMatch(/p-popup-mask[^>]*bindtap|p-popup-mask[^>]*bind:tap/)
+    expect(wxml).toMatch(/catch:tap="noop"/)
+    // 位置类静态字面量（三形态分支）——scoped 必命中；无动态拼接类/panelStyle 动态 style
+    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--bottom-data-v-[\w]+/)
+    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--top-data-v-[\w]+/)
+    expect(wxml).toMatch(/class="p-popup-panel-data-v-[\w]+ p-popup-panel--center-data-v-[\w]+/)
+    expect(wxml).not.toContain('style="{{panelStyle}}"')
+    expect(wxml).not.toMatch(/p-popup-panel---data-v-[\w]+' \+ position/)
+    expect(wxss).toMatch(/\.p-popup-panel--bottom-data-v-[\w]+\s*\{[\s\S]*?bottom: 0/)
+  })
+
+  it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位', () => {
+    const r = compileComponent('src/components/p-popover/index.vue')
+    const wxml = r.wxml ?? ''
+    const wxss = r.wxss ?? ''
+    expect(wxml).toMatch(/<view bindtap="close" class="p-popover-layer-data-v-[\w]+/)
+    expect(wxml).not.toContain('p-popover-mask')
+    const m = wxss.match(/\.p-popover-layer-data-v-[\w]+\s*\{[\s\S]*?\}/)
+    expect(m).not.toBeNull()
+    expect(m![0]).not.toContain('inset:')
+    expect(m![0]).toContain('bottom: 0')
+  })
+})
