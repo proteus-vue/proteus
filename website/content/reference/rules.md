@@ -746,13 +746,13 @@ after:  onLoad: this.store = usePlayerStore()（data 不含 store）
 
 ### `script/top-level-calls`
 
-**顶层副作用语句保留（★#494：零缩进调用注入 onLoad 最前）**
+**顶层副作用语句保留（★#494/#G12：零缩进调用注入 onLoad 初始化序，实例依赖后置 this 化）**
 
-零缩进顶层表达式语句（initAppConfig(x) / registerCapability(x) 等调用形态）按源码顺序注入 onLoad 最前（先于 runtimeInits——初始化先于读取）；此前这类语句被静默丢弃，initAppConfig 不执行则后续 getConfig 必炸（config-demo 白屏根因之二）
+零缩进顶层表达式语句（initAppConfig(x) / registerCapability(x) 等调用形态）注入 onLoad 初始化序：外部/import 初始化调用（无实例依赖）置最前（先于 runtimeInits——初始化先于读取，#494 config-demo 白屏根因之二）；callee 依赖实例的调用（方法名册成员 this.x() / runtimeInit 链式 this.host.y()）后置 runtimeInit 之后并 this 化（★G12 复测真机 bug：semantic-primitives-demo 顶层 refreshSplit() 裸名注入 onLoad → ReferenceError）；此前这类语句被静默丢弃
 
 ```
-before: initAppConfig(appConfig)
-after:  onLoad 最前：initAppConfig(appConfig)
+before: initAppConfig(appConfig) / refreshSplit() / host.registerFallback(x)
+after:  onLoad 初始化序：外部 init 前置原样；refreshSplit() → this.refreshSplit()（runtimeInit 后）；host 链式 → this.host.registerFallback(x)（runtimeInit 后）
 ```
 
 > why: MP 页面无模块级作用域，<script setup> 顶层副作用必须显式注入生命周期才有执行时机——静默丢弃违背反黑盒红线

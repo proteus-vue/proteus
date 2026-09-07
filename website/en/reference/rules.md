@@ -746,13 +746,13 @@ after:  onLoad: this.store = usePlayerStore()（data 不含 store）
 
 ### `script/top-level-calls`
 
-**Top-level side-effect statements preserved (#494: zero-indent calls injected at the start of onLoad)**
+**Top-level side-effect statements preserved (#494/G12: zero-indent calls injected into the onLoad init sequence; instance-dependent calls moved after runtimeInits and this-ified)**
 
-Zero-indent top-level expression statements (initAppConfig(x) / registerCapability(x) and other call forms) are injected at the start of onLoad in source order (before runtimeInits — initialization before reads); previously these statements were silently dropped — without initAppConfig running, a later getConfig was guaranteed to throw (second root cause of the config-demo white screen)
+Zero-indent top-level expression statements (initAppConfig(x) / registerCapability(x) and other call forms) are injected into the onLoad init sequence: external/import initialization calls with no instance dependency go first (before runtimeInits — initialization before reads, #494 root cause of the config-demo white screen); calls whose callee depends on the instance (method-registry members this.x() / runtimeInit chained calls this.host.y()) move after runtimeInits and get this-ified (G12 on-device regression: semantic-primitives-demo top-level refreshSplit() was injected into onLoad as a bare name → ReferenceError); previously these statements were silently dropped
 
 ```
-before: initAppConfig(appConfig)
-after:  onLoad 最前：initAppConfig(appConfig)
+before: initAppConfig(appConfig) / refreshSplit() / host.registerFallback(x)
+after:  onLoad 初始化序：外部 init 前置原样；refreshSplit() → this.refreshSplit()（runtimeInit 后）；host 链式 → this.host.registerFallback(x)（runtimeInit 后）
 ```
 
 > why: MP pages have no module-level scope, so top-level side effects in <script setup> must be explicitly injected into a lifecycle to ever run — silently dropping them violates the anti-black-box red line

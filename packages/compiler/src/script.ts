@@ -1307,7 +1307,7 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
   }
   if (out.length) {
     warnings.push(
-      `顶层副作用调用 ${out.length} 条（${out[0].slice(0, 40)}${out.length > 1 ? ` 等 ${out.length} 条` : ''}）已注入 onLoad 最前执行——MP 页面无模块级作用域，初始化类调用请确保幂等`,
+      `顶层副作用调用 ${out.length} 条（${out[0].slice(0, 40)}${out.length > 1 ? ` 等 ${out.length} 条` : ''}）已注入 onLoad 初始化序（外部 init 前置/实例方法调用后置 this 化）——MP 页面无模块级作用域，初始化类调用请确保幂等`,
     )
   }
   return out
@@ -2205,8 +2205,21 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     })
   }
   // ★#495c 初始化序：顶层副作用 → runtimeInits（先于 computed——computed 可依赖 runtimeInit 值如 gridClass→gridOk）→ computed（含 runtimeInit 裸名/props 改写）→ store/app-config 桥 → 快照 → immediate watch → provide/inject
+  // ★2026-09-07 G12 复测真机 bug：注入段裸方法调用漏 this 化（semantic-primitives-demo refreshSplit 顶层调用
+  //   → onLoad ReferenceError）——注入段与显式 onLoad body 同规则过 rewriteBareMethodCalls。
+  //   同时修顺序：顶层调用分两段——pre（外部/import 初始化如 initAppConfig，须先于 runtimeInit——#494 原语义）
+  //   置最前；post（callee 依赖实例：方法名册成员 this.x() / runtimeInit 链式 this.host.y()）置于 runtimeInit 之后
+  //   （源码序 const host 先定义再 host.registerFallback——此前单段置顶会让 this.host 先行 undefined）。
+  const dependsOnInstance = (c: string): boolean => {
+    const m = c.match(/^(?:await\s+)?([A-Za-z_$][\w$]*)/)
+    if (!m) return false
+    const base = m[1].split('.')[0]
+    return Boolean(base && (methodNames.has(base) || runtimeInitNames.has(base)))
+  }
+  const preCallsLine = topLevelCalls.filter((c) => !dependsOnInstance(c)).join('\n')
+  const postCallsLine = topLevelCalls.filter((c) => dependsOnInstance(c)).join('\n')
   const initLineSeq = (): string[] =>
-    [semanticGridInit, topLevelCalls.length ? topLevelCalls.join('\n') : '', runtimeInitLine(runtimeInits, methodNames), computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
+    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames), postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
