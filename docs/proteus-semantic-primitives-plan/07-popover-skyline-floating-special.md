@@ -19,6 +19,9 @@
 | 结构② 同①但面板改 fixed 固定坐标（inline style，spike V1） | ❌ 无任何视觉 |
 | 结构③ 同①外包 `<root-portal>`（官方同层，spike V2） | ❌ 无任何视觉 |
 | 参照系：p-drawer/p-modal/p-popup/p-action-sheet（**面板在 fixed 全屏容器内**） | ✅ 渲染+命中+动画全部正常 |
+| ★2026-09-07 深挖：页面级 root-portal/plain fixed 标记 | ✅ 均渲染（V3） |
+| ★组件 json 补 `componentFramework: glass-easel` 后，p-popover 内**常驻** root-portal 内容 | ✅ 渲染（V4 绿块可见） |
+| ★同上但 portal 内容在 `wx:if` 内（真实浮层形态） | ❌ 仍无视觉——glass-easel 下 portal+wx:if 挂载疑仍异常 |
 
 **根因方向**：skyline/glass-easel 下「锚定型悬浮层」（fixed 兄弟层 + 脱离 fixed 容器的
 absolute 面板 / 动态坐标）可靠性不足；同类可靠组件全部满足**「组件内 fixed 全屏容器包裹内容」**。
@@ -27,10 +30,13 @@ p-popover 的面板必须锚定在 trigger 旁 → 无法直接套用 fixed 容�
 ## 3. 候选路线
 
 ### A. 官方同层机制（root-portal / scene 语义）——中远期
-- 编译器原生标签表已登记 `root-portal`（tags.ts），官方 skyline 语义为「节点上浮到根层」。
-- 已试（组件内 `<root-portal>` 包裹，spike V2）无效 → **疑用法/位置受限**（可能须在页面顶层、
-  或有绑定约束）。下一步需：官方文档核对 `root-portal` 的承载条件 + 在**页面级**做最小复现。
-- 风险：即使同层渲染成功，锚定坐标仍需动态定位通道（见 B 的可靠性问题）。
+- 编译器原生标签表已登记 `root-portal`（tags.ts），官方 skyline 语义为「整棵子树脱离页面，类 fixed，
+  专用于弹窗/弹出层」（基础库 2.25.2+，Skyline+WebView，`enable`/`externalClass` 属性）。
+- ★2026-09-07 里程碑 1 达成：**组件 json 缺 `componentFramework: glass-easel` 是 portal 在组件内失效的根因**
+  ——gen-routes 只给页面加了该声明，组件漏加；修复后组件内**常驻** portal 内容渲染 ✅（V4）。
+- 仍卡点：portal 内容包在 `wx:if`（真实显隐形态）内不渲染；下一步候选：a) portal 外层常驻 + 内部
+  visibility/类切换（对齐 p-drawer 常驻模式）；b) 页面级 portal 用法核对；c) glass-easel 对 wx:if 子树
+  与 portal 交互的官方限制。
 
 ### B. 动态定位（selectorQuery 测量 + 动态坐标）——中风险
 - 触发后测 trigger rect（组件内 `wx.createSelectorQuery().in(this)`）→ 面板按坐标渲染。

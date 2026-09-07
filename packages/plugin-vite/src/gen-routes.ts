@@ -598,6 +598,10 @@ function writeComponentJsons(): void {
       const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
       fs.mkdirSync(path.dirname(outFile), { recursive: true })
       const json: Record<string, unknown> = { component: true }
+      // ★2026-09-07 Skyline 组件声明遗漏修复：页面 json 有 componentFramework: glass-easel，组件 json 此前漏加——
+      //   真机/模拟器实证：p-popover 组件内 <root-portal>（官方悬浮层）无该声明不渲染（V2 无效）；
+      //   补声明后组件内 portal/悬浮渲染正常（V4 绿块可见）。Skyline 下组件与页面同需该声明。
+      if (config.skyline) json.componentFramework = 'glass-easel'
       // ★样式穿透（2026-08 真机实测）：默认 styleIsolation: isolated 使页面 wxss 无法作用于组件内部——
       //   <p-view class="box"> 的 class 虽被微信合并到组件根节点，但页面 .box.data-v-xxx 规则进不去 → 外层容器样式失效。
       //   apply-shared：页面样式可作用组件（等价 Vue 父组件 scoped 样式作用于子组件根节点语义）；组件 wxss 不反向影响页面。
