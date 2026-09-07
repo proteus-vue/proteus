@@ -1189,11 +1189,11 @@ after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES20
 
 **WXML output checked against the platform standard (glass-easel official error codes as blueprint)**
 
-four official-error-code checks: ① DataBindingNotAllowed — wx:key contains {{}} (official: wx:key forbids data binding; specify the item field name or *this directly); ② DuplicatedAttribute — the same attribute appears twice (WeChat keeps only one); ③ AvoidUppercaseLetters — a tag name contains uppercase (custom-component tags in output should be all-lowercase kebab-case; uppercase attribute names are exempt — camelCase custom attributes like modelValue are legal bindings, and the official level is Note); ④ UnsupportedSyntax — a binding expression contains optional chaining ?. (the official expr.rs operator table has no ?. — Skyline/glass-easel parsing rejects it; a hit errors out and suggests guard-style rewriting)
+six official-error-code checks: ① DataBindingNotAllowed — wx:key contains {{}} (official: wx:key forbids data binding; specify the item field name or *this directly); ② DuplicatedAttribute — the same attribute appears twice (WeChat keeps only one); ③ AvoidUppercaseLetters — a tag name contains uppercase (custom-component tags in output should be all-lowercase kebab-case; uppercase attribute names are exempt — camelCase custom attributes like modelValue are legal bindings, and the official level is Note); ④ UnsupportedSyntax — a binding expression contains optional chaining ?. (the official expr.rs operator table has no ?. — Skyline/glass-easel parsing rejects it; a hit errors out and suggests guard-style rewriting); ⑤ InvalidAttribute — wx:key/wx:for-item/wx:for-index appear without a wx:for (official ForList extraction consumes them only when wx:for exists); ⑥ InvalidAttribute — wx:elif/wx:else appears with no preceding wx:if/wx:elif sibling (official If-group merging cannot find a preceding If)
 
 ```
-before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal>
-after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed] …
+before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal> / {{ a?.b }} / wx:else 悬挂 / wx:key 无 wx:for
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed/InvalidAttribute/…] …
 ```
 
 > why: ★#505 G2 platform-semantic alignment: inventing IR semantics by ourselves goes wrong (wx:key used to drop :key="t.id" entirely) — the platform standard is the glass-easel official parser error codes (docs/compiler-platform-alignment.md §1.3); normal output never hits these, so any hit is a compiler bug (echoing the tightening: validators follow platform standards, not host standards)

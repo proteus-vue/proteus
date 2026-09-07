@@ -1,8 +1,8 @@
 // tests/compiler-validate-wxml-platform.test.ts
 // ★#505 G2：wxml 产物按平台标准校验（蓝本 = glass-easel 官方 parser 错误码）——
 //   DataBindingNotAllowed（wx:key 禁数据绑定）/ DuplicatedAttribute / AvoidUppercaseLetters /
-//   UnsupportedSyntax（绑定表达式含 ?. 可选链，官方 expr.rs 无此运算符）。
-//   产物正常形态永不命中，命中即编译器 bug（G1 wx:key 防回归 + 历史 class 双属性真机坑 + 大写标签映射漏 + ?. 透传坑）。
+//   UnsupportedSyntax（绑定表达式含 ?.）/ InvalidAttribute（wx:key·for-item·index 无 for 悬挂；wx:else/elif 悬挂）。
+//   产物正常形态永不命中，命中即编译器 bug（G1 wx:key 防回归 + 历史 class 双属性真机坑 + 大写标签映射漏 + ?. 透传坑 + codegen 重构回归）。
 import { describe, it, expect } from 'vitest'
 import {
   compileVueSfc,
@@ -15,7 +15,7 @@ import {
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
-describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本四检查', () => {
+describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本六检查', () => {
   it('DataBindingNotAllowed：wx:key 含 {{}} → 命中（官方：wx:key 禁用数据绑定）', () => {
     const issues = scanWxmlPlatformIssues('<view wx:for="{{list}}" wx:key="{{item.id}}">x</view>')
     expect(issues.some((i) => i.code === 'DataBindingNotAllowed' && i.message.includes('wx:key'))).toBe(true)
@@ -51,6 +51,29 @@ describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本四检查', (
 
   it('注释与闭标签不误报', () => {
     expect(scanWxmlPlatformIssues('<!-- <PModal wx:key="{{x}}"> --></view>')).toEqual([])
+  })
+
+  it('★2026-09-07 官方深扒二轮：InvalidAttribute——wx:key / wx:for-item 无 wx:for 悬挂命中（官方 ForList 仅 for 存在时消费）', () => {
+    const r = scanWxmlPlatformIssues('<view wx:key="id">x</view>')
+    expect(r.some((i) => i.code === 'InvalidAttribute' && i.message.includes('wx:key'))).toBe(true)
+    const r2 = scanWxmlPlatformIssues('<view wx:for-item="it" wx:for-index="i">x</view>')
+    expect(r2.some((i) => i.code === 'InvalidAttribute' && i.message.includes('wx:for-item'))).toBe(true)
+    // 有 wx:for 的正常形态零命中（wx:key 恒随 for）
+    expect(scanWxmlPlatformIssues('<view wx:for="{{list}}" wx:for-item="it" wx:for-index="i" wx:key="id">x</view>')).toEqual([])
+  })
+
+  it('★2026-09-07 官方深扒二轮：InvalidAttribute——wx:else/elif 悬挂命中（官方分支组要求紧跟 if 链），配对链零误报', () => {
+    // 悬挂：wx:else 前兄弟不是 wx:if/elif
+    const r = scanWxmlPlatformIssues('<view>a</view><view wx:else>b</view>')
+    expect(r.some((i) => i.code === 'InvalidAttribute' && i.message.includes('wx:else'))).toBe(true)
+    // 悬挂：wx:elif 在 wx:else 之后（链已闭合）
+    const r2 = scanWxmlPlatformIssues('<view wx:if="{{a}}">1</view><view wx:else>2</view><view wx:elif="{{b}}">3</view>')
+    expect(r2.some((i) => i.code === 'InvalidAttribute' && i.message.includes('wx:elif'))).toBe(true)
+    // 配对链零命中（if → elif → else，跨行/自闭合均合法）
+    expect(scanWxmlPlatformIssues('<view wx:if="{{a}}">1</view>\n<view wx:elif="{{b}}">2</view>\n<view wx:else>3</view>')).toEqual([])
+    expect(scanWxmlPlatformIssues('<view wx:if="{{a}}" /><view wx:else />')).toEqual([])
+    // 注释夹在链中不破坏配对
+    expect(scanWxmlPlatformIssues('<view wx:if="{{a}}">1</view><!-- 中间 --><view wx:else>2</view>')).toEqual([])
   })
 })
 

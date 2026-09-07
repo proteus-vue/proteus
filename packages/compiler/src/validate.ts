@@ -125,19 +125,23 @@ export function assertValidResult(result: CompileResult, filename: string): void
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ★#505 G2 wxml 平台标准校验（蓝本：glass-easel parse/tag.rs ParseErrorKind）
-// 检查四项（对应官方具名错误码；产物正常形态永不命中——命中即编译器 bug）:
+// 检查六项（对应官方具名错误码；产物正常形态永不命中——命中即编译器 bug）:
 //   1. DataBindingNotAllowed —— wx:key 值含 {{}}（官方：wx:key 禁用数据绑定，直接指定字段名）
 //   2. DuplicatedAttribute —— 同一元素重复属性（历史真机坑：重复 class 只保留其一）
 //   3. AvoidUppercaseLetters —— 标签名含大写（产物自定义组件标签应为 kebab-case 全小写；
 //      属性名大写豁免——camelCase 自定义属性如 modelValue/viewBox 是合法绑定，官方亦为 Note 级）
 //   4. UnsupportedSyntax —— 绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——模板表达式会经
 //      平台表达式解析；Skyline(glass-easel) 无此运算符；官方 UnsupportedSyntax Error 级蓝本）
+//   5. InvalidAttribute —— wx:key / wx:for-item / wx:for-index 悬挂（元素无 wx:for 却带这三者；
+//      官方 ForList 提取仅 for 存在时消费，否则逐项告警——防 codegen 收敛重构回归）
+//   6. InvalidAttribute —— wx:elif / wx:else 悬挂（无前置同层 wx:if/wx:elif 兄弟；官方分支组
+//      合并 find_if_element_index 找不到前置 If → 告警 + 语义错位——Vue v-else 语义已保证配对）
 // 诚实边界：完整平台校验（标签/属性白名单、style 串合法性等）需官方 parser 级实现，暂不内置。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 单条 wxml 平台违规（code = 官方 ParseErrorKind 蓝本） */
 export interface WxmlPlatformIssue {
-  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax'
+  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax' | 'InvalidAttribute'
   message: string
   /** wxml 字符偏移（定位用） */
   at: number
@@ -213,6 +217,49 @@ export function scanWxmlPlatformIssues(wxml: string): WxmlPlatformIssue[] {
     const keyM = tag.attrText.match(/wx:key\s*=\s*(["'])(.*?)\1/)
     if (keyM && keyM[2].includes('{{')) {
       issues.push({ code: 'DataBindingNotAllowed', message: `<${tag.name}> wx:key="${keyM[2]}" 含数据绑定 {{}}——官方规范：wx:key 禁用数据绑定（直接指定 item 字段名或 *this）`, at: tag.at })
+    }
+    // InvalidAttribute：wx:key / wx:for-item / wx:for-index 悬挂（无 wx:for——官方 ForList 提取
+    //   tag.rs 仅 for 存在时消费这三者，否则逐项 InvalidAttribute 告警；我们产物 wx:key 恒随 v-for
+    //   同元素发射，命中即 codegen 重构回归）
+    const hasFor = names.includes('wx:for')
+    if (!hasFor) {
+      const dangling = ['wx:key', 'wx:for-item', 'wx:for-index'].filter((n) => names.includes(n))
+      if (dangling.length) {
+        issues.push({ code: 'InvalidAttribute', message: `<${tag.name}> ${dangling.join('/')} 无 wx:for 悬挂（官方仅 wx:for 元素消费——列表键/作用域名须随 for）`, at: tag.at })
+      }
+    }
+  }
+  // InvalidAttribute：wx:elif / wx:else 悬挂（无前置同层 wx:if/wx:elif 兄弟——官方分支组合并
+  //   find_if_element_index 找不到前置 If → InvalidAttribute 告警 + 分支语义错位；Vue v-else 已保证配对，
+  //   命中即 codegen 重构回归）——结构性扫描：栈模拟深度 + 每层最近兄弟的 if 态
+  const noComments2 = wxml.replace(/<!--[\s\S]*?-->/g, (c) => ' '.repeat(c.length))
+  const structRe = /<((\/?)([a-zA-Z][\w-]*)((?:[^">']|"[^"]*"|'[^']*')*?)(\/?))>/g
+  let sm: RegExpExecArray | null
+  const depthIf: string[] = [] // depthIf[d] = 最近一个已完成兄弟的 if 态：'if' | 'elif' | 'else' | 'none'
+  let openDepth = 0
+  const setIf = (d: number, v: string) => { depthIf[d] = v }
+  while ((sm = structRe.exec(noComments2))) {
+    const closing = sm[2]
+    const name = sm[3]
+    const attrText = sm[4] ?? ''
+    const selfClose = sm[5] === '/'
+    const attrs = parseAttrNames(attrText)
+    if (closing) { openDepth = Math.max(0, openDepth - 1); continue }
+    const isIf = attrs.includes('wx:if')
+    const isElif = attrs.includes('wx:elif')
+    const isElse = attrs.includes('wx:else')
+    if (isElif || isElse) {
+      const prev = depthIf[openDepth] ?? 'none'
+      if (prev !== 'if' && prev !== 'elif') {
+        issues.push({ code: 'InvalidAttribute', message: `<${name}> ${isElif ? 'wx:elif' : 'wx:else'} 悬挂（前置兄弟无 wx:if/wx:elif——官方分支组要求 elif/else 紧跟 if 链）`, at: sm.index })
+      }
+    }
+    // 记录本元素对同层后续兄弟的 if 态
+    const st = isIf ? 'if' : isElif ? 'elif' : isElse ? 'else' : 'none'
+    setIf(openDepth, st)
+    if (!selfClose) {
+      openDepth++
+      if (openDepth < depthIf.length) depthIf[openDepth] = 'none' // 进入子层重置
     }
   }
   // UnsupportedSyntax：绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——含 ?? 与函数调用但无可选链；
