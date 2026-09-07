@@ -325,13 +325,13 @@ after:  wx:key="idx" / wx:key="item.id"
 
 ### `directive/v-model`
 
-**v-model → two-way binding compilation (input → value+bindinput; ★#500 custom components → prop + update:arg event)**
+**v-model → two-way binding compilation (input → value+bindinput; ★#500/G12 custom components → prop + single-segment event update-arg)**
 
-v-model="x" on input/textarea → value="{{x}}" + bindinput="proteusOnXInput"; ★#500 v-model[:arg]="x" on a custom component (p-modal v-model:visible) → {{arg}}="{{x}}" + bind:update:arg="proteusUpdateArgModel" (the page writes back e.detail via setData) — the old output blindly emitted bindinput, so component two-way binding never worked (the real-device root cause of unresponsive clicks)
+v-model="x" on input/textarea → value="{{x}}" + bindinput="proteusOnXInput"; ★#500 v-model[:arg]="x" on a custom component (p-modal v-model:visible) → {{arg}}="{{x}}" + bind:update-arg="proteusUpdateArgModel" (the page writes back e.detail via setData) — the old output blindly emitted bindinput, so component two-way binding never worked; ★G12 candidate B (2026-09-07 Skyline on-device evidence: double-colon bind:update:* is dropped by the glass-easel/WeChat compile chain — p-modal cannot close, p-switch/p-input do not write back) → event names are normalized to single segments update:{arg} → update-{arg} (arg semantics stay in the IR as vModelComponentHandlers.arg)
 
 ```
 before: <input v-model="name" /> / <p-modal v-model:visible="show" />
-after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
+after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update-visible="proteusUpdateVisibleModel" />
 ```
 
 > why: Mini Programs have no v-model syntax; the two halves of two-way binding are needed: a value/prop binding + an event write-back (script/vmodel-handler / vModelComponentHandlers); ★#500 v-model on Vue components is core semantics (prop + update:arg event contract) and must be compiled per spec; ★#505 M4: the full contract enters CompileIR (arg/propName travel with the declaration, so the IR snapshot is self-sufficient to rebuild the artifact — no more lost fields from hand-copied side channels)
@@ -816,7 +816,7 @@ after:  properties: {
 
 **defineEmits + emit() → triggerEvent (v0.3 component system)**
 
-Component mode: emit("xxx", payload) → this.triggerEvent("xxx", payload); parent @xxx (not in EVENT_MAP) → bind:xxx
+Component mode: emit("xxx", payload) → this.triggerEvent("xxx", payload); parent @xxx (not in EVENT_MAP) → bind:xxx; ★G12 candidate B: v-model contract events normalize their first-arg literal 'update:xxx' to the single segment 'update-xxx' (matching the parent bind:update-xxx — double-colon event names are dropped by the Skyline/glass-easel compile chain); non-update: event names are left untouched
 
 ```
 before: emit('change', count.value)

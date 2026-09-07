@@ -4,21 +4,21 @@
 <template>
   <view class="page">
     <text class="page-title">★G12 v-model MP 复测（Skyline）</text>
-    <text class="page-sub">p-* 组件 v-model 双绑回传——bind:update:* 事件在 Skyline 是否工作</text>
+    <text class="page-sub">p-* 组件 v-model 双绑回传——单段事件 bind:update-*（G12 候选 B）在 Skyline/WebView 是否工作</text>
 
     <view class="card">
-      <text class="card-title">① p-modal v-model:visible（update:visible 契约）</text>
+      <text class="card-title">① p-modal v-model:visible（update-visible 单段事件契约）</text>
       <p-button variant="primary" size="small" @click="openModal">打开弹窗</p-button>
       <p-modal v-model:visible="modalVisible" title="G12 复测弹窗" :mask-closable="true">
         <view class="modal-body">
-          <text>点遮罩关闭——若 visible 回传 false 说明 update:visible 事件工作</text>
+          <text>点遮罩关闭——若 visible 回传 false 说明 update-visible 事件工作</text>
         </view>
       </p-modal>
       <text class="state-line">modalVisible：{{ modalVisible ? 'true（开）' : 'false（关）' }}</text>
     </view>
 
     <view class="card">
-      <text class="card-title">② p-switch v-model（update:modelValue 契约）</text>
+      <text class="card-title">② p-switch v-model（update-modelValue 契约）</text>
       <view class="row">
         <p-switch v-model="sw" />
         <text class="state-line">sw：{{ sw ? '开' : '关' }}</text>
@@ -26,13 +26,13 @@
     </view>
 
     <view class="card">
-      <text class="card-title">③ p-slider v-model（update:modelValue 契约）</text>
+      <text class="card-title">③ p-slider v-model（update-modelValue 契约）</text>
       <p-slider v-model="sliderVal" :min="0" :max="100" :step="1" />
       <text class="state-line">sliderVal：{{ sliderVal }}</text>
     </view>
 
     <view class="card">
-      <text class="card-title">④ p-input v-model（update:model-value 契约）</text>
+      <text class="card-title">④ p-input v-model（update-modelValue 契约）</text>
       <p-input v-model="txt" placeholder="输入文字测回传" />
       <text class="state-line">txt：{{ txt || '（空）' }}</text>
     </view>

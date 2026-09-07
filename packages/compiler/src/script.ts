@@ -1561,7 +1561,13 @@ function rewriteRefAccess(
   //  替换为括号/尖括号深度平衡的剥除器（stripTypeSyntax），任意嵌套一次覆盖；不再新增形态正则
   out = stripTypeSyntax(out)
   // 组件事件（v0.3）：emit('xxx', payload) → this.triggerEvent('xxx', payload)（微信组件方法）
-  if (emitEnabled) out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
+  if (emitEnabled) {
+    out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')
+    // ★G12 候选 B（2026-09-07 Skyline 真机实证）：v-model 契约事件名单段化——triggerEvent 首参字符串字面量
+    //   'update:xxx' → 'update-xxx'（与父侧 bind:update-xxx 同口径；双冒号事件名在 Skyline/glass-easel 编译链
+    //   不匹配；非 update: 前缀事件名（formChange/openshare…）不动；动态/变量事件名不动——产物保持原样）
+    out = out.replace(/this\.triggerEvent\(\s*(['"])(update:)([^'"]*)\1/g, 'this.triggerEvent($1update-$3$1')
+  }
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
   if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
   // computed 写路径（v0.3 尾）：x.value = v → setter 方法调用；只读（无 setter）→ 注释忽略

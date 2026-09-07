@@ -42,13 +42,13 @@ describe('★#505 v-model 校准族①：规则已迁执行层（第五条 apply
 })
 
 describe('★#505 v-model 校准族②：产物等价 + 端到端契约', () => {
-  it('自定义组件 v-model:visible → prop + bind:update:visible（p-modal 场景）', () => {
+  it('自定义组件 v-model:visible → prop + bind:update-visible（p-modal 场景）', () => {
     const r = compileVueSfc(
       '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)</script>\n<template><p-modal v-model:visible="show">x</p-modal></template>',
       { filename: 'pages/vm1.vue', ...opts },
     )
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update:visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
     expect(r.wxml).not.toContain('bindinput')
     expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
   })
@@ -71,6 +71,19 @@ describe('★#505 v-model 校准族②：产物等价 + 端到端契约', () => 
     expect(r.ir?.template.vModelTargets).toEqual(['show'])
     expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' }])
   })
+  it('组件侧 emit update 归一：emit(\'update:visible\') → triggerEvent(\'update-visible\')（组件自身产物单段，与父 bind:update-visible 同口径）；非 update 事件名不动', () => {
+    const src = '<script setup lang="ts">\n'
+      + 'const props = defineProps({ visible: { type: Boolean, default: false } })\n'
+      + 'const emit = defineEmits([\'update:visible\', \'formChange\'])\n'
+      + 'function onMaskTap(): void { emit(\'update:visible\', false) }\n'
+      + 'function onFormChange(): void { emit(\'formChange\', \'a\') }\n'
+      + '</script>\n<template><view class="x" @tap="onMaskTap">m</view><view @tap="onFormChange">f</view></template>'
+    const r = compileVueSfc(src, { filename: 'components/p-vmtest/index.vue', isComponent: true, ...opts })
+    expect(r.js).toContain("this.triggerEvent('update-visible', false)")
+    expect(r.js).not.toContain("triggerEvent('update:visible'")
+    // 非 v-model 契约事件名原样（formChange 无冒号不动）
+    expect(r.js).toContain("this.triggerEvent('formChange', 'a')")
+  })
 })
 
 describe('★#505 v-model 校准族③：删/禁用规则即红', () => {
@@ -78,8 +91,8 @@ describe('★#505 v-model 校准族③：删/禁用规则即红', () => {
     const src = '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)</script>\n<template><p-modal v-model:visible="show">x</p-modal></template>'
     const enabled = compileVueSfc(src, { filename: 'pages/vm4.vue', ...opts })
     const disabled = compileVueSfc(src, { filename: 'pages/vm4.vue', ...opts, rules: { disabled: ['directive/v-model'] } })
-    expect(enabled.wxml).toContain('bind:update:visible')
-    expect(disabled.wxml).not.toContain('bind:update:visible')
+    expect(enabled.wxml).toContain('bind:update-visible')
+    expect(disabled.wxml).not.toContain('bind:update-visible')
     expect(disabled.wxml).not.toContain('visible="{{show}}"')
     expect(disabled.warnings.join('\n')).toContain('directive/v-model 已被禁用')
   })

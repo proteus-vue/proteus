@@ -77,7 +77,7 @@ describe('★#505 M1 compileVueSfc 端到端：result.ir 存在且与产物旁�
     expect(r.ir?.template.vModelTargets).toEqual(expect.arrayContaining(['show', 'name']))
     expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' }])
     // 产物等价锚点：既有形态不受 ir 影响
-    expect(r.wxml).toContain('bind:update:visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
     expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
   })
 
