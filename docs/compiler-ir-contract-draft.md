@@ -5,8 +5,12 @@
 > 背景决策：#290（语义 IR + 可插拔后端定案）、#504（方法论：「不自研成熟工具链，只自建语义层」）、
 > 用户 2026-09-07 方向确认（自研边界应收敛为**一份语义层**，而非每端一套文本转换器）。
 >
+> **★执行状态（2026-09-07 收口）**：M0-M5 全部 ✅（逐批详见 §6/§9/§10 + PROJECT_MEMORY）——本文件已从
+> 评审稿转为**落地记录**；各节末尾「★执行态」注记标注设计 vs 现实的对照与结构性遗留
+> （codegen 收敛 / script 规则 apply 化 / ScriptIR×conformance——均待专项立项）。
+>
 > **★#505 平台语义参考附录**：`docs/compiler-platform-alignment.md`（glass-easel 官方 WXML 语义模型——
-> 不再自造 IR 语义，官方 parser 即平台语义真相；含 wx:key 自造限制实证 G1）。
+> 不再自造 IR 语义，官方 parser 即平台语义真相；含 wx:key 自造限制实证 G1 与差距表 G1-G12 执行态）。
 
 ---
 
@@ -16,6 +20,10 @@
 2. **方案**：把主编译路径提升为「**框架 IR（CompileIR）→ 规则在 IR 上变换 → codegen 后端**」三阶段，与既有 C-IR / CompilerIR **打通**（不建第三套独立语义体系），让 conformance 对准**真实主编译产物**。
 3. **不推翻**：#497–#504 的资产全部保留（AST 化发现层、83 条双语规则说明书、ES5 babel、87 文件门禁）；Web/App 仍走成熟工具链（真 Vue / 官方 createRenderer），**不重建三端 codegen**。
 4. **每步验收铁律**：产物由 IR 生成（非直出）+ 语义快照进 conformance 门禁；重构期产物与现状**逐字节等价**（保 87 门禁与 golden 全绿）。
+
+> ★#505 执行态（2026-09-07 收口）：问题/方案/不推翻三点均按草案落地（M1-M5 ✅）；**铁律点 4 前半未达成**——
+> 产物仍由既有 codegen 直出、IR 快照为**旁路附加**而非生成源（M1 分期放行未回填 → 登记专项「codegen 收敛」，§10 偏差①）；
+> 「逐字节等价」全程兑现（golden/87 门禁/全量测试各批全绿，未重建三端 codegen）。
 
 ---
 
@@ -86,6 +94,12 @@ CompileResult = { wxml, js, wxss, warnings, trace, sourcemap }   ← 100% 文本
 
 → 「修一次、多端 conformance 受益」**至今没有机器通道**——这正是本草案要补的核心一环。
 
+> ★#505 执行态：本节为 2026-09-07 **取证快照（只读基线）**，落地后的现状变化——
+> ①1.2 的 15 字段旁路 → M1 `buildTemplateIR` 1:1 投影 14 字段 + M4 v-model 组件契约升级（arg/propName 不再丢）——
+> 仍是**旁路快照**（非 codegen 消费面，见 §10 偏差①）；②1.3 规则治理 M5 落地（总数 89 快照 + verify 存在性门禁 +
+> 变换点覆盖 + `executeRule` 公开导出 + 六条 apply 分派点机器锁定 + example harness）；③1.5 断裂已修 **template 半**
+> （M3 交叉门禁 R1-R3 + 六端 readback + semanticForest D6 A'）；**ScriptIR 半仍零 conformance 消费方**（§10 偏差③）。
+
 ---
 
 ## 2. 设计目标（可判定）
@@ -98,6 +112,12 @@ CompileResult = { wxml, js, wxss, warnings, trace, sourcemap }   ← 100% 文本
 | G4 | 不建第三套独立语义体系 | CompileIR 的语义词表引用 C-IR（SEMANTIC_ENUM/TAG_SEMANTIC_MAP），产物快照与 CompilerIR 形状对齐 |
 | G5 | 不推翻现有、不重建三端 codegen | 重构期产物逐字节等价（golden/87 门禁不动）；Web/App 仍走成熟工具链 |
 | G6 | 与 #504 方法论一致 | 框架自研边界 = CompileIR 定义 + 语义变换规则；parse（sfc/dom/babel）、ES5（babel）全用成熟工具 |
+
+> ★#505 执行态对照（2026-09-07）：**G1 前半 ✅**（compileVueSfc 内部存在可校验 CompileIR 快照）/ **后半 ⬜**
+> （产物仍直出——§10 偏差①，专项 codegen 收敛）；**G2 前半 ✅**（六条 apply + 变换点覆盖门禁，删规则即红）/ **script 语义域 ⬜**
+> （九语义未经规则 apply 分派——§10 偏差②，专项）；**G3 template 半 ✅**（M3）/ **ScriptIR ⬜**（§10 偏差③，专项）；
+> **G4 ✅**（语义词表引用 C-IR 不新造；平台语义对齐方法论见 compiler-platform-alignment.md）；**G5 ✅**（逐字节等价全程兑现、
+> 未重建三端）；**G6 ✅**（parse/babel 全成熟工具，框架自研 = CompileIR 定义 + 语义变换规则）。
 
 ---
 
@@ -131,6 +151,10 @@ codegen 后端（薄）→ wxml / js / wxss（与现状逐字节等价）
 - **CompileIR 复用 C-IR 的语义词表**（SEMANTIC_ENUM/TAG_SEMANTIC_MAP），不新造 p-* 语义；
 - CompileIR 的「语义快照」序列化后与 CompilerIR.semantic 同构 → 真实主编译产物进入既有 conformance；
 - 命名避免蓝图旧称 `IRProgram`（7 类节点覆盖 route/store/capability…领域，超出编译管线职责且无真实消费方）；本 IR 从 1.2 的 15 字段真实契约升级而来——**先有事实、后有名字**。
+
+> ★#505 执行态：CompileIR 已落地（类型入 `@proteus-vue/types/compiler-types` + compiler re-export +
+> `src/ir/build.ts` 投影 + `compileVueSfc` 结果附加 `result.ir` 快照）——但图中「codegen 后端消费 CompileIR」与
+> 「语义快照 → conformance」两条链路仅后者通 **template 半**（M3）：codegen 仍直出（§10 偏差①）、ScriptIR 快照零消费方（§10 偏差③）。
 
 ---
 
@@ -174,6 +198,13 @@ ScriptIR = {
 
 > v0.1 **只先落 TemplateIR + ScriptIR 的类型与「旁路字段 → 声明节点」的搬迁**（行为零变化）；
 > 表达式级分析（识别依赖/归一参数）逐语义迁入，不从第一天做全量表达式 IR。
+
+> ★#505 执行态：4.1 结构按草案落地——TemplateIR 由 1.2 的 14 字段提升为声明 + ScriptIR 十语义族
+> （data/computeds/runtimeInits/lifecycles/watchers(含 props 源 observers)/props/provides/injects/methods，M4 评审 ✅ §10）；
+> 实际字段名以 `@proteus-vue/types/compiler-types` ScriptIR/TemplateIR 为准。4.2 挂载方式 ✅——executeRule 公开导出（M2）、
+> 六条 apply（px-to-rpx/scope-attr/v-bind-style/inline-expression/v-model/self-once）+ 变换点覆盖门禁（M5）+ example↔实现差分 harness（M5 批2）。
+> 4.3 codegen 后端未收敛（§10 偏差①专项）。4.4 快照进 conformance：template 半 ✅（M3 R1-R3/六端 readback/semanticForest）；
+> ScriptIR 待消费方（§10 偏差③专项）。
 
 ### 4.2 规则注册表挂载方式（G2 的机器基础）
 
@@ -222,6 +253,10 @@ ScriptIR = {
 
 **候选备选**：v-model 自定义组件契约（#501，契约性最强、可对齐 Web 真实 Vue 语义，但跨 script 方法体生成，范围略大）；v-show 括号化（最小冒烟，价值上限低）。
 
+> ★#505 执行态：`:style` 试点即 **M2 ✅**——`directive/v-bind-style` 迁执行层（第三条真实 apply：input exp → output
+> {target, derived}）+ TemplateIR.styleBindings 升级 `{target, valueKind: 'string-only'}`（平台序列化约束入 IR）+ 删规则即红反向验证；
+> 试点验收 4 条全过（逐字节等价/快照含 valueKind/87 门禁全绿/删除规则快照门禁红）。
+
 ---
 
 ## 6. 里程碑与退出标准
@@ -235,7 +270,7 @@ ScriptIR = {
 | M4 | **ScriptIR 语义逐条迁入**（computed 链 / watch / props / observers 归一…） | 每条 = 一条规则 apply + 产物断言；drift 门禁升级为变换点覆盖 |
 | M5 | 规则治理补全：verify 解析 + example 编译断言 + 总数快照门禁 + executeRule 公开导出 | transforms 世界与 conformance 世界共享门禁，无盲区 |
 
-**执行状态（2026-09-07）**：M1 ✅ / M2 ✅ / M3 ✅（语义森林 D6 采纳 A'，见 §9）/ **M4 ✅（评审通过，偏差登记见 §10）** / M5 ✅（批 1-4：治理门禁基线 + example harness + 变换点覆盖 + scope-attr 接线）。全量 2505/2505 + CI 等价 verify 全绿。
+**执行状态（2026-09-07）**：M1 ✅ / M2 ✅ / M3 ✅（语义森林 D6 采纳 A'，见 §9）/ **M4 ✅（评审通过，偏差登记见 §10）** / M5 ✅（批 1-4：治理门禁基线 + example harness + 变换点覆盖 + scope-attr 接线）。各批验证全绿（全量测试随批递增，最新 2511/2511，详见 PROJECT_MEMORY）。
 
 每里程碑独立可停可审；任何一步与 §2 目标冲突即停，不悄悄滑回"直出 + 旁注"。
 
@@ -275,6 +310,9 @@ ScriptIR = {
 | D3 | 重构期产物兼容 | A. 逐字节等价是硬约束（golden 4 不动）B. 允许 golden 快照更新 | **A（强烈建议）**：等价是"不推翻"承诺的机器证明；golden 更新会掩盖漂移 |
 | D4 | M1-M5 节奏 | 一次评审后连续做 / 每 M 评审一次 | 每 M 评审一次（M1 后先看字节等价证据再放行 M2） |
 | D5 | 命名（若 D1=A） | CompileIR / PipelineIR / StageIR | CompileIR（与 CompilerIR 区分清晰、表意直白） |
+
+> ★#505 执行态：D1-D5 全部按「建议」采纳实施（D1 = 类型落 `@proteus-vue/types/compiler-types` + compiler re-export——
+> 与 C-IR/CompilerIR 平级第三套但复用词表；D3 逐字节等价为硬约束全程兑现；D4 每 M 评审一次——M4 评审记录见 §10）。
 
 ---
 
