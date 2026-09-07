@@ -44,7 +44,7 @@ export function buildCompileIR(tpl: TemplateTransformResult): CompileIR {
   }
 }
 
-/** ScriptIR 占位（M4 迁入前不产出内容；保留导出以免类型成为死代码） */
+/** ScriptIR 缺省（确定性——纯模板/提取禁用时 script 段 = 全空数组而非 undefined） */
 export function emptyScriptIR(): ScriptIR {
-  return {}
+  return { data: [], computeds: [], runtimeInits: [], lifecycles: [], watchers: [], props: [] }
 }

@@ -334,7 +334,7 @@ before: <input v-model="name" /> / <p-modal v-model:visible="show" />
 after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
 ```
 
-> why: 小程序无 v-model 语法，需双向绑定的两半：value/prop 绑定 + 事件回写（script/vmodel-handler / vModelComponentHandlers）；★#500 Vue 组件 v-model 是核心语义（prop + update:arg 事件契约），必须按规范编译
+> why: 小程序无 v-model 语法，需双向绑定的两半：value/prop 绑定 + 事件回写（script/vmodel-handler / vModelComponentHandlers）；★#500 Vue 组件 v-model 是核心语义（prop + update:arg 事件契约），必须按规范编译；★#505 M4：契约完整入 CompileIR（arg/propName 随声明携带，IR 快照单点自足可重建产物——不再旁路手抄丢字段）
 
 ### `directive/v-html`
 

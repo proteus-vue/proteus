@@ -69,7 +69,7 @@ describe('★#505 v-model 校准族②：产物等价 + 端到端契约', () => 
       { filename: 'pages/vm3.vue', ...opts },
     )
     expect(r.ir?.template.vModelTargets).toEqual(['show'])
-    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show' }])
+    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' }])
   })
 })
 

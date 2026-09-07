@@ -334,7 +334,7 @@ before: <input v-model="name" /> / <p-modal v-model:visible="show" />
 after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update:visible="proteusUpdateVisibleModel" />
 ```
 
-> why: Mini Programs have no v-model syntax; the two halves of two-way binding are needed: a value/prop binding + an event write-back (script/vmodel-handler / vModelComponentHandlers); ★#500 v-model on Vue components is core semantics (prop + update:arg event contract) and must be compiled per spec
+> why: Mini Programs have no v-model syntax; the two halves of two-way binding are needed: a value/prop binding + an event write-back (script/vmodel-handler / vModelComponentHandlers); ★#500 v-model on Vue components is core semantics (prop + update:arg event contract) and must be compiled per spec; ★#505 M4: the full contract enters CompileIR (arg/propName travel with the declaration, so the IR snapshot is self-sufficient to rebuild the artifact — no more lost fields from hand-copied side channels)
 
 ### `directive/v-html`
 

@@ -81,6 +81,20 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
   fluidLayout?: FluidLayoutConfig
 }
 
+/** 自定义组件 v-model[:arg] 回写契约（★#500 prop + update:arg 事件 → 页面 setData）
+ * ★#505 M4：从 {name, model} 升级为完整契约——arg（v-model 参数）/propName（组件属性名）不再旁路丢失；
+ *   name = script 回写方法名（proteusUpdate<Arg>Model）；model = 绑定目标字段。 */
+export interface VModelComponentHandler {
+  /** 回写方法名（script 注入 setData 方法） */
+  name: string
+  /** 绑定目标字段（data 字段名） */
+  model: string
+  /** v-model 参数（v-model:visible → 'visible'；无参数组件形态缺省 → 不携带） */
+  arg?: string
+  /** 组件属性名（arg ?? 'modelValue'——template 侧 {{propName}} 绑定 + bind:update:propName 事件） */
+  propName: string
+}
+
 /** template → wxml 结果 */
 export interface TemplateTransformResult {
   wxml: string
@@ -107,7 +121,7 @@ export interface TemplateTransformResult {
   /** ★#500 :style 绑定的动态标识符（computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings?: string[]
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */
-  vModelComponentHandlers?: Array<{ name: string; model: string }>
+  vModelComponentHandlers?: VModelComponentHandler[]
   /** ★15-page-scroll-container：页面已自动包滚动容器（compileVueSfc 据此注入高度样式） */
   pageScrollWrapped?: boolean
   warnings: string[]
@@ -134,7 +148,7 @@ export interface ScriptTransformOptions {
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生值自动 styleToString 化——MP 双渲染器 style 仅收字符串） */
   styleBindings?: string[]
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（setData 方法名 + 字段） */
-  vModelComponentHandlers?: Array<{ name: string; model: string }>
+  vModelComponentHandlers?: VModelComponentHandler[]
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
   moduleImports?: Array<{ source: string; requirePath: string }>
   trace?: TransformTrace
@@ -144,8 +158,9 @@ export interface ScriptTransformOptions {
 export interface ScriptTransformResult {
   js: string
   warnings: string[]
-  /** sourcemap v3 JSON（方法级 JS 源码映射） */
   sourcemap?: string
+  /** ★#505 M4 ScriptIR 语义快照（script 提取层结构化投影——codegen 出口不变；编译产物与既有逐字节等价） */
+  ir?: ScriptIR
 }
 
 /** 编译选项（compileVueSfc 入口） */
@@ -203,8 +218,8 @@ export interface CompileIR {
 export interface TemplateIR {
   /** v-model 绑定目标字段（含组件形态；组件回写见 vModelComponentHandlers） */
   vModelTargets: string[]
-  /** 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件契约 → script 注入 setData 方法） */
-  vModelComponentHandlers: Array<{ name: string; model: string }>
+  /** 自定义组件 v-model[:arg] 回写处理器（完整契约：prop + update:arg 事件 + setData 回写——★#505 M4 arg/propName 不再丢） */
+  vModelComponentHandlers: VModelComponentHandler[]
   /** 事件适配器（.self/.once 修饰符包装方法名） */
   eventWrappers: { self: string[]; once: string[] }
   /** 内联事件表达式包装方法（name + 代码段，script 原样发射） */
@@ -235,12 +250,22 @@ export interface TemplateIR {
   }
 }
 
-/** 脚本语义声明（★#505：类型先落地，M4 随逐条迁入填充） */
+/** 脚本语义声明（★#505：类型先落地，M4 随逐条迁入填充）
+ * ★#505 M4 ScriptIR 首条：data/computeds/runtimeInits/lifecycles 结构化投影（script 提取层局部态 → 声明）
+ *   —— data = 进 data 对象的字段（ref/reactive/字面量 const）；computeds = 派生声明（deps 依赖 + 形态）；
+ *   runtimeInits = 实例属性通道（函数调用初始化 + let 句柄——onLoad/attached 注入，非 data）；
+ *   lifecycles = 命中的生命周期钩子名（onLoad/onReady/onUnload——Vue 钩子映射后目标）。 */
 export interface ScriptIR {
-  /** data 声明（ref/reactive/顶层 let） */
+  /** data 声明（ref/reactive/顶层 let 字面量 → data） */
   data?: Array<{ name: string }>
-  /** computed 派生声明 */
-  computeds?: Array<{ name: string }>
-  /** 生命周期钩子映射（onMounted→onReady 等） */
+  /** computed 派生声明（含依赖 deps 与形态 kind——块体/可写/表达式） */
+  computeds?: Array<{ name: string; deps?: string[]; kind?: 'expression' | 'block' | 'writable' }>
+  /** 实例属性通道（runtimeInit 函数调用 + 顶层 let null 句柄——非 data，onLoad/attached 注入） */
+  runtimeInits?: Array<{ name: string }>
+  /** 生命周期钩子（Vue → MP 映射后命中目标名） */
   lifecycles?: string[]
+  /** watch 声明（源形态/依赖/immediate/observers——★props 源 = WeChat observers） */
+  watchers?: Array<{ deps: string[]; kind: 'ref' | 'array' | 'getter' | 'props'; immediate: boolean; observers: boolean; propField?: string }>
+  /** props 声明（defineProps 对象/泛型 → Component properties：name + 微信类型） */
+  props?: Array<{ name: string; type: string }>
 }

@@ -7,7 +7,7 @@ import { transformScriptToPage } from './script'
 import { transformStyleToWxss } from './style'
 import { assertValidResult, CompilerError } from './validate'
 import { createTrace } from './trace'
-import { buildCompileIR } from './ir/build'
+import { buildCompileIR, emptyScriptIR } from './ir/build'
 import type { CompileOptions, CompileResult } from './types'
 
 /** djb2 哈希 → scoped 属性名（稳定：同文件同 scopeId；零依赖纯函数） */
@@ -165,5 +165,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   assertValidResult(result, options.filename ?? 'anonymous.vue')
   // ★#505 M1：CompileIR 语义快照（旁路字段投影；不改变 wxml/js/wxss——产物逐字节等价）
   result.ir = buildCompileIR(tplResult)
+  // ★#505 M4 ScriptIR 首条：script 语义声明（提取层结构化投影——codegen 出口不变；确定性缺省为空）
+  result.ir.script = scriptResult.ir ?? emptyScriptIR()
   return result
 }

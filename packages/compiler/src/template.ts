@@ -9,7 +9,7 @@ import type {
   TemplateChildNode,
 } from '@vue/compiler-dom'
 import type { StyleTransformOptions, TemplateTransformOptions, TemplateTransformResult } from './types'
-import type { FluidLayoutConfig } from '@proteus-vue/types/compiler-types'
+import type { FluidLayoutConfig, VModelComponentHandler } from '@proteus-vue/types/compiler-types'
 import { linearFluid, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
@@ -276,8 +276,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings: Set<string>
-  /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData） */
-  vModelComponentHandlers: Array<{ name: string; model: string }>
+  /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData；★#505 M4 完整契约含 arg/propName） */
+  vModelComponentHandlers: VModelComponentHandler[]
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
   /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
@@ -944,7 +944,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           attrs.push(`${propName}="{{${model}}}"`)
           attrs.push(`bind:update:${propName}="${updateHandler}"`)
           if (!ctx.vModelComponentHandlers.some((h) => h.name === updateHandler)) {
-            ctx.vModelComponentHandlers.push({ name: updateHandler, model })
+            // ★#505 M4：完整契约入旁路/IR——arg + propName 不再丢失（script 仅消费 name/model，产物等价）
+            ctx.vModelComponentHandlers.push({ name: updateHandler, model, propName, ...(modelArg ? { arg: modelArg } : {}) })
           }
           ctx.trace?.add('directive/v-model', {
             line: node.loc.start.line,

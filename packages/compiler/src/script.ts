@@ -1,7 +1,7 @@
 // src/compiler/script.ts
 // 4-1-b Script → Page/Component 构造器 JS
 // 顶层 const（ref/reactive/字面量）→ data；顶层函数 → methods；生命周期映射
-import type { ScriptTransformOptions, ScriptTransformResult, StyleTransformOptions } from './types'
+import type { ScriptIR, ScriptTransformOptions, ScriptTransformResult, StyleTransformOptions } from './types'
 import type { TransformTrace } from './trace'
 import { lineAt } from './trace'
 import { resolveOverrides } from './overrides'
@@ -2447,5 +2447,27 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   const es5 = transpileMpSafe(jsFinal, sourcemap)
   if (es5.error) warnings.push(`es5-safe 转译失败（产物保留原样，预览可能报语法错误）：${es5.error}`)
   if (es5.changed) trace?.add('script/es5-safe', { before: '?? / ?. / ??= / ||= / &&= / 对象展开残留', after: 'babel 表达式级转译（ES2020→ES5 安全产物，方法论：不自研成熟工具链）' })
-  return { js: es5.code, warnings, sourcemap: es5.sourcemap ?? sourcemap }
+  // ★#505 M4 ScriptIR 首条：script 语义结构化投影（data/computeds/runtimeInits/lifecycles——
+  //   规则禁用态如实反映：const-to-data/computed-to-data 禁用 → 对应声明空（产物同样退化为无该语义）
+  const scriptIR: ScriptIR = {
+    data: Object.keys(data).map((name) => ({ name })),
+    computeds: Object.entries(computeds).map(([name, c]) => ({
+      name,
+      deps: (c.deps ?? []).slice(),
+      kind: c.blockBody ? ('block' as const) : c.setter ? ('writable' as const) : ('expression' as const),
+    })),
+    runtimeInits: [...runtimeInitNames].map((name) => ({ name })),
+    lifecycles: (['onLoad', 'onReady', 'onUnload'] as const).filter((k) => lifecycles[k]),
+    // watch 声明（props 源 → observers；getter 源带 expr；数组源 deps>1；单 ref 源 deps=1）——规则禁用态如实
+    watchers: Object.values(watches).map((w) => ({
+      deps: (w.deps ?? []).slice(),
+      kind: w.propField ? ('props' as const) : w.expr !== undefined ? ('getter' as const) : (w.deps?.length ?? 0) > 1 ? ('array' as const) : ('ref' as const),
+      immediate: w.immediate ?? false,
+      observers: w.propField !== undefined,
+      ...(w.propField ? { propField: w.propField } : {}),
+    })),
+    // props 声明（defineProps → properties：name + 微信类型——组件模式且 script/define-props 未禁用时提取）
+    props: Object.entries(props).map(([name, p]) => ({ name, type: p.type })),
+  }
+  return { js: es5.code, warnings, sourcemap: es5.sourcemap ?? sourcemap, ir: scriptIR }
 }
