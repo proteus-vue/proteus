@@ -35,7 +35,6 @@
       <text class="card-title">④ p-input（受控组件：:value + @input，非 v-model）</text>
       <p-input :value="txt" placeholder="输入文字测回传" @input="onTxtInput" />
       <text class="state-line">txt：{{ txt || '（空）' }}</text>
-      <text class="state-line probe">事件探针：{{ lastEv || '—（未触发）' }}</text>
     </view>
   </view>
 </template>
@@ -47,19 +46,14 @@ const modalVisible = ref(false)
 const sw = ref(true)
 const sliderVal = ref(40)
 const txt = ref('')
-const lastEv = ref('')
 
 function openModal(): void {
   modalVisible.value = true
 }
 
-// ★p-input 事件契约：载荷 { value }（跨端归一）——受控回显；探针定位断点（事件是否到父 / 载荷形态）
-function onTxtInput(e: unknown): void {
-  const ev = (e as { detail?: unknown })?.detail
-  lastEv.value = JSON.stringify(ev ?? null)
-  console.log('[p-input-probe] detail =', JSON.stringify(ev))
-  const v = (ev as { value?: unknown } | null)?.value
-  txt.value = typeof v === 'string' ? v : ''
+// ★p-input 事件契约：载荷 { value }（跨端归一）——受控回显（非 v-model 契约）
+function onTxtInput(e: { detail: { value?: string } }): void {
+  txt.value = e?.detail?.value ?? ''
 }
 </script>
 
