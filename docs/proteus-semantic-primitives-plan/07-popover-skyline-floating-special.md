@@ -71,7 +71,16 @@ p-popover 的面板必须锚定在 trigger 旁 → 无法直接套用 fixed 容�
    - 常驻 overlay + `.p-popover-overlay--on` visibility（含方向性过渡保留显隐）→ **气泡锚定正常 + 遮罩点关正常**。
 3. 真机/模拟器最终状态：触发 → 气泡现于按钮下 ✅；点外关闭 ✅；定位/关闭/产物契约（P8d）全部锁定。
 
-## 6. 决策请求（历史存档）
+## 6. 已知限制与后续（P2）
+
+- **skyline 层叠**：popover 面板（absolute）按 DOM 序绘制——若页面在 popover 之后有与其重叠的内容，会盖住气泡；
+  layer（fixed）正常上浮（点外关闭不受影响）。Web 无此问题（z-index 正常逃逸）。
+- 尝试「根 z-index: 1000」无效（skyline 非 fixed 根不参与页面层叠提升，已回撤）。
+- **P2 后续方案 A**：打开时组件内 `wx.createSelectorQuery` 测 trigger rect → 面板改 `position: fixed` + 坐标 px
+  （面板随 fixed 上浮到最上层）。需过 no-platform-api 审计，排期另定。
+- 使用建议（skyline）：popover 所在行之后避免紧跟重叠交互内容，或置于区块/页面靠后位置。
+
+## 7. 决策存档（历史）
 
 原建议 ①短期 C 显式降级 ②中期 A 官方同层实证——实际执行合并路线：A 调研 + componentFramework 修复 + 结构终案，
 未走 C 降级（无需）。Web 端不受影响（portal 标签移除后 Web 结构即常驻 overlay + visibility，行为一致）。

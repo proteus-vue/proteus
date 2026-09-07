@@ -55,7 +55,7 @@ function close(): void {
   display: inline-block;
 }
 .p-popover-overlay {
-  /* 常驻 overlay：关闭态隐藏（不拦截不绘制），打开态可见——portal 内 visibility 控制（skyline portal+wx:if 不可用） */
+  /* 常驻 overlay：关闭态隐藏（不拦截不绘制），打开态可见——skyline 终案（wx:if 子树不可靠，弃 portal） */
   visibility: hidden;
   transition: visibility 0s linear 0.25s;
 }
