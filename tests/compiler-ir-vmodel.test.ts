@@ -17,16 +17,16 @@ describe('★#505 v-model 校准族①：规则已迁执行层（第五条 apply
     expect(executable.length).toBeGreaterThanOrEqual(5)
   })
 
-  it('apply 契约：组件形态（非 input-like 非原生标签）→ prop + update:arg handler', () => {
+  it('apply 契约：组件形态（非 input-like 非原生标签）→ prop + update:arg handler（★名含 model——多组件 v-model 防撞名）', () => {
     const ctx: RuleContext = { input: { model: 'show', arg: 'visible', isInputLike: false, isNativeTag: false } }
     executeRule('directive/v-model', ctx)
-    expect(ctx.output).toEqual({ kind: 'component', model: 'show', propName: 'visible', updateHandler: 'proteusUpdateVisibleModel' })
+    expect(ctx.output).toEqual({ kind: 'component', model: 'show', propName: 'visible', updateHandler: 'proteusUpdateShowModel' })
   })
 
-  it('apply 契约：组件无 arg → 默认 modelValue', () => {
+  it('apply 契约：组件无 arg → 默认 modelValue（handler 名含 model——同页多组件 modelValue 不撞名）', () => {
     const ctx: RuleContext = { input: { model: 'val', arg: '', isInputLike: false, isNativeTag: false } }
     executeRule('directive/v-model', ctx)
-    expect(ctx.output).toEqual({ kind: 'component', model: 'val', propName: 'modelValue', updateHandler: 'proteusUpdateModelValueModel' })
+    expect(ctx.output).toEqual({ kind: 'component', model: 'val', propName: 'modelValue', updateHandler: 'proteusUpdateValModel' })
   })
 
   it('apply 契约：input-like / 原生标签 → value + bindinput 形态', () => {
@@ -48,9 +48,9 @@ describe('★#505 v-model 校准族②：产物等价 + 端到端契约', () => 
       { filename: 'pages/vm1.vue', ...opts },
     )
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateShowModel"')
     expect(r.wxml).not.toContain('bindinput')
-    expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
+    expect(r.js).toContain('proteusUpdateShowModel(e) { this.setData({ show: e.detail }) }')
   })
 
   it('input v-model → value + bindinput（旧路径保留）', () => {
@@ -69,7 +69,7 @@ describe('★#505 v-model 校准族②：产物等价 + 端到端契约', () => 
       { filename: 'pages/vm3.vue', ...opts },
     )
     expect(r.ir?.template.vModelTargets).toEqual(['show'])
-    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' }])
+    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateShowModel', model: 'show', arg: 'visible', propName: 'visible' }])
   })
   it('组件侧 emit update 归一：emit(\'update:visible\') → triggerEvent(\'update-visible\')（组件自身产物单段，与父 bind:update-visible 同口径）；非 update 事件名不动', () => {
     const src = '<script setup lang="ts">\n'

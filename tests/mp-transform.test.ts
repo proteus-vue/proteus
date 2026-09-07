@@ -1410,9 +1410,9 @@ function setN() {
       { filename: 'pages/vmodel.vue' },
     )
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateShowModel"')
     expect(r.wxml).not.toContain('bindinput')
-    expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
+    expect(r.js).toContain('proteusUpdateShowModel(e) { this.setData({ show: e.detail }) }')
   })
 
   it('★#500 赋值型内联事件 x = !x / x = 字面量 → setData 包装方法（旧产物整句当方法名 → 点击无反应）', () => {

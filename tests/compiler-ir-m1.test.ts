@@ -24,7 +24,7 @@ function fullTplResult(): TemplateTransformResult {
     storeBindings: ['counter'],
     semanticGrids: [{ minColWidth: 120, gap: 12, index: 0, defaultStyle: 'width: 50%;' }],
     styleBindings: ['boxStyle'],
-    vModelComponentHandlers: [{ name: 'proteusUpdateVisibleModel', model: 'showModal', arg: 'visible', propName: 'visible' }],
+    vModelComponentHandlers: [{ name: 'proteusUpdateShowModalModel', model: 'showModal', arg: 'visible', propName: 'visible' }],
     pageScrollWrapped: true,
     warnings: [],
   }
@@ -34,7 +34,7 @@ describe('★#505 M1 buildTemplateIR：旁路字段 → TemplateIR 投影（1:1 
   it('14 旁路字段全量映射（无丢失、无臆造）', () => {
     const ir = buildTemplateIR(fullTplResult())
     expect(ir.vModelTargets).toEqual(['name', 'count'])
-    expect(ir.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'showModal', arg: 'visible', propName: 'visible' }])
+    expect(ir.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateShowModalModel', model: 'showModal', arg: 'visible', propName: 'visible' }])
     expect(ir.eventWrappers).toEqual({ self: ['onSelf'], once: ['onOnce'] })
     expect(ir.inlineHandlers).toEqual([{ name: 'proteusInlineInc', code: 'this.setData({ count: this.data.count + 1 })' }])
     expect(ir.transitions).toEqual([{ ref: 'show', tName: 'fade', index: 0 }])
@@ -75,10 +75,10 @@ describe('★#505 M1 compileVueSfc 端到端：result.ir 存在且与产物旁�
       + '<template><p-modal v-model:visible="show">x</p-modal><input v-model="name" /></template>'
     const r = compileVueSfc(src, { filename: 'pages/vm.vue', ...opts })
     expect(r.ir?.template.vModelTargets).toEqual(expect.arrayContaining(['show', 'name']))
-    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' }])
+    expect(r.ir?.template.vModelComponentHandlers).toEqual([{ name: 'proteusUpdateShowModel', model: 'show', arg: 'visible', propName: 'visible' }])
     // 产物等价锚点：既有形态不受 ir 影响
-    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
-    expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateShowModel"')
+    expect(r.js).toContain('proteusUpdateShowModel(e) { this.setData({ show: e.detail }) }')
   })
 
   it(':style 派生对象 + .self/.once + 赋值型内联事件 + store 引用 → 对应声明投影', () => {

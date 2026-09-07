@@ -32,12 +32,12 @@ describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/pr
       + '<template><p-modal v-model:visible="show">x</p-modal></template>'
     const r = compileVueSfc(src, { filename: 'pages/m4vm.vue', ...opts })
     expect(r.ir?.template.vModelComponentHandlers).toEqual([
-      { name: 'proteusUpdateVisibleModel', model: 'show', arg: 'visible', propName: 'visible' },
+      { name: 'proteusUpdateShowModel', model: 'show', arg: 'visible', propName: 'visible' },
     ])
     // 产物等价锚点（#500 形态不变——行为零变化）
     expect(r.wxml).toContain('visible="{{show}}"')
-    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
-    expect(r.js).toContain('proteusUpdateVisibleModel(e) { this.setData({ show: e.detail }) }')
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateShowModel"')
+    expect(r.js).toContain('proteusUpdateShowModel(e) { this.setData({ show: e.detail }) }')
   })
 
   it('IR 快照自足：仅凭声明可重建产物契约（propName → {{model}} 绑定 + bind:update-propName 事件；name → 回写方法）', () => {
@@ -61,10 +61,10 @@ describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/pr
       + '<template><p-modal v-model="title">x</p-modal></template>'
     const r = compileVueSfc(src, { filename: 'pages/m4argless.vue', ...opts })
     expect(r.ir?.template.vModelComponentHandlers).toEqual([
-      { name: 'proteusUpdateModelValueModel', model: 'title', propName: 'modelValue' },
+      { name: 'proteusUpdateTitleModel', model: 'title', propName: 'modelValue' },
     ])
     expect(r.wxml).toContain('modelValue="{{title}}"')
-    expect(r.wxml).toContain('bind:update-modelValue="proteusUpdateModelValueModel"')
+    expect(r.wxml).toContain('bind:update-modelValue="proteusUpdateTitleModel"')
   })
 
   it('input 形态不进组件契约（value+bindinput 路径——vModelTargets 仍收集目标字段）', () => {
