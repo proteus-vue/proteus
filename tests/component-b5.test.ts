@@ -39,13 +39,14 @@ describe('p-popup（弹层）', () => {
     expect(wxml).toContain('wx:if="{{shown}}"')
     expect(wxml).toContain('p-popup-panel--')
     expect(wxml).toContain('<slot')
-    // js：visible prop 源 watch → observers（enter 置 shown/phase）
+    // js：visible prop 源 watch → observers（enter 置 shown/phase；★2026-09-07 phase 类 computed 裸类名同步）
     expect(js).toContain('observers: {')
     expect(js).toContain('visible(n, o) {')
-    expect(js).toContain("this.setData({ shown: true })")
-    expect(js).toContain("this.setData({ phase: 'enter' })")
+    expect(js).toContain('this.setData({ shown: true })')
+    expect(js).toContain("this.data.phase = 'enter'")
+    expect(js).toContain('panelPhaseCls: this.proteusCalcPanelPhaseCls()')
     // js：leave 动画 → setTimeout → emit close（多行箭头 RHS 修复后产物完整）
-    expect(js).toContain("this.setData({ phase: 'leave' })")
+    expect(js).toContain("this.data.phase = 'leave'")
     expect(js).toContain('setTimeout(() => {')
     expect(js).toContain("this.triggerEvent('close')")
     // wxss：转场 keyframes 进 WXSS（fade/slide）

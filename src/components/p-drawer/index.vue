@@ -17,9 +17,21 @@
     @click="onMaskAreaTap"
   >
     <view v-if="modelValue && overlay" class="p-drawer-mask" />
+    <!-- side 静态分支（.p-drawer-left/--right 字面量）：动态 side 类在 Skyline 无 scoped 匹配 →
+         right 侧面板会落到静态位置（left 恰好看似正常），同 p-popup 位置类教训 -->
     <view
-      class="p-drawer"
-      :class="[side, { 'p-drawer-open': modelValue }]"
+      v-if="side === 'left'"
+      class="p-drawer p-drawer-left"
+      :class="{ 'p-drawer-open': modelValue }"
+      :style="{ width: width + 'px' }"
+      @click.stop="noop"
+    >
+      <slot />
+    </view>
+    <view
+      v-else
+      class="p-drawer p-drawer-right"
+      :class="{ 'p-drawer-open': modelValue }"
       :style="{ width: width + 'px' }"
       @click.stop="noop"
     >
@@ -90,11 +102,11 @@ function onMaskAreaTap(): void {
   transition: transform 0.25s ease;
   overflow-y: auto;
 }
-.p-drawer.left {
+.p-drawer-left {
   left: 0;
   transform: translateX(-100%);
 }
-.p-drawer.right {
+.p-drawer-right {
   right: 0;
   transform: translateX(100%);
 }

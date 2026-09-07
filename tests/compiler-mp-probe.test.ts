@@ -133,6 +133,13 @@ describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契�
     expect(m![0]).toContain('bottom: 0')
     expect(m![0]).toContain('rgba(0, 0, 0, 0.45)')
   })
+
+  it('P7e：side 静态分支（p-drawer-left/--right 字面量 scoped）——right 侧不再落静态位置（动态 side 类 Skyline 无 scoped 匹配）', () => {
+    const wxml = compileComponent('src/components/p-drawer/index.vue').wxml ?? ''
+    expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-left-data-v-[\w]+/)
+    expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-right-data-v-[\w]+/)
+    expect(wxml).not.toContain('{{(side)')
+  })
 })
 
 describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命中层（p-drawer P7 同款批量）', () => {
@@ -161,6 +168,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     const r = compileComponent('src/components/p-popup/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
+    const js = r.js ?? ''
     expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bind:tap="onLayerTap" class="p-popup-data-v-[\w]+/)
     expect(wxml).not.toMatch(/p-popup-mask[^>]*bindtap|p-popup-mask[^>]*bind:tap/)
     expect(wxml).toMatch(/catch:tap="noop"/)
@@ -171,9 +179,14 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(wxml).not.toContain('style="{{panelStyle}}"')
     expect(wxml).not.toMatch(/p-popup-panel---data-v-[\w]+' \+ position/)
     expect(wxss).toMatch(/\.p-popup-panel--bottom-data-v-[\w]+\s*\{[\s\S]*?bottom: 0/)
+    // ★MP 动画恢复：phase 类走 computed 裸类名（模板无类字面量 → 不插 scope 后缀）+ <style global> 规则
+    expect(wxml).toContain('panelPhaseCls')
+    expect(js).toContain('p-popup-panel--fade-')
+    expect(wxss).toMatch(/\.p-popup-panel--enter \{\s*animation: proteus-popup-in/)
+    expect(wxss).toMatch(/\.p-popup-panel--fade-enter \{\s*animation: proteus-popup-fade-in/)
   })
 
-  it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位', () => {
+  it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位，placement 静态四分支', () => {
     const r = compileComponent('src/components/p-popover/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
@@ -183,5 +196,10 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(m).not.toBeNull()
     expect(m![0]).not.toContain('inset:')
     expect(m![0]).toContain('bottom: 0')
+    // placement 静态分支（动态 placement 类 Skyline 无 scoped 匹配 → 面板左上角）
+    for (const p of ['bottom', 'top', 'left', 'right']) {
+      expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
+    }
+    expect(wxml).not.toContain("+ placement")
   })
 })
