@@ -236,3 +236,61 @@ describe('★#505 M3 门禁④：交叉通道负面护栏——规则被删/禁�
     expect(diff).toContain('backend-only: keyword')
   })
 })
+
+describe('★#505 M3 门禁⑦：fluid/p-fluid disabled 接线——规则声明可关即实际可关（旧行为不查 disabled）', () => {
+  const opts = { px2rpx: true, rpxRatio: 2 }
+  const SRC = '<template><text p-fluid="font-size(14, 18)">流式</text></template>'
+  it('规则启用：p-fluid → style 追加 calc 线性声明（SKyline 无 clamp——#496 M3 兑底）；属性不进产物', () => {
+    const r = compileVueSfc(SRC, { filename: 'pages/m3fluid-on.vue', ...opts })
+    expect(r.wxml).toContain('calc(')
+    expect(r.wxml).not.toContain('p-fluid=')
+    expect(r.warnings.some((w) => w.includes('fluid/p-fluid 已被禁用'))).toBe(false)
+  })
+  it('禁用：显式警告 + 属性剥离不生成样式（无 calc 残留——与旧「无法关闭」行为区分）', () => {
+    const r = compileVueSfc(SRC, { filename: 'pages/m3fluid-off.vue', ...opts, rules: { disabled: ['fluid/p-fluid'] } })
+    expect(r.warnings.some((w) => w.includes('fluid/p-fluid 已被禁用') && w.includes('剥离'))).toBe(true)
+    expect(r.wxml).not.toContain('calc(')
+    expect(r.wxml).not.toContain('p-fluid=')
+  })
+})
+
+describe('★#505 M3 门禁⑧：D6 语义森林——compat 根页面的语义内容顶层根平铺（单根 C-IR 契约不动）', () => {
+  it('root 为 p-*：forest 恒为 [tree]（同构——六端消费方走 tree 路径不变）', () => {
+    const back = createNodeCompilerBackend().compile({ filename: 'm3forest-root.vue', source: '<template><p-stack><p-grid :min-col-width="160" :gap="12"><p-box /></p-grid><p-text>hi</p-text></p-stack></template>' })
+    const sem = back.semantic
+    expect(sem.tree?.semantic).toBe('layout.stack')
+    expect(sem.forest?.length).toBe(1)
+    expect(sem.forest?.[0].semantic).toBe('layout.stack')
+    // 同构：tree 与 forest[0] 子树一致（走 renderToComponentIR 同源——p-box 进 p-grid 子树）
+    expect(JSON.stringify(sem.forest?.[0])).toBe(JSON.stringify(sem.tree))
+  })
+  it('compat 根页面：forest = 逐顶层语义根（view 壳不进 Layer 0；嵌套 p-box 归入 p-grid 子树）', () => {
+    const back = createNodeCompilerBackend().compile({ filename: 'm3forest-page.vue', source: '<template><view class="page"><p-grid :min-col-width="160" :gap="12"><p-box /><p-box /></p-grid><p-text>hi</p-text></view></template>' })
+    const sem = back.semantic
+    expect(sem.tree).toBeNull()
+    const forest = sem.forest ?? []
+    expect(forest.map((f) => f.semantic)).toEqual(['layout.grid', 'ui.text'])
+    // 语义内容不丢失：forest 子树覆盖全树语义（grid 子树含 2 个 box；顶层 2 根）
+    expect(JSON.stringify(forest[0])).toContain('layout.grid')
+    expect(JSON.stringify(forest[0])).toContain('layout.box')
+    expect(sem.semanticCount).toBe(4) // p-grid + p-box×2 + p-text
+  })
+  it('纯 compat（无 p-*）：forest = []（与 tree null / semanticCount 0 自洽）', () => {
+    const back = createNodeCompilerBackend().compile({ filename: 'm3forest-compat.vue', source: '<template><view><text>纯兼容</text></view></template>' })
+    expect(back.semantic.forest).toEqual([])
+  })
+  it('capability.* 入口不因页面壳丢失（compat 根页面从 forest 逐根收集——旧行为 tree null 时整页能力声明空白）', () => {
+    const back = createNodeCompilerBackend().compile({ filename: 'm3forest-cap.vue', source: '<template><view><p-scan-qr /><p-box /></view></template>' })
+    expect(back.semantic.tree).toBeNull()
+    expect(back.semantic.forest?.map((f) => f.semantic)).toEqual(['capability.scan-qr', 'layout.box'])
+    expect(back.bindings.capabilities).toEqual([{ name: 'scan-qr', semantic: 'capability.scan-qr' }])
+  })
+  it('compat 根 + 语义页面经 runCompilerConformance 全过（forestRooted/forestNonEmpty 核对在位）', () => {
+    const result = runCompilerConformance(
+      createNodeCompilerBackend(),
+      '<template><view class="page"><p-grid :min-col-width="160" :gap="12"><p-box /></p-grid><p-text>hi</p-text></view></template>',
+    )
+    expect(result.ok, JSON.stringify(result.checks.filter((c) => !c.pass), null, 2)).toBe(true)
+    expect(result.checks.find((c) => c.name === 'ir.semantic.forestRooted')?.pass).toBe(true)
+  })
+})

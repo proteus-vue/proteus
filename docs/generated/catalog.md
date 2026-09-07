@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **128** 原语 · implemented **44**。
+> 总计 **136** 原语 · implemented **45**。
 
 ## layout — 布局（12）
 
@@ -19,6 +19,8 @@
 | L10 | `layout.scroll` | tag:p-scroll | `p-scroll` | <scroll-view> | implemented |
 | L11 | `layout.virtual-list` | tag:p-virtual-list | `p-virtual-list` | <scroll-view> + 手动回收 | implemented |
 | L12 | `layout.masonry` | tag:p-masonry | `p-masonry` | 第三方瀑布流 | implemented |
+| L13 | `layout.aspect` | tag:p-aspect | `p-aspect` | 无（纵横比容器） | planned |
+| L14 | `layout.zone` | tag:p-zone | `p-zone` | 无（容器断点分区） | planned |
 
 ## ui — UI（18）
 
@@ -42,6 +44,9 @@
 | U16 | `ui.slider` | tag:p-slider | `p-slider` | <slider> | implemented |
 | U17 | `ui.picker` | tag:p-picker | `p-picker` | <picker> | implemented |
 | U18 | `ui.form` | tag:p-form | `p-form` | 组合 | implemented |
+| U19 | `ui.loading` | tag:p-loading | `p-loading` | wx.showLoading 部分 | planned |
+| U20 | `ui.scale` | tag:p-scale | `p-scale` | 无（无障碍档位） | planned |
+| U21 | `ui.skeleton` | tag:p-skeleton | `p-skeleton` | 无 | planned |
 
 ## shell — Shell（10）
 
@@ -57,6 +62,9 @@
 | S8 | `shell.toast` | tag:p-toast | `p-toast` | wx.showToast | planned |
 | S9 | `shell.action-sheet` | tag:p-action-sheet | `p-action-sheet` | wx.showActionSheet | implemented |
 | S10 | `layout.split` | tag:p-split | `p-split` | 无（分栏布局） | implemented |
+| S11 | `shell.mask` | tag:p-mask | `p-mask` | 组合（遮罩层） | planned |
+| S12 | `shell.popup` | tag:p-popup | `p-popup` | 组合（弹层） | planned |
+| S13 | `shell.toolbar` | tag:p-toolbar | `p-toolbar` | 无（溢出折叠） | planned |
 
 ## gesture — 手势（10）
 
@@ -139,7 +147,7 @@
 | E5 | `engineering.provide-inject` | api:useProvide()/useInject() | `useProvide()/useInject()` | 无 | planned |
 | E6 | `engineering.lifecycle` | api:useLifecycle() | `useLifecycle()` | onLoad/onShow/onHide/onUnload | planned |
 | E7 | `engineering.ready` | api:useReady() | `useReady()` | onReady | planned |
-| E8 | `engineering.error-boundary` | api:useErrorBoundary() | `useErrorBoundary()` | onError | planned |
+| E8 | `engineering.error-boundary` | tag:p-error-boundary | `p-error-boundary` | onError | planned |
 | E9 | `engineering.page-param` | api:usePageParam() | `usePageParam()` | onLoad(options) | planned |
 | E10 | `engineering.route` | api:useRoute() | `useRoute()` | getCurrentPages() | planned |
 | E11 | `engineering.router-push` | api:router.push() | `router.push()` | wx.navigateTo | planned |
@@ -149,7 +157,7 @@
 | E15 | `engineering.router-relaunch` | api:router.reLaunch() | `router.reLaunch()` | wx.reLaunch | planned |
 | E16 | `engineering.router-before-each` | api:router.beforeEach() | `router.beforeEach()` | onLaunch 手动 | planned |
 | E17 | `engineering.router-after-each` | api:router.afterEach() | `router.afterEach()` | 无 | planned |
-| E18 | `engineering.router-link` | tag:router-link | `router-link` | <navigator> | planned |
+| E18 | `engineering.router-link` | tag:p-router-link | `p-router-link` | <navigator> | implemented |
 | E19 | `engineering.transition` | tag:p-transition | `p-transition` | transition CSS | implemented |
 | E20 | `engineering.animate` | tag:p-animate | `p-animate` | animation CSS | implemented |
 | E21 | `engineering.animation` | api:useAnimation() | `useAnimation()` | wx.createAnimation | planned |

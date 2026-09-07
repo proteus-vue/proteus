@@ -111,11 +111,11 @@ write('catalog.md', buildCatalog())
 write('miniprogram-mapping.md', buildMapping())
 write('implemented-semantics.md', buildImplemented())
 
-const catalogCheck = PRIMITIVE_CATALOG.length === 128
+const catalogCheck = PRIMITIVE_CATALOG.length === 136 // ★#405 语义登记批后 136（128 为过期常量——每次 gen:docs 自检红已存在多批）
 const mappingCheck = MP_MAPPING_MATRIX.filter((i) => i.status === 'missing').length === 0
 const coverageCheck = implementedPrimitives().every((p) => Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length >= 3)
 if (!catalogCheck || !mappingCheck || !coverageCheck) {
   console.error(`gen-docs 自检失败：catalog=${catalogCheck}（128）· mapping 缺失=${MP_MAPPING_MATRIX.filter((i) => i.status === 'missing').length} · 覆盖≥3端=${coverageCheck}`)
   process.exit(1)
 }
-console.log('gen-docs 自检 ✅（128 原语 · 矩阵 0 缺失 · implemented 全部 ≥3 端映射）')
+console.log(`gen-docs 自检 ✅（${PRIMITIVE_CATALOG.length} 原语 · 矩阵 0 缺失 · implemented 全部 ≥3 端映射）`)

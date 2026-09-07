@@ -136,8 +136,12 @@ export function runCompilerConformance(backend: ProteusCompilerBackend, fixture 
       check('ir.semantic.countMatch', sem.tree === null || irCount === sem.semanticCount, sem.tree ? `C-IR 树 ${irCount} 节点 vs semanticCount=${sem.semanticCount}` : 'tree=null（compat 根页面——语义以渲染树+计数为准）')
       check('ir.semantic.renderMatch', sem.semanticCount === semanticNodes, `semanticCount=${sem.semanticCount} vs 渲染树语义节点 ${semanticNodes}`)
       check('ir.semantic.compatCount', sem.compatCount === compatElements, `compatCount=${sem.compatCount} vs 渲染树兼容元素 ${compatElements}`)
-      // ★#505 M3：compat 根但含语义内容 → 信息性核对（真实页面主形态——语义存在但无单根 C-IR 树，页级 C-IR 森林留后续批次；不视为失败）
-      check('ir.semantic.unrooted', true, sem.tree === null && sem.semanticCount > 0 ? `tree=null 但 semanticCount=${sem.semanticCount}（compat 根页面：语义在渲染树，单根 C-IR 树不适用）` : undefined)
+      // ★#505 M3 D6：语义森林核对——root p-* → forest 恒为 [tree]（同构）；compat 根含语义 → forest 非空逐根平铺；纯 compat → []
+      const forest = sem.forest ?? []
+      check('ir.semantic.forestRooted', sem.tree !== null ? forest.length === 1 && sem.tree.semantic === forest[0]?.semantic : forest.every((f) => typeof f.semantic === 'string'), sem.tree !== null ? `tree 根=${sem.tree.semantic} vs forest=${forest.map((f) => f.semantic).join(',')}` : forest.length ? `compat 根页顶层语义根：${forest.map((f) => f.semantic).join(', ')}` : '纯 compat（无语义内容）')
+      check('ir.semantic.forestNonEmpty', sem.tree !== null || sem.semanticCount === 0 || forest.length > 0, sem.tree === null && sem.semanticCount > 0 && forest.length === 0 ? `语义内容 ${sem.semanticCount} 个但 forest 空——compat 根页语义未平铺` : undefined)
+      // ★#505 M3：compat 根但含语义内容 → 信息性核对（真实页面主形态——语义存在但无单根 C-IR 树，forest 承载顶层语义根）
+      check('ir.semantic.unrooted', true, sem.tree === null && sem.semanticCount > 0 ? `tree=null 但 semanticCount=${sem.semanticCount}（compat 根页面：语义顶层根见 forest=${forest.map((f) => f.semantic).join(',') || '(空)'}）` : undefined)
     }
 
     // bindings shape（G-28 消费）

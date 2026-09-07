@@ -262,3 +262,21 @@ ScriptIR = {
 ---
 
 *本草案为评审稿；批准后更新 PROJECT_MEMORY 决策链并进入 M1。*
+
+---
+
+## 9. M3 收口遗留决策 D6（2026-09-07，批 5 后唯一开放项——待拍板）
+
+**事实基线**（M3 批 1-5 已落地，见 PROJECT_MEMORY）：semanticCount 已改渲染树全树口径（compat 根页面语义如实计入）；conformance 的 countMatch 仅在 C-IR 树存在时适用；`ir.semantic.unrooted` 信息核对说明「compat 根有语义 = 合法主形态」。**遗留**：compat 根页面（真实页面主形态：`<view>` 壳 + 嵌套 p-*）的 `semantic.tree` 恒为 null——单根 C-IR 契约表达不了「页面 = 兼容壳 + 语义内容」；component-ir 六端矩阵（renderComponentSnapshot 读 C-IR）因此只能 fixture 级验证，真实页面语义内容读不回六端。
+
+**决策**：compat 根页面语义内容如何进入六端矩阵读回？
+
+| 方案 | 内容 | 优点 | 代价/风险 |
+|---|---|---|---|
+| A. **C-IR forest（多根）**：`SemanticIR.tree` 扩为 `ComponentIR | ComponentIR[] | null`，compat 根页面返回语义根数组（各顶层语义元素平铺） | 语义内容无丢失地进入消费方；六端矩阵可对每个语义根读回 | 破单根契约（spi/rust/conformance/六端消费全联动）；页面级根顺序语义需定义；改动面最大 |
+| B. **合成容器根**：compat 根页面合成伪根 `{ tag: null, semantic: 'layout.page-shell', children: [顶层语义...] }`（新语义入 SEMANTIC_ENUM/SEMANTIC_BACKEND_MAP） | 保持单根契约（tree 恒非空）；六端零改造读回 | 引入**自造语义**（'layout.page-shell' 非平台标准——违背 glass-easel 官方语义对齐方法论）；伪根在各渲染端无真实对等物 |
+| C. **现状 + 显式声明**：tree 保持 null；六端矩阵维持 fixture/组件级；文档+conformance unrooted 检查显式声明「页面级语义读回 = 渲染树遍历（cross-gate 已覆盖），六端矩阵只管组件语义树」 | 零契约改动；cross-gate（M3 门禁① R1/R2/R3）已覆盖真实页面的编译语义↔语义树一致性 | 真实页面的语义内容仍不进六端控件映射矩阵（页面 p-* 组件的语义控件在各渲染端的 readback 无机器验证） |
+
+**建议：先 A 后收口，但砍范围**——不动 `SemanticIR.tree` 契约（C 的保守面），改在 **compiler-backend 层新增旁路 `semanticForest`**（`{ tree 单根保留现状 + forest: ComponentIR[] 顶层语义根平铺 }`，Node/Rust 双端 + conformance 计数核对）；六端读回按 forest 逐根 renderComponentSnapshot。理由：①不破既有单根契约与 Rust 等价（tree 语义不变）；②页面「compat 壳 + 语义内容」用 forest 如实表达，无自造语义（对齐 B 的反对点）；③消费方（六端矩阵）增量接入，不阻塞。若选 C 则 M3 就此收口（语义森林登记为远期项）。
+
+**✅ D6 已采纳（A' 砍范围版，2026-09-07 批 6 落地）**：`SemanticIR.forest`（可选）Node/Rust 双端产出 + conformance forestRooted/forestNonEmpty 核对 + 84 真实文件双端 forest 序列等价 + capabilities 从 forest 逐根收集（compat 根页能力声明不再空白）。遗留：六端矩阵按 forest 逐根 readback 的消费接线（render-backend 侧增量，下一小批）。

@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createNodeCompilerBackend, DEFAULT_CONFORMANCE_SFC } from '@proteus-vue/compiler-backend'
+import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
 
 const CRATE_DIR = path.resolve('packages/compiler-backend-rust')
 const BIN = path.join(CRATE_DIR, 'target', 'debug', 'proteus-cc-rust')
@@ -117,5 +118,22 @@ describe('G-29 B2 RustBackend（同一 SFC → 语义等价 CompilerIR——G-29
     expect(root.props['min-col-width']).toEqual({ expr: '160' })
     expect(root.props['max-cols']).toEqual({ expr: '4' })
     expect(root.props['label']).toBe('网格')
+  })
+
+  it('★#405 守护：TAG_SEMANTIC_MAP 全量标签 × Rust semantic_for_tag 同步（SSOT 穷举——新组件入 catalog 漏同步 Rust 表 → 红）', () => {
+    // Rust semantic.rs 是 TAG_SEMANTIC_MAP 的手抄子集（审计 #405：catalog→schema→rust 双处登记）——
+    //   真实文件双端等价测试只覆盖「真实用到的标签」，未用到的登记标签漏同步不会被抓；
+    //   本测试以 SSOT 自动生成穷举 fixture（root p-stack + 每个登记标签自闭合子节点），
+    //   Node（直接读 TAG_SEMANTIC_MAP）vs Rust CLI 编译 → C-IR 树语义序列必须一致——
+    //   Rust 表缺标签（dropped → 树短）或语义串漂移（≠）都会红
+    const tags = Object.keys(TAG_SEMANTIC_MAP).filter((t) => t.startsWith('p-'))
+    expect(tags.length).toBeGreaterThan(50) // 防门禁自身退化（router-link 等非 p- 别名键不在 Rust 语义表职责内——MP 主编译已映射）
+    const fixture = `<template>\n  <p-stack>\n${tags.map((t) => `    <${t} />`).join('\n')}\n  </p-stack>\n</template>`
+    const nodeIr = createNodeCompilerBackend().compile({ filename: 'catalog-sync.vue', source: fixture })
+    const { ir: rustIr } = compileWithRust(fixture)
+    const nodeSeq = cirSeq(nodeIr.semantic.tree as never)
+    const rustSeq = cirSeq((rustIr.semantic as { tree: never | null }).tree)
+    expect(rustSeq).toEqual(nodeSeq)
+    expect(nodeSeq.length).toBe(tags.length + 1) // p-stack 根 + 全量子标签
   })
 })

@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **44** 个。
+> implemented 语义 **45** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -9,9 +9,9 @@
 | `layout.inline` | div.proteus-inline | UITextAttachment | TextView.inline | Span | view.inline | InlineSpan | inline |
 | `layout.stack` | div.proteus-stack | UIStackView | LinearLayout | Flex | view.flex | Flex | stack |
 | `layout.grid` | div.proteus-grid | UICollectionView | GridLayoutManager | Grid | grid | GridView | grid |
-| `layout.fluid` | div.proteus-fluid | AutoLayout | ConstraintLayout | Flex.fluid | view.fluid | Wrap | fluid |
+| `layout.fluid` | div.proteus-fluid | UIView.fluid | ConstraintLayout | Flex.fluid | view.fluid | Wrap | fluid |
 | `layout.adaptive` | div.proteus-adaptive | UISheet | BottomSheetDialog | Sheet | half-screen | showModal | adaptive |
-| `layout.fit` | div.proteus-fit | intrinsicSize | wrapContent | fitContent | view.fit | IntrinsicWidth | fit |
+| `layout.fit` | div.proteus-fit | UIView.fit | wrapContent | fitContent | view.fit | IntrinsicWidth | fit |
 | `layout.spacer` | div.proteus-spacer | UILayoutGuide | Space | Blank | view.spacer | Spacer | spacer |
 | `layout.divider` | hr.proteus-divider | UIView.divider | View.divider | Divider | view.divider | Divider | divider |
 | `layout.scroll` | div.proteus-scroll | UIScrollView | ScrollView | Scroll | scroll-view | ScrollView | scroll |
@@ -47,5 +47,6 @@
 | `gesture.draggable` | div.proteus-draggable | UIPanGestureRecognizer | GestureDetector | PanGesture | movable-view | Draggable | draggable |
 | `gesture.scrollable` | div.proteus-scrollable | UIScrollView.gesture | NestedScrollView | Scroll.gesture | scroll-view | Scrollable | scrollable |
 | `capability.location` | button.proteus-location | CLLocationManager | FusedLocation | geoLocationManager | wx.getLocation | getLocation | location |
+| `engineering.router-link` | a.proteus-router-link | UIButton.link | TextView.link | Text.link | navigator | TextButton | router-link |
 | `engineering.transition` | div.proteus-transition | UIView.transition | View.animate.transition | animateTo.transition | view.transition | AnimatedOpacity | transition |
 | `engineering.animate` | div.proteus-animate | CAKeyframeAnimation | ValueAnimator | Animator.transition | view.animation | AnimationController | animate |

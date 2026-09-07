@@ -33,10 +33,13 @@ pub struct RenderIR {
 pub struct SemanticIR {
     /// C-IR 树（p-* 语义树——非 p- 标签不产生 Layer 0 C-IR；无树 → null——与 Node 侧 ComponentIR|null 同构）
     pub tree: Option<serde_json::Value>,
-    /// C-IR 树节点数（= 渲染树带 semantic 的元素数）
+    /// C-IR 树节点数（= 渲染树带 semantic 的元素数——★#505 M3 改全树口径）
     pub semantic_count: usize,
     /// 兼容层元素数（渲染树无 semantic 的元素）
     pub compat_count: usize,
+    /// ★#505 M3 D6：语义森林——顶层语义根（父链无 semantic 的语义节点）的 C-IR 子树集合
+    /// root 为 p-* 时恒为 [tree]；compat 根页面逐顶层语义根平铺；无语义 → []
+    pub forest: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]

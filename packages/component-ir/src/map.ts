@@ -40,7 +40,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
   },
   'layout.fluid': {
     'vue-dom': 'div.proteus-fluid',
-    'native-ios': 'AutoLayout',
+    'native-ios': 'UIView.fluid',
     'native-android': 'ConstraintLayout',
     'native-harmony': 'Flex.fluid',
     skyline: 'view.fluid',
@@ -58,7 +58,7 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
   },
   'layout.fit': {
     'vue-dom': 'div.proteus-fit',
-    'native-ios': 'intrinsicSize',
+    'native-ios': 'UIView.fit',
     'native-android': 'wrapContent',
     'native-harmony': 'fitContent',
     skyline: 'view.fit',

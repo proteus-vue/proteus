@@ -16,6 +16,7 @@ import type {
   CompilerIR,
   ProteusCompilerBackend,
   RenderNode,
+  SemanticIR,
   SFCSource,
   TemplateAST,
   TemplateNode,
@@ -118,14 +119,34 @@ function renderToComponentIR(node: RenderNode): ComponentIR | null {
   return toComponentIR(node.type, pickConstraintProps(node.props), children)
 }
 
+/**
+ * ★#505 M3 D6：语义森林——渲染树中「顶层语义根」（父链无 semantic 的语义节点）的 C-IR 子树集合。
+ * root 为 p-* 时首节点即语义 → 结果 = [renderToComponentIR(root)]（= tree，与 tree 同构）；
+ * compat 根页面（view 壳 + 嵌套 p-*）→ 逐顶层语义根平铺（compat 壳不进 Layer 0，语义内容不丢失）。
+ * 遍历规则：遇到 semantic 节点即收其为根并停在该子树（内部由 C-IR 承载），无 semantic 节点继续下钻。
+ */
+function collectSemanticForest(node: RenderNode): ComponentIR[] {
+  const out: ComponentIR[] = []
+  const walk = (n: RenderNode): void => {
+    if (n.semantic) {
+      const ir = renderToComponentIR(n)
+      if (ir) out.push(ir)
+      return
+    }
+    for (const c of n.children) walk(c)
+  }
+  walk(node)
+  return out
+}
+
 /** 模板源码 → { render / semantic / bindings } */
-function buildIR(template: string): { render: RenderNode; semantic: { tree: ComponentIR | null; semanticCount: number; compatCount: number }; bindings: BindingIR } {
+function buildIR(template: string): { render: RenderNode; semantic: SemanticIR; bindings: BindingIR } {
   const root = domParse(template, { onError: () => undefined })
   const rootEl = flattenChildNodes(root.children).find((c) => c.type === NodeTypes.ELEMENT) as ElementNode | undefined
   if (!rootEl) {
     return {
       render: { type: 'template', props: {}, children: [], loc: { line: 1, column: 1 } },
-      semantic: { tree: null, semanticCount: 0, compatCount: 0 },
+      semantic: { tree: null, semanticCount: 0, compatCount: 0, forest: [] },
       bindings: { capabilities: [], models: [], handlers: [] },
     }
   }
@@ -138,10 +159,15 @@ function buildIR(template: string): { render: RenderNode; semantic: { tree: Comp
   //   语义内容以渲染树 + 计数为准（conformance 交叉核对 renderMatch 因此对真实页面成立）
   const semanticCount = countSemantic(render)
   const compatCount = countCompat(render)
+  // ★#505 M3 D6：语义森林（顶层语义根平铺——compat 根页面语义内容不丢失；root p-* 时与 tree 同构）
+  const forest = collectSemanticForest(render)
   if (tree) {
     collectCapabilities(tree, acc)
+  } else {
+    // compat 根页面：capability.* 入口从森林逐根收集（与 tree 路径对称——能力声明不因页面壳丢失）
+    for (const f of forest) collectCapabilities(f, acc)
   }
-  return { render, semantic: { tree, semanticCount, compatCount }, bindings: acc }
+  return { render, semantic: { tree, semanticCount, compatCount, forest }, bindings: acc }
 }
 
 /** C-IR 树节点计数（★#505 M3 后：semanticCount 改按渲染树全树统计，本函数供树级断言复用） */

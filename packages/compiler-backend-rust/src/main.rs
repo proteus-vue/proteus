@@ -8,7 +8,8 @@ mod template;
 
 use ir::{BindingsIR, CompilerIR, RenderIR};
 use semantic::{
-    collect_capabilities, count_compat, count_semantic, render_to_component_ir, semantic_for_tag,
+    collect_capabilities, collect_semantic_forest, count_compat, count_semantic,
+    render_to_component_ir, semantic_for_tag,
 };
 use std::io::Read;
 use template::TmplElement;
@@ -195,9 +196,16 @@ fn main() {
             //   compat 根页面嵌套 p-* 亦计入；C-IR 树仅根为 p-* 时存在，语义内容以渲染树+计数为准）
             let semantic_count = count_semantic(&render_root);
             let compat_count = count_compat(&render_root);
+            // ★#505 M3 D6：语义森林（顶层语义根平铺——compat 根页面语义内容不丢失；root p-* 时与 tree 同构）
+            let forest = collect_semantic_forest(&render_root);
             let mut capabilities = Vec::new();
             if let Some(tree) = &c_ir {
                 collect_capabilities(tree, &mut capabilities);
+            } else {
+                // compat 根页面：capability.* 入口从森林逐根收集（与 Node 侧对称——能力声明不因页面壳丢失）
+                for f in &forest {
+                    collect_capabilities(f, &mut capabilities);
+                }
             }
             CompilerIR {
                 version: 1,
@@ -206,6 +214,7 @@ fn main() {
                     tree: c_ir,
                     semantic_count,
                     compat_count,
+                    forest,
                 },
                 bindings: BindingsIR {
                     capabilities,
@@ -229,6 +238,7 @@ fn main() {
                 tree: None,
                 semantic_count: 0,
                 compat_count: 0,
+                forest: Vec::new(),
             },
             bindings: BindingsIR {
                 capabilities: Vec::new(),

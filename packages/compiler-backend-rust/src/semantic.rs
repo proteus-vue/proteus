@@ -171,6 +171,26 @@ pub fn count_semantic(node: &RenderNode) -> usize {
     n
 }
 
+/// 语义森林（★#505 M3 D6）——渲染树中「顶层语义根」（父链无 semantic 的语义节点）的 C-IR 子树集合
+/// 与 Node collectSemanticForest 对齐：遇 semantic 节点即收其为根并停（内部由 C-IR 承载），
+/// 无 semantic 节点继续下钻；root 为 p-* 时首节点即语义 → 结果 = [render_to_component_ir(root)]（= tree）
+pub fn collect_semantic_forest(node: &RenderNode) -> Vec<serde_json::Value> {
+    let mut out: Vec<serde_json::Value> = Vec::new();
+    fn walk(node: &RenderNode, out: &mut Vec<serde_json::Value>) {
+        if node.semantic.is_some() {
+            if let Some(ir) = render_to_component_ir(node) {
+                out.push(ir);
+            }
+            return;
+        }
+        for c in &node.children {
+            walk(c, out);
+        }
+    }
+    walk(node, &mut out);
+    out
+}
+
 /// capability.* 语义入口 → bindings.capabilities（G-28 能力调用收集——与 Node collectCapabilities 对齐）
 pub fn collect_capabilities(node: &serde_json::Value, out: &mut Vec<crate::ir::CapabilityBinding>) {
     if let Some(sem) = node.get("semantic").and_then(|s| s.as_str()) {

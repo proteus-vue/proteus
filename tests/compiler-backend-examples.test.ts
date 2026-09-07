@@ -62,6 +62,11 @@ function cirSeq(node: { semantic?: string; children?: unknown[] } | null | undef
   return out
 }
 
+/** 语义森林 → 语义序列（逐根 cirSeq 展平——★#505 M3 D6 Node/Rust 双端等价对比锚点） */
+function forestSeq(forest: Array<{ semantic?: string; children?: unknown[] }> | null | undefined): string[] {
+  return (forest ?? []).reduce((acc, r) => acc.concat(cirSeq(r)), [] as string[])
+}
+
 /** 事件名归一（Node 用 arg（@click.stop → click）；Rust 键带修饰符——去 '.' 前缀对齐） */
 function normHandlerName(name: string): string {
   return name.split('.')[0]
@@ -117,6 +122,11 @@ describe('G-29.1 examples/组件真实文件：Node/Rust 双端编译跑通 + �
       )
       expect(rustB.models).toEqual(nodeB.models)
       expect(rustB.capabilities).toEqual(nodeB.capabilities)
+
+      // ⑥ ★#505 M3 D6：语义森林双端等价（compat 根页面顶层语义根平铺——Node/Rust 一致）
+      expect(forestSeq((rustIr.semantic as { forest?: Array<{ semantic?: string; children?: unknown[] }> }).forest)).toEqual(
+        forestSeq((nodeIr.semantic as { forest?: Array<{ semantic?: string; children?: unknown[] }> }).forest),
+      )
     })
   }
 })

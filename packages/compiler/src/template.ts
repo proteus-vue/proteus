@@ -701,8 +701,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         continue
       }
       // ★G-22 柔性布局：p-fluid 指令 → 编译期 clamp 生成（设计稿/视口取自 fluidLayout 配置）
+      // ★#505 M3 批 4：补 disabled 检查（fluid/p-fluid 已登记 #496 M3——旧行为不查 disabled = 规则声明可关但实际无法关）
       if (attr.name === 'p-fluid') {
         const expr = attr.value ? attr.value.content : ''
+        if (ctx.disabled.has('fluid/p-fluid')) {
+          ctx.warnings.push(`规则 fluid/p-fluid 已被禁用（rules.disabled）——p-fluid="${expr}" 不再生成流式样式（属性剥离；需流式请恢复规则或改静态 px/rem）`)
+          ctx.trace?.add('fluid/p-fluid', { line: node.loc.start.line, before: `p-fluid="${expr}"`, after: '（规则禁用——剥离，不生成样式）' })
+          continue
+        }
         const groups = parseFluidExpr(expr)
         if (!groups.length) {
           // FLD003：p-fluid 须提供 prop(min, max) 区间——无法解析则剥离 + 告警，不生成样式
