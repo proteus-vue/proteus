@@ -178,6 +178,24 @@ export function resolveSharedModule(
 }
 
 /**
+ * ★共享模块 import 扫描（module-plan B0）：返回源码中的 import 源模块（纯函数可测）
+ * ★2026-09-07 修复：多行 named import（import {\n  a,\n} from 'x'）此前漏扫（正则 .*? 无 s 标志不跨行）→
+ *   @proteus-vue/desktop 等跨行 import 不进共享模块 → 页面产物丢 require → 运行时 ReferenceError 白屏
+ * 实现：\s\s（等价 s 标志）跨行 + 量词限制在「{…}」或标识符内（防 from 后源串含 from 字符串误切——源串仅取引号内）
+ */
+export function scanSourceImports(source: string): Array<{ source: string; typeOnly: boolean }> {
+  const out: Array<{ source: string; typeOnly: boolean }> = []
+  // import { a, b } from 'm' / import type {...} from 'm' / import def from 'm' / import 'm'
+  const re =
+    /import\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/g
+  for (const m of source.matchAll(re)) {
+    const s = m[1] || m[2]
+    if (s) out.push({ source: s, typeOnly: /import\s+type\s+/.test(m[0]) })
+  }
+  return out
+}
+
+/**
  * 提取 builder 函数名：function xxxBuilder(...)
  */
 export function extractBuilderFnName(code: string): string | null {
@@ -386,12 +404,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
         const script = src.includes('<script') ? (src.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '') : src
-        const out: Array<{ source: string; typeOnly: boolean }> = []
-        for (const m of script.matchAll(/import\s+(?:type\s+)?.*?from\s+['"]([^'"]+)['"]|import\s+['"]([^'"]+)['"]/gm)) {
-          const s = m[1] || m[2]
-          if (s) out.push({ source: s, typeOnly: m[0].includes('import type') })
-        }
-        return out
+        return scanSourceImports(script)
       }
       for (const { file } of files) {
         const list: Array<{ source: string; requirePath: string }> = []
