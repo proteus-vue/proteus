@@ -1237,14 +1237,24 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
 
 /** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
  *  ★#494 call 为本页方法名（methodNames 命中）→ this.<method>() 裸调用改写——
- *  微信 Page 顶层方法必须 this 调用（词法查找必 ReferenceError：config-demo 的 makeGuardStyle 白屏根因之一） */
-function runtimeInitLine(inits: Array<{ name: string; call: string }>, methodNames?: Set<string>): string {
+ *  微信 Page 顶层方法必须 this 调用（词法查找必 ReferenceError：config-demo 的 makeGuardStyle 白屏根因之一）
+ *  ★2026-09-07 同族坑②：call 表达式内其它 runtimeInit 实例裸引用 → this.<name>（dev-host `const metrics =
+ *  host.getMetrics()` → this.metrics = host.getMetrics() 中 host 未 this 化 → onLoad ReferenceError） */
+function runtimeInitLine(inits: Array<{ name: string; call: string }>, methodNames?: Set<string>, runtimeInitNames?: Set<string>): string {
   return inits
     .map((i) => {
       let call = i.call
       if (methodNames) {
         const m = call.match(/^([A-Za-z_$][\w$]*)\s*\(/)
         if (m && methodNames.has(m[1])) call = `this.${call}`
+      }
+      if (runtimeInitNames) {
+        // call 内其它 runtimeInit 实例裸名 → this.<name>（链式 base / 参数引用；与 computedInitLine rewrite 同规则；
+        //   声明顺序 = 源码序（inits 数组），前序实例已 this 赋值，后续引用安全）
+        for (const n of runtimeInitNames) {
+          if (n === i.name) continue // 自引用（递归 const 非法，保守跳过）
+          call = call.replace(new RegExp(`(?<!\\.)\\b${n}\\b`, 'g'), `this.${n}`)
+        }
       }
       return `this.${i.name} = ${call}`
     })
@@ -1294,6 +1304,10 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     const m = t.match(/^(?:await\s+)?([A-Za-z_$][\w$.]*)\s*\((.*)\)\s*;?$/)
     if (!m) continue
     const fn = m[1]
+    // ★2026-09-07 同族坑①：语句关键字开头被误当函数调用（`if (typeof window !== 'undefined')
+    //   window.addEventListener('resize', onResize)` → fn='if' 整行注入 onLoad——onResize 方法裸引用在
+    //   resize 触发时 ReferenceError + if 语义错乱）——排除语句关键字（首个标识符）
+    if (/^(if|for|while|switch|do|return|throw|try|catch|else|new|delete|typeof|void|in|instanceof|case|default|break|continue)\b/.test(t)) continue
     // 专门通道已有归属的形态跳过（provide/inject/watch/computed/生命周期宏）
     if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
@@ -2225,7 +2239,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   const preCallsLine = topLevelCalls.filter((c) => !dependsOnInstance(c)).join('\n')
   const postCallsLine = topLevelCalls.filter((c) => dependsOnInstance(c)).join('\n')
   const initLineSeq = (): string[] =>
-    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames), postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
+    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -2234,10 +2248,13 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
       lines.push(`  created() {\n${indentBody(piBlocks.provide)}\n  },`)
     }
     // ★#495c 组件 attached：runtimeInit 先于 computed（顺序同页面 initLineSeq）
-    // ★#499：props 组件 computed/immediate 已移至 onReady（微信父传属性 attached 后才到位）——attached 仅保留运行时初始化/注入
+    // ★2026-09-07 同族坑③：组件模式顶层副作用此前完全未注入（topLevelCalls 仅页面 initLineSeq 使用 → 组件 setup
+    //   顶层调用静默丢）——attached 补 pre/post 段（与页面同构：外部 init 最前；实例依赖调用 this 化后置 runtimeInit 后）
     const initLines = [
       semanticGridInit,
-      runtimeInitLine(runtimeInits, methodNames),
+      preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '',
+      runtimeInitLine(runtimeInits, methodNames, runtimeInitNames),
+      postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '',
       compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar),
       storeBindingInit,
       compDerivedReady ? '' : immediateWatchLine(watches, propsVar),
