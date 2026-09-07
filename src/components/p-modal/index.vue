@@ -11,7 +11,7 @@
        mask/panel absolute 相对容器（弹层常规结构） -->
   <view v-if="shown" class="p-modal">
     <view class="p-modal-mask" @click="onMaskTap" />
-    <view class="p-modal-panel" :class="panelClass" :style="panelStyle">
+    <view class="p-modal-panel" :data-form="form" :style="panelStyle">
       <view v-if="title || closable" class="p-modal-header">
         <text v-if="title" class="p-modal-title">{{ title }}</text>
         <text v-if="closable" class="p-modal-close" @click="onCloseTap">✕</text>
@@ -121,15 +121,13 @@ function computeAnchorStyle(anchor: unknown): Record<string, string> {
 }
 
 // ★断言放方法体内（MP 编译器剥离方法体 as）
-// ★2026-09-07 布局专项：panel 形态类（--sheet/--dialog/--popover）声明在非 scoped 全局 style 块——
-//   动态 :class="{{panelClass}}" 在 MP 产物无法加 scoped 后缀（wxss .xxx-data-v 失配 → sheet 底部定位丢失
-//   → 面板落左上/中上）；全局类名唯一（p-modal-panel--*），Web 端同命中。panelStyle（inline）保留兜底。
-const panelClass = computed(() => 'p-modal-panel--' + form.value)
-
+// ★2026-09-07 布局专项③：形态定位改「属性选择器」承载——模板 :data-form="form"（属性值无需 scoped hash，
+//   动态值天然命中）+ scoped 规则 .p-modal-panel[data-form=...]（class 静态部分照常 hash）——彻底绕开
+//   「动态 class 无法 scoped 后缀」；不再依赖 JS 设 panelClass。Web 端 Vue 响应式 data-form 同机制。
 const panelStyle = computed(() => {
-  // ★2026-09-07 布局专项②：位置/形态全由形态类承担（global：.p-modal-panel--sheet 底部 / --dialog·--popover 居中——
-  //   absolute 相对 .p-modal 容器）；inline 只承载形态补充（sheet Home Indicator 避让）。不再内联 position:fixed——
-  //   会覆盖类 absolute 并把面板拉回不可靠的 fixed 坐标系（Skyline/WebView 引擎 bottom 定位失效实证）。
+  // ★位置/形态全由 data-form 属性选择器承担（sheet 底部 / dialog·popover 居中——absolute 相对 .p-modal 容器）；
+  //   inline 只承载形态补充（sheet Home Indicator 避让）。不再内联 position:fixed——会覆盖属性选择器的 absolute
+  //   并把面板拉回不可靠的 fixed 坐标系（Skyline/WebView 引擎 fixed bottom 定位失效实证）。
   const style: Record<string, string> = {}
   // ★popover + anchor → 锚定（anchor 下方，Web 场景；MP 恒 sheet 不走此分支）——anchored 用 fixed 相对视口（真 Vue 支持）
   if (form.value === 'popover' && props.anchor) {
@@ -175,6 +173,24 @@ const panelStyle = computed(() => {
   width: 92%;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
+/* ★2026-09-07 布局专项③：形态定位用属性选择器（:data-form 动态值无需 scoped hash）——
+   sheet 底部全宽 / dialog·popover 居中（absolute 相对 .p-modal 容器）；绕开动态 class scoped 后缀坑 */
+.p-modal-panel[data-form='sheet'] {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  border-radius: 12px 12px 0 0;
+  max-height: 80vh;
+  overflow: auto;
+}
+.p-modal-panel[data-form='dialog'],
+.p-modal-panel[data-form='popover'] {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
 .p-modal-header {
   display: flex;
   align-items: center;
@@ -200,26 +216,5 @@ const panelStyle = computed(() => {
 @keyframes proteus-modal-in {
   from { opacity: 0; transform: translateY(24px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-</style>
-
-<!-- ★2026-09-07 布局专项①：形态类全局声明（global 非 scoped）——MP 动态 :class={{panelClass}} 无法带 scoped 后缀，
-     类名全局唯一即可（absolute 相对 .p-modal 容器）；scoped 段保留静态类（p-modal/mask/panel 基础等模板字面量可加后缀） -->
-<style global>
-.p-modal-panel--sheet {
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  max-width: none;
-  border-radius: 12px 12px 0 0;
-  max-height: 80vh;
-  overflow: auto;
-}
-.p-modal-panel--dialog,
-.p-modal-panel--popover {
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
 }
 </style>

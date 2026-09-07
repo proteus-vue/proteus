@@ -185,18 +185,19 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     expect(el.querySelector('.p-modal')).toBeNull()
   })
 
-  it('★width 覆盖三档：320 → sheet / 700 → dialog / 1024 → popover（不同窗口大小验证）', async () => {
+  it('★width 覆盖三档：320 → sheet / 700 → dialog / 1024 → popover（不同窗口大小验证——形态经 data-form 属性）', async () => {
     const cases: Array<[number, string]> = [
-      [320, 'p-modal-panel--sheet'],
-      [600, 'p-modal-panel--dialog'], // 边界 [lo, hi) 左闭右开
-      [700, 'p-modal-panel--dialog'],
-      [1024, 'p-modal-panel--popover'],
+      [320, 'sheet'],
+      [600, 'dialog'], // 边界 [lo, hi) 左闭右开
+      [700, 'dialog'],
+      [1024, 'popover'],
     ]
     for (const [w, expected] of cases) {
       const el = mount(PModal, { visible: true, width: w })
       await nextTick()
       const panel = el.querySelector('.p-modal-panel') as HTMLElement
-      expect(panel.classList.contains(expected)).toBe(true)
+      // ★2026-09-07 布局专项③：形态定位经 :data-form 属性选择器（动态值无需 scoped hash）
+      expect(panel.dataset.form).toBe(expected)
     }
   })
 
@@ -208,7 +209,7 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     )
     await nextTick()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    expect(panel.classList.contains('p-modal-panel--dialog')).toBe(true)
+    expect(panel.dataset.form).toBe('dialog')
     expect((el.querySelector('.p-modal-title') as HTMLElement).textContent).toBe('标题')
     expect(el.querySelector('.body-text')).not.toBeNull()
     expect(el.querySelector('.p-modal-close')).not.toBeNull()
@@ -219,7 +220,7 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     const el = mount(PModal, { visible: true, width: 1024, anchor })
     await nextTick()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
+    expect(panel.dataset.form).toBe('popover')
     expect(panel.style.position).toBe('fixed')
     expect(panel.style.left).toBe('120px') // anchor.left
     expect(panel.style.top).toBe('120px') // anchor.bottom + 8 = (80 + 32) + 8
@@ -230,15 +231,15 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     const el = mount(PModal, { visible: true, width: 1024 })
     await nextTick()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    // ★2026-09-07 布局专项②：居中定位归形态类（global .p-modal-panel--popover { left50/top50/translate }）——
-    //   inline 不再内联 position:fixed 定位（Skyline/WebView 引擎 fixed bottom 失效实证）；class 承载形态
-    expect(panel.classList.contains('p-modal-panel--popover')).toBe(true)
-    expect(panel.style.transform).toBe('') // inline 无 transform（居中由样式类承担）
+    // ★2026-09-07 布局专项③：居中定位归 data-form 属性选择器（.p-modal-panel[data-form='popover']）——
+    //   inline 不再内联 position:fixed 定位（Skyline/WebView 引擎 fixed bottom 失效实证）
+    expect(panel.dataset.form).toBe('popover')
+    expect(panel.style.transform).toBe('') // inline 无 transform（居中由属性选择器规则承担）
     const el2 = mount(PModal, { visible: true, width: 320 })
     await nextTick()
     const sheet = el2.querySelector('.p-modal-panel') as HTMLElement
-    expect(sheet.classList.contains('p-modal-panel--sheet')).toBe(true)
-    // 底部定位在 global .p-modal-panel--sheet（left/right/bottom 0）——inline 仅承载安全区 padding（env 解析丢）
+    expect(sheet.dataset.form).toBe('sheet')
+    // 底部定位在 .p-modal-panel[data-form='sheet']——inline 仅承载安全区 padding（env 解析丢）
     expect(sheet.style.left).toBe('')
     expect(sheet.style.bottom).toBe('')
   })
