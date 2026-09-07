@@ -13,6 +13,7 @@ import type { FluidLayoutConfig } from '@proteus-vue/types/compiler-types'
 import { linearFluid, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
+import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
@@ -518,8 +519,14 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★#496 柔性语义编译：<p-grid> 语义元素——仅页面（Skyline SelectorQuery 需页面 onReady；组件内 p-grid 回退运行时组件）
+  // ★#505 M3 批 3：规则禁用须整体回退（template/script/gen-routes 三侧一致）——旧行为 template 照常语义编译但
+  //   script 不注入默认档（disabled 只查了 script 侧）→ 产物 wxml 引用 {{pgridStyleN}} 永远 undefined = 半失效产物；
+  //   现在禁用 → 回退运行时组件（产物保留 <p-grid> 标签，gen-routes 同步注册 usingComponents）
   if (SEMANTIC_COMPILE_TAGS.has(node.tag)) {
-    if (ctx.isPage) {
+    if (ctx.disabled.has('fluid/semantic-grid')) {
+      ctx.warnings.push(`规则 fluid/semantic-grid 已被禁用（rules.disabled）——<p-grid> 回退运行时组件（产物保留 <p-grid> 标签；页面需经 gen-routes 注册该组件，禁用即放弃 #496 编译器档位语义）`)
+      ctx.trace?.add('fluid/semantic-grid', { line: node.loc.start.line, before: '<p-grid>（语义编译）', after: '<p-grid> 回退运行时组件（规则禁用）' })
+    } else if (ctx.isPage) {
       const grid = tryParseSemanticGrid(node)
       if (grid) return serializeSemanticGrid(node, ctx, grid)
       ctx.warnings.push(`<p-grid> 的 min-col-width/gap 需为静态数值（动态 props 语义编译暂不支持 #496 MVP）——已回退运行时组件（仅 Web 可用）`)
@@ -608,6 +615,16 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>；p-svg 等矢量组件 MP 端 Skia 映射为后续批次）——已原样输出但不会渲染，请改用 image/背景图或等待矢量批次`,
     )
     ctx.trace?.add('template/svg-no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（MP 无对等：SVG 标签不渲染）' })
+  }
+  // ★#505 M3 批 2：p-* 是框架保留前缀（src/components 语义组件 + p-grid 等语义编译标签——TAG_SEMANTIC_MAP 登记即合法）——
+  //   未登记 = 拼写错误或未入库组件：旧行为静默按未注册自定义组件输出（gen-routes 不注册 → MP 整块不渲染、无语义链接）
+  //   反黑盒显式警告（与 conformance render.semanticLink「p-* 语义空白」收紧同源——本规则把同源收紧带到主编译产物侧）；
+  //   config tags 映射显式覆盖的 p-*（用户自定义逃生舱）不警告
+  if (node.tag.startsWith('p-') && !TAG_SEMANTIC_MAP[node.tag] && !ctx.tagMap[node.tag] && !ctx.disabled.has('tag/unknown-p-star')) {
+    ctx.warnings.push(
+      `<${node.tag}> 以 p- 前缀命名但不在组件库语义登记表（TAG_SEMANTIC_MAP）——拼写错误或未入库组件？产物将按未注册自定义组件输出（MP 端不渲染、无语义链接）；请检查组件名或移除 p- 前缀`,
+    )
+    ctx.trace?.add('tag/unknown-p-star', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（未登记 p-*：按未注册自定义组件输出——MP 不渲染）' })
   }
   // 决策 trace：标签映射
   if (!ctx.disabled.has('tag/unknown-kebab') && !(tagRuleId && ctx.disabled.has(tagRuleId))) {

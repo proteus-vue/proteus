@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 86 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 89 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (46)
+## Template transforms (49)
 
 ### `tag/div-to-view`
 
@@ -140,6 +140,19 @@ after:  <custom-comp foo="bar" />
 ```
 
 > why: whitelist mapping + conservative retention of unknown tags: the standard Vue component system (Principle 9) and the native-component escape hatch (the pain point #11 countermeasure) rely on this channel
+
+### `tag/unknown-p-star`
+
+**p-* tags must be registered in the component library — unknown p-* warns**
+
+the p- prefix is framework-reserved (src/components semantic components + semantic-compiled tags such as p-grid = the TAG_SEMANTIC_MAP registered set); an unregistered p-* means a typo or a component not in the library, so a compile-time warning is raised (the artifact is still emitted as an unregistered custom component: it does not render on MP and has no semantic link)
+
+```
+before: <p-buttn @click="go">x</p-buttn>
+after:  编译警告（未登记 p-*——拼写错误或未入库组件）；产物仍按未注册自定义组件输出
+```
+
+> why: anti-black-box (★#505 M3): the conformance world already tightens “p-* present but blank” (not in TAG_SEMANTIC_MAP) into an explicit render.semanticLink failure; this rule brings the same tightening to the main compiled artifact side — the old behavior emitted silently and developers could not attribute a whole block not rendering on MP
 
 ### `semantic/base-class`
 
@@ -609,6 +622,32 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 ```
 
 > why: progress is not currently on the Skyline component-support list (real-device tests show it does not render) — the downgraded custom structure keeps both ends consistent and is usable on Skyline (16-progress-skyline-degrade)
+
+### `fluid/semantic-grid`
+
+**p-grid flexible semantic compilation (page-level flex column container)**
+
+<p-grid> (in pages) compiles to a container view flex(row/wrap/gap) plus per-child p-grid-item column wrappers (v-for/v-if/key migrate to the wrapper; style binds {{pgridStyleN}} px columns, the script injects defaults plus onLoad/onReady SelectorQuery measurement); dynamic props or in-component usage fall back to the runtime component; when disabled, it falls back entirely to the runtime component (the artifact keeps the <p-grid> tag and gen-routes registers usingComponents accordingly)
+
+```
+before: <p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid>
+after:  <view class="p-grid" style="flex-direction:row;flex-wrap:wrap;gap:12px;..."><view class="p-grid-item" style="{{pgridStyle0}}">...</view></view>（script 注入档位）
+```
+
+> why: Skyline/WebView have no CSS Grid — cross-end grids can only be code-generated per end by the compiler (#496, five rounds of verification: flex + px columns + measured container width is the only reliable Skyline path); disabling must be consistent across all three sides (template falls back + script injects nothing + gen-routes registers), otherwise the artifact references {{pgridStyleN}} in wxml while the script injects no defaults = a half-broken artifact (fixed in ★#505 M3 batch 3)
+
+### `fluid/p-fluid`
+
+**the p-fluid attribute becomes linear calc fluid declarations (Skyline has no clamp)**
+
+a p-fluid="prop(min, max)" attribute on an element compiles to linear calc length declarations (linearFluid: calc(px + vw)) at compile time — Skyline/WebView share one wxml and Skyline officially has no clamp/min/max; multiple groups are separated by “;”; when parsing fails (FLD003, no prop(min,max) range) the attribute is stripped with a warning and no styles are generated
+
+```
+before: <text p-fluid="font-size(14, 18)">x</text>
+after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意——数值随 designWidth/viewport）
+```
+
+> why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
 ## Script transforms (26)
 

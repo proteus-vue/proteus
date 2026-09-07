@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 86 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 89 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（46）
+## 模板转换（49）
 
 ### `tag/div-to-view`
 
@@ -140,6 +140,19 @@ after:  <custom-comp foo="bar" />
 ```
 
 > why: 白名单映射 + 未知标签保守保留：标准 Vue 组件体系（原则 9）与原生组件逃生舱（痛点 #11 对策）依赖此通道
+
+### `tag/unknown-p-star`
+
+**p-* 标签须组件库语义登记——未登记警告**
+
+p- 前缀是框架保留（src/components 语义组件 + p-grid 等语义编译标签 = TAG_SEMANTIC_MAP 登记集）；未登记的 p-* = 拼写错误或未入库组件 → 编译期显式警告（产物仍按未注册自定义组件输出：MP 不渲染、无语义链接）
+
+```
+before: <p-buttn @click="go">x</p-buttn>
+after:  编译警告（未登记 p-*——拼写错误或未入库组件）；产物仍按未注册自定义组件输出
+```
+
+> why: 反黑盒（★#505 M3）：conformance 世界已把「p-* 存在但空白」（TAG_SEMANTIC_MAP 未登记）收紧为 render.semanticLink 显式失败，本规则把同源收紧带到主编译产物侧——旧行为静默输出，开发者在 MP 端看到整块不渲染无从归因
 
 ### `semantic/base-class`
 
@@ -609,6 +622,32 @@ after:  <view class="proteus-progress"><view class="proteus-progress-track"><vie
 ```
 
 > why: Skyline 组件支持表 progress 暂不考虑（真机实测不渲染）——降级自定义结构双端一致 + Skyline 可用（16-progress-skyline-degrade）
+
+### `fluid/semantic-grid`
+
+**p-grid 柔性语义编译（页面级 flex 档位容器）**
+
+<p-grid>（页面内）编译为容器 view flex(row/wrap/gap) + 直接子元素逐包 p-grid-item 档位容器（v-for/v-if/key 迁移包装层；style 绑 {{pgridStyleN}} px 档，script 注入默认档 + onLoad/onReady SelectorQuery 实测重算）；动态 props/组件内 → 回退运行时组件；禁用 → 整体回退运行时组件（产物保留 <p-grid> 标签，gen-routes 同步注册 usingComponents）
+
+```
+before: <p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid>
+after:  <view class="p-grid" style="flex-direction:row;flex-wrap:wrap;gap:12px;..."><view class="p-grid-item" style="{{pgridStyle0}}">...</view></view>（script 注入档位）
+```
+
+> why: Skyline/WebView 无 CSS Grid——跨端网格只能编译器按端 codegen（#496 五轮实证：flex + px 档 + 实测容器宽才是 Skyline 可靠路径）；禁用须三侧一致（template 回退 + script 不注入 + gen-routes 注册），否则产物 wxml 引用 {{pgridStyleN}} 而 script 不注入默认档 = 半失效产物（★#505 M3 批 3 修复）
+
+### `fluid/p-fluid`
+
+**p-fluid 属性 → calc 线性流式声明（Skyline 无 clamp）**
+
+元素上的 p-fluid="prop(min, max)" 属性编译期为 calc 线性长度声明（linearFluid：calc(px + vw)——Skyline/WebView 共用 wxml，Skyline 官方表无 clamp/min/max）；多组 ; 分隔；解析失败（FLD003 无 prop(min,max) 区间）→ 剥离 + 警告不生成样式
+
+```
+before: <text p-fluid="font-size(14, 18)">x</text>
+after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意——数值随 designWidth/viewport）
+```
+
+> why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
 ## 脚本转换（26）
 

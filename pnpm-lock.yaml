@@ -338,6 +338,9 @@ importers:
       '@babel/plugin-transform-optional-chaining':
         specifier: ^7.29.0
         version: 7.29.7(@babel/core@7.29.7)
+      '@proteus-vue/component-ir':
+        specifier: 0.1.0
+        version: link:../component-ir
       '@proteus-vue/contracts':
         specifier: 0.1.0
         version: link:../contracts

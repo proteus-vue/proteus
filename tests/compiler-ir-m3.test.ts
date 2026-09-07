@@ -176,6 +176,48 @@ describe('★#505 M3 门禁③：conformance 收紧——「p-* 存在但空白�
   })
 })
 
+describe('★#505 M3 门禁⑤：主编译未知 p-* 反黑盒——p-* 语义空白收紧同源带到主编译产物侧', () => {
+  const opts = { px2rpx: true, rpxRatio: 2 }
+  it('未登记 p-*（拼写错误形态 p-gride）→ 编译警告（原样输出但显式提示，不再静默）', () => {
+    const r = compileVueSfc('<template><view><p-gride @click="go">x</p-gride></view></template>', { filename: 'pages/m3unknown.vue', ...opts })
+    expect(r.warnings.some((w) => w.includes('p-gride') && w.includes('TAG_SEMANTIC_MAP'))).toBe(true)
+    // 产物不被破坏（仍按未注册自定义组件原样输出——逃生舱不变），警告让使用者知晓
+    expect(r.wxml).toContain('<p-gride')
+  })
+  it('登记过的 p-*（p-grid 语义编译 + p-stack 组件）→ 零未知 p-* 警告（不误报）', () => {
+    const r = compileVueSfc('<template><p-stack><p-grid :min-col-width="160" :gap="12"><p-box /></p-grid></p-stack></template>', { filename: 'pages/m3known.vue', ...opts })
+    expect(r.warnings.some((w) => w.includes('语义登记表'))).toBe(false)
+  })
+  it('禁用 tag/unknown-p-star → 无警告（退旧行为；逃生舱留给用户决策）', () => {
+    const r = compileVueSfc('<template><view><p-gride>x</p-gride></view></template>', { filename: 'pages/m3off.vue', ...opts, rules: { disabled: ['tag/unknown-p-star'] } })
+    expect(r.warnings.some((w) => w.includes('p-gride') && w.includes('TAG_SEMANTIC_MAP'))).toBe(false)
+  })
+  it('config customTags 映射显式覆盖的 p-*（用户自定义逃生舱）→ 不警告', () => {
+    const r = compileVueSfc('<template><view><p-foo>自定义</p-foo></view></template>', { filename: 'pages/m3override.vue', ...opts, rules: { customTags: { 'p-foo': 'view' } } })
+    expect(r.warnings.some((w) => w.includes('p-foo') && w.includes('TAG_SEMANTIC_MAP'))).toBe(false)
+    expect(r.wxml).toContain('<view')
+  })
+})
+
+describe('★#505 M3 门禁⑥：fluid/semantic-grid 禁用整体回退——消除 template 照常编译但 script 不注入默认档的半失效产物', () => {
+  const opts = { px2rpx: true, rpxRatio: 2 }
+  const SRC = '<template><view class="page"><p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid></view></template>'
+  it('规则启用：页面 p-grid → 容器 flex 语义编译（wxml 无 <p-grid 字面标签、无 pgridStyle 悬空引用）+ IR 声明 semanticGrids', () => {
+    const r = compileVueSfc(SRC, { filename: 'pages/m3grid-on.vue', ...opts })
+    expect(r.wxml).not.toContain('<p-grid')
+    expect(r.wxml).toContain('class="p-grid"')
+    expect(r.ir?.template.semanticGrids.length).toBe(1)
+    expect(r.warnings.some((w) => w.includes('fluid/semantic-grid 已被禁用'))).toBe(false)
+  })
+  it('禁用：显式警告 + 回退运行时组件（产物保留 <p-grid> 标签，供 gen-routes 注册）；IR 无 semanticGrids（无半失效 {{pgridStyleN}}）', () => {
+    const r = compileVueSfc(SRC, { filename: 'pages/m3grid-off.vue', ...opts, rules: { disabled: ['fluid/semantic-grid'] } })
+    expect(r.warnings.some((w) => w.includes('fluid/semantic-grid 已被禁用') && w.includes('回退运行时组件'))).toBe(true)
+    expect(r.wxml).toContain('<p-grid')
+    expect(r.ir?.template.semanticGrids).toEqual([])
+    expect(r.js).not.toContain('pgridStyle')
+  })
+})
+
 describe('★#505 M3 门禁④：交叉通道负面护栏——规则被删/禁用 → R2 红（语义缺口经真实产物矩阵暴露，非仅 fixture）', () => {
   const SRC = '<script setup lang="ts">import { ref } from "vue"\nconst keyword = ref("")</script>\n<template><input v-model="keyword" /></template>'
   const back = createNodeCompilerBackend()

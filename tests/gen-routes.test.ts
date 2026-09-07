@@ -179,4 +179,22 @@ describe('runGenRoutes：路由表生成全链路', () => {
     expect(userProfile).toContain('"title":"个人资料"')
     expect(userProfile).toContain('"requiresAuth":true') // 目录级保留（精确只覆盖 title）
   })
+
+  it('★#505 M3 批 3：fluid/semantic-grid 规则状态决定页面 p-grid 的 usingComponents 注册（禁用回退运行时组件须注册，规则启用语义编译跳过）', () => {
+    const FW = path.resolve('src/components')
+    const gridTpl = `<template><view class="page"><p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid></view></template>`
+    // 规则启用：p-grid 已被语义编译（产物无标签）→ 页面 page.json 不注册（#496 skipSemantic 语义）
+    const rootOn = path.join(TMP, 'grid-on')
+    writeFixture(rootOn, 'src/pages/index.vue', gridTpl)
+    runGenRoutes({ config: makeConfig(), root: rootOn, frameworkComponentsDir: FW })
+    const pageJsonOn = JSON.parse(fs.readFileSync(path.join(rootOn, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJsonOn.usingComponents?.['p-grid']).toBeUndefined()
+    // 规则禁用：p-grid 回退运行时组件（编译产物保留 <p-grid> 标签）→ 必须注册——旧行为 skipSemantic 硬编码排除 →
+    //   wxml 引用 <p-grid> 而 page.json 不注册 = MP 整块不渲染（半失效产物）；修复后与编译侧规则状态一致
+    const rootOff = path.join(TMP, 'grid-off')
+    writeFixture(rootOff, 'src/pages/index.vue', gridTpl)
+    runGenRoutes({ config: makeConfig({ rules: { disabled: ['fluid/semantic-grid'] } }), root: rootOff, frameworkComponentsDir: FW })
+    const pageJsonOff = JSON.parse(fs.readFileSync(path.join(rootOff, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJsonOff.usingComponents?.['p-grid']).toBe('/proteus/p-grid/index')
+  })
 })

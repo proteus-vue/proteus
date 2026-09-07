@@ -505,7 +505,11 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
   const tpl = extractTemplateBody(src)
   const customTags = new Set(Object.keys(config.rules?.customTags ?? {}))
   // ★#496 语义编译标签（仅页面——产物层展开为 flex 档位容器，不注入 usingComponents；组件模板保留运行时组件需注册）
-  const semanticTags = skipSemantic ? new Set(['p-grid']) : new Set()
+  // ★#505 M3 批 3：语义跳过须与编译侧规则状态一致——fluid/semantic-grid 被禁用时页面 p-grid 回退运行时组件
+  //   （产物保留 <p-grid> 标签）→ 必须注册 usingComponents；规则启用才按语义编译跳过（防禁用后半失效产物：
+  //   wxml 引用 <p-grid> 而 page.json 不注册 → MP 整块不渲染）
+  const gridRuleDisabled = (config.rules?.disabled ?? []).includes('fluid/semantic-grid')
+  const semanticTags = skipSemantic && !gridRuleDisabled ? new Set(['p-grid']) : new Set()
   const used = new Set<string>()
   // 标签扫描跳过 HTML 注释块（注释里可能出现 <p-xxx> 示例文本——旧正则直接扫文本会把注释示例误当使用）
   let idx = 0
