@@ -1189,7 +1189,7 @@ after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES20
 
 **WXML output checked against the platform standard (glass-easel official error codes as blueprint)**
 
-three official-error-code checks: ① DataBindingNotAllowed — wx:key contains {{}} (official: wx:key forbids data binding; specify the item field name or *this directly); ② DuplicatedAttribute — the same attribute appears twice (WeChat keeps only one); ③ AvoidUppercaseLetters — a tag name contains uppercase (custom-component tags in output should be all-lowercase kebab-case; uppercase attribute names are exempt — camelCase custom attributes like modelValue are legal bindings, and the official level is Note)
+four official-error-code checks: ① DataBindingNotAllowed — wx:key contains {{}} (official: wx:key forbids data binding; specify the item field name or *this directly); ② DuplicatedAttribute — the same attribute appears twice (WeChat keeps only one); ③ AvoidUppercaseLetters — a tag name contains uppercase (custom-component tags in output should be all-lowercase kebab-case; uppercase attribute names are exempt — camelCase custom attributes like modelValue are legal bindings, and the official level is Note); ④ UnsupportedSyntax — a binding expression contains optional chaining ?. (the official expr.rs operator table has no ?. — Skyline/glass-easel parsing rejects it; a hit errors out and suggests guard-style rewriting)
 
 ```
 before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal>

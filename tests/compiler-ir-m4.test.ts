@@ -6,9 +6,25 @@
 // 验收：① IR 声明 = 完整契约（arg/propName 在位）；② 产物与既有实现逐字节等价（行为零变化）；
 //       ③ IR 单点可重建产物契约（快照自足）；④ 组件无 arg 形态默认 modelValue 契约。
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
+
+const REPO_ROOT = path.resolve('.')
+const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('src/components')]
+
+function walkVue(dir: string, acc: string[] = []): string[] {
+  for (const f of fs.readdirSync(dir)) {
+    const p = path.join(dir, f)
+    if (fs.statSync(p).isDirectory()) walkVue(p, acc)
+    else if (f.endsWith('.vue')) acc.push(p)
+  }
+  return acc
+}
+
+const FILES = WALK_ROOTS.reduce((acc, root) => walkVue(root, acc), [] as string[])
 
 describe('★#505 M4 首条对照①：v-model 组件契约完整入 IR（arg/propName 不再丢）', () => {
   it('v-model:visible → IR 声明 {name, model, arg, propName} 四字段全（契约两半 = template prop 绑定 + script 回写）', () => {
@@ -221,5 +237,35 @@ describe('★#505 M4 methods 名册 + observers 参数归一声明', () => {
     expect(obs?.params).toEqual(['w']) // 原始开发者参数名
     // 产物锚点：observers 回调签名归一 n/o（#499 renameWatchParamsToNo）
     expect(r.js).toContain('width(n, o) {')
+  })
+})
+
+describe('★#505 M4 评审补丁 P1：ScriptIR 声明 × 真实文件自洽门禁（84 真实 .vue——script 声明与现实一致机器化）', () => {
+  it('watchers.deps ⊆ data∪computeds；data∩runtimeInits∩props = ∅；props 仅组件模式非空；全部文件 script 快照在位', () => {
+    const issues: string[] = []
+    let checked = 0
+    for (const file of FILES) {
+      const rel = path.relative(REPO_ROOT, file)
+      const isComponent = rel.includes('src/components')
+      const r = compileVueSfc(fs.readFileSync(file, 'utf-8'), { filename: file, isComponent })
+      const s = r.ir?.script
+      if (!s) {
+        issues.push(`${rel}: script 快照缺失`)
+        continue
+      }
+      checked++
+      const dataNames = new Set((s.data ?? []).map((d) => d.name))
+      const compNames = new Set((s.computeds ?? []).map((c) => c.name))
+      const initNames = new Set((s.runtimeInits ?? []).map((i) => i.name))
+      const propNames = new Set((s.props ?? []).map((p) => p.name))
+      for (const w of s.watchers ?? []) {
+        const missing = (w.deps ?? []).filter((d) => !dataNames.has(d) && !compNames.has(d))
+        if (missing.length) issues.push(`${rel}: watch deps ${missing.join(',')} 不在 data/computeds 声明中`)
+      }
+      for (const n of dataNames) if (initNames.has(n) || propNames.has(n)) issues.push(`${rel}: data.${n} 与 runtimeInits/props 重名`)
+      if (propNames.size && !isComponent) issues.push(`${rel}: 页面模式（非组件）出现 props 声明（defineProps 仅组件语义）`)
+    }
+    expect(checked, '84 真实文件必须全部编译（防门禁自身退化）').toBeGreaterThan(80)
+    expect(issues, `ScriptIR 自洽问题：\n${issues.join('\n')}`).toEqual([])
   })
 })

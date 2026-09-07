@@ -1,7 +1,8 @@
 // tests/compiler-validate-wxml-platform.test.ts
 // ★#505 G2：wxml 产物按平台标准校验（蓝本 = glass-easel 官方 parser 错误码）——
-//   DataBindingNotAllowed（wx:key 禁数据绑定）/ DuplicatedAttribute / AvoidUppercaseLetters。
-//   产物正常形态永不命中，命中即编译器 bug（G1 wx:key 防回归 + 历史 class 双属性真机坑 + 大写标签映射漏）。
+//   DataBindingNotAllowed（wx:key 禁数据绑定）/ DuplicatedAttribute / AvoidUppercaseLetters /
+//   UnsupportedSyntax（绑定表达式含 ?. 可选链，官方 expr.rs 无此运算符）。
+//   产物正常形态永不命中，命中即编译器 bug（G1 wx:key 防回归 + 历史 class 双属性真机坑 + 大写标签映射漏 + ?. 透传坑）。
 import { describe, it, expect } from 'vitest'
 import {
   compileVueSfc,
@@ -14,7 +15,7 @@ import {
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
-describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本三检查', () => {
+describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本四检查', () => {
   it('DataBindingNotAllowed：wx:key 含 {{}} → 命中（官方：wx:key 禁用数据绑定）', () => {
     const issues = scanWxmlPlatformIssues('<view wx:for="{{list}}" wx:key="{{item.id}}">x</view>')
     expect(issues.some((i) => i.code === 'DataBindingNotAllowed' && i.message.includes('wx:key'))).toBe(true)
@@ -30,6 +31,17 @@ describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本三检查', (
     expect(issues.some((i) => i.code === 'AvoidUppercaseLetters' && i.message.includes('PModal'))).toBe(true)
     // camelCase 属性（modelValue/viewBox 类）是合法绑定，不命中
     expect(scanWxmlPlatformIssues('<p-switch modelValue="{{x}}" />')).toEqual([])
+  })
+
+  it('★2026-09-07 官方深扒：UnsupportedSyntax——绑定表达式含 ?. 可选链命中（官方 expr.rs 运算符表无 ?.）', () => {
+    // 属性绑定形态 {{ a?.b }} → 命中
+    const attr = scanWxmlPlatformIssues('<view hidden="{{!a?.b}}">x</view>')
+    expect(attr.some((i) => i.code === 'UnsupportedSyntax' && i.message.includes('?.'))).toBe(true)
+    // 文本插值形态同样命中（表达式经平台解析）
+    const text = scanWxmlPlatformIssues('<view>{{ a?.list[0]?.name }}</view>')
+    expect(text.some((i) => i.code === 'UnsupportedSyntax')).toBe(true)
+    // ?? 与函数调用在官方运算符表内（合法），? 三元后跟 . 数字（a? .5）非可选链——不误报
+    expect(scanWxmlPlatformIssues('<view hidden="{{a ?? b}}">x</view>')).toEqual([])
   })
 
   it('正常产物零命中（kebab 标签 + 引号值含 = / 冒号 / wx:key 静态字段）', () => {

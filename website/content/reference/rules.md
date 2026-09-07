@@ -1189,7 +1189,7 @@ after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES20
 
 **WXML 产物按平台标准校验（蓝本 glass-easel 官方错误码）**
 
-三项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）
+四项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）；④UnsupportedSyntax——绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——Skyline/glass-easel 解析不支持，命中即报错提示改守卫写法）
 
 ```
 before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal>

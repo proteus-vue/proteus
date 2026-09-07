@@ -235,7 +235,24 @@ ScriptIR = {
 | M4 | **ScriptIR 语义逐条迁入**（computed 链 / watch / props / observers 归一…） | 每条 = 一条规则 apply + 产物断言；drift 门禁升级为变换点覆盖 |
 | M5 | 规则治理补全：verify 解析 + example 编译断言 + 总数快照门禁 + executeRule 公开导出 | transforms 世界与 conformance 世界共享门禁，无盲区 |
 
+**执行状态（2026-09-07）**：M1 ✅ / M2 ✅ / M3 ✅（语义森林 D6 采纳 A'，见 §9）/ **M4 ✅（评审通过，偏差登记见 §10）** / M5 ✅（批 1-4：治理门禁基线 + example harness + 变换点覆盖 + scope-attr 接线）。全量 2505/2505 + CI 等价 verify 全绿。
+
 每里程碑独立可停可审；任何一步与 §2 目标冲突即停，不悄悄滑回"直出 + 旁注"。
+
+---
+
+## 10. M4 评审决议（2026-09-07）
+
+**评审对象**：M4 语义族十项（template: v-model 组件契约；script: data/computeds/runtimeInits/lifecycles/watchers/props/provides/injects/methods）× 草案 §6 M4 标准（声明/规则态/产物断言/规则 apply/变换点分派）。
+
+**通过项**：十语义均满足——结构化声明入 CompileIR、规则禁用态如实、产物断言锚点齐备（m4 测试 21 例 + 各语义禁用即红通道）。M4 评审补丁 P1 新增真实文件自洽门禁（84 真实 .vue：watchers.deps ⊆ data∪computeds / data∩runtimeInits∩props = ∅ / props 仅组件模式非空）全过。
+
+**偏差登记（评审发现，诚实记录）**：
+- **G1 后半未达成（结构性）**：产物仍由 codegen 直出——IR 快照是**旁路附加**而非 codegen 消费面（草案目标「产物由 IR 快照 + codegen 生成（非直出）」）；M1 分期放行「codegen 出口暂不变」在 M1-M5 期间未回填。登记为后续专项「codegen 收敛」（§4.3），本评审**接受分期放行**、不做假宣称。
+- **G2 在 script 语义域未闭环**：script 侧九语义走「提取层局部态 → 声明快照 + disabled 门控」，**未经规则 apply 分派**（草案「每条 = 一条规则 apply」）；script 描述层规则迁移执行层 + M5 变换点覆盖门禁只锁既有 apply 集合。登记为 M5 后专项（script 规则 apply 化逐条）。
+- **G3 半达成**：template 侧快照已进 M3 交叉门禁（R1-R3 + 六端 readback）；**ScriptIR 快照零 conformance 消费方**（仅测试断言）——script 语义「修一次多端受益」缺机器通道。登记为后续专项（script 声明 × 后端/产物交叉验证面，与 codegen 收敛联动）。
+
+**决议**：M4 收口 ✅（分期放行接受）；P1 门禁随评审落地；G1/G2/G3 偏差入册为后续专项候选，不进 M4 假宣称。
 
 ---
 

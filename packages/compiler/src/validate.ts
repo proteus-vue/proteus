@@ -125,17 +125,19 @@ export function assertValidResult(result: CompileResult, filename: string): void
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ★#505 G2 wxml 平台标准校验（蓝本：glass-easel parse/tag.rs ParseErrorKind）
-// 检查三项（对应官方具名错误码；产物正常形态永不命中——命中即编译器 bug）:
+// 检查四项（对应官方具名错误码；产物正常形态永不命中——命中即编译器 bug）:
 //   1. DataBindingNotAllowed —— wx:key 值含 {{}}（官方：wx:key 禁用数据绑定，直接指定字段名）
 //   2. DuplicatedAttribute —— 同一元素重复属性（历史真机坑：重复 class 只保留其一）
 //   3. AvoidUppercaseLetters —— 标签名含大写（产物自定义组件标签应为 kebab-case 全小写；
 //      属性名大写豁免——camelCase 自定义属性如 modelValue/viewBox 是合法绑定，官方亦为 Note 级）
+//   4. UnsupportedSyntax —— 绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——模板表达式会经
+//      平台表达式解析；Skyline(glass-easel) 无此运算符；官方 UnsupportedSyntax Error 级蓝本）
 // 诚实边界：完整平台校验（标签/属性白名单、style 串合法性等）需官方 parser 级实现，暂不内置。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 单条 wxml 平台违规（code = 官方 ParseErrorKind 蓝本） */
 export interface WxmlPlatformIssue {
-  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters'
+  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax'
   message: string
   /** wxml 字符偏移（定位用） */
   at: number
@@ -212,6 +214,14 @@ export function scanWxmlPlatformIssues(wxml: string): WxmlPlatformIssue[] {
     if (keyM && keyM[2].includes('{{')) {
       issues.push({ code: 'DataBindingNotAllowed', message: `<${tag.name}> wx:key="${keyM[2]}" 含数据绑定 {{}}——官方规范：wx:key 禁用数据绑定（直接指定 item 字段名或 *this）`, at: tag.at })
     }
+  }
+  // UnsupportedSyntax：绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——含 ?? 与函数调用但无可选链；
+  //   ★2026-09-07 官方仓库深扒取证：define_operator 全表无 '?.'）——模板 {{ a?.b }} 会经平台表达式解析，
+  //   Skyline(glass-easel) 视为不支持语法；Vue 源码请改用守卫写法（如 a && a.b 或 a !== undefined ? a.b : undefined）
+  const noComments = wxml.replace(/<!--[\s\S]*?-->/g, (c) => ' '.repeat(c.length))
+  const optM = noComments.match(/\{\{[^{}]*\?\.[^{}]*\}\}/)
+  if (optM) {
+    issues.push({ code: 'UnsupportedSyntax', message: `绑定表达式 ${optM[0].trim().slice(0, 60)} 含 ?. 可选链——平台表达式解析不支持（官方 UnsupportedSyntax；含 ?? 与函数调用但无可选链）：请改守卫写法`, at: optM.index ?? 0 })
   }
   return issues
 }
