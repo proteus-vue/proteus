@@ -1,0 +1,42 @@
+{
+  "name": "@proteus-vue/runtime",
+  "version": "0.2.0-beta.0",
+  "description": "Proteus 运行时：setData 桥接（批量 + 深层 diff）/ 页面生命周期 / store 桥 / app 骨架模板",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./style-safety": {
+      "types": "./dist/style-safety/index.d.ts",
+      "import": "./dist/style-safety/index.js",
+      "default": "./dist/style-safety/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@proteus-vue/contracts --external:pinia --external:vue"
+  },
+  "dependencies": {
+    "@proteus-vue/contracts": "0.1.0",
+    "@proteus-vue/shared": "0.2.0-beta.0"
+  },
+  "peerDependencies": {
+    "pinia": "^4.0.0",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "pinia": "^4.0.3",
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/types": "0.1.0"
+  }
+}

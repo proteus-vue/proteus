@@ -1,0 +1,745 @@
+/* packages/web/src/style.css —— 小程序语义 Web 模拟层 · 微信默认样式对齐层（14-mp-first-semantics）
+ * 小程序原生组件由微信框架注入默认 UA 样式（button 灰底/圆角/::after 边框、input 无边框等）；
+ * Web 端浏览器默认样式不同（button 立体边框、input 默认边框）——本文件对齐微信默认表现，双端视觉一致。
+ * 优先级：单类选择器（特异性最低）→ 用户 scoped 样式（双类）可覆盖。
+ * 使用：import '@proteus-vue/web/style.css'（或经构建插件注入）
+ */
+
+/* ===== button（对齐微信小程序 button 默认：灰底/圆角/18px/行高/::after 1px 边框）=====
+ * ★变体（2026-08-30，对齐 weui.io/#button_default 数值）：
+ *   type=primary 绿 #07c160 / warn 红 #fa5151；size=mini 小尺寸（weui-btn_mini 数值）；
+ *   disabled 禁用；loading spinner；plain 幽灵（透明底+边框）
+ *   默认（type=default）保留微信原生：灰底 #f8f8f8 / 18px / 行高 2.556 / 圆角 5px（用户已验收） */
+.proteus-web-button {
+  position: relative;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 14px;
+  padding-right: 14px;
+  box-sizing: border-box;
+  font-size: 18px;
+  text-align: center;
+  text-decoration: none;
+  line-height: 2.55555556;
+  border-radius: 5px;
+  overflow: hidden;
+  color: #000000;
+  background-color: #f8f8f8;
+  border: none;
+}
+/* 变体：primary 绿 / warn 红（对齐 weui-btn_primary/weui-btn_warn + 微信原生 type） */
+.proteus-web-button.is-primary {
+  background-color: #07c160; /* --weui-BRAND */
+  color: #fff;
+}
+.proteus-web-button.is-warn {
+  background-color: #fa5151; /* --weui-RED-100 */
+  color: #fff;
+}
+/* 变体：mini 小尺寸（weui-btn_mini：14px/padding 6px 12px/圆角 6px/inline-block） */
+.proteus-web-button.is-mini {
+  display: inline-block;
+  min-width: 0;
+  width: auto;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.42857;
+}
+/* 变体：禁用（微信原生 button disabled：淡灰底 + 浅字） */
+.proteus-web-button.is-disabled {
+  color: rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.15);
+  cursor: not-allowed;
+}
+.proteus-web-button.is-primary.is-disabled,
+.proteus-web-button.is-warn.is-disabled {
+  color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(0, 0, 0, 0.2);
+}
+/* 变体：plain 幽灵按钮（透明底 + 细边框——微信原生 plain） */
+.proteus-web-button.is-plain {
+  background: transparent;
+  color: #07c160;
+  border: 1px solid #07c160;
+}
+.proteus-web-button.is-plain.is-warn {
+  color: #fa5151;
+  border-color: #fa5151;
+}
+/* loading spinner（对齐 weui-btn_loading：旋转圆环） */
+.pwb-loading {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 6px;
+  vertical-align: -0.15em;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: pwb-spin 0.8s linear infinite;
+}
+.proteus-web-button.is-default .pwb-loading {
+  border-color: rgba(0, 0, 0, 0.2);
+  border-top-color: rgba(0, 0, 0, 0.6);
+}
+@keyframes pwb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 微信 button::after 边框（200%/scale(0.5) 细线方案，对齐微信实现） */
+.proteus-web-button::after {
+  content: ' ';
+  width: 200%;
+  height: 200%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  transform: scale(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  border-radius: 10px;
+  pointer-events: none;
+}
+/* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗） */
+.proteus-web-button--hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+/* 暗黑模式（对齐 weui 暗黑按钮）：primary/warn 保持；default 深底浅字 */
+@media (prefers-color-scheme: dark) {
+  .proteus-web-button.is-default {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .proteus-web-button.is-default::after {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .proteus-web-button.is-disabled {
+    color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* ===== input（对齐微信 input：无边框/透明背景/继承字号）===== */
+.proteus-web-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  padding: 0;
+  min-height: 1.4em;
+}
+
+/* ===== image（对齐微信 image：块级展示；mode 映射尺寸见组件内联）===== */
+.proteus-web-image {
+  display: block;
+}
+
+/* ===== view/text 最小对齐（微信默认：block/inline + 继承；text 取消默认空隙）===== */
+.proteus-web-view {
+  display: block;
+}
+.proteus-web-text {
+  display: inline;
+}
+
+/* ===== wx 交互 UI（showToast/showModal/showActionSheet 对齐微信表现）===== */
+/* ★暗黑模式（2026-08-30，weui.io emulateMedia dark 实测）：
+ *   全局变量组（weui 语义）+ prefers-color-scheme 覆盖——与官方 wx-root 变量同构
+ *   实测暗黑：弹层 bg #191919 / toast bg #404040 / 文字 rgba(255,255,255,0.8~0.5) /
+ *   分割线 rgba(255,255,255,0.1) / 确定按钮 LINK #7d90a9 */
+:root {
+  /* 弹层背景（modal/actionsheet menu/取消） */
+  --pwu-bg-2: #ffffff;
+  --pwu-bg-1: #f7f7f7; /* actionsheet 弹层露出的间距色 */
+  --pwu-bg-3: #f7f7f7; /* actionsheet cell 内部分隔背景（暂同 bg-1） */
+  --pwu-fg-0: rgba(0, 0, 0, 0.9); /* 主文字 */
+  --pwu-fg-1: rgba(0, 0, 0, 0.55); /* 次级文字 */
+  --pwu-fg-3: rgba(0, 0, 0, 0.1); /* 分割线 */
+  --pwu-fg-half: rgba(0, 0, 0, 0.9); /* 取消按钮文字 */
+  --pwu-link: #576b95; /* 确定按钮 WeUI 蓝 */
+  --pwu-active: #ececec; /* 按压反馈 */
+  --pwu-toast-bg: #4c4c4c; /* toast 背景 */
+  --pwu-input-border: #d9d9d9; /* modal 输入框边框 */
+  --pwu-wash-bg: #ffffff; /* toast 图标（success 白勾） */
+  /* switch/slider（2026-08-30 暗黑实测：轨道 rgba(255,255,255,0.1) / 阴影 rgba(255,255,255,0.1)） */
+  --pwu-sw-track-off: #fafafa; /* switch 关闭态轨道（用户真机验收白底） */
+  --pwu-sw-border-off: #d0d0d0; /* switch 关闭态边框 */
+  --pwu-sw-track-on: #07c160; /* switch 打开态（--weui-BRAND） */
+  --pwu-sw-thumb: #ffffff; /* switch/slider 滑块 */
+  --pwu-sw-thumb-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.06); /* switch 滑块阴影（weui 官方） */
+  --pwu-sl-track: rgba(0, 0, 0, 0.1); /* slider 轨道（--weui-FG-3） */
+  --pwu-sl-thumb-shadow: 0 0 4px rgba(0, 0, 0, 0.1); /* slider 滑块阴影（weui 官方） */
+  --pwu-wash-ripple: #ffffff; /* switch wash 白色扩散遮罩 */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pwu-bg-2: #191919;
+    --pwu-bg-1: #1e1e1e;
+    --pwu-bg-3: #202020;
+    --pwu-fg-0: rgba(255, 255, 255, 0.8);
+    --pwu-fg-1: rgba(255, 255, 255, 0.5);
+    --pwu-fg-3: rgba(255, 255, 255, 0.1);
+    --pwu-fg-half: rgba(255, 255, 255, 0.6);
+    --pwu-link: #7d90a9; /* 暗化 WeUI 蓝（官方实测） */
+    --pwu-active: rgba(255, 255, 255, 0.1);
+    --pwu-toast-bg: #404040; /* 暗黑 toast（官方实测 #404040） */
+    --pwu-input-border: rgba(255, 255, 255, 0.2);
+    --pwu-wash-bg: rgba(255, 255, 255, 0.9);
+    /* switch/slider 暗黑：轨道 rgba(255,255,255,0.1)（官方实测）、打开态绿不变、滑块白不变
+     * ★关闭态边框与轨道同色（官方 form_switch 无边框方案 borderWidth 0——1px 透明边框保持 thumb 定位不变） */
+    --pwu-sw-track-off: rgba(255, 255, 255, 0.1);
+    --pwu-sw-border-off: rgba(255, 255, 255, 0.1);
+    --pwu-sw-track-on: #07c160;
+    --pwu-sw-thumb: #ffffff;
+    --pwu-sw-thumb-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.2);
+    --pwu-sl-track: rgba(255, 255, 255, 0.1);
+    --pwu-sl-thumb-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+    --pwu-wash-ripple: rgba(255, 255, 255, 0.9);
+  }
+}
+/* ★对齐 WeUI 官方（weui.io/#toast）：背景 #4c4c4c、圆角 8px、padding 28px 20px、文字 rgba(255,255,255,0.9)、
+ *   位置 top 40%、行高 1.4；min-width 132 / max-width 320（图标态方形 132×132，纯文字态见 --text） */
+.proteus-web-toast {
+  position: fixed;
+  left: 50%;
+  top: 50%; /* ★用户实测微信 showToast 居中显示（WeUI 官网 top:40% 仅网页演示，实际居中） */
+  transform: translate(-50%, -50%);
+  background: var(--pwu-toast-bg); /* var(--weui-BG-4) */
+  color: rgba(255, 255, 255, 0.9); /* ★WeUI 文字色（0.9 白，非纯白——toast 深底浅暗黑不变） */
+  /* ★微信 toast 尺寸规则：最小宽度 132px；纯文字长文本最大宽度 320px（横向）
+   * width: max-content 让文字优先单行撑开（图标态/短文字不换行），超 320 才换行 */
+  width: max-content;
+  min-width: 132px;
+  max-width: 320px;
+  box-sizing: border-box;
+  padding: 28px 20px; /* ★WeUI padding */
+  border-radius: 8px; /* ★WeUI 圆角 */
+  line-height: 1.4; /* ★WeUI 行高 */
+  z-index: 99999;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+/* ★图标态：固定方形 132×132（WeUI 图标态 40 图标 + 16 间距 + 文字 + 28×2 padding = 132 自然方形） */
+.proteus-web-toast--icon {
+  width: 132px;
+  height: 132px;
+}
+/* ★纯文字态（weui-toast_text）：padding 12px 20px + 不设最小宽高（WeUI 官方） */
+.proteus-web-toast--text {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 20px;
+}
+.pwu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* ★WeUI 图标与文字间距 16px（.weui-icon_toast margin-bottom） */
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.pwu-icon svg {
+  display: block;
+}
+/* ★toast 图标对齐微信：success 无底色白勾（SVG 自带）；error 白圆底黑叹号（SVG 自带）——无需 CSS 底色
+ * 注意：与 <icon> 组件（彩色圆底）不同——toast 图标是另一种视觉 */
+.pwu-icon-loading {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: proteus-web-spin 0.8s linear infinite;
+}
+@keyframes proteus-web-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pwu-toast-title {
+  font-size: 14px;
+  text-align: center;
+}
+.proteus-web-ui-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99990;
+}
+.proteus-web-modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px; /* ★微信 showModal 宽度固定 320px（iOS UIAlertController 风格，不随大屏等比放大） */
+  max-width: 90vw; /* 小屏兜底：320 视口下 288px 防溢出（微信 rpx 在小屏等比缩小） */
+  background: var(--pwu-bg-2);
+  border-radius: 12px;
+  z-index: 99991;
+  overflow: hidden;
+}
+/* ★对齐 WeUI 官方 dialog（weui.io/#dialog 实测）：
+ *   标题 hd 32px 24px 16px / 17px / 500 / FG-0(0.9)；内容 bd 0 24px + mb 32px / FG-1(0.55)；
+ *   按钮 padding 20px 8px / 17px / 500 / LINK(#576b95)；分割线 hairline rgba(0,0,0,.1) scale 0.5 */
+.pwu-modal-title {
+  font-size: 17px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.4;
+  color: var(--pwu-fg-0); /* --weui-FG-0 */
+  padding: 32px 24px 16px; /* WeUI hd */
+}
+.pwu-modal-content {
+  font-size: 17px;
+  color: var(--pwu-fg-1); /* --weui-FG-1（次级文字） */
+  text-align: center;
+  line-height: 1.4;
+  padding: 0 24px; /* WeUI bd */
+  margin-bottom: 32px;
+}
+/* ★WeUI 无标题对话框：内容顶替标题位置（padding 32px 24px 0）+ FG-0 色（0.9 黑，非灰色） */
+.pwu-modal--no-title .pwu-modal-content {
+  padding: 32px 24px 0;
+  color: var(--pwu-fg-0);
+}
+/* ★WeUI 可输入对话框（showModal editable）：输入框白底灰边框圆角（微信输入框） */
+.pwu-modal-input {
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 48px); /* 24px 左右边距与内容对齐 */
+  margin: 0 auto 32px;
+  padding: 8px 12px;
+  border: 1px solid var(--pwu-input-border); /* 微信输入框浅灰边框 */
+  border-radius: 6px;
+  background: var(--pwu-bg-2);
+  color: var(--pwu-fg-0);
+  font-size: 17px;
+  outline: none;
+}
+.pwu-modal-input:focus {
+  border-color: #576b95; /* 聚焦边框 WeUI 蓝 */
+}
+.pwu-modal-btns {
+  display: flex;
+  position: relative;
+}
+/* ★顶部 hairline 分割线（WeUI ft::after：scaleY(0.5) 细线） */
+.pwu-modal-btns::before {
+  content: ' ';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  border-top: 1px solid var(--pwu-fg-3); /* --weui-DIALOG-LINE-COLOR */
+  transform: scaleY(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+}
+.pwu-modal-btn {
+  flex: 1;
+  position: relative;
+  padding: 20px 8px; /* ★微信底部按钮 padding（用户实测：上下 20px 左右 8px） */
+  border: none;
+  background: var(--pwu-bg-2);
+  font-size: 17px;
+  font-weight: 500; /* WeUI 按钮 500（非 600） */
+  line-height: 1.41176; /* WeUI btn 行高 */
+  color: var(--pwu-link); /* --weui-LINK 默认（主操作） */
+  cursor: pointer;
+}
+/* ★按钮间 hairline 竖线（WeUI btn::after：scaleX(0.5)），首个按钮无线 */
+.pwu-modal-btn::after {
+  content: ' ';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px solid var(--pwu-fg-3);
+  transform: scaleX(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+}
+.pwu-modal-btn:first-child::after {
+  display: none;
+}
+.pwu-modal-btn--cancel {
+  color: var(--pwu-fg-half); /* --weui-FG-HALF（取消/辅助操作） */
+}
+.pwu-modal-btn--confirm {
+  color: var(--pwu-link); /* --weui-LINK（主操作/确定） */
+}
+.proteus-web-actionsheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--pwu-bg-1); /* --weui-BG-1 弹层背景 */
+  z-index: 99991;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+/* ★对齐 WeUI 官方 actionsheet（weui.io/#actionsheet 实测）：
+ *   cell padding 16px 16px / 17px / line-height 1.41176 / FG-0；
+ *   分割线 hairline rgba(0,0,0,.1) scaleY(0.5)（first-child 无）；:active 背景 #ececec；
+ *   取消区 margin-top 8px（--weui-BG-1 露出的间距） */
+.pwu-sheet-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 16px 16px; /* WeUI cell padding */
+  border: none;
+  background: var(--pwu-bg-2);
+  font-size: 17px;
+  line-height: 1.41176;
+  color: var(--pwu-fg-0); /* --weui-FG-0 */
+  cursor: pointer;
+}
+/* ★顶部 hairline 分割线（WeUI cell::before scaleY(0.5)），首项无线 */
+.pwu-sheet-item::before {
+  content: ' ';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  border-top: 1px solid var(--pwu-fg-3); /* --weui-FG-3 */
+  transform: scaleY(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+}
+.pwu-sheet-item:first-child::before {
+  display: none;
+}
+/* ★按压反馈（WeUI cell:active --weui-BG-COLOR-ACTIVE） */
+.pwu-sheet-item:active,
+.pwu-sheet-cancel:active {
+  background-color: var(--pwu-active);
+}
+.pwu-sheet-cancel {
+  display: block;
+  width: 100%;
+  padding: 16px 16px;
+  border: none;
+  background: var(--pwu-bg-2);
+  font-size: 17px;
+  line-height: 1.41176;
+  color: var(--pwu-fg-0); /* ★微信取消按钮黑色（--weui-FG-0，非灰色） */
+  cursor: pointer;
+  margin-top: 8px; /* ★WeUI action margin-top 8px（--weui-BG-1 间距） */
+}
+
+/* ===== picker 半屏弹层（18-picker-swiper B1 selector）=====
+ * ★对齐 weui.io/#form_select_primary 官方（规划 17 方法论 CDP 实测）：
+ *   弹层 = 左上关闭按钮 + 居中标题 15px/500；滚轮区 280px + 56px 行；
+ *   选中高亮 = indicator 灰条（top 112px / #f7f7f7 / 左右 8px / 四角 8px 圆角）+ 上下白色渐隐遮罩；
+ *   内容定位 = translate3d 平移（.weui-picker__content），滚动/拖拽后吸附最近项
+ *   动画 = 弹出/关闭 0.3s ease（官方 weui-animate-slide-up/down：translate3d(0,100%,0) ↔ 0）
+ *   暗黑模式 = 官方同构：CSS 变量 + prefers-color-scheme 覆盖（实测暗黑：bg #191919 / indicator #202020 / 文字 rgba(255,255,255,0.8)）
+ *   ★变量作用域在 .proteus-web-picker-sheet 上（组件内局部，不污染全局） */
+.proteus-web-picker-sheet {
+  /* 浅色默认（官方 light 变量） */
+  --pwp-bg: #ffffff;
+  --pwp-indicator: #f7f7f7;
+  --pwp-fg: rgba(0, 0, 0, 0.9);
+  --pwp-mask-1: rgba(255, 255, 255, 0.95);
+  --pwp-mask-2: rgba(255, 255, 255, 0.6);
+  --pwp-mask-bg: #ffffff;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--pwp-bg);
+  z-index: 99992;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  transform: translate3d(0, 100%, 0); /* 初始在屏外（官方 .weui-picker transform） */
+  transition: transform 0.3s ease; /* 官方 0.3s ease */
+}
+/* ★暗黑模式（官方实测：bg #191919 / indicator #202020 / 文字 rgba(255,255,255,0.8) / 渐隐配 #191919） */
+@media (prefers-color-scheme: dark) {
+  .proteus-web-picker-sheet {
+    --pwp-bg: #191919;
+    --pwp-indicator: #202020;
+    --pwp-fg: rgba(255, 255, 255, 0.8);
+    --pwp-mask-1: rgba(25, 25, 25, 0.95);
+    --pwp-mask-2: rgba(25, 25, 25, 0.6);
+    --pwp-mask-bg: #191919;
+  }
+}
+/* ★弹出动画：上滑到屏幕内（官方 @keyframes a） */
+.proteus-web-picker-sheet.is-open {
+  transform: translateZ(0);
+}
+/* 遮罩渐隐：官方 weui-animate-fade-in（opacity 0→1 0.3s ease） */
+.proteus-web-picker-sheet + .proteus-web-ui-mask {
+  transition: opacity 0.3s ease;
+}
+/* 弹层头（官方 weui-half-screen-dialog__hd：左上关闭 + 居中标题 15px/500） */
+.pwp-hd {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px; /* 官方实测 hd 高 64px */
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+.pwp-close {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--pwp-fg); /* 官方 FG-0 */
+  display: flex;
+  align-items: center;
+}
+.pwp-close-icon {
+  display: block; /* ★24px（官方 weui-icon-close-thin 宽高 24） */
+}
+.pwp-title {
+  font-size: 15px; /* 官方 half-screen-dialog__title */
+  font-weight: 500;
+  color: var(--pwp-fg);
+  text-align: center;
+}
+/* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden；★底部到确定按钮间距 44px 来自 half-screen-dialog__bd padding-bottom） */
+.pwp-bd {
+  display: flex;
+  position: relative;
+  height: 280px;
+  margin-bottom: 44px; /* ★官方实测 bd 底 → 确定按钮顶 = 44px */
+  overflow: hidden;
+  background: var(--pwp-bg);
+}
+.pwp-group {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  font-size: 17px;
+  overflow: hidden;
+  touch-action: none; /* 拖拽不触发页面滚动 */
+}
+/* 上下白色渐隐遮罩（官方 weui-picker__mask：linear-gradient 顶部+底部 112px；暗黑配 #191919） */
+.pwp-picker-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  background-image: linear-gradient(var(--pwp-mask-1), var(--pwp-mask-2)), linear-gradient(0deg, var(--pwp-mask-1), var(--pwp-mask-2));
+  background-position: center top, center bottom;
+  background-size: 100% 112px;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+/* 选中高亮条（官方 weui-picker__indicator：top 112px / h 56px / 左右 8px / 四角 8px 圆角；暗黑 #202020） */
+.pwp-indicator {
+  position: absolute;
+  top: 112px;
+  left: 8px;
+  right: 8px;
+  height: 56px;
+  z-index: 1;
+  background: var(--pwp-indicator);
+  border-radius: 8px;
+  pointer-events: none;
+}
+/* 内容轨道（官方 weui-picker__content：translate3d 平移） */
+.pwp-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 2;
+}
+.pwp-item {
+  height: 56px; /* 官方 weui-picker__item */
+  line-height: 56px;
+  text-align: center;
+  font-size: 17px;
+  color: var(--pwp-fg); /* 官方 FG-0 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+/* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding-bottom calc(64px + safe-area)） */
+.pwp-ft {
+  padding: 0 24px calc(64px + env(safe-area-inset-bottom)); /* 官方 ft */
+  background: var(--pwp-bg);
+}
+/* 确定按钮（官方 weui-btn_primary：绿底 #07c160 / 白字 17px / 圆角 8px / 高 48px / 居中） */
+.pwp-confirm {
+  display: block;
+  width: 100%;
+  max-width: 184px; /* 官方实测按钮宽 184px */
+  margin: 0 auto;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  background: #07c160; /* --weui-BRAND */
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.41176;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+/* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
+.proteus-web-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 16px;
+  /* ★对齐微信 textarea 默认高度 150px（微信组件默认；用户设置 height 可覆盖——特异性更高） */
+  height: 150px;
+  padding: 0;
+  resize: none;
+}
+.proteus-web-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 32px;
+  border-radius: 16px;
+  box-sizing: border-box;
+  /* ★对齐微信 switch 静止态：关闭=极浅灰轨道 + 灰边框；打开=微信绿背景+绿边框（iOS 风格）
+   * 用户真机实测优先（weui.io 网页版为 rgba(0,0,0,.1) 无边框——保留用户验收的白底灰边）
+   * 颜色走 --pwu-sw-* 变量（暗黑：轨道 rgba(255,255,255,0.1) 官方实测） */
+  background-color: var(--pwu-sw-track-off);
+  border: 1px solid var(--pwu-sw-border-off);
+  cursor: pointer;
+  /* ★weui 官方过渡：background-color 0.1s（原 0.4s 过长——用户实测'关闭延迟卡一下'） */
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+  vertical-align: middle;
+  /* ★白色扩散遮罩裁剪在滑轨内（overflow hidden——wash 圆再大也被限制在圆角滑轨内，不在整个开关上盖大圆） */
+  overflow: hidden;
+}
+.proteus-web-switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* ★禁用态对齐官方（weui.io/#form_switch）：.weui-switch[disabled] { opacity: 0.1 }——整体淡出（轨道+thumb 一起） */
+.proteus-web-switch.is-disabled {
+  opacity: 0.1;
+}
+.proteus-web-switch.is-disabled input {
+  cursor: not-allowed;
+}
+.pws-thumb {
+  /* ★switch 滑块（对齐微信：纯白圆点无边框无阴影）——关闭时与白色 track 融合无缝隙；
+   * 打开时 track 绿从 thumb 边缘缝隙（1px）露出成细绿边（用户实测：'只有一个微信绿边框看得到'）
+   * 注意：switch 与 slider 滑块类名分离（.pws-thumb switch / .pws-slider-thumb slider）——
+   * 共享类名会导致 slider 尺寸修改误伤 switch（2026-08 实测） */
+  position: absolute;
+  top: 1px; /* thumb 28px 垂直居中（顶距 = border 1 + 1 = 2，底距 32-2-28 = 2 对称——绿边上下等宽） */
+  left: 1px; /* 贴 track 内部左缘（border 内侧） */
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--pwu-sw-thumb);
+  /* ★weui 官方 thumb 阴影：0 2px 3px 0 rgba(0,0,0,0.06)（轻而柔和——原 0 1px 2px 0.2 过硬） */
+  box-shadow: var(--pwu-sw-thumb-shadow);
+  /* ★weui 官方 thumb 过渡：0.35s cubic-bezier(0.4,0.4,0.25,1.35)（回弹曲线——原 0.28s ease） */
+  transition: transform 0.35s cubic-bezier(0.4, 0.4, 0.25, 1.35);
+  z-index: 2;
+  pointer-events: none;
+}
+.proteus-web-slider {
+  /* ★对齐微信 slider：自定义结构（div 滑轨/填充/白圆点）——不依赖 -webkit 伪元素（渲染不可靠）
+   * 容器 padding 15px 18px（weui 官方 .weui-slider 触控区） */
+  position: relative;
+  width: 100%;
+  padding: 15px 18px; /* weui 官方 */
+  box-sizing: border-box;
+}
+.pws-track {
+  position: relative;
+  height: 2px; /* weui 官方 .weui-slider__inner height 2px */
+  border-radius: 1px;
+  background: var(--pwu-sl-track); /* ★weui 官方 --weui-FG-3（暗黑 rgba(255,255,255,0.1) 实测） */
+}
+.pws-fill {
+  height: 100%;
+  border-radius: 1px;
+  background: var(--pws-color, #07c160); /* --weui-BRAND 已填充 activeColor */
+}
+/* ★slider 滑块（28px = weui 官方 .weui-slider__handler width/height；与 switch 滑块类名分离 .pws-slider-thumb）
+ * 阴影对齐 weui 官方：0 0 4px var(--weui-FG-3)（模糊扩散型——原 0 2px 4px 0.2 硬投影） */
+.pws-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--pwu-sw-thumb);
+  box-shadow: var(--pwu-sl-thumb-shadow); /* weui 官方（暗黑 rgba(255,255,255,0.1) 实测） */
+  transform: translate(-50%, -50%); /* 居中：left 由百分比定位 + 自身 50% 回中 */
+  pointer-events: none;
+  z-index: 1;
+}
+.proteus-web-slider input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0; /* 隐藏原生 range（视觉用自定义结构），opacity 不影响拖拽交互 */
+  cursor: pointer;
+}
+.proteus-web-icon {
+  display: inline-block;
+  line-height: 0; /* svg 占位精确 */
+  vertical-align: middle;
+}
+.proteus-web-icon svg {
+  display: block;
+}
+.proteus-web-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pwp-track {
+  flex: 1;
+  background: #ebedf0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pwp-inner {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.pwp-info {
+  font-size: 13px;
+  color: #666;
+  min-width: 34px;
+  text-align: right;
+}
+.proteus-web-navigator {
+  color: inherit;
+  text-decoration: none;
+}

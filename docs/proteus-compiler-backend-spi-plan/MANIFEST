@@ -1,0 +1,19 @@
+# MANIFEST - G-38 CompilerBackend SPI 文件白名单
+# verify.sh 以此为唯一事实源，双向比对（缺/多都 FAIL）
+# pack.sh 基于此白名单打包（MANIFEST 本身也进包）
+# ★入库整合（决策 #312）：G-35 → G-38 编号避让，文件重命名为 00-06 编号形式
+
+00-architecture-update.md
+01-compiler-backend-spi.md
+02-conformance-suite.md
+03-implementation-guide.md
+04-incremental-compilation.md
+05-batches.md
+06-rules.md
+README.md
+MANIFEST
+CHECKSUM.md
+verify.sh
+pack.sh
+run-all-verify.sh
+conformance-runner.js

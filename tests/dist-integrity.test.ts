@@ -1,0 +1,53 @@
+// tests/dist-integrity.test.ts —— 构建产物完整性：共享单例实现不得被内联进其他包 dist
+// ★防回归（决策 #250）：devtools 曾把 devtools-runtime 内联进 bundle → getProteusTraceBus 双实例
+//   （main.ts setEnabled 设给包模块单例 A，install/面板订阅 bundle 内联副本 B → 面板 timeline 永远空）
+//   共享模块级可变状态（bus 单例等）必须 external 引用，保证业务侧多包解析到同一模块实例
+import { describe, it, expect } from 'vitest'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const packagesDir = path.join(root, 'packages')
+
+/** 共享单例实现的所有者包（只有它能定义这些函数；其他包必须 external 引用） */
+const SINGLETON_OWNERS = new Set(['devtools-runtime', 'render-backend'])
+/** 共享单例实现特征（内联 = 双实例风险）——带括号精确匹配（避免命中 createTraceBusSource/WsBridge 前缀） */
+const SINGLETON_FNS = ['function getProteusTraceBus(', 'function createTraceBus(', 'function getProteusOwnershipGraph(']
+
+describe('dist 构建产物完整性（共享单例不内联）', () => {
+  it('getProteusTraceBus/createTraceBus 实现只存在于 devtools-runtime，其余包 dist 零内联', () => {
+    const offenders: string[] = []
+    for (const dir of readdirSync(packagesDir)) {
+      const distFile = path.join(packagesDir, dir, 'dist', 'index.js')
+      if (!existsSync(distFile) || SINGLETON_OWNERS.has(dir)) continue
+      const code = readFileSync(distFile, 'utf8')
+      for (const fn of SINGLETON_FNS) {
+        if (code.includes(fn)) offenders.push(`${dir}: ${fn}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('devtools dist 必须 external 引用 devtools-runtime 与 render-backend（import 而非内联实现——G-43 B4）', () => {
+    const code = readFileSync(path.join(packagesDir, 'devtools', 'dist', 'index.js'), 'utf8')
+    expect(code).toContain('@proteus-vue/devtools-runtime') // external import 保留
+    expect(code).toContain('@proteus-vue/render-backend') // ★G-43 B4：所有权图单例必须同源（getProteusOwnershipGraph）
+    expect(code).not.toContain('function getProteusTraceBus') // 不内联单例实现
+    expect(code).not.toContain('function getProteusOwnershipGraph') // 不内联单例实现
+  })
+
+  it('★任何包 dist 不得内联 @vue/runtime-core（CJS 版覆盖全局 __VUE_HMR_RUNTIME__ → HMR map 分叉失效，决策 #254）', () => {
+    const offenders: string[] = []
+    for (const dir of readdirSync(packagesDir)) {
+      const distFile = path.join(packagesDir, dir, 'dist', 'index.js')
+      if (!existsSync(distFile)) continue
+      const code = readFileSync(distFile, 'utf8')
+      // 内联 vue 会连带引入 runtime-core 的 CJS 实现（node platform 解析）
+      if (code.includes('runtime-core/dist/runtime-core.cjs')) offenders.push(`${dir}: 内联 runtime-core.cjs`)
+      // 若内联了 vue 的 ref 等实现（非 external import from 'vue'）也标记
+      if (code.includes('function createRef(') && !code.includes('from "vue"')) offenders.push(`${dir}: 疑似内联 vue`)
+    }
+    expect(offenders).toEqual([])
+  })
+})

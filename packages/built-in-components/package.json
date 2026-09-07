@@ -1,0 +1,37 @@
+{
+  "name": "@proteus-vue/built-in-components",
+  "version": "0.1.0",
+  "description": "Proteus 框架内置组件（以微信小程序内置组件为基准）：view/text/button/input/image/scroll-view/textarea/switch/slider/icon/progress/navigator/picker 的跨端组件本体 + install + MpComponentSchema 契约对照——与扩展组件（@proteus-vue/components，p-* 生态组件）区分",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./style.css": "./src/style.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src/style.css",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:vue --external:@proteus-vue/shared"
+  },
+  "dependencies": {
+    "@proteus-vue/shared": "0.2.0-beta.0",
+    "@proteus-vue/types": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "vue": "^3.5.42"
+  }
+}

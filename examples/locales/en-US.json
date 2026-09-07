@@ -1,0 +1,6 @@
+{
+  "common.confirm": "Confirm",
+  "user.greeting": "Hello, {name}",
+  "cart.items": "{count, plural, one {1 item} other {# items}}",
+  "dir.label": "Text direction"
+}

@@ -1,0 +1,922 @@
+<!-- examples/pages/platform-api-demo.vue —— PlatformAPI 收口演示（types-plus B9 + api-plan）
+     业务代码零 wx.*：request / storage / router / ui 四域统一走 @proteus-vue/api 的 createPlatformAPI
+     对照：mp-semantics-demo 直接 wx.*（小程序语义演示）→ 本页展示收口后的业务落地形态
+     ★双端：MP 端平台分支自动生效（wx.request/setStorageSync/navigateTo/showToast），Web 端
+       fetch/localStorage/history/DOM toast；request 默认 httpbin（CORS 开放；MP 端需开发者工具关闭域名校验） -->
+<template>
+  <view class="pad">
+    <text class="pad-title">PlatformAPI 收口演示（B9）</text>
+    <text class="pad-sub">业务代码零 wx.* —— request / storage / router / ui 统一走 createPlatformAPI</text>
+
+    <view class="pad-box">
+      <text class="pad-label">① request（wx.request → platformAPI.request）</text>
+      <input class="pad-input" :value="url" placeholder="请求 URL（默认 httpbin.org/get）" @input="onUrlInput" />
+      <view class="pad-row">
+        <button class="pad-btn" @click="onRequest">GET 请求</button>
+        <text class="pad-log">status {{ respStatus === null ? '—' : respStatus }} · {{ respData }}</text>
+      </view>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">② storage（wx.setStorageSync → platformAPI.storage，JSON 往返）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-storage-set" @click="onStorageSet">写入</button>
+        <button class="pad-btn" data-testid="pad-storage-get" @click="onStorageGet">读取</button>
+        <button class="pad-btn" data-testid="pad-storage-remove" @click="onStorageRemove">删除</button>
+      </view>
+      <text class="pad-log" data-testid="pad-storage-log">{{ storageLog }}</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">③ router（wx.navigateTo → platformAPI.router）</text>
+      <view class="pad-row">
+        <button class="pad-btn" @click="onRouterPush">push → showcase</button>
+        <button class="pad-btn" @click="onRouterBack">back（带参数 delta）</button>
+      </view>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">④ ui（wx.showToast / showModal / showActionSheet → platformAPI.ui）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-modal" @click="onModal">showModal</button>
+        <button class="pad-btn" data-testid="pad-action-sheet" @click="onActionSheet">showActionSheet</button>
+        <button class="pad-btn" data-testid="pad-loading" @click="onLoading">showLoading（2s 自动关）</button>
+        <button class="pad-btn" @click="onHideLoading">hideLoading</button>
+      </view>
+      <text class="pad-log" data-testid="pad-ui-log">{{ uiLog }}</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑤ 能力 Hook（G-32：useDevice/useNetwork/useClipboard → Result&lt;T&gt; 无回调）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-device" @click="onCapDevice">useDevice</button>
+        <button class="pad-btn" data-testid="pad-cap-network" @click="onCapNetwork">useNetwork</button>
+        <button class="pad-btn" data-testid="pad-cap-clipboard" @click="onCapClipboard">useClipboard</button>
+        <button class="pad-btn" data-testid="pad-cap-fetch" @click="onCapFetch">useFetch</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap-log">{{ capLog }}</text>
+      <text class="pad-sub">useFetch = G-32 C26（迁移文档：wx.request → await useFetch(url)）· usePermission/useStorage 见 @proteus-vue/api/capability.ts（probe 降级 + createReactiveStorage 响应式）</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑥ 能力 Hook 三期（useSensor/useBiometric/useAuth/useQRCode——web 缺能力 → Err 降级）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-sensor" @click="onCapSensor">useSensor</button>
+        <button class="pad-btn" data-testid="pad-cap-biometric" @click="onCapBiometric">useBiometric</button>
+        <button class="pad-btn" data-testid="pad-cap-auth" @click="onCapAuth">useAuth 登录</button>
+        <button class="pad-btn" data-testid="pad-cap-auth-logout" @click="onCapAuthLogout">登出</button>
+        <button class="pad-btn" data-testid="pad-cap-qr" @click="onCapQR">useQRCode</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap3-log">{{ cap3Log }}</text>
+      <text class="pad-sub">useBiometric → web 无 WebAuthn 时 data:false（feature detection）；useQRCode web 需摄像头取流源 → Err · 小程序端 wx.scanCode 直通</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑦ 能力 Hook 四期（useWebSocket/useAnalytics/useLog/useFileSystem——网络与工程类）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-ws" @click="onCapWS">useWebSocket</button>
+        <button class="pad-btn" data-testid="pad-cap-analytics" @click="onCapAnalytics">useAnalytics 埋点</button>
+        <button class="pad-btn" data-testid="pad-cap-log" @click="onCapLog">useLog</button>
+        <button class="pad-btn" data-testid="pad-cap-fs" @click="onCapFS">useFileSystem</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap4-log">{{ cap4Log }}</text>
+      <text class="pad-sub">useWebSocket/useAnalytics 小程序端走 wx.connectSocket/reportEvent；useFileSystem web 端内存降级（非持久）· useUpload/useDownload 见 @proteus-vue/api/capability.ts</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑧ 能力 Hook 五期（useNotification/useAppLifecycle/useContact/useCalendar/useArchive/useShortcut）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-notification" @click="onCapNotification">useNotification</button>
+        <button class="pad-btn" data-testid="pad-cap-lifecycle" @click="onCapLifecycle">useAppLifecycle</button>
+        <button class="pad-btn" data-testid="pad-cap-contact" @click="onCapContact">useContact</button>
+        <button class="pad-btn" data-testid="pad-cap-calendar" @click="onCapCalendar">useCalendar</button>
+        <button class="pad-btn" data-testid="pad-cap-archive" @click="onCapArchive">useArchive</button>
+        <button class="pad-btn" data-testid="pad-cap-shortcut" @click="onCapShortcut">useShortcut</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap5-log">{{ cap5Log }}</text>
+      <text class="pad-sub">小程序端走 wx.requestSubscribeMessage/chooseContact/addPhoneCalendar/compressFile/addToDesktop + App 钩子；web 端仅 Notification 与 visibilitychange 有原生对应，其余诚实降级 → Err</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑨ 能力 Hook 六期（usePageLifecycle/useBluetooth/useNFC/useCamera/useMicrophone/useKeyboard——媒体与近场）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-page-lc" @click="onCapPageLC">usePageLifecycle</button>
+        <button class="pad-btn" data-testid="pad-cap-bt" @click="onCapBt">useBluetooth</button>
+        <button class="pad-btn" data-testid="pad-cap-nfc" @click="onCapNfc">useNFC</button>
+        <button class="pad-btn" data-testid="pad-cap-cam" @click="onCapCam">useCamera</button>
+        <button class="pad-btn" data-testid="pad-cap-mic" @click="onCapMic">useMicrophone</button>
+        <button class="pad-btn" data-testid="pad-cap-kb" @click="onCapKb">useKeyboard</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap6-log">{{ cap6Log }}</text>
+      <text class="pad-sub">小程序端走 wx.openBluetoothAdapter/getHCEState/authorize/onKeyboardHeightChange/onPageShow·onPageHide；web 端蓝牙·NFC 为特性探测，相机·麦克风走 getUserMedia（需 HTTPS），键盘走 visualViewport 启发式</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑩ 工程原语（G-32 B5：useState/useComputed/usePageParam——injectable vue reactivity）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-eng-inc" @click="onEngInc">useState 自增</button>
+        <button class="pad-btn" data-testid="pad-eng-log" @click="onEngLog">useState/Computed 读</button>
+        <button class="pad-btn" data-testid="pad-eng-param" @click="onEngParam">usePageParam</button>
+      </view>
+      <text class="pad-log" data-testid="pad-eng-log-out">{{ engLog }}</text>
+      <text class="pad-sub">createEngineering 注入 Vue reactivity——useState=ref 语义 / useComputed=computed / usePageParam 读页面参数（api 包零 vue 依赖，消费方注入）</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑪ 路由语义化（G-32 B5 续：createRouterEngineering——E10 useRoute / E11-E15 导航语义 / E16-E17 守卫）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-route-push" @click="onRoutePush">push</button>
+        <button class="pad-btn" data-testid="pad-route-replace" @click="onRouteReplace">replace</button>
+        <button class="pad-btn" data-testid="pad-route-back" @click="onRouteBack">back</button>
+        <button class="pad-btn" data-testid="pad-route-tab" @click="onRouteTab">switchTab</button>
+        <button class="pad-btn" data-testid="pad-route-relaunch" @click="onRouteRelanch">reLaunch</button>
+        <button class="pad-btn" data-testid="pad-route-read" @click="onRouteRead">useRoute</button>
+      </view>
+      <text class="pad-log" data-testid="pad-route-log">{{ routeLog }}</text>
+      <text class="pad-sub">createRouterEngineering 注入兼容 router（mock 录制调用，不真实导航）——E11-E15 语义委托既有 router（replace=replace:true / switchTab / reLaunch 标志）；E10 useRoute 读注入 getCurrentRoute 源；E16/E17 守卫委托（router 缺省时安全 no-op）</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑫ 动画语义（G-32 B5 续二：p-transition E19 / p-animate E20 / useAnimation E21-E23 注入式）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-anim-toggle" @click="onAnimToggle">p-transition 显隐</button>
+        <button class="pad-btn" data-testid="pad-anim-run" @click="onAnimRun">useAnimation</button>
+        <button class="pad-btn" data-testid="pad-anim-gesture" @click="onAnimGesture">useGestureAnimation</button>
+        <button class="pad-btn" data-testid="pad-anim-scroll" @click="onAnimScroll">useScrollAnimation</button>
+      </view>
+      <view class="pad-anim-stage">
+        <p-transition name="slide-up" mode="both" :duration="300" :visible="animVisible">
+          <p-animate keyframes="bounce" :duration="800" :loop="false">
+            <text class="pad-anim-box">Proteus</text>
+          </p-animate>
+        </p-transition>
+      </view>
+      <text class="pad-log" data-testid="pad-anim-log">{{ animLog }}</text>
+      <text class="pad-sub">E19 p-transition（CSS 显隐过渡）· E20 p-animate（CSS 动画声明——组件形态，纯 CSS 双端）；E21 useAnimation（wx.createAnimation 语义构建器）/ E22 useGestureAnimation（增量累积→提交帧）/ E23 useScrollAnimation（进度→插值）——reactivity/driver 注入式，web 端 WAAPI 播放（MP/无 driver 安全 no-op）</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑬ 工程化（G-32 B5 续三：useDevTools E24 / useInspector E25 / usePerformance E26 / defineComponent E27 / defineCapability E28）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-tool-dev" @click="onToolDev">useDevTools</button>
+        <button class="pad-btn" data-testid="pad-tool-insp" @click="onToolInsp">useInspector</button>
+        <button class="pad-btn" data-testid="pad-tool-perf" @click="onToolPerf">usePerformance</button>
+        <button class="pad-btn" data-testid="pad-tool-defc" @click="onToolDefComp">defineComponent</button>
+        <button class="pad-btn" data-testid="pad-tool-defcap" @click="onToolDefCap">defineCapability</button>
+      </view>
+      <text class="pad-log" data-testid="pad-tool-log">{{ toolLog }}</text>
+      <text class="pad-sub">E24 useDevTools（dev 事件面）/ E25 useInspector（组件树快照）/ E26 usePerformance（wx.reportPerformance 语义）→ 注入式 Hook；E27 defineComponent（类型化组件定义含 C-IR 元信息 + 声明期校验）/ E28 defineCapability（G-30 降级链声明 + 解析）→ 纯函数声明工具——工程原语 28 收口</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——map·sms·background·socket-task·data-channel·cookie·face-id·IAP·mini-program·embedded·live·extension）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-cap-cookie" @click="onCapCookie">useCookie</button>
+        <button class="pad-btn" data-testid="pad-cap-bg" @click="onCapBg">useBackground</button>
+        <button class="pad-btn" data-testid="pad-cap-face" @click="onCapFace">useFaceID</button>
+        <button class="pad-btn" data-testid="pad-cap-map" @click="onCapMap">useMap</button>
+        <button class="pad-btn" data-testid="pad-cap-mp" @click="onCapMp">useMiniProgram</button>
+        <button class="pad-btn" data-testid="pad-cap-ext" @click="onCapExt">useExtension</button>
+      </view>
+      <text class="pad-log" data-testid="pad-cap7-log">{{ cap7Log }}</text>
+      <text class="pad-sub">Capability 50/50 收官——web 真实能力（cookie=document.cookie / background=visibilitychange / face-id=WebAuthn）+ wx 原生（map=createMapContext / mini-program=navigateToMiniProgram）+ 宿主桥（data-channel / embedded / live / extension）——web 无标准 → 诚实 Err 降级</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1 策略请求 / R2 useQuery SWR / R3 enqueue 队列 / R4 dedupe）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-req-query" @click="onReqQuery">useQuery</button>
+        <button class="pad-btn" data-testid="pad-req-queue" @click="onReqQueue">enqueue</button>
+        <button class="pad-btn" data-testid="pad-req-cache" @click="onReqCache">request 缓存</button>
+      </view>
+      <text class="pad-log" data-testid="pad-req-log">{{ reqLog }}</text>
+      <text class="pad-sub">注入式请求数据层（mock client + compat storage 缓存底座，无真实网络）——R2 useQuery SWR（缓存命中即用 + in-flight 去重 + refresh/mutate/invalidate）；R3 enqueue 并发队列（FIFO + 上限 + 失败隔离）；R1 request 策略请求（ttl 缓存 + dedupe 合并 + 可选排队）——与四工厂同族注入式可单测；useQuery 点两次看第二次缓存命中</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">⑯ 声明式导航（G-32 B5 尾巴：p-router-link E18——点击 emit navigate → createRouterEngineering 响应）</text>
+      <view class="pad-row">
+        <p-router-link data-testid="pad-link-home" to="home" @navigate="onLinkNavigate">首页</p-router-link>
+        <p-router-link data-testid="pad-link-user" to="user" @navigate="onLinkNavigate">个人中心</p-router-link>
+        <p-router-link data-testid="pad-link-mine" to="mine" switch-tab @navigate="onLinkNavigate">我的（switchTab）</p-router-link>
+      </view>
+      <text class="pad-log" data-testid="pad-link-log">{{ linkLog }}</text>
+      <text class="pad-sub">E18 p-router-link 声明式导航（engineering.router-link，B5 工程原语最后节点）——点击 emit('navigate', { to, replace, switchTab })；父级 @navigate 调 rx.push/replace/switchTab（E11-E14 语义委托 mock router 录制，不真实导航）；组件零平台依赖（审计合规）+ web role="link" 可访问性 · MP bindtap</text>
+    </view>
+
+    <view class="pad-box">
+      <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
+      <text class="pad-sub">
+        wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
+        wx.setStorageSync → api.storage.set · wx.navigateTo → api.router.push · wx.switchTab → api.router.switchTab · wx.request → api.request
+      </text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract, createRequestEngineering } from '@proteus-vue/api'
+import type { AnimationDriver, RequestExecutor, RequestResponse, RequestConfig } from '@proteus-vue/api'
+// ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）+ E18 声明式导航
+import { PTransition, PAnimate, PRouterLink } from '@proteus-vue/components'
+
+// ★业务侧统一平台 API 入口（演示用每页独立实例；生产建议模块级单例 / DI 注入）
+const api = createPlatformAPI()
+// ★G-32 能力 Hook 层（useXxx → Result<T>，无回调）——演示用每页独立实例
+const cap = createCapabilityHooks()
+
+// ---------- ① request ----------
+const url = ref('https://httpbin.org/get')
+const respStatus = ref<number | null>(null)
+const respData = ref('')
+function onUrlInput(e: any) {
+  url.value = e?.detail?.value ?? ''
+}
+async function onRequest() {
+  try {
+    const res = await api.request<{ url: string }>({ url: url.value, method: 'GET', timeout: 8000 })
+    respStatus.value = res.status
+    respData.value = JSON.stringify(res.data).slice(0, 140)
+  } catch (err) {
+    respStatus.value = -1
+    respData.value = (err as Error).message
+  }
+}
+
+// ---------- ② storage ----------
+const STORAGE_KEY = 'pad-key'
+const storageLog = ref('')
+function onStorageSet() {
+  api.storage.set(STORAGE_KEY, { t: Date.now(), from: 'platform-api-demo' })
+  storageLog.value = `已写入 { t: ${Date.now()}, from: 'platform-api-demo' }`
+}
+function onStorageGet() {
+  const v = api.storage.get<{ t: number }>(STORAGE_KEY)
+  storageLog.value = v === undefined ? '读取到 undefined（未写入）' : `读取到 t = ${v.t}`
+}
+function onStorageRemove() {
+  api.storage.remove(STORAGE_KEY)
+  storageLog.value = '已删除'
+}
+
+// ---------- ③ router ----------
+function onRouterPush() {
+  api.router.push('/pages/showcase')
+}
+function onRouterBack() {
+  api.router.back(1)
+}
+
+// ---------- ④ ui ----------
+const uiLog = ref('')
+function onToast() {
+  api.ui.showToast('platformAPI.ui.showToast')
+}
+function onModal() {
+  void api.ui.showModal({ title: '确认', content: 'platformAPI.ui.showModal（确认对话框）' }).then((r) => {
+    uiLog.value = r.confirm ? 'showModal → 点了确定' : 'showModal → 取消'
+  })
+}
+function onActionSheet() {
+  void api.ui.showActionSheet({ itemList: ['编辑', '删除'] }).then((r) => {
+    uiLog.value = r.tapIndex === -1 ? 'showActionSheet → 取消' : `showActionSheet → 点了第 ${r.tapIndex + 1} 项`
+  })
+}
+function onLoading() {
+  api.ui.showLoading('加载中…')
+  setTimeout(() => api.ui.hideLoading(), 2000)
+}
+function onHideLoading() {
+  api.ui.hideLoading()
+}
+
+// ---------- ⑤ 能力 Hook（G-32：useXxx → Result<T>，无回调） ----------
+const capLog = ref('点击按钮调用能力 Hook')
+function onCapDevice() {
+  void cap.useDevice().then((r) => {
+    capLog.value = r.ok ? `useDevice → ${r.data.platform} · ${r.data.model}` : `useDevice → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapNetwork() {
+  void cap.useNetwork().then((r) => {
+    capLog.value = r.ok ? `useNetwork → online=${r.data.online} · type=${r.data.type}` : `useNetwork → Err(${r.error.code})`
+  })
+}
+function onCapClipboard() {
+  void cap.useClipboard().then((r) => {
+    capLog.value = r.ok ? `useClipboard → ${r.data.slice(0, 40)}` : `useClipboard → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapFetch() {
+  // ★G-32 C26：wx.request → await useFetch(url)（迁移文档标题目标；demo 用 httpbin CORS 端点）
+  void cap.useFetch<{ url: string }>('https://httpbin.org/get', { timeout: 8000 }).then((r) => {
+    capLog.value = r.ok ? `useFetch → ${JSON.stringify(r.data).slice(0, 60)}` : `useFetch → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+
+// ---------- ⑥ 能力 Hook 三期（G-32 B3 续） ----------
+const cap3Log = ref('点击按钮调用三期能力 Hook')
+const auth = cap.useAuth() // ★C33 组合：token 托管 + login 桥 + storage 桥（业务不读 raw token）
+function onCapSensor() {
+  // ★C5：一次性读取（web 需设备授权；Node 无事件环境 → Err 降级）
+  void cap.useSensor('accelerometer').then((r) => {
+    cap3Log.value = r.ok ? `useSensor → ${JSON.stringify(r.data)}` : `useSensor → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapBiometric() {
+  // ★C38：feature detection——web 无 WebAuthn → data:false
+  void cap.useBiometric().then((r) => {
+    cap3Log.value = r.ok ? `useBiometric → 支持=${r.data}` : `useBiometric → Err(${r.error.code})`
+  })
+}
+function onCapAuth() {
+  // ★C33：login 桥（wx.login / 第三方 provider）→ 存 token；无桥 → Err 降级
+  void auth.login().then((r) => {
+    cap3Log.value = r.ok ? `useAuth.login → token=${r.data} · 已登录=${auth.isAuthenticated}` : `useAuth.login → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapAuthLogout() {
+  void auth.logout().then((r) => {
+    cap3Log.value = r.ok ? `useAuth.logout → 已登出（token=${auth.token}）` : `useAuth.logout → Err(${r.error.code})`
+  })
+}
+function onCapQR() {
+  // ★C42：wx.scanCode 直通；web 无摄像头取流桥 → Err 降级（非抛异常）
+  void cap.useQRCode().then((r) => {
+    cap3Log.value = r.ok ? `useQRCode → ${r.data.slice(0, 40)}` : `useQRCode → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+
+// ---------- ⑦ 能力 Hook 四期（G-32 B3 续） ----------
+const cap4Log = ref('点击按钮调用四期能力 Hook')
+const analytics = cap.useAnalytics() // ★C34：句柄（web 无标准 → track 返回 Err）
+const logger = cap.useLog() // ★C35：console + 上报
+const fsHandle = cap.useFileSystem() // ★C43：wx FS / web 内存降级
+function onCapWS() {
+  // ★C27：wss 连接句柄（demo 用不存在的 echo 端点——验证连接流程/降级；web 无 WebSocket 支持则 Err）
+  void cap.useWebSocket('wss://echo.example.invalid/ws').then((r) => {
+    cap4Log.value = r.ok ? `useWebSocket → 已连接（send/close/on 可用）` : `useWebSocket → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapAnalytics() {
+  void analytics.track('demo_click', { block: 7 }).then((r) => {
+    cap4Log.value = r.ok ? 'useAnalytics → track ok（wx.reportEvent 已上报）' : `useAnalytics → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapLog() {
+  void logger.log('proteus demo', { block: 7 }).then((r) => {
+    cap4Log.value = r.ok ? 'useLog → console.log 已输出（可接上报链）' : `useLog → Err(${r.error.code})`
+  })
+}
+function onCapFS() {
+  // C43：写读往返（web 内存降级 / wx getFileSystemManager）
+  void fsHandle.writeFile('/demo.txt', 'hello').then((w) => {
+    if (!w.ok) {
+      cap4Log.value = `useFileSystem → 写入 Err(${w.error.code})`
+      return
+    }
+    void fsHandle.readFile('/demo.txt').then((r) => {
+      cap4Log.value = r.ok ? `useFileSystem → /demo.txt = ${r.data}` : `useFileSystem → 读取 Err(${r.error.code})`
+    })
+  })
+}
+
+// ---------- ⑧ 能力 Hook 五期（G-32 B3 续） ----------
+const cap5Log = ref('点击按钮调用五期能力 Hook')
+const lifecycle = cap.useAppLifecycle() // ★C23：App 生命周期订阅句柄
+function onCapNotification() {
+  // ★C17：模板订阅授权（web Notification.requestPermission——需 HTTPS；wx requestSubscribeMessage）
+  void cap.useNotification('demo_template_1').then((r) => {
+    cap5Log.value = r.ok ? `useNotification → granted=${r.data.granted} status=${r.data.status}` : `useNotification → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapLifecycle() {
+  // ★C23：订阅当前生命周期阶段
+  let count = 0
+  let log = ''
+  const off = lifecycle.onShow(() => {
+    count += 1
+    log = `onShow ×${count}`
+  })
+  cap5Log.value = 'useAppLifecycle → 已订阅 onShow（当前 phase=' + lifecycle.phase + '）'
+  // Web 端已触发过 load → 若 count 未涨说明 handler 尚未被调用，主动展示一次
+  if (count === 0) {
+    cap5Log.value = cap5Log.value + ' · 等待 visibilitychange 触发'
+  }
+  void log
+  void off
+}
+function onCapContact() {
+  // ★C19：wx.chooseContact 直通；web 无标准 → Err
+  void cap.useContact().then((r) => {
+    cap5Log.value = r.ok ? `useContact → ${r.data.map((c) => c.name).join(', ')}` : `useContact → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapCalendar() {
+  // ★C20：wx.addPhoneCalendar 直通；web → Err
+  void cap
+    .useCalendar({ title: 'Proteus 演示', startTime: Date.now() + 3600_000 })
+    .then((r) => {
+      cap5Log.value = r.ok ? 'useCalendar → 已添加到系统日历' : `useCalendar → Err(${r.error.code}) ${r.error.message}`
+    })
+}
+function onCapArchive() {
+  // ★C44：wx.compressFile 直通；web → Err
+  void cap.useArchive({ src: '/demo.png' }).then((r) => {
+    cap5Log.value = r.ok ? 'useArchive → 压缩完成' : `useArchive → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapShortcut() {
+  // ★C45：wx.addToDesktop 直通；web → Err
+  void cap.useShortcut().then((r) => {
+    cap5Log.value = r.ok ? 'useShortcut → 已添加快捷方式' : `useShortcut → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+
+// ---------- ⑨ 能力 Hook 六期（G-32 B3 续） ----------
+const cap6Log = ref('点击按钮调用六期能力 Hook')
+const pageLifecycle = cap.usePageLifecycle() // ★C24：页面生命周期订阅
+const keyboardLifecycle = cap.useKeyboard() // ★C14：键盘生命周期（wx 真实 / web visualViewport 启发式）
+function onCapPageLC() {
+  // ★C24：订阅页面 onShow/onHide（web visibilitychange / wx onPageShow·onPageHide）
+  let count = 0
+  pageLifecycle.onShow(() => {
+    count += 1
+    cap6Log.value = `usePageLifecycle → onShow ×${count}`
+  })
+  cap6Log.value = 'usePageLifecycle → 已订阅 onShow（phase=' + pageLifecycle.phase + '）'
+}
+function onCapBt() {
+  // ★C36：wx.openBluetoothAdapter 直通；web 特性探测（navigator.bluetooth）
+  void cap.useBluetooth().then((r) => {
+    cap6Log.value = r.ok ? `useBluetooth → available=${r.data.available} devices=${r.data.devices.length}` : `useBluetooth → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapNfc() {
+  // ★C37：wx.getHCEState 直通；web NDEFReader 探测
+  void cap.useNFC().then((r) => {
+    cap6Log.value = r.ok ? `useNFC → supported=${r.data.supported} available=${r.data.available}` : `useNFC → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapCam() {
+  // ★C1：wx.authorize scope.camera；web getUserMedia（需 HTTPS + 用户授权）
+  void cap.useCamera().then((r) => {
+    cap6Log.value = r.ok ? `useCamera → supported=${r.data.supported} granted=${r.data.granted}` : `useCamera → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapMic() {
+  // ★C2：wx.authorize scope.record；web getUserMedia audio
+  void cap.useMicrophone().then((r) => {
+    cap6Log.value = r.ok ? `useMicrophone → supported=${r.data.supported} granted=${r.data.granted}` : `useMicrophone → Err(${r.error.code}) ${r.error.message}`
+  })
+}
+function onCapKb() {
+  // ★C14：订阅键盘高度变化（wx onKeyboardHeightChange / web visualViewport）
+  keyboardLifecycle.onChange((info) => {
+    cap6Log.value = `useKeyboard → height=${info.height} visible=${info.visible}`
+  })
+  cap6Log.value = `useKeyboard → 已订阅（当前 height=${keyboardLifecycle.info.height}）`
+}
+
+// ---------- ⑩ 工程原语（G-32 B5：injectable reactivity） ----------
+const eng = createEngineering({
+  reactivity: { ref, computed, watch: () => () => undefined },
+  paramSource: () => ({ demoId: '42', demoKey: 'hello' }),
+}) // ★useState=ref / useComputed=computed；watch 演示页不注入（测试覆盖），lifecycle 缺省
+const engCount = eng.useState(0)
+const engDouble = eng.useComputed(() => engCount.value * 2)
+const engLog = ref('点击按钮演示工程原语')
+function onEngInc() {
+  engCount.value += 1
+  engLog.value = `useState → count=${engCount.value} · useComputed → double=${engDouble.value}`
+}
+function onEngLog() {
+  engLog.value = `useState → count=${engCount.value} · useComputed → double=${engDouble.value}`
+}
+function onEngParam() {
+  const id = eng.usePageParam('demoId')
+  const key = eng.usePageParam('demoKey')
+  engLog.value = `usePageParam → demoId=${id.value} · demoKey=${key.value}`
+}
+
+// ---------- ⑪ 路由语义化（G-32 B5 续：createRouterEngineering——mock 录制调用，不真实导航） ----------
+const routeLog = ref('点击按钮演示路由语义化（mock router 录制调用）')
+const rx = createRouterEngineering({
+  router: {
+    push: (target) => {
+      routeLog.value = `mockRouter.push → ${JSON.stringify(target)}`
+      return Promise.resolve()
+    },
+    back: (delta) => {
+      routeLog.value = `mockRouter.back → delta=${delta}`
+    },
+  },
+  reactivity: { ref, computed, watch: () => () => undefined },
+  getCurrentRoute: () => ({ path: '/pages/platform-api-demo/index', name: 'platform-api-demo' }),
+}) // ★E11-E15 语义委托 mock router 录制（不真实导航）；E10 useRoute 读注入源；E16/E17 守卫委托缺省安全
+const currentRoute = rx.useRoute()
+function onRoutePush() {
+  rx.push({ name: 'showcase', params: { id: 42 } })
+}
+function onRouteReplace() {
+  rx.replace({ path: '/pages/demo/showcase' })
+}
+function onRouteBack() {
+  rx.back(1)
+}
+function onRouteTab() {
+  rx.switchTab({ path: '/pages/demo/home' })
+}
+function onRouteRelanch() {
+  rx.reLaunch({ path: '/pages/demo/entry' })
+}
+function onRouteRead() {
+  const cur = currentRoute.value
+  routeLog.value = cur ? `useRoute → path=${cur.path} · name=${cur.name}` : 'useRoute → undefined（未注入当前路由源）'
+}
+
+// ---------- ⑫ 动画语义（G-32 B5 续二：E19 p-transition / E20 p-animate / E21-E23 useXxx 注入式） ----------
+const anim = createAnimationEngineering({
+  reactivity: { ref, computed, watch: () => () => undefined },
+  driver: typeof document !== 'undefined' ? createWebAnimationDriver() : undefined,
+}) // ★E21-E23 语义面：构建器/句柄产出 AnimationDescriptor；driver 注入 Web WAAPI（MP/SSR 无 document → no-op）
+const animVisible = ref(true)
+const animLog = ref('点击按钮演示动画语义（web 端 WAAPI 真实播放；MP 走组件 CSS 声明）')
+// E22/E23 持久句柄（手势会话 / 滚动进度跨调用保持）
+const gestureAnim = anim.useGestureAnimation()
+const scrollAnim = anim.useScrollAnimation({
+  from: { opacity: 1, y: 0 },
+  to: { opacity: 0.2, y: -60 },
+})
+
+// ★Web-only 驱动（demo 页非组件不受 no-platform-api 审计约束）：script 顶层 typeof document 守卫——MP 逻辑层无 document → undefined
+//   ★MP 编译安全：返回类型标注在函数声明上（contextual typing——对象字面量内 arrow 不写内联类型标注，避 #307 坑）
+function createWebAnimationDriver(): AnimationDriver {
+  return {
+    run: (target, descriptor) => {
+      const el = target as HTMLElement
+      const frames = descriptor.keyframes.map((k) => {
+        const f: Record<string, string | number> = { offset: k.offset, easing: k.easing ?? 'ease' }
+        const ops: string[] = []
+        if (k.props.x !== undefined) ops.push(`translateX(${k.props.x}px)`)
+        if (k.props.y !== undefined) ops.push(`translateY(${k.props.y}px)`)
+        if (k.props.scale !== undefined) ops.push(`scale(${k.props.scale})`)
+        if (k.props.rotate !== undefined) ops.push(`rotate(${k.props.rotate}deg)`)
+        if (k.props.opacity !== undefined) f.opacity = String(k.props.opacity)
+        if (ops.length > 0) f.transform = ops.join(' ')
+        return f
+      })
+      const wa = el.animate(frames, {
+        duration: descriptor.duration,
+        easing: descriptor.timingFunction,
+        delay: descriptor.delay,
+        iterations: descriptor.iterations,
+        fill: 'forwards',
+      })
+      return {
+        play: () => wa.play(),
+        pause: () => wa.pause(),
+        reverse: () => wa.reverse(),
+        cancel: () => wa.cancel(),
+        finish: () => wa.finish(),
+        seek: (t) => {
+          wa.currentTime = t
+        },
+        onFinish: (cb) => {
+          wa.onfinish = () => cb()
+        },
+      }
+    },
+  }
+}
+
+function onAnimToggle() {
+  animVisible.value = !animVisible.value
+  animLog.value = `p-transition → visible=${animVisible.value}（CSS 类切换显隐过渡）`
+}
+function onAnimRun() {
+  if (typeof document === 'undefined') {
+    animLog.value = 'useAnimation → 无 document（MP 逻辑层）——组件 CSS 声明承担动画'
+    return
+  }
+  const stage = document.querySelector('.pad-anim-stage')
+  const c = anim.useAnimation({ duration: 400 })
+  c.set({ opacity: 0, x: 0 }).step()
+  c.set({ opacity: 1, x: 120, rotate: 30 }).step({ duration: 500 })
+  c.set({ x: 0, rotate: 0 }).step({ duration: 400 })
+  const run = c.play(stage)
+  animLog.value = run ? `useAnimation → 3 步关键帧播放（state=${c.state.value}；末帧 rotate=0 回位）` : 'useAnimation → 无 driver 安全 no-op'
+}
+function onAnimGesture() {
+  gestureAnim.reset()
+  gestureAnim.apply({ x: 20 })
+  gestureAnim.commit({ duration: 200 })
+  gestureAnim.apply({ x: 60, rotate: 12 })
+  gestureAnim.commit({ duration: 200 })
+  const d = gestureAnim.export()
+  animLog.value = `useGestureAnimation → ${d.keyframes.length} 关键帧（手势增量 x=60 · rotate=12 累积）· state=${gestureAnim.state.value}`
+}
+function onAnimScroll() {
+  scrollAnim.setProgress(0)
+  const v0 = scrollAnim.value()
+  scrollAnim.setProgress(0.5)
+  const v50 = scrollAnim.value()
+  scrollAnim.setProgress(1)
+  const v100 = scrollAnim.value()
+  animLog.value = `useScrollAnimation → p=0.5 插值 y=${v50.y}·opacity=${v50.opacity}（0：y=${v0.y}·o=${v0.opacity} → 1：y=${v100.y}·o=${v100.opacity}）`
+}
+
+// ---------- ⑬ 工程化（G-32 B5 续三：E24-E28——注入式 Hook + 声明工具，工程原语 28 收口） ----------
+const tool = createToolingEngineering({ reactivity: { ref, computed, watch: () => () => undefined } })
+const toolLog = ref('点击按钮演示工程化语义')
+const toolDev = tool.useDevTools({ enabled: true })
+const toolInsp = tool.useInspector()
+const toolPerf = tool.usePerformance()
+
+function onToolDev() {
+  const count = toolDev.events.value.length + 1
+  toolDev.log('demo', { n: count })
+  toolDev.log('state', { visible: animVisible.value })
+  const latest = toolDev.events.value[count]
+  toolLog.value = `useDevTools → ${count + 1} 个 dev 事件（最新：${latest ? latest.type : ''}）`
+}
+function onToolInsp() {
+  toolInsp.register({ id: 'page', name: 'p-page', semantic: 'shell.page' })
+  toolInsp.register({ id: 'box', name: 'p-box', semantic: 'layout.box', parentId: 'page' })
+  toolInsp.register({ id: 'btn', name: 'p-button', semantic: 'ui.button', parentId: 'box', props: { variant: 'primary' } })
+  const tree = toolInsp.snapshot()
+  const root = tree[0]
+  const box = root ? root.children[0] : undefined
+  const btn = box ? box.children[0] : undefined
+  toolLog.value = `useInspector → ${root ? root.name : ''} > ${box ? box.name : ''} > ${btn ? btn.name : ''}（${btn ? String(btn.props.variant) : ''}）`
+}
+function onToolPerf() {
+  toolPerf.mark('start')
+  toolPerf.mark('step1')
+  const ms = toolPerf.measure('loop', 'start')
+  toolPerf.report('frame', 60)
+  const list = toolPerf.metrics.value
+  const last = list[list.length - 1]
+  toolLog.value = `usePerformance → loop=${ms ?? 0}ms · 记录 ${list.length} 条（最新：${last ? last.name : ''}=${last ? last.value : ''}）`
+}
+function onToolDefComp() {
+  const def = tool.defineComponent({
+    name: 'p-demo',
+    semantic: 'layout.box',
+    props: { label: { type: 'String', required: true } },
+    emits: ['select'],
+    slots: ['default'],
+  })
+  const okErrors = validateComponentMeta(def)
+  const badErrors = validateComponentMeta({ name: '', semantic: 'layout.box' })
+  toolLog.value = `defineComponent → ${def.name}(${def.semantic}) 校验：合法=${okErrors.length === 0 ? '✅' : okErrors.join(';')} · 缺名=${badErrors.join(';')}`
+}
+async function onToolDefCap() {
+  const cap = tool.defineCapability(
+    { name: 'scan-qr', fallback: ['scan-qr-input', 'manual'], required: false },
+    { probe: () => Promise.resolve(false) },
+  )
+  const available = await cap.check()
+  const chosen = cap.resolve([
+    { name: 'scan-qr', available: false },
+    { name: 'scan-qr-input', available: false },
+    { name: 'manual', available: true },
+  ])
+  const contractErrors = validateCapabilityContract(cap.contract)
+  toolLog.value = `defineCapability → probe=${available} · 降级链解析=${chosen}（degraded:${cap.isDegraded(chosen)}）· 合同校验=${contractErrors.length === 0 ? '✅' : contractErrors.join(';')}`
+}
+
+// ---------- ⑭ 能力收官（G-32 B3 七/八期：Capability 50/50——web 真实 + wx 原生 + 宿主桥诚实降级） ----------
+const cap7Log = ref('点击按钮演示收官能力（Capability 50/50）')
+
+async function onCapCookie() {
+  const jar = await cap.useCookie()
+  if (!jar.ok) {
+    cap7Log.value = `useCookie → Err(${jar.error.code})`
+    return
+  }
+  jar.data.set('proteus-demo', 'v1', 3600)
+  const read = jar.data.get('proteus-demo')
+  const all = Object.keys(jar.data.list()).join(', ')
+  cap7Log.value = `useCookie → 写入 proteus-demo=v1 · 读回=${read} · 当前全部=${all}`
+}
+async function onCapBg() {
+  const bg = await cap.useBackground()
+  if (!bg.ok) {
+    cap7Log.value = `useBackground → Err(${bg.error.code})`
+    return
+  }
+  bg.data.onEvent((e) => {
+    cap7Log.value = `useBackground → ${e.type === 'enter-background' ? '切后台（enter-background）' : '回前台（enter-foreground）'} @${e.time}`
+  })
+  cap7Log.value = 'useBackground → 已订阅（切换标签页/窗口失焦即触发事件）'
+}
+async function onCapFace() {
+  const face = await cap.useFaceID('Proteus 验证')
+  cap7Log.value = face.ok ? `useFaceID → ${face.data ? '✅ 认证成功（WebAuthn）' : '认证未通过/取消'}` : `useFaceID → Err(${face.error.code})（需 HTTPS + WebAuthn）`
+}
+async function onCapMap() {
+  const map = await cap.useMap('demo-map')
+  cap7Log.value = map.ok ? 'useMap → 地图控制器可用（wx createMapContext 原生）' : `useMap → Err(${map.error.code})（web 无原生地图——宿主集成或 wx 端可用）`
+}
+async function onCapMp() {
+  const mp = await cap.useMiniProgram()
+  cap7Log.value = mp.ok ? 'useMiniProgram → 可跳转小程序（wx navigateToMiniProgram 原生）' : `useMiniProgram → Err(${mp.error.code})（web 无对等——wx 专属）`
+}
+async function onCapExt() {
+  const ext = await cap.useExtension('proteus-kit')
+  cap7Log.value = ext.ok ? `useExtension → ${JSON.stringify(ext.data)}（宿主 loadPlugin 桥）` : `useExtension → Err(${ext.error.code})（宿主 loadPlugin 桥未接）`
+}
+
+// ---------- ⑮ 请求数据层（G-32 B6 前置：createRequestEngineering——R1-R4 注入式） ----------
+// ★MP 编译安全（#307 坑）：字面量内不嵌函数调用——先提为简单顶层 const（简单调用是安全先例）
+const fakeClient = createFakeRequestClient()
+const requestCache = cap.useStorage()
+const req = createRequestEngineering({
+  client: fakeClient,
+  reactivity: { ref, computed, watch: () => () => undefined },
+  cache: requestCache,
+  concurrency: 1,
+}) // ★mock client + compat storage 缓存底座（无真实网络、确定性演示）
+const reqLog = ref('点击按钮演示请求数据层（mock client，无真实网络）')
+let reqFetchCount = 0
+
+// ★Web-only 假的确定性 client（记录请求数 + 延迟返回——可验证缓存命中/去重）
+//   MP 编译安全：函数签名零泛型（<T> 会断 MP 正则）；类型面用双断言一次收口
+function clientRequest(config: RequestConfig): Promise<RequestResponse<unknown>> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      reqFetchCount += 1
+      resolve({ data: { url: config.url, at: Date.now() }, status: 200, headers: {}, config })
+    }, 50)
+  })
+}
+function createFakeRequestClient(): RequestExecutor {
+  return { request: clientRequest } as unknown as RequestExecutor
+}
+
+// ★MP 编译安全：队列任务/顺序数组放顶层（async 函数体内构造受限——#307 惯例）
+const reqQueueOrder: string[] = []
+function mkQueueTask(label: string, delay: number) {
+  return () =>
+    new Promise((r) =>
+      setTimeout(() => {
+        reqQueueOrder.push(label)
+        // ★MP 安全：无 <void> 泛型（MP 正则断）；Promise<unknown> 的 resolve 显式传 undefined
+        r(undefined)
+      }, delay),
+    )
+}
+
+async function onReqQuery() {
+  const q = req.useQuery(
+    'demo-user',
+    () => clientRequest({ url: '/user', method: 'GET' }).then((r) => r.data),
+    { ttl: 20000 },
+  )
+  // 轮询等 init fetch 落定（demo 层；生产走响应式渲染）
+  for (let i = 0; i < 30 && q.state.value.loading; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  const data = q.state.value.data
+  reqLog.value = `useQuery → data=${JSON.stringify(data)} · 请求数=${reqFetchCount}（点两次：第二次缓存命中零重发）`
+}
+async function onReqQueue() {
+  // ★MP 编译安全：队列任务与顺序数组提到顶层（#307 惯例）——
+  //   async 函数体内不允许：带标注 const / 嵌套函数声明 / new Promise 泛型
+  reqQueueOrder.length = 0
+  await Promise.all([
+    req.enqueue(mkQueueTask('A', 20)),
+    req.enqueue(mkQueueTask('B', 30)),
+    req.enqueue(mkQueueTask('C', 40)),
+  ])
+  reqLog.value = `enqueue（并发 1 串行）→ 完成顺序 ${reqQueueOrder.join(' > ')}`
+}
+async function onReqCache() {
+  const before = reqFetchCount
+  const r1 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
+  const afterFirst = reqFetchCount
+  const r2 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
+  const afterSecond = reqFetchCount
+  reqLog.value = `request 缓存 → 首次 ${afterFirst - before} 次请求 · 二次 ${afterSecond - afterFirst} 次（ttl=10s 命中零重发）· data=${JSON.stringify(r2.data)}`
+}
+
+// ---------- ⑯ 声明式导航（G-32 B5 尾巴：E18 p-router-link——emit navigate → rx.push 语义委托） ----------
+const linkLog = ref('点击链接演示声明式导航（p-router-link → rx.push 录制）')
+function onLinkNavigate(payload: { to: string; replace: boolean; switchTab: boolean }) {
+  if (payload.replace) {
+    rx.replace({ name: payload.to })
+    linkLog.value = `p-router-link → rx.replace({ name: '${payload.to}' })（E12）`
+  } else if (payload.switchTab) {
+    rx.switchTab({ name: payload.to })
+    linkLog.value = `p-router-link → rx.switchTab({ name: '${payload.to}' })（E14）`
+  } else {
+    rx.push({ name: payload.to })
+    linkLog.value = `p-router-link → rx.push({ name: '${payload.to}' })（E11）`
+  }
+}
+</script>
+
+<style scoped>
+.pad {
+  padding: 24px;
+  text-align: left;
+}
+.pad-title {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.pad-sub {
+  display: block;
+  color: #888;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.pad-box {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.pad-label {
+  display: block;
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.pad-row {
+  /* ★Skyline 引擎不支持 inline 布局——行内排布必须 flex 容器 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+.pad-btn {
+  margin-top: 4px;
+}
+.pad-input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.pad-log {
+  display: block;
+  color: #1a7af8;
+  font-size: 13px;
+  margin-top: 6px;
+  word-break: break-all;
+}
+/* ⑫ 动画语义舞台（useAnimation WAAPI 播放目标） */
+.pad-anim-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88px;
+  margin: 8px 0;
+  border: 1px dashed rgba(26, 122, 248, 0.35);
+  border-radius: 8px;
+  background: rgba(26, 122, 248, 0.06);
+}
+.pad-anim-box {
+  display: inline-block;
+  padding: 10px 22px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a7af8, #7b5ce0);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 暗黑模式：页面深底（RouterView .page #111）——配色适配 */
+@media (prefers-color-scheme: dark) {
+  .pad-title {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .pad-sub {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .pad-box {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .pad-label {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .pad-input {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: #191919;
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .pad-log {
+    color: #7d90a9;
+  }
+}
+</style>

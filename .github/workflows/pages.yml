@@ -1,0 +1,97 @@
+# ★#425 GitHub Pages 部署（替代 Vercel 每日 100 部署限额——public 仓库 Actions 无限）
+# 触发自控：workflow_dispatch（手动）或 push main 且 commit message 含 [deploy]——日常 push 零部署
+# 构建：pnpm --filter website（配置收敛形态，无 vite.config）→ website/dist → Pages
+# 子路径部署：PROTEUS_BASE=/proteus/（vite base + router BASE_URL 跟随）；404.html = index（SPA 刷新兜底）
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # ① 触发门：手动 dispatch 直接部署；push 需 commit message 含 [deploy]
+      - name: 触发门（[deploy] 标记或手动 dispatch）
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          elif echo "${{ github.event.head_commit.message }}" | grep -q '\[deploy\]'; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ok == 'true'
+
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装
+        if: steps.gate.outputs.ok == 'true'
+        # ★#430：--ignore-scripts——postinstall（build-packages 全量构建）移交给下方显式步；
+        #   fresh 环境 install 期构建易失败且会中止整 run（types/api TS2307 子路径 dist 时序）
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # ★#428/#429：proteus bin 依赖 @proteus-vue/cli dist——显式两遍拓扑构建（build-packages.mjs = postinstall 同款）
+      - name: 构建 workspace 包（cli/component-ir/render-backend dist）
+        if: steps.gate.outputs.ok == 'true'
+        run: node scripts/build-packages.mjs
+
+      - name: 生成内容 + 构建（自定义域名 proteus-vue.cn = 根路径——不注入子路径 base）
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: |
+          pnpm --filter website run gen:content
+          pnpm --filter website build
+          cp website/dist/index.html website/dist/404.html # GitHub Pages SPA 刷新兜底（无服务端 rewrite）
+
+      - name: 检查产物（双入口 + 根路径 assets 前缀）
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          test -f website/dist/index.html
+          test -f website/dist/spirit.html
+          grep -q 'src="/assets/' website/dist/index.html && echo '根路径 assets ✓'
+
+      - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.ok == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          path: website/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.ok == 'true'
+
+      # ★#465 部署后自检：线上产物 hash == 本次构建 hash（重试抗 CDN 传播；不一致即红）
+      #   防「部署被 cancel / 缓存滞留」静默不同步——直接回答官网内容是否真上线
+      - name: 部署后核验（verify-live：线上 main hash = 本次构建）
+        if: steps.gate.outputs.ok == 'true'
+        run: node website/scripts/verify-live.mjs

@@ -1,0 +1,104 @@
+<!-- src/components/p-list-view/index.vue —— 虚拟长列表（组件库 B3，virtual-list 通用化）
+     矩阵 01 §5：items / item-key / virtual / lazy-mount / buffer-size / item-size 预估
+     高性能设计：只渲染可视窗口（数据切片 + 顶部占位），万级数据渲染行数恒定；scroll 守卫：窗口未跨行跳过 setData（intra-row 滚动零更新）
+     items 变化（分页/加载更多）→ watch 重算窗口：Web 标准 Vue watch（全响应式）；MP 编译器 props 源 watch → WeChat observers
+     lazy：首屏不渲染，首次滚动才计算（列表在首屏外/多层嵌套时省首帧）；virtual=false：全量渲染（小列表省切片开销）
+     ★B4 事件归一：onScroll 用 eventScrollTop（MP e.detail.scrollTop / Web e.target.scrollTop）
+     ★注意：watch 回调必须花括号体（编译器仅支持 => { body }）；虚拟窗口必须搭配 scroll-view（Skyline 禁全局滚动） -->
+<template>
+  <scroll-view class="p-list-view" scroll-y :style="{ height: height + 'px' }" @scroll="onScroll">
+    <view v-if="virtual" class="plv-ph" :style="{ height: start * itemHeight + 'px' }" />
+    <view v-for="(item, i) in visible" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
+      <text>{{ item.title }}</text>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, watch } from 'vue'
+import { eventScrollTop } from '../runtime/event'
+import { getVirtualWindow } from '../runtime/virtual-window'
+import { componentRender } from '../runtime/observability'
+
+const props = defineProps({
+  pid: { type: String, default: '' },
+  disabled: { type: Boolean, default: false },
+  ariaLabel: { type: String, default: '' },
+  items: { type: Array as any, default: () => [] },
+  itemHeight: { type: Number, default: 44 },
+  height: { type: Number, default: 400 },
+  bufferSize: { type: Number, default: 2 }, // 可视区外缓冲行数（平滑滚动的提前量）
+  virtual: { type: Boolean, default: true }, // 虚拟开关（false = 全量渲染，小列表省组件切片开销）
+  lazy: { type: Boolean, default: false }, // 懒挂载：首屏不渲染，首次滚动才计算
+})
+
+const start = ref(0)
+const visible = ref([{ title: '' }])
+const ready = ref(false)
+
+// 计算可视窗口（方法体内 props.x → this.data.x 改写 ✓）；lazy 模式下首次滚动（onScroll 置 ready）前不渲染
+// ★B7：窗口数学抽纯函数 getVirtualWindow（可单测：10k 数据 → 恒定行数），此处只做切片
+// ★真机修复：去 template v-if/v-else 双 if 结构（WXML wx:else 无法配对）→ 单一 v-for visible，
+//   virtual=false 时 visible 直接置全量 items（模板零 wx:else，天然兼容微信解析）
+function calc() {
+  if (props.lazy && !ready.value) return
+  const t0 = Date.now()
+  const w = getVirtualWindow(
+    start.value * props.itemHeight,
+    props.itemHeight,
+    props.height,
+    props.bufferSize,
+    props.items.length,
+  )
+  visible.value = props.virtual ? props.items.slice(w.start, w.start + w.count) : props.items
+  // ★B8 渲染埋点（默认 no-op；开发开 setObservabilityEnabled(true) 后输出）
+  componentRender('p-list-view', { durationMs: Date.now() - t0, itemCount: props.virtual ? w.count : props.items.length, strategy: props.virtual ? 'virtual' : 'full' })
+}
+
+function onScroll(e: unknown) {
+  if (!props.virtual) return // 全量模式：无虚拟窗口，滚动无需处理
+  if (props.lazy && !ready.value) {
+    ready.value = true
+    calc() // 懒挂载首帧：立即渲染首屏（即使窗口未跨行）
+  }
+  const s = Math.max(0, Math.floor(eventScrollTop(e) / props.itemHeight))
+  // ★性能守卫：窗口未跨行 → 跳过 setData（intra-row 滚动零更新）
+  if (s === start.value) return
+  start.value = s
+  calc()
+}
+
+// items 变化（分页/加载更多）→ 重算窗口：Web 标准 Vue watch；MP 编译器 props 源 watch → observers
+watch(() => props.items, () => {
+  calc()
+})
+
+onMounted(() => {
+  calc() // 首帧（scrollTop=0）；lazy 模式被 calc 内守卫跳过
+})
+</script>
+
+<style scoped>
+.p-list-view {
+  width: 100%;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+/* Web 端：scroll-view 是自定义元素，需显式滚动（MP 端 scroll-y 属性原生滚动） */
+scroll-view {
+  display: block;
+  overflow-y: auto;
+}
+.plv-row {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #374151;
+}
+.plv-ph {
+  width: 100%;
+}
+</style>

@@ -1,0 +1,52 @@
+name: cross-layer-consistency
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# 全局门禁：任何违反规约的提交都在此 job 失败，阻断合并
+jobs:
+  consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run CrossLayerChecker
+        # 校验脚本仅用 Node 内置模块，无需 npm install
+        run: node scripts/check-consistency.js
+        working-directory: ${{ github.workspace }}
+
+      - name: Scope residual scan
+        # 兜底：全仓库 grep @proteus/（不含 @proteus-vue/），发现即失败
+        run: |
+          set -e
+          if grep -rE "@proteus/[a-zA-Z0-9-]+" --include="*.md" --include="*.ts" --include="*.json" . \
+               | grep -v "@proteus-vue/" | grep -v "proteus-architecture"; then
+            echo "::error::Found legacy @proteus/ scope (should be @proteus-vue/)"
+            exit 1
+          fi
+          echo "scope clean"
+
+  # 分层锁定：包名合法 + types 零运行时依赖 + 构建配置齐备
+  layering:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run layering check
+        run: node scripts/check-consistency.js --layering
+        working-directory: ${{ github.workspace }}
+
+  # 契约先行：contracts.ts 变更需同步各层
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/check-consistency.js --focus=contracts
+        working-directory: ${{ github.workspace }}

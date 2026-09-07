@@ -1,0 +1,86 @@
+{
+  "name": "@proteus-vue/router",
+  "version": "0.2.0-beta.0",
+  "description": "Proteus 路由：createRouter 工厂 + 守卫 + Skyline 转场 + <route> 扫描/校验/树构建（M1/M2）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./types": "./dist/types.d.ts",
+    "./scan": {
+      "types": "./dist/scan.d.ts",
+      "import": "./dist/scan.js",
+      "default": "./dist/scan.js"
+    },
+    "./tree": {
+      "types": "./dist/tree.d.ts",
+      "import": "./dist/tree.js",
+      "default": "./dist/tree.js"
+    },
+    "./rules": {
+      "types": "./dist/rules.d.ts",
+      "import": "./dist/rules.js",
+      "default": "./dist/rules.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "default": "./dist/schema.js"
+    },
+    "./merge": {
+      "types": "./dist/merge.d.ts",
+      "import": "./dist/merge.js",
+      "default": "./dist/merge.js"
+    },
+    "./transforms/transform-transition": {
+      "types": "./dist/transforms/transform-transition.d.ts",
+      "import": "./dist/transforms/transform-transition.js",
+      "default": "./dist/transforms/transform-transition.js"
+    },
+    "./codegen": {
+      "types": "./dist/codegen/index.d.ts",
+      "import": "./dist/codegen/index.js",
+      "default": "./dist/codegen/index.js"
+    },
+    "./navigation": {
+      "types": "./dist/navigation.d.ts",
+      "import": "./dist/navigation.js",
+      "default": "./dist/navigation.js"
+    },
+    "./stack-diff": {
+      "types": "./dist/stack-diff.d.ts",
+      "import": "./dist/stack-diff.js",
+      "default": "./dist/stack-diff.js"
+    },
+    "./deep-link": {
+      "types": "./dist/deep-link.d.ts",
+      "import": "./dist/deep-link.js",
+      "default": "./dist/deep-link.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src/presets",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/scan.ts src/tree.ts src/rules.ts src/schema.ts src/merge.ts src/transforms/transform-transition.ts src/codegen/index.ts src/navigation.ts src/stack-diff.ts src/deep-link.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@vue/compiler-sfc"
+  },
+  "dependencies": {
+    "@proteus-vue/shared": "0.2.0-beta.0",
+    "@proteus-vue/types": "0.1.0"
+  },
+  "peerDependencies": {
+    "@vue/compiler-sfc": "^3.4"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^3.5.42"
+  }
+}

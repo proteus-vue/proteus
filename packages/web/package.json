@@ -1,0 +1,35 @@
+{
+  "name": "@proteus-vue/web",
+  "version": "0.1.0",
+  "description": "Proteus 小程序语义 Web 模拟层（14-mp-first-semantics）：wx API 模拟（wx.request/showToast/…）+ 聚合安装（内置组件 @proteus-vue/built-in-components + wx API）——以小程序为标准，Web 端完全对齐表现",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:vue --external:@proteus-vue/built-in-components"
+  },
+  "dependencies": {
+    "@proteus-vue/built-in-components": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "vue": "^3.5.42",
+    "@proteus-vue/shared": "0.2.0-beta.0"
+  }
+}
