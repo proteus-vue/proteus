@@ -227,21 +227,23 @@ describe('p-modal 组件（B4：p-adaptive 属性 + 形态能力并入弹窗）'
     expect(panel.style.transform).toBe('') // 非居中降级
   })
 
-  it('★popover 无 anchor → 居中降级（03 §6，形态类承担——inline 不再内联定位）；sheet 底部安全区自动应用', async () => {
+  it('★popover 无 anchor → 居中降级（inline 清零静态 sheet 类）；sheet 静态类 + inline 双保险底部定位', async () => {
     const el = mount(PModal, { visible: true, width: 1024 })
     await nextTick()
     const panel = el.querySelector('.p-modal-panel') as HTMLElement
-    // ★2026-09-07 布局专项③：居中定位归 data-form 属性选择器（.p-modal-panel[data-form='popover']）——
-    //   inline 不再内联 position:fixed 定位（Skyline/WebView 引擎 fixed bottom 失效实证）
+    // ★2026-09-07 布局专项④：居中由 inline 覆盖（模板静态 --sheet 类的 right/bottom/width 被清零：auto/92%）
     expect(panel.dataset.form).toBe('popover')
-    expect(panel.style.transform).toBe('') // inline 无 transform（居中由属性选择器规则承担）
+    expect(panel.style.transform).toBe('translate(-50%, -50%)')
+    expect(panel.style.right).toBe('auto')
+    expect(panel.style.bottom).toBe('auto')
     const el2 = mount(PModal, { visible: true, width: 320 })
     await nextTick()
     const sheet = el2.querySelector('.p-modal-panel') as HTMLElement
     expect(sheet.dataset.form).toBe('sheet')
-    // 底部定位在 .p-modal-panel[data-form='sheet']——inline 仅承载安全区 padding（env 解析丢）
-    expect(sheet.style.left).toBe('')
-    expect(sheet.style.bottom).toBe('')
+    // 静态类 .p-modal-panel--sheet（Skyline 类选择器必支持）承载底部定位；inline 同值双保险
+    expect(sheet.classList.contains('p-modal-panel--sheet')).toBe(true)
+    expect(sheet.style.left).toBe('0px')
+    expect(sheet.style.bottom).toBe('0px')
   })
 
   it('点击遮罩（maskClosable）→ update:visible false', async () => {
