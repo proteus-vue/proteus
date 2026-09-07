@@ -71,8 +71,12 @@ function onMaskAreaTap(): void {
   transition: visibility 0s linear 0s;
 }
 .p-drawer-mask {
+  /* ★显式四边定位（Skyline 不认 inset 简写 → 尺寸塌 0 透明；p-modal 同款写法） */
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.45);
   z-index: 1;
 }
