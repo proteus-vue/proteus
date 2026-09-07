@@ -96,3 +96,41 @@ describe('★mp-conformance 探针矩阵 P6：复测页整体产物（vmodel-mp-
     expect(r.wxml).not.toContain('bind:update:')
   })
 })
+
+describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契约（真机 2026-09-07）', () => {
+  // 真机探针实证：skyline 下遮罩元素自身不参与命中测试（事件落根容器）→
+  // 修法：事件挂可靠层（根容器收非面板区点击）+ 面板 catchtap 吞冒泡 + 遮罩纯视觉 + 显式四边定位
+  const r = compileComponent('src/components/p-drawer/index.vue')
+  const wxml = r.wxml ?? ''
+  const wxss = r.wxss ?? ''
+  const js = r.js ?? ''
+
+  it('P7a：关闭事件挂根容器 bindtap（onMaskAreaTap），遮罩无任何事件绑定（纯视觉）', () => {
+    expect(wxml).toMatch(/<view bindtap="onMaskAreaTap" class="p-drawer-root-data-v-["\w]+ /)
+    const maskNode = wxml.match(/<view wx:if="\{\{modelValue && overlay\}\}"[^>]*class="p-drawer-mask[^"]*"[^>]*\/?>/) ?? ''
+    expect(maskNode).not.toContain('bindtap')
+    expect(maskNode).not.toContain('catchtap')
+  })
+
+  it('P7b：抽屉面板 catchtap 吞冒泡（@click.stop → noop），面板内点击不触发根关闭', () => {
+    expect(wxml).toContain('catchtap="noop"')
+    expect(js).toMatch(/noop\(\)/)
+  })
+
+  it('P7c：onMaskAreaTap 带 overlay 守卫并回传 update-modelValue false（无遮罩不响应外部点击）', () => {
+    expect(js).toContain('if (!this.data.overlay || !this.data.modelValue) return')
+    expect(js).toContain("this.triggerEvent('update-modelValue', false)")
+  })
+
+  it('P7d：mask 显式四边定位（skyline 不认 inset 简写 → 尺寸塌 0 透明；含 rgba 半透明背景）', () => {
+    const m = wxss.match(/\.p-drawer-mask-data-v-[\w]+\s*\{[\s\S]*?\}/)
+    expect(m).not.toBeNull()
+    // 注释含「inset 简写」字样 → 断言属性形态（inset:）而非注释词
+    expect(m![0]).not.toContain('inset:')
+    expect(m![0]).toContain('top: 0')
+    expect(m![0]).toContain('left: 0')
+    expect(m![0]).toContain('right: 0')
+    expect(m![0]).toContain('bottom: 0')
+    expect(m![0]).toContain('rgba(0, 0, 0, 0.45)')
+  })
+})

@@ -187,6 +187,11 @@ skyline 页面在 webview 下降级渲染会报此类错）→ 先切 skyline �
   mask 自身 handler 永不触发；面板（同容器子节点）命中却正常。
 - **可靠事件层 = 根容器**：fixed 全屏容器上 bindtap 收「非面板区」点击关闭；面板 catchtap（`.stop`）
   吞自身冒泡防误关；遮罩退化为纯视觉层。
+- **遮罩尺寸用显式四边**（`top/left/right/bottom: 0`）：Skyline 不认 `inset` 简写 → 尺寸塌 0 → 遮罩透明
+  （背景在却看不见；p-modal 同款写法）。
+- **★自动化边界（为什么这类交互要至少一次人工）**：wechatide 工具面无页面坐标点击；元素树不含自定义
+  组件内部节点（`p-drawer` 标签/`>>>` 深选择器/内部类均 no such element）→ **渲染层命中测试无法自动驱动**。
+  人工只用于「命中层」一次性实证；结论以**产物契约测试（P7 探针）+ 本台账**固化，回归靠 vitest 拦截。
 - 验证手段：产物内插分层探针（根 catchtap / 面板 tap / mask handler 各打日志）——日志在 **GUI Console
   可见但 `get_simulator_console` 可能漏抓**，由用户回报日志归属判定命中层。
 
