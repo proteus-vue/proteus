@@ -65,6 +65,37 @@ $WECHATIDE -c zed simulator_screenshot --project <absDist> --path <out.png>  # �
 | 登录态 | `loginExpired: false` | `login`（扫码，主动轮询 taskId 至 success） |
 | 版本 | `versionRelation: equal` / `agent_ahead` | 处理同 wechatide-skill environment-readiness |
 | 授权 | 首次调用触发 auth → `polling_task_result` 轮询至 `authorization_success` | 用户拒绝 → 停 |
+| ★渲染模式 | `project.private.config.json` 的 `setting.skylineRenderEnable` 与页面目标一致（skyline 页面 → `true`） | 先改 private 配置再编译（见下「渲染模式指定」） |
+
+#### ★渲染模式指定（2026-09-07 真机教训）
+
+**背景**：同页面在 **skyline 模式正常、webview 模式报渲染层错误**（如 rich-text 等 glass-easel
+组件在 webview 下降级渲染 → `[渲染层错误] Cannot set properties of undefined (setting 'textContent')` /
+`TypeError: SystemError (webviewScriptError)`）。渲染层错误**不进逻辑层 console buffer**（`get_simulator_console`
+抓不到）——自动化默认落在 webview 模式会误报/误判，必须先锁渲染模式。
+
+**根因**：渲染模式由 IDE 管理的 `project.private.config.json`（gitignored）决定：
+
+```json
+{ "setting": { "skylineRenderEnable": false } }   // ← GUI 切过 WebView 后残留 → 自动化默认 webview
+```
+
+**指定方法**（官方 project-config scene 字段 `setting.skylineRenderEnable`）：
+
+```bash
+# 测试前将目标产物 private 配置强制为 skyline（skyline:true 的项目）
+cat > <dist>/project.private.config.json <<'EOF'
+{
+  "setting": { "skylineRenderEnable": true }
+}
+EOF
+# 改后必须重编译页面（simulator_open_page）才生效
+```
+
+**注意**：
+- `simulator_open_page` 等工具**无渲染模式参数**——只能改 private 配置；
+- IDE 会在 GUI 切渲染模式时覆写 private（残留上次选择）→ 自动化每次测试前显式检查/写入，不依赖上次状态；
+- 页面 json `"renderer": "skyline"` 存在 ≠ 实际 skyline 渲染（private false 会降级 webview）。
 
 ### 1 · 开窗与编译
 
@@ -74,19 +105,27 @@ $WECHATIDE -c zed simulator_screenshot --project <absDist> --path <out.png>  # �
 
 ### 2 · ★console 零错门禁（全链路最重要）
 
-**每个页面进入后第一动作**：
+**每个页面进入后第一动作**。★门禁判定**必须全量抓取后在本端逐行解析**，不可信 IDE grep 子命令的空返回
+（官方明确「返回空 = 无匹配行，≠ console 为空」——pattern 写法失效会假绿）：
 
 ```bash
-wechatide -c zed get_simulator_console --project <absDist> --command 'grep -iE "error|exception|ReferenceError|not defined|is not a function|MiniProgramError"'
+# ① 全量抓取（官方 debugger 标准写法）
+wechatide -c zed get_simulator_console --project <absDist> --command 'grep -n .'
+# ② 本端逐行解析：error 级行（[error]/ReferenceError/not defined/MiniProgramError/Exception）计数必须为 0
 ```
 
-- **返回空 = 门禁绿**（注意：工具返回空字符串 = 无匹配，≠ console 无日志）。
-- **非空 = 门禁红** → 立即停止一切元素操作：
-  1. 读完整报错行（放宽 pattern：`grep -n .` 全量看上下文）；
+- **本端解析 error 行数 = 0 = 门禁绿**。
+- **非零 = 门禁红** → 立即停止一切元素操作：
+  1. 读完整报错行（全量输出看上下文）；
   2. 归类：`ReferenceError: xxx is not defined` → 产物丢 import/require（编译器共享模块扫描/剥离 bug）；
      `Fatal`/`SyntaxError` → WXML/JS 平台编译错；组件告警（warn 级）不阻断但记录；
   3. **修产物/源码 → 重新 `build:mp`（必要时清 `examples/node_modules/.cache/proteus`）→ 回门禁 1 重进页面**；
   4. 严禁带着已知白屏/报错继续抓元素或断言渲染。
+
+**⚠ 渲染层错误盲区**：`get_simulator_console` 只抓逻辑层 appservice console；**渲染层错误**
+（GUI Console 面板渲染层 tab 的 `[渲染层错误]`/`webviewScriptError`，如 `Cannot set properties of
+undefined (setting 'textContent')`）**不进该 buffer**。渲染层错误优先怀疑渲染模式（见门禁 0「渲染模式指定」——
+skyline 页面在 webview 下降级渲染会报此类错）→ 先切 skyline 验证，非模式问题再按组件排查。
 
 > 门禁红是「自动化提前抓到 bug」的价值时刻（本次 buildPermissionManifest 白屏即此门禁该拦下）——
 > 修复后该页面必须能在本门禁下稳定绿，再谈后续。
@@ -105,7 +144,16 @@ wechatide -c zed get_simulator_console --project <absDist> --command 'grep -iE "
 ### 5 · 元素断言（才允许碰元素）
 
 顺序：`querySelectorAll`（核对选择器）→ `text/attribute`（读）→ `tap`（交互）。
-选择器用 WXML 真实标签（页面原生 `button`/`view`；**自定义组件 p-* 内部节点用 `p-button button` 类路径**）。
+选择器用 WXML 真实标签（页面原生 `button`/`view`）。
+
+**★自定义组件边界（2026-09-07 实测）**：automator 元素查询**只看页面自身节点，看不到自定义组件内部**——
+`p-button`/`.p-button`/组件内原生 `button` 均 `no such element` 或空数组（glass-easel 组件 DOM 隔离）。
+因此 p-* 组件上的交互**无法用元素 tap 驱动**。对策：
+- 交互等价驱动走 **evaluate 调页面方法**（按钮 bindtap 的 handler 即页面方法，如 `p.openDrawer()`）；
+- 状态断言走 **evaluate 读 page data**（`p.data.drawerOpen`）；
+- 组件内部事件契约（如 mask tap → onClose → `triggerEvent('update-modelValue')`）用**组件产物断言**
+  （探针矩阵 P 系列 / headless mountMpComponent）而非真机元素层。
+
 元素层受模拟器激活态影响（可能超时）→ 超时先回门禁 2/3 确认页面健康，勿死循环重试。
 
 ### 6 · 交互回读
@@ -123,5 +171,7 @@ wechatide -c zed get_simulator_console --project <absDist> --command 'grep -iE "
 | 页面 | 产物 | console 门禁 | 备注 |
 |---|---|---|---|
 | pages/semantic-primitives-demo | dist/mp-weixin | ✅ 绿（2026-09-07 修后） | 曾红：`buildPermissionManifest is not defined`（plugin 跨行 import 漏扫 → 丢 desktop require）→ 已修 |
+| pages/semantic-primitives-demo | dist/mp-weixin（skyline） | ✅ 绿（2026-09-07） | **渲染模式坑**：webview 下报 `[渲染层错误] Cannot set properties of undefined (setting 'textContent')`（rich-text 等 glass-easel 降级）——skyline 正常；根因 private `skylineRenderEnable: false` 残留 → 已改 true 消失（见门禁 0「渲染模式指定」） |
+| pages/semantic-primitives-demo（skyline） | dist/mp-weixin | ✅ 绿（2026-09-07 e2e 回归） | **v-model handler 撞名修复后真机回归**：开→读→关→读 驱动 drawer/popover/sheet/switch/slider/tabbar/segment 全部独立回写通过（12 handler 逐一验证，产物 handler 名 `proteusUpdate{Model}Model` 不撞）；截图 `.proteus/e2e-mp/shot-drawer-open.png` |
 
 新增被测页 → 先在本台账登记 + 门禁绿，再写元素断言。

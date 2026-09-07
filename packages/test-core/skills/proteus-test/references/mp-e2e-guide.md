@@ -6,15 +6,25 @@
 完整链路定义见框架 plan **15-mp-e2e-console-gate.md**（本文件是它的速查版）。
 
 ```
-0 环境门禁（wechatide CLI + 登录 + 授权）
+0 环境门禁（wechatide CLI + 登录 + 授权 + ★渲染模式锁定）
 1 开窗编译（open_project_window --window-mode fullMode → simulator_open_page <页>）
-2 ★console 零错门禁（get_simulator_console grep error）——红即停，先修产物，严禁越步
+2 ★console 零错门禁（get_simulator_console 全量 grep -n . → 本端逐行解析 error）——红即停，先修产物，严禁越步
 3 运行时确认（automation_runtime_info currentPage）
 4 data 就绪断言（automation_evaluate 读 page data——最稳通道）
-5 元素断言（querySelectorAll → text/attribute → tap）
+5 元素断言（querySelectorAll → text/attribute → tap；★自定义组件内部不可 tap → 交互走 evaluate 调页面方法）
 6 交互回读（evaluate 再读 data）
 7 截图取证 + 复位
 ```
+
+### ★渲染模式锁定（门禁 0，2026-09-07 教训）
+
+- 同页面 skyline 正常 / webview 报渲染层错误（rich-text 等 glass-easel 组件降级 →
+  `[渲染层错误] Cannot set properties of undefined (setting 'textContent')` / `webviewScriptError`）——
+  渲染层错误**不进 get_simulator_console buffer**（该工具只抓逻辑层）。
+- 根因：`project.private.config.json`（gitignored，IDE 管理）残留 `"skylineRenderEnable": false`
+  （GUI 切过 WebView）→ 页面 json 虽 `renderer: skyline` 仍降级 webview。
+- 自动化测试前置：读/写目标产物 private 配置 `setting.skylineRenderEnable` 与项目目标一致
+  （skyline 项目 → true），改后 `simulator_open_page` 重编译生效。
 
 > 反面教材（2026-09-07）：页面白屏（onLoad ReferenceError: buildPermissionManifest is not defined）仍去抓元素——
 > 无规范乱跑浪费轮次。规范动作：进页 → console 门禁立即红 → 定位产物丢 require（plugin 跨行 import 漏扫）→ 修 → 重编 → 绿 → 才继续。

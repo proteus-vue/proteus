@@ -481,12 +481,16 @@ export const TEMPLATE_RULES: TransformRule[] = [
       const isComponent = !input.isInputLike && !input.isNativeTag
       if (isComponent) {
         const propName = arg || 'modelValue'
-        const cap = propName.charAt(0).toUpperCase() + propName.slice(1)
+        // ★2026-09-07 多组件 v-model 撞名修复：handler 名以 **model**（回写目标）标识——
+        //   旧命名 proteusUpdate{PropName}Model 只含 propName（arg/modelValue），同页多个无 arg
+        //   v-model（p-switch/p-drawer/p-popover/p-action-sheet 全 modelValue）或同 arg 多 model
+        //   会撞名 → script 去重后只剩第一个 handler → 其余组件回写丢失（真机：drawer/as/popover 关闭无效）。
+        //   新命名与 input 侧 proteusOn{Model}Input 对仗：proteusUpdate{Model}Model（arg 语义在 IR 保留）
         ctx.output = {
           kind: 'component',
           model,
           propName,
-          updateHandler: `proteusUpdate${cap}Model`,
+          updateHandler: `proteusUpdate${capitalize(model)}Model`,
         }
       } else {
         ctx.output = {

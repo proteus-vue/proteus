@@ -51,8 +51,9 @@ describe('★mp-conformance 探针矩阵 P3：v-model 事件名单段（G12 候�
     const src = '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)\nconst on = ref(false)</script>\n'
       + '<template><p-modal v-model:visible="show">x</p-modal><p-switch v-model="on"/></template>'
     const r = compileVueSfc(src, { filename: 'pages/probe3.vue', ...opts })
-    expect(r.wxml).toContain('bind:update-visible="proteusUpdateVisibleModel"')
-    expect(r.wxml).toContain('bind:update-modelValue')
+    // ★2026-09-07 多组件 v-model 撞名修复：handler 名以 model 标识（show → proteusUpdateShowModel；on → proteusUpdateOnModel）
+    expect(r.wxml).toContain('bind:update-visible="proteusUpdateShowModel"')
+    expect(r.wxml).toContain('bind:update-modelValue="proteusUpdateOnModel"')
     expect(r.wxml).not.toContain('bind:update:')
   })
 
