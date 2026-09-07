@@ -1,7 +1,7 @@
 // tests/compiler-validate-wxml-platform.test.ts
 // ★#505 G2：wxml 产物按平台标准校验（蓝本 = glass-easel 官方 parser 错误码）——
 //   DataBindingNotAllowed（wx:key 禁数据绑定）/ DuplicatedAttribute / AvoidUppercaseLetters /
-//   UnsupportedSyntax（绑定表达式含 ?.）/ InvalidAttribute（wx:key·for-item·index 无 for 悬挂；wx:else/elif 悬挂）。
+//   UnsupportedSyntax（绑定表达式含 ?.）/ InvalidAttribute（wx:key·for-item·index 无 for 悬挂；wx:else/elif 悬挂）/ DuplicatedStylePropertyNames（纯静态 style 重复键）。
 //   产物正常形态永不命中，命中即编译器 bug（G1 wx:key 防回归 + 历史 class 双属性真机坑 + 大写标签映射漏 + ?. 透传坑 + codegen 重构回归）。
 import { describe, it, expect } from 'vitest'
 import {
@@ -15,7 +15,7 @@ import {
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
-describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本六检查', () => {
+describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本七检查', () => {
   it('DataBindingNotAllowed：wx:key 含 {{}} → 命中（官方：wx:key 禁用数据绑定）', () => {
     const issues = scanWxmlPlatformIssues('<view wx:for="{{list}}" wx:key="{{item.id}}">x</view>')
     expect(issues.some((i) => i.code === 'DataBindingNotAllowed' && i.message.includes('wx:key'))).toBe(true)
@@ -74,6 +74,19 @@ describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本六检查', (
     expect(scanWxmlPlatformIssues('<view wx:if="{{a}}" /><view wx:else />')).toEqual([])
     // 注释夹在链中不破坏配对
     expect(scanWxmlPlatformIssues('<view wx:if="{{a}}">1</view><!-- 中间 --><view wx:else>2</view>')).toEqual([])
+  })
+
+  it('★2026-09-07 三轮取证：DuplicatedStylePropertyNames——纯静态 style 重复键命中（官方仅对 Value::Static 拆分查重），动态/引号分号不误报', () => {
+    // 静态重复键 → 命中
+    const r = scanWxmlPlatformIssues('<view style="color:red;color:blue">x</view>')
+    expect(r.some((i) => i.code === 'DuplicatedStylePropertyNames' && i.message.includes('color'))).toBe(true)
+    // 合法静态多键 → 零命中
+    expect(scanWxmlPlatformIssues('<view style="color:red;background:#fff">x</view>')).toEqual([])
+    // 动态/混合 style（含 {{}}）→ 官方不静态查重，跳过零命中
+    expect(scanWxmlPlatformIssues('<view style="{{styleStr}}">x</view>')).toEqual([])
+    expect(scanWxmlPlatformIssues('<view style="color:{{c}}">x</view>')).toEqual([])
+    // 引号内分号不误拆（font-family 值含 ;）
+    expect(scanWxmlPlatformIssues("<view style=\"font-family:'A;B',sans-serif;color:red\">x</view>")).toEqual([])
   })
 })
 

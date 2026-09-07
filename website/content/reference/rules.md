@@ -1189,11 +1189,11 @@ after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES20
 
 **WXML 产物按平台标准校验（蓝本 glass-easel 官方错误码）**
 
-六项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）；④UnsupportedSyntax——绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——Skyline/glass-easel 解析不支持，命中即报错提示改守卫写法）；⑤InvalidAttribute——wx:key/wx:for-item/wx:for-index 无 wx:for 悬挂（官方 ForList 仅 for 存在时消费）；⑥InvalidAttribute——wx:elif/wx:else 悬挂（无前置同层 wx:if/wx:elif——官方分支组 find_if_element_index 找不到前置 If）
+七项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）；④UnsupportedSyntax——绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——Skyline/glass-easel 解析不支持，命中即报错提示改守卫写法）；⑤InvalidAttribute——wx:key/wx:for-item/wx:for-index 无 wx:for 悬挂（官方 ForList 仅 for 存在时消费）；⑥InvalidAttribute——wx:elif/wx:else 悬挂（无前置同层 wx:if/wx:elif——官方分支组 find_if_element_index 找不到前置 If）；⑦DuplicatedStylePropertyNames——纯静态 style 串重复键（官方仅对 Value::Static style 拆分查重，含 {{}} 动态值不静态分析）
 
 ```
-before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal> / {{ a?.b }} / wx:else 悬挂 / wx:key 无 wx:for
-after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed/InvalidAttribute/…] …
+before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal> / {{ a?.b }} / wx:else 悬挂 / wx:key 无 wx:for / style="a:1;a:2"
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed/InvalidAttribute/DuplicatedStylePropertyNames/…] …
 ```
 
 > why: ★#505 G2 平台语义对齐：自造 IR 语义会错（wx:key 曾把 :key="t.id" 整句丢弃）——平台标准 = glass-easel 官方 parser 错误码（docs/compiler-platform-alignment.md §1.3）；产物正常形态永不命中，命中即编译器 bug（呼应「校验器按平台标准而非宿主标准」收紧）

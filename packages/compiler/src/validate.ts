@@ -136,12 +136,15 @@ export function assertValidResult(result: CompileResult, filename: string): void
 //      官方 ForList 提取仅 for 存在时消费，否则逐项告警——防 codegen 收敛重构回归）
 //   6. InvalidAttribute —— wx:elif / wx:else 悬挂（无前置同层 wx:if/wx:elif 兄弟；官方分支组
 //      合并 find_if_element_index 找不到前置 If → 告警 + 语义错位——Vue v-else 语义已保证配对）
+//   7. DuplicatedStylePropertyNames —— 纯静态 style 串含重复键（官方 tag.rs 仅对 Value::Static
+//      style 拆分查重——含 {{}} 的动态值官方不静态分析（动态 base + style: 前缀 →
+//      IncompatibleWithStyleColonAttributes）；用户手写 style="a:1;a:2" 或未来 codegen 拼接回归即命中）
 // 诚实边界：完整平台校验（标签/属性白名单、style 串合法性等）需官方 parser 级实现，暂不内置。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 单条 wxml 平台违规（code = 官方 ParseErrorKind 蓝本） */
 export interface WxmlPlatformIssue {
-  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax' | 'InvalidAttribute'
+  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax' | 'InvalidAttribute' | 'DuplicatedStylePropertyNames'
   message: string
   /** wxml 字符偏移（定位用） */
   at: number
@@ -270,7 +273,51 @@ export function scanWxmlPlatformIssues(wxml: string): WxmlPlatformIssue[] {
   if (optM) {
     issues.push({ code: 'UnsupportedSyntax', message: `绑定表达式 ${optM[0].trim().slice(0, 60)} 含 ?. 可选链——平台表达式解析不支持（官方 UnsupportedSyntax；含 ?? 与函数调用但无可选链）：请改守卫写法`, at: optM.index ?? 0 })
   }
+  // DuplicatedStylePropertyNames：纯静态 style 串重复键（官方 tag.rs 仅对 Value::Static style 拆分查重——
+  //   含 {{}} 的动态值官方不静态分析；跳过引号内分号防误拆：
+  //   ★2026-09-07 三轮取证：产物 49 处 style（静态 5/动态 34/混合 10）静态段重复零——命中 = 用户源码
+  //   低质写法（style="a:1;a:2"）或未来 codegen 拼接回归）
+  const styleRe = /\bstyle\s*=\s*(["'])([^"']*)\1/g
+  let stm: RegExpExecArray | null
+  while ((stm = styleRe.exec(noComments))) {
+    const styleVal = stm[2]
+    if (styleVal.includes('{{')) continue // 动态/混合值：官方语义不静态查重（动态 base → IncompatibleWithStyleColonAttributes 分支）
+    const seenKeys = new Set<string>()
+    for (const decl of splitStyleDecls(styleVal)) {
+      const key = decl.split(':')[0]?.trim()
+      if (!key || !/^[a-zA-Z_-][\w-]*$/.test(key)) continue // 空段/非键（值内含分号被跳过引号后仍可能余渣）不参与
+      if (seenKeys.has(key)) {
+        issues.push({ code: 'DuplicatedStylePropertyNames', message: `style="${styleVal.slice(0, 80)}" 重复属性键 ${key}（官方 DuplicatedStylePropertyNames Error 级——微信仅保留其一/后覆盖前，语义不可预期）`, at: stm.index })
+        break
+      }
+      seenKeys.add(key)
+    }
+  }
   return issues
+}
+
+/** 按分号拆 style 声明（跳过单双引号内的分号——font-family:'A; B' 等值内分号不误拆） */
+function splitStyleDecls(styleVal: string): string[] {
+  const decls: string[] = []
+  let cur = ''
+  let i = 0
+  while (i < styleVal.length) {
+    const c = styleVal[i]
+    if (c === "'" || c === '"') {
+      const q = c
+      cur += c
+      i++
+      while (i < styleVal.length && styleVal[i] !== q) cur += styleVal[i++]
+      if (i < styleVal.length) cur += styleVal[i]
+      i++
+      continue
+    }
+    if (c === ';') { decls.push(cur); cur = ''; i++; continue }
+    cur += c
+    i++
+  }
+  if (cur.trim()) decls.push(cur)
+  return decls
 }
 
 /** wxml 平台标准校验入口：任一官方错误码命中 → 校验失败 */
