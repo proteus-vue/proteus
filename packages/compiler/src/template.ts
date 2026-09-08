@@ -647,6 +647,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const isInputLike = tag === 'input' || tag === 'textarea'
   const attrs: string[] = []
   let hasNavTarget = false
+  // ★2026-09-08 v-text 对齐：v-text="expr" → 元素内容覆盖为文本插值 {{ expr }}（Vue 语义：v-text 覆盖子节点，输出文本）
+  let vTextExpr: string | undefined
 
   // scoped CSS（v0.3，★Skyline 兼容修复）：作用域 **class**（glass-easel 不支持属性选择器）
   //   ★仅计算、末尾统一发射（2026-08 真机实测修复：WXML 重复 class 属性只保留其一——独立 scope class 属性会丢掉用户 class，
@@ -751,6 +753,11 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       continue
     }
     switch (dir.name) {
+      case 'text':
+        if (ctx.disabled.has('directive/v-text')) { ctx.warnings.push('规则 directive/v-text 已被禁用（rules.disabled），v-text 已忽略'); break }
+        vTextExpr = exprContent(dir.exp)
+        ctx.trace?.add('directive/v-text', { line: node.loc.start.line, before: `v-text="${exprContent(dir.exp)}"`, after: `元素内容 → {{ ${exprContent(dir.exp)} }}（v-text 覆盖子节点）` })
+        break
       case 'if':
         if (ctx.disabled.has('directive/v-if')) { ctx.warnings.push('规则 directive/v-if 已被禁用（rules.disabled），v-if 已忽略'); break }
         // ★Batch 5：transition 子元素 v-if 为裸 ref 名 → 离开动画状态机（显示由 __tv{i} 控制，ref 写入点联动）
@@ -982,8 +989,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         break
       default:
         // ★Batch A（vue-compat）：自定义指令（v-focus 等）小程序无对等——显式警告（反黑盒，不再静默剥离）
-        if (dir.name === 'slot' || dir.name === 'pre' || dir.name === 'cloak') {
-          break // v-slot/v-pre/v-cloak：MVP 忽略（无对等语义）
+        if (dir.name === 'slot' || dir.name === 'pre' || dir.name === 'cloak' || dir.name === 'text') {
+          break // v-slot/v-pre/v-cloak/v-text：MVP 忽略（v-text 已由 case 'text' 覆盖内容）
         }
         ctx.warnings.push(
           `自定义指令 v-${dir.name} 在小程序无对等机制（已剥离且不执行）——请改用方法调用或条件渲染（vue-compat Batch A）`,
@@ -1058,6 +1065,10 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (lineNote && !ctx.lineNoteTraced) {
     ctx.lineNoteTraced = true
     ctx.trace?.add('annotation/line-note', { line: node.loc.start.line, before: `<${node.tag}>`, after: `<!-- @${node.loc.start.line} ${node.tag} -->` })
+  }
+  // ★2026-09-08 v-text 对齐：内容覆盖为文本插值（v-text 覆盖子节点，输出 {{ expr }}）
+  if (vTextExpr !== undefined) {
+    return `${lineNote}<${tag}${attrStr}>{{ ${vTextExpr} }}</${tag}>`
   }
   if (!node.children.length) return `${lineNote}<${tag}${attrStr} />`
   const hasElementChild = node.children.some((c) => c.type === NodeTypes.ELEMENT)

@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 94 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 95 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (49)
+## Template transforms (50)
 
 ### `tag/div-to-view`
 
@@ -361,6 +361,19 @@ after:  <p hidden="{{!show}}">a</p>
 ```
 
 > why: Mini Programs have no v-show directive; the hidden attribute is its semantic equivalent (toggling display:none); the element stays in the document flow, unlike v-if which removes it (completed in v0.3; previously an MVP limitation)
+
+### `directive/v-text`
+
+**v-text → element content overridden to text interpolation**
+
+v-text="expr" → <tag>{{ expr }}</tag> (v-text overrides child nodes, outputting text interpolation — Vue semantics); previously stripped as a custom directive with a warning (text content lost — a real bug, not a semantic limitation)
+
+```
+before: <view v-text="msg">child</view>
+after:  <view>{{ msg }}</view>
+```
+
+> why: Mini Programs have no v-text directive, but v-text semantics = element content is the text value — mapped to content interpolation {{ expr }} (element kept + content overridden); same family as v-html→rich-text
 
 ### `directive/custom`
 
