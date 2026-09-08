@@ -1322,7 +1322,10 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     // 专门通道已有归属的形态跳过（provide/inject/watch/computed/生命周期宏）
     // ★onMounted/onUnmounted 已由 extractLifecycles 映射到 onReady/onUnload（组件→detached），若不再跳过会被
     //   当作顶层副作用裸调用注入 onLoad——产物里 onMounted(...) 无 import → 运行时 ReferenceError（getCurrentInstance 同类）
-    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
+    // ★同理，未映射的其它 Vue 生命周期钩子（onBeforeUnmount/onErrorCaptured/onUpdated/onBeforeMount/onBeforeUpdate/
+    //   onActivated/onDeactivated/onRenderTracked/onRenderTriggered/onServerPrefetch）由 extractLifecycles 统一「剥离+警告」，
+    //   亦须跳过——否则既警告又裸注入 onLoad（partial 钩子告警但产物仍裸调用 → ReferenceError）。mapOnxxx 将跳过，仅告警。
+    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))

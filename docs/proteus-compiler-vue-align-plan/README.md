@@ -42,6 +42,12 @@
 - **编译器支撑**：`<script setup>` 方法允许声明 `this: T`（TS 伪参数声明方法 this 类型），但 JS 无此语法——编译器此前**未剥离 `this` 伪参数**（`astParamText`/`stripParamTypes` 对 `TSThisParameter`/`Identifier(name='this')` 保留 → 产物 `openMeasure(this) {` → `Unexpected token 'this'`）。已修：两者对 `this` 伪参数整体剔除（方法签名 `openMeasure()`，复用方法调用绑定的实例）。
 - **验证**：`build:mp` 产物 `adapter.measureRect(TRIGGER_SELECTOR, this)`；探针 P8e4 断言同步；computed 一次性派生（框架既定，暂按现状）。
 
+## 修复：partial 生命周期钩子「警告 + 干净剥离」（不再泄漏裸调用）
+
+- **问题**：`onBeforeUnmount`/`onErrorCaptured`/`onUpdated` 等未映射 Vue 生命周期钩子在矩阵为 `partial`（警告），但 `extractTopLevelCalls` 的跳过正则只含 `onMounted|onUnmounted`——这些钩子被 `extractLifecycles` 打成「已剥离+警告」，又被当顶层副作用**裸注入 onLoad** → 产物 `onBeforeUnmount(...)` 无 import → 运行时 `ReferenceError`（getCurrentInstance 同类）。
+- **修复**：`extractTopLevelCalls` 跳过正则补全全部 Vue 生命周期钩子（`onBeforeMount/onBeforeUpdate/onUpdated/onBeforeUnmount/onActivated/onDeactivated/onErrorCaptured/onRenderTracked/onRenderTriggered/onServerPrefetch`）——钩子现为「警告 + 干净剥离」，产物不再泄漏裸调用。
+- **验证**：`render-backend-demo`（真实用 `onBeforeUnmount`）产物仅 `onReady()`（onMounted 映射）、无裸 `onBeforeUnmount(`；`examples/pages/render-backend-demo` 无裸调用；新增 1 断言 `vue-compat-compile.test.ts`（警告+不裸泄漏）。
+
 > ⚠️ 待办：`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 关联

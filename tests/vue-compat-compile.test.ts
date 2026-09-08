@@ -56,6 +56,25 @@ describe('编译器接线：vue 命名导入 × Vue 全集基准线', () => {
     expect(r.warnings.some((w) => w.includes('onErrorCaptured') && w.includes('Vue API'))).toBe(true)
   })
 
+  it('partial 生命周期钩子：警告 + 干净剥离（产物不裸泄漏 onXxx 调用进 onLoad——防 ReferenceError）', () => {
+    // ★2026-09-08：onBeforeUnmount/onErrorCaptured 等未映射钩子不仅应警告，且不得被当顶层副作用裸注入 onLoad
+    //   （产物 onBeforeUnmount(...) 无 import → 运行时 ReferenceError，getCurrentInstance 同类）。
+    const src = makeSfc(
+      "import { onMounted, onBeforeUnmount, onErrorCaptured } from 'vue'",
+      "onMounted(() => { console.log('M') })\nonBeforeUnmount(() => { clear() })\nonErrorCaptured(() => { return false })",
+    )
+    const r = compileVueSfc(src, { filename: 'pages/probe.vue', ...opts })
+    // 生命周期映射：onMounted → onReady 生效
+    expect(r.js).toMatch(/onReady\(\)/)
+    // 未映射钩子（partial）→ 警告
+    expect(r.warnings.some((w) => w.includes('onBeforeUnmount') && w.includes('未映射'))).toBe(true)
+    expect(r.warnings.some((w) => w.includes('onErrorCaptured'))).toBe(true)
+    // ★不裸泄漏：产物无裸 onBeforeUnmount(/onErrorCaptured(/onMounted( 调用（防 ReferenceError）
+    expect(r.js).not.toMatch(/(?:^|\s)onBeforeUnmount\s*\(/)
+    expect(r.js).not.toMatch(/(?:^|\s)onErrorCaptured\s*\(/)
+    expect(r.js).not.toMatch(/(?:^|\s)onMounted\s*\(/)
+  })
+
   it('现有 aligned 生态（provide/inject）正常不收 Vue API 警告', () => {
     const src = makeSfc(
       "import { provide } from 'vue'",
