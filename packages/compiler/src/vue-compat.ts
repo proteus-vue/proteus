@@ -69,9 +69,10 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'getCurrentWatcher', group: 'reactivity', status: 'unsupported', note: '当前 watcher，MP 无对等', source: '评估' },
   // watch 族
   { name: 'watch', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径（ref/数组/函数/props 源）' },
-  { name: 'watchEffect', group: 'reactivity', status: 'unsupported', note: '立即执行+依赖追踪——请用 watch(源, cb, {immediate:true}) 或 computed', source: '评估' },
-  { name: 'watchPostEffect', group: 'reactivity', status: 'unsupported', note: '同上；flush post 无对等', source: '评估' },
-  { name: 'watchSyncEffect', group: 'reactivity', status: 'unsupported', note: '同上；flush sync 无对等', source: '评估' },
+  // ★2026-09-08 增强：watchEffect 族改写为 watch(deps, cb, {immediate:true})（deps 从 cb 提取 x.value 的 ref）——MP 无 watchEffect，watch immediate 等价
+  { name: 'watchEffect', group: 'reactivity', status: 'aligned', note: 'watchEffect(cb) 改写为 watch([deps], cb, {immediate:true})——deps = cb 内访问的 ref（x.value → x）；MP 无 watchEffect，watch(immediate) 等价', source: '增强（watchEffect→watch 改写）' },
+  { name: 'watchPostEffect', group: 'reactivity', status: 'aligned', note: '同 watchEffect（flush post 无对等，按 watch immediate 处理）', source: '增强（watchEffect→watch 改写）' },
+  { name: 'watchSyncEffect', group: 'reactivity', status: 'aligned', note: '同 watchEffect（flush sync 无对等，按 watch immediate 处理）', source: '增强（watchEffect→watch 改写）' },
 
   // ===== component API =====
   // ★2026-09-08 P1 校准：defineComponent 在 <script setup> 为冗余包装（SFC 已自动组件化）——编译器识别并剥离为 no-op（不落 data/不裸注入 onLoad），矩阵 partial（警告：包装 options 未编译，请用 <script setup>）；对内 setup 逻辑不翻译（非 SFC 范式）

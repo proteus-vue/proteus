@@ -676,6 +676,22 @@ function watchOptionsImmediate(args: any[]): boolean {
  * ★#497 批 2b：AST 顶层发现——回调参数 TS 类型/解构天然剥除（astParamText）、options AST 定位、
  *   单参简写 (v => {}) 与 getter 块体（单 return）补支持；解析失败回退旧文本路径（永不比现状差）
  */
+/** ★增强：watchEffect(cb) 前置改写为 watch(deps, cb, { immediate: true })——deps = cb 内访问的 ref（x.value → x）。
+ *  MP 无 watchEffect；watch(immediate) 等价（立即执行 + 依赖变化重跑）。只匹配块体箭头/函数回调，其余保守不改（保持 gate fail-closed） */
+function rewriteWatchEffectToWatch(source: string): string {
+  // watchEffect( () => { ...body... } )——提取 body 内 x.value 的依赖名，改写为 watch([deps], () => {body}, { immediate: true })
+  let out = source
+  for (const name of ['watchEffect', 'watchPostEffect', 'watchSyncEffect']) {
+    const re = new RegExp(`\\b${name}\\s*\\(\\s*\\(\\)\\s*=>\\s*\\{([\\s\\S]*?)\\}\\s*\\)`, 'g')
+    out = out.replace(re, (_m, body: string) => {
+      // ★正则字面量用单反斜杠 \\b/\\.（RegExp 构造字符串才用双反斜杠）——此前误写 \\\\b 致匹配字面 backslash-b 不命中
+      const deps = [...new Set([...body.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g)].map((m) => m[1]))]
+      return deps.length ? `watch([${deps.join(', ')}], () => {${body}}, { immediate: true })` : _m
+    })
+  }
+  return out
+}
+
 function extractWatch(
   source: string,
   data: Record<string, unknown>,
@@ -1941,6 +1957,8 @@ export function transformScriptToPage(
   _opts: StyleTransformOptions = { px2rpx: true, rpxRatio: 2 },
   extra: ScriptTransformOptions = {},
 ): ScriptTransformResult {
+  // ★增强：watchEffect 族前置改写为 watch(deps, cb, { immediate: true })（MP 无 watchEffect；下游 extractWatch/handleConstToData 吃改写后 source）
+  source = rewriteWatchEffectToWatch(source)
   const warnings: string[] = []
   const trace = extra.trace
   // ★module-plan B0：import → require（跨模块引用）——moduleImports 由插件预计算（源码路径 → 产物相对 require 路径）
