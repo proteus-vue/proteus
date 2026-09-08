@@ -119,6 +119,12 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r as any).js).not.toMatch(/isRef\s*\(/)
   })
 
+  it('watchEffect：改写为 watch(deps, cb, {immediate})（→ proteusWatchX + onLoad 初始化，不再裸 watchEffect）', () => {
+    const r = compile("import { ref, watchEffect } from 'vue'\nconst x = ref(1)\nwatchEffect(() => { console.log(x.value) })", '<view>x</view>')
+    expect((r as any).js).toMatch(/proteusWatchX/)
+    expect((r as any).js).not.toMatch(/watchEffect\s*\(/)
+  })
+
   it('withDefaults：宏剥离 + 默认值合并到 properties（组件模式），不裸调用/不落 data', () => {
     const r = compileVueSfc(
       `<script setup lang="ts">

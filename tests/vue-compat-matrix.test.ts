@@ -57,7 +57,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
 
   it('代表性能力状态（对齐框架既定基线）', () => {
     // aligned：书写面核心（vue-compat §1 主路径）
-    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef']) {
+    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef', 'watchEffect', 'watchPostEffect', 'watchSyncEffect']) {
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项
@@ -73,7 +73,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
   })
 
   it('用户决策 1（b）：运行时对内 API 归 unsupported 反黑盒（不翻译成框架标准）', () => {
-    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'watchEffect', 'h', 'createApp', 'proxyRefs', 'effectScope']) {
+    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'h', 'createApp', 'proxyRefs', 'effectScope']) {
       expect(vueCompatStatus(u).status).toBe('unsupported')
       expect(vueCompatStatus(u).note, `${u} 应带替代建议/原因`).toBeTruthy()
     }
