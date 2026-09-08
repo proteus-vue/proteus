@@ -115,6 +115,28 @@ function read() { return m.value }
     expect(r.js).not.toMatch(/data:\s*\{[\s\S]*?m:\s*undefined/)
   })
 
+  it('useModel（compileScript 权威源驱动）：prop 注册 + m.value 读写 + 模板改名（不再裸调用）', () => {
+    // ★2026-09-08：useModel(props, name) 是显式运行时调用（compileScript 不展开）——此前被当顶层副作用裸调用
+    //   this.m = useModel(props, 'title') → not defined。现经 useModel 引用提取（var→prop）复用 defineModel 链路。
+    const src = `<script setup lang="ts">
+import { useModel } from 'vue'
+const props = defineProps<{ title?: string }>()
+const m = useModel(props, 'title')
+function set(v: string) { m.value = v }
+function read() { return m.value }
+</script>
+<template><view>{{ m }}</view></template>`
+    const r = compileVueSfc(src, { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true })
+    // prop 注册
+    expect(r.js).toMatch(/title:\s*\{\s*type: String/)
+    // 写 → triggerEvent('update-title')；读 → this.data.title；模板改名 {{ title }}
+    expect(r.js).toMatch(/triggerEvent\('update-title'/)
+    expect(r.js).toMatch(/return this\.data\.title/)
+    expect(r.wxml).toMatch(/\{\{\s*title\s*\}\}/)
+    // 不再裸 useModel(props, ...) 调用
+    expect(r.js).not.toMatch(/useModel\s*\(/)
+  })
+
   it('现有 aligned 生态（provide/inject）正常不收 Vue API 警告', () => {
     const src = makeSfc(
       "import { provide } from 'vue'",

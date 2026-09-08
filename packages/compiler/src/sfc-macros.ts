@@ -56,6 +56,11 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
     while ((mm = useModelRe.exec(content))) {
       modelRefs.push({ varName: mm[1], propName: mm[3] || 'modelValue' })
     }
+    // ★useModel 是**显式运行时调用**（compileScript 不展开它——它是函数而非宏）：源码形态 const <v> = useModel(<props>, 'name')
+    //   提取 { varName, propName } — 合并进 modelRefs（prop 注册 + .value 读写复用 defineModel 链路）
+    const useModelSrcRe = /const\s+([A-Za-z_$][\w$]*)\s*=\s*useModel\s*\([^,)]*,\s*(['"])([^'"]*)\2\s*\)/g
+    let ur: RegExpExecArray | null
+    while ((ur = useModelSrcRe.exec(source))) modelRefs.push({ varName: ur[1], propName: ur[3] || 'modelValue' })
     // ★权威 props=bindings 里标 'props' 的 prop 名集合（compileScript 分类——prop 名权威源；type/default 解析留扩展）
     // ★权威 emits（compileScript 展开 emits: ['x'] 简单 或 emits: _mergeModels(['x'], ['update:y']) 合并形态）
     const emits: string[] = []

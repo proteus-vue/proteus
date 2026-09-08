@@ -922,7 +922,7 @@ function handleConstToData(
   //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
   //   ★defineComponent：SFC 已自动组件化，defineComponent(...) 包装为编译期 no-op（剥离+警告），不落 data/不裸注入 onLoad
   //   ★defineModel：v-model 组件契约（compileScript 权威源），const m = defineModel 不落 data（prop 由 modelRefs 注册；m.value 读写由 modelRefs 重写）
-  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\(|defineModel\s*[<(])/.test(init)) return
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\(|defineModel\s*[<(]|useModel\s*\()/.test(init)) return
   // 跳过函数/箭头函数（属于 methods）
   if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
   // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
