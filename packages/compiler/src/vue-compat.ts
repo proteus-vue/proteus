@@ -105,7 +105,7 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'getCurrentInstance', group: 'component', status: 'unsupported', note: '运行时对内 API——单独立项框架语义 API（如 useMpInstance/adapter.selectorQuery）承接；MP 下勿直接用', source: '用户决策 1（b）' },
   { name: 'useSlots', group: 'component', status: 'unsupported', note: '运行时对内 API——组件内用 <slot> 透传 + slots prop', source: '用户决策 1（b）' },
   { name: 'useAttrs', group: 'component', status: 'unsupported', note: '运行时对内 API——attrs 走 $attrs 产物面', source: '用户决策 1（b）' },
-  { name: 'useTemplateRef', group: 'component', status: 'unsupported', note: '模板 ref 无对等（Batch A 已警告 ref=）——用 selectComponent', source: 'vue-compat Batch A' },
+  { name: 'useTemplateRef', group: 'component', status: 'partial', degrade: true, note: 'useTemplateRef(name) → this.<var> = this.selectComponent(\'#name\')（组件实例引用）+ 方法体 .value 剥除；onLoad 时子组件可能未挂载（null）——onReady 后可取（诚实时序边界）', source: 'useTemplateRef 对齐（selectComponent 承接）' },
   { name: 'useId', group: 'component', status: 'unsupported', note: '运行时 id，MP 无对等', source: '评估' },
   { name: 'useSSRContext', group: 'component', status: 'unsupported', note: 'SSR，MP 无对等', source: '评估' },
   { name: 'hasInjectionContext', group: 'component', status: 'unsupported', note: 'SSR 注入判断，MP 无对等', source: '评估' },
@@ -176,7 +176,7 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: ':deep()', group: 'sfc', status: 'aligned', source: 'vue-compat §1' },
   { name: '<style lang=scss>', group: 'sfc', status: 'aligned', source: 'vue-compat §1（scss 预处理器）' },
   { name: '<template #slot>', group: 'sfc', status: 'aligned', source: 'vue-compat §1（具名）' },
-  { name: '模板 ref="x"', group: 'sfc', status: 'unsupported', note: '无对等（Batch A 已警告）——用 selectComponent', source: 'vue-compat Batch A' },
+  { name: '模板 ref="x"', group: 'sfc', status: 'partial', degrade: true, note: 'ref="x" → 注入 id="x" + 收集（useTemplateRef(name) → this.selectComponent(\'#name\') 组件实例引用；onLoad 可能 null）', source: 'useTemplateRef 对齐（ref id 注入 + 收集）' },
   { name: 'TS 类型注解', group: 'sfc', status: 'aligned', source: 'vue-compat §1（TS 剥除）' },
 ]
 

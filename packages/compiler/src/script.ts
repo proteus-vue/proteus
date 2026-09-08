@@ -1041,6 +1041,19 @@ function handleConstToData(
     // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
     // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
     // ★#503 es5-safe：运行时初始化调用串内 ?? / ?. → 显式 null 检查（原样进产物 onLoad/attached）
+    // ★2026-09-08 useTemplateRef 承接：const b = useTemplateRef('x') → this.b = this.selectComponent('#x')（组件实例引用）
+    //   + constSourceTypes 'templateref'（方法体 b.value → this.b 剥 .value）。selectComponent 需渲染树就绪（onLoad 可能 null——onReady 后可取，诚实边界）
+    const utr = raw.match(/^useTemplateRef\s*\(\s*['"]([^'"]+)['"]\s*\)$/)
+    if (utr) {
+      out.runtimeInits.push({ name, call: `this.selectComponent('#${utr[1]}')` })
+      out.constSourceTypes.set(name, 'templateref')
+      trace?.add('script/use-template-ref', {
+        line,
+        before: `const ${name} = useTemplateRef('${utr[1]}')`,
+        after: `this.${name} = this.selectComponent('#${utr[1]}')（组件实例引用；onLoad 可能 null，onReady 后可取）`,
+      })
+      return
+    }
     out.runtimeInits.push({ name, call: raw.trim() })
     // ★2026-09-08 toRef/toRefs/customRef：返回真 ref——constSourceTypes 记 'ref'（isRef(...)=true 内联判定）
     if (/^(?:toRef|toRefs|customRef)\s*\(/.test(raw.trim())) out.constSourceTypes.set(name, 'ref')
@@ -1815,6 +1828,8 @@ function rewriteRefAccess(
   // ★2026-09-08 P1（defineModel 地基）：modelRefs（var→propName）——compileScript 权威源展开 _useModel 后
   //   m.value 读→this.data.propName；m.value=expr 写→this.triggerEvent('update:propName', expr)（对齐 glass-easel update-xxx）
   modelRefs: Map<string, string> = new Map(),
+  // ★2026-09-08 useTemplateRef：templateref 变量 x.value → this.x（存组件实例，剥 .value；实例属性非 data）
+  templaterefVars: Set<string> = new Set(),
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
@@ -1846,7 +1861,12 @@ function rewriteRefAccess(
     // 写：m.value = expr → this.triggerEvent('update-propName', expr)（glass-easel 事件名 update-xxx；先写后读，避免二次命中）
     out = out.replace(new RegExp(`\\b${varName}\\.value\\s*=\\s*(?!=)([^;\\n]+)`), (_m, expr) => `this.triggerEvent('update-${propName}', ${expr.trim()})`)
     // 读：m.value → this.data.propName（未被写替换吞掉的其余读取）
+    //   ★RegExp 构造字符串须双反斜杠（\\b → 引擎 \b；\\. → \.）——单反斜杠退化为字面字符不匹配（正则转义坑）
     out = out.replace(new RegExp(`\\b${varName}\\.value\\b`, 'g'), `this.data.${propName}`)
+  }
+  // ★2026-09-08 useTemplateRef：templateref 变量 x.value → this.x（剥 .value——实例属性，非 data 字段）
+  for (const v of templaterefVars) {
+    if (new RegExp(`\\b${v}\\.value`).test(out)) out = out.replace(new RegExp(`\\b${v}\\.value\\b`, 'g'), `this.${v}`)
   }
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
   //   ★RegExp 构造字符串须双反斜杠（\\b → \b 词边界；\\w → \w），否则退化为字面字符不匹配（此前误改单反斜杠致全校 props 改写失效）
@@ -2261,6 +2281,11 @@ export function transformScriptToPage(
   // ★#499：改写集合含 computeds——派生字段 ready/onLoad 已进 data，方法体读取 x.value → this.data.x（p-modal
   //   observers/onReady 内 variants.value 此前裸引用 ReferenceError；表达式体 computed 写入路径由 setter 循环先行接管）
   const refNames = new Set([...Object.keys(data), ...Object.keys(computed)])
+  // ★2026-09-08 useTemplateRef：templateref 变量（const x = useTemplateRef('name') → this.x = this.selectComponent('#name') 实例属性）——
+  //   方法体 x.value → this.x（剥 .value）；统一经 rw helper 传入 rewriteRefAccess（避免 9 处调用点逐个加参）
+  const templaterefVars = new Set([...constSourceTypes.entries()].filter(([, v]) => v === 'templateref').map(([k]) => k))
+  const rw = (body: string): string =>
+    rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs, templaterefVars), methodNames, runtimeInitNames)
 
   // ★vue-compat-advance Batch 3：provide/inject 提取 + 注入块构建（禁用规则时整体跳过）
   // ★Batch 4：裸 ref 提供 → provideRefs（ref→key），ref 写入点同步注册表 + 通知订阅者；inject 侧订阅 __subs
@@ -2464,7 +2489,7 @@ export function transformScriptToPage(
     lines.push('  observers: {')
     for (const w of propWatches) {
       // ★#499：回调参数先归一为 n/o（微信 observers 实参固定 — 回调体引用开发者参数名如 w 必须同步改名）
-      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(renameWatchParamsToNo(w.body, w.params), refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
+      const observerBody = rw(renameWatchParamsToNo(w.body, w.params))
       const bodyLines = observerBody.split('\n')
       lines.push(`    ${w.propField}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
@@ -2515,7 +2540,7 @@ export function transformScriptToPage(
       : compDerivedReady
         ? `${compDerivedReady}\n${lifecycles.onReady}`
         : lifecycles.onReady
-    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(readyBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rw(readyBody))}\n  },`)
   } else if (semanticGridReady || compDerivedReady) {
     lines.push(`  onReady() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
   } else if (extra.debug) {
@@ -2540,7 +2565,7 @@ export function transformScriptToPage(
   if (lifecycles.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
-    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
+    const unloadBody = rw(lifecycles.onUnload)
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine, reactiveDisposeLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, reactiveDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
@@ -2640,7 +2665,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
     const initLines = initLineSeq()
-    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
+    const body = rw(lifecycles.onLoad)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -2686,7 +2711,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     const braceIdx = m.src.indexOf('{')
     const sig = m.src.slice(0, braceIdx + 1)
     const body = m.src.slice(braceIdx + 1)
-    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)},`, m.line)
+    pushMethod(`  ${sig + rw(body)},`, m.line)
   }
   // ★15-page-scroll-container 批次2/3：桥接方法生成（dataExtra 已在 dataEntries 前赋值）
   if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
@@ -2716,7 +2741,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
   for (const w of Object.values(watches)) {
     if (w.propField && !w.immediate) continue
     methodNames.add(`proteusWatch${w.id}`)
-    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rw(w.body))}\n  },`
     pushMethod(`  ${src}`, w.line)
   }
   // ★#499 块体 computed 整段求值方法：proteusCalcX()（内部语句任意，末语句 return 表达式；派生 expr = this.proteusCalcX()——
@@ -2725,14 +2750,14 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     if (!c.blockBody) continue
     const mcalc = `proteusCalc${capitalize(cname)}`
     methodNames.add(mcalc)
-    const bsrc = `${mcalc}() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.blockBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
+    const bsrc = `${mcalc}() {\n${indentBody(rw(c.blockBody))}\n  },`
     pushMethod(`  ${bsrc}`, 1)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {
     if (!c.setter) continue
     methodNames.add(`proteusSet${capitalize(cname)}`)
-    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rw(c.setter.body))}\n  },`
     pushMethod(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发

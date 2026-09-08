@@ -24,10 +24,11 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(r.wxml).not.toContain('v-focus') // 已剥离
   })
 
-  it('模板 ref → 警告（无对等绑定）', () => {
+  it('模板 ref → 注入 id + 收集（useTemplateRef 承接，不再警告剥离）', () => {
     const r = compile('<template><input ref="el" /></template><script setup>const inputEl = ref(null)</script>')
-    expect(r.warnings.some((w) => w.includes('模板 ref="el"'))).toBe(true)
-    expect(r.warnings.some((w) => w.includes('selectComponent'))).toBe(true)
+    // 新行为：ref="el" → 注入 id="el" + 收集（配合 useTemplateRef('el') → this.selectComponent('#el')）；不再警告剥离
+    expect(r.wxml).toContain('id="el"')
+    expect(r.warnings.some((w) => w.includes('模板 ref="el"'))).toBe(false)
   })
 
   it('Transition 已支持（不再警告），Teleport 等无对等组件 → 警告', () => {

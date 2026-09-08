@@ -276,6 +276,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings: Set<string>
+  /** ★2026-09-08 useTemplateRef/模板 ref 承接：ref="x" → 注入 id="x"（selectComponent 需要）+ 收集 ref 名（script 侧 useTemplateRef → this.<var> = this.selectComponent('#x')） */
+  templateRefNames: Set<string>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData；★#505 M4 完整契约含 arg/propName） */
   vModelComponentHandlers: VModelComponentHandler[]
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
@@ -759,12 +761,20 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         continue
       }
-      // ★Batch A（vue-compat）：模板 ref 小程序无对等——显式警告（不再静默无效）
+      // ★2026-09-08 useTemplateRef/模板 ref 承接：ref="x" → 注入 id="x"（this.selectComponent('#x') 需要）+ 收集 ref 名
+      //   （script 侧 const b = useTemplateRef('x') → this.b = this.selectComponent('#x') 组件实例引用；页面对视区子组件也可）。
+      //   注意：selectComponent 仅组件模式可靠（页面 query 组件需渲染树就绪）——非组件模式对原生标签 id 无害（选择器留窗口）
       if (attr.name === 'ref') {
-        ctx.warnings.push(
-          `模板 ref="${attr.value ? attr.value.content : ''}" 在小程序无对等绑定（永不赋值）——请用 this.selectComponent('#id')（vue-compat Batch A）`,
-        )
-        ctx.trace?.add('template/template-ref', { line: node.loc.start.line, before: `ref="${attr.value ? attr.value.content : ''}"`, after: '（剥离，无对等）' })
+        const refName = attr.value ? attr.value.content : ''
+        if (refName && !ctx.disabled.has('template/template-ref')) {
+          ctx.templateRefNames.add(refName)
+          // 若元素无显式 id，注入 ref 名作 id（selectComponent 选择器；用户须保证 ref 唯一）
+          const hasId = node.props.some((p) => p.type === NodeTypes.ATTRIBUTE && (p as AttributeNode).name === 'id')
+          if (!hasId) attrs.push(`id="${escapeXml(refName)}"`)
+          ctx.trace?.add('template/template-ref', { line: node.loc.start.line, before: `ref="${refName}"`, after: `id="${refName}" + 收集（script useTemplateRef('${refName}') → this.selectComponent('#${refName}') 组件实例引用）` })
+        } else if (refName) {
+          ctx.warnings.push(`模板 ref="${refName}" 被规则 template/template-ref 禁用——不注入 id/不收集（useTemplateRef 将拿不到实例）`)
+        }
         continue
       }
       attrs.push(attr.value ? `${attr.name}="${escapeXml(attr.value.content)}"` : attr.name)
@@ -1172,6 +1182,8 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#500 :style 动态标识符绑定收集
     styleBindings: new Set<string>(),
+    // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
+    templateRefNames: new Set<string>(),
     vModelComponentHandlers: [],
     // ★#496 柔性语义编译：p-grid 收集
     semanticGrids: [],
@@ -1240,6 +1252,7 @@ export function transformTemplateToWxml(
     // ★pinia-plan 12 P1：模板 store 引用字段（script 生成绑定）
     storeBindings: [...ctx.storeBindings],
     templateRefs: [...ctx.templateRefs],
+    templateRefNames: [...ctx.templateRefNames],
     // ★#500 :style 动态标识符绑定（script 侧同名 computed 派生值自动序列化）
     styleBindings: [...ctx.styleBindings],
     // ★#500 自定义组件 v-model 回写处理器

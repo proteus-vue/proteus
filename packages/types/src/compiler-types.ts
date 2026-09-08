@@ -123,6 +123,8 @@ export interface TemplateTransformResult {
   transitions?: Array<{ ref: string; tName: string; index: number }>
   /** ★#494 模板表达式裸标识符（与 runtimeInits 求交 → 快照 setData） */
   templateRefs?: string[]
+  /** ★2026-09-08 useTemplateRef/模板 ref 承接：ref="x" 收集名（script 侧 useTemplateRef → this.<var>=selectComponent('#x')） */
+  templateRefNames?: string[]
   /** ★模板 store.<field> 引用字段 */
   storeBindings?: string[]
   /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位变量/求解段） */
@@ -156,6 +158,8 @@ export interface ScriptTransformOptions {
   templateRefs?: string[]
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生值自动 styleToString 化——MP 双渲染器 style 仅收字符串） */
   styleBindings?: string[]
+  /** ★2026-09-08 useTemplateRef/模板 ref 承接：ref="x" 收集名（script 侧 useTemplateRef → this.<var>=selectComponent('#x') + .value 剥除） */
+  templateRefNames?: string[]
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（setData 方法名 + 字段） */
   vModelComponentHandlers?: VModelComponentHandler[]
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
