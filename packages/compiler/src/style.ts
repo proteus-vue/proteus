@@ -156,9 +156,13 @@ export function transformStyleToWxss(
     if (pxCount > 0) trace?.add('style/px-to-rpx', { before: `${pxCount} 处 px`, after: `${pxCount} 处 rpx（rpxRatio=${opts.rpxRatio}）` })
   }
 
+  // ★平台化薄接缝：Skyline 特有降级/警告仅 Skyline 产物需要；webview 渲染引擎亦存在（微信 WebView 组件），
+  //   且此等特判只在 Skyline 下才真。renderer 缺省(undefined)沿用现行为（Skyline 特判全开，产物不变）。
+  const isWebview = opts.renderer === 'webview'
+
   // 3. Skyline 不支持的属性编译期警告
   const unsupported: string[] = []
-  if (!res.disabled.has('style/skyline-unsupported')) {
+  if (!isWebview && !res.disabled.has('style/skyline-unsupported')) {
     if (/float\s*:/.test(css)) unsupported.push('float')
     if (/position\s*:\s*fixed\b/.test(css)) unsupported.push('position: fixed')
   }
@@ -172,7 +176,7 @@ export function transformStyleToWxss(
   //   `:deep(*)` 编译后 `.x *` 均踩中——同源码双端：Web 真浏览器可用需保留，仅 MP 产物剔除 + 告警）；
   //   :deep 包装若残留（global 样式）一并剔除。
   let removedSelectors = 0
-  if (!res.disabled.has('style/skyline-selector')) {
+  if (!isWebview && !res.disabled.has('style/skyline-selector')) {
     css = css.replace(/([^{}]+)\{[^{}]*\}/g, (m: string, sel: string) => {
       const t = sel.trim()
       // 注：@keyframes 帧（from/to/百分比）与 @ 规则不动；用正则形态避免字面 'from'/'to' 误触 check-deps 的 BARE_RE 裸模块扫描

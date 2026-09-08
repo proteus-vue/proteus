@@ -22,6 +22,7 @@ export function scopedIdFrom(filename: string): string {
 export type {
   CompileOptions,
   CompileResult,
+  Renderer,
   StyleTransformOptions,
   TemplateTransformOptions,
   TemplateTransformResult,
@@ -66,6 +67,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     px2rpx: options.px2rpx ?? true,
     rpxRatio: options.rpxRatio ?? 2,
     rules: options.rules,
+    // ★平台化薄接缝：MP 渲染引擎下钻（缺省 undefined → 沿现行为；'webview' 关 Skyline-only 特判）
+    renderer: options.renderer,
   }
 
   // scoped CSS（★2026-08 用户决策：默认 scoped）：非 <style global> 的 style 块即作用域化（类名后缀拼接）

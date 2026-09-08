@@ -64,6 +64,8 @@ export function compileCacheKey(
     autoScrollContainer?: boolean
     /** ★G-22 柔性布局：p-fluid 编译参数（缓存键包含——改 layout 配置失效） */
     fluidLayout?: unknown
+    /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缓存键包含，防同源码跨渲染引擎命中错误缓存 */
+    renderer?: 'skyline' | 'webview'
   },
   projectRoot: string,
 ): string {

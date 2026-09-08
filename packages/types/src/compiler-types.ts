@@ -6,6 +6,13 @@
 /** 编译阶段（transforms 注册表 phase 字段） */
 export type TransformPhase = 'template' | 'script' | 'style' | 'validate'
 
+/** ★平台化薄接缝（2026-09-08，proteus-compiler-platform-plan）：MP 内部渲染引擎。
+ *  编译器当前仅服务 MP（web/app 走运行时 render-backend，不经本编译器，ps app 端无编译侧管线）；引入
+ *  renderer 使平台/Skyline 特判有显式挂点，避免后续「拆平台」需横穿散点硬编码。后续平台化全拆时以
+ *  此字段为维，向三级（或按 target: mp/web/app）扩展，当前保持最小接缝。
+ */
+export type Renderer = 'skyline' | 'webview'
+
 /** 单条决策事件：某份源码位置触发了某条规则 */
 export interface TransformTraceEvent {
   /** 规则 ID（与 transforms 注册表一致） */
@@ -39,6 +46,12 @@ export interface TransformRuleOverrides {
 }
 
 /** 样式转换选项 */
+/** 柔性布局配置（★G-22 fluid-layout）：p-fluid 编译期 clamp 生成参数（缺省设计稿 375 / 视口 320-1440） */
+export interface FluidLayoutConfig {
+  designWidth?: number
+  viewport?: { min?: number; max?: number }
+}
+
 export interface StyleTransformOptions {
   /** 是否 px → rpx */
   px2rpx: boolean
@@ -52,12 +65,8 @@ export interface StyleTransformOptions {
   rules?: TransformRuleOverrides
   /** scoped CSS 作用域属性（如 'data-v-abc123'） */
   scopeId?: string
-}
-
-/** 柔性布局配置（★G-22 fluid-layout）：p-fluid 编译期 clamp 生成参数（缺省设计稿 375 / 视口 320-1440） */
-export interface FluidLayoutConfig {
-  designWidth?: number
-  viewport?: { min?: number; max?: number }
+  /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缺省沿用现行为；使 platform 特判有显式挂点 */
+  renderer?: Renderer
 }
 
 /** template 转换选项（含反黑盒调试能力） */
@@ -180,6 +189,11 @@ export interface CompileOptions {
   moduleImports?: Array<{ source: string; requirePath: string }>
   /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
   autoScrollContainer?: boolean
+  /** ★平台化薄接缝（2026-09-08，proteus-compiler-platform-plan）：MP 内部渲染引擎。
+   *  缺省 = undefined → 当前行为（Skyline 特判全开，现有产物不变）；显式 'webview' 时关 Skyline-only 降级/警告。
+   *  编译器当前仅服务 MP（web/app 走运行时 render-backend），此字段为后续「全端平台化拆分」的最小挂点。
+   */
+  renderer?: Renderer
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */
