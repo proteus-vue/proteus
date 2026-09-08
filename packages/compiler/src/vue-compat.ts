@@ -164,7 +164,7 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: '<transition>', group: 'template', status: 'aligned', source: 'advance Batch 2/5（进入+离开动画）' },
   { name: '<transition-group>', group: 'template', status: 'partial', degrade: true, note: '列表过渡无对等——用组件级 transition', source: 'advance Batch 2' },
   { name: '<keep-alive>', group: 'template', status: 'unsupported', note: '无对等——用 v-if + 显式缓存，或分包', source: '评估' },
-  { name: '<teleport>', group: 'template', status: 'unsupported', note: 'MP 无对等——root-portal（Skyline）或固定容器', source: '评估' },
+  { name: '<teleport>', group: 'template', status: 'unsupported', note: '小程序无 root-portal 层叠语义——已解壳内联子元素（内容渲染但无层叠/传送）；Skyline root-portal 层叠为后续批次；弹层请用 p-popup/p-modal', source: 'teleport 诚实对齐（解壳内联）' },
   { name: '<suspense>', group: 'template', status: 'unsupported', note: '无对等', source: '评估' },
   { name: '<component :is>', group: 'template', status: 'unsupported', note: '动态组件无对等——用 v-if 条件渲染', source: 'vue-compat Batch A' },
   { name: '<slot>', group: 'template', status: 'aligned', source: 'vue-compat §1（默认/具名）' },

@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 98 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 99 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (52)
+## Template transforms (53)
 
 ### `tag/div-to-view`
 
@@ -374,6 +374,19 @@ after:  <view>{{ msg }}</view>
 ```
 
 > why: Mini Programs have no v-text directive, but v-text semantics = element content is the text value — mapped to content interpolation {{ expr }} (element kept + content overridden); same family as v-html→rich-text
+
+### `template/teleport-inline`
+
+**<teleport> inline-stripped (no root-portal layering, honest warning)**
+
+<teleport> has no root-portal layering semantics in Mini Programs — its children are inlined (content renders but without layering/teleport) with an honest warning; Skyline root-portal layering is a later batch; previously the invalid <teleport> tag was output verbatim and did not render (worse than inlining)
+
+```
+before: <teleport to="body"><view>hi</view></teleport>
+after:  <view>hi</view>（解壳内联 + 警告：无 layer-layer 语义）
+```
+
+> why: Mini Programs have no root-portal (the Vue <teleport> layering/teleport-to-body counterpart) — honest: content is inlined and visible + explicit warning (anti-black-box), use p-popup/p-modal for overlays
 
 ### `directive/v-once`
 

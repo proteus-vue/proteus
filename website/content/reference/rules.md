@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 98 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 99 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（52）
+## 模板转换（53）
 
 ### `tag/div-to-view`
 
@@ -374,6 +374,19 @@ after:  <view>{{ msg }}</view>
 ```
 
 > why: 小程序无 v-text 指令，但 v-text 语义 =元素内容为文本值——映射为内容插值 {{ expr }}（元素保留 + 内容覆盖）；v-html→rich-text 同族
+
+### `template/teleport-inline`
+
+**<teleport> 解壳内联（无 root-portal 层叠，诚实警告）**
+
+<teleport> 在小程序无 root-portal 层叠语义——解壳内联子元素（内容渲染但无层叠/传送）+ 诚实警告；Skyline root-portal 层叠为后续批次；此前原样输出无效 <teleport> 标签不渲染（比解壳更糟）
+
+```
+before: <teleport to="body"><view>hi</view></teleport>
+after:  <view>hi</view>（解壳内联 + 警告：无 layer-layer 语义）
+```
+
+> why: 小程序无 root-portal（Vue <teleport> 层叠/传送到 body 的对等）——诚实：内容内联可见 + 显式警告（反黑盒），弹层请用 p-popup/p-modal
 
 ### `directive/v-once`
 
