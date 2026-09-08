@@ -36,6 +36,10 @@ function topLevelAst(source: string): any[] | null {
 /** 方法参数 AST → 产物参数文本（类型注解天然剔除；保留 ? 可选 / 默认值 / 展开；解构参数剥类型注解切片） */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function astParamText(source: string, p: any): string {
+  // ★2026-09-08 伪参数 this：TS 允许 function f(this: T) 声明方法 this 类型但 JS 无此语法（签名出现 `this` → Unexpected token）
+  //   返回空串由调用方过滤（运行时经方法调用 this=实例，见 p-popover openMeasure(this) 传组件实例作 measureRect scope）
+  //   ★Babel 对 this 伪参数节点可为 TSThisParameter 或 Identifier(name='this')——两种都要剔除
+  if (p.type === 'TSThisParameter' || (p.type === 'Identifier' && p.name === 'this')) return ''
   if (p.type === 'Identifier') return p.name // TS 可选参数 optional=true（? 是类型语法——产物 JS 无可选标记）
   if (p.type === 'AssignmentPattern') return `${astParamText(source, p.left)} = ${source.slice(p.right.start, p.right.end)}`
   if (p.type === 'RestElement') return '...' + astParamText(source, p.argument)
@@ -1063,7 +1067,10 @@ function stripParamTypes(params: string): string {
     .split(',')
     .map((p) => p.trim().replace(/\?$/, '')) // ★#494 剥参数可选标记 ?（JS 无此语法——TS 可选参数）
     .filter(Boolean)
-    .join(', ')
+    // ★2026-09-08 伪参数 this：TS 允许 function f(this: T) 声明方法 this 类型，但 JS 无此语法（方法签名出现 `this` 即 Unexpected token）
+    //   ——整体剔除（this 是 TS 专属伪参，运行时经方法调用 this=实例，见 p-popover openMeasure(this) 传组件实例作 measureRect scope）
+    .filter((p) => p !== 'this')
+    .join(', ')    
     .replace(/,\s*,/g, ',')
     .trim()
 }
@@ -1115,7 +1122,7 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
   if (body) {
     for (const st of body) {
       if (st.type === 'FunctionDeclaration' && fnEnabled && st.id) {
-        const params = st.params.map((p: any) => astParamText(source, p)).join(', ')
+        const params = st.params.map((p: any) => astParamText(source, p)).filter((p: string) => p !== '').join(', ')
         addMethod('fn', st.id.name, params, Boolean(st.async), st.loc.start.line, extractBracedBody(source, st.body.start))
         continue
       }
@@ -1125,7 +1132,7 @@ function extractMethods(source: string, warnings: string[], trace?: TransformTra
           const init = d.init
           if (init.type !== 'ArrowFunctionExpression' && init.type !== 'FunctionExpression') continue
           const fnLike = init
-          const params = fnLike.params.map((p: any) => astParamText(source, p)).join(', ')
+          const params = fnLike.params.map((p: any) => astParamText(source, p)).filter((p: string) => p !== '').join(', ')
           if (fnLike.body.type === 'BlockStatement') {
             addMethod('arrow', d.id.name, params, Boolean(fnLike.async), st.loc.start.line, extractBracedBody(source, fnLike.body.start))
           }

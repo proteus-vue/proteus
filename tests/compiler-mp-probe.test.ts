@@ -248,9 +248,9 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect(js).toContain('TRIGGER_SELECTOR:')
     expect(js).toContain('data-role')
     expect(js).toContain('proteus-popover-trigger')
-    // ★2026-09-08：measureRect scope 用模板 ref 组件根（popoverRoot——getCurrentInstance MP 编译 not defined，已弃）
-    //   ★用户决策 1（b）：getCurrentInstance 归 unsupported 反黑盒；组件内「拿实例」走框架语义 API／模板 ref
-    // ★scope 用模板 ref 组件根（this.data.popoverRoot）——正向证明（getCurrentInstance 已弃用；注释可能残留不误伤）
-    expect(js).toMatch(/measureRect\(TRIGGER_SELECTOR,\s*this\.data\.popoverRoot/)
+    // ★2026-09-08：measureRect scope 用组件实例 this（MP 方法内 this=组件实例；adapter 经 .in(this) 下探组件内 trigger）
+    //   ★用户决策 1（b）：getCurrentInstance 归 unsupported 反黑盒；组件内「拿实例」走框架语义 API（此处为 MP 原生 this）
+    //   ★不再用模板 ref popoverRoot（MP 模板 ref 永不绑定→this.data.popoverRoot 恒 undefined→.in(undefined) 页面级查询失效）
+    expect(js).toMatch(/measureRect\(TRIGGER_SELECTOR,\s*this/)
   })
 })
