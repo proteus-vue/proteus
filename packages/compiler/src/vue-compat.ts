@@ -82,8 +82,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', source: '评估' },
   { name: 'defineModel', group: 'component', status: 'unsupported', note: 'v-model 组件契约未实现——产物 data.x=undefined；请用 props + defineEmits(update:x) 显式建模', source: 'P1 校准' },
   { name: 'useModel', group: 'component', status: 'unsupported', note: '同 defineModel（模型声明）——裸调用 → not defined；请用 props + emit 显式建模', source: 'P1 校准' },
-  // ★Step2 校准：withDefaults 实测编译抛语法错误（macro 未对齐，Unexpected token）——标 aligned 是假
-  { name: 'withDefaults', group: 'component', status: 'unsupported', note: '当前编译抛语法错误（macro 未对齐）——请用 <script setup> 内联默认值或待对齐', source: '评估（Step2 实测校准）' },
+  // ★2026-09-08 P1 对齐：withDefaults(defineProps<T>(), D) 已识别为宏（早退不落 data）+ extractProps 合并默认值 D（字面量）
+  { name: 'withDefaults', group: 'component', status: 'aligned', note: 'withDefaults(defineProps<T>(), D) 宏剥离 + 默认值 D 合并到 properties.value（函数默认值仍忽略/警告）', source: 'P1 对齐（宏识别+默认值合并）' },
   // ★2026-09-08 P1 对齐：nextTick 已翻译——nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))
   { name: 'nextTick', group: 'component', status: 'aligned', note: 'nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))（wx.nextTick 返回 undefined，await 需 Promise 包装）', source: 'P1 对齐（脚本体翻译）' },
   { name: 'queuePostFlushCb', group: 'component', status: 'unsupported', note: '内部调度，MP 无对等', source: '评估' },

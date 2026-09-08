@@ -57,7 +57,16 @@
 - 校准依据：全部经最小 fixture 实测分类（诚实降级 vs 假降级），且这些能力在 MP `.vue` 中均未被使用（无生产破坏）；转 error 反黑盒安全。
 - **验证**：全量 2571/2571 绿；build:mp / build:web 通过。
 
-> ⚠️ 待办：`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+## P1 第二批（2026-09-08）：`withDefaults` 宏转 aligned
+
+- **`withDefaults` → aligned**：编译器原把它当函数调用（`const p = withDefaults(...)` 落 data/语法错误），现识别为宏——
+  - `handleConstToData` 将 `withDefaults(` 纳入宏早退（不落 data、不裸调用）；
+  - `extractProps` 全树扫描收集 `withDefaults(defineProps<T>(), D)` 并读取第二参默认值对象 D，**合并默认值到 `properties.value`**（字面量有效；函数默认仍忽略+警告）。
+  - 实测：`withDefaults(defineProps<{a;b?}>(), {b:'hi'})` → `b: { type: String, value: "hi" }`。
+- 黄金断言：`tests/vue-compat-aligned.test.ts`（组件模式，宏剥离 + 默认值合并）。
+- **验证**：全量 2572/2572 绿；build:mp / build:web 通过。
+
+> ⚠️ 待办：`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）
 
