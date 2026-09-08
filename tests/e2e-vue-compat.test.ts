@@ -62,7 +62,7 @@ interface CapabilityCase {
 const CAPABILITY_CASES: CapabilityCase[] = [
   {
     name: 'ref+data',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (_d, data) => {
       // count(ref → data) 是最稳的 ref→data 证明（v-model 的 name 初值 data 读取路径不稳，不用）
       expect(typeof data.count, 'count(ref→data) 应存在且为数字').toBe('number')
@@ -70,7 +70,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'computed',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver, data) => {
       // computed 派生字段：count=0 → double=0（onLoad 初始化）
       expect(data.double, 'double(computed 派生字段) 应存在').toBe(0)
@@ -84,7 +84,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'watch',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver, data) => {
       expect(data.watchLog, 'watchLog(watch 回调产物) 应初始为字符串').toBe('')
       // 触发 count 写入 → watch 回调 → watchLog 更新
@@ -96,7 +96,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'v-model',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver, data) => {
       // v-model 双绑数据：name 字段存在（用 typeof 判存在——初值读取不稳，避免脆断言）
       expect(typeof data.name, 'name(v-model 数据字段) 应存在').not.toBe('undefined')
@@ -109,7 +109,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'v-if/v-for',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (_d, data) => {
       // v-if 链：agree 初始 false → tip 隐藏；此处只断言数据驱动存在
       expect(typeof data.agree, 'agree(v-if 条件) 应存在').toBe('boolean')
@@ -117,7 +117,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'transition',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver) => {
       // cardOn 切换 → 状态机 __tv/__tl 生成；切一次不崩即可
       await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; if (typeof p.toggleCard === 'function') p.toggleCard() })
@@ -126,7 +126,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'provide/inject',
-    route: '/pages/provide-inject-demo',
+    route: '/pages/vue-compat-demo',
     assert: async (_d, data) => {
       expect(data.user, 'provide("demo-user", user) → user(data) 应存在').toBe('proteus')
       expect(data.theme, 'provide("demo-theme", theme.value) → theme(data) 应存在').toBe('dark')
@@ -134,7 +134,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'v-html',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver, data) => {
       // v-html → <rich-text nodes=... />（页面级元素可查——非组件隔离）
       expect(String(data.html ?? ''), 'html(ref) 应存在（rich-text nodes 数据源）').toContain('rich-text')
@@ -144,7 +144,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: ':class/:style',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (driver, data) => {
       // :class 数组语法 + :style 对象语法 → 数据源 agree 存在 + 页面 <p>(已勾选) 元素渲染
       // ★元素读文本不可靠（.text() 对 view/p 返空）——改用「元素 attached 存在性」断言（稳健）
@@ -154,7 +154,7 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'v-show',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (_d, data) => {
       // v-show → hidden 属性切换（agree 驱动）；初始 agree=false → 隐藏数据就绪
       expect(data.agree, 'agree(v-show hidden 驱动源) 应存在').toBe(false)
@@ -162,10 +162,24 @@ const CAPABILITY_CASES: CapabilityCase[] = [
   },
   {
     name: 'v-if/v-else-if/v-else',
-    route: '/pages/forms',
+    route: '/pages/vue-compat-demo',
     assert: async (_d, data) => {
       // 条件链由 status 驱动（'a' → 分 A 分支）
       expect(data.status, 'status(v-if 条件链驱动源) 应存在').toBe('a')
+    },
+  },
+  {
+    name: 'defineModel',
+    route: '/pages/vue-compat-demo',
+    assert: async (driver, data) => {
+      // ★defineModel v-model 契约：model-demo(defineModel) 经 v-model 绑定 modelDemo——
+      //   初值 data.modelDemo 存在（受控双绑）；经页内 setData 驱动 modelDemo → 组件 `m` 读到（update-modelValue 往返）
+      expect(typeof data.modelDemo, 'modelDemo(v-model 绑定 defineModel) 应存在').not.toBe('undefined')
+      await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; p.setData({ modelDemo: 'hello' }) })
+      await driver.waitFor(400)
+      // 组件 defineModel 读写：m.value 读→this.data.modelValue；写→triggerEvent('update-modelValue')——经 v-model 回写 modelDemo
+      const after = JSON.parse((await driver.evaluate(readPageData)) as string) as Record<string, unknown>
+      expect(after.modelDemo, 'defineModel 双绑回写 modelDemo').toBe('hello')
     },
   },
 ]
