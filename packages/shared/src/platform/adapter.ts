@@ -43,11 +43,11 @@ export interface PlatformAdapter {
   ): void
   /**
    * 测量某 selector 的首个元素视口矩形（L2 抽象——组件禁直接 wx 或 document 平台直调，no-platform-api 约束）。
-   * MP: wx.createSelectorQuery().select(selector).boundingClientRect()（页面级查询，无 .in 作用域）
-   * Web: document.querySelector(selector).getBoundingClientRect()
+   * MP: wx.createSelectorQuery().in(scope?).select(selector).boundingClientRect()——★p-* 自定义组件内部 trigger 需 .in(组件) 下探（页面级查不到）
+   * Web: (scope ?? document).querySelector(selector).getBoundingClientRect()
    * 找不到元素 / 环境不支持 / 失败 → resolve null（调用方降级；约定：所有失败静默 resolve）
    */
-  measureRect?(selector: string): Promise<Rect | null>
+  measureRect?(selector: string, scope?: unknown): Promise<Rect | null>
 }
 
 /** 路由变化事件载荷（Web 端使用） */

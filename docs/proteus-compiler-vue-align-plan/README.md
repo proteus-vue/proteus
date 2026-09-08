@@ -1,0 +1,41 @@
+# 编译器 Vue 能力对齐（proteus-compiler-vue-align-plan）
+
+> **立项：2026-09-08**。框架级专项——**以「Vue 全能力」为基准线**（开发者写标准 SFC 去跨端），逐能力对齐（aligned / partial / unsupported）+ 机器门禁，对齐 G-29/G-31/G-32 conformance 基线模式。
+> 起因：p-popover 用 `getCurrentInstance()` 在 MP 编译产物 not defined——暴露「编译器对标准 Vue 能力的对齐没有权威基准线 + 逐能力状态门禁」的根因。
+
+## 一句话
+
+开发者写的是**标准 Vue SFC**（期望标准 Vue 能力全对齐），但编译器对 Vue 能力的处理是**需求驱动打地鼠**（`vue-compat-plan` §1 有一次性实测基线，但**没固化为「Vue 全集基准线 + 逐能力状态 + 编译断言门禁」**）。`getCurrentInstance` 只是「基准线内能力未兜底（静默输出未定义引用）」的首个暴露点。
+
+## 基准线 = Vue 全能力（SSOT，权威拉取）
+
+从 `@vue/runtime-core@3.5.42` + `@vue/reactivity` + `@vue/shared` + SFC 模板/指令/内置组件面拉取（`02-api-gap.md` A-D）：响应式 / 组件 API / 生命周期 / 模板指令+内置组件+SFC 特性——**全集**，非自选子集。
+
+**每个能力必须给出三类之一**：`aligned`（正确翻译）/ `partial`（受限 + 编译期警告）/ `unsupported`（明确报错）——**绝不静默**。
+
+## 目录
+
+- `01-problem.md`：症状 + 铁证（getCurrentInstance not defined）+ 为什么是"缺基准线/门禁"而非"补翻译"。
+- `02-api-gap.md`：**Vue 全能力基准线**（A-D 权威清单）+ 三类状态定义。**附权威拉取来源**。
+- `03-root-cause.md`：根因（逐 API 白名单翻译 + 缺 Vue 全集基准线 + 不留 vue import）。
+- `04-fix-direction.md`：修复 = ①固化 Vue 全集基准线 SSOT ②逐能力标状态+编译断言门禁 ③运行时/模板 API「三类之一」兜底反黑盒。
+- `05-priority.md`：优先级（先 SSOT + 状态表 + 门禁 → 逐能力对齐 / 反黑盒兜底）。
+
+## 进展（2026-09-08）
+
+- **P0 Step 1-3 已落地**：
+  - `packages/compiler/src/vue-compat.ts`（`VUE_COMPAT_MATRIX` + `vueCompatStatus`/`vueCompatLevel` + `VUE_COMPAT_UNKNOWN` 反黑盒兜底）→ 导出到 `index.ts`。
+  - `tests/vue-compat-matrix.test.ts`（完整性/规则/代表性状态/漂移护栏）。
+  - compiler 接线（`packages/compiler/src/script.ts`）：vue 命名导入逐 API 查矩阵 → aligned 静默 / partial·unsupported+degrade 警告 / **unsupported 无降级抛 CompilerError**。
+  - `tests/vue-compat-compile.test.ts`（aligned 正常 / getCurrentInstance·h·createApp·useSlots 抛错 / partial 警告 / provide 正常）。
+- **P0 Step 2（逐能力标状态）+ 黄金断言 已落地**：
+  - **修复关键运行时回归**：`onMounted`/`onUnmounted` 预先是「生命周期正确映射到 onReady/onUnload」+「顶层副作用裸调用泄漏进 onLoad」（产物 `onMounted(...)` 无 import → ReferenceError，与 getCurrentInstance 同类）。已在 `extractTopLevelCalls` 跳过正则补 `onMounted`/`onUnmounted`（根因修复，`dist/mp-weixin` 验证无裸调用）。
+  - **校准 16 项假 aligned**（仍为 `unsupported`·error / `partial`·warning）：运行时守卫 `isRef/isReactive/isReadonly/isProxy/isShallow`、内部渲染助手 `resolveComponent/renderSlot/mergeProps/toHandlers/withCtx/withScopeId`、`defineComponent/withDefaults`（产物裸标识符或抛错）、`version`（data=undefined）、`v-text/v-pre/v-once`（剥离不执行/语义丢失）。
+  - **新增 `tests/vue-compat-aligned.test.ts`**（11 用例）：核心 aligned（ref/computed/watch/onMounted/v-if/v-for/v-model/v-html/:class/:style/<transition>/defineProps）黄金断言——锁「标 aligned = 产物是正确翻译」。
+- **验证**：全量 **2564/2564 绿**；`build:web`/`build:mp` 通过；`dist/mp-weixin` 无裸生命周期调用。
+
+> ⚠️ 待办：`emit` 接线（`defineEmits` 产物在部分上下文为 bare `emit(...)`，疑受 `isComponent`/`emitEnabled` 上下文影响，需在真实组件上下文复核）、`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+
+## 关联
+- 既定基线：`docs/vue-compat-plan.md`（§1 ✅/⚠️/❌ 实测）、`docs/vue-compat-advance.md`（Batch 1-7）、`docs/roadmap.md`（#2 编译能力）、L0 规约（原则 #0 第五投影 / #10.8 / 反黑盒 / 降级铁律）。
+- **Vue 全集权威来源**：`node_modules/.pnpm/@vue+runtime-core@3.5.42/.../runtime-core.d.ts` + `@vue/reactivity` + `@vue/shared`（版本随 vue pkg 演进）。

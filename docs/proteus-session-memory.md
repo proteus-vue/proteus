@@ -1,8 +1,59 @@
 # Proteus Session Memory（会话记忆）
 
+## 2026-09-08 立 · ★★立项：编译器 Vue API 能力对齐（严重框架缺口——用户裁定先立项）
+
+### 起因
+p-popover 方案 A 用 `getCurrentInstance()`（拿组件实例作 `.in(组件)` scope）→ MP 编译产物 `getCurrentInstance is not defined`（ReferenceError，真机 console 实抓）。用户裁定：**这是编译器连基础 Vue API 都没对齐的严重问题，先立项解决**，不再在 popover 上打补丁。
+
+### 立项（docs/proteus-compiler-vue-align-plan/）
+- 根因：编译器**逐 API 白名单语义翻译**（ref→data/watch→observers/computed→proteusCalcX/onMounted→onReady/defineProps→properties/provide-inject→注册表/Pinia→$subscribe 桥……register 在 `transforms/script.ts` SCRIPT_RULES）；**没注册的 Vue API 无处理路径，且编译器不留 `import 'vue'`（响应式内联编译）** → 未翻译的 Vue 导出在产物裸奔/not defined。
+- 差距面（02-api-gap）：P0 会崩 = `getCurrentInstance`/`useSlots`/`useAttrs`/`nextTick`/`watchEffect*`；P1 = `computed` setter/`toRef*`/`isRef` 等/生命周期不全/`useModel`；P2 = `h`/`createApp`/`render`/`EffectScope`/`markRaw`/`defineOptions`/`onErrorCaptured` 等（动态渲染=框架非目标应显式报错）。
+- 修复方向（04）：A 逐项补翻译（对齐 SCRIPT_RULES）→ B 统一「未支持 Vue API 编译期显式报错」反黑盒兜底（**最低成本、兜底全部 gap、可测**）→ C 对标（uni-app 条件编译+polyfill / Taro 运行时 DOM 模拟=框架非目标 #515 排除，Proteus 走编译期为主+补翻译+反黑盒）。
+- 优先级（05）：先 B（编译期报错兜底）→ 再 P0（getCurrentInstance/nextTick/watchEffect）→ P1/P2 按需或标 unsupported。
+
+### 待用户拍板（已拍板 2026-09-08）
+- ✅ 决策 1（b）：`getCurrentInstance` 等运行时对内 API → 单独立项**框架语义 API**（useMpInstance/adapter.selectorQuery(组件)）承接，不翻译 Vue 运行时 API。SSOT 已把 `getCurrentInstance`/`useSlots`/`useAttrs`/`watchEffect`/`h`/`createApp` 等标 `unsupported` 反黑盒。
+- ✅ 决策 2：unsupported+降级策略→**warning**；无降级→**error**（已固化 `vueCompatLevel`）。
+- ✅ 决策 3：SSOT 放 **compiler 内**（`packages/compiler/src/vue-compat.ts`）。
+- 决策 4（Vue 版本演进重拉）：待纳入版本变更流程（默认）。
+
+### P0 Step 1 + Step 3 均已落地（2026-09-08）
+- **SSOT** `packages/compiler/src/vue-compat.ts`：VUE_COMPAT_MATRIX（Vue 全集 A-D，含 degrade 标志）+ vueCompatStatus/vueCompatLevel + VUE_COMPAT_UNKNOWN 反黑盒兜底；导出 index.ts。
+- **矩阵门禁** `tests/vue-compat-matrix.test.ts` 8 用例（完整性/规则/代表性状态/漂移护栏）。
+- **编译器接线** `packages/compiler/src/script.ts`（vue import 分支）：vue 命名导入逐 API 查矩阵 → aligned 静默 / partial·unsupported+degrade 警告 / **unsupported 无降级 抛 CompilerError**（getCurrentInstance/h/createApp/useSlots 编译期报错）。
+- **接线测试** `tests/vue-compat-compile.test.ts` 5 用例（aligned 正常 / getCurrentInstance 等 error / partial onErrorCaptured warning / provide 正常）。
+- 现有项目零破坏：现有 .vue 用 aligned（ref/computed/watch/onMounted/onUnmounted/provide）+ partial（onErrorCaptured/onBeforeUnmount 既有警告）；无 unsupported 无降级 API → build:mp/web 通过。
+- 全量 **2553/2553 绿**（2548 + 接线 5）。
+
+## 2026-09-08 · 弹层族/方案 A 相关——已查明但未最终修的（供交接）
+- **root-portal 逃逸层叠已验证生效**（popover 面板不再被"打开动作面板"遮——官方层叠解药，符合 07 文档 A 路线）。
+- **定位仍失败**（面板落视口顶）：measureRect 的 `.in(组件)` scope 拿不到组件实例——因 `getCurrentInstance` MP not defined → `.in(undefined)` → 页面级查不到组件内 trigger → null → 回退 .p-popover-bottom（portal 脱离 containing block → top:100% = 顶部）。**依赖本立项 P0 getCurrentInstance 翻译**。
+- **Skyline 页面滚动**：编译器给页面（非组件）自动包 `<scroll-view scroll-y class="proteus-page-scroll">`（15-page-scroll-container）；页面级滚动（wx.pageScrollTo/pageScrollTo/viewport.pageScrollTo）无效；**页面声明 `onPageScroll`+调 `wx.pageScrollTo`** 才生成 `scroll-top="{{__proteusPageScrollTop}}"`+`proteusPageScrollTo` 桥接（实测能滚 scroll-view）。semantic-primitives-demo 已加 onPageScroll+goPopoverSection（wx.pageScrollTo 桥接）。
+
 > 跨会话交接用的精简记忆。每次收尾把「成果 / 教训 / 待办 / 环境」追加到顶部一节。
 > 详细台账：`docs/proteus-test-framework-plan/15-mp-e2e-console-gate.md`（页面健康台账 + 实证教训）、
 > `docs/proteus-semantic-primitives-plan/07-popover-skyline-floating-special.md`（popover 专项）。
+
+## 2026-09-08 续 · ★★Skyline 页滚 + measureRect scope 修复（用户三连纠错）
+
+### 三个真问题（用户逐一纠正）
+1. **webview 页空白 ≠ DOM 隔离**：webview 下 glass-easel 组件降级不渲染（页面空白→automator 拿不到元素）。我曾误判"页面 DOM 全隔离"。切 skyline 后页面正常渲染、页面级 `view` **可查**；但 `p-popover` **自定义组件内部**（`[data-role]`）页面级查不到（glass-easel 组件边界），只有原生 `view` 可查。
+2. **Skyline 页滚必须在 scroll-view 内**：编译器给页面（非组件、非 scroll-view 根）自动包 `<scroll-view scroll-y class="proteus-page-scroll">`（15-page-scroll-container）。**页面级滚动（wx.pageScrollTo/pageScrollTo/automation_viewport.pageScrollTo）都无效**——skyline 页面本身不滚。
+3. **页面滚动桥接条件**：编译器只在页面**声明 `onPageScroll`** + **调用 `wx.pageScrollTo`** 时才给 scroll-view 生成 `scroll-top="{{__proteusPageScrollTop}}"` + `bindscroll`/`proteusPageScrollTo` 桥接（template.ts `hooks.hasOnPageScroll`/`hasPageScrollTo`；script.ts `wx.pageScrollTo`→`this.proteusPageScrollTo`）。`semantic-primitives-demo` 原本都没有→滚不动；给页面加 `onPageScroll`+`wx.pageScrollTo` 后 **`wx.pageScrollTo`（经页面方法）能滚 scroll-view**（实测 `__proteusPageScrollTop` 设 2600/1700 成功）。
+
+### 真机实测
+- 到达 popover 区（scroll-view 滚到 1350-1700），`popoverOpen:true` → 面板"气泡内容"渲染（未被完全遮挡，比最初"被完全遮盖"改善）。
+- `.p-popover-panel` 仍页面级不可读（组件隔离）→ 无法从页面 query 读面板 panelStyle/是否 fixed。
+- popover MP E2E（scope 修复 + demo 页 onPageScroll 改动）**通过**；全量 **2540/2540 绿**。
+
+### measureRect scope 修复
+- `PlatformAdapter.measureRect(selector, scope?)`：mp `.in(scope)` / web `scope.querySelector`——下探到 p-popover 组件内部 trigger（页面级查不到）。
+- 组件 `openMeasure` 传 `getCurrentInstance().proxy`（`__scopeInst` 编译器保留为 `this.__scopeInst = getCurrentInstance()`；scopeRef ref 初始化值被丢弃→改直接传 `__scopeInst?.proxy`）。
+- P8e4 探针锁 `measureRect(TRIGGER_SELECTOR, this.__scopeInst.proxy)` 调用面。
+
+### 遗留/待用户
+- demo 页加了 `onPageScroll`+`goPopoverSection`（pageScrollTop）——`onPageScroll` 是页面滚动钩子（合理），`goPopoverSection` 是测试脚手（是否保留待用户）。
+- 面板是否真 `position: fixed` 逃离层叠：受组件隔离（读不到 `.p-popover-panel`）→ 需 GUI/或组件内 `console.error`（get_simulator_console 不可靠）；视觉已见渲染未完全遮挡。
 
 ## 2026-09-08 · ★★MP E2E 后端重构：miniprogram-automator → wechatide skill-CLI（唯一标准）
 

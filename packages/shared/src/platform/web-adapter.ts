@@ -92,11 +92,16 @@ export function createWebAdapter(): PlatformAdapter {
     navigateBack: ({ delta }) => {
       history.go(-delta)
     },
-    measureRect: (selector) =>
+    measureRect: (selector, scope) =>
       new Promise((resolve) => {
         // SSR/测试/node 无 document → 决定 resolve null（调用方降级，不抛）
         if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return resolve(null)
-        const el = document.querySelector(selector)
+        // ★scope 提供 → 在 scope 内查（组件传入根 DOM/元素，避免跨实例）；否则 document
+        const root =
+          scope && typeof (scope as { querySelector?: unknown }).querySelector === 'function'
+            ? (scope as { querySelector(s: string): Element | null })
+            : document
+        const el = root.querySelector(selector)
         if (!el || typeof el.getBoundingClientRect !== 'function') return resolve(null)
         const r = el.getBoundingClientRect()
         resolve({

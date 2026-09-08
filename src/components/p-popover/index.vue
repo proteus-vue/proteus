@@ -3,33 +3,35 @@
      ★B2/B4 薄壳：v-model 显隐受控 + 自绘定位（智能定位批次接入）
      双端同源码：div → view；MP 安全（遮罩点关闭，避 document 监听） -->
 <template>
-  <div class="p-popover">
+  <div class="p-popover" ref="popoverRoot">
     <!-- ★方案 A spike：data-role 静态属性（非 scoped hash）供 adapter.measureRect 页面级 selectorQuery 测量——
          不加 id（MP 编译器丢弃模块级 let/实例 uid 计数的 const/ref → ReferenceError），data-role 常驻可查 -->
     <div class="p-popover-trigger" data-role="proteus-popover-trigger" @click="onTrigger">
       <slot name="trigger" />
     </div>
-    <!-- ★2026-09-07 Skyline 悬浮层：常驻 overlay + visibility 切换（对齐 p-drawer 常驻模式；wx:if 子树在
-         glass-easel 不可靠）。portal 版曾实证可渲染但「脱离导致锚定失效（面板左上角）」→ 去 portal，
-         面板 absolute 锚定留在原组件树（containing block = .p-popover 根，定位不破坏） -->
-    <view class="p-popover-overlay" :class="{ 'p-popover-overlay--on': modelValue }">
-      <view class="p-popover-layer" @click="close" />
-      <!-- ★方案 A spike：面板定位由 panelStyle 承载 fixed+像素坐标（浮层叠顶层）；measureRect 失败 → 回退
-           静态 .p-popover-{placement} 绝对锚定（恰在下/上/左/右 + gap）。静态分支类名**保持不变**（动态
-           拼接类被编译器插半截 scope 后缀，勿改） -->
-      <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom" :style="panelStyle">
-        <slot />
+    <!-- ★★Skyline 层叠根治：<root-portal>（官方同层节点，专为弹层/悬浮层逃逸页面层叠——类 fixed 于最顶层）
+         包住 overlay + 面板，脱离 .p-popover 的 containing block（此前 absolute 面板被后续内容遮挡的真因）。
+         ★V4 实证：组件 json 已含 componentFramework: glass-easel（root-portal 渲染前提）；常驻内容 ✅ 渲染。
+         ★不用 wx:if 包 portal 内容（glass-easel 下 portal+wx:if 挂载异常不渲染）→ 常驻 + visibility 类切换。
+         ★定位：portal 脱离后 containing block 丢失（面板会落左/上角）——板面用 :style 定位（fixed+坐标/或
+           经 adaptive 语义），不再依赖 .p-popover 相对锚定 -->
+    <root-portal>
+      <view class="p-popover-overlay" :class="{ 'p-popover-overlay--on': modelValue }">
+        <view class="p-popover-layer" @click="close" />
+        <view v-if="placement === 'bottom'" class="p-popover-panel p-popover-bottom" :style="panelStyle">
+          <slot />
+        </view>
+        <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top" :style="panelStyle">
+          <slot />
+        </view>
+        <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left" :style="panelStyle">
+          <slot />
+        </view>
+        <view v-else class="p-popover-panel p-popover-right" :style="panelStyle">
+          <slot />
+        </view>
       </view>
-      <view v-else-if="placement === 'top'" class="p-popover-panel p-popover-top" :style="panelStyle">
-        <slot />
-      </view>
-      <view v-else-if="placement === 'left'" class="p-popover-panel p-popover-left" :style="panelStyle">
-        <slot />
-      </view>
-      <view v-else class="p-popover-panel p-popover-right" :style="panelStyle">
-        <slot />
-      </view>
-    </view>
+    </root-portal>
   </div>
 </template>
 
@@ -65,6 +67,10 @@ const emit = defineEmits(['update:modelValue'])
 const TRIGGER_SELECTOR = '[data-role="proteus-popover-trigger"]'
 const panelStyle = ref('')
 
+// ★scope（组件根节点）：measureRect 需 .in(组件) 下探到组件内 trigger（页面级 query 查不到——glass-easel 隔离）
+//   ★getCurrentInstance 在 MP 编译 not defined（Vue 该 API 不被 MP 组件保留，import 被剥离）→ 改用模板 ref 拿根节点作 scope
+const popoverRoot = ref<unknown>(null)
+
 async function openMeasure(): Promise<void> {
   // measureRect 可选（旧 adapter/mock 无此方法）→ 回退空增量
   if (!adapter.measureRect || typeof adapter.measureRect !== 'function') {
@@ -72,7 +78,9 @@ async function openMeasure(): Promise<void> {
     return
   }
   try {
-    const rect = await adapter.measureRect(TRIGGER_SELECTOR)
+    // ★scope 直接传组件实例（__scopeInst 经 getCurrentInstance().proxy；编译器保留为 this.__scopeInst）
+    //   用 .in(组件) 下探组件内 trigger（页面级 query 查不到——glass-easel 隔离）
+    const rect = await adapter.measureRect(TRIGGER_SELECTOR, popoverRoot.value || undefined)
     if (!rect) {
       panelStyle.value = ''
       return
