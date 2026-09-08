@@ -45,6 +45,25 @@
   - **新增 `tests/vue-compat-aligned.test.ts`**（11 用例）：核心 aligned（ref/computed/watch/onMounted/v-if/v-for/v-model/v-html/:class/:style/<transition>/defineProps）黄金断言——锁「标 aligned = 产物是正确翻译」。
 - **验证**：全量 **2564/2564 绿**；`build:web`/`build:mp` 通过；`dist/mp-weixin` 无裸生命周期调用。
 
+## 专项状态总览（2026-09-08 收口）
+
+**结论：Vue 全能力基准线对齐专项已到「完整、可验证、地基正本」交付点**——宏语义不再手造（吃 `@vue/compiler-sfc` 权威源 + 对齐 glass-easel），逐能力状态机器门禁 + 真机验收一键跑。
+
+| 模块 | 状态 |
+|------|------|
+| P0：Vue 全集基准线 SSOT + 逐能力状态 + 编译门禁 + 黄金断言 | ✅ |
+| P1：nextTick/withDefaults/defineComponent/version 对齐 + partial 诚实性校准 | ✅ |
+| defineModel/useModel 经 compileScript 权威源对齐 + 真机验证 | ✅ |
+| 宏一致性门测（prop 名⊆ + type 一致 + emits）——手写实现罩在官方源下 | ✅ |
+| 真机验收栏目（规范页 12 能力 + `test e2e:mp` 一键跑） | ✅ |
+| onMounted/onUnmounted 裸调用回归修复 + popover 测量 scope（this） | ✅ |
+
+**当前矩阵状态**：`aligned`（ref/computed/watch/defineProps/defineEmits/withDefaults/nextTick/version/v-model/v-if/v-for/…）/ `partial`（defineModel/useModel/defineComponent/defineSlots/readonly/生命周期/模板 v-* 指令——诚实降级）/ `unsupported`（运行时渲染 h·createApp、对内 API getCurrentInstance·useSlots、响应式守卫 isRef/toRef 等——反黑盒 fail-closed）。
+
+**剩余待办（非阻塞）**：① `defineProps`/`defineEmits` 手写实现迁到权威源（门测已保证一致，迁移为可选消代码；收益小风险高，建议非必要不动）② defineModel 模型修饰符/嵌套（MP 对等有限）③ computed 响应式二次求值（框架语义既定）。
+
+> ⚠ 本专项收口，不阻塞后续；接口演进见 `docs/proteus-compiler-platform-plan/README.md`（全端平台化拆分）。
+
 ## 决策 1（b）落地（组件内拿实例 → .in(组件) 测量）
 
 - **场景**：p-popover `adapter.measureRect(TRIGGER_SELECTOR, scope)` 需 `.in(组件)` 下探到 p-* 自定义组件内部的 trigger（页面级 `wx.createSelectorQuery()` 查不到——glass-easel 隔离）。
