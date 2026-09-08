@@ -49,6 +49,9 @@ export { buildTemplateIR, buildCompileIR } from './ir/build'
 export { listTransformRules, getTransformRule, formatTransformRule, formatTransformCatalog, executeRule } from './transforms/registry'
 export type { TransformRule, TransformPhase, RuleStatus, RuleContext, RuleApplier } from './transforms/types'
 export type { TransformRuleOverrides } from './types'
+// ★★2026-09-08 立项：Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）
+export { VUE_COMPAT_MATRIX, VUE_COMPAT_UNKNOWN, vueCompatStatus, vueCompatLevel } from './vue-compat'
+export type { VueCompatEntry, VueCompatStatus, VueCompatGroup } from './vue-compat'
 
 // 阶段二：决策 trace（explainTransform 输出源码触发的全部转换规则）
 export { explainTransform, formatTransformTrace } from './explain'

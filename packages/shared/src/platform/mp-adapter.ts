@@ -48,11 +48,15 @@ export function createMpAdapter(): PlatformAdapter {
     navigateBack: ({ delta }) => {
       wx.navigateBack({ delta })
     },
-    measureRect: (selector) =>
+    measureRect: (selector, scope) =>
       // ★平台层许可直接碰 wx.*（no-platform-api 审计 allow: platforms/**/packages/api/**）；组件经此 L2 抽象消费
       new Promise((resolve) => {
         if (typeof wx === 'undefined' || typeof wx.createSelectorQuery !== 'function') return resolve(null)
-        wx.createSelectorQuery()
+        // ★scope 传入 → .in(scope) 下探到 p-* 自定义组件内部（页面级 query 查不到组件内 trigger——glass-easel 隔离）
+        const query = wx.createSelectorQuery()
+        // ★scope 类型收窄（unknown → 组件/页面实例）；无 scope → 页面级查询
+        const inQuery = scope ? query.in(scope as never) : query
+        inQuery
           .select(selector)
           .boundingClientRect((rect: Rect | null | undefined) => resolve(normalizeRect(rect)))
           .exec()

@@ -201,9 +201,10 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
       expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
     }
     expect(wxml).not.toContain("+ placement")
-    // ★skyline 终案契约：无 wx:if 开合、无 root-portal（脱离破锚定）；overlay 常驻 + visibility 类切换
+    // ★★2026-09-08（正轨）：root-portal（官方同层节点）逃逸 Skyline 层叠——不再「弃 root-portal」；放置于 overlay 外层
+    //   ★V4 实证：组件 json 含 componentFramework: glass-easel 则 root-portal 常驻内容渲染；wx:if 子树不可靠 → overlay 常驻+visibility
+    expect(wxml).toMatch(/<root-portal class="\{\{rootClass\}\}">/)
     expect(wxml).not.toContain('wx:if="{{modelValue}}"')
-    expect(wxml).not.toContain('root-portal')
     expect(wxml).toMatch(/class="p-popover-overlay-data-v-[\w]+ \{\{/)
     expect(wxss).toMatch(/\.p-popover-overlay-data-v-[\w]+\s*\{[\s\S]*?visibility: hidden/)
     expect(wxss).toMatch(/\.p-popover-overlay--on-data-v-[\w]+\s*\{[\s\S]*?visibility: visible/)
@@ -247,7 +248,9 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect(js).toContain('TRIGGER_SELECTOR:')
     expect(js).toContain('data-role')
     expect(js).toContain('proteus-popover-trigger')
-    expect(js).toContain('measureRect(TRIGGER_SELECTOR)')
-    expect(js).not.toContain('popoverSeq') // 真机 ReferenceError 根因已消除
+    // ★2026-09-08：measureRect scope 用模板 ref 组件根（popoverRoot——getCurrentInstance MP 编译 not defined，已弃）
+    //   ★用户决策 1（b）：getCurrentInstance 归 unsupported 反黑盒；组件内「拿实例」走框架语义 API／模板 ref
+    // ★scope 用模板 ref 组件根（this.data.popoverRoot）——正向证明（getCurrentInstance 已弃用；注释可能残留不误伤）
+    expect(js).toMatch(/measureRect\(TRIGGER_SELECTOR,\s*this\.data\.popoverRoot/)
   })
 })

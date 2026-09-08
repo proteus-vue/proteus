@@ -310,6 +310,16 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+// ★测试验证用：页面声明 onPageScroll 触发框架滚动桥接（15-page-scroll-container）——Skyline 页面本身不滚动，
+//   声明后编译器给自动包装 scroll-view 生成 scroll-top 绑定 + proteusPageScrollTo 桥接，wx.pageScrollTo 才能滚页
+const pageScrollTop = ref(0)
+function onPageScroll(e: { scrollTop: number }): void {
+  pageScrollTop.value = e.scrollTop
+}
+// ★调 wx.pageScrollTo 触发框架 hasPageScrollTo → 生成 scroll-top 绑定 + proteusPageScrollTo 桥接（wx.pageScrollTo 才能滚页）
+function goPopoverSection(): void {
+  wx.pageScrollTo({ scrollTop: 2600, duration: 0 })
+}
 import {
   PHeading,
   PText,

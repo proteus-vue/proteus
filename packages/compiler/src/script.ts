@@ -9,6 +9,10 @@ import { resolveOverrides } from './overrides'
 import { parse as babelParse } from '@babel/parser'
 // ★#504 语言层转译交还 babel（方法论：不自研成熟工具链，只自建语义层）
 import { transpileMpSafe } from './es5'
+// ★★2026-09-08 立项（proteus-compiler-vue-align-plan）：Vue 全能力基准线——vue 命名导入逐个查对齐状态，
+//   aligned 静默 / partial·unsupported+degrade 警告 / unsupported 无降级 抛 CompilerError（反黑盒 fail-closed）
+import { CompilerError } from './validate'
+import { vueCompatStatus, vueCompatLevel } from './vue-compat'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let astCacheSrc = ''
@@ -1309,7 +1313,9 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     //   resize 触发时 ReferenceError + if 语义错乱）——排除语句关键字（首个标识符）
     if (/^(if|for|while|switch|do|return|throw|try|catch|else|new|delete|typeof|void|in|instanceof|case|default|break|continue)\b/.test(t)) continue
     // 专门通道已有归属的形态跳过（provide/inject/watch/computed/生命周期宏）
-    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
+    // ★onMounted/onUnmounted 已由 extractLifecycles 映射到 onReady/onUnload（组件→detached），若不再跳过会被
+    //   当作顶层副作用裸调用注入 onLoad——产物里 onMounted(...) 无 import → 运行时 ReferenceError（getCurrentInstance 同类）
+    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))
@@ -1856,7 +1862,27 @@ export function transformScriptToPage(
   const requireLines: string[] = []
   const importWarnings: string[] = []
   for (const imp of extractImports(source)) {
-    if (imp.source === 'vue') continue // Vue API 导入：编译器静态识别，正常用法
+    if (imp.source === 'vue') {
+      // ★★2026-09-08 Vue 全能力基准线：vue 命名导入逐个查对齐状态（开发者写标准 SFC——每个能力必须三类之一结果）
+      if (imp.kind === 'named') {
+        for (const apiName of imp.names) {
+          const entry = vueCompatStatus(apiName)
+          const level = vueCompatLevel(entry)
+          if (level === 'error') {
+            // unsupported 无降级（如 getCurrentInstance/h/createApp）——编译期 fail-closed 报错（反黑盒红线）
+            throw new CompilerError(
+              extra.file ?? 'unknown.vue',
+              `Vue API 「${apiName}」未在「Vue 全能力基准线」对齐且无降级策略——MP 端不支持（会输出未定义引用），建议：${entry.note ?? '改用框架语义 API / 模板 DSL'}`,
+            )
+          } else if (level === 'warning') {
+            // partial / unsupported+degrade——编译期警告 + 替代建议（反黑盒，不静默）
+            warnings.push(`Vue API 「${apiName}」${entry.status === 'partial' ? '语义受限' : '不支持（有降级）'}——${entry.note ?? ''}`)
+          }
+          // aligned → 静默（编译器静态翻译）
+        }
+      }
+      continue // vue import 本身不产 require（响应式内联编译）
+    }
     if (imp.typeOnly) continue // import type：纯类型，运行时剥离
     if (imp.source.endsWith('.vue')) continue // 组件导入：MP 端走 usingComponents（编译器忽略）
     const reqPath = moduleImports.get(imp.source)
