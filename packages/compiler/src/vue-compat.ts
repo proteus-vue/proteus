@@ -55,7 +55,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'unref', group: 'reactivity', status: 'aligned', note: 'unref(x) 编译期内联：x 为 ref → this.data.x；非 ref → x 本身（unref 恒等）；MP 无运行时 unref，编译期取值', source: '增强（编译期内联改写）' },
   // ★2026-09-08 Step2 校准：isRef/isReactive/isReadonly/isProxy/isShallow 实测被当「函数调用初始化」译为 this.x=isX(…)，
   //   产物为裸标识符且无 vue import → 运行时 not defined（getCurrentInstance 同类）——标记 aligned 是假，降 unsupported（无降级→error）
-  { name: 'isRef', group: 'reactivity', status: 'unsupported', note: '运行时类型守卫无对等——isRef 编译期可内联 true/false 但未实现；当前译为 this.x=isRef(…) 裸标识符 → not defined；请改用框架语义 API 或直接判别', source: '评估（Step2 实测校准）' },
+  // ★2026-09-08 增强：isRef(x) 编译期内联——x 为 ref/shallowRef/computed → true；否则 false（MP 保留 ref 概念，可靠判定）；isReactive/isReadonly/isProxy/isShallow 因 MP 编译为普通 data（无代理/只读语义）保持 unsupported（诚实）
+  { name: 'isRef', group: 'reactivity', status: 'aligned', note: 'isRef(x) 编译期内联：x 来源 ref/shallowRef/computed → true；否则 false（MP 保留 ref 概念）+ 依赖 constSourceTypes 追踪', source: '增强（守卫内联）' },
   { name: 'isReactive', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined；请改用框架语义 API', source: '评估（Step2 实测校准）' },
   { name: 'isReadonly', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined', source: '评估（Step2 实测校准）' },
   { name: 'isProxy', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined', source: '评估（Step2 实测校准）' },

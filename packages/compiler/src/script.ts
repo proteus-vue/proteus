@@ -913,7 +913,7 @@ function handleConstToData(
   name: string,
   init: string,
   line: number,
-  out: { data: Record<string, unknown>; runtimeInits: Array<{ name: string; call: string }>; rawComputed: Array<{ name: string; init: string; line: number }> },
+  out: { data: Record<string, unknown>; runtimeInits: Array<{ name: string; call: string }>; rawComputed: Array<{ name: string; init: string; line: number }>; constSourceTypes: Map<string, string> },
   warnings: string[],
   trace?: TransformTrace,
 ): void {
@@ -937,12 +937,26 @@ function handleConstToData(
   })
   const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
   const raw = inner ? inner[1] : init
+  // ★守卫内联：记录常量来源类型（ref/reactive/shallowRef/readonly/字面量），供 isRef 等编译期内联 true/false
+  const srcType = init.match(/^(ref|reactive|shallowRef|shallowReactive|readonly|shallowReadonly)\s*[<(]/)?.[1]
+  if (srcType) out.constSourceTypes.set(name, { ref: 'ref', reactive: 'reactive', shallowRef: 'ref', shallowReactive: 'reactive', readonly: 'readonly', shallowReadonly: 'readonly' }[srcType] ?? srcType)
+  else out.constSourceTypes.set(name, 'plain')
   // ★增强：unref(x)/toValue(x) 编译期内联——x 为已知 ref（初值已入 data）→ data.<name> = data.<x>（MP 无运行时 unref，编译期取值）
   const uv = raw.match(/^(?:unref|toValue)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)$/)
   if (uv && Object.prototype.hasOwnProperty.call(out.data, uv[1])) {
     out.data[name] = out.data[uv[1]]
     trace?.add('script/const-to-data', { line, before: `const ${name} = ${raw}`, after: `data.${name} = data.${uv[1]}（unref/toValue 内联）` })
     return
+  }
+  // ★守卫内联：const ok = isRef(x) → x 来源 ref/computed ? true : false（MP 保留 ref 概念）
+  const isRefM = raw.match(/^isRef\s*\(\s*([A-Za-z_$][\w$]*)\s*\)$/)
+  if (isRefM) {
+    const t = out.constSourceTypes.get(isRefM[1])
+    if (t) {
+      out.data[name] = t === 'ref' || t === 'computed'
+      trace?.add('script/const-to-data', { line, before: `const ${name} = ${raw}`, after: `data.${name} = ${out.data[name]}（isRef 内联，${isRefM[1]} 来源 ${t}）` })
+      return
+    }
   }
   // ★2026-09-08 P1：Vue 公共常量导出（version）——const v = version 内联字面量（此前 evalLiteral 返 undefined → data.v=undefined）
   //   version 为裸标识符且属 VUE_PUBLIC_CONSTS（vue import 去掉后裸 version 即 Vue 导出；与 readonly/shallowRef 同识别口径）
@@ -991,12 +1005,13 @@ function extractData(
   computed: Record<string, ComputedInfo>
   runtimeInits: Array<{ name: string; call: string }>
   letHandles: string[]
+  constSourceTypes: Map<string, string>
 } {
   const data: Record<string, unknown> = {}
   const runtimeInits: Array<{ name: string; call: string }> = []
   const letHandles: string[] = []
   const rawComputed: Array<{ name: string; init: string; line: number }> = []
-  const out = { data, runtimeInits, rawComputed }
+  const out = { data, runtimeInits, rawComputed, constSourceTypes: new Map<string, string>() }
   /** let 句柄判定：顶层 null/undefined 初始化（声明后方法体内赋值使用）——其它形态维持旧行为 */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const addLetHandle = (name: string, init: string | null, line: number): void => {
@@ -1064,7 +1079,7 @@ function extractData(
       warnings.push(`computed ${c.name} 仅支持箭头简写表达式体（computed(() => expr)）或块体（末语句 return 表达式），已忽略`)
     }
   }
-  return { data, computed, runtimeInits, letHandles }
+  return { data, computed, runtimeInits, letHandles, constSourceTypes: out.constSourceTypes }
 }
 
 /** 顶层方法（源码 + 起始行号，供 sourcemap / 行号注释） */
@@ -1992,9 +2007,11 @@ export function transformScriptToPage(
   }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
-  const { data, computed, runtimeInits, letHandles } = disabled.has('script/const-to-data')
-    ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, letHandles: [] as string[] }
+  const { data, computed, runtimeInits, letHandles, constSourceTypes } = disabled.has('script/const-to-data')
+    ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, letHandles: [] as string[], constSourceTypes: new Map<string, string>() }
     : extractData(source, warnings, trace)
+  // ★守卫内联：computed 也是 ref-like（isRef 应 true）——把 computed 名标为 'computed'（来源类型补进 map）
+  for (const cname of Object.keys(computed)) constSourceTypes.set(cname, 'computed')
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
   // ★#500 :style 绑定的 computed 派生对象自动序列化（MP 双渲染器 style 属性仅收字符串——对象绑定静默失效，WebView 亦然）

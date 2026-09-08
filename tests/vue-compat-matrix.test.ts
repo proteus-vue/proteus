@@ -57,7 +57,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
 
   it('代表性能力状态（对齐框架既定基线）', () => {
     // aligned：书写面核心（vue-compat §1 主路径）
-    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue']) {
+    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef']) {
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项
@@ -65,7 +65,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
       expect(vueCompatStatus(p).status, `${p} 应为 partial`).toBe('partial')
     }
     // unsupported：运行时对内 API / 动态渲染 / 无对等平台能力——含 Step2 校准（运行时守卫/内部渲染助手/宏未对齐降 unsupported 无降级→error）
-    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'h', 'createApp', '<component :is>', '自定义指令', 'isRef', 'isReactive', 'isProxy', 'isReadonly', 'isShallow', 'resolveComponent', 'renderSlot', 'mergeProps', 'toHandlers', 'withCtx', 'withScopeId', 'toRef', 'toRefs', 'shallowReactive', 'shallowReadonly', 'defineOptions']) {
+    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'h', 'createApp', '<component :is>', '自定义指令', 'isReactive', 'isProxy', 'isReadonly', 'isShallow', 'resolveComponent', 'renderSlot', 'mergeProps', 'toHandlers', 'withCtx', 'withScopeId', 'toRef', 'toRefs', 'shallowReactive', 'shallowReadonly', 'defineOptions']) {
       expect(vueCompatStatus(u).status, `${u} 应为 unsupported`).toBe('unsupported')
       // 反黑盒：must 有 note；且按用户规则（无降级 → error）
       expect(vueCompatLevel(vueCompatStatus(u))).toBe('error')
