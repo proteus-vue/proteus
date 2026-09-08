@@ -21,3 +21,4 @@ coverage/
 
 # local npm auth (never commit)
 .npmrc
+scripts/commit-msg.txt
