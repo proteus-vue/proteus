@@ -39,4 +39,10 @@ describe('手写宏实现 × compileScript 权威源一致性（地基对齐门�
     const authoritative = extractSfcMacros(src, 'p-button.vue')
     expect(authoritative.emits).toContain('click')
   })
+
+  it('p-input：权威 emits 含 input/confirm/focus/blur（手写 emit 实现的地基校准源）', () => {
+    const src = readFileSync('src/components/p-input/index.vue', 'utf8')
+    const authoritative = extractSfcMacros(src, 'p-input.vue')
+    for (const e of ['input', 'confirm', 'focus', 'blur']) expect(authoritative.emits, `emit ${e}`).toContain(e)
+  })
 })
