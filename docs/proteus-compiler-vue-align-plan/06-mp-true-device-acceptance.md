@@ -46,9 +46,9 @@ PROTEUS_IDE_CLI="/path/to/wechatwebdevtools.app/Contents/MacOS/wechatide" \
 | 能力（矩阵 name） | 演示页 route | 断言（读页 data / evaluate 触发） | 状态 |
 |-------------------|--------------|-----------------------------------|------|
 | `ref`(data) | `/pages/forms` | `count`/`name` 存在（ref→data） | ✅ harness |
-| `computed` | `/pages/forms` | `double` 派生字段存在（count 写入合并重算） | ✅ harness |
+| `computed` | `/pages/forms` | `double` 派生字段存在 + **bump() 后重算（count=1→double=2，响应式非一次性）** | ✅ harness |
 | `watch` | `/pages/forms` | `bump()` 后 `watchLog` 更新为 `watch: …→…` | ✅ harness |
-| `v-model` | `/pages/forms` | `setData({name})` 驱动双绑数据 | ✅ harness |
+| `v-model` | `/pages/forms` | `setData({name})` 驱动双绑数据（name 用 typeof 判存在——初值读取不稳，避免脆断言） | ✅ harness |
 | `v-if/v-for` | `/pages/forms` | `agree` 布尔存在（v-if 条件数据） | ✅ harness |
 | `<transition>` | `/pages/forms` | `toggleCard()` 切状态机不崩 | ✅ harness |
 | `provide/inject` | `/pages/provide-inject-demo` | `user`/`theme` 存在（provide 快照） | ✅ harness |
