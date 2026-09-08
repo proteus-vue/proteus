@@ -196,8 +196,9 @@ export function createMpDriver(mini: AutomatorMiniLike, debuggerHandle?: MpDebug
       return result?.path ?? path ?? ''
     },
     async waitFor(ms: number): Promise<void> {
-      // automator 无 mini 级 waitFor → evaluate 延时（★必须传函数，见 resolve 注释）
-      await mini.evaluate((delay) => new Promise((r) => setTimeout(r, delay)), ms)
+      // ★2026-09-08：wechatide 后端 evaluate 不支持带参（--args 实测不生效）→ 把 ms 烘成无参函数字面量
+      //   （automator 也兼容——无参函数同样可运行）；★必须传函数（evaluate toString 序列化）
+      await mini.evaluate(new Function(`return () => new Promise((r) => setTimeout(r, ${ms}))`)())
     },
     // ★debug 能力（wechatide 工具：console/network/clearCache/refresh——automator 无这些 API，需注入 debugger 句柄）
     async consoleLogs(filter?: string): Promise<ConsoleEntry[]> {

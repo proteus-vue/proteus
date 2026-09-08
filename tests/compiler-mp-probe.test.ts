@@ -209,3 +209,45 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
     expect(wxss).toMatch(/\.p-popover-overlay--on-data-v-[\w]+\s*\{[\s\S]*?visibility: visible/)
   })
 })
+
+describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约（measureRect + fixed 像素坐标 + 回退）', () => {
+  // 方案 A（Skyline 层叠解药）：打开时 adapter.measureRect('#'+uid) 测 trigger → computePopoverPosition 算
+  //   fixed 视口坐标 → panelStyle 字符串（position:fixed;left;top）→ 浮层叠顶层；measureRect 失败 → panelStyle=''
+  //   → 回退静态 .p-popover-{placement} 绝对锚定（终案）。契约锁：产物含 measureRect + setData panelStyle + uid。
+  const r = compileComponent('src/components/p-popover/index.vue')
+  const wxml = r.wxml ?? ''
+  const js = r.js ?? ''
+
+  it('P8e1：trigger 带静态 data-role（非 scoped hash）供 measureRect 页面级 selector 查询命中', () => {
+    // 不加 :id（MP 编译器丢弃模块 let/实例 uid const/ref → popoverSeq ReferenceError 真机崩）——data-role 常驻可查
+    expect(wxml).toMatch(/data-role="proteus-popover-trigger"[^>]*class="p-popover-trigger-data-v-[\w]+/)
+    expect(wxml).not.toContain("id=\"{{triggerId}}\"")
+  })
+
+  it('P8e2：面板 style 绑定 panelStyle（方案 A fixed+坐标串；回退空串→静态锚定）', () => {
+    // 四分支均绑定 style="{{panelStyle}}"（wxml 属性序：style 在前 class 在后）
+    expect((wxml.match(/style="\{\{panelStyle\}\}"/g) ?? []).length).toBe(4)
+    // 保留静态 placement 类（回退锚定；未改成动态 class——编译器插半截 scope 后缀坑）
+    for (const p of ['bottom', 'top', 'left', 'right']) {
+      expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
+    }
+    expect(wxml).not.toContain("+ placement")
+  })
+
+  it('P8e3：js 含 measureRect 测量 + setData panelStyle（fixed+坐标串）', () => {
+    // 编译产物属性经 esbuild 可能去掉空格（setData({ panelStyle: 'position:fixed;left:' }}）——用宽松子串
+    expect(js).toContain('.measureRect(')
+    expect(js).toContain("setData({ panelStyle: 'position:fixed;left:'")
+    // 回退（measureRect 失败/缺失 → panelStyle 空串 → 静态锚定）
+    expect(js).toContain("setData({ panelStyle: '' })")
+  })
+
+  it('P8e4：TRIGGER_SELECTOR 作为 data 字段（非模块 let——MP 编译器丢弃模块 let 致 ReferenceError），measureRect 引用它', () => {
+    // data 字段声明（[data-role="proteus-popover-trigger"]——宽松子串，引号转义形态不定）
+    expect(js).toContain('TRIGGER_SELECTOR:')
+    expect(js).toContain('data-role')
+    expect(js).toContain('proteus-popover-trigger')
+    expect(js).toContain('measureRect(TRIGGER_SELECTOR)')
+    expect(js).not.toContain('popoverSeq') // 真机 ReferenceError 根因已消除
+  })
+})

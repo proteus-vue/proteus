@@ -105,7 +105,12 @@ const config: ProteusConfig = {
     return {
       plugins,
       resolve: {
-        alias: [{ find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') }],
+        alias: [
+          { find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') },
+          // ★框架组件（src/components）经 adapter L2 抽象消费 @proteus-vue/shared——vite 需显式别名
+          //   （根 node_modules 未 hoist shared，rollup 解析不到）；类型侧在 tsconfig paths 已补
+          { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },
+        ],
       },
       build: rollupOptions ? { rollupOptions } : undefined,
     }

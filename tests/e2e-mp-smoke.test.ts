@@ -9,7 +9,7 @@
 // ★本机未装 IDE → 默认跳过（PROTEUS_MP_E2E 未置位）
 // ⚠ 文件被根 test 排除（tests/e2e-*.test.ts 通配，与 Web E2E 平级）
 import { describe, it, expect } from 'vitest'
-import { createDriver } from '@proteus-vue/test-core/driver'
+import { createDriver, createWxideMini } from '@proteus-vue/test-core/driver'
 import type { AutomatorMiniLike, MpDebuggerLike } from '@proteus-vue/test-core/driver'
 import { runSharedSmoke } from './e2e-driver-shared'
 
@@ -41,6 +41,8 @@ type AutomatorLaunch = (opts: {
 }) => Promise<AutomatorMiniLike>
 
 const ENABLED = process.env.PROTEUS_MP_E2E === '1'
+// ★★2026-09-08：wechatide skill-CLI 为标准（automator 与新 Electron IDE 不兼容）——CLI 设 PROTEUS_MP_E2E_WXIDE=1 走 wechatide
+const WXIDE_ENABLED = process.env.PROTEUS_MP_E2E_WXIDE === '1'
 // ★CLI 注入：端口已被 IDE 自动化服务占用 → 复用 connect（不重复 launch，避免 Port in use）
 const REUSE_IDE = process.env.PROTEUS_MP_E2E_CONNECT === '1'
 
@@ -65,30 +67,37 @@ describe.skipIf(!ENABLED)('小程序 E2E 冒烟（B5 + 统一测试 API TestDriv
     async () => {
       const log = (s: string) => console.log(`[spec] ${s}`)
       log('start')
-      const mod = (await import(AUTOMATOR_MODULE)) as {
-        default: { launch: AutomatorLaunch; connect: (o: { wsEndpoint: string }) => Promise<AutomatorMiniLike> }
-      }
       let mini: AutomatorMiniLike
-      try {
-        if (REUSE_IDE) {
-          log(`connect ws://localhost:${AUTOMATOR_PORT}`)
-          mini = await mod.default.connect({ wsEndpoint: `ws://localhost:${AUTOMATOR_PORT}` })
-        } else {
-          log('launch ...')
-          mini = await mod.default.launch({
-            cliPath: IDE_CLI || undefined,
-            projectPath: PROJECT_PATH,
-            trustProject: true,
-            port: AUTOMATOR_PORT,
-            timeout: 60_000,
-          })
+      if (WXIDE_ENABLED) {
+        // ★★2026-09-08：wechatide skill-CLI 为标准（miniprogram-automator 与新 Electron IDE 不兼容）——
+        //   createWxideMini 内部 spawn wechatide 工具，无需 launch/连接；reLaunch/currentPage/evaluate 稳通道
+        log(`wxide backend: project ${PROJECT_PATH}`)
+        mini = createWxideMini({ cliPath: IDE_CLI || undefined, project: PROJECT_PATH, client: 'zed' }) as unknown as AutomatorMiniLike
+      } else {
+        const mod = (await import(AUTOMATOR_MODULE)) as {
+          default: { launch: AutomatorLaunch; connect: (o: { wsEndpoint: string }) => Promise<AutomatorMiniLike> }
         }
-        log('connect/launch OK')
-      } catch (e) {
-        // ★失败模式诊断：把实测踩过的坑转成可行动指引
-        throw new Error(launchErrorHint(e))
+        try {
+          if (REUSE_IDE) {
+            log(`connect ws://localhost:${AUTOMATOR_PORT}`)
+            mini = await mod.default.connect({ wsEndpoint: `ws://localhost:${AUTOMATOR_PORT}` })
+          } else {
+            log('launch ...')
+            mini = await mod.default.launch({
+              cliPath: IDE_CLI || undefined,
+              projectPath: PROJECT_PATH,
+              trustProject: true,
+              port: AUTOMATOR_PORT,
+              timeout: 60_000,
+            })
+          }
+          log('connect/launch OK')
+        } catch (e) {
+          // ★失败模式诊断：把实测踩过的坑转成可行动指引
+          throw new Error(launchErrorHint(e))
+        }
       }
-      // ★统一测试 API：注入 automator miniProgram → TestDriver → 同一份跨端用例（tests/e2e-driver-shared.ts）
+      // ★统一测试 API：注入 miniProgram 句柄 → TestDriver → 同一份跨端用例（tests/e2e-driver-shared.ts）
       log('createDriver + runSharedSmoke ...')
       const driver = createDriver({ platform: 'mp', mini, debugger: await loadDebuggerHandle() })
       // ★elementOps:false——当前 IDE 模拟器激活态下 automator page.$ 挂起（B5 边界：页面级 DOM 查询受激活态影响）

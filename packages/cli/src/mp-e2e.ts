@@ -78,8 +78,8 @@ export function planMpE2E(opts: { root?: string; port?: number; ideCli?: string 
   const steps = [
     `[proteus] MP E2E：IDE CLI ${ideCli}（port ${port}）`,
     `[proteus] 项目产物：${projectDir}${needBuild ? '（⚠ 缺失，需先 npm run build:mp）' : ''}`,
-    '[proteus] automator launch：spawn IDE（auto --trust-project）+ 轮询连接 + checkVersion（官方 SDK 路径）',
-    '[proteus] spec：reLaunch 首页 → data 断言 → disconnect（铁律：用例独立运行）',
+    '[proteus] wechatide skill-CLI：open_project_window（fullMode）+ skylineRenderEnable + spec 走 createWxideMini（官方 Electron 版标准——automator 已弃用）',
+    '[proteus] spec：reLaunch 首页 → data 断言 → console 零错门禁（铁律：用例独立运行）',
   ]
   return { ideCli, projectDir, port, needBuild, steps }
 }
@@ -220,7 +220,7 @@ export function formatMpE2EDiagnosis(d: MpE2EDiagnosis): string {
     const icon = c.level === 'ok' ? '✅' : c.level === 'warn' ? '⚠' : '✗'
     lines.push(`  ${icon} ${c.name}：${c.message}`)
   }
-  lines.push(d.ok ? '[proteus] ✅ 环境就绪，可运行 automator' : '[proteus] ✗ 存在硬错误，请按上方指引修复（warn 不阻断）')
+  lines.push(d.ok ? '[proteus] ✅ 环境就绪，可运行 wechatide MP E2E' : '[proteus] ✗ 存在硬错误，请按上方指引修复（warn 不阻断）')
   return lines.join('\n')
 }
 

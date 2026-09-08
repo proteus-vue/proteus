@@ -8,11 +8,14 @@
 import type { TestDriver, PlaywrightPageLike, AutomatorMiniLike, MpDebuggerLike, CdpSessionLike } from './types'
 import { createWebDriver } from './web'
 import { createMpDriver } from './mp'
+import { createWxideMini, callWxide } from './wxide'
+export type { WxideMiniOptions } from './wxide'
 
 export type { TestDriver, TestElement, TestElementOptions, ElementWaitOptions, ElementWaitState, PageSnapshot, SystemSnapshot, ConsoleEntry, NetworkEntry } from './types'
 export type { PlaywrightPageLike, PlaywrightLocatorLike, AutomatorMiniLike, AutomatorElementLike, MpDebuggerLike, WxApiHandle, TicketHandle, CdpHandle, CdpSessionLike } from './types'
 export { createWebDriver } from './web'
 export { createMpDriver } from './mp'
+export { createWxideMini, callWxide } from './wxide'
 
 export type DriverLaunchOptions =
   | { platform: 'web'; page: PlaywrightPageLike; cdp?: CdpSessionLike }
