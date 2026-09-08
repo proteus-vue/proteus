@@ -57,3 +57,23 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
     return { ...EMPTY, error: (e as Error).message }
   }
 }
+
+/**
+ * ★模板表达式 var 改名（defineModel 落地）：模板里 `{{ m }}` 读 data.m，但 model 的 prop 名是 'modelValue'（var m ≠ prop 名）——
+ *   需把插值 `{{ }}` 内的独立标识符 <var> 改为 <propName>，否则读不到（空）。仅改 `{{ }}` 内，避免误伤类名/属性。
+ * @param wxml 模板变换器产物（WXML 文本）
+ * @param modelRefs var→prop 映射（extractSfcMacros 的 modelRefs）
+ */
+export function renameModelVarsInWxml(wxml: string, modelRefs: MacroModelRef[]): string {
+  if (!modelRefs.length || !wxml.includes('{{')) return wxml
+  let out = wxml
+  for (const ref of modelRefs) {
+    if (ref.varName === ref.propName) continue
+    // 仅 `{{ ... }}` 区间内的独立标识符（前后非 \w/\s 绑定词）替换
+    out = out.replace(/\{\{([\s\S]*?)\}\}/g, (m, expr: string) =>
+      // ★注意 RegExp 构造字符串须双反斜杠（\\w → 引擎 \w），否则退化为字面 w/b 不匹配
+      `{{${expr.replace(new RegExp(`(?<![.\\w])${ref.varName}\\b(?![\\w])`, 'g'), ref.propName)}}}`,
+    )
+  }
+  return out
+}
