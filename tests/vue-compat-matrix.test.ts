@@ -57,7 +57,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
 
   it('代表性能力状态（对齐框架既定基线）', () => {
     // aligned：书写面核心（vue-compat §1 主路径）+ reactivity-runtime spke 对齐的 reactive 族/守卫
-    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', 'v-text', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef', 'watchEffect', 'watchPostEffect', 'watchSyncEffect', 'reactive', 'readonly', 'shallowReactive', 'shallowReadonly', 'isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw', 'toRef', 'toRefs', 'markRaw', 'customRef', 'proxyRefs']) {
+    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', 'v-text', '<teleport>', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef', 'watchEffect', 'watchPostEffect', 'watchSyncEffect', 'reactive', 'readonly', 'shallowReactive', 'shallowReadonly', 'isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw', 'toRef', 'toRefs', 'markRaw', 'customRef', 'proxyRefs']) {
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项

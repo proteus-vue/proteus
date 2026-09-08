@@ -375,18 +375,18 @@ after:  <view>{{ msg }}</view>
 
 > why: Mini Programs have no v-text directive, but v-text semantics = element content is the text value — mapped to content interpolation {{ expr }} (element kept + content overridden); same family as v-html→rich-text
 
-### `template/teleport-inline`
+### `template/teleport-root-portal`
 
-**<teleport> inline-stripped (no root-portal layering, honest warning)**
+**<teleport> → <root-portal> (Skyline official: subtree detaches from the page for layering)**
 
-<teleport> has no root-portal layering semantics in Mini Programs — its children are inlined (content renders but without layering/teleport) with an honest warning; Skyline root-portal layering is a later batch; previously the invalid <teleport> tag was output verbatim and did not render (worse than inlining)
+<teleport>content</teleport> → <root-portal>content</root-portal> (base library 2.25.2+, Skyline/WebView: the subtree detaches from the page, like fixed position — the correct layering solution for modals/popovers, breaking out of the z-index stacking context); the to target has no MP equivalent (root-portal always detaches from the page, i.e. fixed-equivalent, with no target-selector semantics) — warns that to is ignored
 
 ```
-before: <teleport to="body"><view>hi</view></teleport>
-after:  <view>hi</view>（解壳内联 + 警告：无 layer-layer 语义）
+before: <teleport to="body"><view class="overlay">hi</view></teleport>
+after:  <root-portal><view class="overlay">hi</view></root-portal>（脱离页面盖层）
 ```
 
-> why: Mini Programs have no root-portal (the Vue <teleport> layering/teleport-to-body counterpart) — honest: content is inlined and visible + explicit warning (anti-black-box), use p-popup/p-modal for overlays
+> why: Skyline/WebView root-portal (official component) detaches the subtree from the page, which is the cross-end equivalent of Vue <teleport> layering/teleporting to body — solving popovers (p-popover etc.) being occluded by lower elements (z-index stacking contexts)
 
 ### `directive/v-once`
 

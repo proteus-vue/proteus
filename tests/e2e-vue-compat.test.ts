@@ -226,6 +226,19 @@ const CAPABILITY_CASES: CapabilityCase[] = [
       expect(after.customVal, 'bumpCustom → customRef set→trigger → data.customVal 自增（逻辑层 .value 读写）').toBe(before + 1)
     },
   },
+  {
+    name: 'teleport/root-portal',
+    route: '/pages/vue-compat-demo',
+    assert: async (driver, data) => {
+      // ★2026-09-08 <teleport> → <root-portal>：弹层内容包进 root-portal（Skyline 官方：子树脱离页面层叠——弹层不被下层遮挡）
+      //   点击 toggleOverlay → data.overlayOn true（弹层显示）；页面 console 零错（root-portal 标签合法）
+      expect(data.overlayOn, 'overlayOn 初始应 false').toBe(false)
+      await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; p.toggleOverlay() })
+      await driver.waitFor(400)
+      const after = JSON.parse((await driver.evaluate(readPageData)) as string) as Record<string, unknown>
+      expect(after.overlayOn, 'toggleOverlay → overlayOn true（root-portal 弹层显示）').toBe(true)
+    },
+  },
 ]
 
 // ① 页面能进 + 真机健康（console 零错）先全局验一次；② 每能力断言

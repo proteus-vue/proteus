@@ -592,14 +592,20 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     // 装饰语义：不输出过渡标签本身，直接序列化子元素（动画 class 由子元素注入）
     return node.children.map((c) => serializeNode(c, ctx)).join('\n')
   }
-  // ★2026-09-08 <teleport> 诚实对齐：小程序无 root-portal 层叠语义——解壳内联子元素（内容至少渲染）+ 警告（不静默）；
-  //   Skyline root-portal 层叠为后续批次（此前原样输出无效 <teleport> 标签不渲染——比解壳更糟）
+  // ★2026-09-08 <teleport> → Skyline root-portal 对齐（官方：root-portal 使子树脱离页面、类似 fixed，用于弹窗/弹出层——
+  //   正是弹层层叠/传送的正解）。<teleport>content</teleport> → <root-portal>content</root-portal>（脱离页面盖住一切）；
+  //   to 属性 MP 无 target 选择器语义（root-portal 恒脱离页面 = fixed 等价）——警告说明忽略 to；@vue/compiler-dom 已
+  //   把 teleport 当容器（tag=teleport），NATIVE_TAGS 已含 root-portal（原样透传）。
   if (node.tag === 'teleport' && !isTransition) {
-    ctx.warnings.push(
-      `<teleport> 在小程序无 root-portal 层叠语义（Skyline root-portal 为后续批次）——已解壳内联子元素（内容渲染但无层叠/传送）；如需弹层请用 p-popup/p-modal 或固定容器`,
-    )
-    ctx.trace?.add('template/teleport-inline', { line: node.loc.start.line, before: '<teleport>', after: '（解壳内联子元素；无层叠语义）' })
-    return node.children.map((c) => serializeNode(c, ctx)).join('\n')
+    const child = node.children.map((c) => serializeNode(c, ctx)).join('\n')
+    const toVal = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && (p as AttributeNode).name === 'to') as AttributeNode | undefined
+    if (toVal?.value?.content) {
+      ctx.warnings.push(
+        `<teleport to="${toVal.value.content}"> 的 to 目标在小程序无对等（root-portal 恒脱离页面 = fixed 等价，无 target 选择器语义）——已忽略 to，子内容包进 <root-portal>（脱离页面层叠）`,
+      )
+    }
+    ctx.trace?.add('template/teleport-root-portal', { line: node.loc.start.line, before: '<teleport>', after: '<root-portal>（脱离页面层叠：用于弹窗/弹出层——官方文档 root-portal 语义）' })
+    return `<root-portal>\n${child}\n</root-portal>`
   }
   if ((node.tag === 'transition-group' || node.tag === 'suspense' || node.tag === 'keep-alive') && !isTransition) {
     ctx.warnings.push(

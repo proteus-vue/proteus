@@ -31,12 +31,13 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(r.warnings.some((w) => w.includes('模板 ref="el"'))).toBe(false)
   })
 
-  it('Transition 已支持（不再警告），Teleport 等无对等组件 → 警告', () => {
+  it('Transition 已支持（不再警告），Teleport → root-portal（to 目标无对等警告）', () => {
     const tr = compile('<template><transition name="fade"><view v-if="on">X</view></transition></template><script setup>const on = ref(true)</script>')
     expect(tr.warnings.some((w) => w.includes('<transition>'))).toBe(false) // vue-compat-advance Batch 2 已支持
     const r = compile('<template><teleport to="body"><view>x</view></teleport></template>')
-    expect(r.warnings.some((w) => w.includes('<teleport>'))).toBe(true)
-    expect(r.warnings.some((w) => w.includes('root-portal'))).toBe(true)
+    // teleport 已对齐 root-portal；to 目标 MP 无对等（root-portal 恒脱离页面）→ 警告说明忽略 to
+    expect(r.wxml).toContain('<root-portal>')
+    expect(r.warnings.some((w) => w.includes('teleport') && w.includes('to'))).toBe(true)
   })
 
   it('import 剥离 → 警告（无法解析的跨模块引用）+ 函数调用运行时初始化', () => {
