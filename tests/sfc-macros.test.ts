@@ -2,7 +2,7 @@
 // ★★2026-09-08 关键架构定调：宏语义不由框架自造——用 @vue/compiler-sfc 的 compileScript 提取权威语义元数据
 //   （bindings 分类 + defineModel→useModel 引用），落地 IR 再适配。锁定「吃官方展开、非手写正则抠宏」。
 import { describe, it, expect } from 'vitest'
-import { extractSfcMacros } from '../packages/compiler/src/sfc-macros'
+import { extractSfcMacros, renameModelVarsInWxml } from '../packages/compiler/src/sfc-macros'
 
 const src = `<script setup lang="ts">
 import { ref, defineModel } from 'vue'
@@ -35,5 +35,14 @@ describe('宏语义权威源：extractSfcMacros（compileScript 展开，非手�
     const r = extractSfcMacros('<template><view>x</view></template>', 'y.vue')
     expect(r.ok).toBe(false)
     expect(r.modelRefs).toEqual([])
+  })
+
+  it('renameModelVarsInWxml：仅 {{ }} 内模型 var→prop（类名/属性不动）', () => {
+    const wxml = `<view>hi {{ m }} {{ count }}</view><view class="m-tip">{{ m }}x</view>`
+    const out = renameModelVarsInWxml(wxml, [{ varName: 'm', propName: 'modelValue' }])
+    expect(out).toContain('{{ modelValue }}')
+    expect(out).not.toContain('{{ m }}')
+    expect(out).toContain('class="m-tip"') // 类名不动
+    expect(out).toContain('{{ count }}') // 非 model var 不动
   })
 })
