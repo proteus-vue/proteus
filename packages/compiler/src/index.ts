@@ -131,6 +131,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
     modelRefs: sfcMacros.ok ? sfcMacros.modelRefs : undefined,
+    // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——transformScriptToPage 剥离 no-op + name 写组件字段
+    defineOptions: sfcMacros.ok ? sfcMacros.defineOptions : undefined,
     trace: scriptTrace,
   })
 

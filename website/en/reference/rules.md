@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 93 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 94 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (49)
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (30)
+## Script transforms (31)
 
 ### `script/const-to-data`
 
@@ -1089,6 +1089,19 @@ after:  onLoad: this.s = reactive({ name: "x" }); this.__proteusSyncReactive('s'
 ```
 
 > why: Once reactive goes through a runtime real Proxy, logic-layer mutations must be bridged to setData to refresh the view (the core of uni-app @dcloudio/uni-mp-vue — bridging Proxy reads/writes to the setData synchronization model); dependency tracking via effect is the standard no-reinvention approach (reading through tracks, mutations auto re-run)
+
+### `script/define-options`
+
+**defineOptions strip no-op (compileScript authoritative source)**
+
+Top-level defineOptions({ name, inheritAttrs }) is stripped to a compile-time no-op (not injected bare into onLoad → not defined); name/inheritAttrs are extracted authoritatively via @vue/compiler-sfc compileScript (expanded into the component options ...{} segment); MP components have no component-level name/inheritAttrs counterpart → warns it is not effective (component attrs go through properties/attrs channel)
+
+```
+before: defineOptions({ name: "MyComp", inheritAttrs: false })
+after:  剥离为 no-op（产物不含 defineOptions；警告说明 name/inheritAttrs 不生效）
+```
+
+> why: defineOptions is a <script setup> macro that would be injected bare into onLoad → not defined; the authoritative macro semantics come from compileScript (no reinvention) — strip + extract semantic metadata rather than fail-closed error (eliminating unsupported)
 
 ## Style transforms (9)
 

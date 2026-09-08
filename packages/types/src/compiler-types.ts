@@ -162,6 +162,8 @@ export interface ScriptTransformOptions {
   moduleImports?: Array<{ source: string; requirePath: string }>
   /** ★2026-09-08 P1（defineModel 地基）：compileScript 权威源的模型引用（var→propName）——m.value 读写重写 + prop 注册 */
   modelRefs?: Array<{ varName: string; propName: string }>
+  /** ★2026-09-08 defineOptions 对齐：compileScript 权威语义 { name?, inheritAttrs? }——剥离为 no-op + name 写组件字段（inheritAttrs 诚实降级） */
+  defineOptions?: { name?: string; inheritAttrs?: boolean }
   trace?: TransformTrace
 }
 

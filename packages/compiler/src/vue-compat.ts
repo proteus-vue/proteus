@@ -84,8 +84,9 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'defineProps', group: 'component', status: 'aligned', source: 'vue-compat §1（define-props）' },
   { name: 'defineEmits', group: 'component', status: 'aligned', source: 'vue-compat §1（define-emits）' },
   { name: 'defineExpose', group: 'component', status: 'aligned', source: 'define-expose（no-op+校验）' },
-  // ★2026-09-08 P1 校准：defineOptions 被当顶层副作用裸注入 onLoad → not defined；defineModel/useModel 产物 data.x=undefined（假降级）→ unsupported·error
-  { name: 'defineOptions', group: 'component', status: 'unsupported', note: '组件选项（name/inheritAttrs）无对等——当前裸注入 onLoad → not defined；请用 <script> options', source: 'P1 校准' },
+  // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——剥离 no-op（不裸注入 onLoad→not defined），
+  //   name/inheritAttrs 在 MP 无组件级对等（微信 Component 无组件级 name/inheritAttrs 字段）→ partial（诚实说明不生效）
+  { name: 'defineOptions', group: 'component', status: 'partial', degrade: true, note: '宏剥离 no-op（compileScript 权威源）；name/inheritAttrs MP 无组件级对等不生效——组件属性请走 properties/attrs 通道', source: 'defineOptions 对齐（compileScript 权威源）' },
   { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', source: '评估' },
   // ★2026-09-08 P1（地基）：defineModel 经 @vue/compiler-sfc 权威展开（_useModel）→ 注册 prop + .value 读写重写 + 模板改名；useModel 同（运行时态，_useModel 产物）
   { name: 'defineModel', group: 'component', status: 'partial', degrade: true, note: 'compileScript 展开为 _useModel(__props, name)：注册 prop + m.value 读写重写（读→data.prop / 写→triggerEvent update-prop）；模型修饰符/嵌套未全接——用 props+emit 显式可兼得', source: 'P1 地基（compileScript 权威源）' },

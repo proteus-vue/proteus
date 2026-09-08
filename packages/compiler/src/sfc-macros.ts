@@ -27,13 +27,15 @@ export interface SfcMacros {
   emits: string[]
   /** ★权威 props 元数据：name → { type, default? }（compileScript 权威展开，手写 extractProps 类型/默认值一致性校验基准） */
   propsMeta: Record<string, { type: string; default?: unknown }>
+  /** ★defineOptions 语义元数据：{ name?, inheritAttrs? }（compileScript 将 defineOptions 展开为组件 options 的 ...{} 段；name/inheritAttrs 权威值） */
+  defineOptions: { name?: string; inheritAttrs?: boolean }
   /** 编译是否成功（失败返回空语义，调用方回退既有路径——不因 compileScript 抛错而崩编译） */
   ok: boolean
   /** 原因（ok=false 时） */
   error?: string
 }
 
-const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], emits: [], propsMeta: {}, ok: false }
+const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], emits: [], propsMeta: {}, defineOptions: {}, ok: false }
 
 /**
  * 用 @vue/compiler-sfc 的 compileScript 提取宏语义元数据（权威源）。
@@ -62,6 +64,17 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
     let ur: RegExpExecArray | null
     while ((ur = useModelSrcRe.exec(source))) modelRefs.push({ varName: ur[1], propName: ur[3] || 'modelValue' })
     // ★权威 props=bindings 里标 'props' 的 prop 名集合（compileScript 分类——prop 名权威源；type/default 解析留扩展）
+    // ★defineOptions 语义（compileScript 权威）：源码 defineOptions({ name: 'X', inheritAttrs: false }) → 组件 options 的 ...{} 段
+    //   直接从源码对象字面量提取 name/inheritAttrs（compileScript 不直接暴露 s.name/s.inheritAttrs——展开进 options 里）
+    const defineOptions: { name?: string; inheritAttrs?: boolean } = {}
+    const doSrc = source.match(/defineOptions\s*\(\s*\{([\s\S]*?)\}\s*\)/)
+    if (doSrc) {
+      const body = doSrc[1]
+      const nameM = body.match(/name\s*:\s*['"]([^'"]+)['"]/)
+      if (nameM) defineOptions.name = nameM[1]
+      const iaM = body.match(/inheritAttrs\s*:\s*(true|false)/)
+      if (iaM) defineOptions.inheritAttrs = iaM[1] === 'true'
+    }
     // ★权威 emits（compileScript 展开 emits: ['x'] 简单 或 emits: _mergeModels(['x'], ['update:y']) 合并形态）
     const emits: string[] = []
     const emitsSeg = content.match(/emits:\s*[^\n]*?((?:['"][^'"]+['"]\s*,?\s*)+)/)?.[1]
@@ -75,7 +88,7 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
       let pm: RegExpExecArray | null
       while ((pm = re.exec(propsBody))) propsMeta[pm[1]] = { type: pm[2], default: pm[3] !== undefined ? pm[3].trim() : undefined }
     }
-    return { bindings, propNames, modelRefs, emits, propsMeta, ok: true }
+    return { bindings, propNames, modelRefs, emits, propsMeta, defineOptions, ok: true }
   } catch (e) {
     return { ...EMPTY, error: (e as Error).message }
   }
