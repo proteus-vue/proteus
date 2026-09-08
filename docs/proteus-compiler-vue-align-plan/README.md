@@ -98,6 +98,7 @@
 - **新增 `packages/compiler/src/sfc-macros.ts`**：`extractSfcMacros`（compileScript → bindings + modelRefs）+ `renameModelVarsInWxml`（模板 `{{ m }}`→`{{ modelValue }}`，仅 `{{ }}` 内，类名/属性不动）。
 - **接线**：`compileVueSfc` → `extractSfcMacros` → 模板改名 + script（`modelRefs`）；`transformScriptToPage` → prop 注册（`modelValue`/`title`→properties）+ `m.value` 读写重写（读→`this.data.<prop>`；写→`triggerEvent('update-<prop>', v)`，glass-easel `update-xxx`）。
 - **矩阵**：`defineModel`/`useModel` → `partial`（degrade→warning；模型修饰符/嵌套未全接——用 props+emit 可兼得）。
+- **useModel 补接（2026-09-08）**：useModel(props, name) 是显式运行时调用（compileScript 不展开，是函数非宏）——此前被当顶层副作用裸调用 `this.m = useModel(props, 'title')` → not defined（partial 但产物坏）。已在 `extractSfcMacros` 加 useModel 源引用提取（`const v = useModel(<props>, 'name')` → { var, prop }）并入 modelRefs，复用 defineModel 链路（prop 注册 + `.value` 读写 + 模板改名）——产物正确（`triggerEvent('update-title')` 等）。
 - **验证**：`tests/vue-compat-compile.test.ts` defineModel 用例（prop 注册 + 读写 + 模板改名 + 不落 data）+ `tests/sfc-macros.test.ts`；全量 **2579/2579 绿**；build:mp / build:web 通过。（⚠ 过程中修复了 propsVar 正则被误改单反斜杠致全校 props 改写失效的回归 + 注册 `script/define-model` 规则。）
 
 > ⚠️ 待办：computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
