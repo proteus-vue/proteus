@@ -90,11 +90,21 @@
       </view>
       <text class="state-line">rs.name={{ rs.name }} · rs.count={{ rs.count }} · isReactive(rs)={{ rsIs }} · isReadonly(ro)={{ roIsReadonly }}</text>
     </view>
+
+    <!-- ⑩ toRef / toRefs（运行时真 ref：逻辑层 .value 读写 + isRef=true） -->
+    <!-- ★2026-09-08：xRef.value 逻辑层读写 trObj.x；isRef(toRef())=true；模板直接 {{ xRef }} 读 ref 对象（值需 .value，见矩阵 note） -->
+    <view class="card">
+      <text class="card-title">⑩ toRef / toRefs（运行时真 ref）</text>
+      <view class="row">
+        <view class="chip" @click="bumpToRef">bump xRef.value（逻辑层 toRef 读写）</view>
+      </view>
+      <text class="state-line">xRefVal={{ xRefVal }} · isRef(xRef)={{ xIsRef }} · isRef(yRefs.y)={{ yRefIsRef }}</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, provide, reactive, readonly, isReactive, isReadonly } from 'vue'
+import { ref, computed, watch, provide, reactive, readonly, isReactive, isReadonly, toRef, toRefs, isRef } from 'vue'
 // Web 端注册本文档组件；MP 端编译器忽略 import（标签走 usingComponents）
 import InjectConsumer from '../components/inject-consumer/index.vue'
 import ModelDemo from '../components/model-demo/index.vue'
@@ -152,6 +162,19 @@ const rsIs = isReactive(rs)
 const roIsReadonly = isReadonly(ro)
 function bumpReactive(): void {
   rs.count += 1
+}
+
+// ⑩ toRef / toRefs（运行时 @vue/reactivity 真 ref：逻辑层 .value 读写 + isRef=true）
+//   模板只显示 data-backed 值（xRefVal / xIsRef）；xRef.value 逻辑层读写经 bumpToRef 反映到 xRefVal
+const trObj = reactive({ x: 5, y: 7 })
+const xRef = toRef(trObj, 'x')
+const yRefs = toRefs(trObj)
+const xIsRef = isRef(xRef)
+const yRefIsRef = isRef(yRefs.y)
+const xRefVal = ref(5)
+function bumpToRef(): void {
+  xRef.value += 1
+  xRefVal.value = xRef.value
 }
 </script>
 

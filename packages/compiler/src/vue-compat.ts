@@ -43,9 +43,10 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'shallowReadonly', group: 'reactivity', status: 'aligned', note: 'shallowReadonly(x) → runtime-init @vue/reactivity 浅 readonly Proxy；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'readonly', group: 'reactivity', status: 'aligned', note: 'readonly(x) → runtime-init @vue/reactivity readonly Proxy（只读约束 runtime 强制）+ setData 桥；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'customRef', group: 'reactivity', status: 'unsupported', note: '自定义 ref 需运行时钩子，MP 无对等——请用 ref + watch/computed', source: '评估' },
-  // ★2026-09-08 P1 校准：toRef/toRefs/toValue 实测译为 this.x=toRef(…) 裸标识符 → not defined（假降级）→ unsupported·error（与 isRef 等运行时守卫同批反黑盒）
-  { name: 'toRef', group: 'reactivity', status: 'unsupported', note: '运行时引用重定向无对等——当前译为裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
-  { name: 'toRefs', group: 'reactivity', status: 'unsupported', note: '同上——裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
+  // ★2026-09-08 reactivity-runtime spke：toRef/toRefs 走运行时 @vue/reactivity——返回真 ref（.value 在逻辑层有效，isRef(toRef())=true）
+  //   模板层诚实降级：toRef 的 runtime-init 变量仅逻辑层 .value（模板 {{ ref }} 读对象非值——请用 ref.value 或 reactive）；不静默（note）
+  { name: 'toRef', group: 'reactivity', status: 'aligned', note: 'toRef(obj, key) → runtime-init @vue/reactivity 真 ref（语义同官方，isRef=true；.value 逻辑层读写 obj[key]）；模板直接 {{ ref }} 读的是 ref 对象——请用 ref.value 或 reactive', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'toRefs', group: 'reactivity', status: 'aligned', note: 'toRefs(obj) → runtime-init @vue/reactivity ref 映射（每键一 ref，.value 读 obj 对应字段）；解构 const { a } = toRefs(obj) 暂未接（声明为 ObjectPattern 跳过）——请用 const r = toRefs(obj); r.a.value', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'toValue', group: 'reactivity', status: 'aligned', note: 'toValue(x) 编译期内联：同 unref——x 为 ref → this.data.x；非 ref → x 本身；MP 无运行时 toValue', source: '增强（编译期内联改写）' },
   { name: 'proxyRefs', group: 'reactivity', status: 'unsupported', note: '运行时代理，MP 无对等——直接用 .value', source: '评估' },
   { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', source: '评估' },
