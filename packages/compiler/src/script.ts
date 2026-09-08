@@ -12,7 +12,7 @@ import { transpileMpSafe } from './es5'
 // ★★2026-09-08 立项（proteus-compiler-vue-align-plan）：Vue 全能力基准线——vue 命名导入逐个查对齐状态，
 //   aligned 静默 / partial·unsupported+degrade 警告 / unsupported 无降级 抛 CompilerError（反黑盒 fail-closed）
 import { CompilerError } from './validate'
-import { vueCompatStatus, vueCompatLevel } from './vue-compat'
+import { vueCompatStatus, vueCompatLevel, VUE_PUBLIC_CONSTS } from './vue-compat'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let astCacheSrc = ''
@@ -936,7 +936,9 @@ function handleConstToData(
   })
   const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
   const raw = inner ? inner[1] : init
-  const value = evalLiteral(raw)
+  // ★2026-09-08 P1：Vue 公共常量导出（version）——const v = version 内联字面量（此前 evalLiteral 返 undefined → data.v=undefined）
+  //   version 为裸标识符且属 VUE_PUBLIC_CONSTS（vue import 去掉后裸 version 即 Vue 导出；与 readonly/shallowRef 同识别口径）
+  const value = VUE_PUBLIC_CONSTS[raw] !== undefined ? VUE_PUBLIC_CONSTS[raw] : evalLiteral(raw)
   const isCall = /^[\w$.]+\(/.test(raw.trim())
   if (isCall && value === undefined && !/^inject\s*\(/.test(raw.trim())) {
     // ★module-plan B0：函数调用且静态求值失败 → 运行时初始化（实例属性 this.<name>，onLoad/attached 注入）——不再丢调用
