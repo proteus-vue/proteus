@@ -16,10 +16,24 @@
 ## 跑法（唯一标准：wechatide skill-CLI，官方 Electron 版）
 
 ```bash
-pnpm build:mp            # 产出 dist/mp-weixin
+pnpm build:mp                 # 产出 examples/dist/mp-weixin
 PROTEUS_MP_E2E_WXIDE=1 npx vitest run tests/e2e-vue-compat.test.ts
 # 前置：微信开发者工具已开项目窗口 + skyline private config = skylineRenderEnable:true
 ```
+
+**★推荐用框架规范命令（自动做管理副本+开窗+skyline，避免手工误配）**：
+
+```bash
+PROTEUS_IDE_CLI="/path/to/wechatwebdevtools.app/Contents/MacOS/wechatide" \
+  npx tsx packages/cli/src/index.ts test e2e:mp examples
+```
+
+### ⚠️ 关键运维结论（2026-09-08 实测）：**多副本窗口是 automator 超时根因**
+
+- `automation_*` 工具（`automation_navigate` 等）经 wechatide CLI（`transport: skill_call`，官方标准，非 miniprogram-automator）驱动 IDE 内部自动化服务；该服务**绑定单项目窗口**。
+- **若开了多个项目窗口 / 多个产物副本窗口**（如同时开 `dist/mp-weixin` 与 `.proteus/e2e-mp`），automator 服务绑定混乱 → `automation_navigate` 报 `timeout waiting for automator response`，`reLaunch` 全部失败。
+- **解法**：跑前确保**只有单个 fresh 项目窗口**——重启微信开发者工具（`pkill -f wechatwebdevtools` 后由 CLI fresh `open_project_window`），不要手工先开别的窗口；CLI 的 `open_project_window` 返回 `type: reuse`（复用当前单窗）是健康的。
+- 已验证：单 fresh 窗口下 `proteus test e2e:mp examples` → smoke + 7 条 Vue 能力真机验收 + p-popover **9/9 全绿**。
 
 - `tests/e2e-vue-compat.test.ts` 命名含 `e2e-vue-compat` → 被 `pnpm test` 的 `--exclude "tests/e2e-*.test.ts"` 排除，
   **不进全量/verify**；未设 `PROTEUS_MP_E2E_WXIDE` 时 `describe.skipIf` 跳过（不破坏单测）。
