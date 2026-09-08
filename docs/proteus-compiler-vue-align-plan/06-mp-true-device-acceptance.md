@@ -38,10 +38,12 @@ PROTEUS_IDE_CLI="/path/to/wechatwebdevtools.app/Contents/MacOS/wechatide" \
 - `tests/e2e-vue-compat.test.ts` 命名含 `e2e-vue-compat` → 被 `pnpm test` 的 `--exclude "tests/e2e-*.test.ts"` 排除，
   **不进全量/verify**；未设 `PROTEUS_MP_E2E_WXIDE` 时 `describe.skipIf` 跳过（不破坏单测）。
 - 每个用例结构（对齐 15 铁律）：① `reLaunch` 到能力演示页 ② **console 零错门禁**（进页第一动作）③ 读页 data → 能力断言。
+- **已验证**：加 `simulator_refresh` 后 `proteus test e2e:mp examples` → smoke + 12 条 Vue 能力真机验收 + p-popover **14/14 全绿**（复用窗口也稳，不再依赖 fresh/单窗）。
+- **★2026-09-08 栏目页化**：新建 `examples/pages/vue-compat-demo.vue`（规范栏目页，逐能力卡片 + 可观察状态），作为 CAPABILITY_CASES 主目标（不再复用 forms/provide-inject-demo 的零散页）；配套 `examples/components/model-demo`（defineModel v-model 契约组件）。
 
 ## 能力 → 演示页 → 真机断言（CAPABILITY_CASES）
 
-能力 → 演示页 → 真机断言（`CAPABILITY_CASES`，harness 已实现前 7 项）
+能力 → 演示页 → 真机断言（`CAPABILITY_CASES`，主目标 = `vue-compat-demo`，12 能力）
 
 | 能力（矩阵 name） | 演示页 route | 断言（读页 data / evaluate 触发） | 状态 |
 |-------------------|--------------|-----------------------------------|------|
