@@ -92,6 +92,21 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r as any).js).not.toMatch(/(?<![.\w])nextTick\s*\(/)
   })
 
+  it('withDefaults：宏剥离 + 默认值合并到 properties（组件模式），不裸调用/不落 data', () => {
+    const r = compileVueSfc(
+      `<script setup lang="ts">
+import { withDefaults } from 'vue'
+const p = withDefaults(defineProps<{ a: number; b?: string }>(), { b: 'hi' })
+</script>
+<template><view>{{ a }}{{ b }}</view></template>`,
+      { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true },
+    )
+    // 宏剥离：无裸 withDefaults 调用、无 const p 落 data
+    expect((r as any).js).not.toMatch(/(?<![.\w])withDefaults\s*\(/)
+    // 属性默认值合并：b → 'hi'（withDefaults 第二参默认对象，properties.value 形态）
+    expect((r as any).js).toMatch(/b:\s*\{\s*type: String, value: ['"]hi['"]/)
+  })
+
   it('defineProps（对象形态）→ 宏剥离，模板可直接消费 props', () => {
     const r = compile(
       "import { ref } from 'vue'\nconst props = defineProps({ initial: Number })",

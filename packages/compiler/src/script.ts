@@ -515,10 +515,18 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
     // 全树扫描 defineProps 调用（宏可能位于 const 初始化 / withDefaults 参数 / 表达式语句）
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const calls: any[] = []
+    // ★2026-09-08 P1：withDefaults(defineProps<T>(), D) 的默认值合并——收集 withDefaults 调用及其第二参默认值对象
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wdDefaults: Array<{ propsCall: any; defaultsObj: any }> = []
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const walk = (n: any): void => {
       if (!n || typeof n.type !== 'string') return
       if (n.type === 'CallExpression' && n.callee && n.callee.type === 'Identifier' && n.callee.name === 'defineProps') calls.push(n)
+      if (n.type === 'CallExpression' && n.callee && n.callee.type === 'Identifier' && n.callee.name === 'withDefaults') {
+        const propsCall = (n.arguments ?? []).find((a: any) => a && a.type === 'CallExpression')
+        const defaultsObj = (n.arguments ?? []).find((a: any) => a && a.type === 'ObjectExpression')
+        if (propsCall && defaultsObj) wdDefaults.push({ propsCall, defaultsObj })
+      }
       for (const k of Object.keys(n)) {
         const v = n[k]
         if (Array.isArray(v)) for (const c of v) walk(c)
@@ -556,6 +564,22 @@ function extractProps(source: string, warnings: string[], trace?: TransformTrace
         const t = source.slice(tn.start, tn.end).trim()
         const info = mapTsType(t, warnings, name)
         add(name, info, `defineProps<{ ${name}${mm.optional ? '?' : ''}: ${t} }>()`)
+      }
+    }
+    // ★withDefaults 默认值合并（放到 props 提取之后——out 已填充）：默认值对象 { k: v } → 覆盖对应 prop 的 value
+    for (const wd of wdDefaults) {
+      for (const p of wd.defaultsObj.properties ?? []) {
+        if (p.type !== 'ObjectProperty' || p.computed) continue
+        const k = p.key
+        const name = k && (k.type === 'Identifier' ? k.name : k.type === 'StringLiteral' ? k.value : undefined)
+        if (!name || !out[name]) continue
+        const dv = p.value
+        if (isFnDefault(dv)) {
+          warnings.push(`prop ${name} 的 default 是函数（微信 properties.value 仅支持字面量），已忽略默认值`)
+          continue
+        }
+        out[name].value = evalLiteral(source.slice(dv.start, dv.end).trim())
+        trace?.add('script/define-props', { before: `withDefaults 默认 ${name}`, after: `properties.${name}.value = ${String(out[name].value)}` })
       }
     }
     return out
@@ -893,8 +917,10 @@ function handleConstToData(
   warnings: string[],
   trace?: TransformTrace,
 ): void {
-  // 组件宏（defineProps/defineEmits/defineExpose）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
-  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\()/.test(init)) return
+  // 组件宏（defineProps/defineEmits/defineExpose/withDefaults）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
+  //   ★2026-09-08 P1：withDefaults(defineProps<T>(), D) 也属宏——内层 defineProps 由 extractProps 全树扫描提取；
+  //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\()/.test(init)) return
   // 跳过函数/箭头函数（属于 methods）
   if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
   // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
