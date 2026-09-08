@@ -15,7 +15,7 @@
 - **正确 = `compileScript`**：它把宏**标准化展开**（`defineModel` → `_useModel(__props, 'title')` + props/emits 规约；`bindings` 权威分类 `modelValue:'props'`/`m:'setup-ref'`；`const p = __props`/`const emit = __emit`）。**用它作权威语义源**驱动 IR，再适配 MP。
 - **小程序侧语义真相 = glass-easel 官方**：`docs/compiler-platform-alignment.md`（glass-easel template-compiler `tag.rs` WXML 语义模型，用户定调「不猜造小程序 IR 语义」）——产物应落在官方 parser 认识的形态内（emit→事件 `update-xxx`、prop→properties 规范等）。
 - **教训**：宏语义不由我们定义——凡是对齐项，都要吃 `@vue/compiler-sfc` 标准展开 + 对齐 glass-easel 官方（见 `docs/compiler-platform-alignment.md`），不手写正则。（后续「手造宏语义」的既有实现需逐步迁移到本链路。）
-- **一致性门测** `tests/sfc-macros-conformance.test.ts`：对代表性真实组件断言「手写 extractProps 产物 ⊆ compileScript 权威 propNames/emits」（差集为空）——**若手写实现与官方标准漂移即红**（地基不牢可被机器捕获）。为把手写宏迁移到权威源提供基准 / 防回归。
+- **一致性门测** `tests/sfc-macros-conformance.test.ts`：对代表性真实组件断言「手写 extractProps 产物 ⊆ compileScript 权威 propNames/emits」**且 type 映射一致（propsMeta.type）**（差集为空）——**若手写实现与官方标准漂移（漏 prop/改类型）即红**（地基不牢可被机器捕获）。为把手写宏迁移到权威源提供基准 / 防回归。
 
 ## 基准线 = Vue 全能力（SSOT，权威拉取）
 

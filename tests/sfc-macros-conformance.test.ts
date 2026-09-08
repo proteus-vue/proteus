@@ -15,11 +15,12 @@ const CASES: Array<[string, string]> = [
   ['p-drawer', 'src/components/p-drawer/index.vue'],
 ]
 
-function compiledPropsKeys(file: string): string[] {
+function compiledProps(file: string): Record<string, string> {
   const src = readFileSync(file, 'utf8')
   const c = compileVueSfc(src, { filename: file, ...opts, isComponent: true })
   const propsBlock = c.js.match(/properties:\s*\{([\s\S]*?)\n\s*\},/)?.[1] ?? ''
-  return [...propsBlock.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{\s*type:/g)].map((m) => m[1])
+  // name → type（微信 properties type 字段——手写 extractProps 的类型映射）
+  return Object.fromEntries([...propsBlock.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{\s*type:\s*(\w+)/g)].map((m) => [m[1], m[2]]))
 }
 
 describe('手写宏实现 × compileScript 权威源一致性（地基对齐门测）', () => {
@@ -28,10 +29,20 @@ describe('手写宏实现 × compileScript 权威源一致性（地基对齐门�
     const authoritative = extractSfcMacros(src, file)
     expect(authoritative.ok).toBe(true)
     const authProps = [...authoritative.propNames]
-    const compiled = compiledPropsKeys(file)
+    const compiled = compiledProps(file)
     // 编译 properties 应覆盖全部权威 prop 名（可多出框架注入字段如 rootClass，但不得少）
-    const missing = authProps.filter((p) => !compiled.includes(p))
+    const missing = authProps.filter((p) => !(p in compiled))
     expect(missing, `手写 extractProps 漏了权威 prop：${missing.join(', ')}`).toEqual([])
+  })
+
+  it.each(CASES)('%s：手写 extractProps 的 type 映射与 compileScript 权威 propsMeta.type 一致', (_label, file) => {
+    const src = readFileSync(file, 'utf8')
+    const authoritative = extractSfcMacros(src, file)
+    const compiled = compiledProps(file)
+    for (const [name, meta] of Object.entries(authoritative.propsMeta)) {
+      expect(compiled[name], `${name} 应被编译为 properties`).toBeTruthy()
+      expect(compiled[name], `${name} type 应=${meta.type}`).toBe(meta.type)
+    }
   })
 
   it('p-button：权威 emits 含 click（compileScript 数组 emits）', () => {
