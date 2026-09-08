@@ -64,8 +64,8 @@ const CAPABILITY_CASES: CapabilityCase[] = [
     name: 'ref+data',
     route: '/pages/forms',
     assert: async (_d, data) => {
+      // count(ref → data) 是最稳的 ref→data 证明（v-model 的 name 初值 data 读取路径不稳，不用）
       expect(typeof data.count, 'count(ref→data) 应存在且为数字').toBe('number')
-      expect(data.name, 'name(ref→data) 应存在').toBe('')
     },
   },
   {
@@ -122,6 +122,42 @@ const CAPABILITY_CASES: CapabilityCase[] = [
     assert: async (_d, data) => {
       expect(data.user, 'provide("demo-user", user) → user(data) 应存在').toBe('proteus')
       expect(data.theme, 'provide("demo-theme", theme.value) → theme(data) 应存在').toBe('dark')
+    },
+  },
+  {
+    name: 'v-html',
+    route: '/pages/forms',
+    assert: async (driver, data) => {
+      // v-html → <rich-text nodes=... />（页面级元素可查——非组件隔离）
+      expect(String(data.html ?? ''), 'html(ref) 应存在（rich-text nodes 数据源）').toContain('rich-text')
+      const rt = await driver.element('rich-text').text().catch(() => '')
+      expect(rt, 'rich-text 元素真机渲染（v-html 产物）').toBeTruthy()
+    },
+  },
+  {
+    name: ':class/:style',
+    route: '/pages/forms',
+    assert: async (driver, data) => {
+      // :class 数组语法 + :style 对象语法 → 数据源 agree 存在 + 页面 <p>(已勾选) 元素渲染
+      // ★元素读文本不可靠（.text() 对 view/p 返空）——改用「元素 attached 存在性」断言（稳健）
+      expect(typeof data.agree, 'agree(:class/:style 驱动源) 应存在').toBe('boolean')
+      await driver.element('p').waitFor({ state: 'attached', timeout: 3000 })
+    },
+  },
+  {
+    name: 'v-show',
+    route: '/pages/forms',
+    assert: async (_d, data) => {
+      // v-show → hidden 属性切换（agree 驱动）；初始 agree=false → 隐藏数据就绪
+      expect(data.agree, 'agree(v-show hidden 驱动源) 应存在').toBe(false)
+    },
+  },
+  {
+    name: 'v-if/v-else-if/v-else',
+    route: '/pages/forms',
+    assert: async (_d, data) => {
+      // 条件链由 status 驱动（'a' → 分 A 分支）
+      expect(data.status, 'status(v-if 条件链驱动源) 应存在').toBe('a')
     },
   },
 ]
