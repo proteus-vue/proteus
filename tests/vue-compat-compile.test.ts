@@ -75,6 +75,22 @@ describe('编译器接线：vue 命名导入 × Vue 全集基准线', () => {
     expect(r.js).not.toMatch(/(?:^|\s)onMounted\s*\(/)
   })
 
+  it('partial（defineComponent）→ 警告 + 【剥离为 no-op】（产物无裸 defineComponent 调用，防 ReferenceError）', () => {
+    // ★2026-09-08 P1：defineComponent 在 <script setup> 为冗余包装（SFC 已自动组件化）——编译器识别并剥离。
+    //   此前被当顶层副作用裸注入 onLoad → 产物 defineComponent(...) 无 import → not defined（getCurrentInstance 同类）。
+    const src = makeSfc(
+      "import { defineComponent } from 'vue'",
+      "defineComponent({ name: 'X' })\nconst App = defineComponent({ name: 'Y' })",
+    )
+    const r = compileVueSfc(src, { filename: 'pages/probe.vue', ...opts })
+    // 警告（partial·degrade → warning）
+    expect(r.warnings.some((w) => w.includes('defineComponent') && w.includes('Vue API'))).toBe(true)
+    // ★不裸泄漏：产物无裸 defineComponent( 调用
+    expect(r.js).not.toMatch(/(?<![.\w])defineComponent\s*\(/)
+    // 也不落 data（const App 不成为 data 字段）
+    expect(r.js).not.toMatch(/App\s*:/)
+  })
+
   it('现有 aligned 生态（provide/inject）正常不收 Vue API 警告', () => {
     const src = makeSfc(
       "import { provide } from 'vue'",

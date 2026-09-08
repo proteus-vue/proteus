@@ -72,8 +72,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'watchSyncEffect', group: 'reactivity', status: 'unsupported', note: '同上；flush sync 无对等', source: '评估' },
 
   // ===== component API =====
-  // ★Step2 校准：defineComponent 实测被当顶层副作用注入 onLoad 裸调用 defineComponent(…) → not defined（MP 编译器自动 SFC 化，无需手动 defineComponent）
-  { name: 'defineComponent', group: 'component', status: 'unsupported', note: 'MP 编译器自动 SFC 化组件，无需手动 defineComponent——当前注入 onLoad 裸调用 → not defined；请直接写组件模板', source: '评估（Step2 实测校准）' },
+  // ★2026-09-08 P1 校准：defineComponent 在 <script setup> 为冗余包装（SFC 已自动组件化）——编译器识别并剥离为 no-op（不落 data/不裸注入 onLoad），矩阵 partial（警告：包装 options 未编译，请用 <script setup>）；对内 setup 逻辑不翻译（非 SFC 范式）
+  { name: 'defineComponent', group: 'component', status: 'partial', degrade: true, note: 'SFC 已自动组件化，defineComponent(...) 包装剥离（no-op）；包装内 options/setup 不编译——请直接用 <script setup> 或模板', source: 'P1 校准（no-op 剥离）' },
   { name: 'defineProps', group: 'component', status: 'aligned', source: 'vue-compat §1（define-props）' },
   { name: 'defineEmits', group: 'component', status: 'aligned', source: 'vue-compat §1（define-emits）' },
   { name: 'defineExpose', group: 'component', status: 'aligned', source: 'define-expose（no-op+校验）' },
