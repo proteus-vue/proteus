@@ -50,6 +50,10 @@
 
 > ⚠️ 待办：`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
+## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）
+
+对齐过程中确认：编译器当前**无平台参数**（`compileVueSfc` 无 target/renderer），把「目标=MP」写死进单一后端；平台选择发生在构建编排层（plugin-vite/cli），Skyline 特判散点硬编码。框架是**全端目标**（Web/MP(Skyline·WebView)/App(iOS·Android·Harmony)），此架构需**后续拆分平台抽象**。详见 **[proteus-compiler-platform-plan/README.md](../proteus-compiler-platform-plan/README.md)**（记录+立项输入，非当前实施）。Vue 对齐专项不受影响（对齐对象=MP 后端行为，Web 用真 Vue 无需对齐）。
+
 ## 关联
 - 既定基线：`docs/vue-compat-plan.md`（§1 ✅/⚠️/❌ 实测）、`docs/vue-compat-advance.md`（Batch 1-7）、`docs/roadmap.md`（#2 编译能力）、L0 规约（原则 #0 第五投影 / #10.8 / 反黑盒 / 降级铁律）。
 - **Vue 全集权威来源**：`node_modules/.pnpm/@vue+runtime-core@3.5.42/.../runtime-core.d.ts` + `@vue/reactivity` + `@vue/shared`（版本随 vue pkg 演进）。
