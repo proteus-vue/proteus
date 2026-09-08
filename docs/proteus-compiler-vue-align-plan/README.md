@@ -91,7 +91,15 @@
 - 黄金断言：`tests/vue-compat-aligned.test.ts`（`v: '3.5.42'`，非 undefined）。
 - **验证**：全量 2574/2574 绿；build:mp / build:web 通过。
 
-> ⚠️ 待办：`defineModel`/`useModel` v-model 组件契约（可对齐，较复杂）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+## P1 第五批（2026-09-08）：`defineModel`/`useModel` 经 compileScript 权威源转为 partial（地基正本）
+
+- **关键架构定调落地**（见顶部「★★关键架构定调」段）：宏语义不再手造——`defineModel` 经 `@vue/compiler-sfc` `compileScript` 权威展开为 `_useModel(__props, name)`（`bindings` 分类 `modelValue:'props'`/`m:'setup-ref'`），用它驱动 MP 适配（对齐 glass-easel），而非手写正则抠。
+- **新增 `packages/compiler/src/sfc-macros.ts`**：`extractSfcMacros`（compileScript → bindings + modelRefs）+ `renameModelVarsInWxml`（模板 `{{ m }}`→`{{ modelValue }}`，仅 `{{ }}` 内，类名/属性不动）。
+- **接线**：`compileVueSfc` → `extractSfcMacros` → 模板改名 + script（`modelRefs`）；`transformScriptToPage` → prop 注册（`modelValue`/`title`→properties）+ `m.value` 读写重写（读→`this.data.<prop>`；写→`triggerEvent('update-<prop>', v)`，glass-easel `update-xxx`）。
+- **矩阵**：`defineModel`/`useModel` → `partial`（degrade→warning；模型修饰符/嵌套未全接——用 props+emit 可兼得）。
+- **验证**：`tests/vue-compat-compile.test.ts` defineModel 用例（prop 注册 + 读写 + 模板改名 + 不落 data）+ `tests/sfc-macros.test.ts`；全量 **2579/2579 绿**；build:mp / build:web 通过。（⚠ 过程中修复了 propsVar 正则被误改单反斜杠致全校 props 改写失效的回归 + 注册 `script/define-model` 规则。）
+
+> ⚠️ 待办：computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）
 

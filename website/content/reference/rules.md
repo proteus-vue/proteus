@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 89 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 90 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（49）
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（26）
+## 脚本转换（27）
 
 ### `script/const-to-data`
 
@@ -837,6 +837,19 @@ after:  no-op（reset 已在 methods，外部 selectComponent 可调）
 ```
 
 > why: 小程序组件外部访问（selectComponent + 方法调用）天然覆盖 Vue 的 defineExpose 方法暴露语义；ref 值暴露需方法包装（v0.3 尾，决策 #91）
+
+### `script/define-model`
+
+**defineModel → v-model 组件契约（compileScript 权威源）**
+
+组件模式：const m = defineModel<T>([name]) 经 @vue/compiler-sfc 权威展开为 _useModel(__props, name)——注册 prop（默认 modelValue）+ m.value 读→this.data.<prop> / 写→triggerEvent("update-<prop>", v)（glass-easel 事件名 update-xxx）；模板 {{ m }} 改名 {{ <prop> }}。不手写抠宏语义（模型修饰符/嵌套未全接 → partial）。
+
+```
+before: const m = defineModel<string>()
+after:  properties.modelValue + m.value 读→this.data.modelValue / 写→this.triggerEvent("update-modelValue", v)
+```
+
+> why: Vue 能力对齐地基（不手造宏语义）：defineModel 的标准展开由 @vue/compiler-sfc 给出（bindings 分类 + props/emits 规约），框架只做 MP 适配（对齐 glass-easel 事件/属性规范），避免手写覆盖面不全致地基不牢。
 
 ### `script/function-to-methods`
 

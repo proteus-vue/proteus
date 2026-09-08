@@ -9,6 +9,7 @@ import { assertValidResult, CompilerError } from './validate'
 import { createTrace } from './trace'
 import { buildCompileIR, emptyScriptIR } from './ir/build'
 import type { CompileOptions, CompileResult } from './types'
+import { extractSfcMacros, renameModelVarsInWxml } from './sfc-macros'
 
 /** djb2 哈希 → scoped 属性名（稳定：同文件同 scopeId；零依赖纯函数） */
 export function scopedIdFrom(filename: string): string {
@@ -105,6 +106,10 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     fluidLayout: options.fluidLayout,
     trace: tplTrace,
   })
+  // ★★2026-09-08 架构定调：宏语义权威源 = @vue/compiler-sfc compileScript（不手造）——defineModel 经它展开
+  //   _useModel(__props, name)；用其 modelRefs 驱动模板 var 改名 + 脚本 .value 读写（对齐 glass-easel 规范落地 IR）
+  const sfcMacros = extractSfcMacros(source, options.filename ?? 'anonymous.vue')
+  const wxml = sfcMacros.ok && sfcMacros.modelRefs.length ? renameModelVarsInWxml(tplResult.wxml, sfcMacros.modelRefs) : tplResult.wxml
   const scriptTrace = createTrace('script')
   const scriptResult = transformScriptToPage(setup, styleOpts, {
     file: options.filename,
@@ -125,6 +130,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     vModelComponentHandlers: tplResult.vModelComponentHandlers,
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
+    modelRefs: sfcMacros.ok ? sfcMacros.modelRefs : undefined,
     trace: scriptTrace,
   })
 
@@ -163,7 +169,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const finalWxss = `${wxss}${pageScrollCss}`
 
   const result: CompileResult = {
-    wxml: tplResult.wxml,
+    wxml,
     js: scriptResult.js,
     wxss: finalWxss,
     warnings: [...tplResult.warnings, ...scriptResult.warnings],

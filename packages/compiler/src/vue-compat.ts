@@ -80,8 +80,9 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // ★2026-09-08 P1 校准：defineOptions 被当顶层副作用裸注入 onLoad → not defined；defineModel/useModel 产物 data.x=undefined（假降级）→ unsupported·error
   { name: 'defineOptions', group: 'component', status: 'unsupported', note: '组件选项（name/inheritAttrs）无对等——当前裸注入 onLoad → not defined；请用 <script> options', source: 'P1 校准' },
   { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', source: '评估' },
-  { name: 'defineModel', group: 'component', status: 'unsupported', note: 'v-model 组件契约未实现——产物 data.x=undefined；请用 props + defineEmits(update:x) 显式建模', source: 'P1 校准' },
-  { name: 'useModel', group: 'component', status: 'unsupported', note: '同 defineModel（模型声明）——裸调用 → not defined；请用 props + emit 显式建模', source: 'P1 校准' },
+  // ★2026-09-08 P1（地基）：defineModel 经 @vue/compiler-sfc 权威展开（_useModel）→ 注册 prop + .value 读写重写 + 模板改名；useModel 同（运行时态，_useModel 产物）
+  { name: 'defineModel', group: 'component', status: 'partial', degrade: true, note: 'compileScript 展开为 _useModel(__props, name)：注册 prop + m.value 读写重写（读→data.prop / 写→triggerEvent update-prop）；模型修饰符/嵌套未全接——用 props+emit 显式可兼得', source: 'P1 地基（compileScript 权威源）' },
+  { name: 'useModel', group: 'component', status: 'partial', degrade: true, note: '同 defineModel（运行时模型态，_useModel 展开；模型修饰符/嵌套未全接）——用 props+emit 显式可兼得', source: 'P1 地基（compileScript 权威源）' },
   // ★2026-09-08 P1 对齐：withDefaults(defineProps<T>(), D) 已识别为宏（早退不落 data）+ extractProps 合并默认值 D（字面量）
   { name: 'withDefaults', group: 'component', status: 'aligned', note: 'withDefaults(defineProps<T>(), D) 宏剥离 + 默认值 D 合并到 properties.value（函数默认值仍忽略/警告）', source: 'P1 对齐（宏识别+默认值合并）' },
   // ★2026-09-08 P1 对齐：nextTick 已翻译——nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))
