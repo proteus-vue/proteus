@@ -81,6 +81,33 @@ describe('reactivity-runtime spke（reactive 族走运行时 @vue/reactivity）'
     expect(r.js).toMatch(/this\.ok = isRef\(this\.refs\.a\)/)
     expect(r.js).toMatch(/this\.refs\.a\.value \+= 1/)
   })
+
+  it('markRaw → runtime-init 原对象（isReactive(markRaw(x))=false）', () => {
+    const r = compile(
+      "import { markRaw, isReactive } from 'vue'\nconst raw = markRaw({ a: 1 })\nfunction chk() { return isReactive(raw) }",
+      '<view>{{ raw.a }}</view>',
+    ) as any
+    expect(r.js).toMatch(/require\('@proteus-vue\/runtime'\)/)
+    expect(r.js).toMatch(/this\.raw = markRaw\(\{ a: 1 \}\)/)
+    expect(r.js).toMatch(/chk\(\) \{\s*return isReactive\(this\.raw\)/)
+  })
+
+  it('customRef → runtime-init 真 ref（工厂 track/trigger 保留）', () => {
+    const r = compile(
+      "import { customRef } from 'vue'\nconst c = customRef((track, trigger) => ({ get() { track(); return 1 }, set() { trigger() } }))",
+      '<view>{{ c.value }}</view>',
+    ) as any
+    expect(r.js).toMatch(/this\.c = customRef\(\(track, trigger\) =>/)
+  })
+
+  it('proxyRefs → runtime-init 代理（成员 ref 自动解包）', () => {
+    const r = compile(
+      "import { reactive, proxyRefs, isRef } from 'vue'\nconst obj = reactive({ n: 1 })\nconst refs = proxyRefs({ obj })\nconst ok = isRef(refs.obj)",
+      '<view>{{ refs.obj }}</view>',
+    ) as any
+    expect(r.js).toMatch(/this\.refs = proxyRefs\(\{ obj: this\.obj \}\)/)
+    expect(r.js).toMatch(/this\.ok = isRef\(this\.refs\.obj\)/)
+  })
 })
 
 describe('rewriteInstanceRefsSafe（★2026-09-08 修复 runtimeInitLine 误伤对象字面量 key/字符串）', () => {
@@ -94,8 +121,8 @@ describe('rewriteInstanceRefsSafe（★2026-09-08 修复 runtimeInitLine 误伤�
   it('字符串内容不被误改（\'a\'/\'obj\' 保持）', () => {
     expect(rewriteInstanceRefsSafe('toRef(obj, \'obj\')', names)).toBe('toRef(this.obj, \'obj\')')
   })
-  it('对象简写 key: 语义保持（value 引用可改）', () => {
-    expect(rewriteInstanceRefsSafe('reactive({ a })', names)).toBe('reactive({ a })')
+  it('对象简写 key+value 转完整（reactive({ a }) → reactive({ a: this.a })）', () => {
+    expect(rewriteInstanceRefsSafe('reactive({ a })', names)).toBe('reactive({ a: this.a })')
   })
   it('属性访问不误改（obj.x 的 obj 是 base 应改 this.obj）', () => {
     expect(rewriteInstanceRefsSafe('getThing(obj.x)', names)).toBe('getThing(this.obj.x)')

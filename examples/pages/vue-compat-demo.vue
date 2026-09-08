@@ -100,11 +100,21 @@
       </view>
       <text class="state-line">xRefVal={{ xRefVal }} · isRef(xRef)={{ xIsRef }} · isRef(yRefs.y)={{ yRefIsRef }}</text>
     </view>
+
+    <!-- ⑪ markRaw / customRef（运行时真语义：markRaw 去代理 isReactive=false；customRef 用户工厂真 ref） -->
+    <!-- ★2026-09-08：模板显示 data-backed 值（rawIsReactive / customVal / customIsRef）；customR.value 逻辑层读写经 bumpCustom 反映 -->
+    <view class="card">
+      <text class="card-title">⑪ markRaw / customRef（运行时真语义）</text>
+      <view class="row">
+        <view class="chip" @click="bumpCustom">bump customR.value（customRef 工厂 set→trigger）</view>
+      </view>
+      <text class="state-line">rawIsReactive={{ rawIsReactive }} · customVal={{ customVal }} · isRef(customR)={{ customIsRef }}</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, provide, reactive, readonly, isReactive, isReadonly, toRef, toRefs, isRef } from 'vue'
+import { ref, computed, watch, provide, reactive, readonly, isReactive, isReadonly, toRef, toRefs, isRef, markRaw, customRef } from 'vue'
 // Web 端注册本文档组件；MP 端编译器忽略 import（标签走 usingComponents）
 import InjectConsumer from '../components/inject-consumer/index.vue'
 import ModelDemo from '../components/model-demo/index.vue'
@@ -176,6 +186,21 @@ function bumpToRef(): void {
   xRef.value += 1
   xRefVal.value = xRef.value
 }
+
+// ⑪ markRaw / customRef（运行时 @vue/reactivity：markRaw 去代理标记 + customRef 用户工厂真 ref）
+const rawData = markRaw({ tag: 'RAW' })
+const rawIsReactive = isReactive(rawData) // 应 false（markRaw 跳过代理）
+// customRef 工厂：闭包存 val（getter 返回 val、setter 存新值 + trigger 触发依赖）——真 ref 语义
+const customR = customRef((track, trigger) => {
+  let val = 9
+  return { get() { track(); return val }, set(v) { val = v; trigger() } }
+})
+const customIsRef = isRef(customR)
+function bumpCustom(): void {
+  customR.value = customR.value + 1
+  customVal.value = customR.value
+}
+const customVal = ref(9)
 </script>
 
 <style scoped>

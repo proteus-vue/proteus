@@ -42,17 +42,18 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'shallowReactive', group: 'reactivity', status: 'aligned', note: 'shallowReactive(x) → runtime-init @vue/reactivity 浅 Proxy + setData 桥；isReactive 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'shallowReadonly', group: 'reactivity', status: 'aligned', note: 'shallowReadonly(x) → runtime-init @vue/reactivity 浅 readonly Proxy；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'readonly', group: 'reactivity', status: 'aligned', note: 'readonly(x) → runtime-init @vue/reactivity readonly Proxy（只读约束 runtime 强制）+ setData 桥；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
-  { name: 'customRef', group: 'reactivity', status: 'unsupported', note: '自定义 ref 需运行时钩子，MP 无对等——请用 ref + watch/computed', source: '评估' },
+  // ★2026-09-08 reactivity-runtime spke：markRaw/triggerRef/customRef/proxyRefs 走运行时 @vue/reactivity（逻辑层真语义）——customRef 返回真 ref（.value 逻辑层），proxyRefs 返回自动解包代理
+  { name: 'customRef', group: 'reactivity', status: 'aligned', note: 'customRef(factory) → runtime-init @vue/reactivity 真 ref（逻辑层 .value 读写 + isRef=true）；工厂 track/trigger 回调语义保留', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   // ★2026-09-08 reactivity-runtime spke：toRef/toRefs 走运行时 @vue/reactivity——返回真 ref（.value 在逻辑层有效，isRef(toRef())=true）
   //   模板层诚实降级：toRef 的 runtime-init 变量仅逻辑层 .value（模板 {{ ref }} 读对象非值——请用 ref.value 或 reactive）；不静默（note）
   { name: 'toRef', group: 'reactivity', status: 'aligned', note: 'toRef(obj, key) → runtime-init @vue/reactivity 真 ref（语义同官方，isRef=true；.value 逻辑层读写 obj[key]）；模板直接 {{ ref }} 读的是 ref 对象——请用 ref.value 或 reactive', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'toRefs', group: 'reactivity', status: 'aligned', note: 'toRefs(obj) → runtime-init @vue/reactivity ref 映射（每键一 ref，.value 读 obj 对应字段）；解构 const { a } = toRefs(obj) 暂未接（声明为 ObjectPattern 跳过）——请用 const r = toRefs(obj); r.a.value', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'toValue', group: 'reactivity', status: 'aligned', note: 'toValue(x) 编译期内联：同 unref——x 为 ref → this.data.x；非 ref → x 本身；MP 无运行时 toValue', source: '增强（编译期内联改写）' },
-  { name: 'proxyRefs', group: 'reactivity', status: 'unsupported', note: '运行时代理，MP 无对等——直接用 .value', source: '评估' },
+  { name: 'proxyRefs', group: 'reactivity', status: 'aligned', note: 'proxyRefs(x) → runtime-init @vue/reactivity 代理（成员 ref 访问自动解包 .value）；逻辑层可用，模板直接 {{ proxy }.[key] } 读解包值需 .value 约定', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', source: '评估' },
   { name: 'stop', group: 'reactivity', status: 'unsupported', note: 'effect 关闭，MP 无对等', source: '评估' },
-  { name: 'triggerRef', group: 'reactivity', status: 'unsupported', note: '手动触发 shallowRef，MP 无对等——用 ref 替代', source: '评估' },
-  { name: 'markRaw', group: 'reactivity', status: 'unsupported', note: '运行时标记，MP 无对等', source: '评估' },
+  { name: 'triggerRef', group: 'reactivity', status: 'partial', degrade: true, note: 'triggerRef(ref) 需 shallowRef 为运行时 ref 对象——当前 shallowRef 编译期内联（this.data.x 为值）无 ref 可传；仅对 toRef/toRefs/factory 等运行时 ref 有效', source: 'reactivity-runtime（运行时 @vue/reactivity，局限）' },
+  { name: 'markRaw', group: 'reactivity', status: 'aligned', note: 'markRaw(x) → runtime-init @vue/reactivity（返回原对象标记跳过代理；isReactive(markRaw(x))=false）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   // ★2026-09-08 增强：unref(x)/toValue(x) 编译期内联为 x.value（x 为已知 ref → this.data.x；非 ref → x 本身）——MP 无运行时 unref，编译期取值等价
   { name: 'unref', group: 'reactivity', status: 'aligned', note: 'unref(x) 编译期内联：x 为 ref → this.data.x；非 ref → x 本身（unref 恒等）；MP 无运行时 unref，编译期取值', source: '增强（编译期内联改写）' },
   // ★2026-09-08 Step2 校准：isRef/isReactive/isReadonly/isProxy/isShallow 实测被当「函数调用初始化」译为 this.x=isX(…)，

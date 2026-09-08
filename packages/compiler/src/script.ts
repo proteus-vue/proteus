@@ -37,6 +37,12 @@ export const REACTIVITY_RUNTIME_APIS = [
   'toRefs',
   // isRef：单标识符走编译期内联（isRef(x) → data.ok=bool）；成员表达式（isRef(obj.key)）需运行时——一并注入供 runtime 分支用
   'isRef',
+  // ★2026-09-08 运行时标记/触发/自定义/代理：markRaw 去代理标记、triggerRef 手动触碰 shallowRef、
+  //   customRef 用户工厂、proxyRefs 自动解包 .value——均走运行时 @vue/reactivity（runtime-init + 注入 require）
+  'markRaw',
+  'triggerRef',
+  'customRef',
+  'proxyRefs',
 ] as const
 
 /** reactive 家族的 const 源类型（isRef 内联判定用：reactive/readonly 均非 ref-like → false） */
@@ -1036,8 +1042,8 @@ function handleConstToData(
     // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
     // ★#503 es5-safe：运行时初始化调用串内 ?? / ?. → 显式 null 检查（原样进产物 onLoad/attached）
     out.runtimeInits.push({ name, call: raw.trim() })
-    // ★2026-09-08 toRef/toRefs：返回真 ref——constSourceTypes 记 'ref'（isRef(toRef())=true 内联判定）
-    if (/^(?:toRef|toRefs)\s*\(/.test(raw.trim())) out.constSourceTypes.set(name, 'ref')
+    // ★2026-09-08 toRef/toRefs/customRef：返回真 ref——constSourceTypes 记 'ref'（isRef(...)=true 内联判定）
+    if (/^(?:toRef|toRefs|customRef)\s*\(/.test(raw.trim())) out.constSourceTypes.set(name, 'ref')
     const guardName = raw.match(/^(isReactive|isReadonly|isProxy|isShallow|toRaw)\s*\(/)?.[1]
     const isReactiveGuard = Boolean(guardName && REACTIVITY_RUNTIME_GUARDS.has(guardName))
     trace?.add('script/runtime-init', {
@@ -1440,9 +1446,22 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       while (j < len && isNameChar(call[j])) j++
       const word = call.slice(i, j)
       if (names.has(word)) {
-        // 对象内 key 位（前一个有效字符是 `{`或`,` 且深度>0）→ 不改写（完整 key `{ a: 1 }` 与简写 `{ a }` 的 key 位）
+        // ① 属性访问（.x / ?.x 的 x 是属性名）→ 不改写
+        if (prevSig === '.') { out += word; i = j; prevSig = ''; continue }
+        // ② 对象内 key 位（深度>0 且前一个有效字符是 `{`/`,`）：完整 key `{ a: 1 }` 后跟 `:` → 纯 key 不改；
+        //    简写 `{ a }` 后跟 `,`/`}`/`)` → key+value 引用 → 转完整 `a: this.a`
         const isKeyPos = depth > 0 && (prevSig === '{' || prevSig === ',')
-        if (!isKeyPos) { out += 'this.' + word } else { out += word }
+        if (isKeyPos) {
+          let k = j
+          while (k < len && /\s/.test(call[k])) k++
+          if (call[k] === ':') { out += word; i = j; prevSig = ''; continue }
+          // 简写 key+value → 完整形式（值引用 this.<word>）
+          out += word + ': this.' + word
+          i = j
+          prevSig = ''
+          continue
+        }
+        out += 'this.' + word
       } else {
         out += word
       }

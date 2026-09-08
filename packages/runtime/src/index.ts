@@ -30,5 +30,9 @@ export {
   toRef,
   toRefs,
   isRef,
+  markRaw,
+  triggerRef,
+  customRef,
+  proxyRefs,
   effect,
 } from 'vue'
