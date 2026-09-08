@@ -212,6 +212,20 @@ const CAPABILITY_CASES: CapabilityCase[] = [
       expect(after.xRefVal, 'bumpToRef → xRef.value+1 → data.xRefVal 自增（toRef .value 逻辑层读写）').toBe(before + 1)
     },
   },
+  {
+    name: 'markRaw/customRef',
+    route: '/pages/vue-compat-demo',
+    assert: async (driver, data) => {
+      // ★2026-09-08 markRaw 走运行时 @vue/reactivity：isReactive(markRaw(x))=false（跳过代理标记）；customRef 返回真 ref（isRef=true）
+      expect(data.rawIsReactive, 'isReactive(markRaw(x)) 应为 false（markRaw 去代理标记）').toBe(false)
+      expect(data.customIsRef, 'isRef(customRef(factory)) 应为 true').toBe(true)
+      const before = (data.customVal as number | undefined) ?? 9
+      await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; p.bumpCustom() })
+      await driver.waitFor(400)
+      const after = JSON.parse((await driver.evaluate(readPageData)) as string) as Record<string, unknown>
+      expect(after.customVal, 'bumpCustom → customRef set→trigger → data.customVal 自增（逻辑层 .value 读写）').toBe(before + 1)
+    },
+  },
 ]
 
 // ① 页面能进 + 真机健康（console 零错）先全局验一次；② 每能力断言
