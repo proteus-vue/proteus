@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 95 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 97 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (50)
+## Template transforms (52)
 
 ### `tag/div-to-view`
 
@@ -374,6 +374,32 @@ after:  <view>{{ msg }}</view>
 ```
 
 > why: Mini Programs have no v-text directive, but v-text semantics = element content is the text value — mapped to content interpolation {{ expr }} (element kept + content overridden); same family as v-html→rich-text
+
+### `directive/v-once`
+
+**v-once honest alignment (static strip equivalent / interpolation warns)**
+
+A v-once element with no {{ }} interpolation (pure static) → stripped with no warning (static content is rendered once anyway, semantically equivalent); with {{ }} interpolation → honest warning (MP data-driven rendering has no render-once laziness)
+
+```
+before: <view v-once>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-once semantics = freeze after the first render; MP data-driven rendering has no static-freeze counterpart, static content naturally satisfies it, reactive content has no equivalent — distinguish honestly (no sugar-coating)
+
+### `directive/v-pre`
+
+**v-pre honest alignment (static strip equivalent / interpolation warns)**
+
+compiler-dom skips compiling the contents of a v-pre element at parse time ({{ }} becomes raw TEXT), so the v-pre attr is absent from props — detected via the element raw source (node.loc.source); if it contains {{ }} → honest warning (WXML has no raw mode so it still interpolates), pure static → silent equivalent
+
+```
+before: <view v-pre>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-pre semantics = skip compiling this node; MP WXML has no raw mode ({{ }} always interpolates) — distinguish honestly between static-equivalent and interpolation-not-effective
 
 ### `directive/custom`
 

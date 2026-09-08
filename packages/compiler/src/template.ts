@@ -370,6 +370,26 @@ const SEMANTIC_COMPILE_TAGS = new Set(['p-grid'])
 /** 需迁移到合成包装节点的指令（循环/条件/渲染 key——包装承载渲染，内容节点剥离） */
 const LOOP_DIRECTIVES = new Set(['for', 'if', 'else-if', 'else', 'key'])
 
+/** ★2026-09-08 v-once/v-pre 诚实对齐：判断元素（含子节点/属性）是否含 {{ }} 插值——无插值=纯静态内容（剥离 v-once/v-pre 语义等价），有插值=依赖运行期（v-once 惰性冻结/v-pre 跳过编译在 MP 无对等 → 诚实 warning） */
+function hasInterpolation(node: ElementNode): boolean {
+  // 属性插值 {{ }}
+  for (const p of node.props) {
+    if (p.type === NodeTypes.ATTRIBUTE && (p as AttributeNode).value && (p as AttributeNode).value?.content.includes('{{')) return true
+    if (p.type === NodeTypes.DIRECTIVE) {
+      const d = p as DirectiveNode
+      if (d.exp && exprContent(d.exp).includes('{{')) return true
+      if (d.arg && exprContent(d.arg).includes('{{')) return true
+    }
+  }
+  // 子节点插值（递归）
+  for (const c of node.children) {
+    if (c.type === NodeTypes.TEXT && (c as { content?: string }).content?.includes('{{')) return true
+    if (c.type === NodeTypes.INTERPOLATION) return true
+    if (c.type === NodeTypes.ELEMENT && hasInterpolation(c as ElementNode)) return true
+  }
+  return false
+}
+
 /** 解析 p-grid 语义 props（MVP：静态属性或 :bind 数字字面量；其它形态 → 回退运行时组件并警告） */
 function tryParseSemanticGrid(node: ElementNode): { minColWidth: number; gap: number } | null {
   let minColWidth = 160
@@ -518,6 +538,17 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
+  // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
+  //   用元素原始源码检测（node.loc.source 含 v-pre）。含 {{ }} 插值 → WXML 仍会插值（v-pre 跳过编译无法实现）→ 诚实警告；纯静态 → 等价（静默）
+  if (/<[^>]*\bv-pre\b[^>]*>/.test(node.loc.source) && !ctx.disabled.has('directive/v-pre')) {
+    const dyn = hasInterpolation(node)
+    if (dyn) {
+      ctx.warnings.push(`v-pre 元素含 {{ }} 插值——WXML 无 raw 模式（{{ }} 仍会被插值，v-pre 应跳过编译无法实现），已剥离；如需原样文本请用转义（vue-compat Batch A）`)
+      ctx.trace?.add('directive/v-pre', { line: node.loc.start.line, before: 'v-pre（含插值）', after: '（剥离：WXML 无 raw 模式，诚实警告）' })
+    } else {
+      ctx.trace?.add('directive/v-pre', { line: node.loc.start.line, before: 'v-pre（纯静态）', after: '剥离（静态内容等价：无需跳过编译）' })
+    }
+  }
   // ★#496 柔性语义编译：<p-grid> 语义元素——仅页面（Skyline SelectorQuery 需页面 onReady；组件内 p-grid 回退运行时组件）
   // ★#505 M3 批 3：规则禁用须整体回退（template/script/gen-routes 三侧一致）——旧行为 template 照常语义编译但
   //   script 不注入默认档（disabled 只查了 script 侧）→ 产物 wxml 引用 {{pgridStyleN}} 永远 undefined = 半失效产物；
@@ -989,8 +1020,23 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         break
       default:
         // ★Batch A（vue-compat）：自定义指令（v-focus 等）小程序无对等——显式警告（反黑盒，不再静默剥离）
-        if (dir.name === 'slot' || dir.name === 'pre' || dir.name === 'cloak' || dir.name === 'text') {
-          break // v-slot/v-pre/v-cloak/v-text：MVP 忽略（v-text 已由 case 'text' 覆盖内容）
+        if (dir.name === 'slot' || dir.name === 'cloak' || dir.name === 'text') {
+          break // v-slot/v-text/v-cloak：MVP 忽略（v-text 已由 case 'text' 覆盖内容）
+        }
+        // ★2026-09-08 v-once / v-pre 诚实对齐：元素无插值（纯静态）→ 剥离无警告（语义等价；静态内容天然只渲染一次）；含插值 → 诚实 warning（MP 无惰性冻结/raw 模式）
+        if (dir.name === 'once' || dir.name === 'pre') {
+          const dyn = hasInterpolation(node)
+          if (dyn) {
+            ctx.warnings.push(
+              dir.name === 'once'
+                ? `v-once 元素含 {{ }} 插值——MP 数据驱动无「渲染一次」惰性（无对等），已剥离；静态内容请去掉插值（vue-compat Batch A）`
+                : `v-pre 元素含 {{ }} 插值——WXML 无 raw 模式（{{ }} 仍会被插值，v-pre 应跳过编译无法实现），已剥离；如需原样文本请用转义（vue-compat Batch A）`,
+            )
+            ctx.trace?.add(dir.name === 'once' ? 'directive/v-once' : 'directive/v-pre', { line: node.loc.start.line, before: `v-${dir.name}（含插值）`, after: '（剥离：MP 无对等，诚实警告）' })
+          } else {
+            ctx.trace?.add(dir.name === 'once' ? 'directive/v-once' : 'directive/v-pre', { line: node.loc.start.line, before: `v-${dir.name}（纯静态）`, after: '剥离（静态内容语义等价：只渲染一次/不需编译）' })
+          }
+          break
         }
         ctx.warnings.push(
           `自定义指令 v-${dir.name} 在小程序无对等机制（已剥离且不执行）——请改用方法调用或条件渲染（vue-compat Batch A）`,
