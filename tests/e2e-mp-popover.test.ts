@@ -102,57 +102,6 @@ describe.skipIf(!ENABLED)('p-popover 方案 A MP E2E（wechatide skill-CLI 标�
     const after = JSON.parse(String(await driver.evaluate(readPageData))) as { popoverOpen?: boolean }
     expect((after as { popoverOpen?: boolean }).popoverOpen, 'popoverOpen 应为 true（打开）').toBe(true)
 
-    // ★诊断（在断言前执行）：页面上下文直接做测量实验（结果写进 data.__ppDiag 再读回）——确定查询 API 真实行为
-    await driver.evaluate(async () => {
-      const pages = getCurrentPages()
-      const p = pages[pages.length - 1]
-      const out: Record<string, unknown> = {}
-      const done = (): void => {
-        p.setData({ __ppDiag: JSON.stringify(out) })
-      }
-      const q1 = wx.createSelectorQuery()
-      q1.select('.proteus-popover-trigger-query').boundingClientRect((r: unknown) => { out.pageLevel = r ? 'hit' : 'null' })
-      q1.exec()
-      const q2 = wx.createSelectorQuery()
-      q2.select('#proteus-popover-trigger').boundingClientRect((r: unknown) => { out.pageLevelId = r ? 'hit' : 'null' })
-      q2.exec()
-      const inst = p.selectComponent('#proteus-popover-demo') as unknown as { createSelectorQuery?: () => { select(s: string): { boundingClientRect(cb: (r: unknown) => void): unknown; exec(): void } } } | null
-      if (inst && typeof inst.createSelectorQuery === 'function') {
-        const q3 = inst.createSelectorQuery()
-        q3.select('.proteus-popover-trigger-query').boundingClientRect((r: unknown) => { out.compLevel = r ? 'hit' : 'null' })
-        q3.exec()
-      } else {
-        out.compLevel = 'no-inst-or-api'
-      }
-      // 实验④：直接调组件 openMeasure（捕获异常）+ 读回 panelStyle——定位组件内链路断点
-      const inst2 = inst as unknown as { openMeasure?: () => Promise<void>; data: Record<string, unknown> } | null
-      if (inst2 && typeof inst2.openMeasure === 'function') {
-        try {
-          await inst2.openMeasure()
-          out.openMeasure = 'ok'
-        } catch (e) {
-          out.openMeasure = 'throw:' + String(e).slice(0, 80)
-        }
-        out.panelStyleAfter = String(inst2.data?.panelStyle ?? '<no-field>').slice(0, 90)
-      } else {
-        out.openMeasure = 'no-method'
-      }
-      // 实验⑤：精确复现 adapter.measureRect 逻辑（scope.createSelectorQuery + await）——内层异常现形
-      try {
-        const rect = await new Promise((resolve: (v: unknown) => void) => {
-          const q = (inst2 as unknown as { createSelectorQuery: () => { select(s: string): { boundingClientRect(cb: (r: unknown) => void): { exec(): void } } } }).createSelectorQuery()
-          q.select('.proteus-popover-trigger-query').boundingClientRect((r: unknown) => resolve(r)).exec()
-        })
-        out.exp5 = rect ? 'rect:' + JSON.stringify(rect).slice(0, 80) : 'null'
-      } catch (e) {
-        out.exp5 = 'throw:' + String(e).slice(0, 80)
-      }
-      setTimeout(done, 400)
-    })
-    await driver.waitFor(900)
-    const diagData = JSON.parse(String(await driver.evaluate(readPageData))) as { __ppDiag?: string }
-    console.log('[DIAG-EXP]', diagData.__ppDiag ?? 'NO-DIAG')
-
     // ⑥ ★定位断言（核心回归锁）：panelStyle 应含 fixed + 非 0 坐标（measureRect 成功 → 面板锚定 trigger 下方，非左上角）
     const panelStyle = String(await driver.evaluate(readPopoverPanelStyle))
     console.log('[POP-STYLE]', panelStyle)
