@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 90 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 93 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (49)
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (27)
+## Script transforms (30)
 
 ### `script/const-to-data`
 
@@ -1048,6 +1048,47 @@ after:  onLoad: const provides = (getApp().__proteusProvides || (getApp().__prot
 ```
 
 > why: The mini program component tree has no provide/inject mechanism (decision #117): the global registry bridge lets a page pass values down to components (including deeply nested ones); MVP is value snapshots (no reactive linkage) + a global registry (duplicate keys are overwritten by the later write); page-level isolation/reactive linkage come later
+
+### `script/reactive-runtime-init`
+
+**reactive/readonly/shallow-family const → runtime real Proxy (@vue/reactivity)**
+
+Top-level const s = reactive({...})/readonly({...})/shallowReactive/shallowReadonly compiles to runtime-init this.s = reactive({...}) (a real @vue/reactivity Proxy carrying ReactiveFlags) instead of inlining to plain data — otherwise isReactive(reactive obj) semantics are lost; ref/shallowRef/computed stay compile-time inlined (the efficient MP model); constSourceTypes record reactive/readonly for isRef inline judgment (both are non-ref-like → false)
+
+```
+before: const s = reactive({ name: "x" })
+after:  onLoad: this.s = reactive({ name: "x" })（真 Proxy；data 置 s: null 占位模板可读）+ 后续 setData 桥
+```
+
+> why: The MP compiler previously inlined reactive into plain data (no Proxy), so isReactive/isReadonly/isProxy could not be true (no flag); introducing runtime @vue/reactivity (reusing the existing dependency, not reinventing) makes the reactive family return real Proxies, so guards reading ReactiveFlags match Web semantics (aligned with uni-app @dcloudio/uni-mp-vue — reuse Vue3 reactivity core + bridge Proxy to setData)
+
+### `script/reactivity-runtime-require`
+
+**Reactive family/guards inject require('@vue/reactivity') on demand**
+
+When the source uses any of reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw (word-boundary detection), the product injects const { ...used } = require('@vue/reactivity') at the top; when the reactive family is present it also adds effect (for the setData bridge); pure ref/computed pages do not inject — keeping ordinary pages lean via inline compilation (on-demand injection)
+
+```
+before: import { reactive } from 'vue'
+const s = reactive({ name: 1 })
+after:  const { reactive, effect } = require('@vue/reactivity')（仅注入用到的符号；纯 ref 页无此行）
+```
+
+> why: vue imports are stripped in MP (reactivity is inlined), but the reactive family/guards need real runtime functions; injecting @vue/reactivity on demand (only the APIs used) instead of the full vue meets the lightness need for pages that do not use it
+
+### `script/reactive-setdata-bridge`
+
+**reactive-family mutation → setData bridge (effect reads through proxy → view refresh)**
+
+After reactive/readonly family runtime-init, generate a per-const bridge: __proteusSyncReactive(name) uses effect to read through the proxy (JSON serialization reads every getter/ownKeys → any field change re-runs) → setData({ [name]: flat snapshot }); template {{ reactive.name }} reads through the data placeholder null + the bridge keeps setData to the view; onUnload/detached disposes the effect (__proteusDisposeReactive) to prevent leaks; initial data sets reactive names to null
+
+```
+before: const s = reactive({ name: "x" })
+// 方法内 s.name = "y"
+after:  onLoad: this.s = reactive({ name: "x" }); this.__proteusSyncReactive('s'); 变更 → 桥 effect 重跑 setData({ s: { name: "y" } })；onUnload 解绑
+```
+
+> why: Once reactive goes through a runtime real Proxy, logic-layer mutations must be bridged to setData to refresh the view (the core of uni-app @dcloudio/uni-mp-vue — bridging Proxy reads/writes to the setData synchronization model); dependency tracking via effect is the standard no-reinvention approach (reading through tracks, mutations auto re-run)
 
 ## Style transforms (9)
 

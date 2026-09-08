@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 90 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 93 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（49）
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（27）
+## 脚本转换（30）
 
 ### `script/const-to-data`
 
@@ -1048,6 +1048,47 @@ after:  onLoad: const provides = (getApp().__proteusProvides || (getApp().__prot
 ```
 
 > why: 小程序组件树无 provide/inject 机制（决策 #117）：全局注册表桥让页面向组件传值（含深层嵌套组件）；MVP 值快照（非响应式联动）+ 全局注册表（重名 key 后写覆盖），页面级隔离/响应式为后续
+
+### `script/reactive-runtime-init`
+
+**reactive/readonly/浅族 const → 运行时真 Proxy（@vue/reactivity）**
+
+顶层 const s = reactive({...})/readonly({...})/shallowReactive/shallowReadonly 编译为 runtime-init this.s = reactive({...})（@vue/reactivity 真 Proxy，携带 ReactiveFlags 标记位）而非内联普通 data——否则 isReactive(reactive obj) 语义丢失；ref/shallowRef/computed 仍保持编译期内联（MP 高效模型）；constSourceTypes 记为 reactive/readonly 供 isRef 内联判定（均非 ref-like → false）
+
+```
+before: const s = reactive({ name: "x" })
+after:  onLoad: this.s = reactive({ name: "x" })（真 Proxy；data 置 s: null 占位模板可读）+ 后续 setData 桥
+```
+
+> why: 小程序编译器此前把 reactive 内联成普通 data（无 Proxy）→ isReactive/isReadonly/isProxy 无法为真（无标记位）；引入运行时 @vue/reactivity（复用既有依赖，不造轮子）让 reactive 族返回真 Proxy，守卫读 ReactiveFlags 即可与 Web 同语义（对齐 uni-app @dcloudio/uni-mp-vue 做法——Vue3 reactivity 核心复用 + Proxy 桥接 setData）
+
+### `script/reactivity-runtime-require`
+
+**reactive 族/守卫按需注入 require('@vue/reactivity')**
+
+源码用到 reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw 任一（词边界检测）→ 产物顶部注入 const { ...used } = require('@vue/reactivity')；reactive 族存在时额外补 effect（setData 桥用）；纯 ref/computed 页面不注入——普通页面保持纯内联轻量（按需注入）
+
+```
+before: import { reactive } from 'vue'
+const s = reactive({ name: 1 })
+after:  const { reactive, effect } = require('@vue/reactivity')（仅注入用到的符号；纯 ref 页无此行）
+```
+
+> why: vue import 在 MP 中被剥离（响应式走编译期内联），但 reactive 族/守卫需要运行时真函数；按需注入 @vue/reactivity（仅用到的 API）而非全量 vue——满足「有的不需要」的轻量诉求
+
+### `script/reactive-setdata-bridge`
+
+**reactive 族变更 → setData 桥（effect 读透 proxy → 视图刷新）**
+
+reactive/readonly 族 runtime-init 之后生成 per-const 桥：__proteusSyncReactive(name) 用 effect 读透 proxy（JSON 序列化即读透每个 getter/ownKeys → 任一字段变更触发重跑）→ setData({ [name]: 扁平快照 })；模板 {{ reactive.name }} 通过 data 占位 null + 桥持续 setData 读到视图；onUnload/detached 解绑 effect（__proteusDisposeReactive）防泄漏；初始 data 置 reactive 名为 null
+
+```
+before: const s = reactive({ name: "x" })
+// 方法内 s.name = "y"
+after:  onLoad: this.s = reactive({ name: "x" }); this.__proteusSyncReactive('s'); 变更 → 桥 effect 重跑 setData({ s: { name: "y" } })；onUnload 解绑
+```
+
+> why: reactive 走运行时真 Proxy 后，logic 层变更需桥接 setData 才能刷新视图（uni-app @dcloudio/uni-mp-vue 核心工作——Proxy 读写桥接 setData 同步模型）；effect 依赖追踪是零造轮子的标准做法（读透即追踪，变更自动重跑）
 
 ## 样式转换（9）
 

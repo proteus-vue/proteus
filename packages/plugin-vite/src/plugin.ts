@@ -183,6 +183,24 @@ export function resolveSharedModule(
  *   @proteus-vue/desktop 等跨行 import 不进共享模块 → 页面产物丢 require → 运行时 ReferenceError 白屏
  * 实现：\s\s（等价 s 标志）跨行 + 量词限制在「{…}」或标识符内（防 from 后源串含 from 字符串误切——源串仅取引号内）
  */
+/**
+ * ★2026-09-08 reactivity-runtime spke：把产物 JS 里的裸 `require('@proteus-vue/<x>')` 映射为相对 `_proteus/<x>.js`。
+ *   编译器注入的 reactivity require（以及任何编译器内联的框架包 require）是裸行，不经过 moduleImports 的 import 改写；
+ *   MP 运行时无 miniprogram_npm，必须相对 require 到 _proteus/ 共享产物（微信 require 缓存同路径同实例）。
+ *   relOutputPath = 产物输出路径无扩展名（如 pages/foo）；`_proteus/<x>.js` 在 appDir 顶层。
+ *   纯函数可测。
+ */
+export function rewriteFrameworkRequires(js: string, relOutput: string): string {
+  if (!js.includes("require('@proteus-vue/")) return js
+  const pageDir = path.posix.dirname(relOutput)
+  return js.replace(/require\('@proteus-vue\/([A-Za-z0-9_-]+)'\)/g, (m, name: string) => {
+    const pkgRel = `_proteus/${name}.js`
+    let rel = path.posix.relative(pageDir, pkgRel)
+    if (!rel.startsWith('.')) rel = `./${rel}`
+    return `require('${rel}')`
+  })
+}
+
 export function scanSourceImports(source: string): Array<{ source: string; typeOnly: boolean }> {
   const out: Array<{ source: string; typeOnly: boolean }> = []
   // import { a, b } from 'm' / import type {...} from 'm' / import def from 'm' / import 'm'
@@ -665,7 +683,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
 
         // sourcemap（v0.3）：方法级 JS 源码映射，调试构建落盘 + js 尾部 sourceMappingURL（微信开发者工具可定位源码）
-        const jsWithMap = sourcemap && isDebug ? `${js}//# sourceMappingURL=${rel}.js.map\n` : js
+        // ★2026-09-08 reactivity-runtime spke：裸 @proteus-vue/* require → 相对 _proteus/*.js（编译器注入行不走 moduleImports）
+        const jsFinal = rewriteFrameworkRequires(js, rel)
+        const jsWithMap = sourcemap && isDebug ? `${jsFinal}//# sourceMappingURL=${rel}.js.map\n` : jsFinal
         this.emitFile({ type: 'asset', fileName: `${rel}.wxml`, source: wxml })
         this.emitFile({ type: 'asset', fileName: `${rel}.js`, source: jsWithMap })
         this.emitFile({ type: 'asset', fileName: `${rel}.wxss`, source: wxss })

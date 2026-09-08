@@ -19,6 +19,38 @@ let astCacheSrc = ''
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let astCacheBody: any[] | null = null
 
+// ★★2026-09-08 立项（proteus-reactivity-runtime-plan spke）：走运行时 @vue/reactivity 的响应式 API 集合。
+//   与 ref/computed（编译期内联）不同，这些需真 Proxy（ReactiveFlags 标记位）才能让 isReactive/isReadonly/isProxy
+//   语义为真——产物注入 require('@vue/reactivity') + reactive/readonly 系列走 runtime-init（实例属性真 Proxy）+ setData 桥。
+export const REACTIVITY_RUNTIME_APIS = [
+  'reactive',
+  'readonly',
+  'shallowReactive',
+  'shallowReadonly',
+  'isReactive',
+  'isReadonly',
+  'isProxy',
+  'isShallow',
+  'toRaw',
+] as const
+
+/** reactive 家族的 const 源类型（isRef 内联判定用：reactive/readonly 均非 ref-like → false） */
+export const REACTIVE_SRC_TYPE: Record<string, string> = {
+  reactive: 'reactive',
+  shallowReactive: 'reactive',
+  readonly: 'readonly',
+  shallowReadonly: 'readonly',
+}
+
+/** 是否为走运行时 reactive 的 const 初始化调用（reactive(x)/readonly(x)/shallowReactive(x)/shallowReadonly(x)） */
+export function isReactiveRuntimeInit(init: string): string | null {
+  const m = init.match(/^(?:reactive|readonly|shallowReactive|shallowReadonly)\s*[<(]/)
+  return m ? REACTIVE_SRC_TYPE[init.match(/^(reactive|readonly|shallowReactive|shallowReadonly)/)?.[1] ?? ''] ?? 'reactive' : null
+}
+
+/** 运行时守卫（读 ReactiveFlags 标记位，需 reactive 族真 Proxy 才有语义）——走 runtime-init 但在「函数调用初始化」警告里改准确地说明 */
+export const REACTIVITY_RUNTIME_GUARDS = new Set(['isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw'])
+
 /** 解析 script 顶层语句（TS 插件；失败 → null 触发回退） */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function topLevelAst(source: string): any[] | null {
@@ -929,10 +961,26 @@ function handleConstToData(
   name: string,
   init: string,
   line: number,
-  out: { data: Record<string, unknown>; runtimeInits: Array<{ name: string; call: string }>; rawComputed: Array<{ name: string; init: string; line: number }>; constSourceTypes: Map<string, string> },
+  out: { data: Record<string, unknown>; runtimeInits: Array<{ name: string; call: string }>; reactiveInits: Array<{ name: string; srcType: string }>; rawComputed: Array<{ name: string; init: string; line: number }>; constSourceTypes: Map<string, string> },
   warnings: string[],
   trace?: TransformTrace,
 ): void {
+  // ★★2026-09-08 reactivity-runtime spke：reactive/readonly/shallowReactive/shallowReadonly 走运行时真 Proxy（@vue/reactivity）
+  //   而非内联普通 data——否则 isReactive(reactive obj) 语义丢失（无 ReactiveFlags 标记位）。
+  //   产物 = runtime-init（this.name = reactive(...)）+ setData 桥（effect→setData，视图刷新）。
+  //   与 ref/computed（内联）边界：ref/shallowRef 仍内联（MP 高效模型）；仅 reactive 族走运行时。
+  const reactiveSrc = isReactiveRuntimeInit(init)
+  if (reactiveSrc) {
+    out.runtimeInits.push({ name, call: init.trim() })
+    out.reactiveInits.push({ name, srcType: reactiveSrc })
+    out.constSourceTypes.set(name, reactiveSrc)
+    trace?.add('script/reactive-runtime-init', {
+      line,
+      before: `const ${name} = ${init.slice(0, 40)}${init.length > 40 ? '…' : ''}`,
+      after: `this.${name} = ${init.trim()}（运行时真 Proxy，@vue/reactivity）+ setData 桥（onLoad/attached）`,
+    })
+    return
+  }
   // 组件宏（defineProps/defineEmits/defineExpose/withDefaults/defineComponent/defineModel）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
   //   ★2026-09-08 P1：withDefaults(defineProps<T>(), D) 也属宏——内层 defineProps 由 extractProps 全树扫描提取；
   //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
@@ -983,13 +1031,19 @@ function handleConstToData(
     // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
     // ★#503 es5-safe：运行时初始化调用串内 ?? / ?. → 显式 null 检查（原样进产物 onLoad/attached）
     out.runtimeInits.push({ name, call: raw.trim() })
+    const guardName = raw.match(/^(isReactive|isReadonly|isProxy|isShallow|toRaw)\s*\(/)?.[1]
+    const isReactiveGuard = Boolean(guardName && REACTIVITY_RUNTIME_GUARDS.has(guardName))
     trace?.add('script/runtime-init', {
       line,
       before: `const ${name} = ${raw.slice(0, 40)}`,
-      after: `this.${name} = ${raw.trim()}（onLoad/attached 运行时初始化，实例属性；模板绑定不支持）`,
+      after: isReactiveGuard
+        ? `this.${name} = ${raw.trim()}（@vue/reactivity 运行时守卫，逻辑层调用）`
+        : `this.${name} = ${raw.trim()}（onLoad/attached 运行时初始化，实例属性；模板绑定不支持）`,
     })
     warnings.push(
-      `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用——已编译为运行时初始化 this.${name}（onLoad/attached 执行，实例属性：模板绑定不支持，逻辑层可用；共享逻辑请用模块 import，见 docs/proteus-module-plan/）`,
+      isReactiveGuard
+        ? `const ${name} 的初始值 "${raw.slice(0, 40)}" 是运行时守卫（@vue/reactivity）——已编译为 runtime-init this.${name}（逻辑层可用；如需模板绑定请先将结果快照进 data）`
+        : `const ${name} 的初始值 "${raw.slice(0, 40)}" 是函数调用——已编译为运行时初始化 this.${name}（onLoad/attached 执行，实例属性：模板绑定不支持，逻辑层可用；共享逻辑请用模块 import，见 docs/proteus-module-plan/）`,
     )
     return // 不进 data（运行时实例属性）
   }
@@ -1020,14 +1074,16 @@ function extractData(
   data: Record<string, unknown>
   computed: Record<string, ComputedInfo>
   runtimeInits: Array<{ name: string; call: string }>
+  reactiveInits: Array<{ name: string; srcType: string }>
   letHandles: string[]
   constSourceTypes: Map<string, string>
 } {
   const data: Record<string, unknown> = {}
   const runtimeInits: Array<{ name: string; call: string }> = []
+  const reactiveInits: Array<{ name: string; srcType: string }> = []
   const letHandles: string[] = []
   const rawComputed: Array<{ name: string; init: string; line: number }> = []
-  const out = { data, runtimeInits, rawComputed, constSourceTypes: new Map<string, string>() }
+  const out = { data, runtimeInits, reactiveInits, rawComputed, constSourceTypes: new Map<string, string>() }
   /** let 句柄判定：顶层 null/undefined 初始化（声明后方法体内赋值使用）——其它形态维持旧行为 */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const addLetHandle = (name: string, init: string | null, line: number): void => {
@@ -1095,7 +1151,7 @@ function extractData(
       warnings.push(`computed ${c.name} 仅支持箭头简写表达式体（computed(() => expr)）或块体（末语句 return 表达式），已忽略`)
     }
   }
-  return { data, computed, runtimeInits, letHandles, constSourceTypes: out.constSourceTypes }
+  return { data, computed, runtimeInits, reactiveInits, letHandles, constSourceTypes: out.constSourceTypes }
 }
 
 /** 顶层方法（源码 + 起始行号，供 sourcemap / 行号注释） */
@@ -2025,13 +2081,37 @@ export function transformScriptToPage(
   }
   // ★底线循环 ①③：禁用集（config rules.disabled 即时生效）
   const disabled = resolveOverrides(extra.rules).disabled
-  const { data, computed, runtimeInits, letHandles, constSourceTypes } = disabled.has('script/const-to-data')
-    ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, letHandles: [] as string[], constSourceTypes: new Map<string, string>() }
+  const { data, computed, runtimeInits, reactiveInits, letHandles, constSourceTypes } = disabled.has('script/const-to-data')
+    ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, reactiveInits: [] as Array<{ name: string; srcType: string }>, letHandles: [] as string[], constSourceTypes: new Map<string, string>() }
     : extractData(source, warnings, trace)
   // ★守卫内联：computed 也是 ref-like（isRef 应 true）——把 computed 名标为 'computed'（来源类型补进 map）
   for (const cname of Object.keys(computed)) constSourceTypes.set(cname, 'computed')
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）
   const computeds = disabled.has('script/computed-to-data') ? {} : computed
+  // ★★2026-09-08 reactivity-runtime spke：按需注入 @vue/reactivity require（仅用到 reactive 族/运行时守卫/effect 的页面注入，普通页面保持纯内联轻量）
+  const usedRuntimeApis = new Set<string>()
+  if (source) {
+    for (const api of REACTIVITY_RUNTIME_APIS) {
+      // 词边界：reactive/readonly/… 作为标识符出现（防 nonReactive 子串误报）
+      if (new RegExp(`\\b${api}\\b`).test(source)) usedRuntimeApis.add(api)
+    }
+  }
+  if (reactiveInits.length) usedRuntimeApis.add('effect') // setData 桥用（effect 读透 proxy → 变更触发 setData）
+  const reactiveInitNames = new Set(reactiveInits.map((i) => i.name))
+  if (usedRuntimeApis.size) {
+    const names = [...usedRuntimeApis]
+    // ★2026-09-08 reactivity-runtime spke：走 @proteus-vue/runtime（runtime 包 re-export @vue/reactivity，esbuild 内联
+    //   进 _proteus/runtime.js）而非裸 require('@vue/reactivity')——MP 运行时无 miniprogram_npm，裸包 require 不可解析；
+    //   @proteus-vue/* 由插件映射到 _proteus/<name>.js（既有 framework 共享机制，体积随 runtime bundle 监控）。
+    requireLines.push(`const { ${names.join(', ')} } = require('@proteus-vue/runtime')`)
+    trace?.add('script/reactivity-runtime-require', {
+      before: 'reactive/readonly/isReactive/isProxy/…（Vue 全能力基准线 reactivity 域）',
+      after: `require('@proteus-vue/runtime') → { ${names.join(', ')} }（按需注入，未用不注入；runtime 包 re-export @vue/reactivity）`,
+    })
+  }
+  // ★★2026-09-08 reactivity-runtime spke：桥标志 + onLoad/attached 的桥 setup 行（在 runtimeInit 之后调用）
+  const hasReactiveBridge = reactiveInits.length > 0
+  const reactiveBridgeSetupLine = reactiveInits.map((i) => `this.__proteusSyncReactive('${i.name}')`).join('\n')
   // ★#500 :style 绑定的 computed 派生对象自动序列化（MP 双渲染器 style 属性仅收字符串——对象绑定静默失效，WebView 亦然）
   const styleBindingNames = new Set(extra.styleBindings ?? [])
   let needsStyleStringHelper = false
@@ -2090,6 +2170,9 @@ export function transformScriptToPage(
     dataExtra[`__tv${t.index}`] = data[t.ref]
     dataExtra[`__tl${t.index}`] = false
   }
+  // ★★2026-09-08 reactivity-runtime spke：reactive 族初始 data 置 null（模板 {{ reactive.name }} 有基值；onLoad 桥 effect→setData 填充）；
+  //   不进 data（走 runtime-init 真 Proxy），仅占位可读
+  for (const ni of reactiveInits) dataExtra[ni.name] = null
 
   // ★pinia-plan 12 P1：模板 store 绑定——store 变量（useXxxStore() runtimeInit）存在且模板引用了 store.<field>
   const storeBindings = extra.storeBindings ?? []
@@ -2333,7 +2416,9 @@ export function transformScriptToPage(
   const appConfigUnsubLine = appConfigBindings.length ? 'if (this.__appConfigUnsub) { this.__appConfigUnsub(); this.__appConfigUnsub = null }' : ''
   // ★#496d 页面 p-grid resize 监听注销（拖宽/旋转重算档位）
   const semGridOffLine = !extra.isComponent && semanticGrids.length ? semanticGridOffLine() : ''
-  const needsPageCleanup = hasInjects || providedRefs.size > 0 || Boolean(storeDisposeLine) || Boolean(appConfigUnsubLine) || Boolean(semGridOffLine)
+  // ★★2026-09-08 reactivity-runtime spke：reactive 桥解绑（onUnload/detached 清理 effect，防泄漏）
+  const reactiveDisposeLine = hasReactiveBridge ? 'if (this.__proteusDisposeReactive) { this.__proteusDisposeReactive(); this.__proteusDisposeReactive = null }' : ''
+  const needsPageCleanup = hasInjects || providedRefs.size > 0 || Boolean(storeDisposeLine) || Boolean(appConfigUnsubLine) || Boolean(semGridOffLine) || Boolean(reactiveDisposeLine)
   const pageCleanupLine = 'const __reg = getApp().__proteusProvides; if (__reg && this.__proteusPageId) delete __reg[this.__proteusPageId]'
   const unsubLine = hasInjects ? 'this.proteusUnsubscribeProvide()' : ''
   if (lifecycles.onUnload) {
@@ -2341,7 +2426,7 @@ export function transformScriptToPage(
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
     const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
     const isComp = extra.isComponent
-    const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
+    const pre = isComp ? [unsubLine, reactiveDisposeLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, reactiveDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
     lines.push(`  ${hook}() {
 ${indentBody(pre ? `${pre}
@@ -2350,14 +2435,15 @@ ${unloadBody}` : unloadBody)}
   } else if (needsPageCleanup && !extra.isComponent) {
     // 页面级 provide/inject/store/app-config/p-grid 但无显式 onUnload：生成承载清理的 onUnload（组件模式用 detached，见组件分支）
     lines.push(`  onUnload() {
-${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
+${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, reactiveDisposeLine, pageCleanupLine].filter(Boolean).join('\n'))}
   },`)
   }
   // ★#494 onLoad 初始化序：顶层副作用调用（initAppConfig 等）→ computed → runtimeInits（已含方法调用 this 改写 + 命令式改写）→ store 桥 → app-config 桥 → 模板引用快照 → immediate watch → provide/inject
   // 模板引用的 runtimeInit 变量 → 快照进 data（实例属性模板读不到；app-config 桥已自带快照的不重复）
   const templateRefNames = new Set(extra.templateRefs ?? [])
   const runtimeInitSnapshots = runtimeInits
-    .filter((i) => templateRefNames.has(i.name) && !appConfigBindings.some((b) => b.name === i.name))
+    // ★reactive 族由 effect 桥持续 setData（非一 shot 快照）——排除以防覆盖真实视图
+    .filter((i) => !reactiveInitNames.has(i.name) && templateRefNames.has(i.name) && !appConfigBindings.some((b) => b.name === i.name))
     .map((i) => i.name)
   const runtimeInitSnapshotLine = runtimeInitSnapshots.length
     ? `this.setData({ ${runtimeInitSnapshots.map((n) => `${n}: ${styleBindingNames.has(n) ? `__proteusStyleString(this.${n})` : `this.${n}`}`).join(', ')} })`
@@ -2380,10 +2466,31 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     const base = m[1].split('.')[0]
     return Boolean(base && (methodNames.has(base) || runtimeInitNames.has(base)))
   }
+  // ★★2026-09-08 reactivity-runtime spke：setData 桥（effect 读透 reactive proxy → 任一字段变更重跑 → setData）
+  //   桥方法引用模块级 effect（来自注入的 require('@vue/reactivity')）；onLoad/attached 在 runtimeInit 之后调用
+  if (hasReactiveBridge) {
+    pushMethod(
+      [
+        '  __proteusSyncReactive(name) {',
+        '    if (this.__proteusDisposeReactive) { this.__proteusDisposeReactive(); this.__proteusDisposeReactive = null }',
+        '    var self = this',
+        '    self.__proteusDisposeReactive = effect(function () {',
+        '      var out = {}',
+        '      out[name] = JSON.parse(JSON.stringify(self[name]))',
+        '      self.setData(out)',
+        '    })',
+        '  },',
+      ].join('\n'),
+    )
+    trace?.add('script/reactive-setdata-bridge', {
+      before: `reactive 族：${reactiveInits.map((i) => i.name).join(' / ')}`,
+      after: 'effect 桥梁：变更 → setData(扁平化)（视图刷新；onUnload 解绑）',
+    })
+  }
   const preCallsLine = topLevelCalls.filter((c) => !dependsOnInstance(c)).join('\n')
   const postCallsLine = topLevelCalls.filter((c) => dependsOnInstance(c)).join('\n')
   const initLineSeq = (): string[] =>
-    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
+    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), reactiveBridgeSetupLine, postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -2398,6 +2505,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
       semanticGridInit,
       preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '',
       runtimeInitLine(runtimeInits, methodNames, runtimeInitNames),
+      reactiveBridgeSetupLine,
       postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '',
       compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar),
       storeBindingInit,
@@ -2409,8 +2517,9 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     }
     // ★Batch 4：组件级 inject 订阅取消（attached 订阅 → detached 移除，防全局注册表回调泄漏）
     // ★B7：onUnmounted 已映射 detached 时不再重复生成（避免 Component 重复键覆盖）
-    if (hasInjects && !lifecycles.onUnload) {
-      lines.push(`  detached() {\n    this.proteusUnsubscribeProvide()\n  },`)
+    // ★2026-09-08 reactivity-runtime spke：组件 reactive 桥解绑同走 detached
+    if ((hasInjects || hasReactiveBridge) && !lifecycles.onUnload) {
+      lines.push(`  detached() {\n${indentBody([unsubLine, reactiveDisposeLine].filter(Boolean).join('\n'))}\n  },`)
     }
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
