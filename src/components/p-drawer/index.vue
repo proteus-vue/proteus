@@ -11,10 +11,11 @@
        ③ 抽屉面板 @click.stop（MP→catchtap）吞掉自身冒泡，面板内点击不触发关闭；
        ④ 关闭态容器 visibility:hidden 不拦截页面；过渡方向技巧保留滑出动画。 -->
 <template>
-  <!-- ★2026-09-08 root-portal 逃逸层叠（对齐 p-popover）：抽屉容器 fixed 全屏，若组件被下层元素遮挡（z-index 上下文）
-       仍会被盖——包 <root-portal>（官方：子树脱离页面层叠，类 fixed 顶层）→ 抽屉恒盖住页面其余内容。
-       常驻（不用 wx:if 包 portal 内容——glass-easel 下 portal+wx:if 挂载异常，p-popover 实证）；关闭态类隐藏不拦截。 -->
-  <root-portal>
+  <!-- ★2026-09-08 改为标准 <teleport>（对齐框架「写标准 Vue 跨端」原则——不再裸写平台标签 root-portal）：
+       编译器把 <teleport> 转成 Skyline <root-portal>（官方同层节点，弹层逃逸页面层叠——类 fixed 顶层）。
+       抽屉容器 fixed 全屏 + 逃逸层叠恒盖住页面其余内容；常驻（不用 wx:if 包 teleport 内容——glass-easel 下
+       portal+wx:if 挂载异常，p-popover 实证）；关闭态类隐藏不拦截。组件源码标准 Vue，Web/MP 双端由编译器统一。 -->
+  <teleport to="body">
     <view
       class="p-drawer-root"
       :class="{ 'p-drawer-root--open': modelValue }"
@@ -42,7 +43,7 @@
         <slot />
       </view>
     </view>
-  </root-portal>
+  </teleport>
 </template>
 
 <script setup lang="ts">

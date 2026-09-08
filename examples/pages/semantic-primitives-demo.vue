@@ -117,7 +117,7 @@
       </div>
       <div class="row">
         <p-text class="label">p-popover（气泡）：</p-text>
-        <p-popover v-model="popoverOpen" placement="bottom">
+        <p-popover id="proteus-popover-demo" v-model="popoverOpen" placement="bottom">
           <template #trigger>
             <p-button variant="ghost" size="small">触发气泡</p-button>
           </template>

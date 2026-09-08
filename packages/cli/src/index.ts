@@ -423,7 +423,16 @@ async function main(): Promise<void> {
             'npx',
             // ★2026-09-08：MP E2E 全家桶——冒烟 + Vue 能力对齐真机验收 + p-popover 方案A（同一管理副本/窗口，逐能力真机断言）
             //   ★--no-file-parallelism：vitest 默认并行跑多个文件，会同时对同一模拟器 navigate（冲突全败）→ 串行（同 test:e2e:web）
-            ['vitest', 'run', '--no-file-parallelism', 'tests/e2e-mp-smoke.test.ts', 'tests/e2e-vue-compat.test.ts', 'tests/e2e-mp-popover.test.ts'],
+            [
+              'vitest',
+              'run',
+              '--no-file-parallelism',
+              // ★2026-09-08 范围精准（用户：未改编译器不必跑 vue 能力对齐）：PROTEUS_E2E_ONLY=<file> 时只跑指定文件，
+              //   否则默认全家桶（smoke + vue-compat + popover）
+              ...(process.env.PROTEUS_E2E_ONLY
+                ? [`tests/${process.env.PROTEUS_E2E_ONLY}.test.ts`]
+                : ['tests/e2e-mp-smoke.test.ts', 'tests/e2e-vue-compat.test.ts', 'tests/e2e-mp-popover.test.ts']),
+            ],
             {
               stdio: 'inherit',
               shell: process.platform === 'win32',

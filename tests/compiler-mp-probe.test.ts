@@ -201,11 +201,12 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
       expect(wxml).toMatch(new RegExp(`p-popover-panel-data-v-[\\w]+ p-popover-${p}-data-v-[\\w]+`))
     }
     expect(wxml).not.toContain("+ placement")
-    // ★★2026-09-08（正轨）：root-portal（官方同层节点）逃逸 Skyline 层叠——不再「弃 root-portal」；放置于 overlay 外层
-    //   ★V4 实证：组件 json 含 componentFramework: glass-easel 则 root-portal 常驻内容渲染；wx:if 子树不可靠 → overlay 常驻+visibility
-    expect(wxml).toMatch(/<root-portal class="\{\{rootClass\}\}">/)
+    // ★★2026-09-08（teleport 对齐）：组件写标准 <teleport>，编译器转 <root-portal>（官方同层节点逃逸层叠）——
+    //   组件源码不再裸写平台标签（teleport 对齐有真实消费者）；teleport 内容（overlay+panel）包进 root-portal
+    expect(wxml).toMatch(/<root-portal>/)
+    expect(wxml.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<teleport')
     expect(wxml).not.toContain('wx:if="{{modelValue}}"')
-    expect(wxml).toMatch(/class="p-popover-overlay-data-v-[\w]+ \{\{/)
+    expect(wxml).toMatch(/class="p-popover-overlay-data-v-[\w]+ \{\{/) 
     expect(wxss).toMatch(/\.p-popover-overlay-data-v-[\w]+\s*\{[\s\S]*?visibility: hidden/)
     expect(wxss).toMatch(/\.p-popover-overlay--on-data-v-[\w]+\s*\{[\s\S]*?visibility: visible/)
   })
@@ -219,10 +220,13 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
   const wxml = r.wxml ?? ''
   const js = r.js ?? ''
 
-  it('P8e1：trigger 带静态 data-role（非 scoped hash）供 measureRect 页面级 selector 查询命中', () => {
-    // 不加 :id（MP 编译器丢弃模块 let/实例 uid const/ref → popoverSeq ReferenceError 真机崩）——data-role 常驻可查
-    expect(wxml).toMatch(/data-role="proteus-popover-trigger"[^>]*class="p-popover-trigger-data-v-[\w]+/)
-    expect(wxml).not.toContain("id=\"{{triggerId}}\"")
+  it('P8e1：trigger 带 id + :class 绑定查询类（无 scope hash——selectorQuery 可命中；Skyline 不认属性选择器）', () => {
+    // ★2026-09-08 二轮修复：旧 data-role 属性选择器 Skyline 不认 + 静态类被 scoped hash 查不到 → 左上角。
+    //   现契约：静态 id（.in(scope) 组件内唯一）+ :class 绑定运行时查询类（classInterp 不加 suffix → DOM 类无 hash）
+    expect(wxml).toMatch(/id="proteus-popover-trigger"/)
+    expect(wxml).toMatch(/\{\{triggerQueryCls\}\}/)
+    expect(wxml).not.toContain('data-role="proteus-popover-trigger"')
+    expect(wxml).not.toContain('id="{{triggerId}}"')
   })
 
   it('P8e2：面板 style 绑定 panelStyle（方案 A fixed+坐标串；回退空串→静态锚定）', () => {
@@ -243,14 +247,11 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect(js).toContain("setData({ panelStyle: '' })")
   })
 
-  it('P8e4：TRIGGER_SELECTOR 作为 data 字段（非模块 let——MP 编译器丢弃模块 let 致 ReferenceError），measureRect 引用它', () => {
-    // data 字段声明（[data-role="proteus-popover-trigger"]——宽松子串，引号转义形态不定）
-    expect(js).toContain('TRIGGER_SELECTOR:')
-    expect(js).toContain('data-role')
-    expect(js).toContain('proteus-popover-trigger')
-    // ★2026-09-08：measureRect scope 用组件实例 this（MP 方法内 this=组件实例；adapter 经 .in(this) 下探组件内 trigger）
-    //   ★用户决策 1（b）：getCurrentInstance 归 unsupported 反黑盒；组件内「拿实例」走框架语义 API（此处为 MP 原生 this）
-    //   ★不再用模板 ref popoverRoot（MP 模板 ref 永不绑定→this.data.popoverRoot 恒 undefined→.in(undefined) 页面级查询失效）
-    expect(js).toMatch(/measureRect\(TRIGGER_SELECTOR,\s*this/)
+  it('P8e4：selector 内联字面量（顶层 const 裸引用在方法体不被改写 → ReferenceError 缺口绕过；登记 compiler 待修）', () => {
+    // ★2026-09-08 真机实证：顶层 const TRIGGER_SELECTOR 内联进 data，但方法体裸引用不被改写 →
+    //   ReferenceError 被 catch 吞 → panelStyle 空 → 左上角（诊断 ERR:TRIGGER_SELECTOR is not defined）。
+    //   现契约：selector 直接内联字面量进 measureRect 调用（绕过缺口；编译器缺口登记待修）
+    expect(js).toContain("measureRect('.proteus-popover-trigger-query', this)")
+    expect(js).toContain('proteus-popover-trigger-query')
   })
 })
