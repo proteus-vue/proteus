@@ -25,13 +25,15 @@ export interface SfcMacros {
   modelRefs: MacroModelRef[]
   /** ★权威 emits（compileScript 展开的 emits 数组） */
   emits: string[]
+  /** ★权威 props 元数据：name → { type, default? }（compileScript 权威展开，手写 extractProps 类型/默认值一致性校验基准） */
+  propsMeta: Record<string, { type: string; default?: unknown }>
   /** 编译是否成功（失败返回空语义，调用方回退既有路径——不因 compileScript 抛错而崩编译） */
   ok: boolean
   /** 原因（ok=false 时） */
   error?: string
 }
 
-const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], emits: [], ok: false }
+const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], emits: [], propsMeta: {}, ok: false }
 
 /**
  * 用 @vue/compiler-sfc 的 compileScript 提取宏语义元数据（权威源）。
@@ -59,7 +61,16 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
     const emits: string[] = []
     const emitsSeg = content.match(/emits:\s*[^\n]*?((?:['"][^'"]+['"]\s*,?\s*)+)/)?.[1]
     if (emitsSeg) for (const m of emitsSeg.matchAll(/['"]([^'"]+)['"]/g)) emits.push(m[1])
-    return { bindings, propNames, modelRefs, emits, ok: true }
+    // ★权威 props 元数据：props: { name: { type, default? } }（compileScript 权威展开，type/default 校验基准）
+    const propsMeta: Record<string, { type: string; default?: unknown }> = {}
+    const propsBody = content.match(/props:\s*(?:[^\n]*_mergeModels\(\s*)?\{([\s\S]*?)\n\s*\}/)?.[1]
+    if (propsBody) {
+      // ★注意：不能用 (['"]?)(name)\1 可选引号回溯——空引号时 \1 空串会导致当前项匹配失败（实测 0 命中）；name 直接捕获即可
+      const re = /([A-Za-z_$][\w$]*)\s*:\s*\{\s*type:\s*(\w+)\s*(?:,\s*(?:required:\s*\w+|default:\s*([^,}\n]+)))?/g
+      let pm: RegExpExecArray | null
+      while ((pm = re.exec(propsBody))) propsMeta[pm[1]] = { type: pm[2], default: pm[3] !== undefined ? pm[3].trim() : undefined }
+    }
+    return { bindings, propNames, modelRefs, emits, propsMeta, ok: true }
   } catch (e) {
     return { ...EMPTY, error: (e as Error).message }
   }
