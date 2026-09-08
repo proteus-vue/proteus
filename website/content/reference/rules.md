@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 93 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 94 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（49）
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（30）
+## 脚本转换（31）
 
 ### `script/const-to-data`
 
@@ -1089,6 +1089,19 @@ after:  onLoad: this.s = reactive({ name: "x" }); this.__proteusSyncReactive('s'
 ```
 
 > why: reactive 走运行时真 Proxy 后，logic 层变更需桥接 setData 才能刷新视图（uni-app @dcloudio/uni-mp-vue 核心工作——Proxy 读写桥接 setData 同步模型）；effect 依赖追踪是零造轮子的标准做法（读透即追踪，变更自动重跑）
+
+### `script/define-options`
+
+**defineOptions 剥离 no-op（compileScript 权威源）**
+
+顶层 defineOptions({ name, inheritAttrs }) 剥离为编译期 no-op（不裸注入 onLoad → not defined）；name/inheritAttrs 经 @vue/compiler-sfc compileScript 权威提取（展开为组件 options 的 ...{} 段），MP 组件无组件级 name/inheritAttrs 对等 → 警告说明不生效（组件属性请走 properties/attrs 通道）
+
+```
+before: defineOptions({ name: "MyComp", inheritAttrs: false })
+after:  剥离为 no-op（产物不含 defineOptions；警告说明 name/inheritAttrs 不生效）
+```
+
+> why: defineOptions 是 <script setup> 宏，被当顶层副作用裸注入 onLoad → not defined；宏语义权威源 = compileScript（不手造）——剥离 + 提取语义元数据，非 fail-closed error（消除 unsupported）
 
 ## 样式转换（9）
 

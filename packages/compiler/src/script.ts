@@ -1554,7 +1554,7 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     // ★同理，未映射的其它 Vue 生命周期钩子（onBeforeUnmount/onErrorCaptured/onUpdated/onBeforeMount/onBeforeUpdate/
     //   onActivated/onDeactivated/onRenderTracked/onRenderTriggered/onServerPrefetch）由 extractLifecycles 统一「剥离+警告」，
     //   亦须跳过——否则既警告又裸注入 onLoad（partial 钩子告警但产物仍裸调用 → ReferenceError）。mapOnxxx 将跳过，仅告警。
-    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineModel|defineAppConfig)\b/.test(fn)) continue
+    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineModel|defineAppConfig|defineOptions)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))
@@ -2189,6 +2189,17 @@ export function transformScriptToPage(
   const { data, computed, runtimeInits, reactiveInits, letHandles, constSourceTypes } = disabled.has('script/const-to-data')
     ? { data: {}, computed: {}, runtimeInits: [] as Array<{ name: string; call: string }>, reactiveInits: [] as Array<{ name: string; srcType: string }>, letHandles: [] as string[], constSourceTypes: new Map<string, string>() }
     : extractData(source, warnings, trace)
+  // ★2026-09-08 defineOptions 对齐：compileScript 权威语义（name/inheritAttrs）——剥离为 no-op（不裸注入 onLoad），
+  //   name/inheritAttrs 在 MP 无组件级对等（微信 Component 无组件级 name/inheritAttrs 字段）——诚实说明（partial，非 error fail-closed）
+  const doMeta = extra.defineOptions
+  if (doMeta && (doMeta.name !== undefined || doMeta.inheritAttrs !== undefined)) {
+    const parts = [doMeta.name !== undefined ? `name='${doMeta.name}'` : '', doMeta.inheritAttrs !== undefined ? `inheritAttrs=${doMeta.inheritAttrs}` : ''].filter(Boolean).join(' / ')
+    warnings.push(`defineOptions({ ${parts} }) 已剥离为编译期 no-op（宏语义 @vue/compiler-sfc 权威源）——MP 组件无组件级 name/inheritAttrs 字段，该选项不生效（组件名/属性继承语义无对等）；组件属性请走 properties/attrs 通道`)
+    trace?.add('script/define-options', {
+      before: `defineOptions({ ${parts} })`,
+      after: '剥离 no-op（宏语义 compileScript 权威源；name/inheritAttrs MP 无组件级对等，不生效）',
+    })
+  }
   // ★守卫内联：computed 也是 ref-like（isRef 应 true）——把 computed 名标为 'computed'（来源类型补进 map）
   for (const cname of Object.keys(computed)) constSourceTypes.set(cname, 'computed')
   // computed 读路径（v0.3）：规则禁用时退化为不编译（computed 字段不进 data）

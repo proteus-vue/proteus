@@ -61,11 +61,11 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项
-    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-text', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef']) {
+    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-text', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef', 'defineOptions']) {
       expect(vueCompatStatus(p).status, `${p} 应为 partial`).toBe('partial')
     }
     // unsupported：运行时对内 API / 动态渲染 / 无对等平台能力——含 Step2 校准（运行时守卫/内部渲染助手/宏未对齐降 unsupported 无降级→error）
-    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'h', 'createApp', '<component :is>', '自定义指令', 'resolveComponent', 'renderSlot', 'mergeProps', 'toHandlers', 'withCtx', 'withScopeId', 'defineOptions', 'effect', 'stop']) {
+    for (const u of ['getCurrentInstance', 'useSlots', 'useAttrs', 'h', 'createApp', '<component :is>', '自定义指令', 'resolveComponent', 'renderSlot', 'mergeProps', 'toHandlers', 'withCtx', 'withScopeId', 'effect', 'stop']) {
       expect(vueCompatStatus(u).status, `${u} 应为 unsupported`).toBe('unsupported')
       // 反黑盒：must 有 note；且按用户规则（无降级 → error）
       expect(vueCompatLevel(vueCompatStatus(u))).toBe('error')

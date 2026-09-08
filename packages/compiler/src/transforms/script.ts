@@ -525,4 +525,23 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'packages/compiler/src/script.ts → transformScriptToPage（__proteusSyncReactive 方法 + reactiveBridgeSetupLine + reactiveDisposeLine）',
     decision: 'reactivity-runtime-plan（选项 A spke）',
   },
+  {
+    id: 'script/define-options',
+    phase: 'script',
+    status: 'implemented',
+    title: 'defineOptions 剥离 no-op（compileScript 权威源）',
+    titleEn: 'defineOptions strip no-op (compileScript authoritative source)',
+    description: '顶层 defineOptions({ name, inheritAttrs }) 剥离为编译期 no-op（不裸注入 onLoad → not defined）；name/inheritAttrs 经 @vue/compiler-sfc compileScript 权威提取（展开为组件 options 的 ...{} 段），MP 组件无组件级 name/inheritAttrs 对等 → 警告说明不生效（组件属性请走 properties/attrs 通道）',
+    descriptionEn: 'Top-level defineOptions({ name, inheritAttrs }) is stripped to a compile-time no-op (not injected bare into onLoad → not defined); name/inheritAttrs are extracted authoritatively via @vue/compiler-sfc compileScript (expanded into the component options ...{} segment); MP components have no component-level name/inheritAttrs counterpart → warns it is not effective (component attrs go through properties/attrs channel)',
+    why: 'defineOptions 是 <script setup> 宏，被当顶层副作用裸注入 onLoad → not defined；宏语义权威源 = compileScript（不手造）——剥离 + 提取语义元数据，非 fail-closed error（消除 unsupported）',
+    whyEn: 'defineOptions is a <script setup> macro that would be injected bare into onLoad → not defined; the authoritative macro semantics come from compileScript (no reinvention) — strip + extract semantic metadata rather than fail-closed error (eliminating unsupported)',
+    when: 'script 顶层出现 defineOptions({ ... })（单行或多行对象字面量）时',
+    example: {
+      before: 'defineOptions({ name: "MyComp", inheritAttrs: false })',
+      after: '剥离为 no-op（产物不含 defineOptions；警告说明 name/inheritAttrs 不生效）',
+    },
+    verify: 'tests/vue-compat-define-options.test.ts',
+    source: 'packages/compiler/src/sfc-macros.ts → extractSfcMacros（defineOptions） + script.ts → transformScriptToPage（extractTopLevelCalls 跳过）+ extractSfcMacros 消费',
+    decision: 'defineOptions 对齐（compileScript 权威源）',
+  },
 ]
