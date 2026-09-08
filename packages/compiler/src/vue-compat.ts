@@ -45,13 +45,14 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // ★2026-09-08 P1 校准：toRef/toRefs/toValue 实测译为 this.x=toRef(…) 裸标识符 → not defined（假降级）→ unsupported·error（与 isRef 等运行时守卫同批反黑盒）
   { name: 'toRef', group: 'reactivity', status: 'unsupported', note: '运行时引用重定向无对等——当前译为裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
   { name: 'toRefs', group: 'reactivity', status: 'unsupported', note: '同上——裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
-  { name: 'toValue', group: 'reactivity', status: 'unsupported', note: '运行时取值无对等——裸调用 → not defined；请直接用 .value 读取', source: 'P1 校准' },
+  { name: 'toValue', group: 'reactivity', status: 'aligned', note: 'toValue(x) 编译期内联：同 unref——x 为 ref → this.data.x；非 ref → x 本身；MP 无运行时 toValue', source: '增强（编译期内联改写）' },
   { name: 'proxyRefs', group: 'reactivity', status: 'unsupported', note: '运行时代理，MP 无对等——直接用 .value', source: '评估' },
   { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', source: '评估' },
   { name: 'stop', group: 'reactivity', status: 'unsupported', note: 'effect 关闭，MP 无对等', source: '评估' },
   { name: 'triggerRef', group: 'reactivity', status: 'unsupported', note: '手动触发 shallowRef，MP 无对等——用 ref 替代', source: '评估' },
   { name: 'markRaw', group: 'reactivity', status: 'unsupported', note: '运行时标记，MP 无对等', source: '评估' },
-  { name: 'unref', group: 'reactivity', status: 'unsupported', note: '运行时取值无对等——裸调用 → not defined；请直接用 .value 读取', source: 'P1 校准' },
+  // ★2026-09-08 增强：unref(x)/toValue(x) 编译期内联为 x.value（x 为已知 ref → this.data.x；非 ref → x 本身）——MP 无运行时 unref，编译期取值等价
+  { name: 'unref', group: 'reactivity', status: 'aligned', note: 'unref(x) 编译期内联：x 为 ref → this.data.x；非 ref → x 本身（unref 恒等）；MP 无运行时 unref，编译期取值', source: '增强（编译期内联改写）' },
   // ★2026-09-08 Step2 校准：isRef/isReactive/isReadonly/isProxy/isShallow 实测被当「函数调用初始化」译为 this.x=isX(…)，
   //   产物为裸标识符且无 vue import → 运行时 not defined（getCurrentInstance 同类）——标记 aligned 是假，降 unsupported（无降级→error）
   { name: 'isRef', group: 'reactivity', status: 'unsupported', note: '运行时类型守卫无对等——isRef 编译期可内联 true/false 但未实现；当前译为 this.x=isRef(…) 裸标识符 → not defined；请改用框架语义 API 或直接判别', source: '评估（Step2 实测校准）' },

@@ -937,6 +937,13 @@ function handleConstToData(
   })
   const inner = init.match(/^(?:ref|reactive|shallowRef|readonly)\s*\(\s*([\s\S]*?)\s*\);?\s*$/)
   const raw = inner ? inner[1] : init
+  // ★增强：unref(x)/toValue(x) 编译期内联——x 为已知 ref（初值已入 data）→ data.<name> = data.<x>（MP 无运行时 unref，编译期取值）
+  const uv = raw.match(/^(?:unref|toValue)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)$/)
+  if (uv && Object.prototype.hasOwnProperty.call(out.data, uv[1])) {
+    out.data[name] = out.data[uv[1]]
+    trace?.add('script/const-to-data', { line, before: `const ${name} = ${raw}`, after: `data.${name} = data.${uv[1]}（unref/toValue 内联）` })
+    return
+  }
   // ★2026-09-08 P1：Vue 公共常量导出（version）——const v = version 内联字面量（此前 evalLiteral 返 undefined → data.v=undefined）
   //   version 为裸标识符且属 VUE_PUBLIC_CONSTS（vue import 去掉后裸 version 即 Vue 导出；与 readonly/shallowRef 同识别口径）
   const value = VUE_PUBLIC_CONSTS[raw] !== undefined ? VUE_PUBLIC_CONSTS[raw] : evalLiteral(raw)
@@ -1652,6 +1659,10 @@ function rewriteRefAccess(
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
   //   ★RegExp 构造字符串须双反斜杠（\\b → \b 词边界；\\w → \w），否则退化为字面字符不匹配（此前误改单反斜杠致全校 props 改写失效）
   if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
+  // ★增强：unref(x)/toValue(x) 方法体内联——x 为已知 ref → this.data.x；非 ref → x 本身（unref/toValue 恒等）
+  if (/(?:unref|toValue)\s*\(/.test(out)) {
+    out = out.replace(/\b(unref|toValue)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/g, (_m, _fn, arg) => (refNames.has(arg) ? `this.data.${arg}` : arg))
+  }
   // computed 写路径（v0.3 尾）：x.value = v → setter 方法调用；只读（无 setter）→ 注释忽略
   for (const [cname, c] of Object.entries(computeds)) {
     if (!new RegExp(`\\b${cname}\\.value\\s*=`).test(out)) continue
