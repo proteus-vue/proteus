@@ -41,10 +41,27 @@ export interface PlatformAdapter {
       nav?: 'forward' | 'back' | 'replace' | 'reLaunch' | 'switchTab',
     ) => void,
   ): void
+  /**
+   * 测量某 selector 的首个元素视口矩形（L2 抽象——组件禁直接 wx 或 document 平台直调，no-platform-api 约束）。
+   * MP: wx.createSelectorQuery().select(selector).boundingClientRect()（页面级查询，无 .in 作用域）
+   * Web: document.querySelector(selector).getBoundingClientRect()
+   * 找不到元素 / 环境不支持 / 失败 → resolve null（调用方降级；约定：所有失败静默 resolve）
+   */
+  measureRect?(selector: string): Promise<Rect | null>
 }
 
 /** 路由变化事件载荷（Web 端使用） */
 export interface RouteChangeEvent {
   route: string
   query: Record<string, string>
+}
+
+/** 元素视口矩形（跨端统一：MP boundingClientRect / Web getBoundingClientRect） */
+export interface Rect {
+  top: number
+  left: number
+  right: number
+  bottom: number
+  width: number
+  height: number
 }

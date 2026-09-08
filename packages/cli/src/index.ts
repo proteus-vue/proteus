@@ -2,10 +2,11 @@
 // Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
 // 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
 // （shebang 由 esbuild --banner 在构建时注入，源码不写）
+import fs from 'node:fs'
 import path from 'node:path'
 import net from 'node:net'
 import { fileURLToPath } from 'node:url'
-// ★B5：automator 兼容补丁脚本（src 与 dist 同指向仓库根 scripts/）
+// ★B5 补丁脚本（src 与 dist 同指向仓库根 scripts/）——★2026-09-08 wechatide 标准后 automator 补丁不再需要，保留路径备用
 const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
 import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText } from './args'
 import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
@@ -390,15 +391,22 @@ async function main(): Promise<void> {
           }
           for (const s of plan.steps) console.log(s)
           console.log(`[proteus-test] 使用独立副本：${prepared.projectDir}（每次重建，避 IDE 路径缓存）`)
-          // ③ automator 官方 launch 处理 IDE 启动（auto --trust-project）+ 端口轮询 + checkVersion；
-          //    此处仅装配环境变量后跑 spec（trustProject 解决新项目信任弹窗阻塞 automator 服务）
+          // ★★2026-09-08：wechatide skill-CLI 为唯一标准（automator 与新 Electron IDE 不兼容——launch 报
+          //   "Failed to launch ... http port is open"）。改为：① 用 wechatide 开项目窗口（fullMode）+ 锁 skyline
+          //   渲染模式（private config skylineRenderEnable:true——面向 skyline 项目的判据）② 设 PROTEUS_MP_E2E_WXIDE=1
+          //   让 spec 走 createWxideMini（spawn wechatide 工具），不再 launch automator。
           const { spawnSync } = await import('node:child_process')
-          // ★B5 兼容补丁：automator 0.12.1 与新版 IDE（Tool.getInfo 缺 SDKVersion）——幂等，先打再跑
-          const patch = spawnSync(process.execPath, [AUTOMATOR_PATCH_SCRIPT], { stdio: 'inherit' })
-          if (patch.status !== 0) {
-            console.error('[proteus-test] automator 兼容补丁失败（scripts/patch-automator.mjs），中止')
-            process.exitCode = 1
-            break
+          const openWin = spawnSync(
+            plan.ideCli,
+            ['-c', 'zed', 'open_project_window', '--project', prepared.projectDir, '--window-mode', 'fullMode'],
+            { encoding: 'utf8', timeout: 60_000 },
+          )
+          if (openWin.status !== 0) console.warn(`[proteus-test] 开窗失败（可能已开）：${(openWin.stderr || '').slice(0, 200)}`)
+          // ★锁 skyline 渲染模式（private config——IDE 开窗可能覆写 private，开窗后写入再刷新页面生效）
+          try {
+            fs.writeFileSync(path.join(prepared.projectDir, 'project.private.config.json'), JSON.stringify({ setting: { skylineRenderEnable: true } }))
+          } catch {
+            /* private config 写了忽略 */
           }
           const r = spawnSync(
             'npx',
@@ -409,6 +417,7 @@ async function main(): Promise<void> {
               env: {
                 ...process.env,
                 PROTEUS_MP_E2E: '1',
+                PROTEUS_MP_E2E_WXIDE: '1',
                 PROTEUS_MP_E2E_CONNECT: reuseIde ? '1' : '0',
                 PROTEUS_AUTOMATOR_PORT: String(plan.port),
                 PROTEUS_IDE_CLI: plan.ideCli,

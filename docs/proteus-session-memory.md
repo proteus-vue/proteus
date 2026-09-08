@@ -4,6 +4,58 @@
 > 详细台账：`docs/proteus-test-framework-plan/15-mp-e2e-console-gate.md`（页面健康台账 + 实证教训）、
 > `docs/proteus-semantic-primitives-plan/07-popover-skyline-floating-special.md`（popover 专项）。
 
+## 2026-09-08 · ★★MP E2E 后端重构：miniprogram-automator → wechatide skill-CLI（唯一标准）
+
+### 起因
+用户实测 `proteus test e2e:mp`（automator）launch 失败 `Failed to launch ... http port is open`——**服务端口一直开着仍连不上** = automator 0.12.1 与新版 Electron IDE 的 automation WS 协议/端口不可发现**不兼容**。用户裁定：**唯一标准 = 小程序开发者工具 Electron 版（官方 wechatide skill-CLI 规范）**，以它为标**重新做自动化测试框架**。
+
+### 成果
+- **新 `packages/test-core/src/driver/wxide.ts`**：`createWxideMini(opts)` 实现 `AutomatorMiniLike` 形状 → `createMpDriver(wxideMini, debugger)` 无缝复用；`callWxide(tool, args, opts)` 内部 spawn `wechatide -c <client> <tool> --project <path> ...` + 解析嵌套 JSON。导出 `createWxideMini`/`callWxide`/`WxideMiniOptions`（driver/index.ts）。
+- **工具映射**：reLaunch/navigate→`automation_navigate`；currentPage/systemInfo→`automation_runtime_info`；evaluate→`automation_evaluate`；screenshot→`simulator_screenshot`；element tap/input/text/attribute→`automation_element_action`；consoleGrep→`get_simulator_console`；refresh→`simulator_refresh`；clearCache→`debug_clear_cache`。
+- **`driver/mp.ts` waitFor 改造**：ms 烘成**无参箭头函数字面量**（`new Function(...)`）——wechatide evaluate 不支持带参（`--args` 实测不生效），无参+字面量两端兼容。
+- **`tests/e2e-mp-popover.test.ts`**（framework 规范，`PROTEUS_MP_E2E_WXIDE=1` 启用）：reLaunch demo 页 → console 零错门禁 → evaluate 开/关 popover（p-button 组件内不可 tap → evaluate setData 驱动）→ **开完 console 零错（方案 A measureRect→setData panelStyle 运行时路径 Skyline 无崩溃）**。
+
+### 验证（Skyline + wechatide framework）
+- `tests/e2e-mp-popover.test.ts` **12.3s 通过**（开/关 popover + console 零错 + `popoverOpen` 正确开合）。
+- 适配器单测探针：currentPage/evaluate/systemInfo/reLaunch 全部跑通（`(function(){})()` IIFE 会 exit 1 → 必须**裸函数源码** `function(){...}`；`wx.getSystemInfoSync().renderer` 本 IDE 版本返回 **undefined** 不能作 skyline 判据）。
+- 全量 **2540/2540 绿**；`check:pkg` 38 包 0 error；test-core build ✓。
+
+### 遗留/下一步
+- ✅ CLI `proteus test e2e:mp` 已迁 wechatide（2026-09-08 同批）：`packages/cli/src/index.ts` e2e:mp 分支改 `open_project_window(fullMode)+skyline config + env PROTEUS_MP_E2E_WXIDE=1` + `tests/e2e-mp-smoke.test.ts` 加 `WXIDE_ENABLED` 分支（`createWxideMini`）；`proteus test e2e:mp examples --ide <cli>` 实测通过（runSharedSmoke OK + Tests 1 passed）。
+- ⚠ `npx proteus`（bin）解析到发布版 `@proteus-vue/cli`（旧 automator）——本仓源码用 `npx tsx packages/cli/src/index.ts test e2e:mp`；对外发布需 rebuild+publish cli 才切 wechatide。
+- `automation_evaluate` 不支持带参/IIFE——只支持裸函数源码（无参）+ 返回字面量/Promise。
+- `systemInfo` 嵌套提取（`result.systemInfo.result`）已解包；console 返回 string 需 split。
+- 产物副本 `.proteus/e2e-mp` 与 real-dist 是不同 runtime——popover 测试用 real-dist 需先 `open_project_window`（automation_navigate 依赖 runtime）。
+
+## 2026-09-07 续 · popover 方案 A spike + platform L2 measureRect（为 P2 拆审计卡点）
+
+## 2026-09-07 续 · popover 方案 A spike + platform L2 measureRect（为 P2 拆审计卡点）
+
+### 成果
+- **L2 `measureRect` 抽象（`packages/shared/src/platform/`）**：`PlatformAdapter` 加可选 `measureRect?(selector): Promise<Rect|null>`
+  ——mp 用 `wx.createSelectorQuery`、web 用 `document.querySelector + getBoundingClientRect`；失败/不支持 resolve null。
+  新增 `Rect` 类型 + shared index 导出。**审计合规**：wx/document 直调只在平台层（no-platform-api allow: platforms/**）。
+- **方案 A spike（p-popover）**：打开时 `adapter.measureRect('#'+uid)` 测 trigger → `computePopoverPosition`（`src/components/runtime/popover-position.ts` 纯函数）
+  算 fixed 视口坐标 → `panelStyle` 字符串（`position:fixed;left:Xpx;top:Ypx;right:auto;bottom:auto`）→ 面板浮到层叠顶层（Skyline 层叠解药）。
+  降级契约：measureRect 缺失/失败/不支持 → panelStyle='' → 回退静态 `.p-popover-{placement}` 绝对锚定（终案行为不变）。
+- **产品契约/测试**：`tests/popover.test.ts` 10 用例（纯函数四向 + 组件 mock measureRect：fixed 命中/空回退/抛错回退/无方法回退/关闭清空）+ platform-adapter +5 用例。
+- **产物实证**：p-popover mp 产物 `setData({ panelStyle: 'position:fixed;left:'+pos.left+... })` 正确重化；wxml `id="{{uid}}"` + 静态 placement 类保留。
+
+### 自动化验证（用项目自有框架，不含手工）
+- **单测**：`tests/popover.test.ts`（纯函数四向 + 组件 mock measureRect 五种态）+ `tests/platform-adapter.test.ts`（measureRect web/mp/null/SSR 守卫）。
+- **产物契约探针**：`tests/compiler-mp-probe.test.ts` P8e 新增 4 断言（trigger triggerId / panel style 绑定 / measureRect+setData / triggerId 生成）。
+- **Web e2e**：`tests/e2e-overlay-family.test.ts` p-popover 改写（opens via overlay--on → panel fixed+coords 定位 → layer 关闭）——真实浏览器（Chromium）验证 fixed+coords 渲染。
+- **命门诚实边界**：Skyline 是否渲染「fixed 像素坐标」无法在无设备 CI 完全自动化，但 Web 真实浏览器已验 fixed+coords 渲染；Skyline 层叠需 final 真机（一次）——但**非每次手工**：改结构即被 P8e 产物契约红 + e2e 红拦截。
+
+### 重点教训（自动化抓到并修复的真 bug）
+- **`src/components` 组件不能 import `@proteus-vue/shared` 直接依赖根 node_modules**——shared 未 hoist 到根（只有 fluid/devtools-runtime 在根）→ 需**同时**在 examples `tsconfig paths` + `proteus.config` vite `resolve.alias` 补 `@proteus-vue/shared`（类型侧 + 打包器侧两处）。
+- **MP 编译器丢弃顶层 const/ref 含函数调用/计数器**：`const uid = '...' + ++uidCounter` 整行丢（uid→undefined→measureRect('#undefined')）；`getCurrentInstance().uid` 同样丢。**解法 = 模块级 `let popoverSeq`（不衍生成 const）+ 方法内 `triggerId.value = '...' + popoverSeq`**（模块 let + data ref 赋值编译器保留）。
+- **`:id` 绑定是异步 flush**：`ensureTriggerId()` 后必须 `await nextTick()` 再 measureRect——否则 querySelector('#...') 在 id 落地前拿 null → 误回退（Web/MP 双端同坑，e2e 抓到）。
+- **组件定位 style**：MP 只收字符串（#500）；且 computed 依赖 async 方法内 ref 赋值**未**被 computed 链 patch 重化（如 p-popover panelStyle）——改成**字符串 ref 直接赋值**（`setData({ panelStyle: 'position:fixed;left:'+... })`）+ 字符串拼接即可重化 + MP 原生可用。p-modal 的 form 走 applyForm 才被重化，这是编译缺口非通用。
+- **注释勿含 `*/`**：JSDoc 里 `wx.*/document.*` 会提前闭合块注释 → TS 语法错误。
+- **happy-dom 字符串 `:style`**：`getAttribute('style')` 返回规范化带空格（`'position: fixed; ...'`），空串为 `''` 非 null。
+- **正则断言脆弱**：产物引号形态不定（setData({ triggerId: '...' })）→ 用宽松子串 `.toContain` 更稳。
+
 ## 2026-09-07 · 弹层族 Skyline 回归（当日收尾）
 
 ### 成果（全量 vitest 2544/2544 绿；HEAD 306df623 已推送；工作区干净）

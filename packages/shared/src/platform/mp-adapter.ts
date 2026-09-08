@@ -1,10 +1,23 @@
 // src/platform/mp-adapter.ts
 // 小程序端适配器（P3-5）：代理 wx.*
 // 所有失败静默 resolve，降级策略由调用方（router）决定
-import type { PlatformAdapter, PageInstance } from './adapter'
+import type { PlatformAdapter, PageInstance, Rect } from './adapter'
 
 function norm(p: any): PageInstance {
   return { route: p.route || p.__route__ || '', setData: p.setData?.bind(p) }
+}
+
+// boundingClientRect 回调在元素缺失时可能返回 null/undefined 或缺失部分字段——统一归一化
+function normalizeRect(rect: Rect | null | undefined): Rect | null {
+  if (!rect || typeof rect.left !== 'number' || typeof rect.top !== 'number') return null
+  return {
+    top: rect.top,
+    left: rect.left,
+    right: typeof rect.right === 'number' ? rect.right : rect.left,
+    bottom: typeof rect.bottom === 'number' ? rect.bottom : rect.top,
+    width: typeof rect.width === 'number' ? rect.width : rect.right - rect.left,
+    height: typeof rect.height === 'number' ? rect.height : rect.bottom - rect.top,
+  }
 }
 
 export function createMpAdapter(): PlatformAdapter {
@@ -35,5 +48,14 @@ export function createMpAdapter(): PlatformAdapter {
     navigateBack: ({ delta }) => {
       wx.navigateBack({ delta })
     },
+    measureRect: (selector) =>
+      // ★平台层许可直接碰 wx.*（no-platform-api 审计 allow: platforms/**/packages/api/**）；组件经此 L2 抽象消费
+      new Promise((resolve) => {
+        if (typeof wx === 'undefined' || typeof wx.createSelectorQuery !== 'function') return resolve(null)
+        wx.createSelectorQuery()
+          .select(selector)
+          .boundingClientRect((rect: Rect | null | undefined) => resolve(normalizeRect(rect)))
+          .exec()
+      }),
   }
 }

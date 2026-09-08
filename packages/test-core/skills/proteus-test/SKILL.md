@@ -28,7 +28,7 @@ description: >-
 | L1-L3 单测 + 编译快照 + 组件 | `npm test` 或 `npx proteus test` | vitest；`tests/e2e-*.test.ts` 被排除（E2E 显式触发） |
 | 单测更新快照 | `npm run test:update` | 快照进 git，CI 不自动更新 |
 | Web E2E（Chromium） | `npm run test:e2e:web` | 先 `npm run build:web`，preview 产物；含路由/渲染 + 关键路径 data-testid |
-| 小程序 E2E（真机） | `npx proteus test e2e:mp <root> --ide <cli> [--port 9420] [--debugger <module>]` | 自动体检/副本/补丁/端口复用；`--debugger` 注入 console/network 句柄 |
+| 小程序 E2E（真机） | `npx proteus test e2e:mp <root> --ide <cli> [--port 9420] [--debugger <module>]` | ★★2026-09-08 起走 **wechatide skill-CLI**（官方 Electron 版标准——automator 与新 IDE 不兼容已弃用）。自动体检/产物副本→`.proteus/e2e-mp`/开窗(fullMode)+skyline config/spec 走 `createWxideMini`（`@proteus-vue/test-core/driver`）；`--debugger` 注入 console/network 句柄 |
 | 六域全量门禁 | `npx proteus audit all` | route/module/config/i18n/capabilities/components；预算 12s |
 | 配置/规范检查 | `npx proteus check <root>` | 四域（appid 等）；capabilities 域扫 `wx.*` 业务直连违规 |
 | 跨端统一测试 API | TestDriver（见 references/testdriver-api.md） | `@proteus-vue/test-core/driver`：createDriver + 能力接口 |
@@ -37,7 +37,7 @@ description: >-
 
 1. **单测/组件**（`tests/*.test.ts`）：组件层统一挂载 `mountComponent(sfc, { platform: 'web'|'mp' })` + `stateOf/textOf/tap` 跨端复用断言（文件头 `// @vitest-environment happy-dom`——esbuild TextEncoder 检查）。小程序逻辑层用 `mountMpComponent`（`{ instance, wxml, js, context, config }`）。
 2. **跨端 E2E**（`tests/e2e-*.test.ts`，被根 test 排除，显式跑）：`createDriver({ platform, page/mini })` → 同一份用例代码双端跑（模式见 references/cross-platform-cases.md）。
-3. **跑**：先 `npm test` 相关文件 → 再 Web E2E → MP E2E（真机，见 references/mp-e2e-guide.md）。
+3. **跑**：先 `npm test` 相关文件 → 再 Web E2E → MP E2E（真机，见 references/mp-e2e-guide.md——★wechatide skill-CLI 标准，automator 已弃用）。
 
 ## 失败快表
 

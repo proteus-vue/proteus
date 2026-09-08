@@ -166,5 +166,8 @@ export {
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数
 export { installFluidLayout, createFluidDirective, createFluidStyle, parseFluidExpr, applyFluidStyle } from './runtime/fluid'
 export type { FluidGroup } from './runtime/fluid'
+// ★p-popover 定位纯函数（方案 A spike：fixed + 像素坐标，Skyline 层叠解药）
+export { computePopoverPosition } from './runtime/popover-position'
+export type { PopoverPlacement, PopoverPosition, PopoverPositionInput } from './runtime/popover-position'
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'

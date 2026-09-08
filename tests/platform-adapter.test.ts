@@ -46,3 +46,90 @@ describe('#491 adapter 平台判定（运行时探测——小程序启动白屏
     expect(adapter.isMP).toBe(false)
   })
 })
+
+describe('measureRect L2 抽象（no-platform-api——组件禁直接 wx.*/document.*，经此处消费）', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('web adapter：querySelector + getBoundingClientRect 归一化（window 存在 → web）', async () => {
+    vi.stubGlobal('window', {})
+    const el = {
+      getBoundingClientRect: () => ({ top: 5, left: 6, right: 20, bottom: 18, width: 14, height: 13 }),
+    }
+    vi.stubGlobal('document', { querySelector: vi.fn().mockReturnValue(el) })
+    vi.resetModules()
+    const { adapter } = await import('@proteus-vue/shared')
+    expect(adapter.isMP).toBe(false)
+    const rect = await adapter.measureRect!('.foo')
+    expect(rect).toEqual({ top: 5, left: 6, right: 20, bottom: 18, width: 14, height: 13 })
+    expect(document.querySelector).toHaveBeenCalledWith('.foo')
+  })
+
+  it('web adapter：元素不存在 → resolve null（不抛，调用方降级）', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('document', { querySelector: vi.fn().mockReturnValue(null) })
+    vi.resetModules()
+    const { adapter } = await import('@proteus-vue/shared')
+    expect(adapter.isMP).toBe(false)
+    await expect(adapter.measureRect!('.zzz')).resolves.toBe(null)
+  })
+
+  it('web adapter：SSR/无 document 环境 → resolve null（安全守卫，不崩）', async () => {
+    vi.stubGlobal('window', {})
+    // 不 stub document——node 环境无 document
+    vi.resetModules()
+    const { adapter } = await import('@proteus-vue/shared')
+    expect(adapter.isMP).toBe(false)
+    await expect(adapter.measureRect!('.foo')).resolves.toBe(null)
+  })
+
+  it('mp adapter：createSelectorQuery + boundingClientRect + exec 归一化（getSystemInfoSync 判定 mp）', async () => {
+    let boundCb: ((r: unknown) => void) | null = null
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      boundingClientRect: vi.fn().mockImplementation(function (this: unknown, cb: (r: unknown) => void) {
+        boundCb = cb
+        return this
+      }),
+      exec: vi.fn().mockImplementation(function (this: unknown) {
+        boundCb?.({ top: 2, left: 3, right: 12, bottom: 10, width: 9, height: 8 })
+        return this
+      }),
+    }
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({}),
+      createSelectorQuery: vi.fn().mockReturnValue(query),
+    })
+    vi.resetModules()
+    const { adapter } = await import('@proteus-vue/shared')
+    expect(adapter.isMP).toBe(true)
+    const rect = await adapter.measureRect!('.trigger')
+    expect(rect).toEqual({ top: 2, left: 3, right: 12, bottom: 10, width: 9, height: 8 })
+    expect(query.select).toHaveBeenCalledWith('.trigger')
+  })
+
+  it('mp adapter：boundingClientRect 返回 null/残缺 → normalize 兜底 or null', async () => {
+    let boundCb: ((r: unknown) => void) | null = null
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      boundingClientRect: vi.fn().mockImplementation(function (this: unknown, cb: (r: unknown) => void) {
+        boundCb = cb
+        return this
+      }),
+      exec: vi.fn().mockImplementation(function (this: unknown) {
+        boundCb?.(null)
+        return this
+      }),
+    }
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({}),
+      createSelectorQuery: vi.fn().mockReturnValue(query),
+    })
+    vi.resetModules()
+    const { adapter } = await import('@proteus-vue/shared')
+    expect(adapter.isMP).toBe(true)
+    await expect(adapter.measureRect!('.gone')).resolves.toBe(null)
+  })
+})

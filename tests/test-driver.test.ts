@@ -168,8 +168,10 @@ describe('createDriver（统一入口：platform + 注入句柄）', () => {
     await mp.evaluate('() => wx.getSystemInfoSync()')
     expect(await mp.screenshot('/tmp/mp.png')).toBe('/tmp/mp.png')
     await mp.waitFor(100)
-    // ★evaluate 传函数 + 参数（automator 序列化）——断言第二参数透传 100
-    expect(mini.evaluate).toHaveBeenCalledWith(expect.any(Function), 100)
+    // ★2026-09-08：waitFor 把 ms 烘成无参函数字面量（wechatide 后端 evaluate 不支持带参 --args）——单参调用，源码含 100
+    const waitFn = mini.evaluate.mock.calls[mini.evaluate.mock.calls.length - 1][0] as () => unknown
+    expect(waitFn.toString()).toContain('100')
+    expect(mini.evaluate).toHaveBeenCalledWith(expect.any(Function))
     expect(mini.screenshot).toHaveBeenCalledWith({ path: '/tmp/mp.png' })
   })
 })

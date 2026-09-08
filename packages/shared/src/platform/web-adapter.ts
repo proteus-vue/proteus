@@ -1,7 +1,7 @@
 // src/platform/web-adapter.ts
 // Web 端适配器（P3-5）：History API + popstate
 // Web 端页面栈恒为 1（SPA 单页语义），onPageLoad 驱动 RouterView 渲染
-import type { PlatformAdapter, PageInstance } from './adapter'
+import type { PlatformAdapter, PageInstance, Rect } from './adapter'
 
 function parseQuery(url: string): Record<string, string> {
   const q = url.split('?')[1] || ''
@@ -92,6 +92,22 @@ export function createWebAdapter(): PlatformAdapter {
     navigateBack: ({ delta }) => {
       history.go(-delta)
     },
+    measureRect: (selector) =>
+      new Promise((resolve) => {
+        // SSR/测试/node 无 document → 决定 resolve null（调用方降级，不抛）
+        if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return resolve(null)
+        const el = document.querySelector(selector)
+        if (!el || typeof el.getBoundingClientRect !== 'function') return resolve(null)
+        const r = el.getBoundingClientRect()
+        resolve({
+          top: r.top,
+          left: r.left,
+          right: r.right,
+          bottom: r.bottom,
+          width: r.width,
+          height: r.height,
+        })
+      }),
     onPageLoad: (cb) => {
       listeners.push(cb)
     },

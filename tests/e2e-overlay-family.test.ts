@@ -108,16 +108,38 @@ describe('弹层族自动化复测（★自动化提前抓定位问题）', () =
     await waitGone('.p-as-mask')
   }, 30_000)
 
-  it('p-popover：点「触发气泡」→ 气泡面板出现（anchor 下方区域）+ 遮罩关闭', async () => {
+  it('p-popover：点「触发气泡」→ 面板 fixed+坐标定位 + 遮罩层关闭（方案 A spike）', async () => {
     await page.goto(`${BASE}/pages/semantic-primitives-demo`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(500)
     expect(await clickButtonByText('触发气泡')).toBe(true)
-    await waitVisible('.p-popover-panel, .p-popover-mask')
+
+    // ① 真正断言「已打开」：overlay 挂上 --on（visibility:visible）——面板常驻（visibility:hidden 时 height>0），
+    //    不能用 waitVisible（常驻元素恒通过）。
+    await page.waitForFunction(
+      () => !!document.querySelector('.p-popover-overlay--on'),
+      undefined,
+      { timeout: 8000 },
+    )
+    // ② measureRect 异步解析 → 面板改 fixed + 视口像素坐标（方案 A：浮层叠顶层）
+    await page.waitForFunction(
+      () => {
+        const panel = document.querySelector('.p-popover-panel')
+        if (!panel) return false
+        const cs = getComputedStyle(panel)
+        return cs.position === 'fixed' && cs.left !== 'auto' && cs.top !== 'auto'
+      },
+      undefined,
+      { timeout: 8000 },
+    )
     const r = await rectOf('.p-popover-panel')
     expect(r.w).toBeGreaterThan(50)
     expect(r.h).toBeGreaterThan(20)
-    // 遮罩关闭
-    await page.click('.p-popover-mask', { position: { x: 200, y: 700 } })
-    await waitGone('.p-popover-mask')
+    // ③ 遮罩层关闭（组件终案为 .p-popover-layer——非旧 .p-popover-mask）
+    await page.click('.p-popover-layer', { position: { x: 200, y: 700 } })
+    await page.waitForFunction(
+      () => !document.querySelector('.p-popover-overlay--on'),
+      undefined,
+      { timeout: 8000 },
+    )
   }, 30_000)
 })
