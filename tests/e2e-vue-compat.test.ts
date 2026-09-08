@@ -5,8 +5,12 @@
 //   都是「编译通过但真机坏」）。本栏目把每个能力映射到「真机运行时断言」，逐个自动化验收。
 //   ★以 **wechatide skill-CLI** 为唯一标准（官方 Electron 版，不再是 automator——与新版 IDE 不兼容）。
 //
-// ★运行：PROTEUS_MP_E2E_WXIDE=1 npx vitest run tests/e2e-vue-compat.test.ts
-//   （前置：pnpm build:mp 产出 dist/mp-weixin + 微信开发者工具已开项目窗口 + skyline private config）
+// ★运行（推荐框架规范命令，自动做管理副本+开窗+skyline）：
+//   PROTEUS_IDE_CLI="<wechatide 绝对路径>" npx tsx packages/cli/src/index.ts test e2e:mp examples
+//   （compat 入列：packages/cli/src/index.ts 的 e2e:mp 全家桶含本文件；--no-file-parallelism 串行对同一模拟器）
+// ★单独运行：PROTEUS_MP_E2E_WXIDE=1 npx vitest run tests/e2e-vue-compat.test.ts
+//   （前置：pnpm build:mp 产出 dist/mp-weixin + 微信开发者工具**单个**项目窗口 + skyline private config；
+//    ⚠多副本窗口 → automator 服务绑定混乱 → automation_navigate timeout，见 06 文档）
 // ★15 铁律：进页第一动作 = console 零错门禁（consoleLogs 过滤 error/not defined/ReferenceError…）→ 绿后才断言。
 // ★新增能力：在 CAPABILITY_CASES 加一项（route + 断言函数），npm test 不受影响（本文件 e2e-* 被排除）。
 import { describe, it, expect } from 'vitest'
