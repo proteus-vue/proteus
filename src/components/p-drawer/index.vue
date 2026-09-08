@@ -11,33 +11,38 @@
        ③ 抽屉面板 @click.stop（MP→catchtap）吞掉自身冒泡，面板内点击不触发关闭；
        ④ 关闭态容器 visibility:hidden 不拦截页面；过渡方向技巧保留滑出动画。 -->
 <template>
-  <view
-    class="p-drawer-root"
-    :class="{ 'p-drawer-root--open': modelValue }"
-    @click="onMaskAreaTap"
-  >
-    <view v-if="modelValue && overlay" class="p-drawer-mask" />
-    <!-- side 静态分支（.p-drawer-left/--right 字面量）：动态 side 类在 Skyline 无 scoped 匹配 →
-         right 侧面板会落到静态位置（left 恰好看似正常），同 p-popup 位置类教训 -->
+  <!-- ★2026-09-08 root-portal 逃逸层叠（对齐 p-popover）：抽屉容器 fixed 全屏，若组件被下层元素遮挡（z-index 上下文）
+       仍会被盖——包 <root-portal>（官方：子树脱离页面层叠，类 fixed 顶层）→ 抽屉恒盖住页面其余内容。
+       常驻（不用 wx:if 包 portal 内容——glass-easel 下 portal+wx:if 挂载异常，p-popover 实证）；关闭态类隐藏不拦截。 -->
+  <root-portal>
     <view
-      v-if="side === 'left'"
-      class="p-drawer p-drawer-left"
-      :class="{ 'p-drawer-open': modelValue }"
-      :style="{ width: width + 'px' }"
-      @click.stop="noop"
+      class="p-drawer-root"
+      :class="{ 'p-drawer-root--open': modelValue }"
+      @click="onMaskAreaTap"
     >
-      <slot />
+      <view v-if="modelValue && overlay" class="p-drawer-mask" />
+      <!-- side 静态分支（.p-drawer-left/--right 字面量）：动态 side 类在 Skyline 无 scoped 匹配 →
+           right 侧面板会落到静态位置（left 恰好看似正常），同 p-popup 位置类教训 -->
+      <view
+        v-if="side === 'left'"
+        class="p-drawer p-drawer-left"
+        :class="{ 'p-drawer-open': modelValue }"
+        :style="{ width: width + 'px' }"
+        @click.stop="noop"
+      >
+        <slot />
+      </view>
+      <view
+        v-else
+        class="p-drawer p-drawer-right"
+        :class="{ 'p-drawer-open': modelValue }"
+        :style="{ width: width + 'px' }"
+        @click.stop="noop"
+      >
+        <slot />
+      </view>
     </view>
-    <view
-      v-else
-      class="p-drawer p-drawer-right"
-      :class="{ 'p-drawer-open': modelValue }"
-      :style="{ width: width + 'px' }"
-      @click.stop="noop"
-    >
-      <slot />
-    </view>
-  </view>
+  </root-portal>
 </template>
 
 <script setup lang="ts">
