@@ -917,11 +917,12 @@ function handleConstToData(
   warnings: string[],
   trace?: TransformTrace,
 ): void {
-  // 组件宏（defineProps/defineEmits/defineExpose/withDefaults/defineComponent）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
+  // 组件宏（defineProps/defineEmits/defineExpose/withDefaults/defineComponent/defineModel）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
   //   ★2026-09-08 P1：withDefaults(defineProps<T>(), D) 也属宏——内层 defineProps 由 extractProps 全树扫描提取；
   //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
   //   ★defineComponent：SFC 已自动组件化，defineComponent(...) 包装为编译期 no-op（剥离+警告），不落 data/不裸注入 onLoad
-  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\()/.test(init)) return
+  //   ★defineModel：v-model 组件契约（compileScript 权威源），const m = defineModel 不落 data（prop 由 modelRefs 注册；m.value 读写由 modelRefs 重写）
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\(|defineModel\s*[<(])/.test(init)) return
   // 跳过函数/箭头函数（属于 methods）
   if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
   // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
@@ -1354,7 +1355,7 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     // ★同理，未映射的其它 Vue 生命周期钩子（onBeforeUnmount/onErrorCaptured/onUpdated/onBeforeMount/onBeforeUpdate/
     //   onActivated/onDeactivated/onRenderTracked/onRenderTriggered/onServerPrefetch）由 extractLifecycles 统一「剥离+警告」，
     //   亦须跳过——否则既警告又裸注入 onLoad（partial 钩子告警但产物仍裸调用 → ReferenceError）。mapOnxxx 将跳过，仅告警。
-    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineAppConfig)\b/.test(fn)) continue
+    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineModel|defineAppConfig)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))
@@ -1612,6 +1613,9 @@ function rewriteRefAccess(
   propsVar?: string,
   providedRefs?: Map<string, string>,
   transitionToggle?: Map<string, string>,
+  // ★2026-09-08 P1（defineModel 地基）：modelRefs（var→propName）——compileScript 权威源展开 _useModel 后
+  //   m.value 读→this.data.propName；m.value=expr 写→this.triggerEvent('update:propName', expr)（对齐 glass-easel update-xxx）
+  modelRefs: Map<string, string> = new Map(),
 ): string {
   const skip = (id: string) => disabled?.has(id)
   let out = body
@@ -1636,7 +1640,17 @@ function rewriteRefAccess(
     //   不匹配；非 update: 前缀事件名（formChange/openshare…）不动；动态/变量事件名不动——产物保持原样）
     out = out.replace(/this\.triggerEvent\(\s*(['"])(update:)([^'"]*)\1/g, 'this.triggerEvent($1update-$3$1')
   }
+  // ★2026-09-08 P1（defineModel）：模型引用 m.value 读/写——读→this.data.propName；写→triggerEvent('update-propName', expr)
+  //   ★RegExp 构造字符串须双反斜杠（\\b → 引擎 \b 词边界；\\s/\\w 同理），否则退化为字面字符不匹配
+  for (const [varName, propName] of modelRefs) {
+    if (!new RegExp(`\\b${varName}\\.value`).test(out)) continue
+    // 写：m.value = expr → this.triggerEvent('update-propName', expr)（glass-easel 事件名 update-xxx；先写后读，避免二次命中）
+    out = out.replace(new RegExp(`\\b${varName}\\.value\\s*=\\s*(?!=)([^;\\n]+)`), (_m, expr) => `this.triggerEvent('update-${propName}', ${expr.trim()})`)
+    // 读：m.value → this.data.propName（未被写替换吞掉的其余读取）
+    out = out.replace(new RegExp(`\\b${varName}\\.value\\b`, 'g'), `this.data.${propName}`)
+  }
   // 组件 props（v0.3）：props.xxx → this.data.xxx（微信 properties 在 this.data 可访问）
+  //   ★RegExp 构造字符串须双反斜杠（\\b → \b 词边界；\\w → \w），否则退化为字面字符不匹配（此前误改单反斜杠致全校 props 改写失效）
   if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
   // computed 写路径（v0.3 尾）：x.value = v → setter 方法调用；只读（无 setter）→ 注释忽略
   for (const [cname, c] of Object.entries(computeds)) {
@@ -1986,6 +2000,16 @@ export function transformScriptToPage(
   // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
   const props = extra.isComponent && !disabled.has('script/define-props') ? extractProps(source, warnings, trace) : {}
   const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*[<(]/)?.[1]
+  // ★2026-09-08 P1（defineModel 地基）：compileScript 权威源的 modelRefs（var→propName）→ 注册 prop + 供 .value 读写重写
+  //   不手写抠 defineModel 语义（_useModel 展开 + bindings 分类由 @vue/compiler-sfc 给出，对齐 glass-easel）
+  const modelRefs = new Map<string, string>()
+  for (const md of extra.modelRefs ?? []) {
+    if (!props[md.propName]) {
+      props[md.propName] = { type: 'String', value: '' }
+      trace?.add('script/define-model', { before: `const ${md.varName} = defineModel${md.propName !== 'modelValue' ? `(${JSON.stringify(md.propName)})` : ''}`, after: `properties.${md.propName}（v-model 契约，compileScript 权威源）` })
+    }
+    modelRefs.set(md.varName, md.propName)
+  }
   const emitEnabled = extra.isComponent && /defineEmits\s*\(/.test(source) && !disabled.has('script/define-emits')
   const methods = extractMethods(source, warnings, trace, disabled)
   // defineExpose（v0.3 尾）：no-op 校验（组件模式）
@@ -2195,7 +2219,7 @@ export function transformScriptToPage(
     lines.push('  observers: {')
     for (const w of propWatches) {
       // ★#499：回调参数先归一为 n/o（微信 observers 实参固定 — 回调体引用开发者参数名如 w 必须同步改名）
-      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(renameWatchParamsToNo(w.body, w.params), refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
+      const observerBody = rewriteBareMethodCalls(rewriteRefAccess(renameWatchParamsToNo(w.body, w.params), refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
       const bodyLines = observerBody.split('\n')
       lines.push(`    ${w.propField}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
@@ -2246,7 +2270,7 @@ export function transformScriptToPage(
       : compDerivedReady
         ? `${compDerivedReady}\n${lifecycles.onReady}`
         : lifecycles.onReady
-    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(readyBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`)
+    lines.push(`  onReady() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(readyBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`)
   } else if (semanticGridReady || compDerivedReady) {
     lines.push(`  onReady() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
   } else if (extra.debug) {
@@ -2269,7 +2293,7 @@ export function transformScriptToPage(
   if (lifecycles.onUnload) {
     // ★Batch 4/6：页面级 inject 订阅取消 + 命名空间清理 + store dispose（前置；onUnload 显式存在时注入）
     // ★B7：组件模式 onUnmounted → detached（微信组件无 onUnload；MP 组件销毁钩子为 detached）
-    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
+    const unloadBody = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onUnload, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
@@ -2345,7 +2369,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
     const initLines = initLineSeq()
-    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)
+    const body = rewriteBareMethodCalls(rewriteRefAccess(lifecycles.onLoad, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
@@ -2391,7 +2415,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     const braceIdx = m.src.indexOf('{')
     const sig = m.src.slice(0, braceIdx + 1)
     const body = m.src.slice(braceIdx + 1)
-    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames)},`, m.line)
+    pushMethod(`  ${sig + rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames)},`, m.line)
   }
   // ★15-page-scroll-container 批次2/3：桥接方法生成（dataExtra 已在 dataEntries 前赋值）
   if (!extra.isComponent && !disabled.has('page/scroll-bridge')) {
@@ -2421,7 +2445,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
   for (const w of Object.values(watches)) {
     if (w.propField && !w.immediate) continue
     methodNames.add(`proteusWatch${w.id}`)
-    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
+    const src = `proteusWatch${w.id}(${w.params.join(', ')}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(w.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${src}`, w.line)
   }
   // ★#499 块体 computed 整段求值方法：proteusCalcX()（内部语句任意，末语句 return 表达式；派生 expr = this.proteusCalcX()——
@@ -2430,14 +2454,14 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, p
     if (!c.blockBody) continue
     const mcalc = `proteusCalc${capitalize(cname)}`
     methodNames.add(mcalc)
-    const bsrc = `${mcalc}() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.blockBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
+    const bsrc = `${mcalc}() {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.blockBody, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${bsrc}`, 1)
   }
   // computed 写路径（v0.3 尾）：显式 setter → proteusSetX(v) 方法（setter 体内 ref 读写照常重写）
   for (const [cname, c] of Object.entries(computeds)) {
     if (!c.setter) continue
     methodNames.add(`proteusSet${capitalize(cname)}`)
-    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle), methodNames, runtimeInitNames))}\n  },`
+    const src = `proteusSet${capitalize(cname)}(${c.setter.param}) {\n${indentBody(rewriteBareMethodCalls(rewriteRefAccess(c.setter.body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs), methodNames, runtimeInitNames))}\n  },`
     pushMethod(`  ${src}`, 1)
   }
   // 事件修饰符包装（v0.3 尾）：.self → 仅 e.target === e.currentTarget 触发；.once → data 标记首次后不再触发

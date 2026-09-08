@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 89 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 90 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (49)
 
@@ -649,7 +649,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (26)
+## Script transforms (27)
 
 ### `script/const-to-data`
 
@@ -837,6 +837,19 @@ after:  no-op（reset 已在 methods，外部 selectComponent 可调）
 ```
 
 > why: External access to mini program components (selectComponent + method calls) natively covers the method-exposure semantics of Vue defineExpose; exposing a ref value would require method wrapping (v0.3 wrap-up, decision #91)
+
+### `script/define-model`
+
+**defineModel → v-model component contract (authoritative compileScript source)**
+
+Component mode: const m = defineModel<T>([name]) is authoritatively expanded by @vue/compiler-sfc to _useModel(__props, name) — registers prop (default modelValue) + rewrites m.value read→this.data.<prop> / write→triggerEvent("update-<prop>", v) (glass-easel update-xxx); template {{ m }} is renamed to {{ <prop> }}. Macro semantics are not hand-rolled (model modifiers/nesting not fully wired → partial).
+
+```
+before: const m = defineModel<string>()
+after:  properties.modelValue + m.value 读→this.data.modelValue / 写→this.triggerEvent("update-modelValue", v)
+```
+
+> why: Vue capability alignment foundation (no hand-rolled macro semantics): defineModel standard expansion comes from @vue/compiler-sfc (bindings classification + props/emits contract); the framework only does MP adaptation (aligned with glass-easel event/property spec) to avoid fragile hand-rolled coverage.
 
 ### `script/function-to-methods`
 

@@ -91,6 +91,30 @@ describe('编译器接线：vue 命名导入 × Vue 全集基准线', () => {
     expect(r.js).not.toMatch(/App\s*:/)
   })
 
+  it('defineModel（compileScript 权威源）：prop 注册 + m.value 读写 + 模板改名（对齐 glass-easel）', () => {
+    // ★2026-09-08 P1（地基）：defineModel 经 @vue/compiler-sfc 权威展开（_useModel），不手写——
+    //   const m = defineModel<string>() → prop modelValue + m.value 读→this.data.modelValue / 写→triggerEvent('update-modelValue', v)
+    const src = `<script setup lang="ts">
+import { defineModel } from 'vue'
+const m = defineModel<string>()
+function set(v: string) { m.value = v }
+function read() { return m.value }
+</script>
+<template><view>{{ m }}</view></template>`
+    const r = compileVueSfc(src, { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true })
+    // prop 注册（properties.modelValue）
+    expect(r.js).toMatch(/modelValue:\s*\{\s*type: String/)
+    // 模板改名：{{ m }} → {{ modelValue }}
+    expect(r.wxml).toMatch(/\{\{\s*modelValue\s*\}\}/)
+    expect(r.wxml).not.toMatch(/\{\{\s*m\s*\}\}/)
+    // 写：m.value = v → this.triggerEvent('update-modelValue', v)
+    expect(r.js).toMatch(/triggerEvent\('update-modelValue',\s*v\)/)
+    // 读：return m.value → return this.data.modelValue
+    expect(r.js).toMatch(/return this\.data\.modelValue/)
+    // 不落 data（m 不进 data）
+    expect(r.js).not.toMatch(/data:\s*\{[\s\S]*?m:\s*undefined/)
+  })
+
   it('现有 aligned 生态（provide/inject）正常不收 Vue API 警告', () => {
     const src = makeSfc(
       "import { provide } from 'vue'",

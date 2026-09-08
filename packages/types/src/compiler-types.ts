@@ -160,6 +160,8 @@ export interface ScriptTransformOptions {
   vModelComponentHandlers?: VModelComponentHandler[]
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
   moduleImports?: Array<{ source: string; requirePath: string }>
+  /** ★2026-09-08 P1（defineModel 地基）：compileScript 权威源的模型引用（var→propName）——m.value 读写重写 + prop 注册 */
+  modelRefs?: Array<{ varName: string; propName: string }>
   trace?: TransformTrace
 }
 
