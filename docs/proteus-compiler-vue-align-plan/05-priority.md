@@ -22,6 +22,7 @@
 
 ### P1（逐能力对齐）
 - 把 partial 里仍受限的，按 `vue-compat-advance` 模式逐批转 aligned（每批 = 状态变更 + 黄金断言）。
+- ✅ **2026-09-08 首批**：`nextTick` 转 aligned（cb→wx.nextTick(cb)；await/无参→Promise 包）+ 黄金断言；同时**partial 诚实性校准**——`toRef/toRefs/toValue/unref/shallowReactive/shallowReadonly/useModel/defineOptions/defineModel/version` 经实测为「假降级（裸调用/undefined）」→ 转 `unsupported`·error（反黑盒）；`readonly/defineSlots` 保留 partial（可用降级）；其余生命周期/模板指令维持 partial（干净剥离+警告）。
 
 ### P2（unsupported / 框架非目标——反黑盒 + 文档）
 - `getCurrentInstance`/`useSlots`/`useAttrs`/`watchEffect`/`h`/`createApp`/`<component :is>`/自定义指令/模板 ref/transition-group/teleport/suspense/keep-alive——unsupported 显式报错（含替代建议）。

@@ -81,6 +81,17 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r as any).js).toMatch(/proteusTransitionToggle0/)
   })
 
+  it('nextTick：cb 形态 → wx.nextTick(cb)；await/无参 → new Promise(r=>wx.nextTick(r))', () => {
+    const r = compile(
+      "import { nextTick } from 'vue'\nasync function go() { nextTick(() => {}); await nextTick() }",
+      '<view>x</view>',
+    )
+    expect((r as any).js).toMatch(/wx\.nextTick\(\(\) => \{\}\)/)
+    expect((r as any).js).toMatch(/await new Promise\(r => wx\.nextTick\(r\)\)/)
+    // 无「裸 nextTick(」（非 wx. 前缀 = 未翻译残留——注意 wx.nextTick( 内 nextTick( 前有 .）
+    expect((r as any).js).not.toMatch(/(?<![.\w])nextTick\s*\(/)
+  })
+
   it('defineProps（对象形态）→ 宏剥离，模板可直接消费 props', () => {
     const r = compile(
       "import { ref } from 'vue'\nconst props = defineProps({ initial: Number })",

@@ -1590,6 +1590,15 @@ function rewriteRefAccess(
   // ★#494 打法收敛：此前按形态逐个打正则补丁（as 标识符/对象/字符串/数组/嵌套函数类型…追不完）——
   //  替换为括号/尖括号深度平衡的剥除器（stripTypeSyntax），任意嵌套一次覆盖；不再新增形态正则
   out = stripTypeSyntax(out)
+  // ★nextTick（Vue API——产物无 vue import，任意裸 nextTick( 即 Vue 能力）：
+  //   nextTick(cb) → wx.nextTick(cb)（微信渲染后回调）；nextTick()/await nextTick() → new Promise(r=>wx.nextTick(r))
+  //   （wx.nextTick 不返回 Promise，await 需包 Promise；哨兵占位防二次改写 wx.nextTick(
+  const NT_PROMISE = '__NEXTTICK_PROMISE__'
+  if (/\bnextTick\s*\(/.test(out)) {
+    out = out.replace(/\bnextTick\s*\(\s*\)/g, NT_PROMISE)
+    out = out.replace(/\bnextTick\s*\(/g, 'wx.nextTick(')
+    out = out.split(NT_PROMISE).join('new Promise(r => wx.nextTick(r))')
+  }
   // 组件事件（v0.3）：emit('xxx', payload) → this.triggerEvent('xxx', payload)（微信组件方法）
   if (emitEnabled) {
     out = out.replace(/\bemit\s*\(/g, 'this.triggerEvent(')

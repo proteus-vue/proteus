@@ -48,6 +48,15 @@
 - **修复**：`extractTopLevelCalls` 跳过正则补全全部 Vue 生命周期钩子（`onBeforeMount/onBeforeUpdate/onUpdated/onBeforeUnmount/onActivated/onDeactivated/onErrorCaptured/onRenderTracked/onRenderTriggered/onServerPrefetch`）——钩子现为「警告 + 干净剥离」，产物不再泄漏裸调用。
 - **验证**：`render-backend-demo`（真实用 `onBeforeUnmount`）产物仅 `onReady()`（onMounted 映射）、无裸 `onBeforeUnmount(`；`examples/pages/render-backend-demo` 无裸调用；新增 1 断言 `vue-compat-compile.test.ts`（警告+不裸泄漏）。
 
+## P1 校准（2026-09-08）：nextTick 转 aligned + partial 诚实性修正
+
+- **`nextTick` → aligned**：编译器新增翻译——`nextTick(cb)` → `wx.nextTick(cb)`；`nextTick()`/`await nextTick()` → `new Promise(r => wx.nextTick(r))`（wx.nextTick 不做 Promise，await 需包装）。命中「Vue API 但产物裸标识符 → not defined」的同类坏产物，现已修。黄金断言 `tests/vue-compat-aligned.test.ts`（cb/await 形态）。
+- **partial 诚实性校准**（多数 partial 项之前标「降级」但产物是**裸调用/undefined** = 假降级）：
+  - 转 `unsupported`·error：`toRef`/`toRefs`/`toValue`/`unref`/`shallowReactive`/`shallowReadonly`/`useModel`/`defineOptions`/`defineModel`/`version`（产物 `this.x=fn(…)` 裸标识符或 `data.x=undefined`）。
+  - 保留 `partial`：`readonly`（字面量→data 可用降级）、`defineSlots`（宏剥离）、`onBeforeUnmount`/`onErrorCaptured` 等生命周期（干净剥离+警告）、`v-text`/`v-pre`/`v-once`（模板剥离+警告）。
+- 校准依据：全部经最小 fixture 实测分类（诚实降级 vs 假降级），且这些能力在 MP `.vue` 中均未被使用（无生产破坏）；转 error 反黑盒安全。
+- **验证**：全量 2571/2571 绿；build:mp / build:web 通过。
+
 > ⚠️ 待办：`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）

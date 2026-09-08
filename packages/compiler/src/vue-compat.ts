@@ -37,19 +37,21 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'reactive', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径' },
   { name: 'computed', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径（读写，proteusSetX）' },
   { name: 'shallowRef', group: 'reactivity', status: 'aligned', source: 'const-to-data' },
-  { name: 'shallowReactive', group: 'reactivity', status: 'partial', degrade: true, note: '仅转字面量初值；深层浅响应 MP 无对等，按 ref 处理', source: 'const-to-data' },
-  { name: 'shallowReadonly', group: 'reactivity', status: 'partial', degrade: true, note: '只读约束编译期不校验，按 ref 处理', source: 'const-to-data' },
-  { name: 'readonly', group: 'reactivity', status: 'partial', degrade: true, note: '只读约束编译期不校验，按 ref 处理', source: 'const-to-data' },
+  // ★2026-09-08 P1 校准：shallowReactive/shallowReadonly 实测被当函数调用译为 this.x=shallowX(…) 裸标识符 → not defined（假降级）→ unsupported·error；readonly 实测字面量→data（可用降级）→ 保持 partial
+  { name: 'shallowReactive', group: 'reactivity', status: 'unsupported', note: '深层浅响应 MP 无对等——当前译为 this.x=shallowReactive(…) 裸标识符 → not defined；请用 ref/普通对象', source: 'P1 校准' },
+  { name: 'shallowReadonly', group: 'reactivity', status: 'unsupported', note: '只读约束未校验且译为裸调用 → not defined；请用 ref/普通对象', source: 'P1 校准' },
+  { name: 'readonly', group: 'reactivity', status: 'partial', degrade: true, note: '只读约束编译期不校验（对象字面量→data 可用，只读语义丢失）；需只读请用属性只读约定', source: 'const-to-data' },
   { name: 'customRef', group: 'reactivity', status: 'unsupported', note: '自定义 ref 需运行时钩子，MP 无对等——请用 ref + watch/computed', source: '评估' },
-  { name: 'toRef', group: 'reactivity', status: 'partial', degrade: true, note: '转 data 字段引用；响应式联动按 store 桥/ref 写通道', source: '评估' },
-  { name: 'toRefs', group: 'reactivity', status: 'partial', degrade: true, note: '同上', source: '评估' },
-  { name: 'toValue', group: 'reactivity', status: 'partial', degrade: true, note: '按 ref.value 读取重写（ref-read）', source: '评估' },
+  // ★2026-09-08 P1 校准：toRef/toRefs/toValue 实测译为 this.x=toRef(…) 裸标识符 → not defined（假降级）→ unsupported·error（与 isRef 等运行时守卫同批反黑盒）
+  { name: 'toRef', group: 'reactivity', status: 'unsupported', note: '运行时引用重定向无对等——当前译为裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
+  { name: 'toRefs', group: 'reactivity', status: 'unsupported', note: '同上——裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
+  { name: 'toValue', group: 'reactivity', status: 'unsupported', note: '运行时取值无对等——裸调用 → not defined；请直接用 .value 读取', source: 'P1 校准' },
   { name: 'proxyRefs', group: 'reactivity', status: 'unsupported', note: '运行时代理，MP 无对等——直接用 .value', source: '评估' },
   { name: 'effect', group: 'reactivity', status: 'unsupported', note: '裸 effect 无对等——请用 watchEffect/computed', source: '评估' },
   { name: 'stop', group: 'reactivity', status: 'unsupported', note: 'effect 关闭，MP 无对等', source: '评估' },
   { name: 'triggerRef', group: 'reactivity', status: 'unsupported', note: '手动触发 shallowRef，MP 无对等——用 ref 替代', source: '评估' },
   { name: 'markRaw', group: 'reactivity', status: 'unsupported', note: '运行时标记，MP 无对等', source: '评估' },
-  { name: 'unref', group: 'reactivity', status: 'partial', degrade: true, note: '按 ref.value 读取重写', source: '评估' },
+  { name: 'unref', group: 'reactivity', status: 'unsupported', note: '运行时取值无对等——裸调用 → not defined；请直接用 .value 读取', source: 'P1 校准' },
   // ★2026-09-08 Step2 校准：isRef/isReactive/isReadonly/isProxy/isShallow 实测被当「函数调用初始化」译为 this.x=isX(…)，
   //   产物为裸标识符且无 vue import → 运行时 not defined（getCurrentInstance 同类）——标记 aligned 是假，降 unsupported（无降级→error）
   { name: 'isRef', group: 'reactivity', status: 'unsupported', note: '运行时类型守卫无对等——isRef 编译期可内联 true/false 但未实现；当前译为 this.x=isRef(…) 裸标识符 → not defined；请改用框架语义 API 或直接判别', source: '评估（Step2 实测校准）' },
@@ -75,13 +77,15 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'defineProps', group: 'component', status: 'aligned', source: 'vue-compat §1（define-props）' },
   { name: 'defineEmits', group: 'component', status: 'aligned', source: 'vue-compat §1（define-emits）' },
   { name: 'defineExpose', group: 'component', status: 'aligned', source: 'define-expose（no-op+校验）' },
-  { name: 'defineOptions', group: 'component', status: 'partial', degrade: true, note: '组件选项（name/inheritAttrs 等）无对等——用 <script> options', source: '评估' },
-  { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理', source: '评估' },
-  { name: 'defineModel', group: 'component', status: 'partial', degrade: true, note: '按 props + update:arg 契约编译（v-model 组件契约）', source: 'v-model 组件形态' },
-  { name: 'useModel', group: 'component', status: 'partial', degrade: true, note: '同上（模型声明）', source: '评估' },
+  // ★2026-09-08 P1 校准：defineOptions 被当顶层副作用裸注入 onLoad → not defined；defineModel/useModel 产物 data.x=undefined（假降级）→ unsupported·error
+  { name: 'defineOptions', group: 'component', status: 'unsupported', note: '组件选项（name/inheritAttrs）无对等——当前裸注入 onLoad → not defined；请用 <script> options', source: 'P1 校准' },
+  { name: 'defineSlots', group: 'component', status: 'partial', degrade: true, note: '类型声明按 slot 透传处理（宏剥离，无产物副作用）', source: '评估' },
+  { name: 'defineModel', group: 'component', status: 'unsupported', note: 'v-model 组件契约未实现——产物 data.x=undefined；请用 props + defineEmits(update:x) 显式建模', source: 'P1 校准' },
+  { name: 'useModel', group: 'component', status: 'unsupported', note: '同 defineModel（模型声明）——裸调用 → not defined；请用 props + emit 显式建模', source: 'P1 校准' },
   // ★Step2 校准：withDefaults 实测编译抛语法错误（macro 未对齐，Unexpected token）——标 aligned 是假
   { name: 'withDefaults', group: 'component', status: 'unsupported', note: '当前编译抛语法错误（macro 未对齐）——请用 <script setup> 内联默认值或待对齐', source: '评估（Step2 实测校准）' },
-  { name: 'nextTick', group: 'component', status: 'partial', degrade: true, note: '转 wx.nextTick / setData 回调后', source: '评估' },
+  // ★2026-09-08 P1 对齐：nextTick 已翻译——nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))
+  { name: 'nextTick', group: 'component', status: 'aligned', note: 'nextTick(cb)→wx.nextTick(cb)；nextTick()/await nextTick()→new Promise(r=>wx.nextTick(r))（wx.nextTick 返回 undefined，await 需 Promise 包装）', source: 'P1 对齐（脚本体翻译）' },
   { name: 'queuePostFlushCb', group: 'component', status: 'unsupported', note: '内部调度，MP 无对等', source: '评估' },
   { name: 'h', group: 'component', status: 'unsupported', note: '运行时渲染（框架非目标 §0.4）——用模板 DSL', source: 'L0 非目标' },
   { name: 'createVNode', group: 'component', status: 'unsupported', note: '同上——用模板 DSL', source: 'L0 非目标' },
@@ -113,8 +117,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // 调试/内部
   { name: 'warn', group: 'component', status: 'unsupported', note: 'Vue 内部 warn，MP 无对等——用 console.warn', source: '评估' },
   { name: 'devtools', group: 'component', status: 'unsupported', note: 'Vue devtools API，MP 走 @proteus-vue/devtools', source: '评估' },
-  // ★Step2 校准：version 实测编译为 data.version=undefined（无法静态求值，未内联）——降 partial（有降级→warning）
-  { name: 'version', group: 'component', status: 'partial', degrade: true, note: '编译期无法静态求值，产物 data.version=undefined——待内联版本号', source: '评估（Step2 实测校准）' },
+  // ★2026-09-08 P1 校准：version 实测编译为 data.version=undefined（未内联版本号，假降级）→ unsupported·error；要支持需内联 compiler 版本号
+  { name: 'version', group: 'component', status: 'unsupported', note: '编译期未内联版本号（产物 data.version=undefined）——待内联；请勿在 MP 直接 import version', source: 'P1 校准' },
 
   // ===== lifecycle =====
   { name: 'onMounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onReady）' },
