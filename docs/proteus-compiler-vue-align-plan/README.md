@@ -20,6 +20,7 @@
 - `03-root-cause.md`：根因（逐 API 白名单翻译 + 缺 Vue 全集基准线 + 不留 vue import）。
 - `04-fix-direction.md`：修复 = ①固化 Vue 全集基准线 SSOT ②逐能力标状态+编译断言门禁 ③运行时/模板 API「三类之一」兜底反黑盒。
 - `05-priority.md`：优先级（先 SSOT + 状态表 + 门禁 → 逐能力对齐 / 反黑盒兜底）。
+- `06-mp-true-device-acceptance.md`：**Vue 能力对齐真机验收专项栏目**——矩阵只给编译期状态，本栏目把每个能力映射到真机运行时断言（wechatide skill-CLI + console 零错门禁），配套 `tests/e2e-vue-compat.test.ts`（`PROTEUS_MP_E2E_WXIDE=1` 运行，`e2e-*` 被排除不进全量）。
 
 ## 进展（2026-09-08）
 
