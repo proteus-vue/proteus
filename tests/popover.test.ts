@@ -29,6 +29,16 @@ async function flush(): Promise<void> {
   await nextTick()
   await new Promise((r) => setTimeout(r, 0))
   await nextTick()
+  await new Promise((r) => setTimeout(r, 0)) // ★2026-09-08 <teleport> 内容送 document.body（Vue Teleport 语义）——多 tick 等挂载
+}
+
+// ★2026-09-08 <teleport> 把弹层内容送到 document.body（非挂载容器 el）：panel 用 document 查询；
+//   清洗两套（el + body）防跨用例泄漏
+function queryPanel(): HTMLElement | null {
+  return document.querySelector('.p-popover-panel')
+}
+function cleanup(): void {
+  document.querySelectorAll('.p-popover-panel, .p-popover-overlay').forEach((n) => n.remove())
 }
 
 describe('computePopoverPosition 纯函数（四方向 fixed 视口坐标）', () => {
@@ -54,30 +64,33 @@ describe('p-popover 方案 A（measureRect + fixed 坐标；降级回退）', ()
     const spy = vi.spyOn(adapter, 'measureRect').mockResolvedValue(TRIGGER_RECT)
     const el = mount(PPopover, { modelValue: true, placement: 'bottom' }, { default: () => h('text', 'content') })
     await flush()
-    const panel = el.querySelector('.p-popover-panel') as HTMLElement
+    const panel = queryPanel() as HTMLElement
     expect(panel.style.position).toBe('fixed')
     expect(panel.style.left).toBe('50px')
     expect(panel.style.top).toBe('126px')
     expect(panel.getAttribute('style')).toContain('position: fixed')
     expect(spy).toHaveBeenCalledTimes(1)
-    expect(String(spy.mock.calls[0][0])).toBe('[data-role="proteus-popover-trigger"]')
+    expect(String(spy.mock.calls[0][0])).toBe('.proteus-popover-trigger-query') // ★2026-09-08 二轮修复：:class 绑定查询类（无 scope hash，Skyline 认类选择器；id/属性选择器真机均查不到）
+    cleanup()
   })
 
   it('measureRect 返回 null（元素未找到）→ panelStyle 空 → 回退静态锚定（.p-popover-bottom 类在位）', async () => {
     vi.spyOn(adapter, 'measureRect').mockResolvedValue(null)
     const el = mount(PPopover, { modelValue: true, placement: 'bottom' }, { default: () => h('text', 'c') })
     await flush()
-    const panel = el.querySelector('.p-popover-panel') as HTMLElement
+    const panel = queryPanel() as HTMLElement
     expect(panel.getAttribute('style')).toBe('') // 空串 → 走 .p-popover-panel 的 absolute
     expect(panel.classList.contains('p-popover-bottom')).toBe(true) // 静态锚定分支类仍在
+    cleanup()
   })
 
   it('measureRect 抛错 → 回退（不抛、panelStyle 空）', async () => {
     vi.spyOn(adapter, 'measureRect').mockRejectedValue(new Error('boom'))
     const el = mount(PPopover, { modelValue: true }, { default: () => h('text', 'c') })
     await flush()
-    const panel = el.querySelector('.p-popover-panel') as HTMLElement
+    const panel = queryPanel() as HTMLElement
     expect(panel.getAttribute('style')).toBe('')
+    cleanup()
   })
 
   it('measureRect 不存在（旧/adapter 无此方法）→ 回退（panelStyle 空）', async () => {
@@ -86,8 +99,9 @@ describe('p-popover 方案 A（measureRect + fixed 坐标；降级回退）', ()
     try {
       const el = mount(PPopover, { modelValue: true }, { default: () => h('text', 'c') })
       await flush()
-      const panel = el.querySelector('.p-popover-panel') as HTMLElement
+      const panel = queryPanel() as HTMLElement
       expect(panel.getAttribute('style')).toBe('')
+      cleanup()
     } finally {
       ;(adapter as { measureRect?: unknown }).measureRect = original
     }
@@ -102,9 +116,10 @@ describe('p-popover 方案 A（measureRect + fixed 坐标；降级回退）', ()
     })
     app.mount(el)
     await flush()
-    expect((el.querySelector('.p-popover-panel') as HTMLElement).getAttribute('style')).toContain('position: fixed')
+    expect((queryPanel() as HTMLElement).getAttribute('style')).toContain('position: fixed')
     open.value = false
     await flush()
-    expect((el.querySelector('.p-popover-panel') as HTMLElement).getAttribute('style')).toBe('')
+    expect((queryPanel() as HTMLElement).getAttribute('style')).toBe('')
+    cleanup()
   })
 })
