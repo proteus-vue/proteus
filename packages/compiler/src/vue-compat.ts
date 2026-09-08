@@ -34,13 +34,14 @@ export interface VueCompatEntry {
 export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // ===== reactivity / 核心 =====
   { name: 'ref', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径' },
-  { name: 'reactive', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径' },
+  // ★2026-09-08 reactivity-runtime spke：reactive 走运行时 @vue/reactivity 真 Proxy（ReactiveFlags 标记位）——isReactive 语义为真
+  { name: 'reactive', group: 'reactivity', status: 'aligned', note: 'reactive(x) → runtime-init @vue/reactivity 真 Proxy + setData 桥（effect→setData，视图刷新）——非普通 data 内联，isReactive 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'computed', group: 'reactivity', status: 'aligned', source: 'vue-compat §1 主路径（读写，proteusSetX）' },
   { name: 'shallowRef', group: 'reactivity', status: 'aligned', source: 'const-to-data' },
-  // ★2026-09-08 P1 校准：shallowReactive/shallowReadonly 实测被当函数调用译为 this.x=shallowX(…) 裸标识符 → not defined（假降级）→ unsupported·error；readonly 实测字面量→data（可用降级）→ 保持 partial
-  { name: 'shallowReactive', group: 'reactivity', status: 'unsupported', note: '深层浅响应 MP 无对等——当前译为 this.x=shallowReactive(…) 裸标识符 → not defined；请用 ref/普通对象', source: 'P1 校准' },
-  { name: 'shallowReadonly', group: 'reactivity', status: 'unsupported', note: '只读约束未校验且译为裸调用 → not defined；请用 ref/普通对象', source: 'P1 校准' },
-  { name: 'readonly', group: 'reactivity', status: 'partial', degrade: true, note: '只读约束编译期不校验（对象字面量→data 可用，只读语义丢失）；需只读请用属性只读约定', source: 'const-to-data' },
+  // ★2026-09-08 reactivity-runtime spke：shallowReactive/shallowReadonly 与 reactive/readonly 同走运行时 @vue/reactivity（浅层 Proxy 语义保留）
+  { name: 'shallowReactive', group: 'reactivity', status: 'aligned', note: 'shallowReactive(x) → runtime-init @vue/reactivity 浅 Proxy + setData 桥；isReactive 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'shallowReadonly', group: 'reactivity', status: 'aligned', note: 'shallowReadonly(x) → runtime-init @vue/reactivity 浅 readonly Proxy；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'readonly', group: 'reactivity', status: 'aligned', note: 'readonly(x) → runtime-init @vue/reactivity readonly Proxy（只读约束 runtime 强制）+ setData 桥；isReadonly 语义保持', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'customRef', group: 'reactivity', status: 'unsupported', note: '自定义 ref 需运行时钩子，MP 无对等——请用 ref + watch/computed', source: '评估' },
   // ★2026-09-08 P1 校准：toRef/toRefs/toValue 实测译为 this.x=toRef(…) 裸标识符 → not defined（假降级）→ unsupported·error（与 isRef 等运行时守卫同批反黑盒）
   { name: 'toRef', group: 'reactivity', status: 'unsupported', note: '运行时引用重定向无对等——当前译为裸调用 → not defined；请用 ref 直接建模', source: 'P1 校准' },
@@ -55,13 +56,14 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'unref', group: 'reactivity', status: 'aligned', note: 'unref(x) 编译期内联：x 为 ref → this.data.x；非 ref → x 本身（unref 恒等）；MP 无运行时 unref，编译期取值', source: '增强（编译期内联改写）' },
   // ★2026-09-08 Step2 校准：isRef/isReactive/isReadonly/isProxy/isShallow 实测被当「函数调用初始化」译为 this.x=isX(…)，
   //   产物为裸标识符且无 vue import → 运行时 not defined（getCurrentInstance 同类）——标记 aligned 是假，降 unsupported（无降级→error）
-  // ★2026-09-08 增强：isRef(x) 编译期内联——x 为 ref/shallowRef/computed → true；否则 false（MP 保留 ref 概念，可靠判定）；isReactive/isReadonly/isProxy/isShallow 因 MP 编译为普通 data（无代理/只读语义）保持 unsupported（诚实）
+  // ★2026-09-08 reactivity-runtime spke：isReactive/isReadonly/isProxy/isShallow/toRaw 走运行时 @vue/reactivity（随 reactive 族真 Proxy，守卫读 ReactiveFlags 标记位）——非编译期内联
+  // ★isRef 保持编译期内联（MP 保留 ref 概念，无需运行时）
   { name: 'isRef', group: 'reactivity', status: 'aligned', note: 'isRef(x) 编译期内联：x 来源 ref/shallowRef/computed → true；否则 false（MP 保留 ref 概念）+ 依赖 constSourceTypes 追踪', source: '增强（守卫内联）' },
-  { name: 'isReactive', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined；请改用框架语义 API', source: '评估（Step2 实测校准）' },
-  { name: 'isReadonly', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'isProxy', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'isShallow', group: 'reactivity', status: 'unsupported', note: '同上——运行时守卫未内联，产物裸标识符 → not defined', source: '评估（Step2 实测校准）' },
-  { name: 'toRaw', group: 'reactivity', status: 'unsupported', note: '运行时去代理，MP 无对等', source: '评估' },
+  { name: 'isReactive', group: 'reactivity', status: 'aligned', note: 'isReactive(x) → runtime @vue/reactivity 守卫（读 ReactiveFlags.IS_REACTIVE）；需 reactive 走运行时真 Proxy 才为真', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'isReadonly', group: 'reactivity', status: 'aligned', note: 'isReadonly(x) → runtime @vue/reactivity 守卫（读 ReactiveFlags.IS_READONLY）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'isProxy', group: 'reactivity', status: 'aligned', note: 'isProxy(x) → runtime @vue/reactivity 守卫（reactive/readonly proxy 为真）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'isShallow', group: 'reactivity', status: 'aligned', note: 'isShallow(x) → runtime @vue/reactivity 守卫（读 reactive/shallow 标记）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
+  { name: 'toRaw', group: 'reactivity', status: 'aligned', note: 'toRaw(x) → runtime @vue/reactivity（去 proxy 返回原始对象）', source: 'reactivity-runtime（运行时 @vue/reactivity）' },
   { name: 'getCurrentScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 运行时，MP 无对等', source: '评估' },
   { name: 'effectScope', group: 'reactivity', status: 'unsupported', note: '作用域，MP 无对等', source: '评估' },
   { name: 'onScopeDispose', group: 'reactivity', status: 'unsupported', note: '作用域清理，MP 无对等——用 onUnmounted', source: '评估' },

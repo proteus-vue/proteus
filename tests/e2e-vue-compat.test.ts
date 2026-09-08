@@ -182,6 +182,22 @@ const CAPABILITY_CASES: CapabilityCase[] = [
       expect(after.modelDemo, 'defineModel 双绑回写 modelDemo').toBe('hello')
     },
   },
+  {
+    name: 'reactive/readonly',
+    route: '/pages/vue-compat-demo',
+    assert: async (driver, data) => {
+      // ★reactivity-runtime spke：reactive 走运行时 @vue/reactivity 真 Proxy + setData 桥——
+      //   守卫结果（isReactive/isReadonly）为真（ReactiveFlags 标记位）；bump 后桥 setData → data.rs.count 自增（视图刷新）。
+      expect(data.rsIs, 'isReactive(reactive obj) 应为 true（运行时 @vue/reactivity 真 Proxy）').toBe(true)
+      expect(data.roIsReadonly, 'isReadonly(readonly obj) 应为 true').toBe(true)
+      const before = (data.rs as Record<string, unknown> | undefined)?.count
+      await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; p.bumpReactive() })
+      await driver.waitFor(400)
+      const after = JSON.parse((await driver.evaluate(readPageData)) as string) as Record<string, unknown>
+      const afterCount = (after.rs as Record<string, unknown> | undefined)?.count
+      expect(afterCount, 'bumpReactive → 桥 setData → data.rs.count 自增（reactive 变更驱动视图）').toBe(typeof before === 'undefined' ? 1 : (before as number) + 1)
+    },
+  },
 ]
 
 // ① 页面能进 + 真机健康（console 零错）先全局验一次；② 每能力断言

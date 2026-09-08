@@ -80,11 +80,21 @@
       <model-demo v-model="modelDemo" />
       <text class="state-line">modelDemo={{ modelDemo || '（空）' }}</text>
     </view>
+
+    <!-- ⑨ reactivity-runtime（reactive/readonly 走运行时 @vue/reactivity 真 Proxy + setData 桥） -->
+    <!-- ★2026-09-08 spke：isReactive(reactive)=true / isReadonly(readonly)=true；变更 reactive 触发 setData 桥刷新视图 -->
+    <view class="card">
+      <text class="card-title">⑨ reactivity-runtime（reactive / readonly 真 Proxy）</text>
+      <view class="row">
+        <view class="chip" @click="bumpReactive">bump reactive.count（变更 → setData 桥刷新）</view>
+      </view>
+      <text class="state-line">rs.name={{ rs.name }} · rs.count={{ rs.count }} · isReactive(rs)={{ rsIs }} · isReadonly(ro)={{ roIsReadonly }}</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, provide } from 'vue'
+import { ref, computed, watch, provide, reactive, readonly, isReactive, isReadonly } from 'vue'
 // Web 端注册本文档组件；MP 端编译器忽略 import（标签走 usingComponents）
 import InjectConsumer from '../components/inject-consumer/index.vue'
 import ModelDemo from '../components/model-demo/index.vue'
@@ -133,6 +143,16 @@ function changeUser(): void {
 
 // ⑧ defineModel（受控 v-model：p-model-demo 经 defineModel 双绑回传）
 const modelDemo = ref('')
+
+// ⑨ reactivity-runtime（reactive/readonly 走运行时 @vue/reactivity 真 Proxy + setData 桥）
+//   isReactive(reactive obj)=true / isReadonly(readonly obj)=true；rs.count 变更经 effect 桥 setData 刷新视图
+const rs = reactive({ name: 'Proteus', count: 0 })
+const ro = readonly({ fixed: 1 })
+const rsIs = isReactive(rs)
+const roIsReadonly = isReadonly(ro)
+function bumpReactive(): void {
+  rs.count += 1
+}
 </script>
 
 <style scoped>

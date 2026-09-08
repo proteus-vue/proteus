@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule, scanSourceImports } from '../packages/plugin-vite/src/plugin'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule, scanSourceImports, rewriteFrameworkRequires } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
@@ -162,5 +162,24 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     expect(appJs).toContain('function halfScreenBuilder() {}')
     expect(appJs).toContain("addRouteBuilder('halfScreen', halfScreenBuilder)")
     expect(appJs).toContain('App({')
+  })
+})
+
+describe('rewriteFrameworkRequires（★reactivity-runtime spke：裸 @proteus-vue/* require → 相对 _proteus/*.js）', () => {
+  it('页面层级（pages/index/index → ../../_proteus/runtime.js）', () => {
+    const js = "const { reactive, effect } = require('@proteus-vue/runtime')"
+    expect(rewriteFrameworkRequires(js, 'pages/index/index')).toBe("const { reactive, effect } = require('../../_proteus/runtime.js')")
+  })
+
+  it('组件层级（components/foo/index → ../../_proteus/*.js）', () => {
+    const js = "const { reactive } = require('@proteus-vue/runtime')\nconst { foo } = require('@proteus-vue/api')"
+    const out = rewriteFrameworkRequires(js, 'components/foo/index')
+    expect(out).toContain("require('../../_proteus/runtime.js')")
+    expect(out).toContain("require('../../_proteus/api.js')")
+  })
+
+  it('无 @proteus-vue/* require 时原样返回', () => {
+    const js = "const { reactive } = require('@vue/reactivity')"
+    expect(rewriteFrameworkRequires(js, 'pages/foo')).toBe(js)
   })
 })

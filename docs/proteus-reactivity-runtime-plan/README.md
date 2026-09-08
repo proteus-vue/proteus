@@ -34,6 +34,26 @@
   - `isReactive(ref)` → false（运行时，ref 非 Proxy）✅；`isReactive(reactive)` → true（运行时 Proxy）✅
   - 风险：**跨线程序列化把 Proxy 拍平**（setData 传输后丢失标记位）——若在 onPage 前的 Proxy 对象被序列化给 WXML，标记位丢失是预期（WXML 只需值）；isReactive 应在逻辑层（App Service）调用（Proxy 未序列化时）→ 语义保持。需验证。
 
+## 实施进度（2026-09-08 spke 已落地编译器侧）
+
+**选项 A spke 已实施**（`packages/compiler/src/script.ts` + `packages/compiler/src/vue-compat.ts`，commit 待推）：
+- **按需注入**：源码用到 `reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw` 任一（词边界检测）→ 产物注入 `require('@vue/reactivity')`；reactive 族存在时补 `effect`（桥用）；纯 ref/computed 页不注入（保持纯内联轻量）。
+- **真 Proxy**：reactive/readonly/浅族 const → runtime-init `this.s = reactive({...})`（@vue/reactivity 真 Proxy，携带 ReactiveFlags）——非普通 data 内联，`isReactive(reactive obj)=true` 语义恢复。
+- **守卫接线**：`isReactive/isReadonly/isProxy/isShallow/toRaw(x)` → runtime-init + 参数 `this.x` 改写（读 ReactiveFlags）。
+- **setData 桥**：per-const `__proteusSyncReactive(name)`（effect 读透 proxy → 任一字段变更重跑 → `setData({ 扁平快照 })`）+ 初始 `data.<name>=null` 占位模板可读 + onUnload/detached 解绑 `__proteusDisposeReactive`。
+- **矩阵**：`reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw` 由 unsupported/partial → **aligned**（同步 `tests/vue-compat-matrix.test.ts` 漂移护栏）。
+- **测试**：`tests/vue-compat-reactivity-runtime.test.ts`（4 用例）+ 全量 2482 绿（既有 2 环境失败/17 jsdom 为基线，与本次无关）；编译器 tsc EXIT 0。
+- **新规则登记**：`script/reactive-runtime-init` / `script/reactivity-runtime-require` / `script/reactive-setdata-bridge` + m5 快照 90→93 / `rules.md` 重新生成。
+
+## 剩余（真机验证门槛）
+
+- **MP 产物 bundle `@vue/reactivity`（已完成，2026-09-08）**：
+  - `@proteus-vue/runtime` re-export vue 的 `reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw/effect`（vue 是 peer dep，esbuild bundle 内联 reactivity）。
+  - 编译器对 reactive 族/守卫按需注入 `require('@proteus-vue/runtime')`（而非裸 `require('@vue/reactivity')`——MP 无 `miniprogram_npm` 不可解析）。
+  - `packages/plugin-vite/src/plugin.ts` 新增 `rewriteFrameworkRequires`：把产物 JS 里裸 `@proteus-vue/*` require 映射为相对 `_proteus/<name>.js`（编译器注入行不走 moduleImports 的 import 改写）。
+  - 已验证：`proteus build --target skyline` 产出 `pages/vue-compat-demo.js` 里 `require('../_proteus/runtime.js')` + `this.rs = reactive(...)` + 桥；主包 784KB < 1200KB。
+- **真机验证（待办）**：用 wechatide 自动化框架（官方 skill 的 cli 规范）跑 `tests/e2e-vue-compat.test.ts` 新增的 `reactive/readonly` 用例（`PROTEUS_MP_E2E_WXIDE=1`），验 `isReactive=true` + bumpReactive → data.rs.count 自增（视图刷新，skyline 引擎下）。
+
 ## 工作量与风险
 
 - **主要工作量**：setData 桥（reactive/readonly 视图数据驱动）+ 深层嵌套/ref 解包 + 真机复核（跨线程/跨组件）。
