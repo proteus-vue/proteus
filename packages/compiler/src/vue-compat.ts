@@ -117,8 +117,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // 调试/内部
   { name: 'warn', group: 'component', status: 'unsupported', note: 'Vue 内部 warn，MP 无对等——用 console.warn', source: '评估' },
   { name: 'devtools', group: 'component', status: 'unsupported', note: 'Vue devtools API，MP 走 @proteus-vue/devtools', source: '评估' },
-  // ★2026-09-08 P1 校准：version 实测编译为 data.version=undefined（未内联版本号，假降级）→ unsupported·error；要支持需内联 compiler 版本号
-  { name: 'version', group: 'component', status: 'unsupported', note: '编译期未内联版本号（产物 data.version=undefined）——待内联；请勿在 MP 直接 import version', source: 'P1 校准' },
+  // ★2026-09-08 P1 对齐：version 已内联——const v = version → data.v = '3.5.42'（VUE_PUBLIC_CONSTS，与 Vue 全集基线 SSOT @vue/runtime-core@3.5.42 对齐）
+  { name: 'version', group: 'component', status: 'aligned', note: 'const v = version 内联为版本号字符串（VUE_PUBLIC_CONSTS，随 Vue 演进同步）；产物 data.v=版本号而非 undefined', source: 'P1 对齐（VUE_PUBLIC_CONSTS 内联）' },
 
   // ===== lifecycle =====
   { name: 'onMounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onReady）' },
@@ -170,6 +170,12 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: '模板 ref="x"', group: 'sfc', status: 'unsupported', note: '无对等（Batch A 已警告）——用 selectComponent', source: 'vue-compat Batch A' },
   { name: 'TS 类型注解', group: 'sfc', status: 'aligned', source: 'vue-compat §1（TS 剥除）' },
 ]
+
+/** ★Vue 公共常量导出（编译期内联值）：`const v = <name>` 时把裸标识符内联为字面量（替代运行时轮询 undefined）。
+ *  版本号与 02-api-gap 基线「Vue 全集权威来源」的 @vue/runtime-core@3.5.42 对齐；随 Vue 版本演进同步。 */
+export const VUE_PUBLIC_CONSTS: Record<string, unknown> = {
+  version: '3.5.42',
+}
 
 /** ★矩阵外/未知的 Vue 命名导入处理：默认按 unsupported（无降级→error）——反黑盒兜底，防静默未定义引用 */
 export const VUE_COMPAT_UNKNOWN: VueCompatEntry = {

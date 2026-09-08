@@ -92,6 +92,13 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r as any).js).not.toMatch(/(?<![.\w])nextTick\s*\(/)
   })
 
+  it('version：const v = version → data.v 内联版本号字符串（非 undefined）', () => {
+    const r = compile("import { version } from 'vue'\nconst v = version", '<view>{{ v }}</view>')
+    // VUE_PUBLIC_CONSTS 内联：data.v = '3.5.42'（与 @vue/runtime-core@3.5.42 对齐基线一致）
+    expect((r as any).js).toMatch(/v:\s*['"]3\.5\.42['"]/)
+    expect((r as any).js).not.toMatch(/v:\s*undefined/)
+  })
+
   it('withDefaults：宏剥离 + 默认值合并到 properties（组件模式），不裸调用/不落 data', () => {
     const r = compileVueSfc(
       `<script setup lang="ts">

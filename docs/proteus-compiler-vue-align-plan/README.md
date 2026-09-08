@@ -75,7 +75,14 @@
 - 黄金断言：`tests/vue-compat-compile.test.ts`（partial 警告 + 不裸调用 + 不落 data）。
 - **验证**：全量 2573/2573 绿；build:mp / build:web 通过。
 
-> ⚠️ 待办：`version` 内联（可对齐）、`defineModel`/`useModel` v-model 组件契约（可对齐，较复杂）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+## P1 第四批（2026-09-08）：`version` 内联转 aligned
+
+- **`version`**：`import { version } from 'vue'` 现内联为 `data.v = '3.5.42'`（此前 `evalLiteral('version')` 返 undefined → `data.v=undefined`，假降级被降 unsupported）。
+- **实现**：`vue-compat.ts` 新增 `VUE_PUBLIC_CONSTS`（`version → '3.5.42'`，与 Vue 全集基线 SSOT `@vue/runtime-core@3.5.42` 对齐，随 Vue 演进同步）；`handleConstToData` 识别裸标识符 `version`（vue import 去后裸 version 即 Vue 导出，与 readonly/shallowRef 同识别口径）→ 内联字面量。
+- 黄金断言：`tests/vue-compat-aligned.test.ts`（`v: '3.5.42'`，非 undefined）。
+- **验证**：全量 2574/2574 绿；build:mp / build:web 通过。
+
+> ⚠️ 待办：`defineModel`/`useModel` v-model 组件契约（可对齐，较复杂）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）
 

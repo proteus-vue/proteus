@@ -25,6 +25,7 @@
 - ✅ **2026-09-08 首批**：`nextTick` 转 aligned（cb→wx.nextTick(cb)；await/无参→Promise 包）+ 黄金断言；同时**partial 诚实性校准**——`toRef/toRefs/toValue/unref/shallowReactive/shallowReadonly/useModel/defineOptions/defineModel/version` 经实测为「假降级（裸调用/undefined）」→ 转 `unsupported`·error（反黑盒）；`readonly/defineSlots` 保留 partial（可用降级）；其余生命周期/模板指令维持 partial（干净剥离+警告）。
 - ✅ **2026-09-08 第二批**：`withDefaults` 宏转 aligned（`handleConstToData` 宏早退 + `extractProps` 全树扫描收集默认值对象 D 合并到 `properties.value`）+ 黄金断言（组件模式），实测 `withDefaults(defineProps<{a;b?}>(), {b:'hi'})` → `b:{type:String,value:"hi"}`。
 - ✅ **2026-09-08 第三批**：`defineComponent` 宏转 `partial`（`handleConstToData` 宏早退 + `extractTopLevelCalls` 跳过 → no-op 剥离 + 警告，不裸注入 onLoad）——SFC 已自动组件化，冗余包装应剥离而非 error 阻断（对内 setup 逻辑非 SFC 范式不翻译）。
+- ✅ **2026-09-08 第四批**：`version` 内联转 `aligned`（`vue-compat.ts` 加 `VUE_PUBLIC_CONSTS` → `handleConstToData` 识别裸 `version` 内联为 `'3.5.42'`，与 @vue/runtime-core 基线对齐）。
 
 ### P2（unsupported / 框架非目标——反黑盒 + 文档）
 - `getCurrentInstance`/`useSlots`/`useAttrs`/`watchEffect`/`h`/`createApp`/`<component :is>`/自定义指令/模板 ref/transition-group/teleport/suspense/keep-alive——unsupported 显式报错（含替代建议）。
