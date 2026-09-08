@@ -6,6 +6,7 @@
 //        ④setData 桥（effect 读透 proxy → 变更重跑 setData）+ onUnload 解绑
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
+import { rewriteInstanceRefsSafe } from '../packages/compiler/src/script'
 
 const opts = { px2rpx: true, rpxRatio: 2 }
 
@@ -58,5 +59,45 @@ describe('reactivity-runtime spke（reactive 族走运行时 @vue/reactivity）'
     expect(r.js).toMatch(/this\.s = reactive\(\{ n: 1 \}\)/)
     expect(r.js).toMatch(/__proteusSyncReactive\(name\)/)
     expect(r.js).toMatch(/effect\(function/)
+  })
+
+  it('toRef 目标 reactive → runtime-init 真 ref + isRef 内联 true + .value 逻辑层读写', () => {
+    const r = compile(
+      "import { reactive, toRef, isRef } from 'vue'\nconst obj = reactive({ a: 1 })\nconst a = toRef(obj, 'a')\nconst ok = isRef(a)\nfunction bump() { a.value += 1 }",
+      '<view>{{ a }}</view>',
+    ) as any
+    expect(r.js).toMatch(/require\('@proteus-vue\/runtime'\)/)
+    expect(r.js).toMatch(/this\.a = toRef\(this\.obj, 'a'\)/)
+    expect(r.js).toMatch(/ok:\s*true/)
+    expect(r.js).toMatch(/this\.a\.value \+= 1/)
+  })
+
+  it('toRefs 目标 reactive → runtime-init 真 ref 映射（refs.a .value 逻辑层读）', () => {
+    const r = compile(
+      "import { reactive, toRefs, isRef } from 'vue'\nconst obj = reactive({ a: 1, b: 2 })\nconst refs = toRefs(obj)\nconst ok = isRef(refs.a)\nfunction bump() { refs.a.value += 1 }",
+      '<view>{{ refs.a }}</view>',
+    ) as any
+    expect(r.js).toMatch(/this\.refs = toRefs\(this\.obj\)/)
+    expect(r.js).toMatch(/this\.ok = isRef\(this\.refs\.a\)/)
+    expect(r.js).toMatch(/this\.refs\.a\.value \+= 1/)
+  })
+})
+
+describe('rewriteInstanceRefsSafe（★2026-09-08 修复 runtimeInitLine 误伤对象字面量 key/字符串）', () => {
+  const names = new Set(['a', 'obj', 'count'])
+  it('对象字面量 key 不被误改（reactive({ a: 1 }) → reactive({ a: 1 })）', () => {
+    expect(rewriteInstanceRefsSafe('reactive({ a: 1, obj: 2 })', names)).toBe('reactive({ a: 1, obj: 2 })')
+  })
+  it('标识符引用被改 this.<name>', () => {
+    expect(rewriteInstanceRefsSafe('toRef(obj, \'a\')', names)).toBe('toRef(this.obj, \'a\')')
+  })
+  it('字符串内容不被误改（\'a\'/\'obj\' 保持）', () => {
+    expect(rewriteInstanceRefsSafe('toRef(obj, \'obj\')', names)).toBe('toRef(this.obj, \'obj\')')
+  })
+  it('对象简写 key: 语义保持（value 引用可改）', () => {
+    expect(rewriteInstanceRefsSafe('reactive({ a })', names)).toBe('reactive({ a })')
+  })
+  it('属性访问不误改（obj.x 的 obj 是 base 应改 this.obj）', () => {
+    expect(rewriteInstanceRefsSafe('getThing(obj.x)', names)).toBe('getThing(this.obj.x)')
   })
 })

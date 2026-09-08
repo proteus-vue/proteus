@@ -198,6 +198,20 @@ const CAPABILITY_CASES: CapabilityCase[] = [
       expect(afterCount, 'bumpReactive → 桥 setData → data.rs.count 自增（reactive 变更驱动视图）').toBe(typeof before === 'undefined' ? 1 : (before as number) + 1)
     },
   },
+  {
+    name: 'toRef/toRefs',
+    route: '/pages/vue-compat-demo',
+    assert: async (driver, data) => {
+      // ★2026-09-08 toRef/toRefs 走运行时 @vue/reactivity 真 ref：isRef(toRef())=true（内联）；bumpToRef → xRef.value+1 → data.xRefVal 自增（逻辑层读写证明）
+      expect(data.xIsRef, 'isRef(toRef(trObj, x)) 应为 true').toBe(true)
+      expect(data.yRefIsRef, 'isRef(toRefs(trObj).y) 应为 true').toBe(true)
+      const before = (data.xRefVal as number | undefined) ?? 5
+      await driver.evaluate(() => { const p = getCurrentPages()[getCurrentPages().length - 1]; p.bumpToRef() })
+      await driver.waitFor(400)
+      const after = JSON.parse((await driver.evaluate(readPageData)) as string) as Record<string, unknown>
+      expect(after.xRefVal, 'bumpToRef → xRef.value+1 → data.xRefVal 自增（toRef .value 逻辑层读写）').toBe(before + 1)
+    },
+  },
 ]
 
 // ① 页面能进 + 真机健康（console 零错）先全局验一次；② 每能力断言

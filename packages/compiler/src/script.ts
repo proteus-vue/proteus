@@ -32,6 +32,11 @@ export const REACTIVITY_RUNTIME_APIS = [
   'isProxy',
   'isShallow',
   'toRaw',
+  // ★2026-09-08 toRef/toRefs 走运行时 @vue/reactivity——返回真 ref（.value 在逻辑层有效；isRef(toRef())=true）
+  'toRef',
+  'toRefs',
+  // isRef：单标识符走编译期内联（isRef(x) → data.ok=bool）；成员表达式（isRef(obj.key)）需运行时——一并注入供 runtime 分支用
+  'isRef',
 ] as const
 
 /** reactive 家族的 const 源类型（isRef 内联判定用：reactive/readonly 均非 ref-like → false） */
@@ -1031,6 +1036,8 @@ function handleConstToData(
     // inject 是 Vue 内置注入（Batch 3）不走此路径（data 初始 undefined + 运行时 setData 填充）
     // ★#503 es5-safe：运行时初始化调用串内 ?? / ?. → 显式 null 检查（原样进产物 onLoad/attached）
     out.runtimeInits.push({ name, call: raw.trim() })
+    // ★2026-09-08 toRef/toRefs：返回真 ref——constSourceTypes 记 'ref'（isRef(toRef())=true 内联判定）
+    if (/^(?:toRef|toRefs)\s*\(/.test(raw.trim())) out.constSourceTypes.set(name, 'ref')
     const guardName = raw.match(/^(isReactive|isReadonly|isProxy|isShallow|toRaw)\s*\(/)?.[1]
     const isReactiveGuard = Boolean(guardName && REACTIVITY_RUNTIME_GUARDS.has(guardName))
     trace?.add('script/runtime-init', {
@@ -1370,6 +1377,86 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
   return `this.setData({ ${rewritten.map(([n, expr]) => `${n}: ${expr}`).join(', ')} })`
 }
 
+/** ★2026-09-08 修复：runtime-init call 内裸 runtimeInit 名 → this.<name> 的**安全**改写。
+ *  旧的 `new RegExp('(?<!\\.)\\b' + n + '\\b')` 会误伤对象字面量 key（`reactive({ a: 1 })` 的 key a 若恰是
+ *  runtimeInit 名 → `{ this.a: 1 }` 语法错误）与字符串内容。本函数字符级扫描：
+ *  ① 跳过字符串（单/双/反引号，含转义）与单行注释；② 裸标识符后跟 `:`（对象完整 key，如 `{ a: 1 }`）不改写；
+ *  ③ 否则（参数引用/链式 base）改 `this.<name>`。简写 key（`{ a }`）暂无区分（其 value 语义保持裸引用，少见于 runtime-init call）。 */
+export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>): string {
+  if (!names.size) return call
+  let out = ''
+  let i = 0
+  const len = call.length
+  let depth = 0 // 括号/对象嵌套深度（仅用于对象 key 判定）
+  let prevSig = '' // 上一个有效（非空白）字符
+  const isNameChar = (c: string): boolean => /[A-Za-z0-9_$]/.test(c)
+  const isIdentStart = (c: string): boolean => /[A-Za-z_$]/.test(c)
+  while (i < len) {
+    const ch = call[i]
+    // 字符串（跳过内容，不替换）
+    if (ch === '\'' || ch === '"') {
+      const quote = ch
+      let j = i + 1
+      while (j < len) {
+        if (call[j] === '\\') { j += 2; continue }
+        if (call[j] === quote) { j++; break }
+        j++
+      }
+      out += call.slice(i, j)
+      i = j
+      prevSig = quote
+      continue
+    }
+    // 反引号模板（跳过整体；不做 ${} 内替换——runtime-init call 几乎不涉）
+    if (ch === '`') {
+      let j = i + 1
+      while (j < len) {
+        if (call[j] === '\\') { j += 2; continue }
+        if (call[j] === '`') { j++; break }
+        j++
+      }
+      out += call.slice(i, j)
+      i = j
+      prevSig = '`'
+      continue
+    }
+    // 单行注释
+    if (ch === '/' && call[i + 1] === '/') {
+      let j = i + 2
+      while (j < len && call[j] !== '\n') j++
+      out += call.slice(i, j)
+      i = j
+      prevSig = '/'
+      continue
+    }
+    // 括号/对象深度
+    if (ch === '{' || ch === '[' || ch === '(') { depth++; out += ch; i++; prevSig = ch; continue }
+    if (ch === '}' || ch === ']' || ch === ')') { depth--; out += ch; i++; prevSig = ch; continue }
+    // 跳过空白（不更新 prevSig）
+    if (/\s/.test(ch)) { out += ch; i++; continue }
+    // 标识符
+    if (isIdentStart(ch)) {
+      let j = i + 1
+      while (j < len && isNameChar(call[j])) j++
+      const word = call.slice(i, j)
+      if (names.has(word)) {
+        // 对象内 key 位（前一个有效字符是 `{`或`,` 且深度>0）→ 不改写（完整 key `{ a: 1 }` 与简写 `{ a }` 的 key 位）
+        const isKeyPos = depth > 0 && (prevSig === '{' || prevSig === ',')
+        if (!isKeyPos) { out += 'this.' + word } else { out += word }
+      } else {
+        out += word
+      }
+      i = j
+      prevSig = ''
+      continue
+    }
+    out += ch
+    prevSig = ch
+    i++
+  }
+  return out
+}
+
 /** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
  *  ★#494 call 为本页方法名（methodNames 命中）→ this.<method>() 裸调用改写——
  *  微信 Page 顶层方法必须 this 调用（词法查找必 ReferenceError：config-demo 的 makeGuardStyle 白屏根因之一）
@@ -1386,10 +1473,9 @@ function runtimeInitLine(inits: Array<{ name: string; call: string }>, methodNam
       if (runtimeInitNames) {
         // call 内其它 runtimeInit 实例裸名 → this.<name>（链式 base / 参数引用；与 computedInitLine rewrite 同规则；
         //   声明顺序 = 源码序（inits 数组），前序实例已 this 赋值，后续引用安全）
-        for (const n of runtimeInitNames) {
-          if (n === i.name) continue // 自引用（递归 const 非法，保守跳过）
-          call = call.replace(new RegExp(`(?<!\\.)\\b${n}\\b`, 'g'), `this.${n}`)
-        }
+        // ★2026-09-08 安全改写：跳过字符串/注释 + 对象 key（`reactive({ a: 1 })` 的 a 若恰为 runtimeInit 名不再被误改）
+        const others = new Set([...runtimeInitNames].filter((n) => n !== i.name)) // 自引用（递归 const 非法）保守跳过
+        call = rewriteInstanceRefsSafe(call, others)
       }
       return `this.${i.name} = ${call}`
     })
