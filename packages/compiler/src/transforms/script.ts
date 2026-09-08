@@ -544,4 +544,23 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'packages/compiler/src/sfc-macros.ts → extractSfcMacros（defineOptions） + script.ts → transformScriptToPage（extractTopLevelCalls 跳过）+ extractSfcMacros 消费',
     decision: 'defineOptions 对齐（compileScript 权威源）',
   },
+  {
+    id: 'script/use-template-ref',
+    phase: 'script',
+    status: 'implemented',
+    title: 'useTemplateRef → this.selectComponent（组件实例引用）',
+    titleEn: 'useTemplateRef → this.selectComponent (component instance reference)',
+    description: 'const b = useTemplateRef(\'x\') → runtime-init this.b = this.selectComponent(\'#x\')（组件实例引用）；方法体 b.value → this.b（剥 .value——实例属性非 data 字段）；模板 ref="x" → 注入 id="x" + 收集（template/template-ref）；selectComponent 需渲染树就绪（onLoad 可能 null，onReady 后可取——诚实时序边界）',
+    descriptionEn: 'const b = useTemplateRef(\'x\') → runtime-init this.b = this.selectComponent(\'#x\') (component instance reference); method-body b.value → this.b (strip .value — instance property, not a data field); template ref="x" → inject id="x" + collect (template/template-ref); selectComponent needs the render tree ready (onLoad may be null, onReady works — honest timing boundary)',
+    why: 'useTemplateRef 是 Vue 3.5 组件实例引用 API；MP 用 this.selectComponent(\'#id\')（组件/页面查子组件实例）；.value 剥除保留实例引用语义（b.value 读实例）',
+    whyEn: 'useTemplateRef is the Vue 3.5 component-instance-reference API; MP uses this.selectComponent(\'#id\') (component/page queries a child instance); stripping .value preserves the instance-reference semantics (b.value reads the instance)',
+    when: 'script 顶层出现 const b = useTemplateRef(\'name\') 时（配合模板 ref="name"）',
+    example: {
+      before: 'const b = useTemplateRef(\'btn\')\nfunction go() { b.value?.tap() }',
+      after: 'attached: this.b = this.selectComponent(\'#btn\'); go() { (this.b) === null || ... || this.b.tap() }（.value 剥除）',
+    },
+    verify: 'tests/vue-compat-use-template-ref.test.ts',
+    source: 'packages/compiler/src/script.ts → handleConstToData（useTemplateRef 识别 + constSourceTypes templateref）+ rewriteRefAccess（templaterefVars 剥 .value）',
+    decision: 'useTemplateRef 对齐（selectComponent 承接）',
+  },
 ]

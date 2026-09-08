@@ -61,7 +61,7 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项
-    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef', 'defineOptions']) {
+    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef', 'defineOptions', 'useTemplateRef', '模板 ref="x"']) {
       expect(vueCompatStatus(p).status, `${p} 应为 partial`).toBe('partial')
     }
     // unsupported：运行时对内 API / 动态渲染 / 无对等平台能力——含 Step2 校准（运行时守卫/内部渲染助手/宏未对齐降 unsupported 无降级→error）

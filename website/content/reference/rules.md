@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 97 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 98 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（52）
 
@@ -688,7 +688,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（31）
+## 脚本转换（32）
 
 ### `script/const-to-data`
 
@@ -1141,6 +1141,20 @@ after:  剥离为 no-op（产物不含 defineOptions；警告说明 name/inherit
 ```
 
 > why: defineOptions 是 <script setup> 宏，被当顶层副作用裸注入 onLoad → not defined；宏语义权威源 = compileScript（不手造）——剥离 + 提取语义元数据，非 fail-closed error（消除 unsupported）
+
+### `script/use-template-ref`
+
+**useTemplateRef → this.selectComponent（组件实例引用）**
+
+const b = useTemplateRef('x') → runtime-init this.b = this.selectComponent('#x')（组件实例引用）；方法体 b.value → this.b（剥 .value——实例属性非 data 字段）；模板 ref="x" → 注入 id="x" + 收集（template/template-ref）；selectComponent 需渲染树就绪（onLoad 可能 null，onReady 后可取——诚实时序边界）
+
+```
+before: const b = useTemplateRef('btn')
+function go() { b.value?.tap() }
+after:  attached: this.b = this.selectComponent('#btn'); go() { (this.b) === null || ... || this.b.tap() }（.value 剥除）
+```
+
+> why: useTemplateRef 是 Vue 3.5 组件实例引用 API；MP 用 this.selectComponent('#id')（组件/页面查子组件实例）；.value 剥除保留实例引用语义（b.value 读实例）
 
 ## 样式转换（9）
 

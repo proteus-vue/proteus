@@ -124,6 +124,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     transitions: tplResult.transitions,
     storeBindings: tplResult.storeBindings,
     templateRefs: tplResult.templateRefs,
+    // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" 收集名 → script 侧 useTemplateRef → this.<var>=selectComponent('#x')）
+    templateRefNames: tplResult.templateRefNames,
     // ★#500 :style 动态标识符绑定 → 同名 computed 派生值自动序列化字符串
     styleBindings: tplResult.styleBindings,
     // ★#500 自定义组件 v-model 回写处理器

@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 97 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 98 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (52)
 
@@ -688,7 +688,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (31)
+## Script transforms (32)
 
 ### `script/const-to-data`
 
@@ -1141,6 +1141,20 @@ after:  剥离为 no-op（产物不含 defineOptions；警告说明 name/inherit
 ```
 
 > why: defineOptions is a <script setup> macro that would be injected bare into onLoad → not defined; the authoritative macro semantics come from compileScript (no reinvention) — strip + extract semantic metadata rather than fail-closed error (eliminating unsupported)
+
+### `script/use-template-ref`
+
+**useTemplateRef → this.selectComponent (component instance reference)**
+
+const b = useTemplateRef('x') → runtime-init this.b = this.selectComponent('#x') (component instance reference); method-body b.value → this.b (strip .value — instance property, not a data field); template ref="x" → inject id="x" + collect (template/template-ref); selectComponent needs the render tree ready (onLoad may be null, onReady works — honest timing boundary)
+
+```
+before: const b = useTemplateRef('btn')
+function go() { b.value?.tap() }
+after:  attached: this.b = this.selectComponent('#btn'); go() { (this.b) === null || ... || this.b.tap() }（.value 剥除）
+```
+
+> why: useTemplateRef is the Vue 3.5 component-instance-reference API; MP uses this.selectComponent('#id') (component/page queries a child instance); stripping .value preserves the instance-reference semantics (b.value reads the instance)
 
 ## Style transforms (9)
 
