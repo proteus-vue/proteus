@@ -2,6 +2,18 @@
 
 > **立项：2026-09-08**。记录一项**架构债 / 后续拆分立项**——因为框架是**全端目标**（Web / MP(Skyline·WebView) / App(iOS·Android·Harmony)…），而当前编译器是「MP 专属后端」，平台区分发生在编译器之外，Skyline 特有规则散点硬编码。**本计划只做记录与方向，不涉及当前动工。**
 
+## ✅ 已落地：阶段 1「薄接缝」（2026-09-08）
+
+按「现在拆薄接缝即可，全量平台矩阵留到有 app 编译侧消费者时」的判断，已落地最小接缝：
+- **`CompileOptions.renderer?: 'skyline' | 'webview'`**（`packages/types/src/compiler-types.ts`，导出 `Renderer`）——缺省 `undefined` 沿现行为（Skyline 特判全开，产物不变）；显式 `'webview'` 关 Skyline-only 特判。
+- **下钻**：`index.ts` styleOpts → `StyleTransformOptions.renderer` → `style.ts` 用 `opts.renderer === 'webview'` 门禁「Skyline 不支持属性警告（position:fixed/float）」与「Skyline 选择器剔除」。
+- **缓存 key**：`plugin-vite/cache.ts` `compileCacheKey` 纳入 `renderer`（防同源码跨渲染引擎命中错缓存）。
+- **接线**：`plugin-vite/plugin.ts` 从 `config.skyline` 派生 `renderer`（skyline→'skyline'；未开→'webview'）传入两处 `compileVueSfc` + 缓存 key。
+- **测试**：`tests/compiler-renderer.test.ts`（5 用例：缺失沿现行为 / skyline 警告开 / webview 关 / 产物稳定）。
+- **验证**：全量 **2570/2570 绿**；`build:mp`/`build:web` 通过。
+
+> 阶段 2（全量平台矩阵 / 按 target 多 codegen）留待 app 端编译侧真正接入时按接缝扩展（见下方「后续拆分方向」）。当前无需为无消费者的端建矩阵（YAGNI）。
+
 ## 一句话
 
 编译器目前**没有平台参数**（`compileVueSfc` 无 `target/platform/renderer` 字段），它把「目标 = MP」当作默认前提（输出 wxml/js/wxss、ES5 平台校验、px2rpx、Skyline 降级规则全部硬编码）。Web 端不走这个编译器（走标准 Vite + 真 Vue 运行时）；「web/skyline/all」的平台选择发生在**构建编排层**（plugin-vite / cli）。全端目标下，这需要拆分出「平台感知的编译器」。

@@ -6,6 +6,7 @@ export type {
   TransformTraceEvent,
   TransformTrace,
   TransformRuleOverrides,
+  Renderer,
   StyleTransformOptions,
   TemplateTransformOptions,
   TemplateTransformResult,

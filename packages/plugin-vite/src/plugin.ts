@@ -306,6 +306,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
   const rules = opts.rules ?? cfg.rules
   // ★15-page-scroll-container：页面自动包滚动容器开关（默认 true）
   const autoScrollContainer = cfg.page?.autoScrollContainer ?? true
+  // ★平台化薄接缝：从 config.skyline 派生 MP 渲染引擎（skyline=→skyline；未开 skyline/webview=→webview）；
+  //   下钻编译器关 Skyline-only 特判 + 纳入缓存 key（防止同源码跨渲染引擎命中错误缓存）
+  const renderer = cfg.skyline ? ('skyline' as const) : ('webview' as const)
   // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（proteus.config.layout，构建期配置）
   const fluidLayout = cfg.layout ? { designWidth: cfg.layout.designWidth, viewport: cfg.layout.fluidViewport } : undefined
   const isDebug = process.env.PROTEUS_DEBUG === '1'
@@ -600,6 +603,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               debug: isDebug,
               autoScrollContainer,
               fluidLayout,
+              renderer,
             },
             projectRoot,
           )
@@ -623,6 +627,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               preprocessStyle,
               autoScrollContainer,
               fluidLayout,
+              renderer,
             })
             wxml = result.wxml
             js = result.js
@@ -645,6 +650,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             preprocessStyle,
             autoScrollContainer,
             fluidLayout,
+            renderer,
           })
           wxml = result.wxml
           js = result.js
