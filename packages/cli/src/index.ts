@@ -408,6 +408,17 @@ async function main(): Promise<void> {
           } catch {
             /* private config 写了忽略 */
           }
+          // ★★2026-09-08 根因修复：open_project_window 只开窗不编译——模拟器里小程序未编译加载 → 无活动页 →
+          //   automation_navigate/runtime_info 报 getPageMetaByWebviewId null（rawPath null）。必须 simulator_refresh
+          //   （=工具栏编译）把小程序编译进模拟器，automator 才有页面可驱动（实测 refresh 后 navigate 立刻 success）。
+          //   ★刷新后稍等编译/渲染稳定再跑（automator 需就绪活动页）。
+          const refresh = spawnSync(
+            plan.ideCli,
+            ['-c', 'zed', 'simulator_refresh', '--project', prepared.projectDir],
+            { encoding: 'utf8', timeout: 90_000 },
+          )
+          if (refresh.status !== 0) console.warn(`[proteus-test] simulator_refresh 失败（编译可能未就绪）：${(refresh.stderr || '').slice(0, 200)}`)
+          await new Promise((r) => setTimeout(r, 3000))
           const r = spawnSync(
             'npx',
             // ★2026-09-08：MP E2E 全家桶——冒烟 + Vue 能力对齐真机验收 + p-popover 方案A（同一管理副本/窗口，逐能力真机断言）

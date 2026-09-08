@@ -28,12 +28,12 @@ PROTEUS_IDE_CLI="/path/to/wechatwebdevtools.app/Contents/MacOS/wechatide" \
   npx tsx packages/cli/src/index.ts test e2e:mp examples
 ```
 
-### ⚠️ 关键运维结论（2026-09-08 实测）：**多副本窗口是 automator 超时根因**
+### ⚠️ 关键运维结论（2026-09-08 实测）：**根因 = 缺 `simulator_refresh`（编译），不是端口/窗口**
 
-- `automation_*` 工具（`automation_navigate` 等）经 wechatide CLI（`transport: skill_call`，官方标准，非 miniprogram-automator）驱动 IDE 内部自动化服务；该服务**绑定单项目窗口**。
-- **若开了多个项目窗口 / 多个产物副本窗口**（如同时开 `dist/mp-weixin` 与 `.proteus/e2e-mp`），automator 服务绑定混乱 → `automation_navigate` 报 `timeout waiting for automator response`，`reLaunch` 全部失败。
-- **解法**：跑前确保**只有单个 fresh 项目窗口**——重启微信开发者工具（`pkill -f wechatwebdevtools` 后由 CLI fresh `open_project_window`），不要手工先开别的窗口；CLI 的 `open_project_window` 返回 `type: reuse`（复用当前单窗）是健康的。
-- 已验证：单 fresh 窗口下 `proteus test e2e:mp examples` → smoke + 7 条 Vue 能力真机验收 + p-popover **9/9 全绿**。
+- `automation_*` 工具（`automation_navigate` 等）经 wechatide CLI（`transport: skill_call`，官方标准，非 miniprogram-automator）驱动 IDE 内部自动化服务；该服务需要**模拟器里有一个已编译加载的活动页面**才能寻址。
+- **真正的坑**：`open_project_window` 只**开窗不编译**——小程序产物副本（`.proteus/e2e-mp`）没被编译加载进模拟器 → `automation_runtime_info` 报 `Cannot destructure 'rawPath' of getPageMetaByWebviewId(...) as null`（无活动页），`automation_navigate` 报 `Uncaught [object Object]`/`timeout waiting for automator response`，`reLaunch` 全挂。此时 `simulator_screenshot` 仍能过（只是截当前空屏）——**故不要被「截图能过」误导**。
+- **解法**：`open_project_window` + skyline 之后、跑 vitest 之前**必须 `simulator_refresh`**（=工具栏编译，把小程序编译加载进模拟器）+ 稍等就绪。已在 `packages/cli/src/index.ts` 的 `test e2e:mp` 固化。
+- **已验证**：加 `simulator_refresh` 后 `proteus test e2e:mp examples` → smoke + 11 条 Vue 能力真机验收 + p-popover **13/13 全绿**（复用窗口也稳，不再依赖 fresh/单窗）。
 
 - `tests/e2e-vue-compat.test.ts` 命名含 `e2e-vue-compat` → 被 `pnpm test` 的 `--exclude "tests/e2e-*.test.ts"` 排除，
   **不进全量/verify**；未设 `PROTEUS_MP_E2E_WXIDE` 时 `describe.skipIf` 跳过（不破坏单测）。
