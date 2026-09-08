@@ -99,6 +99,20 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r as any).js).not.toMatch(/v:\s*undefined/)
   })
 
+  it('unref/toValue：编译期内联为 ref 值（const out = unref(x) → data.out = data.x；方法体 → this.data.x）', () => {
+    // 顶层 const
+    const r1 = compile("import { unref, ref } from 'vue'\nconst x = ref(1)\nconst out = unref(x)", '<view>{{ out }}</view>')
+    expect((r1 as any).js).toMatch(/out:\s*1/)
+    expect((r1 as any).js).not.toMatch(/unref\s*\(/)
+    // toValue 同理
+    const r2 = compile("import { toValue, ref } from 'vue'\nconst x = ref(1)\nconst out = toValue(x)", '<view>{{ out }}</view>')
+    expect((r2 as any).js).toMatch(/out:\s*1/)
+    expect((r2 as any).js).not.toMatch(/toValue\s*\(/)
+    // 方法体
+    const r3 = compile("import { unref, ref } from 'vue'\nconst x = ref(1)\nfunction f(){ return unref(x) }", '<view>x</view>')
+    expect((r3 as any).js).toMatch(/return this\.data\.x/)
+  })
+
   it('withDefaults：宏剥离 + 默认值合并到 properties（组件模式），不裸调用/不落 data', () => {
     const r = compileVueSfc(
       `<script setup lang="ts">
