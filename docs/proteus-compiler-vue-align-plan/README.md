@@ -34,7 +34,15 @@
   - **新增 `tests/vue-compat-aligned.test.ts`**（11 用例）：核心 aligned（ref/computed/watch/onMounted/v-if/v-for/v-model/v-html/:class/:style/<transition>/defineProps）黄金断言——锁「标 aligned = 产物是正确翻译」。
 - **验证**：全量 **2564/2564 绿**；`build:web`/`build:mp` 通过；`dist/mp-weixin` 无裸生命周期调用。
 
-> ⚠️ 待办：`emit` 接线（`defineEmits` 产物在部分上下文为 bare `emit(...)`，疑受 `isComponent`/`emitEnabled` 上下文影响，需在真实组件上下文复核）、`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+## 决策 1（b）落地（组件内拿实例 → .in(组件) 测量）
+
+- **场景**：p-popover `adapter.measureRect(TRIGGER_SELECTOR, scope)` 需 `.in(组件)` 下探到 p-* 自定义组件内部的 trigger（页面级 `wx.createSelectorQuery()` 查不到——glass-easel 隔离）。
+- **根因**：旧实现用模板 ref `popoverRoot` 作 scope——**MP 模板 ref 永不赋值**（编译期警告「无对等绑定」）→ `this.data.popoverRoot` 恒 `undefined` → `.in(undefined)` 退化为页面级查询 → 测量失败。`getCurrentInstance` 也因 MP 编译 not defined 不可用。
+- **方案**：**组件方法内直接用 MP 原生 `this`（组件实例）作 scope**——`adapter.measureRect(TRIGGER_SELECTOR, this)` → adapter `query.in(this)` 正确下探组件内部。`this` 是 MP 运行时时态（非 Vue 运行时 API），不违反「不翻译 Vue 运行时 API」红线。
+- **编译器支撑**：`<script setup>` 方法允许声明 `this: T`（TS 伪参数声明方法 this 类型），但 JS 无此语法——编译器此前**未剥离 `this` 伪参数**（`astParamText`/`stripParamTypes` 对 `TSThisParameter`/`Identifier(name='this')` 保留 → 产物 `openMeasure(this) {` → `Unexpected token 'this'`）。已修：两者对 `this` 伪参数整体剔除（方法签名 `openMeasure()`，复用方法调用绑定的实例）。
+- **验证**：`build:mp` 产物 `adapter.measureRect(TRIGGER_SELECTOR, this)`；探针 P8e4 断言同步；computed 一次性派生（框架既定，暂按现状）。
+
+> ⚠️ 待办：`withDefaults`/`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 关联
 - 既定基线：`docs/vue-compat-plan.md`（§1 ✅/⚠️/❌ 实测）、`docs/vue-compat-advance.md`（Batch 1-7）、`docs/roadmap.md`（#2 编译能力）、L0 规约（原则 #0 第五投影 / #10.8 / 反黑盒 / 降级铁律）。

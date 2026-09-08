@@ -3,7 +3,7 @@
      ★B2/B4 薄壳：v-model 显隐受控 + 自绘定位（智能定位批次接入）
      双端同源码：div → view；MP 安全（遮罩点关闭，避 document 监听） -->
 <template>
-  <div class="p-popover" ref="popoverRoot">
+  <div class="p-popover">
     <!-- ★方案 A spike：data-role 静态属性（非 scoped hash）供 adapter.measureRect 页面级 selectorQuery 测量——
          不加 id（MP 编译器丢弃模块级 let/实例 uid 计数的 const/ref → ReferenceError），data-role 常驻可查 -->
     <div class="p-popover-trigger" data-role="proteus-popover-trigger" @click="onTrigger">
@@ -67,20 +67,18 @@ const emit = defineEmits(['update:modelValue'])
 const TRIGGER_SELECTOR = '[data-role="proteus-popover-trigger"]'
 const panelStyle = ref('')
 
-// ★scope（组件根节点）：measureRect 需 .in(组件) 下探到组件内 trigger（页面级 query 查不到——glass-easel 隔离）
-//   ★getCurrentInstance 在 MP 编译 not defined（Vue 该 API 不被 MP 组件保留，import 被剥离）→ 改用模板 ref 拿根节点作 scope
-const popoverRoot = ref<unknown>(null)
-
-async function openMeasure(): Promise<void> {
+async function openMeasure(this: unknown): Promise<void> {
   // measureRect 可选（旧 adapter/mock 无此方法）→ 回退空增量
   if (!adapter.measureRect || typeof adapter.measureRect !== 'function') {
     panelStyle.value = ''
     return
   }
   try {
-    // ★scope 直接传组件实例（__scopeInst 经 getCurrentInstance().proxy；编译器保留为 this.__scopeInst）
-    //   用 .in(组件) 下探组件内 trigger（页面级 query 查不到——glass-easel 隔离）
-    const rect = await adapter.measureRect(TRIGGER_SELECTOR, popoverRoot.value || undefined)
+    // ★scope 直接传组件实例 this（MP 方法内 this=组件实例；adapter 经 .in(this) 下探组件内 trigger——
+    //   页面级 query 查不到玻璃组件内部，glass-easel 隔离）。★不再用模板 ref popoverRoot（MP 模板 ref 永不绑定
+    //   → this.data.popoverRoot 恒 undefined → .in(undefined) 退化为页面级查询 → 测量失败）；也不译 Vue 运行时
+    //   getCurrentInstance（MP 编译 not defined，用户决策 1b 反黑盒）——组件实例走 MP 原生 this（框架语义 API）
+    const rect = await adapter.measureRect(TRIGGER_SELECTOR, this)
     if (!rect) {
       panelStyle.value = ''
       return
