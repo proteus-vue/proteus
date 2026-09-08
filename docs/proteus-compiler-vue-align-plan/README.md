@@ -67,7 +67,15 @@
 - 黄金断言：`tests/vue-compat-aligned.test.ts`（组件模式，宏剥离 + 默认值合并）。
 - **验证**：全量 2572/2572 绿；build:mp / build:web 通过。
 
-> ⚠️ 待办：`defineComponent` 宏对齐（当前 unsupported）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
+## P1 第三批（2026-09-08）：`defineComponent` 宏转 partial（no-op 剥离 + 警告）
+
+- **`defineComponent`**：`<script setup>` 里为**冗余包装**（SFC 已自动组件化）。此前被当顶层副作用裸注入 onLoad → 产物 `defineComponent(...)` 无 import → 运行时 ReferenceError（getCurrentInstance 同类），属编译器缺口；Step2 曾因此降 `unsupported`。
+- **修复**：`handleConstToData` 宏早退 + `extractTopLevelCalls` 跳过 `defineComponent`——编译器识别并**剥离为 no-op** + 矩阵 `partial`（警告：包装 options/setup 不编译，请用 `<script setup>`）；不落 data、不裸调用。
+- 注：不强行转 `aligned`——`defineComponent({ setup(){} })` 内 setup 逻辑非 SFC 范式、不翻译；`partial`（警告）比 `unsupported`（error 阻断）更诚实（可识别但包装未编译）。
+- 黄金断言：`tests/vue-compat-compile.test.ts`（partial 警告 + 不裸调用 + 不落 data）。
+- **验证**：全量 2573/2573 绿；build:mp / build:web 通过。
+
+> ⚠️ 待办：`version` 内联（可对齐）、`defineModel`/`useModel` v-model 组件契约（可对齐，较复杂）、computed 一次性派生是否需响应式二次求值（框架语义既定，暂按现状锁定）。
 
 ## 副产：发现的架构债（全端目标 → 编译器需平台化拆分）
 

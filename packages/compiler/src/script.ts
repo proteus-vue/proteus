@@ -917,10 +917,11 @@ function handleConstToData(
   warnings: string[],
   trace?: TransformTrace,
 ): void {
-  // 组件宏（defineProps/defineEmits/defineExpose/withDefaults）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
+  // 组件宏（defineProps/defineEmits/defineExpose/withDefaults/defineComponent）：编译期指令，不提取 data（defineProps< 泛型形式兼容）
   //   ★2026-09-08 P1：withDefaults(defineProps<T>(), D) 也属宏——内层 defineProps 由 extractProps 全树扫描提取；
   //   const 不落 data（否则 withDefaults(...) 当函数调用初始化 → 产物裸调用/语法错误）
-  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\()/.test(init)) return
+  //   ★defineComponent：SFC 已自动组件化，defineComponent(...) 包装为编译期 no-op（剥离+警告），不落 data/不裸注入 onLoad
+  if (/^(?:defineProps\s*[<(]|defineEmits\s*\(|defineExpose\s*\(|withDefaults\s*\(|defineComponent\s*\()/.test(init)) return
   // 跳过函数/箭头函数（属于 methods）
   if (/^(?:async\s+)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/.test(init)) return
   // computed 读路径（v0.3）：收集后统一处理（依赖可能定义在其后）
@@ -1351,7 +1352,7 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
     // ★同理，未映射的其它 Vue 生命周期钩子（onBeforeUnmount/onErrorCaptured/onUpdated/onBeforeMount/onBeforeUpdate/
     //   onActivated/onDeactivated/onRenderTracked/onRenderTriggered/onServerPrefetch）由 extractLifecycles 统一「剥离+警告」，
     //   亦须跳过——否则既警告又裸注入 onLoad（partial 钩子告警但产物仍裸调用 → ReferenceError）。mapOnxxx 将跳过，仅告警。
-    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineAppConfig)\b/.test(fn)) continue
+    if (/^(provide|inject|watch|computed|onLoad|onShow|onHide|onReady|onUnload|onMounted|onUnmounted|onBeforeMount|onBeforeUpdate|onUpdated|onBeforeUnmount|onActivated|onDeactivated|onErrorCaptured|onRenderTracked|onRenderTriggered|onServerPrefetch|defineProps|defineEmits|defineExpose|defineComponent|defineAppConfig)\b/.test(fn)) continue
     // 字符串内不含换行即视为单行闭合（保守：多行调用不抓，避免误截）
     if ((m[2].match(/['"`]/g) ?? []).length % 2 !== 0) continue
     out.push(t.replace(/;$/, ''))
