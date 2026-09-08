@@ -62,7 +62,8 @@ PROTEUS_MP_E2E_WXIDE=1 npx vitest run tests/e2e-vue-compat.test.ts
 
 - 复用 `@proteus-vue/test-core/driver` 的 `createWxideMini`/`createDriver`（wechatide skill-CLI 封装，官方 Electron 标准）。
 - 不引入 automator（与新版 IDE 不兼容，`15-mp-e2e-console-gate.md` 已弃用）。
-- 真机执行环境需开发者工具 + skyline，属可选手工/CI 验收，**不阻塞单测绿**。
+- 真机验收**走自动化测试框架**（`@proteus-vue/test-core/driver` + wechatide skill-CLI，官方 Electron 版，automator 已弃用）——同 `e2e-mp-popover.test.ts` 既定模式，非手工。
+- 运行需开发者工具 + skyline 环境（`PROTEUS_MP_E2E_WXIDE=1` 门控；未设环境或不满足时 `describe.skipIf` 跳过）——**不阻塞单测绿**，但真机验收本身是框架自动化执行。
 
 ## 待扩展（对齐基线加深）
 
