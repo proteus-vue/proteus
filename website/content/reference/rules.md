@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 94 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 95 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（49）
+## 模板转换（50）
 
 ### `tag/div-to-view`
 
@@ -361,6 +361,19 @@ after:  <p hidden="{{!show}}">a</p>
 ```
 
 > why: 小程序无 v-show 指令，hidden 属性语义对齐（display:none 切换）；元素保留在文档流中，与 v-if 的移除不同（v0.3 补齐，原为 MVP 限制）
+
+### `directive/v-text`
+
+**v-text → 元素内容覆盖为文本插值**
+
+v-text="expr" → <tag>{{ expr }}</tag>（v-text 覆盖子节点，输出文本插值——Vue 语义）；此前被当自定义指令剥离+警告（文本内容丢失——真 bug 非语义限制）
+
+```
+before: <view v-text="msg">child</view>
+after:  <view>{{ msg }}</view>
+```
+
+> why: 小程序无 v-text 指令，但 v-text 语义 =元素内容为文本值——映射为内容插值 {{ expr }}（元素保留 + 内容覆盖）；v-html→rich-text 同族
 
 ### `directive/custom`
 

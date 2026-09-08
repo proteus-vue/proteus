@@ -57,11 +57,11 @@ describe('Vue 全能力基准线 SSOT（proteus-compiler-vue-align-plan）', () 
 
   it('代表性能力状态（对齐框架既定基线）', () => {
     // aligned：书写面核心（vue-compat §1 主路径）+ reactivity-runtime spke 对齐的 reactive 族/守卫
-    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef', 'watchEffect', 'watchPostEffect', 'watchSyncEffect', 'reactive', 'readonly', 'shallowReactive', 'shallowReadonly', 'isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw', 'toRef', 'toRefs', 'markRaw', 'customRef', 'proxyRefs']) {
+    for (const a of ['ref', 'computed', 'watch', 'onMounted', 'defineProps', 'defineEmits', 'defineExpose', 'withDefaults', 'v-if', 'v-for', 'v-model', 'v-text', '<script setup>', '<style scoped>', 'provide', 'inject', 'nextTick', 'version', 'unref', 'toValue', 'isRef', 'watchEffect', 'watchPostEffect', 'watchSyncEffect', 'reactive', 'readonly', 'shallowReactive', 'shallowReadonly', 'isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw', 'toRef', 'toRefs', 'markRaw', 'customRef', 'proxyRefs']) {
       expect(vueCompatStatus(a).status, `${a} 应为 aligned`).toBe('aligned')
     }
     // partial：语义受限（advance Batch 平台限制）——含 Step2 校准后降级项
-    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-text', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef', 'defineOptions']) {
+    for (const p of ['onUpdated', 'onErrorCaptured', 'onBeforeUnmount', 'v-pre', 'v-once', 'defineSlots', 'defineComponent', 'defineModel', 'useModel', 'triggerRef', 'defineOptions']) {
       expect(vueCompatStatus(p).status, `${p} 应为 partial`).toBe('partial')
     }
     // unsupported：运行时对内 API / 动态渲染 / 无对等平台能力——含 Step2 校准（运行时守卫/内部渲染助手/宏未对齐降 unsupported 无降级→error）
