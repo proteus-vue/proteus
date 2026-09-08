@@ -7,6 +7,15 @@
 
 开发者写的是**标准 Vue SFC**（期望标准 Vue 能力全对齐），但编译器对 Vue 能力的处理是**需求驱动打地鼠**（`vue-compat-plan` §1 有一次性实测基线，但**没固化为「Vue 全集基准线 + 逐能力状态 + 编译断言门禁」**）。`getCurrentInstance` 只是「基准线内能力未兜底（静默输出未定义引用）」的首个暴露点。
 
+## ★★关键架构定调（2026-09-08，用户拍板）
+
+> **不手造宏/Vue 语义——框架始终吃 `@vue/compiler-sfc` 的输出经过框架 IR，再适配多端；小程序端不对齐自造语义，而是对齐 glass-easel 官方规范落地到 IR。**
+
+- **Vue 侧语义源 = `@vue/compiler-sfc`**：`compileVueSfc` 此前只用 `sfcParse`（取原始 `<script setup>` 文本），**宏（defineModel/defineProps/defineEmits/withDefaults/defineComponent）都靠自研正则抠 = 自造语义**（覆盖面不全、边界不一致，地基不牢——`defineModel` 的 useModel/modifiers/mergeModels 就暴露了）。
+- **正确 = `compileScript`**：它把宏**标准化展开**（`defineModel` → `_useModel(__props, 'title')` + props/emits 规约；`bindings` 权威分类 `modelValue:'props'`/`m:'setup-ref'`；`const p = __props`/`const emit = __emit`）。**用它作权威语义源**驱动 IR，再适配 MP。
+- **小程序侧语义真相 = glass-easel 官方**：`docs/compiler-platform-alignment.md`（glass-easel template-compiler `tag.rs` WXML 语义模型，用户定调「不猜造小程序 IR 语义」）——产物应落在官方 parser 认识的形态内（emit→事件 `update-xxx`、prop→properties 规范等）。
+- **教训**：宏语义不由我们定义——凡是对齐项，都要吃 `@vue/compiler-sfc` 标准展开 + 对齐 glass-easel 官方（见 `docs/compiler-platform-alignment.md`），不手写正则。（后续「手造宏语义」的既有实现需逐步迁移到本链路。）
+
 ## 基准线 = Vue 全能力（SSOT，权威拉取）
 
 从 `@vue/runtime-core@3.5.42` + `@vue/reactivity` + `@vue/shared` + SFC 模板/指令/内置组件面拉取（`02-api-gap.md` A-D）：响应式 / 组件 API / 生命周期 / 模板指令+内置组件+SFC 特性——**全集**，非自选子集。
