@@ -23,13 +23,15 @@ export interface SfcMacros {
   propNames: Set<string>
   /** defineModel 引用——const m = defineModel() 展开为 _useModel(__props, 'modelValue') 后提取 { varName: 变量名, propName } */
   modelRefs: MacroModelRef[]
+  /** ★权威 emits（compileScript 展开的 emits 数组） */
+  emits: string[]
   /** 编译是否成功（失败返回空语义，调用方回退既有路径——不因 compileScript 抛错而崩编译） */
   ok: boolean
   /** 原因（ok=false 时） */
   error?: string
 }
 
-const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], ok: false }
+const EMPTY: SfcMacros = { bindings: {}, propNames: new Set(), modelRefs: [], emits: [], ok: false }
 
 /**
  * 用 @vue/compiler-sfc 的 compileScript 提取宏语义元数据（权威源）。
@@ -52,7 +54,12 @@ export function extractSfcMacros(source: string, filename = 'anonymous.vue'): Sf
     while ((mm = useModelRe.exec(content))) {
       modelRefs.push({ varName: mm[1], propName: mm[3] || 'modelValue' })
     }
-    return { bindings, propNames, modelRefs, ok: true }
+    // ★权威 props=bindings 里标 'props' 的 prop 名集合（compileScript 分类——prop 名权威源；type/default 解析留扩展）
+    // ★权威 emits（compileScript 展开 emits: ['x'] 简单 或 emits: _mergeModels(['x'], ['update:y']) 合并形态）
+    const emits: string[] = []
+    const emitsSeg = content.match(/emits:\s*[^\n]*?((?:['"][^'"]+['"]\s*,?\s*)+)/)?.[1]
+    if (emitsSeg) for (const m of emitsSeg.matchAll(/['"]([^'"]+)['"]/g)) emits.push(m[1])
+    return { bindings, propNames, modelRefs, emits, ok: true }
   } catch (e) {
     return { ...EMPTY, error: (e as Error).message }
   }
