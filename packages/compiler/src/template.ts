@@ -592,9 +592,18 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     // 装饰语义：不输出过渡标签本身，直接序列化子元素（动画 class 由子元素注入）
     return node.children.map((c) => serializeNode(c, ctx)).join('\n')
   }
-  if ((node.tag === 'transition-group' || node.tag === 'teleport' || node.tag === 'suspense' || node.tag === 'keep-alive') && !isTransition) {
+  // ★2026-09-08 <teleport> 诚实对齐：小程序无 root-portal 层叠语义——解壳内联子元素（内容至少渲染）+ 警告（不静默）；
+  //   Skyline root-portal 层叠为后续批次（此前原样输出无效 <teleport> 标签不渲染——比解壳更糟）
+  if (node.tag === 'teleport' && !isTransition) {
     ctx.warnings.push(
-      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——缓存/传送请移除；多元素转场请用路由 routeType（vue-compat Batch A）`,
+      `<teleport> 在小程序无 root-portal 层叠语义（Skyline root-portal 为后续批次）——已解壳内联子元素（内容渲染但无层叠/传送）；如需弹层请用 p-popup/p-modal 或固定容器`,
+    )
+    ctx.trace?.add('template/teleport-inline', { line: node.loc.start.line, before: '<teleport>', after: '（解壳内联子元素；无层叠语义）' })
+    return node.children.map((c) => serializeNode(c, ctx)).join('\n')
+  }
+  if ((node.tag === 'transition-group' || node.tag === 'suspense' || node.tag === 'keep-alive') && !isTransition) {
+    ctx.warnings.push(
+      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——缓存/多元素转场请移除或改用路由 routeType（vue-compat Batch A）`,
     )
     ctx.trace?.add('template/no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（无对等，原样输出）' })
   }

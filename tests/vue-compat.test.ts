@@ -36,7 +36,7 @@ describe('Batch A：平台无对等能力显式警告（反黑盒）', () => {
     expect(tr.warnings.some((w) => w.includes('<transition>'))).toBe(false) // vue-compat-advance Batch 2 已支持
     const r = compile('<template><teleport to="body"><view>x</view></teleport></template>')
     expect(r.warnings.some((w) => w.includes('<teleport>'))).toBe(true)
-    expect(r.warnings.some((w) => w.includes('routeType'))).toBe(true)
+    expect(r.warnings.some((w) => w.includes('root-portal'))).toBe(true)
   })
 
   it('import 剥离 → 警告（无法解析的跨模块引用）+ 函数调用运行时初始化', () => {
