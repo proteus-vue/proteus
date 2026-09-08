@@ -375,18 +375,18 @@ after:  <view>{{ msg }}</view>
 
 > why: 小程序无 v-text 指令，但 v-text 语义 =元素内容为文本值——映射为内容插值 {{ expr }}（元素保留 + 内容覆盖）；v-html→rich-text 同族
 
-### `template/teleport-inline`
+### `template/teleport-root-portal`
 
-**<teleport> 解壳内联（无 root-portal 层叠，诚实警告）**
+**<teleport> → <root-portal>（Skyline 官方：子树脱离页面层叠）**
 
-<teleport> 在小程序无 root-portal 层叠语义——解壳内联子元素（内容渲染但无层叠/传送）+ 诚实警告；Skyline root-portal 层叠为后续批次；此前原样输出无效 <teleport> 标签不渲染（比解壳更糟）
+<teleport>content</teleport> → <root-portal>content</root-portal>（B2.25.2+，Skyline/WebView：子树脱离页面、类似 fixed position——弹窗/弹出层层叠正解，突破 z-index 层叠上下文）；to 目标 MP 无对等（root-portal 恒脱离页面 = fixed 等价，无 target 选择器）——警告说明忽略 to
 
 ```
-before: <teleport to="body"><view>hi</view></teleport>
-after:  <view>hi</view>（解壳内联 + 警告：无 layer-layer 语义）
+before: <teleport to="body"><view class="overlay">hi</view></teleport>
+after:  <root-portal><view class="overlay">hi</view></root-portal>（脱离页面盖层）
 ```
 
-> why: 小程序无 root-portal（Vue <teleport> 层叠/传送到 body 的对等）——诚实：内容内联可见 + 显式警告（反黑盒），弹层请用 p-popup/p-modal
+> why: Skyline/WebView root-portal（官方组件）把子树脱离页面固定，正是 Vue <teleport> 弹层层叠/传送到 body 的跨端等价——解决 p-popover 等弹层被下层元素遮挡（z-index 层叠上下文）
 
 ### `directive/v-once`
 

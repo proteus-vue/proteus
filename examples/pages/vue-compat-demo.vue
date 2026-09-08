@@ -110,6 +110,21 @@
       </view>
       <text class="state-line">rawIsReactive={{ rawIsReactive }} · customVal={{ customVal }} · isRef(customR)={{ customIsRef }}</text>
     </view>
+
+    <!-- ⑫ teleport → root-portal（Skyline 官方：子树脱离页面层叠——弹窗/弹层盖住一切；to 目标 MP 无对等已忽略） -->
+    <!-- ★2026-09-08：点击显示弹层 → <teleport> 编译为 <root-portal>（脱离页面 fixed 层叠，弹层不受下层遮挡） -->
+    <view class="card">
+      <text class="card-title">⑫ teleport → root-portal（弹层层叠）</text>
+      <view class="row">
+        <view class="chip" @click="toggleOverlay">{{ overlayOn ? '关闭弹层' : '显示弹层' }}</view>
+      </view>
+      <text class="state-line">overlayOn={{ overlayOn }}</text>
+      <teleport to="body">
+        <view v-if="overlayOn" class="overlay-panel">
+          <text>root-portal 弹层：脱离页面层叠（不被下层遮挡）</text>
+        </view>
+      </teleport>
+    </view>
   </view>
 </template>
 
@@ -201,6 +216,12 @@ function bumpCustom(): void {
   customVal.value = customR.value
 }
 const customVal = ref(9)
+
+// ⑫ teleport → root-portal（弹层脱离页面层叠）
+const overlayOn = ref(false)
+function toggleOverlay(): void {
+  overlayOn.value = !overlayOn.value
+}
 </script>
 
 <style scoped>
