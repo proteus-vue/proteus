@@ -113,6 +113,12 @@ describe('aligned 核心黄金断言（标 aligned = 产物是正确翻译）', 
     expect((r3 as any).js).toMatch(/return this\.data\.x/)
   })
 
+  it('isRef：编译期内联——const ok = isRef(refVar) → data.ok = true（MP 保留 ref 概念）', () => {
+    const r = compile("import { ref, isRef } from 'vue'\nconst x = ref(1)\nconst ok = isRef(x)", '<view>{{ ok }}</view>')
+    expect((r as any).js).toMatch(/ok:\s*true/)
+    expect((r as any).js).not.toMatch(/isRef\s*\(/)
+  })
+
   it('withDefaults：宏剥离 + 默认值合并到 properties（组件模式），不裸调用/不落 data', () => {
     const r = compileVueSfc(
       `<script setup lang="ts">

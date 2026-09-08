@@ -60,7 +60,7 @@
 
 **当前矩阵状态**：`aligned`（ref/computed/watch/defineProps/defineEmits/withDefaults/nextTick/version/unref/toValue/v-model/v-if/v-for/…）/ `partial`（defineModel/useModel/defineComponent/defineSlots/readonly/生命周期/模板 v-* 指令——诚实降级）/ `unsupported`（运行时渲染 h·createApp、对内 API getCurrentInstance·useSlots、响应式守卫 isRef/toRef 等——反黑盒 fail-closed）。
 
-> ★能力增强进行中（消除 unsupported/partial）：第一批 `unref`/`toValue` 已转 aligned（编译期内联为 ref 值，`const out = unref(x)` → `data.out = data.x`；方法体 → `this.data.x`）——黄金断言 + 全量绿。下一批候选：`isRef/isReactive/isReadonly/isProxy/isShallow`（守卫内联）、`watchEffect` 族（→watch immediate）。
+> ★能力增强进行中（消除 unsupported/partial）：`unref`/`toValue`（读取改写内联）+ `isRef`（守卫内联，依赖 constSourceTypes 追踪：ref/computed→true）已转 aligned——黄金断言 + 全量绿。诚实结论：`isReactive/isReadonly/isProxy/isShallow` 因 MP 编译为普通 data（无代理/只读语义）保持 unsupported（不强行违背语义）；`watchEffect` 族（→watch immediate）为下一批候选。
 
 **剩余待办（非阻塞）**：① `defineProps`/`defineEmits` 手写实现迁到权威源（门测已保证一致，迁移为可选消代码；收益小风险高，建议非必要不动）② defineModel 模型修饰符/嵌套（MP 对等有限）③ computed 响应式二次求值（框架语义既定）。
 
