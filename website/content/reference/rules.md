@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 95 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 97 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（50）
+## 模板转换（52）
 
 ### `tag/div-to-view`
 
@@ -374,6 +374,32 @@ after:  <view>{{ msg }}</view>
 ```
 
 > why: 小程序无 v-text 指令，但 v-text 语义 =元素内容为文本值——映射为内容插值 {{ expr }}（元素保留 + 内容覆盖）；v-html→rich-text 同族
+
+### `directive/v-once`
+
+**v-once 诚实对齐（静态剥离等价/含插值警告）**
+
+v-once 元素无 {{ }} 插值（纯静态）→ 剥离无警告（静态内容天然只渲染一次，语义等价）；含 {{ }} 插值 → 诚实警告（MP 数据驱动无「渲染一次」惰性）
+
+```
+before: <view v-once>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-once 语义 = 首次渲染后冻结；MP 数据驱动无静默化对应，静态内容天然满足，响应式内容无对等——诚实区分（不粉饰）
+
+### `directive/v-pre`
+
+**v-pre 诚实对齐（静态剥离等价/含插值警告）**
+
+compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——用元素原始源码（node.loc.source）检测；含 {{ }} → 诚实警告（WXML 无 raw 模式仍插值），纯静态 → 静默等价
+
+```
+before: <view v-pre>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-pre 语义 = 跳过该节点编译；MP WXML 无 raw 模式（{{ }} 恒插值）——诚实区分静态等价 vs 插值不生效
 
 ### `directive/custom`
 

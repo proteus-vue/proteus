@@ -155,8 +155,8 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   { name: 'v-html', group: 'template', status: 'aligned', source: 'vue-compat §1（rich-text）' },
   // ★2026-09-08 v-text 对齐：v-text="expr" → 元素内容覆盖为文本插值 {{ expr }}（Vue 语义：覆盖子节点输出文本）——消除「剥离导致文本丢失」真 bug
   { name: 'v-text', group: 'template', status: 'aligned', note: 'v-text="expr" → <tag>{{ expr }}</tag>（元素内容覆盖为文本插值；v-text 覆盖子节点——Vue 语义）', source: 'v-text 对齐（模板指令→文本插值）' },
-  { name: 'v-pre', group: 'template', status: 'partial', degrade: true, note: '剥离但 {{ }} 仍插值（v-pre 应跳过编译）——当前不生效', source: '评估（Step2 实测校准）' },
-  { name: 'v-once', group: 'template', status: 'partial', degrade: true, note: '剥离+警告，丢失只渲染一次语义——MP 数据驱动无对应惰性，请用模板内联', source: '评估（Step2 实测校准）' },
+  { name: 'v-pre', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价；含 {{ }} 插值时 WXML 无 raw 模式仍会插值（v-pre 跳过编译无法实现）——诚实警告', source: 'v-pre 诚实对齐（静态等价/响应式警告）' },
+  { name: 'v-once', group: 'template', status: 'partial', degrade: true, note: '纯静态内容剥离等价（静态天然只渲染一次）；含 {{ }} 插值时 MP 数据驱动无「渲染一次」惰性——诚实警告', source: 'v-once 诚实对齐（静态等价/响应式警告）' },
   { name: 'v-cloak', group: 'template', status: 'aligned', source: 'vue-compat §1（MP 无首帧未编译闪烁——剥离保留正常插值，语义等价 noop）' },
   { name: 'v-slot', group: 'template', status: 'aligned', source: 'vue-compat §1（具名）' },
   { name: ':class', group: 'template', status: 'aligned', source: 'vue-compat §1（数组+对象简写）' },
