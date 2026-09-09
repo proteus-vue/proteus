@@ -563,12 +563,21 @@ function warnUnsupportedSvgFeatures(node: ElementNode, ctx: SerializeContext): v
   const bad = collectUnsupportedSvgTags(node)
   if (!bad.size) return
   const names = [...bad].map((t) => `<${t}>`).join('/')
-  const msg = `SVG 子标签 ${names} 在 Skyline 的 image 渲染中实测不支持（真机验证渲染为空白）——请改用 <path> 展开（use/symbol 引用的图形）或转 <text> 为路径/图片（svg 文字）`
+  // ★2026-09-09 根因实证（对照实验）：Skyline 渲染引擎**解码 SVG 成功但丢弃文字元素**——
+  //   同一 SVG 含 <text> 时其它元素（rect 等）正常渲染、仅文字缺失；切 WebView 渲染模式后文字全部正常。
+  //   → 这是 Skyline 的 SVG 实现限制（官方文档未记载），非小程序整体限制、非编译器问题。
+  const isText = [...bad].some((t) => t === 'text' || t === 'tspan')
+  const fix = isText
+    ? '方案：① 文字移到 SVG 外的 <text> 组件叠加（推荐——原生渲染、可选中、字体可控）；② 文字轮廓化为 <path>（设计工具导出 SVG 时选 outline/convert to path）；③ 该页改用 WebView 渲染模式（renderer: webview——文字可渲染，但放弃 Skyline 特性）'
+    : '方案：改用 <path> 展开或图片'
+  const msg =
+    `SVG 子标签 ${names} 在 Skyline 下不渲染（实测：Skyline 解码 SVG 成功但丢弃该元素；同一 SVG 切 WebView 后正常）` +
+    `——Skyline 的 SVG 实现限制（官方文档未记载）。${fix}`
   ctx.warnings.push(msg)
   ctx.trace?.add('template/svg-p2-unsupported', {
     line: node.loc.start.line,
     before: `SVG 含 ${names}`,
-    after: '（Skyline image 渲染实测空白——诚实警告）',
+    after: '（Skyline 丢弃文字元素——WebView 正常；根因已实证）',
   })
 }
 

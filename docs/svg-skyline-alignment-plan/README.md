@@ -210,7 +210,7 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 **验证**：`tests/svg-to-image.test.ts` 17 用例（含 P2：mask/clipPath/transform 放行 + use/text 警告 + 支持表导出）；
 全量 2692/2692 · 门禁 93/93 · build:mp/web ✓。
 
-**边界（诚实）**：`text`（SVG 文字）实测空白——警告引导转路径/图片；SVG 内部事件命中仍未实现（见 §9e）。
+**边界（诚实）**：`text`（SVG 文字）见 §9g；SVG 内部事件命中见 §9e。
 
 ## 9e. ★use/symbol 编译期展开（2026-09-09）——从空白到完美渲染
 
@@ -258,6 +258,30 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 
 **边界（诚实）**：`path` 用采样点包围盒近似（曲线/凹形可能误判）；transform 子树不参与；无 hit-test 缓存
 （每次 touch 查询 rect——可优化）。`tests/svg-hit.test.ts` 7 用例。
+
+## 9g. ★`<text>` 空白根因实证（2026-09-09）
+
+**问题**：SVG `<text>` 在 Skyline 下渲染空白（§9d 表中列为"不支持"）。
+
+**实证方法**：`svg-p2-spike.vue` 加两组对照——① 5 种 text 形态（基础/显式坐标/font-family/大字号/foreignObject）；
+② 同一 SVG「含 text vs 不含 text」（同页并排）；③ 切 WebView 渲染模式复跑全部。
+
+**结果**：
+
+| 形态 | Skyline | WebView |
+|---|---|---|
+| text 基础 / 显式坐标 / font-family / 大字号 | ❌ 全部空白 | ✅ 全部正常 |
+| foreignObject（HTML 内嵌） | ❌ 空白 | ✅ 正常 |
+| **同一 SVG 的 rect（含 text 时）** | ✅ **正常渲染** | ✅ 正常 |
+
+**根因**：**Skyline 渲染引擎解码 SVG 成功（其它元素正常），但主动丢弃文字元素**——
+是 Skyline 的 SVG 实现限制（**官方文档未记载**——文档仅列「不支持百分比单位」「不支持 `<style>`」两条），
+**非小程序整体限制**（WebView 正常）、**非编译器问题**。
+
+**编译器行为（诚实警告 + 三种方案）**：`warnUnsupportedSvgFeatures` 给出精确根因与可行动方案——
+① 文字移到 SVG 外的 `<text>` 组件叠加（推荐：原生渲染/可选中/字体可控）；
+② 文字轮廓化为 `<path>`（设计工具导出时选 outline/convert to path）；
+③ 该页改用 `renderer: webview`（文字可渲染，但放弃 Skyline 特性）。
 
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
