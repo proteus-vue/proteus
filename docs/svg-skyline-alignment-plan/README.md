@@ -296,3 +296,58 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 - `template/svg-no-peer` 规则（G2 反黑盒警告——未覆盖标签仍警告）
 - `src/components/p-svg/index.vue`（汇合点）
 - PROJECT_MEMORY 本会话条目（2026-09-08 ⑨）
+
+
+## 11. ★能力边界实测汇总（2026-09-09）——场景适配评估
+
+**实测数据**（Skyline 2.02.2609072 Nightly / SDK 3.16.2 / 真机模拟器）：
+
+### 11.1 动画：❌ 不播放
+
+| 动画类型 | Skyline `<image>` 内表现 |
+|---|---|
+| SMIL `<animate>` | ❌ 只渲染首帧（红点不移动） |
+| SMIL `<animateTransform>` | ❌ 不旋转 |
+| CSS `@keyframes`（SVG `<style>`） | ❌ 不播放 |
+| `stroke-dashoffset` 描边动画 | ❌ 圆环恒空 |
+
+**判定方法**：间隔 10s 两次截图 **MD5 完全一致**（像素级证明无动画推进）。
+
+> 结论：SVG 动画**不可用**。需要动画请用 ① CSS `@keyframes`（WXML 元素级，非 SVG 内）/ ② 小程序 `wx.createAnimation` / ③ 逐帧切 data-URI（`setData` 换 src，实测 50 图标 4ms，帧率受限）/ ④ Skyline 的 worklet 动画。
+
+### 11.2 体积与性能：✅ 可规模化
+
+| 图标复杂度 | 源码 | base64 data-URI | 膨胀 |
+|---|---|---|---|
+| 简单（1 path） | 118B | 186B | 1.58× |
+| 中等（3 path） | 181B | 270B | 1.49× |
+| 复杂（渐变+多路径） | 355B | 502B | 1.41× |
+| 插图级（20 路径） | 1010B | 1374B | 1.36× |
+
+**实测性能**：50 个 SVG 图标 `setData`→渲染 **4ms**，数据量 10KB——**无性能瓶颈**。
+100 个中等图标约 56KB（分包/gzip 后更小）。
+
+### 11.3 场景适配结论
+
+| 场景 | 适配度 | 说明 |
+|---|---|---|
+| **SVG 图标**（单色/多色/渐变/描边） | ✅ **完全适合** | 体积小、性能好；Skyline 原生渲染；`use` 展开、事件命中均可用 |
+| **普通应用**（图表/示意图形/装饰矢量） | ✅ **适合** | 除文字外全部特性可用；文字用 SVG 外 `<text>` 叠加 |
+| **超级应用**（复杂图形/大量图标） | ✅ **基本适合** | 体积性能无压力；需注意 ① 文字用原生 `<text>` ② 图标建议 sprite 化（`<symbol>` + `<use>` 编译期展开）③ 复杂插图考虑转 PNG/WebP |
+| **SVG 动画** | ❌ **不适合** | `<image>` 内动画不播放；改用 CSS/worklet 动画或逐帧换 src |
+| **SVG 文字** | ⚠️ **需绕行** | Skyline 丢弃文字元素（§9g）；用 SVG 外 `<text>` 叠加 |
+
+### 11.4 关键限制速查
+
+| 能力 | Skyline `<image>` |
+|---|---|
+| path/circle/rect/ellipse/line/polyline/polygon | ✅ |
+| 渐变（linear/radial）/ clipPath / mask | ✅ |
+| transform 矩阵 / opacity / filter | ✅ |
+| stroke-dasharray（静态） | ✅ |
+| `<use>` + `<symbol>` | ✅（编译器展开） |
+| 图形事件（@click/@tap） | ✅（编译器生成 touchstart 命中） |
+| **`<text>` / `<tspan>`** | ❌ Skyline 丢弃（WebView 正常） |
+| **SMIL / CSS 动画** | ❌ 只渲染首帧 |
+| `<style>` 元素 | ❌ 官方明确不支持 |
+| 百分比单位 | ❌ 官方明确不支持 |

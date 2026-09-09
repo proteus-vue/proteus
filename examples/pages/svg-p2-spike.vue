@@ -35,6 +35,11 @@
       </view>
     </view>
 
+    <text class="spike-sub">↓ 50 图标压力测试（{{ perfItems.length }} 个）</text>
+    <view class="perf-grid">
+      <image v-for="(it, i) in perfItems" :key="i" class="perf-img" :src="it.src" mode="aspectFit" />
+    </view>
+
     <view class="spike-grid">
       <view class="spike-cell" v-for="(it, i) in items" :key="i">
         <image class="spike-img" :src="it.src" mode="aspectFit" @tap="onImgTap" data-idx="{{i}}" />
@@ -51,6 +56,18 @@ const NS = 'http://www.w3.org/2000/svg'
 const items = ref<any[]>([])
 const tapLog = ref('未点击')
 const dbgWithText = ref('')
+const perfItems = ref<any[]>([])
+const perfMs = ref('')
+
+onMounted(() => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2 L22 22 L2 22 Z" fill="#e74c3c"/></svg>'
+  const uri = 'data:image/svg+xml,' + encodeURIComponent(svg)
+  const items: Array<{ src: string }> = []
+  for (let i = 0; i < 50; i++) items.push({ src: uri })
+  const t0 = Date.now()
+  perfItems.value = items
+  setTimeout(() => { perfMs.value = 'setData→渲染 ' + (Date.now() - t0) + 'ms' }, 100)
+})
 const dbgNoText = ref('')
 
 function onRootTouch(e: unknown): void {
@@ -140,33 +157,31 @@ onMounted(() => {
     ),
   },
   {
-    name: 'text 基础',
+    name: 'SMIL animate',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="50" y="55" font-size="24" fill="#000" text-anchor="middle">AB</text></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="20" cy="50" r="12" fill="#e74c3c">` +
+        `<animate attributeName="cx" values="20;80;20" dur="2s" repeatCount="indefinite"/></circle></svg>`,
     ),
   },
   {
-    name: 'text 显式坐标',
+    name: 'SMIL animateTransform',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" width="100" height="100"><text x="10" y="50" font-size="30" fill="red">Hi</text></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><rect x="35" y="35" width="30" height="30" fill="#3498db">` +
+        `<animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="3s" repeatCount="indefinite"/></rect></svg>`,
     ),
   },
   {
-    name: 'text 带 font-family',
+    name: 'CSS @keyframes',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="10" y="50" font-size="20" font-family="sans-serif" fill="#000">Text</text></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><style>@keyframes s{0%{opacity:1}50%{opacity:0.2}100%{opacity:1}}.a{animation:s 2s infinite}</style>` +
+        `<circle cx="50" cy="50" r="30" fill="#2ecc71" class="a"/></svg>`,
     ),
   },
   {
-    name: 'text 大字号',
+    name: 'stroke-dashoffset 动画',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="5" y="70" font-size="60" fill="#000">A</text></svg>`,
-    ),
-  },
-  {
-    name: 'foreignObject',
-    src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><foreignObject x="10" y="10" width="80" height="40"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:20px">HTML</div></foreignObject></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="none" stroke="#9b59b6" stroke-width="8" ` +
+        `stroke-dasharray="220" stroke-dashoffset="220"><animate attributeName="stroke-dashoffset" from="220" to="0" dur="2s" repeatCount="indefinite"/></circle></svg>`,
     ),
   },
   {
@@ -180,6 +195,17 @@ onMounted(() => {
 })
 </script>
 <style scoped>
+.perf-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+}
+.perf-img {
+  width: 24px;
+  height: 24px;
+}
 .spike {
   display: flex;
   flex-direction: column;
