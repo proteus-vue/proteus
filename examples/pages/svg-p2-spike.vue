@@ -23,6 +23,18 @@
       <text class="spike-label">use 编译器展开</text>
     </view>
 
+    <text class="spike-sub">↓ 对照：含 text vs 不含 text（同一 SVG，看 rect 是否显示）</text>
+    <view class="spike-row">
+      <view class="spike-cell">
+        <image class="spike-img" :src="dbgWithText" mode="aspectFit" />
+        <text class="spike-label">含 text</text>
+      </view>
+      <view class="spike-cell">
+        <image class="spike-img" :src="dbgNoText" mode="aspectFit" />
+        <text class="spike-label">不含 text</text>
+      </view>
+    </view>
+
     <view class="spike-grid">
       <view class="spike-cell" v-for="(it, i) in items" :key="i">
         <image class="spike-img" :src="it.src" mode="aspectFit" @tap="onImgTap" data-idx="{{i}}" />
@@ -38,6 +50,9 @@ import { onMounted, ref } from 'vue'
 const NS = 'http://www.w3.org/2000/svg'
 const items = ref<any[]>([])
 const tapLog = ref('未点击')
+const dbgWithText = ref('')
+const dbgNoText = ref('')
+
 function onRootTouch(e: unknown): void {
   const ev = e as { type?: string; detail?: unknown; touches?: unknown; changedTouches?: unknown } | undefined
   tapLog.value = 'TOUCH ' + String(ev?.type) + ' detail=' + JSON.stringify(ev?.detail) + ' touches=' + JSON.stringify(ev?.touches) + ' changed=' + JSON.stringify(ev?.changedTouches)
@@ -125,9 +140,33 @@ onMounted(() => {
     ),
   },
   {
-    name: 'text',
+    name: 'text 基础',
     src: 'data:image/svg+xml,' + encodeURIComponent(
       `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="50" y="55" font-size="24" fill="#000" text-anchor="middle">AB</text></svg>`,
+    ),
+  },
+  {
+    name: 'text 显式坐标',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" width="100" height="100"><text x="10" y="50" font-size="30" fill="red">Hi</text></svg>`,
+    ),
+  },
+  {
+    name: 'text 带 font-family',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="10" y="50" font-size="20" font-family="sans-serif" fill="#000">Text</text></svg>`,
+    ),
+  },
+  {
+    name: 'text 大字号',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="5" y="70" font-size="60" fill="#000">A</text></svg>`,
+    ),
+  },
+  {
+    name: 'foreignObject',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><foreignObject x="10" y="10" width="80" height="40"><div xmlns="http://www.w3.org/1999/xhtml" style="font-size:20px">HTML</div></foreignObject></svg>`,
     ),
   },
   {

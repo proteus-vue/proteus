@@ -106,7 +106,7 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
         '<g transform="rotate(45)"><rect width="100" height="100" fill="#2ecc71" clip-path="url(#c)" mask="url(#m)"/></g></svg></template>',
     )
     expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
-    expect(r.warnings.some((w: string) => /不支持/.test(w))).toBe(false)
+    expect(r.warnings.some((w: string) => /SVG 子标签/.test(w))).toBe(false)
     // 特性保留在 data-URI 内
     const b64 = r.wxml.match(/src="data:image\/svg\+xml;base64,([^"]+)"/)![1]
     const svg = Buffer.from(b64, 'base64').toString('utf8')
@@ -130,15 +130,22 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
 
   it('P2：use 外部引用（symbol 未定义）→ 展开失败 + 诚实警告', () => {
     const r = compile('<template><svg viewBox="0 0 100 100"><use href="#external"/></svg></template>')
-    const w = r.warnings.find((x: string) => /不支持/.test(x))
+    const w = r.warnings.find((x: string) => /SVG 子标签/.test(x))
     expect(w, '外部引用应有警告').toBeTruthy()
     expect(w).toMatch(/use\(外部引用\)/)
   })
 
-  it('P2：text → lowering + 实测不支持警告', () => {
+  it('P2：text → lowering + 精确根因警告（Skyline 丢弃文字元素，WebView 正常）', () => {
     const r = compile('<template><svg viewBox="0 0 100 100"><text x="50" y="55" font-size="24">AB</text></svg></template>')
     expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
-    expect(r.warnings.some((x: string) => /不支持/.test(x) && /<text>/.test(x))).toBe(true)
+    const w = r.warnings.find((x: string) => /SVG 子标签/.test(x) && /<text>/.test(x))
+    expect(w, 'text 应有警告').toBeTruthy()
+    // 根因 + 三种可行动方案（实测：Skyline 解码成功但丢弃文字；WebView 正常）
+    expect(w).toMatch(/Skyline 下不渲染/)
+    expect(w).toMatch(/WebView 后正常/)
+    expect(w).toMatch(/<text> 组件叠加/)
+    expect(w).toMatch(/轮廓化为 <path>/)
+    expect(w).toMatch(/renderer: webview/)
   })
 
   it('P2：SVG_P2_SUPPORT 支持表导出（文档化实测结论）', () => {
