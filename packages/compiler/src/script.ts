@@ -2638,15 +2638,21 @@ export function transformScriptToPage(
       : ''
   // ★#496c onReady 精修段（页面 p-grid 档位——SelectorQuery 实测容器宽）
   const semanticGridReady = !extra.isComponent ? semanticGridReadyCode(semanticGrids) : ''
+  // ★2026-09-09 真机复测实证（Skyline 模拟器）：微信 Component 生命周期是 ready——onReady 是 Page 专属，
+  //   组件内 onReady() 被 glass-easel 静默忽略（当普通方法，永不触发）→ #499 移入组件 onReady 的派生
+  //   /immediate 初始化全部失效（p-safe safeStyle 空 / p-aspect innerStyle 空 / p-modal variants 空）。
+  //   组件发射 ready()（微信文档 Component lifecycles：created/attached/ready/detached——ready = 布局就绪，
+  //   可获取节点信息，语义与页面 onReady 对齐）；页面保持 onReady()。
+  const readyHookName = extra.isComponent ? 'ready' : 'onReady'
   if (lifecycles.onReady) {
     const readyBody = semanticGridReady
       ? `${semanticGridReady}\n${compDerivedReady ? `${compDerivedReady}\n` : ''}${lifecycles.onReady}`
       : compDerivedReady
         ? `${compDerivedReady}\n${lifecycles.onReady}`
         : lifecycles.onReady
-    lines.push(`  onReady() {\n${indentBody(rw(readyBody))}\n  },`)
+    lines.push(`  ${readyHookName}() {\n${indentBody(rw(readyBody))}\n  },`)
   } else if (semanticGridReady || compDerivedReady) {
-    lines.push(`  onReady() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
+    lines.push(`  ${readyHookName}() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)

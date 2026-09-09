@@ -386,3 +386,17 @@ describe('★mp-conformance 探针矩阵 P16：支持矩阵 fail-fast（#504 定
     expect(r.warnings.filter((w: string) => /已原样输出/.test(w)).length).toBe(0)
   })
 })
+
+describe('★mp-conformance 探针矩阵 P17：WXML 绑定 ?? fail-closed（#504 同族——wcc 实测拒绝，官方文档误判）', () => {
+  // 2026-09-09 真机复测实证：value="{{modelValue ?? ''}}" → wcc「unexpected token '?'」→ 模拟器启动失败；
+  //   assertValidResult 编译期硬报错（此前按官方 expr.rs 判合法静默放行 → 流到 IDE 才炸）
+  it('P17a：绑定含 ?? → 编译期 CompilerError（消息含 computed/守卫建议）', () => {
+    expect(() => compileVueSfc(`<script setup lang="ts">const m = ""</script>\n<template><input :value="m ?? ''" /></template>`, { filename: 'p17.vue', ...opts }))
+      .toThrow(/\?\? 空值合并/)
+  })
+  it('P17b：script 层 ?? 不受影响（babel ES5 通道——p-model-demo onInput 形态畅通）', () => {
+    const r = compileVueSfc('<script setup lang="ts">const m = ""\nfunction onInput(d: { value?: string }) { void d }</script>\n<template><input :value="m" @input="onInput" /></template>', { filename: 'p17b.vue', ...opts })
+    expect(r.js).not.toMatch(/\?\?/)
+    expect(r.warnings.some((w: string) => /空值合并/.test(w))).toBe(false)
+  })
+})

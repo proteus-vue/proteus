@@ -45,8 +45,8 @@ describe('p-list-view（虚拟长列表，virtual-list 通用化）', () => {
     expect(js).toContain('observers: {')
     expect(js).toContain('items(n, o) {')
     expect(js).toContain('calc()')
-    // js：首帧 + 性能守卫 + lazy 门控
-    expect(js).toContain('onReady() {')
+    // js：首帧 + 性能守卫 + lazy 门控（★2026-09-09 组件 ready——非 onReady）
+    expect(js).toContain('ready() {')
     expect(js).toContain('if (s === this.data.start) return')
     expect(js).toContain('this.data.lazy && !this.data.ready')
   })

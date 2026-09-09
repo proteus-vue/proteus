@@ -409,10 +409,11 @@ describe('组件系统（v0.3：defineProps / defineEmits / slots）', () => {
     expect(js).not.toContain('e: {')
   })
 
-  it('★#499 props 组件派生初始化放 onReady（微信父传属性 attached 后才到位——attached 读 this.data.items 为 undefined 真机实证）', () => {
+  it('★#499 props 组件派生初始化放 ready（微信父传属性 attached 后才到位——attached 读 this.data.items 为 undefined 真机实证；★2026-09-09 组件钩子是 ready 非 onReady——onReady 为 Page 专属，组件内被静默忽略）', () => {
     const src = 'const props = defineProps({ items: { type: Array as any, default: () => [] } })\nconst count = computed(() => props.items.length)\nconst base = ref(1)'
     const { js } = transformScriptToPage(src, opts, { isComponent: true })
-    expect(js).toContain('onReady() {')
+    expect(js).toContain('ready() {')
+    expect(js).not.toContain('onReady() {')
     expect(js).toContain('this.setData({ count: this.data.items.length })')
     // 无 runtimeInit/注入时不再生成 attached（派生整体移 ready）
     expect(js).not.toContain('attached() {')
@@ -560,8 +561,8 @@ describe('虚拟列表（v0.4）', () => {
     expect(r.js).toContain('this.data.items.slice')
     // items 变化响应：props 源 watch → observers
     expect(r.js).toContain('observers: {')
-    // onReady 首屏计算
-    expect(r.js).toContain('onReady()')
+    // ready 首屏计算（★2026-09-09 组件 ready——非 onReady）
+    expect(r.js).toContain('ready()')
     expect(r.js).toContain('calc()')
     // 模板：scroll-view + bindscroll + 单一可视区 v-for（真机修复：无 wx:else 双 if）
     expect(r.wxml).toContain('<scroll-view')

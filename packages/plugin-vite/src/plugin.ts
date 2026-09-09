@@ -317,8 +317,18 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/** ★#492 分包生效值统一经 resolveRouterConfig（router.subPackages 优先，顶层别名兼容）——
+ *  ★2026-09-09 真机复测发现：gen-routes 已用生效值（app.json 声明 + 分包 json 生成），而插件页面扫描
+ *  仍读顶层 cfg.subPackages——配置收编后顶层为空 → 分包页永不进编译清单（只产 list.json + 声明，
+ *  微信启动报「未找到 subpackages/order/pages/list.wxml」模拟器启动失败）。对齐 gen-routes 同源。 */
+function resolveEffectiveSubPackages(cfg: ProteusConfig): Array<{ root: string; name?: string }> {
+  const { router: rc } = resolveRouterConfig(cfg as never)
+  return rc.subPackages
+}
+
 export default function mpTransform(opts: PluginOptions): Plugin {
   const cfg = opts.config
+  const effectiveSubPackages = resolveEffectiveSubPackages(cfg)
   const px2rpx = opts.px2rpx ?? cfg.style.px2rpx
   const rpxRatio = opts.rpxRatio ?? cfg.style.rpxRatio
   const rules = opts.rules ?? cfg.rules
@@ -366,7 +376,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           /* 读失败不影响编译 */
         }
       }
-      for (const pagesRoot of [path.join(projectRoot, cfg.pagesDir), ...(cfg.subPackages ?? []).map((sp) => path.join(projectRoot, sp.root))]) {
+      for (const pagesRoot of [path.join(projectRoot, cfg.pagesDir), ...(effectiveSubPackages ?? []).map((sp) => path.join(projectRoot, sp.root))]) {
         for (const f of walkVueFiles(pagesRoot)) detectWebOnly(f)
       }
       // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
@@ -381,7 +391,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
       }
       pushRel(path.join(projectRoot, cfg.pagesDir))
-      for (const sp of cfg.subPackages ?? []) {
+      for (const sp of effectiveSubPackages ?? []) {
         pushRel(path.join(projectRoot, sp.root))
       }
       // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）

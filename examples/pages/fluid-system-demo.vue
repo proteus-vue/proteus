@@ -132,7 +132,7 @@ onUnmounted(() => {
       Web 端 env(safe-area-inset-*) 需 viewport-fit=cover（已注入）；桌面 env()=0 → fallback 兜底「至少 Npx」。
       折叠屏 hinge 用 DevTools 设备模拟（display-mode: fold/span）验证。
     </p>
-    <p-safe area="top" :fallback="44" class="safe-demo">
+    <p-safe id="retest-safe-top" area="top" :fallback="44" class="safe-demo">
       <div class="safe-inner">顶部避让 · fallback 44px（模拟刘海/状态栏）</div>
     </p-safe>
     <p-safe area="bottom" :fallback="34" class="safe-demo">
@@ -148,7 +148,7 @@ onUnmounted(() => {
     <!-- ★S2 p-aspect：纵横比容器（aspect-ratio 原生 / padding-top hack 降级） -->
     <h3 class="sec-title">S2 · 纵横比容器（p-aspect）</h3>
     <div class="aspect-row">
-      <p-aspect :ratio="16 / 9" class="aspect-demo">
+      <p-aspect id="retest-aspect" :ratio="16 / 9" class="aspect-demo">
         <div class="aspect-inner">16:9</div>
       </p-aspect>
       <p-aspect :ratio="1" class="aspect-demo">
@@ -167,7 +167,7 @@ onUnmounted(() => {
     <!-- ★S3 p-sidebar：窄屏 bottom-bar → 宽屏 side-rail（拖宽/拖窄窗口看切换；nav 项支持方向键焦点移动） -->
     <h3 class="sec-title">S3 · 自适应导航栏（p-sidebar）</h3>
     <p class="hint">容器 &lt; 640px → 底部导航条；≥ 640px → 左侧侧栏（Arrow 方向键在导航项间移动焦点）</p>
-    <p-sidebar :min-sidebar-width="640" :nav-width="160" class="sidebar-demo">
+    <p-sidebar id="retest-sidebar" :min-sidebar-width="640" :nav-width="160" class="sidebar-demo">
       <template #nav>
         <a class="nav-item" href="#">首页</a>
         <a class="nav-item" href="#">导航</a>
@@ -225,6 +225,7 @@ onUnmounted(() => {
     </div>
     <!-- ★B4 p-modal：p-adaptive 属性 + anchor 锚定 + width 覆盖（sheet 底部 / dialog 居中 / popover 锚定 trigger 下方） -->
     <p-modal
+      id="retest-modal"
       v-model:visible="showModal"
       p-adaptive="sheet(0, 600) | dialog(600, 840) | popover(840, ∞)"
       :anchor="modalTrigger || undefined"
