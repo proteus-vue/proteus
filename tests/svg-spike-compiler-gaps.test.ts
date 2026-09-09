@@ -135,3 +135,33 @@ describe('真机预览暴露的 ES2021 语法缺口（回归锁）', () => {
     expect(() => compile('const big = 123n', '<template><view>x</view></template>')).not.toThrow()
   })
 })
+
+describe('真机 t.apply is not a function 根因（回归锁）', () => {
+  it('⑦ 回调内 ref 赋值不吞外层实参（setTimeout(cb, 100)）', () => {
+    const r = compile(
+      'import { ref, onMounted } from "vue"\nconst a = ref("")\nonMounted(() => { setTimeout(() => { a.value = "x" }, 100) })',
+      '<template><view>{{ a }}</view></template>',
+    )
+    // setData 只接一个对象参数——`}, 100)` 的 100 属 setTimeout
+    // babel 输出双引号（源码单引号）——断言形态不锁引号
+    expect(r.js).toMatch(/setTimeout\(\(\) => \{ this\.setData\(\{ a: ["']x["'] \}\)\}, 100\)/)
+    expect(r.js).not.toMatch(/setData\(\{ a: ["']x["'] \}, 100\)/)
+  })
+
+  it('⑦ 多行三元 / 多行对象 RHS 不回归', () => {
+    const r1 = compile('const s = ref("")\nfunction f() { const ok = true; s.value = ok\n  ? "yes"\n  : "no" }', '<template><view>{{ s }}</view></template>')
+    expect(r1.js).toMatch(/setData\(\{ s: ok[\s\S]*\? "yes"[\s\S]*: "no"/)
+    const r2 = compile('const o = ref({})\nfunction f() { o.value = {\n  a: 1,\n  b: 2,\n} }', '<template><view>{{ o }}</view></template>')
+    expect(r2.js).toMatch(/setData\(\{ o: \{[\s\S]*a: 1[\s\S]*b: 2/)
+  })
+
+  it('⑦ 函数调用 RHS 保留（String(123) 不被截断）', () => {
+    const r = compile('const s = ref("")\nfunction f() { s.value = String(123) }', '<template><view>{{ s }}</view></template>')
+    expect(r.js).toMatch(/setData\(\{ s: String\(123\) \}\)/)
+  })
+
+  it('⑦ 数组下标赋值不回归', () => {
+    const r = compile('const arr = ref([1, 2])\nfunction f() { arr.value[0] = 9 }', '<template><view>{{ arr }}</view></template>')
+    expect(r.js).toMatch(/setData\(\{ arr: this\.data\.arr \}\)|arr\[0\] = 9/)
+  })
+})
