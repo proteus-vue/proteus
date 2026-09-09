@@ -5,7 +5,7 @@
 //   可见 canvas 的 SelectorQuery.node() 拿不到（正常运行时同样 TIMEOUT）。
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
-import { sampleValues, evalAnim, primitiveToPathD } from '../src/components/p-svg-canvas/engine'
+import { sampleValues, evalAnim, primitiveToPathD, drawScene } from '../src/components/p-svg-canvas/engine'
 import { tracePath } from '../src/components/p-svg-canvas/path-parser'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
@@ -142,5 +142,35 @@ describe('SVG path 解析器（真机 createPath2D 不可用 → 自写解析）
     const t = mockTarget()
     tracePath(t, 'M-1.5 -2.5 L1e2 3.5')
     expect(t.calls).toEqual(['M-1.5,-2.5', 'L100,3.5'])
+  })
+})
+
+describe('描边动画（stroke-dasharray / stroke-dashoffset）', () => {
+  it('drawScene 设置 setLineDash + lineDashOffset（dashoffset 随时间插值）', () => {
+    const calls: string[] = []
+    const ctx: any = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, lineCap: '', lineJoin: '', lineDashOffset: 0,
+      setLineDash: (s: number[]) => calls.push('dash=' + JSON.stringify(s)),
+      save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, setTransform() {}, clearRect() {},
+      beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {}, arc() {}, closePath() {},
+      fill() {}, stroke() {}, fillRect() {},
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    }
+    const canvas: any = { width: 120, height: 120, getContext: () => ctx }
+    const scene: any = {
+      viewBox: [0, 0, 100, 100],
+      nodes: [{
+        tag: 'circle',
+        attrs: { cx: 50, cy: 50, r: 35, fill: 'none', stroke: '#9b59b6', 'stroke-width': 8, 'stroke-dasharray': 220, 'stroke-dashoffset': 220 },
+        anims: [{ attr: 'stroke-dashoffset', values: ['220', '0'], dur: 2000, delay: 0, repeat: true }],
+      }],
+      duration: 2000,
+    }
+    drawScene(canvas, scene, 0)
+    expect(calls).toContain('dash=[220]')
+    expect(ctx.lineDashOffset).toBe(220)
+    drawScene(canvas, scene, 1000)
+    expect(ctx.lineDashOffset).toBe(110) // 插值中
   })
 })
