@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 99 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 100 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (53)
+## Template transforms (54)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-to-image`
+
+**Static <svg> subtree → <image> data-URI (SVG→Skyline P0)**
+
+A static SVG subtree (no v-bind/v-if/v-for/interpolation/events) is serialized to an SVG string → base64 data-URI → <image src> (Skyline renders path/stroke/circle correctly, verified on device); subtrees with dynamic bindings are not lowered (honest warning, P1)
+
+```
+before: <svg viewBox="0 0 24 24"><path d="M12 2 L22 22" fill="red"/></svg>
+after:  <image src="data:image/svg+xml;base64,…" mode="aspectFit" />
+```
+
+> why: G-62 SVG→Skyline P0 (decision: the ground-work spike proved Skyline <image> fully renders SVG data-URI while the canvas route is blocked by the node() channel) — 80% of static icon cases work without code changes
 
 ### `template/svg-no-peer`
 

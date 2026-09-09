@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 99 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 100 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（53）
+## 模板转换（54）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-to-image`
+
+**静态 <svg> 子树 → <image> data-URI（SVG→Skyline P0）**
+
+静态 SVG 子树（无 v-bind/v-if/v-for/插值/事件）序列化为 SVG 字符串 → base64 data-URI → <image src>（Skyline 实测可完整渲染 path/stroke/circle）；含动态绑定不 lowering（诚实警告，P1）
+
+```
+before: <svg viewBox="0 0 24 24"><path d="M12 2 L22 22" fill="red"/></svg>
+after:  <image src="data:image/svg+xml;base64,…" mode="aspectFit" />
+```
+
+> why: G-62 SVG→Skyline P0（决策：地基 spike 实证 Skyline <image> 完整渲染 SVG data-URI，而 canvas 路线被 node() 通道阻塞）——静态图标 80% 场景零改代码可用
 
 ### `template/svg-no-peer`
 
