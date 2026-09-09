@@ -19,6 +19,7 @@ import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { CompilerError } from './validate'
 import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags } from './svg-lower'
+import type { SvgTextNode } from './svg-lower'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -580,6 +581,25 @@ function warnUnsupportedSvgFeatures(node: ElementNode, ctx: SerializeContext): v
     after: '（Skyline 丢弃文字元素——WebView 正常；根因已实证）',
   })
 }
+/** ★2026-09-09 text 提升：SVG <text> → 原生 <text>（绝对定位，viewBox 坐标 → 百分比）。
+ *  Skyline 丢弃 SVG 文字（§9g 实证），编译期提取为原生节点叠加在 <image> 上——
+ *  文字可选中、字体可控、随容器缩放（百分比定位）。 */
+function svgTextToWxml(t: SvgTextNode, vbW: number, vbH: number): string {
+  const leftPct = ((t.x / vbW) * 100).toFixed(3)
+  const topPct = ((t.y / vbH) * 100).toFixed(3)
+  // text-anchor → CSS text-align/transform 对齐
+  const anchorStyle =
+    t.anchor === 'middle' ? 'transform:translateX(-50%);' : t.anchor === 'end' ? 'transform:translateX(-100%);' : ''
+  const fw = t.fontWeight ? `font-weight:${t.fontWeight};` : ''
+  // 字号按 viewBox 高度比例换算（相对容器高度，用 vh 语义不可行 → 用百分比 + em 基准）
+  const style = `position:absolute;left:${leftPct}%;top:${topPct}%;${anchorStyle}${fw}color:${t.fill};font-size:${t.fontSize}px;line-height:1;white-space:nowrap;`
+  return `<text style="${style}">${escWxml(t.content)}</text>`
+}
+
+/** WXML 文本转义（{{ }} 会触发插值——静态文字需转义花括号） */
+function escWxml(s: string): string {
+  return s.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
@@ -731,6 +751,25 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       const style = wAttr
         ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
         : `width:${w}px;height:${h}px;`
+      // ★2026-09-09 text 提升：SVG 文字 → 原生 <text> 叠加层（Skyline 丢弃 SVG 文字，编译期提取）。
+      //   坐标按 viewBox → 百分比定位（相对容器），字号按 viewBox 比例换算为 px。
+      if (lowered.texts.length) {
+        const vbParts = lowered.viewBox.trim().split(/\s+/).map(Number)
+        const vbW = vbParts.length === 4 && vbParts[2] > 0 ? vbParts[2] : 24
+        const vbH = vbParts.length === 4 && vbParts[3] > 0 ? vbParts[3] : 24
+        const overlay = lowered.texts.map((t) => svgTextToWxml(t, vbW, vbH)).join('\n')
+        ctx.trace?.add('template/svg-text-promote', {
+          line: node.loc.start.line,
+          before: `<svg><text x y>...</text></svg>`,
+          after: `原生 <text> 叠加层（${lowered.texts.length} 个，viewBox → 百分比定位）`,
+        })
+        return (
+          `<view class="proteus-svg-wrap${ctx.scopeId ? ` proteus-svg-${ctx.scopeId}` : ''}" style="${style}position:relative;">\n` +
+          `  <image style="width:100%;height:100%;" src="${lowered.dataUri}" mode="aspectFit" />\n` +
+          `  ${overlay}\n` +
+          `</view>`
+        )
+      }
       // ★G-62 P2：实测不支持的 SVG 特性（use/symbol/text/tspan）诚实警告（Skyline image 渲染为空白）
       warnUnsupportedSvgFeatures(node, ctx)
       // ★2026-09-09 事件命中：图形带事件 → 加 id + touch 绑定 + 收集（真机实证 tap 无坐标、touchstart 有）

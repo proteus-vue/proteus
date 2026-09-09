@@ -82,6 +82,24 @@ export interface SvgHitShape {
   strokeOnly?: boolean
 }
 
+/** ★2026-09-09 text 提升：SVG <text> → 原生 <text> 叠加层（Skyline 丢弃 SVG 文字，编译期提取）。
+ *  坐标保留 viewBox 坐标系，由调用方按 image 尺寸换算为百分比定位。 */
+export interface SvgTextNode {
+  /** 文本内容（静态——含插值则走动态路径不提升） */
+  content: string
+  /** viewBox 坐标（x/y） */
+  x: number
+  y: number
+  /** 字号（viewBox 单位，无单位） */
+  fontSize: number
+  /** 填充色 */
+  fill: string
+  /** text-anchor: start/middle/end（默认 start） */
+  anchor: string
+  /** font-weight（可选） */
+  fontWeight?: string
+}
+
 export interface SvgLowerResult {
   /** data-URI（可直接作 <image src>） */
   dataUri: string
@@ -89,6 +107,8 @@ export interface SvgLowerResult {
   viewBox: string
   /** ★事件命中：带事件的图形表（空 = 无事件，不生成命中逻辑） */
   hitShapes: SvgHitShape[]
+  /** ★text 提升：SVG 文字节点（编译期提取 → 调用方生成原生 <text> 叠加） */
+  texts: SvgTextNode[]
 }
 
 /** 属性名规范化：SVG 在 WXML/HTML 解析后可能小写化（viewBox → viewbox）——回写时恢复驼峰 */
@@ -241,6 +261,44 @@ function toBase64(s: string): string {
   return Buffer.from(s, 'utf8').toString('base64')
 }
 
+/** ★text 提升：提取 SVG <text> 节点（Skyline 丢弃 SVG 文字——编译期提取为原生 <text> 叠加）。
+ *  仅静态文本（无插值/无 transform 父级）；tspan 作为整体文本拼接。 */
+function collectTextNodes(node: ElementNode, acc: SvgTextNode[], hasTransform: boolean): void {
+  const tag = node.tag.toLowerCase()
+  const hasTf = hasTransform || node.props.some(
+    (p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name.toLowerCase() === 'transform',
+  )
+  if (tag === 'text' && !hasTf) {
+    const num = (name: string, dflt: number): number => {
+      const v = staticAttr(node, name)
+      return v !== undefined && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : dflt
+    }
+    // 文本内容：递归拼接 TEXT 子节点（含 tspan）
+    let content = ''
+    const walk = (n: ElementNode): void => {
+      for (const c of n.children as TemplateChildNode[]) {
+        if (c.type === NodeTypes.TEXT) content += (c as { content: string }).content
+        else if (c.type === NodeTypes.ELEMENT) walk(c as ElementNode)
+      }
+    }
+    walk(node)
+    if (content.trim()) {
+      acc.push({
+        content: content.trim(),
+        x: num('x', 0),
+        y: num('y', 0),
+        fontSize: num('font-size', 16),
+        fill: staticAttr(node, 'fill') ?? '#000',
+        anchor: staticAttr(node, 'text-anchor') ?? 'start',
+        fontWeight: staticAttr(node, 'font-weight'),
+      })
+    }
+  }
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type === NodeTypes.ELEMENT) collectTextNodes(c as ElementNode, acc, hasTf)
+  }
+}
+
 /** ★事件命中：从静态 SVG 子树提取带事件的图形几何（编译期）。
  *  简化假设（诚实边界）：仅处理**无 transform 的顶层/嵌套图形**——transform 矩阵换算留待需要时；
  *  几何按 viewBox 坐标系记录（运行时用 rect 尺寸换算）。 */
@@ -309,7 +367,10 @@ export function lowerSvgToImage(node: ElementNode): SvgLowerResult | null {
   // ★事件命中：收集带事件的图形（静态几何——运行时按 touch 坐标判定）
   const hitShapes: SvgHitShape[] = []
   collectHitShapes(node, hitShapes, false)
-  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox, hitShapes }
+  // ★text 提升：收集 SVG 文字（Skyline 丢弃 → 调用方生成原生 <text> 叠加）
+  const texts: SvgTextNode[] = []
+  collectTextNodes(node, texts, false)
+  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox, hitShapes, texts }
 }
 
 /** 从 viewBox 推导宽高比（供 <image> 默认尺寸；失败 → 1:1） */

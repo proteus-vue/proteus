@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 103 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 104 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（57）
+## 模板转换（58）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-text-promote`
+
+**SVG <text> → 原生 <text> 叠加层（补 Skyline 丢弃文字短板）**
+
+静态 SVG <text>（含 tspan 拼接）编译期提取 → <view> 容器 + <image> + 绝对定位原生 <text>（viewBox 坐标 → 百分比、text-anchor → translateX、font-size/fill/font-weight 映射）；文字可选中、字体可控、随容器缩放
+
+```
+before: <svg><text x="50" y="25" text-anchor="middle">Hi</text></svg>
+after:  <view style="position:relative"><image …/><text style="position:absolute;left:50%;top:25%;transform:translateX(-50%)">Hi</text></view>
+```
+
+> why: G-62 text 短板：真机实证 Skyline 解码 SVG 成功但丢弃文字元素（WebView 正常，官方文档未记载）——编译期提升为原生 text 是零运行时正解（对比 canvas fillText 需运行时绘制）
 
 ### `template/svg-hit`
 
