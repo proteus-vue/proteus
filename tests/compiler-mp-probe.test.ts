@@ -255,3 +255,103 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect(js).toContain('proteus-popover-trigger-query')
   })
 })
+
+describe('★mp-conformance 探针矩阵 P9：具名插槽 multipleSlots 注入（#500 双渲染器一致根因）', () => {
+  // 微信自定义组件默认单插槽——不注入 options.multipleSlots 则 <slot name> 与 slot="name" 不按名路由
+  // （p-zone 选槽错乱 / p-sidebar nav 泄漏进默认插槽真机根因）；Page 不注入（无插槽语义）
+  it('P9a：Component 产物注入 options.multipleSlots + <slot name> 按名输出', () => {
+    const src = '<template><view><slot name="header"/><slot/></view></template>'
+    const r = compileVueSfc('<script setup lang="ts"></script>\n' + src, { filename: 'probe9.vue', isComponent: true, ...opts })
+    expect(r.js).toContain('options: { multipleSlots: true },')
+    expect(r.wxml).toContain('<slot name="header"')
+    expect(r.wxml).toContain('<slot')
+  })
+  it('P9b：Page 产物不注入 multipleSlots', () => {
+    const r = compileVueSfc('<template><view>x</view></template>', { filename: 'probe9p.vue', isComponent: false, ...opts })
+    expect(r.js).not.toContain('multipleSlots')
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P10：v-show 复合表达式括号（#501 WebView 亦错的基础语义）', () => {
+  // hidden="{{!expr}}" 无括号 → !mode === 'x' 按 (!mode)==='x' 解析 → p-sidebar nav 恒可见真机根因；
+  // 契约：复合表达式包 !(…)；裸标识符保持无括号（旧产物形态兼容）
+  it('P10a：复合表达式 hidden="{{!(…)}}"', () => {
+    const r = compileVueSfc('<script setup lang="ts">const mode = "a"</script>\n<template><view v-show="mode === \'side-rail\' || mode === \'collapsed-open\'">x</view></template>', { filename: 'probe10.vue', ...opts })
+    expect(r.wxml).toContain("hidden=\"{{!(mode === 'side-rail' || mode === 'collapsed-open')}}\"")
+  })
+  it('P10b：裸标识符 hidden="{{!show}}"（无括号形态锁定）', () => {
+    const r = compileVueSfc('<script setup lang="ts">const show = true</script>\n<template><view v-show="show">x</view></template>', { filename: 'probe10b.vue', ...opts })
+    expect(r.wxml).toContain('hidden="{{!show}}"')
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P11：?? / ?. ES5 tripwire（#504 语言转译交还 babel）', () => {
+  // 真机上传期 SyntaxError（?? Unexpected token）——Node --check 门禁永远抓不到；契约：产物零 ??/?. 残留
+  it('P11：方法体 ?? / ?. 产物零残留（babel ES5 转写——顶层 const 走静态求值路径不经 babel，探针锁方法体通道）', () => {
+    const r = compileVueSfc('<script setup lang="ts">const a: { b?: string | null } = {}\nfunction f() { return a?.b ?? "x" }</script>\n<template><view>{{ f() }}</view></template>', { filename: 'probe11.vue', ...opts })
+    expect(r.js).not.toMatch(/\?\?|\?\./)
+    expect(r.js).toMatch(/=== void 0 \? .* : "x"/)
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P12：非有限数 setData 序列化反黑盒（#502 p-modal 样式全丢根因）', () => {
+  // 微信 setData 数据须可 JSON 序列化——Infinity/NaN 整次 setData 被放弃/字段静默变 null（同次 maskStyle/panelClass 全丢）
+  it('P12：含非有限数的 const 编译期显式警告（引导 MAX_SAFE_INTEGER）', () => {
+    const r = compileVueSfc('<script setup lang="ts">const LIMIT = Infinity</script>\n<template><view /></template>', { filename: 'probe12.vue', ...opts })
+    expect(r.warnings.some((w: string) => /非有限数|MAX_SAFE_INTEGER/.test(w))).toBe(true)
+  })
+  it('P12b：MAX_SAFE_INTEGER 字面量不警告（推荐形态畅通）', () => {
+    const r = compileVueSfc('<script setup lang="ts">const LIMIT = Number.MAX_SAFE_INTEGER</script>\n<template><view /></template>', { filename: 'probe12b.vue', ...opts })
+    expect(r.warnings.some((w: string) => /非有限数/.test(w))).toBe(false)
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P13：:style 对象派生自动序列化（#500 对象绑定双渲染器静默失效根因）', () => {
+  // style 属性仅收字符串（双渲染器一致）——对象绑定 = 布局全死；契约：computed 派生 expr 自动包 __proteusStyleString
+  it('P13：:style 绑定同名 computed → js 注入 __proteusStyleString + wxml style="{{}}"', () => {
+    const r = compileVueSfc(
+      '<script setup lang="ts">import { computed } from "vue"\nconst boxStyle = computed(() => ({ display: "flex", gap: "8rpx" }))</script>\n'
+      + '<template><view :style="boxStyle">x</view></template>',
+      { filename: 'probe13.vue', ...opts },
+    )
+    expect(r.js).toMatch(/boxStyle: __proteusStyleString\(/)
+    expect(r.wxml).toContain('style="{{boxStyle}}"')
+    expect(r.js).toContain('function __proteusStyleString(')
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P14：p-safe env/max 诚实边界（#501 Skyline 无 max 长度函数）', () => {
+  // 避让逻辑（env(safe-area-inset-*) + max(env,Npx) 兜底）在 @proteus-vue/fluid resolveSafeAreaStyle 共享模块——
+  // MP 产物无模块系统 → 组件产物不含 env/max 实现（unresolved import 诚实警告）；契约锁：safeStyle 走自动序列化 + hinge 边界
+  const r = compileComponent('src/components/p-safe/index.vue')
+  it('P14a：safeStyle 走 __proteusStyleString（对象绑定自动序列化通道；链式 init 双形态）', () => {
+    expect(r.js).toMatch(/__proteusStyleString\(this\.proteusCalcSafeStyle\(\)\)/)
+    expect(r.wxml).toContain('style="{{safeStyle}}"')
+  })
+  it('P14b：产物不含 env( 实现；resolveSafeAreaStyle 裸引用由打包层接线 _proteus/fluid.js（@proteus-vue/* scope import 剥离无警告）', () => {
+    expect(r.js).not.toContain('env(safe-area-inset')
+    expect(r.js).toMatch(/resolveSafeAreaStyle\(/)
+  })
+  it('P14c：hinge 避让 displayMode 逻辑在位（MP 逻辑层无 matchMedia → displayMode 恒 standard 诚实边界）', () => {
+    expect(r.js).toMatch(/displayMode === 'fold'/)
+  })
+})
+
+describe('★mp-conformance 探针矩阵 P15：p-aspect 盒模型假设（#500 降级 hack 宽高全丢根因）', () => {
+  // padding-top hack 依赖「高度 0 + padding 撑盒」——渲染端默认 border-box 则总高恒 0；契约：显式 content-box
+  // + 内层 p-aspect-inner 承载 slot 与内联定位（MP 产物通配/子选择器被剔除 → .p-aspect-fallback > * 全局规则退役）
+  const r = compileComponent('src/components/p-aspect/index.vue')
+  it('P15a：降级 padding hack 显式 box-sizing content-box + paddingTop 百分比', () => {
+    expect(r.js).toMatch(/boxSizing\s*=\s*['"]content-box['"]/)
+    expect(r.js).toMatch(/paddingTop\s*=\s*100\s*\/\s*ratio/)
+  })
+  it('P15b：内层 p-aspect-inner 节点承载 innerStyle + slot（子选择器降级通道退役）', () => {
+    expect(r.wxml).toMatch(/class="p-aspect-inner/)
+    expect(r.wxml).toContain('style="{{innerStyle}}"')
+    expect(r.js).toMatch(/innerStyle: __proteusStyleString\(/)
+  })
+  it('P15c：aspectOk 探测分支在位（原生 aspect-ratio 与降级 hack 双形态）', () => {
+    expect(r.js).toMatch(/aspectOk/)
+    expect(r.js).toMatch(/p-aspect-fallback/)
+  })
+})
