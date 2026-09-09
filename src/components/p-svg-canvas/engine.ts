@@ -76,6 +76,10 @@ export interface DrawCtx {
   globalAlpha: number
   lineCap: string
   lineJoin: string
+  /** ★2026-09-09 描边虚线（SVG stroke-dasharray → Canvas setLineDash 语义；数组或字符串） */
+  setLineDash?(segments: number[]): void
+  /** ★SVG stroke-dashoffset → Canvas lineDashOffset */
+  lineDashOffset?: number
   save(): void
   restore(): void
   translate(x: number, y: number): void
@@ -223,6 +227,15 @@ function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tM
   if (lc) ctx.lineCap = String(lc)
   const lj = nodeAttr(node, 'strokeLinejoin', tMs)
   if (lj) ctx.lineJoin = String(lj)
+  // ★2026-09-09 真机实证补：stroke-dasharray / stroke-dashoffset（描边进度动画必需——
+  //   SVG 的 dashoffset 从 N 变 0 = 线条「画出来」的经典效果；此前完全未处理 → 描边动画不动）
+  const da = nodeAttr(node, 'strokeDasharray', tMs) ?? nodeAttr(node, 'stroke-dasharray', tMs)
+  if (da !== undefined && da !== '' && String(da) !== 'none' && typeof ctx.setLineDash === 'function') {
+    const segs = String(da).split(/[,\s]+/).map(Number).filter((n) => !Number.isNaN(n))
+    if (segs.length) ctx.setLineDash(segs)
+  }
+  const doff = nodeAttr(node, 'strokeDashoffset', tMs) ?? nodeAttr(node, 'stroke-dashoffset', tMs)
+  if (doff !== undefined) ctx.lineDashOffset = Number(doff) || 0
 
   // 几何：★真机实证 createPath2D(SVG 字符串) 不可用（模拟器可用）→ 自写解析器直接下发绘制命令
   const d = node.tag === 'path' ? (node.d ?? '') : primitiveToPathD(node, tMs)
