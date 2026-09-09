@@ -3,10 +3,7 @@
      为什么不用可见 canvas：实测 SelectorQuery.node() 拿不到 node（正常运行时同样 TIMEOUT，§12.2 A）。
      诚实边界：回传是瓶颈（setData 18ms/次）→ 建议 ≤512px、目标 30fps；纯静态/整体变换请用 image 方案。 -->
 <template>
-  <view>
-    <image class="p-svg-canvas" :src="src" :style="imageStyle" mode="scaleToFill" />
-    <text style="font-size:9px;color:#c0392b;word-break:break-all;">{{ diag }}</text>
-  </view>
+  <image class="p-svg-canvas" :src="src" :style="imageStyle" mode="scaleToFill" />
 </template>
 
 <script setup lang="ts">
@@ -28,7 +25,6 @@ const props = defineProps({
 })
 
 const src = ref('')
-const diag = ref('init')
 /** 已渲染帧数（调试/外部观察用——模拟器与真机均可读取） */
 const frames = ref(0)
 const imageStyle = computed(() => ({ width: props.width + 'px', height: props.height + 'px' }))
@@ -40,15 +36,10 @@ const imageStyle = computed(() => ({ width: props.width + 'px', height: props.he
 function ensureCanvas(this: any): any {
   if (this.canvas) return this.canvas
   const w = wx as any
-  if (typeof w.createOffscreenCanvas !== 'function') {
-    this.setData({ diag: 'NO_OFFSCREEN_API' })
-    return null
-  }
+  if (typeof w.createOffscreenCanvas !== 'function') return null
   try {
     this.canvas = w.createOffscreenCanvas({ type: '2d', width: this.data.width, height: this.data.height })
-    this.setData({ diag: 'canvas ' + this.canvas.width + 'x' + this.canvas.height + ' wh=' + this.data.width + 'x' + this.data.height })
-  } catch (e) {
-    this.setData({ diag: 'CANVAS_ERR ' + String(e).slice(0, 50) })
+  } catch {
     return null
   }
   return this.canvas
@@ -78,35 +69,14 @@ function renderFrame(this: any, tMs: number): void {
           fail?: (e?: unknown) => void
         }) => void
       }
-      const n0 = this.data.frames || 0
       if (typeof w.canvasToTempFilePath === 'function') {
         w.canvasToTempFilePath({
           canvas: c,
-          success: (r) => {
-            const p = String(r.tempFilePath)
-            if (n0 % 20 === 0) this.setData({ diag: 'tmp OK ' + p.slice(0, 46) })
-            // 验证路径可读性（诊断：getImageInfo 能否读到）
-            if (n0 <= 1 && typeof (wx as any).getImageInfo === 'function') {
-              ;(wx as any).getImageInfo({
-                src: p,
-                success: (info: any) => {
-                  this.setData({ diag: 'READ OK ' + info.width + 'x' + info.height + ' ' + p.slice(0, 30) })
-                },
-                fail: (err: any) => {
-                  this.setData({ diag: 'READ FAIL ' + JSON.stringify(err).slice(0, 60) })
-                },
-              })
-            }
-            emit(p)
-          },
-          fail: (e?: unknown) => {
-            if (n0 % 20 === 0) this.setData({ diag: 'tmp FAIL ' + JSON.stringify(e).slice(0, 60) })
-            emit(c.toDataURL('image/png'))
-          },
+          success: (r) => emit(r.tempFilePath),
+          fail: () => emit(c.toDataURL('image/png')),
         })
       } else {
         emit(c.toDataURL('image/png'))
-        if (n0 % 20 === 0) this.setData({ diag: 'dataURI only' })
       }
     } catch {
       try {

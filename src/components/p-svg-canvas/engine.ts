@@ -15,6 +15,8 @@
 //
 // 诚实边界：回传是瓶颈（18ms/次）→ 大图/高帧率场景受限；建议 ≤512px 画布 + 30fps 目标。
 
+import { tracePath } from './path-parser'
+
 /** 场景节点（编译期从 SVG 树产出） */
 export interface SceneNode {
   /** SVG 标签类型 */
@@ -82,8 +84,15 @@ export interface DrawCtx {
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
   clearRect(x: number, y: number, w: number, h: number): void
   beginPath(): void
-  fill(path?: unknown): void
-  stroke(path?: unknown): void
+  moveTo(x: number, y: number): void
+  lineTo(x: number, y: number): void
+  bezierCurveTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void
+  quadraticCurveTo(cx: number, cy: number, x: number, y: number): void
+  arc(cx: number, cy: number, r: number, s: number, e: number, ccw?: boolean): void
+  closePath(): void
+  fill(): void
+  stroke(): void
+  fillRect(x: number, y: number, w: number, h: number): void
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): { addColorStop(o: number, c: string): void }
   createRadialGradient(x0: number, y0: number, x1: number, y1: number, r0: number, r1: number): { addColorStop(o: number, c: string): void }
 }
@@ -93,7 +102,8 @@ export interface OffscreenCanvasLike {
   width: number
   height: number
   getContext(type: '2d'): DrawCtx
-  createPath2D(d?: string): unknown
+  /** @deprecated 真机不可用（保留仅为类型兼容）——改用 tracePath */
+  createPath2D?(d?: string): unknown
   toDataURL(type?: string, quality?: number): string
   requestAnimationFrame(cb: (t: number) => void): number
   cancelAnimationFrame(id: number): void
@@ -214,31 +224,18 @@ function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tM
   const lj = nodeAttr(node, 'strokeLinejoin', tMs)
   if (lj) ctx.lineJoin = String(lj)
 
-  // 几何：path 用 createPath2D（直接接受 SVG d 字符串——实测可用，省解析器）
-  if (node.tag === 'path' && node.d) {
-    const p2 = canvas.createPath2D(node.d)
-    if (fill !== 'none') {
-      ctx.fillStyle = fill
-      ctx.fill(p2)
-    }
-    if (stroke !== 'none') {
-      ctx.strokeStyle = stroke
-      ctx.stroke(p2)
-    }
-    ctx.restore()
-    return
-  }
-  // circle/rect/ellipse/line/polyline/polygon → 转等价 path d
-  const d = primitiveToPathD(node, tMs)
+  // 几何：★真机实证 createPath2D(SVG 字符串) 不可用（模拟器可用）→ 自写解析器直接下发绘制命令
+  const d = node.tag === 'path' ? (node.d ?? '') : primitiveToPathD(node, tMs)
   if (d) {
-    const p2 = canvas.createPath2D(d)
+    ctx.beginPath()
+    tracePath(ctx, d)
     if (fill !== 'none') {
       ctx.fillStyle = fill
-      ctx.fill(p2)
+      ctx.fill()
     }
     if (stroke !== 'none') {
       ctx.strokeStyle = stroke
-      ctx.stroke(p2)
+      ctx.stroke()
     }
   }
   ctx.restore()
@@ -288,31 +285,35 @@ export function drawScene(canvas: OffscreenCanvasLike, scene: SvgScene, tMs: num
   ctx.scale(canvas.width / vw, canvas.height / vh)
   ctx.translate(-vx, -vy)
   for (const node of scene.nodes) drawNode(ctx, canvas, node, tMs)
-  // ★2026-09-09 真机诊断：用 fillRect（不依赖 Path2D）画一个角标——
-  //   若真机能见到此角标但图形仍无，则 createPath2D 在真机不可用（模拟器可用）。
-  try {
-    const c = ctx as unknown as { fillRect?: (x: number, y: number, w: number, h: number) => void }
-    if (c.fillRect) {
-      ctx.fillStyle = '#ff00ff'
-      c.fillRect(0, 0, 12, 12)
-    }
-  } catch {
-    /* 诊断忽略 */
-  }
 }
 
-/** 命中判定：点是否落在场景任一图形内（viewBox 坐标——用 isPointInPath） */
+/** 命中判定：点是否落在场景任一图形内（viewBox 坐标——包围盒近似，零 Path2D 依赖）。
+ *  诚实边界：path 用采样点包围盒（曲线/凹形可能误判）；circle/ellipse/rect 精确。 */
 export function hitTest(canvas: OffscreenCanvasLike, scene: SvgScene, px: number, py: number): number {
-  const ctx = canvas.getContext('2d') as DrawCtx & { isPointInPath(p: unknown, x: number, y: number): boolean }
+  void canvas
   for (let i = scene.nodes.length - 1; i >= 0; i--) {
     const node = scene.nodes[i]
-    const d = node.tag === 'path' ? node.d : primitiveToPathD(node, 0)
-    if (!d) continue
-    try {
-      const p2 = canvas.createPath2D(d)
-      if (ctx.isPointInPath(p2, px, py)) return i
-    } catch {
-      /* 忽略 */
+    const n = (name: string, dflt: number): number => {
+      const v = node.attrs[name]
+      return v === undefined ? dflt : Number(v) || 0
+    }
+    if (node.tag === 'circle') {
+      const cx = n('cx', 0), cy = n('cy', 0), r = n('r', 0)
+      if ((px - cx) ** 2 + (py - cy) ** 2 <= r * r) return i
+    } else if (node.tag === 'ellipse') {
+      const cx = n('cx', 0), cy = n('cy', 0), rx = n('rx', 0), ry = n('ry', 0)
+      if (rx > 0 && ry > 0 && ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2 <= 1) return i
+    } else if (node.tag === 'rect') {
+      const x = n('x', 0), y = n('y', 0), w = n('width', 0), h = n('height', 0)
+      if (px >= x && px <= x + w && py >= y && py <= y + h) return i
+    } else {
+      const d = node.d ?? ''
+      const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+      const xs = nums.filter((_, k) => k % 2 === 0)
+      const ys = nums.filter((_, k) => k % 2 === 1)
+      if (xs.length && ys.length) {
+        if (px >= Math.min(...xs) && px <= Math.max(...xs) && py >= Math.min(...ys) && py <= Math.max(...ys)) return i
+      }
     }
   }
   return -1
