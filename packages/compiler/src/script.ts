@@ -1400,13 +1400,20 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
  *  旧的 `new RegExp('(?<!\\.)\\b' + n + '\\b')` 会误伤对象字面量 key（`reactive({ a: 1 })` 的 key a 若恰是
  *  runtimeInit 名 → `{ this.a: 1 }` 语法错误）与字符串内容。本函数字符级扫描：
  *  ① 跳过字符串（单/双/反引号，含转义）与单行注释；② 裸标识符后跟 `:`（对象完整 key，如 `{ a: 1 }`）不改写；
- *  ③ 否则（参数引用/链式 base）改 `this.<name>`。简写 key（`{ a }`）暂无区分（其 value 语义保持裸引用，少见于 runtime-init call）。 */
-export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>): string {
+ *  ③ 否则（参数引用/链式 base）改 `<prefix><name>`（prefix 默认 `this.`——runtimeInit 实例属性；plain data 内联字段传
+ *   `this.data.`）。简写 key（`{ a }`）暂无区分（其 value 语义保持裸引用，少见于 runtime-init call）。
+ *  ★2026-09-09 const 裸引用缺口（p-popover TRIGGER_SELECTOR 真机根因）：方法体复用时模板串 `${}` 内插值表达式
+ *   不能整体跳过（`${X}` 内裸名同样 ReferenceError）——插值内容递归走同一扫描（嵌套模板/字符串自然覆盖）。 */
+export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>, prefix = 'this.'): string {
   if (!names.size) return call
   let out = ''
   let i = 0
   const len = call.length
-  let depth = 0 // 括号/对象嵌套深度（仅用于对象 key 判定）
+  // ★2026-09-09 括号栈取代单一 depth：key 位只可能出现在**对象字面量** `{}` 内——`f(vue, ir)` 参数位逗号后的
+  //   标识符不是 key（旧 depth 计数把 `(a, b)` 误判为 key 位 → `b: this.b` 语法错，render-backend-demo 实证）。
+  //   `{` 分类（对象 vs 块）按前一有效符号：`)`/`>`(箭头体)/`;`/`{`/`}` 后为块；else/do/try 后为块；其余为对象。
+  const stack: Array<{ ch: string; obj: boolean }> = []
+  let prevIdent: string | null = null // 上一非空白 token 为标识符时记录（`{` 分类的关键字检查）
   let prevSig = '' // 上一个有效（非空白）字符
   const isNameChar = (c: string): boolean => /[A-Za-z0-9_$]/.test(c)
   const isIdentStart = (c: string): boolean => /[A-Za-z_$]/.test(c)
@@ -1424,19 +1431,62 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       out += call.slice(i, j)
       i = j
       prevSig = quote
+      prevIdent = null
       continue
     }
-    // 反引号模板（跳过整体；不做 ${} 内替换——runtime-init call 几乎不涉）
+    // 反引号模板：模板文本原样拷贝，`${}` 内插值表达式递归走同一扫描（方法体模板串插值引用裸名常见——整体跳过会漏）
     if (ch === '`') {
-      let j = i + 1
-      while (j < len) {
-        if (call[j] === '\\') { j += 2; continue }
-        if (call[j] === '`') { j++; break }
-        j++
-      }
-      out += call.slice(i, j)
-      i = j
+      out += '`'
+      i++
       prevSig = '`'
+      while (i < len) {
+        if (call[i] === '\\') { out += call.slice(i, i + 2); i += 2; continue }
+        if (call[i] === '`') { out += '`'; i++; prevSig = '`'; break }
+        if (call[i] === '$' && call[i + 1] === '{') {
+          // 找匹配 `}`（跳过插值内的字符串/模板/嵌套括号）→ 插值表达式递归改写
+          out += '${'
+          i += 2
+          let braceDepth = 1
+          let k = i
+          while (k < len && braceDepth > 0) {
+            const c2 = call[k]
+            if (c2 === '\\') { k += 2; continue }
+            if (c2 === '\'' || c2 === '"') {
+              const q = c2
+              k++
+              while (k < len) {
+                if (call[k] === '\\') { k += 2; continue }
+                if (call[k] === q) { k++; break }
+                k++
+              }
+              continue
+            }
+            if (c2 === '`') {
+              k++
+              while (k < len) {
+                if (call[k] === '\\') { k += 2; continue }
+                if (call[k] === '`') { k++; break }
+                if (call[k] === '$' && call[k + 1] === '{') { braceDepth++; k += 2; continue }
+                k++
+              }
+              continue
+            }
+            if (c2 === '{') { braceDepth++; k++; continue }
+            if (c2 === '}') { braceDepth--; k++; continue }
+            k++
+          }
+          // braceDepth 归零处 k-1 即匹配 `}`；插值内容（不含外层 `${`/`}`）递归
+          const innerEnd = braceDepth === 0 ? k - 1 : k
+          out += rewriteInstanceRefsSafe(call.slice(i, innerEnd), names, prefix)
+          if (braceDepth === 0) { out += '}'; i = k } else { i = k } // 未闭合（残缺串）保持原样收尾
+          prevSig = '}'
+          prevIdent = null
+          continue
+        }
+        out += call[i]
+        i++
+      }
+      prevIdent = null
       continue
     }
     // 单行注释
@@ -1446,11 +1496,23 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       out += call.slice(i, j)
       i = j
       prevSig = '/'
+      prevIdent = null
       continue
     }
-    // 括号/对象深度
-    if (ch === '{' || ch === '[' || ch === '(') { depth++; out += ch; i++; prevSig = ch; continue }
-    if (ch === '}' || ch === ']' || ch === ')') { depth--; out += ch; i++; prevSig = ch; continue }
+    // 括号栈（`{` 需分类对象/块；`(`/`[` 恒非 key 位）
+    if (ch === '{' || ch === '[' || ch === '(') {
+      let obj = true
+      if (ch === '{') {
+        if (prevSig === ')' || prevSig === '>' || prevSig === ';' || prevSig === '{' || prevSig === '}') obj = false
+        else if (prevIdent) obj = !['else', 'do', 'try'].includes(prevIdent)
+      } else {
+        obj = false
+      }
+      stack.push({ ch, obj })
+      out += ch; i++; prevSig = ch; prevIdent = null
+      continue
+    }
+    if (ch === '}' || ch === ']' || ch === ')') { stack.pop(); out += ch; i++; prevSig = ch; prevIdent = null; continue }
     // 跳过空白（不更新 prevSig）
     if (/\s/.test(ch)) { out += ch; i++; continue }
     // 标识符
@@ -1458,23 +1520,25 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       let j = i + 1
       while (j < len && isNameChar(call[j])) j++
       const word = call.slice(i, j)
+      prevIdent = word
       if (names.has(word)) {
         // ① 属性访问（.x / ?.x 的 x 是属性名）→ 不改写
         if (prevSig === '.') { out += word; i = j; prevSig = ''; continue }
-        // ② 对象内 key 位（深度>0 且前一个有效字符是 `{`/`,`）：完整 key `{ a: 1 }` 后跟 `:` → 纯 key 不改；
-        //    简写 `{ a }` 后跟 `,`/`}`/`)` → key+value 引用 → 转完整 `a: this.a`
-        const isKeyPos = depth > 0 && (prevSig === '{' || prevSig === ',')
+        // ② 对象字面量内 key 位（栈顶为对象 `{` 且前一有效字符是 `{`/`,`）：完整 key `{ a: 1 }` 后跟 `:` → 纯 key 不改；
+        //    简写 `{ a }` 后跟 `,`/`}`/`)` → key+value 引用 → 转完整 `a: <prefix>a`。参数位/数组位/块内逗号后标识符非 key → 值引用改写
+        const top = stack[stack.length - 1]
+        const isKeyPos = Boolean(top && top.ch === '{' && top.obj && (prevSig === '{' || prevSig === ','))
         if (isKeyPos) {
           let k = j
           while (k < len && /\s/.test(call[k])) k++
           if (call[k] === ':') { out += word; i = j; prevSig = ''; continue }
-          // 简写 key+value → 完整形式（值引用 this.<word>）
-          out += word + ': this.' + word
+          // 简写 key+value → 完整形式（值引用 <prefix><word>）
+          out += word + ': ' + prefix + word
           i = j
           prevSig = ''
           continue
         }
-        out += 'this.' + word
+        out += prefix + word
       } else {
         out += word
       }
@@ -1484,9 +1548,30 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
     }
     out += ch
     prevSig = ch
+    prevIdent = null
     i++
   }
   return out
+}
+
+/** ★2026-09-09 const 裸引用缺口修复（p-popover TRIGGER_SELECTOR is not defined 真机根因，登记于 #506 会话）：
+ *  顶层 `const X = 字面量` 内联进 data 后，方法体内裸引用 X 无改写通道（ref 走 .value、let/runtimeInit 走
+ *  rewriteBareMethodCalls，plain const 落空）→ 产物词法查找 ReferenceError，且常被事件 catch 吞掉无感知。
+ *  改写为 `this.data.X`（字符级安全扫描：字符串/注释/属性访问/对象 key 位不误伤）。
+ *  遮蔽守卫（保守跳过，保持原语义——局部可见的同名绑定本就正确）：方法体局部 const/let/var 声明、解构声明/参数
+ *  （`const { X } = …` / `({ X }) =>`）、单参箭头（`X =>`）。诚实边界：非解构的普通参数同名（`function f(X)`）不守卫，
+ *  保持 MVP 限度（与 runtimeInitNames 通道同水位）。 */
+function rewritePlainDataSafe(body: string, names: ReadonlySet<string>): string {
+  if (!names.size) return body
+  const active = [...names].filter((n) => {
+    if (new RegExp(`\\b(?:const|let|var)\\s+${n}\\b`).test(body)) return false // 局部声明遮蔽
+    if (new RegExp(`\\b(?:const|let|var)\\s*\\{[^}]*\\b${n}\\b`).test(body)) return false // 解构声明遮蔽
+    if (new RegExp(`\\(\\s*\\{[^}]*\\b${n}\\b[^}]*\\}\\s*=>`).test(body)) return false // 解构参数遮蔽
+    if (new RegExp(`\\b${n}\\s*=>`).test(body)) return false // 单参箭头参数遮蔽
+    return true
+  })
+  if (!active.length) return body
+  return rewriteInstanceRefsSafe(body, new Set(active), 'this.data.')
 }
 
 /** ★module-plan B0：函数调用初始化运行时注入（实例属性 this.<name> = <call>，onLoad/attached 执行）
@@ -2257,8 +2342,19 @@ export function transformScriptToPage(
     c.expr = `__proteusStyleString(${c.expr})`
     needsStyleStringHelper = true
   }
+  // ★2026-09-09 const 裸引用缺口（p-popover TRIGGER_SELECTOR 真机根因）：plain 字面量 const 已内联进 data——
+  //   方法体/表达式内裸引用 X 必须改 this.data.X（此前无通道 → 运行时 ReferenceError 被 catch 吞掉）。
+  //   ① computed 表达式原地改写：一并覆盖 computedInitLine 与 ref 写入 setData 的派生补丁（computedPatchEntries 读 c.expr）
+  const plainDataNames = new Set([...constSourceTypes.entries()].filter(([n, v]) => v === 'plain' && Object.prototype.hasOwnProperty.call(data, n)).map(([n]) => n))
+  if (plainDataNames.size) {
+    for (const c of Object.values(computeds)) c.expr = rewriteInstanceRefsSafe(c.expr, plainDataNames, 'this.data.')
+  }
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace, !disabled.has('script/watch-props'))
+  // ★2026-09-09 ② watch 函数源表达式（immediate watch getter 内裸引用 plain const 同样 ReferenceError）
+  if (plainDataNames.size) {
+    for (const w of Object.values(watches)) if (w.expr) w.expr = rewriteInstanceRefsSafe(w.expr, plainDataNames, 'this.data.')
+  }
   // 组件系统（v0.3）：defineProps → properties、emit → triggerEvent、props 访问重写
   const props = extra.isComponent && !disabled.has('script/define-props') ? extractProps(source, warnings, trace) : {}
   const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*[<(]/)?.[1]
@@ -2285,7 +2381,15 @@ export function transformScriptToPage(
   //   方法体 x.value → this.x（剥 .value）；统一经 rw helper 传入 rewriteRefAccess（避免 9 处调用点逐个加参）
   const templaterefVars = new Set([...constSourceTypes.entries()].filter(([, v]) => v === 'templateref').map(([k]) => k))
   const rw = (body: string): string =>
-    rewriteBareMethodCalls(rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs, templaterefVars), methodNames, runtimeInitNames)
+    rewriteBareMethodCalls(
+      // ★2026-09-09 plain const 裸引用 → this.data.X（遮蔽守卫；置于 .value 改写后——emit 出的 this.data.X 属性位不重入）
+      rewritePlainDataSafe(
+        rewriteRefAccess(body, refNames, trace, disabled, computeds, watches, emitEnabled, propsVar, providedRefs, transitionToggle, modelRefs, templaterefVars),
+        plainDataNames,
+      ),
+      methodNames,
+      runtimeInitNames,
+    )
 
   // ★vue-compat-advance Batch 3：provide/inject 提取 + 注入块构建（禁用规则时整体跳过）
   // ★Batch 4：裸 ref 提供 → provideRefs（ref→key），ref 写入点同步注册表 + 通知订阅者；inject 侧订阅 __subs
@@ -2630,8 +2734,10 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
   }
   const preCallsLine = topLevelCalls.filter((c) => !dependsOnInstance(c)).join('\n')
   const postCallsLine = topLevelCalls.filter((c) => dependsOnInstance(c)).join('\n')
+  // ★2026-09-09 顶层副作用调用内 plain const 裸引用 → this.data.X（顶层 const 已内联 data，onLoad 期可读）
+  const plainCallsRewrite = (s: string): string => (s ? rewritePlainDataSafe(s, plainDataNames) : s)
   const initLineSeq = (): string[] =>
-    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), reactiveBridgeSetupLine, postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
+    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(preCallsLine), methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), reactiveBridgeSetupLine, postCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(postCallsLine), methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -2644,10 +2750,10 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     //   顶层调用静默丢）——attached 补 pre/post 段（与页面同构：外部 init 最前；实例依赖调用 this 化后置 runtimeInit 后）
     const initLines = [
       semanticGridInit,
-      preCallsLine ? rewriteBareMethodCalls(preCallsLine, methodNames, runtimeInitNames) : '',
+      preCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(preCallsLine), methodNames, runtimeInitNames) : '',
       runtimeInitLine(runtimeInits, methodNames, runtimeInitNames),
       reactiveBridgeSetupLine,
-      postCallsLine ? rewriteBareMethodCalls(postCallsLine, methodNames, runtimeInitNames) : '',
+      postCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(postCallsLine), methodNames, runtimeInitNames) : '',
       compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar),
       storeBindingInit,
       compDerivedReady ? '' : immediateWatchLine(watches, propsVar),
