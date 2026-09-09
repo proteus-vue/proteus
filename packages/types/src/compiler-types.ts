@@ -135,6 +135,8 @@ export interface TemplateTransformResult {
   semanticGrids?: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
   /** ★#500 :style 绑定的动态标识符（computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings?: string[]
+  /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（touch 坐标 + 几何判定） */
+  svgHits?: Array<{ imageId: string; viewBox: string; shapes: SvgHitShape[] }>
   /** ★2026-09-09 G-62 P1：动态 SVG（computed 名 + 结构化片段树 + 依赖）——script 侧生成 computed */
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */
@@ -145,6 +147,14 @@ export interface TemplateTransformResult {
 }
 
 /** script 转换附加信息 */
+/** ★2026-09-09 G-62 事件命中：带事件的 SVG 图形几何（编译期提取） */
+export interface SvgHitShape {
+  handler: string
+  kind: 'circle' | 'rect' | 'ellipse' | 'path'
+  geom: Record<string, number | number[]>
+  strokeOnly?: boolean
+}
+
 /** ★2026-09-09 G-62 P1：动态 SVG 片段（lit 字面量 / expr 动态表达式 / if 条件片段） */
 export type SvgPart =
   | { t: 'lit'; v: string }
@@ -152,6 +162,8 @@ export type SvgPart =
   | { t: 'if'; cond: string; parts: SvgPart[] }
 
 export interface ScriptTransformOptions {
+  /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（模板侧收集 → script 侧生成命中方法） */
+  svgHits?: Array<{ imageId: string; viewBox: string; shapes: SvgHitShape[] }>
   /** ★2026-09-09 G-62 P1：动态 SVG（模板侧收集 → script 侧生成 computed 重生成 SVG 字符串） */
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   file?: string

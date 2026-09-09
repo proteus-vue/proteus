@@ -69,11 +69,26 @@ const SVG_TAGS = new Set([
 ])
 
 /** 序列化结果：静态 SVG → base64 data-URI；含动态绑定/不支持形态 → null（调用方警告） */
+/** ★2026-09-09 事件命中：带事件的图形几何（编译期提取——运行时做坐标命中判定）。
+ *  真机实证：Skyline tap 事件无坐标，touchstart 的 touches[0] 带 pageX/pageY → 命中基于 touch。 */
+export interface SvgHitShape {
+  /** 事件处理器名（页面/组件方法） */
+  handler: string
+  /** 图形类型（命中判定算法选择） */
+  kind: 'circle' | 'rect' | 'ellipse' | 'path'
+  /** 几何参数（viewBox 坐标系）：circle→cx,cy,r；rect→x,y,w,h；ellipse→cx,cy,rx,ry；path→采样点对 */
+  geom: Record<string, number | number[]>
+  /** fill 是否 none（描边图形命中判定用 stroke 宽度；简化：仍按几何命中） */
+  strokeOnly?: boolean
+}
+
 export interface SvgLowerResult {
   /** data-URI（可直接作 <image src>） */
   dataUri: string
   /** 原始 viewBox（用于推导 image 尺寸/比例） */
   viewBox: string
+  /** ★事件命中：带事件的图形表（空 = 无事件，不生成命中逻辑） */
+  hitShapes: SvgHitShape[]
 }
 
 /** 属性名规范化：SVG 在 WXML/HTML 解析后可能小写化（viewBox → viewbox）——回写时恢复驼峰 */
@@ -184,7 +199,10 @@ function serializeSvgElement(node: ElementNode, depth: number, symbols: SymbolMa
         attrs.push(`${name}="${esc(a.value.content)}"`)
       }
     } else if (p.type === NodeTypes.DIRECTIVE) {
-      // 任何指令（v-bind/v-if/v-for/v-on/自定义）→ 动态，P0 不处理
+      const d = p as { name?: string }
+      // ★2026-09-09 事件指令（@click/@tap/v-on）不影响图形渲染——忽略（由事件命中机制处理，见 collectHitShapes）
+      if (d.name === 'on') continue
+      // 其它指令（v-bind/v-if/v-for/自定义）→ 动态，静态路径不处理
       return null
     }
   }
@@ -223,6 +241,47 @@ function toBase64(s: string): string {
   return Buffer.from(s, 'utf8').toString('base64')
 }
 
+/** ★事件命中：从静态 SVG 子树提取带事件的图形几何（编译期）。
+ *  简化假设（诚实边界）：仅处理**无 transform 的顶层/嵌套图形**——transform 矩阵换算留待需要时；
+ *  几何按 viewBox 坐标系记录（运行时用 rect 尺寸换算）。 */
+function collectHitShapes(node: ElementNode, acc: SvgHitShape[], hasTransform: boolean): void {
+  const tag = node.tag.toLowerCase()
+  // 有 transform 的子树跳过（坐标换算复杂度高——诚实降级：不参与命中）
+  const hasTf = hasTransform || node.props.some(
+    (p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name.toLowerCase() === 'transform',
+  )
+  // 事件处理器（@click / @tap / bindtap 统一取 click/tap）
+  let handler: string | undefined
+  for (const p of node.props) {
+    if (p.type === NodeTypes.DIRECTIVE && (p as { name?: string }).name === 'on') {
+      const d = p as { arg?: { content?: string }; exp?: { content?: string } }
+      const evName = d.arg?.content
+      if (evName === 'click' || evName === 'tap') {
+        const exp = (d.exp?.content ?? '').trim()
+        if (/^[A-Za-z_$][\w$]*$/.test(exp)) handler = exp
+      }
+    }
+  }
+  if (handler && !hasTf) {
+    const num = (name: string): number => Number(staticAttr(node, name) ?? '0') || 0
+    if (tag === 'circle') {
+      acc.push({ handler, kind: 'circle', geom: { cx: num('cx'), cy: num('cy'), r: num('r') } })
+    } else if (tag === 'ellipse') {
+      acc.push({ handler, kind: 'ellipse', geom: { cx: num('cx'), cy: num('cy'), rx: num('rx'), ry: num('ry') } })
+    } else if (tag === 'rect') {
+      acc.push({ handler, kind: 'rect', geom: { x: num('x'), y: num('y'), w: num('width'), h: num('height') } })
+    } else if (tag === 'path') {
+      // path：采样 d 里的坐标对（M/L/C 等指令的数字对）——包围盒近似
+      const d = staticAttr(node, 'd') ?? ''
+      const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+      acc.push({ handler, kind: 'path', geom: { pts: nums } })
+    }
+  }
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type === NodeTypes.ELEMENT) collectHitShapes(c as ElementNode, acc, hasTf)
+  }
+}
+
 /**
  * 静态 SVG 子树 → <image> data-URI。
  * 前提：调用方已确认 node.tag === 'svg'。含动态绑定 → 返回 null（调用方诚实警告，P1 处理）。
@@ -247,7 +306,10 @@ export function lowerSvgToImage(node: ElementNode): SvgLowerResult | null {
   if (!/\sxmlns\s*=/.test(svg)) {
     svg = svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
   }
-  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox }
+  // ★事件命中：收集带事件的图形（静态几何——运行时按 touch 坐标判定）
+  const hitShapes: SvgHitShape[] = []
+  collectHitShapes(node, hitShapes, false)
+  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox, hitShapes }
 }
 
 /** 从 viewBox 推导宽高比（供 <image> 默认尺寸；失败 → 1:1） */

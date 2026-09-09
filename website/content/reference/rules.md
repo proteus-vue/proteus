@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 102 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 103 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（56）
+## 模板转换（57）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-hit`
+
+**SVG 图形事件命中（touchstart 坐标 + 几何判定）**
+
+静态 SVG 图形带 @click/@tap → 编译期收集几何（circle/rect/ellipse/path 包围盒）→ image 加 id + bindtouchstart → 运行时按 touches[0] 坐标换算 viewBox → 几何判定 → 调 handler
+
+```
+before: <svg><circle cx="30" cy="30" r="20" @click="onDot"/></svg>
+after:  <image id="proteus-svg-hit-1" bindtouchstart="proteusSvgHit1"/> + 命中方法
+```
+
+> why: G-62 事件命中：真机实证 Skyline tap 事件 detail/touches 全 undefined（无坐标），touchstart 的 touches[0] 带 pageX/pageY → 命中必须基于 touchstart；离屏 canvas 的 getImageData/isPointInPath 虽可用，但纯几何判定零运行时依赖、更轻
 
 ### `template/svg-p2-unsupported`
 

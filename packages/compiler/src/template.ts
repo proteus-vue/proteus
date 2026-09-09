@@ -288,6 +288,8 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings: Set<string>
+  /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（touch 坐标 + 几何判定） */
+  svgHits: Array<{ imageId: string; viewBox: string; shapes: import('./svg-lower').SvgHitShape[] }>
   /** ★2026-09-09 G-62 P1：动态 <svg> 收集（computed 名 + SVG 模板字面量 + 依赖 + viewBox）——
    *  由 script 侧生成 computed（复用既有 computed 链路：依赖追踪/init/写入补丁重算） */
   dynamicSvgs: Array<{ computedName: string; parts: import('./svg-lower').SvgPart[]; deps: string[]; viewBox: string }>
@@ -722,6 +724,18 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         : `width:${w}px;height:${h}px;`
       // ★G-62 P2：实测不支持的 SVG 特性（use/symbol/text/tspan）诚实警告（Skyline image 渲染为空白）
       warnUnsupportedSvgFeatures(node, ctx)
+      // ★2026-09-09 事件命中：图形带事件 → 加 id + touch 绑定 + 收集（真机实证 tap 无坐标、touchstart 有）
+      // 规则 template/svg-hit 禁用 → 不生成命中绑定（与 script 侧同规则，避免半失效产物）
+      if (lowered.hitShapes.length && !ctx.disabled.has('template/svg-hit')) {
+        const imgId = `proteus-svg-hit-${ctx.svgHits.length + 1}`
+        ctx.svgHits.push({ imageId: imgId, viewBox: lowered.viewBox, shapes: lowered.hitShapes })
+        ctx.trace?.add('template/svg-hit', {
+          line: node.loc.start.line,
+          before: `<svg><circle @click="onX"/></svg>`,
+          after: `<image id="${imgId}" bindtouchstart="proteusSvgHit1" />（touch 坐标 + 几何命中）`,
+        })
+        return `<image id="${imgId}" class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" bindtouchstart="proteusSvgHit${ctx.svgHits.length}" />`
+      }
       return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
     }
     // ★★2026-09-09 G-62 P1：动态 SVG → computed（运行时重生成 SVG 字符串 + <image src="{{x}}">）。
@@ -1298,6 +1312,8 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#500 :style 动态标识符绑定收集
     styleBindings: new Set<string>(),
+    // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
+    svgHits: [],
     // ★2026-09-09 G-62 P1：动态 SVG 收集
     dynamicSvgs: [],
     // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
@@ -1373,6 +1389,8 @@ export function transformTemplateToWxml(
     templateRefNames: [...ctx.templateRefNames],
     // ★#500 :style 动态标识符绑定（script 侧同名 computed 派生值自动序列化）
     styleBindings: [...ctx.styleBindings],
+    // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
+    svgHits: ctx.svgHits,
     // ★2026-09-09 G-62 P1：动态 SVG（script 侧生成 computed）
     dynamicSvgs: ctx.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器

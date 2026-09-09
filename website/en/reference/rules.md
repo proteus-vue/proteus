@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 102 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 103 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (56)
+## Template transforms (57)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-hit`
+
+**SVG shape event hit-testing (touchstart coordinates + geometric testing)**
+
+A static SVG shape with @click/@tap → compile-time geometry collection (circle/rect/ellipse/path bbox) → image gets id + bindtouchstart → runtime converts touches[0] to viewBox coordinates → geometric test → calls the handler
+
+```
+before: <svg><circle cx="30" cy="30" r="20" @click="onDot"/></svg>
+after:  <image id="proteus-svg-hit-1" bindtouchstart="proteusSvgHit1"/> + 命中方法
+```
+
+> why: G-62 event hit-testing: on-device evidence shows Skyline tap events carry no coordinates (detail/touches undefined) while touchstart touches[0] has pageX/pageY, so hit-testing must use touchstart; although offscreen canvas getImageData/isPointInPath work, pure geometric testing has zero runtime dependencies and is lighter
 
 ### `template/svg-p2-unsupported`
 
