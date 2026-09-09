@@ -67,3 +67,23 @@ describe('P2 spike 暴露的编译器缺口（回归锁）', () => {
     expect(r.js).toMatch(/Math\.max\(this\.data\.n, 0\)/)
   })
 })
+
+describe('canvas 探测 v2 暴露的编译器缺口（回归锁）', () => {
+  it('④ 嵌套 function 表达式参数类型注解剥离（方法体内回调）', () => {
+    const r = compile('function go() { const h = function (r: unknown) { void r }; void h }')
+    expect(r.js).not.toMatch(/function \([^)]*:\s*\w+\)/)
+    expect(r.js).toMatch(/function \(r\)/)
+  })
+
+  it('④ 具名 function 声明的参数 + 返回类型注解剥离（嵌套）', () => {
+    const r = compile('function go() { function inner(r: unknown): string { return String(r) } void inner }')
+    expect(r.js).not.toMatch(/function inner\([^)]*:\s*\w+\)/)
+    expect(r.js).toMatch(/function inner\s*\(r\)/)
+    expect(r.js).not.toMatch(/\)\s*:\s*string\s*\{/)
+  })
+
+  it('④ 箭头函数参数注解剥离不回归', () => {
+    const r = compile('function go() { [1].forEach((x: number) => { void x }) }')
+    expect(r.js).not.toMatch(/\(x: number\)/)
+  })
+})
