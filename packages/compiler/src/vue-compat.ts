@@ -129,6 +129,27 @@ export const VUE_COMPAT_MATRIX: VueCompatEntry[] = [
   // ★2026-09-08 P1 对齐：version 已内联——const v = version → data.v = '3.5.42'（VUE_PUBLIC_CONSTS，与 Vue 全集基线 SSOT @vue/runtime-core@3.5.42 对齐）
   { name: 'version', group: 'component', status: 'aligned', note: 'const v = version 内联为版本号字符串（VUE_PUBLIC_CONSTS，随 Vue 演进同步）；产物 data.v=版本号而非 undefined', source: 'P1 对齐（VUE_PUBLIC_CONSTS 内联）' },
 
+  // ===== ★2026-09-09 全集覆盖补齐（用户可见 API）=====
+  // 背景（真机复测发现）：对比 Vue 运行时导出 171 项，矩阵原 112 项漏登以下用户可见 API——
+  //   未登记落 VUE_COMPAT_UNKNOWN（error 但无替代建议），违反「基准线是全集 + 每个能力给替代建议」。
+  //   以下显式登记；纯内部/编译期导出由 VUE_INTERNAL_EXPORTS 集合统一归类（见下）。
+  { name: 'defineAsyncComponent', group: 'component', status: 'unsupported', degrade: true, note: '异步组件无对等（MP 无运行时组件加载）——请改静态 usingComponents 声明 + 分包按需加载', source: '评估（MP 无异步组件加载）' },
+  { name: 'useCssVars', group: 'component', status: 'unsupported', degrade: true, note: '运行时 CSS 变量注入无对等（Skyline/WebView 均不支持运行时写 CSS var）——请改 :style 绑定或静态 class', source: '评估（无运行时 CSS 变量通道）' },
+  { name: 'useCssModule', group: 'component', status: 'unsupported', note: 'CSS Modules 无对等——请用 scoped class（Proteus 默认 scoped）', source: '评估（无 CSS Modules）' },
+  { name: 'createSSRApp', group: 'component', status: 'unsupported', note: 'SSR 应用工厂，MP 无对等——页面由 app.json 声明 + 路由表生成', source: '评估（SSR）' },
+  { name: 'render', group: 'component', status: 'unsupported', note: '运行时渲染入口（框架非目标 §0.4）——请用模板 DSL', source: '评估（框架非目标）' },
+  { name: 'hydrate', group: 'component', status: 'unsupported', note: 'SSR 水合，MP 无对等', source: '评估（SSR）' },
+  { name: 'compile', group: 'component', status: 'unsupported', note: '运行时模板编译（体积代价），Proteus 为编译期转换——请用 SFC', source: '评估（编译期已转换）' },
+  { name: 'defineCustomElement', group: 'component', status: 'unsupported', note: 'Web Components 自定义元素无对等——请用 .vue 组件（usingComponents 静态注册）', source: '评估（无 Custom Elements）' },
+  { name: 'defineSSRCustomElement', group: 'component', status: 'unsupported', note: 'SSR + Custom Elements，MP 无对等', source: '评估（SSR）' },
+  { name: 'useHost', group: 'component', status: 'unsupported', note: 'Custom Elements 宿主，MP 无对等', source: '评估（无 Custom Elements）' },
+  { name: 'useShadowRoot', group: 'component', status: 'unsupported', note: 'Shadow DOM，MP 无对等', source: '评估（无 Shadow DOM）' },
+  { name: 'VueElement', group: 'component', status: 'unsupported', note: 'Custom Elements 基类，MP 无对等', source: '评估（无 Custom Elements）' },
+  { name: 'createRenderer', group: 'component', status: 'unsupported', note: '自定义渲染器入口——Proteus 走 @proteus-vue/renderer-app（G-41 宿主运行时 SPI）', source: '评估（走框架 SPI）' },
+  { name: 'nodeOps', group: 'component', status: 'unsupported', note: 'Vue 内部 DOM 操作集——Proteus 走 @proteus-vue/render-backend（G-37 SPI）', source: '评估（走框架 SPI）' },
+  { name: 'patchProp', group: 'component', status: 'unsupported', note: 'Vue 内部属性补丁——Proteus 走 render-backend', source: '评估（走框架 SPI）' },
+  { name: 'EffectScope', group: 'reactivity', status: 'unsupported', note: 'effectScope 类（运行时作用域），MP 无对等——用 onUnmounted 清理', source: '评估（无 effectScope）' },
+
   // ===== lifecycle =====
   { name: 'onMounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onReady）' },
   { name: 'onUnmounted', group: 'lifecycle', status: 'aligned', source: 'vue-compat §1（onUnload）' },
@@ -186,6 +207,55 @@ export const VUE_PUBLIC_CONSTS: Record<string, unknown> = {
   version: '3.5.42',
 }
 
+/** ★2026-09-09 别名机制（真机复测发现的命名错配）：矩阵 template 组按**模板形态**登记（`<teleport>`/`<keep-alive>`…），
+ *  而开发者按 Vue 官方文档常写 PascalCase 组件导入（`import { Teleport } from 'vue'`）——同一能力两种写法，
+ *  未登记形态落 VUE_COMPAT_UNKNOWN 报「可能为 Vue 内部导出」= 矛盾结论（`<teleport>` 明明 aligned）。
+ *  别名表：PascalCase 导出名 → 已登记模板形态名。查询先查矩阵，未命中再查别名（返回同一 entry，状态一致）。 */
+export const VUE_COMPAT_ALIASES: Record<string, string> = {
+  Teleport: '<teleport>',
+  KeepAlive: '<keep-alive>',
+  Suspense: '<suspense>',
+  Transition: '<transition>',
+  TransitionGroup: '<transition-group>',
+}
+
+/** ★2026-09-09 Vue 内部导出集合（@vue/runtime-core + @vue/reactivity + @vue/shared 的非用户面导出）。
+ *  这些符号开发者不应手写（编译期已生成对等结构 / 运行时内部机制 / SSR / 自定义渲染器）——
+ *  统一归 unsupported 并给出准确说明，替代「可能是 Vue 内部导出」的模糊兜底。
+ *  维护：Vue 版本升级后跑 tests/vue-compat-coverage.test.ts（对比运行时导出，新增未分类项即红）。 */
+export const VUE_INTERNAL_EXPORTS = new Set<string>([
+  // VNode 类型常量 / 过渡基类
+  'Fragment', 'Text', 'Comment', 'Static', 'BaseTransition', 'BaseTransitionPropsValidators',
+  // VNode 创建与 block 机制（模板编译期生成）
+  'createVNodeHelper', 'createBlock', 'createCommentVNode', 'createElementBlock', 'createElementVNode',
+  'createStaticVNode', 'createTextVNode', 'openBlock', 'setBlockTracking', 'isMemoSame', 'withMemo',
+  'transformVNodeArgs', 'createPropsRestProxy', 'guardReactiveProps', 'createSlots', 'renderList',
+  // 属性/事件/文本归一（编译期已处理）
+  'normalizeClass', 'normalizeStyle', 'normalizeProps', 'toDisplayString', 'toHandlerKey',
+  'withModifiers', 'withKeys', 'mergeDefaults', 'mergeModels',
+  // v-model / v-show 指令实现（模板编译期处理）
+  'vModelText', 'vModelCheckbox', 'vModelRadio', 'vModelSelect', 'vModelDynamic', 'vShow',
+  // 过渡内部
+  'useTransitionState', 'getTransitionRawChildren', 'resolveTransitionHooks', 'setTransitionHooks',
+  // 作用域 id / 运行时编译器 / devtools 内部
+  'pushScopeId', 'popScopeId', 'registerRuntimeCompiler', 'isRuntimeOnly', 'setDevtoolsHook',
+  'initCustomFormatter', 'compatUtils',
+  // SSR 内部
+  'createHydrationRenderer', 'initDirectivesForSSR', 'ssrContextKey', 'ssrUtils',
+  'hydrateOnIdle', 'hydrateOnVisible', 'hydrateOnInteraction', 'hydrateOnMediaQuery',
+  'withAsyncContext',
+  // 错误处理内部
+  'callWithErrorHandling', 'callWithAsyncErrorHandling', 'handleError', 'assertNumber',
+  // 响应式内部类型/枚举
+  'ReactiveEffect', 'TrackOpTypes', 'TriggerOpTypes', 'DeprecationTypes', 'ErrorCodes', 'ErrorTypeStrings',
+  // @vue/shared 字符串工具
+  'camelize', 'capitalize',
+  // Vue 2 遗留
+  'resolveFilter',
+  // ESM 命名空间噪声
+  '__esModule',
+])
+
 /** ★矩阵外/未知的 Vue 命名导入处理：默认按 unsupported（无降级→error）——反黑盒兜底，防静默未定义引用 */
 export const VUE_COMPAT_UNKNOWN: VueCompatEntry = {
   name: '<unknown-vue-api>',
@@ -195,9 +265,28 @@ export const VUE_COMPAT_UNKNOWN: VueCompatEntry = {
   source: '评估（未知默认 unsupported）',
 }
 
-/** 查询 Vue 能力的对齐状态；未登记 → VUE_COMPAT_UNKNOWN（unsupported，无降级，error） */
+/** ★内部导出条目（VUE_INTERNAL_EXPORTS 命中时返回——准确说明替代「可能为内部导出」的模糊兜底） */
+export const VUE_COMPAT_INTERNAL: VueCompatEntry = {
+  name: '<vue-internal>',
+  group: 'component',
+  status: 'unsupported',
+  note: 'Vue 内部导出（编译期已生成对等结构 / 运行时内部机制 / SSR / 自定义渲染器）——用户代码不应直接使用；请用模板 DSL 或框架语义 API',
+  source: '评估（Vue 内部导出集合）',
+}
+
+/** 查询 Vue 能力的对齐状态；未登记 → 别名表 → 内部导出集合 → VUE_COMPAT_UNKNOWN（均 unsupported 无降级 → error） */
 export function vueCompatStatus(name: string): VueCompatEntry {
-  return VUE_COMPAT_MATRIX.find((e) => e.name === name) ?? VUE_COMPAT_UNKNOWN
+  const direct = VUE_COMPAT_MATRIX.find((e) => e.name === name)
+  if (direct) return direct
+  // ★别名：PascalCase 组件导入（Teleport/KeepAlive…）→ 已登记的模板形态（<teleport>/<keep-alive>…）
+  const alias = VUE_COMPAT_ALIASES[name]
+  if (alias) {
+    const target = VUE_COMPAT_MATRIX.find((e) => e.name === alias)
+    if (target) return target
+  }
+  // ★内部导出集合：给出准确说明（仍是 unsupported + error——反黑盒不放松）
+  if (VUE_INTERNAL_EXPORTS.has(name)) return { ...VUE_COMPAT_INTERNAL, name }
+  return VUE_COMPAT_UNKNOWN
 }
 
 /** 根据状态 + degrade 判断编译期提示级别：aligned=null（无提示）；partial 或 (unsupported+degrade)=(warning)；unsupported 无 degrade=(error) */
