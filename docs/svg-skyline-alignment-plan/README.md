@@ -313,7 +313,23 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 
 **判定方法**：间隔 10s 两次截图 **MD5 完全一致**（像素级证明无动画推进）。
 
-> 结论：SVG 动画**不可用**。需要动画请用 ① CSS `@keyframes`（WXML 元素级，非 SVG 内）/ ② 小程序 `wx.createAnimation` / ③ 逐帧切 data-URI（`setData` 换 src，实测 50 图标 4ms，帧率受限）/ ④ Skyline 的 worklet 动画。
+### 11.1b ★根因实证（2026-09-09）——`<image>` 把 SVG **静态光栅化**，动画语义在解码期即丢失
+
+用户追问「为什么动画没播放」→ 三层验证：
+
+| 验证 | 方法 | 结果 |
+|---|---|---|
+| ① 是否 Skyline 特有？ | 切 `renderer: webview` 复跑，两帧 MD5 | **同样一致**（WebView 也不播放）→ 非 Skyline 特有问题 |
+| ② 是否 `<image>` 架构问题？ | 离屏 canvas `createImage()` 加载**动画 SVG** → 绘制 → 1.5s 后重绘取像素 | **像素完全不变**（`[231,76,60,255]` 两次相同） |
+| ③ 动画元素是否被丢弃？ | 动画 SVG vs 静态 SVG（仅差一个 `<animate>`）分别解码取像素 | **像素完全相同**（`identical: true`）→ `<animate>` 在解码期被忽略 |
+
+**根因**：`<image>` 组件（Skyline 与 WebView 同）把 SVG **一次性解码为静态位图**——
+其契约是「加载一张静态图片资源」，没有保留 SVG 的 DOM/时间轴运行时。
+因此 SMIL（`<animate>`/`<animateTransform>`）与 CSS 动画（依赖 `<style>`，官方已明确「不支持 `<style>` element」）
+**在解码阶段即被剥离**，只留下首帧的静态形态。这是**架构性限制，不是 bug**——
+对比浏览器 `<img src="x.svg">` 会保留 SVG 文档并播放动画（浏览器内建 SVG 运行时），小程序没有这条链路。
+
+> 结论：SVG 动画**不可用**。需要动画请用 ① CSS `@keyframes`（**WXML 元素级**——作用于 `<view>`/`<image>` 等原生节点，非 SVG 内部）/ ② 小程序 `wx.createAnimation` / ③ 逐帧切 data-URI（`setData` 换 `src`，实测 50 图标 4ms，但帧率受 setData 往返限制）/ ④ Skyline worklet 动画。
 
 ### 11.2 体积与性能：✅ 可规模化
 
