@@ -768,7 +768,23 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         after: `<p-svg-canvas scene="{{${name}}}" />（离屏 canvas 逐帧绘制，${scene.duration}ms）`,
       })
       // text 提升：canvas 场景里的 text 也叠加原生 text（canvas 绘制文字亦可，但叠加更可控）
-      return `<p-svg-canvas scene="{{${name}}}" width="${w}" height="${h}" />`
+      // ★2026-09-09：透传源码上的事件绑定（@tick / @load 等——此前 lowering 丢弃导致组件事件收不到）
+      const evAttrs: string[] = []
+      for (const p of node.props) {
+        if (p.type === NodeTypes.DIRECTIVE && (p as { name?: string }).name === 'on') {
+          const d = p as { arg?: { content?: string }; modifiers?: unknown[] }
+          const evName = d.arg?.content
+          if (!evName) continue
+          const exp = (d as { exp?: { content?: string } }).exp?.content?.trim() ?? ''
+          if (!exp || !/^[A-Za-z_$][\w$]*$/.test(exp)) continue // 仅简单方法引用
+          const handler = exp
+          const isCatch = Array.isArray(d.modifiers) && (d.modifiers as Array<{ name?: string }>).some((m) => m?.name === 'stop')
+          const custom = !(evName in ctx.eventMap)
+          evAttrs.push(`${isCatch ? 'catch' : 'bind'}${custom ? ':' : ''}${evName}="${handler}"`)
+        }
+      }
+      const evStr = evAttrs.length ? ' ' + evAttrs.join(' ') : ''
+      return `<p-svg-canvas scene="{{${name}}}" width="${w}" height="${h}"${evStr} />`
     }
   }
   if (node.tag.toLowerCase() === 'svg' && !ctx.disabled.has('template/svg-to-image')) {
