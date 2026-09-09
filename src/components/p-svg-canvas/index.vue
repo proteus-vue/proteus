@@ -3,7 +3,9 @@
      为什么不用可见 canvas：实测 SelectorQuery.node() 拿不到 node（正常运行时同样 TIMEOUT，§12.2 A）。
      诚实边界：回传是瓶颈（setData 18ms/次）→ 建议 ≤512px、目标 30fps；纯静态/整体变换请用 image 方案。 -->
 <template>
-  <image class="p-svg-canvas" :src="src" :style="imageStyle" mode="scaleToFill" />
+  <!-- ★2026-09-09 真机反馈「点击没反应」：Skyline 下 image 是原生组件会吞触摸——
+       内部捕获 tap 后 triggerEvent 透传，外层父容器的 bind:tap 才收得到 -->
+  <image class="p-svg-canvas" :src="src" :style="imageStyle" mode="scaleToFill" @tap="onInnerTap" />
 </template>
 
 <script setup lang="ts">
@@ -18,8 +20,8 @@ const props = defineProps({
   width: { type: Number, default: 200 },
   /** 画布高 px */
   height: { type: Number, default: 200 },
-  /** 目标帧率（默认 10——每帧生成 PNG 文件 + setData 是重操作，真机 I/O 慢；30 会导致 image 来不及加载） */
-  fps: { type: Number, default: 10 },
+  /** 目标帧率（默认 20——平衡流畅度与 I/O；每帧需 PNG 编码 + setData） */
+  fps: { type: Number, default: 20 },
   /** 是否播放（外部控制） */
   playing: { type: Boolean, default: true },
 })
@@ -37,8 +39,23 @@ function ensureCanvas(this: any): any {
   if (this.canvas) return this.canvas
   const w = wx as any
   if (typeof w.createOffscreenCanvas !== 'function') return null
+  // ★2026-09-09 真机反馈「整体太模糊」：画布内部分辨率须按 DPR 放大（否则 2x/3x 屏上被拉伸模糊）。
+  //   CSS 尺寸不变（image 按 width/height 显示），内部分辨率 = CSS × dpr，绘制时 ctx.scale(dpr)。
+  let dpr = 1
   try {
-    this.canvas = w.createOffscreenCanvas({ type: '2d', width: this.data.width, height: this.data.height })
+    const info = typeof w.getWindowInfo === 'function' ? w.getWindowInfo() : w.getSystemInfoSync()
+    dpr = Number(info && info.pixelRatio) || 1
+    if (dpr > 3) dpr = 3 // 上限（内存/性能平衡）
+  } catch {
+    dpr = 1
+  }
+  this.__dpr = dpr
+  try {
+    this.canvas = w.createOffscreenCanvas({
+      type: '2d',
+      width: Math.round(this.data.width * dpr),
+      height: Math.round(this.data.height * dpr),
+    })
   } catch {
     return null
   }
@@ -146,6 +163,12 @@ watch(
 onUnmounted(function (this: any) {
   this.stop()
 })
+
+/** ★内部 tap → triggerEvent('tap')：编译期把源码 <svg @tap> 透传为 <p-svg-canvas bind:tap>，
+ *  组件内部捕获原生 image 触摸后抛同名事件（微信自定义事件默认不冒泡，故由组件直接抛给监听方） */
+function onInnerTap(this: any, e: unknown): void {
+  this.triggerEvent('tap', (e as { detail?: unknown })?.detail ?? {})
+}
 </script>
 
 <style scoped>
