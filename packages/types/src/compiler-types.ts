@@ -139,6 +139,8 @@ export interface TemplateTransformResult {
   svgHits?: Array<{ imageId: string; viewBox: string; shapes: SvgHitShape[] }>
   /** ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes 片段（追加到 wxss） */
   animCss?: string[]
+  /** ★2026-09-09 Canvas 通道：含形状变化动画的 SVG 场景（script 侧注入 data） */
+  svgScenes?: Array<{ name: string; scene: unknown; width: number; height: number; duration: number }>
   /** ★2026-09-09 G-62 P1：动态 SVG（computed 名 + 结构化片段树 + 依赖）——script 侧生成 computed */
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */
@@ -166,6 +168,8 @@ export type SvgPart =
 export interface ScriptTransformOptions {
   /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（模板侧收集 → script 侧生成命中方法） */
   svgHits?: Array<{ imageId: string; viewBox: string; shapes: SvgHitShape[] }>
+  /** ★2026-09-09 Canvas 通道：SVG 场景（模板侧收集 → script 侧注入 data） */
+  svgScenes?: Array<{ name: string; scene: unknown; width: number; height: number; duration: number }>
   /** ★2026-09-09 G-62 P1：动态 SVG（模板侧收集 → script 侧生成 computed 重生成 SVG 字符串） */
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   file?: string

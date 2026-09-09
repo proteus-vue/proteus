@@ -429,6 +429,8 @@ const NATIVE_MP_TAGS = new Set([
   //   产物不含这些标签——扫描跳过，否则误报「未找到组件 <svg>」并写入 usingComponents（image-spike 实证）
   'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'defs',
   'linearGradient', 'radialGradient', 'stop', 'use', 'symbol', 'mask', 'clipPath', 'tspan',
+  // ★2026-09-09 G-62：SVG 动画标签由编译器消费（转 CSS 或 canvas 场景）——产物无这些标签
+  'animate', 'animateTransform', 'animateMotion', 'set',
 ])
 const HTML_TAGS = new Set([
   'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'br', 'ul', 'ol', 'li', 'section', 'header',
@@ -537,6 +539,12 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
     const tag = mm[1]
     if (!(NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag) || semanticTags.has(tag))) used.add(tag)
     idx = lt + 1 + mm[0].length
+  }
+  // ★2026-09-09 G-62 Canvas 通道：源码含**形状变化动画**的 SVG（cx/r/d/stroke-dashoffset 等）时，
+  //   编译器会 lowering 为 <p-svg-canvas> 组件——源码模板里没有该标签，须在此补注册。
+  if (/<(?:svg|circle|rect|ellipse|path|line|polyline|polygon)[\s>][\s\S]*?<animate\b/i.test(tpl)) {
+    const shapeAnim = /<animate\s[^>]*attributeName\s*=\s*["'](cx|cy|r|rx|ry|x|y|width|height|d|points|stroke-dashoffset|stroke-dasharray)["']/i
+    if (shapeAnim.test(tpl)) used.add('p-svg-canvas')
   }
   const out: Record<string, string> = {}
   for (const tag of used) {

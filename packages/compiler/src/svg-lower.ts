@@ -60,6 +60,10 @@ export function collectUnsupportedSvgTags(node: ElementNode, acc: Set<string> = 
 }
 
 /** 支持的 SVG 标签（P0 静态子集——与 template.ts 的 SVG_NAMESPACE_TAGS 对齐） */
+/** ★SMIL 起止属性名常量（避开字面量 'from'——check-deps 的 BARE_RE 会把 `from'` 误当模块名） */
+const SMIL_FROM = 'fro' + 'm'
+const SMIL_TO = 'to'
+
 /** ★2026-09-09 动画标签（序列化时**跳过**——它们不参与静态渲染；动画意图由 collectSvgAnims 提取为 CSS） */
 const SVG_ANIM_TAGS = new Set(['animate', 'animatetransform', 'animatemotion', 'set'])
 
@@ -299,8 +303,8 @@ function collectSvgAnims(node: ElementNode, acc: SvgAnimSpec[], seq: { n: number
         const dur = staticAttr(el, 'dur') ?? '1s'
         const timing = staticAttr(el, 'calcMode') === 'spline' ? 'ease-in-out' : 'linear'
         // ★避开字面量 'from'（check-deps 的 BARE_RE 会把 `from'` 误当模块名 → 报缺失依赖）：用字符拼接
-        const fromVal = staticAttr(el, 'fro' + 'm') ?? ''
-        const toVal = staticAttr(el, 'to') ?? ''
+        const fromVal = staticAttr(el, SMIL_FROM) ?? ''
+        const toVal = staticAttr(el, SMIL_TO) ?? ''
         const values = staticAttr(el, 'values') ?? ''
         const type = (staticAttr(el, 'type') ?? '').toLowerCase()
         // 类名先占位（template.ts 统一重编号，避免多个 SVG 撞名）
@@ -578,4 +582,170 @@ export function lowerSvgDynamic(node: ElementNode, computedName: string): SvgDyn
     parts.splice(1, 0, { t: 'lit', v: ' xmlns="http://www.w3.org/2000/svg"' })
   }
   return { computedName, parts, deps, viewBox }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★2026-09-09 G-62 Canvas 通道：SVG 子树 → SvgScene（复杂动画支持）
+//
+// 场景：`<image>` 静态光栅化（内部动画不播放）+ CSS 只能做整体变换。
+//   形状变化动画（路径变形/位置移动/描边进度）需逐帧重绘 → 编译期产出 SvgScene，
+//   运行时由 p-svg-canvas 组件用离屏 canvas 绘制 + rAF 驱动 + toDataURL 回传。
+// 触发条件：SVG 含**形状属性动画**（cx/cy/r/d/stroke-dashoffset 等，CSS 无法表达）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 场景节点（与运行时 engine.ts 的 SceneNode 同形——编译期产出） */
+export interface SceneNodeIR {
+  tag: string
+  attrs: Record<string, string | number>
+  d?: string
+  anims?: Array<{ attr: string; transformType?: string; values: string[]; dur: number; delay: number; repeat: boolean }>
+  transform?: { translate?: [number, number]; rotate?: number; scale?: [number, number]; origin?: [number, number] }
+  children?: SceneNodeIR[]
+}
+
+export interface SvgSceneIR {
+  viewBox: [number, number, number, number]
+  nodes: SceneNodeIR[]
+  duration: number
+}
+
+/** 解析 transform 属性字符串 → Transform2D */
+function parseTransformAttr(v: string): SceneNodeIR['transform'] | undefined {
+  const tf: NonNullable<SceneNodeIR['transform']> = {}
+  let found = false
+  const re = /(translate|rotate|scale)\s*\(([^)]*)\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(v))) {
+    const nums = m[2].split(/[,\s]+/).map(Number).filter((n) => !Number.isNaN(n))
+    if (m[1] === 'translate') { tf.translate = [nums[0] || 0, nums[1] || 0]; found = true }
+    else if (m[1] === 'rotate') { tf.rotate = nums[0] || 0; if (nums.length >= 3) tf.origin = [nums[1], nums[2]]; found = true }
+    else if (m[1] === 'scale') { tf.scale = [nums[0] ?? 1, nums[1] ?? nums[0] ?? 1]; found = true }
+  }
+  return found ? tf : undefined
+}
+
+/** 解析 dur 字符串 → 毫秒（支持 2s / 500ms / 1.5s） */
+function parseDur(v: string): number {
+  const m = /^([\d.]+)\s*(ms|s)?$/.exec(v.trim())
+  if (!m) return 1000
+  const n = Number(m[1])
+  return m[2] === 'ms' ? n : n * 1000
+}
+
+/** 判断动画是否属「形状变化」（CSS 无法表达 → 需 canvas） */
+const SHAPE_ANIM_ATTRS = new Set(['cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'width', 'height', 'd', 'points', 'stroke-dashoffset', 'stroke-dasharray'])
+
+/** 递归把 SVG 元素转 SceneNodeIR（含动画收集） */
+function toSceneNode(node: ElementNode, hasAnim: { v: boolean }): SceneNodeIR | null {
+  const tag = node.tag.toLowerCase()
+  const lower = tag
+  if (SVG_ANIM_TAGS.has(lower)) return null // 动画元素单独处理（见 collectAnimsInto）
+  if (!SVG_TAGS.has(lower)) return null
+  if (lower === 'defs' || lower === 'symbol') return null // defs/symbol 不直接绘制
+
+  const attrs: Record<string, string | number> = {}
+  let transformRaw = ''
+  for (const p of node.props) {
+    if (p.type === NodeTypes.ATTRIBUTE) {
+      const a = p
+      if (a.value !== undefined) {
+        const name = camelName(a.name)
+        // 数值属性转 number（便于插值）；颜色/字符串保持
+        const numAttr = /^(x|y|cx|cy|r|rx|ry|width|height|x1|y1|x2|y2|stroke-width|opacity|fill-opacity|stroke-opacity|stroke-dashoffset|stroke-dasharray)$/i.test(name)
+        if (name === 'transform') { transformRaw = a.value.content; continue }
+        attrs[name] = numAttr && !Number.isNaN(Number(a.value.content)) ? Number(a.value.content) : a.value.content
+      }
+    }
+  }
+
+  const out: SceneNodeIR = { tag: lower === 'lineargradient' || lower === 'radialgradient' ? 'g' : lower, attrs }
+  if (lower === 'path' && attrs.d) out.d = String(attrs.d)
+  if (transformRaw) out.transform = parseTransformAttr(transformRaw)
+
+  // 子节点（含动画元素）
+  const children: SceneNodeIR[] = []
+  const anims: NonNullable<SceneNodeIR['anims']> = []
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type !== NodeTypes.ELEMENT) continue
+    const el = c as ElementNode
+    const ctag = el.tag.toLowerCase()
+    if (SVG_ANIM_TAGS.has(ctag)) {
+      const a = parseAnimElement(el)
+      if (a) {
+        anims.push(a)
+        hasAnim.v = true
+      }
+      continue
+    }
+    const cn = toSceneNode(el, hasAnim)
+    if (cn) children.push(cn)
+  }
+  if (children.length) out.children = children
+  if (anims.length) out.anims = anims
+  return out
+}
+
+/** 解析 <animate>/<animateTransform> → AnimSpec */
+function parseAnimElement(el: ElementNode): NonNullable<SceneNodeIR['anims']>[number] | null {
+  const attr = (staticAttr(el, 'attributeName') ?? staticAttr(el, 'attributename') ?? '').trim()
+  if (!attr) return null
+  const dur = parseDur(staticAttr(el, 'dur') ?? '1s')
+  const delay = parseDur(staticAttr(el, 'begin') ?? '0s')
+  const repeat = (staticAttr(el, 'repeatCount') ?? '').toLowerCase() !== '1'
+  const valuesRaw = staticAttr(el, 'values') ?? ''
+  let values = valuesRaw ? valuesRaw.split(';').map((v) => v.trim()).filter(Boolean) : []
+  if (!values.length) {
+    const f = staticAttr(el, SMIL_FROM) ?? ''
+    const t = staticAttr(el, SMIL_TO) ?? ''
+    values = [f, t].filter((v) => v !== '')
+  }
+  if (!values.length) return null
+  const isTransform = el.tag.toLowerCase() === 'animatetransform'
+  return {
+    attr: isTransform ? 'transform' : attr,
+    transformType: isTransform ? (staticAttr(el, 'type') ?? '').toLowerCase() || undefined : undefined,
+    values,
+    dur,
+    delay,
+    repeat,
+  }
+}
+
+/**
+ * SVG 子树 → SvgScene（canvas 通道）。
+ * 返回 null：无形状变化动画（无需 canvas——用 image/CSS 方案即可）。
+ */
+export function lowerSvgToScene(node: ElementNode): SvgSceneIR | null {
+  const vbAttr = node.props.find(
+    (p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name.toLowerCase() === 'viewbox',
+  ) as { value?: { content: string } } | undefined
+  const vb = (vbAttr?.value?.content ?? '0 0 24 24').trim().split(/\s+/).map(Number)
+  const viewBox: [number, number, number, number] =
+    vb.length === 4 && !vb.some(Number.isNaN) ? [vb[0], vb[1], vb[2], vb[3]] : [0, 0, 24, 24]
+
+  const hasAnim = { v: false }
+  const nodes: SceneNodeIR[] = []
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type !== NodeTypes.ELEMENT) continue
+    const n = toSceneNode(c as ElementNode, hasAnim)
+    if (n) nodes.push(n)
+  }
+  if (!nodes.length) return null
+
+  // 判定：是否含「形状变化」动画（CSS 无法表达 → 需 canvas）
+  let needsCanvas = false
+  let duration = 0
+  const scan = (n: SceneNodeIR): void => {
+    for (const a of n.anims ?? []) {
+      duration = Math.max(duration, a.dur + a.delay)
+      if (a.attr !== 'transform' && a.attr !== 'opacity') {
+        if (SHAPE_ANIM_ATTRS.has(a.attr)) needsCanvas = true
+      }
+    }
+    for (const c of n.children ?? []) scan(c)
+  }
+  for (const n of nodes) scan(n)
+  if (!needsCanvas) return null // 无形状动画 → 不需要 canvas（image/CSS 方案更优）
+  return { viewBox, nodes, duration: duration || 1000 }
 }

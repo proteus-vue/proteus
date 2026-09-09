@@ -6,6 +6,7 @@
 //      （RHS 平衡扫描遇换行即停；改为按「换行前最后一个非空白字符是否为续行符号」判定）
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
+import { validateMpJsPlatform } from '../packages/compiler/src/validate'
 
 const compile = (script: string, template = '<template><view>x</view></template>') =>
   compileVueSfc(`<script setup lang="ts">\n${script}\n</script>\n${template}`, { filename: 't.vue' }) as any
@@ -113,5 +114,24 @@ describe('canvas 调研探针暴露的缺口（回归锁）', () => {
     const r = compile('function a(): void {}\nfunction b(): void { a() }', '<template><view>x</view></template>')
     expect(r.js).toMatch(/this\.a\(\)/)
     expect(r.js).not.toMatch(/self\.a\(\)/)
+  })
+})
+
+describe('真机预览暴露的 ES2021 语法缺口（回归锁）', () => {
+  it('⑥ 数字分隔符 3600_000 → 转译为 3600000（小程序 babel 不解析）', () => {
+    const r = compile('const delay = 3600_000\nconst hex = 0x1_2', '<template><view>{{ delay }}</view></template>')
+    expect(r.js).toMatch(/3600000/)
+    expect(r.js).not.toMatch(/\d_\d/)
+  })
+
+  it('⑥ 数字分隔符门禁（validateMpJsPlatform 残留即红）', () => {
+    expect(validateMpJsPlatform('const a = 3600_000').ok).toBe(false)
+    expect(validateMpJsPlatform('const a = 3600000').ok).toBe(true)
+    expect(validateMpJsPlatform('const a_b = 1').ok).toBe(true) // 标识符不误报
+    expect(validateMpJsPlatform("const s = '1_000'").ok).toBe(true) // 字符串不误报
+  })
+
+  it('⑥ BigInt 不崩溃（编译期求值转字符串——小程序无 BigInt）', () => {
+    expect(() => compile('const big = 123n', '<template><view>x</view></template>')).not.toThrow()
   })
 })

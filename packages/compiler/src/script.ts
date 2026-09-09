@@ -123,10 +123,14 @@ function stripTrailingComment(code: string): string {
   return code
 }
 
-/** 构建期求值开发者自身源码中的字面量表达式（与 babel 插件同信任域） */
+/** 构建期求值开发者自身源码中的字面量表达式（与 babel 插件同信任域）。
+ *  ★2026-09-09 BigInt 实证：`Function` 求值 `123n` 返回 BigInt → 后续 JSON.stringify 崩（"Do not know how to
+ *  serialize a BigInt"）且小程序无 BigInt 支持 → 转成字符串字面量（保号）+ 由调用方诚实警告。 */
 function evalLiteral(expr: string): unknown {
   try {
-    return Function(`"use strict"; return (${expr})`)()
+    const v = Function(`"use strict"; return (${expr})`)()
+    if (typeof v === 'bigint') return String(v) // 小程序无 BigInt——转字符串保号（调用方警告）
+    return v
   } catch {
     return undefined
   }
@@ -1949,6 +1953,9 @@ function rewriteBareMethodCalls(body: string, methodNames: Set<string>, runtimeI
   const fnRanges = plainFunctionBodyRanges(out)
   const needsSelf = fnRanges.length > 0
   for (const name of methodNames) {
+    // ★2026-09-09 canvas-probe 实证：方法作为**值**引用（name.bind(this) / 传给回调）也需 this. 化——
+    //   此前只改 `name(` 调用形态，`loop.bind(this)` 的裸 loop → ReferenceError
+    out = out.replace(new RegExp(`(?<![\\w$.:])${name}\\.bind\\s*\\(`, 'g'), `this.${name}.bind(`)
     const re = new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g')
     if (!needsSelf) {
       out = out.replace(re, `this.${name}(`)
@@ -2469,6 +2476,15 @@ export function transformScriptToPage(
       after: `computed ${ds.computedName}（运行时重生成 SVG 字符串 + <image src>，P1）`,
     })
   }
+  // ★2026-09-09 G-62 Canvas 通道：SVG 场景注入 data（p-svg-canvas 组件消费）
+  for (const sc of extra.svgScenes ?? []) {
+    data[sc.name] = sc.scene
+    trace?.add('template/svg-canvas', {
+      before: `SVG 形状动画场景（${sc.duration}ms）`,
+      after: `data.${sc.name}（p-svg-canvas 组件消费——离屏 canvas 逐帧绘制）`,
+    })
+  }
+
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace, !disabled.has('script/watch-props'))
   // ★2026-09-09 ② watch 函数源表达式（immediate watch getter 内裸引用 plain const 同样 ReferenceError）

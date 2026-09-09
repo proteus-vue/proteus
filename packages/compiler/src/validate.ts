@@ -63,6 +63,8 @@ export function scanMpUnsafeEs5(js: string): { kind: string; line: number; col: 
     if (c === '?' && next === '.' && !/[0-9]/.test(js[i + 2] ?? '')) return { kind: '?.', line, col: i }
     if (c === '|' && next === '|' && js[i + 2] === '=') return { kind: '||=', line, col: i }
     if (c === '&' && next === '&' && js[i + 2] === '=') return { kind: '&&=', line, col: i }
+    // ★2026-09-09 真机预览实证：数字分隔符（3600_000）小程序 babel 不解析（Invalid or unexpected token）
+    if (/[0-9]/.test(c) && next === '_' && /[0-9a-fA-F]/.test(js[i + 2] ?? '')) return { kind: 'numeric separator', line, col: i }
     i++
   }
   return null
