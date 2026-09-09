@@ -157,37 +157,37 @@ onMounted(() => {
     ),
   },
   {
-    name: '静态对照(无动画)',
+    name: 'filter feColorMatrix',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="20" cy="50" r="12" fill="#e74c3c"/></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><filter id="f"><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></defs>` +
+        `<circle cx="50" cy="50" r="40" fill="#00ff00" filter="url(#f)"/></svg>`,
     ),
   },
   {
-    name: 'SMIL animate',
+    name: 'pattern 填充',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="20" cy="50" r="12" fill="#e74c3c">` +
-        `<animate attributeName="cx" values="20;80;20" dur="2s" repeatCount="indefinite"/></circle></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse">` +
+        `<circle cx="10" cy="10" r="6" fill="#e74c3c"/></pattern></defs><rect width="100" height="100" fill="url(#p)"/></svg>`,
     ),
   },
   {
-    name: 'SMIL animateTransform',
+    name: 'marker 箭头',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><rect x="35" y="35" width="30" height="30" fill="#3498db">` +
-        `<animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="3s" repeatCount="indefinite"/></rect></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><marker id="m" markerWidth="10" markerHeight="10" refX="5" refY="5">` +
+        `<path d="M0 0 L10 5 L0 10 Z" fill="#e74c3c"/></marker></defs>` +
+        `<line x1="10" y1="50" x2="90" y2="50" stroke="#333" stroke-width="4" marker-end="url(#m)"/></svg>`,
     ),
   },
   {
-    name: 'CSS @keyframes',
+    name: 'svg image 内嵌',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><style>@keyframes s{0%{opacity:1}50%{opacity:0.2}100%{opacity:1}}.a{animation:s 2s infinite}</style>` +
-        `<circle cx="50" cy="50" r="30" fill="#2ecc71" class="a"/></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" x="20" y="20" width="60" height="60"/></svg>`,
     ),
   },
   {
-    name: 'stroke-dashoffset 动画',
+    name: 'animateMotion 路径运动',
     src: 'data:image/svg+xml,' + encodeURIComponent(
-      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="50" cy="50" r="35" fill="none" stroke="#9b59b6" stroke-width="8" ` +
-        `stroke-dasharray="220" stroke-dashoffset="220"><animate attributeName="stroke-dashoffset" from="220" to="0" dur="2s" repeatCount="indefinite"/></circle></svg>`,
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle r="8" fill="#e74c3c"><animateMotion dur="2s" repeatCount="indefinite" path="M10 50 Q50 10 90 50"/></circle></svg>`,
     ),
   },
   {

@@ -208,3 +208,35 @@ describe('★2026-09-09 SVG <text> 编译期提升为原生 <text> 叠加层（�
     expect(r.wxml).toContain('&#123;literal&#125;')
   })
 })
+
+describe('★2026-09-09 规范盘点补全：白名单扩充（真机像素实测均渲染）', () => {
+  it('滤镜（filter/feColorMatrix/feGaussianBlur）→ lowering 保留', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><defs><filter id="f"><feColorMatrix type="matrix" values="0 0 0 0 1"/><feGaussianBlur stdDeviation="5"/></filter></defs><circle cx="50" cy="50" r="40" filter="url(#f)"/></svg></template>')
+    const b64 = r.wxml.match(/src="data:image\/svg\+xml;base64,([^"]+)"/)![1]
+    const svg = Buffer.from(b64, 'base64').toString('utf8')
+    expect(svg).toContain('<filter')
+    expect(svg).toContain('feColorMatrix')
+    expect(svg).toContain('feGaussianBlur')
+  })
+
+  it('pattern / marker → lowering 保留', () => {
+    const r1 = compile('<template><svg viewBox="0 0 100 100"><defs><pattern id="p" width="20" height="20"><circle cx="10" cy="10" r="6"/></pattern></defs><rect width="100" height="100" fill="url(#p)"/></svg></template>')
+    expect(Buffer.from(r1.wxml.match(/base64,([^"]+)"/)![1], 'base64').toString('utf8')).toContain('<pattern')
+    const r2 = compile('<template><svg viewBox="0 0 100 100"><defs><marker id="m"><path d="M0 0 L10 5 Z"/></marker></defs><line x1="10" y1="50" x2="90" y2="50" marker-end="url(#m)"/></svg></template>')
+    expect(Buffer.from(r2.wxml.match(/base64,([^"]+)"/)![1], 'base64').toString('utf8')).toContain('<marker')
+  })
+
+  it('内嵌 image / textPath → lowering 保留', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><image href="data:image/png;base64,iVBOR" x="20" y="20" width="60" height="60"/></svg></template>')
+    expect(Buffer.from(r.wxml.match(/base64,([^"]+)"/)![1], 'base64').toString('utf8')).toContain('<image')
+  })
+
+  it('滤镜/图案属性映射（filterUnits/stdDeviation/patternUnits/marker-end 等）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><defs><filter id="f" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="3"/></filter><pattern id="p" patternUnits="userSpaceOnUse" width="10" height="10"/></defs><line x1="0" y1="0" x2="50" y2="50" marker-end="url(#m)"/></svg></template>')
+    const svg = Buffer.from(r.wxml.match(/base64,([^"]+)"/)![1], 'base64').toString('utf8')
+    expect(svg).toContain('filterUnits="userSpaceOnUse"')
+    expect(svg).toContain('stdDeviation="3"')
+    expect(svg).toContain('patternUnits="userSpaceOnUse"')
+    expect(svg).toContain('marker-end="url(#m)"')
+  })
+})
