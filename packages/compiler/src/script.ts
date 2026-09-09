@@ -2115,8 +2115,16 @@ function rewriteRefAccess(
           } else if (ch === '{' || ch === '(' || ch === '[') {
             depth++
           } else if (ch === '}' || ch === ')' || ch === ']') {
+            // ★2026-09-09 真机实证（t.apply is not a function）：depth 已为 0 时遇闭合括号 =
+            //   RHS 已结束、该括号属**外层**（箭头体结束 `}, 100)` 的 `}` / 外层调用闭合 `)`）——立即终止。
+            //   此前无条件 depth--（变 -1）→ 后续 `,` 不满足 depth===0 → 误吞 `, 100)` →
+            //   `setData({x: expr}, 100)` 第二参非函数 → TypeError。
+            //   多行三元/链式无括号（depth 恒 0）不受影响。
+            if (depth === 0) break
             depth--
           } else if (depth === 0 && ch === ';') {
+            break
+          } else if (depth === 0 && (ch === ',' || ch === ')')) {
             break
           } else if (depth === 0 && (ch === '\n' || ch === '\r')) {
             // ★2026-09-09 多行 RHS 续行判定（svg-spike 实证：`s.value = ok\n  ? a\n  : b` 被首行截断 →
