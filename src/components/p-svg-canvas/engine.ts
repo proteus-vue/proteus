@@ -402,7 +402,7 @@ export function drawScene(canvas: OffscreenCanvasLike, scene: SvgScene, tMs: num
   const [vx, vy, vw, vh] = scene.viewBox
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  // viewBox → 画布缩放
+  // viewBox → 画布缩放（canvas 内部分辨率已含 DPR——等比映射到 viewBox，无需额外处理）
   ctx.scale(canvas.width / vw, canvas.height / vh)
   ctx.translate(-vx, -vy)
   for (const node of scene.nodes) drawNode(ctx, canvas, node, tMs, scene)

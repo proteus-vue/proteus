@@ -15,8 +15,10 @@
     <text class="sub">渐变 · 滤镜辉光 · 进度环 · 轨道粒子 · 脉冲 · 交互</text>
 
     <!-- ① 主视觉：发光核心（静态光效 + CSS 旋转 + 事件） -->
-    <view class="stage" @tap="onCoreTap">
-      <svg viewBox="0 0 200 200" width="240" height="240">
+    <view class="stage">
+      <!-- ★点击热区：透明 view 覆盖（Skyline 下 image/组件内触摸不可靠，原生 view 最稳） -->
+      <view class="hit-area" @tap="onCoreTap"></view>
+      <svg viewBox="0 0 200 200" width="240" height="240" @tick="onTick">
         <defs>
           <!-- 辉光滤镜 -->
           <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -95,6 +97,7 @@
 
     <!-- 交互反馈 -->
     <text class="status">{{ status }}</text>
+    <text class="status">帧数 {{ frames }}</text>
 
     <!-- ② 能力卡片：每个用一项 SVG 能力 -->
     <view class="cards">
@@ -197,11 +200,20 @@
 import { ref } from 'vue'
 
 const status = ref('点击核心试试')
-let taps = 0
+const frames = ref(0)
+const taps = ref(0)
+
+function onTick(e: unknown): void {
+  const ev = e as { detail?: { frames?: number } }
+  const d = ev && ev.detail
+  frames.value = (d && d.frames) || 0
+}
 
 function onCoreTap(): void {
-  taps++
-  status.value = `核心能量 +${taps} ｜ 当前状态：${taps % 3 === 0 ? '过载' : '稳定'}`
+  const n = taps.value + 1
+  taps.value = n
+  const mood = n % 3 === 0 ? '过载' : '稳定'
+  status.value = '核心能量 +' + n + ' ｜ 当前状态：' + mood
 }
 </script>
 
@@ -233,6 +245,18 @@ function onCoreTap(): void {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+.hit-area {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200px;
+  height: 200px;
+  margin-left: -100px;
+  margin-top: -100px;
+  border-radius: 50%;
+  z-index: 10;
 }
 .status {
   font-size: 13px;
