@@ -367,3 +367,79 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 | **SMIL / CSS 动画** | ❌ 只渲染首帧 |
 | `<style>` 元素 | ❌ 官方明确不支持 |
 | 百分比单位 | ❌ 官方明确不支持 |
+
+
+## 12. ★Canvas 高性能方案调研（2026-09-09）
+
+**动因**：`<image>` + data-URI 方案（§9-11）解决了静态/动态 SVG，但有两个架构性短板——① `<text>` 被 Skyline 丢弃；
+② 动画不播放（静态光栅化）。调研基于 canvas 的方案能否补上。
+
+### 12.1 原生平台实现思路（调研结论）
+
+**共同架构模式**：`解析(SVG d → Path) → 几何(Path/CGPath/SkPath，含 trim/变换) → 绘制指令 → GPU 合成`，
+中间挂**几何缓存 + 位图缓存**，动画只改几何参数、不重解析。
+
+| 平台 | 实现 | 关键点 |
+|---|---|---|
+| **Android VectorDrawable** | `pathData` → `PathParser` → native `nDraw`（hwui/Skia） | 仅 vector/group/path/clip-path 四元素；**不支持 text/filter/mask**；每 drawable 一份 bitmap cache；动画用 ObjectAnimator 改 `pathData`/`trimStart/End` |
+| **iOS CAShapeLayer** | SVG → `CGPath` → CAShapeLayer（GPU 合成） | `path` 属性 animatable；**隐式动画**（改属性自动生成 CABasicAnimation）；代价=主线程渲染并缓存 |
+| **Skia SkSVGDOM** | 完整 SVG 解析（含 text/tspan、渐变、filter、mask、use） | ⚠️ **SkSVGDOM 无动画**——`render()` 与时间无关，动画需外部逐帧改属性重绘 |
+
+> 关键启示：**原生平台也不做"SVG 动画播放器"**——它们把 SVG 解析成几何路径（Path/CGPath），
+> 动画由外部时间轴驱动几何参数变化。这正好匹配小程序 canvas 的能力（`createPath2D` + `requestAnimationFrame`）。
+
+### 12.2 小程序 canvas 真机实测（`examples/pages/svg-canvas-probe.vue`）
+
+Skyline 2.02.2609072 / SDK 3.16.2，**在 `onMounted`（正常运行时上下文）**探测：
+
+| 探针 | 结果 | 结论 |
+|---|---|---|
+| A. `page.createSelectorQuery().select('#id').node()` | ❌ **TIMEOUT** | **canvas node 拿不到**（非 automation 上下文问题——正常运行时同样失败） |
+| B. 离屏 `requestAnimationFrame` | ✅ **62 帧/秒** | 动画驱动能力充足 |
+| C. 绘制 200 arc | ✅ **2ms** | 绘制吞吐优秀 |
+| D. `toDataURL()` ×10 | ✅ **2ms/次** | 回传成本低 |
+| E. `isPointInPath` + `Path2D` | ✅ in=true / out=false | 精确命中判定可用 |
+| F. `setData({src})` 单次 | ⚠️ **18ms** | 单次往返偏重 |
+| G. `fillText`（canvas 文字） | ✅ **1106 非白像素** | **canvas 能画文字**（补 SVG text 短板） |
+| H. rAF + setData 连续 10 帧 | ✅ **208ms ≈ 48fps** | 逐帧换 src 的动画**实际可行** |
+
+**核心结论**：
+
+1. **`node()` 通道彻底不可用**（页面级/组件级/正常上下文全试过）→ **无法在页面里直接操控可见 canvas**
+2. 但 **离屏 canvas 完全可用**：绘制（2ms/200 图形）、rAF（62fps）、`toDataURL`（2ms）、`Path2D`/`isPointInPath`、`fillText` 全部正常
+3. **唯一瓶颈是回传**：`setData({src})` 18ms → 逐帧换 src 约 48fps（探针 H 实测），**可接受但不理想**
+
+### 12.3 两方案对比
+
+| 维度 | `<image>` + data-URI（现方案） | 离屏 canvas + rAF（调研方案） |
+|---|---|---|
+| 静态图形 | ✅ 零运行时开销 | ⚠️ 需运行时绘制 |
+| 动态属性 | ✅ computed 重生成（一次 setData） | ✅ 直接改 ctx 重绘 |
+| **文字** | ❌ Skyline 丢弃 | ✅ **fillText 可用** |
+| **动画** | ❌ 不播放 | ✅ **rAF 48fps** |
+| 渐变/裁剪/遮罩/滤镜 | ✅ 原生渲染 | ⚠️ 需自实现（canvas 有 clip/createLinearGradient，无 filter/mask） |
+| 事件命中 | ✅ 几何判定 | ✅ `isPointInPath` 更精确 |
+| 体积 | ⚠️ 膨胀 1.4-1.6x | ✅ 无 data-URI 体积 |
+| 复杂度 | ✅ 编译期转换、零运行时 | ❌ 需运行时组件（绘制管线 + 重绘调度） |
+
+### 12.4 建议路线（渐进式）
+
+**不建议全量替换**——现方案在静态/图标/普通动态场景更优（零运行时、体积可控、原生渐变遮罩滤镜）。
+建议**按需引入 canvas 通道**，补两个短板：
+
+| 场景 | 方案 |
+|---|---|
+| 静态图标 / 图形 / 动态属性 | ✅ **保持现方案**（image + data-URI） |
+| SVG 文字 | ① 优先：SVG 外原生 `<text>` 叠加（零成本）；② 需要文字随图形一起缩放/变换时 → canvas `fillText` |
+| 动画（描边/变换/淡入淡出） | ① 简单动画：CSS `@keyframes` 作用于 WXML 元素；② 复杂矢量动画 → 离屏 canvas + rAF（48fps 实测） |
+| 大量图形 + 高频更新 | 离屏 canvas 全量重绘（2ms/200 图形） |
+
+**实现要点（若做 canvas 通道）**：
+- 解析一次 → `createPath2D()` 持有几何，动画只改参数（对齐原生"几何缓存"思路）
+- 静态层预栅格化缓存，每帧只重绘变化层
+- `requestAnimationFrame` 驱动，**避免每帧 setData**（回传是瓶颈——可用 rAF 节流或只在需要时 toDataURL）
+- 画布尺寸 ≤1365×1365（官方限制），按 DPR scale
+- ⚠️ **不能依赖 `node()` 拿可见 canvas**——只能用离屏 canvas + data-URI 回传（或 `wx.canvasToTempFilePath`）
+
+**诚实边界**：本调研**未实现** canvas 渲染通道（工作量：运行时组件 + SVG d 解析器 + 绘制管线 + 重绘调度）；
+结论基于真机探针实测 + 原生方案调研，作为后续立项依据。
