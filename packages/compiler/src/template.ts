@@ -18,7 +18,7 @@ import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { CompilerError } from './validate'
-import { lowerSvgToImage } from './svg-lower'
+import { lowerSvgToImage, lowerSvgDynamic } from './svg-lower'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -288,6 +288,9 @@ interface SerializeContext {
   templateRefs: Set<string>
   /** ★#500 :style 绑定的动态标识符（同名 computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings: Set<string>
+  /** ★2026-09-09 G-62 P1：动态 <svg> 收集（computed 名 + SVG 模板字面量 + 依赖 + viewBox）——
+   *  由 script 侧生成 computed（复用既有 computed 链路：依赖追踪/init/写入补丁重算） */
+  dynamicSvgs: Array<{ computedName: string; parts: import('./svg-lower').SvgPart[]; deps: string[]; viewBox: string }>
   /** ★2026-09-08 useTemplateRef/模板 ref 承接：ref="x" → 注入 id="x"（selectComponent 需要）+ 收集 ref 名（script 侧 useTemplateRef → this.<var> = this.selectComponent('#x')） */
   templateRefNames: Set<string>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData；★#505 M4 完整契约含 arg/propName） */
@@ -702,6 +705,34 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
         : `width:${w}px;height:${h}px;`
       return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
+    }
+    // ★★2026-09-09 G-62 P1：动态 SVG → computed（运行时重生成 SVG 字符串 + <image src="{{x}}">）。
+    //   绕开 canvas node() 阻塞（专项 §9）：微信逻辑层无 btoa，但 encodeURIComponent 可用，
+    //   真机实证「运行时拼 SVG → computed → setData → Skyline 实时重渲染 + 响应式有效」（image-spike.vue）。
+    //   复用既有 computed 链路（依赖追踪/init/写入补丁重算）——script 侧由 dynamicSvgs 生成。
+    if (!ctx.disabled.has('template/svg-dynamic')) {
+      const dynName = `proteusSvg${ctx.dynamicSvgs.length + 1}`
+      const dyn = lowerSvgDynamic(node, dynName)
+      if (dyn) {
+        ctx.dynamicSvgs.push({ computedName: dyn.computedName, parts: dyn.parts, deps: [...dyn.deps], viewBox: dyn.viewBox })
+        const sizeAttr = (n: string): string | undefined => {
+          const a = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name === n) as
+            | { value?: { content: string } }
+            | undefined
+          return a?.value?.content
+        }
+        const wAttr = sizeAttr('width')
+        const hAttr = sizeAttr('height')
+        const style = wAttr
+          ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
+          : ''
+        ctx.trace?.add('template/svg-dynamic', {
+          line: node.loc.start.line,
+          before: '<svg><path :d="d" :fill="c"/></svg>',
+          after: `<image src="{{${dyn.computedName}}}" />（P1 动态 SVG → computed 重生成，deps: ${[...dyn.deps].join('/') || '无'}）`,
+        })
+        return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}"${style ? ` style="${style}"` : ''} src="{{${dyn.computedName}}}" mode="aspectFit" />`
+      }
     }
   }
   // ★#505 G2 补：SVG 命名空间标签在小程序无对等组件（微信无 <svg>，Skia 矢量映射为后续批次）——
@@ -1248,6 +1279,8 @@ export function transformTemplateToWxml(
     templateRefs: new Set<string>(),
     // ★#500 :style 动态标识符绑定收集
     styleBindings: new Set<string>(),
+    // ★2026-09-09 G-62 P1：动态 SVG 收集
+    dynamicSvgs: [],
     // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
     templateRefNames: new Set<string>(),
     vModelComponentHandlers: [],
@@ -1321,6 +1354,8 @@ export function transformTemplateToWxml(
     templateRefNames: [...ctx.templateRefNames],
     // ★#500 :style 动态标识符绑定（script 侧同名 computed 派生值自动序列化）
     styleBindings: [...ctx.styleBindings],
+    // ★2026-09-09 G-62 P1：动态 SVG（script 侧生成 computed）
+    dynamicSvgs: ctx.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器
     vModelComponentHandlers: ctx.vModelComponentHandlers,
     semanticGrids: ctx.semanticGrids,

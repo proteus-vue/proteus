@@ -2364,6 +2364,39 @@ export function transformScriptToPage(
   if (plainDataNames.size) {
     for (const c of Object.values(computeds)) c.expr = rewriteInstanceRefsSafe(c.expr, plainDataNames, 'this.data.')
   }
+  // ★★2026-09-09 G-62 P1：动态 SVG → computed（SVG 字符串重生成 + <image src="{{x}}">）。
+  //   模板侧已收集 dynamicSvgs（computedName + 结构化片段树 + deps）；此处拼成模板字面量并复用既有
+  //   computed 链路（依赖追踪 → init setData → 任一依赖写入时补丁重算），绕开 canvas node 阻塞。
+  //   ★片段树只对 expr/if 节点改写标识符 → 标签名/属性名/文本永不误伤（嵌套 v-if 亦然）。
+  for (const ds of extra.dynamicSvgs ?? []) {
+    if (disabled.has('script/computed-to-data')) break
+    const deps = new Set<string>(ds.deps)
+    // 表达式内裸标识符 → this.data.<name>（跳过属性访问/已限定/标签名——片段树已隔离，这里只处理表达式）
+    const rwExpr = (expr: string): string => {
+      let out = expr
+      for (const d of deps) {
+        out = out.replace(new RegExp(`(?<![\\w$.])${d}(?![\\w$])`, 'g'), `this.data.${d}`)
+      }
+      return out
+    }
+    // 片段树 → 模板字面量源码（lit 转义反引号/${；expr 内联；if → 三元）
+    const emit = (parts: Array<{ t: string; v?: string; cond?: string; parts?: unknown[] }>): string =>
+      parts
+        .map((p) => {
+          if (p.t === 'lit') return (p.v ?? '').replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
+          if (p.t === 'expr') return `\${${rwExpr(p.v ?? '')}}`
+          // if：${cond ? `子片段` : ''}
+          return `\${${rwExpr(p.cond ?? '')} ? \`${emit((p.parts ?? []) as never)}\` : ''}`
+        })
+        .join('')
+    const tpl = emit(ds.parts as never)
+    const expr = `'data:image/svg+xml,' + encodeURIComponent(\`${tpl}\`)`
+    computed[ds.computedName] = { name: ds.computedName, deps: [...deps] as string[], expr }
+    trace?.add('template/svg-dynamic', {
+      before: `动态 SVG（${[...deps].join('/') || '无依赖'}）`,
+      after: `computed ${ds.computedName}（运行时重生成 SVG 字符串 + <image src>，P1）`,
+    })
+  }
   // watch（v0.3）：依赖 ref 写入 setData 后自动调用回调
   const watches = disabled.has('script/watch-to-methods') ? {} : extractWatch(source, data, warnings, trace, !disabled.has('script/watch-props'))
   // ★2026-09-09 ② watch 函数源表达式（immediate watch getter 内裸引用 plain const 同样 ReferenceError）

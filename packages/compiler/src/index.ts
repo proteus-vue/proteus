@@ -128,6 +128,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     templateRefNames: tplResult.templateRefNames,
     // ★#500 :style 动态标识符绑定 → 同名 computed 派生值自动序列化字符串
     styleBindings: tplResult.styleBindings,
+    // ★2026-09-09 G-62 P1：动态 SVG（模板收集 → script 生成 computed）
+    dynamicSvgs: tplResult.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器
     vModelComponentHandlers: tplResult.vModelComponentHandlers,
     semanticGrids: tplResult.semanticGrids,
