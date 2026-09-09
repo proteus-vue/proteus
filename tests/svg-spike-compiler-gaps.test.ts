@@ -165,3 +165,40 @@ describe('真机 t.apply is not a function 根因（回归锁）', () => {
     expect(r.js).toMatch(/setData\(\{ arr: this\.data\.arr \}\)|arr\[0\] = 9/)
   })
 })
+
+describe('ref 自增跨行误匹配（真机 svg-showcase-demo 点击崩溃根因）', () => {
+  it('⑧ `n++` 后换行跟 `s.value =` 不被误当成 `++s.value`', () => {
+    const r = compile(
+      'import { ref } from "vue"\nconst s = ref("")\nlet n = 0\nfunction f(): void {\n  n++\n  s.value = "x=" + n\n}',
+      '<template><view>{{ s }}</view></template>',
+    )
+    // n++ 保留独立；s.value 正确改写
+    expect(r.js).toMatch(/n\+\+/)
+    expect(r.js).toMatch(/setData\(\{ s: "x=" \+ n \}\)/)
+    // 不得出现粘连（nthis / n.valuethis）
+    expect(r.js).not.toMatch(/nthis|n\.valuethis/)
+  })
+
+  it('⑧ 真 ref 自增仍正常（不回归）', () => {
+    const r = compile('const n = ref(0)\nfunction f(): void { n.value++ }', '<template><view>{{ n }}</view></template>')
+    // numOrZero 守卫形态：setData({ n: (… ? 0 : this.data.n) + 1 })
+    expect(r.js).toMatch(/setData\(\{ n: \(this\.data\.n === undefined[^)]*\) \+ 1 \}\)/)
+  })
+
+  it('⑧ 前置自增（++n.value）仍正常', () => {
+    const r = compile('const n = ref(0)\nfunction f(): void { ++n.value }', '<template><view>{{ n }}</view></template>')
+    // 前置自增形态：先写 this.data.n 再 setData({ n: this.data.n })
+    expect(r.js).toMatch(/this\.data\.n = \(this\.data\.n === undefined[^)]*\) \+ 1/)
+    expect(r.js).toMatch(/setData\(\{ n: this\.data\.n \}\)/)
+  })
+
+  it('⑧ 模板字符串插值 + let 自增（真机原始崩溃场景）', () => {
+    const r = compile(
+      'import { ref } from "vue"\nconst s = ref("")\nlet n = 0\nfunction f(): void {\n  n++\n  s.value = `x=${n}`\n}',
+      '<template><view>{{ s }}</view></template>',
+    )
+    expect(r.js).toMatch(/n\+\+/)
+    expect(r.js).toMatch(/setData\(\{ s: `x=\$\{n\}` \}\)/)
+    expect(r.js).not.toMatch(/nthis/)
+  })
+})

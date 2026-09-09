@@ -2077,10 +2077,14 @@ function rewriteRefAccess(
       if (new RegExp(`(\\+\\+|--)\\s*${name}\\.value`).test(body) || new RegExp(`\\b${name}\\.value\\s*(\\+\\+|--)`).test(body)) {
         trace?.add('script/ref-incdec', { line, before: `${name}.value++/--`, after: `this.setData({ ${name}: ...${patch.entries.length || w ? ' + 派生/联动' : ''} })` })
       }
-      out = out.replace(new RegExp(`\\+\\+\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
-      out = out.replace(new RegExp(`--\\s*${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w))}${tail}${sync}${tToggle}`)
-      out = out.replace(new RegExp(`\\b${name}\\.value\\s*--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}${sync}${tToggle}`)
+      // ★2026-09-09 真机实证（svg-showcase-demo 点击崩溃）：`++\s*${name}.value` 的 `\s*` 会**跨行匹配**——
+      //   `n++\n  s.value = ...` 被当成 `++s.value` 替换 → 产物 `n` + `this.data.s = ...` 粘连（语法错）。
+      //   修复：`\s` 收窄为 `[ \t]*`（不跨行）；前置 ++ 允许 `++ s.value`（同行空格）。
+      const SP = '[ \\t]*'
+      out = out.replace(new RegExp(`\\+\\+${SP}${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
+      out = out.replace(new RegExp(`--${SP}${name}\\.value`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w), true)}${tail}${sync}${tToggle}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value${SP}\\+\\+`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} + 1`, patch, Boolean(w))}${tail}${sync}${tToggle}`)
+      out = out.replace(new RegExp(`\\b${name}\\.value${SP}--`, 'g'), `${oldSave}${writeSetData(name, `${numOrZero(prop)} - 1`, patch, Boolean(w))}${tail}${sync}${tToggle}`)
     }
     // 赋值：name.value = expr（排除 == / === / 复合赋值）
     // ★B5 修复：RHS 支持多行表达式（箭头函数体/对象字面量含换行）——旧捕获 [^;\n]+ 遇多行箭头只截到首行
