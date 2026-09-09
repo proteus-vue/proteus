@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 101 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 102 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（55）
+## 模板转换（56）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-p2-unsupported`
+
+**SVG 子树内 use/symbol/text/tspan → 实测不支持警告（SVG→Skyline P2）**
+
+Skyline image 渲染 SVG 的实测支持表（真机 spike）：mask/clipPath/渐变/transform/dasharray/opacity/filter 全部支持；use/symbol/text/tspan 渲染为空白 → 编译期诚实警告
+
+```
+before: <svg><use href="#icon"/></svg>
+after:  lowering 为 image + 警告「实测不支持」
+```
+
+> why: G-62 SVG→Skyline P2：原方案假设 mask/clip-path 需 canvas 近似；真机实证 Skyline image 原生支持（P2 大幅简化）。仅 use/text 空白——提前告知避免真机踩坑（反黑盒）
 
 ### `template/svg-dynamic`
 

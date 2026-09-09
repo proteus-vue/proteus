@@ -12,10 +12,42 @@
 import type { ElementNode, TemplateChildNode } from '@vue/compiler-dom'
 import { NodeTypes } from '@vue/compiler-dom'
 
+/** ★2026-09-09 G-62 P2：Skyline `<image>` 渲染 SVG 的**实测特性支持表**（真机 spike: examples/pages/svg-p2-spike.vue）。
+ *  结论：Skyline image 的 SVG 渲染能力远超预期——mask/clipPath/渐变/transform/dasharray/opacity/filter 全部原生支持，
+ *  无需 canvas 路线（P2 因此大幅简化）。仅 use+symbol / text 不支持（实测空白）。 */
+export const SVG_P2_SUPPORT = {
+  /** ✅ 实测支持（放行，无警告） */
+  supported: [
+    'linearGradient', 'radialGradient', 'stop', 'defs',
+    'clipPath', 'mask',
+    'transform（translate/rotate/scale 矩阵）',
+    'stroke-dasharray / stroke-dashoffset', 'opacity / fill-opacity / stroke-opacity',
+    'g（嵌套组）', 'filter（feGaussianBlur 等）',
+  ],
+  /** ❌ 实测不支持（编译期诚实警告——渲染为空白） */
+  unsupported: ['use', 'symbol', 'text', 'tspan'],
+} as const
+
+/** P2 不支持标签（实测空白——渲染无产出） */
+const SVG_UNSUPPORTED_TAGS = new Set(['use', 'symbol', 'text', 'tspan'])
+
+/** 收集子树内实测不支持的 SVG 标签（去重，供诚实警告） */
+export function collectUnsupportedSvgTags(node: ElementNode, acc: Set<string> = new Set()): Set<string> {
+  const lower = node.tag.toLowerCase()
+  if (SVG_UNSUPPORTED_TAGS.has(lower)) acc.add(lower)
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type === NodeTypes.ELEMENT) collectUnsupportedSvgTags(c as ElementNode, acc)
+  }
+  return acc
+}
+
 /** 支持的 SVG 标签（P0 静态子集——与 template.ts 的 SVG_NAMESPACE_TAGS 对齐） */
 const SVG_TAGS = new Set([
   'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'defs',
   'lineargradient', 'radialgradient', 'stop', 'use', 'symbol', 'mask', 'clippath', 'tspan',
+  // ★2026-09-09 P2：<svg> 子树内的 text 即 SVG text（与原生 <text> 同名的歧义只存在于根级；
+  //   子树内 lowering 由 serializeSvgElement 的标签白名单保证——P2 实测其渲染为空白，见 SVG_P2_SUPPORT）
+  'text',
 ])
 
 /** 序列化结果：静态 SVG → base64 data-URI；含动态绑定/不支持形态 → null（调用方警告） */

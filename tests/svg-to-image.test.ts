@@ -5,7 +5,7 @@
 //   边界：仅静态子树（无 v-bind/v-if/v-for/插值/事件）lowering；动态 SVG 诚实警告（P1 待做）。
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
-import { lowerSvgToImage, viewBoxRatio } from '../packages/compiler/src/svg-lower'
+import { lowerSvgToImage, viewBoxRatio, SVG_P2_SUPPORT } from '../packages/compiler/src/svg-lower'
 
 const compile = (src: string) => compileVueSfc(src, { filename: 't.vue' }) as any
 
@@ -96,6 +96,44 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
   it('非 svg 的 SVG 子标签（独立 <circle>）仍走 svg-no-peer 警告', () => {
     const r = compile('<template><circle cx="12" cy="12" r="10" fill="#000"/></template>')
     expect(r.warnings.some((w: string) => /SVG 矢量标签/.test(w))).toBe(true)
+  })
+
+  // ★2026-09-09 P2：Skyline image SVG 特性支持矩阵（真机 spike 实证）
+  it('P2：mask/clipPath/transform/dasharray → 放行（实测支持，无警告）', () => {
+    const r = compile(
+      '<template><svg viewBox="0 0 100 100"><defs><clipPath id="c"><circle cx="50" cy="50" r="35"/></clipPath>' +
+        '<mask id="m"><rect width="100" height="100" fill="#fff"/></mask></defs>' +
+        '<g transform="rotate(45)"><rect width="100" height="100" fill="#2ecc71" clip-path="url(#c)" mask="url(#m)"/></g></svg></template>',
+    )
+    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+    expect(r.warnings.some((w: string) => /不支持/.test(w))).toBe(false)
+    // 特性保留在 data-URI 内
+    const b64 = r.wxml.match(/src="data:image\/svg\+xml;base64,([^"]+)"/)![1]
+    const svg = Buffer.from(b64, 'base64').toString('utf8')
+    expect(svg).toContain('clipPath')
+    expect(svg).toContain('mask')
+    expect(svg).toContain('transform="rotate(45)"')
+  })
+
+  it('P2：use/symbol → lowering + 实测不支持警告（真机渲染空白）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><defs><symbol id="s"><circle r="15"/></symbol></defs><use href="#s" x="30" y="30"/></svg></template>')
+    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+    const w = r.warnings.find((x: string) => /不支持/.test(x))
+    expect(w, 'use/symbol 应有实测不支持警告').toBeTruthy()
+    expect(w).toMatch(/<use>|<symbol>/)
+  })
+
+  it('P2：text → lowering + 实测不支持警告', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><text x="50" y="55" font-size="24">AB</text></svg></template>')
+    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+    expect(r.warnings.some((x: string) => /不支持/.test(x) && /<text>/.test(x))).toBe(true)
+  })
+
+  it('P2：SVG_P2_SUPPORT 支持表导出（文档化实测结论）', () => {
+    expect(SVG_P2_SUPPORT.supported).toContain('clipPath')
+    expect(SVG_P2_SUPPORT.supported).toContain('mask')
+    expect(SVG_P2_SUPPORT.unsupported).toContain('use')
+    expect(SVG_P2_SUPPORT.unsupported).toContain('text')
   })
 
   it('viewBoxRatio 推导宽高比', () => {

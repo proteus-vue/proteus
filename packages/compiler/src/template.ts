@@ -18,7 +18,7 @@ import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { CompilerError } from './validate'
-import { lowerSvgToImage, lowerSvgDynamic } from './svg-lower'
+import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags } from './svg-lower'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -554,6 +554,22 @@ function serializeSemanticGrid(node: ElementNode, ctx: SerializeContext, grid: {
   return serializeElement(container, ctx)
 }
 
+/** ★G-62 P2：SVG 子树内实测不支持特性（use/symbol/text/tspan）→ 编译期诚实警告。
+ *  依据真机 spike（examples/pages/svg-p2-spike.vue）：Skyline image 的 SVG 渲染支持 mask/clipPath/
+ *  渐变/transform/dasharray/opacity/filter，但 use+symbol 与 text 实测空白——提前告知（反黑盒）。 */
+function warnUnsupportedSvgFeatures(node: ElementNode, ctx: SerializeContext): void {
+  const bad = collectUnsupportedSvgTags(node)
+  if (!bad.size) return
+  const names = [...bad].map((t) => `<${t}>`).join('/')
+  const msg = `SVG 子标签 ${names} 在 Skyline 的 image 渲染中实测不支持（真机验证渲染为空白）——请改用 <path> 展开（use/symbol 引用的图形）或转 <text> 为路径/图片（svg 文字）`
+  ctx.warnings.push(msg)
+  ctx.trace?.add('template/svg-p2-unsupported', {
+    line: node.loc.start.line,
+    before: `SVG 含 ${names}`,
+    after: '（Skyline image 渲染实测空白——诚实警告）',
+  })
+}
+
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
   //   用元素原始源码检测（node.loc.source 含 v-pre）。含 {{ }} 插值 → WXML 仍会插值（v-pre 跳过编译无法实现）→ 诚实警告；纯静态 → 等价（静默）
@@ -704,6 +720,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       const style = wAttr
         ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
         : `width:${w}px;height:${h}px;`
+      // ★G-62 P2：实测不支持的 SVG 特性（use/symbol/text/tspan）诚实警告（Skyline image 渲染为空白）
+      warnUnsupportedSvgFeatures(node, ctx)
       return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
     }
     // ★★2026-09-09 G-62 P1：动态 SVG → computed（运行时重生成 SVG 字符串 + <image src="{{x}}">）。
@@ -731,6 +749,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           before: '<svg><path :d="d" :fill="c"/></svg>',
           after: `<image src="{{${dyn.computedName}}}" />（P1 动态 SVG → computed 重生成，deps: ${[...dyn.deps].join('/') || '无'}）`,
         })
+        warnUnsupportedSvgFeatures(node, ctx)
         return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}"${style ? ` style="${style}"` : ''} src="{{${dyn.computedName}}}" mode="aspectFit" />`
       }
     }
@@ -739,7 +758,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   旧行为静默当未注册自定义组件原样输出 → 产物无效标签（p-svg 真机不渲染实证）；反黑盒显式警告
   //   ★2026-09-09：静态 <svg> 已由上方 lowering 处理（P0）；此处兜底动态 SVG / 非 svg 的 SVG 子标签
   if (SVG_NAMESPACE_TAGS.has(node.tag.toLowerCase()) && !ctx.disabled.has('template/svg-no-peer')) {
-    const svgMsg = `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>）——已原样输出但不会渲染。静态 SVG 可经 template/svg-to-image 规则 lowering 为 <image> data-URI（P0）；含动态绑定的响应式矢量属 P1（canvas 路线，见 docs/svg-skyline-alignment-plan/）`
+    const svgMsg = `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>）——已原样输出但不会渲染。完整 <svg> 子树可经 template/svg-to-image（静态）/ template/svg-dynamic（动态）lowering 为 <image> data-URI；此警告出现在独立 SVG 子标签（无 <svg> 父）或 lowering 不支持的形态（如 v-for）——见 docs/svg-skyline-alignment-plan/`
     if (ctx.failFast) failFastThrow(ctx.filename, svgMsg)
     ctx.warnings.push(svgMsg)
     ctx.trace?.add('template/svg-no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（MP 无对等：SVG 标签不渲染）' })

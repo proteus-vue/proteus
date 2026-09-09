@@ -1,0 +1,141 @@
+<!-- examples/pages/svg-p2-spike.vue —— ★G-62 P2 地基验证（2026-09-09）
+     目的：Skyline <image> 渲染 SVG 时支持多少高级特性（决定 P2 范围）。
+     逐项对照：linearGradient / radialGradient / clipPath / mask / transform 矩阵 / stroke-dasharray /
+     opacity / filter / text / 嵌套 g / use+symbol。
+     每个特性单独一个 SVG（互不干扰，便于逐项判定）。 -->
+<template>
+  <view class="spike">
+    <text class="spike-title">SVG 高级特性渲染对照</text>
+    <text class="spike-sub">每格一个特性——看哪个渲染、哪个空白</text>
+
+    <view class="spike-grid">
+      <view class="spike-cell" v-for="(it, i) in items" :key="i">
+        <image class="spike-img" :src="it.src" mode="aspectFit" />
+        <text class="spike-label">{{ it.name }}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+
+const NS = 'http://www.w3.org/2000/svg'
+const items = ref<any[]>([])
+
+onMounted(() => {
+  items.value = [
+  {
+    name: 'linearGradient',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0">` +
+        `<stop offset="0" stop-color="#e74c3c"/><stop offset="1" stop-color="#3498db"/></linearGradient></defs>` +
+        `<rect x="5" y="20" width="90" height="60" fill="url(#g)"/></svg>`,
+    ),
+  },
+  {
+    name: 'radialGradient',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><radialGradient id="r">` +
+        `<stop offset="0" stop-color="#f1c40f"/><stop offset="1" stop-color="#8e44ad"/></radialGradient></defs>` +
+        `<circle cx="50" cy="50" r="45" fill="url(#r)"/></svg>`,
+    ),
+  },
+  {
+    name: 'clipPath',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><clipPath id="c"><circle cx="50" cy="50" r="35"/></clipPath></defs>` +
+        `<rect x="0" y="0" width="100" height="100" fill="#2ecc71" clip-path="url(#c)"/></svg>`,
+    ),
+  },
+  {
+    name: 'mask',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><mask id="m"><rect x="0" y="0" width="100" height="100" fill="#fff"/>` +
+        `<circle cx="50" cy="50" r="30" fill="#000"/></mask></defs>` +
+        `<rect x="0" y="0" width="100" height="100" fill="#9b59b6" mask="url(#m)"/></svg>`,
+    ),
+  },
+  {
+    name: 'transform 矩阵',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><g transform="translate(50 50) rotate(45) scale(0.8)">` +
+        `<rect x="-30" y="-15" width="60" height="30" fill="#e67e22"/></g></svg>`,
+    ),
+  },
+  {
+    name: 'stroke-dasharray',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="#16a085" ` +
+        `stroke-width="8" stroke-dasharray="20 10"/></svg>`,
+    ),
+  },
+  {
+    name: 'opacity + 嵌套 g',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><g opacity="0.5"><rect x="10" y="10" width="50" height="50" fill="#c0392b"/>` +
+        `<circle cx="65" cy="65" r="25" fill="#2980b9"/></g></svg>`,
+    ),
+  },
+  {
+    name: 'use + symbol',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><symbol id="s"><circle cx="0" cy="0" r="15" fill="#34495e"/></symbol></defs>` +
+        `<use href="#s" x="30" y="30"/><use href="#s" x="70" y="70"/></svg>`,
+    ),
+  },
+  {
+    name: 'text',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><text x="50" y="55" font-size="24" fill="#000" text-anchor="middle">AB</text></svg>`,
+    ),
+  },
+  {
+    name: 'filter 模糊',
+    src: 'data:image/svg+xml,' + encodeURIComponent(
+      `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><filter id="f"><feGaussianBlur stdDeviation="3"/></filter></defs>` +
+        `<circle cx="50" cy="50" r="30" fill="#e74c3c" filter="url(#f)"/></svg>`,
+    ),
+  },
+  ]
+})
+</script>
+<style scoped>
+.spike {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+}
+.spike-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.spike-sub {
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 6px;
+}
+.spike-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.spike-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 25%;
+  margin-bottom: 8px;
+}
+.spike-img {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+}
+.spike-label {
+  font-size: 9px;
+  color: #333;
+  margin-top: 2px;
+}
+</style>
