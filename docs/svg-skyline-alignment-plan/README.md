@@ -278,10 +278,8 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 是 Skyline 的 SVG 实现限制（**官方文档未记载**——文档仅列「不支持百分比单位」「不支持 `<style>`」两条），
 **非小程序整体限制**（WebView 正常）、**非编译器问题**。
 
-**编译器行为（诚实警告 + 三种方案）**：`warnUnsupportedSvgFeatures` 给出精确根因与可行动方案——
-① 文字移到 SVG 外的 `<text>` 组件叠加（推荐：原生渲染/可选中/字体可控）；
-② 文字轮廓化为 `<path>`（设计工具导出时选 outline/convert to path）；
-③ 该页改用 `renderer: webview`（文字可渲染，但放弃 Skyline 特性）。
+**编译器行为**：★★2026-09-09 已**自动提升**（见 §9h）——静态 `<text>` 编译期转原生 `<text>` 叠加层，无需人工绕行。
+带 `transform` 的 text 仍保留诚实警告（坐标换算复杂度高）。
 
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
@@ -443,3 +441,33 @@ Skyline 2.02.2609072 / SDK 3.16.2，**在 `onMounted`（正常运行时上下文
 
 **诚实边界**：本调研**未实现** canvas 渲染通道（工作量：运行时组件 + SVG d 解析器 + 绘制管线 + 重绘调度）；
 结论基于真机探针实测 + 原生方案调研，作为后续立项依据。
+
+
+## 9h. ★SVG `<text>` 编译期提升（2026-09-09 落地）——从空白到正常显示
+
+**方案来源**：§12 调研结论推荐方案①（SVG 外原生 `<text>` 叠加）——零运行时、文字可选中、字体可控。
+比 canvas `fillText`（需运行时绘制管线）更轻。
+
+**实现**：
+- `svg-lower.ts` `collectTextNodes`：提取静态 `<text>`（x/y/font-size/fill/text-anchor/font-weight；
+  `tspan` 子文本拼接为整体；**带 transform 父级诚实降级**保留警告）
+- `template.ts` `svgTextToWxml`：`<view style="position:relative">` 容器 + `<image>` + 绝对定位原生 `<text>`
+  - viewBox 坐标 → 百分比：`left = x/vbW*100%`、`top = y/vbH*100%`
+  - `text-anchor` → `transform: translateX(-50% / -100%)`
+  - `fill`/`font-size`/`font-weight` 直接映射
+  - WXML 文本转义（`{{ }}` 不触发插值）
+- 规则 `template/svg-text-promote` 登记
+
+**产物示例**：
+```html
+<view class="proteus-svg-wrap" style="width:120px;height:120px;position:relative;">
+  <image style="width:100%;height:100%;" src="data:image/svg+xml;base64,…" mode="aspectFit" />
+  <text style="position:absolute;left:50.000%;top:25.000%;transform:translateX(-50%);color:#333;font-size:16px;line-height:1;">Hello SVG</text>
+</view>
+```
+
+**真机验证**：`svg-hit-test` 页红圆上方正确渲染「Hello SVG」（此前 Skyline 空白）。
+`tests/svg-to-image.test.ts` 24 用例（含 tspan 拼接 / anchor 变体 / transform 降级 / 无 text 不包裹 / 文本转义）。
+
+**边界（诚实）**：仅静态 text（含插值的动态 text 仍走警告）；带 transform 不提升；多行/旋转文字不处理；
+字号用 px（未随容器等比缩放——需要时可用 `em`/百分比）。
