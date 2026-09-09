@@ -58,6 +58,15 @@ export interface AnimSpec {
   repeat: boolean
 }
 
+/** 渐变定义（Canvas 需运行时创建——fillStyle 不认 url(#id)） */
+export interface GradientDef {
+  type: 'linear' | 'radial'
+  stops: Array<{ offset: number; color: string; opacity?: number }>
+  x1?: number; y1?: number; x2?: number; y2?: number
+  cx?: number; cy?: number; r?: number
+  units?: string
+}
+
 /** 场景（一次解析，多次绘制） */
 export interface SvgScene {
   /** viewBox（x y w h） */
@@ -66,6 +75,8 @@ export interface SvgScene {
   nodes: SceneNode[]
   /** 总时长（所有动画的最大值；0 = 静态） */
   duration: number
+  /** ★2026-09-09 Canvas 渐变：id → 定义（运行时创建 Canvas 渐变对象） */
+  gradients?: Record<string, GradientDef>
 }
 
 /** 绘制上下文（微信离屏 canvas 的最小接口） */
@@ -222,8 +233,85 @@ function colorOf(v: string | number | undefined, fallback: string): string {
   return s === 'none' ? 'none' : s
 }
 
+/** ★2026-09-09 Canvas 渐变：`url(#id)` → createLinearGradient/createRadialGradient
+ *  （Canvas fillStyle 不认 SVG 的 url(#id) 引用——此前静默失效成黑块/无色）。
+ *  bbox：当前图形的包围盒（objectBoundingBox 单位需按 bbox 换算；userSpaceOnUse 直接用坐标）。 */
+function resolveFill(
+  ctx: DrawCtx,
+  paint: string,
+  scene: SvgScene,
+  bbox: { x: number; y: number; w: number; h: number },
+): string | { addColorStop(o: number, c: string): void } {
+  const m = /^url\(#([^)]+)\)$/.exec(paint)
+  if (!m) return paint
+  const g = scene.gradients?.[m[1]]
+  if (!g) return 'transparent'
+  const userSpace = (g.units ?? 'objectBoundingBox') === 'userSpaceOnUse'
+  const toX = (v: number): number => (userSpace ? v : bbox.x + v * bbox.w)
+  const toY = (v: number): number => (userSpace ? v : bbox.y + v * bbox.h)
+  let grad: { addColorStop(o: number, c: string): void }
+  if (g.type === 'linear') {
+    grad = ctx.createLinearGradient(toX(g.x1 ?? 0), toY(g.y1 ?? 0), toX(g.x2 ?? 1), toY(g.y2 ?? 0))
+  } else {
+    const rr = userSpace ? (g.r ?? 0.5) : (g.r ?? 0.5) * Math.max(bbox.w, bbox.h)
+    const cx = toX(g.cx ?? 0.5)
+    const cy = toY(g.cy ?? 0.5)
+    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr)
+  }
+  for (const st of g.stops) {
+    const alpha = st.opacity === undefined ? 1 : st.opacity
+    grad.addColorStop(Math.max(0, Math.min(1, st.offset)), alpha >= 1 ? st.color : withAlpha(st.color, alpha))
+  }
+  return grad
+}
+
+/** 颜色 + 透明度 → rgba（canvas addColorStop 不认 stop-opacity，需合成进颜色） */
+function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)
+  if (hex) {
+    const n = parseInt(hex[1], 16)
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+  }
+  const hex3 = /^#([0-9a-f]{3})$/i.exec(color)
+  if (hex3) {
+    const h = hex3[1]
+    const n = parseInt(h[0] + h[0] + h[1] + h[1] + h[2] + h[2], 16)
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+  }
+  return color
+}
+
+/** 节点包围盒（渐变 objectBoundingBox 换算用） */
+function nodeBBox(node: SceneNode, tMs: number): { x: number; y: number; w: number; h: number } {
+  const n = (name: string, dflt: number): number => {
+    const v = nodeAttr(node, name, tMs)
+    return v === undefined ? dflt : Number(v) || 0
+  }
+  if (node.tag === 'circle') {
+    const r = n('r', 0)
+    return { x: n('cx', 0) - r, y: n('cy', 0) - r, w: r * 2, h: r * 2 }
+  }
+  if (node.tag === 'ellipse') {
+    const rx = n('rx', 0), ry = n('ry', 0)
+    return { x: n('cx', 0) - rx, y: n('cy', 0) - ry, w: rx * 2, h: ry * 2 }
+  }
+  if (node.tag === 'rect') {
+    return { x: n('x', 0), y: n('y', 0), w: n('width', 0), h: n('height', 0) }
+  }
+  // path 等：用采样点包围盒
+  const d = node.d ?? ''
+  const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+  const xs = nums.filter((_, k) => k % 2 === 0)
+  const ys = nums.filter((_, k) => k % 2 === 1)
+  if (xs.length && ys.length) {
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+  }
+  return { x: 0, y: 0, w: 0, h: 0 }
+}
+
 /** 绘制单个节点（递归） */
-function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tMs: number): void {
+function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tMs: number, scene: SvgScene): void {
   ctx.save()
   applyTransform(ctx, nodeTransform(node, tMs))
 
@@ -231,7 +319,7 @@ function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tM
   if (opacity !== undefined) ctx.globalAlpha = Number(opacity) || 0
 
   if (node.tag === 'g') {
-    for (const c of node.children ?? []) drawNode(ctx, canvas, c, tMs)
+    for (const c of node.children ?? []) drawNode(ctx, canvas, c, tMs, scene)
     ctx.restore()
     return
   }
@@ -260,11 +348,14 @@ function drawNode(ctx: DrawCtx, canvas: OffscreenCanvasLike, node: SceneNode, tM
     ctx.beginPath()
     tracePath(ctx, d)
     if (fill !== 'none') {
-      ctx.fillStyle = fill
+      const bbox = nodeBBox(node, tMs)
+      // ★渐变引用 → Canvas 渐变对象（否则 url(#id) 当颜色字符串 → 无效）
+      ctx.fillStyle = resolveFill(ctx, fill, scene, bbox) as string
       ctx.fill()
     }
     if (stroke !== 'none') {
-      ctx.strokeStyle = stroke
+      const bbox2 = nodeBBox(node, tMs)
+      ctx.strokeStyle = resolveFill(ctx, stroke, scene, bbox2) as string
       ctx.stroke()
     }
   }
@@ -314,7 +405,7 @@ export function drawScene(canvas: OffscreenCanvasLike, scene: SvgScene, tMs: num
   // viewBox → 画布缩放
   ctx.scale(canvas.width / vw, canvas.height / vh)
   ctx.translate(-vx, -vy)
-  for (const node of scene.nodes) drawNode(ctx, canvas, node, tMs)
+  for (const node of scene.nodes) drawNode(ctx, canvas, node, tMs, scene)
 }
 
 /** 命中判定：点是否落在场景任一图形内（viewBox 坐标——包围盒近似，零 Path2D 依赖）。

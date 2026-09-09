@@ -431,6 +431,12 @@ const NATIVE_MP_TAGS = new Set([
   'linearGradient', 'radialGradient', 'stop', 'use', 'symbol', 'mask', 'clipPath', 'tspan',
   // ★2026-09-09 G-62：SVG 动画标签由编译器消费（转 CSS 或 canvas 场景）——产物无这些标签
   'animate', 'animateTransform', 'animateMotion', 'set',
+  // ★2026-09-09 G-62 规范盘点补全：滤镜/图案/标记/内嵌图/文字路径（lowering 保留在 data-URI 内）
+  'filter', 'feGaussianBlur', 'feColorMatrix', 'feOffset', 'feBlend', 'feComposite', 'feTurbulence',
+  'feDropShadow', 'feMerge', 'feMergeNode', 'feMorphology', 'feDisplacementMap', 'feImage', 'feTile',
+  'feDistantLight', 'fePointLight', 'feSpotLight', 'feDiffuseLighting', 'feSpecularLighting',
+  'feComponentTransfer', 'feFuncA', 'feFuncB', 'feFuncG', 'feFuncR',
+  'pattern', 'marker', 'view', 'textPath', 'title', 'desc', 'metadata',
 ])
 const HTML_TAGS = new Set([
   'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'br', 'ul', 'ol', 'li', 'section', 'header',

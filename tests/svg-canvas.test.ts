@@ -227,3 +227,61 @@ describe('animateMotion 路径运动（真机验证）', () => {
     expect(x1).toBeCloseTo(50, 0) // 中点
   })
 })
+
+describe('Canvas 通道渐变支持（url(#id) → createGradient）', () => {
+  it('场景收集渐变定义（linear/radial + stops）', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100"><defs><radialGradient id="g"><stop offset="0%" stop-color="#fff" stop-opacity="1"/><stop offset="100%" stop-color="#00f" stop-opacity="0.5"/></radialGradient></defs>' +
+        '<circle cx="50" cy="50" r="30" fill="url(#g)"><animate attributeName="r" values="30;20;30" dur="1s"/></circle></svg>',
+    )
+    expect(r.js).toMatch(/"gradients":\{/)
+    expect(r.js).toMatch(/"type":"radial"/)
+    expect(r.js).toMatch(/"color":"#fff"/)
+    expect(r.js).toMatch(/"opacity":0.5/)
+  })
+
+  it('drawScene 把 url(#id) 解析为 Canvas 渐变（fillStyle 收到渐变对象）', () => {
+    const gradCalls: string[] = []
+    const ctx: any = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, lineCap: '', lineJoin: '', lineDashOffset: 0,
+      setLineDash() {}, save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, setTransform() {},
+      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {},
+      arc() {}, closePath() {}, fill() { gradCalls.push('fill:' + typeof this.fillStyle) }, stroke() {}, fillRect() {},
+      createLinearGradient: () => { gradCalls.push('createLinear'); return { addColorStop() { gradCalls.push('stop') } } },
+      createRadialGradient: () => { gradCalls.push('createRadial'); return { addColorStop() { gradCalls.push('stop') } } },
+    }
+    const canvas: any = { width: 100, height: 100, getContext: () => ctx }
+    const scene: any = {
+      viewBox: [0, 0, 100, 100],
+      nodes: [{ tag: 'circle', attrs: { cx: 50, cy: 50, r: 30, fill: 'url(#g)' }, anims: [{ attr: 'r', values: ['30', '20'], dur: 1000, delay: 0, repeat: true }] }],
+      duration: 1000,
+      gradients: { g: { type: 'radial', stops: [{ offset: 0, color: '#fff', opacity: 1 }, { offset: 1, color: '#00f', opacity: 0.5 }], cx: 0.5, cy: 0.5, r: 0.5 } },
+    }
+    drawScene(canvas, scene, 0)
+    expect(gradCalls).toContain('createRadial')
+    expect(gradCalls.filter((c) => c === 'stop').length).toBe(2)
+    expect(gradCalls).toContain('fill:object') // fillStyle 被设为渐变对象
+  })
+
+  it('stop-opacity 合成进颜色（canvas addColorStop 不认 opacity）', () => {
+    const colors: string[] = []
+    const ctx: any = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, lineCap: '', lineJoin: '', lineDashOffset: 0,
+      setLineDash() {}, save() {}, restore() {}, translate() {}, rotate() {}, scale() {}, setTransform() {},
+      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {},
+      arc() {}, closePath() {}, fill() {}, stroke() {}, fillRect() {},
+      createLinearGradient: () => ({ addColorStop: (_o: number, c: string) => colors.push(c) }),
+      createRadialGradient: () => ({ addColorStop: (_o: number, c: string) => colors.push(c) }),
+    }
+    const canvas: any = { width: 100, height: 100, getContext: () => ctx }
+    const scene: any = {
+      viewBox: [0, 0, 100, 100],
+      nodes: [{ tag: 'rect', attrs: { x: 0, y: 0, width: 100, height: 100, fill: 'url(#g)' }, anims: [{ attr: 'width', values: ['100', '50'], dur: 1000, delay: 0, repeat: true }] }],
+      duration: 1000,
+      gradients: { g: { type: 'linear', stops: [{ offset: 0, color: '#ffffff', opacity: 0.5 }, { offset: 1, color: '#0000ff', opacity: 1 }], x1: 0, y1: 0, x2: 1, y2: 0 } },
+    }
+    drawScene(canvas, scene, 0)
+    expect(colors[0]).toBe('rgba(255,255,255,0.5)') // opacity 合成
+    expect(colors[1]).toBe('#0000ff') // opacity=1 原样
+  })
+})
