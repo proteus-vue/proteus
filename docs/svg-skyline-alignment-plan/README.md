@@ -327,7 +327,38 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 **在解码阶段即被剥离**，只留下首帧的静态形态。这是**架构性限制，不是 bug**——
 对比浏览器 `<img src="x.svg">` 会保留 SVG 文档并播放动画（浏览器内建 SVG 运行时），小程序没有这条链路。
 
-> 结论：SVG 动画**不可用**。需要动画请用 ① CSS `@keyframes`（**WXML 元素级**——作用于 `<view>`/`<image>` 等原生节点，非 SVG 内部）/ ② 小程序 `wx.createAnimation` / ③ 逐帧切 data-URI（`setData` 换 `src`，实测 50 图标 4ms，但帧率受 setData 往返限制）/ ④ Skyline worklet 动画。
+> **★2026-09-09 已部分解决（见 §11.1c）**：SVG **内部**动画确实不播放，但**整体变换类动画可由编译器自动转译为 CSS `@keyframes` 作用于 `<image>`**（真机验证有效）。
+> 形状变化类（`cx`/`d`/`stroke-dashoffset`）仍不可用——需 canvas 逐帧重绘。
+
+### 11.1c ★动画转译落地（2026-09-09）
+
+**关键实证**：CSS 动画作用于 `<image>` 元素**完全有效**——`svg-anim-probe` 页连拍三帧 **MD5 各异**
+（旋转/淡入淡出/缩放三个三角形状态持续变化）；而 SVG 内部 SMIL 的对照格子**静止不动**。
+
+**编译器自动转译**（`template/svg-anim-promote`）：
+
+| SVG 内部写法 | 转译为 |
+|---|---|
+| `<animateTransform type="rotate" from="0 50 50" to="360 50 50" dur="2s">` | `.proteus-svg-anim-N { animation: … }` + `@keyframes { from{rotate(0)} to{rotate(360)} }` |
+| `<animateTransform type="scale" values="1;0.75;1">` | CSS `scale` 关键帧 |
+| `<animateTransform type="translate" …>` | CSS `translate` 关键帧 |
+| `<animate attributeName="opacity" values="1;0.2;1">` | CSS `opacity` 关键帧 |
+| `<animate attributeName="cx"/"d"/"stroke-dashoffset">` | ❌ 不转译（CSS 无法表达形状变化——诚实边界） |
+
+**产物示例**：
+```html
+<image class="proteus-svg-anim-1" src="data:image/svg+xml;base64,…" />
+```
+```css
+.proteus-svg-anim-1 { animation:proteus-svg-anim-1-kf 2s linear infinite; }
+@keyframes proteus-svg-anim-1-kf { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+```
+
+**真机验证**（`svg-anim-probe` 页）：A 旋转 / B 淡入淡出 / C 缩放三格**持续动**（三帧 MD5 各异）；
+D SMIL 对照格静止。`tests/svg-anim.test.ts` 6 用例。
+
+**边界（诚实）**：仅整体变换（作用于整个 `<image>`）；形状变化动画（路径/位置/描边）不支持——
+需 canvas 逐帧重绘（§12 调研给出路线：离屏 canvas + rAF 实测 48fps）。
 
 ### 11.2 体积与性能：✅ 可规模化
 

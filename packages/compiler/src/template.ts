@@ -291,6 +291,8 @@ interface SerializeContext {
   styleBindings: Set<string>
   /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（touch 坐标 + 几何判定） */
   svgHits: Array<{ imageId: string; viewBox: string; shapes: import('./svg-lower').SvgHitShape[] }>
+  /** ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes（追加到 wxss） */
+  animCss: string[]
   /** ★2026-09-09 G-62 P1：动态 <svg> 收集（computed 名 + SVG 模板字面量 + 依赖 + viewBox）——
    *  由 script 侧生成 computed（复用既有 computed 链路：依赖追踪/init/写入补丁重算） */
   dynamicSvgs: Array<{ computedName: string; parts: import('./svg-lower').SvgPart[]; deps: string[]; viewBox: string }>
@@ -600,6 +602,26 @@ function svgTextToWxml(t: SvgTextNode, vbW: number, vbH: number): string {
 function escWxml(s: string): string {
   return s.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
+/** ★2026-09-09 动画提升：SvgAnimSpec → CSS @keyframes + 类（作用于 <image>/容器）。 */
+function svgAnimToCss(a: import('./svg-lower').SvgAnimSpec): string {
+  const anim =
+    a.kind === 'rotate'
+      ? `animation:${a.className}-kf ${a.dur} ${a.timing} infinite`
+      : a.kind === 'scale'
+        ? `animation:${a.className}-kf ${a.dur} ${a.timing} infinite`
+        : a.kind === 'translate'
+          ? `animation:${a.className}-kf ${a.dur} ${a.timing} infinite`
+          : `animation:${a.className}-kf ${a.dur} ${a.timing} infinite`
+  let kf: string
+  if (a.kind === 'rotate') kf = `from { transform: rotate(0deg); } to { transform: rotate(360deg); }`
+  else if (a.kind === 'scale') kf = `from { transform: scale(${a.from}); } to { transform: scale(${a.to}); }`
+  else if (a.kind === 'translate') {
+    const f = a.from.replace(',', 'px, ') + 'px'
+    const t = a.to.replace(',', 'px, ') + 'px'
+    kf = `from { transform: translate(${f}); } to { transform: translate(${t}); }`
+  } else kf = `from { opacity: ${a.from}; } to { opacity: ${a.to}; }`
+  return `.${a.className} { ${anim}; }\n@keyframes ${a.className}-kf { ${kf} }`
+}
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
@@ -751,6 +773,25 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       const style = wAttr
         ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
         : `width:${w}px;height:${h}px;`
+      // ★2026-09-09 动画提升：SVG 内部动画不播放（image 静态光栅化，§11.1 实证），但整体变换类
+      //   可映射为 CSS 动画作用于 <image>（真机三帧 MD5 各异——完全有效）。
+      // 类名统一重编号（多个 SVG 各自的占位名会撞——按 ctx.animCss 长度递增）
+      const animCls = lowered.anims.length
+        ? lowered.anims
+            .map((a, i) => {
+              a.className = `proteus-svg-anim-${ctx.animCss.length + i + 1}`
+              return a.className
+            })
+            .join(' ')
+        : ''
+      if (lowered.anims.length) {
+        for (const a of lowered.anims) ctx.animCss.push(svgAnimToCss(a))
+        ctx.trace?.add('template/svg-anim-promote', {
+          line: node.loc.start.line,
+          before: 'SVG 内部 <animateTransform>/<animate opacity>',
+          after: `CSS @keyframes 作用于 <image>（${lowered.anims.map((a) => a.kind).join('/')}）`,
+        })
+      }
       // ★2026-09-09 text 提升：SVG 文字 → 原生 <text> 叠加层（Skyline 丢弃 SVG 文字，编译期提取）。
       //   坐标按 viewBox → 百分比定位（相对容器），字号按 viewBox 比例换算为 px。
       if (lowered.texts.length) {
@@ -764,7 +805,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           after: `原生 <text> 叠加层（${lowered.texts.length} 个，viewBox → 百分比定位）`,
         })
         return (
-          `<view class="proteus-svg-wrap${ctx.scopeId ? ` proteus-svg-${ctx.scopeId}` : ''}" style="${style}position:relative;">\n` +
+          `<view class="proteus-svg-wrap${ctx.scopeId ? ` proteus-svg-${ctx.scopeId}` : ''}${animCls ? ' ' + animCls : ''}" style="${style}position:relative;">\n` +
           `  <image style="width:100%;height:100%;" src="${lowered.dataUri}" mode="aspectFit" />\n` +
           `  ${overlay}\n` +
           `</view>`
@@ -782,9 +823,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           before: `<svg><circle @click="onX"/></svg>`,
           after: `<image id="${imgId}" bindtouchstart="proteusSvgHit1" />（touch 坐标 + 几何命中）`,
         })
-        return `<image id="${imgId}" class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" bindtouchstart="proteusSvgHit${ctx.svgHits.length}" />`
+        return `<image id="${imgId}" class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}${animCls}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" bindtouchstart="proteusSvgHit${ctx.svgHits.length}" />`
       }
-      return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
+      return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}${animCls}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
     }
     // ★★2026-09-09 G-62 P1：动态 SVG → computed（运行时重生成 SVG 字符串 + <image src="{{x}}">）。
     //   绕开 canvas node() 阻塞（专项 §9）：微信逻辑层无 btoa，但 encodeURIComponent 可用，
@@ -1362,6 +1403,8 @@ export function transformTemplateToWxml(
     styleBindings: new Set<string>(),
     // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
     svgHits: [],
+    // ★2026-09-09 动画提升：SVG 整体变换 → CSS
+    animCss: [],
     // ★2026-09-09 G-62 P1：动态 SVG 收集
     dynamicSvgs: [],
     // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
@@ -1439,6 +1482,8 @@ export function transformTemplateToWxml(
     styleBindings: [...ctx.styleBindings],
     // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表
     svgHits: ctx.svgHits,
+    // ★2026-09-09 动画提升：CSS 片段（index.ts 追加到 wxss）
+    animCss: ctx.animCss,
     // ★2026-09-09 G-62 P1：动态 SVG（script 侧生成 computed）
     dynamicSvgs: ctx.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器

@@ -137,6 +137,8 @@ export interface TemplateTransformResult {
   styleBindings?: string[]
   /** ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（touch 坐标 + 几何判定） */
   svgHits?: Array<{ imageId: string; viewBox: string; shapes: SvgHitShape[] }>
+  /** ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes 片段（追加到 wxss） */
+  animCss?: string[]
   /** ★2026-09-09 G-62 P1：动态 SVG（computed 名 + 结构化片段树 + 依赖）——script 侧生成 computed */
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */

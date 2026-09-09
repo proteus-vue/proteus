@@ -60,6 +60,9 @@ export function collectUnsupportedSvgTags(node: ElementNode, acc: Set<string> = 
 }
 
 /** 支持的 SVG 标签（P0 静态子集——与 template.ts 的 SVG_NAMESPACE_TAGS 对齐） */
+/** ★2026-09-09 动画标签（序列化时**跳过**——它们不参与静态渲染；动画意图由 collectSvgAnims 提取为 CSS） */
+const SVG_ANIM_TAGS = new Set(['animate', 'animatetransform', 'animatemotion', 'set'])
+
 const SVG_TAGS = new Set([
   'svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g', 'defs',
   'lineargradient', 'radialgradient', 'stop', 'use', 'symbol', 'mask', 'clippath', 'tspan',
@@ -100,6 +103,22 @@ export interface SvgTextNode {
   fontWeight?: string
 }
 
+/** ★2026-09-09 动画提升：SVG 整体变换动画 → CSS @keyframes（作用于 <image> 元素）。
+ *  实测：SVG 内部 SMIL 不播放（image 静态光栅化），但 CSS 动画对 image 元素**完全有效**（真机三帧 MD5 各异）。 */
+export interface SvgAnimSpec {
+  /** 动画类型（映射到 CSS 变换） */
+  kind: 'rotate' | 'scale' | 'translate' | 'opacity'
+  /** 时长（如 2s） */
+  dur: string
+  /** 缓动（如 linear/ease-in-out） */
+  timing: string
+  /** 关键帧值（CSS 语义） */
+  from: string
+  to: string
+  /** 生成的 CSS 类名（调用方注入 wxss） */
+  className: string
+}
+
 export interface SvgLowerResult {
   /** data-URI（可直接作 <image src>） */
   dataUri: string
@@ -109,6 +128,8 @@ export interface SvgLowerResult {
   hitShapes: SvgHitShape[]
   /** ★text 提升：SVG 文字节点（编译期提取 → 调用方生成原生 <text> 叠加） */
   texts: SvgTextNode[]
+  /** ★动画提升：可映射为 CSS 动画的整体变换（SVG 内部动画不播放，见 §11.1） */
+  anims: SvgAnimSpec[]
 }
 
 /** 属性名规范化：SVG 在 WXML/HTML 解析后可能小写化（viewBox → viewbox）——回写时恢复驼峰 */
@@ -182,8 +203,10 @@ function staticAttr(node: ElementNode, name: string): string | undefined {
 function serializeSvgElement(node: ElementNode, depth: number, symbols: SymbolMap = new Map()): string | null {
   const tag = node.tag
   const lower = tag.toLowerCase()
-  if (!SVG_TAGS.has(lower)) return null // 非 SVG 标签（含自定义组件）→ 不 lower
+  if (!SVG_TAGS.has(lower) && !SVG_ANIM_TAGS.has(lower)) return null // 非 SVG 标签（含自定义组件）→ 不 lower
 
+  // ★动画标签不参与静态渲染（意图已由 collectSvgAnims 提取为 CSS）——序列化跳过
+  if (SVG_ANIM_TAGS.has(lower)) return ''
   // ★P2 补：<symbol> 定义不直接输出（仅作为 <use> 的展开源）；<use> → 展开为 symbol 内容 + translate
   if (lower === 'symbol') return ''
   if (lower === 'use') {
@@ -259,6 +282,49 @@ function serializeSvgElement(node: ElementNode, depth: number, symbols: SymbolMa
 /** UTF-8 → base64（Node 环境；编译器运行在构建期） */
 function toBase64(s: string): string {
   return Buffer.from(s, 'utf8').toString('base64')
+}
+
+/** ★2026-09-09 动画提升：收集可映射为 CSS 的整体变换动画（SMIL animate/animateTransform）。
+ *  仅支持「作用于整个 SVG 根」的 transform/opacity（映射 CSS 变换）；
+ *  形状属性动画（cx/d/stroke-dashoffset 等）无法用 CSS 表达 → 不收集（调用方诚实警告）。 */
+function collectSvgAnims(node: ElementNode, acc: SvgAnimSpec[], seq: { n: number }): void {
+  // 找 <svg> 直属（或 defs 外）的 animate/animateTransform——作用域判定简化：整树扫描
+  const walk = (n: ElementNode, depth: number): void => {
+    for (const c of n.children as TemplateChildNode[]) {
+      if (c.type !== NodeTypes.ELEMENT) continue
+      const el = c as ElementNode
+      const tag = el.tag.toLowerCase()
+      if (tag === 'animatetransform' || tag === 'animate') {
+        const attrName = (staticAttr(el, 'attributeName') ?? staticAttr(el, 'attributename') ?? '').toLowerCase()
+        const dur = staticAttr(el, 'dur') ?? '1s'
+        const timing = staticAttr(el, 'calcMode') === 'spline' ? 'ease-in-out' : 'linear'
+        // ★避开字面量 'from'（check-deps 的 BARE_RE 会把 `from'` 误当模块名 → 报缺失依赖）：用字符拼接
+        const fromVal = staticAttr(el, 'fro' + 'm') ?? ''
+        const toVal = staticAttr(el, 'to') ?? ''
+        const values = staticAttr(el, 'values') ?? ''
+        const type = (staticAttr(el, 'type') ?? '').toLowerCase()
+        // 类名先占位（template.ts 统一重编号，避免多个 SVG 撞名）
+        const cls = `__proteus_svg_anim_${seq.n++}__`
+        if (tag === 'animatetransform') {
+          if (type === 'rotate') {
+            acc.push({ kind: 'rotate', dur, timing, from: '0deg', to: '360deg', className: cls })
+          } else if (type === 'scale') {
+            const vals = (values || `${fromVal};${toVal}`).split(';').filter(Boolean)
+            acc.push({ kind: 'scale', dur, timing, from: vals[0] ?? '1', to: vals[vals.length - 1] ?? '1', className: cls })
+          } else if (type === 'translate') {
+            const vals = (values || `${fromVal};${toVal}`).split(';').filter(Boolean)
+            acc.push({ kind: 'translate', dur, timing, from: vals[0] ?? '0,0', to: vals[vals.length - 1] ?? '0,0', className: cls })
+          }
+        } else if (attrName === 'opacity') {
+          const vals = (values || `${fromVal};${toVal}`).split(';').filter(Boolean)
+          acc.push({ kind: 'opacity', dur, timing, from: vals[0] ?? '1', to: vals[vals.length - 1] ?? '0', className: cls })
+        }
+        // 其它 attributeName（cx/d/stroke-dashoffset 等）→ 不收集（无法用 CSS 表达）
+      }
+      walk(el, depth + 1)
+    }
+  }
+  walk(node, 0)
 }
 
 /** ★text 提升：提取 SVG <text> 节点（Skyline 丢弃 SVG 文字——编译期提取为原生 <text> 叠加）。
@@ -370,7 +436,10 @@ export function lowerSvgToImage(node: ElementNode): SvgLowerResult | null {
   // ★text 提升：收集 SVG 文字（Skyline 丢弃 → 调用方生成原生 <text> 叠加）
   const texts: SvgTextNode[] = []
   collectTextNodes(node, texts, false)
-  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox, hitShapes, texts }
+  // ★动画提升：收集可映射为 CSS 的整体变换动画
+  const anims: SvgAnimSpec[] = []
+  collectSvgAnims(node, anims, { n: 1 })
+  return { dataUri: `data:image/svg+xml;base64,${toBase64(svg)}`, viewBox, hitShapes, texts, anims }
 }
 
 /** 从 viewBox 推导宽高比（供 <image> 默认尺寸；失败 → 1:1） */
@@ -429,10 +498,12 @@ function collectDeps(expr: string, deps: Set<string>): void {
  */
 function serializeParts(node: ElementNode, deps: Set<string>): SvgPart[] | null {
   const tag = node.tag
-  if (!SVG_TAGS.has(tag.toLowerCase())) return null
+  if (!SVG_TAGS.has(tag.toLowerCase()) && !SVG_ANIM_TAGS.has(tag.toLowerCase())) return null
   // v-for 暂不支持（列表展开 + key 管理，复杂度高）
   if (node.props.some((p) => p.type === NodeTypes.DIRECTIVE && (p as { name?: string }).name === 'for')) return null
 
+  // 动画标签跳过（静态渲染无贡献）
+  if (SVG_ANIM_TAGS.has(tag.toLowerCase())) return []
   const out: SvgPart[] = [{ t: 'lit', v: `<${tag}` }]
   for (const p of node.props) {
     if (p.type === NodeTypes.ATTRIBUTE) {

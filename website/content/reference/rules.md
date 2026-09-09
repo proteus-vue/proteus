@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 104 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 105 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（58）
+## 模板转换（59）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-anim-promote`
+
+**SVG 整体变换动画 → CSS @keyframes（作用于 image）**
+
+SVG 内部 <animateTransform rotate/scale/translate> 与 <animate opacity> → CSS @keyframes + 类名绑定 <image>；形状属性动画（cx/d/stroke-dashoffset）无法用 CSS 表达 → 不转译
+
+```
+before: <animateTransform type="rotate" from="0 50 50" to="360 50 50" dur="2s"/>
+after:  <image class="proteus-svg-anim-1"/> + .proteus-svg-anim-1 { animation: … } + @keyframes
+```
+
+> why: G-62 动画：真机实证 SVG 内部动画不播放（image 静态光栅化，§11.1），但 CSS 动画作用于 image 元素完全有效（三帧 MD5 各异）——整体变换类自动转译，形状变化类诚实不转
 
 ### `template/svg-text-promote`
 

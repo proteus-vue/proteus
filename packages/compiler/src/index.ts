@@ -170,7 +170,9 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     usesTransition: tplResult.usesTransition,
     trace: styleTrace,
   })
-  const wxss = [globalWxss, scopedWxss].filter(Boolean).join('\n')
+  // ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes（模板侧收集，此处追加）
+  const animCss = (tplResult.animCss ?? []).join('\n')
+  const wxss = [globalWxss, scopedWxss, animCss].filter(Boolean).join('\n')
   // ★15-page-scroll-container：页面自动包滚动容器后注入高度样式（100vh = Skyline 视口；
   //   scoped 转换后拼接 → .proteus-page-scroll 不参与 scope 后缀，匹配模板注入节点）
   const pageScrollCss = tplResult.pageScrollWrapped ? '\n.proteus-page-scroll { height: 100vh; }\n' : ''
