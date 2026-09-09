@@ -17,6 +17,7 @@ import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
+import { CompilerError } from './validate'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -120,13 +121,21 @@ function parseForExpr(exp: string): { list: string; item?: string; index?: strin
 }
 
 /** 事件处理器：仅支持简单方法引用（方法名 / 方法名($event)） */
-function cleanHandler(exp: string, warnings: string[]): string {
+function cleanHandler(exp: string, warnings: string[], failFast?: boolean, filename?: string): string {
   const t = exp.trim()
   if (/^[\w$]+$/.test(t)) return t
   const m = t.match(/^([\w$]+)\(\$event\)$/)
   if (m) return m[1]
-  warnings.push(`事件处理器 "${t}" 不是简单方法引用（MVP 仅支持方法名），已原样输出`)
+  const msg = `事件处理器 "${t}" 不是简单方法引用（MVP 仅支持方法名），已原样输出`
+  if (failFast) failFastThrow(filename, msg)
+  warnings.push(msg)
   return t
+}
+
+/** ★2026-09-09 支持矩阵 fail-fast（rules.failFast）：矩阵外语义「已原样输出」类软警告 → 编译期硬报错（fail-closed）。
+ *  防「原样输出不生效」的静默放行——产物流到真机才暴露（对比 uni-app 黑盒）；缺省关（诚实警告不拦截） */
+function failFastThrow(filename: string | undefined, msg: string): never {
+  throw new CompilerError(filename ?? 'anonymous.vue', `${msg}——rules.failFast 开启：矩阵外语义编译期硬报错（不再原样输出放行）`)
 }
 
 /** :class 绑定：对象语法 → 三元拼接，其余 → {{expr}}
@@ -249,6 +258,8 @@ interface SerializeContext {
   semanticClass: Record<string, string>
   /** 被禁用的规则 ID 集合 */
   disabled: Set<string>
+  /** ★2026-09-09 支持矩阵 fail-fast：矩阵外语义「已原样输出」→ 编译期 CompilerError（rules.failFast） */
+  failFast?: boolean
   /** scoped CSS 作用域属性（v0.3：元素附加 data-v-xxx，样式侧选择器属性匹配） */
   scopeId?: string
   /** ★组件模式根节点标记（首个顶层元素：class 追加 {{rootClass}} 接收外部 class 透传） */
@@ -608,9 +619,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
     return `<root-portal>\n${child}\n</root-portal>`
   }
   if ((node.tag === 'transition-group' || node.tag === 'suspense' || node.tag === 'keep-alive') && !isTransition) {
-    ctx.warnings.push(
-      `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——缓存/多元素转场请移除或改用路由 routeType（vue-compat Batch A）`,
-    )
+    const noPeerMsg = `<${node.tag}> 在小程序无对等组件（已原样输出，不生效）——缓存/多元素转场请移除或改用路由 routeType（vue-compat Batch A）`
+    if (ctx.failFast) failFastThrow(ctx.filename, noPeerMsg)
+    ctx.warnings.push(noPeerMsg)
     ctx.trace?.add('template/no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（无对等，原样输出）' })
   }
   // ★2026-09 fluid-system 真机缺口：自定义组件子级插槽内容 <template #name> MP 接线——
@@ -659,9 +670,9 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   // ★#505 G2 补：SVG 命名空间标签在小程序无对等组件（微信无 <svg>，Skia 矢量映射为后续批次）——
   //   旧行为静默当未注册自定义组件原样输出 → 产物无效标签（p-svg 真机不渲染实证）；反黑盒显式警告
   if (SVG_NAMESPACE_TAGS.has(node.tag.toLowerCase()) && !ctx.disabled.has('template/svg-no-peer')) {
-    ctx.warnings.push(
-      `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>；p-svg 等矢量组件 MP 端 Skia 映射为后续批次）——已原样输出但不会渲染，请改用 image/背景图或等待矢量批次`,
-    )
+    const svgMsg = `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>；p-svg 等矢量组件 MP 端 Skia 映射为后续批次）——已原样输出但不会渲染，请改用 image/背景图或等待矢量批次`
+    if (ctx.failFast) failFastThrow(ctx.filename, svgMsg)
+    ctx.warnings.push(svgMsg)
     ctx.trace?.add('template/svg-no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（MP 无对等：SVG 标签不渲染）' })
   }
   // ★#505 M3 批 2：p-* 是框架保留前缀（src/components 语义组件 + p-grid 等语义编译标签——TAG_SEMANTIC_MAP 登记即合法）——
@@ -857,7 +868,7 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       case 'on': {
         if (ctx.disabled.has('event/click-to-tap') && ctx.disabled.has('event/modifier-catch')) {
           ctx.warnings.push('事件映射规则已全部禁用（rules.disabled），@事件 原样输出')
-          const handler = cleanHandler(exprContent(dir.exp), ctx.warnings)
+          const handler = cleanHandler(exprContent(dir.exp), ctx.warnings, ctx.failFast, ctx.filename)
           attrs.push(`bind${exprContent(dir.arg)}="${handler}"`)
           break
         }
@@ -887,12 +898,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           if (!ctx.inlineHandlers.some((h) => h.name === inline.name)) ctx.inlineHandlers.push(inline)
           ctx.trace?.add('event/inline-expression', { line: node.loc.start.line, before: `@${exprContent(dir.arg)}="${rawHandler}"`, after: `${inline.name}（包装方法）` })
         } else {
-          handler = cleanHandler(rawHandler, ctx.warnings)
+          handler = cleanHandler(rawHandler, ctx.warnings, ctx.failFast, ctx.filename)
         }
         // 键位修饰符（@keyup.enter 等）：小程序无键盘事件对等，警告
         if (raw === 'keyup' || raw === 'keydown' || raw === 'keypress') {
           const keyMods = mods.filter((m) => !['stop', 'prevent', 'self', 'once'].includes(m))
-          ctx.warnings.push(`@${raw}${keyMods.length ? '.' + keyMods.join('.') : ''} 在小程序无对等键盘事件（input 键盘行为请用 @confirm），已原样输出`)
+          const keyMsg = `@${raw}${keyMods.length ? '.' + keyMods.join('.') : ''} 在小程序无对等键盘事件（input 键盘行为请用 @confirm），已原样输出`
+          if (ctx.failFast) failFastThrow(ctx.filename, keyMsg)
+          ctx.warnings.push(keyMsg)
         }
         // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
         const isCustomEvent = !(raw in ctx.eventMap)
