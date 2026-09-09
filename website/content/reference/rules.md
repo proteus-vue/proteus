@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 105 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 106 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（59）
+## 模板转换（60）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-canvas`
+
+**含形状变化动画的 SVG → p-svg-canvas 组件（离屏 canvas 逐帧绘制）**
+
+SVG 含形状属性动画（cx/cy/r/d/stroke-dashoffset 等，CSS 无法表达）→ 编译期产出 SvgScene → 运行时 p-svg-canvas 组件用离屏 canvas 逐帧绘制 + 定时器驱动 + toDataURL 回传 image src
+
+```
+before: <svg><circle cx="20"><animate attributeName="cx" values="20;80;20"/></circle></svg>
+after:  <p-svg-canvas scene="{{proteusSvgScene1}}" />（离屏 canvas 逐帧）
+```
+
+> why: G-62 动画：<image> 静态光栅化（内部动画不播放）+ CSS 只能做整体变换 → 形状变化动画需逐帧重绘；实测离屏 canvas 可用（createPath2D 直接接受 SVG d / rAF 62fps / toDataURL 2ms），可见 canvas 的 node() 拿不到
 
 ### `template/svg-anim-promote`
 

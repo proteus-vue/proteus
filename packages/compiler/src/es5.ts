@@ -13,16 +13,26 @@ import optionalChaining from '@babel/plugin-transform-optional-chaining'
 import logicalAssignment from '@babel/plugin-transform-logical-assignment-operators'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import objectRestSpread from '@babel/plugin-transform-object-rest-spread'
+// ★2026-09-09 真机预览实证缺口：数字分隔符（3600_000）——小程序 babel 不解析（Invalid or unexpected token）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import numericSeparator from '@babel/plugin-transform-numeric-separator'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PLUGINS: any[] = [nullish, optionalChaining, logicalAssignment, objectRestSpread].map((p) =>
+const PLUGINS: any[] = [nullish, optionalChaining, logicalAssignment, objectRestSpread, numericSeparator].map((p) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   typeof p === 'function' ? p : (p as any).default ?? p,
 )
 
-/** 快路径：产物是否残留微信编译器不解析的语法（?? ?. ??= ||= &&=）——无则跳过 babel（大多数页面零开销） */
+/** 快路径：产物是否残留微信编译器不解析的语法（?? ?. ??= ||= &&= 数字分隔符）——无则跳过 babel（大多数页面零开销） */
 export function hasMpUnsafeSyntax(code: string): boolean {
-  return /\?\?|\?\./.test(code) || /\|\|=/ .test(code) || /&&=/.test(code) || /\?\?=/.test(code)
+  return (
+    /\?\?|\?\./.test(code) ||
+    /\|\|=/.test(code) ||
+    /&&=/.test(code) ||
+    /\?\?=/.test(code) ||
+    // ★数字分隔符：`3600_000` / `0x1_2`（真机预览实证：Invalid or unexpected token）
+    /\d_\d|\b0[xob][\da-fA-F_]+_/.test(code)
+  )
 }
 
 export interface MpSafeResult {

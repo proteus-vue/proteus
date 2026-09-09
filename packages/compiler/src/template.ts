@@ -18,7 +18,7 @@ import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { CompilerError } from './validate'
-import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags } from './svg-lower'
+import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags, lowerSvgToScene } from './svg-lower'
 import type { SvgTextNode } from './svg-lower'
 
 function escapeXml(s: string): string {
@@ -293,6 +293,8 @@ interface SerializeContext {
   svgHits: Array<{ imageId: string; viewBox: string; shapes: import('./svg-lower').SvgHitShape[] }>
   /** ★2026-09-09 动画提升：SVG 整体变换 → CSS @keyframes（追加到 wxss） */
   animCss: string[]
+  /** ★2026-09-09 Canvas 通道：含形状变化动画的 SVG 场景（→ p-svg-canvas 组件 + data 注入） */
+  svgScenes: Array<{ name: string; scene: unknown; width: number; height: number; duration: number }>
   /** ★2026-09-09 G-62 P1：动态 <svg> 收集（computed 名 + SVG 模板字面量 + 依赖 + viewBox）——
    *  由 script 侧生成 computed（复用既有 computed 链路：依赖追踪/init/写入补丁重算） */
   dynamicSvgs: Array<{ computedName: string; parts: import('./svg-lower').SvgPart[]; deps: string[]; viewBox: string }>
@@ -744,6 +746,31 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   地基实证（examples/pages/image-spike.vue 真机截图）：Skyline <image> 完整渲染 SVG base64 data-URI
   //   （path/stroke/circle 正确）——静态图标 80% 场景零改代码可用（canvas 路线被 node() 通道阻塞，见专项 §9）。
   //   仅静态子树 lowering；含动态绑定（v-bind/v-if/v-for/插值/事件）→ 返回 null 走下方诚实警告（P1 待做）。
+  // ★★2026-09-09 G-62 Canvas 通道：含**形状变化动画**（cx/cy/r/d/stroke-dashoffset 等，CSS 无法表达）
+  //   的 SVG → 编译期产出 SvgScene → 运行时 p-svg-canvas 组件（离屏 canvas 逐帧绘制 + rAF + toDataURL）。
+  //   优先于 image 分支（image 是静态光栅化，内部动画不播放——§11.1 实证）。
+  if (node.tag.toLowerCase() === 'svg' && !ctx.disabled.has('template/svg-canvas')) {
+    const scene = lowerSvgToScene(node)
+    if (scene) {
+      const name = `proteusSvgScene${ctx.svgScenes.length + 1}`
+      const sizeAttr2 = (n: string): string | undefined => {
+        const a = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name === n) as
+          | { value?: { content: string } }
+          | undefined
+        return a?.value?.content
+      }
+      const w = Number(sizeAttr2('width') ?? sizeAttr2('size') ?? 0) || 200
+      const h = Number(sizeAttr2('height') ?? sizeAttr2('size') ?? 0) || 200
+      ctx.svgScenes.push({ name, scene, width: w, height: h, duration: scene.duration })
+      ctx.trace?.add('template/svg-canvas', {
+        line: node.loc.start.line,
+        before: '<svg><circle><animate attributeName="cx"/></circle></svg>',
+        after: `<p-svg-canvas scene="{{${name}}}" />（离屏 canvas 逐帧绘制，${scene.duration}ms）`,
+      })
+      // text 提升：canvas 场景里的 text 也叠加原生 text（canvas 绘制文字亦可，但叠加更可控）
+      return `<p-svg-canvas scene="{{${name}}}" width="${w}" height="${h}" />`
+    }
+  }
   if (node.tag.toLowerCase() === 'svg' && !ctx.disabled.has('template/svg-to-image')) {
     const lowered = lowerSvgToImage(node)
     if (lowered) {
@@ -1405,6 +1432,8 @@ export function transformTemplateToWxml(
     svgHits: [],
     // ★2026-09-09 动画提升：SVG 整体变换 → CSS
     animCss: [],
+    // ★2026-09-09 Canvas 通道：含形状变化动画的 SVG 场景
+    svgScenes: [],
     // ★2026-09-09 G-62 P1：动态 SVG 收集
     dynamicSvgs: [],
     // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
@@ -1484,6 +1513,8 @@ export function transformTemplateToWxml(
     svgHits: ctx.svgHits,
     // ★2026-09-09 动画提升：CSS 片段（index.ts 追加到 wxss）
     animCss: ctx.animCss,
+    // ★2026-09-09 Canvas 通道：场景表（script 侧注入 data）
+    svgScenes: ctx.svgScenes,
     // ★2026-09-09 G-62 P1：动态 SVG（script 侧生成 computed）
     dynamicSvgs: ctx.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器

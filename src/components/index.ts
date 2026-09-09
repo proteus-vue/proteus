@@ -60,6 +60,7 @@ import PAvatar from './p-avatar/index.vue'
 import PMedia from './p-media/index.vue'
 import PCanvas from './p-canvas/index.vue'
 import PSvg from './p-svg/index.vue'
+import PSvgCanvas from './p-svg-canvas/index.vue'
 // ★G-32 B2 续：UI 表单原语（select/checkbox/radio/picker/form）
 import PSelect from './p-select/index.vue'
 import PCheckbox from './p-checkbox/index.vue'
@@ -140,6 +141,7 @@ export {
   PMedia,
   PCanvas,
   PSvg,
+  PSvgCanvas,
   // ★G-32 B2 续：UI 表单原语（select/checkbox/radio/picker/form）
   PSelect,
   PCheckbox,

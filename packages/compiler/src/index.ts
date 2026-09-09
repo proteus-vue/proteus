@@ -130,6 +130,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     styleBindings: tplResult.styleBindings,
     // ★2026-09-09 G-62 事件命中：带事件的静态 SVG 图形表（模板收集 → script 生成命中方法）
     svgHits: tplResult.svgHits,
+    // ★2026-09-09 G-62 Canvas 通道：SVG 场景（模板收集 → script 注入 data）
+    svgScenes: tplResult.svgScenes,
     // ★2026-09-09 G-62 P1：动态 SVG（模板收集 → script 生成 computed）
     dynamicSvgs: tplResult.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器

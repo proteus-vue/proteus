@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 105 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 106 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (59)
+## Template transforms (60)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-canvas`
+
+**SVG with shape-morph animation → p-svg-canvas component (offscreen canvas per-frame drawing)**
+
+An SVG with shape-attribute animation (cx/cy/r/d/stroke-dashoffset etc., inexpressible in CSS) → compile-time SvgScene → runtime p-svg-canvas component draws per frame on an offscreen canvas + timer-driven + toDataURL back to image src
+
+```
+before: <svg><circle cx="20"><animate attributeName="cx" values="20;80;20"/></circle></svg>
+after:  <p-svg-canvas scene="{{proteusSvgScene1}}" />（离屏 canvas 逐帧）
+```
+
+> why: G-62 animation: <image> is statically rasterized (internal animation does not play) and CSS only covers whole transforms, so shape-morph animations need per-frame redrawing; the offscreen canvas works (createPath2D accepts SVG d / rAF 62fps / toDataURL 2ms) while the visible canvas node() is unavailable
 
 ### `template/svg-anim-promote`
 

@@ -51,16 +51,18 @@ describe('G-62 SVG 动画转译（整体变换 → CSS @keyframes）', () => {
     expect(r.wxss).toMatch(/\.proteus-svg-anim-2\s*\{/)
   })
 
-  it('形状属性动画（cx）不转译（CSS 无法表达——诚实边界）', () => {
+  // ★2026-09-09 更新：形状属性动画（cx）现由 Canvas 通道接管（template/svg-canvas → p-svg-canvas）
+  it('形状属性动画（cx）→ 走 Canvas 通道（非 CSS）', () => {
     const r = compile(
       '<svg viewBox="0 0 100 100"><circle cx="20" cy="50" r="14" fill="#3498db">' +
         '<animate attributeName="cx" values="20;80;20" dur="2s" repeatCount="indefinite"/></circle></svg>',
     )
-    // 无 CSS 动画类
+    // 不生成 CSS 动画类（CSS 无法表达形状变化）
     expect(r.wxml).not.toMatch(/proteus-svg-anim/)
     expect(r.wxss).not.toMatch(/@keyframes proteus-svg-anim/)
-    // 仍正常 lowering 为 image（静态首帧）
-    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+    // → p-svg-canvas 组件（离屏 canvas 逐帧绘制）
+    expect(r.wxml).toMatch(/<p-svg-canvas[^>]*scene="\{\{proteusSvgScene1\}\}"/)
+    expect(r.js).toMatch(/proteusSvgScene1:/)
   })
 
   it('无动画的 SVG 不生成 CSS（零开销）', () => {
