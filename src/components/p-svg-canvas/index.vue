@@ -80,17 +80,39 @@ function renderFrame(this: any, tMs: number): void {
     }
     try {
       const w = wx as unknown as {
+        env?: { USER_DATA_PATH?: string }
         canvasToTempFilePath?: (o: {
           canvas: unknown
+          fileType?: string
+          destWidth?: number
+          destHeight?: number
+          filePath?: string
           success?: (r: { tempFilePath: string }) => void
           fail?: (e?: unknown) => void
         }) => void
       }
+      // ★2026-09-09 真机反馈「15 秒后停止」：每帧 canvasToTempFilePath 生成**新临时文件**，
+      //   真机有临时文件配额/清理机制 → 堆积后失败。改为**复用同一路径**（filePath 参数覆盖写入）。
+      const tmpPath = this.__tmpPath || (this.__tmpPath = `proteus-svg-${Date.now()}.png`)
       if (typeof w.canvasToTempFilePath === 'function') {
         w.canvasToTempFilePath({
           canvas: c,
-          success: (r) => emit(r.tempFilePath),
-          fail: () => emit(c.toDataURL('image/png')),
+          fileType: 'png',
+          destWidth: c.width,
+          destHeight: c.height,
+          // filePath 指定固定路径（wx.env.USER_DATA_PATH）——复用同一文件，避免临时文件堆积
+          filePath: `${(w.env && w.env.USER_DATA_PATH) || ''}/${tmpPath}`,
+          success: (r) => {
+            this.__emitCount = (this.__emitCount || 0) + 1
+            this.__lastOk = Date.now()
+            // ★复用路径时 src 不变会导致 image 不刷新——加递增查询参数强制重载（同文件、不同 URL）
+            emit(r.tempFilePath + '?t=' + this.__emitCount)
+          },
+          fail: (e?: unknown) => {
+            this.__failCount = (this.__failCount || 0) + 1
+            this.__lastErr = String(e).slice(0, 120)
+            emit(c.toDataURL('image/png'))
+          },
         })
       } else {
         emit(c.toDataURL('image/png'))
