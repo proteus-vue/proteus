@@ -43,6 +43,10 @@ export interface TransformRuleOverrides {
   mapping?: Record<string, Record<string, string>>
   /** 自定义标签映射：新增 HTML 标签 → 小程序标签（AI 扩展新标签的入口） */
   customTags?: Record<string, string>
+  /** ★2026-09-09 支持矩阵 fail-fast：矩阵外语义（「已原样输出」类——非方法引用事件处理器/无对等组件标签/SVG/键盘事件）
+   *  从软警告升级为编译期硬报错（CompilerError fail-closed——防「已原样输出」静默放行产出无效产物）；
+   *  缺省 false 保持警告（诚实但不拦截） */
+  failFast?: boolean
 }
 
 /** 样式转换选项 */

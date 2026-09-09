@@ -15,6 +15,8 @@ export interface ResolvedOverrides {
   semanticClass: Record<string, string>
   /** 被禁用的规则 ID 集合 */
   disabled: Set<string>
+  /** ★2026-09-09 支持矩阵 fail-fast：矩阵外语义「已原样输出」软警告升级为编译期 CompilerError（缺省 false） */
+  failFast: boolean
 }
 
 /** 解析规则覆盖：合并 tags.ts 常量 + 覆盖补丁；未知规则 ID 编译期警告（防配置笔误） */
@@ -43,5 +45,5 @@ export function resolveOverrides(options?: TransformRuleOverrides): ResolvedOver
     if (!getTransformRule(id)) console.warn(`[proteus] 规则覆盖禁用了未注册的规则 ID：${id}（已忽略）`)
   }
 
-  return { tagMap, eventMap, semanticClass, disabled }
+  return { tagMap, eventMap, semanticClass, disabled, failFast: options?.failFast === true }
 }
