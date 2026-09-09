@@ -1877,6 +1877,11 @@ function stripTypeSyntax(body: string): string {
   //    (x: number) =>（此前仅处理带返回注解的，参数注解残留进产物 → Unexpected token ':'——svg-spike 实证）
   out = out.replace(/\(([^(){}]*)\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
   out = out.replace(/\(([^(){}]*\s*:\s*[^(){}]*)\)\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
+  // ⑤ ★2026-09-09 function 表达式/声明的参数类型注解（含返回类型）：function (r: unknown): string → function (r)
+  //   （svg-spike 实证：方法体内回调函数参数注解残留 → Unexpected token ':'；此前只覆盖箭头函数）
+  //   含具名函数声明形态：function name(r: unknown): string → function name(r)
+  out = out.replace(/\bfunction\s*([A-Za-z_$][\w$]*)?\s*\(([^(){}]*\s*:\s*[^(){}]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]|\s]*)?\s*\{/g,
+    (_m, name: string | undefined, params: string) => `function ${name ? name + ' ' : ''}(${stripParamTypes(params)}) {`)
   return out
 }
 

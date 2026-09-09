@@ -111,9 +111,27 @@ Web 里 `.icon path { fill: red }` 在 Skyline 无解（canvas 无 CSS 级联）
 | `wx.createCanvasContext('id')`（旧 API） | ⚠️ 返回对象但带 `isFallbackLegacy`——`draw()` 后截图无可见产出（Skyline 不认旧 API） |
 | `p.selectComponent('#spike-canvas')` | ❌ null |
 
-**推论**：Skyline 下 canvas 组件存在且布局可测（boundingClientRect 有值），但**取 node / 取 ctx 的官方通道当前不工作**。
-官方文档称 Skyline 支持 canvas 且示例用 `node()`，并注明「Skyline 需用最新 Nightly 工具调试」——
-因此可能是 **IDE 版本（36.6.0 非 Nightly）或自动化上下文限制**，而非平台能力缺失。
+**推论**：Skyline 下 canvas 组件存在且布局可测（boundingClientRect 有值），但**`SelectorQuery.node()` 取 canvas node 不工作**。
+
+### ★★2026-09-09 修正（版本记录纠错 + 通道重测）
+
+**纠错**：此前记录「IDE 36.6.0 非 Nightly」是**读错版本号**——`CFBundleShortVersionString` 读到的 36.6.0 是
+**Electron 版本**；实际 IDE 是 **2.02.2609072 Nightly darwin-arm64**（用户截图确认）。因此「等 Nightly」的结论不成立。
+
+**通道重测（`svg-spike.vue` v2 多通道并行探测，每通道 4s 独立超时自证）**：
+
+| 通道 | 结果 |
+|---|---|
+| A `page.createSelectorQuery().select('#id').node(cb)` | ❌ TIMEOUT（回调不触发） |
+| B `.fields({node:true})` | ❌ TIMEOUT |
+| C `wx.createSelectorQuery().select('#id').node(cb)` | ❌ TIMEOUT |
+| D `boundingClientRect`（对照） | ✅ rect=249.6px |
+| **E `wx.createOffscreenCanvas({type:'2d'})`** | ✅ **`ctx=OK(fillRect:function)`** |
+| **F 离屏绘制 → `toDataURL()` → `<image>`** | ✅ **完美显示**（截图实证：紫底黄折线） |
+
+**修正后的结论**：canvas 路线**并非被阻塞**——只是「查询 DOM 拿 canvas node」这条通道不工作；
+**离屏 canvas（`wx.createOffscreenCanvas`）完全可用**，带 `getContext('2d')` + `toDataURL()` + `createImage` + `createPath2D`，
+且绘制结果可经 data-URI 进 `<image>` 显示。这为 P2 未覆盖的能力（SVG 内部事件命中、`use`/`text` 等）留了可行路线。
 
 **对方案的影响与下一步**：
 

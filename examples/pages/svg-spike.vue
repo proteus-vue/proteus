@@ -1,100 +1,119 @@
-<!-- examples/pages/svg-spike.vue —— ★G-62 SVG→Skyline 地基 spike（2026-09-09）
-     目的：验证 Skyline 下 <canvas type="2d"> 能否拿 node + getContext('2d') + 真绘制。
-     这是 SVG 专项方案的地基假设——不成立则整个 lowering 方案要改。
-     验证路径（对齐 p-popover 血泪经验）：
-       ① canvas 必须显式 type="2d"（否则 selectorQuery.node() 拿不到）
-       ② 必须用 scope.createSelectorQuery()（wx.createSelectorQuery().in(scope) 在 Skyline 查不到组件内元素）
-       ③ 拿到 ctx 后真画一条线，用截图确认视觉产出
-     @proteus-api-check-ignore：本页刻意直用 wx.* 验证平台能力（spike 性质，非业务代码） -->
+<!-- examples/pages/svg-spike.vue —— ★G-62 地基 spike v2（2026-09-09 修正版）
+     目的：验证 Skyline 下 <canvas type="2d"> 能否拿 node + getContext('2d')。
+     ★v2 修正：IDE 版本记录错误已纠正（实际 2.02.2609072 Nightly，非 36.6.0——后者是 Electron 版本）。
+       本版做**多通道并行探测**，每通道独立超时自证，结果落 data（排除单一通道/上下文的偶然失败）。
+     @proteus-api-check-ignore：spike 性质，刻意直用 wx.* -->
 <template>
   <view class="spike">
-    <text class="spike-title">SVG→Skyline 地基 spike</text>
+    <text class="spike-title">canvas node 通道探测 v2</text>
     <text class="spike-sub">{{ status }}</text>
-
-    <!-- ★关键：type="2d" 显式声明 + 固定 id（Skyline 查询需要） -->
     <canvas id="spike-canvas" type="2d" width="240" height="120" class="spike-canvas" />
-
-    <button class="spike-btn" @click="runSpike">跑一遍验证</button>
+    <button class="spike-btn" @click="runSpike">跑探测</button>
+    <text class="spike-result">{{ resultText }}</text>
+    <text class="spike-sub">离屏 canvas 绘制 → image 显示（F 通道）</text>
+    <image v-if="offUri" class="spike-canvas" :src="offUri" mode="aspectFit" />
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const status = ref('待验证——点按钮')
+const status = ref('待探测')
+const resultText = ref('')
+const offUri = ref('')
 
-type AnyCtx = {
-  fillStyle?: string
-  strokeStyle?: string
-  lineWidth?: number
-  fillRect?: (x: number, y: number, w: number, h: number) => void
-  beginPath?: () => void
-  moveTo?: (x: number, y: number) => void
-  lineTo?: (x: number, y: number) => void
-  stroke?: () => void
-}
-
-/** 地基层 1：拿 canvas node + 2d ctx */
-function probeCanvas(): Promise<{ ok: boolean; detail: string; ctx?: AnyCtx }> {
+/** 单通道探测（独立超时自证——避免"回调不回来"与"回调返回 null"混淆） */
+function probeChannel(name: string, run: (done: (r: string) => void) => void): Promise<string> {
   return new Promise((resolve) => {
-    const pages = getCurrentPages()
-    const page = pages[pages.length - 1]
-    // ★正确通道：页面实例自带 createSelectorQuery（wx.createSelectorQuery().in(page) 在 Skyline 不可靠）
-    const q = typeof page.createSelectorQuery === 'function' ? page.createSelectorQuery() : wx.createSelectorQuery()
-    q.select('#spike-canvas')
-      .node((res) => {
-        if (!res || !res.node) return resolve({ ok: false, detail: 'node() 返回 null——canvas 节点拿不到' })
-        const node = res.node
-        if (typeof node.getContext !== 'function') return resolve({ ok: false, detail: 'node.tagName=' + node.tagName + ' 无 getContext' })
-        let ctx: AnyCtx | null = null
-        try {
-          ctx = node.getContext('2d') as AnyCtx
-        } catch (e) {
-          return resolve({ ok: false, detail: 'getContext(2d) 抛错：' + String(e).slice(0, 80) })
-        }
-        if (!ctx) return resolve({ ok: false, detail: 'getContext(2d) 返回 null' })
-        resolve({ ok: true, detail: 'node.tagName=' + node.tagName + '，ctx 可用（fillRect=' + typeof ctx.fillRect + '）', ctx })
+    let settled = false
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        resolve(name + ': TIMEOUT（回调未触发）')
+      }
+    }, 4000)
+    try {
+      run((r: string) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(name + ': ' + r)
       })
-      .exec()
+    } catch (e) {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(name + ': THROW ' + String(e).slice(0, 60))
+    }
   })
 }
 
-/** 地基层 2：真绘制（画红矩形 + 一条线，截图可验证） */
-function drawSmokeTest(ctx: AnyCtx): boolean {
-  try {
-    if (typeof ctx.fillRect !== 'function') return false
-    ctx.fillStyle = '#e74c3c'
-    ctx.fillRect(0, 0, 120, 60)
-    if (typeof ctx.beginPath === 'function') {
-      ctx.strokeStyle = '#2ecc71'
-      ctx.lineWidth = 4
-      ctx.beginPath()
-      if (ctx.moveTo) ctx.moveTo(0, 0)
-      if (ctx.lineTo) ctx.lineTo(240, 120)
-      if (ctx.stroke) ctx.stroke()
-    }
-    return true
-  } catch {
-    return false
-  }
-}
-
 async function runSpike(): Promise<void> {
-  status.value = '验证中…'
-  const probe = await probeCanvas()
-  if (!probe.ok) {
-    status.value = `✗ 地基层 1 失败：${probe.detail}`
-    return
+  status.value = '探测中…（每通道 4s 超时）'
+  const results: string[] = []
+  const page = getCurrentPages()[getCurrentPages().length - 1] as any
+
+  function describeNode(r: unknown): string {
+    const res = r as any
+    if (!res) return 'NULL'
+    if (!res.node) return 'NO_NODE_FIELD'
+    const node = res.node
+    let ctxInfo = ''
+    try {
+      const ctx = node.getContext ? node.getContext('2d') : null
+      ctxInfo = ctx ? 'ctx=OK(fillRect:' + typeof ctx.fillRect + ')' : 'ctx=null'
+    } catch (e) {
+      ctxInfo = 'ctxThrow:' + String(e).slice(0, 30)
+    }
+    return 'node.tagName=' + node.tagName + ' ' + ctxInfo
   }
-  const drew = drawSmokeTest(probe.ctx as AnyCtx)
-  let msg = ''
-  if (drew) {
-    msg = '✓ 地基成立：' + probe.detail + '，已绘制（红块+绿线，看画布）'
-  } else {
-    msg = '△ 拿到 ctx 但绘制失败：' + probe.detail
+
+  results.push(await probeChannel('A page.createSelectorQuery().node()', function (done) {
+    page.createSelectorQuery().select('#spike-canvas').node(function (r: unknown) { done(describeNode(r)) }).exec()
+  }))
+  results.push(await probeChannel('B page...fields({node:true})', function (done) {
+    page.createSelectorQuery().select('#spike-canvas').fields({ node: true, size: true }, function (r: unknown) { done(describeNode(r)) }).exec()
+  }))
+  results.push(await probeChannel('C wx.createSelectorQuery().node()', function (done) {
+    wx.createSelectorQuery().select('#spike-canvas').node(function (r: unknown) { done(describeNode(r)) }).exec()
+  }))
+  results.push(await probeChannel('D boundingClientRect（对照）', function (done) {
+    page.createSelectorQuery().select('#spike-canvas').boundingClientRect(function (r: unknown) {
+      const rr = r as { width?: number } | null
+      done(rr ? 'rect=' + rr.width + 'px' : 'NULL')
+    }).exec()
+  }))
+  results.push(await probeChannel('E wx.createOffscreenCanvas({type:2d})', function (done) {
+    const w = wx as any
+    if (typeof w.createOffscreenCanvas !== 'function') return done('API 不存在')
+    const c = w.createOffscreenCanvas({ type: '2d', width: 100, height: 100 })
+    const ctx = c.getContext ? c.getContext('2d') : null
+    done(ctx ? 'ctx=OK(fillRect:' + typeof ctx.fillRect + ')' : 'ctx=null')
+  }))
+
+  // F. 离屏 canvas 绘制 → toDataURL → image 显示（决定 canvas 路线是否可行）
+  try {
+    const w = wx as any
+    const c = w.createOffscreenCanvas({ type: '2d', width: 240, height: 120 })
+    const ctx = c.getContext('2d')
+    ctx.fillStyle = '#9b59b6'
+    ctx.fillRect(0, 0, 240, 120)
+    ctx.strokeStyle = '#f1c40f'
+    ctx.lineWidth = 8
+    ctx.beginPath()
+    ctx.moveTo(20, 100)
+    ctx.lineTo(120, 20)
+    ctx.lineTo(220, 100)
+    ctx.stroke()
+    offUri.value = c.toDataURL()
+    results.push('F offscreen draw→toDataURL→image: ' + (offUri.value ? 'URI ' + offUri.value.length + ' chars' : 'EMPTY'))
+  } catch (e) {
+    results.push('F offscreen draw: THROW ' + String(e).slice(0, 60))
   }
-  status.value = msg
-  console.log('[svg-spike]', msg)
+
+  resultText.value = results.join('\n')
+  status.value = '探测完成'
+  console.log('[svg-spike-v2]', resultText.value)
 }
 </script>
 
@@ -103,18 +122,16 @@ async function runSpike(): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0;
-  gap: 12px;
+  padding: 16px 8px;
+  gap: 8px;
 }
 .spike-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
 }
 .spike-sub {
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
-  padding: 0 24px;
-  text-align: center;
 }
 .spike-canvas {
   width: 240px;
@@ -123,6 +140,15 @@ async function runSpike(): Promise<void> {
   border: 1px solid #ddd;
 }
 .spike-btn {
-  margin-top: 8px;
+  margin-top: 4px;
+}
+.spike-result {
+  font-size: 11px;
+  color: #333;
+  white-space: pre-wrap;
+  padding: 8px;
+  background: #f7f8fa;
+  width: 100%;
+  box-sizing: border-box;
 }
 </style>
