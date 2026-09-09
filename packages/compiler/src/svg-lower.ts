@@ -73,6 +73,21 @@ const SVG_TAGS = new Set([
   // ★2026-09-09 P2：<svg> 子树内的 text 即 SVG text（与原生 <text> 同名的歧义只存在于根级；
   //   子树内 lowering 由 serializeSvgElement 的标签白名单保证——P2 实测其渲染为空白，见 SVG_P2_SUPPORT）
   'text',
+  // ★★2026-09-09 规范盘点补全（像素级真机实测：这些能力**都能渲染**——此前不在白名单导致整棵 SVG
+  //   lowering 失败、原样输出不渲染。白名单缺失 ≠ 平台不支持）
+  // 滤镜（真机实测 feColorMatrix/feGaussianBlur 均渲染）
+  'filter', 'fegaussianblur', 'fecolormatrix', 'feoffset', 'feblend', 'fecomposite', 'feturbulence',
+  'fedropshadow', 'femerge', 'femergenode', 'femorphology', 'fedisplacementmap', 'feimage', 'fetile',
+  'fedistantlight', 'fepointlight', 'fespotlight', 'fediffuselighting', 'fespecularlighting', 'fecomponenttransfer',
+  'fefunca', 'fefuncb', 'fefuncg', 'fefuncr',
+  // 图案 / 标记（真机实测 pattern/marker 渲染）
+  'pattern', 'marker', 'view',
+  // 内嵌图像（真机实测渲染）
+  'image',
+  // 文字路径 / 引用
+  'textpath', 'a', 'switch',
+  // 描述性（不影响渲染，保留以兼容）
+  'title', 'desc', 'metadata', 'style',
 ])
 
 /** 序列化结果：静态 SVG → base64 data-URI；含动态绑定/不支持形态 → null（调用方警告） */
@@ -163,6 +178,45 @@ const CAMEL_ATTRS: Record<string, string> = {
   strokedashoffset: 'stroke-dashoffset',
   fillopacity: 'fill-opacity',
   fillrule: 'fill-rule',
+  // ★2026-09-09 规范盘点补全（滤镜/图案/标记相关属性）
+  filterunits: 'filterUnits',
+  primitiveunits: 'primitiveUnits',
+  xchannelselector: 'xChannelSelector',
+  ychannelselector: 'yChannelSelector',
+  markerstart: 'marker-start',
+  markerend: 'marker-end',
+  markermid: 'marker-mid',
+  markerunits: 'markerUnits',
+  patterncontentunits: 'patternContentUnits',
+  patterntransform: 'patternTransform',
+  textanchor: 'text-anchor',
+  fontsize: 'font-size',
+  fontfamily: 'font-family',
+  fontweight: 'font-weight',
+  fontstyle: 'font-style',
+  dominantbaseline: 'dominant-baseline',
+  letterspacing: 'letter-spacing',
+  d: 'd',
+  x: 'x',
+  y: 'y',
+  cx: 'cx',
+  cy: 'cy',
+  r: 'r',
+  rx: 'rx',
+  ry: 'ry',
+  x1: 'x1',
+  y1: 'y1',
+  x2: 'x2',
+  y2: 'y2',
+  width: 'width',
+  height: 'height',
+  points: 'points',
+  href: 'href',
+  xlinkhref: 'xlink:href',
+  mode: 'mode',
+  result: 'result',
+  in: 'in',
+  in2: 'in2',
   cliprule: 'clip-rule',
 }
 
