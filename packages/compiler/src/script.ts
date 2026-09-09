@@ -2620,6 +2620,63 @@ export function transformScriptToPage(
     lines.push('  },')
   }
 
+  // ★★2026-09-09 G-62 事件命中：SVG 图形事件（touch 坐标 → viewBox 坐标 → 几何判定 → 调 handler）。
+  //   真机实证：Skyline tap 事件 detail/touches 全 undefined（无坐标）；touchstart 的 touches[0] 带 pageX/pageY
+  //   → 命中必须基于 touchstart。坐标换算：touches[0].pageX/pageY - image 的 boundingClientRect 左上角
+  //   → 按 image 实际尺寸/viewBox 缩放 → viewBox 坐标系 → 逐图形判定（circle/ellipse/rect/path 包围盒）。
+  for (const hit of extra.svgHits ?? []) {
+    if (disabled.has('template/svg-hit')) continue
+    const idx = (extra.svgHits ?? []).indexOf(hit) + 1
+    const methodName = `proteusSvgHit${idx}`
+    methodNames.add(methodName)
+    const vb = hit.viewBox.trim().split(/\s+/).map(Number)
+    const vbW = vb.length === 4 && vb[2] > 0 ? vb[2] : 24
+    const vbH = vb.length === 4 && vb[3] > 0 ? vb[3] : 24
+    // 图形判定代码（按编译期几何——viewBox 坐标）
+    const checks = hit.shapes.map((sh) => {
+      const g = sh.geom as Record<string, number | number[]>
+      if (sh.kind === 'circle') {
+        const cx = Number(g.cx ?? 0), cy = Number(g.cy ?? 0), r = Number(g.r ?? 0)
+        return `if ((px - ${cx}) * (px - ${cx}) + (py - ${cy}) * (py - ${cy}) <= ${r * r}) { this.${sh.handler}(); return }`
+      }
+      if (sh.kind === 'ellipse') {
+        const cx = Number(g.cx ?? 0), cy = Number(g.cy ?? 0), rx = Number(g.rx ?? 0), ry = Number(g.ry ?? 0)
+        return `if (rx > 0 && ry > 0 && ((px - ${cx}) / ${rx}) * ((px - ${cx}) / ${rx}) + ((py - ${cy}) / ${ry}) * ((py - ${cy}) / ${ry}) <= 1) { this.${sh.handler}(); return }`
+      }
+      if (sh.kind === 'rect') {
+        const x = Number(g.x ?? 0), y = Number(g.y ?? 0), w = Number(g.w ?? 0), h = Number(g.h ?? 0)
+        return `if (px >= ${x} && px <= ${x + w} && py >= ${y} && py <= ${y + h}) { this.${sh.handler}(); return }`
+      }
+      // path：用采样点包围盒近似（诚实边界——曲线/凹形可能误判）
+      const pts = (g.pts as number[]) ?? []
+      const xs = pts.filter((_, i) => i % 2 === 0)
+      const ys = pts.filter((_, i) => i % 2 === 1)
+      if (!xs.length || !ys.length) return ''
+      const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
+      return `if (px >= ${minX} && px <= ${maxX} && py >= ${minY} && py <= ${maxY}) { this.${sh.handler}(); return }`
+    }).filter(Boolean).join('\n')
+    pushMethod(
+      `  ${methodName}(e) {\n` +
+      `    var t = (e && e.touches && e.touches[0]) || (e && e.changedTouches && e.changedTouches[0])\n` +
+      `    if (!t) return\n` +
+      `    var self = this\n` +
+      `    var q = (this.createSelectorQuery ? this.createSelectorQuery() : wx.createSelectorQuery())\n` +
+      `    q.select('#${hit.imageId}').boundingClientRect(function (rect) {\n` +
+      `      if (!rect || !rect.width || !rect.height) return\n` +
+      `      var sx = ${vbW} / rect.width\n` +
+      `      var sy = ${vbH} / rect.height\n` +
+      `      var px = (t.pageX - rect.left) * sx\n` +
+      `      var py = (t.pageY - rect.top) * sy\n` +
+      `      ${checks.split('\n').join('\n      ').replace(/this\./g, 'self.')}\n` +
+      `    }).exec()\n` +
+      `  },`,
+    )
+    trace?.add('template/svg-hit', {
+      before: `SVG 图形事件 ${hit.shapes.map((x) => x.handler).join('/')}`,
+      after: `${methodName}（touchstart 坐标 → viewBox → 几何命中 → handler；${hit.shapes.length} 个图形）`,
+    })
+  }
+
   // v-model 自动 handler：proteusOnXxxInput(e) { this.setData({ xxx: e.detail.value }) }
   const vmodelDisabled = disabled.has('script/vmodel-handler')
   for (const name of vModelBindings) {

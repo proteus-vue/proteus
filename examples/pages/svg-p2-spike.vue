@@ -4,7 +4,7 @@
      opacity / filter / text / 嵌套 g / use+symbol。
      每个特性单独一个 SVG（互不干扰，便于逐项判定）。 -->
 <template>
-  <view class="spike">
+  <view class="spike" @tap="onRootTap" @touchstart="onRootTouch" @touchend="onRootTouch">
     <text class="spike-title">SVG 高级特性渲染对照</text>
     <text class="spike-sub">每格一个特性——看哪个渲染、哪个空白</text>
     <text class="spike-sub">{{ tapLog }}</text>
@@ -25,7 +25,7 @@
 
     <view class="spike-grid">
       <view class="spike-cell" v-for="(it, i) in items" :key="i">
-        <image class="spike-img" :src="it.src" mode="aspectFit" @tap="onImgTap(it.name)" data-idx="{{i}}" />
+        <image class="spike-img" :src="it.src" mode="aspectFit" @tap="onImgTap" data-idx="{{i}}" />
         <text class="spike-label">{{ it.name }}</text>
       </view>
     </view>
@@ -38,11 +38,28 @@ import { onMounted, ref } from 'vue'
 const NS = 'http://www.w3.org/2000/svg'
 const items = ref<any[]>([])
 const tapLog = ref('未点击')
-function onImgTap(name: string, e?: unknown): void {
-  const ev = e as { detail?: { x?: number; y?: number }; currentTarget?: { offsetLeft?: number; offsetTop?: number }; touches?: Array<{ x?: number; y?: number }> } | undefined
-  const d = ev?.detail
-  const t = ev?.touches?.[0]
-  tapLog.value = `tap ${name}: detail=${JSON.stringify(d)} touch=${JSON.stringify(t)} ct=${JSON.stringify(ev?.currentTarget)}`
+function onRootTouch(e: unknown): void {
+  const ev = e as { type?: string; detail?: unknown; touches?: unknown; changedTouches?: unknown } | undefined
+  tapLog.value = 'TOUCH ' + String(ev?.type) + ' detail=' + JSON.stringify(ev?.detail) + ' touches=' + JSON.stringify(ev?.touches) + ' changed=' + JSON.stringify(ev?.changedTouches)
+  console.log('[tap-root]', tapLog.value)
+}
+function onRootTap(e: unknown): void {
+  const ev = e as { detail?: unknown; touches?: unknown; changedTouches?: unknown; currentTarget?: unknown; target?: unknown } | undefined
+  tapLog.value = 'ROOT detail=' + JSON.stringify(ev?.detail) + ' touch=' + JSON.stringify(ev?.touches) + ' changed=' + JSON.stringify(ev?.changedTouches)
+  console.log('[tap-root]', tapLog.value)
+}
+function onImgTap(e: unknown): void {
+  const ev = e as {
+    detail?: { x?: number; y?: number }
+    currentTarget?: { dataset?: { idx?: number }; offsetLeft?: number; offsetTop?: number }
+    touches?: Array<{ x?: number; y?: number; clientX?: number; clientY?: number; pageX?: number; pageY?: number }>
+    changedTouches?: Array<{ x?: number; y?: number }>
+  } | undefined
+  tapLog.value =
+    'detail=' + JSON.stringify(ev?.detail) +
+    ' | touch=' + JSON.stringify(ev?.touches?.[0]) +
+    ' | changed=' + JSON.stringify(ev?.changedTouches?.[0]) +
+    ' | ct=' + JSON.stringify(ev?.currentTarget)
   console.log('[tap-probe]', tapLog.value)
 }
 

@@ -240,10 +240,24 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 **技术链路完整**：`<image @tap>` 拿坐标 → 减 boundingClientRect 偏移 → 换算 viewBox 坐标 →
 对 shape 列表做 `isPointInPath` / 包围盒判定 → 派发对应 handler。
 
-**未实现原因（诚实）**：需要运行时组件维护 shape 列表 + 坐标变换 + 命中判定 + 事件派发四件套，
-且 `<image>` 无内部元素、命中精度受 viewBox 缩放影响；相对 `use` 展开（纯编译期、零风险）性价比低。
-**当前建议**：需要内部元素交互的场景，用「多个 `<image>` 分区 + 各自 `@tap`」代替——零编译器改动、命中精确。
-若后续有强需求，按上述链路实现 `mp-svg` 运行时组件（离屏 canvas 绘制 + 命中测试）。
+### ★★已实现（2026-09-09 晚）
+
+**关键实证（推翻 tap 方案）**：Skyline 下 **`tap` 事件 `detail`/`touches`/`changedTouches` 全部 undefined（无坐标）**；
+**`touchstart` 的 `touches[0]` 带 `pageX/pageY/clientX/clientY`** → 命中必须基于 **touchstart**。
+
+**实现**（纯几何判定，零运行时依赖——未用离屏 canvas，更轻）：
+- 编译期 `collectHitShapes`：收集带 `@click`/`@tap` 的图形几何（circle/rect/ellipse/path 包围盒；
+  **带 transform 的子树诚实降级不参与**——坐标换算复杂度高）
+- 模板：`<image id="proteus-svg-hit-N" bindtouchstart="proteusSvgHitN">`
+- 脚本：`proteusSvgHitN(e)` → `touches[0]` 坐标 → `boundingClientRect` 换算 → `scale = viewBox/rect` →
+  viewBox 坐标 → 逐图形判定（声明序，先命中先返回）→ 调 handler（经 `self` 调用——回调内 `this` 非组件实例）
+- 规则 `template/svg-hit`（模板/脚本两侧同规则，可禁用）
+
+**真机验证**（`examples/pages/svg-hit-test.vue`）：红圆(30,30) → `HIT: red circle`；
+蓝圆(70,70) → `HIT: blue circle`；绿方(60-90,10-40) → `HIT: green rect`；空白区 → 不命中（RESET）。
+
+**边界（诚实）**：`path` 用采样点包围盒近似（曲线/凹形可能误判）；transform 子树不参与；无 hit-test 缓存
+（每次 touch 查询 rect——可优化）。`tests/svg-hit.test.ts` 7 用例。
 
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
