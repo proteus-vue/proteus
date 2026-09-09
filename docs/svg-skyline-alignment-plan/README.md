@@ -169,6 +169,32 @@ Web 里 `.icon path { fill: red }` 在 Skyline 无解（canvas 无 CSS 级联）
 **边界（诚实）**：`v-for` 的 SVG 暂不支持（列表展开 + key 管理复杂度高）——保持 `svg-no-peer` 警告；
 SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas 路线才能做）；`:style`/`:class` 在外层 `<image>` 处理。
 
+## 9d. ★P2 已落地（2026-09-09）——实测特性支持表 + 不支持项诚实警告
+
+**原假设被真机推翻**：方案 §5 的 P2 原本假设 mask/clip-path/transform 需要 canvas 近似绘制（"部分放弃浏览器语义改近似视觉"）。
+真机 spike（`examples/pages/svg-p2-spike.vue`，10 项逐格对照）显示 **Skyline 的 `<image>` SVG 渲染能力远超预期**：
+
+| 特性 | 实测 | 特性 | 实测 |
+|---|---|---|---|
+| linearGradient | ✅ 完美 | transform 矩阵（translate/rotate/scale） | ✅ 完美 |
+| radialGradient | ✅ 完美 | stroke-dasharray | ✅ 完美 |
+| clipPath | ✅ 完美 | opacity / 嵌套 g | ✅ 完美 |
+| mask | ✅ 完美（圆形镂空） | filter（feGaussianBlur） | ✅ 完美 |
+| **use + symbol** | ❌ 空白 | **text** | ❌ 空白 |
+
+**结论：P2 无需 canvas**——mask/clip-path/transform/dasharray/filter 全部原生支持，编译器只需**放行**并在
+不支持项上诚实警告。实现：
+- `SVG_P2_SUPPORT` 支持表（`svg-lower.ts`，实测结论文档化）+ `collectUnsupportedSvgTags`
+- `template.ts` `warnUnsupportedSvgFeatures`：SVG 子树含 `use`/`symbol`/`text`/`tspan` → 编译期警告（含替代建议）
+- 规则 `template/svg-p2-unsupported` 登记；`<text>` 纳入 SVG_TAGS（子树内即 SVG text）
+- `svg-no-peer` 文案更新（不再指向过时的「canvas 路线」）
+
+**验证**：`tests/svg-to-image.test.ts` 17 用例（含 P2：mask/clipPath/transform 放行 + use/text 警告 + 支持表导出）；
+全量 2692/2692 · 门禁 93/93 · build:mp/web ✓。
+
+**边界（诚实）**：`use`/`symbol`（SVG sprite 引用）与 `text`（SVG 文字）实测空白——警告引导改用 `<path>` 展开
+或图片；SVG 内部事件命中仍不支持（image 无内部元素）。
+
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
 1. **ref 赋值右侧三元表达式被切断**：`status.value = cond ? a : b` →

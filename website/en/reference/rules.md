@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 101 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 102 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (55)
+## Template transforms (56)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-p2-unsupported`
+
+**use/symbol/text/tspan inside SVG → measured-unsupported warning (SVG→Skyline P2)**
+
+Measured SVG feature support for Skyline image rendering (on-device spike): mask/clipPath/gradients/transform/dasharray/opacity/filter all work; use/symbol/text/tspan render blank → honest compile-time warning
+
+```
+before: <svg><use href="#icon"/></svg>
+after:  lowering 为 image + 警告「实测不支持」
+```
+
+> why: G-62 SVG→Skyline P2: the original plan assumed mask/clip-path needed canvas approximation; on-device evidence shows Skyline image supports them natively (P2 greatly simplified). Only use/text render blank — warning ahead of time to avoid on-device surprises (anti-black-box)
 
 ### `template/svg-dynamic`
 
