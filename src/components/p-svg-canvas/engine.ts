@@ -288,6 +288,17 @@ export function drawScene(canvas: OffscreenCanvasLike, scene: SvgScene, tMs: num
   ctx.scale(canvas.width / vw, canvas.height / vh)
   ctx.translate(-vx, -vy)
   for (const node of scene.nodes) drawNode(ctx, canvas, node, tMs)
+  // ★2026-09-09 真机诊断：用 fillRect（不依赖 Path2D）画一个角标——
+  //   若真机能见到此角标但图形仍无，则 createPath2D 在真机不可用（模拟器可用）。
+  try {
+    const c = ctx as unknown as { fillRect?: (x: number, y: number, w: number, h: number) => void }
+    if (c.fillRect) {
+      ctx.fillStyle = '#ff00ff'
+      c.fillRect(0, 0, 12, 12)
+    }
+  } catch {
+    /* 诊断忽略 */
+  }
 }
 
 /** 命中判定：点是否落在场景任一图形内（viewBox 坐标——用 isPointInPath） */
