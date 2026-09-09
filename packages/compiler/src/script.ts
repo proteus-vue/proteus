@@ -1370,14 +1370,17 @@ function computedPatchEntries(
 }
 
 /** onLoad 初始化行：一次性计算全部 computed 派生字段（首次渲染前 data 就绪） */
-function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNames?: Set<string>, propsVar?: string): string {
+function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNames?: Set<string>, propsVar?: string, methodNames?: Set<string>): string {
   const entries = Object.entries(computeds)
   if (!entries.length) return ''
   // ★#495c computed 表达式内 runtimeInit 裸名 → this.x（gridClass 依赖 gridOk=detectFluidCapabilities() runtimeInit——
   //  裸名词法查找 ReferenceError：p-grid attached 崩）；props.gap → this.data.gap（与方法体 propsVar 重写一致）
+  //  ★2026-09-09 P2 spike 缺口：模块级函数在 computed 表达式内裸调用未改写（double(n.value) → 裸 double → ReferenceError）；
+  //   复用 rewriteBareMethodCalls（与方法体同规则：methodNames 命中 → this.name(）
   const rewrite = (expr: string): string => {
     let out = expr
     if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
+    if (methodNames) out = rewriteBareMethodCalls(out, methodNames)
     if (runtimeInitNames) {
       for (const name of runtimeInitNames) {
         out = out.replace(new RegExp(`(?<!\\.)\\b${name}\\b`, 'g'), `this.${name}`)
@@ -2682,7 +2685,7 @@ export function transformScriptToPage(
   //   无 props 组件保持 attached（既有验证时序不变）；运行时初始化/注入仍留 attached（先于 ready 执行）
   const compDerivedReady =
     extra.isComponent && propEntries.length > 0
-      ? [computedInitLine(computeds, runtimeInitNames, propsVar), immediateWatchLine(watches, propsVar)].filter(Boolean).join('\n')
+      ? [computedInitLine(computeds, runtimeInitNames, propsVar, methodNames), immediateWatchLine(watches, propsVar)].filter(Boolean).join('\n')
       : ''
   // ★#496c onReady 精修段（页面 p-grid 档位——SelectorQuery 实测容器宽）
   const semanticGridReady = !extra.isComponent ? semanticGridReadyCode(semanticGrids) : ''
@@ -2791,7 +2794,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
   // ★2026-09-09 顶层副作用调用内 plain const 裸引用 → this.data.X（顶层 const 已内联 data，onLoad 期可读）
   const plainCallsRewrite = (s: string): string => (s ? rewritePlainDataSafe(s, plainDataNames) : s)
   const initLineSeq = (): string[] =>
-    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(preCallsLine), methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), reactiveBridgeSetupLine, postCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(postCallsLine), methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
+    [semanticGridInit, preCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(preCallsLine), methodNames, runtimeInitNames) : '', runtimeInitLine(runtimeInits, methodNames, runtimeInitNames), reactiveBridgeSetupLine, postCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(postCallsLine), methodNames, runtimeInitNames) : '', computedInitLine(computeds, runtimeInitNames, propsVar, methodNames), storeBindingInit, appConfigBindingInit, runtimeInitSnapshotLine, immediateWatchLine(watches, propsVar), piBlocks.page].filter(Boolean)
 
   // 组件模式：无 onLoad（微信组件生命周期无 onLoad）；computed 初始化 + immediate watch 放 attached()
   // ★vue-compat-advance Batch 3：provide 注册放 created（先于子组件 attached 注入），inject 读取放 attached
@@ -2808,7 +2811,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
       runtimeInitLine(runtimeInits, methodNames, runtimeInitNames),
       reactiveBridgeSetupLine,
       postCallsLine ? rewriteBareMethodCalls(plainCallsRewrite(postCallsLine), methodNames, runtimeInitNames) : '',
-      compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar),
+      compDerivedReady ? '' : computedInitLine(computeds, runtimeInitNames, propsVar, methodNames),
       storeBindingInit,
       compDerivedReady ? '' : immediateWatchLine(watches, propsVar),
       piBlocks.inject,
