@@ -15,7 +15,7 @@
 //
 // 诚实边界：回传是瓶颈（18ms/次）→ 大图/高帧率场景受限；建议 ≤512px 画布 + 30fps 目标。
 
-import { tracePath } from './path-parser'
+import { tracePath, getPointAtLength } from './path-parser'
 
 /** 场景节点（编译期从 SVG 树产出） */
 export interface SceneNode {
@@ -154,6 +154,23 @@ function nodeTransform(node: SceneNode, tMs: number): Transform2D | undefined {
   let tf = node.transform
   if (!node.anims) return tf
   for (const a of node.anims) {
+    // ★2026-09-09 animateMotion：沿路径运动（values[0] = 路径 d）→ 按进度取点转 translate
+    if (a.attr === 'motion') {
+      const pathD = a.values[0]
+      if (!pathD) continue
+      // 进度（含循环/延迟——复用 evalAnim 的时间归一化语义）
+      const total = a.dur + a.delay
+      let local = tMs - a.delay
+      if (local < 0) local = 0
+      else if (a.repeat) local = local % a.dur
+      else if (local > a.dur) local = a.dur
+      const p = a.dur > 0 ? local / a.dur : 0
+      const pt = getPointAtLength(pathD, p)
+      if (pt) {
+        tf = { ...tf, translate: [pt.x, pt.y] }
+      }
+      continue
+    }
     if (a.attr !== 'transform' || !a.transformType) continue
     const v = evalAnim(a, tMs)
     if (v === null) continue

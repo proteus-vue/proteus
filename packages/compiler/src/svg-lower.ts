@@ -742,6 +742,21 @@ function toSceneNode(node: ElementNode, hasAnim: { v: boolean }): SceneNodeIR | 
 
 /** 解析 <animate>/<animateTransform> → AnimSpec */
 function parseAnimElement(el: ElementNode): NonNullable<SceneNodeIR['anims']>[number] | null {
+  const tag = el.tag.toLowerCase()
+  // ★2026-09-09 animateMotion 前置判定：它**没有 attributeName**（用 path 属性）——
+  //   必须在 attr 空值检查之前处理，否则被 return null 丢掉（实测漏掉原因）
+  if (tag === 'animatemotion') {
+    const pathD = staticAttr(el, 'path') ?? ''
+    if (!pathD) return null
+    return {
+      attr: 'motion',
+      transformType: undefined,
+      values: [pathD],
+      dur: parseDur(staticAttr(el, 'dur') ?? '1s'),
+      delay: parseDur(staticAttr(el, 'begin') ?? '0s'),
+      repeat: (staticAttr(el, 'repeatCount') ?? '').toLowerCase() !== '1',
+    }
+  }
   const attr = (staticAttr(el, 'attributeName') ?? staticAttr(el, 'attributename') ?? '').trim()
   if (!attr) return null
   const dur = parseDur(staticAttr(el, 'dur') ?? '1s')
@@ -755,7 +770,7 @@ function parseAnimElement(el: ElementNode): NonNullable<SceneNodeIR['anims']>[nu
     values = [f, t].filter((v) => v !== '')
   }
   if (!values.length) return null
-  const isTransform = el.tag.toLowerCase() === 'animatetransform'
+  const isTransform = tag === 'animatetransform'
   return {
     attr: isTransform ? 'transform' : attr,
     transformType: isTransform ? (staticAttr(el, 'type') ?? '').toLowerCase() || undefined : undefined,
@@ -794,7 +809,8 @@ export function lowerSvgToScene(node: ElementNode): SvgSceneIR | null {
     for (const a of n.anims ?? []) {
       duration = Math.max(duration, a.dur + a.delay)
       if (a.attr !== 'transform' && a.attr !== 'opacity') {
-        if (SHAPE_ANIM_ATTRS.has(a.attr)) needsCanvas = true
+        // ★animateMotion（路径运动）也需 canvas 逐帧绘制
+        if (a.attr === 'motion' || SHAPE_ANIM_ATTRS.has(a.attr)) needsCanvas = true
       }
     }
     for (const c of n.children ?? []) scan(c)

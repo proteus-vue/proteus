@@ -248,3 +248,113 @@ export function tracePath(t: PathTarget, d: string): void {
     prevCmd = cmd
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★2026-09-09 animateMotion：路径采样（沿路径按弧长取点——SVG animateMotion 的 path 属性）
+// 实现：用 tracePath 的同一套解析逻辑，但把命令记录为「点序列」而非直接下发 ctx；
+//   贝塞尔/弧线离散为折线 → 累计弧长 → 按进度 t(0..1) 插值取点。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 采样点 */
+export interface SamplePoint {
+  x: number
+  y: number
+}
+
+/** 收集型 target：把路径命令转为折线点序列 */
+function collectPoints(d: string): SamplePoint[] {
+  const pts: SamplePoint[] = []
+  let cur: SamplePoint = { x: 0, y: 0 }
+  const t: PathTarget = {
+    beginPath() {
+      pts.length = 0
+    },
+    moveTo(x, y) {
+      cur = { x, y }
+      pts.push({ x, y })
+    },
+    lineTo(x, y) {
+      cur = { x, y }
+      pts.push({ x, y })
+    },
+    bezierCurveTo(c1x, c1y, c2x, c2y, x, y) {
+      // 三次贝塞尔离散（16 段足够视觉平滑）
+      const n = 16
+      for (let i = 1; i <= n; i++) {
+        const u = i / n
+        const v = 1 - u
+        const px = v * v * v * cur.x + 3 * v * v * u * c1x + 3 * v * u * u * c2x + u * u * u * x
+        const py = v * v * v * cur.y + 3 * v * v * u * c1y + 3 * v * u * u * c2y + u * u * u * y
+        pts.push({ x: px, y: py })
+      }
+      cur = { x, y }
+    },
+    quadraticCurveTo(cx, cy, x, y) {
+      const n = 12
+      for (let i = 1; i <= n; i++) {
+        const u = i / n
+        const v = 1 - u
+        const px = v * v * cur.x + 2 * v * u * cx + u * u * x
+        const py = v * v * cur.y + 2 * v * u * cy + u * u * y
+        pts.push({ x: px, y: py })
+      }
+      cur = { x, y }
+    },
+    arc(cx, cy, r, s, e, ccw) {
+      const n = 16
+      const dir = ccw ? -1 : 1
+      const span = (e - s) * dir
+      for (let i = 1; i <= n; i++) {
+        const a = s + (span * i) / n * dir
+        pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) })
+      }
+      cur = { x: cx + r * Math.cos(e), y: cy + r * Math.sin(e) }
+    },
+    closePath() {
+      if (pts.length) pts.push({ ...pts[0] })
+    },
+  }
+  tracePath(t, d)
+  return pts
+}
+
+/**
+ * 沿 SVG path 按进度 p(0..1) 取点（弧长参数化——animateMotion 的核心）。
+ * 返回 null：路径无效或点数不足。
+ */
+export function getPointAtLength(d: string, p: number): SamplePoint | null {
+  const pts = collectPoints(d)
+  if (pts.length < 2) return null
+  // 累计弧长
+  const cum: number[] = [0]
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x
+    const dy = pts[i].y - pts[i - 1].y
+    cum.push(cum[i - 1] + Math.sqrt(dx * dx + dy * dy))
+  }
+  const total = cum[cum.length - 1]
+  if (total <= 0) return pts[0]
+  const target = Math.max(0, Math.min(1, p)) * total
+  // 二分/线性查找段
+  let i = 1
+  while (i < cum.length && cum[i] < target) i++
+  if (i >= cum.length) return pts[pts.length - 1]
+  const segLen = cum[i] - cum[i - 1]
+  const local = segLen > 0 ? (target - cum[i - 1]) / segLen : 0
+  return {
+    x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * local,
+    y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * local,
+  }
+}
+
+/** 路径总长度（供需要按长度匀速的场景） */
+export function getPathLength(d: string): number {
+  const pts = collectPoints(d)
+  let total = 0
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i - 1].x
+    const dy = pts[i].y - pts[i - 1].y
+    total += Math.sqrt(dx * dx + dy * dy)
+  }
+  return total
+}

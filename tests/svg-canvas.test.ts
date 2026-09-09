@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
 import { sampleValues, evalAnim, primitiveToPathD, drawScene } from '../src/components/p-svg-canvas/engine'
-import { tracePath } from '../src/components/p-svg-canvas/path-parser'
+import { tracePath, getPointAtLength, getPathLength } from '../src/components/p-svg-canvas/path-parser'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
 
@@ -172,5 +172,58 @@ describe('描边动画（stroke-dasharray / stroke-dashoffset）', () => {
     expect(ctx.lineDashOffset).toBe(220)
     drawScene(canvas, scene, 1000)
     expect(ctx.lineDashOffset).toBe(110) // 插值中
+  })
+})
+
+describe('animateMotion 路径运动（真机验证）', () => {
+  it('路径采样：按弧长取点（起点/中点/终点）', () => {
+    const d = 'M10 50 Q50 10 90 50'
+    const p0 = getPointAtLength(d, 0)
+    const p5 = getPointAtLength(d, 0.5)
+    const p1 = getPointAtLength(d, 1)
+    expect(p0?.x).toBeCloseTo(10, 1)
+    expect(p0?.y).toBeCloseTo(50, 1)
+    expect(p5?.x).toBeCloseTo(50, 0)
+    expect(p5?.y).toBeCloseTo(30, 0) // 二次贝塞尔顶点
+    expect(p1?.x).toBeCloseTo(90, 1)
+    expect(p1?.y).toBeCloseTo(50, 1)
+  })
+
+  it('路径总长度（弧长累计）', () => {
+    expect(getPathLength('M0 0 L10 0')).toBeCloseTo(10, 3)
+    expect(getPathLength('M0 0 L10 0 L10 10')).toBeCloseTo(20, 3)
+  })
+
+  it('animateMotion 编译 → p-svg-canvas + attr=motion + 路径数据', () => {
+    const r = compile('<svg viewBox="0 0 100 100"><circle r="8" fill="#e74c3c"><animateMotion dur="2s" repeatCount="indefinite" path="M10 50 Q50 10 90 50"/></circle></svg>')
+    expect(r.wxml).toMatch(/<p-svg-canvas[^>]*scene="\{\{proteusSvgScene1\}\}"/)
+    expect(r.js).toMatch(/"attr":"motion"/)
+    expect(r.js).toMatch(/"values":\["M10 50 Q50 10 90 50"\]/)
+  })
+
+  it('drawScene 应用路径运动（不同时刻 translate 不同）', () => {
+    const seen: number[] = []
+    const ctx: any = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, lineCap: '', lineJoin: '', lineDashOffset: 0,
+      setLineDash() {},
+      save() {}, restore() {}, translate: (x: number) => seen.push(x), rotate() {}, scale() {}, setTransform() {},
+      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {}, quadraticCurveTo() {},
+      arc() {}, closePath() {}, fill() {}, stroke() {}, fillRect() {},
+      createLinearGradient: () => ({ addColorStop() {} }),
+      createRadialGradient: () => ({ addColorStop() {} }),
+    }
+    const canvas: any = { width: 100, height: 100, getContext: () => ctx }
+    const scene: any = {
+      viewBox: [0, 0, 100, 100],
+      nodes: [{ tag: 'circle', attrs: { r: 8, fill: '#e74c3c' }, anims: [{ attr: 'motion', values: ['M10 50 L90 50'], dur: 2000, delay: 0, repeat: true }] }],
+      duration: 2000,
+    }
+    drawScene(canvas, scene, 0)
+    const x0 = seen[seen.length - 1]
+    seen.length = 0
+    drawScene(canvas, scene, 1000)
+    const x1 = seen[seen.length - 1]
+    expect(x0).toBeCloseTo(10, 0) // 起点
+    expect(x1).toBeCloseTo(50, 0) // 中点
   })
 })
