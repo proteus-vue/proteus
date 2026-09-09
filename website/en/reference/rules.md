@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 100 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 101 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (54)
+## Template transforms (55)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-dynamic`
+
+**Dynamic <svg> subtree → computed SVG data-URI regeneration (SVG→Skyline P1)**
+
+An SVG subtree with dynamic bindings (:d/:fill/v-if/interpolation) becomes a computed (runtime SVG string + encodeURIComponent → URL-encoded data-URI) + <image src="{{proteusSvgN}}">, reusing the existing computed pipeline (dependency tracking / init / write-patch recompute)
+
+```
+before: <svg viewBox="0 0 24 24"><path :d="d" :fill="c"/></svg>
+after:  <image src="{{proteusSvg1}}" mode="aspectFit" /> + computed 拼 SVG 字符串
+```
+
+> why: G-62 SVG→Skyline P1: the original canvas approach is blocked by the Skyline node() channel (plan §9); the ground-work probe proved that "runtime SVG string → computed → setData → Skyline re-render + reactivity" works, and that WeChat logic layer lacks btoa so URL-encoded is required (verified on device)
 
 ### `template/svg-to-image`
 

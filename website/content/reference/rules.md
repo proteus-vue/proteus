@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 100 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 101 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（54）
+## 模板转换（55）
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-dynamic`
+
+**动态 <svg> 子树 → computed 重生成 SVG data-URI（SVG→Skyline P1）**
+
+含动态绑定（:d/:fill/v-if/插值）的 SVG 子树 → computed（运行时拼 SVG 字符串 + encodeURIComponent → URL-encoded data-URI）+ <image src="{{proteusSvgN}}">；复用既有 computed 链路（依赖追踪/init/写入补丁重算）
+
+```
+before: <svg viewBox="0 0 24 24"><path :d="d" :fill="c"/></svg>
+after:  <image src="{{proteusSvg1}}" mode="aspectFit" /> + computed 拼 SVG 字符串
+```
+
+> why: G-62 SVG→Skyline P1：原 canvas 方案被 Skyline node() 通道阻塞（专项 §9）；地基探测实证「运行时拼 SVG → computed → setData → Skyline 重渲染 + 响应式有效」，且微信逻辑层无 btoa 须走 URL-encoded（真机 image-spike 验证）
 
 ### `template/svg-to-image`
 

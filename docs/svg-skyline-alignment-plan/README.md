@@ -142,8 +142,32 @@ Web 里 `.icon path { fill: red }` 在 Skyline 无解（canvas 无 CSS 级联）
 动态不 lowering + 警告 / 规则可禁用 / 独立子标签仍警告）；`tests/compiler-ir-svg.test.ts` 契约更新；
 真机端到端（image-spike 页 lowering 产物渲染出紫圆+黄线，零改代码）。全量 2684/2684 · 门禁 92/92 · build:mp/web ✓。
 
-**边界（诚实）**：仅静态子树。动态 SVG（`:d`/`:fill` 响应式、v-if 控制、事件）属 P1，需 canvas 或 SVG 重生成——
-受 §9 的 node() 通道阻塞影响，待 Nightly IDE / 真机复验后推进。
+**边界（诚实）**：仅静态子树。动态 SVG（`:d`/`:fill` 响应式、v-if 控制、事件）属 P1——见 §9c。
+
+## 9c. ★P1 已落地（2026-09-09）——动态 SVG → computed 重生成（绕开 canvas 阻塞）
+
+**路线切换**：P1 原方案（canvas 2D 重画）被 §9 的 `node()` 通道阻塞。地基探测找到**替代路线**并真机实证：
+
+| 探测项 | 结果 |
+|---|---|
+| `btoa` | ❌ 微信逻辑层**不存在**（动态 SVG 不能走 base64） |
+| `encodeURIComponent` | ✅ 可用 → 走 **URL-encoded** data-URI |
+| 运行时拼 SVG → computed → setData | ✅ Skyline 实时重渲染 + 响应式有效（`image-spike.vue` 截图：颜色/路径同步变更） |
+
+**实现**：动态 `<svg>` 子树 → 结构化片段树（`SvgPart`：lit/expr/if）→ script 侧拼模板字面量 → 一条 computed
+（`'data:image/svg+xml,' + encodeURIComponent(\`…\`)`）+ `<image src="{{proteusSvgN}}">`。
+复用既有 computed 链路（依赖追踪 → init setData → 任一依赖写入时补丁重算），**零新增运行时机制**。
+
+**关键设计（避免误伤）**：表达式改写只作用于片段树的 `expr`/`if` 节点——标签名/属性名/文本永不参与标识符替换
+（首版用正则改 `${}` 内标识符，在 p-svg 的嵌套 `v-if` 场景把 `<path` 改成 `<this.data.path` 致语法错；
+片段树方案根治）。
+
+**验证**：`tests/svg-to-image.test.ts` 13 用例（含 P1：computed 重生成 / 标签名不误伤 / v-for 边界）；
+真机端到端（image-spike 页 `:fill`/`:d` 零改代码渲染 + 点击响应式变色变路径）；p-svg 组件由警告转为对齐。
+全量 2686/2686 · 门禁 92/92 · build:mp/web ✓。
+
+**边界（诚实）**：`v-for` 的 SVG 暂不支持（列表展开 + key 管理复杂度高）——保持 `svg-no-peer` 警告；
+SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas 路线才能做）；`:style`/`:class` 在外层 `<image>` 处理。
 
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 

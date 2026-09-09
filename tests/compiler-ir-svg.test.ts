@@ -37,13 +37,14 @@ describe('★#505 / G-62 P0：SVG 标签处理（静态 lowering / 动态警告�
 })
 
 describe('★#505 p-svg 组件端到端（MP 编译）', () => {
-  it('p-svg 组件模板（含动态 :d/:viewBox）→ 不 lowering + SVG 警告 + IR 快照在位', () => {
+  it('p-svg 组件模板（含动态 :d/:viewBox）→ P1 computed 重生成 + IR 快照在位', () => {
     const src = '<script setup lang="ts">import { computed } from "vue"\nconst props = defineProps({ path: { type: String, default: "" }, size: { type: Number, default: 24 } })\nconst svgStyle = computed(() => ({ width: props.size + "px" }))</script>\n'
       + '<template><svg class="p-svg" :viewBox="viewbox" :style="svgStyle"><path v-if="path" :d="path" fill="currentColor" /></svg></template>'
     const r = compileVueSfc(src, { filename: 'components/p-svg/index.vue', isComponent: true, ...opts })
-    // 动态 SVG（:viewBox/:d/v-if）→ P1 边界，保持诚实警告
-    expect(r.warnings.some((w) => w.includes('SVG 矢量标签'))).toBe(true)
-    expect(r.wxml).not.toMatch(/data:image\/svg\+xml/)
+    // ★2026-09-09 P1：动态 SVG 已 lowering 为 computed 重生成（不再警告）
+    expect(r.wxml).toMatch(/<image[^>]*src="\{\{proteusSvg\d+\}\}"/)
+    expect(r.js).toMatch(/encodeURIComponent/)
+    expect(r.warnings.some((w) => w.includes('SVG 矢量标签'))).toBe(false)
     // IR 快照在位（编译未崩）
     expect(r.ir).toBeDefined()
   })

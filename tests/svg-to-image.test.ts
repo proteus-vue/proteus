@@ -51,17 +51,37 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
     expect(svg).toContain('<g>')
   })
 
-  it('动态 SVG（v-bind/插值）不 lowering + 诚实警告（P1 边界）', () => {
+  // ★2026-09-09 P1 落地：动态 SVG 不再走警告，改为 computed 重生成（<image src="{{proteusSvgN}}">）
+  it('P1：动态 SVG（:d/:fill）→ computed 重生成 + <image src="{{proteusSvgN}}">', () => {
     const r = compile('<script setup lang="ts">const d = ref("M0 0")\nconst c = ref("red")</script>\n<template><svg viewBox="0 0 24 24"><path :d="d" :fill="c"/></svg></template>')
-    expect(r.wxml).not.toMatch(/data:image\/svg\+xml/)
-    expect(r.warnings.some((w: string) => /SVG 矢量标签/.test(w))).toBe(true)
-    // 警告须指向 P0 规则与 P1 路线（可行动）
-    expect(r.warnings.some((w: string) => /svg-to-image/.test(w) && /P1/.test(w))).toBe(true)
+    expect(r.wxml).toMatch(/<image[^>]*src="\{\{proteusSvg1\}\}"/)
+    expect(r.wxml).not.toContain('<svg')
+    // computed 表达式：URL-encoded data-URI + 依赖改写为 this.data.x
+    expect(r.js).toMatch(/encodeURIComponent\(`<svg[\s\S]*this\.data\.d[\s\S]*this\.data\.c/)
+    expect(r.js).toMatch(/data:image\/svg\+xml,/)
+    expect(r.js).not.toMatch(/btoa/) // 微信逻辑层无 btoa——URL-encoded 形态
+    // 动态已对齐 → 无 SVG 警告
+    expect(r.warnings.some((w: string) => /SVG 矢量标签/.test(w))).toBe(false)
   })
 
-  it('v-if 控制的 SVG → 不 lowering（动态，P1）', () => {
-    const r = compile('<script setup lang="ts">const show = ref(true)</script>\n<template><svg v-if="show" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#000"/></svg></template>')
+  it('P1：标签名/属性名不被误伤（片段树只改 expr——嵌套 v-if 亦然）', () => {
+    const r = compile('<script setup lang="ts">const show = ref(true)\nconst path = ref("M0 0")</script>\n<template><svg viewBox="0 0 24 24"><path v-if="show" :d="path"/></svg></template>')
+    const js = r.js
+    expect(js).not.toMatch(/<this\.data\.path/) // 标签名 path 不被改
+    expect(js).not.toMatch(/this\.data\.path d=/)
+    expect(js).toMatch(/<path d="\$\{this\.data\.path\}"/)
+    expect(js).toMatch(/this\.data\.show \?/)
+  })
+
+  it('P1：v-for 不支持 → 保持诚实警告（边界）', () => {
+    const r = compile('<script setup lang="ts">const items = ref([1])</script>\n<template><svg viewBox="0 0 24 24"><path v-for="i in items" :d="i"/></svg></template>')
     expect(r.wxml).not.toMatch(/data:image\/svg\+xml/)
+    expect(r.warnings.some((w: string) => /SVG 矢量标签/.test(w))).toBe(true)
+  })
+
+  it('v-if 控制的 SVG 根节点 → 不 lowering 为静态 image（动态，走 svg-no-peer 兜底）', () => {
+    const r = compile('<script setup lang="ts">const show = ref(true)</script>\n<template><svg v-if="show" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#000"/></svg></template>')
+    expect(r.wxml).not.toMatch(/data:image\/svg\+xml;base64/)
   })
 
   it('规则 template/svg-to-image 可禁用（回退原样输出 + 警告）', () => {

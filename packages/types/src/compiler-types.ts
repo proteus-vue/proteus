@@ -135,6 +135,8 @@ export interface TemplateTransformResult {
   semanticGrids?: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
   /** ★#500 :style 绑定的动态标识符（computed 派生对象 → 编译器自动序列化字符串——MP 双渲染器 style 仅收字符串） */
   styleBindings?: string[]
+  /** ★2026-09-09 G-62 P1：动态 SVG（computed 名 + 结构化片段树 + 依赖）——script 侧生成 computed */
+  dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */
   vModelComponentHandlers?: VModelComponentHandler[]
   /** ★15-page-scroll-container：页面已自动包滚动容器（compileVueSfc 据此注入高度样式） */
@@ -143,7 +145,15 @@ export interface TemplateTransformResult {
 }
 
 /** script 转换附加信息 */
+/** ★2026-09-09 G-62 P1：动态 SVG 片段（lit 字面量 / expr 动态表达式 / if 条件片段） */
+export type SvgPart =
+  | { t: 'lit'; v: string }
+  | { t: 'expr'; v: string }
+  | { t: 'if'; cond: string; parts: SvgPart[] }
+
 export interface ScriptTransformOptions {
+  /** ★2026-09-09 G-62 P1：动态 SVG（模板侧收集 → script 侧生成 computed 重生成 SVG 字符串） */
+  dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   file?: string
   /** 组件模式 → Component() 构造器 */
   isComponent?: boolean
