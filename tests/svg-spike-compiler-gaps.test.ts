@@ -49,3 +49,21 @@ describe('SVG spike 暴露的编译器缺口（回归锁）', () => {
     expect(r.js).toMatch(/setData\(\{ s: "x" \}\)/)
   })
 })
+
+describe('P2 spike 暴露的编译器缺口（回归锁）', () => {
+  it('③ computed 表达式内模块级函数裸调用 → this.name(（此前裸调用 ReferenceError）', () => {
+    const r = compile('import { computed } from "vue"\nconst n = ref(1)\nfunction double(x: number): number { return x * 2 }\nconst out = computed(() => double(n.value))', '<template><view>{{ out }}</view></template>')
+    expect(r.js).toMatch(/setData\(\{ out: this\.double\(this\.data\.n\)/)
+    expect(r.js).not.toMatch(/setData\(\{ out: double\(/)
+  })
+
+  it('③ 方法体内模块函数改写不回归（methodNames 通道）', () => {
+    const r = compile('function helper(x: string): string { return x + "!" }\nfunction go() { return helper("a") }', '<template><view>x</view></template>')
+    expect(r.js).toMatch(/return this\.helper\("a"\)/)
+  })
+
+  it('③ computed 内非方法调用不受影响（Math/内置保持裸调用）', () => {
+    const r = compile('const n = ref(1)\nconst out = computed(() => Math.max(n.value, 0))', '<template><view>{{ out }}</view></template>')
+    expect(r.js).toMatch(/Math\.max\(this\.data\.n, 0\)/)
+  })
+})
