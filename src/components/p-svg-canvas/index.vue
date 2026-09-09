@@ -91,27 +91,37 @@ function renderFrame(this: any, tMs: number): void {
           fail?: (e?: unknown) => void
         }) => void
       }
-      // ★2026-09-09 真机反馈「15 秒后停止」：每帧 canvasToTempFilePath 生成**新临时文件**，
-      //   真机有临时文件配额/清理机制 → 堆积后失败。改为**复用同一路径**（filePath 参数覆盖写入）。
-      const tmpPath = this.__tmpPath || (this.__tmpPath = `proteus-svg-${Date.now()}.png`)
-      if (typeof w.canvasToTempFilePath === 'function') {
-        w.canvasToTempFilePath({
+      // ★2026-09-09 真机两轮实证：
+      //   ① 每帧新临时文件 → 150 帧（≈7.5MB）后堆积超配额 → 停止；
+      //   ② 固定 filePath 复用同一文件 → image 正在读取时无法覆盖写入 → 渲染失败（空白）。
+      //   → 采用**轮转 N 个文件**：文件数有上限（不堆积），且写入时该文件已不被 image 占用（不冲突）。
+      const ROTATE = 4
+      this.__slot = ((this.__slot || 0) + 1) % ROTATE
+      const tmpName = `proteus-svg-${this.__slot}.png`
+      const basePath = (w.env && w.env.USER_DATA_PATH) || ''
+      const toFile = w.canvasToTempFilePath
+      if (typeof toFile === 'function') {
+        toFile({
           canvas: c,
           fileType: 'png',
           destWidth: c.width,
           destHeight: c.height,
-          // filePath 指定固定路径（wx.env.USER_DATA_PATH）——复用同一文件，避免临时文件堆积
-          filePath: `${(w.env && w.env.USER_DATA_PATH) || ''}/${tmpPath}`,
+          filePath: basePath ? `${basePath}/${tmpName}` : undefined,
           success: (r) => {
             this.__emitCount = (this.__emitCount || 0) + 1
             this.__lastOk = Date.now()
-            // ★复用路径时 src 不变会导致 image 不刷新——加递增查询参数强制重载（同文件、不同 URL）
+            // src 加查询参数强制重载（轮转路径本身已变，加参数双保险）
             emit(r.tempFilePath + '?t=' + this.__emitCount)
           },
           fail: (e?: unknown) => {
             this.__failCount = (this.__failCount || 0) + 1
             this.__lastErr = String(e).slice(0, 120)
-            emit(c.toDataURL('image/png'))
+            // ★回退：不带 filePath 的默认临时文件（真机可渲染，仅会堆积——轮转失败时才走此路）
+            toFile({
+              canvas: c,
+              success: (r2) => emit(r2.tempFilePath),
+              fail: () => emit(c.toDataURL('image/png')),
+            })
           },
         })
       } else {
