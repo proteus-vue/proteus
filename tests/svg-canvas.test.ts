@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
 import { sampleValues, evalAnim, primitiveToPathD } from '../src/components/p-svg-canvas/engine'
+import { tracePath } from '../src/components/p-svg-canvas/path-parser'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
 
@@ -93,5 +94,53 @@ describe('Canvas 引擎核心（插值 / 几何）', () => {
     expect(primitiveToPathD({ tag: 'circle', attrs: { cx: 50, cy: 50, r: 20 } } as never, 0)).toContain('A20 20')
     expect(primitiveToPathD({ tag: 'rect', attrs: { x: 10, y: 10, width: 30, height: 20 } } as never, 0)).toBe('M10 10 H40 V30 H10 Z')
     expect(primitiveToPathD({ tag: 'line', attrs: { x1: 0, y1: 0, x2: 10, y2: 10 } } as never, 0)).toBe('M0 0 L10 10')
+  })
+})
+
+describe('SVG path 解析器（真机 createPath2D 不可用 → 自写解析）', () => {
+  /** 记录命令序列的 mock target */
+  function mockTarget() {
+    const calls: string[] = []
+    return {
+      calls,
+      beginPath: () => calls.push('begin'),
+      moveTo: (x: number, y: number) => calls.push(`M${x},${y}`),
+      lineTo: (x: number, y: number) => calls.push(`L${x},${y}`),
+      bezierCurveTo: () => calls.push('C'),
+      quadraticCurveTo: () => calls.push('Q'),
+      arc: (cx: number, cy: number, r: number) => calls.push(`A${cx},${cy},${r}`),
+      closePath: () => calls.push('Z'),
+    }
+  }
+  it('M/L/H/V/Z 基本命令', () => {
+    const t = mockTarget()
+    tracePath(t, 'M10 10 L30 10 H50 V40 Z')
+    expect(t.calls).toEqual(['M10,10', 'L30,10', 'L50,10', 'L50,40', 'Z'])
+  })
+  it('相对命令 m/l/h/v', () => {
+    const t = mockTarget()
+    tracePath(t, 'm10 10 l20 0 h20 v30 z')
+    expect(t.calls).toEqual(['M10,10', 'L30,10', 'L50,10', 'L50,40', 'Z'])
+  })
+  it('三次贝塞尔 C/S', () => {
+    const t = mockTarget()
+    tracePath(t, 'M0 0 C10 10 20 20 30 30 S50 50 60 60')
+    expect(t.calls.filter((c) => c === 'C').length).toBe(2)
+  })
+  it('二次贝塞尔 Q/T', () => {
+    const t = mockTarget()
+    tracePath(t, 'M0 0 Q10 10 20 0 T40 0')
+    expect(t.calls.filter((c) => c === 'Q').length).toBe(2)
+  })
+  it('圆弧 A → 折线近似（零 Path2D 依赖）', () => {
+    const t = mockTarget()
+    tracePath(t, 'M10 50 A20 20 0 0 1 50 50')
+    // 弧被离散为多条 L
+    expect(t.calls.filter((c) => c.startsWith('L')).length).toBeGreaterThan(4)
+  })
+  it('科学计数法 / 负数 / 小数', () => {
+    const t = mockTarget()
+    tracePath(t, 'M-1.5 -2.5 L1e2 3.5')
+    expect(t.calls).toEqual(['M-1.5,-2.5', 'L100,3.5'])
   })
 })
