@@ -273,6 +273,14 @@ export function scanWxmlPlatformIssues(wxml: string): WxmlPlatformIssue[] {
   if (optM) {
     issues.push({ code: 'UnsupportedSyntax', message: `绑定表达式 ${optM[0].trim().slice(0, 60)} 含 ?. 可选链——平台表达式解析不支持（官方 UnsupportedSyntax；含 ?? 与函数调用但无可选链）：请改守卫写法`, at: optM.index ?? 0 })
   }
+  // ★2026-09-09 ?? 加入 UnsupportedSyntax（真机复测实证推翻官方文档结论）：wcc 实测拒绝
+  //   value="{{modelValue ?? ''}}"（Bad attr 'value' with message: unexpected token '?'——model-demo 弹窗
+  //   组件致模拟器启动失败）。此前按官方 expr.rs「?? 含于运算符表」判合法——真机证据优先（诚实原则）。
+  //   Vue 源码请改 computed 或 value="{{m}}"（undefined 渲染为空）；
+  const nullishM = noComments.match(/\{\{[^{}]*\?\?[^{}]*\}\}/)
+  if (nullishM) {
+    issues.push({ code: 'UnsupportedSyntax', message: `绑定表达式 ${nullishM[0].trim().slice(0, 60)} 含 ?? 空值合并——wcc 实测拒绝（2026-09-09 模拟器编译错实证，官方文档与实现不符）：请改 computed 或守卫写法`, at: nullishM.index ?? 0 })
+  }
   // DuplicatedStylePropertyNames：纯静态 style 串重复键（官方 tag.rs 仅对 Value::Static style 拆分查重——
   //   含 {{}} 的动态值官方不静态分析；跳过引号内分号防误拆：
   //   ★2026-09-07 三轮取证：产物 49 处 style（静态 5/动态 34/混合 10）静态段重复零——命中 = 用户源码

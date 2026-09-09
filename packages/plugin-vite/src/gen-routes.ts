@@ -625,7 +625,10 @@ function writeProjectConfig(): void {
     compileType: 'miniprogram',
     appid: config.appid,
     projectname: projectName,
-    setting: { minifyWXML: true, urlCheck: false },
+    // ★2026-09-09 真机复测实证：skyline 项目需 IDE 级 skylineRenderEnable 开关，否则模拟器回落 WebView
+    //   （getSkylineInfoSync().isSupported=false / reason=a-b test not enabled——产物 json 声明 renderer:skyline 不够）。
+    //   写入 project.config.json（非 private——private 每次重建被清，实测开关丢失后复测全是 WebView 假绿/假红）。
+    setting: { minifyWXML: true, urlCheck: false, ...(config.skyline ? { skylineRenderEnable: true } : {}) },
   }
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(path.join(OUT_DIR, 'project.config.json'), JSON.stringify(projectConfig, null, 2) + '\n')

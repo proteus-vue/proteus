@@ -40,8 +40,9 @@ describe('★#505 G2 scanWxmlPlatformIssues：官方错误码蓝本七检查', (
     // 文本插值形态同样命中（表达式经平台解析）
     const text = scanWxmlPlatformIssues('<view>{{ a?.list[0]?.name }}</view>')
     expect(text.some((i) => i.code === 'UnsupportedSyntax')).toBe(true)
-    // ?? 与函数调用在官方运算符表内（合法），? 三元后跟 . 数字（a? .5）非可选链——不误报
-    expect(scanWxmlPlatformIssues('<view hidden="{{a ?? b}}">x</view>')).toEqual([])
+    // ★2026-09-09 真机证据推翻官方文档：wcc 实测拒绝 {{a ?? b}}（model-demo 模拟器启动失败实证）——
+    //   ?? 加入 UnsupportedSyntax（fail-closed）；? 三元后跟 . 数字（a? .5）非可选链——不误报
+    expect(scanWxmlPlatformIssues('<view hidden="{{a ?? b}}">x</view>').some((i) => i.code === 'UnsupportedSyntax' && i.message.includes('??'))).toBe(true)
   })
 
   it('正常产物零命中（kebab 标签 + 引号值含 = / 冒号 / wx:key 静态字段）', () => {

@@ -6,7 +6,7 @@
     <text class="p-model-demo-label">defineModel 值：{{ m }}</text>
     <input
       class="p-model-demo-input"
-      :value="m ?? ''"
+      :value="m"
       placeholder="输入测 defineModel 双绑"
       @input="onInput"
     />
