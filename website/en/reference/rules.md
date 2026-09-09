@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 103 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 104 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (57)
+## Template transforms (58)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-text-promote`
+
+**SVG <text> → native <text> overlay (works around Skyline dropping SVG text)**
+
+A static SVG <text> (tspan concatenated) is extracted at compile time → <view> wrapper + <image> + absolutely positioned native <text> (viewBox coords → percentages, text-anchor → translateX, font-size/fill/font-weight mapped); text is selectable, font-controllable, and scales with the container
+
+```
+before: <svg><text x="50" y="25" text-anchor="middle">Hi</text></svg>
+after:  <view style="position:relative"><image …/><text style="position:absolute;left:50%;top:25%;transform:translateX(-50%)">Hi</text></view>
+```
+
+> why: G-62 text gap: on-device evidence shows Skyline decodes SVG successfully but drops text elements (WebView works; undocumented officially) — compile-time promotion to native text is the zero-runtime fix (vs canvas fillText which needs a runtime drawing pipeline)
 
 ### `template/svg-hit`
 

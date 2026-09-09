@@ -135,17 +135,13 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
     expect(w).toMatch(/use\(外部引用\)/)
   })
 
-  it('P2：text → lowering + 精确根因警告（Skyline 丢弃文字元素，WebView 正常）', () => {
+  // ★2026-09-09 更新：静态 text 已编译期提升为原生 <text> 叠加（见下方 describe）——不再警告
+  it('P2：静态 text → 提升为原生 text（不再警告）；tspan 保留在 SVG 内则警告', () => {
     const r = compile('<template><svg viewBox="0 0 100 100"><text x="50" y="55" font-size="24">AB</text></svg></template>')
     expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
-    const w = r.warnings.find((x: string) => /SVG 子标签/.test(x) && /<text>/.test(x))
-    expect(w, 'text 应有警告').toBeTruthy()
-    // 根因 + 三种可行动方案（实测：Skyline 解码成功但丢弃文字；WebView 正常）
-    expect(w).toMatch(/Skyline 下不渲染/)
-    expect(w).toMatch(/WebView 后正常/)
-    expect(w).toMatch(/<text> 组件叠加/)
-    expect(w).toMatch(/轮廓化为 <path>/)
-    expect(w).toMatch(/renderer: webview/)
+    expect(r.wxml).toMatch(/proteus-svg-wrap/)
+    expect(r.wxml).toContain('AB')
+    expect(r.warnings.some((x: string) => /SVG 子标签.*<text>/.test(x))).toBe(false)
   })
 
   it('P2：SVG_P2_SUPPORT 支持表导出（文档化实测结论）', () => {
@@ -165,5 +161,50 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
   it('lowerSvgToImage 直接调用：静态返回 dataUri，动态返回 null', () => {
     // 通过 compileVueSfc 的产物间接覆盖（lowerSvgToImage 需要 ElementNode——此处验证导出可用）
     expect(typeof lowerSvgToImage).toBe('function')
+  })
+})
+
+describe('★2026-09-09 SVG <text> 编译期提升为原生 <text> 叠加层（补 Skyline 丢弃文字短板）', () => {
+  it('静态 <text> → view 容器 + image + 绝对定位原生 text（viewBox → 百分比）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100" width="120" height="120"><circle cx="50" cy="70" r="25" fill="#e74c3c"/><text x="50" y="25" font-size="16" fill="#333" text-anchor="middle">Hello SVG</text></svg></template>')
+    // 容器 + image + 叠加 text
+    expect(r.wxml).toMatch(/<view class="proteus-svg-wrap[^>]*style="[^"]*position:relative/)
+    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml;base64/)
+    expect(r.wxml).toMatch(/<text style="position:absolute;left:50\.000%;top:25\.000%/)
+    expect(r.wxml).toContain('Hello SVG')
+    // text-anchor=middle → translateX(-50%)
+    expect(r.wxml).toMatch(/transform:translateX\(-50%\)/)
+    // 颜色/字号映射
+    expect(r.wxml).toMatch(/color:#333/)
+    expect(r.wxml).toMatch(/font-size:16px/)
+    // 不再警告（文字已提升）
+    expect(r.warnings.some((w: string) => /SVG 子标签.*<text>/.test(w))).toBe(false)
+  })
+
+  it('text-anchor=end → translateX(-100%)', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><text x="90" y="50" text-anchor="end">R</text></svg></template>')
+    expect(r.wxml).toMatch(/transform:translateX\(-100%\)/)
+  })
+
+  it('tspan 子文本拼接为整体', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><text x="10" y="50"><tspan>AB</tspan><tspan>CD</tspan></text></svg></template>')
+    expect(r.wxml).toContain('ABCD')
+  })
+
+  it('带 transform 的 text 不提升（坐标换算复杂度高——诚实降级）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><g transform="rotate(45)"><text x="50" y="50">X</text></g></svg></template>')
+    expect(r.wxml).not.toMatch(/proteus-svg-wrap/)
+    expect(r.warnings.some((w: string) => /SVG 子标签.*<text>/.test(w))).toBe(true)
+  })
+
+  it('无 text 的 SVG 不生成容器包裹（既有产物形态不回归）', () => {
+    const r = compile('<template><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg></template>')
+    expect(r.wxml).not.toMatch(/proteus-svg-wrap/)
+    expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+  })
+
+  it('WXML 文本转义（{{ }} 不触发插值）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><text x="10" y="50">{literal}</text></svg></template>')
+    expect(r.wxml).toContain('&#123;literal&#125;')
   })
 })

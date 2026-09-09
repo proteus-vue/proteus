@@ -13,6 +13,15 @@
       </svg>
     </view>
     <text class="hint">红圆(30,30) / 蓝圆(70,70) / 绿方(60-90,10-40)</text>
+
+    <text class="title">SVG text 提升验证</text>
+    <view class="row">
+      <svg viewBox="0 0 100 100" width="120" height="120" class="canvas">
+        <circle cx="50" cy="70" r="25" fill="#e74c3c" />
+        <text x="50" y="25" font-size="16" fill="#333" text-anchor="middle">Hello SVG</text>
+      </svg>
+    </view>
+    <text class="hint">↑ 文字应为「Hello SVG」（编译期提升为原生 text 叠加）</text>
   </view>
 </template>
 
