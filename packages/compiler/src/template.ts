@@ -18,6 +18,7 @@ import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
 import { CompilerError } from './validate'
+import { lowerSvgToImage } from './svg-lower'
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -667,10 +668,47 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   if (tag === 'progress' && !ctx.disabled.has('component/progress-degrade')) {
     return serializeProgress(node, ctx)
   }
+  // ★★2026-09-09 G-62 SVG→Skyline P0：<svg> 子树 lowering → <image> data-URI。
+  //   地基实证（examples/pages/image-spike.vue 真机截图）：Skyline <image> 完整渲染 SVG base64 data-URI
+  //   （path/stroke/circle 正确）——静态图标 80% 场景零改代码可用（canvas 路线被 node() 通道阻塞，见专项 §9）。
+  //   仅静态子树 lowering；含动态绑定（v-bind/v-if/v-for/插值/事件）→ 返回 null 走下方诚实警告（P1 待做）。
+  if (node.tag.toLowerCase() === 'svg' && !ctx.disabled.has('template/svg-to-image')) {
+    const lowered = lowerSvgToImage(node)
+    if (lowered) {
+      const vb = lowered.viewBox
+      const w = (() => {
+        const m = vb.trim().split(/\s+/).map(Number)
+        return m.length === 4 && m[2] > 0 ? m[2] : 24
+      })()
+      const h = (() => {
+        const m = vb.trim().split(/\s+/).map(Number)
+        return m.length === 4 && m[3] > 0 ? m[3] : 24
+      })()
+      ctx.trace?.add('template/svg-to-image', {
+        line: node.loc.start.line,
+        before: '<svg><path d fill/></svg>',
+        after: `<image src="data:image/svg+xml;base64,…" />（P0 静态 SVG → data-URI，viewBox ${vb}）`,
+      })
+      // 尺寸：沿用 <svg> 上的 width/height 属性（若有），否则用 viewBox 比例 + 24px 基准
+      const sizeAttr = (n: string): string | undefined => {
+        const a = node.props.find((p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name === n) as
+          | { value?: { content: string } }
+          | undefined
+        return a?.value?.content
+      }
+      const wAttr = sizeAttr('width') ?? sizeAttr('size')
+      const hAttr = sizeAttr('height') ?? sizeAttr('size')
+      const style = wAttr
+        ? `width:${/^\d+$/.test(wAttr) ? wAttr + 'px' : wAttr};${hAttr ? `height:${/^\d+$/.test(hAttr) ? hAttr + 'px' : hAttr};` : ''}`
+        : `width:${w}px;height:${h}px;`
+      return `<image class="${ctx.scopeId ? `proteus-svg-${ctx.scopeId} ` : ''}" style="${style}" src="${lowered.dataUri}" mode="aspectFit" />`
+    }
+  }
   // ★#505 G2 补：SVG 命名空间标签在小程序无对等组件（微信无 <svg>，Skia 矢量映射为后续批次）——
   //   旧行为静默当未注册自定义组件原样输出 → 产物无效标签（p-svg 真机不渲染实证）；反黑盒显式警告
+  //   ★2026-09-09：静态 <svg> 已由上方 lowering 处理（P0）；此处兜底动态 SVG / 非 svg 的 SVG 子标签
   if (SVG_NAMESPACE_TAGS.has(node.tag.toLowerCase()) && !ctx.disabled.has('template/svg-no-peer')) {
-    const svgMsg = `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>；p-svg 等矢量组件 MP 端 Skia 映射为后续批次）——已原样输出但不会渲染，请改用 image/背景图或等待矢量批次`
+    const svgMsg = `<${node.tag}> 为 SVG 矢量标签，在小程序无对等组件（微信无 <svg>）——已原样输出但不会渲染。静态 SVG 可经 template/svg-to-image 规则 lowering 为 <image> data-URI（P0）；含动态绑定的响应式矢量属 P1（canvas 路线，见 docs/svg-skyline-alignment-plan/）`
     if (ctx.failFast) failFastThrow(ctx.filename, svgMsg)
     ctx.warnings.push(svgMsg)
     ctx.trace?.add('template/svg-no-peer', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（MP 无对等：SVG 标签不渲染）' })

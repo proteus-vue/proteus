@@ -125,6 +125,26 @@ Web 里 `.icon path { fill: red }` 在 Skyline 无解（canvas 无 CSS 级联）
 - **复验清单**：① Nightly IDE 重跑本 spike；② 真机（非模拟器）复验；③ 若两者都失败，向微信反馈 + 评估 Skyline 的
   `canvas type="2d"` 替代方案（如 `wx.createOffscreenCanvas` 离屏 + image 回填）。
 
+## 9b. ★P0 已落地（2026-09-09）——静态 SVG → `<image>` data-URI
+
+**地基再验证**（`examples/pages/image-spike.vue` 真机截图）：Skyline `<image src="data:image/svg+xml;base64,…">`
+**完整渲染** SVG（circle/path/stroke 均正确；base64 与 URL-encoded 两形态均可用）——P0 路线成立。
+
+**实现**：
+- `packages/compiler/src/svg-lower.ts`：静态 SVG 子树序列化（标签/属性/嵌套/文本；驼峰属性恢复 viewBox/stop-color 等）
+  → 自动补 `xmlns` → base64 data-URI。含 v-bind/v-if/v-for/插值/事件 → 返回 null（P1）。
+- `template.ts`：`<svg>` 节点优先 lowering 为 `<image class="proteus-svg-<scope>" style="width/height" src mode="aspectFit">`
+  （尺寸继承 svg 的 width/height，否则用 viewBox）；规则 `template/svg-to-image`（可 disabled 回退）。
+- `gen-routes.ts`：SVG 标签加入跳过集（lowering 后产物无这些标签，否则误报「未找到组件 <svg>」并写入 usingComponents）。
+- 规则登记 + 参考文档再生成（规则总数 99→100）。
+
+**验证**：`tests/svg-to-image.test.ts` 11 用例（静态 lowering / data-URI 解码校验 / 尺寸继承 / 嵌套 defs·linearGradient /
+动态不 lowering + 警告 / 规则可禁用 / 独立子标签仍警告）；`tests/compiler-ir-svg.test.ts` 契约更新；
+真机端到端（image-spike 页 lowering 产物渲染出紫圆+黄线，零改代码）。全量 2684/2684 · 门禁 92/92 · build:mp/web ✓。
+
+**边界（诚实）**：仅静态子树。动态 SVG（`:d`/`:fill` 响应式、v-if 控制、事件）属 P1，需 canvas 或 SVG 重生成——
+受 §9 的 node() 通道阻塞影响，待 Nightly IDE / 真机复验后推进。
+
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
 1. **ref 赋值右侧三元表达式被切断**：`status.value = cond ? a : b` →
