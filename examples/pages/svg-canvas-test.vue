@@ -33,9 +33,18 @@
         </svg>
         <text class="lbl">③ 半径变化 (r)</text>
       </view>
+
+      <view class="cell">
+        <svg viewBox="0 0 100 100" width="120" height="120">
+          <circle r="8" fill="#e74c3c">
+            <animateMotion dur="2s" repeatCount="indefinite" path="M10 50 Q50 10 90 50" />
+          </circle>
+        </svg>
+        <text class="lbl">④ 路径运动 (animateMotion)</text>
+      </view>
     </view>
 
-    <text class="hint">三个图形应持续动（离屏 canvas + 定时器驱动）</text>
+    <text class="hint">四个图形应持续动（离屏 canvas + 定时器驱动）</text>
     <text class="frames">渲染帧数：{{ frames }}（持续增长 = 动画在跑）</text>
   </view>
 </template>
