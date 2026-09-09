@@ -7,6 +7,7 @@
   <view class="spike">
     <text class="spike-title">SVG 高级特性渲染对照</text>
     <text class="spike-sub">每格一个特性——看哪个渲染、哪个空白</text>
+    <text class="spike-sub">{{ tapLog }}</text>
 
     <text class="spike-sub">↓ 编译器 lowering：&lt;use href&gt; 零改代码（编译期展开）</text>
     <view class="spike-cell">
@@ -24,7 +25,7 @@
 
     <view class="spike-grid">
       <view class="spike-cell" v-for="(it, i) in items" :key="i">
-        <image class="spike-img" :src="it.src" mode="aspectFit" />
+        <image class="spike-img" :src="it.src" mode="aspectFit" @tap="onImgTap(it.name)" data-idx="{{i}}" />
         <text class="spike-label">{{ it.name }}</text>
       </view>
     </view>
@@ -36,6 +37,14 @@ import { onMounted, ref } from 'vue'
 
 const NS = 'http://www.w3.org/2000/svg'
 const items = ref<any[]>([])
+const tapLog = ref('未点击')
+function onImgTap(name: string, e?: unknown): void {
+  const ev = e as { detail?: { x?: number; y?: number }; currentTarget?: { offsetLeft?: number; offsetTop?: number }; touches?: Array<{ x?: number; y?: number }> } | undefined
+  const d = ev?.detail
+  const t = ev?.touches?.[0]
+  tapLog.value = `tap ${name}: detail=${JSON.stringify(d)} touch=${JSON.stringify(t)} ct=${JSON.stringify(ev?.currentTarget)}`
+  console.log('[tap-probe]', tapLog.value)
+}
 
 onMounted(() => {
   items.value = [
