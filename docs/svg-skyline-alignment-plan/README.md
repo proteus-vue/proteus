@@ -95,6 +95,43 @@ Web 里 `.icon path { fill: red }` 在 Skyline 无解（canvas 无 CSS 级联）
 2. `mp-svg` 运行时组件最小骨架：canvas 拿节点（createSelectorQuery node）→ watch shapes → path d 解析 → tap 命中测试
 3. 跑通第一个 `<path :d="d" :fill="color">` 例子
 
+## 9. ★地基 spike 实测（2026-09-09，真机 Skyline 模拟器）
+
+**结论：方案第 2/3 节的核心前提「运行时用 Canvas 2D 重画」目前被阻塞——`canvas node` 拿不到。**
+
+验证页 `examples/pages/svg-spike.vue`（`<canvas id="spike-canvas" type="2d" width="240" height="120">`），
+在 Skyline（`isSupported: true`，SDK 3.16.2，IDE 36.6.0）+ wechatide skill-CLI 下实测：
+
+| 通道 | 结果 |
+|---|---|
+| `page.createSelectorQuery().select('#id').boundingClientRect(cb)` | ✅ 正常回调（返回 249.6×124.8） |
+| `page.createSelectorQuery().select('#id').node(cb)` | ❌ **不回调**（6s 超时，无报错） |
+| `.fields({ node: true, size: true }, cb)` | ❌ 不回调 |
+| `wx.createSelectorQuery().in(page)` 各形态 | ❌ 返回 null（与 p-popover 记录一致） |
+| `wx.createCanvasContext('id')`（旧 API） | ⚠️ 返回对象但带 `isFallbackLegacy`——`draw()` 后截图无可见产出（Skyline 不认旧 API） |
+| `p.selectComponent('#spike-canvas')` | ❌ null |
+
+**推论**：Skyline 下 canvas 组件存在且布局可测（boundingClientRect 有值），但**取 node / 取 ctx 的官方通道当前不工作**。
+官方文档称 Skyline 支持 canvas 且示例用 `node()`，并注明「Skyline 需用最新 Nightly 工具调试」——
+因此可能是 **IDE 版本（36.6.0 非 Nightly）或自动化上下文限制**，而非平台能力缺失。
+
+**对方案的影响与下一步**：
+
+- 方案 2/3 节（canvas lowering + 运行时重画）**暂不可行**，直到 node 通道确认可用；
+- **P0（静态图标）建议改走 `<image>` 方案**：编译期把静态 `<svg>` 渲染成 data-URI SVG/PNG 进 `image` src
+  （不依赖 canvas node，Skyline 原生支持 image）——可覆盖 80% 图标场景，与方案 §5 P0 目标一致；
+- **P1/P2（响应式矢量/动画）依赖 canvas node**：需先在 **Nightly IDE** 或真机上复验 `node()` 通道；
+  若真机可用而 IDE 不可用，则「真机验收」必须前置（专项 06-mp-true-device-acceptance 同源纪律）。
+- **复验清单**：① Nightly IDE 重跑本 spike；② 真机（非模拟器）复验；③ 若两者都失败，向微信反馈 + 评估 Skyline 的
+  `canvas type="2d"` 替代方案（如 `wx.createOffscreenCanvas` 离屏 + image 回填）。
+
+## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
+
+1. **ref 赋值右侧三元表达式被切断**：`status.value = cond ? a : b` →
+   `this.setData({ status: cond })` 后接悬空 `? a : b` → 产物语法错。需修 ref 赋值改写（三元/多行 RHS）。
+2. **箭头函数参数类型注解未剥离**：`.node((res: any) => {...})` 的 `res: any` 残留进产物 → 语法错。
+   stripTypeSyntax 未覆盖箭头函数参数位。
+
 ## 关联
 
 - `docs/compiler-platform-alignment.md`（glass-easel 平台语义对齐——同源方法论：不自造语义）

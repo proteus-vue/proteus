@@ -1870,8 +1870,10 @@ function stripTypeSyntax(body: string): string {
   out = out.replace(/([A-Za-z_$][\w$]*)<[A-Za-z_$][\w$]*>\s*\(/g, '$1(')
   // ③ 块内 const/let 类型注解剥离：const f: Record<string, number> = {...} → const f = {...}
   out = out.replace(/\b(const|let)\s+([A-Za-z_$][\w$]*)\s*:\s*[^=\n]+=/g, (m, kw, name) => `${kw} ${name} =`)
-  // ④ 块内箭头函数参数/返回类型注解剥离：(n: IRNode): void => → (n) =>
+  // ④ 块内箭头函数参数/返回类型注解剥离：(n: IRNode): void => → (n) =>；★2026-09-09 补无返回注解形态
+  //    (x: number) =>（此前仅处理带返回注解的，参数注解残留进产物 → Unexpected token ':'——svg-spike 实证）
   out = out.replace(/\(([^(){}]*)\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
+  out = out.replace(/\(([^(){}]*\s*:\s*[^(){}]*)\)\s*=>/g, (_m, params) => `(${stripParamTypes(params)}) =>`)
   return out
 }
 
@@ -2035,8 +2037,21 @@ function rewriteRefAccess(
             depth++
           } else if (ch === '}' || ch === ')' || ch === ']') {
             depth--
-          } else if (depth === 0 && (ch === ';' || ch === '\n')) {
+          } else if (depth === 0 && ch === ';') {
             break
+          } else if (depth === 0 && (ch === '\n' || ch === '\r')) {
+            // ★2026-09-09 多行 RHS 续行判定（svg-spike 实证：`s.value = ok\n  ? a\n  : b` 被首行截断 →
+            //   setData({s: ok}) 后悬空三元 = 产物语法错）。判定取**换行前最后一个非空白字符**：
+            //   仅当它是明确的续行符号（运算符 / 开括号 / ? : , .）才继续——避免把后续独立语句吞进 RHS
+            //   （`n.value = 1\n  if (...)` 的 if 不是续行，此前按「下一行首字符」判断导致误吞 → 语法错）。
+            let k = i - 1
+            while (k >= 0 && /[ \t]/.test(rest[k])) k--
+            const prevCh = rest[k] ?? ''
+            const continues = prevCh === '?' || prevCh === ':' || prevCh === ',' || prevCh === '.' ||
+              prevCh === '+' || prevCh === '-' || prevCh === '*' || prevCh === '/' || prevCh === '%' ||
+              prevCh === '&' || prevCh === '|' || prevCh === '=' || prevCh === '(' || prevCh === '[' ||
+              prevCh === '<' || prevCh === '>'
+            if (!continues) break
           }
           i++
         }
