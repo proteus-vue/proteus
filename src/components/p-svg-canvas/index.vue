@@ -25,6 +25,8 @@ const props = defineProps({
 })
 
 const src = ref('')
+/** 已渲染帧数（调试/外部观察用——模拟器与真机均可读取） */
+const frames = ref(0)
 const imageStyle = computed(() => ({ width: props.width + 'px', height: props.height + 'px' }))
 
 /** 离屏画布句柄（惰性创建） */
@@ -68,6 +70,10 @@ function loop(this: any): void {
   const dur = this.data.scene?.duration ?? 0
   try {
     this.renderFrame(dur > 0 ? elapsed % dur : elapsed)
+    const n = (this.data.frames || 0) + 1
+    this.setData({ frames: n })
+    // 每 10 帧向页面上报（便于外部观察动画是否推进——模拟器/真机均可）
+    if (n % 10 === 0 && this.triggerEvent) this.triggerEvent('tick', { frames: n })
   } catch {
     /* 单帧绘制失败忽略（下一帧重试） */
   }

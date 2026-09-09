@@ -8,7 +8,7 @@
 
     <view class="row">
       <view class="cell">
-        <svg viewBox="0 0 100 100" width="120" height="120">
+        <svg viewBox="0 0 100 100" width="120" height="120" @tick="onTick">
           <circle cx="20" cy="50" r="14" fill="#3498db">
             <animate attributeName="cx" values="20;80;20" dur="2s" repeatCount="indefinite" />
           </circle>
@@ -17,7 +17,7 @@
       </view>
 
       <view class="cell">
-        <svg viewBox="0 0 100 100" width="120" height="120">
+        <svg viewBox="0 0 100 100" width="120" height="120" @tick="onTick">
           <circle cx="50" cy="50" r="35" fill="none" stroke="#9b59b6" stroke-width="8" stroke-dasharray="220" stroke-dashoffset="220">
             <animate attributeName="stroke-dashoffset" from="220" to="0" dur="2s" repeatCount="indefinite" />
           </circle>
@@ -26,7 +26,7 @@
       </view>
 
       <view class="cell">
-        <svg viewBox="0 0 100 100" width="120" height="120">
+        <svg viewBox="0 0 100 100" width="120" height="120" @tick="onTick">
           <circle cx="50" cy="50" r="10" fill="#e74c3c">
             <animate attributeName="r" values="10;40;10" dur="1.5s" repeatCount="indefinite" />
           </circle>
@@ -35,11 +35,19 @@
       </view>
     </view>
 
-    <text class="hint">三个图形应持续动（离屏 canvas + rAF 驱动）</text>
+    <text class="hint">三个图形应持续动（离屏 canvas + 定时器驱动）</text>
+    <text class="frames">渲染帧数：{{ frames }}（持续增长 = 动画在跑）</text>
   </view>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const frames = ref(0)
+function onTick(e: unknown): void {
+  frames.value = (e as { detail?: { frames?: number } })?.detail?.frames ?? 0
+}
+</script>
 
 <style scoped>
 .page {
@@ -74,6 +82,12 @@
 .lbl {
   font-size: 10px;
   color: #333;
+}
+.frames {
+  font-size: 13px;
+  color: #e74c3c;
+  font-weight: 700;
+  margin-top: 4px;
 }
 .hint {
   font-size: 11px;

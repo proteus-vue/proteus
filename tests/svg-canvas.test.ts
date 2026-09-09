@@ -48,6 +48,23 @@ describe('G-62 Canvas 通道：形状变化动画 → p-svg-canvas', () => {
     expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
   })
 
+  it('源码 <svg> 上的事件绑定透传到 <p-svg-canvas>（@tick → bind:tick）', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100" width="120" height="120" @tick="onTick"><circle cx="20" cy="50" r="14">' +
+        '<animate attributeName="cx" values="20;80;20" dur="2s"/></circle></svg>',
+    )
+    // 事件透传（此前 lowering 丢弃 → 组件事件收不到）
+    expect(r.wxml).toMatch(/<p-svg-canvas[^>]*bind:tick="onTick"/)
+  })
+
+  it('非简单方法引用的事件不透传（避免生成无效绑定）', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100" @tick="onTick(1)"><circle cx="20" cy="50" r="14">' +
+        '<animate attributeName="cx" values="20;80" dur="1s"/></circle></svg>',
+    )
+    expect(r.wxml).not.toMatch(/bind:tick/)
+  })
+
   it('规则 template/svg-canvas 可禁用', () => {
     const r = compileVueSfc(
       '<template><svg viewBox="0 0 100 100"><circle cx="20" cy="50" r="14"><animate attributeName="cx" values="20;80" dur="1s"/></circle></svg></template>',
