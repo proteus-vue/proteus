@@ -53,6 +53,7 @@ function go(name: 'forms' | 'config-demo' | 'user') {
     <div class="svg-links">
       <h3>SVG → Skyline 专项</h3>
       <p class="nest-tip">静态/动态 SVG、use 展开、文字提升、事件命中、动画（CSS/canvas）</p>
+      <a class="link svg-star" href="/pages/svg-showcase-demo">★ SVG 能力综合演示（炫丽效果）</a>
       <a class="link" href="/pages/svg-hit-test">① SVG 事件命中 + 文字提升</a>
       <a class="link" href="/pages/svg-anim-probe">② SVG 动画（CSS 转译）</a>
       <a class="link" href="/pages/svg-canvas-test">③ SVG 动画（Canvas 通道·形状变化）</a>
@@ -82,6 +83,10 @@ function go(name: 'forms' | 'config-demo' | 'user') {
   margin-top: 32px;
   padding-top: 16px;
   border-top: 1px dashed #ddd;
+}
+.svg-star {
+  font-weight: 700;
+  color: #7c3aed;
 }
 .svg-links h3 {
   font-size: 16px;

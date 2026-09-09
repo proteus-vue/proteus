@@ -662,6 +662,15 @@ export interface SvgSceneIR {
   viewBox: [number, number, number, number]
   nodes: SceneNodeIR[]
   duration: number
+  /** ★2026-09-09 Canvas 渐变：defs 里的渐变定义（id → 类型/stops/坐标）——
+   *  Canvas fillStyle 不认 `url(#id)`，需运行时 createLinearGradient/createRadialGradient */
+  gradients?: Record<string, {
+    type: 'linear' | 'radial'
+    stops: Array<{ offset: number; color: string; opacity?: number }>
+    x1?: number; y1?: number; x2?: number; y2?: number
+    cx?: number; cy?: number; r?: number
+    units?: string
+  }>
 }
 
 /** 解析 transform 属性字符串 → Transform2D */
@@ -795,9 +804,44 @@ export function lowerSvgToScene(node: ElementNode): SvgSceneIR | null {
 
   const hasAnim = { v: false }
   const nodes: SceneNodeIR[] = []
+  const gradients: NonNullable<SvgSceneIR['gradients']> = {}
   for (const c of node.children as TemplateChildNode[]) {
     if (c.type !== NodeTypes.ELEMENT) continue
-    const n = toSceneNode(c as ElementNode, hasAnim)
+    const el = c as ElementNode
+    // ★收集 defs 里的渐变定义（Canvas 需运行时创建）
+    const collectGradients = (n: ElementNode): void => {
+      const tg = n.tag.toLowerCase()
+      if (tg === 'lineargradient' || tg === 'radialgradient') {
+        const id = staticAttr(n, 'id')
+        if (id) {
+          const stops: Array<{ offset: number; color: string; opacity?: number }> = []
+          for (const sc of n.children as TemplateChildNode[]) {
+            if (sc.type !== NodeTypes.ELEMENT) continue
+            const se = sc as ElementNode
+            if (se.tag.toLowerCase() !== 'stop') continue
+            const off = staticAttr(se, 'offset') ?? '0'
+            stops.push({
+              offset: off.endsWith('%') ? Number(off.slice(0, -1)) / 100 : Number(off) || 0,
+              color: staticAttr(se, 'stop-color') ?? staticAttr(se, 'stopcolor') ?? '#000',
+              opacity: Number(staticAttr(se, 'stop-opacity') ?? staticAttr(se, 'stopopacity') ?? '1'),
+            })
+          }
+          const num = (nm: string, dflt: number): number => {
+            const v = staticAttr(n, nm)
+            return v === undefined ? dflt : Number(v) || 0
+          }
+          gradients[id] =
+            tg === 'lineargradient'
+              ? { type: 'linear', stops, x1: num('x1', 0), y1: num('y1', 0), x2: num('x2', 1), y2: num('y2', 0), units: staticAttr(n, 'gradientUnits') ?? 'objectBoundingBox' }
+              : { type: 'radial', stops, cx: num('cx', 0.5), cy: num('cy', 0.5), r: num('r', 0.5), units: staticAttr(n, 'gradientUnits') ?? 'objectBoundingBox' }
+        }
+      }
+      for (const gc of n.children as TemplateChildNode[]) {
+        if (gc.type === NodeTypes.ELEMENT) collectGradients(gc as ElementNode)
+      }
+    }
+    collectGradients(el)
+    const n = toSceneNode(el, hasAnim)
     if (n) nodes.push(n)
   }
   if (!nodes.length) return null
@@ -817,5 +861,5 @@ export function lowerSvgToScene(node: ElementNode): SvgSceneIR | null {
   }
   for (const n of nodes) scan(n)
   if (!needsCanvas) return null // 无形状动画 → 不需要 canvas（image/CSS 方案更优）
-  return { viewBox, nodes, duration: duration || 1000 }
+  return { viewBox, nodes, duration: duration || 1000, gradients: Object.keys(gradients).length ? gradients : undefined }
 }
