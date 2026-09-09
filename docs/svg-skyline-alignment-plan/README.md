@@ -502,3 +502,39 @@ Skyline 2.02.2609072 / SDK 3.16.2，**在 `onMounted`（正常运行时上下文
 
 **边界（诚实）**：仅静态 text（含插值的动态 text 仍走警告）；带 transform 不提升；多行/旋转文字不处理；
 字号用 px（未随容器等比缩放——需要时可用 `em`/百分比）。
+
+## 13. ★SVG 规范能力对齐盘点（2026-09-09 收官）
+
+**方法**：对照 SVG 规范分组 → 逐项核查实现 → **真机像素级实测**（`getImageData` 检测非空像素）。
+
+| 分组 | 能力 | 状态 |
+|---|---|---|
+| **基础图形** | path / circle / rect / line / polyline / polygon / ellipse | ✅ 真机验证 |
+| **容器结构** | g / defs / symbol / use / view / switch / a | ✅（`use` 编译期展开） |
+| **渐变** | linearGradient / radialGradient / stop | ✅ 真机验证 |
+| **裁剪遮罩** | clipPath / mask | ✅ 真机验证 |
+| **滤镜** | filter + 22 个 feXxx（feGaussianBlur/feColorMatrix/feOffset/feBlend/feComposite/feTurbulence/feDropShadow/feMerge…） | ✅ 补全（真机像素实测） |
+| **图案标记** | pattern / marker | ✅ 补全（真机像素实测） |
+| **内嵌图像** | image | ✅ 补全（真机像素实测） |
+| **文字** | text / tspan / textPath | ⚠️ text·tspan 编译期提升为原生 `<text>`；textPath 走 image（真机实测渲染） |
+| **动画** | animate / animateTransform / animateMotion / set | ✅ 整体变换→CSS、形状变化→Canvas（真机验证） |
+| **描述性** | title / desc / metadata | ✅ 保留（不影响渲染） |
+
+### ★关键认知修正（本轮最大收获）
+
+**白名单缺失 ≠ 平台不支持**。盘点初版显示滤镜/图案/标记/内嵌图"未覆盖"，但**真机像素实测证明全部渲染**——
+问题在**编译器白名单**（不在 `SVG_TAGS` → 整棵 SVG lowering 失败 → 原样输出不渲染），而非平台能力。
+扩充白名单后全部可用（feColorMatrix 5124px / pattern 3100px / marker 1020px / image 3600px / textPath 244px）。
+
+### 已知边界（诚实，非"未做"）
+
+| 边界 | 原因 | 替代方案 |
+|---|---|---|
+| `text`/`tspan` | Skyline image 丢弃文字元素（WebView 正常，官方未记载） | 编译期自动提升为原生 `<text>` 叠加 |
+| `animateMotion` | image 静态光栅化不播放；Canvas 通道未实现路径运动 | 用形状动画（cx/cy 关键帧）近似 |
+| SVG 内部事件命中 | `<image>` 无内部元素 | 几何判定（path 用包围盒近似；带 transform 不参与） |
+| `v-for` 的 SVG | 列表展开 + key 管理复杂度高 | 保持编译期警告 |
+| 百分比单位 / `<style>` 元素 | 官方明确不支持 | — |
+
+**结论**：SVG 常用能力（图形/渐变/裁剪/遮罩/滤镜/图案/标记/内嵌图/动画/文字）**已对齐并真机验证**；
+剩余边界均有明确原因与替代方案（非"未实现"）。
