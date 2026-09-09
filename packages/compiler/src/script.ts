@@ -1882,6 +1882,10 @@ function stripTypeSyntax(body: string): string {
   //   含具名函数声明形态：function name(r: unknown): string → function name(r)
   out = out.replace(/\bfunction\s*([A-Za-z_$][\w$]*)?\s*\(([^(){}]*\s*:\s*[^(){}]*)\)\s*(?::\s*[A-Za-z_$][\w$.<>\[\]|\s]*)?\s*\{/g,
     (_m, name: string | undefined, params: string) => `function ${name ? name + ' ' : ''}(${stripParamTypes(params)}) {`)
+  // ⑥ ★2026-09-09 无参/纯返回类型注解的函数表达式：function (): void { → function () {
+  //   （canvas-probe 实证：箭头/带参形态已覆盖，无参 + 仅返回类型注解漏网）
+  out = out.replace(/\bfunction\s*([A-Za-z_$][\w$]*)?\s*\(\s*\)\s*:\s*[A-Za-z_$][\w$.<>\[\]|\s]*\s*\{/g,
+    (_m, name: string | undefined) => `function ${name ? name + ' ' : ''}() {`)
   return out
 }
 
