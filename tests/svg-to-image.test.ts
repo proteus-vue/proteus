@@ -115,12 +115,24 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
     expect(svg).toContain('transform="rotate(45)"')
   })
 
-  it('P2：use/symbol → lowering + 实测不支持警告（真机渲染空白）', () => {
-    const r = compile('<template><svg viewBox="0 0 100 100"><defs><symbol id="s"><circle r="15"/></symbol></defs><use href="#s" x="30" y="30"/></svg></template>')
+  it('P2：use/symbol 编译期展开（真机实证：原始渲染空白，展开后完美渲染）', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><defs><symbol id="s"><circle cx="0" cy="0" r="15" fill="#34495e"/></symbol></defs><use href="#s" x="30" y="30"/><use href="#s" x="70" y="70"/></svg></template>')
     expect(r.wxml).toMatch(/<image[^>]*data:image\/svg\+xml/)
+    const b64 = r.wxml.match(/src="data:image\/svg\+xml;base64,([^"]+)"/)![1]
+    const svg = Buffer.from(b64, 'base64').toString('utf8')
+    expect(svg).not.toContain('<use')       // use 已展开
+    expect(svg).not.toContain('<symbol')    // symbol 定义已移除
+    expect(svg).toMatch(/translate\(30,30\)/)
+    expect(svg).toMatch(/translate\(70,70\)/)
+    expect(svg).not.toMatch(/<defs>\s*<\/defs>/) // 空 defs 已清理
+    expect(r.warnings.some((x: string) => /不支持/.test(x))).toBe(false) // 内部引用不警告
+  })
+
+  it('P2：use 外部引用（symbol 未定义）→ 展开失败 + 诚实警告', () => {
+    const r = compile('<template><svg viewBox="0 0 100 100"><use href="#external"/></svg></template>')
     const w = r.warnings.find((x: string) => /不支持/.test(x))
-    expect(w, 'use/symbol 应有实测不支持警告').toBeTruthy()
-    expect(w).toMatch(/<use>|<symbol>/)
+    expect(w, '外部引用应有警告').toBeTruthy()
+    expect(w).toMatch(/use\(外部引用\)/)
   })
 
   it('P2：text → lowering + 实测不支持警告', () => {
@@ -132,8 +144,9 @@ describe('G-62 P0：静态 SVG → image data-URI', () => {
   it('P2：SVG_P2_SUPPORT 支持表导出（文档化实测结论）', () => {
     expect(SVG_P2_SUPPORT.supported).toContain('clipPath')
     expect(SVG_P2_SUPPORT.supported).toContain('mask')
-    expect(SVG_P2_SUPPORT.unsupported).toContain('use')
+    // ★use/symbol 已由编译期展开解决（不再列为 unsupported）；text 仍不支持
     expect(SVG_P2_SUPPORT.unsupported).toContain('text')
+    expect(SVG_P2_SUPPORT.unsupported).not.toContain('use')
   })
 
   it('viewBoxRatio 推导宽高比', () => {

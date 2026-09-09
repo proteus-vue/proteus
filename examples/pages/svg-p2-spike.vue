@@ -8,6 +8,20 @@
     <text class="spike-title">SVG 高级特性渲染对照</text>
     <text class="spike-sub">每格一个特性——看哪个渲染、哪个空白</text>
 
+    <text class="spike-sub">↓ 编译器 lowering：&lt;use href&gt; 零改代码（编译期展开）</text>
+    <view class="spike-cell">
+      <svg viewBox="0 0 100 100" width="72" height="72">
+        <defs>
+          <symbol id="dot">
+            <circle cx="0" cy="0" r="15" fill="#e74c3c" />
+          </symbol>
+        </defs>
+        <use href="#dot" x="30" y="30" />
+        <use href="#dot" x="70" y="70" />
+      </svg>
+      <text class="spike-label">use 编译器展开</text>
+    </view>
+
     <view class="spike-grid">
       <view class="spike-cell" v-for="(it, i) in items" :key="i">
         <image class="spike-img" :src="it.src" mode="aspectFit" />
@@ -78,7 +92,7 @@ onMounted(() => {
     ),
   },
   {
-    name: 'use + symbol',
+    name: 'use 原始(手写 URI)',
     src: 'data:image/svg+xml,' + encodeURIComponent(
       `<svg xmlns="${NS}" viewBox="0 0 100 100"><defs><symbol id="s"><circle cx="0" cy="0" r="15" fill="#34495e"/></symbol></defs>` +
         `<use href="#s" x="30" y="30"/><use href="#s" x="70" y="70"/></svg>`,

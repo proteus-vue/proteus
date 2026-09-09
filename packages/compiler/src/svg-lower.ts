@@ -24,20 +24,38 @@ export const SVG_P2_SUPPORT = {
     'stroke-dasharray / stroke-dashoffset', 'opacity / fill-opacity / stroke-opacity',
     'g（嵌套组）', 'filter（feGaussianBlur 等）',
   ],
-  /** ❌ 实测不支持（编译期诚实警告——渲染为空白） */
-  unsupported: ['use', 'symbol', 'text', 'tspan'],
+  /** ❌ 实测不支持（编译期诚实警告——渲染为空白）。★use/symbol 已由编译期展开解决（见 useExpanded） */
+  unsupported: ['text', 'tspan'],
+  /** ★编译期展开解决（原始渲染空白，展开后完美渲染——真机实证） */
+  useExpanded: ['use', 'symbol'],
 } as const
 
-/** P2 不支持标签（实测空白——渲染无产出） */
-const SVG_UNSUPPORTED_TAGS = new Set(['use', 'symbol', 'text', 'tspan'])
+/** P2 不支持标签（实测空白——渲染无产出）。★use/symbol 已由编译期展开处理（不再警告）；text/tspan 仍不支持 */
+const SVG_UNSUPPORTED_TAGS = new Set(['text', 'tspan'])
 
-/** 收集子树内实测不支持的 SVG 标签（去重，供诚实警告） */
+/** use/symbol 标签（编译期展开为内联图形——不警告） */
+const SVG_USE_TAGS = new Set(['use', 'symbol'])
+
+/** 收集子树内**实测不支持**的 SVG 标签（去重，供诚实警告）。
+ *  ★use/symbol 已由编译期展开处理——仅当 use 引用的 symbol **未在本文档定义**（外部 sprite）时，
+ *  展开失败才计入警告（键名 'use(外部引用)'）。 */
 export function collectUnsupportedSvgTags(node: ElementNode, acc: Set<string> = new Set()): Set<string> {
-  const lower = node.tag.toLowerCase()
-  if (SVG_UNSUPPORTED_TAGS.has(lower)) acc.add(lower)
-  for (const c of node.children as TemplateChildNode[]) {
-    if (c.type === NodeTypes.ELEMENT) collectUnsupportedSvgTags(c as ElementNode, acc)
+  // 先收集本文档内的 symbol 定义（判定 use 能否展开）
+  const symbols: SymbolMap = new Map()
+  collectSymbols(node, symbols)
+  const walk = (n: ElementNode): void => {
+    const lower = n.tag.toLowerCase()
+    if (SVG_UNSUPPORTED_TAGS.has(lower)) acc.add(lower)
+    if (lower === 'use') {
+      const href = staticAttr(n, 'href') ?? staticAttr(n, 'xlink:href') ?? ''
+      const id = href.replace(/^#/, '')
+      if (!id || !symbols.has(id)) acc.add('use(外部引用)')
+    }
+    for (const c of n.children as TemplateChildNode[]) {
+      if (c.type === NodeTypes.ELEMENT) walk(c as ElementNode)
+    }
   }
+  walk(node)
   return acc
 }
 
@@ -96,14 +114,64 @@ function esc(s: string): string {
 /** 自闭合标签（SVG 中无子节点时输出 <x/>） */
 const SELF_CLOSING = new Set(['path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'stop', 'use'])
 
+/** ★2026-09-09 P2 补：<use href="#id"> 编译期展开（真机实证 use/symbol 渲染空白，展开后完美渲染）。
+ *  收集 <defs>/<symbol id> 定义 → 遇到 <use href="#id" x y> 时把 symbol 内容包进 <g transform="translate(x,y)"> 内联。
+ *  纯编译期转换（零运行时依赖）。 */
+type SymbolMap = Map<string, ElementNode>
+
+/** 递归收集子树内的 <symbol id="..."> 定义（含 defs 内） */
+function collectSymbols(node: ElementNode, map: SymbolMap): void {
+  if (node.tag.toLowerCase() === 'symbol') {
+    const idAttr = node.props.find(
+      (p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name.toLowerCase() === 'id',
+    ) as { value?: { content: string } } | undefined
+    if (idAttr?.value?.content) map.set(idAttr.value.content, node)
+  }
+  for (const c of node.children as TemplateChildNode[]) {
+    if (c.type === NodeTypes.ELEMENT) collectSymbols(c as ElementNode, map)
+  }
+}
+
+/** 读取元素上的静态属性值（无 → undefined） */
+function staticAttr(node: ElementNode, name: string): string | undefined {
+  const a = node.props.find(
+    (p) => p.type === NodeTypes.ATTRIBUTE && (p as { name: string }).name.toLowerCase() === name.toLowerCase(),
+  ) as { value?: { content: string } } | undefined
+  return a?.value?.content
+}
+
 /**
  * 把静态 SVG 元素子树序列化为 SVG 字符串。
  * 返回 null 表示含动态绑定（{{ }} / v-bind / v-if / v-for / v-on / 其它指令）——P0 不处理。
  */
-function serializeSvgElement(node: ElementNode, depth: number): string | null {
+function serializeSvgElement(node: ElementNode, depth: number, symbols: SymbolMap = new Map()): string | null {
   const tag = node.tag
   const lower = tag.toLowerCase()
   if (!SVG_TAGS.has(lower)) return null // 非 SVG 标签（含自定义组件）→ 不 lower
+
+  // ★P2 补：<symbol> 定义不直接输出（仅作为 <use> 的展开源）；<use> → 展开为 symbol 内容 + translate
+  if (lower === 'symbol') return ''
+  if (lower === 'use') {
+    const href = staticAttr(node, 'href') ?? staticAttr(node, 'xlink:href') ?? ''
+    const id = href.replace(/^#/, '')
+    const sym = id ? symbols.get(id) : undefined
+    if (!sym) return '' // 引用缺失（外部 sprite 等）→ 空（调用方已警告）
+    const x = staticAttr(node, 'x') ?? '0'
+    const y = staticAttr(node, 'y') ?? '0'
+    const inner: string[] = []
+    for (const c of sym.children as TemplateChildNode[]) {
+      if (c.type === NodeTypes.ELEMENT) {
+        const cs = serializeSvgElement(c as ElementNode, depth + 1, symbols)
+        if (cs === null) return null
+        if (cs) inner.push(cs)
+      } else if (c.type === NodeTypes.TEXT) {
+        const t = (c as { content: string }).content
+        if (t.trim()) inner.push(esc(t.trim()))
+      }
+    }
+    const g = `<g transform="translate(${x},${y})">${inner.join('')}</g>`
+    return g
+  }
 
   const attrs: string[] = []
   for (const p of node.props) {
@@ -125,10 +193,12 @@ function serializeSvgElement(node: ElementNode, depth: number): string | null {
   let hasChild = false
   for (const c of node.children as TemplateChildNode[]) {
     if (c.type === NodeTypes.ELEMENT) {
-      const s = serializeSvgElement(c as ElementNode, depth + 1)
+      const s = serializeSvgElement(c as ElementNode, depth + 1, symbols)
       if (s === null) return null // 子节点含动态 → 整树不 lower
-      childParts.push(s)
-      hasChild = true
+      if (s) {
+        childParts.push(s)
+        hasChild = true
+      }
     } else if (c.type === NodeTypes.TEXT) {
       const t = (c as { content: string }).content
       if (t.trim()) {
@@ -164,12 +234,16 @@ export function lowerSvgToImage(node: ElementNode): SvgLowerResult | null {
   ) as { value?: { content: string } } | undefined
   const viewBox = viewBoxAttr?.value?.content ?? '0 0 24 24'
 
+  // ★P2 补：先收集 <symbol> 定义（供 <use> 展开）
+  const symbols: SymbolMap = new Map()
+  collectSymbols(node, symbols)
   // 序列化整个 <svg>（含自身属性）
-  const inner = serializeSvgElement(node, 0)
+  const inner = serializeSvgElement(node, 0, symbols)
   if (inner === null) return null
 
+  // ★P2 补：清理展开后残留的空 <defs></defs>（symbol 已内联，defs 空壳无意义）
+  let svg = inner.replace(/<defs>\s*<\/defs>/g, '')
   // 补 xmlns（SVG 渲染必需；源码常省略，因为是内联 DOM）
-  let svg = inner
   if (!/\sxmlns\s*=/.test(svg)) {
     svg = svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"')
   }
