@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 104 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 105 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (58)
+## Template transforms (59)
 
 ### `tag/div-to-view`
 
@@ -543,6 +543,19 @@ after:  警告 + 原样输出
 ```
 
 > why: anti-black-box (vue-compat Batch A, decision #116): use the routeType transition for transitions; remove keep-alive/teleport usage
+
+### `template/svg-anim-promote`
+
+**SVG whole-transform animation → CSS @keyframes (applied to image)**
+
+SVG-internal <animateTransform rotate/scale/translate> and <animate opacity> → CSS @keyframes + class bound to <image>; shape-attribute animations (cx/d/stroke-dashoffset) cannot be expressed in CSS → not translated
+
+```
+before: <animateTransform type="rotate" from="0 50 50" to="360 50 50" dur="2s"/>
+after:  <image class="proteus-svg-anim-1"/> + .proteus-svg-anim-1 { animation: … } + @keyframes
+```
+
+> why: G-62 animation: on-device evidence shows SVG-internal animation does not play (image is statically rasterized, §11.1), but CSS animation on the image element works fully (three frames with distinct MD5) — whole-transform animations are auto-translated, shape-morph ones are honestly skipped
 
 ### `template/svg-text-promote`
 
