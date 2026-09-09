@@ -51,10 +51,35 @@ function renderFrame(this: any, tMs: number): void {
   const minInterval = 1000 / Math.max(1, this.data.fps)
   if (this.__lastEmit === undefined || tMs - this.__lastEmit >= minInterval) {
     this.__lastEmit = tMs
+    // ★2026-09-09 真机实证：真机 <image> 渲染 canvasToTempFilePath 的**临时文件路径**比 data-URI 更可靠
+    //   （data-URI 长字符串在真机 setData 可能被截断/渲染失败——真机帧数在跑但图形不显示）；
+    //   模拟器两者均可。优先 tempFilePath，失败回退 data-URI。
+    const emit = (uri: string): void => {
+      if (uri) this.setData({ src: uri })
+    }
     try {
-      this.setData({ src: c.toDataURL('image/png') })
+      const w = wx as unknown as {
+        canvasToTempFilePath?: (o: {
+          canvas: unknown
+          success?: (r: { tempFilePath: string }) => void
+          fail?: () => void
+        }) => void
+      }
+      if (typeof w.canvasToTempFilePath === 'function') {
+        w.canvasToTempFilePath({
+          canvas: c,
+          success: (r) => emit(r.tempFilePath),
+          fail: () => emit(c.toDataURL('image/png')),
+        })
+      } else {
+        emit(c.toDataURL('image/png'))
+      }
     } catch {
-      /* toDataURL 失败忽略（下一帧重试） */
+      try {
+        emit(c.toDataURL('image/png'))
+      } catch {
+        /* 两种通道都失败——下一帧重试 */
+      }
     }
   }
 }
