@@ -21,8 +21,8 @@ const props = defineProps({
   width: { type: Number, default: 200 },
   /** 画布高 px */
   height: { type: Number, default: 200 },
-  /** 目标帧率（默认 30——回传瓶颈下的平衡点） */
-  fps: { type: Number, default: 30 },
+  /** 目标帧率（默认 10——每帧生成 PNG 文件 + setData 是重操作，真机 I/O 慢；30 会导致 image 来不及加载） */
+  fps: { type: Number, default: 10 },
   /** 是否播放（外部控制） */
   playing: { type: Boolean, default: true },
 })
@@ -83,8 +83,21 @@ function renderFrame(this: any, tMs: number): void {
         w.canvasToTempFilePath({
           canvas: c,
           success: (r) => {
-            if (n0 % 20 === 0) this.setData({ diag: 'tmp OK ' + String(r.tempFilePath).slice(-24) })
-            emit(r.tempFilePath)
+            const p = String(r.tempFilePath)
+            if (n0 % 20 === 0) this.setData({ diag: 'tmp OK ' + p.slice(0, 46) })
+            // 验证路径可读性（诊断：getImageInfo 能否读到）
+            if (n0 <= 1 && typeof (wx as any).getImageInfo === 'function') {
+              ;(wx as any).getImageInfo({
+                src: p,
+                success: (info: any) => {
+                  this.setData({ diag: 'READ OK ' + info.width + 'x' + info.height + ' ' + p.slice(0, 30) })
+                },
+                fail: (err: any) => {
+                  this.setData({ diag: 'READ FAIL ' + JSON.stringify(err).slice(0, 60) })
+                },
+              })
+            }
+            emit(p)
           },
           fail: (e?: unknown) => {
             if (n0 % 20 === 0) this.setData({ diag: 'tmp FAIL ' + JSON.stringify(e).slice(0, 60) })
