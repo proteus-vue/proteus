@@ -210,8 +210,40 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 **验证**：`tests/svg-to-image.test.ts` 17 用例（含 P2：mask/clipPath/transform 放行 + use/text 警告 + 支持表导出）；
 全量 2692/2692 · 门禁 93/93 · build:mp/web ✓。
 
-**边界（诚实）**：`use`/`symbol`（SVG sprite 引用）与 `text`（SVG 文字）实测空白——警告引导改用 `<path>` 展开
-或图片；SVG 内部事件命中仍不支持（image 无内部元素）。
+**边界（诚实）**：`text`（SVG 文字）实测空白——警告引导转路径/图片；SVG 内部事件命中仍未实现（见 §9e）。
+
+## 9e. ★use/symbol 编译期展开（2026-09-09）——从空白到完美渲染
+
+**真机对照实证**：`<use href="#s">` 原始形态渲染空白；手动展开为内联图形后**完美渲染**（截图：两个圆点）。
+→ 编译期展开有效，纯编译期转换（零运行时依赖）。
+
+**实现**：`collectSymbols` 收集 `<symbol id>` 定义 → `<use href="#id" x y>` 展开为
+`<g transform="translate(x,y)">symbol 内容</g>`；`<symbol>` 定义不输出；清理残留空 `<defs></defs>`。
+`collectUnsupportedSvgTags` 区分「内部引用（已展开，不警告）」与「外部引用（symbol 未定义 → 警告 `use(外部引用)`）」。
+`SVG_P2_SUPPORT.useExpanded` 分类记录。
+
+**真机验证**：编译器 lowering 的 use 用例渲染出两个红点；手写原始 use 仍空白（同页对照）。
+`tests/svg-to-image.test.ts` 18 用例 · 全量 2699/2699。
+
+## 9f. ★事件命中可行性探测（2026-09-09，未实现——能力已确认）
+
+离屏 canvas 打通后，重新评估「SVG 内部元素事件命中」（§9 标记的剩余能力）。探测结论：
+
+| 能力 | 结果 |
+|---|---|
+| `ctx.getImageData(x,y,1,1).data` | ✅ 返回真实像素（中心 #e74c3c / 角落透明）——像素级命中可行 |
+| `ctx.isPointInPath` | ✅ 存在——几何级命中更精确 |
+| `canvas.createPath2D` | ✅ 存在 |
+| tap 事件坐标 | ✅ 事件对象携带 `detail.x/y` 与 `touches[0].x/y`（页面坐标） |
+| image 定位 | ✅ `boundingClientRect` 可用（换算相对坐标） |
+
+**技术链路完整**：`<image @tap>` 拿坐标 → 减 boundingClientRect 偏移 → 换算 viewBox 坐标 →
+对 shape 列表做 `isPointInPath` / 包围盒判定 → 派发对应 handler。
+
+**未实现原因（诚实）**：需要运行时组件维护 shape 列表 + 坐标变换 + 命中判定 + 事件派发四件套，
+且 `<image>` 无内部元素、命中精度受 viewBox 缩放影响；相对 `use` 展开（纯编译期、零风险）性价比低。
+**当前建议**：需要内部元素交互的场景，用「多个 `<image>` 分区 + 各自 `@tap`」代替——零编译器改动、命中精确。
+若后续有强需求，按上述链路实现 `mp-svg` 运行时组件（离屏 canvas 绘制 + 命中测试）。
 
 ## 10. ★顺带发现的两个编译器缺口（spike 过程中暴露，已登记）
 
