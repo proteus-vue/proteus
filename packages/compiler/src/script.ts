@@ -1896,11 +1896,71 @@ function stripTypeSyntax(body: string): string {
  * ★#494 runtimeInitNames：runtimeInit 变量的裸标识符引用 → this.<name>（toggleGlass 内的 appConf.features
  *   原样词法查找必 ReferenceError——变量是实例属性 this.appConf）
  */
+/** ★2026-09-09：扫描普通 `function (...) { ... }` 体的字符范围（花括号配对，跳过字符串/注释/模板）。
+ *  用于区分「回调内 this 非实例」（需 self.）与「方法体顶层 this」（直接 this.）。 */
+function plainFunctionBodyRanges(src: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = []
+  const re = /\bfunction\s*(?:[A-Za-z_$][\w$]*)?\s*\([^)]*\)\s*\{/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src))) {
+    let i = m.index + m[0].length
+    let depth = 1
+    while (i < src.length && depth > 0) {
+      const ch = src[i]
+      if (ch === '"' || ch === "'" || ch === '`') {
+        const q = ch
+        i++
+        while (i < src.length) {
+          if (src[i] === '\\') { i += 2; continue }
+          if (src[i] === q) { i++; break }
+          i++
+        }
+        continue
+      }
+      if (ch === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue }
+      if (ch === '/' && src[i + 1] === '*') { i += 2; while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue }
+      if (ch === '{') depth++
+      else if (ch === '}') depth--
+      i++
+    }
+    ranges.push({ start: m.index + m[0].length, end: i })
+    re.lastIndex = m.index + m[0].length // 允许嵌套 function 各自入册
+  }
+  return ranges
+}
+
+/** ★2026-09-09：在含 `self.` 引用的**方法体**开头注入 `var self = this`（页面/组件方法体顶层）。
+ *  简化策略：在首个 `function` 回调所在的最外层方法体起始处注入——此处传入整体 body，
+ *  统一在 body 开头注入（方法体内部作用域都能看到，且不与已有声明冲突——先检查）。 */
+function injectSelfVar(body: string, ranges: Array<{ start: number; end: number }>): string {
+  if (/\bvar self = this\b/.test(body)) return body
+  // 找到第一个普通 function 回调的所在方法体起点（即该回调之前的最近一个 `{` 之后）——简化：在 body 最前注入
+  // 注意：body 本身可能是单条方法体内容（rw 的入参），此处直接前置声明（缩进沿用首行）
+  const indent = (body.match(/^([ \t]*)/)?.[1] ?? '') + '  '
+  void ranges
+  return `${indent}var self = this\n${body}`
+}
+
 function rewriteBareMethodCalls(body: string, methodNames: Set<string>, runtimeInitNames?: Set<string>): string {
   let out = body
+  // ★2026-09-09 canvas-probe 实证缺口：方法裸调用若位于**普通 function 回调**内（如 setTimeout(function () { doWork() })），
+  //   改写为 this.doWork() 会因回调内 this 非页面实例而 TypeError（箭头函数才保 this）。
+  //   处理：字符级扫描标出普通 function 体范围 → 体内方法调用改 self.name()，并注入 `var self = this`。
+  const fnRanges = plainFunctionBodyRanges(out)
+  const needsSelf = fnRanges.length > 0
   for (const name of methodNames) {
-    out = out.replace(new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g'), `this.${name}(`)
+    const re = new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g')
+    if (!needsSelf) {
+      out = out.replace(re, `this.${name}(`)
+      continue
+    }
+    // 逐匹配判断：落在普通 function 体内 → self.，否则 this.
+    out = out.replace(re, (m: string, offset: number) => {
+      const inPlainFn = fnRanges.some((r) => offset > r.start && offset < r.end)
+      return inPlainFn ? `self.${name}(` : `this.${name}(`
+    })
   }
+  if (needsSelf && out.includes('self.')) out = injectSelfVar(out, fnRanges)
   if (runtimeInitNames) {
     for (const name of runtimeInitNames) {
       // 裸标识符 → this.<name>；三例外：属性访问（.name）、声明处（const/let/var name）、保持原样

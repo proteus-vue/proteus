@@ -87,3 +87,31 @@ describe('canvas 探测 v2 暴露的编译器缺口（回归锁）', () => {
     expect(r.js).not.toMatch(/\(x: number\)/)
   })
 })
+
+describe('canvas 调研探针暴露的缺口（回归锁）', () => {
+  it('⑤ 普通 function 回调内方法调用 → self.name() + 注入 var self = this', () => {
+    const r = compile(
+      'import { onMounted } from "vue"\nfunction doWork(): void {}\nonMounted(() => { setTimeout(function () { doWork() }, 100) })',
+      '<template><view>x</view></template>',
+    )
+    // 回调内不能是 this.（普通 function 的 this 非页面实例）
+    expect(r.js).toMatch(/setTimeout\(function \(\) \{ self\.doWork\(\) \}/)
+    expect(r.js).not.toMatch(/setTimeout\(function \(\) \{ this\.doWork\(\) \}/)
+    expect(r.js).toMatch(/var self = this/)
+  })
+
+  it('⑤ 箭头回调保持 this.（词法 this 正确）', () => {
+    const r = compile(
+      'import { onMounted } from "vue"\nfunction doWork(): void {}\nonMounted(() => { setTimeout(() => { doWork() }, 100) })',
+      '<template><view>x</view></template>',
+    )
+    expect(r.js).toMatch(/setTimeout\(\(\) => \{ this\.doWork\(\) \}/)
+    expect(r.js).not.toMatch(/self\.doWork\(\)/)
+  })
+
+  it('⑤ 方法体顶层调用保持 this.（既有行为不回归）', () => {
+    const r = compile('function a(): void {}\nfunction b(): void { a() }', '<template><view>x</view></template>')
+    expect(r.js).toMatch(/this\.a\(\)/)
+    expect(r.js).not.toMatch(/self\.a\(\)/)
+  })
+})
