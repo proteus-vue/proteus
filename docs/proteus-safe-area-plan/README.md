@@ -28,7 +28,7 @@ Proteus App 端用 JSI 直调原生 View，**没有浏览器那套 `env(safe-are
 | Android | `WindowInsets` + `DisplayCutout` |
 | 鸿蒙 | `getAvoidArea()` + `getWindowRect()` |
 | Web | CSS `env()` + `viewport-fit=cover` |
-| Skyline | `getSystemInfo().safeArea` + `env()` |
+| Skyline | `getSystemInfo().safeArea` + `env()`（★实测 env() 无效 → 走 runtime 读数，见 04 §2.2 校准） |
 
 ## 关键洞察
 

@@ -11,6 +11,8 @@
        · 事件命中（点击核心触发反馈） -->
 <template>
   <view class="page">
+    <!-- ★状态栏安全区：app 为 navigationStyle:custom（无原生导航栏）→ 页面须自行避让 -->
+    <p-safe area="top" :fallback="50" />
     <text class="title">SVG 能量核心</text>
     <text class="sub">渐变 · 滤镜辉光 · 进度环 · 轨道粒子 · 脉冲 · 交互</text>
 
@@ -204,6 +206,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { PSafe } from '@proteus-vue/components'
 
 const status = ref('点击核心试试')
 const frames = ref(0)
