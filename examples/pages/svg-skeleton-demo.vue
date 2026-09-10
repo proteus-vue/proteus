@@ -29,7 +29,7 @@
 
       <!-- ① 行走：机械双足，前后腿反相，步伐稳健（常驻场景，非活动时 playing=false 停表 + 容器隐藏） -->
       <view :class="{ 'scene-on': mode === 'walk', 'scene-off': mode !== 'walk', 'scene-fade': fading }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'walk'" :speed="speed" :progress="seed" @tick="onTick">
+      <svg viewBox="0 -80 320 300" width="288" height="270" :playing="playing && mode === 'walk'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" stroke-dasharray="10 8">
           <animate attributeName="stroke-dashoffset" values="0;-18" dur="0.5s" repeatCount="indefinite" />
         </line>
@@ -96,7 +96,7 @@
       </view>
       <!-- ② 奔跑：更大摆幅 + 更快节奏 + 前倾 -->
       <view :class="{ 'scene-on': mode === 'run', 'scene-off': mode !== 'run', 'scene-fade': fading }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'run'" :speed="speed" :progress="seed" @tick="onTick">
+      <svg viewBox="0 -80 320 300" width="288" height="270" :playing="playing && mode === 'run'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" stroke-dasharray="14 6">
           <animate attributeName="stroke-dashoffset" values="0;-40" dur="0.25s" repeatCount="indefinite" />
         </line>
@@ -147,7 +147,7 @@
       </view>
       <!-- ③ 跳跃：整体腾空 translate + 腿部收展 + 落地压缩 -->
       <view :class="{ 'scene-on': mode === 'jump', 'scene-off': mode !== 'jump', 'scene-fade': fading }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'jump'" :speed="speed" :progress="seed" @tick="onTick">
+      <svg viewBox="0 -80 320 300" width="288" height="270" :playing="playing && mode === 'jump'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" />
         <g transform="translate(160,96)">
           <!-- 整体腾空（根级 translate 动画） -->

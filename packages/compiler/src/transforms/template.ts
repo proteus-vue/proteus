@@ -28,6 +28,28 @@ function capitalize(s: string): string {
 }
 
 /**
+ * 参数是否可安全包装（**裸标识符** 或 **字面量**）——用于判定内联方法调用 `fn(标识符/字面量...)` 可包装。
+ * 允许：裸标识符（count）/ 数字（含小数/负数：0.4 / -1）/ 字符串 / true|false|null|undefined。
+ * 拒绝：成员访问（t.id）/ 表达式（a + b）等需运行时求值的形态 → 走 cleanHandler 警告原样。
+ * ★2026-09-10：数字补小数与负号（此前拒绝 → setSpeed(0.4)/setSpeed(-1) 原样输出非法 bindtap → 真机点击无反应）。
+ */
+function isWrapperSafeArgs(argsRaw: string): boolean {
+  const args = argsRaw.trim()
+  if (args === '') return true // 无参
+  return args.split(',').every((a) => {
+    const t = a.trim()
+    if (t === '') return false
+    return (
+      /^[\w$]+$/.test(t) || // 裸标识符（既有行为：log(count)）
+      /^-?\d+(?:\.\d+)?$/.test(t) || // 数字（含小数/负数）
+      /^'(?:[^']*)'$/.test(t) || // 单引号字符串
+      /^"(?:[^"]*)"$/.test(t) || // 双引号字符串
+      t === 'true' || t === 'false' || t === 'null' || t === 'undefined'
+    )
+  })
+}
+
+/**
  * ★#505 内联事件表达式 → 包装方法（event/inline-expression 规则 apply 的实现，自 template.ts tryInlineHandler 迁入——逻辑单点化）。
  * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2) / x = !x / x = 字面量 / store.method(...)。
  * 返回 null = 不可校准形态 → 调用方走 cleanHandler 警告原样输出。
@@ -50,9 +72,14 @@ function tryInlineExpressionToWrapper(exp: string): { name: string; code: string
     }
   }
   // 简单方法调用：fn(字面量参数)——无 . 链（store.xxx 等链式走警告）
+  // ★2026-09-10 修：参数判定改为**逐个字面量校验**（数字含小数/负数、字符串、true/false/null/undefined）——
+  //   此前白名单 `[\w$,'"\s]` 拒绝 `.`/`-` → setSpeed(0.4)/setSpeed(-1) 被判不可校准 → 原样输出
+  //   bindtap="setSpeed(0.4)"（非法事件处理器）→ 真机点击无反应（用户反馈「慢放/倒放没反应」）。
   m = t.match(/^([\w$]+)\(([^()]*)\)$/)
-  if (m && /^[\w$,'"\s]*$/.test(m[2])) {
-    const key = m[2].replace(/\W/g, '') || 'NoArgs'
+  if (m && isWrapperSafeArgs(m[2])) {
+    // ★key 编码保留符号/小数点（- → M、. → D）：否则 setSpeed(1) 与 setSpeed(-1) 撞名
+    //   （都归「1」）→ 去重后 -1 会错误复用 +1 的方法体。
+    const key = m[2].replace(/[^A-Za-z0-9]/g, (c) => (c === '-' ? 'M' : c === '.' ? 'D' : '')) || 'NoArgs'
     return {
       name: `proteusInline${capitalize(m[1])}${key}`,
       code: `this.${m[1]}(${m[2]})`,
