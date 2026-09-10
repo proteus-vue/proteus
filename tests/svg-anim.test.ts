@@ -124,4 +124,23 @@ describe('★2026-09-10 嵌套变换动画 → Canvas 通道（骨骼运动学�
     expect(seq).toContain('R40')
     expect(seq).toContain('R-20')
   })
+
+  it('★交互控制：<svg> 上的 :playing/:speed/:fps 透传为 p-svg-canvas 属性绑定', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100" :playing="playing && mode === \'walk\'" :speed="spd" :fps="rate">' +
+        '<circle cx="50" cy="50" r="20"><animate attributeName="r" values="20;30;20" dur="1s" repeatCount="indefinite"/></circle></svg>',
+    )
+    expect(r.wxml).toMatch(/playing="\{\{playing && mode === 'walk'\}\}"/)
+    expect(r.wxml).toMatch(/speed="\{\{spd\}\}"/)
+    expect(r.wxml).toMatch(/fps="\{\{rate\}\}"/)
+  })
+
+  it('交互控制白名单：非控制类绑定（:class/:style）不透传到组件', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100" :class="cls" :style="st">' +
+        '<circle cx="50" cy="50" r="20"><animate attributeName="r" values="20;30;20" dur="1s" repeatCount="indefinite"/></circle></svg>',
+    )
+    expect(r.wxml).not.toMatch(/class="\{\{cls\}\}"/)
+    expect(r.wxml).not.toMatch(/style="\{\{st\}\}"/)
+  })
 })

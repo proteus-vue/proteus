@@ -24,6 +24,9 @@ const props = defineProps({
   fps: { type: Number, default: 20 },
   /** 是否播放（外部控制） */
   playing: { type: Boolean, default: true },
+  /** ★2026-09-10 播放速率（外部控制）：1 = 原速；<1 慢放；>1 快放；0 = 定格；负数 = 倒放。
+   *  以「相位时钟」累加（dt × speed）→ 变速不跳帧（相不突变）。 */
+  speed: { type: Number, default: 1 },
 })
 
 const src = ref('')
@@ -276,15 +279,23 @@ function renderFrame(this: any, tMs: number, rawMs: number): boolean {
 function loop(this: any): void {
   if (!this.data.playing) return
   const now = Date.now()
-  if (!this.__startTime) this.__startTime = now
-  const elapsed = now - this.__startTime
+  if (!this.__lastTick) this.__lastTick = now
+  const dt = now - this.__lastTick // 真实帧间隔（瞬时时间）
+  this.__lastTick = now
+  // ★2026-09-10 播放速率：相位时钟按 dt × speed 累加（变速不跳帧——相位连续，不因 speed 突变而跳变）。
+  //   speed=0 定格、负数倒放。★节流用**单调时钟** __clock（恒增），绘制用相位 __phase（可负/可停）——
+  //   倒放时相位递减，若拿相位做节流会恒不满足 → 冻结，故两者必须分开。
+  const speed = typeof this.data.speed === 'number' ? this.data.speed : 1
+  this.__clock = (this.__clock || 0) + dt
+  this.__phase = (this.__phase || 0) + dt * speed
   const dur = this.data.scene?.duration ?? 0
+  const phase = this.__phase
   try {
     const n = (this.__frames || 0) + 1
     this.__frames = n
     // ★帧数与 src 合并为一次 setData（setSrc）——回传发起时由 setSrc 一并写入；
     //   未发起回传（在途保护/节流跳过）时才单独补一次，避免每帧两次桥接。
-    const emitted = this.renderFrame(dur > 0 ? elapsed % dur : elapsed, elapsed)
+    const emitted = this.renderFrame(dur > 0 ? ((phase % dur) + dur) % dur : phase, this.__clock)
     if (!emitted) this.setData({ frames: n })
     // 每 10 帧向页面上报（便于外部观察动画是否推进——模拟器/真机均可）
     // ★2026-09-09 真机诊断：附带回传通道计数（issued/emits/fails——issued-(emits+fails)=在途）、
@@ -317,8 +328,11 @@ function stop(this: any): void {
 function play(this: any): void {
   const c = this.ensureCanvas()
   if (!c || this.__timer !== undefined) return
-  this.__startTime = 0
+  // 重置时钟/相位（重新播放从头开始；暂停再播不跳变）
+  this.__lastTick = 0
   this.__lastEmit = undefined
+  this.__clock = 0
+  this.__phase = 0
   if (!this.__loop) this.__loop = loop.bind(this)
   const interval = Math.max(16, Math.round(1000 / Math.max(1, this.data.fps || 30)))
   this.__timer = setInterval(this.__loop, interval)
