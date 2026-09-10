@@ -360,7 +360,7 @@ describe('★mp-conformance 探针矩阵 P16：支持矩阵 fail-fast（#504 定
   // 矩阵外语义（「已原样输出」类）缺省 = 软警告静默放行（产物无效但不拦）；rules.failFast=true → 编译期 CompilerError
   const H = '<script setup lang="ts"></script>\n'
   it('P16a：缺省软警告（四形态各自警告文案在位，不抛错）', () => {
-    const r1 = compileVueSfc(H + '<template><view @click="pushGood(\'1.0.0\', \'CODE\')">x</view></template>', { filename: 'p16a1.vue', ...opts })
+    const r1 = compileVueSfc(H + '<template><view @click="pushGood(item.id)">x</view></template>', { filename: 'p16a1.vue', ...opts })
     expect(r1.warnings.some((w: string) => /不是简单方法引用.*已原样输出/.test(w))).toBe(true)
     const r2 = compileVueSfc(H + '<template><keep-alive><view/></keep-alive></template>', { filename: 'p16a2.vue', ...opts })
     expect(r2.warnings.some((w: string) => /keep-alive.*无对等组件.*已原样输出/.test(w))).toBe(true)
@@ -372,7 +372,7 @@ describe('★mp-conformance 探针矩阵 P16：支持矩阵 fail-fast（#504 定
   })
   it('P16b：rules.failFast → 四形态编译期 CompilerError（fail-closed，消息带 fail-fast 标记）', () => {
     const ff = { ...opts, rules: { failFast: true } }
-    expect(() => compileVueSfc(H + '<template><view @click="pushGood(\'1.0.0\', \'CODE\')">x</view></template>', { filename: 'p16b1.vue', ...ff }))
+    expect(() => compileVueSfc(H + '<template><view @click="pushGood(item.id)">x</view></template>', { filename: 'p16b1.vue', ...ff }))
       .toThrow(/不是简单方法引用[\s\S]*rules\.failFast/)
     expect(() => compileVueSfc(H + '<template><keep-alive><view/></keep-alive></template>', { filename: 'p16b2.vue', ...ff }))
       .toThrow(/keep-alive[\s\S]*rules\.failFast/)
