@@ -98,6 +98,11 @@
     <!-- 交互反馈 -->
     <text class="status">{{ status }}</text>
     <text class="status">帧数 {{ frames }}</text>
+    <!-- ★真机诊断（区分「写入失败」/「渲染失败」——排障后移除） -->
+    <text class="diag">回传 {{ emits }} · 失败 {{ fails }}</text>
+    <text class="diag">{{ img }}</text>
+    <text class="diag">{{ srcTail }}</text>
+    <text class="diag">{{ err }}</text>
 
     <!-- ② 能力卡片：每个用一项 SVG 能力 -->
     <view class="cards">
@@ -202,11 +207,23 @@ import { ref } from 'vue'
 const status = ref('点击核心试试')
 const frames = ref(0)
 const taps = ref(0)
+/** ★真机诊断字段（tick 事件回传——排障后移除） */
+const emits = ref(0)
+const fails = ref(0)
+const img = ref('img -')
+const srcTail = ref('src -')
+const err = ref('err -')
 
 function onTick(e: unknown): void {
-  const ev = e as { detail?: { frames?: number } }
+  const ev = e as { detail?: { frames?: number; emits?: number; fails?: number; img?: string; src?: string; err?: string } }
   const d = ev && ev.detail
-  frames.value = (d && d.frames) || 0
+  if (!d) return
+  frames.value = d.frames || 0
+  emits.value = d.emits || 0
+  fails.value = d.fails || 0
+  if (d.img) img.value = d.img
+  if (d.src) srcTail.value = '…' + d.src
+  if (d.err) err.value = d.err
 }
 
 function onCoreTap(): void {
@@ -263,6 +280,13 @@ function onCoreTap(): void {
   color: #a5f3fc;
   margin-top: 4px;
   font-weight: 600;
+}
+.diag {
+  font-size: 12px;
+  color: #fca5a5;
+  word-break: break-all;
+  text-align: center;
+  line-height: 1.3;
 }
 .cards {
   display: flex;
