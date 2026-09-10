@@ -5,6 +5,7 @@
 // 边界：形状属性动画（cx/d/stroke-dashoffset 等）无法用 CSS 表达 → 不转译（保留在 SVG 内，不播放）。
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
+import { drawScene } from '../src/components/p-svg-canvas/engine'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
 
@@ -69,5 +70,58 @@ describe('G-62 SVG 动画转译（整体变换 → CSS @keyframes）', () => {
     const r = compile('<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>')
     expect(r.wxss).not.toMatch(/@keyframes proteus-svg-anim/)
     expect(r.wxml).not.toMatch(/proteus-svg-anim/)
+  })
+})
+
+describe('★2026-09-10 嵌套变换动画 → Canvas 通道（骨骼运动学）', () => {
+  it('深层子级 animateTransform（骨骼关节）→ 走 Canvas 而非 CSS（CSS 只能整图转）', () => {
+    // 两层嵌套 <g>：外层静态 translate，内层关节 rotate —— 关节运动必须逐节点绘制
+    const r = compile(
+      '<svg viewBox="0 0 100 100"><g transform="translate(50,10)"><g>' +
+        '<rect x="-4" y="0" width="8" height="30"/>' +
+        '<animateTransform attributeName="transform" type="rotate" values="0;30;0" dur="2s" repeatCount="indefinite"/>' +
+        '</g></g></svg>',
+    )
+    expect(r.wxml).toMatch(/<p-svg-canvas[^>]*scene="\{\{proteusSvgScene1\}\}"/)
+    expect(r.wxss).not.toMatch(/@keyframes proteus-svg-anim/) // 不误走 CSS 整图通道
+    expect(r.js).toMatch(/"transformType":"rotate"/)
+    expect(r.js).toMatch(/"transform":\{"translate":\[50,10\]\}/) // 静态父级变换保留
+  })
+
+  it('根级 animateTransform 仍走 CSS 快路径（无运行时开销）', () => {
+    const r = compile(
+      '<svg viewBox="0 0 100 100"><g><rect x="30" y="30" width="40" height="40"/>' +
+        '<animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="2s" repeatCount="indefinite"/></g></svg>',
+    )
+    expect(r.wxss).toMatch(/@keyframes proteus-svg-anim-1-kf/)
+    expect(r.wxml).not.toMatch(/p-svg-canvas/)
+  })
+
+  it('嵌套旋转沿链复合：子级绝对角度 = 父级 + 自身（骨骼运动学核心）', () => {
+    // 仿真引擎：绘制命令里两个 rotate 依次应用（ctx.save/restore 嵌套 → 复合）
+    const seq: string[] = []
+    const ctx: any = {
+      fillStyle: '', strokeStyle: '', lineWidth: 0, globalAlpha: 1, lineCap: '', lineJoin: '', lineDashOffset: 0,
+      setLineDash() {}, save() {}, restore() {}, translate() {},
+      rotate: (rad: number) => seq.push('R' + Math.round((rad * 180) / Math.PI)),
+      scale() {}, setTransform() {}, clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      bezierCurveTo() {}, quadraticCurveTo() {}, arc() {}, ellipse() {}, closePath() {},
+      fill() {}, stroke() {}, fillRect() {},
+      createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }),
+    }
+    const canvas: any = { width: 100, height: 100, getContext: () => ctx }
+    const scene: any = {
+      viewBox: [0, 0, 100, 100], duration: 1000,
+      nodes: [{
+        tag: 'g', attrs: {}, anims: [{ attr: 'transform', transformType: 'rotate', values: ['0', '40', '0'], dur: 1000, delay: 0, repeat: true }],
+        children: [{
+          tag: 'g', attrs: {}, anims: [{ attr: 'transform', transformType: 'rotate', values: ['0', '-20', '0'], dur: 1000, delay: 0, repeat: true }],
+          children: [{ tag: 'rect', attrs: { x: 0, y: 0, width: 10, height: 10 } }],
+        }],
+      }],
+    }
+    drawScene(canvas, scene, 500) // 两个关节都在中途 → 父 +40、子 -20（子相对父）
+    expect(seq).toContain('R40')
+    expect(seq).toContain('R-20')
   })
 })

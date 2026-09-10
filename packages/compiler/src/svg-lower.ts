@@ -846,20 +846,26 @@ export function lowerSvgToScene(node: ElementNode): SvgSceneIR | null {
   }
   if (!nodes.length) return null
 
-  // 判定：是否含「形状变化」动画（CSS 无法表达 → 需 canvas）
+  // 判定：是否含 CSS 无法表达的动画 → 需 canvas 逐帧绘制
   let needsCanvas = false
   let duration = 0
-  const scan = (n: SceneNodeIR): void => {
+  const scan = (n: SceneNodeIR, depth: number): void => {
     for (const a of n.anims ?? []) {
       duration = Math.max(duration, a.dur + a.delay)
-      if (a.attr !== 'transform' && a.attr !== 'opacity') {
+      if (a.attr === 'transform') {
+        // ★2026-09-10 嵌套变换动画（骨骼运动学）：CSS 通道只能表达「整张 SVG」的整体变换
+        //   （collectSvgAnims 映射到 <image> 的 CSS transform）——深层子级的 transform 动画
+        //   （如嵌套 <g> 骨骼链各关节 rotate）用 CSS 表达会整图乱转 → 必须走 canvas 逐节点变换。
+        //   根级（depth 0）保留 CSS 快路径（零运行时）。
+        if (depth >= 1) needsCanvas = true
+      } else if (a.attr !== 'opacity') {
         // ★animateMotion（路径运动）也需 canvas 逐帧绘制
         if (a.attr === 'motion' || SHAPE_ANIM_ATTRS.has(a.attr)) needsCanvas = true
       }
     }
-    for (const c of n.children ?? []) scan(c)
+    for (const c of n.children ?? []) scan(c, depth + 1)
   }
-  for (const n of nodes) scan(n)
-  if (!needsCanvas) return null // 无形状动画 → 不需要 canvas（image/CSS 方案更优）
+  for (const n of nodes) scan(n, 0)
+  if (!needsCanvas) return null // 无形状/嵌套变换动画 → 不需要 canvas（image/CSS 方案更优）
   return { viewBox, nodes, duration: duration || 1000, gradients: Object.keys(gradients).length ? gradients : undefined }
 }

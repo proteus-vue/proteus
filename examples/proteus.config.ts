@@ -26,7 +26,10 @@ const config: ProteusConfig = {
     // 路由表产物路径（编译期 gen-routes 生成）
     routesOutput: 'router/auto-routes.ts',
     // 分包：各分包独立扫描树
-    subPackages: [{ root: 'subpackages/order', name: 'order' }], // 分包示例：订单模块
+    subPackages: [
+      { root: 'subpackages/order', name: 'order' }, // 分包示例：订单模块
+      { root: 'subpackages/svg-lab', name: 'svg-lab' }, // SVG 诊断探针页（腾出主包名额——主包有 32 页硬限）
+    ],
     // wx.router 自定义路由：内置预设 builders（随 @proteus-vue/router 包发布源码，插件读取后内联进 app.js 注册）
     customRoute: {
       registerPresets: true,

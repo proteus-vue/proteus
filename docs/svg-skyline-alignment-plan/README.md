@@ -473,6 +473,31 @@ Skyline 2.02.2609072 / SDK 3.16.2，**在 `onMounted`（正常运行时上下文
 **诚实边界**：本调研**未实现** canvas 渲染通道（工作量：运行时组件 + SVG d 解析器 + 绘制管线 + 重绘调度）；
 结论基于真机探针实测 + 原生方案调研，作为后续立项依据。
 
+### 12.4 ★骨骼动画（嵌套变换复合）——编译器通道判定修复（2026-09-10）
+
+用户提议「做个骨骼动画演示页，与现在的 showcase 不同思路」。**骨骼动画的数学本质 = 嵌套 `<g>` 变换沿链复合**
+（父级变换 × 子级变换 × 孙级变换），这正是**「整体变换 → CSS」通道表达不了**的能力（CSS 只能整张 SVG 转，
+无法让某段骨骼相对父级转）。
+
+**发现的真实能力缺口**：`lowerSvgToScene` 的通道判定此前认为「transform 动画 = CSS 可表达」→
+**嵌套（深层）关节的 `animateTransform` 会被误判走 CSS 整图通道而丢失**。修复：判定加 `depth`——
+**深层（depth≥1）的 transform 动画强制走 Canvas**（逐节点变换），根级（depth 0）保留 CSS 快路径（零运行时）。
+
+**引擎侧本已支持**（无需改）：`drawNode` 用 `ctx.save()/restore()` 递归，`nodeTransform` 逐节点求值
+`animateTransform`（rotate/scale/translate）→ 嵌套变换自然复合（仿真验证：父 +40°、子相对父 -20°）。
+
+**演示页**：`examples/pages/svg-skeleton-demo.vue`（首页 SVG 区置顶入口）——机械双足行走
+（髋→大腿→小腿→足 / 肩→上臂→前臂，前后腿反相）+ 尾巴 3 节链 + 地面虚线滚动，同屏 13 个旋转关节、30 个嵌套 `<g>`。
+
+**★主包页数硬限**：微信主包 ≤32 页（平台限制），examples 已顶格（加骨骼页 → 33 报错）→ 把 7 个
+**纯诊断探针页**（image-spike / svg-anim-probe / svg-canvas-probe / svg-canvas-test / svg-hit-test /
+svg-p2-spike / svg-spike）移入新分包 `subpackages/svg-lab`（本就属调试工具，不该占主包名额）——
+主包 24 页、分包 7 页，从容。
+
+**验证**：编译产物 13 rotate 关节 + 30 `<g>`；模拟器两帧截图姿态明显不同（腿角/尾巴/虚线相位）+ emits 持续增长、
+fails=0；新增 `tests/svg-anim.test.ts` 3 用例（深层→Canvas / 根级→CSS / 嵌套复合角度）+ `tests/e2e-mp-svg-skeleton.test.ts`；
+svg 系列 215/215 绿；build:mp/web ✓；router/audit/pkg/deps/script-compile/en-drift 门禁 ✓。
+
 ### 12.3 ★长时运行性能（2026-09-10 实测）——三项关键修复
 
 用户问「长时间运行有没有性能问题」。实测（模拟器 2 分钟连续采样）+ 代码审计定位三处：

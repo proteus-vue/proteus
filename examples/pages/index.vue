@@ -54,13 +54,14 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <h3>SVG → Skyline 专项</h3>
       <p class="nest-tip">静态/动态 SVG、use 展开、文字提升、事件命中、动画（CSS/canvas）</p>
       <a class="link svg-star" href="/pages/svg-showcase-demo">★ SVG 能力综合演示（炫丽效果）</a>
-      <a class="link" href="/pages/svg-hit-test">① SVG 事件命中 + 文字提升</a>
-      <a class="link" href="/pages/svg-anim-probe">② SVG 动画（CSS 转译）</a>
-      <a class="link" href="/pages/svg-canvas-test">③ SVG 动画（Canvas 通道·形状变化）</a>
-      <a class="link" href="/pages/svg-p2-spike">④ SVG 特性支持矩阵（实测对照）</a>
-      <a class="link" href="/pages/image-spike">⑤ SVG → image data-URI 验证</a>
-      <a class="link" href="/pages/svg-canvas-probe">⑥ Canvas 能力探针（性能/API）</a>
-      <a class="link" href="/pages/svg-spike">⑦ Canvas node 通道探针</a>
+      <a class="link svg-star" href="/pages/svg-skeleton-demo">★ SVG 骨骼动画（嵌套变换复合 / 层级运动学）</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-hit-test">① SVG 事件命中 + 文字提升</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-anim-probe">② SVG 动画（CSS 转译）</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-canvas-test">③ SVG 动画（Canvas 通道·形状变化）</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-p2-spike">④ SVG 特性支持矩阵（实测对照）</a>
+      <a class="link" href="/subpackages/svg-lab/pages/image-spike">⑤ SVG → image data-URI 验证</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-canvas-probe">⑥ Canvas 能力探针（性能/API）</a>
+      <a class="link" href="/subpackages/svg-lab/pages/svg-spike">⑦ Canvas node 通道探针</a>
     </div>
     <div class="router-links">
       <button class="link" @click="go('forms')">router.push → 表单与指令</button>

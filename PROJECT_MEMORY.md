@@ -19,6 +19,12 @@
 
 ## 当前状态速览（最近一次更新：2026-09-10）★新会话以此为准
 
+- **★★本会话续三十二（2026-09-10，SVG 骨骼动画演示 + 编译器通道判定修复 + 主包页数硬限治理）**：用户提议「再做演示页证明框架 SVG 能力，比如骨骼动画，与现有 showcase 不同思路」。**骨骼动画本质 = 嵌套 `<g>` 变换沿链复合**（父×子×孙），正是「整体变换→CSS」通道**表达不了**的能力。
+  **① ★发现的真实能力缺口（修复）**：`lowerSvgToScene` 通道判定此前认为「transform 动画 = CSS 可表达」→ **深层关节的 `animateTransform` 被误判走 CSS 整图通道而丢失**。判定加 `depth`：**深层（≥1）transform 动画强制走 Canvas**（逐节点变换），根级保留 CSS 快路径（零运行时）。引擎侧本已支持（`drawNode` 递归 `ctx.save/restore` + `nodeTransform` 逐节点求值 → 自然复合），仿真验证：父 +40°、子相对父 -20°。
+  **② 演示页** `examples/pages/svg-skeleton-demo.vue`（首页置顶入口）：机械双足行走（髋→大腿→小腿→足 / 肩→上臂→前臂，前后腿反相）+ 尾巴 3 节链 + 地面虚线滚动；同屏 **13 旋转关节 + 30 嵌套 `<g>`**。
+  **③ ★主包页数硬限治理**：微信主包 ≤32 页（平台限制），examples 已顶格（加页即报「超过硬边界 32」）→ 把 **7 个纯诊断探针页**（image-spike/svg-anim-probe/svg-canvas-probe/svg-canvas-test/svg-hit-test/svg-p2-spike/svg-spike）移入新分包 `subpackages/svg-lab`（本就属调试工具）——主包 **24 页** + 分包 7 页，首页链接路径同步改 `/subpackages/svg-lab/pages/*`。
+  **④ 验证**：产物 13 关节 + 30 `<g>`；模拟器两帧截图姿态明显不同（腿角/尾巴/虚线相位）+ emits 持续增长、fails=0；新增 `tests/svg-anim.test.ts` 3 用例（深层→Canvas / 根级→CSS / 嵌套复合角度）+ `tests/e2e-mp-svg-skeleton.test.ts`（E2E 通过：frames 260→390）；svg 系列 **215/215 绿**；showcase E2E 移页后仍通过；`build:mp`/`build:web` ✓；router/audit/pkg(38 包 0 error)/deps(0 缺失)/script-compile(99/0)/en-drift 全 ✓；类型检查本次文件零错。**诚实边界**：骨骼姿态正确性属视觉（模拟器截图留档人工确认）；e2e 只锁「在跑 + 通道健康」。文档：plan §12.4。**环境备忘**：模拟器 `filePath` 被忽略 → `pruneErr: unlink permission denied`（预期，真机 USER_DATA_PATH 应可删）。
+
 - **★★本会话续三十一（2026-09-10，长时运行性能——三项修复 + 临时文件配额真根因）**：用户问「长时间运行有没有性能问题」。**代码审计 + 模拟器 2 分钟连续采样**定位三处：
   **① 节流误用动画相位（★「停止」真根因）**——`renderFrame` 的节流曾用 `tMs=elapsed%duration` 比较，动画跑完一个周期后相位回绕、差值恒为负 → **src 永久停更**（frames 独立计数照跑，故看似"还在动"）。修复：`shouldEmit` 改用**单调时间** `elapsed` + 4ms 容差（定时器实际间隔常略小于标称值，无容差会吃掉约一半帧——实测 `emits≈frames/2` 回归已修）。
   **② 不发放的帧仍在绘制**——`drawScene` 曾在节流判断之前执行（画完即弃）。修复：**先判节流再绘制**。
