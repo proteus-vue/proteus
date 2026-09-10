@@ -25,8 +25,8 @@
       <view class="hit" @tap="onPoke"></view>
 
       <!-- ① 行走：机械双足，前后腿反相，步伐稳健（常驻场景，非活动时 playing=false 停表 + 容器隐藏） -->
-      <view :class="{ 'scene-on': mode === 'walk', 'scene-off': mode !== 'walk' }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'walk'" :speed="speed" @tick="onTick">
+      <view :class="{ 'scene-on': mode === 'walk', 'scene-off': mode !== 'walk', 'scene-fade': fading }">
+      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'walk'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" stroke-dasharray="10 8">
           <animate attributeName="stroke-dashoffset" values="0;-18" dur="0.5s" repeatCount="indefinite" />
         </line>
@@ -92,8 +92,8 @@
 
       </view>
       <!-- ② 奔跑：更大摆幅 + 更快节奏 + 前倾 -->
-      <view :class="{ 'scene-on': mode === 'run', 'scene-off': mode !== 'run' }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'run'" :speed="speed" @tick="onTick">
+      <view :class="{ 'scene-on': mode === 'run', 'scene-off': mode !== 'run', 'scene-fade': fading }">
+      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'run'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" stroke-dasharray="14 6">
           <animate attributeName="stroke-dashoffset" values="0;-40" dur="0.25s" repeatCount="indefinite" />
         </line>
@@ -143,8 +143,8 @@
 
       </view>
       <!-- ③ 跳跃：整体腾空 translate + 腿部收展 + 落地压缩 -->
-      <view :class="{ 'scene-on': mode === 'jump', 'scene-off': mode !== 'jump' }">
-      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'jump'" :speed="speed" @tick="onTick">
+      <view :class="{ 'scene-on': mode === 'jump', 'scene-off': mode !== 'jump', 'scene-fade': fading }">
+      <svg viewBox="0 0 320 240" width="288" height="216" :playing="playing && mode === 'jump'" :speed="speed" :progress="seed" @tick="onTick">
         <line x1="0" y1="214" x2="320" y2="214" stroke="#334155" stroke-width="2" />
         <g transform="translate(160,96)">
           <!-- 整体腾空（根级 translate 动画） -->
@@ -231,6 +231,13 @@ type Mode = 'walk' | 'run' | 'jump'
 const mode = ref('walk')
 const playing = ref(true)
 const speed = ref(1)
+/** ★动作切换的相位连续：切换时把上一动作的周期进度（0..1）作为种子传给各场景组件 */
+const seed = ref(-1)
+/** 当前动作的归一化周期进度（来自 tick 事件——用于生成下一次切换的种子） */
+const progress = ref(0)
+/** 过渡淡入（切换时置 true → 下一帧清除；CSS opacity 过渡） */
+const fading = ref(false)
+let fadeTimer: ReturnType<typeof setTimeout> | null = null
 const frames = ref(0)
 const pokes = ref(0)
 const status = ref('机械双足行走中')
@@ -246,10 +253,21 @@ const MODE_LABEL: Record<Mode, string> = { walk: '行走', run: '奔跑', jump: 
 
 function setMode(m: Mode): void {
   if (mode.value === m) return
+  // ★相位连续：以当前进度作种子（新动作从相同周期位置起，腿部不回到起点）
+  seed.value = progress.value
   mode.value = m
   playing.value = true
-  frames.value = 0
-  status.value = '动作：' + MODE_LABEL[m]
+  fadeIn()
+  status.value = '动作：' + MODE_LABEL[m] + '（相位承接 ' + Math.round(progress.value * 100) + '%）'
+}
+
+/** 切换过渡：置 fading → 下一帧清除（触发 CSS opacity 淡入） */
+function fadeIn(): void {
+  fading.value = true
+  if (fadeTimer) clearTimeout(fadeTimer)
+  fadeTimer = setTimeout(function () {
+    fading.value = false
+  }, 60)
 }
 
 function setSpeed(v: number): void {
@@ -258,13 +276,16 @@ function setSpeed(v: number): void {
 }
 
 function onTick(e: unknown): void {
-  const ev = e as { detail?: { frames?: number; emits?: number; issued?: number; fails?: number; img?: string; src?: string; err?: string } }
+  const ev = e as { detail?: { frames?: number; emits?: number; issued?: number; fails?: number; img?: string; src?: string; err?: string; progress?: number } }
   const d = ev && ev.detail
   if (!d) return
-  frames.value = d.frames || 0
-  emits.value = d.emits || 0
-  issued.value = d.issued || 0
-  fails.value = d.fails || 0
+  if (typeof d.progress === 'number') progress.value = d.progress
+  // ★轻量 tick（每 2 帧）只带 frames+progress；重型字段（每 10 帧）才带——
+  //   故仅在有值时更新，避免被轻量 tick 清零。
+  if (typeof d.frames === 'number') frames.value = d.frames
+  if (typeof d.emits === 'number') emits.value = d.emits
+  if (typeof d.issued === 'number') issued.value = d.issued
+  if (typeof d.fails === 'number') fails.value = d.fails
   if (d.img) img.value = d.img
   if (d.src) srcTail.value = '…' + d.src
   if (d.err) err.value = d.err
@@ -337,6 +358,11 @@ function onPoke(): void {
 }
 .scene-off {
   display: none;
+}
+/* 切换过渡：fading 期间压低不透明度（下一帧清除 → 过渡回 1，弱化生硬跳变） */
+.scene-fade {
+  opacity: 0.3;
+  transition: opacity 0.16s ease-out;
 }
 .hit {
   position: absolute;

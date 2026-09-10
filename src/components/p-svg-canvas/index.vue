@@ -27,6 +27,10 @@ const props = defineProps({
   /** ★2026-09-10 播放速率（外部控制）：1 = 原速；<1 慢放；>1 快放；0 = 定格；负数 = 倒放。
    *  以「相位时钟」累加（dt × speed）→ 变速不跳帧（相不突变）。 */
   speed: { type: Number, default: 1 },
+  /** ★2026-09-10 相位种子（外部控制，0..1 归一化）：变化时把动画相位跳到该周期位置。
+   *  用于**动作切换的相位连续**（走→跑时腿部不回到起点，承接上一动作的周期位置）。
+   *  -1 = 不设种子（默认，从当前相位继续）。 */
+  progress: { type: Number, default: -1 },
 })
 
 const src = ref('')
@@ -277,11 +281,12 @@ function renderFrame(this: any, tMs: number, rawMs: number): boolean {
 /** 帧驱动（★实证：模拟器静止时 rAF 被节流——只跑 3 帧就停；setInterval 更可靠）
  *  真机/有交互时 rAF 正常，但为跨环境一致，统一用 setInterval（默认 30fps）。 */
 function loop(this: any): void {
-  if (!this.data.playing) return
   const now = Date.now()
+  // ★时钟先更新（即使暂停）——避免恢复播放/切到该场景时 dt 累积成巨值 → 相位跳变
   if (!this.__lastTick) this.__lastTick = now
-  const dt = now - this.__lastTick // 真实帧间隔（瞬时时间）
+  const dt = now - this.__lastTick
   this.__lastTick = now
+  if (!this.data.playing) return // 暂停：停表（不绘制不回传），但定时器保持存活（切到该场景即可续播）
   // ★2026-09-10 播放速率：相位时钟按 dt × speed 累加（变速不跳帧——相位连续，不因 speed 突变而跳变）。
   //   speed=0 定格、负数倒放。★节流用**单调时钟** __clock（恒增），绘制用相位 __phase（可负/可停）——
   //   倒放时相位递减，若拿相位做节流会恒不满足 → 冻结，故两者必须分开。
@@ -297,20 +302,28 @@ function loop(this: any): void {
     //   未发起回传（在途保护/节流跳过）时才单独补一次，避免每帧两次桥接。
     const emitted = this.renderFrame(dur > 0 ? ((phase % dur) + dur) % dur : phase, this.__clock)
     if (!emitted) this.setData({ frames: n })
-    // 每 10 帧向页面上报（便于外部观察动画是否推进——模拟器/真机均可）
+    // 每 10 帧向页面上报；但**相位进度每 2 帧上报**（动作切换要按当前进度承接相位——
+    //   10 帧（0.5s）粒度太粗，1.2s 周期下最多偏 40%，切换会明显跳）。
     // ★2026-09-09 真机诊断：附带回传通道计数（issued/emits/fails——issued-(emits+fails)=在途）、
     //   最后错误、src 尾串、前两帧解码探测——页面直接显示即可判断写入/渲染哪一步失败、是否积压。
-    if (n % 10 === 0 && this.triggerEvent) {
+    const heavy = n % 10 === 0
+    const light = n % 2 === 0
+    if ((heavy || light) && this.triggerEvent) {
       this.triggerEvent('tick', {
         frames: n,
-        emits: this.__emitCount || 0,
-        fails: this.__failCount || 0,
-        issued: this.__issued || 0,
-        pruned: this.__pruned || 0,
-        pruneErr: this.__pruneErr || '',
-        err: this.__lastErr || '',
-        img: this.__imgProbe || '',
-        src: this.__srcTail || '',
+        progress: dur > 0 ? ((phase % dur) + dur) % dur / dur : 0,
+        ...(heavy
+          ? {
+              emits: this.__emitCount || 0,
+              fails: this.__failCount || 0,
+              issued: this.__issued || 0,
+              pruned: this.__pruned || 0,
+              pruneErr: this.__pruneErr || '',
+              err: this.__lastErr || '',
+              img: this.__imgProbe || '',
+              src: this.__srcTail || '',
+            }
+          : {}),
       })
     }
   } catch {
@@ -328,34 +341,39 @@ function stop(this: any): void {
 function play(this: any): void {
   const c = this.ensureCanvas()
   if (!c || this.__timer !== undefined) return
-  // 重置时钟/相位（重新播放从头开始；暂停再播不跳变）
+  // ★相位**保留**（不重置）——暂停再播 / 动作切回时从冻结相位继续；
+  //   需要跳到特定周期位置时由 progress 种子显式设置（见下 watch）。
   this.__lastTick = 0
   this.__lastEmit = undefined
-  this.__clock = 0
-  this.__phase = 0
   if (!this.__loop) this.__loop = loop.bind(this)
   const interval = Math.max(16, Math.round(1000 / Math.max(1, this.data.fps || 30)))
   this.__timer = setInterval(this.__loop, interval)
 }
 
 // ★显式启动（不依赖 watch immediate——编译器对 immediate watch 支持有限）：
-//   onMounted → 组件 ready（属性已到位）→ 渲染首帧 + 启动 rAF。
+//   onMounted → 组件 ready（属性已到位）→ 渲染首帧 + **总是启动定时器**。
+//   ★2026-09-10：定时器常驻（loop 内按 playing 停表）——因为编译器的 prop-watch 不可靠
+//   （`watch(() => [props.a, props.b])` / `watch(() => props.x)` 均编译不出 observer），
+//   故不能靠 watch 在「playing 由 false→true」时启动定时器；常驻定时器由 loop 读 playing 决定是否绘制。
 onMounted(function (this: any) {
   if (!this.data.scene) return
+  this.__lastEmit = undefined
   this.renderFrame(0, 0) // 首帧立即出图（避免空白等待）
-  if (this.data.playing) this.play()
+  this.play()
 })
 
-// 场景/播放状态变化 → 重启
+// ★相位种子：progress(0..1) 变化 → 相位跳到该周期位置（动作切换的相位连续）。
+//   ★回调参数不用（编译器 prop-watch 回调首参绑定不可靠）——直接读 this.data.progress。
 watch(
-  () => [props.scene, props.playing] as const,
+  () => props.progress,
   function (this: any) {
-    this.stop()
-    if (this.data.scene && this.data.playing) this.play()
-    else if (this.data.scene) {
-      this.__lastEmit = undefined // 暂停态强制绘制一帧静态图（不受节流限制）
-      this.renderFrame(0, 0)
-    }
+    const p = this.data.progress
+    if (typeof p !== 'number' || p < 0) return
+    const dur = (this.data.scene && this.data.scene.duration) || 0
+    if (dur <= 0) return
+    this.__phase = p * dur
+    this.__lastEmit = undefined // 强制立即出图（暂停态也能看到新相位）
+    this.renderFrame(this.__phase % dur, this.__clock || 0)
   },
 )
 

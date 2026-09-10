@@ -511,6 +511,12 @@ svg 系列 215/215 绿；build:mp/web ✓；router/audit/pkg/deps/script-compile
 E2E（CLI 路径）通过：frames 220→340 / emits 193→303 / fails 0 + 动作切换/speed 断言；`tests/svg-anim.test.ts` +2 用例（控制 prop 透传/白名单）；
 web 保留原生 `<svg>`（真实动画）`build:web` ✓。
 
+**★相位连续切换（2026-09-10 续二）**：动作切换时**不回到起点**——新增 `progress` prop（0..1 归一化相位种子）：
+- 组件：`progress` 变化 → `__phase = progress × duration`（跳到该周期位置）；tick 回传**每 2 帧**上报 `progress`（10 帧粒度在 1.2s 周期下最多偏 40%，切换会跳）。
+- 页面：`setMode` 时 `seed = 当前 progress` 传给三场景组件（新动作从相同周期位置起步，腿部不回到起点）。切换加**淡入过渡**（`.scene-fade` opacity 0.16s）。
+- ★**修的两个真 bug**：a）组件原 `watch(() => [props.scene, props.playing])` **编译不出 observer**（数组源 watch 不支持，实测「watch 源无法解析依赖 已跳过」）→ 播放/暂停切换靠它重启定时器是**死代码**；改**定时器常驻**（loop 读 `playing` 决定是否绘制，暂停停表但定时器活着——切到该场景即可续播）。b）编译器 prop-watch 回调**首参绑定不可靠**（`progress(n,o)` 实际 n=新值但源码用 `o`）→ 改**读 `this.data.progress`**，不依赖回调参数。
+- **验证**：E2E **原子断言**（一次 evaluate 内 `pre=progress → setMode → 读 seed`，setData 同步 → 精确 `seed===pre`）通过；切到 run 后 progress 0.32→0.88 继续推进；svg 系列 107/107；`build:mp/web` ✓。
+
 ### 12.3 ★长时运行性能（2026-09-10 实测）——三项关键修复
 
 用户问「长时间运行有没有性能问题」。实测（模拟器 2 分钟连续采样）+ 代码审计定位三处：
