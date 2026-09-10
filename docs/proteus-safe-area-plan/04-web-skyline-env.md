@@ -72,6 +72,11 @@ const sysInfo = wx.getSystemInfoSync()
 
 - Skyline 基础库 **8.0.49+** 部分支持 `env(safe-area-inset-*)`
 - **不是所有版本/机型都支持**，需兜底
+- ★**2.2 实测校准（2026-09-10，开发者工具 Skyline 真机/模拟器）**：`env(safe-area-inset-top)` **不可用**——
+  含 `env()` 的声明被**整条丢弃**（`padding-top: max(env(...), 50px)` 也不生效，p-safe 组件因此完全无效）。
+  → **MP 端不要依赖 `env()`，改用运行时读数**：`getWindowInfo().statusBarHeight`（+ `safeArea`）与
+  `getMenuButtonBoundingClientRect().bottom`（胶囊下沿，避免内容与胶囊并列）→ 内联 px。
+  `p-safe` 组件已按此改造（`resolveSafeAreaStyle({ insets })` → px；无 `insets` 才走 `env()`）。
 
 ### 2.3 胶囊按钮避让（小程序特有）
 

@@ -352,6 +352,26 @@ describe('Fluid System S2 纯逻辑（resolveSafeAreaStyle 安全区样式）', 
     expect(resolveSafeAreaStyle({ fold: true, displayMode: 'standard' })).toEqual({})
     expect(resolveSafeAreaStyle({ fold: false, displayMode: 'fold' })).toEqual({ paddingTop: 'env(safe-area-inset-top, 0px)' })
   })
+
+  // ★2026-09-10 MP/Skyline：env() 不被支持（整条声明被丢弃）→ 提供运行时 insets 时走 px
+  it('insets 提供时走 px（MP/Skyline 路径——env() 无效）', () => {
+    expect(resolveSafeAreaStyle({ area: 'top', insets: { top: 47 } })).toEqual({ paddingTop: '47px' })
+    expect(resolveSafeAreaStyle({ area: 'all', insets: { top: 47, bottom: 34, left: 0, right: 0 } })).toEqual({
+      paddingTop: '47px',
+      paddingBottom: '34px',
+      paddingLeft: '0px',
+      paddingRight: '0px',
+    })
+  })
+
+  it('insets 与 fallback 取较大值（max(insets, fallback)）', () => {
+    expect(resolveSafeAreaStyle({ area: 'top', insets: { top: 20 }, fallback: 50 })).toEqual({ paddingTop: '50px' })
+    expect(resolveSafeAreaStyle({ area: 'top', insets: { top: 83 }, fallback: 50 })).toEqual({ paddingTop: '83px' })
+  })
+
+  it('未提供 insets → 仍走 env()（Web 路径不变）', () => {
+    expect(resolveSafeAreaStyle({ area: 'top' })).toEqual({ paddingTop: 'env(safe-area-inset-top, 0px)' })
+  })
 })
 
 describe('Fluid System S2 组件（p-safe 安全区 / p-aspect 纵横比）', () => {

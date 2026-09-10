@@ -1,6 +1,7 @@
 <!-- src/pages/index.vue —— 首页（TabBar 页面示例，覆盖核心映射：ref/v-if/v-for/:src/事件/ref 写入） -->
 <script setup lang="ts">
 import { ref } from 'vue'
+import { PSafe } from '@proteus-vue/components'
 // ★devtools 打通：SPA 导航走框架 router 单例（pushState + TraceBus 事件 → devtools route 回溯/守卫徽章）
 import { router } from '../router'
 
@@ -21,6 +22,8 @@ function go(name: 'forms' | 'config-demo' | 'user') {
 
 <template>
   <div class="home">
+    <!-- ★状态栏安全区：app 为 navigationStyle:custom（无原生导航栏）→ 页面须自行避让 -->
+    <p-safe area="top" :fallback="50" />
     <h1>{{ title }}</h1>
     <p v-if="show">One Vue source. Every form.</p>
     <p class="tapped-count">tapped {{ count }} times</p>

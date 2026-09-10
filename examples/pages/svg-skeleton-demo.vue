@@ -11,6 +11,9 @@
      诚实边界：Canvas 通道逐帧回传（20fps 可跑），非游戏级 60fps；纯装饰动画。 -->
 <template>
   <view class="page">
+    <!-- ★状态栏安全区（app 为 navigationStyle:custom，无原生导航栏）：p-safe 在 Skyline 走运行时读数
+         （env() 不受支持）→ 让出状态栏+胶囊，否则标题/小人被遮挡（用户真机反馈） -->
+    <p-safe area="top" :fallback="50" />
     <text class="title">SVG 骨骼动画</text>
     <text class="sub">嵌套变换复合 · 层级运动学 · 可交互</text>
 
@@ -224,6 +227,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { PSafe } from '@proteus-vue/components'
 
 type Mode = 'walk' | 'run' | 'jump'
 /** ★注意：不要写 ref<Mode>('walk')——编译器对带泛型实参的 ref() 无法静态求值初值
@@ -304,6 +308,8 @@ function onPoke(): void {
   flex-direction: column;
   align-items: center;
   padding: 16px 12px 40px;
+  /* Web 端刘海避让（Skyline 丢弃 env() → 回退 shorthand 的 16px，再由 MP 运行时内联覆盖） */
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
   gap: 6px;
   background: #0b1020;
   min-height: 100vh;
