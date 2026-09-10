@@ -62,14 +62,49 @@ function ensureCanvas(this: any): any {
   return this.canvas
 }
 
-/** 设置 src（真机诊断：记录尾串，供页面显示） */
+/** 首次回传前清理上一会话遗留的 proteus-svg-*.png（USER_DATA_PATH 持久——跨会话会累积）。
+ *  只跑一次；失败静默（不影响渲染）。 */
+function cleanupStale(this: any): void {
+  if (this.__cleaned) return
+  this.__cleaned = true
+  try {
+    const w = wx as unknown as {
+      env?: { USER_DATA_PATH?: string }
+      getFileSystemManager?: () => {
+        readdirSync?: (p: string) => string[]
+        unlink?: (o: { filePath: string; success?: () => void; fail?: (e?: unknown) => void }) => void
+      }
+    }
+    const base = w.env && w.env.USER_DATA_PATH
+    const fs = typeof w.getFileSystemManager === 'function' ? w.getFileSystemManager() : null
+    if (!base || !fs || typeof fs.readdirSync !== 'function' || typeof fs.unlink !== 'function') return
+    let names: string[] = []
+    try {
+      names = fs.readdirSync(base) || []
+    } catch {
+      return
+    }
+    const prefix = 'proteus-svg-'
+    for (const n of names) {
+      if (n.indexOf(prefix) === 0) fs.unlink({ filePath: `${base}/${n}`, fail: () => undefined })
+    }
+  } catch {
+    /* 清理失败静默 */
+  }
+}
+
+/** 设置 src（真机诊断：记录尾串，供页面显示）
+ *  ★帧数与 src 合并为一次 setData——setData 是回传瓶颈，避免每帧两次桥接 */
 function setSrc(this: any, uri: string): void {
   if (!uri) return
-  this.setData({ src: uri })
+  this.setData({ src: uri, frames: this.__frames || 0 })
   this.__srcTail = String(uri).slice(-34)
 }
 
-/** 轮转清理：只保留最近 KEEP 个临时文件（当前显示的那个永不删），避免临时目录配额堆积 */
+/** 清理超龄临时文件（只保留最近 KEEP 个，当前显示的那个永不删）。
+ *  ★文件名唯一（seq 自增）→ src 永不重复 → image 必然重载（无需查询参数——那会导致真机 wxfile:// 不渲染）。
+ *  ★写入用 USER_DATA_PATH（filePath 参数）→ 该目录可 unlink（实证）；默认 http://tmp/ 文件 unlink 权限不足。
+ *  模拟器忽略 filePath（返回 http://tmp/）→ 此处 unlink 失败静默（模拟器无配额问题，不影响渲染）。 */
 function pruneTempFiles(this: any, path: string): void {
   const KEEP = 24
   const ring: string[] = this.__ring || (this.__ring = [])
@@ -78,11 +113,23 @@ function pruneTempFiles(this: any, path: string): void {
     const old = ring.shift()
     if (!old || old === this.data.src) continue
     try {
-      const w = wx as unknown as { getFileSystemManager?: () => { unlink?: (o: { filePath: string; fail?: () => void }) => void } }
+      const w = wx as unknown as {
+        getFileSystemManager?: () => { unlink?: (o: { filePath: string; success?: () => void; fail?: (e?: unknown) => void }) => void }
+      }
       const fs = typeof w.getFileSystemManager === 'function' ? w.getFileSystemManager() : null
-      if (fs && typeof fs.unlink === 'function') fs.unlink({ filePath: old, fail: () => undefined })
-    } catch {
-      /* 清理失败不影响渲染 */
+      if (fs && typeof fs.unlink === 'function') {
+        fs.unlink({
+          filePath: old,
+          success: () => {
+            this.__pruned = (this.__pruned || 0) + 1
+          },
+          fail: (e?: unknown) => {
+            this.__pruneErr = ((e as { errMsg?: string })?.errMsg || String(e)).slice(0, 60)
+          },
+        })
+      }
+    } catch (e) {
+      this.__pruneErr = String(e).slice(0, 60)
     }
   }
 }
@@ -112,14 +159,20 @@ function probeSrc(this: any, uri: string): void {
   }
 }
 
-/** 单帧回传：canvasToTempFilePath → src（失败回退 data-URI） */
-function emitFrame(this: any, c: any): void {
+/** 单帧回传：canvasToTempFilePath → src（失败回退 data-URI）
+ *  ★在途保护（长跑关键）：一次转换未完成前不再发起下一帧——防止编码耗时>间隔时任务无限堆积
+ *  （大画布/真机 PNG 编码慢于帧间隔时，无保护会积压 → 内存上涨/卡顿）。
+ *  @returns 是否已发起本次回传（false = 在途未完成或通道不可用） */
+function emitFrame(this: any, c: any): boolean {
+  if (this.__converting) return false
   const w = wx as unknown as {
+    env?: { USER_DATA_PATH?: string }
     canvasToTempFilePath?: (o: {
       canvas: unknown
       fileType?: string
       destWidth?: number
       destHeight?: number
+      filePath?: string
       success?: (r: { tempFilePath: string }) => void
       fail?: (e?: unknown) => void
     }) => void
@@ -128,39 +181,63 @@ function emitFrame(this: any, c: any): void {
   if (typeof toFile !== 'function') {
     try {
       this.setSrc(c.toDataURL('image/png'))
+      return true
     } catch {
-      /* 通道不可用 */
+      return false
     }
-    return
   }
+  // ★文件名唯一（seq 自增）→ src 永不重复 → image 必然重载（不靠查询参数——真机 wxfile:// 拼参数不渲染）。
+  // ★filePath 指向 USER_DATA_PATH：该目录可 unlink（实证）→ 清理有效、文件有界；
+  //   默认临时目录（http://tmp/）不可 unlink（模拟器实测 permission denied）→ 会堆积。
+  //   模拟器忽略 filePath（返回 http://tmp/）→ 清理静默失败，但模拟器无配额问题。
+  this.__seq = (this.__seq || 0) + 1
+  const basePath = (w.env && w.env.USER_DATA_PATH) || ''
+  if (basePath) this.cleanupStale() // 首次：清上一会话遗留（同一稳定前缀）
+  const filePath = basePath ? `${basePath}/proteus-svg-${this.__seq}.png` : undefined
+  this.__converting = true
+  this.__issued = (this.__issued || 0) + 1
   try {
     toFile({
       canvas: c,
       fileType: 'png',
       destWidth: c.width,
       destHeight: c.height,
+      filePath,
       success: (r) => {
+        this.__converting = false
         this.__emitCount = (this.__emitCount || 0) + 1
         this.__lastOk = Date.now()
-        // ★2026-09-09 真机实证：src 必须是**裸 tempFilePath**——早期真机可渲染的形态正是
-        //   `READ OK 120x120 wxxfile://tmp_...`（无查询参数）。两轮「真机空白」都恰好是拼了
-        //   `?t=N` 之后：模拟器路径是 http://tmp/...（拼参数无碍），真机是 wxfile://（拼参数失效）。
+        // ★src 必须**裸 tempFilePath**（无查询参数——真机 wxfile:// 拼参数不渲染，两轮「真机空白」根因）
         this.setSrc(r.tempFilePath)
         this.pruneTempFiles(r.tempFilePath)
         this.probeSrc(r.tempFilePath)
       },
       fail: (e?: unknown) => {
+        this.__converting = false
         this.__failCount = (this.__failCount || 0) + 1
         this.__lastErr = 'tmpFAIL ' + String(e).slice(0, 90)
-        // 回退 data-URI（真机长串可能渲染失败，仅作最后手段——诊断计数会暴露）
+        // 回退：不带 filePath 的默认临时文件（真机可渲染，仅会堆积——filePath 通道失败才走此路）
         try {
-          this.setSrc(c.toDataURL('image/png'))
+          toFile({
+            canvas: c,
+            fileType: 'png',
+            destWidth: c.width,
+            destHeight: c.height,
+            success: (r2) => this.setSrc(r2.tempFilePath),
+            fail: () => this.setSrc(c.toDataURL('image/png')),
+          })
         } catch {
-          /* 两种通道都失败——下一帧重试 */
+          try {
+            this.setSrc(c.toDataURL('image/png'))
+          } catch {
+            /* 三种通道都失败——下一帧重试 */
+          }
         }
       },
     })
+    return true
   } catch (e) {
+    this.__converting = false
     this.__failCount = (this.__failCount || 0) + 1
     this.__lastErr = 'tmpTHROW ' + String(e).slice(0, 90)
     try {
@@ -168,25 +245,29 @@ function emitFrame(this: any, c: any): void {
     } catch {
       /* 同上 */
     }
+    return true
   }
 }
 
 /** 单帧绘制 + 回传
  *  @param tMs   动画相位时间（elapsed % duration——供插值）
- *  @param rawMs 单调递增的真实经过时间（节流用；缺省取 tMs） */
-function renderFrame(this: any, tMs: number, rawMs?: number): void {
-  const c = this.ensureCanvas()
-  const scene = this.data.scene
-  if (!c || !scene) return
-  drawScene(c, scene, tMs)
+ *  @param rawMs 单调递增的真实经过时间（节流用）
+ *  @returns 是否已发起回传
+ *  ★性能（长跑关键）：**先判节流再绘制**——不需要回传的帧直接跳过，不做无谓的 drawScene
+ *  （模拟器高帧率下少一半绘制量；真机 20fps 节流时更是省去约一半绘制 + 全部 PNG 编码）。 */
+function renderFrame(this: any, tMs: number, rawMs: number): boolean {
   // ★2026-09-09 真机「15 秒后动画停止」根因之一：节流曾用 tMs（= elapsed % duration）比较，
   //   动画跑完一个周期后相位回绕 → 差值恒为负 → src 永久停更（帧数照跑，故看似仍在动）。
-  //   节流必须用**单调时间**（rawMs）。
-  const now = typeof rawMs === 'number' ? rawMs : tMs
-  if (shouldEmit(this.__lastEmit, now, this.data.fps)) {
-    this.__lastEmit = now
-    this.emitFrame(c)
-  }
+  //   节流必须用**单调时间**（rawMs）+ 容差（定时器抖动）。
+  if (!shouldEmit(this.__lastEmit, rawMs, this.data.fps, 4)) return false
+  // 在途未完成 → 本帧不绘制（下一帧重试）——避免堆积，也避免画了白发
+  if (this.__converting) return false
+  const c = this.ensureCanvas()
+  const scene = this.data.scene
+  if (!c || !scene) return false
+  this.__lastEmit = rawMs
+  drawScene(c, scene, tMs)
+  return this.emitFrame(c)
 }
 
 /** rAF 循环（this = 组件实例） */
@@ -199,17 +280,23 @@ function loop(this: any): void {
   const elapsed = now - this.__startTime
   const dur = this.data.scene?.duration ?? 0
   try {
-    this.renderFrame(dur > 0 ? elapsed % dur : elapsed, elapsed)
-    const n = (this.data.frames || 0) + 1
-    this.setData({ frames: n })
+    const n = (this.__frames || 0) + 1
+    this.__frames = n
+    // ★帧数与 src 合并为一次 setData（setSrc）——回传发起时由 setSrc 一并写入；
+    //   未发起回传（在途保护/节流跳过）时才单独补一次，避免每帧两次桥接。
+    const emitted = this.renderFrame(dur > 0 ? elapsed % dur : elapsed, elapsed)
+    if (!emitted) this.setData({ frames: n })
     // 每 10 帧向页面上报（便于外部观察动画是否推进——模拟器/真机均可）
-    // ★2026-09-09 真机诊断：附带回传通道计数/最后错误/src 尾串/前两帧解码探测结果，
-    //   页面直接显示即可区分「写入失败」与「渲染失败」。
+    // ★2026-09-09 真机诊断：附带回传通道计数（issued/emits/fails——issued-(emits+fails)=在途）、
+    //   最后错误、src 尾串、前两帧解码探测——页面直接显示即可判断写入/渲染哪一步失败、是否积压。
     if (n % 10 === 0 && this.triggerEvent) {
       this.triggerEvent('tick', {
         frames: n,
         emits: this.__emitCount || 0,
         fails: this.__failCount || 0,
+        issued: this.__issued || 0,
+        pruned: this.__pruned || 0,
+        pruneErr: this.__pruneErr || '',
         err: this.__lastErr || '',
         img: this.__imgProbe || '',
         src: this.__srcTail || '',
@@ -241,7 +328,7 @@ function play(this: any): void {
 //   onMounted → 组件 ready（属性已到位）→ 渲染首帧 + 启动 rAF。
 onMounted(function (this: any) {
   if (!this.data.scene) return
-  this.renderFrame(0) // 首帧立即出图（避免空白等待）
+  this.renderFrame(0, 0) // 首帧立即出图（避免空白等待）
   if (this.data.playing) this.play()
 })
 
@@ -251,7 +338,10 @@ watch(
   function (this: any) {
     this.stop()
     if (this.data.scene && this.data.playing) this.play()
-    else if (this.data.scene) this.renderFrame(0)
+    else if (this.data.scene) {
+      this.__lastEmit = undefined // 暂停态强制绘制一帧静态图（不受节流限制）
+      this.renderFrame(0, 0)
+    }
   },
 )
 

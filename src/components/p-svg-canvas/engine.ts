@@ -134,10 +134,11 @@ function easeInOut(t: number): number {
 /** 回传节流判定。
  *  ★必须传**单调递增时间**（组件里用 elapsed），不能传动画相位（elapsed % duration）——
  *  相位每个周期回绕，差值恒为负 → 一个周期后永久停发帧（真机「15 秒后动画停止」的根因之一：
- *  帧数照跑，但 src 不再更新）。 */
-export function shouldEmit(lastEmitMs: number | undefined, nowMs: number, fps: number): boolean {
+ *  帧数照跑，但 src 不再更新）。
+ *  @param toleranceMs 计时容差（setInterval 实际间隔常略小于标称值——留容差避免抖动丢帧） */
+export function shouldEmit(lastEmitMs: number | undefined, nowMs: number, fps: number, toleranceMs = 0): boolean {
   if (lastEmitMs === undefined) return true
-  return nowMs - lastEmitMs >= 1000 / Math.max(1, fps)
+  return nowMs - lastEmitMs >= 1000 / Math.max(1, fps) - toleranceMs
 }
 
 /** 在关键值序列上按进度 p(0..1) 插值（分段线性） */
