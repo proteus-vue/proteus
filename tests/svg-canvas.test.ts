@@ -133,11 +133,22 @@ describe('SVG path 解析器（真机 createPath2D 不可用 → 自写解析）
     tracePath(t, 'M0 0 Q10 10 20 0 T40 0')
     expect(t.calls.filter((c) => c === 'Q').length).toBe(2)
   })
-  it('圆弧 A → 折线近似（零 Path2D 依赖）', () => {
+  it('圆弧 A → 原生真曲线（真机离屏 canvas 支持 arc/ellipse——消除锯齿）', () => {
     const t = mockTarget()
     tracePath(t, 'M10 50 A20 20 0 0 1 50 50')
-    // 弧被离散为多条 L
-    expect(t.calls.filter((c) => c.startsWith('L')).length).toBeGreaterThan(4)
+    // 有 arc 能力 → 下发一条原生弧命令，不再折线离散
+    expect(t.calls.filter((c) => c.startsWith('A')).length).toBe(1)
+    expect(t.calls.filter((c) => c.startsWith('L')).length).toBe(0)
+  })
+  it('圆弧 A 回退：目标无 arc/ellipse 时折线近似（采样/mock 场景）', () => {
+    const calls: string[] = []
+    // 仅实现基础命令的 target（无 arc/ellipse）
+    const bare = {
+      beginPath() {}, moveTo() {}, lineTo: () => calls.push('L'),
+      bezierCurveTo() {}, quadraticCurveTo() {}, closePath() {},
+    }
+    tracePath(bare, 'M10 50 A20 20 0 0 1 50 50')
+    expect(calls.length).toBeGreaterThan(4)
   })
   it('科学计数法 / 负数 / 小数', () => {
     const t = mockTarget()

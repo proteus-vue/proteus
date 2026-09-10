@@ -104,6 +104,8 @@ export interface DrawCtx {
   bezierCurveTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void
   arc(cx: number, cy: number, r: number, s: number, e: number, ccw?: boolean): void
+  /** ★2026-09-09 原生椭圆/弧（真机离屏 canvas 支持——用于圆弧真曲线绘制，抗锯齿） */
+  ellipse?(cx: number, cy: number, rx: number, ry: number, rot: number, s: number, e: number, ccw?: boolean): void
   closePath(): void
   fill(): void
   stroke(): void
