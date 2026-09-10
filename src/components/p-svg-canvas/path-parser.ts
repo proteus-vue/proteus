@@ -10,7 +10,11 @@ export interface PathTarget {
   lineTo(x: number, y: number): void
   bezierCurveTo(c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number): void
   quadraticCurveTo(cx: number, cy: number, x: number, y: number): void
-  arc(cx: number, cy: number, r: number, start: number, end: number, ccw?: boolean): void
+  /** 原生圆弧（可选——缺省时 arcTo 回退贝塞尔分段） */
+  arc?(cx: number, cy: number, r: number, start: number, end: number, ccw?: boolean): void
+  /** ★2026-09-09 原生椭圆/弧（可选）——真机离屏 canvas 已实证支持（能力探测），
+   *  用真曲线绘制圆弧（硬件抗锯齿）替代折线近似，消除大半径圆环的多边形折面。 */
+  ellipse?(cx: number, cy: number, rx: number, ry: number, rot: number, start: number, end: number, ccw?: boolean): void
   closePath(): void
 }
 
@@ -81,16 +85,28 @@ function arcTo(
   let dTheta = ang((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry)
   if (!sweep && dTheta > 0) dTheta -= 2 * Math.PI
   if (sweep && dTheta < 0) dTheta += 2 * Math.PI
-  // ctx.arc 仅支持圆；椭圆用缩放近似（rx===ry 时精确）
-  const steps = Math.max(2, Math.ceil(Math.abs(dTheta) / (Math.PI / 16)))
+  // ★2026-09-09 真机「锯齿」根因：此前一律把弧拆成折线（整圆仅 2π/(π/16)=32 段）→
+  //   大半径圆环/圆形出现明显多边形折面。真机离屏 canvas 已实证支持 arc/ellipse（能力探测），
+  //   故优先下发**原生真曲线**（硬件抗锯齿）；仅在目标不支持时回退折线近似（采样/mock 场景）。
   const cosA = Math.cos(phi)
   const sinA = Math.sin(phi)
+  const theta2 = theta1 + dTheta
+  const ccw = dTheta < 0
+  if (Math.abs(phi) < 1e-6 && Math.abs(rx - ry) < 1e-6 && typeof t.arc === 'function') {
+    t.arc(cx, cy, rx, theta1, theta2, ccw)
+    return
+  }
+  if (typeof t.ellipse === 'function') {
+    t.ellipse(cx, cy, rx, ry, phi, theta1, theta2, ccw)
+    return
+  }
+  // 回退：折线近似
+  const steps = Math.max(2, Math.ceil(Math.abs(dTheta) / (Math.PI / 16)))
   for (let i = 1; i <= steps; i++) {
     const th = theta1 + (dTheta * i) / steps
     const px = cx + rx * Math.cos(th) * cosA - ry * Math.sin(th) * sinA
     const py = cy + rx * Math.cos(th) * sinA + ry * Math.sin(th) * cosA
-    if (i === 1) t.lineTo(px, py)
-    else t.lineTo(px, py)
+    t.lineTo(px, py)
   }
 }
 
@@ -301,14 +317,30 @@ function collectPoints(d: string): SamplePoint[] {
       cur = { x, y }
     },
     arc(cx, cy, r, s, e, ccw) {
-      const n = 16
-      const dir = ccw ? -1 : 1
-      const span = (e - s) * dir
+      // 自适应段数（弧越长越密——原固定 16 段在整圆上偏粗）
+      const span = Math.abs(e - s)
+      const n = Math.max(8, Math.ceil(span / (Math.PI / 32)))
       for (let i = 1; i <= n; i++) {
-        const a = s + (span * i) / n * dir
+        const a = s + ((e - s) * i) / n
         pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) })
       }
       cur = { x: cx + r * Math.cos(e), y: cy + r * Math.sin(e) }
+    },
+    ellipse(cx, cy, rx, ry, rot, s, e, ccw) {
+      void ccw
+      const span = Math.abs(e - s)
+      const n = Math.max(8, Math.ceil(span / (Math.PI / 32)))
+      const cosR = Math.cos(rot)
+      const sinR = Math.sin(rot)
+      for (let i = 1; i <= n; i++) {
+        const a = s + ((e - s) * i) / n
+        const ex = rx * Math.cos(a)
+        const ey = ry * Math.sin(a)
+        pts.push({ x: cx + ex * cosR - ey * sinR, y: cy + ex * sinR + ey * cosR })
+      }
+      const eex = rx * Math.cos(e)
+      const eey = ry * Math.sin(e)
+      cur = { x: cx + eex * cosR - eey * sinR, y: cy + eex * sinR + eey * cosR }
     },
     closePath() {
       if (pts.length) pts.push({ ...pts[0] })
