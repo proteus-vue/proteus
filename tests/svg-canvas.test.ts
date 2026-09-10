@@ -341,4 +341,41 @@ describe('回传节流（真机「15 秒后动画停止」根因——相位回�
     expect(src).not.toMatch(/tempFilePath\s*\+\s*['"`]\?/)
     expect(src).toMatch(/this\.setSrc\(r\.tempFilePath\)/)
   })
+
+  it('组件源码契约：回传有在途保护（长跑防任务堆积）', () => {
+    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    // 未完成前不再发起下一帧转换
+    expect(src).toMatch(/if \(this\.__converting\) return false/)
+    // 成功/失败均需复位在途标记
+    expect(src.match(/this\.__converting = false/g)?.length || 0).toBeGreaterThanOrEqual(3)
+  })
+
+  it('组件源码契约：先判节流再绘制（不发放的帧不白画）', () => {
+    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    const fn = src.slice(src.indexOf('function renderFrame'))
+    // shouldEmit 应出现在 drawScene 之前
+    expect(fn.indexOf('shouldEmit')).toBeGreaterThan(-1)
+    expect(fn.indexOf('shouldEmit')).toBeLessThan(fn.indexOf('drawScene'))
+  })
+
+  it('节流容差：定时器实际间隔略小于标称值时不吃掉半帧（20fps 实测丢帧回归）', () => {
+    const fps = 20
+    const nominal = 50
+    let firedReal = 48.5 // setInterval(50) 实测常略小于 50
+    // 无容差：每次差 48.5 < 50 → 需两拍才发一次（实测 emits≈frames/2）
+    let last: number | undefined
+    let count = 0
+    for (let t = 0; t < 10000; t += firedReal) {
+      if (shouldEmit(last, t, fps)) { last = t; count++ }
+    }
+    const noTol = count
+    // 有容差 4ms：每次差 48.5 >= 46 → 每拍都发（≈目标帧率）
+    last = undefined
+    count = 0
+    for (let t = 0; t < 10000; t += firedReal) {
+      if (shouldEmit(last, t, fps, 4)) { last = t; count++ }
+    }
+    expect(noTol).toBeLessThan(150) // 无容差：约 100 次（=10000/97）
+    expect(count).toBeGreaterThan(190) // 有容差：约 206 次（≈fps 目标）
+  })
 })

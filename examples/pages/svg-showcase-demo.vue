@@ -99,10 +99,11 @@
     <text class="status">{{ status }}</text>
     <text class="status">帧数 {{ frames }}</text>
     <!-- ★真机诊断（区分「写入失败」/「渲染失败」——排障后移除） -->
-    <text class="diag">回传 {{ emits }} · 失败 {{ fails }}</text>
+    <text class="diag">回传 {{ emits }} · 发起 {{ issued }} · 失败 {{ fails }} · 清理 {{ pruned }}</text>
     <text class="diag">{{ img }}</text>
     <text class="diag">{{ srcTail }}</text>
     <text class="diag">{{ err }}</text>
+    <text class="diag">{{ pruneErr }}</text>
 
     <!-- ② 能力卡片：每个用一项 SVG 能力 -->
     <view class="cards">
@@ -209,18 +210,24 @@ const frames = ref(0)
 const taps = ref(0)
 /** ★真机诊断字段（tick 事件回传——排障后移除） */
 const emits = ref(0)
+const issued = ref(0)
 const fails = ref(0)
+const pruned = ref(0)
+const pruneErr = ref('')
 const img = ref('img -')
 const srcTail = ref('src -')
 const err = ref('err -')
 
 function onTick(e: unknown): void {
-  const ev = e as { detail?: { frames?: number; emits?: number; fails?: number; img?: string; src?: string; err?: string } }
+  const ev = e as { detail?: { frames?: number; emits?: number; issued?: number; fails?: number; pruned?: number; pruneErr?: string; img?: string; src?: string; err?: string } }
   const d = ev && ev.detail
   if (!d) return
   frames.value = d.frames || 0
   emits.value = d.emits || 0
+  issued.value = d.issued || 0
   fails.value = d.fails || 0
+  pruned.value = d.pruned || 0
+  if (d.pruneErr) pruneErr.value = d.pruneErr
   if (d.img) img.value = d.img
   if (d.src) srcTail.value = '…' + d.src
   if (d.err) err.value = d.err
