@@ -4,8 +4,9 @@
 //   实测（§12.2 探针）：离屏 canvas 可用（createPath2D 直接接受 SVG d / rAF 62fps / toDataURL 2ms），
 //   可见 canvas 的 SelectorQuery.node() 拿不到（正常运行时同样 TIMEOUT）。
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { compileVueSfc } from '../packages/compiler/src/index'
-import { sampleValues, evalAnim, primitiveToPathD, drawScene } from '../src/components/p-svg-canvas/engine'
+import { sampleValues, evalAnim, primitiveToPathD, drawScene, shouldEmit } from '../src/components/p-svg-canvas/engine'
 import { tracePath, getPointAtLength, getPathLength } from '../src/components/p-svg-canvas/path-parser'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
@@ -283,5 +284,50 @@ describe('Canvas 通道渐变支持（url(#id) → createGradient）', () => {
     drawScene(canvas, scene, 0)
     expect(colors[0]).toBe('rgba(255,255,255,0.5)') // opacity 合成
     expect(colors[1]).toBe('#0000ff') // opacity=1 原样
+  })
+})
+
+describe('回传节流（真机「15 秒后动画停止」根因——相位回绕）', () => {
+  it('shouldEmit 用单调时间：跨多个动画周期仍持续发帧', () => {
+    const fps = 20
+    const dur = 4500 // 演示页主场景周期
+    const step = 50
+    let lastEmit: number | undefined
+    const emits: number[] = []
+    for (let elapsed = 0; elapsed <= 30000; elapsed += step) {
+      // 相位（elapsed % dur）只用于插值；节流必须用 elapsed
+      if (shouldEmit(lastEmit, elapsed, fps)) {
+        lastEmit = elapsed
+        emits.push(elapsed)
+      }
+    }
+    // 30s / 50ms = 600 帧 → 按 20fps 约 300 次回传
+    expect(emits.length).toBeGreaterThan(250)
+    // 关键：一个周期（4500ms）之后仍有回传
+    expect(emits.filter((t) => t > dur).length).toBeGreaterThan(150)
+    expect(emits[emits.length - 1]).toBeGreaterThan(29000)
+  })
+
+  it('回归护栏：若误用相位时间做节流 → 一个周期后永久停发（此测试证明该 bug 存在）', () => {
+    const fps = 20
+    const dur = 4500
+    const step = 50
+    let lastPhase: number | undefined
+    const emits: number[] = []
+    for (let elapsed = 0; elapsed <= 30000; elapsed += step) {
+      const phase = elapsed % dur
+      if (lastPhase === undefined || phase - lastPhase >= 1000 / fps) {
+        lastPhase = phase
+        emits.push(elapsed)
+      }
+    }
+    // 相位回绕 → 最后一个 emit 落在第一个周期内，之后 25s 零发帧
+    expect(emits[emits.length - 1]).toBeLessThan(dur)
+  })
+
+  it('组件源码契约：src 只用裸 tempFilePath（真机 wxfile:// 拼查询参数不渲染）', () => {
+    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    expect(src).not.toMatch(/tempFilePath\s*\+\s*['"`]\?/)
+    expect(src).toMatch(/this\.setSrc\(r\.tempFilePath\)/)
   })
 })

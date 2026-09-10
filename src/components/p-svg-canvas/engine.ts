@@ -129,6 +129,15 @@ function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
 }
 
+/** 回传节流判定。
+ *  ★必须传**单调递增时间**（组件里用 elapsed），不能传动画相位（elapsed % duration）——
+ *  相位每个周期回绕，差值恒为负 → 一个周期后永久停发帧（真机「15 秒后动画停止」的根因之一：
+ *  帧数照跑，但 src 不再更新）。 */
+export function shouldEmit(lastEmitMs: number | undefined, nowMs: number, fps: number): boolean {
+  if (lastEmitMs === undefined) return true
+  return nowMs - lastEmitMs >= 1000 / Math.max(1, fps)
+}
+
 /** 在关键值序列上按进度 p(0..1) 插值（分段线性） */
 export function sampleValues(values: string[], p: number): string {
   if (!values.length) return ''
