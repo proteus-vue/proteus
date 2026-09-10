@@ -222,11 +222,12 @@ function onTick(e: unknown): void {
   const ev = e as { detail?: { frames?: number; emits?: number; issued?: number; fails?: number; pruned?: number; pruneErr?: string; img?: string; src?: string; err?: string } }
   const d = ev && ev.detail
   if (!d) return
-  frames.value = d.frames || 0
-  emits.value = d.emits || 0
-  issued.value = d.issued || 0
-  fails.value = d.fails || 0
-  pruned.value = d.pruned || 0
+  // ★轻量 tick（每 2 帧）只带 frames+progress；重型字段仅在有值时更新（避免被清零）
+  if (typeof d.frames === 'number') frames.value = d.frames
+  if (typeof d.emits === 'number') emits.value = d.emits
+  if (typeof d.issued === 'number') issued.value = d.issued
+  if (typeof d.fails === 'number') fails.value = d.fails
+  if (typeof d.pruned === 'number') pruned.value = d.pruned
   if (d.pruneErr) pruneErr.value = d.pruneErr
   if (d.img) img.value = d.img
   if (d.src) srcTail.value = '…' + d.src

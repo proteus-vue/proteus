@@ -394,8 +394,8 @@ const SEMANTIC_COMPILE_TAGS = new Set(['p-grid'])
 /** 需迁移到合成包装节点的指令（循环/条件/渲染 key——包装承载渲染，内容节点剥离） */
 const LOOP_DIRECTIVES = new Set(['for', 'if', 'else-if', 'else', 'key'])
 
-/** ★2026-09-10 p-svg-canvas 可动态绑定的 prop 白名单（<svg> 根上的 :playing/:speed/:fps 透传——交互控制） */
-const SVG_CANVAS_PROPS = new Set(['playing', 'speed', 'fps'])
+/** ★2026-09-10 p-svg-canvas 可动态绑定的 prop 白名单（<svg> 根上的 :playing/:speed/:fps/:progress 透传——交互控制） */
+const SVG_CANVAS_PROPS = new Set(['playing', 'speed', 'fps', 'progress'])
 
 /** ★2026-09-08 v-once/v-pre 诚实对齐：判断元素（含子节点/属性）是否含 {{ }} 插值——无插值=纯静态内容（剥离 v-once/v-pre 语义等价），有插值=依赖运行期（v-once 惰性冻结/v-pre 跳过编译在 MP 无对等 → 诚实 warning） */
 function hasInterpolation(node: ElementNode): boolean {
