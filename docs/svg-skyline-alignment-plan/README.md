@@ -498,6 +498,19 @@ svg-p2-spike / svg-spike）移入新分包 `subpackages/svg-lab`（本就属调�
 fails=0；新增 `tests/svg-anim.test.ts` 3 用例（深层→Canvas / 根级→CSS / 嵌套复合角度）+ `tests/e2e-mp-svg-skeleton.test.ts`；
 svg 系列 215/215 绿；build:mp/web ✓；router/audit/pkg/deps/script-compile/en-drift 门禁 ✓。
 
+**★交互控制（2026-09-10 续）**：给演示页加「动作切换 + 播放控制」。关键约束与修法：
+- **`v-if` 包裹 `<svg>` 不 lowering**（实测：v-if/v-else 三场景 → 0 个组件）→ **多场景常驻 + `:playing` 门控**（非活动场景停表），
+  `display:none` 在 Skyline 生效（实测，隐藏场景不渲染）。
+- **编译器透传控制 prop**：`<svg>` 根上的 `:playing` / `:speed` / `:fps` → `p-svg-canvas` 属性绑定（白名单，`:class`/`:style` 不透传）。
+- **组件加 `speed` 传播放**：相位时钟 = Σ(dt × speed)——变速不跳帧；speed=0 定格、负数倒放。
+  ★关键：**节流时钟与相位时钟必须分离**（`__clock` 恒增用于节流，`__phase` 可负可停用于绘制）——否则倒放时相位递减 → 节流恒不满足 → 冻结。
+- **踩坑**：① `ref<Mode>('walk')`（带泛型实参）初值无法静态求值 → `data.mode=undefined` → 页面空白（编译器 MVP 限制，改无泛型 ref）；
+  ② `:class="method(...)"` 返回的类名**不带 scope 后缀**（`.scene-on` 未命中）→ 用**对象语法** `:class="{ 'scene-on': cond }"`（编译器正确注入后缀）。
+
+**验证**：模拟器实测——三个动作切换（走/跑/跳各渲染，截图确认）+ 定格两帧图形区 MD5 相同 + 倒放回传持续增长 + 帧率 23fps（仅当前场景在表，隐藏场景停表）；
+E2E（CLI 路径）通过：frames 220→340 / emits 193→303 / fails 0 + 动作切换/speed 断言；`tests/svg-anim.test.ts` +2 用例（控制 prop 透传/白名单）；
+web 保留原生 `<svg>`（真实动画）`build:web` ✓。
+
 ### 12.3 ★长时运行性能（2026-09-10 实测）——三项关键修复
 
 用户问「长时间运行有没有性能问题」。实测（模拟器 2 分钟连续采样）+ 代码审计定位三处：

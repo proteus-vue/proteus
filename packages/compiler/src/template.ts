@@ -394,6 +394,9 @@ const SEMANTIC_COMPILE_TAGS = new Set(['p-grid'])
 /** 需迁移到合成包装节点的指令（循环/条件/渲染 key——包装承载渲染，内容节点剥离） */
 const LOOP_DIRECTIVES = new Set(['for', 'if', 'else-if', 'else', 'key'])
 
+/** ★2026-09-10 p-svg-canvas 可动态绑定的 prop 白名单（<svg> 根上的 :playing/:speed/:fps 透传——交互控制） */
+const SVG_CANVAS_PROPS = new Set(['playing', 'speed', 'fps'])
+
 /** ★2026-09-08 v-once/v-pre 诚实对齐：判断元素（含子节点/属性）是否含 {{ }} 插值——无插值=纯静态内容（剥离 v-once/v-pre 语义等价），有插值=依赖运行期（v-once 惰性冻结/v-pre 跳过编译在 MP 无对等 → 诚实 warning） */
 function hasInterpolation(node: ElementNode): boolean {
   // 属性插值 {{ }}
@@ -784,7 +787,19 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
       }
       const evStr = evAttrs.length ? ' ' + evAttrs.join(' ') : ''
-      return `<p-svg-canvas scene="{{${name}}}" width="${w}" height="${h}"${evStr} />`
+      // ★2026-09-10 交互控制：<svg> 根节点上的组件 prop 绑定（:playing / :speed / :fps）
+      //   透传为 p-svg-canvas 的属性绑定——页面可动态暂停/变速（多场景切换/播放控制）。
+      //   白名单限定（避免把 :class/:style 等无关绑定透传到组件）。
+      const propAttrs: string[] = []
+      for (const p of node.props) {
+        if (p.type !== NodeTypes.DIRECTIVE || (p as { name?: string }).name !== 'bind') continue
+        const arg = (p as { arg?: { content?: string } }).arg?.content
+        if (!arg || !SVG_CANVAS_PROPS.has(arg)) continue
+        const exp = (p as { exp?: { content?: string } }).exp?.content?.trim() ?? ''
+        if (exp) propAttrs.push(`${arg}="{{${exp}}}"`)
+      }
+      const propStr = propAttrs.length ? ' ' + propAttrs.join(' ') : ''
+      return `<p-svg-canvas scene="{{${name}}}" width="${w}" height="${h}"${propStr}${evStr} />`
     }
   }
   if (node.tag.toLowerCase() === 'svg' && !ctx.disabled.has('template/svg-to-image')) {
