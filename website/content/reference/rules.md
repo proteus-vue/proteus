@@ -444,7 +444,7 @@ after:  警告 + 原样输出（无效标签）
 
 **内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）**
 
-@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
+@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
 
 ```
 before: @click="count++" / @click="showModal = !showModal"

@@ -660,7 +660,7 @@ export const TEMPLATE_RULES: TransformRule[] = [
     status: 'implemented',
     title: '内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）',
     titleEn: 'inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments)',
-    description: '@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告',
+    description: '@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告',
     descriptionEn: '@click="count++" (increment/decrement), @click="fn(1)" (a simple method call) and ★#500 assignments (x = !x / x = literal) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning',
     why: 'Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应）：不再原样输出无效 bindtap',
     whyEn: 'support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap): no longer emitting an invalid bindtap as-is',

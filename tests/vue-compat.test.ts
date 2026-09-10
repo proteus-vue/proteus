@@ -107,6 +107,20 @@ describe('Batch B：事件内联表达式 → 包装方法（vue-compat）', () 
     expect(r.js).toContain('this.fn(1)')
   })
 
+  it('@click="fn(\'1.0.0\')" 含点的字符串参数 → 包装（旧白名单因 `.` 误拒）', () => {
+    const r = compile('<template><button @click="pushGood(\'1.0.0\', \'CODE\')">F</button></template><script setup>function pushGood(v, c) {}</script>')
+    expect(r.warnings).toHaveLength(0)
+    expect(r.wxml).not.toContain('bindtap="pushGood(')
+    expect(r.wxml).toMatch(/bindtap="proteusInlinePushGood/)
+    expect(r.js).toContain("this.pushGood('1.0.0', 'CODE')")
+  })
+
+  it('成员访问参数（fn(t.id)）仍不可校准 → 警告原样（须运行时求值）', () => {
+    const r = compile('<template><button @click="fn(t.id)">F</button></template><script setup>const t = { id: 1 }; function fn(n) {}</script>')
+    expect(r.warnings.some((w) => w.includes('不是简单方法引用'))).toBe(true)
+    expect(r.wxml).toContain('bindtap="fn(t.id)"')
+  })
+
   it('复杂表达式（a.b() 链式）仍警告原样', () => {
     // ★P2（pinia-plan 12）：store.method() 已支持包装——链式改 a.b() 验证警告保留
     const r = compile('<template><button @click="a.b()">T</button></template><script setup>const a = { b: () => {} }</script>')
