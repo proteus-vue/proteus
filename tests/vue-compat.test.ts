@@ -88,6 +88,25 @@ describe('Batch B：事件内联表达式 → 包装方法（vue-compat）', () 
     expect(r.js).toContain('this.fn(1)')
   })
 
+  // ★2026-09-10 修：小数/负数参数此前被参数白名单拒绝 → 原样输出 bindtap="fn(0.4)"（非法）→ 真机点击无反应
+  it('@click="fn(0.4)" 小数参数 → 包装方法（不再原样输出非法事件处理器）', () => {
+    const r = compile('<template><button @click="fn(0.4)">F</button></template><script setup>const x = ref(1); function fn(n) { x.value = n }</script>')
+    expect(r.warnings).toHaveLength(0)
+    expect(r.wxml).toContain('bindtap="proteusInlineFn0D4"')
+    expect(r.wxml).not.toContain('bindtap="fn(0.4)"')
+    expect(r.js).toContain('this.fn(0.4)')
+  })
+
+  it('@click="fn(-1)" 负数参数 → 包装方法；与 fn(1) 不撞名（M 前缀区分）', () => {
+    const r = compile('<template><button @click="fn(-1)">F</button><button @click="fn(1)">G</button></template><script setup>const x = ref(1); function fn(n) { x.value = n }</script>')
+    expect(r.warnings).toHaveLength(0)
+    expect(r.wxml).toContain('bindtap="proteusInlineFnM1"')
+    expect(r.wxml).toContain('bindtap="proteusInlineFn1"')
+    // 两个方法体各自正确（不因撞名被去重成同一个）
+    expect(r.js).toContain('this.fn(-1)')
+    expect(r.js).toContain('this.fn(1)')
+  })
+
   it('复杂表达式（a.b() 链式）仍警告原样', () => {
     // ★P2（pinia-plan 12）：store.method() 已支持包装——链式改 a.b() 验证警告保留
     const r = compile('<template><button @click="a.b()">T</button></template><script setup>const a = { b: () => {} }</script>')
