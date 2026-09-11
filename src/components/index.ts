@@ -5,6 +5,7 @@
 // 组件层契约/能力（组件库落地评估 v2 B1）：contracts / runtime 供 Web 端 import
 import VirtualList from './virtual-list/index.vue'
 import PView from './p-view/index.vue'
+import PBox from './p-box/index.vue'
 import PText from './p-text/index.vue'
 import PImage from './p-image/index.vue'
 import PButton from './p-button/index.vue'
@@ -82,10 +83,15 @@ import PAnimate from './p-animate/index.vue'
 import PRouterLink from './p-router-link/index.vue'
 // ★G-07 液态玻璃统一入口（glass-plan B1 · Web L1+L2 首落地，消费方：官网导航/面板）
 import PgGlass from './pg-glass/index.vue'
+// ★Skyline 线收口：能力入口组件（capability.scan-qr / pick-photo / location——消费 @proteus-vue/api hooks）
+import PScanQr from './p-scan-qr/index.vue'
+import PPickPhoto from './p-pick-photo/index.vue'
+import PLocation from './p-location/index.vue'
 
 export {
   VirtualList,
   PView,
+  PBox,
   PText,
   PImage,
   PButton,
@@ -163,6 +169,10 @@ export {
   PRouterLink,
   // ★G-07 液态玻璃
   PgGlass,
+  // ★Skyline 线收口：能力入口组件
+  PScanQr,
+  PPickPhoto,
+  PLocation,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

@@ -40,7 +40,8 @@ const LAYOUT: PrimitiveDef[] = [
   { id: 'L2', kind: 'layout', semantic: 'layout.inline', tag: 'p-inline', props: ['wrap'], mpEquiv: '<text> 内联', tier: 'L1', status: 'implemented' },
   { id: 'L3', kind: 'layout', semantic: 'layout.stack', tag: 'p-stack', props: ['direction', 'gap', 'align', 'wrap', 'snap', 'loop'], mpEquiv: 'flex + scroll-view + swiper', tier: 'L1', status: 'implemented' },
   { id: 'L4', kind: 'layout', semantic: 'layout.grid', tag: 'p-grid', props: ['minColWidth', 'maxCols', 'gap', 'autoFlow'], mpEquiv: '<view> + CSS Grid', tier: 'L1', status: 'implemented' },
-  { id: 'L5', kind: 'layout', semantic: 'layout.fluid', tag: 'p-fluid', props: ['breakpoints', 'minItemWidth'], mpEquiv: '响应式 CSS', tier: 'L1', status: 'implemented' },
+  // ★Skyline 线收口：layout.fluid 由 v-p-fluid **指令**承载（非标签）——无 tag，避免 <p-fluid> 幽灵
+  { id: 'L5', kind: 'layout', semantic: 'layout.fluid', props: ['breakpoints', 'minItemWidth'], mpEquiv: '响应式 CSS（v-p-fluid 指令）', tier: 'L1', status: 'implemented' },
   { id: 'L6', kind: 'layout', semantic: 'layout.adaptive', tag: 'p-adaptive', props: ['sheet', 'dialog', 'popover', 'drawer'], mpEquiv: '无（容器宽度语义断点）', tier: 'L1', status: 'implemented' },
   { id: 'L7', kind: 'layout', semantic: 'layout.fit', tag: 'p-fit', props: ['mode'], mpEquiv: 'fit-content', tier: 'L1', status: 'implemented' },
   { id: 'L8', kind: 'layout', semantic: 'layout.spacer', tag: 'p-spacer', props: ['grow', 'shrink'], mpEquiv: 'flex:1', tier: 'L1', status: 'implemented' },

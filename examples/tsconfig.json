@@ -22,7 +22,8 @@
       //   （fluid/devtools-runtime 在 root node_modules，shared 只在 examples）→ 显式 paths 解析到源码
       "@proteus-vue/shared": ["../packages/shared/src/index.ts"],
       "@proteus-vue/glass": ["../packages/glass/src/index.ts"],
-      "@proteus-vue/worklet": ["../packages/worklet/src/index.ts"]
+      "@proteus-vue/worklet": ["../packages/worklet/src/index.ts"],
+      "@proteus-vue/api": ["../packages/api/src/index.ts"]
     }
   },
   "include": [

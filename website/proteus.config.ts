@@ -57,6 +57,8 @@ const config: ProteusConfig = {
         { find: '@proteus-vue/glass', replacement: path.join(__dirname, '../packages/glass/src/index.ts') },
         // ★Skyline 线收口：框架组件消费 @proteus-vue/worklet
         { find: '@proteus-vue/worklet', replacement: path.join(__dirname, '../packages/worklet/src/index.ts') },
+        // ★Skyline 线收口：能力入口组件消费 @proteus-vue/api
+        { find: '@proteus-vue/api', replacement: path.join(__dirname, '../packages/api/src/index.ts') },
       ],
     },
     build: {
