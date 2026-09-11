@@ -120,7 +120,13 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 | 　└ 文件系统 | C43 | ✅ 已落地（异步 16 方法 + Sync 10 方法；web 内存降级全量） | ✅ |
 | 　└ 地图 | C4 | ✅ 已落地（MapController：标记/折线/圆/视野/坐标/移动/开App/事件） | ✅ |
 | 　└ 相机/麦克风 | C1/C2 | ✅ 已落地（CameraController + RecorderController） | ✅ |
-| **L2 中频** | 系统集成 | NFC · 通知 · 存储（异步）· 传感器流 · 后台生命周期 · 日历 | ⬜ 待启 |
+| **L2 中频** | 系统集成 | 传感器流 · 存储（异步）· NFC · 通知 · 后台 · 日历 | 🟡 进行中 |
+| 　└ 传感器流 | C5 | ✅ SensorStream（start/stop/on；修 readSensor 泄漏） | ✅ |
+| 　└ 存储异步 | C15 | ✅ setAsync/getAsync/removeAsync/clearAsync/info/batchGet/batchSet | ✅ |
+| 　└ NFC | C37 | ✅ NFCAPI（startHCE/stopHCE/sendHCEMessage/onHCEMessage/onHCEStateChange） | ✅ |
+| 　└ 通知 | C17 | ✅ subscribeDeviceMessage/openCustomerService | ✅ |
+| 　└ 后台生命周期 | C25 | 待做（~15 事件：onMemoryWarning/onThemeChange/onWindowResize…） | ⬜ |
+| 　└ 日历 | C20 | 待做（CalendarAPI） | ⬜ |
 | **L3 长尾** | 低使用率 | 直播（~30）· AI 推理 · 多媒体编辑 · 支付扩展 | ⬜ 待评估（建议泛化壳 + 诚实边界） |
 | **即时修复** | bug | `usePermission` 小程序端（wxBridge 加 getSetting→state 映射） | ✅ 已落地 |
 
