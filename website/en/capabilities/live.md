@@ -43,8 +43,17 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 | Method | Signature | Doc |
 |---|---|---|
+| `play` | `play(): Promise<CapResult<void>>` | — |
+| `pause` | `pause(): Promise<CapResult<void>>` | — |
+| `resume` | `resume(): Promise<CapResult<void>>` | — |
+| `stop` | `stop(): Promise<CapResult<void>>` | — |
+| `mute` | `mute(): void` | — |
+| `snapshot` | `snapshot(): Promise<CapResult<string>>` | — |
+| `requestFullScreen` | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | — |
+| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | — |
+| `status` | `status(): LivePlayState` | — |
+| `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | — |
 | `leave` | `leave(): Promise<CapResult<void>>` | — |
-| `status` | `status(): 'joined' \| 'left'` | — |
 
 ## Error codes
 
@@ -58,8 +67,8 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 | Target | Status | Notes |
 |---|---|---|
-| Web SPA | ⚠️ | vue-dom · webBridge missing joinLiveRoom → explicit Err degradation (no direct platform API) |
-| WeChat Mini Program | ⚠️ | skyline (WebView fallback) · wx bridge missing joinLiveRoom → explicit Err degradation |
+| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → (wx-native equivalent; exact mapping in the zh version) |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |
