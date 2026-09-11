@@ -281,8 +281,60 @@ export interface Logger {
 export interface FileSystemBridge {
   readFile(path: string): Promise<string>
   writeFile(path: string, data: string): Promise<void>
+  /** ★能力颗粒度对齐：追加写入 */
+  appendFile(path: string, data: string): Promise<void>
+  /** 复制文件 */
+  copyFile(src: string, dest: string): Promise<void>
+  /** 重命名/移动 */
+  rename(oldPath: string, newPath: string): Promise<void>
   remove(path: string): Promise<void>
   exists(path: string): Promise<boolean>
+  /** 文件/目录信息 */
+  stat(path: string): Promise<FileStat>
+  /** 创建目录 */
+  mkdir(path: string, recursive?: boolean): Promise<void>
+  /** 删除目录 */
+  rmdir(path: string, recursive?: boolean): Promise<void>
+  /** 读目录（返回条目名） */
+  readdir(path: string): Promise<string[]>
+  /** 文件摘要（size + digest） */
+  getFileInfo(path: string, digestAlgorithm?: string): Promise<{ size: number; digest: string }>
+  /** 保存临时文件到本地（返回持久路径） */
+  saveFile(tempPath: string): Promise<string>
+  /** 已保存文件列表 */
+  getSavedFileList(): Promise<SavedFileInfo[]>
+  /** 删除已保存文件 */
+  removeSavedFile(path: string): Promise<void>
+  /** 解压 */
+  unzip(zipPath: string, targetPath: string): Promise<void>
+  // —— Sync 变体（对齐官方 *Sync；同步阻塞，仅小文件/启动期用） ——
+  readFileSync(path: string): string
+  writeFileSync(path: string, data: string): void
+  existsSync(path: string): boolean
+  statSync(path: string): FileStat
+  readdirSync(path: string): string[]
+  mkdirSync(path: string, recursive?: boolean): void
+  renameSync(oldPath: string, newPath: string): void
+  unlinkSync(path: string): void
+  copyFileSync(src: string, dest: string): void
+  appendFileSync(path: string, data: string): void
+}
+
+/** 文件/目录信息（wx.Stats 子集） */
+export interface FileStat {
+  size: number
+  mode: number
+  lastAccessedTime: number
+  lastModifiedTime: number
+  isDirectory: boolean
+  isFile: boolean
+}
+
+/** 已保存文件信息（wx.SavedFileInfo 子集） */
+export interface SavedFileInfo {
+  filePath: string
+  size: number
+  createTime: number
 }
 
 /** C43 FSAdapter（useFileSystem 句柄——方法均返回 Result<T>） */
@@ -291,8 +343,31 @@ export interface FSAdapter {
   supported: boolean
   readFile(path: string): Promise<CapResult<string>>
   writeFile(path: string, data: string): Promise<CapResult<void>>
+  appendFile(path: string, data: string): Promise<CapResult<void>>
+  copyFile(src: string, dest: string): Promise<CapResult<void>>
+  rename(oldPath: string, newPath: string): Promise<CapResult<void>>
   remove(path: string): Promise<CapResult<void>>
   exists(path: string): Promise<CapResult<boolean>>
+  stat(path: string): Promise<CapResult<FileStat>>
+  mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
+  rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
+  readdir(path: string): Promise<CapResult<string[]>>
+  getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>
+  saveFile(tempPath: string): Promise<CapResult<string>>
+  getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
+  removeSavedFile(path: string): Promise<CapResult<void>>
+  unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
+  // Sync 变体（对齐官方；返回 CapResult 保持契约一致——同步失败返回 Err 而非抛）
+  readFileSync(path: string): CapResult<string>
+  writeFileSync(path: string, data: string): CapResult<void>
+  existsSync(path: string): CapResult<boolean>
+  statSync(path: string): CapResult<FileStat>
+  readdirSync(path: string): CapResult<string[]>
+  mkdirSync(path: string, recursive?: boolean): CapResult<void>
+  renameSync(oldPath: string, newPath: string): CapResult<void>
+  unlinkSync(path: string): CapResult<void>
+  copyFileSync(src: string, dest: string): CapResult<void>
+  appendFileSync(path: string, data: string): CapResult<void>
 }
 
 // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut
@@ -388,6 +463,68 @@ export interface BluetoothInfo {
   available: boolean
   /** 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） */
   devices: string[]
+}
+
+/** BLE 设备（wx.BluetoothDevice 子集） */
+export interface BleDevice {
+  deviceId: string
+  name: string
+  /** 信号强度（发现/连接后可得） */
+  RSSI?: number
+}
+
+/** BLE 服务（wx.BLEService 子集） */
+export interface BleService {
+  uuid: string
+  isPrimary: boolean
+}
+
+/** BLE 特征值（wx.BLECharacteristic 子集） */
+export interface BleCharacteristic {
+  uuid: string
+  properties: { read: boolean; write: boolean; notify: boolean; indicate: boolean }
+}
+
+/**
+ * ★能力颗粒度对齐（docs/capability-granularity-alignment.md）：C36 蓝牙 BLE 操作接口
+ *   计划 BluetoothAPI 的落地——连接/服务/特征值/通知/发现/断开全套（原实现只有状态探测）。
+ *   方法统一返回 Promise<CapResult<T>>（G-32.4）；订阅类返回取消函数；不支持 → web/缺桥 Err。
+ */
+export interface BluetoothAPI extends BluetoothInfo {
+  /** 关闭适配器（释放资源） */
+  close(): Promise<CapResult<void>>
+  /** 适配器状态（available + discovering） */
+  getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>
+  /** 开始搜索附近设备 */
+  startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
+  /** 停止搜索 */
+  stopDiscovery(): Promise<CapResult<void>>
+  /** 订阅「发现新设备」（返回取消订阅） */
+  onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
+  /** 已发现设备列表 */
+  getDevices(): Promise<CapResult<BleDevice[]>>
+  /** 已连接设备列表 */
+  getConnectedDevices(): Promise<CapResult<BleDevice[]>>
+  /** 连接设备 */
+  connect(deviceId: string): Promise<CapResult<void>>
+  /** 断开设备 */
+  disconnect(deviceId: string): Promise<CapResult<void>>
+  /** 订阅「连接状态变化」（返回取消订阅） */
+  onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void
+  /** 获取设备服务列表 */
+  getServices(deviceId: string): Promise<CapResult<BleService[]>>
+  /** 获取服务的特征值列表 */
+  getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>
+  /** 读特征值 */
+  read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>
+  /** 写特征值 */
+  write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>
+  /** 订阅/取消订阅特征值通知 */
+  setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>
+  /** 订阅「特征值变化」（返回取消订阅） */
+  onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void
+  /** 读取信号强度 */
+  getRSSI(deviceId: string): Promise<CapResult<number>>
 }
 
 /** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
@@ -617,8 +754,8 @@ export interface CapabilityBridge {
   // ★G-32 B3 六期：new capabilities（缺省 undefined → Hook 返回 Err / 句柄抛错）
   /** C24 页面生命周期订阅（wx Page 钩子 / web load+visibilitychange） */
   getPageLifecycle?(): PageLifecycle
-  /** C36 蓝牙状态（wx.openBluetoothAdapter / web navigator.bluetooth 特性探测） */
-  getBluetooth?(): Promise<BluetoothInfo>
+  /** C36 蓝牙（wx.openBluetoothAdapter + BLE 操作 / web navigator.bluetooth 特性探测）——★富接口 */
+  getBluetooth?(): Promise<BluetoothAPI>
   /** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
   getNfc?(): Promise<NfcInfo>
   /** C1 摄像头访问（wx.authorize scope.camera / web getUserMedia） */
@@ -823,6 +960,38 @@ interface WxFileSystemManager {
   }) => void
   unlink?: (opt: { filePath: string; success?: () => void; fail: (e: unknown) => void }) => void
   access?: (opt: { path: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  appendFile?: (opt: { filePath: string; data: string | ArrayBuffer; encoding?: string; success?: () => void; fail: (e: unknown) => void }) => void
+  copyFile?: (opt: { srcPath: string; destPath: string; success?: () => void; fail: (e: unknown) => void }) => void
+  rename?: (opt: { oldPath: string; newPath: string; success?: () => void; fail: (e: unknown) => void }) => void
+  stat?: (opt: { path: string; success: (r: WxStatsLike) => void; fail: (e: unknown) => void }) => void
+  mkdir?: (opt: { dirPath: string; recursive?: boolean; success?: () => void; fail: (e: unknown) => void }) => void
+  rmdir?: (opt: { dirPath: string; recursive?: boolean; success?: () => void; fail: (e: unknown) => void }) => void
+  readdir?: (opt: { dirPath: string; success: (r: { files: string[] }) => void; fail: (e: unknown) => void }) => void
+  getFileInfo?: (opt: { filePath: string; digestAlgorithm?: string; success: (r: { size: number; digest: string }) => void; fail: (e: unknown) => void }) => void
+  saveFile?: (opt: { tempFilePath: string; success: (r: { savedFilePath: string }) => void; fail: (e: unknown) => void }) => void
+  getSavedFileList?: (opt: { success: (r: { fileList: Array<{ filePath: string; size: number; createTime: number }> }) => void; fail?: (e: unknown) => void }) => void
+  removeSavedFile?: (opt: { filePath: string; success?: () => void; fail: (e: unknown) => void }) => void
+  unzip?: (opt: { zipFilePath: string; targetPath: string; success?: () => void; fail: (e: unknown) => void }) => void
+  readFileSync?: (opt: { filePath: string; encoding?: string }) => string | ArrayBuffer
+  writeFileSync?: (opt: { filePath: string; data: string | ArrayBuffer; encoding?: string }) => void
+  appendFileSync?: (opt: { filePath: string; data: string | ArrayBuffer; encoding?: string }) => void
+  copyFileSync?: (opt: { srcPath: string; destPath: string }) => void
+  renameSync?: (opt: { oldPath: string; newPath: string }) => void
+  unlinkSync?: (opt: { filePath: string }) => void
+  accessSync?: (opt: { path: string }) => void
+  statSync?: (opt: { path: string }) => WxStatsLike
+  mkdirSync?: (opt: { dirPath: string; recursive?: boolean }) => void
+  readdirSync?: (opt: { dirPath: string }) => string[]
+}
+
+/** wx.Stats 子集（WxFileSystemManager.stat/statSync 回传） */
+interface WxStatsLike {
+  size: number
+  mode?: number
+  lastAccessedTime?: number
+  lastModifiedTime?: number
+  isDirectory?: () => boolean
+  isFile?: () => boolean
 }
 
 interface WxLike {
@@ -939,8 +1108,28 @@ interface WxLike {
   getRecorderManager?: () => unknown
   authorize?: (opt: { scope: string; success?: () => void; fail?: (e: unknown) => void }) => void
   openBluetoothAdapter?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
-  getBluetoothDevices?: (opt: { success: (r: { devices?: Array<{ name?: string }> }) => void; fail?: (e: unknown) => void }) => void
+  closeBluetoothAdapter?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  getBluetoothAdapterState?: (opt: { success?: (r: { available: boolean; discovering: boolean }) => void; fail?: (e: unknown) => void }) => void
+  getBluetoothDevices?: (opt: { success?: (r: { devices?: Array<{ name?: string; deviceId?: string; RSSI?: number }> }) => void; fail?: (e: unknown) => void }) => void
+  getConnectedBluetoothDevices?: (opt: { services?: string[]; success?: (r: { devices?: Array<{ name?: string; deviceId?: string }> }) => void; fail?: (e: unknown) => void }) => void
+  startBluetoothDevicesDiscovery?: (opt?: { allowDuplicatesKey?: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopBluetoothDevicesDiscovery?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onBluetoothDeviceFound?: (cb: (r: { devices?: Array<{ name?: string; deviceId?: string; RSSI?: number }> }) => void) => void
+  offBluetoothDeviceFound?: (cb?: (...args: never[]) => void) => void
+  createBLEConnection?: (opt: { deviceId: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  closeBLEConnection?: (opt: { deviceId: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  getBLEDeviceServices?: (opt: { deviceId: string; success?: (r: { services?: Array<{ uuid: string; isPrimary?: boolean }> }) => void; fail?: (e: unknown) => void }) => void
+  getBLEDeviceCharacteristics?: (opt: { deviceId: string; serviceId: string; success?: (r: { characteristics?: Array<{ uuid: string; properties?: { read?: boolean; write?: boolean; notify?: boolean; indicate?: boolean } }> }) => void; fail?: (e: unknown) => void }) => void
+  readBLECharacteristicValue?: (opt: { deviceId: string; serviceId: string; characteristicId: string; success?: (r: { value?: ArrayBuffer }) => void; fail?: (e: unknown) => void }) => void
+  writeBLECharacteristicValue?: (opt: { deviceId: string; serviceId: string; characteristicId: string; value: ArrayBuffer; success?: () => void; fail?: (e: unknown) => void }) => void
+  notifyBLECharacteristicValueChange?: (opt: { deviceId: string; serviceId: string; characteristicId: string; state: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
+  onBLEConnectionStateChange?: (cb: (r: { deviceId: string; connected: boolean }) => void) => void
+  offBLEConnectionStateChange?: (cb?: (...args: never[]) => void) => void
+  onBLECharacteristicValueChange?: (cb: (r: { deviceId: string; serviceId: string; characteristicId: string; value: ArrayBuffer }) => void) => void
+  offBLECharacteristicValueChange?: (cb?: (...args: never[]) => void) => void
+  getBLEDeviceRSSI?: (opt: { deviceId: string; success?: (r: { RSSI: number }) => void; fail?: (e: unknown) => void }) => void
   getHCEState?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  getSetting?: (opt: { success?: (r: { authSetting?: Record<string, boolean> }) => void; fail?: (e: unknown) => void }) => void
   onKeyboardHeightChange?: (cb: (r: { height: number }) => void) => void
   onPageShow?: (cb: () => void) => void
   onPageHide?: (cb: () => void) => void
@@ -1010,7 +1199,28 @@ function wxStorage(wx: WxLike): CompatStorage {
 
 /** web 内存文件系统（C43 降级：可读写但非持久——无标准同步 FS 时的诚实降级） */
 function memoryFileSystem(): FileSystemBridge {
+  // ★能力颗粒度对齐：Web/SSR 内存降级——实现完整 FileSystemBridge（目录语义用 '/' 前缀 key 模拟）
   const mem = new Map<string, string>()
+  const dirs = new Set<string>()
+  const isDir = (path: string): boolean => dirs.has(path)
+  const dirPrefix = (path: string): string => (path.endsWith('/') ? path : path + '/')
+  const childrenOf = (path: string): string[] => {
+    const pfx = dirPrefix(path)
+    const out = new Set<string>()
+    for (const k of mem.keys()) {
+      if (k.startsWith(pfx)) out.add(k.slice(pfx.length).split('/')[0] as string)
+    }
+    for (const d of dirs) {
+      if (d !== path && d.startsWith(pfx)) out.add(d.slice(pfx.length).split('/')[0] as string)
+    }
+    return [...out]
+  }
+  const statOf = (path: string): FileStat => {
+    const v = mem.get(path)
+    const directory = isDir(path)
+    return { size: v ? v.length : 0, mode: 0, lastAccessedTime: 0, lastModifiedTime: 0, isDirectory: directory, isFile: !directory }
+  }
+  const asyncOk = (): Promise<void> => Promise.resolve()
   return {
     readFile: (path) =>
       new Promise((resolve, reject) => {
@@ -1018,26 +1228,131 @@ function memoryFileSystem(): FileSystemBridge {
         if (v === undefined) return reject(new CapError('file-system.read-failed', `内存文件不存在: ${path}`))
         resolve(v)
       }),
-    writeFile: (path, data) =>
-      new Promise((resolve) => {
-        mem.set(path, data)
-        resolve()
-      }),
-    remove: (path) =>
-      new Promise((resolve) => {
-        mem.delete(path)
-        resolve()
-      }),
-    exists: (path) =>
-      new Promise((resolve) => {
-        resolve(mem.has(path))
-      }),
+    writeFile: (path, data) => {
+      mem.set(path, data)
+      return asyncOk()
+    },
+    appendFile: (path, data) => {
+      mem.set(path, (mem.get(path) ?? '') + data)
+      return asyncOk()
+    },
+    copyFile: (src, dest) => {
+      if (!mem.has(src)) return Promise.reject(new CapError('file-system.copy-failed', `内存文件不存在: ${src}`))
+      mem.set(dest, mem.get(src) as string)
+      return asyncOk()
+    },
+    rename: (o, n) => {
+      if (!mem.has(o)) return Promise.reject(new CapError('file-system.rename-failed', `内存文件不存在: ${o}`))
+      mem.set(n, mem.get(o) as string)
+      mem.delete(o)
+      return asyncOk()
+    },
+    remove: (path) => {
+      mem.delete(path)
+      return asyncOk()
+    },
+    exists: (path) => Promise.resolve(mem.has(path) || isDir(path)),
+    stat: (path) => {
+      if (!mem.has(path) && !isDir(path)) return Promise.reject(new CapError('file-system.stat-failed', `不存在: ${path}`))
+      return Promise.resolve(statOf(path))
+    },
+    mkdir: (path) => {
+      dirs.add(path)
+      return asyncOk()
+    },
+    rmdir: (path) => {
+      dirs.delete(path)
+      return asyncOk()
+    },
+    readdir: (path) => Promise.resolve(childrenOf(path)),
+    getFileInfo: (path) => {
+      if (!mem.has(path)) return Promise.reject(new CapError('file-system.info-failed', `内存文件不存在: ${path}`))
+      const v = mem.get(path) as string
+      return Promise.resolve({ size: v.length, digest: String(v.length) })
+    },
+    saveFile: (temp) => Promise.resolve(temp),
+    getSavedFileList: () => Promise.resolve([...mem.keys()].map((p) => ({ filePath: p, size: (mem.get(p) ?? '').length, createTime: 0 }))),
+    removeSavedFile: (path) => {
+      mem.delete(path)
+      return asyncOk()
+    },
+    unzip: () => Promise.reject(new CapError('file-system.unsupported', 'web 内存降级不支持解压')),
+    readFileSync: (path) => {
+      const v = mem.get(path)
+      if (v === undefined) throw new CapError('file-system.read-failed', `内存文件不存在: ${path}`)
+      return v
+    },
+    writeFileSync: (path, data) => {
+      mem.set(path, data)
+    },
+    existsSync: (path) => mem.has(path) || isDir(path),
+    statSync: (path) => {
+      if (!mem.has(path) && !isDir(path)) throw new CapError('file-system.stat-failed', `不存在: ${path}`)
+      return statOf(path)
+    },
+    readdirSync: (path) => childrenOf(path),
+    mkdirSync: (path) => {
+      dirs.add(path)
+    },
+    renameSync: (o, n) => {
+      if (!mem.has(o)) throw new CapError('file-system.rename-failed', `内存文件不存在: ${o}`)
+      mem.set(n, mem.get(o) as string)
+      mem.delete(o)
+    },
+    unlinkSync: (path) => {
+      mem.delete(path)
+    },
+    copyFileSync: (src, dest) => {
+      if (!mem.has(src)) throw new CapError('file-system.copy-failed', `内存文件不存在: ${src}`)
+      mem.set(dest, mem.get(src) as string)
+    },
+    appendFileSync: (path, data) => {
+      mem.set(path, (mem.get(path) ?? '') + data)
+    },
   }
 }
 
 /** wx 文件系统桥（getFileSystemManager 子集——readFile/writeFile/unlink/access） */
+function normStats(st: WxStatsLike): FileStat {
+  return {
+    size: st.size ?? 0,
+    mode: st.mode ?? 0,
+    lastAccessedTime: st.lastAccessedTime ?? 0,
+    lastModifiedTime: st.lastModifiedTime ?? 0,
+    isDirectory: typeof st.isDirectory === 'function' ? st.isDirectory() : false,
+    isFile: typeof st.isFile === 'function' ? st.isFile() : true,
+  }
+}
+
 function wxFileSystem(wx: WxLike): FileSystemBridge {
   const fs = wx.getFileSystemManager?.()
+  const need = (fn: unknown, name: string): void => {
+    if (typeof fn !== 'function') throw new CapError('file-system.unsupported', 'wx FileSystemManager.' + name + ' 缺失')
+  }
+  const prom = <T>(fn: (cb: { success: (r: never) => void; fail: (e: unknown) => void }) => void, code = 'file-system.failed'): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      fn({
+        success: (r: never) => resolve(r as T),
+        fail: (e: unknown) => reject(new CapError(code, (e as { errMsg?: string })?.errMsg || 'wx 文件操作失败', e)),
+      })
+    })
+  const ok = (fn: () => void, code = 'file-system.failed'): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      try {
+        fn()
+        resolve()
+      } catch (e) {
+        reject(new CapError(code, (e as { errMsg?: string })?.errMsg || 'wx 文件操作失败', e))
+      }
+    })
+  const guard = <T>(fn: () => T, code = 'file-system.failed'): CapResult<T> => {
+    try {
+      return capOk(fn())
+    } catch (e) {
+      return capErr<T>(e instanceof CapError ? e.code : code, e instanceof Error ? e.message : String(e), e)
+    }
+  }
+
   const read = (path: string): Promise<string> =>
     new Promise((resolve, reject) => {
       if (!fs?.readFile) return reject(new CapError('file-system.unsupported', 'wx FileSystemManager.readFile 缺失'))
@@ -1061,7 +1376,137 @@ function wxFileSystem(wx: WxLike): FileSystemBridge {
       }
       fs.access({ path, success: () => resolve(true), fail: () => resolve(false) })
     })
-  return { readFile: read, writeFile: write, remove, exists }
+
+  // 异步操作（缺 API → reject 显式 Err）
+  const append = (path: string, data: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.appendFile) return reject(new CapError('file-system.unsupported', 'FileSystemManager.appendFile 缺失'))
+      fs.appendFile({ filePath: path, data, encoding: 'utf8', success: () => resolve(), fail: (e) => reject(new CapError('file-system.append-failed', '追加失败', e)) })
+    })
+  const copy = (src: string, dest: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.copyFile) return reject(new CapError('file-system.unsupported', 'FileSystemManager.copyFile 缺失'))
+      fs.copyFile({ srcPath: src, destPath: dest, success: () => resolve(), fail: (e) => reject(new CapError('file-system.copy-failed', '复制失败', e)) })
+    })
+  const rename = (o: string, n: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.rename) return reject(new CapError('file-system.unsupported', 'FileSystemManager.rename 缺失'))
+      fs.rename({ oldPath: o, newPath: n, success: () => resolve(), fail: (e) => reject(new CapError('file-system.rename-failed', '重命名失败', e)) })
+    })
+  const stat = (path: string): Promise<FileStat> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.stat) return reject(new CapError('file-system.unsupported', 'FileSystemManager.stat 缺失'))
+      fs.stat({ path, success: (r) => resolve(normStats(r)), fail: (e) => reject(new CapError('file-system.stat-failed', 'stat 失败', e)) })
+    })
+  const mkdir = (path: string, recursive = false): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.mkdir) return reject(new CapError('file-system.unsupported', 'FileSystemManager.mkdir 缺失'))
+      fs.mkdir({ dirPath: path, recursive, success: () => resolve(), fail: (e) => reject(new CapError('file-system.mkdir-failed', '创建目录失败', e)) })
+    })
+  const rmdir = (path: string, recursive = false): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.rmdir) return reject(new CapError('file-system.unsupported', 'FileSystemManager.rmdir 缺失'))
+      fs.rmdir({ dirPath: path, recursive, success: () => resolve(), fail: (e) => reject(new CapError('file-system.rmdir-failed', '删除目录失败', e)) })
+    })
+  const readdir = (path: string): Promise<string[]> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.readdir) return reject(new CapError('file-system.unsupported', 'FileSystemManager.readdir 缺失'))
+      fs.readdir({ dirPath: path, success: (r) => resolve(r.files ?? []), fail: (e) => reject(new CapError('file-system.readdir-failed', '读目录失败', e)) })
+    })
+  const getFileInfo = (path: string, digestAlgorithm = 'md5'): Promise<{ size: number; digest: string }> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.getFileInfo) return reject(new CapError('file-system.unsupported', 'FileSystemManager.getFileInfo 缺失'))
+      fs.getFileInfo({ filePath: path, digestAlgorithm, success: (r) => resolve({ size: r.size, digest: r.digest }), fail: (e) => reject(new CapError('file-system.info-failed', 'getFileInfo 失败', e)) })
+    })
+  const saveFile = (temp: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.saveFile) return reject(new CapError('file-system.unsupported', 'FileSystemManager.saveFile 缺失'))
+      fs.saveFile({ tempFilePath: temp, success: (r) => resolve(r.savedFilePath), fail: (e) => reject(new CapError('file-system.save-failed', 'saveFile 失败', e)) })
+    })
+  const getSavedFileList = (): Promise<SavedFileInfo[]> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.getSavedFileList) return reject(new CapError('file-system.unsupported', 'FileSystemManager.getSavedFileList 缺失'))
+      fs.getSavedFileList({ success: (r) => resolve((r.fileList ?? []).map((f) => ({ filePath: f.filePath, size: f.size, createTime: f.createTime }))), fail: (e) => reject(new CapError('file-system.list-failed', 'getSavedFileList 失败', e)) })
+    })
+  const removeSavedFile = (path: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.removeSavedFile) return reject(new CapError('file-system.unsupported', 'FileSystemManager.removeSavedFile 缺失'))
+      fs.removeSavedFile({ filePath: path, success: () => resolve(), fail: (e) => reject(new CapError('file-system.remove-failed', 'removeSavedFile 失败', e)) })
+    })
+  const unzip = (zip: string, target: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (!fs?.unzip) return reject(new CapError('file-system.unsupported', 'FileSystemManager.unzip 缺失'))
+      fs.unzip({ zipFilePath: zip, targetPath: target, success: () => resolve(), fail: (e) => reject(new CapError('file-system.unzip-failed', '解压失败', e)) })
+    })
+
+  // Sync 变体（缺 API → 抛，由 FSAdapter 包 CapResult）
+  const req = (fn: unknown, name: string): void => need(fn, name)
+  return {
+    readFile: read,
+    writeFile: write,
+    appendFile: append,
+    copyFile: copy,
+    rename,
+    remove,
+    exists,
+    stat,
+    mkdir,
+    rmdir,
+    readdir,
+    getFileInfo,
+    saveFile,
+    getSavedFileList,
+    removeSavedFile,
+    unzip,
+    readFileSync: (path) => {
+      req(fs?.readFileSync, 'readFileSync')
+      return String((fs!.readFileSync as (o: { filePath: string; encoding?: string }) => string | ArrayBuffer)({ filePath: path, encoding: 'utf8' }))
+    },
+    writeFileSync: (path, data) => {
+      req(fs?.writeFileSync, 'writeFileSync')
+      ;(fs!.writeFileSync as (o: { filePath: string; data: string; encoding?: string }) => void)({ filePath: path, data, encoding: 'utf8' })
+    },
+    existsSync: (path) => {
+      if (!fs?.accessSync) throw new CapError('file-system.unsupported', 'FileSystemManager.accessSync 缺失')
+      try {
+        ;(fs.accessSync as (o: { path: string }) => void)({ path })
+        return true
+      } catch {
+        return false
+      }
+    },
+    statSync: (path) => {
+      req(fs?.statSync, 'statSync')
+      return normStats((fs!.statSync as (o: { path: string }) => WxStatsLike)({ path }))
+    },
+    readdirSync: (path) => {
+      req(fs?.readdirSync, 'readdirSync')
+      return (fs!.readdirSync as (o: { dirPath: string }) => string[])({ dirPath: path }) ?? []
+    },
+    mkdirSync: (path, recursive = false) => {
+      req(fs?.mkdirSync, 'mkdirSync')
+      ;(fs!.mkdirSync as (o: { dirPath: string; recursive?: boolean }) => void)({ dirPath: path, recursive })
+    },
+    renameSync: (o, n) => {
+      req(fs?.renameSync, 'renameSync')
+      ;(fs!.renameSync as (x: { oldPath: string; newPath: string }) => void)({ oldPath: o, newPath: n })
+    },
+    unlinkSync: (path) => {
+      req(fs?.unlinkSync, 'unlinkSync')
+      ;(fs!.unlinkSync as (x: { filePath: string }) => void)({ filePath: path })
+    },
+    copyFileSync: (src, dest) => {
+      req(fs?.copyFileSync, 'copyFileSync')
+      ;(fs!.copyFileSync as (x: { srcPath: string; destPath: string }) => void)({ srcPath: src, destPath: dest })
+    },
+    appendFileSync: (path, data) => {
+      req(fs?.appendFileSync, 'appendFileSync')
+      ;(fs!.appendFileSync as (x: { filePath: string; data: string; encoding?: string }) => void)({ filePath: path, data, encoding: 'utf8' })
+    },
+  }
+  void prom
+  void ok
+  void guard
 }
 
 function wxBridge(wx: WxLike): CapabilityBridge {
@@ -1373,26 +1818,142 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         return () => undefined
       },
     }),
-    getBluetooth: () =>
-      new Promise((resolve, reject) => {
-        if (!wx.openBluetoothAdapter) return reject(new CapError('bluetooth.unsupported', 'wx.openBluetoothAdapter 缺失'))
-        wx.openBluetoothAdapter({
-          success: () => {
-            const devices: string[] = []
-            if (wx.getBluetoothDevices) {
-              wx.getBluetoothDevices({
-                success: (r) => {
-                  resolve({ supported: true, available: true, devices: (r.devices ?? []).map((d) => d.name ?? 'unnamed') })
-                },
-                // 设备列表读取失败：适配器可用但列表暂不可得——available 保持 true（已开启），devices 空是诚实值
-                fail: () => resolve({ supported: true, available: true, devices }),
-              })
-            } else {
-              resolve({ supported: true, available: true, devices })
-            }
-          },
-          // ★诚实降级：适配器开启失败 = 不可用（原实现谎报 supported:true 掩盖失败）
+    // ★能力颗粒度对齐：C36 蓝牙 BLE 富接口（连接/服务/特征值/通知/发现——原实现仅状态探测）
+    //   打开适配器 → 返回 BluetoothAPI（方法统一 Promise<CapResult<T>>；订阅返回取消函数；缺 API → 方法级 Err）
+    getBluetooth: async () => {
+      if (!wx.openBluetoothAdapter) throw new CapError('bluetooth.unsupported', 'wx.openBluetoothAdapter 缺失')
+      await new Promise<void>((resolve, reject) => {
+        wx.openBluetoothAdapter!({
+          success: () => resolve(),
+          // ★诚实降级：适配器开启失败 = 不可用（不谎报 supported:true）
           fail: (e: unknown) => reject(new CapError('bluetooth.unavailable', (e as { errMsg?: string })?.errMsg || 'wx.openBluetoothAdapter 失败')),
+        })
+      })
+      const need = (fn: unknown, name: string): void => {
+        if (typeof fn !== 'function') throw new CapError('bluetooth.unsupported', 'wx.' + name + ' 缺失')
+      }
+      // 便捷：把 wx 回调式 API 包成 Promise（失败 reject CapError）
+      type WxCb<r> = { success?: (res: r) => void; fail?: (e: unknown) => void }
+      // opt 宽松（wx 各 API 参数形状各异）；运行时补 success/fail 回调，故用 unknown 断言注入
+      const call = <r>(fn: (opt: Record<string, unknown>) => void, opt: Record<string, unknown> = {}, errCode = 'bluetooth.failed'): Promise<r> =>
+        new Promise<r>((resolve, reject) => {
+          fn({
+            ...opt,
+            success: (res: r) => resolve(res),
+            fail: (e: unknown) => reject(new CapError(errCode, (e as { errMsg?: string })?.errMsg || 'ble 操作失败')),
+          })
+        })
+      const cap = <T>(p: Promise<T>): Promise<CapResult<T>> => p.then((data) => capOk(data), (e) => capErr(e instanceof CapError ? e.code : 'bluetooth.failed', e instanceof Error ? e.message : String(e), e))
+      const mapDev = (d: { name?: string; deviceId?: string; RSSI?: number }): BleDevice => ({ deviceId: d.deviceId ?? '', name: d.name ?? 'unnamed', RSSI: d.RSSI })
+      const listDevices = async (): Promise<BleDevice[]> => {
+        if (!wx.getBluetoothDevices) return []
+        const r = await call<{ devices?: Array<{ name?: string; deviceId?: string; RSSI?: number }> }>((o) => wx.getBluetoothDevices!(o as never))
+        return (r.devices ?? []).map(mapDev)
+      }
+      const api: BluetoothAPI = {
+        supported: true,
+        available: true,
+        devices: (await listDevices()).map((d) => d.name),
+        close: () => cap(wx.closeBluetoothAdapter ? call<void>((o) => wx.closeBluetoothAdapter!(o)) : Promise.reject(new CapError('bluetooth.unsupported', 'wx.closeBluetoothAdapter 缺失'))),
+        getAdapterState: () =>
+          cap(
+            wx.getBluetoothAdapterState
+              ? call<{ available: boolean; discovering: boolean }>((o) => wx.getBluetoothAdapterState!(o as never))
+              : Promise.resolve({ available: true, discovering: false }),
+          ),
+        startDiscovery: (allowDuplicatesKey = false) =>
+          cap(wx.startBluetoothDevicesDiscovery ? call<void>((o) => wx.startBluetoothDevicesDiscovery!({ ...(o as object), allowDuplicatesKey })) : Promise.reject(new CapError('bluetooth.unsupported', 'wx.startBluetoothDevicesDiscovery 缺失'))),
+        stopDiscovery: () => cap(wx.stopBluetoothDevicesDiscovery ? call<void>((o) => wx.stopBluetoothDevicesDiscovery!(o)) : Promise.resolve()),
+        getDevices: () => cap(listDevices()),
+        getConnectedDevices: () =>
+          cap(
+            wx.getConnectedBluetoothDevices
+              ? call<{ devices?: Array<{ name?: string; deviceId?: string }> }>((o) => wx.getConnectedBluetoothDevices!(o as never)).then((r) => (r.devices ?? []).map(mapDev))
+              : listDevices(),
+          ),
+        connect: (deviceId) => cap(wx.createBLEConnection ? call<void>((o) => wx.createBLEConnection!({ ...(o as object), deviceId })) : Promise.reject(new CapError('bluetooth.unsupported', 'wx.createBLEConnection 缺失'))),
+        disconnect: (deviceId) => cap(wx.closeBLEConnection ? call<void>((o) => wx.closeBLEConnection!({ ...(o as object), deviceId })) : Promise.resolve()),
+        getServices: (deviceId) =>
+          cap(
+            wx.getBLEDeviceServices
+              ? call<{ services?: Array<{ uuid: string; isPrimary?: boolean }> }>((o) => wx.getBLEDeviceServices!({ ...(o as object), deviceId })).then((r) => (r.services ?? []).map((sv) => ({ uuid: sv.uuid, isPrimary: sv.isPrimary ?? true })))
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.getBLEDeviceServices 缺失')),
+          ),
+        getCharacteristics: (deviceId, serviceId) =>
+          cap(
+            wx.getBLEDeviceCharacteristics
+              ? call<{ characteristics?: Array<{ uuid: string; properties?: { read?: boolean; write?: boolean; notify?: boolean; indicate?: boolean } }> }>((o) => wx.getBLEDeviceCharacteristics!({ ...(o as object), deviceId, serviceId })).then((r) =>
+                  (r.characteristics ?? []).map((c) => ({ uuid: c.uuid, properties: { read: !!c.properties?.read, write: !!c.properties?.write, notify: !!c.properties?.notify, indicate: !!c.properties?.indicate } })),
+                )
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.getBLEDeviceCharacteristics 缺失')),
+          ),
+        read: (deviceId, serviceId, characteristicId) =>
+          cap(
+            wx.readBLECharacteristicValue
+              ? call<{ value?: ArrayBuffer }>((o) => wx.readBLECharacteristicValue!({ ...(o as object), deviceId, serviceId, characteristicId })).then((r) => r.value ?? new ArrayBuffer(0))
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.readBLECharacteristicValue 缺失')),
+          ),
+        write: (deviceId, serviceId, characteristicId, value) =>
+          cap(
+            wx.writeBLECharacteristicValue
+              ? call<void>((o) => wx.writeBLECharacteristicValue!({ ...(o as object), deviceId, serviceId, characteristicId, value }))
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.writeBLECharacteristicValue 缺失')),
+          ),
+        setNotify: (deviceId, serviceId, characteristicId, state) =>
+          cap(
+            wx.notifyBLECharacteristicValueChange
+              ? call<void>((o) => wx.notifyBLECharacteristicValueChange!({ ...(o as object), deviceId, serviceId, characteristicId, state }))
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.notifyBLECharacteristicValueChange 缺失')),
+          ),
+        getRSSI: (deviceId) =>
+          cap(
+            wx.getBLEDeviceRSSI
+              ? call<{ RSSI: number }>((o) => wx.getBLEDeviceRSSI!({ ...(o as object), deviceId })).then((r) => r.RSSI)
+              : Promise.reject(new CapError('bluetooth.unsupported', 'wx.getBLEDeviceRSSI 缺失')),
+          ),
+        // 订阅：wx 的 on*/off* 成对；返回取消函数（无 API → 空订阅，不抛）
+        onDeviceFound: (cb) => {
+          if (!wx.onBluetoothDeviceFound) return () => {}
+          const h = (r: { devices?: Array<{ name?: string; deviceId?: string; RSSI?: number }> }): void => cb((r.devices ?? []).map(mapDev))
+          wx.onBluetoothDeviceFound(h)
+          return () => {
+            if (wx.offBluetoothDeviceFound) wx.offBluetoothDeviceFound(h)
+          }
+        },
+        onConnectionStateChange: (cb) => {
+          if (!wx.onBLEConnectionStateChange) return () => {}
+          const h = (r: { deviceId: string; connected: boolean }): void => cb(r.deviceId, r.connected)
+          wx.onBLEConnectionStateChange(h)
+          return () => {
+            if (wx.offBLEConnectionStateChange) wx.offBLEConnectionStateChange(h)
+          }
+        },
+        onCharacteristicValueChange: (cb) => {
+          if (!wx.onBLECharacteristicValueChange) return () => {}
+          const h = (r: { deviceId: string; serviceId: string; characteristicId: string; value: ArrayBuffer }): void => cb(r.deviceId, r.serviceId, r.characteristicId, r.value)
+          wx.onBLECharacteristicValueChange(h)
+          return () => {
+            if (wx.offBLECharacteristicValueChange) wx.offBLECharacteristicValueChange(h)
+          }
+        },
+      }
+      void need // 语义保留：需要时可显式断言
+      return api
+    },
+    // ★能力颗粒度对齐修复：C16 权限（wxBridge 原缺失 → usePermission 在小程序端恒 Err）
+    //   语义映射：wx.getSetting().authSetting[scope] === true → granted；false + 有记录 → denied；无记录 → prompt
+    getPermission: (permission) =>
+      new Promise((resolve, reject) => {
+        if (!wx.getSetting) return reject(new CapError('permission.unsupported', 'wx.getSetting 缺失'))
+        wx.getSetting({
+          success: (r) => {
+            const scope = permission.startsWith('scope.') ? permission : 'scope.' + permission
+            const auth = r.authSetting ?? {}
+            const has = Object.prototype.hasOwnProperty.call(auth, scope)
+            const state: PermissionState['state'] = auth[scope] === true ? 'granted' : has ? 'denied' : 'prompt'
+            resolve({ permission, state })
+          },
+          fail: (e: unknown) => reject(new CapError('permission.failed', (e as { errMsg?: string })?.errMsg || 'wx.getSetting 失败')),
         })
       }),
     getNfc: () =>
@@ -1978,7 +2539,30 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
       // Web Bluetooth：仅特性探测（真实请求需用户手势 + 权限）——诚实降级
       const nav = g.navigator as { bluetooth?: unknown } | undefined
       const supported = typeof nav?.bluetooth === 'object' && nav.bluetooth !== null
-      return { supported, available: supported, devices: [] }
+      // ★能力颗粒度对齐：返回完整 BluetoothAPI；Web 的 BLE 操作无标准对等 → 每个操作诚实 Err（不虚构）
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('bluetooth.unsupported', 'Web 端 BLE ' + op + ' 无标准对等（需 Web Bluetooth 用户手势）'))
+      return {
+        supported,
+        available: supported,
+        devices: [],
+        close: () => Promise.resolve(capOk(undefined)),
+        getAdapterState: () => Promise.resolve(capOk({ available: supported, discovering: false })),
+        startDiscovery: () => noWeb('startDiscovery'),
+        stopDiscovery: () => Promise.resolve(capOk(undefined)),
+        getDevices: () => Promise.resolve(capOk([])),
+        getConnectedDevices: () => Promise.resolve(capOk([])),
+        connect: () => noWeb('connect'),
+        disconnect: () => noWeb('disconnect'),
+        getServices: () => noWeb('getServices'),
+        getCharacteristics: () => noWeb('getCharacteristics'),
+        read: () => noWeb('read'),
+        write: () => noWeb('write'),
+        setNotify: () => noWeb('setNotify'),
+        getRSSI: () => noWeb('getRSSI'),
+        onDeviceFound: () => () => {},
+        onConnectionStateChange: () => () => {},
+        onCharacteristicValueChange: () => () => {},
+      }
     },
     getNfc: async () => {
       const supported = typeof (g as { NDEFReader?: unknown }).NDEFReader === 'function'
@@ -2234,7 +2818,7 @@ export interface CapabilityHooks {
   /** C24 usePageLifecycle：页面生命周期订阅句柄（wx Page 钩子 / web load+visibilitychange） */
   usePageLifecycle(): PageLifecycle
   /** C36 useBluetooth：蓝牙状态（wx.openBluetoothAdapter / web 特性探测） */
-  useBluetooth(): Promise<CapResult<BluetoothInfo>>
+  useBluetooth(): Promise<CapResult<BluetoothAPI>>
   /** C37 useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
   useNFC(): Promise<CapResult<NfcInfo>>
   /** C1 useCamera：摄像头访问（wx.authorize / web getUserMedia） */
@@ -2476,12 +3060,42 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
     useFileSystem: () => {
       if (!bridge.getFileSystem) throw new CapError('file-system.unsupported', '桥未提供 getFileSystem（useFileSystem 不可用）')
       const fs = bridge.getFileSystem()
+      // ★能力颗粒度对齐：代理完整 FileSystemBridge（异步 wrap CapResult；Sync 捕获 → CapResult）
+      const sync = <T>(fn: () => T): CapResult<T> => {
+        try {
+          return capOk(fn())
+        } catch (e) {
+          return capErr<T>(e instanceof CapError ? e.code : 'file-system.failed', e instanceof Error ? e.message : String(e), e)
+        }
+      }
       return {
         supported: true,
         readFile: (path) => wrap(fs.readFile(path)),
         writeFile: (path, data) => wrap(fs.writeFile(path, data)),
+        appendFile: (path, data) => wrap(fs.appendFile(path, data)),
+        copyFile: (src, dest) => wrap(fs.copyFile(src, dest)),
+        rename: (o, n) => wrap(fs.rename(o, n)),
         remove: (path) => wrap(fs.remove(path)),
         exists: (path) => wrap(fs.exists(path)),
+        stat: (path) => wrap(fs.stat(path)),
+        mkdir: (path, recursive) => wrap(fs.mkdir(path, recursive)),
+        rmdir: (path, recursive) => wrap(fs.rmdir(path, recursive)),
+        readdir: (path) => wrap(fs.readdir(path)),
+        getFileInfo: (path, digestAlgorithm) => wrap(fs.getFileInfo(path, digestAlgorithm)),
+        saveFile: (temp) => wrap(fs.saveFile(temp)),
+        getSavedFileList: () => wrap(fs.getSavedFileList()),
+        removeSavedFile: (path) => wrap(fs.removeSavedFile(path)),
+        unzip: (zip, target) => wrap(fs.unzip(zip, target)),
+        readFileSync: (path) => sync(() => fs.readFileSync(path)),
+        writeFileSync: (path, data) => sync(() => fs.writeFileSync(path, data)),
+        existsSync: (path) => sync(() => fs.existsSync(path)),
+        statSync: (path) => sync(() => fs.statSync(path)),
+        readdirSync: (path) => sync(() => fs.readdirSync(path)),
+        mkdirSync: (path, recursive) => sync(() => fs.mkdirSync(path, recursive)),
+        renameSync: (o, n) => sync(() => fs.renameSync(o, n)),
+        unlinkSync: (path) => sync(() => fs.unlinkSync(path)),
+        copyFileSync: (src, dest) => sync(() => fs.copyFileSync(src, dest)),
+        appendFileSync: (path, data) => sync(() => fs.appendFileSync(path, data)),
       }
     },
     // ★G-32 B3 五期：notification / contact / calendar / app-lifecycle / archive / shortcut（缺桥 → Err 非抛异常）
