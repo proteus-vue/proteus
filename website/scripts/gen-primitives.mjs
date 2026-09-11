@@ -45,7 +45,7 @@ const SUMMARY_MAP = {
   'context-menu': '右键 / 长按菜单：防溢出翻转定位 + 一步构建',
   hover: '悬停态语义（brighten/lift/underline）——触屏自动降级 tap 高亮',
   directives: '把 B1-B4 原语注册成 v-p-* Vue 指令（Web 接线薄层；MP 不注册天然降级）',
-  'cursor-glow': '指针跟随环境光晕（品牌紫/青双光斑，lerp 插值拖尾）',
+  'cursor-glow': '指针跟随环境光晕（品牌双光斑，lerp 插值拖尾）',
   notify: '系统通知：探测 / 权限 / 发送归一（Notification API；无实现诚实 Err）',
   permission: '权限门禁：六语义目录 + check/request 归一 + v-p-permission 拦截重放',
   clipboard: '剪贴板读写：Clipboard API → execCommand 降级 → 诚实 Err',
@@ -59,7 +59,7 @@ const SUMMARY_MAP = {
   network: '网络状态：online + 连接类型归一 + 变化订阅',
   'low-power': '低电量 / 省电模式探测（Battery API）',
   scroll: '页面滚动观测：rAF 节流 + y/max/progress（App 顶部进度条与 Home 联动在用）',
-  'window-message': '跨窗消息订阅：origin 白名单 + type 过滤 + destroy（spirit iframe 气泡在用）',
+  'window-message': '跨窗消息订阅：origin 白名单 + type 过滤 + destroy',
   anchor: '按 id 锚点平滑滚动（SPA 新页 v-html 文档跳转，可延时）',
   'page-url': '页面地址读写：origin / pathname + replaceState 收口（分享链接同步在用）',
   recognizers: '手势识别器：Web Pointer / MP touch 归一 GestureInput → tap/pan/swipe/pinch/rotate 等语义事件',
@@ -172,7 +172,7 @@ const USAGE_MAP = {
   clipboard: [{ code: `void copyText(url) // Clipboard API + 降级`, src: 'website/src/components/TransformDemo.vue:179' }],
   command: [{ code: `const list = filterCommands(cmdItems, cmdQuery.value)`, src: 'examples/pages/semantic-primitives-demo.vue:456' }, { code: `cmdIdx.value = moveCommandIndex(cmdIdx.value, dir, list.items.length)`, src: 'examples/pages/semantic-primitives-demo.vue:457' }],
   'context-menu': [{ code: `<div v-p-context-menu="cardMenu" class="ctx-card">右键我</div>`, src: 'examples/pages/semantic-primitives-demo.vue:214' }],
-  'cursor-glow': [{ code: `<p-page v-p-cursor-glow="cursorGlowOptions" …>` + ' // size/color/accent 品牌光晕', src: 'website/src/App.vue:67' }],
+  'cursor-glow': [{ code: `<p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>`, src: 'tests/desktop-cursor-glow.test.ts' }],
   deeplink: [{ code: `const dl = parseDeepLink('proteus://order/42?tab=detail')`, src: 'examples/pages/semantic-primitives-demo.vue:385' }, { code: `matchDeepLink('proteus://order/:id', 'proteus://order/42')`, src: 'examples/pages/semantic-primitives-demo.vue:386' }],
   directives: [{ code: `<button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }">⌘K 搜索</button>`, src: 'website/src/DocSearch.vue:133（createDesktopDirectives 注册于 website/src/main.ts）' }],
   'focus-trap': [{ code: `trap = modalEl.value ? createFocusTrap(modalEl.value) : null`, src: 'website/src/DocSearch.vue:64' }, { code: `<div v-p-focus-trap class="trap-dialog">…</div>`, src: 'examples/pages/semantic-primitives-demo.vue:218' }],
@@ -188,7 +188,7 @@ const USAGE_MAP = {
   shortcut: [{ code: `<button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }">`, src: 'website/src/DocSearch.vue:133' }, { code: `const kbd = shortcutLabel('mod+k', detectShortcutPlatform())`, src: 'website/src/DocSearch.vue:47' }],
   'state-restoration': [{ code: `const token = captureState('demo', 'view', { path, ts: Date.now() })`, src: 'examples/pages/semantic-primitives-demo.vue:495' }, { code: `restoreState('demo', 'view')`, src: 'examples/pages/semantic-primitives-demo.vue:499' }],
   tabs: [{ code: `resolveTabAfterClose(demoTabs.value, demoActive.value, id)`, src: 'examples/pages/semantic-primitives-demo.vue:436' }],
-  'window-message': [{ code: `subscribeWindowMessage({ types: ['proteus-spirit-morph'], onMessage })`, src: 'website/src/App.vue:30' }],
+  'window-message': [{ code: `subscribeWindowMessage({ types: ['app-event'], onMessage })`, src: 'tests/desktop-web-primitives.test.ts' }],
 }
 
 function renderPage(srcDirAbs, rel, file, order, group) {

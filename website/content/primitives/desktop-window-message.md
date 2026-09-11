@@ -6,13 +6,13 @@ group: 桌面原语
 
 # 跨窗消息原语（iframe postMessage 收口）
 
-跨窗消息订阅：origin 白名单 + type 过滤 + destroy（spirit iframe 气泡在用）
+跨窗消息订阅：origin 白名单 + type 过滤 + destroy
 
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★#449 G-24 B5（proteus-semantic-primitives-plan 续批）：跨窗消息原语——postMessage 收口（来源校验 + type 过滤）**
 语义：同源/指定源 iframe 消息订阅（origin 校验在框架包内完成——页面零裸 window.addEventListener('message')）
-消费：App 壳 spirit iframe（同源变身消息 → 形态气泡）——cross-window 消息缺口回收
+消费：桌面原语 API（包内测试覆盖；2026-09-11 官网改版后站内暂无页面消费者）——cross-window 消息缺口回收
 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实全局——同 network/lifecycle 族惯例）
 
 ## 兼容进度
@@ -43,9 +43,9 @@ group: 桌面原语
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 
 ```ts
-subscribeWindowMessage({ types: ['proteus-spirit-morph'], onMessage })
+subscribeWindowMessage({ types: ['app-event'], onMessage })
 ```
-> 出处：`website/src/App.vue:30`
+> 出处：`tests/desktop-web-primitives.test.ts`
 
 ## 用法与降级
 

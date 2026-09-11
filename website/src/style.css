@@ -6,15 +6,21 @@
 :root {
   /* ★p-page 背景钩子（组件默认 #f7f8fa 浅色——官网深色优先，经组件变量钩子统一） */
   --p-page-bg: var(--bg);
-  --bg: #0a0a0c;
-  --panel: #121216;
-  --panel2: #1a1a20;
-  --line: #26262e;
-  --ink: #f2f2f5;
-  --muted: #8a8a99;
-  --dim: #5c5c6a;
+  /* ★2026-09-11 风格收敛（用户评审「AI 味过重」→ 对齐专业组件库参考）：
+     去霓虹双色调（紫→青），改为**单一品牌强调色 + 中性面**——紫仍是品牌主色，青不再是第二主色。
+     面板层次靠 panel/line 明度差，而非发光。 */
+  --bg: #0b0b0f;
+  --panel: #141419;
+  --panel2: #1b1b21;
+  --line: #26262d;
+  --line-soft: #1f1f26;
+  --ink: #f4f4f7;
+  --muted: #9b9baa;
+  --dim: #6a6a78;
   --brand: #7c5cff;
-  --brand2: #00e0c6;
+  --brand-ink: #ab9bff;
+  /* 第二强调：霓虹青 → 克制的柔紫（去掉「双色调 AI 渐变感」；仅用于次级链接/描边高光） */
+  --brand2: #ab9bff;
   --accent: #ff8a5c;
   /* ★#386 状态/强调层（design-tokens.json color.ok/warn/rec） */
   --ok: #3ddc97;
@@ -23,7 +29,7 @@
   /* ★#386 品牌柔色（tag/active 底色——替代页面散落的 rgba 硬编码） */
   --brand-soft: rgba(124, 92, 255, 0.12);
   /* ★#386 玻璃拟态（llm-style-guide：Glass-light 仅 nav，blur 12px） */
-  --glass-bg: rgba(10, 10, 12, 0.72);
+  --glass-bg: rgba(11, 11, 15, 0.78);
   /* ★#386 后端色（多后端剖面的可读性根基——后端名出现时必须用其后端色） */
   --bk-vue: #42b883;
   --bk-ios: #0a84ff;

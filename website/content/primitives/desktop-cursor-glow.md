@@ -6,12 +6,12 @@ group: 桌面原语
 
 # p-cursor-glow
 
-指针跟随环境光晕（品牌紫/青双光斑，lerp 插值拖尾）
+指针跟随环境光晕（品牌双光斑，lerp 插值拖尾）
 
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
 **★G-24 B5（proteus-semantic-primitives-plan 续批）：指针跟随光晕——桌面交互语义「环境光随指针」**
-语义：光晕层（主紫 + 副青双光斑）以 lerp 插值跟随指针——AI 科技感的指针环境反馈；
+语义：光晕层（主/副双光斑）以 lerp 插值跟随指针——指针环境反馈；
 降级链：prefers-reduced-motion → 不启用；触屏（pointer:coarse）→ 不启用；MP 逻辑层无 DOM → 不启用
 分层：纯逻辑（本模块，可单测）+ thin 指令（directives.ts v-p-cursor-glow）
 
@@ -44,9 +44,9 @@ group: 桌面原语
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 
 ```ts
-<p-page v-p-cursor-glow="cursorGlowOptions" …> // size/color/accent 品牌光晕
+<p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>
 ```
-> 出处：`website/src/App.vue:67`
+> 出处：`tests/desktop-cursor-glow.test.ts`
 
 ## 用法与降级
 

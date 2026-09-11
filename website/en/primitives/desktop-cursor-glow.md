@@ -44,9 +44,9 @@ Layering: pure logic (this module, unit-testable) + thin directive (directives.t
 ## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)
 
 ```ts
-<p-page v-p-cursor-glow="cursorGlowOptions" …> // size/color/accent brand glow
+<p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>
 ```
-> Origin: `website/src/App.vue:67`
+> Origin: `tests/desktop-cursor-glow.test.ts`
 
 ## Usage & degradation
 

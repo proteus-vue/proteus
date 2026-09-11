@@ -131,11 +131,11 @@ export const PRIM_EN = {
   },
   'window-message': {
     title: "Cross-window message primitive (iframe postMessage funnel)",
-    summary: "Cross-window message subscription: origin allowlist + type filtering + destroy (used by the spirit iframe bubble)",
+    summary: "Cross-window message subscription: origin allowlist + type filtering + destroy",
     notes: [
       "★#449 G-24 B5 (proteus-semantic-primitives-plan continuation batch): cross-window message primitive — postMessage funnel (source validation + type filtering)",
       "Semantics: same-origin / designated-origin iframe message subscription (origin validation happens inside the framework package — pages keep zero raw window.addEventListener('message'))",
-      "Consumption: App-shell spirit iframe (same-origin morph message → form bubble) — reclaiming the cross-window message gap",
+      "Consumption: desktop API — exercised by the package test suite (no in-repo page consumer after the 2026-09-11 site restyle)",
       "Layering: pure logic + Web wiring — env-injected for unit testing, falls back to real globals by default (the network/lifecycle family convention)",
     ],
     exports: {
@@ -145,7 +145,7 @@ export const PRIM_EN = {
       WindowMessageHandle: '—',
       subscribeWindowMessage: "★subscribeWindowMessage: cross-window message subscription (origin allowlist validation + type filtering; destroy cleanup)",
     },
-    usage: [{ code: "subscribeWindowMessage({ types: ['proteus-spirit-morph'], onMessage })", src: 'website/src/App.vue:30' }],
+    usage: [{ code: "subscribeWindowMessage({ types: ['app-event'], onMessage })", src: 'tests/desktop-web-primitives.test.ts' }],
   },
   anchor: {
     title: "Anchor positioning primitive (scrollToId)",
@@ -179,7 +179,7 @@ export const PRIM_EN = {
       hasFinePointer: "Whether the environment has a fine pointer (mouse/pen — not enabled on touch; no matchMedia environment = non-Web, disabled)",
       createCursorGlow: '/',
     },
-    usage: [{ code: '<p-page v-p-cursor-glow="cursorGlowOptions" …> // size/color/accent brand glow', src: 'website/src/App.vue:67' }],
+    usage: [{ code: '<p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>', src: 'tests/desktop-cursor-glow.test.ts' }],
   },
   // —— 桌面批次（#482 续）——
   breadcrumb: {
