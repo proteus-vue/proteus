@@ -1,0 +1,24 @@
+{
+  "name": "@proteus-vue/glass",
+  "version": "0.1.0",
+  "description": "Proteus Glass（G-07）：液态玻璃横切能力——preset/intensity/resolve/degrade/capability 纯逻辑 SSOT + <pg-glass> 统一入口的解析与降级决策，零依赖",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  }
+}

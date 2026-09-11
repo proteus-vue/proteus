@@ -34,6 +34,7 @@
     "@proteus-vue/docs": "0.1.0",
     "@proteus-vue/fluid": "0.1.0",
     "@proteus-vue/gesture": "0.1.0",
+    "@proteus-vue/glass": "0.1.0",
     "@proteus-vue/i18n": "0.1.0",
     "@proteus-vue/module": "0.1.0",
     "@proteus-vue/render-backend": "0.1.0",

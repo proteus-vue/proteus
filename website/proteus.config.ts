@@ -53,6 +53,8 @@ const config: ProteusConfig = {
         // ★框架组件（src/components）经 adapter L2 抽象消费 @proteus-vue/shared——根 node_modules 未 hoist shared，
         //   rollup 解析不到 → 显式别名指源码（类型侧见 website/tsconfig.json paths 同步补）
         { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },
+        // ★G-07 液态玻璃：框架组件 pg-glass 消费 @proteus-vue/glass（纯逻辑 SSOT）
+        { find: '@proteus-vue/glass', replacement: path.join(__dirname, '../packages/glass/src/index.ts') },
       ],
     },
     build: {

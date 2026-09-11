@@ -58,6 +58,8 @@ export default defineConfig({
       { find: '@proteus-vue/compiler-backend/node', replacement: fileURLToPath(new URL('./packages/compiler-backend/src/node.ts', import.meta.url)) },
       // ★G-32 B4 ④ Gesture：@proteus-vue/gesture 包（tests/gesture.test.ts 直接引用）
       { find: '@proteus-vue/gesture', replacement: fileURLToPath(new URL('./packages/gesture/src/index.ts', import.meta.url)) },
+      // ★G-07：@proteus-vue/glass 液态玻璃横切能力包（tests/glass.test.ts 直接引用）
+      { find: '@proteus-vue/glass', replacement: fileURLToPath(new URL('./packages/glass/src/index.ts', import.meta.url)) },
       // ★G-31 B6：@proteus-vue/compat-miniprogram 兼容层包（tests/compat-miniprogram.test.ts 直接引用）
       { find: '@proteus-vue/compat-miniprogram', replacement: fileURLToPath(new URL('./packages/compat-miniprogram/src/index.ts', import.meta.url)) },
       // ★G-24 B1：@proteus-vue/desktop 桌面交互原语包（tests/desktop.test.ts 直接引用）

@@ -673,6 +673,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   z-index: 1;
   /* 窗口微透明：背后线框几何体隐隐透出（浮于 3D 结构之上的观感），仍保证代码可读 */
   background: rgba(20, 20, 25, 0.82);
+  /* d2-exempt: Hero IDE 窗口 chrome 的半透明磨砂（装饰层，非玻璃面——窗口微透明透出背后线框） */
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   border: 1px solid var(--line);
