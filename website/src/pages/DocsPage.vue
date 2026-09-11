@@ -2,7 +2,7 @@
 // website/src/pages/DocsPage.vue —— 文档页（★#390ii 四区通用 + ★#468 国际化）
 // 内容即数据：各区 md 由 @proteus-vue/docs 引擎构建期编译（frontmatter/html/toc），运行时 v-html 零解析
 // ★#468 chrome 双语（@proteus-vue/i18n dogfooding）+ 英文内容变体（en/ overlay——试点指南区；缺失 → 提示回中文）
-import { computed } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { findDoc, sections, enModule, enTitleFor } from '../docs-registry'
 import { locale, setLocale, t, sectionName, groupName } from '../i18n'
@@ -38,6 +38,55 @@ function stripMd(text: string): string {
 const tocFlat = computed(() =>
   ((variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? []).map((t2: { depth: number; text: string; id: string }) => ({ ...t2, text: stripMd(t2.text) })),
 )
+// ★导航体验（2026-09-11）：① 锚点跳转不被吸顶栏遮挡（scroll-margin 见 style）
+//   ② 目录滚动高亮（scroll-spy）：监听正文标题，命中当前视口顶部者标 active
+const activeId = ref('')
+const NAV_OFFSET = 185 // --nav-h(97) + docs-topbar(~71) + 余量——与 scroll-margin-top 对齐
+let spyTargets: Array<{ id: string; el: HTMLElement }> = []
+
+/** 滚动线法（比 IntersectionObserver 窄带稳）：取滚动线以上最后一个标题为当前项 */
+function updateSpy(): void {
+  if (!spyTargets.length) return
+  const line = NAV_OFFSET + 8
+  let current = spyTargets[0]!.id
+  for (const t of spyTargets) {
+    if (t.el.getBoundingClientRect().top <= line) current = t.id
+    else break
+  }
+  // 滚到底：强制高亮最后一项（末段条目常在线下）
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
+    current = spyTargets[spyTargets.length - 1]!.id
+  }
+  activeId.value = current
+}
+
+function setupSpy(): void {
+  spyTargets = tocFlat.value
+    .map((t) => ({ id: t.id, el: document.getElementById(t.id) }))
+    .filter((t): t is { id: string; el: HTMLElement } => !!t.el)
+  updateSpy()
+}
+
+function onScrollSpy(): void {
+  updateSpy()
+}
+
+watch(
+  [() => route.fullPath, docHtml],
+  async () => {
+    activeId.value = ''
+    await nextTick()
+    setupSpy()
+  },
+  { immediate: true, flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  spyTargets = []
+  if (typeof window !== 'undefined') window.removeEventListener('scroll', onScrollSpy)
+})
+if (typeof window !== 'undefined') window.addEventListener('scroll', onScrollSpy, { passive: true })
+
 const ends = computed(() => current.value?.doc.ends ?? undefined)
 const noEn = computed(() => isEn.value && !variant.value)
 const idx = computed(() => section.value.items.findIndex((g) => g.slug === slug.value))
@@ -126,7 +175,14 @@ function itemTitle(slugOf: string, zhTitle: string): string {
         <!-- 页内导读（右栏粘性）——未翻译页在英文态下不显示中文 TOC -->
         <p-view v-if="tocFlat.length && !noEn" class="page-toc">
           <span class="eyebrow">{{ t('toc.onthepage') }}</span>
-          <a v-for="toc in tocFlat" :key="toc.id" :href="`#${toc.id}`" class="page-toc-link" :class="`depth-${toc.depth}`">{{ toc.text }}</a>
+          <a
+            v-for="toc in tocFlat"
+            :key="toc.id"
+            :href="`#${toc.id}`"
+            class="page-toc-link"
+            :class="[`depth-${toc.depth}`, { active: activeId === toc.id }]"
+            @click="activeId = toc.id"
+          >{{ toc.text }}</a>
         </p-view>
       </p-stack>
     </p-view>
@@ -270,6 +326,14 @@ function itemTitle(slugOf: string, zhTitle: string): string {
   transition: color 0.12s, border-color 0.12s;
 }
 .page-toc-link:hover { color: var(--brand); }
+/* ★导航体验：目录当前项高亮（scroll-spy）——品牌色 + 加粗 + 左侧竖条 */
+.page-toc-link.active {
+  color: var(--brand);
+  font-weight: 600;
+  border-left-color: var(--brand);
+}
+.page-toc-link.depth-3.active,
+.page-toc-link.depth-4.active { color: var(--brand); opacity: 1; }
 /* ★TOC 优化：h3 方法/类型项——等宽字体 + 左缩进 + 细引导线，一眼可辨是「方法名」 */
 .page-toc-link.depth-3 {
   padding-left: 14px;
