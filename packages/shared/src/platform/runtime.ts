@@ -25,17 +25,9 @@ declare const __PROTEUS_SKYLINE__: boolean
 export function detectRuntime(): ProteusRuntime {
   if (typeof window !== 'undefined') return 'web'
   try {
-    const g = globalThis as {
-      wx?: { getSystemInfoSync?: unknown; getWindowInfo?: unknown }
-    }
-    const w = g.wx
-    if (
-      typeof w !== 'undefined' &&
-      w &&
-      (typeof w.getSystemInfoSync === 'function' || typeof w.getWindowInfo === 'function')
-    ) {
-      return 'mp'
-    }
+    // window 缺席 + wx 存在 → 小程序（真实 MP 必有 wx；浏览器 wx 模拟层已被上面的 window 守卫排除）
+    // 不要求 wx 含具体探测函数——能力桥/组件层会各自探测能力是否存在（缺失应显式 Err，非在此误判平台）
+    if (typeof wx !== 'undefined' && wx) return 'mp'
   } catch {
     /* 探测失败一律按 web（fail-safe：不误认小程序） */
   }

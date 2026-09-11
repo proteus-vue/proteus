@@ -33,10 +33,10 @@ describe('detectRuntime（运行时判定 SSOT）', () => {
     expect(detectRuntime()).toBe('mp')
   })
 
-  it('window 缺席 + 空 wx（无探测 API）→ web（fail-safe）', () => {
+  it('window 缺席 + wx 存在 → mp（小程序 = 有 wx 无 window）', () => {
     vi.stubGlobal('window', undefined)
     vi.stubGlobal('wx', {})
-    expect(detectRuntime()).toBe('web')
+    expect(detectRuntime()).toBe('mp')
   })
 })
 

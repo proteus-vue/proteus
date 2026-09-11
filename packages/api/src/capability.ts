@@ -5,6 +5,7 @@
 //   与 createPlatformAPI（request/storage/router/ui 四域）分层：本层是「能力」面（设备/系统/通信/扩展）
 //   兼容面：全部 Promise<Result<T>>；平台不支持 → Err('<cap>.unsupported')（G-32.3 降级语义）
 //   MP 产物安全（决策 #32/#36）：无 ?. / ?? （显式检查）；无数组解构
+import { detectRuntime } from '@proteus-vue/shared'
 import type { HttpMethod, RequestConfig, RequestResponse } from '@proteus-vue/types/api-types'
 import { createAuth } from './auth'
 import type { AuthStorage } from './auth'
@@ -827,7 +828,7 @@ interface WxFileSystemManager {
 interface WxLike {
   getLocation?: (opt: { success: (r: Coords) => void; fail: (e: unknown) => void }) => void
   vibrateShort?: (opt: { fail: () => void }) => void
-  getNetworkType?: (opt: { success: (r: { networkType: string }) => void }) => void
+  getNetworkType?: (opt: { success: (r: { networkType: string }) => void; fail?: (e: unknown) => void }) => void
   getClipboardData?: (opt: { success: (r: { data: string }) => void; fail: () => void }) => void
   setClipboardData?: (opt: { data: string; success?: () => void; fail?: () => void }) => void
   getSystemInfoSync?: () => { screenWidth: number; screenHeight: number; pixelRatio: number; platform: string; model: string; system: string }
@@ -1080,12 +1081,10 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         resolve() // 短震无回调，直接成功（durationMs>0 短震语义）
       }),
     getNetwork: () =>
-      new Promise((resolve) => {
-        if (!wx.getNetworkType) {
-          resolve({ online: true, type: 'unknown' })
-          return
-        }
-        wx.getNetworkType({ success: (r) => resolve({ online: true, type: normalizeNetwork(r.networkType) }) })
+      new Promise((resolve, reject) => {
+        // ★诚实降级（对齐 G-32.3 显式错误）：能力缺失必须 Err，不虚构在线状态
+        if (!wx.getNetworkType) return reject(new CapError('network.unsupported', 'wx.getNetworkType 缺失'))
+        wx.getNetworkType({ success: (r) => resolve({ online: true, type: normalizeNetwork(r.networkType) }), fail: () => reject(new CapError('network.failed', 'wx.getNetworkType 失败')) })
       }),
     readClipboard: () =>
       new Promise((resolve, reject) => {
@@ -1113,11 +1112,9 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         wx.getBatteryInfo({ success: (r) => resolve({ level: r.level / 100, charging: r.isCharging }) })
       }),
     getOrientation: () =>
-      new Promise((resolve) => {
-        if (!wx.onDeviceOrientationChange) {
-          resolve({ type: 'portrait', angle: 0 })
-          return
-        }
+      new Promise((resolve, reject) => {
+        // ★诚实降级：缺失必须 Err，不虚构朝向
+        if (!wx.onDeviceOrientationChange) return reject(new CapError('orientation.unsupported', 'wx.onDeviceOrientationChange 缺失'))
         wx.onDeviceOrientationChange((r) => resolve({ type: r.value === 'landscape' ? 'landscape' : 'portrait', angle: 0 }))
       }),
     share: async (options) => {
@@ -1387,13 +1384,15 @@ function wxBridge(wx: WxLike): CapabilityBridge {
                 success: (r) => {
                   resolve({ supported: true, available: true, devices: (r.devices ?? []).map((d) => d.name ?? 'unnamed') })
                 },
+                // 设备列表读取失败：适配器可用但列表暂不可得——available 保持 true（已开启），devices 空是诚实值
                 fail: () => resolve({ supported: true, available: true, devices }),
               })
             } else {
               resolve({ supported: true, available: true, devices })
             }
           },
-          fail: () => resolve({ supported: true, available: false, devices: [] }),
+          // ★诚实降级：适配器开启失败 = 不可用（原实现谎报 supported:true 掩盖失败）
+          fail: (e: unknown) => reject(new CapError('bluetooth.unavailable', (e as { errMsg?: string })?.errMsg || 'wx.openBluetoothAdapter 失败')),
         })
       }),
     getNfc: () =>
@@ -2156,10 +2155,11 @@ function encodedUrl(url: string, params?: Record<string, unknown>): string {
   return url + (url.includes('?') ? '&' : '?') + qs
 }
 
-/** 运行时探测：wx 存在 → wx 桥；否则 web 桥（Node/SSR 可注入 mock） */
+/** 运行时探测（★SSOT：@proteus-vue/shared.detectRuntime——window 前置守卫）：
+ *  真·小程序运行时 → wx 桥；否则 web 桥（含 web 上 @proteus-vue/web 的 wx 模拟层——不误选 wx 窄桥） */
 export function createCapabilityBridge(): CapabilityBridge {
   const g = globalThis as { wx?: WxLike }
-  if (g.wx) return wxBridge(g.wx)
+  if (detectRuntime() === 'mp' && g.wx) return wxBridge(g.wx)
   return webBridge(globalThis)
 }
 
