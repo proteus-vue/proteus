@@ -292,37 +292,50 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
             </router-link>
           </p-stack>
         </p-view>
-        <!-- 产品视觉：同一份语义 → 多端产物（纯 CSS 玻璃窗 mock；不依赖特效） -->
+        <!-- 产品视觉：真实 IDE/控制台 mock（纯 CSS + 语法着色；aria-hidden 装饰层） -->
         <p-view class="hero-visual" aria-hidden="true">
           <span class="hv-glow" />
           <p-view class="hv-frame">
-            <p-stack direction="row" :gap="6" class="hv-bar"><span class="hv-dot" /><span class="hv-dot" /><span class="hv-dot" /></p-stack>
+            <!-- 标题栏：窗口控件 + 当前文件 tab + 运行态徽标 -->
+            <p-stack direction="row" :gap="10" class="hv-bar">
+              <span class="hv-dots"><span class="hv-dot" /><span class="hv-dot" /><span class="hv-dot" /></span>
+              <span class="hv-tab"><span class="hv-tab-dot" />ProductDetail.vue</span>
+              <span class="hv-live">LIVE</span>
+            </p-stack>
             <p-stack direction="row" :gap="0" class="hv-body">
+              <!-- 资源管理器（文件树） -->
               <p-view class="hv-side">
-                <p-text class="hv-item on">源码</p-text>
-                <p-text class="hv-item">Compile</p-text>
-                <p-text class="hv-item">Render</p-text>
-                <p-text class="hv-item">Capability</p-text>
+                <p-text class="hv-side-title">EXPLORER</p-text>
+                <p-text class="hv-file dir">src</p-text>
+                <p-text class="hv-file">App.vue</p-text>
+                <p-text class="hv-file on">ProductDetail.vue</p-text>
+                <p-text class="hv-file dir">components</p-text>
+                <p-text class="hv-file">p-grid</p-text>
+                <p-text class="hv-file">p-stack</p-text>
               </p-view>
+              <!-- 编辑器：行号 + 语法着色代码 -->
               <p-view class="hv-main">
-                <p-stack direction="row" :gap="8" class="hv-head">
-                  <p-text class="hv-line w40" />
-                  <span class="hv-live">CONNECTED</span>
-                </p-stack>
-                <p-text class="hv-line w80" />
-                <p-text class="hv-line w60" />
-                <!-- 中间迷你指标区（填充面板 + 像真实仪表盘） -->
-                <p-stack direction="row" :gap="12" class="hv-metrics">
-                  <p-view class="hv-metric"><p-text class="hv-metric-v">136</p-text><p-text class="hv-metric-l">原语</p-text></p-view>
-                  <p-view class="hv-metric"><p-text class="hv-metric-v">6</p-text><p-text class="hv-metric-l">后端</p-text></p-view>
-                  <p-view class="hv-metric"><p-text class="hv-metric-v">45</p-text><p-text class="hv-metric-l">语义</p-text></p-view>
-                </p-stack>
-                <p-stack direction="row" :gap="12" class="hv-cards">
-                  <p-view class="hv-card"><p-text class="hv-ring" /><p-text class="hv-cap">Web</p-text></p-view>
-                  <p-view class="hv-card"><p-stack direction="row" :gap="4" class="hv-bars"><i /><i /><i /></p-stack><p-text class="hv-cap">小程序</p-text></p-view>
-                  <p-view class="hv-card"><p-text class="hv-ring alt" /><p-text class="hv-cap">Native</p-text></p-view>
-                </p-stack>
+                <pre class="hv-code"><code><span class="hv-cl"><span class="hv-ln">1</span><span class="hv-ct"><span class="tk-tag">&lt;script</span> <span class="tk-attr">setup</span><span class="tk-tag">&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">2</span><span class="hv-ct"><span class="tk-kw">import</span> { <span class="tk-fn">ref</span> } <span class="tk-kw">from</span> <span class="tk-str">'vue'</span></span></span>
+<span class="hv-cl"><span class="hv-ln">3</span><span class="hv-ct"></span></span>
+<span class="hv-cl"><span class="hv-ln">4</span><span class="hv-ct"><span class="tk-kw">const</span> product = <span class="tk-fn">ref</span>({ name: <span class="tk-str">'Proteus'</span> })</span></span>
+<span class="hv-cl"><span class="hv-ln">5</span><span class="hv-ct"><span class="tk-kw">const</span> qty = <span class="tk-fn">ref</span>(<span class="tk-num">1</span>)</span></span>
+<span class="hv-cl"><span class="hv-ln">6</span><span class="hv-ct"></span></span>
+<span class="hv-cl"><span class="hv-ln">7</span><span class="hv-ct"><span class="tk-kw">function</span> <span class="tk-fn">addToCart</span>() { qty.<span class="tk-attr">value</span><span class="tk-op">++</span> }</span></span>
+<span class="hv-cl"><span class="hv-ln">8</span><span class="hv-ct"><span class="tk-tag">&lt;/script&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">9</span><span class="hv-ct"></span></span>
+<span class="hv-cl"><span class="hv-ln">10</span><span class="hv-ct"><span class="tk-tag">&lt;template&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">11</span><span class="hv-ct">  <span class="tk-tag">&lt;p-grid</span> <span class="tk-attr">:min-col-width</span>=<span class="tk-str">"240"</span><span class="tk-tag">&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">12</span><span class="hv-ct">    <span class="tk-tag">&lt;p-card</span> <span class="tk-attr">v-for</span>=<span class="tk-str">"c in cards"</span> <span class="tk-attr">:key</span>=<span class="tk-str">"c.id"</span> <span class="tk-tag">/&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">13</span><span class="hv-ct">  <span class="tk-tag">&lt;/p-grid&gt;</span></span></span>
+<span class="hv-cl"><span class="hv-ln">14</span><span class="hv-ct"><span class="tk-tag">&lt;/template&gt;</span></span></span></code></pre>
               </p-view>
+            </p-stack>
+            <!-- 状态栏（仿编辑器底栏：分支 / 诊断 / 编译耗时） -->
+            <p-stack direction="row" :gap="16" class="hv-foot">
+              <span class="hv-st"><span class="hv-branch">⑂</span> main</span>
+              <span class="hv-st ok">✓ 0 errors</span>
+              <span class="hv-st">compile 2ms</span>
             </p-stack>
           </p-view>
         </p-view>
@@ -583,49 +596,41 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   overflow: hidden;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
 }
-.hv-bar { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.hv-bar { padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: center; gap: 10px; }
+.hv-dots { display: flex; flex-direction: row; gap: 6px; flex-shrink: 0; }
 .hv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); }
-.hv-body { min-height: clamp(260px, 23vw, 340px); align-items: stretch; }
-.hv-side { width: clamp(118px, 9vw, 140px); border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 15px; flex-shrink: 0; }
-.hv-item { color: var(--dim); font-size: 13px; }
-.hv-item.on { color: var(--brand-ink); font-weight: 600; }
-.hv-main { flex: 1; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.hv-line { display: block; height: 11px; border-radius: 6px; background: var(--panel2); }
-.hv-line.w80 { width: 80%; }
-.hv-line.w60 { width: 60%; }
-.hv-head { align-items: center; gap: 8px; }
-.hv-line.w40 { width: 40%; }
-.hv-live { color: var(--ok); font-size: 12px; letter-spacing: 0.6px; margin-left: auto; }
+.hv-tab { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: 12.5px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 4px 12px; }
+.hv-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
+.hv-live { color: var(--ok); font-size: 12px; letter-spacing: 0.5px; margin-left: auto; }
 .hv-live::before { content: '● '; }
-.hv-metrics { gap: 12px; }
-.hv-metric { flex: 1; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg); display: flex; flex-direction: column; gap: 2px; }
-.hv-metric-v { color: var(--ink); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
-.hv-metric-l { color: var(--dim); font-size: 12px; }
-.hv-cards { margin-top: auto; gap: 12px; }
-.hv-card {
-  flex: 1;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  background: var(--bg);
-}
-.hv-ring { display: block; width: 44px; height: 44px; border-radius: 50%; border: 4px solid var(--brand); border-right-color: var(--line); }
-.hv-ring.alt { border-color: var(--brand2); border-top-color: var(--line); }
-.hv-bars { align-items: flex-end; height: 44px; }
-.hv-bars i { width: 8px; border-radius: 4px; background: var(--brand2); }
-.hv-bars i:nth-child(1) { height: 20px; }
-.hv-bars i:nth-child(2) { height: 32px; }
-.hv-bars i:nth-child(3) { height: 44px; }
-.hv-cap { color: var(--muted); font-size: 12.5px; }
-/* 窄容器：收起侧栏（否则 3 张产物卡被挤到换行）——主区获得全宽 */
-@container (max-width: 480px) {
-  /* ★特异性：p-view 组件自带 .p-view{display:flex}（同为 0,1,1）会按捆绑顺序抢胜——
-     用 `.hv-body .hv-side`（0,2,1）稳定压过组件基础样式 */
+.hv-body { min-height: clamp(230px, 19vw, 296px); align-items: stretch; }
+.hv-side { width: clamp(122px, 9.5vw, 156px); border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; background: var(--bg); }
+.hv-side-title { color: var(--dim); font-size: 12px; letter-spacing: 1px; margin-bottom: 7px; }
+.hv-file { color: var(--muted); font-size: 12.5px; padding: 3px 8px; border-radius: var(--radius-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hv-file.dir { color: var(--dim); }
+.hv-file.on { color: var(--brand-ink); background: var(--brand-soft); font-weight: 600; }
+.hv-main { flex: 1; padding: 14px 18px; min-width: 0; overflow: hidden; }
+/* ★<pre> 内 span 间的换行会被 white-space:pre 渲染成空行（14 行→27 行）——
+   把 <code> 设为 flex 容器：子项成为 flex item，空白文本节点被忽略（不产生空行） */
+.hv-code { margin: 0; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.7; }
+.hv-code code { display: flex; flex-direction: column; }
+.hv-cl { display: flex; flex-direction: row; gap: 12px; }
+.hv-ln { color: var(--dim); width: 16px; text-align: right; flex-shrink: 0; }
+.hv-ct { white-space: pre; }
+.tk-tag { color: var(--syn-tag); }
+.tk-attr { color: var(--syn-attr); }
+.tk-str { color: var(--syn-str); }
+.tk-kw { color: var(--syn-kw); }
+.tk-fn { color: var(--syn-fn); }
+.tk-num { color: var(--syn-attr); }
+.tk-op { color: var(--muted); }
+.hv-foot { padding: 8px 16px; border-top: 1px solid var(--line); background: var(--bg); align-items: center; }
+.hv-st { color: var(--dim); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.hv-st.ok { color: var(--ok); }
+.hv-branch { color: var(--brand-ink); }
+/* 窄容器：收起资源管理器，代码区获得全宽 */
+@container (max-width: 520px) {
+  /* ★特异性：p-view 自带 .p-view{display:flex}（同为 0,1,1）按捆绑顺序抢胜 → .hv-body .hv-side（0,2,1）压过 */
   .hv-body .hv-side { display: none; }
 }
 /* Hero 数字行 */
