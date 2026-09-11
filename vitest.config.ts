@@ -60,6 +60,8 @@ export default defineConfig({
       { find: '@proteus-vue/gesture', replacement: fileURLToPath(new URL('./packages/gesture/src/index.ts', import.meta.url)) },
       // ★G-07：@proteus-vue/glass 液态玻璃横切能力包（tests/glass.test.ts 直接引用）
       { find: '@proteus-vue/glass', replacement: fileURLToPath(new URL('./packages/glass/src/index.ts', import.meta.url)) },
+      // ★Skyline 线收口：@proteus-vue/worklet（tests/worklet.test.ts + 组件 runtime 直接引用）
+      { find: '@proteus-vue/worklet', replacement: fileURLToPath(new URL('./packages/worklet/src/index.ts', import.meta.url)) },
       // ★G-31 B6：@proteus-vue/compat-miniprogram 兼容层包（tests/compat-miniprogram.test.ts 直接引用）
       { find: '@proteus-vue/compat-miniprogram', replacement: fileURLToPath(new URL('./packages/compat-miniprogram/src/index.ts', import.meta.url)) },
       // ★G-24 B1：@proteus-vue/desktop 桌面交互原语包（tests/desktop.test.ts 直接引用）

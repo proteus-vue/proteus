@@ -4,8 +4,10 @@
 // ★MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构（共享模块 B0 机制编译进 MP 产物）
 // ★Skyline 线收口（2026-09-11）：运行时/渲染器判定改由 @proteus-vue/shared 的 SSOT 提供
 //   （detectRuntime/detectMpRenderer）——修「web 上 wx 模拟层致误判小程序」+ 新增 renderer 维度
+//   + worklet-animation 接 @proteus-vue/worklet 真实能力（不再恒 false）
 import { detectRuntime, detectMpRenderer } from '@proteus-vue/shared'
 import type { MpRenderer } from '@proteus-vue/shared'
+import { hasWorklet } from '@proteus-vue/worklet'
 
 /** 当前渲染后端：web=浏览器/SSR；skyline=微信小程序运行时（Skyline/WebView 渲染器差异归能力表）；app=v0.6 自定义渲染器占位 */
 export type PlatformBackend = 'web' | 'skyline' | 'app'
@@ -66,7 +68,8 @@ const DYNAMIC_CAPABILITIES = new Set(['webp', 'native-toast'])
 function syncHas(backend: PlatformBackend, name: CapabilityName): boolean {
   switch (name) {
     case 'worklet-animation':
-      return false // Worklet 未实现（router B10 ⬜），v0.6 后接
+      // ★Skyline 线收口：真实判断（真·小程序 + Skyline 渲染器 + wx.worklet 存在）；WebView 无 worklet
+      return hasWorklet()
     case 'recycle-manager':
       return false // Skyline recycleManager 未接入，list-view 用 JS 切片
     case 'native-toast':

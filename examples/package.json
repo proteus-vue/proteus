@@ -44,6 +44,7 @@
     "@proteus-vue/style-safety": "0.1.0",
     "@proteus-vue/test-ir": "0.1.0",
     "@proteus-vue/web": "0.1.0",
+    "@proteus-vue/worklet": "0.1.0",
     "@vue/devtools-api": "^8.0.0",
     "pinia": "^4.0.3",
     "vue": "^3.4.0"

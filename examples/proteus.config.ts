@@ -116,6 +116,8 @@ const config: ProteusConfig = {
           { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },
           // ★G-07 液态玻璃：框架组件 pg-glass 消费 @proteus-vue/glass（纯逻辑 SSOT）
           { find: '@proteus-vue/glass', replacement: path.join(__dirname, '../packages/glass/src/index.ts') },
+          // ★Skyline 线收口：框架组件消费 @proteus-vue/worklet（UI 线程动画）
+          { find: '@proteus-vue/worklet', replacement: path.join(__dirname, '../packages/worklet/src/index.ts') },
         ],
       },
       build: rollupOptions ? { rollupOptions } : undefined,
