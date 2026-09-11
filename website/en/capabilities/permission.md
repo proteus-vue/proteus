@@ -52,7 +52,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | Target | Status | Notes |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
-| WeChat Mini Program | ⚠️ | skyline (WebView fallback) · wx bridge missing getPermission → explicit Err degradation |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.authorize |
 | Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |

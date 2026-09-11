@@ -32,8 +32,30 @@ Returns `FSAdapter` (synchronous handle/state object).
 |---|---|---|
 | `readFile` | `readFile(path: string): Promise<CapResult<string>>` | — |
 | `writeFile` | `writeFile(path: string, data: string): Promise<CapResult<void>>` | — |
+| `appendFile` | `appendFile(path: string, data: string): Promise<CapResult<void>>` | — |
+| `copyFile` | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | — |
+| `rename` | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | — |
 | `remove` | `remove(path: string): Promise<CapResult<void>>` | — |
 | `exists` | `exists(path: string): Promise<CapResult<boolean>>` | — |
+| `stat` | `stat(path: string): Promise<CapResult<FileStat>>` | — |
+| `mkdir` | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
+| `rmdir` | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
+| `readdir` | `readdir(path: string): Promise<CapResult<string[]>>` | — |
+| `getFileInfo` | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | — |
+| `saveFile` | `saveFile(tempPath: string): Promise<CapResult<string>>` | — |
+| `getSavedFileList` | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | — |
+| `removeSavedFile` | `removeSavedFile(path: string): Promise<CapResult<void>>` | — |
+| `unzip` | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | — |
+| `readFileSync` | `readFileSync(path: string): CapResult<string>` | — |
+| `writeFileSync` | `writeFileSync(path: string, data: string): CapResult<void>` | — |
+| `existsSync` | `existsSync(path: string): CapResult<boolean>` | — |
+| `statSync` | `statSync(path: string): CapResult<FileStat>` | — |
+| `readdirSync` | `readdirSync(path: string): CapResult<string[]>` | — |
+| `mkdirSync` | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | — |
+| `renameSync` | `renameSync(oldPath: string, newPath: string): CapResult<void>` | — |
+| `unlinkSync` | `unlinkSync(path: string): CapResult<void>` | — |
+| `copyFileSync` | `copyFileSync(src: string, dest: string): CapResult<void>` | — |
+| `appendFileSync` | `appendFileSync(path: string, data: string): CapResult<void>` | — |
 
 ## Error codes
 

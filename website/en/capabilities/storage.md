@@ -20,6 +20,12 @@ useStorage(): CompatStorage
 
 Returns `CompatStorage` (synchronous handle/state object).
 
+#### Properties of `CompatStorage`
+
+| Property | Type | Doc |
+|---|---|---|
+| `keys` | `string[]; currentSize: number; limitSize: number }>>` | — |
+
 #### Methods of `CompatStorage`
 
 | Method | Signature | Doc |
@@ -27,6 +33,12 @@ Returns `CompatStorage` (synchronous handle/state object).
 | `set` | `set(key: string, value: unknown): void` | — |
 | `remove` | `remove(key: string): void` | — |
 | `clear` | `clear(): void` | — |
+| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
+| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | — |
+| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | — |
+| `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | — |
+| `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | — |
+| `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | — |
 
 ## Error codes
 

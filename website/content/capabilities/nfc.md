@@ -13,7 +13,7 @@ useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测）
 ## 签名
 
 ```ts
-useNFC(): Promise<CapResult<NfcInfo>>
+useNFC(): Promise<CapResult<NFCAPI>>
 ```
 
 ## 返回值
@@ -23,15 +23,8 @@ useNFC(): Promise<CapResult<NfcInfo>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `NfcInfo` | 成功载荷（结构见下） |
+| `data` | `NFCAPI` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
-
-#### `data`（`NfcInfo`）的属性
-
-| 属性 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `supported` | `boolean` | 是 | 平台是否支持 NFC |
-| `available` | `boolean` | 是 | NFC 当前可用（已开启） |
 
 ## 错误码
 

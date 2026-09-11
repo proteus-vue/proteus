@@ -52,7 +52,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 | 端 | 兼容 | 说明 |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
-| 微信小程序 | ⚠️ | skyline（WebView 降级） · wx 桥未提供 getPermission → Err 显式降级 |
+| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.authorize |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——能力桥未接线 |
 | Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——能力桥未接线 |

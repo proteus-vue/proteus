@@ -31,6 +31,14 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | Method | Signature | Doc |
 |---|---|---|
 | `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
+| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | — |
+| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | — |
+| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | — |
+| `onError` | `onError(cb: (error: string) => void): () => void` | — |
+| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | — |
+| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | — |
+| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
+| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
 
 ## Error codes
 

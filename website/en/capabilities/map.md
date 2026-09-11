@@ -29,15 +29,8 @@ useMap(id: string): Promise<CapResult<MapController>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `MapController` | Success payload (methods below) |
+| `data` | `MapController` | Success payload |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
-
-#### Methods of `MapController`
-
-| Method | Signature | Doc |
-|---|---|---|
-| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
-| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
 
 ## Error codes
 
