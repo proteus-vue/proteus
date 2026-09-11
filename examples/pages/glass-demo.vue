@@ -69,11 +69,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { PHeading, PText, PgGlass } from '@proteus-vue/components'
-import { GLASS_PRESET_NAMES, resolveGlass, resolveGlassLevel } from '@proteus-vue/glass'
-import type { GlassIntensity, GlassPlatform } from '@proteus-vue/glass'
+import { resolveGlass, resolveGlassLevel } from '@proteus-vue/glass'
+import type { GlassPlatform } from '@proteus-vue/glass'
 
-const presets = GLASS_PRESET_NAMES
-const intensities: GlassIntensity[] = ['none', 'thin', 'regular', 'thick']
+// ★MP 安全：模板 v-for 的数据须为字面量（import 常量在 MP 无法静态求值 → data 为 undefined）
+const presets = ['navigationBar', 'tabBar', 'modal', 'card', 'floating', 'sidebar', 'custom']
+const intensities = ['none', 'thin', 'regular', 'thick']
 
 // ★降级决策展示：同 preset 在不同环境下解析出的层级（纯逻辑 SSOT——组件与各端 Backend 共用）
 const levelText = computed(() => {
