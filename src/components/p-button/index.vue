@@ -33,7 +33,11 @@ function onClick(e: unknown) {
   const now = Date.now()
   if (props.throttle > 0 && now - lastClick.value < props.throttle) return
   lastClick.value = now
-  emit('click', e)
+  // ★MP 事件跨组件边界（2026-09-11）：click 带 bubbles+composed 发射——
+  //   插槽内 p-button 作为「父组件（如 p-popover trigger wrapper）的原生 bindtap 目标」时，
+  //   小程序原生 tap 不跨自定义组件边界 → 须由组件 emit 冒泡事件、父级以 bind:click 接收。
+  //   Web（Vue emit）第 3 参被忽略/透传为多余实参，无副作用。
+  emit('click', e, { bubbles: true, composed: true })
 }
 </script>
 

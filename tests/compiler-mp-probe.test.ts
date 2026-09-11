@@ -247,6 +247,13 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
     expect(js).toContain("setData({ panelStyle: '' })")
   })
 
+  it('P8e5：trigger 事件双通道——@click（bindtap 收普通元素原生 tap）+ bind:click（收插槽内自定义组件冒泡事件）', () => {
+    // ★2026-09-11 修「MP trigger 点开无反应」：小程序原生 tap 不跨自定义组件边界——
+    //   插槽内 p-button 点击只 emit('click',{bubbles,composed}) triggerEvent，不冒泡到 wrapper 的 bindtap。
+    //   契约：wrapper 同时持 bindtap="onTrigger"（普通元素 tap）+ bind:click="onTrigger"（组件冒泡 click）。
+    expect(wxml).toMatch(/id="proteus-popover-trigger"[^>]*bindtap="onTrigger"/)
+    expect(wxml).toMatch(/id="proteus-popover-trigger"[^>]*bind:click="onTrigger"/)
+  })
   it('P8e4：selector 内联字面量（顶层 const 裸引用在方法体不被改写 → ReferenceError 缺口绕过；登记 compiler 待修）', () => {
     // ★2026-09-08 真机实证：顶层 const TRIGGER_SELECTOR 内联进 data，但方法体裸引用不被改写 →
     //   ReferenceError 被 catch 吞 → panelStyle 空 → 左上角（诊断 ERR:TRIGGER_SELECTOR is not defined）。
@@ -400,4 +407,15 @@ describe('★mp-conformance 探针矩阵 P17：WXML 绑定 ?? fail-closed（#504
     expect(r.js).not.toMatch(/\?\?/)
     expect(r.warnings.some((w: string) => /空值合并/.test(w))).toBe(false)
   })
+
+
+describe('★事件跨组件边界 P10：p-button click 冒泡发射（供父级 bind:click 接收）', () => {
+  // ★2026-09-11：小程序原生 tap 不跨自定义组件边界 → 组件须 emit({bubbles,composed}) 让父级 bind:click 收到。
+  //   契约锁：p-button 产物 triggerEvent 带 bubbles+composed（Web 端 Vue 忽略多余实参，无副作用）。
+  it('p-button：triggerEvent("click", e, { bubbles, composed })', () => {
+    const r = compileComponent('src/components/p-button/index.vue')
+    const js = r.js ?? ''
+    expect(js).toMatch(/triggerEvent\('click',\s*e,\s*\{\s*bubbles:\s*true,\s*composed:\s*true\s*\}\)/)
+  })
+})
 })

@@ -84,3 +84,23 @@ p-popover 的面板必须锚定在 trigger 旁 → 无法直接套用 fixed 容�
 
 原建议 ①短期 C 显式降级 ②中期 A 官方同层实证——实际执行合并路线：A 调研 + componentFramework 修复 + 结构终案，
 未走 C 降级（无需）。Web 端不受影响（portal 标签移除后 Web 结构即常驻 overlay + visibility，行为一致）。
+
+## 8. ★trigger 点击缺口修复（2026-09-11）
+
+**缺口**（15-台账登记）：插槽内 `p-button` 点击 → `p-popover` 点开无反应。**根因 = 小程序原生 `tap` 不跨自定义组件边界**——
+`p-popover` trigger wrapper 绑 `bindtap="onTrigger"`（收普通元素原生 tap），但插槽里放的是 `p-button` **自定义组件**，
+其点击只经 `triggerEvent('click')` 发出，**不会冒泡**到 wrapper 的原生 `bindtap` → onTrigger 永不触发。
+
+**修复（零编译器改动，双通道）**：
+1. `p-button` 的 `click` 改为**冒泡跨边界发射**：`emit('click', e, { bubbles: true, composed: true })`
+   （编译为 `this.triggerEvent('click', e, { bubbles: true, composed: true })`；Web 端 Vue 忽略多余实参无副作用）。
+2. `p-popover` wrapper 增 **`bind:click="onTrigger"`**（`bind:` 前缀 = 微信自定义组件事件标准，编译器原样透传）
+   —— 接收插槽内组件冒泡上来的 click。普通元素仍走 `@click`→`bindtap`（原生 tap 不冒泡到 bind:click，无重复触发）。
+
+**通用结论**：组件内「插槽承载任意内容 + 需响应其点击」的场景，须同时绑 `@click`（原生元素）+ `bind:click`（子组件冒泡）；
+组件若要被父级以原生方式接收点击，须以 `{bubbles,composed}` 发射。同源先例：`p-svg-canvas`（内部 tap → `triggerEvent` → 父级 `bind:tap`）。
+
+**验证**：产物契约 `compiler-mp-probe` P8e5（wrapper 双绑定）+ P10（p-button 冒泡 triggerEvent）；
+Web 端交互冒烟（点 trigger → `update:modelValue=true`）；全量 2916 绿。
+**诚实边界**：模拟器 E2E 实点 trigger 因本机 IDE **登录过期**（APPID_ERROR 需扫码）未跑成——
+e2e 已加「实点 trigger」探针（支持点组件内元素则硬断言，否则降级日志）；真机需人工点一次确认。
