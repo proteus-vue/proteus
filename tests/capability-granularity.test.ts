@@ -285,3 +285,118 @@ describe('★C1/C2 相机 + 录音操作控制器', () => {
     expect(() => h2.useRecorder()).toThrow(/getRecorder/)
   })
 })
+
+describe('★C5 传感器流 useSensorStream（启停 + 多订阅 + 泄漏修复）', () => {
+  it('start 挂接推送 → on 订阅收到帧；stop 取消订阅', async () => {
+    let frame: ((r: { x: number; y: number; z: number }) => void) | null = null
+    let offCalled = false
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      startAccelerometer: (o: { success?: () => void }) => o.success && o.success(),
+      stopAccelerometer: (o: { success?: () => void }) => o.success && o.success(),
+      onAccelerometerChange: (cb: (r: { x: number; y: number; z: number }) => void) => { frame = cb },
+      offAccelerometerChange: () => { offCalled = true },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useSensorStream('accelerometer')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const stream = r.data
+    const seen: number[] = []
+    stream.on((s) => seen.push(s.x as number))
+    expect(stream.active()).toBe(false)
+    await stream.start()
+    expect(stream.active()).toBe(true)
+    // 模拟传感器推送
+    frame!({ x: 1, y: 2, z: 3 })
+    expect(seen).toEqual([1])
+    await stream.stop()
+    expect(stream.active()).toBe(false)
+    expect(offCalled).toBe(true)
+  })
+
+  it('readSensor 一次性读取后解除监听（修泄漏）', async () => {
+    let off = false
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onCompassChange: (cb: (r: { direction: number }) => void) => setTimeout(() => cb({ direction: 90 }), 0),
+      offCompassChange: () => { off = true },
+    })
+    const s = await createCapabilityHooks(createCapabilityBridge()).useSensor('compass')
+    expect(s.ok && s.data.heading).toBe(90)
+    expect(off).toBe(true) // 读到即解除监听
+  })
+})
+
+describe('★C15 存储异步/批量/info（useStorage）', () => {
+  it('web（内存降级）setAsync/getAsync/removeAsync/info/batch', async () => {
+    vi.stubGlobal('window', {})
+    const st = createCapabilityHooks(createCapabilityBridge()).useStorage()
+    expect((await st.setAsync('a', { n: 1 })).ok).toBe(true)
+    expect(await st.getAsync('a')).toMatchObject({ ok: true, data: { n: 1 } })
+    expect((await st.batchSet([{ key: 'x', value: 1 }, { key: 'y', value: 2 }])).ok).toBe(true)
+    const bg = await st.batchGet(['x', 'y'])
+    expect(bg.ok && bg.data[0].value).toBe(1)
+    const info = await st.info()
+    expect(info.ok && info.data.keys).toContain('a')
+    expect((await st.removeAsync('a')).ok).toBe(true)
+    expect((await st.getAsync('a')).data).toBeUndefined()
+  })
+})
+
+describe('★C37 NFC 富接口（HCE 卡模拟 + 消息）', () => {
+  it('startHCE/stopHCE/sendHCEMessage + onHCEMessage', async () => {
+    const calls: string[] = []
+    let msgCb: ((r: { messageType: number; data?: ArrayBuffer }) => void) | null = null
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getHCEState: (o: { success?: () => void }) => { calls.push('state'); o.success && o.success() },
+      startHCE: (o: { aidList: string[]; success?: () => void }) => { calls.push('start:' + o.aidList.length); o.success && o.success() },
+      stopHCE: (o?: { success?: () => void }) => { calls.push('stop'); o && o.success && o.success() },
+      sendHCEMessage: (o: { success?: () => void }) => { calls.push('send'); o.success && o.success() },
+      onHCEMessage: (cb: (r: { messageType: number }) => void) => { msgCb = cb },
+      offHCEMessage: () => undefined,
+      onHCEStateChange: () => undefined,
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useNFC()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const nfc = r.data
+    expect(nfc.available).toBe(true)
+    for (const m of ['startHCE', 'stopHCE', 'sendHCEMessage', 'onHCEMessage', 'onHCEStateChange']) {
+      expect(typeof (nfc as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    expect((await nfc.startHCE(['A0000002471001'])).ok).toBe(true)
+    expect((await nfc.sendHCEMessage(new ArrayBuffer(4))).ok).toBe(true)
+    expect((await nfc.stopHCE()).ok).toBe(true)
+    let got: number | null = null
+    nfc.onHCEMessage((m) => { got = m.messageType })
+    msgCb!({ messageType: 1 })
+    expect(got).toBe(1)
+    expect(calls).toContain('start:1')
+  })
+})
+
+describe('★C17 通知扩展（设备订阅 + 客服）', () => {
+  it('MP：subscribeDeviceMessage + openCustomerService', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      requestSubscribeDeviceMessage: (o: { tmplIds: string[]; success?: (r: Record<string, string>) => void }) => o.success && o.success({ T1: 'accept' }),
+      openCustomerServiceChat: (o: { success?: () => void }) => o.success && o.success(),
+    })
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    const d = await hooks.useDeviceNotification('T1')
+    expect(d.ok && d.data.granted).toBe(true)
+    expect((await hooks.useCustomerService('corp', 'https://x')).ok).toBe(true)
+  })
+
+  it('web：设备订阅/客服诚实 Err', async () => {
+    vi.stubGlobal('window', {})
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    expect((await hooks.useDeviceNotification('T1')).ok).toBe(false)
+    expect((await hooks.useCustomerService('c', 'u')).ok).toBe(false)
+  })
+})

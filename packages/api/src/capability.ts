@@ -135,6 +135,22 @@ export interface SensorSample {
   timestamp?: number
 }
 
+/**
+ * ★能力颗粒度对齐：C5 传感器流（原一次性读取且不解除监听 → 显式生命周期 + 多订阅 + 可停）
+ *   on() 返回取消函数；stop() 停止底层监听；start() 可选（部分平台自动开始）
+ */
+export interface SensorStream {
+  kind: SensorKind
+  /** 开始监听（幂等） */
+  start(): Promise<CapResult<void>>
+  /** 停止监听（释放底层 on* 订阅） */
+  stop(): Promise<CapResult<void>>
+  /** 订阅采样（返回取消订阅；多订阅并存） */
+  on(cb: (sample: SensorSample) => void): () => void
+  /** 是否监听中 */
+  active(): boolean
+}
+
 /** C40 支付参数（对齐 wx.requestPayment 核心字段——服务端下单后下发） */
 export interface PaymentConfig {
   /** 时间戳（秒级字符串，服务端生成） */
@@ -584,6 +600,23 @@ export interface NfcInfo {
   available: boolean
 }
 
+/**
+ * ★能力颗粒度对齐：C37 NFC 操作接口（原仅 getHCEState 状态探测 → HCE 卡模拟 + 消息收发）
+ *   HCE = Host Card Emulation（手机模拟卡）；APDU 收发 + 事件订阅。
+ */
+export interface NFCAPI extends NfcInfo {
+  /** 启动 HCE（模拟卡；aidList 应用标识） */
+  startHCE(aidList: string[]): Promise<CapResult<void>>
+  /** 停止 HCE */
+  stopHCE(): Promise<CapResult<void>>
+  /** 发送 APDU 响应（收到 onHCEMessage 后回） */
+  sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>
+  /** 订阅 HCE 消息（返回取消） */
+  onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void
+  /** 订阅 HCE 状态变化（返回取消） */
+  onHCEStateChange(cb: (available: boolean) => void): () => void
+}
+
 /** C14 键盘信息（高度 px + 可见性） */
 export interface KeyboardInfo {
   /** 键盘高度（px） */
@@ -808,8 +841,13 @@ export interface CapabilityBridge {
   /** 存储句柄（useStorage——wx sync 存储 / localStorage / mock；缺省 undefined → useStorage 抛错） */
   getStorage?(): CompatStorage
   // ★G-32 B3 三期：新增能力（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')
-  /** C5 传感器一次性读取（wx onXxxChange 首个事件 / web DeviceMotion+DeviceOrientation） */
+  /** C5 传感器一次性读取（wx onXxxChange 首个事件，读到即解除监听；web DeviceMotion+DeviceOrientation） */
   readSensor?(kind: SensorKind): Promise<SensorSample>
+  /** ★能力颗粒度对齐：C5 传感器流（持续监听 + 显式启停 + 多订阅） */
+  startSensor?(kind: SensorKind): Promise<void>
+  stopSensor?(kind: SensorKind): Promise<void>
+  /** 持续推送采样（wx on*Change 挂接；返回取消订阅）——缺省 → 流仅收集订阅者无推送（诚实边界） */
+  subscribeSensor?(kind: SensorKind, cb: (sample: SensorSample) => void): () => void
   /** C13 亮度读取（wx.getScreenBrightness；web 无标准 API → 缺省） */
   getBrightness?(): Promise<number>
   /** C13 亮度设置（wx.setScreenBrightness） */
@@ -842,6 +880,10 @@ export interface CapabilityBridge {
   // ★G-32 B3 五期：new capabilities（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')
   /** C17 消息订阅授权（wx.requestSubscribeMessage / web Notification.requestPermission） */
   subscribeMessage?(templateId: string): Promise<MessageSubscription>
+  /** ★能力颗粒度对齐：C17 设备订阅消息（wx.requestSubscribeDeviceMessage） */
+  subscribeDeviceMessage?(templateId: string): Promise<MessageSubscription>
+  /** ★能力颗粒度对齐：C17 打开客服会话（wx.openCustomerServiceChat / customer-service 组件） */
+  openCustomerService?(corpId: string, url: string): Promise<void>
   /** C19 联系人选择（wx.chooseContact / web 无标准 → 缺省） */
   chooseContact?(): Promise<Contact[]>
   /** C20 日历事件添加（wx.addPhoneCalendar / web 无标准 → 缺省） */
@@ -857,8 +899,8 @@ export interface CapabilityBridge {
   getPageLifecycle?(): PageLifecycle
   /** C36 蓝牙（wx.openBluetoothAdapter + BLE 操作 / web navigator.bluetooth 特性探测）——★富接口 */
   getBluetooth?(): Promise<BluetoothAPI>
-  /** C37 NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
-  getNfc?(): Promise<NfcInfo>
+  /** C37 NFC（wx HCE 卡模拟 + 消息收发 / web NDEFReader 特性探测）——★富接口 */
+  getNfc?(): Promise<NFCAPI>
   /** C1 摄像头访问（wx.authorize scope.camera / web getUserMedia） */
   getCamera?(): Promise<MediaAccess>
   /** ★能力颗粒度对齐：C1 相机操作控制器（wx.createCameraContext(id) → 拍照/录像） */
@@ -903,6 +945,17 @@ export interface CompatStorage {
   set(key: string, value: unknown): void
   remove(key: string): void
   clear(): void
+  // ★能力颗粒度对齐：异步 API（对齐官方 setStorage/getStorage；大值不阻塞主线程）
+  setAsync(key: string, value: unknown): Promise<CapResult<void>>
+  getAsync<T = unknown>(key: string): Promise<CapResult<T | undefined>>
+  removeAsync(key: string): Promise<CapResult<void>>
+  clearAsync(): Promise<CapResult<void>>
+  /** 存储信息（keys / 已用 / 上限） */
+  info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>
+  /** 批量读 */
+  batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>
+  /** 批量写 */
+  batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>
 }
 
 /** useFetch 配置（对齐 RequestConfig 高频字段） */
@@ -1120,12 +1173,28 @@ interface WxLike {
   }) => void
   setStorageSync?: (key: string, value: unknown) => void
   getStorageSync?: (key: string) => unknown
+  setStorage?: (opt: { key: string; data: unknown; success?: () => void; fail?: (e: unknown) => void }) => void
+  getStorage?: (opt: { key: string; success: (r: { data: unknown }) => void; fail?: (e: unknown) => void }) => void
+  removeStorage?: (opt: { key: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  clearStorage?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  getStorageInfo?: (opt: { success: (r: { keys: string[]; currentSize: number; limitSize: number }) => void; fail?: (e: unknown) => void }) => void
+  batchSetStorage?: (opt: { kvList: Array<{ key: string; value: unknown }>; success?: () => void; fail?: (e: unknown) => void }) => void
+  batchGetStorage?: (opt: { keyList: string[]; success: (r: { kvList: Array<{ key: string; value: unknown }> }) => void; fail?: (e: unknown) => void }) => void
   removeStorageSync?: (key: string) => void
   clearStorageSync?: () => void
   // ★G-32 B3 三期：新增 wx 能力
   onAccelerometerChange?: (cb: (r: { x: number; y: number; z: number }) => void) => void
-  onCompassChange?: (cb: (r: { direction: number; accuracy?: number | string }) => void) => void
+  offAccelerometerChange?: (cb?: (r: { x: number; y: number; z: number }) => void) => void
+  startAccelerometer?: (opt?: { interval?: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopAccelerometer?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onCompassChange?: (cb: (r: { direction?: number }) => void) => void
+  offCompassChange?: (cb?: (r: { direction?: number }) => void) => void
+  startCompass?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  stopCompass?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   onGyroscopeChange?: (cb: (r: { x: number; y: number; z: number }) => void) => void
+  offGyroscopeChange?: (cb?: (r: { x: number; y: number; z: number }) => void) => void
+  startGyroscope?: (opt?: { interval?: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopGyroscope?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
   getScreenBrightness?: (opt: { success: (r: { value: number }) => void }) => void
   setScreenBrightness?: (opt: { value: number; fail?: () => void }) => void
   makePhoneCall?: (opt: { phoneNumber: string; success?: () => void; fail: () => void }) => void
@@ -1179,6 +1248,8 @@ interface WxLike {
   reportEvent?: (opt: { event: string; data?: Record<string, unknown> }) => void
   getFileSystemManager?: () => WxFileSystemManager
   // ★G-32 B3 五期：新增 wx 能力
+  requestSubscribeDeviceMessage?: (opt: { tmplIds: string[]; success?: (r: Record<string, string>) => void; fail?: (e: unknown) => void }) => void
+  openCustomerServiceChat?: (opt: { extInfo: { url: string }; corpId: string; success?: () => void; fail?: (e: unknown) => void }) => void
   requestSubscribeMessage?: (opt: {
     tmplIds: string[]
     success: (r: { [tmplId: string]: string }) => void
@@ -1234,6 +1305,12 @@ interface WxLike {
   offBLECharacteristicValueChange?: (cb?: (...args: never[]) => void) => void
   getBLEDeviceRSSI?: (opt: { deviceId: string; success?: (r: { RSSI: number }) => void; fail?: (e: unknown) => void }) => void
   getHCEState?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  startHCE?: (opt: { aidList: string[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  stopHCE?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  sendHCEMessage?: (opt: { data: ArrayBuffer; success?: () => void; fail?: (e: unknown) => void }) => void
+  onHCEMessage?: (cb: (r: { messageType: number; data?: ArrayBuffer }) => void) => void
+  offHCEMessage?: (cb?: (...args: never[]) => void) => void
+  onHCEStateChange?: (cb: (r: { available: boolean }) => void) => void
   getSetting?: (opt: { success?: (r: { authSetting?: Record<string, boolean> }) => void; fail?: (e: unknown) => void }) => void
   onKeyboardHeightChange?: (cb: (r: { height: number }) => void) => void
   onPageShow?: (cb: () => void) => void
@@ -1311,26 +1388,91 @@ function memoryStorage(): CompatStorage {
     clear: () => {
       mem.clear()
     },
+    // ★能力颗粒度对齐：异步/批量/info（内存实现同步语义包装 CapResult）
+    setAsync: (key, value) => {
+      mem.set(key, JSON.stringify(value))
+      return Promise.resolve(capOk(undefined))
+    },
+    getAsync: <T,>(key: string) => {
+      const raw = mem.get(key)
+      if (raw === undefined) return Promise.resolve(capOk<T | undefined>(undefined))
+      try {
+        return Promise.resolve(capOk<T | undefined>(JSON.parse(raw) as T))
+      } catch {
+        return Promise.resolve(capOk<T | undefined>(undefined))
+      }
+    },
+    removeAsync: (key) => {
+      mem.delete(key)
+      return Promise.resolve(capOk(undefined))
+    },
+    clearAsync: () => {
+      mem.clear()
+      return Promise.resolve(capOk(undefined))
+    },
+    info: () =>
+      Promise.resolve(
+        capOk({ keys: [...mem.keys()], currentSize: [...mem.values()].reduce((n, v) => n + v.length, 0), limitSize: 10 * 1024 * 1024 }),
+      ),
+    batchGet: (keys) =>
+      Promise.resolve(
+        capOk(
+          keys.map((k) => {
+            const raw = mem.get(k)
+            let value: unknown
+            try {
+              value = raw === undefined ? undefined : JSON.parse(raw)
+            } catch {
+              value = undefined
+            }
+            return { key: k, value }
+          }),
+        ),
+      ),
+    batchSet: (kvList) => {
+      kvList.forEach((kv) => mem.set(kv.key, JSON.stringify(kv.value)))
+      return Promise.resolve(capOk(undefined))
+    },
   }
 }
 
 /** wx 存储适配（sync 存储缺失 → 内存兜底） */
 function wxStorage(wx: WxLike): CompatStorage {
-  if (typeof wx.setStorageSync === 'function') {
-    return {
-      get: <T>(key: string) => wx.getStorageSync ? (wx.getStorageSync(key) as T) : undefined,
-      set: (key, value) => {
-        if (wx.setStorageSync) wx.setStorageSync(key, value)
-      },
-      remove: (key) => {
-        if (wx.removeStorageSync) wx.removeStorageSync(key)
-      },
-      clear: () => {
-        if (wx.clearStorageSync) wx.clearStorageSync()
-      },
-    }
+  if (typeof wx.setStorageSync !== 'function') return memoryStorage()
+  const sync: Pick<CompatStorage, 'get' | 'set' | 'remove' | 'clear'> = {
+    get: <T>(key: string) => (wx.getStorageSync ? (wx.getStorageSync(key) as T) : undefined),
+    set: (key, value) => {
+      if (wx.setStorageSync) wx.setStorageSync(key, value)
+    },
+    remove: (key) => {
+      if (wx.removeStorageSync) wx.removeStorageSync(key)
+    },
+    clear: () => {
+      if (wx.clearStorageSync) wx.clearStorageSync()
+    },
   }
-  return memoryStorage()
+  // ★能力颗粒度对齐：异步 API（缺 wx 异步 → 用同步结果包装；保证契约一致不 Err）
+  const pAsync = <T>(fn: (resolve: (r: T) => void, reject: (e: unknown) => void) => void, code = 'storage.failed'): Promise<CapResult<T>> =>
+    new Promise<CapResult<T>>((resolve) => fn((r) => resolve(capOk(r)), (e) => resolve(capErr<T>(code, (e as { errMsg?: string })?.errMsg || '存储操作失败', e))))
+  return {
+    ...sync,
+    setAsync: (key, value) => (wx.setStorage ? pAsync<void>((res, rej) => wx.setStorage!({ key, data: value, success: () => res(undefined as never), fail: rej })) : Promise.resolve(capOk(sync.set(key, value)))),
+    getAsync: <T,>(key: string) => (wx.getStorage ? pAsync<T | undefined>((res, rej) => wx.getStorage!({ key, success: (r) => res(r.data as T), fail: rej })) : Promise.resolve(capOk(sync.get<T>(key)))),
+    removeAsync: (key) => (wx.removeStorage ? pAsync<void>((res, rej) => wx.removeStorage!({ key, success: () => res(undefined as never), fail: rej })) : Promise.resolve(capOk(sync.remove(key)))),
+    clearAsync: () => (wx.clearStorage ? pAsync<void>((res, rej) => wx.clearStorage!({ success: () => res(undefined as never), fail: rej })) : Promise.resolve(capOk(sync.clear()))),
+    info: () =>
+      wx.getStorageInfo
+        ? pAsync<{ keys: string[]; currentSize: number; limitSize: number }>((res, rej) => wx.getStorageInfo!({ success: (r) => res({ keys: r.keys ?? [], currentSize: r.currentSize ?? 0, limitSize: r.limitSize ?? 0 }), fail: rej }))
+        : Promise.resolve(capOk({ keys: [], currentSize: 0, limitSize: 0 })),
+    batchGet: (keys) =>
+      wx.batchGetStorage
+        ? pAsync<Array<{ key: string; value: unknown }>>((res, rej) => wx.batchGetStorage!({ keyList: keys, success: (r) => res((r.kvList ?? []).map((kv) => ({ key: kv.key, value: kv.value }))), fail: rej }))
+        : Promise.resolve(capOk(keys.map((k) => ({ key: k, value: sync.get(k) })))),
+    batchSet: (kvList) =>
+      wx.batchSetStorage
+        ? pAsync<void>((res, rej) => wx.batchSetStorage!({ kvList, success: () => res(undefined as never), fail: rej }))
+        : Promise.resolve(capOk(kvList.forEach((kv) => sync.set(kv.key, kv.value)) as unknown as void)),
+  }
 }
 
 /** web 内存文件系统（C43 降级：可读写但非持久——无标准同步 FS 时的诚实降级） */
@@ -1724,18 +1866,71 @@ function wxBridge(wx: WxLike): CapabilityBridge {
     getStorage: () => wxStorage(wx),
     // ★G-32 B3 三期：新增能力（wx → Result；缺能力 → CapError 降级）
     readSensor: (kind) =>
+      // ★修复：读到首帧后解除监听（原实现永久挂 on* → 泄漏；wx.off* 存在则调用）
       new Promise((resolve, reject) => {
         if (kind === 'compass') {
           if (!wx.onCompassChange) return reject(new CapError('sensor.compass.unsupported', 'wx.onCompassChange 缺失'))
-          wx.onCompassChange((r) =>
-            resolve({ kind, heading: typeof r.direction === 'number' ? r.direction : 0, timestamp: Date.now() }),
-          )
+          const h = (r: { direction?: number }): void => {
+            if (wx.offCompassChange) wx.offCompassChange(h)
+            resolve({ kind, heading: typeof r.direction === 'number' ? r.direction : 0, timestamp: Date.now() })
+          }
+          wx.onCompassChange(h)
           return
         }
-        const on = kind === 'gyroscope' ? wx.onGyroscopeChange : wx.onAccelerometerChange
-        if (!on) return reject(new CapError(`sensor.${kind}.unsupported`, 'wx 传感器监听缺失'))
-        on((r) => resolve({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() }))
+        if (kind === 'gyroscope') {
+          if (!wx.onGyroscopeChange) return reject(new CapError('sensor.gyroscope.unsupported', 'wx.onGyroscopeChange 缺失'))
+          const h = (r: { x: number; y: number; z: number }): void => {
+            if (wx.offGyroscopeChange) wx.offGyroscopeChange(h)
+            resolve({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() })
+          }
+          wx.onGyroscopeChange(h)
+          return
+        }
+        if (!wx.onAccelerometerChange) return reject(new CapError('sensor.accelerometer.unsupported', 'wx.onAccelerometerChange 缺失'))
+        const h = (r: { x: number; y: number; z: number }): void => {
+          if (wx.offAccelerometerChange) wx.offAccelerometerChange(h)
+          resolve({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() })
+        }
+        wx.onAccelerometerChange(h)
       }),
+    // ★能力颗粒度对齐：传感器流启停（start/stop 显式生命周期）
+    startSensor: (kind) =>
+      new Promise((resolve, reject) => {
+        const start = kind === 'compass' ? wx.startCompass : kind === 'gyroscope' ? wx.startGyroscope : wx.startAccelerometer
+        if (typeof start !== 'function') return reject(new CapError('sensor.' + kind + '.unsupported', 'wx.start' + kind + ' 缺失'))
+        start({ success: () => resolve(), fail: (e: unknown) => reject(new CapError('sensor.start-failed', '传感器启动失败', e)) })
+      }),
+    stopSensor: (kind) =>
+      new Promise((resolve, reject) => {
+        const stop = kind === 'compass' ? wx.stopCompass : kind === 'gyroscope' ? wx.stopGyroscope : wx.stopAccelerometer
+        if (typeof stop !== 'function') return reject(new CapError('sensor.' + kind + '.unsupported', 'wx.stop' + kind + ' 缺失'))
+        stop({ success: () => resolve(), fail: (e: unknown) => reject(new CapError('sensor.stop-failed', '传感器停止失败', e)) })
+      }),
+    // ★能力颗粒度对齐：持续推送（on*Change 挂接 → cb；返回取消订阅）
+    subscribeSensor: (kind, cb) => {
+      if (kind === 'compass') {
+        if (!wx.onCompassChange) return () => {}
+        const h = (r: { direction?: number }): void => cb({ kind, heading: typeof r.direction === 'number' ? r.direction : 0, timestamp: Date.now() })
+        wx.onCompassChange(h)
+        return () => {
+          if (wx.offCompassChange) wx.offCompassChange(h)
+        }
+      }
+      if (kind === 'gyroscope') {
+        if (!wx.onGyroscopeChange) return () => {}
+        const h = (r: { x: number; y: number; z: number }): void => cb({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() })
+        wx.onGyroscopeChange(h)
+        return () => {
+          if (wx.offGyroscopeChange) wx.offGyroscopeChange(h)
+        }
+      }
+      if (!wx.onAccelerometerChange) return () => {}
+      const h = (r: { x: number; y: number; z: number }): void => cb({ kind, x: r.x, y: r.y, z: r.z, timestamp: Date.now() })
+      wx.onAccelerometerChange(h)
+      return () => {
+        if (wx.offAccelerometerChange) wx.offAccelerometerChange(h)
+      }
+    },
     getBrightness: () =>
       new Promise((resolve, reject) => {
         if (!wx.getScreenBrightness) return reject(new CapError('brightness.unsupported', 'wx.getScreenBrightness 缺失'))
@@ -1884,6 +2079,23 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           },
           fail: (e) => reject(new CapError('notification.failed', 'wx.requestSubscribeMessage 失败', e)),
         })
+      }),
+    subscribeDeviceMessage: (templateId) =>
+      new Promise((resolve, reject) => {
+        if (!wx.requestSubscribeDeviceMessage) return reject(new CapError('notification.unsupported', 'wx.requestSubscribeDeviceMessage 缺失'))
+        wx.requestSubscribeDeviceMessage({
+          tmplIds: [templateId],
+          success: (r) => {
+            const status = (r ?? {})[templateId] ?? 'reject'
+            resolve({ templateId, granted: status === 'accept', status })
+          },
+          fail: (e) => reject(new CapError('notification.failed', 'wx.requestSubscribeDeviceMessage 失败', e)),
+        })
+      }),
+    openCustomerService: (corpId, url) =>
+      new Promise((resolve, reject) => {
+        if (!wx.openCustomerServiceChat) return reject(new CapError('notification.unsupported', 'wx.openCustomerServiceChat 缺失'))
+        wx.openCustomerServiceChat({ corpId, extInfo: { url }, success: () => resolve(), fail: (e) => reject(new CapError('notification.failed', '打开客服失败', e)) })
       }),
     chooseContact: () =>
       new Promise((resolve, reject) => {
@@ -2092,15 +2304,44 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           fail: (e: unknown) => reject(new CapError('permission.failed', (e as { errMsg?: string })?.errMsg || 'wx.getSetting 失败')),
         })
       }),
+    // ★能力颗粒度对齐：C37 NFC 富接口（HCE 卡模拟 + 消息收发；原仅状态探测）
     getNfc: () =>
       new Promise((resolve) => {
+        const build = (supported: boolean, available: boolean): NFCAPI => {
+          const cap = <T,>(p: Promise<T>): Promise<CapResult<T>> => p.then((d) => capOk(d), (e) => capErr<T>(e instanceof CapError ? e.code : 'nfc.failed', e instanceof Error ? e.message : String(e), e))
+          const run = (fn: unknown, name: string, opt?: Record<string, unknown>): Promise<void> =>
+            new Promise<void>((res, rej) => {
+              if (typeof fn !== 'function') return rej(new CapError('nfc.unsupported', 'wx.' + name + ' 缺失'))
+              ;(fn as (o?: Record<string, unknown>) => void)({ ...opt, success: () => res(), fail: (e: unknown) => rej(new CapError('nfc.failed', 'wx ' + name + ' 失败', e)) })
+            })
+          return {
+            supported,
+            available,
+            startHCE: (aidList) => cap(run(wx.startHCE, 'startHCE', { aidList })),
+            stopHCE: () => cap(run(wx.stopHCE, 'stopHCE')),
+            sendHCEMessage: (data) => cap(run(wx.sendHCEMessage, 'sendHCEMessage', { data })),
+            onHCEMessage: (cb) => {
+              if (!wx.onHCEMessage) return () => {}
+              wx.onHCEMessage(cb)
+              return () => {
+                if (wx.offHCEMessage) wx.offHCEMessage(cb)
+              }
+            },
+            onHCEStateChange: (cb) => {
+              if (!wx.onHCEStateChange) return () => {}
+              const h = (r: { available: boolean }): void => cb(r.available)
+              wx.onHCEStateChange(h)
+              return () => {}
+            },
+          }
+        }
         if (!wx.getHCEState) {
-          resolve({ supported: false, available: false })
+          resolve(build(false, false))
           return
         }
         wx.getHCEState({
-          success: () => resolve({ supported: true, available: true }),
-          fail: () => resolve({ supported: true, available: false }),
+          success: () => resolve(build(true, true)),
+          fail: () => resolve(build(true, false)),
         })
       }),
     getCamera: () =>
@@ -2463,29 +2704,43 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     },
     getStorage: () => {
       const ls = (g as { localStorage?: Storage }).localStorage
-      if (ls && typeof ls.getItem === 'function') {
-        return {
-          get: <T>(key: string) => {
-            const raw = ls.getItem(key)
-            if (raw === null) return undefined
-            try {
-              return JSON.parse(raw) as T
-            } catch {
-              return undefined
-            }
-          },
-          set: (key, value) => {
-            ls.setItem(key, JSON.stringify(value))
-          },
-          remove: (key) => {
-            ls.removeItem(key)
-          },
-          clear: () => {
-            ls.clear()
-          },
+      if (!ls || typeof ls.getItem !== 'function') return memoryStorage()
+      const readOne = <T,>(key: string): T | undefined => {
+        const raw = ls.getItem(key)
+        if (raw === null) return undefined
+        try {
+          return JSON.parse(raw) as T
+        } catch {
+          return undefined
         }
       }
-      return memoryStorage()
+      const store: CompatStorage = {
+        get: readOne,
+        set: (key, value) => ls.setItem(key, JSON.stringify(value)),
+        remove: (key) => ls.removeItem(key),
+        clear: () => ls.clear(),
+        // ★能力颗粒度对齐：异步/批量/info（localStorage 同步语义包装 CapResult）
+        setAsync: (key, value) => {
+          ls.setItem(key, JSON.stringify(value))
+          return Promise.resolve(capOk(undefined))
+        },
+        getAsync: <T,>(key: string) => Promise.resolve(capOk(readOne<T>(key))),
+        removeAsync: (key) => {
+          ls.removeItem(key)
+          return Promise.resolve(capOk(undefined))
+        },
+        clearAsync: () => {
+          ls.clear()
+          return Promise.resolve(capOk(undefined))
+        },
+        info: () => Promise.resolve(capOk({ keys: Object.keys(ls), currentSize: 0, limitSize: 5 * 1024 * 1024 })),
+        batchGet: (keys) => Promise.resolve(capOk(keys.map((k) => ({ key: k, value: readOne(k) })))),
+        batchSet: (kvList) => {
+          kvList.forEach((kv) => ls.setItem(kv.key, JSON.stringify(kv.value)))
+          return Promise.resolve(capOk(undefined))
+        },
+      }
+      return store
     },
     // ★G-32 B3 三期：新增能力（web——无标准 API 的能力（亮度/电话/支付/登录/扫码）缺省 undefined → Hook Err('<cap>.unsupported')
     readSensor: (kind) =>
@@ -2651,6 +2906,9 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
       const status = await N.requestPermission()
       return { templateId, granted: status === 'granted', status }
     },
+    // ★能力颗粒度对齐：web 设备订阅消息/客服会话（无标准对等 → 诚实 Err）
+    subscribeDeviceMessage: () => Promise.reject(new CapError('notification.unsupported', 'Web 端无设备订阅消息对等')),
+    openCustomerService: () => Promise.reject(new CapError('notification.unsupported', 'Web 端无客服会话对等')),
     getAppLifecycle: () => {
       let phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE' = 'PENDING'
       const launchCbs: Array<() => void> = []
@@ -2778,7 +3036,17 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     },
     getNfc: async () => {
       const supported = typeof (g as { NDEFReader?: unknown }).NDEFReader === 'function'
-      return { supported, available: supported }
+      // ★能力颗粒度对齐：web 返完整 NFCAPI（HCE 无标准对等 → 诚实 Err）
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('nfc.unsupported', 'Web 端 HCE ' + op + ' 无标准对等'))
+      return {
+        supported,
+        available: supported,
+        startHCE: () => noWeb('startHCE'),
+        stopHCE: () => noWeb('stopHCE'),
+        sendHCEMessage: () => noWeb('sendHCEMessage'),
+        onHCEMessage: () => () => {},
+        onHCEStateChange: () => () => {},
+      }
     },
     getCamera: async () => {
       const nav = g.navigator as (Navigator & { mediaDevices?: { getUserMedia?: (c: Record<string, unknown>) => Promise<{ getTracks(): Array<{ stop(): void }> }> } }) | undefined
@@ -3004,6 +3272,8 @@ export interface CapabilityHooks {
   // ★G-32 B3 三期：新增能力 Hook
   /** C5 useSensor：传感器一次性读取（accelerometer/compass/gyroscope） */
   useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
+  /** ★能力颗粒度对齐：传感器流（持续采样 + 启停 + 多订阅） */
+  useSensorStream(kind: SensorKind): CapResult<SensorStream>
   /** C13 useBrightness：读取当前亮度（0-1） */
   useBrightness(): Promise<CapResult<number>>
   /** C13 setBrightness：设置亮度（0-1） */
@@ -3038,6 +3308,10 @@ export interface CapabilityHooks {
   // ★G-32 B3 五期：新增能力 Hook
   /** C17 useNotification：消息订阅授权（wx.requestSubscribeMessage / web Notification） */
   useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
+  /** ★能力颗粒度对齐：设备订阅消息 */
+  useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription>>
+  /** ★能力颗粒度对齐：打开客服会话 */
+  useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
   /** C19 useContact：联系人选择（wx.chooseContact；web 无标准 → Err 降级） */
   useContact(): Promise<CapResult<Contact[]>>
   /** C20 useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err） */
@@ -3054,7 +3328,7 @@ export interface CapabilityHooks {
   /** C36 useBluetooth：蓝牙状态（wx.openBluetoothAdapter / web 特性探测） */
   useBluetooth(): Promise<CapResult<BluetoothAPI>>
   /** C37 useNFC：NFC 状态（wx.getHCEState / web NDEFReader 特性探测） */
-  useNFC(): Promise<CapResult<NfcInfo>>
+  useNFC(): Promise<CapResult<NFCAPI>>
   /** C1 useCamera：摄像头访问（wx.authorize / web getUserMedia） */
   useCamera(): Promise<CapResult<MediaAccess>>
   /** ★能力颗粒度对齐：相机操作控制器（拍照/录像/缩放/帧） */
@@ -3102,6 +3376,10 @@ const wrap = <T>(p: Promise<T>): Promise<CapResult<T>> =>
 
 /** ★createCapabilityHooks：能力 Hook 统一实例（bridge 注入可单测） */
 export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilityBridge()): CapabilityHooks {
+  // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
+  const listeners: Array<(s: SensorSample) => void> = []
+  let active = false
+  let unsubscribe: (() => void) | null = null
   return {
     useLocation: () => wrap(bridge.getLocation()),
     useVibrate: (durationMs = 15) => wrap(bridge.vibrate(durationMs)),
@@ -3133,6 +3411,52 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       return bridge.getStorage()
     },
     // ★G-32 B3 三期：新增能力 Hook（缺桥 → Err('<cap>.unsupported') 非抛异常——G-32.3 降级语义）
+    // ★能力颗粒度对齐：传感器流（显式启停 + 多订阅；无 start/stop 桥 → 用 readSensor 一次性轮询降级）
+    useSensorStream: (kind) => {
+      const noBridge = !bridge.startSensor && !bridge.stopSensor
+      return capOk<SensorStream>({
+        kind,
+        active: () => active,
+        start: async () => {
+          if (active) return capOk(undefined)
+          // 挂接持续推送（桥有 subscribeSensor → 每帧转发给全部订阅者）
+          if (bridge.subscribeSensor) {
+            unsubscribe = bridge.subscribeSensor(kind, (sample) => listeners.forEach((l) => l(sample)))
+          }
+          if (bridge.startSensor) {
+            try {
+              await bridge.startSensor(kind)
+            } catch (e) {
+              return capErr(e instanceof CapError ? e.code : 'sensor.start-failed', e instanceof Error ? e.message : String(e))
+            }
+          }
+          active = true
+          return capOk(undefined)
+        },
+        stop: async () => {
+          active = false
+          if (unsubscribe) {
+            unsubscribe()
+            unsubscribe = null
+          }
+          if (bridge.stopSensor) {
+            try {
+              await bridge.stopSensor(kind)
+            } catch (e) {
+              return capErr(e instanceof CapError ? e.code : 'sensor.stop-failed', e instanceof Error ? e.message : String(e))
+            }
+          }
+          return capOk(undefined)
+        },
+        on: (cb) => {
+          listeners.push(cb)
+          return () => {
+            const i = listeners.indexOf(cb)
+            if (i >= 0) listeners.splice(i, 1)
+          }
+        },
+      })
+    },
     useSensor: (kind) =>
       wrap(
         (() => {
@@ -3342,6 +3666,20 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         (() => {
           if (!bridge.subscribeMessage) return Promise.reject(new CapError('notification.unsupported', '桥未提供 subscribeMessage（useNotification 不可用）'))
           return bridge.subscribeMessage(templateId)
+        })(),
+      ),
+    useDeviceNotification: (templateId) =>
+      wrap(
+        (() => {
+          if (!bridge.subscribeDeviceMessage) return Promise.reject(new CapError('notification.unsupported', '桥未提供 subscribeDeviceMessage'))
+          return bridge.subscribeDeviceMessage(templateId)
+        })(),
+      ),
+    useCustomerService: (corpId, url) =>
+      wrap(
+        (() => {
+          if (!bridge.openCustomerService) return Promise.reject(new CapError('notification.unsupported', '桥未提供 openCustomerService'))
+          return bridge.openCustomerService(corpId, url)
         })(),
       ),
     useContact: () =>
