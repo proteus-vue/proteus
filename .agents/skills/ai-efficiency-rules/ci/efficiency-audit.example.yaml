@@ -1,0 +1,21 @@
+# 复制为仓库根目录 .efficiency-audit.yaml 后生效（可选）
+# 不提供该文件时，脚本按内置默认规则执行
+
+# 关闭指定规则（写规则 ID）
+disable:
+  # - R007          # 不检查 workflow 的 timeout-minutes
+  # - R003          # 允许全量 git clone
+
+# 调整规则级别：error / warn / info
+severity:
+  # R002: error     # 把"网络请求缺少 timeout"提升为错误
+  # R005: info      # 读取依赖目录只作提示
+
+# 忽略路径（正则，作用于文件路径）
+ignore_paths:
+  - '^third_party/'
+  - '^tests/fixtures/'
+  - '\.generated\.(ts|py)$'
+
+# 是否一并扫描 Markdown 文档中的示例代码（默认 false，也可用 --include-docs 开启）
+include_docs: false

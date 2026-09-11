@@ -1,0 +1,25 @@
+# 将本文件内容合并进 .gitlab-ci.yml
+# 依赖：scripts/audit_efficiency.py 放在仓库 tools/ 下
+
+stages:
+  - audit
+
+ai-efficiency-audit:
+  stage: audit
+  image: python:3.11-slim
+  timeout: 10 minutes          # 自身也遵守规范：必须有超时上限
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME --depth 50 || true
+    - |
+      python3 tools/audit_efficiency.py \
+        --diff-base "origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-$CI_DEFAULT_BRANCH}" \
+        --format md --output efficiency-report.md --fail-on error
+  artifacts:
+    when: always
+    paths:
+      - efficiency-report.md
+    expire_in: 1 week
+  allow_failure: false
