@@ -8,6 +8,14 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- ★2026-09-11 dev 修复：Playground 在浏览器内联编译（@proteus-vue/compiler → @babel/*），
+         而 @babel/types 等 CJS 依赖引用 `process.env.BABEL_TYPES_8_BREAKING`（bare process）。
+         生产构建靠 NODE_ENV 替换裁掉该分支；**dev 模式** Vite 不注入 bare process → 模块初始化抛
+         `ReferenceError: process is not defined` → 应用不挂载（页面空白）。
+         这里在 module 之前定义最小 shim（NODE_ENV 留空 → Vue 等库按 dev 语义走）。 -->
+    <script>
+      window.process = window.process || { env: {} };
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
