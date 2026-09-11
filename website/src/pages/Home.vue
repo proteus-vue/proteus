@@ -600,7 +600,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .hv-bars i:nth-child(1) { height: 14px; }
 .hv-bars i:nth-child(2) { height: 22px; }
 .hv-bars i:nth-child(3) { height: 30px; }
-.hv-cap { color: var(--muted); font-size: 11.5px; }
+.hv-cap { color: var(--muted); font-size: 12px; }
 /* Hero 数字行 */
 .hero-stats { align-items: flex-start; }
 .hero-stat { display: flex; flex-direction: column; gap: 4px; }
@@ -630,7 +630,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 }
 .card-title { color: var(--ink); margin: 0 0 8px; font-size: 16px; }
 .card-desc { color: var(--muted); font-size: 13px; line-height: 1.7; }
-.feature-tag { color: var(--brand-ink); font-size: 11.5px; letter-spacing: 0.8px; display: block; margin-bottom: 8px; }
+.feature-tag { color: var(--brand-ink); font-size: 12px; letter-spacing: 0.8px; display: block; margin-bottom: 8px; }
 .feature-card { display: flex; flex-direction: column; }
 
 /* ---- 学习路径卡（整卡可点） ---- */
