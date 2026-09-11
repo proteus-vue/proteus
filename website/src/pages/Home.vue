@@ -274,7 +274,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 <template>
   <p-page ref="homeEl" class="home" :class="{ 'no-motion': !motionOk }">
     <!-- 1. Hero：双栏（左文案 + 右产品视觉）——参考「专业组件库官网」构图 -->
-    <p-view v-p-fluid="'padding-top(48, 92) padding-bottom(28, 48)'" class="hero">
+    <p-view v-p-fluid="'padding-top(56, 112) padding-bottom(40, 76)'" class="hero">
       <p-grid :min-col-width="380" :gap="40" class="hero-grid">
         <p-view class="hero-copy">
           <span class="eyebrow">{{ t('home.eyebrow') }}</span>
@@ -327,7 +327,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 2. 为什么选择（eyebrow + 居中标题 + 四图标卡） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec why">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec why">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.whyEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.featuresTitle') }}</p-heading>
@@ -343,7 +343,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 3. 更少的代码（左文案 + 右代码/预览双栏） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec code-sec">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec code-sec">
       <p-grid :min-col-width="360" :gap="36" class="hero-grid code-grid">
         <p-view class="hero-copy">
           <span class="sec-eyebrow">{{ t('home.codeEyebrow') }}</span>
@@ -360,7 +360,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 4. 数字背书（stats.ts 可追溯） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec stats">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec stats">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.statsEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.statsTitle') }}</p-heading>
@@ -376,7 +376,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 5. 适用场景（3 图标卡） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec scenarios">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec scenarios">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.scenEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.scenTitle') }}</p-heading>
@@ -392,7 +392,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 5b. 核心能力（G 系能力矩阵——框架价值主张） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec features">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec features">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.capEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.capTitle') }}</p-heading>
@@ -408,7 +408,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 6. 生态支持（技术栈 logo 行） -->
-    <p-view v-p-fluid="'padding-top(24, 44) padding-bottom(24, 44)'" data-reveal class="sec stack">
+    <p-view v-p-fluid="'padding-top(36, 76) padding-bottom(36, 76)'" data-reveal class="sec stack">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.stackEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 30)'" class="sec-title">{{ t('home.stackTitle') }}</p-heading>
@@ -423,7 +423,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 7. 对标表（与「翻译派」的本质分水岭） -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec compare">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec compare">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.compareEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.compareTitle') }}</p-heading>
@@ -437,10 +437,10 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
           <tbody>
             <tr v-for="row in compareRows" :key="row.dim">
               <td class="cmp-dim">{{ row.dim }}</td>
-              <td>{{ row.uniapp }}</td>
-              <td>{{ row.rn }}</td>
-              <td>{{ row.flutter }}</td>
-              <td class="cmp-proteus">{{ row.proteus }} <span class="cmp-status" :class="statusClass(row.status)">{{ row.status }}</span></td>
+              <td data-label="uni-app">{{ row.uniapp }}</td>
+              <td data-label="React Native">{{ row.rn }}</td>
+              <td data-label="Flutter">{{ row.flutter }}</td>
+              <td class="cmp-proteus" data-label="Proteus">{{ row.proteus }} <span class="cmp-status" :class="statusClass(row.status)">{{ row.status }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -449,7 +449,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 8. dogfooding 金句 -->
-    <p-view v-p-fluid="'padding-top(32, 64) padding-bottom(32, 64)'" data-reveal class="sec quote">
+    <p-view v-p-fluid="'padding-top(40, 84) padding-bottom(40, 84)'" data-reveal class="sec quote">
       <p-heading :level="2" v-p-fluid="'font-size(20, 32)'" class="quote-line">
         「{{ t('home.quote1') }}」<br />
         {{ t('home.quote2a') }}<em>&lt;p-grid&gt;</em>{{ t('home.quote2b') }}
@@ -462,7 +462,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 9. 学习路径 -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(24, 48)'" data-reveal class="sec journey">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec journey">
       <p-view class="sec-head">
         <span class="sec-eyebrow">{{ t('home.journeyEyebrow') }}</span>
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.journeyTitle') }}</p-heading>
@@ -479,7 +479,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     </p-view>
 
     <!-- 10. 底部 CTA 横幅 -->
-    <p-view v-p-fluid="'padding-top(24, 48) padding-bottom(48, 84)'" data-reveal class="sec cta-banner">
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(56, 100)'" data-reveal class="sec cta-banner">
       <p-view class="cta-panel">
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="cta-title">{{ t('home.endTitle') }}</p-heading>
         <p-text class="cta-sub">{{ t('home.endSub') }}</p-text>
@@ -517,7 +517,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 
 /* ---- 通用区块头（eyebrow + 居中标题 + 副标题） ---- */
 .sec { max-width: 1180px; margin: 0 auto; }
-.sec-head { text-align: center; max-width: 680px; margin: 0 auto 30px; align-items: center; }
+.sec-head { text-align: center; max-width: 700px; margin: 0 auto 48px; align-items: center; }
 .sec-eyebrow {
   display: inline-block;
   width: fit-content;
@@ -530,12 +530,12 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   padding: 4px 12px;
   margin-bottom: 14px;
 }
-.sec-title { color: var(--ink); margin: 0 0 10px; font-weight: 700; }
+.sec-title { color: var(--ink); margin: 0 0 14px; font-weight: 700; letter-spacing: -0.01em; }
 .sec-title.left, .sec-sub.left { text-align: left; }
-.sec-sub { color: var(--muted); font-size: 14.5px; line-height: 1.7; margin: 0; display: block; }
+.sec-sub { color: var(--muted); font-size: 15px; line-height: 1.7; margin: 0; display: block; }
 
 /* ---- 1. Hero 双栏 ---- */
-.hero { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 46px; }
+.hero { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
 /* 布局归 p-grid（:min-col-width/:gap）；这里只做交叉轴对齐 */
 .hero-grid { align-items: center; }
 .hero-copy { max-width: 620px; }
@@ -611,7 +611,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .card {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  padding: var(--sp-18);
+  padding: 24px;
   background: var(--panel);
   transition: border-color 0.15s;
 }
@@ -628,8 +628,8 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   border: 1px solid rgba(124, 92, 255, 0.25);
   margin-bottom: 14px;
 }
-.card-title { color: var(--ink); margin: 0 0 8px; font-size: 16px; }
-.card-desc { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.card-title { color: var(--ink); margin: 0 0 10px; font-size: 16.5px; }
+.card-desc { color: var(--muted); font-size: 13.5px; line-height: 1.75; }
 .feature-tag { color: var(--brand-ink); font-size: 12px; letter-spacing: 0.8px; display: block; margin-bottom: 8px; }
 .feature-card { display: flex; flex-direction: column; }
 
@@ -675,8 +675,11 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 }
 .stack-name { color: var(--ink); font-size: 14px; font-weight: 600; }
 
-/* ---- 对标表 ---- */
+/* ---- 对标表（★2026-09-11：窄容器卡片化——@container 驱动，免横向滚动） ---- */
+.compare { container-type: inline-size; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-xl); min-width: 0; max-width: 100%; }
+/* 窄容器：每行变一张卡（thead 隐藏，cell 带 data-label 左标签） */
+
 .cmp-table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
 .cmp-table th { color: var(--ink); background: var(--panel2); padding: 11px 14px; text-align: left; white-space: nowrap; }
 .cmp-table td { color: var(--muted); border-top: 1px solid var(--line); padding: 11px 14px; }
@@ -687,6 +690,26 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .cmp-status.st-warn { color: var(--warn); }
 .cmp-status.st-plan { color: var(--dim); }
 .cmp-note { color: var(--muted); font-size: 12px; margin-top: 12px; display: block; }
+/* 窄容器卡片化（置于基础规则之后——同优先级后写胜出，覆盖 min-width 640） */
+@container (max-width: 720px) {
+  .table-wrap { overflow: visible; border: none; }
+  .cmp-table { display: block; min-width: 0; font-size: 13.5px; }
+  .cmp-table thead { display: none; }
+  .cmp-table tbody { display: block; }
+  .cmp-table tr {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    background: var(--panel);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .cmp-table td { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-top: 1px solid var(--line-soft); padding: 11px 16px; }
+  .cmp-table td:first-child { border-top: none; }
+  .cmp-table td.cmp-dim { display: block; background: var(--panel2); color: var(--ink); font-weight: 700; padding: 13px 16px; }
+  .cmp-table td:not(.cmp-dim)::before { content: attr(data-label); color: var(--dim); font-weight: 500; flex-shrink: 0; }
+  .cmp-table td.cmp-proteus { background: var(--brand-soft); }
+}
 .center-block { text-align: center; }
 
 /* ---- dogfooding 金句 ---- */
