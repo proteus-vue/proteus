@@ -23,8 +23,38 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `BluetoothAPI` | Success payload |
+| `data` | `BluetoothAPI` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Properties of the `BluetoothAPI` object
+
+| Property | Type | Required | Doc |
+|---|---|---|---|
+| `supported` | `boolean` | Yes | Whether the platform supports Bluetooth |
+| `available` | `boolean` | Yes | The adapter is open (available) |
+| `devices` | `string[]` | Yes | Names of paired/discovered devices (wx.getBluetoothDevices; on the web, listed only after a user gesture) |
+
+#### Methods of `BluetoothAPI`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `close` | `close(): Promise<CapResult<void>>` | — |
+| `getAdapterState` | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | — |
+| `startDiscovery` | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | — |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | — |
+| `onDeviceFound` | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | — |
+| `getDevices` | `getDevices(): Promise<CapResult<BleDevice[]>>` | — |
+| `getConnectedDevices` | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | — |
+| `connect` | `connect(deviceId: string): Promise<CapResult<void>>` | — |
+| `disconnect` | `disconnect(deviceId: string): Promise<CapResult<void>>` | — |
+| `onConnectionStateChange` | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | — |
+| `getServices` | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | — |
+| `getCharacteristics` | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | — |
+| `read` | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | — |
+| `write` | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | — |
+| `setNotify` | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | — |
+| `onCharacteristicValueChange` | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | — |
+| `getRSSI` | `getRSSI(deviceId: string): Promise<CapResult<number>>` | — |
 
 ## Error codes
 

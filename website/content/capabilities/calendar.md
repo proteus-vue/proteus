@@ -69,6 +69,24 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
+## 扩展接口
+
+除主 hook `useCalendar` 外，本能力还提供以下操作接口：
+
+### `useCalendarAPI`
+
+```ts
+useCalendarAPI(): CapResult<CalendarAPI>
+```
+
+#### `CalendarAPI` 的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `add` | `add(event: CalendarEvent): Promise<CapResult<void>>` | 添加日程（wx.addPhoneCalendar） |
+| `remove` | `remove(eventId: string): Promise<CapResult<void>>` | 删除日程（wx 需用户确认，按 eventId；支持有限） |
+| `list` | `list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>` | 查询日程（无开放 API → 诚实 Err） |
+
 ## 用法
 
 ```ts

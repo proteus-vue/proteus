@@ -65,6 +65,30 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
+## 扩展接口
+
+除主 hook `useNotification` 外，本能力还提供以下操作接口：
+
+### `useDeviceNotification`
+
+```ts
+useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription>>
+```
+
+#### `MessageSubscription` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `templateId` | `string` | 是 | 模板 id（wx 需要先在公众平台申请） |
+| `granted` | `boolean` | 是 | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
+| `status` | `string` | 否 | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
+
+### `useCustomerService`
+
+```ts
+useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
+```
+
 ## 用法
 
 ```ts

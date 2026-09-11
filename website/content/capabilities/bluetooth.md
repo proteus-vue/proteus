@@ -23,8 +23,38 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `BluetoothAPI` | 成功载荷 |
+| `data` | `BluetoothAPI` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`BluetoothAPI`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | 是 | 平台是否支持蓝牙 |
+| `available` | `boolean` | 是 | 适配器已打开（可用） |
+| `devices` | `string[]` | 是 | 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） |
+
+#### `data`（`BluetoothAPI`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `close` | `close(): Promise<CapResult<void>>` | 关闭适配器（释放资源） |
+| `getAdapterState` | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | 适配器状态（available + discovering） |
+| `startDiscovery` | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | 开始搜索附近设备 |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索 |
+| `onDeviceFound` | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | 订阅「发现新设备」（返回取消订阅） |
+| `getDevices` | `getDevices(): Promise<CapResult<BleDevice[]>>` | 已发现设备列表 |
+| `getConnectedDevices` | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | 已连接设备列表 |
+| `connect` | `connect(deviceId: string): Promise<CapResult<void>>` | 连接设备 |
+| `disconnect` | `disconnect(deviceId: string): Promise<CapResult<void>>` | 断开设备 |
+| `onConnectionStateChange` | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | 订阅「连接状态变化」（返回取消订阅） |
+| `getServices` | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | 获取设备服务列表 |
+| `getCharacteristics` | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | 获取服务的特征值列表 |
+| `read` | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | 读特征值 |
+| `write` | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | 写特征值 |
+| `setNotify` | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | 订阅/取消订阅特征值通知 |
+| `onCharacteristicValueChange` | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | 订阅「特征值变化」（返回取消订阅） |
+| `getRSSI` | `getRSSI(deviceId: string): Promise<CapResult<number>>` | 读取信号强度 |
 
 ## 错误码
 

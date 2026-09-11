@@ -29,8 +29,27 @@ useMap(id: string): Promise<CapResult<MapController>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `MapController` | 成功载荷 |
+| `data` | `MapController` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`MapController`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
+| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
+| `moveToLocation` | `moveToLocation(): Promise<CapResult<void>>` | 移动到当前定位点 |
+| `includePoints` | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | 缩放视野以包含所有点 |
+| `translateMarker` | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | 平移（相对当前中心，单位 px 或度数） |
+| `addMarkers` | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | 添加/移除标记 |
+| `removeMarkers` | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | — |
+| `addPolylines` | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | 折线 / 圆 |
+| `removePolylines` | `removePolylines(ids: number[]): Promise<CapResult<void>>` | — |
+| `addCircles` | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | — |
+| `removeCircles` | `removeCircles(ids: number[]): Promise<CapResult<void>>` | — |
+| `getScale` | `getScale(): Promise<CapResult<number>>` | 获取缩放级别 / 旋转角 |
+| `openMapApp` | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | 打开地图 App（导航，宿主放行才可用） |
+| `on` | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | 订阅地图事件（regionchange/updated 等；返回取消） |
 
 ## 错误码
 

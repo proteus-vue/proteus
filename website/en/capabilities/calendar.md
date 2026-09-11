@@ -69,6 +69,24 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Extension interfaces
+
+Beyond the primary hook `useCalendar`, this capability also exposes these operation interfaces:
+
+### `useCalendarAPI`
+
+```ts
+useCalendarAPI(): CapResult<CalendarAPI>
+```
+
+#### `CalendarAPI` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `add` | `add(event: CalendarEvent): Promise<CapResult<void>>` | 添加日程（wx.addPhoneCalendar） |
+| `remove` | `remove(eventId: string): Promise<CapResult<void>>` | 删除日程（wx 需用户确认，按 eventId；支持有限） |
+| `list` | `list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>` | 查询日程（无开放 API → 诚实 Err） |
+
 ## Usage
 
 ```ts

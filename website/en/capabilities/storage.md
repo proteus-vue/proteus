@@ -20,12 +20,6 @@ useStorage(): CompatStorage
 
 Returns `CompatStorage` (synchronous handle/state object).
 
-#### Properties of `CompatStorage`
-
-| Property | Type | Doc |
-|---|---|---|
-| `keys` | `string[]; currentSize: number; limitSize: number }>>` | — |
-
 #### Methods of `CompatStorage`
 
 | Method | Signature | Doc |

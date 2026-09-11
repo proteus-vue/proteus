@@ -59,6 +59,27 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Extension interfaces
+
+Beyond the primary hook `useMicrophone`, this capability also exposes these operation interfaces:
+
+### `useRecorder`
+
+```ts
+useRecorder(): CapResult<RecorderController>
+```
+
+#### `RecorderController` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `start` | `start(options?: RecordOptions): Promise<CapResult<void>>` | — |
+| `stop` | `stop(): Promise<CapResult<void>>` | — |
+| `pause` | `pause(): Promise<CapResult<void>>` | — |
+| `resume` | `resume(): Promise<CapResult<void>>` | — |
+| `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音事件（返回取消函数） |
+| `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（时长/大小） |
+
 ## Usage
 
 ```ts

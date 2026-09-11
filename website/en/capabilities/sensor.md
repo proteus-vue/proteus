@@ -69,6 +69,31 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Extension interfaces
+
+Beyond the primary hook `useSensor`, this capability also exposes these operation interfaces:
+
+### `useSensorStream`
+
+```ts
+useSensorStream(kind: SensorKind): CapResult<SensorStream>
+```
+
+#### `SensorStream` props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | — |
+
+#### `SensorStream` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `start` | `start(): Promise<CapResult<void>>` | 开始监听（幂等） |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止监听（释放底层 on* 订阅） |
+| `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
+| `active` | `active(): boolean` | 是否监听中 |
+
 ## Usage
 
 ```ts

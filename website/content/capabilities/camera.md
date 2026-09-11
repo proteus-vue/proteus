@@ -59,6 +59,26 @@ useCamera(): Promise<CapResult<MediaAccess>>
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
+## 扩展接口
+
+除主 hook `useCamera` 外，本能力还提供以下操作接口：
+
+### `useCameraContext`
+
+```ts
+useCameraContext(id: string): CapResult<CameraController>
+```
+
+#### `CameraController` 的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `takePhoto` | `takePhoto(quality?: 'high' \| 'normal' \| 'low'): Promise<CapResult<PhotoResult>>` | — |
+| `startRecord` | `startRecord(): Promise<CapResult<void>>` | — |
+| `stopRecord` | `stopRecord(): Promise<CapResult<VideoResult>>` | — |
+| `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | — |
+| `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机帧（返回取消函数；web 无对等 → 空订阅） |
+
 ## 用法
 
 ```ts

@@ -23,8 +23,25 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `NFCAPI` | Success payload |
+| `data` | `NFCAPI` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Properties of the `NFCAPI` object
+
+| Property | Type | Required | Doc |
+|---|---|---|---|
+| `supported` | `boolean` | Yes | Whether the platform supports NFC |
+| `available` | `boolean` | Yes | NFC is currently available (enabled) |
+
+#### Methods of `NFCAPI`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `startHCE` | `startHCE(aidList: string[]): Promise<CapResult<void>>` | — |
+| `stopHCE` | `stopHCE(): Promise<CapResult<void>>` | — |
+| `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | — |
+| `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | — |
+| `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | — |
 
 ## Error codes
 

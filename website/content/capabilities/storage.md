@@ -20,12 +20,6 @@ useStorage(): CompatStorage
 
 返回 `CompatStorage`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `CompatStorage` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `keys` | `string[]; currentSize: number; limitSize: number }>>` | — |
-
 #### `CompatStorage` 的方法
 
 | 方法 | 签名 | 说明 |

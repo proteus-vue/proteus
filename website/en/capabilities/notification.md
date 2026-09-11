@@ -65,6 +65,30 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Extension interfaces
+
+Beyond the primary hook `useNotification`, this capability also exposes these operation interfaces:
+
+### `useDeviceNotification`
+
+```ts
+useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription>>
+```
+
+#### `MessageSubscription` props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `templateId` | `string` | Yes | 模板 id（wx 需要先在公众平台申请） |
+| `granted` | `boolean` | Yes | 是否获得授权（wx 为 tmplIds 中该模板的状态；web 为 Notification.requestPermission granted） |
+| `status` | `string` | No | 原始状态文案（wx: 'accept'/'reject'/'ban'；web: 'granted'/'denied'/'default'） |
+
+### `useCustomerService`
+
+```ts
+useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
+```
+
 ## Usage
 
 ```ts

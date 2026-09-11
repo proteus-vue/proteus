@@ -69,6 +69,31 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
+## 扩展接口
+
+除主 hook `useSensor` 外，本能力还提供以下操作接口：
+
+### `useSensorStream`
+
+```ts
+useSensorStream(kind: SensorKind): CapResult<SensorStream>
+```
+
+#### `SensorStream` 的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kind` | `SensorKind` | 是 | — |
+
+#### `SensorStream` 的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `start` | `start(): Promise<CapResult<void>>` | 开始监听（幂等） |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止监听（释放底层 on* 订阅） |
+| `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
+| `active` | `active(): boolean` | 是否监听中 |
+
 ## 用法
 
 ```ts

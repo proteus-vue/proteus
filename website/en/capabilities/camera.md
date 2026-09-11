@@ -59,6 +59,26 @@ useCamera(): Promise<CapResult<MediaAccess>>
 
 > Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
 
+## Extension interfaces
+
+Beyond the primary hook `useCamera`, this capability also exposes these operation interfaces:
+
+### `useCameraContext`
+
+```ts
+useCameraContext(id: string): CapResult<CameraController>
+```
+
+#### `CameraController` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `takePhoto` | `takePhoto(quality?: 'high' \| 'normal' \| 'low'): Promise<CapResult<PhotoResult>>` | — |
+| `startRecord` | `startRecord(): Promise<CapResult<void>>` | — |
+| `stopRecord` | `stopRecord(): Promise<CapResult<VideoResult>>` | — |
+| `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | — |
+| `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机帧（返回取消函数；web 无对等 → 空订阅） |
+
 ## Usage
 
 ```ts
