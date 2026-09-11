@@ -63,6 +63,8 @@ watch(() => route.fullPath, () => {
 
 <template>
   <p-page ref="siteEl" class="site">
+    <!-- ★无障碍：跳转到主内容（键盘首个 Tab 即可达；WCAG 2.4.1 Bypass Blocks） -->
+    <a class="skip-link" href="#main-content">{{ locale === 'zh' ? '跳到主内容' : 'Skip to content' }}</a>
     <!-- ★#389 导航：实底细边框（去掉玻璃发光——风格收敛） -->
     <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen }">
       <div class="nav">
@@ -124,7 +126,7 @@ watch(() => route.fullPath, () => {
       </div>
     </header>
 
-    <main v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
+    <main id="main-content" tabindex="-1" v-p-fluid="'padding(12, 24)'" class="main" :class="{ 'is-docs': isDocs, 'is-wide': isWide }">
       <router-view />
     </main>
 

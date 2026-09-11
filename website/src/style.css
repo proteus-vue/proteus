@@ -170,3 +170,32 @@ body {
 /* ★#383：v-html 宽内容（表格/pre）横向滚动收敛在自身，不撑破页面 */
 .doc-body table { display: block; overflow-x: auto; width: 100%; }
 .doc-body pre { max-width: 100%; }
+
+/* ============ ★2026-09-11 无障碍：键盘焦点态（WCAG 2.4.7 Focus Visible） ============
+   此前全站零 :focus 样式——键盘用户看不到焦点位置。统一用 :focus-visible（仅键盘触发，
+   鼠标点击不显示，避免视觉噪音）：品牌色描边 + 2px offset。 */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* 深色背景下更稳的可读焦点环（外圈留白 + 内圈品牌色） */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* 跳转到主内容（键盘首个可聚焦项——大厂标配） */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 100;
+  background: var(--brand);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  font-size: 14px;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 12px; }
