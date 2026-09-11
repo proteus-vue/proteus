@@ -44,7 +44,7 @@
 | 维度 | uni-app (WebView) | uni-app x (UTS) | Taro | Lynx | Flutter | **Proteus** | 证据 |
 |------|---|---|---|---|---|---|---|
 | 世界观 | 翻译（小程序 API） | 翻译 + 蒸汽编译 | 翻译（React） | 高性能渲染引擎 | 自绘 | **语义收敛（IR+SPI）** | → /methodology |
-| 组件来源 | 小程序标签原样 | 同左 | React 组件 + 小程序 | 类小程序 + Skyline | Widget | **137 语义原语** | → /primitives |
+| 组件来源 | 小程序标签原样 | 同左 | React 组件 + 小程序 | 类小程序 + Skyline | Widget | **142 语义原语** | → /primitives |
 | 组件形状 | `<view>` `<scroll-view>` `<swiper>` | 同左 | `<View>` `<ScrollView>` | `<view>` + PAPI | `<GridView>` | **`<p-grid>` `<p-stack>`（消灭 swiper 等）** | → /primitives/layout |
 | API 风格 | 回调 + 全局对象 | 同左 | 类 React | 模块 + PAPI | 面向对象 | **Hook + Promise + 全类型** | → /primitives/capability |
 | 标准归属 | **微信** | **微信** | **微信**（可插拔有限） | **Lynx 引擎** | Flutter/Dart | **框架自己的 IR** | → /architecture |
@@ -113,7 +113,7 @@ Proteus 层级：
   · 语义层消灭：swiper / scroll-view / movable-view（还原为布局属性）
 
 小程序 wx.* API ~120 类 → Proteus 覆盖：100%
-  · 51 个能力原语（Hook 化，对接 G-28 NativeBackend SPI）
+  · 53 个能力原语（Hook 化，对接 G-28 NativeBackend SPI）
   · 私有能力收敛：useMiniProgram()（微信支付 / open-data / 公众号 ...）
     → 显式标记「仅微信端」，非微信端 Err('miniprogram.only')
 ```
@@ -160,7 +160,7 @@ Proteus 层级：
 ```
 你的项目能力清单：
   ✅ 42 个组件全部在 G-32 覆盖范围内
-  ✅ 118 个 wx.* API → 51 个能力 Hook（useXxx）+ 属性还原
+  ✅ 118 个 wx.* API → 53 个能力 Hook（useXxx）+ 属性还原
   🔶 2 个微信私有能力 → useMiniProgram()（仅微信端，需标注）
   ⚠️ 3 处平台特定代码（wx.getSystemInfoSync 旧版）→ codemod 自动更新
 

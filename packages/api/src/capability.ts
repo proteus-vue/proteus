@@ -1347,6 +1347,58 @@ export interface UpdateManagerAPI {
   applyUpdate(): Promise<CapResult<void>>
 }
 
+/**
+ * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
+ *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
+ *   Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标准（下载替代）∪ 缺省 Err（诚实降级）。
+ */
+export interface MediaFile {
+  /** 临时文件路径（wx 临时文件 / web Blob URL） */
+  tempFilePath: string
+  /** 媒体类型 */
+  type: 'image' | 'video'
+  /** 字节大小 */
+  size?: number
+  /** 时长 ms（视频） */
+  duration?: number
+  width?: number
+  height?: number
+}
+
+export interface AlbumPickOptions {
+  /** 选择数量上限（默认 1；小程序上限 9） */
+  count?: number
+  /** 媒体类型：image（默认）/ video / all */
+  mediaType?: 'image' | 'video' | 'all'
+  /** 来源：album 相册（默认）/ camera 拍照 */
+  source?: 'album' | 'camera'
+}
+
+export interface AlbumAPI {
+  /** 选择图片/视频（wx.chooseMedia；web <input type=file>） */
+  pick(options?: AlbumPickOptions): Promise<CapResult<MediaFile[]>>
+  /** 保存图片到系统相册（wx.saveImageToPhotosAlbum——需 scope.writePhotosAlbum 授权；web 无标准 → Err） */
+  saveImage(filePath: string): Promise<CapResult<void>>
+  /** 保存视频到系统相册（wx.saveVideoToPhotosAlbum；web 无标准 → Err） */
+  saveVideo(filePath: string): Promise<CapResult<void>>
+  /** 预览媒体（wx.previewImage / previewMedia；web 宿主视图） */
+  preview(urls: string[], current?: string): Promise<CapResult<void>>
+}
+
+/**
+ * ★颗粒度对齐 C3：C53 多线程 Worker（wx.createWorker）
+ *   创建 Worker 线程 + postMessage 收发 + terminate——对齐小程序 Worker API。
+ *   Web 端：new Worker(...)（同源脚本）∪ 缺省 Err（诚实降级）。
+ */
+export interface WorkerHandle {
+  /** 主线程 → Worker 发消息 */
+  postMessage(message: unknown): void
+  /** 订阅 Worker → 主线程消息（返回取消） */
+  onMessage(cb: (message: unknown) => void): () => void
+  /** 终止 Worker 线程 */
+  terminate(): void
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -1475,6 +1527,11 @@ export interface CapabilityBridge {
   joinLiveRoom?(options: LiveRoomOptions): LiveRoomBridge
   /** C50 扩展/插件（G-21 扩展点——宿主 loadPlugin 桥） */
   loadExtension?(extensionId: string): Promise<unknown>
+  // ★颗粒度对齐 C3：相册 / Worker（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')）
+  /** C52 相册（wx.chooseMedia/saveImageToPhotosAlbum/previewImage；web <input type=file>）——★富接口 */
+  getAlbum?(): AlbumAPI
+  /** C53 多线程 Worker（wx.createWorker / web Worker） */
+  createWorker?(scriptPath: string): WorkerHandle
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -1623,6 +1680,10 @@ export interface CapabilityProbe {
   live: boolean
   /** 扩展/插件 */
   extension: boolean
+  /** ★颗粒度对齐 C3：相册 */
+  album: boolean
+  /** ★颗粒度对齐 C3：Worker */
+  worker: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -1887,6 +1948,22 @@ interface WxLike {
     success?: () => void
     fail?: (e: unknown) => void
   }) => void
+  // ★颗粒度对齐 C3：相册 / Worker
+  chooseMedia?: (opt: {
+    count?: number
+    mediaType?: string[]
+    sourceType?: string[]
+    success: (r: { tempFiles: Array<{ tempFilePath: string; size: number; duration?: number; width?: number; height?: number }> }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  saveImageToPhotosAlbum?: (opt: { filePath: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  saveVideoToPhotosAlbum?: (opt: { filePath: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  previewMedia?: (opt: { urls: string[]; current?: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  createWorker?: (scriptPath: string) => {
+    postMessage: (msg: unknown) => void
+    onMessage: (cb: (msg: unknown) => void) => void
+    terminate: () => void
+  }
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -3206,6 +3283,58 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         applyUpdate: () => Promise.resolve(capOk(mgr.applyUpdate() as undefined)),
       }
     },
+    // ★颗粒度对齐 C3：C52 相册（wx.chooseMedia/saveImageToPhotosAlbum/previewMedia）
+    getAlbum: () => ({
+      pick: (options) =>
+        new Promise<CapResult<MediaFile[]>>((resolve) => {
+          if (typeof wx.chooseMedia !== 'function') return resolve(capErr('album.unsupported', 'wx.chooseMedia 缺失'))
+          const mediaType = options?.mediaType === 'all' ? ['image', 'video'] : options?.mediaType ? [options.mediaType] : ['image']
+          wx.chooseMedia({
+            count: options?.count ?? 1,
+            mediaType,
+            sourceType: options?.source ? [options.source] : ['album', 'camera'],
+            success: (r) =>
+              resolve(
+                capOk(
+                  r.tempFiles.map((f) => ({
+                    tempFilePath: f.tempFilePath,
+                    type: (f.duration != null ? 'video' : 'image') as MediaFile['type'],
+                    size: f.size,
+                    duration: f.duration,
+                    width: f.width,
+                    height: f.height,
+                  })),
+                ),
+              ),
+            fail: (e) => resolve(capErr('album.failed', '选择媒体失败', e)),
+          })
+        }),
+      saveImage: (filePath) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.saveImageToPhotosAlbum !== 'function') return resolve(capErr('album.unsupported', 'wx.saveImageToPhotosAlbum 缺失'))
+          wx.saveImageToPhotosAlbum({ filePath, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('album.save-failed', '保存图片失败（需 scope.writePhotosAlbum 授权）', e)) })
+        }),
+      saveVideo: (filePath) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.saveVideoToPhotosAlbum !== 'function') return resolve(capErr('album.unsupported', 'wx.saveVideoToPhotosAlbum 缺失'))
+          wx.saveVideoToPhotosAlbum({ filePath, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('album.save-failed', '保存视频失败（需 scope.writePhotosAlbum 授权）', e)) })
+        }),
+      preview: (urls, current) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.previewMedia !== 'function') return resolve(capErr('album.unsupported', 'wx.previewMedia 缺失'))
+          wx.previewMedia({ urls, current, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('album.failed', '预览失败', e)) })
+        }),
+    }),
+    // ★颗粒度对齐 C3：C53 Worker（wx.createWorker）
+    createWorker: (scriptPath) => {
+      if (typeof wx.createWorker !== 'function') throw new CapError('worker.unsupported', 'wx.createWorker 缺失')
+      const w = wx.createWorker(scriptPath)
+      return {
+        postMessage: (message) => w.postMessage(message),
+        onMessage: (cb) => { w.onMessage(cb); return () => { /* wx Worker onMessage 无对应 off；随 terminate 释放 */ } },
+        terminate: () => w.terminate(),
+      }
+    },
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -4141,6 +4270,50 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         list: () => readAll(),
       }
     },
+    // ★颗粒度对齐 C3：web 相册 / Worker
+    getAlbum: () => ({
+      pick: (options) =>
+        new Promise<CapResult<MediaFile[]>>((resolve) => {
+          const doc = (g as { document?: { createElement?: (t: string) => HTMLInputElement } }).document
+          if (!doc || typeof doc.createElement !== 'function') return resolve(capErr('album.unsupported', 'Web 无 DOM 环境（SSR）——相册选择不可用'))
+          const input = doc.createElement('input')
+          input.type = 'file'
+          input.accept = options?.mediaType === 'video' ? 'video/*' : options?.mediaType === 'image' ? 'image/*' : 'image/*,video/*'
+          if ((options?.count ?? 1) > 1) input.multiple = true
+          input.onchange = () => {
+            const files = Array.from(input.files ?? [])
+            if (!files.length) return resolve(capErr('album.cancelled', '未选择文件'))
+            const urls = (g as { URL?: { createObjectURL?: (f: unknown) => string } }).URL
+            resolve(
+              capOk(
+                files.slice(0, options?.count ?? 1).map((f) => ({
+                  tempFilePath: urls && typeof urls.createObjectURL === 'function' ? urls.createObjectURL(f) : '',
+                  type: (f.type.startsWith('video') ? 'video' : 'image') as MediaFile['type'],
+                  size: f.size,
+                })),
+              ),
+            )
+          }
+          input.click()
+        }),
+      saveImage: () => Promise.resolve(capErr<void>('album.unsupported', 'Web 无系统相册写入标准 API（可用 <a download> 替代）')),
+      saveVideo: () => Promise.resolve(capErr<void>('album.unsupported', 'Web 无系统相册写入标准 API（可用 <a download> 替代）')),
+      preview: () => Promise.resolve(capErr<void>('album.unsupported', 'Web 预览由宿主组件承载（lightbox），无标准 API')),
+    }),
+    createWorker: (scriptPath) => {
+      const W = (g as { Worker?: new (p: string) => Worker }).Worker
+      if (typeof W !== 'function') throw new CapError('worker.unsupported', 'Web Worker 不可用（SSR 或受限环境）')
+      const w = new W(scriptPath)
+      return {
+        postMessage: (message) => w.postMessage(message),
+        onMessage: (cb) => {
+          const h = (e: MessageEvent): void => cb(e.data)
+          w.addEventListener('message', h as EventListener)
+          return () => w.removeEventListener('message', h as EventListener)
+        },
+        terminate: () => w.terminate(),
+      }
+    },
     authenticateFaceID: async (prompt) => {
       const cred = (g as { PublicKeyCredential?: unknown }).PublicKeyCredential
       if (typeof cred !== 'function') return false
@@ -4302,6 +4475,11 @@ export interface CapabilityHooks {
   useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
   /** C50 useExtension：扩展/插件（G-21 扩展点——宿主 loadPlugin 桥；缺省 Err） */
   useExtension(extensionId: string): Promise<CapResult<unknown>>
+  // ★颗粒度对齐 C3：相册 / Worker
+  /** ★C52 useAlbum：相册句柄（wx.chooseMedia/saveImageToPhotosAlbum/previewMedia；web <input type=file>） */
+  useAlbum(): CapResult<AlbumAPI>
+  /** ★C53 useWorker：多线程 Worker（wx.createWorker / web Worker；不可用 → Err） */
+  useWorker(scriptPath: string): CapResult<WorkerHandle>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -4879,6 +5057,15 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           return bridge.loadExtension(extensionId)
         })(),
       ),
+    // ★颗粒度对齐 C3：相册 / Worker（句柄型——桥缺省 → Err）
+    useAlbum: () => handleResult<AlbumAPI>(() => {
+      if (!bridge.getAlbum) throw new CapError('album.unsupported', '桥未提供 getAlbum（useAlbum 不可用）')
+      return bridge.getAlbum()
+    }),
+    useWorker: (scriptPath) => handleResult<WorkerHandle>(() => {
+      if (!bridge.createWorker) throw new CapError('worker.unsupported', '桥未提供 createWorker（useWorker 不可用）')
+      return bridge.createWorker(scriptPath)
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -4931,6 +5118,8 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       embedded: bridge.getHostContext !== undefined,
       live: bridge.joinLiveRoom !== undefined,
       extension: bridge.loadExtension !== undefined,
+      album: bridge.getAlbum !== undefined,
+      worker: bridge.createWorker !== undefined,
     }),
   }
 }

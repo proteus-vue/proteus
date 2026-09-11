@@ -1734,4 +1734,18 @@ export const CAP_EN = {
     desc: 'useUpdate: mini program hot-update manager (wx.getUpdateManager; web → Err)',
     errors: { 'update.unsupported': 'The bridge does not provide getUpdateManager (useUpdate unavailable)' },
   },
+  // —— 媒体与多线程（★C3 颗粒度对齐）——
+  album: {
+    desc: 'useAlbum: album handle — pick media + save to the system album + preview (wx.chooseMedia/saveImageToPhotosAlbum/previewMedia; web <input type=file>)',
+    errors: {
+      'album.unsupported': 'wx.chooseMedia / saveImageToPhotosAlbum is missing (or Web has no standard album write API)',
+      'album.failed': 'Choosing / previewing media failed',
+      'album.save-failed': 'Saving to the album failed (wx requires scope.writePhotosAlbum)',
+      'album.cancelled': 'No file selected (Web)',
+    },
+  },
+  worker: {
+    desc: 'useWorker: multi-threaded Worker — postMessage / onMessage / terminate (wx.createWorker / web Worker)',
+    errors: { 'worker.unsupported': 'wx.createWorker is missing (or Web Worker is unavailable — SSR / restricted env)' },
+  },
 }

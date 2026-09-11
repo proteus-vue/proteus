@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 51 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 53 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（8）
 
@@ -103,8 +103,10 @@ order: 0
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | console + 上报 |
 
-## 其他（1）
+## 其他（3）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
 | C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
+| C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
+| C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
