@@ -159,16 +159,27 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 | C20 日历 | ✅ | CalendarAPI（add/remove；查询无开放 API → Err） |
 | C16 权限 | ✅ | **修复**：wxBridge 补 getPermission（原小程序端恒 Err） |
 
-**测试**：`tests/capability-granularity.test.ts` 24 用例；全量 2898/2898。
+**测试**：`tests/capability-granularity.test.ts` 30 用例；全量 2914/2914。
 
-## 8. L3 长尾（未做，按需驱动）
+## 8. L3 长尾（已落地项 + 按需驱动项）
 
 | 域 | 缺口 | 说明 |
 |----|------|------|
-| C49 直播 | ✅ 观看端已落地 | LiveRoomHandle（play/pause/resume/stop/mute/snapshot/全屏/onStateChange）；推流端（LivePusherContext 美颜/连麦）为诚实边界 |
-| C4 地图 | ✅ 已全量 | MapContext 30 方法全覆盖 |
-| C36 BLE 外设端 | 14 | `BLEPeripheralServer`（手机当外设，极低频） |
-| C37 NFC `NFCAdapter` | ✅ 已落地 | 读卡模式：getAdapter + startDiscovery/onDiscovered + connectNdef/NfcA/B/F/V/IsoDep/Mifare（NDEF 读写/transceive） |
-| AI 推理 / 多媒体编辑 / 支付扩展 | — | 需特定类目/企业主体，业务罕见 |
+**已落地**：
+
+| 域 | 交付 |
+|----|------|
+| C49 直播（观看端） | LiveRoomHandle（play/pause/resume/stop/mute/snapshot/全屏/onStateChange） |
+| C37 NFC 读卡模式 | NfcAdapter（getAdapter + startDiscovery/onDiscovered + connectNdef/NfcA/B/F/V/IsoDep/Mifare + NDEF 读写/transceive） |
+| C4 地图 | MapContext 30 方法全覆盖 |
+
+**剩余（按需驱动，未做）**：
+
+| 域 | 缺口 | 说明 |
+|----|------|------|
+| C49 直播推流端 | ~30 | `LivePusherContext`（美颜/连麦/推流）——需推流类目 |
+| C36 BLE 外设端 | 14 | `BLEPeripheralServer`（手机当外设）——极低频 |
+| AI 推理 | — | `InferenceSession`——需模型类目 |
+| 多媒体编辑 / 支付扩展 | — | 需特定类目/企业主体 |
 
 **结论**：L3 采用「按需驱动」而非覆盖式铺开——泛化壳（wx 直通）会造成「假覆盖」，违背 G-32.3 显式降级原则。
