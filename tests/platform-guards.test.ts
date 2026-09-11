@@ -16,7 +16,8 @@ describe('getPlatform / detectPlatform（运行时探测）', () => {
     expect(getPlatform()).toBe('web')
   })
   it('wx 存在 → skyline', () => {
-    vi.stubGlobal('wx', {})
+    vi.stubGlobal('window', undefined) // ★SSOT：MP 运行时 window 缺席
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     expect(getPlatform()).toBe('skyline')
   })
 })
@@ -34,13 +35,15 @@ describe('matchPlatform（三端分支 + 类型收窄）', () => {
   })
 
   it('skyline 分支（wx 存在）', () => {
-    vi.stubGlobal('wx', {})
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const r = matchPlatform({ web: () => 'w', skyline: () => 'mp', app: () => 'app' })
     expect(r).toBe('mp')
   })
 
   it('返回值类型统一（T 推断）', () => {
-    vi.stubGlobal('wx', {})
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const n: number = matchPlatform({ web: () => 1, skyline: () => 2, app: () => 3 })
     expect(n).toBe(2)
   })

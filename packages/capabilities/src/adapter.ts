@@ -2,6 +2,7 @@
 // ★platform-plan B2（M2 Adapter Registry）：统一管理"哪个平台用哪个实现"，业务不感知
 // 选择策略（§4）：platform 过滤 → priority 降序 → isSupported() 探测 → 命中第一个 → 无命中 → fallback
 // 多实例隔离（§5）：createCapabilityRegistry 工厂——SSR / Worker 场景独立 registry，禁止全局可变副作用
+import { detectRuntime } from '@proteus-vue/shared'
 import type { Capability, CapabilityAPI, CapabilityPlatform } from './types'
 
 /** 能力可观测事件总线（结构与 devtools-runtime TraceBus.emit 兼容；零硬依赖注入） */
@@ -245,8 +246,7 @@ export class CapabilityRegistry {
   }
 }
 
-/** 平台探测（feature detection：wx → skyline / window → web；无则 web） */
+/** 平台探测（★SSOT：@proteus-vue/shared.detectRuntime——window 前置守卫，web 模拟层 wx 不误判） */
 export function detectPlatform(): CapabilityPlatform {
-  const wxGlobal = (globalThis as { wx?: unknown }).wx
-  return typeof wxGlobal !== 'undefined' ? 'skyline' : 'web'
+  return detectRuntime() === 'mp' ? 'skyline' : 'web'
 }

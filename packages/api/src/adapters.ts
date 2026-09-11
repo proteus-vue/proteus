@@ -1,5 +1,8 @@
 // packages/api/src/adapters.ts
 // ★api-plan A1/A8：平台适配器（wx.request / fetch）+ 设备信息——L2 唯一允许平台 API 的位置
+// ★Skyline 线收口（2026-09-11）：运行时/渲染器判定走 @proteus-vue/shared SSOT（window 前置守卫 +
+//   Skyline vs WebView 区分）——修「web 上 wx 模拟层使 createRequestAdapter 误选 wx」+ isSkyline 假阳性
+import { detectRuntime, detectMpRenderer } from '@proteus-vue/shared'
 import type { HttpMethod, IRequestAdapter, RequestConfig, RequestResponse } from './types'
 import { ApiError } from './types'
 
@@ -90,14 +93,16 @@ export interface DeviceInfo {
 
 export function getDeviceInfo(): DeviceInfo {
   const wxGlobal = (globalThis as { wx?: { getWindowInfo?: () => Record<string, unknown> } }).wx
-  if (wxGlobal && typeof wxGlobal.getWindowInfo === 'function') {
+  // ★SSOT：仅真·小程序运行时（window 缺席）读 wx——避免 web 模拟层污染
+  if (detectRuntime() === 'mp' && wxGlobal && typeof wxGlobal.getWindowInfo === 'function') {
     const info = wxGlobal.getWindowInfo()
     return {
       platform: String(info.platform ?? 'unknown'),
       screenWidth: Number(info.screenWidth ?? 0),
       screenHeight: Number(info.screenHeight ?? 0),
       pixelRatio: Number(info.pixelRatio ?? 1),
-      isSkyline: true,
+      // ★真实渲染器判定（原实现恒 true——WebView 渲染器下也误报 Skyline）
+      isSkyline: detectMpRenderer() === 'skyline',
     }
   }
   return {
@@ -109,10 +114,9 @@ export function getDeviceInfo(): DeviceInfo {
   }
 }
 
-/** 创建请求适配器（平台探测：wx → skyline；否则 web） */
+/** 创建请求适配器（★SSOT：真·小程序运行时 → wx；否则 web——web 模拟层 wx 不误选） */
 export function createRequestAdapter(): IRequestAdapter {
-  const wxGlobal = (globalThis as { wx?: unknown }).wx
-  return typeof wxGlobal !== 'undefined' ? createWxAdapter() : createWebAdapter()
+  return detectRuntime() === 'mp' ? createWxAdapter() : createWebAdapter()
 }
 
 export const ALL_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']

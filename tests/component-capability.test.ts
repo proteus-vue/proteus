@@ -23,25 +23,54 @@ describe('backend 判定（web 分支）', () => {
 })
 
 describe('backend 判定（skyline 分支）', () => {
-  it('wx 存在 → skyline：native-toast 可用，passive-event 不可用', () => {
-    vi.stubGlobal('wx', { showToast: vi.fn() })
+  // ★Skyline 线收口：SSOT 的 window 前置守卫——MP 运行时 window 缺席（happy-dom 默认有 window，须显式移除）
+  function stubMp(wxObj: Record<string, unknown>) {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', wxObj)
+  }
+
+  it('MP（无 window + wx）→ skyline：native-toast 可用，passive-event 不可用', () => {
+    stubMp({ showToast: vi.fn(), getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const cap = getCapability()
     expect(cap.backend).toBe('skyline')
     expect(cap.has('native-toast')).toBe(true)
     expect(cap.has('passive-event')).toBe(false)
   })
 
-  it('wx 存在但无 showToast → native-toast 降级 false', () => {
-    vi.stubGlobal('wx', {})
+  it('★Web 污染守卫：window 存在 + wx（模拟层已注册）→ 仍判 web', () => {
+    vi.stubGlobal('window', {}) // 模拟浏览器：@proteus-vue/web 的 wx 模拟层会注册 wx
+    vi.stubGlobal('wx', { showToast: vi.fn(), getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const cap = getCapability()
+    expect(cap.backend).toBe('web') // window 前置守卫生效
+    expect(cap.has('native-toast')).toBe(false)
+  })
+
+  it('MP 但无 showToast → native-toast 降级 false', () => {
+    stubMp({ getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const cap = getCapability()
     expect(cap.has('native-toast')).toBe(false)
+  })
+
+  it('★渲染器维度：mp 时 renderer 区分 skyline/webview；web 时 null', () => {
+    stubMp({ showToast: vi.fn(), getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    expect(getCapability().renderer).toBe('skyline')
+    resetCapability()
+    vi.unstubAllGlobals()
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'webview' }) })
+    expect(getCapability().renderer).toBe('webview')
+    resetCapability()
+    vi.unstubAllGlobals()
+    expect(getCapability().renderer).toBe(null) // web
   })
 })
 
 describe('能力表（未实现能力恒 false，防静默失效）', () => {
-  it('worklet-animation / recycle-manager 当前恒 false（Worklet 未实现，router B10 ⬜）', () => {
-    vi.stubGlobal('wx', {})
+  it('worklet-animation / recycle-manager 当前恒 false（运行时驱动未接入）', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const cap = getCapability()
+    expect(cap.backend).toBe('skyline')
     expect(cap.has('worklet-animation')).toBe(false)
     expect(cap.has('recycle-manager')).toBe(false)
   })

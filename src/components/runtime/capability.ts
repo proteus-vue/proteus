@@ -2,6 +2,10 @@
 // 组件代码不得直接 if (typeof wx !== 'undefined')，必须查询 capability（对齐 Draft v1 02-platform-capability.md）
 // 修正：不全局注入（$capability），组件内直接 import 本模块；探测惰性单例（首次调用求值，测试可先 stub 再调）
 // ★MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构（共享模块 B0 机制编译进 MP 产物）
+// ★Skyline 线收口（2026-09-11）：运行时/渲染器判定改由 @proteus-vue/shared 的 SSOT 提供
+//   （detectRuntime/detectMpRenderer）——修「web 上 wx 模拟层致误判小程序」+ 新增 renderer 维度
+import { detectRuntime, detectMpRenderer } from '@proteus-vue/shared'
+import type { MpRenderer } from '@proteus-vue/shared'
 
 /** 当前渲染后端：web=浏览器/SSR；skyline=微信小程序运行时（Skyline/WebView 渲染器差异归能力表）；app=v0.6 自定义渲染器占位 */
 export type PlatformBackend = 'web' | 'skyline' | 'app'
@@ -16,6 +20,8 @@ export type CapabilityName =
 
 export interface PlatformCapability {
   backend: PlatformBackend
+  /** ★Skyline 线收口：渲染器维度（mp 时 skyline/webview；web 时 null）——组件据此分流降级 */
+  renderer: MpRenderer | null
   /** 同步能力查询（启动期确定，setup() 求值一次缓存） */
   has(name: CapabilityName): boolean
   /** 异步探测（基础库版本 / 运行时特性），失败兜底默认值 */
@@ -38,10 +44,21 @@ export function capabilityWarnOnce(tag: string, feature: string, fallback: strin
   capabilityWarn(tag, feature, fallback)
 }
 
+/** 检测运行时后端（★SSOT：shared.detectRuntime，含 window 前置守卫——web 上 wx 模拟层不误判） */
 function detectBackend(): PlatformBackend {
-  // MP 运行时：wx 存在（Skyline/WebView 均适用）；浏览器/SSR：无 wx 归 web；app 恒占位（v0.6）
-  if (typeof wx !== 'undefined') return 'skyline'
-  return 'web'
+  return detectRuntime() === 'mp' ? 'skyline' : 'web'
+}
+
+/** wx 取值（不裸引用全局——globalThis 取值，MP 产物安全；★无 ?.——本文件约定） */
+function wxApi(): { showToast?: unknown } | null {
+  const g = globalThis as { wx?: { showToast?: unknown } }
+  return g.wx && typeof g.wx === 'object' ? g.wx : null
+}
+
+/** wx.showToast 是否存在 */
+function hasWxToast(): boolean {
+  const w = wxApi()
+  return w !== null && typeof w.showToast === 'function'
 }
 
 const DYNAMIC_CAPABILITIES = new Set(['webp', 'native-toast'])
@@ -53,7 +70,7 @@ function syncHas(backend: PlatformBackend, name: CapabilityName): boolean {
     case 'recycle-manager':
       return false // Skyline recycleManager 未接入，list-view 用 JS 切片
     case 'native-toast':
-      return backend === 'skyline' && typeof wx !== 'undefined' && typeof wx.showToast === 'function'
+      return backend === 'skyline' && hasWxToast()
     case 'webp':
       return true // 现代浏览器/微信基础库默认支持；低版本由 detect 异步兜底
     case 'passive-event':
@@ -69,8 +86,10 @@ let cached: PlatformCapability | null = null
 export function getCapability(): PlatformCapability {
   if (cached) return cached
   const backend = detectBackend()
+  const renderer: MpRenderer | null = backend === 'skyline' ? detectMpRenderer() : null
   const capability: PlatformCapability = {
     backend,
+    renderer,
     has(name: CapabilityName) {
       return syncHas(backend, name)
     },
