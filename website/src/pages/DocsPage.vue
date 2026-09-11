@@ -317,41 +317,40 @@ function itemTitle(slugOf: string, zhTitle: string): string {
 .page-toc-link {
   color: var(--muted);
   text-decoration: none;
-  font-size: 13px;
-  padding: 2px 0;
   width: 100%;
-  overflow-wrap: anywhere; /* ★长方法名换行不溢出容器 */
   box-sizing: border-box;
+  line-height: 1.5;
+  overflow-wrap: anywhere; /* ★长方法名换行不溢出容器 */
+  padding: 3px 8px 3px 10px; /* ★一级：左内边距给 active 竖条留呼吸位（原先 0 → 竖条贴字） */
   border-left: 2px solid transparent;
-  transition: color 0.12s, border-color 0.12s;
+  border-radius: 0 6px 6px 0;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
-.page-toc-link:hover { color: var(--brand); }
-/* ★导航体验：目录当前项高亮（scroll-spy）——品牌色 + 加粗 + 左侧竖条 */
+.page-toc-link:hover { color: var(--brand); background: var(--panel2); }
+/* ★导航体验：目录当前项高亮（scroll-spy）——品牌色 + 加粗 + 左侧竖条 + 浅底 */
 .page-toc-link.active {
   color: var(--brand);
   font-weight: 600;
   border-left-color: var(--brand);
+  background: var(--brand-soft);
 }
-.page-toc-link.depth-3.active,
-.page-toc-link.depth-4.active { color: var(--brand); opacity: 1; }
-/* ★TOC 优化：h3 方法/类型项——等宽字体 + 左缩进 + 细引导线，一眼可辨是「方法名」 */
+/* ★TOC 层级：一级 h2（正文节）/ 二级 h3（方法、类型）/ 三级 h4（扩展接口方法）——逐级缩进 */
+.page-toc-link.depth-2 { font-weight: 600; font-size: 13px; }
 .page-toc-link.depth-3 {
-  padding-left: 14px;
+  padding-left: 24px;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
 }
-.page-toc-link.depth-3:hover { border-left-color: var(--brand); color: var(--brand); }
 .page-toc-link.depth-4 {
-  padding-left: 26px;
+  padding-left: 38px;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12px;
   color: var(--muted);
   opacity: 0.86;
 }
-.page-toc-link.depth-1 { font-weight: 600; }
-/* ★TOC 优化：目录过长（方法多）时紧凑行距 + 独立滚动（sticky 已设 overflow-y） */
-.page-toc-link { line-height: 1.5; }
+.page-toc-link.depth-3.active,
+.page-toc-link.depth-4.active { color: var(--brand); opacity: 1; }
 .pager { margin-top: 20px; }
 .pager-link { color: var(--brand); text-decoration: none; font-size: 14px; }
 .pager-link:hover { text-decoration: underline; }
