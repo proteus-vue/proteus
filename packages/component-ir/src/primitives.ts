@@ -185,6 +185,10 @@ const CAPABILITY: PrimitiveDef[] = [
   // ★颗粒度对齐 C3（2026-09-11）：相册 / Worker（对齐小程序媒体与多线程 API——纯 Hook，无 C-IR 节点 → planned）
   { id: 'C52', kind: 'capability', semantic: 'capability.album', api: 'useAlbum()', props: ['AlbumAPI'], mpEquiv: 'wx.chooseMedia/saveImageToPhotosAlbum/previewMedia', tier: 'L1', status: 'planned' },
   { id: 'C53', kind: 'capability', semantic: 'capability.worker', api: 'useWorker()', props: ['WorkerHandle'], mpEquiv: 'wx.createWorker', tier: 'L1', status: 'planned' },
+  // ★颗粒度对齐 C3 批 2：收货地址 / WiFi / 微信运动（对齐小程序系统 API——纯 Hook → planned）
+  { id: 'C54', kind: 'capability', semantic: 'capability.address', api: 'useAddress()', props: ['ShippingAddress'], mpEquiv: 'wx.chooseAddress', tier: 'L1', status: 'planned' },
+  { id: 'C55', kind: 'capability', semantic: 'capability.wifi', api: 'useWifi()', props: ['WifiAPI'], mpEquiv: 'wx.getConnectedWifi/getWifiList/connectWifi', tier: 'L1', status: 'planned' },
+  { id: 'C56', kind: 'capability', semantic: 'capability.we-run', api: 'useWeRun()', props: ['WeRunData'], mpEquiv: 'wx.getWeRunData', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

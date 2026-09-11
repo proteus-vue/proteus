@@ -18,20 +18,20 @@ import {
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（142 原语 SSOT）', () => {
-  it('142 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（145 原语 SSOT）', () => {
+  it('145 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
     // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1
     //   + ★C2 颗粒度对齐：ui+2 progress/label + shell+1 page-container
-    //   + ★C3 颗粒度对齐：capability+2 album/worker）
+    //   + ★C3 颗粒度对齐：capability+5 album/worker/address/wifi/we-run）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
     expect(count('ui')).toBe(23)
     expect(count('shell')).toBe(14)
     expect(count('gesture')).toBe(10)
-    expect(count('capability')).toBe(53)
+    expect(count('capability')).toBe(56)
     expect(count('engineering')).toBe(28)
   })
 

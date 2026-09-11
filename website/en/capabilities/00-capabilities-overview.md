@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 53 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 56 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (8)
 
@@ -103,10 +103,13 @@ order: 0
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | — |
 
-## Other (3)
+## Other (6)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
 | C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |
 | C52 | [capability.album](/docs/capability/album) | `useAlbum()` | `AlbumAPI` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia |
 | C53 | [capability.worker](/docs/capability/worker) | `useWorker()` | `WorkerHandle` | wx.createWorker |
+| C54 | [capability.address](/docs/capability/address) | `useAddress()` | `ShippingAddress` | wx.chooseAddress |
+| C55 | [capability.wifi](/docs/capability/wifi) | `useWifi()` | `WifiAPI` | wx.getConnectedWifi/getWifiList/connectWifi |
+| C56 | [capability.we-run](/docs/capability/we-run) | `useWeRun()` | `WeRunData` | wx.getWeRunData |

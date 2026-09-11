@@ -1399,6 +1399,46 @@ export interface WorkerHandle {
   terminate(): void
 }
 
+/** ★颗粒度对齐 C3：C54 收货地址（wx.chooseAddress）——对齐小程序收货地址 API */
+export interface ShippingAddress {
+  userName: string
+  postalCode?: string
+  provinceName: string
+  cityName: string
+  countyName: string
+  detailInfo: string
+  nationalCode?: string
+  telNumber: string
+}
+
+/** ★颗粒度对齐 C3：C55 WiFi（wx.getConnectedWifi / getWifiList / connectWifi——Android 连接） */
+export interface WifiInfo {
+  SSID: string
+  BSSID: string
+  secure: boolean
+  signalStrength: number
+  /** 频率 MHz（5G/2.4G 区分；部分平台缺失） */
+  frequency?: number
+}
+
+export interface WifiAPI {
+  /** 当前连接的 WiFi（wx.getConnectedWifi） */
+  getConnected(): Promise<CapResult<WifiInfo>>
+  /** 已扫描到的 WiFi 列表（需 wx.startWifi + onGetWifiList 授权；wx.getWifiList → onGetWifiList） */
+  list(): Promise<CapResult<WifiInfo[]>>
+  /** 连接指定 WiFi（wx.connectWifi——Android 支持；iOS/部分基础库 → Err） */
+  connect(SSID: string, password?: string): Promise<CapResult<void>>
+}
+
+/** ★颗粒度对齐 C3：C56 微信运动（wx.getWeRunData → 加密数据需后端解密） */
+export interface WeRunData {
+  /** 加密的步数数据（wx.getWeRunData 返回的 cloudID/encryptedData；需业务后端解密） */
+  encryptedData: string
+  iv: string
+  /** cloudID（小程序云开发场景免解密） */
+  cloudID?: string
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -1532,6 +1572,12 @@ export interface CapabilityBridge {
   getAlbum?(): AlbumAPI
   /** C53 多线程 Worker（wx.createWorker / web Worker） */
   createWorker?(scriptPath: string): WorkerHandle
+  /** C54 收货地址（wx.chooseAddress；web 无标准 → 缺省） */
+  chooseAddress?(): Promise<ShippingAddress>
+  /** C55 WiFi（wx.getConnectedWifi/getWifiList/connectWifi；web 无标准 → 缺省）——★富接口 */
+  getWifi?(): WifiAPI
+  /** C56 微信运动（wx.getWeRunData；web 无标准 → 缺省） */
+  getWeRunData?(): Promise<WeRunData>
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -1684,6 +1730,12 @@ export interface CapabilityProbe {
   album: boolean
   /** ★颗粒度对齐 C3：Worker */
   worker: boolean
+  /** ★颗粒度对齐 C3 批 2：收货地址 */
+  address: boolean
+  /** ★颗粒度对齐 C3 批 2：WiFi */
+  wifi: boolean
+  /** ★颗粒度对齐 C3 批 2：微信运动 */
+  weRun: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -1964,6 +2016,17 @@ interface WxLike {
     onMessage: (cb: (msg: unknown) => void) => void
     terminate: () => void
   }
+  // ★颗粒度对齐 C3 批 2：收货地址 / WiFi / 微信运动
+  chooseAddress?: (opt: {
+    success: (r: { userName: string; postalCode?: string; provinceName: string; cityName: string; countyName: string; detailInfo: string; nationalCode?: string; telNumber: string }) => void
+    fail?: (e: unknown) => void
+  }) => void
+  getConnectedWifi?: (opt: { success: (r: { wifi: { SSID: string; BSSID: string; secure: boolean; signalStrength: number; frequency?: number } }) => void; fail?: (e: unknown) => void }) => void
+  startWifi?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  getWifiList?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onGetWifiList?: (cb: (r: { wifiList: Array<{ SSID: string; BSSID: string; secure: boolean; signalStrength: number; frequency?: number }> }) => void) => void
+  connectWifi?: (opt: { SSID: string; password?: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  getWeRunData?: (opt: { success: (r: { encryptedData: string; iv: string; cloudID?: string }) => void; fail?: (e: unknown) => void }) => void
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -3335,6 +3398,52 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         terminate: () => w.terminate(),
       }
     },
+    // ★颗粒度对齐 C3 批 2：C54 收货地址（wx.chooseAddress）
+    chooseAddress: () =>
+      new Promise<ShippingAddress>((resolve, reject) => {
+        if (typeof wx.chooseAddress !== 'function') return reject(new CapError('address.unsupported', 'wx.chooseAddress 缺失'))
+        wx.chooseAddress({
+          success: (r) => resolve({ userName: r.userName, postalCode: r.postalCode, provinceName: r.provinceName, cityName: r.cityName, countyName: r.countyName, detailInfo: r.detailInfo, nationalCode: r.nationalCode, telNumber: r.telNumber }),
+          fail: (e) => reject(new CapError('address.failed', '选择收货地址失败', e)),
+        })
+      }),
+    // ★颗粒度对齐 C3 批 2：C55 WiFi（wx.getConnectedWifi/getWifiList/connectWifi）
+    getWifi: () => {
+      const map = (w: { SSID: string; BSSID: string; secure: boolean; signalStrength: number; frequency?: number }): WifiInfo => ({ SSID: w.SSID, BSSID: w.BSSID, secure: w.secure, signalStrength: w.signalStrength, frequency: w.frequency })
+      return {
+        getConnected: () =>
+          new Promise<CapResult<WifiInfo>>((resolve) => {
+            if (typeof wx.getConnectedWifi !== 'function') return resolve(capErr('wifi.unsupported', 'wx.getConnectedWifi 缺失'))
+            wx.getConnectedWifi({ success: (r) => resolve(capOk(map(r.wifi))), fail: (e) => resolve(capErr('wifi.failed', '获取当前 WiFi 失败', e)) })
+          }),
+        list: () =>
+          new Promise<CapResult<WifiInfo[]>>((resolve) => {
+            if (typeof wx.getWifiList !== 'function' || typeof wx.onGetWifiList !== 'function') return resolve(capErr('wifi.unsupported', 'wx.getWifiList/onGetWifiList 缺失'))
+            let settled = false
+            wx.onGetWifiList((r) => {
+              if (settled) return
+              settled = true
+              resolve(capOk((r.wifiList ?? []).map(map)))
+            })
+            if (typeof wx.startWifi === 'function') wx.startWifi({})
+            wx.getWifiList({})
+          }),
+        connect: (SSID, password) =>
+          new Promise<CapResult<void>>((resolve) => {
+            if (typeof wx.connectWifi !== 'function') return resolve(capErr('wifi.unsupported', 'wx.connectWifi 缺失（iOS 不支持程序化连接）'))
+            wx.connectWifi({ SSID, password, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('wifi.connect-failed', '连接 WiFi 失败', e)) })
+          }),
+      }
+    },
+    // ★颗粒度对齐 C3 批 2：C56 微信运动（wx.getWeRunData）
+    getWeRunData: () =>
+      new Promise<WeRunData>((resolve, reject) => {
+        if (typeof wx.getWeRunData !== 'function') return reject(new CapError('werun.unsupported', 'wx.getWeRunData 缺失'))
+        wx.getWeRunData({
+          success: (r) => resolve({ encryptedData: r.encryptedData, iv: r.iv, cloudID: r.cloudID }),
+          fail: (e) => reject(new CapError('werun.failed', '获取微信运动数据失败（需 scope.werun 授权 + 后端解密）', e)),
+        })
+      }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -4480,6 +4589,13 @@ export interface CapabilityHooks {
   useAlbum(): CapResult<AlbumAPI>
   /** ★C53 useWorker：多线程 Worker（wx.createWorker / web Worker；不可用 → Err） */
   useWorker(scriptPath: string): CapResult<WorkerHandle>
+  // ★颗粒度对齐 C3 批 2：收货地址 / WiFi / 微信运动
+  /** ★C54 useAddress：收货地址（wx.chooseAddress；web 无标准 → Err） */
+  useAddress(): Promise<CapResult<ShippingAddress>>
+  /** ★C55 useWifi：WiFi 句柄（wx.getConnectedWifi/getWifiList/connectWifi；web 无标准 → Err） */
+  useWifi(): CapResult<WifiAPI>
+  /** ★C56 useWeRun：微信运动数据（wx.getWeRunData；web 无标准 → Err） */
+  useWeRun(): Promise<CapResult<WeRunData>>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -5066,6 +5182,25 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.createWorker) throw new CapError('worker.unsupported', '桥未提供 createWorker（useWorker 不可用）')
       return bridge.createWorker(scriptPath)
     }),
+    // ★颗粒度对齐 C3 批 2：收货地址 / WiFi / 微信运动
+    useAddress: () =>
+      wrap(
+        (() => {
+          if (!bridge.chooseAddress) return Promise.reject(new CapError('address.unsupported', '桥未提供 chooseAddress（useAddress 不可用）'))
+          return bridge.chooseAddress()
+        })(),
+      ),
+    useWifi: () => handleResult<WifiAPI>(() => {
+      if (!bridge.getWifi) throw new CapError('wifi.unsupported', '桥未提供 getWifi（useWifi 不可用）')
+      return bridge.getWifi()
+    }),
+    useWeRun: () =>
+      wrap(
+        (() => {
+          if (!bridge.getWeRunData) return Promise.reject(new CapError('werun.unsupported', '桥未提供 getWeRunData（useWeRun 不可用）'))
+          return bridge.getWeRunData()
+        })(),
+      ),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -5120,6 +5255,9 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       extension: bridge.loadExtension !== undefined,
       album: bridge.getAlbum !== undefined,
       worker: bridge.createWorker !== undefined,
+      address: bridge.chooseAddress !== undefined,
+      wifi: bridge.getWifi !== undefined,
+      weRun: bridge.getWeRunData !== undefined,
     }),
   }
 }

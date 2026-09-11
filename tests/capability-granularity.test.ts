@@ -697,3 +697,76 @@ describe('★C3 颗粒度对齐：C52 相册 / C53 Worker', () => {
     })
   })
 })
+
+describe('★C3 批 2 颗粒度对齐：C54 收货地址 / C55 WiFi / C56 微信运动', () => {
+  it('useAddress：wx.chooseAddress 归一（含 optional 字段）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      chooseAddress: (o: { success: (r: Record<string, string>) => void }) =>
+        o.success({ userName: '张三', provinceName: '浙江省', cityName: '杭州市', countyName: '西湖区', detailInfo: '文三路 1 号', telNumber: '13800000000' }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useAddress()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ userName: '张三', cityName: '杭州市', telNumber: '13800000000' })
+  })
+
+  it('useAddress：无 wx.chooseAddress → Err(address.unsupported)', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useAddress()
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('address.unsupported')
+  })
+
+  it('useWifi：getConnected + list + connect（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getConnectedWifi: (o: { success: (r: unknown) => void }) => o.success({ wifi: { SSID: 'Home', BSSID: 'aa', secure: true, signalStrength: -50, frequency: 5180 } }),
+      startWifi: () => { calls.push('start') },
+      getWifiList: () => { calls.push('getList') },
+      onGetWifiList: (cb: (r: unknown) => void) => cb({ wifiList: [{ SSID: 'A', BSSID: 'a', secure: false, signalStrength: -30 }] }),
+      connectWifi: (o: { SSID: string; success?: () => void }) => { calls.push('connect:' + o.SSID); o.success && o.success() },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWifi()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const wifi = r.data
+    const conn = await wifi.getConnected()
+    expect(conn.ok && conn.data.SSID).toBe('Home')
+    const list = await wifi.list()
+    expect(list.ok && list.data[0].SSID).toBe('A')
+    expect((await wifi.connect('A', 'pw')).ok).toBe(true)
+    expect(calls).toContain('connect:A')
+  })
+
+  it('useWifi：无 wx.getConnectedWifi → 句柄 pick 时 Err(wifi.unsupported)', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWifi()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((await r.data.getConnected()).ok).toBe(false)
+  })
+
+  it('useWeRun：wx.getWeRunData → encryptedData/iv', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getWeRunData: (o: { success: (r: { encryptedData: string; iv: string }) => void }) => o.success({ encryptedData: 'ENC', iv: 'IV' }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useWeRun()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data).toMatchObject({ encryptedData: 'ENC', iv: 'IV' })
+  })
+
+  it('probe：address/wifi/weRun 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.address).toBe(true)
+    expect(p.wifi).toBe(true)
+    expect(p.weRun).toBe(true)
+  })
+})
