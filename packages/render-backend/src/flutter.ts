@@ -94,6 +94,10 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
   'engineering.transition': 'AnimatedOpacity',
   'engineering.animate': 'AnimationController',
+  // ★能力颗粒度对齐 C2
+  'ui.progress': 'LinearProgressIndicator',
+  'ui.label': 'Text.label',
+  'shell.page-container': 'showModalBottomSheet',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

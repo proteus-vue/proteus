@@ -88,6 +88,10 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20——纯 CSS 声明）
   'engineering.transition': { tag: 'div', className: 'proteus-transition' },
   'engineering.animate': { tag: 'div', className: 'proteus-animate' },
+  // ★能力颗粒度对齐 C2：进度条 / 表单标签 / 页面容器
+  'ui.progress': { tag: 'div', className: 'proteus-progress' },
+  'ui.label': { tag: 'label' },
+  'shell.page-container': { tag: 'div', className: 'proteus-page-container' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

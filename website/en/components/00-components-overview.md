@@ -6,7 +6,7 @@ order: 0
 
 # Components overview
 
-> 63 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
+> 66 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
 
 ## Layout (17)
 
@@ -30,7 +30,7 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## Content & Forms (24)
+## Content & Forms (26)
 
 | Component | Props | Events |
 |---|---|---|
@@ -43,11 +43,13 @@ order: 0
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
 | [p-image](/docs/component/p-image) | 8 | 2 |
 | [p-input](/docs/component/p-input) | 8 | 4 |
+| [p-label](/docs/component/p-label) | 2 | 1 |
 | [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
 | [p-picker](/docs/component/p-picker) | 4 | 1 |
+| [p-progress](/docs/component/p-progress) | 8 | 0 |
 | [p-radio](/docs/component/p-radio) | 3 | 1 |
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
@@ -59,7 +61,7 @@ order: 0
 | [p-text](/docs/component/p-text) | 4 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 7 | 4 |
 
-## Page Shell (13)
+## Page Shell (14)
 
 | Component | Props | Events |
 |---|---|---|
@@ -69,6 +71,7 @@ order: 0
 | [p-modal](/docs/component/p-modal) | 8 | 2 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |
 | [p-page](/docs/component/p-page) | 3 | 0 |
+| [p-page-container](/docs/component/p-page-container) | 5 | 2 |
 | [p-popover](/docs/component/p-popover) | 3 | 1 |
 | [p-popup](/docs/component/p-popup) | 8 | 1 |
 | [p-segment](/docs/component/p-segment) | 2 | 2 |

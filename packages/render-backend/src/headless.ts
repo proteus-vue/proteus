@@ -82,6 +82,10 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
   'engineering.transition': 'transition',
   'engineering.animate': 'animate',
+  // ★能力颗粒度对齐 C2
+  'ui.progress': 'progress',
+  'ui.label': 'label',
+  'shell.page-container': 'page-container',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

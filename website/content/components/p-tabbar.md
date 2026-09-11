@@ -1,7 +1,7 @@
 ---
 title: p-tabbar
 group: 页面外壳
-order: 2011
+order: 2012
 ---
 
 # p-tabbar

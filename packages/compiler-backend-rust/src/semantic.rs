@@ -77,6 +77,10 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-toolbar" => Some("shell.toolbar"),
         "p-scroll-view" => Some("layout.scroll"), // 滚动容器 = p-scroll 角色（p-view 别名先例）
         "p-error-boundary" => Some("engineering.error-boundary"), // E8 原语组件形态
+        // ★能力颗粒度对齐 C2（与 Node TAG_SEMANTIC_MAP 同步——progress/label/page-container）
+        "p-progress" => Some("ui.progress"),
+        "p-label" => Some("ui.label"),
+        "p-page-container" => Some("shell.page-container"),
         _ => None, // 未知 p- / 非 p- 标签（view/text/scroll-view——Layer 1 兼容层不产 C-IR）
     }
 }

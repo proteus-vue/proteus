@@ -135,6 +135,10 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'UIView.transition',
     'engineering.animate': 'CAKeyframeAnimation',
+    // ★能力颗粒度对齐 C2
+    'ui.progress': 'UIProgressView',
+    'ui.label': 'UILabel.label',
+    'shell.page-container': 'UIPresentationController',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -193,6 +197,10 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'View.animate.transition',
     'engineering.animate': 'ValueAnimator',
+    // ★能力颗粒度对齐 C2
+    'ui.progress': 'ProgressBar',
+    'ui.label': 'TextView.label',
+    'shell.page-container': 'BottomSheetDialog',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -251,6 +259,10 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'animateTo.transition',
     'engineering.animate': 'Animator.transition',
+    // ★能力颗粒度对齐 C2
+    'ui.progress': 'Progress',
+    'ui.label': 'Text.label',
+    'shell.page-container': 'bindSheet',
   },
 }
 

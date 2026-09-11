@@ -18,24 +18,25 @@ import {
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（137 原语 SSOT）', () => {
-  it('137 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（140 原语 SSOT）', () => {
+  it('140 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
-    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1）
+    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1
+    //   + ★C2 颗粒度对齐：ui+2 progress/label + shell+1 page-container）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
-    expect(count('ui')).toBe(21)
-    expect(count('shell')).toBe(13)
+    expect(count('ui')).toBe(23)
+    expect(count('shell')).toBe(14)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(51)
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 45 项（G-32 冻结清单已实现：12 layout + 18 ui + 9 shell + 2 gesture + 1 capability + 3 engineering）· 其余 planned 待落地', () => {
+  it('implemented 48 项（G-32 冻结清单已实现：12 layout + 20 ui + 10 shell + 2 gesture + 1 capability + 3 engineering）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(45)
+    expect(impl.length).toBe(48)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
@@ -55,6 +56,10 @@ describe('G-32 B1 清单冻结（137 原语 SSOT）', () => {
     expect(implSemantics.has('engineering.animate')).toBe(true)
     // G-32 B5 尾巴：E18 声明式导航组件形态翻 implemented（工程原语组件形态 3/3 全部闭环）
     expect(implSemantics.has('engineering.router-link')).toBe(true)
+    // ★C2 颗粒度对齐：progress/label/page-container 翻 implemented（对齐小程序同名组件）
+    expect(implSemantics.has('ui.progress')).toBe(true)
+    expect(implSemantics.has('ui.label')).toBe(true)
+    expect(implSemantics.has('shell.page-container')).toBe(true)
     // planned 不设 ≥3 端门禁（L2 生态）但必须入 enum
     for (const p of PRIMITIVE_CATALOG.filter((x) => x.status === 'planned' && x.tag)) {
       expect((SEMANTIC_ENUM as readonly string[]).indexOf(p.semantic), `${p.id} ${p.semantic} 未入 enum`).toBeGreaterThanOrEqual(0)
