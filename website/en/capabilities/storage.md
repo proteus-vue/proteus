@@ -20,23 +20,21 @@ useStorage(): CompatStorage
 
 Returns `CompatStorage` (synchronous handle/state object).
 
-#### Methods of `CompatStorage`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `set` | `set(key: string, value: unknown): void` | — |
-| `remove` | `remove(key: string): void` | — |
-| `clear` | `clear(): void` | — |
-| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
-| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | — |
-| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | — |
-| `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | — |
-| `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | — |
-| `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | — |
+| [`set`](#set) | `set(key: string, value: unknown): void` | — |
+| [`remove`](#remove) | `remove(key: string): void` | — |
+| [`clear`](#clear) | `clear(): void` | — |
+| [`setAsync`](#setasync) | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
+| [`removeAsync`](#removeasync) | `removeAsync(key: string): Promise<CapResult<void>>` | — |
+| [`clearAsync`](#clearasync) | `clearAsync(): Promise<CapResult<void>>` | — |
+| [`info`](#info) | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | — |
+| [`batchGet`](#batchget) | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | — |
+| [`batchSet`](#batchset) | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `set`
+### `set`
 
 ```ts
 set(key: string, value: unknown): void
@@ -49,7 +47,7 @@ set(key: string, value: unknown): void
 
 **Returns**: `void`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(key: string): void
@@ -61,7 +59,7 @@ remove(key: string): void
 
 **Returns**: `void`
 
-##### `clear`
+### `clear`
 
 ```ts
 clear(): void
@@ -69,7 +67,7 @@ clear(): void
 
 **Returns**: `void`
 
-##### `setAsync`
+### `setAsync`
 
 ```ts
 setAsync(key: string, value: unknown): Promise<CapResult<void>>
@@ -82,7 +80,7 @@ setAsync(key: string, value: unknown): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeAsync`
+### `removeAsync`
 
 ```ts
 removeAsync(key: string): Promise<CapResult<void>>
@@ -94,7 +92,7 @@ removeAsync(key: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `clearAsync`
+### `clearAsync`
 
 ```ts
 clearAsync(): Promise<CapResult<void>>
@@ -102,7 +100,7 @@ clearAsync(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `info`
+### `info`
 
 ```ts
 info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>
@@ -110,7 +108,7 @@ info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: numb
 
 **Returns**: `Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>`
 
-##### `batchGet`
+### `batchGet`
 
 ```ts
 batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>
@@ -122,7 +120,7 @@ batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown 
 
 **Returns**: `Promise<CapResult<Array<{ key: string; value: unknown }>>>`
 
-##### `batchSet`
+### `batchSet`
 
 ```ts
 batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>

@@ -26,9 +26,9 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `data` | `OrientationInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `OrientationInfo` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `type` | `'portrait' \| 'landscape'` | Yes | Screen orientation |
 | `angle` | `number` | Yes | Rotation angle (0/90/180/-90 degrees) |

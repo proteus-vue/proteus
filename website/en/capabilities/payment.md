@@ -42,9 +42,9 @@ Param,Type,Required,Doc
 | `data` | `PaymentReceipt` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `PaymentReceipt` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `provider` | `string` | Yes | Payment channel (wechat / alipay / host … — tagged by the host bridge) |
 | `transactionId` | `string` | No | Transaction ID (returned by the channel; omitted when unsupported) |

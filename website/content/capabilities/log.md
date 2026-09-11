@@ -20,17 +20,15 @@ useLog(): Logger
 
 返回 `Logger`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `Logger` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
-| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
-| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
+| [`log`](#log) | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
+| [`warn`](#warn) | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
+| [`error`](#error) | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
 
-#### 方法详解
-
-##### `log`
+### `log`
 
 ```ts
 log(message: string, data?: unknown): Promise<CapResult<void>>
@@ -45,7 +43,7 @@ log(message: string, data?: unknown): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `warn`
+### `warn`
 
 ```ts
 warn(message: string, data?: unknown): Promise<CapResult<void>>
@@ -60,7 +58,7 @@ warn(message: string, data?: unknown): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `error`
+### `error`
 
 ```ts
 error(message: string, data?: unknown): Promise<CapResult<void>>

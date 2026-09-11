@@ -26,27 +26,18 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | `data` | `NFCAPI` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `NFCAPI` object
-
-| Property | Type | Required | Doc |
-|---|---|---|---|
-| `supported` | `boolean` | Yes | Whether the platform supports NFC |
-| `available` | `boolean` | Yes | NFC is currently available (enabled) |
-
-#### Methods of `NFCAPI`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `startHCE` | `startHCE(aidList: string[]): Promise<CapResult<void>>` | — |
-| `stopHCE` | `stopHCE(): Promise<CapResult<void>>` | — |
-| `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | — |
-| `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | — |
-| `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | — |
-| `getAdapter` | `getAdapter(): NfcAdapter` | — |
+| [`startHCE`](#starthce) | `startHCE(aidList: string[]): Promise<CapResult<void>>` | — |
+| [`stopHCE`](#stophce) | `stopHCE(): Promise<CapResult<void>>` | — |
+| [`sendHCEMessage`](#sendhcemessage) | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | — |
+| [`onHCEMessage`](#onhcemessage) | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | — |
+| [`onHCEStateChange`](#onhcestatechange) | `onHCEStateChange(cb: (available: boolean) => void): () => void` | — |
+| [`getAdapter`](#getadapter) | `getAdapter(): NfcAdapter` | — |
 
-#### Method details
-
-##### `startHCE`
+### `startHCE`
 
 ```ts
 startHCE(aidList: string[]): Promise<CapResult<void>>
@@ -58,7 +49,7 @@ startHCE(aidList: string[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `stopHCE`
+### `stopHCE`
 
 ```ts
 stopHCE(): Promise<CapResult<void>>
@@ -66,7 +57,7 @@ stopHCE(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `sendHCEMessage`
+### `sendHCEMessage`
 
 ```ts
 sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>
@@ -78,7 +69,7 @@ sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onHCEMessage`
+### `onHCEMessage`
 
 ```ts
 onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void
@@ -90,7 +81,7 @@ onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void)
 
 **Returns**: `() => void`
 
-##### `onHCEStateChange`
+### `onHCEStateChange`
 
 ```ts
 onHCEStateChange(cb: (available: boolean) => void): () => void
@@ -102,7 +93,7 @@ onHCEStateChange(cb: (available: boolean) => void): () => void
 
 **Returns**: `() => void`
 
-##### `getAdapter`
+### `getAdapter`
 
 ```ts
 getAdapter(): NfcAdapter
@@ -110,11 +101,20 @@ getAdapter(): NfcAdapter
 
 **Returns**: `NfcAdapter`
 
-#### Referenced types
+## Props
 
-**`NfcAdapter`** — ★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接） 与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `supported` | `boolean` | Yes | Whether the platform supports NFC |
+| `available` | `boolean` | Yes | NFC is currently available (enabled) |
 
-| Prop/Method | Type | Doc |
+## Referenced types
+
+### `NfcAdapter`
+
+★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接） 与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+
+| Method | Signature | Doc |
 |---|---|---|
 | `startDiscovery` | `startDiscovery(): Promise<CapResult<void>>` | 开始发现附近标签 |
 | `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止发现 |

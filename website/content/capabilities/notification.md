@@ -32,7 +32,7 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 | `data` | `MessageSubscription` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`MessageSubscription`）的属性
+## 属性
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|

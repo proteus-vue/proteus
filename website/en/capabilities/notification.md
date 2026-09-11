@@ -32,9 +32,9 @@ Param,Type,Required,Doc
 | `data` | `MessageSubscription` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `MessageSubscription` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `templateId` | `string` | Yes | Template ID (for wx, must first be applied for on the Official Platform) |
 | `granted` | `boolean` | Yes | Whether authorization was granted (wx: the status of this template in tmplIds; web: Notification.requestPermission granted) |

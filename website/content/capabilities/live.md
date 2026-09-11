@@ -39,25 +39,23 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | `data` | `LiveRoomHandle` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`LiveRoomHandle`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `play` | `play(): Promise<CapResult<void>>` | 开始播放 |
-| `pause` | `pause(): Promise<CapResult<void>>` | 暂停播放 |
-| `resume` | `resume(): Promise<CapResult<void>>` | 从暂停处恢复播放 |
-| `stop` | `stop(): Promise<CapResult<void>>` | 停止播放 |
-| `mute` | `mute(): void` | 静音切换（同步，无 Promise） |
-| `snapshot` | `snapshot(): Promise<CapResult<string>>` | 截图（返回临时文件路径） |
-| `requestFullScreen` | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） |
-| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
-| `status` | `status(): LivePlayState` | 当前播放状态 |
-| `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
-| `leave` | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
+| [`play`](#play) | `play(): Promise<CapResult<void>>` | 开始播放 |
+| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停播放 |
+| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | 从暂停处恢复播放 |
+| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止播放 |
+| [`mute`](#mute) | `mute(): void` | 静音切换（同步，无 Promise） |
+| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | 截图（返回临时文件路径） |
+| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） |
+| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
+| [`status`](#status) | `status(): LivePlayState` | 当前播放状态 |
+| [`onStateChange`](#onstatechange) | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
+| [`leave`](#leave) | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
 
-#### 方法详解
-
-##### `play`
+### `play`
 
 ```ts
 play(): Promise<CapResult<void>>
@@ -67,7 +65,7 @@ play(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `pause`
+### `pause`
 
 ```ts
 pause(): Promise<CapResult<void>>
@@ -77,7 +75,7 @@ pause(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `resume`
+### `resume`
 
 ```ts
 resume(): Promise<CapResult<void>>
@@ -87,7 +85,7 @@ resume(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `stop`
+### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -97,7 +95,7 @@ stop(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `mute`
+### `mute`
 
 ```ts
 mute(): void
@@ -107,7 +105,7 @@ mute(): void
 
 **返回值**：`void`
 
-##### `snapshot`
+### `snapshot`
 
 ```ts
 snapshot(): Promise<CapResult<string>>
@@ -117,7 +115,7 @@ snapshot(): Promise<CapResult<string>>
 
 **返回值**：`Promise<CapResult<string>>`
 
-##### `requestFullScreen`
+### `requestFullScreen`
 
 ```ts
 requestFullScreen(direction?: number): Promise<CapResult<void>>
@@ -131,7 +129,7 @@ requestFullScreen(direction?: number): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `exitFullScreen`
+### `exitFullScreen`
 
 ```ts
 exitFullScreen(): Promise<CapResult<void>>
@@ -141,7 +139,7 @@ exitFullScreen(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `status`
+### `status`
 
 ```ts
 status(): LivePlayState
@@ -151,7 +149,7 @@ status(): LivePlayState
 
 **返回值**：`LivePlayState`
 
-##### `onStateChange`
+### `onStateChange`
 
 ```ts
 onStateChange(cb: (state: LivePlayState) => void): () => void
@@ -165,7 +163,7 @@ onStateChange(cb: (state: LivePlayState) => void): () => void
 
 **返回值**：`() => void`
 
-##### `leave`
+### `leave`
 
 ```ts
 leave(): Promise<CapResult<void>>

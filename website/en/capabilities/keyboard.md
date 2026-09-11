@@ -20,21 +20,13 @@ useKeyboard(): KeyboardLifecycle
 
 Returns `KeyboardLifecycle` (synchronous handle/state object).
 
-#### Properties of `KeyboardLifecycle`
-
-| Property | Type | Doc |
-|---|---|---|
-| `info` | `KeyboardInfo` | — |
-
-#### Methods of `KeyboardLifecycle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | — |
+| [`onChange`](#onchange) | `onChange(cb: (info: KeyboardInfo) => void): () => void` | — |
 
-#### Method details
-
-##### `onChange`
+### `onChange`
 
 ```ts
 onChange(cb: (info: KeyboardInfo) => void): () => void
@@ -46,11 +38,19 @@ onChange(cb: (info: KeyboardInfo) => void): () => void
 
 **Returns**: `() => void`
 
-#### Referenced types
+## Props
 
-**`KeyboardInfo`** — C14 键盘信息（高度 px + 可见性）
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `info` | `KeyboardInfo` | Yes | 当前键盘状态（高度/可见性快照） |
 
-| Prop/Method | Type | Doc |
+## Referenced types
+
+### `KeyboardInfo`
+
+C14 键盘信息（高度 px + 可见性）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `height` | `number` | 键盘高度（px） |
 | `visible` | `boolean` | 键盘是否可见 |

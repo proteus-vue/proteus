@@ -32,7 +32,7 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 | `data` | `SensorSample` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`SensorSample`）的属性
+## 属性
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -94,9 +94,7 @@ useSensorStream(kind: SensorKind): CapResult<SensorStream>
 | `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
 | `active` | `active(): boolean` | 是否监听中 |
 
-##### 方法详解
-
-###### `start`
+#### `start`
 
 ```ts
 start(): Promise<CapResult<void>>
@@ -106,7 +104,7 @@ start(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `stop`
+#### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -116,7 +114,7 @@ stop(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `on`
+#### `on`
 
 ```ts
 on(cb: (sample: SensorSample) => void): () => void
@@ -130,7 +128,7 @@ on(cb: (sample: SensorSample) => void): () => void
 
 **返回值**：`() => void`
 
-###### `active`
+#### `active`
 
 ```ts
 active(): boolean
@@ -140,7 +138,7 @@ active(): boolean
 
 **返回值**：`boolean`
 
-##### 类型引用
+#### 类型引用
 
 **`SensorSample`** — C5 传感器采样（一次性读取当前值；compass 带 heading）
 

@@ -33,17 +33,15 @@ Param,Type,Required,Doc
 | `data` | `WebSocketConnection` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `WebSocketConnection`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `send` | `send(data: string \| ArrayBuffer): void` | Send a message (string or binary) |
-| `close` | `close(code?: number, reason?: string): void` | Close the connection |
-| `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
+| [`send`](#send) | `send(data: string \| ArrayBuffer): void` | Send a message (string or binary) |
+| [`close`](#close) | `close(code?: number, reason?: string): void` | Close the connection |
+| [`on`](#on) | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
 
-#### Method details
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string | ArrayBuffer): void
@@ -57,7 +55,7 @@ send(data: string | ArrayBuffer): void
 
 **Returns**: `void`
 
-##### `close`
+### `close`
 
 ```ts
 close(code?: number, reason?: string): void
@@ -72,7 +70,7 @@ close(code?: number, reason?: string): void
 
 **Returns**: `void`
 
-##### `on`
+### `on`
 
 ```ts
 on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void

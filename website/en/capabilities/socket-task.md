@@ -32,18 +32,16 @@ Param,Type,Required,Doc
 | `data` | `SocketTaskHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `SocketTaskHandle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `send` | `send(data: string): Promise<CapResult<void>>` | — |
-| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | — |
-| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
-| `isConnected` | `isConnected(): boolean` | — |
+| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | — |
+| [`close`](#close) | `close(code?: number, reason?: string): Promise<CapResult<void>>` | — |
+| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | — |
+| [`isConnected`](#isconnected) | `isConnected(): boolean` | — |
 
-#### Method details
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string): Promise<CapResult<void>>
@@ -55,7 +53,7 @@ send(data: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `close`
+### `close`
 
 ```ts
 close(code?: number, reason?: string): Promise<CapResult<void>>
@@ -68,7 +66,7 @@ close(code?: number, reason?: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onMessage`
+### `onMessage`
 
 ```ts
 onMessage(cb: (data: string) => void): () => void
@@ -80,7 +78,7 @@ onMessage(cb: (data: string) => void): () => void
 
 **Returns**: `() => void`
 
-##### `isConnected`
+### `isConnected`
 
 ```ts
 isConnected(): boolean

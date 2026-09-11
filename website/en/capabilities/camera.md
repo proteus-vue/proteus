@@ -26,9 +26,9 @@ useCamera(): Promise<CapResult<MediaAccess>>
 | `data` | `MediaAccess` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `MediaAccess` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `kind` | `'camera' \| 'microphone'` | Yes | Media device type |
 | `supported` | `boolean` | Yes | Platform capability/device is present |
@@ -79,9 +79,7 @@ useCameraContext(id: string): CapResult<CameraController>
 | `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | 设置缩放级别。 |
 | `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机实时帧。 |
 
-##### Method details
-
-###### `takePhoto`
+#### `takePhoto`
 
 ```ts
 takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
@@ -95,7 +93,7 @@ takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
 
 **Returns**: `Promise<CapResult<PhotoResult>>` -- 照片临时路径 + 宽高
 
-###### `startRecord`
+#### `startRecord`
 
 ```ts
 startRecord(): Promise<CapResult<void>>
@@ -105,7 +103,7 @@ startRecord(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `stopRecord`
+#### `stopRecord`
 
 ```ts
 stopRecord(): Promise<CapResult<VideoResult>>
@@ -115,7 +113,7 @@ stopRecord(): Promise<CapResult<VideoResult>>
 
 **Returns**: `Promise<CapResult<VideoResult>>`
 
-###### `setZoom`
+#### `setZoom`
 
 ```ts
 setZoom(zoom: number): Promise<CapResult<void>>
@@ -129,7 +127,7 @@ setZoom(zoom: number): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `onCameraFrame`
+#### `onCameraFrame`
 
 ```ts
 onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void
@@ -143,7 +141,7 @@ onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) =
 
 **Returns**: `() => void` -- 取消订阅函数（web 无对等 → 空订阅）
 
-##### Referenced types
+#### Referenced types
 
 **`PhotoResult`** — 拍照结果（wx.takePhoto 子集）
 

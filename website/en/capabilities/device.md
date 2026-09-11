@@ -26,9 +26,9 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `data` | `CapDeviceInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `CapDeviceInfo` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `platform` | `string` | Yes | Platform identifier (ios / android / devtools / desktop …) |
 | `model` | `string` | Yes | Device model (e.g. iPhone 15 Pro) |

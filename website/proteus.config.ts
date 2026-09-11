@@ -45,7 +45,7 @@ const config: ProteusConfig = {
   // ★GitHub Pages 子路径部署：PROTEUS_BASE=/proteus/ 注入 base（Vercel/本地根路径缺省 '/' 不变）
   vite: () => ({
     base: process.env.PROTEUS_BASE ?? '/',
-    plugins: [docsMdPlugin({ resolveEnds })],
+    plugins: [docsMdPlugin({ resolveEnds, tocMaxDepth: 4 })],
     resolve: {
       alias: [
         // ★dogfooding：p-* 内置组件 + installFluidLayout 沿用框架组件库源（与 examples 同一约定）

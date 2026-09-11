@@ -20,23 +20,15 @@ useAppLifecycle(): AppLifecycle
 
 返回 `AppLifecycle`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `AppLifecycle` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | 当前阶段：launch/show/hide |
-
-#### `AppLifecycle` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onLaunch` | `onLaunch(cb: () => void): () => void` | 订阅「应用启动」（返回取消） |
-| `onShow` | `onShow(cb: () => void): () => void` | 订阅「应用进入前台」（返回取消） |
-| `onHide` | `onHide(cb: () => void): () => void` | 订阅「应用退到后台」（返回取消） |
+| [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | 订阅「应用启动」（返回取消） |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | 订阅「应用进入前台」（返回取消） |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | 订阅「应用退到后台」（返回取消） |
 
-#### 方法详解
-
-##### `onLaunch`
+### `onLaunch`
 
 ```ts
 onLaunch(cb: () => void): () => void
@@ -50,7 +42,7 @@ onLaunch(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-##### `onShow`
+### `onShow`
 
 ```ts
 onShow(cb: () => void): () => void
@@ -64,7 +56,7 @@ onShow(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-##### `onHide`
+### `onHide`
 
 ```ts
 onHide(cb: () => void): () => void
@@ -77,6 +69,12 @@ onHide(cb: () => void): () => void
 | `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
 
 **返回值**：`() => void`
+
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | 是 | 当前阶段：launch/show/hide |
 
 ## 错误码
 

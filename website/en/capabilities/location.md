@@ -26,9 +26,9 @@ useLocation(): Promise<CapResult<Coords>>
 | `data` | `Coords` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `Coords` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `latitude` | `number` | Yes | latitude (WGS84, in floating-point degrees) |
 | `longitude` | `number` | Yes | longitude (WGS84, in floating-point degrees) |

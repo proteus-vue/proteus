@@ -26,9 +26,9 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 | `data` | `MediaAccess` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `MediaAccess` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `kind` | `'camera' \| 'microphone'` | Yes | Media device type |
 | `supported` | `boolean` | Yes | Platform capability/device is present |
@@ -80,9 +80,7 @@ useRecorder(): CapResult<RecorderController>
 | `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音生命周期事件。 |
 | `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（录 per-frame 数据，用于实时波形/编码）。 |
 
-##### Method details
-
-###### `start`
+#### `start`
 
 ```ts
 start(options?: RecordOptions): Promise<CapResult<void>>
@@ -96,7 +94,7 @@ start(options?: RecordOptions): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `stop`
+#### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -106,7 +104,7 @@ stop(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `pause`
+#### `pause`
 
 ```ts
 pause(): Promise<CapResult<void>>
@@ -116,7 +114,7 @@ pause(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `resume`
+#### `resume`
 
 ```ts
 resume(): Promise<CapResult<void>>
@@ -126,7 +124,7 @@ resume(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `on`
+#### `on`
 
 ```ts
 on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void): () => void
@@ -141,7 +139,7 @@ on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown
 
 **Returns**: `() => void` -- 取消订阅函数
 
-###### `onFrameRecorded`
+#### `onFrameRecorded`
 
 ```ts
 onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
@@ -155,7 +153,7 @@ onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) 
 
 **Returns**: `() => void` -- 取消订阅函数
 
-##### Referenced types
+#### Referenced types
 
 **`RecordOptions`** — 录音状态（wx RecorderManager onStart/onStop 等）
 

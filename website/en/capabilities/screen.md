@@ -26,9 +26,9 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 | `data` | `ScreenInfo` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `ScreenInfo` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `width` | `number` | Yes | Screen width (px, CSS pixels) |
 | `height` | `number` | Yes | Screen height (px, CSS pixels) |

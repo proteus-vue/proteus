@@ -26,39 +26,29 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 | `data` | `BluetoothAPI` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `BluetoothAPI` object
-
-| Property | Type | Required | Doc |
-|---|---|---|---|
-| `supported` | `boolean` | Yes | Whether the platform supports Bluetooth |
-| `available` | `boolean` | Yes | The adapter is open (available) |
-| `devices` | `string[]` | Yes | Names of paired/discovered devices (wx.getBluetoothDevices; on the web, listed only after a user gesture) |
-
-#### Methods of `BluetoothAPI`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `close` | `close(): Promise<CapResult<void>>` | — |
-| `getAdapterState` | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | — |
-| `startDiscovery` | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | — |
-| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | — |
-| `onDeviceFound` | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | — |
-| `getDevices` | `getDevices(): Promise<CapResult<BleDevice[]>>` | — |
-| `getConnectedDevices` | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | — |
-| `connect` | `connect(deviceId: string): Promise<CapResult<void>>` | — |
-| `disconnect` | `disconnect(deviceId: string): Promise<CapResult<void>>` | — |
-| `onConnectionStateChange` | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | — |
-| `getServices` | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | — |
-| `getCharacteristics` | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | — |
-| `read` | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | — |
-| `write` | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | — |
-| `setNotify` | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | — |
-| `onCharacteristicValueChange` | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | — |
-| `getRSSI` | `getRSSI(deviceId: string): Promise<CapResult<number>>` | — |
+| [`close`](#close) | `close(): Promise<CapResult<void>>` | — |
+| [`getAdapterState`](#getadapterstate) | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | — |
+| [`startDiscovery`](#startdiscovery) | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | — |
+| [`stopDiscovery`](#stopdiscovery) | `stopDiscovery(): Promise<CapResult<void>>` | — |
+| [`onDeviceFound`](#ondevicefound) | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | — |
+| [`getDevices`](#getdevices) | `getDevices(): Promise<CapResult<BleDevice[]>>` | — |
+| [`getConnectedDevices`](#getconnecteddevices) | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | — |
+| [`connect`](#connect) | `connect(deviceId: string): Promise<CapResult<void>>` | — |
+| [`disconnect`](#disconnect) | `disconnect(deviceId: string): Promise<CapResult<void>>` | — |
+| [`onConnectionStateChange`](#onconnectionstatechange) | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | — |
+| [`getServices`](#getservices) | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | — |
+| [`getCharacteristics`](#getcharacteristics) | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | — |
+| [`read`](#read) | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | — |
+| [`write`](#write) | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | — |
+| [`setNotify`](#setnotify) | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | — |
+| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | — |
+| [`getRSSI`](#getrssi) | `getRSSI(deviceId: string): Promise<CapResult<number>>` | — |
 
-#### Method details
-
-##### `close`
+### `close`
 
 ```ts
 close(): Promise<CapResult<void>>
@@ -66,7 +56,7 @@ close(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `getAdapterState`
+### `getAdapterState`
 
 ```ts
 getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>
@@ -74,7 +64,7 @@ getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean 
 
 **Returns**: `Promise<CapResult<{ available: boolean; discovering: boolean }>>`
 
-##### `startDiscovery`
+### `startDiscovery`
 
 ```ts
 startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
@@ -86,7 +76,7 @@ startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `stopDiscovery`
+### `stopDiscovery`
 
 ```ts
 stopDiscovery(): Promise<CapResult<void>>
@@ -94,7 +84,7 @@ stopDiscovery(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onDeviceFound`
+### `onDeviceFound`
 
 ```ts
 onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
@@ -106,7 +96,7 @@ onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
 
 **Returns**: `() => void` -- 取消订阅函数
 
-##### `getDevices`
+### `getDevices`
 
 ```ts
 getDevices(): Promise<CapResult<BleDevice[]>>
@@ -114,7 +104,7 @@ getDevices(): Promise<CapResult<BleDevice[]>>
 
 **Returns**: `Promise<CapResult<BleDevice[]>>`
 
-##### `getConnectedDevices`
+### `getConnectedDevices`
 
 ```ts
 getConnectedDevices(): Promise<CapResult<BleDevice[]>>
@@ -122,7 +112,7 @@ getConnectedDevices(): Promise<CapResult<BleDevice[]>>
 
 **Returns**: `Promise<CapResult<BleDevice[]>>`
 
-##### `connect`
+### `connect`
 
 ```ts
 connect(deviceId: string): Promise<CapResult<void>>
@@ -134,7 +124,7 @@ connect(deviceId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `disconnect`
+### `disconnect`
 
 ```ts
 disconnect(deviceId: string): Promise<CapResult<void>>
@@ -146,7 +136,7 @@ disconnect(deviceId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onConnectionStateChange`
+### `onConnectionStateChange`
 
 ```ts
 onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void
@@ -158,7 +148,7 @@ onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () 
 
 **Returns**: `() => void` -- 取消订阅函数
 
-##### `getServices`
+### `getServices`
 
 ```ts
 getServices(deviceId: string): Promise<CapResult<BleService[]>>
@@ -170,7 +160,7 @@ getServices(deviceId: string): Promise<CapResult<BleService[]>>
 
 **Returns**: `Promise<CapResult<BleService[]>>`
 
-##### `getCharacteristics`
+### `getCharacteristics`
 
 ```ts
 getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>
@@ -183,7 +173,7 @@ getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCh
 
 **Returns**: `Promise<CapResult<BleCharacteristic[]>>`
 
-##### `read`
+### `read`
 
 ```ts
 read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>
@@ -197,7 +187,7 @@ read(deviceId: string, serviceId: string, characteristicId: string): Promise<Cap
 
 **Returns**: `Promise<CapResult<ArrayBuffer>>`
 
-##### `write`
+### `write`
 
 ```ts
 write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>
@@ -212,7 +202,7 @@ write(deviceId: string, serviceId: string, characteristicId: string, value: Arra
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `setNotify`
+### `setNotify`
 
 ```ts
 setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>
@@ -227,7 +217,7 @@ setNotify(deviceId: string, serviceId: string, characteristicId: string, state: 
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onCharacteristicValueChange`
+### `onCharacteristicValueChange`
 
 ```ts
 onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void
@@ -239,7 +229,7 @@ onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteri
 
 **Returns**: `() => void` -- 取消订阅函数
 
-##### `getRSSI`
+### `getRSSI`
 
 ```ts
 getRSSI(deviceId: string): Promise<CapResult<number>>
@@ -251,26 +241,40 @@ getRSSI(deviceId: string): Promise<CapResult<number>>
 
 **Returns**: `Promise<CapResult<number>>`
 
-#### Referenced types
+## Props
 
-**`BleDevice`** — BLE 设备（wx.BluetoothDevice 子集）
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `supported` | `boolean` | Yes | Whether the platform supports Bluetooth |
+| `available` | `boolean` | Yes | The adapter is open (available) |
+| `devices` | `string[]` | Yes | Names of paired/discovered devices (wx.getBluetoothDevices; on the web, listed only after a user gesture) |
 
-| Prop/Method | Type | Doc |
+## Referenced types
+
+### `BleDevice`
+
+BLE 设备（wx.BluetoothDevice 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `deviceId` | `string` | 设备唯一 id |
 | `name` | `string` | 设备名称 |
 | `RSSI` | `number` | 信号强度（发现/连接后可得） |
 
-**`BleService`** — BLE 服务（wx.BLEService 子集）
+### `BleService`
 
-| Prop/Method | Type | Doc |
+BLE 服务（wx.BLEService 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `uuid` | `string` | 服务 uuid |
 | `isPrimary` | `boolean` | 是否主服务 |
 
-**`BleCharacteristic`** — BLE 特征值（wx.BLECharacteristic 子集）
+### `BleCharacteristic`
 
-| Prop/Method | Type | Doc |
+BLE 特征值（wx.BLECharacteristic 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `uuid` | `string` | 特征值 uuid |
 | `properties` | `{ read: boolean; write: boolean; notify: boolean; indicate: boolean }` | 支持的操作（read/write/notify/indicate） |

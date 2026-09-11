@@ -20,23 +20,15 @@ useAppLifecycle(): AppLifecycle
 
 Returns `AppLifecycle` (synchronous handle/state object).
 
-#### Properties of `AppLifecycle`
-
-| Property | Type | Doc |
-|---|---|---|
-| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | — |
-
-#### Methods of `AppLifecycle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `onLaunch` | `onLaunch(cb: () => void): () => void` | — |
-| `onShow` | `onShow(cb: () => void): () => void` | — |
-| `onHide` | `onHide(cb: () => void): () => void` | — |
+| [`onLaunch`](#onlaunch) | `onLaunch(cb: () => void): () => void` | — |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
 
-#### Method details
-
-##### `onLaunch`
+### `onLaunch`
 
 ```ts
 onLaunch(cb: () => void): () => void
@@ -48,7 +40,7 @@ onLaunch(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-##### `onShow`
+### `onShow`
 
 ```ts
 onShow(cb: () => void): () => void
@@ -60,7 +52,7 @@ onShow(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-##### `onHide`
+### `onHide`
 
 ```ts
 onHide(cb: () => void): () => void
@@ -71,6 +63,12 @@ onHide(cb: () => void): () => void
 | `cb` | `() => void` | Yes | — |
 
 **Returns**: `() => void`
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `phase` | `'PENDING' \| 'LAUNCH' \| 'SHOW' \| 'HIDE'` | Yes | 当前阶段：launch/show/hide |
 
 ## Error codes
 

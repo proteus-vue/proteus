@@ -26,18 +26,16 @@ useCookie(): Promise<CapResult<CookieJar>>
 | `data` | `CookieJar` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `CookieJar`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `get` | `get(name: string): string \| undefined` | — |
-| `set` | `set(name: string, value: string, maxAge?: number): void` | — |
-| `remove` | `remove(name: string): void` | — |
-| `list` | `list(): Record<string, string>` | — |
+| [`get`](#get) | `get(name: string): string \| undefined` | — |
+| [`set`](#set) | `set(name: string, value: string, maxAge?: number): void` | — |
+| [`remove`](#remove) | `remove(name: string): void` | — |
+| [`list`](#list) | `list(): Record<string, string>` | — |
 
-#### Method details
-
-##### `get`
+### `get`
 
 ```ts
 get(name: string): string | undefined
@@ -49,7 +47,7 @@ get(name: string): string | undefined
 
 **Returns**: `string \| undefined`
 
-##### `set`
+### `set`
 
 ```ts
 set(name: string, value: string, maxAge?: number): void
@@ -63,7 +61,7 @@ set(name: string, value: string, maxAge?: number): void
 
 **Returns**: `void`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(name: string): void
@@ -75,7 +73,7 @@ remove(name: string): void
 
 **Returns**: `void`
 
-##### `list`
+### `list`
 
 ```ts
 list(): Record<string, string>

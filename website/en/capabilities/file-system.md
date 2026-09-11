@@ -20,46 +20,38 @@ useFileSystem(): FSAdapter
 
 Returns `FSAdapter` (synchronous handle/state object).
 
-#### Properties of `FSAdapter`
-
-| Property | Type | Doc |
-|---|---|---|
-| `supported` | `boolean` | — |
-
-#### Methods of `FSAdapter`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `readFile` | `readFile(path: string): Promise<CapResult<string>>` | — |
-| `writeFile` | `writeFile(path: string, data: string): Promise<CapResult<void>>` | — |
-| `appendFile` | `appendFile(path: string, data: string): Promise<CapResult<void>>` | — |
-| `copyFile` | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | — |
-| `rename` | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | — |
-| `remove` | `remove(path: string): Promise<CapResult<void>>` | — |
-| `exists` | `exists(path: string): Promise<CapResult<boolean>>` | — |
-| `stat` | `stat(path: string): Promise<CapResult<FileStat>>` | — |
-| `mkdir` | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
-| `rmdir` | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
-| `readdir` | `readdir(path: string): Promise<CapResult<string[]>>` | — |
-| `getFileInfo` | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | — |
-| `saveFile` | `saveFile(tempPath: string): Promise<CapResult<string>>` | — |
-| `getSavedFileList` | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | — |
-| `removeSavedFile` | `removeSavedFile(path: string): Promise<CapResult<void>>` | — |
-| `unzip` | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | — |
-| `readFileSync` | `readFileSync(path: string): CapResult<string>` | — |
-| `writeFileSync` | `writeFileSync(path: string, data: string): CapResult<void>` | — |
-| `existsSync` | `existsSync(path: string): CapResult<boolean>` | — |
-| `statSync` | `statSync(path: string): CapResult<FileStat>` | — |
-| `readdirSync` | `readdirSync(path: string): CapResult<string[]>` | — |
-| `mkdirSync` | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | — |
-| `renameSync` | `renameSync(oldPath: string, newPath: string): CapResult<void>` | — |
-| `unlinkSync` | `unlinkSync(path: string): CapResult<void>` | — |
-| `copyFileSync` | `copyFileSync(src: string, dest: string): CapResult<void>` | — |
-| `appendFileSync` | `appendFileSync(path: string, data: string): CapResult<void>` | — |
+| [`readFile`](#readfile) | `readFile(path: string): Promise<CapResult<string>>` | — |
+| [`writeFile`](#writefile) | `writeFile(path: string, data: string): Promise<CapResult<void>>` | — |
+| [`appendFile`](#appendfile) | `appendFile(path: string, data: string): Promise<CapResult<void>>` | — |
+| [`copyFile`](#copyfile) | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | — |
+| [`rename`](#rename) | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | — |
+| [`remove`](#remove) | `remove(path: string): Promise<CapResult<void>>` | — |
+| [`exists`](#exists) | `exists(path: string): Promise<CapResult<boolean>>` | — |
+| [`stat`](#stat) | `stat(path: string): Promise<CapResult<FileStat>>` | — |
+| [`mkdir`](#mkdir) | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
+| [`rmdir`](#rmdir) | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | — |
+| [`readdir`](#readdir) | `readdir(path: string): Promise<CapResult<string[]>>` | — |
+| [`getFileInfo`](#getfileinfo) | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | — |
+| [`saveFile`](#savefile) | `saveFile(tempPath: string): Promise<CapResult<string>>` | — |
+| [`getSavedFileList`](#getsavedfilelist) | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | — |
+| [`removeSavedFile`](#removesavedfile) | `removeSavedFile(path: string): Promise<CapResult<void>>` | — |
+| [`unzip`](#unzip) | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | — |
+| [`readFileSync`](#readfilesync) | `readFileSync(path: string): CapResult<string>` | — |
+| [`writeFileSync`](#writefilesync) | `writeFileSync(path: string, data: string): CapResult<void>` | — |
+| [`existsSync`](#existssync) | `existsSync(path: string): CapResult<boolean>` | — |
+| [`statSync`](#statsync) | `statSync(path: string): CapResult<FileStat>` | — |
+| [`readdirSync`](#readdirsync) | `readdirSync(path: string): CapResult<string[]>` | — |
+| [`mkdirSync`](#mkdirsync) | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | — |
+| [`renameSync`](#renamesync) | `renameSync(oldPath: string, newPath: string): CapResult<void>` | — |
+| [`unlinkSync`](#unlinksync) | `unlinkSync(path: string): CapResult<void>` | — |
+| [`copyFileSync`](#copyfilesync) | `copyFileSync(src: string, dest: string): CapResult<void>` | — |
+| [`appendFileSync`](#appendfilesync) | `appendFileSync(path: string, data: string): CapResult<void>` | — |
 
-#### Method details
-
-##### `readFile`
+### `readFile`
 
 ```ts
 readFile(path: string): Promise<CapResult<string>>
@@ -71,7 +63,7 @@ readFile(path: string): Promise<CapResult<string>>
 
 **Returns**: `Promise<CapResult<string>>`
 
-##### `writeFile`
+### `writeFile`
 
 ```ts
 writeFile(path: string, data: string): Promise<CapResult<void>>
@@ -84,7 +76,7 @@ writeFile(path: string, data: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `appendFile`
+### `appendFile`
 
 ```ts
 appendFile(path: string, data: string): Promise<CapResult<void>>
@@ -97,7 +89,7 @@ appendFile(path: string, data: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `copyFile`
+### `copyFile`
 
 ```ts
 copyFile(src: string, dest: string): Promise<CapResult<void>>
@@ -110,7 +102,7 @@ copyFile(src: string, dest: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `rename`
+### `rename`
 
 ```ts
 rename(oldPath: string, newPath: string): Promise<CapResult<void>>
@@ -123,7 +115,7 @@ rename(oldPath: string, newPath: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(path: string): Promise<CapResult<void>>
@@ -135,7 +127,7 @@ remove(path: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `exists`
+### `exists`
 
 ```ts
 exists(path: string): Promise<CapResult<boolean>>
@@ -147,7 +139,7 @@ exists(path: string): Promise<CapResult<boolean>>
 
 **Returns**: `Promise<CapResult<boolean>>`
 
-##### `stat`
+### `stat`
 
 ```ts
 stat(path: string): Promise<CapResult<FileStat>>
@@ -159,7 +151,7 @@ stat(path: string): Promise<CapResult<FileStat>>
 
 **Returns**: `Promise<CapResult<FileStat>>`
 
-##### `mkdir`
+### `mkdir`
 
 ```ts
 mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
@@ -172,7 +164,7 @@ mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `rmdir`
+### `rmdir`
 
 ```ts
 rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
@@ -185,7 +177,7 @@ rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `readdir`
+### `readdir`
 
 ```ts
 readdir(path: string): Promise<CapResult<string[]>>
@@ -197,7 +189,7 @@ readdir(path: string): Promise<CapResult<string[]>>
 
 **Returns**: `Promise<CapResult<string[]>>`
 
-##### `getFileInfo`
+### `getFileInfo`
 
 ```ts
 getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>
@@ -210,7 +202,7 @@ getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: n
 
 **Returns**: `Promise<CapResult<{ size: number; digest: string }>>`
 
-##### `saveFile`
+### `saveFile`
 
 ```ts
 saveFile(tempPath: string): Promise<CapResult<string>>
@@ -222,7 +214,7 @@ saveFile(tempPath: string): Promise<CapResult<string>>
 
 **Returns**: `Promise<CapResult<string>>`
 
-##### `getSavedFileList`
+### `getSavedFileList`
 
 ```ts
 getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
@@ -230,7 +222,7 @@ getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
 
 **Returns**: `Promise<CapResult<SavedFileInfo[]>>`
 
-##### `removeSavedFile`
+### `removeSavedFile`
 
 ```ts
 removeSavedFile(path: string): Promise<CapResult<void>>
@@ -242,7 +234,7 @@ removeSavedFile(path: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `unzip`
+### `unzip`
 
 ```ts
 unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
@@ -255,7 +247,7 @@ unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `readFileSync`
+### `readFileSync`
 
 ```ts
 readFileSync(path: string): CapResult<string>
@@ -267,7 +259,7 @@ readFileSync(path: string): CapResult<string>
 
 **Returns**: `CapResult<string>`
 
-##### `writeFileSync`
+### `writeFileSync`
 
 ```ts
 writeFileSync(path: string, data: string): CapResult<void>
@@ -280,7 +272,7 @@ writeFileSync(path: string, data: string): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-##### `existsSync`
+### `existsSync`
 
 ```ts
 existsSync(path: string): CapResult<boolean>
@@ -292,7 +284,7 @@ existsSync(path: string): CapResult<boolean>
 
 **Returns**: `CapResult<boolean>`
 
-##### `statSync`
+### `statSync`
 
 ```ts
 statSync(path: string): CapResult<FileStat>
@@ -304,7 +296,7 @@ statSync(path: string): CapResult<FileStat>
 
 **Returns**: `CapResult<FileStat>`
 
-##### `readdirSync`
+### `readdirSync`
 
 ```ts
 readdirSync(path: string): CapResult<string[]>
@@ -316,7 +308,7 @@ readdirSync(path: string): CapResult<string[]>
 
 **Returns**: `CapResult<string[]>`
 
-##### `mkdirSync`
+### `mkdirSync`
 
 ```ts
 mkdirSync(path: string, recursive?: boolean): CapResult<void>
@@ -329,7 +321,7 @@ mkdirSync(path: string, recursive?: boolean): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-##### `renameSync`
+### `renameSync`
 
 ```ts
 renameSync(oldPath: string, newPath: string): CapResult<void>
@@ -342,7 +334,7 @@ renameSync(oldPath: string, newPath: string): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-##### `unlinkSync`
+### `unlinkSync`
 
 ```ts
 unlinkSync(path: string): CapResult<void>
@@ -354,7 +346,7 @@ unlinkSync(path: string): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-##### `copyFileSync`
+### `copyFileSync`
 
 ```ts
 copyFileSync(src: string, dest: string): CapResult<void>
@@ -367,7 +359,7 @@ copyFileSync(src: string, dest: string): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-##### `appendFileSync`
+### `appendFileSync`
 
 ```ts
 appendFileSync(path: string, data: string): CapResult<void>
@@ -380,11 +372,19 @@ appendFileSync(path: string, data: string): CapResult<void>
 
 **Returns**: `CapResult<void>`
 
-#### Referenced types
+## Props
 
-**`FileStat`** — 文件/目录信息（wx.Stats 子集）
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `supported` | `boolean` | Yes | 能力可用性（内存降级也算可用；false = 完全不可用） |
 
-| Prop/Method | Type | Doc |
+## Referenced types
+
+### `FileStat`
+
+文件/目录信息（wx.Stats 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `size` | `number` | 文件大小（字节） |
 | `mode` | `number` | 权限位 |
@@ -393,9 +393,11 @@ appendFileSync(path: string, data: string): CapResult<void>
 | `isDirectory` | `boolean` | 是否目录 |
 | `isFile` | `boolean` | 是否文件 |
 
-**`SavedFileInfo`** — 已保存文件信息（wx.SavedFileInfo 子集）
+### `SavedFileInfo`
 
-| Prop/Method | Type | Doc |
+已保存文件信息（wx.SavedFileInfo 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `filePath` | `string` | 保存后的文件路径 |
 | `size` | `number` | 文件大小（字节） |

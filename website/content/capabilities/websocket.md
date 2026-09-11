@@ -33,17 +33,15 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 | `data` | `WebSocketConnection` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`WebSocketConnection`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `send` | `send(data: string \| ArrayBuffer): void` | 发送消息（字符串或二进制） |
-| `close` | `close(code?: number, reason?: string): void` | 关闭连接 |
-| `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）——open/message/close/error |
+| [`send`](#send) | `send(data: string \| ArrayBuffer): void` | 发送消息（字符串或二进制） |
+| [`close`](#close) | `close(code?: number, reason?: string): void` | 关闭连接 |
+| [`on`](#on) | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）——open/message/close/error |
 
-#### 方法详解
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string | ArrayBuffer): void
@@ -57,7 +55,7 @@ send(data: string | ArrayBuffer): void
 
 **返回值**：`void`
 
-##### `close`
+### `close`
 
 ```ts
 close(code?: number, reason?: string): void
@@ -72,7 +70,7 @@ close(code?: number, reason?: string): void
 
 **返回值**：`void`
 
-##### `on`
+### `on`
 
 ```ts
 on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void

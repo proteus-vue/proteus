@@ -20,23 +20,15 @@ usePageLifecycle(): PageLifecycle
 
 Returns `PageLifecycle` (synchronous handle/state object).
 
-#### Properties of `PageLifecycle`
-
-| Property | Type | Doc |
-|---|---|---|
-| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | — |
-
-#### Methods of `PageLifecycle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `onLoad` | `onLoad(cb: () => void): () => void` | — |
-| `onShow` | `onShow(cb: () => void): () => void` | — |
-| `onHide` | `onHide(cb: () => void): () => void` | — |
+| [`onLoad`](#onload) | `onLoad(cb: () => void): () => void` | — |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | — |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | — |
 
-#### Method details
-
-##### `onLoad`
+### `onLoad`
 
 ```ts
 onLoad(cb: () => void): () => void
@@ -48,7 +40,7 @@ onLoad(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-##### `onShow`
+### `onShow`
 
 ```ts
 onShow(cb: () => void): () => void
@@ -60,7 +52,7 @@ onShow(cb: () => void): () => void
 
 **Returns**: `() => void`
 
-##### `onHide`
+### `onHide`
 
 ```ts
 onHide(cb: () => void): () => void
@@ -71,6 +63,12 @@ onHide(cb: () => void): () => void
 | `cb` | `() => void` | Yes | — |
 
 **Returns**: `() => void`
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | Yes | 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） |
 
 ## Error codes
 

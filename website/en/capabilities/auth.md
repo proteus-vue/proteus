@@ -20,25 +20,16 @@ useAuth(): AuthState
 
 Returns `AuthState` (synchronous handle/state object).
 
-#### Properties of `AuthState`
-
-| Property | Type | Doc |
-|---|---|---|
-| `token` | `string \| null` | Current token (null when not logged in; reactive — bind directly in the UI) |
-| `isAuthenticated` | `boolean` | Whether the user is logged in (true when the token is non-empty) |
-
-#### Methods of `AuthState`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `login` | `login(provider?: string): Promise<CapResult<string>>` | Log in via the host bridge (stores the token on success; missing bridge → explicit Err) |
-| `logout` | `logout(): Promise<CapResult<void>>` | Log out (clears the token) |
-| `setToken` | `setToken(token: string \| null): void` | Manually set the token (third-party login / server-issued session) |
-| `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | Subscribe to auth-state changes (returns an unsubscribe function) |
+| [`login`](#login) | `login(provider?: string): Promise<CapResult<string>>` | Log in via the host bridge (stores the token on success; missing bridge → explicit Err) |
+| [`logout`](#logout) | `logout(): Promise<CapResult<void>>` | Log out (clears the token) |
+| [`setToken`](#settoken) | `setToken(token: string \| null): void` | Manually set the token (third-party login / server-issued session) |
+| [`subscribe`](#subscribe) | `subscribe(cb: (token: string \| null) => void): () => void` | Subscribe to auth-state changes (returns an unsubscribe function) |
 
-#### Method details
-
-##### `login`
+### `login`
 
 ```ts
 login(provider?: string): Promise<CapResult<string>>
@@ -52,7 +43,7 @@ login(provider?: string): Promise<CapResult<string>>
 
 **Returns**: `Promise<CapResult<string>>`
 
-##### `logout`
+### `logout`
 
 ```ts
 logout(): Promise<CapResult<void>>
@@ -62,7 +53,7 @@ logout(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `setToken`
+### `setToken`
 
 ```ts
 setToken(token: string | null): void
@@ -76,7 +67,7 @@ setToken(token: string | null): void
 
 **Returns**: `void`
 
-##### `subscribe`
+### `subscribe`
 
 ```ts
 subscribe(cb: (token: string | null) => void): () => void
@@ -89,6 +80,13 @@ subscribe(cb: (token: string | null) => void): () => void
 | `cb` | `(token: string \| null) => void` | Yes | — |
 
 **Returns**: `() => void`
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `token` | `string \| null` | Yes | Current token (null when not logged in; reactive — bind directly in the UI) |
+| `isAuthenticated` | `boolean` | Yes | Whether the user is logged in (true when the token is non-empty) |
 
 ## Compat rollout
 

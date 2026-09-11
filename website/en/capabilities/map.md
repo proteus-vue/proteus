@@ -32,48 +32,46 @@ Param,Type,Required,Doc
 | `data` | `MapController` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `MapController`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
-| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
-| `moveToLocation` | `moveToLocation(): Promise<CapResult<void>>` | — |
-| `includePoints` | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | — |
-| `translateMarker` | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | — |
-| `addMarkers` | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | — |
-| `removeMarkers` | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | — |
-| `addPolylines` | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | — |
-| `removePolylines` | `removePolylines(ids: number[]): Promise<CapResult<void>>` | — |
-| `addCircles` | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | — |
-| `removeCircles` | `removeCircles(ids: number[]): Promise<CapResult<void>>` | — |
-| `getScale` | `getScale(): Promise<CapResult<number>>` | — |
-| `openMapApp` | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | — |
-| `on` | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | — |
-| `getCenterLocation` | `getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
-| `getRotate` | `getRotate(): Promise<CapResult<number>>` | — |
-| `getSkew` | `getSkew(): Promise<CapResult<number>>` | — |
-| `fromScreenLocation` | `fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
-| `toScreenLocation` | `toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>` | — |
-| `setCenterOffset` | `setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>` | — |
-| `setBoundary` | `setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>` | — |
-| `moveAlong` | `moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>` | — |
-| `addArc` | `addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>` | — |
-| `eraseLines` | `eraseLines(ids: number[]): Promise<CapResult<void>>` | — |
-| `initMarkerCluster` | `initMarkerCluster(enable: boolean): Promise<CapResult<void>>` | — |
-| `setLocMarkerIcon` | `setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>` | — |
-| `addCustomLayer` | `addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
-| `removeCustomLayer` | `removeCustomLayer(layerId: string): Promise<CapResult<void>>` | — |
-| `addVisualLayer` | `addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
-| `removeVisualLayer` | `removeVisualLayer(layerId: string): Promise<CapResult<void>>` | — |
-| `executeVisualLayerCommand` | `executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>` | — |
-| `addGroundOverlay` | `addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
-| `updateGroundOverlay` | `updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
-| `removeGroundOverlay` | `removeGroundOverlay(overlayId: string): Promise<CapResult<void>>` | — |
+| [`getRegion`](#getregion) | `getRegion(): Promise<CapResult<MapRegion>>` | — |
+| [`moveTo`](#moveto) | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
+| [`moveToLocation`](#movetolocation) | `moveToLocation(): Promise<CapResult<void>>` | — |
+| [`includePoints`](#includepoints) | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | — |
+| [`translateMarker`](#translatemarker) | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | — |
+| [`addMarkers`](#addmarkers) | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | — |
+| [`removeMarkers`](#removemarkers) | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | — |
+| [`addPolylines`](#addpolylines) | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | — |
+| [`removePolylines`](#removepolylines) | `removePolylines(ids: number[]): Promise<CapResult<void>>` | — |
+| [`addCircles`](#addcircles) | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | — |
+| [`removeCircles`](#removecircles) | `removeCircles(ids: number[]): Promise<CapResult<void>>` | — |
+| [`getScale`](#getscale) | `getScale(): Promise<CapResult<number>>` | — |
+| [`openMapApp`](#openmapapp) | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | — |
+| [`on`](#on) | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | — |
+| [`getCenterLocation`](#getcenterlocation) | `getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
+| [`getRotate`](#getrotate) | `getRotate(): Promise<CapResult<number>>` | — |
+| [`getSkew`](#getskew) | `getSkew(): Promise<CapResult<number>>` | — |
+| [`fromScreenLocation`](#fromscreenlocation) | `fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
+| [`toScreenLocation`](#toscreenlocation) | `toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>` | — |
+| [`setCenterOffset`](#setcenteroffset) | `setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>` | — |
+| [`setBoundary`](#setboundary) | `setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>` | — |
+| [`moveAlong`](#movealong) | `moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>` | — |
+| [`addArc`](#addarc) | `addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>` | — |
+| [`eraseLines`](#eraselines) | `eraseLines(ids: number[]): Promise<CapResult<void>>` | — |
+| [`initMarkerCluster`](#initmarkercluster) | `initMarkerCluster(enable: boolean): Promise<CapResult<void>>` | — |
+| [`setLocMarkerIcon`](#setlocmarkericon) | `setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>` | — |
+| [`addCustomLayer`](#addcustomlayer) | `addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| [`removeCustomLayer`](#removecustomlayer) | `removeCustomLayer(layerId: string): Promise<CapResult<void>>` | — |
+| [`addVisualLayer`](#addvisuallayer) | `addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| [`removeVisualLayer`](#removevisuallayer) | `removeVisualLayer(layerId: string): Promise<CapResult<void>>` | — |
+| [`executeVisualLayerCommand`](#executevisuallayercommand) | `executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>` | — |
+| [`addGroundOverlay`](#addgroundoverlay) | `addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| [`updateGroundOverlay`](#updategroundoverlay) | `updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| [`removeGroundOverlay`](#removegroundoverlay) | `removeGroundOverlay(overlayId: string): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `getRegion`
+### `getRegion`
 
 ```ts
 getRegion(): Promise<CapResult<MapRegion>>
@@ -81,7 +79,7 @@ getRegion(): Promise<CapResult<MapRegion>>
 
 **Returns**: `Promise<CapResult<MapRegion>>`
 
-##### `moveTo`
+### `moveTo`
 
 ```ts
 moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>
@@ -95,7 +93,7 @@ moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<v
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `moveToLocation`
+### `moveToLocation`
 
 ```ts
 moveToLocation(): Promise<CapResult<void>>
@@ -103,7 +101,7 @@ moveToLocation(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `includePoints`
+### `includePoints`
 
 ```ts
 includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>
@@ -116,7 +114,7 @@ includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: 
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `translateMarker`
+### `translateMarker`
 
 ```ts
 translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>
@@ -128,7 +126,7 @@ translateMarker(opt: { markerId: number; destination: { latitude: number; longit
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addMarkers`
+### `addMarkers`
 
 ```ts
 addMarkers(markers: MapMarker[]): Promise<CapResult<void>>
@@ -140,7 +138,7 @@ addMarkers(markers: MapMarker[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeMarkers`
+### `removeMarkers`
 
 ```ts
 removeMarkers(ids: number[]): Promise<CapResult<void>>
@@ -152,7 +150,7 @@ removeMarkers(ids: number[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addPolylines`
+### `addPolylines`
 
 ```ts
 addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>
@@ -164,7 +162,7 @@ addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removePolylines`
+### `removePolylines`
 
 ```ts
 removePolylines(ids: number[]): Promise<CapResult<void>>
@@ -176,7 +174,7 @@ removePolylines(ids: number[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addCircles`
+### `addCircles`
 
 ```ts
 addCircles(circles: MapCircle[]): Promise<CapResult<void>>
@@ -188,7 +186,7 @@ addCircles(circles: MapCircle[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeCircles`
+### `removeCircles`
 
 ```ts
 removeCircles(ids: number[]): Promise<CapResult<void>>
@@ -200,7 +198,7 @@ removeCircles(ids: number[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `getScale`
+### `getScale`
 
 ```ts
 getScale(): Promise<CapResult<number>>
@@ -208,7 +206,7 @@ getScale(): Promise<CapResult<number>>
 
 **Returns**: `Promise<CapResult<number>>`
 
-##### `openMapApp`
+### `openMapApp`
 
 ```ts
 openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>
@@ -220,7 +218,7 @@ openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `on`
+### `on`
 
 ```ts
 on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
@@ -233,7 +231,7 @@ on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => vo
 
 **Returns**: `() => void` -- 取消订阅函数
 
-##### `getCenterLocation`
+### `getCenterLocation`
 
 ```ts
 getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>
@@ -241,7 +239,7 @@ getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>
 
 **Returns**: `Promise<CapResult<{ latitude: number; longitude: number }>>`
 
-##### `getRotate`
+### `getRotate`
 
 ```ts
 getRotate(): Promise<CapResult<number>>
@@ -249,7 +247,7 @@ getRotate(): Promise<CapResult<number>>
 
 **Returns**: `Promise<CapResult<number>>`
 
-##### `getSkew`
+### `getSkew`
 
 ```ts
 getSkew(): Promise<CapResult<number>>
@@ -257,7 +255,7 @@ getSkew(): Promise<CapResult<number>>
 
 **Returns**: `Promise<CapResult<number>>`
 
-##### `fromScreenLocation`
+### `fromScreenLocation`
 
 ```ts
 fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>
@@ -270,7 +268,7 @@ fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; 
 
 **Returns**: `Promise<CapResult<{ latitude: number; longitude: number }>>`
 
-##### `toScreenLocation`
+### `toScreenLocation`
 
 ```ts
 toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>
@@ -283,7 +281,7 @@ toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: nu
 
 **Returns**: `Promise<CapResult<{ x: number; y: number }>>`
 
-##### `setCenterOffset`
+### `setCenterOffset`
 
 ```ts
 setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>
@@ -295,7 +293,7 @@ setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `setBoundary`
+### `setBoundary`
 
 ```ts
 setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>
@@ -307,7 +305,7 @@ setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `moveAlong`
+### `moveAlong`
 
 ```ts
 moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>
@@ -319,7 +317,7 @@ moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addArc`
+### `addArc`
 
 ```ts
 addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>
@@ -331,7 +329,7 @@ addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: {
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `eraseLines`
+### `eraseLines`
 
 ```ts
 eraseLines(ids: number[]): Promise<CapResult<void>>
@@ -343,7 +341,7 @@ eraseLines(ids: number[]): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `initMarkerCluster`
+### `initMarkerCluster`
 
 ```ts
 initMarkerCluster(enable: boolean): Promise<CapResult<void>>
@@ -355,7 +353,7 @@ initMarkerCluster(enable: boolean): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `setLocMarkerIcon`
+### `setLocMarkerIcon`
 
 ```ts
 setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>
@@ -367,7 +365,7 @@ setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addCustomLayer`
+### `addCustomLayer`
 
 ```ts
 addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
@@ -379,7 +377,7 @@ addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeCustomLayer`
+### `removeCustomLayer`
 
 ```ts
 removeCustomLayer(layerId: string): Promise<CapResult<void>>
@@ -391,7 +389,7 @@ removeCustomLayer(layerId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `addVisualLayer`
+### `addVisualLayer`
 
 ```ts
 addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
@@ -403,7 +401,7 @@ addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeVisualLayer`
+### `removeVisualLayer`
 
 ```ts
 removeVisualLayer(layerId: string): Promise<CapResult<void>>
@@ -415,7 +413,7 @@ removeVisualLayer(layerId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `executeVisualLayerCommand`
+### `executeVisualLayerCommand`
 
 ```ts
 executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>
@@ -427,7 +425,7 @@ executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<s
 
 **Returns**: `Promise<CapResult<string>>`
 
-##### `addGroundOverlay`
+### `addGroundOverlay`
 
 ```ts
 addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
@@ -439,7 +437,7 @@ addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `updateGroundOverlay`
+### `updateGroundOverlay`
 
 ```ts
 updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
@@ -451,7 +449,7 @@ updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `removeGroundOverlay`
+### `removeGroundOverlay`
 
 ```ts
 removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
@@ -463,19 +461,23 @@ removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-#### Referenced types
+## Referenced types
 
-**`MapRegion`** — C4 地图区域（wx.createMapContext 语义）
+### `MapRegion`
 
-| Prop/Method | Type | Doc |
+C4 地图区域（wx.createMapContext 语义）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `latitude` | `number` | 中心纬度 |
 | `longitude` | `number` | 中心经度 |
 | `scale` | `number` | 缩放级别（4-20，越大越细） |
 
-**`MapMarker`** — 地图标记（wx.Marker 子集）
+### `MapMarker`
 
-| Prop/Method | Type | Doc |
+地图标记（wx.Marker 子集）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `id` | `number` | 标记唯一 id（增删改按 id） |
 | `latitude` | `number` | 纬度 |
@@ -486,17 +488,21 @@ removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
 | `height` | `number` | 图标高（px） |
 | `callout` | `Record<string, unknown>` | 气泡配置 |
 
-**`MapPolyline`** — 折线
+### `MapPolyline`
 
-| Prop/Method | Type | Doc |
+折线
+
+| Prop | Type | Doc |
 |---|---|---|
 | `points` | `Array<{ latitude: number; longitude: number }>` | 顶点序列 |
 | `color` | `string` | 线颜色 |
 | `width` | `number` | 线宽（px） |
 
-**`MapCircle`** — 圆
+### `MapCircle`
 
-| Prop/Method | Type | Doc |
+圆
+
+| Prop | Type | Doc |
 |---|---|---|
 | `latitude` | `number` | 圆心纬度 |
 | `longitude` | `number` | 圆心经度 |

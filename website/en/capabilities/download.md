@@ -42,9 +42,9 @@ Param,Type,Required,Doc
 | `data` | `DownloadResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `DownloadResult` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `status` | `number` | Yes | HTTP status code |
 | `data` | `unknown` | Yes | Response body (its form is determined by responseType) |

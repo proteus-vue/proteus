@@ -32,9 +32,9 @@ Param,Type,Required,Doc
 | `data` | `IAPReceipt` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `IAPReceipt` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `productId` | `string` | Yes | In-app purchase product ID (registered in the app store) |
 | `transactionId` | `string` | No | Transaction ID (returned by the store) |

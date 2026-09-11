@@ -32,9 +32,9 @@ Param,Type,Required,Doc
 | `data` | `SensorSample` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `SensorSample` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `kind` | `SensorKind` | Yes | Sensor type (echoes the requested kind) |
 | `x` | `number` | No | X-axis acceleration/component (accelerometer/gyroscope) |
@@ -94,9 +94,7 @@ useSensorStream(kind: SensorKind): CapResult<SensorStream>
 | `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
 | `active` | `active(): boolean` | 是否监听中 |
 
-##### Method details
-
-###### `start`
+#### `start`
 
 ```ts
 start(): Promise<CapResult<void>>
@@ -106,7 +104,7 @@ start(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `stop`
+#### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -116,7 +114,7 @@ stop(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `on`
+#### `on`
 
 ```ts
 on(cb: (sample: SensorSample) => void): () => void
@@ -130,7 +128,7 @@ on(cb: (sample: SensorSample) => void): () => void
 
 **Returns**: `() => void`
 
-###### `active`
+#### `active`
 
 ```ts
 active(): boolean
@@ -140,7 +138,7 @@ active(): boolean
 
 **Returns**: `boolean`
 
-##### Referenced types
+#### Referenced types
 
 **`SensorSample`** — C5 传感器采样（一次性读取当前值；compass 带 heading）
 

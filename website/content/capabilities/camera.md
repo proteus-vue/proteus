@@ -26,7 +26,7 @@ useCamera(): Promise<CapResult<MediaAccess>>
 | `data` | `MediaAccess` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`MediaAccess`）的属性
+## 属性
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -79,9 +79,7 @@ useCameraContext(id: string): CapResult<CameraController>
 | `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | 设置缩放级别。 |
 | `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机实时帧。 |
 
-##### 方法详解
-
-###### `takePhoto`
+#### `takePhoto`
 
 ```ts
 takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
@@ -95,7 +93,7 @@ takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
 
 **返回值**：`Promise<CapResult<PhotoResult>>`——照片临时路径 + 宽高
 
-###### `startRecord`
+#### `startRecord`
 
 ```ts
 startRecord(): Promise<CapResult<void>>
@@ -105,7 +103,7 @@ startRecord(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `stopRecord`
+#### `stopRecord`
 
 ```ts
 stopRecord(): Promise<CapResult<VideoResult>>
@@ -115,7 +113,7 @@ stopRecord(): Promise<CapResult<VideoResult>>
 
 **返回值**：`Promise<CapResult<VideoResult>>`
 
-###### `setZoom`
+#### `setZoom`
 
 ```ts
 setZoom(zoom: number): Promise<CapResult<void>>
@@ -129,7 +127,7 @@ setZoom(zoom: number): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `onCameraFrame`
+#### `onCameraFrame`
 
 ```ts
 onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void
@@ -143,7 +141,7 @@ onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) =
 
 **返回值**：`() => void`——取消订阅函数（web 无对等 → 空订阅）
 
-##### 类型引用
+#### 类型引用
 
 **`PhotoResult`** — 拍照结果（wx.takePhoto 子集）
 

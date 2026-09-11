@@ -20,15 +20,13 @@ useAnalytics(): TrackAPI
 
 Returns `TrackAPI` (synchronous handle/state object).
 
-#### Methods of `TrackAPI`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| [`track`](#track) | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `track`
+### `track`
 
 ```ts
 track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>

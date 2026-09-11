@@ -45,9 +45,9 @@ Param,Type,Required,Doc
 | `data` | `UploadResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `UploadResult` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `status` | `number` | Yes | HTTP status code |
 | `data` | `unknown` | Yes | Response body (text/JSON is decided by the server) |
