@@ -582,3 +582,39 @@ describe('★C37 NFC 读卡模式（NFCAdapter：发现 + 各技术类型连接�
     if (!ndef.ok) expect(ndef.error.code).toBe('nfc.unsupported')
   })
 })
+
+describe('★C4 地图剩余方法（查询/视野/覆盖物/图层）', () => {
+  it('getCenterLocation/getRotate/fromScreenLocation/setBoundary/addVisualLayer 往返', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createMapContext: () => ({
+        getCenterLocation: (o: { success?: (r: { latitude: number; longitude: number }) => void }) => { calls.push('center'); o.success && o.success({ latitude: 30, longitude: 120 }) },
+        getRotate: (o: { success?: (r: { rotate: number }) => void }) => o.success && o.success({ rotate: 45 }),
+        getSkew: (o: { success?: (r: { skew: number }) => void }) => o.success && o.success({ skew: 0 }),
+        fromScreenLocation: (o: { success?: (r: { latitude: number; longitude: number }) => void }) => o.success && o.success({ latitude: 1, longitude: 2 }),
+        toScreenLocation: (o: { success?: (r: { x: number; y: number }) => void }) => o.success && o.success({ x: 10, y: 20 }),
+        setBoundary: (o: { success?: () => void }) => { calls.push('boundary'); o.success && o.success() },
+        addVisualLayer: (o: { success?: () => void }) => { calls.push('visual'); o.success && o.success() },
+        executeVisualLayerCommand: (o: { success?: (r: { result: string }) => void }) => o.success && o.success({ result: 'ok' }),
+      }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useMap('m')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const map = r.data
+    for (const m of ['getCenterLocation', 'getRotate', 'getSkew', 'fromScreenLocation', 'toScreenLocation', 'setBoundary', 'moveAlong', 'addArc', 'eraseLines', 'initMarkerCluster', 'setLocMarkerIcon', 'addCustomLayer', 'removeCustomLayer', 'addVisualLayer', 'removeVisualLayer', 'executeVisualLayerCommand', 'addGroundOverlay', 'updateGroundOverlay', 'removeGroundOverlay']) {
+      expect(typeof (map as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    expect((await map.getCenterLocation()).data).toMatchObject({ latitude: 30, longitude: 120 })
+    const rot = await map.getRotate()
+    expect(rot.ok && rot.data).toBe(45)
+    expect((await map.fromScreenLocation(5, 6)).ok).toBe(true)
+    expect((await map.setBoundary([{ latitude: 1, longitude: 2 }])).ok).toBe(true)
+    expect((await map.addVisualLayer({ id: 'v1', type: 'marker' })).ok).toBe(true)
+    const cmd = await map.executeVisualLayerCommand({ layerId: 'v1', command: 'update' })
+    expect(cmd.ok && cmd.data).toBe('ok')
+    expect(calls).toContain('boundary')
+  })
+})

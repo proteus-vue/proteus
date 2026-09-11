@@ -50,6 +50,26 @@ useMap(id: string): Promise<CapResult<MapController>>
 | `getScale` | `getScale(): Promise<CapResult<number>>` | — |
 | `openMapApp` | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | — |
 | `on` | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | — |
+| `getCenterLocation` | `getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
+| `getRotate` | `getRotate(): Promise<CapResult<number>>` | — |
+| `getSkew` | `getSkew(): Promise<CapResult<number>>` | — |
+| `fromScreenLocation` | `fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>` | — |
+| `toScreenLocation` | `toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>` | — |
+| `setCenterOffset` | `setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>` | — |
+| `setBoundary` | `setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>` | — |
+| `moveAlong` | `moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>` | — |
+| `addArc` | `addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>` | — |
+| `eraseLines` | `eraseLines(ids: number[]): Promise<CapResult<void>>` | — |
+| `initMarkerCluster` | `initMarkerCluster(enable: boolean): Promise<CapResult<void>>` | — |
+| `setLocMarkerIcon` | `setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>` | — |
+| `addCustomLayer` | `addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| `removeCustomLayer` | `removeCustomLayer(layerId: string): Promise<CapResult<void>>` | — |
+| `addVisualLayer` | `addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| `removeVisualLayer` | `removeVisualLayer(layerId: string): Promise<CapResult<void>>` | — |
+| `executeVisualLayerCommand` | `executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>` | — |
+| `addGroundOverlay` | `addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| `updateGroundOverlay` | `updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| `removeGroundOverlay` | `removeGroundOverlay(overlayId: string): Promise<CapResult<void>>` | — |
 
 ## Error codes
 

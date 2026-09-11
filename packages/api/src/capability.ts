@@ -720,6 +720,26 @@ export interface MapContextBridge {
   getScale(): Promise<number>
   openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<void>
   on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
+  getCenterLocation(): Promise<{ latitude: number; longitude: number }>
+  getRotate(): Promise<number>
+  getSkew(): Promise<number>
+  fromScreenLocation(x: number, y: number): Promise<{ latitude: number; longitude: number }>
+  toScreenLocation(latitude: number, longitude: number): Promise<{ x: number; y: number }>
+  setCenterOffset(offset: { x: number; y: number }): Promise<void>
+  setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<void>
+  moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<void>
+  addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<void>
+  eraseLines(ids: number[]): Promise<void>
+  initMarkerCluster(enable: boolean): Promise<void>
+  setLocMarkerIcon(iconPath: string): Promise<void>
+  addCustomLayer(layer: Record<string, unknown>): Promise<void>
+  removeCustomLayer(layerId: string): Promise<void>
+  addVisualLayer(layer: Record<string, unknown>): Promise<void>
+  removeVisualLayer(layerId: string): Promise<void>
+  executeVisualLayerCommand(command: Record<string, unknown>): Promise<string>
+  addGroundOverlay(overlay: Record<string, unknown>): Promise<void>
+  updateGroundOverlay(overlay: Record<string, unknown>): Promise<void>
+  removeGroundOverlay(overlayId: string): Promise<void>
 }
 
 /** C4 useMap 句柄（控制器方法返回 Result<T>——G-32.4） */
@@ -765,6 +785,30 @@ export interface MapController {
   openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>
   /** 订阅地图事件（regionchange/updated 等；返回取消） */
   on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
+  // —— 查询类（对齐官方 MapContext 剩余方法）——
+  getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>
+  getRotate(): Promise<CapResult<number>>
+  getSkew(): Promise<CapResult<number>>
+  /** 坐标转换：屏幕 ↔ 经纬 */
+  fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>
+  toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>
+  // —— 视野/边界 ——
+  setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>
+  setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>
+  moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>
+  // —— 覆盖物：弧线 / 地面 / 自定义 / 可视化图层 ——
+  addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>
+  eraseLines(ids: number[]): Promise<CapResult<void>>
+  initMarkerCluster(enable: boolean): Promise<CapResult<void>>
+  setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>
+  addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
+  removeCustomLayer(layerId: string): Promise<CapResult<void>>
+  addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
+  removeVisualLayer(layerId: string): Promise<CapResult<void>>
+  executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>
+  addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
+  updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
+  removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
 }
 
 /** C25 后台事件（wx onAppHide/onAppShow / web visibilitychange） */
@@ -1527,6 +1571,26 @@ interface WxMapContextLike {
   openMapApp?: (opt: { latitude: number; longitude: number; name?: string; success?: () => void; fail?: (e: unknown) => void }) => void
   on?: (event: string, cb: (payload: unknown) => void) => void
   off?: (event: string, cb: (payload: unknown) => void) => void
+  getCenterLocation?: (opt: { success: (r: { latitude: number; longitude: number }) => void; fail?: (e: unknown) => void }) => void
+  getRotate?: (opt: { success: (r: { rotate: number }) => void; fail?: (e: unknown) => void }) => void
+  getSkew?: (opt: { success: (r: { skew: number }) => void; fail?: (e: unknown) => void }) => void
+  fromScreenLocation?: (opt: { x: number; y: number; success: (r: { latitude: number; longitude: number }) => void; fail?: (e: unknown) => void }) => void
+  toScreenLocation?: (opt: { latitude: number; longitude: number; success: (r: { x: number; y: number }) => void; fail?: (e: unknown) => void }) => void
+  setCenterOffset?: (opt: { offset: { x: number; y: number }; success?: () => void; fail?: (e: unknown) => void }) => void
+  setBoundary?: (opt: { boundaries: Array<{ latitude: number; longitude: number }>; success?: () => void; fail?: (e: unknown) => void }) => void
+  moveAlong?: (opt: Record<string, unknown>) => void
+  addArc?: (opt: Record<string, unknown>) => void
+  eraseLines?: (opt: { eraseOptions: Array<{ id: number }>; success?: () => void; fail?: (e: unknown) => void }) => void
+  initMarkerCluster?: (opt: { enableCluster: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
+  setLocMarkerIcon?: (opt: { iconPath: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  addCustomLayer?: (opt: Record<string, unknown>) => void
+  removeCustomLayer?: (opt: Record<string, unknown>) => void
+  addVisualLayer?: (opt: Record<string, unknown>) => void
+  removeVisualLayer?: (opt: Record<string, unknown>) => void
+  executeVisualLayerCommand?: (opt: { layerId: string; command: string; success: (r: { result: string }) => void; fail?: (e: unknown) => void }) => void
+  addGroundOverlay?: (opt: Record<string, unknown>) => void
+  updateGroundOverlay?: (opt: Record<string, unknown>) => void
+  removeGroundOverlay?: (opt: Record<string, unknown>) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -2648,6 +2712,27 @@ function wxBridge(wx: WxLike): CapabilityBridge {
             if (typeof ctx.off === 'function') ctx.off(event, cb)
           }
         },
+        // ★能力颗粒度对齐：MapContext 剩余 21 方法（查询/视野/覆盖物/图层）
+        getCenterLocation: () => call<{ latitude: number; longitude: number }>(ctx.getCenterLocation, 'getCenterLocation'),
+        getRotate: () => call<{ rotate: number }>(ctx.getRotate, 'getRotate').then((r) => r.rotate),
+        getSkew: () => call<{ skew: number }>(ctx.getSkew, 'getSkew').then((r) => r.skew),
+        fromScreenLocation: (x, y) => call<{ latitude: number; longitude: number }>(ctx.fromScreenLocation, 'fromScreenLocation', { x, y }),
+        toScreenLocation: (latitude, longitude) => call<{ x: number; y: number }>(ctx.toScreenLocation, 'toScreenLocation', { latitude, longitude }),
+        setCenterOffset: (offset) => call<void>(ctx.setCenterOffset, 'setCenterOffset', { offset }),
+        setBoundary: (boundaries) => call<void>(ctx.setBoundary, 'setBoundary', { boundaries }),
+        moveAlong: (opt) => call<void>(ctx.moveAlong, 'moveAlong', opt),
+        addArc: (arc) => call<void>(ctx.addArc, 'addArc', { ...arc, start: arc.start, end: arc.end }),
+        eraseLines: (ids) => call<void>(ctx.eraseLines, 'eraseLines', { eraseOptions: ids.map((id) => ({ id })) }),
+        initMarkerCluster: (enable) => call<void>(ctx.initMarkerCluster, 'initMarkerCluster', { enableCluster: enable }),
+        setLocMarkerIcon: (iconPath) => call<void>(ctx.setLocMarkerIcon, 'setLocMarkerIcon', { iconPath }),
+        addCustomLayer: (layer) => call<void>(ctx.addCustomLayer, 'addCustomLayer', { ...layer, layerId: layer.layerId ?? layer.id }),
+        removeCustomLayer: (layerId) => call<void>(ctx.removeCustomLayer, 'removeCustomLayer', { layerId }),
+        addVisualLayer: (layer) => call<void>(ctx.addVisualLayer, 'addVisualLayer', { ...layer, layerId: layer.layerId ?? layer.id }),
+        removeVisualLayer: (layerId) => call<void>(ctx.removeVisualLayer, 'removeVisualLayer', { layerId }),
+        executeVisualLayerCommand: (command) => call<{ result: string }>(ctx.executeVisualLayerCommand, 'executeVisualLayerCommand', { command: command.command ?? '', layerId: command.layerId ?? '' }).then((r) => r.result),
+        addGroundOverlay: (overlay) => call<void>(ctx.addGroundOverlay, 'addGroundOverlay', { ...overlay, id: overlay.id }),
+        updateGroundOverlay: (overlay) => call<void>(ctx.updateGroundOverlay, 'updateGroundOverlay', { ...overlay, id: overlay.id }),
+        removeGroundOverlay: (overlayId) => call<void>(ctx.removeGroundOverlay, 'removeGroundOverlay', { id: overlayId }),
       }
     },
     // ★能力颗粒度对齐：C25 后台/宿主生命周期全事件面（原仅 visible/hidden）
@@ -4233,6 +4318,26 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
             getScale: () => wrap(ctx.getScale()),
             openMapApp: (opt) => wrap(ctx.openMapApp(opt)),
             on: (event, cb) => ctx.on(event, cb),
+            getCenterLocation: () => wrap(ctx.getCenterLocation()),
+            getRotate: () => wrap(ctx.getRotate()),
+            getSkew: () => wrap(ctx.getSkew()),
+            fromScreenLocation: (x, y) => wrap(ctx.fromScreenLocation(x, y)),
+            toScreenLocation: (latitude, longitude) => wrap(ctx.toScreenLocation(latitude, longitude)),
+            setCenterOffset: (offset) => wrap(ctx.setCenterOffset(offset)),
+            setBoundary: (boundaries) => wrap(ctx.setBoundary(boundaries)),
+            moveAlong: (opt) => wrap(ctx.moveAlong(opt)),
+            addArc: (arc) => wrap(ctx.addArc(arc)),
+            eraseLines: (ids) => wrap(ctx.eraseLines(ids)),
+            initMarkerCluster: (enable) => wrap(ctx.initMarkerCluster(enable)),
+            setLocMarkerIcon: (iconPath) => wrap(ctx.setLocMarkerIcon(iconPath)),
+            addCustomLayer: (layer) => wrap(ctx.addCustomLayer(layer)),
+            removeCustomLayer: (layerId) => wrap(ctx.removeCustomLayer(layerId)),
+            addVisualLayer: (layer) => wrap(ctx.addVisualLayer(layer)),
+            removeVisualLayer: (layerId) => wrap(ctx.removeVisualLayer(layerId)),
+            executeVisualLayerCommand: (command) => wrap(ctx.executeVisualLayerCommand(command)),
+            addGroundOverlay: (overlay) => wrap(ctx.addGroundOverlay(overlay)),
+            updateGroundOverlay: (overlay) => wrap(ctx.updateGroundOverlay(overlay)),
+            removeGroundOverlay: (overlayId) => wrap(ctx.removeGroundOverlay(overlayId)),
           }
           return Promise.resolve(controller)
         })(),
