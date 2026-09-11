@@ -42,9 +42,16 @@ Navigation bar
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `back` | Back button tap (navigation is decided by the page - the component never calls routing directly) | — |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `back` | Back button tap (navigation is decided by the page - the component never calls routing directly) |
+| `left` | Named slot |
+| `right` | Named slot |
 
 ## Implementation notes
 

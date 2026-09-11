@@ -35,6 +35,12 @@ Intrinsic sizing
 |---|---|---|---|---|
 | `maxRatio` | Max ratio of the container (0-1; default 0.8) - prevents dynamic content from overflowing the container | `Number` | `0.8` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Width is decided by content (fit-content) but never exceeds the container maxRatio (default 80%) - dynamic text/images adapt

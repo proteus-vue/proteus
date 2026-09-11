@@ -38,6 +38,12 @@ Canvas
 | `height` | CSS height in px (0 = auto) | `Number` | `150` | No |
 | `resolution` | Resolution multiplier (>1 renders at high definition; internal canvas resolution = CSS size times the multiplier) | `Number` | `1` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - engine 2d/webgl/skia + resolution awareness

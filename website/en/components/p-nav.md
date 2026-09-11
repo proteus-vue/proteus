@@ -36,6 +36,14 @@ Navigation bar
 | `title` | Title text (slot content takes precedence) | `String` | `''` | No |
 | `transparent` | Transparent mode (blends with the background) | `Boolean` | `false` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `left` | Named slot |
+| default | Default slot (main content) |
+| `right` | Named slot |
+
 ## Implementation notes
 
 - Declarative navigation bar: centered title + left/right slots (back / action areas) + transparent mode

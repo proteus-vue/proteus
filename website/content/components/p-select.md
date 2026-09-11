@@ -40,6 +40,12 @@ order: 1018
 | `searchable` | 搜索（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
 | `cascader` | 级联（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `v` |
+
 ## 实现要点
 
 - options[{value,label}] + multiple + searchable + cascader（B2 基础：单选/多选面板；searchable/cascader 后续批次）

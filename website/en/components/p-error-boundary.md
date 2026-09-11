@@ -38,6 +38,13 @@ Error fallback
 | `ariaLabel` | Accessibility label (text read by screen readers) | `String` | `''` | No |
 | `fallbackText` | Fallback copy for load failure/empty state | `String` | `'页面出错了，请重试'` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `fallback` | Named slot |
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Matrix 10: Vue errorCaptured catches descendant errors (Web); MP ends have no Vue runtime → onErrorCaptured is stripped by the compiler, degrading to a passthrough container (platform limitation noted)

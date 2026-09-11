@@ -36,6 +36,14 @@ order: 2005
 | `title` | 标题文本（插槽内容优先） | `String` | `''` | 否 |
 | `transparent` | 透明模式（随背景融合） | `Boolean` | `false` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| `left` | 具名插槽 |
+| default | 默认插槽（组件主内容） |
+| `right` | 具名插槽 |
+
 ## 实现要点
 
 - 声明式导航栏：title 居中 + left/right 插槽（返回/操作区）+ transparent 透明模式

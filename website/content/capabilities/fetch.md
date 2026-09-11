@@ -48,6 +48,7 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
 | code | 说明 |
 |---|---|
 | `fetch.unsupported` | 桥未提供 request（useFetch 不可用） |
+| `fetch.failed` | wx.request 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

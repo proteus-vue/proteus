@@ -36,6 +36,12 @@ order: 1022
 | `modelValue` | 双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约） | `Boolean` | `false` | 否 |
 | `loading` | 加载中（禁切换） | `Boolean` | `false` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+
 ## 实现要点
 
 - checked 受控 v-model（modelValue ←→ update:modelValue）；loading 期间禁点

@@ -36,6 +36,12 @@ Aspect-ratio container
 | `ratio` | Width/height ratio (e.g. 16/9 = 1.777; default 1.777) | `Number` | `16 / 9` | No |
 | `maxWidth` | Max width (px; 0 = unlimited) | `Number` | `0` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Only the width/height ratio is declared: Web = CSS aspect-ratio (native since Chrome 88+); unsupported → padding-top hack fallback

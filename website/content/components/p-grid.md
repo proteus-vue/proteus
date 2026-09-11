@@ -36,6 +36,12 @@ order: 6
 | `minColWidth` | 每列最小宽度（px）——列数自动求解 | `Number` | `160` | 否 |
 | `gap` | 列间距（px） | `Number` | `12` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 只声明「每列最小宽度」+ 间距，列数自动：Web = CSS Grid repeat(auto-fill, minmax(minColWidth, 1fr))

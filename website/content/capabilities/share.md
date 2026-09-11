@@ -44,7 +44,7 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 
 | code | 说明 |
 |---|---|
-| `share.unsupported` | navigator.share 不支持（需 HTTPS + 用户手势） |
+| `share.unsupported` | wx.shareAppMessage 缺失 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

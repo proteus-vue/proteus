@@ -38,6 +38,12 @@ Animation declaration -- the CSS animation semantic surface
 | `loop` | Loop playback (default true -- decorative animation; false plays once) | `Boolean` | `true` | No |
 | `delay` | Delay (ms) | `Number` | `0` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - keyframes: preset animation names (fade/bounce/pulse/shake/zoom-in/spin -- @keyframes p-animate-{keyframes})

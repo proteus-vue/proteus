@@ -39,9 +39,15 @@ order: 4003
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `navigate` | — | `{ to: props.to, replace: props.replace, switchTab: props.switchTab }` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `navigate` | — |
+| default | 默认插槽（组件主内容） |
 
 ## 实现要点
 

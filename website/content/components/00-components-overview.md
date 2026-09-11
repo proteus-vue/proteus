@@ -12,7 +12,7 @@ order: 0
 
 | 组件 | Props | Events |
 |---|---|---|
-| [p-adaptive](/docs/component/p-adaptive) | 2 | 1 |
+| [p-adaptive](/docs/component/p-adaptive) | 2 | 2 |
 | [p-aspect](/docs/component/p-aspect) | 2 | 0 |
 | [p-box](/docs/component/p-box) | 2 | 0 |
 | [p-divider](/docs/component/p-divider) | 3 | 0 |
@@ -37,7 +37,7 @@ order: 0
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
 | [p-button](/docs/component/p-button) | 5 | 1 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
-| [p-checkbox](/docs/component/p-checkbox) | 3 | 0 |
+| [p-checkbox](/docs/component/p-checkbox) | 3 | 1 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
@@ -47,15 +47,15 @@ order: 0
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
-| [p-picker](/docs/component/p-picker) | 4 | 0 |
-| [p-radio](/docs/component/p-radio) | 3 | 0 |
+| [p-picker](/docs/component/p-picker) | 4 | 1 |
+| [p-radio](/docs/component/p-radio) | 3 | 1 |
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
-| [p-select](/docs/component/p-select) | 6 | 0 |
+| [p-select](/docs/component/p-select) | 6 | 1 |
 | [p-skeleton](/docs/component/p-skeleton) | 6 | 0 |
-| [p-slider](/docs/component/p-slider) | 6 | 0 |
+| [p-slider](/docs/component/p-slider) | 6 | 1 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
-| [p-switch](/docs/component/p-switch) | 2 | 0 |
+| [p-switch](/docs/component/p-switch) | 2 | 1 |
 | [p-text](/docs/component/p-text) | 4 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 7 | 4 |
 
@@ -63,17 +63,17 @@ order: 0
 
 | 组件 | Props | Events |
 |---|---|---|
-| [p-action-sheet](/docs/component/p-action-sheet) | 3 | 2 |
-| [p-drawer](/docs/component/p-drawer) | 4 | 0 |
+| [p-action-sheet](/docs/component/p-action-sheet) | 3 | 3 |
+| [p-drawer](/docs/component/p-drawer) | 4 | 1 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
-| [p-modal](/docs/component/p-modal) | 8 | 1 |
+| [p-modal](/docs/component/p-modal) | 8 | 2 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |
 | [p-page](/docs/component/p-page) | 3 | 0 |
-| [p-popover](/docs/component/p-popover) | 3 | 0 |
+| [p-popover](/docs/component/p-popover) | 3 | 1 |
 | [p-popup](/docs/component/p-popup) | 8 | 1 |
-| [p-segment](/docs/component/p-segment) | 2 | 1 |
+| [p-segment](/docs/component/p-segment) | 2 | 2 |
 | [p-split](/docs/component/p-split) | 3 | 0 |
-| [p-tabbar](/docs/component/p-tabbar) | 2 | 1 |
+| [p-tabbar](/docs/component/p-tabbar) | 2 | 2 |
 | [p-toast](/docs/component/p-toast) | 7 | 1 |
 | [p-toolbar](/docs/component/p-toolbar) | 4 | 1 |
 

@@ -38,6 +38,12 @@ order: 7
 | `justify` | 主轴对齐（flex-start/center/end/space-between/space-around） | `String` | `'flex-start'` | 否 |
 | `align` | 交叉轴对齐（flex-start/center/end/stretch） | `String` | `'center'` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 内联盒语义（对齐 CSS inline-flex）：内容按行排列，wrap 开启允许折行

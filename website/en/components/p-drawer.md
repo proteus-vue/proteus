@@ -38,6 +38,18 @@ Side drawer
 | `width` | Drawer width in px | `Number` | `300` | No |
 | `overlay` | Overlay (click to close) | `Boolean` | `true` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - open is controlled (v-model:open ←→ modelValue) + side direction + width + overlay click-to-close

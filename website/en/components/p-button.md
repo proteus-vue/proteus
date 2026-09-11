@@ -41,9 +41,15 @@ Button
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `click` | Click / tap (fires after throttling) | `e, { bubbles: true, composed: true }` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `click` | Click / tap (fires after throttling) |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

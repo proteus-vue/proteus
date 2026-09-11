@@ -39,10 +39,11 @@ Action sheet
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `select` | An item is selected |
-| `cancel` | Cancel / close |
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
+| `select` | An item is selected | `actValue(act)` |
+| `cancel` | Cancel / close | — |
 
 ## Implementation notes
 

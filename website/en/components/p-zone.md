@@ -35,6 +35,15 @@ Container-breakpoint zone
 |---|---|---|---|---|
 | `designWidth` | Design-spec width (baseline for deriving container breakpoints; 375 by default) | `Number` | `375` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `sm` | Named slot |
+| `md` | Named slot |
+| `lg` | Named slot |
+| `xl` | Named slot |
+
 ## Implementation notes
 
 - Container breakpoints (sm/md/lg/xl, based on container width rather than the viewport) → renders the corresponding named slot (sm/md/lg/xl; the xl slot serves as the fallback by default)

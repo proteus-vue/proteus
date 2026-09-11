@@ -36,6 +36,12 @@ order: 8
 | `colCount` | 列数（默认 2） | `Number` | `2` | 否 |
 | `gap` | 列与行间距 px | `Number` | `12` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - CSS columns 实现（col-count/column-gap + 子项 break-inside:avoid + 纵向 gap via CSS 变量）

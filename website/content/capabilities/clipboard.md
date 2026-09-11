@@ -30,8 +30,10 @@ useClipboard(): Promise<CapResult<string>>
 
 | code | 说明 |
 |---|---|
-| `clipboard.read.unsupported` | navigator.clipboard.readText 不支持 |
-| `clipboard.read.failed` | 剪贴板读取被拒（需要权限/聚焦） |
+| `clipboard.read.unsupported` | wx.getClipboardData 缺失 |
+| `clipboard.read.failed` | 读取剪贴板失败 |
+| `clipboard.write.unsupported` | wx.setClipboardData 缺失 |
+| `clipboard.write.failed` | 写入剪贴板失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

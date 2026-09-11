@@ -38,6 +38,12 @@ order: 1003
 | `height` | CSS 高 px（0=自适应） | `Number` | `150` | 否 |
 | `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - engine 2d/webgl/skia + resolution 分辨率感知

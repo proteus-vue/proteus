@@ -36,6 +36,12 @@ order: 3
 | `aspectRatio` | 宽高比（如 '16/9'；0/空 = 不设）——Skyline 无 aspect-ratio → 降级为不约束（内容撑高） | `String` | `''` | 否 |
 | `overflow` | 溢出：visible（默认）/ hidden（裁剪） | `String` | `'visible'` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 统一 flex 纵向容器 + 可选宽高比 / 溢出策略；p-view 为通用容器，p-box 强调「盒」语义（宽高比/裁剪）

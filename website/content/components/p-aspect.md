@@ -36,6 +36,12 @@ order: 2
 | `ratio` | 宽/高比（如 16/9 = 1.777；默认 1.777） | `Number` | `16 / 9` | 否 |
 | `maxWidth` | 最大宽度（px；0 = 不限） | `Number` | `0` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 只声明「宽/高比」：Web = CSS aspect-ratio（Chrome 88+ 原生）；不支持 → padding-top hack 降级

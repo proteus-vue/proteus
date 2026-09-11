@@ -58,6 +58,7 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 | code | 说明 |
 |---|---|
 | `upload.unsupported` | 桥未提供 upload（useUpload 不可用） |
+| `upload.failed` | wx 上传缺少 filePath |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

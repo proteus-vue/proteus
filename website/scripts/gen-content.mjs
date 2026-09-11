@@ -317,24 +317,44 @@ function autoParamDoc(a) {
   return '—'
 }
 
+// ★颗粒度对齐 A：从 JSDoc 文本提取「默认值」（缺省/默认 X）——能力页类型引用属性表的「默认值」列
+function extractDefaultFromDoc(doc) {
+  if (!doc) return ''
+  const m = doc.match(/(?:缺省|默认(?:值)?)[\s：:是为=]+([^\s，。；;）)]+)/)
+  return m ? m[1] : ''
+}
+
 // 渲染类型引用（h2 段内：每类型 h3 + 属性/方法表）——TOC 可列类型名
 function renderTypeRefsH2(lines, names, ifaces) {
-  for (const n of names) {
+  // ★颗粒度对齐 A（2026-09-11）：**递归展开**引用的 interfaces——原只展一层，嵌套类型（nfc 的 NfcTag/NfcTagHandle/
+  //   NdefHandle、组件类型里的嵌套）不展开。BFS：从给定 names 出发，扫属性类型 + 方法签名中的 interface 引用继续。
+  const rendered = new Set()
+  const queue = [...names]
+  while (queue.length) {
+    const n = queue.shift()
+    if (rendered.has(n) || !ifaces[n]) continue
+    rendered.add(n)
     const ti = ifaces[n]
-    if (!ti) continue
     lines.push(`### \`${n}\``)
     lines.push('')
     if (ti.doc) { lines.push(ti.doc); lines.push('') }
     if (ti.props.length) {
-      lines.push('| 属性 | 类型 | 说明 |')
-      lines.push('|---|---|---|')
-      for (const pr of ti.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+      lines.push('| 属性 | 类型 | 默认值 | 说明 |')
+      lines.push('|---|---|---|---|')
+      for (const pr of ti.props) {
+        const dflt = extractDefaultFromDoc(pr.doc)
+        lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${dflt ? `\`${escMd(dflt)}\`` : '—'} | ${pr.doc || '—'} |`)
+        for (const r of collectRefTypes([pr.type], ifaces)) if (!rendered.has(r)) queue.push(r)
+      }
       lines.push('')
     }
     if (ti.methods.length) {
       lines.push('| 方法 | 签名 | 说明 |')
       lines.push('|---|---|---|')
-      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+      for (const mm of ti.methods) {
+        lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+        for (const r of collectRefTypes([mm.sig], ifaces)) if (!rendered.has(r)) queue.push(r)
+      }
       lines.push('')
     }
   }
@@ -385,8 +405,11 @@ function hookShape(sigLine, ifaces) {
 // 从实现体提取 CapError('code', 'msg') 错误码（能力页错误码表 SSOT）
 function extractErrorCodes(body) {
   const out = []
-  for (const m of body.matchAll(/CapError\(\s*'([^']+)'\s*,\s*'([^']+)'/g)) {
-    if (!out.some((e) => e.code === m[1])) out.push({ code: m[1], message: m[2] })
+  if (typeof body !== 'string') return out
+  // ★颗粒度对齐 A：消息引号放宽（单/双/反引号模板串）——原只认单引号 → file-system.* 等模板串消息的 code 全丢。
+  for (const m of body.matchAll(/CapError\(\s*'([^']+)'\s*,\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)/g)) {
+    const code = m[1]
+    if (!out.some((e) => e.code === code)) out.push({ code, message: m[2] ?? m[3] ?? m[4] ?? '' })
   }
   return out
 }
@@ -522,8 +545,45 @@ function parseProps(block) {
 function parseEmits(src) {
   const em = src.match(/defineEmits\((\[[\s\S]*?\]|\{[\s\S]*?\})\)/)
   if (!em) return []
-  const names = [...em[1].matchAll(/['"`]([a-zA-Z-]+)['"`]/g)].map((x) => x[1])
+  // ★颗粒度对齐 A（2026-09-11）：旧字符类 [a-zA-Z-] 不含 ':' → update:modelValue/update:visible/update:active/update:group
+  //   等 13 个 v-model 事件全丢（8 个组件页整段 Events 消失）。改 [\w:-]（含 ':'）。
+  const names = [...em[1].matchAll(/['"`]([a-zA-Z][\w:-]*)['"`]/g)].map((x) => x[1])
   return [...new Set(names)]
+}
+
+/**
+ * ★颗粒度对齐 A：解析 emit 载荷（事件回调参数）——`emit('name', EXPR)` → name→EXPR（行级，取行尾最后一个 ')' 前）。
+ * 供组件页 Events 表「载荷」列（对齐小程序「事件回调参数」粒度）。
+ */
+function parseEmitPayloads(src) {
+  const out = {}
+  for (const line of src.split('\n')) {
+    const m = line.match(/\bemit\(\s*['"`]([^'"`]+)['"`]\s*(?:,\s*([\s\S]*))?\)\s*$/)
+    if (!m) continue
+    if (m[2] !== undefined) out[m[1]] = m[2].trim()
+    else if (!(m[1] in out)) out[m[1]] = ''
+  }
+  // v-model 隐式载荷（update:xxx 常为表达式本身；无显式 emit 时留空）
+  return out
+}
+
+/**
+ * ★颗粒度对齐 A：解析组件模板插槽——`<slot>`（默认）/ `<slot name="x">`（具名）/ `<slot :prop="…">`（作用域）。
+ * 供组件页「插槽」段（对齐小程序「插槽」）。
+ */
+function parseSlots(src) {
+  const out = []
+  const seen = new Set()
+  for (const m of src.matchAll(/<slot\b([^>]*)>/g)) {
+    const attrs = m[1]
+    const nm = attrs.match(/\bname\s*=\s*["']([^"']+)["']/)
+    const name = nm ? nm[1] : 'default'
+    if (seen.has(name)) continue
+    seen.add(name)
+    const scopedProps = [...attrs.matchAll(/:([\w$]+)\s*=/g)].map((x) => x[1])
+    out.push({ name, scoped: scopedProps.length > 0, props: scopedProps })
+  }
+  return out
 }
 
 // ★组件 tab 重构：提取组件源码头部的说明注释（「是做什么的」）
@@ -690,6 +750,8 @@ function genComponents(ir, ends) {
     const src = fs.readFileSync(vueFile, 'utf8')
     const props = parseProps(extractCall(src, 'defineProps') ?? '')
     const emits = parseEmits(src)
+    const emitPayloads = parseEmitPayloads(src)
+    const slots = parseSlots(src)
     const semantic = semanticMap[dir] ?? null
     const domain = domainOf[dir]
     // ★兼容进度表：MP_MAPPING_MATRIX.proteus 存的是语义名（'layout.box / layout.stack'）而非 p-* 目录名——
@@ -747,10 +809,36 @@ function genComponents(ir, ends) {
     if (emits.length) {
       lines.push('## Events')
       lines.push('')
-      lines.push('| 事件 | 说明 |')
-      lines.push('|---|---|')
+      lines.push('| 事件 | 说明 | 载荷 |')
+      lines.push('|---|---|---|')
+      // v-model 事件说明兜底（update:* → 双向绑定语义）
+      const vmDoc = (e) => {
+        const m = e.match(/^update:(.+)$/)
+        if (!m) return null
+        const field = m[1] === 'modelValue' ? 'v-model 值' : `\`${m[1]}\``
+        return `v-model 双向绑定：${field}变化时触发（同步父级绑定）`
+      }
       for (const e of emits) {
-        lines.push(`| \`${e}\` | ${COMMON_EVENT_DOCS[e] ?? '—'} |`)
+        const doc = COMMON_EVENT_DOCS[e] ?? vmDoc(e) ?? '—'
+        const payload = emitPayloads[e]
+        lines.push(`| \`${e}\` | ${escMd(doc)} | ${payload ? `\`${escMd(payload)}\`` : '—'} |`)
+      }
+      lines.push('')
+    }
+    // ★颗粒度对齐 A（2026-09-11）：插槽段（对齐小程序「插槽」——默认/具名/作用域）
+    if (slots.length) {
+      lines.push('## 插槽')
+      lines.push('')
+      lines.push('| 插槽 | 说明 |')
+      lines.push('|---|---|')
+      for (const sl of slots) {
+        const label = sl.name === 'default' ? 'default' : `\`${sl.name}\``
+        let doc
+        const scopedNote = `作用域参数：${sl.props.map((x) => `\`${x}\``).join('、')}`
+        if (sl.name === 'default') doc = sl.scoped ? `默认插槽（作用域参数：${sl.props.map((x) => `\`${x}\``).join('、')}）` : '默认插槽（组件主内容）'
+        else if (sl.scoped) doc = `具名 + 作用域插槽（${scopedNote}）`
+        else doc = '具名插槽'
+        lines.push(`| ${label} | ${doc} |`)
       }
       lines.push('')
     }
@@ -810,7 +898,14 @@ function capContext(ir) {
   const wxKeys = new Set(extractFnKeys(apiSrc, 'wxBridge'))
   const webKeys = new Set(extractFnKeys(apiSrc, 'webBridge'))
   const ifaces = extractInterfaces(apiSrc)
-  const bridgeBodies = { ...extractBridgeBodies(apiSrc, 'wxBridge'), ...extractBridgeBodies(apiSrc, 'webBridge') }
+  // ★颗粒度对齐 A（2026-09-11）：旧 spread 让 webBridge 同名方法覆盖 wxBridge → 丢 wx 原生错误码（network/orientation/device…）。
+  //   改 per-method **并集**（同名两段都保留，错误码提取两源皆扫）。
+  const wxBodies = extractBridgeBodies(apiSrc, 'wxBridge')
+  const webBodies = extractBridgeBodies(apiSrc, 'webBridge')
+  const bridgeBodies = {}
+  for (const k of new Set([...Object.keys(wxBodies), ...Object.keys(webBodies)])) {
+    bridgeBodies[k] = [wxBodies[k], webBodies[k]].filter(Boolean).join('\n')
+  }
   const iface = apiSrc.slice(apiSrc.indexOf('export interface CapabilityHooks'))
   const hookDocs = {}
   const JSDOC = '\\*\\*((?:[^*]|\\*(?!/))*)\\*\\/'
@@ -847,12 +942,12 @@ function capContext(ir) {
     perCat[catOf[c.semantic]] = (perCat[catOf[c.semantic]] ?? 0) + 1
     orderOfCap[c.semantic] = CAP_CAT_ORDER.indexOf(catOf[c.semantic]) * 1000 + perCat[catOf[c.semantic]]
   }
-  return { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap }
+  return { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc }
 }
 
 function genCapabilities(ir, ends) {
   fs.mkdirSync(OUT_CAP, { recursive: true })
-  const { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap } = capContext(ir)
+  const { caps, wxKeys, webKeys, ifaces, bridgeBodies, iface, hookDocs, hooksBody, hookRefs, catOf, orderOfCap, apiSrc } = capContext(ir)
   // ★#407：旗舰 hook 的真实用法示例（SSOT = 签名；示例值按参数语义给典型值）
   // ★#490 扩全：句柄型 hook（返回方法集/同步状态）通用模板完全失效或误导（await 非句柄）——逐个手写；
   //   纯数据/void 型由 CAP_ARGS（真实参数值）+ CAP_DATA_HINTS（按返回类型的 data 用法行）差异化生成，不再 50 页一版
@@ -1200,8 +1295,17 @@ function genCapabilities(ir, ends) {
       const idx0 = hits.indexOf(hit)
       return idx0 >= 0 && idx0 + 1 < hits.length ? hits[idx0 + 1].index : hooksBody.length
     })()
-    const errBodies = refs.map((r) => bridgeBodies[r]).filter(Boolean)
-    const errCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    const errBodies = refs.map((r) => bridgeBodies[r]).filter((x) => typeof x === 'string')
+    // ★颗粒度对齐 A（2026-09-11）：错误码补「全文件扫描」——源码 98 唯一 code，原只渲染 61（hook 体无字面 CapError 时 0 行）。
+    //   纳入规则：scoped（hook 切片 + bridge 方法体）+ 全文件中「前缀 === 本能力 slug」的 code（helper 函数体/throw 亦覆盖）。
+    const capSlug = c.semantic.replace('capability.', '')
+    const allErrCodes = extractErrorCodes(apiSrc)
+    const scopedCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    const errCodes = [...scopedCodes]
+    for (const ec of allErrCodes) {
+      if (errCodes.some((e) => e.code === ec.code)) continue
+      if (ec.code.split('.')[0] === capSlug) errCodes.push(ec)
+    }
     if (errCodes.length) {
       lines.push('## 错误码')
       lines.push('')
@@ -1260,6 +1364,15 @@ function genCapabilities(ir, ends) {
           lines.push(ehSig[0].trim())
           lines.push('```')
           lines.push('')
+          // ★颗粒度对齐 A：扩展接口**参数表**（原只渲染签名+返回结构，输入参数 0 文档）
+          const ehParamM = ehSig[0].match(/\(([^)]*)\)/)
+          const ehArgs = ehParamM ? parseSigArgs(ehParamM[1]) : []
+          if (ehArgs.length) {
+            lines.push('| 参数 | 类型 | 必填 | 说明 |')
+            lines.push('|---|---|---|---|')
+            for (const a of ehArgs) lines.push(`| \`${a.name}\` | \`${escMd(a.type || '—')}\` | ${a.optional ? '否' : '是'} | ${autoParamDoc(a)} |`)
+            lines.push('')
+          }
         }
         // 句柄方法表（返回的接口结构）——★TOC 优化：属性 h4、方法逐个 h4（进目录）
         const ehShape = hookShape(ehSig ? ehSig[0] : '', ifaces)
@@ -1388,6 +1501,8 @@ async function genComponentsEn(ir, ends) {
     const src = fs.readFileSync(vueFile, 'utf8')
     const props = parseProps(extractCall(src, 'defineProps') ?? '')
     const emits = parseEmits(src)
+    const emitPayloads = parseEmitPayloads(src)
+    const slots = parseSlots(src)
     const semantic = semanticMap[dir] ?? null
     const domain = domainOf[dir]
     const mpMatches = semantic ? mpComp.filter((i) => i.proteus.split(' / ').some((s) => s.includes(semantic))) : []
@@ -1441,9 +1556,36 @@ async function genComponentsEn(ir, ends) {
     if (emits.length) {
       lines.push(SHARED_EN.hEvents)
       lines.push('')
-      lines.push(SHARED_EN.eventsCols)
+      lines.push('| Event | Doc | Payload |')
+      lines.push('|---|---|---|')
+      const vmDocEn = (e) => {
+        const m = e.match(/^update:(.+)$/)
+        if (!m) return null
+        const field = m[1] === 'modelValue' ? 'v-model value' : `\`${m[1]}\``
+        return `Two-way binding: fires when ${field} changes (syncs the parent binding)`
+      }
+      for (const e of emits) {
+        const doc = page.events?.[e] ?? vmDocEn(e) ?? '—'
+        const payload = emitPayloads[e]
+        lines.push(`| \`${e}\` | ${esc(doc)} | ${payload ? `\`${esc(payload)}\`` : '—'} |`)
+      }
+      lines.push('')
+    }
+    // Slots section (EN — mirrors zh 插槽)
+    if (slots.length) {
+      lines.push('## Slots')
+      lines.push('')
+      lines.push('| Slot | Doc |')
       lines.push('|---|---|')
-      for (const e of emits) lines.push(`| \`${e}\` | ${esc(page.events?.[e] ?? '—')} |`)
+      for (const sl of slots) {
+        const label = sl.name === 'default' ? 'default' : `\`${sl.name}\``
+        const scopedNote = `scoped props: ${sl.props.map((x) => `\`${x}\``).join(', ')}`
+        let doc
+        if (sl.name === 'default') doc = sl.scoped ? `Default slot (${scopedNote})` : 'Default slot (main content)'
+        else if (sl.scoped) doc = `Named + scoped slot (${scopedNote})`
+        else doc = 'Named slot'
+        lines.push(`| ${label} | ${doc} |`)
+      }
       lines.push('')
     }
     if (page.notes?.length) {
@@ -1499,7 +1641,7 @@ async function genComponentsEn(ir, ends) {
 // 登记在 CAP_EN 的 slug 额外产出 website/en/capabilities/<slug>.md；未登记的走 #noEn 回退。
 async function genCapabilitiesEn(ir, ends) {
   const OUT = path.join(ROOT, 'website', 'en', 'capabilities')
-  const { caps, wxKeys, webKeys, ifaces, iface, hookDocs, hooksBody, bridgeBodies, hookRefs, catOf, orderOfCap } = capContext(ir)
+  const { caps, wxKeys, webKeys, ifaces, iface, hookDocs, hooksBody, bridgeBodies, hookRefs, catOf, orderOfCap, apiSrc } = capContext(ir)
   const esc = (s) => String(s).replace(/\|/g, '\\|')
   const docEn = (page, key, fallback = '—') => (page && page.params && page.params[key]) || fallback
   let ok = 0
@@ -1635,26 +1777,37 @@ async function genCapabilitiesEn(ir, ends) {
       }
       lines.push('')
     }
-    const refNamesEn = collectRefTypes([...allMethodsEn.map((m) => m.sig), ...allPropsEn.map((p) => p.type)], ifaces)
-    if (refNamesEn.length) {
+    // ★颗粒度对齐 A：EN 类型引用同样**递归展开** + 「默认值」列（与 zh 对称）
+    const refQueueEn = collectRefTypes([...allMethodsEn.map((m) => m.sig), ...allPropsEn.map((p) => p.type)], ifaces)
+    const renderedEn = new Set()
+    if (refQueueEn.length) {
       lines.push(CAP_SHARED_EN.hTypeRefs)
       lines.push('')
-      for (const n of refNamesEn) {
+      while (refQueueEn.length) {
+        const n = refQueueEn.shift()
+        if (renderedEn.has(n) || !ifaces[n]) continue
+        renderedEn.add(n)
         const rt = ifaces[n]
-        if (!rt) continue
         lines.push(`### \`${n}\``)
         lines.push('')
         if (rt.doc) { lines.push(rt.doc); lines.push('') }
         if (rt.props.length) {
-          lines.push('| Prop | Type | Doc |')
-          lines.push('|---|---|---|')
-          for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.doc || '—'} |`)
+          lines.push('| Prop | Type | Default | Doc |')
+          lines.push('|---|---|---|---|')
+          for (const pr of rt.props) {
+            const dflt = extractDefaultFromDoc(pr.doc)
+            lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${dflt ? `\`${esc(dflt)}\`` : '—'} | ${pr.doc || '—'} |`)
+            for (const r of collectRefTypes([pr.type], ifaces)) if (!renderedEn.has(r)) refQueueEn.push(r)
+          }
           lines.push('')
         }
         if (rt.methods.length) {
           lines.push('| Method | Signature | Doc |')
           lines.push('|---|---|---|')
-          for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${mm.doc || '—'} |`)
+          for (const mm of rt.methods) {
+            lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${mm.doc || '—'} |`)
+            for (const r of collectRefTypes([mm.sig], ifaces)) if (!renderedEn.has(r)) refQueueEn.push(r)
+          }
           lines.push('')
         }
       }
@@ -1667,8 +1820,17 @@ async function genCapabilitiesEn(ir, ends) {
       return idx0 >= 0 && idx0 + 1 < hits.length ? hits[idx0 + 1].index : hooksBody.length
     })()
     const refs = hookRefs[hook] ?? []
-    const errBodies = refs.map((r) => bridgeBodies[r]).filter(Boolean)
-    const errCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    const errBodies = refs.map((r) => bridgeBodies[r]).filter((x) => typeof x === 'string')
+    // ★颗粒度对齐 A（2026-09-11）：错误码补「全文件扫描」——源码 98 唯一 code，原只渲染 61（hook 体无字面 CapError 时 0 行）。
+    //   纳入规则：scoped（hook 切片 + bridge 方法体）+ 全文件中「前缀 === 本能力 slug」的 code（helper 函数体/throw 亦覆盖）。
+    const capSlug = c.semantic.replace('capability.', '')
+    const allErrCodes = extractErrorCodes(apiSrc)
+    const scopedCodes = extractErrorCodes([hooksBody.slice(hookStart, hookEnd), ...errBodies].join('\n'))
+    const errCodes = [...scopedCodes]
+    for (const ec of allErrCodes) {
+      if (errCodes.some((e) => e.code === ec.code)) continue
+      if (ec.code.split('.')[0] === capSlug) errCodes.push(ec)
+    }
     if (errCodes.length) {
       lines.push(CAP_SHARED_EN.hErrors)
       lines.push('')
@@ -1730,6 +1892,14 @@ async function genCapabilitiesEn(ir, ends) {
           lines.push(ehSig[0].trim())
           lines.push('```')
           lines.push('')
+          const ehParamM = ehSig[0].match(/\(([^)]*)\)/)
+          const ehArgs = ehParamM ? parseSigArgs(ehParamM[1]) : []
+          if (ehArgs.length) {
+            lines.push('| Param | Type | Required | Doc |')
+            lines.push('|---|---|---|---|')
+            for (const a of ehArgs) lines.push(`| \`${a.name}\` | \`${escMd(a.type || '—')}\` | ${a.optional ? 'No' : 'Yes'} | ${autoParamDoc(a)} |`)
+            lines.push('')
+          }
         }
         const ehShape = hookShape(ehSig ? ehSig[0] : '', ifaces)
         const ehIface = ehShape.dataIface || ehShape.handleIface

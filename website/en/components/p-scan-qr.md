@@ -38,10 +38,16 @@ QR scan capability entry
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `scan` | — | `r.data` |
+| `error` | — | `'scan-failed')` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `scan` | — |
-| `error` | — |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

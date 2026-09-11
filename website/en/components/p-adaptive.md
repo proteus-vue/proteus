@@ -38,9 +38,16 @@ Adaptive container form
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `update:visible` | Two-way binding: fires when `visible` changes (syncs the parent binding) | — |
+| `formChange` | Active form changed | `s.form` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `formChange` | Active form changed |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

@@ -38,6 +38,12 @@ order: 10
 | `refresh` | 下拉刷新（能力约束——B2 仅声明） | `Boolean` | `false` | 否 |
 | `indicator` | 滚动指示器 | `Boolean` | `true` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 仅当需「滚动」语义时使用（对齐 scroll-view）；axis 控制方向，CSS overflow 实现 Web 滚动

@@ -36,7 +36,8 @@ useVibrate(durationMs?: number): Promise<CapResult<void>>
 
 | code | 说明 |
 |---|---|
-| `vibrate.unsupported` | navigator.vibrate 不支持 |
+| `vibrate.unsupported` | wx.vibrateShort 缺失 |
+| `vibrate.failed` | wx.vibrateShort 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

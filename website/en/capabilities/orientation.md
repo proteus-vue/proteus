@@ -33,6 +33,14 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `type` | `'portrait' \| 'landscape'` | Yes | Screen orientation |
 | `angle` | `number` | Yes | Rotation angle (0/90/180/-90 degrees) |
 
+## Error codes
+
+| code | Doc |
+|---|---|
+| `orientation.unsupported` | — |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
 ## Compat rollout
 
 | Target | Status | Notes |

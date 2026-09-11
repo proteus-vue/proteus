@@ -384,30 +384,44 @@ appendFileSync(path: string, data: string): CapResult<void>
 
 文件/目录信息（wx.Stats 子集）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `size` | `number` | 文件大小（字节） |
-| `mode` | `number` | 权限位 |
-| `lastAccessedTime` | `number` | 最后访问时间（ms 时间戳） |
-| `lastModifiedTime` | `number` | 最后修改时间（ms 时间戳） |
-| `isDirectory` | `boolean` | 是否目录 |
-| `isFile` | `boolean` | 是否文件 |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `size` | `number` | — | 文件大小（字节） |
+| `mode` | `number` | — | 权限位 |
+| `lastAccessedTime` | `number` | — | 最后访问时间（ms 时间戳） |
+| `lastModifiedTime` | `number` | — | 最后修改时间（ms 时间戳） |
+| `isDirectory` | `boolean` | — | 是否目录 |
+| `isFile` | `boolean` | — | 是否文件 |
 
 ### `SavedFileInfo`
 
 已保存文件信息（wx.SavedFileInfo 子集）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `filePath` | `string` | 保存后的文件路径 |
-| `size` | `number` | 文件大小（字节） |
-| `createTime` | `number` | 保存时间（ms 时间戳） |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `filePath` | `string` | — | 保存后的文件路径 |
+| `size` | `number` | — | 文件大小（字节） |
+| `createTime` | `number` | — | 保存时间（ms 时间戳） |
 
 ## Error codes
 
 | code | Doc |
 |---|---|
 | `file-system.unsupported` | Bridge does not provide getFileSystem (useFileSystem unavailable) |
+| `file-system.read-failed` | — |
+| `file-system.copy-failed` | — |
+| `file-system.rename-failed` | — |
+| `file-system.stat-failed` | — |
+| `file-system.info-failed` | — |
+| `file-system.write-failed` | — |
+| `file-system.remove-failed` | — |
+| `file-system.append-failed` | — |
+| `file-system.mkdir-failed` | — |
+| `file-system.rmdir-failed` | — |
+| `file-system.readdir-failed` | — |
+| `file-system.save-failed` | — |
+| `file-system.list-failed` | — |
+| `file-system.unzip-failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

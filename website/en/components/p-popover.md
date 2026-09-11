@@ -37,6 +37,19 @@ Bubble popover
 | `trigger` | Trigger mode: click / hover / focus (hover/focus wired in later batches - B4 thin shell: click only) | `String` | `'click'` | No |
 | `placement` | Placement: top / bottom / left / right | `String` | `'bottom'` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `trigger` | Named slot |
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - trigger click/hover/focus + placement (top/bottom/left/right)

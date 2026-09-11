@@ -37,6 +37,12 @@ Safe-area avoidance
 | `fold` | Foldable-screen hinge avoidance: when display-mode is fold/span, keep clear of the fold area on both sides (off by default) | `Boolean` | `false` | No |
 | `fallback` | Fallback px: when env() is 0 on desktop/notch-less screens, force at least this value (wrapped in max(); 0 = no fallback) | `Number` | `0` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Only the avoidance direction is declared: Web = env(safe-area-inset-*) (requires viewport-fit=cover) + foldable-screen hinge avoidance

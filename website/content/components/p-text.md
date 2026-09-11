@@ -38,6 +38,12 @@ order: 1023
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
 | `selectable` | 是否可选中文本 | `Boolean` | `false` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 矩阵 01 §2：selectable 映射 —— Web user-select: text（.is-selectable 类）；MP 原生 text 的 selectable 属性

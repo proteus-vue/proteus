@@ -38,6 +38,12 @@ order: 4001
 | `loop` | 循环播放（缺省 true——装饰动画；false 播一次） | `Boolean` | `true` | 否 |
 | `delay` | 延迟（ms） | `Number` | `0` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - keyframes：预设动画名（fade/bounce/pulse/shake/zoom-in/spin——@keyframes p-animate-{keyframes}）

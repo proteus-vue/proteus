@@ -44,9 +44,15 @@ Popup layer
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `close` | Close | — |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `close` | Close |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

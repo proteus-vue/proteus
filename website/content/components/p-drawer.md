@@ -38,6 +38,18 @@ order: 2002
 | `width` | 抽屉宽度 px | `Number` | `300` | 否 |
 | `overlay` | 遮罩（点击关闭） | `Boolean` | `true` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
+
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - open 受控（v-model:open ←→ modelValue）+ side 方向 + width + overlay 遮罩点击关闭

@@ -36,6 +36,12 @@ Masonry
 | `colCount` | Column count (default 2) | `Number` | `2` | No |
 | `gap` | Column and row spacing in px | `Number` | `12` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - CSS columns implementation (col-count/column-gap + break-inside:avoid on children + vertical gap via CSS variables)

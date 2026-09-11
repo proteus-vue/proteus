@@ -45,6 +45,7 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 | code | 说明 |
 |---|---|
 | `notification.unsupported` | 桥未提供 subscribeMessage（useNotification 不可用） |
+| `notification.failed` | wx.requestSubscribeMessage 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 
@@ -75,6 +76,10 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ```
 
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `templateId` | `string` | 是 | 字符串参数 |
+
 #### `MessageSubscription` 的属性
 
 | 属性 | 类型 | 必填 | 说明 |
@@ -88,6 +93,11 @@ useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription
 ```ts
 useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
 ```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `corpId` | `string` | 是 | 字符串参数 |
+| `url` | `string` | 是 | 地址 |
 
 ## 用法
 

@@ -39,9 +39,15 @@ Declarative navigation
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `navigate` | — | `{ to: props.to, replace: props.replace, switchTab: props.switchTab }` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `navigate` | — |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

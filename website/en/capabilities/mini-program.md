@@ -50,17 +50,18 @@ navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
 
 C47 小程序跳转（wx.navigateToMiniProgram）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `appId` | `string` | 目标小程序 appId |
-| `path` | `string` | 目标页路径（缺省首页） |
-| `extraData` | `Record<string, unknown>` | 传递给目标小程序的数据（target app onLoad options.extraData） |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `appId` | `string` | — | 目标小程序 appId |
+| `path` | `string` | — | 目标页路径（缺省首页） |
+| `extraData` | `Record<string, unknown>` | — | 传递给目标小程序的数据（target app onLoad options.extraData） |
 
 ## Error codes
 
 | code | Doc |
 |---|---|
 | `mini-program.unsupported` | The bridge does not provide navigateMiniProgram (useMiniProgram unavailable) |
+| `mini-program.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

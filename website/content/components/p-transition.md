@@ -38,6 +38,12 @@ order: 4004
 | `duration` | 过渡时长（ms） | `Number` | `300` | 否 |
 | `visible` | 显隐开关（父级控制） | `Boolean` | `true` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - name：过渡预设（fade/slide-up/slide-down/slide-left/slide-right/zoom——CSS 类 p-transition-{name}）

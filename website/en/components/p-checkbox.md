@@ -37,6 +37,18 @@ Multi-select
 | `indeterminate` | Indeterminate state (undetermined parent - explicit control) | `Boolean` | `false` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `!props.modelValue` |
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - checked is controlled (v-model) + indeterminate half-check + group normalization (v-model:group array)

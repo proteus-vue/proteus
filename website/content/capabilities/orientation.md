@@ -33,6 +33,14 @@ useOrientation(): Promise<CapResult<OrientationInfo>>
 | `type` | `'portrait' \| 'landscape'` | 是 | 屏幕方向 |
 | `angle` | `number` | 是 | 旋转角度（0/90/180/-90 度） |
 
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `orientation.unsupported` | wx.onDeviceOrientationChange 缺失 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

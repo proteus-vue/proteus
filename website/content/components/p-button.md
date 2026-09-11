@@ -41,9 +41,15 @@ order: 1002
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `click` | 点击/轻触（throttle 节流后触发） | `e, { bubbles: true, composed: true }` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `click` | 点击/轻触（throttle 节流后触发） |
+| default | 默认插槽（组件主内容） |
 
 ## 实现要点
 

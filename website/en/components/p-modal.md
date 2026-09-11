@@ -44,9 +44,18 @@ Modal
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `update:visible` | Two-way binding: fires when `visible` changes (syncs the parent binding) | `false` |
+| `formChange` | Form field changes | `next` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `formChange` | Form field changes |
+| `header` | Named slot |
+| default | Default slot (main content) |
+| `footer` | Named slot |
 
 ## Implementation notes
 

@@ -39,10 +39,11 @@ order: 2001
 
 ## Events
 
-| 事件 | 说明 |
-|---|---|
-| `select` | 选中某项 |
-| `cancel` | 取消/关闭 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
+| `select` | 选中某项 | `actValue(act)` |
+| `cancel` | 取消/关闭 | — |
 
 ## 实现要点
 

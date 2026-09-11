@@ -38,10 +38,16 @@ Photo / album capability entry
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `pick` | — | `r.data` |
+| `error` | — | `'pick-failed')` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `pick` | — |
-| `error` | — |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

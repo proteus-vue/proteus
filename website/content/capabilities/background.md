@@ -164,10 +164,10 @@ getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
 
 C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
-| `time` | `number` | 事件时间戳（ms） |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `type` | `'enter-background' \| 'enter-foreground'` | — | 事件类型（退后台 / 回前台） |
+| `time` | `number` | — | 事件时间戳（ms） |
 
 ## 错误码
 

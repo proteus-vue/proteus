@@ -48,7 +48,12 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `sensor.unsupported` | Bridge does not provide readSensor (useSensor unavailable) |
+| `sensor.compass.unsupported` | — |
+| `sensor.gyroscope.unsupported` | — |
+| `sensor.accelerometer.unsupported` | — |
 | `sensor.timeout` | Sensor event timed out (requires device support / user permission) |
+| `sensor.start-failed` | — |
+| `sensor.stop-failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 
@@ -78,6 +83,10 @@ Beyond the primary hook `useSensor`, this capability also exposes these operatio
 ```ts
 useSensorStream(kind: SensorKind): CapResult<SensorStream>
 ```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | 类型 |
 
 #### `SensorStream` props
 

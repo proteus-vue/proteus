@@ -69,6 +69,10 @@ useCamera(): Promise<CapResult<MediaAccess>>
 useCameraContext(id: string): CapResult<CameraController>
 ```
 
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | `string` | 是 | 标识 |
+
 #### `CameraController` 的方法
 
 | 方法 | 签名 | 说明 |

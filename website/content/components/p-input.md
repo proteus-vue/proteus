@@ -44,12 +44,12 @@ order: 1009
 
 ## Events
 
-| 事件 | 说明 |
-|---|---|
-| `input` | 输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约） |
-| `confirm` | 键盘确认（回车/完成键） |
-| `focus` | 获得焦点 |
-| `blur` | 失去焦点 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `input` | 输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约） | `{ value: eventValue(e) }` |
+| `confirm` | 键盘确认（回车/完成键） | `{ value: eventValue(e) }` |
+| `focus` | 获得焦点 | `e` |
+| `blur` | 失去焦点 | `e` |
 
 ## 实现要点
 

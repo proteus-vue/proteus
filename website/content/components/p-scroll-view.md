@@ -45,11 +45,17 @@ order: 11
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `scroll` | 滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop） | `e` |
+| `scrolltolower` | 滚动到底部（lowerThreshold 触发） | `e` |
+| `refresherrefresh` | 自定义下拉刷新触发 | `e` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `scroll` | 滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop） |
-| `scrolltolower` | 滚动到底部（lowerThreshold 触发） |
-| `refresherrefresh` | 自定义下拉刷新触发 |
+| default | 默认插槽（组件主内容） |
 
 ## 实现要点
 

@@ -36,6 +36,12 @@ Switch
 | `modelValue` | Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract) | `Boolean` | `false` | No |
 | `loading` | Loading (switching disabled) | `Boolean` | `false` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `!props.modelValue` |
+
 ## Implementation notes
 
 - checked controlled v-model (modelValue ←→ update:modelValue); taps disabled while loading

@@ -40,6 +40,12 @@ Slider
 | `activeColor` | — | `String` | `'#07c160'` | No |
 | `disabled` | — | `Boolean` | `false` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `Number.isFinite(v) ? v : props.modelValue` |
+
 ## Implementation notes
 
 - min/max/step constraints + v-model (modelValue ←→ update:modelValue)

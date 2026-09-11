@@ -140,11 +140,43 @@ getAdapter(): NfcAdapter
 | `connectMifareClassic` | `connectMifareClassic(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Classic 标签 |
 | `connectMifareUltralight` | `connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Ultralight 标签 |
 
+### `NfcTag`
+
+NFC 发现的标签
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `id` | `ArrayBuffer` | — | — |
+| `techs` | `string[]` | — | — |
+| `messages` | `Array<{ records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }>` | — | — |
+
+### `NdefHandle`
+
+NDEF 句柄（额外：读写 NDEF 消息 + onNdefMessage）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `writeNdefMessage` | `writeNdefMessage(message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }): Promise<CapResult<void>>` | — |
+| `onNdefMessage` | `onNdefMessage(cb: (message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }) => void): () => void` | — |
+
+### `NfcTagHandle`
+
+NFC 标签连接句柄（各技术类型公共面：connect/close/isConnected/setTimeout/transceive）
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `connect` | `connect(): Promise<CapResult<void>>` | — |
+| `close` | `close(): Promise<CapResult<void>>` | — |
+| `isConnected` | `isConnected(): boolean` | — |
+| `setTimeout` | `setTimeout(timeout: number): Promise<CapResult<void>>` | — |
+| `transceive` | `transceive(data: ArrayBuffer): Promise<CapResult<ArrayBuffer>>` | — |
+
 ## 错误码
 
 | code | 说明 |
 |---|---|
 | `nfc.unsupported` | 桥未提供 getNfc（useNFC 不可用） |
+| `nfc.failed` | wx  |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

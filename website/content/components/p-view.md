@@ -37,6 +37,12 @@ order: 15
 | `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 矩阵 01 §1：display 统一 flex 纵向；box-sizing 统一 content-box（Skyline 默认，Web 侧对齐）

@@ -58,6 +58,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `upload.unsupported` | The bridge does not provide upload (useUpload unavailable) |
+| `upload.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

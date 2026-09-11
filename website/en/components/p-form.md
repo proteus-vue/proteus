@@ -39,9 +39,15 @@ Form container
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `submit` | Form submission | `{ model: props.model, errors: { ...errors.value } }` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `submit` | Form submission |
+| default | Default slot (scoped props: `errors`) |
 
 ## Implementation notes
 

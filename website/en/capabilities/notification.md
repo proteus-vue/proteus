@@ -45,6 +45,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `notification.unsupported` | Bridge does not provide subscribeMessage (useNotification unavailable) |
+| `notification.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 
@@ -75,6 +76,10 @@ Beyond the primary hook `useNotification`, this capability also exposes these op
 useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 ```
 
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `templateId` | `string` | Yes | 字符串参数 |
+
 #### `MessageSubscription` props
 
 | Prop | Type | Required | Doc |
@@ -88,6 +93,11 @@ useDeviceNotification(templateId: string): Promise<CapResult<MessageSubscription
 ```ts
 useCustomerService(corpId: string, url: string): Promise<CapResult<void>>
 ```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `corpId` | `string` | Yes | 字符串参数 |
+| `url` | `string` | Yes | 地址 |
 
 ## Usage
 

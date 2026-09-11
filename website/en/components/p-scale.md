@@ -37,6 +37,12 @@ Dynamic font size / density
 | `density` | Density: compact / regular / comfortable (roomy, for a11y) | `String` | `'regular'` | No |
 | `baseSize` | Base font size (px) - children inherit it via em and scale along | `Number` | `16` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Declares only the font-size level + density: container font-size = base × level multiplier × global font scaling (var(--proteus-font-scale, 1), injected by the host/system for foldable/tablet density adaptation); children inherit via em and scale along; density → line-height + the --proteus-density-gap spacing token
