@@ -704,9 +704,11 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 /* ---- 数字背书 ---- */
 .stat { padding: var(--sp-14); height: 100%; transition: border-color 0.15s; }
 .stat:hover { border-color: var(--brand); }
-.stat-value { color: var(--brand-ink); font-size: 26px; font-weight: 700; }
-.stat-label { color: var(--ink); font-size: 13px; }
-.stat-source { color: var(--muted); font-size: 12px; }
+/* ★pg-glass 卡片非 flex-column → p-text(span) 会 inline 挤在同一行（「38@proteus-vue/* 包」）——
+   显式 display:block 让数值/标签/来源各占一行 */
+.stat-value { display: block; color: var(--brand-ink); font-size: 26px; font-weight: 700; line-height: 1.2; }
+.stat-label { display: block; color: var(--ink); font-size: 13px; margin-top: 2px; }
+.stat-source { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
 
 /* ---- 生态支持（技术栈行） ---- */
 .stack-row { justify-content: center; }
