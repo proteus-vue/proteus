@@ -28,7 +28,16 @@ const isEn = computed(() => locale.value === 'en')
 const variant = computed(() => enModule(section.value.base, slug.value))
 const displayDoc = computed(() => (isEn.value && variant.value ? variant.value : current.value.doc))
 const docHtml = computed(() => displayDoc.value?.html ?? '')
-const tocFlat = computed(() => (variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? [])
+// ★TOC 优化（防御）：目录文本剥 markdown 标记（`code`/**bold**/[link](x) 等）——无论 docs 引擎版本/缓存如何，目录始终纯文本
+function stripMd(text: string): string {
+  return String(text ?? '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [text](href) → text
+    .replace(/[*_`~]/g, '') // 行内标记符
+    .trim()
+}
+const tocFlat = computed(() =>
+  ((variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? []).map((t2: { depth: number; text: string; id: string }) => ({ ...t2, text: stripMd(t2.text) })),
+)
 const ends = computed(() => current.value?.doc.ends ?? undefined)
 const noEn = computed(() => isEn.value && !variant.value)
 const idx = computed(() => section.value.items.findIndex((g) => g.slug === slug.value))
