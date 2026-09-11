@@ -192,3 +192,96 @@ describe('★C43 useFileSystem 富接口（Web 内存降级全量往返）', () 
     expect((await fs.unzip('/z.zip', '/out')).ok).toBe(true)
   })
 })
+
+describe('★C4 useMap 富接口（覆盖物/视野/坐标/移动标记）', () => {
+  it('控制器含全套方法；调用往返 Result', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createMapContext: () => ({
+        getRegion: (o: { success?: (r: { latitude: number; longitude: number; scale: number }) => void }) => { calls.push('getRegion'); o.success && o.success({ latitude: 30, longitude: 120, scale: 16 }) },
+        moveTo: (o: { success?: () => void }) => { calls.push('moveTo'); o.success && o.success() },
+        includePoints: (o: { points: unknown[]; success?: () => void }) => { calls.push('includePoints:' + o.points.length); o.success && o.success() },
+        addMarkers: (o: { markers: unknown[]; success?: () => void }) => { calls.push('addMarkers:' + o.markers.length); o.success && o.success() },
+        translateMarker: (o: { markerId: number; success?: () => void }) => { calls.push('translate:' + o.markerId); o.success && o.success() },
+        getScale: (o: { success?: (r: { scale: number }) => void }) => { calls.push('getScale'); o.success && o.success({ scale: 18 }) },
+      }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useMap('m')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const map = r.data
+    for (const m of ['getRegion', 'moveTo', 'moveToLocation', 'includePoints', 'translateMarker', 'addMarkers', 'removeMarkers', 'addPolylines', 'removePolylines', 'addCircles', 'removeCircles', 'getScale', 'openMapApp', 'on']) {
+      expect(typeof (map as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    expect((await map.getRegion()).ok).toBe(true)
+    expect((await map.includePoints([{ latitude: 1, longitude: 2 }, { latitude: 3, longitude: 4 }])).ok).toBe(true)
+    expect((await map.addMarkers([{ id: 1, latitude: 1, longitude: 2 }])).ok).toBe(true)
+    expect((await map.translateMarker({ markerId: 7, destination: { latitude: 1, longitude: 2 } })).ok).toBe(true)
+    const sc = await map.getScale()
+    expect(sc.ok && sc.data).toBe(18)
+    expect(calls).toContain('includePoints:2')
+    expect(calls).toContain('translate:7')
+  })
+
+  it('缺 ctx 方法 → 对应操作 Err（诚实，不虚构）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }), createMapContext: () => ({}) })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useMap('m')
+    if (!r.ok) return
+    const incl = await r.data.includePoints([])
+    expect(incl.ok).toBe(false)
+    if (!incl.ok) expect(incl.error.code).toBe('map.unsupported')
+  })
+})
+
+describe('★C1/C2 相机 + 录音操作控制器', () => {
+  it('useCameraContext：takePhoto/startRecord/stopRecord/setZoom 往返', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createCameraContext: () => ({
+        takePhoto: (o: { quality?: string; success?: (r: { tempImagePath: string; width: number; height: number }) => void }) => o.success && o.success({ tempImagePath: '/p.jpg', width: 100, height: 200 }),
+        startRecord: (o: { success?: () => void }) => o.success && o.success(),
+        stopRecord: (o: { success?: (r: { tempVideoPath: string; duration: number; size: number }) => void }) => o.success && o.success({ tempVideoPath: '/v.mp4', duration: 3, size: 999 }),
+        setZoom: (o: { zoom: number; success?: () => void }) => o.success && o.success(),
+      }),
+    })
+    const cam = createCapabilityHooks(createCapabilityBridge()).useCameraContext('c1')
+    expect(cam.ok).toBe(true)
+    if (!cam.ok) return
+    const photo = await cam.data.takePhoto('high')
+    expect(photo).toMatchObject({ ok: true, data: { tempImagePath: '/p.jpg', width: 100, height: 200 } })
+    expect((await cam.data.startRecord()).ok).toBe(true)
+    expect((await cam.data.stopRecord())).toMatchObject({ ok: true, data: { duration: 3, size: 999 } })
+    expect((await cam.data.setZoom(2)).ok).toBe(true)
+    expect(typeof cam.data.onCameraFrame(() => {})).toBe('function')
+  })
+
+  it('useRecorder：start/stop/pause/resume + 事件订阅', () => {
+    let stopped = false
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getRecorderManager: () => ({ start: () => {}, stop: () => { stopped = true }, pause: () => {}, resume: () => {}, onStop: (cb: (r: unknown) => void) => cb({}), onFrameRecorded: () => {} }),
+    })
+    const rec = createCapabilityHooks(createCapabilityBridge()).useRecorder()
+    expect(rec.ok).toBe(true)
+    if (!rec.ok) return
+    for (const m of ['start', 'stop', 'pause', 'resume', 'on', 'onFrameRecorded']) {
+      expect(typeof (rec.data as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    expect(typeof rec.data.on('stop', () => {})).toBe('function')
+  })
+
+  it('缺桥 → useCameraContext/useRecorder 抛错（句柄类惯例）', () => {
+    vi.stubGlobal('window', {})
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    // web 桥有 createCameraContext/getRecorder（返回 Err 句柄）；此处用空桥验证抛错路径
+    const bare = { getLocation: async () => ({ latitude: 0, longitude: 0 }), vibrate: async () => {}, getNetwork: async () => ({ online: true, type: 'unknown' as const }), readClipboard: async () => '', setClipboard: async () => {}, getScreen: async () => ({ width: 0, height: 0, dpr: 1, orientation: 'portrait' as const }), getDevice: async () => ({ platform: 'web', model: '', os: '', version: '' }), getBattery: async () => ({ level: 1, charging: true }), getOrientation: async () => ({ type: 'portrait' as const, angle: 0 }), share: async () => {} }
+    const h2 = createCapabilityHooks(bare)
+    expect(() => h2.useCameraContext('x')).toThrow(/createCameraContext/)
+    expect(() => h2.useRecorder()).toThrow(/getRecorder/)
+  })
+})
