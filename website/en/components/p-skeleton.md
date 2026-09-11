@@ -38,7 +38,7 @@ Skeleton
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
 | `visible` | Whether visible (show/hide driven by reactive data, zero platform branches) | `Boolean` | `true` | No |
 | `avatar` | Whether the header is avatar-shaped (skeleton) | `Boolean` | `false` | No |
-| `lines` | Row count (number of skeleton placeholder rows) | `Array as any` | `() => [90, 70, 80]` | No |
+| `lines` | Row count (number of skeleton placeholder rows) | `Array` | `() => [90, 70, 80]` | No |
 
 ## Implementation notes
 

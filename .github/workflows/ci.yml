@@ -98,8 +98,8 @@ jobs:
       - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
         run: cd website && npm run check:plugin-docs
 
-      - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则与源一致）
-        run: cd website && npm run check:reference && npm run check:css-compat
+      - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
+        run: cd website && npm run check:reference && npm run check:css-compat && npm run check:content
 
       - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
         run: cd website && npm run check:primitives

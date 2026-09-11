@@ -37,11 +37,16 @@ order: 1020
 | `min` | 最小值 | `Number` | `0` | 否 |
 | `max` | 最大值 | `Number` | `100` | 否 |
 | `step` | 步长 | `Number` | `1` | 否 |
+| `activeColor` | 激活色（滑轨填充；WebSlider/微信原生均支持） | `String` | `'#07c160'` | 否 |
+| `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
 ## 实现要点
 
 - min/max/step 约束 + v-model（modelValue ←→ update:modelValue）
-- 双端同源码：Web input[type=range]；MP 编译器后续批次映射 slider 内置
+- ★2026-09-07 p-slider MP 映射落地：模板用原生 <slider> 双端中性标签——
+- Web 经 defaultScopedPlugin 改写 <proteus-slider>（built-in WebSlider 自绘模拟：轨道/填充/圆点 +
+- { detail: { value } } 载荷）；MP 编译保留 <slider> = 微信原生 slider（bindchange）。此前
+- <input type="range"> 微信无对等 → MP 双引擎不可见（已登记缺口，本批关闭）。
 
 ## 用法
 

@@ -50,6 +50,9 @@ const config: ProteusConfig = {
       alias: [
         // ★dogfooding：p-* 内置组件 + installFluidLayout 沿用框架组件库源（与 examples 同一约定）
         { find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') },
+        // ★框架组件（src/components）经 adapter L2 抽象消费 @proteus-vue/shared——根 node_modules 未 hoist shared，
+        //   rollup 解析不到 → 显式别名指源码（类型侧见 website/tsconfig.json paths 同步补）
+        { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },
       ],
     },
     build: {

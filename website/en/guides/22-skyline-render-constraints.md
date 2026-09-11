@@ -97,7 +97,42 @@ Measure the trigger rect inside the component with `createSelectorQuery`, then p
 `position: fixed` with pixel coordinates (the panel rides the fixed layer to the top). This introduces
 a platform measurement API, so follow the framework platform-API audit before adding it.
 
-## 8. Regression self-check
+## 8. Safe area: `env()` is unavailable — use `p-safe` (runtime read)
+
+**`env(safe-area-inset-*)` is NOT supported under Skyline** — any CSS declaration containing `env()`
+is **dropped entirely** (even the `max(env(...), Npx)` fallback form). Because the framework app uses
+`navigationStyle: custom` (no native nav bar), pages must clear the status bar + the capsule button
+at the top-right themselves, or **the title/content gets covered**.
+
+**Do**: put `<p-safe area="top" :fallback="50" />` at the top of the page. On MP, `p-safe` reads
+runtime-measured values (`getWindowInfo().statusBarHeight` + `getMenuButtonBoundingClientRect().bottom`,
+the capsule bottom) → inline px; on Web it still uses `env()`.
+
+```html
+<view class="page">
+  <p-safe area="top" :fallback="50" />
+  <text class="title">…</text>
+</view>
+```
+
+> Use the **capsule bottom** (not just the status-bar height): otherwise content sits **beside** the
+> capsule button (no overlap, but ugly).
+
+## 9. Inline event arguments: decimals/negatives/strings OK (member access is not)
+
+Mini-program event handlers **cannot be a call with arguments**; the compiler wraps `@tap="fn(1)"`
+into a `proteusInlineFn1` method. Arguments may be **bare identifiers / literals** (numbers including
+decimals and negatives `0.4`/`-1`, strings, `true/false/null`).
+
+**Forms that fail silently (not wrappable)**: **member-access arguments** (`fn(item.id)`) — emitted
+verbatim as `bindtap="fn(item.id)"` (an **invalid handler** in a mini program; tapping does nothing),
+with a compile-time warning. Use an argument-less method or move the value into `data`.
+
+> ⚠️ Whole-number arguments being valid **masked** the argument-type issue — an early whitelist missed
+> decimals/negatives, so `setSpeed(0.4)` silently failed while `setSpeed(1)` worked. Fixed (decimals/
+> negatives/strings are now supported).
+
+## 10. Regression self-check
 
 After touching overlays/state classes, run the in-repo **product contract probes (P7/P8)** and the
 Skyline device gate before merging — and remember most "phantom" issues (stale IDE artifacts etc.)

@@ -36,7 +36,7 @@ order: 1010
 | `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
 | `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
-| `items` | 数据项数组 | `Array as any` | `() => []` | 否 |
+| `items` | 数据项数组 | `Array` | `() => []` | 否 |
 | `itemHeight` | 单项高度（px，虚拟窗口计算基准） | `Number` | `44` | 否 |
 | `height` | 高度（px） | `Number` | `400` | 否 |
 | `bufferSize` | 可视区外缓冲行数（平滑滚动的提前量） | `Number` | `2` | 否 |

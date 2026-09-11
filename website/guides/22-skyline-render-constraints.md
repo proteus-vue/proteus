@@ -82,7 +82,38 @@ layer 因 fixed 上浮不受影响——点外关闭始终可用）。
 组件内 `createSelectorQuery` 测 trigger rect → 面板 `position: fixed` + 像素坐标（面板随 fixed
 上浮到最顶层）。涉及平台测量 API，按框架平台 API 审计引入。
 
-## 8. 回归自检
+## 8. 安全区：`env()` 不可用，用 `p-safe`（运行时读数）
+
+**`env(safe-area-inset-*)` 在 Skyline 下不受支持**——含 `env()` 的整条 CSS 声明被**丢弃**
+（连 `max(env(...), Npx)` 兜底写法也无效）。因为框架 app 是 `navigationStyle: custom`（无原生
+导航栏），页面须自行避让状态栏 + 右上角胶囊按钮，否则**标题/内容被遮挡**。
+
+**写**：页面顶部放 `<p-safe area="top" :fallback="50" />`。`p-safe` 在 MP 端读运行时实测值
+（`getWindowInfo().statusBarHeight` + `getMenuButtonBoundingClientRect().bottom` 胶囊下沿）→ 内联 px；
+Web 端仍走 `env()`。
+
+```html
+<view class="page">
+  <p-safe area="top" :fallback="50" />
+  <text class="title">…</text>
+</view>
+```
+
+> 取**胶囊下沿**（而非仅状态栏高度）：否则内容与胶囊按钮**并列**（不重叠但难看）。
+
+## 9. 内联事件参数：小数/负数/字符串都可（但成员访问不可）
+
+小程序事件处理器**不能是带参调用**，编译器会把 `@tap="fn(1)"` 包装成 `proteusInlineFn1` 方法。
+参数支持**裸标识符 / 字面量**（数字含小数与负数 `0.4`/`-1`、字符串、`true/false/null`）。
+
+**不可校准 → 静默失效**的形态：**成员访问参数**（`fn(item.id)`）——会被原样输出
+`bindtap="fn(item.id)"`（小程序**非法事件处理器**，点击无反应），编译期有警告。此时改用
+无参方法或把值放到 data。
+
+> ⚠️ 整数参数合法会**掩盖**参数类型问题——早期白名单漏了小数/负数，`setSpeed(0.4)` 静默失效，
+> 而 `setSpeed(1)` 正常。已修（小数/负数/字符串均可）。
+
+## 10. 回归自检
 
 改完浮层/形态类，框架内跑**产物契约探针（P7/P8）** + Skyline 真机门禁再合入——大多数
 「假象问题」（陈旧 IDE 产物等）先重编译/重启工具排除，再动代码。

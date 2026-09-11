@@ -52,7 +52,7 @@ order: 0
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
 | [p-select](/docs/component/p-select) | 6 | 0 |
 | [p-skeleton](/docs/component/p-skeleton) | 6 | 0 |
-| [p-slider](/docs/component/p-slider) | 4 | 0 |
+| [p-slider](/docs/component/p-slider) | 6 | 0 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
 | [p-switch](/docs/component/p-switch) | 2 | 0 |
 | [p-text](/docs/component/p-text) | 4 | 0 |

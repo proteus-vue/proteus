@@ -42,7 +42,8 @@ order: 8
 - 只声明「避让方向」：Web = env(safe-area-inset-*)（前提 viewport-fit=cover）+ 折叠屏 hinge 避让
 - （display-mode: fold/span 时内容避开折叠区域 env(fold-left/fold-width)——把系统能力搬进框架，原则 #10）
 - 薄壳组件：displayMode 状态桥接 @proteus-vue/fluid（createDeviceEnv + resolveSafeAreaStyle 纯逻辑）
-- MP：Skyline 部分支持 env()；逻辑层无 matchMedia → displayMode 恒 standard → hinge 不生效（渲染端自决）
+- ★MP/Skyline：env() **不受支持**（实测整条声明被丢弃 → 组件此前无效）→ 走**运行时读数**
+- （getWindowInfo().statusBarHeight+safeArea / getMenuButtonBoundingClientRect 胶囊下沿）→ px 内边距
 - 与 App 端 SafeArea（G-09 safeAreaLayoutGuide/WindowInsets）同语义：开发者只写 <p-safe area="top">
 
 ## 用法
