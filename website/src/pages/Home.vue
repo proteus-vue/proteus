@@ -352,21 +352,21 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       </p-grid>
     </p-view>
 
-    <!-- 3. 更少的代码（左文案 + 右代码/预览双栏） -->
+    <!-- 3. 更少的代码（★2026-09-11 改版：文案在上、Playground 全宽在下——
+         此前左右两栏使右侧仅 548px < TransformDemo 并排门槛 880px → 代码/产物被迫上下堆叠
+         成 1164px 高，左栏文案被垂直居中而上下大片空白。全宽后 demo 有 ~1180px → 真并排、矮一半） -->
     <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec code-sec">
-      <p-grid :min-col-width="360" :gap="36" class="hero-grid code-grid">
-        <p-view class="hero-copy">
-          <span class="sec-eyebrow">{{ t('home.codeEyebrow') }}</span>
-          <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title left">{{ t('home.codeTitle') }}</p-heading>
-          <p-text class="sec-sub left">{{ t('home.codeSub') }}</p-text>
-          <router-link to="/docs/08-structure" class="btn btn-ghost">
-            <p-text class="btn-text ghost">{{ t('home.codeCta') }}</p-text>
-          </router-link>
-        </p-view>
-        <p-view class="code-demo">
-          <TransformDemo compact panel-title="Mini Playground" />
-        </p-view>
-      </p-grid>
+      <p-view class="sec-head">
+        <span class="sec-eyebrow">{{ t('home.codeEyebrow') }}</span>
+        <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.codeTitle') }}</p-heading>
+        <p-text class="sec-sub">{{ t('home.codeSub') }}</p-text>
+        <router-link to="/docs/08-structure" class="btn btn-ghost code-cta">
+          <p-text class="btn-text ghost">{{ t('home.codeCta') }}</p-text>
+        </router-link>
+      </p-view>
+      <p-view class="code-demo">
+        <TransformDemo compact panel-title="Mini Playground" />
+      </p-view>
     </p-view>
 
     <!-- 4. 数字背书（stats.ts 可追溯） -->
@@ -543,6 +543,8 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .sec-title { color: var(--ink); margin: 0 0 14px; font-weight: 700; letter-spacing: -0.01em; }
 .sec-title.left, .sec-sub.left { text-align: left; }
 .sec-sub { color: var(--muted); font-size: 15px; line-height: 1.7; margin: 0; display: block; }
+/* sec-head 内的 CTA 按钮：自适应宽度（flex 子项默认 stretch 会拉满整行） */
+.code-cta { width: fit-content; margin: 20px auto 0; }
 
 /* ---- 1. Hero 双栏 ---- */
 .hero { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
@@ -664,7 +666,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .pillar-no { color: var(--brand-ink); font-size: 12px; letter-spacing: 1px; display: block; margin-bottom: 6px; }
 
 /* ---- 3. 代码/编译双栏 ---- */
-.code-sec { }
+
 .code-grid { align-items: center; }
 .code-demo { min-width: 0; }
 
