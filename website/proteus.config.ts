@@ -58,20 +58,19 @@ const config: ProteusConfig = {
     build: {
       outDir: 'dist', // 官网部署产物目录（vercel outputDirectory=website/dist 不变）
       rollupOptions: {
-        // ★#389i 多页入口：spirit.html = Three.js 3D 海神精灵（iframe 嵌入——three 隔离独立 chunk）
+        // ★2026-09-11 风格收敛：spirit.html（3D 海神萌宠）已移除——它是「AI 味」来源之一；
+        //   three.js 随之不再打包（省 ~600KB chunk）。
         // ★#489 原版六端呈现（iframe 嵌入官网壳——自身顶条已去掉，导航由官网接管）
         input: {
           main: path.join(__dirname, 'index.html'),
-          spirit: path.join(__dirname, 'spirit.html'),
           flexible: path.join(__dirname, 'flexible-multi-device.html'),
         },
         // ★Vercel 构建沙箱稳定性：限制 rollup 并行文件读取（OOM-kill 无输出死掉的高危点）
         maxParallelFileOps: 4,
         output: {
-          // ★拆包：@vue/compiler-sfc（Playground 编译内核 ~500KB）独立 chunk；three 隔离在精灵 chunk
+          // ★拆包：@vue/compiler-sfc（Playground 编译内核 ~500KB）独立 chunk
           manualChunks(id: string) {
             if (id.includes('@vue/compiler-sfc') || id.includes('@vue/compiler-dom') || id.includes('@vue/compiler-core')) return 'compiler-sfc'
-            if (id.includes('node_modules/three')) return 'spirit-three'
           },
         },
       },

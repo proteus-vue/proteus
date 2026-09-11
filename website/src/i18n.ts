@@ -21,6 +21,9 @@ const zh = {
   'lang.zh': '中',
   'lang.en': 'EN',
   // —— Home（★#475）——
+  'home.eyebrow': '◆ 语义内核 · 可插拔渲染',
+  'home.heroTitle1': '为现代跨端应用而生的',
+  'home.heroTitle2': 'Vue 语义引擎',
   'home.heroSub': '不是又一个「小程序跨端框架」。Proteus 定义跨端语义内核，让编译、UI 渲染、原生能力、端接入全部成为可插拔后端——Web、小程序、Flutter、原生 UIKit / Jetpack / ArkUI，都是 SPI 的一种实现。',
   'home.ctaStart': '⚡ 快速开始',
   'home.ctaPlay': '在线体验',
@@ -48,8 +51,6 @@ const zh = {
   'app.docs': '文档',
   'app.multidev': '多端同屏',
   'app.footer': '官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）',
-  // —— 海神精灵（★#488）——
-  'spirit.title': 'Proteus 海神精灵（点击变身）',
   // —— Multi-device 同屏墙（★#489）——
   'mdev.subtitle': '同一份语义 · 六端各自的样子',
   'mdev.sub': '同一份商品数据，由渲染后端按端形态推导出各自该有的界面——手机单列+底部导航、平板侧栏双列、PC 侧栏三列可悬停、车机大热区焦点、电视 Hero+海报流、手表一屏一意。这不是页面缩放，也不是 #ifdef。',
@@ -89,6 +90,9 @@ const en = {
   'lang.zh': '中',
   'lang.en': 'EN',
   // —— Home（★#475）——
+  'home.eyebrow': '◆ Semantic core · Pluggable rendering',
+  'home.heroTitle1': 'The Vue semantic engine',
+  'home.heroTitle2': 'for modern cross-platform apps',
   'home.heroSub': 'Not “yet another mini-program framework”. Proteus defines a cross-platform semantic core and turns compilation, UI rendering, native capabilities and target integration into pluggable backends — Web, Mini Programs, Flutter, native UIKit / Jetpack / ArkUI are all just one implementation of the SPI.',
   'home.ctaStart': '⚡ Quick start',
   'home.ctaPlay': 'Try it online',
@@ -117,7 +121,6 @@ const en = {
   'app.multidev': 'Multi-device',
   'app.footer': 'This site is built with Proteus itself (dogfooding): p-* semantic components + the @proteus-vue/docs engine + G-22 fluid layout (zero @media)',
   // —— Spirit pet（★#488）——
-  'spirit.title': 'Proteus spirit pet (click to morph)',
   // —— Multi-device wall（★#489）——
   'mdev.subtitle': 'One semantic set · a different shape on each target',
   'mdev.sub': 'The same product data takes the shape each target deserves, derived by the render backend: phone single-column + bottom tabs, tablet rail + two columns, desktop side-nav + three columns with hover, in-car large hit areas + focus navigation, TV hero + poster rows, watch one screen, one meaning. Not page scaling — not #ifdef.',

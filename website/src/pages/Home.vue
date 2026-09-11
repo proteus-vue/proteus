@@ -11,26 +11,14 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { STATS, COMPARE_MATRIX } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
-// ★#449 desktop p-scroll-observer：滚动观测收口（监听注册 + rAF 节流在框架包内）——Hero 滚动联动豁免回收
-import { createScrollObserver, type ScrollState } from '@proteus-vue/desktop'
 // ★#475 首页国际化（chrome t() + 数据数组 locale 双份）
 import { locale, t } from '../i18n'
-// ★#389b 粒子场已上移至 App 壳（全站固定背景层）；Hero 保留辉光 + 内容滚动联动
+// ★2026-09-11 风格收敛：移除 Hero 视差（--sp）与辉光/波浪——Hero 改静态左对齐构图
 
 const homeEl = ref<{ $el?: HTMLElement } | null>(null)
-// ★#389b 动效守卫：prefers-reduced-motion → 粒子静态化 + 显现动效跳过 + 渐变流光关闭
+// ★#389b 动效守卫：prefers-reduced-motion → 显现动效跳过
 const motionOk = ref(true)
 let revealObserver: IntersectionObserver | null = null
-
-// ★#389c Hero 滚动联动：--sp（0→1）驱动粒子/辉光/内容视差淡出（合成器属性；desktop 原语按帧回调）
-const scrollP = ref(0)
-let scrollObs: ReturnType<typeof createScrollObserver> | null = null
-function onScrollState(s: ScrollState): void {
-  const root = (homeEl.value?.$el as HTMLElement | undefined) ?? (homeEl.value as unknown as HTMLElement | null)
-  if (!root) return
-  const heroH = root.querySelector('.hero')?.getBoundingClientRect().height || 1
-  scrollP.value = Math.max(0, Math.min(1, s.y / heroH))
-}
 
 // ★#389c 数字滚动计数（数据背书卡进入视口时 0→N 补间；reduced-motion 直接终值）
 const counters = ref<Record<number, string>>({})
@@ -76,14 +64,10 @@ onMounted(() => {
     { threshold: 0.12 },
   )
   targets.forEach((el) => revealObserver?.observe(el))
-  // ★#389c 滚动联动（motion-ok 才绑——reduced-motion 恒 0；desktop 原语 rAF 节流）
-  if (motionOk.value) scrollObs = createScrollObserver({ onChange: onScrollState })
 })
 onUnmounted(() => {
   revealObserver?.disconnect()
   revealObserver = null
-  scrollObs?.destroy()
-  scrollObs = null
 })
 
 // ★#386 对标状态色接入 design-tokens 状态层（ok/warn/rec——llm-style-guide §2：✓ 用 ok / partial 用 warn / 规划用 dim）
@@ -91,13 +75,16 @@ function statusClass(status: string): string {
   return { '✅': 'st-ok', '🟡': 'st-warn', '📋': 'st-plan' }[status] ?? ''
 }
 
-// G 系 pills（v3 hero 下方信息钉子——每个 pill 对应真实入库 plan）
-const gPillsZh = [
-  'G-27 渲染可插拔',
-  'G-28 能力可插拔',
-  'G-29 编译可插拔',
-  'G-30 任意端',
-  'G-31/32 语义原语',
+// ★2026-09-11 Hero 数字行（3 项 headline 数字；精确值，不加修饰符；完整 8 项见「数字背书」区，值同源 stats.ts）
+const heroStatsZh = [
+  { value: '38', label: '@proteus-vue/* 包' },
+  { value: String(STATS[1]?.value ?? '2006'), label: '单测全绿' },
+  { value: '128', label: '语义原语 SSOT' },
+]
+const heroStatsEn = [
+  { value: '38', label: '@proteus-vue/* packages' },
+  { value: String(STATS[1]?.value ?? '2006'), label: 'unit tests green' },
+  { value: '128', label: 'semantic primitives SSOT' },
 ]
 
 // 编号三支柱（v3 三卡构图；文案对齐方法论三句话）
@@ -193,7 +180,7 @@ const capabilitiesZh = [
 ]
 
 /* ============ ★#475 首页国际化：英文数据层（locale 双份）+ 计算暴露（模板变量名不变） ============ */
-const gPillsEn = ['G-27 Rendering pluggable', 'G-28 Capability pluggable', 'G-29 Compiler pluggable', 'G-30 Any target', 'G-31/32 Semantic primitives']
+const heroStats = computed(() => (enOn() ? heroStatsEn : heroStatsZh))
 
 const pillarsEn = [
   { no: '01', title: 'Semantics first', desc: 'Components are semantics, not div aliases. p-grid says “grid intent”, p-stack says “flow” — layout semantics are checked at compile time, not patched with CSS afterwards.' },
@@ -244,7 +231,6 @@ const COMPARE_EN = [
 ]
 
 const enOn = (): boolean => locale.value === 'en'
-const gPills = computed(() => (enOn() ? gPillsEn : gPillsZh))
 const pillars = computed(() => (enOn() ? pillarsEn : pillarsZh))
 const journey = computed(() => (enOn() ? journeyEn : journeyZh))
 const capabilities = computed(() => (enOn() ? capabilitiesEn : capabilitiesZh))
@@ -254,43 +240,33 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 
 <template>
   <p-page ref="homeEl" class="home" :class="{ 'no-motion': !motionOk }">
-    <!-- 1. 居中 Hero（v3 构图 + ★#389 品牌辉光 + ★#389c 滚动联动视差；粒子场在全站背景层） -->
-    <p-view
-      v-p-fluid="'padding-top(48, 96) padding-bottom(36, 64)'"
-      class="hero"
-      :style="{ '--sp': String(scrollP) }"
-    >
-      <span class="hero-glow" aria-hidden="true" />
+    <!-- 1. Hero（★2026-09-11 风格收敛：左对齐两行标题 + 数字行，去掉辉光/波浪/流光——对齐专业组件库构图） -->
+    <p-view v-p-fluid="'padding-top(52, 96) padding-bottom(36, 56)'" class="hero">
       <p-view class="hero-content">
-        <span class="eyebrow">◆ SEMANTIC MODEL ARCHITECTURE</span>
-      <p-heading :level="1" v-p-fluid="'font-size(30, 60)'" class="hero-title">
-        One semantic model.<br />
-        <em>Any engine — at every layer.</em>
-      </p-heading>
-      <p-text v-p-fluid="'font-size(14, 17)'" class="hero-sub">
-        {{ t('home.heroSub') }}
-      </p-text>
-      <p-stack direction="row" :gap="14" class="hero-cta">
-        <router-link to="/docs/04-requirements" class="cta-primary">
-          <p-text class="cta-text">{{ t('home.ctaStart') }}</p-text>
-        </router-link>
-        <router-link to="/playground" class="cta-ghost">
-          <p-text class="cta-text">{{ t('home.ctaPlay') }}</p-text>
-        </router-link>
-      </p-stack>
-      <p-stack direction="row" :gap="8" wrap class="hero-pills">
-        <span v-for="p in gPills" :key="p" class="g-pill">{{ p }}</span>
-      </p-stack>
+        <span class="eyebrow">{{ t('home.eyebrow') }}</span>
+        <p-heading :level="1" v-p-fluid="'font-size(32, 56)'" class="hero-title">
+          {{ t('home.heroTitle1') }}<br />
+          <em>{{ t('home.heroTitle2') }}</em>
+        </p-heading>
+        <p-text v-p-fluid="'font-size(15, 17)'" class="hero-sub">
+          {{ t('home.heroSub') }}
+        </p-text>
+        <p-stack direction="row" :gap="12" class="hero-cta">
+          <router-link to="/docs/04-requirements" class="cta-primary">
+            <p-text class="cta-text">{{ t('home.ctaStart') }}</p-text>
+          </router-link>
+          <router-link to="/playground" class="cta-ghost">
+            <p-text class="cta-text">{{ t('home.ctaPlay') }}</p-text>
+          </router-link>
+        </p-stack>
       </p-view>
-      <!-- ★#389e 海浪装饰（双层 SVG 波形缓漂——海神意象收尾） -->
-      <span class="hero-waves" aria-hidden="true">
-        <svg class="wave w1" viewBox="0 0 2880 64" preserveAspectRatio="none">
-          <path d="M0,40 C120,16 240,16 360,40 S600,64 720,40 S960,16 1080,40 S1320,64 1440,40 S1680,16 1800,40 S2040,64 2160,40 S2400,16 2520,40 S2760,64 2880,40 L2880,64 L0,64 Z" />
-        </svg>
-        <svg class="wave w2" viewBox="0 0 2880 64" preserveAspectRatio="none">
-          <path d="M0,44 C160,24 320,24 480,44 S800,60 960,44 S1280,24 1440,44 S1760,60 1920,44 S2240,24 2400,44 S2720,60 2880,44 L2880,64 L0,64 Z" />
-        </svg>
-      </span>
+      <!-- 数字行（可追溯；完整 8 项见下方「数字背书」区） -->
+      <p-stack direction="row" :gap="44" wrap class="hero-stats">
+        <p-view v-for="h in heroStats" :key="h.label" class="hero-stat">
+          <p-text class="hs-value">{{ h.value }}</p-text>
+          <p-text class="hs-label">{{ h.label }}</p-text>
+        </p-view>
+      </p-stack>
     </p-view>
 
     <!-- 2. Mini Playground 面板（真实编译 · LIVE） -->
@@ -419,68 +395,50 @@ npm run build:mp     <span class="qs-dim">{{ t('home.qsMp') }}</span></code></pr
 </template>
 
 <style scoped>
-/* ---- Hero（居中构图 + ★#389c 滚动联动：--sp 0→1 驱动辉光/内容视差淡出——纯合成器属性；粒子场在全站背景层） ---- */
-.hero { max-width: 880px; margin: 0 auto; text-align: center; position: relative; }
-.hero-glow {
-  position: absolute;
-  inset: 0;
-  height: 340px;
-  pointer-events: none;
-  z-index: 0;
-  opacity: calc(1 - var(--sp, 0));
-  /* ★#389f 辉光零溢出 + 零裁剪感：渐变用百分比椭圆（相对元素尺寸，衰减在元素内部完成——
-     任何宽度都不会像固定 px 半径那样在边界被硬切）+ blur(26px) 二次软化 */
-  background:
-    radial-gradient(52% 44% at 27% 26%, rgba(124, 92, 255, 0.18), transparent 66%),
-    radial-gradient(52% 44% at 75% 30%, rgba(0, 224, 198, 0.14), transparent 68%);
-  filter: blur(26px);
+/* ---- Hero（★2026-09-11 左对齐构图：标题两行 + 数字行；无辉光/波浪/流光） ---- */
+.hero { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px; }
+.hero-content { max-width: 760px; }
+.eyebrow {
+  color: var(--brand2);
+  font-size: 12.5px;
+  letter-spacing: 0.4px;
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: var(--radius-pill);
+  padding: var(--sp-4) var(--sp-12);
+  display: inline-block;
+  width: fit-content;
+  background: var(--brand-soft);
 }
-.hero-content {
-  transform: translateY(calc(var(--sp, 0) * 60px));
-  opacity: calc(1 - var(--sp, 0) * 1.15);
+.hero-title { color: var(--ink); line-height: 1.12; letter-spacing: -0.02em; font-weight: 800; margin: 22px 0 18px; }
+.hero-title em { font-style: normal; color: var(--brand-ink); }
+.hero-sub { color: var(--muted); line-height: 1.75; margin: 0 0 28px; max-width: 620px; display: block; }
+.hero-cta { align-items: center; }
+.cta-primary {
+  color: #fff;
+  background: var(--brand);
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: background 0.15s;
 }
-.hero-waves {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 12px;
-  height: 64px;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
+.cta-primary:hover { background: #6a4cf0; }
+.cta-text { color: #fff; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.cta-ghost {
+  border: 1px solid var(--line);
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: border-color 0.15s;
 }
-.hero-waves .wave {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 200%;
-  height: 100%;
-}
-.hero-waves .w1 {
-  fill: rgba(124, 92, 255, 0.07);
-  animation: wave-drift 26s linear infinite;
-}
-.hero-waves .w2 {
-  fill: rgba(0, 224, 198, 0.05);
-  animation: wave-drift 38s linear infinite reverse;
-  bottom: -6px;
-}
-@keyframes wave-drift {
-  to { transform: translateX(-50%); }
-}
-.no-motion .hero-waves .wave { animation: none; }
-/* 内容层浮于辉光/粒子之上 */
-.hero .eyebrow,
-.hero .hero-title,
-.hero .hero-sub,
-.hero .hero-cta,
-.hero .hero-pills { position: relative; z-index: 1; }
-/* ★#389b 渐变流光（motion-ok 时启用；reduced-motion 关闭） */
-.motion-ok .hero-title em { background-size: 200% auto; animation: hero-shimmer 7s linear infinite; }
-@keyframes hero-shimmer {
-  to { background-position: 200% center; }
-}
-/* ---- 滚动显现（data-reveal；reduced-motion / 无 IO 直接显现）+ ★#389c 网格子项 stagger ---- */
+.cta-ghost:hover { border-color: var(--brand); }
+.cta-ghost .cta-text { color: var(--ink); font-size: 14px; white-space: nowrap; }
+/* ---- Hero 数字行 ---- */
+.hero-stats { align-items: flex-start; }
+.hero-stat { display: flex; flex-direction: column; gap: 4px; }
+.hs-value { color: var(--ink); font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+.hs-label { color: var(--muted); font-size: 13px; }
+
+/* ---- 滚动显现（data-reveal；reduced-motion / 无 IO 直接显现）+ 网格子项 stagger ---- */
 [data-reveal] {
   opacity: 0;
   transform: translateY(18px);
@@ -521,54 +479,6 @@ npm run build:mp     <span class="qs-dim">{{ t('home.qsMp') }}</span></code></pr
   opacity: 1;
   transform: none;
   transition: none;
-}
-.eyebrow {
-  color: var(--brand2);
-  white-space: nowrap;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: var(--sp-4) var(--sp-12);
-  display: inline-block;
-  background: var(--brand-soft);
-  border-color: rgba(124, 92, 255, 0.3);
-}
-.hero-title { color: var(--ink); line-height: 1.12; letter-spacing: -0.02em; font-weight: 800; margin: 20px 0 18px; }
-.hero-title em {
-  font-style: normal;
-  background: linear-gradient(100deg, var(--brand), var(--brand2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.hero-sub { color: var(--muted); line-height: 1.75; margin: 0 auto 28px; max-width: 640px; display: block; }
-.hero-cta { justify-content: center; align-items: center; }
-.cta-primary {
-  color: var(--bg);
-  background: linear-gradient(100deg, var(--brand), var(--brand2));
-  padding: 10px 22px;
-  border-radius: var(--radius-md);
-  text-decoration: none;
-}
-.cta-text { color: var(--bg); font-weight: 600; font-size: 14px; white-space: nowrap; }
-.cta-ghost {
-  border: 1px solid var(--line);
-  padding: 10px 22px;
-  border-radius: var(--radius-md);
-  text-decoration: none;
-}
-.cta-ghost .cta-text { color: var(--ink); font-size: 14px; white-space: nowrap; }
-.cta-ghost:hover, .cta-primary:hover { filter: brightness(1.1); }
-.hero-pills { justify-content: center; margin-top: 26px; }
-.g-pill {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: var(--sp-4) var(--sp-12);
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 /* ---- 通用节标题（v3 居中型） ---- */
@@ -623,21 +533,9 @@ npm run build:mp     <span class="qs-dim">{{ t('home.qsMp') }}</span></code></pr
 /* ---- dogfooding 金句（v3 收尾） ---- */
 .quote { max-width: 880px; margin: 0 auto; text-align: center; }
 .quote-line { color: var(--ink); line-height: 1.4; margin: 0 0 12px; }
-.quote-line em {
-  font-style: normal;
-  background: linear-gradient(100deg, var(--brand), var(--brand2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  font-weight: 800;
-}
+.quote-line em { font-style: normal; color: var(--brand-ink); font-weight: 800; }
 .quote-sub { color: var(--muted); font-size: 15px; display: block; }
-.quote-sub .grad {
-  background: linear-gradient(100deg, var(--brand), var(--brand2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+.quote-sub .grad { color: var(--brand-ink); font-weight: 600; }
 .quote-links { justify-content: center; margin-top: 20px; }
 .method-link { color: var(--brand2); text-decoration: none; font-size: 14px; }
 .method-link:hover { text-decoration: underline; }

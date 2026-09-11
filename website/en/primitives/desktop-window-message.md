@@ -6,13 +6,13 @@ group: 桌面原语
 
 # Cross-window message primitive (iframe postMessage funnel)
 
-Cross-window message subscription: origin allowlist + type filtering + destroy (used by the spirit iframe bubble)
+Cross-window message subscription: origin allowlist + type filtering + destroy
 
 > Source module `@proteus-vue/desktop` (pure logic + Web wiring — env-injected for testing, falls back to real globals when absent). Platform mapping / degradation chain → see the module header source.
 
 **★#449 G-24 B5 (proteus-semantic-primitives-plan continuation batch): cross-window message primitive — postMessage funnel (source validation + type filtering)**
 Semantics: same-origin / designated-origin iframe message subscription (origin validation happens inside the framework package — pages keep zero raw window.addEventListener('message'))
-Consumption: App-shell spirit iframe (same-origin morph message → form bubble) — reclaiming the cross-window message gap
+Consumption: desktop API — exercised by the package test suite (no in-repo page consumer after the 2026-09-11 site restyle)
 Layering: pure logic + Web wiring — env-injected for unit testing, falls back to real globals by default (the network/lifecycle family convention)
 
 ## Compat rollout
@@ -43,9 +43,9 @@ Layering: pure logic + Web wiring — env-injected for unit testing, falls back 
 ## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)
 
 ```ts
-subscribeWindowMessage({ types: ['proteus-spirit-morph'], onMessage })
+subscribeWindowMessage({ types: ['app-event'], onMessage })
 ```
-> Origin: `website/src/App.vue:30`
+> Origin: `tests/desktop-web-primitives.test.ts`
 
 ## Usage & degradation
 

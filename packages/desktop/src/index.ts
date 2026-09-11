@@ -33,7 +33,7 @@ export type { CursorGlowOptions, CursorGlowHandle } from './cursor-glow'
 // ★#449 p-scroll-observer：页面滚动观测（window/document 几何收口——App 顶部进度条 / Home Hero 联动）
 export { createScrollObserver, readPageScroll } from './scroll'
 export type { ScrollState, ScrollObserverEnv, ScrollObserver } from './scroll'
-// ★#449 跨窗消息原语（spirit iframe postMessage——origin 校验 + type 过滤收口）
+// ★#449 跨窗消息原语（postMessage——origin 校验 + type 过滤收口）
 export { subscribeWindowMessage } from './window-message'
 export type { WindowMessage, WindowMessageEnv, WindowMessageOptions, WindowMessageHandle } from './window-message'
 // ★#449 锚点定位原语（scrollToId——SPA 后 v-html 锚点跳转）

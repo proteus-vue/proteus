@@ -75,7 +75,6 @@ jobs:
         if: steps.gate.outputs.ok == 'true'
         run: |
           test -f website/dist/index.html
-          test -f website/dist/spirit.html
           grep -q 'src="/assets/' website/dist/index.html && echo '根路径 assets ✓'
 
       - uses: actions/configure-pages@v5

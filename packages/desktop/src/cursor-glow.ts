@@ -1,6 +1,6 @@
 // packages/desktop/src/cursor-glow.ts
 // ★G-24 B5（proteus-semantic-primitives-plan 续批）：指针跟随光晕——桌面交互语义「环境光随指针」
-//   语义：光晕层（主紫 + 副青双光斑）以 lerp 插值跟随指针——AI 科技感的指针环境反馈；
+//   语义：光晕层（主/副双光斑）以 lerp 插值跟随指针——指针环境反馈；
 //   降级链：prefers-reduced-motion → 不启用；触屏（pointer:coarse）→ 不启用；MP 逻辑层无 DOM → 不启用
 //   分层：纯逻辑（本模块，可单测）+ thin 指令（directives.ts v-p-cursor-glow）
 
