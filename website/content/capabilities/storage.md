@@ -20,23 +20,21 @@ useStorage(): CompatStorage
 
 返回 `CompatStorage`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `CompatStorage` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `set` | `set(key: string, value: unknown): void` | 同步写入 |
-| `remove` | `remove(key: string): void` | 同步删除 |
-| `clear` | `clear(): void` | 同步清空 |
-| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | 异步写入（大值不阻塞主线程） |
-| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | 异步删除 |
-| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | 异步清空 |
-| `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
-| `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
-| `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
+| [`set`](#set) | `set(key: string, value: unknown): void` | 同步写入 |
+| [`remove`](#remove) | `remove(key: string): void` | 同步删除 |
+| [`clear`](#clear) | `clear(): void` | 同步清空 |
+| [`setAsync`](#setasync) | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | 异步写入（大值不阻塞主线程） |
+| [`removeAsync`](#removeasync) | `removeAsync(key: string): Promise<CapResult<void>>` | 异步删除 |
+| [`clearAsync`](#clearasync) | `clearAsync(): Promise<CapResult<void>>` | 异步清空 |
+| [`info`](#info) | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
+| [`batchGet`](#batchget) | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
+| [`batchSet`](#batchset) | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
 
-#### 方法详解
-
-##### `set`
+### `set`
 
 ```ts
 set(key: string, value: unknown): void
@@ -51,7 +49,7 @@ set(key: string, value: unknown): void
 
 **返回值**：`void`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(key: string): void
@@ -65,7 +63,7 @@ remove(key: string): void
 
 **返回值**：`void`
 
-##### `clear`
+### `clear`
 
 ```ts
 clear(): void
@@ -75,7 +73,7 @@ clear(): void
 
 **返回值**：`void`
 
-##### `setAsync`
+### `setAsync`
 
 ```ts
 setAsync(key: string, value: unknown): Promise<CapResult<void>>
@@ -90,7 +88,7 @@ setAsync(key: string, value: unknown): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `removeAsync`
+### `removeAsync`
 
 ```ts
 removeAsync(key: string): Promise<CapResult<void>>
@@ -104,7 +102,7 @@ removeAsync(key: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `clearAsync`
+### `clearAsync`
 
 ```ts
 clearAsync(): Promise<CapResult<void>>
@@ -114,7 +112,7 @@ clearAsync(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `info`
+### `info`
 
 ```ts
 info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>
@@ -124,7 +122,7 @@ info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: numb
 
 **返回值**：`Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>`
 
-##### `batchGet`
+### `batchGet`
 
 ```ts
 batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>
@@ -138,7 +136,7 @@ batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown 
 
 **返回值**：`Promise<CapResult<Array<{ key: string; value: unknown }>>>`
 
-##### `batchSet`
+### `batchSet`
 
 ```ts
 batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>

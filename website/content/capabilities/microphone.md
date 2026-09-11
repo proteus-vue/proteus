@@ -26,7 +26,7 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 | `data` | `MediaAccess` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`MediaAccess`）的属性
+## 属性
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -80,9 +80,7 @@ useRecorder(): CapResult<RecorderController>
 | `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音生命周期事件。 |
 | `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（录 per-frame 数据，用于实时波形/编码）。 |
 
-##### 方法详解
-
-###### `start`
+#### `start`
 
 ```ts
 start(options?: RecordOptions): Promise<CapResult<void>>
@@ -96,7 +94,7 @@ start(options?: RecordOptions): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `stop`
+#### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -106,7 +104,7 @@ stop(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `pause`
+#### `pause`
 
 ```ts
 pause(): Promise<CapResult<void>>
@@ -116,7 +114,7 @@ pause(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `resume`
+#### `resume`
 
 ```ts
 resume(): Promise<CapResult<void>>
@@ -126,7 +124,7 @@ resume(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-###### `on`
+#### `on`
 
 ```ts
 on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void): () => void
@@ -141,7 +139,7 @@ on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown
 
 **返回值**：`() => void`——取消订阅函数
 
-###### `onFrameRecorded`
+#### `onFrameRecorded`
 
 ```ts
 onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
@@ -155,7 +153,7 @@ onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) 
 
 **返回值**：`() => void`——取消订阅函数
 
-##### 类型引用
+#### 类型引用
 
 **`RecordOptions`** — 录音状态（wx RecorderManager onStart/onStop 等）
 

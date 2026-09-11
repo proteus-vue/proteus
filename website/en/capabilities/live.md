@@ -39,25 +39,23 @@ Param,Type,Required,Doc
 | `data` | `LiveRoomHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `LiveRoomHandle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `play` | `play(): Promise<CapResult<void>>` | — |
-| `pause` | `pause(): Promise<CapResult<void>>` | — |
-| `resume` | `resume(): Promise<CapResult<void>>` | — |
-| `stop` | `stop(): Promise<CapResult<void>>` | — |
-| `mute` | `mute(): void` | — |
-| `snapshot` | `snapshot(): Promise<CapResult<string>>` | — |
-| `requestFullScreen` | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | — |
-| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | — |
-| `status` | `status(): LivePlayState` | — |
-| `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | — |
-| `leave` | `leave(): Promise<CapResult<void>>` | — |
+| [`play`](#play) | `play(): Promise<CapResult<void>>` | — |
+| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | — |
+| [`resume`](#resume) | `resume(): Promise<CapResult<void>>` | — |
+| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | — |
+| [`mute`](#mute) | `mute(): void` | — |
+| [`snapshot`](#snapshot) | `snapshot(): Promise<CapResult<string>>` | — |
+| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | — |
+| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | — |
+| [`status`](#status) | `status(): LivePlayState` | — |
+| [`onStateChange`](#onstatechange) | `onStateChange(cb: (state: LivePlayState) => void): () => void` | — |
+| [`leave`](#leave) | `leave(): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `play`
+### `play`
 
 ```ts
 play(): Promise<CapResult<void>>
@@ -65,7 +63,7 @@ play(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `pause`
+### `pause`
 
 ```ts
 pause(): Promise<CapResult<void>>
@@ -73,7 +71,7 @@ pause(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `resume`
+### `resume`
 
 ```ts
 resume(): Promise<CapResult<void>>
@@ -81,7 +79,7 @@ resume(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `stop`
+### `stop`
 
 ```ts
 stop(): Promise<CapResult<void>>
@@ -89,7 +87,7 @@ stop(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `mute`
+### `mute`
 
 ```ts
 mute(): void
@@ -97,7 +95,7 @@ mute(): void
 
 **Returns**: `void`
 
-##### `snapshot`
+### `snapshot`
 
 ```ts
 snapshot(): Promise<CapResult<string>>
@@ -105,7 +103,7 @@ snapshot(): Promise<CapResult<string>>
 
 **Returns**: `Promise<CapResult<string>>`
 
-##### `requestFullScreen`
+### `requestFullScreen`
 
 ```ts
 requestFullScreen(direction?: number): Promise<CapResult<void>>
@@ -117,7 +115,7 @@ requestFullScreen(direction?: number): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `exitFullScreen`
+### `exitFullScreen`
 
 ```ts
 exitFullScreen(): Promise<CapResult<void>>
@@ -125,7 +123,7 @@ exitFullScreen(): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `status`
+### `status`
 
 ```ts
 status(): LivePlayState
@@ -133,7 +131,7 @@ status(): LivePlayState
 
 **Returns**: `LivePlayState`
 
-##### `onStateChange`
+### `onStateChange`
 
 ```ts
 onStateChange(cb: (state: LivePlayState) => void): () => void
@@ -145,7 +143,7 @@ onStateChange(cb: (state: LivePlayState) => void): () => void
 
 **Returns**: `() => void`
 
-##### `leave`
+### `leave`
 
 ```ts
 leave(): Promise<CapResult<void>>

@@ -32,9 +32,9 @@ Param,Type,Required,Doc
 | `data` | `PermissionState` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `PermissionState` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `permission` | `string` | Yes | Permission name (web Permissions API name, e.g. geolocation / camera) |
 | `state` | `'granted' \| 'denied' \| 'prompt'` | Yes | Authorization state (prompt = not yet asked) |

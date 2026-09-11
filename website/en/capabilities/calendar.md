@@ -87,9 +87,7 @@ useCalendarAPI(): CapResult<CalendarAPI>
 | `remove` | `remove(eventId: string): Promise<CapResult<void>>` | 删除日程（wx 需用户确认，按 eventId；支持有限） |
 | `list` | `list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>` | 查询日程（无开放 API → 诚实 Err） |
 
-##### Method details
-
-###### `add`
+#### `add`
 
 ```ts
 add(event: CalendarEvent): Promise<CapResult<void>>
@@ -103,7 +101,7 @@ add(event: CalendarEvent): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `remove`
+#### `remove`
 
 ```ts
 remove(eventId: string): Promise<CapResult<void>>
@@ -117,7 +115,7 @@ remove(eventId: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-###### `list`
+#### `list`
 
 ```ts
 list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
@@ -132,7 +130,7 @@ list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
 
 **Returns**: `Promise<CapResult<CalendarEvent[]>>`
 
-##### Referenced types
+#### Referenced types
 
 **`CalendarEvent`** — C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined）
 

@@ -38,16 +38,14 @@ Param,Type,Required,Doc
 | `data` | `DataChannelHandle` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `DataChannelHandle`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `send` | `send(data: string): Promise<CapResult<void>>` | — |
-| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
+| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | — |
+| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | — |
 
-#### Method details
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string): Promise<CapResult<void>>
@@ -59,7 +57,7 @@ send(data: string): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `onMessage`
+### `onMessage`
 
 ```ts
 onMessage(cb: (data: string) => void): () => void

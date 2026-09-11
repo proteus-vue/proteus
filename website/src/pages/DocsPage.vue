@@ -249,9 +249,33 @@ function itemTitle(slugOf: string, zhTitle: string): string {
   gap: 6px;
   align-items: flex-start;
 }
-.page-toc-link { color: var(--muted); text-decoration: none; font-size: 13px; }
+.page-toc-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 2px 0;
+  border-left: 2px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
 .page-toc-link:hover { color: var(--brand); }
-.page-toc-link.depth-3 { padding-left: 16px; }
+/* ★TOC 优化：h3 方法/类型项——等宽字体 + 左缩进 + 细引导线，一眼可辨是「方法名」 */
+.page-toc-link.depth-3 {
+  padding-left: 14px;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--muted);
+}
+.page-toc-link.depth-3:hover { border-left-color: var(--brand); color: var(--brand); }
+.page-toc-link.depth-4 {
+  padding-left: 26px;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.86;
+}
+.page-toc-link.depth-1 { font-weight: 600; }
+/* ★TOC 优化：目录过长（方法多）时紧凑行距 + 独立滚动（sticky 已设 overflow-y） */
+.page-toc-link { line-height: 1.5; }
 .pager { margin-top: 20px; }
 .pager-link { color: var(--brand); text-decoration: none; font-size: 14px; }
 .pager-link:hover { text-decoration: underline; }

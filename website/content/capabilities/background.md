@@ -26,23 +26,21 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | `data` | `BackgroundAPI` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`BackgroundAPI`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | 订阅前后台切换（返回取消） |
-| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
-| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
-| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
-| `onError` | `onError(cb: (error: string) => void): () => void` | 小程序错误（wx.onError） |
-| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | 未处理的 Promise rejection（wx.onUnhandledRejection） |
-| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
-| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
-| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
+| [`onEvent`](#onevent) | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | 订阅前后台切换（返回取消） |
+| [`onMemoryWarning`](#onmemorywarning) | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
+| [`onThemeChange`](#onthemechange) | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
+| [`onWindowResize`](#onwindowresize) | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
+| [`onError`](#onerror) | `onError(cb: (error: string) => void): () => void` | 小程序错误（wx.onError） |
+| [`onUnhandledRejection`](#onunhandledrejection) | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | 未处理的 Promise rejection（wx.onUnhandledRejection） |
+| [`onNetworkStatusChange`](#onnetworkstatuschange) | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
+| [`getLaunchOptions`](#getlaunchoptions) | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
+| [`getEnterOptions`](#getenteroptions) | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
 
-#### 方法详解
-
-##### `onEvent`
+### `onEvent`
 
 ```ts
 onEvent(cb: (e: BackgroundEvent) => void): () => void
@@ -56,7 +54,7 @@ onEvent(cb: (e: BackgroundEvent) => void): () => void
 
 **返回值**：`() => void`
 
-##### `onMemoryWarning`
+### `onMemoryWarning`
 
 ```ts
 onMemoryWarning(cb: (level: number) => void): () => void
@@ -70,7 +68,7 @@ onMemoryWarning(cb: (level: number) => void): () => void
 
 **返回值**：`() => void`
 
-##### `onThemeChange`
+### `onThemeChange`
 
 ```ts
 onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
@@ -84,7 +82,7 @@ onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
 
 **返回值**：`() => void`
 
-##### `onWindowResize`
+### `onWindowResize`
 
 ```ts
 onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void
@@ -98,7 +96,7 @@ onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void
 
 **返回值**：`() => void`
 
-##### `onError`
+### `onError`
 
 ```ts
 onError(cb: (error: string) => void): () => void
@@ -112,7 +110,7 @@ onError(cb: (error: string) => void): () => void
 
 **返回值**：`() => void`
 
-##### `onUnhandledRejection`
+### `onUnhandledRejection`
 
 ```ts
 onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void
@@ -126,7 +124,7 @@ onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> })
 
 **返回值**：`() => void`
 
-##### `onNetworkStatusChange`
+### `onNetworkStatusChange`
 
 ```ts
 onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void
@@ -140,7 +138,7 @@ onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }
 
 **返回值**：`() => void`
 
-##### `getLaunchOptions`
+### `getLaunchOptions`
 
 ```ts
 getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
@@ -150,7 +148,7 @@ getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
 
 **返回值**：`Promise<CapResult<Record<string, unknown>>>`
 
-##### `getEnterOptions`
+### `getEnterOptions`
 
 ```ts
 getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
@@ -160,11 +158,13 @@ getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
 
 **返回值**：`Promise<CapResult<Record<string, unknown>>>`
 
-#### 类型引用
+## 类型引用
 
-**`BackgroundEvent`** — C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+### `BackgroundEvent`
 
-| 属性/方法 | 类型 | 说明 |
+C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
 | `time` | `number` | 事件时间戳（ms） |

@@ -317,6 +317,29 @@ function autoParamDoc(a) {
   return '—'
 }
 
+// 渲染类型引用（h2 段内：每类型 h3 + 属性/方法表）——TOC 可列类型名
+function renderTypeRefsH2(lines, names, ifaces) {
+  for (const n of names) {
+    const ti = ifaces[n]
+    if (!ti) continue
+    lines.push(`### \`${n}\``)
+    lines.push('')
+    if (ti.doc) { lines.push(ti.doc); lines.push('') }
+    if (ti.props.length) {
+      lines.push('| 属性 | 类型 | 说明 |')
+      lines.push('|---|---|---|')
+      for (const pr of ti.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+      lines.push('')
+    }
+    if (ti.methods.length) {
+      lines.push('| 方法 | 签名 | 说明 |')
+      lines.push('|---|---|---|')
+      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+      lines.push('')
+    }
+  }
+}
+
 // 渲染「逐方法详细说明」（h4：签名 + 参数表 + 返回值 + 说明）——小程序文档式颗粒度
 function renderMethodDetails(lines, methods, opts) {
   const { hLevel, paramCols, returnsLabel, descLabel } = opts
@@ -1132,51 +1155,42 @@ function genCapabilities(ir, ends) {
       lines.push('| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |')
       lines.push('')
     }
-    // 结构表（★#490 属性 + 方法双通道——句柄型接口的方法是结构本体；Contact[] 剥数组后缀按元素接口查）
-    // ★详细文档（2026-09-11）：概览表（方法|说明）+ 逐方法详解（h5：签名/参数/返回/说明）+ 类型引用表
-    const renderMethods = (title, ti) => {
-      lines.push(title)
+    // ★TOC 优化（2026-09-11）：方法/属性/类型引用提升为 h2 段，条目为 h3——右侧目录可直观看到有哪些方法
+    //   汇总属性/方法（data 接口 + 句柄接口双通道合并）
+    const allProps = [...(shape.dataIface?.props ?? [])]
+    const allMethods = [...(shape.dataIface?.methods ?? [])]
+    if (handleT && shape.handleIface) {
+      for (const pr of shape.handleIface.props) {
+        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // 函数类型属性（方法成员）
+        allProps.push(pr)
+      }
+      allMethods.push(...shape.handleIface.methods)
+    }
+    // ## 方法（h2）——汇总表 + 每方法 h3 详解
+    if (allMethods.length) {
+      lines.push('## 方法')
       lines.push('')
       lines.push('| 方法 | 签名 | 说明 |')
       lines.push('|---|---|---|')
-      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc ? mm.doc.replace(/^C\d+\s+/, '') : '—'} |`)
+      for (const mm of allMethods) lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | \`${escMd(mm.sig)}\` | ${mm.doc ? mm.doc.replace(/^C\d+\s+/, '') : '—'} |`)
       lines.push('')
-      // 逐方法详解（小程序文档式颗粒度）
-      if (ti.methods.length) {
-        lines.push('#### 方法详解')
-        lines.push('')
-        renderMethodDetails(lines, ti.methods, { hLevel: '#####', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
-        // 引用的类型展开
-        const refs = collectRefTypes(ti.methods.map((m) => m.sig), ifaces)
-        renderTypeRefs(lines, refs, ifaces, { hLevel: '####', label: '类型引用', cols: ['属性/方法', '类型', '说明'] })
-      }
+      renderMethodDetails(lines, allMethods, { hLevel: '###', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
     }
-    if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
-      if (shape.dataIface.props.length) {
-        lines.push(`#### \`data\`（\`${dataT}\`）的属性`)
-        lines.push('')
-        lines.push('| 属性 | 类型 | 必填 | 说明 |')
-        lines.push('|---|---|---|---|')
-        for (const pr of shape.dataIface.props) {
-          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
-        }
-        lines.push('')
-      }
-      if (shape.dataIface.methods.length) renderMethods(`#### \`data\`（\`${shape.dataElemT}\`）的方法`, shape.dataIface)
+    // ## 属性（h2）
+    if (allProps.length) {
+      lines.push('## 属性')
+      lines.push('')
+      lines.push('| 属性 | 类型 | 必填 | 说明 |')
+      lines.push('|---|---|---|---|')
+      for (const pr of allProps) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+      lines.push('')
     }
-    if (handleT && shape.handleIface && (shape.handleIface.props.length || shape.handleIface.methods.length)) {
-      if (shape.handleIface.props.length) {
-        lines.push(`#### \`${handleT}\` 的属性`)
-        lines.push('')
-        lines.push('| 属性 | 类型 | 说明 |')
-        lines.push('|---|---|---|')
-        for (const pr of shape.handleIface.props) {
-          if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // 函数类型属性不入表（方法成员走下方方法表）
-          lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
-        }
-        lines.push('')
-      }
-      if (shape.handleIface.methods.length) renderMethods(`#### \`${handleT}\` 的方法`, shape.handleIface)
+    // ## 类型引用（h2）——签名/属性引用的接口展开为 h3
+    const refTypeNames = collectRefTypes([...allMethods.map((m) => m.sig), ...allProps.map((p) => p.type)], ifaces)
+    if (refTypeNames.length) {
+      lines.push('## 类型引用')
+      lines.push('')
+      renderTypeRefsH2(lines, refTypeNames, ifaces)
     }
     // 错误码表：hook 条目切片 + 关联桥方法实现体中 CapError('code', 'msg') 全量提取
     const hookStart = hooksBody.indexOf(`${hook}:`)
@@ -1247,7 +1261,7 @@ function genCapabilities(ir, ends) {
           lines.push('```')
           lines.push('')
         }
-        // 句柄方法表（返回的接口结构）
+        // 句柄方法表（返回的接口结构）——★TOC 优化：属性 h4、方法逐个 h4（进目录）
         const ehShape = hookShape(ehSig ? ehSig[0] : '', ifaces)
         const ehIface = ehShape.dataIface || ehShape.handleIface
         const ehT = ehShape.dataElemT || ehShape.handleT
@@ -1267,11 +1281,9 @@ function genCapabilities(ir, ends) {
             lines.push('|---|---|---|')
             for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
             lines.push('')
-            lines.push('##### 方法详解')
-            lines.push('')
-            renderMethodDetails(lines, ehIface.methods, { hLevel: '######', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
+            renderMethodDetails(lines, ehIface.methods, { hLevel: '####', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
             const erefs = collectRefTypes(ehIface.methods.map((m) => m.sig), ifaces)
-            renderTypeRefs(lines, erefs, ifaces, { hLevel: '#####', label: '类型引用', cols: ['属性/方法', '类型', '说明'] })
+            renderTypeRefs(lines, erefs, ifaces, { hLevel: '####', label: '类型引用', cols: ['属性/方法', '类型', '说明'] })
           }
         }
       }
@@ -1571,89 +1583,81 @@ async function genCapabilitiesEn(ir, ends) {
       lines.push(`| \`error\` | \`CapError\` | ${esc(CAP_SHARED_EN.retError)} |`)
       lines.push('')
     }
-    const renderMethodsEn = (title, tiName, ti) => {
-      lines.push(title)
+    // ★TOC 优化（2026-09-11）：EN 与 zh 结构对称——方法/属性/类型引用为 h2，条目为 h3
+    const allPropsEn = [...(shape.dataIface?.props ?? [])]
+    const allMethodsEn = [...(shape.dataIface?.methods ?? [])]
+    if (handleT && shape.handleIface) {
+      for (const pr of shape.handleIface.props) {
+        if (pr.type.includes('=>') || pr.type.startsWith('(')) continue
+        allPropsEn.push(pr)
+      }
+      allMethodsEn.push(...shape.handleIface.methods)
+    }
+    if (allMethodsEn.length) {
+      lines.push(CAP_SHARED_EN.hMethods)
       lines.push('')
       lines.push(CAP_SHARED_EN.methodCols)
       lines.push('|---|---|---|')
-      for (const mm of ti.methods) {
-        const doc = (CAP_METHODS_EN[tiName] && CAP_METHODS_EN[tiName][mm.name]) || '—'
-        lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${esc(doc)} |`)
+      for (const mm of allMethodsEn) {
+        const doc = (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || '—'
+        lines.push(`| [\`${mm.name}\`](#${mm.name.toLowerCase()}) | \`${esc(mm.sig)}\` | ${esc(doc)} |`)
       }
       lines.push('')
-      // ★详细文档（2026-09-11）：逐方法详解（EN）+ 类型引用（与 zh 结构对称）
-      if (ti.methods.length) {
-        lines.push(CAP_SHARED_EN.methodsDetailTitle)
+      for (const mm of allMethodsEn) {
+        const doc = (CAP_METHODS_EN[shape.dataElemT] && CAP_METHODS_EN[shape.dataElemT][mm.name]) || (handleT && CAP_METHODS_EN[handleT] && CAP_METHODS_EN[handleT][mm.name]) || ''
+        lines.push(`### \`${mm.name}\``)
         lines.push('')
-        for (const mm of ti.methods) {
-          const doc = (CAP_METHODS_EN[tiName] && CAP_METHODS_EN[tiName][mm.name]) || ''
-          lines.push(`##### \`${mm.name}\``)
-          lines.push('')
-          lines.push('```ts')
-          lines.push(mm.sig)
-          lines.push('```')
-          lines.push('')
-          if (doc) { lines.push(`**${CAP_SHARED_EN.descLabel}**: ${doc}`); lines.push('') }
-          const args = parseSigArgs(mm.args)
-          if (args.length) {
-            const pc = CAP_SHARED_EN.paramCols
-            lines.push(`| ${pc[0]} | ${pc[1]} | ${pc[2]} | ${pc[3]} |`)
-            lines.push('|---|---|---|---|')
-            for (const a of args) lines.push(`| \`${a.name}\` | \`${esc(a.type || '—')}\` | ${a.optional ? CAP_SHARED_EN.requiredNo : CAP_SHARED_EN.requiredYes} | ${(mm.paramDocs && mm.paramDocs[a.name]) || '—'} |`)
-            lines.push('')
-          }
-          lines.push(`**${CAP_SHARED_EN.returnsLabel}**: \`${esc(mm.ret)}\`${mm.returns ? ' -- ' + mm.returns : ''}`)
+        lines.push('```ts')
+        lines.push(mm.sig)
+        lines.push('```')
+        lines.push('')
+        if (doc) { lines.push(`**${CAP_SHARED_EN.descLabel}**: ${doc}`); lines.push('') }
+        const args = parseSigArgs(mm.args)
+        if (args.length) {
+          const pc = CAP_SHARED_EN.paramCols
+          lines.push(`| ${pc[0]} | ${pc[1]} | ${pc[2]} | ${pc[3]} |`)
+          lines.push('|---|---|---|---|')
+          for (const a of args) lines.push(`| \`${a.name}\` | \`${esc(a.type || '—')}\` | ${a.optional ? CAP_SHARED_EN.requiredNo : CAP_SHARED_EN.requiredYes} | ${(mm.paramDocs && mm.paramDocs[a.name]) || '—'} |`)
           lines.push('')
         }
-        const refs = collectRefTypes(ti.methods.map((m) => m.sig), ifaces)
-        if (refs.length) {
-          lines.push(CAP_SHARED_EN.typeRefsTitle)
-          lines.push('')
-          for (const n of refs) {
-            const rt = ifaces[n]
-            if (rt.doc) { lines.push(`**\`${n}\`** — ${rt.doc}`); lines.push('') }
-            if (rt.props.length) {
-              lines.push('| Prop/Method | Type | Doc |')
-              lines.push('|---|---|---|')
-              for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.doc || '—'} |`)
-              lines.push('')
-            }
-            if (rt.methods.length) {
-              lines.push('| Prop/Method | Type | Doc |')
-              lines.push('|---|---|---|')
-              for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${mm.doc || '—'} |`)
-              lines.push('')
-            }
-          }
-        }
+        lines.push(`**${CAP_SHARED_EN.returnsLabel}**: \`${esc(mm.ret)}\`${mm.returns ? ' -- ' + mm.returns : ''}`)
+        lines.push('')
       }
     }
-    if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
-      if (shape.dataIface.props.length) {
-        lines.push(CAP_SHARED_EN.dataPropsTitle(dataT))
-        lines.push('')
-        lines.push(CAP_SHARED_EN.propCols)
-        lines.push('|---|---|---|---|')
-        for (const pr of shape.dataIface.props) {
-          lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc((page.dataProps && page.dataProps[pr.name]) || '—')} |`)
-        }
-        lines.push('')
+    if (allPropsEn.length) {
+      lines.push(CAP_SHARED_EN.hProps)
+      lines.push('')
+      lines.push(CAP_SHARED_EN.propCols4)
+      lines.push(CAP_SHARED_EN.propSep4)
+      for (const pr of allPropsEn) {
+        const doc = (page.dataProps && page.dataProps[pr.name]) || (page.directProps && page.directProps[pr.name]) || pr.doc || '—'
+        lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${esc(doc)} |`)
       }
-      if (shape.dataIface.methods.length) renderMethodsEn(CAP_SHARED_EN.methodsTitle(shape.dataElemT), shape.dataElemT, shape.dataIface)
+      lines.push('')
     }
-    if (handleT && shape.handleIface && (shape.handleIface.props.length || shape.handleIface.methods.length)) {
-      if (shape.handleIface.props.length) {
-        lines.push(CAP_SHARED_EN.directPropsTitle(handleT))
+    const refNamesEn = collectRefTypes([...allMethodsEn.map((m) => m.sig), ...allPropsEn.map((p) => p.type)], ifaces)
+    if (refNamesEn.length) {
+      lines.push(CAP_SHARED_EN.hTypeRefs)
+      lines.push('')
+      for (const n of refNamesEn) {
+        const rt = ifaces[n]
+        if (!rt) continue
+        lines.push(`### \`${n}\``)
         lines.push('')
-        lines.push(CAP_SHARED_EN.retCols)
-        lines.push('|---|---|---|')
-        for (const pr of shape.handleIface.props) {
-          if (pr.type.includes('=>') || pr.type.startsWith('(')) continue // function-typed members go to the methods table
-          lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${esc((page.directProps && page.directProps[pr.name]) || '—')} |`)
+        if (rt.doc) { lines.push(rt.doc); lines.push('') }
+        if (rt.props.length) {
+          lines.push('| Prop | Type | Doc |')
+          lines.push('|---|---|---|')
+          for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.doc || '—'} |`)
+          lines.push('')
         }
-        lines.push('')
+        if (rt.methods.length) {
+          lines.push('| Method | Signature | Doc |')
+          lines.push('|---|---|---|')
+          for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${mm.doc || '—'} |`)
+          lines.push('')
+        }
       }
-      if (shape.handleIface.methods.length) renderMethodsEn(CAP_SHARED_EN.methodsTitle(handleT), handleT, shape.handleIface)
     }
     const hookStart = hooksBody.indexOf(`${hook}:`)
     const hookEnd = (() => {
@@ -1746,10 +1750,8 @@ async function genCapabilitiesEn(ir, ends) {
             lines.push('|---|---|---|')
             for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
             lines.push('')
-            lines.push('##### Method details')
-            lines.push('')
             for (const mm of ehIface.methods) {
-              lines.push(`###### \`${mm.name}\``)
+              lines.push(`#### \`${mm.name}\``)
               lines.push('')
               lines.push('```ts')
               lines.push(mm.sig)
@@ -1768,7 +1770,7 @@ async function genCapabilitiesEn(ir, ends) {
             }
             const erefs = collectRefTypes(ehIface.methods.map((m) => m.sig), ifaces)
             if (erefs.length) {
-              lines.push('##### Referenced types')
+              lines.push('#### Referenced types')
               lines.push('')
               for (const n of erefs) {
                 const rt = ifaces[n]

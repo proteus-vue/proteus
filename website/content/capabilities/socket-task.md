@@ -32,18 +32,16 @@ useSocketTask(url: string): Promise<CapResult<SocketTaskHandle>>
 | `data` | `SocketTaskHandle` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`SocketTaskHandle`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
-| `close` | `close(code?: number, reason?: string): Promise<CapResult<void>>` | 关闭连接（code/reason 透传给对端） |
-| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
-| `isConnected` | `isConnected(): boolean` | 连接是否已建立 |
+| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| [`close`](#close) | `close(code?: number, reason?: string): Promise<CapResult<void>>` | 关闭连接（code/reason 透传给对端） |
+| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+| [`isConnected`](#isconnected) | `isConnected(): boolean` | 连接是否已建立 |
 
-#### 方法详解
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string): Promise<CapResult<void>>
@@ -57,7 +55,7 @@ send(data: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `close`
+### `close`
 
 ```ts
 close(code?: number, reason?: string): Promise<CapResult<void>>
@@ -72,7 +70,7 @@ close(code?: number, reason?: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `onMessage`
+### `onMessage`
 
 ```ts
 onMessage(cb: (data: string) => void): () => void
@@ -86,7 +84,7 @@ onMessage(cb: (data: string) => void): () => void
 
 **返回值**：`() => void`
 
-##### `isConnected`
+### `isConnected`
 
 ```ts
 isConnected(): boolean

@@ -38,16 +38,14 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 | `data` | `DataChannelHandle` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`DataChannelHandle`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
-| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+| [`send`](#send) | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| [`onMessage`](#onmessage) | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
 
-#### 方法详解
-
-##### `send`
+### `send`
 
 ```ts
 send(data: string): Promise<CapResult<void>>
@@ -61,7 +59,7 @@ send(data: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `onMessage`
+### `onMessage`
 
 ```ts
 onMessage(cb: (data: string) => void): () => void

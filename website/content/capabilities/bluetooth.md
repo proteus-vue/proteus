@@ -26,39 +26,29 @@ useBluetooth(): Promise<CapResult<BluetoothAPI>>
 | `data` | `BluetoothAPI` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`BluetoothAPI`）的属性
-
-| 属性 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `supported` | `boolean` | 是 | 平台是否支持蓝牙 |
-| `available` | `boolean` | 是 | 适配器已打开（可用） |
-| `devices` | `string[]` | 是 | 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） |
-
-#### `data`（`BluetoothAPI`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `close` | `close(): Promise<CapResult<void>>` | 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） |
-| `getAdapterState` | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | 获取适配器状态（available 是否可用 / discovering 是否在搜索） |
-| `startDiscovery` | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | 开始搜索附近 BLE 设备。 |
-| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索附近设备 |
-| `onDeviceFound` | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | 订阅「发现新设备」事件。 |
-| `getDevices` | `getDevices(): Promise<CapResult<BleDevice[]>>` | 获取已发现设备列表 |
-| `getConnectedDevices` | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | 获取已连接设备列表 |
-| `connect` | `connect(deviceId: string): Promise<CapResult<void>>` | 连接指定设备。 |
-| `disconnect` | `disconnect(deviceId: string): Promise<CapResult<void>>` | 断开指定设备。 |
-| `onConnectionStateChange` | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | 订阅「连接状态变化」事件。 |
-| `getServices` | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | 获取设备的服务（Service）列表。 |
-| `getCharacteristics` | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | 获取服务下的特征值（Characteristic）列表。 |
-| `read` | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | 读特征值。 |
-| `write` | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | 写特征值。 |
-| `setNotify` | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | 订阅 / 取消订阅特征值通知。 |
-| `onCharacteristicValueChange` | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | 订阅「特征值变化」通知数据。 |
-| `getRSSI` | `getRSSI(deviceId: string): Promise<CapResult<number>>` | 读取设备信号强度（RSSI）。 |
+| [`close`](#close) | `close(): Promise<CapResult<void>>` | 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） |
+| [`getAdapterState`](#getadapterstate) | `getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>` | 获取适配器状态（available 是否可用 / discovering 是否在搜索） |
+| [`startDiscovery`](#startdiscovery) | `startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>` | 开始搜索附近 BLE 设备。 |
+| [`stopDiscovery`](#stopdiscovery) | `stopDiscovery(): Promise<CapResult<void>>` | 停止搜索附近设备 |
+| [`onDeviceFound`](#ondevicefound) | `onDeviceFound(cb: (devices: BleDevice[]) => void): () => void` | 订阅「发现新设备」事件。 |
+| [`getDevices`](#getdevices) | `getDevices(): Promise<CapResult<BleDevice[]>>` | 获取已发现设备列表 |
+| [`getConnectedDevices`](#getconnecteddevices) | `getConnectedDevices(): Promise<CapResult<BleDevice[]>>` | 获取已连接设备列表 |
+| [`connect`](#connect) | `connect(deviceId: string): Promise<CapResult<void>>` | 连接指定设备。 |
+| [`disconnect`](#disconnect) | `disconnect(deviceId: string): Promise<CapResult<void>>` | 断开指定设备。 |
+| [`onConnectionStateChange`](#onconnectionstatechange) | `onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void` | 订阅「连接状态变化」事件。 |
+| [`getServices`](#getservices) | `getServices(deviceId: string): Promise<CapResult<BleService[]>>` | 获取设备的服务（Service）列表。 |
+| [`getCharacteristics`](#getcharacteristics) | `getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>` | 获取服务下的特征值（Characteristic）列表。 |
+| [`read`](#read) | `read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>` | 读特征值。 |
+| [`write`](#write) | `write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>` | 写特征值。 |
+| [`setNotify`](#setnotify) | `setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>` | 订阅 / 取消订阅特征值通知。 |
+| [`onCharacteristicValueChange`](#oncharacteristicvaluechange) | `onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void` | 订阅「特征值变化」通知数据。 |
+| [`getRSSI`](#getrssi) | `getRSSI(deviceId: string): Promise<CapResult<number>>` | 读取设备信号强度（RSSI）。 |
 
-#### 方法详解
-
-##### `close`
+### `close`
 
 ```ts
 close(): Promise<CapResult<void>>
@@ -68,7 +58,7 @@ close(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `getAdapterState`
+### `getAdapterState`
 
 ```ts
 getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>
@@ -78,7 +68,7 @@ getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean 
 
 **返回值**：`Promise<CapResult<{ available: boolean; discovering: boolean }>>`
 
-##### `startDiscovery`
+### `startDiscovery`
 
 ```ts
 startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
@@ -92,7 +82,7 @@ startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `stopDiscovery`
+### `stopDiscovery`
 
 ```ts
 stopDiscovery(): Promise<CapResult<void>>
@@ -102,7 +92,7 @@ stopDiscovery(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `onDeviceFound`
+### `onDeviceFound`
 
 ```ts
 onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
@@ -116,7 +106,7 @@ onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
 
 **返回值**：`() => void`——取消订阅函数
 
-##### `getDevices`
+### `getDevices`
 
 ```ts
 getDevices(): Promise<CapResult<BleDevice[]>>
@@ -126,7 +116,7 @@ getDevices(): Promise<CapResult<BleDevice[]>>
 
 **返回值**：`Promise<CapResult<BleDevice[]>>`
 
-##### `getConnectedDevices`
+### `getConnectedDevices`
 
 ```ts
 getConnectedDevices(): Promise<CapResult<BleDevice[]>>
@@ -136,7 +126,7 @@ getConnectedDevices(): Promise<CapResult<BleDevice[]>>
 
 **返回值**：`Promise<CapResult<BleDevice[]>>`
 
-##### `connect`
+### `connect`
 
 ```ts
 connect(deviceId: string): Promise<CapResult<void>>
@@ -150,7 +140,7 @@ connect(deviceId: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `disconnect`
+### `disconnect`
 
 ```ts
 disconnect(deviceId: string): Promise<CapResult<void>>
@@ -164,7 +154,7 @@ disconnect(deviceId: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `onConnectionStateChange`
+### `onConnectionStateChange`
 
 ```ts
 onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void
@@ -178,7 +168,7 @@ onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () 
 
 **返回值**：`() => void`——取消订阅函数
 
-##### `getServices`
+### `getServices`
 
 ```ts
 getServices(deviceId: string): Promise<CapResult<BleService[]>>
@@ -192,7 +182,7 @@ getServices(deviceId: string): Promise<CapResult<BleService[]>>
 
 **返回值**：`Promise<CapResult<BleService[]>>`
 
-##### `getCharacteristics`
+### `getCharacteristics`
 
 ```ts
 getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>
@@ -207,7 +197,7 @@ getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCh
 
 **返回值**：`Promise<CapResult<BleCharacteristic[]>>`
 
-##### `read`
+### `read`
 
 ```ts
 read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>
@@ -223,7 +213,7 @@ read(deviceId: string, serviceId: string, characteristicId: string): Promise<Cap
 
 **返回值**：`Promise<CapResult<ArrayBuffer>>`
 
-##### `write`
+### `write`
 
 ```ts
 write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>
@@ -240,7 +230,7 @@ write(deviceId: string, serviceId: string, characteristicId: string, value: Arra
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `setNotify`
+### `setNotify`
 
 ```ts
 setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>
@@ -257,7 +247,7 @@ setNotify(deviceId: string, serviceId: string, characteristicId: string, state: 
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `onCharacteristicValueChange`
+### `onCharacteristicValueChange`
 
 ```ts
 onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void
@@ -271,7 +261,7 @@ onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteri
 
 **返回值**：`() => void`——取消订阅函数
 
-##### `getRSSI`
+### `getRSSI`
 
 ```ts
 getRSSI(deviceId: string): Promise<CapResult<number>>
@@ -285,26 +275,40 @@ getRSSI(deviceId: string): Promise<CapResult<number>>
 
 **返回值**：`Promise<CapResult<number>>`
 
-#### 类型引用
+## 属性
 
-**`BleDevice`** — BLE 设备（wx.BluetoothDevice 子集）
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | 是 | 平台是否支持蓝牙 |
+| `available` | `boolean` | 是 | 适配器已打开（可用） |
+| `devices` | `string[]` | 是 | 已配对/发现的设备名（wx.getBluetoothDevices；web 需用户手势不列） |
 
-| 属性/方法 | 类型 | 说明 |
+## 类型引用
+
+### `BleDevice`
+
+BLE 设备（wx.BluetoothDevice 子集）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `deviceId` | `string` | 设备唯一 id |
 | `name` | `string` | 设备名称 |
 | `RSSI` | `number` | 信号强度（发现/连接后可得） |
 
-**`BleService`** — BLE 服务（wx.BLEService 子集）
+### `BleService`
 
-| 属性/方法 | 类型 | 说明 |
+BLE 服务（wx.BLEService 子集）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `uuid` | `string` | 服务 uuid |
 | `isPrimary` | `boolean` | 是否主服务 |
 
-**`BleCharacteristic`** — BLE 特征值（wx.BLECharacteristic 子集）
+### `BleCharacteristic`
 
-| 属性/方法 | 类型 | 说明 |
+BLE 特征值（wx.BLECharacteristic 子集）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `uuid` | `string` | 特征值 uuid |
 | `properties` | `{ read: boolean; write: boolean; notify: boolean; indicate: boolean }` | 支持的操作（read/write/notify/indicate） |

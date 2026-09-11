@@ -53,6 +53,8 @@
   --radius-lg: 12px;
   --radius-xl: 14px;
   --radius-pill: 999px;
+  /* ★TOC 优化：等宽字体栈（方法名/类型名） */
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   /* ★#386 间距 scale（design-tokens space.scale，供页面取用；不在 scale 上的值待 B5 清扫） */
   --sp-4: 4px;
   --sp-6: 6px;

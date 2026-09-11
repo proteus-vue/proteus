@@ -19,17 +19,17 @@ describe('★能力页生成器：接口解析（extends / 单行 / 泛型）', 
     expect(md).toContain('| `supported` | `boolean` |')
     expect(md).toContain('| `available` | `boolean` |')
     expect(md).toContain('| `devices` | `string[]` |')
-    // 方法表（富接口）
-    expect(md).toContain('#### `data`（`BluetoothAPI`）的方法')
-    expect(md).toContain('`write`')
-    expect(md).toContain('`setNotify`')
+    // 方法表（★TOC 优化后：## 方法 + ### 名）
+    expect(md).toContain('## 方法')
+    expect(md).toContain('### `write`')
+    expect(md).toContain('### `setNotify`')
   })
 
   it('map：MapController 方法表存在（单行接口 MapPolyline/MapCircle 不吞掉它）', () => {
     const md = read('map')
-    expect(md).toContain('#### `data`（`MapController`）的方法')
+    expect(md).toContain('## 方法')
     for (const m of ['getRegion', 'includePoints', 'addMarkers', 'translateMarker']) {
-      expect(md).toContain(`| \`${m}\` |`)
+      expect(md).toContain(`### \`${m}\``)
     }
   })
 
@@ -63,7 +63,7 @@ describe('★官网漏修：能力扩展接口段（额外 hook 可见）', () =
       const md = read(slug)
       expect(md).toContain('## 扩展接口')
       expect(md).toContain(hook)
-      for (const m of methods) expect(md).toContain(`| \`${m}\` |`)
+      for (const m of methods) expect(md).toContain(`\`${m}\``)
     })
   }
 

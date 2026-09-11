@@ -26,23 +26,21 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | `data` | `BackgroundAPI` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `BackgroundAPI`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
-| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | — |
-| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | — |
-| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | — |
-| `onError` | `onError(cb: (error: string) => void): () => void` | — |
-| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | — |
-| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | — |
-| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
-| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
+| [`onEvent`](#onevent) | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
+| [`onMemoryWarning`](#onmemorywarning) | `onMemoryWarning(cb: (level: number) => void): () => void` | — |
+| [`onThemeChange`](#onthemechange) | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | — |
+| [`onWindowResize`](#onwindowresize) | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | — |
+| [`onError`](#onerror) | `onError(cb: (error: string) => void): () => void` | — |
+| [`onUnhandledRejection`](#onunhandledrejection) | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | — |
+| [`onNetworkStatusChange`](#onnetworkstatuschange) | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | — |
+| [`getLaunchOptions`](#getlaunchoptions) | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
+| [`getEnterOptions`](#getenteroptions) | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
 
-#### Method details
-
-##### `onEvent`
+### `onEvent`
 
 ```ts
 onEvent(cb: (e: BackgroundEvent) => void): () => void
@@ -54,7 +52,7 @@ onEvent(cb: (e: BackgroundEvent) => void): () => void
 
 **Returns**: `() => void`
 
-##### `onMemoryWarning`
+### `onMemoryWarning`
 
 ```ts
 onMemoryWarning(cb: (level: number) => void): () => void
@@ -66,7 +64,7 @@ onMemoryWarning(cb: (level: number) => void): () => void
 
 **Returns**: `() => void`
 
-##### `onThemeChange`
+### `onThemeChange`
 
 ```ts
 onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
@@ -78,7 +76,7 @@ onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
 
 **Returns**: `() => void`
 
-##### `onWindowResize`
+### `onWindowResize`
 
 ```ts
 onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void
@@ -90,7 +88,7 @@ onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void
 
 **Returns**: `() => void`
 
-##### `onError`
+### `onError`
 
 ```ts
 onError(cb: (error: string) => void): () => void
@@ -102,7 +100,7 @@ onError(cb: (error: string) => void): () => void
 
 **Returns**: `() => void`
 
-##### `onUnhandledRejection`
+### `onUnhandledRejection`
 
 ```ts
 onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void
@@ -114,7 +112,7 @@ onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> })
 
 **Returns**: `() => void`
 
-##### `onNetworkStatusChange`
+### `onNetworkStatusChange`
 
 ```ts
 onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void
@@ -126,7 +124,7 @@ onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }
 
 **Returns**: `() => void`
 
-##### `getLaunchOptions`
+### `getLaunchOptions`
 
 ```ts
 getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
@@ -134,7 +132,7 @@ getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
 
 **Returns**: `Promise<CapResult<Record<string, unknown>>>`
 
-##### `getEnterOptions`
+### `getEnterOptions`
 
 ```ts
 getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
@@ -142,11 +140,13 @@ getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
 
 **Returns**: `Promise<CapResult<Record<string, unknown>>>`
 
-#### Referenced types
+## Referenced types
 
-**`BackgroundEvent`** — C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+### `BackgroundEvent`
 
-| Prop/Method | Type | Doc |
+C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
 | `time` | `number` | 事件时间戳（ms） |

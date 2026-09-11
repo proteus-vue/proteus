@@ -32,9 +32,9 @@ Param,Type,Required,Doc
 | `data` | `LoginResult` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `LoginResult` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `provider` | `string` | Yes | Login channel (wechat / host-provider …) |
 | `code` | `string` | No | Login credential (wx code; the server exchanges it for a session) |

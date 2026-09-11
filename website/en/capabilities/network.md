@@ -26,9 +26,9 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | `data` | `NetworkType` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `NetworkType` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
 | `online` | `boolean` | Yes | Whether the device is online (normalized from navigator.onLine / wx.getNetworkType) |
 | `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | Yes | Network type (web has no finer granularity → unknown; offline → none) |

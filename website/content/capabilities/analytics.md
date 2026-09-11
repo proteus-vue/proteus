@@ -20,15 +20,13 @@ useAnalytics(): TrackAPI
 
 返回 `TrackAPI`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `TrackAPI` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
+| [`track`](#track) | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
 
-#### 方法详解
-
-##### `track`
+### `track`
 
 ```ts
 track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>

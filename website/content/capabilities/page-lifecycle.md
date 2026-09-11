@@ -20,23 +20,15 @@ usePageLifecycle(): PageLifecycle
 
 返回 `PageLifecycle`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `PageLifecycle` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） |
-
-#### `PageLifecycle` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onLoad` | `onLoad(cb: () => void): () => void` | 订阅「页面加载」（返回取消） |
-| `onShow` | `onShow(cb: () => void): () => void` | 订阅「页面显示」（返回取消） |
-| `onHide` | `onHide(cb: () => void): () => void` | 订阅「页面隐藏」（返回取消） |
+| [`onLoad`](#onload) | `onLoad(cb: () => void): () => void` | 订阅「页面加载」（返回取消） |
+| [`onShow`](#onshow) | `onShow(cb: () => void): () => void` | 订阅「页面显示」（返回取消） |
+| [`onHide`](#onhide) | `onHide(cb: () => void): () => void` | 订阅「页面隐藏」（返回取消） |
 
-#### 方法详解
-
-##### `onLoad`
+### `onLoad`
 
 ```ts
 onLoad(cb: () => void): () => void
@@ -50,7 +42,7 @@ onLoad(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-##### `onShow`
+### `onShow`
 
 ```ts
 onShow(cb: () => void): () => void
@@ -64,7 +56,7 @@ onShow(cb: () => void): () => void
 
 **返回值**：`() => void`
 
-##### `onHide`
+### `onHide`
 
 ```ts
 onHide(cb: () => void): () => void
@@ -77,6 +69,12 @@ onHide(cb: () => void): () => void
 | `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
 
 **返回值**：`() => void`
+
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `phase` | `'IDLE' \| 'LOAD' \| 'SHOW' \| 'HIDE'` | 是 | 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） |
 
 ## 错误码
 

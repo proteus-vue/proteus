@@ -20,46 +20,38 @@ useFileSystem(): FSAdapter
 
 返回 `FSAdapter`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `FSAdapter` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `supported` | `boolean` | 能力可用性（内存降级也算可用；false = 完全不可用） |
-
-#### `FSAdapter` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `readFile` | `readFile(path: string): Promise<CapResult<string>>` | 读取文本文件（UTF-8）。 |
-| `writeFile` | `writeFile(path: string, data: string): Promise<CapResult<void>>` | 写入文件（覆盖；不存在则创建）。 |
-| `appendFile` | `appendFile(path: string, data: string): Promise<CapResult<void>>` | 追加写入（在文件尾部追加）。 |
-| `copyFile` | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | 复制文件。 |
-| `rename` | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | 重命名 / 移动。 |
-| `remove` | `remove(path: string): Promise<CapResult<void>>` | 删除文件。 |
-| `exists` | `exists(path: string): Promise<CapResult<boolean>>` | 文件 / 目录是否存在。 |
-| `stat` | `stat(path: string): Promise<CapResult<FileStat>>` | 获取文件 / 目录信息（大小 / 时间 / 类型）。 |
-| `mkdir` | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 创建目录。 |
-| `rmdir` | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 删除目录。 |
-| `readdir` | `readdir(path: string): Promise<CapResult<string[]>>` | 读取目录，返回条目名列表。 |
-| `getFileInfo` | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | 获取文件摘要（大小 + 摘要值）。 |
-| `saveFile` | `saveFile(tempPath: string): Promise<CapResult<string>>` | 保存临时文件到本地（返回持久路径）。 |
-| `getSavedFileList` | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | 已保存文件列表 |
-| `removeSavedFile` | `removeSavedFile(path: string): Promise<CapResult<void>>` | 删除已保存文件。 |
-| `unzip` | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | 解压 zip。 |
-| `readFileSync` | `readFileSync(path: string): CapResult<string>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
-| `writeFileSync` | `writeFileSync(path: string, data: string): CapResult<void>` | 同步写文件（阻塞主线程） |
-| `existsSync` | `existsSync(path: string): CapResult<boolean>` | 同步判断存在 |
-| `statSync` | `statSync(path: string): CapResult<FileStat>` | 同步取文件信息 |
-| `readdirSync` | `readdirSync(path: string): CapResult<string[]>` | 同步读目录 |
-| `mkdirSync` | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | 同步创建目录 |
-| `renameSync` | `renameSync(oldPath: string, newPath: string): CapResult<void>` | 同步重命名 |
-| `unlinkSync` | `unlinkSync(path: string): CapResult<void>` | 同步删除 |
-| `copyFileSync` | `copyFileSync(src: string, dest: string): CapResult<void>` | 同步复制 |
-| `appendFileSync` | `appendFileSync(path: string, data: string): CapResult<void>` | 同步追加 |
+| [`readFile`](#readfile) | `readFile(path: string): Promise<CapResult<string>>` | 读取文本文件（UTF-8）。 |
+| [`writeFile`](#writefile) | `writeFile(path: string, data: string): Promise<CapResult<void>>` | 写入文件（覆盖；不存在则创建）。 |
+| [`appendFile`](#appendfile) | `appendFile(path: string, data: string): Promise<CapResult<void>>` | 追加写入（在文件尾部追加）。 |
+| [`copyFile`](#copyfile) | `copyFile(src: string, dest: string): Promise<CapResult<void>>` | 复制文件。 |
+| [`rename`](#rename) | `rename(oldPath: string, newPath: string): Promise<CapResult<void>>` | 重命名 / 移动。 |
+| [`remove`](#remove) | `remove(path: string): Promise<CapResult<void>>` | 删除文件。 |
+| [`exists`](#exists) | `exists(path: string): Promise<CapResult<boolean>>` | 文件 / 目录是否存在。 |
+| [`stat`](#stat) | `stat(path: string): Promise<CapResult<FileStat>>` | 获取文件 / 目录信息（大小 / 时间 / 类型）。 |
+| [`mkdir`](#mkdir) | `mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 创建目录。 |
+| [`rmdir`](#rmdir) | `rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>` | 删除目录。 |
+| [`readdir`](#readdir) | `readdir(path: string): Promise<CapResult<string[]>>` | 读取目录，返回条目名列表。 |
+| [`getFileInfo`](#getfileinfo) | `getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>` | 获取文件摘要（大小 + 摘要值）。 |
+| [`saveFile`](#savefile) | `saveFile(tempPath: string): Promise<CapResult<string>>` | 保存临时文件到本地（返回持久路径）。 |
+| [`getSavedFileList`](#getsavedfilelist) | `getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>` | 已保存文件列表 |
+| [`removeSavedFile`](#removesavedfile) | `removeSavedFile(path: string): Promise<CapResult<void>>` | 删除已保存文件。 |
+| [`unzip`](#unzip) | `unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>` | 解压 zip。 |
+| [`readFileSync`](#readfilesync) | `readFileSync(path: string): CapResult<string>` | 同步读文件（阻塞主线程——仅小文件/启动期用） |
+| [`writeFileSync`](#writefilesync) | `writeFileSync(path: string, data: string): CapResult<void>` | 同步写文件（阻塞主线程） |
+| [`existsSync`](#existssync) | `existsSync(path: string): CapResult<boolean>` | 同步判断存在 |
+| [`statSync`](#statsync) | `statSync(path: string): CapResult<FileStat>` | 同步取文件信息 |
+| [`readdirSync`](#readdirsync) | `readdirSync(path: string): CapResult<string[]>` | 同步读目录 |
+| [`mkdirSync`](#mkdirsync) | `mkdirSync(path: string, recursive?: boolean): CapResult<void>` | 同步创建目录 |
+| [`renameSync`](#renamesync) | `renameSync(oldPath: string, newPath: string): CapResult<void>` | 同步重命名 |
+| [`unlinkSync`](#unlinksync) | `unlinkSync(path: string): CapResult<void>` | 同步删除 |
+| [`copyFileSync`](#copyfilesync) | `copyFileSync(src: string, dest: string): CapResult<void>` | 同步复制 |
+| [`appendFileSync`](#appendfilesync) | `appendFileSync(path: string, data: string): CapResult<void>` | 同步追加 |
 
-#### 方法详解
-
-##### `readFile`
+### `readFile`
 
 ```ts
 readFile(path: string): Promise<CapResult<string>>
@@ -73,7 +65,7 @@ readFile(path: string): Promise<CapResult<string>>
 
 **返回值**：`Promise<CapResult<string>>`
 
-##### `writeFile`
+### `writeFile`
 
 ```ts
 writeFile(path: string, data: string): Promise<CapResult<void>>
@@ -88,7 +80,7 @@ writeFile(path: string, data: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `appendFile`
+### `appendFile`
 
 ```ts
 appendFile(path: string, data: string): Promise<CapResult<void>>
@@ -103,7 +95,7 @@ appendFile(path: string, data: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `copyFile`
+### `copyFile`
 
 ```ts
 copyFile(src: string, dest: string): Promise<CapResult<void>>
@@ -118,7 +110,7 @@ copyFile(src: string, dest: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `rename`
+### `rename`
 
 ```ts
 rename(oldPath: string, newPath: string): Promise<CapResult<void>>
@@ -133,7 +125,7 @@ rename(oldPath: string, newPath: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(path: string): Promise<CapResult<void>>
@@ -147,7 +139,7 @@ remove(path: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `exists`
+### `exists`
 
 ```ts
 exists(path: string): Promise<CapResult<boolean>>
@@ -161,7 +153,7 @@ exists(path: string): Promise<CapResult<boolean>>
 
 **返回值**：`Promise<CapResult<boolean>>`
 
-##### `stat`
+### `stat`
 
 ```ts
 stat(path: string): Promise<CapResult<FileStat>>
@@ -175,7 +167,7 @@ stat(path: string): Promise<CapResult<FileStat>>
 
 **返回值**：`Promise<CapResult<FileStat>>`
 
-##### `mkdir`
+### `mkdir`
 
 ```ts
 mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
@@ -190,7 +182,7 @@ mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `rmdir`
+### `rmdir`
 
 ```ts
 rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
@@ -205,7 +197,7 @@ rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `readdir`
+### `readdir`
 
 ```ts
 readdir(path: string): Promise<CapResult<string[]>>
@@ -219,7 +211,7 @@ readdir(path: string): Promise<CapResult<string[]>>
 
 **返回值**：`Promise<CapResult<string[]>>`
 
-##### `getFileInfo`
+### `getFileInfo`
 
 ```ts
 getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>
@@ -234,7 +226,7 @@ getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: n
 
 **返回值**：`Promise<CapResult<{ size: number; digest: string }>>`
 
-##### `saveFile`
+### `saveFile`
 
 ```ts
 saveFile(tempPath: string): Promise<CapResult<string>>
@@ -248,7 +240,7 @@ saveFile(tempPath: string): Promise<CapResult<string>>
 
 **返回值**：`Promise<CapResult<string>>`
 
-##### `getSavedFileList`
+### `getSavedFileList`
 
 ```ts
 getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
@@ -258,7 +250,7 @@ getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
 
 **返回值**：`Promise<CapResult<SavedFileInfo[]>>`
 
-##### `removeSavedFile`
+### `removeSavedFile`
 
 ```ts
 removeSavedFile(path: string): Promise<CapResult<void>>
@@ -272,7 +264,7 @@ removeSavedFile(path: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `unzip`
+### `unzip`
 
 ```ts
 unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
@@ -287,7 +279,7 @@ unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `readFileSync`
+### `readFileSync`
 
 ```ts
 readFileSync(path: string): CapResult<string>
@@ -301,7 +293,7 @@ readFileSync(path: string): CapResult<string>
 
 **返回值**：`CapResult<string>`
 
-##### `writeFileSync`
+### `writeFileSync`
 
 ```ts
 writeFileSync(path: string, data: string): CapResult<void>
@@ -316,7 +308,7 @@ writeFileSync(path: string, data: string): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-##### `existsSync`
+### `existsSync`
 
 ```ts
 existsSync(path: string): CapResult<boolean>
@@ -330,7 +322,7 @@ existsSync(path: string): CapResult<boolean>
 
 **返回值**：`CapResult<boolean>`
 
-##### `statSync`
+### `statSync`
 
 ```ts
 statSync(path: string): CapResult<FileStat>
@@ -344,7 +336,7 @@ statSync(path: string): CapResult<FileStat>
 
 **返回值**：`CapResult<FileStat>`
 
-##### `readdirSync`
+### `readdirSync`
 
 ```ts
 readdirSync(path: string): CapResult<string[]>
@@ -358,7 +350,7 @@ readdirSync(path: string): CapResult<string[]>
 
 **返回值**：`CapResult<string[]>`
 
-##### `mkdirSync`
+### `mkdirSync`
 
 ```ts
 mkdirSync(path: string, recursive?: boolean): CapResult<void>
@@ -373,7 +365,7 @@ mkdirSync(path: string, recursive?: boolean): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-##### `renameSync`
+### `renameSync`
 
 ```ts
 renameSync(oldPath: string, newPath: string): CapResult<void>
@@ -388,7 +380,7 @@ renameSync(oldPath: string, newPath: string): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-##### `unlinkSync`
+### `unlinkSync`
 
 ```ts
 unlinkSync(path: string): CapResult<void>
@@ -402,7 +394,7 @@ unlinkSync(path: string): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-##### `copyFileSync`
+### `copyFileSync`
 
 ```ts
 copyFileSync(src: string, dest: string): CapResult<void>
@@ -417,7 +409,7 @@ copyFileSync(src: string, dest: string): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-##### `appendFileSync`
+### `appendFileSync`
 
 ```ts
 appendFileSync(path: string, data: string): CapResult<void>
@@ -432,11 +424,19 @@ appendFileSync(path: string, data: string): CapResult<void>
 
 **返回值**：`CapResult<void>`
 
-#### 类型引用
+## 属性
 
-**`FileStat`** — 文件/目录信息（wx.Stats 子集）
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | 是 | 能力可用性（内存降级也算可用；false = 完全不可用） |
 
-| 属性/方法 | 类型 | 说明 |
+## 类型引用
+
+### `FileStat`
+
+文件/目录信息（wx.Stats 子集）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `size` | `number` | 文件大小（字节） |
 | `mode` | `number` | 权限位 |
@@ -445,9 +445,11 @@ appendFileSync(path: string, data: string): CapResult<void>
 | `isDirectory` | `boolean` | 是否目录 |
 | `isFile` | `boolean` | 是否文件 |
 
-**`SavedFileInfo`** — 已保存文件信息（wx.SavedFileInfo 子集）
+### `SavedFileInfo`
 
-| 属性/方法 | 类型 | 说明 |
+已保存文件信息（wx.SavedFileInfo 子集）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `filePath` | `string` | 保存后的文件路径 |
 | `size` | `number` | 文件大小（字节） |

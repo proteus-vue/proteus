@@ -20,25 +20,16 @@ useAuth(): AuthState
 
 返回 `AuthState`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `AuthState` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `token` | `string \| null` | 当前令牌（未登录 null；响应式——UI 直接绑定） |
-| `isAuthenticated` | `boolean` | 是否已登录（token 非空即真） |
-
-#### `AuthState` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `login` | `login(provider?: string): Promise<CapResult<string>>` | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
-| `logout` | `logout(): Promise<CapResult<void>>` | 登出：清 token |
-| `setToken` | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
-| `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
+| [`login`](#login) | `login(provider?: string): Promise<CapResult<string>>` | 登录：调桥 login() → 成功存 token（无 login 桥 → Err<cap>.native 降级） |
+| [`logout`](#logout) | `logout(): Promise<CapResult<void>>` | 登出：清 token |
+| [`setToken`](#settoken) | `setToken(token: string \| null): void` | 手动设置 token（第三方登录 / 服务端下发的既有会话） |
+| [`subscribe`](#subscribe) | `subscribe(cb: (token: string \| null) => void): () => void` | 订阅登录态变化（响应式 UI 联动） |
 
-#### 方法详解
-
-##### `login`
+### `login`
 
 ```ts
 login(provider?: string): Promise<CapResult<string>>
@@ -52,7 +43,7 @@ login(provider?: string): Promise<CapResult<string>>
 
 **返回值**：`Promise<CapResult<string>>`
 
-##### `logout`
+### `logout`
 
 ```ts
 logout(): Promise<CapResult<void>>
@@ -62,7 +53,7 @@ logout(): Promise<CapResult<void>>
 
 **返回值**：`Promise<CapResult<void>>`
 
-##### `setToken`
+### `setToken`
 
 ```ts
 setToken(token: string | null): void
@@ -76,7 +67,7 @@ setToken(token: string | null): void
 
 **返回值**：`void`
 
-##### `subscribe`
+### `subscribe`
 
 ```ts
 subscribe(cb: (token: string | null) => void): () => void
@@ -89,6 +80,13 @@ subscribe(cb: (token: string | null) => void): () => void
 | `cb` | `(token: string \| null) => void` | 是 | 事件 / 结果回调函数 |
 
 **返回值**：`() => void`
+
+## 属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `token` | `string \| null` | 是 | 当前令牌（未登录 null；响应式——UI 直接绑定） |
+| `isAuthenticated` | `boolean` | 是 | 是否已登录（token 非空即真） |
 
 ## 兼容进度
 

@@ -93,9 +93,11 @@ export function parseBlocks(source: string): MdBlock[] {
     const heading = line.match(HEADING_RE)
     if (heading) {
       const depth = heading[1].length as HeadingBlock['depth']
-      const text = heading[2].trim()
-      const inline = parseInline(text)
-      blocks.push({ type: 'heading', depth, id: slugify(inlineToText(inline), takenIds), text, inline })
+      const raw = heading[2].trim()
+      const inline = parseInline(raw)
+      // ★TOC 优化：text 存纯文本（剥 `code` 等标记，目录干净）；inline 保留供正文渲染（代码样式）
+      const text = inlineToText(inline)
+      blocks.push({ type: 'heading', depth, id: slugify(text, takenIds), text, inline })
       i++
       continue
     }

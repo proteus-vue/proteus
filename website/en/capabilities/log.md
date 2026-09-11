@@ -20,17 +20,15 @@ useLog(): Logger
 
 Returns `Logger` (synchronous handle/state object).
 
-#### Methods of `Logger`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | — |
+| [`log`](#log) | `log(message: string, data?: unknown): Promise<CapResult<void>>` | — |
+| [`warn`](#warn) | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | — |
+| [`error`](#error) | `error(message: string, data?: unknown): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `log`
+### `log`
 
 ```ts
 log(message: string, data?: unknown): Promise<CapResult<void>>
@@ -43,7 +41,7 @@ log(message: string, data?: unknown): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `warn`
+### `warn`
 
 ```ts
 warn(message: string, data?: unknown): Promise<CapResult<void>>
@@ -56,7 +54,7 @@ warn(message: string, data?: unknown): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-##### `error`
+### `error`
 
 ```ts
 error(message: string, data?: unknown): Promise<CapResult<void>>

@@ -26,13 +26,13 @@ useContact(): Promise<CapResult<Contact[]>>
 | `data` | `Contact[]` | Success payload (structure below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Properties of the `Contact[]` object
+## Props
 
-| Property | Type | Required | Doc |
+| Prop | Type | Required | Doc |
 |---|---|---|---|
-| `name` | `string` | Yes | — |
-| `phone` | `string` | No | — |
-| `email` | `string` | No | — |
+| `name` | `string` | Yes | 联系人姓名 |
+| `phone` | `string` | No | 电话号码 |
+| `email` | `string` | No | 邮箱 |
 
 ## Error codes
 

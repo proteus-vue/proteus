@@ -26,18 +26,16 @@ useCookie(): Promise<CapResult<CookieJar>>
 | `data` | `CookieJar` | 成功载荷（方法结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
 
-#### `data`（`CookieJar`）的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `get` | `get(name: string): string \| undefined` | 读取 cookie |
-| `set` | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
-| `remove` | `remove(name: string): void` | 删除 cookie |
-| `list` | `list(): Record<string, string>` | 列出全部 cookie |
+| [`get`](#get) | `get(name: string): string \| undefined` | 读取 cookie |
+| [`set`](#set) | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
+| [`remove`](#remove) | `remove(name: string): void` | 删除 cookie |
+| [`list`](#list) | `list(): Record<string, string>` | 列出全部 cookie |
 
-#### 方法详解
-
-##### `get`
+### `get`
 
 ```ts
 get(name: string): string | undefined
@@ -51,7 +49,7 @@ get(name: string): string | undefined
 
 **返回值**：`string \| undefined`
 
-##### `set`
+### `set`
 
 ```ts
 set(name: string, value: string, maxAge?: number): void
@@ -67,7 +65,7 @@ set(name: string, value: string, maxAge?: number): void
 
 **返回值**：`void`
 
-##### `remove`
+### `remove`
 
 ```ts
 remove(name: string): void
@@ -81,7 +79,7 @@ remove(name: string): void
 
 **返回值**：`void`
 
-##### `list`
+### `list`
 
 ```ts
 list(): Record<string, string>

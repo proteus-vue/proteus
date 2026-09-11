@@ -26,15 +26,13 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 | `data` | `MiniProgramAPI` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
 
-#### Methods of `MiniProgramAPI`
+## Methods
 
 | Method | Signature | Doc |
 |---|---|---|
-| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
+| [`navigate`](#navigate) | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
 
-#### Method details
-
-##### `navigate`
+### `navigate`
 
 ```ts
 navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
@@ -46,11 +44,13 @@ navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
 
 **Returns**: `Promise<CapResult<void>>`
 
-#### Referenced types
+## Referenced types
 
-**`MiniProgramNavOptions`** — C47 小程序跳转（wx.navigateToMiniProgram）
+### `MiniProgramNavOptions`
 
-| Prop/Method | Type | Doc |
+C47 小程序跳转（wx.navigateToMiniProgram）
+
+| Prop | Type | Doc |
 |---|---|---|
 | `appId` | `string` | 目标小程序 appId |
 | `path` | `string` | 目标页路径（缺省首页） |

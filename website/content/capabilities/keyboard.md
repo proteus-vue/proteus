@@ -20,21 +20,13 @@ useKeyboard(): KeyboardLifecycle
 
 返回 `KeyboardLifecycle`（同步句柄——无 Promise、无 await，结构见下）。
 
-#### `KeyboardLifecycle` 的属性
-
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `info` | `KeyboardInfo` | 当前键盘状态（高度/可见性快照） |
-
-#### `KeyboardLifecycle` 的方法
+## 方法
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
+| [`onChange`](#onchange) | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
 
-#### 方法详解
-
-##### `onChange`
+### `onChange`
 
 ```ts
 onChange(cb: (info: KeyboardInfo) => void): () => void
@@ -48,11 +40,19 @@ onChange(cb: (info: KeyboardInfo) => void): () => void
 
 **返回值**：`() => void`
 
-#### 类型引用
+## 属性
 
-**`KeyboardInfo`** — C14 键盘信息（高度 px + 可见性）
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `info` | `KeyboardInfo` | 是 | 当前键盘状态（高度/可见性快照） |
 
-| 属性/方法 | 类型 | 说明 |
+## 类型引用
+
+### `KeyboardInfo`
+
+C14 键盘信息（高度 px + 可见性）
+
+| 属性 | 类型 | 说明 |
 |---|---|---|
 | `height` | `number` | 键盘高度（px） |
 | `visible` | `boolean` | 键盘是否可见 |
