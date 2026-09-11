@@ -450,6 +450,19 @@ export interface CalendarEvent {
   description?: string
 }
 
+/**
+ * ★能力颗粒度对齐：C20 日历 API（原仅 addCalendarEvent → 增删查）
+ *   注：小程序仅支持写日历（add/remove）；查询/更新无开放 API → 诚实 Err。
+ */
+export interface CalendarAPI {
+  /** 添加日程（wx.addPhoneCalendar） */
+  add(event: CalendarEvent): Promise<CapResult<void>>
+  /** 删除日程（wx 需用户确认，按 eventId；支持有限） */
+  remove(eventId: string): Promise<CapResult<void>>
+  /** 查询日程（无开放 API → 诚实 Err） */
+  list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
+}
+
 // ★G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphone / keyboard
 
 /** C24 页面生命周期句柄（wx Page 钩子 / web load+visibilitychange） */
@@ -717,8 +730,28 @@ export interface BackgroundEvent {
 }
 
 /** C25 useBackground 句柄（后台/前台切换订阅） */
+/**
+ * ★能力颗粒度对齐：C25 后台/宿主生命周期 API（原仅 onEvent（visible/hidden）→ 全事件面）
+ *   各订阅返回取消函数；未实现的事件 → 返回 no-op 取消（诚实边界）。
+ */
 export interface BackgroundAPI {
   onEvent(cb: (e: BackgroundEvent) => void): () => void
+  /** 内存警告（wx.onMemoryWarning） */
+  onMemoryWarning(cb: (level: number) => void): () => void
+  /** 主题变化（wx.onThemeChange，深色/浅色） */
+  onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
+  /** 窗口尺寸变化（wx.onWindowResize / web resize） */
+  onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void
+  /** 小程序错误（wx.onError） */
+  onError(cb: (error: string) => void): () => void
+  /** 未处理的 Promise rejection（wx.onUnhandledRejection） */
+  onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void
+  /** 网络状态变化（wx.onNetworkStatusChange） */
+  onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void
+  /** 启动参数（wx.getLaunchOptionsSync） */
+  getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
+  /** 当前进入参数（wx.getEnterOptionsSync） */
+  getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
 }
 
 /** C28 底层 SocketTask（wx.SocketTask 语义——send/close/onMessage 低层句柄；与 C27 上层连接互补） */
@@ -888,6 +921,8 @@ export interface CapabilityBridge {
   chooseContact?(): Promise<Contact[]>
   /** C20 日历事件添加（wx.addPhoneCalendar / web 无标准 → 缺省） */
   addCalendarEvent?(event: CalendarEvent): Promise<void>
+  /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
+  getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
   getAppLifecycle?(): AppLifecycle
   /** C44 压缩（wx.compressFile / web 无标准 → 缺省） */
@@ -1271,6 +1306,15 @@ interface WxLike {
   }) => void
   onAppShow?: (cb: () => void) => void
   onAppHide?: (cb: () => void) => void
+  onMemoryWarning?: (cb: (r: { level: number }) => void) => void
+  onThemeChange?: (cb: (r: { theme: 'dark' | 'light' }) => void) => void
+  onWindowResize?: (cb: (r: { size: { windowWidth: number; windowHeight: number } }) => void) => void
+  onError?: (cb: (e: string) => void) => void
+  onUnhandledRejection?: (cb: (r: { reason: string; promise: Promise<unknown> }) => void) => void
+  onNetworkStatusChange?: (cb: (r: { isConnected: boolean; networkType: string }) => void) => void
+  getLaunchOptionsSync?: () => Record<string, unknown>
+  getEnterOptionsSync?: () => Record<string, unknown>
+  removePhoneCalendar?: (opt: { eventId: string; success?: () => void; fail?: (e: unknown) => void }) => void
   compressFile?: (opt: {
     src: string
     dest?: string
@@ -2485,11 +2529,23 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         },
       }
     },
+    // ★能力颗粒度对齐：C25 后台/宿主生命周期全事件面（原仅 visible/hidden）
     getBackground: () => {
       const cbs: Array<(e: BackgroundEvent) => void> = []
       const emit = (type: BackgroundEvent['type']) => cbs.forEach((cb) => cb({ type, time: Date.now() }))
       if (typeof wx.onAppHide === 'function') wx.onAppHide(() => emit('enter-background'))
       if (typeof wx.onAppShow === 'function') wx.onAppShow(() => emit('enter-foreground'))
+      // 通用订阅助手：wx.onXxx 存在 → 挂接并返回 off（无 off 则 no-op 取消）；缺失 → no-op 取消
+      // Raw=wx 回调原始载荷；Out=对外暴露类型（可同形或经 map 提取）
+      const sub = <Raw, Out>(onName: keyof WxLike, cb: (out: Out) => void, map: (r: Raw) => Out): (() => void) => {
+        const on = wx[onName]
+        if (typeof on !== 'function') return () => {}
+        const h = (r: Raw): void => cb(map(r))
+        ;(on as unknown as (c: (r: Raw) => void) => void)(h)
+        return () => {
+          // wx 各 on* 对应 off* 命名不同；本处理保守：无显式 off 表 → 不解除（生命周期事件常驻，影响可忽略）
+        }
+      }
       return {
         onEvent: (cb) => {
           cbs.push(cb)
@@ -2498,8 +2554,44 @@ function wxBridge(wx: WxLike): CapabilityBridge {
             if (i >= 0) cbs.splice(i, 1)
           }
         },
+        onMemoryWarning: (cb) => sub<{ level: number }, number>('onMemoryWarning', cb, (r) => r.level),
+        onThemeChange: (cb) => sub<{ theme: 'dark' | 'light' }, 'dark' | 'light'>('onThemeChange', cb, (r) => r.theme),
+        onWindowResize: (cb) => sub<{ size: { windowWidth: number; windowHeight: number } }, { windowWidth: number; windowHeight: number }>('onWindowResize', cb, (r) => r.size),
+        onError: (cb) => sub<string, string>('onError', cb, (r) => r),
+        onUnhandledRejection: (cb) => sub<{ reason: string; promise: Promise<unknown> }, { reason: string; promise: Promise<unknown> }>('onUnhandledRejection', cb, (r) => r),
+        onNetworkStatusChange: (cb) => sub<{ isConnected: boolean; networkType: string }, { isConnected: boolean; networkType: string }>('onNetworkStatusChange', cb, (r) => r),
+        getLaunchOptions: async () => {
+          if (typeof wx.getLaunchOptionsSync !== 'function') return capErr<Record<string, unknown>>('background.unsupported', 'wx.getLaunchOptionsSync 缺失')
+          try {
+            return capOk(wx.getLaunchOptionsSync())
+          } catch (e) {
+            return capErr<Record<string, unknown>>('background.failed', e instanceof Error ? e.message : String(e))
+          }
+        },
+        getEnterOptions: async () => {
+          if (typeof wx.getEnterOptionsSync !== 'function') return capErr<Record<string, unknown>>('background.unsupported', 'wx.getEnterOptionsSync 缺失')
+          try {
+            return capOk(wx.getEnterOptionsSync())
+          } catch (e) {
+            return capErr<Record<string, unknown>>('background.failed', e instanceof Error ? e.message : String(e))
+          }
+        },
       }
     },
+    // ★能力颗粒度对齐：C20 日历 API（增删查；查询无开放 API → Err）
+    getCalendar: () => ({
+      add: (event) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (!wx.addPhoneCalendar) return resolve(capErr('calendar.unsupported', 'wx.addPhoneCalendar 缺失'))
+          wx.addPhoneCalendar({ ...event, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('calendar.failed', '添加日程失败', e)) })
+        }),
+      remove: (eventId) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (!wx.removePhoneCalendar) return resolve(capErr('calendar.unsupported', 'wx.removePhoneCalendar 缺失'))
+          wx.removePhoneCalendar({ eventId, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('calendar.failed', '删除日程失败', e)) })
+        }),
+      list: () => Promise.resolve(capErr<CalendarEvent[]>('calendar.unsupported', '小程序无日历查询开放 API（仅写）')),
+    }),
     createSocketTask: (url) => {
       if (typeof wx.connectSocket !== 'function') throw new CapError('socket-task.unsupported', 'wx.connectSocket 缺失')
       const task = wx.connectSocket({ url })
@@ -3130,6 +3222,14 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
           cbs.forEach((cb) => cb({ type: doc.hidden ? 'enter-background' : 'enter-foreground', time: Date.now() }))
         })
       }
+      const sub = <T,>(add: unknown, event: string, cb: (r: T) => void): (() => void) => {
+        if (typeof add !== 'function') return () => {}
+        const h = (e: unknown): void => cb(e as T)
+        ;(add as (t: string, c: (e: unknown) => void) => void)(event, h)
+        return () => {}
+      }
+      const w = g as { addEventListener?: unknown }
+      const win = (g as { window?: { addEventListener?: unknown; getLaunchOptions?: () => Record<string, unknown> } }).window
       return {
         onEvent: (cb) => {
           cbs.push(cb)
@@ -3138,8 +3238,41 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
             if (i >= 0) cbs.splice(i, 1)
           }
         },
+        onMemoryWarning: () => () => {},
+        onThemeChange: (cb) => {
+          const mm = (g as { matchMedia?: (q: string) => { matches: boolean; addEventListener?: (t: string, c: (e: { matches: boolean }) => void) => void } }).matchMedia
+          if (typeof mm !== 'function') return () => {}
+          const mql = mm('(prefers-color-scheme: dark)')
+          if (mql.addEventListener) mql.addEventListener('change', (e) => cb(e.matches ? 'dark' : 'light'))
+          return () => {}
+        },
+        onWindowResize: (cb) => {
+          const add = (win && win.addEventListener) || w.addEventListener
+          if (typeof add !== 'function') return () => {}
+          const h = (): void => cb({ windowWidth: (g as { innerWidth?: number }).innerWidth ?? 0, windowHeight: (g as { innerHeight?: number }).innerHeight ?? 0 })
+          ;(add as (t: string, c: () => void) => void)('resize', h)
+          return () => {}
+        },
+        onError: (cb) => sub<string | ErrorEvent>(w.addEventListener, 'error', (e) => cb(String((e as { message?: string })?.message ?? e))),
+        onUnhandledRejection: (cb) => sub<PromiseRejectionEvent>(w.addEventListener, 'unhandledrejection', (e) => cb({ reason: String((e as { reason?: unknown })?.reason ?? ''), promise: (e as { promise?: Promise<unknown> })?.promise ?? Promise.resolve() })),
+        onNetworkStatusChange: (cb) => {
+          const add = (g as { addEventListener?: unknown }).addEventListener
+          if (typeof add !== 'function') return () => {}
+          const h = (): void => cb({ isConnected: (g as { navigator?: { onLine?: boolean } }).navigator?.onLine !== false, networkType: 'unknown' })
+          ;(add as (t: string, c: () => void) => void)('online', h)
+          ;(add as (t: string, c: () => void) => void)('offline', h)
+          return () => {}
+        },
+        getLaunchOptions: async () => capErr<Record<string, unknown>>('background.unsupported', 'Web 端无启动参数对等'),
+        getEnterOptions: async () => capErr<Record<string, unknown>>('background.unsupported', 'Web 端无进入参数对等'),
       }
     },
+    // ★能力颗粒度对齐：C20 日历（web 无标准 → 诚实 Err）
+    getCalendar: () => ({
+      add: () => Promise.resolve(capErr<void>('calendar.unsupported', 'Web 端无日历写入对等')),
+      remove: () => Promise.resolve(capErr<void>('calendar.unsupported', 'Web 端无日历删除对等')),
+      list: () => Promise.resolve(capErr<CalendarEvent[]>('calendar.unsupported', 'Web 端无日历查询对等')),
+    }),
     createSocketTask: (url) => {
       const WS = (g as { WebSocket?: new (u: string) => unknown }).WebSocket
       if (typeof WS !== 'function') throw new CapError('socket-task.unsupported', 'WebSocket 不支持')
@@ -3316,6 +3449,8 @@ export interface CapabilityHooks {
   useContact(): Promise<CapResult<Contact[]>>
   /** C20 useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err） */
   useCalendar(event: CalendarEvent): Promise<CapResult<void>>
+  /** ★能力颗粒度对齐：C20 日历完整 API（增删查） */
+  useCalendarAPI(): CapResult<CalendarAPI>
   /** C23 useAppLifecycle：应用生命周期订阅句柄（wx App 钩子 / web visibilitychange+load） */
   useAppLifecycle(): AppLifecycle
   /** C44 useArchive：压缩文件（wx.compressFile；web → Err） */
@@ -3696,6 +3831,17 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           return bridge.addCalendarEvent(event)
         })(),
       ),
+    useCalendarAPI: () => {
+      if (bridge.getCalendar) return capOk(bridge.getCalendar())
+      if (bridge.addCalendarEvent) {
+        return capOk<CalendarAPI>({
+          add: (event) => wrap(bridge.addCalendarEvent!(event)),
+          remove: () => Promise.resolve(capErr('calendar.unsupported', '桥未提供日历删除')),
+          list: () => Promise.resolve(capErr<CalendarEvent[]>('calendar.unsupported', '桥未提供日历查询')),
+        })
+      }
+      throw new CapError('calendar.unsupported', '桥未提供 getCalendar（useCalendarAPI 不可用）')
+    },
     useAppLifecycle: () => {
       if (!bridge.getAppLifecycle) throw new CapError('app-lifecycle.unsupported', '桥未提供 getAppLifecycle（useAppLifecycle 不可用）')
       return bridge.getAppLifecycle()

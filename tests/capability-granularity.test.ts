@@ -400,3 +400,62 @@ describe('★C17 通知扩展（设备订阅 + 客服）', () => {
     expect((await hooks.useCustomerService('c', 'u')).ok).toBe(false)
   })
 })
+
+describe('★C25 后台生命周期扩展 + C20 日历 API', () => {
+  it('BackgroundAPI：onMemoryWarning/onThemeChange/onWindowResize + 启动参数', async () => {
+    const fired: string[] = []
+    let memCb: ((r: { level: number }) => void) | null = null
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onAppHide: () => undefined,
+      onAppShow: () => undefined,
+      onMemoryWarning: (cb: (r: { level: number }) => void) => { memCb = cb },
+      onThemeChange: () => undefined,
+      onWindowResize: (cb: (r: { size: { windowWidth: number; windowHeight: number } }) => void) => setTimeout(() => cb({ size: { windowWidth: 375, windowHeight: 667 } }), 0),
+      getLaunchOptionsSync: () => ({ path: 'pages/index', scene: 1001 }),
+      getEnterOptionsSync: () => ({ scene: 1001 }),
+    })
+    const bgR = await createCapabilityHooks(createCapabilityBridge()).useBackground()
+    expect(bgR.ok).toBe(true)
+    if (!bgR.ok) return
+    const bg = bgR.data
+    for (const m of ['onEvent', 'onMemoryWarning', 'onThemeChange', 'onWindowResize', 'onError', 'onUnhandledRejection', 'onNetworkStatusChange', 'getLaunchOptions', 'getEnterOptions']) {
+      expect(typeof (bg as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    bg.onMemoryWarning((l) => fired.push('mem:' + l))
+    memCb!({ level: 10 })
+    expect(fired).toContain('mem:10')
+    const lo = await bg.getLaunchOptions()
+    expect(lo.ok && lo.data.scene).toBe(1001)
+    let size: { windowWidth: number } | null = null
+    bg.onWindowResize((s) => { size = s })
+    await new Promise((r) => setTimeout(r, 5))
+    expect(size && size.windowWidth).toBe(375)
+  })
+
+  it('CalendarAPI（MP）：add/remove 走 wx，list 诚实 Err', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      addPhoneCalendar: (o: { success?: () => void }) => o.success && o.success(),
+      removePhoneCalendar: (o: { success?: () => void }) => o.success && o.success(),
+    })
+    const cal = createCapabilityHooks(createCapabilityBridge()).useCalendarAPI()
+    expect(cal.ok).toBe(true)
+    if (!cal.ok) return
+    expect((await cal.data.add({ title: 'x', startTime: 1 })).ok).toBe(true)
+    expect((await cal.data.remove('e1')).ok).toBe(true)
+    const list = await cal.data.list()
+    expect(list.ok).toBe(false)
+    if (!list.ok) expect(list.error.code).toBe('calendar.unsupported')
+  })
+
+  it('CalendarAPI（web）：全操作诚实 Err', async () => {
+    vi.stubGlobal('window', {})
+    const cal = createCapabilityHooks(createCapabilityBridge()).useCalendarAPI()
+    if (!cal.ok) return
+    expect((await cal.data.add({ title: 'x', startTime: 1 })).ok).toBe(false)
+    expect((await cal.data.list()).ok).toBe(false)
+  })
+})
