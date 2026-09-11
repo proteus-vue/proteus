@@ -9,7 +9,10 @@
          + class 被 scoped hash（.p-popover-trigger-data-v-x 精确类名 select 查不到无 hash 的 .p-popover-trigger）
          → measureRect 返回 null → panelStyle 空 → 面板 absolute 含块跨 root-portal 失效 → 左上角。
          id 选择器 Skyline 认 + .in(scope) 限定组件内唯一（每实例 wrapper 独立 DOM，静态 id 安全，非模块 let 动态生成） -->
-    <div class="p-popover-trigger" :class="triggerQueryCls" id="proteus-popover-trigger" @click="onTrigger">
+    <!-- ★trigger 事件双通道（2026-09-11）：@click→bindtap 收「普通元素」原生 tap；
+         bind:click（原样透传）收「插槽内自定义组件」冒泡的 click（小程序原生 tap 不跨组件边界——
+         p-button 等组件 emit({bubbles,composed}) 后由此接收）。两通道互斥不重复触发。 -->
+    <div class="p-popover-trigger" :class="triggerQueryCls" id="proteus-popover-trigger" @click="onTrigger" bind:click="onTrigger">
       <slot name="trigger" />
     </div>
     <!-- ★★2026-09-08 改为标准 <teleport>（对齐框架「写标准 Vue 跨端」原则——不再裸写平台标签 root-portal）：

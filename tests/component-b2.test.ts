@@ -78,7 +78,8 @@ describe('p-button（按钮）', () => {
     expect(js).toContain('throttle: { type: Number, value: 0 }')
     // 节流：时间戳防抖，emit → triggerEvent
     expect(js).toContain('this.data.throttle > 0')
-    expect(js).toContain("this.triggerEvent('click', e)")
+    // ★2026-09-11：click 带冒泡选项（bubbles+composed）——供跨组件边界父级 bind:click 接收（p-popover trigger）
+    expect(js).toMatch(/this\.triggerEvent\('click',\s*e,\s*\{\s*bubbles:\s*true,\s*composed:\s*true\s*\}\)/)
   })
 })
 

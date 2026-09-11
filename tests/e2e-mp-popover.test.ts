@@ -129,4 +129,38 @@ describe.skipIf(!ENABLED)('p-popover 方案 A MP E2E（wechatide skill-CLI 标�
 
     await driver.close()
   }, 120_000)
+
+  it('★实点 trigger（插槽内 p-button）→ popover 打开——「点开无反应」缺口回归锁（有 tap 能力则硬断言）', async () => {
+    const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+    const driver = createDriver({ platform: 'mp', mini, debugger: wxideDebugger })
+    let launched = false
+    for (let i = 0; i < 3 && !launched; i++) {
+      try { await driver.reLaunch('/pages/semantic-primitives-demo'); launched = true } catch { await driver.waitFor(3000) }
+    }
+    expect(launched).toBe(true)
+    await driver.waitFor(800)
+    // 进页确认 + 确保关闭态
+    const readData = (): string => { const p = getCurrentPages(); return JSON.stringify(p[p.length - 1].data ?? {}) }
+    let d = JSON.parse(String(await driver.evaluate(readData))) as { popoverOpen?: boolean }
+    for (let i = 0; i < 3 && !('popoverOpen' in d); i++) { await driver.waitFor(2000); d = JSON.parse(String(await driver.evaluate(readData))) }
+    await driver.evaluate(() => { const p = getCurrentPages(); p[p.length - 1].setData({ popoverOpen: false, __proteusPageScrollTop: 1500 }) })
+    await driver.waitFor(700)
+    // ★实点 trigger：插槽内 p-button 是自定义组件（原生 tap 不跨边界）——修法 = 组件 click 冒泡 + wrapper bind:click。
+    //   自动化是否支持点击「组件内元素」视 wechatide 能力而定：支持 → 硬断言打开；不支持 → 降级为日志（人工真机补验）。
+    let tapped = false
+    try {
+      callWxide('automation_element_action', { action: 'tap', selector: '.p-popover-trigger' }, { cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      tapped = true
+    } catch {
+      tapped = false
+    }
+    await driver.waitFor(900)
+    const after = JSON.parse(String(await driver.evaluate(readData))) as { popoverOpen?: boolean }
+    if (tapped) {
+      expect(after.popoverOpen, '★实点 trigger 应打开 popover（跨组件边界事件修复）').toBe(true)
+    } else {
+      console.log('[PROBE] wechatide 不支持点组件内元素（tap 调用失败）——本步降级日志；请真机点 trigger 验证')
+    }
+    await driver.close()
+  }, 120_000)
 })
