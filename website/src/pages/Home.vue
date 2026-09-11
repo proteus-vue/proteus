@@ -402,7 +402,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.statsTitle') }}</p-heading>
         <p-text class="sec-sub">{{ t('home.statsSub') }}</p-text>
       </p-view>
-      <p-grid :min-col-width="200" :gap="12">
+      <p-grid :min-col-width="270" :gap="12">
         <pg-glass v-for="(s, i) in statItems" :key="s.label" preset="card" intensity="thin" :radius="14" :noise="0.03" class="stat" :style="{ '--stagger-i': String(i) }">
           <p-text class="stat-value">{{ counters[i] ?? s.value }}</p-text>
           <p-text class="stat-label">{{ s.label }}</p-text>
@@ -504,7 +504,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.journeyTitle') }}</p-heading>
         <p-text class="sec-sub">{{ t('home.journeySub') }}</p-text>
       </p-view>
-      <p-grid :min-col-width="220" :gap="12">
+      <p-grid :min-col-width="340" :gap="12">
         <router-link v-for="(s, i) in journey" :key="s.title" :to="s.to" v-p-hover class="card journey-card" :style="{ '--stagger-i': String(i) }">
           <p-text class="pillar-no">{{ s.no }}</p-text>
           <p-heading :level="3" class="card-title">{{ s.title }}</p-heading>
