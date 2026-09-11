@@ -41,11 +41,55 @@ Toast
 | `duration` | Duration (ms) | `Number` | `2000` | No |
 | `position` | Position | `String` | `'center'` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (the text read aloud by a screen reader)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether it is visible (visibility driven by reactive data, zero platform branching)
+
+#### `text`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Text to display
+
+#### `duration`
+
+- **Type**: `Number`　**Default**: `2000`　**Required**: No
+- **Doc**: Duration (ms)
+
+#### `position`
+
+- **Type**: `String`　**Default**: `'center'`　**Required**: No
+- **Doc**: Position
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `close` | Close | — |
+
+### Event details
+
+#### `close`
+
+- **Doc**: Close
+- **Payload**: none
 
 ## Implementation notes
 

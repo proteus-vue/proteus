@@ -37,6 +37,23 @@ order: 4
 | `inset` | 内缩距离 px（水平=上下外边距；垂直=左右外边距） | `Number` | `0` | 否 |
 | `color` | 线色（缺省随主题变量） | `String` | `''` | 否 |
 
+### 属性详解
+
+#### `orientation`
+
+- **类型**：`String`　**默认值**：`'horizontal'`　**必填**：否
+- **说明**：方向：horizontal 水平 / vertical 垂直
+
+#### `inset`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：内缩距离 px（水平=上下外边距；垂直=左右外边距）
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：线色（缺省随主题变量）
+
 ## 实现要点
 
 - 水平/垂直分隔线：orientation 控制方向，inset 控制内缩（水平=上下边距，垂直=左右边距）
@@ -45,7 +62,7 @@ order: 4
 ## 用法
 
 ```vue
-<p-divider :orientation="…">
+<p-divider :orientation="'horizontal'" :inset="0" :color="'…'">
   <p-text>内容</p-text>
 </p-divider>
 ```

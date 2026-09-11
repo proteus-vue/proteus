@@ -40,11 +40,50 @@ Slider
 | `activeColor` | — | `String` | `'#07c160'` | No |
 | `disabled` | — | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `modelValue`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract)
+
+#### `min`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Minimum value
+
+#### `max`
+
+- **Type**: `Number`　**Default**: `100`　**Required**: No
+- **Doc**: Maximum value
+
+#### `step`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Step
+
+#### `activeColor`
+
+- **Type**: `String`　**Default**: `'#07c160'`　**Required**: No
+- **Doc**: —
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `Number.isFinite(v) ? v : props.modelValue` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `Number.isFinite(v) ? v : props.modelValue` (implicit v-model: the value itself)
 
 ## Implementation notes
 

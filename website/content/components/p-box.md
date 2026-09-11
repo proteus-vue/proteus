@@ -36,6 +36,18 @@ order: 3
 | `aspectRatio` | 宽高比（如 '16/9'；0/空 = 不设）——Skyline 无 aspect-ratio → 降级为不约束（内容撑高） | `String` | `''` | 否 |
 | `overflow` | 溢出：visible（默认）/ hidden（裁剪） | `String` | `'visible'` | 否 |
 
+### 属性详解
+
+#### `aspectRatio`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：宽高比（如 '16/9'；0/空 = 不设）——Skyline 无 aspect-ratio → 降级为不约束（内容撑高）
+
+#### `overflow`
+
+- **类型**：`String`　**默认值**：`'visible'`　**必填**：否
+- **说明**：溢出：visible（默认）/ hidden（裁剪）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -50,7 +62,7 @@ order: 3
 ## 用法
 
 ```vue
-<p-box :aspectRatio="…">
+<p-box :aspectRatio="'…'" :overflow="'visible'">
   <p-text>内容</p-text>
 </p-box>
 ```

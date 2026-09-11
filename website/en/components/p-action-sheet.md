@@ -37,6 +37,23 @@ Action sheet
 | `actions` | Action items [{label,value?,color?}] | `Array as () => unknown[]` | `() => []` | No |
 | `cancelText` | Cancel text | `String` | `'取消'` | No |
 
+### Prop details
+
+#### `modelValue`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Visibility (v-model)
+
+#### `actions`
+
+- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Doc**: Action items [{label,value?,color?}]
+
+#### `cancelText`
+
+- **Type**: `String`　**Default**: `'取消'`　**Required**: No
+- **Doc**: Cancel text
+
 ## Events
 
 | Event | Doc | Payload |
@@ -44,6 +61,23 @@ Action sheet
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
 | `select` | An item is selected | `actValue(act)` |
 | `cancel` | Cancel / close | — |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `false` (implicit v-model: the value itself)
+
+#### `select`
+
+- **Doc**: An item is selected
+- **Payload**: `actValue(act)`
+
+#### `cancel`
+
+- **Doc**: Cancel / close
+- **Payload**: none
 
 ## Implementation notes
 

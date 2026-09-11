@@ -37,6 +37,23 @@ Safe-area avoidance
 | `fold` | Foldable-screen hinge avoidance: when display-mode is fold/span, keep clear of the fold area on both sides (off by default) | `Boolean` | `false` | No |
 | `fallback` | Fallback px: when env() is 0 on desktop/notch-less screens, force at least this value (wrapped in max(); 0 = no fallback) | `Number` | `0` | No |
 
+### Prop details
+
+#### `area`
+
+- **Type**: `String`　**Default**: `'top'`　**Required**: No
+- **Doc**: Avoidance direction: top / bottom / left / right / horizontal / all (defaults to top)
+
+#### `fold`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Foldable-screen hinge avoidance: when display-mode is fold/span, keep clear of the fold area on both sides (off by default)
+
+#### `fallback`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Fallback px: when env() is 0 on desktop/notch-less screens, force at least this value (wrapped in max(); 0 = no fallback)
+
 ## Slots
 
 | Slot | Doc |

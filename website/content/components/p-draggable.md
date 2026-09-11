@@ -36,12 +36,36 @@ order: 3001
 | `ghost` | 拖拽拖影（半透明跟随） | `Boolean` | `false` | 否 |
 | `snapToGrid` | 网格吸附步长 px（0=自由拖拽） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `ghost`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：拖拽拖影（半透明跟随）
+
+#### `snapToGrid`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：网格吸附步长 px（0=自由拖拽）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `drag` | 拖拽中（gesture.draggable） | `{ x: nx, y: ny }` |
 | `drop` | 拖拽释放 | `{ x: dx.value, y: dy.value }` |
+
+### 事件详解
+
+#### `drag`
+
+- **说明**：拖拽中（gesture.draggable）
+- **载荷**：`{ x: nx, y: ny }`
+
+#### `drop`
+
+- **说明**：拖拽释放
+- **载荷**：`{ x: dx.value, y: dy.value }`
 
 ## 插槽
 
@@ -58,7 +82,7 @@ order: 3001
 ## 用法
 
 ```vue
-<p-draggable :ghost="…">
+<p-draggable :ghost="true" :snapToGrid="0">
   <p-text>内容</p-text>
 </p-draggable>
 ```

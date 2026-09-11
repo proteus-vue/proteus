@@ -38,6 +38,28 @@ order: 4004
 | `duration` | 过渡时长（ms） | `Number` | `300` | 否 |
 | `visible` | 显隐开关（父级控制） | `Boolean` | `true` | 否 |
 
+### 属性详解
+
+#### `name`
+
+- **类型**：`String`　**默认值**：`'fade'`　**必填**：否
+- **说明**：过渡预设名（fade/slide-up/slide-down/slide-left/slide-right/zoom）
+
+#### `mode`
+
+- **类型**：`String`　**默认值**：`'both'`　**必填**：否
+- **说明**：过渡方向：in（仅进入）/ out（仅退出）/ both（双向）
+
+#### `duration`
+
+- **类型**：`Number`　**默认值**：`300`　**必填**：否
+- **说明**：过渡时长（ms）
+
+#### `visible`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：显隐开关（父级控制）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -56,7 +78,7 @@ order: 4004
 ## 用法
 
 ```vue
-<p-transition :name="…">
+<p-transition :name="'fade'" :mode="'both'" :duration="300">
   <p-text>内容</p-text>
 </p-transition>
 ```

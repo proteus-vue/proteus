@@ -37,6 +37,23 @@ order: 2001
 | `actions` | 动作项 [{label,value?,color?}] | `Array as () => unknown[]` | `() => []` | 否 |
 | `cancelText` | 取消文案 | `String` | `'取消'` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：显隐（v-model）
+
+#### `actions`
+
+- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **说明**：动作项 [{label,value?,color?}]
+
+#### `cancelText`
+
+- **类型**：`String`　**默认值**：`'取消'`　**必填**：否
+- **说明**：取消文案
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
@@ -44,6 +61,23 @@ order: 2001
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
 | `select` | 选中某项 | `actValue(act)` |
 | `cancel` | 取消/关闭 | — |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`false`（v-model 隐式：值本身）
+
+#### `select`
+
+- **说明**：选中某项
+- **载荷**：`actValue(act)`
+
+#### `cancel`
+
+- **说明**：取消/关闭
+- **载荷**：无
 
 ## 实现要点
 
@@ -53,7 +87,7 @@ order: 2001
 ## 用法
 
 ```vue
-<p-action-sheet :modelValue="…">
+<p-action-sheet v-model="value" :cancelText="'取消'">
   <p-text>内容</p-text>
 </p-action-sheet>
 ```

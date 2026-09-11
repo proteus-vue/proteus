@@ -36,12 +36,36 @@ Photo / album capability entry
 | `label` | Accessibility label / default button text | `String` | `'选择图片'` | No |
 | `auto` | Fire on mount instead of on click | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `label`
+
+- **Type**: `String`　**Default**: `'选择图片'`　**Required**: No
+- **Doc**: Accessibility label / default button text
+
+#### `auto`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Fire on mount instead of on click
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `pick` | — | `r.data` |
 | `error` | — | `'pick-failed')` |
+
+### Event details
+
+#### `pick`
+
+- **Doc**: —
+- **Payload**: `r.data`
+
+#### `error`
+
+- **Doc**: —
+- **Payload**: `'pick-failed')`
 
 ## Slots
 

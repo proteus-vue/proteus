@@ -40,11 +40,50 @@ Selector / overlay type
 | `searchable` | Search (B2 placeholder declaration -- implemented in a later batch) | `Boolean` | `false` | No |
 | `cascader` | Cascade (B2 placeholder declaration -- implemented in a later batch) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `options`
+
+- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Doc**: Options [{value,label}?]
+
+#### `modelValue`
+
+- **Type**: `[String, Number, Array]`　**Default**: `''`　**Required**: No
+- **Doc**: Single-select value or an array of multi-select values
+
+#### `multiple`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Multi-select mode
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `'请选择'`　**Required**: No
+- **Doc**: Placeholder text
+
+#### `searchable`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Search (B2 placeholder declaration -- implemented in a later batch)
+
+#### `cascader`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Cascade (B2 placeholder declaration -- implemented in a later batch)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `v` (implicit v-model: the value itself)
 
 ## Implementation notes
 

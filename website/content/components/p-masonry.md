@@ -36,6 +36,18 @@ order: 8
 | `colCount` | 列数（默认 2） | `Number` | `2` | 否 |
 | `gap` | 列与行间距 px | `Number` | `12` | 否 |
 
+### 属性详解
+
+#### `colCount`
+
+- **类型**：`Number`　**默认值**：`2`　**必填**：否
+- **说明**：列数（默认 2）
+
+#### `gap`
+
+- **类型**：`Number`　**默认值**：`12`　**必填**：否
+- **说明**：列与行间距 px
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -51,7 +63,7 @@ order: 8
 ## 用法
 
 ```vue
-<p-masonry :colCount="…">
+<p-masonry :colCount="2" :gap="12">
   <p-text>内容</p-text>
 </p-masonry>
 ```

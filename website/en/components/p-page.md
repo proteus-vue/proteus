@@ -37,6 +37,23 @@ Page root container
 | `statusBar` | Immersive status bar (content extends into the status-bar area) | `Boolean` | `false` | No |
 | `pullRefresh` | Pull-to-refresh (consumed by the page-level scroll integration batches) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `title`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Page title (semantic declaration of the navigation-bar / document title)
+
+#### `statusBar`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Immersive status bar (content extends into the status-bar area)
+
+#### `pullRefresh`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Pull-to-refresh (consumed by the page-level scroll integration batches)
+
 ## Slots
 
 | Slot | Doc |

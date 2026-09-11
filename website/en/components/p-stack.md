@@ -37,6 +37,23 @@ Flex stack
 | `wrap` | Wrap automatically when space is insufficient (row only) | `Boolean` | `false` | No |
 | `gap` | Spacing between children (px) | `Number` | `0` | No |
 
+### Prop details
+
+#### `direction`
+
+- **Type**: `String`　**Default**: `'column'`　**Required**: No
+- **Doc**: Main-axis direction: row (horizontal) / column (vertical)
+
+#### `wrap`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Wrap automatically when space is insufficient (row only)
+
+#### `gap`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Spacing between children (px)
+
 ## Slots
 
 | Slot | Doc |

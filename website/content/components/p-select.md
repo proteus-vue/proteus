@@ -40,11 +40,50 @@ order: 1018
 | `searchable` | 搜索（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
 | `cascader` | 级联（B2 占位声明——后续批次实现） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `options`
+
+- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **说明**：选项 [{value,label}?]
+
+#### `modelValue`
+
+- **类型**：`[String, Number, Array]`　**默认值**：`''`　**必填**：否
+- **说明**：单选值 或 多选值数组
+
+#### `multiple`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：多选模式
+
+#### `placeholder`
+
+- **类型**：`String`　**默认值**：`'请选择'`　**必填**：否
+- **说明**：占位文本
+
+#### `searchable`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：搜索（B2 占位声明——后续批次实现）
+
+#### `cascader`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：级联（B2 占位声明——后续批次实现）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `v` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`v`（v-model 隐式：值本身）
 
 ## 实现要点
 
@@ -55,7 +94,7 @@ order: 1018
 ## 用法
 
 ```vue
-<p-select :options="…">
+<p-select v-model="value" :multiple="true" :placeholder="'请选择'">
   <p-text>内容</p-text>
 </p-select>
 ```

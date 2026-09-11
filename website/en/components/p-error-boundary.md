@@ -38,6 +38,28 @@ Error fallback
 | `ariaLabel` | Accessibility label (text read by screen readers) | `String` | `''` | No |
 | `fallbackText` | Fallback copy for load failure/empty state | `String` | `'页面出错了，请重试'` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging/observability/test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (interaction disabled + visually de-emphasized; MP native disabled passthrough)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read by screen readers)
+
+#### `fallbackText`
+
+- **Type**: `String`　**Default**: `'页面出错了，请重试'`　**Required**: No
+- **Doc**: Fallback copy for load failure/empty state
+
 ## Slots
 
 | Slot | Doc |

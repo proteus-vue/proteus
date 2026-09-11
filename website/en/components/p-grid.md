@@ -36,6 +36,18 @@ Adaptive grid
 | `minColWidth` | Minimum column width (px) -- the column count is derived automatically | `Number` | `160` | No |
 | `gap` | Column gap (px) | `Number` | `12` | No |
 
+### Prop details
+
+#### `minColWidth`
+
+- **Type**: `Number`　**Default**: `160`　**Required**: No
+- **Doc**: Minimum column width (px) -- the column count is derived automatically
+
+#### `gap`
+
+- **Type**: `Number`　**Default**: `12`　**Required**: No
+- **Doc**: Column gap (px)
+
 ## Slots
 
 | Slot | Doc |

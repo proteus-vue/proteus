@@ -38,6 +38,28 @@ order: 10
 | `refresh` | 下拉刷新（能力约束——B2 仅声明） | `Boolean` | `false` | 否 |
 | `indicator` | 滚动指示器 | `Boolean` | `true` | 否 |
 
+### 属性详解
+
+#### `axis`
+
+- **类型**：`String`　**默认值**：`'y'`　**必填**：否
+- **说明**：滚动轴：x 水平 / y 垂直 / both
+
+#### `paging`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：翻页吸附（能力约束——B2 仅声明）
+
+#### `refresh`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：下拉刷新（能力约束——B2 仅声明）
+
+#### `indicator`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：滚动指示器
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -53,7 +75,7 @@ order: 10
 ## 用法
 
 ```vue
-<p-scroll :axis="…">
+<p-scroll :axis="'y'" :paging="true" :refresh="true">
   <p-text>内容</p-text>
 </p-scroll>
 ```

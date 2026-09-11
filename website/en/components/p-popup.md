@@ -42,11 +42,60 @@ Popup layer
 | `maskOpacity` | Mask opacity (0-1) | `Number` | `0.5` | No |
 | `duration` | Duration (ms) | `Number` | `0` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (for debugging/observability/test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + dims visuals; native disabled passed through on MP)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: A11y label (text read aloud by screen readers)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether visible (visibility driven by reactive data, zero platform branching)
+
+#### `position`
+
+- **Type**: `String`　**Default**: `'bottom'`　**Required**: No
+- **Doc**: Position/placement
+
+#### `closeOnMask`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Whether tapping the mask closes it
+
+#### `maskOpacity`
+
+- **Type**: `Number`　**Default**: `0.5`　**Required**: No
+- **Doc**: Mask opacity (0-1)
+
+#### `duration`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Duration (ms)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `close` | Close | — |
+
+### Event details
+
+#### `close`
+
+- **Doc**: Close
+- **Payload**: none
 
 ## Slots
 

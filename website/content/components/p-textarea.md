@@ -41,6 +41,43 @@ order: 1024
 | `placeholder` | 占位提示文本 | `String` | `''` | 否 |
 | `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `pid`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）
+
+#### `ariaLabel`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：无障碍标签（读屏器朗读文本）
+
+#### `value`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：绑定值
+
+#### `maxlength`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：最大输入长度（≤ 0 = 不限）
+
+#### `placeholder`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：占位提示文本
+
+#### `focus`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：自动聚焦
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
@@ -49,6 +86,28 @@ order: 1024
 | `confirm` | 键盘确认（回车/完成键） | `{ value: eventValue(e) }` |
 | `focus` | 获得焦点 | `e` |
 | `blur` | 失去焦点 | `e` |
+
+### 事件详解
+
+#### `input`
+
+- **说明**：输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约）
+- **载荷**：`{ value: eventValue(e) }`
+
+#### `confirm`
+
+- **说明**：键盘确认（回车/完成键）
+- **载荷**：`{ value: eventValue(e) }`
+
+#### `focus`
+
+- **说明**：获得焦点
+- **载荷**：`e`
+
+#### `blur`
+
+- **说明**：失去焦点
+- **载荷**：`e`
 
 ## 实现要点
 
@@ -59,7 +118,7 @@ order: 1024
 ## 用法
 
 ```vue
-<p-textarea :pid="…">
+<p-textarea :disabled="true" :value="'…'" :maxlength="0">
   <p-text>内容</p-text>
 </p-textarea>
 ```

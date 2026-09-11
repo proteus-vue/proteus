@@ -37,6 +37,23 @@ Generic container
 | `disabled` | Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled) | `Boolean` | `false` | No |
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
 ## Slots
 
 | Slot | Doc |

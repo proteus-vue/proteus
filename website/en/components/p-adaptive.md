@@ -36,12 +36,36 @@ Adaptive container form
 | `modes` | Form-range expression: `sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)` | `String` | `''` | No |
 | `visible` | Whether the form layer is rendered (false → not rendered) | `Boolean` | `true` | No |
 
+### Prop details
+
+#### `modes`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Form-range expression: `sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)`
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Whether the form layer is rendered (false → not rendered)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:visible` | Two-way binding: fires when `visible` changes (syncs the parent binding) | — |
 | `formChange` | Active form changed | `s.form` |
+
+### Event details
+
+#### `update:visible`
+
+- **Doc**: Two-way binding: fires when `visible` changes (syncs the parent binding)
+- **Payload**: none (implicit v-model: the value itself)
+
+#### `formChange`
+
+- **Doc**: Active form changed
+- **Payload**: `s.form`
 
 ## Slots
 

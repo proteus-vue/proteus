@@ -39,12 +39,51 @@ order: 3002
 | `loading` | 加载中（footer 文案切换） | `Boolean` | `false` | 否 |
 | `height` | 可视高度 px（0=继承/自适应） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `bounce`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：弹性滚动（iOS 橡皮筋）
+
+#### `refresh`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：下拉刷新（语义声明——原生实现批次接入）
+
+#### `loadMore`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：触底加载更多
+
+#### `loading`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：加载中（footer 文案切换）
+
+#### `height`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：可视高度 px（0=继承/自适应）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `load-more` | 加载更多（触底翻页） | — |
 | `refresh` | 刷新触发 | — |
+
+### 事件详解
+
+#### `load-more`
+
+- **说明**：加载更多（触底翻页）
+- **载荷**：无
+
+#### `refresh`
+
+- **说明**：刷新触发
+- **载荷**：无
 
 ## 插槽
 
@@ -61,7 +100,7 @@ order: 3002
 ## 用法
 
 ```vue
-<p-scrollable :bounce="…">
+<p-scrollable :bounce="true" :refresh="true" :loadMore="true">
   <p-text>内容</p-text>
 </p-scrollable>
 ```

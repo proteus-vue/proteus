@@ -38,6 +38,28 @@ Animation declaration -- the CSS animation semantic surface
 | `loop` | Loop playback (default true -- decorative animation; false plays once) | `Boolean` | `true` | No |
 | `delay` | Delay (ms) | `Number` | `0` | No |
 
+### Prop details
+
+#### `keyframes`
+
+- **Type**: `String`　**Default**: `'fade'`　**Required**: No
+- **Doc**: Preset animation name (fade/bounce/pulse/shake/zoom-in/spin)
+
+#### `duration`
+
+- **Type**: `Number`　**Default**: `600`　**Required**: No
+- **Doc**: Animation duration (ms)
+
+#### `loop`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Loop playback (default true -- decorative animation; false plays once)
+
+#### `delay`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Delay (ms)
+
 ## Slots
 
 | Slot | Doc |

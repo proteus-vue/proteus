@@ -37,6 +37,23 @@ order: 15
 | `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
 
+### 属性详解
+
+#### `pid`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）
+
+#### `ariaLabel`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：无障碍标签（读屏器朗读文本）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -51,7 +68,7 @@ order: 15
 ## 用法
 
 ```vue
-<p-view :pid="…">
+<p-view :disabled="true">
   <p-text>内容</p-text>
 </p-view>
 ```

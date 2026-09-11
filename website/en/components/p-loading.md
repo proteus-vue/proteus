@@ -39,6 +39,33 @@ Loading
 | `visible` | Whether visible (show/hide is driven by reactive data - zero platform branching) | `Boolean` | `false` | No |
 | `text` | Display text | `String` | `''` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether visible (show/hide is driven by reactive data - zero platform branching)
+
+#### `text`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Display text
+
 ## Implementation notes
 
 - Matrix 01 §8: visible + text + spinner (CSS rotation animation); does not auto-close (controlled by the page)

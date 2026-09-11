@@ -38,6 +38,28 @@ Avatar
 | `size` | Size (px) | `Number` | `44` | No |
 | `fallback` | Fallback text (shown when the image is missing or fails to load -- its first character is displayed) | `String` | `''` | No |
 
+### Prop details
+
+#### `src`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Avatar image source
+
+#### `shape`
+
+- **Type**: `String`　**Default**: `'circle'`　**Required**: No
+- **Doc**: Shape: circle (round) / square (rounded corners)
+
+#### `size`
+
+- **Type**: `Number`　**Default**: `44`　**Required**: No
+- **Doc**: Size (px)
+
+#### `fallback`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Fallback text (shown when the image is missing or fails to load -- its first character is displayed)
+
 ## Implementation notes
 
 - Image avatar + shape (circle/square) + size + fallback (shows the first character when the image is missing)

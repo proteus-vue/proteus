@@ -37,11 +37,35 @@ order: 1015
 | `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `value`
+
+- **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
+- **说明**：本项值
+
+#### `group`
+
+- **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
+- **说明**：当前选中值（父级 group 持有）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:group` | v-model 双向绑定：`group`变化时触发（同步父级绑定） | `props.value` |
+
+### 事件详解
+
+#### `update:group`
+
+- **说明**：v-model 双向绑定：`group`变化时触发（同步父级绑定）
+- **载荷**：`props.value`（v-model 隐式：值本身）
 
 ## 插槽
 
@@ -58,7 +82,7 @@ order: 1015
 ## 用法
 
 ```vue
-<p-radio :value="…">
+<p-radio :value="'…'" :group="'…'" :disabled="true">
   <p-text>内容</p-text>
 </p-radio>
 ```

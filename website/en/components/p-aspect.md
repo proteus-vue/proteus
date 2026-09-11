@@ -36,6 +36,18 @@ Aspect-ratio container
 | `ratio` | Width/height ratio (e.g. 16/9 = 1.777; default 1.777) | `Number` | `16 / 9` | No |
 | `maxWidth` | Max width (px; 0 = unlimited) | `Number` | `0` | No |
 
+### Prop details
+
+#### `ratio`
+
+- **Type**: `Number`　**Default**: `16 / 9`　**Required**: No
+- **Doc**: Width/height ratio (e.g. 16/9 = 1.777; default 1.777)
+
+#### `maxWidth`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Max width (px; 0 = unlimited)
+
 ## Slots
 
 | Slot | Doc |

@@ -38,6 +38,28 @@ order: 1001
 | `size` | 尺寸 px | `Number` | `44` | 否 |
 | `fallback` | 兜底文本（缺图/加载失败显示——首字符） | `String` | `''` | 否 |
 
+### 属性详解
+
+#### `src`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：头像图源
+
+#### `shape`
+
+- **类型**：`String`　**默认值**：`'circle'`　**必填**：否
+- **说明**：形状：circle 圆形 / square 圆角方形
+
+#### `size`
+
+- **类型**：`Number`　**默认值**：`44`　**必填**：否
+- **说明**：尺寸 px
+
+#### `fallback`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：兜底文本（缺图/加载失败显示——首字符）
+
 ## 实现要点
 
 - 图片头像 + shape（circle/square）+ size + fallback（缺图显首字符）
@@ -46,7 +68,7 @@ order: 1001
 ## 用法
 
 ```vue
-<p-avatar :src="…">
+<p-avatar :src="'…'" :shape="'circle'" :size="44">
   <p-text>内容</p-text>
 </p-avatar>
 ```

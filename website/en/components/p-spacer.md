@@ -37,6 +37,23 @@ Spacer
 | `shrink` | Shrink ratio (default 1) | `Number` | `1` | No |
 | `minSize` | Own size lower bound in px (keeps it visible/tappable) | `Number` | `1` | No |
 
+### Prop details
+
+#### `grow`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Flex grow ratio (default 1 -- fills the remaining space)
+
+#### `shrink`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Shrink ratio (default 1)
+
+#### `minSize`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Own size lower bound in px (keeps it visible/tappable)
+
 ## Implementation notes
 
 - Flexibly fills the remaining space (equivalent to flex:1): pushes the layout open so subsequent elements sit at the edge; grow/shrink adjustable

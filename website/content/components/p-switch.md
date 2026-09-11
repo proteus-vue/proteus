@@ -36,11 +36,30 @@ order: 1022
 | `modelValue` | 双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约） | `Boolean` | `false` | 否 |
 | `loading` | 加载中（禁切换） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约）
+
+#### `loading`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：加载中（禁切换）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`!props.modelValue`（v-model 隐式：值本身）
 
 ## 实现要点
 
@@ -50,7 +69,7 @@ order: 1022
 ## 用法
 
 ```vue
-<p-switch :modelValue="…">
+<p-switch v-model="value" :loading="true">
   <p-text>内容</p-text>
 </p-switch>
 ```

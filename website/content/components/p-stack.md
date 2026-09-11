@@ -37,6 +37,23 @@ order: 14
 | `wrap` | 空间不足自动换行（仅 row） | `Boolean` | `false` | 否 |
 | `gap` | 子项间距（px） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `direction`
+
+- **类型**：`String`　**默认值**：`'column'`　**必填**：否
+- **说明**：主轴方向：row（横向）/ column（纵向）
+
+#### `wrap`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：空间不足自动换行（仅 row）
+
+#### `gap`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：子项间距（px）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -51,7 +68,7 @@ order: 14
 ## 用法
 
 ```vue
-<p-stack :direction="…">
+<p-stack :direction="'column'" :wrap="true" :gap="0">
   <p-text>内容</p-text>
 </p-stack>
 ```

@@ -36,12 +36,36 @@ order: 1
 | `modes` | 形态区间表达式：`sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)` | `String` | `''` | 否 |
 | `visible` | 形态层是否渲染（false → 不渲染） | `Boolean` | `true` | 否 |
 
+### 属性详解
+
+#### `modes`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：形态区间表达式：`sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)`
+
+#### `visible`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：形态层是否渲染（false → 不渲染）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:visible` | v-model 双向绑定：`visible`变化时触发（同步父级绑定） | — |
 | `formChange` | 表单项变化 | `s.form` |
+
+### 事件详解
+
+#### `update:visible`
+
+- **说明**：v-model 双向绑定：`visible`变化时触发（同步父级绑定）
+- **载荷**：无（v-model 隐式：值本身）
+
+#### `formChange`
+
+- **说明**：表单项变化
+- **载荷**：`s.form`
 
 ## 插槽
 
@@ -59,7 +83,7 @@ order: 1
 ## 用法
 
 ```vue
-<p-adaptive :modes="…">
+<p-adaptive v-model:visible="visible" :modes="'…'">
   <p-text>内容</p-text>
 </p-adaptive>
 ```

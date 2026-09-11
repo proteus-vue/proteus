@@ -38,6 +38,28 @@ order: 12
 | `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` | 否 |
 | `toggleLabel` | ★collapsed 模式切换条文案（#384） | `String` | `'导航'` | 否 |
 
+### 属性详解
+
+#### `minSidebarWidth`
+
+- **类型**：`Number`　**默认值**：`640`　**必填**：否
+- **说明**：容器宽度达到此值 → side-rail 侧栏；窄于此 → collapsed 折叠（px）
+
+#### `navWidth`
+
+- **类型**：`Number`　**默认值**：`200`　**必填**：否
+- **说明**：side-rail 模式导航栏宽度（px）
+
+#### `designWidth`
+
+- **类型**：`Number`　**默认值**：`375`　**必填**：否
+- **说明**：设计稿宽度（容器断点推导基准）
+
+#### `toggleLabel`
+
+- **类型**：`String`　**默认值**：`'导航'`　**必填**：否
+- **说明**：★collapsed 模式切换条文案（#384）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -56,7 +78,8 @@ order: 12
 ## 用法
 
 ```vue
-<p-sidebar :minSidebarWidth="…">
+<p-sidebar :minSidebarWidth="640" :navWidth="200" :designWidth="375">
+  <template #nav>…</template>
   <p-text>内容</p-text>
 </p-sidebar>
 ```

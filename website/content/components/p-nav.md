@@ -36,6 +36,18 @@ order: 2005
 | `title` | 标题文本（插槽内容优先） | `String` | `''` | 否 |
 | `transparent` | 透明模式（随背景融合） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `title`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：标题文本（插槽内容优先）
+
+#### `transparent`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：透明模式（随背景融合）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -52,7 +64,9 @@ order: 2005
 ## 用法
 
 ```vue
-<p-nav :title="…">
+<p-nav :title="'…'" :transparent="true">
+  <template #left>…</template>
+  <template #right>…</template>
   <p-text>内容</p-text>
 </p-nav>
 ```

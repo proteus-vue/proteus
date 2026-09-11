@@ -38,11 +38,40 @@ Side drawer
 | `width` | Drawer width in px | `Number` | `300` | No |
 | `overlay` | Overlay (click to close) | `Boolean` | `true` | No |
 
+### Prop details
+
+#### `modelValue`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Open state (v-model:open)
+
+#### `side`
+
+- **Type**: `String`　**Default**: `'left'`　**Required**: No
+- **Doc**: Side: left / right
+
+#### `width`
+
+- **Type**: `Number`　**Default**: `300`　**Required**: No
+- **Doc**: Drawer width in px
+
+#### `overlay`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Overlay (click to close)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `false` (implicit v-model: the value itself)
 
 ## Slots
 

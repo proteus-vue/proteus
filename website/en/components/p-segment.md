@@ -36,12 +36,36 @@ Segmented control
 | `options` | Segment items [{label,value?}?] (defaults to label when value is omitted) | `Array as () => unknown[]` | `() => []` | No |
 | `active` | The value of the currently active item | `[String, Number]` | `''` | No |
 
+### Prop details
+
+#### `options`
+
+- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Doc**: Segment items [{label,value?}?] (defaults to label when value is omitted)
+
+#### `active`
+
+- **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
+- **Doc**: The value of the currently active item
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:active` | Two-way binding: fires when `active` changes (syncs the parent binding) | `v` |
 | `select` | An item is selected | `v` |
+
+### Event details
+
+#### `update:active`
+
+- **Doc**: Two-way binding: fires when `active` changes (syncs the parent binding)
+- **Payload**: `v` (implicit v-model: the value itself)
+
+#### `select`
+
+- **Doc**: An item is selected
+- **Payload**: `v`
 
 ## Implementation notes
 

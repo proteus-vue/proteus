@@ -38,6 +38,28 @@ SVG graphics
 | `size` | Size in px | `Number` | `24` | No |
 | `color` | Color | `String` | `'currentColor'` | No |
 
+### Prop details
+
+#### `path`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: SVG path d data (no fill semantics -- follows currentColor)
+
+#### `viewbox`
+
+- **Type**: `String`　**Default**: `'0 0 24 24'`　**Required**: No
+- **Doc**: View box "x y w h" (defaults to 0 0 24 24)
+
+#### `size`
+
+- **Type**: `Number`　**Default**: `24`　**Required**: No
+- **Doc**: Size in px
+
+#### `color`
+
+- **Type**: `String`　**Default**: `'currentColor'`　**Required**: No
+- **Doc**: Color
+
 ## Implementation notes
 
 - path (SVG path d data) + viewbox rendering; vector-first (no bitmaps)

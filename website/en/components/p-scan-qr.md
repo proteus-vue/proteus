@@ -36,12 +36,36 @@ QR scan capability entry
 | `label` | Accessibility label / default button text | `String` | `'扫码'` | No |
 | `auto` | Fire on mount instead of on click | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `label`
+
+- **Type**: `String`　**Default**: `'扫码'`　**Required**: No
+- **Doc**: Accessibility label / default button text
+
+#### `auto`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Fire on mount instead of on click
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `scan` | — | `r.data` |
 | `error` | — | `'scan-failed')` |
+
+### Event details
+
+#### `scan`
+
+- **Doc**: —
+- **Payload**: `r.data`
+
+#### `error`
+
+- **Doc**: —
+- **Payload**: `'scan-failed')`
 
 ## Slots
 

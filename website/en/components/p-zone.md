@@ -35,6 +35,13 @@ Container-breakpoint zone
 |---|---|---|---|---|
 | `designWidth` | Design-spec width (baseline for deriving container breakpoints; 375 by default) | `Number` | `375` | No |
 
+### Prop details
+
+#### `designWidth`
+
+- **Type**: `Number`　**Default**: `375`　**Required**: No
+- **Doc**: Design-spec width (baseline for deriving container breakpoints; 375 by default)
+
 ## Slots
 
 | Slot | Doc |

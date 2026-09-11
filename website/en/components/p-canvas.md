@@ -38,6 +38,28 @@ Canvas
 | `height` | CSS height in px (0 = auto) | `Number` | `150` | No |
 | `resolution` | Resolution multiplier (>1 renders at high definition; internal canvas resolution = CSS size times the multiplier) | `Number` | `1` | No |
 
+### Prop details
+
+#### `engine`
+
+- **Type**: `String`　**Default**: `'2d'`　**Required**: No
+- **Doc**: Render engine: 2d / webgl / skia
+
+#### `width`
+
+- **Type**: `Number`　**Default**: `300`　**Required**: No
+- **Doc**: CSS width in px (0 = auto)
+
+#### `height`
+
+- **Type**: `Number`　**Default**: `150`　**Required**: No
+- **Doc**: CSS height in px (0 = auto)
+
+#### `resolution`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Resolution multiplier (>1 renders at high definition; internal canvas resolution = CSS size times the multiplier)
+
 ## Slots
 
 | Slot | Doc |

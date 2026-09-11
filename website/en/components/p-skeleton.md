@@ -40,6 +40,38 @@ Skeleton
 | `avatar` | Whether the header is avatar-shaped (skeleton) | `Boolean` | `false` | No |
 | `lines` | Row count (number of skeleton placeholder rows) | `Array` | `() => [90, 70, 80]` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging/observability/test targeting -- the D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (interaction disabled + dimmed visuals; MP native disabled is passed through)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Whether visible (show/hide driven by reactive data, zero platform branches)
+
+#### `avatar`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether the header is avatar-shaped (skeleton)
+
+#### `lines`
+
+- **Type**: `Array`　**Default**: `() => [90, 70, 80]`　**Required**: No
+- **Doc**: Row count (number of skeleton placeholder rows)
+
 ## Slots
 
 | Slot | Doc |

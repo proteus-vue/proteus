@@ -41,6 +41,43 @@ Multiline textarea
 | `placeholder` | Placeholder hint text | `String` | `''` | No |
 | `focus` | Auto focus | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (the text read aloud by a screen reader)
+
+#### `value`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Bound value
+
+#### `maxlength`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: Maximum input length (<= 0 = unlimited)
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Placeholder hint text
+
+#### `focus`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Auto focus
+
 ## Events
 
 | Event | Doc | Payload |
@@ -49,6 +86,28 @@ Multiline textarea
 | `confirm` | Keyboard confirm (Enter/Done key) | `{ value: eventValue(e) }` |
 | `focus` | Gains focus | `e` |
 | `blur` | Loses focus | `e` |
+
+### Event details
+
+#### `input`
+
+- **Doc**: Input changes (payload { value } normalized cross-end — MP custom-component v-model only covers native input/textarea, hence the explicit event contract)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `confirm`
+
+- **Doc**: Keyboard confirm (Enter/Done key)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `focus`
+
+- **Doc**: Gains focus
+- **Payload**: `e`
+
+#### `blur`
+
+- **Doc**: Loses focus
+- **Payload**: `e`
 
 ## Implementation notes
 

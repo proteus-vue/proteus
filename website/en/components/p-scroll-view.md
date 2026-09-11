@@ -43,6 +43,53 @@ Scroll container
 | `refresherEnabled` | Enables the custom pull-down refresher | `Boolean` | `false` | No |
 | `lowerThreshold` | Distance in px from the bottom that triggers the scrolltolower event | `Number` | `50` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging/observability/test targeting -- the D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (interaction disabled + dimmed visuals; MP native disabled is passed through)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `scrollX`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Allows horizontal scrolling
+
+#### `scrollY`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Allows vertical scrolling
+
+#### `scrollTop`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Vertical scroll position (px)
+
+#### `scrollLeft`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Horizontal scroll position (px)
+
+#### `refresherEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Enables the custom pull-down refresher
+
+#### `lowerThreshold`
+
+- **Type**: `Number`　**Default**: `50`　**Required**: No
+- **Doc**: Distance in px from the bottom that triggers the scrolltolower event
+
 ## Events
 
 | Event | Doc | Payload |
@@ -50,6 +97,23 @@ Scroll container
 | `scroll` | Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop) | `e` |
 | `scrolltolower` | Scrolled to the bottom (triggered by lowerThreshold) | `e` |
 | `refresherrefresh` | Custom pull-down refresher triggered | `e` |
+
+### Event details
+
+#### `scroll`
+
+- **Doc**: Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop)
+- **Payload**: `e`
+
+#### `scrolltolower`
+
+- **Doc**: Scrolled to the bottom (triggered by lowerThreshold)
+- **Payload**: `e`
+
+#### `refresherrefresh`
+
+- **Doc**: Custom pull-down refresher triggered
+- **Payload**: `e`
 
 ## Slots
 

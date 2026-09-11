@@ -42,12 +42,66 @@ Image
 | `lazyLoad` | Lazy loading (loads the resource only when it enters the viewport) | `Boolean` | `false` | No |
 | `placeholder` | Placeholder hint text | `String` | `''` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `src`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Resource URL (network / local / temporary paths)
+
+#### `alt`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Alternative text (image load failure / accessibility)
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'aspectFill'`　**Required**: No
+- **Doc**: Mode / crop method (per-component enums -- see the type column)
+
+#### `lazyLoad`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Lazy loading (loads the resource only when it enters the viewport)
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Placeholder hint text
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `load` | Load completed | `e` |
 | `error` | Load / execution failed | `e` |
+
+### Event details
+
+#### `load`
+
+- **Doc**: Load completed
+- **Payload**: `e`
+
+#### `error`
+
+- **Doc**: Load / execution failed
+- **Payload**: `e`
 
 ## Implementation notes
 

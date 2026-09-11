@@ -36,6 +36,18 @@ Rich text
 | `source` | HTML/markdown source | `String` | `''` | No |
 | `schema` | Render schema (HTML/MARKDOWN - B2 pass-through, to be strictly enforced in later batches) | `String` | `'html'` | No |
 
+### Prop details
+
+#### `source`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: HTML/markdown source
+
+#### `schema`
+
+- **Type**: `String`　**Default**: `'html'`　**Required**: No
+- **Doc**: Render schema (HTML/MARKDOWN - B2 pass-through, to be strictly enforced in later batches)
+
 ## Implementation notes
 
 - source HTML/markdown → rendered; Web renders directly with v-html, the MP compiler maps it to a rich-text node

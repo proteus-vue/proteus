@@ -39,12 +39,51 @@ Scrollable area
 | `loading` | Loading state (footer text toggling) | `Boolean` | `false` | No |
 | `height` | Visible height in px (0 = inherit/adapt) | `Number` | `0` | No |
 
+### Prop details
+
+#### `bounce`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Elastic scrolling (iOS rubber-band)
+
+#### `refresh`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Pull-down refresher (semantic declaration -- native implementation lands in a later batch)
+
+#### `loadMore`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Load more when scrolled to the bottom
+
+#### `loading`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Loading state (footer text toggling)
+
+#### `height`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Visible height in px (0 = inherit/adapt)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `load-more` | Load more (pagination on reaching the bottom) | — |
 | `refresh` | Refresh triggered | — |
+
+### Event details
+
+#### `load-more`
+
+- **Doc**: Load more (pagination on reaching the bottom)
+- **Payload**: none
+
+#### `refresh`
+
+- **Doc**: Refresh triggered
+- **Payload**: none
 
 ## Slots
 

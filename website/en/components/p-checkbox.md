@@ -37,11 +37,35 @@ Multi-select
 | `indeterminate` | Indeterminate state (undetermined parent - explicit control) | `Boolean` | `false` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `modelValue`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Checked state (controlled v-model)
+
+#### `indeterminate`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Indeterminate state (undetermined parent - explicit control)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `!props.modelValue` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `!props.modelValue` (implicit v-model: the value itself)
 
 ## Slots
 

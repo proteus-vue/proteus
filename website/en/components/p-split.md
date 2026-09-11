@@ -37,6 +37,23 @@ Adaptive panes
 | `gap` | Spacing between panes / stacked sections (px) | `Number` | `16` | No |
 | `designWidth` | Design width (baseline for deriving the container breakpoint) | `Number` | `375` | No |
 
+### Prop details
+
+#### `minSplitWidth`
+
+- **Type**: `Number`　**Default**: `640`　**Required**: No
+- **Doc**: Container width reaches this value → side-by-side panes (px; below it → stacked)
+
+#### `gap`
+
+- **Type**: `Number`　**Default**: `16`　**Required**: No
+- **Doc**: Spacing between panes / stacked sections (px)
+
+#### `designWidth`
+
+- **Type**: `Number`　**Default**: `375`　**Required**: No
+- **Doc**: Design width (baseline for deriving the container breakpoint)
+
 ## Slots
 
 | Slot | Doc |

@@ -38,6 +38,28 @@ order: 4001
 | `loop` | 循环播放（缺省 true——装饰动画；false 播一次） | `Boolean` | `true` | 否 |
 | `delay` | 延迟（ms） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `keyframes`
+
+- **类型**：`String`　**默认值**：`'fade'`　**必填**：否
+- **说明**：动画预设名（fade/bounce/pulse/shake/zoom-in/spin）
+
+#### `duration`
+
+- **类型**：`Number`　**默认值**：`600`　**必填**：否
+- **说明**：动画时长（ms）
+
+#### `loop`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：循环播放（缺省 true——装饰动画；false 播一次）
+
+#### `delay`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：延迟（ms）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -56,7 +78,7 @@ order: 4001
 ## 用法
 
 ```vue
-<p-animate :keyframes="…">
+<p-animate :keyframes="'fade'" :duration="600" :loop="true">
   <p-text>内容</p-text>
 </p-animate>
 ```

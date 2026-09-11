@@ -42,12 +42,66 @@ order: 2004
 | `maskClosable` | 点击遮罩关闭 | `Boolean` | `true` | 否 |
 | `maskOpacity` | 遮罩透明度 | `Number` | `0.5` | 否 |
 
+### 属性详解
+
+#### `visible`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：弹窗可见（v-model:visible）
+
+#### `pAdaptive`
+
+- **类型**：`String`　**默认值**：`'sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)'`　**必填**：否
+- **说明**：★形态区间声明：模板写 p-adaptive="sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)"（计划 API）→ pAdaptive prop
+
+#### `anchor`
+
+- **类型**：`Object`　**默认值**：`null`　**必填**：否
+- **说明**：popover 形态锚定触发源（元素引用；缺省 → popover 居中降级，03 §6 降级链）
+
+#### `width`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：形态求解宽度覆盖（0 = 跟随视口；>0 = 强制指定——预览/验证/测试不同窗口大小）
+
+#### `title`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：标题（header slot 存在时优先）
+
+#### `closable`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：右上角关闭按钮
+
+#### `maskClosable`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：点击遮罩关闭
+
+#### `maskOpacity`
+
+- **类型**：`Number`　**默认值**：`0.5`　**必填**：否
+- **说明**：遮罩透明度
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:visible` | v-model 双向绑定：`visible`变化时触发（同步父级绑定） | `false` |
 | `formChange` | 表单项变化 | `next` |
+
+### 事件详解
+
+#### `update:visible`
+
+- **说明**：v-model 双向绑定：`visible`变化时触发（同步父级绑定）
+- **载荷**：`false`（v-model 隐式：值本身）
+
+#### `formChange`
+
+- **说明**：表单项变化
+- **载荷**：`next`
 
 ## 插槽
 
@@ -69,7 +123,9 @@ order: 2004
 ## 用法
 
 ```vue
-<p-modal :visible="…">
+<p-modal v-model:visible="visible" :width="0" :title="'…'">
+  <template #header>…</template>
+  <template #footer>…</template>
   <p-text>内容</p-text>
 </p-modal>
 ```

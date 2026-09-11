@@ -36,6 +36,18 @@ Atomic container
 | `aspectRatio` | Aspect ratio (e.g. '16/9'; empty = unset) -- Skyline has no aspect-ratio, so it degrades to unconstrained (content-sized) | `String` | `''` | No |
 | `overflow` | Overflow: visible (default) / hidden (clip) | `String` | `'visible'` | No |
 
+### Prop details
+
+#### `aspectRatio`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Aspect ratio (e.g. '16/9'; empty = unset) -- Skyline has no aspect-ratio, so it degrades to unconstrained (content-sized)
+
+#### `overflow`
+
+- **Type**: `String`　**Default**: `'visible'`　**Required**: No
+- **Doc**: Overflow: visible (default) / hidden (clip)
+
 ## Slots
 
 | Slot | Doc |

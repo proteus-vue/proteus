@@ -39,11 +39,45 @@ Button
 | `loading` | Loading state | `Boolean` | `false` | No |
 | `throttle` | Click throttle interval (ms; prevents repeated triggers -- built into the runtime) | `Number` | `0` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `loading`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Loading state
+
+#### `throttle`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Click throttle interval (ms; prevents repeated triggers -- built into the runtime)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `click` | Click / tap (fires after throttling) | `e, { bubbles: true, composed: true }` |
+
+### Event details
+
+#### `click`
+
+- **Doc**: Click / tap (fires after throttling)
+- **Payload**: `e, { bubbles: true, composed: true }`
 
 ## Slots
 

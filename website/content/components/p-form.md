@@ -37,11 +37,35 @@ order: 1005
 | `rules` | 校验规则 {field: (value) => string \| null}（返回错误文案；null=通过） | `Object` | `() => ({` | 否 |
 | `layout` | 布局：horizontal 横排 / vertical 纵排 | `String` | `'vertical'` | 否 |
 
+### 属性详解
+
+#### `model`
+
+- **类型**：`Object`　**默认值**：`() => ({`　**必填**：否
+- **说明**：表单数据模型（校验对象）
+
+#### `rules`
+
+- **类型**：`Object`　**默认值**：`() => ({`　**必填**：否
+- **说明**：校验规则 {field: (value) => string \| null}（返回错误文案；null=通过）
+
+#### `layout`
+
+- **类型**：`String`　**默认值**：`'vertical'`　**必填**：否
+- **说明**：布局：horizontal 横排 / vertical 纵排
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `submit` | 表单提交 | `{ model: props.model, errors: { ...errors.value } }` |
+
+### 事件详解
+
+#### `submit`
+
+- **说明**：表单提交
+- **载荷**：`{ model: props.model, errors: { ...errors.value } }`
 
 ## 插槽
 
@@ -58,7 +82,7 @@ order: 1005
 ## 用法
 
 ```vue
-<p-form :model="…">
+<p-form :layout="'vertical'">
   <p-text>内容</p-text>
 </p-form>
 ```

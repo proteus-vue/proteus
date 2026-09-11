@@ -43,6 +43,53 @@ order: 1012
 | `width` | 宽 px（0=自适应） | `Number` | `0` | 否 |
 | `height` | 高 px（0=自适应） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `kind`
+
+- **类型**：`String`　**默认值**：`'image'`　**必填**：否
+- **说明**：媒体类型：image / video / audio / live
+
+#### `src`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：资源地址
+
+#### `poster`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：封面（video/live）
+
+#### `controls`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：显示控制条
+
+#### `autoplay`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：自动播放
+
+#### `loop`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：循环
+
+#### `muted`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：静音
+
+#### `width`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：宽 px（0=自适应）
+
+#### `height`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：高 px（0=自适应）
+
 ## 实现要点
 
 - kind image/video/audio/live 统一入口（消灭 video/audio 分离组件）
@@ -52,7 +99,7 @@ order: 1012
 ## 用法
 
 ```vue
-<p-media :kind="…">
+<p-media :kind="'image'" :src="'…'" :poster="'…'">
   <p-text>内容</p-text>
 </p-media>
 ```
