@@ -42,6 +42,7 @@ import { generateAppConfigSkeleton } from './app-config-gen'
 import { runAuditAll, formatAuditAll } from './audit-all'
 import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
 import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
+import { runGlassAudit, formatGlassAudit } from './glass-audit'
 import { runGate, formatGateList } from './gate'
 import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
 
@@ -197,7 +198,20 @@ async function main(): Promise<void> {
         }
         break
       }
-      if (rest[0] !== 'module') throw new Error('proteus audit 支持 d2 / module / devtools-budget / coverage / all（proteus audit d2 [dir] | audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
+      // ★G-07：audit glass（玻璃治理门禁 GLS001-006——裸 backdrop-filter / 嵌套 / 节点预算）
+      if (rest[0] === 'glass') {
+        const dir = rest.find((a) => a !== 'glass' && !a.startsWith('-')) ?? 'src'
+        try {
+          const result = runGlassAudit(path.resolve(dir))
+          console.log(formatGlassAudit(result))
+          if (!result.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      if (rest[0] !== 'module') throw new Error('proteus audit 支持 d2 / glass / module / devtools-budget / coverage / all（proteus audit d2 [dir] | audit glass [dir] | audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
       const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
       const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
       console.log(text)

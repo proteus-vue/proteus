@@ -33,6 +33,9 @@ importers:
       '@proteus-vue/gesture':
         specifier: workspace:*
         version: link:packages/gesture
+      '@proteus-vue/glass':
+        specifier: workspace:*
+        version: link:packages/glass
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -458,6 +461,8 @@ importers:
   packages/fluid: {}
 
   packages/gesture: {}
+
+  packages/glass: {}
 
   packages/hmr:
     dependencies:

@@ -20,7 +20,8 @@
       "@proteus-vue/components/*": ["../src/components/*"],
       // ★@proteus-vue/shared：框架组件（src/components）经 L2 抽象消费——根 node_modules 未 hoist shared
       //   （fluid/devtools-runtime 在 root node_modules，shared 只在 examples）→ 显式 paths 解析到源码
-      "@proteus-vue/shared": ["../packages/shared/src/index.ts"]
+      "@proteus-vue/shared": ["../packages/shared/src/index.ts"],
+      "@proteus-vue/glass": ["../packages/glass/src/index.ts"]
     }
   },
   "include": [

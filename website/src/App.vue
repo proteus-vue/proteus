@@ -173,6 +173,7 @@ watch(() => route.fullPath, () => {
   transition: box-shadow 0.2s ease, background 0.2s ease;
   container-type: inline-size;
 }
+/* d2-exempt: 导航滚动态玻璃（实底→滚动加模糊的层级区分设计，非独立玻璃面；迁移 pg-glass 归官网视觉批次） */
 .nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 /* ★#389c 滚动进度条（品牌色细线） */
 .scroll-progress {

@@ -90,7 +90,7 @@
 
 | plan | 编号 | 状态 | 说明 |
 |------|------|------|------|
-| `proteus-glass-plan` | G-07 | ⬜ 规划 | pg-glass 系统级玻璃（L1/L2/L3 降级） |
+| `proteus-glass-plan` | G-07 | 🟡 **B1 落地（2026-09-11）** | 新包 **`@proteus-vue/glass`**（纯逻辑 SSOT：preset 表 7 内置 + props 归一 resolveGlass + 三级降级 resolveGlassLevel + 能力矩阵 + defineGlassPreset 扩展）；`<pg-glass>` 组件收口消费该包（去内联硬编码表——多端解释分歧消除）；CLI **`proteus audit glass`**（GLS001-006：裸 backdrop-filter error / 嵌套≤2·节点≤10 warn / d2-exempt 登记豁免）；22 用例 + 双端 demo（glass-demo）；★顺带修编译器尾逗号 bug（computed(() => expr,) 产物 `...,;` 语法错）。**余 M2+ = 原生端 iOS/鸿蒙/Android 系统材质映射（L3，需真机）** |
 | `proteus-safe-area-plan` | G-09 | 🟡 | p-safe 语义已落地（fluid-system S2）；App 端安全区待渲染层 |
 | `proteus-fluid-layout-plan`（四原语） | G-22 | ✅ | 见 L1 |
 | `proteus-css-compat-plan` | G-08 | ✅ | CSS 矩阵 + 布局语义 + 矩阵测试 |
@@ -250,7 +250,7 @@
 **① 总体定位：按关键路径（规约 → G-27 SPI → compiler IR → NativeBackend → 混合渲染 → G-28 生态 → benchmark）≈ M1 末 → M2 中段。** 框架侧地基（M1）与 M2 多数并行流**已提前收官**（规划排到 M1 末才要的「换一个 flag 切渲染后端」demo 现为可运行代码）；未兑现的是**「真机全端 + 生态数据」这条收敛链**。
 
 **② A 类·已落地可运行**（生产代码，有单测 / E2E / 门禁）：
-L2 引擎（G-02/03/04/05/06/21/35）· L3 能力（G-08/10/12/13/14/15/16/17/18/19/20/22/22.5；G-07 pg-glass 除外）· L4 工具链（G-16/17/19）· G-24 B1-B5 · G-27 B1-B6 · G-29 B1-B2 · G-31 B1-B6 · G-32 B1-B4 · G-36 B1-B4 · G-38 B1-B3 前置 · G-41/42/43 B1-B6 · G-45 B1-B3a。
+L2 引擎（G-02/03/04/05/06/21/35）· L3 能力（G-08/10/12/13/14/15/16/17/18/19/20/22/22.5；**G-07 pg-glass B1 已落地**）· L4 工具链（G-16/17/19）· G-24 B1-B5 · G-27 B1-B6 · G-29 B1-B2 · G-31 B1-B6 · G-32 B1-B4 · G-36 B1-B4 · G-38 B1-B3 前置 · G-41/42/43 B1-B6 · G-45 B1-B3a。
 
 **③ B 类·仅规划**（plan 文档 + 零依赖参考实现，**无生产级代码**）：
 **G-46~G-60 十五份**（2026-09 #385~#397 批量入库，`.cjs` self-test + verify.sh PASS，非 `packages/` 生产包）—— resource-pool / combined-conformance / miniprogram-runtime / sandbox-isolation / developer-platform / test-ir-runner / cross-device-verification / mobile-verification / devtools-suite / devtools-landing / studio / inspector / plugin-api / plugin-ecosystem / studio-website-landing；另有**待启** G-37/G-39/G-40/G-28/G-30/G-25/G-26/G-23（G-23 由 G-36 部分承接）。

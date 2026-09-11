@@ -59,6 +59,7 @@
     "@proteus-vue/devtools-runtime": "workspace:*",
     "@proteus-vue/fluid": "workspace:*",
     "@proteus-vue/gesture": "workspace:*",
+    "@proteus-vue/glass": "workspace:*",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vue/compiler-dom": "^3.5.42",

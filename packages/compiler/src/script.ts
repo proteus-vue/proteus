@@ -933,6 +933,9 @@ function extractComputedFromInit(
   let setter: { param: string; body: string } | undefined
   if (arrow) {
     rawExpr = arrow[1]
+    // ★2026-09-11 尾逗号修复：computed(() => EXPR,) 是 prettier 默认风格——懒惰匹配会把 EXPR 后的 `,`
+    //   一并吞进表达式（产物 `this.data.x = EXPR,;` → 语法错）。剥离表达式尾部单个逗号。
+    rawExpr = rawExpr.replace(/,\s*$/, '')
     if (rawExpr.trim().startsWith('{')) {
       // ★#499 块体 computed 支持：整段求值编译为 proteusCalcX() 方法（内部语句任意：局部变量/分支/模块函数），
       //   依赖=全文 x.value 读取（与 Vue 响应依赖语义对齐）；末语句须为 return 表达式（否则无派生值 → 旧警告路径）
