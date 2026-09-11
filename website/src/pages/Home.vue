@@ -352,7 +352,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
             <!-- 状态栏（仿编辑器底栏：分支 / 诊断 / 编译耗时） -->
             <p-stack direction="row" :gap="16" class="hv-foot">
               <span class="hv-st"><span class="hv-branch">⑂</span> main</span>
-              <span class="hv-st ok">✓ 0 errors</span>
+              <span class="hv-st ok"><span class="hv-orb" />0 errors</span>
               <span class="hv-st">compile 2ms</span>
             </p-stack>
           </p-view>
@@ -733,6 +733,21 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .hv-st { color: var(--dim); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 .hv-st.ok { color: var(--ok); }
 .hv-branch { color: var(--brand-ink); }
+/* 运行时核心（SVG 通道在 Hero 的落点）：小径向渐变圆核 + 脉冲——读作「引擎在跑」 */
+.hv-orb {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #d6ccff, var(--brand) 52%, transparent 74%);
+  box-shadow: 0 0 9px rgba(124, 92, 255, 0.75);
+  animation: hv-orb-pulse 1.7s ease-in-out infinite;
+}
+@keyframes hv-orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.7); opacity: 0.55; }
+}
+.no-motion .hv-orb { animation: none; }
 /* 窄容器：收起资源管理器，代码区获得全宽 */
 @container (max-width: 520px) {
   /* ★特异性：p-view 自带 .p-view{display:flex}（同为 0,1,1）按捆绑顺序抢胜 → .hv-body .hv-side（0,2,1）压过 */
