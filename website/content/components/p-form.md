@@ -39,9 +39,15 @@ order: 1005
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `submit` | 表单提交 | `{ model: props.model, errors: { ...errors.value } }` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `submit` | 表单提交 |
+| default | 默认插槽（作用域参数：`errors`） |
 
 ## 实现要点
 

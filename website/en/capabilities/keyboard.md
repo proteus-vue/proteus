@@ -50,10 +50,10 @@ onChange(cb: (info: KeyboardInfo) => void): () => void
 
 C14 键盘信息（高度 px + 可见性）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `height` | `number` | 键盘高度（px） |
-| `visible` | `boolean` | 键盘是否可见 |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `height` | `number` | — | 键盘高度（px） |
+| `visible` | `boolean` | — | 键盘是否可见 |
 
 ## Error codes
 

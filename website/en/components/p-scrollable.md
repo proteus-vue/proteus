@@ -41,10 +41,16 @@ Scrollable area
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `load-more` | Load more (pagination on reaching the bottom) | — |
+| `refresh` | Refresh triggered | — |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `load-more` | Load more (pagination on reaching the bottom) |
-| `refresh` | Refresh triggered |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

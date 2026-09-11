@@ -38,6 +38,12 @@ Inline container
 | `justify` | Main-axis alignment (flex-start/center/end/space-between/space-around) | `String` | `'flex-start'` | No |
 | `align` | Cross-axis alignment (flex-start/center/end/stretch) | `String` | `'center'` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Inline-box semantics (aligned with CSS inline-flex): content lays out in rows; wrap enables line wrapping

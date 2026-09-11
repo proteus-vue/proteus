@@ -31,6 +31,7 @@ useBrightness(): Promise<CapResult<number>>
 | code | 说明 |
 |---|---|
 | `brightness.unsupported` | 桥未提供 getBrightness（useBrightness 不可用） |
+| `brightness.failed` | wx.setScreenBrightness 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

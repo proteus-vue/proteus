@@ -90,7 +90,7 @@ on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) =
 | code | 说明 |
 |---|---|
 | `websocket.unsupported` | 桥未提供 connectWebSocket（useWebSocket 不可用） |
-| `websocket.failed` | WebSocket 构造失败 |
+| `websocket.failed` | wx.connectSocket 返回空 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

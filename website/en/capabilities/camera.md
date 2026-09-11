@@ -69,6 +69,10 @@ Beyond the primary hook `useCamera`, this capability also exposes these operatio
 useCameraContext(id: string): CapResult<CameraController>
 ```
 
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `id` | `string` | Yes | 标识 |
+
 #### `CameraController` methods
 
 | Method | Signature | Doc |

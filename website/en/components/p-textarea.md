@@ -43,12 +43,12 @@ Multiline textarea
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `input` | Input changes (payload { value } normalized cross-end — MP custom-component v-model only covers native input/textarea, hence the explicit event contract) |
-| `confirm` | Keyboard confirm (Enter/Done key) |
-| `focus` | Gains focus |
-| `blur` | Loses focus |
+| Event | Doc | Payload |
+|---|---|---|
+| `input` | Input changes (payload { value } normalized cross-end — MP custom-component v-model only covers native input/textarea, hence the explicit event contract) | `{ value: eventValue(e) }` |
+| `confirm` | Keyboard confirm (Enter/Done key) | `{ value: eventValue(e) }` |
+| `focus` | Gains focus | `e` |
+| `blur` | Loses focus | `e` |
 
 ## Implementation notes
 

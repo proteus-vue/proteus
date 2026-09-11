@@ -37,6 +37,13 @@ Adaptive panes
 | `gap` | Spacing between panes / stacked sections (px) | `Number` | `16` | No |
 | `designWidth` | Design width (baseline for deriving the container breakpoint) | `Number` | `375` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `aside` | Named slot |
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Container width < minSplitWidth → stacked (column); ≥ → side-by-side (row) -- resolved by the container, not the viewport

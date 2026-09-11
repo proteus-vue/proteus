@@ -37,6 +37,12 @@ Generic container
 | `disabled` | Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled) | `Boolean` | `false` | No |
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Matrix 01 §1: display unified to a flex column; box-sizing unified to content-box (the Skyline default, aligned on the Web side)

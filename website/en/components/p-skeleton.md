@@ -40,6 +40,12 @@ Skeleton
 | `avatar` | Whether the header is avatar-shaped (skeleton) | `Boolean` | `false` | No |
 | `lines` | Row count (number of skeleton placeholder rows) | `Array` | `() => [90, 70, 80]` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Matrix 10 business component: bind the loading state (:visible="loading"), no built-in timer (C4)

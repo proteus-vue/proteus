@@ -38,6 +38,12 @@ Native date/time/city picker
 | `min` | Minimum boundary (native min for date/time) | `String` | `''` | No |
 | `max` | Maximum boundary | `String` | `''` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v ?? ''` |
+
 ## Implementation notes
 
 - mode date/time/region + start/end boundaries

@@ -48,7 +48,12 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 | code | 说明 |
 |---|---|
 | `sensor.unsupported` | 桥未提供 readSensor（useSensor 不可用） |
+| `sensor.compass.unsupported` | wx.onCompassChange 缺失 |
+| `sensor.gyroscope.unsupported` | wx.onGyroscopeChange 缺失 |
+| `sensor.accelerometer.unsupported` | wx.onAccelerometerChange 缺失 |
 | `sensor.timeout` | 传感器事件超时（需设备支持/用户授权） |
+| `sensor.start-failed` | 传感器启动失败 |
+| `sensor.stop-failed` | 传感器停止失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 
@@ -78,6 +83,10 @@ useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
 ```ts
 useSensorStream(kind: SensorKind): CapResult<SensorStream>
 ```
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kind` | `SensorKind` | 是 | 类型 |
 
 #### `SensorStream` 的属性
 

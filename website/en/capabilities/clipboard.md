@@ -32,6 +32,8 @@ useClipboard(): Promise<CapResult<string>>
 |---|---|
 | `clipboard.read.unsupported` | navigator.clipboard.readText is not supported |
 | `clipboard.read.failed` | Clipboard read was rejected (requires permission / focus) |
+| `clipboard.write.unsupported` | — |
+| `clipboard.write.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

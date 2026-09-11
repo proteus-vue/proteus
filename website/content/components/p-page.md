@@ -37,6 +37,12 @@ order: 2006
 | `statusBar` | 沉浸式状态栏（内容延伸至状态栏区域） | `Boolean` | `false` | 否 |
 | `pullRefresh` | 下拉刷新（页面级滚动接入批次使用） | `Boolean` | `false` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 页面根 = route component（G-17）：title 语义 + statusBar 沉浸 + pullRefresh 声明

@@ -178,6 +178,7 @@ leave(): Promise<CapResult<void>>
 | code | 说明 |
 |---|---|
 | `live.unsupported` | 桥未提供 joinLiveRoom（useLive 不可用） |
+| `live.failed` | wx 直播  |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

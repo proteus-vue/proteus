@@ -37,6 +37,18 @@ Radio (single choice)
 | `group` | Current selected value (held by the parent group) | `[String, Number]` | `''` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:group` | Two-way binding: fires when `group` changes (syncs the parent binding) | `props.value` |
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - value is this item's value + group is the currently selected value (held by the parent) → matched item is selected

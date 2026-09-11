@@ -43,9 +43,9 @@ Toast
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `close` | Close |
+| Event | Doc | Payload |
+|---|---|---|
+| `close` | Close | — |
 
 ## Implementation notes
 

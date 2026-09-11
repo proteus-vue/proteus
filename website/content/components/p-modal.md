@@ -44,9 +44,18 @@ order: 2004
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:visible` | v-model 双向绑定：`visible`变化时触发（同步父级绑定） | `false` |
+| `formChange` | 表单项变化 | `next` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `formChange` | 表单项变化 |
+| `header` | 具名插槽 |
+| default | 默认插槽（组件主内容） |
+| `footer` | 具名插槽 |
 
 ## 实现要点
 

@@ -37,6 +37,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `vibrate.unsupported` | navigator.vibrate is not supported |
+| `vibrate.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

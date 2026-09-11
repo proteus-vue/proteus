@@ -38,10 +38,16 @@ Draggable element
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `drag` | Dragging (gesture.draggable) | `{ x: nx, y: ny }` |
+| `drop` | Drag released | `{ x: dx.value, y: dy.value }` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `drag` | Dragging (gesture.draggable) |
-| `drop` | Drag released |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

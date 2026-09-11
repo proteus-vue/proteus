@@ -37,6 +37,18 @@ order: 1015
 | `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:group` | v-model 双向绑定：`group`变化时触发（同步父级绑定） | `props.value` |
+
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - value 本项值 + group 当前选中值（父级持有）→ 命中即选中

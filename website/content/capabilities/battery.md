@@ -39,7 +39,7 @@ useBattery(): Promise<CapResult<BatteryInfo>>
 
 | code | 说明 |
 |---|---|
-| `battery.unsupported` | navigator.getBattery 不支持 |
+| `battery.unsupported` | wx.getBatteryInfo 缺失 |
 | `battery.failed` | getBattery 返回空 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。

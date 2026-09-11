@@ -38,6 +38,12 @@ Transition (show/hide) — the semantics surface of CSS transition
 | `duration` | Transition duration (ms) | `Number` | `300` | No |
 | `visible` | Show/hide switch (controlled by the parent) | `Boolean` | `true` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - name: the transition preset (fade/slide-up/slide-down/slide-left/slide-right/zoom; CSS class p-transition-{name})

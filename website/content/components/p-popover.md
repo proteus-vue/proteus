@@ -37,6 +37,19 @@ order: 2007
 | `trigger` | 触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click） | `String` | `'click'` | 否 |
 | `placement` | 位置：top / bottom / left / right | `String` | `'bottom'` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
+
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| `trigger` | 具名插槽 |
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - trigger click/hover/focus + placement 位置（top/bottom/left/right）

@@ -56,6 +56,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 | code | 说明 |
 |---|---|
 | `download.unsupported` | 桥未提供 download（useDownload 不可用） |
+| `download.failed` | wx.downloadFile 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

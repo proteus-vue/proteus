@@ -36,6 +36,12 @@ Atomic container
 | `aspectRatio` | Aspect ratio (e.g. '16/9'; empty = unset) -- Skyline has no aspect-ratio, so it degrades to unconstrained (content-sized) | `String` | `''` | No |
 | `overflow` | Overflow: visible (default) / hidden (clip) | `String` | `'visible'` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Unified flex-column container with optional aspect ratio / overflow policy; p-view is the generic container, p-box emphasizes "box" semantics (aspect ratio / clipping)

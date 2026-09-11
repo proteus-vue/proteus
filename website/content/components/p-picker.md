@@ -38,6 +38,12 @@ order: 1014
 | `min` | 最小值边界（date/time 原生 min） | `String` | `''` | 否 |
 | `max` | 最大值边界 | `String` | `''` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `v ?? ''` |
+
 ## 实现要点
 
 - mode date/time/region + start/end 边界

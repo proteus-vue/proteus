@@ -37,6 +37,12 @@ order: 9
 | `fold` | 折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭） | `Boolean` | `false` | 否 |
 | `fallback` | 兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底） | `Number` | `0` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - /* components-allow-platform: 安全区胶囊下沿读数（statusBarHeight + menuButton.bottom）——平台专属，

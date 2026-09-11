@@ -35,6 +35,12 @@ Heading
 |---|---|---|---|---|
 | `level` | Heading level 1-6 (font size decreases with level) | `Number` | `1` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Semantic headings (aligned with h1-h6): level drives the heading level → font size/weight — safe on both targets: div → view; the level is expressed via classes instead of dynamic tags (the MP compiler does not support dynamic tag names)

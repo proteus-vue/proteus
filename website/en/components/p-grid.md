@@ -36,6 +36,12 @@ Adaptive grid
 | `minColWidth` | Minimum column width (px) -- the column count is derived automatically | `Number` | `160` | No |
 | `gap` | Column gap (px) | `Number` | `12` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Only the minimum per-column width + gap are declared; the column count resolves itself: Web = CSS Grid repeat(auto-fill, minmax(minColWidth, 1fr))

@@ -48,6 +48,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `fetch.unsupported` | The bridge does not provide request (useFetch unavailable) |
+| `fetch.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

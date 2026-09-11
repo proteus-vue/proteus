@@ -38,9 +38,16 @@ order: 1
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:visible` | v-model 双向绑定：`visible`变化时触发（同步父级绑定） | — |
+| `formChange` | 表单项变化 | `s.form` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `formChange` | 表单项变化 |
+| default | 默认插槽（组件主内容） |
 
 ## 实现要点
 

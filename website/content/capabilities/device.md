@@ -36,6 +36,14 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `version` | `string` | 是 | 系统版本号（如 17.4） |
 | `browser` | `string` | 否 | 浏览器/容器名（web 端有；MP 缺省） |
 
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `device.unsupported` | wx.getSystemInfoSync 缺失 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

@@ -37,6 +37,12 @@ order: 1017
 | `density` | 密度：compact（紧凑）/ regular / comfortable（宽松无障碍） | `String` | `'regular'` | 否 |
 | `baseSize` | 基准字号（px）——子项用 em 继承即随缩放 | `Number` | `16` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 只声明「字号级别 + 密度」：容器 font-size = base × 级别倍率 × 全局字号缩放（var(--proteus-font-scale, 1)

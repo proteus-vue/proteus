@@ -38,6 +38,13 @@ Adaptive navigation bar
 | `designWidth` | Design width (baseline for deriving the container breakpoint) | `Number` | `375` | No |
 | `toggleLabel` | ★Collapsed-mode toggle bar copy (#384) | `String` | `'导航'` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| `nav` | Named slot |
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Container width < minSidebarWidth → bottom horizontal nav bar (the primary mobile scenario); ≥ → left vertical sidebar (tablet / in-car / desktop)

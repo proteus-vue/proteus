@@ -38,9 +38,10 @@ Segmented control
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `select` | An item is selected |
+| Event | Doc | Payload |
+|---|---|---|
+| `update:active` | Two-way binding: fires when `active` changes (syncs the parent binding) | `v` |
+| `select` | An item is selected | `v` |
 
 ## Implementation notes
 

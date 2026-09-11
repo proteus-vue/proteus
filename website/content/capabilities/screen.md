@@ -39,7 +39,7 @@ useScreen(): Promise<CapResult<ScreenInfo>>
 
 | code | 说明 |
 |---|---|
-| `screen.unsupported` | window.screen 不存在（SSR） |
+| `screen.unsupported` | wx.getSystemInfoSync 缺失 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

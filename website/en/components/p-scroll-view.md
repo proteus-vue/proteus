@@ -45,11 +45,17 @@ Scroll container
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `scroll` | Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop) | `e` |
+| `scrolltolower` | Scrolled to the bottom (triggered by lowerThreshold) | `e` |
+| `refresherrefresh` | Custom pull-down refresher triggered | `e` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `scroll` | Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop) |
-| `scrolltolower` | Scrolled to the bottom (triggered by lowerThreshold) |
-| `refresherrefresh` | Custom pull-down refresher triggered |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

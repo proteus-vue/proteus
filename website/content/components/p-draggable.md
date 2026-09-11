@@ -38,10 +38,16 @@ order: 3001
 
 ## Events
 
-| 事件 | 说明 |
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `drag` | 拖拽中（gesture.draggable） | `{ x: nx, y: ny }` |
+| `drop` | 拖拽释放 | `{ x: dx.value, y: dy.value }` |
+
+## 插槽
+
+| 插槽 | 说明 |
 |---|---|
-| `drag` | 拖拽中（gesture.draggable） |
-| `drop` | 拖拽释放 |
+| default | 默认插槽（组件主内容） |
 
 ## 实现要点
 

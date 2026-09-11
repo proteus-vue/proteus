@@ -31,7 +31,7 @@ useBiometric(): Promise<CapResult<boolean>>
 | code | 说明 |
 |---|---|
 | `biometric.unsupported` | 桥未提供 checkBiometricSupport（useBiometric 不可用） |
-| `biometric.failed` | WebAuthn 认证失败/用户取消 |
+| `biometric.failed` | 生物识别认证失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

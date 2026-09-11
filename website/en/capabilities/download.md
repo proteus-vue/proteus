@@ -56,6 +56,7 @@ Param,Type,Required,Doc
 | code | Doc |
 |---|---|
 | `download.unsupported` | The bridge does not provide download (useDownload unavailable) |
+| `download.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

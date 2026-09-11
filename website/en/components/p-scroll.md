@@ -38,6 +38,12 @@ Explicit scroll container
 | `refresh` | Pull-to-refresh (capability constraint - B2 declaration only) | `Boolean` | `false` | No |
 | `indicator` | Scroll indicator | `Boolean` | `true` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Use only when a scroll semantic is needed (aligned with scroll-view); axis controls the direction, CSS overflow implements Web scrolling

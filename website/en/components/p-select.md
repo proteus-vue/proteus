@@ -40,6 +40,12 @@ Selector / overlay type
 | `searchable` | Search (B2 placeholder declaration -- implemented in a later batch) | `Boolean` | `false` | No |
 | `cascader` | Cascade (B2 placeholder declaration -- implemented in a later batch) | `Boolean` | `false` | No |
 
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v` |
+
 ## Implementation notes
 
 - options[{value,label}] + multiple + searchable + cascader (B2 base: single/multi-select panel; searchable/cascader in later batches)

@@ -33,6 +33,15 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | `online` | `boolean` | 是 | 是否联网（navigator.onLine / wx.getNetworkType 归一） |
 | `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | 是 | 网络类型（web 无细分 → unknown；离线 → none） |
 
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `network.unsupported` | wx.getNetworkType 缺失 |
+| `network.failed` | wx.getNetworkType 失败 |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |

@@ -37,6 +37,12 @@ Flex stack
 | `wrap` | Wrap automatically when space is insufficient (row only) | `Boolean` | `false` | No |
 | `gap` | Spacing between children (px) | `Number` | `0` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Direction + gap + smart wrapping: Web = flex + gap (children wrap automatically when space runs out while wrap is enabled)

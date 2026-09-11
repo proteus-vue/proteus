@@ -37,6 +37,18 @@ order: 1004
 | `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - checked 受控（v-model）+ indeterminate 半选 + group 归一（v-model:group 数组）

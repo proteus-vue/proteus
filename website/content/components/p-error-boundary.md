@@ -38,6 +38,13 @@ order: 4002
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
 | `fallbackText` | 加载失败/空态的兑底文案 | `String` | `'页面出错了，请重试'` | 否 |
 
+## 插槽
+
+| 插槽 | 说明 |
+|---|---|
+| `fallback` | 具名插槽 |
+| default | 默认插槽（组件主内容） |
+
 ## 实现要点
 
 - 矩阵 10：Vue errorCaptured 捕获后代错误（Web）；MP 端无 Vue 运行时 → onErrorCaptured 被编译器剥离，退化为透传容器（平台限制标注）

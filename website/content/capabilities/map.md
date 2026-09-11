@@ -535,48 +535,48 @@ removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
 
 C4 地图区域（wx.createMapContext 语义）
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `latitude` | `number` | 中心纬度 |
-| `longitude` | `number` | 中心经度 |
-| `scale` | `number` | 缩放级别（4-20，越大越细） |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `latitude` | `number` | — | 中心纬度 |
+| `longitude` | `number` | — | 中心经度 |
+| `scale` | `number` | — | 缩放级别（4-20，越大越细） |
 
 ### `MapMarker`
 
 地图标记（wx.Marker 子集）
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `id` | `number` | 标记唯一 id（增删改按 id） |
-| `latitude` | `number` | 纬度 |
-| `longitude` | `number` | 经度 |
-| `title` | `string` | 标题（点按显示） |
-| `iconPath` | `string` | 图标路径 |
-| `width` | `number` | 图标宽（px） |
-| `height` | `number` | 图标高（px） |
-| `callout` | `Record<string, unknown>` | 气泡配置 |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `id` | `number` | — | 标记唯一 id（增删改按 id） |
+| `latitude` | `number` | — | 纬度 |
+| `longitude` | `number` | — | 经度 |
+| `title` | `string` | — | 标题（点按显示） |
+| `iconPath` | `string` | — | 图标路径 |
+| `width` | `number` | — | 图标宽（px） |
+| `height` | `number` | — | 图标高（px） |
+| `callout` | `Record<string, unknown>` | — | 气泡配置 |
 
 ### `MapPolyline`
 
 折线
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `points` | `Array<{ latitude: number; longitude: number }>` | 顶点序列 |
-| `color` | `string` | 线颜色 |
-| `width` | `number` | 线宽（px） |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `points` | `Array<{ latitude: number; longitude: number }>` | — | 顶点序列 |
+| `color` | `string` | — | 线颜色 |
+| `width` | `number` | — | 线宽（px） |
 
 ### `MapCircle`
 
 圆
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `latitude` | `number` | 圆心纬度 |
-| `longitude` | `number` | 圆心经度 |
-| `radius` | `number` | 半径（m） |
-| `color` | `string` | 描边色 |
-| `fillColor` | `string` | 填充色 |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `latitude` | `number` | — | 圆心纬度 |
+| `longitude` | `number` | — | 圆心经度 |
+| `radius` | `number` | — | 半径（m） |
+| `color` | `string` | — | 描边色 |
+| `fillColor` | `string` | — | 填充色 |
 
 ## 错误码
 

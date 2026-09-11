@@ -38,10 +38,16 @@ Location capability entry
 
 ## Events
 
-| Event | Doc |
+| Event | Doc | Payload |
+|---|---|---|
+| `locate` | — | `r.data` |
+| `error` | — | `'locate-failed')` |
+
+## Slots
+
+| Slot | Doc |
 |---|---|
-| `locate` | — |
-| `error` | — |
+| default | Default slot (main content) |
 
 ## Implementation notes
 

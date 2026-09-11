@@ -40,9 +40,9 @@ Toolbar overflow fold
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `select` | An item is selected |
+| Event | Doc | Payload |
+|---|---|---|
+| `select` | An item is selected | `itemKey(item)` |
 
 ## Implementation notes
 

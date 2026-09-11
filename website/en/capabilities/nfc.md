@@ -128,11 +128,43 @@ getAdapter(): NfcAdapter
 | `connectMifareClassic` | `connectMifareClassic(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Classic 标签 |
 | `connectMifareUltralight` | `connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Ultralight 标签 |
 
+### `NfcTag`
+
+NFC 发现的标签
+
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `id` | `ArrayBuffer` | — | — |
+| `techs` | `string[]` | — | — |
+| `messages` | `Array<{ records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }>` | — | — |
+
+### `NdefHandle`
+
+NDEF 句柄（额外：读写 NDEF 消息 + onNdefMessage）
+
+| Method | Signature | Doc |
+|---|---|---|
+| `writeNdefMessage` | `writeNdefMessage(message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }): Promise<CapResult<void>>` | — |
+| `onNdefMessage` | `onNdefMessage(cb: (message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }) => void): () => void` | — |
+
+### `NfcTagHandle`
+
+NFC 标签连接句柄（各技术类型公共面：connect/close/isConnected/setTimeout/transceive）
+
+| Method | Signature | Doc |
+|---|---|---|
+| `connect` | `connect(): Promise<CapResult<void>>` | — |
+| `close` | `close(): Promise<CapResult<void>>` | — |
+| `isConnected` | `isConnected(): boolean` | — |
+| `setTimeout` | `setTimeout(timeout: number): Promise<CapResult<void>>` | — |
+| `transceive` | `transceive(data: ArrayBuffer): Promise<CapResult<ArrayBuffer>>` | — |
+
 ## Error codes
 
 | code | Doc |
 |---|---|
 | `nfc.unsupported` | Bridge does not provide getNfc (useNFC unavailable) |
+| `nfc.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

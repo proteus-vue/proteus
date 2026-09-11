@@ -255,29 +255,29 @@ getRSSI(deviceId: string): Promise<CapResult<number>>
 
 BLE 设备（wx.BluetoothDevice 子集）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `deviceId` | `string` | 设备唯一 id |
-| `name` | `string` | 设备名称 |
-| `RSSI` | `number` | 信号强度（发现/连接后可得） |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `deviceId` | `string` | — | 设备唯一 id |
+| `name` | `string` | — | 设备名称 |
+| `RSSI` | `number` | — | 信号强度（发现/连接后可得） |
 
 ### `BleService`
 
 BLE 服务（wx.BLEService 子集）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `uuid` | `string` | 服务 uuid |
-| `isPrimary` | `boolean` | 是否主服务 |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `uuid` | `string` | — | 服务 uuid |
+| `isPrimary` | `boolean` | — | 是否主服务 |
 
 ### `BleCharacteristic`
 
 BLE 特征值（wx.BLECharacteristic 子集）
 
-| Prop | Type | Doc |
-|---|---|---|
-| `uuid` | `string` | 特征值 uuid |
-| `properties` | `{ read: boolean; write: boolean; notify: boolean; indicate: boolean }` | 支持的操作（read/write/notify/indicate） |
+| Prop | Type | Default | Doc |
+|---|---|---|---|
+| `uuid` | `string` | — | 特征值 uuid |
+| `properties` | `{ read: boolean; write: boolean; notify: boolean; indicate: boolean }` | — | 支持的操作（read/write/notify/indicate） |
 
 ## Error codes
 

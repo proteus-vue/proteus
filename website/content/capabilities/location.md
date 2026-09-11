@@ -40,8 +40,8 @@ useLocation(): Promise<CapResult<Coords>>
 
 | code | 说明 |
 |---|---|
-| `location.unsupported` | geolocation 不支持 |
-| `location.failed` | geolocation 失败 |
+| `location.unsupported` | wx.getLocation 缺失 |
+| `location.failed` | wx.getLocation 失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

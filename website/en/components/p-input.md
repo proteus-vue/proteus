@@ -44,12 +44,12 @@ Input
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `input` | Input changes (payload { value } normalized across targets -- v-model on MP custom components only covers native input/textarea, hence the explicit event contract) |
-| `confirm` | Keyboard confirm (Enter / done key) |
-| `focus` | Gained focus |
-| `blur` | Lost focus |
+| Event | Doc | Payload |
+|---|---|---|
+| `input` | Input changes (payload { value } normalized across targets -- v-model on MP custom components only covers native input/textarea, hence the explicit event contract) | `{ value: eventValue(e) }` |
+| `confirm` | Keyboard confirm (Enter / done key) | `{ value: eventValue(e) }` |
+| `focus` | Gained focus | `e` |
+| `blur` | Lost focus | `e` |
 
 ## Implementation notes
 

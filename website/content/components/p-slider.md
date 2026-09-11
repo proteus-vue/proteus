@@ -40,6 +40,12 @@ order: 1020
 | `activeColor` | 激活色（滑轨填充；WebSlider/微信原生均支持） | `String` | `'#07c160'` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `Number.isFinite(v) ? v : props.modelValue` |
+
 ## 实现要点
 
 - min/max/step 约束 + v-model（modelValue ←→ update:modelValue）

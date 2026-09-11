@@ -38,6 +38,12 @@ Text
 | `ariaLabel` | Accessibility label (the text read aloud by a screen reader) | `String` | `''` | No |
 | `selectable` | Whether the text is selectable | `Boolean` | `false` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - Matrix 01 §2: selectable mapping — Web user-select: text (.is-selectable class); the selectable attribute of MP native text

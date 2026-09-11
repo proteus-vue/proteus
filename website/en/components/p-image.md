@@ -44,10 +44,10 @@ Image
 
 ## Events
 
-| Event | Doc |
-|---|---|
-| `load` | Load completed |
-| `error` | Load / execution failed |
+| Event | Doc | Payload |
+|---|---|---|
+| `load` | Load completed | `e` |
+| `error` | Load / execution failed | `e` |
 
 ## Implementation notes
 

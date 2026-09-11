@@ -37,6 +37,12 @@ Page root container
 | `statusBar` | Immersive status bar (content extends into the status-bar area) | `Boolean` | `false` | No |
 | `pullRefresh` | Pull-to-refresh (consumed by the page-level scroll integration batches) | `Boolean` | `false` | No |
 
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
 ## Implementation notes
 
 - The page root is the route component (G-17): title semantics + immersive statusBar + pullRefresh declaration

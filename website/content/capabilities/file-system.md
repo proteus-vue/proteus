@@ -436,30 +436,44 @@ appendFileSync(path: string, data: string): CapResult<void>
 
 文件/目录信息（wx.Stats 子集）
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `size` | `number` | 文件大小（字节） |
-| `mode` | `number` | 权限位 |
-| `lastAccessedTime` | `number` | 最后访问时间（ms 时间戳） |
-| `lastModifiedTime` | `number` | 最后修改时间（ms 时间戳） |
-| `isDirectory` | `boolean` | 是否目录 |
-| `isFile` | `boolean` | 是否文件 |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `size` | `number` | — | 文件大小（字节） |
+| `mode` | `number` | — | 权限位 |
+| `lastAccessedTime` | `number` | — | 最后访问时间（ms 时间戳） |
+| `lastModifiedTime` | `number` | — | 最后修改时间（ms 时间戳） |
+| `isDirectory` | `boolean` | — | 是否目录 |
+| `isFile` | `boolean` | — | 是否文件 |
 
 ### `SavedFileInfo`
 
 已保存文件信息（wx.SavedFileInfo 子集）
 
-| 属性 | 类型 | 说明 |
-|---|---|---|
-| `filePath` | `string` | 保存后的文件路径 |
-| `size` | `number` | 文件大小（字节） |
-| `createTime` | `number` | 保存时间（ms 时间戳） |
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `filePath` | `string` | — | 保存后的文件路径 |
+| `size` | `number` | — | 文件大小（字节） |
+| `createTime` | `number` | — | 保存时间（ms 时间戳） |
 
 ## 错误码
 
 | code | 说明 |
 |---|---|
 | `file-system.unsupported` | 桥未提供 getFileSystem（useFileSystem 不可用） |
+| `file-system.read-failed` | 内存文件不存在: ${path} |
+| `file-system.copy-failed` | 内存文件不存在: ${src} |
+| `file-system.rename-failed` | 内存文件不存在: ${o} |
+| `file-system.stat-failed` | 不存在: ${path} |
+| `file-system.info-failed` | 内存文件不存在: ${path} |
+| `file-system.write-failed` | wx 写文件失败 |
+| `file-system.remove-failed` | wx unlink 失败 |
+| `file-system.append-failed` | 追加失败 |
+| `file-system.mkdir-failed` | 创建目录失败 |
+| `file-system.rmdir-failed` | 删除目录失败 |
+| `file-system.readdir-failed` | 读目录失败 |
+| `file-system.save-failed` | saveFile 失败 |
+| `file-system.list-failed` | getSavedFileList 失败 |
+| `file-system.unzip-failed` | 解压失败 |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

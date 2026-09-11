@@ -156,6 +156,7 @@ leave(): Promise<CapResult<void>>
 | code | Doc |
 |---|---|
 | `live.unsupported` | The bridge does not provide joinLiveRoom (useLive unavailable) |
+| `live.failed` | — |
 
 > Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
 

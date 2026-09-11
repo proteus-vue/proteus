@@ -36,6 +36,14 @@ useDevice(): Promise<CapResult<CapDeviceInfo>>
 | `version` | `string` | Yes | System version (e.g. 17.4) |
 | `browser` | `string` | No | Browser/container name (present on the web; omitted in Mini Programs) |
 
+## Error codes
+
+| code | Doc |
+|---|---|
+| `device.unsupported` | — |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
 ## Compat rollout
 
 | Target | Status | Notes |

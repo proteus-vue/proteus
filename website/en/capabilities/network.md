@@ -33,6 +33,15 @@ useNetwork(): Promise<CapResult<NetworkType>>
 | `online` | `boolean` | Yes | Whether the device is online (normalized from navigator.onLine / wx.getNetworkType) |
 | `type` | `'unknown' \| 'wifi' \| 'cellular' \| 'none'` | Yes | Network type (web has no finer granularity → unknown; offline → none) |
 
+## Error codes
+
+| code | Doc |
+|---|---|
+| `network.unsupported` | — |
+| `network.failed` | — |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
 ## Compat rollout
 
 | Target | Status | Notes |
