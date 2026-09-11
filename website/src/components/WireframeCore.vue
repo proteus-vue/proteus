@@ -18,6 +18,8 @@ const props = defineProps({
   alpha: { type: Number, default: 0.62 },
   /** 旋转速度（弧度/秒） */
   speed: { type: Number, default: 0.22 },
+  /** 投影缩放（几何体占比） */
+  scale: { type: Number, default: 0.82 },
 })
 
 const cv = ref<HTMLCanvasElement | null>(null)
@@ -39,6 +41,7 @@ onMounted(() => {
     color: hexToRgb01(props.color),
     alpha: props.alpha,
     speed: props.speed,
+    scale: props.scale,
     still: reduce,
   })
   if (!handle) off.value = true // WebGL 不可用 → 隐藏 canvas（布局不受影响）

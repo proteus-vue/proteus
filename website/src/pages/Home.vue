@@ -309,6 +309,9 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
         <!-- 产品视觉：真实 IDE/控制台 mock（纯 CSS + 语法着色；aria-hidden 装饰层） -->
         <p-view class="hero-visual" aria-hidden="true">
           <span class="hv-glow" />
+          <!-- ★零依赖 WebGL 线框核心（icosahedron）——进首页即可见的「炫技」：
+               比 IDE 窗口大一圈 → 几何体外沿环绕应用窗口（应用浮于 3D 结构之中）。 -->
+          <WireframeCore class="hv-core" color="#7c5cff" :alpha="0.7" :speed="0.2" :scale="1.25" />
           <p-view class="hv-frame">
             <!-- 标题栏：窗口控件 + 当前文件 tab + 运行态徽标 -->
             <p-stack direction="row" :gap="10" class="hv-bar">
@@ -627,10 +630,22 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   transform: translate(-50%, -50%);
   z-index: 0;
 }
+.hv-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 156%;
+  height: 156%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
 .hv-frame {
   position: relative;
   z-index: 1;
-  background: var(--panel);
+  /* 窗口微透明：背后线框几何体隐隐透出（浮于 3D 结构之上的观感），仍保证代码可读 */
+  background: rgba(20, 20, 25, 0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   overflow: hidden;
