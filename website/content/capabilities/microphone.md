@@ -59,6 +59,27 @@ useMicrophone(): Promise<CapResult<MediaAccess>>
 
 > 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
 
+## 扩展接口
+
+除主 hook `useMicrophone` 外，本能力还提供以下操作接口：
+
+### `useRecorder`
+
+```ts
+useRecorder(): CapResult<RecorderController>
+```
+
+#### `RecorderController` 的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `start` | `start(options?: RecordOptions): Promise<CapResult<void>>` | — |
+| `stop` | `stop(): Promise<CapResult<void>>` | — |
+| `pause` | `pause(): Promise<CapResult<void>>` | — |
+| `resume` | `resume(): Promise<CapResult<void>>` | — |
+| `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音事件（返回取消函数） |
+| `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（时长/大小） |
+
 ## 用法
 
 ```ts

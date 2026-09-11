@@ -23,8 +23,25 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `NFCAPI` | 成功载荷 |
+| `data` | `NFCAPI` | 成功载荷（结构见下） |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+#### `data`（`NFCAPI`）的属性
+
+| 属性 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `supported` | `boolean` | 是 | 平台是否支持 NFC |
+| `available` | `boolean` | 是 | NFC 当前可用（已开启） |
+
+#### `data`（`NFCAPI`）的方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| `startHCE` | `startHCE(aidList: string[]): Promise<CapResult<void>>` | 启动 HCE（模拟卡；aidList 应用标识） |
+| `stopHCE` | `stopHCE(): Promise<CapResult<void>>` | 停止 HCE |
+| `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | 发送 APDU 响应（收到 onHCEMessage 后回） |
+| `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | 订阅 HCE 消息（返回取消） |
+| `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
 
 ## 错误码
 

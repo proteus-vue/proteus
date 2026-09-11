@@ -15,6 +15,18 @@ const COMP_DIR = path.join(ROOT, 'src', 'components')
 const OUT_COMP = path.join(ROOT, 'website', 'content', 'components')
 const OUT_CAP = path.join(ROOT, 'website', 'content', 'capabilities')
 
+// ★官网漏修：能力「扩展 Hook」映射——某些能力的富操作接口由**额外 hook** 暴露（非 c.api 那一个），
+//   如 C1 相机 → useCameraContext(id)、C2 录音 → useRecorder()、C5 传感器 → useSensorStream(kind)、
+//   C20 日历 → useCalendarAPI()、C17 通知 → useDeviceNotification/useCustomerService。
+//   这些也要在能力页展示（否则官网只见主 hook，富接口不可见）。value = 扩展 hook 名数组。
+const CAP_EXTRA_HOOKS = {
+  'capability.camera': ['useCameraContext'],
+  'capability.microphone': ['useRecorder'],
+  'capability.sensor': ['useSensorStream'],
+  'capability.calendar': ['useCalendarAPI'],
+  'capability.notification': ['useDeviceNotification', 'useCustomerService'],
+}
+
 // ★2026-09-10：--check 漂移模式（此前只能覆盖写、无门禁 → 手改文档与源脱节无人拦）。
 //   与 gen-reference.mjs 同模式：--check 只比对不写，不一致 exit 1。
 const check = process.argv.includes('--check')
@@ -87,23 +99,55 @@ function extractFnKeys(src, fnName) {
 //   ★#490 补方法成员：句柄型接口（CookieJar/BackgroundAPI/FSAdapter…）的结构本体是方法——属性通道排除 '): ' 行，这里成对补齐
 function extractInterfaces(src) {
   const out = {}
-  const re = /(?:\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*\n)?export interface (\w+)(?:<[^>]*>)? \{([^\0]*?)\n\}/g
+  // ★官网漏修（2026-09-11）：原正则只认 `export interface X {` —— 漏三类 → 官网方法表缺失：
+  //   ① extends（BluetoothAPI extends BluetoothInfo / NFCAPI extends NfcInfo）
+  //   ② 单行接口（MapPolyline/MapCircle `{ ... }` 同行——还会吞掉紧随的 MapController）
+  //   ③ 带泛型默认值的接口（ReactiveStorage<TState extends ... = ...>）
+  //   改：定位每个 `export interface NAME`，从其后第一个 `{` 起花括号配对取 body（含跨行/单行/extends/泛型）。
+  const re = /(?:\/\*\*((?:[^*]|\*(?!\/))*)\*\/\s*)?export interface (\w+)([^{;]*?)\{/g
   let m
   while ((m = re.exec(src))) {
-    const [, jsdoc, name, body] = m
-    const props = []
-    // 逐属性：前置 JSDoc（可跨行，tempered）或行尾 // 注释；方法成员/JSDoc 内文行不入表（CapabilityBridge.tel 假阳性教训）
-    const pre = /((?:\/\*\*(?:[^*]|\*(?!\/))*\*\/\s*\n)?)(\s*)(\w+)(\?)?:\s*([^\n]+)/g
-    let p
-    while ((p = pre.exec(body))) {
-      if (/\):\s/.test(p[5])) continue // 方法参数碎片（login(provider?: string): Promise<...> 的内参）——真实属性类型不含 '): '
-      let doc = ''
-      if (p[1]) {
-        doc = p[1].replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ')
-      } else if (/\/\//.test(p[5])) {
-        doc = p[5].split('//').pop().trim()
+    const jsdoc = m[1]
+    const name = m[2]
+    // extends 基名（如 ` extends BluetoothInfo）——合并父接口属性到本接口
+    const extM = (m[3] || '').match(/extends\s+([\w.]+)/)
+    const extendsName = extM ? extM[1] : null
+    const braceStart = m.index + m[0].length - 1
+    // 花括号配对（跳过字符串/注释简化：capability.ts 接口体无嵌套模板串干扰）
+    let depth = 0
+    let i = braceStart
+    for (; i < src.length; i++) {
+      const ch = src[i]
+      if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) break
       }
-      props.push({ name: p[3], optional: p[4] === '?', type: p[5].replace(/\/\/.*$/, '').trim(), doc })
+    }
+    const body = src.slice(braceStart + 1, i)
+    re.lastIndex = i + 1
+    const props = []
+    // ★官网漏修：属性解析改**行级**（原多行正则会把 `getAdapterState(): Promise<CapResult<{ available: boolean; ... }>>`
+    //   的参数碎片误当属性 → 类型截断）。行级规则：跳过注释行 / 含 `(` 的方法行 / 含 `<` 泛型参数行，仅收 `name?: type`。
+    {
+      const propLines = body.split('\n')
+      let pdoc = ''
+      for (const raw of propLines) {
+        const t = raw.trim()
+        if (!t) continue
+        if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
+          pdoc = (pdoc ? pdoc + ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
+          continue
+        }
+        // 方法行（含 `(` 或 `):` 形态）→ 跳过且清零文档缓冲
+        if (/\(/.test(t)) { pdoc = ''; continue }
+        const pm = t.match(/^(\w+)(\?)?:\s*([^;]+);?\s*(?:\/\/(.*))?$/)
+        if (pm) {
+          const inline = pm[4] ? pm[4].trim() : ''
+          props.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim(), doc: (pdoc || inline).trim() })
+        }
+        pdoc = ''
+      }
     }
     // 方法成员（行级解析——capability.ts 接口成员均为单行；JSDoc 缓冲遇非注释行即清零）
     const methods = []
@@ -122,6 +166,15 @@ function extractInterfaces(src) {
       doc: jsdoc ? jsdoc.replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ') : '',
       props,
       methods,
+      extendsName,
+    }
+  }
+  // ★官网漏修：extends 合并（子接口属性 = 父接口属性（去重） + 自身属性）——BluetoothAPI/NFCAPI 状态字段可见
+  for (const name of Object.keys(out)) {
+    const base = out[name].extendsName
+    if (base && out[base]) {
+      const ownNames = new Set(out[name].props.map((x) => x.name))
+      out[name].props = [...out[base].props.filter((x) => !ownNames.has(x.name)), ...out[name].props]
     }
   }
   return out
@@ -1007,6 +1060,47 @@ function genCapabilities(ir, ends) {
     lines.push(...compatSection(capRows, '> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 端原型映射·能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。'))
     lines.push('> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。')
     lines.push('')
+    // ★官网漏修：扩展接口段（该能力的额外 hook——富操作句柄）
+    const extraHooks = CAP_EXTRA_HOOKS[c.semantic] ?? []
+    if (extraHooks.length) {
+      lines.push('## 扩展接口')
+      lines.push('')
+      lines.push(`除主 hook \`${hook}\` 外，本能力还提供以下操作接口：`)
+      lines.push('')
+      for (const eh of extraHooks) {
+        const ehSig = iface.match(new RegExp(`${eh}(?:<[^>(]*>)?\\([^)]*\\):\\s*[^\\n]+`))
+        lines.push(`### \`${eh}\``)
+        lines.push('')
+        if (ehSig) {
+          lines.push('```ts')
+          lines.push(ehSig[0].trim())
+          lines.push('```')
+          lines.push('')
+        }
+        // 句柄方法表（返回的接口结构）
+        const ehShape = hookShape(ehSig ? ehSig[0] : '', ifaces)
+        const ehIface = ehShape.dataIface || ehShape.handleIface
+        const ehT = ehShape.dataElemT || ehShape.handleT
+        if (ehIface && (ehIface.props.length || ehIface.methods.length)) {
+          if (ehIface.props.length) {
+            lines.push(`#### \`${ehT}\` 的属性`)
+            lines.push('')
+            lines.push('| 属性 | 类型 | 必填 | 说明 |')
+            lines.push('|---|---|---|---|')
+            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? '否' : '是'} | ${pr.doc || '—'} |`)
+            lines.push('')
+          }
+          if (ehIface.methods.length) {
+            lines.push(`#### \`${ehT}\` 的方法`)
+            lines.push('')
+            lines.push('| 方法 | 签名 | 说明 |')
+            lines.push('|---|---|---|')
+            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+            lines.push('')
+          }
+        }
+      }
+    }
     lines.push('## 用法')
     lines.push('')
     lines.push('```ts')
@@ -1395,6 +1489,46 @@ async function genCapabilitiesEn(ir, ends) {
     lines.push('')
     lines.push(CAP_SHARED_EN.ironRule)
     lines.push('')
+    // ★官网漏修：扩展接口段（EN 镜像——与 zh 结构对称，避免 en-drift）
+    const extraHooksEn = CAP_EXTRA_HOOKS[c.semantic] ?? []
+    if (extraHooksEn.length) {
+      lines.push('## Extension interfaces')
+      lines.push('')
+      lines.push(`Beyond the primary hook \`${hook}\`, this capability also exposes these operation interfaces:`)
+      lines.push('')
+      for (const eh of extraHooksEn) {
+        const ehSig = iface.match(new RegExp(`${eh}(?:<[^>(]*>)?\\([^)]*\\):\\s*[^\\n]+`))
+        lines.push(`### \`${eh}\``)
+        lines.push('')
+        if (ehSig) {
+          lines.push('```ts')
+          lines.push(ehSig[0].trim())
+          lines.push('```')
+          lines.push('')
+        }
+        const ehShape = hookShape(ehSig ? ehSig[0] : '', ifaces)
+        const ehIface = ehShape.dataIface || ehShape.handleIface
+        const ehT = ehShape.dataElemT || ehShape.handleT
+        if (ehIface && (ehIface.props.length || ehIface.methods.length)) {
+          if (ehIface.props.length) {
+            lines.push(`#### \`${ehT}\` props`)
+            lines.push('')
+            lines.push('| Prop | Type | Required | Doc |')
+            lines.push('|---|---|---|---|')
+            for (const pr of ehIface.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.optional ? 'No' : 'Yes'} | ${pr.doc || '—'} |`)
+            lines.push('')
+          }
+          if (ehIface.methods.length) {
+            lines.push(`#### \`${ehT}\` methods`)
+            lines.push('')
+            lines.push('| Method | Signature | Doc |')
+            lines.push('|---|---|---|')
+            for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+            lines.push('')
+          }
+        }
+      }
+    }
     lines.push(CAP_SHARED_EN.hUsage)
     lines.push('')
     lines.push('```ts')

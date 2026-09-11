@@ -29,8 +29,27 @@ useMap(id: string): Promise<CapResult<MapController>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `MapController` | Success payload |
+| `data` | `MapController` | Success payload (methods below) |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+#### Methods of `MapController`
+
+| Method | Signature | Doc |
+|---|---|---|
+| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
+| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
+| `moveToLocation` | `moveToLocation(): Promise<CapResult<void>>` | — |
+| `includePoints` | `includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>` | — |
+| `translateMarker` | `translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>` | — |
+| `addMarkers` | `addMarkers(markers: MapMarker[]): Promise<CapResult<void>>` | — |
+| `removeMarkers` | `removeMarkers(ids: number[]): Promise<CapResult<void>>` | — |
+| `addPolylines` | `addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>` | — |
+| `removePolylines` | `removePolylines(ids: number[]): Promise<CapResult<void>>` | — |
+| `addCircles` | `addCircles(circles: MapCircle[]): Promise<CapResult<void>>` | — |
+| `removeCircles` | `removeCircles(ids: number[]): Promise<CapResult<void>>` | — |
+| `getScale` | `getScale(): Promise<CapResult<number>>` | — |
+| `openMapApp` | `openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>` | — |
+| `on` | `on(event: 'regionchange' \| 'markerTap' \| 'updated', cb: (payload: unknown) => void): () => void` | — |
 
 ## Error codes
 
