@@ -47,7 +47,7 @@ order: 2013
 ## 实现要点
 
 - 导航项超出容器 → 多余项收进「更多」（展开面板）——calcVisibleToolbarItems 纯计算（fluid 包）
-- 按容器而非视口求解（createContainerQuery）；容器不可测（MP 无 ResizeObserver）→ 不折叠全显示（铁律 G-22.2）
+- 按容器而非视口求解（createContainerQuery）；★Skyline 线收口：MP 下经 SelectorQuery 测量容器 → 溢出折叠真生效
 - ★车机：drive-mode / prefers-reduced-motion → no-motion class（CSS 禁用动效）
 
 ## 用法

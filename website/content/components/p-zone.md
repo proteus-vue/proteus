@@ -1,7 +1,7 @@
 ---
 title: p-zone
 group: 布局
-order: 16
+order: 17
 ---
 
 # p-zone
@@ -39,7 +39,7 @@ order: 16
 
 - 容器断点（sm/md/lg/xl，按容器宽度非视口）→ 渲染对应命名槽（sm/md/lg/xl；缺省 xl 槽兜底）
 - 薄壳引用 @proteus-vue/fluid（createContainerQuery）
-- ★MP 安全：泛型 ref 降级（MP 下无 ResizeObserver → 恒 sm 槽）
+- ★Skyline 线收口：MP 下经 SelectorQuery 测量容器（运行时测量类），容器断点真生效
 
 ## 用法
 

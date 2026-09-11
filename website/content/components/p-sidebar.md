@@ -1,7 +1,7 @@
 ---
 title: p-sidebar
 group: 布局
-order: 11
+order: 12
 ---
 
 # p-sidebar

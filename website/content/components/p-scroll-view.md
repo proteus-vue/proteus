@@ -1,7 +1,7 @@
 ---
 title: p-scroll-view
 group: 布局
-order: 10
+order: 11
 ---
 
 # p-scroll-view
