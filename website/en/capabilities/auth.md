@@ -36,6 +36,60 @@ Returns `AuthState` (synchronous handle/state object).
 | `setToken` | `setToken(token: string \| null): void` | Manually set the token (third-party login / server-issued session) |
 | `subscribe` | `subscribe(cb: (token: string \| null) => void): () => void` | Subscribe to auth-state changes (returns an unsubscribe function) |
 
+#### Method details
+
+##### `login`
+
+```ts
+login(provider?: string): Promise<CapResult<string>>
+```
+
+**Doc**: Log in via the host bridge (stores the token on success; missing bridge → explicit Err)
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `provider` | `string` | No | — |
+
+**Returns**: `Promise<CapResult<string>>`
+
+##### `logout`
+
+```ts
+logout(): Promise<CapResult<void>>
+```
+
+**Doc**: Log out (clears the token)
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `setToken`
+
+```ts
+setToken(token: string | null): void
+```
+
+**Doc**: Manually set the token (third-party login / server-issued session)
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `token` | `string \| null` | Yes | — |
+
+**Returns**: `void`
+
+##### `subscribe`
+
+```ts
+subscribe(cb: (token: string | null) => void): () => void
+```
+
+**Doc**: Subscribe to auth-state changes (returns an unsubscribe function)
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(token: string \| null) => void` | Yes | — |
+
+**Returns**: `() => void`
+
 ## Compat rollout
 
 | Target | Status | Notes |

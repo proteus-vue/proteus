@@ -24,9 +24,56 @@ useLog(): Logger
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | — |
-| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | — |
+| `log` | `log(message: string, data?: unknown): Promise<CapResult<void>>` | 普通日志 |
+| `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | 警告日志 |
+| `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | 错误日志（可触发上报） |
+
+#### 方法详解
+
+##### `log`
+
+```ts
+log(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+**说明**：普通日志
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `message` | `string` | 是 | 字符串参数 |
+| `data` | `unknown` | 否 | 数据 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `warn`
+
+```ts
+warn(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+**说明**：警告日志
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `message` | `string` | 是 | 字符串参数 |
+| `data` | `unknown` | 否 | 数据 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `error`
+
+```ts
+error(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+**说明**：错误日志（可触发上报）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `message` | `string` | 是 | 字符串参数 |
+| `data` | `unknown` | 否 | 数据 |
+
+**返回值**：`Promise<CapResult<void>>`
 
 ## 错误码
 

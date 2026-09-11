@@ -30,10 +30,66 @@ useCookie(): Promise<CapResult<CookieJar>>
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `get` | `get(name: string): string \| undefined` | — |
-| `set` | `set(name: string, value: string, maxAge?: number): void` | — |
-| `remove` | `remove(name: string): void` | — |
-| `list` | `list(): Record<string, string>` | — |
+| `get` | `get(name: string): string \| undefined` | 读取 cookie |
+| `set` | `set(name: string, value: string, maxAge?: number): void` | 写入 cookie（maxAge 秒；缺省会话级） |
+| `remove` | `remove(name: string): void` | 删除 cookie |
+| `list` | `list(): Record<string, string>` | 列出全部 cookie |
+
+#### 方法详解
+
+##### `get`
+
+```ts
+get(name: string): string | undefined
+```
+
+**说明**：读取 cookie
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `string` | 是 | 名称 |
+
+**返回值**：`string \| undefined`
+
+##### `set`
+
+```ts
+set(name: string, value: string, maxAge?: number): void
+```
+
+**说明**：写入 cookie（maxAge 秒；缺省会话级）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `string` | 是 | 名称 |
+| `value` | `string` | 是 | 值 |
+| `maxAge` | `number` | 否 | 数值参数 |
+
+**返回值**：`void`
+
+##### `remove`
+
+```ts
+remove(name: string): void
+```
+
+**说明**：删除 cookie
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `string` | 是 | 名称 |
+
+**返回值**：`void`
+
+##### `list`
+
+```ts
+list(): Record<string, string>
+```
+
+**说明**：列出全部 cookie
+
+**返回值**：`Record<string, string>`
 
 ## 错误码
 

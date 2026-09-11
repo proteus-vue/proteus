@@ -18,7 +18,7 @@ useDownload(url: string, options?: DownloadOptions, onProgress?: ProgressCallbac
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `url` | `string` | Yes | Target URL (HTTPS) |
 | `options` | `DownloadOptions` | No | C30 download options |

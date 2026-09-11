@@ -30,7 +30,32 @@ useKeyboard(): KeyboardLifecycle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | — |
+| `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | 订阅键盘高度变化（返回取消） |
+
+#### 方法详解
+
+##### `onChange`
+
+```ts
+onChange(cb: (info: KeyboardInfo) => void): () => void
+```
+
+**说明**：订阅键盘高度变化（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(info: KeyboardInfo) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+#### 类型引用
+
+**`KeyboardInfo`** — C14 键盘信息（高度 px + 可见性）
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `height` | `number` | 键盘高度（px） |
+| `visible` | `boolean` | 键盘是否可见 |
 
 ## 错误码
 

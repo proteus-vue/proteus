@@ -73,12 +73,99 @@ useRecorder(): CapResult<RecorderController>
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `start` | `start(options?: RecordOptions): Promise<CapResult<void>>` | — |
-| `stop` | `stop(): Promise<CapResult<void>>` | — |
-| `pause` | `pause(): Promise<CapResult<void>>` | — |
-| `resume` | `resume(): Promise<CapResult<void>>` | — |
-| `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音事件（返回取消函数） |
-| `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（时长/大小） |
+| `start` | `start(options?: RecordOptions): Promise<CapResult<void>>` | 开始录音。 |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止录音（结果经 on('stop') 回调返回） |
+| `pause` | `pause(): Promise<CapResult<void>>` | 暂停录音（可从当前位置 resume） |
+| `resume` | `resume(): Promise<CapResult<void>>` | 恢复录音 |
+| `on` | `on(event: 'start' \| 'stop' \| 'pause' \| 'resume' \| 'error', cb: (payload: unknown) => void): () => void` | 订阅录音生命周期事件。 |
+| `onFrameRecorded` | `onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void` | 订阅录音帧（录 per-frame 数据，用于实时波形/编码）。 |
+
+##### 方法详解
+
+###### `start`
+
+```ts
+start(options?: RecordOptions): Promise<CapResult<void>>
+```
+
+**说明**：开始录音。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `RecordOptions` | 否 | 录音参数（时长/采样率/声道/码率/格式） |
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `stop`
+
+```ts
+stop(): Promise<CapResult<void>>
+```
+
+**说明**：停止录音（结果经 on('stop') 回调返回）
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `pause`
+
+```ts
+pause(): Promise<CapResult<void>>
+```
+
+**说明**：暂停录音（可从当前位置 resume）
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `resume`
+
+```ts
+resume(): Promise<CapResult<void>>
+```
+
+**说明**：恢复录音
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `on`
+
+```ts
+on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void): () => void
+```
+
+**说明**：订阅录音生命周期事件。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `event` | `'start' \| 'stop' \| 'pause' \| 'resume' \| 'error'` | 是 | 事件名（start / stop / pause / resume / error） |
+| `cb` | `(payload: unknown) => void` | 是 | 事件处理器（stop 携带录音结果） |
+
+**返回值**：`() => void`——取消订阅函数
+
+###### `onFrameRecorded`
+
+```ts
+onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
+```
+
+**说明**：订阅录音帧（录 per-frame 数据，用于实时波形/编码）。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void` | 是 | 帧回调（frameBuffer 帧数据、isLastFrame 是否末帧） |
+
+**返回值**：`() => void`——取消订阅函数
+
+##### 类型引用
+
+**`RecordOptions`** — 录音状态（wx RecorderManager onStart/onStop 等）
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `duration` | `number` | 录音时长（ms；到时自动停止） |
+| `sampleRate` | `number` | 采样率（Hz，如 44100） |
+| `numberOfChannels` | `number` | 声道数 |
+| `encodeBitRate` | `number` | 编码码率（bps） |
+| `format` | `'mp3' \| 'aac' \| 'wav' \| 'PCM'` | 音频格式 |
 
 ## 用法
 

@@ -18,7 +18,7 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `options` | `DataChannelOptions` | Yes | C31 data channel (live/real-time — bridged by the host; honest Err fallback by default) |
 
@@ -44,6 +44,32 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 |---|---|---|
 | `send` | `send(data: string): Promise<CapResult<void>>` | — |
 | `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
+
+#### Method details
+
+##### `send`
+
+```ts
+send(data: string): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `data` | `string` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `onMessage`
+
+```ts
+onMessage(cb: (data: string) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(data: string) => void` | Yes | — |
+
+**Returns**: `() => void`
 
 ## Error codes
 

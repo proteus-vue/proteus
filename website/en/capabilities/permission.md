@@ -18,7 +18,7 @@ usePermission(name: string): Promise<CapResult<PermissionState>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `name` | `string` | Yes | Permission name (standard web Permissions API name) |
 

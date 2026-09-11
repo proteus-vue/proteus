@@ -993,6 +993,13 @@ export const CAP_SHARED_EN = {
   dataPropsTitle: (name) => `#### Properties of the \`${name}\` object`,
   directPropsTitle: (t) => `#### Properties of \`${t}\``,
   methodsTitle: (t) => `#### Methods of \`${t}\``,
+  methodsDetailTitle: '#### Method details',
+  typeRefsTitle: '#### Referenced types',
+  paramCols: ['Param', 'Type', 'Required', 'Doc'],
+  requiredYes: 'Yes',
+  requiredNo: 'No',
+  returnsLabel: 'Returns',
+  descLabel: 'Doc',
   methodCols: '| Method | Signature | Doc |',
   noDataGeneric: '—',
   capLegend:

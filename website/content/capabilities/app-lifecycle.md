@@ -30,9 +30,53 @@ useAppLifecycle(): AppLifecycle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onLaunch` | `onLaunch(cb: () => void): () => void` | — |
-| `onShow` | `onShow(cb: () => void): () => void` | — |
-| `onHide` | `onHide(cb: () => void): () => void` | — |
+| `onLaunch` | `onLaunch(cb: () => void): () => void` | 订阅「应用启动」（返回取消） |
+| `onShow` | `onShow(cb: () => void): () => void` | 订阅「应用进入前台」（返回取消） |
+| `onHide` | `onHide(cb: () => void): () => void` | 订阅「应用退到后台」（返回取消） |
+
+#### 方法详解
+
+##### `onLaunch`
+
+```ts
+onLaunch(cb: () => void): () => void
+```
+
+**说明**：订阅「应用启动」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onShow`
+
+```ts
+onShow(cb: () => void): () => void
+```
+
+**说明**：订阅「应用进入前台」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onHide`
+
+```ts
+onHide(cb: () => void): () => void
+```
+
+**说明**：订阅「应用退到后台」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
 
 ## 错误码
 

@@ -30,7 +30,7 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
+| `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | 订阅前后台切换（返回取消） |
 | `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
 | `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
 | `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
@@ -39,6 +39,135 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
 | `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
 | `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
+
+#### 方法详解
+
+##### `onEvent`
+
+```ts
+onEvent(cb: (e: BackgroundEvent) => void): () => void
+```
+
+**说明**：订阅前后台切换（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(e: BackgroundEvent) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onMemoryWarning`
+
+```ts
+onMemoryWarning(cb: (level: number) => void): () => void
+```
+
+**说明**：内存警告（wx.onMemoryWarning）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(level: number) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onThemeChange`
+
+```ts
+onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
+```
+
+**说明**：主题变化（wx.onThemeChange，深色/浅色）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(theme: 'dark' \| 'light') => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onWindowResize`
+
+```ts
+onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void
+```
+
+**说明**：窗口尺寸变化（wx.onWindowResize / web resize）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(size: { windowWidth: number; windowHeight: number }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onError`
+
+```ts
+onError(cb: (error: string) => void): () => void
+```
+
+**说明**：小程序错误（wx.onError）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(error: string) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onUnhandledRejection`
+
+```ts
+onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void
+```
+
+**说明**：未处理的 Promise rejection（wx.onUnhandledRejection）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(reason: { reason: string; promise: Promise<unknown> }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onNetworkStatusChange`
+
+```ts
+onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void
+```
+
+**说明**：网络状态变化（wx.onNetworkStatusChange）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(status: { isConnected: boolean; networkType: string }) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `getLaunchOptions`
+
+```ts
+getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
+```
+
+**说明**：启动参数（wx.getLaunchOptionsSync）
+
+**返回值**：`Promise<CapResult<Record<string, unknown>>>`
+
+##### `getEnterOptions`
+
+```ts
+getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
+```
+
+**说明**：当前进入参数（wx.getEnterOptionsSync）
+
+**返回值**：`Promise<CapResult<Record<string, unknown>>>`
+
+#### 类型引用
+
+**`BackgroundEvent`** — C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
+| `time` | `number` | 事件时间戳（ms） |
 
 ## 错误码
 

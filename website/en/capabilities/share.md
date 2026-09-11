@@ -18,7 +18,7 @@ useShare(options: ShareOptions): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `options` | `ShareOptions` | Yes | Options object (fields in the table below) |
 

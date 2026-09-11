@@ -41,6 +41,52 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 | `close` | `close(code?: number, reason?: string): void` | 关闭连接 |
 | `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | 订阅事件（返回取消订阅函数）——open/message/close/error |
 
+#### 方法详解
+
+##### `send`
+
+```ts
+send(data: string | ArrayBuffer): void
+```
+
+**说明**：发送消息（字符串或二进制）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `data` | `string \| ArrayBuffer` | 是 | 数据 |
+
+**返回值**：`void`
+
+##### `close`
+
+```ts
+close(code?: number, reason?: string): void
+```
+
+**说明**：关闭连接
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `code` | `number` | 否 | 数值参数 |
+| `reason` | `string` | 否 | 字符串参数 |
+
+**返回值**：`void`
+
+##### `on`
+
+```ts
+on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void
+```
+
+**说明**：订阅事件（返回取消订阅函数）——open/message/close/error
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `event` | `'open' \| 'message' \| 'close' \| 'error'` | 是 | 事件名 |
+| `handler` | `(payload?: unknown) => void` | 否 | 回调函数 |
+
+**返回值**：`() => void`
+
 ## 错误码
 
 | code | 说明 |

@@ -42,8 +42,38 @@ useDataChannel(options: DataChannelOptions): Promise<CapResult<DataChannelHandle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `send` | `send(data: string): Promise<CapResult<void>>` | — |
-| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | — |
+| `send` | `send(data: string): Promise<CapResult<void>>` | 发送文本消息 |
+| `onMessage` | `onMessage(cb: (data: string) => void): () => void` | 订阅收到消息（返回取消） |
+
+#### 方法详解
+
+##### `send`
+
+```ts
+send(data: string): Promise<CapResult<void>>
+```
+
+**说明**：发送文本消息
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `data` | `string` | 是 | 数据 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `onMessage`
+
+```ts
+onMessage(cb: (data: string) => void): () => void
+```
+
+**说明**：订阅收到消息（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(data: string) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
 
 ## 错误码
 

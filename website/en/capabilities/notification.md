@@ -18,7 +18,7 @@ useNotification(templateId: string): Promise<CapResult<MessageSubscription>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `templateId` | `string` | Yes | Subscription message template ID (registered on the Official Platform) |
 

@@ -18,7 +18,7 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `url` | `string` | Yes | Target URL (HTTPS) |
 | `protocols` | `string[]` | No | WebSocket subprotocols (optional) |
@@ -40,6 +40,52 @@ useWebSocket(url: string, protocols?: string[]): Promise<CapResult<WebSocketConn
 | `send` | `send(data: string \| ArrayBuffer): void` | Send a message (string or binary) |
 | `close` | `close(code?: number, reason?: string): void` | Close the connection |
 | `on` | `on(event: 'open' \| 'message' \| 'close' \| 'error', handler: (payload?: unknown) => void): () => void` | Subscribe to events (returns an unsubscribe function) — open/message/close/error |
+
+#### Method details
+
+##### `send`
+
+```ts
+send(data: string | ArrayBuffer): void
+```
+
+**Doc**: Send a message (string or binary)
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `data` | `string \| ArrayBuffer` | Yes | — |
+
+**Returns**: `void`
+
+##### `close`
+
+```ts
+close(code?: number, reason?: string): void
+```
+
+**Doc**: Close the connection
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `code` | `number` | No | — |
+| `reason` | `string` | No | — |
+
+**Returns**: `void`
+
+##### `on`
+
+```ts
+on(event: 'open' | 'message' | 'close' | 'error', handler: (payload?: unknown) => void): () => void
+```
+
+**Doc**: Subscribe to events (returns an unsubscribe function) — open/message/close/error
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `event` | `'open' \| 'message' \| 'close' \| 'error'` | Yes | — |
+| `handler` | `(payload?: unknown) => void` | No | — |
+
+**Returns**: `() => void`
 
 ## Error codes
 

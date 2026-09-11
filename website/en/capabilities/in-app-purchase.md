@@ -18,7 +18,7 @@ useInAppPurchase(productId: string): Promise<CapResult<IAPReceipt>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `productId` | `string` | Yes | In-app purchase product ID (registered in the app store) |
 

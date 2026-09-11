@@ -32,6 +32,29 @@ Returns `KeyboardLifecycle` (synchronous handle/state object).
 |---|---|---|
 | `onChange` | `onChange(cb: (info: KeyboardInfo) => void): () => void` | — |
 
+#### Method details
+
+##### `onChange`
+
+```ts
+onChange(cb: (info: KeyboardInfo) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(info: KeyboardInfo) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+#### Referenced types
+
+**`KeyboardInfo`** — C14 键盘信息（高度 px + 可见性）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `height` | `number` | 键盘高度（px） |
+| `visible` | `boolean` | 键盘是否可见 |
+
 ## Error codes
 
 | code | Doc |

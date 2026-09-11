@@ -18,7 +18,7 @@ useVibrate(durationMs?: number): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `durationMs` | `number` | No | Vibration duration (ms) |
 

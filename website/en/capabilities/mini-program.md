@@ -32,6 +32,30 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 |---|---|---|
 | `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
 
+#### Method details
+
+##### `navigate`
+
+```ts
+navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `options` | `MiniProgramNavOptions` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+#### Referenced types
+
+**`MiniProgramNavOptions`** — C47 小程序跳转（wx.navigateToMiniProgram）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `appId` | `string` | 目标小程序 appId |
+| `path` | `string` | 目标页路径（缺省首页） |
+| `extraData` | `Record<string, unknown>` | 传递给目标小程序的数据（target app onLoad options.extraData） |
+
 ## Error codes
 
 | code | Doc |

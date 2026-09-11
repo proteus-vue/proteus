@@ -24,7 +24,24 @@ useAnalytics(): TrackAPI
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | — |
+| `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | 上报埋点事件 |
+
+#### 方法详解
+
+##### `track`
+
+```ts
+track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
+```
+
+**说明**：上报埋点事件
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `name` | `string` | 是 | 名称 |
+| `params` | `Record<string, unknown>` | 否 | 附加参数对象 |
+
+**返回值**：`Promise<CapResult<void>>`
 
 ## 错误码
 
