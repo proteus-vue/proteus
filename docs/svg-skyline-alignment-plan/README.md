@@ -343,7 +343,7 @@ SVG 内部元素**事件命中**不支持（`<image>` 无内部元素，canvas �
 | `<animateTransform type="scale" values="1;0.75;1">` | CSS `scale` 关键帧 |
 | `<animateTransform type="translate" …>` | CSS `translate` 关键帧 |
 | `<animate attributeName="opacity" values="1;0.2;1">` | CSS `opacity` 关键帧 |
-| `<animate attributeName="cx"/"d"/"stroke-dashoffset">` | ❌ 不转译（CSS 无法表达形状变化——诚实边界） |
+| `<animate attributeName="cx"/"d"/"stroke-dashoffset">` | ❌ 不转译为 **CSS**（CSS 无法表达形状变化）→ ✅ 改走 **Canvas 通道**逐帧绘制（`p-svg-canvas`，见 §12） |
 
 **产物示例**：
 ```html
@@ -463,15 +463,17 @@ Skyline 2.02.2609072 / SDK 3.16.2，**在 `onMounted`（正常运行时上下文
 | 动画（描边/变换/淡入淡出） | ① 简单动画：CSS `@keyframes` 作用于 WXML 元素；② 复杂矢量动画 → 离屏 canvas + rAF（48fps 实测） |
 | 大量图形 + 高频更新 | 离屏 canvas 全量重绘（2ms/200 图形） |
 
-**实现要点（若做 canvas 通道）**：
-- 解析一次 → `createPath2D()` 持有几何，动画只改参数（对齐原生"几何缓存"思路）
-- 静态层预栅格化缓存，每帧只重绘变化层
-- `requestAnimationFrame` 驱动，**避免每帧 setData**（回传是瓶颈——可用 rAF 节流或只在需要时 toDataURL）
+**实现要点（★已落地——见 §12）**：
+- 解析一次 → 共享几何（自写 SVG d 解析器；真机 `createPath2D(SVG字符串)` 不可用），动画只改参数
+- 每帧按相位全量重绘 → `canvasToTempFilePath` 回传 → `<image src>`（回传是瓶颈 → 节流 + 在途保护）
+- 节流用**单调时钟**（非动画相位——相位回绕会致 src 永久停更）；画布按 DPR 放大（清晰度）
 - 画布尺寸 ≤1365×1365（官方限制），按 DPR scale
-- ⚠️ **不能依赖 `node()` 拿可见 canvas**——只能用离屏 canvas + data-URI 回传（或 `wx.canvasToTempFilePath`）
+- ⚠️ **不能依赖 `node()` 拿可见 canvas**——用离屏 canvas + `canvasToTempFilePath` 回传（`src` 必须裸路径，拼查询参数真机不渲染）
+- 临时文件写 `USER_DATA_PATH`（可 unlink；默认 `http://tmp/` 权限不足）+ 保留最近 N 个（配额/长跑）
 
-**诚实边界**：本调研**未实现** canvas 渲染通道（工作量：运行时组件 + SVG d 解析器 + 绘制管线 + 重绘调度）；
-结论基于真机探针实测 + 原生方案调研，作为后续立项依据。
+**落地状态（2026-09-10 收官）**：canvas 渲染通道**已实现并真机验证**——`p-svg-canvas` 组件 +
+自写 SVG d 解析器 + 绘制管线 + `setInterval` 重绘调度（形状动画 / 嵌套变换 / animateMotion 三通道）；
+真机复测正常（长时运行不停止 + 图形完整 + 清理生效）。本节早期「未实现/后续立项」的表述已过时。
 
 ### 12.4 ★骨骼动画（嵌套变换复合）——编译器通道判定修复（2026-09-10）
 
@@ -593,11 +595,27 @@ web 保留原生 `<svg>`（真实动画）`build:web` ✓。
 
 | 边界 | 原因 | 替代方案 |
 |---|---|---|
-| `text`/`tspan` | Skyline image 丢弃文字元素（WebView 正常，官方未记载） | 编译期自动提升为原生 `<text>` 叠加 |
-| `animateMotion` | image 静态光栅化不播放；Canvas 通道未实现路径运动 | 用形状动画（cx/cy 关键帧）近似 |
-| SVG 内部事件命中 | `<image>` 无内部元素 | 几何判定（path 用包围盒近似；带 transform 不参与） |
+| `text`/`tspan`（带 transform） | Skyline image 丢弃文字元素（WebView 正常，官方未记载）；带 transform 无法安全提升为叠加层 | 无 transform → 编译期自动提升为原生 `<text>` 叠加；带 transform → 诚实降级（不提升） |
+| SVG 内部事件命中（带 transform） | `<image>` 无内部元素；几何判定不换算 transform 矩阵 | 无 transform 图形：几何判定（path 用包围盒近似）；带 transform：不参与命中 |
 | `v-for` 的 SVG | 列表展开 + key 管理复杂度高 | 保持编译期警告 |
 | 百分比单位 / `<style>` 元素 | 官方明确不支持 | — |
 
-**结论**：SVG 常用能力（图形/渐变/裁剪/遮罩/滤镜/图案/标记/内嵌图/动画/文字）**已对齐并真机验证**；
+**结论**：SVG 常用能力（图形/渐变/裁剪/遮罩/滤镜/图案/标记/内嵌图/动画/文字/事件/动态绑定）**已对齐并真机验证**；
 剩余边界均有明确原因与替代方案（非"未实现"）。
+
+## ★收官（2026-09-10）
+
+**SVG → Skyline 专项收尾**——用户真机复测正常，全线闭环：
+
+| 能力 | 通道 | 状态 |
+|---|---|---|
+| 静态图形/渐变/裁剪/遮罩/滤镜/图案/标记/内嵌图 | 编译期 lowering → `<image>` data-URI | ✅ 真机验证 |
+| 动态绑定（`:d`/`:fill`/`v-if` 等） | `template/svg-dynamic` → 运行时 data-URI | ✅ |
+| 整体变换动画（rotate/scale/translate/opacity） | 编译期 → CSS `@keyframes`（零运行时） | ✅ |
+| 形状变化 / 嵌套变换 / animateMotion | Canvas 通道（`p-svg-canvas` 逐帧绘制） | ✅ 真机验证 |
+| 文字 | 编译期提升为原生 `<text>` | ✅（带 transform 除外） |
+| 事件命中 | 编译期几何表 + 运行时命中测试 | ✅（无 transform） |
+
+**过程修复的框架级缺陷**（这条线滚出的）：嵌套变换通道判定遗漏、圆弧折线锯齿、回传节流误用动画相位、
+临时文件配额（`USER_DATA_PATH`）、内联事件参数白名单过窄、`p-safe` 的 `env()` 在 Skyline 无效、
+数组源 `watch` 编译不出 observer、`ref<T>()` 泛型初值不可静态求值——均已在真机/模拟器验证。
