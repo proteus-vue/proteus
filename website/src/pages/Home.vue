@@ -648,7 +648,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .stat:hover { border-color: var(--brand); }
 .stat-value { color: var(--brand-ink); font-size: 26px; font-weight: 700; }
 .stat-label { color: var(--ink); font-size: 13px; }
-.stat-source { color: var(--muted); font-size: 11px; }
+.stat-source { color: var(--muted); font-size: 12px; }
 
 /* ---- 生态支持（技术栈行） ---- */
 .stack-row { justify-content: center; }
@@ -682,7 +682,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .cmp-table td { color: var(--muted); border-top: 1px solid var(--line); padding: 11px 14px; }
 .cmp-dim { color: var(--ink); font-weight: 600; white-space: nowrap; }
 .cmp-proteus-head, .cmp-proteus { color: var(--ink); background: var(--brand-soft); }
-.cmp-status { font-size: 11px; }
+.cmp-status { font-size: 12px; }
 .cmp-status.st-ok { color: var(--ok); }
 .cmp-status.st-warn { color: var(--warn); }
 .cmp-status.st-plan { color: var(--dim); }
