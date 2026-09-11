@@ -21,6 +21,10 @@ const zh = {
   'lang.zh': '中',
   'lang.en': 'EN',
   // —— Home（★#475）——
+  'home.relVersion': 'v0.6 · 可插拔渲染后端',
+  'home.relLicense': 'MIT 开源',
+  'home.relBuild': '构建通过 · 单测全绿',
+  'home.relMore': '发布说明 →',
   'home.eyebrow': '◆ 语义内核 · 可插拔渲染',
   'home.heroTitle1': '为现代跨端应用而生的',
   'home.heroTitle2': 'Vue 语义引擎',
@@ -108,6 +112,10 @@ const en = {
   'lang.zh': '中',
   'lang.en': 'EN',
   // —— Home（★#475）——
+  'home.relVersion': 'v0.6 · pluggable render backends',
+  'home.relLicense': 'MIT licensed',
+  'home.relBuild': 'build passing · tests green',
+  'home.relMore': 'What’s new →',
   'home.eyebrow': '◆ Semantic core · Pluggable rendering',
   'home.heroTitle1': 'The Vue semantic engine',
   'home.heroTitle2': 'for modern cross-platform apps',

@@ -160,12 +160,18 @@ const journeyZh = [
 const scenariosZh = [
   { icon: 'layout', title: '中后台 / 企业应用', desc: '标准 Vue + 语义组件，Web 直出、小程序同源——一套代码覆盖管理后台与企业内部系统。' },
   { icon: 'chart', title: '数据可视化与图表', desc: 'Canvas / SVG 通道对齐（形状动画、路径运动、渐变裁剪），复杂图形在 Skyline 下逐帧重绘。' },
+  { icon: 'phone', title: '小程序 / Web 同源复用', desc: '同一份标准 Vue SFC，Web 由渲染后端直出 DOM、小程序由编译器生成 Skyline 四件套——零 #ifdef。' },
   { icon: 'app', title: '多端同屏与宿主容器', desc: '同一份语义按端形态推导界面：手机 / 平板 / PC / 车机 / 电视 / 手表，或嵌入超级 App 沙箱。' },
+  { icon: 'bolt', title: 'AI 原生开发流', desc: 'MCP Server + Agent Kit：AI 操作语义 IR 而非自由文本，产出天然通过 IR 契约校验——可自修复。' },
+  { icon: 'box', title: '设计系统与组件库', desc: '136 语义原语 SSOT 驱动 59 个 p-* 组件 + 设计 token；布局语义编译期可校验，而非 CSS 事后救。' },
 ]
 const scenariosEn = [
   { icon: 'layout', title: 'Admin & enterprise apps', desc: 'Standard Vue + semantic components — Web direct-out, Mini Program from the same source; one codebase for back-office and internal systems.' },
   { icon: 'chart', title: 'Data visualization & charts', desc: 'Canvas / SVG channel alignment (shape animation, path motion, gradient clipping); complex graphics redraw per frame under Skyline.' },
+  { icon: 'phone', title: 'Mini Program / Web reuse', desc: 'One standard Vue SFC: Web renders real DOM, Mini Program compiles to Skyline artifacts — zero #ifdef.' },
   { icon: 'app', title: 'Multi-device & host containers', desc: 'The same semantics derive per-target UI: phone / tablet / PC / car / TV / watch, or embedded in a super-app sandbox.' },
+  { icon: 'bolt', title: 'AI-native development', desc: 'MCP Server + Agent Kit: AI operates the semantic IR, not free text — output naturally passes IR contract validation, self-repairable.' },
+  { icon: 'box', title: 'Design systems & libraries', desc: '136 semantic primitives SSOT drive 59 p-* components + design tokens; layout semantics checked at compile time, not patched with CSS.' },
 ]
 
 // 生态支持（技术栈）
@@ -273,8 +279,15 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 
 <template>
   <p-page ref="homeEl" class="home" :class="{ 'no-motion': !motionOk }">
+    <!-- 0. 发布状态条（参考图首屏顶部：版本 / 许可 / 构建号；弱视觉、信息性） -->
+    <p-stack direction="row" :gap="18" wrap class="release-bar">
+      <span class="rb-item"><span class="rb-dot" />{{ t('home.relVersion') }}</span>
+      <span class="rb-item">{{ t('home.relLicense') }}</span>
+      <span class="rb-item">{{ t('home.relBuild') }}</span>
+      <router-link to="/docs/01-intro" class="rb-link">{{ t('home.relMore') }}</router-link>
+    </p-stack>
     <!-- 1. Hero：双栏（左文案 + 右产品视觉）——参考「专业组件库官网」构图 -->
-    <p-view v-p-fluid="'padding-top(56, 112) padding-bottom(40, 76)'" class="hero">
+    <p-view v-p-fluid="'padding-top(24, 44) padding-bottom(40, 76)'" class="hero">
       <p-grid :min-col-width="380" :gap="40" class="hero-grid">
         <p-view class="hero-copy">
           <span class="eyebrow">{{ t('home.eyebrow') }}</span>
@@ -405,7 +418,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.scenTitle') }}</p-heading>
         <p-text class="sec-sub">{{ t('home.scenSub') }}</p-text>
       </p-view>
-      <p-grid :min-col-width="260" :gap="14">
+      <p-grid :min-col-width="340" :gap="14">
         <p-view v-for="(s, i) in scenarios" :key="s.title" v-p-hover class="card icon-card" :style="{ '--stagger-i': String(i) }">
           <span class="card-icon"><FeatureIcon :name="s.icon" /></span>
           <p-heading :level="3" class="card-title">{{ s.title }}</p-heading>
@@ -558,6 +571,19 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .sec-sub { color: var(--muted); font-size: 15px; line-height: 1.7; margin: 0; display: block; }
 /* sec-head 内的 CTA 按钮：自适应宽度（flex 子项默认 stretch 会拉满整行） */
 .code-cta { width: fit-content; margin: 20px auto 0; }
+
+/* ---- 0. 发布状态条 ---- */
+.release-bar {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-top: 26px;
+  align-items: center;
+  gap: 18px;
+}
+.rb-item { color: var(--dim); font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; }
+.rb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.16); }
+.rb-link { color: var(--brand-ink); font-size: 12.5px; text-decoration: none; margin-left: auto; }
+.rb-link:hover { text-decoration: underline; }
 
 /* ---- 1. Hero 双栏 ---- */
 .hero { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
