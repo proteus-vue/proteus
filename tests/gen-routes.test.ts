@@ -5,7 +5,7 @@ import { describe, it, expect, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
+import { runGenRoutes, matchWebviewPage } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-'))
@@ -196,5 +196,37 @@ describe('runGenRoutes：路由表生成全链路', () => {
     runGenRoutes({ config: makeConfig({ rules: { disabled: ['fluid/semantic-grid'] } }), root: rootOff, frameworkComponentsDir: FW })
     const pageJsonOff = JSON.parse(fs.readFileSync(path.join(rootOff, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJsonOff.usingComponents?.['p-grid']).toBe('/proteus/p-grid/index')
+  })
+})
+
+describe('★Skyline iOS 白屏兜底：page.webviewPages 页面级 WebView 降级通道', () => {
+  it('matchWebviewPage：页面名 / pages 前缀 / 分包 relInSub 三种形态命中；空/未设不命中', () => {
+    expect(matchWebviewPage(undefined, 'pages/home')).toBe(false)
+    expect(matchWebviewPage([], 'pages/home')).toBe(false)
+    // 页面名（推荐）
+    expect(matchWebviewPage(['home'], 'pages/home', undefined, 'pages/home')).toBe(true)
+    // 带 pages/ 前缀
+    expect(matchWebviewPage(['pages/home'], 'pages/home')).toBe(true)
+    // 分包内相对路径
+    expect(matchWebviewPage(['list'], undefined, 'pages/list', 'subpackages/order/pages/list')).toBe(true)
+    // 不命中
+    expect(matchWebviewPage(['other'], 'pages/home')).toBe(false)
+  })
+
+  it('端到端：命中页 page.json 无 renderer:skyline；未命中页仍 skyline + glass-easel', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-webview-'))
+    writeFixture(dir, 'src/pages/home.vue', '<template><div>home</div></template>')
+    writeFixture(dir, 'src/pages/detail.vue', '<template><div>detail</div></template>')
+    runGenRoutes({
+      config: makeConfig({ page: { autoScrollContainer: true, webviewPages: ['home'] } }),
+      root: dir,
+    })
+    const homeJson = JSON.parse(fs.readFileSync(path.join(dir, 'dist/mp-weixin/pages/home.json'), 'utf-8'))
+    const detailJson = JSON.parse(fs.readFileSync(path.join(dir, 'dist/mp-weixin/pages/detail.json'), 'utf-8'))
+    expect(homeJson.renderer, 'webviewPages 命中页不写 renderer:skyline（走 WebView 兜底）').toBeUndefined()
+    expect(homeJson.componentFramework).toBeUndefined()
+    expect(detailJson.renderer, '未命中页仍 Skyline').toBe('skyline')
+    expect(detailJson.componentFramework).toBe('glass-easel')
+    fs.rmSync(dir, { recursive: true, force: true })
   })
 })

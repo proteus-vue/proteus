@@ -13,6 +13,14 @@ export const proteusConfigSchema = {
     skyline: { type: 'boolean' },
     appid: { type: 'string' },
     pagesDir: { type: 'string' },
+    // ★Skyline iOS 白屏兜底：页面级 WebView 降级通道（page.webviewPages）
+    page: {
+      type: 'object',
+      properties: {
+        autoScrollContainer: { type: 'boolean' },
+        webviewPages: { type: 'array', items: { type: 'string' } },
+      },
+    },
     routesOutput: { type: 'string', description: '★#492 已收编 router 段（向后兼容别名）' },
     subPackages: {
       type: 'array',

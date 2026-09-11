@@ -40,6 +40,14 @@ export interface ProteusConfig {
     /** px→rpx 比例，默认 2 */
     rpxRatio: number
   }
+  /** ★Skyline iOS 白屏兜底（页面级 WebView 降级通道，roadmap v0.5） */
+  page?: {
+    /** 页面自动包 scroll-view（Skyline 页面不滚；默认 true） */
+    autoScrollContainer?: boolean
+    /** 强制走 WebView 渲染的页面（页面名 'home' / 'pages/home' / 分包内路径）——
+     *  仅对 Skyline 白屏高风险页启用，不全局降级；命中页 page.json 不写 renderer:skyline */
+    webviewPages?: string[]
+  }
 }
 ```
 
@@ -128,6 +136,23 @@ customRoute: {
 - `px2rpx: true`：小程序编译期把 CSS 中的 `px` 换算为 `rpx`（**仅编译期生效**，Web 端永不转换——Web 端保持标准 CSS，由编译器吸收差异）。
 - `rpxRatio: 2`：px→rpx 比例，默认 2（对应 iPhone6 375px = 750rpx 基准）。
 - 注意：`h1-h6/p/a` 的语义基础样式直接以 rpx / em 书写，不受此换算影响。
+
+### page（Skyline iOS 白屏兜底 · 页面级 WebView 降级通道）
+
+Skyline 渲染器在 iOS 真机上有已知偶发白屏（微信平台问题，动效/canvas 等场景高发）。`page.webviewPages`
+提供**页面级**降级通道：把白屏高风险页列出，该页即走传统 WebView 渲染（`page.json` 不写 `renderer: skyline`），
+其余页面不受影响（不全局降级）。
+
+```typescript
+page: {
+  webviewPages: ['home', 'live-room'], // 页面名 / 'pages/home' / 分包内相对路径
+}
+```
+
+说明：
+- 键匹配宽松——页面名 `home`、`pages/home`、分包内 `list` 均可。
+- 命中页同时跳过编译器 Skyline-only 特判（等同 `skyline: false` 的产物形态），保证 WebView 下行为一致。
+- 建议：仅对真机复现白屏的页面启用；未复现不预先降级（避免放弃 Skyline 的层叠/性能收益）。
 
 ### rules（★规则覆盖：底线循环 ①③）
 
