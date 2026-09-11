@@ -305,9 +305,19 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
                 <p-text class="hv-item">Capability</p-text>
               </p-view>
               <p-view class="hv-main">
+                <p-stack direction="row" :gap="8" class="hv-head">
+                  <p-text class="hv-line w40" />
+                  <span class="hv-live">CONNECTED</span>
+                </p-stack>
                 <p-text class="hv-line w80" />
                 <p-text class="hv-line w60" />
-                <p-stack direction="row" :gap="10" class="hv-cards">
+                <!-- 中间迷你指标区（填充面板 + 像真实仪表盘） -->
+                <p-stack direction="row" :gap="12" class="hv-metrics">
+                  <p-view class="hv-metric"><p-text class="hv-metric-v">136</p-text><p-text class="hv-metric-l">原语</p-text></p-view>
+                  <p-view class="hv-metric"><p-text class="hv-metric-v">6</p-text><p-text class="hv-metric-l">后端</p-text></p-view>
+                  <p-view class="hv-metric"><p-text class="hv-metric-v">45</p-text><p-text class="hv-metric-l">语义</p-text></p-view>
+                </p-stack>
+                <p-stack direction="row" :gap="12" class="hv-cards">
                   <p-view class="hv-card"><p-text class="hv-ring" /><p-text class="hv-cap">Web</p-text></p-view>
                   <p-view class="hv-card"><p-stack direction="row" :gap="4" class="hv-bars"><i /><i /><i /></p-stack><p-text class="hv-cap">小程序</p-text></p-view>
                   <p-view class="hv-card"><p-text class="hv-ring alt" /><p-text class="hv-cap">Native</p-text></p-view>
@@ -555,7 +565,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .hero-sub { color: var(--muted); line-height: 1.75; margin: 0 0 26px; display: block; }
 .hero-cta { align-items: center; }
 /* 产品视觉（纯 CSS 玻璃窗 mock） */
-.hero-visual { position: relative; }
+.hero-visual { position: relative; container-type: inline-size; }
 .hv-glow {
   position: absolute;
   inset: -8% -6%;
@@ -571,36 +581,51 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   overflow: hidden;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
 }
-.hv-bar { padding: 10px 14px; border-bottom: 1px solid var(--line); }
-.hv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); }
-.hv-body { min-height: 176px; align-items: stretch; }
-.hv-side { width: 108px; border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 11px; flex-shrink: 0; }
-.hv-item { color: var(--dim); font-size: 12.5px; }
+.hv-bar { padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.hv-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--line); }
+.hv-body { min-height: clamp(260px, 23vw, 340px); align-items: stretch; }
+.hv-side { width: clamp(118px, 9vw, 140px); border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 15px; flex-shrink: 0; }
+.hv-item { color: var(--dim); font-size: 13px; }
 .hv-item.on { color: var(--brand-ink); font-weight: 600; }
-.hv-main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.hv-line { display: block; height: 9px; border-radius: 5px; background: var(--panel2); }
+.hv-main { flex: 1; padding: 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hv-line { display: block; height: 11px; border-radius: 6px; background: var(--panel2); }
 .hv-line.w80 { width: 80%; }
 .hv-line.w60 { width: 60%; }
-.hv-cards { margin-top: auto; }
+.hv-head { align-items: center; gap: 8px; }
+.hv-line.w40 { width: 40%; }
+.hv-live { color: var(--ok); font-size: 12px; letter-spacing: 0.6px; margin-left: auto; }
+.hv-live::before { content: '● '; }
+.hv-metrics { gap: 12px; }
+.hv-metric { flex: 1; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; background: var(--bg); display: flex; flex-direction: column; gap: 2px; }
+.hv-metric-v { color: var(--ink); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.hv-metric-l { color: var(--dim); font-size: 12px; }
+.hv-cards { margin-top: auto; gap: 12px; }
 .hv-card {
   flex: 1;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  padding: 12px 10px;
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 12px;
   background: var(--bg);
 }
-.hv-ring { display: block; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--brand); border-right-color: var(--line); }
+.hv-ring { display: block; width: 44px; height: 44px; border-radius: 50%; border: 4px solid var(--brand); border-right-color: var(--line); }
 .hv-ring.alt { border-color: var(--brand2); border-top-color: var(--line); }
-.hv-bars { align-items: flex-end; height: 30px; }
-.hv-bars i { width: 6px; border-radius: 3px; background: var(--brand2); }
-.hv-bars i:nth-child(1) { height: 14px; }
-.hv-bars i:nth-child(2) { height: 22px; }
-.hv-bars i:nth-child(3) { height: 30px; }
-.hv-cap { color: var(--muted); font-size: 12px; }
+.hv-bars { align-items: flex-end; height: 44px; }
+.hv-bars i { width: 8px; border-radius: 4px; background: var(--brand2); }
+.hv-bars i:nth-child(1) { height: 20px; }
+.hv-bars i:nth-child(2) { height: 32px; }
+.hv-bars i:nth-child(3) { height: 44px; }
+.hv-cap { color: var(--muted); font-size: 12.5px; }
+/* 窄容器：收起侧栏（否则 3 张产物卡被挤到换行）——主区获得全宽 */
+@container (max-width: 480px) {
+  /* ★特异性：p-view 组件自带 .p-view{display:flex}（同为 0,1,1）会按捆绑顺序抢胜——
+     用 `.hv-body .hv-side`（0,2,1）稳定压过组件基础样式 */
+  .hv-body .hv-side { display: none; }
+}
 /* Hero 数字行 */
 .hero-stats { align-items: flex-start; }
 .hero-stat { display: flex; flex-direction: column; gap: 4px; }
