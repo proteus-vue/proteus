@@ -31,6 +31,14 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | 方法 | 签名 | 说明 |
 |---|---|---|
 | `onEvent` | `onEvent(cb: (e: BackgroundEvent) => void): () => void` | — |
+| `onMemoryWarning` | `onMemoryWarning(cb: (level: number) => void): () => void` | 内存警告（wx.onMemoryWarning） |
+| `onThemeChange` | `onThemeChange(cb: (theme: 'dark' \| 'light') => void): () => void` | 主题变化（wx.onThemeChange，深色/浅色） |
+| `onWindowResize` | `onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void` | 窗口尺寸变化（wx.onWindowResize / web resize） |
+| `onError` | `onError(cb: (error: string) => void): () => void` | 小程序错误（wx.onError） |
+| `onUnhandledRejection` | `onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void` | 未处理的 Promise rejection（wx.onUnhandledRejection） |
+| `onNetworkStatusChange` | `onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void` | 网络状态变化（wx.onNetworkStatusChange） |
+| `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | 启动参数（wx.getLaunchOptionsSync） |
+| `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | 当前进入参数（wx.getEnterOptionsSync） |
 
 ## 错误码
 

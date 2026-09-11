@@ -13,7 +13,7 @@ useBluetooth: Bluetooth status (wx.openBluetoothAdapter / web feature detection)
 ## Signature
 
 ```ts
-useBluetooth(): Promise<CapResult<BluetoothInfo>>
+useBluetooth(): Promise<CapResult<BluetoothAPI>>
 ```
 
 ## Returns
@@ -23,16 +23,8 @@ useBluetooth(): Promise<CapResult<BluetoothInfo>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `BluetoothInfo` | Success payload (structure below) |
+| `data` | `BluetoothAPI` | Success payload |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
-
-#### Properties of the `BluetoothInfo` object
-
-| Property | Type | Required | Doc |
-|---|---|---|---|
-| `supported` | `boolean` | Yes | Whether the platform supports Bluetooth |
-| `available` | `boolean` | Yes | The adapter is open (available) |
-| `devices` | `string[]` | Yes | Names of paired/discovered devices (wx.getBluetoothDevices; on the web, listed only after a user gesture) |
 
 ## Error codes
 

@@ -29,22 +29,15 @@ useMap(id: string): Promise<CapResult<MapController>>
 | 属性 | 类型 | 说明 |
 |---|---|---|
 | `ok` | `boolean` | 成功 `true` / 失败 `false` |
-| `data` | `MapController` | 成功载荷（方法结构见下） |
+| `data` | `MapController` | 成功载荷 |
 | `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
-
-#### `data`（`MapController`）的方法
-
-| 方法 | 签名 | 说明 |
-|---|---|---|
-| `getRegion` | `getRegion(): Promise<CapResult<MapRegion>>` | — |
-| `moveTo` | `moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>` | — |
 
 ## 错误码
 
 | code | 说明 |
 |---|---|
 | `map.unsupported` | 桥未提供 createMap（useMap 不可用） |
-| `map.failed` | wx 地图区域获取失败 |
+| `map.failed` | wx 地图  |
 
 > 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
 

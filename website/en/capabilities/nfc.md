@@ -13,7 +13,7 @@ useNFC: NFC status (wx.getHCEState / web NDEFReader feature detection)
 ## Signature
 
 ```ts
-useNFC(): Promise<CapResult<NfcInfo>>
+useNFC(): Promise<CapResult<NFCAPI>>
 ```
 
 ## Returns
@@ -23,15 +23,8 @@ useNFC(): Promise<CapResult<NfcInfo>>
 | Property | Type | Doc |
 |---|---|---|
 | `ok` | `boolean` | Succeeded `true` / failed `false` |
-| `data` | `NfcInfo` | Success payload (structure below) |
+| `data` | `NFCAPI` | Success payload |
 | `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
-
-#### Properties of the `NfcInfo` object
-
-| Property | Type | Required | Doc |
-|---|---|---|---|
-| `supported` | `boolean` | Yes | Whether the platform supports NFC |
-| `available` | `boolean` | Yes | NFC is currently available (enabled) |
 
 ## Error codes
 

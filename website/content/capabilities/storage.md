@@ -20,6 +20,12 @@ useStorage(): CompatStorage
 
 返回 `CompatStorage`（同步句柄——无 Promise、无 await，结构见下）。
 
+#### `CompatStorage` 的属性
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `keys` | `string[]; currentSize: number; limitSize: number }>>` | — |
+
 #### `CompatStorage` 的方法
 
 | 方法 | 签名 | 说明 |
@@ -27,6 +33,12 @@ useStorage(): CompatStorage
 | `set` | `set(key: string, value: unknown): void` | — |
 | `remove` | `remove(key: string): void` | — |
 | `clear` | `clear(): void` | — |
+| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
+| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | — |
+| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | — |
+| `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
+| `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
+| `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
 
 ## 错误码
 
