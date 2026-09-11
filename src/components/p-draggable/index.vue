@@ -12,6 +12,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useGesture } from '@proteus-vue/gesture'
+import { isMpRuntime } from '../runtime/container-measure'
+import { capabilityWarnOnce } from '../runtime/capability'
 
 interface PanPayload {
   type: string
@@ -39,6 +41,11 @@ let baseY = 0
 let gesture: { bind: (e: HTMLElement | null) => void; unbind: () => void } | null = null
 
 onMounted(() => {
+  // ★Skyline 线收口：MP 无 Pointer Events 识别器 → 元素静态（显式告警，不静默失效）
+  if (isMpRuntime()) {
+    capabilityWarnOnce('p-draggable', 'pointer-gesture', '元素静态（小程序无 Pointer 识别器；手势映射待后续批次）')
+    return
+  }
   gesture = useGesture({
     pan: onPan,
   })
