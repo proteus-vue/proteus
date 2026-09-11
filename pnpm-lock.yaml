@@ -36,6 +36,9 @@ importers:
       '@proteus-vue/glass':
         specifier: workspace:*
         version: link:packages/glass
+      '@proteus-vue/worklet':
+        specifier: workspace:*
+        version: link:packages/worklet
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -159,6 +162,9 @@ importers:
       '@proteus-vue/web':
         specifier: 0.1.0
         version: link:../packages/web
+      '@proteus-vue/worklet':
+        specifier: 0.1.0
+        version: link:../packages/worklet
       '@vue/devtools-api':
         specifier: ^8.0.0
         version: 8.2.1
@@ -688,6 +694,12 @@ importers:
       vue:
         specifier: ^3.5.42
         version: 3.5.42(typescript@5.9.3)
+
+  packages/worklet:
+    dependencies:
+      '@proteus-vue/shared':
+        specifier: 0.2.0-beta.0
+        version: link:../shared
 
   website:
     dependencies:
