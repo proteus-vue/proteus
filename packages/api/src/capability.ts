@@ -628,6 +628,52 @@ export interface NFCAPI extends NfcInfo {
   onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void
   /** 订阅 HCE 状态变化（返回取消） */
   onHCEStateChange(cb: (available: boolean) => void): () => void
+  /** ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 */
+  getAdapter(): NfcAdapter
+}
+
+/** NFC 发现的标签 */
+export interface NfcTag {
+  id: ArrayBuffer
+  techs: string[]
+  messages?: Array<{ records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }>
+}
+
+/** NFC 标签连接句柄（各技术类型公共面：connect/close/isConnected/setTimeout/transceive） */
+export interface NfcTagHandle {
+  connect(): Promise<CapResult<void>>
+  close(): Promise<CapResult<void>>
+  isConnected(): boolean
+  setTimeout(timeout: number): Promise<CapResult<void>>
+  transceive(data: ArrayBuffer): Promise<CapResult<ArrayBuffer>>
+}
+
+/** NDEF 句柄（额外：读写 NDEF 消息 + onNdefMessage） */
+export interface NdefHandle extends NfcTagHandle {
+  writeNdefMessage(message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }): Promise<CapResult<void>>
+  onNdefMessage(cb: (message: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }) => void): () => void
+}
+
+/**
+ * ★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接）
+ *   与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+ */
+export interface NfcAdapter {
+  /** 开始发现附近标签 */
+  startDiscovery(): Promise<CapResult<void>>
+  /** 停止发现 */
+  stopDiscovery(): Promise<CapResult<void>>
+  /** 订阅发现的标签（返回取消） */
+  onDiscovered(cb: (tag: NfcTag) => void): () => void
+  /** 按技术类型取句柄并连接（tag.techs 含对应类型才可用） */
+  connectNdef(): Promise<CapResult<NdefHandle>>
+  connectIsoDep(): Promise<CapResult<NfcTagHandle>>
+  connectNfcA(): Promise<CapResult<NfcTagHandle>>
+  connectNfcB(): Promise<CapResult<NfcTagHandle>>
+  connectNfcF(): Promise<CapResult<NfcTagHandle>>
+  connectNfcV(): Promise<CapResult<NfcTagHandle>>
+  connectMifareClassic(): Promise<CapResult<NfcTagHandle>>
+  connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>
 }
 
 /** C14 键盘信息（高度 px + 可见性） */
@@ -1386,6 +1432,7 @@ interface WxLike {
   onHCEMessage?: (cb: (r: { messageType: number; data?: ArrayBuffer }) => void) => void
   offHCEMessage?: (cb?: (...args: never[]) => void) => void
   onHCEStateChange?: (cb: (r: { available: boolean }) => void) => void
+  getNFCAdapter?: () => WxNfcAdapterLike
   getSetting?: (opt: { success?: (r: { authSetting?: Record<string, boolean> }) => void; fail?: (e: unknown) => void }) => void
   onKeyboardHeightChange?: (cb: (r: { height: number }) => void) => void
   onPageShow?: (cb: () => void) => void
@@ -1423,6 +1470,31 @@ interface WxRecorderManagerLike {
   onResume?: (cb: () => void) => void
   onError?: (cb: (e: unknown) => void) => void
   onFrameRecorded?: (cb: (f: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void) => void
+}
+/** wx.NFCAdapter 子集（读卡模式） */
+interface WxNfcAdapterLike {
+  startDiscovery?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  stopDiscovery?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onDiscovered?: (cb: (r: { id: ArrayBuffer; techs: string[]; messages?: unknown[] }) => void) => void
+  offDiscovered?: (cb?: (...a: never[]) => void) => void
+  getNdef?: () => WxNfcTagLike
+  getIsoDep?: () => WxNfcTagLike
+  getNfcA?: () => WxNfcTagLike
+  getNfcB?: () => WxNfcTagLike
+  getNfcF?: () => WxNfcTagLike
+  getNfcV?: () => WxNfcTagLike
+  getMifareClassic?: () => WxNfcTagLike
+  getMifareUltralight?: () => WxNfcTagLike
+}
+interface WxNfcTagLike {
+  connect?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  close?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  isConnected?: () => boolean
+  setTimeout?: (opt: { timeout: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  transceive?: (opt: { data: ArrayBuffer; success: (r: { data: ArrayBuffer }) => void; fail: (e: unknown) => void }) => void
+  writeNdefMessage?: (opt: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }>; success?: () => void; fail: (e: unknown) => void }) => void
+  onNdefMessage?: (cb: (r: { records: Array<{ id: ArrayBuffer; payload: ArrayBuffer; tnf: number; type: ArrayBuffer }> }) => void) => void
+  offNdefMessage?: (cb?: (...a: never[]) => void) => void
 }
 /** wx.LivePlayerContext 子集（观看端） */
 interface WxLivePlayerContextLike {
@@ -2424,6 +2496,8 @@ function wxBridge(wx: WxLike): CapabilityBridge {
               wx.onHCEStateChange(h)
               return () => {}
             },
+            // ★能力颗粒度对齐：读卡模式（wx.getNFCAdapter）
+            getAdapter: () => buildNfcAdapter(wx),
           }
         }
         if (!wx.getHCEState) {
@@ -2766,6 +2840,100 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         },
       }
     },
+  }
+}
+
+/** ★能力颗粒度对齐：NFC 读卡模式桥（wx.getNFCAdapter → 发现标签 + 各技术类型连接）
+ *   缺 getNFCAdapter → 全方法 Err（诚实降级）。各连接句柄方法统一 Promise<CapResult<T>>。 */
+function buildNfcAdapter(wx: WxLike): NfcAdapter {
+  const noAdapter = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('nfc.unsupported', 'wx.getNFCAdapter 缺失（' + op + ' 不可用）'))
+  if (typeof wx.getNFCAdapter !== 'function') {
+    return {
+      startDiscovery: () => noAdapter('startDiscovery'),
+      stopDiscovery: () => noAdapter('stopDiscovery'),
+      onDiscovered: () => () => {},
+      connectNdef: () => noAdapter('getNdef'),
+      connectIsoDep: () => noAdapter('getIsoDep'),
+      connectNfcA: () => noAdapter('getNfcA'),
+      connectNfcB: () => noAdapter('getNfcB'),
+      connectNfcF: () => noAdapter('getNfcF'),
+      connectNfcV: () => noAdapter('getNfcV'),
+      connectMifareClassic: () => noAdapter('getMifareClassic'),
+      connectMifareUltralight: () => noAdapter('getMifareUltralight'),
+    }
+  }
+  const adapter = wx.getNFCAdapter()
+  const cap = <T,>(p: Promise<T>): Promise<CapResult<T>> => p.then((d) => capOk(d), (e) => capErr<T>(e instanceof CapError ? e.code : 'nfc.failed', e instanceof Error ? e.message : String(e), e))
+  const run = (fn: unknown, name: string, opt?: Record<string, unknown>): Promise<void> =>
+    new Promise<void>((res, rej) => {
+      if (typeof fn !== 'function') return rej(new CapError('nfc.unsupported', 'NFCAdapter.' + name + ' 缺失'))
+      ;(fn as (o?: Record<string, unknown>) => void)({ ...opt, success: () => res(), fail: (e: unknown) => rej(new CapError('nfc.failed', 'NFC ' + name + ' 失败', e)) })
+    })
+  const makeTag = (getter: () => WxNfcTagLike | undefined, name: string): Promise<CapResult<NfcTagHandle>> =>
+    cap(
+      (async () => {
+        const tag = getter()
+        if (!tag) throw new CapError('nfc.unsupported', 'NFCAdapter.' + name + ' 缺失')
+        await run(tag.connect, name + '.connect')
+        const handle: NfcTagHandle = {
+          connect: () => cap(run(tag.connect, name + '.connect')),
+          close: () => cap(run(tag.close, name + '.close')),
+          isConnected: () => (typeof tag.isConnected === 'function' ? tag.isConnected() : false),
+          setTimeout: (timeout) => cap(run(tag.setTimeout, name + '.setTimeout', { timeout })),
+          transceive: (data) =>
+            new Promise<CapResult<ArrayBuffer>>((res) => {
+              if (typeof tag.transceive !== 'function') return res(capErr('nfc.unsupported', name + '.transceive 缺失'))
+              tag.transceive!({ data, success: (r) => res(capOk(r.data)), fail: (e: unknown) => res(capErr('nfc.failed', 'transceive 失败', e)) })
+            }),
+        }
+        return handle
+      })(),
+    )
+  const makeNdef = (): Promise<CapResult<NdefHandle>> =>
+    cap(
+      (async () => {
+        const tag = adapter.getNdef ? adapter.getNdef() : undefined
+        if (!tag) throw new CapError('nfc.unsupported', 'NFCAdapter.getNdef 缺失')
+        await run(tag.connect, 'Ndef.connect')
+        const base = await makeTag(() => tag, 'Ndef')
+        if (!base.ok) throw new CapError(base.error.code, base.error.message)
+        const handle: NdefHandle = {
+          ...base.data,
+          writeNdefMessage: (message) =>
+            new Promise<CapResult<void>>((res) => {
+              if (typeof tag.writeNdefMessage !== 'function') return res(capErr('nfc.unsupported', 'Ndef.writeNdefMessage 缺失'))
+              tag.writeNdefMessage({ records: message.records, success: () => res(capOk(undefined)), fail: (e) => res(capErr('nfc.failed', '写 NDEF 失败', e)) })
+            }),
+          onNdefMessage: (cb) => {
+            if (typeof tag.onNdefMessage !== 'function') return () => {}
+            tag.onNdefMessage(cb)
+            return () => {
+              if (typeof tag.offNdefMessage === 'function') tag.offNdefMessage(cb)
+            }
+          },
+        }
+        return handle
+      })(),
+    )
+  return {
+    startDiscovery: () => cap(run(adapter.startDiscovery, 'startDiscovery')),
+    stopDiscovery: () => cap(run(adapter.stopDiscovery, 'stopDiscovery')),
+    onDiscovered: (cb) => {
+      if (typeof adapter.onDiscovered !== 'function') return () => {}
+      const h = (r: { id: ArrayBuffer; techs: string[]; messages?: unknown[] }): void => cb({ id: r.id, techs: r.techs ?? [], messages: r.messages as NfcTag['messages'] })
+      adapter.onDiscovered(h)
+      return () => {
+        if (typeof adapter.offDiscovered === 'function') adapter.offDiscovered(h)
+      }
+    },
+    connectNdef: () => makeNdef(),
+    connectIsoDep: () => makeTag(() => adapter.getIsoDep?.(), 'IsoDep'),
+    connectNfcA: () => makeTag(() => adapter.getNfcA?.(), 'NfcA'),
+    connectNfcB: () => makeTag(() => adapter.getNfcB?.(), 'NfcB'),
+    connectNfcF: () => makeTag(() => adapter.getNfcF?.(), 'NfcF'),
+    connectNfcV: () => makeTag(() => adapter.getNfcV?.(), 'NfcV'),
+    connectMifareClassic: () => makeTag(() => adapter.getMifareClassic?.(), 'MifareClassic'),
+    connectMifareUltralight: () => makeTag(() => adapter.getMifareUltralight?.(), 'MifareUltralight'),
   }
 }
 
@@ -3242,7 +3410,20 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     getNfc: async () => {
       const supported = typeof (g as { NDEFReader?: unknown }).NDEFReader === 'function'
       // ★能力颗粒度对齐：web 返完整 NFCAPI（HCE 无标准对等 → 诚实 Err）
-      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('nfc.unsupported', 'Web 端 HCE ' + op + ' 无标准对等'))
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('nfc.unsupported', 'Web 端 NFC ' + op + ' 无标准对等'))
+      const noAdapter = (): NfcAdapter => ({
+        startDiscovery: () => noWeb('startDiscovery'),
+        stopDiscovery: () => noWeb('stopDiscovery'),
+        onDiscovered: () => () => {},
+        connectNdef: () => noWeb('getNdef'),
+        connectIsoDep: () => noWeb('getIsoDep'),
+        connectNfcA: () => noWeb('getNfcA'),
+        connectNfcB: () => noWeb('getNfcB'),
+        connectNfcF: () => noWeb('getNfcF'),
+        connectNfcV: () => noWeb('getNfcV'),
+        connectMifareClassic: () => noWeb('getMifareClassic'),
+        connectMifareUltralight: () => noWeb('getMifareUltralight'),
+      })
       return {
         supported,
         available: supported,
@@ -3251,6 +3432,7 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         sendHCEMessage: () => noWeb('sendHCEMessage'),
         onHCEMessage: () => () => {},
         onHCEStateChange: () => () => {},
+        getAdapter: noAdapter,
       }
     },
     getCamera: async () => {
