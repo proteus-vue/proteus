@@ -234,7 +234,7 @@ function itemTitle(slugOf: string, zhTitle: string): string {
 .doc-main { flex: 1 1 480px; min-width: 0; }
 /* ★双类选择器提特异性：p-view 自带 scoped 的 content-box/flex-column（同特异性但级联靠后）——border-box 必须显式打赢（铁律） */
 .page-toc.page-toc {
-  flex: 0 0 220px; /* 定宽不参与增长——多余空间全部让给正文 */
+  flex: 0 0 236px; /* 定宽不参与增长——多余空间全部让给正文（★TOC 优化：微加宽容纳方法名） */
   box-sizing: border-box;
   align-self: flex-start;
   position: sticky;
@@ -254,6 +254,9 @@ function itemTitle(slugOf: string, zhTitle: string): string {
   text-decoration: none;
   font-size: 13px;
   padding: 2px 0;
+  width: 100%;
+  overflow-wrap: anywhere; /* ★长方法名换行不溢出容器 */
+  box-sizing: border-box;
   border-left: 2px solid transparent;
   transition: color 0.12s, border-color 0.12s;
 }
