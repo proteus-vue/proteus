@@ -165,7 +165,7 @@ const scenariosZh = [
   { icon: 'phone', title: '小程序 / Web 同源复用', desc: '同一份标准 Vue SFC，Web 由渲染后端直出 DOM、小程序由编译器生成 Skyline 四件套——零 #ifdef。' },
   { icon: 'app', title: '多端同屏与宿主容器', desc: '同一份语义按端形态推导界面：手机 / 平板 / PC / 车机 / 电视 / 手表，或嵌入超级 App 沙箱。' },
   { icon: 'bolt', title: 'AI 原生开发流', desc: 'MCP Server + Agent Kit：AI 操作语义 IR 而非自由文本，产出天然通过 IR 契约校验——可自修复。' },
-  { icon: 'box', title: '设计系统与组件库', desc: '142 语义原语 SSOT 驱动 66 个语义组件 + 设计 token；布局语义编译期可校验，而非 CSS 事后救。' },
+  { icon: 'box', title: '设计系统与组件库', desc: '145 语义原语 SSOT 驱动 66 个语义组件 + 设计 token；布局语义编译期可校验，而非 CSS 事后救。' },
 ]
 const scenariosEn = [
   { icon: 'layout', title: 'Admin & enterprise apps', desc: 'Standard Vue + semantic components — Web direct-out, Mini Program from the same source; one codebase for back-office and internal systems.' },
@@ -199,7 +199,7 @@ const capabilitiesZh = [
   {
     tag: 'G-31/32',
     title: '语义原语 SSOT',
-    desc: '142 语义原语单一事实源 → 66 个语义组件 → 48 implemented 语义 × 6 后端 conformance 门禁 + 53 Capability Hook。',
+    desc: '145 语义原语单一事实源 → 66 个语义组件 → 48 implemented 语义 × 6 后端 conformance 门禁 + 56 Capability Hook。',
   },
   {
     tag: 'G-41/42/43',
@@ -240,7 +240,7 @@ const journeyEn = [
 const capabilitiesEn = [
   { tag: 'G-27', title: 'Pluggable rendering', desc: 'RenderBackend SPI + five official backends (VueDom / Native×3 / Flutter) + hybrid rendering — pick an engine per page in the same app, business code unchanged.' },
   { tag: 'G-29/38', title: 'Pluggable compiler', desc: 'config.compiler.backend — one flag switches Node / Rust (same CompilerIR, semantic-equivalence Golden 81 cases), frozen SPI + incremental sessions.' },
-  { tag: 'G-31/32', title: 'Semantic primitives SSOT', desc: '142 semantic primitives SSOT → 66 semantic components → 48 implemented semantics × 6 backends under conformance gates + 53 capability Hooks.' },
+  { tag: 'G-31/32', title: 'Semantic primitives SSOT', desc: '142 semantic primitives SSOT → 66 semantic components → 48 implemented semantics × 6 backends under conformance gates + 56 capability Hooks.' },
   { tag: 'G-41/42/43', title: 'Host layer trio', desc: '36-combination matrix hot-swap + six container strategies (super-app sandbox / crash isolation) + ownership with borrow-checking intercepting use-after-move at compile time.' },
   { tag: 'G-45', title: 'Dev host as host', desc: 'Install-Once Host: dynamic plugin loading (signature + conformance quick check) + pending replay — native plugin changes never re-package the host.' },
   { tag: 'G-36', title: 'AI-native end to end', desc: 'MCP Server + Agent Kit self-repair loop + three guard rails — AI emits IR-contract-conforming standard code, not free text.' },

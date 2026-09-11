@@ -1748,4 +1748,20 @@ export const CAP_EN = {
     desc: 'useWorker: multi-threaded Worker — postMessage / onMessage / terminate (wx.createWorker / web Worker)',
     errors: { 'worker.unsupported': 'wx.createWorker is missing (or Web Worker is unavailable — SSR / restricted env)' },
   },
+  address: {
+    desc: 'useAddress: shipping address picker (wx.chooseAddress; web has no standard → Err)',
+    errors: { 'address.unsupported': 'The bridge does not provide chooseAddress (useAddress unavailable)', 'address.failed': 'wx.chooseAddress failed' },
+  },
+  wifi: {
+    desc: 'useWifi: WiFi handle — connected network / scan list / connect (wx.getConnectedWifi/getWifiList/connectWifi; web has no standard → Err)',
+    errors: {
+      'wifi.unsupported': 'wx.getConnectedWifi / getWifiList / connectWifi is missing (iOS forbids programmatic connect)',
+      'wifi.failed': 'Failed to read the current WiFi',
+      'wifi.connect-failed': 'Failed to connect to WiFi',
+    },
+  },
+  'we-run': {
+    desc: 'useWeRun: WeChat Sports data (wx.getWeRunData — encrypted; the business backend must decrypt)',
+    errors: { 'werun.unsupported': 'The bridge does not provide getWeRunData (useWeRun unavailable)', 'werun.failed': 'wx.getWeRunData failed (requires scope.werun + backend decryption)' },
+  },
 }

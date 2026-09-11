@@ -40,7 +40,7 @@
 | **B** | 组件页详细化 | 逐属性详解 + 逐事件详解 + 真实示例（对齐能力页详细度；含源 JSDoc 补全） | ✅ 已提交 73dfa43c |
 | **C1** | 覆盖度门禁重做 | 幽灵行一致性校验（引用必须真实存在）+ landed/planned 两维（区分「有等价」与「真缺」） | ✅ 已提交 627af8ea |
 | **C2** | 新增缺失组件 | ✅ 批 1：**p-progress / p-label / p-page-container**（对齐小程序 `<progress>`/`<label>`/`<page-container>`——全端真实落地：schema+primitives+map+六后端渲染表+Rust 表+导出+d.ts+MP 编译测试）。⬜ 批 2：能力入口组件 p-camera/p-map/p-webview/p-ad（需原生渲染，诚实标 L2） | 🟡 批 1 落地 |
-| **C3** | 新增缺失 API | ✅ 批 1：**C52 useAlbum**（wx.chooseMedia/saveImageToPhotosAlbum/saveVideoToPhotosAlbum/previewMedia；web `<input type=file>`）+ **C53 useWorker**（wx.createWorker / web Worker）——修矩阵 `saveImageToPhotosAlbum→pick-photo` 语义错标。⬜ 批 2：WiFi/微信运动/收货地址/卡券/发票/广告/解密/AI/数据预拉取/周期性更新（部分需类目资质，按需驱动） | 🟡 批 1 落地 |
+| **C3** | 新增缺失 API | ✅ 批 1：**C52 useAlbum** + **C53 useWorker**（修矩阵 `saveImageToPhotosAlbum→pick-photo` 语义错标）。✅ 批 2：**C54 useAddress**（wx.chooseAddress）+ **C55 useWifi**（wx.getConnectedWifi/getWifiList/connectWifi）+ **C56 useWeRun**（wx.getWeRunData）。⬜ 批 3：卡券/发票/广告/解密/AI/数据预拉取/周期性更新（需类目资质，按需驱动） | 🟡 批 1+2 落地 |
 
 ---
 
