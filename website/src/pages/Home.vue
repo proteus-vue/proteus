@@ -12,6 +12,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { STATS, COMPARE_MATRIX } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
 import FeatureIcon from '../components/FeatureIcon.vue'
+import WireframeCore from '../components/WireframeCore.vue'
 // ★#475 首页国际化（chrome t() + 数据数组 locale 双份）
 import { locale, t } from '../i18n'
 // ★2026-09-11 风格收敛：移除 Hero 视差（--sp）与辉光/波浪——Hero 改静态左对齐构图
@@ -517,6 +518,9 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     <!-- 10. 底部 CTA 横幅 -->
     <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(56, 100)'" data-reveal class="sec cta-banner">
       <p-view class="cta-panel">
+        <!-- ★零依赖 WebGL 线框核心（icosahedron）——底部 CTA 背景：慢速旋转 3D 结构（工程炫技自证，
+             零第三方依赖；纯合成器动画）。此区块留白充足，几何体完整可见而不遮挡文字。 -->
+        <WireframeCore class="cta-core" color="#7c5cff" :alpha="0.62" :speed="0.16" />
         <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="cta-title">{{ t('home.endTitle') }}</p-heading>
         <p-text class="cta-sub">{{ t('home.endSub') }}</p-text>
         <p-stack direction="row" :gap="12" class="cta-actions">
@@ -614,8 +618,18 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   filter: blur(30px);
   pointer-events: none;
 }
+.hv-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 116%;
+  height: 116%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
 .hv-frame {
   position: relative;
+  z-index: 1;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
@@ -784,6 +798,13 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 
 /* ---- 底部 CTA 横幅 ---- */
 .cta-panel {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(320px, 34vw, 440px);
   text-align: center;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
@@ -792,6 +813,16 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
     var(--panel);
   padding: 52px 24px;
 }
+.cta-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(400px, 84vw);
+  height: min(400px, 84vw);
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+.cta-title, .cta-sub, .cta-actions { position: relative; z-index: 1; }
 .cta-title { color: var(--ink); margin: 0 0 10px; }
 .cta-sub { color: var(--muted); font-size: 14.5px; margin: 0 0 24px; display: block; }
 .cta-actions { justify-content: center; }
