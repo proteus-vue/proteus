@@ -455,6 +455,55 @@ export interface MediaAccess {
   granted: boolean
 }
 
+/** 拍照结果（wx.takePhoto 子集） */
+export interface PhotoResult {
+  /** 临时文件路径 */
+  tempImagePath?: string
+  width: number
+  height: number
+  /** web dataURL（blob: / data:） */
+  dataUrl?: string
+}
+
+/** 录像结果（wx.stopRecord 子集） */
+export interface VideoResult {
+  tempThumbPath?: string
+  tempVideoPath?: string
+  duration: number
+  size: number
+}
+
+/** ★能力颗粒度对齐：C1 相机操作控制器（wx.createCameraContext(id) → 拍照/录像/缩放/帧回调） */
+export interface CameraController {
+  takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
+  startRecord(): Promise<CapResult<void>>
+  stopRecord(): Promise<CapResult<VideoResult>>
+  setZoom(zoom: number): Promise<CapResult<void>>
+  /** 订阅相机帧（返回取消函数；web 无对等 → 空订阅） */
+  onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void
+}
+
+/** 录音状态（wx RecorderManager onStart/onStop 等） */
+export interface RecordOptions {
+  duration?: number
+  sampleRate?: number
+  numberOfChannels?: number
+  encodeBitRate?: number
+  format?: 'mp3' | 'aac' | 'wav' | 'PCM'
+}
+
+/** ★能力颗粒度对齐：C2 录音操作控制器（wx.getRecorderManager() → start/stop/pause/resume + 事件） */
+export interface RecorderController {
+  start(options?: RecordOptions): Promise<CapResult<void>>
+  stop(): Promise<CapResult<void>>
+  pause(): Promise<CapResult<void>>
+  resume(): Promise<CapResult<void>>
+  /** 订阅录音事件（返回取消函数） */
+  on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void): () => void
+  /** 订阅录音帧（时长/大小） */
+  onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
+}
+
 /** C36 蓝牙状态（wx.openBluetoothAdapter / web Web Bluetooth 特性探测） */
 export interface BluetoothInfo {
   /** 平台是否支持蓝牙 */
@@ -563,15 +612,67 @@ export interface MapRegion {
 }
 
 /** C4 地图上下文桥（wx MapContext / web 宿主集成） */
+/** 地图控制器桥（原始 Promise 层——hook 层包 CapResult） */
 export interface MapContextBridge {
   getRegion(): Promise<MapRegion>
   moveTo(latitude: number, longitude: number, scale?: number): Promise<void>
+  moveToLocation(): Promise<void>
+  includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<void>
+  translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<void>
+  addMarkers(markers: MapMarker[]): Promise<void>
+  removeMarkers(ids: number[]): Promise<void>
+  addPolylines(polylines: MapPolyline[]): Promise<void>
+  removePolylines(ids: number[]): Promise<void>
+  addCircles(circles: MapCircle[]): Promise<void>
+  removeCircles(ids: number[]): Promise<void>
+  getScale(): Promise<number>
+  openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<void>
+  on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
 }
 
 /** C4 useMap 句柄（控制器方法返回 Result<T>——G-32.4） */
+/** 地图标记（wx.Marker 子集） */
+export interface MapMarker {
+  id: number
+  latitude: number
+  longitude: number
+  title?: string
+  iconPath?: string
+  width?: number
+  height?: number
+  callout?: Record<string, unknown>
+}
+/** 地图覆盖物/折线/圆（简化） */
+export interface MapPolyline { points: Array<{ latitude: number; longitude: number }>; color?: string; width?: number }
+export interface MapCircle { latitude: number; longitude: number; radius: number; color?: string; fillColor?: string }
+
+/**
+ * ★能力颗粒度对齐：C4 地图控制器（原 2 方法 → 覆盖物/视野/坐标转换/移动标记全套）
+ *   方法统一 Promise<CapResult<T>>；上层组件 <map> 通过 id 取控制器。
+ */
 export interface MapController {
   getRegion(): Promise<CapResult<MapRegion>>
   moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>
+  /** 移动到当前定位点 */
+  moveToLocation(): Promise<CapResult<void>>
+  /** 缩放视野以包含所有点 */
+  includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>
+  /** 平移（相对当前中心，单位 px 或度数） */
+  translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>
+  /** 添加/移除标记 */
+  addMarkers(markers: MapMarker[]): Promise<CapResult<void>>
+  removeMarkers(ids: number[]): Promise<CapResult<void>>
+  /** 折线 / 圆 */
+  addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>
+  removePolylines(ids: number[]): Promise<CapResult<void>>
+  addCircles(circles: MapCircle[]): Promise<CapResult<void>>
+  removeCircles(ids: number[]): Promise<CapResult<void>>
+  /** 获取缩放级别 / 旋转角 */
+  getScale(): Promise<CapResult<number>>
+  /** 打开地图 App（导航，宿主放行才可用） */
+  openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>
+  /** 订阅地图事件（regionchange/updated 等；返回取消） */
+  on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
 }
 
 /** C25 后台事件（wx onAppHide/onAppShow / web visibilitychange） */
@@ -760,8 +861,12 @@ export interface CapabilityBridge {
   getNfc?(): Promise<NfcInfo>
   /** C1 摄像头访问（wx.authorize scope.camera / web getUserMedia） */
   getCamera?(): Promise<MediaAccess>
+  /** ★能力颗粒度对齐：C1 相机操作控制器（wx.createCameraContext(id) → 拍照/录像） */
+  createCameraContext?(id: string): CameraController
   /** C2 麦克风访问（wx.authorize scope.record / web getUserMedia audio） */
   getMicrophone?(): Promise<MediaAccess>
+  /** ★能力颗粒度对齐：C2 录音操作控制器（wx.getRecorderManager() → start/stop/pause/resume） */
+  getRecorder?(): RecorderController
   /** C14 键盘生命周期（wx.onKeyboardHeightChange / web visualViewport） */
   getKeyboard?(): KeyboardLifecycle
   // ★G-32 B3 七期：剩余能力（缺省 undefined → 对应 Hook 返回 Err('<cap>.unsupported')——G-32.3 降级语义）
@@ -1104,8 +1209,8 @@ interface WxLike {
   }) => void
   addToDesktop?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
   // ★G-32 B3 六期：新增 wx 能力
-  createCameraContext?: () => unknown
-  getRecorderManager?: () => unknown
+  createCameraContext?: (id?: string) => WxCameraContextLike
+  getRecorderManager?: () => WxRecorderManagerLike
   authorize?: (opt: { scope: string; success?: () => void; fail?: (e: unknown) => void }) => void
   openBluetoothAdapter?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
   closeBluetoothAdapter?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
@@ -1145,12 +1250,43 @@ interface WxLike {
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
+/** wx.CameraContext 子集 */
+interface WxCameraContextLike {
+  takePhoto?: (opt: { quality?: string; success: (r: { tempImagePath?: string; width: number; height: number }) => void; fail: (e: unknown) => void }) => void
+  startRecord?: (opt: { timeoutCallback?: (r: { tempThumbPath?: string; tempVideoPath?: string; duration: number; size: number }) => void; success?: () => void; fail: (e: unknown) => void }) => void
+  stopRecord?: (opt: { success: (r: { tempThumbPath?: string; tempVideoPath?: string; duration: number; size: number }) => void; fail: (e: unknown) => void }) => void
+  setZoom?: (opt: { zoom: number; success?: () => void; fail: (e: unknown) => void }) => void
+  onCameraFrame?: (cb: (data: { data: ArrayBuffer; width: number; height: number }) => void) => void
+}
+/** wx.RecorderManager 子集 */
+interface WxRecorderManagerLike {
+  start?: (opt?: Record<string, unknown>) => void
+  stop?: () => void
+  pause?: () => void
+  resume?: () => void
+  onStart?: (cb: () => void) => void
+  onStop?: (cb: (r: { tempFilePath: string; duration: number; fileSize: number }) => void) => void
+  onPause?: (cb: () => void) => void
+  onResume?: (cb: () => void) => void
+  onError?: (cb: (e: unknown) => void) => void
+  onFrameRecorded?: (cb: (f: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void) => void
+}
 interface WxMapContextLike {
-  getRegion?: (opt: {
-    success: (r: { latitude: number; longitude: number; scale?: number; latitudeSpan?: number; longitudeSpan?: number }) => void
-    fail?: (e: unknown) => void
-  }) => void
+  getRegion?: (opt: { success: (r: { latitude: number; longitude: number; scale?: number; latitudeSpan?: number; longitudeSpan?: number }) => void; fail?: (e: unknown) => void }) => void
   moveTo?: (opt: { latitude: number; longitude: number; scale?: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  moveToLocation?: (opt?: { latitude?: number; longitude?: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  includePoints?: (opt: { points: Array<{ latitude: number; longitude: number }>; padding?: number[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  translateMarker?: (opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  addMarkers?: (opt: { markers: MapMarker[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  removeMarkers?: (opt: { markerIds: number[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  addPolylines?: (opt: { polylines: MapPolyline[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  removePolylines?: (opt: { polylineIds: number[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  addCircles?: (opt: { circles: MapCircle[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  removeCircles?: (opt: { circleIds: number[]; success?: () => void; fail?: (e: unknown) => void }) => void
+  getScale?: (opt: { success: (r: { scale: number }) => void; fail?: (e: unknown) => void }) => void
+  openMapApp?: (opt: { latitude: number; longitude: number; name?: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+  off?: (event: string, cb: (payload: unknown) => void) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -1991,6 +2127,62 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         }
         wx.authorize({ scope: 'scope.record', success: () => resolve({ kind: 'microphone', supported: true, granted: true }), fail: () => resolve({ kind: 'microphone', supported, granted: false }) })
       }),
+    // ★能力颗粒度对齐：C1 相机操作（wx.createCameraContext(id) → takePhoto/startRecord/stopRecord/setZoom/onCameraFrame）
+    createCameraContext: (id: string) => {
+      if (typeof wx.createCameraContext !== 'function') throw new CapError('camera.unsupported', 'wx.createCameraContext 缺失')
+      const ctx = wx.createCameraContext(id)
+      const call = <r>(fn: unknown, name: string, opt: Record<string, unknown> = {}): Promise<CapResult<r>> =>
+        new Promise<CapResult<r>>((resolve) => {
+          if (typeof fn !== 'function') return resolve(capErr<r>('camera.unsupported', 'CameraContext.' + name + ' 缺失'))
+          ;(fn as (o: Record<string, unknown>) => void)({ ...opt, success: (res: r) => resolve(capOk(res)), fail: (e: unknown) => resolve(capErr<r>('camera.failed', 'wx 相机 ' + name + ' 失败', e)) })
+        })
+      return {
+        takePhoto: (quality = 'normal') =>
+          call<{ tempImagePath?: string; width: number; height: number }>(ctx.takePhoto, 'takePhoto', { quality }).then((r) => (r.ok ? capOk({ tempImagePath: r.data.tempImagePath, width: r.data.width ?? 0, height: r.data.height ?? 0 }) : r)),
+        startRecord: () => call<void>(ctx.startRecord, 'startRecord'),
+        stopRecord: () =>
+          call<{ tempThumbPath?: string; tempVideoPath?: string; duration: number; size: number }>(ctx.stopRecord, 'stopRecord').then((r) => (r.ok ? capOk({ tempThumbPath: r.data.tempThumbPath, tempVideoPath: r.data.tempVideoPath, duration: r.data.duration ?? 0, size: r.data.size ?? 0 }) : r)),
+        setZoom: (zoom: number) => call<void>(ctx.setZoom, 'setZoom', { zoom }),
+        onCameraFrame: (cb) => {
+          if (typeof ctx.onCameraFrame !== 'function') return () => {}
+          ctx.onCameraFrame(cb)
+          return () => {}
+        },
+      }
+    },
+    // ★能力颗粒度对齐：C2 录音操作（wx.getRecorderManager() → start/stop/pause/resume + 事件）
+    getRecorder: () => {
+      if (typeof wx.getRecorderManager !== 'function') throw new CapError('microphone.unsupported', 'wx.getRecorderManager 缺失')
+      const mgr = wx.getRecorderManager()
+      const okRun = (fn: unknown, name: string, opt?: Record<string, unknown>): Promise<CapResult<void>> =>
+        Promise.resolve().then(() => {
+          if (typeof fn !== 'function') return capErr<void>('microphone.unsupported', 'RecorderManager.' + name + ' 缺失')
+          try {
+            ;(fn as (o?: Record<string, unknown>) => void)(opt)
+            return capOk(undefined)
+          } catch (e) {
+            return capErr<void>('microphone.failed', 'wx 录音 ' + name + ' 失败', e)
+          }
+        })
+      const evMap: Record<string, string> = { start: 'onStart', stop: 'onStop', pause: 'onPause', resume: 'onResume', error: 'onError' }
+      return {
+        start: (options?: RecordOptions) => okRun(mgr.start, 'start', options as Record<string, unknown> | undefined),
+        stop: () => okRun(mgr.stop, 'stop'),
+        pause: () => okRun(mgr.pause, 'pause'),
+        resume: () => okRun(mgr.resume, 'resume'),
+        on: (event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void) => {
+          const fn = mgr[evMap[event] as keyof WxRecorderManagerLike]
+          if (typeof fn !== 'function') return () => {}
+          ;(fn as (c: (p: unknown) => void) => void)(cb)
+          return () => {}
+        },
+        onFrameRecorded: (cb) => {
+          if (typeof mgr.onFrameRecorded !== 'function') return () => {}
+          mgr.onFrameRecorded(cb)
+          return () => {}
+        },
+      }
+    },
     getKeyboard: () => {
       let info: KeyboardInfo = { height: 0, visible: false }
       const cbs: Array<(i: KeyboardInfo) => void> = []
@@ -2016,20 +2208,40 @@ function wxBridge(wx: WxLike): CapabilityBridge {
     createMap: (id) => {
       if (typeof wx.createMapContext !== 'function') throw new CapError('map.unsupported', 'wx.createMapContext 缺失')
       const ctx = wx.createMapContext(id)
+      // ★能力颗粒度对齐：C4 地图控制器全量（覆盖物/视野/坐标/移动标记 + 事件）
+      //   缺 ctx API → 对应方法 Err（诚实）；事件订阅返回取消函数
+      // 桥层返回原始 Promise（MapContextBridge）；CapResult 包装在 hook 层（useMap）
+      const call = <r>(fn: unknown, name: string, opt: Record<string, unknown> = {}): Promise<r> =>
+        new Promise<r>((resolve, reject) => {
+          if (typeof fn !== 'function') return reject(new CapError('map.unsupported', 'MapContext.' + name + ' 缺失'))
+          ;(fn as (o: Record<string, unknown>) => void)({
+            ...opt,
+            success: (res: r) => resolve(res),
+            fail: (e: unknown) => reject(new CapError('map.failed', 'wx 地图 ' + name + ' 失败', e)),
+          })
+        })
       return {
         getRegion: () =>
-          new Promise((resolve, reject) => {
-            if (!ctx.getRegion) return reject(new CapError('map.unsupported', 'MapContext.getRegion 缺失'))
-            ctx.getRegion({
-              success: (r) => resolve({ latitude: r.latitude, longitude: r.longitude, scale: r.scale }),
-              fail: (e) => reject(new CapError('map.failed', 'wx 地图区域获取失败', e)),
-            })
-          }),
-        moveTo: (latitude, longitude, scale) =>
-          new Promise((resolve, reject) => {
-            if (!ctx.moveTo) return reject(new CapError('map.unsupported', 'MapContext.moveTo 缺失'))
-            ctx.moveTo({ latitude, longitude, scale, success: () => resolve(), fail: (e) => reject(new CapError('map.failed', 'wx 地图移动失败', e)) })
-          }),
+          call<{ latitude: number; longitude: number; scale?: number }>(ctx.getRegion, 'getRegion').then((r) => ({ latitude: r.latitude, longitude: r.longitude, scale: r.scale })),
+        moveTo: (latitude: number, longitude: number, scale?: number) => call<void>(ctx.moveTo, 'moveTo', { latitude, longitude, scale }),
+        moveToLocation: () => call<void>(ctx.moveToLocation, 'moveToLocation'),
+        includePoints: (points: Array<{ latitude: number; longitude: number }>, padding?: number[]) => call<void>(ctx.includePoints, 'includePoints', { points, padding }),
+        translateMarker: (opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }) => call<void>(ctx.translateMarker, 'translateMarker', opt),
+        addMarkers: (markers: MapMarker[]) => call<void>(ctx.addMarkers, 'addMarkers', { markers }),
+        removeMarkers: (ids: number[]) => call<void>(ctx.removeMarkers, 'removeMarkers', { markerIds: ids }),
+        addPolylines: (polylines: MapPolyline[]) => call<void>(ctx.addPolylines, 'addPolylines', { polylines }),
+        removePolylines: (ids: number[]) => call<void>(ctx.removePolylines, 'removePolylines', { polylineIds: ids }),
+        addCircles: (circles: MapCircle[]) => call<void>(ctx.addCircles, 'addCircles', { circles }),
+        removeCircles: (ids: number[]) => call<void>(ctx.removeCircles, 'removeCircles', { circleIds: ids }),
+        getScale: () => call<{ scale: number }>(ctx.getScale, 'getScale').then((r) => r.scale),
+        openMapApp: (opt: { latitude: number; longitude: number; name?: string }) => call<void>(ctx.openMapApp, 'openMapApp', opt),
+        on: (event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void) => {
+          if (typeof ctx.on !== 'function') return () => {}
+          ctx.on(event, cb)
+          return () => {
+            if (typeof ctx.off === 'function') ctx.off(event, cb)
+          }
+        },
       }
     },
     getBackground: () => {
@@ -2592,6 +2804,28 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         return { kind: 'microphone' as const, supported: true, granted: false }
       }
     },
+    // ★能力颗粒度对齐：web 相机操作（诚实 Err——拍照/录像需 canvas/MediaRecorder 后续批次）
+    createCameraContext: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('camera.unsupported', 'Web 端相机 ' + op + ' 未实现（需 canvas/MediaRecorder，后续批次）'))
+      return {
+        takePhoto: () => noWeb<PhotoResult>('takePhoto'),
+        startRecord: () => noWeb<void>('startRecord'),
+        stopRecord: () => noWeb<VideoResult>('stopRecord'),
+        setZoom: () => noWeb<void>('setZoom'),
+        onCameraFrame: () => () => {},
+      }
+    },
+    getRecorder: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('microphone.unsupported', 'Web 端录音 ' + op + ' 未实现（需 MediaRecorder，后续批次）'))
+      return {
+        start: () => noWeb<void>('start'),
+        stop: () => noWeb<void>('stop'),
+        pause: () => noWeb<void>('pause'),
+        resume: () => noWeb<void>('resume'),
+        on: () => () => {},
+        onFrameRecorded: () => () => {},
+      }
+    },
     getKeyboard: () => {
       let info: KeyboardInfo = { height: 0, visible: false }
       const cbs: Array<(i: KeyboardInfo) => void> = []
@@ -2823,8 +3057,12 @@ export interface CapabilityHooks {
   useNFC(): Promise<CapResult<NfcInfo>>
   /** C1 useCamera：摄像头访问（wx.authorize / web getUserMedia） */
   useCamera(): Promise<CapResult<MediaAccess>>
+  /** ★能力颗粒度对齐：相机操作控制器（拍照/录像/缩放/帧） */
+  useCameraContext(id: string): CapResult<CameraController>
   /** C2 useMicrophone：麦克风访问（wx.authorize / web getUserMedia） */
   useMicrophone(): Promise<CapResult<MediaAccess>>
+  /** ★能力颗粒度对齐：录音操作控制器（start/stop/pause/resume + 事件） */
+  useRecorder(): CapResult<RecorderController>
   /** C14 useKeyboard：键盘生命周期句柄（wx.onKeyboardHeightChange / web visualViewport） */
   useKeyboard(): KeyboardLifecycle
   // ★G-32 B3 七期：剩余能力 Hook（C4 地图 / C22 短信 / C25 后台 / C28 SocketTask / C31 数据通道 / C32 Cookie / C39 人脸 / C46 内购 / C47 小程序 / C48 宿主嵌入 / C49 直播 / C50 扩展）
@@ -3171,6 +3409,16 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           return bridge.getMicrophone()
         })(),
       ),
+    // ★能力颗粒度对齐：相机操作控制器（桥无 → 抛；有 → 返回控制器，方法自带 CapResult）
+    useCameraContext: (id: string) => {
+      if (!bridge.createCameraContext) throw new CapError('camera.unsupported', '桥未提供 createCameraContext（useCameraContext 不可用）')
+      return capOk(bridge.createCameraContext(id))
+    },
+    // ★能力颗粒度对齐：录音操作控制器
+    useRecorder: () => {
+      if (!bridge.getRecorder) throw new CapError('microphone.unsupported', '桥未提供 getRecorder（useRecorder 不可用）')
+      return capOk(bridge.getRecorder())
+    },
     useKeyboard: () => {
       if (!bridge.getKeyboard) throw new CapError('keyboard.unsupported', '桥未提供 getKeyboard（useKeyboard 不可用）')
       return bridge.getKeyboard()
@@ -3181,9 +3429,22 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         (() => {
           if (!bridge.createMap) return Promise.reject(new CapError('map.unsupported', '桥未提供 createMap（useMap 不可用）'))
           const ctx = bridge.createMap(id)
+          // ★能力颗粒度对齐：全量控制器（每个方法包 CapResult）
           const controller: MapController = {
             getRegion: () => wrap(ctx.getRegion()),
             moveTo: (latitude, longitude, scale) => wrap(ctx.moveTo(latitude, longitude, scale)),
+            moveToLocation: () => wrap(ctx.moveToLocation()),
+            includePoints: (points, padding) => wrap(ctx.includePoints(points, padding)),
+            translateMarker: (opt) => wrap(ctx.translateMarker(opt)),
+            addMarkers: (markers) => wrap(ctx.addMarkers(markers)),
+            removeMarkers: (ids) => wrap(ctx.removeMarkers(ids)),
+            addPolylines: (polylines) => wrap(ctx.addPolylines(polylines)),
+            removePolylines: (ids) => wrap(ctx.removePolylines(ids)),
+            addCircles: (circles) => wrap(ctx.addCircles(circles)),
+            removeCircles: (ids) => wrap(ctx.removeCircles(ids)),
+            getScale: () => wrap(ctx.getScale()),
+            openMapApp: (opt) => wrap(ctx.openMapApp(opt)),
+            on: (event, cb) => ctx.on(event, cb),
           }
           return Promise.resolve(controller)
         })(),

@@ -118,8 +118,8 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 | **L1 高频核心** | 硬件交互主战场 | 蓝牙 BLE · 文件系统 · 地图 · 相机/麦克风 | 🟡 进行中 |
 | 　└ 蓝牙 BLE | C36 | ✅ 已落地（BluetoothAPI：连接/服务/特征值读写/通知/发现/断开 + RSSI） | ✅ |
 | 　└ 文件系统 | C43 | ✅ 已落地（异步 16 方法 + Sync 10 方法；web 内存降级全量） | ✅ |
-| 　└ 地图 | C4 | 待做（现 2 → ~30 ops） | ⬜ |
-| 　└ 相机/麦克风 | C1/C2 | 待做（takePhoto/record + RecorderManager） | ⬜ |
+| 　└ 地图 | C4 | ✅ 已落地（MapController：标记/折线/圆/视野/坐标/移动/开App/事件） | ✅ |
+| 　└ 相机/麦克风 | C1/C2 | ✅ 已落地（CameraController + RecorderController） | ✅ |
 | **L2 中频** | 系统集成 | NFC · 通知 · 存储（异步）· 传感器流 · 后台生命周期 · 日历 | ⬜ 待启 |
 | **L3 长尾** | 低使用率 | 直播（~30）· AI 推理 · 多媒体编辑 · 支付扩展 | ⬜ 待评估（建议泛化壳 + 诚实边界） |
 | **即时修复** | bug | `usePermission` 小程序端（wxBridge 加 getSetting→state 映射） | ✅ 已落地 |
