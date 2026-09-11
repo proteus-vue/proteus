@@ -264,7 +264,7 @@ watch(() => route.fullPath, () => {
 .nav-menu .nav-link.active::after { left: 10px; right: auto; width: 20px; }
 .brand-tag { display: none; }
 /* ---- 宽容器：恢复横排，隐藏汉堡 ---- */
-@container (min-width: 760px) {
+@container (min-width: 900px) {
   .nav-burger { display: none; }
   .nav-scrim { display: none; }
   .brand-tag { display: inline; }
