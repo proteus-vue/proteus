@@ -139,3 +139,36 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 - **不追求 495 全量**：多数长尾 API 需特定类目/企业主体，且业务罕见——泛化壳（`wx` 直通）会造成「假覆盖」，违背 G-32.3 显式降级原则；长尾域按需（有真实业务诉求）再补。
 - **BLE 外设端（`BLEPeripheralServer`）**、**NFC 全套**、**地图完整覆盖物**属「重实现」——建议按业务需求驱动，不做纯覆盖式铺开。
 - **平台差异**：Web 端多数硬件能力无对等（蓝牙 Web Bluetooth 仅部分、NFC 仅 Chrome Android、文件系统仅 OPFS）——保持诚实 Err，不假装。
+
+---
+
+## 7. 落地进度（2026-09-11）
+
+| 域 | 状态 | 交付 |
+|----|------|------|
+| C36 蓝牙 | ✅ | BluetoothAPI（连接/服务/特征值读写/通知/发现/RSSI + 3 订阅） |
+| C43 文件系统 | ✅ | FSAdapter（异步 16 + Sync 10；web 内存降级全量） |
+| C4 地图 | ✅ | MapController（14 方法：覆盖物/视野/坐标/移动/开App/事件） |
+| C1 相机 | ✅ | CameraController（useCameraContext(id)：拍照/录像/缩放/帧） |
+| C2 录音 | ✅ | RecorderController（useRecorder：启停/暂停/恢复 + 事件） |
+| C5 传感器 | ✅ | SensorStream（start/stop/on + 持续推送；修 readSensor 泄漏） |
+| C15 存储 | ✅ | 异步 setAsync/getAsync/removeAsync/clearAsync + info + batchGet/batchSet |
+| C37 NFC | ✅ | NFCAPI（startHCE/stopHCE/sendHCEMessage/onHCEMessage/onHCEStateChange） |
+| C17 通知 | ✅ | subscribeMessage + subscribeDeviceMessage + openCustomerService |
+| C25 后台 | ✅ | 全事件面 + getLaunchOptions/getEnterOptions |
+| C20 日历 | ✅ | CalendarAPI（add/remove；查询无开放 API → Err） |
+| C16 权限 | ✅ | **修复**：wxBridge 补 getPermission（原小程序端恒 Err） |
+
+**测试**：`tests/capability-granularity.test.ts` 24 用例；全量 2898/2898。
+
+## 8. L3 长尾（未做，按需驱动）
+
+| 域 | 缺口 | 说明 |
+|----|------|------|
+| C49 直播 | ~30 | wx live 组件形态/宿主桥 |
+| C4 地图完整覆盖物 | 剩 ~15 | 自定义图层/可视化图层/AR 等低频 |
+| C36 BLE 外设端 | 14 | `BLEPeripheralServer`（手机当外设，极低频） |
+| C37 NFC `NFCAdapter` | 12 | 读卡模式（NDEF/NfcA/B/F/V/IsoDep/Mifare） |
+| AI 推理 / 多媒体编辑 / 支付扩展 | — | 需特定类目/企业主体，业务罕见 |
+
+**结论**：L3 采用「按需驱动」而非覆盖式铺开——泛化壳（wx 直通）会造成「假覆盖」，违背 G-32.3 显式降级原则。
