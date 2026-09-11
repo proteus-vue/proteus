@@ -6,7 +6,7 @@
 // ★B4 导航重构（#379）：顶部导航只留区块入口（首页/Playground/文档/GitHub）
 // ★D-2：布局标签 p-view/p-text；★W-6：v-p-fluid clamp，零 @media
 // ★#389c 滚动上下文：顶部渐变进度条（scaleX 合成器）+ 导航滚动态（scrolled 投影）
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DocSearch from './DocSearch.vue'
 // ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer
@@ -52,19 +52,40 @@ const scrollObs = createScrollObserver({
 onUnmounted(() => {
   scrollObs.destroy()
 })
+
+// ★2026-09-11 移动端导航：容器查询（@container）驱动的汉堡菜单——视口无关、零 @media、零裸平台 API。
+//   窄容器收起为品牌 + 汉堡；点击展开全宽菜单（触控目标 ≥44px）；路由变化自动收起。
+const menuOpen = ref(false)
+watch(() => route.fullPath, () => {
+  menuOpen.value = false
+})
 </script>
 
 <template>
   <p-page ref="siteEl" class="site">
     <!-- ★#389 导航：实底细边框（去掉玻璃发光——风格收敛） -->
-    <header class="nav-shell" :class="{ 'is-scrolled': scrolled }">
-      <p-stack v-p-fluid="'padding(14, 24)'" direction="row" :gap="8" wrap class="nav">
+    <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen }">
+      <div class="nav">
         <router-link to="/" class="brand">
           <span class="brand-mark">◆</span>
           <p-text class="brand-name">Proteus</p-text>
+          <!-- 品牌尾缀在窄容器隐藏（空间让给汉堡） -->
           <span class="brand-tag">/ semantic engine</span>
         </router-link>
-        <p-stack direction="row" :gap="4" wrap class="nav-links">
+        <!-- ★移动端汉堡（仅窄容器显示——@container 驱动） -->
+        <button
+          type="button"
+          class="nav-burger"
+          :aria-expanded="menuOpen ? 'true' : 'false'"
+          aria-label="菜单"
+          @click="menuOpen = !menuOpen"
+        >
+          <span class="burger-bar" />
+          <span class="burger-bar" />
+          <span class="burger-bar" />
+        </button>
+        <!-- 导航菜单：宽容器横排；窄容器收进汉堡 → 展开为下拉面板 -->
+        <div class="nav-menu" :class="{ 'is-open': menuOpen }">
           <DocSearch />
           <button
             type="button"
@@ -93,8 +114,10 @@ onUnmounted(() => {
           <a class="nav-link nav-github" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">
             <p-text class="nav-text">GitHub ↗</p-text>
           </a>
-        </p-stack>
-      </p-stack>
+        </div>
+      </div>
+      <!-- ★移动端菜单遮罩（点击关闭；仅展开时存在，框架中性：无平台 API） -->
+      <div v-if="menuOpen" class="nav-scrim" aria-hidden="true" @click="menuOpen = false" />
       <!-- ★#389c 顶部滚动进度条（品牌色细线 scaleX——合成器属性） -->
       <div class="scroll-progress" aria-hidden="true">
         <div class="scroll-progress-bar" :style="{ transform: 'scaleX(' + progress + ')' }" />
@@ -135,7 +158,9 @@ onUnmounted(() => {
   transition: border-color 0.15s, color 0.15s;
 }
 .lang-switch:hover { border-color: var(--brand); color: var(--ink); }
-/* ★导航：实底 + 细下边框（去玻璃发光；滚动后加投影区分层级） */
+/* ★导航：实底 + 细下边框（去玻璃发光；滚动后加投影区分层级）
+   ★2026-09-11 移动端：container-type: inline-size → 子元素可用 @container 查询（视口无关，
+   零媒体查询/零裸 window，符合 W-6 与 D-2 no-media-query/no-web-platform-api=error） */
 .nav-shell {
   position: -webkit-sticky;
   position: sticky;
@@ -144,6 +169,7 @@ onUnmounted(() => {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   transition: box-shadow 0.2s ease, background 0.2s ease;
+  container-type: inline-size;
 }
 .nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 /* ★#389c 滚动进度条（品牌色细线） */
@@ -162,10 +188,16 @@ onUnmounted(() => {
   transform: scaleX(0);
 }
 .nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px;
   max-width: 1320px;
   margin: 0 auto;
   width: 100%;
+  padding: 12px 24px;
+  box-sizing: border-box;
 }
 .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
 /* ★#387 品牌标识（同心方 conic 渐变） */
@@ -176,7 +208,7 @@ onUnmounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  font-size: 11px;
+  font-size: 12px;
   color: #fff;
   background: conic-gradient(from 210deg, var(--brand), var(--brand2), var(--accent), var(--brand));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
@@ -184,6 +216,73 @@ onUnmounted(() => {
 .brand-name { color: var(--ink); font-weight: 700; font-size: 17px; letter-spacing: 0.4px; white-space: nowrap; }
 .brand-tag { color: var(--dim); font-size: 13px; white-space: nowrap; }
 .nav-links { display: flex; align-items: center; flex-wrap: wrap; }
+/* ---- 移动端菜单（默认窄容器：收起） ---- */
+.nav-burger {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.nav-burger:hover { border-color: var(--brand); }
+.burger-bar { display: block; height: 2px; border-radius: 2px; background: var(--ink); }
+.nav-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 16px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+.nav-menu.is-open { display: flex; }
+/* 遮罩：覆盖页面（菜单之下、内容之上）——点击即关 */
+.nav-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(0, 0, 0, 0.5);
+}
+/* 窄容器下菜单项紧凑（不再各占一行大块） */
+.nav-menu { gap: 0; }
+.nav-menu .nav-link { padding: 11px 10px; }
+/* 触控目标 ≥44px + 左对齐（移动端菜单项） */
+.nav-menu .nav-link { padding: 12px 10px; }
+.nav-menu .nav-link.active::after { left: 10px; right: auto; width: 20px; }
+.brand-tag { display: none; }
+/* ---- 宽容器：恢复横排，隐藏汉堡 ---- */
+@container (min-width: 760px) {
+  .nav-burger { display: none; }
+  .nav-scrim { display: none; }
+  .brand-tag { display: inline; }
+  .nav-menu {
+    display: flex;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .nav-menu .nav-link { padding: 7px 12px; }
+  .nav-menu .nav-link.active::after { left: 12px; right: 12px; width: auto; }
+}
 .nav-link { text-decoration: none; padding: 7px 12px; border-radius: var(--radius-sm); position: relative; }
 /* ★#381：链接文字禁折字（首/页 竖排两字的根因）——窄屏整链接换行 */
 .nav-text { color: var(--muted); font-size: 14px; transition: color 0.15s; white-space: nowrap; }
