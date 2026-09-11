@@ -199,7 +199,7 @@ function itemTitle(slugOf: string, zhTitle: string): string {
 .toc-group + .toc-group { margin-top: 12px; }
 .toc-group-name {
   color: var(--brand);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   margin-bottom: 4px;

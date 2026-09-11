@@ -376,18 +376,18 @@ run(source.value)
   border: 1px solid rgba(61, 220, 151, 0.3);
   background: rgba(61, 220, 151, 0.12);
   border-radius: var(--radius-pill);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1px;
   padding: 2px 8px;
   white-space: nowrap;
 }
 .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .live-pulse { display: inline-flex; align-items: center; }
-.panel-tip { color: var(--dim); font-size: 11px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.panel-tip { color: var(--dim); font-size: 12px; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ★#388 后端切换工具栏（v3 四组 select） */
 .toolbar { align-items: flex-end; margin-bottom: 12px; }
 .tool-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tool-label { color: var(--dim); font-size: 10px; letter-spacing: 1px; white-space: nowrap; }
+.tool-label { color: var(--dim); font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
 .tool-select {
   background: var(--panel2);
   color: var(--ink);
@@ -419,7 +419,7 @@ run(source.value)
   overflow: auto;
 }
 .device-inner.p-view { width: 100%; max-width: 100%; min-width: 0; min-height: 240px; border: 1px dashed var(--line); border-radius: var(--radius-sm); padding: 6px; box-sizing: border-box; }
-.render-meta { color: var(--muted); font-size: 11px; }
+.render-meta { color: var(--muted); font-size: 12px; }
 .render-json.p-view {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -428,7 +428,7 @@ run(source.value)
   margin: 0;
   color: var(--ink);
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   overflow: auto;
   max-height: 220px;
@@ -490,7 +490,7 @@ run(source.value)
 /* ★#388c Tab 说明条（切换即读——透明编译的用户教育内建于 UI） */
 .tab-desc {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
@@ -591,7 +591,7 @@ run(source.value)
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   padding: 3px 12px;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 .trace-toggle:hover { color: var(--ink); border-color: var(--brand); }

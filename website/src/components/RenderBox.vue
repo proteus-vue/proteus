@@ -51,7 +51,7 @@ const hasChildren = computed(() => props.node.children.length > 0)
   position: relative;
 }
 .rbox-root { width: 100%; height: 100%; overflow: auto; }
-.rbox-label { color: var(--rb-color); font-size: 10px; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.rbox-label { color: var(--rb-color); font-size: 12px; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .rbox-sem { color: var(--dim); margin-left: 6px; }
 .rbox-text-content { color: var(--ink); font-size: 12px; }
 .rbox-grid-inner {
