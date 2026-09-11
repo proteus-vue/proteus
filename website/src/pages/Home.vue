@@ -410,6 +410,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       <p-grid :min-col-width="270" :gap="12">
         <pg-glass v-for="(s, i) in statItems" :key="s.label" preset="card" intensity="thin" :radius="14" :noise="0.03" class="stat" :style="{ '--stagger-i': String(i) }">
           <p-text class="stat-value">{{ counters[i] ?? s.value }}</p-text>
+          <span class="stat-bar" />
           <p-text class="stat-label">{{ s.label }}</p-text>
           <p-text class="stat-source">{{ s.source }}</p-text>
         </pg-glass>
@@ -685,7 +686,28 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .hv-tab { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: 12.5px; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 4px 12px; }
 .hv-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
 .hv-live { color: var(--ok); font-size: 12px; letter-spacing: 0.5px; margin-left: auto; }
-.hv-live::before { content: '● '; }
+.hv-live::before { content: '● '; animation: hv-pulse 1.8s ease-in-out infinite; }
+@keyframes hv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.28; } }
+/* 编译扫描线：窗口顶部一条高光横向扫过（「正在编译」的观感；纯合成器动画） */
+.hv-frame::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand), var(--brand2), transparent);
+  background-size: 42% 100%;
+  background-repeat: no-repeat;
+  animation: hv-scan 3.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes hv-scan {
+  0% { background-position: -45% 0; }
+  100% { background-position: 145% 0; }
+}
+.no-motion .hv-live::before, .no-motion .hv-frame::after { animation: none; }
 .hv-body { min-height: clamp(230px, 19vw, 296px); align-items: stretch; }
 .hv-side { width: clamp(122px, 9.5vw, 156px); border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; background: var(--bg); }
 .hv-side-title { color: var(--dim); font-size: 12px; letter-spacing: 1px; margin-bottom: 7px; }
@@ -817,7 +839,21 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .stat:hover { border-color: var(--brand); }
 /* ★pg-glass 卡片非 flex-column → p-text(span) 会 inline 挤在同一行（「38@proteus-vue/* 包」）——
    显式 display:block 让数值/标签/来源各占一行 */
-.stat-value { display: block; color: var(--brand-ink); font-size: 26px; font-weight: 700; line-height: 1.2; }
+.stat-value { display: block; color: var(--brand-ink); font-size: 26px; font-weight: 700; line-height: 1.2; text-shadow: 0 0 20px rgba(124, 92, 255, 0.38); }
+/* 强调条：显现时从左画出（与计数动画同步的「强调下划线」，非数据进度——不伪造百分比） */
+.stat-bar {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  margin: 10px 0 3px;
+  background: linear-gradient(90deg, var(--brand), var(--brand2));
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: calc(var(--stagger-i, 0) * 70ms);
+}
+.revealed .stat-bar { transform: scaleX(1); }
+.no-motion .stat-bar { transform: scaleX(1); transition: none; }
 .stat-label { display: block; color: var(--ink); font-size: 13px; margin-top: 2px; }
 .stat-source { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
 
