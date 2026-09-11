@@ -105,3 +105,29 @@ describe('gen-routes 端到端（B6 组件自动解析）', () => {
     }
   })
 })
+
+// ★C2 颗粒度对齐（2026-09-11）：新增真实组件 MP 产物（对齐小程序同名组件）
+describe('p-progress / p-label / p-page-container（C2 新增）', () => {
+  it('p-progress：percent 门控 + 状态类 + 纯 CSS 进度（MP 安全）', () => {
+    const { wxml, wxss } = compileComponent('p-progress')
+    expect(wxml).toContain('<view')
+    expect(wxml).toMatch(/class="[^"]*\bp-progress\b/)
+    // 无 wx/document/window 直调（MP 安全）
+    expect(wxml).not.toMatch(/\bwx\./)
+    expect(wxss).toBeDefined()
+  })
+
+  it('p-label：for 关联控件（对齐小程序 <label for>）', () => {
+    const { wxml } = compileComponent('p-label')
+    // label → label 标签保留（小程序原生支持 for）
+    expect(wxml).toMatch(/<label/)
+    expect(wxml).toContain('for=')
+  })
+
+  it('p-page-container：teleport → root-portal（Skyline 顶层）+ 遮罩结构', () => {
+    const { wxml } = compileComponent('p-page-container')
+    expect(wxml).toContain('p-page-container')
+    // teleport 编译为 root-portal（对齐 p-drawer/p-popover）
+    expect(wxml).toContain('root-portal')
+  })
+})

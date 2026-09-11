@@ -487,6 +487,34 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'AnimationController',
     headless: 'animate',
   },
+  // ★能力颗粒度对齐 C2：进度条 / 表单标签 / 页面容器（对齐小程序 <progress>/<label>/<page-container>）
+  'ui.progress': {
+    'vue-dom': 'div.proteus-progress',
+    'native-ios': 'UIProgressView',
+    'native-android': 'ProgressBar',
+    'native-harmony': 'Progress',
+    skyline: 'progress', // 微信原生 <progress>
+    flutter: 'LinearProgressIndicator',
+    headless: 'progress',
+  },
+  'ui.label': {
+    'vue-dom': 'label',
+    'native-ios': 'UILabel.label',
+    'native-android': 'TextView.label',
+    'native-harmony': 'Text.label',
+    skyline: 'label', // 微信原生 <label>（for 关联控件）
+    flutter: 'Text.label',
+    headless: 'label',
+  },
+  'shell.page-container': {
+    'vue-dom': 'div.proteus-page-container',
+    'native-ios': 'UIPresentationController',
+    'native-android': 'BottomSheetDialog',
+    'native-harmony': 'bindSheet',
+    skyline: 'page-container', // 微信原生 <page-container>
+    flutter: 'showModalBottomSheet',
+    headless: 'page-container',
+  },
 }
 
 /**

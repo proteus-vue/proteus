@@ -963,6 +963,51 @@ export const COMP_EN = {
     ],
     props: { designWidth: "Design-spec width (baseline for deriving container breakpoints; 375 by default)" },
   },
+  // ★C2 granularity alignment: progress / label / page-container (real WeChat built-in components)
+  'p-progress': {
+    desc: "Progress bar",
+    notes: [
+      "Aligned with the Mini Program <progress>: percent 0-100 (out-of-range is clamped), status active/success/exception",
+      "type=line linear / type=circle ring (drawn with pure CSS conic-gradient — no SVG dependency, both ends work)",
+      "Both ends share one source: div → view; pure style computation (MP-safe)",
+    ],
+    props: {
+      percent: "Current progress 0-100 (clamped automatically)",
+      showInfo: "Whether to show the percentage text on the right",
+      status: "Status: active / success / exception",
+      strokeWidth: "Line width in px (ring = ring thickness, line = bar height)",
+      type: "Type: line / circle",
+      rounded: "Whether the ends are rounded",
+      color: "Bar color (overrides the status default)",
+      trackColor: "Track background color",
+    },
+  },
+  'p-label': {
+    desc: "Form label / control association",
+    notes: [
+      "Aligned with the Mini Program <label>: the for attribute links a control id → tapping the label focuses/toggles the linked control",
+      "Both ends share one source: label → label (the Mini Program <label for> is natively supported)",
+    ],
+    props: {
+      for: "The id of the linked control (aligned with the Mini Program <label for> / HTML label for)",
+      block: "Whether it is a full-width block",
+    },
+  },
+  'p-page-container': {
+    desc: "Page container / bottom sheet",
+    notes: [
+      "Aligned with the Mini Program <page-container>: a half/full-screen container that slides up from the bottom",
+      "Container structure follows p-drawer (teleport → root-portal on Skyline; the mask is visual-only, the root container captures taps)",
+      "MP-safe: CSS transform transitions; no direct wx/document/window calls",
+    ],
+    props: {
+      show: "Whether shown (v-model:show)",
+      position: "Position: bottom (default) / top / center",
+      overlay: "Whether to show the mask",
+      closeOnClickOverlay: "Close when the mask is tapped",
+      round: "Rounded corners in px (top two corners)",
+    },
+  },
 }
 
 // ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════

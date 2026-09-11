@@ -1,7 +1,8 @@
 // packages/component-ir/src/primitives.ts
 // ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——唯一事实源（SSOT）
 //   ★2026-09-11：+C51 useUpdate（小程序热更新）→ 137；checkPrimitiveCatalog 长度改为「与常量对齐」动态校验
-//   6 大类：layout(14) / ui(21) / shell(13) / gesture(10) / capability(50) / engineering(28)
+//   ★2026-09-11 C2 颗粒度对齐：+ui.progress/ +ui.label / +shell.page-container（对齐小程序同名组件）→ 140
+//   6 大类：layout(14) / ui(23) / shell(14) / gesture(10) / capability(51) / engineering(28)
 //   ★#405 语义登记批：+8 planned（layout.aspect/zone + ui.loading/scale/skeleton + shell.mask/popup/toolbar）
 //     + engineering.error-boundary 组件形态补登（E8 加 tag，总数不变）——src/components 59 组件全部入图
 //   ★闭环 IR 设计：本清单是「语义全集」的唯一来源——
@@ -79,6 +80,9 @@ const UI: PrimitiveDef[] = [
   { id: 'U19', kind: 'ui', semantic: 'ui.loading', tag: 'p-loading', props: ['size', 'text'], mpEquiv: 'wx.showLoading 部分', tier: 'L2', status: 'planned' },
   { id: 'U20', kind: 'ui', semantic: 'ui.scale', tag: 'p-scale', props: ['level', 'density', 'baseSize'], mpEquiv: '无（无障碍档位）', tier: 'L2', status: 'planned' },
   { id: 'U21', kind: 'ui', semantic: 'ui.skeleton', tag: 'p-skeleton', props: ['rows', 'avatar', 'animated'], mpEquiv: '无', tier: 'L2', status: 'planned' },
+  // ★能力颗粒度对齐 C2：进度条 / 表单标签
+  { id: 'U22', kind: 'ui', semantic: 'ui.progress', tag: 'p-progress', props: ['percent', 'status', 'type', 'strokeWidth', 'showInfo'], mpEquiv: '<progress>', tier: 'L1', status: 'implemented' },
+  { id: 'U23', kind: 'ui', semantic: 'ui.label', tag: 'p-label', props: ['for', 'block'], mpEquiv: '<label>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */
@@ -97,6 +101,8 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S11', kind: 'shell', semantic: 'shell.mask', tag: 'p-mask', props: ['visible', 'transparent'], mpEquiv: '组合（遮罩层）', tier: 'L2', status: 'planned' },
   { id: 'S12', kind: 'shell', semantic: 'shell.popup', tag: 'p-popup', props: ['position', 'round', 'overlay'], mpEquiv: '组合（弹层）', tier: 'L2', status: 'planned' },
   { id: 'S13', kind: 'shell', semantic: 'shell.toolbar', tag: 'p-toolbar', props: ['items', 'itemWidth', 'moreWidth'], mpEquiv: '无（溢出折叠）', tier: 'L2', status: 'planned' },
+  // ★能力颗粒度对齐 C2：页面容器（对齐小程序 <page-container>）
+  { id: 'S14', kind: 'shell', semantic: 'shell.page-container', tag: 'p-page-container', props: ['show', 'position', 'overlay', 'closeOnClickOverlay'], mpEquiv: '<page-container>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §6 ④ 交互/手势原语 Gesture（10）——手势是声明式约束（v-gesture:* 指令 + 组件 + Hook） */

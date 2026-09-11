@@ -65,6 +65,9 @@ export const SEMANTIC_ENUM = [
   'ui.loading',
   'ui.scale',
   'ui.skeleton',
+  // ★能力颗粒度对齐 C2：进度条 / 表单标签（对齐小程序 <progress> / <label>）
+  'ui.progress',
+  'ui.label',
   // —— 容器/导航原语（G-32 ③ Shell 10）——
   'shell.page',
   'shell.nav',
@@ -79,6 +82,8 @@ export const SEMANTIC_ENUM = [
   'shell.mask',
   'shell.popup',
   'shell.toolbar',
+  // ★能力颗粒度对齐 C2：页面容器（对齐小程序 <page-container>）
+  'shell.page-container',
   // —— 交互/手势原语（G-32 ④ Gesture——组件形态 2 个；v-gesture: 指令归绑定层不产生 C-IR 节点）——
   'gesture.draggable',
   'gesture.scrollable',
@@ -187,4 +192,8 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-toolbar': 'shell.toolbar',
   'p-scroll-view': 'layout.scroll', // 滚动容器 = p-scroll 角色
   'p-error-boundary': 'engineering.error-boundary', // E8 原语组件形态（useErrorBoundary API 形态并存）
+  // ★能力颗粒度对齐 C2：新增真实组件
+  'p-progress': 'ui.progress',
+  'p-label': 'ui.label',
+  'p-page-container': 'shell.page-container',
 }

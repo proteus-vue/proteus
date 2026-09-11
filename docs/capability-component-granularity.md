@@ -36,10 +36,10 @@
 
 | 批 | 范围 | 内容 | 状态 |
 |----|------|------|------|
-| **A** | 生成器正确性 bug | ① parseEmits 支持 `:` → 恢复 `update:*`；② 组件页「插槽」段；③ 事件「载荷」列；④ 错误码补全（bridgeBodies per-method union + 扫 helper + throw）；⑤ 类型引用递归；⑥ 扩展接口参数表；⑦ 参数/属性「默认值」列 | 🟡 进行中 |
-| **B** | 组件页详细化 | 逐属性详解 + 逐事件详解 + 真实示例（对齐能力页详细度；含源 JSDoc 补全） | ⬜ |
-| **C1** | 覆盖度门禁重做 | 真实官方 spec 驱动、可失败（含 ghost 行一致性校验） | ⬜ |
-| **C2** | 新增缺失组件 | p-progress/p-label/match-media/page-meta/snapshot/sticky-*/root-portal/p-map/p-camera/p-page-container/p-webview/p-ad… | ⬜ |
+| **A** | 生成器正确性 bug | ① parseEmits 支持 `:` → 恢复 `update:*`；② 组件页「插槽」段；③ 事件「载荷」列；④ 错误码补全（bridgeBodies per-method union + 扫 helper + throw）；⑤ 类型引用递归；⑥ 扩展接口参数表；⑦ 参数/属性「默认值」列 | ✅ 已提交 ea984e56 |
+| **B** | 组件页详细化 | 逐属性详解 + 逐事件详解 + 真实示例（对齐能力页详细度；含源 JSDoc 补全） | ✅ 已提交 73dfa43c |
+| **C1** | 覆盖度门禁重做 | 幽灵行一致性校验（引用必须真实存在）+ landed/planned 两维（区分「有等价」与「真缺」） | ✅ 已提交 627af8ea |
+| **C2** | 新增缺失组件 | ✅ 批 1：**p-progress / p-label / p-page-container**（对齐小程序 `<progress>`/`<label>`/`<page-container>`——全端真实落地：schema+primitives+map+六后端渲染表+Rust 表+导出+d.ts+MP 编译测试）。⬜ 批 2：能力入口组件 p-camera/p-map/p-webview/p-ad（需原生渲染，诚实标 L2） | 🟡 批 1 落地 |
 | **C3** | 新增缺失 API | useUpdateManager/useAlbum/useWorker/WiFi/微信运动/收货地址/卡券/发票/广告/解密/AI/数据预拉取… | ⬜ |
 
 ---

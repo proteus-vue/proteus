@@ -37,6 +37,13 @@ declare module 'vue' {
     'p-error-boundary': typeof import('./p-error-boundary/index.vue')['default']
     VirtualList: typeof import('./virtual-list/index.vue')['default']
     'virtual-list': typeof import('./virtual-list/index.vue')['default']
+    // ★能力颗粒度对齐 C2
+    PProgress: typeof import('./p-progress/index.vue')['default']
+    'p-progress': typeof import('./p-progress/index.vue')['default']
+    PLabel: typeof import('./p-label/index.vue')['default']
+    'p-label': typeof import('./p-label/index.vue')['default']
+    PPageContainer: typeof import('./p-page-container/index.vue')['default']
+    'p-page-container': typeof import('./p-page-container/index.vue')['default']
   }
 }
 

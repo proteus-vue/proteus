@@ -87,6 +87,10 @@ import PgGlass from './pg-glass/index.vue'
 import PScanQr from './p-scan-qr/index.vue'
 import PPickPhoto from './p-pick-photo/index.vue'
 import PLocation from './p-location/index.vue'
+// ★能力颗粒度对齐 C2：真实组件补齐（progress/label/page-container——对齐小程序同名组件）
+import PProgress from './p-progress/index.vue'
+import PLabel from './p-label/index.vue'
+import PPageContainer from './p-page-container/index.vue'
 
 export {
   VirtualList,
@@ -173,6 +177,10 @@ export {
   PScanQr,
   PPickPhoto,
   PLocation,
+  // ★能力颗粒度对齐 C2：真实组件补齐
+  PProgress,
+  PLabel,
+  PPageContainer,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数
