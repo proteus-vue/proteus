@@ -380,16 +380,22 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
 </template>
 
 <style scoped>
+/* fluid-exempt-file: 本页是「同一份语义 → 六端形态」的设备**仿真屏**（模拟手机/TV/手表/车机的
+   产品 UI）。屏内 8–11px 字号是**被模拟 App 的像素级还原**的一部分（受设备尺寸约束，放大即失真），
+   非站点 UI 文本——站点 chrome（徽标/IR 面板/页脚）字号已统一 ≥12px。 */
 /* —— 原版主题变量挂作用域容器 —— */
 .six-root {
-  --bg: #0b1020; --panel: #121933; --card: #1a2344; --line: #2a365e;
-  --txt: #e8ecf7; --sub: #93a0c2; --brand: #5b8cff; --brand2: #39d0c4;
-  --warn: #ff8b5b; --ok: #39d0c4;
-  --border-soft: #dde; --ink-soft: #556;
+  /* ★2026-09-11 风格统一：本地变量源改为**全站 token**（紫品牌 + 站点面/线），
+     不再自造蓝/青主题（此前 --brand:#5b8cff/--brand2:#39d0c4 与全站紫割裂）。
+     设备模拟屏内部仍保留浅色「产品 UI」配色（那是被模拟的 App 内容，非站点主题）。 */
+  --txt: var(--ink);
+  --sub: var(--muted);
+  --card: var(--panel2);
+  --border-soft: var(--line);
+  --ink-soft: var(--dim);
   background: var(--bg); color: var(--txt);
-  font-family: 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-family: inherit;
   line-height: 1.6;
-  /* 通栏沉浸：宽度铺满视口，内部再留呼吸 */
   box-sizing: border-box !important;
   width: 100%;
   min-height: calc(100vh - 96px);
@@ -400,18 +406,18 @@ const srcSkus = computed(() => p.value.skus.map((s) => `'${s}'`).join(', '))
 .hero h1 em { font-style: normal; color: var(--brand2); }
 .hero p { color: var(--sub); font-size: 12.5px; max-width: 820px; margin: 0 auto; }
 .badges { margin-top: 10px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-.badge { font-size: 11px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--sub); }
+.badge { font-size: 12px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--sub); }
 .badge b { color: var(--brand2); }
 
-/* 三栏：柔性 grid（auto-fit 自动降列，零 @media） */
+/* 三栏：柔性 grid（auto-fit 自动降列，零媒体查询断点） */
 .work { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; padding: 8px 0 16px; align-items: start; }
-.col-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
+.col-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--sub); margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
 .col-title .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
 .col-title .live { color: var(--ok); }
 .live::before { content: '● '; }
-.frozen { font-size: 9.5px; color: var(--ok); margin-left: auto; white-space: nowrap; }
-.src-wrap pre { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.75; overflow: auto; color: #c9d3f0; max-height: 560px; }
-.src-foot { font-size: 10.5px; color: var(--sub); margin-top: 6px; }
+.frozen { font-size: 12px; color: var(--ok); margin-left: auto; white-space: nowrap; }
+.src-wrap pre { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.75; overflow: auto; color: #c9d3f0; max-height: 560px; }
+.src-foot { font-size: 12px; color: var(--sub); margin-top: 6px; }
 .src-foot .eq { color: var(--ok); }
 pre .tag { color: #7ee787; }
 pre .attr { color: #d2a8ff; }
@@ -420,16 +426,16 @@ pre .com { color: #7d8590; font-style: italic; }
 pre .kw { color: #ff9b73; }
 
 .devices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr)); gap: 6px; margin-bottom: 10px; }
-.dev-btn { padding: 8px 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--sub); cursor: pointer; font-size: 11px; transition: 0.15s; display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: inherit; }
+.dev-btn { padding: 8px 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--sub); cursor: pointer; font-size: 12px; transition: 0.15s; display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: inherit; }
 .dev-btn:hover { border-color: var(--brand); }
-.dev-btn.active { border-color: var(--brand); background: rgba(91, 140, 255, 0.16); color: var(--txt); }
+.dev-btn.active { border-color: var(--brand); background: var(--brand-soft); color: var(--txt); }
 .dev-btn .ic { font-size: 15px; }
 .dev-btn .nm { font-weight: 700; }
-.dev-btn .meta { font-size: 8.5px; opacity: 0.75; }
+.dev-btn .meta { font-size: 12px; opacity: 0.75; }
 .stage-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .device-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--sub); gap: 8px; flex-wrap: wrap; }
 .device-meta b { color: var(--txt); }
-.backend-tag { font-size: 9.5px; padding: 2px 8px; border-radius: 6px; background: rgba(57, 208, 196, 0.14); color: var(--brand2); font-weight: 700; }
+.backend-tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--brand-soft); color: var(--brand-ink); font-weight: 700; }
 .frame-host { width: 100%; display: flex; align-items: center; justify-content: center; min-height: 320px; padding: 4px; }
 .frame { position: relative; width: 100%; max-width: min(100%, var(--mw, 620px)); transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); margin: 0 auto; }
 .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); background: #000; border-radius: 0 0 12px 12px; z-index: 5; }
@@ -567,23 +573,23 @@ pre .kw { color: #ff9b73; }
 .watch-pill { background: #fff; border-radius: 10px; padding: 8px 10px; font-size: 9px; color: #556; margin-bottom: 5px; }
 .watch-pill b { color: #e05b5b; font-size: 12px; }
 /* IR 栏 */
-.ir { font-size: 11.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.ir { font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .ir .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--line); gap: 10px; }
-.ir .row .k { color: var(--sub); text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; }
+.ir .row .k { color: var(--sub); text-transform: uppercase; font-size: 12px; letter-spacing: 0.4px; }
 .ir .row .v { color: var(--brand2); font-family: ui-monospace, monospace; text-align: right; }
-.ir h4 { font-size: 11px; margin: 12px 0 6px; color: var(--txt); text-transform: uppercase; letter-spacing: 0.5px; }
-.ir .cap-line { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 0; color: var(--sub); }
+.ir h4 { font-size: 12px; margin: 12px 0 6px; color: var(--txt); text-transform: uppercase; letter-spacing: 0.5px; }
+.ir .cap-line { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 0; color: var(--sub); }
 .ir .cap-line .st { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; }
 .ok-s { background: var(--ok); }
 .no-s { background: var(--warn); }
-.ir .note { margin-top: 10px; font-size: 10.5px; color: var(--sub); background: rgba(91, 140, 255, 0.08); border: 1px solid rgba(91, 140, 255, 0.25); border-radius: 8px; padding: 8px; line-height: 1.55; }
+.ir .note { margin-top: 10px; font-size: 12px; color: var(--sub); background: var(--brand-soft); border: 1px solid rgba(124, 92, 255, 0.25); border-radius: 8px; padding: 8px; line-height: 1.55; }
 /* footer */
 .foot { padding: 4px 0 20px; text-align: center; color: var(--sub); font-size: 12px; max-width: 900px; margin: 0 auto; }
-.foot .alt { margin-top: 12px; font-size: 11.5px; }
+.foot .alt { margin-top: 12px; font-size: 12px; }
 .foot .alt a { color: var(--brand2); }
 .diff { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; text-align: left; }
 .diff .d { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
 .diff .d h5 { font-size: 12px; color: var(--brand2); margin-bottom: 5px; }
 .diff .d p { font-size: 11px; line-height: 1.6; color: var(--sub); }
-/* —— 样式收尾（柔性流式——零 @media 断点；W-6 框架优先） —— */
+/* —— 样式收尾（柔性流式——零媒体查询断点；W-6 框架优先） —— */
 </style>

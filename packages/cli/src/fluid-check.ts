@@ -77,6 +77,10 @@ export function checkFluidFile(file: string): FluidViolation[] {
   const push = (rule: string, line: number, message: string): void => {
     violations.push({ rule, file, line, message })
   }
+  // ★2026-09-11 豁免机制（与 D-2 d2-exempt 同模式）：文件头 `/* fluid-exempt-file: <原因> */`
+  //   豁免**警告级** FLD012 小字号（用于「设备/UI 仿真」这类像素级还原场景，字号是仿真的一部分，
+  //   不能放大）。错误级规则（FLD001/003/004/006/007/008）不受豁免——仍强制。
+  const exemptFile = /fluid-exempt-file:\s*([^\n*]+)/.exec(source)
 
   // style 块：@media（FLD001）+ 硬编码断点值（FLD002）+ 过小字号（FLD012）
   for (const block of extractBlocks(source, 'style')) {
@@ -92,8 +96,9 @@ export function checkFluidFile(file: string): FluidViolation[] {
         }
       }
       // ★FLD012：过小字号（≤11px）——无障碍风险（动态字号缩放下限，App 端跟随系统字号）
+      //   豁免：文件级 fluid-exempt-file / 行内 fluid-exempt
       const fs = l.match(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/)
-      if (fs && Number(fs[1] as string) <= 11) {
+      if (fs && Number(fs[1] as string) <= 11 && !exemptFile && !/fluid-exempt:/.test(l)) {
         push('FLD012', block.startLine + i, `font-size ${fs[1]}px 过小（≤11px 无障碍风险）——用 p-scale 动态字号或 ≥12px`)
       }
     }

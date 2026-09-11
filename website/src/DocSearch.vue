@@ -190,7 +190,7 @@ const hintText = computed(() => t('search.hint'))
 .docsearch-trigger:hover { border-color: var(--brand); color: var(--ink); }
 .ds-placeholder { display: inline; }
 .ds-kbd {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   border: 1px solid var(--line);
   border-radius: var(--radius-chip);
@@ -253,7 +253,7 @@ const hintText = computed(() => t('search.hint'))
 }
 .docsearch-item:last-child { border-bottom: none; }
 .docsearch-item.active { background: var(--brand-soft); }
-.ds-crumb { color: var(--dim); font-size: 11px; }
+.ds-crumb { color: var(--dim); font-size: 12px; }
 .ds-heading { color: var(--ink); font-size: 14px; font-weight: 600; }
 .ds-text {
   color: var(--muted);

@@ -103,6 +103,33 @@ describe('★G-22 fluid:check（FLD001-006）', () => {
     expect(checkFluidFile(path.join(TMP, 'pages/s4-good.vue'))).toEqual([])
   })
 
+  it('★2026-09-11 FLD012 豁免：fluid-exempt-file 只豁免警告级字号，错误级 @media 仍强制', () => {
+    // 文件级豁免：真实 UI 文本字号（如设备仿真屏）可豁免 FLD012
+    write(
+      'pages/exempt-ok.vue',
+      [
+        '<style scoped>',
+        '/* fluid-exempt-file: 设备仿真屏像素级还原（受设备尺寸约束） */',
+        '.tiny { font-size: 9px; }',
+        '</style>',
+      ].join('\n'),
+    )
+    expect(checkFluidFile(path.join(TMP, 'pages/exempt-ok.vue'))).toEqual([])
+    // 错误级规则不受豁免：带豁免标记的文件里 @media 仍报 FLD001
+    write(
+      'pages/exempt-media.vue',
+      [
+        '<style scoped>',
+        '/* fluid-exempt-file: 理由 */',
+        '.tiny { font-size: 9px; }',
+        '@media (max-width: 600px) { .x { color: red; } }',
+        '</style>',
+      ].join('\n'),
+    )
+    const v = checkFluidFile(path.join(TMP, 'pages/exempt-media.vue'))
+    expect(v.map((x) => x.rule)).toEqual(['FLD001']) // 字号豁免、@media 仍拦
+  })
+
   it('★p-adaptive FLD007/008/009：重叠区间 + 手动宽度判断 + 非常用端点命中；合规不误报', () => {
     write(
       'pages/adapt-bad.vue',
