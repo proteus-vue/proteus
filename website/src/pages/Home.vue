@@ -13,6 +13,7 @@ import { STATS, COMPARE_MATRIX } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
 import FeatureIcon from '../components/FeatureIcon.vue'
 import WireframeCore from '../components/WireframeCore.vue'
+import VectorOrb from '../components/VectorOrb.vue'
 // ★#475 首页国际化（chrome t() + 数据数组 locale 双份）
 import { locale, t } from '../i18n'
 // ★2026-09-11 风格收敛：移除 Hero 视差（--sp）与辉光/波浪——Hero 改静态左对齐构图
@@ -447,6 +448,33 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       </p-grid>
     </p-view>
 
+    <!-- 5c. 渲染通道（★炫技：同一份语义 → 两条渲染通道——SVG 矢量 + WebGL 结构，均为框架自身能力） -->
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec channels">
+      <p-view class="sec-head">
+        <span class="sec-eyebrow">{{ t('home.chanEyebrow') }}</span>
+        <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.chanTitle') }}</p-heading>
+        <p-text class="sec-sub">{{ t('home.chanSub') }}</p-text>
+      </p-view>
+      <p-grid :min-col-width="380" :gap="16">
+        <p-view class="chan-card">
+          <p-view class="chan-stage"><VectorOrb /></p-view>
+          <p-stack direction="row" :gap="8" class="chan-meta">
+            <span class="chan-tag">SVG</span>
+            <p-text class="chan-name">{{ t('home.chanV1') }}</p-text>
+          </p-stack>
+          <p-text class="chan-desc">{{ t('home.chanVSub') }}</p-text>
+        </p-view>
+        <p-view class="chan-card">
+          <p-view class="chan-stage"><WireframeCore class="chan-core" color="#7c5cff" :alpha="0.85" :speed="0.35" :scale="1.05" /></p-view>
+          <p-stack direction="row" :gap="8" class="chan-meta">
+            <span class="chan-tag">WebGL</span>
+            <p-text class="chan-name">{{ t('home.chanW1') }}</p-text>
+          </p-stack>
+          <p-text class="chan-desc">{{ t('home.chanWSub') }}</p-text>
+        </p-view>
+      </p-grid>
+    </p-view>
+
     <!-- 6. 生态支持（技术栈 logo 行） -->
     <p-view v-p-fluid="'padding-top(36, 76) padding-bottom(36, 76)'" data-reveal class="sec stack">
       <p-view class="sec-head">
@@ -693,6 +721,60 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .hero-stat { display: flex; flex-direction: column; gap: 4px; }
 .hs-value { color: var(--ink); font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
 .hs-label { color: var(--muted); font-size: 13px; }
+
+/* ---- 区块环境光晕（弱，去「死黑」；纯装饰层） ---- */
+.channels { position: relative; }
+.channels::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: min(900px, 92vw);
+  height: 420px;
+  transform: translate(-50%, -30%);
+  background: radial-gradient(50% 50% at 50% 50%, rgba(124, 92, 255, 0.10), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: 0;
+}
+.channels .sec-head, .channels .p-grid { position: relative; z-index: 1; }
+/* ---- 渲染通道卡（深面 + 舞台 + 标签） ---- */
+.chan-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s;
+}
+.chan-card:hover { border-color: var(--brand); }
+.chan-stage {
+  position: relative;
+  height: clamp(210px, 22vw, 268px);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(60% 60% at 50% 42%, rgba(124, 92, 255, 0.14), transparent 72%), var(--bg);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chan-core { position: absolute; inset: 0; width: 100%; height: 100%; }
+.chan-meta { align-items: center; margin-bottom: 6px; }
+.chan-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: var(--radius-chip);
+  padding: 2px 8px;
+}
+.chan-name { color: var(--ink); font-size: 14.5px; font-weight: 600; }
+.chan-desc { color: var(--muted); font-size: 13px; line-height: 1.65; }
 
 /* ---- 卡片（图标卡 / 能力卡 / 学习路径卡） ---- */
 .card {
