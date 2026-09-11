@@ -8,7 +8,7 @@ group: 总览
 
 > One-line framework philosophy: **you write semantics; each target decides the form**. A primitive is that single semantic catalog — declare once, and each target's rendering engine / system capability turns it into its own native implementation.
 
-Everything Proteus ships boils down to **one semantic catalog (137 primitives, the SSOT — `PRIMITIVE_CATALOG`) × multiple consumption forms**. This section documents usage entry by entry, family by family; the components / capabilities two columns are that same catalog's **component form / API form** — complementary to this section, never repeated.
+Everything Proteus ships boils down to **one semantic catalog (142 primitives, the SSOT — `PRIMITIVE_CATALOG`) × multiple consumption forms**. This section documents usage entry by entry, family by family; the components / capabilities two columns are that same catalog's **component form / API form** — complementary to this section, never repeated.
 
 ## Family × form matrix
 

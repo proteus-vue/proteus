@@ -618,3 +618,82 @@ describe('★C4 地图剩余方法（查询/视野/覆盖物/图层）', () => {
     expect(calls).toContain('boundary')
   })
 })
+
+describe('★C3 颗粒度对齐：C52 相册 / C53 Worker', () => {
+  it('useAlbum：picker 选择 + saveImage 保存 + preview（wx 桥归一为 Result）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      chooseMedia: (o: { mediaType: string[]; success?: (r: { tempFiles: Array<{ tempFilePath: string; size: number; width: number; height: number }> }) => void }) => {
+        calls.push('pick:' + o.mediaType.join(','))
+        o.success && o.success({ tempFiles: [{ tempFilePath: '/tmp/a.jpg', size: 1024, width: 100, height: 80 }] })
+      },
+      saveImageToPhotosAlbum: (o: { filePath: string; success?: () => void }) => { calls.push('save:' + o.filePath); o.success && o.success() },
+      previewMedia: (o: { urls: string[]; success?: () => void }) => { calls.push('preview:' + o.urls.length); o.success && o.success() },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useAlbum()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const album = r.data
+    const picked = await album.pick({ count: 3, mediaType: 'image' })
+    expect(picked.ok).toBe(true)
+    if (picked.ok) expect(picked.data[0]).toMatchObject({ tempFilePath: '/tmp/a.jpg', type: 'image', size: 1024 })
+    expect((await album.saveImage('/tmp/a.jpg')).ok).toBe(true)
+    expect((await album.preview(['/tmp/a.jpg'])).ok).toBe(true)
+    expect(calls).toEqual(['pick:image', 'save:/tmp/a.jpg', 'preview:1'])
+  })
+
+  it('useAlbum：无 wx.chooseMedia → Err(album.unsupported) 诚实降级', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useAlbum()
+    // 桥存在（getAlbum 常在）→ 句柄可建；pick 调用时才缺 wx.chooseMedia → Err
+    expect(r.ok).toBe(true)
+    if (r.ok) return expect(r.data.pick()).resolves.toMatchObject({ ok: false, error: { code: 'album.unsupported' } })
+  })
+
+  it('useWorker：postMessage/onMessage/terminate 往返（wx.createWorker）', () => {
+    const calls: string[] = []
+    let onMsg: ((m: unknown) => void) | null = null
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createWorker: () => ({
+        postMessage: (m: unknown) => calls.push('post:' + String(m)),
+        onMessage: (cb: (m: unknown) => void) => { onMsg = cb },
+        terminate: () => calls.push('terminate'),
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWorker('workers/sum.js')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const w = r.data
+    w.postMessage({ n: 3 })
+    const got: unknown[] = []
+    w.onMessage((m) => got.push(m))
+    expect(onMsg).not.toBeNull()
+    ;(onMsg as unknown as (m: unknown) => void)({ sum: 6 })
+    expect(got).toEqual([{ sum: 6 }])
+    w.terminate()
+    expect(calls).toEqual(['post:[object Object]', 'terminate'])
+  })
+
+  it('useWorker：无 wx.createWorker → Err(worker.unsupported)', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWorker('w.js')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('worker.unsupported')
+  })
+
+  it('probe：album / worker 维度反映桥方法存在（调用期再判平台支持——同既有权能约定）', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    return createCapabilityHooks(createCapabilityBridge()).probe().then((p) => {
+      // probe 语义 = 桥方法是否注册（wx 桥恒注册 getAlbum/createWorker，缺平台 API 在调用期抛 → Err）
+      expect(p.album).toBe(true)
+      expect(p.worker).toBe(true)
+    })
+  })
+})

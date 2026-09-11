@@ -182,6 +182,9 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C50', kind: 'capability', semantic: 'capability.extension', api: 'useExtension()', props: ['ExtensionAPI'], mpEquiv: '无（插件/扩展点 G-21）', tier: 'L1', status: 'planned' },
   // ★颗粒度对齐 C（2026-09-11）：C51 小程序热更新（wx.getUpdateManager）
   { id: 'C51', kind: 'capability', semantic: 'capability.update', api: 'useUpdate()', props: ['UpdateManagerAPI'], mpEquiv: 'wx.getUpdateManager', tier: 'L1', status: 'planned' },
+  // ★颗粒度对齐 C3（2026-09-11）：相册 / Worker（对齐小程序媒体与多线程 API——纯 Hook，无 C-IR 节点 → planned）
+  { id: 'C52', kind: 'capability', semantic: 'capability.album', api: 'useAlbum()', props: ['AlbumAPI'], mpEquiv: 'wx.chooseMedia/saveImageToPhotosAlbum/previewMedia', tier: 'L1', status: 'planned' },
+  { id: 'C53', kind: 'capability', semantic: 'capability.worker', api: 'useWorker()', props: ['WorkerHandle'], mpEquiv: 'wx.createWorker', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

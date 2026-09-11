@@ -69,7 +69,7 @@ adapter.ops
 
 `capability.*` 行说明**渲染与原生能力共用同一语义模型**：扫码 → `AVCaptureSession` / `CameraX` / `ScanKit`，拍照 → `UIImagePicker` / `PhotoPicker` / `PhotoViewPicker`，定位 → `CLLocationManager` / `FusedLocation` / `geoLocationManager`。
 
-两条消费路径收敛到同一份目录（137 原语 SSOT，capability 族 51 项）：
+两条消费路径收敛到同一份目录（142 原语 SSOT，capability 族 53 项）：
 
 - **模板里**是能力入口语义——`capability.scan-qr` 在 vue-dom 端渲染为 `button.proteus-scan-qr`（能力实现由 Hook 注入）；
 - **脚本里**是 Hook——`createCapabilityHooks()` 返回能力 Hook 集合（覆盖 51 个能力原语；含 `useXxx` 及少量 `setXxx` / `authenticateXxx` 辅助）（`useCamera()` / `useLocation()` / `useQRCode()` …）。

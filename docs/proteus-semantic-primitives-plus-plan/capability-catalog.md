@@ -1,6 +1,6 @@
 # 能力原语明细（Capability Catalog）
 
-> 对应 G-32 §7 的 51 个能力原语（C1-C50 + ★C51 useUpdate 热更新），**逐一定义**：语义、参数、返回类型、降级行为、小程序原始 API 对照。  
+> 对应 G-32 §7 的 53 个能力原语（C1-C50 + ★C51 useUpdate / C52 useAlbum / C53 useWorker），**逐一定义**：语义、参数、返回类型、降级行为、小程序原始 API 对照。  
 > 目标：让任一 Backend 实现者仅凭本文即可落地，且行为一致。
 
 ---
@@ -375,11 +375,16 @@ function useWebSocket(url: string, protocols?: string[]): WSConnection
 
 > 完整签名见仓库 `proteus/src/capabilities/` 各文件实现。
 
-### C36-C51 略（结构同，详见 §9 对照矩阵）
+### C36-C53 略（结构同，详见 §9 对照矩阵）
 
 > 2026-09-11 补登：**C51 useUpdate()** —— 小程序热更新管理器（`wx.getUpdateManager`；Web 无对应 → Err 诚实降级）。
 > 返回 `Promise<Result<UpdateManagerAPI>>`；`UpdateManagerAPI` 提供 `onUpdateReady/onUpdateFailed/applyUpdate` 等
 > （对齐微信 `UpdateManager`：`onCheckForUpdate` / `onUpdateReady` / `onUpdateFailed` / `applyUpdate`）。
+>
+> 2026-09-11 补登（C3 颗粒度对齐）：**C52 useAlbum()** —— 相册句柄（`wx.chooseMedia` / `saveImageToPhotosAlbum` /
+> `saveVideoToPhotosAlbum` / `previewMedia`；Web 端 pick 走 `<input type=file>`，save 无标准 → Err）。返回
+> `Result<AlbumAPI>`（`pick` / `saveImage` / `saveVideo` / `preview`）。**C53 useWorker()** —— 多线程 Worker
+> （`wx.createWorker` / Web `new Worker`；不可用 → Err）。返回 `Result<WorkerHandle>`（`postMessage` / `onMessage` / `terminate`）。
 
 ---
 
@@ -388,10 +393,10 @@ function useWebSocket(url: string, protocols?: string[]): WSConnection
 `proteus audit:coverage` 读取本目录所有 `useXxx` 定义 + 小程序官方 API 清单（JSON），输出：
 
 ```
-✅ C1-C51 全部有对应原语
+✅ C1-C53 全部有对应原语
 ✅ 小程序组件 100% 映射
 ⚠️ 微信私有 API (requestWeChatPay 等) → 收敛到 C47 useMiniProgram()
-覆盖率: 100%（84 项矩阵：有等价 84 · 私有 7；其中 L2 规划待落地 12）
+覆盖率: 100%（85 项矩阵：有等价 85 · 私有 7；其中 L2 规划待落地 8）
 ```
 
 > 门禁实现：`proteus audit coverage`（`packages/cli/src/coverage-audit.ts`）——① 覆盖率（`missing > 0` → 红）
