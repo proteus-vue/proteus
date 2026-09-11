@@ -39,8 +39,9 @@ order: 2
 ## 实现要点
 
 - 只声明「宽/高比」：Web = CSS aspect-ratio（Chrome 88+ 原生）；不支持 → padding-top hack 降级
-- （height:0 + paddingTop:1/ratio% + 子项绝对定位——全端 CSS2 技术「朴素但正确」，铁律 G-22.2）
-- MP：aspect-ratio Skyline 部分支持；逻辑层无 CSS.supports → 假设支持（渲染端自决）
+- （height:0 + paddingTop:1/ratio% + 内层绝对定位铺满——★#500 内层包装替代 > * 全局规则：
+- MP 产物通配/子选择器被剔除（style/skyline-selector），slot 子元素必须由组件内层节点承载定位）
+- MP：逻辑层无 CSS.supports → Skyline 构建期宏判不支持（padding hack）；WebView 假设支持（渲染端自决）
 
 ## 用法
 

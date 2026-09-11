@@ -36,7 +36,7 @@ Virtual list
 | `pid` | Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract) | `String` | `''` | No |
 | `disabled` | Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP) | `Boolean` | `false` | No |
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
-| `items` | Array of data items | `Array as any` | `() => []` | No |
+| `items` | Array of data items | `Array` | `() => []` | No |
 | `itemHeight` | Item height in px (basis of the virtual-window calculation) | `Number` | `44` | No |
 | `height` | Height in px | `Number` | `400` | No |
 | `bufferSize` | Number of buffer rows beyond the visible area (headroom for smooth scrolling) | `Number` | `2` | No |

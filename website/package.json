@@ -9,6 +9,7 @@
     "build": "node scripts/gen-plugin-docs.mjs --check && node ../packages/cli/dist/index.js build --target web",
     "preview": "node ../packages/cli/dist/index.js build --target web && vite preview dist",
     "gen:content": "tsx scripts/gen-content.mjs",
+    "check:content": "tsx scripts/gen-content.mjs --check",
     "gen:plugin-docs": "tsx scripts/gen-plugin-docs.mjs",
     "check:plugin-docs": "tsx scripts/gen-plugin-docs.mjs --check",
     "postinstall": "node ../scripts/build-packages.mjs",

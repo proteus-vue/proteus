@@ -37,6 +37,8 @@ Slider
 | `min` | Minimum value | `Number` | `0` | No |
 | `max` | Maximum value | `Number` | `100` | No |
 | `step` | Step | `Number` | `1` | No |
+| `activeColor` | — | `String` | `'#07c160'` | No |
+| `disabled` | — | `Boolean` | `false` | No |
 
 ## Implementation notes
 

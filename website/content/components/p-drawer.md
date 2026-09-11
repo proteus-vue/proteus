@@ -42,6 +42,14 @@ order: 2002
 
 - open 受控（v-model:open ←→ modelValue）+ side 方向 + width + overlay 遮罩点击关闭
 - 双端同源码：div → view；CSS transform 滑入滑出（MP 安全）
+- ★2026-09-07 Skyline 真机修复：点遮罩关不掉抽屉。
+- 根因（探针实证）：Skyline 下自定义组件内「遮罩元素自身」不参与命中测试——
+- wx:if 动态插入/常驻挂载均无效，事件落到根容器；而「根容器」事件可靠。
+- 方案（对齐 p-modal「布局专项②」容器结构 + 事件挂可靠层）：
+- ① 根容器 fixed 全屏 = 视口坐标 + 命中基准，@click 收「非面板区」点击关闭；
+- ② 遮罩仅视觉层（不再绑事件）；
+- ③ 抽屉面板 @click.stop（MP→catchtap）吞掉自身冒泡，面板内点击不触发关闭；
+- ④ 关闭态容器 visibility:hidden 不拦截页面；过渡方向技巧保留滑出动画。
 
 ## 用法
 
