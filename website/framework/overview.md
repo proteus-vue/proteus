@@ -12,11 +12,11 @@ Proteus 的内核是一台「语义机器」：业务代码声明**要什么**�
 
 ```
 ┌─ 应用层（业务）      标准 Vue SFC / 路由 / 状态 / 页面
-├─ 语义层（框架核心）  p-* 语义组件 / 136 原语 SSOT / Capability Hook / Fluid
+├─ 语义层（框架核心）  p-* 语义组件 / 137 原语 SSOT / Capability Hook / Fluid
 ├─ 编译层             Compiler + Plugin API + CompilerBackend SPI（Node / Rust / WASM）
 ├─ 渲染层             RenderBackend SPI（VueDom / Native / Flutter / Skia / Headless）
 ├─ 宿主层             HostRuntime SPI + 六容器策略 + 所有权 / 借用检查
-└─ 能力层             NativeBackend SPI（📋 规划）+ Capability Hook（50 个）
+└─ 能力层             NativeBackend SPI（📋 规划）+ Capability Hook（51 个）
 ```
 
 核心洞察：框架通过 IR 只描述「要什么」（一个网格、一次扫码调用），后端决定「怎么做」（`UICollectionView` 还是 CSS Grid、`AVCapture` 还是 `CameraX`）。

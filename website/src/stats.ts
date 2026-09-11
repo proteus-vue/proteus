@@ -10,14 +10,14 @@ export interface StatItem {
 }
 
 export const STATS: StatItem[] = [
-  { value: '38', label: '@proteus-vue/* 包', source: 'npm run check:pkg（38 包 0 error）' },
-  { value: '2006', label: '单测全绿', source: 'npm test（官方门禁，e2e 排除）' },
-  { value: '128', label: '语义原语 SSOT', source: 'PRIMITIVE_CATALOG（proteus audit coverage）' },
+  { value: '40', label: '@proteus-vue/* 包', source: 'npm run check:pkg（40 包 0 error）' },
+  { value: '2927', label: '单测全绿', source: 'npm test（官方门禁，e2e 排除）' },
+  { value: '137', label: '语义原语 SSOT', source: 'PRIMITIVE_CATALOG（proteus audit coverage）' },
   { value: '45', label: 'implemented 语义 × 6 后端', source: 'conformance 门禁' },
-  { value: '59', label: 'p-* 语义组件', source: 'proteus components:audit' },
-  { value: '69', label: '编译规则 AI 说明书', source: 'listTransformRules（packages/compiler transforms 注册表）' },
+  { value: '66', label: '语义组件（p-*/pg-*）', source: 'proteus components:audit src/components' },
+  { value: '106', label: '编译规则 AI 说明书', source: 'listTransformRules（packages/compiler transforms 注册表）' },
   { value: '8', label: 'conformance 套件', source: 'RND/H/C/CMP/ABI/NAT-C 系列' },
-  { value: '69', label: 'plan 文档', source: 'docs/*-plan 目录（board-inventory 全景索引；#385 批次后）' },
+  { value: '81', label: 'plan 文档', source: 'docs/*-plan 目录（board-inventory 全景索引）' },
 ]
 
 /** 对标矩阵（来源：docs/proteus-positioning-v3.md §6——状态标注诚实原则） */

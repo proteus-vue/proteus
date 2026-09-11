@@ -1329,6 +1329,24 @@ export interface LiveRoomHandle {
   leave(): Promise<CapResult<void>>
 }
 
+/**
+ * ★颗粒度对齐 C（2026-09-11）：C51 小程序热更新管理器（wx.getUpdateManager）
+ *   checkUpdate → onCheckForUpdate 结果 → onUpdateReady → applyUpdateAndRestart。
+ *   Web/无更新机制 → 全 Err（诚实降级）。
+ */
+export interface UpdateManagerAPI {
+  /** 检查是否有新版本 */
+  checkUpdate(): Promise<CapResult<{ hasUpdate: boolean }>>
+  /** 订阅「发现新版本」（返回取消） */
+  onCheckForUpdate(cb: (hasUpdate: boolean) => void): () => void
+  /** 订阅「新版本已下载，可立即应用」（返回取消） */
+  onUpdateReady(cb: () => void): () => void
+  /** 订阅「更新失败」（返回取消） */
+  onUpdateFailed(cb: (errMsg: string) => void): () => void
+  /** 应用更新并重启小程序 */
+  applyUpdate(): Promise<CapResult<void>>
+}
+
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
 export interface CapabilityBridge {
   /** 位置（wx.getLocation / navigator.geolocation / mock） */
@@ -1404,6 +1422,8 @@ export interface CapabilityBridge {
   chooseContact?(): Promise<Contact[]>
   /** C20 日历事件添加（wx.addPhoneCalendar / web 无标准 → 缺省） */
   addCalendarEvent?(event: CalendarEvent): Promise<void>
+  /** ★C51 小程序热更新（wx.getUpdateManager；web 无 → 缺省） */
+  getUpdateManager?(): UpdateManagerAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -1685,6 +1705,12 @@ interface WxLike {
   getClipboardData?: (opt: { success: (r: { data: string }) => void; fail: () => void }) => void
   setClipboardData?: (opt: { data: string; success?: () => void; fail?: () => void }) => void
   getSystemInfoSync?: () => { screenWidth: number; screenHeight: number; pixelRatio: number; platform: string; model: string; system: string }
+  getUpdateManager?: () => {
+    onCheckForUpdate: (cb: (r: { hasUpdate: boolean }) => void) => void
+    onUpdateReady: (cb: () => void) => void
+    onUpdateFailed: (cb: (r: { errMsg?: string }) => void) => void
+    applyUpdate: () => void
+  }
   getBatteryInfo?: (opt: { success: (r: { level: number; isCharging: boolean }) => void }) => void
   onDeviceOrientationChange?: (cb: (r: { value: string }) => void) => void
   shareAppMessage?: (opt: { title?: string }) => void
@@ -3155,6 +3181,31 @@ function wxBridge(wx: WxLike): CapabilityBridge {
       }
     },
     // ★能力颗粒度对齐：C20 日历 API（增删查；查询无开放 API → Err）
+    // ★C51 小程序热更新（wx.getUpdateManager）
+    getUpdateManager: () => {
+      if (typeof wx.getUpdateManager !== 'function') throw new CapError('update.unsupported', 'wx.getUpdateManager 缺失')
+      const mgr = wx.getUpdateManager()
+      const subs: { ready: Array<() => void>; failed: Array<(m: string) => void>; check: Array<(h: boolean) => void> } = { ready: [], failed: [], check: [] }
+      mgr.onUpdateReady(() => subs.ready.forEach((cb) => cb()))
+      mgr.onUpdateFailed((r) => subs.failed.forEach((cb) => cb(r?.errMsg ?? 'update failed')))
+      return {
+        checkUpdate: () =>
+          new Promise<CapResult<{ hasUpdate: boolean }>>((resolve) => {
+            try {
+              mgr.onCheckForUpdate((r) => {
+                subs.check.forEach((cb) => cb(r.hasUpdate))
+                resolve(capOk({ hasUpdate: r.hasUpdate }))
+              })
+            } catch (e) {
+              resolve(capErr('update.failed', e instanceof Error ? e.message : String(e)))
+            }
+          }),
+        onCheckForUpdate: (cb) => { subs.check.push(cb); return () => { const i = subs.check.indexOf(cb); if (i >= 0) subs.check.splice(i, 1) } },
+        onUpdateReady: (cb) => { subs.ready.push(cb); return () => { const i = subs.ready.indexOf(cb); if (i >= 0) subs.ready.splice(i, 1) } },
+        onUpdateFailed: (cb) => { subs.failed.push(cb); return () => { const i = subs.failed.indexOf(cb); if (i >= 0) subs.failed.splice(i, 1) } },
+        applyUpdate: () => Promise.resolve(capOk(mgr.applyUpdate() as undefined)),
+      }
+    },
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -4199,6 +4250,8 @@ export interface CapabilityHooks {
   useContact(): Promise<CapResult<Contact[]>>
   /** C20 useCalendar：添加日历事件（wx.addPhoneCalendar；web → Err） */
   useCalendar(event: CalendarEvent): Promise<CapResult<void>>
+  /** ★C51 小程序热更新管理器（wx.getUpdateManager；web → Err） */
+  useUpdate(): Promise<CapResult<UpdateManagerAPI>>
   /** ★能力颗粒度对齐：C20 日历完整 API（增删查） */
   useCalendarAPI(): CapResult<CalendarAPI>
   /** C23 useAppLifecycle：应用生命周期订阅句柄（wx App 钩子 / web visibilitychange+load） */
@@ -4588,6 +4641,13 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         (() => {
           if (!bridge.addCalendarEvent) return Promise.reject(new CapError('calendar.unsupported', '桥未提供 addCalendarEvent（useCalendar 不可用）'))
           return bridge.addCalendarEvent(event)
+        })(),
+      ),
+    useUpdate: () =>
+      wrap(
+        (() => {
+          if (!bridge.getUpdateManager) return Promise.reject(new CapError('update.unsupported', '桥未提供 getUpdateManager（useUpdate 不可用）'))
+          return Promise.resolve(bridge.getUpdateManager())
         })(),
       ),
     useCalendarAPI: () => {

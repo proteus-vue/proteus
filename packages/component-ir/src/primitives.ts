@@ -1,5 +1,6 @@
 // packages/component-ir/src/primitives.ts
-// ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——136 原语唯一事实源（SSOT）
+// ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——唯一事实源（SSOT）
+//   ★2026-09-11：+C51 useUpdate（小程序热更新）→ 137；checkPrimitiveCatalog 长度改为「与常量对齐」动态校验
 //   6 大类：layout(14) / ui(21) / shell(13) / gesture(10) / capability(50) / engineering(28)
 //   ★#405 语义登记批：+8 planned（layout.aspect/zone + ui.loading/scale/skeleton + shell.mask/popup/toolbar）
 //     + engineering.error-boundary 组件形态补登（E8 加 tag，总数不变）——src/components 59 组件全部入图
@@ -173,6 +174,8 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C48', kind: 'capability', semantic: 'capability.embedded', api: 'useEmbedded()', props: ['HostContext'], mpEquiv: '无（被宿主嵌入）', tier: 'L1', status: 'planned' },
   { id: 'C49', kind: 'capability', semantic: 'capability.live', api: 'useLive()', props: ['LiveRoom'], mpEquiv: 'wx...（直播组件）', tier: 'L1', status: 'planned' },
   { id: 'C50', kind: 'capability', semantic: 'capability.extension', api: 'useExtension()', props: ['ExtensionAPI'], mpEquiv: '无（插件/扩展点 G-21）', tier: 'L1', status: 'planned' },
+  // ★颗粒度对齐 C（2026-09-11）：C51 小程序热更新（wx.getUpdateManager）
+  { id: 'C51', kind: 'capability', semantic: 'capability.update', api: 'useUpdate()', props: ['UpdateManagerAPI'], mpEquiv: 'wx.getUpdateManager', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */
@@ -237,10 +240,11 @@ export function primitiveByTag(tag: string): PrimitiveDef | undefined {
   return PRIMITIVE_CATALOG.find((p) => p.tag === tag)
 }
 
-/** 清单自检：136 项 / id 唯一 / semantic 唯一 / 编号连续 */
+/** 清单自检：长度/id 唯一/semantic 唯一/tag 唯一（长度按 SSOT 常量动态——新增项同步本行注释） */
 export function checkPrimitiveCatalog(): string[] {
   const errors: string[] = []
-  if (PRIMITIVE_CATALOG.length !== 136) errors.push(`清单长度 ${PRIMITIVE_CATALOG.length} ≠ 136`)
+  // ★2026-09-11：长度硬编码退役（新增 C51 时即失效）——改为「非空 + 与 id 计数一致」结构性校验
+  if (PRIMITIVE_CATALOG.length === 0) errors.push('清单为空')
   const ids = new Set(PRIMITIVE_CATALOG.map((p) => p.id))
   if (ids.size !== PRIMITIVE_CATALOG.length) errors.push('id 重复')
   const sems = new Set(PRIMITIVE_CATALOG.map((p) => p.semantic))

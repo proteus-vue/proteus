@@ -12,14 +12,14 @@ Draggable element
 
 | Semantic | Domain | Mini Program equivalent |
 |---|---|---|
-| gesture.draggable | Gestures | `<movable-view>` (L1 primitive) |
+| gesture.draggable | Gestures | `<movable-view>` (L1 primitive) · `<double-tap-gesture>` (L1 primitive) |
 
 ## Compat rollout
 
 | Target | Status | Notes |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
-| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<movable-view>` (L1 primitive) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<movable-view>` (L1 primitive) · `<double-tap-gesture>` (L1 primitive) |
 | Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |

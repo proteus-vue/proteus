@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 50 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 51 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (8)
 
@@ -102,3 +102,9 @@ order: 0
 |---|---|---|---|---|
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | — |
+
+## Other (1)
+
+| # | Capability | API | Returns | Mini Program equivalent |
+|---|---|---|---|---|
+| C51 | [capability.update](/docs/capability/update) | `useUpdate()` | `UpdateManagerAPI` | wx.getUpdateManager |

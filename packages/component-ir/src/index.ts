@@ -15,5 +15,6 @@ export type { ComponentConformanceResult, ControlMismatch, SemanticTree, Coverag
 export { PRIMITIVE_CATALOG, componentPrimitives, implementedPrimitives, primitiveById, primitiveBySemantic, primitiveByTag, checkPrimitiveCatalog } from './primitives'
 export type { PrimitiveDef, PrimitiveKind, PrimitiveStatus } from './primitives'
 // ★G-32 B1：audit:coverage 工具 + 闭环一致性门禁（G-32.1 小程序能力 100%）
-export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditCatalogConsistency, formatCoverageReport } from './audit'
+export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditMatrixReferences, auditCatalogConsistency, formatCoverageReport } from './audit'
+export type { MatrixRefIssue } from './audit'
 export type { CoverageReport, MpCoverageStatus, MpMatrixItem, ConsistencyIssue } from './audit'

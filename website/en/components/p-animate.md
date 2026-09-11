@@ -12,14 +12,14 @@ Animation declaration -- the CSS animation semantic surface
 
 | Semantic | Domain | Mini Program equivalent |
 |---|---|---|
-| engineering.animate | Engineering | — |
+| engineering.animate | Engineering | `<keyframe-animation>` (L1 primitive) |
 
 ## Compat rollout
 
 | Target | Status | Notes |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
-| WeChat Mini Program | ✅ | skyline (WebView fallback) · Proteus extension component — no Mini Program equivalent |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<keyframe-animation>` (L1 primitive) |
 | Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |

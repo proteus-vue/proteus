@@ -14,20 +14,22 @@ import {
   SEMANTIC_ENUM,
   TAG_SEMANTIC_MAP,
   formatCoverageReport,
+  auditMatrixReferences,
+  type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（136 原语 SSOT）', () => {
-  it('136 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（137 原语 SSOT）', () => {
+  it('137 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
-    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8：layout+2/ui+3/shell+3）
+    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
     expect(count('ui')).toBe(21)
     expect(count('shell')).toBe(13)
     expect(count('gesture')).toBe(10)
-    expect(count('capability')).toBe(50)
+    expect(count('capability')).toBe(51)
     expect(count('engineering')).toBe(28)
   })
 
@@ -72,9 +74,9 @@ describe('G-32 B1 audit:coverage（G-32.1 小程序能力 100%）', () => {
     expect(report.pass).toBe(true)
     expect(report.missing).toBe(0)
     expect(report.percent).toBe(100)
-    expect(report.total).toBeGreaterThan(60) // 组件 42 + API 组 ~28
-    // 组件全量 42 项
-    expect(MP_MAPPING_MATRIX.filter((i) => i.group === 'component').length).toBe(42)
+    expect(report.total).toBeGreaterThan(60) // 组件 ~55 + API 组 ~29
+    // 组件全量 55 项（G-32 42 + 2026-09-11 补录 13：match-media/page-meta/snapshot/grid-view/sticky-*/root-portal/double-tap-gesture 等）
+    expect(MP_MAPPING_MATRIX.filter((i) => i.group === 'component').length).toBe(55)
   })
 
   it('缺失项注入 → 审计红（CI 门禁阻断）', () => {
@@ -91,6 +93,60 @@ describe('G-32 B1 audit:coverage（G-32.1 小程序能力 100%）', () => {
     expect(text).toContain('G-32.1')
     expect(text).toContain('100%')
     expect(text).toContain('达标')
+  })
+})
+
+describe('G-32.1 矩阵引用一致性（幽灵引用门禁——修「假门禁」同义反复）', () => {
+  it('真实矩阵 0 幽灵引用（组件标签/语义/Hook 全部存在）· planned 行诚实豁免', () => {
+    const { issues, plannedRefs } = auditMatrixReferences(MP_MAPPING_MATRIX)
+    expect(issues).toEqual([])
+    // L2 规划行必须被豁免计数（否则门禁会对未实现组件误报）
+    expect(plannedRefs).toBeGreaterThan(0)
+  })
+
+  it('破坏性验证：注入幽灵组件标签 → component 命中（CI 阻断）', () => {
+    const withGhost: MpMatrixItem[] = [
+      ...MP_MAPPING_MATRIX,
+      { mp: '<fiction>', proteus: 'p-does-not-exist', status: 'ok', group: 'component' },
+    ]
+    const { issues } = auditMatrixReferences(withGhost)
+    expect(issues.length).toBe(1)
+    expect(issues[0]).toMatchObject({ mp: '<fiction>', ref: 'p-does-not-exist', kind: 'component' })
+  })
+
+  it('破坏性验证：注入幽灵语义 → semantic 命中', () => {
+    const withGhost: MpMatrixItem[] = [
+      ...MP_MAPPING_MATRIX,
+      { mp: 'wx.fictional', proteus: 'capability.fictional', status: 'ok', group: 'api' },
+    ]
+    const { issues } = auditMatrixReferences(withGhost)
+    expect(issues).toEqual([{ mp: 'wx.fictional', ref: 'capability.fictional', kind: 'semantic' }])
+  })
+
+  it('knownHooks 传入时：幽灵 Hook 命中、真实 Hook 放行', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: 'wx.a', proteus: 'useGhostHook（不存在）', status: 'compat', group: 'api' },
+      { mp: 'wx.b', proteus: 'useMap（存在）', status: 'ok', group: 'api' },
+    ]
+    const { issues } = auditMatrixReferences(matrix, new Set(['useMap']))
+    expect(issues).toEqual([{ mp: 'wx.a', ref: 'useGhostHook', kind: 'hook' }])
+  })
+
+  it('planned: true 行豁免组件标签检查（诚实登记 L2 规划，不算幽灵）', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: '<planned>', proteus: 'p-future-component（L2 规划）', status: 'compat', group: 'component', planned: true },
+    ]
+    const { issues, plannedRefs } = auditMatrixReferences(matrix)
+    expect(issues).toEqual([])
+    expect(plannedRefs).toBe(1)
+  })
+
+  it('status=missing 行不做引用校验（已登记缺口，引用可不存在）', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: '<gap>', proteus: '', status: 'missing', group: 'component' },
+    ]
+    const { issues } = auditMatrixReferences(matrix)
+    expect(issues).toEqual([])
   })
 })
 

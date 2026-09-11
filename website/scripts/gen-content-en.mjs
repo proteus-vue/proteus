@@ -1684,4 +1684,9 @@ export const CAP_EN = {
     desc: 'useLog: log handle (console + reporting)',
     errors: { 'log.unsupported': 'The bridge does not provide log (useLog unavailable)' },
   },
+  // —— 其他（#481 批次 ⑦：C51 热更新）——
+  update: {
+    desc: 'useUpdate: mini program hot-update manager (wx.getUpdateManager; web → Err)',
+    errors: { 'update.unsupported': 'The bridge does not provide getUpdateManager (useUpdate unavailable)' },
+  },
 }
