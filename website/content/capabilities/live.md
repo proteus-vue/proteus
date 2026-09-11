@@ -26,7 +26,7 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `roomId` | `string` | 是 | 直播间 ID |
+| `roomId` | `string` | 是 | 直播间 ID（同时作为 `<live-player id>` 组件 id——wx.createLivePlayerContext(roomId)） |
 | `mode` | `'video' \| 'audio'` | 否 | 拉流模式 |
 
 ## 返回值
@@ -43,8 +43,17 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `leave` | `leave(): Promise<CapResult<void>>` | — |
-| `status` | `status(): 'joined' \| 'left'` | — |
+| `play` | `play(): Promise<CapResult<void>>` | — |
+| `pause` | `pause(): Promise<CapResult<void>>` | — |
+| `resume` | `resume(): Promise<CapResult<void>>` | — |
+| `stop` | `stop(): Promise<CapResult<void>>` | — |
+| `mute` | `mute(): void` | 静音切换（同步，无 Promise） |
+| `snapshot` | `snapshot(): Promise<CapResult<string>>` | 截图（返回临时文件路径） |
+| `requestFullScreen` | `requestFullScreen(direction?: number): Promise<CapResult<void>>` | — |
+| `exitFullScreen` | `exitFullScreen(): Promise<CapResult<void>>` | — |
+| `status` | `status(): LivePlayState` | 当前播放状态 |
+| `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | 订阅播放状态变化（返回取消） |
+| `leave` | `leave(): Promise<CapResult<void>>` | 离开直播间（= stop 的语义别名） |
 
 ## 错误码
 
@@ -58,8 +67,8 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
-| Web SPA | ⚠️ | vue-dom · webBridge 未提供 joinLiveRoom → Err 显式降级（平台无直通 API） |
-| 微信小程序 | ⚠️ | skyline（WebView 降级） · wx 桥未提供 joinLiveRoom → Err 显式降级 |
+| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx...（直播组件） |
 | Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
 | iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——能力桥未接线 |
 | Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——能力桥未接线 |

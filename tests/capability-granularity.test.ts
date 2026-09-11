@@ -275,14 +275,12 @@ describe('★C1/C2 相机 + 录音操作控制器', () => {
     expect(typeof rec.data.on('stop', () => {})).toBe('function')
   })
 
-  it('缺桥 → useCameraContext/useRecorder 抛错（句柄类惯例）', () => {
+  it('缺桥 → useCameraContext/useRecorder 返回 Err（handle 型统一契约）', () => {
     vi.stubGlobal('window', {})
-    const hooks = createCapabilityHooks(createCapabilityBridge())
-    // web 桥有 createCameraContext/getRecorder（返回 Err 句柄）；此处用空桥验证抛错路径
     const bare = { getLocation: async () => ({ latitude: 0, longitude: 0 }), vibrate: async () => {}, getNetwork: async () => ({ online: true, type: 'unknown' as const }), readClipboard: async () => '', setClipboard: async () => {}, getScreen: async () => ({ width: 0, height: 0, dpr: 1, orientation: 'portrait' as const }), getDevice: async () => ({ platform: 'web', model: '', os: '', version: '' }), getBattery: async () => ({ level: 1, charging: true }), getOrientation: async () => ({ type: 'portrait' as const, angle: 0 }), share: async () => {} }
     const h2 = createCapabilityHooks(bare)
-    expect(() => h2.useCameraContext('x')).toThrow(/createCameraContext/)
-    expect(() => h2.useRecorder()).toThrow(/getRecorder/)
+    expect(h2.useCameraContext('x').ok).toBe(false)
+    expect(h2.useRecorder().ok).toBe(false)
   })
 })
 
@@ -457,5 +455,67 @@ describe('★C25 后台生命周期扩展 + C20 日历 API', () => {
     if (!cal.ok) return
     expect((await cal.data.add({ title: 'x', startTime: 1 })).ok).toBe(false)
     expect((await cal.data.list()).ok).toBe(false)
+  })
+})
+
+describe('★C49 直播 LiveRoom 富接口（观看端播放控制）', () => {
+  it('play/pause/resume/stop/mute/snapshot/全屏 + onStateChange', async () => {
+    let onPlay: (() => void) | null = null
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createLivePlayerContext: () => ({
+        play: (o: { success?: () => void }) => { calls.push('play'); o.success && o.success() },
+        pause: (o: { success?: () => void }) => { calls.push('pause'); o.success && o.success() },
+        resume: (o: { success?: () => void }) => { o.success && o.success() },
+        stop: (o: { success?: () => void }) => { calls.push('stop'); o.success && o.success() },
+        mute: () => { calls.push('mute') },
+        snapshot: (o: { success?: (r: { tempImagePath: string }) => void }) => o.success && o.success({ tempImagePath: '/live.jpg' }),
+        requestFullScreen: (o: { success?: () => void }) => o.success && o.success(),
+        exitFullScreen: (o: { success?: () => void }) => o.success && o.success(),
+        onPlay: (cb: () => void) => { onPlay = cb },
+        onError: () => undefined,
+      }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useLive({ roomId: 'room-1' })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const live = r.data
+    for (const m of ['play', 'pause', 'resume', 'stop', 'mute', 'snapshot', 'requestFullScreen', 'exitFullScreen', 'status', 'onStateChange', 'leave']) {
+      expect(typeof (live as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    let state: string | null = null
+    live.onStateChange((s) => { state = s })
+    expect((await live.play()).ok).toBe(true)
+    onPlay!() // 组件回调驱动状态
+    expect(state).toBe('playing')
+    expect(live.status()).toBe('playing')
+    expect((await live.snapshot())).toMatchObject({ ok: true, data: '/live.jpg' })
+    live.mute()
+    expect((await live.leave()).ok).toBe(true)
+    expect(calls).toContain('mute')
+  })
+
+  it('缺 createLivePlayerContext → useLive Err（诚实降级）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useLive({ roomId: 'x' })
+    // 句柄构造成功（无 live-player 上下文 → play 等操作返回 Err）
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const play = await r.data.play()
+    expect(play.ok).toBe(false)
+    if (!play.ok) expect(play.error.code).toBe('live.unsupported')
+  })
+
+  it('web：直播句柄操作诚实 Err', async () => {
+    vi.stubGlobal('window', {})
+    const r = await createCapabilityHooks(createCapabilityBridge()).useLive({ roomId: 'x' })
+    expect(r.ok).toBe(true) // 句柄返回成功（方法级 Err）
+    if (!r.ok) return
+    const play = await r.data.play()
+    expect(play.ok).toBe(false)
+    if (!play.ok) expect(play.error.code).toBe('live.unsupported')
   })
 })

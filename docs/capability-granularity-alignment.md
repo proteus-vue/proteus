@@ -165,7 +165,7 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 
 | 域 | 缺口 | 说明 |
 |----|------|------|
-| C49 直播 | ~30 | wx live 组件形态/宿主桥 |
+| C49 直播 | ✅ 观看端已落地 | LiveRoomHandle（play/pause/resume/stop/mute/snapshot/全屏/onStateChange）；推流端（LivePusherContext 美颜/连麦）为诚实边界 |
 | C4 地图完整覆盖物 | 剩 ~15 | 自定义图层/可视化图层/AR 等低频 |
 | C36 BLE 外设端 | 14 | `BLEPeripheralServer`（手机当外设，极低频） |
 | C37 NFC `NFCAdapter` | 12 | 读卡模式（NDEF/NfcA/B/F/V/IsoDep/Mifare） |

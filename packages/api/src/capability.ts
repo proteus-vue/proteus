@@ -830,20 +830,51 @@ export interface HostContext {
 
 /** C49 直播房间（wx live 组件形态/宿主桥——缺省 Err） */
 export interface LiveRoomOptions {
-  /** 直播间 ID */
+  /** 直播间 ID（同时作为 `<live-player id>` 组件 id——wx.createLivePlayerContext(roomId)） */
   roomId: string
   /** 拉流模式 */
   mode?: 'video' | 'audio'
 }
 
+/** 直播播放状态（LivePlayerContext.onXxx 归一） */
+export type LivePlayState = 'playing' | 'paused' | 'stopped' | 'error'
+
+/** 直播播放桥（原始 Promise 层） */
 export interface LiveRoomBridge {
-  leave(): Promise<void>
-  status(): 'joined' | 'left'
+  play(): Promise<void>
+  pause(): Promise<void>
+  resume(): Promise<void>
+  stop(): Promise<void>
+  mute(): void
+  snapshot(): Promise<string>
+  requestFullScreen(direction?: number): Promise<void>
+  exitFullScreen(): Promise<void>
+  status(): LivePlayState
+  onStateChange(cb: (state: LivePlayState) => void): () => void
 }
 
+/**
+ * ★能力颗粒度对齐：C49 直播房间操作句柄（原仅 leave/status → 播放控制全套）
+ *   观看端（LivePlayerContext）；推流端（LivePusherContext：美颜/连麦/推流）为诚实边界（需推流类目，未纳入）。
+ *   注：live-player 组件需在页面声明 + 直播类目资质；Web 无对等 → Err。
+ */
 export interface LiveRoomHandle {
+  play(): Promise<CapResult<void>>
+  pause(): Promise<CapResult<void>>
+  resume(): Promise<CapResult<void>>
+  stop(): Promise<CapResult<void>>
+  /** 静音切换（同步，无 Promise） */
+  mute(): void
+  /** 截图（返回临时文件路径） */
+  snapshot(): Promise<CapResult<string>>
+  requestFullScreen(direction?: number): Promise<CapResult<void>>
+  exitFullScreen(): Promise<CapResult<void>>
+  /** 当前播放状态 */
+  status(): LivePlayState
+  /** 订阅播放状态变化（返回取消） */
+  onStateChange(cb: (state: LivePlayState) => void): () => void
+  /** 离开直播间（= stop 的语义别名） */
   leave(): Promise<CapResult<void>>
-  status(): 'joined' | 'left'
 }
 
 /** 能力桥（平台实现注入——wx/web/mock 三形态，可单测） */
@@ -1361,6 +1392,7 @@ interface WxLike {
   onPageHide?: (cb: () => void) => void
   // ★G-32 B3 七期：新增 wx 能力（地图 / 人脸 / 跳小程序）
   createMapContext?: (id: string) => WxMapContextLike
+  createLivePlayerContext?: (id: string) => WxLivePlayerContextLike
   navigateToMiniProgram?: (opt: {
     appId: string
     path?: string
@@ -1391,6 +1423,21 @@ interface WxRecorderManagerLike {
   onResume?: (cb: () => void) => void
   onError?: (cb: (e: unknown) => void) => void
   onFrameRecorded?: (cb: (f: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void) => void
+}
+/** wx.LivePlayerContext 子集（观看端） */
+interface WxLivePlayerContextLike {
+  play?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  pause?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  resume?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  stop?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  mute?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  snapshot?: (opt: { success: (r: { tempImagePath: string }) => void; fail: (e: unknown) => void }) => void
+  requestFullScreen?: (opt: { direction?: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  exitFullScreen?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onPlay?: (cb: () => void) => void
+  onPause?: (cb: () => void) => void
+  onStop?: (cb: () => void) => void
+  onError?: (cb: (e: unknown) => void) => void
 }
 interface WxMapContextLike {
   getRegion?: (opt: { success: (r: { latitude: number; longitude: number; scale?: number; latitudeSpan?: number; longitudeSpan?: number }) => void; fail?: (e: unknown) => void }) => void
@@ -2670,6 +2717,55 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           fail: (e) => reject(new CapError('mini-program.failed', 'wx 跳小程序失败', e)),
         })
       }),
+    // ★能力颗粒度对齐：C49 直播观看端（wx.createLivePlayerContext(roomId) → 播放控制全套）
+    joinLiveRoom: (options) => {
+      // 缺 API → 返回「全 reject 桥」（useLive 为 Promise 型 hook：方法级 Err 而非抛）
+      if (typeof wx.createLivePlayerContext !== 'function') {
+        const noSupport = (): Promise<never> => Promise.reject(new CapError('live.unsupported', 'wx.createLivePlayerContext 缺失（live-player 组件需直播类目）'))
+        return { play: noSupport, pause: noSupport, resume: noSupport, stop: noSupport, mute: () => {}, snapshot: noSupport, requestFullScreen: noSupport, exitFullScreen: noSupport, status: () => 'stopped' as const, onStateChange: () => () => {} }
+      }
+      const ctx = wx.createLivePlayerContext(options.roomId)
+      let state: LivePlayState = 'stopped'
+      const stateCbs: Array<(s: LivePlayState) => void> = []
+      const setState = (s: LivePlayState): void => {
+        state = s
+        stateCbs.forEach((cb) => cb(s))
+      }
+      const run = (fn: unknown, name: string, opt?: Record<string, unknown>): Promise<void> =>
+        new Promise<void>((res, rej) => {
+          if (typeof fn !== 'function') return rej(new CapError('live.unsupported', 'LivePlayerContext.' + name + ' 缺失'))
+          ;(fn as (o?: Record<string, unknown>) => void)({ ...opt, success: () => res(), fail: (e: unknown) => rej(new CapError('live.failed', 'wx 直播 ' + name + ' 失败', e)) })
+        })
+      // 生命周期回调驱动状态
+      if (ctx.onPlay) ctx.onPlay(() => setState('playing'))
+      if (ctx.onPause) ctx.onPause(() => setState('paused'))
+      if (ctx.onStop) ctx.onStop(() => setState('stopped'))
+      if (ctx.onError) ctx.onError(() => setState('error'))
+      return {
+        play: () => run(ctx.play, 'play'),
+        pause: () => run(ctx.pause, 'pause'),
+        resume: () => run(ctx.resume, 'resume'),
+        stop: () => run(ctx.stop, 'stop'),
+        mute: () => {
+          if (typeof ctx.mute === 'function') ctx.mute({})
+        },
+        snapshot: () =>
+          new Promise<string>((res, rej) => {
+            if (typeof ctx.snapshot !== 'function') return rej(new CapError('live.unsupported', 'LivePlayerContext.snapshot 缺失'))
+            ctx.snapshot({ success: (r) => res(r.tempImagePath), fail: (e: unknown) => rej(new CapError('live.failed', '截图失败', e)) })
+          }),
+        requestFullScreen: (direction) => run(ctx.requestFullScreen, 'requestFullScreen', { direction }),
+        exitFullScreen: () => run(ctx.exitFullScreen, 'exitFullScreen'),
+        status: () => state,
+        onStateChange: (cb) => {
+          stateCbs.push(cb)
+          return () => {
+            const i = stateCbs.indexOf(cb)
+            if (i >= 0) stateCbs.splice(i, 1)
+          }
+        },
+      }
+    },
   }
 }
 
@@ -2990,6 +3086,23 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
     },
     // C43 file-system：web 无标准同步 FS（OPFS 受限/需安全上下文）→ 内存降级（可读写，非持久）
     getFileSystem: () => memoryFileSystem(),
+    // ★能力颗粒度对齐：web 直播观看端（无标准对等 → 诚实 Err 句柄）
+    joinLiveRoom: () => {
+      // 桥层返回原始 Promise（reject）——hook 的 wrap 转为 Err
+      const noWeb = (op: string): Promise<never> => Promise.reject(new CapError('live.unsupported', 'Web 端直播 ' + op + ' 无标准对等'))
+      return {
+        play: () => noWeb('play'),
+        pause: () => noWeb('pause'),
+        resume: () => noWeb('resume'),
+        stop: () => noWeb('stop'),
+        mute: () => {},
+        snapshot: () => noWeb('snapshot'),
+        requestFullScreen: () => noWeb('requestFullScreen'),
+        exitFullScreen: () => noWeb('exitFullScreen'),
+        status: () => 'stopped' as const,
+        onStateChange: () => () => {},
+      }
+    },
     // ★G-32 B3 五期：web 实现（notification=Notification API / app-lifecycle=visibilitychange+load；contact/calendar/archive/shortcut 无标准 → 缺省降级 Err）
     subscribeMessage: async (templateId) => {
       const N = (g as { Notification?: NotificationConstructor }).Notification
@@ -3511,6 +3624,15 @@ const wrap = <T>(p: Promise<T>): Promise<CapResult<T>> =>
 
 /** ★createCapabilityHooks：能力 Hook 统一实例（bridge 注入可单测） */
 export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilityBridge()): CapabilityHooks {
+  // ★统一 handle 型 hook 契约：桥构造句柄失败（缺平台 API / 抛错）→ 返回 Err（不 uncaught、不半残句柄）
+  const handleResult = <T,>(make: () => T): CapResult<T> => {
+    try {
+      return capOk(make())
+    } catch (e) {
+      return capErr<T>(e instanceof CapError ? e.code : 'cap.failed', e instanceof Error ? e.message : String(e))
+    }
+  }
+
   // ★传感器流局部状态（useSensorStream 用；订阅经桥 readSensor 轮询——无推送桥的诚实降级）
   const listeners: Array<(s: SensorSample) => void> = []
   let active = false
@@ -3832,7 +3954,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
         })(),
       ),
     useCalendarAPI: () => {
-      if (bridge.getCalendar) return capOk(bridge.getCalendar())
+      if (bridge.getCalendar) return handleResult(() => bridge.getCalendar!())
       if (bridge.addCalendarEvent) {
         return capOk<CalendarAPI>({
           add: (event) => wrap(bridge.addCalendarEvent!(event)),
@@ -3895,13 +4017,13 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       ),
     // ★能力颗粒度对齐：相机操作控制器（桥无 → 抛；有 → 返回控制器，方法自带 CapResult）
     useCameraContext: (id: string) => {
-      if (!bridge.createCameraContext) throw new CapError('camera.unsupported', '桥未提供 createCameraContext（useCameraContext 不可用）')
-      return capOk(bridge.createCameraContext(id))
+      if (!bridge.createCameraContext) return capErr<CameraController>('camera.unsupported', '桥未提供 createCameraContext（useCameraContext 不可用）')
+      return handleResult(() => bridge.createCameraContext!(id))
     },
     // ★能力颗粒度对齐：录音操作控制器
     useRecorder: () => {
-      if (!bridge.getRecorder) throw new CapError('microphone.unsupported', '桥未提供 getRecorder（useRecorder 不可用）')
-      return capOk(bridge.getRecorder())
+      if (!bridge.getRecorder) return capErr<RecorderController>('microphone.unsupported', '桥未提供 getRecorder（useRecorder 不可用）')
+      return handleResult(() => bridge.getRecorder!())
     },
     useKeyboard: () => {
       if (!bridge.getKeyboard) throw new CapError('keyboard.unsupported', '桥未提供 getKeyboard（useKeyboard 不可用）')
@@ -4018,8 +4140,17 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           if (!bridge.joinLiveRoom) return Promise.reject(new CapError('live.unsupported', '桥未提供 joinLiveRoom（useLive 不可用）'))
           const room = bridge.joinLiveRoom(options)
           const handle: LiveRoomHandle = {
-            leave: () => wrap(room.leave()),
+            play: () => wrap(room.play()),
+            pause: () => wrap(room.pause()),
+            resume: () => wrap(room.resume()),
+            stop: () => wrap(room.stop()),
+            mute: () => room.mute(),
+            snapshot: () => wrap(room.snapshot()),
+            requestFullScreen: (direction) => wrap(room.requestFullScreen(direction)),
+            exitFullScreen: () => wrap(room.exitFullScreen()),
             status: () => room.status(),
+            onStateChange: (cb) => room.onStateChange(cb),
+            leave: () => wrap(room.stop()),
           }
           return Promise.resolve(handle)
         })(),
