@@ -37,11 +37,35 @@ Radio (single choice)
 | `group` | Current selected value (held by the parent group) | `[String, Number]` | `''` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `value`
+
+- **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
+- **Doc**: Value of this item
+
+#### `group`
+
+- **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
+- **Doc**: Current selected value (held by the parent group)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:group` | Two-way binding: fires when `group` changes (syncs the parent binding) | `props.value` |
+
+### Event details
+
+#### `update:group`
+
+- **Doc**: Two-way binding: fires when `group` changes (syncs the parent binding)
+- **Payload**: `props.value` (implicit v-model: the value itself)
 
 ## Slots
 

@@ -37,6 +37,23 @@ Divider
 | `inset` | Inset distance in px (horizontal = top/bottom outer margins; vertical = left/right outer margins) | `Number` | `0` | No |
 | `color` | Line color (defaults to the theme variable) | `String` | `''` | No |
 
+### Prop details
+
+#### `orientation`
+
+- **Type**: `String`　**Default**: `'horizontal'`　**Required**: No
+- **Doc**: Direction: horizontal / vertical
+
+#### `inset`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Inset distance in px (horizontal = top/bottom outer margins; vertical = left/right outer margins)
+
+#### `color`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Line color (defaults to the theme variable)
+
 ## Implementation notes
 
 - Horizontal/vertical divider: orientation controls the direction, inset controls the inset (horizontal = top/bottom margins, vertical = left/right margins)

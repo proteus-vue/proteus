@@ -43,6 +43,53 @@ order: 11
 | `refresherEnabled` | 启用自定义下拉刷新 | `Boolean` | `false` | 否 |
 | `lowerThreshold` | 距底部多少 px 触发 scrolltolower 事件 | `Number` | `50` | 否 |
 
+### 属性详解
+
+#### `pid`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）
+
+#### `ariaLabel`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：无障碍标签（读屏器朗读文本）
+
+#### `scrollX`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：允许横向滚动
+
+#### `scrollY`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：允许纵向滚动
+
+#### `scrollTop`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：纵向滚动位置（px）
+
+#### `scrollLeft`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：横向滚动位置（px）
+
+#### `refresherEnabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：启用自定义下拉刷新
+
+#### `lowerThreshold`
+
+- **类型**：`Number`　**默认值**：`50`　**必填**：否
+- **说明**：距底部多少 px 触发 scrolltolower 事件
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
@@ -50,6 +97,23 @@ order: 11
 | `scroll` | 滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop） | `e` |
 | `scrolltolower` | 滚动到底部（lowerThreshold 触发） | `e` |
 | `refresherrefresh` | 自定义下拉刷新触发 | `e` |
+
+### 事件详解
+
+#### `scroll`
+
+- **说明**：滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop）
+- **载荷**：`e`
+
+#### `scrolltolower`
+
+- **说明**：滚动到底部（lowerThreshold 触发）
+- **载荷**：`e`
+
+#### `refresherrefresh`
+
+- **说明**：自定义下拉刷新触发
+- **载荷**：`e`
 
 ## 插槽
 
@@ -65,7 +129,7 @@ order: 11
 ## 用法
 
 ```vue
-<p-scroll-view :pid="…">
+<p-scroll-view :disabled="true" :scrollX="true" :scrollY="true">
   <p-text>内容</p-text>
 </p-scroll-view>
 ```

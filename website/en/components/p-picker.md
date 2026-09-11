@@ -38,11 +38,40 @@ Native date/time/city picker
 | `min` | Minimum boundary (native min for date/time) | `String` | `''` | No |
 | `max` | Maximum boundary | `String` | `''` | No |
 
+### Prop details
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'date'`　**Required**: No
+- **Doc**: Mode: date / time / region
+
+#### `modelValue`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Value (date=YYYY-MM-DD; time=HH:mm; region=geolocation/text)
+
+#### `min`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Minimum boundary (native min for date/time)
+
+#### `max`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Maximum boundary
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v ?? ''` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `v ?? ''` (implicit v-model: the value itself)
 
 ## Implementation notes
 

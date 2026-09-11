@@ -38,11 +38,40 @@ Toolbar overflow fold
 | `moreWidth` | 'More' button width (px) | `Number` | `48` | No |
 | `moreLabel` | 'More' label text | `String` | `'更多'` | No |
 
+### Prop details
+
+#### `items`
+
+- **Type**: `Array`　**Default**: `() => []`　**Required**: No
+- **Doc**: Navigation items ({ key, label })
+
+#### `itemWidth`
+
+- **Type**: `Number`　**Default**: `80`　**Required**: No
+- **Doc**: Single navigation item width (px; used for overflow calculation)
+
+#### `moreWidth`
+
+- **Type**: `Number`　**Default**: `48`　**Required**: No
+- **Doc**: 'More' button width (px)
+
+#### `moreLabel`
+
+- **Type**: `String`　**Default**: `'更多'`　**Required**: No
+- **Doc**: 'More' label text
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `select` | An item is selected | `itemKey(item)` |
+
+### Event details
+
+#### `select`
+
+- **Doc**: An item is selected
+- **Payload**: `itemKey(item)`
 
 ## Implementation notes
 

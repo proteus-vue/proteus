@@ -40,11 +40,50 @@ Navigation bar
 | `back` | Whether to show a back button (only emits the event; navigation is decided by the page - the component never calls routing directly) | `Boolean` | `false` | No |
 | `fixed` | Whether to use fixed positioning (sticky top / sticky bottom) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `title`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Title
+
+#### `back`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether to show a back button (only emits the event; navigation is decided by the page - the component never calls routing directly)
+
+#### `fixed`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether to use fixed positioning (sticky top / sticky bottom)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `back` | Back button tap (navigation is decided by the page - the component never calls routing directly) | — |
+
+### Event details
+
+#### `back`
+
+- **Doc**: Back button tap (navigation is decided by the page - the component never calls routing directly)
+- **Payload**: none
 
 ## Slots
 

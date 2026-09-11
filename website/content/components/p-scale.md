@@ -37,6 +37,23 @@ order: 1017
 | `density` | 密度：compact（紧凑）/ regular / comfortable（宽松无障碍） | `String` | `'regular'` | 否 |
 | `baseSize` | 基准字号（px）——子项用 em 继承即随缩放 | `Number` | `16` | 否 |
 
+### 属性详解
+
+#### `level`
+
+- **类型**：`Number`　**默认值**：`1`　**必填**：否
+- **说明**：字号级别：0 小 / 1 标准 / 2 大 / 3 特大（无障碍档位）
+
+#### `density`
+
+- **类型**：`String`　**默认值**：`'regular'`　**必填**：否
+- **说明**：密度：compact（紧凑）/ regular / comfortable（宽松无障碍）
+
+#### `baseSize`
+
+- **类型**：`Number`　**默认值**：`16`　**必填**：否
+- **说明**：基准字号（px）——子项用 em 继承即随缩放
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -52,7 +69,7 @@ order: 1017
 ## 用法
 
 ```vue
-<p-scale :level="…">
+<p-scale :level="1" :density="'regular'" :baseSize="16">
   <p-text>内容</p-text>
 </p-scale>
 ```

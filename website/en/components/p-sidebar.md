@@ -38,6 +38,28 @@ Adaptive navigation bar
 | `designWidth` | Design width (baseline for deriving the container breakpoint) | `Number` | `375` | No |
 | `toggleLabel` | ★Collapsed-mode toggle bar copy (#384) | `String` | `'导航'` | No |
 
+### Prop details
+
+#### `minSidebarWidth`
+
+- **Type**: `Number`　**Default**: `640`　**Required**: No
+- **Doc**: Container width reaches this value → side-rail sidebar; below it → collapsed (px)
+
+#### `navWidth`
+
+- **Type**: `Number`　**Default**: `200`　**Required**: No
+- **Doc**: Navigation bar width in side-rail mode (px)
+
+#### `designWidth`
+
+- **Type**: `Number`　**Default**: `375`　**Required**: No
+- **Doc**: Design width (baseline for deriving the container breakpoint)
+
+#### `toggleLabel`
+
+- **Type**: `String`　**Default**: `'导航'`　**Required**: No
+- **Doc**: ★Collapsed-mode toggle bar copy (#384)
+
 ## Slots
 
 | Slot | Doc |

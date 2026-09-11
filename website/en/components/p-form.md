@@ -37,11 +37,35 @@ Form container
 | `rules` | Validation rules {field: (value) => string \| null} (returns the error message; null = pass) | `Object` | `() => ({` | No |
 | `layout` | Layout: horizontal (side-by-side) / vertical (stacked) | `String` | `'vertical'` | No |
 
+### Prop details
+
+#### `model`
+
+- **Type**: `Object`　**Default**: `() => ({`　**Required**: No
+- **Doc**: Form data model (the object being validated)
+
+#### `rules`
+
+- **Type**: `Object`　**Default**: `() => ({`　**Required**: No
+- **Doc**: Validation rules {field: (value) => string \| null} (returns the error message; null = pass)
+
+#### `layout`
+
+- **Type**: `String`　**Default**: `'vertical'`　**Required**: No
+- **Doc**: Layout: horizontal (side-by-side) / vertical (stacked)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `submit` | Form submission | `{ model: props.model, errors: { ...errors.value } }` |
+
+### Event details
+
+#### `submit`
+
+- **Doc**: Form submission
+- **Payload**: `{ model: props.model, errors: { ...errors.value } }`
 
 ## Slots
 

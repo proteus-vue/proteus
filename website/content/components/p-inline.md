@@ -38,6 +38,28 @@ order: 7
 | `justify` | 主轴对齐（flex-start/center/end/space-between/space-around） | `String` | `'flex-start'` | 否 |
 | `align` | 交叉轴对齐（flex-start/center/end/stretch） | `String` | `'center'` | 否 |
 
+### 属性详解
+
+#### `wrap`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：允许折行（默认不折行）
+
+#### `gap`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：元素间距 px
+
+#### `justify`
+
+- **类型**：`String`　**默认值**：`'flex-start'`　**必填**：否
+- **说明**：主轴对齐（flex-start/center/end/space-between/space-around）
+
+#### `align`
+
+- **类型**：`String`　**默认值**：`'center'`　**必填**：否
+- **说明**：交叉轴对齐（flex-start/center/end/stretch）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -52,7 +74,7 @@ order: 7
 ## 用法
 
 ```vue
-<p-inline :wrap="…">
+<p-inline :wrap="true" :gap="0" :justify="'flex-start'">
   <p-text>内容</p-text>
 </p-inline>
 ```

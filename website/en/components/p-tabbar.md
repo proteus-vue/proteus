@@ -36,12 +36,36 @@ Bottom tab bar
 | `tabs` | Tab items array ({key,label,badge?,icon?}) | `Array as () => unknown[]` | `() => []` | No |
 | `active` | Key of the currently active item | `[String, Number]` | `''` | No |
 
+### Prop details
+
+#### `tabs`
+
+- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Doc**: Tab items array ({key,label,badge?,icon?})
+
+#### `active`
+
+- **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
+- **Doc**: Key of the currently active item
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:active` | Two-way binding: fires when `active` changes (syncs the parent binding) | `key` |
 | `select` | An item is selected | `key` |
+
+### Event details
+
+#### `update:active`
+
+- **Doc**: Two-way binding: fires when `active` changes (syncs the parent binding)
+- **Payload**: `key` (implicit v-model: the value itself)
+
+#### `select`
+
+- **Doc**: An item is selected
+- **Payload**: `key`
 
 ## Implementation notes
 

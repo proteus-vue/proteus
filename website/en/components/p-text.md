@@ -38,6 +38,28 @@ Text
 | `ariaLabel` | Accessibility label (the text read aloud by a screen reader) | `String` | `''` | No |
 | `selectable` | Whether the text is selectable | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging/observation/test targeting — D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and dims the visuals; MP native disabled is passed through)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (the text read aloud by a screen reader)
+
+#### `selectable`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether the text is selectable
+
 ## Slots
 
 | Slot | Doc |

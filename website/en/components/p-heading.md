@@ -35,6 +35,13 @@ Heading
 |---|---|---|---|---|
 | `level` | Heading level 1-6 (font size decreases with level) | `Number` | `1` | No |
 
+### Prop details
+
+#### `level`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Heading level 1-6 (font size decreases with level)
+
 ## Slots
 
 | Slot | Doc |

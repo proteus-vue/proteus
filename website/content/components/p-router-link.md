@@ -37,11 +37,35 @@ order: 4003
 | `replace` | 替换当前页（E12 语义——push({...to, replace:true})） | `Boolean` | `false` | 否 |
 | `switchTab` | 切 Tab 页（E14 语义——push({...to, switchTab:true})） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `to`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：导航目标（路由名或路径）——createRouterEngineering.push({ name: to \| path: to })
+
+#### `replace`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：替换当前页（E12 语义——push({...to, replace:true})）
+
+#### `switchTab`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：切 Tab 页（E14 语义——push({...to, switchTab:true})）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `navigate` | — | `{ to: props.to, replace: props.replace, switchTab: props.switchTab }` |
+
+### 事件详解
+
+#### `navigate`
+
+- **说明**：—
+- **载荷**：`{ to: props.to, replace: props.replace, switchTab: props.switchTab }`
 
 ## 插槽
 
@@ -61,7 +85,7 @@ order: 4003
 ## 用法
 
 ```vue
-<p-router-link :to="…">
+<p-router-link :to="'…'" :replace="true" :switchTab="true">
   <p-text>内容</p-text>
 </p-router-link>
 ```

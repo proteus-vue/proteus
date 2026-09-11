@@ -36,12 +36,36 @@ Location capability entry
 | `label` | Accessibility label / default button text | `String` | `'定位'` | No |
 | `auto` | Fire on mount instead of on click | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `label`
+
+- **Type**: `String`　**Default**: `'定位'`　**Required**: No
+- **Doc**: Accessibility label / default button text
+
+#### `auto`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Fire on mount instead of on click
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `locate` | — | `r.data` |
 | `error` | — | `'locate-failed')` |
+
+### Event details
+
+#### `locate`
+
+- **Doc**: —
+- **Payload**: `r.data`
+
+#### `error`
+
+- **Doc**: —
+- **Payload**: `'locate-failed')`
 
 ## Slots
 

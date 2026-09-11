@@ -36,6 +36,18 @@ Masonry
 | `colCount` | Column count (default 2) | `Number` | `2` | No |
 | `gap` | Column and row spacing in px | `Number` | `12` | No |
 
+### Prop details
+
+#### `colCount`
+
+- **Type**: `Number`　**Default**: `2`　**Required**: No
+- **Doc**: Column count (default 2)
+
+#### `gap`
+
+- **Type**: `Number`　**Default**: `12`　**Required**: No
+- **Doc**: Column and row spacing in px
+
 ## Slots
 
 | Slot | Doc |

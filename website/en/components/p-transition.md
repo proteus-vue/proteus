@@ -38,6 +38,28 @@ Transition (show/hide) — the semantics surface of CSS transition
 | `duration` | Transition duration (ms) | `Number` | `300` | No |
 | `visible` | Show/hide switch (controlled by the parent) | `Boolean` | `true` | No |
 
+### Prop details
+
+#### `name`
+
+- **Type**: `String`　**Default**: `'fade'`　**Required**: No
+- **Doc**: Transition preset name (fade/slide-up/slide-down/slide-left/slide-right/zoom)
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'both'`　**Required**: No
+- **Doc**: Transition direction: in (enter only) / out (exit only) / both (both directions)
+
+#### `duration`
+
+- **Type**: `Number`　**Default**: `300`　**Required**: No
+- **Doc**: Transition duration (ms)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Show/hide switch (controlled by the parent)
+
 ## Slots
 
 | Slot | Doc |

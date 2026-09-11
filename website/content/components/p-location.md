@@ -36,12 +36,36 @@ order: 5001
 | `label` | 无障碍标签 / 默认按钮文案 | `String` | `'定位'` | 否 |
 | `auto` | 自动触发（挂载即扫；默认点击触发） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `label`
+
+- **类型**：`String`　**默认值**：`'定位'`　**必填**：否
+- **说明**：无障碍标签 / 默认按钮文案
+
+#### `auto`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：自动触发（挂载即扫；默认点击触发）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `locate` | — | `r.data` |
 | `error` | 加载/执行失败 | `'locate-failed')` |
+
+### 事件详解
+
+#### `locate`
+
+- **说明**：—
+- **载荷**：`r.data`
+
+#### `error`
+
+- **说明**：加载/执行失败
+- **载荷**：`'locate-failed')`
 
 ## 插槽
 
@@ -57,7 +81,7 @@ order: 5001
 ## 用法
 
 ```vue
-<p-location :label="…">
+<p-location :label="'定位'" :auto="true">
   <p-text>内容</p-text>
 </p-location>
 ```

@@ -35,6 +35,13 @@ Intrinsic sizing
 |---|---|---|---|---|
 | `maxRatio` | Max ratio of the container (0-1; default 0.8) - prevents dynamic content from overflowing the container | `Number` | `0.8` | No |
 
+### Prop details
+
+#### `maxRatio`
+
+- **Type**: `Number`　**Default**: `0.8`　**Required**: No
+- **Doc**: Max ratio of the container (0-1; default 0.8) - prevents dynamic content from overflowing the container
+
 ## Slots
 
 | Slot | Doc |

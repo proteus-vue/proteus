@@ -38,6 +38,28 @@ Explicit scroll container
 | `refresh` | Pull-to-refresh (capability constraint - B2 declaration only) | `Boolean` | `false` | No |
 | `indicator` | Scroll indicator | `Boolean` | `true` | No |
 
+### Prop details
+
+#### `axis`
+
+- **Type**: `String`　**Default**: `'y'`　**Required**: No
+- **Doc**: Scroll axis: x horizontal / y vertical / both
+
+#### `paging`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Paging snap (capability constraint - B2 declaration only)
+
+#### `refresh`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Pull-to-refresh (capability constraint - B2 declaration only)
+
+#### `indicator`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Scroll indicator
+
 ## Slots
 
 | Slot | Doc |

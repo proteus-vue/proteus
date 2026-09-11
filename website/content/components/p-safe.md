@@ -37,6 +37,23 @@ order: 9
 | `fold` | 折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭） | `Boolean` | `false` | 否 |
 | `fallback` | 兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `area`
+
+- **类型**：`String`　**默认值**：`'top'`　**必填**：否
+- **说明**：避让方向：top / bottom / left / right / horizontal / all（默认 top）
+
+#### `fold`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：折叠屏 hinge 避让：display-mode fold/span 时左右避开折叠区域（默认关闭）
+
+#### `fallback`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：兜底 px：桌面/无刘海屏 env()=0 时强制至少该值（max() 包裹；0 = 不兜底）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -57,7 +74,7 @@ order: 9
 ## 用法
 
 ```vue
-<p-safe :area="…">
+<p-safe :area="'top'" :fold="true" :fallback="0">
   <p-text>内容</p-text>
 </p-safe>
 ```

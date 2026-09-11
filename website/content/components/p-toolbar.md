@@ -38,11 +38,40 @@ order: 2013
 | `moreWidth` | 「更多」按钮宽度（px） | `Number` | `48` | 否 |
 | `moreLabel` | 「更多」文案 | `String` | `'更多'` | 否 |
 
+### 属性详解
+
+#### `items`
+
+- **类型**：`Array`　**默认值**：`() => []`　**必填**：否
+- **说明**：导航项（{ key, label }）
+
+#### `itemWidth`
+
+- **类型**：`Number`　**默认值**：`80`　**必填**：否
+- **说明**：单导航项宽度（px；溢出计算用）
+
+#### `moreWidth`
+
+- **类型**：`Number`　**默认值**：`48`　**必填**：否
+- **说明**：「更多」按钮宽度（px）
+
+#### `moreLabel`
+
+- **类型**：`String`　**默认值**：`'更多'`　**必填**：否
+- **说明**：「更多」文案
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `select` | 选中某项 | `itemKey(item)` |
+
+### 事件详解
+
+#### `select`
+
+- **说明**：选中某项
+- **载荷**：`itemKey(item)`
 
 ## 实现要点
 
@@ -53,7 +82,7 @@ order: 2013
 ## 用法
 
 ```vue
-<p-toolbar :items="…">
+<p-toolbar :itemWidth="80" :moreWidth="48" :moreLabel="'更多'">
   <p-text>内容</p-text>
 </p-toolbar>
 ```

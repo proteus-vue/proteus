@@ -37,6 +37,23 @@ Virtualized long list
 | `itemHeight` | Fixed row height in px (prerequisite for virtualization) | `Number` | `44` | No |
 | `height` | Height of the visible viewport in px | `Number` | `400` | No |
 
+### Prop details
+
+#### `items`
+
+- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Doc**: List data (the array of items to render)
+
+#### `itemHeight`
+
+- **Type**: `Number`　**Default**: `44`　**Required**: No
+- **Doc**: Fixed row height in px (prerequisite for virtualization)
+
+#### `height`
+
+- **Type**: `Number`　**Default**: `400`　**Required**: No
+- **Doc**: Height of the visible viewport in px
+
 ## Implementation notes
 
 - Thin forwarding layer (same pattern as virtual-list): API surface items/itemHeight/height → single p-list-view implementation

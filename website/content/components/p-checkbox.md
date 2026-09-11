@@ -37,11 +37,35 @@ order: 1004
 | `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：选中态（受控 v-model）
+
+#### `indeterminate`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：半选态（父级不定——显式控制）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`!props.modelValue`（v-model 隐式：值本身）
 
 ## 插槽
 
@@ -57,7 +81,7 @@ order: 1004
 ## 用法
 
 ```vue
-<p-checkbox :modelValue="…">
+<p-checkbox v-model="value" :indeterminate="true" :disabled="true">
   <p-text>内容</p-text>
 </p-checkbox>
 ```

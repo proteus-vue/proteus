@@ -38,6 +38,28 @@ order: 1021
 | `size` | 尺寸 px | `Number` | `24` | 否 |
 | `color` | 颜色 | `String` | `'currentColor'` | 否 |
 
+### 属性详解
+
+#### `path`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：SVG path d 数据（无 fill 语义——随 currentColor）
+
+#### `viewbox`
+
+- **类型**：`String`　**默认值**：`'0 0 24 24'`　**必填**：否
+- **说明**：视盒 "x y w h"（缺省 0 0 24 24）
+
+#### `size`
+
+- **类型**：`Number`　**默认值**：`24`　**必填**：否
+- **说明**：尺寸 px
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`'currentColor'`　**必填**：否
+- **说明**：颜色
+
 ## 实现要点
 
 - path（SVG path d 数据）+ viewbox 渲染；矢量优先（无位图）
@@ -46,7 +68,7 @@ order: 1021
 ## 用法
 
 ```vue
-<p-svg :path="…">
+<p-svg :path="'…'" :viewbox="'0 0 24 24'" :size="24">
   <p-text>内容</p-text>
 </p-svg>
 ```

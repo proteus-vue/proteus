@@ -36,6 +36,18 @@ order: 1016
 | `source` | HTML/markdown 源 | `String` | `''` | 否 |
 | `schema` | 渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化） | `String` | `'html'` | 否 |
 
+### 属性详解
+
+#### `source`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：HTML/markdown 源
+
+#### `schema`
+
+- **类型**：`String`　**默认值**：`'html'`　**必填**：否
+- **说明**：渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化）
+
 ## 实现要点
 
 - source HTML/markdown → 渲染；Web v-html 直渲，MP 编译器映射 rich-text node
@@ -45,7 +57,7 @@ order: 1016
 ## 用法
 
 ```vue
-<p-rich-text :source="…">
+<p-rich-text :source="'…'" :schema="'html'">
   <p-text>内容</p-text>
 </p-rich-text>
 ```

@@ -39,11 +39,45 @@ order: 1002
 | `loading` | 加载中状态 | `Boolean` | `false` | 否 |
 | `throttle` | 点击节流间隔（ms，防重复触发——runtime 内置） | `Number` | `0` | 否 |
 
+### 属性详解
+
+#### `pid`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）
+
+#### `ariaLabel`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：无障碍标签（读屏器朗读文本）
+
+#### `loading`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：加载中状态
+
+#### `throttle`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：点击节流间隔（ms，防重复触发——runtime 内置）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `click` | 点击/轻触（throttle 节流后触发） | `e, { bubbles: true, composed: true }` |
+
+### 事件详解
+
+#### `click`
+
+- **说明**：点击/轻触（throttle 节流后触发）
+- **载荷**：`e, { bubbles: true, composed: true }`
 
 ## 插槽
 
@@ -59,7 +93,7 @@ order: 1002
 ## 用法
 
 ```vue
-<p-button :pid="…">
+<p-button :disabled="true" :loading="true" :throttle="0">
   <p-text>内容</p-text>
 </p-button>
 ```

@@ -37,6 +37,23 @@ order: 2006
 | `statusBar` | 沉浸式状态栏（内容延伸至状态栏区域） | `Boolean` | `false` | 否 |
 | `pullRefresh` | 下拉刷新（页面级滚动接入批次使用） | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `title`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：页面标题（导航栏/文档标题语义声明）
+
+#### `statusBar`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：沉浸式状态栏（内容延伸至状态栏区域）
+
+#### `pullRefresh`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：下拉刷新（页面级滚动接入批次使用）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -52,7 +69,7 @@ order: 2006
 ## 用法
 
 ```vue
-<p-page :title="…">
+<p-page :title="'…'" :statusBar="true" :pullRefresh="true">
   <p-text>内容</p-text>
 </p-page>
 ```

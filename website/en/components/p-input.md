@@ -42,6 +42,48 @@ Input
 | `placeholder` | Placeholder hint text | `String` | `''` | No |
 | `focus` | Auto focus | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `value`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Bound value
+
+#### `type`
+
+- **Type**: `String`　**Default**: `'text'`　**Required**: No
+- **Doc**: Type variant
+
+#### `maxlength`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: Maximum input length (≤ 0 = unlimited)
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Placeholder hint text
+
+#### `focus`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Auto focus
+
 ## Events
 
 | Event | Doc | Payload |
@@ -50,6 +92,28 @@ Input
 | `confirm` | Keyboard confirm (Enter / done key) | `{ value: eventValue(e) }` |
 | `focus` | Gained focus | `e` |
 | `blur` | Lost focus | `e` |
+
+### Event details
+
+#### `input`
+
+- **Doc**: Input changes (payload { value } normalized across targets -- v-model on MP custom components only covers native input/textarea, hence the explicit event contract)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `confirm`
+
+- **Doc**: Keyboard confirm (Enter / done key)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `focus`
+
+- **Doc**: Gained focus
+- **Payload**: `e`
+
+#### `blur`
+
+- **Doc**: Lost focus
+- **Payload**: `e`
 
 ## Implementation notes
 

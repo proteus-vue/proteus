@@ -36,12 +36,36 @@ order: 2009
 | `options` | 分段项 [{label,value?}?]（value 缺省=label） | `Array as () => unknown[]` | `() => []` | 否 |
 | `active` | 当前激活项 value | `[String, Number]` | `''` | 否 |
 
+### 属性详解
+
+#### `options`
+
+- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **说明**：分段项 [{label,value?}?]（value 缺省=label）
+
+#### `active`
+
+- **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
+- **说明**：当前激活项 value
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:active` | v-model 双向绑定：`active`变化时触发（同步父级绑定） | `v` |
 | `select` | 选中某项 | `v` |
+
+### 事件详解
+
+#### `update:active`
+
+- **说明**：v-model 双向绑定：`active`变化时触发（同步父级绑定）
+- **载荷**：`v`（v-model 隐式：值本身）
+
+#### `select`
+
+- **说明**：选中某项
+- **载荷**：`v`
 
 ## 实现要点
 
@@ -51,7 +75,7 @@ order: 2009
 ## 用法
 
 ```vue
-<p-segment :options="…">
+<p-segment :active="'…'">
   <p-text>内容</p-text>
 </p-segment>
 ```

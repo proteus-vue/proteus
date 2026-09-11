@@ -43,6 +43,53 @@ Virtual list
 | `virtual` | Virtualization toggle (false = full render; saves slicing overhead for small lists) | `Boolean` | `true` | No |
 | `lazy` | Lazy mount (does not render on the first screen; renders on the first scroll / when it first becomes visible) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `items`
+
+- **Type**: `Array`　**Default**: `() => []`　**Required**: No
+- **Doc**: Array of data items
+
+#### `itemHeight`
+
+- **Type**: `Number`　**Default**: `44`　**Required**: No
+- **Doc**: Item height in px (basis of the virtual-window calculation)
+
+#### `height`
+
+- **Type**: `Number`　**Default**: `400`　**Required**: No
+- **Doc**: Height in px
+
+#### `bufferSize`
+
+- **Type**: `Number`　**Default**: `2`　**Required**: No
+- **Doc**: Number of buffer rows beyond the visible area (headroom for smooth scrolling)
+
+#### `virtual`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Virtualization toggle (false = full render; saves slicing overhead for small lists)
+
+#### `lazy`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Lazy mount (does not render on the first screen; renders on the first scroll / when it first becomes visible)
+
 ## Implementation notes
 
 - Matrix 01 §5: items / item-key / virtual / lazy-mount / buffer-size / item-size estimation

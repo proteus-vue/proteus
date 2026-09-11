@@ -38,6 +38,28 @@ Icon
 | `color` | Color | `String` | `'currentColor'` | No |
 | `spin` | Rotation animation | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `name`
+
+- **Type**: `String`　**Default**: `'info'`　**Required**: No
+- **Doc**: Icon name (built-in glyph table; unknown → '?')
+
+#### `size`
+
+- **Type**: `Number`　**Default**: `16`　**Required**: No
+- **Doc**: Size (px)
+
+#### `color`
+
+- **Type**: `String`　**Default**: `'currentColor'`　**Required**: No
+- **Doc**: Color
+
+#### `spin`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Rotation animation
+
 ## Implementation notes
 
 - Vector-first: built-in glyph mapping (self-contained unicode, zero assets); name/size/color/spin constraints

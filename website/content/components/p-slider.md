@@ -40,11 +40,50 @@ order: 1020
 | `activeColor` | 激活色（滑轨填充；WebSlider/微信原生均支持） | `String` | `'#07c160'` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约）
+
+#### `min`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：最小值
+
+#### `max`
+
+- **类型**：`Number`　**默认值**：`100`　**必填**：否
+- **说明**：最大值
+
+#### `step`
+
+- **类型**：`Number`　**默认值**：`1`　**必填**：否
+- **说明**：步长
+
+#### `activeColor`
+
+- **类型**：`String`　**默认值**：`'#07c160'`　**必填**：否
+- **说明**：激活色（滑轨填充；WebSlider/微信原生均支持）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `Number.isFinite(v) ? v : props.modelValue` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`Number.isFinite(v) ? v : props.modelValue`（v-model 隐式：值本身）
 
 ## 实现要点
 
@@ -57,7 +96,7 @@ order: 1020
 ## 用法
 
 ```vue
-<p-slider :modelValue="…">
+<p-slider v-model="value" :min="0" :max="100">
   <p-text>内容</p-text>
 </p-slider>
 ```

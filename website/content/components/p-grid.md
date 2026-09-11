@@ -36,6 +36,18 @@ order: 6
 | `minColWidth` | 每列最小宽度（px）——列数自动求解 | `Number` | `160` | 否 |
 | `gap` | 列间距（px） | `Number` | `12` | 否 |
 
+### 属性详解
+
+#### `minColWidth`
+
+- **类型**：`Number`　**默认值**：`160`　**必填**：否
+- **说明**：每列最小宽度（px）——列数自动求解
+
+#### `gap`
+
+- **类型**：`Number`　**默认值**：`12`　**必填**：否
+- **说明**：列间距（px）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -55,7 +67,7 @@ order: 6
 ## 用法
 
 ```vue
-<p-grid :minColWidth="…">
+<p-grid :minColWidth="160" :gap="12">
   <p-text>内容</p-text>
 </p-grid>
 ```

@@ -37,6 +37,23 @@ order: 2010
 | `gap` | 分栏/堆叠间距（px） | `Number` | `16` | 否 |
 | `designWidth` | 设计稿宽度（容器断点推导基准） | `Number` | `375` | 否 |
 
+### 属性详解
+
+#### `minSplitWidth`
+
+- **类型**：`Number`　**默认值**：`640`　**必填**：否
+- **说明**：容器宽度达到此值 → 并排分栏（px；窄于此 → 堆叠）
+
+#### `gap`
+
+- **类型**：`Number`　**默认值**：`16`　**必填**：否
+- **说明**：分栏/堆叠间距（px）
+
+#### `designWidth`
+
+- **类型**：`Number`　**默认值**：`375`　**必填**：否
+- **说明**：设计稿宽度（容器断点推导基准）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -53,7 +70,8 @@ order: 2010
 ## 用法
 
 ```vue
-<p-split :minSplitWidth="…">
+<p-split :minSplitWidth="640" :gap="16" :designWidth="375">
+  <template #aside>…</template>
   <p-text>内容</p-text>
 </p-split>
 ```

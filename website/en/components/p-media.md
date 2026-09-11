@@ -43,6 +43,53 @@ Unified media entry
 | `width` | Width in px (0 = auto) | `Number` | `0` | No |
 | `height` | Height in px (0 = auto) | `Number` | `0` | No |
 
+### Prop details
+
+#### `kind`
+
+- **Type**: `String`　**Default**: `'image'`　**Required**: No
+- **Doc**: Media type: image / video / audio / live
+
+#### `src`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Resource address
+
+#### `poster`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Poster (video/live)
+
+#### `controls`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Show the control bar
+
+#### `autoplay`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Autoplay
+
+#### `loop`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Loop
+
+#### `muted`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Muted
+
+#### `width`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Width in px (0 = auto)
+
+#### `height`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Height in px (0 = auto)
+
 ## Implementation notes
 
 - Unified entry for image/video/audio/live via kind (eliminates the separate video/audio components)

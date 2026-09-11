@@ -37,11 +37,35 @@ order: 2007
 | `trigger` | 触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click） | `String` | `'click'` | 否 |
 | `placement` | 位置：top / bottom / left / right | `String` | `'bottom'` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：显隐（v-model）
+
+#### `trigger`
+
+- **类型**：`String`　**默认值**：`'click'`　**必填**：否
+- **说明**：触发方式：click / hover / focus（hover/focus 批次接入——B4 薄壳 click）
+
+#### `placement`
+
+- **类型**：`String`　**默认值**：`'bottom'`　**必填**：否
+- **说明**：位置：top / bottom / left / right
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`false`（v-model 隐式：值本身）
 
 ## 插槽
 
@@ -59,7 +83,8 @@ order: 2007
 ## 用法
 
 ```vue
-<p-popover :modelValue="…">
+<p-popover v-model="value" :trigger="'click'" :placement="'bottom'">
+  <template #trigger>…</template>
   <p-text>内容</p-text>
 </p-popover>
 ```

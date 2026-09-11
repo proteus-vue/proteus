@@ -38,6 +38,28 @@ order: 1003
 | `height` | CSS 高 px（0=自适应） | `Number` | `150` | 否 |
 | `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` | 否 |
 
+### 属性详解
+
+#### `engine`
+
+- **类型**：`String`　**默认值**：`'2d'`　**必填**：否
+- **说明**：渲染引擎：2d / webgl / skia
+
+#### `width`
+
+- **类型**：`Number`　**默认值**：`300`　**必填**：否
+- **说明**：CSS 宽 px（0=自适应）
+
+#### `height`
+
+- **类型**：`Number`　**默认值**：`150`　**必填**：否
+- **说明**：CSS 高 px（0=自适应）
+
+#### `resolution`
+
+- **类型**：`Number`　**默认值**：`1`　**必填**：否
+- **说明**：分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -53,7 +75,7 @@ order: 1003
 ## 用法
 
 ```vue
-<p-canvas :engine="…">
+<p-canvas :engine="'2d'" :width="300" :height="150">
   <p-text>内容</p-text>
 </p-canvas>
 ```

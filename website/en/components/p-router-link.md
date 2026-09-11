@@ -37,11 +37,35 @@ Declarative navigation
 | `replace` | Replaces the current page (E12 semantics - push({...to, replace:true})) | `Boolean` | `false` | No |
 | `switchTab` | Switches to a Tab page (E14 semantics - push({...to, switchTab:true})) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `to`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Navigation target (route name or path) - createRouterEngineering.push({ name: to \| path: to })
+
+#### `replace`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Replaces the current page (E12 semantics - push({...to, replace:true}))
+
+#### `switchTab`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Switches to a Tab page (E14 semantics - push({...to, switchTab:true}))
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `navigate` | — | `{ to: props.to, replace: props.replace, switchTab: props.switchTab }` |
+
+### Event details
+
+#### `navigate`
+
+- **Doc**: —
+- **Payload**: `{ to: props.to, replace: props.replace, switchTab: props.switchTab }`
 
 ## Slots
 

@@ -42,12 +42,66 @@ Modal
 | `maskClosable` | Close on mask tap | `Boolean` | `true` | No |
 | `maskOpacity` | Mask opacity | `Number` | `0.5` | No |
 
+### Prop details
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Modal visibility (v-model:visible)
+
+#### `pAdaptive`
+
+- **Type**: `String`　**Default**: `'sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)'`　**Required**: No
+- **Doc**: ★Form-range declaration: in the template write p-adaptive="sheet(0, 600) \| dialog(600, 840) \| popover(840, ∞)" (planned API) → the pAdaptive prop
+
+#### `anchor`
+
+- **Type**: `Object`　**Default**: `null`　**Required**: No
+- **Doc**: Anchor to the trigger source for the popover form (an element reference; when omitted → the popover falls back to centered, the 03 §6 fallback chain)
+
+#### `width`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Width override for form resolution (0 = follow the viewport; > 0 = force a specified width - to preview / validate / test different window sizes)
+
+#### `title`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Title (the header slot takes precedence when present)
+
+#### `closable`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Close button in the top-right corner
+
+#### `maskClosable`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Close on mask tap
+
+#### `maskOpacity`
+
+- **Type**: `Number`　**Default**: `0.5`　**Required**: No
+- **Doc**: Mask opacity
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:visible` | Two-way binding: fires when `visible` changes (syncs the parent binding) | `false` |
 | `formChange` | Form field changes | `next` |
+
+### Event details
+
+#### `update:visible`
+
+- **Doc**: Two-way binding: fires when `visible` changes (syncs the parent binding)
+- **Payload**: `false` (implicit v-model: the value itself)
+
+#### `formChange`
+
+- **Doc**: Form field changes
+- **Payload**: `next`
 
 ## Slots
 

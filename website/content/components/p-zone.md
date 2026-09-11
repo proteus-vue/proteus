@@ -35,6 +35,13 @@ order: 17
 |---|---|---|---|---|
 | `designWidth` | 设计稿宽度（容器断点推导基准；缺省 375） | `Number` | `375` | 否 |
 
+### 属性详解
+
+#### `designWidth`
+
+- **类型**：`Number`　**默认值**：`375`　**必填**：否
+- **说明**：设计稿宽度（容器断点推导基准；缺省 375）
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -53,7 +60,9 @@ order: 17
 ## 用法
 
 ```vue
-<p-zone :designWidth="…">
+<p-zone :designWidth="375">
+  <template #sm>…</template>
+  <template #md>…</template>
   <p-text>内容</p-text>
 </p-zone>
 ```

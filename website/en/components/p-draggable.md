@@ -36,12 +36,36 @@ Draggable element
 | `ghost` | Drag ghost (semi-transparent, follows the pointer) | `Boolean` | `false` | No |
 | `snapToGrid` | Grid snap step in px (0 = free drag) | `Number` | `0` | No |
 
+### Prop details
+
+#### `ghost`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Drag ghost (semi-transparent, follows the pointer)
+
+#### `snapToGrid`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Grid snap step in px (0 = free drag)
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `drag` | Dragging (gesture.draggable) | `{ x: nx, y: ny }` |
 | `drop` | Drag released | `{ x: dx.value, y: dy.value }` |
+
+### Event details
+
+#### `drag`
+
+- **Doc**: Dragging (gesture.draggable)
+- **Payload**: `{ x: nx, y: ny }`
+
+#### `drop`
+
+- **Doc**: Drag released
+- **Payload**: `{ x: dx.value, y: dy.value }`
 
 ## Slots
 

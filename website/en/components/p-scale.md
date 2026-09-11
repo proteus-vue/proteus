@@ -37,6 +37,23 @@ Dynamic font size / density
 | `density` | Density: compact / regular / comfortable (roomy, for a11y) | `String` | `'regular'` | No |
 | `baseSize` | Base font size (px) - children inherit it via em and scale along | `Number` | `16` | No |
 
+### Prop details
+
+#### `level`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: Font-size level: 0 small / 1 standard / 2 large / 3 extra large (a11y levels)
+
+#### `density`
+
+- **Type**: `String`　**Default**: `'regular'`　**Required**: No
+- **Doc**: Density: compact / regular / comfortable (roomy, for a11y)
+
+#### `baseSize`
+
+- **Type**: `Number`　**Default**: `16`　**Required**: No
+- **Doc**: Base font size (px) - children inherit it via em and scale along
+
 ## Slots
 
 | Slot | Doc |

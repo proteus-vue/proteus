@@ -40,11 +40,50 @@ Mask
 | `opacity` | Opacity (0-1) | `Number` | `0.5` | No |
 | `closeOnTap` | Whether to auto-close after a tap | `Boolean` | `true` | No |
 
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance identifier (for debugging / observability / test targeting - D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction and weakens the visuals; the native disabled is passed through on MP)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `visible`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Whether visible (show/hide is driven by reactive data - zero platform branching)
+
+#### `opacity`
+
+- **Type**: `Number`　**Default**: `0.5`　**Required**: No
+- **Doc**: Opacity (0-1)
+
+#### `closeOnTap`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: Whether to auto-close after a tap
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `close` | Close | — |
+
+### Event details
+
+#### `close`
+
+- **Doc**: Close
+- **Payload**: none
 
 ## Implementation notes
 

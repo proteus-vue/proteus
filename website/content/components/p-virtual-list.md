@@ -37,6 +37,23 @@ order: 16
 | `itemHeight` | 固定行高 px（虚拟化前提） | `Number` | `44` | 否 |
 | `height` | 可视区高度 px | `Number` | `400` | 否 |
 
+### 属性详解
+
+#### `items`
+
+- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **说明**：列表数据（渲染 item 数组）
+
+#### `itemHeight`
+
+- **类型**：`Number`　**默认值**：`44`　**必填**：否
+- **说明**：固定行高 px（虚拟化前提）
+
+#### `height`
+
+- **类型**：`Number`　**默认值**：`400`　**必填**：否
+- **说明**：可视区高度 px
+
 ## 实现要点
 
 - 薄转发层（同 virtual-list 模式）：API 表面 items/itemHeight/height → p-list-view 单实现
@@ -45,7 +62,7 @@ order: 16
 ## 用法
 
 ```vue
-<p-virtual-list :items="…">
+<p-virtual-list :itemHeight="44" :height="400">
   <p-text>内容</p-text>
 </p-virtual-list>
 ```

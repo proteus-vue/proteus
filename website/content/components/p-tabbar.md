@@ -36,12 +36,36 @@ order: 2011
 | `tabs` | 标签项数组（{key,label,badge?,icon?}） | `Array as () => unknown[]` | `() => []` | 否 |
 | `active` | 当前激活项 key | `[String, Number]` | `''` | 否 |
 
+### 属性详解
+
+#### `tabs`
+
+- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **说明**：标签项数组（{key,label,badge?,icon?}）
+
+#### `active`
+
+- **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
+- **说明**：当前激活项 key
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:active` | v-model 双向绑定：`active`变化时触发（同步父级绑定） | `key` |
 | `select` | 选中某项 | `key` |
+
+### 事件详解
+
+#### `update:active`
+
+- **说明**：v-model 双向绑定：`active`变化时触发（同步父级绑定）
+- **载荷**：`key`（v-model 隐式：值本身）
+
+#### `select`
+
+- **说明**：选中某项
+- **载荷**：`key`
 
 ## 实现要点
 
@@ -51,7 +75,7 @@ order: 2011
 ## 用法
 
 ```vue
-<p-tabbar :tabs="…">
+<p-tabbar :active="'…'">
   <p-text>内容</p-text>
 </p-tabbar>
 ```

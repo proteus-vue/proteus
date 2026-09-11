@@ -38,11 +38,40 @@ order: 1014
 | `min` | 最小值边界（date/time 原生 min） | `String` | `''` | 否 |
 | `max` | 最大值边界 | `String` | `''` | 否 |
 
+### 属性详解
+
+#### `mode`
+
+- **类型**：`String`　**默认值**：`'date'`　**必填**：否
+- **说明**：模式：date / time / region
+
+#### `modelValue`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：值（date=YYYY-MM-DD；time=HH:mm；region=经纬度/文本）
+
+#### `min`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：最小值边界（date/time 原生 min）
+
+#### `max`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：最大值边界
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `v ?? ''` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`v ?? ''`（v-model 隐式：值本身）
 
 ## 实现要点
 
@@ -53,7 +82,7 @@ order: 1014
 ## 用法
 
 ```vue
-<p-picker :mode="…">
+<p-picker v-model="value" :mode="'date'" :min="'…'">
   <p-text>内容</p-text>
 </p-picker>
 ```

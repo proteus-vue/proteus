@@ -38,6 +38,28 @@ Inline container
 | `justify` | Main-axis alignment (flex-start/center/end/space-between/space-around) | `String` | `'flex-start'` | No |
 | `align` | Cross-axis alignment (flex-start/center/end/stretch) | `String` | `'center'` | No |
 
+### Prop details
+
+#### `wrap`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Allow line wrapping (no wrapping by default)
+
+#### `gap`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Spacing between elements (px)
+
+#### `justify`
+
+- **Type**: `String`　**Default**: `'flex-start'`　**Required**: No
+- **Doc**: Main-axis alignment (flex-start/center/end/space-between/space-around)
+
+#### `align`
+
+- **Type**: `String`　**Default**: `'center'`　**Required**: No
+- **Doc**: Cross-axis alignment (flex-start/center/end/stretch)
+
 ## Slots
 
 | Slot | Doc |

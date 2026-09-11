@@ -37,11 +37,35 @@ Bubble popover
 | `trigger` | Trigger mode: click / hover / focus (hover/focus wired in later batches - B4 thin shell: click only) | `String` | `'click'` | No |
 | `placement` | Placement: top / bottom / left / right | `String` | `'bottom'` | No |
 
+### Prop details
+
+#### `modelValue`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Visibility (v-model)
+
+#### `trigger`
+
+- **Type**: `String`　**Default**: `'click'`　**Required**: No
+- **Doc**: Trigger mode: click / hover / focus (hover/focus wired in later batches - B4 thin shell: click only)
+
+#### `placement`
+
+- **Type**: `String`　**Default**: `'bottom'`　**Required**: No
+- **Doc**: Placement: top / bottom / left / right
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `false` |
+
+### Event details
+
+#### `update:modelValue`
+
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
+- **Payload**: `false` (implicit v-model: the value itself)
 
 ## Slots
 

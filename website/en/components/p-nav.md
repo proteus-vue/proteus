@@ -36,6 +36,18 @@ Navigation bar
 | `title` | Title text (slot content takes precedence) | `String` | `''` | No |
 | `transparent` | Transparent mode (blends with the background) | `Boolean` | `false` | No |
 
+### Prop details
+
+#### `title`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Title text (slot content takes precedence)
+
+#### `transparent`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Transparent mode (blends with the background)
+
 ## Slots
 
 | Slot | Doc |

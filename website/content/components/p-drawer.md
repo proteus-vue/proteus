@@ -38,11 +38,40 @@ order: 2002
 | `width` | 抽屉宽度 px | `Number` | `300` | 否 |
 | `overlay` | 遮罩（点击关闭） | `Boolean` | `true` | 否 |
 
+### 属性详解
+
+#### `modelValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：展开状态（v-model:open）
+
+#### `side`
+
+- **类型**：`String`　**默认值**：`'left'`　**必填**：否
+- **说明**：侧向：left / right
+
+#### `width`
+
+- **类型**：`Number`　**默认值**：`300`　**必填**：否
+- **说明**：抽屉宽度 px
+
+#### `overlay`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：遮罩（点击关闭）
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
+
+### 事件详解
+
+#### `update:modelValue`
+
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
+- **载荷**：`false`（v-model 隐式：值本身）
 
 ## 插槽
 
@@ -66,7 +95,7 @@ order: 2002
 ## 用法
 
 ```vue
-<p-drawer :modelValue="…">
+<p-drawer v-model="value" :side="'left'" :width="300">
   <p-text>内容</p-text>
 </p-drawer>
 ```

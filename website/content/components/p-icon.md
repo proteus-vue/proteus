@@ -38,6 +38,28 @@ order: 1007
 | `color` | 颜色 | `String` | `'currentColor'` | 否 |
 | `spin` | 旋转动画 | `Boolean` | `false` | 否 |
 
+### 属性详解
+
+#### `name`
+
+- **类型**：`String`　**默认值**：`'info'`　**必填**：否
+- **说明**：图标名（内置字形表；未知 → '?'）
+
+#### `size`
+
+- **类型**：`Number`　**默认值**：`16`　**必填**：否
+- **说明**：尺寸 px
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`'currentColor'`　**必填**：否
+- **说明**：颜色
+
+#### `spin`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：旋转动画
+
 ## 实现要点
 
 - 矢量优先：内置字形映射（unicode 自包含，零资源）；name/size/color/spin 约束
@@ -46,7 +68,7 @@ order: 1007
 ## 用法
 
 ```vue
-<p-icon :name="…">
+<p-icon :name="'info'" :size="16" :color="'currentColor'">
   <p-text>内容</p-text>
 </p-icon>
 ```
