@@ -57,6 +57,7 @@ onMounted(() => {
   if (g.CSS && typeof g.CSS.supports === 'function') {
     supportsBackdrop.value = g.CSS.supports('backdrop-filter', 'blur(1px)')
   }
+  // components-allow-platform: 无障碍偏好探测（Web）；MP 无 matchMedia → 恒不降级（默认支持玻璃）
   const mm = g.matchMedia ? g.matchMedia('(prefers-reduced-transparency: reduce)') : undefined
   if (mm) {
     reducedTransparency.value = mm.matches

@@ -2,8 +2,13 @@
 // ★组件库 B8：proteus components:audit —— 组件层硬门禁（对齐 07/10 规划，DRY 复用 capabilities:check 的纯函数+CLI 模式）
 // 规则（当前可静态判定项）：
 //   no-platform-api（error）     组件内不得直接 wx.* / document.* / window.*（C1：走 L2 抽象）
+//                                ★Skyline 线收口：含绕过检测——globalThis as {wx?}.wx / const w = wx / wxAlias.w
 //   no-sync-storage（error）     组件内禁止 wx.setStorageSync / localStorage（对齐 API A3 异步原则）
+//   no-browser-observer（error） 组件内不得直接 new ResizeObserver / matchMedia / getBoundingClientRect
+//                                （★Skyline：MP 无这些 API → 静默失效；应走 @proteus-vue/fluid 尺寸观测原语 / L2 抽象）
 //   manifest-complete（error）   组件目录 <tag>/index.vue ↔ 聚合导出 index.ts 双向一致
+// 豁免（诚实登记，非静默）：整文件 `/* components-allow-platform: <原因> */`（仅平台 API 家族生效，
+//   不豁免 manifest-complete / no-sync-storage）——用于确需直调 wx 的组件（须在注释写明 L2 缺失原因）
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -20,30 +25,83 @@ export interface ComponentAuditResult {
 }
 
 const PLATFORM_API_RE = /\b(wx|document|window)\.\s*[A-Za-z_$][\w$]*/
+// ★Skyline 线收口：绕过检测（原正则只匹配 `wx.` 紧邻形态，`const w = wx` + `w.foo` 可逃逸）
+const WX_ALIAS_RE = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*wx\b/
+const GLOBALTHIS_WX_RE = /globalThis[^\n]*\bwx\b/
+// ★Skyline 线收口：浏览器专有观察/测量 API（MP 无 → 静默失效；应走 fluid 原语 / L2 抽象）
+const BROWSER_OBSERVER_RE = /\bnew\s+ResizeObserver\b|\bmatchMedia\s*\(|\bgetBoundingClientRect\s*\(/
 const SYNC_STORAGE_RE = /\bwx\.setStorageSync\s*\(|\blocalStorage\.(setItem|getItem|removeItem)\s*\(/
+// 整文件豁免（诚实登记）：`/* components-allow-platform: <原因> */`——仅平台 API 家族生效
+const FILE_EXEMPT_RE = /\/\*\s*components-allow-platform:\s*([^*\n]+)/
+// 行内/紧邻上一行豁免：`// components-allow-platform: <原因>`
+const LINE_EXEMPT_RE = /\/\/\s*components-allow-platform:\s*([^\n]+)/
 
-/** 剥离注释（单行与块注释），保留代码行（防注释误报） */
+/** 剥离注释（单行与块注释），★保留行结构（块注释按行替换为空白——行号与原文严格对齐，供豁免定位） */
 function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  // 块注释：逐行置空（保留 \n）——避免跨行块注释塌缩导致行号错位
+  const noBlock = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
+  return noBlock.replace(/\/\/[^\n]*/g, '')
 }
 
 function checkComponentFile(abs: string, violations: ComponentViolation[]): void {
-  const src = fs.readFileSync(abs, 'utf-8')
-  const code = stripComments(src)
+  const raw = fs.readFileSync(abs, 'utf-8')
+  const fileExempt = FILE_EXEMPT_RE.test(raw) // 平台 API 家族整文件豁免（诚实登记）
+  const code = stripComments(raw)
   const lines = code.split('\n')
+  const rawLines = raw.split('\n') // ★豁免标记用原始行（注释已剥，须从 raw 读）
+  // 收集 wx 别名变量（`const w = wx`）→ 后续 `w.foo` 也视为平台直调
+  const wxAliases = new Set<string>()
+  for (const line of lines) {
+    const am = line.match(WX_ALIAS_RE)
+    if (am) wxAliases.add(am[1])
+  }
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    const loc = `${path.relative(process.cwd(), abs)}:${i + 1}`
+    const rawLine = rawLines[i] ?? line
+    const lineExemptEarly = LINE_EXEMPT_RE.test(rawLine) || (i > 0 && LINE_EXEMPT_RE.test(rawLines[i - 1] ?? ''))
     const pm = line.match(PLATFORM_API_RE)
-    if (pm) {
+    if (pm && !fileExempt && !lineExemptEarly) {
       violations.push({
-        file: `${path.relative(process.cwd(), abs)}:${i + 1}`,
+        file: loc,
         rule: 'no-platform-api',
         message: `组件内直接调用 ${pm[1]}.*（平台 API）——组件只允许走 L2 抽象（runtime/capability 等），跨端能力用 capability.has() 探测`,
       })
     }
+    // 行内/紧邻上一行豁免（仅作用于本行）
+    const lineExempt = LINE_EXEMPT_RE.test(rawLine) || (i > 0 && LINE_EXEMPT_RE.test(rawLines[i - 1] ?? ''))
+    // ★Skyline 线收口：绕过检测（globalThis.wx / wx 别名变量的成员访问）
+    if (!fileExempt && !lineExempt) {
+      const windowText = lines.slice(Math.max(0, i - 5), i + 1).join(' ') // ★多行窗口（globalThis 与 wx 跨行 cast 形态）
+      if (GLOBALTHIS_WX_RE.test(line) || (/globalThis/.test(windowText) && /\bwx\b/.test(windowText))) {
+        violations.push({
+          file: loc,
+          rule: 'no-platform-api',
+          message: '组件内经 globalThis 访问 wx（绕过 L2 抽象）——改走 adapter/capability（或加 `/* components-allow-platform: 原因 */` 登记豁免）',
+        })
+      }
+      for (const alias of wxAliases) {
+        if (new RegExp(`\\b${alias}\\s*\\.\\s*[A-Za-z_$]`).test(line) && !new RegExp(`\\b${alias}\\s*=`).test(line)) {
+          violations.push({
+            file: loc,
+            rule: 'no-platform-api',
+            message: `wx 别名变量 "${alias}" 的成员访问（平台直调绕过）——改走 L2 抽象`,
+          })
+          break
+        }
+      }
+    }
+    // ★Skyline 线收口：浏览器专有观察/测量 API（MP 无 → 静默失效）
+    if (BROWSER_OBSERVER_RE.test(line) && !lineExempt) {
+      violations.push({
+        file: loc,
+        rule: 'no-browser-observer',
+        message: '组件内直接使用 ResizeObserver/matchMedia/getBoundingClientRect（小程序无 → 静默失效）——走 @proteus-vue/fluid 尺寸观测原语或 L2 adapter',
+      })
+    }
     if (SYNC_STORAGE_RE.test(line)) {
       violations.push({
-        file: `${path.relative(process.cwd(), abs)}:${i + 1}`,
+        file: loc,
         rule: 'no-sync-storage',
         message: '组件内禁止同步存储（wx.setStorageSync / localStorage）——异步原则走 @proteus-vue/api 存储或 store 持久化',
       })

@@ -1,4 +1,6 @@
 <!-- src/components/p-safe/index.vue —— 安全区避让（★Fluid System S2 + G-09 语义 Web 落地）
+     /* components-allow-platform: 安全区胶囊下沿读数（statusBarHeight + menuButton.bottom）——平台专属，
+        尚无 L2 adapter API（adapter.measureRect 不覆盖 capsule inset）；TODO：待 @proteus-vue/shared adapter 增 getSafeAreaInsets 后收编 */
      只声明「避让方向」：Web = env(safe-area-inset-*)（前提 viewport-fit=cover）+ 折叠屏 hinge 避让
      （display-mode: fold/span 时内容避开折叠区域 env(fold-left/fold-width)——把系统能力搬进框架，原则 #10）
      薄壳组件：displayMode 状态桥接 @proteus-vue/fluid（createDeviceEnv + resolveSafeAreaStyle 纯逻辑）

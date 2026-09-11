@@ -112,9 +112,11 @@ function noop(): void {}
 
 /** popover 锚定定位：anchor 下方弹出（无 anchor / 无 rect → 空 = 走居中降级） */
 function computeAnchorStyle(anchor: unknown): Record<string, string> {
+  // components-allow-platform: Web 端 anchor 锚定用 DOM rect；MP anchor 为 null → 走居中降级（非静默失效）
   const el = anchor as { getBoundingClientRect?: () => { left: number; top: number; width: number; height: number; bottom?: number } } | null
   if (!el || typeof el.getBoundingClientRect !== 'function') return {}
   try {
+    // components-allow-platform: Web DOM rect（MP anchor 为 null 已在上方提前 return）
     const rect = el.getBoundingClientRect()
     // ★bottom 用 top + height 推导（fake/部分实现可能无 bottom 字段）
     const bottom = typeof rect.bottom === 'number' ? rect.bottom : rect.top + (rect.height || 0)
