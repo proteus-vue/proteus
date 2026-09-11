@@ -12,8 +12,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import type { CSSProperties } from 'vue'
+import { isMpRuntime } from '../runtime/container-measure'
+import { capabilityWarnOnce } from '../runtime/capability'
 
 const props = defineProps({
   /** 弹性滚动（iOS 橡皮筋） */
@@ -29,6 +31,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['load-more', 'refresh'])
+
+onMounted(() => {
+  // ★Skyline 线收口：Skyline 的 view 不滚动（需 scroll-view）→ overflow 滚动与触底事件失效，显式告警
+  if (isMpRuntime()) {
+    capabilityWarnOnce('p-scrollable', 'css-overflow-scroll', '小程序 view 不滚动——请改用 p-scroll-view / p-list-view（原生 scroll-view）')
+  }
+})
 
 function onScroll(e: Event): void {
   const el = e.target as HTMLElement

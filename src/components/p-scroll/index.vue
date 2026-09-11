@@ -9,8 +9,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import type { CSSProperties } from 'vue'
+import { isMpRuntime } from '../runtime/container-measure'
+import { capabilityWarnOnce } from '../runtime/capability'
 
 const props = defineProps({
   /** 滚动轴：x 水平 / y 垂直 / both */
@@ -21,6 +23,13 @@ const props = defineProps({
   refresh: { type: Boolean, default: false },
   /** 滚动指示器 */
   indicator: { type: Boolean, default: true },
+})
+
+onMounted(() => {
+  // ★Skyline 线收口：Skyline 的 view 不滚动（CSS overflow 无效）→ 显式告警（应改用 p-scroll-view）
+  if (isMpRuntime()) {
+    capabilityWarnOnce('p-scroll', 'css-overflow-scroll', '小程序 view 不滚动——请改用 p-scroll-view（原生 scroll-view）')
+  }
 })
 
 const scrollStyle = computed(() => {

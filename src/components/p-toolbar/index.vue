@@ -1,9 +1,9 @@
 <!-- src/components/p-toolbar/index.vue —— 工具栏溢出折叠（★Fluid System S3：车机/平板有限容器宽度）
      导航项超出容器 → 多余项收进「更多」（展开面板）——calcVisibleToolbarItems 纯计算（fluid 包）
-     按容器而非视口求解（createContainerQuery）；容器不可测（MP 无 ResizeObserver）→ 不折叠全显示（铁律 G-22.2）
+     按容器而非视口求解（createContainerQuery）；★Skyline 线收口：MP 下经 SelectorQuery 测量容器 → 溢出折叠真生效
      ★车机：drive-mode / prefers-reduced-motion → no-motion class（CSS 禁用动效） -->
 <template>
-  <div ref="rootEl" class="p-toolbar" :class="{ 'p-toolbar-no-motion': reducedMotion }">
+  <div ref="rootEl" class="p-toolbar" :class="[{ 'p-toolbar-no-motion': reducedMotion }, mpCls]">
     <div class="p-toolbar-row">
       <button
         v-for="item in visibleItems"
@@ -35,7 +35,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createContainerQuery, createDeviceEnv, shouldReduceMotion, calcVisibleToolbarItems } from '@proteus-vue/fluid'
-import type { FluidContext, DeviceEnv } from '@proteus-vue/fluid'
+import type { FluidContext, DeviceEnv, SizeObserverFactory } from '@proteus-vue/fluid'
+import { mpContainerObserverFactory, measureClass, isMpRuntime } from '../runtime/container-measure'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
 const props = defineProps({
@@ -55,12 +56,15 @@ const containerWidth = ref(0)
 const open = ref(false)
 const reducedMotion = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
+const mpCls = ref('')
 let query: FluidContext | null = null
 let env: DeviceEnv | null = null
 
 onMounted(() => {
-  if (!rootEl.value) return // MP/无 ResizeObserver：容器宽 0 → 不折叠全显示
-  query = createContainerQuery(rootEl.value, {})
+  const mp = isMpRuntime()
+  if (mp) mpCls.value = measureClass('toolbar')
+  const factory: SizeObserverFactory | null = mp ? mpContainerObserverFactory('.' + measureClass('toolbar')) : null
+  query = createContainerQuery(rootEl.value ?? ({} as unknown), factory ? { createObserver: factory } : {})
   query.subscribe((s) => {
     containerWidth.value = s.width
   })
