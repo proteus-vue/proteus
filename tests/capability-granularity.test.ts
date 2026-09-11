@@ -519,3 +519,66 @@ describe('★C49 直播 LiveRoom 富接口（观看端播放控制）', () => {
     if (!play.ok) expect(play.error.code).toBe('live.unsupported')
   })
 })
+
+describe('★C37 NFC 读卡模式（NFCAdapter：发现 + 各技术类型连接）', () => {
+  it('getAdapter → startDiscovery/onDiscovered/connectNdef(writeNdefMessage)', async () => {
+    let discCb: ((r: { id: ArrayBuffer; techs: string[] }) => void) | null = null
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getHCEState: (o: { success?: () => void }) => o.success && o.success(),
+      getNFCAdapter: () => ({
+        startDiscovery: (o?: { success?: () => void }) => { calls.push('startDiscovery'); o && o.success && o.success() },
+        stopDiscovery: (o?: { success?: () => void }) => { o && o.success && o.success() },
+        onDiscovered: (cb: (r: { id: ArrayBuffer; techs: string[] }) => void) => { discCb = cb },
+        offDiscovered: () => undefined,
+        getNdef: () => ({
+          connect: (o?: { success?: () => void }) => o && o.success && o.success(),
+          close: (o?: { success?: () => void }) => o && o.success && o.success(),
+          isConnected: () => true,
+          setTimeout: (o: { success?: () => void }) => o.success && o.success(),
+          transceive: (o: { success?: (r: { data: ArrayBuffer }) => void }) => o.success && o.success({ data: new ArrayBuffer(2) }),
+          writeNdefMessage: (o: { success?: () => void }) => { calls.push('writeNdef'); o.success && o.success() },
+          onNdefMessage: () => undefined,
+          offNdefMessage: () => undefined,
+        }),
+        getNfcA: () => ({ connect: (o?: { success?: () => void }) => o && o.success && o.success(), isConnected: () => false, transceive: (o: { success?: (r: { data: ArrayBuffer }) => void }) => o.success && o.success({ data: new ArrayBuffer(1) }) }),
+      }),
+    })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useNFC()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const adapter = r.data.getAdapter()
+    let tag: { techs: string[] } | null = null
+    adapter.onDiscovered((t) => { tag = t })
+    expect((await adapter.startDiscovery()).ok).toBe(true)
+    discCb!({ id: new ArrayBuffer(4), techs: ['ndef'] })
+    expect(tag && tag.techs).toEqual(['ndef'])
+    // 连接 NDEF + 写消息
+    const ndef = await adapter.connectNdef()
+    expect(ndef.ok).toBe(true)
+    if (ndef.ok) {
+      expect(ndef.data.isConnected()).toBe(true)
+      expect((await ndef.data.writeNdefMessage({ records: [] })).ok).toBe(true)
+      expect((await ndef.data.transceive(new ArrayBuffer(1))).ok).toBe(true)
+    }
+    // NfcA
+    const a = await adapter.connectNfcA()
+    expect(a.ok).toBe(true)
+    expect(calls).toContain('startDiscovery')
+    expect(calls).toContain('writeNdef')
+  })
+
+  it('缺 getNFCAdapter → 读卡操作 Err（诚实降级）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }), getHCEState: (o: { success?: () => void }) => o.success && o.success() })
+    const r = await createCapabilityHooks(createCapabilityBridge()).useNFC()
+    if (!r.ok) return
+    const adapter = r.data.getAdapter()
+    expect((await adapter.startDiscovery()).ok).toBe(false)
+    const ndef = await adapter.connectNdef()
+    expect(ndef.ok).toBe(false)
+    if (!ndef.ok) expect(ndef.error.code).toBe('nfc.unsupported')
+  })
+})

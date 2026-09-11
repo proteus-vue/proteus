@@ -42,6 +42,7 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | 发送 APDU 响应（收到 onHCEMessage 后回） |
 | `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | 订阅 HCE 消息（返回取消） |
 | `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
+| `getAdapter` | `getAdapter(): NfcAdapter` | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
 
 ## 错误码
 

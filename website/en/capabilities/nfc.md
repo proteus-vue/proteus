@@ -42,6 +42,7 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | `sendHCEMessage` | `sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>` | — |
 | `onHCEMessage` | `onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void` | — |
 | `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | — |
+| `getAdapter` | `getAdapter(): NfcAdapter` | — |
 
 ## Error codes
 
