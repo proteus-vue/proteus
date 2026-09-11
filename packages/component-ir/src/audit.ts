@@ -22,6 +22,8 @@ export interface MpMatrixItem {
   status: MpCoverageStatus
   /** 对照类别（component / api-*) */
   group: 'component' | 'api'
+  /** ★诚实边界：proteus 引用的 p-* 为 L2 规划中（尚未实现）——引用门禁据此豁免（不豁免则视为幽灵） */
+  planned?: boolean
 }
 
 /** 小程序官方组件 → Proteus（miniprogram-mapping.md §2，42 项） */
@@ -34,10 +36,10 @@ const MP_COMPONENTS: MpMatrixItem[] = [
   { mp: '<swiper-item>', proteus: 'layout.stack 子项', status: 'ok', group: 'component' },
   { mp: '<movable-area>', proteus: 'gesture.scrollable 容器', status: 'ok', group: 'component' },
   { mp: '<movable-view>', proteus: 'gesture.draggable', status: 'ok', group: 'component' },
-  { mp: '<cover-view>', proteus: 'p-overlay (L2)', status: 'compat', group: 'component' },
-  { mp: '<cover-image>', proteus: 'p-overlay + ui.image', status: 'compat', group: 'component' },
+  { mp: '<cover-view>', proteus: 'p-overlay（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<cover-image>', proteus: 'p-overlay + ui.image（L2 规划）', status: 'compat', group: 'component', planned: true },
   { mp: '<icon>', proteus: 'ui.icon', status: 'ok', group: 'component' },
-  { mp: '<progress>', proteus: 'p-progress (L2)', status: 'compat', group: 'component' },
+  { mp: '<progress>', proteus: 'p-progress（L2 规划）', status: 'compat', group: 'component', planned: true },
   { mp: '<rich-text>', proteus: 'ui.rich-text', status: 'ok', group: 'component' },
   { mp: '<button>', proteus: 'ui.button', status: 'ok', group: 'component' },
   { mp: '<form>', proteus: 'ui.form', status: 'ok', group: 'component' },
@@ -49,58 +51,72 @@ const MP_COMPONENTS: MpMatrixItem[] = [
   { mp: '<picker-view>', proteus: 'ui.picker mode=wheel', status: 'ok', group: 'component' },
   { mp: '<slider>', proteus: 'ui.slider', status: 'ok', group: 'component' },
   { mp: '<switch>', proteus: 'ui.switch', status: 'ok', group: 'component' },
-  { mp: '<label>', proteus: 'p-label (L2)', status: 'compat', group: 'component' },
+  { mp: '<label>', proteus: 'p-label（L2 规划）', status: 'compat', group: 'component', planned: true },
   { mp: '<navigator>', proteus: 'engineering.router-link / router.*', status: 'ok', group: 'component' },
   { mp: '<audio>', proteus: 'ui.media kind=audio（消灭为属性）', status: 'ok', group: 'component' },
   { mp: '<video>', proteus: 'ui.media kind=video（消灭为属性）', status: 'ok', group: 'component' },
-  { mp: '<camera>', proteus: 'p-camera (L2) + capability.camera', status: 'ok', group: 'component' },
+  { mp: '<camera>', proteus: 'p-camera（L2 规划）+ useCamera', status: 'compat', group: 'component', planned: true },
   { mp: '<live-player>', proteus: 'ui.media kind=live（消灭为属性）', status: 'ok', group: 'component' },
   { mp: '<live-pusher>', proteus: 'ui.media kind=live mode=push', status: 'ok', group: 'component' },
   { mp: '<canvas>', proteus: 'ui.canvas', status: 'ok', group: 'component' },
-  { mp: '<map>', proteus: 'p-map (L2) + capability.map', status: 'ok', group: 'component' },
-  { mp: '<web-view>', proteus: 'p-webview (L2)', status: 'compat', group: 'component' },
+  { mp: '<map>', proteus: 'p-map（L2 规划）+ useMap', status: 'compat', group: 'component', planned: true },
+  { mp: '<web-view>', proteus: 'p-webview（L2 规划）', status: 'compat', group: 'component', planned: true },
   { mp: '<editor>', proteus: 'ui.rich-text editable', status: 'ok', group: 'component' },
-  { mp: '<ad>', proteus: 'p-ad (L2)', status: 'compat', group: 'component' },
-  { mp: '<official-account>', proteus: 'capability.mini-program（微信私有）', status: 'private', group: 'component' },
-  { mp: '<open-data>', proteus: 'capability.mini-program（微信私有）', status: 'private', group: 'component' },
-  { mp: '<share-element>', proteus: 'p-share-element (L2)', status: 'compat', group: 'component' },
-  { mp: '<aria-component>', proteus: 'p-aria (L2)', status: 'compat', group: 'component' },
-  { mp: '<page-container>', proteus: 'p-page-container (L2)', status: 'compat', group: 'component' },
-  { mp: '<voip-room>', proteus: 'capability.mini-program（微信 VOIP）', status: 'private', group: 'component' },
-  { mp: '<guild-room>', proteus: 'capability.mini-program（微信游戏）', status: 'private', group: 'component' },
+  { mp: '<ad>', proteus: 'p-ad（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<official-account>', proteus: 'useMiniProgram（微信私有）', status: 'private', group: 'component' },
+  { mp: '<open-data>', proteus: 'useMiniProgram（微信私有）', status: 'private', group: 'component' },
+  { mp: '<share-element>', proteus: 'p-share-element（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<aria-component>', proteus: 'p-aria（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<page-container>', proteus: 'p-page-container（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<voip-room>', proteus: 'useMiniProgram（微信 VOIP）', status: 'private', group: 'component' },
+  { mp: '<guild-room>', proteus: 'useMiniProgram（微信游戏）', status: 'private', group: 'component' },
+  // ★2026-09-11 补齐：此前矩阵漏列的真实微信内置组件（Skyline 族为主）——有等价能力标 ok/compat，无则 missing
+  { mp: '<match-media>', proteus: 'p-adaptive / p-zone（容器断点替代）', status: 'ok', group: 'component' },
+  { mp: '<navigation-bar>', proteus: 'shell.nav（p-nav-bar 自绘）', status: 'ok', group: 'component' },
+  { mp: '<keyframe-animation>', proteus: 'engineering.animate / engineering.transition', status: 'ok', group: 'component' },
+  { mp: '<list-view>', proteus: 'layout.virtual-list（p-list-view 回收）', status: 'ok', group: 'component' },
+  { mp: '<grid-view>', proteus: 'layout.grid / layout.virtual-list', status: 'ok', group: 'component' },
+  { mp: '<snapshot>', proteus: 'ui.canvas（截图经 OffscreenCanvas）', status: 'compat', group: 'component' },
+  { mp: '<page-meta>', proteus: 'shell.page（页面配置属性）', status: 'compat', group: 'component' },
+  { mp: '<root-portal>', proteus: 'engineering.transition（teleport→root-portal 编译期）', status: 'ok', group: 'component' },
+  { mp: '<sticky-header>', proteus: 'layout.scroll + sticky（CSS）', status: 'compat', group: 'component' },
+  { mp: '<sticky-section>', proteus: 'layout.scroll + sticky（CSS）', status: 'compat', group: 'component' },
+  { mp: '<double-tap-gesture>', proteus: 'gesture.draggable（p-draggable 手势识别器）', status: 'ok', group: 'component' },
+  { mp: '<functional-page-navigator>', proteus: '—（微信插件页专属，非目标）', status: 'private', group: 'component' },
+  { mp: '<open-container>', proteus: '—（微信开屏容器，私有）', status: 'private', group: 'component' },
 ]
 
 /** 小程序 API 类别 → Proteus（miniprogram-mapping.md §3，按类别聚合——本行代表该类 API 集合） */
 const MP_API_GROUPS: MpMatrixItem[] = [
-  { mp: 'wx.request/upload/download/websocket（网络）', proteus: 'capability.fetch/upload/download/websocket', status: 'ok', group: 'api' },
-  { mp: 'wx.requestPayment', proteus: 'capability.payment', status: 'ok', group: 'api' },
-  { mp: 'wx.chooseImage/chooseMedia/previewImage（媒体）', proteus: 'capability.camera + ui.image preview', status: 'ok', group: 'api' },
-  { mp: 'wx.startRecord/RecorderManager（录音）', proteus: 'capability.microphone', status: 'ok', group: 'api' },
-  { mp: 'wx.createVideoContext/CameraContext', proteus: 'capability.media + ui.media', status: 'ok', group: 'api' },
-  { mp: 'wx.scanCode', proteus: 'capability.qr-code / capability.scan-qr', status: 'ok', group: 'api' },
-  { mp: 'wx.saveImageToPhotosAlbum', proteus: 'capability.album (L2)', status: 'compat', group: 'api' },
-  { mp: 'wx.getFileSystemManager/*（文件 30+）', proteus: 'capability.file-system', status: 'ok', group: 'api' },
-  { mp: 'wx.compressFile/unzip', proteus: 'capability.archive', status: 'ok', group: 'api' },
-  { mp: 'wx.set/get/remove/clearStorage(+Sync)', proteus: 'capability.storage', status: 'ok', group: 'api' },
-  { mp: 'wx.getLocation/chooseLocation/openLocation', proteus: 'capability.location', status: 'ok', group: 'api' },
-  { mp: 'wx.createMapContext', proteus: 'capability.map', status: 'ok', group: 'api' },
-  { mp: 'wx.getSystemInfo（设备/屏幕/网络/电量/亮度/方向/震动/传感器/剪贴板/电话）', proteus: 'capability.device/screen/network/battery/brightness/orientation/vibrate/sensor/clipboard/phone-call', status: 'ok', group: 'api' },
-  { mp: 'wx.openBluetoothAdapter（蓝牙 20+）', proteus: 'capability.bluetooth', status: 'ok', group: 'api' },
-  { mp: 'wx.getHCEState（NFC）', proteus: 'capability.nfc', status: 'ok', group: 'api' },
-  { mp: 'wx.checkIsSupportFingerPrint/FaceID', proteus: 'capability.biometric / face-id', status: 'ok', group: 'api' },
-  { mp: 'wx.showToast/showLoading/showModal/showActionSheet', proteus: 'shell.toast + capability.toast/loading + shell.modal + shell.action-sheet', status: 'ok', group: 'api' },
+  { mp: 'wx.request/upload/download/websocket（网络）', proteus: 'useFetch / useUpload / useDownload / useWebSocket / useSocketTask', status: 'ok', group: 'api' },
+  { mp: 'wx.requestPayment', proteus: 'usePayment', status: 'ok', group: 'api' },
+  { mp: 'wx.chooseImage/chooseMedia/previewImage（媒体）', proteus: 'useCamera / useQRCode + ui.image', status: 'ok', group: 'api' },
+  { mp: 'wx.startRecord/RecorderManager（录音）', proteus: 'useMicrophone / useRecorder', status: 'ok', group: 'api' },
+  { mp: 'wx.createVideoContext/CameraContext', proteus: 'ui.media + createCameraContext（ui.canvas 承接）', status: 'ok', group: 'api' },
+  { mp: 'wx.scanCode', proteus: 'useQRCode / p-scan-qr', status: 'ok', group: 'api' },
+  { mp: 'wx.saveImageToPhotosAlbum', proteus: 'p-pick-photo（L2 规划）', planned: true, status: 'compat', group: 'api' },
+  { mp: 'wx.getFileSystemManager/*（文件 30+）', proteus: 'useFileSystem', status: 'ok', group: 'api' },
+  { mp: 'wx.compressFile/unzip', proteus: 'useArchive', status: 'ok', group: 'api' },
+  { mp: 'wx.set/get/remove/clearStorage(+Sync)', proteus: 'useStorage', status: 'ok', group: 'api' },
+  { mp: 'wx.getLocation/chooseLocation/openLocation', proteus: 'useLocation / p-location', status: 'ok', group: 'api' },
+  { mp: 'wx.createMapContext', proteus: 'useMap', status: 'ok', group: 'api' },
+  { mp: 'wx.getSystemInfo（设备/屏幕/网络/电量/亮度/方向/震动/传感器/剪贴板/电话）', proteus: 'useDevice / useScreen / useNetwork / useBattery / useBrightness / useOrientation / useVibrate / useSensor / useClipboard / usePhoneCall', status: 'ok', group: 'api' },
+  { mp: 'wx.openBluetoothAdapter（蓝牙 20+）', proteus: 'useBluetooth', status: 'ok', group: 'api' },
+  { mp: 'wx.getHCEState（NFC）', proteus: 'useNFC', status: 'ok', group: 'api' },
+  { mp: 'wx.checkIsSupportFingerPrint/FaceID', proteus: 'useBiometric / useFaceID', status: 'ok', group: 'api' },
+  { mp: 'wx.showToast/showLoading/showModal/showActionSheet', proteus: 'shell.toast + ui.loading + shell.modal + shell.action-sheet', status: 'ok', group: 'api' },
   { mp: 'wx.setNavigationBarTitle/Color', proteus: 'shell.nav', status: 'ok', group: 'api' },
   { mp: 'wx.setTabBarItem/Style/hide/show', proteus: 'shell.tabbar', status: 'ok', group: 'api' },
-  { mp: 'wx.pageScrollTo', proteus: 'capability.page-scroll', status: 'ok', group: 'api' },
-  { mp: 'wx.createAnimation', proteus: 'engineering.animation', status: 'ok', group: 'api' },
-  { mp: 'wx.createSelectorQuery/IntersectionObserver', proteus: 'capability.element / intersection', status: 'ok', group: 'api' },
-  { mp: 'wx.navigateTo/redirectTo/navigateBack/switchTab/reLaunch', proteus: 'engineering.router-push/replace/back/switch-tab/relaunch', status: 'ok', group: 'api' },
-  { mp: 'wx.getCurrentPages', proteus: 'engineering.route', status: 'ok', group: 'api' },
-  { mp: 'App()/Page() 生命周期/getApp()', proteus: 'engineering.lifecycle + capability.app-lifecycle/page-lifecycle', status: 'ok', group: 'api' },
-  { mp: 'wx.shareAppMessage/requestSubscribeMessage', proteus: 'capability.share / notification', status: 'ok', group: 'api' },
-  { mp: 'wx.login/checkSession/getUserInfo/authorize', proteus: 'capability.login / auth / permission', status: 'ok', group: 'api' },
-  { mp: 'wx.getUpdateManager', proteus: 'capability.update (L2)', status: 'compat', group: 'api' },
-  { mp: 'wx.requestWeChatPay/navigateToMiniProgram/模板消息/客服（微信私有）', proteus: 'capability.mini-program', status: 'private', group: 'api' },
+  { mp: 'wx.pageScrollTo', proteus: 'layout.scroll（p-scroll-view）', status: 'ok', group: 'api' },
+  { mp: 'wx.createAnimation', proteus: 'engineering.animate / engineering.transition', status: 'ok', group: 'api' },
+  { mp: 'wx.createSelectorQuery/IntersectionObserver', proteus: 'engineering.router-link + layout.scroll（实测能力）', status: 'ok', group: 'api' },
+  { mp: 'wx.navigateTo/redirectTo/navigateBack/switchTab/reLaunch', proteus: 'engineering.router-link + router.* API', status: 'ok', group: 'api' },
+  { mp: 'wx.getCurrentPages', proteus: 'engineering.router-link + shared adapter', status: 'ok', group: 'api' },
+  { mp: 'App()/Page() 生命周期/getApp()', proteus: 'useAppLifecycle / usePageLifecycle', status: 'ok', group: 'api' },
+  { mp: 'wx.shareAppMessage/requestSubscribeMessage', proteus: 'useShare / useNotification', status: 'ok', group: 'api' },
+  { mp: 'wx.login/checkSession/getUserInfo/authorize', proteus: 'useLogin / useAuth / usePermission', status: 'ok', group: 'api' },
+  { mp: 'wx.getUpdateManager', proteus: 'useUpdate', status: 'ok', group: 'api' },
+  { mp: 'wx.requestWeChatPay/navigateToMiniProgram/模板消息/客服（微信私有）', proteus: 'useMiniProgram', status: 'private', group: 'api' },
 ]
 
 /** 全量对照矩阵 */
@@ -112,6 +128,10 @@ export interface CoverageReport {
   compat: number
   private: number
   missing: number
+  /** ★诚实边界：`planned: true` 行——L2 规划中（尚未实现），计作已覆盖但**不是已落地** */
+  planned: number
+  /** ★真·已落地 = total − private − missing − planned（有等价能力且现已可用）——区分「有等价」与「真缺」 */
+  landed: number
   /** 覆盖百分比（非 missing 占比） */
   percent: number
   /** G-32.1：missing > 0 → 不达标（CI 红） */
@@ -122,6 +142,7 @@ export interface CoverageReport {
 /**
  * ★G-32.1 audit:coverage：小程序官方能力 100% 覆盖校验
  * 缺失（❌）= 无 Proteus 原语且非平台私有 —— 出现即 CI 红
+ * ★非纯计数：额外区分 `landed`（现已可用）与 `planned`（L2 规划待落地），避免「100% = 全做完」的误读
  */
 export function auditMiniprogramCoverage(matrix: MpMatrixItem[] = MP_MAPPING_MATRIX): CoverageReport {
   const missing = matrix.filter((i) => i.status === 'missing')
@@ -129,6 +150,7 @@ export function auditMiniprogramCoverage(matrix: MpMatrixItem[] = MP_MAPPING_MAT
   const ok = matrix.filter((i) => i.status === 'ok').length
   const compat = matrix.filter((i) => i.status === 'compat').length
   const priv = matrix.filter((i) => i.status === 'private').length
+  const planned = matrix.filter((i) => i.planned === true).length
   const total = matrix.length
   return {
     total,
@@ -136,10 +158,56 @@ export function auditMiniprogramCoverage(matrix: MpMatrixItem[] = MP_MAPPING_MAT
     compat,
     private: priv,
     missing: missingItems.length,
+    planned,
+    landed: total - priv - missingItems.length - planned,
     percent: total === 0 ? 0 : Math.round(((total - missingItems.length) / total) * 100),
     pass: missingItems.length === 0,
     missingItems,
   }
+}
+
+// —— ①-b ★引用一致性门禁（2026-09-11，修「假门禁」） ——
+
+export interface MatrixRefIssue {
+  mp: string
+  ref: string
+  kind: 'component' | 'semantic' | 'hook'
+}
+
+/**
+ * ★矩阵引用一致性：proteus 列引用的 token 必须真实存在（组件标签 ∈ TAG_SEMANTIC_MAP / 语义 ∈ SEMANTIC_ENUM /
+ *   Hook ∈ knownHooks）——否则「幽灵引用」（旧矩阵把未实现的 p-overlay/p-progress、不存在的 capability.fetch 等
+ *   标为 ok/compat，致「100% 覆盖」自证同义反复）。`planned: true` 行豁免「组件标签不存在」（诚实登记 L2 规划）。
+ * @param knownHooks 能力 Hook 名集合（来自 @proteus-vue/api SSOT——component-ir 不 import api，由调用方传入）
+ */
+export function auditMatrixReferences(
+  matrix: MpMatrixItem[] = MP_MAPPING_MATRIX,
+  knownHooks: ReadonlySet<string> = new Set(),
+): { issues: MatrixRefIssue[]; plannedRefs: number } {
+  const issues: MatrixRefIssue[] = []
+  const tags = new Set(Object.keys(TAG_SEMANTIC_MAP))
+  const semantics = new Set<string>(SEMANTIC_ENUM as readonly string[])
+  let plannedRefs = 0
+  for (const it of matrix) {
+    // status=missing 是**已登记的缺口**（引用可不存在）——非幽灵，跳过
+    if (it.status === 'missing') continue
+    for (const m of it.proteus.matchAll(/\bp-[a-z][\w-]*/g)) {
+      if (tags.has(m[0])) continue
+      if (it.planned) { plannedRefs++; continue }
+      issues.push({ mp: it.mp, ref: m[0], kind: 'component' })
+    }
+    for (const m of it.proteus.matchAll(/\b(?:layout|ui|shell|gesture|capability|engineering)\.[a-z][\w-]*/g)) {
+      if (semantics.has(m[0])) continue
+      issues.push({ mp: it.mp, ref: m[0], kind: 'semantic' })
+    }
+    if (knownHooks.size) {
+      // Hook 约定统一 useXxx()（不匹配 setXxx——矩阵里 wx.setNavigationBarTitle 是 wx API 名，非 Hook，避免误报）
+      for (const m of it.proteus.matchAll(/\buse[A-Z]\w*/g)) {
+        if (!knownHooks.has(m[0])) issues.push({ mp: it.mp, ref: m[0], kind: 'hook' })
+      }
+    }
+  }
+  return { issues, plannedRefs }
 }
 
 // —— ② 闭环一致性审计（SSOT = PRIMITIVE_CATALOG） ——
@@ -208,7 +276,8 @@ export function auditCatalogConsistency(): ConsistencyIssue[] {
 export function formatCoverageReport(report: CoverageReport): string {
   const lines = [
     `G-32.1 小程序能力覆盖审计：`,
-    `  总计 ${report.total} · ✅ L1 ${report.ok}（${Math.round((report.ok / report.total) * 100)}%）· 🔄 L2/compat ${report.compat} · ⬛ 私有 ${report.private} · ❌ 缺失 ${report.missing}`,
+    `  总计 ${report.total} · ✅ 有等价 ${report.total - report.missing}（L1 原语 ${report.ok} + 兼容等价 ${report.compat - report.planned}）· ⬛ 私有 ${report.private} · ❌ 缺失 ${report.missing}`,
+    `  ★真·已落地 ${report.landed} · 📋 L2 规划待落地 ${report.planned}（计作覆盖，非已实现——诚实边界）`,
     `  覆盖率 ${report.percent}% ${report.pass ? '✅ 达标（0 缺失）' : '❌ 未达标（CI 红）'}`,
   ]
   if (report.missingItems.length) {

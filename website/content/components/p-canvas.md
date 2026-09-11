@@ -12,14 +12,14 @@ order: 1003
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| ui.canvas | 内容与表单 | `<canvas>`（L1 原语） |
+| ui.canvas | 内容与表单 | `<canvas>`（L1 原语） · `<snapshot>`（L2 兼容层） |
 
 ## 兼容进度
 
 | 端 | 兼容 | 说明 |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · 双端同源码编译目标（编译期映射 + 事件归一） |
-| 微信小程序 | ✅ | skyline（WebView 降级） · 原生控件映射 → `<canvas>`（L1 原语） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · 原生控件映射 → `<canvas>`（L1 原语） · `<snapshot>`（L2 兼容层） |
 | Headless（SSR / 测试） | ✅ | headless · IR 渲染测试档（工具端） |
 | iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——组件级接线未开始 |
 | Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——组件级接线未开始 |

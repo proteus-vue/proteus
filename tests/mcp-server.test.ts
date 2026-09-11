@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import { createMcpServer, DESIGN_TOKENS, validateToolArgs } from '@proteus-vue/mcp'
 import type { McpToolDef } from '@proteus-vue/mcp'
-import { toComponentTree } from '@proteus-vue/component-ir'
+import { toComponentTree, PRIMITIVE_CATALOG } from '@proteus-vue/component-ir'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
@@ -60,7 +60,7 @@ describe('G-36 B1 MCP Server 协议面', () => {
     ])
     const catalog = s.readResource('proteus://primitives/catalog')
     expect(catalog.ok).toBe(true)
-    expect((catalog.contents as unknown[]).length).toBe(136) // G-32 128 原语 + #405 语义登记批 8
+    expect((catalog.contents as unknown[]).length).toBe(PRIMITIVE_CATALOG.length) // SSOT 计数（G-32 128 + #405 登记批 8 + C51 useUpdate）
     const tokens = s.readResource('proteus://tokens/design')
     expect((tokens.contents as Record<string, unknown>).color).toBeDefined()
     const schema = s.readResource('proteus://ir/schemas/component')
@@ -92,7 +92,7 @@ describe('G-36 B1 只读工具', () => {
     expect(catResult.primitives.every((p) => p.kind === 'gesture')).toBe(true)
   })
 
-  it('get_primitive：存在/不存在；list_primitives：136 统计', async () => {
+  it('get_primitive：存在/不存在；list_primitives：SSOT 统计', async () => {
     const s = makeServer()
     const ok = await s.callTool('get_primitive', { name: 'L1' })
     expect((ok.result as { ok: boolean }).ok).toBe(true)
@@ -101,8 +101,8 @@ describe('G-36 B1 只读工具', () => {
 
     const list = await s.callTool('list_primitives', {})
     const result = list.result as { total: number; byKind: Record<string, number> }
-    expect(result.total).toBe(136)
-    expect(Object.values(result.byKind).reduce((a, b) => a + b, 0)).toBe(136)
+    expect(result.total).toBe(PRIMITIVE_CATALOG.length)
+    expect(Object.values(result.byKind).reduce((a, b) => a + b, 0)).toBe(PRIMITIVE_CATALOG.length)
   })
 
   it('get_design_token：点路径/分组/全树 + 未命中', async () => {

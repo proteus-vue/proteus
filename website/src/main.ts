@@ -4,7 +4,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
-// ★p-* 语义组件库（59 组件，128 原语 SSOT 的组件形态）——官网全局注册后模板直接写 p-* 标签
+// ★语义组件库（66 组件，137 原语 SSOT 的组件形态）——官网全局注册后模板直接写 p-* 标签
 import {
   PView,
   PText,
