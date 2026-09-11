@@ -126,7 +126,7 @@ Web + 微信 Skyline 双端编译、编译期路由/分包/tabBar、自定义路
 | 支付宝小程序 | `src/platform/` 新增 adapter + 编译器目标平台选项 | 映射表插拔（`view/text` 同为支付宝原生标签，工作量主要在 API 差异）；`platform: 'mp-alipay'` |
 | 抖音小程序 | 同上 | 抖音标签与微信高度同构，成本最低 |
 | WebView 渲染补齐 | 编译器产物兼容层 | 降级模式从"可运行"提升到"视觉一致"（补齐 WebView 不支持能力告警清单） |
-| **Skyline iOS 真机白屏兜底** | 编译器产物 + 页面 renderer 配置 | iOS 真机偶发白屏（微信平台已知问题，需真机复现路径）。对策三层：① **能力兼容清单**——编译期警告扩充（float/fixed 已有先例），白屏高发场景（动效 / worklet / 特定组件）编译期预警；② **页面级降级通道**——`renderer` 可配置 WebView 兜底（仅白屏风险页启用，不全局降级）；③ **v1.0 真机验收**必须覆盖 iOS Skyline 白屏复现与降级切换 |
+| **Skyline iOS 真机白屏兜底** | 编译器产物 + 页面 renderer 配置 | iOS 真机偶发白屏（微信平台已知问题，需真机复现路径）。对策三层：① 能力兼容清单——编译期警告扩充（float/fixed 已有先例）；② ✅ **页面级降级通道（已落地 2026-09-11）**——`page.webviewPages` 配置风险页走 WebView（`page.json` 不写 `renderer:skyline` + 编译器跳 Skyline-only 特判；仅风险页，不全局降级，`docs/configuration.md §page`）；③ **v1.0 真机验收**必须覆盖 iOS Skyline 白屏复现与降级切换（**待真机**） |
 | HarmonyOS | 小程序侧（微信基础库 3.7+ 已支持） | `wx.getDeviceInfo()` 平台兼容分支 |
 | 原生能力桥 | 插件体系设计 | 原生组件包装 / 原生事件映射 / `wx` API 白名单管理（对标 Taro 插件体系） |
 

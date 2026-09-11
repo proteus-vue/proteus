@@ -95,6 +95,10 @@ export interface ProteusConfig {
   /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
   page?: {
     autoScrollContainer?: boolean
+    /** ★Skyline iOS 白屏兜底（roadmap v0.5 对策② · 页面级降级通道）：
+     *  指定页面（页面名，如 'home' / 'list' 或 'pages/home'）强制走 WebView 渲染（page.json renderer 不写 skyline），
+     *  仅对 Skyline 白屏高风险页启用——不全局降级。为空/未设 → 全站随 config.skyline。 */
+    webviewPages?: string[]
   }
   /** 包体积预算 */
   budget?: {

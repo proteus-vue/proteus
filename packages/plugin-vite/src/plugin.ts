@@ -21,6 +21,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
+import { matchWebviewPage } from './gen-routes'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
@@ -608,6 +609,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           }
         }
         const isComponent = file.includes(`${path.sep}components${path.sep}`)
+        // ★Skyline iOS 白屏兜底（页面级通道）：该页在 page.webviewPages → 强制 webview 渲染
+        //   （产物 page.json 无 renderer:skyline + 编译器关 Skyline-only 特判/降级不一致）
+        const pageRenderer = !isComponent && matchWebviewPage(cfg.page?.webviewPages, rel) ? ('webview' as const) : renderer
         // ★build-plan M8：编译缓存（PROTEUS_NO_CACHE=1 关闭；debug 构建跳过——sourcemap/行号注入与缓存互斥）
         const cacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
         let wxml: string
@@ -631,7 +635,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               debug: isDebug,
               autoScrollContainer,
               fluidLayout,
-              renderer,
+              renderer: pageRenderer,
             },
             projectRoot,
           )
@@ -655,7 +659,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               preprocessStyle,
               autoScrollContainer,
               fluidLayout,
-              renderer,
+              renderer: pageRenderer,
             })
             wxml = result.wxml
             js = result.js

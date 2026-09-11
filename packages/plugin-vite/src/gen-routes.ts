@@ -42,6 +42,18 @@ export interface GenRoutesOptions {
 /**
  * 运行路由表生成（纯函数，可单测）：清理 dist 产物 → 扫描页面 → 生成 auto-routes/app.json/page.json/component.json
  */
+/**
+ * ★Skyline iOS 白屏兜底（roadmap v0.5 对策② · 页面级降级通道）：纯函数——该页是否强制 WebView 渲染。
+ * 命中 page.webviewPages（页面名 'home' / 相对路径 'pages/home' / 分包内 relInSub）→ 不写 renderer:skyline。
+ * 纯函数（list 显式传入）供 gen-routes 与 plugin-vite 复用（不受 runGenRoutes 闭包限制）。
+ */
+export function matchWebviewPage(list: string[] | undefined, rel?: string, relInSub?: string, mpPath?: string): boolean {
+  if (!Array.isArray(list) || !list.length) return false
+  const norm = (x?: string): string => (x ?? '').replace(/^\/+/, '').replace(/\.vue$/, '').replace(/^pages\//, '')
+  const keys = new Set([norm(rel), relInSub ? norm(relInSub) : '', mpPath ? norm(mpPath) : ''].filter(Boolean))
+  return list.some((name) => keys.has(norm(name)))
+}
+
 export function runGenRoutes(options: GenRoutesOptions): void {
   const config = options.config
   const ROOT = options.root ?? process.cwd()
@@ -577,7 +589,7 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
 function writePageJsons(pages: PageInfo[]): void {
   for (const p of pages) {
     const pageJson: Record<string, unknown> = {}
-    if (config.skyline) {
+    if (config.skyline && !matchWebviewPage(config.page?.webviewPages, p.relSrc, p.relInSub, p.mpPath)) {
       pageJson.renderer = 'skyline'
       pageJson.componentFramework = 'glass-easel' // Skyline 强制要求（真机校验：需同时设置）
     }
