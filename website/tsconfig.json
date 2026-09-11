@@ -16,7 +16,8 @@
       "@proteus-vue/components/*": ["../src/components/*"],
       "@proteus-vue/shared": ["../packages/shared/src/index.ts"],
       "@proteus-vue/glass": ["../packages/glass/src/index.ts"],
-      "@proteus-vue/worklet": ["../packages/worklet/src/index.ts"]
+      "@proteus-vue/worklet": ["../packages/worklet/src/index.ts"],
+      "@proteus-vue/api": ["../packages/api/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "src/env.d.ts"]

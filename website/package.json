@@ -22,19 +22,20 @@
     "check:en-drift": "node scripts/check-en-drift.mjs"
   },
   "dependencies": {
+    "@proteus-vue/api": "0.1.0",
     "@proteus-vue/compiler": "0.3.0-beta.0",
     "@proteus-vue/compiler-backend": "0.1.0",
     "@proteus-vue/desktop": "0.1.0",
+    "@proteus-vue/devtools-runtime": "0.1.0",
     "@proteus-vue/docs": "0.1.0",
-    "miniprogram-api-typings": "^3.12.2",
-    "vue": "^3.4.0",
-    "vue-router": "^4.3.0",
     "@proteus-vue/fluid": "0.1.0",
     "@proteus-vue/gesture": "0.1.0",
     "@proteus-vue/i18n": "0.1.0",
-    "@proteus-vue/devtools-runtime": "0.1.0",
     "@proteus-vue/render-backend": "0.1.0",
-    "@proteus-vue/test-ir": "0.1.0"
+    "@proteus-vue/test-ir": "0.1.0",
+    "miniprogram-api-typings": "^3.12.2",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

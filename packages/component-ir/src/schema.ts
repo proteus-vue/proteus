@@ -117,7 +117,7 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-inline': 'layout.inline',
   'p-stack': 'layout.stack',
   'p-grid': 'layout.grid',
-  'p-fluid': 'layout.fluid',
+  // ★Skyline 线收口：'p-fluid' 移除——layout.fluid 是 v-p-fluid **指令**语义（非标签），登记为标签会让 <p-fluid> 静默不渲染
   'p-adaptive': 'layout.adaptive',
   'p-fit': 'layout.fit',
   'p-spacer': 'layout.spacer',
