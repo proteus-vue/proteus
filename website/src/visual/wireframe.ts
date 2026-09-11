@@ -17,6 +17,8 @@ export interface WireframeOptions {
   maxDpr?: number
   /** 静态单帧（prefers-reduced-motion）——不启动 rAF */
   still?: boolean
+  /** 投影缩放（几何体在画布内的占比；默认 0.82） */
+  scale?: number
 }
 
 export interface WireframeHandle {
@@ -112,6 +114,7 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
   const speed = opts.speed ?? 0.22
   const maxDpr = opts.maxDpr ?? 2
   const still = opts.still === true
+  const scale = opts.scale ?? 0.82
 
   let gl: WebGLRenderingContext | null = null
   try {
@@ -144,7 +147,7 @@ export function createWireframeCore(canvas: HTMLCanvasElement, opts: WireframeOp
   gl.blendFunc(gl.ONE, gl.ONE) // 加色（预乘输出）——暗底发光
   gl.uniform3f(gl.getUniformLocation(prog, 'u_color'), color[0], color[1], color[2])
   gl.uniform1f(gl.getUniformLocation(prog, 'u_alpha'), alpha)
-  gl.uniform1f(gl.getUniformLocation(prog, 'u_scale'), 0.82)
+  gl.uniform1f(gl.getUniformLocation(prog, 'u_scale'), scale)
   const uRot = gl.getUniformLocation(prog, 'u_rot')
   const uRes = gl.getUniformLocation(prog, 'u_res')
   const uTime = gl.getUniformLocation(prog, 'u_time')
