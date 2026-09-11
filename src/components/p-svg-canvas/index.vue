@@ -1,4 +1,6 @@
 <!-- src/components/p-svg-canvas/index.vue —— ★G-62 Canvas 通道运行时组件（2026-09-09）
+     /* components-allow-platform: MP-only 运行时组件——离屏 canvas 逐帧绘制依赖 wx.createOffscreenCanvas/
+        canvasToTempFilePath；Web 端不走此组件（编译器仅在 Skyline 通道选用），故无 L2 等价物 */
      复杂 SVG 动画支持：离屏 canvas 逐帧绘制 → toDataURL → image src（rAF 驱动）。
      为什么不用可见 canvas：实测 SelectorQuery.node() 拿不到 node（正常运行时同样 TIMEOUT，§12.2 A）。
      诚实边界：回传是瓶颈（setData 18ms/次）→ 建议 ≤512px、目标 30fps；纯静态/整体变换请用 image 方案。 -->
