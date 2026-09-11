@@ -148,7 +148,7 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 |----|------|------|
 | C36 蓝牙 | ✅ | BluetoothAPI（连接/服务/特征值读写/通知/发现/RSSI + 3 订阅） |
 | C43 文件系统 | ✅ | FSAdapter（异步 16 + Sync 10；web 内存降级全量） |
-| C4 地图 | ✅ | MapController（14 方法：覆盖物/视野/坐标/移动/开App/事件） |
+| C4 地图 | ✅ | MapController（**30 方法全量**：查询/视野/坐标转换/标记/折线/圆/弧线/地面覆盖物/自定义图层/可视化图层/移动/开App/事件） |
 | C1 相机 | ✅ | CameraController（useCameraContext(id)：拍照/录像/缩放/帧） |
 | C2 录音 | ✅ | RecorderController（useRecorder：启停/暂停/恢复 + 事件） |
 | C5 传感器 | ✅ | SensorStream（start/stop/on + 持续推送；修 readSensor 泄漏） |
@@ -166,7 +166,7 @@ export interface BluetoothInfo { supported: boolean; available: boolean; devices
 | 域 | 缺口 | 说明 |
 |----|------|------|
 | C49 直播 | ✅ 观看端已落地 | LiveRoomHandle（play/pause/resume/stop/mute/snapshot/全屏/onStateChange）；推流端（LivePusherContext 美颜/连麦）为诚实边界 |
-| C4 地图完整覆盖物 | 剩 ~15 | 自定义图层/可视化图层/AR 等低频（按需） |
+| C4 地图 | ✅ 已全量 | MapContext 30 方法全覆盖 |
 | C36 BLE 外设端 | 14 | `BLEPeripheralServer`（手机当外设，极低频） |
 | C37 NFC `NFCAdapter` | ✅ 已落地 | 读卡模式：getAdapter + startDiscovery/onDiscovered + connectNdef/NfcA/B/F/V/IsoDep/Mifare（NDEF 读写/transceive） |
 | AI 推理 / 多媒体编辑 / 支付扩展 | — | 需特定类目/企业主体，业务罕见 |
