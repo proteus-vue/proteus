@@ -19,14 +19,16 @@
 
 | 分层 | 版本线（roadmap.md） | 里程碑线（roadmap-2） | 现状 |
 |------|---------------------|----------------------|------|
-| L0 规约 | v0.1+（原则/铁律积累） | M1.1 规约收口 | 🟡 决策已积累（PROJECT_MEMORY 290 条），正式规约收口待 M1.1 |
-| L1 方法论 | v0.4+（G-22 系） | M1 地基（0-3 月） | 🟡 G-22 / G-22.5 / **G-27（SPI+conformance+B1/B2）✅**；G-24/25/26/28 ⬜ 规划 |
-| L2 核心引擎 | v0.2-v0.4 | M1.2-M1.8 | ✅ 大部分已落地（compiler / plugin / types / build / app-config / module / lifecycle） |
-| L3 能力 | v0.3-v0.5 | M2.3-M2.5 | ✅ 大部分已落地（router / pinia / api / platform / component / i18n / security / fluid / css-compat） |
-| L4 工具链 | v0.2-v1.0 | M1.8 / M2.7 | ✅ 大部分已落地（cli / devtools / testing / test-framework / vue-devtools）+ 🟡 G-44 验证层规划入库（Test IR + TestBackend SPI） |
-| L5 交付 | v1.0-v2.0 | M2-M3 | ⬜ 大部分未启动（★render-backend / native-backend 为核心方向） |
+| L0 规约 | v0.1+（原则/铁律积累） | M1.1 规约收口 | ✅ **M1.1 已收口**（`docs/proteus-architecture.md` 原则 #0-#13.83 + 铁律 + 严格规则；facade 三文件由 `check-consistency.js` 门禁） |
+| L1 方法论 | v0.4+（G-22 系） | M1 地基（0-3 月） | ✅ G-22 / G-22.5 / **G-27 全系（SPI+conformance+B1-B6）** / G-31 / G-32 / G-36 已落地；G-25/G-26/G-28/G-30 ⬜ 规划待启 |
+| L2 核心引擎 | v0.2-v0.4 | M1.2-M1.8 | ✅ 大部分已落地（compiler / plugin / types / build / app-config / module / lifecycle / compiler-backend Node+Rust） |
+| L3 能力 | v0.3-v0.5 | M2.3-M2.5 | ✅ 大部分已落地（router / pinia / api / platform / component / i18n / security / fluid / css-compat；G-07 pg-glass ⬜） |
+| L4 工具链 | v0.2-v1.0 | M1.8 / M2.7 | ✅ 大部分已落地（cli / devtools / testing / test-framework / vue-devtools）+ ✅ G-44 验证层（Test IR + TestBackend SPI，B1 落地）+ 📋 G-46~G-60 十五份规划入库（**参考实现级，非生产代码**） |
+| L5 交付 | v1.0-v2.0 | M2-M3 | 🟡 G-27 官方后端原型（Headless/VueDom/Native×3/Flutter）+ G-41 宿主接入已落地；**⬜ 真机宿主工程 + Website/blueprint/生态 → 详见 §4.5 两类口径** |
 
 **关键路径（18 月）**：规约 → G-27 SPI → compiler IR → NativeBackend → FlutterBackend → 混合渲染 → G-28 生态 → benchmark。**G-27 B5 FlutterBackend 是唯一技术不确定项（最早 spike）。**
+
+> ★**进度定位（2026-09-11 对账）**：按关键路径 ≈ **M1 末 → M2 中段**；「已落地可运行」与「仅规划（参考实现）」两类口径见 **§4.5**。
 
 ---
 
@@ -241,7 +243,35 @@
 
 ---
 
+## 4.5 进度定位与两类口径（2026-09-11 对账）
+
+> 起因：用户问「路线图做到哪里了」。下方 §5「状态速览」把「已落地」与「已完成 plan 登记」混在一条，易把「规划入库（参考实现）」误读为「生产可用」。本节把两类明确分开，作为**对外叙事的口径基线**（每条结论均可追溯到具体包 / 测试 / 门禁）。
+
+**① 总体定位：按关键路径（规约 → G-27 SPI → compiler IR → NativeBackend → 混合渲染 → G-28 生态 → benchmark）≈ M1 末 → M2 中段。** 框架侧地基（M1）与 M2 多数并行流**已提前收官**（规划排到 M1 末才要的「换一个 flag 切渲染后端」demo 现为可运行代码）；未兑现的是**「真机全端 + 生态数据」这条收敛链**。
+
+**② A 类·已落地可运行**（生产代码，有单测 / E2E / 门禁）：
+L2 引擎（G-02/03/04/05/06/21/35）· L3 能力（G-08/10/12/13/14/15/16/17/18/19/20/22/22.5；G-07 pg-glass 除外）· L4 工具链（G-16/17/19）· G-24 B1-B5 · G-27 B1-B6 · G-29 B1-B2 · G-31 B1-B6 · G-32 B1-B4 · G-36 B1-B4 · G-38 B1-B3 前置 · G-41/42/43 B1-B6 · G-45 B1-B3a。
+
+**③ B 类·仅规划**（plan 文档 + 零依赖参考实现，**无生产级代码**）：
+**G-46~G-60 十五份**（2026-09 #385~#397 批量入库，`.cjs` self-test + verify.sh PASS，非 `packages/` 生产包）—— resource-pool / combined-conformance / miniprogram-runtime / sandbox-isolation / developer-platform / test-ir-runner / cross-device-verification / mobile-verification / devtools-suite / devtools-landing / studio / inspector / plugin-api / plugin-ecosystem / studio-website-landing；另有**待启** G-37/G-39/G-40/G-28/G-30/G-25/G-26/G-23（G-23 由 G-36 部分承接）。
+
+**④ 剩余缺口（叙事不可越界）**：
+- **真机宿主工程接线**（= v0.6 的全部剩余；iOS/Android/Flutter/鸿蒙 各实现一个 RenderBackend 接入 `createProteusRenderer`——框架侧插槽已冻结）
+- **G-27 B5 FlutterBackend 真机嵌入**（Embedder C ABI）—— 规划点名的**关键路径唯一技术不确定项**，目前只有 widget 映射原型
+- **v0.5 多端**（支付宝 / 抖音 / 鸿蒙）：仍只落微信 Skyline + Web
+- **M3 量化叙事**（benchmark：启动 / 内存 / 帧率 / 包体对标 Flutter/RN）：未系统采集
+- **npm 真实发布**：未启用（用户指示暂发）
+- **G-46~G-60 从参考实现到真实现**：M2 后段~M3 主体工作量（当前为文档债）
+
+**⑤ 对外可讲 / 不可讲**：可讲「Backend 切换」「混合渲染」两个 demo（均有可运行代码）；**不可讲**「六端真机」「对标报告」「99% 零原生」——均未达。
+
+**⑥ 口径修正**：包规模 **31→38**；`docs/*-plan/` 实为 **81 个**；测试文件 **261**（最近全量 ≈2783 用例，9 个 pnpm 不 hoist 同源的既有解析失败）。
+
+---
+
 ## 5. 状态速览（一句话）
+
+> ★**先读 §4.5**——本节把「已落地（生产代码）」与「已规划（参考实现）」混列，勿据此判断完成度。
 
 - **已落地**：G-02/03/04/05/06/08/10/12/13/14/15/16/17/18/19/20/21/22/22.5 + L2 引擎 + L4 工具链（≈ 20 个板块）
 - **★已落地（近期批次）**：G-27 B6 混合渲染（决策 #328）→ G-24 B1 桌面原语（决策 #329）→ G-29 B2 RustBackend（决策 #330）→ **G-27 可视化 demo 页 + E2E（决策 #331）** → **G-29.1 真实文件双端等价门禁 81 用例（决策 #332）** → **G-29 编译器插拔消费点（决策 #333）** → **G-38 B1/B2-Node（决策 #334）** → **G-38 B2 尾（决策 #335）** → **G-38 B3 前置·真 IncrementalSession（决策 #336）** → **G-24 B2 系统集成四件套（决策 #337）** → **G-24 B3 导航结构（决策 #338）** → **G-24 B4 生命周期/设备（决策 #339：G-24 家族 B1-B4 全收官，desktop 17 模块）** → **G-40 执行载体 plan 整合入库（决策 #340）** → **宿主层三 plan 整合入库 G-41/42/43（决策 #341）** → **G-41 B1-B5（决策 #342-#346：nodeOps Dispatcher / Host Conformance 32 项 / 真实 Vue3 createRenderer 接入 / WebHostRuntime / 热切换三策略）** → **G-42 B1-B5（决策 #347-#351：容器 SPI / StackContainer / Conformance 38 项 / SuperAppContainer / 仓库治理 CLI）** → **G-43 B1-B2（决策 #352-#353：Owned 所有权类型 / 借用检查器 B 规则集）** → **G-43 B3（决策 #354：页面所有权上下文——G-42 五原子销毁第 3 步委托 Drop 协议：forceDrop + Managed 自动释放 + 配额归零，StackContainer/SuperAppContainer ownership 接入）** → **G-43 B4 数据层（决策 #355：DevTools 所有权图——graph mutation 事件流 + 历史时间线/计数器采样 + 四类检测（泄漏路径/长期借用/跨页强引用/无主资源）+ alloc-drop 配对，V-01~V-07）** → **G-43 B4 面板 UI（决策 #356：devtools 第十视图 Ownership——renderOwnership + tracer + 本地/Proteus.ownership 远程双通道 + install 缺省挂全局单例图）** → **G-43 B5（决策 #357：PSS 编译器支持——pragma 三级声明 + P1~P9 限制 + CMP071 ref(Owned) 拦截 + insertScopeDrops 自动 drop + runPss 管线 + B-07/B-08 补全 + useOwned/useBorrow 响应式集成）** → **G-42 B6（决策 #358：其余 4 容器落地——SinglePage 单槽/Embedded 宿主挂载/Window 多窗口/MiniProgram 导航语义+tab 保活+L1 沙箱 + conformance 能力门控扩展（C-04/C-06），六容器画像全部可运行零 FAIL）** → **G-41 B6（决策 #359：宿主×引擎组合矩阵——6×6=36 组合 Tier 声明 + 组合级 conformance（语义指纹/控件映射/热切换等价）+ Tier 1 13 组全验证 failed===0）** → **G-36 B1（决策 #360：MCP Server——新包 @proteus-vue/mcp：11 工具/5 Resources/3 Prompts/CMP021 策略，传输无关核心，数据源全 SSOT 派生）** → **G-36 B2（决策 #361：Agent Kit SDK——新包 @proteus-vue/agent：IRBuilder 不绑 LLM 构造 IR + generateCode 规则引擎 + withProteusRules + intent-to-flex 规则引擎版 + LlmLike 可注入——降级策略成立）** → **G-36 B3（决策 #362：migrate-miniprogram Skill——G-31 B6 codemod 复用 + wx.* API 扫描 + CMP019 映射日志（tag/api × auto/manual）+ 覆盖率 + AgentKit.migrate 门面）** → **G-36 B4（决策 #363：三层护栏 + 自修复循环——L1 IR Schema/L2 风格（裸色值 token 反查/wx.*/命名）/L3 六端 conformance（经 MCP 协议面）；diagnose 五类；repairSource design-token-fix 策略；generateWithRetry 上限 3 超限转人工）** → **G-44 整合入库（决策 #364：自动化测试框架第八次泛化——Test IR + TestBackend SPI 五后端 + 跨层集成 INT 套件 + G-25 三维断点自动化 100 profiles + 统一 conformance runner；编号避让 G-41→G-44、CMP067-074→CMP074-081；陈旧 00-12 副本删除；参考实现零依赖真跑 verify.sh 10/10）** → **G-46~G-52 七 plan + 白皮书整合入库（决策 #385：resource-pool / combined-conformance / miniprogram-runtime / sandbox-isolation / developer-platform / test-ir-runner / cross-device-verification + docs/proteus-whitepaper-plan（非 G 序）——编号避让统一 CMP089-146 连续段 + 原则 #13.31-56 + 铁律 G-46~G-52 + 泛化序修正 10-16 + G-48×G-49 沙箱去重 + 白皮书引用化去重；facade G 表 v3.11）** → **G-53 补登记 + G-54 devtools-suite 整合入库（决策 #391：mobile-verification 孤儿 plan 补登记——泛化序修正 15→17 + 铁律 G-53.1-8/CMP147-154/原则 #13.57-59 并入规约；devtools-suite 原稿 G-55→G-54 编号避让——CMP-163~170→155~162 + 泛化 15→18 + 铁律 G-54.1-8/原则 #13.60-62 并入 + rules 编号避让登记 + README 补建 + CHECKSUM 重算；假想「DevTools 加固」未入库降级为未编号规划，消费面前指 G-51/G-52；facade G 表 v3.12，docs/*-plan 69→71）** → **G-55 devtools-landing 整合入库（决策 #392：G-54 工程落地不占泛化序——宿主适配不 fork + Rust 常驻内核 + 确定性性能预算 + 架构试金石；编号避让原稿 G-56→G-55 + CMP-171~178→163~170 + 原则 #13.60-62 撞号顺延 #13.63-65；facade v3.13，docs/*-plan 72）** → **G-56 studio 整合入库（决策 #393：Proteus Studio 自有宿主壳——第 19 次泛化（不绑宿主来源）+ 绝不自研编辑器/GUI 红线 + 四宿主共用内核零改动 + 移动端伴侣 + 生态边界诚实；编号避让原稿 G-57→G-56 + CMP-179~186→171~178 + 原则 #13.57-59 撞号顺延 #13.66-68 + G-59 预留取消；facade v3.14，docs/*-plan 73）** → **G-57 inspector 整合入库（决策 #394：Proteus Inspector 三层可观测性叠加——第 20 次泛化（不绑可观测性来源）+ 叠加不替代 + L1 语义增强 + 安全红线；编号避让原稿 G-58→G-57 + CMP-187~194→179~186 + 原则 #13.60-62 第三次撞号顺延 #13.69-71；facade v3.15，docs/*-plan 74）** → **G-58 plugin-api 整合入库（决策 #395：Proteus Studio 插件 API 与扩展生态——第 21 次泛化（不绑扩展来源）+ 内置功能走 API 红线 + 零权限 + WIT 版本化 + WASM 隔离；编号避让原稿 G-59（studio 预留号）→G-58 + CMP-195~202→187~194 + 原则 #13.60-62 第四次撞号顺延 #13.72-74；studio 前向引用（G-59/预留段）兑现闭合；facade v3.16，docs/*-plan 75）** → **G-59 plugin-ecosystem 整合入库（决策 #396：插件生态治理与性能契约——第 22 次泛化（不绑生态治理模式，首个治理形态轴）+ 激活契约 + 权限锚点数据敏感度 + 信任不可继承 + 破坏率看板；编号避让原稿 G-60→G-59 + CMP-203~214→195~206 + 原则 #13.60-64 第五次撞号顺延 #13.75-79；facade v3.17，docs/*-plan 76）** → **G-60 studio-website-landing 整合入库（决策 #397：Studio 官网落地与插件 API 文档——第 23 次泛化（不绑文档形态）+ 文档即契约红线 + 漂移阻断 + 数字不粉饰官网专项 + 私钥不可逆管控；编号避让原稿 G-61→G-60 + CMP-215~235→207~227 三段式 + 原则 #13.60-63 第六次撞号顺延 #13.80-83；facade v3.18，docs/*-plan 77）**；**待启**：G-24 余项并入 G-32（B4+ 原语由 capability/G-32 承接）→ G-38 B3（Rust native——先定 template parse 策略）→ G-29 B3（WASM Playground）→ **G-44 B1（Test IR + SPI 骨架落地）/ G-36 B5 adapt-device Skill / B6 评测集 / G-37 RenderBackend SPI B1 / G-39 Host Runtime B1 / G-40 Execution Carrier B1** → **G-42 真实 App 验证（需生产 App）/ G-43 B6（跨设备转移——需真机环境）** → **G-46~G-52 B 批次（G-46 B2 真实原生桥接 Backend / G-48 真双线程+分包 / G-49 L3 真进程隔离（G-50 B 生态硬前置）/ G-51 NativeAdapter 阶段 2 / G-52 真机 profile 库与云端调度 G-53）**
