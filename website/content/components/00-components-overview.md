@@ -6,14 +6,15 @@ order: 0
 
 # 组件总览
 
-> 59 个语义组件（5 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
+> 63 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
 
-## 布局（16）
+## 布局（17）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-adaptive](/docs/component/p-adaptive) | 2 | 1 |
 | [p-aspect](/docs/component/p-aspect) | 2 | 0 |
+| [p-box](/docs/component/p-box) | 2 | 0 |
 | [p-divider](/docs/component/p-divider) | 3 | 0 |
 | [p-fit](/docs/component/p-fit) | 1 | 0 |
 | [p-grid](/docs/component/p-grid) | 2 | 0 |
@@ -91,3 +92,11 @@ order: 0
 | [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
 | [p-router-link](/docs/component/p-router-link) | 3 | 1 |
 | [p-transition](/docs/component/p-transition) | 4 | 0 |
+
+## 能力入口（3）
+
+| 组件 | Props | Events |
+|---|---|---|
+| [p-location](/docs/component/p-location) | 2 | 2 |
+| [p-pick-photo](/docs/component/p-pick-photo) | 2 | 2 |
+| [p-scan-qr](/docs/component/p-scan-qr) | 2 | 2 |

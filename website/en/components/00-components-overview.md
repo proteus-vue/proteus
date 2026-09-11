@@ -6,14 +6,15 @@ order: 0
 
 # Components overview
 
-> 59 semantic components (5 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
+> 63 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
 
-## Layout (16)
+## Layout (17)
 
 | Component | Props | Events |
 |---|---|---|
 | [p-adaptive](/docs/component/p-adaptive) | 2 | 1 |
 | [p-aspect](/docs/component/p-aspect) | 2 | 0 |
+| [p-box](/docs/component/p-box) | 2 | 0 |
 | [p-divider](/docs/component/p-divider) | 3 | 0 |
 | [p-fit](/docs/component/p-fit) | 1 | 0 |
 | [p-grid](/docs/component/p-grid) | 2 | 0 |
@@ -91,3 +92,11 @@ order: 0
 | [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
 | [p-router-link](/docs/component/p-router-link) | 3 | 1 |
 | [p-transition](/docs/component/p-transition) | 4 | 0 |
+
+## Capability Entry (3)
+
+| Component | Props | Events |
+|---|---|---|
+| [p-location](/docs/component/p-location) | 2 | 2 |
+| [p-pick-photo](/docs/component/p-pick-photo) | 2 | 2 |
+| [p-scan-qr](/docs/component/p-scan-qr) | 2 | 2 |

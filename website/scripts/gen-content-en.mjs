@@ -80,6 +80,51 @@ export const OVERVIEW_EN = {
  *  - mpExtra?: 小程序等价行追加语（缺省用状态括注）
  */
 export const COMP_EN = {
+  // —— ★Skyline 线收口新增组件（p-box / 能力入口三件）——
+  'p-box': {
+    desc: 'Atomic container',
+    notes: [
+      'Unified flex-column container with optional aspect ratio / overflow policy; p-view is the generic container, p-box emphasizes "box" semantics (aspect ratio / clipping)',
+      '★Skyline close-out: pure layout primitive (zero platform API, identical on both targets); when aspect-ratio is unsupported (Skyline) the width auto-fits and height is auto',
+    ],
+    props: {
+      aspectRatio: "Aspect ratio (e.g. '16/9'; empty = unset) -- Skyline has no aspect-ratio, so it degrades to unconstrained (content-sized)",
+      overflow: 'Overflow: visible (default) / hidden (clip)',
+    },
+  },
+  'p-scan-qr': {
+    desc: 'QR scan capability entry',
+    notes: [
+      'Declarative capability entry: click fires the capability hook; success emits scan',
+      'Abilities routed through the @proteus-vue/api bridge (no platform branches in component code); unavailable capability surfaces via the error event',
+    ],
+    props: {
+      label: 'Accessibility label / default button text',
+      auto: 'Fire on mount instead of on click',
+    },
+  },
+  'p-pick-photo': {
+    desc: 'Photo / album capability entry',
+    notes: [
+      'Declarative capability entry: click fires the camera capability hook; success emits pick',
+      'Abilities routed through the @proteus-vue/api bridge (no platform branches in component code); unavailable capability surfaces via the error event',
+    ],
+    props: {
+      label: 'Accessibility label / default button text',
+      auto: 'Fire on mount instead of on click',
+    },
+  },
+  'p-location': {
+    desc: 'Location capability entry',
+    notes: [
+      'Declarative capability entry: click fires the location capability hook; success emits locate',
+      'Abilities routed through the @proteus-vue/api bridge (no platform branches in component code); unavailable capability surfaces via the error event',
+    ],
+    props: {
+      label: 'Accessibility label / default button text',
+      auto: 'Fire on mount instead of on click',
+    },
+  },
   // —— 布局/基础组件（★#481 首批试点）——
   'p-view': {
     desc: 'Generic container',

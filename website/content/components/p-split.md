@@ -41,7 +41,7 @@ order: 2010
 
 - 容器宽度 < minSplitWidth → 堆叠（column）；≥ → 并排（row）——按容器而非视口求解
 - 薄壳引用 @proteus-vue/fluid（createContainerQuery 容器查询运行时）
-- ★MP 安全：泛型 ref 降级（MP 下无 ResizeObserver → 保持堆叠默认）；方法体 as 可剥
+- ★Skyline 线收口：MP 下经 SelectorQuery 测量容器（运行时测量类），容器响应式真生效（不再恒堆叠）；方法体 as 可剥
 
 ## 用法
 
