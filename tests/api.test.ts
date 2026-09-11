@@ -92,7 +92,8 @@ describe('wx adapter', () => {
         opts.success?.({ statusCode: 200, data: { wx: 1 }, header: { 'x-a': '1' } })
       }),
     }
-    vi.stubGlobal('wx', wxMock)
+    vi.stubGlobal('window', undefined) // ★SSOT：真·小程序运行时 window 缺席（否则判 web，不进 wx 分支）
+    vi.stubGlobal('wx', { ...wxMock, getSystemInfoSync: () => ({ renderer: 'skyline' }) })
     const api = createApi()
     const res = await api.get<{ wx: number }>('/u')
     expect(res.data).toEqual({ wx: 1 })
@@ -101,8 +102,10 @@ describe('wx adapter', () => {
   })
 
   it('wx.request fail → ApiError NETWORK_ERROR', async () => {
+    vi.stubGlobal('window', undefined)
     vi.stubGlobal('wx', {
       request: vi.fn((opts: { success?: (r: Record<string, unknown>) => void; fail?: (e: unknown) => void }) => opts.fail?.({ errMsg: 'request:fail' })),
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
     })
     await expect(createApi().get('/u')).rejects.toThrow(/NETWORK_ERROR/)
   })

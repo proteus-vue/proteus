@@ -129,6 +129,9 @@ importers:
       '@proteus-vue/gesture':
         specifier: 0.1.0
         version: link:../packages/gesture
+      '@proteus-vue/glass':
+        specifier: 0.1.0
+        version: link:../packages/glass
       '@proteus-vue/i18n':
         specifier: 0.1.0
         version: link:../packages/i18n
@@ -211,6 +214,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@proteus-vue/shared':
+        specifier: 0.2.0-beta.0
+        version: link:../shared
       '@proteus-vue/types':
         specifier: 0.1.0
         version: link:../types
@@ -243,6 +249,9 @@ importers:
 
   packages/capabilities:
     dependencies:
+      '@proteus-vue/shared':
+        specifier: 0.2.0-beta.0
+        version: link:../shared
       '@proteus-vue/types':
         specifier: 0.1.0
         version: link:../types
