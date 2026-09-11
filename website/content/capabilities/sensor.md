@@ -83,7 +83,7 @@ useSensorStream(kind: SensorKind): CapResult<SensorStream>
 
 | 属性 | 类型 | 必填 | 说明 |
 |---|---|---|---|
-| `kind` | `SensorKind` | 是 | — |
+| `kind` | `SensorKind` | 是 | 传感器类型（回显创建时传入的 kind） |
 
 #### `SensorStream` 的方法
 
@@ -93,6 +93,65 @@ useSensorStream(kind: SensorKind): CapResult<SensorStream>
 | `stop` | `stop(): Promise<CapResult<void>>` | 停止监听（释放底层 on* 订阅） |
 | `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
 | `active` | `active(): boolean` | 是否监听中 |
+
+##### 方法详解
+
+###### `start`
+
+```ts
+start(): Promise<CapResult<void>>
+```
+
+**说明**：开始监听（幂等）
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `stop`
+
+```ts
+stop(): Promise<CapResult<void>>
+```
+
+**说明**：停止监听（释放底层 on* 订阅）
+
+**返回值**：`Promise<CapResult<void>>`
+
+###### `on`
+
+```ts
+on(cb: (sample: SensorSample) => void): () => void
+```
+
+**说明**：订阅采样（返回取消订阅；多订阅并存）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(sample: SensorSample) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+###### `active`
+
+```ts
+active(): boolean
+```
+
+**说明**：是否监听中
+
+**返回值**：`boolean`
+
+##### 类型引用
+
+**`SensorSample`** — C5 传感器采样（一次性读取当前值；compass 带 heading）
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `kind` | `SensorKind` | 传感器类型（回显请求的 kind） |
+| `x` | `number` | X 轴加速度/分量（accelerometer/gyroscope） |
+| `y` | `number` | Y 轴加速度/分量 |
+| `z` | `number` | Z 轴加速度/分量 |
+| `heading` | `number` | 罗盘方位（0-360°，参考正北；仅 compass） |
+| `timestamp` | `number` | 采样时间戳（ms） |
 
 ## 用法
 

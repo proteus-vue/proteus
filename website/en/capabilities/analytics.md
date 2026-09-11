@@ -26,6 +26,21 @@ Returns `TrackAPI` (synchronous handle/state object).
 |---|---|---|
 | `track` | `track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>` | — |
 
+#### Method details
+
+##### `track`
+
+```ts
+track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `name` | `string` | Yes | — |
+| `params` | `Record<string, unknown>` | No | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
 ## Error codes
 
 | code | Doc |

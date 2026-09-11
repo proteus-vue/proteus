@@ -18,7 +18,7 @@ useFaceID(prompt?: string): Promise<CapResult<boolean>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `prompt` | `string` | No | Authentication prompt text (shown by the native system UI) |
 

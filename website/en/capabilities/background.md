@@ -40,6 +40,117 @@ useBackground(): Promise<CapResult<BackgroundAPI>>
 | `getLaunchOptions` | `getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
 | `getEnterOptions` | `getEnterOptions(): Promise<CapResult<Record<string, unknown>>>` | — |
 
+#### Method details
+
+##### `onEvent`
+
+```ts
+onEvent(cb: (e: BackgroundEvent) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(e: BackgroundEvent) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onMemoryWarning`
+
+```ts
+onMemoryWarning(cb: (level: number) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(level: number) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onThemeChange`
+
+```ts
+onThemeChange(cb: (theme: 'dark' | 'light') => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(theme: 'dark' \| 'light') => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onWindowResize`
+
+```ts
+onWindowResize(cb: (size: { windowWidth: number; windowHeight: number }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(size: { windowWidth: number; windowHeight: number }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onError`
+
+```ts
+onError(cb: (error: string) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(error: string) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onUnhandledRejection`
+
+```ts
+onUnhandledRejection(cb: (reason: { reason: string; promise: Promise<unknown> }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(reason: { reason: string; promise: Promise<unknown> }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onNetworkStatusChange`
+
+```ts
+onNetworkStatusChange(cb: (status: { isConnected: boolean; networkType: string }) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(status: { isConnected: boolean; networkType: string }) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `getLaunchOptions`
+
+```ts
+getLaunchOptions(): Promise<CapResult<Record<string, unknown>>>
+```
+
+**Returns**: `Promise<CapResult<Record<string, unknown>>>`
+
+##### `getEnterOptions`
+
+```ts
+getEnterOptions(): Promise<CapResult<Record<string, unknown>>>
+```
+
+**Returns**: `Promise<CapResult<Record<string, unknown>>>`
+
+#### Referenced types
+
+**`BackgroundEvent`** — C25 后台事件（wx onAppHide/onAppShow / web visibilitychange）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `type` | `'enter-background' \| 'enter-foreground'` | 事件类型（退后台 / 回前台） |
+| `time` | `number` | 事件时间戳（ms） |
+
 ## Error codes
 
 | code | Doc |

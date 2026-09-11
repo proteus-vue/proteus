@@ -18,7 +18,7 @@ useFetch<T = unknown>(url: string, config?: FetchConfig): Promise<CapResult<T>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `url` | `string` | Yes | Target URL (HTTPS) |
 | `config` | `FetchConfig` | No | useFetch configuration (aligned with RequestConfig high-frequency fields) |

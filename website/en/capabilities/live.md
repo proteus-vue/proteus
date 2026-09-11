@@ -18,7 +18,7 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `options` | `LiveRoomOptions` | Yes | C49 live room (wx live component form / host bridge — Err by default) |
 
@@ -54,6 +54,104 @@ useLive(options: LiveRoomOptions): Promise<CapResult<LiveRoomHandle>>
 | `status` | `status(): LivePlayState` | — |
 | `onStateChange` | `onStateChange(cb: (state: LivePlayState) => void): () => void` | — |
 | `leave` | `leave(): Promise<CapResult<void>>` | — |
+
+#### Method details
+
+##### `play`
+
+```ts
+play(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `pause`
+
+```ts
+pause(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `resume`
+
+```ts
+resume(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `stop`
+
+```ts
+stop(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `mute`
+
+```ts
+mute(): void
+```
+
+**Returns**: `void`
+
+##### `snapshot`
+
+```ts
+snapshot(): Promise<CapResult<string>>
+```
+
+**Returns**: `Promise<CapResult<string>>`
+
+##### `requestFullScreen`
+
+```ts
+requestFullScreen(direction?: number): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `direction` | `number` | No | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `exitFullScreen`
+
+```ts
+exitFullScreen(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `status`
+
+```ts
+status(): LivePlayState
+```
+
+**Returns**: `LivePlayState`
+
+##### `onStateChange`
+
+```ts
+onStateChange(cb: (state: LivePlayState) => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(state: LivePlayState) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `leave`
+
+```ts
+leave(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
 
 ## Error codes
 

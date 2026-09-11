@@ -18,7 +18,7 @@ useArchive(options: ArchiveOptions): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `options` | `ArchiveOptions` | Yes | C44 compression options (wx.compressFile; web has no standard API → degrades to undefined) |
 

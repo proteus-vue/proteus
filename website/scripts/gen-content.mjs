@@ -132,35 +132,85 @@ function extractInterfaces(src) {
     {
       const propLines = body.split('\n')
       let pdoc = ''
-      for (const raw of propLines) {
-        const t = raw.trim()
+      // 顶层 ; 切分（单行接口 `a: X; b: Y` 拆成多条，尊重 <>{}()[] 嵌套）
+      const splitTop = (str) => {
+        const out = []
+        let depth = 0
+        let cur = ''
+        for (const ch of str) {
+          if ('<({['.includes(ch)) depth++
+          else if ('>)}]'.includes(ch)) depth--
+          if (ch === ';' && depth === 0) { out.push(cur); cur = '' } else cur += ch
+        }
+        if (cur.trim()) out.push(cur)
+        return out
+      }
+      for (const rawLine of propLines) {
+        const t = rawLine.trim()
         if (!t) continue
+        // 含顶层 ; 的单行多属性 → 逐个（注释缓冲只在首个生效）
+        const segs = splitTop(t)
+        if (segs.length > 1) {
+          for (const seg of segs) {
+            const pm = seg.trim().match(/^(\w+)(\?)?:\s*(.*)$/)
+            if (pm) props.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim(), doc: pdoc.trim() })
+          }
+          pdoc = ''
+          continue
+        }
         if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
           pdoc = (pdoc ? pdoc + ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
           continue
         }
         // 方法行（含 `(` 或 `):` 形态）→ 跳过且清零文档缓冲
         if (/\(/.test(t)) { pdoc = ''; continue }
-        const pm = t.match(/^(\w+)(\?)?:\s*([^;]+);?\s*(?:\/\/(.*))?$/)
+        // 属性行：类型可含嵌套对象/泛型（内部含 `;`）——取整行，再剥尾分号与行尾 // 注释
+        // 剥行尾 // 注释（引号内的 // 罕见——capability.ts 接口属性注释均在行尾且无 // 字符串）
+        const commentM = t.match(/^([\s\S]*?)\s*\/\/(.*)$/)
+        const noComment = (commentM ? commentM[1] : t).replace(/;\s*$/, '')
+        const inline = commentM ? commentM[2].trim() : ''
+        const pm = noComment.match(/^(\w+)(\?)?:\s*(.*)$/)
         if (pm) {
-          const inline = pm[4] ? pm[4].trim() : ''
           props.push({ name: pm[1], optional: pm[2] === '?', type: pm[3].trim(), doc: (pdoc || inline).trim() })
         }
         pdoc = ''
       }
     }
     // 方法成员（行级解析——capability.ts 接口成员均为单行；JSDoc 缓冲遇非注释行即清零）
+    // ★详细文档（2026-09-11）：保留 rawDoc（含 @param/@returns）+ 解析参数，供「逐方法详细段」生成
     const methods = []
-    let mdoc = ''
+    let mdocLines = []
+    const parseMethodDoc = (raw) => {
+      const lines = raw
+        .replace(/^\/\*\*/, '')
+        .replace(/\*\/$/, '')
+        .split('\n')
+        .map((l) => l.replace(/^\s*\*\s?/, '').trim())
+        .filter(Boolean)
+      const paramDocs = {}
+      let returns = ''
+      const prose = []
+      for (const l of lines) {
+        let mm
+        if ((mm = l.match(/^@param\s+(\w+)\s*(?:-|—)?\s*(.*)$/))) paramDocs[mm[1]] = mm[2].trim()
+        else if ((mm = l.match(/^@returns?\s*(?:-|—)?\s*(.*)$/))) returns = mm[1].trim()
+        else if (l.startsWith('@')) continue
+        else prose.push(l)
+      }
+      return { doc: prose.join(' '), paramDocs, returns }
+    }
     for (const raw of body.split('\n')) {
       const t = raw.trim()
       if (t.startsWith('/**') || t.startsWith('*') || t.startsWith('*/')) {
-        mdoc += (mdoc ? ' ' : '') + t.replace(/^\/\*\*/, '').replace(/\*\/$/, '').replace(/^\*\s?/, '').trim()
+        mdocLines.push(t)
         continue
       }
       const mm = t.match(/^(\w+)\s*\((.*)\)\s*:\s*(.+?);?$/)
-      if (mm) methods.push({ name: mm[1], sig: `${mm[1]}(${mm[2]}): ${mm[3].replace(/;$/, '')}`, doc: mdoc.trim() })
-      mdoc = ''
+      if (mm) {
+        const parsed = mdocLines.length ? parseMethodDoc(mdocLines.join('\n')) : { doc: '', paramDocs: {}, returns: '' }
+        methods.push({ name: mm[1], sig: `${mm[1]}(${mm[2]}): ${mm[3].replace(/;$/, '')}`, args: mm[2], ret: mm[3].replace(/;$/, ''), doc: parsed.doc, paramDocs: parsed.paramDocs, returns: parsed.returns })
+      }
+      mdocLines = []
     }
     out[name] = {
       doc: jsdoc ? jsdoc.replace(/\/\*\*|\*\//g, '').split('\n').map((l) => l.replace(/^\s*\*\s?/, '').trim()).filter(Boolean).join(' ') : '',
@@ -182,6 +232,116 @@ function extractInterfaces(src) {
 
 // 表格单元格内类型/签名/描述竖线转义（'joined' | 'left' / string | null / 形态区间表达式——否则断列）
 const escMd = (s) => String(s).replace(/\|/g, '\\|')
+
+// ★详细文档（2026-09-11）：方法签名 → 参数列表（名称/类型/可选；与 JSDoc @param 合并）
+function parseSigArgs(argsStr) {
+  if (!argsStr || !argsStr.trim()) return []
+  const out = []
+  // 顶层逗号切分（跳过尖括号/圆括号/方括号/花括号内）
+  let depth = 0
+  let cur = ''
+  for (const ch of argsStr) {
+    if ('<([{'.includes(ch)) depth++
+    else if ('>)]}'.includes(ch)) depth--
+    if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = '' } else cur += ch
+  }
+  if (cur.trim()) out.push(cur.trim())
+  const params = []
+  for (const seg of out) {
+    let m = seg.match(/^(\w+)\??:\s*([\s\S]+)$/) // name: type
+    if (m) { params.push({ name: m[1], type: m[2].trim(), optional: /\?\s*:/.test(seg) }); continue }
+    m = seg.match(/^\.\.\.(\w+)\s*:\s*([\s\S]+)$/) // rest
+    if (m) { params.push({ name: '...' + m[1], type: m[2].trim(), optional: false }); continue }
+    params.push({ name: seg, type: '', optional: false }) // 非常规（回调解构等）——原样
+  }
+  return params
+}
+
+// 从签名/返回类型提取「引用的接口名」（大写开头标识符），过滤 TS 内建/泛型占位
+const TS_BUILTINS = new Set(['Promise', 'CapResult', 'Array', 'Record', 'Partial', 'Readonly', 'Map', 'Set', 'Date', 'Error', 'ArrayBuffer', 'Uint8Array', 'Boolean', 'String', 'Number', 'Object', 'Function', 'T', 'K', 'V'])
+function collectRefTypes(methodSigs, ifaces) {
+  const names = new Set()
+  for (const sig of methodSigs) {
+    for (const m of sig.matchAll(/\b([A-Z][A-Za-z0-9]+)\b/g)) {
+      const n = m[1]
+      if (!TS_BUILTINS.has(n) && ifaces[n]) names.add(n)
+    }
+  }
+  return [...names]
+}
+
+// 渲染引用类型表（去重；不含自身/父）——放在方法详细段之后
+function renderTypeRefs(lines, names, ifaces, opts) {
+  if (!names.length) return
+  const { hLevel, label, cols } = opts
+  lines.push(`${hLevel} ${label}`)
+  lines.push('')
+  for (const n of names) {
+    const ti = ifaces[n]
+    if (!ti) continue
+    if (ti.doc) { lines.push(`**\`${n}\`** — ${ti.doc}`); lines.push('') }
+    if (ti.props.length) {
+      lines.push(`| ${cols[0]} | ${cols[1]} | ${cols[2]} |`)
+      lines.push('|---|---|---|')
+      for (const pr of ti.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+      lines.push('')
+    }
+    if (ti.methods.length) {
+      lines.push(`| ${cols[0]} | ${cols[1]} | ${cols[2]} |`)
+      lines.push('|---|---|---|')
+      for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+      lines.push('')
+    }
+  }
+}
+
+// 参数说明自动兜底（无 @param 时按名称/类型生成，避免满屏 `—`）
+function autoParamDoc(a) {
+  const t = a.type || ''
+  if (/=>/.test(t)) {
+    if (a.name === 'cb' || a.name === 'callback') return '事件 / 结果回调函数'
+    return '回调函数'
+  }
+  if (a.name === 'options' || a.name === 'opt' || a.name === 'config') return '配置选项对象'
+  // 通用参数名兜底
+  const GENERIC = {
+    value: '值', data: '数据', params: '附加参数对象', token: '凭证', event: '事件名',
+    name: '名称', kind: '类型', id: '标识', key: '键名', kvList: '键值对列表',
+    phone: '电话号码', url: '地址', path: '路径', kind: '类型',
+  }
+  if (GENERIC[a.name]) return GENERIC[a.name]
+  if (/\[\]/.test(t)) return '数组参数'
+  if (t === 'string') return '字符串参数'
+  if (t === 'number') return '数值参数'
+  if (t === 'boolean') return '布尔参数'
+  return '—'
+}
+
+// 渲染「逐方法详细说明」（h4：签名 + 参数表 + 返回值 + 说明）——小程序文档式颗粒度
+function renderMethodDetails(lines, methods, opts) {
+  const { hLevel, paramCols, returnsLabel, descLabel } = opts
+  for (const mm of methods) {
+    lines.push(`${hLevel} \`${mm.name}\``)
+    lines.push('')
+    lines.push('```ts')
+    lines.push(mm.sig)
+    lines.push('```')
+    lines.push('')
+    if (mm.doc) { lines.push(`**${descLabel}**：${mm.doc}`); lines.push('') }
+    const args = parseSigArgs(mm.args)
+    if (args.length) {
+      lines.push(`| ${paramCols[0]} | ${paramCols[1]} | ${paramCols[2]} | ${paramCols[3]} |`)
+      lines.push('|---|---|---|---|')
+      for (const a of args) {
+        const doc = (mm.paramDocs && mm.paramDocs[a.name]) || autoParamDoc(a)
+        lines.push(`| \`${a.name}\` | \`${escMd(a.type || '—')}\` | ${a.optional ? paramCols[4] : paramCols[5]} | ${doc} |`)
+      }
+      lines.push('')
+    }
+    lines.push(`**${returnsLabel}**：\`${escMd(mm.ret)}\`${mm.returns ? '——' + mm.returns : ''}`)
+    lines.push('')
+  }
+}
 
 // ★#490 返回形态判定（zh/EN 同源）：Promise<CapResult<T>> 数据型 / Promise<CapResult<句柄>> 句柄型 / 同步句柄
 //   旧版 directT 硬编码 ['AuthState','CompatStorage'] 漏掉 6 个同步句柄（TrackAPI/Logger/AppLifecycle/PageLifecycle/FSAdapter/KeyboardLifecycle）
@@ -973,6 +1133,7 @@ function genCapabilities(ir, ends) {
       lines.push('')
     }
     // 结构表（★#490 属性 + 方法双通道——句柄型接口的方法是结构本体；Contact[] 剥数组后缀按元素接口查）
+    // ★详细文档（2026-09-11）：概览表（方法|说明）+ 逐方法详解（h5：签名/参数/返回/说明）+ 类型引用表
     const renderMethods = (title, ti) => {
       lines.push(title)
       lines.push('')
@@ -980,6 +1141,15 @@ function genCapabilities(ir, ends) {
       lines.push('|---|---|---|')
       for (const mm of ti.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc ? mm.doc.replace(/^C\d+\s+/, '') : '—'} |`)
       lines.push('')
+      // 逐方法详解（小程序文档式颗粒度）
+      if (ti.methods.length) {
+        lines.push('#### 方法详解')
+        lines.push('')
+        renderMethodDetails(lines, ti.methods, { hLevel: '#####', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
+        // 引用的类型展开
+        const refs = collectRefTypes(ti.methods.map((m) => m.sig), ifaces)
+        renderTypeRefs(lines, refs, ifaces, { hLevel: '####', label: '类型引用', cols: ['属性/方法', '类型', '说明'] })
+      }
     }
     if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
       if (shape.dataIface.props.length) {
@@ -1097,6 +1267,11 @@ function genCapabilities(ir, ends) {
             lines.push('|---|---|---|')
             for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
             lines.push('')
+            lines.push('##### 方法详解')
+            lines.push('')
+            renderMethodDetails(lines, ehIface.methods, { hLevel: '######', paramCols: ['参数', '类型', '必填', '说明', '否', '是'], returnsLabel: '返回值', descLabel: '说明' })
+            const erefs = collectRefTypes(ehIface.methods.map((m) => m.sig), ifaces)
+            renderTypeRefs(lines, erefs, ifaces, { hLevel: '#####', label: '类型引用', cols: ['属性/方法', '类型', '说明'] })
           }
         }
       }
@@ -1406,6 +1581,52 @@ async function genCapabilitiesEn(ir, ends) {
         lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${esc(doc)} |`)
       }
       lines.push('')
+      // ★详细文档（2026-09-11）：逐方法详解（EN）+ 类型引用（与 zh 结构对称）
+      if (ti.methods.length) {
+        lines.push(CAP_SHARED_EN.methodsDetailTitle)
+        lines.push('')
+        for (const mm of ti.methods) {
+          const doc = (CAP_METHODS_EN[tiName] && CAP_METHODS_EN[tiName][mm.name]) || ''
+          lines.push(`##### \`${mm.name}\``)
+          lines.push('')
+          lines.push('```ts')
+          lines.push(mm.sig)
+          lines.push('```')
+          lines.push('')
+          if (doc) { lines.push(`**${CAP_SHARED_EN.descLabel}**: ${doc}`); lines.push('') }
+          const args = parseSigArgs(mm.args)
+          if (args.length) {
+            const pc = CAP_SHARED_EN.paramCols
+            lines.push(`| ${pc[0]} | ${pc[1]} | ${pc[2]} | ${pc[3]} |`)
+            lines.push('|---|---|---|---|')
+            for (const a of args) lines.push(`| \`${a.name}\` | \`${esc(a.type || '—')}\` | ${a.optional ? CAP_SHARED_EN.requiredNo : CAP_SHARED_EN.requiredYes} | ${(mm.paramDocs && mm.paramDocs[a.name]) || '—'} |`)
+            lines.push('')
+          }
+          lines.push(`**${CAP_SHARED_EN.returnsLabel}**: \`${esc(mm.ret)}\`${mm.returns ? ' -- ' + mm.returns : ''}`)
+          lines.push('')
+        }
+        const refs = collectRefTypes(ti.methods.map((m) => m.sig), ifaces)
+        if (refs.length) {
+          lines.push(CAP_SHARED_EN.typeRefsTitle)
+          lines.push('')
+          for (const n of refs) {
+            const rt = ifaces[n]
+            if (rt.doc) { lines.push(`**\`${n}\`** — ${rt.doc}`); lines.push('') }
+            if (rt.props.length) {
+              lines.push('| Prop/Method | Type | Doc |')
+              lines.push('|---|---|---|')
+              for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${esc(pr.type)}\` | ${pr.doc || '—'} |`)
+              lines.push('')
+            }
+            if (rt.methods.length) {
+              lines.push('| Prop/Method | Type | Doc |')
+              lines.push('|---|---|---|')
+              for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${esc(mm.sig)}\` | ${mm.doc || '—'} |`)
+              lines.push('')
+            }
+          }
+        }
+      }
     }
     if (!handleT && shape.dataIface && (shape.dataIface.props.length || shape.dataIface.methods.length)) {
       if (shape.dataIface.props.length) {
@@ -1525,6 +1746,47 @@ async function genCapabilitiesEn(ir, ends) {
             lines.push('|---|---|---|')
             for (const mm of ehIface.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
             lines.push('')
+            lines.push('##### Method details')
+            lines.push('')
+            for (const mm of ehIface.methods) {
+              lines.push(`###### \`${mm.name}\``)
+              lines.push('')
+              lines.push('```ts')
+              lines.push(mm.sig)
+              lines.push('```')
+              lines.push('')
+              if (mm.doc) { lines.push(`**Doc**: ${mm.doc}`); lines.push('') }
+              const args = parseSigArgs(mm.args)
+              if (args.length) {
+                lines.push('| Param | Type | Required | Doc |')
+                lines.push('|---|---|---|---|')
+                for (const a of args) lines.push(`| \`${a.name}\` | \`${escMd(a.type || '—')}\` | ${a.optional ? 'No' : 'Yes'} | ${(mm.paramDocs && mm.paramDocs[a.name]) || '—'} |`)
+                lines.push('')
+              }
+              lines.push(`**Returns**: \`${escMd(mm.ret)}\`${mm.returns ? ' -- ' + mm.returns : ''}`)
+              lines.push('')
+            }
+            const erefs = collectRefTypes(ehIface.methods.map((m) => m.sig), ifaces)
+            if (erefs.length) {
+              lines.push('##### Referenced types')
+              lines.push('')
+              for (const n of erefs) {
+                const rt = ifaces[n]
+                if (rt.doc) { lines.push(`**\`${n}\`** — ${rt.doc}`); lines.push('') }
+                if (rt.props.length) {
+                  lines.push('| Prop/Method | Type | Doc |')
+                  lines.push('|---|---|---|')
+                  for (const pr of rt.props) lines.push(`| \`${pr.name}\` | \`${escMd(pr.type)}\` | ${pr.doc || '—'} |`)
+                  lines.push('')
+                }
+                if (rt.methods.length) {
+                  lines.push('| Prop/Method | Type | Doc |')
+                  lines.push('|---|---|---|')
+                  for (const mm of rt.methods) lines.push(`| \`${mm.name}\` | \`${escMd(mm.sig)}\` | ${mm.doc || '—'} |`)
+                  lines.push('')
+                }
+              }
+            }
           }
         }
       }

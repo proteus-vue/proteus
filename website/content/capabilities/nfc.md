@@ -44,6 +44,102 @@ useNFC(): Promise<CapResult<NFCAPI>>
 | `onHCEStateChange` | `onHCEStateChange(cb: (available: boolean) => void): () => void` | 订阅 HCE 状态变化（返回取消） |
 | `getAdapter` | `getAdapter(): NfcAdapter` | ★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接 |
 
+#### 方法详解
+
+##### `startHCE`
+
+```ts
+startHCE(aidList: string[]): Promise<CapResult<void>>
+```
+
+**说明**：启动 HCE（模拟卡；aidList 应用标识）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `aidList` | `string[]` | 是 | 数组参数 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `stopHCE`
+
+```ts
+stopHCE(): Promise<CapResult<void>>
+```
+
+**说明**：停止 HCE
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `sendHCEMessage`
+
+```ts
+sendHCEMessage(data: ArrayBuffer): Promise<CapResult<void>>
+```
+
+**说明**：发送 APDU 响应（收到 onHCEMessage 后回）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `data` | `ArrayBuffer` | 是 | 数据 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `onHCEMessage`
+
+```ts
+onHCEMessage(cb: (message: { messageType: number; data?: ArrayBuffer }) => void): () => void
+```
+
+**说明**：订阅 HCE 消息（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(message: { messageType: number; data?: ArrayBuffer }) => void` | 否 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onHCEStateChange`
+
+```ts
+onHCEStateChange(cb: (available: boolean) => void): () => void
+```
+
+**说明**：订阅 HCE 状态变化（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `(available: boolean) => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `getAdapter`
+
+```ts
+getAdapter(): NfcAdapter
+```
+
+**说明**：★能力颗粒度对齐：读卡模式适配器（wx.getNFCAdapter）——发现标签 + 各技术类型连接
+
+**返回值**：`NfcAdapter`
+
+#### 类型引用
+
+**`NfcAdapter`** — ★能力颗粒度对齐：C37 NFC 读卡模式（wx.getNFCAdapter——发现标签 + Ndef/NfcA/B/F/V/IsoDep/Mifare 连接） 与 HCE（模拟卡）互补：HCE 让手机当卡，Adapter 让手机读卡。
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `startDiscovery` | `startDiscovery(): Promise<CapResult<void>>` | 开始发现附近标签 |
+| `stopDiscovery` | `stopDiscovery(): Promise<CapResult<void>>` | 停止发现 |
+| `onDiscovered` | `onDiscovered(cb: (tag: NfcTag) => void): () => void` | 订阅发现的标签（返回取消） |
+| `connectNdef` | `connectNdef(): Promise<CapResult<NdefHandle>>` | 连接 NDEF 标签（读写 NDEF 消息） |
+| `connectIsoDep` | `connectIsoDep(): Promise<CapResult<NfcTagHandle>>` | 连接 IsoDep 标签（ISO-DEP/APDU 透传） |
+| `connectNfcA` | `connectNfcA(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-A 标签 |
+| `connectNfcB` | `connectNfcB(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-B 标签 |
+| `connectNfcF` | `connectNfcF(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-F 标签（FeliCa） |
+| `connectNfcV` | `connectNfcV(): Promise<CapResult<NfcTagHandle>>` | 连接 NFC-V 标签 |
+| `connectMifareClassic` | `connectMifareClassic(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Classic 标签 |
+| `connectMifareUltralight` | `connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>` | 连接 Mifare Ultralight 标签 |
+
 ## 错误码
 
 | code | 说明 |

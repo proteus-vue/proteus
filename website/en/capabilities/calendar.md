@@ -18,7 +18,7 @@ useCalendar(event: CalendarEvent): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `event` | `CalendarEvent` | Yes | C20 calendar event (wx.addPhoneCalendar / web has no standard → degrades to undefined) |
 
@@ -86,6 +86,64 @@ useCalendarAPI(): CapResult<CalendarAPI>
 | `add` | `add(event: CalendarEvent): Promise<CapResult<void>>` | 添加日程（wx.addPhoneCalendar） |
 | `remove` | `remove(eventId: string): Promise<CapResult<void>>` | 删除日程（wx 需用户确认，按 eventId；支持有限） |
 | `list` | `list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>` | 查询日程（无开放 API → 诚实 Err） |
+
+##### Method details
+
+###### `add`
+
+```ts
+add(event: CalendarEvent): Promise<CapResult<void>>
+```
+
+**Doc**: 添加日程（wx.addPhoneCalendar）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `event` | `CalendarEvent` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+###### `remove`
+
+```ts
+remove(eventId: string): Promise<CapResult<void>>
+```
+
+**Doc**: 删除日程（wx 需用户确认，按 eventId；支持有限）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `eventId` | `string` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+###### `list`
+
+```ts
+list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
+```
+
+**Doc**: 查询日程（无开放 API → 诚实 Err）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `startTime` | `number` | No | — |
+| `endTime` | `number` | No | — |
+
+**Returns**: `Promise<CapResult<CalendarEvent[]>>`
+
+##### Referenced types
+
+**`CalendarEvent`** — C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `title` | `string` | 日历事件标题 |
+| `startTime` | `number` | 开始时间戳（ms） |
+| `endTime` | `number` | 结束时间戳（ms） |
+| `alarms` | `number[]` | 提前提醒（分钟） |
+| `location` | `string` | 地点 |
+| `description` | `string` | 备注/描述 |
 
 ## Usage
 

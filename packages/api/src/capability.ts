@@ -140,6 +140,7 @@ export interface SensorSample {
  *   on() 返回取消函数；stop() 停止底层监听；start() 可选（部分平台自动开始）
  */
 export interface SensorStream {
+  /** 传感器类型（回显创建时传入的 kind） */
   kind: SensorKind
   /** 开始监听（幂等） */
   start(): Promise<CapResult<void>>
@@ -280,6 +281,7 @@ export interface AnalyticsEvent {
 
 /** C34 TrackAPI（useAnalytics 句柄） */
 export interface TrackAPI {
+  /** 上报埋点事件 */
   track(name: string, params?: Record<string, unknown>): Promise<CapResult<void>>
 }
 
@@ -288,8 +290,11 @@ export type LogLevel = 'log' | 'info' | 'warn' | 'error'
 
 /** C35 Logger（useLog 句柄——console + 上报） */
 export interface Logger {
+  /** 普通日志 */
   log(message: string, data?: unknown): Promise<CapResult<void>>
+  /** 警告日志 */
   warn(message: string, data?: unknown): Promise<CapResult<void>>
+  /** 错误日志（可触发上报） */
   error(message: string, data?: unknown): Promise<CapResult<void>>
 }
 
@@ -338,18 +343,27 @@ export interface FileSystemBridge {
 
 /** 文件/目录信息（wx.Stats 子集） */
 export interface FileStat {
+  /** 文件大小（字节） */
   size: number
+  /** 权限位 */
   mode: number
+  /** 最后访问时间（ms 时间戳） */
   lastAccessedTime: number
+  /** 最后修改时间（ms 时间戳） */
   lastModifiedTime: number
+  /** 是否目录 */
   isDirectory: boolean
+  /** 是否文件 */
   isFile: boolean
 }
 
 /** 已保存文件信息（wx.SavedFileInfo 子集） */
 export interface SavedFileInfo {
+  /** 保存后的文件路径 */
   filePath: string
+  /** 文件大小（字节） */
   size: number
+  /** 保存时间（ms 时间戳） */
   createTime: number
 }
 
@@ -357,32 +371,111 @@ export interface SavedFileInfo {
 export interface FSAdapter {
   /** 能力可用性（内存降级也算可用；false = 完全不可用） */
   supported: boolean
+  /**
+   * 读取文本文件（UTF-8）。
+   * @param path 文件路径（本地路径 / USER_DATA_PATH）
+   */
   readFile(path: string): Promise<CapResult<string>>
+  /**
+   * 写入文件（覆盖；不存在则创建）。
+   * @param path 文件路径
+   * @param data 文本内容
+   */
   writeFile(path: string, data: string): Promise<CapResult<void>>
+  /**
+   * 追加写入（在文件尾部追加）。
+   * @param path 文件路径
+   * @param data 追加内容
+   */
   appendFile(path: string, data: string): Promise<CapResult<void>>
+  /**
+   * 复制文件。
+   * @param src 源路径
+   * @param dest 目标路径
+   */
   copyFile(src: string, dest: string): Promise<CapResult<void>>
+  /**
+   * 重命名 / 移动。
+   * @param oldPath 原路径
+   * @param newPath 新路径
+   */
   rename(oldPath: string, newPath: string): Promise<CapResult<void>>
+  /**
+   * 删除文件。
+   * @param path 文件路径
+   */
   remove(path: string): Promise<CapResult<void>>
+  /**
+   * 文件 / 目录是否存在。
+   * @param path 路径
+   */
   exists(path: string): Promise<CapResult<boolean>>
+  /**
+   * 获取文件 / 目录信息（大小 / 时间 / 类型）。
+   * @param path 路径
+   */
   stat(path: string): Promise<CapResult<FileStat>>
+  /**
+   * 创建目录。
+   * @param path 目录路径
+   * @param recursive 是否递归创建父目录（缺省 false）
+   */
   mkdir(path: string, recursive?: boolean): Promise<CapResult<void>>
+  /**
+   * 删除目录。
+   * @param path 目录路径
+   * @param recursive 是否递归删除（缺省 false）
+   */
   rmdir(path: string, recursive?: boolean): Promise<CapResult<void>>
+  /**
+   * 读取目录，返回条目名列表。
+   * @param path 目录路径
+   */
   readdir(path: string): Promise<CapResult<string[]>>
+  /**
+   * 获取文件摘要（大小 + 摘要值）。
+   * @param path 文件路径
+   * @param digestAlgorithm 摘要算法（缺省 md5）
+   */
   getFileInfo(path: string, digestAlgorithm?: string): Promise<CapResult<{ size: number; digest: string }>>
+  /**
+   * 保存临时文件到本地（返回持久路径）。
+   * @param tempPath 临时文件路径（如拍照/下载产出）
+   */
   saveFile(tempPath: string): Promise<CapResult<string>>
+  /** 已保存文件列表 */
   getSavedFileList(): Promise<CapResult<SavedFileInfo[]>>
+  /**
+   * 删除已保存文件。
+   * @param path 文件路径
+   */
   removeSavedFile(path: string): Promise<CapResult<void>>
+  /**
+   * 解压 zip。
+   * @param zipPath zip 文件路径
+   * @param targetPath 解压目标目录
+   */
   unzip(zipPath: string, targetPath: string): Promise<CapResult<void>>
   // Sync 变体（对齐官方；返回 CapResult 保持契约一致——同步失败返回 Err 而非抛）
+  /** 同步读文件（阻塞主线程——仅小文件/启动期用） */
   readFileSync(path: string): CapResult<string>
+  /** 同步写文件（阻塞主线程） */
   writeFileSync(path: string, data: string): CapResult<void>
+  /** 同步判断存在 */
   existsSync(path: string): CapResult<boolean>
+  /** 同步取文件信息 */
   statSync(path: string): CapResult<FileStat>
+  /** 同步读目录 */
   readdirSync(path: string): CapResult<string[]>
+  /** 同步创建目录 */
   mkdirSync(path: string, recursive?: boolean): CapResult<void>
+  /** 同步重命名 */
   renameSync(oldPath: string, newPath: string): CapResult<void>
+  /** 同步删除 */
   unlinkSync(path: string): CapResult<void>
+  /** 同步复制 */
   copyFileSync(src: string, dest: string): CapResult<void>
+  /** 同步追加 */
   appendFileSync(path: string, data: string): CapResult<void>
 }
 
@@ -419,8 +512,11 @@ export interface Contact {
 export interface AppLifecycle {
   /** 当前阶段：launch/show/hide */
   phase: 'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE'
+  /** 订阅「应用启动」（返回取消） */
   onLaunch(cb: () => void): () => void
+  /** 订阅「应用进入前台」（返回取消） */
   onShow(cb: () => void): () => void
+  /** 订阅「应用退到后台」（返回取消） */
   onHide(cb: () => void): () => void
 }
 
@@ -469,8 +565,11 @@ export interface CalendarAPI {
 export interface PageLifecycle {
   /** 页面当前阶段（LOAD 加载 / SHOW 显示 / HIDE 隐藏） */
   phase: 'IDLE' | 'LOAD' | 'SHOW' | 'HIDE'
+  /** 订阅「页面加载」（返回取消） */
   onLoad(cb: () => void): () => void
+  /** 订阅「页面显示」（返回取消） */
   onShow(cb: () => void): () => void
+  /** 订阅「页面隐藏」（返回取消） */
   onHide(cb: () => void): () => void
 }
 
@@ -486,9 +585,11 @@ export interface MediaAccess {
 
 /** 拍照结果（wx.takePhoto 子集） */
 export interface PhotoResult {
-  /** 临时文件路径 */
+  /** 照片临时文件路径 */
   tempImagePath?: string
+  /** 照片宽度（px） */
   width: number
+  /** 照片高度（px） */
   height: number
   /** web dataURL（blob: / data:） */
   dataUrl?: string
@@ -496,40 +597,80 @@ export interface PhotoResult {
 
 /** 录像结果（wx.stopRecord 子集） */
 export interface VideoResult {
+  /** 视频封面缩略图路径 */
   tempThumbPath?: string
+  /** 视频临时文件路径 */
   tempVideoPath?: string
+  /** 视频时长（ms） */
   duration: number
+  /** 视频大小（字节） */
   size: number
 }
 
 /** ★能力颗粒度对齐：C1 相机操作控制器（wx.createCameraContext(id) → 拍照/录像/缩放/帧回调） */
 export interface CameraController {
+  /**
+   * 拍照。
+   * @param quality 画质（high 高清 / normal 普通 / low 低清；缺省 normal）
+   * @returns 照片临时路径 + 宽高
+   */
   takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
+  /** 开始录像（与 stopRecord 配对；超时可用 WxCameraContextLike.timeoutCallback 回调，超出本控制器范围） */
   startRecord(): Promise<CapResult<void>>
+  /** 停止录像并返回视频临时路径 / 缩略图 / 时长 / 大小 */
   stopRecord(): Promise<CapResult<VideoResult>>
+  /**
+   * 设置缩放级别。
+   * @param zoom 缩放倍数（1 为原始）
+   */
   setZoom(zoom: number): Promise<CapResult<void>>
-  /** 订阅相机帧（返回取消函数；web 无对等 → 空订阅） */
+  /**
+   * 订阅相机实时帧。
+   * @param cb 每帧回调（data = RGBA 像素、width/height 帧尺寸）
+   * @returns 取消订阅函数（web 无对等 → 空订阅）
+   */
   onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void
 }
 
 /** 录音状态（wx RecorderManager onStart/onStop 等） */
 export interface RecordOptions {
+  /** 录音时长（ms；到时自动停止） */
   duration?: number
+  /** 采样率（Hz，如 44100） */
   sampleRate?: number
+  /** 声道数 */
   numberOfChannels?: number
+  /** 编码码率（bps） */
   encodeBitRate?: number
+  /** 音频格式 */
   format?: 'mp3' | 'aac' | 'wav' | 'PCM'
 }
 
 /** ★能力颗粒度对齐：C2 录音操作控制器（wx.getRecorderManager() → start/stop/pause/resume + 事件） */
 export interface RecorderController {
+  /**
+   * 开始录音。
+   * @param options 录音参数（时长/采样率/声道/码率/格式）
+   */
   start(options?: RecordOptions): Promise<CapResult<void>>
+  /** 停止录音（结果经 on('stop') 回调返回） */
   stop(): Promise<CapResult<void>>
+  /** 暂停录音（可从当前位置 resume） */
   pause(): Promise<CapResult<void>>
+  /** 恢复录音 */
   resume(): Promise<CapResult<void>>
-  /** 订阅录音事件（返回取消函数） */
+  /**
+   * 订阅录音生命周期事件。
+   * @param event 事件名（start / stop / pause / resume / error）
+   * @param cb 事件处理器（stop 携带录音结果）
+   * @returns 取消订阅函数
+   */
   on(event: 'start' | 'stop' | 'pause' | 'resume' | 'error', cb: (payload: unknown) => void): () => void
-  /** 订阅录音帧（时长/大小） */
+  /**
+   * 订阅录音帧（录 per-frame 数据，用于实时波形/编码）。
+   * @param cb 帧回调（frameBuffer 帧数据、isLastFrame 是否末帧）
+   * @returns 取消订阅函数
+   */
   onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
 }
 
@@ -545,7 +686,9 @@ export interface BluetoothInfo {
 
 /** BLE 设备（wx.BluetoothDevice 子集） */
 export interface BleDevice {
+  /** 设备唯一 id */
   deviceId: string
+  /** 设备名称 */
   name: string
   /** 信号强度（发现/连接后可得） */
   RSSI?: number
@@ -553,13 +696,17 @@ export interface BleDevice {
 
 /** BLE 服务（wx.BLEService 子集） */
 export interface BleService {
+  /** 服务 uuid */
   uuid: string
+  /** 是否主服务 */
   isPrimary: boolean
 }
 
 /** BLE 特征值（wx.BLECharacteristic 子集） */
 export interface BleCharacteristic {
+  /** 特征值 uuid */
   uuid: string
+  /** 支持的操作（read/write/notify/indicate） */
   properties: { read: boolean; write: boolean; notify: boolean; indicate: boolean }
 }
 
@@ -569,39 +716,87 @@ export interface BleCharacteristic {
  *   方法统一返回 Promise<CapResult<T>>（G-32.4）；订阅类返回取消函数；不支持 → web/缺桥 Err。
  */
 export interface BluetoothAPI extends BluetoothInfo {
-  /** 关闭适配器（释放资源） */
+  /** 关闭蓝牙适配器（释放系统资源；后续操作需重新 openBluetoothAdapter） */
   close(): Promise<CapResult<void>>
-  /** 适配器状态（available + discovering） */
+  /** 获取适配器状态（available 是否可用 / discovering 是否在搜索） */
   getAdapterState(): Promise<CapResult<{ available: boolean; discovering: boolean }>>
-  /** 开始搜索附近设备 */
+  /**
+   * 开始搜索附近 BLE 设备。
+   * @param allowDuplicatesKey 是否允许重复上报同一设备（缺省 false）
+   */
   startDiscovery(allowDuplicatesKey?: boolean): Promise<CapResult<void>>
-  /** 停止搜索 */
+  /** 停止搜索附近设备 */
   stopDiscovery(): Promise<CapResult<void>>
-  /** 订阅「发现新设备」（返回取消订阅） */
+  /**
+   * 订阅「发现新设备」事件。
+   * @param cb 回调（devices 本次新发现设备列表）
+   * @returns 取消订阅函数
+   */
   onDeviceFound(cb: (devices: BleDevice[]) => void): () => void
-  /** 已发现设备列表 */
+  /** 获取已发现设备列表 */
   getDevices(): Promise<CapResult<BleDevice[]>>
-  /** 已连接设备列表 */
+  /** 获取已连接设备列表 */
   getConnectedDevices(): Promise<CapResult<BleDevice[]>>
-  /** 连接设备 */
+  /**
+   * 连接指定设备。
+   * @param deviceId 设备 id（来自发现结果）
+   */
   connect(deviceId: string): Promise<CapResult<void>>
-  /** 断开设备 */
+  /**
+   * 断开指定设备。
+   * @param deviceId 设备 id
+   */
   disconnect(deviceId: string): Promise<CapResult<void>>
-  /** 订阅「连接状态变化」（返回取消订阅） */
+  /**
+   * 订阅「连接状态变化」事件。
+   * @param cb 回调（deviceId / connected）
+   * @returns 取消订阅函数
+   */
   onConnectionStateChange(cb: (deviceId: string, connected: boolean) => void): () => void
-  /** 获取设备服务列表 */
+  /**
+   * 获取设备的服务（Service）列表。
+   * @param deviceId 设备 id（需先连接）
+   */
   getServices(deviceId: string): Promise<CapResult<BleService[]>>
-  /** 获取服务的特征值列表 */
+  /**
+   * 获取服务下的特征值（Characteristic）列表。
+   * @param deviceId 设备 id
+   * @param serviceId 服务 uuid
+   */
   getCharacteristics(deviceId: string, serviceId: string): Promise<CapResult<BleCharacteristic[]>>
-  /** 读特征值 */
+  /**
+   * 读特征值。
+   * @param deviceId 设备 id
+   * @param serviceId 服务 uuid
+   * @param characteristicId 特征值 uuid（须支持 read）
+   */
   read(deviceId: string, serviceId: string, characteristicId: string): Promise<CapResult<ArrayBuffer>>
-  /** 写特征值 */
+  /**
+   * 写特征值。
+   * @param deviceId 设备 id
+   * @param serviceId 服务 uuid
+   * @param characteristicId 特征值 uuid（须支持 write）
+   * @param value 待写入字节（≤ 20 字节，长包需分包）
+   */
   write(deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer): Promise<CapResult<void>>
-  /** 订阅/取消订阅特征值通知 */
+  /**
+   * 订阅 / 取消订阅特征值通知。
+   * @param deviceId 设备 id
+   * @param serviceId 服务 uuid
+   * @param characteristicId 特征值 uuid（须支持 notify/indicate）
+   * @param state true 订阅 / false 取消
+   */
   setNotify(deviceId: string, serviceId: string, characteristicId: string, state: boolean): Promise<CapResult<void>>
-  /** 订阅「特征值变化」（返回取消订阅） */
+  /**
+   * 订阅「特征值变化」通知数据。
+   * @param cb 回调（deviceId / serviceId / characteristicId / value）
+   * @returns 取消订阅函数
+   */
   onCharacteristicValueChange(cb: (deviceId: string, serviceId: string, characteristicId: string, value: ArrayBuffer) => void): () => void
-  /** 读取信号强度 */
+  /**
+   * 读取设备信号强度（RSSI）。
+   * @param deviceId 设备 id（需先连接）
+   */
   getRSSI(deviceId: string): Promise<CapResult<number>>
 }
 
@@ -665,14 +860,21 @@ export interface NfcAdapter {
   stopDiscovery(): Promise<CapResult<void>>
   /** 订阅发现的标签（返回取消） */
   onDiscovered(cb: (tag: NfcTag) => void): () => void
-  /** 按技术类型取句柄并连接（tag.techs 含对应类型才可用） */
+  /** 连接 NDEF 标签（读写 NDEF 消息） */
   connectNdef(): Promise<CapResult<NdefHandle>>
+  /** 连接 IsoDep 标签（ISO-DEP/APDU 透传） */
   connectIsoDep(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 NFC-A 标签 */
   connectNfcA(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 NFC-B 标签 */
   connectNfcB(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 NFC-F 标签（FeliCa） */
   connectNfcF(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 NFC-V 标签 */
   connectNfcV(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 Mifare Classic 标签 */
   connectMifareClassic(): Promise<CapResult<NfcTagHandle>>
+  /** 连接 Mifare Ultralight 标签 */
   connectMifareUltralight(): Promise<CapResult<NfcTagHandle>>
 }
 
@@ -688,6 +890,7 @@ export interface KeyboardInfo {
 export interface KeyboardLifecycle {
   /** 当前键盘状态（高度/可见性快照） */
   info: KeyboardInfo
+  /** 订阅键盘高度变化（返回取消） */
   onChange(cb: (info: KeyboardInfo) => void): () => void
 }
 
@@ -745,69 +948,210 @@ export interface MapContextBridge {
 /** C4 useMap 句柄（控制器方法返回 Result<T>——G-32.4） */
 /** 地图标记（wx.Marker 子集） */
 export interface MapMarker {
+  /** 标记唯一 id（增删改按 id） */
   id: number
+  /** 纬度 */
   latitude: number
+  /** 经度 */
   longitude: number
+  /** 标题（点按显示） */
   title?: string
+  /** 图标路径 */
   iconPath?: string
+  /** 图标宽（px） */
   width?: number
+  /** 图标高（px） */
   height?: number
+  /** 气泡配置 */
   callout?: Record<string, unknown>
 }
 /** 地图覆盖物/折线/圆（简化） */
-export interface MapPolyline { points: Array<{ latitude: number; longitude: number }>; color?: string; width?: number }
-export interface MapCircle { latitude: number; longitude: number; radius: number; color?: string; fillColor?: string }
+/** 折线 */
+export interface MapPolyline {
+  /** 顶点序列 */
+  points: Array<{ latitude: number; longitude: number }>
+  /** 线颜色 */
+  color?: string
+  /** 线宽（px） */
+  width?: number
+}
+/** 圆 */
+export interface MapCircle {
+  /** 圆心纬度 */
+  latitude: number
+  /** 圆心经度 */
+  longitude: number
+  /** 半径（m） */
+  radius: number
+  /** 描边色 */
+  color?: string
+  /** 填充色 */
+  fillColor?: string
+}
 
 /**
  * ★能力颗粒度对齐：C4 地图控制器（原 2 方法 → 覆盖物/视野/坐标转换/移动标记全套）
  *   方法统一 Promise<CapResult<T>>；上层组件 <map> 通过 id 取控制器。
  */
 export interface MapController {
+  /** 获取当前地图视野（中心经纬 + 缩放级别） */
   getRegion(): Promise<CapResult<MapRegion>>
+  /**
+   * 平移地图中心到指定经纬。
+   * @param latitude 纬度
+   * @param longitude 经度
+   * @param scale 缩放级别（1-20；缺省不变）
+   */
   moveTo(latitude: number, longitude: number, scale?: number): Promise<CapResult<void>>
   /** 移动到当前定位点 */
   moveToLocation(): Promise<CapResult<void>>
-  /** 缩放视野以包含所有点 */
+  /**
+   * 缩放视野以包含所有给定点。
+   * @param points 经纬点列表
+   * @param padding 边距（[上, 右, 下, 左]，px）
+   */
   includePoints(points: Array<{ latitude: number; longitude: number }>, padding?: number[]): Promise<CapResult<void>>
-  /** 平移（相对当前中心，单位 px 或度数） */
+  /**
+   * 平移指定标记到目标点（带旋转/时长）。
+   * @param opt markerId 标记 id、destination 目标经纬、rotate 旋转角、duration 动画时长(ms)
+   */
   translateMarker(opt: { markerId: number; destination: { latitude: number; longitude: number }; rotate?: number; duration?: number }): Promise<CapResult<void>>
-  /** 添加/移除标记 */
+  /**
+   * 添加标记。
+   * @param markers 标记列表（id 唯一）
+   */
   addMarkers(markers: MapMarker[]): Promise<CapResult<void>>
+  /**
+   * 移除标记。
+   * @param ids 标记 id 列表
+   */
   removeMarkers(ids: number[]): Promise<CapResult<void>>
-  /** 折线 / 圆 */
+  /**
+   * 添加折线。
+   * @param polylines 折线列表（点序列 + 颜色/宽度）
+   */
   addPolylines(polylines: MapPolyline[]): Promise<CapResult<void>>
+  /**
+   * 移除折线。
+   * @param ids 折线 id 列表
+   */
   removePolylines(ids: number[]): Promise<CapResult<void>>
+  /**
+   * 添加圆。
+   * @param circles 圆列表（中心 + 半径 + 颜色）
+   */
   addCircles(circles: MapCircle[]): Promise<CapResult<void>>
+  /**
+   * 移除圆。
+   * @param ids 圆 id 列表
+   */
   removeCircles(ids: number[]): Promise<CapResult<void>>
-  /** 获取缩放级别 / 旋转角 */
+  /** 获取当前缩放级别 */
   getScale(): Promise<CapResult<number>>
-  /** 打开地图 App（导航，宿主放行才可用） */
+  /**
+   * 打开第三方地图 App 导航（宿主放行才可用）。
+   * @param opt latitude/longitude 目标、name 地点名
+   */
   openMapApp(opt: { latitude: number; longitude: number; name?: string }): Promise<CapResult<void>>
-  /** 订阅地图事件（regionchange/updated 等；返回取消） */
+  /**
+   * 订阅地图事件。
+   * @param event 事件名（regionchange 视野变化 / markerTap 标记点击 / updated 更新完成）
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
   on(event: 'regionchange' | 'markerTap' | 'updated', cb: (payload: unknown) => void): () => void
-  // —— 查询类（对齐官方 MapContext 剩余方法）——
+  /** 获取地图中心经纬 */
   getCenterLocation(): Promise<CapResult<{ latitude: number; longitude: number }>>
+  /** 获取地图旋转角（度） */
   getRotate(): Promise<CapResult<number>>
+  /** 获取地图倾斜角（度） */
   getSkew(): Promise<CapResult<number>>
-  /** 坐标转换：屏幕 ↔ 经纬 */
+  /**
+   * 屏幕坐标 → 经纬度。
+   * @param x 屏幕 x
+   * @param y 屏幕 y
+   */
   fromScreenLocation(x: number, y: number): Promise<CapResult<{ latitude: number; longitude: number }>>
+  /**
+   * 经纬度 → 屏幕坐标。
+   * @param latitude 纬度
+   * @param longitude 经度
+   */
   toScreenLocation(latitude: number, longitude: number): Promise<CapResult<{ x: number; y: number }>>
-  // —— 视野/边界 ——
+  /**
+   * 设置地图中心偏移（把中心点从容器中心移开，露出标记）。
+   * @param offset x/y 偏移量（px）
+   */
   setCenterOffset(offset: { x: number; y: number }): Promise<CapResult<void>>
+  /**
+   * 限制地图可拖动范围到给定边界多边形。
+   * @param boundaries 边界多边形顶点
+   */
   setBoundary(boundaries: Array<{ latitude: number; longitude: number }>): Promise<CapResult<void>>
+  /**
+   * 沿路径平滑移动（轨迹回放）。
+   * @param opt path 路径点、duration 总时长(ms)、autoRotate 是否自动转向
+   */
   moveAlong(opt: { path: Array<{ latitude: number; longitude: number }>; duration?: number; autoRotate?: boolean }): Promise<CapResult<void>>
-  // —— 覆盖物：弧线 / 地面 / 自定义 / 可视化图层 ——
+  /**
+   * 添加弧线。
+   * @param arc id / start 起点 / end 终点 / color / width
+   */
   addArc(arc: { id: number; start: { latitude: number; longitude: number }; end: { latitude: number; longitude: number }; color?: string; width?: number }): Promise<CapResult<void>>
+  /**
+   * 删除折线（清空指定 id）。
+   * @param ids 折线 id 列表
+   */
   eraseLines(ids: number[]): Promise<CapResult<void>>
+  /**
+   * 开启/关闭点聚合。
+   * @param enable 是否启用
+   */
   initMarkerCluster(enable: boolean): Promise<CapResult<void>>
+  /**
+   * 设置定位点图标。
+   * @param iconPath 图标路径
+   */
   setLocMarkerIcon(iconPath: string): Promise<CapResult<void>>
+  /**
+   * 添加自定义图层（Canvas 绘制覆盖物）。
+   * @param layer 图层配置（id + 绘制器）
+   */
   addCustomLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
+  /**
+   * 移除自定义图层。
+   * @param layerId 图层 id
+   */
   removeCustomLayer(layerId: string): Promise<CapResult<void>>
+  /**
+   * 添加可视化图层（GeoJSON → 样式）。
+   * @param layer 图层配置（id + GeoJSON + 样式）
+   */
   addVisualLayer(layer: Record<string, unknown>): Promise<CapResult<void>>
+  /**
+   * 移除可视化图层。
+   * @param layerId 图层 id
+   */
   removeVisualLayer(layerId: string): Promise<CapResult<void>>
+  /**
+   * 执行可视化图层指令（增删改要素）。
+   * @param command 指令对象（layerId + command + 参数）
+   */
   executeVisualLayerCommand(command: Record<string, unknown>): Promise<CapResult<string>>
+  /**
+   * 添加地面覆盖物（图片贴地）。
+   * @param overlay 覆盖物配置（id + 图片 + 边界）
+   */
   addGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
+  /**
+   * 更新地面覆盖物。
+   * @param overlay 覆盖物配置（含 id）
+   */
   updateGroundOverlay(overlay: Record<string, unknown>): Promise<CapResult<void>>
+  /**
+   * 移除地面覆盖物。
+   * @param overlayId 覆盖物 id
+   */
   removeGroundOverlay(overlayId: string): Promise<CapResult<void>>
 }
 
@@ -825,6 +1169,7 @@ export interface BackgroundEvent {
  *   各订阅返回取消函数；未实现的事件 → 返回 no-op 取消（诚实边界）。
  */
 export interface BackgroundAPI {
+  /** 订阅前后台切换（返回取消） */
   onEvent(cb: (e: BackgroundEvent) => void): () => void
   /** 内存警告（wx.onMemoryWarning） */
   onMemoryWarning(cb: (level: number) => void): () => void
@@ -854,9 +1199,13 @@ export interface SocketTaskBridge {
 
 /** C28 useSocketTask 句柄（Hook 层——方法包 CapResult，G-32.4） */
 export interface SocketTaskHandle {
+  /** 发送文本消息 */
   send(data: string): Promise<CapResult<void>>
+  /** 关闭连接（code/reason 透传给对端） */
   close(code?: number, reason?: string): Promise<CapResult<void>>
+  /** 订阅收到消息（返回取消） */
   onMessage(cb: (data: string) => void): () => void
+  /** 连接是否已建立 */
   isConnected(): boolean
 }
 
@@ -872,15 +1221,21 @@ export interface DataChannelBridge {
 }
 
 export interface DataChannelHandle {
+  /** 发送文本消息 */
   send(data: string): Promise<CapResult<void>>
+  /** 订阅收到消息（返回取消） */
   onMessage(cb: (data: string) => void): () => void
 }
 
 /** C32 Cookie 罐（web document.cookie / wx storage 兜底） */
 export interface CookieJar {
+  /** 读取 cookie */
   get(name: string): string | undefined
+  /** 写入 cookie（maxAge 秒；缺省会话级） */
   set(name: string, value: string, maxAge?: number): void
+  /** 删除 cookie */
   remove(name: string): void
+  /** 列出全部 cookie */
   list(): Record<string, string>
 }
 
@@ -905,6 +1260,7 @@ export interface MiniProgramNavOptions {
 }
 
 export interface MiniProgramAPI {
+  /** 跳转到其他小程序 */
   navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
 }
 
@@ -949,15 +1305,21 @@ export interface LiveRoomBridge {
  *   注：live-player 组件需在页面声明 + 直播类目资质；Web 无对等 → Err。
  */
 export interface LiveRoomHandle {
+  /** 开始播放 */
   play(): Promise<CapResult<void>>
+  /** 暂停播放 */
   pause(): Promise<CapResult<void>>
+  /** 从暂停处恢复播放 */
   resume(): Promise<CapResult<void>>
+  /** 停止播放 */
   stop(): Promise<CapResult<void>>
   /** 静音切换（同步，无 Promise） */
   mute(): void
   /** 截图（返回临时文件路径） */
   snapshot(): Promise<CapResult<string>>
+  /** 请求全屏（direction 0 竖屏 / 90 横屏；缺省不变） */
   requestFullScreen(direction?: number): Promise<CapResult<void>>
+  /** 退出全屏 */
   exitFullScreen(): Promise<CapResult<void>>
   /** 当前播放状态 */
   status(): LivePlayState
@@ -1097,14 +1459,22 @@ export interface CapabilityBridge {
 
 /** 存储契约（useStorage / reactive storage 底座） */
 export interface CompatStorage {
+  /** 同步读取（缺省 undefined） */
   get<T = unknown>(key: string): T | undefined
+  /** 同步写入 */
   set(key: string, value: unknown): void
+  /** 同步删除 */
   remove(key: string): void
+  /** 同步清空 */
   clear(): void
   // ★能力颗粒度对齐：异步 API（对齐官方 setStorage/getStorage；大值不阻塞主线程）
+  /** 异步写入（大值不阻塞主线程） */
   setAsync(key: string, value: unknown): Promise<CapResult<void>>
+  /** 异步读取 */
   getAsync<T = unknown>(key: string): Promise<CapResult<T | undefined>>
+  /** 异步删除 */
   removeAsync(key: string): Promise<CapResult<void>>
+  /** 异步清空 */
   clearAsync(): Promise<CapResult<void>>
   /** 存储信息（keys / 已用 / 上限） */
   info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>

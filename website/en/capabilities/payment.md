@@ -18,7 +18,7 @@ usePayment(config: PaymentConfig): Promise<CapResult<PaymentReceipt>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `config` | `PaymentConfig` | Yes | C40 payment parameters (aligned with wx.requestPayment core fields — issued by the server after the order is placed) |
 

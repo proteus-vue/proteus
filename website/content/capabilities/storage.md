@@ -24,15 +24,133 @@ useStorage(): CompatStorage
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `set` | `set(key: string, value: unknown): void` | — |
-| `remove` | `remove(key: string): void` | — |
-| `clear` | `clear(): void` | — |
-| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | — |
-| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | — |
-| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | — |
+| `set` | `set(key: string, value: unknown): void` | 同步写入 |
+| `remove` | `remove(key: string): void` | 同步删除 |
+| `clear` | `clear(): void` | 同步清空 |
+| `setAsync` | `setAsync(key: string, value: unknown): Promise<CapResult<void>>` | 异步写入（大值不阻塞主线程） |
+| `removeAsync` | `removeAsync(key: string): Promise<CapResult<void>>` | 异步删除 |
+| `clearAsync` | `clearAsync(): Promise<CapResult<void>>` | 异步清空 |
 | `info` | `info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>` | 存储信息（keys / 已用 / 上限） |
 | `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | 批量读 |
 | `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | 批量写 |
+
+#### 方法详解
+
+##### `set`
+
+```ts
+set(key: string, value: unknown): void
+```
+
+**说明**：同步写入
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `key` | `string` | 是 | 键名 |
+| `value` | `unknown` | 是 | 值 |
+
+**返回值**：`void`
+
+##### `remove`
+
+```ts
+remove(key: string): void
+```
+
+**说明**：同步删除
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `key` | `string` | 是 | 键名 |
+
+**返回值**：`void`
+
+##### `clear`
+
+```ts
+clear(): void
+```
+
+**说明**：同步清空
+
+**返回值**：`void`
+
+##### `setAsync`
+
+```ts
+setAsync(key: string, value: unknown): Promise<CapResult<void>>
+```
+
+**说明**：异步写入（大值不阻塞主线程）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `key` | `string` | 是 | 键名 |
+| `value` | `unknown` | 是 | 值 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `removeAsync`
+
+```ts
+removeAsync(key: string): Promise<CapResult<void>>
+```
+
+**说明**：异步删除
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `key` | `string` | 是 | 键名 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `clearAsync`
+
+```ts
+clearAsync(): Promise<CapResult<void>>
+```
+
+**说明**：异步清空
+
+**返回值**：`Promise<CapResult<void>>`
+
+##### `info`
+
+```ts
+info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>
+```
+
+**说明**：存储信息（keys / 已用 / 上限）
+
+**返回值**：`Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>`
+
+##### `batchGet`
+
+```ts
+batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>
+```
+
+**说明**：批量读
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `keys` | `string[]` | 是 | 数组参数 |
+
+**返回值**：`Promise<CapResult<Array<{ key: string; value: unknown }>>>`
+
+##### `batchSet`
+
+```ts
+batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>
+```
+
+**说明**：批量写
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kvList` | `Array<{ key: string; value: unknown }>` | 是 | 键值对列表 |
+
+**返回值**：`Promise<CapResult<void>>`
 
 ## 错误码
 

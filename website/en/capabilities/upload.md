@@ -18,7 +18,7 @@ useUpload(options: UploadOptions, onProgress?: ProgressCallback): Promise<CapRes
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `options` | `UploadOptions` | Yes | C29 upload options (wx.uploadFile / web fetch FormData) |
 | `onProgress` | `ProgressCallback` | No | Progress callback (0-100; optional) |

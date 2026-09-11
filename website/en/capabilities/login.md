@@ -18,7 +18,7 @@ useLogin(provider?: string): Promise<CapResult<LoginResult>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `provider` | `string` | No | Service provider identifier (wechat / web / host-defined) |
 

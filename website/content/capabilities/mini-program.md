@@ -30,7 +30,33 @@ useMiniProgram(): Promise<CapResult<MiniProgramAPI>>
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | — |
+| `navigate` | `navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>` | 跳转到其他小程序 |
+
+#### 方法详解
+
+##### `navigate`
+
+```ts
+navigate(options: MiniProgramNavOptions): Promise<CapResult<void>>
+```
+
+**说明**：跳转到其他小程序
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `MiniProgramNavOptions` | 是 | 配置选项对象 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+#### 类型引用
+
+**`MiniProgramNavOptions`** — C47 小程序跳转（wx.navigateToMiniProgram）
+
+| 属性/方法 | 类型 | 说明 |
+|---|---|---|
+| `appId` | `string` | 目标小程序 appId |
+| `path` | `string` | 目标页路径（缺省首页） |
+| `extraData` | `Record<string, unknown>` | 传递给目标小程序的数据（target app onLoad options.extraData） |
 
 ## 错误码
 

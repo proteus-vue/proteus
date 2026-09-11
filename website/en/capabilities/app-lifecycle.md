@@ -34,6 +34,44 @@ Returns `AppLifecycle` (synchronous handle/state object).
 | `onShow` | `onShow(cb: () => void): () => void` | — |
 | `onHide` | `onHide(cb: () => void): () => void` | — |
 
+#### Method details
+
+##### `onLaunch`
+
+```ts
+onLaunch(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onShow`
+
+```ts
+onShow(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
+##### `onHide`
+
+```ts
+onHide(cb: () => void): () => void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `() => void` | Yes | — |
+
+**Returns**: `() => void`
+
 ## Error codes
 
 | code | Doc |

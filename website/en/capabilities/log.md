@@ -28,6 +28,47 @@ Returns `Logger` (synchronous handle/state object).
 | `warn` | `warn(message: string, data?: unknown): Promise<CapResult<void>>` | — |
 | `error` | `error(message: string, data?: unknown): Promise<CapResult<void>>` | — |
 
+#### Method details
+
+##### `log`
+
+```ts
+log(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `message` | `string` | Yes | — |
+| `data` | `unknown` | No | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `warn`
+
+```ts
+warn(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `message` | `string` | Yes | — |
+| `data` | `unknown` | No | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `error`
+
+```ts
+error(message: string, data?: unknown): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `message` | `string` | Yes | — |
+| `data` | `unknown` | No | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
 ## Error codes
 
 | code | Doc |

@@ -30,9 +30,53 @@ usePageLifecycle(): PageLifecycle
 
 | 方法 | 签名 | 说明 |
 |---|---|---|
-| `onLoad` | `onLoad(cb: () => void): () => void` | — |
-| `onShow` | `onShow(cb: () => void): () => void` | — |
-| `onHide` | `onHide(cb: () => void): () => void` | — |
+| `onLoad` | `onLoad(cb: () => void): () => void` | 订阅「页面加载」（返回取消） |
+| `onShow` | `onShow(cb: () => void): () => void` | 订阅「页面显示」（返回取消） |
+| `onHide` | `onHide(cb: () => void): () => void` | 订阅「页面隐藏」（返回取消） |
+
+#### 方法详解
+
+##### `onLoad`
+
+```ts
+onLoad(cb: () => void): () => void
+```
+
+**说明**：订阅「页面加载」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onShow`
+
+```ts
+onShow(cb: () => void): () => void
+```
+
+**说明**：订阅「页面显示」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
+
+##### `onHide`
+
+```ts
+onHide(cb: () => void): () => void
+```
+
+**说明**：订阅「页面隐藏」（返回取消）
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `cb` | `() => void` | 是 | 事件 / 结果回调函数 |
+
+**返回值**：`() => void`
 
 ## 错误码
 

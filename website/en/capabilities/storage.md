@@ -34,6 +34,106 @@ Returns `CompatStorage` (synchronous handle/state object).
 | `batchGet` | `batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>` | — |
 | `batchSet` | `batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>` | — |
 
+#### Method details
+
+##### `set`
+
+```ts
+set(key: string, value: unknown): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `key` | `string` | Yes | — |
+| `value` | `unknown` | Yes | — |
+
+**Returns**: `void`
+
+##### `remove`
+
+```ts
+remove(key: string): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `key` | `string` | Yes | — |
+
+**Returns**: `void`
+
+##### `clear`
+
+```ts
+clear(): void
+```
+
+**Returns**: `void`
+
+##### `setAsync`
+
+```ts
+setAsync(key: string, value: unknown): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `key` | `string` | Yes | — |
+| `value` | `unknown` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `removeAsync`
+
+```ts
+removeAsync(key: string): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `key` | `string` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `clearAsync`
+
+```ts
+clearAsync(): Promise<CapResult<void>>
+```
+
+**Returns**: `Promise<CapResult<void>>`
+
+##### `info`
+
+```ts
+info(): Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>
+```
+
+**Returns**: `Promise<CapResult<{ keys: string[]; currentSize: number; limitSize: number }>>`
+
+##### `batchGet`
+
+```ts
+batchGet(keys: string[]): Promise<CapResult<Array<{ key: string; value: unknown }>>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `keys` | `string[]` | Yes | — |
+
+**Returns**: `Promise<CapResult<Array<{ key: string; value: unknown }>>>`
+
+##### `batchSet`
+
+```ts
+batchSet(kvList: Array<{ key: string; value: unknown }>): Promise<CapResult<void>>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `kvList` | `Array<{ key: string; value: unknown }>` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
 ## Error codes
 
 | code | Doc |

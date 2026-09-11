@@ -18,7 +18,7 @@ usePhoneCall(phoneNumber: string): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `phoneNumber` | `string` | Yes | Phone number |
 

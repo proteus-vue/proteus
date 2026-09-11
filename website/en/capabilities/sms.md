@@ -18,7 +18,7 @@ useSMS(phone: string, message: string): Promise<CapResult<void>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `phone` | `string` | Yes | Recipient's phone number |
 | `message` | `string` | Yes | Message content text |

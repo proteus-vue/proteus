@@ -73,11 +73,95 @@ useCameraContext(id: string): CapResult<CameraController>
 
 | Method | Signature | Doc |
 |---|---|---|
-| `takePhoto` | `takePhoto(quality?: 'high' \| 'normal' \| 'low'): Promise<CapResult<PhotoResult>>` | — |
-| `startRecord` | `startRecord(): Promise<CapResult<void>>` | — |
-| `stopRecord` | `stopRecord(): Promise<CapResult<VideoResult>>` | — |
-| `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | — |
-| `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机帧（返回取消函数；web 无对等 → 空订阅） |
+| `takePhoto` | `takePhoto(quality?: 'high' \| 'normal' \| 'low'): Promise<CapResult<PhotoResult>>` | 拍照。 |
+| `startRecord` | `startRecord(): Promise<CapResult<void>>` | 开始录像（与 stopRecord 配对；超时可用 WxCameraContextLike.timeoutCallback 回调，超出本控制器范围） |
+| `stopRecord` | `stopRecord(): Promise<CapResult<VideoResult>>` | 停止录像并返回视频临时路径 / 缩略图 / 时长 / 大小 |
+| `setZoom` | `setZoom(zoom: number): Promise<CapResult<void>>` | 设置缩放级别。 |
+| `onCameraFrame` | `onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void` | 订阅相机实时帧。 |
+
+##### Method details
+
+###### `takePhoto`
+
+```ts
+takePhoto(quality?: 'high' | 'normal' | 'low'): Promise<CapResult<PhotoResult>>
+```
+
+**Doc**: 拍照。
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `quality` | `'high' \| 'normal' \| 'low'` | No | 画质（high 高清 / normal 普通 / low 低清；缺省 normal） |
+
+**Returns**: `Promise<CapResult<PhotoResult>>` -- 照片临时路径 + 宽高
+
+###### `startRecord`
+
+```ts
+startRecord(): Promise<CapResult<void>>
+```
+
+**Doc**: 开始录像（与 stopRecord 配对；超时可用 WxCameraContextLike.timeoutCallback 回调，超出本控制器范围）
+
+**Returns**: `Promise<CapResult<void>>`
+
+###### `stopRecord`
+
+```ts
+stopRecord(): Promise<CapResult<VideoResult>>
+```
+
+**Doc**: 停止录像并返回视频临时路径 / 缩略图 / 时长 / 大小
+
+**Returns**: `Promise<CapResult<VideoResult>>`
+
+###### `setZoom`
+
+```ts
+setZoom(zoom: number): Promise<CapResult<void>>
+```
+
+**Doc**: 设置缩放级别。
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `zoom` | `number` | Yes | 缩放倍数（1 为原始） |
+
+**Returns**: `Promise<CapResult<void>>`
+
+###### `onCameraFrame`
+
+```ts
+onCameraFrame(cb: (data: { data: ArrayBuffer; width: number; height: number }) => void): () => void
+```
+
+**Doc**: 订阅相机实时帧。
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(data: { data: ArrayBuffer; width: number; height: number }) => void` | Yes | 每帧回调（data = RGBA 像素、width/height 帧尺寸） |
+
+**Returns**: `() => void` -- 取消订阅函数（web 无对等 → 空订阅）
+
+##### Referenced types
+
+**`PhotoResult`** — 拍照结果（wx.takePhoto 子集）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `tempImagePath` | `string` | 照片临时文件路径 |
+| `width` | `number` | 照片宽度（px） |
+| `height` | `number` | 照片高度（px） |
+| `dataUrl` | `string` | web dataURL（blob: / data:） |
+
+**`VideoResult`** — 录像结果（wx.stopRecord 子集）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `tempThumbPath` | `string` | 视频封面缩略图路径 |
+| `tempVideoPath` | `string` | 视频临时文件路径 |
+| `duration` | `number` | 视频时长（ms） |
+| `size` | `number` | 视频大小（字节） |
 
 ## Usage
 

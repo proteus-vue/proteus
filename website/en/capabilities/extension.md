@@ -18,7 +18,7 @@ useExtension(extensionId: string): Promise<CapResult<unknown>>
 
 ## Parameters
 
-| Parameter | Type | Required | Doc |
+Param,Type,Required,Doc
 |---|---|---|---|
 | `extensionId` | `string` | Yes | Extension/plugin ID (registered name of the G-21 extension point) |
 

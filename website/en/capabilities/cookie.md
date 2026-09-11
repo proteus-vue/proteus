@@ -35,6 +35,54 @@ useCookie(): Promise<CapResult<CookieJar>>
 | `remove` | `remove(name: string): void` | — |
 | `list` | `list(): Record<string, string>` | — |
 
+#### Method details
+
+##### `get`
+
+```ts
+get(name: string): string | undefined
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `name` | `string` | Yes | — |
+
+**Returns**: `string \| undefined`
+
+##### `set`
+
+```ts
+set(name: string, value: string, maxAge?: number): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `name` | `string` | Yes | — |
+| `value` | `string` | Yes | — |
+| `maxAge` | `number` | No | — |
+
+**Returns**: `void`
+
+##### `remove`
+
+```ts
+remove(name: string): void
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `name` | `string` | Yes | — |
+
+**Returns**: `void`
+
+##### `list`
+
+```ts
+list(): Record<string, string>
+```
+
+**Returns**: `Record<string, string>`
+
 ## Error codes
 
 | code | Doc |
