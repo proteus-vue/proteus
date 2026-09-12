@@ -1947,6 +1947,121 @@ export interface PrivacyAPI {
   onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void
 }
 
+// —— ★权威标尺缺口补齐（2026-09-12）：C66 性能 / C67 预加载 / C68 图像编辑 ——
+
+/** 性能条目（wx PerformanceEntry 子集——navigation 导航 / render 渲染 / script 脚本） */
+export interface PerformanceEntry {
+  /** 条目名（路由名 / 脚本路径等） */
+  name: string
+  /** 条目类型 */
+  entryType: 'navigation' | 'render' | 'script'
+  /** 时长（ms） */
+  duration: number
+  /** 开始时间（ms） */
+  startTime?: number
+  /** 关联文件列表（script 类） */
+  fileList?: string[]
+  /** 模块名（script 类） */
+  moduleName?: string
+}
+
+/** 性能观察器句柄（wx PerformanceObserver 子集） */
+export interface PerformanceObserverHandle {
+  /**
+   * 开始观察新性能条目。
+   * @param cb 新条目回调
+   * @param entryTypes 订阅的条目类型（缺省全部）
+   */
+  observe(cb: (entries: PerformanceEntry[]) => void, entryTypes?: string[]): void
+  /** 取消观察（释放） */
+  disconnect(): void
+}
+
+/**
+ * ★权威标尺缺口 C66：性能（wx.getPerformance / wx.reportPerformance）。
+ *   条目读取（navigation 导航 / render 渲染 / script 脚本）+ 实时观察 + 自定义指标上报
+ *   （上报需在小程序后台配置指标 id）。
+ *   web：`performance.getEntries*` 承接条目读取；`report` 无对等上报后端 → Err。
+ */
+export interface PerformanceAPI {
+  /** 读取性能条目（可按类型过滤） */
+  getEntries(entryType?: 'navigation' | 'render' | 'script'): Promise<CapResult<PerformanceEntry[]>>
+  /** 按名字读取性能条目 */
+  getEntriesByName(name: string, entryType?: string): Promise<CapResult<PerformanceEntry[]>>
+  /** 创建观察器（实时推送新条目） */
+  createObserver(): PerformanceObserverHandle
+  /** 设置性能缓冲区大小（条目数上限） */
+  setBufferSize(size: number): void
+  /**
+   * 上报自定义性能指标（微信性能监控平台——需后台配置 id）。
+   * @param id 指标 id
+   * @param value 指标值
+   * @param dimensions 自定义维度（字符串或数组）
+   */
+  report(id: number, value: number, dimensions?: string | unknown[]): Promise<CapResult<void>>
+}
+
+/** 预加载资源项（wx.preloadAssets——字体/图片） */
+export interface PreloadAsset {
+  /** 资源地址 */
+  src: string
+  /** 资源类型（font 字体 / image 图片） */
+  type: 'font' | 'image'
+}
+
+/** 分包预下载任务句柄（wx.preDownloadSubpackage 返回） */
+export interface PreDownloadTask {
+  /**
+   * 订阅下载进度。
+   * @param cb 进度回调（progress 百分比 / 已下载字节 / 预期总字节）
+   * @returns 取消订阅函数
+   */
+  onProgressUpdate(cb: (res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void): () => void
+}
+
+/**
+ * ★权威标尺缺口 C67：预加载（wx.preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage）。
+ *   「用空间换时间」——提前拉取资源 / 视图 / 分包，降低首屏与页面切换等待。
+ *   web：无标准预加载 API（可用 `<link rel=preload>` 或动态 import 替代）→ 各方法 Err 诚实降级。
+ */
+export interface PreloadAPI {
+  /**
+   * 预加载资源（字体 / 图片）。
+   * @param data 资源列表
+   */
+  assets(data: PreloadAsset[]): Promise<CapResult<void>>
+  /** 预加载 Skyline 视图（配合 Skyline 渲染器的页面预载） */
+  skylineView(): Promise<CapResult<void>>
+  /** 预加载 WebView 页面 */
+  webview(): Promise<CapResult<void>>
+  /**
+   * 预下载分包（目前仅 workers 分包）。
+   * @param packageType 分包类型（'workers'）
+   */
+  subpackage(packageType: string): Promise<CapResult<PreDownloadTask>>
+}
+
+/**
+ * ★权威标尺缺口 C68：图像编辑（wx.cropImage / wx.editImage）。
+ *   裁剪（固定比例）+ 自由编辑 → 输出临时图片路径。
+ *   web：无微信编辑 UI → Err 诚实降级（可用 canvas 自实现裁剪）。
+ */
+export interface ImageEditAPI {
+  /**
+   * 裁剪图片（拉起裁剪 UI，按比例）。
+   * @param src 图片路径
+   * @param cropScale 裁剪比例（16:9 / 9:16 / 4:3 / 3:4 / 5:4 / 4:5 / 1:1）
+   * @returns 裁剪后临时文件路径
+   */
+  crop(src: string, cropScale: '16:9' | '9:16' | '4:3' | '3:4' | '5:4' | '4:5' | '1:1'): Promise<CapResult<string>>
+  /**
+   * 编辑图片（拉起编辑 UI——涂鸦 / 裁剪 / 文字 / 马赛克）。
+   * @param src 图片路径
+   * @returns 编辑后临时文件路径
+   */
+  edit(src: string): Promise<CapResult<string>>
+}
+
 /**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
  *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
@@ -2118,6 +2233,12 @@ export interface CapabilityBridge {
   getUpdateManager?(): UpdateManagerAPI
   /** ★权威标尺缺口 C65 隐私协议（wx.getPrivacySetting / openPrivacyContract / requirePrivacyAuthorize；web 缺省） */
   getPrivacy?(): PrivacyAPI
+  /** ★权威标尺缺口 C66 性能（wx.getPerformance / reportPerformance；web performance API） */
+  getPerformance?(): PerformanceAPI
+  /** ★权威标尺缺口 C67 预加载（wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage；web 缺省） */
+  getPreload?(): PreloadAPI
+  /** ★权威标尺缺口 C68 图像编辑（wx.cropImage/editImage；web 缺省） */
+  getImageEdit?(): ImageEditAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -2375,6 +2496,12 @@ export interface CapabilityProbe {
   ad: boolean
   /** ★权威标尺缺口：隐私协议（getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize） */
   privacy: boolean
+  /** ★权威标尺缺口：性能（getPerformance/reportPerformance） */
+  performance: boolean
+  /** ★权威标尺缺口：预加载（preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage） */
+  preload: boolean
+  /** ★权威标尺缺口：图像编辑（cropImage/editImage） */
+  imageEdit: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -2686,6 +2813,15 @@ interface WxLike {
   requirePrivacyAuthorize?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
   onNeedPrivacyAuthorization?: (cb: (res: { privacyContractName: string }) => void) => void
   offNeedPrivacyAuthorization?: (cb?: (...a: never[]) => void) => void
+  // ★权威标尺缺口 C66/C67/C68：性能 / 预加载 / 图像编辑
+  getPerformance?: () => WxPerformanceLike
+  reportPerformance?: (id: number, value: number, dimensions?: string | unknown[]) => void
+  preloadAssets?: (opt: { data: Array<{ src: string; type: 'font' | 'image' }>; success?: () => void; fail?: (e: unknown) => void }) => void
+  preloadSkylineView?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  preloadWebview?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  preDownloadSubpackage?: (opt: { packageType: string; success?: () => void; fail?: (e: unknown) => void }) => WxPreDownloadTaskLike
+  cropImage?: (opt: { src: string; cropScale: string; success: (r: { tempFilePath: string }) => void; fail?: (e: unknown) => void }) => void
+  editImage?: (opt: { src: string; success: (r: { tempFilePath: string }) => void; fail?: (e: unknown) => void }) => void
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -2899,6 +3035,32 @@ interface WxBannerAdLike {
   onLoad?: (cb: () => void) => void
   onResize?: (cb: (size: { width: number; height: number }) => void) => void
   onError?: (cb: (e: { errCode: number; errMsg: string }) => void) => void
+}
+
+/** wx.getPerformance 返回对象子集 */
+interface WxPerformanceLike {
+  getEntries?: () => WxPerformanceEntryLike[]
+  getEntriesByName?: (name: string, entryType?: string) => WxPerformanceEntryLike[]
+  createObserver?: () => {
+    observe?: (cb: (entries: WxPerformanceEntryLike[]) => void, entryTypes?: string[]) => void
+    disconnect?: () => void
+  }
+  setBufferSize?: (size: number) => void
+}
+
+/** wx PerformanceEntry 子集 */
+interface WxPerformanceEntryLike {
+  name: string
+  entryType: 'navigation' | 'render' | 'script'
+  duration?: number
+  startTime?: number
+  fileList?: string[]
+  moduleName?: string
+}
+
+/** wx.preDownloadSubpackage 返回任务子集 */
+interface WxPreDownloadTaskLike {
+  onProgressUpdate?: (cb: (res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -4622,6 +4784,90 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         }
       },
     }),
+    // ★权威标尺缺口 C66：性能（wx.getPerformance / reportPerformance）
+    getPerformance: () => {
+      const perf = typeof wx.getPerformance === 'function' ? wx.getPerformance() : undefined
+      return {
+        getEntries: (entryType) =>
+          Promise.resolve().then(() => {
+            if (typeof perf?.getEntries !== 'function') return capErr<PerformanceEntry[]>('performance.unsupported', 'wx.getPerformance().getEntries 缺失')
+            const list = perf.getEntries()
+            const filtered = entryType ? list.filter((e) => e.entryType === entryType) : list
+            return capOk(filtered.map(normalizePerfEntry))
+          }),
+        getEntriesByName: (name, entryType) =>
+          Promise.resolve().then(() => {
+            if (typeof perf?.getEntriesByName !== 'function') return capErr<PerformanceEntry[]>('performance.unsupported', 'Performance.getEntriesByName 缺失')
+            return capOk(perf.getEntriesByName(name, entryType).map(normalizePerfEntry))
+          }),
+        createObserver: () => {
+          const obs = typeof perf?.createObserver === 'function' ? perf.createObserver() : undefined
+          return {
+            observe: (cb, entryTypes) => {
+              if (typeof obs?.observe !== 'function') return
+              obs.observe((entries) => cb(entries.map(normalizePerfEntry)), entryTypes)
+            },
+            disconnect: () => obs?.disconnect?.(),
+          }
+        },
+        setBufferSize: (size) => perf?.setBufferSize?.(size),
+        report: (id, value, dimensions) =>
+          Promise.resolve().then(() => {
+            if (typeof wx.reportPerformance !== 'function') return capErr<void>('performance.unsupported', 'wx.reportPerformance 缺失')
+            try {
+              wx.reportPerformance(id, value, dimensions)
+              return capOk(undefined)
+            } catch (e) {
+              return capErr<void>('performance.failed', '上报性能指标失败', e)
+            }
+          }),
+      }
+    },
+    // ★权威标尺缺口 C67：预加载（wx.preloadAssets / preloadSkylineView / preloadWebview / preDownloadSubpackage）
+    getPreload: () => ({
+      assets: (data) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.preloadAssets !== 'function') return resolve(capErr('preload.unsupported', 'wx.preloadAssets 缺失'))
+          wx.preloadAssets({ data, success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('preload.failed', '预加载资源失败', e)) })
+        }),
+      skylineView: () =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.preloadSkylineView !== 'function') return resolve(capErr('preload.unsupported', 'wx.preloadSkylineView 缺失'))
+          wx.preloadSkylineView({ success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('preload.failed', '预加载 Skyline 视图失败', e)) })
+        }),
+      webview: () =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.preloadWebview !== 'function') return resolve(capErr('preload.unsupported', 'wx.preloadWebview 缺失'))
+          wx.preloadWebview({ success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('preload.failed', '预加载 WebView 失败', e)) })
+        }),
+      subpackage: (packageType) =>
+        new Promise<CapResult<PreDownloadTask>>((resolve) => {
+          if (typeof wx.preDownloadSubpackage !== 'function') return resolve(capErr('preload.unsupported', 'wx.preDownloadSubpackage 缺失'))
+          const holder: { task?: WxPreDownloadTaskLike } = {}
+          try {
+            holder.task = wx.preDownloadSubpackage({
+              packageType,
+              success: () => resolve(capOk(makeProgressHandle(holder))),
+              fail: (e: unknown) => resolve(capErr('preload.failed', '预下载分包失败', e)),
+            })
+          } catch (e) {
+            return resolve(capErr('preload.failed', '预下载分包失败', e))
+          }
+        }),
+    }),
+    // ★权威标尺缺口 C68：图像编辑（wx.cropImage / wx.editImage）
+    getImageEdit: () => ({
+      crop: (src, cropScale) =>
+        new Promise<CapResult<string>>((resolve) => {
+          if (typeof wx.cropImage !== 'function') return resolve(capErr('image-edit.unsupported', 'wx.cropImage 缺失'))
+          wx.cropImage({ src, cropScale, success: (r) => resolve(capOk(r.tempFilePath)), fail: (e: unknown) => resolve(capErr('image-edit.failed', '裁剪图片失败', e)) })
+        }),
+      edit: (src) =>
+        new Promise<CapResult<string>>((resolve) => {
+          if (typeof wx.editImage !== 'function') return resolve(capErr('image-edit.unsupported', 'wx.editImage 缺失'))
+          wx.editImage({ src, success: (r) => resolve(capOk(r.tempFilePath)), fail: (e: unknown) => resolve(capErr('image-edit.failed', '编辑图片失败', e)) })
+        }),
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -4863,6 +5109,23 @@ function normalizeNetwork(t: string): NetworkType['type'] {
   if (t === 'wifi') return 'wifi'
   if (t === '2g' || t === '3g' || t === '4g' || t === '5g' || t === 'unknown') return 'cellular'
   return 'unknown'
+}
+
+/** wx PerformanceEntry → 归一（C66） */
+function normalizePerfEntry(e: WxPerformanceEntryLike): PerformanceEntry {
+  return { name: e.name, entryType: e.entryType, duration: e.duration ?? 0, startTime: e.startTime, fileList: e.fileList, moduleName: e.moduleName }
+}
+
+/** 预下载任务 → 进度订阅句柄（C67；holder 惰性读 task——success 回调可能早于赋值返回） */
+function makeProgressHandle(holder: { task?: WxPreDownloadTaskLike }): PreDownloadTask {
+  return {
+    onProgressUpdate: (cb) => {
+      const task = holder.task
+      if (typeof task?.onProgressUpdate !== 'function') return () => {}
+      task.onProgressUpdate(cb)
+      return () => {}
+    },
+  }
 }
 
 /** Web 桥（navigator / window.screen / matchMedia——SSR/Node 安全探测） */
@@ -5995,6 +6258,67 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         onNeedAuthorization: () => () => {},
       }
     },
+    // ★权威标尺缺口 C66：性能（web performance.getEntries* 承接条目读取；上报无对等后端 → Err）
+    getPerformance: () => {
+      const perf = (g as { performance?: Performance }).performance
+      const webType = (t?: string): string => (t === 'navigation' || t === 'render' || t === 'script' ? 'resource' : t ?? '')
+      const toEntry = (e: PerformanceEntry): PerformanceEntry => ({ name: e.name, entryType: e.entryType as PerformanceEntry['entryType'], duration: e.duration, startTime: e.startTime })
+      return {
+        getEntries: (entryType) =>
+          Promise.resolve().then(() => {
+            if (!perf || (typeof perf.getEntriesByType !== 'function' && typeof perf.getEntries !== 'function')) return capErr<PerformanceEntry[]>('performance.unsupported', 'web performance API 不可用')
+            if (entryType && typeof perf.getEntriesByType === 'function') {
+              return capOk(perf.getEntriesByType(webType(entryType)).map((e) => toEntry(e as unknown as PerformanceEntry)))
+            }
+            const list = typeof perf.getEntries === 'function' ? perf.getEntries() : []
+            const filtered = entryType ? list.filter((e) => e.entryType === entryType) : list
+            return capOk(filtered.map((e) => toEntry(e as unknown as PerformanceEntry)))
+          }),
+        getEntriesByName: (name, entryType) =>
+          Promise.resolve().then(() => {
+            if (!perf || typeof perf.getEntriesByName !== 'function') return capErr<PerformanceEntry[]>('performance.unsupported', 'web performance API 不可用')
+            return capOk(perf.getEntriesByName(name, entryType ? webType(entryType) : undefined).map((e) => toEntry(e as unknown as PerformanceEntry)))
+          }),
+        createObserver: () => {
+          const PO = (g as { PerformanceObserver?: new (cb: (list: { getEntries: () => PerformanceEntry[] }) => void) => { observe: (o: { entryTypes: string[] }) => void; disconnect: () => void } }).PerformanceObserver
+          const holder: { obs?: { observe: (o: { entryTypes: string[] }) => void; disconnect: () => void } } = {}
+          return {
+            observe: (cb, entryTypes) => {
+              if (typeof PO !== 'function') return
+              holder.obs = new PO((list) => cb(list.getEntries().map((e) => toEntry(e as unknown as PerformanceEntry))))
+              try {
+                holder.obs.observe({ entryTypes: (entryTypes ?? ['resource', 'mark', 'measure']).map(webType) })
+              } catch {
+                /* 不支持的 entryType 忽略 */
+              }
+            },
+            disconnect: () => holder.obs?.disconnect(),
+          }
+        },
+        setBufferSize: () => {
+          /* web 无缓冲区设置 */
+        },
+        report: () => Promise.resolve(capErr<void>('performance.unsupported', 'Web 无微信性能监控上报后端（report 需小程序平台）')),
+      }
+    },
+    // ★权威标尺缺口 C67：预加载（web 无标准预加载 API → 各方法 Err 诚实降级；可用 <link rel=preload>/动态 import）
+    getPreload: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('preload.unsupported', 'Web 无标准预加载 API（' + op + ' 可用 <link rel=preload> 或动态 import 替代）'))
+      return {
+        assets: () => noWeb<void>('assets'),
+        skylineView: () => noWeb<void>('skylineView'),
+        webview: () => noWeb<void>('webview'),
+        subpackage: () => noWeb<PreDownloadTask>('subpackage'),
+      }
+    },
+    // ★权威标尺缺口 C68：图像编辑（web 无微信编辑 UI → Err 诚实降级；可用 canvas 自实现裁剪）
+    getImageEdit: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('image-edit.unsupported', 'Web 无微信图像编辑 UI（' + op + ' 可用 canvas 自实现）'))
+      return {
+        crop: () => noWeb<string>('crop'),
+        edit: () => noWeb<string>('edit'),
+      }
+    },
   }
 }
 
@@ -6188,6 +6512,12 @@ export interface CapabilityHooks {
   // ★权威标尺缺口补齐（C65）：隐私协议
   /** ★C65 usePrivacy：隐私协议句柄（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize；web 缺省 → Err） */
   usePrivacy(): CapResult<PrivacyAPI>
+  /** ★C66 usePerformance：性能句柄（wx.getPerformance/reportPerformance；web performance API） */
+  usePerformance(): CapResult<PerformanceAPI>
+  /** ★C67 usePreload：预加载句柄（wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage；web 缺省 → Err） */
+  usePreload(): CapResult<PreloadAPI>
+  /** ★C68 useImageEdit：图像编辑句柄（wx.cropImage/editImage；web 缺省 → Err） */
+  useImageEdit(): CapResult<ImageEditAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -6833,6 +7163,19 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getPrivacy) throw new CapError('privacy.unsupported', '桥未提供 getPrivacy（usePrivacy 不可用）')
       return bridge.getPrivacy()
     }),
+    // ★权威标尺缺口 C66/C67/C68：性能 / 预加载 / 图像编辑
+    usePerformance: () => handleResult<PerformanceAPI>(() => {
+      if (!bridge.getPerformance) throw new CapError('performance.unsupported', '桥未提供 getPerformance（usePerformance 不可用）')
+      return bridge.getPerformance()
+    }),
+    usePreload: () => handleResult<PreloadAPI>(() => {
+      if (!bridge.getPreload) throw new CapError('preload.unsupported', '桥未提供 getPreload（usePreload 不可用）')
+      return bridge.getPreload()
+    }),
+    useImageEdit: () => handleResult<ImageEditAPI>(() => {
+      if (!bridge.getImageEdit) throw new CapError('image-edit.unsupported', '桥未提供 getImageEdit（useImageEdit 不可用）')
+      return bridge.getImageEdit()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -6899,6 +7242,9 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       livePusher: bridge.createLivePusher !== undefined,
       ad: bridge.getAd !== undefined,
       privacy: bridge.getPrivacy !== undefined,
+      performance: bridge.getPerformance !== undefined,
+      preload: bridge.getPreload !== undefined,
+      imageEdit: bridge.getImageEdit !== undefined,
     }),
   }
 }

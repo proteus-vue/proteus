@@ -18,8 +18,8 @@ import {
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（154 原语 SSOT）', () => {
-  it('154 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（157 原语 SSOT）', () => {
+  it('157 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
@@ -27,13 +27,13 @@ describe('G-32 B1 清单冻结（154 原语 SSOT）', () => {
     //   + ★C2 颗粒度对齐：ui+2 progress/label + shell+1 page-container
     //   + ★C3 颗粒度对齐：capability+5 album/worker/address/wifi/we-run
     //   + ★组件实例 API 对齐：capability+8 canvas/element-query/intersection/media-query/video/audio/live-pusher/ad
-    //   + ★权威标尺缺口补齐：capability+1 privacy）
+    //   + ★权威标尺缺口补齐：capability+4 privacy/performance/preload/image-edit）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
     expect(count('ui')).toBe(23)
     expect(count('shell')).toBe(14)
     expect(count('gesture')).toBe(10)
-    expect(count('capability')).toBe(65)
+    expect(count('capability')).toBe(68)
     expect(count('engineering')).toBe(28)
   })
 

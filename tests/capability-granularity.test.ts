@@ -1187,3 +1187,121 @@ describe('★权威标尺缺口补齐（2026-09-12）· C65 usePrivacy 隐私协
     expect(p.privacy).toBe(true)
   })
 })
+
+describe('★权威标尺缺口补齐批 D（2026-09-12）· C66/C67/C68 性能/预加载/图像编辑', () => {
+  it('usePerformance：getEntries 过滤 + report（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getPerformance: () => ({
+        getEntries: () => [
+          { name: 'pages/index', entryType: 'navigation', duration: 120, startTime: 10 },
+          { name: 'app.js', entryType: 'script', duration: 30, fileList: ['app.js'] },
+        ],
+        createObserver: () => ({ observe: () => undefined, disconnect: () => undefined }),
+        setBufferSize: (n: number) => calls.push('buf:' + n),
+      }),
+      reportPerformance: (id: number, value: number) => { calls.push('report:' + id + '=' + value) },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePerformance()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const all = await r.data.getEntries()
+    expect(all.ok && all.data.length).toBe(2)
+    const nav = await r.data.getEntries('navigation')
+    expect(nav.ok && nav.data.length).toBe(1)
+    expect(nav.ok && nav.data[0].name).toBe('pages/index')
+    r.data.setBufferSize(100)
+    await expect(r.data.report(101, 3.14)).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['buf:100', 'report:101=3.14'])
+  })
+
+  it('web 端 usePerformance：performance 条目承接 + report Err', async () => {
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('performance', {
+      getEntries: () => [{ name: 'https://a/b.png', entryType: 'resource', duration: 5, startTime: 1 }],
+      getEntriesByName: () => [],
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePerformance()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const ents = await r.data.getEntries()
+    expect(ents.ok && ents.data[0].name).toBe('https://a/b.png')
+    expect((await r.data.report(1, 1)).ok).toBe(false)
+  })
+
+  it('usePreload：assets/skylineView/webview/subpackage（wx 桥归一）', async () => {
+    const calls: string[] = []
+    let progCb: ((res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      preloadAssets: (o: { success?: () => void }) => { calls.push('assets'); o.success && o.success() },
+      preloadSkylineView: (o: { success?: () => void }) => { calls.push('skyline'); o.success && o.success() },
+      preloadWebview: (o: { success?: () => void }) => { calls.push('webview'); o.success && o.success() },
+      preDownloadSubpackage: (o: { success?: () => void }) => { calls.push('subpackage'); o.success && o.success(); return { onProgressUpdate: (cb: typeof progCb) => { progCb = cb } } },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePreload()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.assets([{ src: 'font.woff', type: 'font' }])).resolves.toMatchObject({ ok: true })
+    await expect(r.data.skylineView()).resolves.toMatchObject({ ok: true })
+    await expect(r.data.webview()).resolves.toMatchObject({ ok: true })
+    const task = await r.data.subpackage('workers')
+    expect(task.ok).toBe(true)
+    if (task.ok) {
+      let progress: number | undefined
+      task.data.onProgressUpdate((res) => { progress = res.progress })
+      progCb!({ progress: 42, totalBytesWritten: 42, totalBytesExpectedToWrite: 100 })
+      expect(progress).toBe(42)
+    }
+    expect(calls).toEqual(['assets', 'skyline', 'webview', 'subpackage'])
+  })
+
+  it('web 端 usePreload：无标准预加载 → Err（诚实降级）', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).usePreload()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((await r.data.assets([{ src: 'x', type: 'image' }])).ok).toBe(false)
+  })
+
+  it('useImageEdit：crop/edit 返回临时路径（wx 桥归一）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      cropImage: (o: { cropScale: string; success: (r: { tempFilePath: string }) => void }) => o.success({ tempFilePath: 'wxfile://crop-' + o.cropScale + '.png' }),
+      editImage: (o: { success: (r: { tempFilePath: string }) => void }) => o.success({ tempFilePath: 'wxfile://edit.png' }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useImageEdit()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const crop = await r.data.crop('wxfile://a.png', '1:1')
+    expect(crop.ok && crop.data).toBe('wxfile://crop-1:1.png')
+    const edit = await r.data.edit('wxfile://a.png')
+    expect(edit.ok && edit.data).toBe('wxfile://edit.png')
+  })
+
+  it('无 wx.cropImage → crop Err(image-edit.unsupported)', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useImageEdit()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const c = await r.data.crop('x', '16:9')
+      expect(c.ok).toBe(false)
+      if (!c.ok) expect(c.error.code).toBe('image-edit.unsupported')
+    }
+  })
+
+  it('probe：performance/preload/imageEdit 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.performance).toBe(true)
+    expect(p.preload).toBe(true)
+    expect(p.imageEdit).toBe(true)
+  })
+})

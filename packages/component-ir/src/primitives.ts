@@ -202,6 +202,10 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C64', kind: 'capability', semantic: 'capability.ad', api: 'useAd()', props: ['AdAPI'], mpEquiv: 'wx.createRewardedVideoAd/createInterstitialAd/createBannerAd', tier: 'L1', status: 'planned' },
   // ★权威标尺缺口补齐（2026-09-12）：隐私协议（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize——合规刚需）
   { id: 'C65', kind: 'capability', semantic: 'capability.privacy', api: 'usePrivacy()', props: ['PrivacyAPI'], mpEquiv: 'wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize', tier: 'L1', status: 'planned' },
+  // ★权威标尺缺口补齐批 D（2026-09-12）：性能 / 预加载 / 图像编辑（通用能力，无资质门槛）
+  { id: 'C66', kind: 'capability', semantic: 'capability.performance', api: 'usePerformance()', props: ['PerformanceAPI'], mpEquiv: 'wx.getPerformance/reportPerformance', tier: 'L1', status: 'planned' },
+  { id: 'C67', kind: 'capability', semantic: 'capability.preload', api: 'usePreload()', props: ['PreloadAPI'], mpEquiv: 'wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage', tier: 'L1', status: 'planned' },
+  { id: 'C68', kind: 'capability', semantic: 'capability.image-edit', api: 'useImageEdit()', props: ['ImageEditAPI'], mpEquiv: 'wx.cropImage/editImage', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */
