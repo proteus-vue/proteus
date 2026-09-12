@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proteus 本地网页（web-view 内嵌）</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 24px; font-family: -apple-system, "PingFang SC", system-ui, sans-serif; background: #faf9ff; color: #1c1b22; }
+    .card { background: #fff; border: 1px solid #e6e3f2; border-radius: 14px; padding: 20px; box-shadow: 0 6px 20px rgba(124, 92, 255, .10); }
+    .brand { display: inline-flex; align-items: center; gap: 8px; color: #7c5cff; font-weight: 700; }
+    .dot { width: 10px; height: 10px; border-radius: 3px; background: linear-gradient(135deg, #7c5cff, #b39dff); }
+    h1 { font-size: 20px; margin: 14px 0 6px; }
+    p { font-size: 14px; line-height: 1.7; color: #4a4756; margin: 6px 0; }
+    code { background: #f2efff; color: #5b3fd6; padding: 1px 6px; border-radius: 5px; font-size: 13px; }
+    .badge { display: inline-block; margin-top: 12px; padding: 4px 10px; border-radius: 999px; background: #efeaff; color: #5b3fd6; font-size: 12px; font-weight: 600; }
+    button { margin-top: 14px; padding: 10px 16px; border: 0; border-radius: 10px; background: #7c5cff; color: #fff; font-size: 14px; font-weight: 600; }
+    #log { margin-top: 10px; font-size: 13px; color: #5b3fd6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="brand"><span class="dot"></span>Proteus · 本地网页</span>
+    <h1>这是一个打包在小程序包内的本地 HTML</h1>
+    <p>经 <code>&lt;p-webview&gt;</code> 内嵌加载：小程序端走原生 <code>&lt;web-view&gt;</code>，Web 端走 <code>&lt;iframe&gt;</code>——同一份源码、同一个 <code>src</code>。</p>
+    <p>它证明 Proteus 的 <code>shell.webview</code> 原语能加载<strong>本地静态网页</strong>，无需外部域名依赖。</p>
+    <span class="badge">● 本地资源加载成功</span>
+    <button id="btn">点我 → 调用 postMessage 上报</button>
+    <div id="log"></div>
+  </div>
+  <script>
+    // web-view H5 内可经 wx.miniProgram.postMessage 回传消息（小程序端 @message 接收）
+    document.getElementById('btn').addEventListener('click', function () {
+      var msg = { type: 'from-local-html', ts: Date.now() }
+      try {
+        if (window.wx && wx.miniProgram && wx.miniProgram.postMessage) {
+          wx.miniProgram.postMessage({ data: msg })
+          document.getElementById('log').textContent = '已 postMessage：' + JSON.stringify(msg)
+        } else {
+          document.getElementById('log').textContent = '（非小程序环境，未发送）' + JSON.stringify(msg)
+        }
+      } catch (e) {
+        document.getElementById('log').textContent = 'postMessage 失败：' + e.message
+      }
+    })
+  </script>
+</body>
+</html>

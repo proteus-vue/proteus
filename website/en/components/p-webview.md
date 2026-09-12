@@ -36,6 +36,7 @@ Embedded web page
 | `src` | Page URL (aligned with src) | `String` | `''` | No |
 | `height` | Height in px (web container; fills the parent by default) | `Number` | `0` | No |
 | `sandbox` | Web iframe sandbox policy | `String` | `'allow-scripts allow-forms allow-same-origin'` | No |
+| `mpLocalHint` | — | `String` | `'web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML 不受平台支持（Web 端可加载）'` | No |
 
 ### Prop details
 
@@ -53,6 +54,11 @@ Embedded web page
 
 - **Type**: `String`　**Default**: `'allow-scripts allow-forms allow-same-origin'`　**Required**: No
 - **Doc**: Web iframe sandbox policy
+
+#### `mpLocalHint`
+
+- **Type**: `String`　**Default**: `'web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML 不受平台支持（Web 端可加载）'`　**Required**: No
+- **Doc**: —
 
 ## Events
 

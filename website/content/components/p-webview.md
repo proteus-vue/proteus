@@ -36,6 +36,7 @@ order: 2017
 | `src` | 网页地址（对齐 src） | `String` | `''` | 否 |
 | `height` | 高度 px（Web 容器；缺省撑满父容器） | `Number` | `0` | 否 |
 | `sandbox` | Web iframe 沙箱策略（缺省允许脚本/表单/同源） | `String` | `'allow-scripts allow-forms allow-same-origin'` | 否 |
+| `mpLocalHint` | MP 端 src 非 URL 时的占位文案（诚实边界：小程序 <web-view> 不支持包内本地 HTML） | `String` | `'web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML 不受平台支持（Web 端可加载）'` | 否 |
 
 ### 属性详解
 
@@ -53,6 +54,11 @@ order: 2017
 
 - **类型**：`String`　**默认值**：`'allow-scripts allow-forms allow-same-origin'`　**必填**：否
 - **说明**：Web iframe 沙箱策略（缺省允许脚本/表单/同源）
+
+#### `mpLocalHint`
+
+- **类型**：`String`　**默认值**：`'web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML 不受平台支持（Web 端可加载）'`　**必填**：否
+- **说明**：MP 端 src 非 URL 时的占位文案（诚实边界：小程序 <web-view> 不支持包内本地 HTML）
 
 ## Events
 

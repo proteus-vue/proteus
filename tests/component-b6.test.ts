@@ -182,10 +182,20 @@ describe('p-ad（广告位——★批 J）', () => {
 describe('p-webview（内嵌网页——★批 J）', () => {
   it('MP 产物：<web-view wx:if> + Web 容器 <view wx:else>（无 iframe 泄漏）', () => {
     const { wxml } = compileComponent('p-webview')
-    expect(wxml).toContain('<web-view wx:if="{{isMp}}"')
+    expect(wxml).toContain('<web-view wx:if="{{isMp && srcIsUrl}}"')
     expect(wxml).toContain('src="{{src}}"')
     expect(wxml).toContain('<view wx:else')
     expect(wxml).not.toContain('<iframe') // 无 iframe 元素（注释提及不算）
+  })
+
+  it('★平台限制（真机实测 2026-09-12）：src 非 https URL 时 MP 端走诚实占位（<web-view> 不支持包内本地 HTML）', () => {
+    const { wxml, js } = compileComponent('p-webview')
+    // srcIsUrl 门控：MP 原生 web-view 仅在绝对 http(s) 地址时渲染
+    expect(js).toMatch(/srcIsUrl/)
+    expect(js).toContain('/^https?:\\/\\//i')
+    // MP 非 URL 分支：诚实占位（含提示文案变量，不留白）
+    expect(wxml).toContain('mpLocalHint')
+    expect(wxml).toContain('wx:elif="{{isMp}}"')
   })
 })
 

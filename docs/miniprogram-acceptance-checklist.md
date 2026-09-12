@@ -32,8 +32,8 @@
 | **p-label** | ✅ 渲染「p-label 关联控件」+ 关联输入框 | 模拟器截图 |
 | **p-selection** | ✅ 渲染说明文字 + 「选区：（未选中）」 | 模拟器截图 |
 | **p-camera** | ❌ **初测误判为"渲染正常"（实际渲染的是 `<video>`！）** → 🟢 **修复后复验正确**：渲染 `<camera>`（「相机初始化失败」= camera 的 @error 回调） | 见下方「★实测抓出的严重 bug」 |
-| **p-map** | ❌ 初测"白板" → 🟢 修复后事件绑定正常（「标记点击次数：0」） | 同上 |
-| **p-webview** | ❌ 初测"白板"（空 iframe 容器）→ 🟢 修复后渲染 `<web-view>` | 同上 |
+| **p-map** | ❌ 初测"白板" → 🟢 修复后**渲染真实腾讯地图**（天安门/人民大会堂地标 + 标记 + 版权条「©2026 Tencent」） | 模拟器截图 |
+| **p-webview** | ❌ 初测"白板"（空 iframe 容器）→ 🟢 修复后**远程官网 `https://proteus-vue.cn` 完整渲染**（Proteus 首页 hero + 代码块） | 模拟器截图 |
 | 页面 `data` 注入 | ✅ `percent:40` / `selected:''` / `camReady:false` 等初始值正确进入逻辑层 | automator `evaluate` |
 | 首屏（对照） | ✅ `pages/index` 完整渲染（Proteus 标题 + 导航 + tabBar） | 模拟器截图 |
 
@@ -50,6 +50,51 @@
 - **回归锁**：tests/component-b6 +4（锁「isMp 进 data、非裸实例属性」；原测试只查 wxml 漏了 js 侧）。
 - **教训**：★平台条件组件的模板绑定变量**必须进 data**（编译器警告「实例属性：模板绑定不支持」不可忽略）；
   wxml 断言不足以覆盖此类 bug，须**同时断言 js 产物**。详见 memory 续七十六。
+
+### ★本批验证顺带抓出的框架 bug（2026-09-12，均已修 + 回归锁）
+
+1. **scoped `:class` 三元把比较操作数误后缀**（`packages/compiler/src/template.ts`）：`formatClassBinding`
+   对表达式内**所有**字符串字面量加 scope 后缀 → `mode === 'local' ? 'a' : ''` 中判断值 `'local'`
+   被改成 `'local-data-v-x'`（条件永不成立）、空串 `''` 被改成 `'-data-v-x'` → **真机 :class 全部失效**。
+   修法：新增 `suffixClassLiterals`，跳过比较操作数（前有 `=!<>`）与空串。回归锁 `tests/mp-transform.test.ts`。
+2. **`resolveSharedModule` 从插件位置解析框架包**（`packages/plugin-vite/src/plugin.ts`）：pnpm 严格链接下
+   `@proteus-vue/{api,runtime,desktop,capabilities,app-config,shared}`（应用声明、非 plugin 依赖）解析失败
+   → 返回 null → **这些 `_proteus/*.js` 从不产出**，而页面产物却 `require` 它们（clean build 时 `pages/pinia-demo`、
+   `pages/vue-compat-demo` onLoad 崩溃）。修法：新增 `resolveFrom`（真实构建传 `projectRoot`，经
+   `createRequire(projectRoot)` 解析）。回归锁 `tests/plugin.test.ts`。**注：此前 stale dist 掩盖了此问题，
+   是本次 clean build 才暴露。**
+3. **配置字段 `page` 未登记**：`page.webviewPages` 在类型 schema 已存在，但 CLI `KNOWN_FIELDS` 白名单与
+   `CONFIG_FIELD_LAYERS` 归属表漏登记 → `config:check` 报「未知字段 page」。已补两处（`page: 'compiler'`）。
+
+### ★p-webview 平台限制实测（2026-09-12，第二批）
+
+**用户诉求**：「webview 应该能加载本地网页吧？做一个加载本地网页 + 加载框架官网 proteus-vue.cn 远程网页，更有说服力」。
+
+**实测结论（诚实边界）**：
+1. ✅ **远程官网 `https://proteus-vue.cn` 在 `<web-view>` 内完整渲染**（模拟器截图取证：Proteus 首页 hero/代码块）。
+   —— 需 DevTools 勾选「不校验合法域名、web-view（业务域名）」。真机需在微信后台配**业务域名**。
+2. ❌ **小程序 `<web-view>` 不支持加载小程序包内的本地 HTML**（平台限制，非框架缺陷）。逐一排除验证：
+
+   | 尝试的 src 形态 | 结果 |
+   |---|---|
+   | `/webview-local.html`（包根绝对路径） | 空白 |
+   | `webview-local.html`（相对路径） | 空白 |
+   | `../webview-local.html`（相对页面路径） | 空白 |
+   | `data:text/html;base64,...`（内联 data URI） | 空白 |
+   | **raw `<web-view>`（绕过 p-webview 组件，直接写原生标签）** | **空白**（证明与组件实现无关） |
+   | `https://proteus-vue.cn/`（远程） | ✅ 正常渲染 |
+
+   官方文档对 `src` 仅写「webview 指向网页的链接……其它网页需登录小程序管理后台配置业务域名」，
+   未提供本地文件协议支持。**结论：微信 `<web-view>` 的 src 必须是可配置业务域名的 https 网页地址。**
+
+**框架响应（诚实降级，不留白）**：
+- `p-webview` MP 端增加 `srcIsUrl` 门控（`/^https?:\/\//`）：**src 为绝对 URL → 原生 `<web-view>`；
+  否则走诚实占位**（`<view>` + 提示文案「web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML
+  不受平台支持（Web 端可加载）」）。
+- **Web 端不受此限**：`<iframe>` 可加载本地相对路径（`/webview-local.html` 经构建复制到 `dist/web/`，
+  preview 服务返回 200 + 内容确证）。
+- 演示页 `native-components-demo` 用**分段控件二选一**（本地网页 / 远程官网）——既符合「一页仅一个
+  `<web-view>`」的官方硬约束，又同时演示「同一份源码、同一个 `src` 属性，两端各自最优解」的跨端语义。
 
 ### 实测发现（真实、非框架缺陷）
 
