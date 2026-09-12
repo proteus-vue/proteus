@@ -43,7 +43,7 @@ const tocFlat = computed(() =>
 // ★导航体验（2026-09-11）：① 锚点跳转不被吸顶栏遮挡（scroll-margin 见 style）
 //   ② 目录滚动高亮（scroll-spy）：监听正文标题，命中当前视口顶部者标 active
 const activeId = ref('')
-const NAV_OFFSET = 185 // --nav-h(97) + docs-topbar(~71) + 余量——与 scroll-margin-top 对齐
+const NAV_OFFSET = 153 // --nav-h(65) + 分区横条(~71) + 余量——与 scroll-margin-top 对齐（横条底 136 < 153）
 let spyTargets: Array<{ id: string; el: HTMLElement }> = []
 
 /** 滚动线法（比 IntersectionObserver 窄带稳）：取滚动线以上最后一个标题为当前项 */
@@ -239,13 +239,19 @@ watch(
 /* ★#390iii 分区横条（小程序文档式按钮卡片版）：居中一排明显的大按钮卡片——
    未激活 = 卡片描边（panel2 底 + muted 文字）；激活 = 品牌实心 + 白字（对应参考图绿色实心钮） */
 .docs-shell { display: block; }
+/* ★分区横条吸顶在导航正下方（top: --nav-h = 实测导航高 65px，无缝隙）。
+   ★液态玻璃融合（2026-09-12）：与顶部导航共用同一玻璃态（--glass-bg + blur），
+   滚动时两层层叠为一块连续磨砂面（内容从下方透出被模糊，不再有「实底横条 + 玻璃导航」的割裂感）；
+   去掉自身下边框、由横条底部统一出一条分隔线（避免 nav↔横条 之间出现第二条线）。 */
 .docs-topbar {
   position: sticky;
   top: var(--nav-h);
   z-index: 15;
   display: flex;
   justify-content: center;
-  background: var(--bg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   padding: 10px 24px;
   margin: 0 -24px 20px; /* 抵消 main 的横向 padding——横条通栏 */
@@ -380,8 +386,9 @@ watch(
   box-sizing: border-box;
   align-self: flex-start;
   position: sticky;
-  top: calc(var(--nav-h) + 16px);
-  max-height: calc(100vh - var(--nav-h) - 32px);
+  /* ★吸顶在分区横条下方（--nav-h 65 + 横条 71 ≈ 横条底 136）——修正原 +16px 落在横条之下被遮挡 */
+  top: calc(var(--nav-h) + 72px);
+  max-height: calc(100vh - var(--nav-h) - 88px);
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);

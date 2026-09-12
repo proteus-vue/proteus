@@ -66,7 +66,7 @@ watch(() => route.fullPath, () => {
     <!-- ★无障碍：跳转到主内容（键盘首个 Tab 即可达；WCAG 2.4.1 Bypass Blocks） -->
     <a class="skip-link" href="#main-content">{{ locale === 'zh' ? '跳到主内容' : 'Skip to content' }}</a>
     <!-- ★#389 导航：实底细边框（去掉玻璃发光——风格收敛） -->
-    <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen }">
+    <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs }">
       <div class="nav">
         <router-link to="/" class="brand">
           <span class="brand-mark">◆</span>
@@ -173,6 +173,9 @@ watch(() => route.fullPath, () => {
   transition: box-shadow 0.2s ease, background 0.2s ease;
   container-type: inline-size;
 }
+/* ★文档页：导航与分区横条融为一体（液态玻璃连续面）——导航下边框透明、由横条出统一底部分隔线
+   （保留 border 宽度=1px → 导航高度不变，避免与 --nav-h 差 1px 再出缝） */
+.nav-shell.is-docs { border-bottom-color: transparent; }
 /* d2-exempt: 导航滚动态玻璃（实底→滚动加模糊的层级区分设计，非独立玻璃面；迁移 pg-glass 归官网视觉批次） */
 .nav-shell.is-scrolled { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 /* ★#389c 滚动进度条（品牌色细线） */
