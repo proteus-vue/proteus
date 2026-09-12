@@ -6,13 +6,13 @@ export const routes = [
   {
     path: "/home",
     name: "home",
-    component: () => import("/Volumes/data1/work/office/debug/proteus/tests/fixtures/router-plan/pages/home.vue"),
+    component: () => import("<FIXTURES>/pages/home.vue"),
     meta: {"title":"首页"},
     children: [
       {
         path: "/home/profile",
         name: "homeProfile",
-        component: () => import("/Volumes/data1/work/office/debug/proteus/tests/fixtures/router-plan/pages/home/profile.vue"),
+        component: () => import("<FIXTURES>/pages/home/profile.vue"),
         meta: {"title":"个人资料","requiresAuth":true},
       }
     ],
@@ -20,12 +20,12 @@ export const routes = [
   {
     path: "/user",
     name: "user",
-    component: () => import("/Volumes/data1/work/office/debug/proteus/tests/fixtures/router-plan/pages/user/index.vue"),
+    component: () => import("<FIXTURES>/pages/user/index.vue"),
     meta: {"title":"用户中心"},
     children: [
       {
         path: "/user/order",
-        component: () => import("/Volumes/data1/work/office/debug/proteus/tests/fixtures/router-plan/pages/user/order.vue"),
+        component: () => import("<FIXTURES>/pages/user/order.vue"),
         meta: {"title":"订单"},
       }
     ],
