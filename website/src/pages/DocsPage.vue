@@ -5,6 +5,7 @@
 import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { findDoc, sections, enModule, enTitleFor } from '../docs-registry'
+import { createScrollSpy } from '@proteus-vue/desktop'
 import { locale, setLocale, t, sectionName, groupName } from '../i18n'
 
 const route = useRoute()
@@ -41,53 +42,31 @@ const tocFlat = computed(() =>
   ((variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? []).map((t2: { depth: number; text: string; id: string }) => ({ ...t2, text: stripMd(t2.text) })),
 )
 // ★导航体验（2026-09-11）：① 锚点跳转不被吸顶栏遮挡（scroll-margin 见 style）
-//   ② 目录滚动高亮（scroll-spy）：监听正文标题，命中当前视口顶部者标 active
+//   ② 目录滚动高亮（scroll-spy）——★2026-09-12 收口为框架原语 createScrollSpy（#477）：
+//      页面零裸 window/document（原 getBoundingClientRect/scrollY/getElementById 全在 @proteus-vue/desktop 内）
 const activeId = ref('')
 const NAV_OFFSET = 153 // --nav-h(65) + 分区横条(~71) + 余量——与 scroll-margin-top 对齐（横条底 136 < 153）
-let spyTargets: Array<{ id: string; el: HTMLElement }> = []
 
-/** 滚动线法（比 IntersectionObserver 窄带稳）：取滚动线以上最后一个标题为当前项 */
-function updateSpy(): void {
-  if (!spyTargets.length) return
-  const line = NAV_OFFSET + 8
-  let current = spyTargets[0]!.id
-  for (const t of spyTargets) {
-    if (t.el.getBoundingClientRect().top <= line) current = t.id
-    else break
-  }
-  // 滚到底：强制高亮最后一项（末段条目常在线下）
-  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
-    current = spyTargets[spyTargets.length - 1]!.id
-  }
-  activeId.value = current
-}
-
-function setupSpy(): void {
-  spyTargets = tocFlat.value
-    .map((t) => ({ id: t.id, el: document.getElementById(t.id) }))
-    .filter((t): t is { id: string; el: HTMLElement } => !!t.el)
-  updateSpy()
-}
-
-function onScrollSpy(): void {
-  updateSpy()
-}
+const scrollSpy = createScrollSpy({
+  offset: NAV_OFFSET,
+  onChange: (id) => {
+    activeId.value = id
+  },
+})
 
 watch(
   [() => route.fullPath, docHtml],
   async () => {
     activeId.value = ''
     await nextTick()
-    setupSpy()
+    scrollSpy.setIds(tocFlat.value.map((t2) => t2.id))
   },
   { immediate: true, flush: 'post' },
 )
 
 onBeforeUnmount(() => {
-  spyTargets = []
-  if (typeof window !== 'undefined') window.removeEventListener('scroll', onScrollSpy)
+  scrollSpy.destroy()
 })
-if (typeof window !== 'undefined') window.addEventListener('scroll', onScrollSpy, { passive: true })
 
 const ends = computed(() => current.value?.doc.ends ?? undefined)
 const noEn = computed(() => isEn.value && !variant.value)

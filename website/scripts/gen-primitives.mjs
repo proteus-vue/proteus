@@ -58,7 +58,7 @@ const SUMMARY_MAP = {
   'state-restoration': 'UI 状态恢复令牌：capture / restore / 过滤可恢复（永续场景）',
   network: '网络状态：online + 连接类型归一 + 变化订阅',
   'low-power': '低电量 / 省电模式探测（Battery API）',
-  scroll: '页面滚动观测：rAF 节流 + y/max/progress（App 顶部进度条与 Home 联动在用）',
+  scroll: '页面滚动观测（进度/滚动态）+ 滚动高亮 createScrollSpy（文档目录 scroll-spy 在用）',
   'window-message': '跨窗消息订阅：origin 白名单 + type 过滤 + destroy',
   anchor: '按 id 锚点平滑滚动（SPA 新页 v-html 文档跳转，可延时）',
   'page-url': '页面地址读写：origin / pathname + replaceState 收口（分享链接同步在用）',
