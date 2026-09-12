@@ -8,7 +8,7 @@ group: 总览
 
 > One-line framework philosophy: **you write semantics; each target decides the form**. A primitive is that single semantic catalog — declare once, and each target's rendering engine / system capability turns it into its own native implementation.
 
-Everything Proteus ships boils down to **one semantic catalog (145 primitives, the SSOT — `PRIMITIVE_CATALOG`) × multiple consumption forms**. This section documents usage entry by entry, family by family; the components / capabilities two columns are that same catalog's **component form / API form** — complementary to this section, never repeated.
+Everything Proteus ships boils down to **one semantic catalog (153 primitives, the SSOT — `PRIMITIVE_CATALOG`) × multiple consumption forms**. This section documents usage entry by entry, family by family; the components / capabilities two columns are that same catalog's **component form / API form** — complementary to this section, never repeated.
 
 ## Family × form matrix
 
@@ -21,7 +21,7 @@ Everything Proteus ships boils down to **one semantic catalog (145 primitives, t
 | Gesture | gesture (G-32 B4) | `p-*` gesture components | `v-gesture` `useGesture` | **this section (below)** |
 | Engineering primitives | engineering (E1-E28 + R1-R4) | `p-animate` `p-router-link` (component form) | `createEngineering`-family injection-based factories | **this section (below)** |
 
-> Forms are not copies: the same semantic (say `layout.grid`) can be both `p-grid` (component form) and registered in the catalog entry — **two consumption faces share one semantic inventory** (the 137 SSOT). That is "semantic convergence".
+> Forms are not copies: the same semantic (say `layout.grid`) can be both `p-grid` (component form) and registered in the catalog entry — **two consumption faces share one semantic inventory** (the 153 SSOT). That is "semantic convergence".
 
 ## Desktop/system primitives, entry by entry (this section)
 

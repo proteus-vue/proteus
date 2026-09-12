@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 56 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 64 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（8）
 
@@ -21,7 +21,7 @@ order: 0
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
 
-## 设备与系统（10）
+## 设备与系统（13）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -35,6 +35,9 @@ order: 0
 | C12 | [capability.orientation](/docs/capability/orientation) | `useOrientation()` | `Orientation` | wx.onDeviceOrientationChange |
 | C13 | [capability.brightness](/docs/capability/brightness) | `useBrightness()` | `Result<void>` | wx.setScreenBrightness |
 | C14 | [capability.keyboard](/docs/capability/keyboard) | `useKeyboard()` | `KeyboardInfo` | wx.onKeyboardHeightChange |
+| C58 | [capability.element-query](/docs/capability/element-query) | `useElement()` | `ElementQuery` | wx.createSelectorQuery |
+| C59 | [capability.intersection](/docs/capability/intersection) | `useIntersection()` | `IntersectionHandle` | wx.createIntersectionObserver |
+| C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
 
 ## 存储与文件（4）
 
@@ -52,7 +55,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## 媒体与扫码（4）
+## 媒体与扫码（8）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -60,6 +63,10 @@ order: 0
 | C2 | [capability.microphone](/docs/capability/microphone) | `useMicrophone()` | `Result<AudioBuffer>` | RecorderManager |
 | C42 | [capability.qr-code](/docs/capability/qr-code) | `useQRCode()` | `Result<string>` | wx.scanCode + canvas |
 | C49 | [capability.live](/docs/capability/live) | `useLive()` | `LiveRoom` | wx...（直播组件） |
+| C57 | [capability.canvas](/docs/capability/canvas) | `useCanvas()` | `CanvasController` | wx.createCanvasContext/canvasToTempFilePath/createOffscreenCanvas |
+| C61 | [capability.video](/docs/capability/video) | `useVideo()` | `VideoController` | wx.createVideoContext |
+| C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
+| C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
 
 ## 账号与支付（7）
 
@@ -73,7 +80,7 @@ order: 0
 | C41 | [capability.login](/docs/capability/login) | `useLogin()` | `Result<Token>` | wx.login |
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | wx.requestPayment 扩展 |
 
-## 通知与分享（7）
+## 通知与分享（8）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -84,6 +91,7 @@ order: 0
 | C21 | [capability.phone-call](/docs/capability/phone-call) | `usePhoneCall()` | `Result<void>` | wx.makePhoneCall |
 | C22 | [capability.sms](/docs/capability/sms) | `useSMS()` | `Result<void>` | wx.??（受限） |
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
+| C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
 
 ## 应用与生命周期（6）
 

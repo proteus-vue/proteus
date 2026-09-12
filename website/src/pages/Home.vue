@@ -81,13 +81,13 @@ function statusClass(status: string): string {
 // ★2026-09-11 Hero 数字行（3 项 headline 数字；精确值，不加修饰符；完整 8 项见「数字背书」区，值同源 stats.ts）
 const heroStatsZh = [
   { value: '40', label: '@proteus-vue/* 包' },
-  { value: String(STATS[1]?.value ?? '2927'), label: '单测全绿' },
-  { value: '142', label: '语义原语 SSOT' },
+  { value: String(STATS[1]?.value ?? '2966'), label: '单测全绿' },
+  { value: '153', label: '语义原语 SSOT' },
 ]
 const heroStatsEn = [
   { value: '40', label: '@proteus-vue/* packages' },
-  { value: String(STATS[1]?.value ?? '2927'), label: 'unit tests green' },
-  { value: '142', label: 'semantic primitives SSOT' },
+  { value: String(STATS[1]?.value ?? '2966'), label: 'unit tests green' },
+  { value: '153', label: 'semantic primitives SSOT' },
 ]
 
 // 编号三支柱（v3 三卡构图；文案对齐方法论三句话）
@@ -165,7 +165,7 @@ const scenariosZh = [
   { icon: 'phone', title: '小程序 / Web 同源复用', desc: '同一份标准 Vue SFC，Web 由渲染后端直出 DOM、小程序由编译器生成 Skyline 四件套——零 #ifdef。' },
   { icon: 'app', title: '多端同屏与宿主容器', desc: '同一份语义按端形态推导界面：手机 / 平板 / PC / 车机 / 电视 / 手表，或嵌入超级 App 沙箱。' },
   { icon: 'bolt', title: 'AI 原生开发流', desc: 'MCP Server + Agent Kit：AI 操作语义 IR 而非自由文本，产出天然通过 IR 契约校验——可自修复。' },
-  { icon: 'box', title: '设计系统与组件库', desc: '145 语义原语 SSOT 驱动 66 个语义组件 + 设计 token；布局语义编译期可校验，而非 CSS 事后救。' },
+  { icon: 'box', title: '设计系统与组件库', desc: '153 语义原语 SSOT 驱动 66 个语义组件 + 设计 token；布局语义编译期可校验，而非 CSS 事后救。' },
 ]
 const scenariosEn = [
   { icon: 'layout', title: 'Admin & enterprise apps', desc: 'Standard Vue + semantic components — Web direct-out, Mini Program from the same source; one codebase for back-office and internal systems.' },
@@ -173,7 +173,7 @@ const scenariosEn = [
   { icon: 'phone', title: 'Mini Program / Web reuse', desc: 'One standard Vue SFC: Web renders real DOM, Mini Program compiles to Skyline artifacts — zero #ifdef.' },
   { icon: 'app', title: 'Multi-device & host containers', desc: 'The same semantics derive per-target UI: phone / tablet / PC / car / TV / watch, or embedded in a super-app sandbox.' },
   { icon: 'bolt', title: 'AI-native development', desc: 'MCP Server + Agent Kit: AI operates the semantic IR, not free text — output naturally passes IR contract validation, self-repairable.' },
-  { icon: 'box', title: 'Design systems & libraries', desc: '142 semantic primitives SSOT drive 66 semantic components + design tokens; layout semantics checked at compile time, not patched with CSS.' },
+  { icon: 'box', title: 'Design systems & libraries', desc: '153 semantic primitives SSOT drive 66 semantic components + design tokens; layout semantics checked at compile time, not patched with CSS.' },
 ]
 
 // 生态支持（技术栈）
@@ -199,7 +199,7 @@ const capabilitiesZh = [
   {
     tag: 'G-31/32',
     title: '语义原语 SSOT',
-    desc: '145 语义原语单一事实源 → 66 个语义组件 → 48 implemented 语义 × 6 后端 conformance 门禁 + 56 Capability Hook。',
+    desc: '153 语义原语单一事实源 → 66 个语义组件 → 48 implemented 语义 × 6 后端 conformance 门禁 + 64 Capability Hook。',
   },
   {
     tag: 'G-41/42/43',
@@ -240,7 +240,7 @@ const journeyEn = [
 const capabilitiesEn = [
   { tag: 'G-27', title: 'Pluggable rendering', desc: 'RenderBackend SPI + five official backends (VueDom / Native×3 / Flutter) + hybrid rendering — pick an engine per page in the same app, business code unchanged.' },
   { tag: 'G-29/38', title: 'Pluggable compiler', desc: 'config.compiler.backend — one flag switches Node / Rust (same CompilerIR, semantic-equivalence Golden 81 cases), frozen SPI + incremental sessions.' },
-  { tag: 'G-31/32', title: 'Semantic primitives SSOT', desc: '142 semantic primitives SSOT → 66 semantic components → 48 implemented semantics × 6 backends under conformance gates + 56 capability Hooks.' },
+  { tag: 'G-31/32', title: 'Semantic primitives SSOT', desc: '153 semantic primitives SSOT → 66 semantic components → 48 implemented semantics × 6 backends under conformance gates + 64 capability Hooks.' },
   { tag: 'G-41/42/43', title: 'Host layer trio', desc: '36-combination matrix hot-swap + six container strategies (super-app sandbox / crash isolation) + ownership with borrow-checking intercepting use-after-move at compile time.' },
   { tag: 'G-45', title: 'Dev host as host', desc: 'Install-Once Host: dynamic plugin loading (signature + conformance quick check) + pending replay — native plugin changes never re-package the host.' },
   { tag: 'G-36', title: 'AI-native end to end', desc: 'MCP Server + Agent Kit self-repair loop + three guard rails — AI emits IR-contract-conforming standard code, not free text.' },
@@ -249,8 +249,8 @@ const capabilitiesEn = [
 /** stats 英文层（数字与 zh 同源同值——只翻 label/source） */
 const STATS_EN = [
   { value: '40', label: '@proteus-vue/* packages', source: 'npm run check:pkg (40 packages, 0 errors)' },
-  { value: '2927', label: 'unit tests green', source: 'npm test (official gate, e2e excluded)' },
-  { value: '142', label: 'semantic primitives SSOT', source: 'PRIMITIVE_CATALOG (proteus audit coverage)' },
+  { value: '2966', label: 'unit tests green', source: 'npm test (official gate, e2e excluded)' },
+  { value: '153', label: 'semantic primitives SSOT', source: 'PRIMITIVE_CATALOG (proteus audit coverage)' },
   { value: '48', label: 'implemented semantics × 6 backends', source: 'conformance gates' },
   { value: '66', label: 'semantic components (p-*/pg-*)', source: 'proteus components:audit src/components' },
   { value: '106', label: 'compile rules with AI explainers', source: 'listTransformRules (compiler transforms registry)' },

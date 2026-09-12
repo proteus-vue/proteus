@@ -1,0 +1,210 @@
+---
+title: useVideo（capability.video）
+group: 媒体与扫码
+order: 4006
+---
+
+# useVideo
+
+★C61 useVideo：视频控制器（wx.createVideoContext / web HTMLVideoElement）
+
+> 能力原语 C61 · `capability.video` · 返回 `VideoController` · **Hook 已实现**（API 就绪，双端桥见下表）
+
+## 签名
+
+```ts
+useVideo(id: string): CapResult<VideoController>
+```
+
+## 参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | `string` | 是 | 地图实例 ID（多地图场景区分） |
+
+## 返回值
+
+`Promise<CapResult<T>>`——铁律：无回调、无 try/catch 义务，`res.ok` 分支处理：
+
+| 属性 | 类型 | 说明 |
+|---|---|---|
+| `ok` | `boolean` | 成功 `true` / 失败 `false` |
+| `data` | `VideoController` | 成功载荷（方法结构见下） |
+| `error` | `CapError` | 失败时存在：`code`（机器码）/ `message`（人读原因）/ `cause`（原始异常） |
+
+## 方法
+
+| 方法 | 签名 | 说明 |
+|---|---|---|
+| [`play`](#play) | `play(): Promise<CapResult<void>>` | 播放 |
+| [`pause`](#pause) | `pause(): Promise<CapResult<void>>` | 暂停 |
+| [`stop`](#stop) | `stop(): Promise<CapResult<void>>` | 停止（回到起点） |
+| [`seek`](#seek) | `seek(position: number): Promise<CapResult<void>>` | 跳转到指定位置。 |
+| [`playbackRate`](#playbackrate) | `playbackRate(rate: number): Promise<CapResult<void>>` | 设置播放倍速。 |
+| [`requestFullScreen`](#requestfullscreen) | `requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>` | 进入全屏 |
+| [`exitFullScreen`](#exitfullscreen) | `exitFullScreen(): Promise<CapResult<void>>` | 退出全屏 |
+| [`sendDanmu`](#senddanmu) | `sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>` | 发送弹幕 |
+| [`on`](#on) | `on(event: 'play' \| 'pause' \| 'ended' \| 'timeupdate' \| 'error' \| 'fullscreenchange', cb: (payload: unknown) => void): () => void` | 订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。 |
+
+### `play`
+
+```ts
+play(): Promise<CapResult<void>>
+```
+
+**说明**：播放
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `pause`
+
+```ts
+pause(): Promise<CapResult<void>>
+```
+
+**说明**：暂停
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `stop`
+
+```ts
+stop(): Promise<CapResult<void>>
+```
+
+**说明**：停止（回到起点）
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `seek`
+
+```ts
+seek(position: number): Promise<CapResult<void>>
+```
+
+**说明**：跳转到指定位置。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `position` | `number` | 是 | 位置（秒） |
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `playbackRate`
+
+```ts
+playbackRate(rate: number): Promise<CapResult<void>>
+```
+
+**说明**：设置播放倍速。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `rate` | `number` | 是 | 倍速（0.5–2.0） |
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `requestFullScreen`
+
+```ts
+requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>
+```
+
+**说明**：进入全屏
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `options` | `VideoFullScreenOptions` | 否 | 配置选项对象 |
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `exitFullScreen`
+
+```ts
+exitFullScreen(): Promise<CapResult<void>>
+```
+
+**说明**：退出全屏
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `sendDanmu`
+
+```ts
+sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>
+```
+
+**说明**：发送弹幕
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `danmu` | `{ text: string; color?: string }` | 否 | — |
+
+**返回值**：`Promise<CapResult<void>>`
+
+### `on`
+
+```ts
+on(event: 'play' | 'pause' | 'ended' | 'timeupdate' | 'error' | 'fullscreenchange', cb: (payload: unknown) => void): () => void
+```
+
+**说明**：订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `event` | `'play' \| 'pause' \| 'ended' \| 'timeupdate' \| 'error' \| 'fullscreenchange'` | 是 | 事件名 |
+| `cb` | `(payload: unknown) => void` | 是 | 事件处理器 |
+
+**返回值**：`() => void`——取消订阅函数
+
+## 类型引用
+
+### `VideoFullScreenOptions`
+
+视频全屏方向（VideoContext.requestFullScreen）
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `direction` | `'horizontal' \| 'vertical'` | — | 全屏方向（horizontal 横屏 / vertical 竖屏） |
+
+## 错误码
+
+| code | 说明 |
+|---|---|
+| `video.unsupported` | 桥未提供 createVideo（useVideo 不可用） |
+
+> 平台不支持 → `*.unsupported` 族；业务按 code 分支处理，无需 try/catch。
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · webBridge 实现（平台 API 直连） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · wx 桥 → wx.createVideoContext |
+| Headless（SSR / 测试） | ✅ | headless · mock 桥注入（测试 / SSR 档） |
+| iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——能力桥未接线 |
+| Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——能力桥未接线 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI） · 端原型映射——能力桥未接线 |
+| Flutter 混合 | 🟡 | flutter · 同一 JS 逻辑层——能力桥未接线 |
+| 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
+
+> 状态口径：✅ 端已落地·本能力可用；⚠️ 端已落地·桥未提供→Err 显式降级；🟡 端原型映射·能力桥未接线；⬜ 端未开始。端架构对照见 [端与成熟度](/docs/framework/ends-matrix)。
+
+> 铁律：能力原语全部返回 `Result<T>`（无回调 / 无全局对象）；平台不支持 → `Err` 显式降级，业务零平台分支。
+
+## 用法
+
+```ts
+const v = useVideo('myVideo') // 同步句柄——无 await、无 res.ok
+
+if (v.ok) {
+  await v.data.play()
+  await v.data.seek(12) // 跳到第 12 秒
+  await v.data.playbackRate(1.5) // 1.5 倍速
+  v.data.on('ended', () => console.log('播放结束'))
+} else if (v.error.code === 'video.unsupported') {
+  // 桥未提供视频 API → 降级路径
+}
+```
+
+<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->
