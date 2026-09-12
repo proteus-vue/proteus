@@ -18,8 +18,8 @@ import {
 import type { HybridRenderer, IRNode, ProteusRenderBackend } from '@proteus-vue/render-backend'
 
 /** text 语义节点快照（headless 断言用） */
-function plain(b: ProteusRenderBackend, root: unknown): unknown {
-  return toPlainTree(b, root)
+function plain(root: unknown): unknown {
+  return toPlainTree(root as never)
 }
 
 describe('G-27 B6 混合渲染（Texture Sharing + 区域切后端）', () => {
@@ -80,7 +80,7 @@ describe('G-27 B6 混合渲染（Texture Sharing + 区域切后端）', () => {
     const spy = vi.fn()
     const origReg = native.registerExternalTexture
     native.registerExternalTexture = spy as never
-    hybrid.registerExternalTexture('video-1', { id: 'video-1', nativeView: { tag: 42 }, width: 640, height: 360 })
+    hybrid.registerExternalTexture!('video-1', { id: 'video-1', nativeView: { tag: 42 }, width: 640, height: 360 })
     expect(spy).toHaveBeenCalledWith('video-1', expect.objectContaining({ width: 640 }))
     expect(native.capabilities.textureSharing).toBe(true)
     if (origReg) native.registerExternalTexture = origReg

@@ -21,15 +21,15 @@ function fullMockBridge(): CapabilityBridge {
     getBattery: async () => ({ level: 0.8, charging: true }),
     getOrientation: async () => ({ type: 'portrait', angle: 0 }),
     share: async () => undefined,
-    // 新能力（12）
+    // 新能力（12）——注入式部分 mock：仅实现用例消费的方法（完整契约由产品侧 map/wx 桥满足）
     createMap: (id) => ({
       getRegion: async () => ({ latitude: 39.9, longitude: 116.4, scale: 14 }),
       moveTo: async () => undefined,
-    }),
+    }) as never,
     sendSMS: async () => undefined,
     getBackground: () => ({
       onEvent: () => () => undefined,
-    }),
+    }) as never,
     createSocketTask: (url) => ({
       send: async () => undefined,
       close: async () => undefined,
@@ -50,7 +50,7 @@ function fullMockBridge(): CapabilityBridge {
       onMessage: () => () => undefined,
     }),
     getHostContext: () => ({ provider: 'host-app', version: '1.0.0' }),
-    joinLiveRoom: () => ({ leave: async () => undefined, status: () => 'joined' }),
+    joinLiveRoom: () => ({ leave: async () => undefined, status: () => 'joined' }) as never,
     loadExtension: async () => ({ name: 'ext-kit' }),
   }
 }

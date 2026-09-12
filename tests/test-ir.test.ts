@@ -210,10 +210,12 @@ describe('G-44 B1 断点矩阵（100 profiles 全过——G-25 自动化）', ()
     const byId = new Map(suite.map((c) => [c.id, c]))
     // 边界值：320→sheet / 839→sheet / 840→dialog / 1199→dialog / 1200→popover
     const w320 = suite.find((c) => c.profile?.w === 320)!
-    expect(w320.assert[0].value).toBe('sheet')
+    const a320 = w320.assert[0]
+    expect(a320.kind === 'eq' && a320.value).toBe('sheet')
     void byId
     const w840 = suite.find((c) => c.profile?.w === 840)!
-    expect(w840.assert[0].value).toBe('dialog')
+    const a840 = w840.assert[0]
+    expect(a840.kind === 'eq' && a840.value).toBe('dialog')
   })
 })
 

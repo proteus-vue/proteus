@@ -1444,7 +1444,7 @@ function setN() {
 
   it('★#504 es5-safe（babel）：真实 demo 页全量编译零 ?? / ?. 残留（devtools-open-api-demo）', () => {
     const src = fs.readFileSync(path.resolve('examples/pages/devtools-open-api-demo.vue'), 'utf-8')
-    const r = compileVueSfc(src, { file: 'pages/devtools-open-api-demo.vue' })
+    const r = compileVueSfc(src, { filename: 'pages/devtools-open-api-demo.vue' })
     expect(r.js).not.toMatch(/\?\?/)
     expect(r.js).not.toMatch(/\?\./)
     expect(r.js).toContain('String((_p$source = p.source) !== null && _p$source !== void 0 ? _p$source :')

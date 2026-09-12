@@ -38,7 +38,7 @@ import {
   parseSession,
   buildDomTree,
 } from '@proteus-vue/devtools'
-import type { DevtoolsSource } from '@proteus-vue/devtools'
+import type { DevtoolsSource, DomTreeNode } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
 import type { TraceEvent, TraceSource, TimelineSpan } from '@proteus-vue/devtools-runtime'
 
@@ -136,9 +136,9 @@ describe('视图渲染函数', () => {
     const root = document.createElement('div')
     renderTimeline(root, {
       spans: [
-        { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, selfMs: 0, children: [], depth: 0 },
-        { id: '2', source: 'router', name: 'nav', start: 10, durationMs: 0, children: [], depth: 0, pending: true },
-        { id: '3', source: 'router', name: 'dot', start: 20, end: 20, durationMs: 0, children: [], depth: 0 },
+        { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, children: [] },
+        { id: '2', source: 'router', name: 'nav', start: 10, durationMs: 0, children: [], pending: true },
+        { id: '3', source: 'router', name: 'dot', start: 20, end: 20, durationMs: 0, children: [] },
       ],
     })
     const lanes = root.querySelectorAll('.pd-lane')
@@ -1004,23 +1004,23 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
       },
     })
     // 注册
-    const registered = calls[0] as { options: { id: string; label: string; icon: string } }
+    const registered = calls[0] as { method: string; options: { id: string; label: string; icon: string } }
     expect(registered.method).toBe('addInspector')
     expect(registered.options.id).toBe('proteus-app-config')
     expect(registered.options.label).toBe('App Config')
     expect(registered.options.icon).toBe('settings') // ★裸 Material 名（kit 拼 custom-ic-baseline-settings 作 fallback）
     // ★树根节点（kit 只在 selectedNodeId 非空时请求 state——无树节点 → 永远 No Data）
-    const treePayload = { inspectorId: 'proteus-app-config' }
+    const treePayload: { inspectorId: string; rootNodes?: unknown[] } = { inspectorId: 'proteus-app-config' }
     treeCbs[0](treePayload)
     expect((treePayload.rootNodes as Array<{ id: string }>)?.[0].id).toBe('root')
     // getInspectorState → resolved 分组（★对象形态：分组名 → 状态行数组；config 顶层键平铺多行）
-    const payload = { inspectorId: 'proteus-app-config', nodeId: 'root' }
+    const payload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'proteus-app-config', nodeId: 'root' }
     stateCbs[0](payload)
     expect(Object.keys(payload.state ?? {})).toEqual(['resolved'])
     expect(payload.state?.resolved?.[0]).toEqual({ key: 'app', value: { name: 'Demo' } })
     expect(payload.state?.resolved?.[1]).toEqual({ key: 'features', value: { glass: true } })
     // 非本 inspector → 不响应（state 保持 undefined）
-    const otherPayload = { inspectorId: 'other', nodeId: 'root' }
+    const otherPayload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'other', nodeId: 'root' }
     stateCbs[0](otherPayload)
     expect(otherPayload.state).toBeUndefined()
     // editInspectorState → path 构建嵌套 patch 回写
@@ -1049,12 +1049,12 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const ids = calls.map((c) => (c.options as { id: string }).id)
     expect(ids).toContain('proteus-style-safety')
     // ★树根节点（kit 只在 selectedNodeId 非空时请求 state）
-    const treePayload = { inspectorId: 'proteus-style-safety' }
+    const treePayload: { inspectorId: string; rootNodes?: unknown[] } = { inspectorId: 'proteus-style-safety' }
     treeCbs[treeCbs.length - 1](treePayload)
     expect((treePayload.rootNodes as Array<{ id: string }>)?.[0].id).toBe('root')
     // ★注册顺序：app-config 先、style-safety 后 → 取最后一个 getInspectorState 回调
     const last = stateCbs[stateCbs.length - 1]
-    const payload = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
+    const payload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'proteus-style-safety', nodeId: 'root' }
     last(payload)
     // ★展示优化：拦截记录平铺成多行（rejected 分组下每条 prop 一行，展开 value/reason/ts）
     expect(Object.keys(payload.state ?? {})).toEqual(['rejected'])
@@ -1068,7 +1068,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
   it('installProteusInspectors：pages 提供 → 注册 proteus-router inspector（parent 嵌套树 + 选中路由详情）', () => {
     const calls: Array<{ method: string; options: unknown }> = []
     const treeCbs: Array<(p: { inspectorId: string; rootNodes?: unknown[] }) => void> = []
-    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Array<{ key: string; value: unknown }> }) => void> = []
+    const stateCbs: Array<(p: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> }) => void> = []
     const api = {
       addInspector: (options: unknown) => calls.push({ method: 'addInspector', options }),
       on: {
@@ -1100,7 +1100,7 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(routerInspector.options.icon).toBe('route')
     // ★嵌套树：导航记录节点置顶 + index 根 → user（parent index）→ user-profile（parent user）
     // ★取最后一个 tree 回调（app-config 也注册了树根节点）
-    const treePayload = { inspectorId: 'proteus-router' }
+    const treePayload: { inspectorId: string; rootNodes?: unknown[] } = { inspectorId: 'proteus-router' }
     treeCbs[treeCbs.length - 1](treePayload)
     const roots = treePayload.rootNodes as Array<{ id: string; label: string; children?: Array<{ id: string; label: string; children?: unknown[] }> }>
     expect(roots[0].id).toBe('proteus-records') // 导航记录置顶
@@ -1121,14 +1121,14 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     const indexTags = (roots[1] as { tags?: Array<{ label: string }> }).tags
     expect(indexTags?.some((t) => t.label === '当前')).toBe(false)
     // ★选中导航记录分组 → 当前路由 + 记录数组（对象分组形态）
-    const recPayload = { inspectorId: 'proteus-router', nodeId: 'proteus-records' }
+    const recPayload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'proteus-router', nodeId: 'proteus-records' }
     stateCbs[stateCbs.length - 1](recPayload)
     expect(Object.keys(recPayload.state ?? {})).toEqual(['导航记录'])
     const recGroup = recPayload.state?.['导航记录'] ?? []
     expect(recGroup[0]).toEqual({ key: 'currentRoute', value: 'pages/user/profile' })
     expect((recGroup[1].value as Array<{ from: string }>)[0].from).toBe('pages/user/index')
     // ★选中单条记录 → 「导航状态」分组（from/to/query/耗时/时间/traceId/守卫链）
-    const singlePayload = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
+    const singlePayload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'proteus-router', nodeId: 'rec-200' }
     stateCbs[stateCbs.length - 1](singlePayload)
     const singleGroup = singlePayload.state?.['导航状态'] ?? []
     expect(singleGroup.map((s) => s.key)).toEqual(['from', 'to', 'query', 'durationMs', 'timestamp', 'traceId', 'guards'])
@@ -1136,13 +1136,13 @@ describe('Vue DevTools 接入：Timeline 适配器', () => {
     expect(singleGroup.find((s) => s.key === 'traceId')?.value).toBe('nav-2')
     expect((singleGroup.find((s) => s.key === 'guards')?.value as Array<{ result: string }>)[0].result).toBe('next')
     // 选中路由节点详情（取最后一个 state 回调——app-config 也注册了）
-    const statePayload = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
+    const statePayload: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'proteus-router', nodeId: 'user-profile' }
     stateCbs[stateCbs.length - 1](statePayload)
     const routeGroup = statePayload.state?.['路由'] ?? []
     expect(routeGroup[0]).toEqual({ key: 'path', value: 'pages/user/profile' })
     expect(routeGroup[1]).toEqual({ key: 'parent', value: 'user' })
     // 非本 inspector 不响应
-    const other = { inspectorId: 'other', nodeId: 'x' }
+    const other: { inspectorId: string; nodeId: string; state?: Record<string, Array<{ key: string; value: unknown }>> } = { inspectorId: 'other', nodeId: 'x' }
     stateCbs[stateCbs.length - 1](other)
     expect(other.state).toBeUndefined()
     // 不提供 pages → 不注册 router inspector
@@ -1391,8 +1391,8 @@ describe('Timeline 缩放/平移交互', () => {
     const container = document.createElement('div')
     Object.defineProperty(container, 'getBoundingClientRect', { value: () => rect, configurable: true })
     const spans: TimelineSpan[] = [
-      { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, selfMs: 0, children: [], depth: 0 },
-      { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+      { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, children: [] },
+      { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, children: [] },
     ]
     const changes: Array<{ start: number; end: number }> = []
     const zoom = createTimelineZoom(container, () => spans, { onWindowChange: (w) => changes.push(w) })
@@ -1453,7 +1453,7 @@ describe('Timeline 缩放/平移交互', () => {
     const root = document.createElement('div')
     const spans: TimelineSpan[] = []
     for (let i = 0; i < 50; i++) {
-      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, selfMs: 0, children: [], depth: 0 })
+      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, children: [] })
     }
     renderTimeline(root, { spans, virtual: { scrollTop: 0, viewHeight: 300 } })
     const spacer = root.querySelector('.pd-timeline-spacer') as HTMLElement
@@ -1470,7 +1470,7 @@ describe('Timeline 缩放/平移交互', () => {
     const root = document.createElement('div')
     const spans: TimelineSpan[] = []
     for (let i = 0; i < 50; i++) {
-      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, selfMs: 0, children: [], depth: 0 })
+      spans.push({ id: String(i), source: 'src' + i, name: 'evt' + i, start: i * 100, end: i * 100 + 50, durationMs: 50, children: [] })
     }
     renderTimeline(root, { spans, virtual: { scrollTop: 0, viewHeight: 300 } })
     const first = root.querySelector('.pd-lane-label')?.textContent
@@ -1487,8 +1487,8 @@ describe('Timeline 窗口过滤', () => {
     const root = document.createElement('div')
     renderTimeline(root, {
       spans: [
-        { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, selfMs: 0, children: [], depth: 0 },
-        { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, selfMs: 0, children: [], depth: 0 },
+        { id: '1', source: 'lifecycle', name: 'boot', start: 0, end: 100, durationMs: 100, children: [] },
+        { id: '2', source: 'router', name: 'nav', start: 200, end: 300, durationMs: 100, children: [] },
       ],
       window: { start: 150, end: 350 },
     })
@@ -1723,7 +1723,7 @@ describe('Components / Pages / Graph 视图', () => {
     // 深度上限：5 层 → 第 5 层截断为 null
     let el: HTMLElement = document.createElement('a')
     const deepRoot = document.createElement('div')
-    let cur = deepRoot
+    let cur: HTMLElement = deepRoot
     for (let i = 0; i < 8; i++) {
       cur.appendChild(el)
       cur = el

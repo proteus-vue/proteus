@@ -6,6 +6,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createCursorGlow, prefersReducedMotion, hasFinePointer } from '../packages/desktop/src/cursor-glow'
 import { createCursorGlowDirective } from '../packages/desktop/src/directives'
 
+/** 指令对象钩子（测试直接调用 mounted/unmounted；弹参宽松以匹配用例调用形态） */
+type DirectiveHooks = { mounted?: (el: HTMLElement, ...args: unknown[]) => void; unmounted?: (el: HTMLElement, ...args: unknown[]) => void }
+
 function mockMatchMedia(matches: Record<string, boolean>): void {
   vi.stubGlobal(
     'matchMedia',
@@ -66,7 +69,7 @@ describe('G-24 B5 v-p-cursor-glow（指针跟随光晕）', () => {
   })
 
   it('指令：v-p-cursor-glow mounted 创建 / unmounted 销毁', () => {
-    const dir = createCursorGlowDirective()
+    const dir = createCursorGlowDirective() as DirectiveHooks
     const el = document.createElement('div')
     dir.mounted!(el, { value: undefined } as never)
     expect(document.querySelector('.p-cursor-glow')).not.toBeNull()

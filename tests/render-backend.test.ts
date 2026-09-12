@@ -15,7 +15,7 @@ import {
   runBackendConformance,
   toPlainTree,
 } from '@proteus-vue/render-backend'
-import type { ProteusRenderBackend, NativeViewDescriptor, FlutterWidgetDescriptor } from '@proteus-vue/render-backend'
+import type { ProteusRenderBackend, NativeViewDescriptor, FlutterWidgetDescriptor, HeadlessNode } from '@proteus-vue/render-backend'
 
 describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
   it('完整后端（Headless 参考实现）→ 全部 check 通过', () => {
@@ -34,7 +34,7 @@ describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
 
   it('残缺后端（缺 insert + 非法 capabilities）→ fail 并指明缺失方法/非法枚举', () => {
     const broken: ProteusRenderBackend = {
-      id: 'fake-broken',
+      id: 'fake-broken' as never, // 非 BackendId 枚举（conformance 应识别非法后端标识）
       version: '0.0.1',
       capabilities: {
         layout: 'magic' as never, // 非法枚举
@@ -75,24 +75,24 @@ describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
 describe('G-27 HeadlessBackend（B3 前置：内存节点树）', () => {
   it('createElement 唯一句柄 + insert 父子关系 + patchProp 属性变更 + setText', () => {
     const b = createHeadlessBackend()
-    const root = b.createElement({ type: 'root', props: {}, children: [] }) as { id: number; children: unknown[] }
-    const a = b.createElement({ type: 'view', props: {}, children: [] }) as { id: number; parent: unknown }
-    const c = b.createElement({ type: 'text', props: {}, children: [] }) as { id: number }
+    const root = b.createElement({ type: 'root', props: {}, children: [] }) as HeadlessNode
+    const a = b.createElement({ type: 'view', props: {}, children: [] }) as HeadlessNode
+    const c = b.createElement({ type: 'text', props: {}, children: [] }) as HeadlessNode
     expect(root).not.toBe(a) // 唯一句柄
     b.insert(a, root)
     b.insert(c, a)
-    expect((root.children as unknown[]).length).toBe(1)
+    expect(root.children.length).toBe(1)
     expect(a.parent).toBe(root)
     // patchProp 属性变更
     b.patchProp(a, 'style', null, { color: 'red' })
     b.patchProp(a, 'id', null, 'box')
-    expect((a as { props: Record<string, unknown> }).props.id).toBe('box')
+    expect(a.props.id).toBe('box')
     // setText
     b.setText(c, 'hello')
-    expect((c as { text: string }).text).toBe('hello')
+    expect(c.text).toBe('hello')
     // remove
     b.remove(c)
-    expect((a as { children: unknown[] }).children.length).toBe(0)
+    expect(a.children.length).toBe(0)
   })
 
   it('toPlainTree：序列化纯对象树（SSR/快照/Agent 断言载体）', () => {
@@ -101,7 +101,7 @@ describe('G-27 HeadlessBackend（B3 前置：内存节点树）', () => {
     const child = b.createElement({ type: 'text', props: {}, children: [] })
     b.insert(child, root)
     b.setText(child, 'hi')
-    const tree = toPlainTree(root as { id: number; type: string; props: Record<string, unknown>; children: unknown[]; text: string })
+    const tree = toPlainTree(root as HeadlessNode)
     expect(tree.type).toBe('page')
     expect(tree.props).toEqual({ title: '首页' })
     expect((tree.children as Array<{ type: string; text: string }>)[0]).toMatchObject({ type: 'text', text: 'hi' })

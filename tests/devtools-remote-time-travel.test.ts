@@ -14,7 +14,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 function relaySock() {
   const handlers: Record<string, (data: unknown) => void> = {}
   return {
-    send: () => {},
+    send: (_d: string) => {},
     readyState: 1,
     close: () => {},
     on: (event: string, cb: (data: unknown) => void) => {
@@ -70,15 +70,15 @@ describe('远程时间旅行端到端', () => {
     setActivePinia(pinia)
     const bus = createTraceBus({ enabled: true })
     const bridgeWs = bridgeSock(sRelay)
-    const Fake = vi.fn(() => bridgeWs) as unknown as typeof WebSocket
-    Fake.OPEN = 1
+    const Fake = Object.assign(vi.fn(() => bridgeWs), { OPEN: 1 }) as unknown as typeof WebSocket
     vi.stubGlobal('WebSocket', Fake)
     const bridge = createTraceBusWsBridge(bus, {
       url: 'ws://host/proteus-source',
       onRestoreStores: (stores) => {
         for (const s of stores) {
           const st = pinia._s.get(s.id)
-          st?.$patch(s.state)
+          // pinia $patch 的 DeepPartial 泛型与外部 Record 结构不通约——恢复路径按运行时契约传入
+          st?.$patch(s.state as never)
         }
       },
     })

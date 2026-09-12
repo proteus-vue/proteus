@@ -107,7 +107,10 @@ describe('G-29.1 examples/组件真实文件：Node/Rust 双端编译跑通 + �
       const rustTreeNull = (rustIr.semantic as { tree: unknown }).tree == null
       expect(rustTreeNull).toBe(nodeTreeNull)
       if (!nodeTreeNull) {
-        expect(cirSeq((rustIr.semantic as { tree: never }).tree)).toEqual(cirSeq((nodeIr.semantic as { tree: never }).tree))
+        // 语义 IR 的 tree 为 C-IR（ComponentIR）；cirSeq 仅消费 semantic/children 结构面
+      const treeOf = (semantic: unknown): { tree?: { semantic?: string; children?: unknown[] } | null } =>
+        semantic as { tree?: { semantic?: string; children?: unknown[] } | null }
+      expect(cirSeq(treeOf(rustIr.semantic).tree)).toEqual(cirSeq(treeOf(nodeIr.semantic).tree))
       }
 
       // ⑤ bindings 一致（handlers 事件名归一 / models / capabilities）

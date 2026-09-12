@@ -186,7 +186,8 @@ describe('★C43 useFileSystem 富接口（Web 内存降级全量往返）', () 
       }),
     })
     const fs = createCapabilityHooks(createCapabilityBridge()).useFileSystem()
-    expect((await fs.getFileInfo('/x')).data).toMatchObject({ size: 10, digest: 'abc' })
+    const finfo = await fs.getFileInfo('/x')
+    expect(finfo.ok && finfo.data).toMatchObject({ size: 10, digest: 'abc' })
     expect((await fs.saveFile('tmp://1'))).toMatchObject({ ok: true, data: 'saved://1' })
     expect((await fs.getSavedFileList())).toMatchObject({ ok: true })
     expect((await fs.unzip('/z.zip', '/out')).ok).toBe(true)
@@ -339,7 +340,8 @@ describe('★C15 存储异步/批量/info（useStorage）', () => {
     const info = await st.info()
     expect(info.ok && info.data.keys).toContain('a')
     expect((await st.removeAsync('a')).ok).toBe(true)
-    expect((await st.getAsync('a')).data).toBeUndefined()
+    const gone = await st.getAsync('a')
+    expect(gone.ok && gone.data).toBeUndefined()
   })
 })
 
@@ -429,7 +431,7 @@ describe('★C25 后台生命周期扩展 + C20 日历 API', () => {
     let size: { windowWidth: number } | null = null
     bg.onWindowResize((s) => { size = s })
     await new Promise((r) => setTimeout(r, 5))
-    expect(size && size.windowWidth).toBe(375)
+    expect(size).toMatchObject({ windowWidth: 375 })
   })
 
   it('CalendarAPI（MP）：add/remove 走 wx，list 诚实 Err', async () => {
@@ -554,7 +556,7 @@ describe('★C37 NFC 读卡模式（NFCAdapter：发现 + 各技术类型连接�
     adapter.onDiscovered((t) => { tag = t })
     expect((await adapter.startDiscovery()).ok).toBe(true)
     discCb!({ id: new ArrayBuffer(4), techs: ['ndef'] })
-    expect(tag && tag.techs).toEqual(['ndef'])
+    expect(tag).toMatchObject({ techs: ['ndef'] })
     // 连接 NDEF + 写消息
     const ndef = await adapter.connectNdef()
     expect(ndef.ok).toBe(true)
@@ -607,7 +609,8 @@ describe('★C4 地图剩余方法（查询/视野/覆盖物/图层）', () => {
     for (const m of ['getCenterLocation', 'getRotate', 'getSkew', 'fromScreenLocation', 'toScreenLocation', 'setBoundary', 'moveAlong', 'addArc', 'eraseLines', 'initMarkerCluster', 'setLocMarkerIcon', 'addCustomLayer', 'removeCustomLayer', 'addVisualLayer', 'removeVisualLayer', 'executeVisualLayerCommand', 'addGroundOverlay', 'updateGroundOverlay', 'removeGroundOverlay']) {
       expect(typeof (map as unknown as Record<string, unknown>)[m]).toBe('function')
     }
-    expect((await map.getCenterLocation()).data).toMatchObject({ latitude: 30, longitude: 120 })
+    const center = await map.getCenterLocation()
+    expect(center.ok && center.data).toMatchObject({ latitude: 30, longitude: 120 })
     const rot = await map.getRotate()
     expect(rot.ok && rot.data).toBe(45)
     expect((await map.fromScreenLocation(5, 6)).ok).toBe(true)
@@ -1442,7 +1445,7 @@ describe('★权威标尺缺口补齐批 E（2026-09-12）· C69 网络底层 / 
     expect(() => r.data.container()).toThrow()
     expect(() => r.data.audioPlayer()).toThrow()
     const d = r.data.videoDecoder()
-    expect((await d.start()).ok).toBe(false) // 无 WebCodecs
+    expect((await d.start({ source: 'tmp://x' })).ok).toBe(false) // 无 WebCodecs
   })
 
   it('probe：socket/mediaProcessing 维度反映桥方法', async () => {

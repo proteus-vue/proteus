@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 
-function makeServer(opts: { writeEnabled?: boolean; rateLimitPerMin?: number } = {}) {
+function makeServer(opts: { writeEnabled?: boolean; rateLimitPerMin?: number; workspaceRoot?: string } = {}) {
   return createMcpServer(opts)
 }
 
@@ -108,7 +108,7 @@ describe('G-36 B1 只读工具', () => {
   it('get_design_token：点路径/分组/全树 + 未命中', async () => {
     const s = makeServer()
     const one = await s.callTool('get_design_token', { name: 'color.primary' })
-    expect((one.result as { value: string }).value).toBe(DESIGN_TOKENS.color.primary)
+    expect((one.result as { value: string }).value).toBe((DESIGN_TOKENS.color as { primary: string }).primary)
     const group = await s.callTool('get_design_token', { group: 'space' })
     expect(group.ok).toBe(true)
     const miss = await s.callTool('get_design_token', { name: 'color.nope' })

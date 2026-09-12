@@ -12,7 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WIT = fs.readFileSync(path.join(root, 'website/api/wit/since_v0_1_0.wit'), 'utf8')
 
 describe('G-60 B2 SPEC_DIFF（★ INV-W7 破坏性分类）', () => {
-  const wit = (body) => `package p:q@0.1.0;\ninterface a {\n${body}\n}`
+  const wit = (body: string) => `package p:q@0.1.0;\ninterface a {\n${body}\n}`
   const oldW = wit('/// f 文档\n  f: func(x: string) -> string;')
 
   it('函数移除 → breaking', () => {
@@ -78,9 +78,9 @@ describe('G-60 B1 WIT 解析器', () => {
   })
 
   it('有返回值与无返回值的 func 都解析（activate 有 / suspend 无）', () => {
-    const host = spec.interfaces.find((i: { name: string }) => i.name === 'host')
-    const activate = host.items.find((x: { name: string }) => x.name === 'activate')
-    const suspend = host.items.find((x: { name: string }) => x.name === 'suspend')
+    const host = spec.interfaces.find((i: { name: string }) => i.name === 'host')!
+    const activate = host.items.find((x: { name: string }) => x.name === 'activate')!
+    const suspend = host.items.find((x: { name: string }) => x.name === 'suspend')!
     expect(activate.kind).toBe('func')
     expect(activate.result).toBe('result<string, string>')
     expect(activate.params).toEqual([{ name: 'plugin-id', type: 'string' }])
@@ -89,21 +89,21 @@ describe('G-60 B1 WIT 解析器', () => {
   })
 
   it('doc 注释精确归属：suspend 不吞 uninstall 的文档（G-55 坑继承）', () => {
-    const host = spec.interfaces.find((i: { name: string }) => i.name === 'host')
-    const suspend = host.items.find((x: { name: string }) => x.name === 'suspend')
-    const uninstall = host.items.find((x: { name: string }) => x.name === 'uninstall')
+    const host = spec.interfaces.find((i: { name: string }) => i.name === 'host')!
+    const suspend = host.items.find((x: { name: string }) => x.name === 'suspend')!
+    const uninstall = host.items.find((x: { name: string }) => x.name === 'uninstall')!
     expect(suspend.doc).not.toContain('卸载')
     expect(uninstall.doc).toBe('卸载插件。')
   })
 
   it('record/enum/variant 类型块带字段解析', () => {
-    const manifest = spec.interfaces.find((i: { name: string }) => i.name === 'manifest')
-    const tier = manifest.items.find((x: { name: string }) => x.name === 'tier')
+    const manifest = spec.interfaces.find((i: { name: string }) => i.name === 'manifest')!
+    const tier = manifest.items.find((x: { name: string }) => x.name === 'tier')!
     expect(tier.kind).toBe('enum')
-    expect(tier.fields.map((f: { name: string }) => f.name)).toEqual(['declarative', 'wasm', 'full'])
-    const cap = manifest.items.find((x: { name: string }) => x.name === 'capability')
+    expect(tier.fields!.map((f: { name: string }) => f.name)).toEqual(['declarative', 'wasm', 'full'])
+    const cap = manifest.items.find((x: { name: string }) => x.name === 'capability')!
     expect(cap.kind).toBe('variant')
-    expect(cap.fields.some((f: { name: string; type?: string }) => f.name === 'network' && f.type === 'list<string>')).toBe(true)
+    expect(cap.fields!.some((f: { name: string; type?: string }) => f.name === 'network' && f.type === 'list<string>')).toBe(true)
   })
 })
 

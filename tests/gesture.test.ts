@@ -73,7 +73,8 @@ describe('G-32 Gesture 识别器（纯逻辑）', () => {
     const feed = makeFeed(now)
     r.feed(feed('down', 10, 10))
     expect(timerCb).not.toBeNull()
-    timerCb?.() // 模拟 500ms 定时触发
+    // 闭包赋值不在 TS 控制流视野内（此前被收窄为 null）——显式函数类型调用
+    ;(timerCb as unknown as () => void)() // 模拟 500ms 定时触发
     expect(collect(events, 'longpress')).toHaveLength(1)
     r.feed(feed('up', 10, 10))
     expect(collect(events, 'longpress')).toHaveLength(1) // 不重复

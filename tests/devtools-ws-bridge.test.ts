@@ -20,9 +20,8 @@ function mockWs() {
 /** ★先 stub 全局 WebSocket 再创建 bridge（构造时 new WebSocket 返回 mock）；补静态 OPEN 常量 */
 function setupBridge() {
   const ws = mockWs()
-  const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
-  Fake.OPEN = 1
-  Fake.CLOSED = 3
+  // WebSocket.OPEN/CLOSED 为 readonly 静态常量——用 Object.assign 在构造 mock 时一并补上
+  const Fake = Object.assign(vi.fn(() => ws), { OPEN: 1, CLOSED: 3 }) as unknown as typeof WebSocket
   vi.stubGlobal('WebSocket', Fake)
   const bus = createTraceBus({ enabled: true })
   const bridge = createTraceBusWsBridge(bus, { url: 'ws://host/proteus-source', appInfo: () => ({ routes: [{ name: 'index', path: 'pages/index' }] }) })
@@ -57,8 +56,7 @@ describe('createTraceBusWsBridge', () => {
 
   it('★远程时间旅行：Proteus.restoreStores 命令 → onRestoreStores 回调（逐 store $patch）+ result 响应', () => {
     const ws = mockWs()
-    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
-    Fake.OPEN = 1
+    const Fake = Object.assign(vi.fn(() => ws), { OPEN: 1 }) as unknown as typeof WebSocket
     vi.stubGlobal('WebSocket', Fake)
     const bus = createTraceBus({ enabled: true })
     const restore = vi.fn()
@@ -73,8 +71,7 @@ describe('createTraceBusWsBridge', () => {
 
   it('★M8 设备面板：Proteus.deviceInfo 命令 → options.deviceInfo 上报（环境/能力）', () => {
     const ws = mockWs()
-    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
-    Fake.OPEN = 1
+    const Fake = Object.assign(vi.fn(() => ws), { OPEN: 1 }) as unknown as typeof WebSocket
     vi.stubGlobal('WebSocket', Fake)
     const bus = createTraceBus({ enabled: true })
     const bridge = createTraceBusWsBridge(bus, {
@@ -92,8 +89,7 @@ describe('createTraceBusWsBridge', () => {
   it('★Proteus.enable → 回放缓冲历史事件（面板后开/重连立即有数据：生命周期等早已 emit）', () => {
     const ws = mockWs()
     ws.readyState = 0 // CONNECTING：on 回调丢弃、事件进缓冲（应用 bootstrap/coreReady 阶段）
-    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
-    Fake.OPEN = 1
+    const Fake = Object.assign(vi.fn(() => ws), { OPEN: 1 }) as unknown as typeof WebSocket
     vi.stubGlobal('WebSocket', Fake)
     const bus = createTraceBus({ enabled: true })
     const bridge = createTraceBusWsBridge(bus, { url: 'ws://host/proteus-source' })
@@ -116,8 +112,7 @@ describe('createTraceBusWsBridge', () => {
 
   it('bus 未开启 → 无上行（门控零开销）', () => {
     const ws = mockWs()
-    const Fake = vi.fn(() => ws) as unknown as typeof WebSocket
-    Fake.OPEN = 1
+    const Fake = Object.assign(vi.fn(() => ws), { OPEN: 1 }) as unknown as typeof WebSocket
     vi.stubGlobal('WebSocket', Fake)
     const bus = createTraceBus({ enabled: false })
     const bridge = createTraceBusWsBridge(bus, { url: 'ws://host/proteus-source' })

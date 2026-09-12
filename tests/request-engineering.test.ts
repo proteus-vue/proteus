@@ -39,14 +39,15 @@ function mockClient(options: { defer?: boolean } = {}) {
   const deferreds: Array<{ resolve: (v: RequestResponse<unknown>) => void }> = []
   let response: RequestResponse<unknown> = { data: 'ok', status: 200, headers: {}, config: { url: '' } }
   const client: RequestExecutor = {
-    request: (config) => {
+    request: <T,>(config: RequestConfig) => {
       calls.push(config)
       if (defer) active += 1
       if (defer && active > maxActive) maxActive = active
-      return new Promise((resolve) => {
+      return new Promise<RequestResponse<T>>((resolve) => {
         const done = (v: RequestResponse<unknown>) => {
           if (defer) active -= 1
-          resolve({ ...v, config })
+          // mock 载荷与 T 无关（固定 response）——边界收敛为执行器契约要求的 T
+          resolve({ ...v, config } as RequestResponse<T>)
         }
         if (defer) deferreds.push({ resolve: done })
         else done(response)
@@ -79,7 +80,7 @@ function mockClient(options: { defer?: boolean } = {}) {
 function memoryCache() {
   const mem = new Map<string, unknown>()
   const cache: CompatStorage = {
-    get: (key) => mem.get(key) as unknown,
+    get: <T,>(key: string) => mem.get(key) as T | undefined,
     set: (key, value) => {
       mem.set(key, value)
     },
@@ -88,6 +89,26 @@ function memoryCache() {
     },
     clear: () => {
       mem.clear()
+    },
+    // 异步变体：缓存底座仅需满足契约（本测试只用同步 get/set 路径）
+    setAsync: async (key, value) => {
+      mem.set(key, value)
+      return { ok: true as const, data: undefined }
+    },
+    getAsync: async <T,>(key: string) => ({ ok: true as const, data: mem.get(key) as T | undefined }),
+    removeAsync: async (key) => {
+      mem.delete(key)
+      return { ok: true as const, data: undefined }
+    },
+    clearAsync: async () => {
+      mem.clear()
+      return { ok: true as const, data: undefined }
+    },
+    info: async () => ({ ok: true as const, data: { keys: [], currentSize: 0, limitSize: 0 } }),
+    batchGet: async (keys: string[]) => ({ ok: true as const, data: keys.map((key) => ({ key, value: mem.get(key) })) }),
+    batchSet: async (kvList: Array<{ key: string; value: unknown }>) => {
+      for (const { key, value } of kvList) mem.set(key, value)
+      return { ok: true as const, data: undefined }
     },
   }
   return {

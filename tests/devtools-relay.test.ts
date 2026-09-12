@@ -15,7 +15,7 @@ function mockSocket() {
     on: (event: string, cb: (data: unknown) => void) => {
       handlers[event] = cb
     },
-    emit: (event: string, data: unknown) => handlers[event]?.(data),
+    emit: (event: string, data?: unknown) => handlers[event]?.(data),
   }
 }
 

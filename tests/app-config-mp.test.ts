@@ -27,7 +27,7 @@ const PAGE_SRC = [
 describe('#494 app-config MP 绑定桥（config-demo 白屏回归）', () => {
   let js = ''
   beforeEach(() => {
-    const r = compileVueSfc(PAGE_SRC, { file: 'pages/config-demo.vue', moduleImports: [{ source: '@proteus-vue/app-config', requirePath: '../_proteus/app-config.js' }, { source: '../app.config', requirePath: '../app.config.js' }] })
+    const r = compileVueSfc(PAGE_SRC, { filename: 'pages/config-demo.vue', moduleImports: [{ source: '@proteus-vue/app-config', requirePath: '../_proteus/app-config.js' }, { source: '../app.config', requirePath: '../app.config.js' }] })
     js = r.js
   })
 
@@ -63,7 +63,7 @@ describe('#494 app-config MP 绑定桥（config-demo 白屏回归）', () => {
 
   it('script/top-level-calls 禁用 → 顶层语句不注入（规则可关）', () => {
     const r = compileVueSfc(PAGE_SRC, {
-      file: 'pages/config-demo.vue',
+      filename: 'pages/config-demo.vue',
       rules: { disabled: ['script/top-level-calls'] },
       moduleImports: [{ source: '@proteus-vue/app-config', requirePath: '../_proteus/app-config.js' }],
     })

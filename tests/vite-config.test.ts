@@ -60,7 +60,7 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     expect((config.server as { port?: number }).port).toBe(5999)
     // 仍保留框架插件（vue + route-blocks）+ 别名 @ 追加（用户别名不被吞）
     expect(config.plugins?.length).toBe(2)
-    const aliases = (config.resolve?.alias as Array<{ find: string }>) ?? []
+    const aliases = (config.resolve?.alias as unknown as Array<{ find: string }>) ?? []
     expect(aliases.some((a) => a.find === '@')).toBe(true)
   })
 

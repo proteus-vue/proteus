@@ -206,14 +206,15 @@ describe('G-43 B4 panel 第十视图集成', () => {
 
   it('WS bridge：Proteus.ownership 命令 → options.ownership 上报', () => {
     const sends: Array<Record<string, unknown>> = []
-    const fakeWs = {
+    // WebSocket 结构子集 mock（onmessage 载荷形态由测试驱动——非 DOM MessageEvent）
+    const fakeWs: { readyState: number; send: (d: string) => void; close: () => void; OPEN: number; onmessage?: (ev: { data: unknown }) => void } = {
       readyState: 1,
       send: (d: string) => {
         sends.push(JSON.parse(d))
       },
       close: () => {},
       OPEN: 1,
-    } as unknown as WebSocket
+    }
     vi.stubGlobal('WebSocket', function () {
       return fakeWs
     })
