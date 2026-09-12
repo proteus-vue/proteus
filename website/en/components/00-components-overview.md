@@ -6,7 +6,7 @@ order: 0
 
 # Components overview
 
-> 68 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
+> 69 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
 
 ## Layout (17)
 
@@ -30,12 +30,13 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## Content & Forms (27)
+## Content & Forms (28)
 
 | Component | Props | Events |
 |---|---|---|
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
 | [p-button](/docs/component/p-button) | 5 | 1 |
+| [p-camera](/docs/component/p-camera) | 3 | 3 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 3 | 1 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
