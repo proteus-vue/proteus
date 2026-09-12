@@ -47,6 +47,7 @@ const config: ProteusConfig = {
       'mine': { title: '我的', isTab: true },
       'components-demo': { title: '组件演示' },
       'builtin-components-demo': { title: '内置组件' },
+      'native-components-demo': { title: '原生能力组件' },
       'config-demo': { title: '配置演示' },
       'forms': { title: '表单与指令' },
       'i18n-demo': { title: '国际化' },
