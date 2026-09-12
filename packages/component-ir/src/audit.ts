@@ -108,6 +108,7 @@ const MP_API_GROUPS: MpMatrixItem[] = [
   { mp: 'wx.createInnerAudioContext（音频实例）', proteus: 'useAudio', status: 'ok', group: 'api' },
   { mp: 'wx.createLivePusherContext（直播推流实例）', proteus: 'useLivePusher', status: 'ok', group: 'api' },
   { mp: 'wx.createRewardedVideoAd/createInterstitialAd/createBannerAd（广告）', proteus: 'useAd', status: 'ok', group: 'api' },
+  { mp: 'wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize（隐私协议）', proteus: 'usePrivacy', status: 'ok', group: 'api' },
   { mp: 'wx.getFileSystemManager/*（文件 30+）', proteus: 'useFileSystem', status: 'ok', group: 'api' },
   { mp: 'wx.compressFile/unzip', proteus: 'useArchive', status: 'ok', group: 'api' },
   { mp: 'wx.set/get/remove/clearStorage(+Sync)', proteus: 'useStorage', status: 'ok', group: 'api' },

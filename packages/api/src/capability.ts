@@ -1916,6 +1916,38 @@ export interface UpdateManagerAPI {
 }
 
 /**
+ * ★权威标尺缺口补齐（C65）：隐私协议（wx.getPrivacySetting / openPrivacyContract /
+ *   requirePrivacyAuthorize / onNeedPrivacyAuthorization）。
+ *   《个人信息保护法》+ 微信隐私协议合规的刚需：开发者需在用户触发隐私授权时弹协议、可跳转协议页、可主动触发授权。
+ *   web 端无对等标准（Cookie 同意可由宿主自建）→ 缺省 Err 诚实降级（常驻宿主桥）。
+ */
+export interface PrivacySetting {
+  /** 是否需要用户授权（用户未同意 → true） */
+  needAuthorization: boolean
+  /** 隐私协议名称（如《用户隐私保护指引》） */
+  privacyContractName: string
+}
+
+export interface PrivacyAPI {
+  /** 查询隐私授权状态（wx.getPrivacySetting） */
+  getSetting(): Promise<CapResult<PrivacySetting>>
+  /** 打开隐私协议页面（wx.openPrivacyContract） */
+  openContract(): Promise<CapResult<void>>
+  /**
+   * 主动触发隐私授权弹窗（wx.requirePrivacyAuthorize）。
+   * @returns 用户是否同意
+   */
+  requireAuthorize(): Promise<CapResult<boolean>>
+  /**
+   * 订阅「需要用户隐私授权」事件（wx.onNeedPrivacyAuthorization）。
+   * 用户在页面触发隐私接口但未同意时回调——业务据此弹自家协议 UI 或调用 openContract。
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  onNeedAuthorization(cb: (res: { privacyContractName: string }) => void): () => void
+}
+
+/**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
  *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
  *   Web 端：pick 走 <input type=file>（需宿主/用户手势），save 无标准（下载替代）∪ 缺省 Err（诚实降级）。
@@ -2084,6 +2116,8 @@ export interface CapabilityBridge {
   addCalendarEvent?(event: CalendarEvent): Promise<void>
   /** ★C51 小程序热更新（wx.getUpdateManager；web 无 → 缺省） */
   getUpdateManager?(): UpdateManagerAPI
+  /** ★权威标尺缺口 C65 隐私协议（wx.getPrivacySetting / openPrivacyContract / requirePrivacyAuthorize；web 缺省） */
+  getPrivacy?(): PrivacyAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -2339,6 +2373,8 @@ export interface CapabilityProbe {
   livePusher: boolean
   /** ★组件实例 API 对齐：广告（RewardedVideoAd/InterstitialAd/BannerAd） */
   ad: boolean
+  /** ★权威标尺缺口：隐私协议（getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize） */
+  privacy: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -2644,6 +2680,12 @@ interface WxLike {
   createRewardedVideoAd?: (opt: { adUnitId: string }) => WxRewardedVideoAdLike
   createInterstitialAd?: (opt: { adUnitId: string }) => WxInterstitialAdLike
   createBannerAd?: (opt: { adUnitId: string; style: { left?: number; top?: number; width: number } }) => WxBannerAdLike
+  // ★权威标尺缺口 C65：隐私协议
+  getPrivacySetting?: (opt: { success: (r: { needAuthorization: boolean; privacyContractName: string }) => void; fail?: (e: unknown) => void }) => void
+  openPrivacyContract?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  requirePrivacyAuthorize?: (opt: { success?: () => void; fail?: (e: unknown) => void }) => void
+  onNeedPrivacyAuthorization?: (cb: (res: { privacyContractName: string }) => void) => void
+  offNeedPrivacyAuthorization?: (cb?: (...a: never[]) => void) => void
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -4552,6 +4594,34 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           }),
       }
     },
+    // ★权威标尺缺口 C65：隐私协议（wx.getPrivacySetting / openPrivacyContract / requirePrivacyAuthorize / onNeedPrivacyAuthorization）
+    getPrivacy: () => ({
+      getSetting: () =>
+        new Promise<CapResult<PrivacySetting>>((resolve) => {
+          if (typeof wx.getPrivacySetting !== 'function') return resolve(capErr('privacy.unsupported', 'wx.getPrivacySetting 缺失'))
+          wx.getPrivacySetting({
+            success: (r) => resolve(capOk({ needAuthorization: !!r.needAuthorization, privacyContractName: r.privacyContractName ?? '' })),
+            fail: (e) => resolve(capErr('privacy.failed', '查询隐私授权状态失败', e)),
+          })
+        }),
+      openContract: () =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.openPrivacyContract !== 'function') return resolve(capErr('privacy.unsupported', 'wx.openPrivacyContract 缺失'))
+          wx.openPrivacyContract({ success: () => resolve(capOk(undefined)), fail: (e) => resolve(capErr('privacy.failed', '打开隐私协议页失败', e)) })
+        }),
+      requireAuthorize: () =>
+        new Promise<CapResult<boolean>>((resolve) => {
+          if (typeof wx.requirePrivacyAuthorize !== 'function') return resolve(capErr('privacy.unsupported', 'wx.requirePrivacyAuthorize 缺失'))
+          wx.requirePrivacyAuthorize({ success: () => resolve(capOk(true)), fail: (e) => resolve(capErr('privacy.denied', '用户拒绝隐私授权', e)) })
+        }),
+      onNeedAuthorization: (cb) => {
+        if (typeof wx.onNeedPrivacyAuthorization !== 'function') return () => {}
+        wx.onNeedPrivacyAuthorization(cb)
+        return () => {
+          if (typeof wx.offNeedPrivacyAuthorization === 'function') wx.offNeedPrivacyAuthorization(cb)
+        }
+      },
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -5915,6 +5985,16 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
       interstitial: () => { throw new CapError('ad.unsupported', 'Web 无广告联盟标准 API（需宿主接入自建广告桥）') },
       banner: () => { throw new CapError('ad.unsupported', 'Web 无广告联盟标准 API（需宿主接入自建广告桥）') },
     }),
+    // ★权威标尺缺口 C65：隐私协议（web 无微信隐私协议标准 → 各方法 Err 诚实降级；Cookie 同意由宿主自建）
+    getPrivacy: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('privacy.unsupported', 'Web 无微信隐私协议标准 API（' + op + ' 由宿主自建 Cookie 同意/协议页）'))
+      return {
+        getSetting: () => noWeb<PrivacySetting>('getSetting'),
+        openContract: () => noWeb<void>('openContract'),
+        requireAuthorize: () => noWeb<boolean>('requireAuthorize'),
+        onNeedAuthorization: () => () => {},
+      }
+    },
   }
 }
 
@@ -6105,6 +6185,9 @@ export interface CapabilityHooks {
   useLivePusher(id: string): CapResult<LivePusherController>
   /** ★C64 useAd：广告句柄（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → throw） */
   useAd(): CapResult<AdAPI>
+  // ★权威标尺缺口补齐（C65）：隐私协议
+  /** ★C65 usePrivacy：隐私协议句柄（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize；web 缺省 → Err） */
+  usePrivacy(): CapResult<PrivacyAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -6745,6 +6828,11 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getAd) throw new CapError('ad.unsupported', '桥未提供 getAd（useAd 不可用）')
       return bridge.getAd()
     }),
+    // ★权威标尺缺口 C65：隐私协议
+    usePrivacy: () => handleResult<PrivacyAPI>(() => {
+      if (!bridge.getPrivacy) throw new CapError('privacy.unsupported', '桥未提供 getPrivacy（usePrivacy 不可用）')
+      return bridge.getPrivacy()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -6810,6 +6898,7 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       audio: bridge.createAudio !== undefined,
       livePusher: bridge.createLivePusher !== undefined,
       ad: bridge.getAd !== undefined,
+      privacy: bridge.getPrivacy !== undefined,
     }),
   }
 }

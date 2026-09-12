@@ -1131,3 +1131,59 @@ describe('★组件实例 API 对齐（2026-09-12）· C61/C62/C63 媒体组件�
     expect(p.ad).toBe(true)
   })
 })
+
+describe('★权威标尺缺口补齐（2026-09-12）· C65 usePrivacy 隐私协议', () => {
+  it('usePrivacy：getSetting/openContract/requireAuthorize/onNeedAuthorization（wx 桥归一）', async () => {
+    const calls: string[] = []
+    let needCb: ((res: { privacyContractName: string }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getPrivacySetting: (o: { success: (r: { needAuthorization: boolean; privacyContractName: string }) => void }) => { calls.push('getSetting'); o.success({ needAuthorization: true, privacyContractName: '《用户隐私保护指引》' }) },
+      openPrivacyContract: (o: { success?: () => void }) => { calls.push('openContract'); o.success && o.success() },
+      requirePrivacyAuthorize: (o: { success?: () => void }) => { calls.push('require'); o.success && o.success() },
+      onNeedPrivacyAuthorization: (cb: (res: { privacyContractName: string }) => void) => { needCb = cb },
+      offNeedPrivacyAuthorization: () => undefined,
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePrivacy()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const setting = await r.data.getSetting()
+    expect(setting.ok && setting.data.needAuthorization).toBe(true)
+    expect(setting.ok && setting.data.privacyContractName).toBe('《用户隐私保护指引》')
+    await expect(r.data.openContract()).resolves.toMatchObject({ ok: true })
+    await expect(r.data.requireAuthorize()).resolves.toMatchObject({ ok: true, data: true })
+    let needName: string | undefined
+    r.data.onNeedAuthorization((res) => { needName = res.privacyContractName })
+    needCb!({ privacyContractName: '《用户隐私保护指引》' })
+    expect(needName).toBe('《用户隐私保护指引》')
+    expect(calls).toEqual(['getSetting', 'openContract', 'require'])
+  })
+
+  it('web 端 usePrivacy：无标准 → getSetting Err（诚实降级）', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).usePrivacy()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((await r.data.getSetting()).ok).toBe(false)
+  })
+
+  it('无 wx.getPrivacySetting → getSetting Err(privacy.unsupported)', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePrivacy()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const s = await r.data.getSetting()
+      expect(s.ok).toBe(false)
+      if (!s.ok) expect(s.error.code).toBe('privacy.unsupported')
+    }
+  })
+
+  it('probe：privacy 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.privacy).toBe(true)
+  })
+})

@@ -200,6 +200,8 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C62', kind: 'capability', semantic: 'capability.audio', api: 'useAudio()', props: ['AudioController'], mpEquiv: 'wx.createInnerAudioContext', tier: 'L1', status: 'planned' },
   { id: 'C63', kind: 'capability', semantic: 'capability.live-pusher', api: 'useLivePusher()', props: ['LivePusherController'], mpEquiv: 'wx.createLivePusherContext', tier: 'L1', status: 'planned' },
   { id: 'C64', kind: 'capability', semantic: 'capability.ad', api: 'useAd()', props: ['AdAPI'], mpEquiv: 'wx.createRewardedVideoAd/createInterstitialAd/createBannerAd', tier: 'L1', status: 'planned' },
+  // ★权威标尺缺口补齐（2026-09-12）：隐私协议（wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize——合规刚需）
+  { id: 'C65', kind: 'capability', semantic: 'capability.privacy', api: 'usePrivacy()', props: ['PrivacyAPI'], mpEquiv: 'wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */
