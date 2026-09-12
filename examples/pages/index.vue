@@ -44,6 +44,7 @@ function go(name: 'forms' | 'config-demo' | 'user') {
       <a class="link" href="/pages/docs-engine-demo">文档引擎（md 编译渲染）</a>
       <a class="link" href="/pages/devtools-open-api-demo">开放 API 演示（第三方面板）</a>
       <a class="link" href="/pages/builtin-components-demo">内置组件</a>
+      <a class="link" href="/pages/native-components-demo">原生能力组件（camera/map/ad）</a>
       <a class="link" href="/pages/i18n-demo">国际化</a>
       <a class="link" href="/pages/provide-inject-demo">注入演示</a>
       <a class="link" href="/pages/virtual-list-demo">虚拟列表</a>

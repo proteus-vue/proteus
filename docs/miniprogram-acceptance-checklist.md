@@ -21,6 +21,30 @@
 | 主包体积预算 | 1153 KB < 1200 KB 预算（微信上限 2MB） |
 | 编译零错误 + 全量测试绿 | `vue-tsc` 0 error；vitest 3045/3045 |
 
+## 1.5 真机（Skyline 模拟器）实测结果 ✅ 2026-09-12
+
+**环境**：微信开发者工具 2.02.2609082 Nightly（`/Volumes/data1/work/office-applications/wechatwebdevtools.app`）·
+已登录（appid `wx33bc04a52024def7`）· 渲染模式 **Skyline** · 模拟器 iPhone 12/13 Pro。
+
+| 页 / 组件 | 实测结果 | 证据 |
+|---|---|---|
+| **p-progress** | ✅ **线性 40%（蓝）+ success 100%（绿）+ 环形 60%（conic-gradient）全部正确渲染**，百分比文案正确 | 模拟器截图 |
+| **p-label** | ✅ 渲染「p-label 关联控件」+ 关联输入框 | 模拟器截图 |
+| **p-selection** | ✅ 渲染说明文字 + 「选区：（未选中）」 | 模拟器截图 |
+| **p-camera** | ✅ 渲染黑色相机预览区（含播放控制条）；「相机就绪：否」（模拟器无真实相机 → 符合预期；真机需授权） | 模拟器截图 |
+| **p-map** | ✅ 渲染地图区域（灰底）；「标记点击次数：0」 | 模拟器截图 |
+| **p-webview** | ✅ 标题渲染（内容需业务域名，见 §2.2） | 模拟器截图 |
+| 页面 `data` 注入 | ✅ `percent:40` / `selected:''` / `camReady:false` 等初始值正确进入逻辑层 | automator `evaluate` |
+| 首屏（对照） | ✅ `pages/index` 完整渲染（Proteus 标题 + 导航 + tabBar） | 模拟器截图 |
+
+### 实测发现（真实、非框架缺陷）
+
+1. **★IDE 自动化 API 在该 nightly 版大面积失效**（`getPageMetaByWebviewId ... null`、`page.$()`/`$$()` 对**首页**也返回空、`pageScrollTo` 超时）——**对照实验证明与我们的产物无关**（连已知正常的首页 `view`/`text` 都查不到）。故本轮真机验证以**模拟器截图视觉确证**为准。
+2. **`<camera>`/`<map>` 原生组件吞滚动**：`native-components-demo` 页滚动位移极小（原生组件覆盖区不传导手势，与既有 `p-svg-canvas`「原生组件吞触摸」同类）。→ 该页后续验证建议**分区展示**（缩短单页）或改用 `<scroll-view>` 包裹原生组件区。
+3. **`<video>` Skyline 调试限制**：DevTools 报「暂未支持 Skyline 下的 video 组件调试，请先到真机预览」——p-camera 的 Web 分支（`<video>`）在 Skyline 下由 `<camera>` 分支接管（v-if），**不影响 MP 端**；但该提示印证了「Web 分支不该进 MP」的设计正确性。
+
+> **结论**：**新增组件的 MP 真机渲染已确证**（Skyline 模拟器）；交互（按钮点击/选区）与需宿主能力项（真机相机/地图/广告）**待真机进一步确认**——交互验证受 IDE 该版本自动化 API 缺陷阻塞，非框架问题。
+
 ## 2. 待真机确认（需微信开发者工具/真机）
 
 ### 2.1 新增组件渲染与交互（页：`builtin-components-demo`）
