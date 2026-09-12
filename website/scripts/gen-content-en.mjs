@@ -1823,4 +1823,25 @@ export const CAP_EN = {
       'privacy.denied': 'The user denied the privacy authorization',
     },
   },
+  performance: {
+    desc: 'usePerformance: performance handle — entries (navigation/render/script) + real-time observer + setBufferSize + report a custom metric (wx.getPerformance/reportPerformance; web performance.getEntries*)',
+    errors: {
+      'performance.unsupported': 'The performance API is missing (or the web performance API is unavailable; report needs the Mini Program platform)',
+      'performance.failed': 'Reporting the performance metric failed',
+    },
+  },
+  preload: {
+    desc: 'usePreload: preload handle — assets (font/image) / skyline view / webview / subpackage pre-download with progress (wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage; web has no standard → Err, use <link rel=preload>)',
+    errors: {
+      'preload.unsupported': 'The preload API is missing (web has no standard preload API — use <link rel=preload> or dynamic import)',
+      'preload.failed': 'Preloading assets / views / subpackage failed',
+    },
+  },
+  'image-edit': {
+    desc: 'useImageEdit: image editing handle — crop by ratio / free edit (wx.cropImage/editImage; web has no WeChat editing UI → Err, implement with canvas)',
+    errors: {
+      'image-edit.unsupported': 'The image-editing API is missing (web has no WeChat editing UI — implement cropping with canvas)',
+      'image-edit.failed': 'Cropping or editing the image failed',
+    },
+  },
 }

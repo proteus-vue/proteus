@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 65 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 68 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（8）
 
@@ -55,7 +55,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## 媒体与扫码（8）
+## 媒体与扫码（9）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -67,6 +67,7 @@ order: 0
 | C61 | [capability.video](/docs/capability/video) | `useVideo()` | `VideoController` | wx.createVideoContext |
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
+| C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
 
 ## 账号与支付（8）
 
@@ -94,7 +95,7 @@ order: 0
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
 
-## 应用与生命周期（6）
+## 应用与生命周期（7）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -104,13 +105,15 @@ order: 0
 | C47 | [capability.mini-program](/docs/capability/mini-program) | `useMiniProgram()` | `MPContext` | wx.navigateToMiniProgram |
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | 无（被宿主嵌入） |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | 无（插件/扩展点 G-21） |
+| C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
 
-## 可观测与调试（2）
+## 可观测与调试（3）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | console + 上报 |
+| C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
 
 ## 其他（6）
 

@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 65 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 68 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (8)
 
@@ -55,7 +55,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## Media & Scanning (8)
+## Media & Scanning (9)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -67,6 +67,7 @@ order: 0
 | C61 | [capability.video](/docs/capability/video) | `useVideo()` | `VideoController` | wx.createVideoContext |
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
+| C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
 
 ## Account & Payment (8)
 
@@ -94,7 +95,7 @@ order: 0
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
 
-## App & Lifecycle (6)
+## App & Lifecycle (7)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -104,13 +105,15 @@ order: 0
 | C47 | [capability.mini-program](/docs/capability/mini-program) | `useMiniProgram()` | `MPContext` | wx.navigateToMiniProgram |
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | — |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | — |
+| C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
 
-## Observability & Debugging (2)
+## Observability & Debugging (3)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
 | C34 | [capability.analytics](/docs/capability/analytics) | `useAnalytics()` | `TrackAPI` | wx.reportEvent |
 | C35 | [capability.log](/docs/capability/log) | `useLog()` | `Logger` | — |
+| C66 | [capability.performance](/docs/capability/performance) | `usePerformance()` | `PerformanceAPI` | wx.getPerformance/reportPerformance |
 
 ## Other (6)
 
