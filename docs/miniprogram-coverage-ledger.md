@@ -22,14 +22,14 @@
 
 | 态 | 含义 | 计数 |
 |---|---|---|
-| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **249** |
-| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **10** |
+| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **251** |
+| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **8** |
 | ⬛ **private** | 平台私有（微信独占——支付/交通卡/视频号/VoIP/人脸核身/营销…）；收敛 `useMiniProgram` / 宿主桥 | **106** |
 | ➖ **na** | 不适用（废弃 API / 构建期语义 / 被语义原语「消灭」的形态） | **17** |
 | ❌ **gap** | 未归类（**必须为 0**——漏登记即 CI 红） | **0** |
 
 > **口径**：`分类完整率 = (total−gap)/total = 100%`（官方项全部进了某个箱子）——**这不是「全实现」**。
-> **诚实指标**：`真·落地率 = covered / (covered+planned) = 249/259 = 96%`（可落地项中已可用的比例）。
+> **诚实指标**：`真·落地率 = covered / (covered+planned) = 251/259 = 97%`（可落地项中已可用的比例）。
 
 ## 2-b. 已按标尺补齐的批次
 
@@ -40,6 +40,7 @@
 | **E** | **网络底层 `useSocket`**（`createUDPSocket`/`createTCPSocket`——UDP bind/connect/send/message + TCP connect/write/message）· **媒体高级 `useMediaProcessing`**（`createMediaContainer`/`createVideoDecoder`/`createMediaAudioPlayer`——轨道合成/解码取帧/多音源混音）；web 浏览器不支持裸 socket + 无标准媒体合成 → Err | covered 211→216 · 落地率 81→83% |
 | **F** | **录屏/截屏 `useScreenCapture`**·**缓存管理 `useCacheManager`**·**空闲调度 `useIdle`**·**窗口 `useWindow`**·**导航拦截 `useNavigationGuard`**（12 个官方 API）；web：空闲走 requestIdleCallback、导航走 beforeunload，其余 Err | covered 216→228 · 落地率 83→88% |
 | **G** | **AR/XR `useAR`**·**iBeacon `useBeacon`**·**局域网 mDNS `useLocalService`**·**翻译 `useTranslation`**·**海报 `usePoster`**·**设备探测 `useDeviceCapability`**（12 个官方 API）；web：AR 无对等→Err、HEVC 走 MediaSource，其余空订阅 | covered 228→249 · 落地率 88→96% |
+| **H** | **组件侧补齐**：`selection`（`ui.selection`——p-selection）· `keyboard-accessory`（`shell.keyboard-accessory`——p-keyboard-accessory），全端真实落地 | covered 249→251 · 落地率 96→97% |
 
 > 标尺的价值证明：缺口不再是「人记得登记才可见」——它把 5 个隐私 API 直接列进 planned，驱动补齐后归 covered。
 

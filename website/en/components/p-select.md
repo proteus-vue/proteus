@@ -12,14 +12,14 @@ Selector / overlay type
 
 | Semantic | Domain | Mini Program equivalent |
 |---|---|---|
-| ui.select | Content & Forms | `<picker>` (L1 primitive) |
+| ui.select | Content & Forms | `<picker>` (L1 primitive) · `<selection>` (L1 primitive) |
 
 ## Compat rollout
 
 | Target | Status | Notes |
 |---|---|---|
 | Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
-| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<picker>` (L1 primitive) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<picker>` (L1 primitive) · `<selection>` (L1 primitive) |
 | Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
 | iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
 | Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |
