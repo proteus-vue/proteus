@@ -484,6 +484,8 @@ export interface MiniProgramContainer extends ProteusHostContainer {
   registerTab(config: MiniProgramTabConfig): void
   listTabs(): string[]
   ownershipOf(pageId: string): PageOwnership | null
+  /** L1 沙箱（返回带 scope 隔离的小程序沙箱——覆盖基类 BusinessSandbox 宽返回型） */
+  createSandbox(bizId: string, manifest: BizManifest): Promise<MiniProgramSandbox>
 }
 
 /** ★G-42 B6：小程序容器——页面栈导航语义（10 层上限）+ tab keep-alive + L1 沙箱（scope 隔离） */

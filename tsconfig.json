@@ -59,6 +59,7 @@
       "@proteus-vue/components": ["src/components/index.ts"],
       "@proteus-vue/components/*": ["src/components/*"],
       "@proteus-vue/compiler-backend": ["packages/compiler-backend/src/index.ts"],
+      "@proteus-vue/compiler-backend/node": ["packages/compiler-backend/src/node.ts"],
       "@proteus-vue/gesture": ["packages/gesture/src/index.ts"],
       "@proteus-vue/desktop": ["packages/desktop/src/index.ts"],
       "@proteus-vue/compat-miniprogram": ["packages/compat-miniprogram/src/index.ts"],
@@ -66,7 +67,12 @@
       "@proteus-vue/agent": ["packages/agent/src/index.ts"],
       "@proteus-vue/docs": ["packages/docs/src/index.ts"],
       "@proteus-vue/dev-host": ["packages/dev-host/src/index.ts"],
-      "@proteus-vue/test-ir": ["packages/test-ir/src/index.ts"]
+      "@proteus-vue/test-ir": ["packages/test-ir/src/index.ts"],
+      // ★2026-09-12 CI 类型门禁修复：补 4 个缺失包（tests 走包名导入 → 缺 paths 报 TS2307 Cannot find module）
+      "@proteus-vue/component-ir": ["packages/component-ir/src/index.ts"],
+      "@proteus-vue/render-backend": ["packages/render-backend/src/index.ts"],
+      "@proteus-vue/style-safety": ["packages/style-safety/src/index.ts"],
+      "@proteus-vue/types": ["packages/types/src/index.ts"]
     }
   },
   "include": [
