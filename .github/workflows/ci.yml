@@ -12,13 +12,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
+          cache: pnpm
 
-      - name: 安装依赖（workspace 包 prepare 自动构建 dist）
-        run: npm ci
+      - name: 安装依赖（--ignore-scripts：postinstall 构建移交显式步，避开 fresh 环境 install 期构建时序问题）
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 构建 workspace 包（cli/component-ir/desktop 等 dist——vue-tsc/tests 子路径解析需要）
+        run: node scripts/build-packages.mjs
 
       - name: 类型检查（vue-tsc 全项目，含 packages/*）
         run: npx vue-tsc --noEmit
@@ -33,7 +40,7 @@ jobs:
         run: node scripts/check-script-compile.mjs
 
       - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
-        run: npm test
+        run: pnpm test
 
       - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
         run: node scripts/check-deps.mjs
@@ -70,16 +77,16 @@ jobs:
           npx tsx packages/cli/src/index.ts config:check examples/proteus.config.ts
 
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
-        run: npm run build:mp
+        run: pnpm run build:mp
 
       - name: Web 构建（示例工程）
-        run: npm run build:web
+        run: pnpm run build:web
 
       - name: 全部 @proteus-vue/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/@proteus-vue/create-proteus → dist）
-        run: npm run build --workspaces
+        run: pnpm -r build
 
       - name: 性能基准回归门禁（G-30：功能基准 >1.5x 基线阻断 / >1.2x 警告）
-        run: npm run bench
+        run: pnpm run bench
 
       - name: 模板快照一致性（快照后 git 无差异 → 模板与主仓同步）
         run: |
@@ -92,25 +99,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
+          cache: pnpm
 
       - name: 安装依赖
-        run: npm ci
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 构建 workspace 包（官网 import @proteus-vue/* 走 dist）
+        run: node scripts/build-packages.mjs
 
       - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
-        run: cd website && npm run check:plugin-docs
+        run: cd website && pnpm run check:plugin-docs
 
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
-        run: cd website && npm run check:reference && npm run check:css-compat && npm run check:content
+        run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content
 
       - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
-        run: cd website && npm run check:primitives
+        run: cd website && pnpm run check:primitives
 
       - name: 双语对齐门禁（★#493：EN overlay 与 zh 结构签名漂移阻断——章节/表格/围栏）
-        run: cd website && npm run check:en-drift
+        run: cd website && pnpm run check:en-drift
 
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
         run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
@@ -123,12 +137,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
-        run: npm run test:e2e:web
+        run: pnpm run test:e2e:web
