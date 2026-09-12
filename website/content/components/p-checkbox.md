@@ -1,7 +1,7 @@
 ---
 title: p-checkbox
 group: 内容与表单
-order: 1004
+order: 1005
 ---
 
 # p-checkbox

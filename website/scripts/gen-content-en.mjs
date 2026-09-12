@@ -1034,6 +1034,20 @@ export const COMP_EN = {
       background: "Background color (white by default)",
     },
   },
+  // ★Batch I (2026-09-12): camera (real WeChat built-in component)
+  'p-camera': {
+    desc: "Camera preview",
+    notes: [
+      "Aligned with the Mini Program <camera>: live preview with device position / flash control",
+      "MP uses the native <camera> component; the web previews via getUserMedia + <video> (standard API), with a graceful hint when unavailable",
+      "MP-safe: the two branches are compile-time valid tags (v-if dead branch is not rendered)",
+    ],
+    props: {
+      devicePosition: "Camera facing: back / front (aligned with device-position)",
+      flash: "Flash mode: auto / on / off (aligned with flash)",
+      aspectRatio: "Preview aspect ratio (default 4:3)",
+    },
+  },
 }
 
 // ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════
