@@ -93,8 +93,8 @@ export function defaultScopedPlugin(): Plugin {
 /** node_modules 包内路径解析（拆包步骤 7）：'node_modules/@proteus-vue/router/src/presets/x.ts' → 解析包根 + 子路径
  * ★2026-08：以 projectRoot 为基准（createRequire(projectRoot)）——vite config bundle 到 os.tmpdir 后
  *   import.meta.url 基准失效，模块级 require 找不到项目 node_modules */
-// 注：resolveSharedModule 仍用模块级 require（真实构建验证可解析 @proteus-vue/* 共享模块）；
-//   指纹（cache.ts）与包内路径解析（本函数）改 projectRoot 基准
+// 注：resolveSharedModule 的 @proteus-vue/* 解析按 resolveFrom（真实构建传 projectRoot）基准——
+//   plugin 自身位置在 pnpm 严格链接下解析不到应用声明的框架包（见该函数注释）；缺省回退模块级 require
 const require = createRequire(import.meta.url)
 export function resolvePkgPath(projectRoot: string, modPath: string): string {
   // 支持 scoped 包（@proteus-vue/router）与非 scoped 包
@@ -139,10 +139,16 @@ export function resolveSharedModule(
   absFrom: string,
   source: string,
   frameworkDir?: string,
+  /** 解析基准目录（真实构建传 projectRoot）：@proteus-vue/* 从项目 node_modules 解析。
+   *  缺省回退 plugin 自身位置——★真机 bug 修复 2026-09-12：此前恒用模块级 require（plugin 位置），
+   *  pnpm 严格链接下 @proteus-vue/{api,runtime,desktop,capabilities,app-config,shared}（应用声明、非 plugin 依赖）
+   *  解析失败 → 返回 null → 这些 _proteus/*.js 从不产出，而页面产物却 require 它们（onLoad 崩溃）。 */
+  resolveFrom?: string,
 ): { file: string; relNoExt: string } | null {
   if (source.startsWith('@proteus-vue/')) {
     try {
-      const pkgRoot = path.dirname(require.resolve(`${source}/package.json`))
+      const resolver = resolveFrom ? createRequire(path.join(resolveFrom, 'package.json')) : require
+      const pkgRoot = path.dirname(resolver.resolve(`${source}/package.json`))
       const entry = path.join(pkgRoot, 'dist', 'index.js')
       if (!fs.existsSync(entry)) return null
       return { file: entry, relNoExt: `_proteus/${source.replace('@proteus-vue/', '')}` }
@@ -431,7 +437,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus-vue/* → _proteus/<name>）
       /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus-vue/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
       const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null =>
-        resolveSharedModule(appDir, absFrom, source, frameworkComponents)
+        resolveSharedModule(appDir, absFrom, source, frameworkComponents, projectRoot)
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
