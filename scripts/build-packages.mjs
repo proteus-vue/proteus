@@ -102,4 +102,27 @@ for (let round = 1; round <= 3; round++) {
   }
 }
 console.log(`\nbuild-packages: built ${built} · failed ${failed}${failedPkgs.length ? '（' + failedPkgs.join(', ') + '）' : ''}`)
+
+// ★fresh 环境 bin 链接补齐（2026-09-12）：pnpm 只在 `install` 时创建 node_modules/.bin 链接，
+//   而 fresh install 时包的 dist 尚不存在 → cli 的 `proteus` bin 未链接（旧仓因 install 晚于首次 build
+//   的残留而「看起来可用」）。构建后补建/修复（幂等）：proteus → packages/cli/dist/index.js。
+function ensureBinLink(pkgDir, binName) {
+  const target = path.join(ROOT, 'packages', pkgDir, 'dist', 'index.js')
+  if (!fs.existsSync(target)) return
+  for (const binDir of [path.join(ROOT, 'node_modules', '.bin'), path.join(ROOT, 'examples', 'node_modules', '.bin')]) {
+    if (!fs.existsSync(path.dirname(binDir))) continue
+    fs.mkdirSync(binDir, { recursive: true })
+    const link = path.join(binDir, binName)
+    try {
+      fs.rmSync(link, { force: true })
+      fs.symlinkSync(path.relative(binDir, target), link)
+      fs.chmodSync(link, 0o755)
+    } catch {
+      /* 链接失败（权限/平台）→ 交由 CI 的 `pnpm install` 兜底，不阻断构建 */
+    }
+  }
+}
+ensureBinLink('cli', 'proteus')
+console.log('build-packages: bin 链接已就绪（proteus → packages/cli/dist/index.js）')
+
 if (failed) process.exit(1)
