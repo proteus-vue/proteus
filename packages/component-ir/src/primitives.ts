@@ -189,6 +189,17 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C54', kind: 'capability', semantic: 'capability.address', api: 'useAddress()', props: ['ShippingAddress'], mpEquiv: 'wx.chooseAddress', tier: 'L1', status: 'planned' },
   { id: 'C55', kind: 'capability', semantic: 'capability.wifi', api: 'useWifi()', props: ['WifiAPI'], mpEquiv: 'wx.getConnectedWifi/getWifiList/connectWifi', tier: 'L1', status: 'planned' },
   { id: 'C56', kind: 'capability', semantic: 'capability.we-run', api: 'useWeRun()', props: ['WeRunData'], mpEquiv: 'wx.getWeRunData', tier: 'L1', status: 'planned' },
+  // ★组件实例 API 对齐（2026-09-12）：画布组件实例（wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/OffscreenCanvas；纯 Hook → planned）
+  { id: 'C57', kind: 'capability', semantic: 'capability.canvas', api: 'useCanvas()', props: ['CanvasController'], mpEquiv: 'wx.createCanvasContext/canvasToTempFilePath/createOffscreenCanvas', tier: 'L1', status: 'planned' },
+  // ★组件实例 API 对齐（2026-09-12）：元素查询 / 交叉观察 / 媒体查询（wx SelectorQuery/IntersectionObserver/MediaQueryObserver）
+  { id: 'C58', kind: 'capability', semantic: 'capability.element-query', api: 'useElement()', props: ['ElementQuery'], mpEquiv: 'wx.createSelectorQuery', tier: 'L1', status: 'planned' },
+  { id: 'C59', kind: 'capability', semantic: 'capability.intersection', api: 'useIntersection()', props: ['IntersectionHandle'], mpEquiv: 'wx.createIntersectionObserver', tier: 'L1', status: 'planned' },
+  { id: 'C60', kind: 'capability', semantic: 'capability.media-query', api: 'useMediaQuery()', props: ['MediaQueryObserver'], mpEquiv: 'wx.createMediaQueryObserver', tier: 'L1', status: 'planned' },
+  // ★组件实例 API 对齐（2026-09-12）：媒体组件实例 + 广告（wx VideoContext/InnerAudioContext/LivePusherContext + 广告联盟）
+  { id: 'C61', kind: 'capability', semantic: 'capability.video', api: 'useVideo()', props: ['VideoController'], mpEquiv: 'wx.createVideoContext', tier: 'L1', status: 'planned' },
+  { id: 'C62', kind: 'capability', semantic: 'capability.audio', api: 'useAudio()', props: ['AudioController'], mpEquiv: 'wx.createInnerAudioContext', tier: 'L1', status: 'planned' },
+  { id: 'C63', kind: 'capability', semantic: 'capability.live-pusher', api: 'useLivePusher()', props: ['LivePusherController'], mpEquiv: 'wx.createLivePusherContext', tier: 'L1', status: 'planned' },
+  { id: 'C64', kind: 'capability', semantic: 'capability.ad', api: 'useAd()', props: ['AdAPI'], mpEquiv: 'wx.createRewardedVideoAd/createInterstitialAd/createBannerAd', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

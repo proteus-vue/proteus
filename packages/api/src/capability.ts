@@ -674,6 +674,574 @@ export interface RecorderController {
   onFrameRecorded(cb: (frame: { frameBuffer: ArrayBuffer; isLastFrame: boolean }) => void): () => void
 }
 
+// —— ★组件实例 API 对齐（2026-09-12）：C57 Canvas 组件实例 ——
+
+/** Canvas 文本度量（measureText 返回——对齐官方 TextMetrics 子集） */
+export interface CanvasTextMetrics {
+  /** 文本宽度（px） */
+  width: number
+  /** 文本高度（部分实现提供） */
+  height?: number
+}
+
+/** Canvas 线性/径向渐变（createLinearGradient / createCircularGradient 返回） */
+export interface CanvasGradientLike {
+  /**
+   * 添加渐变色标。
+   * @param offset 色标位置（0–1）
+   * @param color 颜色（CSS 颜色串）
+   */
+  addColorStop(offset: number, color: string): void
+}
+
+/** Canvas 图案填充（createPattern 返回） */
+export interface CanvasPatternLike {
+  /** 设置图案变换（可选，部分实现提供） */
+  setTransform?(transform: unknown): void
+}
+
+/**
+ * ★组件实例 API 对齐（2026-09-12）：C57 CanvasContext 2D 绘图上下文。
+ *   方法名与参数**逐一对齐微信官方 CanvasContext**（`wx.createCanvasContext` 返回）——
+ *   web 由标准 `CanvasRenderingContext2D` 适配（`setFillStyle` → `fillStyle` 等），
+ *   因此同一份绘图代码在小程序端与 Web 端均可运行，业务零平台分支。
+ */
+export interface CanvasContext {
+  /** 设置填充色（CSS 颜色串） */
+  setFillStyle(color: string): void
+  /** 设置描边色（CSS 颜色串） */
+  setStrokeStyle(color: string): void
+  /** 设置线宽 */
+  setLineWidth(lineWidth: number): void
+  /** 设置线帽（butt 平头 / round 圆头 / square 方头） */
+  setLineCap(lineCap: 'butt' | 'round' | 'square'): void
+  /** 设置连线拐角（bevel 斜角 / round 圆角 / miter 尖角） */
+  setLineJoin(lineJoin: 'bevel' | 'round' | 'miter'): void
+  /** 设置最大斜接长度 */
+  setMiterLimit(miterLimit: number): void
+  /** 设置全局透明度（0–1） */
+  setGlobalAlpha(alpha: number): void
+  /** 设置阴影（offsetX/offsetY 偏移、blur 模糊、color 颜色） */
+  setShadow(offsetX: number, offsetY: number, blur: number, color?: string): void
+  /** 设置虚线（pattern 为线段与间隔长度数组，offset 起始偏移） */
+  setLineDash(pattern: number[], offset?: number): void
+  /** 设置字号（px） */
+  setFontSize(fontSize: number): void
+  /** 设置文本水平对齐（left / center / right） */
+  setTextAlign(align: 'left' | 'center' | 'right'): void
+  /** 设置文本基线 */
+  setTextBaseline(textBaseline: 'top' | 'bottom' | 'middle' | 'normal' | 'alphabetic' | 'hanging' | 'ideographic'): void
+  /** 设置变换矩阵（等价标准 setTransform） */
+  setTransform(scaleX: number, skewY: number, skewX: number, scaleY: number, translateX: number, translateY: number): void
+  /** 保存绘图上下文（与 restore 配对，栈式） */
+  save(): void
+  /** 恢复最近保存的绘图上下文 */
+  restore(): void
+  /** 平移坐标系 */
+  translate(x: number, y: number): void
+  /** 旋转坐标系（弧度） */
+  rotate(rotate: number): void
+  /** 缩放坐标系 */
+  scale(scaleX: number, scaleY: number): void
+  /** 开始新路径（清空当前路径） */
+  beginPath(): void
+  /** 闭合当前路径 */
+  closePath(): void
+  /** 移动路径起点 */
+  moveTo(x: number, y: number): void
+  /** 连线到坐标 */
+  lineTo(x: number, y: number): void
+  /** 画圆弧（startAngle/endAngle 弧度；counterclockwise 逆时针） */
+  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void
+  /** 画圆弧并连线 */
+  arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void
+  /** 二次贝塞尔曲线 */
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void
+  /** 三次贝塞尔曲线 */
+  bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void
+  /** 矩形路径 */
+  rect(x: number, y: number, width: number, height: number): void
+  /** 填充当前路径 */
+  fill(): void
+  /** 描边当前路径 */
+  stroke(): void
+  /** 按当前路径裁剪 */
+  clip(): void
+  /** 填充矩形 */
+  fillRect(x: number, y: number, width: number, height: number): void
+  /** 描边矩形 */
+  strokeRect(x: number, y: number, width: number, height: number): void
+  /** 清除矩形区域 */
+  clearRect(x: number, y: number, width: number, height: number): void
+  /** 填充文本（maxWidth 可选，超宽压缩） */
+  fillText(text: string, x: number, y: number, maxWidth?: number): void
+  /** 测量文本尺寸 */
+  measureText(text: string): CanvasTextMetrics
+  /** 绘制图片（对齐官方 9 参 / 5 参 / 3 参重载：source 后接目标/裁剪参数） */
+  drawImage(imageResource: string | unknown, ...args: number[]): void
+  /** 创建线性渐变 */
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradientLike
+  /** 创建径向渐变（圆心 x,y 半径 radius） */
+  createCircularGradient(x: number, y: number, radius: number): CanvasGradientLike
+  /** 创建图案填充 */
+  createPattern(image: string | unknown, repetition: 'repeat' | 'repeat-x' | 'repeat-y' | 'no-repeat'): CanvasPatternLike | null
+  /** 提交绘制（wx 异步提交到画布；web 即时绘制 → 直接回调。reserve 为 true 时保留上次绘制内容） */
+  draw(reserve?: boolean | (() => void), callback?: () => void): void
+}
+
+/** Canvas 导出参数（wx.canvasToTempFilePath 对齐——web 端取相关字段） */
+export interface CanvasExportOptions {
+  /** 源区域左上角 x（缺省 0） */
+  x?: number
+  /** 源区域左上角 y（缺省 0） */
+  y?: number
+  /** 源区域宽（缺省画布宽） */
+  width?: number
+  /** 源区域高（缺省画布高） */
+  height?: number
+  /** 输出图宽（缺省 = 源宽） */
+  destWidth?: number
+  /** 输出图高（缺省 = 源高） */
+  destHeight?: number
+  /** 图片格式（缺省 png） */
+  fileType?: 'png' | 'jpg'
+  /** 图片质量（仅 jpg 生效，0–1） */
+  quality?: number
+}
+
+/** Canvas 画布节点（`<canvas type="2d">`——wx fields({node:true}) / web HTMLCanvasElement） */
+export interface CanvasNode {
+  /** 画布像素宽 */
+  width: number
+  /** 画布像素高 */
+  height: number
+  /** 取原生上下文（2d / webgl） */
+  getContext(type: '2d' | 'webgl'): unknown
+  /** 请求动画帧（wx Canvas node.requestAnimationFrame / web 同） */
+  requestAnimationFrame?(cb: (time: number) => void): number
+  /** 取消动画帧 */
+  cancelAnimationFrame?(handle: number): void
+}
+
+/** 离屏画布（wx.createOffscreenCanvas / web OffscreenCanvas——Skyline 高频渲染） */
+export interface OffscreenCanvasHandle {
+  /** 像素宽 */
+  width: number
+  /** 像素高 */
+  height: number
+  /** 取上下文（2d 返回可绘图上下文） */
+  getContext(type: '2d' | 'webgl'): CanvasContext | null
+}
+
+/**
+ * ★组件实例 API 对齐：C57 画布控制器（`useCanvas(id)`）。
+ *   wx：`wx.createCanvasContext(id)` + `createSelectorQuery().fields({node:true})` +
+ *   `wx.canvasToTempFilePath` + `wx.createOffscreenCanvas`；
+ *   web：`document` 中按 id/选择器定位 `HTMLCanvasElement` + 标准 2D 上下文适配 + OffscreenCanvas 降级。
+ */
+export interface CanvasController {
+  /** 画布标识（wx canvas-id；web 选择器/id，已去 `#` 前缀） */
+  readonly id: string
+  /** 创建旧版 2D 绘图上下文（方法名对齐官方 CanvasContext） */
+  createContext(): CapResult<CanvasContext>
+  /** 取画布节点（`<canvas type="2d">` node——用于 requestAnimationFrame / 标准 getContext） */
+  node(): Promise<CapResult<CanvasNode>>
+  /** 导出为临时文件路径（wx.canvasToTempFilePath；web 返回 data URL） */
+  toTempFilePath(options?: CanvasExportOptions): Promise<CapResult<string>>
+  /** 导出为 data URL（web 原生；wx 经临时文件读为 base64） */
+  toDataURL(options?: CanvasExportOptions): Promise<CapResult<string>>
+  /** 创建离屏画布（Skyline 高频渲染 / 离屏合成） */
+  offscreen(width: number, height: number, type?: '2d' | 'webgl'): CapResult<OffscreenCanvasHandle>
+}
+
+// —— ★组件实例 API 对齐（2026-09-12）：C58/C59/C60 元素查询 / 交叉观察 / 媒体查询 ——
+
+/** 元素几何（SelectorQuery.boundingClientRect 结果——对齐官方字段） */
+export interface ElementRect {
+  /** 元素 id */
+  id?: string
+  /** dataset 数据 */
+  dataset?: Record<string, unknown>
+  /** 左边界（相对显示区域） */
+  left: number
+  /** 上边界 */
+  top: number
+  /** 右边界 */
+  right: number
+  /** 下边界 */
+  bottom: number
+  /** 宽度 */
+  width: number
+  /** 高度 */
+  height: number
+}
+
+/** 滚动位置（SelectorQuery.scrollOffset 结果） */
+export interface ElementScrollOffset {
+  /** 元素 id */
+  id?: string
+  /** dataset 数据 */
+  dataset?: Record<string, unknown>
+  /** 纵向滚动距离 */
+  scrollTop: number
+  /** 横向滚动距离 */
+  scrollLeft: number
+}
+
+/** fields 查询选项（对齐官方 SelectorQuery.fields） */
+export interface ElementFieldsOptions {
+  /** 返回节点（`<canvas type="2d">` / 自定义组件实例） */
+  node?: boolean
+  /** 返回几何（left/top/right/bottom/width/height） */
+  rect?: boolean
+  /** 返回尺寸（width/height） */
+  size?: boolean
+  /** 返回滚动位置 */
+  scrollOffset?: boolean
+  /** 返回 computedStyle（属性名数组） */
+  computedStyle?: string[]
+  /** 返回类名/自定义属性 dataset 等上下文 */
+  context?: boolean
+}
+
+/** fields 查询结果（含请求到的各维度——未请求字段为 undefined） */
+export interface ElementFieldsResult {
+  /** 元素 id */
+  id?: string
+  /** dataset 数据 */
+  dataset?: Record<string, unknown>
+  /** 节点（node: true） */
+  node?: CanvasNode
+  /** 几何（rect: true） */
+  left?: number
+  top?: number
+  right?: number
+  bottom?: number
+  /** 尺寸（rect/size: true） */
+  width?: number
+  height?: number
+  /** 滚动位置（scrollOffset: true） */
+  scrollTop?: number
+  scrollLeft?: number
+  /** computedStyle（computedStyle: [...]） */
+  [styleOrExtra: string]: unknown
+}
+
+/**
+ * ★组件实例 API 对齐：C58 元素查询句柄（`useElement(id?)`）。
+ *   wx：`wx.createSelectorQuery()`（boundingClientRect / scrollOffset / fields + node/rect/size）+
+ *   `wx.createIntersectionObserver` 关联元素；web：`document.querySelector` + `getBoundingClientRect()`。
+ */
+export interface ElementQuery {
+  /**
+   * 查询元素几何。
+   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   */
+  boundingClientRect(selector?: string): Promise<CapResult<ElementRect>>
+  /**
+   * 查询元素滚动位置。
+   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   */
+  scrollOffset(selector?: string): Promise<CapResult<ElementScrollOffset>>
+  /**
+   * 按需查询元素字段（node/rect/size/scrollOffset/computedStyle）。
+   * @param options 字段开关
+   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   */
+  fields(options: ElementFieldsOptions, selector?: string): Promise<CapResult<ElementFieldsResult>>
+  /**
+   * 查询元素尺寸（boundingClientRect 的常用投影）。
+   * @param selector CSS 选择器（缺省 = 句柄初始 id/选择器）
+   */
+  size(selector?: string): Promise<CapResult<{ width: number; height: number }>>
+  /**
+   * 批量查询（同一查询内选择器数组——对齐官方 selectAll 的批量语义）。
+   * @param selectors CSS 选择器数组
+   */
+  batch(selectors: string[]): Promise<CapResult<Array<ElementRect | null>>>
+}
+
+/** 交叉观察结果（IntersectionObserver 回调载荷——对齐官方字段） */
+export interface IntersectionResult {
+  /** 元素 id */
+  id?: string
+  /** dataset 数据 */
+  dataset?: Record<string, unknown>
+  /** 相交比例（0–1） */
+  intersectionRatio: number
+  /** 相交区域 */
+  intersectionRect: { left: number; top: number; right: number; bottom: number; width: number; height: number }
+  /** 目标边界 */
+  boundingClientRect: ElementRect
+  /** 相对参照物的区域 */
+  relativeRect: { left: number; top: number; right: number; bottom: number; width: number; height: number }
+  /** 时间戳 */
+  time: number
+}
+
+/** 交叉观察配置（wx.createIntersectionObserver options） */
+export interface IntersectionOptions {
+  /** 相交阈值数组（缺省 [0]） */
+  thresholds?: number[]
+  /** 初始相交比例（用于立即上报初始态） */
+  initialRatio?: number
+  /** 是否同时观察所有满足选择器的元素 */
+  observeAll?: boolean
+}
+
+/** 交叉观察句柄（IntersectionHandle.observe / relativeTo* / disconnect） */
+export interface IntersectionHandle {
+  /**
+   * 指定参照元素（相对该元素观察）。
+   * @param selector 参照元素选择器
+   * @param margins 参照物扩展/收缩边界
+   */
+  relativeTo(selector: string, margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle
+  /**
+   * 以显示区域（视口）为参照。
+   * @param margins 视口扩展/收缩边界
+   */
+  relativeToViewport(margins?: { left?: number; right?: number; top?: number; bottom?: number }): IntersectionHandle
+  /**
+   * 开始观察目标元素。
+   * @param targetSelector 目标元素选择器
+   * @param cb 相交状态变化回调
+   */
+  observe(targetSelector: string, cb: (result: IntersectionResult) => void): IntersectionHandle
+  /** 停止观察（释放） */
+  disconnect(): void
+}
+
+/** 媒体查询条件（wx MediaQueryObserver.observe options——对齐官方字段） */
+export interface MediaQueryCondition {
+  /** 最小宽度（px） */
+  minWidth?: number
+  /** 最大宽度（px） */
+  maxWidth?: number
+  /** 宽度（px） */
+  width?: number
+  /** 最小高度（px） */
+  minHeight?: number
+  /** 最大高度（px） */
+  maxHeight?: number
+  /** 高度（px） */
+  height?: number
+  /** 屏幕方向 */
+  orientation?: 'landscape' | 'portrait'
+}
+
+/** 媒体查询结果 */
+export interface MediaQueryResult {
+  /** 是否匹配当前条件 */
+  matches: boolean
+}
+
+/**
+ * ★组件实例 API 对齐：C60 媒体查询句柄（`useMediaQuery()`）。
+ *   wx：`wx.createMediaQueryObserver()`；web：`window.matchMedia`（条件 → media query 串）。
+ */
+export interface MediaQueryObserver {
+  /**
+   * 开始观察媒体查询条件。
+   * @param condition 条件（宽高范围 / 方向）
+   * @param cb 匹配状态变化回调
+   */
+  observe(condition: MediaQueryCondition, cb: (result: MediaQueryResult) => void): void
+  /** 停止观察（释放） */
+  disconnect(): void
+}
+
+// —— ★组件实例 API 对齐（2026-09-12）：C61/C62/C63 媒体组件实例（video / audio / live-pusher） ——
+
+/** 视频全屏方向（VideoContext.requestFullScreen） */
+export interface VideoFullScreenOptions {
+  /** 全屏方向（horizontal 横屏 / vertical 竖屏） */
+  direction?: 'horizontal' | 'vertical'
+}
+
+/**
+ * ★组件实例 API 对齐：C61 视频控制器（`useVideo(id)`）。
+ *   wx：`wx.createVideoContext(id)`；web：`document` 中按 id 定位 `<video>` 元素并归一化控制/事件。
+ */
+export interface VideoController {
+  /** 播放 */
+  play(): Promise<CapResult<void>>
+  /** 暂停 */
+  pause(): Promise<CapResult<void>>
+  /** 停止（回到起点） */
+  stop(): Promise<CapResult<void>>
+  /**
+   * 跳转到指定位置。
+   * @param position 位置（秒）
+   */
+  seek(position: number): Promise<CapResult<void>>
+  /**
+   * 设置播放倍速。
+   * @param rate 倍速（0.5–2.0）
+   */
+  playbackRate(rate: number): Promise<CapResult<void>>
+  /** 进入全屏 */
+  requestFullScreen(options?: VideoFullScreenOptions): Promise<CapResult<void>>
+  /** 退出全屏 */
+  exitFullScreen(): Promise<CapResult<void>>
+  /** 发送弹幕 */
+  sendDanmu(danmu: { text: string; color?: string }): Promise<CapResult<void>>
+  /**
+   * 订阅视频事件（play / pause / ended / timeupdate / error / fullscreenchange）。
+   * @param event 事件名
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  on(event: 'play' | 'pause' | 'ended' | 'timeupdate' | 'error' | 'fullscreenchange', cb: (payload: unknown) => void): () => void
+}
+
+/**
+ * ★组件实例 API 对齐：C62 音频控制器（`useAudio(options?)`）。
+ *   wx：`wx.createInnerAudioContext()`；web：`Audio` 元素（HTMLAudioElement）适配。
+ */
+export interface AudioController {
+  /**
+   * 播放。
+   * @param src 音频地址（缺省用构造时的 src）
+   */
+  play(src?: string): Promise<CapResult<void>>
+  /** 暂停 */
+  pause(): Promise<CapResult<void>>
+  /** 停止 */
+  stop(): Promise<CapResult<void>>
+  /**
+   * 跳转到指定位置。
+   * @param position 位置（秒）
+   */
+  seek(position: number): Promise<CapResult<void>>
+  /** 设置音量（0–1） */
+  setVolume(volume: number): void
+  /** 设置是否循环 */
+  setLoop(loop: boolean): void
+  /** 当前播放进度（秒） */
+  readonly currentTime: number
+  /** 音频时长（秒） */
+  readonly duration: number
+  /** 是否暂停 */
+  readonly paused: boolean
+  /** 释放音频资源 */
+  destroy(): void
+  /**
+   * 订阅音频事件（canplay / play / pause / stop / ended / timeupdate / error）。
+   * @param event 事件名
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  on(event: 'canplay' | 'play' | 'pause' | 'stop' | 'ended' | 'timeupdate' | 'error', cb: (payload: unknown) => void): () => void
+}
+
+/**
+ * ★组件实例 API 对齐：C63 直播推流控制器（`useLivePusher(id)`）。
+ *   wx：`wx.createLivePusherContext(id)`；web：无标准推流 API → 各方法 Err 诚实降级（宿主桥）。
+ */
+export interface LivePusherController {
+  /** 开始推流 */
+  start(): Promise<CapResult<void>>
+  /** 停止推流 */
+  stop(): Promise<CapResult<void>>
+  /** 暂停推流 */
+  pause(): Promise<CapResult<void>>
+  /** 恢复推流 */
+  resume(): Promise<CapResult<void>>
+  /** 切换前后摄像头 */
+  switchCamera(): Promise<CapResult<void>>
+  /** 开启/关闭闪光灯 */
+  toggleTorch(): Promise<CapResult<void>>
+  /** 推流截图（返回临时文件路径 / data URL） */
+  snapshot(): Promise<CapResult<string>>
+  /** 发送 SEI 消息 */
+  sendMessage(msg: string): Promise<CapResult<void>>
+  /**
+   * 订阅推流事件（statechange / netstatus / error）。
+   * @param event 事件名
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  on(event: 'statechange' | 'netstatus' | 'error', cb: (payload: unknown) => void): () => void
+}
+
+// —— ★组件实例 API 对齐（2026-09-12）：C64 广告组件实例 ——
+
+/** 激励视频广告句柄（wx.createRewardedVideoAd） */
+export interface RewardedVideoAdHandle {
+  /** 拉取广告（缺省 show 前自动 load） */
+  load(): Promise<CapResult<void>>
+  /** 展示广告（返回是否因激励观看完毕而闭合的 Promise 解析在 onClose 载荷） */
+  show(): Promise<CapResult<void>>
+  /** 订阅加载成功（可缓存预热） */
+  onLoad(cb: () => void): () => void
+  /**
+   * 订阅用户关闭广告。
+   * @param cb 载荷 `isEnded`（是否观看完毕可发奖励）
+   */
+  onClose(cb: (res: { isEnded: boolean }) => void): () => void
+  /** 订阅错误 */
+  onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void
+  /** 销毁 */
+  off(): void
+}
+
+/** 插屏广告句柄（wx.createInterstitialAd） */
+export interface InterstitialAdHandle {
+  /** 拉取广告 */
+  load(): Promise<CapResult<void>>
+  /** 展示广告 */
+  show(): Promise<CapResult<void>>
+  /** 订阅加载成功 */
+  onLoad(cb: () => void): () => void
+  /** 订阅用户关闭 */
+  onClose(cb: () => void): () => void
+  /** 订阅错误 */
+  onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void
+  /** 销毁 */
+  destroy(): void
+}
+
+/** 横幅广告样式（wx.createBannerAd style） */
+export interface BannerAdStyle {
+  /** 左侧偏移（px） */
+  left?: number
+  /** 顶部偏移（px） */
+  top?: number
+  /** 宽度（px） */
+  width: number
+}
+
+/** 横幅广告句柄（wx.createBannerAd） */
+export interface BannerAdHandle {
+  /** 展示广告 */
+  show(): Promise<CapResult<void>>
+  /** 隐藏广告 */
+  hide(): Promise<CapResult<void>>
+  /** 销毁 */
+  destroy(): void
+  /** 订阅加载成功 */
+  onLoad(cb: () => void): () => void
+  /** 订阅尺寸变化 */
+  onResize(cb: (size: { width: number; height: number }) => void): () => void
+  /** 订阅错误 */
+  onError(cb: (err: { errCode: number; errMsg: string }) => void): () => void
+}
+
+/**
+ * ★组件实例 API 对齐：C64 广告句柄（`useAd()`）。
+ *   wx：`wx.createRewardedVideoAd` / `createInterstitialAd` / `createBannerAd`；
+ *   web：无广告联盟标准 API → 创建时抛 `ad.unsupported`（诚实降级，宿主可注入自建广告桥）。
+ */
+export interface AdAPI {
+  /** 创建激励视频广告（按 adUnitId 缓存实例——同 id 复用） */
+  rewardedVideo(adUnitId: string): RewardedVideoAdHandle
+  /** 创建插屏广告 */
+  interstitial(adUnitId: string): InterstitialAdHandle
+  /** 创建横幅广告 */
+  banner(options: { adUnitId: string; style: BannerAdStyle }): BannerAdHandle
+}
+
 /** C36 蓝牙状态（wx.openBluetoothAdapter / web Web Bluetooth 特性探测） */
 export interface BluetoothInfo {
   /** 平台是否支持蓝牙 */
@@ -1578,6 +2146,25 @@ export interface CapabilityBridge {
   getWifi?(): WifiAPI
   /** C56 微信运动（wx.getWeRunData；web 无标准 → 缺省） */
   getWeRunData?(): Promise<WeRunData>
+  // ★组件实例 API 对齐（2026-09-12）：C57 画布（Canvas 组件实例——缺省 undefined → Hook 返回 Err）
+  /** C57 画布控制器（wx.createCanvasContext/SelectorQuery node / web document canvas） */
+  createCanvas?(id: string): CanvasController
+  // ★组件实例 API 对齐（2026-09-12）：C58/C59/C60 元素查询 / 交叉观察 / 媒体查询
+  /** C58 元素查询句柄（wx.createSelectorQuery / web querySelector + getBoundingClientRect） */
+  createElementQuery?(id?: string): ElementQuery
+  /** C59 交叉观察句柄（wx.createIntersectionObserver / web IntersectionObserver） */
+  createIntersection?(options?: IntersectionOptions): IntersectionHandle
+  /** C60 媒体查询句柄（wx.createMediaQueryObserver / web matchMedia） */
+  createMediaQuery?(): MediaQueryObserver
+  // ★组件实例 API 对齐（2026-09-12）：C61/C62/C63 媒体组件实例 + C64 广告
+  /** C61 视频控制器（wx.createVideoContext / web HTMLVideoElement） */
+  createVideo?(id: string): VideoController
+  /** C62 音频控制器（wx.createInnerAudioContext / web Audio） */
+  createAudio?(src?: string): AudioController
+  /** C63 直播推流控制器（wx.createLivePusherContext / web 无标准 → Err） */
+  createLivePusher?(id: string): LivePusherController
+  /** C64 广告（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → 创建时 throw） */
+  getAd?(): AdAPI
 }
 
 /** 存储契约（useStorage / reactive storage 底座） */
@@ -1736,6 +2323,22 @@ export interface CapabilityProbe {
   wifi: boolean
   /** ★颗粒度对齐 C3 批 2：微信运动 */
   weRun: boolean
+  /** ★组件实例 API 对齐：画布（Canvas 组件实例） */
+  canvas: boolean
+  /** ★组件实例 API 对齐：元素查询（SelectorQuery） */
+  element: boolean
+  /** ★组件实例 API 对齐：交叉观察（IntersectionObserver） */
+  intersection: boolean
+  /** ★组件实例 API 对齐：媒体查询（MediaQueryObserver） */
+  mediaQuery: boolean
+  /** ★组件实例 API 对齐：视频控制器（VideoContext） */
+  video: boolean
+  /** ★组件实例 API 对齐：音频控制器（InnerAudioContext） */
+  audio: boolean
+  /** ★组件实例 API 对齐：直播推流（LivePusherContext） */
+  livePusher: boolean
+  /** ★组件实例 API 对齐：广告（RewardedVideoAd/InterstitialAd/BannerAd） */
+  ad: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -2027,6 +2630,20 @@ interface WxLike {
   onGetWifiList?: (cb: (r: { wifiList: Array<{ SSID: string; BSSID: string; secure: boolean; signalStrength: number; frequency?: number }> }) => void) => void
   connectWifi?: (opt: { SSID: string; password?: string; success?: () => void; fail?: (e: unknown) => void }) => void
   getWeRunData?: (opt: { success: (r: { encryptedData: string; iv: string; cloudID?: string }) => void; fail?: (e: unknown) => void }) => void
+  // ★组件实例 API 对齐（2026-09-12）：C57 Canvas 组件实例
+  createCanvasContext?: (canvasId: string) => unknown
+  canvasToTempFilePath?: (opt: Record<string, unknown>) => void
+  createOffscreenCanvas?: (opt: { type?: string; width: number; height: number }) => unknown
+  createSelectorQuery?: () => WxSelectorQueryLike
+  createIntersectionObserver?: (component: unknown, options?: { thresholds?: number[]; initialRatio?: number; observeAll?: boolean }) => WxIntersectionObserverLike
+  createMediaQueryObserver?: () => WxMediaQueryObserverLike
+  // ★组件实例 API 对齐（2026-09-12）：媒体组件实例 + 广告
+  createVideoContext?: (id: string) => WxVideoContextLike
+  createInnerAudioContext?: (opt?: { useWebAudioImplement?: boolean }) => WxInnerAudioContextLike
+  createLivePusherContext?: (id?: string) => WxLivePusherContextLike
+  createRewardedVideoAd?: (opt: { adUnitId: string }) => WxRewardedVideoAdLike
+  createInterstitialAd?: (opt: { adUnitId: string }) => WxInterstitialAdLike
+  createBannerAd?: (opt: { adUnitId: string; style: { left?: number; top?: number; width: number } }) => WxBannerAdLike
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -2127,6 +2744,119 @@ interface WxMapContextLike {
   addGroundOverlay?: (opt: Record<string, unknown>) => void
   updateGroundOverlay?: (opt: Record<string, unknown>) => void
   removeGroundOverlay?: (opt: Record<string, unknown>) => void
+}
+
+/**
+ * ★组件实例 API 对齐（2026-09-12）：wx.createSelectorQuery 返回的查询对象子集。
+ *   fields 的 node/rect/size/computedStyle 结果经 exec 回调批量返回。
+ */
+interface WxSelectorQueryLike {
+  in?: (component: unknown) => WxSelectorQueryLike
+  select?: (selector: string) => WxSelectorQueryLike
+  selectAll?: (selector: string) => WxSelectorQueryLike
+  selectViewport?: () => WxSelectorQueryLike
+  boundingClientRect?: (cb?: (r: unknown) => void) => WxSelectorQueryLike
+  scrollOffset?: (cb?: (r: unknown) => void) => WxSelectorQueryLike
+  fields?: (opt: Record<string, unknown>, cb?: (r: unknown) => void) => WxSelectorQueryLike
+  exec?: (cb?: (res: unknown) => void) => void
+}
+
+/** wx.createIntersectionObserver 返回对象子集 */
+interface WxIntersectionObserverLike {
+  relativeTo?: (selector: string, margins?: Record<string, number>) => WxIntersectionObserverLike
+  relativeToViewport?: (margins?: Record<string, number>) => WxIntersectionObserverLike
+  observe?: (targetSelector: string, cb: (res: unknown) => void) => void
+  disconnect?: () => void
+}
+
+/** wx.createMediaQueryObserver 返回对象子集 */
+interface WxMediaQueryObserverLike {
+  observe?: (condition: Record<string, unknown>, cb: (res: { matches: boolean }) => void) => void
+  disconnect?: () => void
+}
+
+/** wx.createVideoContext 返回对象子集 */
+interface WxVideoContextLike {
+  play?: () => void
+  pause?: () => void
+  stop?: () => void
+  seek?: (position: number) => void
+  playbackRate?: (rate: number) => void
+  requestFullScreen?: (opt?: { direction?: string }) => void
+  exitFullScreen?: () => void
+  sendDanmu?: (danmu: { text: string; color?: string }) => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+  off?: (event: string, cb: (payload: unknown) => void) => void
+}
+
+/** wx.createInnerAudioContext 返回对象子集 */
+interface WxInnerAudioContextLike {
+  src?: string
+  autoplay?: boolean
+  loop?: boolean
+  volume?: number
+  duration?: number
+  currentTime?: number
+  paused?: boolean
+  play?: () => void
+  pause?: () => void
+  stop?: () => void
+  seek?: (position: number) => void
+  destroy?: () => void
+  onCanplay?: (cb: () => void) => void
+  onPlay?: (cb: () => void) => void
+  onPause?: (cb: () => void) => void
+  onStop?: (cb: () => void) => void
+  onEnded?: (cb: () => void) => void
+  onTimeUpdate?: (cb: () => void) => void
+  onError?: (cb: (e: unknown) => void) => void
+}
+
+/** wx.createLivePusherContext 返回对象子集 */
+interface WxLivePusherContextLike {
+  start?: (opt?: Record<string, unknown>) => void
+  stop?: (opt?: Record<string, unknown>) => void
+  pause?: (opt?: Record<string, unknown>) => void
+  resume?: (opt?: Record<string, unknown>) => void
+  switchCamera?: (opt?: Record<string, unknown>) => void
+  toggleTorch?: (opt?: Record<string, unknown>) => void
+  snapshot?: (opt?: Record<string, unknown>) => void
+  sendMessage?: (opt: { msg: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+  off?: (event: string, cb: (payload: unknown) => void) => void
+}
+
+/** wx.createRewardedVideoAd 返回对象子集 */
+interface WxRewardedVideoAdLike {
+  load?: () => Promise<void>
+  show?: () => Promise<void>
+  offLoad?: (cb?: (...a: never[]) => void) => void
+  offClose?: (cb?: (...a: never[]) => void) => void
+  offError?: (cb?: (...a: never[]) => void) => void
+  destroy?: () => void
+  onLoad?: (cb: () => void) => void
+  onClose?: (cb: (res: { isEnded: boolean }) => void) => void
+  onError?: (cb: (e: { errCode: number; errMsg: string }) => void) => void
+}
+
+/** wx.createInterstitialAd 返回对象子集 */
+interface WxInterstitialAdLike {
+  load?: () => Promise<void>
+  show?: () => Promise<void>
+  destroy?: () => void
+  onLoad?: (cb: () => void) => void
+  onClose?: (cb: () => void) => void
+  onError?: (cb: (e: { errCode: number; errMsg: string }) => void) => void
+}
+
+/** wx.createBannerAd 返回对象子集 */
+interface WxBannerAdLike {
+  show?: () => Promise<void>
+  hide?: () => void
+  destroy?: () => void
+  onLoad?: (cb: () => void) => void
+  onResize?: (cb: (size: { width: number; height: number }) => void) => void
+  onError?: (cb: (e: { errCode: number; errMsg: string }) => void) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -3444,6 +4174,384 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           fail: (e) => reject(new CapError('werun.failed', '获取微信运动数据失败（需 scope.werun 授权 + 后端解密）', e)),
         })
       }),
+    // ★组件实例 API 对齐（2026-09-12）：C57 画布（wx.createCanvasContext / SelectorQuery node / canvasToTempFilePath / createOffscreenCanvas）
+    createCanvas: (id) => {
+      const canvasId = id.replace(/^#/, '')
+      // 旧接口 CanvasContext（方法名已对齐官方）——wx 直接返回；缺 API → 各方法级 Err
+      const makeContext = (): CapResult<CanvasContext> => {
+        if (typeof wx.createCanvasContext !== 'function') return capErr('canvas.unsupported', 'wx.createCanvasContext 缺失')
+        const raw = wx.createCanvasContext(canvasId) as Record<string, unknown>
+        const call = (name: string, ...args: unknown[]): void => {
+          const fn = raw[name]
+          if (typeof fn === 'function') (fn as (...a: unknown[]) => void).apply(raw, args)
+        }
+        return capOk({
+          setFillStyle: (c) => call('setFillStyle', c),
+          setStrokeStyle: (c) => call('setStrokeStyle', c),
+          setLineWidth: (w) => call('setLineWidth', w),
+          setLineCap: (v) => call('setLineCap', v),
+          setLineJoin: (v) => call('setLineJoin', v),
+          setMiterLimit: (v) => call('setMiterLimit', v),
+          setGlobalAlpha: (a) => call('setGlobalAlpha', a),
+          setShadow: (x, y, b, c) => call('setShadow', x, y, b, c),
+          setLineDash: (p, o) => call('setLineDash', p, o),
+          setFontSize: (s) => call('setFontSize', s),
+          setTextAlign: (v) => call('setTextAlign', v),
+          setTextBaseline: (v) => call('setTextBaseline', v),
+          setTransform: (a, b, c, d, e, f) => call('setTransform', a, b, c, d, e, f),
+          save: () => call('save'),
+          restore: () => call('restore'),
+          translate: (x, y) => call('translate', x, y),
+          rotate: (r) => call('rotate', r),
+          scale: (x, y) => call('scale', x, y),
+          beginPath: () => call('beginPath'),
+          closePath: () => call('closePath'),
+          moveTo: (x, y) => call('moveTo', x, y),
+          lineTo: (x, y) => call('lineTo', x, y),
+          arc: (x, y, r, s, e, cc) => call('arc', x, y, r, s, e, cc),
+          arcTo: (x1, y1, x2, y2, r) => call('arcTo', x1, y1, x2, y2, r),
+          quadraticCurveTo: (cpx, cpy, x, y) => call('quadraticCurveTo', cpx, cpy, x, y),
+          bezierCurveTo: (a, b, c, d, e, f) => call('bezierCurveTo', a, b, c, d, e, f),
+          rect: (x, y, w, h) => call('rect', x, y, w, h),
+          fill: () => call('fill'),
+          stroke: () => call('stroke'),
+          clip: () => call('clip'),
+          fillRect: (x, y, w, h) => call('fillRect', x, y, w, h),
+          strokeRect: (x, y, w, h) => call('strokeRect', x, y, w, h),
+          clearRect: (x, y, w, h) => call('clearRect', x, y, w, h),
+          fillText: (t, x, y, mw) => call('fillText', t, x, y, mw),
+          measureText: (t) => {
+            if (typeof raw.measureText !== 'function') return { width: 0 }
+            return (raw.measureText as (s: string) => CanvasTextMetrics)(t)
+          },
+          drawImage: (img, ...args) => call('drawImage', img, ...args),
+          createLinearGradient: (x0, y0, x1, y1) => {
+            if (typeof raw.createLinearGradient !== 'function') return { addColorStop: () => {} }
+            return (raw.createLinearGradient as (...a: number[]) => CanvasGradientLike)(x0, y0, x1, y1)
+          },
+          createCircularGradient: (x, y, r) => {
+            if (typeof raw.createCircularGradient !== 'function') return { addColorStop: () => {} }
+            return (raw.createCircularGradient as (x: number, y: number, r: number) => CanvasGradientLike)(x, y, r)
+          },
+          createPattern: (img, rep) => {
+            if (typeof raw.createPattern !== 'function') return null
+            return (raw.createPattern as (i: unknown, r: string) => CanvasPatternLike)(img, rep)
+          },
+          draw: (reserve, cb) => {
+            const done = typeof reserve === 'function' ? reserve : cb
+            const keep = typeof reserve === 'boolean' ? reserve : undefined
+            if (typeof raw.draw === 'function') (raw.draw as (r?: boolean, c?: () => void) => void)(keep, done)
+            else if (done) done()
+          },
+        })
+      }
+      const queryNode = (): Promise<CanvasNode> =>
+        new Promise<CanvasNode>((resolve, reject) => {
+          if (typeof wx.createSelectorQuery !== 'function') return reject(new CapError('canvas.unsupported', 'wx.createSelectorQuery 缺失（type=2d 节点不可用）'))
+          const q = wx.createSelectorQuery()
+          const sel = q.select?.('#' + canvasId)
+          if (!sel || typeof sel.fields !== 'function') return reject(new CapError('canvas.unsupported', 'SelectorQuery.fields 缺失'))
+          sel.fields({ node: true, size: true }, () => {})
+          if (typeof q.exec !== 'function') return reject(new CapError('canvas.unsupported', 'SelectorQuery.exec 缺失'))
+          q.exec((res: unknown) => {
+            const first = Array.isArray(res) ? (res[0] as { node?: CanvasNode } | undefined) : (res as { node?: CanvasNode } | undefined)
+            if (first?.node) resolve(first.node)
+            else reject(new CapError('canvas.node-missing', '未取得 canvas 节点（需 <canvas type="2d" id="…">）'))
+          })
+        })
+      const exportImage = (options?: CanvasExportOptions): Promise<CapResult<string>> =>
+        new Promise<CapResult<string>>((resolve) => {
+          if (typeof wx.canvasToTempFilePath !== 'function') return resolve(capErr('canvas.unsupported', 'wx.canvasToTempFilePath 缺失'))
+          wx.canvasToTempFilePath({
+            canvasId,
+            ...options,
+            success: (r: unknown) => resolve(capOk((r as { tempFilePath: string }).tempFilePath)),
+            fail: (e: unknown) => resolve(capErr('canvas.export-failed', '导出画布失败', e)),
+          })
+        })
+      return {
+        id: canvasId,
+        createContext: makeContext,
+        node: () => wrap(queryNode()),
+        toTempFilePath: exportImage,
+        toDataURL: (options) =>
+          exportImage(options).then(async (r) => {
+            if (!r.ok) return r
+            const fsm = typeof wx.getFileSystemManager === 'function' ? wx.getFileSystemManager() : undefined
+            if (!fsm?.readFile) return capErr<string>('canvas.unsupported', 'wx.getFileSystemManager.readFile 缺失（无法转 base64）')
+            return await new Promise<CapResult<string>>((resolve) => {
+              fsm.readFile!({
+                filePath: r.data,
+                encoding: 'base64',
+                success: (rr) => resolve(capOk('data:image/png;base64,' + String(rr.data))),
+                fail: (e) => resolve(capErr<string>('canvas.export-failed', '读取临时文件失败', e)),
+              })
+            })
+          }),
+        offscreen: (width, height, type = '2d') => {
+          if (typeof wx.createOffscreenCanvas !== 'function') return capErr<OffscreenCanvasHandle>('canvas.unsupported', 'wx.createOffscreenCanvas 缺失')
+          const off = wx.createOffscreenCanvas({ type, width, height }) as { width: number; height: number; getContext: (t: string) => unknown }
+          return capOk({
+            width: off.width,
+            height: off.height,
+            getContext: (t: '2d' | 'webgl') => off.getContext(t) as CanvasContext | null,
+          })
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C58 元素查询（wx.createSelectorQuery）
+    createElementQuery: (id) => {
+      const norm = (sel?: string): string => {
+        const s = sel ?? id ?? ''
+        return s.startsWith('#') ? s : s ? '#' + s : ''
+      }
+      const execOne = <T,>(build: (q: WxSelectorQueryLike) => void): Promise<CapResult<T>> =>
+        new Promise<CapResult<T>>((resolve) => {
+          if (typeof wx.createSelectorQuery !== 'function') return resolve(capErr<T>('element.unsupported', 'wx.createSelectorQuery 缺失'))
+          const q = wx.createSelectorQuery()
+          try {
+            build(q)
+          } catch (e) {
+            return resolve(capErr<T>('element.failed', 'SelectorQuery 构建失败', e))
+          }
+          if (typeof q.exec !== 'function') return resolve(capErr<T>('element.unsupported', 'SelectorQuery.exec 缺失'))
+          q.exec((res: unknown) => {
+            const first = Array.isArray(res) ? res[0] : res
+            if (first == null) return resolve(capErr<T>('element.not-found', '未查询到元素'))
+            resolve(capOk(first as T))
+          })
+        })
+      const execMany = <T,>(selectors: string[], build: (q: WxSelectorQueryLike, sel: string) => void): Promise<CapResult<T[]>> =>
+        new Promise<CapResult<T[]>>((resolve) => {
+          if (typeof wx.createSelectorQuery !== 'function') return resolve(capErr<T[]>('element.unsupported', 'wx.createSelectorQuery 缺失'))
+          const q = wx.createSelectorQuery()
+          try {
+            for (const sel of selectors) build(q, sel)
+          } catch (e) {
+            return resolve(capErr<T[]>('element.failed', 'SelectorQuery 构建失败', e))
+          }
+          if (typeof q.exec !== 'function') return resolve(capErr<T[]>('element.unsupported', 'SelectorQuery.exec 缺失'))
+          q.exec((res: unknown) => {
+            const arr = Array.isArray(res) ? res : []
+            resolve(capOk(arr as T[]))
+          })
+        })
+      return {
+        boundingClientRect: (selector) => execOne<ElementRect>((q) => {
+          const s = q.select?.(norm(selector))
+          s?.boundingClientRect?.()
+        }),
+        scrollOffset: (selector) => execOne<ElementScrollOffset>((q) => {
+          const s = q.select?.(norm(selector))
+          s?.scrollOffset?.()
+        }),
+        fields: (options, selector) => execOne<ElementFieldsResult>((q) => {
+          const s = q.select?.(norm(selector))
+          s?.fields?.({ ...options })
+        }),
+        size: (selector) =>
+          execOne<ElementRect>((q) => {
+            const s = q.select?.(norm(selector))
+            s?.boundingClientRect?.()
+          }).then((r) => (r.ok ? capOk({ width: r.data.width ?? 0, height: r.data.height ?? 0 }) : (r as unknown as CapResult<{ width: number; height: number }>))),
+        batch: (selectors) => execMany<ElementRect>(selectors, (q, sel) => q.select?.(norm(sel))?.boundingClientRect?.()),
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C59 交叉观察（wx.createIntersectionObserver）
+    createIntersection: (options) => {
+      const make = wx.createIntersectionObserver
+      const obs = typeof make === 'function' ? make.call(wx, undefined, options) : undefined
+      const handle: IntersectionHandle = {
+        relativeTo: (selector, margins) => {
+          obs?.relativeTo?.(selector, margins)
+          return handle
+        },
+        relativeToViewport: (margins) => {
+          obs?.relativeToViewport?.(margins)
+          return handle
+        },
+        observe: (targetSelector, cb) => {
+          obs?.observe?.(targetSelector, (res) => cb(res as IntersectionResult))
+          return handle
+        },
+        disconnect: () => {
+          obs?.disconnect?.()
+        },
+      }
+      return handle
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C60 媒体查询（wx.createMediaQueryObserver）
+    createMediaQuery: () => {
+      const obs = typeof wx.createMediaQueryObserver === 'function' ? wx.createMediaQueryObserver() : undefined
+      return {
+        observe: (condition, cb) => {
+          if (!obs?.observe) {
+            cb({ matches: false })
+            return
+          }
+          obs.observe({ ...condition }, (res) => cb({ matches: !!res.matches }))
+        },
+        disconnect: () => {
+          obs?.disconnect?.()
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C61 视频控制器（wx.createVideoContext）
+    createVideo: (id) => {
+      const ctx = typeof wx.createVideoContext === 'function' ? wx.createVideoContext(id.replace(/^#/, '')) : undefined
+      const run = (fn: unknown, name: string, ...args: unknown[]): Promise<CapResult<void>> =>
+        Promise.resolve().then(() => {
+          if (typeof fn !== 'function') return capErr<void>('video.unsupported', 'VideoContext.' + name + ' 缺失')
+          try {
+            ;(fn as (...a: unknown[]) => void).apply(ctx, args)
+            return capOk(undefined)
+          } catch (e) {
+            return capErr<void>('video.failed', '视频 ' + name + ' 失败', e)
+          }
+        })
+      const evMap: Record<string, string> = { play: 'onPlay', pause: 'onPause', ended: 'onEnded', timeupdate: 'onTimeUpdate', error: 'onError', fullscreenchange: 'onFullScreenChange' }
+      return {
+        play: () => run(ctx?.play, 'play'),
+        pause: () => run(ctx?.pause, 'pause'),
+        stop: () => run(ctx?.stop, 'stop'),
+        seek: (position) => run(ctx?.seek, 'seek', position),
+        playbackRate: (rate) => run(ctx?.playbackRate, 'playbackRate', rate),
+        requestFullScreen: (options) => run(ctx?.requestFullScreen, 'requestFullScreen', options),
+        exitFullScreen: () => run(ctx?.exitFullScreen, 'exitFullScreen'),
+        sendDanmu: (danmu) => run(ctx?.sendDanmu, 'sendDanmu', danmu),
+        on: (event, cb) => {
+          const fn = ctx?.[evMap[event] as keyof WxVideoContextLike]
+          if (typeof fn !== 'function') return () => {}
+          ;(fn as (c: (p: unknown) => void) => void)(cb)
+          return () => {}
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C62 音频控制器（wx.createInnerAudioContext）
+    createAudio: (src) => {
+      if (typeof wx.createInnerAudioContext !== 'function') throw new CapError('audio.unsupported', 'wx.createInnerAudioContext 缺失')
+      const ac = wx.createInnerAudioContext()
+      if (src) ac.src = src
+      const run = (fn: unknown, name: string, ...args: unknown[]): Promise<CapResult<void>> =>
+        Promise.resolve().then(() => {
+          if (typeof fn !== 'function') return capErr<void>('audio.unsupported', 'InnerAudioContext.' + name + ' 缺失')
+          try {
+            ;(fn as (...a: unknown[]) => void).apply(ac, args)
+            return capOk(undefined)
+          } catch (e) {
+            return capErr<void>('audio.failed', '音频 ' + name + ' 失败', e)
+          }
+        })
+      const evMap: Record<string, string> = { canplay: 'onCanplay', play: 'onPlay', pause: 'onPause', stop: 'onStop', ended: 'onEnded', timeupdate: 'onTimeUpdate', error: 'onError' }
+      return {
+        play: (s) => {
+          if (s) ac.src = s
+          return run(ac.play, 'play')
+        },
+        pause: () => run(ac.pause, 'pause'),
+        stop: () => run(ac.stop, 'stop'),
+        seek: (position) => run(ac.seek, 'seek', position),
+        setVolume: (v) => { ac.volume = v },
+        setLoop: (v) => { ac.loop = v },
+        get currentTime() { return ac.currentTime ?? 0 },
+        get duration() { return ac.duration ?? 0 },
+        get paused() { return ac.paused ?? false },
+        destroy: () => ac.destroy?.(),
+        on: (event, cb) => {
+          const fn = ac[evMap[event] as keyof WxInnerAudioContextLike]
+          if (typeof fn !== 'function') return () => {}
+          ;(fn as (c: (p: unknown) => void) => void)(cb as (p: unknown) => void)
+          return () => {}
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C63 直播推流控制器（wx.createLivePusherContext）
+    createLivePusher: (id) => {
+      const ctx = typeof wx.createLivePusherContext === 'function' ? wx.createLivePusherContext(id.replace(/^#/, '')) : undefined
+      const call = (fn: unknown, name: string, opt?: Record<string, unknown>): Promise<CapResult<void>> =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof fn !== 'function') return resolve(capErr<void>('live-pusher.unsupported', 'LivePusherContext.' + name + ' 缺失'))
+          try {
+            ;(fn as (o?: Record<string, unknown>) => void)({ ...opt, success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr<void>('live-pusher.failed', '推流 ' + name + ' 失败', e)) })
+          } catch (e) {
+            resolve(capErr<void>('live-pusher.failed', '推流 ' + name + ' 失败', e))
+          }
+        })
+      return {
+        start: () => call(ctx?.start, 'start'),
+        stop: () => call(ctx?.stop, 'stop'),
+        pause: () => call(ctx?.pause, 'pause'),
+        resume: () => call(ctx?.resume, 'resume'),
+        switchCamera: () => call(ctx?.switchCamera, 'switchCamera'),
+        toggleTorch: () => call(ctx?.toggleTorch, 'toggleTorch'),
+        snapshot: () =>
+          new Promise<CapResult<string>>((resolve) => {
+            if (typeof ctx?.snapshot !== 'function') return resolve(capErr<string>('live-pusher.unsupported', 'LivePusherContext.snapshot 缺失'))
+            ctx.snapshot({ success: (r: unknown) => resolve(capOk((r as { tempImagePath?: string }).tempImagePath ?? '')), fail: (e: unknown) => resolve(capErr<string>('live-pusher.failed', '推流截图失败', e)) })
+          }),
+        sendMessage: (msg) =>
+          new Promise<CapResult<void>>((resolve) => {
+            if (typeof ctx?.sendMessage !== 'function') return resolve(capErr<void>('live-pusher.unsupported', 'LivePusherContext.sendMessage 缺失'))
+            ctx.sendMessage({ msg, success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr<void>('live-pusher.failed', '发送 SEI 消息失败', e)) })
+          }),
+        on: (event, cb) => {
+          if (typeof ctx?.on !== 'function') return () => {}
+          ctx.on(event, cb)
+          return () => {
+            if (typeof ctx?.off === 'function') ctx.off(event, cb)
+          }
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C64 广告（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd）
+    getAd: () => {
+      const cache = new Map<string, unknown>()
+      const ensure = <T,>(key: string, make: () => T): T => {
+        if (!cache.has(key)) cache.set(key, make())
+        return cache.get(key) as T
+      }
+      return {
+        rewardedVideo: (adUnitId) =>
+          ensure('rv:' + adUnitId, (): RewardedVideoAdHandle => {
+            if (typeof wx.createRewardedVideoAd !== 'function') throw new CapError('ad.unsupported', 'wx.createRewardedVideoAd 缺失')
+            const ad = wx.createRewardedVideoAd({ adUnitId })
+            return {
+              load: () => Promise.resolve(ad.load?.()).then(() => capOk(undefined), (e) => capErr<void>('ad.failed', '加载激励视频失败', e)),
+              show: () => Promise.resolve(ad.show?.()).then(() => capOk(undefined), (e) => capErr<void>('ad.failed', '展示激励视频失败', e)),
+              onLoad: (cb) => { ad.onLoad?.(cb); return () => ad.offLoad?.(cb) },
+              onClose: (cb) => { ad.onClose?.((res) => cb({ isEnded: !!res.isEnded })); return () => ad.offClose?.() },
+              onError: (cb) => { ad.onError?.(cb); return () => ad.offError?.() },
+              off: () => ad.destroy?.(),
+            }
+          }),
+        interstitial: (adUnitId) =>
+          ensure('int:' + adUnitId, (): InterstitialAdHandle => {
+            if (typeof wx.createInterstitialAd !== 'function') throw new CapError('ad.unsupported', 'wx.createInterstitialAd 缺失')
+            const ad = wx.createInterstitialAd({ adUnitId })
+            return {
+              load: () => Promise.resolve(ad.load?.()).then(() => capOk(undefined), (e) => capErr<void>('ad.failed', '加载插屏广告失败', e)),
+              show: () => Promise.resolve(ad.show?.()).then(() => capOk(undefined), (e) => capErr<void>('ad.failed', '展示插屏广告失败', e)),
+              onLoad: (cb) => { ad.onLoad?.(cb); return () => {} },
+              onClose: (cb) => { ad.onClose?.(cb); return () => {} },
+              onError: (cb) => { ad.onError?.(cb); return () => {} },
+              destroy: () => ad.destroy?.(),
+            }
+          }),
+        banner: (options) =>
+          ensure('banner:' + options.adUnitId, (): BannerAdHandle => {
+            if (typeof wx.createBannerAd !== 'function') throw new CapError('ad.unsupported', 'wx.createBannerAd 缺失')
+            const ad = wx.createBannerAd({ adUnitId: options.adUnitId, style: options.style })
+            return {
+              show: () => Promise.resolve(ad.show?.()).then(() => capOk(undefined), (e) => capErr<void>('ad.failed', '展示横幅广告失败', e)),
+              hide: () => Promise.resolve().then(() => { ad.hide?.(); return capOk(undefined) }),
+              destroy: () => ad.destroy?.(),
+              onLoad: (cb) => { ad.onLoad?.(cb); return () => {} },
+              onResize: (cb) => { ad.onResize?.(cb); return () => {} },
+              onError: (cb) => { ad.onError?.(cb); return () => {} },
+            }
+          }),
+      }
+    },
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -4443,7 +5551,389 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         return false
       }
     },
+    // ★组件实例 API 对齐（2026-09-12）：C57 画布（web HTMLCanvasElement + 标准 2D 上下文适配 / OffscreenCanvas）
+    createCanvas: (id) => {
+      const canvasId = id.replace(/^#/, '')
+      const doc = (g as { document?: Document }).document
+      let cached: HTMLCanvasElement | null = null
+      const resolveEl = (): HTMLCanvasElement | null => {
+        if (cached) return cached
+        if (!doc || typeof doc.querySelector !== 'function') return null
+        const byId = typeof doc.getElementById === 'function' ? doc.getElementById(canvasId) : null
+        cached = (byId as HTMLCanvasElement | null) ?? (doc.querySelector(`#${canvasId}`) as HTMLCanvasElement | null) ?? (doc.querySelector(canvasId.startsWith('.') || canvasId.includes('[') ? canvasId : `canvas.${canvasId}`) as HTMLCanvasElement | null)
+        return cached
+      }
+      const exportImage = (options?: CanvasExportOptions): Promise<CapResult<string>> => {
+        const el = resolveEl()
+        if (!el || typeof el.toDataURL !== 'function') return Promise.resolve(capErr<string>('canvas.unsupported', '未找到 canvas 元素（web 端需 id/选择器命中）'))
+        const type = options?.fileType === 'jpg' ? 'image/jpeg' : 'image/png'
+        const quality = options?.quality
+        // 裁剪导出：有源区域参数且元素可用 drawImage 时走离屏重绘
+        const wantCrop = options && (options.x || options.y || options.width || options.height || options.destWidth || options.destHeight)
+        if (wantCrop && typeof doc?.createElement === 'function') {
+          try {
+            const w = options?.destWidth ?? options?.width ?? el.width
+            const h = options?.destHeight ?? options?.height ?? el.height
+            const off = doc.createElement('canvas')
+            off.width = w
+            off.height = h
+            const octx = off.getContext('2d')
+            if (octx) {
+              octx.drawImage(el, options?.x ?? 0, options?.y ?? 0, options?.width ?? el.width, options?.height ?? el.height, 0, 0, w, h)
+              return Promise.resolve(capOk(off.toDataURL(type, quality)))
+            }
+          } catch (e) {
+            return Promise.resolve(capErr<string>('canvas.export-failed', '导出画布失败', e))
+          }
+        }
+        try {
+          return Promise.resolve(capOk(el.toDataURL(type, quality)))
+        } catch (e) {
+          return Promise.resolve(capErr<string>('canvas.export-failed', '导出画布失败（可能被跨域图片污染）', e))
+        }
+      }
+      return {
+        id: canvasId,
+        createContext: () => {
+          const el = resolveEl()
+          if (!el || typeof el.getContext !== 'function') return capErr<CanvasContext>('canvas.unsupported', '未找到 canvas 元素（web 端需 id/选择器命中）')
+          const ctx = el.getContext('2d') as CanvasRenderingContext2D | null
+          if (!ctx) return capErr<CanvasContext>('canvas.unsupported', 'getContext(2d) 返回空')
+          let lineDash: number[] = []
+          const applyDash = (): void => {
+            if (typeof (ctx as { setLineDash?: (p: number[]) => void }).setLineDash === 'function') ctx.setLineDash(lineDash)
+          }
+          return capOk({
+            setFillStyle: (c) => { ctx.fillStyle = c },
+            setStrokeStyle: (c) => { ctx.strokeStyle = c },
+            setLineWidth: (w) => { ctx.lineWidth = w },
+            setLineCap: (v) => { ctx.lineCap = v },
+            setLineJoin: (v) => { ctx.lineJoin = v },
+            setMiterLimit: (v) => { ctx.miterLimit = v },
+            setGlobalAlpha: (a) => { ctx.globalAlpha = a },
+            setShadow: (x, y, b, c) => { ctx.shadowOffsetX = x; ctx.shadowOffsetY = y; ctx.shadowBlur = b; if (c) ctx.shadowColor = c },
+            setLineDash: (p, o) => { lineDash = o ? [o, ...p] : p; applyDash() },
+            setFontSize: (s) => {
+              const cur = ctx.font || '10px sans-serif'
+              ctx.font = cur.replace(/^\d+(\.\d+)?px/, `${s}px`)
+              if (!/px/.test(ctx.font)) ctx.font = `${s}px sans-serif`
+            },
+            setTextAlign: (v) => { ctx.textAlign = v },
+            setTextBaseline: (v) => { ctx.textBaseline = v === 'normal' ? 'alphabetic' : v },
+            setTransform: (a, b, c, d, e, f) => ctx.setTransform(a, b, c, d, e, f),
+            save: () => ctx.save(),
+            restore: () => ctx.restore(),
+            translate: (x, y) => ctx.translate(x, y),
+            rotate: (r) => ctx.rotate(r),
+            scale: (x, y) => ctx.scale(x, y),
+            beginPath: () => ctx.beginPath(),
+            closePath: () => ctx.closePath(),
+            moveTo: (x, y) => ctx.moveTo(x, y),
+            lineTo: (x, y) => ctx.lineTo(x, y),
+            arc: (x, y, r, s, e, cc) => ctx.arc(x, y, r, s, e, cc),
+            arcTo: (x1, y1, x2, y2, r) => ctx.arcTo(x1, y1, x2, y2, r),
+            quadraticCurveTo: (cpx, cpy, x, y) => ctx.quadraticCurveTo(cpx, cpy, x, y),
+            bezierCurveTo: (a, b, c, d, e, f) => ctx.bezierCurveTo(a, b, c, d, e, f),
+            rect: (x, y, w, h) => ctx.rect(x, y, w, h),
+            fill: () => ctx.fill(),
+            stroke: () => ctx.stroke(),
+            clip: () => ctx.clip(),
+            fillRect: (x, y, w, h) => ctx.fillRect(x, y, w, h),
+            strokeRect: (x, y, w, h) => ctx.strokeRect(x, y, w, h),
+            clearRect: (x, y, w, h) => ctx.clearRect(x, y, w, h),
+            fillText: (t, x, y, mw) => (mw === undefined ? ctx.fillText(t, x, y) : ctx.fillText(t, x, y, mw)),
+            measureText: (t) => {
+              const m = ctx.measureText(t)
+              return { width: m.width, height: (m as { actualBoundingBoxAscent?: number }).actualBoundingBoxAscent }
+            },
+            drawImage: (img, ...args) => {
+              // 对齐官方重载：3 参（dx,dy）/ 5 参（dx,dy,dw,dh）/ 9 参（裁剪）；字符串路径 web 端不支持同步绘制
+              if (typeof img === 'string') return
+              const i = img as CanvasImageSource
+              if (args.length === 2) ctx.drawImage(i, args[0], args[1])
+              else if (args.length === 4) ctx.drawImage(i, args[0], args[1], args[2], args[3])
+              else if (args.length === 8) ctx.drawImage(i, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+            },
+            createLinearGradient: (x0, y0, x1, y1) => ctx.createLinearGradient(x0, y0, x1, y1),
+            createCircularGradient: (x, y, r) => ctx.createRadialGradient(x, y, 0, x, y, r),
+            createPattern: (img, rep) => (typeof img === 'string' ? null : ctx.createPattern(img as CanvasImageSource, rep)),
+            draw: (reserve, cb) => {
+              // web 即时绘制——无异步提交；回调对齐 wx 的 draw 完成语义
+              const done = typeof reserve === 'function' ? reserve : cb
+              if (done) done()
+            },
+          })
+        },
+        node: () => {
+          const el = resolveEl()
+          if (!el) return Promise.resolve(capErr<CanvasNode>('canvas.unsupported', '未找到 canvas 元素（web 端需 id/选择器命中）'))
+          const raf = (g as { requestAnimationFrame?: (cb: (t: number) => void) => number }).requestAnimationFrame
+          const caf = (g as { cancelAnimationFrame?: (h: number) => void }).cancelAnimationFrame
+          return Promise.resolve(capOk({
+            width: el.width,
+            height: el.height,
+            getContext: (t: '2d' | 'webgl') => el.getContext(t),
+            requestAnimationFrame: raf ? (cb) => raf(cb) : undefined,
+            cancelAnimationFrame: caf ? (h) => caf(h) : undefined,
+          }))
+        },
+        toTempFilePath: exportImage,
+        toDataURL: exportImage,
+        offscreen: (width, height, type = '2d') => {
+          const OC = (g as { OffscreenCanvas?: new (w: number, h: number) => { width: number; height: number; getContext: (t: string) => unknown } }).OffscreenCanvas
+          if (typeof OC === 'function') {
+            const off = new OC(width, height)
+            return capOk({ width: off.width, height: off.height, getContext: (t: '2d' | 'webgl') => off.getContext(t) as CanvasContext | null })
+          }
+          if (doc && typeof doc.createElement === 'function') {
+            const el = doc.createElement('canvas')
+            el.width = width
+            el.height = height
+            return capOk({ width, height, getContext: (t: '2d' | 'webgl') => (el.getContext(t) as unknown) as CanvasContext | null })
+          }
+          return capErr<OffscreenCanvasHandle>('canvas.unsupported', 'Web 无 OffscreenCanvas 且无 document（SSR）')
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C58 元素查询（web querySelector + getBoundingClientRect）
+    createElementQuery: (id) => {
+      const doc = (g as { document?: Document }).document
+      const norm = (sel?: string): string => {
+        const s = sel ?? id ?? ''
+        return s.startsWith('#') || s.includes('.') || s.includes('[') ? s : s ? '#' + s : ''
+      }
+      const pick = (sel?: string): Element | null => {
+        if (!doc || typeof doc.querySelector !== 'function') return null
+        const s = norm(sel)
+        if (!s) return null
+        try {
+          return doc.querySelector(s)
+        } catch {
+          return null
+        }
+      }
+      const rectOf = (el: Element): ElementRect => {
+        const r = el.getBoundingClientRect()
+        return { id: (el as HTMLElement).id || undefined, dataset: (el as HTMLElement).dataset as unknown as Record<string, unknown>, left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
+      }
+      return {
+        boundingClientRect: (selector) => {
+          const el = pick(selector)
+          if (!el) return Promise.resolve(capErr<ElementRect>('element.not-found', '未找到元素（web 端需 id/选择器命中）'))
+          return Promise.resolve(capOk(rectOf(el)))
+        },
+        scrollOffset: (selector) => {
+          const el = pick(selector)
+          if (!el) return Promise.resolve(capErr<ElementScrollOffset>('element.not-found', '未找到元素（web 端需 id/选择器命中）'))
+          const h = el as HTMLElement
+          return Promise.resolve(capOk({ id: h.id || undefined, dataset: h.dataset as unknown as Record<string, unknown>, scrollTop: h.scrollTop ?? 0, scrollLeft: h.scrollLeft ?? 0 }))
+        },
+        fields: (options, selector) => {
+          const el = pick(selector)
+          if (!el) return Promise.resolve(capErr<ElementFieldsResult>('element.not-found', '未找到元素（web 端需 id/选择器命中）'))
+          const h = el as HTMLElement
+          const r = h.getBoundingClientRect()
+          const out: ElementFieldsResult = { id: h.id || undefined, dataset: h.dataset as unknown as Record<string, unknown> }
+          if (options.node) out.node = { width: (h as HTMLCanvasElement).width ?? Math.round(r.width), height: (h as HTMLCanvasElement).height ?? Math.round(r.height), getContext: (t: string) => (h as HTMLCanvasElement).getContext?.(t as '2d') }
+          if (options.rect || options.size) {
+            out.left = r.left; out.top = r.top; out.right = r.right; out.bottom = r.bottom; out.width = r.width; out.height = r.height
+          }
+          if (options.scrollOffset) {
+            out.scrollTop = h.scrollTop ?? 0; out.scrollLeft = h.scrollLeft ?? 0
+          }
+          if (options.computedStyle && typeof g.getComputedStyle === 'function') {
+            const cs = g.getComputedStyle(el)
+            for (const key of options.computedStyle) out[camel(key)] = cs.getPropertyValue(key)
+          }
+          return Promise.resolve(capOk(out))
+        },
+        size: (selector) => {
+          const el = pick(selector)
+          if (!el) return Promise.resolve(capErr<{ width: number; height: number }>('element.not-found', '未找到元素（web 端需 id/选择器命中）'))
+          const r = el.getBoundingClientRect()
+          return Promise.resolve(capOk({ width: r.width, height: r.height }))
+        },
+        batch: (selectors) =>
+          Promise.resolve(capOk(selectors.map((sel) => {
+            const el = pick(sel)
+            return el ? rectOf(el) : null
+          }))),
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C59 交叉观察（web IntersectionObserver）
+    createIntersection: (options) => {
+      const IO = (g as { IntersectionObserver?: new (cb: (entries: unknown[]) => void, opts?: unknown) => { observe: (el: Element) => void; unobserve?: (el: Element) => void; disconnect: () => void } }).IntersectionObserver
+      const callbacks = new Map<Element, (res: IntersectionResult) => void>()
+      const io = typeof IO === 'function' ? new IO((entries) => {
+        for (const ent of entries as Array<{ target: Element; intersectionRatio: number; time: number; intersectionRect: { left: number; top: number; right: number; bottom: number; width: number; height: number }; boundingClientRect: DOMRectReadOnly }>) {
+          const cb = callbacks.get(ent.target)
+          if (!cb) continue
+          const b = ent.boundingClientRect
+          cb({
+            id: (ent.target as HTMLElement).id || undefined,
+            dataset: (ent.target as HTMLElement).dataset as unknown as Record<string, unknown>,
+            intersectionRatio: ent.intersectionRatio,
+            intersectionRect: ent.intersectionRect,
+            boundingClientRect: { left: b.left, top: b.top, right: b.right, bottom: b.bottom, width: b.width, height: b.height },
+            relativeRect: ent.intersectionRect,
+            time: ent.time,
+          })
+        }
+      }, { threshold: options?.thresholds ?? [0] }) : undefined
+      const handle: IntersectionHandle = {
+        relativeTo: (selector) => {
+          // web IntersectionObserver 的 root 需在构造时确定；此处记录供自定义实现扩展（标准实现以视口为参照）
+          const doc = (g as { document?: Document }).document
+          doc?.querySelector?.(selector)
+          return handle
+        },
+        relativeToViewport: () => handle,
+        observe: (targetSelector, cb) => {
+          const doc = (g as { document?: Document }).document
+          const el = doc?.querySelector?.(targetSelector)
+          if (!el || !io) return handle
+          callbacks.set(el, cb)
+          io.observe(el)
+          return handle
+        },
+        disconnect: () => {
+          callbacks.clear()
+          io?.disconnect?.()
+        },
+      }
+      return handle
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C60 媒体查询（web matchMedia）
+    createMediaQuery: () => {
+      const mm = (g as { matchMedia?: (q: string) => MediaQueryList }).matchMedia
+      const subs = new Set<{ mql: MediaQueryList; cb: (r: MediaQueryResult) => void; h: () => void }>()
+      return {
+        observe: (condition, cb) => {
+          const query = conditionToQuery(condition)
+          if (typeof mm !== 'function' || !query) {
+            cb({ matches: false })
+            return
+          }
+          const mql = mm(query)
+          const h = (): void => cb({ matches: mql.matches })
+          mql.addEventListener?.('change', h)
+          subs.add({ mql, cb, h })
+          cb({ matches: mql.matches })
+        },
+        disconnect: () => {
+          for (const s of subs) s.mql.removeEventListener?.('change', s.h)
+          subs.clear()
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C61 视频控制器（web HTMLVideoElement）
+    createVideo: (id) => {
+      const doc = (g as { document?: Document }).document
+      const el = doc?.getElementById?.(id.replace(/^#/, '')) as HTMLVideoElement | null
+      const run = (op: string, fn: () => unknown): Promise<CapResult<void>> =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (!el) return resolve(capErr<void>('video.not-found', '未找到 <video> 元素（web 端需 id 命中）'))
+          try {
+            const r = fn()
+            // play() 返回 Promise
+            if (r && typeof (r as Promise<void>).then === 'function') return void (r as Promise<void>).then(() => resolve(capOk(undefined)), (e) => resolve(capErr<void>('video.failed', '视频 ' + op + ' 失败', e)))
+            resolve(capOk(undefined))
+          } catch (e) {
+            resolve(capErr<void>('video.failed', '视频 ' + op + ' 失败', e))
+          }
+        })
+      const evMap: Record<string, string> = { play: 'play', pause: 'pause', ended: 'ended', timeupdate: 'timeupdate', error: 'error', fullscreenchange: 'fullscreenchange' }
+      return {
+        play: () => run('play', () => el?.play()),
+        pause: () => run('pause', () => el?.pause()),
+        stop: () => run('stop', () => { if (el) { el.pause(); el.currentTime = 0 } }),
+        seek: (position) => run('seek', () => { if (el) el.currentTime = position }),
+        playbackRate: (rate) => run('playbackRate', () => { if (el) el.playbackRate = rate }),
+        requestFullScreen: () => run('fullscreen', () => el?.requestFullscreen?.()),
+        exitFullScreen: () => run('exitFullScreen', () => doc?.exitFullscreen?.()),
+        sendDanmu: () => Promise.resolve(capErr<void>('video.unsupported', 'Web 无弹幕标准 API（由宿主视图承载）')),
+        on: (event, cb) => {
+          if (!el) return () => {}
+          const h = (e: Event): void => cb(e)
+          el.addEventListener(evMap[event] ?? event, h)
+          return () => el.removeEventListener(evMap[event] ?? event, h)
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C62 音频控制器（web Audio 元素）
+    createAudio: (src) => {
+      const A = (g as { Audio?: new (src?: string) => HTMLAudioElement }).Audio
+      if (typeof A !== 'function') throw new CapError('audio.unsupported', 'web Audio 不可用（SSR/受限环境）')
+      const el = new A(src)
+      const run = (op: string, fn: () => unknown): Promise<CapResult<void>> =>
+        new Promise<CapResult<void>>((resolve) => {
+          try {
+            const r = fn()
+            if (r && typeof (r as Promise<void>).then === 'function') return (r as Promise<void>).then(() => resolve(capOk(undefined)), (e) => resolve(capErr<void>('audio.failed', '音频 ' + op + ' 失败', e)))
+            resolve(capOk(undefined))
+          } catch (e) {
+            resolve(capErr<void>('audio.failed', '音频 ' + op + ' 失败', e))
+          }
+        })
+      return {
+        play: (s) => { if (s) el.src = s; return run('play', () => el.play()) },
+        pause: () => run('pause', () => el.pause()),
+        stop: () => run('stop', () => { el.pause(); el.currentTime = 0 }),
+        seek: (position) => run('seek', () => { el.currentTime = position }),
+        setVolume: (v) => { el.volume = v },
+        setLoop: (v) => { el.loop = v },
+        get currentTime() { return el.currentTime },
+        get duration() { return el.duration || 0 },
+        get paused() { return el.paused },
+        destroy: () => { try { el.pause(); el.src = '' } catch { /* noop */ } },
+        on: (event, cb) => {
+          const map: Record<string, string> = { canplay: 'canplay', play: 'play', pause: 'pause', stop: 'pause', ended: 'ended', timeupdate: 'timeupdate', error: 'error' }
+          const h = (e: Event): void => cb(e)
+          el.addEventListener(map[event] ?? event, h)
+          return () => el.removeEventListener(map[event] ?? event, h)
+        },
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C63 直播推流（web 无标准 → 各方法 Err 诚实降级）
+    createLivePusher: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('live-pusher.unsupported', 'Web 无标准推流 API（' + op + ' 需宿主桥承载）'))
+      return {
+        start: () => noWeb<void>('start'),
+        stop: () => noWeb<void>('stop'),
+        pause: () => noWeb<void>('pause'),
+        resume: () => noWeb<void>('resume'),
+        switchCamera: () => noWeb<void>('switchCamera'),
+        toggleTorch: () => noWeb<void>('toggleTorch'),
+        snapshot: () => noWeb<string>('snapshot'),
+        sendMessage: () => noWeb<void>('sendMessage'),
+        on: () => () => {},
+      }
+    },
+    // ★组件实例 API 对齐（2026-09-12）：C64 广告（web 无广告联盟标准 → 创建时 throw）
+    getAd: () => ({
+      rewardedVideo: () => { throw new CapError('ad.unsupported', 'Web 无广告联盟标准 API（需宿主接入自建广告桥）') },
+      interstitial: () => { throw new CapError('ad.unsupported', 'Web 无广告联盟标准 API（需宿主接入自建广告桥）') },
+      banner: () => { throw new CapError('ad.unsupported', 'Web 无广告联盟标准 API（需宿主接入自建广告桥）') },
+    }),
   }
+}
+
+/** camelCase（computedStyle 键） */
+function camel(k: string): string {
+  return k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+}
+
+/** 媒体查询条件 → media query 串（web matchMedia） */
+function conditionToQuery(c: MediaQueryCondition): string {
+  const parts: string[] = []
+  if (c.minWidth !== undefined) parts.push(`(min-width: ${c.minWidth}px)`)
+  if (c.maxWidth !== undefined) parts.push(`(max-width: ${c.maxWidth}px)`)
+  if (c.width !== undefined) parts.push(`(width: ${c.width}px)`)
+  if (c.minHeight !== undefined) parts.push(`(min-height: ${c.minHeight}px)`)
+  if (c.maxHeight !== undefined) parts.push(`(max-height: ${c.maxHeight}px)`)
+  if (c.height !== undefined) parts.push(`(height: ${c.height}px)`)
+  if (c.orientation) parts.push(`(orientation: ${c.orientation})`)
+  return parts.join(' and ')
 }
 
 /** params → query 拼接（useFetch） */
@@ -4596,6 +6086,25 @@ export interface CapabilityHooks {
   useWifi(): CapResult<WifiAPI>
   /** ★C56 useWeRun：微信运动数据（wx.getWeRunData；web 无标准 → Err） */
   useWeRun(): Promise<CapResult<WeRunData>>
+  // ★组件实例 API 对齐（2026-09-12）：C57 画布
+  /** ★C57 useCanvas：画布控制器（wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/OffscreenCanvas；web HTMLCanvasElement） */
+  useCanvas(id: string): CapResult<CanvasController>
+  // ★组件实例 API 对齐（2026-09-12）：元素查询 / 交叉观察 / 媒体查询
+  /** ★C58 useElement：元素查询句柄（wx.createSelectorQuery / web querySelector + getBoundingClientRect） */
+  useElement(id?: string): CapResult<ElementQuery>
+  /** ★C59 useIntersection：交叉观察句柄（wx.createIntersectionObserver / web IntersectionObserver） */
+  useIntersection(options?: IntersectionOptions): CapResult<IntersectionHandle>
+  /** ★C60 useMediaQuery：媒体查询句柄（wx.createMediaQueryObserver / web matchMedia） */
+  useMediaQuery(): CapResult<MediaQueryObserver>
+  // ★组件实例 API 对齐（2026-09-12）：媒体组件实例 + 广告
+  /** ★C61 useVideo：视频控制器（wx.createVideoContext / web HTMLVideoElement） */
+  useVideo(id: string): CapResult<VideoController>
+  /** ★C62 useAudio：音频控制器（wx.createInnerAudioContext / web Audio） */
+  useAudio(src?: string): CapResult<AudioController>
+  /** ★C63 useLivePusher：直播推流控制器（wx.createLivePusherContext / web 无标准 → Err） */
+  useLivePusher(id: string): CapResult<LivePusherController>
+  /** ★C64 useAd：广告句柄（wx.createRewardedVideoAd/createInterstitialAd/createBannerAd / web 无标准 → throw） */
+  useAd(): CapResult<AdAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -5201,6 +6710,41 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
           return bridge.getWeRunData()
         })(),
       ),
+    // ★组件实例 API 对齐：C57 画布控制器
+    useCanvas: (id) => handleResult<CanvasController>(() => {
+      if (!bridge.createCanvas) throw new CapError('canvas.unsupported', '桥未提供 createCanvas（useCanvas 不可用）')
+      return bridge.createCanvas(id)
+    }),
+    // ★组件实例 API 对齐：C58/C59/C60 元素查询 / 交叉观察 / 媒体查询
+    useElement: (id) => handleResult<ElementQuery>(() => {
+      if (!bridge.createElementQuery) throw new CapError('element.unsupported', '桥未提供 createElementQuery（useElement 不可用）')
+      return bridge.createElementQuery(id)
+    }),
+    useIntersection: (options) => handleResult<IntersectionHandle>(() => {
+      if (!bridge.createIntersection) throw new CapError('element.unsupported', '桥未提供 createIntersection（useIntersection 不可用）')
+      return bridge.createIntersection(options)
+    }),
+    useMediaQuery: () => handleResult<MediaQueryObserver>(() => {
+      if (!bridge.createMediaQuery) throw new CapError('element.unsupported', '桥未提供 createMediaQuery（useMediaQuery 不可用）')
+      return bridge.createMediaQuery()
+    }),
+    // ★组件实例 API 对齐：C61/C62/C63 媒体组件实例 + C64 广告
+    useVideo: (id) => handleResult<VideoController>(() => {
+      if (!bridge.createVideo) throw new CapError('video.unsupported', '桥未提供 createVideo（useVideo 不可用）')
+      return bridge.createVideo(id)
+    }),
+    useAudio: (src) => handleResult<AudioController>(() => {
+      if (!bridge.createAudio) throw new CapError('audio.unsupported', '桥未提供 createAudio（useAudio 不可用）')
+      return bridge.createAudio(src)
+    }),
+    useLivePusher: (id) => handleResult<LivePusherController>(() => {
+      if (!bridge.createLivePusher) throw new CapError('live-pusher.unsupported', '桥未提供 createLivePusher（useLivePusher 不可用）')
+      return bridge.createLivePusher(id)
+    }),
+    useAd: () => handleResult<AdAPI>(() => {
+      if (!bridge.getAd) throw new CapError('ad.unsupported', '桥未提供 getAd（useAd 不可用）')
+      return bridge.getAd()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -5258,6 +6802,14 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       address: bridge.chooseAddress !== undefined,
       wifi: bridge.getWifi !== undefined,
       weRun: bridge.getWeRunData !== undefined,
+      canvas: bridge.createCanvas !== undefined,
+      element: bridge.createElementQuery !== undefined,
+      intersection: bridge.createIntersection !== undefined,
+      mediaQuery: bridge.createMediaQuery !== undefined,
+      video: bridge.createVideo !== undefined,
+      audio: bridge.createAudio !== undefined,
+      livePusher: bridge.createLivePusher !== undefined,
+      ad: bridge.getAd !== undefined,
     }),
   }
 }
