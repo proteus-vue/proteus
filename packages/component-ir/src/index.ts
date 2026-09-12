@@ -18,3 +18,6 @@ export type { PrimitiveDef, PrimitiveKind, PrimitiveStatus } from './primitives'
 export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditMatrixReferences, auditCatalogConsistency, formatCoverageReport } from './audit'
 export type { MatrixRefIssue } from './audit'
 export type { CoverageReport, MpCoverageStatus, MpMatrixItem, ConsistencyIssue } from './audit'
+// ★权威标尺（2026-09-12）：小程序官方清单分类 + spec 驱动覆盖度门禁（修「手写矩阵自证」）
+export { classifySpecApi, classifySpecComponent, auditSpecCoverage, SPEC_COVERED, SPEC_PLANNED, SPEC_PRIVATE, SPEC_NA, SPEC_COMPONENT_OVERRIDE, SPEC_RATCHET } from './mp-spec-coverage'
+export type { MpSpecStatus, MpSpecClass, MpOfficialSpec, SpecCoverageReport } from './mp-spec-coverage'
