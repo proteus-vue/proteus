@@ -6,7 +6,7 @@ group: 桌面原语
 
 # 滚动观测原语（页面滚动进度 / 滚动态）
 
-页面滚动观测：rAF 节流 + y/max/progress（App 顶部进度条与 Home 联动在用）
+页面滚动观测（进度/滚动态）+ 滚动高亮 createScrollSpy（文档目录 scroll-spy 在用）
 
 > 来源模块 `@proteus-vue/desktop`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。
 
@@ -39,6 +39,12 @@ group: 桌面原语
 | `ScrollObserver` | interface | — |
 | `readPageScroll` | function | 真实窗口/文档几何（SSR/无 DOM → 全零诚实态） |
 | `createScrollObserver` | function | ★createScrollObserver：订阅页面滚动（rAF 节流——一帧至多一次回调；immediate 首帧即回调） |
+| `ScrollSpyElement` | interface | 元素最小形状（鸭子类型——不依赖 DOM 全局类型） |
+| `ScrollSpyEnv` | interface | — |
+| `ScrollSpyOptions` | interface | — |
+| `ScrollSpy` | interface | — |
+| `pickActiveId` | function | 纯函数：给定「元素到视口顶距离」序列与滚动线，取最后一个越过滚动线的 id（无 → ''） |
+| `createScrollSpy` | function | ★createScrollSpy：滚动高亮（rAF 节流；setIds 后立即计算一次） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

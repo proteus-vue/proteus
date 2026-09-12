@@ -39,6 +39,12 @@ Layering: pure logic + Web wiring (env-injected for unit testing; defaults to fa
 | `ScrollObserver` | interface | — |
 | `readPageScroll` | function | Real window/document geometry (SSR / no DOM → an all-zero honest state) |
 | `createScrollObserver` | function | ★createScrollObserver: subscribes to page scroll (rAF-throttled — at most one callback per frame; immediate fires the callback on the first frame) |
+| `ScrollSpyElement` | interface | — |
+| `ScrollSpyEnv` | interface | — |
+| `ScrollSpyOptions` | interface | — |
+| `ScrollSpy` | interface | — |
+| `pickActiveId` | function | — |
+| `createScrollSpy` | function | — |
 
 ## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)
 
