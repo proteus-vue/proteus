@@ -89,7 +89,7 @@ function buildImplemented(): string {
   lines.push('|------|---------|-----------|----------------|----------------|---------|---------|----------|')
   for (const p of impl) {
     const row = SEMANTIC_BACKEND_MAP[p.semantic] ?? {}
-    const cell = (bid: string) => row[bid] ?? '—'
+    const cell = (bid: keyof typeof row) => row[bid] ?? '—'
     lines.push(`| \`${p.semantic}\` | ${cell('vue-dom')} | ${cell('native-ios')} | ${cell('native-android')} | ${cell('native-harmony')} | ${cell('skyline')} | ${cell('flutter')} | ${cell('headless')} |`)
   }
   return lines.join('\n')

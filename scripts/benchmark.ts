@@ -13,8 +13,6 @@ import { createHmrRuntime } from '@proteus-vue/hmr'
 import type { HmrPayload } from '@proteus-vue/hmr'
 import { collectStyleGateRecords } from '@proteus-vue/hmr/style-gate'
 import { redactValue } from '@proteus-vue/devtools-runtime'
-
-import { redactValue } from '@proteus-vue/devtools-runtime'
 import { Window } from 'happy-dom'
 
 // ★@proteus-vue/runtime → shared web-adapter / vue runtime-dom 模块初始化需要浏览器全局（window/document/location/history）
@@ -183,7 +181,7 @@ function main(): void {
   let errors = 0
   let warns = 0
 
-  const rows: string[] = []
+  const rows: Array<BenchResult & { status: string; base: number | undefined }> = []
   for (const r of results) {
     const base = baseline.results[r.name]
     let status = '✓'

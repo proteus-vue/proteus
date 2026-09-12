@@ -64,6 +64,7 @@
     "@proteus-vue/glass": "workspace:*",
     "@proteus-vue/worklet": "workspace:*",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vue/compiler-dom": "^3.5.42",
     "@vue/compiler-sfc": "^3.5.42",
