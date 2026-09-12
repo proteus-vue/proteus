@@ -86,6 +86,10 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-keyboard-accessory" => Some("shell.keyboard-accessory"),
         // ★权威标尺批 I
         "p-camera" => Some("ui.camera"),
+        // ★权威标尺批 J
+        "p-webview" => Some("shell.webview"),
+        "p-ad" => Some("shell.ad"),
+        "p-map" => Some("ui.map"),
         _ => None, // 未知 p- / 非 p- 标签（view/text/scroll-view——Layer 1 兼容层不产 C-IR）
     }
 }

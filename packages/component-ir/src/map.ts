@@ -544,6 +544,35 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'CameraPreview',
     headless: 'camera',
   },
+  // ★权威标尺批 J：内嵌网页 / 广告位（对齐小程序 <web-view>/<ad>）
+  'shell.webview': {
+    'vue-dom': 'div.proteus-webview', // Web iframe 运行时注入
+    'native-ios': 'WKWebView',
+    'native-android': 'WebView',
+    'native-harmony': 'Web',
+    skyline: 'web-view', // 微信原生 <web-view>
+    flutter: 'WebView',
+    headless: 'webview',
+  },
+  'shell.ad': {
+    'vue-dom': 'div.proteus-ad', // Web 占位容器（无广告联盟标准）
+    'native-ios': 'UIView.ad',
+    'native-android': 'View.ad',
+    'native-harmony': 'AdSlot',
+    skyline: 'ad', // 微信原生 <ad>
+    flutter: 'AdWidget',
+    headless: 'ad',
+  },
+  // ★权威标尺批 J：地图（对齐小程序 <map>）
+  'ui.map': {
+    'vue-dom': 'div.proteus-map', // Web 宿主槽位（接入高德/Google/Mapbox）
+    'native-ios': 'MKMapView',
+    'native-android': 'MapView',
+    'native-harmony': 'MapComponent',
+    skyline: 'map', // 微信原生 <map>
+    flutter: 'GoogleMap',
+    headless: 'map',
+  },
 }
 
 /**

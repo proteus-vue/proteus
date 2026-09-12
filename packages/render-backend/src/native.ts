@@ -142,6 +142,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.selection': 'UITextView.selection',
     'shell.keyboard-accessory': 'UIInputView',
     'ui.camera': 'AVCaptureVideoPreviewLayer',
+    'shell.webview': 'WKWebView',
+    'shell.ad': 'UIView.ad',
+    'ui.map': 'MKMapView',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -207,6 +210,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.selection': 'TextView.selection',
     'shell.keyboard-accessory': 'InputMethodService.accessory',
     'ui.camera': 'CameraX.PreviewView',
+    'shell.webview': 'WebView',
+    'shell.ad': 'View.ad',
+    'ui.map': 'MapView',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -272,6 +278,9 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.selection': 'Text.selection',
     'shell.keyboard-accessory': 'KeyboardAccessory',
     'ui.camera': 'XComponent.camera',
+    'shell.webview': 'Web',
+    'shell.ad': 'AdSlot',
+    'ui.map': 'MapComponent',
   },
 }
 

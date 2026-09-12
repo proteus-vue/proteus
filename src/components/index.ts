@@ -96,6 +96,10 @@ import PSelection from './p-selection/index.vue'
 import PKeyboardAccessory from './p-keyboard-accessory/index.vue'
 // ★权威标尺批 I：相机
 import PCamera from './p-camera/index.vue'
+// ★权威标尺批 J：内嵌网页 / 广告位
+import PWebview from './p-webview/index.vue'
+import PAd from './p-ad/index.vue'
+import PMap from './p-map/index.vue'
 
 export {
   VirtualList,
@@ -189,6 +193,9 @@ export {
   PSelection,
   PKeyboardAccessory,
   PCamera,
+  PWebview,
+  PAd,
+  PMap,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

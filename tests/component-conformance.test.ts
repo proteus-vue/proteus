@@ -115,9 +115,9 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
   it('G-31.4/G-32.3 覆盖门禁：所有 implemented 语义 ≥3 端映射（不足 → 降级 L2 禁入 core）', () => {
     const gaps = checkSemanticCoverage(3)
     expect(gaps).toEqual([])
-    // ★G-32 B1/B2/B4/B5/B5尾巴 + ★C2 颗粒度对齐 + ★批 H/I 组件：implemented 语义 = 51（planned 不设门禁）
+    // ★G-32 B1/B2/B4/B5/B5尾巴 + ★C2 颗粒度对齐 + ★批 H/I/J 组件：implemented 语义 = 54（planned 不设门禁）
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(51)
+    expect(impl.length).toBe(54)
     for (const p of impl) {
       expect(Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length, `${p.semantic} 参考行不足`).toBeGreaterThanOrEqual(3)
     }

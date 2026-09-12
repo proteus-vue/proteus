@@ -52,6 +52,13 @@ declare module 'vue' {
     // ★权威标尺批 I
     PCamera: typeof import('./p-camera/index.vue')['default']
     'p-camera': typeof import('./p-camera/index.vue')['default']
+    // ★权威标尺批 J
+    PWebview: typeof import('./p-webview/index.vue')['default']
+    'p-webview': typeof import('./p-webview/index.vue')['default']
+    PAd: typeof import('./p-ad/index.vue')['default']
+    'p-ad': typeof import('./p-ad/index.vue')['default']
+    PMap: typeof import('./p-map/index.vue')['default']
+    'p-map': typeof import('./p-map/index.vue')['default']
   }
 }
 

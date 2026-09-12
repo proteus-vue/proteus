@@ -90,6 +90,11 @@ export const SEMANTIC_ENUM = [
   'shell.page-container',
   // ★权威标尺批 H：键盘上方工具栏（对齐小程序 <keyboard-accessory>）
   'shell.keyboard-accessory',
+  // ★权威标尺批 J：内嵌网页 / 广告位（对齐小程序 <web-view>/<ad>）
+  'shell.webview',
+  'shell.ad',
+  // ★权威标尺批 J：地图（对齐小程序 <map>）
+  'ui.map',
   // —— 交互/手势原语（G-32 ④ Gesture——组件形态 2 个；v-gesture: 指令归绑定层不产生 C-IR 节点）——
   'gesture.draggable',
   'gesture.scrollable',
@@ -207,4 +212,8 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-keyboard-accessory': 'shell.keyboard-accessory',
   // ★权威标尺批 I：相机
   'p-camera': 'ui.camera',
+  // ★权威标尺批 J：内嵌网页 / 广告位
+  'p-webview': 'shell.webview',
+  'p-ad': 'shell.ad',
+  'p-map': 'ui.map',
 }
