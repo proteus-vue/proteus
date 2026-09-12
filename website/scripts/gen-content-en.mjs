@@ -1893,4 +1893,34 @@ export const CAP_EN = {
       'navigation-guard.failed': 'Enabling or disabling the unload confirmation failed',
     },
   },
+  ar: {
+    desc: 'useAR: AR/XR vision session — create a VKSession (plane/marker/face/hand/body/depth tracking) + start/stop/events/frame, and query support (wx.createVKSession/isVKSupport; web has no equivalent vision algorithm → Err)',
+    errors: {
+      'ar.unsupported': 'The AR vision API is missing (web has no WeChat vision session — use WebXR / a third-party CV library)',
+      'ar.failed': 'A VK session operation failed',
+    },
+  },
+  beacon: {
+    desc: 'useBeacon: iBeacon — service state change + device update events (wx.onBeaconServiceChange/onBeaconUpdate; web has no equivalent → empty subscription, use Web Bluetooth)',
+    errors: { 'beacon.unsupported': 'The bridge does not provide getBeacon (useBeacon unavailable)' },
+  },
+  'local-service': {
+    desc: 'useLocalService: LAN service discovery (mDNS) — found / lost / resolve-fail / discovery-stop events (wx.onLocalService*; web has no standard mDNS → empty subscription)',
+    errors: { 'local-service.unsupported': 'The bridge does not provide getLocalService (useLocalService unavailable)' },
+  },
+  translation: {
+    desc: 'useTranslation: translation — user-triggered / user-cancelled translation events (wx.onUserTriggerTranslation/onUserOffTranslation; web has no equivalent → empty subscription)',
+    errors: { 'translation.unsupported': 'The bridge does not provide getTranslation (useTranslation unavailable)' },
+  },
+  poster: {
+    desc: 'usePoster: share poster — poster generation event (wx.onGeneratePoster; web has no equivalent → empty subscription)',
+    errors: { 'poster.unsupported': 'The bridge does not provide getPoster (usePoster unavailable)' },
+  },
+  'device-capability': {
+    desc: 'useDeviceCapability: device capability probe — HEVC (H.265) hardware decode support (wx.checkDeviceSupportHevc; web MediaSource.isTypeSupported)',
+    errors: {
+      'device-capability.unsupported': 'The device-capability API is missing (web has no MediaSource.isTypeSupported)',
+      'device-capability.failed': 'Querying HEVC support failed',
+    },
+  },
 }
