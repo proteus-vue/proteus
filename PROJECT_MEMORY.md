@@ -804,6 +804,7 @@
 
 ## 验证状态（最近一次）
 
+- ✅ **官网已上线（2026-09-12，权威标尺批 J）**：3 commit 已 push origin/main（0e3e615e→9e3cd49a）；★`[deploy]` 触发 pages.yml **success**（run @ 9e3cd49a）；线上实测 https://proteus-vue.cn/ HTTP 200，bundle `main-CJLVFa8q.js` 命中 p-webview/p-ad/p-map/176/72。
 - ✅ **当前基线（2026-09-12，权威标尺 + 批 J webview/ad/map/aria 归 na）**：全量 **3028/3029 测试绿**（260 文件；唯一 fail = `vue-compat-coverage` 的 `module.exports`——**干净 HEAD 复现**，Node 23.5 CJS interop 既有基线）· **官方能力覆盖门禁**（spec 382 项：已落地 **255** / 规划 1 / 私有 106 / 不适用 20 / 未归类 0；真·落地率 **99%**（floor））· check:mp-spec ✓ · audit:coverage（spec 归类完整 + 棘轮 + 引用/闭环）· check:content（components 72 / capabilities 81）· check:en-drift · check:pkg · check:deps · check:alltarget · check:script-compile · components:audit（75）· build:mp ✓（1142KB < 1200）/web/website ✓。
 - ✅ **官网已上线（2026-09-12，权威标尺批 I）**：3 commit 已 push origin/main（ad3df25f→aa06d901）；★`[deploy]` 触发 pages.yml **success**（run @ aa06d901）；线上实测 https://proteus-vue.cn/ HTTP 200，bundle `main-D9zr7b_2.js` 命中 p-camera/devicePosition/getUserMedia/173/69。
 - ✅ **当前基线（2026-09-12，权威标尺 + 批 I 相机/cover 归 na）**：全量 **3019/3020 测试绿**（260 文件；唯一 fail = `vue-compat-coverage` 的 `module.exports`——**干净 HEAD 复现**，Node 23.5 CJS interop 既有基线）· **官方能力覆盖门禁**（spec 382 项：已落地 **252** / 规划 5 / 私有 106 / 不适用 19 / 未归类 0；真·落地率 **98%**）· check:mp-spec ✓ · audit:coverage（spec 归类完整 + 棘轮 + 引用/闭环）· check:content（components 69 / capabilities 81）· check:en-drift · check:pkg · check:deps · check:alltarget · check:script-compile · components:audit（72）· build:mp ✓（1127KB < 1200）/web/website ✓。
