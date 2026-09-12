@@ -48,6 +48,26 @@ function onSelectionChange(e: { selectedString: string; isCollapsed: boolean }) 
 
 <template>
   <div class="cd">
+    <!-- ★真机验收（2026-09-12）：颗粒度对齐新增组件（对齐小程序内置） -->
+    <h2>新增组件（颗粒度对齐）</h2>
+    <p class="sub">p-progress（&lt;progress&gt;）/ p-label（&lt;label&gt;）/ p-selection（&lt;selection&gt;）</p>
+    <p-view class="box">
+      <p-progress :percent="percent" />
+      <p-button @click="percent = Math.min(100, percent + 20)">进度 +20（当前 {{ percent }}%）</p-button>
+      <p-progress :percent="100" status="success" />
+      <p-progress :percent="60" type="circle" />
+    </p-view>
+    <p-view class="box">
+      <p-label for="demo-input">p-label 关联控件（点击聚焦输入框）</p-label>
+      <p-input id="demo-input" :value="name" placeholder="被 label 关联" @input="onNameInput" />
+    </p-view>
+    <p-view class="box">
+      <p-selection @selectionchange="onSelectionChange">
+        <p-text>长按选中这段文字，下方显示选区内容（对齐小程序 selectionchange）</p-text>
+      </p-selection>
+      <p-text class="row">选区：{{ selected || '（未选中）' }}</p-text>
+    </p-view>
+
     <h2>内置组件（B2）</h2>
     <p class="sub">p-view 容器 / p-text 文本 / p-button 防重复 / p-image 懒加载</p>
 
@@ -105,25 +125,6 @@ function onSelectionChange(e: { selectedString: string; isCollapsed: boolean }) 
       <p-text v-if="!loading" class="row">数据已加载</p-text>
     </p-view>
 
-    <!-- ★真机验收（2026-09-12）：颗粒度对齐新增组件（对齐小程序内置） -->
-    <h2>新增组件（颗粒度对齐）</h2>
-    <p class="sub">p-progress（&lt;progress&gt;）/ p-label（&lt;label&gt;）/ p-selection（&lt;selection&gt;）</p>
-    <p-view class="box">
-      <p-progress :percent="percent" />
-      <p-button @click="percent = Math.min(100, percent + 20)">进度 +20（当前 {{ percent }}%）</p-button>
-      <p-progress :percent="100" status="success" />
-      <p-progress :percent="60" type="circle" />
-    </p-view>
-    <p-view class="box">
-      <p-label for="demo-input">p-label 关联控件（点击聚焦输入框）</p-label>
-      <p-input id="demo-input" :value="name" placeholder="被 label 关联" @input="onNameInput" />
-    </p-view>
-    <p-view class="box">
-      <p-selection @selectionchange="onSelectionChange">
-        <p-text>长按选中这段文字，下方显示选区内容（对齐小程序 selectionchange）</p-text>
-      </p-selection>
-      <p-text class="row">选区：{{ selected || '（未选中）' }}</p-text>
-    </p-view>
   </div>
 </template>
 
