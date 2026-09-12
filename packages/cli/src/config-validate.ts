@@ -50,6 +50,7 @@ const KNOWN_FIELDS = new Set([
   'router',
   'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）
   'frameworkComponentsDir', // 决策 #115：框架内置组件目录（组件库拆包前过渡字段）
+  'page', // ★Skyline 白屏兜底：page.autoScrollContainer / page.webviewPages（页面级 WebView 降级通道）
   'audit', // ★#447 D-2 dogfooding 门禁（audit-d2 消费——规则级可配）
   'gates', // ★#456 统一门禁开关（gates.disabled——check/audit all 消费）
 ])
