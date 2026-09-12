@@ -146,6 +146,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: 构建 workspace 包（build:web 消费 @proteus-vue/* 的 dist——fresh 环境必需）
+        run: node scripts/build-packages.mjs
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
