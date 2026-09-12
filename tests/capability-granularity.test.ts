@@ -770,3 +770,364 @@ describe('★C3 批 2 颗粒度对齐：C54 收货地址 / C55 WiFi / C56 微信
     expect(p.weRun).toBe(true)
   })
 })
+
+describe('★组件实例 API 对齐（2026-09-12）· C57 useCanvas', () => {
+  /** 真·小程序环境 + Canvas 组件实例 wx mock（记录调用） */
+  function stubMpCanvas() {
+    const calls: string[] = []
+    const drawCalls: string[] = []
+    const ctxLike: Record<string, unknown> = {
+      setFillStyle: (c: string) => drawCalls.push('fill:' + c),
+      setFontSize: (s: number) => drawCalls.push('font:' + s),
+      beginPath: () => drawCalls.push('beginPath'),
+      arc: (...a: number[]) => drawCalls.push('arc:' + a.length),
+      fill: () => drawCalls.push('fill'),
+      measureText: (t: string) => ({ width: t.length * 6 }),
+      draw: (reserve?: boolean | (() => void), cb?: () => void) => { calls.push('draw'); const d = typeof reserve === 'function' ? reserve : cb; d && d() },
+    }
+    const node = { width: 300, height: 150, getContext: () => ctxLike, requestAnimationFrame: (cb: (t: number) => void) => { cb(1); return 1 } }
+    const wx = {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createCanvasContext: (id: string) => { calls.push('ctx:' + id); return ctxLike },
+      createSelectorQuery: () => ({
+        select: () => ({ fields: () => {} }),
+        exec: (cb: (res: unknown) => void) => { calls.push('exec'); cb([{ node }]) },
+      }),
+      canvasToTempFilePath: (opt: { success: (r: { tempFilePath: string }) => void }) => { calls.push('toTemp'); opt.success({ tempFilePath: 'wxfile://tmp/a.png' }) },
+      getFileSystemManager: () => ({ readFile: (opt: { success: (r: { data: string }) => void }) => opt.success({ data: 'BASE64' }) }),
+      createOffscreenCanvas: (o: { width: number; height: number }) => ({ width: o.width, height: o.height, getContext: () => ctxLike }),
+    }
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', wx)
+    return { calls, drawCalls }
+  }
+
+  it('返回句柄含 id/createContext/node/toTempFilePath/toDataURL/offscreen', () => {
+    stubMpCanvas()
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('myCanvas')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const c = r.data
+    expect(c.id).toBe('myCanvas')
+    for (const m of ['createContext', 'node', 'toTempFilePath', 'toDataURL', 'offscreen']) {
+      expect(typeof (c as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+  })
+
+  it('createContext：绘图方法逐一对齐官方 CanvasContext（可调用）', () => {
+    stubMpCanvas()
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('c1')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const ctx = r.data.createContext()
+    expect(ctx.ok).toBe(true)
+    if (!ctx.ok) return
+    for (const m of ['setFillStyle', 'setStrokeStyle', 'setLineWidth', 'setGlobalAlpha', 'setShadow', 'setLineDash', 'setFontSize', 'setTextAlign', 'save', 'restore', 'translate', 'rotate', 'scale', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arc', 'arcTo', 'quadraticCurveTo', 'bezierCurveTo', 'rect', 'fill', 'stroke', 'clip', 'fillRect', 'strokeRect', 'clearRect', 'fillText', 'measureText', 'drawImage', 'createLinearGradient', 'createCircularGradient', 'createPattern', 'draw']) {
+      expect(typeof (ctx.data as unknown as Record<string, unknown>)[m]).toBe('function')
+    }
+    // 真实往返：设置样式 + 画弧 + 提交
+    ctx.data.setFillStyle('#f00')
+    ctx.data.arc(10, 10, 5, 0, Math.PI * 2)
+    ctx.data.fill()
+    expect(ctx.data.measureText('abcd').width).toBe(24)
+    let drawn = false
+    ctx.data.draw(() => { drawn = true })
+    expect(drawn).toBe(true)
+  })
+
+  it('node()：SelectorQuery fields({node}) → CanvasNode（宽高/取上下文）', async () => {
+    stubMpCanvas()
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('c2')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const n = await r.data.node()
+    expect(n.ok).toBe(true)
+    if (n.ok) {
+      expect(n.data.width).toBe(300)
+      expect(n.data.height).toBe(150)
+      expect(typeof n.data.getContext).toBe('function')
+    }
+  })
+
+  it('toTempFilePath / toDataURL：导出临时文件 + base64 data URL', async () => {
+    stubMpCanvas()
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('c3')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const t = await r.data.toTempFilePath({ fileType: 'png' })
+    expect(t.ok && t.data).toBe('wxfile://tmp/a.png')
+    const d = await r.data.toDataURL()
+    expect(d.ok && d.data.startsWith('data:image/png;base64,')).toBe(true)
+  })
+
+  it('offscreen：离屏画布尺寸与上下文', () => {
+    stubMpCanvas()
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('c4')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const off = r.data.offscreen(128, 64)
+    expect(off.ok).toBe(true)
+    if (off.ok) {
+      expect(off.data.width).toBe(128)
+      expect(off.data.height).toBe(64)
+      expect(off.data.getContext('2d')).toBeTruthy()
+    }
+  })
+
+  it('无 wx.createCanvasContext → createContext Err（诚实降级）', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useCanvas('c5')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.createContext().ok).toBe(false)
+  })
+
+  it('probe：canvas 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.canvas).toBe(true)
+  })
+})
+
+describe('★组件实例 API 对齐（2026-09-12）· C58/C59/C60 元素查询 / 交叉观察 / 媒体查询', () => {
+  it('useElement：selectorQuery 几何查询（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createSelectorQuery: () => ({
+        select: (sel: string) => {
+          calls.push(sel)
+          return {
+            boundingClientRect: () => {},
+            scrollOffset: () => {},
+            fields: (o: Record<string, unknown>) => { calls.push('fields:' + Object.keys(o).join(',')) },
+          }
+        },
+        exec: (cb: (res: unknown) => void) => cb([{ id: 'box', width: 120, height: 40, top: 10, left: 5, right: 125, bottom: 50 }]),
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useElement('box')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const rect = await r.data.boundingClientRect()
+    expect(rect.ok && rect.data.width).toBe(120)
+    const size = await r.data.size()
+    expect(size.ok && size.data.height).toBe(40)
+    const fields = await r.data.fields({ node: true, rect: true })
+    expect(fields.ok).toBe(true)
+    expect(calls).toContain('#box')
+    expect(calls.some((c) => c.startsWith('fields:node,rect'))).toBe(true)
+  })
+
+  it('useIntersection：observe → 相交回调（wx 桥归一）', () => {
+    let captured: ((res: unknown) => void) | undefined
+    const observed: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createIntersectionObserver: () => ({
+        relativeToViewport: () => undefined,
+        observe: (targetSelector: string, cb: (res: unknown) => void) => { observed.push(targetSelector); captured = cb },
+        disconnect: () => { observed.push('disconnect') },
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useIntersection({ thresholds: [0.5] })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let hit: unknown
+    r.data.relativeToViewport().observe('.item', (res) => { hit = res })
+    expect(observed).toContain('.item')
+    captured!({ intersectionRatio: 0.8, time: 123 })
+    expect(hit).toMatchObject({ intersectionRatio: 0.8, time: 123 })
+    r.data.disconnect()
+    expect(observed).toContain('disconnect')
+  })
+
+  it('useMediaQuery：observe 宽高条件 → matches（wx 桥归一）', () => {
+    let cb: ((res: { matches: boolean }) => void) | undefined
+    let seenCond: Record<string, unknown> | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createMediaQueryObserver: () => ({
+        observe: (cond: Record<string, unknown>, c: (res: { matches: boolean }) => void) => { seenCond = cond; cb = c },
+        disconnect: () => undefined,
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useMediaQuery()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let matched: boolean | undefined
+    r.data.observe({ minWidth: 600, orientation: 'landscape' }, (res) => { matched = res.matches })
+    expect(seenCond).toMatchObject({ minWidth: 600, orientation: 'landscape' })
+    cb!({ matches: true })
+    expect(matched).toBe(true)
+  })
+
+  it('无 wx 组件实例 API → 三件套句柄方法级 Err（诚实降级）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const hooks = createCapabilityHooks(createCapabilityBridge())
+    const el = hooks.useElement('x')
+    expect(el.ok).toBe(true)
+    if (el.ok) expect((await el.data.boundingClientRect()).ok).toBe(false)
+    const io = hooks.useIntersection()
+    expect(io.ok).toBe(true) // 句柄构造成功但 observe 无回调
+    const mq = hooks.useMediaQuery()
+    expect(mq.ok).toBe(true)
+    if (mq.ok) {
+      let matched: boolean | undefined
+      mq.data.observe({ minWidth: 100 }, (res) => { matched = res.matches })
+      expect(matched).toBe(false)
+    }
+  })
+
+  it('probe：element/intersection/mediaQuery 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.element).toBe(true)
+    expect(p.intersection).toBe(true)
+    expect(p.mediaQuery).toBe(true)
+  })
+})
+
+describe('★组件实例 API 对齐（2026-09-12）· C61/C62/C63 媒体组件实例 + C64 广告', () => {
+  it('useVideo：play/pause/seek/倍速/全屏/弹幕 + 事件（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createVideoContext: () => ({
+        play: () => calls.push('play'),
+        pause: () => calls.push('pause'),
+        seek: (p: number) => calls.push('seek:' + p),
+        playbackRate: (r: number) => calls.push('rate:' + r),
+        requestFullScreen: (o: { direction?: string }) => calls.push('fs:' + (o?.direction ?? '')),
+        sendDanmu: (d: { text: string }) => calls.push('danmu:' + d.text),
+        onPlay: () => undefined,
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useVideo('v1')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.play()).resolves.toMatchObject({ ok: true })
+    await expect(r.data.seek(12)).resolves.toMatchObject({ ok: true })
+    await expect(r.data.playbackRate(1.5)).resolves.toMatchObject({ ok: true })
+    await expect(r.data.requestFullScreen({ direction: 'horizontal' })).resolves.toMatchObject({ ok: true })
+    await expect(r.data.sendDanmu({ text: 'hi' })).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['play', 'seek:12', 'rate:1.5', 'fs:horizontal', 'danmu:hi'])
+  })
+
+  it('useAudio：play/pause/seek/音量/循环 + 时长（wx 桥归一）', async () => {
+    const ac: Record<string, unknown> = { duration: 30, currentTime: 3, paused: true }
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createInnerAudioContext: () => ({
+        play: () => calls.push('play'),
+        pause: () => calls.push('pause'),
+        seek: (p: number) => calls.push('seek:' + p),
+        destroy: () => calls.push('destroy'),
+        get duration() { return ac.duration },
+        get currentTime() { return ac.currentTime },
+        get paused() { return ac.paused },
+        set volume(v: number) { ac.volume = v; calls.push('vol:' + v) },
+        set loop(v: boolean) { ac.loop = v; calls.push('loop:' + v) },
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useAudio('a.mp3')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.data.duration).toBe(30)
+    expect(r.data.paused).toBe(true)
+    await expect(r.data.play()).resolves.toMatchObject({ ok: true })
+    await expect(r.data.seek(5)).resolves.toMatchObject({ ok: true })
+    r.data.setVolume(0.5)
+    r.data.setLoop(true)
+    r.data.destroy()
+    expect(calls).toEqual(['play', 'seek:5', 'vol:0.5', 'loop:true', 'destroy'])
+  })
+
+  it('useLivePusher：start/stop/snapshot/SEI + 事件（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createLivePusherContext: () => ({
+        start: (o: { success?: () => void }) => { calls.push('start'); o.success && o.success() },
+        stop: (o: { success?: () => void }) => { calls.push('stop'); o.success && o.success() },
+        snapshot: (o: { success: (r: { tempImagePath: string }) => void }) => { calls.push('snap'); o.success({ tempImagePath: 'wxfile://tmp/p.png' }) },
+        sendMessage: (o: { msg: string; success?: () => void }) => { calls.push('sei:' + o.msg); o.success && o.success() },
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useLivePusher('pusher')
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.start()).resolves.toMatchObject({ ok: true })
+    const snap = await r.data.snapshot()
+    expect(snap.ok && snap.data).toBe('wxfile://tmp/p.png')
+    await expect(r.data.sendMessage('hello')).resolves.toMatchObject({ ok: true })
+    await expect(r.data.stop()).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['start', 'snap', 'sei:hello', 'stop'])
+  })
+
+  it('useAd：激励视频 load/show/onClose 激励判定（wx 桥归一 + 同 id 复用）', async () => {
+    let closeCb: ((res: { isEnded: boolean }) => void) | undefined
+    const calls: string[] = []
+    let created = 0
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createRewardedVideoAd: () => { created++; return {
+        load: () => { calls.push('load'); return Promise.resolve() },
+        show: () => { calls.push('show'); return Promise.resolve() },
+        onClose: (cb: (res: { isEnded: boolean }) => void) => { closeCb = cb },
+        destroy: () => calls.push('destroy'),
+      } },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useAd()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const ad = r.data.rewardedVideo('adunit-1')
+    const adAgain = r.data.rewardedVideo('adunit-1')
+    expect(created).toBe(1) // 同 id 复用
+    expect(ad).toBe(adAgain)
+    let ended: boolean | undefined
+    ad.onClose((res) => { ended = res.isEnded })
+    await expect(ad.load()).resolves.toMatchObject({ ok: true })
+    await expect(ad.show()).resolves.toMatchObject({ ok: true })
+    closeCb!({ isEnded: true })
+    expect(ended).toBe(true)
+    expect(calls).toContain('show')
+  })
+
+  it('web 端 useAd：无广告联盟 → 创建时 throw（诚实降级）', () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useAd()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(() => r.data.rewardedVideo('x')).toThrow()
+  })
+
+  it('web 端 useLivePusher：无标准推流 → 各方法 Err', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useLivePusher('p')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((await r.data.start()).ok).toBe(false)
+  })
+
+  it('probe：video/audio/livePusher/ad 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.video).toBe(true)
+    expect(p.audio).toBe(true)
+    expect(p.livePusher).toBe(true)
+    expect(p.ad).toBe(true)
+  })
+})
