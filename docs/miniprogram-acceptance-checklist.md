@@ -31,11 +31,25 @@
 | **p-progress** | ✅ **线性 40%（蓝）+ success 100%（绿）+ 环形 60%（conic-gradient）全部正确渲染**，百分比文案正确 | 模拟器截图 |
 | **p-label** | ✅ 渲染「p-label 关联控件」+ 关联输入框 | 模拟器截图 |
 | **p-selection** | ✅ 渲染说明文字 + 「选区：（未选中）」 | 模拟器截图 |
-| **p-camera** | ✅ 渲染黑色相机预览区（含播放控制条）；「相机就绪：否」（模拟器无真实相机 → 符合预期；真机需授权） | 模拟器截图 |
-| **p-map** | ✅ 渲染地图区域（灰底）；「标记点击次数：0」 | 模拟器截图 |
-| **p-webview** | ✅ 标题渲染（内容需业务域名，见 §2.2） | 模拟器截图 |
+| **p-camera** | ❌ **初测误判为"渲染正常"（实际渲染的是 `<video>`！）** → 🟢 **修复后复验正确**：渲染 `<camera>`（「相机初始化失败」= camera 的 @error 回调） | 见下方「★实测抓出的严重 bug」 |
+| **p-map** | ❌ 初测"白板" → 🟢 修复后事件绑定正常（「标记点击次数：0」） | 同上 |
+| **p-webview** | ❌ 初测"白板"（空 iframe 容器）→ 🟢 修复后渲染 `<web-view>` | 同上 |
 | 页面 `data` 注入 | ✅ `percent:40` / `selected:''` / `camReady:false` 等初始值正确进入逻辑层 | automator `evaluate` |
 | 首屏（对照） | ✅ `pages/index` 完整渲染（Proteus 标题 + 导航 + tabBar） | 模拟器截图 |
+
+### ★实测抓出的严重 bug（用户真机观察驱动，已修复）
+
+**用户反馈**：「p-camera 看着像个视频组件？还有音量和亮度调节，p-map 和 p-webview 都是白板」——**观察完全正确**。
+
+- **根因**：平台条件组件（camera/map/webview/ad）用 `v-if="isMp"` 双分支，但 `const isMp = isMpRuntime()`
+  是**函数调用** → 编译器归 runtimeInit → 产物写 **实例属性** `this.isMp`（模板只能读 `data`）→
+  `wx:if` 恒 false → **MP 端永远渲染 Web 分支**（`<video>` / 空 iframe 容器 / 空占位）——
+  用户看到的"视频+音量/亮度手势"正是 `<video>` 默认行为，"白板"正是空宿主容器。
+- **修复**：改 `computed(() => isMpRuntime())` → 产物 `ready(){ setData({isMp:...}) }`（首帧前写入 data）。
+- **真机复验**：p-camera 现渲染 `<camera>`（error 回调证明）；p-map/webview 正确。
+- **回归锁**：tests/component-b6 +4（锁「isMp 进 data、非裸实例属性」；原测试只查 wxml 漏了 js 侧）。
+- **教训**：★平台条件组件的模板绑定变量**必须进 data**（编译器警告「实例属性：模板绑定不支持」不可忽略）；
+  wxml 断言不足以覆盖此类 bug，须**同时断言 js 产物**。详见 memory 续七十六。
 
 ### 实测发现（真实、非框架缺陷）
 
