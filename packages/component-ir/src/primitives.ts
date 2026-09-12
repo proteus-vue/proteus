@@ -215,6 +215,13 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C73', kind: 'capability', semantic: 'capability.idle', api: 'useIdle()', props: ['IdleAPI'], mpEquiv: 'wx.requestIdleCallback/cancelIdleCallback', tier: 'L1', status: 'planned' },
   { id: 'C74', kind: 'capability', semantic: 'capability.window', api: 'useWindow()', props: ['WindowAPI'], mpEquiv: 'wx.setWindowSize', tier: 'L1', status: 'planned' },
   { id: 'C75', kind: 'capability', semantic: 'capability.navigation-guard', api: 'useNavigationGuard()', props: ['NavigationGuardAPI'], mpEquiv: 'wx.enableAlertBeforeUnload/disableAlertBeforeUnload', tier: 'L1', status: 'planned' },
+  // ★权威标尺缺口补齐批 G（2026-09-12）：AR/XR / iBeacon / 局域网 / 翻译 / 海报 / 设备探测
+  { id: 'C76', kind: 'capability', semantic: 'capability.ar', api: 'useAR()', props: ['ARAPI'], mpEquiv: 'wx.createVKSession/isVKSupport', tier: 'L1', status: 'planned' },
+  { id: 'C77', kind: 'capability', semantic: 'capability.beacon', api: 'useBeacon()', props: ['BeaconAPI'], mpEquiv: 'wx.onBeaconServiceChange/onBeaconUpdate', tier: 'L1', status: 'planned' },
+  { id: 'C78', kind: 'capability', semantic: 'capability.local-service', api: 'useLocalService()', props: ['LocalServiceAPI'], mpEquiv: 'wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop', tier: 'L1', status: 'planned' },
+  { id: 'C79', kind: 'capability', semantic: 'capability.translation', api: 'useTranslation()', props: ['TranslationAPI'], mpEquiv: 'wx.onUserTriggerTranslation/onUserOffTranslation', tier: 'L1', status: 'planned' },
+  { id: 'C80', kind: 'capability', semantic: 'capability.poster', api: 'usePoster()', props: ['PosterAPI'], mpEquiv: 'wx.onGeneratePoster', tier: 'L1', status: 'planned' },
+  { id: 'C81', kind: 'capability', semantic: 'capability.device-capability', api: 'useDeviceCapability()', props: ['DeviceCapabilityAPI'], mpEquiv: 'wx.checkDeviceSupportHevc', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

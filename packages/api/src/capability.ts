@@ -2396,6 +2396,181 @@ export interface NavigationGuardAPI {
   disable(): Promise<CapResult<void>>
 }
 
+// —— ★权威标尺缺口补齐（2026-09-12）：C76 AR/XR / C77 iBeacon / C78 局域网服务 / C79 翻译 / C80 分享海报 / C81 设备能力探测 ——
+
+/** VK（视觉算法）会话状态（wx VKSession.state） */
+export type VKSessionState = 0 | 1 | 2 | 3
+
+/**
+ * ★权威标尺缺口 C76：AR/XR 视觉算法（`useAR()`）。
+ *   wx：`wx.createVKSession`（v1/v2 视觉算法会话——平面检测/人脸/手势/深度/OCR/标记）；
+ *   web：`WebXR` 无对等视觉算法 → Err 诚实降级（isVKSupport 恒 false）。
+ */
+export interface ARSessionHandle {
+  /** 会话状态（0 未初始化 / 1 就绪 / 2 运行中 / 3 暂停） */
+  state(): VKSessionState
+  /** 启动会话 */
+  start(): Promise<CapResult<void>>
+  /** 停止会话 */
+  stop(): Promise<CapResult<void>>
+  /** 销毁会话（释放相机/算法资源） */
+  destroy(): void
+  /**
+   * 订阅会话事件。
+   * @param event 事件名（update / resize / addAnchors / removeAnchors 等）
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  on(event: string, cb: (payload: unknown) => void): () => void
+  /** 请求下一帧 VK 数据（驱动算法） */
+  requestAnimationFrame(cb: (timestamp: number, frame: unknown) => void): number
+  /** 取消动画帧 */
+  cancelAnimationFrame(handle: number): void
+  /** 取当前 VK 帧 */
+  getVKFrame(width?: number, height?: number): unknown
+}
+
+export interface AROptions {
+  /** 追踪模式（'plane' 平面 / 'marker' 标记 / 'OSD' 图片识别 / 'face' 人脸 / 'hand' 手势 / 'body' 人体 / 'depth' 深度） */
+  track?: Record<string, unknown>
+  /** 算法版本（缺省 v2） */
+  version?: 'v1' | 'v2'
+  /** WebGL 上下文（渲染锚点用） */
+  gl?: unknown
+}
+
+export interface ARAPI {
+  /** 创建视觉算法会话 */
+  createSession(options?: AROptions): ARSessionHandle
+  /**
+   * 查询设备是否支持视觉算法。
+   * @param version 算法版本（v1 旧版 / v2 iOS 2.22.0+）
+   */
+  isSupported(version?: 'v1' | 'v2'): Promise<CapResult<boolean>>
+}
+
+/** iBeacon 设备信息（wx BeaconInfo） */
+export interface BeaconInfo {
+  /** 设备 uuid */
+  uuid: string
+  /** major 值 */
+  major: number
+  /** minor 值 */
+  minor: number
+  /** 距离（米） */
+  accuracy: number
+  /** 信号强度 */
+  rssi: number
+  /** 距离档位（0 未知 / 1 极近 / 2 近 / 3 远） */
+  proximity: 0 | 1 | 2 | 3
+}
+
+/**
+ * ★权威标尺缺口 C77：iBeacon（`useBeacon()`）。
+ *   wx：`wx.onBeaconServiceChange` / `wx.onBeaconUpdate`；web：无对等（可用 Web Bluetooth）→ Err 诚实降级。
+ */
+export interface BeaconAPI {
+  /**
+   * 订阅 Beacon 服务状态变化。
+   * @param cb 状态回调（available 服务可用 / discovering 搜索中）
+   * @returns 取消订阅函数
+   */
+  onServiceChange(cb: (res: { available: boolean; discovering: boolean }) => void): () => void
+  /**
+   * 订阅 Beacon 设备更新。
+   * @param cb 设备回调（beacons 发现的设备列表）
+   * @returns 取消订阅函数
+   */
+  onUpdate(cb: (res: { beacons: BeaconInfo[] }) => void): () => void
+}
+
+/** mDNS 局域网服务（wx OnLocalServiceFound/Lost） */
+export interface LocalServiceInfo {
+  /** 服务名 */
+  serviceName: string
+  /** 服务类型（如 _http._tcp） */
+  serviceType: string
+  /** 服务 IP */
+  ip?: string
+  /** 服务端口 */
+  port?: number
+}
+
+/**
+ * ★权威标尺缺口 C78：局域网服务发现（`useLocalService()`，mDNS）。
+ *   wx：`wx.onLocalServiceFound` / `onLocalServiceLost` / `onLocalServiceResolveFail`
+ *   / `onLocalServiceDiscoveryStop`；web：无标准 mDNS → Err 诚实降级。
+ */
+export interface LocalServiceAPI {
+  /**
+   * 订阅发现新服务。
+   * @param cb 服务回调
+   * @returns 取消订阅函数
+   */
+  onFound(cb: (res: LocalServiceInfo) => void): () => void
+  /**
+   * 订阅服务离开。
+   * @param cb 服务回调
+   * @returns 取消订阅函数
+   */
+  onLost(cb: (res: LocalServiceInfo) => void): () => void
+  /**
+   * 订阅服务解析失败。
+   * @param cb 服务回调
+   * @returns 取消订阅函数
+   */
+  onResolveFail(cb: (res: LocalServiceInfo) => void): () => void
+  /**
+   * 订阅搜索停止。
+   * @param cb 停止回调
+   * @returns 取消订阅函数
+   */
+  onDiscoveryStop(cb: () => void): () => void
+}
+
+/**
+ * ★权威标尺缺口 C79：翻译（`useTranslation()`）。
+ *   wx：`wx.onUserTriggerTranslation` / `wx.onUserOffTranslation`（用户主动/取消翻译菜单）；
+ *   web：无对等（可用 Translation API）→ Err 诚实降级。
+ */
+export interface TranslationAPI {
+  /**
+   * 订阅用户主动翻译。
+   * @param cb 事件回调（locale 语言 / type 类型）
+   * @returns 取消订阅函数
+   */
+  onTrigger(cb: (res: { locale: string; type: string }) => void): () => void
+  /**
+   * 订阅用户取消翻译。
+   * @param cb 事件回调
+   * @returns 取消订阅函数
+   */
+  onOff(cb: () => void): () => void
+}
+
+/**
+ * ★权威标尺缺口 C80：分享海报（`usePoster()`）。
+ *   wx：`wx.onGeneratePoster`（分享海报生成事件）；web：无对等 → Err 诚实降级。
+ */
+export interface PosterAPI {
+  /**
+   * 订阅海报生成事件。
+   * @param cb 事件回调（src 海报地址 / promise 异步产物）
+   * @returns 取消订阅函数
+   */
+  onGenerate(cb: (res: { src: string; promise?: unknown }) => void): () => void
+}
+
+/**
+ * ★权威标尺缺口 C81：设备能力探测（`useDeviceCapability()`）。
+ *   wx：`wx.checkDeviceSupportHevc`（HEVC 硬解支持）；web：`MediaSource.isTypeSupported` 兜底。
+ */
+export interface DeviceCapabilityAPI {
+  /** 查询设备是否支持 HEVC（H.265）硬解码 */
+  supportsHevc(): Promise<CapResult<boolean>>
+}
+
+
 /**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
  *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
@@ -2590,6 +2765,18 @@ export interface CapabilityBridge {
   getWindow?(): WindowAPI
   /** ★权威标尺缺口 C75 导航卸载拦截（wx.enableAlertBeforeUnload/disableAlertBeforeUnload / web beforeunload） */
   getNavigationGuard?(): NavigationGuardAPI
+  /** ★权威标尺缺口 C76 AR/XR（wx.createVKSession/isVKSupport；web 无对等 → Err） */
+  getAR?(): ARAPI
+  /** ★权威标尺缺口 C77 iBeacon（wx.onBeaconServiceChange/onBeaconUpdate；web 缺省） */
+  getBeacon?(): BeaconAPI
+  /** ★权威标尺缺口 C78 局域网服务 mDNS（wx.onLocalService*；web 缺省） */
+  getLocalService?(): LocalServiceAPI
+  /** ★权威标尺缺口 C79 翻译（wx.onUserTriggerTranslation/onUserOffTranslation；web 缺省） */
+  getTranslation?(): TranslationAPI
+  /** ★权威标尺缺口 C80 分享海报（wx.onGeneratePoster；web 缺省） */
+  getPoster?(): PosterAPI
+  /** ★权威标尺缺口 C81 设备能力探测（wx.checkDeviceSupportHevc / web MediaSource） */
+  getDeviceCapability?(): DeviceCapabilityAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -2867,6 +3054,18 @@ export interface CapabilityProbe {
   window: boolean
   /** ★权威标尺缺口：导航卸载拦截（enableAlertBeforeUnload） */
   navigationGuard: boolean
+  /** ★权威标尺缺口：AR/XR（createVKSession/isVKSupport） */
+  ar: boolean
+  /** ★权威标尺缺口：iBeacon（onBeaconServiceChange/onBeaconUpdate） */
+  beacon: boolean
+  /** ★权威标尺缺口：局域网 mDNS（onLocalService*） */
+  localService: boolean
+  /** ★权威标尺缺口：翻译（onUserTriggerTranslation/onUserOffTranslation） */
+  translation: boolean
+  /** ★权威标尺缺口：分享海报（onGeneratePoster） */
+  poster: boolean
+  /** ★权威标尺缺口：设备能力探测（checkDeviceSupportHevc） */
+  deviceCapability: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -3206,6 +3405,28 @@ interface WxLike {
   setWindowSize?: (opt: { width: number; height: number; success?: () => void; fail?: (e: unknown) => void }) => void
   enableAlertBeforeUnload?: (opt: { message: string; success?: () => void; fail?: (e: unknown) => void }) => void
   disableAlertBeforeUnload?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
+  // ★权威标尺缺口 C76-C81：AR/XR / iBeacon / 局域网 / 翻译 / 海报 / 设备探测
+  createVKSession?: (opt: Record<string, unknown>) => WxVKSessionLike
+  isVKSupport?: (version: 'v1' | 'v2') => boolean
+  onBeaconServiceChange?: (cb: (res: { available: boolean; discovering: boolean }) => void) => void
+  offBeaconServiceChange?: (cb?: (...a: never[]) => void) => void
+  onBeaconUpdate?: (cb: (res: { beacons: BeaconInfo[] }) => void) => void
+  offBeaconUpdate?: (cb?: (...a: never[]) => void) => void
+  onLocalServiceFound?: (cb: (res: { serviceName: string; serviceType: string; ip?: string; port?: number }) => void) => void
+  offLocalServiceFound?: (cb?: (...a: never[]) => void) => void
+  onLocalServiceLost?: (cb: (res: { serviceName: string; serviceType: string; ip?: string; port?: number }) => void) => void
+  offLocalServiceLost?: (cb?: (...a: never[]) => void) => void
+  onLocalServiceResolveFail?: (cb: (res: { serviceName: string; serviceType: string; ip?: string; port?: number }) => void) => void
+  offLocalServiceResolveFail?: (cb?: (...a: never[]) => void) => void
+  onLocalServiceDiscoveryStop?: (cb: () => void) => void
+  offLocalServiceDiscoveryStop?: (cb?: (...a: never[]) => void) => void
+  onUserTriggerTranslation?: (cb: (res: { locale: string; type: string }) => void) => void
+  offUserTriggerTranslation?: (cb?: (...a: never[]) => void) => void
+  onUserOffTranslation?: (cb: (res: unknown) => void) => void
+  offUserOffTranslation?: (cb?: (...a: never[]) => void) => void
+  onGeneratePoster?: (cb: (res: { src: string; promise?: unknown }) => void) => void
+  offGeneratePoster?: (cb?: (...a: never[]) => void) => void
+  checkDeviceSupportHevc?: (opt?: { success?: (r: { supportHevc: boolean }) => void; fail?: (e: unknown) => void }) => void
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -3518,6 +3739,19 @@ interface WxCacheManagerLike {
   clearCaches?: () => void
   on?: (event: string, cb: (payload: unknown) => void) => void
   off?: (event: string, cb?: (...a: never[]) => void) => void
+}
+
+/** wx.createVKSession 返回对象子集 */
+interface WxVKSessionLike {
+  state?: VKSessionState
+  start?: (cb?: (...a: unknown[]) => void) => void
+  stop?: (cb?: (...a: unknown[]) => void) => void
+  destroy?: () => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+  off?: (event: string, cb?: (...a: never[]) => void) => void
+  requestAnimationFrame?: (cb: (timestamp: number, frame: unknown) => void) => number
+  cancelAnimationFrame?: (handle: number) => void
+  getVKFrame?: (width?: number, height?: number) => unknown
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -5625,6 +5859,137 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           wx.disableAlertBeforeUnload({ success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr('navigation-guard.failed', '关闭卸载确认失败', e)) })
         }),
     }),
+    // ★权威标尺缺口 C76：AR/XR（wx.createVKSession / isVKSupport）
+    getAR: () => ({
+      createSession: (options) => {
+        if (typeof wx.createVKSession !== 'function') throw new CapError('ar.unsupported', 'wx.createVKSession 缺失')
+        const s = wx.createVKSession({ track: {}, version: 'v2', ...(options as Record<string, unknown>) })
+        return {
+          state: () => (s.state ?? 0) as VKSessionState,
+          start: () =>
+            Promise.resolve().then(() => {
+              if (typeof s.start !== 'function') return capErr<void>('ar.unsupported', 'VKSession.start 缺失')
+              try {
+                s.start()
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('ar.failed', '启动 AR 会话失败', e)
+              }
+            }),
+          stop: () =>
+            Promise.resolve().then(() => {
+              if (typeof s.stop !== 'function') return capErr<void>('ar.unsupported', 'VKSession.stop 缺失')
+              try {
+                s.stop()
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('ar.failed', '停止 AR 会话失败', e)
+              }
+            }),
+          destroy: () => s.destroy?.(),
+          on: (event, cb) => {
+            if (typeof s.on !== 'function') return () => {}
+            s.on(event, cb)
+            return () => s.off?.(event, cb as (...a: never[]) => void)
+          },
+          requestAnimationFrame: (cb) => (typeof s.requestAnimationFrame === 'function' ? s.requestAnimationFrame(cb as (t: number, f: unknown) => void) : 0),
+          cancelAnimationFrame: (handle) => s.cancelAnimationFrame?.(handle),
+          getVKFrame: (width, height) => (typeof s.getVKFrame === 'function' ? s.getVKFrame(width, height) : undefined),
+        }
+      },
+      isSupported: (version = 'v2') =>
+        Promise.resolve().then(() => {
+          if (typeof wx.isVKSupport !== 'function') return capErr<boolean>('ar.unsupported', 'wx.isVKSupport 缺失')
+          try {
+            return capOk(!!wx.isVKSupport(version))
+          } catch (e) {
+            return capErr<boolean>('ar.failed', '查询 VK 支持失败', e)
+          }
+        }),
+    }),
+    // ★权威标尺缺口 C77：iBeacon
+    getBeacon: () => ({
+      onServiceChange: (cb) => {
+        if (typeof wx.onBeaconServiceChange !== 'function') return () => {}
+        wx.onBeaconServiceChange(cb)
+        return () => {
+          if (typeof wx.offBeaconServiceChange === 'function') wx.offBeaconServiceChange()
+        }
+      },
+      onUpdate: (cb) => {
+        if (typeof wx.onBeaconUpdate !== 'function') return () => {}
+        wx.onBeaconUpdate(cb)
+        return () => {
+          if (typeof wx.offBeaconUpdate === 'function') wx.offBeaconUpdate()
+        }
+      },
+    }),
+    // ★权威标尺缺口 C78：局域网服务 mDNS
+    getLocalService: () => ({
+      onFound: (cb) => {
+        if (typeof wx.onLocalServiceFound !== 'function') return () => {}
+        wx.onLocalServiceFound(cb)
+        return () => {
+          if (typeof wx.offLocalServiceFound === 'function') wx.offLocalServiceFound()
+        }
+      },
+      onLost: (cb) => {
+        if (typeof wx.onLocalServiceLost !== 'function') return () => {}
+        wx.onLocalServiceLost(cb)
+        return () => {
+          if (typeof wx.offLocalServiceLost === 'function') wx.offLocalServiceLost()
+        }
+      },
+      onResolveFail: (cb) => {
+        if (typeof wx.onLocalServiceResolveFail !== 'function') return () => {}
+        wx.onLocalServiceResolveFail(cb)
+        return () => {
+          if (typeof wx.offLocalServiceResolveFail === 'function') wx.offLocalServiceResolveFail()
+        }
+      },
+      onDiscoveryStop: (cb) => {
+        if (typeof wx.onLocalServiceDiscoveryStop !== 'function') return () => {}
+        wx.onLocalServiceDiscoveryStop(cb)
+        return () => {
+          if (typeof wx.offLocalServiceDiscoveryStop === 'function') wx.offLocalServiceDiscoveryStop()
+        }
+      },
+    }),
+    // ★权威标尺缺口 C79：翻译
+    getTranslation: () => ({
+      onTrigger: (cb) => {
+        if (typeof wx.onUserTriggerTranslation !== 'function') return () => {}
+        wx.onUserTriggerTranslation(cb)
+        return () => {
+          if (typeof wx.offUserTriggerTranslation === 'function') wx.offUserTriggerTranslation()
+        }
+      },
+      onOff: (cb) => {
+        if (typeof wx.onUserOffTranslation !== 'function') return () => {}
+        wx.onUserOffTranslation(() => cb())
+        return () => {
+          if (typeof wx.offUserOffTranslation === 'function') wx.offUserOffTranslation()
+        }
+      },
+    }),
+    // ★权威标尺缺口 C80：分享海报
+    getPoster: () => ({
+      onGenerate: (cb) => {
+        if (typeof wx.onGeneratePoster !== 'function') return () => {}
+        wx.onGeneratePoster(cb)
+        return () => {
+          if (typeof wx.offGeneratePoster === 'function') wx.offGeneratePoster()
+        }
+      },
+    }),
+    // ★权威标尺缺口 C81：设备能力探测
+    getDeviceCapability: () => ({
+      supportsHevc: () =>
+        new Promise<CapResult<boolean>>((resolve) => {
+          if (typeof wx.checkDeviceSupportHevc !== 'function') return resolve(capErr('device-capability.unsupported', 'wx.checkDeviceSupportHevc 缺失'))
+          wx.checkDeviceSupportHevc({ success: (r: { supportHevc: boolean }) => resolve(capOk(!!r.supportHevc)), fail: (e: unknown) => resolve(capErr('device-capability.failed', '查询 HEVC 支持失败', e)) })
+        }),
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -7195,6 +7560,45 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
           }),
       }
     },
+    // ★权威标尺缺口 C76：AR/XR（web 无对等视觉算法 → createSession throw；isSupported 恒 false）
+    getAR: () => ({
+      createSession: () => {
+        throw new CapError('ar.unsupported', 'Web 无微信视觉算法会话（可用 WebXR / 第三方 CV 库）')
+      },
+      isSupported: () => Promise.resolve(capOk(false)),
+    }),
+    // ★权威标尺缺口 C77：iBeacon（web 无对等 → 空订阅；可用 Web Bluetooth）
+    getBeacon: () => ({
+      onServiceChange: () => () => {},
+      onUpdate: () => () => {},
+    }),
+    // ★权威标尺缺口 C78：局域网 mDNS（web 无标准 → 空订阅）
+    getLocalService: () => ({
+      onFound: () => () => {},
+      onLost: () => () => {},
+      onResolveFail: () => () => {},
+      onDiscoveryStop: () => () => {},
+    }),
+    // ★权威标尺缺口 C79：翻译（web 无对等 → 空订阅；可用 Translation API）
+    getTranslation: () => ({
+      onTrigger: () => () => {},
+      onOff: () => () => {},
+    }),
+    // ★权威标尺缺口 C80：分享海报（web 无对等 → 空订阅）
+    getPoster: () => ({
+      onGenerate: () => () => {},
+    }),
+    // ★权威标尺缺口 C81：设备能力探测（web MediaSource.isTypeSupported 兜底）
+    getDeviceCapability: () => ({
+      supportsHevc: () =>
+        Promise.resolve().then(() => {
+          const MS = (g as { MediaSource?: { isTypeSupported?: (t: string) => boolean } }).MediaSource
+          if (MS && typeof MS.isTypeSupported === 'function') {
+            return capOk(MS.isTypeSupported('video/mp4; codecs="hvc1"') || MS.isTypeSupported('video/mp4; codecs="hev1"'))
+          }
+          return capErr<boolean>('device-capability.unsupported', 'web 无 MediaSource.isTypeSupported')
+        }),
+    }),
   }
 }
 
@@ -7408,6 +7812,18 @@ export interface CapabilityHooks {
   useWindow(): CapResult<WindowAPI>
   /** ★C75 useNavigationGuard：卸载拦截（wx.enableAlertBeforeUnload / web beforeunload） */
   useNavigationGuard(): CapResult<NavigationGuardAPI>
+  /** ★C76 useAR：AR/XR 视觉算法（wx.createVKSession/isVKSupport；web 无对等 → Err） */
+  useAR(): CapResult<ARAPI>
+  /** ★C77 useBeacon：iBeacon（wx.onBeaconServiceChange/onBeaconUpdate；web 空订阅） */
+  useBeacon(): CapResult<BeaconAPI>
+  /** ★C78 useLocalService：局域网 mDNS（wx.onLocalService*；web 空订阅） */
+  useLocalService(): CapResult<LocalServiceAPI>
+  /** ★C79 useTranslation：翻译（wx.onUserTriggerTranslation/onUserOffTranslation；web 空订阅） */
+  useTranslation(): CapResult<TranslationAPI>
+  /** ★C80 usePoster：分享海报（wx.onGeneratePoster；web 空订阅） */
+  usePoster(): CapResult<PosterAPI>
+  /** ★C81 useDeviceCapability：设备能力探测（wx.checkDeviceSupportHevc / web MediaSource） */
+  useDeviceCapability(): CapResult<DeviceCapabilityAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -8096,6 +8512,31 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getNavigationGuard) throw new CapError('navigation-guard.unsupported', '桥未提供 getNavigationGuard（useNavigationGuard 不可用）')
       return bridge.getNavigationGuard()
     }),
+    // ★权威标尺缺口 C76-C81：AR/iBeacon/局域网/翻译/海报/设备探测
+    useAR: () => handleResult<ARAPI>(() => {
+      if (!bridge.getAR) throw new CapError('ar.unsupported', '桥未提供 getAR（useAR 不可用）')
+      return bridge.getAR()
+    }),
+    useBeacon: () => handleResult<BeaconAPI>(() => {
+      if (!bridge.getBeacon) throw new CapError('beacon.unsupported', '桥未提供 getBeacon（useBeacon 不可用）')
+      return bridge.getBeacon()
+    }),
+    useLocalService: () => handleResult<LocalServiceAPI>(() => {
+      if (!bridge.getLocalService) throw new CapError('local-service.unsupported', '桥未提供 getLocalService（useLocalService 不可用）')
+      return bridge.getLocalService()
+    }),
+    useTranslation: () => handleResult<TranslationAPI>(() => {
+      if (!bridge.getTranslation) throw new CapError('translation.unsupported', '桥未提供 getTranslation（useTranslation 不可用）')
+      return bridge.getTranslation()
+    }),
+    usePoster: () => handleResult<PosterAPI>(() => {
+      if (!bridge.getPoster) throw new CapError('poster.unsupported', '桥未提供 getPoster（usePoster 不可用）')
+      return bridge.getPoster()
+    }),
+    useDeviceCapability: () => handleResult<DeviceCapabilityAPI>(() => {
+      if (!bridge.getDeviceCapability) throw new CapError('device-capability.unsupported', '桥未提供 getDeviceCapability（useDeviceCapability 不可用）')
+      return bridge.getDeviceCapability()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -8172,6 +8613,12 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       idle: bridge.getIdle !== undefined,
       window: bridge.getWindow !== undefined,
       navigationGuard: bridge.getNavigationGuard !== undefined,
+      ar: bridge.getAR !== undefined,
+      beacon: bridge.getBeacon !== undefined,
+      localService: bridge.getLocalService !== undefined,
+      translation: bridge.getTranslation !== undefined,
+      poster: bridge.getPoster !== undefined,
+      deviceCapability: bridge.getDeviceCapability !== undefined,
     }),
   }
 }
