@@ -131,3 +131,25 @@ describe('p-progress / p-label / p-page-container（C2 新增）', () => {
     expect(wxml).toContain('root-portal')
   })
 })
+
+describe('p-selection（局部文本选区——★批 H）', () => {
+  it('MP 产物：selectionchange 事件 + 类 + 插槽 + props', () => {
+    const { wxml, js } = compileComponent('p-selection')
+    expect(wxml).toMatch(/class="[^"]*\bp-selection\b/)
+    expect(wxml).toContain('bind:selectionchange="onSelectionChange"')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('disableContextMenu: {')
+    expect(js).toContain("this.triggerEvent('selectionchange'")
+  })
+})
+
+describe('p-keyboard-accessory（键盘上方工具栏——★批 H）', () => {
+  it('MP 产物：可见门控类 + 插槽 + maxHeight 属性', () => {
+    const { wxml, js } = compileComponent('p-keyboard-accessory')
+    expect(wxml).toMatch(/class="[^"]*\bp-keyboard-accessory\b/)
+    expect(wxml).toContain('p-keyboard-accessory--visible')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('maxHeight: {')
+    expect(js).toContain('value: 200')
+  })
+})

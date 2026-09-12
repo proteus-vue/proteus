@@ -57,16 +57,18 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
   it('planned 清单可见（规划待落地逐条列出，非黑盒）', () => {
     const r = auditSpecCoverage(spec, MP_MAPPING_MATRIX)
     expect(r.plannedItems.length).toBe(r.planned)
-    // 至少 API 侧 planned 项带承接名（组件侧部分来自矩阵 planned 行）
-    expect(r.plannedItems.filter((p) => !!p.proteus).length).toBeGreaterThan(0)
+    // ★API 侧 planned 已清零；剩余 planned 均为组件侧（来自矩阵 planned 行——需原生渲染/宿主）
+    const apiPlanned = r.plannedItems.filter((p) => p.kind === 'api')
+    expect(apiPlanned).toEqual([])
+    expect(r.plannedItems.every((p) => p.kind === 'component')).toBe(true)
   })
 
   it('分类器：覆盖五态语义（covered/planned/private/na/gap）', () => {
     expect(classifySpecApi('createCanvasContext').status).toBe('covered')
     expect(classifySpecApi('createUDPSocket').status).toBe('covered')
     expect(classifySpecApi('createVKSession').status).toBe('covered')
-    // planned 现仅剩组件侧（keyboard-accessory/selection）——API 侧全归类
-    expect(classifySpecComponent('keyboard-accessory', MP_MAPPING_MATRIX).status).toBe('planned')
+    // ★API 侧 planned 清零——planned 现仅剩组件侧（需原生渲染/宿主能力）
+    expect(classifySpecComponent('camera', MP_MAPPING_MATRIX).status).toBe('planned')
     expect(classifySpecApi('requestMerchantTransfer').status).toBe('private')
     expect(classifySpecApi('nextTick').status).toBe('na')
     // 未归类 → gap（防漏网）
@@ -77,7 +79,9 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
     expect(classifySpecComponent('canvas', MP_MAPPING_MATRIX).status).toBe('covered')
     expect(classifySpecComponent('checkbox-group', MP_MAPPING_MATRIX).status).toBe('na')
     expect(classifySpecComponent('channel-live', MP_MAPPING_MATRIX).status).toBe('private')
-    expect(classifySpecComponent('keyboard-accessory', MP_MAPPING_MATRIX).status).toBe('planned')
+    // ★批 H：keyboard-accessory/selection 已全端真实落地（原 planned）
+    expect(classifySpecComponent('keyboard-accessory', MP_MAPPING_MATRIX).status).toBe('covered')
+    expect(classifySpecComponent('selection', MP_MAPPING_MATRIX).status).toBe('covered')
     expect(classifySpecComponent('totally-unknown-tag', MP_MAPPING_MATRIX).status).toBe('gap')
   })
 

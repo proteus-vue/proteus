@@ -81,6 +81,9 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-progress" => Some("ui.progress"),
         "p-label" => Some("ui.label"),
         "p-page-container" => Some("shell.page-container"),
+        // ★权威标尺批 H（与 Node TAG_SEMANTIC_MAP 同步——selection/keyboard-accessory）
+        "p-selection" => Some("ui.selection"),
+        "p-keyboard-accessory" => Some("shell.keyboard-accessory"),
         _ => None, // 未知 p- / 非 p- 标签（view/text/scroll-view——Layer 1 兼容层不产 C-IR）
     }
 }

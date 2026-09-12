@@ -44,6 +44,11 @@ declare module 'vue' {
     'p-label': typeof import('./p-label/index.vue')['default']
     PPageContainer: typeof import('./p-page-container/index.vue')['default']
     'p-page-container': typeof import('./p-page-container/index.vue')['default']
+    // ★权威标尺批 H
+    PSelection: typeof import('./p-selection/index.vue')['default']
+    'p-selection': typeof import('./p-selection/index.vue')['default']
+    PKeyboardAccessory: typeof import('./p-keyboard-accessory/index.vue')['default']
+    'p-keyboard-accessory': typeof import('./p-keyboard-accessory/index.vue')['default']
   }
 }
 

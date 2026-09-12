@@ -286,9 +286,9 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   'nested-scroll-body': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'nested-scroll-header': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'draggable-sheet': { status: 'covered', proteus: 'shell.page-container（半屏可拖）' },
-  // 表单/富文本/文本片段 → 语义承接
-  'keyboard-accessory': { status: 'planned', proteus: 'shell.keyboard-accessory（L2）' },
-  selection: { status: 'planned', proteus: 'ui.text selection（L2）' },
+  // 表单/富文本/文本片段 → 语义承接（★批 H：keyboard-accessory/selection 已全端真实落地）
+  'keyboard-accessory': { status: 'covered', proteus: 'shell.keyboard-accessory（p-keyboard-accessory）' },
+  selection: { status: 'covered', proteus: 'ui.selection（p-selection）' },
   span: { status: 'na', proteus: 'ui.text 内联（消灭为子元素）' },
   'editor-portal': { status: 'na', proteus: 'ui.rich-text 内联（消灭为子元素）' },
   'native-component': { status: 'private', proteus: '（微信原生组件扩展点，非目标）' },
@@ -373,6 +373,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 249, // 2026-09-12 基线（spec 382 项：covered 249 / planned 10 / private 106 / na 17 / gap 0）——含 C65-C81；planned 仅剩组件侧
+  coveredMin: 251, // 2026-09-12 基线（spec 382 项：covered 251 / planned 8 / private 106 / na 17 / gap 0）——含组件批 H
   gapMax: 0, // 全部官方项必须归类
 }

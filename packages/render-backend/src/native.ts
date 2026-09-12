@@ -139,6 +139,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.progress': 'UIProgressView',
     'ui.label': 'UILabel.label',
     'shell.page-container': 'UIPresentationController',
+    'ui.selection': 'UITextView.selection',
+    'shell.keyboard-accessory': 'UIInputView',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -201,6 +203,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.progress': 'ProgressBar',
     'ui.label': 'TextView.label',
     'shell.page-container': 'BottomSheetDialog',
+    'ui.selection': 'TextView.selection',
+    'shell.keyboard-accessory': 'InputMethodService.accessory',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -263,6 +267,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.progress': 'Progress',
     'ui.label': 'Text.label',
     'shell.page-container': 'bindSheet',
+    'ui.selection': 'Text.selection',
+    'shell.keyboard-accessory': 'KeyboardAccessory',
   },
 }
 
