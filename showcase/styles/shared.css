@@ -1,0 +1,108 @@
+/* showcase/styles/shared.css —— 跨页复用样式（全局，无 scoped 后缀）
+   定位：真正需要跨页面复用、且不宜放进组件 scoped 块的类（页面标题/卡片/标签等）。
+   命名前缀 sp- 避免冲突；页面自有的局部样式仍写在各页 <style scoped>。 */
+
+.sp-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: var(--sp-4) var(--sp-4) calc(var(--sp-8) + env(safe-area-inset-bottom, 0px));
+  background: var(--sp-bg);
+}
+
+.sp-title {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 var(--sp-1);
+  color: var(--sp-text);
+}
+.sp-lead {
+  display: block;
+  font-size: 13px;
+  color: var(--sp-text-3);
+  margin: 0 0 var(--sp-4);
+}
+.sp-section {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  margin: var(--sp-6) 0 var(--sp-3);
+  color: var(--sp-text);
+}
+
+.sp-card {
+  display: block;
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-line);
+  border-radius: var(--sp-radius-lg);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--sp-shadow-sm);
+  box-sizing: border-box;
+}
+.sp-card__title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 var(--sp-1);
+  color: var(--sp-text);
+}
+.sp-card__desc {
+  display: block;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--sp-text-2);
+  margin: 0;
+}
+
+.sp-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--sp-radius-sm);
+  background: var(--sp-brand-soft);
+  color: var(--sp-brand-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.sp-mono {
+  font-family: var(--sp-mono);
+  font-size: 12px;
+}
+
+/* 列表行（可点列的通用形态） */
+.sp-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-line);
+  border-radius: var(--sp-radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-2);
+  box-sizing: border-box;
+}
+.sp-row-item__main {
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+.sp-row-item__label {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--sp-text);
+}
+.sp-row-item__desc {
+  display: block;
+  font-size: 12px;
+  color: var(--sp-text-3);
+  margin-top: 2px;
+}
+.sp-row-item__chev {
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--sp-text-3);
+}

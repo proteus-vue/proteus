@@ -1,0 +1,48 @@
+{
+  "name": "proteus-showcase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Proteus 官方演示小程序：一套 Vue 语义源码 → 小程序（Skyline）+ Web，全面演示框架能力",
+  "scripts": {
+    "dev:web": "proteus dev --target web",
+    "build:web": "proteus build --target web",
+    "dev:mp": "proteus dev --target skyline",
+    "build:mp": "proteus build --target skyline",
+    "debug:mp": "PROTEUS_DEBUG=1 proteus build --target skyline",
+    "preview:web": "proteus build --target web && vite preview dist/web",
+    "cli:check": "tsx ../packages/cli/src/index.ts check",
+    "cli:build:web": "tsx ../packages/cli/src/index.ts build --target web",
+    "cli:build:mp": "tsx ../packages/cli/src/index.ts build --target skyline"
+  },
+  "dependencies": {
+    "@proteus-vue/api": "0.1.0",
+    "@proteus-vue/app-config": "0.1.0",
+    "@proteus-vue/built-in-components": "0.1.0",
+    "@proteus-vue/capabilities": "0.1.0",
+    "@proteus-vue/desktop": "0.1.0",
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/fluid": "0.1.0",
+    "@proteus-vue/gesture": "0.1.0",
+    "@proteus-vue/glass": "0.1.0",
+    "@proteus-vue/i18n": "0.1.0",
+    "@proteus-vue/router": "0.2.0-beta.0",
+    "@proteus-vue/runtime": "0.2.0-beta.0",
+    "@proteus-vue/shared": "0.2.0-beta.0",
+    "@proteus-vue/web": "0.1.0",
+    "@proteus-vue/worklet": "0.1.0",
+    "pinia": "^4.0.3",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@proteus-vue/cli": "0.2.1-beta.0",
+    "@proteus-vue/compiler": "0.3.0-beta.0",
+    "@proteus-vue/plugin-vite": "0.2.0-beta.0",
+    "@types/node": "^20.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0",
+    "vue-tsc": "^2.0.0"
+  }
+}

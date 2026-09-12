@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule, scanSourceImports, rewriteFrameworkRequires } from '../packages/plugin-vite/src/plugin'
+import { extractBuilderFnName, assembleAppJs, filterOverriddenPresets, resolvePkgPath, resolveSharedModule, scanSourceImports, rewriteFrameworkRequires, rewriteRootToPage, VENDOR_SINGLETONS } from '../packages/plugin-vite/src/plugin'
 
 describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
   it('extractBuilderFnName 提取函数名', () => {
@@ -192,3 +192,56 @@ describe('rewriteFrameworkRequires（★reactivity-runtime spke：裸 @proteus-v
     expect(rewriteFrameworkRequires(js, 'pages/foo')).toBe(js)
   })
 })
+
+describe('rewriteRootToPage（★app.wxss 全局样式通道：:root → page）', () => {
+  it('行首 :root 改写为 page', () => {
+    expect(rewriteRootToPage(':root {\n  --x: 1;\n}')).toContain('page {')
+    expect(rewriteRootToPage(':root {')).not.toContain(':root')
+  })
+  it('组合选择器 :root 也改写（如 :root, page）', () => {
+    expect(rewriteRootToPage(':root, page {').trim().startsWith('page,')).toBe(true)
+  })
+  it('规则体内/元素选择器里的 root 不误伤（只匹配 :root 标记）', () => {
+    const css = '.root { color: red; }\n:root {\n  --a: 1;\n}'
+    const out = rewriteRootToPage(css)
+    expect(out).toContain('.root { color: red; }') // 类名 .root 保留
+    expect(out).toContain('page {') // :root 改写
+  })
+  it('无 :root 时原样返回', () => {
+    const css = 'page { --x: 1; }'
+    expect(rewriteRootToPage(css)).toBe(css)
+  })
+})
+
+describe('★vendor 单例化（2026-09-12 真机修复：pinia 多实例 → store 全失效）', () => {
+  it('VENDOR_SINGLETONS 含 pinia / vue / @vue/devtools-api', () => {
+    expect(VENDOR_SINGLETONS).toContain('pinia')
+    expect(VENDOR_SINGLETONS).toContain('vue')
+    expect(VENDOR_SINGLETONS).toContain('@vue/devtools-api')
+  })
+
+  it('resolveSharedModule(pinia) → _proteus/pinia（external 到单例产物，杜绝各 bundle 重复内联）', () => {
+    const repoRoot = path.resolve(__dirname, '..')
+    const appDir = path.join(repoRoot, 'showcase')
+    const r = resolveSharedModule(appDir, path.join(appRoot(), 'pages/a.vue'), 'pinia', undefined, appDir)
+    expect(r?.relNoExt).toBe('_proteus/pinia')
+    expect(fs.existsSync(r?.file ?? '')).toBe(true)
+  })
+
+  it('assembleAppJs：传入 Pinia 安装行 → 骨架注入（含 createMpPinia 调用）', () => {
+    const install = '    var m = require(\'./_proteus/runtime.js\')\n    m.createMpPinia()'
+    const out = assembleAppJs('', [], install)
+    expect(out).toContain('createMpPinia()')
+    expect(out).not.toContain('__PINIA_INSTALL__')
+    expect(out).toContain('App({')
+  })
+
+  it('assembleAppJs：不传 Pinia 安装行 → 占位被替换为空（不残留 token）', () => {
+    const out = assembleAppJs('', [])
+    expect(out).not.toContain('__PINIA_INSTALL__')
+  })
+})
+
+function appRoot(): string {
+  return path.join(path.resolve(__dirname, '..'), 'showcase')
+}

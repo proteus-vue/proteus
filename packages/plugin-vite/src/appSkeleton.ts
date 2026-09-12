@@ -4,7 +4,8 @@
 //   App 包装 / onLaunch 调试日志 / 全局错误捕获 / 内置预设注册 全部由框架生成，开发者零样板。
 // ⚠ 本文件是"文本模板"（纯字符串导出），仅供 mp-transform 插件引用拼装，不是运行时代码；
 //   生成的代码遵守 ES5 安全约定（决策 #32/#36：无 ?? / 无 ?. / 无数组解构 / 无对象展开）。
-//   __PROTEUS_DEBUG__ 由插件按 PROTEUS_DEBUG=1 替换；__PRESET_REGISTRATION__ 由插件替换为预设注册行。
+//   __PROTEUS_DEBUG__ 由插件按 PROTEUS_DEBUG=1 替换；__PRESET_REGISTRATION__ 由插件替换为预设注册行；
+//   __PINIA_INSTALL__ 由插件在「页面使用 store」时替换为 Pinia 安装行（否则置空，不引入 runtime 体积）。
 
 export const APP_LAUNCH_SKELETON = `App({
   onLaunch() {
@@ -17,6 +18,10 @@ export const APP_LAUNCH_SKELETON = `App({
         if (debug) console.error('[proteus][error]', err, Date.now())
       })
     }
+    // ★Pinia 安装（仅页面使用 store 时注入，否则此行为注释）：
+    //   小程序无 createApp 实例 → createMpPinia() 内部 setActivePinia，页面 useStore() 才能解析；
+    //   时序：onLaunch 早于任何页面 onLoad ✓
+__PINIA_INSTALL__
     // 内置预设注册（同文件静态可分析：函数定义在前、注册在后，插件已保证顺序）
     if (typeof wx !== 'undefined' && wx.router) {
 __PRESET_REGISTRATION__

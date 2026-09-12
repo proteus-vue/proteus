@@ -1683,6 +1683,9 @@ function extractTopLevelCalls(source: string, warnings: string[], trace?: Transf
 /**
  * ★pinia-plan 12 P1：模板 store 绑定注入——useXxxStore() 实例属性 + Pinia $subscribe → setData 同步
  * 字段映射：<field>: store.<field>（Pinia getter 访问；setData 后模板 {{ field }} 生效）
+ * ★真机 bug 修复（2026-09-12）：`$subscribe` 返回值（退订函数）存到 `this.__proteusStoreUnsub`，
+ *   onUnload 时**只退订本页订阅**（此前调 `$dispose()` 会销毁 app 级 store → 全局状态每次离页清空、
+ *   其他页订阅一并失效；Pinia store 是 app 级单例，不应按页面销毁）。
  */
 function storeBindingLine(fields: string[], storeVar: string): string {
   const map = fields.map((f) => `${f}: __self.${storeVar}.${f}`).join(', ')
@@ -1690,7 +1693,7 @@ function storeBindingLine(fields: string[], storeVar: string): string {
     'const __self = this',
     `this.setData({ ${map} })`,
     `if (this.${storeVar} && this.${storeVar}.$subscribe) {`,
-    `  this.${storeVar}.$subscribe(function () { __self.setData({ ${map} }) })`,
+    `  this.__proteusStoreUnsub = this.${storeVar}.$subscribe(function () { __self.setData({ ${map} }) })`,
     `}`,
   ].join('\n')
 }
@@ -2813,9 +2816,12 @@ export function transformScriptToPage(
   // 导航链接自动 handler（模板出现 <a href> / <router-link> 时注入，仅 MP 产物存在）
   // 方法名避免 __ 前缀（微信保留前缀）；当前为临时调试版：无条件输出日志（验证通过后回收门控）
   if (extra.usesNavigate && !disabled.has('script/nav-handler')) {
-    trace?.add('script/nav-handler', { before: '<a href> / <router-link>', after: 'proteusNavigateTo(e)（data-url → wx.navigateTo）' })
+    trace?.add('script/nav-handler', { before: '<a href> / <router-link>', after: 'proteusNavigateTo(e)（data-url → wx.navigateTo，tab 页 fallback switchTab）' })
     // 注意：生成代码避免数组解构/对象展开（微信 ES5 转译依赖 babel helper 模块）
     // 调试日志统一 [proteus][环节] 格式，仅 debug 构建注入
+    // ★2026-09-12 tab 页 fallback：wx.navigateTo 对 **tabBar 页面必失败**（微信硬限制，静默无反应）→
+    //   失败时 fallback 到 wx.switchTab（官方推荐模式；不依赖编译期 tab 表，任何工程通用）。
+    //   switchTab 不支持 routeType 自定义转场（tab 切换固定行为）→ fallback 时不透传。
     methodNames.add('proteusNavigateTo')
     methodLines.push(
       '  proteusNavigateTo(e) {',
@@ -2828,8 +2834,12 @@ export function transformScriptToPage(
       '      url: url,',
       ...(extra.debug ? [`      success: function () { console.log('[proteus][nav] navigateTo success', url, Date.now()) },`] : []),
       '      fail: function (err) {',
-      ...(extra.debug ? [`        console.warn('[proteus][nav] navigateTo fail', JSON.stringify(err), Date.now())`] : []),
-      '        if (ds.routeType) wx.navigateTo({ url: url })',
+      ...(extra.debug ? [`        console.warn('[proteus][nav] navigateTo fail, try switchTab', JSON.stringify(err), Date.now())`] : []),
+      '        wx.switchTab({',
+      '          url: url,',
+      ...(extra.debug ? [`          success: function () { console.log('[proteus][nav] switchTab success', url, Date.now()) },`] : []),
+      ...(extra.debug ? [`          fail: function (e2) { console.warn('[proteus][nav] switchTab fail', JSON.stringify(e2), Date.now()) },`] : []),
+      '        })',
       '      }',
       '    }',
       '    if (ds.routeType) nav.routeType = ds.routeType',
@@ -2866,10 +2876,13 @@ export function transformScriptToPage(
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
   }
   // ★Batch 6：页面级清理（provide 或 inject 时）——onUnload 删除当前页命名空间（防泄漏）
-  // ★lifecycle B6：页面级 store $dispose（useXxxStore 实例属性 → onUnload 自动清理，防内存泄漏）
+  // ★lifecycle B6 + 真机 bug 修复（2026-09-12）：页面级 store 清理改为**仅退订本页 $subscribe**。
+  //   此前 `store.$dispose()` 会**销毁 app 级 Pinia store**（全局单例）——每次离开页面清空全局状态、
+  //   并使其他页对该 store 的订阅一并失效（真机实测：store 页交互后 data 不更新）。Pinia store 是 app 级，
+  //   不应按页面销毁；只需解除本页的数据同步订阅（退订函数由 storeBindingLine 存入 __proteusStoreUnsub）。
   const storeDisposeLine =
     storeVar && !extra.isComponent
-      ? `if (this.${storeVar} && this.${storeVar}.$dispose) { this.${storeVar}.$dispose(); this.${storeVar} = null }`
+      ? `if (this.__proteusStoreUnsub) { this.__proteusStoreUnsub(); this.__proteusStoreUnsub = null }`
       : ''
   // ★#494 app-config 订阅退订：onUnload 显式存在时注入 unsubscribe；无 onUnload 时 needsPageCleanup 承载生成
   const appConfigUnsubLine = appConfigBindings.length ? 'if (this.__appConfigUnsub) { this.__appConfigUnsub(); this.__appConfigUnsub = null }' : ''

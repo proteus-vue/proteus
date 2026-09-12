@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus 头像（深色版）· 同多色立方体，深石板底（暗色商店/文档场景）。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Proteus">
+  <title>Proteus</title>
+  <defs>
+    <linearGradient id="pTop" x1="0.5" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#c4b5fd"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <linearGradient id="pLeft" x1="0.25" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0d9488"/></linearGradient>
+    <linearGradient id="pRight" x1="0.75" y1="0" x2="0.5" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <clipPath id="tileD"><rect width="512" height="512" rx="116"/></clipPath>
+  </defs>
+  <g clip-path="url(#tileD)">
+    <rect width="512" height="512" fill="#141419"/>
+    <polygon points="256,112 385.9,187 256,262 126.1,187" fill="url(#pTop)"/>
+    <polygon points="126.1,187 256,262 256,412 126.1,337" fill="url(#pLeft)"/>
+    <polygon points="256,262 385.9,187 385.9,337 256,412" fill="url(#pRight)"/>
+  </g>
+</svg>

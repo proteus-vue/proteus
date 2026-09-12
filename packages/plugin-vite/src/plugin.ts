@@ -17,7 +17,7 @@ import { resolveRouterConfig } from '@proteus-vue/types'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
-import { compileVueSfc } from '@proteus-vue/compiler'
+import { compileVueSfc, transformStyleToWxss } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
@@ -134,6 +134,12 @@ function preprocessStyle(lang: string, content: string): string {
  * - @proteus-vue/*（框架包 dist）→ 产物 _proteus/<name>（白名单放行；微信 require 缓存同路径同实例）
  * - 其余裸模块（vue/pinia 等第三方）→ null（不参与）
  */
+/** ★vendor 单例清单（2026-09-12 真机 bug 修复）：这些库含模块级可变状态
+ *  （pinia 的 activePinia / vue 的 currentInstance），若各 bundle 内联 → 多份独立实例 →
+ *  setActivePinia 设的那份不是 useStore() 查的那份 → store 全失效。故统一 external 到 `_proteus/<name>.js`。
+ *  @vue/devtools-api 是 pinia 的运行时依赖，同样单例化（避免多份注册表）。 */
+export const VENDOR_SINGLETONS = ['pinia', 'vue', '@vue/devtools-api']
+
 export function resolveSharedModule(
   appDir: string,
   absFrom: string,
@@ -156,7 +162,23 @@ export function resolveSharedModule(
       return null
     }
   }
-  if (!source.startsWith('.')) return null // 其余裸模块（vue/pinia 等第三方）不参与
+  // ★vendor 单例（pinia/vue/@vue/devtools-api）：解析到真实入口，产物 _proteus/<name>.js
+  //   —— 全共享模块 external 引用同一份实例（杜绝重复内联导致的模块级状态分裂）。
+  //   解析基准：先 projectRoot（应用直接声明的 vendor，如 vue），失败再退到引用方位置
+  //   （vendor 的**传递依赖**，如 pinia→@vue/devtools-api，只存在于 pinia 同级 node_modules）。
+  if (VENDOR_SINGLETONS.includes(source)) {
+    const tryResolve = (base: string): string | null => {
+      try {
+        return createRequire(base).resolve(source)
+      } catch {
+        return null
+      }
+    }
+    const entry = tryResolve(path.join(resolveFrom ?? appDir, 'package.json')) ?? tryResolve(absFrom)
+    if (!entry || !fs.existsSync(entry)) return null
+    return { file: entry, relNoExt: `_proteus/${source}` }
+  }
+  if (!source.startsWith('.')) return null // 其余裸模块（lodash 等第三方）不参与
   const base = path.resolve(path.dirname(absFrom), source)
   // ★B2 修复（决策 #365）：扩展名白名单——仅 JS/TS 参与共享模块 bundle；
   //   非代码资源（.md/.json/.txt/图片等）不走 esbuild bundle（此前 .md 命中 base 原样文件 → esbuild 裸错 "No loader"）
@@ -190,6 +212,16 @@ export function resolveSharedModule(
  *   @proteus-vue/desktop 等跨行 import 不进共享模块 → 页面产物丢 require → 运行时 ReferenceError 白屏
  * 实现：\s\s（等价 s 标志）跨行 + 量词限制在「{…}」或标识符内（防 from 后源串含 from 字符串误切——源串仅取引号内）
  */
+/**
+ * ★全局样式选择器改写（app.wxss 通道，2026-09-12）：
+ * 源文件写标准 CSS（`:root`），小程序 WXSS 的根选择器是 `page`——WXSS 不支持 `:root`
+ * （微信告警且不生效 → 设计 token 全失效）。构建期把 `:root` 改写为 `page`，保持单一事实源。
+ * 纯函数可测。仅在规则位置（行首/`}`/`,`/空白后）匹配 `:root`，避免误伤字符串/选择器内部。
+ */
+export function rewriteRootToPage(css: string): string {
+  return css.replace(/(^|[},\s]):root\b/g, '$1page')
+}
+
 /**
  * ★2026-09-08 reactivity-runtime spke：把产物 JS 里的裸 `require('@proteus-vue/<x>')` 映射为相对 `_proteus/<x>.js`。
  *   编译器注入的 reactivity require（以及任何编译器内联的框架包 require）是裸行，不经过 moduleImports 的 import 改写；
@@ -239,6 +271,7 @@ export function extractBuilderFnName(code: string): string | null {
 export function assembleAppJs(
   mainCode: string,
   presets: Array<{ name: string; fnName: string; source: string }>,
+  piniaInstall = '',
 ): string {
   const presetCode = presets.map((p) => p.source.trim()).join('\n\n')
   const custom = mainCode.trim()
@@ -253,10 +286,11 @@ export function assembleAppJs(
     return `${custom}\n\n${presetCode}${register}`
   }
 
-  // ② 极简模式：自动补全 app 骨架（App 包装 / 调试日志 / 错误捕获 / 预设注册）
+  // ② 极简模式：自动补全 app 骨架（App 包装 / 调试日志 / 错误捕获 / 预设注册 / Pinia 安装）
   // 骨架内 if 块是 4 空格缩进，注册行对齐 6 空格
   const skeletonReg = presets.map((p) => `      wx.router.addRouteBuilder('${p.name}', ${p.fnName})`)
   const skeleton = APP_LAUNCH_SKELETON.replace('__PRESET_REGISTRATION__', skeletonReg.join('\n') || '      // 无内置预设')
+    .replace('__PINIA_INSTALL__', piniaInstall)
   return `${custom ? `${custom}\n\n` : ''}${presetCode ? `${presetCode}\n\n` : ''}${skeleton}`
 }
 
@@ -417,6 +451,17 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
       // 调试开关 __PROTEUS_DEBUG__ 由本插件替换（vite define 不作用于直出资产）
+      // ★store 使用探测（2026-09-12 真机 bug 修复）：app.js 骨架需据此安装 Pinia；
+      //   命中 → 安装 createMpPinia()（setActivePinia）+ 强制产出 _proteus/runtime.js；未命中零成本。
+      const appUsesStore = files.some((f) => {
+        try {
+          const s = fs.readFileSync(f.file, 'utf-8')
+          const script = s.includes('<script') ? (s.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '') : s
+          return /\buse[A-Z]\w*Store\s*\(/.test(script)
+        } catch {
+          return false
+        }
+      })
       const mpEntry = path.join(appDir, 'main.mp.ts')
       if (fs.existsSync(mpEntry)) {
         const src = fs.readFileSync(mpEntry, 'utf-8')
@@ -424,11 +469,37 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         // 内置预设：按 proteus.config.ts 的 customRoute.builders 读取源码并内联注册；
         // main 中同名手写注册优先（filterOverriddenPresets 跳过被覆盖的预设）
         const presets = filterOverriddenPresets(code, await loadPresetBuilders(projectRoot, cfg))
-        const appJs = assembleAppJs(code, presets)
+        const piniaInstall = appUsesStore
+          ? '    // ★页面使用 store → 安装并激活 Pinia（小程序无 createApp，必须 setActivePinia）\n' +
+            "    var __proteusPiniaMod = require('./_proteus/runtime.js')\n" +
+            '    if (__proteusPiniaMod && __proteusPiniaMod.createMpPinia) __proteusPiniaMod.createMpPinia()'
+          : '    // （未检测到 store 使用——跳过 Pinia 安装）'
+        const appJs = assembleAppJs(code, presets, piniaInstall)
           .replace(/__PROTEUS_DEBUG__/g, isDebug ? 'true' : 'false')
           .replace(/"worklet"/g, "'worklet'")
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
-        console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}`)
+        console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}${appUsesStore ? '，Pinia 已安装' : ''}`)
+      }
+      // ★app.wxss 全局样式（MP 唯一全局样式通道）：config.globalStyle 显式指定，或探测
+      //   应用目录/根目录的 app.wxss → 编译（px→rpx）后产出产物根 app.wxss（微信自动全局生效）。
+      //   用途：设计 token（CSS 变量）+ 全局重置——页面级 wxss 各自 scoped，变量无法跨页继承，故需全局通道。
+      {
+        const explicit = cfg.globalStyle ? path.resolve(projectRoot, cfg.globalStyle) : undefined
+        const candidates = [
+          explicit,
+          path.join(appDir, 'app.wxss'),
+          path.join(projectRoot, 'app.wxss'),
+        ].filter((p): p is string => Boolean(p))
+        const globalStylePath = candidates.find((p) => fs.existsSync(p))
+        if (globalStylePath) {
+          const raw = fs.readFileSync(globalStylePath, 'utf-8')
+          // ★`:root` → `page`：源文件写标准 CSS（:root，Web 标准），小程序 WXSS 的根选择器是 `page`
+          //   （WXSS 不支持 :root，微信会告警且不生效）——构建期改写，保持设计 token 单一事实源。
+          const normalized = rewriteRootToPage(raw)
+          const wxss = transformStyleToWxss(normalized, { px2rpx: cfg.style?.px2rpx ?? true, rpxRatio: cfg.style?.rpxRatio ?? 2, rules: cfg.rules })
+          this.emitFile({ type: 'asset', fileName: 'app.wxss', source: wxss })
+          console.log(`[mp-transform] app.wxss 已产出（${path.relative(projectRoot, globalStylePath).replace(/\\/g, '/')}——全局设计 token/重置，:root→page）`)
+        }
       }
       // ★module-plan B0 + platform-plan B5 尾：跨模块引用——扫描页面/组件 import 的共享模块（相对路径 .ts/.js + @proteus-vue/* 框架包）→ esbuild bundle 为 CJS 独立产物；
       //   页面/组件产物 import → require（相对产物路径）；vue/第三方 npm/.vue 不参与（编译器静态 / 体积过大跳过 / usingComponents）
@@ -456,6 +527,15 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         if (list.length) moduleImportsByFile.set(file, list)
       }
+      // ★store 使用 → 强制产出 _proteus/runtime.js（app.js 骨架 require 它安装 Pinia；
+      //   page 若已 import 则已在 sharedModules，此处幂等补齐 app-only 场景）
+      if (appUsesStore) {
+        const rt = resolveShared(mpEntry, '@proteus-vue/runtime')
+        if (rt) {
+          sharedModules.add(rt.file)
+          sharedRelNoExt.set(rt.file, rt.relNoExt)
+        }
+      }
       // BFS：共享模块内部 import（相对路径 + @proteus-vue/*）继续收集
       const pending = [...sharedModules]
       while (pending.length) {
@@ -472,7 +552,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       // ★B0 边界（★放行 @proteus-vue/* 框架包 + 第三方白名单）：含未白名单第三方裸依赖的共享模块树跳过编译
       // （pinia 是框架默认状态库——P3 放行；★决策 #211：vue 加入白名单——@proteus-vue/app-config 等框架包运行时依赖 vue 是生态常态，
       //   bundle 体积由 bundle-report 监控；其余第三方保持跳过）
-      const THIRD_PARTY_ALLOW = new Set(['pinia', 'vue', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
+      // ★pinia 4.x 的运行时依赖 nostics（诊断库）；vue-demi/@vue/* 为 Vue 生态常见运行时（决策 #211）
+      const THIRD_PARTY_ALLOW = new Set([...VENDOR_SINGLETONS, 'nostics', 'vue-demi', '@vue/reactivity', '@vue/shared', '@vue/runtime-core'])
       const hasThirdParty = new Set<string>()
       for (const sharedFile of sharedModules) {
         for (const imp of scanImports(sharedFile)) {
@@ -499,7 +580,38 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           moduleImportsByFile.set(file, list.filter((item) => !skipShared.has(resolveShared(file, item.source)?.file ?? '')))
         }
       }
-      // 共享模块 → esbuild bundle（全内联 + @proteus-vue/* external 映射，minify）→ CJS 单文件输出
+      // 共享模块 → esbuild bundle（全内联 + @proteus-vue/* 与 vendor 单例 external，minify）→ CJS 单文件输出
+      // ★vendor 单例化（2026-09-12 真机 bug 修复）：pinia/vue 若各 bundle 内联 → **多份独立实例**
+      //   （pinia 的 setActivePinia 模块级变量分裂 → store 拿不到 active pinia → useStore() 返回 undefined）。
+      //   修法：vendor 也 external 到 `_proteus/<name>.js`（每个 vendor 单独 bundle 一份）→ 全产物共享同一实例。
+      //   （条目收集由 resolveSharedModule 的 vendor 分支 + BFS 完成，无需额外扫描。）
+      /** external 映射插件（@proteus-vue/* 与 vendor 单例 → 相对产物路径；从 relNoExt 出发算相对） */
+      const externalResolvePlugin = (relNoExt: string) => ({
+        name: 'proteus-pkg-require-path',
+        setup(b: import('esbuild').PluginBuild) {
+          const mapExternal = (target: string) => {
+            const dir = path.posix.dirname(relNoExt)
+            let rel = path.posix.relative(dir, target)
+            if (!rel.startsWith('.')) rel = `./${rel}`
+            return { path: rel, external: true }
+          }
+          b.onResolve({ filter: /^@proteus-vue\// }, (args) => mapExternal(`_proteus/${args.path.replace('@proteus-vue/', '')}.js`))
+          b.onResolve({ filter: new RegExp(`^(${VENDOR_SINGLETONS.join('|')})$`) }, (args) => mapExternal(`_proteus/${args.path}.js`))
+          // ★G-36/官网 B2：非 JS 资源 onLoad——文本资源（.md/.txt/.json）以字符串导出；
+          //   二进制扩展（图片/字体/音视频）显式中文报错（MP 产物无资源管线——替代 esbuild 裸 "No loader"）
+          b.onLoad({ filter: /\.(md|txt|json)$/ }, (args) => ({
+            contents: `export default ${JSON.stringify(fs.readFileSync(args.path, 'utf-8'))}`,
+            loader: 'js',
+          }))
+          b.onLoad({ filter: /\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp3|mp4|wav|zip)$/ }, (args) => ({
+            errors: [
+              {
+                text: `MP 产物不支持二进制资源 import：${path.relative(projectRoot, args.path)}——请改用网络 URL 或 base64 内联`,
+              },
+            ],
+          }))
+        },
+      })
       // ★M8：bundle 缓存（输入快照 mtime+size 校验；PROTEUS_NO_CACHE=1 关闭）
       const bundleCacheEnabled = !process.env.PROTEUS_NO_CACHE && !isDebug
       for (const sharedFile of sharedModules) {
@@ -528,41 +640,22 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             minify: true,
             metafile: true,
             // ★#495c define 注入：esbuild 直出资产不经 vite define——宏在此替换（config.skyline → __PROTEUS_SKYLINE__）
+            // ★vendor 单例化（2026-09-12）：pinia/vue 的 CJS 入口有 `process.env.NODE_ENV` 分支，小程序无 process
+            //   → 必须 define 掉（否则运行时崩/带 dev 分支体积）；Vue flag 一并显式声明消除警告
             define: {
               __PROTEUS_DEBUG__: isDebug ? 'true' : 'false',
               __PROTEUS_SKYLINE__: cfg.skyline ? 'true' : 'false',
+              'process.env.NODE_ENV': isDebug ? '"development"' : '"production"',
+              __VUE_OPTIONS_API__: 'true',
+              __VUE_PROD_DEVTOOLS__: 'false',
+              __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
             },
-            // ★@proteus-vue/* external：运行时 require 产物 _proteus/<name>.js（微信 require 缓存同路径同实例）
-            external: ['@proteus-vue/*'],
-            plugins: [
-              {
-                name: 'proteus-pkg-require-path',
-                setup(b) {
-                  b.onResolve({ filter: /^@proteus-vue\// }, (args) => {
-                    const pkgRel = `_proteus/${args.path.replace('@proteus-vue/', '')}.js`
-                    const dir = path.posix.dirname(relNoExt)
-                    let rel = path.posix.relative(dir, pkgRel)
-                    if (!rel.startsWith('.')) rel = `./${rel}`
-                    return { path: rel, external: true }
-                  })
-                  // ★G-36/官网 B2：非 JS 资源 onLoad——文本资源（.md/.txt/.json）以字符串导出；
-                  //   二进制扩展（图片/字体/音视频）显式中文报错（MP 产物无资源管线——替代 esbuild 裸 "No loader"）
-                  b.onLoad({ filter: /\.(md|txt|json)$/ }, (args) => ({
-                    contents: `export default ${JSON.stringify(fs.readFileSync(args.path, 'utf-8'))}`,
-                    loader: 'js',
-                  }))
-                  b.onLoad({ filter: /\.(png|jpe?g|gif|webp|svg|ico|woff2?|ttf|eot|mp3|mp4|wav|zip)$/ }, (args) => ({
-                    errors: [
-                      {
-                        text: `MP 产物不支持二进制资源 import：${path.relative(projectRoot, args.path)}——请改用网络 URL 或 base64 内联`,
-                      },
-                    ],
-                  }))
-                },
-              },
-            ],
+            // ★external：@proteus-vue/* 与 vendor 单例（pinia/vue）→ 产物 _proteus/<name>.js
+            //   （微信 require 缓存同路径同实例 → 全产物共享同一份，杜绝重复内联导致的实例分裂）
+            external: ['@proteus-vue/*', ...VENDOR_SINGLETONS],
+            plugins: [externalResolvePlugin(relNoExt)],
           })
-          code = build.outputFiles[0]?.text ?? ''
+          code = build.outputFiles?.[0]?.text ?? ''
           if (!code) {
             console.warn(`[mp-transform] 共享模块编译失败：${relNoExt}`)
             continue

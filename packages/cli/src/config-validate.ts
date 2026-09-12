@@ -46,6 +46,7 @@ const KNOWN_FIELDS = new Set([
   'compiler', // ★G-29 编译器后端插拔（compiler-backend-1-plan §5）：backend 'node' | 'rust'
   'setDataBridge',
   'style',
+  'globalStyle', // ★全局样式（MP app.wxss 通道）
   'budget',
   'router',
   'vite', // ★#418 配置收敛：vite 透传扩展字段（resolveProteusViteConfig 消费）

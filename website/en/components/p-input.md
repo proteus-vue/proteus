@@ -40,6 +40,12 @@ Input
 | `type` | Type variant | `String` | `'text'` | No |
 | `maxlength` | Maximum input length (≤ 0 = unlimited) | `Number` | `-1` | No |
 | `placeholder` | Placeholder hint text | `String` | `''` | No |
+| `password` | — | `Boolean` | `false` | No |
+| `placeholderStyle` | — | `String` | `''` | No |
+| `cursorSpacing` | — | `Number` | `0` | No |
+| `confirmType` | — | `String` | `''` | No |
+| `cursor` | — | `Number` | `-1` | No |
+| `autoHeight` | — | `Boolean` | `false` | No |
 | `focus` | Auto focus | `Boolean` | `false` | No |
 
 ### Prop details
@@ -78,6 +84,36 @@ Input
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: Placeholder hint text
+
+#### `password`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `placeholderStyle`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `cursorSpacing`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `confirmType`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `cursor`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `autoHeight`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 #### `focus`
 

@@ -776,6 +776,19 @@ describe('transformScriptToPage（script → Page 构造器）', () => {
     expect(js).toContain('ds.routeType')
   })
 
+  it('★tab 页 fallback：navigateTo 失败 → switchTab（微信规定 tabBar 页必须 switchTab，否则静默无反应）', () => {
+    const { js } = transformScriptToPage('', opts, { usesNavigate: true })
+    // navigateTo 的 fail 回调里必须有 switchTab fallback
+    expect(js).toContain('wx.switchTab(')
+    // fail 在 navigateTo 之前定义（同一 nav 对象）
+    const navIdx = js.indexOf('wx.navigateTo(nav)')
+    const swIdx = js.indexOf('wx.switchTab(')
+    expect(navIdx).toBeGreaterThan(0)
+    expect(swIdx).toBeGreaterThan(0)
+    expect(swIdx).toBeLessThan(navIdx) // switchTab 在 fail 闭包内（先定义后调用）
+    expect(js).toContain('fail: function')
+  })
+
   it('导航 url 保留前导 /（微信 navigateTo 相对路径会解析成 pages/pages/... 报错）', () => {
     const { js } = transformScriptToPage('', opts, { usesNavigate: true })
     expect(js).toContain('const url = String(ds.url || "")')

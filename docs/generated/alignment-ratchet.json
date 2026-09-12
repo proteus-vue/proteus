@@ -1,0 +1,7 @@
+{
+ "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs --min 校验，勿手改。",
+ "attrCovered": 99,
+ "attrTotal": 352,
+ "coveredMin": 99,
+ "note": "补齐属性后上调 coveredMin"
+}

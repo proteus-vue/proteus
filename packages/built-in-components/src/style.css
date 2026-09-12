@@ -104,20 +104,30 @@
   border-radius: 10px;
   pointer-events: none;
 }
-/* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗） */
+/* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗）
+   ★!important 是刻意的：这是框架接管的**按下态**，必须压过用户对基色的主题化
+     （用户常以 `.p-button[data-v-x] { background: var(--p-button-bg) }` 覆盖基色——
+      特异性 (0,2,0) 高于本类 (0,1,0)；2026-09-13 实测：Web 端按下类已加但背景不变 → 无点击反馈）。
+     小程序端不在 Web 层：由微信原生 button-hover 提供同款反馈（p-button 的 hoverClass 缺省时保留）。 */
+.proteus-web-button.proteus-web-button--hover,
 .proteus-web-button--hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.1) !important;
 }
-/* 暗黑模式（对齐 weui 暗黑按钮）：primary/warn 保持；default 深底浅字 */
+/* 暗黑模式（对齐 weui 暗黑按钮）：primary/warn 保持；default 深底浅字。
+   ★:where() 归零框架侧特异性（0,2,0 → 0,1,0），恢复文件头声明的契约「框架默认样式特异性最低 → 用户 scoped 可覆盖」。
+   背景（2026-09-13 用户实测「Web 按钮都消失了」）：系统暗色下，本规则给 default 按钮
+   白 10% 底 + 白 80% 字；但 p-button 主题化基色 `.p-button[data-v-x]{background:var(--p-button-bg)}`
+   同为 (0,2,0)，级联顺序使本规则胜出 → 白字白底，在浅色卡片上按钮**不可见**（真机/浏览器复现）。
+   归零后用户主题化永远胜出：显式设 --p-button-bg 的按钮在暗色下保持其基色。 */
 @media (prefers-color-scheme: dark) {
-  .proteus-web-button.is-default {
+  .proteus-web-button:where(.is-default) {
     background-color: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
   }
-  .proteus-web-button.is-default::after {
+  .proteus-web-button:where(.is-default)::after {
     border-color: rgba(255, 255, 255, 0.2);
   }
-  .proteus-web-button.is-disabled {
+  .proteus-web-button:where(.is-disabled) {
     color: rgba(255, 255, 255, 0.3);
     background-color: rgba(255, 255, 255, 0.15);
   }

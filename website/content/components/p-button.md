@@ -38,6 +38,25 @@ order: 1002
 | `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
 | `loading` | 加载中状态 | `Boolean` | `false` | 否 |
 | `throttle` | 点击节流间隔（ms，防重复触发——runtime 内置） | `Number` | `0` | 否 |
+| `size` | 按钮大小：default / mini | `String` | `''` | 否 |
+| `type` | 样式类型：default（白）/ primary（绿）/ warn（红） | `String` | `''` | 否 |
+| `plain` | 是否镂空（背景透明） | `Boolean` | `false` | 否 |
+| `formType` | form 内行为：submit / reset | `String` | `''` | 否 |
+| `openType` | 微信开放能力（contact/share/getPhoneNumber/openSetting/launchApp/chooseAvatar/…） | `String` | `''` | 否 |
+| `hoverClass` | 按下样式类：缺省（''）→ 用微信原生 button-hover 默认点击反馈（★勿传空串覆盖）； | `String` | `''` | 否 |
+| `hoverStopPropagation` | 是否阻止祖先节点出现点击态 | `Boolean` | `false` | 否 |
+| `hoverStartTime` | 按住多久出现点击态（ms） | `Number` | `20` | 否 |
+| `hoverStayTime` | 松开后点击态保留时间（ms） | `Number` | `70` | 否 |
+| `lang` | 返回用户信息的语言：zh_CN / zh_TW / en | `String` | `''` | 否 |
+| `sessionFrom` | 会话来源（open-type=contact 有效） | `String` | `''` | 否 |
+| `sendMessageTitle` | 会话内消息卡片标题（contact） | `String` | `''` | 否 |
+| `sendMessagePath` | 会话内消息卡片跳转路径（contact） | `String` | `''` | 否 |
+| `sendMessageImg` | 会话内消息卡片图片（contact） | `String` | `''` | 否 |
+| `appParameter` | 打开 APP 时传递的参数（launchApp） | `String` | `''` | 否 |
+| `showMessageCard` | 是否显示会话内消息卡片（contact） | `Boolean` | `false` | 否 |
+| `phoneNumberNoQuotaToast` | 手机号额度用尽时是否展示提示（getPhoneNumber） | `Boolean` | `true` | 否 |
+| `needShowEntrance` | 转发的文本消息是否带小程序入口 | `Boolean` | `false` | 否 |
+| `entrancePath` | 从消息入口打开小程序的路径 | `String` | `''` | 否 |
 
 ### 属性详解
 
@@ -66,11 +85,116 @@ order: 1002
 - **类型**：`Number`　**默认值**：`0`　**必填**：否
 - **说明**：点击节流间隔（ms，防重复触发——runtime 内置）
 
+#### `size`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：按钮大小：default / mini
+
+#### `type`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：样式类型：default（白）/ primary（绿）/ warn（红）
+
+#### `plain`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否镂空（背景透明）
+
+#### `formType`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：form 内行为：submit / reset
+
+#### `openType`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：微信开放能力（contact/share/getPhoneNumber/openSetting/launchApp/chooseAvatar/…）
+
+#### `hoverClass`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：按下样式类：缺省（''）→ 用微信原生 button-hover 默认点击反馈（★勿传空串覆盖）；
+
+#### `hoverStopPropagation`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否阻止祖先节点出现点击态
+
+#### `hoverStartTime`
+
+- **类型**：`Number`　**默认值**：`20`　**必填**：否
+- **说明**：按住多久出现点击态（ms）
+
+#### `hoverStayTime`
+
+- **类型**：`Number`　**默认值**：`70`　**必填**：否
+- **说明**：松开后点击态保留时间（ms）
+
+#### `lang`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：返回用户信息的语言：zh_CN / zh_TW / en
+
+#### `sessionFrom`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：会话来源（open-type=contact 有效）
+
+#### `sendMessageTitle`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：会话内消息卡片标题（contact）
+
+#### `sendMessagePath`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：会话内消息卡片跳转路径（contact）
+
+#### `sendMessageImg`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：会话内消息卡片图片（contact）
+
+#### `appParameter`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：打开 APP 时传递的参数（launchApp）
+
+#### `showMessageCard`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否显示会话内消息卡片（contact）
+
+#### `phoneNumberNoQuotaToast`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：手机号额度用尽时是否展示提示（getPhoneNumber）
+
+#### `needShowEntrance`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：转发的文本消息是否带小程序入口
+
+#### `entrancePath`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：从消息入口打开小程序的路径
+
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `click` | 点击/轻触（throttle 节流后触发） | `e, { bubbles: true, composed: true }` |
+| `getuserinfo` | — | — |
+| `contact` | — | — |
+| `getphonenumber` | — | — |
+| `getrealtimephonenumber` | — | — |
+| `error` | 加载/执行失败 | — |
+| `opensetting` | — | — |
+| `launchapp` | — | — |
+| `chooseavatar` | — | — |
+| `agreeprivacyauthorization` | — | — |
+| `createliveactivity` | — | — |
 
 ### 事件详解
 
@@ -78,6 +202,56 @@ order: 1002
 
 - **说明**：点击/轻触（throttle 节流后触发）
 - **载荷**：`e, { bubbles: true, composed: true }`
+
+#### `getuserinfo`
+
+- **说明**：—
+- **载荷**：无
+
+#### `contact`
+
+- **说明**：—
+- **载荷**：无
+
+#### `getphonenumber`
+
+- **说明**：—
+- **载荷**：无
+
+#### `getrealtimephonenumber`
+
+- **说明**：—
+- **载荷**：无
+
+#### `error`
+
+- **说明**：加载/执行失败
+- **载荷**：无
+
+#### `opensetting`
+
+- **说明**：—
+- **载荷**：无
+
+#### `launchapp`
+
+- **说明**：—
+- **载荷**：无
+
+#### `chooseavatar`
+
+- **说明**：—
+- **载荷**：无
+
+#### `agreeprivacyauthorization`
+
+- **说明**：—
+- **载荷**：无
+
+#### `createliveactivity`
+
+- **说明**：—
+- **载荷**：无
 
 ## 插槽
 
@@ -88,7 +262,9 @@ order: 1002
 ## 实现要点
 
 - 矩阵 01 §7：disabled/loading 原生映射 + throttle 防重复点击（runtime 内置）
-- 双端同源码：button 原生透传（tag/passthrough）；@click → bindtap
+- ★2026-09-13 官方属性对齐：补齐官方 <button> 的属性透传（size/type/plain/form-type/open-type/hover-*）
+- 与开放能力事件（getuserinfo/contact/getphonenumber/…）——此前只声明 5 个 props（覆盖 2/22）。
+- Web 端 proteus-button 已实现同套 API（视觉变体 + open-type 降级），两端语义一致。
 
 ## 用法
 

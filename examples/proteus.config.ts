@@ -18,7 +18,7 @@ const config: ProteusConfig = {
   compiler: {
     backend: 'node',
   },
-  appid: 'wx33bc04a52024def7',
+  appid: 'wxa720d0c502451748',
   pagesDir: 'pages',
   // ★原生组件页降级 WebView 渲染（2026-09-12）：web-view/camera/map/video 在 Skyline 渲染引擎下
   //   官方不支持（DevTools 报「Skyline 暂不支持 web-view/camera/map/video 组件调试」）——该演示页

@@ -2,3 +2,5 @@ packages:
   - packages/*
   - website
   - examples
+  # ★showcase：Proteus 官方演示小程序（对外旗舰演示；examples 保留为内部测试全家桶，勿混用）
+  - showcase

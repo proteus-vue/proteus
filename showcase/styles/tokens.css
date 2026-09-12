@@ -1,0 +1,116 @@
+/* showcase/styles/tokens.css —— 官方演示设计 token（唯一事实源）
+   ★与官网 design-tokens.json 同源：品牌紫 + 中性面 + 后端色 + 圆角语义化。
+
+   ★★MP 作用域约束（重要，勿踩）：
+    小程序编译器**默认把每个 .vue 的 <style> 当 scoped**（选择器类名追加 -scopeId），
+    而本文件是全局 CSS（无后缀）——因此**这里只放 CSS 变量与元素级重置**：
+      · CSS 变量：跨作用域继承 ✓（自定义属性天然继承，不受 scoped 影响）
+      · 元素选择器 page/body：作用于宿主，无类名匹配问题 ✓
+      · 工具类 .sp-xxx：在 scoped 组件模板里用会被加后缀 → 匹配不上 ✗
+    故各组件/页面在自带的 <style scoped> 里消费变量、自定义局部类名；
+    真正需要跨页复用的类名走 <style global> 的共享组件（如 components/PageShell.vue）。
+   ★命名前缀 --sp-（showcase）避免与框架组件变量 --p-* 冲突。 */
+
+:root {
+  /* 品牌 */
+  --sp-brand: #7c5cff;
+  --sp-brand-ink: #6a4ae0;
+  --sp-brand-soft: rgba(124, 92, 255, 0.10);
+  --sp-brand-soft-2: rgba(124, 92, 255, 0.18);
+
+  /* 中性面（浅色为主——与小程序默认观感一致） */
+  --sp-bg: #f5f6fa;
+  --sp-surface: #ffffff;
+  --sp-surface-2: #fafbfe;
+  --sp-line: #e8e9f0;
+  --sp-line-soft: #f0f1f6;
+  --sp-text: #1c1b22;
+  --sp-text-2: #5a5866;
+  --sp-text-3: #8a8896;
+
+  /* 状态 */
+  --sp-ok: #22b573;
+  --sp-warn: #f0a020;
+  --sp-rec: #ef4d4d;
+
+  /* 后端色（多端/多后端剖面可读性根基） */
+  --sp-bk-vue: #42b883;
+  --sp-bk-ios: #0a84ff;
+  --sp-bk-android: #3ddc84;
+  --sp-bk-flutter: #54c5f8;
+  --sp-bk-skia: #d4a017;
+  --sp-bk-harmony: #ff8a5c;
+  --sp-bk-mp: #07c160;
+
+  /* 品牌立方体三面（与 docs/brand 同源） */
+  --sp-cube-top: #a78bfa;
+  --sp-cube-left: #34d399;
+  --sp-cube-right: #3b82f6;
+
+  /* 圆角（语义化——页面禁写裸 px 圆角） */
+  --sp-radius-sm: 8px;
+  --sp-radius-md: 12px;
+  --sp-radius-lg: 16px;
+  --sp-radius-xl: 22px;
+  --sp-radius-pill: 999px;
+
+  /* 间距 scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* 阴影（克制——靠明度差，不用发光） */
+  --sp-shadow-sm: 0 1px 2px rgba(28, 27, 34, 0.06);
+  --sp-shadow-md: 0 4px 14px rgba(28, 27, 34, 0.08);
+  --sp-shadow-lg: 0 10px 30px rgba(28, 27, 34, 0.10);
+
+  --sp-font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+  --sp-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ★框架组件页背景钩子（p-page 默认浅色——与演示底色统一） */
+  --p-page-bg: var(--sp-bg);
+
+  /* ★框架组件品牌主题（2026-09-12）：定在 page（所有元素真祖先）→ 天然继承进自定义组件内部。
+     实测：跨组件（demo-block → p-button）设 CSS 变量不生效（微信组件样式隔离），
+     故组件的可换肤变量必须在 page 级定义。 */
+  /* ★p-button 默认色 = 微信原生 default（白底深字），不是品牌紫——
+     品牌紫只是演示区某些块的主题（见 demo-block 的 --p-button-bg 覆盖）；
+     全局设紫会让 type=primary/warn 的官方色被覆盖（真机/Web 实测：mini/primary 显示成紫色）。 */
+  --p-button-radius: 10px;
+  --p-input-border: #ccc6e8;
+  --p-input-bg: #ffffff;
+  --p-input-color: #1c1b22;
+  --p-input-radius: 10px;
+}
+
+/* 元素级重置（作用于宿主元素，无 scoped 类名匹配问题） */
+page,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--sp-bg);
+  color: var(--sp-text);
+  font-family: var(--sp-font);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ★★跨端样式隔离铁律（2026-09-12 真机实测，务必遵守）★★
+   1) 共享组件的**根节点与布局容器用原生 `<view>`/`<div>`**（类名留在元素上，样式生效）；
+      ❌ 不要用 `<p-view class="...">`——p-view 经 root-class 把类名传进组件**内部**，
+         父组件 wxss 因微信组件样式隔离够不到 → 卡片边框/圆角/内边距全部失效（真机实测：卡片样式丢失）。
+   2) 框架组件（p-button/p-input…）的**换肤变量定在 page 级**（见上）——跨组件设 CSS 变量不继承。
+   3) 演示页的样式类（.db-* / .api-* 等）在**各自的 scoped 块**里写即可；
+      需要父页作用到共享组件内部时，用 `<style global>` 或原生标签+类名。
+   4) ★框架默认样式（含 `@media (prefers-color-scheme: dark)` 等媒体查询分支）**不得压过用户主题化**——
+      框架侧已用 `:where()` 归零特异性保证这一点（见 packages/built-in-components/src/style.css）。
+      2026-09-13 实测教训：系统暗色下框架 `.proteus-web-button.is-default`（白底白字）与
+      页面主题化 `.p-button[data-v-x]{background:var(--p-button-bg)}` 同为 (0,2,0)，
+      级联顺序使暗色规则胜出 → **浅色卡片上的按钮全变白、肉眼"消失"**。 */
+

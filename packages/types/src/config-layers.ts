@@ -24,6 +24,7 @@ export const CONFIG_FIELD_LAYERS: Record<string, ConfigLayer> = {
   compiler: 'compiler', // ★G-29 编译器后端插拔（§5 config.compiler.backend）
   setDataBridge: 'build',
   style: 'compiler',
+  globalStyle: 'compiler', // ★全局样式（MP app.wxss 通道——编译期产出）
   budget: 'build',
   router: 'router',
   vite: 'build', // ★#418 配置收敛：vite 透传字段（构建工具链配置）

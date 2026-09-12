@@ -40,6 +40,12 @@ order: 1010
 | `type` | 类型变体 | `String` | `'text'` | 否 |
 | `maxlength` | 最大输入长度（≤ 0 = 不限） | `Number` | `-1` | 否 |
 | `placeholder` | 占位提示文本 | `String` | `''` | 否 |
+| `password` | 是否是密码类型（官方独立属性；等价 type="password"） | `Boolean` | `false` | 否 |
+| `placeholderStyle` | 占位符样式（内联样式字符串） | `String` | `''` | 否 |
+| `cursorSpacing` | 指定光标与键盘的距离（px） | `Number` | `0` | 否 |
+| `confirmType` | 键盘右下角按钮文字：send/search/next/go/done | `String` | `''` | 否 |
+| `cursor` | 光标位置 | `Number` | `-1` | 否 |
+| `autoHeight` | 是否自动增高（textarea 语义，input 端透传） | `Boolean` | `false` | 否 |
 | `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
 
 ### 属性详解
@@ -78,6 +84,36 @@ order: 1010
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
 - **说明**：占位提示文本
+
+#### `password`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否是密码类型（官方独立属性；等价 type="password"）
+
+#### `placeholderStyle`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：占位符样式（内联样式字符串）
+
+#### `cursorSpacing`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：指定光标与键盘的距离（px）
+
+#### `confirmType`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：键盘右下角按钮文字：send/search/next/go/done
+
+#### `cursor`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标位置
+
+#### `autoHeight`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否自动增高（textarea 语义，input 端透传）
 
 #### `focus`
 
