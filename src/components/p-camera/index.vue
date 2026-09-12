@@ -47,7 +47,10 @@ const props = defineProps({
 
 const emit = defineEmits(['initdone', 'error', 'ready'])
 
-const isMp = isMpRuntime()
+// ★★真机 bug 修复（2026-09-12）：`isMpRuntime()` 直接调用 → 编译器归 runtimeInit 实例属性（this.isMp），
+//   模板只能读 data → wx:if="{{isMp}}" 恒 false → MP 端错走 <video> Web 分支（真机渲染成 video 组件）。
+//   改 computed：编译产物 = attached() { this.data.isMp = isMpRuntime(); setData(...) }（首帧前写入 data ✓）。
+const isMp = computed(() => isMpRuntime())
 const active = ref(false)
 const errorText = ref('')
 const videoId = 'p-camera-' + Math.random().toString(36).slice(2, 8)
@@ -101,7 +104,7 @@ function onError(e: unknown): void {
 }
 
 onMounted(() => {
-  if (!isMp) void startWebPreview()
+  if (!isMp.value) void startWebPreview()
 })
 
 onUnmounted(() => {

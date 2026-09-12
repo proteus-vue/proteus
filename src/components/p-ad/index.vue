@@ -43,9 +43,10 @@ const props = defineProps({
 
 const emit = defineEmits(['load', 'error', 'close'])
 
-const isMp = isMpRuntime()
+// ★真机 bug 修复（2026-09-12）：computed 使 isMp 进 data（直调会成实例属性 → MP 错走占位分支）
+const isMp = computed(() => isMpRuntime())
 /** Web 占位恒为占位态（无广告联盟标准 API）——诚实标记，非伪装 */
-const isPlaceholder = computed(() => !isMp)
+const isPlaceholder = computed(() => !isMp.value)
 
 const placeholderStyle = computed<CSSProperties>(() => ({
   height: props.height + 'px',

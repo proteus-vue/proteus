@@ -69,7 +69,8 @@ const props = defineProps({
 
 const emit = defineEmits(['markertap', 'regionchange', 'tap'])
 
-const isMp = isMpRuntime()
+// ★真机 bug 修复（2026-09-12）：computed 使 isMp 进 data（直调会成实例属性，模板读不到 → MP 错走 Web 槽位）
+const isMp = computed(() => isMpRuntime())
 const mapId = 'p-map-' + Math.random().toString(36).slice(2, 8)
 
 const wrapStyle = computed<CSSProperties>(() => ({ width: '100%', height: props.height + 'px' }))

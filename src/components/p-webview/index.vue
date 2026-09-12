@@ -34,14 +34,15 @@ const props = defineProps({
 
 const emit = defineEmits(['message', 'error'])
 
-const isMp = isMpRuntime()
+// ★真机 bug 修复（2026-09-12）：computed 使 isMp 进 data（直调会成实例属性 → MP 错走 iframe 容器）
+const isMp = computed(() => isMpRuntime())
 const hostId = 'p-webview-' + Math.random().toString(36).slice(2, 8)
 let frame: HTMLIFrameElement | null = null
 
 const hostStyle = computed<CSSProperties>(() => (props.height > 0 ? { height: props.height + 'px' } : { height: '100%' }))
 
 function ensureFrame(): void {
-  if (isMp) return
+  if (isMp.value) return
   // components-allow-platform: Web iframe 按需创建（MP 端走原生 <web-view>，本分支不执行）
   const doc = (globalThis as { document?: Document }).document
   const host = doc && typeof doc.getElementById === 'function' ? doc.getElementById(hostId) : null
@@ -61,13 +62,13 @@ function ensureFrame(): void {
 }
 
 onMounted(() => {
-  if (!isMp) ensureFrame()
+  if (!isMp.value) ensureFrame()
 })
 
 watch(
   () => props.src,
   () => {
-    if (!isMp) ensureFrame()
+    if (!isMp.value) ensureFrame()
   },
 )
 
