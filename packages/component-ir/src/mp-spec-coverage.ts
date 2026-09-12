@@ -118,6 +118,10 @@ export const SPEC_COVERED: Record<string, string> = {
   getPrivacySetting: 'usePrivacy', openPrivacyContract: 'usePrivacy',
   requirePrivacyAuthorize: 'usePrivacy', onNeedPrivacyAuthorization: 'usePrivacy',
   offNeedPrivacyAuthorization: 'usePrivacy',
+  // 性能 / 预加载 / 图像编辑（C66-C68——批 D 补齐，2026-09-12）
+  getPerformance: 'usePerformance', reportPerformance: 'usePerformance',
+  preloadAssets: 'usePreload', preloadSkylineView: 'usePreload', preloadWebview: 'usePreload', preDownloadSubpackage: 'usePreload',
+  cropImage: 'useImageEdit', editImage: 'useImageEdit',
 }
 
 // —— ② 显式「平台私有」（微信独占；收敛 useMiniProgram / 宿主桥） ——
@@ -185,16 +189,11 @@ export const SPEC_PLANNED: Record<string, string> = {
   // 媒体高级
   createMediaContainer: 'useMediaContainer（L2）', createMediaAudioPlayer: 'useMediaAudioPlayer（L2）',
   createVideoDecoder: 'useVideoDecoder（L2）',
-  // 图像编辑
-  cropImage: 'useImageEdit（L2）', editImage: 'useImageEdit（L2）',
-  // 性能
-  getPerformance: 'usePerformance（L2）', reportPerformance: 'usePerformance（L2）',
+  // 图像编辑（已由 C68 useImageEdit 覆盖——见 SPEC_COVERED）
+  // 性能（已由 C66 usePerformance 覆盖——见 SPEC_COVERED）
   // 录屏 / 画中画
   getScreenRecordingState: 'useScreenCapture（L2）', checkIsPictureInPictureActive: 'useScreenCapture（L2）',
-  // 隐私协议（已由 C65 usePrivacy 覆盖——见 SPEC_COVERED）
-  // 预加载 / 分包
-  preDownloadSubpackage: 'usePreload（L2）', preloadAssets: 'usePreload（L2）',
-  preloadSkylineView: 'usePreload（L2）', preloadWebview: 'usePreload（L2）',
+  // 预加载 / 分包（已由 C67 usePreload 覆盖——见 SPEC_COVERED）
   // AR / XR
   createVKSession: 'useAR（L2）', isVKSupport: 'useAR（L2）',
   // 缓存管理 / 窗口 / 卸载拦截
@@ -364,6 +363,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 203, // 2026-09-12 基线（spec 382 项：covered 203 / planned 56 / private 106 / na 17 / gap 0）——含 C65 隐私协议
+  coveredMin: 211, // 2026-09-12 基线（spec 382 项：covered 211 / planned 48 / private 106 / na 17 / gap 0）——含 C65-C68
   gapMax: 0, // 全部官方项必须归类
 }
