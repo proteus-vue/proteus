@@ -2245,6 +2245,157 @@ export interface MediaProcessingAPI {
   audioPlayer(): MediaAudioPlayerHandle
 }
 
+// —— ★权威标尺缺口补齐（2026-09-12）：C71 录屏/截屏 / C72 缓存管理 / C73 空闲调度 / C74 窗口 / C75 导航拦截 ——
+
+/**
+ * ★权威标尺缺口 C71：录屏 / 截屏（`useScreenCapture()`）。
+ *   wx：`wx.getScreenRecordingState` / `onScreenRecordingStateChanged` / `onUserCaptureScreen`
+ *   / `checkIsPictureInPictureActive`；web：无标准（可用 MediaDevices.getDisplayMedia 探测）→ Err 诚实降级。
+ */
+export interface ScreenCaptureAPI {
+  /** 查询当前系统录屏状态（on 录制中 / off 未录制） */
+  getRecordingState(): Promise<CapResult<'on' | 'off'>>
+  /**
+   * 订阅系统录屏状态变化。
+   * @param cb 状态回调
+   * @returns 取消订阅函数
+   */
+  onRecordingStateChange(cb: (state: 'on' | 'off') => void): () => void
+  /**
+   * 订阅用户主动截屏事件。
+   * @param cb 截屏回调
+   * @returns 取消订阅函数
+   */
+  onUserCapture(cb: () => void): () => void
+  /** 查询当前是否处于画中画（Picture-in-Picture）状态 */
+  isPictureInPictureActive(): Promise<CapResult<boolean>>
+}
+
+/** 缓存规则（wx.addRules 的字符串 / 正则形态简化为声明式） */
+export interface CacheRule {
+  /** 匹配 URL 的字符串或正则源 */
+  pattern: string
+  /** 缓存方法（缺省 GET） */
+  method?: string
+  /** 最大缓存时长（秒） */
+  maxAge?: number
+}
+
+/** 缓存管理器状态 */
+export interface CacheManagerState {
+  /** 缓存模式（weakNetwork 弱网 / always 总是 / none 关闭） */
+  mode: 'weakNetwork' | 'always' | 'none'
+  /** 运行状态（0 未启动 / 1 运行中 / 2 已停止——对齐 wx state） */
+  state: number
+  /** 缓存域名 */
+  origin?: string
+  /** 默认最大缓存时长（秒） */
+  maxAge?: number
+}
+
+/**
+ * ★权威标尺缺口 C72：缓存管理（`useCacheManager(options?)`）。
+ *   wx：`wx.createCacheManager`（HTTP 请求缓存——规则/启停/清理/删除 + 事件）；
+ *   web：无对等（可用 Service Worker / Cache Storage）→ 创建时 throw 诚实降级。
+ */
+export interface CacheManagerHandle {
+  /** 缓存规则（可读写） */
+  rules: CacheRule[]
+  /**
+   * 添加缓存规则。
+   * @param rules 规则列表
+   * @returns 规则 id 列表
+   */
+  addRules(rules: CacheRule[]): Promise<CapResult<string[]>>
+  /**
+   * 删除缓存规则。
+   * @param ids 规则 id 列表
+   */
+  deleteRules(ids: string[]): Promise<CapResult<void>>
+  /** 清空全部规则 */
+  clearRules(): Promise<CapResult<void>>
+  /** 启动缓存 */
+  start(): Promise<CapResult<void>>
+  /** 停止缓存 */
+  stop(): Promise<CapResult<void>>
+  /**
+   * 删除指定 URL 的缓存。
+   * @param id 缓存 id
+   */
+  deleteCache(id: string): Promise<CapResult<void>>
+  /**
+   * 批量删除缓存。
+   * @param ids 缓存 id 列表
+   */
+  deleteCaches(ids: string[]): Promise<CapResult<void>>
+  /** 清空全部缓存 */
+  clearCaches(): Promise<CapResult<void>>
+  /** 读取当前配置 */
+  getState(): CacheManagerState
+  /**
+   * 订阅缓存事件。
+   * @param event 事件（request 命中规则 / enterWeakNetwork 进入弱网 / exitWeakNetwork 退出弱网）
+   * @param cb 事件处理器
+   * @returns 取消订阅函数
+   */
+  on(event: 'request' | 'enterWeakNetwork' | 'exitWeakNetwork', cb: (payload: unknown) => void): () => void
+}
+
+/** 空闲回调截止信息（requestIdleCallback 回调载荷子集） */
+export interface IdleDeadline {
+  /** 本次空闲回调剩余时间（ms） */
+  timeRemaining(): number
+  /** 是否因超时触发（非真正空闲） */
+  didTimeout: boolean
+}
+
+/**
+ * ★权威标尺缺口 C73：空闲调度（`useIdle()`）。
+ *   wx：`wx.requestIdleCallback` / `wx.cancelIdleCallback`；web：`requestIdleCallback`（Safari 缺省 → setTimeout 兜底）。
+ */
+export interface IdleAPI {
+  /**
+   * 在浏览器/宿主空闲时执行回调。
+   * @param cb 空闲回调（携带 deadline）
+   * @param timeout 超时（ms，到时即执行）
+   * @returns 句柄 id（可传入 cancel）
+   */
+  request(cb: (deadline: IdleDeadline) => void, timeout?: number): Promise<CapResult<number>>
+  /**
+   * 取消待执行的空闲回调。
+   * @param id 句柄 id
+   */
+  cancel(id: number): Promise<CapResult<void>>
+}
+
+/**
+ * ★权威标尺缺口 C74：窗口（`useWindow()`）。
+ *   wx：`wx.setWindowSize`（PC 端调整窗口）；web：无标准 → Err 诚实降级。
+ */
+export interface WindowAPI {
+  /**
+   * 调整窗口大小（PC 端）。
+   * @param width 宽（px）
+   * @param height 高（px）
+   */
+  setSize(width: number, height: number): Promise<CapResult<void>>
+}
+
+/**
+ * ★权威标尺缺口 C75：导航卸载拦截（`useNavigationGuard()`）。
+ *   wx：`wx.enableAlertBeforeUnload` / `disableAlertBeforeUnload`（返回/关闭时弹确认）；
+ *   web：`beforeunload` 事件承接（浏览器原生行为）。
+ */
+export interface NavigationGuardAPI {
+  /**
+   * 开启卸载前确认弹窗。
+   * @param message 询问文案
+   */
+  enable(message: string): Promise<CapResult<void>>
+  /** 关闭卸载前确认弹窗 */
+  disable(): Promise<CapResult<void>>
+}
+
 /**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
  *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
@@ -2429,6 +2580,16 @@ export interface CapabilityBridge {
   }
   /** ★权威标尺缺口 C70 媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
   getMediaProcessing?(): MediaProcessingAPI
+  /** ★权威标尺缺口 C71 录屏/截屏（wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive；web 缺省） */
+  getScreenCapture?(): ScreenCaptureAPI
+  /** ★权威标尺缺口 C72 缓存管理（wx.createCacheManager；web 缺省 → throw） */
+  createCacheManager?(options?: { maxAge?: number; mode?: 'weakNetwork' | 'always' | 'none'; origin?: string }): CacheManagerHandle
+  /** ★权威标尺缺口 C73 空闲调度（wx.requestIdleCallback/cancelIdleCallback / web requestIdleCallback） */
+  getIdle?(): IdleAPI
+  /** ★权威标尺缺口 C74 窗口（wx.setWindowSize；web 缺省） */
+  getWindow?(): WindowAPI
+  /** ★权威标尺缺口 C75 导航卸载拦截（wx.enableAlertBeforeUnload/disableAlertBeforeUnload / web beforeunload） */
+  getNavigationGuard?(): NavigationGuardAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -2696,6 +2857,16 @@ export interface CapabilityProbe {
   socket: boolean
   /** ★权威标尺缺口：媒体高级（createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
   mediaProcessing: boolean
+  /** ★权威标尺缺口：录屏/截屏 */
+  screenCapture: boolean
+  /** ★权威标尺缺口：缓存管理（createCacheManager） */
+  cacheManager: boolean
+  /** ★权威标尺缺口：空闲调度（requestIdleCallback） */
+  idle: boolean
+  /** ★权威标尺缺口：窗口（setWindowSize） */
+  window: boolean
+  /** ★权威标尺缺口：导航卸载拦截（enableAlertBeforeUnload） */
+  navigationGuard: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -3022,6 +3193,19 @@ interface WxLike {
   createMediaContainer?: () => WxMediaContainerLike
   createVideoDecoder?: () => WxVideoDecoderLike
   createMediaAudioPlayer?: () => WxMediaAudioPlayerLike
+  // ★权威标尺缺口 C71-C75：录屏/缓存/空闲/窗口/导航拦截
+  getScreenRecordingState?: (opt?: { success?: (r: { state: 'on' | 'off' }) => void; fail?: (e: unknown) => void }) => void
+  onScreenRecordingStateChanged?: (cb: (r: { state: 'on' | 'off' }) => void) => void
+  offScreenRecordingStateChanged?: (cb?: (...a: never[]) => void) => void
+  onUserCaptureScreen?: (cb: () => void) => void
+  offUserCaptureScreen?: (cb?: (...a: never[]) => void) => void
+  checkIsPictureInPictureActive?: () => boolean
+  createCacheManager?: (opt?: { maxAge?: number; mode?: string; origin?: string }) => WxCacheManagerLike
+  requestIdleCallback?: (cb: (res: { timeRemaining?: number; didTimeout?: boolean }) => void, opt?: { timeout?: number }) => void
+  cancelIdleCallback?: (id: number) => void
+  setWindowSize?: (opt: { width: number; height: number; success?: () => void; fail?: (e: unknown) => void }) => void
+  enableAlertBeforeUnload?: (opt: { message: string; success?: () => void; fail?: (e: unknown) => void }) => void
+  disableAlertBeforeUnload?: (opt?: { success?: () => void; fail?: (e: unknown) => void }) => void
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -3316,6 +3500,24 @@ interface WxMediaAudioPlayerLike {
   start?: () => Promise<unknown>
   stop?: () => Promise<unknown>
   destroy?: () => void
+}
+
+/** wx.createCacheManager 返回对象子集 */
+interface WxCacheManagerLike {
+  maxAge?: number
+  mode?: string
+  origin?: string
+  state?: number
+  addRules?: (rules: unknown[]) => string[]
+  deleteRules?: (ids: string[]) => void
+  clearRules?: () => void
+  start?: () => void
+  stop?: () => void
+  deleteCache?: (id: string) => void
+  deleteCaches?: (ids: string[]) => void
+  clearCaches?: () => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+  off?: (event: string, cb?: (...a: never[]) => void) => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -5306,6 +5508,123 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         }
       },
     }),
+    // ★权威标尺缺口 C71：录屏/截屏
+    getScreenCapture: () => ({
+      getRecordingState: () =>
+        new Promise<CapResult<'on' | 'off'>>((resolve) => {
+          if (typeof wx.getScreenRecordingState !== 'function') return resolve(capErr('screen-capture.unsupported', 'wx.getScreenRecordingState 缺失'))
+          wx.getScreenRecordingState({ success: (r) => resolve(capOk(r.state)), fail: (e: unknown) => resolve(capErr('screen-capture.failed', '查询录屏状态失败', e)) })
+        }),
+      onRecordingStateChange: (cb) => {
+        if (typeof wx.onScreenRecordingStateChanged !== 'function') return () => {}
+        wx.onScreenRecordingStateChanged((r) => cb(r.state))
+        return () => {
+          if (typeof wx.offScreenRecordingStateChanged === 'function') wx.offScreenRecordingStateChanged()
+        }
+      },
+      onUserCapture: (cb) => {
+        if (typeof wx.onUserCaptureScreen !== 'function') return () => {}
+        wx.onUserCaptureScreen(cb)
+        return () => {
+          if (typeof wx.offUserCaptureScreen === 'function') wx.offUserCaptureScreen()
+        }
+      },
+      isPictureInPictureActive: () =>
+        Promise.resolve().then(() => {
+          if (typeof wx.checkIsPictureInPictureActive !== 'function') return capErr<boolean>('screen-capture.unsupported', 'wx.checkIsPictureInPictureActive 缺失')
+          try {
+            return capOk(!!wx.checkIsPictureInPictureActive())
+          } catch (e) {
+            return capErr<boolean>('screen-capture.failed', '查询画中画状态失败', e)
+          }
+        }),
+    }),
+    // ★权威标尺缺口 C72：缓存管理
+    createCacheManager: (options) => {
+      if (typeof wx.createCacheManager !== 'function') throw new CapError('cache-manager.unsupported', 'wx.createCacheManager 缺失')
+      const cm = wx.createCacheManager(options as { maxAge?: number; mode?: string; origin?: string })
+      const run = (fn: unknown, name: string, ...args: unknown[]): Promise<CapResult<void>> =>
+        Promise.resolve().then(() => {
+          if (typeof fn !== 'function') return capErr<void>('cache-manager.unsupported', 'CacheManager.' + name + ' 缺失')
+          try {
+            ;(fn as (...a: unknown[]) => void).apply(cm, args)
+            return capOk(undefined)
+          } catch (e) {
+            return capErr<void>('cache-manager.failed', 'CacheManager.' + name + ' 失败', e)
+          }
+        })
+      return {
+        rules: [],
+        addRules: (rules) =>
+          Promise.resolve().then(() => {
+            if (typeof cm.addRules !== 'function') return capErr<string[]>('cache-manager.unsupported', 'CacheManager.addRules 缺失')
+            try {
+              return capOk(cm.addRules(rules.map((r) => ({ url: r.pattern, method: r.method, maxAge: r.maxAge }))))
+            } catch (e) {
+              return capErr<string[]>('cache-manager.failed', '添加缓存规则失败', e)
+            }
+          }),
+        deleteRules: (ids) => run(cm.deleteRules, 'deleteRules', ids),
+        clearRules: () => run(cm.clearRules, 'clearRules'),
+        start: () => run(cm.start, 'start'),
+        stop: () => run(cm.stop, 'stop'),
+        deleteCache: (id) => run(cm.deleteCache, 'deleteCache', id),
+        deleteCaches: (ids) => run(cm.deleteCaches, 'deleteCaches', ids),
+        clearCaches: () => run(cm.clearCaches, 'clearCaches'),
+        getState: () => ({ mode: (cm.mode as CacheManagerState['mode']) ?? 'always', state: cm.state ?? 0, origin: cm.origin, maxAge: cm.maxAge }),
+        on: (event, cb) => {
+          if (typeof cm.on !== 'function') return () => {}
+          cm.on(event, cb)
+          return () => cm.off?.(event, cb as (...a: never[]) => void)
+        },
+      }
+    },
+    // ★权威标尺缺口 C73：空闲调度
+    getIdle: () => ({
+      request: (cb, timeout) =>
+        Promise.resolve().then(() => {
+          if (typeof wx.requestIdleCallback !== 'function') return capErr<number>('idle.unsupported', 'wx.requestIdleCallback 缺失')
+          try {
+            // wx 不返回 id（回调即执行）——用递增计数模拟 cancel 句柄
+            const id = ++idleSeq
+            wx.requestIdleCallback((res) => cb({ timeRemaining: () => res.timeRemaining ?? 0, didTimeout: !!res.didTimeout }), timeout !== undefined ? { timeout } : undefined)
+            return capOk(id)
+          } catch (e) {
+            return capErr<number>('idle.failed', 'requestIdleCallback 失败', e)
+          }
+        }),
+      cancel: (id) =>
+        Promise.resolve().then(() => {
+          if (typeof wx.cancelIdleCallback !== 'function') return capErr<void>('idle.unsupported', 'wx.cancelIdleCallback 缺失')
+          try {
+            wx.cancelIdleCallback(id)
+            return capOk(undefined)
+          } catch (e) {
+            return capErr<void>('idle.failed', '取消空闲回调失败', e)
+          }
+        }),
+    }),
+    // ★权威标尺缺口 C74：窗口
+    getWindow: () => ({
+      setSize: (width, height) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.setWindowSize !== 'function') return resolve(capErr('window.unsupported', 'wx.setWindowSize 缺失（仅 PC 端支持）'))
+          wx.setWindowSize({ width, height, success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr('window.failed', '设置窗口大小失败', e)) })
+        }),
+    }),
+    // ★权威标尺缺口 C75：导航卸载拦截
+    getNavigationGuard: () => ({
+      enable: (message) =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.enableAlertBeforeUnload !== 'function') return resolve(capErr('navigation-guard.unsupported', 'wx.enableAlertBeforeUnload 缺失'))
+          wx.enableAlertBeforeUnload({ message, success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr('navigation-guard.failed', '开启卸载确认失败', e)) })
+        }),
+      disable: () =>
+        new Promise<CapResult<void>>((resolve) => {
+          if (typeof wx.disableAlertBeforeUnload !== 'function') return resolve(capErr('navigation-guard.unsupported', 'wx.disableAlertBeforeUnload 缺失'))
+          wx.disableAlertBeforeUnload({ success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr('navigation-guard.failed', '关闭卸载确认失败', e)) })
+        }),
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -5565,6 +5884,9 @@ function makeProgressHandle(holder: { task?: WxPreDownloadTaskLike }): PreDownlo
     },
   }
 }
+
+/** requestIdleCallback 句柄计数（wx 不返回 id——用递增计数模拟 cancel 语义） */
+let idleSeq = 0
 
 /** Web 桥（navigator / window.screen / matchMedia——SSR/Node 安全探测） */
 function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery?: () => Promise<unknown> } }): CapabilityBridge {
@@ -6791,6 +7113,88 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         }
       },
     }),
+    // ★权威标尺缺口 C71：录屏/截屏（web 无标准 → Err；MediaDevices.getDisplayMedia 仅支持用户主动共享探测）
+    getScreenCapture: () => {
+      const noWeb = <T,>(op: string): Promise<CapResult<T>> => Promise.resolve(capErr<T>('screen-capture.unsupported', 'Web 无标准录屏状态 API（' + op + ' 需宿主/平台支持）'))
+      return {
+        getRecordingState: () => noWeb<'on' | 'off'>('getRecordingState'),
+        onRecordingStateChange: () => () => {},
+        onUserCapture: () => () => {},
+        isPictureInPictureActive: () =>
+          Promise.resolve().then(() => {
+            const doc = (g as { document?: Document }).document
+            if (doc && typeof (doc as { pictureInPictureElement?: unknown }).pictureInPictureElement !== 'undefined') {
+              return capOk(Boolean((doc as { pictureInPictureElement?: unknown }).pictureInPictureElement))
+            }
+            return capErr<boolean>('screen-capture.unsupported', 'Web 无画中画状态 API（document.pictureInPictureElement 不可用）')
+          }),
+      }
+    },
+    // ★权威标尺缺口 C72：缓存管理（web 无对等 → 创建时 throw；可用 Service Worker/Cache Storage）
+    createCacheManager: () => {
+      throw new CapError('cache-manager.unsupported', 'Web 无微信请求缓存管理器（可用 Service Worker / Cache Storage）')
+    },
+    // ★权威标尺缺口 C73：空闲调度（web requestIdleCallback；Safari 缺省 → setTimeout 兜底）
+    getIdle: () => {
+      const ric = (g as { requestIdleCallback?: (cb: (d: { timeRemaining: () => number; didTimeout: boolean }) => void, o?: { timeout?: number }) => number }).requestIdleCallback
+      const cic = (g as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
+      return {
+        request: (cb, timeout) =>
+          Promise.resolve().then(() => {
+            if (typeof ric === 'function') {
+              const id = ric((d) => cb({ timeRemaining: () => d.timeRemaining(), didTimeout: d.didTimeout }), timeout !== undefined ? { timeout } : undefined)
+              return capOk(id)
+            }
+            // 兜底：setTimeout（deadline.timeRemaining 恒 0）
+            const st = (g as { setTimeout?: (fn: () => void, ms?: number) => number }).setTimeout
+            if (typeof st !== 'function') return capErr<number>('idle.unsupported', 'web 无 requestIdleCallback/setTimeout')
+            const id = st(() => cb({ timeRemaining: () => 0, didTimeout: false }), timeout ?? 0)
+            return capOk(id as unknown as number)
+          }),
+        cancel: (id) =>
+          Promise.resolve().then(() => {
+            if (typeof cic === 'function') {
+              cic(id)
+              return capOk(undefined)
+            }
+            const ct = (g as { clearTimeout?: (id: number) => void }).clearTimeout
+            if (typeof ct === 'function') {
+              ct(id)
+              return capOk(undefined)
+            }
+            return capErr<void>('idle.unsupported', 'web 无 cancelIdleCallback/clearTimeout')
+          }),
+      }
+    },
+    // ★权威标尺缺口 C74：窗口（web 无标准 setWindowSize → Err）
+    getWindow: () => ({
+      setSize: () => Promise.resolve(capErr<void>('window.unsupported', 'Web 无标准窗口尺寸设置 API（window.resizeTo 仅限弹出窗口）')),
+    }),
+    // ★权威标尺缺口 C75：导航卸载拦截（web beforeunload 承接）
+    getNavigationGuard: () => {
+      const handlerRef: { h?: (e: BeforeUnloadEvent) => void } = {}
+      type WinLike = { addEventListener?: (t: string, h: (e: BeforeUnloadEvent) => void) => void; removeEventListener?: (t: string, h: (e: BeforeUnloadEvent) => void) => void }
+      const win = (g as WinLike & { window?: WinLike })
+      const target: WinLike = typeof win.addEventListener === 'function' ? win : (win.window ?? win)
+      return {
+        enable: (message) =>
+          Promise.resolve().then(() => {
+            if (typeof target.addEventListener !== 'function') return capErr<void>('navigation-guard.unsupported', 'web 无 beforeunload 事件')
+            handlerRef.h = (e) => {
+              e.preventDefault()
+              e.returnValue = message
+            }
+            target.addEventListener('beforeunload', handlerRef.h)
+            return capOk(undefined)
+          }),
+        disable: () =>
+          Promise.resolve().then(() => {
+            if (handlerRef.h && typeof target.removeEventListener === 'function') target.removeEventListener('beforeunload', handlerRef.h)
+            handlerRef.h = undefined
+            return capOk(undefined)
+          }),
+      }
+    },
   }
 }
 
@@ -6994,6 +7398,16 @@ export interface CapabilityHooks {
   useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectOptions): TCPSocketHandle }>
   /** ★C70 useMediaProcessing：媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
   useMediaProcessing(): CapResult<MediaProcessingAPI>
+  /** ★C71 useScreenCapture：录屏/截屏（wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive） */
+  useScreenCapture(): CapResult<ScreenCaptureAPI>
+  /** ★C72 useCacheManager：缓存管理（wx.createCacheManager；web → throw） */
+  useCacheManager(options?: { maxAge?: number; mode?: 'weakNetwork' | 'always' | 'none'; origin?: string }): CapResult<CacheManagerHandle>
+  /** ★C73 useIdle：空闲调度（wx.requestIdleCallback / web requestIdleCallback） */
+  useIdle(): CapResult<IdleAPI>
+  /** ★C74 useWindow：窗口（wx.setWindowSize；web 缺省 → Err） */
+  useWindow(): CapResult<WindowAPI>
+  /** ★C75 useNavigationGuard：卸载拦截（wx.enableAlertBeforeUnload / web beforeunload） */
+  useNavigationGuard(): CapResult<NavigationGuardAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -7661,6 +8075,27 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getMediaProcessing) throw new CapError('media-processing.unsupported', '桥未提供 getMediaProcessing（useMediaProcessing 不可用）')
       return bridge.getMediaProcessing()
     }),
+    // ★权威标尺缺口 C71-C75：录屏/缓存/空闲/窗口/导航拦截
+    useScreenCapture: () => handleResult<ScreenCaptureAPI>(() => {
+      if (!bridge.getScreenCapture) throw new CapError('screen-capture.unsupported', '桥未提供 getScreenCapture（useScreenCapture 不可用）')
+      return bridge.getScreenCapture()
+    }),
+    useCacheManager: (options) => handleResult<CacheManagerHandle>(() => {
+      if (!bridge.createCacheManager) throw new CapError('cache-manager.unsupported', '桥未提供 createCacheManager（useCacheManager 不可用）')
+      return bridge.createCacheManager(options)
+    }),
+    useIdle: () => handleResult<IdleAPI>(() => {
+      if (!bridge.getIdle) throw new CapError('idle.unsupported', '桥未提供 getIdle（useIdle 不可用）')
+      return bridge.getIdle()
+    }),
+    useWindow: () => handleResult<WindowAPI>(() => {
+      if (!bridge.getWindow) throw new CapError('window.unsupported', '桥未提供 getWindow（useWindow 不可用）')
+      return bridge.getWindow()
+    }),
+    useNavigationGuard: () => handleResult<NavigationGuardAPI>(() => {
+      if (!bridge.getNavigationGuard) throw new CapError('navigation-guard.unsupported', '桥未提供 getNavigationGuard（useNavigationGuard 不可用）')
+      return bridge.getNavigationGuard()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -7732,6 +8167,11 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       imageEdit: bridge.getImageEdit !== undefined,
       socket: bridge.getSocket !== undefined,
       mediaProcessing: bridge.getMediaProcessing !== undefined,
+      screenCapture: bridge.getScreenCapture !== undefined,
+      cacheManager: bridge.createCacheManager !== undefined,
+      idle: bridge.getIdle !== undefined,
+      window: bridge.getWindow !== undefined,
+      navigationGuard: bridge.getNavigationGuard !== undefined,
     }),
   }
 }

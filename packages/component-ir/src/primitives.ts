@@ -209,6 +209,12 @@ const CAPABILITY: PrimitiveDef[] = [
   // ★权威标尺缺口补齐批 E（2026-09-12）：网络底层 / 媒体高级
   { id: 'C69', kind: 'capability', semantic: 'capability.socket', api: 'useSocket()', props: ['UDPSocketHandle / TCPSocketHandle'], mpEquiv: 'wx.createUDPSocket/createTCPSocket', tier: 'L1', status: 'planned' },
   { id: 'C70', kind: 'capability', semantic: 'capability.media-processing', api: 'useMediaProcessing()', props: ['MediaProcessingAPI'], mpEquiv: 'wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer', tier: 'L1', status: 'planned' },
+  // ★权威标尺缺口补齐批 F（2026-09-12）：录屏/缓存/空闲/窗口/导航拦截
+  { id: 'C71', kind: 'capability', semantic: 'capability.screen-capture', api: 'useScreenCapture()', props: ['ScreenCaptureAPI'], mpEquiv: 'wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive', tier: 'L1', status: 'planned' },
+  { id: 'C72', kind: 'capability', semantic: 'capability.cache-manager', api: 'useCacheManager()', props: ['CacheManagerHandle'], mpEquiv: 'wx.createCacheManager', tier: 'L1', status: 'planned' },
+  { id: 'C73', kind: 'capability', semantic: 'capability.idle', api: 'useIdle()', props: ['IdleAPI'], mpEquiv: 'wx.requestIdleCallback/cancelIdleCallback', tier: 'L1', status: 'planned' },
+  { id: 'C74', kind: 'capability', semantic: 'capability.window', api: 'useWindow()', props: ['WindowAPI'], mpEquiv: 'wx.setWindowSize', tier: 'L1', status: 'planned' },
+  { id: 'C75', kind: 'capability', semantic: 'capability.navigation-guard', api: 'useNavigationGuard()', props: ['NavigationGuardAPI'], mpEquiv: 'wx.enableAlertBeforeUnload/disableAlertBeforeUnload', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */
