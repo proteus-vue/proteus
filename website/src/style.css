@@ -67,8 +67,10 @@
   --sp-24: 24px;
   --sp-28: 28px;
   --container: 1180px;
-  /* ★sticky 导航高度（sidebar sticky / 标题锚点避让用——CDP 实测 97px：v-p-fluid padding(14,28) 在宽视口端 clamp 取上限 28px×2 + 链接行高） */
-  --nav-h: 97px;
+  /* ★sticky 导航高度（sidebar sticky / 标题锚点避让用）——★2026-09-12 修正：实测各视口恒 65px
+     （.nav 为 padding 12px 24px + 链接行高 ≈41 → 65px；旧值 97px 系 .nav 内边距改小前的过时值，
+     多算 32px → 文档分区横条吸顶在其下留出 32px 缝隙、滚动时内容从缝里漏出）。 */
+  --nav-h: 65px;
 }
 
 * { box-sizing: border-box; }
@@ -170,7 +172,7 @@ body {
 .doc-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 /* ★导航体验：锚点跳转避开吸顶（nav + 分区横条）——全标题级别（h1-h6，含方法 h4/h5） */
 .doc-body h1[id], .doc-body h2[id], .doc-body h3[id], .doc-body h4[id], .doc-body h5[id], .doc-body h6[id] {
-  scroll-margin-top: calc(var(--nav-h) + 88px); /* nav + 分区横条 + 呼吸余量——标题不被吸顶遮挡 */
+  scroll-margin-top: calc(var(--nav-h) + 88px); /* nav(65) + 分区横条(71) + 呼吸余量 —— 标题不被吸顶遮挡（横条底 = 136 < 153 ✓） */
 }
 /* ★#383：v-html 宽内容（表格/pre）横向滚动收敛在自身，不撑破页面 */
 .doc-body table { display: block; overflow-x: auto; width: 100%; }
