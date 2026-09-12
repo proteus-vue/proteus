@@ -1,7 +1,7 @@
 ---
 title: p-slider
 group: 内容与表单
-order: 1024
+order: 1025
 ---
 
 # p-slider

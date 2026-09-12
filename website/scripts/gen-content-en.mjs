@@ -1048,6 +1048,34 @@ export const COMP_EN = {
       aspectRatio: "Preview aspect ratio (default 4:3)",
     },
   },
+  // ★Batch J (2026-09-12): webview / ad / map (real WeChat built-in components)
+  'p-webview': {
+    desc: "Embedded web page",
+    notes: [
+      "Aligned with the Mini Program <web-view>: embeds a host web page (the Mini Program requires a registered business domain)",
+      "MP uses the native <web-view>; the web injects an <iframe> at runtime (the literal iframe never enters the MP artifact — same approach as p-camera's getUserMedia)",
+      "MP-safe: the template only contains tags valid on both ends (<web-view> / <view>)",
+    ],
+    props: { src: "Page URL (aligned with src)", height: "Height in px (web container; fills the parent by default)", sandbox: "Web iframe sandbox policy" },
+  },
+  'p-ad': {
+    desc: "Ad slot",
+    notes: [
+      "Aligned with the Mini Program <ad>: hosts a WeChat ad-network unit (unit-id created in the Mini Program console)",
+      "MP uses the native <ad>; the web has no ad-network standard → an honest placeholder container with a replaceable slot",
+      "MP-safe: the two branches are compile-time valid tags",
+    ],
+    props: { unitId: "Ad unit id (aligned with unit-id)", adIntervals: "Auto-refresh interval in seconds (min 30)", adType: "Ad type (aligned with ad-type: banner / video / grid)", height: "Placeholder height in px (web)", placeholderText: "Web placeholder text" },
+  },
+  'p-map': {
+    desc: "Map container",
+    notes: [
+      "Aligned with the Mini Program <map>: map view with markers / scale / show-location",
+      "MP uses the native <map>; the web has no standard map API → a host slot for injecting Amap / Google / Mapbox SDK (honest degradation)",
+      "Map control (moveTo/addMarkers…) goes through the useMap() capability surface",
+    ],
+    props: { latitude: "Center latitude", longitude: "Center longitude", scale: "Zoom level (3-20)", markers: "Marker list", showLocation: "Show the current location dot", height: "Height in px (default 300)" },
+  },
 }
 
 // ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════

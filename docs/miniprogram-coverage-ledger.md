@@ -22,14 +22,14 @@
 
 | 态 | 含义 | 计数 |
 |---|---|---|
-| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **252** |
-| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **5** |
+| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **255** |
+| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **1** |
 | ⬛ **private** | 平台私有（微信独占——支付/交通卡/视频号/VoIP/人脸核身/营销…）；收敛 `useMiniProgram` / 宿主桥 | **106** |
 | ➖ **na** | 不适用（废弃 API / 构建期语义 / 被语义原语「消灭」的形态） | **17** |
 | ❌ **gap** | 未归类（**必须为 0**——漏登记即 CI 红） | **0** |
 
 > **口径**：`分类完整率 = (total−gap)/total = 100%`（官方项全部进了某个箱子）——**这不是「全实现」**。
-> **诚实指标**：`真·落地率 = covered / (covered+planned) = 252/259 = 98%`（可落地项中已可用的比例）。
+> **诚实指标**：`真·落地率 = covered / (covered+planned) = 255/256 = 99%`（可落地项中已可用的比例）。
 
 ## 2-b. 已按标尺补齐的批次
 
@@ -42,6 +42,7 @@
 | **G** | **AR/XR `useAR`**·**iBeacon `useBeacon`**·**局域网 mDNS `useLocalService`**·**翻译 `useTranslation`**·**海报 `usePoster`**·**设备探测 `useDeviceCapability`**（12 个官方 API）；web：AR 无对等→Err、HEVC 走 MediaSource，其余空订阅 | covered 228→249 · 落地率 88→96% |
 | **H** | **组件侧补齐**：`selection`（`ui.selection`——p-selection）· `keyboard-accessory`（`shell.keyboard-accessory`——p-keyboard-accessory），全端真实落地 | covered 249→251 · 落地率 96→97% |
 | **I** | **相机 `ui.camera`**（p-camera 真实落地：MP 原生 `<camera>` + Web getUserMedia `<video>`）；`cover-view`/`cover-image` 归 **na**（Skyline 同层渲染后冗余——官方建议用 view/image 替代） | covered 251→252 · 落地率 97→98% · planned 8→5 |
+| **J** | **组件批**：`web-view`（p-webview：MP 原生 + Web iframe 运行时注入）· `ad`（p-ad：MP 原生 + Web 诚实占位）· `map`（p-map：MP 原生 + Web 宿主 SDK 槽位）；`aria-component` 归 **na**（ARIA 属性文档页，非组件标签） | covered 252→255 · 落地率 98→99% · planned 5→1 · na 19→20 |
 
 > 标尺的价值证明：缺口不再是「人记得登记才可见」——它把 5 个隐私 API 直接列进 planned，驱动补齐后归 covered。
 
