@@ -106,6 +106,15 @@ describe('内置预设内联（extractBuilderFnName / assembleAppJs）', () => {
     it('@proteus-vue/* 未构建（无 dist）→ null', () => {
       expect(resolveSharedModule('/proj', '/proj/pages/a.vue', '@proteus-vue/ghost')).toBeNull()
     })
+
+    it('★resolveFrom（projectRoot）解析应用声明的框架包（真机 bug 2026-09-12：插件位置解析不到 → 产物缺 _proteus/*.js）', () => {
+      const repoRoot = path.resolve(__dirname, '..')
+      const examplesRoot = path.join(repoRoot, 'examples')
+      // @proteus-vue/api 由 examples 工程声明（pnpm 严格链接仅在其 node_modules）——按 projectRoot 解析应命中
+      const r = resolveSharedModule(examplesRoot, path.join(examplesRoot, 'pages/a.vue'), '@proteus-vue/api', undefined, examplesRoot)
+      expect(r?.relNoExt).toBe('_proteus/api')
+      expect(r?.file).toContain('packages/api/dist/index.js')
+    })
   })
 
   describe('★共享模块 import 扫描（scanSourceImports：多行 named 不漏扫——semantic 页 desktop 白屏根因）', () => {
