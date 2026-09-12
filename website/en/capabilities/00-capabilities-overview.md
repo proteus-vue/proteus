@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 70 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 75 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (9)
 
@@ -22,7 +22,7 @@ order: 0
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 
-## Device & System (13)
+## Device & System (15)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -39,6 +39,8 @@ order: 0
 | C58 | [capability.element-query](/docs/capability/element-query) | `useElement()` | `ElementQuery` | wx.createSelectorQuery |
 | C59 | [capability.intersection](/docs/capability/intersection) | `useIntersection()` | `IntersectionHandle` | wx.createIntersectionObserver |
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
+| C71 | [capability.screen-capture](/docs/capability/screen-capture) | `useScreenCapture()` | `ScreenCaptureAPI` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive |
+| C72 | [capability.cache-manager](/docs/capability/cache-manager) | `useCacheManager()` | `CacheManagerHandle` | wx.createCacheManager |
 
 ## Storage & Files (4)
 
@@ -97,7 +99,7 @@ order: 0
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
 
-## App & Lifecycle (7)
+## App & Lifecycle (10)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -108,6 +110,9 @@ order: 0
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | — |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | — |
 | C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
+| C73 | [capability.idle](/docs/capability/idle) | `useIdle()` | `IdleAPI` | wx.requestIdleCallback/cancelIdleCallback |
+| C74 | [capability.window](/docs/capability/window) | `useWindow()` | `WindowAPI` | wx.setWindowSize |
+| C75 | [capability.navigation-guard](/docs/capability/navigation-guard) | `useNavigationGuard()` | `NavigationGuardAPI` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload |
 
 ## Observability & Debugging (3)
 

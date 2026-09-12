@@ -1858,4 +1858,39 @@ export const CAP_EN = {
       'media-processing.failed': 'A media-processing operation failed',
     },
   },
+  'screen-capture': {
+    desc: 'useScreenCapture: screen recording / capture — recording state + change events / user-capture event / picture-in-picture active (wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive; web has no standard → Err, PiP via document.pictureInPictureElement)',
+    errors: {
+      'screen-capture.unsupported': 'The screen-capture API is missing (web has no standard screen-recording state API)',
+      'screen-capture.failed': 'Querying the screen-recording state failed',
+    },
+  },
+  'cache-manager': {
+    desc: 'useCacheManager: HTTP request cache manager — add/delete rules, start/stop, delete/clear caches, events (wx.createCacheManager; web has no equivalent → throws, use Service Worker / Cache Storage)',
+    errors: {
+      'cache-manager.unsupported': 'The cache-manager API is missing (web has no WeChat request cache manager — use Service Worker / Cache Storage)',
+      'cache-manager.failed': 'A cache-manager operation failed',
+    },
+  },
+  idle: {
+    desc: 'useIdle: idle scheduling — run a callback when the host is idle, with cancel (wx.requestIdleCallback/cancelIdleCallback; web requestIdleCallback with setTimeout fallback)',
+    errors: {
+      'idle.unsupported': 'The idle-callback API is missing (no requestIdleCallback/setTimeout available)',
+      'idle.failed': 'Scheduling or cancelling the idle callback failed',
+    },
+  },
+  window: {
+    desc: 'useWindow: window size — setSize for PC (wx.setWindowSize; web has no standard → Err, window.resizeTo is popup-only)',
+    errors: {
+      'window.unsupported': 'The window API is missing (web has no standard window-size API; resizeTo is popup-only)',
+      'window.failed': 'Setting the window size failed',
+    },
+  },
+  'navigation-guard': {
+    desc: 'useNavigationGuard: navigation/unload guard — enable/disable a confirm prompt before leaving (wx.enableAlertBeforeUnload/disableAlertBeforeUnload; web beforeunload event)',
+    errors: {
+      'navigation-guard.unsupported': 'The navigation-guard API is missing (web has no beforeunload event available)',
+      'navigation-guard.failed': 'Enabling or disabling the unload confirmation failed',
+    },
+  },
 }
