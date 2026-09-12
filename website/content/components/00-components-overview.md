@@ -6,7 +6,7 @@ order: 0
 
 # 组件总览
 
-> 66 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
+> 68 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
 
 ## 布局（17）
 
@@ -30,7 +30,7 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## 内容与表单（26）
+## 内容与表单（27）
 
 | 组件 | Props | Events |
 |---|---|---|
@@ -54,6 +54,7 @@ order: 0
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
 | [p-select](/docs/component/p-select) | 6 | 1 |
+| [p-selection](/docs/component/p-selection) | 2 | 1 |
 | [p-skeleton](/docs/component/p-skeleton) | 6 | 0 |
 | [p-slider](/docs/component/p-slider) | 6 | 1 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
@@ -61,12 +62,13 @@ order: 0
 | [p-text](/docs/component/p-text) | 4 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 7 | 4 |
 
-## 页面外壳（14）
+## 页面外壳（15）
 
 | 组件 | Props | Events |
 |---|---|---|
 | [p-action-sheet](/docs/component/p-action-sheet) | 3 | 3 |
 | [p-drawer](/docs/component/p-drawer) | 4 | 1 |
+| [p-keyboard-accessory](/docs/component/p-keyboard-accessory) | 3 | 0 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
 | [p-modal](/docs/component/p-modal) | 8 | 2 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |

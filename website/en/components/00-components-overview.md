@@ -6,7 +6,7 @@ order: 0
 
 # Components overview
 
-> 66 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
+> 68 semantic components (6 domains) — props/events generated from source SSOT (`website/scripts/gen-content.mjs`), always in sync with the framework implementation.
 
 ## Layout (17)
 
@@ -30,7 +30,7 @@ order: 0
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
-## Content & Forms (26)
+## Content & Forms (27)
 
 | Component | Props | Events |
 |---|---|---|
@@ -54,6 +54,7 @@ order: 0
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
 | [p-select](/docs/component/p-select) | 6 | 1 |
+| [p-selection](/docs/component/p-selection) | 2 | 1 |
 | [p-skeleton](/docs/component/p-skeleton) | 6 | 0 |
 | [p-slider](/docs/component/p-slider) | 6 | 1 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
@@ -61,12 +62,13 @@ order: 0
 | [p-text](/docs/component/p-text) | 4 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 7 | 4 |
 
-## Page Shell (14)
+## Page Shell (15)
 
 | Component | Props | Events |
 |---|---|---|
 | [p-action-sheet](/docs/component/p-action-sheet) | 3 | 3 |
 | [p-drawer](/docs/component/p-drawer) | 4 | 1 |
+| [p-keyboard-accessory](/docs/component/p-keyboard-accessory) | 3 | 0 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
 | [p-modal](/docs/component/p-modal) | 8 | 2 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |

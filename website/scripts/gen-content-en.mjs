@@ -1008,6 +1008,32 @@ export const COMP_EN = {
       round: "Rounded corners in px (top two corners)",
     },
   },
+  // ★Batch H (2026-09-12): selection / keyboard-accessory (real WeChat built-in components)
+  'p-selection': {
+    desc: "Local text selection",
+    notes: [
+      "Aligned with the Mini Program <selection>: wraps selectable text and emits selectionchange with the selected string and offsets",
+      "Both ends share one source: div → view; MP drives it via the native selectionchange event, the web normalizes it from document.getSelection()",
+      "MP-safe: no wx/document/window calls on MP — selection data comes from the event payload",
+    ],
+    props: {
+      disableContextMenu: "Whether to hide the native text-selection buttons (aligned with disable-context-menu)",
+      selectable: "Whether the text is selectable (maps to CSS user-select)",
+    },
+  },
+  'p-keyboard-accessory': {
+    desc: "Toolbar above the keyboard",
+    notes: [
+      "Aligned with the Mini Program <keyboard-accessory>: a toolbar floating above the keyboard while an input/textarea is focused",
+      "MP uses the native <keyboard-accessory> (WebView); the web pins it to the bottom driven by visualViewport readings",
+      "View max height is 200px (aligned with the official limit)",
+    ],
+    props: {
+      visible: "Visibility (controlled; when omitted it is derived from the keyboard height)",
+      maxHeight: "Toolbar max height in px (aligned with the official 200px limit)",
+      background: "Background color (white by default)",
+    },
+  },
 }
 
 // ════════════ capabilities EN（★#481 续：能力分区，CAP_EN 页面级字段表） ════════════
