@@ -534,6 +534,16 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'KeyboardAccessoryView',
     headless: 'keyboard-accessory',
   },
+  // ★权威标尺批 I：相机（对齐小程序 <camera>）
+  'ui.camera': {
+    'vue-dom': 'video.proteus-camera', // Web getUserMedia + <video> 预览
+    'native-ios': 'AVCaptureVideoPreviewLayer',
+    'native-android': 'CameraX.PreviewView',
+    'native-harmony': 'XComponent.camera',
+    skyline: 'camera', // 微信原生 <camera>
+    flutter: 'CameraPreview',
+    headless: 'camera',
+  },
 }
 
 /**

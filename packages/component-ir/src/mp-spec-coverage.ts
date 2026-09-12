@@ -286,6 +286,9 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   'nested-scroll-body': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'nested-scroll-header': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'draggable-sheet': { status: 'covered', proteus: 'shell.page-container（半屏可拖）' },
+  // Skyline 同层渲染后冗余（官方：建议用 view 替代 cover-view/cover-image）
+  'cover-view': { status: 'na', proteus: '—（同层渲染后冗余，用 layout.box 替代）' },
+  'cover-image': { status: 'na', proteus: '—（同层渲染后冗余，用 ui.image 替代）' },
   // 表单/富文本/文本片段 → 语义承接（★批 H：keyboard-accessory/selection 已全端真实落地）
   'keyboard-accessory': { status: 'covered', proteus: 'shell.keyboard-accessory（p-keyboard-accessory）' },
   selection: { status: 'covered', proteus: 'ui.selection（p-selection）' },

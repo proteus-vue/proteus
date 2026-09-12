@@ -68,7 +68,7 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
     expect(classifySpecApi('createUDPSocket').status).toBe('covered')
     expect(classifySpecApi('createVKSession').status).toBe('covered')
     // ★API 侧 planned 清零——planned 现仅剩组件侧（需原生渲染/宿主能力）
-    expect(classifySpecComponent('camera', MP_MAPPING_MATRIX).status).toBe('planned')
+    expect(classifySpecComponent('camera', MP_MAPPING_MATRIX).status).toBe('covered')
     expect(classifySpecApi('requestMerchantTransfer').status).toBe('private')
     expect(classifySpecApi('nextTick').status).toBe('na')
     // 未归类 → gap（防漏网）

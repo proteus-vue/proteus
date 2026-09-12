@@ -18,8 +18,8 @@ import {
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（172 原语 SSOT）', () => {
-  it('172 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（173 原语 SSOT）', () => {
+  it('173 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
@@ -29,19 +29,20 @@ describe('G-32 B1 清单冻结（172 原语 SSOT）', () => {
     //   + ★批 E：capability+2 socket/media-processing
     //   + ★批 F：capability+5 screen-capture/cache-manager/idle/window/navigation-guard
     //   + ★批 G：capability+6 ar/beacon/local-service/translation/poster/device-capability
-    //   + ★组件批 H：ui+1 selection + shell+1 keyboard-accessory）
+    //   + ★组件批 H：ui+1 selection + shell+1 keyboard-accessory
+    //   + ★组件批 I：ui+1 camera）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
-    expect(count('ui')).toBe(24)
+    expect(count('ui')).toBe(25)
     expect(count('shell')).toBe(15)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(81)
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 50 项（G-32 冻结清单已实现：12 layout + 21 ui + 11 shell + 2 gesture + 1 capability + 3 engineering）· 其余 planned 待落地', () => {
+  it('implemented 51 项（G-32 冻结清单已实现：12 layout + 22 ui + 11 shell + 2 gesture + 1 capability + 3 engineering）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(50)
+    expect(impl.length).toBe(51)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
