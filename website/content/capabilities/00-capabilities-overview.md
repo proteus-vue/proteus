@@ -6,9 +6,9 @@ order: 0
 
 # 能力总览
 
-> 75 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 81 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
-## 网络与通信（9）
+## 网络与通信（10）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -21,8 +21,9 @@ order: 0
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
+| C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## 设备与系统（15）
+## 设备与系统（18）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -41,6 +42,9 @@ order: 0
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
 | C71 | [capability.screen-capture](/docs/capability/screen-capture) | `useScreenCapture()` | `ScreenCaptureAPI` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive |
 | C72 | [capability.cache-manager](/docs/capability/cache-manager) | `useCacheManager()` | `CacheManagerHandle` | wx.createCacheManager |
+| C76 | [capability.ar](/docs/capability/ar) | `useAR()` | `ARAPI` | wx.createVKSession/isVKSupport |
+| C77 | [capability.beacon](/docs/capability/beacon) | `useBeacon()` | `BeaconAPI` | wx.onBeaconServiceChange/onBeaconUpdate |
+| C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
 
 ## 存储与文件（4）
 
@@ -86,7 +90,7 @@ order: 0
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | wx.requestPayment 扩展 |
 | C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
-## 通知与分享（8）
+## 通知与分享（10）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -98,6 +102,8 @@ order: 0
 | C22 | [capability.sms](/docs/capability/sms) | `useSMS()` | `Result<void>` | wx.??（受限） |
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
+| C79 | [capability.translation](/docs/capability/translation) | `useTranslation()` | `TranslationAPI` | wx.onUserTriggerTranslation/onUserOffTranslation |
+| C80 | [capability.poster](/docs/capability/poster) | `usePoster()` | `PosterAPI` | wx.onGeneratePoster |
 
 ## 应用与生命周期（10）
 

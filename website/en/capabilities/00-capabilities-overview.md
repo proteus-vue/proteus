@@ -6,9 +6,9 @@ order: 0
 
 # Capabilities overview
 
-> 75 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 81 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
-## Network & Communication (9)
+## Network & Communication (10)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -21,8 +21,9 @@ order: 0
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
+| C78 | [capability.local-service](/docs/capability/local-service) | `useLocalService()` | `LocalServiceAPI` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop |
 
-## Device & System (15)
+## Device & System (18)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -41,6 +42,9 @@ order: 0
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
 | C71 | [capability.screen-capture](/docs/capability/screen-capture) | `useScreenCapture()` | `ScreenCaptureAPI` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive |
 | C72 | [capability.cache-manager](/docs/capability/cache-manager) | `useCacheManager()` | `CacheManagerHandle` | wx.createCacheManager |
+| C76 | [capability.ar](/docs/capability/ar) | `useAR()` | `ARAPI` | wx.createVKSession/isVKSupport |
+| C77 | [capability.beacon](/docs/capability/beacon) | `useBeacon()` | `BeaconAPI` | wx.onBeaconServiceChange/onBeaconUpdate |
+| C81 | [capability.device-capability](/docs/capability/device-capability) | `useDeviceCapability()` | `DeviceCapabilityAPI` | wx.checkDeviceSupportHevc |
 
 ## Storage & Files (4)
 
@@ -86,7 +90,7 @@ order: 0
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | — |
 | C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
-## Notifications & Sharing (8)
+## Notifications & Sharing (10)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -98,6 +102,8 @@ order: 0
 | C22 | [capability.sms](/docs/capability/sms) | `useSMS()` | `Result<void>` | — |
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
+| C79 | [capability.translation](/docs/capability/translation) | `useTranslation()` | `TranslationAPI` | wx.onUserTriggerTranslation/onUserOffTranslation |
+| C80 | [capability.poster](/docs/capability/poster) | `usePoster()` | `PosterAPI` | wx.onGeneratePoster |
 
 ## App & Lifecycle (10)
 
