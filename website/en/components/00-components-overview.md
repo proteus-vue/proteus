@@ -84,7 +84,7 @@ order: 0
 | [p-tabbar](/docs/component/p-tabbar) | 2 | 2 |
 | [p-toast](/docs/component/p-toast) | 7 | 1 |
 | [p-toolbar](/docs/component/p-toolbar) | 4 | 1 |
-| [p-webview](/docs/component/p-webview) | 3 | 2 |
+| [p-webview](/docs/component/p-webview) | 4 | 2 |
 
 ## Gestures (2)
 

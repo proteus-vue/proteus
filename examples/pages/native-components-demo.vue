@@ -16,10 +16,16 @@ const camError = ref('')
 const mapTapCount = ref(0)
 const adLoaded = ref(false)
 const adError = ref('')
+const webviewMsg = ref('')
+const webviewErr = ref('')
+// web-view 源切换：本地静态 HTML / 远程官网（★平台限制：一页仅一个 <web-view>，故二选一）
+// ★注意：不要写 ref<'local'|'remote'>('local')——编译器对带泛型实参的 ref() 无法静态求值初值
+//   （会令 data.srcMode = undefined → 首帧 wx:if 判空错走远程分支）；用无泛型 ref，读取处比较即可。
+const srcMode = ref('local')
 
-// 地图标记（对齐小程序 markers）
+// 地图标记（对齐小程序 markers；★width/height 必填，否则 DevTools 报「width and height of marker id ... are required」）
 const markers = ref([
-  { id: 1, latitude: 39.908823, longitude: 116.39747, title: '天安门' },
+  { id: 1, latitude: 39.908823, longitude: 116.39747, title: '天安门', width: 32, height: 32 },
 ])
 
 function onCamReady() {
@@ -36,6 +42,14 @@ function onAdLoad() {
 }
 function onAdError(e: { errMsg?: string } | unknown) {
   adError.value = (e as { errMsg?: string })?.errMsg ?? '广告加载失败（需真实 adUnitId）'
+}
+// web-view 消息（H5 内 postMessage → @message）与错误
+function onWebviewMessage(e: unknown) {
+  const d = (e as { detail?: { data?: unknown } })?.detail?.data ?? e
+  webviewMsg.value = JSON.stringify(d)
+}
+function onWebviewError(e: { errMsg?: string } | unknown) {
+  webviewErr.value = (e as { errMsg?: string })?.errMsg ?? 'web-view 加载失败'
 }
 </script>
 
@@ -54,9 +68,23 @@ function onAdError(e: { errMsg?: string } | unknown) {
     <p-map :latitude="39.908823" :longitude="116.39747" :scale="14" :markers="markers" :height="240" @markertap="onMarkerTap" />
     <p-text class="stat">标记点击次数：{{ mapTapCount }}</p-text>
 
-    <!-- 验证点 ③：内嵌网页（真机需业务域名；DevTools 可关校验） -->
+    <!-- 验证点 ③：内嵌网页——本地静态 HTML / 远程官网（proteus-vue.cn）二选一切换
+         ★平台硬约束 ①：官方规定 <web-view> **一个页面只能插入一个**（否则 DevTools 报「一个页面只能插入一个」、
+           区域渲染空白）→ 此处用 v-if 二选一，保证同一时刻 DOM 中只有一个 <web-view>。
+         ★平台硬约束 ②（真机实测确认）：小程序 <web-view> 的 src **必须是 https 业务域名内的网页**，
+           **不支持加载小程序包内的本地 HTML**——实测 raw `<web-view src="/x.html">` 与 `data:text/html` URI
+           在模拟器/真机均渲染空白（对照：远程 https 正常渲染）。故「本地网页」在 MP 端只能诚实占位（组件内建）；
+           Web 端 <iframe> 不受此限，本地相对路径可正常加载。
+         ★诚实前提：远程 src 真机需在后台配 **业务域名**；DevTools 可勾选「不校验合法域名、web-view（业务域名）」直接验证。 -->
     <h3>p-webview（&lt;web-view&gt;）</h3>
-    <p-webview src="https://developers.weixin.qq.com/" :height="240" />
+    <div class="seg">
+      <p-button class="seg__btn" @click="srcMode = 'local'">本地网页{{ srcMode === 'local' ? ' ✓' : '' }}</p-button>
+      <p-button class="seg__btn" @click="srcMode = 'remote'">远程官网{{ srcMode === 'remote' ? ' ✓' : '' }}</p-button>
+    </div>
+    <p-text class="hint">{{ srcMode === 'local' ? 'src=/webview-local.html（包内本地 HTML）——Web 端 iframe 可加载；MP 端原生 web-view 平台限制仅支持 https 业务域名（下方为诚实占位）' : 'src=https://proteus-vue.cn（远程官网）——两端均可（真机需配业务域名 / DevTools 关校验）' }}</p-text>
+    <p-webview v-if="srcMode === 'local'" src="/webview-local.html" :height="200" @message="onWebviewMessage" @error="onWebviewError" />
+    <p-webview v-else src="https://proteus-vue.cn/" :height="200" @message="onWebviewMessage" @error="onWebviewError" />
+    <p-text class="stat">web-view 消息：{{ webviewMsg || '（未收到，点本地页按钮试）' }}{{ webviewErr ? ' · ' + webviewErr : '' }}</p-text>
 
     <!-- 验证点 ④：广告位（需真实 adUnitId；示例 id 真机不展示广告属预期，load/error 事件可见） -->
     <h3>p-ad（&lt;ad&gt;）</h3>
@@ -88,11 +116,22 @@ h3 {
   margin: 20px 0 8px;
   font-size: 15px;
 }
+.hint {
+  display: block;
+  color: #999;
+  font-size: 12px;
+  margin: 2px 0 8px;
+}
 .stat {
   display: block;
   color: #666;
   font-size: 13px;
   margin: 8px 0 4px;
+}
+.seg {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .kb-row {
   display: flex;

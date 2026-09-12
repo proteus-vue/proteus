@@ -20,6 +20,11 @@ const config: ProteusConfig = {
   },
   appid: 'wx33bc04a52024def7',
   pagesDir: 'pages',
+  // ★原生组件页降级 WebView 渲染（2026-09-12）：web-view/camera/map/video 在 Skyline 渲染引擎下
+  //   官方不支持（DevTools 报「Skyline 暂不支持 web-view/camera/map/video 组件调试」）——该演示页
+  //   强制走 WebView 渲染模式（page.json 不写 renderer:skyline），原生组件才能正常加载/调试。
+  //   这正是「Skyline 白屏兜底 · 页面级降级通道」机制的实际用途。
+  page: { webviewPages: ['native-components-demo'] },
   // ★#492 项目级路由管理：路由相关配置统一在 router 段（结构 + tabBar + meta）——
   //   routesOutput/subPackages/customRoute 已从顶层收编此处，顶层写法仍兼容（router.* 优先）
   router: {
