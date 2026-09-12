@@ -140,13 +140,42 @@ function failFastThrow(filename: string | undefined, msg: string): never {
   throw new CompilerError(filename ?? 'anonymous.vue', `${msg}——rules.failFast 开启：矩阵外语义编译期硬报错（不再原样输出放行）`)
 }
 
+/** ★scoped 类名字面量后缀（真机 bug 修复 2026-09-12）：
+ *  对 :class 表达式内的**类名字面量**追加 scope 后缀，但**跳过**：
+ *   - 比较操作数（前有 = ! < >，或后接 == != <= >= 等）——如 `mode === 'local' ? 'a' : ''` 的 'local' 是判断值，非类名；
+ *   - 空串（'' 不能变成 '-data-v-x'）。
+ *  旧实现用 /'([^']*)'/g 无差别后缀 → 'local' 被改成 'local-data-v-x' 令三元条件永不成立（真机 :class 全部失效）。 */
+function suffixClassLiterals(e: string, sfx: (name: string) => string): string {
+  let out = ''
+  for (let i = 0; i < e.length; i++) {
+    const ch = e[i]
+    if (ch !== "'" && ch !== '"') {
+      out += ch
+      continue
+    }
+    const quote = ch
+    let j = i + 1
+    let lit = ''
+    while (j < e.length && !(e[j] === quote && e[j - 1] !== '\\')) {
+      lit += e[j]
+      j++
+    }
+    const before = out.replace(/\s+$/, '')
+    const after = e.slice(j + 1).replace(/^\s+/, '')
+    const isCmpOperand = /[=!<>]$/.test(before) || /^(===|!==|==|!=|<=|>=|<|>)/.test(after)
+    out += quote + (isCmpOperand || lit.length === 0 ? lit : sfx(lit)) + quote
+    i = j
+  }
+  return out
+}
+
 /** :class 绑定：对象语法 → 三元拼接，其余 → {{expr}}
  * ★2026-08 scoped 后缀：scopeId 非空时字符串字面量/对象键后缀（'box' → 'box-data-v-x'）；动态变量类名无法静态后缀 → 编译期警告 */
 function formatClassBinding(exp: string, warnings: string[], scopeId = ''): string {
   const t = exp.trim()
   const sfx = (name: string): string => (scopeId && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name)
-  // 表达式内字符串字面量后缀（三元值 'a'/'b' 等）
-  const sfxExpr = (e: string): string => (scopeId ? e.replace(/'([^']*)'/g, (_m, s: string) => `'${sfx(s)}'`) : e)
+  // 表达式内类名字面量后缀（三元值 'a'/'b' 等；比较操作数/空串不动——见 suffixClassLiterals）
+  const sfxExpr = (e: string): string => (scopeId ? suffixClassLiterals(e, sfx) : e)
   const dynWarn = (name: string): void => {
     if (scopeId) warnings.push(`:class 动态类名 "${name}" 无法 scoped 后缀（MP 单类选择器机制），该动态类在小程序无 scoped 样式匹配（Web 端正常）`)
   }
