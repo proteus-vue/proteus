@@ -6,7 +6,7 @@ order: 0
 
 # Capabilities overview
 
-> 64 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 65 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
 ## Network & Communication (8)
 
@@ -68,7 +68,7 @@ order: 0
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
 
-## Account & Payment (7)
+## Account & Payment (8)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -79,6 +79,7 @@ order: 0
 | C40 | [capability.payment](/docs/capability/payment) | `usePayment()` | `Result<PayResult>` | wx.requestPayment |
 | C41 | [capability.login](/docs/capability/login) | `useLogin()` | `Result<Token>` | wx.login |
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | — |
+| C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
 ## Notifications & Sharing (8)
 

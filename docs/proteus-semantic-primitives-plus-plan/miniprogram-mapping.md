@@ -222,24 +222,19 @@
 
 ## 5. 自动化校验
 
-`scripts/coverage-audit.ts`：
+> ★**2026-09-12 落地**（此前本节为**未兑现的规划**——所引 `scripts/coverage-audit.ts` + `miniprogram-official-spec.json` 一直不存在，导致覆盖度门禁由手写矩阵自证同义反复）。现真实实现如下：
 
-```ts
-import miniprogramSpec from './miniprogram-official-spec.json' // 官方 API/组件清单
-import { L1_PRIMITIVES } from './primitives-registry'
+| 环节 | 实现 |
+|---|---|
+| 官方清单快照 | `scripts/gen-mp-spec.mjs` → `docs/generated/miniprogram-official-spec.json`（**组件 84** 来自[官方组件索引页](https://developers.weixin.qq.com/miniprogram/dev/component/)，**API 298** 来自官方 typings `interface Wx`）|
+| 分类器 | `packages/component-ir/src/mp-spec-coverage.ts`（五态：covered/planned/private/na/gap；规则 + 显式声明）|
+| 门禁 | `proteus audit coverage`（gap>0 或 covered<棘轮基线 → CI 红）+ `npm run check:mp-spec`（快照漂移）+ CI verify 步 |
+| 测试 | `tests/mp-spec-coverage.test.ts`（归类完整 + 棘轮 + 破坏性可失败证明）|
+| 台账 | `docs/miniprogram-coverage-ledger.md`（每项分类 + 缺口清单 + 诚实指标）|
 
-function audit() {
-  const missing: string[] = []
-  for (const api of miniprogramSpec.apis) {
-    const found = L1_PRIMITIVES.find(p => p.covers === api.name)
-    if (!found && !isPrivate(api)) missing.push(api.name)
-  }
-  // missing.length === 0 才通过
-  return { covered: miniprogramSpec.apis.length - missing.length, total: miniprogramSpec.apis.length, missing }
-}
-```
+**口径修正**：`gap=0`（官方项全部归类）≠「全实现」——真实指标是 `真·落地率 = covered/(covered+planned)`（当前 **78%**）。`private`（平台私有）/`na`（废弃/语义消灭）不计入「可落地」。
 
-**CI 门禁**：`missing.length > 0` → 构建失败，强制补齐原语或显式标记 `⬛ private`。
+**CI 门禁**：官方新增项未归类（gap>0）或 covered 回退 → 构建失败，强制归类（covered/planned/private/na 之一）。
 
 ---
 

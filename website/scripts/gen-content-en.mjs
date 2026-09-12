@@ -1815,4 +1815,12 @@ export const CAP_EN = {
     desc: 'useAd: ad handle — rewardedVideo / interstitial / banner (wx.createRewardedVideoAd/createInterstitialAd/createBannerAd; web has no ad-network standard → throws on create)',
     errors: { 'ad.unsupported': 'The ad API is missing (web has no ad-network standard API — needs a host bridge)', 'ad.failed': 'Loading or showing the ad failed' },
   },
+  privacy: {
+    desc: 'usePrivacy: privacy-agreement handle — query authorization state / open the privacy contract page / require authorization / on-need-authorization (wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize/onNeedPrivacyAuthorization; web has no WeChat-privacy standard → Err)',
+    errors: {
+      'privacy.unsupported': 'The privacy API is missing (web has no WeChat privacy standard — build your own cookie consent in the host)',
+      'privacy.failed': 'Querying the privacy state or opening the contract page failed',
+      'privacy.denied': 'The user denied the privacy authorization',
+    },
+  },
 }

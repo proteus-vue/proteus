@@ -94,7 +94,7 @@ The platform API and the semantic primitives are two faces of the same goal:
 | Facet | Form | Coverage |
 |---|---|---|
 | Imperative (this page) | method calls over the four domains of `createPlatformAPI()` | the high-frequency domains: request / storage / router / ui |
-| Declarative (G-31/32) | `p-*` semantic components + the 153-primitive SSOT + 64 Capability Hooks | layout / UI / device / system / communication / extension |
+| Declarative (G-31/32) | `p-*` semantic components + the 154-primitive SSOT + 65 Capability Hooks | layout / UI / device / system / communication / extension |
 
 The dividing rule: what carries clear UI semantics goes through `p-*` components (compiled into `ComponentIR` and mapped by the render backend); imperative actions go through PlatformAPI / `useXxx` Hooks. Every hook on the capability layer (G-32: `useLocation` / `useNetwork` / `useBattery`…) returns `Promise<Result<T>>` — when the platform does not support it, it returns `Err('<cap>.unsupported')` instead of throwing, in line with the degradation semantics of the [Capability system](/docs/18-capability-system). Platform-exclusive capabilities (Bluetooth, biometric authentication, etc.) are **not stuffed into PlatformAPI**; they are declared through the capability system.
 
