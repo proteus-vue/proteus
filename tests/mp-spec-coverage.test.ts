@@ -48,7 +48,7 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
   it('诚实指标：真·落地率 = covered / (covered+planned)（非「已归类率」）', () => {
     const r = auditSpecCoverage(spec, MP_MAPPING_MATRIX)
     expect(r.actionable).toBe(r.covered + r.planned)
-    expect(r.landedPercent).toBe(Math.round((r.covered / r.actionable) * 100))
+    expect(r.landedPercent).toBe(Math.floor((r.covered / r.actionable) * 100)) // ★floor（永不夸大）
     // 落地率应是「真实但不等于 100」——防止有人把 planned 也算成已落地
     expect(r.landedPercent).toBeLessThan(100)
     expect(r.landedPercent).toBeGreaterThan(50)

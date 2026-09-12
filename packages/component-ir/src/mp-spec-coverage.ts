@@ -286,6 +286,8 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   'nested-scroll-body': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'nested-scroll-header': { status: 'covered', proteus: 'layout.scroll（嵌套滚动）' },
   'draggable-sheet': { status: 'covered', proteus: 'shell.page-container（半屏可拖）' },
+  // aria-component 是 ARIA 属性文档页（非组件标签）——ARIA 属性两端原生支持（aria-label/aria-role）
+  'aria-component': { status: 'na', proteus: '—（ARIA 属性文档页；aria-* 两端原生支持，组件已带 ariaLabel）' },
   // Skyline 同层渲染后冗余（官方：建议用 view 替代 cover-view/cover-image）
   'cover-view': { status: 'na', proteus: '—（同层渲染后冗余，用 layout.box 替代）' },
   'cover-image': { status: 'na', proteus: '—（同层渲染后冗余，用 ui.image 替代）' },
@@ -365,7 +367,7 @@ export function auditSpecCoverage(
     accounted: total - counts.gap,
     classifiedPercent: total === 0 ? 0 : Math.round(((total - counts.gap) / total) * 100),
     actionable,
-    landedPercent: actionable === 0 ? 100 : Math.round((counts.covered / actionable) * 100),
+    landedPercent: actionable === 0 ? 100 : Math.floor((counts.covered / actionable) * 100), // ★floor（永不夸大——99.6% 显示 99 而非 100）
     gaps,
     plannedItems,
   }
@@ -376,6 +378,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 251, // 2026-09-12 基线（spec 382 项：covered 251 / planned 8 / private 106 / na 17 / gap 0）——含组件批 H
+  coveredMin: 255, // 2026-09-12 基线（spec 382 项：covered 255 / planned 1（share-element，需宿主分享流）/ private 106 / na 20 / gap 0）——含 C65-C81 + 组件批 H/I/J
   gapMax: 0, // 全部官方项必须归类
 }

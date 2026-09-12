@@ -2,8 +2,8 @@
 // ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——唯一事实源（SSOT）
 //   ★2026-09-11：+C51 useUpdate（小程序热更新）→ 137；checkPrimitiveCatalog 长度改为「与常量对齐」动态校验
 //   ★2026-09-11 C2 颗粒度对齐：+ui.progress/ +ui.label / +shell.page-container（对齐小程序同名组件）→ 140
-//   ★2026-09-12 权威标尺批 H：+ui.selection / +shell.keyboard-accessory → 172；批 I：+ui.camera → 173
-//   6 大类：layout(14) / ui(25) / shell(15) / gesture(10) / capability(81) / engineering(28)
+//   ★2026-09-12 权威标尺批 H：+ui.selection / +shell.keyboard-accessory → 172；批 I：+ui.camera → 173；批 J：+shell.webview/+shell.ad/+ui.map → 176
+//   6 大类：layout(14) / ui(26) / shell(17) / gesture(10) / capability(81) / engineering(28)
 //   ★#405 语义登记批：+8 planned（layout.aspect/zone + ui.loading/scale/skeleton + shell.mask/popup/toolbar）
 //     + engineering.error-boundary 组件形态补登（E8 加 tag，总数不变）——src/components 59 组件全部入图
 //   ★闭环 IR 设计：本清单是「语义全集」的唯一来源——
@@ -88,6 +88,8 @@ const UI: PrimitiveDef[] = [
   { id: 'U24', kind: 'ui', semantic: 'ui.selection', tag: 'p-selection', props: ['disableContextMenu', 'selectable'], mpEquiv: '<selection>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 I：相机
   { id: 'U25', kind: 'ui', semantic: 'ui.camera', tag: 'p-camera', props: ['devicePosition', 'flash', 'aspectRatio'], mpEquiv: '<camera>', tier: 'L1', status: 'implemented' },
+  // ★权威标尺批 J：地图
+  { id: 'U26', kind: 'ui', semantic: 'ui.map', tag: 'p-map', props: ['latitude', 'longitude', 'scale', 'markers'], mpEquiv: '<map>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */
@@ -110,6 +112,9 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S14', kind: 'shell', semantic: 'shell.page-container', tag: 'p-page-container', props: ['show', 'position', 'overlay', 'closeOnClickOverlay'], mpEquiv: '<page-container>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 H：键盘上方工具栏
   { id: 'S15', kind: 'shell', semantic: 'shell.keyboard-accessory', tag: 'p-keyboard-accessory', props: ['visible', 'maxHeight', 'background'], mpEquiv: '<keyboard-accessory>', tier: 'L1', status: 'implemented' },
+  // ★权威标尺批 J：内嵌网页 / 广告位
+  { id: 'S16', kind: 'shell', semantic: 'shell.webview', tag: 'p-webview', props: ['src', 'height', 'sandbox'], mpEquiv: '<web-view>', tier: 'L1', status: 'implemented' },
+  { id: 'S17', kind: 'shell', semantic: 'shell.ad', tag: 'p-ad', props: ['unitId', 'adIntervals', 'adType', 'height'], mpEquiv: '<ad>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §6 ④ 交互/手势原语 Gesture（10）——手势是声明式约束（v-gesture:* 指令 + 组件 + Hook） */

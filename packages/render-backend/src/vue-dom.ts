@@ -95,6 +95,9 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'ui.selection': { tag: 'div', className: 'proteus-selection' },
   'shell.keyboard-accessory': { tag: 'div', className: 'proteus-keyboard-accessory' },
   'ui.camera': { tag: 'video', className: 'proteus-camera' },
+  'shell.webview': { tag: 'div', className: 'proteus-webview' },
+  'shell.ad': { tag: 'div', className: 'proteus-ad' },
+  'ui.map': { tag: 'div', className: 'proteus-map' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

@@ -89,6 +89,9 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'ui.selection': 'selection',
   'shell.keyboard-accessory': 'keyboard-accessory',
   'ui.camera': 'camera',
+  'shell.webview': 'webview',
+  'shell.ad': 'ad',
+  'ui.map': 'map',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

@@ -167,3 +167,36 @@ describe('p-camera（相机——★批 I）', () => {
     expect(js).toContain("this.triggerEvent('initdone'")
   })
 })
+
+describe('p-ad（广告位——★批 J）', () => {
+  it('MP 产物：<ad wx:if> + Web 占位 <view wx:else>', () => {
+    const { wxml, js } = compileComponent('p-ad')
+    expect(wxml).toContain('<ad wx:if="{{isMp}}"')
+    expect(wxml).toContain('unit-id="{{unitId}}"')
+    expect(wxml).toContain('<view wx:else')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('unitId: {')
+  })
+})
+
+describe('p-webview（内嵌网页——★批 J）', () => {
+  it('MP 产物：<web-view wx:if> + Web 容器 <view wx:else>（无 iframe 泄漏）', () => {
+    const { wxml } = compileComponent('p-webview')
+    expect(wxml).toContain('<web-view wx:if="{{isMp}}"')
+    expect(wxml).toContain('src="{{src}}"')
+    expect(wxml).toContain('<view wx:else')
+    expect(wxml).not.toContain('<iframe') // 无 iframe 元素（注释提及不算）
+  })
+})
+
+describe('p-map（地图——★批 J）', () => {
+  it('MP 产物：<map wx:if> + 标记绑定 + Web 宿主槽位', () => {
+    const { wxml, js } = compileComponent('p-map')
+    expect(wxml).toContain('<map wx:if="{{isMp}}"')
+    expect(wxml).toContain('latitude="{{latitude}}"')
+    expect(wxml).toContain('markers="{{markers}}"')
+    expect(wxml).toContain('bind:markertap="onMarkerTap"')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('latitude: {')
+  })
+})
