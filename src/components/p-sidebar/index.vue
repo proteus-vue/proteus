@@ -29,6 +29,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { CSSProperties } from 'vue'
 import { createContainerQuery, createDeviceEnv, shouldReduceMotion } from '@proteus-vue/fluid'
+import { shouldAutoCloseOnClick } from '../runtime/nav-close'
 import type { FluidContext, DeviceEnv } from '@proteus-vue/fluid'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
@@ -103,8 +104,13 @@ function onNavKeydown(e: KeyboardEvent): void {
 }
 
 /** ★#467 移动端体验（VitePress 同款）：折叠展开态下点击导航项后自动收起——导航即离开，回到正文沉浸阅读 */
-function onNavClick(): void {
-  if (mode.value === 'collapsed-open') userExpanded.value = false
+function onNavClick(e: Event): void {
+  if (mode.value !== 'collapsed-open') return
+  // ★#467 语义收窄（2026-09-12）：仅**真实导航项（链接）**触发自动收起——
+  //   原实现对侧栏内任意点击都收起，误伤「折叠/展开一级域」等交互控件（点开一级菜单被顺手关掉）。
+  //   规则：点击落在 <a href> 内（router-link 渲染为 a）才收起；自定义可导航项可标 data-sidebar-close。
+  if (!shouldAutoCloseOnClick(e.target)) return
+  userExpanded.value = false
 }
 
 // ★三态根类（页面按状态适配呈现的官方信号）：p-sidebar-side-rail / p-sidebar-collapsed / p-sidebar-collapsed-open
