@@ -23,6 +23,8 @@ const sectionKey = computed(() => {
 const section = computed(() => sections.find((s) => s.key === sectionKey.value) ?? sections[0]!)
 const slug = computed(() => (route.params.slug as string) ?? '')
 const current = computed(() => findDoc(section.value.base, slug.value) ?? section.value.items[0])
+/** ★稳健活动 slug：以实际展示文档为准（URL 未命中 → 回退首项）——高亮/前后页/侧栏折叠三处同源 */
+const activeSlug = computed(() => current.value?.slug ?? slug.value)
 const isEn = computed(() => locale.value === 'en')
 // ★#468 内容层：英文变体优先（变体含 title/html/toc），无变体 → 中文 + 提示条
 const variant = computed(() => enModule(section.value.base, slug.value))
@@ -89,13 +91,43 @@ if (typeof window !== 'undefined') window.addEventListener('scroll', onScrollSpy
 
 const ends = computed(() => current.value?.doc.ends ?? undefined)
 const noEn = computed(() => isEn.value && !variant.value)
-const idx = computed(() => section.value.items.findIndex((g) => g.slug === slug.value))
+const idx = computed(() => section.value.items.findIndex((g) => g.slug === activeSlug.value))
 const prev = computed(() => (idx.value > 0 ? section.value.items[idx.value - 1] : undefined))
 const next = computed(() => (idx.value >= 0 && idx.value < section.value.items.length - 1 ? section.value.items[idx.value + 1] : undefined))
 /** sidebar 条目标题：英文态下翻译过的页用 en title，未翻译保持中文（诚实混合） */
 function itemTitle(slugOf: string, zhTitle: string): string {
   return isEn.value ? (enTitleFor(section.value.base, slugOf) ?? zhTitle) : zhTitle
 }
+
+// ★侧栏折叠（2026-09-12）：一级域手风琴——默认仅展开「当前页所在域」，其余折叠（侧栏不再平铺过长）。
+//   交互：点域标题切换；导航到某页时自动展开其所属域（手动折叠的当前域也会被导航重新展开，符合预期）。
+const expandedGroups = ref(new Set<string>())
+/** 当前域：以实际展示文档（activeSlug）推导 */
+const activeGroupName = computed(() => section.value.groups.find((grp) => grp.items.some((g) => g.slug === activeSlug.value))?.name ?? '')
+function isGroupOpen(name: string): boolean {
+  return expandedGroups.value.has(name)
+}
+function toggleGroup(name: string): void {
+  const set = new Set(expandedGroups.value)
+  if (set.has(name)) set.delete(name)
+  else set.add(name)
+  expandedGroups.value = set
+}
+/** 切区/切页：确保当前域展开（切区时重置为「仅当前域」，避免跨区残留展开态） */
+watch(
+  [sectionKey, slug],
+  ([key], [oldKey]) => {
+    const active = activeGroupName.value
+    if (key !== oldKey) {
+      expandedGroups.value = active ? new Set([active]) : new Set()
+    } else if (active) {
+      const set = new Set(expandedGroups.value)
+      set.add(active)
+      expandedGroups.value = set
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -119,16 +151,26 @@ function itemTitle(slugOf: string, zhTitle: string): string {
     <template #nav>
       <p-view class="sidebar-card">
         <span class="eyebrow">{{ t('toc.sidebar', { name: sectionName(section.key) }) }}</span>
-        <!-- 当前区分组导航 -->
-        <p-view v-for="grp in section.groups" :key="grp.name" class="toc-group">
-          <p-text class="toc-group-name">{{ groupName(grp.name) }}</p-text>
-          <p-view class="toc-nav">
+        <!-- 当前区分组导航（★一级域手风琴：点标题折叠/展开，默认仅展开当前域） -->
+        <p-view v-for="grp in section.groups" :key="grp.name" class="toc-group" :class="{ 'toc-group--collapsed': !isGroupOpen(grp.name) }">
+          <button
+            type="button"
+            class="toc-group-name"
+            :class="{ 'toc-group-name--open': isGroupOpen(grp.name) }"
+            :aria-expanded="isGroupOpen(grp.name)"
+            @click="toggleGroup(grp.name)"
+          >
+            <span class="toc-chevron" aria-hidden="true" />
+            <span class="toc-group-label">{{ groupName(grp.name) }}</span>
+            <span class="toc-group-count">{{ grp.items.length }}</span>
+          </button>
+          <p-view v-show="isGroupOpen(grp.name)" class="toc-nav">
             <router-link
               v-for="g in grp.items"
               :key="g.slug"
               :to="`${section.base}/${g.slug}`"
               class="toc-link"
-              :class="{ active: g.slug === slug }"
+              :class="{ active: g.slug === activeSlug }"
             >
               <p-text class="toc-text">{{ itemTitle(g.slug, g.title) }}</p-text>
             </router-link>
@@ -261,15 +303,50 @@ function itemTitle(slugOf: string, zhTitle: string): string {
   overflow-y: auto;
 }
 .toc-group { display: flex; flex-direction: column; gap: 2px; }
-.toc-group + .toc-group { margin-top: 12px; }
+.toc-group + .toc-group { margin-top: 6px; }
+/* ★一级域标题：可点击折叠按钮（reset 原生 button 样式，视觉沿用原品牌色小标题） */
 .toc-group-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 10px;
+  margin: 0 -10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--radius-sm);
   color: var(--brand);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  margin-bottom: 4px;
+  font-family: inherit;
+  transition: background 0.15s;
 }
-.toc-nav { display: flex; flex-direction: column; gap: 2px; }
+.toc-group-name:hover { background: var(--panel2); }
+.toc-group-label { flex: 1 1 auto; }
+/* 折叠态域计数（弱化——仅提示该域条目数） */
+.toc-group-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+/* 折叠指示：纯 CSS 三角（展开朝下、折叠朝右——不依赖图标集） */
+.toc-chevron {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.18s ease;
+  transform: rotate(90deg); /* 展开：朝下 */
+}
+.toc-group--collapsed .toc-chevron { transform: rotate(0deg); }
+.toc-nav { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .toc-link {
   display: block;
   position: relative;
