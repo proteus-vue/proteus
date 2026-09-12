@@ -10,6 +10,12 @@ import { generateWebRoutes, generateMpConfig } from '../packages/router/src/code
 
 const FIX = fileURLToPath(new URL('./fixtures/router-plan', import.meta.url))
 
+/** ★快照可移植（2026-09-12）：codegen 的 lazy import 含**绝对路径**（componentPath，运行期正确），
+ *  但写进快照会把本机路径固化 → 换目录/CI（不同 checkout 路径）必挂。
+ *  快照前把 fixtures 绝对前缀替换为稳定占位 `<FIXTURES>`（仅快照文本归一，不改 codegen 行为）。 */
+const portable = (code: string): string =>
+  code.split(FIX).join('<FIXTURES>').replace(/\\\\/g, '/')
+
 describe('L2 集成：scan → tree → codegen 全链路', () => {
   const blocks = scanRoutes(path.join(FIX, 'pages'))
   const tree = buildRouteTree(blocks, {
@@ -20,7 +26,7 @@ describe('L2 集成：scan → tree → codegen 全链路', () => {
   it('scan 提取 + tree 嵌套 + codegen 三端产物快照（可审计契约）', () => {
     // Web：vue-router 形态（嵌套 children + lazy import）
     const web = generateWebRoutes(tree)
-    expect(web).toMatchFileSnapshot('./__snapshots__/router-codegen.web.txt')
+    expect(portable(web)).toMatchFileSnapshot('./__snapshots__/router-codegen.web.txt')
     // MP：平铺 pages（meta.__parent 降级 + transition 映射）
     const mp = generateMpConfig(tree, {
       color: '#999',
