@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 64 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 65 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（8）
 
@@ -68,7 +68,7 @@ order: 0
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
 
-## 账号与支付（7）
+## 账号与支付（8）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -79,6 +79,7 @@ order: 0
 | C40 | [capability.payment](/docs/capability/payment) | `usePayment()` | `Result<PayResult>` | wx.requestPayment |
 | C41 | [capability.login](/docs/capability/login) | `useLogin()` | `Result<Token>` | wx.login |
 | C46 | [capability.in-app-purchase](/docs/capability/in-app-purchase) | `useInAppPurchase()` | `Result<Receipt>` | wx.requestPayment 扩展 |
+| C65 | [capability.privacy](/docs/capability/privacy) | `usePrivacy()` | `PrivacyAPI` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize |
 
 ## 通知与分享（8）
 
