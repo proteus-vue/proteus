@@ -794,6 +794,7 @@
 
 ## 验证状态（最近一次）
 
+- ✅ **官网已上线（2026-09-12，权威标尺批 E）**：4 commit 已 push origin/main（063eaaa4→1ff05f51）；★`[deploy]` 触发 pages.yml **success**（run @ 1ff05f51）；线上实测 https://proteus-vue.cn/ HTTP 200，bundle `main-CPWIpxH0.js` 命中 useSocket/useMediaProcessing/159/70/socket.unsupported/media-processing.unsupported。
 - ✅ **当前基线（2026-09-12，权威标尺 + 批 E 网络底层/媒体高级）**：全量 **2993/2994 测试绿**（260 文件；唯一 fail = `vue-compat-coverage` 的 `module.exports`——**干净 HEAD 复现**，Node 23.5 CJS interop 既有基线）· **官方能力覆盖门禁**（spec 382 项：已落地 **216** / 规划 43 / 私有 106 / 不适用 17 / 未归类 0；真·落地率 **83%**）· check:mp-spec ✓ · audit:coverage（spec 归类完整 + 棘轮 + 引用/闭环）· check:content（components 66 / capabilities 70）· check:en-drift · check:pkg · check:deps · check:alltarget · check:script-compile · build:mp ✓（1094KB < 1200）/web/website ✓。
 - ✅ **官网已上线（2026-09-12，权威标尺批 D）**：4 commit 已 push origin/main（e0c1408e→ea49d9eb）；★`[deploy]` 触发 pages.yml **success**（run @ ea49d9eb）；线上实测 https://proteus-vue.cn/ HTTP 200，bundle `main-CIh7vP-w.js` 命中 usePerformance/usePreload/useImageEdit/157/68/preload.unsupported/image-edit.unsupported。
 - ✅ **当前基线（2026-09-12，权威标尺 + 批 D 性能/预加载/图像编辑）**：全量 **2986/2987 测试绿**（260 文件；唯一 fail = `vue-compat-coverage` 的 `module.exports`——**干净 HEAD 复现**，Node 23.5 CJS interop 既有基线）· **官方能力覆盖门禁**（spec 382 项：已落地 **211** / 规划 48 / 私有 106 / 不适用 17 / 未归类 0；真·落地率 **81%**）· check:mp-spec ✓ · audit:coverage（spec 归类完整 + 棘轮 + 引用/闭环）· check:content（components 66 / capabilities 68）· check:en-drift · check:pkg · check:deps · check:alltarget · check:script-compile · build:mp ✓（1087KB < 1200）/web/website ✓。
