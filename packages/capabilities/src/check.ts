@@ -77,6 +77,16 @@ const BUSINESS_EXCLUDE = ['capabilities', 'adapters', 'platforms', 'shims', 'nod
 /** 平台 API 裸调用（wx.setStorageSync( / window.location = 等；非 declare 类型声明） */
 const PLATFORM_API_RE = /\b(?:wx|window)\.[A-Za-z_$][\w$]*\s*(\(|=|;|\.)/g
 
+/**
+ * ★文件级豁免（2026-09-12，对齐 api-check 同款约定）：首部注释含 `@proteus-api-check-ignore`。
+ *   用途：刻意演示旧平台 API（wx / window）的**兼容层演示页**（examples/pages/mp-semantics-demo 等）——
+ *   这些页面展示 Layer 1 兼容语义本身，写平台 API 即为演示目的，非业务违规。
+ *   与 `@proteus-api-check-ignore`（CMP007 api-check）共用标记，一处登记两门禁同认（避免双标记）。
+ */
+function isPlatformExempt(src: string): boolean {
+  return src.slice(0, 400).includes('@proteus-api-check-ignore')
+}
+
 export interface PlatformViolation {
   file: string
   match: string
@@ -101,6 +111,8 @@ export function scanPlatformViolations(root: string): PlatformViolation[] {
       if (!/\.(vue|ts)$/.test(entry.name)) continue
       const rel = path.relative(root, full).replace(/\\/g, '/')
       const src = fs.readFileSync(full, 'utf-8')
+      // ★文件级豁免：刻意演示旧平台的兼容层演示页（@proteus-api-check-ignore，同 api-check 约定）
+      if (isPlatformExempt(src)) continue
       const script = entry.name.endsWith('.vue') ? (src.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] ?? '') : src
       const isPlatformFile = PLATFORM_FILE_RE.test(rel)
       if (isPlatformFile) {

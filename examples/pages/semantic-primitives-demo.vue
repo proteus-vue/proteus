@@ -1,4 +1,6 @@
 <!-- examples/pages/semantic-primitives-demo.vue —— G-32 完整语义原语演示（★G-32 B2：布局 12 + UI 18 + Shell 落地）
+     @proteus-api-check-ignore：本演示页刻意直调平台 API（wx.pageScrollTo 触发编译器滚动桥接、
+     window.resize 演示 p-master-detail 实时 reflow）——B5 §6 门禁豁免（同 mp-semantics-demo 约定）
      p-前缀语义组件 Web 端演示：布局（inline/spacer/divider/scroll/masonry/virtual-list）+
      UI（heading/icon/switch/slider）+ Shell（nav/tabbar/drawer） —— Playground 可用 -->
 <route>

@@ -51,6 +51,17 @@ describe('scanPlatformViolations（§6 禁止清单静态检查）', () => {
     const violations = scanPlatformViolations(TMP)
     expect(violations.some((v) => v.file.includes('shims'))).toBe(false)
   })
+
+  it('★文件级豁免：首部含 @proteus-api-check-ignore 的兼容层演示页 → 不违规（同 api-check 约定）', () => {
+    const ex = path.join(TMP, 'exempt')
+    fs.mkdirSync(ex, { recursive: true })
+    write('exempt/pages/demo.vue', '<!-- @proteus-api-check-ignore：刻意演示旧 wx API -->\n<script setup lang="ts">\nwx.showToast({ title: "x" })\nwindow.setTimeout(() => {}, 0)\n</script>')
+    // 同目录另有一处未豁免 → 仍应被抓（豁免是文件级，不影响其它文件）
+    write('exempt/pages/real.vue', '<script setup lang="ts">\nwx.showToast({ title: "y" })\n</script>')
+    const violations = scanPlatformViolations(ex)
+    expect(violations.some((v) => v.file.includes('demo'))).toBe(false)
+    expect(violations.some((v) => v.file.includes('real'))).toBe(true)
+  })
 })
 
 describe('runCapabilityCheck（CLI 输出 + 退出码语义）', () => {

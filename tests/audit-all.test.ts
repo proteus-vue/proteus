@@ -1,7 +1,7 @@
 // tests/audit-all.test.ts
 // ★test-framework B6 + M10 + #450：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
 // 八域聚合（route/module/config/i18n/capabilities/components/d2/devtools-budget）+ CI 耗时预算 <12s
-// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 src/components 跳过；capabilities 保持 B5 真实门禁；
+// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 src/components 跳过；capabilities 为 B5 真实门禁（演示页 @proteus-api-check-ignore 豁免）；
 //   d2 为 opt-in（proteus.config 声明 audit 才跑，未声明跳过）；devtools-budget 性能烟测
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
@@ -37,7 +37,7 @@ function writeProject(dir: string, auditTs: string | null, pages: Record<string,
 }
 
 describe('proteus audit all（test-framework B6 全量门禁）', () => {
-  it('examples：十域齐全 + 预算内 + 核心域绿（capabilities 如实报 demo 页 B5 违规；fluid 抓 FLD 布局违规；d2 未声明 audit 跳过）', async () => {
+  it('examples：十域齐全 + 预算内 + 核心域绿（capabilities 演示页豁免后零违规；fluid 抓 FLD 布局违规；d2 未声明 audit 跳过）', async () => {
     const result = await runAuditAll('examples')
     expect(result.domains.map((d) => d.name).sort()).toEqual(['api-check', 'capabilities', 'components', 'config', 'd2', 'devtools-budget', 'fluid', 'i18n', 'module', 'route'])
     expect(result.totalMs).toBeLessThan(AUDIT_ALL_BUDGET_MS)
@@ -55,8 +55,9 @@ describe('proteus audit all（test-framework B6 全量门禁）', () => {
     const d2 = result.domains.find((d) => d.name === 'd2')
     expect(d2?.skipped).toBe(true)
     expect(d2?.detail).toContain('未声明 audit')
-    // capabilities 如实报违规（mp-semantics-demo 演示页直写 wx.*，B5 §6 禁止清单——audit all 比 check 更严的门禁）
-    expect(result.domains.find((d) => d.name === 'capabilities')?.ok).toBe(false)
+    // capabilities：演示页带 @proteus-api-check-ignore 文件级豁免（刻意演示旧 wx API，同 api-check 约定）
+    // → 业务零平台 API 裸调 → 本域通过（B5 门禁与 api-check 共用豁免标记；见 packages/capabilities/src/check.ts）
+    expect(result.domains.find((d) => d.name === 'capabilities')?.ok).toBe(true)
   })
 
   it('空项目：各域跳过/零违规 → ok（独立编译模式语义）', async () => {
