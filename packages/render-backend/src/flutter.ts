@@ -98,6 +98,8 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'ui.progress': 'LinearProgressIndicator',
   'ui.label': 'Text.label',
   'shell.page-container': 'showModalBottomSheet',
+  'ui.selection': 'SelectableText',
+  'shell.keyboard-accessory': 'KeyboardAccessoryView',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

@@ -515,6 +515,25 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'showModalBottomSheet',
     headless: 'page-container',
   },
+  // ★权威标尺批 H：局部文本选区 / 键盘上方工具栏（对齐小程序 <selection>/<keyboard-accessory>）
+  'ui.selection': {
+    'vue-dom': 'div.proteus-selection',
+    'native-ios': 'UITextView.selection',
+    'native-android': 'TextView.selection',
+    'native-harmony': 'Text.selection',
+    skyline: 'selection', // 微信原生 <selection>
+    flutter: 'SelectableText',
+    headless: 'selection',
+  },
+  'shell.keyboard-accessory': {
+    'vue-dom': 'div.proteus-keyboard-accessory',
+    'native-ios': 'UIInputView',
+    'native-android': 'InputMethodService.accessory',
+    'native-harmony': 'KeyboardAccessory',
+    skyline: 'keyboard-accessory', // 微信原生 <keyboard-accessory>
+    flutter: 'KeyboardAccessoryView',
+    headless: 'keyboard-accessory',
+  },
 }
 
 /**

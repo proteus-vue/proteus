@@ -86,6 +86,8 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'ui.progress': 'progress',
   'ui.label': 'label',
   'shell.page-container': 'page-container',
+  'ui.selection': 'selection',
+  'shell.keyboard-accessory': 'keyboard-accessory',
 }
 
 const HEADLESS_CAPABILITIES: BackendCapabilities = {

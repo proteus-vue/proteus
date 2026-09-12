@@ -84,6 +84,9 @@ const MP_COMPONENTS: MpMatrixItem[] = [
   { mp: '<double-tap-gesture>', proteus: 'gesture.draggable（p-draggable 手势识别器）', status: 'ok', group: 'component' },
   { mp: '<functional-page-navigator>', proteus: '—（微信插件页专属，非目标）', status: 'private', group: 'component' },
   { mp: '<open-container>', proteus: '—（微信开屏容器，私有）', status: 'private', group: 'component' },
+  // ★权威标尺批 H：局部文本选区 / 键盘上方工具栏（全端真实落地）
+  { mp: '<selection>', proteus: 'ui.selection（p-selection）', status: 'ok', group: 'component' },
+  { mp: '<keyboard-accessory>', proteus: 'shell.keyboard-accessory（p-keyboard-accessory）', status: 'ok', group: 'component' },
 ]
 
 /** 小程序 API 类别 → Proteus（miniprogram-mapping.md §3，按类别聚合——本行代表该类 API 集合） */

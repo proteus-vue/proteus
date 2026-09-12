@@ -68,6 +68,8 @@ export const SEMANTIC_ENUM = [
   // ★能力颗粒度对齐 C2：进度条 / 表单标签（对齐小程序 <progress> / <label>）
   'ui.progress',
   'ui.label',
+  // ★权威标尺批 H：局部文本选区（对齐小程序 <selection>）
+  'ui.selection',
   // —— 容器/导航原语（G-32 ③ Shell 10）——
   'shell.page',
   'shell.nav',
@@ -84,6 +86,8 @@ export const SEMANTIC_ENUM = [
   'shell.toolbar',
   // ★能力颗粒度对齐 C2：页面容器（对齐小程序 <page-container>）
   'shell.page-container',
+  // ★权威标尺批 H：键盘上方工具栏（对齐小程序 <keyboard-accessory>）
+  'shell.keyboard-accessory',
   // —— 交互/手势原语（G-32 ④ Gesture——组件形态 2 个；v-gesture: 指令归绑定层不产生 C-IR 节点）——
   'gesture.draggable',
   'gesture.scrollable',
@@ -196,4 +200,7 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-progress': 'ui.progress',
   'p-label': 'ui.label',
   'p-page-container': 'shell.page-container',
+  // ★权威标尺批 H：选区 / 键盘工具栏
+  'p-selection': 'ui.selection',
+  'p-keyboard-accessory': 'shell.keyboard-accessory',
 }
