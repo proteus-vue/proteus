@@ -141,6 +141,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.page-container': 'UIPresentationController',
     'ui.selection': 'UITextView.selection',
     'shell.keyboard-accessory': 'UIInputView',
+    'ui.camera': 'AVCaptureVideoPreviewLayer',
   },
   android: {
     'layout.box': 'FrameLayout',
@@ -205,6 +206,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.page-container': 'BottomSheetDialog',
     'ui.selection': 'TextView.selection',
     'shell.keyboard-accessory': 'InputMethodService.accessory',
+    'ui.camera': 'CameraX.PreviewView',
   },
   harmony: {
     'layout.box': 'Stack',
@@ -269,6 +271,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'shell.page-container': 'bindSheet',
     'ui.selection': 'Text.selection',
     'shell.keyboard-accessory': 'KeyboardAccessory',
+    'ui.camera': 'XComponent.camera',
   },
 }
 

@@ -100,6 +100,7 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'shell.page-container': 'showModalBottomSheet',
   'ui.selection': 'SelectableText',
   'shell.keyboard-accessory': 'KeyboardAccessoryView',
+  'ui.camera': 'CameraPreview',
 }
 
 /** 语义标签 → Flutter widget（未映射标签保留原样——自定义 widget 透传） */

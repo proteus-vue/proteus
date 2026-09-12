@@ -94,6 +94,7 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'shell.page-container': { tag: 'div', className: 'proteus-page-container' },
   'ui.selection': { tag: 'div', className: 'proteus-selection' },
   'shell.keyboard-accessory': { tag: 'div', className: 'proteus-keyboard-accessory' },
+  'ui.camera': { tag: 'video', className: 'proteus-camera' },
 }
 
 export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {

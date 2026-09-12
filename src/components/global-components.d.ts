@@ -49,6 +49,9 @@ declare module 'vue' {
     'p-selection': typeof import('./p-selection/index.vue')['default']
     PKeyboardAccessory: typeof import('./p-keyboard-accessory/index.vue')['default']
     'p-keyboard-accessory': typeof import('./p-keyboard-accessory/index.vue')['default']
+    // ★权威标尺批 I
+    PCamera: typeof import('./p-camera/index.vue')['default']
+    'p-camera': typeof import('./p-camera/index.vue')['default']
   }
 }
 

@@ -70,6 +70,8 @@ export const SEMANTIC_ENUM = [
   'ui.label',
   // ★权威标尺批 H：局部文本选区（对齐小程序 <selection>）
   'ui.selection',
+  // ★权威标尺批 I：相机（对齐小程序 <camera>）
+  'ui.camera',
   // —— 容器/导航原语（G-32 ③ Shell 10）——
   'shell.page',
   'shell.nav',
@@ -203,4 +205,6 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   // ★权威标尺批 H：选区 / 键盘工具栏
   'p-selection': 'ui.selection',
   'p-keyboard-accessory': 'shell.keyboard-accessory',
+  // ★权威标尺批 I：相机
+  'p-camera': 'ui.camera',
 }

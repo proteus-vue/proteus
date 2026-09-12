@@ -2,8 +2,8 @@
 // ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义原语清单冻结——唯一事实源（SSOT）
 //   ★2026-09-11：+C51 useUpdate（小程序热更新）→ 137；checkPrimitiveCatalog 长度改为「与常量对齐」动态校验
 //   ★2026-09-11 C2 颗粒度对齐：+ui.progress/ +ui.label / +shell.page-container（对齐小程序同名组件）→ 140
-//   ★2026-09-12 权威标尺批 H：+ui.selection / +shell.keyboard-accessory（对齐小程序 <selection>/<keyboard-accessory>）→ 172
-//   6 大类：layout(14) / ui(24) / shell(15) / gesture(10) / capability(81) / engineering(28)
+//   ★2026-09-12 权威标尺批 H：+ui.selection / +shell.keyboard-accessory → 172；批 I：+ui.camera → 173
+//   6 大类：layout(14) / ui(25) / shell(15) / gesture(10) / capability(81) / engineering(28)
 //   ★#405 语义登记批：+8 planned（layout.aspect/zone + ui.loading/scale/skeleton + shell.mask/popup/toolbar）
 //     + engineering.error-boundary 组件形态补登（E8 加 tag，总数不变）——src/components 59 组件全部入图
 //   ★闭环 IR 设计：本清单是「语义全集」的唯一来源——
@@ -86,6 +86,8 @@ const UI: PrimitiveDef[] = [
   { id: 'U23', kind: 'ui', semantic: 'ui.label', tag: 'p-label', props: ['for', 'block'], mpEquiv: '<label>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 H：局部文本选区
   { id: 'U24', kind: 'ui', semantic: 'ui.selection', tag: 'p-selection', props: ['disableContextMenu', 'selectable'], mpEquiv: '<selection>', tier: 'L1', status: 'implemented' },
+  // ★权威标尺批 I：相机
+  { id: 'U25', kind: 'ui', semantic: 'ui.camera', tag: 'p-camera', props: ['devicePosition', 'flash', 'aspectRatio'], mpEquiv: '<camera>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */

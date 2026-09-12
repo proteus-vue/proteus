@@ -94,6 +94,8 @@ import PPageContainer from './p-page-container/index.vue'
 // ★权威标尺批 H：selection/keyboard-accessory
 import PSelection from './p-selection/index.vue'
 import PKeyboardAccessory from './p-keyboard-accessory/index.vue'
+// ★权威标尺批 I：相机
+import PCamera from './p-camera/index.vue'
 
 export {
   VirtualList,
@@ -186,6 +188,7 @@ export {
   PPageContainer,
   PSelection,
   PKeyboardAccessory,
+  PCamera,
 }
 
 // ★G-22 柔性布局运行时（Web 端）：v-p-fluid 指令 + 表达式解析/clamp 生成纯函数

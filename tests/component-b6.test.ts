@@ -153,3 +153,17 @@ describe('p-keyboard-accessory（键盘上方工具栏——★批 H）', () => 
     expect(js).toContain('value: 200')
   })
 })
+
+describe('p-camera（相机——★批 I）', () => {
+  it('MP 产物：<camera wx:if> + <video wx:else> 双分支 + 原生事件', () => {
+    const { wxml, js } = compileComponent('p-camera')
+    expect(wxml).toContain('<camera wx:if="{{isMp}}"')
+    expect(wxml).toContain('device-position="{{devicePosition}}"')
+    expect(wxml).toContain('bind:initdone="onInitDone"')
+    expect(wxml).toContain('<video wx:else')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('devicePosition: {')
+    expect(js).toContain('flash: {')
+    expect(js).toContain("this.triggerEvent('initdone'")
+  })
+})
