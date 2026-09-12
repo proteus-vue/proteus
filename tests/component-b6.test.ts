@@ -200,3 +200,24 @@ describe('p-map（地图——★批 J）', () => {
     expect(js).toContain('latitude: {')
   })
 })
+
+// ★★真机 bug 回归锁（2026-09-12）：平台条件组件（camera/map/webview/ad）的 isMp 必须进 data——
+//   直调 isMpRuntime() 会被编译器归 runtimeInit 实例属性（this.isMp），模板只能读 data →
+//   wx:if="{{isMp}}" 恒 false → MP 端错走 Web 分支（真机渲染成 video/iframe 容器/空白，用户实测抓出）。
+//   修法 = computed(() => isMpRuntime())（产物 ready() 里 setData 快照）。本测试锁「isMp 进 data」，
+//   防止回归（原测试只断言 wxml 标签，漏了 js 侧 → bug 溜过）。
+describe('★平台条件组件回归锁：isMp 必须进 data（模板可读）', () => {
+  for (const tag of ['p-camera', 'p-map', 'p-webview', 'p-ad']) {
+    it(`${tag}：产物将 isMp 快照进 data（非裸实例属性）`, () => {
+      const { js, wxml } = compileComponent(tag)
+      expect(wxml, `${tag} 应含 isMp 条件`).toContain('isMp')
+      // 合法形态二选一（在整份 js 中，不切 lifecycle——setData 内 } 会截断）：
+      //   ① this.setData({ isMp: isMpRuntime(), ... })  ② this.data.isMp = isMpRuntime() 且 setData({...isMp...})
+      const viaSetData = /setData\(\{[^)]*isMp:\s*(isMpRuntime\(\)|this\.data\.isMp)/.test(js)
+      const viaDataThenSet = /this\.data\.isMp = isMpRuntime\(\)/.test(js) && /setData\(\{[^}]*isMp/.test(js)
+      expect(viaSetData || viaDataThenSet, `${tag} 未将 isMp 快照进 data`).toBe(true)
+      // 反例：裸实例属性 this.isMp = isMpRuntime()（无 data 前缀）——本 bug 的形态
+      expect(js, `${tag} 出现裸 this.isMp 赋值（应为 data/setData）`).not.toMatch(/this\.isMp\s*=\s*isMpRuntime/)
+    })
+  }
+})
