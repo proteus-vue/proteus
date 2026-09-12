@@ -1094,6 +1094,18 @@ describe('组件 class 透传（component/root-class，2026-08 真机实测）',
     expect(wxml).toContain('-data-v-')
   })
 
+  it('★scoped :class 三元：比较操作数字面量不后缀（真机 bug 2026-09-12：mode 判断值被误改导致 :class 恒不生效）', () => {
+    const { wxml } = compileVueSfc(
+      '<script setup>const mode = ref("a")</script>\n<template><view :class="mode === \'a\' ? \'on\' : \'\'">x</view></template>\n<style scoped>.on { color: red; }</style>',
+      { filename: 'pages/seg.vue' },
+    )
+    // 判断值 'a' 原样保留；类名 'on' 后缀；空串 '' 不被后缀
+    expect(wxml).toMatch(/\{\{mode === 'a' \? 'on-data-v-[a-f0-9]+' : ''\}\}/)
+    // 反向锁：判断值/空串绝不带 scope 后缀
+    expect(wxml).not.toMatch(/mode === 'a-data-v-/)
+    expect(wxml).not.toMatch(/: '-data-v-/) // 空串不被改成 '-data-v-x'
+  })
+
   it('组件模式：根节点 class 追加 {{rootClass}} + js 注入 rootClass property', () => {
     const { wxml, js } = compileVueSfc(
       '<template><view class="p-view"><slot /></view></template>\n<style scoped>.p-view { display: flex; }</style>',
