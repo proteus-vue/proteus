@@ -38,7 +38,12 @@ describe('Vue 全能力基准线：全集覆盖门禁', () => {
   it('Vue 运行时导出全集零未覆盖（矩阵 ∪ 别名 ∪ 内部集合 = 全部导出）', () => {
     const registered = new Set(VUE_COMPAT_MATRIX.map((e) => e.name))
     const aliasKeys = new Set(Object.keys(VUE_COMPAT_ALIASES))
-    const exported = Object.keys(vue).filter((k) => /^[a-zA-Z_$]/.test(k))
+    // ★2026-09-12：只收「合法标识符」键——命名导出必然是标识符，含 `.` 的键不可能是命名导出。
+    //   修 CJS interop 噪音：vitest 下 `import * as vue` 的命名空间会带 `module.exports`（Node CJS 互操作产物，
+    //   真实 ESM/浏览器构建无此键）；原 `/^[a-zA-Z_$]/` 只查首字符 → 误纳入。收严为完整标识符即自然排除。
+    const exported = Object.keys(vue).filter((k) => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k))
+    // 防测试自身退化：过滤收紧后仍须收到足量真实导出（Vue 3.5 命名导出 160+）
+    expect(exported.length, '导出枚举过少——过滤逻辑可能误吞真实导出').toBeGreaterThan(150)
     const uncovered = exported.filter((k) => !registered.has(k) && !aliasKeys.has(k) && !VUE_INTERNAL_EXPORTS.has(k))
     expect(
       uncovered,
