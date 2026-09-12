@@ -134,6 +134,12 @@ export const SPEC_COVERED: Record<string, string> = {
   requestIdleCallback: 'useIdle', cancelIdleCallback: 'useIdle',
   setWindowSize: 'useWindow',
   enableAlertBeforeUnload: 'useNavigationGuard', disableAlertBeforeUnload: 'useNavigationGuard',
+  // AR/XR / iBeacon / 局域网 / 翻译 / 海报 / 设备探测（C76-C81——批 G 补齐，2026-09-12）
+  createVKSession: 'useAR', isVKSupport: 'useAR',
+  checkDeviceSupportHevc: 'useDeviceCapability',
+  onUserTriggerTranslation: 'useTranslation', offUserTriggerTranslation: 'useTranslation',
+  onUserOffTranslation: 'useTranslation', offUserOffTranslation: 'useTranslation',
+  onGeneratePoster: 'usePoster', offGeneratePoster: 'usePoster',
 }
 
 // —— ② 显式「平台私有」（微信独占；收敛 useMiniProgram / 宿主桥） ——
@@ -202,12 +208,10 @@ export const SPEC_PLANNED: Record<string, string> = {
   // 性能（已由 C66 usePerformance 覆盖——见 SPEC_COVERED）
   // 录屏 / 画中画（已由 C71 useScreenCapture 覆盖——见 SPEC_COVERED + EVENT_BASE covered）
   // 预加载 / 分包（已由 C67 usePreload 覆盖——见 SPEC_COVERED）
-  // AR / XR
-  createVKSession: 'useAR（L2）', isVKSupport: 'useAR（L2）',
+  // AR / XR（已由 C76 useAR 覆盖——见 SPEC_COVERED）
   // 缓存管理 / 窗口 / 卸载拦截（已由 C72/C74/C75 覆盖——见 SPEC_COVERED）
   // 调度（已由 C73 useIdle 覆盖——见 SPEC_COVERED）
-  // 设备能力探测
-  checkDeviceSupportHevc: 'useDevice.supportsHevc（L2）',
+  // 设备能力探测（已由 C81 useDeviceCapability 覆盖——见 SPEC_COVERED）
 }
 
 // —— ④ 事件对 → 承接（status 区分：映射既有 Hook = covered，映射新 Hook = planned） ——
@@ -221,18 +225,19 @@ const EVENT_BASE: Record<string, MpSpecClass> = {
   onApiCategoryChange: { status: 'covered', proteus: 'useDevice' }, offApiCategoryChange: { status: 'covered', proteus: 'useDevice' },
   onWindowStateChange: { status: 'covered', proteus: 'useAppLifecycle' }, offWindowStateChange: { status: 'covered', proteus: 'useAppLifecycle' },
   onBLEPeripheralConnectionStateChanged: { status: 'covered', proteus: 'useBluetooth' }, offBLEPeripheralConnectionStateChanged: { status: 'covered', proteus: 'useBluetooth' },
-  // 需新 Hook（planned）
+  // 批 G：iBeacon / 局域网 mDNS（covered——C77/C78）
+  onBeaconServiceChange: { status: 'covered', proteus: 'useBeacon' }, offBeaconServiceChange: { status: 'covered', proteus: 'useBeacon' },
+  onBeaconUpdate: { status: 'covered', proteus: 'useBeacon' }, offBeaconUpdate: { status: 'covered', proteus: 'useBeacon' },
+  onLocalServiceFound: { status: 'covered', proteus: 'useLocalService' }, offLocalServiceFound: { status: 'covered', proteus: 'useLocalService' },
+  onLocalServiceLost: { status: 'covered', proteus: 'useLocalService' }, offLocalServiceLost: { status: 'covered', proteus: 'useLocalService' },
+  onLocalServiceResolveFail: { status: 'covered', proteus: 'useLocalService' }, offLocalServiceResolveFail: { status: 'covered', proteus: 'useLocalService' },
+  onLocalServiceDiscoveryStop: { status: 'covered', proteus: 'useLocalService' }, offLocalServiceDiscoveryStop: { status: 'covered', proteus: 'useLocalService' },
+  // 批 G：录屏（covered——C71）/ 翻译（covered——C79）/ 海报（covered——C80）
   onScreenRecordingStateChanged: { status: 'covered', proteus: 'useScreenCapture' }, offScreenRecordingStateChanged: { status: 'covered', proteus: 'useScreenCapture' },
   onUserCaptureScreen: { status: 'covered', proteus: 'useScreenCapture' }, offUserCaptureScreen: { status: 'covered', proteus: 'useScreenCapture' },
-  onUserTriggerTranslation: { status: 'planned', proteus: 'useTranslation（L2）' }, offUserTriggerTranslation: { status: 'planned', proteus: 'useTranslation（L2）' },
-  onUserOffTranslation: { status: 'planned', proteus: 'useTranslation（L2）' }, offUserOffTranslation: { status: 'planned', proteus: 'useTranslation（L2）' },
-  onGeneratePoster: { status: 'planned', proteus: 'usePoster（L2）' }, offGeneratePoster: { status: 'planned', proteus: 'usePoster（L2）' },
-  onLocalServiceFound: { status: 'planned', proteus: 'useLocalService（L2）' }, offLocalServiceFound: { status: 'planned', proteus: 'useLocalService（L2）' },
-  onLocalServiceLost: { status: 'planned', proteus: 'useLocalService（L2）' }, offLocalServiceLost: { status: 'planned', proteus: 'useLocalService（L2）' },
-  onLocalServiceResolveFail: { status: 'planned', proteus: 'useLocalService（L2）' }, offLocalServiceResolveFail: { status: 'planned', proteus: 'useLocalService（L2）' },
-  onLocalServiceDiscoveryStop: { status: 'planned', proteus: 'useLocalService（L2）' }, offLocalServiceDiscoveryStop: { status: 'planned', proteus: 'useLocalService（L2）' },
-  onBeaconServiceChange: { status: 'planned', proteus: 'useBeacon（L2）' }, offBeaconServiceChange: { status: 'planned', proteus: 'useBeacon（L2）' },
-  onBeaconUpdate: { status: 'planned', proteus: 'useBeacon（L2）' }, offBeaconUpdate: { status: 'planned', proteus: 'useBeacon（L2）' },
+  onUserTriggerTranslation: { status: 'covered', proteus: 'useTranslation' }, offUserTriggerTranslation: { status: 'covered', proteus: 'useTranslation' },
+  onUserOffTranslation: { status: 'covered', proteus: 'useTranslation' }, offUserOffTranslation: { status: 'covered', proteus: 'useTranslation' },
+  onGeneratePoster: { status: 'covered', proteus: 'usePoster' }, offGeneratePoster: { status: 'covered', proteus: 'usePoster' },
 }
 
 /** 单条分类（规则序：显式 covered → private → na → planned → 事件基名 → gap） */
@@ -368,6 +373,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 228, // 2026-09-12 基线（spec 382 项：covered 228 / planned 31 / private 106 / na 17 / gap 0）——含 C65-C75
+  coveredMin: 249, // 2026-09-12 基线（spec 382 项：covered 249 / planned 10 / private 106 / na 17 / gap 0）——含 C65-C81；planned 仅剩组件侧
   gapMax: 0, // 全部官方项必须归类
 }

@@ -18,24 +18,23 @@ import {
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 
-describe('G-32 B1 清单冻结（164 原语 SSOT）', () => {
-  it('164 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（170 原语 SSOT）', () => {
+  it('170 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
     // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1
-    //   + ★C2 颗粒度对齐：ui+2 progress/label + shell+1 page-container
-    //   + ★C3 颗粒度对齐：capability+5 album/worker/address/wifi/we-run
-    //   + ★组件实例 API 对齐：capability+8 canvas/element-query/intersection/media-query/video/audio/live-pusher/ad
+    //   + ★C2：ui+2 + shell+1 · ★C3：capability+5 · ★组件实例：capability+8
     //   + ★权威标尺缺口补齐：capability+4 privacy/performance/preload/image-edit
-    //   + ★权威标尺缺口补齐批 E：capability+2 socket/media-processing
-    //   + ★权威标尺缺口补齐批 F：capability+5 screen-capture/cache-manager/idle/window/navigation-guard）
+    //   + ★批 E：capability+2 socket/media-processing
+    //   + ★批 F：capability+5 screen-capture/cache-manager/idle/window/navigation-guard
+    //   + ★批 G：capability+6 ar/beacon/local-service/translation/poster/device-capability）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(14)
     expect(count('ui')).toBe(23)
     expect(count('shell')).toBe(14)
     expect(count('gesture')).toBe(10)
-    expect(count('capability')).toBe(75)
+    expect(count('capability')).toBe(81)
     expect(count('engineering')).toBe(28)
   })
 

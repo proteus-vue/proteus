@@ -1615,3 +1615,156 @@ describe('★权威标尺缺口补齐批 F（2026-09-12）· C71-C75 录屏/缓�
     expect(p.navigationGuard).toBe(true)
   })
 })
+
+describe('★权威标尺缺口补齐批 G（2026-09-12）· C76-C81 AR/iBeacon/局域网/翻译/海报/设备探测', () => {
+  it('useAR：createSession 状态/启停 + isSupported（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createVKSession: () => ({ state: 1, start: () => calls.push('start'), stop: () => calls.push('stop'), destroy: () => calls.push('destroy'), on: () => undefined, requestAnimationFrame: () => 1, cancelAnimationFrame: () => undefined, getVKFrame: () => ({}) }),
+      isVKSupport: (v: string) => v === 'v2',
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useAR()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const s = r.data.createSession({ version: 'v2' })
+    expect(s.state()).toBe(1)
+    await expect(s.start()).resolves.toMatchObject({ ok: true })
+    await expect(s.stop()).resolves.toMatchObject({ ok: true })
+    const sup = await r.data.isSupported('v2')
+    expect(sup.ok && sup.data).toBe(true)
+    const sup1 = await r.data.isSupported('v1')
+    expect(sup1.ok && sup1.data).toBe(false)
+    expect(calls).toEqual(['start', 'stop'])
+  })
+
+  it('web 端 useAR：createSession throw + isSupported false（诚实降级）', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useAR()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(() => r.data.createSession()).toThrow()
+    const sup = await r.data.isSupported()
+    expect(sup.ok && sup.data).toBe(false)
+  })
+
+  it('useBeacon：服务状态 + 设备更新（wx 桥归一）', () => {
+    let svcCb: ((res: { available: boolean; discovering: boolean }) => void) | undefined
+    let updCb: ((res: { beacons: Array<{ uuid: string; major: number; minor: number; accuracy: number; rssi: number; proximity: 1 }> }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onBeaconServiceChange: (cb: typeof svcCb) => { svcCb = cb },
+      onBeaconUpdate: (cb: typeof updCb) => { updCb = cb },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useBeacon()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let avail: boolean | undefined
+    r.data.onServiceChange((res) => { avail = res.available })
+    svcCb!({ available: true, discovering: false })
+    expect(avail).toBe(true)
+    let uuid: string | undefined
+    r.data.onUpdate((res) => { uuid = res.beacons[0].uuid })
+    updCb!({ beacons: [{ uuid: 'abc', major: 1, minor: 2, accuracy: 0.5, rssi: -60, proximity: 1 }] })
+    expect(uuid).toBe('abc')
+  })
+
+  it('useLocalService：found/lost/发现停止（wx 桥归一）', () => {
+    let foundCb: ((res: { serviceName: string; serviceType: string; ip: string; port: number }) => void) | undefined
+    let stopCb: (() => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onLocalServiceFound: (cb: typeof foundCb) => { foundCb = cb },
+      onLocalServiceLost: () => undefined,
+      onLocalServiceResolveFail: () => undefined,
+      onLocalServiceDiscoveryStop: (cb: typeof stopCb) => { stopCb = cb },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useLocalService()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let name: string | undefined
+    r.data.onFound((res) => { name = res.serviceName })
+    foundCb!({ serviceName: 'printer', serviceType: '_http._tcp', ip: '192.168.1.5', port: 80 })
+    expect(name).toBe('printer')
+    let stopped = false
+    r.data.onDiscoveryStop(() => { stopped = true })
+    stopCb!()
+    expect(stopped).toBe(true)
+  })
+
+  it('useTranslation：trigger/off（wx 桥归一）', () => {
+    let trigCb: ((res: { locale: string; type: string }) => void) | undefined
+    let offCb: (() => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onUserTriggerTranslation: (cb: typeof trigCb) => { trigCb = cb },
+      onUserOffTranslation: (cb: typeof offCb) => { offCb = cb },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useTranslation()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let locale: string | undefined
+    r.data.onTrigger((res) => { locale = res.locale })
+    trigCb!({ locale: 'en', type: 'text' })
+    expect(locale).toBe('en')
+    let offed = false
+    r.data.onOff(() => { offed = true })
+    offCb!()
+    expect(offed).toBe(true)
+  })
+
+  it('usePoster：onGenerate（wx 桥归一）', () => {
+    let genCb: ((res: { src: string }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      onGeneratePoster: (cb: typeof genCb) => { genCb = cb },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).usePoster()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let src: string | undefined
+    r.data.onGenerate((res) => { src = res.src })
+    genCb!({ src: 'wxfile://poster.png' })
+    expect(src).toBe('wxfile://poster.png')
+  })
+
+  it('useDeviceCapability：HEVC 探测（wx 桥归一 + web MediaSource）', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      checkDeviceSupportHevc: (o: { success: (r: { supportHevc: boolean }) => void }) => o.success({ supportHevc: true }),
+    })
+    let r = createCapabilityHooks(createCapabilityBridge()).useDeviceCapability()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((await r.data.supportsHevc()).ok && (await r.data.supportsHevc()).ok).toBe(true)
+
+    // web
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('MediaSource', { isTypeSupported: (t: string) => t.includes('hvc1') })
+    r = createCapabilityHooks(createCapabilityBridge()).useDeviceCapability()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      const h = await r.data.supportsHevc()
+      expect(h.ok && h.data).toBe(true)
+    }
+  })
+
+  it('probe：ar/beacon/localService/translation/poster/deviceCapability 维度', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.ar).toBe(true)
+    expect(p.beacon).toBe(true)
+    expect(p.localService).toBe(true)
+    expect(p.translation).toBe(true)
+    expect(p.poster).toBe(true)
+    expect(p.deviceCapability).toBe(true)
+  })
+})
