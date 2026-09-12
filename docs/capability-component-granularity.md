@@ -40,12 +40,14 @@
 | **B** | 组件页详细化 | 逐属性详解 + 逐事件详解 + 真实示例（对齐能力页详细度；含源 JSDoc 补全） | ✅ 已提交 73dfa43c |
 | **C1** | 覆盖度门禁重做 | 幽灵行一致性校验（引用必须真实存在）+ landed/planned 两维（区分「有等价」与「真缺」） | ✅ 已提交 627af8ea |
 | **C2** | 新增缺失组件 | ✅ 批 1：**p-progress / p-label / p-page-container**（对齐小程序 `<progress>`/`<label>`/`<page-container>`——全端真实落地：schema+primitives+map+六后端渲染表+Rust 表+导出+d.ts+MP 编译测试）。⬜ 批 2：能力入口组件 p-camera/p-map/p-webview/p-ad（需原生渲染，诚实标 L2） | 🟡 批 1 落地 |
-| **C3** | 新增缺失 API | ✅ 批 1：**C52 useAlbum** + **C53 useWorker**（修矩阵 `saveImageToPhotosAlbum→pick-photo` 语义错标）。✅ 批 2：**C54 useAddress**（wx.chooseAddress）+ **C55 useWifi**（wx.getConnectedWifi/getWifiList/connectWifi）+ **C56 useWeRun**（wx.getWeRunData）。⬜ 批 3：卡券/发票/广告/解密/AI/数据预拉取/周期性更新（需类目资质，按需驱动） | 🟡 批 1+2 落地 |
+| **C3** | 新增缺失 API | ✅ 批 1：**C52 useAlbum** + **C53 useWorker**（修矩阵 `saveImageToPhotosAlbum→pick-photo` 语义错标）。✅ 批 2：**C54 useAddress**（wx.chooseAddress）+ **C55 useWifi**（wx.getConnectedWifi/getWifiList/connectWifi）+ **C56 useWeRun**（wx.getWeRunData）。⬜ 批 3：卡券/发票/解密/AI/数据预拉取/周期性更新（需类目资质，按需驱动） | 🟡 批 1+2 落地 |
+| **C4** | 组件实例 API | ✅ **C57 useCanvas**（canvas 组件实例——CanvasContext 2D 全量 42 方法 + node(type=2d) + toTempFilePath/toDataURL + OffscreenCanvas）· **C58 useElement**（SelectorQuery——boundingClientRect/scrollOffset/fields/size/batch）· **C59 useIntersection**（IntersectionObserver——relativeTo/relativeToViewport/observe/disconnect）· **C60 useMediaQuery**（MediaQueryObserver——宽高/方向条件）· **C61 useVideo**（VideoContext——播放控制/倍速/全屏/弹幕）· **C62 useAudio**（InnerAudioContext——播放/进度/音量/循环）· **C63 useLivePusher**（LivePusherContext——推流/切换/截图/SEI）· **C64 useAd**（RewardedVideoAd/InterstitialAd/BannerAd）。★修矩阵幽灵引用 `useElement`/`useIntersection`/`useMedia`（此前只声明未实现）；web 端标准 API 承接（HTMLCanvasElement/HTMLVideoElement/Audio/matchMedia/IntersectionObserver），无标准的（推流/广告）诚实降级 | ✅ 已落地 |
 
 ---
 
 ## 3. 诚实边界
 
-- **C2/C3 部分需类目资质**（支付扩展/卡券/发票/广告/AI）——不做纯覆盖式铺开，按需驱动。
+- **C2/C3 部分需类目资质**（支付扩展/卡券/发票/广告/AI）——不做纯覆盖式铺开，按需驱动；**C4 广告（useAd）已按「能力面就绪 + web 诚实降级」处理**（wx 侧真实接入，web 侧创建即 Err）。
+- **C4 组件实例**：`useCanvas.createContext()` 走 wx 旧版 `createCanvasContext`（方法名对齐官方）；`node()` 走 SelectorQuery `fields({node:true})`（`<canvas type="2d">`）；web 端由标准 DOM API 适配（非完全等价的绘制语义，如 `setFontSize` 在 web 为 font 串改写）。
 - **微信内置组件 48** 中部分为 Skyline 专属（`grid-view/list-view/sticky-*/double-tap-gesture/root-portal/snapshot/page-meta`），Proteus 侧已有等价能力（`p-grid/p-list-view/p-animate`）或有意不支持——C1 门禁须区分「有等价能力」与「真缺」。
 - 覆盖度以**微信官方文档为准**（非我方手写矩阵）。

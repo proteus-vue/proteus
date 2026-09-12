@@ -69,7 +69,7 @@ TypeScript is a first-class citizen, not "supported as an afterthought":
 
 ## Is the learning curve steep? What is the mental model?
 
-In one sentence: **learn only the semantic components, not each target**. The mental model is a single formula — semantic definition (done by the framework) + backend implementation (done by the platform): business code only consumes semantic interfaces (p-* components + 56 Capability Hooks) and has zero awareness of render backends, compile backends, or hosts. Teams that already know Vue 3 SFC have almost no new syntax to learn; methodological details can be picked up from the five pillars of Unified Semantic Convergence — the officially designated first onboarding lesson.
+In one sentence: **learn only the semantic components, not each target**. The mental model is a single formula — semantic definition (done by the framework) + backend implementation (done by the platform): business code only consumes semantic interfaces (p-* components + 64 Capability Hooks) and has zero awareness of render backends, compile backends, or hosts. Teams that already know Vue 3 SFC have almost no new syntax to learn; methodological details can be picked up from the five pillars of Unified Semantic Convergence — the officially designated first onboarding lesson.
 
 ## What if a target doesn't support a capability?
 

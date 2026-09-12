@@ -1764,4 +1764,55 @@ export const CAP_EN = {
     desc: 'useWeRun: WeChat Sports data (wx.getWeRunData — encrypted; the business backend must decrypt)',
     errors: { 'werun.unsupported': 'The bridge does not provide getWeRunData (useWeRun unavailable)', 'werun.failed': 'wx.getWeRunData failed (requires scope.werun + backend decryption)' },
   },
+  // —— 组件实例 API（★2026-09-12 对齐）——
+  canvas: {
+    desc: 'useCanvas: canvas component instance — 2D drawing context + node (type=2d) + export to temp file / data URL + offscreen canvas (wx.createCanvasContext/SelectorQuery node/canvasToTempFilePath/createOffscreenCanvas; web HTMLCanvasElement + standard 2D context)',
+    errors: {
+      'canvas.unsupported': 'The canvas API is missing (wx.createCanvasContext / SelectorQuery / OffscreenCanvas, or no canvas element matched on web)',
+      'canvas.node-missing': 'Canvas node not resolved (needs <canvas type="2d" id="…">)',
+      'canvas.export-failed': 'Exporting the canvas failed (e.g. cross-origin image taint on web)',
+    },
+  },
+  'element-query': {
+    desc: 'useElement: element query handle — geometry / scroll offset / fields (node/rect/size/computedStyle) / batch (wx.createSelectorQuery; web querySelector + getBoundingClientRect)',
+    errors: {
+      'element.unsupported': 'The bridge does not provide createElementQuery (useElement unavailable)',
+      'element.not-found': 'No element matched the selector',
+      'element.failed': 'Building or running the selector query failed',
+    },
+  },
+  intersection: {
+    desc: 'useIntersection: intersection observer — relativeTo/relativeToViewport + observe + disconnect (wx.createIntersectionObserver; web IntersectionObserver)',
+    errors: { 'element.unsupported': 'The bridge does not provide createIntersection (useIntersection unavailable)' },
+  },
+  'media-query': {
+    desc: 'useMediaQuery: media query observer — observe width/height/orientation conditions + disconnect (wx.createMediaQueryObserver; web matchMedia)',
+    errors: { 'element.unsupported': 'The bridge does not provide createMediaQuery (useMediaQuery unavailable)' },
+  },
+  video: {
+    desc: 'useVideo: video component instance — play/pause/stop/seek/playbackRate/fullscreen/danmu + events (wx.createVideoContext; web HTMLVideoElement)',
+    errors: {
+      'video.unsupported': 'The bridge does not provide createVideo (useVideo unavailable)',
+      'video.not-found': 'No <video> element matched on web',
+      'video.failed': 'A video operation failed',
+    },
+  },
+  audio: {
+    desc: 'useAudio: audio instance — play/pause/stop/seek/volume/loop + duration/currentTime + events (wx.createInnerAudioContext; web Audio element)',
+    errors: {
+      'audio.unsupported': 'The bridge does not provide createAudio (useAudio unavailable)',
+      'audio.failed': 'An audio operation failed',
+    },
+  },
+  'live-pusher': {
+    desc: 'useLivePusher: live-stream pusher instance — start/stop/pause/resume/switchCamera/toggleTorch/snapshot/SEI + events (wx.createLivePusherContext; web has no standard → Err)',
+    errors: {
+      'live-pusher.unsupported': 'wx.createLivePusherContext is missing (web has no standard push API — needs a host bridge)',
+      'live-pusher.failed': 'A live-pusher operation failed',
+    },
+  },
+  ad: {
+    desc: 'useAd: ad handle — rewardedVideo / interstitial / banner (wx.createRewardedVideoAd/createInterstitialAd/createBannerAd; web has no ad-network standard → throws on create)',
+    errors: { 'ad.unsupported': 'The ad API is missing (web has no ad-network standard API — needs a host bridge)', 'ad.failed': 'Loading or showing the ad failed' },
+  },
 }
