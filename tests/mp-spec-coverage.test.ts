@@ -63,7 +63,8 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
 
   it('分类器：覆盖五态语义（covered/planned/private/na/gap）', () => {
     expect(classifySpecApi('createCanvasContext').status).toBe('covered')
-    expect(classifySpecApi('createUDPSocket').status).toBe('planned')
+    expect(classifySpecApi('createUDPSocket').status).toBe('covered')
+    expect(classifySpecApi('getScreenRecordingState').status).toBe('planned')
     expect(classifySpecApi('requestMerchantTransfer').status).toBe('private')
     expect(classifySpecApi('nextTick').status).toBe('na')
     // 未归类 → gap（防漏网）

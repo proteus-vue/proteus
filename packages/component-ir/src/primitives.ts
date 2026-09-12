@@ -206,6 +206,9 @@ const CAPABILITY: PrimitiveDef[] = [
   { id: 'C66', kind: 'capability', semantic: 'capability.performance', api: 'usePerformance()', props: ['PerformanceAPI'], mpEquiv: 'wx.getPerformance/reportPerformance', tier: 'L1', status: 'planned' },
   { id: 'C67', kind: 'capability', semantic: 'capability.preload', api: 'usePreload()', props: ['PreloadAPI'], mpEquiv: 'wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage', tier: 'L1', status: 'planned' },
   { id: 'C68', kind: 'capability', semantic: 'capability.image-edit', api: 'useImageEdit()', props: ['ImageEditAPI'], mpEquiv: 'wx.cropImage/editImage', tier: 'L1', status: 'planned' },
+  // ★权威标尺缺口补齐批 E（2026-09-12）：网络底层 / 媒体高级
+  { id: 'C69', kind: 'capability', semantic: 'capability.socket', api: 'useSocket()', props: ['UDPSocketHandle / TCPSocketHandle'], mpEquiv: 'wx.createUDPSocket/createTCPSocket', tier: 'L1', status: 'planned' },
+  { id: 'C70', kind: 'capability', semantic: 'capability.media-processing', api: 'useMediaProcessing()', props: ['MediaProcessingAPI'], mpEquiv: 'wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer', tier: 'L1', status: 'planned' },
 ]
 
 /** G-32 §8 ⑥ 工程原语 Engineering（28）——状态/生命周期 + 路由/导航 + 动画/过渡 + 调试/工程化 */

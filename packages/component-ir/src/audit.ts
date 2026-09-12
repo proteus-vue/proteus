@@ -112,6 +112,8 @@ const MP_API_GROUPS: MpMatrixItem[] = [
   { mp: 'wx.getPerformance/reportPerformance（性能）', proteus: 'usePerformance', status: 'ok', group: 'api' },
   { mp: 'wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage（预加载）', proteus: 'usePreload', status: 'ok', group: 'api' },
   { mp: 'wx.cropImage/editImage（图像编辑）', proteus: 'useImageEdit', status: 'ok', group: 'api' },
+  { mp: 'wx.createUDPSocket/createTCPSocket（网络底层 Socket）', proteus: 'useSocket', status: 'ok', group: 'api' },
+  { mp: 'wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer（媒体高级）', proteus: 'useMediaProcessing', status: 'ok', group: 'api' },
   { mp: 'wx.getFileSystemManager/*（文件 30+）', proteus: 'useFileSystem', status: 'ok', group: 'api' },
   { mp: 'wx.compressFile/unzip', proteus: 'useArchive', status: 'ok', group: 'api' },
   { mp: 'wx.set/get/remove/clearStorage(+Sync)', proteus: 'useStorage', status: 'ok', group: 'api' },
