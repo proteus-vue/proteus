@@ -2062,6 +2062,189 @@ export interface ImageEditAPI {
   edit(src: string): Promise<CapResult<string>>
 }
 
+// —— ★权威标尺缺口补齐（2026-09-12）：C69 网络底层 / C70 媒体高级 ——
+
+/** UDP 收到的消息（wx UDPSocket onMessage） */
+export interface UdpMessage {
+  /** 消息载荷（ArrayBuffer） */
+  message: ArrayBuffer
+  /** 发送端地址 */
+  remoteAddress: string
+  /** 发送端端口 */
+  remotePort: number
+  /** 发送端协议族（IPv4 / IPv6） */
+  family?: string
+}
+
+/**
+ * ★权威标尺缺口 C69-a：UDP Socket（`useUDPSocket()`）。
+ *   wx：`wx.createUDPSocket()`；web：无 UDP 标准 API（浏览器不支持裸 UDP）→ Err 诚实降级。
+ */
+export interface UDPSocketHandle {
+  /** 绑定本地端口（缺省系统分配） */
+  bind(port?: number): Promise<CapResult<void>>
+  /**
+   * 预连目标地址（配合 write）。
+   * @param address 目标 IP / 域名
+   * @param port 目标端口
+   */
+  connect(address: string, port: number): Promise<CapResult<void>>
+  /**
+   * 发送消息。
+   * @param address 目标地址
+   * @param port 目标端口
+   * @param message 载荷（字符串或 ArrayBuffer）
+   * @param broadcast 是否广播
+   */
+  send(address: string, port: number, message: string | ArrayBuffer, broadcast?: boolean): Promise<CapResult<void>>
+  /**
+   * 向已 connect 的地址发送（少写地址；需先 connect）。
+   * @param message 载荷
+   */
+  write(address: string, port: number, message: string | ArrayBuffer): Promise<CapResult<void>>
+  /**
+   * 订阅收到的消息。
+   * @param cb 消息回调
+   * @returns 取消订阅函数
+   */
+  onMessage(cb: (msg: UdpMessage) => void): () => void
+  /** 订阅错误 */
+  onError(cb: (err: { errMsg: string }) => void): () => void
+  /** 关闭 socket（释放） */
+  close(): Promise<CapResult<void>>
+}
+
+/** TCP Socket 连接选项 */
+export interface TCPSocketConnectOptions {
+  /** 目标地址 */
+  address: string
+  /** 目标端口 */
+  port: number
+  /** 连接超时（ms，缺省 2000） */
+  timeout?: number
+}
+
+/**
+ * ★权威标尺缺口 C69-b：TCP Socket（`useTCPSocket(options?)`）。
+ *   wx：`wx.createTCPSocket()`；web：无原始 TCP 标准 API（浏览器不支持）→ Err 诚实降级。
+ */
+export interface TCPSocketHandle {
+  /**
+   * 连接目标地址。
+   * @param options 地址 / 端口 / 超时
+   */
+  connect(options: TCPSocketConnectOptions): Promise<CapResult<void>>
+  /**
+   * 写入数据。
+   * @param data 载荷（字符串或 ArrayBuffer）
+   */
+  write(data: string | ArrayBuffer): Promise<CapResult<void>>
+  /**
+   * 订阅收到的消息。
+   * @param cb 消息回调（message = ArrayBuffer）
+   * @returns 取消订阅函数
+   */
+  onMessage(cb: (res: { message: ArrayBuffer; localInfo?: unknown; remoteInfo?: unknown }) => void): () => void
+  /** 订阅连接建立成功 */
+  onConnect(cb: () => void): () => void
+  /** 订阅错误 */
+  onError(cb: (err: { errMsg: string }) => void): () => void
+  /** 订阅连接关闭 */
+  onClose(cb: () => void): () => void
+  /** 关闭连接（释放） */
+  close(): Promise<CapResult<void>>
+}
+
+/**
+ * ★权威标尺缺口 C70：媒体高级（wx.createMediaContainer / createVideoDecoder / createMediaAudioPlayer）。
+ *   MediaContainer 视频轨道合成 / VideoDecoder 视频解码取帧 / MediaAudioPlayer 多音源混音。
+ *   wx 侧真实接入；web：MediaContainer/MediaAudioPlayer 无标准 → Err（可用 WebCodecs 之 VideoDecoder
+ *   做尽力承接），VideoDecoder 有 WebCodecs 标准 → 承接。
+ */
+export interface MediaTrackInfo {
+  /** 轨道类型 */
+  kind: 'audio' | 'video'
+  /** 源地址 */
+  src: string
+  /** 轨道起点（秒，可选） */
+  startTime?: number
+}
+
+export interface MediaContainerHandle {
+  /**
+   * 添加音视频轨道。
+   * @param track 轨道信息
+   */
+  addTrack(track: MediaTrackInfo): Promise<CapResult<void>>
+  /**
+   * 移除轨道。
+   * @param track 轨道信息
+   */
+  removeTrack(track: MediaTrackInfo): Promise<CapResult<void>>
+  /**
+   * 分离视频源为轨道（不自动加入容器）。
+   * @param src 视频源地址
+   * @returns 分离出的轨道
+   */
+  extractDataSource(src: string): Promise<CapResult<MediaTrackInfo[]>>
+  /**
+   * 合成并导出视频。
+   * @returns 导出结果（临时文件路径）
+   */
+  export(): Promise<CapResult<string>>
+  /** 销毁容器（释放资源） */
+  destroy(): void
+}
+
+export interface VideoDecoderHandle {
+  /**
+   * 开始解码。
+   * @param options 源地址与解码选项
+   */
+  start(options: { source: string; mode?: number; abortAudio?: boolean }): Promise<CapResult<void>>
+  /** 解码下一帧（返回帧数据） */
+  getFrameData(): Promise<CapResult<{ data: ArrayBuffer; width?: number; height?: number }>>
+  /**
+   * 跳转到指定时间。
+   * @param position 位置（秒）
+   */
+  seek(position: number): Promise<CapResult<void>>
+  /** 停止解码（释放） */
+  stop(): Promise<CapResult<void>>
+}
+
+export interface MediaAudioPlayerHandle {
+  /**
+   * 添加音源。
+   * @param src 音频地址
+   * @param startTime 起始时间（秒）
+   */
+  addAudioSource(src: string, startTime?: number): Promise<CapResult<void>>
+  /**
+   * 移除音源。
+   * @param src 音频地址
+   */
+  removeAudioSource(src: string): Promise<CapResult<void>>
+  /** 开始混音播放 */
+  start(): Promise<CapResult<void>>
+  /** 停止播放 */
+  stop(): Promise<CapResult<void>>
+  /** 销毁（释放） */
+  destroy(): void
+}
+
+/**
+ * ★权威标尺缺口 C70：媒体处理句柄（`useMediaProcessing()`）。
+ */
+export interface MediaProcessingAPI {
+  /** 创建视频轨道合成容器 */
+  container(): MediaContainerHandle
+  /** 创建视频解码器（取帧） */
+  videoDecoder(): VideoDecoderHandle
+  /** 创建多音源混音播放器 */
+  audioPlayer(): MediaAudioPlayerHandle
+}
+
 /**
  * ★颗粒度对齐 C3：C52 相册（wx.chooseMedia / saveImageToPhotosAlbum / previewImage）
  *   选择媒体 + 保存到系统相册 + 预览——对齐小程序媒体类 API 组。
@@ -2239,6 +2422,13 @@ export interface CapabilityBridge {
   getPreload?(): PreloadAPI
   /** ★权威标尺缺口 C68 图像编辑（wx.cropImage/editImage；web 缺省） */
   getImageEdit?(): ImageEditAPI
+  /** ★权威标尺缺口 C69 网络底层（wx.createUDPSocket/createTCPSocket；web 无裸 socket → Err） */
+  getSocket?(): {
+    udp(): UDPSocketHandle
+    tcp(options?: TCPSocketConnectOptions): TCPSocketHandle
+  }
+  /** ★权威标尺缺口 C70 媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
+  getMediaProcessing?(): MediaProcessingAPI
   /** ★能力颗粒度对齐：C20 日历 API（增删查）——优先于 addCalendarEvent */
   getCalendar?(): CalendarAPI
   /** C23 应用生命周期订阅（wx App 钩子 / web visibilitychange+load） */
@@ -2502,6 +2692,10 @@ export interface CapabilityProbe {
   preload: boolean
   /** ★权威标尺缺口：图像编辑（cropImage/editImage） */
   imageEdit: boolean
+  /** ★权威标尺缺口：网络底层（createUDPSocket/createTCPSocket） */
+  socket: boolean
+  /** ★权威标尺缺口：媒体高级（createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
+  mediaProcessing: boolean
 }
 
 // —— 平台桥实现（双端 + mock） ——
@@ -2822,6 +3016,12 @@ interface WxLike {
   preDownloadSubpackage?: (opt: { packageType: string; success?: () => void; fail?: (e: unknown) => void }) => WxPreDownloadTaskLike
   cropImage?: (opt: { src: string; cropScale: string; success: (r: { tempFilePath: string }) => void; fail?: (e: unknown) => void }) => void
   editImage?: (opt: { src: string; success: (r: { tempFilePath: string }) => void; fail?: (e: unknown) => void }) => void
+  // ★权威标尺缺口 C69/C70：网络底层 / 媒体高级
+  createUDPSocket?: () => WxUDPSocketLike
+  createTCPSocket?: () => WxTCPSocketLike
+  createMediaContainer?: () => WxMediaContainerLike
+  createVideoDecoder?: () => WxVideoDecoderLike
+  createMediaAudioPlayer?: () => WxMediaAudioPlayerLike
 }
 
 /** wx MapContext（wx.createMapContext 返回——C4 子集） */
@@ -3061,6 +3261,61 @@ interface WxPerformanceEntryLike {
 /** wx.preDownloadSubpackage 返回任务子集 */
 interface WxPreDownloadTaskLike {
   onProgressUpdate?: (cb: (res: { progress: number; totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void) => void
+}
+
+/** wx.createUDPSocket 返回对象子集 */
+interface WxUDPSocketLike {
+  bind?: (port?: number) => void
+  connect?: (option: { address: string; port: number }) => void
+  send?: (option: { address: string; port: number; message: string | ArrayBuffer; setBroadcast?: boolean; success?: () => void; fail?: (e: unknown) => void }) => void
+  write?: (option: { address: string; port: number; message: string | ArrayBuffer }) => void
+  onMessage?: (cb: (res: { message: ArrayBuffer; remoteInfo: { address: string; port: number; family?: string } }) => void) => void
+  offMessage?: (cb?: (...a: never[]) => void) => void
+  onError?: (cb: (e: { errMsg: string }) => void) => void
+  offError?: (cb?: (...a: never[]) => void) => void
+  close?: () => void
+}
+
+/** wx.createTCPSocket 返回对象子集 */
+interface WxTCPSocketLike {
+  connect?: (option: { address: string; port: number; timeout?: number }) => void
+  write?: (data: string | ArrayBuffer) => void
+  onConnect?: (cb: () => void) => void
+  offConnect?: (cb?: (...a: never[]) => void) => void
+  onMessage?: (cb: (res: { message: ArrayBuffer; localInfo?: unknown; remoteInfo?: unknown }) => void) => void
+  offMessage?: (cb?: (...a: never[]) => void) => void
+  onError?: (cb: (e: { errMsg: string }) => void) => void
+  offError?: (cb?: (...a: never[]) => void) => void
+  onClose?: (cb: () => void) => void
+  offClose?: (cb?: (...a: never[]) => void) => void
+  close?: () => void
+}
+
+/** wx.createMediaContainer 返回对象子集 */
+interface WxMediaContainerLike {
+  addTrack?: (track: Record<string, unknown>) => void
+  removeTrack?: (track: Record<string, unknown>) => void
+  extractDataSource?: (opt: { source: string; success?: (r: { tracks?: unknown[] }) => void; fail?: (e: unknown) => void }) => void
+  export?: (opt?: Record<string, unknown>) => void
+  destroy?: () => void
+  on?: (event: string, cb: (payload: unknown) => void) => void
+}
+
+/** wx.createVideoDecoder 返回对象子集 */
+interface WxVideoDecoderLike {
+  start?: (opt: { source: string; mode?: number; abortAudio?: boolean }) => Promise<unknown>
+  getFrameData?: () => { data: ArrayBuffer; width?: number; height?: number }
+  seek?: (position: number) => Promise<unknown>
+  stop?: () => Promise<unknown>
+}
+
+/** wx.createMediaAudioPlayer 返回对象子集 */
+interface WxMediaAudioPlayerLike {
+  addAudioSource?: (src: string, startTime?: number) => Promise<unknown>
+  removeAudioSource?: (src: string) => Promise<unknown>
+  start?: () => Promise<unknown>
+  stop?: () => Promise<unknown>
+  destroy?: () => void
 }
 
 /** 内存存储兜底（wx sync 存储缺失 / Node / SSR） */
@@ -4868,6 +5123,189 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           wx.editImage({ src, success: (r) => resolve(capOk(r.tempFilePath)), fail: (e: unknown) => resolve(capErr('image-edit.failed', '编辑图片失败', e)) })
         }),
     }),
+    // ★权威标尺缺口 C69：网络底层（wx.createUDPSocket / createTCPSocket）
+    getSocket: () => {
+      const makeUdp = (): UDPSocketHandle => {
+        if (typeof wx.createUDPSocket !== 'function') throw new CapError('socket.unsupported', 'wx.createUDPSocket 缺失')
+        const s = wx.createUDPSocket()
+        return {
+          bind: (port) =>
+            Promise.resolve().then(() => {
+              if (typeof s.bind !== 'function') return capErr<void>('socket.unsupported', 'UDPSocket.bind 缺失')
+              try {
+                s.bind(port)
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'UDP bind 失败', e)
+              }
+            }),
+          connect: (address, port) =>
+            Promise.resolve().then(() => {
+              if (typeof s.connect !== 'function') return capErr<void>('socket.unsupported', 'UDPSocket.connect 缺失')
+              try {
+                s.connect({ address, port })
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'UDP connect 失败', e)
+              }
+            }),
+          send: (address, port, message, broadcast) =>
+            new Promise<CapResult<void>>((resolve) => {
+              if (typeof s.send !== 'function') return resolve(capErr('socket.unsupported', 'UDPSocket.send 缺失'))
+              s.send({ address, port, message, setBroadcast: broadcast, success: () => resolve(capOk(undefined)), fail: (e: unknown) => resolve(capErr('socket.failed', 'UDP 发送失败', e)) })
+            }),
+          write: (address, port, message) =>
+            Promise.resolve().then(() => {
+              if (typeof s.write !== 'function') return capErr<void>('socket.unsupported', 'UDPSocket.write 缺失')
+              try {
+                s.write({ address, port, message })
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'UDP write 失败', e)
+              }
+            }),
+          onMessage: (cb) => {
+            if (typeof s.onMessage !== 'function') return () => {}
+            const h = (res: { message: ArrayBuffer; remoteInfo: { address: string; port: number; family?: string } }): void =>
+              cb({ message: res.message, remoteAddress: res.remoteInfo?.address ?? '', remotePort: res.remoteInfo?.port ?? 0, family: res.remoteInfo?.family })
+            s.onMessage(h)
+            return () => s.offMessage?.(h)
+          },
+          onError: (cb) => {
+            if (typeof s.onError !== 'function') return () => {}
+            s.onError(cb)
+            return () => s.offError?.(cb)
+          },
+          close: () =>
+            Promise.resolve().then(() => {
+              try {
+                s.close?.()
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'UDP 关闭失败', e)
+              }
+            }),
+        }
+      }
+      const makeTcp = (): TCPSocketHandle => {
+        if (typeof wx.createTCPSocket !== 'function') throw new CapError('socket.unsupported', 'wx.createTCPSocket 缺失')
+        const s = wx.createTCPSocket()
+        return {
+          connect: (options) =>
+            new Promise<CapResult<void>>((resolve) => {
+              if (typeof s.connect !== 'function') return resolve(capErr('socket.unsupported', 'TCPSocket.connect 缺失'))
+              try {
+                s.connect(options)
+                resolve(capOk(undefined))
+              } catch (e) {
+                resolve(capErr('socket.failed', 'TCP connect 失败', e))
+              }
+            }),
+          write: (data) =>
+            Promise.resolve().then(() => {
+              if (typeof s.write !== 'function') return capErr<void>('socket.unsupported', 'TCPSocket.write 缺失')
+              try {
+                s.write(data)
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'TCP 写入失败', e)
+              }
+            }),
+          onMessage: (cb) => {
+            if (typeof s.onMessage !== 'function') return () => {}
+            s.onMessage(cb)
+            return () => s.offMessage?.(cb as (...a: never[]) => void)
+          },
+          onConnect: (cb) => {
+            if (typeof s.onConnect !== 'function') return () => {}
+            s.onConnect(cb)
+            return () => s.offConnect?.(cb)
+          },
+          onError: (cb) => {
+            if (typeof s.onError !== 'function') return () => {}
+            s.onError(cb)
+            return () => s.offError?.(cb)
+          },
+          onClose: (cb) => {
+            if (typeof s.onClose !== 'function') return () => {}
+            s.onClose(cb)
+            return () => s.offClose?.(cb)
+          },
+          close: () =>
+            Promise.resolve().then(() => {
+              try {
+                s.close?.()
+                return capOk(undefined)
+              } catch (e) {
+                return capErr<void>('socket.failed', 'TCP 关闭失败', e)
+              }
+            }),
+        }
+      }
+      return { udp: makeUdp, tcp: makeTcp }
+    },
+    // ★权威标尺缺口 C70：媒体高级（wx.createMediaContainer / createVideoDecoder / createMediaAudioPlayer）
+    getMediaProcessing: () => ({
+      container: () => {
+        if (typeof wx.createMediaContainer !== 'function') throw new CapError('media-processing.unsupported', 'wx.createMediaContainer 缺失')
+        const c = wx.createMediaContainer()
+        const run = (fn: unknown, name: string, ...args: unknown[]): Promise<CapResult<void>> =>
+          Promise.resolve().then(() => {
+            if (typeof fn !== 'function') return capErr<void>('media-processing.unsupported', 'MediaContainer.' + name + ' 缺失')
+            try {
+              ;(fn as (...a: unknown[]) => void).apply(c, args)
+              return capOk(undefined)
+            } catch (e) {
+              return capErr<void>('media-processing.failed', 'MediaContainer.' + name + ' 失败', e)
+            }
+          })
+        return {
+          addTrack: (track) => run(c.addTrack, 'addTrack', track),
+          removeTrack: (track) => run(c.removeTrack, 'removeTrack', track),
+          extractDataSource: (src) =>
+            new Promise<CapResult<MediaTrackInfo[]>>((resolve) => {
+              if (typeof c.extractDataSource !== 'function') return resolve(capErr('media-processing.unsupported', 'MediaContainer.extractDataSource 缺失'))
+              c.extractDataSource({ source: src, success: (r: { tracks?: unknown[] }) => resolve(capOk((r.tracks ?? []) as MediaTrackInfo[])), fail: (e: unknown) => resolve(capErr('media-processing.failed', '分离轨道失败', e)) })
+            }),
+          export: () =>
+            new Promise<CapResult<string>>((resolve) => {
+              if (typeof c.export !== 'function') return resolve(capErr('media-processing.unsupported', 'MediaContainer.export 缺失'))
+              c.export({ success: (r: unknown) => resolve(capOk((r as { tempFilePath?: string }).tempFilePath ?? '')), fail: (e: unknown) => resolve(capErr('media-processing.failed', '导出视频失败', e)) })
+            }),
+          destroy: () => c.destroy?.(),
+        }
+      },
+      videoDecoder: () => {
+        if (typeof wx.createVideoDecoder !== 'function') throw new CapError('media-processing.unsupported', 'wx.createVideoDecoder 缺失')
+        const d = wx.createVideoDecoder()
+        return {
+          start: (options) =>
+            Promise.resolve(d.start?.({ ...options })).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '视频解码 start 失败', e)),
+          getFrameData: () =>
+            Promise.resolve().then(() => {
+              if (typeof d.getFrameData !== 'function') return capErr<{ data: ArrayBuffer; width?: number; height?: number }>('media-processing.unsupported', 'VideoDecoder.getFrameData 缺失')
+              try {
+                return capOk(d.getFrameData())
+              } catch (e) {
+                return capErr<{ data: ArrayBuffer; width?: number; height?: number }>('media-processing.failed', '取帧失败', e)
+              }
+            }),
+          seek: (position) => Promise.resolve(d.seek?.(position)).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', 'seek 失败', e)),
+          stop: () => Promise.resolve(d.stop?.()).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '解码停止失败', e)),
+        }
+      },
+      audioPlayer: () => {
+        if (typeof wx.createMediaAudioPlayer !== 'function') throw new CapError('media-processing.unsupported', 'wx.createMediaAudioPlayer 缺失')
+        const p = wx.createMediaAudioPlayer()
+        return {
+          addAudioSource: (src, startTime) => Promise.resolve(p.addAudioSource?.(src, startTime)).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '添加音源失败', e)),
+          removeAudioSource: (src) => Promise.resolve(p.removeAudioSource?.(src)).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '移除音源失败', e)),
+          start: () => Promise.resolve(p.start?.()).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '混音播放失败', e)),
+          stop: () => Promise.resolve(p.stop?.()).then(() => capOk(undefined), (e) => capErr<void>('media-processing.failed', '停止失败', e)),
+          destroy: () => p.destroy?.(),
+        }
+      },
+    }),
     getCalendar: () => ({
       add: (event) =>
         new Promise<CapResult<void>>((resolve) => {
@@ -6319,6 +6757,40 @@ function webBridge(g: typeof globalThis & { navigator?: Navigator & { getBattery
         edit: () => noWeb<string>('edit'),
       }
     },
+    // ★权威标尺缺口 C69：网络底层（web 浏览器不支持裸 UDP/TCP → Err 诚实降级；可用 WebSocket/WebRTC）
+    getSocket: () => {
+      const noUdp = (): never => {
+        throw new CapError('socket.unsupported', 'Web 浏览器不支持裸 UDP（可用 WebRTC DataChannel 或宿主桥）')
+      }
+      const noTcp = (): never => {
+        throw new CapError('socket.unsupported', 'Web 浏览器不支持裸 TCP（可用 WebSocket 或宿主桥）')
+      }
+      return { udp: noUdp, tcp: noTcp }
+    },
+    // ★权威标尺缺口 C70：媒体高级（web：VideoDecoder 走 WebCodecs；container/audioPlayer 无标准 → 创建时 throw）
+    getMediaProcessing: () => ({
+      container: () => {
+        throw new CapError('media-processing.unsupported', 'Web 无标准媒体合成容器（可用 WebCodecs + canvas 编排）')
+      },
+      audioPlayer: () => {
+        throw new CapError('media-processing.unsupported', 'Web 无标准多音源混音播放器（可用 WebAudio）')
+      },
+      videoDecoder: () => {
+        const VD = (g as { VideoDecoder?: new (init: unknown) => { configure: (c: unknown) => void; decode: (chunk: unknown) => void; flush: () => Promise<void>; close: () => void } }).VideoDecoder
+        // ★诚实边界：WebCodecs VideoDecoder 需要 EncodedVideoChunk（需 demux 层），此处给「能力可用但需宿主配合」的诚实句柄
+        return {
+          start: () =>
+            Promise.resolve().then(() => {
+              if (typeof VD !== 'function') return capErr<void>('media-processing.unsupported', 'Web 无 WebCodecs VideoDecoder')
+              return capOk(undefined)
+            }),
+          getFrameData: () =>
+            Promise.resolve(capErr<{ data: ArrayBuffer; width?: number; height?: number }>('media-processing.unsupported', 'Web 端需 EncodedVideoChunk（demux 由宿主/库提供）——getFrameData 无直通')),
+          seek: () => Promise.resolve(capErr<void>('media-processing.unsupported', 'Web 端 seek 需宿主 demux 支持')),
+          stop: () => Promise.resolve(capOk(undefined)),
+        }
+      },
+    }),
   }
 }
 
@@ -6518,6 +6990,10 @@ export interface CapabilityHooks {
   usePreload(): CapResult<PreloadAPI>
   /** ★C68 useImageEdit：图像编辑句柄（wx.cropImage/editImage；web 缺省 → Err） */
   useImageEdit(): CapResult<ImageEditAPI>
+  /** ★C69 useSocket：底层网络 Socket（wx.createUDPSocket/createTCPSocket；web 无裸 socket → Err） */
+  useSocket(): CapResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectOptions): TCPSocketHandle }>
+  /** ★C70 useMediaProcessing：媒体高级（wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer） */
+  useMediaProcessing(): CapResult<MediaProcessingAPI>
   /** 能力探测面（降级查询） */
   probe(): Promise<CapabilityProbe>
 }
@@ -7176,6 +7652,15 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       if (!bridge.getImageEdit) throw new CapError('image-edit.unsupported', '桥未提供 getImageEdit（useImageEdit 不可用）')
       return bridge.getImageEdit()
     }),
+    // ★权威标尺缺口 C69/C70：网络底层 / 媒体高级
+    useSocket: () => handleResult<{ udp(): UDPSocketHandle; tcp(options?: TCPSocketConnectOptions): TCPSocketHandle }>(() => {
+      if (!bridge.getSocket) throw new CapError('socket.unsupported', '桥未提供 getSocket（useSocket 不可用）')
+      return bridge.getSocket()
+    }),
+    useMediaProcessing: () => handleResult<MediaProcessingAPI>(() => {
+      if (!bridge.getMediaProcessing) throw new CapError('media-processing.unsupported', '桥未提供 getMediaProcessing（useMediaProcessing 不可用）')
+      return bridge.getMediaProcessing()
+    }),
     probe: async () => ({
       location: bridge.getLocation !== undefined,
       vibrate: bridge.vibrate !== undefined,
@@ -7245,6 +7730,8 @@ export function createCapabilityHooks(bridge: CapabilityBridge = createCapabilit
       performance: bridge.getPerformance !== undefined,
       preload: bridge.getPreload !== undefined,
       imageEdit: bridge.getImageEdit !== undefined,
+      socket: bridge.getSocket !== undefined,
+      mediaProcessing: bridge.getMediaProcessing !== undefined,
     }),
   }
 }

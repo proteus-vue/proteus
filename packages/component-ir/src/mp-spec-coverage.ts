@@ -122,6 +122,10 @@ export const SPEC_COVERED: Record<string, string> = {
   getPerformance: 'usePerformance', reportPerformance: 'usePerformance',
   preloadAssets: 'usePreload', preloadSkylineView: 'usePreload', preloadWebview: 'usePreload', preDownloadSubpackage: 'usePreload',
   cropImage: 'useImageEdit', editImage: 'useImageEdit',
+  // 网络底层 / 媒体高级（C69-C70——批 E 补齐，2026-09-12）
+  createUDPSocket: 'useSocket.udp', createTCPSocket: 'useSocket.tcp',
+  createMediaContainer: 'useMediaProcessing.container', createVideoDecoder: 'useMediaProcessing.videoDecoder',
+  createMediaAudioPlayer: 'useMediaProcessing.audioPlayer',
 }
 
 // —— ② 显式「平台私有」（微信独占；收敛 useMiniProgram / 宿主桥） ——
@@ -184,11 +188,8 @@ export const SPEC_NA: ReadonlySet<string> = new Set([
 
 // —— ③-b 显式「规划待落地」（L2 通用缺口——可见待办，非 owned 自证；棘轮约束下只能降不能升） ——
 export const SPEC_PLANNED: Record<string, string> = {
-  // 网络底层
-  createUDPSocket: 'useUDPSocket（L2）', createTCPSocket: 'useTCPSocket（L2）',
-  // 媒体高级
-  createMediaContainer: 'useMediaContainer（L2）', createMediaAudioPlayer: 'useMediaAudioPlayer（L2）',
-  createVideoDecoder: 'useVideoDecoder（L2）',
+  // 网络底层（已由 C69 useSocket 覆盖——见 SPEC_COVERED）
+  // 媒体高级（已由 C70 useMediaProcessing 覆盖——见 SPEC_COVERED）
   // 图像编辑（已由 C68 useImageEdit 覆盖——见 SPEC_COVERED）
   // 性能（已由 C66 usePerformance 覆盖——见 SPEC_COVERED）
   // 录屏 / 画中画
@@ -363,6 +364,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 211, // 2026-09-12 基线（spec 382 项：covered 211 / planned 48 / private 106 / na 17 / gap 0）——含 C65-C68
+  coveredMin: 216, // 2026-09-12 基线（spec 382 项：covered 216 / planned 43 / private 106 / na 17 / gap 0）——含 C65-C70
   gapMax: 0, // 全部官方项必须归类
 }

@@ -1305,3 +1305,151 @@ describe('★权威标尺缺口补齐批 D（2026-09-12）· C66/C67/C68 性能/
     expect(p.imageEdit).toBe(true)
   })
 })
+
+describe('★权威标尺缺口补齐批 E（2026-09-12）· C69 网络底层 / C70 媒体高级', () => {
+  it('useSocket：UDP bind/connect/send/onMessage/close（wx 桥归一）', async () => {
+    const calls: string[] = []
+    let msgCb: ((res: { message: ArrayBuffer; remoteInfo: { address: string; port: number; family: string } }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createUDPSocket: () => ({
+        bind: (p: number) => calls.push('bind:' + p),
+        connect: (o: { address: string; port: number }) => calls.push('connect:' + o.address + ':' + o.port),
+        send: (o: { address: string; port: number; success?: () => void }) => { calls.push('send:' + o.address + ':' + o.port); o.success && o.success() },
+        write: () => calls.push('write'),
+        onMessage: (cb: typeof msgCb) => { msgCb = cb },
+        onError: () => undefined,
+        close: () => calls.push('close'),
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useSocket()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const udp = r.data.udp()
+    await expect(udp.bind(8080)).resolves.toMatchObject({ ok: true })
+    await expect(udp.connect('192.168.1.1', 9000)).resolves.toMatchObject({ ok: true })
+    await expect(udp.send('192.168.1.1', 9000, 'hi')).resolves.toMatchObject({ ok: true })
+    let got: { remoteAddress: string; remotePort: number } | undefined
+    udp.onMessage((m) => { got = { remoteAddress: m.remoteAddress, remotePort: m.remotePort } })
+    msgCb!({ message: new ArrayBuffer(4), remoteInfo: { address: '10.0.0.2', port: 1234, family: 'IPv4' } })
+    expect(got).toEqual({ remoteAddress: '10.0.0.2', remotePort: 1234 })
+    await expect(udp.close()).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['bind:8080', 'connect:192.168.1.1:9000', 'send:192.168.1.1:9000', 'close'])
+  })
+
+  it('useSocket：TCP connect/write/onMessage/close（wx 桥归一）', async () => {
+    const calls: string[] = []
+    let msgCb: ((res: { message: ArrayBuffer }) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createTCPSocket: () => ({
+        connect: (o: { address: string; port: number }) => calls.push('connect:' + o.address + ':' + o.port),
+        write: (d: string) => calls.push('write:' + d),
+        onConnect: () => calls.push('onConnect'),
+        onMessage: (cb: typeof msgCb) => { msgCb = cb },
+        onError: () => undefined,
+        onClose: () => undefined,
+        close: () => calls.push('close'),
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useSocket()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const tcp = r.data.tcp()
+    await expect(tcp.connect({ address: '10.1.2.3', port: 443 })).resolves.toMatchObject({ ok: true })
+    await expect(tcp.write('PING')).resolves.toMatchObject({ ok: true })
+    let size: number | undefined
+    tcp.onMessage((res) => { size = res.message.byteLength })
+    msgCb!({ message: new ArrayBuffer(8) })
+    expect(size).toBe(8)
+    await expect(tcp.close()).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['connect:10.1.2.3:443', 'write:PING', 'close'])
+  })
+
+  it('web 端 useSocket：浏览器不支持裸 socket → 创建时 throw（诚实降级）', () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useSocket()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(() => r.data.udp()).toThrow()
+      expect(() => r.data.tcp()).toThrow()
+    }
+  })
+
+  it('无 wx.createUDPSocket → udp() throw(socket.unsupported)', () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const r = createCapabilityHooks(createCapabilityBridge()).useSocket()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(() => r.data.udp()).toThrow()
+  })
+
+  it('useMediaProcessing：container/videoDecoder/audioPlayer（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createMediaContainer: () => ({
+        addTrack: () => calls.push('addTrack'),
+        removeTrack: () => calls.push('removeTrack'),
+        extractDataSource: (o: { success?: (r: { tracks: unknown[] }) => void }) => { calls.push('extract'); o.success && o.success({ tracks: [{ kind: 'video', src: 'a.mp4' }] }) },
+        export: (o: { success: (r: { tempFilePath: string }) => void }) => { calls.push('export'); o.success({ tempFilePath: 'wxfile://out.mp4' }) },
+        destroy: () => calls.push('destroy'),
+      }),
+      createVideoDecoder: () => ({
+        start: () => { calls.push('decoder.start'); return Promise.resolve() },
+        getFrameData: () => ({ data: new ArrayBuffer(16), width: 100, height: 50 }),
+        seek: () => { calls.push('seek'); return Promise.resolve() },
+        stop: () => { calls.push('stop'); return Promise.resolve() },
+      }),
+      createMediaAudioPlayer: () => ({
+        addAudioSource: () => { calls.push('addAudio'); return Promise.resolve() },
+        removeAudioSource: () => { calls.push('removeAudio'); return Promise.resolve() },
+        start: () => { calls.push('play'); return Promise.resolve() },
+        stop: () => { calls.push('pause'); return Promise.resolve() },
+        destroy: () => calls.push('destroyAudio'),
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useMediaProcessing()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const c = r.data.container()
+    await expect(c.addTrack({ kind: 'video', src: 'a.mp4' })).resolves.toMatchObject({ ok: true })
+    const tracks = await c.extractDataSource('b.mp4')
+    expect(tracks.ok && tracks.data[0].kind).toBe('video')
+    const ex = await c.export()
+    expect(ex.ok && ex.data).toBe('wxfile://out.mp4')
+    const d = r.data.videoDecoder()
+    await expect(d.start({ source: 'a.mp4' })).resolves.toMatchObject({ ok: true })
+    const frame = await d.getFrameData()
+    expect(frame.ok && frame.data.width).toBe(100)
+    const p = r.data.audioPlayer()
+    await expect(p.addAudioSource('a.mp3')).resolves.toMatchObject({ ok: true })
+    await expect(p.start()).resolves.toMatchObject({ ok: true })
+    expect(calls).toContain('export')
+    expect(calls).toContain('decoder.start')
+  })
+
+  it('web 端 useMediaProcessing：container/audioPlayer throw；videoDecoder 无 WebCodecs → Err', async () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useMediaProcessing()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(() => r.data.container()).toThrow()
+    expect(() => r.data.audioPlayer()).toThrow()
+    const d = r.data.videoDecoder()
+    expect((await d.start()).ok).toBe(false) // 无 WebCodecs
+  })
+
+  it('probe：socket/mediaProcessing 维度反映桥方法', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.socket).toBe(true)
+    expect(p.mediaProcessing).toBe(true)
+  })
+})
