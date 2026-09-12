@@ -6,9 +6,9 @@ order: 0
 
 # Capabilities overview
 
-> 68 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
+> 70 capability primitives — SSOT = `PRIMITIVE_CATALOG` (capability kind) + `CapabilityHooks` interface. **All hooks implemented** (API ready — target bridges/degradation in each page's compat table).
 
-## Network & Communication (8)
+## Network & Communication (9)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -20,6 +20,7 @@ order: 0
 | C31 | [capability.data-channel](/docs/capability/data-channel) | `useDataChannel()` | `Channel` | — |
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
+| C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 
 ## Device & System (13)
 
@@ -55,7 +56,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## Media & Scanning (9)
+## Media & Scanning (10)
 
 | # | Capability | API | Returns | Mini Program equivalent |
 |---|---|---|---|---|
@@ -68,6 +69,7 @@ order: 0
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
 | C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
+| C70 | [capability.media-processing](/docs/capability/media-processing) | `useMediaProcessing()` | `MediaProcessingAPI` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer |
 
 ## Account & Payment (8)
 
