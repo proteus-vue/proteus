@@ -126,6 +126,14 @@ export const SPEC_COVERED: Record<string, string> = {
   createUDPSocket: 'useSocket.udp', createTCPSocket: 'useSocket.tcp',
   createMediaContainer: 'useMediaProcessing.container', createVideoDecoder: 'useMediaProcessing.videoDecoder',
   createMediaAudioPlayer: 'useMediaProcessing.audioPlayer',
+  // 录屏/缓存/空闲/窗口/导航拦截（C71-C75——批 F 补齐，2026-09-12）
+  getScreenRecordingState: 'useScreenCapture', onScreenRecordingStateChanged: 'useScreenCapture',
+  offScreenRecordingStateChanged: 'useScreenCapture', onUserCaptureScreen: 'useScreenCapture',
+  offUserCaptureScreen: 'useScreenCapture', checkIsPictureInPictureActive: 'useScreenCapture',
+  createCacheManager: 'useCacheManager',
+  requestIdleCallback: 'useIdle', cancelIdleCallback: 'useIdle',
+  setWindowSize: 'useWindow',
+  enableAlertBeforeUnload: 'useNavigationGuard', disableAlertBeforeUnload: 'useNavigationGuard',
 }
 
 // —— ② 显式「平台私有」（微信独占；收敛 useMiniProgram / 宿主桥） ——
@@ -192,16 +200,12 @@ export const SPEC_PLANNED: Record<string, string> = {
   // 媒体高级（已由 C70 useMediaProcessing 覆盖——见 SPEC_COVERED）
   // 图像编辑（已由 C68 useImageEdit 覆盖——见 SPEC_COVERED）
   // 性能（已由 C66 usePerformance 覆盖——见 SPEC_COVERED）
-  // 录屏 / 画中画
-  getScreenRecordingState: 'useScreenCapture（L2）', checkIsPictureInPictureActive: 'useScreenCapture（L2）',
+  // 录屏 / 画中画（已由 C71 useScreenCapture 覆盖——见 SPEC_COVERED + EVENT_BASE covered）
   // 预加载 / 分包（已由 C67 usePreload 覆盖——见 SPEC_COVERED）
   // AR / XR
   createVKSession: 'useAR（L2）', isVKSupport: 'useAR（L2）',
-  // 缓存管理 / 窗口 / 卸载拦截
-  createCacheManager: 'useCacheManager（L2）', setWindowSize: 'useScreen.setWindowSize（L2）',
-  enableAlertBeforeUnload: 'useNavigationGuard（L2）', disableAlertBeforeUnload: 'useNavigationGuard（L2）',
-  // 调度
-  requestIdleCallback: 'useIdleCallback（L2）', cancelIdleCallback: 'useIdleCallback（L2）',
+  // 缓存管理 / 窗口 / 卸载拦截（已由 C72/C74/C75 覆盖——见 SPEC_COVERED）
+  // 调度（已由 C73 useIdle 覆盖——见 SPEC_COVERED）
   // 设备能力探测
   checkDeviceSupportHevc: 'useDevice.supportsHevc（L2）',
 }
@@ -218,8 +222,8 @@ const EVENT_BASE: Record<string, MpSpecClass> = {
   onWindowStateChange: { status: 'covered', proteus: 'useAppLifecycle' }, offWindowStateChange: { status: 'covered', proteus: 'useAppLifecycle' },
   onBLEPeripheralConnectionStateChanged: { status: 'covered', proteus: 'useBluetooth' }, offBLEPeripheralConnectionStateChanged: { status: 'covered', proteus: 'useBluetooth' },
   // 需新 Hook（planned）
-  onScreenRecordingStateChanged: { status: 'planned', proteus: 'useScreenCapture（L2）' }, offScreenRecordingStateChanged: { status: 'planned', proteus: 'useScreenCapture（L2）' },
-  onUserCaptureScreen: { status: 'planned', proteus: 'useScreenCapture（L2）' }, offUserCaptureScreen: { status: 'planned', proteus: 'useScreenCapture（L2）' },
+  onScreenRecordingStateChanged: { status: 'covered', proteus: 'useScreenCapture' }, offScreenRecordingStateChanged: { status: 'covered', proteus: 'useScreenCapture' },
+  onUserCaptureScreen: { status: 'covered', proteus: 'useScreenCapture' }, offUserCaptureScreen: { status: 'covered', proteus: 'useScreenCapture' },
   onUserTriggerTranslation: { status: 'planned', proteus: 'useTranslation（L2）' }, offUserTriggerTranslation: { status: 'planned', proteus: 'useTranslation（L2）' },
   onUserOffTranslation: { status: 'planned', proteus: 'useTranslation（L2）' }, offUserOffTranslation: { status: 'planned', proteus: 'useTranslation（L2）' },
   onGeneratePoster: { status: 'planned', proteus: 'usePoster（L2）' }, offGeneratePoster: { status: 'planned', proteus: 'usePoster（L2）' },
@@ -364,6 +368,6 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 216, // 2026-09-12 基线（spec 382 项：covered 216 / planned 43 / private 106 / na 17 / gap 0）——含 C65-C70
+  coveredMin: 228, // 2026-09-12 基线（spec 382 项：covered 228 / planned 31 / private 106 / na 17 / gap 0）——含 C65-C75
   gapMax: 0, // 全部官方项必须归类
 }

@@ -1453,3 +1453,165 @@ describe('★权威标尺缺口补齐批 E（2026-09-12）· C69 网络底层 / 
     expect(p.mediaProcessing).toBe(true)
   })
 })
+
+describe('★权威标尺缺口补齐批 F（2026-09-12）· C71-C75 录屏/缓存/空闲/窗口/导航拦截', () => {
+  it('useScreenCapture：录屏状态/截屏/画中画（wx 桥归一）', async () => {
+    let recStateCb: ((r: { state: 'on' | 'off' }) => void) | undefined
+    let captureCb: (() => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      getScreenRecordingState: (o: { success: (r: { state: 'on' }) => void }) => o.success({ state: 'on' }),
+      onScreenRecordingStateChanged: (cb: typeof recStateCb) => { recStateCb = cb },
+      onUserCaptureScreen: (cb: typeof captureCb) => { captureCb = cb },
+      checkIsPictureInPictureActive: () => true,
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useScreenCapture()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const st = await r.data.getRecordingState()
+    expect(st.ok && st.data).toBe('on')
+    let rec: string | undefined
+    r.data.onRecordingStateChange((s) => { rec = s })
+    recStateCb!({ state: 'off' })
+    expect(rec).toBe('off')
+    let captured = false
+    r.data.onUserCapture(() => { captured = true })
+    captureCb!()
+    expect(captured).toBe(true)
+    const pip = await r.data.isPictureInPictureActive()
+    expect(pip.ok && pip.data).toBe(true)
+  })
+
+  it('useCacheManager：addRules/start/state/事件（wx 桥归一）', async () => {
+    const calls: string[] = []
+    let evCb: ((p: unknown) => void) | undefined
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      createCacheManager: () => ({
+        mode: 'always', state: 0, origin: 'https://api.example.com', maxAge: 60,
+        addRules: (rules: unknown[]) => { calls.push('add:' + rules.length); return ['r1'] },
+        start: () => calls.push('start'),
+        stop: () => calls.push('stop'),
+        clearCaches: () => calls.push('clearCaches'),
+        on: (_e: string, cb: typeof evCb) => { evCb = cb },
+        off: () => undefined,
+      }),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useCacheManager()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    const ids = await r.data.addRules([{ pattern: 'https://api.example.com/*', method: 'GET' }])
+    expect(ids.ok && ids.data).toEqual(['r1'])
+    const st = r.data.getState()
+    expect(st.mode).toBe('always')
+    expect(st.origin).toBe('https://api.example.com')
+    await expect(r.data.start()).resolves.toMatchObject({ ok: true })
+    let hit = false
+    r.data.on('request', () => { hit = true })
+    evCb!(undefined)
+    expect(hit).toBe(true)
+    expect(calls).toContain('start')
+  })
+
+  it('web 端 useCacheManager：无对等 → 创建时 throw（诚实降级）', () => {
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    const r = createCapabilityHooks(createCapabilityBridge()).useCacheManager()
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.code).toBe('cache-manager.unsupported')
+  })
+
+  it('useIdle：request 回调 + cancel（wx 桥归一）', async () => {
+    let idleCb: ((res: { timeRemaining: number; didTimeout: boolean }) => void) | undefined
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      requestIdleCallback: (cb: typeof idleCb) => { idleCb = cb },
+      cancelIdleCallback: (id: number) => calls.push('cancel:' + id),
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useIdle()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let remain: number | undefined
+    const id = await r.data.request((d) => { remain = d.timeRemaining() })
+    expect(id.ok).toBe(true)
+    idleCb!({ timeRemaining: 12, didTimeout: false })
+    expect(remain).toBe(12)
+    if (id.ok) await expect(r.data.cancel(id.data)).resolves.toMatchObject({ ok: true })
+    expect(calls.some((c) => c.startsWith('cancel:'))).toBe(true)
+  })
+
+  it('web 端 useIdle：requestIdleCallback 缺失 → setTimeout 兜底', async () => {
+    const timers: Array<() => void> = []
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('setTimeout', (fn: () => void) => { timers.push(fn); return 1 })
+    const r = createCapabilityHooks(createCapabilityBridge()).useIdle()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    let fired = false
+    await r.data.request(() => { fired = true })
+    timers.forEach((fn) => fn())
+    expect(fired).toBe(true)
+  })
+
+  it('useWindow：setSize（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      setWindowSize: (o: { width: number; height: number; success?: () => void }) => { calls.push(o.width + 'x' + o.height); o.success && o.success() },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useWindow()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.setSize(1280, 720)).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['1280x720'])
+  })
+
+  it('useNavigationGuard：enable/disable（wx 桥归一）', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', {
+      getSystemInfoSync: () => ({ renderer: 'skyline' }),
+      enableAlertBeforeUnload: (o: { message: string; success?: () => void }) => { calls.push('enable:' + o.message); o.success && o.success() },
+      disableAlertBeforeUnload: (o: { success?: () => void }) => { calls.push('disable'); o.success && o.success() },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useNavigationGuard()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.enable('确认离开？')).resolves.toMatchObject({ ok: true })
+    await expect(r.data.disable()).resolves.toMatchObject({ ok: true })
+    expect(calls).toEqual(['enable:确认离开？', 'disable'])
+  })
+
+  it('web 端 useNavigationGuard：beforeunload 承接', async () => {
+    const listeners: Record<string, () => void> = {}
+    vi.stubGlobal('wx', undefined)
+    vi.stubGlobal('window', {
+      addEventListener: (t: string, h: () => void) => { listeners[t] = h },
+      removeEventListener: (t: string) => { delete listeners[t] },
+    })
+    const r = createCapabilityHooks(createCapabilityBridge()).useNavigationGuard()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    await expect(r.data.enable('leave?')).resolves.toMatchObject({ ok: true })
+    expect(typeof listeners['beforeunload']).toBe('function')
+    await expect(r.data.disable()).resolves.toMatchObject({ ok: true })
+    expect(listeners['beforeunload']).toBeUndefined()
+  })
+
+  it('probe：screenCapture/cacheManager/idle/window/navigationGuard 维度', async () => {
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('wx', { getSystemInfoSync: () => ({ renderer: 'skyline' }) })
+    const p = await createCapabilityHooks(createCapabilityBridge()).probe()
+    expect(p.screenCapture).toBe(true)
+    expect(p.cacheManager).toBe(true)
+    expect(p.idle).toBe(true)
+    expect(p.window).toBe(true)
+    expect(p.navigationGuard).toBe(true)
+  })
+})
