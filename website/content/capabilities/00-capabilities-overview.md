@@ -6,7 +6,7 @@ order: 0
 
 # 能力总览
 
-> 70 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 75 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
 ## 网络与通信（9）
 
@@ -22,7 +22,7 @@ order: 0
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
 | C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 
-## 设备与系统（13）
+## 设备与系统（15）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -39,6 +39,8 @@ order: 0
 | C58 | [capability.element-query](/docs/capability/element-query) | `useElement()` | `ElementQuery` | wx.createSelectorQuery |
 | C59 | [capability.intersection](/docs/capability/intersection) | `useIntersection()` | `IntersectionHandle` | wx.createIntersectionObserver |
 | C60 | [capability.media-query](/docs/capability/media-query) | `useMediaQuery()` | `MediaQueryObserver` | wx.createMediaQueryObserver |
+| C71 | [capability.screen-capture](/docs/capability/screen-capture) | `useScreenCapture()` | `ScreenCaptureAPI` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive |
+| C72 | [capability.cache-manager](/docs/capability/cache-manager) | `useCacheManager()` | `CacheManagerHandle` | wx.createCacheManager |
 
 ## 存储与文件（4）
 
@@ -97,7 +99,7 @@ order: 0
 | C45 | [capability.shortcut](/docs/capability/shortcut) | `useShortcut()` | `Result<void>` | wx.addToDesktop |
 | C64 | [capability.ad](/docs/capability/ad) | `useAd()` | `AdAPI` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd |
 
-## 应用与生命周期（7）
+## 应用与生命周期（10）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -108,6 +110,9 @@ order: 0
 | C48 | [capability.embedded](/docs/capability/embedded) | `useEmbedded()` | `HostContext` | 无（被宿主嵌入） |
 | C50 | [capability.extension](/docs/capability/extension) | `useExtension()` | `ExtensionAPI` | 无（插件/扩展点 G-21） |
 | C67 | [capability.preload](/docs/capability/preload) | `usePreload()` | `PreloadAPI` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage |
+| C73 | [capability.idle](/docs/capability/idle) | `useIdle()` | `IdleAPI` | wx.requestIdleCallback/cancelIdleCallback |
+| C74 | [capability.window](/docs/capability/window) | `useWindow()` | `WindowAPI` | wx.setWindowSize |
+| C75 | [capability.navigation-guard](/docs/capability/navigation-guard) | `useNavigationGuard()` | `NavigationGuardAPI` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload |
 
 ## 可观测与调试（3）
 
