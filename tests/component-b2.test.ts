@@ -81,6 +81,31 @@ describe('p-button（按钮）', () => {
     // ★2026-09-11：click 带冒泡选项（bubbles+composed）——供跨组件边界父级 bind:click 接收（p-popover trigger）
     expect(js).toMatch(/this\.triggerEvent\('click',\s*e,\s*\{\s*bubbles:\s*true,\s*composed:\s*true\s*\}\)/)
   })
+
+  it('★禁用态视觉 + 主题变量（2026-09-12 真机修复：disabled 此前只有原生禁交互、无视觉区分）', () => {
+    const { wxml, wxss } = compileComponent('p-button')
+    // 禁用 class 绑定（编译产物：disabled?'is-disabled-<scope> ':'')
+    expect(wxml).toMatch(/disabled\?'is-disabled/)
+    // 禁用态样式（灰底 + 弱化文字；scope 后缀拼接为 .p-button-x.is-disabled-x）
+    expect(wxss).toMatch(/\.p-button[\w-]*\.is-disabled/)
+    // 主题变量（宿主可换肤：--p-button-bg 等）
+    expect(wxss).toContain('var(--p-button-bg')
+    expect(wxss).toContain('var(--p-button-color')
+  })
+
+  it('★点击反馈：hover-class 缺省不发属性（保留微信原生 button-hover 点击态）', () => {
+    const { wxml } = compileComponent('p-button')
+    // ★真机 bug 修复（2026-09-13）：hoverClass 默认 '' 曾直接发射 → 空串覆盖原生默认点击态 → 无反馈。
+    //   现 `hoverClass || undefined`：缺省求值为 undefined，微信按「未传」处理 → 原生 button-hover 生效。
+    expect(wxml).toContain('hover-class="{{hoverClass || undefined}}"')
+  })
+
+  it('★官方属性全量：size/type/plain/form-type/open-type/hover-* 均发射到原生 <button>', () => {
+    const { wxml } = compileComponent('p-button')
+    for (const a of ['size', 'type', 'plain', 'form-type', 'open-type', 'hover-stop-propagation', 'hover-start-time', 'hover-stay-time', 'session-from', 'app-parameter', 'show-message-card']) {
+      expect(wxml, `缺官方属性 ${a}`).toContain(`${a}="{{`)
+    }
+  })
 })
 
 describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', () => {

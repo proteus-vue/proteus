@@ -11,3 +11,6 @@ export type { CrossPlatformElement, WebEventTarget, MpEventTarget, WebHostLike, 
 // ★test-framework：统一测试 API —— mountComponent 双端挂载（03 §环境：Web happy-dom + @vue/test-utils / MP 逻辑层 + WXML）
 export { mountComponent, mountWebComponent, sfcToComponent } from './mount'
 export type { MountComponentOptions, MountedHost, UnifiedMpHost } from './mount'
+// ★端能力对齐配套：页面渲染门禁（跨端断言「页面真的渲染出来了吗」——补 E2E 的视觉盲区）
+export { assertPageRendered, collectRenderMetrics } from './assert-render'
+export type { RenderGateOptions, RenderGateResult } from './assert-render'

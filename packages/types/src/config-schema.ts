@@ -68,6 +68,8 @@ export const proteusConfigSchema = {
         rpxRatio: { type: 'number' },
       },
     },
+    // ★全局样式（MP app.wxss 通道）：相对 root 的 CSS 文件，构建期编译为产物根 app.wxss
+    globalStyle: { type: 'string' },
     budget: {
       type: 'object',
       properties: {

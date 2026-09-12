@@ -35,7 +35,7 @@ order: 0
 | Component | Props | Events |
 |---|---|---|
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
-| [p-button](/docs/component/p-button) | 5 | 1 |
+| [p-button](/docs/component/p-button) | 24 | 11 |
 | [p-camera](/docs/component/p-camera) | 3 | 3 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 3 | 1 |
@@ -43,7 +43,7 @@ order: 0
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
 | [p-image](/docs/component/p-image) | 8 | 2 |
-| [p-input](/docs/component/p-input) | 8 | 4 |
+| [p-input](/docs/component/p-input) | 14 | 4 |
 | [p-label](/docs/component/p-label) | 2 | 1 |
 | [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |

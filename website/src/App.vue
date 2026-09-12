@@ -9,6 +9,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DocSearch from './DocSearch.vue'
+import BrandMark from './components/BrandMark.vue'
 // ★#449 desktop 原语（豁免回收）：滚动进度/滚动态 = p-scroll-observer
 //   ——window/document 监听与 origin 校验收口到框架包，页面零裸平台 API
 import { createScrollObserver, type ScrollState } from '@proteus-vue/desktop'
@@ -69,7 +70,7 @@ watch(() => route.fullPath, () => {
     <header class="nav-shell" :class="{ 'is-scrolled': scrolled, 'is-open': menuOpen, 'is-docs': isDocs }">
       <div class="nav">
         <router-link to="/" class="brand">
-          <span class="brand-mark">◆</span>
+          <BrandMark :size="24" />
           <p-text class="brand-name">Proteus</p-text>
           <!-- 品牌尾缀在窄容器隐藏（空间让给汉堡） -->
           <span class="brand-tag">/ semantic engine</span>
@@ -205,20 +206,8 @@ watch(() => route.fullPath, () => {
   padding: 12px 24px;
   box-sizing: border-box;
 }
-.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; flex-shrink: 0; }
-/* ★#387 品牌标识（同心方 conic 渐变） */
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  font-size: 12px;
-  color: #fff;
-  background: conic-gradient(from 210deg, var(--brand), var(--brand2), var(--accent), var(--brand));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-}
+.brand { display: flex; align-items: center; gap: 9px; text-decoration: none; flex-shrink: 0; }
+/* ★2026-09-12 品牌标识改为品牌立方体（<BrandMark>，与小程序头像同源）——原 ◆ conic 色片已弃用 */
 .brand-name { color: var(--ink); font-weight: 700; font-size: 17px; letter-spacing: 0.4px; white-space: nowrap; }
 .brand-tag { color: var(--dim); font-size: 13px; white-space: nowrap; }
 .nav-links { display: flex; align-items: center; flex-wrap: wrap; }

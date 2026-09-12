@@ -38,6 +38,25 @@ Button
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
 | `loading` | Loading state | `Boolean` | `false` | No |
 | `throttle` | Click throttle interval (ms; prevents repeated triggers -- built into the runtime) | `Number` | `0` | No |
+| `size` | — | `String` | `''` | No |
+| `type` | — | `String` | `''` | No |
+| `plain` | — | `Boolean` | `false` | No |
+| `formType` | — | `String` | `''` | No |
+| `openType` | — | `String` | `''` | No |
+| `hoverClass` | — | `String` | `''` | No |
+| `hoverStopPropagation` | — | `Boolean` | `false` | No |
+| `hoverStartTime` | — | `Number` | `20` | No |
+| `hoverStayTime` | — | `Number` | `70` | No |
+| `lang` | — | `String` | `''` | No |
+| `sessionFrom` | — | `String` | `''` | No |
+| `sendMessageTitle` | — | `String` | `''` | No |
+| `sendMessagePath` | — | `String` | `''` | No |
+| `sendMessageImg` | — | `String` | `''` | No |
+| `appParameter` | — | `String` | `''` | No |
+| `showMessageCard` | — | `Boolean` | `false` | No |
+| `phoneNumberNoQuotaToast` | — | `Boolean` | `true` | No |
+| `needShowEntrance` | — | `Boolean` | `false` | No |
+| `entrancePath` | — | `String` | `''` | No |
 
 ### Prop details
 
@@ -66,11 +85,116 @@ Button
 - **Type**: `Number`　**Default**: `0`　**Required**: No
 - **Doc**: Click throttle interval (ms; prevents repeated triggers -- built into the runtime)
 
+#### `size`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `type`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `plain`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `formType`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `openType`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `hoverClass`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `hoverStopPropagation`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `hoverStartTime`
+
+- **Type**: `Number`　**Default**: `20`　**Required**: No
+- **Doc**: —
+
+#### `hoverStayTime`
+
+- **Type**: `Number`　**Default**: `70`　**Required**: No
+- **Doc**: —
+
+#### `lang`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `sessionFrom`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `sendMessageTitle`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `sendMessagePath`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `sendMessageImg`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `appParameter`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `showMessageCard`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `phoneNumberNoQuotaToast`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `needShowEntrance`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `entrancePath`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
 | `click` | Click / tap (fires after throttling) | `e, { bubbles: true, composed: true }` |
+| `getuserinfo` | — | — |
+| `contact` | — | — |
+| `getphonenumber` | — | — |
+| `getrealtimephonenumber` | — | — |
+| `error` | — | — |
+| `opensetting` | — | — |
+| `launchapp` | — | — |
+| `chooseavatar` | — | — |
+| `agreeprivacyauthorization` | — | — |
+| `createliveactivity` | — | — |
 
 ### Event details
 
@@ -78,6 +202,56 @@ Button
 
 - **Doc**: Click / tap (fires after throttling)
 - **Payload**: `e, { bubbles: true, composed: true }`
+
+#### `getuserinfo`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `contact`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `getphonenumber`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `getrealtimephonenumber`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `error`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `opensetting`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `launchapp`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `chooseavatar`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `agreeprivacyauthorization`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `createliveactivity`
+
+- **Doc**: —
+- **Payload**: none
 
 ## Slots
 

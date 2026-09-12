@@ -50,7 +50,8 @@ describe('p-input（输入框）', () => {
     const { wxml, js } = compileComponent('p-input')
     expect(wxml).toContain('<input')
     expect(wxml).toContain('value="{{value}}"')
-    expect(wxml).toContain('type="{{type}}"')
+    // type 与官方 password 属性协同（password=true → type=password）
+    expect(wxml).toContain("type=\"{{(password ? 'password' : type)}}\"")
     expect(wxml).toContain('maxlength="{{maxlength}}"')
     expect(wxml).toContain('placeholder="{{placeholder}}"')
     expect(wxml).toContain('focus="{{focus}}"')
@@ -62,6 +63,14 @@ describe('p-input（输入框）', () => {
     expect(js).toContain("const { eventValue } = require('./runtime/event')")
     expect(js).toContain("this.triggerEvent('input', { value: eventValue(e) })")
     expect(js).toContain("this.triggerEvent('confirm', { value: eventValue(e) })")
+  })
+
+  it('★两端盒模型归一（2026-09-13 真机修复：只给 padding 致 MP 端又矮又圆 + 占位极小）', () => {
+    const { wxss } = compileComponent('p-input')
+    // 显式固定高度（两端一致），而非依赖 padding
+    expect(wxss).toContain('height: var(--p-input-height')
+    // 横向 padding 保留（px→rpx 编译为 0 24rpx），纵向交给 height
+    expect(wxss).toMatch(/padding: 0 24rpx|padding: 0 12px/)
   })
 })
 

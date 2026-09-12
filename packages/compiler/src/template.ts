@@ -658,6 +658,12 @@ function svgAnimToCss(a: import('./svg-lower').SvgAnimSpec): string {
 }
 
 function serializeElement(node: ElementNode, ctx: SerializeContext): string {
+  // ★2026-09-13 组件根标记「消费即清除」（放在函数最顶部，任何分支的 early return 都不会漏清）：
+  //   isComponentRoot 只在**根节点自身**生效，不能沿子树递归共用（否则每个后代都被追加 {{rootClass}}，
+  //   真机：给组件传 class 会级联到全部子元素）。此处捕获后立即置 false——本函数下方各 early return
+  //   （semantic-grid / slot / root-portal / svg / progress 等）都不会再把标记带进子树。
+  const isComponentRoot = ctx.isComponentRoot === true
+  ctx.isComponentRoot = false
   // ★2026-09-08 v-pre 诚实对齐：compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——
   //   用元素原始源码检测（node.loc.source 含 v-pre）。含 {{ }} 插值 → WXML 仍会插值（v-pre 跳过编译无法实现）→ 诚实警告；纯静态 → 等价（静默）
   if (/<[^>]*\bv-pre\b[^>]*>/.test(node.loc.source) && !ctx.disabled.has('directive/v-pre')) {
@@ -1405,7 +1411,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   const classStatic = [transitionAnimCls, autoFlexRow ? 'proteus-flex-row' : '', effectiveBaseClass, staticClass].filter((c): c is string => Boolean(c)).map(suffix)
   const classInterp = [bindingClass, transitionLeaveExpr].filter((c): c is string => Boolean(c))
   // ★组件根节点（组件模式首元素）：接收外部 class 透传（root-class 属性 → rootClass property → 根节点 {{rootClass}}）
-  if (ctx.isComponentRoot) classInterp.push('{{rootClass}}')
+  //   isComponentRoot 已在函数顶部捕获并清除（见该处注释）。
+  if (isComponentRoot) classInterp.push('{{rootClass}}')
   // ★自定义组件标签（p-view/counter 等非原生标签）：class 全部改发 root-class 透传——
   //   微信页面 wxss 无法可靠作用于组件 host 节点（真机实测：p-view 外层容器 box 样式不生效，即使 styleIsolation: apply-shared）——
   //   Vue 的 class 继承语义需编译期等价：组件标签 class → root-class 属性 → 组件 properties.rootClass → 组件根节点绑定 {{rootClass}}
@@ -1518,7 +1525,16 @@ export function transformTemplateToWxml(
     .map((c) => {
       if (firstEl && c.type === NodeTypes.ELEMENT) {
         firstEl = false
-        return serializeNode(c, { ...ctx, isComponentRoot: true })
+        // ★2026-09-13 修复（不再浅拷贝 ctx）：
+        //   ① 浅拷贝里写入的**原始值标志**（usesNavigate/usesTransition）不会回传原始 ctx →
+        //      组件内含 <a href>/<router-link> 时 WXML 生成 bindtap="proteusNavigateTo" 却无对应方法
+        //      → 小程序真机点击**无反应**（Showcase 目录页跳详情即此）。
+        //   ② 拷贝沿子树递归共用 → isComponentRoot 泄漏到所有后代。
+        //   改为在原 ctx 上临时置位：serializeElement 消费即清除（见该函数首），标志变更天然回传。
+        ctx.isComponentRoot = true
+        const rootOut = serializeNode(c, ctx)
+        ctx.isComponentRoot = false
+        return rootOut
       }
       return serializeNode(c, ctx)
     })

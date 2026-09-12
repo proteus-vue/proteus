@@ -77,18 +77,22 @@ const store = usePlayerStore()
   })
 })
 
-describe('B6：页面 onUnload 自动 $dispose store（lifecycle-plan）', () => {
-  it('useXxxStore 页面 → onUnload 注入 $dispose + 置空（防内存泄漏）', () => {
+describe('B6：页面 onUnload 退订 store 订阅（★2026-09-12 真机修复：不再 $dispose 全局 store）', () => {
+  it('useXxxStore 页面 → onLoad 存 $subscribe 退订函数 + onUnload 退订（不销毁 app 级 store）', () => {
     const { js } = compile(
       `<template><p>{{ store.volume }}</p></template>\n  <script setup>\nimport { usePlayerStore } from '../stores/player'\nconst store = usePlayerStore()\n  </script>`,
     )
-    expect(js).toContain('if (this.store && this.store.$dispose) { this.store.$dispose(); this.store = null }')
+    // onLoad：保存 $subscribe 的退订函数（Pinia $subscribe 返回 unwatch）
+    expect(js).toContain('this.__proteusStoreUnsub = this.store.$subscribe(')
+    // onUnload：仅退订本页订阅——★不得调用 $dispose（会销毁 app 级全局 store）
+    expect(js).toContain('if (this.__proteusStoreUnsub) { this.__proteusStoreUnsub(); this.__proteusStoreUnsub = null }')
+    expect(js).not.toContain('this.store.$dispose()')
     expect(js).toContain('onUnload() {')
   })
 
-  it('无 store 变量 → 不注入 $dispose', () => {
+  it('无 store 变量 → 不注入退订', () => {
     const { js } = compile('<template><p>{{ count }}</p></template><script setup>const count = ref(1)</script>')
-    expect(js).not.toContain('$dispose')
+    expect(js).not.toContain('__proteusStoreUnsub')
   })
 })
 

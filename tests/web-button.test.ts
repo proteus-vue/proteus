@@ -100,6 +100,63 @@ describe('WebButton（对齐 weui.io/#button_default 变体）', () => {
     expect(state.opened).toBe('share')
     expect(state.clicks).toBe(1)
   })
+
+  // ★2026-09-13 用户实测教训回归锁：按下反馈。
+  //   故障：按下类（proteus-web-button--hover）已加到元素上，但用户 scoped 主题化
+  //   `.p-button[data-v-x]{background:var(--p-button-bg)}` 特异性 (0,2,0) 压过框架类 (0,1,0)
+  //   → 背景不变 → Web 端按钮「点下去没反应」。修复：style.css 的按下态加 !important（框架接管按下态）。
+  it('★按下反馈：pointerdown 加 hover 类、pointerup 移除（对齐微信 button-hover）', async () => {
+    mountButton({})
+    const btn = document.querySelector('.proteus-web-button') as HTMLElement
+    expect(btn.classList.contains('proteus-web-button--hover')).toBe(false)
+    btn.dispatchEvent(new Event('pointerdown'))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(btn.classList.contains('proteus-web-button--hover')).toBe(true)
+    btn.dispatchEvent(new Event('pointerup'))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(btn.classList.contains('proteus-web-button--hover')).toBe(false)
+  })
+
+  it('★hover-class="none" → 不施加任何按下类（关闭点击态）', async () => {
+    mountButton({ hoverClass: 'none' })
+    const btn = document.querySelector('.proteus-web-button') as HTMLElement
+    btn.dispatchEvent(new Event('pointerdown'))
+    await new Promise((r) => setTimeout(r, 10))
+    // hover-class=none 时类名即 'none'（对齐微信：none 表示无点击态，这里断言不加 --hover 默认类）
+    expect(btn.classList.contains('proteus-web-button--hover')).toBe(false)
+  })
+
+  it('★按下态样式带 !important（压过用户主题化的基色覆盖——见 style.css）', async () => {
+    // 断言框架样式表内按下态规则含 !important（静态检查：防止后续误删导致反馈再次失效）
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), 'packages/built-in-components/src/style.css'),
+      'utf8',
+    )
+    const rule = css.match(/\.proteus-web-button--hover[^{]*\{[^}]*\}/)?.[0] ?? ''
+    expect(rule, '按下态规则应存在').toContain('background-color')
+    expect(rule, '按下态必须 !important（压过用户基色覆盖）').toContain('!important')
+  })
+
+  // ★2026-09-13 用户实测教训回归锁：暗色模式下按钮「消失」。
+  //   故障：@media (prefers-color-scheme: dark) 内 `.proteus-web-button.is-default` 特异性 (0,2,0)，
+  //   与用户主题化 `.p-button[data-v-x]{background:var(--p-button-bg)}` 打平 → 级联顺序使暗色规则胜出
+  //   → 白 10% 底 + 白 80% 字，在浅色卡片上按钮不可见。
+  //   修复：框架侧加 :where() 归零特异性（0,2,0 → 0,1,0），恢复「用户样式永远可覆盖框架默认」契约。
+  it('★暗色模式规则必须用 :where() 归零特异性（保证用户主题化可覆盖）', async () => {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const css = fs.readFileSync(path.resolve(process.cwd(), 'packages/built-in-components/src/style.css'), 'utf8')
+    const darkBlock = css.match(/@media \(prefers-color-scheme: dark\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+    expect(darkBlock, '暗色块应存在').toContain('prefers-color-scheme')
+    // 暗色块内针对 button 的选择器都必须经 :where()（否则特异性会压过用户 scoped 样式）
+    const btnSelectors = darkBlock.match(/\.proteus-web-button[^{]*\{/g) ?? []
+    expect(btnSelectors.length).toBeGreaterThan(0)
+    for (const sel of btnSelectors) {
+      expect(sel, `暗色按钮选择器应经 :where() 归零特异性：${sel.trim()}`).toContain(':where(')
+    }
+  })
 })
 
 describe('WebPicker multiSelector（18-picker-swiper B2）', () => {

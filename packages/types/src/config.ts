@@ -92,6 +92,10 @@ export interface ProteusConfig {
     px2rpx: boolean
     rpxRatio: number
   }
+  /** ★全局样式（MP 端唯一全局样式入口）：相对 root 的 CSS 文件路径（缺省探测根/应用目录的 app.wxss）。
+   *  构建期编译（px→rpx）后产出产物根 `app.wxss`（微信自动全局生效）——用于设计 token / 全局重置；
+   *  Web 端同一文件在入口 import（单源）。页面级 wxss 各自 scoped，变量无法跨页继承，故需此全局通道。 */
+  globalStyle?: string
   /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
   page?: {
     autoScrollContainer?: boolean
