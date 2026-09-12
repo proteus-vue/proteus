@@ -12,6 +12,8 @@ import {
   currentPageOrigin,
   currentPagePathname,
   replacePageUrl,
+  createScrollSpy,
+  pickActiveId,
 } from '@proteus-vue/desktop'
 import type { ScrollState } from '@proteus-vue/desktop'
 
@@ -172,5 +174,79 @@ describe('#449 页面 URL 读写（location/history 收口）', () => {
 
   it('无 history 环境 → 静默不抛', () => {
     expect(() => replacePageUrl('https://a.com/x')).not.toThrow()
+  })
+})
+
+describe('★#477 createScrollSpy（滚动高亮——滚动线取当前项）', () => {
+  function makeSpyEnv(tops: Record<string, number>, opts: { atBottom?: boolean; docH?: number; vh?: number; y?: number } = {}) {
+    const listeners: Array<() => void> = []
+    const rafQueue: Array<() => void> = []
+    const env = {
+      on: (fn: () => void) => listeners.push(fn),
+      off: (fn: () => void) => {
+        const i = listeners.indexOf(fn)
+        if (i >= 0) listeners.splice(i, 1)
+      },
+      raf: (fn: () => void) => {
+        rafQueue.push(fn)
+        return rafQueue.length
+      },
+      caf: () => {
+        rafQueue.length = 0
+      },
+      find: (id: string) => (id in tops ? { top: () => tops[id]! } : null),
+      atBottom: () => !!opts.atBottom,
+    }
+    return { env, fire: () => listeners.forEach((f) => f()), flush: () => rafQueue.splice(0).forEach((f) => f()), listeners }
+  }
+
+  it('pickActiveId：取最后一个越过滚动线的 id（空/全在线下 → 空）', () => {
+    const tops = [{ id: 'a', top: -100 }, { id: 'b', top: 10 }, { id: 'c', top: 500 }]
+    expect(pickActiveId(tops, 150)).toBe('b') // a/b 线以上（a: -100, b: 10），c 线下
+    expect(pickActiveId(tops, 0)).toBe('a')
+    expect(pickActiveId(tops, -200)).toBe('')
+    expect(pickActiveId([], 100)).toBe('')
+  })
+
+  it('setIds 立即计算一次；滚动事件按帧合并回调', () => {
+    const onChange = vi.fn()
+    const h = makeSpyEnv({ h1: -50, h2: 200, h3: 900 })
+    const spy = createScrollSpy({ offset: 100, onChange }, h.env)
+    spy.setIds(['h1', 'h2', 'h3'])
+    expect(onChange).toHaveBeenCalledWith('h1') // 线=108：h1(-50)越过，h2(200)未
+    onChange.mockClear()
+    h.fire(); h.fire()
+    expect(onChange).not.toHaveBeenCalled()
+    ;(h as { env: { find: unknown } }).env.find = undefined as never
+    h.flush() // 同帧缓存不变 → 同 id 不重复回调
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('hit 变化才回调（相同 id 去抖）+ 滚到底强制最后一项', () => {
+    const onChange = vi.fn()
+    const tops: Record<string, number> = { h1: 0, h2: 0, h3: 0 }
+    const h = makeSpyEnv(tops, { atBottom: true })
+    const spy = createScrollSpy({ offset: 0, onChange }, h.env)
+    spy.setIds(['h1', 'h2', 'h3'])
+    expect(spy.getActive()).toBe('h3') // 滚到底 → 强制最后一项
+  })
+
+  it('目标缺失（未渲染/已被移除）跳过；全缺失 → 空 id 回调', () => {
+    const onChange = vi.fn()
+    const h = makeSpyEnv({ h1: -10 })
+    const spy = createScrollSpy({ offset: 0, onChange }, h.env)
+    spy.setIds(['h1', 'missing', 'h9'])
+    expect(spy.getActive()).toBe('h1') // missing/h9 无元素跳过
+  })
+
+  it('destroy 后滚动不再回调', () => {
+    const onChange = vi.fn()
+    const h = makeSpyEnv({ h1: -10 })
+    const spy = createScrollSpy({ offset: 0, onChange }, h.env)
+    spy.setIds(['h1'])
+    onChange.mockClear()
+    spy.destroy()
+    h.fire(); h.flush()
+    expect(onChange).not.toHaveBeenCalled()
   })
 })

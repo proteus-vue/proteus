@@ -31,8 +31,8 @@ export type { CursorGlowOptions, CursorGlowHandle } from './cursor-glow'
 //   p-scroll-observer（滚动进度/滚动态 rAF 节流）/ 跨窗消息订阅（origin 校验 + type 过滤）/ 锚点定位 / 页面 URL 读写
 //   与 G-24 B4 network/lifecycle 同族：desktop 承担 Web 接线，页面零裸 window/document/navigator/location/history
 // ★#449 p-scroll-observer：页面滚动观测（window/document 几何收口——App 顶部进度条 / Home Hero 联动）
-export { createScrollObserver, readPageScroll } from './scroll'
-export type { ScrollState, ScrollObserverEnv, ScrollObserver } from './scroll'
+export { createScrollObserver, readPageScroll, createScrollSpy, pickActiveId } from './scroll'
+export type { ScrollState, ScrollObserverEnv, ScrollObserver, ScrollSpyEnv, ScrollSpyOptions, ScrollSpy, ScrollSpyElement } from './scroll'
 // ★#449 跨窗消息原语（postMessage——origin 校验 + type 过滤收口）
 export { subscribeWindowMessage } from './window-message'
 export type { WindowMessage, WindowMessageEnv, WindowMessageOptions, WindowMessageHandle } from './window-message'
