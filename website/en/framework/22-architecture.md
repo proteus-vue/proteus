@@ -16,7 +16,7 @@ Proteus's architecture has only one theme: **not binding**. “Not binding to an
 
 | Dimension (G series) | Semantic-layer interface (framework-defined) | Backend SPI (pluggable implementation) | Status |
 |---|---|---|---|
-| Platform API (G-31/32) | p-* semantic components + the 157-primitive SSOT + 68 Capability Hooks | Per-target semantic implementations; the Mini Program component set = the Layer 1 compatibility layer | ✅ |
+| Platform API (G-31/32) | p-* semantic components + the 159-primitive SSOT + 70 Capability Hooks | Per-target semantic implementations; the Mini Program component set = the Layer 1 compatibility layer | ✅ |
 | Render engine (G-27/37) | VNode / Component IR / LayoutConstraint IR | RenderBackend: VueDom / Native×3 / Flutter / Headless | ✅ |
 | Compiler (G-29/38) | CompilerIR: `SourceFile → ProgramIR → IRModule` | CompilerBackend: Node ✅ / Rust ✅ / WASM | 🟡 |
 | Fluid layout (G-22) | The p-fluid / p-grid / p-stack / p-fit / p-adaptive declarative primitives | `@proteus-vue/fluid` + the FLD001-013 gate | ✅ |

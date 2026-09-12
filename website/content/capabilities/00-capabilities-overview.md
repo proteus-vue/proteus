@@ -6,9 +6,9 @@ order: 0
 
 # 能力总览
 
-> 68 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
+> 70 个能力原语——SSOT = `PRIMITIVE_CATALOG`（capability kind）+ `CapabilityHooks` 接口。**Hook 全部已实现**（API 就绪，双端桥/降级见各页兼容进度表）
 
-## 网络与通信（8）
+## 网络与通信（9）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -20,6 +20,7 @@ order: 0
 | C31 | [capability.data-channel](/docs/capability/data-channel) | `useDataChannel()` | `Channel` | wx...（直播/实时） |
 | C36 | [capability.bluetooth](/docs/capability/bluetooth) | `useBluetooth()` | `BluetoothAPI` | wx.openBluetoothAdapter |
 | C37 | [capability.nfc](/docs/capability/nfc) | `useNFC()` | `NFCAPI` | wx.getHCEState |
+| C69 | [capability.socket](/docs/capability/socket) | `useSocket()` | `UDPSocketHandle / TCPSocketHandle` | wx.createUDPSocket/createTCPSocket |
 
 ## 设备与系统（13）
 
@@ -55,7 +56,7 @@ order: 0
 | C3 | [capability.location](/docs/capability/location) | `useLocation()` | `Result<Coords>` | wx.getLocation |
 | C4 | [capability.map](/docs/capability/map) | `useMap()` | `MapController` | wx.createMapContext |
 
-## 媒体与扫码（9）
+## 媒体与扫码（10）
 
 | # | 能力 | API | 返回 | 小程序等价 |
 |---|---|---|---|---|
@@ -68,6 +69,7 @@ order: 0
 | C62 | [capability.audio](/docs/capability/audio) | `useAudio()` | `AudioController` | wx.createInnerAudioContext |
 | C63 | [capability.live-pusher](/docs/capability/live-pusher) | `useLivePusher()` | `LivePusherController` | wx.createLivePusherContext |
 | C68 | [capability.image-edit](/docs/capability/image-edit) | `useImageEdit()` | `ImageEditAPI` | wx.cropImage/editImage |
+| C70 | [capability.media-processing](/docs/capability/media-processing) | `useMediaProcessing()` | `MediaProcessingAPI` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer |
 
 ## 账号与支付（8）
 

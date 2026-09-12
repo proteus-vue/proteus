@@ -1844,4 +1844,18 @@ export const CAP_EN = {
       'image-edit.failed': 'Cropping or editing the image failed',
     },
   },
+  socket: {
+    desc: 'useSocket: low-level sockets — UDP (bind/connect/send/write/onMessage) and TCP (connect/write/onMessage/close) (wx.createUDPSocket/createTCPSocket; web browsers do not expose raw UDP/TCP → Err, use WebSocket/WebRTC)',
+    errors: {
+      'socket.unsupported': 'The socket API is missing (browsers do not expose raw UDP/TCP — use WebSocket/WebRTC or a host bridge)',
+      'socket.failed': 'A socket operation failed',
+    },
+  },
+  'media-processing': {
+    desc: 'useMediaProcessing: advanced media — MediaContainer (track compose/export) / VideoDecoder (frame grabbing) / MediaAudioPlayer (multi-source mixing) (wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer; web has no standard compose → container/audioPlayer throw, VideoDecoder uses WebCodecs)',
+    errors: {
+      'media-processing.unsupported': 'The media-processing API is missing (web has no standard compose/mixer; VideoDecoder needs WebCodecs + EncodedVideoChunk)',
+      'media-processing.failed': 'A media-processing operation failed',
+    },
+  },
 }
