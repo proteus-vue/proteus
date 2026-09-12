@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { PView, PText, PImage, PButton, PScrollView, PListView, PInput, PTextarea, PPopup, PToast, PNavBar, PSkeleton } from '@proteus-vue/components'
+import { PProgress, PLabel, PSelection } from '@proteus-vue/components'
 
 const clicks = ref(0)
 const imgLoads = ref(0)
@@ -13,6 +14,9 @@ const bio = ref('')
 const showPopup = ref(false)
 const showToast = ref(false)
 const loading = ref(true)
+// ★真机验收（2026-09-12）：新增组件演示态
+const percent = ref(40)
+const selected = ref('')
 
 // 万条数据：p-list-view 虚拟窗口只渲染可视区（行数恒定）
 const rows = ref([] as { title: string }[])
@@ -35,6 +39,10 @@ function onBioInput(e: { value: string }) {
 }
 function toggleLoading() {
   loading.value = !loading.value
+}
+// ★选区变化（对齐小程序 selectionchange event.detail）
+function onSelectionChange(e: { selectedString: string; isCollapsed: boolean }) {
+  selected.value = e.isCollapsed ? '（未选中）' : e.selectedString
 }
 </script>
 
@@ -95,6 +103,26 @@ function toggleLoading() {
       <p-button @click="toggleLoading">{{ loading ? '结束加载' : '开始加载' }}</p-button>
       <p-skeleton :visible="loading" :avatar="true" />
       <p-text v-if="!loading" class="row">数据已加载</p-text>
+    </p-view>
+
+    <!-- ★真机验收（2026-09-12）：颗粒度对齐新增组件（对齐小程序内置） -->
+    <h2>新增组件（颗粒度对齐）</h2>
+    <p class="sub">p-progress（&lt;progress&gt;）/ p-label（&lt;label&gt;）/ p-selection（&lt;selection&gt;）</p>
+    <p-view class="box">
+      <p-progress :percent="percent" />
+      <p-button @click="percent = Math.min(100, percent + 20)">进度 +20（当前 {{ percent }}%）</p-button>
+      <p-progress :percent="100" status="success" />
+      <p-progress :percent="60" type="circle" />
+    </p-view>
+    <p-view class="box">
+      <p-label for="demo-input">p-label 关联控件（点击聚焦输入框）</p-label>
+      <p-input id="demo-input" :value="name" placeholder="被 label 关联" @input="onNameInput" />
+    </p-view>
+    <p-view class="box">
+      <p-selection @selectionchange="onSelectionChange">
+        <p-text>长按选中这段文字，下方显示选区内容（对齐小程序 selectionchange）</p-text>
+      </p-selection>
+      <p-text class="row">选区：{{ selected || '（未选中）' }}</p-text>
     </p-view>
   </div>
 </template>
