@@ -55,6 +55,11 @@ jobs:
       - name: 组件库审计门禁（B8：no-platform-api / no-sync-storage / manifest-complete）
         run: npx tsx packages/cli/src/index.ts components:audit src/components
 
+      - name: 官方能力覆盖门禁（★权威标尺：官方清单 spec 驱动 + 棘轮——未归类/覆盖回退即红）
+        run: |
+          node scripts/gen-mp-spec.mjs --check
+          npx tsx packages/cli/src/index.ts audit coverage
+
       - name: 国际化消息审计（i18n-plan B2：缺失 key 阻断）
         run: npx tsx packages/cli/src/index.ts i18n:check examples --catalog examples/locales/zh-CN.json
 
