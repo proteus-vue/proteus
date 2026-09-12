@@ -21,6 +21,9 @@ import {
 } from '@proteus-vue/desktop'
 import type { FocusableElement } from '@proteus-vue/desktop'
 
+/** 指令对象钩子（测试直接调用 mounted/unmounted；弹参宽松以匹配用例调用形态） */
+type DirectiveHooks = { mounted?: (el: HTMLElement, ...args: unknown[]) => void; unmounted?: (el: HTMLElement, ...args: unknown[]) => void }
+
 describe('G-24 B1 p-shortcut（键盘快捷键纯逻辑）', () => {
   it('parseShortcutExpr：mod+s:save → keys+id；无 id / 空白容忍', () => {
     expect(parseShortcutExpr('mod+s:save')).toEqual({ keys: ['mod', 's'], id: 'save' })
@@ -138,14 +141,15 @@ describe('G-24 指令工厂（六原语集）', () => {
   it('createDesktopDirectives：返回 v-p-hover / v-p-shortcut / v-p-focus-trap / v-p-context-menu / v-p-permission / v-p-cursor-glow 六指令（#389d 新增指针跟随光晕）', () => {
     const dirs = createDesktopDirectives()
     expect(Object.keys(dirs).sort()).toEqual(['p-context-menu', 'p-cursor-glow', 'p-focus-trap', 'p-hover', 'p-permission', 'p-shortcut'])
-    for (const d of Object.values(dirs)) {
+    // 指令工厂恒返回对象形态（Directive 联合类型未收窄——测试侧断言对象钩子）
+    for (const d of Object.values(dirs) as DirectiveHooks[]) {
       expect(typeof d.mounted).toBe('function')
       expect(typeof d.unmounted).toBe('function')
     }
   })
 
   it('v-p-shortcut 指令：keydown 命中 → handler(id)；unmounted 清理监听', () => {
-    const dir = createDesktopDirectives()['p-shortcut']
+    const dir = createDesktopDirectives()['p-shortcut'] as DirectiveHooks
     const el = document.createElement('button')
     const handler = vi.fn()
     dir.mounted!(el, { value: { expr: 'mod+s:save', handler }, platform: 'web' } as never)
@@ -157,7 +161,7 @@ describe('G-24 指令工厂（六原语集）', () => {
   })
 
   it('v-p-hover 指令：mount 后 mouseenter → hover class；unmount 清理', () => {
-    const dir = createDesktopDirectives()['p-hover']
+    const dir = createDesktopDirectives()['p-hover'] as DirectiveHooks
     const el = document.createElement('div')
     dir.mounted!(el, { value: 'lift' } as never)
     el.dispatchEvent(new MouseEvent('mouseenter'))

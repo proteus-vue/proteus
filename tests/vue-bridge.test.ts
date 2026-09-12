@@ -19,6 +19,19 @@ import {
 } from '@proteus-vue/render-backend'
 import type { IRNode } from '@proteus-vue/render-backend'
 
+/** 纯对象树（toPlainTree）结构面——递归类型（原内联 cast 少一层嵌套导致访问下钻报错） */
+interface PlainNode {
+  type: string
+  props: Record<string, unknown>
+  text?: string
+  children: PlainNode[]
+}
+/** Flutter widget 树（toWidgetTree）结构面 */
+interface WidgetNode {
+  widget: string
+  children: WidgetNode[]
+}
+
 /** 业务 VNode 树（语义标签 p-* —— "一套代码"本体） */
 function productVNode() {
   return h('p-page', { title: 'Product' }, [
@@ -37,11 +50,7 @@ describe('G-41 B3 vue-bridge：真实 Vue 渲染器接入 Dispatcher', () => {
 
     renderer.render(productVNode(), container)
 
-    const tree = toPlainTree(container) as {
-      type: string
-      props: Record<string, unknown>
-      children: Array<{ type: string; props: Record<string, unknown>; children: Array<{ type: string; children: Array<{ type: string; text: string }> }> }>
-    }
+    const tree = toPlainTree(container) as unknown as PlainNode
     // 结构：container → page → grid → [box→text, box→button]；semantic 分发：layout.grid → 'grid'，ui.text → 'text'
     expect(tree.type).toBe('container')
     const page = tree.children[0]
@@ -100,7 +109,7 @@ describe('G-41 B3 vue-bridge：真实 Vue 渲染器接入 Dispatcher', () => {
     dispatch.switchBackend(flutter)
     const flatContainer = flutter.createElement({ type: 'container', props: {}, children: [] }) as never
     renderer.render(productVNode(), flatContainer)
-    const flatTree = toWidgetTree(flatContainer) as { children: Array<{ widget: string; children: Array<{ widget: string; children: Array<{ widget: string }> }> }> }
+    const flatTree = toWidgetTree(flatContainer) as unknown as WidgetNode
     expect(flatTree.children[0].widget).toBe('Scaffold') // shell.page
     const flatGrid = flatTree.children[0].children[0]
     expect(flatGrid.widget).toBe('GridView') // layout.grid

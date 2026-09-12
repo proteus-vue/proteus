@@ -32,7 +32,7 @@ describe('HMR Runtime：分派与顺序', () => {
     const runtime = createHmrRuntime({
       applyModule,
       reload,
-      onEvent: (e) => events.push(`${e.type}:${e.result ?? ''}`),
+      onEvent: (e) => events.push(`${e.type}:${e.type === 'apply' ? e.result : ''}`),
     })
     runtime.apply(payload({ id: 1, file: 'src/a.vue', code: 'export default {}' }))
     expect(applyModule).toHaveBeenCalledWith('src/a.vue', 'export default {}')

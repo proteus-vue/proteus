@@ -50,7 +50,7 @@ describe('FluidContext 容器查询（S1 纯逻辑）', () => {
   })
 
   it('createContainerQuery：fake 观察器驱动 → 订阅收到宽度/方向/断点更新；destroy 停止', () => {
-    let fake: ReturnType<typeof fakeObserverFactory> | null = null
+    let fake!: ReturnType<typeof fakeObserverFactory>
     const el = { tag: 'div' }
     const query = createContainerQuery(el, {
       designWidth: 375,
@@ -237,7 +237,7 @@ describe('统一断点入口 createSizeAwareObserver（essence 02 §2 useBreakpo
   }
 
   it('容器 + 视口双断点：容器变化 → containerBreakpoint；resize → viewportBreakpoint；destroy 释放监听', () => {
-    let fake: ReturnType<typeof fakeObserverFactory> | null = null
+    let fake!: ReturnType<typeof fakeObserverFactory>
     const { target, listeners } = fakeResizeTarget()
     let vw = 500
     const aware = createSizeAwareObserver(

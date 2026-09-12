@@ -9,14 +9,41 @@ import type { CapabilityBridge, CompatStorage, KeyboardInfo } from '@proteus-vue
 /** 内存 CompatStorage（useStorage 测试底座） */
 function memStorage(): CompatStorage {
   const m = new Map<string, string>()
+  const get = <T>(key: string): T | undefined => {
+    const raw = m.get(key)
+    return raw === undefined ? undefined : (JSON.parse(raw) as T)
+  }
   return {
-    get: <T>(key: string) => {
-      const raw = m.get(key)
-      return raw === undefined ? undefined : (JSON.parse(raw) as T)
+    get,
+    set: (key, value) => {
+      m.set(key, JSON.stringify(value))
     },
-    set: (key, value) => m.set(key, JSON.stringify(value)),
-    remove: (key) => m.delete(key),
-    clear: () => m.clear(),
+    remove: (key) => {
+      m.delete(key)
+    },
+    clear: () => {
+      m.clear()
+    },
+    // 异步变体：测试底座同步实现直通（仅需满足契约，测试只用同步路径）
+    setAsync: async (key, value) => {
+      m.set(key, JSON.stringify(value))
+      return capOk(undefined)
+    },
+    getAsync: async <T,>(key: string) => capOk(get<T>(key)),
+    removeAsync: async (key) => {
+      m.delete(key)
+      return capOk(undefined)
+    },
+    clearAsync: async () => {
+      m.clear()
+      return capOk(undefined)
+    },
+    info: async () => capOk({ keys: Array.from(m.keys()), currentSize: 0, limitSize: 10 * 1024 * 1024 }),
+    batchGet: async (keys) => capOk(keys.map((key) => ({ key, value: get(key) }))),
+    batchSet: async (kvList) => {
+      for (const { key, value } of kvList) m.set(key, JSON.stringify(value))
+      return capOk(undefined)
+    },
   }
 }
 
@@ -209,7 +236,10 @@ describe('G-32 B3 续：useFetch / usePermission / useStorage / createReactiveSt
     const r = await hooks.useFetch<{ url: string; method: string }>('/api/x', { method: 'POST' })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.data).toMatchObject({ url: '/api/x', method: 'POST' })
-    const { data } = await hooks.useFetch<{ url: string }>('/api/y')
+    const { data } = await hooks.useFetch<{ url: string }>('/api/y').then((r) => {
+      if (!r.ok) throw new Error('expected ok')
+      return r
+    })
     expect(data).toMatchObject({ url: '/api/y' }) // migration.md `const { data } = await useFetch(url)`
   })
 
@@ -814,7 +844,7 @@ describe('G-32 B3 四期：websocket / upload / download / analytics / log / fil
     }
     const hooks = createCapabilityHooks(
       mockBridge({
-        getFileSystem: () => fsBridge,
+        getFileSystem: () => fsBridge as never, // 部分 mock：仅实现用例用到的方法
       }),
     )
     const fs = hooks.useFileSystem()
@@ -848,7 +878,7 @@ describe('G-32 B3 四期：websocket / upload / download / analytics / log / fil
           writeFile: async () => undefined,
           remove: async () => undefined,
           exists: async () => true,
-        }),
+        }) as never, // 部分 mock：仅实现用例用到的方法
       }),
     )
     const probe = await full.probe()
@@ -1320,8 +1350,8 @@ describe('G-32 B3 六期：page-lifecycle / bluetooth / nfc / camera / microphon
     const full = createCapabilityHooks(
       mockBridge({
         getPageLifecycle: () => ({ phase: 'IDLE' as const, onLoad: () => () => undefined, onShow: () => () => undefined, onHide: () => () => undefined }),
-        getBluetooth: async () => ({ supported: true, available: true, devices: ['x'] }),
-        getNfc: async () => ({ supported: true, available: true }),
+        getBluetooth: async () => ({ supported: true, available: true, devices: ['x'] }) as never, // 部分 mock：仅 info 字段
+        getNfc: async () => ({ supported: true, available: true }) as never, // 部分 mock：仅 info 字段
         getCamera: async () => ({ kind: 'camera', supported: true, granted: true }),
         getMicrophone: async () => ({ kind: 'microphone', supported: true, granted: true }),
         getKeyboard: () => ({ info: { height: 0, visible: false }, onChange: () => () => undefined }),

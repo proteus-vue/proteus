@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest'
 import { createFlamegraphCollector } from '@proteus-vue/devtools-runtime'
 import type { TraceEvent, TraceSource } from '@proteus-vue/devtools-runtime'
 
-function ev(source: TraceSource, phase: 'start' | 'end', name: string, timestamp: number): TraceEvent {
+function ev(source: TraceSource, phase: 'start' | 'end' | 'point' | 'error', name: string, timestamp: number): TraceEvent {
   return { source, phase, name, timestamp }
 }
 

@@ -348,7 +348,9 @@ describe('G-36 B4 自修复循环（G-36.6 上限 3 超限转人工）', () => {
     const mcp = createMcpServer()
     const r = await generateWithRetry(
       { intent: '商品详情页，主图+价格+加入购物车' },
-      { construct: ({ intent }) => intentToFlex({ intent }, { mcp }), mcp },
+      // intent-to-flex Skill 直接作构造器：返回 IntentToFlexResult（页面/代码/blocks），
+      // generateWithRetry 只消费其 source/ir（此处均缺省 → 校验层跳过 → 首次交付）
+      { construct: (({ intent }: { intent: string }) => intentToFlex({ intent }, { mcp })) as never, mcp },
     )
     expect(r.ok).toBe(true)
     expect(r.status).toBe('delivered')

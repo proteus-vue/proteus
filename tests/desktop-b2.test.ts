@@ -21,6 +21,7 @@ import {
   createPermissionDirective,
 } from '@proteus-vue/desktop'
 import type { NotificationCtor } from '@proteus-vue/desktop'
+import type { ObjectDirective } from 'vue'
 
 describe('G-24 B2 p-notify（通知——04 §1 Notification API 映射）', () => {
   function makeNotification(permission: string): NotificationCtor {
@@ -110,7 +111,7 @@ describe('G-24 B2 p-permission（权限门禁——04 §2 权限前置）', () =
         return true
       },
     }
-    const d = createPermissionDirective({ env })
+    const d = createPermissionDirective({ env }) as ObjectDirective<HTMLElement>
     const el = document.createElement('button')
     const handler = vi.fn()
     el.addEventListener('click', handler) // 业务 handler（注册于指令监听之后——同元素同阶段按注册序）
@@ -124,7 +125,7 @@ describe('G-24 B2 p-permission（权限门禁——04 §2 权限前置）', () =
   })
 
   it('v-p-permission：已授权 → 放行（业务 handler 正常触发一次）', async () => {
-    const d = createPermissionDirective({ env: { query: async () => 'granted' } })
+    const d = createPermissionDirective({ env: { query: async () => 'granted' } }) as ObjectDirective<HTMLElement>
     const el = document.createElement('button')
     const handler = vi.fn()
     el.addEventListener('click', handler)

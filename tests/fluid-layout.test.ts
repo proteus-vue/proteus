@@ -52,7 +52,7 @@ describe('fluid-layout B1（纯算法）', () => {
 
 describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
   it('transformTemplateToWxml：p-fluid 属性 → style 追加 calc 线性声明（★#496 M3 Skyline 无 clamp）；属性本身剥离', () => {
-    const result = transformTemplateToWxml('<h1 p-fluid="font-size(20, 32)">标题</h1>', {})
+    const result = transformTemplateToWxml('<h1 p-fluid="font-size(20, 32)">标题</h1>', { px2rpx: true, rpxRatio: 2 })
     expect(result.wxml).toContain('style="font-size: calc(15.77px + 1.1268vw)"')
     expect(result.wxml).not.toContain('p-fluid')
     expect(result.warnings.length).toBe(0)
@@ -60,6 +60,8 @@ describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
 
   it('多组 + 与静态 style 合并；自定义 designWidth/viewport 生效', () => {
     const result = transformTemplateToWxml('<div style="color:red" p-fluid="gap(12,20) margin(16,32)">x</div>', {
+      px2rpx: true,
+      rpxRatio: 2,
       fluidLayout: { designWidth: 400, viewport: { min: 320, max: 1280 } },
     })
     // slope(gap)=(20-12)/(1280-400)=0.00909；intercept=12-0.00909*400=8.36；margin slope=0.01818，intercept=16-0.01818*400=8.73
@@ -67,7 +69,7 @@ describe('★G-22 p-fluid 编译期生成（MP 模板转换）', () => {
   })
 
   it('FLD003：无法解析的表达式 → 剥离 + 警告，不生成样式', () => {
-    const result = transformTemplateToWxml('<p p-fluid="font-size(20)">x</p>', {})
+    const result = transformTemplateToWxml('<p p-fluid="font-size(20)">x</p>', { px2rpx: true, rpxRatio: 2 })
     expect(result.wxml).not.toContain('p-fluid')
     expect(result.warnings.some((w) => w.includes('FLD003'))).toBe(true)
   })

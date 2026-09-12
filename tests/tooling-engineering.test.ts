@@ -12,7 +12,7 @@ import {
   validateComponentMeta,
   validateCapabilityContract,
 } from '@proteus-vue/api'
-import type { CapabilityContract, Reactivity } from '@proteus-vue/api'
+import type { CapabilityContract, ComponentMeta, Reactivity } from '@proteus-vue/api'
 
 /** 简单 reactivity mock（ref：{value} 可写；computed/watch 静态）——既有测试同构 */
 function mockReactivity(): Reactivity {
@@ -122,7 +122,8 @@ describe('G-32 B5 续三 工程化语义（E24-E28）', () => {
     // 非法：空 name / 缺 semantic / 非法 prop type / 空 emits 项
     expect(validateComponentMeta({ name: '', semantic: 'layout.box' })).toContain('name 必填（组件名）')
     expect(validateComponentMeta({ name: 'p-x', semantic: '' })).toContain('semantic 必填（C-IR 语义）')
-    const bad = validateComponentMeta({ name: 'p-x', semantic: 'layout.box', props: { a: { type: 'Nope' } } })
+    // 故意非法 prop type（校验路径输入）——越过声明类型边界
+    const bad = validateComponentMeta({ name: 'p-x', semantic: 'layout.box', props: { a: { type: 'Nope' } } } as unknown as ComponentMeta)
     expect(bad.some((e) => e.includes('type 非法'))).toBe(true)
     const badEmits = validateComponentMeta({ name: 'p-x', semantic: 'layout.box', emits: [''] })
     expect(badEmits.some((e) => e.includes('emits'))).toBe(true)
@@ -146,7 +147,7 @@ describe('G-32 B5 续三 工程化语义（E24-E28）', () => {
   })
 
   it('E28 defineCapability：probe 注入 → check 可用性；resolve 降级解析；isDegraded 语义', async () => {
-    const probe = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+    const probe = vi.fn<[], Promise<boolean>>().mockResolvedValue(false)
     const tool = createToolingEngineering({ reactivity: mockReactivity() })
     const cap = tool.defineCapability({ name: 'scan-qr', fallback: ['manual'], required: false }, { probe })
     expect(await cap.check()).toBe(false)

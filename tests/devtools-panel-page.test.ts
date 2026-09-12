@@ -77,7 +77,8 @@ describe('printPanelUrl', () => {
     const logger = { info: (m: string) => logs.push(m) }
     printPanelUrl(httpServer, logger)
     expect(cb).not.toBeNull()
-    cb?.()
+    // 闭包赋值不在 TS 控制流视野内（此前被收窄为 null）——显式函数类型调用
+    ;(cb as unknown as () => void)()
     expect(logs[0]).toContain('http://localhost:5173/proteus-devtools')
   })
 

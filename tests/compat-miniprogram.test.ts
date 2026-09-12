@@ -85,7 +85,8 @@ describe('G-31 B6 createWxCompat（Step 1 运行时桥——wx.* 委托 Proteus�
   it('storage 委托：wx.setStorageSync/getStorageSync → platform.storage', () => {
     const platform = createPlatformAPI()
     // Node 环境 storage 兜底内存 Map
-    const wx = createWxCompat(platform, { useVibrate: async () => ({ ok: true as const, data: undefined }) })
+    // 部分 mock：仅 useVibrate（createWxCompat 只消费该能力入口——完整 CapabilityHooks 由平台桥提供）
+    const wx = createWxCompat(platform, { useVibrate: async () => ({ ok: true as const, data: undefined }) } as never)
     wx.setStorageSync('k', 42)
     expect(wx.getStorageSync('k')).toBe(42)
     wx.removeStorageSync('k')
@@ -94,9 +95,10 @@ describe('G-31 B6 createWxCompat（Step 1 运行时桥——wx.* 委托 Proteus�
 
   it('request 委托：回调式 → platform.request Promise 桥（success 接收到 data）', async () => {
     const platform = createPlatformAPI({
+      // 部分 mock 适配器：仅 status/data（RequestResponse 的 headers/config 非本用例关注）
       request: async () => ({ status: 200, data: { hello: 1 } }),
-    })
-    const wx = createWxCompat(platform, { useVibrate: async () => ({ ok: true as const, data: undefined }) })
+    } as never)
+    const wx = createWxCompat(platform, { useVibrate: async () => ({ ok: true as const, data: undefined }) } as never)
     const res = await new Promise<{ statusCode: number; data: unknown }>((resolve) => {
       wx.request({ url: '/x', success: (r) => resolve(r) })
     })

@@ -116,7 +116,7 @@ describe('p-adaptive resolveAdaptiveFormStyle（B2 Web 形态样式）', () => {
 
 describe('p-adaptive createAdaptiveController（B2 容器监听 + 求解）', () => {
   it('fake 观察器驱动：宽度变化 → 形态切换（边界 600/840）；destroy 停止', () => {
-    let fake: ReturnType<typeof fakeObserverFactory> | null = null
+    let fake!: ReturnType<typeof fakeObserverFactory>
     const controller = createAdaptiveController(
       { tag: 'div' },
       {

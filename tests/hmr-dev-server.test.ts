@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createHmrDevServer } from '@proteus-vue/hmr/dev-server'
 import type { HmrDevServer } from '@proteus-vue/hmr/dev-server'
+import type { HmrPayload } from '@proteus-vue/hmr'
 import { compileVueSfc } from '@proteus-vue/compiler'
 import { WebSocket } from 'ws' // Node 18 无全局 WebSocket → 用 ws 包客户端（与 hmr 服务端同源）
 import fs from 'node:fs'
@@ -56,7 +57,7 @@ describe('HMR Dev Server：WS 服务端', () => {
     ws.onmessage = (ev) => received.push(JSON.parse(String(ev.data)))
     await waitFor(() => server.clientCount === 1)
 
-    const p = { id: 1, file: 'src/a.vue', type: 'vue', action: 'update', timestamp: Date.now(), code: 'x' }
+    const p: HmrPayload = { id: 1, file: 'src/a.vue', type: 'vue', action: 'update', timestamp: Date.now(), code: 'x' }
     server.broadcast([p])
     await waitFor(() => received.length === 1)
     expect(received[0]).toEqual(p)

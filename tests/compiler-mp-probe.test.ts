@@ -17,7 +17,7 @@ const opts = { px2rpx: true, rpxRatio: 2 }
 
 function compileComponent(rel: string) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8')
-  return compileVueSfc(src, { file: rel, isComponent: true, ...opts })
+  return compileVueSfc(src, { filename: rel, isComponent: true, ...opts })
 }
 
 describe('★mp-conformance 探针矩阵 P1/P2：p-modal 布局终案产物契约', () => {
@@ -87,7 +87,7 @@ describe('★mp-conformance 探针矩阵 P5：p-slider MP 映射（原生 slider
 
 describe('★mp-conformance 探针矩阵 P6：复测页整体产物（vmodel-mp-test 四形态）', () => {
   const src = fs.readFileSync(path.join(ROOT, 'examples/pages/vmodel-mp-test.vue'), 'utf8')
-  const r = compileVueSfc(src, { file: 'pages/vmodel-mp-test.vue', isComponent: false, ...opts })
+  const r = compileVueSfc(src, { filename: 'pages/vmodel-mp-test.vue', isComponent: false, ...opts })
   it('P6：modal/switch/slider 单段事件 + p-input 受控 bindinput 同页共存', () => {
     expect(r.wxml).toContain('bind:update-visible=')
     expect(r.wxml).toContain('bind:update-modelValue=')

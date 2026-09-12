@@ -49,7 +49,7 @@ const readPageData = (): string => {
 const readPopoverPanelStyle = (): string => {
   const pages = getCurrentPages()
   const p = pages[pages.length - 1]
-  const inst = p.selectComponent('#proteus-popover-demo')
+  const inst = p.selectComponent('#proteus-popover-demo') as { data?: Record<string, unknown> } | null
   return inst && inst.data ? String(inst.data.panelStyle ?? '') : ''
 }
 

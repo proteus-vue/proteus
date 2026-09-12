@@ -123,7 +123,7 @@ describe('G-42 B6 Embedded 嵌入语义', () => {
 describe('G-42 B6 Window 多窗口语义', () => {
   it('窗口创建/聚焦/销毁 + SPI 代理聚焦窗口', async () => {
     const c = createWindowContainer()
-    await c.initialize()
+    await c.initialize({ runtime: null, backends: [] })
     expect(c.listWindows()).toEqual(['window-1'])
     const w2 = c.createWindow('win-editor')
     expect(c.focusedWindow).toBe('win-editor') // 创建即聚焦

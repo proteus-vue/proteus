@@ -27,7 +27,14 @@ import {
   toComponentTree,
 } from '@proteus-vue/component-ir'
 import type { IRNode } from '@proteus-vue/render-backend'
+import type { ComponentIR } from '@proteus-vue/component-ir'
 import { COMPONENT_FIXTURES, GRID_BASIC, TRANSITION_FADE, ANIMATE_ENTRANCE, ROUTER_LINK_NAV } from './fixtures/component-ir-fixtures'
+
+/** C-IR（tag/semantic）与后端 IRNode（type/semantic）字段命名不同但运行时同构——渲染层读 semantic。
+ *  边界处显式转换（同 compiler-ir-m3-readback.test.ts 既有惯例）。 */
+function asIR(ir: ComponentIR): IRNode {
+  return ir as unknown as IRNode
+}
 
 /** Tier-1 渲染后端矩阵（B5 门禁覆盖面——conformance.md §2 CLI: VueDom/Native-iOS/Native-Android/Flutter + Harmony/Headless） */
 function buildBackends(): Array<{ id: string; backend: ProteusRenderBackend }> {
@@ -41,10 +48,10 @@ function buildBackends(): Array<{ id: string; backend: ProteusRenderBackend }> {
   ]
 }
 
-function renderAll(fixture: IRNode): Record<string, RenderNodeSnapshot> {
+function renderAll(fixture: ComponentIR): Record<string, RenderNodeSnapshot> {
   const out: Record<string, RenderNodeSnapshot> = {}
   for (const { id, backend } of buildBackends()) {
-    out[id] = renderComponentSnapshot(backend, fixture, createControlReader(id))
+    out[id] = renderComponentSnapshot(backend, asIR(fixture), createControlReader(id))
   }
   return out
 }
@@ -53,7 +60,7 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
   it('★核心：全部 L1 fixture × 全部 Tier-1 后端 → 控件映射与参考表一致（零 error）', () => {
     for (const [name, ir] of Object.entries(COMPONENT_FIXTURES)) {
       for (const { id, backend } of buildBackends()) {
-        const snap = renderComponentSnapshot(backend, ir, createControlReader(id))
+        const snap = renderComponentSnapshot(backend, asIR(ir), createControlReader(id))
         const result = checkComponentSnapshot(id, snap)
         expect(result.ok, `${name} × ${id}: ${JSON.stringify(result.errors)}`).toBe(true)
         expect(result.errors, `${name} × ${id}`).toEqual([])
@@ -131,12 +138,12 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
     ])
     expect(ir).not.toBeNull()
     for (const { id, backend } of buildBackends()) {
-      const snap = renderComponentSnapshot(backend, ir as Parameters<typeof renderComponentSnapshot>[1], createControlReader(id))
+      const snap = renderComponentSnapshot(backend, asIR(ir!), createControlReader(id))
       const result = checkComponentSnapshot(id, snap)
       expect(result.ok, `${id}: ${JSON.stringify(result.errors)}`).toBe(true)
     }
     // 渲染树 spot check：p-tabbar → 各端控件
-    const snaps = renderAll(ir as Parameters<typeof renderComponentSnapshot>[1])
+    const snaps = renderAll(ir!)
     expect(snaps['vue-dom'].control).toBe('nav.proteus-tabbar')
     expect(snaps['native-ios'].control).toBe('UITabBar')
     expect(snaps['native-android'].control).toBe('BottomNavigationView')
