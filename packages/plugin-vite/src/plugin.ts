@@ -17,7 +17,11 @@ import { resolveRouterConfig } from '@proteus-vue/types'
 import { transform as esbuildTransform, build as esbuildBuild } from 'esbuild'
 import * as sass from 'sass'
 import type { Plugin } from 'vite'
-import { compileVueSfc, transformStyleToWxss } from '@proteus-vue/compiler'
+import {
+  compileVueSfc, transformStyleToWxss, applyPlatformMacros, platformDefines,
+  effectiveVariants, splitVariant, resolvePlatformVariantWithExts, mapPublicAssetVariants, resolvePlatformVariant,
+} from '@proteus-vue/compiler'
+import type { VariantPlatform } from '@proteus-vue/compiler'
 import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/compiler-backend'
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
@@ -47,6 +51,23 @@ const MP_TAG_MAP: Record<string, string> = {
   navigator: 'proteus-navigator',
   picker: 'proteus-picker',
 }
+
+/** ★MP 专用原生标签（Web 端无对等）：位于组件模板的**平台死分支**（`v-if="!isWeb"`）时不渲染，
+ *  但 Vue 会把 `resolveComponent` 提升到 render 顶部 → Web 端仍会解析失败告警。
+ *  在 @vitejs/plugin-vue 的 `isCustomElement` 里声明为自定义元素即消除（见 vite-config.ts）。 */
+export const MP_ONLY_TAGS = new Set([
+  'picker-view',
+  'picker-view-column',
+  'movable-view',
+  'movable-area',
+  'match-media',
+  'root-portal',
+  'page-container',
+  'share-element',
+  'keyboard-accessory',
+  'cover-view',
+  'cover-image',
+])
 
 export function defaultScopedPlugin(): Plugin {
   return {
@@ -128,6 +149,23 @@ function preprocessStyle(lang: string, content: string): string {
   return content
 }
 
+/** ★平台变体·CSS（2026-09-13，第 5 层）：`<style src="./theme.css">` 加载并按目标平台解析变体。
+ *  `./theme.css` → 存在 theme.mp.css 则用它（否则 theme.css）。相对引用方 .vue 所在目录解析。 */
+export function loadStyleSrcWithVariant(
+  src: string,
+  fromFilename: string,
+  platform: VariantPlatform = 'mp',
+): string | null {
+  const base = path.resolve(path.dirname(fromFilename), src)
+  const hit = resolvePlatformVariant(base, platform, fs.existsSync)
+  if (!hit) return null
+  try {
+    return fs.readFileSync(hit, 'utf-8')
+  } catch {
+    return null
+  }
+}
+
 /**
  * ★module-plan B0 + platform-plan B5 尾：共享模块解析（纯函数可测）
  * - 相对路径（本地 .ts/.js）→ 产物相对 appDir 路径
@@ -150,6 +188,8 @@ export function resolveSharedModule(
    *  pnpm 严格链接下 @proteus-vue/{api,runtime,desktop,capabilities,app-config,shared}（应用声明、非 plugin 依赖）
    *  解析失败 → 返回 null → 这些 _proteus/*.js 从不产出，而页面产物却 require 它们（onLoad 崩溃）。 */
   resolveFrom?: string,
+  /** ★平台变体解析目标（2026-09-13）：相对导入优先命中 foo.<platform>.ts（缺省 mp） */
+  platform: VariantPlatform = 'mp',
 ): { file: string; relNoExt: string } | null {
   if (source.startsWith('@proteus-vue/')) {
     try {
@@ -183,7 +223,13 @@ export function resolveSharedModule(
   // ★B2 修复（决策 #365）：扩展名白名单——仅 JS/TS 参与共享模块 bundle；
   //   非代码资源（.md/.json/.txt/图片等）不走 esbuild bundle（此前 .md 命中 base 原样文件 → esbuild 裸错 "No loader"）
   const JS_EXTS = new Set(['.ts', '.js', '.mjs', '.cjs'])
-  for (const cand of [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]) {
+  // ★平台变体优先（2026-09-13）：`./share` → share.mp.ts（目标平台）优先于 share.ts（基准）。
+  //   无扩展名导入与带扩展名导入都走变体解析（resolvePlatformVariantWithExts 内含基准回退）。
+  const variantHit = resolvePlatformVariantWithExts(base, [...JS_EXTS], platform, (p) => {
+    try { return fs.statSync(p).isFile() } catch { return false }
+  })
+  const candidates = variantHit ? [variantHit] : [base, `${base}.ts`, `${base}.js`, path.join(base, 'index.ts'), path.join(base, 'index.js')]
+  for (const cand of candidates) {
     if (cand.endsWith('.vue')) continue
     if (!JS_EXTS.has(path.extname(cand).toLowerCase())) continue
     // ★B3 修复：必须是文件（existsSync 会把同名目录误匹配 → EISDIR）
@@ -358,6 +404,55 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
   return acc
 }
 
+/** ★2026-09-13：MP 待编译清单收集（页面 vs 组件分类的**唯一权威**处）。
+ *  分类依据 = **文件来自哪个源目录**，而不是「路径里有没有 components 字样」：
+ *  分包目录名常叫 components（如 subpackages/components/pages/*），旧启发式
+ *  `file.includes('/components/')` 会把**页面**误判为组件 → 产物成 Component() 且跳过
+ *  页面滚动容器包装 → 组件详情页整页无法滚动（首页正常，因其路径不含 components）。
+ *  组件仅来自两处（与 gen-routes 解析口径一致）：<appDir>/components 与 frameworkComponentsDir。 */
+export function collectMpEntries(opts: {
+  projectRoot: string
+  appDir: string
+  pagesDir: string
+  subPackages: Array<{ root: string }>
+  frameworkComponentsDir: string
+  webOnlyPages?: Set<string>
+  onSkipWebOnly?: (file: string) => void
+  /** ★平台变体（2026-09-13）：按该平台解析 `foo.mp.vue`/`foo.web.vue`（缺省 mp） */
+  platform?: VariantPlatform
+}): Array<{ file: string; rel: string; isComponent: boolean }> {
+  const { projectRoot, appDir, pagesDir, subPackages, frameworkComponentsDir, webOnlyPages, onSkipWebOnly } = opts
+  const platform = opts.platform ?? 'mp'
+  const out: Array<{ file: string; rel: string; isComponent: boolean }> = []
+  const pushRel = (dir: string, isComponent: boolean) => {
+    // ★平台变体去重：每个逻辑名只取目标平台那一份（他端变体不编译——否则同名逻辑被编译两次）
+    for (const f of effectiveVariants(walkVueFiles(dir), platform)) {
+      if (webOnlyPages?.has(f)) {
+        onSkipWebOnly?.(f)
+        continue
+      }
+      // 产物 rel 去掉变体后缀（page.mp.vue → pages/page，与 page.vue 同路径）
+      const relBase = path.relative(appDir, splitVariant(f).base).replace(/\\/g, '/')
+      out.push({ file: f, rel: relBase.replace(/\.vue$/, ''), isComponent })
+    }
+  }
+  // 页面根（含分包树）——一律**页面**
+  pushRel(path.join(projectRoot, pagesDir), false)
+  for (const sp of subPackages) pushRel(path.join(projectRoot, sp.root), false)
+  // 应用组件（约定 <appRoot>/components/<name>/index.vue）
+  pushRel(path.join(appDir, 'components'), true)
+  // 框架内置组件（src/components/<name>/index.vue → 产物 proteus/<name>/index）
+  for (const f of effectiveVariants(walkVueFiles(frameworkComponentsDir), platform)) {
+    if (webOnlyPages?.has(f)) {
+      onSkipWebOnly?.(f)
+      continue
+    }
+    const relIn = path.relative(frameworkComponentsDir, splitVariant(f).base).replace(/\\/g, '/').replace(/\.vue$/, '')
+    out.push({ file: f, rel: `proteus/${relIn}`, isComponent: true })
+  }
+  return out
+}
+
 /** ★#492 分包生效值统一经 resolveRouterConfig（router.subPackages 优先，顶层别名兼容）——
  *  ★2026-09-09 真机复测发现：gen-routes 已用生效值（app.json 声明 + 分包 json 生成），而插件页面扫描
  *  仍读顶层 cfg.subPackages——配置收编后顶层为空 → 分包页永不进编译清单（只产 list.json + 声明，
@@ -407,12 +502,29 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const bundleCache = createBundleCache(path.join(projectRoot, 'node_modules', '.cache', 'proteus', 'bundle'))
       // ★G-42/官网：webOnly 页面（<route> 块 webOnly: true）——MP 不编译不收录（仅 Web 路由，
       //   如文档引擎 demo 的 v-html 页/官网专属页）；auto-routes.ts（web 路由表）照常收录
+      // ★平台变体·路由门控（第 4 层，2026-09-13）：`platforms` 白名单不含 mp → 同样跳过 MP 编译
       const webOnlyPages = new Set<string>()
       const detectWebOnly = (file: string): void => {
         try {
           const src = fs.readFileSync(file, 'utf-8')
           const m = src.match(/<route>\s*([\s\S]*?)<\/route>/)
-          if (m && /"?webOnly"?\s*:\s*true/.test(m[1])) webOnlyPages.add(file)
+          if (!m) return
+          if (/"?webOnly"?\s*:\s*true/.test(m[1])) {
+            webOnlyPages.add(file)
+            return
+          }
+          // platforms: [...] —— 解析 JSON 判定是否含 mp（宽松：非 JSON 则忽略，交由 gen-routes 严格校验）
+          const pm = m[1].match(/"?platforms"?\s*:\s*(\[[^\]]*\])/)
+          if (pm) {
+            try {
+              const arr = JSON.parse(pm[1]) as unknown[]
+              if (Array.isArray(arr) && !arr.some((p) => typeof p === 'string' && ['mp', 'mp-weixin', 'skyline'].includes(p))) {
+                webOnlyPages.add(file)
+              }
+            } catch {
+              /* 非法 JSON：gen-routes 会抛错，此处不重复报 */
+            }
+          }
         } catch {
           /* 读失败不影响编译 */
         }
@@ -420,34 +532,21 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       for (const pagesRoot of [path.join(projectRoot, cfg.pagesDir), ...(effectiveSubPackages ?? []).map((sp) => path.join(projectRoot, sp.root))]) {
         for (const f of walkVueFiles(pagesRoot)) detectWebOnly(f)
       }
-      // 待编译文件：{ 绝对路径, 产物相对路径 }（框架组件 rel 规范化为 proteus/<name>/index）
-      const files: Array<{ file: string; rel: string }> = []
-      const pushRel = (dir: string) => {
-        for (const f of walkVueFiles(dir)) {
-          if (webOnlyPages.has(f)) {
-            console.log(`[mp-transform] 跳过 webOnly 页面：${path.relative(projectRoot, f).replace(/\\/g, '/')}`)
-            continue
-          }
-          files.push({ file: f, rel: path.relative(appDir, f).replace(/\\/g, '/').replace(/\.vue$/, '') })
-        }
-      }
-      pushRel(path.join(projectRoot, cfg.pagesDir))
-      for (const sp of effectiveSubPackages ?? []) {
-        pushRel(path.join(projectRoot, sp.root))
-      }
-      // 组件系统（v0.3）：应用根 components/ 目录（约定 <appRoot>/components/<name>/index.vue）
-      // isComponent 判定依赖路径含 /components/
-      const appComponents = path.join(appDir, 'components')
-      if (fs.existsSync(appComponents)) pushRel(appComponents)
-      // 框架内置组件（v0.4，★定位修正：非示例组件）：src/components/<name>/index.vue
-      // 产物路径规范化为 proteus/<name>/index（与应用组件 /components/... 隔离，gen-routes 同步解析）
+      // 待编译文件：{ 绝对路径, 产物相对路径, 是否组件 }（框架组件 rel 规范化为 proteus/<name>/index）
+      // ★2026-09-13 修复：isComponent 不再用「路径含 /components/」反推——分包目录名恰为
+      //   components（如 subpackages/components/pages/*）会把**页面**误判为组件 →
+      //   产物成 Component() 且跳过页面滚动容器包装（真机表现：组件详情页整页无法滚动）。
+      //   分类逻辑抽为 collectMpEntries（可单测；回归锁 tests/plugin-mp-entries.test.ts）。
       const frameworkComponents = opts.frameworkComponentsDir ?? path.join(projectRoot, 'src', 'components')
-      if (fs.existsSync(frameworkComponents)) {
-        for (const f of walkVueFiles(frameworkComponents)) {
-          const relIn = path.relative(frameworkComponents, f).replace(/\\/g, '/').replace(/\.vue$/, '')
-          files.push({ file: f, rel: `proteus/${relIn}` })
-        }
-      }
+      const files = collectMpEntries({
+        projectRoot,
+        appDir,
+        pagesDir: cfg.pagesDir,
+        subPackages: effectiveSubPackages ?? [],
+        frameworkComponentsDir: frameworkComponents,
+        webOnlyPages,
+        onSkipWebOnly: (f) => console.log(`[mp-transform] 跳过 webOnly 页面：${path.relative(projectRoot, f).replace(/\\/g, '/')}`),
+      })
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；
       // 调试开关 __PROTEUS_DEBUG__ 由本插件替换（vite define 不作用于直出资产）
@@ -474,9 +573,9 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             "    var __proteusPiniaMod = require('./_proteus/runtime.js')\n" +
             '    if (__proteusPiniaMod && __proteusPiniaMod.createMpPinia) __proteusPiniaMod.createMpPinia()'
           : '    // （未检测到 store 使用——跳过 Pinia 安装）'
-        const appJs = assembleAppJs(code, presets, piniaInstall)
+        const appJs = applyPlatformMacros(assembleAppJs(code, presets, piniaInstall)
           .replace(/__PROTEUS_DEBUG__/g, isDebug ? 'true' : 'false')
-          .replace(/"worklet"/g, "'worklet'")
+          .replace(/"worklet"/g, "'worklet'"), 'mp', 'code')
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}${appUsesStore ? '，Pinia 已安装' : ''}`)
       }
@@ -508,7 +607,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       const sharedRelNoExt = new Map<string, string>() // 共享模块文件 → 产物相对路径（@proteus-vue/* → _proteus/<name>）
       /** 解析共享模块：相对路径（本地 .ts/.js）或 @proteus-vue/*（框架包 dist，产物 _proteus/<name>）→ 返回 { file, relNoExt } */
       const resolveShared = (absFrom: string, source: string): { file: string; relNoExt: string } | null =>
-        resolveSharedModule(appDir, absFrom, source, frameworkComponents, projectRoot)
+        resolveSharedModule(appDir, absFrom, source, frameworkComponents, projectRoot, 'mp')
       const scanImports = (absFile: string): Array<{ source: string; typeOnly: boolean }> => {
         const src = fs.readFileSync(absFile, 'utf-8')
         // .vue 取 <script> 块；.ts/.js 共享模块直接用全文
@@ -645,6 +744,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             define: {
               __PROTEUS_DEBUG__: isDebug ? 'true' : 'false',
               __PROTEUS_SKYLINE__: cfg.skyline ? 'true' : 'false',
+              // ★平台编译期宏（条件显隐）：MP 共享 .ts 模块脚本内的 __MP__/__WEB__/__TARGET__ 在此替换
+              ...platformDefines('mp'),
               'process.env.NODE_ENV': isDebug ? '"development"' : '"production"',
               __VUE_OPTIONS_API__: 'true',
               __VUE_PROD_DEVTOOLS__: 'false',
@@ -693,7 +794,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
           item.requirePath = rel
         }
       }
-      for (const { file, rel } of files) {
+      for (const { file, rel, isComponent } of files) {
         const source = fs.readFileSync(file, 'utf-8')
         // ★G-29：compiler=rust → 先跑 Node/Rust 双编译语义等价校验（fail fast——不等价不产出）
         if (rustCompiler) {
@@ -707,7 +808,6 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             throw new Error(`[mp-transform] G-29.1 双编译语义不等价：${rel}\n  ${v.details.join('\n  ')}（${v.reason}）——产物未生成；config.compiler.backend 改回 'node' 可降级`)
           }
         }
-        const isComponent = file.includes(`${path.sep}components${path.sep}`)
         // ★Skyline iOS 白屏兜底（页面级通道）：该页在 page.webviewPages → 强制 webview 渲染
         //   （产物 page.json 无 renderer:skyline + 编译器关 Skyline-only 特判/降级不一致）
         const pageRenderer = !isComponent && matchWebviewPage(cfg.page?.webviewPages, rel) ? ('webview' as const) : renderer
@@ -735,6 +835,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               autoScrollContainer,
               fluidLayout,
               renderer: pageRenderer,
+              platform: 'mp',
             },
             projectRoot,
           )
@@ -756,9 +857,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               annotateLines: isDebug,
               debug: isDebug,
               preprocessStyle,
+              loadStyleSrc: (src) => loadStyleSrcWithVariant(src, file, 'mp'),
               autoScrollContainer,
               fluidLayout,
               renderer: pageRenderer,
+              platform: 'mp',
             })
             wxml = result.wxml
             js = result.js
@@ -779,9 +882,11 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             annotateLines: isDebug,
             debug: isDebug,
             preprocessStyle,
+            loadStyleSrc: (src) => loadStyleSrcWithVariant(src, file, 'mp'),
             autoScrollContainer,
             fluidLayout,
             renderer,
+            platform: 'mp',
           })
           wxml = result.wxml
           js = result.js
@@ -815,6 +920,30 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         }
         if (warnings.length) warningReport.push({ file: rel, warnings })
         console.log(`[mp-transform] ${rel} → wxml/js/wxss 已输出`)
+      }
+      // ★平台变体·静态资源（2026-09-13，第 3 层）：public/ 下的变体文件按平台选取，
+      //   产物路径**去变体后缀**（assets/logo.mp.png → assets/logo.png）——模板始终写
+      //   `src="/assets/logo.png"`，两端各自产出各自的图（他端变体不进产物）。
+      {
+        const publicDir = path.join(projectRoot, 'public')
+        if (fs.existsSync(publicDir)) {
+          const rels: string[] = []
+          const walk = (dir: string): void => {
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (e.name.startsWith('.')) continue
+              const full = path.join(dir, e.name)
+              if (e.isDirectory()) walk(full)
+              else rels.push(path.relative(publicDir, full).replace(/\\/g, '/'))
+            }
+          }
+          walk(publicDir)
+          let assetN = 0
+          for (const { from, to } of mapPublicAssetVariants(rels, 'mp')) {
+            this.emitFile({ type: 'asset', fileName: to, source: fs.readFileSync(path.join(publicDir, from)) })
+            assetN++
+          }
+          if (assetN) console.log(`[mp-transform] public 静态资源 → ${assetN} 个（平台变体已按 mp 解析）`)
+        }
       }
       // ★G-29 compiler=rust：双编译等价校验统计（mismatch 已在循环内抛红）
       if (rustCompiler) {

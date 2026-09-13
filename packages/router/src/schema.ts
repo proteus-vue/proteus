@@ -14,6 +14,17 @@ export class RouteValidationError extends Error {
   }
 }
 
+/** 平台标识归一（与 compiler/platform-variant 同规则；此处内联避免 router→compiler 依赖） */
+const PLATFORM_ALIASES: Record<string, string> = {
+  web: 'web', mp: 'mp', 'mp-weixin': 'mp', skyline: 'mp',
+  ios: 'ios', 'native-ios': 'ios', android: 'android', 'native-android': 'android',
+  harmony: 'harmony', 'native-harmony': 'harmony',
+  native: 'native', app: 'native',
+}
+function normalizePlatform(raw: string): string | undefined {
+  return PLATFORM_ALIASES[raw.trim().toLowerCase()]
+}
+
 /** meta.transition 合法枚举（对齐 RouteMeta 类型 + M4 的 Skyline routeType 映射） */
 const TRANSITIONS = ['slideUp', 'slideDown', 'halfScreen', 'scaleDown', 'none'] as const
 
@@ -121,6 +132,22 @@ export function validateSchema(
     webOnly = parsed.webOnly
   }
 
+  // ★平台变体·路由门控（2026-09-13，第 4 层）：platforms 白名单——本页仅在列出的平台编译/收录。
+  //   泛化 webOnly：`webOnly: true` ≡ `platforms: ['web']`。取值 = 规范变体 id（web | mp | native，
+  //   别名 skyline→mp、app→native）；未声明 = 全平台。
+  let platforms: string[] | undefined
+  if (parsed.platforms !== undefined && parsed.platforms !== null) {
+    if (!Array.isArray(parsed.platforms) || parsed.platforms.some((p) => typeof p !== 'string')) {
+      throw new RouteValidationError('platforms 必须是字符串数组（web/mp/ios/android/harmony/native；别名 skyline→mp、app→native）', loc)
+    }
+    const norm = (parsed.platforms as string[]).map((p) => normalizePlatform(p))
+    if (norm.some((p) => p === undefined)) {
+      throw new RouteValidationError(`platforms 含未知平台：${(parsed.platforms as string[]).join(',')}（有效：web/mp/ios/android/harmony/native）`, loc)
+    }
+    platforms = [...new Set(norm as string[])]
+    if (platforms.length === 1 && platforms[0] === 'web') webOnly = true // 兼容：仅 web ≡ webOnly
+  }
+
   // params：可选对象（字段名 → 类型名 string/number/boolean），供 RouteParamsByName 类型表
   let params: Record<string, string> | undefined
   if (parsed.params !== undefined && parsed.params !== null) {
@@ -161,7 +188,7 @@ export function validateSchema(
     chunk = parsed.chunk
   }
 
-  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, chunk, webOnly, componentPath: loc.file }
+  return { loc, path: parsed.path, name, redirect, parent, meta, lazy, params, pageJson, customRouteKeyName, chunk, webOnly, platforms, componentPath: loc.file }
 }
 
 /** 全局唯一性校验：path / name 重复报错（指向两个文件:行号） */

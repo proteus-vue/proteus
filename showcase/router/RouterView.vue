@@ -6,11 +6,16 @@ import { computed, ref, defineAsyncComponent } from 'vue'
 import type { Component } from 'vue'
 import { routeMap } from './auto-routes'
 import { adapter } from '@proteus-vue/shared'
-import { webTransitionName } from '@proteus-vue/router'
+import { webTransitionName, resolveVariantComponentKey, routeAppliesToPlatform } from '@proteus-vue/router'
 
 // 懒加载全部页面（含分包页）：Web 端按页面自动 code-split
 // glob 相对本文件（examples/router/）→ examples/pages 与 examples/subpackages/*/pages
 const modules = import.meta.glob('../**/pages/**/*.vue')
+
+// ★平台变体·路由门控（第 4 层）：仅保留在 web 生效的路由（platforms 白名单 / webOnly）
+const activeRouteMap: Record<string, (typeof routeMap)[string]> = Object.fromEntries(
+  Object.entries(routeMap).filter(([, r]) => routeAppliesToPlatform(r as never, 'web')),
+)
 
 // 页面组件缓存 + 预热：异步组件首次挂载会跳过 Transition 动画（真机/浏览器验证"第一次无下沉转场"），
 // 预热使首次导航也同步挂载（chunk 已加载则 defineAsyncComponent 不再是异步 wrapper）
@@ -60,12 +65,14 @@ const barrierOpacity = computed(() => (transitionName.value.startsWith('halfscre
 const view = computed<Component | null>(() => {
   // routeMap 以 name 为键，这里收到的是 path，需按 path 回退查找（同 guards.getCurrentFrom）
   const rec =
-    routeMap[currentRoute.value] || Object.values(routeMap).find((r) => r.path === currentRoute.value)
+    activeRouteMap[currentRoute.value] || Object.values(activeRouteMap).find((r) => r.path === currentRoute.value)
   if (!rec) return null
-  // rec.component 为相对 examples/router/ 的路径，与 glob 键一致；优先用缓存（同步挂载保证转场）
-  const cached = pageCache.get(rec.component)
+  // ★平台变体（第 2 层）：rec.component 是**基准路径**（login.vue）→ 解析到本平台变体（login.web.vue）@
+  const key = resolveVariantComponentKey(Object.keys(modules), rec.component, 'web') ?? rec.component
+  // 优先用缓存（同步挂载保证转场）
+  const cached = pageCache.get(key)
   if (cached) return cached
-  const load = (modules as Record<string, () => Promise<unknown>>)[rec.component]
+  const load = (modules as Record<string, () => Promise<unknown>>)[key]
   return load ? defineAsyncComponent(load as () => Promise<Component>) : null
 })
 </script>

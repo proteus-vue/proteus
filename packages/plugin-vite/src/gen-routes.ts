@@ -19,6 +19,7 @@ import { scanRoutes } from '@proteus-vue/router/scan'
 import { buildRouteTree } from '@proteus-vue/router/tree'
 import { resolveRouterConfig } from '@proteus-vue/types'
 import type { ProteusConfig } from './config'
+import { effectiveVariants, splitVariant } from '@proteus-vue/compiler'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -113,6 +114,8 @@ interface PageInfo {
   params?: Record<string, string>
   /** ★G-42/官网：仅 Web 路由（<route> 块 webOnly: true）——MP app.json 不收录 + mpTransform 跳过编译 */
   webOnly?: boolean
+  /** ★平台变体·路由门控（第 4 层）：本页生效平台白名单（web|mp|native）；未声明 = 全平台 */
+  platforms?: string[]
 }
 
 /** 递归收集目录下所有 .vue 文件（跳过隐藏目录）——组件扫描用 */
@@ -152,10 +155,18 @@ function scanPages(): PageInfo[] {
   const pages: PageInfo[] = []
   const configMeta = rc.meta
 
+  // ★平台变体·页面（第 2 层，2026-09-13）：runGenRoutes 仅服务 MP 构建（OUT_DIR=dist/mp-weixin），
+  //   故按 'mp' 过滤：他端变体（page.web.vue）不收录，且被变体覆盖的基准（page.vue + page.mp.vue）只收变体。
+  const keepMp = (blocks: ReturnType<typeof scanRoutes>): ReturnType<typeof scanRoutes> => {
+    const effective = new Set(effectiveVariants(blocks.map((b) => b.componentPath), 'mp'))
+    return blocks.filter((b) => effective.has(b.componentPath))
+  }
+
   // 主包：pagesDir
-  const mainBlocks = scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true, includeNoRoute: true })
+  const mainBlocks = keepMp(scanRoutes(path.join(ROOT, config.pagesDir), { derivePath: true, verbose: true, includeNoRoute: true }))
   for (const b of mainBlocks) {
-    const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+    // ★平台变体：产物路径去变体后缀（page.mp.vue → pages/page，与 page.vue 同路由路径）
+    const relSrc = path.relative(APP_DIR, splitVariant(b.componentPath).base).replace(/\\/g, '/').replace(/\.vue$/, '')
     const pageRel = relSrc.replace(/^pages\//, '')
     trace(`[route] ${relSrc} 来源登记（${b.loc.file}:${b.loc.line}，route/scan）`)
     pages.push({
@@ -168,6 +179,7 @@ function scanPages(): PageInfo[] {
       pageJson: b.pageJson,
       customRouteKeyName: b.customRouteKeyName,
       webOnly: b.webOnly,
+      platforms: b.platforms,
     })
   }
 
@@ -175,10 +187,12 @@ function scanPages(): PageInfo[] {
   for (const sp of rc.subPackages) {
     const spRootAbs = path.join(ROOT, sp.root)
     const spName = sp.name ?? path.basename(sp.root)
-    const spBlocks = scanRoutes(spRootAbs, { derivePath: true, verbose: true, includeNoRoute: true })
+    const spBlocks = keepMp(scanRoutes(spRootAbs, { derivePath: true, verbose: true, includeNoRoute: true }))
     for (const b of spBlocks) {
-      const relSrc = path.relative(APP_DIR, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
-      const relInSub = path.relative(spRootAbs, b.componentPath).replace(/\\/g, '/').replace(/\.vue$/, '')
+      // ★平台变体：产物路径去变体后缀（与 page.vue 同路由路径）
+      const basePath = splitVariant(b.componentPath).base
+      const relSrc = path.relative(APP_DIR, basePath).replace(/\\/g, '/').replace(/\.vue$/, '')
+      const relInSub = path.relative(spRootAbs, basePath).replace(/\\/g, '/').replace(/\.vue$/, '')
       const pageRel = relInSub.replace(/^pages\//, '')
       pages.push({
         file: b.componentPath,
@@ -192,6 +206,7 @@ function scanPages(): PageInfo[] {
         customRouteKeyName: b.customRouteKeyName,
         chunk: b.chunk,
         webOnly: b.webOnly,
+        platforms: b.platforms,
       })
       // ★Router M7.1（module-plan 05）：分包页面声明 chunk → 必须与分包名对齐（页面→模块映射；不一致 → 透明化警告）
       if (b.chunk && b.chunk !== spName) {
@@ -211,12 +226,16 @@ function buildRoutes(pages: PageInfo[]): RouteRecord[] {
       name: deriveName(p),
       path: p.mpPath,
       // 相对 RouterView 所在目录（{appDir}/router）的路径，Web 端 import.meta.glob 按此匹配
-      component: path.relative(path.join(APP_DIR, 'router'), p.file).replace(/\\/g, '/'),
+      // ★平台变体（2026-09-13）：路由表 Web/MP **共享**，component 必须写**基准路径**（去变体后缀）——
+      //   两端各自按平台解析到自己的变体（Web: x.web.vue / MP: x.mp.vue）。写变体路径会让 Web 拿到 MP 变体。
+      component: path.relative(path.join(APP_DIR, 'router'), splitVariant(p.file).base).replace(/\\/g, '/'),
     }
     if (p.subPackage) r.subPackage = p.subPackage
     if (p.meta && Object.keys(p.meta).length > 0) r.meta = p.meta
     if (p.customRouteKeyName) r.customRouteKeyName = p.customRouteKeyName
     if (p.params && Object.keys(p.params).length > 0) r.params = p.params
+    // ★平台变体·路由门控（第 4 层）：白名单随路由表下发，两端据此过滤
+    if (p.platforms && p.platforms.length > 0) r.platforms = p.platforms
     return r
   })
 
@@ -282,6 +301,8 @@ function formatRoute(r: RouteRecord): string {
   if (r.subPackage) parts.push(`subPackage: ${JSON.stringify(r.subPackage)}`)
   if (r.meta && Object.keys(r.meta).length) parts.push(`meta: ${JSON.stringify(r.meta)}`)
   if (r.customRouteKeyName) parts.push(`customRouteKeyName: ${JSON.stringify(r.customRouteKeyName)}`)
+  // ★平台变体·路由门控（第 4 层）：白名单下发到路由表（Web RouterView / MP 过滤用）
+  if (r.platforms && r.platforms.length) parts.push(`platforms: ${JSON.stringify(r.platforms)}`)
   return `  { ${parts.join(', ')} },`
 }
 
@@ -333,7 +354,13 @@ function tsType(t: string): string {
 /** 生成 dist/mp-weixin/app.json */
 function writeAppJson(allPages: PageInfo[], routes: RouteRecord[]): void {
   // ★G-42/官网：webOnly 页面不进 MP app.json（仅 Web 路由——官网文档页等无 MP 对等）
-  const pages = allPages.filter(p => !(p as { webOnly?: boolean }).webOnly)
+  // ★平台变体·路由门控（第 4 层）：platforms 白名单不含 'mp' → 不进 MP app.json（泛化 webOnly）
+  const pages = allPages.filter(p => {
+    const pi = p as { webOnly?: boolean; platforms?: string[] }
+    if (pi.webOnly) return false
+    if (pi.platforms && !pi.platforms.includes('mp')) return false
+    return true
+  })
   const mainPages = pages.filter(p => !p.subPackage).map(p => p.mpPath)
   // ★默认首页一致性（2026-08）：主包根 index 页（如 pages/index）置顶——小程序 pages[0] = 冷启动默认页，
   //   对齐 Web 端 RouterView 初始路由回退（'pages/index'）；约定 pagesDir/index.vue 为默认首页
@@ -549,12 +576,16 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
       idx = lt + 2
       continue
     }
-    const mm = /^([a-z][\w-]*)/.exec(tpl.slice(lt + 1))
+    // ★标签名匹配：小写（kebab/原生）或 PascalCase（`<PSafe>`/`<PGrid>`）。
+    //   旧正则 `^([a-z][\w-]*)` 只匹配小写开头 → `<PSafe>` **完全跳过扫描** → 既不注册也不告警
+    //   （组件静默不渲染——showcase `<PSafe>` 踩坑）。扩展含大写，再统一 kebab 化（Vue 标准）。
+    const mm = /^([A-Za-z][\w-]*)/.exec(tpl.slice(lt + 1))
     if (!mm) {
       idx = lt + 1
       continue
     }
-    const tag = mm[1]
+    const tagRaw = mm[1]
+    const tag = /[A-Z]/.test(tagRaw) ? tagRaw.replace(/\B([A-Z])/g, '-$1').toLowerCase() : tagRaw
     if (!(NATIVE_MP_TAGS.has(tag) || HTML_TAGS.has(tag) || customTags.has(tag) || semanticTags.has(tag))) used.add(tag)
     idx = lt + 1 + mm[0].length
   }

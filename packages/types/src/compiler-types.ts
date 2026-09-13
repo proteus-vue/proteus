@@ -225,6 +225,9 @@ export interface CompileOptions {
   fluidLayout?: FluidLayoutConfig
   /** style 预处理器钩子（适配层注入 sass/less，编译器零依赖） */
   preprocessStyle?: (lang: string, content: string) => string
+  /** ★平台变体（2026-09-13）：`<style src="...">` 加载钩子——适配层按目标平台解析变体
+   *  （`./theme.css` → `theme.<platform>.css`）。缺省 → 该 style 块跳过并告警（不静默丢失）。 */
+  loadStyleSrc?: (src: string, fromFilename: string) => string | null
   /** ★module-plan B0：跨模块引用映射 */
   moduleImports?: Array<{ source: string; requirePath: string }>
   /** ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view；默认 true） */
@@ -234,6 +237,10 @@ export interface CompileOptions {
    *  编译器当前仅服务 MP（web/app 走运行时 render-backend），此字段为后续「全端平台化拆分」的最小挂点。
    */
   renderer?: Renderer
+  /** ★平台编译期宏（条件显隐）：`__MP__`/`__WEB__`/`__TARGET__` 在编译期替换为该平台字面量，
+   *  并静态裁剪死分支（v-if="__MP__" 在 Web 构建整体消失）。
+   *  缺省 'mp'（本编译器服务 MP；Web 端走标准 @vitejs/plugin-vue + vite define 同值替换）。 */
+  platform?: 'mp' | 'web' | 'native' | 'ios' | 'android' | 'harmony'
 }
 
 /** 整包编译结果（.wxml + .js + .wxss） */

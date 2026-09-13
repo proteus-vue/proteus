@@ -34,4 +34,9 @@ export interface RouteRecord {
   subPackage?: string
   /** 路由参数类型声明 */
   params?: Record<string, string>
+  /** ★G-42/官网：仅 Web 路由（MP app.json 不收录 + mpTransform 跳过编译） */
+  webOnly?: boolean
+  /** ★平台变体·路由门控（2026-09-13，第 4 层）：本路由生效平台白名单（web | mp | native）；
+   *  未声明 = 全平台。两端运行时据此过滤（Web RouterView / MP 路由表）。 */
+  platforms?: string[]
 }
