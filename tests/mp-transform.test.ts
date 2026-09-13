@@ -20,6 +20,23 @@ afterEach(() => {
 })
 
 describe('v-show（v0.3 指令补全）', () => {
+  // ★2026-09-13 S38 回归锁：模板表达式内的**函数调用**在 WXML 不可求值——
+  //   真机实测 `multiIdx.join(', ')` 抛 `Cannot convert undefined or null to object`，
+  //   使 handleChildrenCreation/bindingMapUpdate 崩溃 → 该页事件链整体失效（picker 确认后不更新）。
+  it('★模板函数调用（S38）须告警（WXML 不支持函数调用）', () => {
+    const w1 = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { warnings } = transformTemplateToWxml('<view>{{ list.join(", ") }}</view>', opts)
+    const calls = w1.mock.calls.map((c) => String(c[0]))
+    const all = [...warnings, ...calls].join('\n')
+    expect(all, '模板函数调用应告警').toContain('函数调用')
+    // 纯属性访问（无调用）不应告警
+    const w2 = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const ok = transformTemplateToWxml('<view>{{ a.b.c }}</view>', opts)
+    expect([...ok.warnings, ...w2.mock.calls.map((c) => String(c[0]))].join('\n'), '属性访问不应告警').not.toContain('函数调用')
+    w1.mockRestore()
+    w2.mockRestore()
+  })
+
   it('★TS 类型断言剥离（2026-08-31 B5 真机实测：as any 原样进 WXML → 微信编译 Fatal）', () => {
     // 'primary' as any / (x as any) 是编译期擦除的 TS 语法，不应进小程序 WXML 表达式
     const { wxml, warnings } = transformTemplateToWxml(`<button :type="('primary' as any)" :disabled="(x as any)">b</button>`, opts)
@@ -27,6 +44,110 @@ describe('v-show（v0.3 指令补全）', () => {
     expect(wxml).toContain('disabled="{{x}}"')
     expect(wxml).not.toContain('as any')
     expect(warnings).not.toContain('unmatched')
+  })
+
+  // ★2026-09-13 回归锁：`ref<T>(…)` 与 `ref(… as T)` 都不可静态求值 → 须告警 + data undefined
+  //   （一天踩三次的静默陷阱：p-checkbox picked / p-picker draft / 演示页）
+  it('★ref 泛型实参与 as 断言均告警（初值不可静态求值）', () => {
+    const w1 = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    compileVueSfc(`<script setup>\nconst a = ref<number[]>([])\nconst b = ref([] as number[])\nconst ok = ref([1, 2])\n</script>`, { filename: 'g.vue' })
+    const calls = w1.mock.calls.map((c) => String(c[0]))
+    expect(calls.some((c) => c.includes('带类型实参') && c.includes('const a')), 'ref<T> 应告警').toBe(true)
+    expect(calls.some((c) => c.includes('as 断言') && c.includes('const b')), 'ref(as T) 应告警').toBe(true)
+    expect(calls.some((c) => c.includes('const ok')), '字面量数组不应告警').toBe(false)
+    w1.mockRestore()
+    const { js } = compileVueSfc(`<script setup>\nconst ok = ref([1, 2])\n</script>`, { filename: 'g2.vue' })
+    const m = js.match(/ok: \[[\s\S]*?\]/)
+    expect(m, '字面量数组可静态求值').toBeTruthy()
+    expect(m![0].replace(/\s/g, ''), '应为 [1,2]').toBe('ok:[1,2]')
+  })
+
+  // ★2026-09-13 框架级 bug 回归锁：`props.value` 不得被 ref 的 `.value` 剥离规则误伤
+  //   （`props.modelValue === props.value` 曾被改成 `this.data.modelValue === this.data.props` → p-radio 全失效）
+  it('★props.value 不被 .value 剥离（ref 语义只对非 props 变量生效）', () => {
+    const sfc = `<script setup>
+const props = defineProps({ modelValue: { type: String, default: '' }, value: { type: String, default: '' } })
+const v = ref(0)
+const isActive = computed(() => props.modelValue === props.value)
+const doubled = computed(() => v.value * 2)
+</script>`
+    const { js } = compileVueSfc(sfc, { isComponent: true, filename: 'r.vue' })
+    expect(js, 'props.value 应保留为 this.data.value').toContain('this.data.modelValue === this.data.value')
+    expect(js, '不得出现 this.data.props').not.toContain('this.data.props')
+    expect(js, 'ref 的 .value 仍正常剥离').toContain('this.data.v * 2')
+  })
+
+  // ★2026-09-13 框架级 bug 回归锁：ref 对象**嵌套写**必须补 setData
+  //   （`o.value[k] = v` 此前只改 this.data、无 setData → 小程序不重渲染 → p-checkbox 群选无效）
+  it('★ref 对象嵌套写（o.value.x / o.value[k]）补 setData', () => {
+    const a = compileVueSfc(`<script setup>
+const o = ref({ x: 0 })
+function f() { o.value.x = 1 }
+</script>`, { filename: 'n.vue' })
+    expect(a.js).toMatch(/this\.data\.o\.x = 1[\s\S]*?setData\(\{ o: this\.data\.o \}\)/)
+    const b = compileVueSfc(`<script setup>
+const m = ref({})
+function g(k) { m.value[k] = 1 }
+</script>`, { filename: 'n2.vue' })
+    expect(b.js).toMatch(/this\.data\.m\[k\] = 1[\s\S]*?setData\(\{ m: this\.data\.m \}\)/)
+    // 整体替换走原 setData 路径（不被嵌套规则误改）
+    const c = compileVueSfc(`<script setup>
+const o = ref({ x: 0 })
+function h() { o.value = { x: 2 } }
+</script>`, { filename: 'n3.vue' })
+    expect(c.js).toContain('setData({ o: { x: 2 } })')
+  })
+
+  // ★2026-09-13 框架级 bug 回归锁：computed **链**（boxStyle 依赖 isChecked 依赖 prop）须传递重算
+  //   （此前只建立直接依赖 → modelValue 变化重算了 isChecked、却漏了 boxStyle → 旧样式残留）
+  it('★computed 链传递依赖（computed 依赖 computed 时，根字段变化须重算后继）', () => {
+    const sfc = `<template><view :style="boxStyle" /></template>
+<script setup>
+const props = defineProps({ modelValue: { type: Boolean, default: false } })
+const isChecked = computed(() => props.modelValue)
+const boxStyle = computed(() => (isChecked.value ? { borderColor: '#f00' } : undefined))
+</script>`
+    const { js } = compileVueSfc(sfc, { isComponent: true, filename: 'chain.vue' })
+    // modelValue 的 observer 必须同时重算 isChecked 与 boxStyle（链式）
+    const obs = js.match(/observers: \{[\s\S]*?\n  \},/)
+    expect(obs, 'observers 应存在').toBeTruthy()
+    expect(obs![0], 'modelValue observer 含 isChecked').toContain('isChecked')
+    expect(obs![0], 'modelValue observer 含 boxStyle（链式传递）').toContain('boxStyle')
+  })
+
+  // ★2026-09-13 框架级 bug 回归锁：computed 派生值须生成 observers（真机：p-checkbox 勾选事件正常但 UI 不变）
+  //   故障：computed 只在 ready() 求值一次，props/data 变化后派生值不重算 → class 绑定视觉不更新。
+  it('★computed 派生值生成依赖 observers（props 源 + data 源）', () => {
+    const sfc = `<template><view :class="{ on: isOn }">{{ label }}</view></template>
+<script setup>
+import { ref, computed } from 'vue'
+const props = defineProps({ checked: { type: Boolean, default: false } })
+const n = ref(0)
+const isOn = computed(() => props.checked)
+const label = computed(() => 'n=' + n.value)
+</script>`
+    const { js } = compileVueSfc(sfc, { isComponent: true, filename: 'c.vue' })
+    expect(js, 'props 源 computed → observer').toMatch(/observers:[\s\S]*checked\(n, o\)/)
+    expect(js, 'observer 内重算派生值').toContain('isOn')
+    expect(js, 'data 源 computed → observer').toMatch(/observers:[\s\S]*n\(n, o\)/)
+    expect(js, 'ready 仍保留初始化').toContain('ready()')
+  })
+
+  // ★2026-09-13 框架级 bug 回归锁：PascalCase → kebab（Vue 标准）
+  //   旧实现 `/([a-z0-9])([A-Z])/` 在连续大写时不插连字符 → `PSafe`→`psafe`（应 `p-safe`）、
+  //   `PGrid`→`pgrid`（应 `p-grid`）→ 组件名解析失败 → usingComponents 未注册 → **静默不渲染**。
+  it('★PascalCase 标签 → kebab（PSafe→p-safe / PGrid→p-grid / pGridView→p-grid-view）', () => {
+    const cases: Array<[string, string]> = [
+      ['PSafe', 'p-safe'], ['PGrid', 'p-grid'], ['PStack', 'p-stack'], ['PSplit', 'p-split'],
+      ['pGridView', 'p-grid-view'], ['p-text', 'p-text'], ['PButton', 'p-button'],
+    ]
+    for (const [input, expected] of cases) {
+      const { wxml } = transformTemplateToWxml(`<template><view><${input} /></view></template>`, opts)
+      expect(wxml, `${input} 应转为 ${expected}`).toContain(`<${expected}`)
+      // 错误名（连续大写未插连字符的形态）不得出现
+      const wrong = input.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+      if (wrong !== expected) expect(wxml, `${input} 不应残留错误名 ${wrong}`).not.toContain(`<${wrong}`)
+    }
   })
 
   it('v-show → hidden 属性（display:none 语义，元素始终渲染）', () => {
@@ -157,6 +278,20 @@ describe('scoped CSS（v0.3）', () => {
     )
     expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+::after/)
     expect(result.wxss).not.toContain('::after.data-v-')
+  })
+
+  it('★注释内含花括号不吞声明（2026-09-13：注释里写 `.x { margin:auto }` 曾致 display 等被吞）', () => {
+    const result = compileVueSfc(
+      '<template><div class="a">x</div></template>\n<style scoped>\n/* 覆盖 .other { margin-left: auto } 的居中语义 */\n.a { display: inline-flex; margin: 0; padding: 8px; }\n</style>',
+      { filename: 'brace-comment.vue' },
+    )
+    // 声明必须完整保留（旧实现：注释里的 `{` 被当作块起始 → display/margin 混入「选择器」被改写丢失）
+    expect(result.wxss, 'display 声明不应丢失').toContain('display: inline-flex')
+    expect(result.wxss, 'margin 声明不应丢失').toMatch(/margin:\s*0/)
+    expect(result.wxss, 'padding 声明不应丢失').toContain('16rpx')
+    // 选择器应正确后缀，注释内容原样保留
+    expect(result.wxss).toMatch(/\.a-data-v-[a-f0-9]+ \{/)
+    expect(result.wxss).toContain('margin-left: auto')
   })
 
   it('逗号选择器列表逐条后缀（.a, .b → .a-data-v-x, .b-data-v-x，无泄漏）', () => {
@@ -1021,6 +1156,17 @@ describe('transformStyleToWxss（style → wxss）', () => {
     )
     expect(css).toContain('@media (min-width: 1200rpx) { .proteus-h1 { color: red; } }')
     expect(css).toContain('@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }')
+  })
+
+  it('★单边异色 border 触发编译期警告（Skyline 下会使 border-radius 失效——圆环变方块）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // 真机四组对照实验定论：border-top-color 等单边异色 + border-radius → 渲染成方块
+    transformStyleToWxss('.ring { border: 2px solid #eee; border-top-color: #fff; border-radius: 10px; animation: spin 1s linear infinite; }', opts)
+    expect(warn, '单边异色 border 应告警').toHaveBeenCalledWith(expect.stringContaining('border-*-color'))
+    warn.mockClear()
+    // 统一色 border（含动画）→ 静默（合法用法）
+    transformStyleToWxss('.ring { border: 2px solid #eee; border-radius: 10px; animation: spin 1s linear infinite; }', opts)
+    expect(warn, '统一色 border 不应告警').not.toHaveBeenCalledWith(expect.stringContaining('border-*-color'))
   })
 
   it('float 触发编译期警告', () => {

@@ -740,14 +740,14 @@ const req = createRequestEngineering({
   concurrency: 1,
 }) // ★mock client + compat storage 缓存底座（无真实网络、确定性演示）
 const reqLog = ref('点击按钮演示请求数据层（mock client，无真实网络）')
-let reqFetchCount = 0
+const reqFetchCount = ref(0)
 
 // ★Web-only 假的确定性 client（记录请求数 + 延迟返回——可验证缓存命中/去重）
 //   MP 编译安全：函数签名零泛型（<T> 会断 MP 正则）；类型面用双断言一次收口
 function clientRequest(config: RequestConfig): Promise<RequestResponse<unknown>> {
   return new Promise((resolve) => {
     setTimeout(() => {
-      reqFetchCount += 1
+      reqFetchCount.value += 1
       resolve({ data: { url: config.url, at: Date.now() }, status: 200, headers: {}, config })
     }, 50)
   })
@@ -780,7 +780,7 @@ async function onReqQuery() {
     await new Promise((r) => setTimeout(r, 10))
   }
   const data = q.state.value.data
-  reqLog.value = `useQuery → data=${JSON.stringify(data)} · 请求数=${reqFetchCount}（点两次：第二次缓存命中零重发）`
+  reqLog.value = `useQuery → data=${JSON.stringify(data)} · 请求数=${reqFetchCount.value}（点两次：第二次缓存命中零重发）`
 }
 async function onReqQueue() {
   // ★MP 编译安全：队列任务与顺序数组提到顶层（#307 惯例）——
@@ -794,11 +794,11 @@ async function onReqQueue() {
   reqLog.value = `enqueue（并发 1 串行）→ 完成顺序 ${reqQueueOrder.join(' > ')}`
 }
 async function onReqCache() {
-  const before = reqFetchCount
+  const before = reqFetchCount.value
   const r1 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
-  const afterFirst = reqFetchCount
+  const afterFirst = reqFetchCount.value
   const r2 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
-  const afterSecond = reqFetchCount
+  const afterSecond = reqFetchCount.value
   reqLog.value = `request 缓存 → 首次 ${afterFirst - before} 次请求 · 二次 ${afterSecond - afterFirst} 次（ttl=10s 命中零重发）· data=${JSON.stringify(r2.data)}`
 }
 

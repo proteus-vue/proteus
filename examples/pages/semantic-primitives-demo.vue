@@ -166,8 +166,8 @@
       </div>
       <div class="row">
         <p-text class="label">p-radio（单选）：</p-text>
-        <p-radio value="x" :group="radioVal" @update:group="onRadio('x')">方案 X</p-radio>
-        <p-radio value="y" :group="radioVal" @update:group="onRadio('y')">方案 Y</p-radio>
+        <p-radio value="x" :model-value="radioVal" @change="onRadio('x')">方案 X</p-radio>
+        <p-radio value="y" :model-value="radioVal" @change="onRadio('y')">方案 Y</p-radio>
       </div>
       <div class="row">
         <p-text class="label">p-picker（日期）：</p-text>
@@ -409,12 +409,12 @@ function onParseLink(): void {
 
 // —— G-24 B3 导航结构（p-master-detail / p-tabs / p-command / p-breadcrumb——纯逻辑驱动，宽屏/桌面形态） ——
 const viewW = ref(960)
-let splitTimer = 0
+const splitTimer = ref(0)
 function onResize(): void {
   // 拖窗口实时 reflow（节流 100ms）
   if (typeof window === 'undefined') return
-  window.clearTimeout(splitTimer)
-  splitTimer = window.setTimeout(() => {
+  window.clearTimeout(splitTimer.value)
+  splitTimer.value = window.setTimeout(() => {
     viewW.value = window.innerWidth
   }, 100)
 }

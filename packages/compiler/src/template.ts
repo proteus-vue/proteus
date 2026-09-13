@@ -25,8 +25,16 @@ function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+/**
+ * PascalCase / camelCase → kebab-case（★Vue 标准实现，2026-09-13 修复）。
+ * 旧实现 `/([a-z0-9])([A-Z])/` 只在「小写/数字后跟大写」时插连字符 → 连续大写不处理：
+ *   `PSafe` → `psafe`（错，应 `p-safe`）、`PGrid` → `pgrid`（错，应 `p-grid`）→
+ *   组件名解析失败 → `usingComponents` 未注册 → **组件静默不渲染**（showcase 的 `<PSafe>` 踩此坑）。
+ * Vue 官方实现：`/\B([A-Z])/g`（非词边界的大写字母前插 `-`）——`PSafe`→`p-safe`、`PGrid`→`p-grid`、
+ *  `pGridView`→`p-grid-view`、已是 kebab 的原样返回。
+ */
 function kebabCase(s: string): string {
-  return s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+  return s.replace(/\B([A-Z])/g, '-$1').toLowerCase()
 }
 
 function camelToKebab(s: string): string {
@@ -173,6 +181,8 @@ function suffixClassLiterals(e: string, sfx: (name: string) => string): string {
  * ★2026-08 scoped 后缀：scopeId 非空时字符串字面量/对象键后缀（'box' → 'box-data-v-x'）；动态变量类名无法静态后缀 → 编译期警告 */
 function formatClassBinding(exp: string, warnings: string[], scopeId = ''): string {
   const t = exp.trim()
+  const cw = templateCallWarning(t)
+  if (cw) warnings.push(cw)
   const sfx = (name: string): string => (scopeId && !name.endsWith(`-${scopeId}`) ? `${name}-${scopeId}` : name)
   // 表达式内类名字面量后缀（三元值 'a'/'b' 等；比较操作数/空串不动——见 suffixClassLiterals）
   const sfxExpr = (e: string): string => (scopeId ? suffixClassLiterals(e, sfx) : e)
@@ -347,10 +357,28 @@ interface SerializeContext {
 function rewriteStoreRefs(expr: string, ctx: SerializeContext): string {
   // ★#494 收集表达式裸标识符（script 侧与 runtimeInits 求交 → 快照 setData）
   for (const id of expr.match(/\b[A-Za-z_$][\w$]*\b/g) ?? []) ctx.templateRefs.add(id)
+  warnTemplateMethodCall(expr, ctx)
   return expr.replace(/\bstore\.([A-Za-z_$][\w$]*)/g, (m, field: string) => {
     ctx.storeBindings.add(field)
     return field
   })
+}
+
+/** ★S38 反黑盒：模板表达式内**函数调用**（`f(...)` / `a.b(...)`）在 WXML 不可求值——
+ *  真机实测 `multiIdx.join(', ')` 抛 `Cannot convert undefined or null to object`，
+ *  使 handleChildrenCreation/bindingMapUpdate 崩溃 → 该页事件链整体失效。返回告警文案（无调用 → null）。
+ *  ⚠ 已知边界：`String(...)`/`Number(...)` 亦属调用、同样不被 WXML 支持——调用方应避免（用 computed）。 */
+function templateCallWarning(expr: string): string | null {
+  const m = expr.match(/[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*\(/)
+  if (!m) return null
+  const call = m[0].replace(/\s*\($/, '')
+  return `模板表达式含函数调用 "${call}(...)"——WXML 不支持函数调用（S38），真机运行期会抛错并可能中断该页事件链；请改为 computed 派生数据或方法内预计算（表达式：${expr.slice(0, 60)}）`
+}
+
+/** 命中函数调用则推入告警（供插值 / v-bind / :class 各表达式路径统一复用） */
+function warnTemplateMethodCall(expr: string, ctx: SerializeContext): void {
+  const w = templateCallWarning(expr)
+  if (w) ctx.warnings.push(w)
 }
 
 /**
@@ -1450,6 +1478,116 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   return `${lineNote}<${tag}${attrStr}>${inline}</${tag}>`
 }
 
+/** ★平台编译期宏·静态条件求值（2026-09-13）：把**字面量**布尔表达式求值——宏替换后的
+ *  `v-if="true"`（__MP__ in MP）或 `v-if="'mp' === 'web'"`（__TARGET__ 比较）等。
+ *  非字面量（含运行时变量）返回 undefined → 不裁剪，走原 wx:if 运行时判定。 */
+function evalStaticBool(expr: string): boolean | undefined {
+  const t = expr.trim()
+  if (t === 'true') return true
+  if (t === 'false') return false
+  const strCmp = t.match(/^(['"])(.*?)\1\s*(===|!==|==|!=)\s*(['"])(.*?)\4$/)
+  if (strCmp) {
+    const eq = strCmp[2] === strCmp[5]
+    return strCmp[3] === '===' || strCmp[3] === '==' ? eq : !eq
+  }
+  const boolCmp = t.match(/^(true|false)\s*(===|!==|==|!=)\s*(true|false)$/)
+  if (boolCmp) {
+    const eq = boolCmp[1] === boolCmp[3]
+    return boolCmp[2] === '===' || boolCmp[2] === '==' ? eq : !eq
+  }
+  const numCmp = t.match(/^(-?\d+(?:\.\d+)?)\s*(===|!==|==|!=)\s*(-?\d+(?:\.\d+)?)$/)
+  if (numCmp) {
+    const eq = Number(numCmp[1]) === Number(numCmp[3])
+    return numCmp[2] === '===' || numCmp[2] === '==' ? eq : !eq
+  }
+  return undefined
+}
+
+/** 元素上的条件指令（if / else-if / else） */
+function condDirective(node: TemplateChildNode): { kind: 'if' | 'else-if' | 'else'; dir: DirectiveNode } | undefined {
+  if (node.type !== NodeTypes.ELEMENT) return undefined
+  for (const p of (node as ElementNode).props) {
+    if (p.type !== NodeTypes.DIRECTIVE) continue
+    const d = p as DirectiveNode
+    if (d.name === 'if') return { kind: 'if', dir: d }
+    if (d.name === 'else-if') return { kind: 'else-if', dir: d }
+    if (d.name === 'else') return { kind: 'else', dir: d }
+  }
+  return undefined
+}
+
+/** 从元素 props 移除某条件指令（保留分支时用，避免产物残留 wx:if="{{true}}"） */
+function stripCondDirective(node: TemplateChildNode, kinds: Array<'if' | 'else-if' | 'else'>): void {
+  if (node.type !== NodeTypes.ELEMENT) return
+  const el = node as ElementNode
+  el.props = el.props.filter((p) => !(p.type === NodeTypes.DIRECTIVE && kinds.includes((p as DirectiveNode).name as never))) as never
+}
+
+/** ★平台编译期宏·静态条件裁剪（2026-09-13）：对 v-if/v-else-if/v-else **链**做 AST 级前置裁剪——
+ *  链头（或链上某 else-if）表达式静态可求值为 true → 保留该支、删除其余支；
+ *  整链可求值但全 false → 全删（如 `v-if="__MP__"` 在 Web 构建整块消失）。
+ *  链上存在**不可静态求值**的支 → 整链原样保留（运行时 wx:if 判定，语义不变）。
+ *  处理是递归的（元素子树各自处理兄弟链）。 */
+function pruneStaticConditionals(children: TemplateChildNode[], ctx: SerializeContext): void {
+  const out: TemplateChildNode[] = []
+  let i = 0
+  while (i < children.length) {
+    const node = children[i]
+    const head = condDirective(node)
+    if (head && head.kind === 'if') {
+      // 收集整条链 [if, else-if*, else?]
+      const chain: Array<{ node: TemplateChildNode; kind: 'if' | 'else-if' | 'else'; expr?: string }> = []
+      let k = i
+      while (k < children.length) {
+        const c = condDirective(children[k])
+        if (!c) break
+        if (k === i && c.kind !== 'if') break
+        if (k > i && c.kind === 'if') break
+        chain.push({ node: children[k], kind: c.kind, expr: c.kind === 'else' ? undefined : exprContent(c.dir.exp) })
+        k++
+      }
+      // 逐支静态求值
+      let keptIdx = -1
+      let allStatic = true
+      for (let ci = 0; ci < chain.length; ci++) {
+        const item = chain[ci]
+        const v = item.kind === 'else' ? true : evalStaticBool(item.expr ?? '')
+        if (v === undefined) {
+          allStatic = false
+          break
+        }
+        if (v === true) {
+          keptIdx = ci
+          break
+        }
+      }
+      if (allStatic) {
+        if (keptIdx >= 0) {
+          const kept = chain[keptIdx]
+          stripCondDirective(kept.node, kept.kind === 'else' ? ['else'] : [kept.kind])
+          ctx.trace?.add('macro/static-branch', { before: `v-if/v-else 链（${chain.length} 支，静态求值）`, after: `保留第 ${keptIdx + 1} 支，删除其余 ${chain.length - 1} 支` })
+          out.push(kept.node)
+        } else {
+          ctx.trace?.add('macro/static-branch', { before: `v-if/v-else 链（${chain.length} 支，静态全 false）`, after: '整链删除（死分支不产出）' })
+        }
+        i = k
+        continue
+      }
+      // 链上存在运行时支 → 原样保留整条链
+      for (const item of chain) out.push(item.node)
+      i = k
+      continue
+    }
+    out.push(node)
+    i++
+  }
+  children.splice(0, children.length, ...out)
+  // 递归子树
+  for (const c of children) {
+    if (c.type === NodeTypes.ELEMENT) pruneStaticConditionals((c as ElementNode).children as TemplateChildNode[], ctx)
+  }
+}
+
 function serializeNode(node: TemplateChildNode, ctx: SerializeContext): string {
   switch (node.type) {
     case NodeTypes.ELEMENT:
@@ -1513,6 +1651,9 @@ export function transformTemplateToWxml(
     fluidLayout: opts.fluidLayout,
   }
   const root = domParse(source, { onError: () => undefined })
+  // ★平台编译期宏·静态条件裁剪（2026-09-13）：v-if/v-else 链中静态可求值的分支在此整块消除
+  //   （宏替换后 `v-if="true"` / `v-if="'mp' === 'web'"` 等）——死分支不进产物。
+  pruneStaticConditionals(root.children as TemplateChildNode[], ctx)
   // ★组件模式：顶层第一个元素为组件根节点（class 追加 {{rootClass}}，接收外部 root-class 透传）
   const isComp = opts.isComponent === true
   // ★15-page-scroll-container：页面模式自动包滚动容器（Skyline 页面本身不滚动，滚动必须 scroll-view）——

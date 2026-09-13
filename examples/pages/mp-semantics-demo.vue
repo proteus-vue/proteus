@@ -1,7 +1,7 @@
 <!-- examples/pages/mp-semantics-demo.vue —— 小程序语义演示（14-mp-first-semantics）
      @proteus-api-check-ignore：本页刻意演示旧 wx.* API（Layer 1 兼容语义面向）——CMP007 门禁豁免
      以小程序组件/API 为标准：view/text/button/image/input 双端直用（MP 原生 / Web 模拟层对齐）
-     open-type 开放能力：MP 原生分享，Web 触发 openshare 事件（开发者自定义处理） -->
+     open-type 开放能力：MP 原生触发 contact 事件；share 原生拉面板（MP 无事件，Web 触发 share 降级事件） -->
 <template>
   <!-- ★Skyline 页面本身不滚动——编译器自动包 scroll-view（15-page-scroll-container）；onPageScroll 桥接自动绑定 -->
   <view class="msd">
@@ -17,8 +17,8 @@
 
     <view class="msd-box">
       <text class="msd-label">button open-type（开放能力：MP 原生 / Web 降级事件）</text>
-      <button open-type="share" @openshare="onShare">分享（open-type="share"）</button>
-      <button open-type="contact" @opencontact="onContact">客服（open-type="contact"）</button>
+      <button open-type="share" @share="onShare">分享（open-type="share"）</button>
+      <button open-type="contact" @contact="onContact">客服（open-type="contact"）</button>
     </view>
 
     <view class="msd-box">
@@ -75,7 +75,7 @@
       </view>
       <view class="msd-row">
         <picker mode="multiSelector" :range="pickerMultiRange" :value="pickerMultiValue" @change="onMultiPickerChange" @columnchange="onMultiColumnChange" class="msd-picker">
-          <text class="msd-scroll-text">multiSelector：{{ pickerMultiValue.join('/') }}</text>
+          <text class="msd-scroll-text">multiSelector：{{ pickerMultiText }}</text>
         </picker>
       </view>
     </view>
@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const inputLog = ref('')
 // 页面滚动桥接演示（15-page-scroll-container 批次2：onPageScroll → 自动包装 scroll-view bindscroll，载荷归一）
@@ -127,6 +127,8 @@ const pickerMultiRange = [
   ['天河区', '南山区', '西湖区', '海曙区'],
 ]
 const pickerMultiValue = ref([0, 0, 0])
+// ★模板内不可调用函数（WXML 表达式限制）→ computed 派生展示串
+const pickerMultiText = computed(() => pickerMultiValue.value.join('/'))
 function onMultiPickerChange(e: any) {
   pickerMultiValue.value = e?.detail?.value ?? [0, 0, 0]
   console.log('[mp-semantics] multiPicker:', e?.detail?.value)
@@ -147,16 +149,17 @@ function onInput(e: any) {
   inputLog.value = e?.detail?.value ?? ''
 }
 
-// open-type 降级事件（Web 端触发；MP 端为原生能力不触发）
+// open-type 事件：★2026-09-13 契约修正——事件名与 MP 原生事件对齐（contact/share），
+//   MP 端 contact 由 bind:contact 触发；share MP 无事件（拉原生面板）→ 仅 Web 触发降级事件
 function onShare() {
   // Web：可走 Web Share API
-  console.log('[mp-semantics] openshare 触发（Web 端自定义处理）')
+  console.log('[mp-semantics] share 触发（仅 Web——MP 走原生分享面板）')
   if (typeof navigator.share === 'function') {
     void navigator.share({ title: 'Proteus 小程序语义', text: 'Web Share API 对齐' })
   }
 }
 function onContact() {
-  console.log('[mp-semantics] opencontact 触发（Web 端自定义处理）')
+  console.log('[mp-semantics] contact 触发（Web 降级；MP 由原生 bind:contact 触发）')
 }
 
 // wx API（MP 原生 / Web 模拟层）

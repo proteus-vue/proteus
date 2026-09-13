@@ -136,6 +136,13 @@ export function transformStyleToWxss(
   const injectTransition = opts.usesTransition === true && !res.disabled.has('transition/animation-wxss')
   if (injectTransition) css = `${css}\n\n${TRANSITION_WXSS}`
 
+  // ★注释屏蔽（2026-09-13，必须放在所有**基于原始文本**的选择器/声明正则之前）：CSS 注释内可能含
+  //   `{` `}` `*` 等字符，会干扰后续正则。实测事故：组件 <style> 注释里写了 `.proteus-web-button { … }`
+  //   → `([^{}]+)\{` 把注释里的 `{` 当块起始，前面的 `display:inline-flex` 等声明被并入「选择器」并改写
+  //   → 声明全部丢失（按钮塌成全宽）。此处统一屏蔽、函数末尾还原（产物中注释原样保留）。
+  const commentSlots: string[] = []
+  css = css.replace(/\/\*[\s\S]*?\*\//g, (m) => `\u0001C${commentSlots.push(m) - 1}\u0001`)
+
   // 1. 标签选择器映射（与模板标签映射一一对应，避免元素已映射而样式匹配不到）
   const doSelectorRewrite = !res.disabled.has('style/selector-tag') && !res.disabled.has('style/selector-semantic')
   const counts = doSelectorRewrite ? countSelectorRewrites(css, res) : { tag: 0, semantic: 0 }
@@ -156,6 +163,8 @@ export function transformStyleToWxss(
     if (pxCount > 0) trace?.add('style/px-to-rpx', { before: `${pxCount} 处 px`, after: `${pxCount} 处 rpx（rpxRatio=${opts.rpxRatio}）` })
   }
 
+  // ★注释已在函数入口屏蔽（见上方），此处及后续第 4 步正则均安全。
+
   // ★平台化薄接缝：Skyline 特有降级/警告仅 Skyline 产物需要；webview 渲染引擎亦存在（微信 WebView 组件），
   //   且此等特判只在 Skyline 下才真。renderer 缺省(undefined)沿用现行为（Skyline 特判全开，产物不变）。
   const isWebview = opts.renderer === 'webview'
@@ -165,6 +174,12 @@ export function transformStyleToWxss(
   if (!isWebview && !res.disabled.has('style/skyline-unsupported')) {
     if (/float\s*:/.test(css)) unsupported.push('float')
     if (/position\s*:\s*fixed\b/.test(css)) unsupported.push('position: fixed')
+    // ★单边异色 border + border-radius（2026-09-13 真机四组对照实验定论）：
+    //   Skyline 下「border-<side>-color 与其它边不同」会让 border-radius **失效**（圆环渲染成方块）。
+    //   典型误用：spinner 用 border + border-top-color 画缺口弧。改用「统一色环 + 随转子点」。
+    if (/border-(?:top|right|bottom|left)-color\s*:/.test(css)) {
+      unsupported.push('border-*-color（单边异色 border；Skyline 下会使 border-radius 失效——圆环变方块，白名单：需要时用 // skyline-ok 标注）')
+    }
   }
   for (const u of unsupported) {
     console.warn(`[mp-transform] WXSS 检测到 Skyline 不支持的属性：${u}（编译期警告）`)
@@ -216,6 +231,8 @@ export function transformStyleToWxss(
       return `${scoped} {`
     })
   }
+  // 还原被屏蔽的注释（见上方「注释屏蔽」——避免注释内 { } * 干扰选择器正则）
+  css = css.replace(/\u0001C(\d+)\u0001/g, (_m, i: string) => commentSlots[Number(i)] ?? '')
   return css
 }
 
