@@ -34,7 +34,7 @@ order: 2001
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
 | `modelValue` | 显隐（v-model） | `Boolean` | `false` | 否 |
-| `actions` | 动作项 [{label,value?,color?}] | `Array as () => unknown[]` | `() => []` | 否 |
+| `actions` | 动作项 [{label,value?,color?}] | `Array as () => ActionItem[]` | `() => []` | 否 |
 | `cancelText` | 取消文案 | `String` | `'取消'` | 否 |
 
 ### 属性详解
@@ -46,7 +46,7 @@ order: 2001
 
 #### `actions`
 
-- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **类型**：`Array as () => ActionItem[]`　**默认值**：`() => []`　**必填**：否
 - **说明**：动作项 [{label,value?,color?}]
 
 #### `cancelText`
@@ -59,7 +59,7 @@ order: 2001
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `false` |
-| `select` | 选中某项 | `actValue(act)` |
+| `select` | 选中某项 | `v == null ? '' : v` |
 | `cancel` | 取消/关闭 | — |
 
 ### 事件详解
@@ -72,7 +72,7 @@ order: 2001
 #### `select`
 
 - **说明**：选中某项
-- **载荷**：`actValue(act)`
+- **载荷**：`v == null ? '' : v`
 
 #### `cancel`
 
@@ -83,6 +83,8 @@ order: 2001
 
 - actions[{label,value?,color?}] + cancel + v-model 显隐 + select/cancel emit
 - 双端同源码：div → view；MP 安全（遮罩 + 面板；无平台 API）
+- ★WXML 无函数调用（S38）：label/style 经 computed 预计算为数据行（rows），模板只做属性访问；
+- 循环内点击用 data-* + 事件对象（WXML bindtap 不能传参）。
 
 ## 用法
 

@@ -1,7 +1,7 @@
 {
  "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs --min 校验，勿手改。",
- "attrCovered": 99,
- "attrTotal": 352,
- "coveredMin": 99,
- "note": "补齐属性后上调 coveredMin"
+ "attrCovered": 106,
+ "attrTotal": 348,
+ "coveredMin": 128,
+ "note": "2026-09-13 批次1 推进：p-button/p-switch/p-checkbox/p-radio/p-picker 全部 100%（棘轮 101→106）"
 }

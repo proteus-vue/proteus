@@ -35,10 +35,10 @@ order: 0
 | Component | Props | Events |
 |---|---|---|
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
-| [p-button](/docs/component/p-button) | 24 | 11 |
+| [p-button](/docs/component/p-button) | 25 | 11 |
 | [p-camera](/docs/component/p-camera) | 3 | 3 |
 | [p-canvas](/docs/component/p-canvas) | 4 | 0 |
-| [p-checkbox](/docs/component/p-checkbox) | 3 | 1 |
+| [p-checkbox](/docs/component/p-checkbox) | 5 | 2 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
 | [p-icon](/docs/component/p-icon) | 4 | 0 |
@@ -50,19 +50,19 @@ order: 0
 | [p-map](/docs/component/p-map) | 9 | 3 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
-| [p-picker](/docs/component/p-picker) | 4 | 1 |
-| [p-progress](/docs/component/p-progress) | 8 | 0 |
-| [p-radio](/docs/component/p-radio) | 3 | 1 |
+| [p-picker](/docs/component/p-picker) | 8 | 3 |
+| [p-progress](/docs/component/p-progress) | 11 | 0 |
+| [p-radio](/docs/component/p-radio) | 5 | 2 |
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
 | [p-select](/docs/component/p-select) | 6 | 1 |
 | [p-selection](/docs/component/p-selection) | 2 | 1 |
 | [p-skeleton](/docs/component/p-skeleton) | 6 | 0 |
-| [p-slider](/docs/component/p-slider) | 6 | 1 |
+| [p-slider](/docs/component/p-slider) | 10 | 3 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
-| [p-switch](/docs/component/p-switch) | 2 | 1 |
+| [p-switch](/docs/component/p-switch) | 5 | 2 |
 | [p-text](/docs/component/p-text) | 4 | 0 |
-| [p-textarea](/docs/component/p-textarea) | 7 | 4 |
+| [p-textarea](/docs/component/p-textarea) | 22 | 4 |
 
 ## Page Shell (17)
 

@@ -37,7 +37,11 @@ order: 1025
 | `min` | 最小值 | `Number` | `0` | 否 |
 | `max` | 最大值 | `Number` | `100` | 否 |
 | `step` | 步长 | `Number` | `1` | 否 |
-| `activeColor` | 激活色（滑轨填充；WebSlider/微信原生均支持） | `String` | `'#07c160'` | 否 |
+| `activeColor` | 激活色（滑轨已选填充；官方 selected-color，Web/MP 均支持） | `String` | `'#07c160'` | 否 |
+| `color` | 背景条（未选轨道）颜色（官方 color；官方已标记为 deprecated→backgroundColor） | `String` | `''` | 否 |
+| `blockSize` | 滑块大小 12–28（官方 block-size） | `Number` | `28` | 否 |
+| `blockColor` | 滑块颜色（官方 block-color） | `String` | `'#ffffff'` | 否 |
+| `showValue` | 是否在滑块旁显示当前值（官方 show-value） | `Boolean` | `false` | 否 |
 | `disabled` | 禁用 | `Boolean` | `false` | 否 |
 
 ### 属性详解
@@ -65,7 +69,27 @@ order: 1025
 #### `activeColor`
 
 - **类型**：`String`　**默认值**：`'#07c160'`　**必填**：否
-- **说明**：激活色（滑轨填充；WebSlider/微信原生均支持）
+- **说明**：激活色（滑轨已选填充；官方 selected-color，Web/MP 均支持）
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：背景条（未选轨道）颜色（官方 color；官方已标记为 deprecated→backgroundColor）
+
+#### `blockSize`
+
+- **类型**：`Number`　**默认值**：`28`　**必填**：否
+- **说明**：滑块大小 12–28（官方 block-size）
+
+#### `blockColor`
+
+- **类型**：`String`　**默认值**：`'#ffffff'`　**必填**：否
+- **说明**：滑块颜色（官方 block-color）
+
+#### `showValue`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否在滑块旁显示当前值（官方 show-value）
 
 #### `disabled`
 
@@ -77,6 +101,8 @@ order: 1025
 | 事件 | 说明 | 载荷 |
 |---|---|---|
 | `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `Number.isFinite(v) ? v : props.modelValue` |
+| `change` | 选中值变化 | `{ value: Number.isFinite(v) ? v : props.modelValue }` |
+| `changing` | — | `{ value: Number.isFinite(v) ? v : props.modelValue }` |
 
 ### 事件详解
 
@@ -85,13 +111,25 @@ order: 1025
 - **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
 - **载荷**：`Number.isFinite(v) ? v : props.modelValue`（v-model 隐式：值本身）
 
+#### `change`
+
+- **说明**：选中值变化
+- **载荷**：`{ value: Number.isFinite(v) ? v : props.modelValue }`
+
+#### `changing`
+
+- **说明**：—
+- **载荷**：`{ value: Number.isFinite(v) ? v : props.modelValue }`
+
 ## 实现要点
 
 - min/max/step 约束 + v-model（modelValue ←→ update:modelValue）
-- ★2026-09-07 p-slider MP 映射落地：模板用原生 <slider> 双端中性标签——
-- Web 经 defaultScopedPlugin 改写 <proteus-slider>（built-in WebSlider 自绘模拟：轨道/填充/圆点 +
-- { detail: { value } } 载荷）；MP 编译保留 <slider> = 微信原生 slider（bindchange）。此前
-- <input type="range"> 微信无对等 → MP 双引擎不可见（已登记缺口，本批关闭）。
+- ★中性标签范式（2026-09-13 定案）：模板写原生 <slider>——
+- Web：defaultScopedPlugin 改写 <slider> → <proteus-slider>（WebSlider 自绘模拟：轨道/填充/圆点）；
+- MP：编译保留 = 微信原生 <slider>。两端视觉统一，零重复实现。
+- ★★属性全覆盖（官方 10/10）：min/max/step/value/disabled/selected-color(→activeColor)/
+- color(背景条)/block-size/block-color/show-value。事件 change/changing 均透传
+- （原生载荷 e.detail.value，页面侧用 e?.detail ?? e 跨端通吃）。
 
 ## 用法
 

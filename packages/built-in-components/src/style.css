@@ -37,15 +37,17 @@
   background-color: #fa5151; /* --weui-RED-100 */
   color: #fff;
 }
-/* 变体：mini 小尺寸（weui-btn_mini：14px/padding 6px 12px/圆角 6px/inline-block） */
+/* 变体：mini 小尺寸（★2026-09-13 对齐微信基础库 `wx-button[size=mini]`：
+   font-size:16px; line-height:2; padding:0 .75em; width:auto —— 旧实现 14px/6px 12px 比原生明显偏小，
+   用户实测「Web mini 高度和宽度和小程序差别那么大」。
+   ★圆角不在此覆盖：原生 mini 不设圆角 → 交由组件自身 `--p-button-radius`（与 MP 一致）。 */
 .proteus-web-button.is-mini {
   display: inline-block;
   min-width: 0;
   width: auto;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 1.42857;
+  padding: 0 0.75em;
+  font-size: 16px;
+  line-height: 2;
 }
 /* 变体：禁用（微信原生 button disabled：淡灰底 + 浅字） */
 .proteus-web-button.is-disabled {
@@ -58,17 +60,32 @@
   color: rgba(255, 255, 255, 0.4);
   background-color: rgba(0, 0, 0, 0.2);
 }
-/* 变体：plain 幽灵按钮（透明底 + 细边框——微信原生 plain） */
+/* 变体：plain 幽灵按钮（透明底 + 1px 边框）
+   ★2026-09-13 对齐微信基础库（用户实测「Web 镂空是绿色边框文字，小程序是黑色」）：
+     `wx-button[type=default][plain]{background-color:transparent;border:1px solid #353535;color:#353535}`
+     ——**默认 type 的镂空是黑色**，只有 type=primary/warn 的镂空才带对应色。旧实现把 plain 一律做成绿色。
+   色值来源：基础库 `wx-button[type=primary][plain]` / `wx-button.wx-button-type-warn.wx-button-plain`。 */
 .proteus-web-button.is-plain {
   background: transparent;
+  color: #353535;
+  border: 1px solid #353535;
+}
+.proteus-web-button.is-plain.is-primary {
   color: #07c160;
-  border: 1px solid #07c160;
+  border-color: #07c160;
 }
 .proteus-web-button.is-plain.is-warn {
-  color: #fa5151;
-  border-color: #fa5151;
+  color: #e64340;
+  border-color: #e64340;
 }
-/* loading spinner（对齐 weui-btn_loading：旋转圆环） */
+/* plain 自带 1px 边框 → 不再叠加 ::after 细线（原生 Skyline `wx-button:after{display:none}`） */
+.proteus-web-button.is-plain::after {
+  border: none;
+}
+/* loading spinner（Web 端按钮；对齐 weui-btn_loading 旋转圆环）
+   ★注：此 spinner 仅 Web 端使用（MP 的 p-button 走中性标签/原生 button，无此 DOM）。
+   Web 可用 border-top-color 缺口弧；★但若将来同步到 MP，须改用「统一色环 + 随子点」
+   （Skyline 下单边异色 border + 圆角会渲染成方块——见 src/components/p-loading 注释）。 */
 .pwb-loading {
   display: inline-block;
   width: 1em;
@@ -104,14 +121,19 @@
   border-radius: 10px;
   pointer-events: none;
 }
-/* 按下反馈（对齐微信默认 button-hover：背景叠加半透明黑变暗）
-   ★!important 是刻意的：这是框架接管的**按下态**，必须压过用户对基色的主题化
-     （用户常以 `.p-button[data-v-x] { background: var(--p-button-bg) }` 覆盖基色——
-      特异性 (0,2,0) 高于本类 (0,1,0)；2026-09-13 实测：Web 端按下类已加但背景不变 → 无点击反馈）。
-     小程序端不在 Web 层：由微信原生 button-hover 提供同款反馈（p-button 的 hoverClass 缺省时保留）。 */
+/* 按下反馈（对齐微信默认 button-hover 的「压暗」语义）
+   ★★2026-09-13 修正（用户实测「Web 点击一闪一闪」）：旧实现 `background-color: rgba(0,0,0,.1) !important`
+   是**替换**背景——对灰/白底按钮尚可，但彩色按钮（p-button 品牌蓝 / theme 色 / is-primary 绿）
+   按下瞬间变成半透明灰 → 观感是「闪一下」，错误。
+   微信原生语义是**保留色相、压暗一档**（基础库实测：`.button-hover{background-color:#dedede}` /
+   `.button-hover[type=primary]{background-color:#179b16}`）。
+   Web 端用 `background-image` 半透明渐变**叠加层**表达：不替换基色 → 对任意基色（含 CSS 变量主题色）
+   自动成立、保留色相。!important 仍保留——用户以 `.p-button[data-v-x]{background:var(--p-button-bg)}`
+   主题化基色时，叠加层必须仍能压上（2026-09-13 实测：不加则按下类已加但无视觉变化）。
+   小程序端不在 Web 层：由平台 hover-class 提供同款（p-button 显式绑定，见 src/components/p-button）。 */
 .proteus-web-button.proteus-web-button--hover,
 .proteus-web-button--hover {
-  background-color: rgba(0, 0, 0, 0.1) !important;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)) !important;
 }
 /* 暗黑模式（对齐 weui 暗黑按钮）：primary/warn 保持；default 深底浅字。
    ★:where() 归零框架侧特异性（0,2,0 → 0,1,0），恢复文件头声明的契约「框架默认样式特异性最低 → 用户 scoped 可覆盖」。
@@ -461,6 +483,7 @@
   --pwp-bg: #ffffff;
   --pwp-indicator: #f7f7f7;
   --pwp-fg: rgba(0, 0, 0, 0.9);
+  --pwp-fg-3: rgba(0, 0, 0, 0.1); /* 选中指示线（weui FG-3） */
   --pwp-mask-1: rgba(255, 255, 255, 0.95);
   --pwp-mask-2: rgba(255, 255, 255, 0.6);
   --pwp-mask-bg: #ffffff;
@@ -481,6 +504,7 @@
     --pwp-bg: #191919;
     --pwp-indicator: #202020;
     --pwp-fg: rgba(255, 255, 255, 0.8);
+    --pwp-fg-3: rgba(255, 255, 255, 0.1);
     --pwp-mask-1: rgba(25, 25, 25, 0.95);
     --pwp-mask-2: rgba(25, 25, 25, 0.6);
     --pwp-mask-bg: #191919;
@@ -494,14 +518,14 @@
 .proteus-web-picker-sheet + .proteus-web-ui-mask {
   transition: opacity 0.3s ease;
 }
-/* 弹层头（官方 weui-half-screen-dialog__hd：左上关闭 + 居中标题 15px/500） */
+/* 弹层头（官方 weui-picker__hd：padding 16px / font-size 17px；★与 MP 自绘一致 56px，无分隔线） */
 .pwp-hd {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 64px; /* 官方实测 hd 高 64px */
-  padding: 0 24px;
+  height: 56px; /* weui .weui-picker__hd ≈ 56（padding 16 × 2 + 行高） */
+  padding: 0 16px;
   box-sizing: border-box;
 }
 .pwp-close {
@@ -526,12 +550,11 @@
   color: var(--pwp-fg);
   text-align: center;
 }
-/* 滚轮区（官方 weui-picker__bd：280px flex + overflow hidden；★底部到确定按钮间距 44px 来自 half-screen-dialog__bd padding-bottom） */
+/* 滚轮区（官方 weui-picker__bd：**240px** flex + overflow hidden；阴影靠 indicator 分隔线表达） */
 .pwp-bd {
   display: flex;
   position: relative;
-  height: 280px;
-  margin-bottom: 44px; /* ★官方实测 bd 底 → 确定按钮顶 = 44px */
+  height: 240px;
   overflow: hidden;
   background: var(--pwp-bg);
 }
@@ -543,7 +566,7 @@
   overflow: hidden;
   touch-action: none; /* 拖拽不触发页面滚动 */
 }
-/* 上下白色渐隐遮罩（官方 weui-picker__mask：linear-gradient 顶部+底部 112px；暗黑配 #191919） */
+/* 上下渐隐遮罩（官方 weui-picker__mask：**上下 92px**；暗黑配 #191919） */
 .pwp-picker-mask {
   position: absolute;
   top: 0;
@@ -553,20 +576,22 @@
   z-index: 3;
   background-image: linear-gradient(var(--pwp-mask-1), var(--pwp-mask-2)), linear-gradient(0deg, var(--pwp-mask-1), var(--pwp-mask-2));
   background-position: center top, center bottom;
-  background-size: 100% 112px;
+  background-size: 100% 92px;
   background-repeat: no-repeat;
   pointer-events: none;
 }
-/* 选中高亮条（官方 weui-picker__indicator：top 112px / h 56px / 左右 8px / 四角 8px 圆角；暗黑 #202020） */
+/* 选中指示线（官方 weui-picker__indicator：height 56 / top 92；上下各 1px 细线——
+   ★两端内缩 `left/right: 16px`：对齐官方 picker 指示线**不撑满宽度**的观感） */
 .pwp-indicator {
   position: absolute;
-  top: 112px;
-  left: 8px;
-  right: 8px;
-  height: 56px;
+  top: 96px; /* (240-48)/2 —— 选中项视觉居中 */
+  left: 16px;
+  right: 16px;
+  height: 48px;
   z-index: 1;
-  background: var(--pwp-indicator);
-  border-radius: 8px;
+  box-sizing: border-box;
+  border-top: 1px solid var(--pwp-fg-3, rgba(0, 0, 0, 0.1));
+  border-bottom: 1px solid var(--pwp-fg-3, rgba(0, 0, 0, 0.1));
   pointer-events: none;
 }
 /* 内容轨道（官方 weui-picker__content：translate3d 平移） */
@@ -578,8 +603,8 @@
   z-index: 2;
 }
 .pwp-item {
-  height: 56px; /* 官方 weui-picker__item */
-  line-height: 56px;
+  height: 48px; /* 官方 weui-picker__item（48） */
+  line-height: 48px;
   text-align: center;
   font-size: 17px;
   color: var(--pwp-fg); /* 官方 FG-0 */
@@ -589,27 +614,41 @@
   cursor: pointer;
   box-sizing: border-box;
 }
-/* 底部确定按钮区（官方 weui-half-screen-dialog__ft：padding-bottom calc(64px + safe-area)） */
+/* 底部按钮区（官方 weui-half-screen-dialog__ft：padding 0 24px 32px；双按钮并排 120px） */
 .pwp-ft {
-  padding: 0 24px calc(64px + env(safe-area-inset-bottom)); /* 官方 ft */
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 0 24px 32px;
   background: var(--pwp-bg);
 }
-/* 确定按钮（官方 weui-btn_primary：绿底 #07c160 / 白字 17px / 圆角 8px / 高 48px / 居中） */
-.pwp-confirm {
-  display: block;
-  width: 100%;
-  max-width: 184px; /* 官方实测按钮宽 184px */
-  margin: 0 auto;
-  padding: 12px 24px;
+/* 按钮（官方 weui-btn：圆角 8px / 高 48px / 17px；单按钮 184px 居中） */
+.pwp-btn {
+  flex: 0 1 184px;
+  max-width: 184px;
+  height: 48px;
+  padding: 0 24px;
   border: none;
   border-radius: 8px;
-  background: #07c160; /* --weui-BRAND */
-  color: #fff;
   font-size: 17px;
   font-weight: 500;
-  line-height: 1.41176;
+  line-height: 48px;
   cursor: pointer;
   box-sizing: border-box;
+}
+/* 双按钮 120px（官方 weui __ft 双按钮）；单类变体——两端同形（MP 亦用 --sm 单类） */
+.pwp-btn-sm {
+  flex: 0 1 120px;
+  max-width: 120px;
+}
+.pwp-btn-confirm {
+  background: #07c160; /* --weui-BRAND */
+  color: #fff;
+}
+/* 双按钮模式：「取消」为浅灰底（weui 次要按钮视觉），与绿色「确定」并排 */
+.pwp-btn-cancel {
+  background: var(--pwp-cancel-bg, rgba(0, 0, 0, 0.05));
+  color: var(--pwp-fg);
 }
 
 /* ===== 扩展组件对齐（textarea/switch/slider/icon/progress/navigator）===== */
@@ -651,9 +690,11 @@
   opacity: 0;
   cursor: pointer;
 }
-/* ★禁用态对齐官方（weui.io/#form_switch）：.weui-switch[disabled] { opacity: 0.1 }——整体淡出（轨道+thumb 一起） */
+/* ★禁用态对齐官方（基础库实测）：wx-switch .wx-switch-input.wx-switch-input-disabled { opacity: .3 }
+   ——此前用 0.1（过淡且与加载态同值，用户实测「禁用/加载完全一样」）；改 0.3 与官方一致。
+   注：p-switch 包装层另有 0.5 淡化（两端状态视觉统一），此处是 Web 模拟层自身对齐官方。 */
 .proteus-web-switch.is-disabled {
-  opacity: 0.1;
+  opacity: 0.3;
 }
 .proteus-web-switch.is-disabled input {
   cursor: not-allowed;
@@ -677,6 +718,42 @@
   z-index: 2;
   pointer-events: none;
 }
+/* ★type=checkbox（对齐官方 switch 的 checkbox 样式）：**渲染为勾选框形态**而非开关形态——
+   原生 `<switch type="checkbox">` 是一个小方框（未选=灰框，选中=绿底白勾），
+   与 switch 圆形轨道外观**明显不同**（基础库实测：wx-checkbox-input + weuiv2 勾选字形）。
+   此前 Web 只把圆角改 4px、仍是 52×32 开关体型 → 与 MP 原生不一致（用户实测「方角和 web 不一致」）。 */
+.proteus-web-switch.is-checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background-color: transparent;
+  border: 1px solid #d1d1d1;
+}
+.proteus-web-switch.is-checkbox.is-on {
+  background-color: #07c160;
+  border-color: #07c160;
+}
+/* checkbox 形态隐藏开关滑块 */
+.proteus-web-switch.is-checkbox .pws-thumb {
+  display: none;
+}
+/* 选中态白色勾选（对齐原生 weuiv2 勾选字形） */
+.proteus-web-switch.is-checkbox::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.proteus-web-switch.is-checkbox.is-on::after {
+  opacity: 1;
+}
 .proteus-web-slider {
   /* ★对齐微信 slider：自定义结构（div 滑轨/填充/白圆点）——不依赖 -webkit 伪元素（渲染不可靠）
    * 容器 padding 15px 18px（weui 官方 .weui-slider 触控区） */
@@ -689,26 +766,41 @@
   position: relative;
   height: 2px; /* weui 官方 .weui-slider__inner height 2px */
   border-radius: 1px;
-  background: var(--pwu-sl-track); /* ★weui 官方 --weui-FG-3（暗黑 rgba(255,255,255,0.1) 实测） */
+  /* ★官方 color/background-color（未选轨道）：有传则用，缺省回落 weui --weui-FG-3 */
+  background: var(--pws-track, var(--pwu-sl-track));
 }
 .pws-fill {
   height: 100%;
   border-radius: 1px;
-  background: var(--pws-color, #07c160); /* --weui-BRAND 已填充 activeColor */
+  background: var(--pws-color, #07c160); /* --weui-BRAND 已填充 activeColor（官方 selected-color） */
 }
+/* ★官方 show-value：为右侧数值留白，避免遮挡滑块 */
+.proteus-web-slider:has(.pws-value) .pws-track { margin-right: 36px; }
 /* ★slider 滑块（28px = weui 官方 .weui-slider__handler width/height；与 switch 滑块类名分离 .pws-slider-thumb）
  * 阴影对齐 weui 官方：0 0 4px var(--weui-FG-3)（模糊扩散型——原 0 2px 4px 0.2 硬投影） */
 .pws-slider-thumb {
   position: absolute;
   top: 50%;
-  width: 28px;
-  height: 28px;
+  width: var(--pws-block, 28px); /* ★官方 block-size（12–28），缺省 28 = weui 官方 */
+  height: var(--pws-block, 28px);
   border-radius: 50%;
-  background: var(--pwu-sw-thumb);
+  background: var(--pws-thumb, var(--pwu-sw-thumb)); /* ★官方 block-color */
   box-shadow: var(--pwu-sl-thumb-shadow); /* weui 官方（暗黑 rgba(255,255,255,0.1) 实测） */
   transform: translate(-50%, -50%); /* 居中：left 由百分比定位 + 自身 50% 回中 */
   pointer-events: none;
   z-index: 1;
+}
+/* ★官方 show-value：滑块旁显示当前值 */
+.pws-value {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--pwu-fg-1, rgba(0, 0, 0, 0.9));
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 2;
 }
 .proteus-web-slider input {
   position: absolute;

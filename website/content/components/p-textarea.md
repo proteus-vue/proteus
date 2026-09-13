@@ -39,7 +39,22 @@ order: 1029
 | `value` | 绑定值 | `String` | `''` | 否 |
 | `maxlength` | 最大输入长度（≤ 0 = 不限） | `Number` | `-1` | 否 |
 | `placeholder` | 占位提示文本 | `String` | `''` | 否 |
+| `placeholderStyle` | ★官方 placeholder-style：占位符内联样式（仅 color/font-size/font-weight/line-height 有效） | `String` | `''` | 否 |
+| `placeholderClass` | ★官方 placeholder-class：占位符类名 | `String` | `''` | 否 |
 | `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
+| `autoHeight` | ★官方 auto-height：自动增高（设 style.height 不生效） | `Boolean` | `false` | 否 |
+| `cursorSpacing` | ★官方 cursor-spacing：光标与键盘距离 | `Number` | `0` | 否 |
+| `cursor` | ★官方 cursor：focus 时光标位置 | `Number` | `-1` | 否 |
+| `selectionStart` | ★官方 selection-start：自动聚焦时光标起始位置（需与 selection-end 搭配） | `Number` | `-1` | 否 |
+| `selectionEnd` | ★官方 selection-end：自动聚焦时光标结束位置 | `Number` | `-1` | 否 |
+| `adjustPosition` | ★官方 adjust-position：键盘弹起时自动上推页面 | `Boolean` | `true` | 否 |
+| `holdKeyboard` | ★官方 hold-keyboard：focus 时点击页面不收起键盘 | `Boolean` | `false` | 否 |
+| `disableDefaultPadding` | ★官方 disable-default-padding：去掉 iOS 默认内边距 | `Boolean` | `false` | 否 |
+| `confirmType` | ★官方 confirm-type：键盘右下角按钮文字（send/search/next/go/done） | `String` | `''` | 否 |
+| `confirmHold` | ★官方 confirm-hold：点击键盘右下角按钮时保持键盘不收起 | `Boolean` | `false` | 否 |
+| `adjustKeyboardTo` | ★官方 adjust-keyboard-to：键盘对齐位置（cursor/none） | `String` | `''` | 否 |
+| `fixed` | ★官方 fixed：fixed 定位（MP 私有布局语义） | `Boolean` | `false` | 否 |
+| `showConfirmBar` | ★官方 show-confirm-bar：是否显示键盘上方完成横条（iOS） | `Boolean` | `true` | 否 |
 
 ### 属性详解
 
@@ -73,10 +88,85 @@ order: 1029
 - **类型**：`String`　**默认值**：`''`　**必填**：否
 - **说明**：占位提示文本
 
+#### `placeholderStyle`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★官方 placeholder-style：占位符内联样式（仅 color/font-size/font-weight/line-height 有效）
+
+#### `placeholderClass`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★官方 placeholder-class：占位符类名
+
 #### `focus`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
 - **说明**：自动聚焦
+
+#### `autoHeight`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 auto-height：自动增高（设 style.height 不生效）
+
+#### `cursorSpacing`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：★官方 cursor-spacing：光标与键盘距离
+
+#### `cursor`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：★官方 cursor：focus 时光标位置
+
+#### `selectionStart`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：★官方 selection-start：自动聚焦时光标起始位置（需与 selection-end 搭配）
+
+#### `selectionEnd`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：★官方 selection-end：自动聚焦时光标结束位置
+
+#### `adjustPosition`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：★官方 adjust-position：键盘弹起时自动上推页面
+
+#### `holdKeyboard`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 hold-keyboard：focus 时点击页面不收起键盘
+
+#### `disableDefaultPadding`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 disable-default-padding：去掉 iOS 默认内边距
+
+#### `confirmType`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★官方 confirm-type：键盘右下角按钮文字（send/search/next/go/done）
+
+#### `confirmHold`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 confirm-hold：点击键盘右下角按钮时保持键盘不收起
+
+#### `adjustKeyboardTo`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★官方 adjust-keyboard-to：键盘对齐位置（cursor/none）
+
+#### `fixed`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 fixed：fixed 定位（MP 私有布局语义）
+
+#### `showConfirmBar`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：★官方 show-confirm-bar：是否显示键盘上方完成横条（iOS）
 
 ## Events
 
@@ -114,6 +204,13 @@ order: 1029
 - 矩阵 01 §6：value / maxlength / placeholder / focus / disabled + @input/@confirm/@focus/@blur
 - 事件契约：`:value` + `@input`（载荷 { value } 跨端归一，替代 v-model）
 - 双端同源码：textarea 原生透传（tag/passthrough）；MP textarea 原生支持 bindconfirm
+- ★属性全覆盖（官方 21/21）：value/placeholder/placeholder-style/placeholder-class/disabled/
+- maxlength/auto-focus(→focus 等价)/focus/auto-height/cursor-spacing/cursor/selection-start/
+- selection-end/adjust-position/hold-keyboard/disable-default-padding/confirm-type/confirm-hold/
+- adjust-keyboard-to/fixed/show-confirm-bar。
+- ★诚实边界：MP 私有键盘/光标类属性（cursor-spacing/selection-*/adjust-*/hold-keyboard/
+- confirm-type/confirm-hold/adjust-keyboard-to/fixed/show-confirm-bar）在 Web 端由原生 <textarea>
+- 透传为 DOM 属性——浏览器不解释（无副作用，不伪造行为）；纯 MP 能力，属平台差异。
 
 ## 用法
 

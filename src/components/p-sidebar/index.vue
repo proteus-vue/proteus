@@ -60,7 +60,7 @@ const rootEl = ref<HTMLElement | null>(null)
 const navEl = ref<HTMLElement | null>(null)
 let query: FluidContext | null = null
 let env: DeviceEnv | null = null
-let focusIndex = -1 // 焦点导航内部游标（不读 document.activeElement——组件审计 no-platform-api）
+const focusIndex = ref(-1) // 焦点导航内部游标（不读 document.activeElement——组件审计 no-platform-api）
 
 onMounted(() => {
   if (!rootEl.value) return // MP/无 ResizeObserver：恒 collapsed
@@ -95,8 +95,8 @@ function onNavKeydown(e: KeyboardEvent): void {
   if (!step) return
   const items = Array.from(nav.children) as HTMLElement[]
   if (!items.length) return
-  focusIndex = focusIndex < 0 ? 0 : Math.min(items.length - 1, Math.max(0, focusIndex + step))
-  const target = items[focusIndex]
+  focusIndex.value = focusIndex.value < 0 ? 0 : Math.min(items.length - 1, Math.max(0, focusIndex.value + step))
+  const target = items[focusIndex.value]
   if (target && typeof target.focus === 'function') {
     target.focus()
     e.preventDefault()

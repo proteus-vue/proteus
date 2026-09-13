@@ -36,8 +36,8 @@ const el = ref<HTMLElement | null>(null)
 const dx = ref(0)
 const dy = ref(0)
 const dragging = ref(false)
-let baseX = 0
-let baseY = 0
+const baseX = ref(0)
+const baseY = ref(0)
 let gesture: { bind: (e: HTMLElement | null) => void; unbind: () => void } | null = null
 
 onMounted(() => {
@@ -60,11 +60,11 @@ onUnmounted(() => {
 function onPan(e: PanPayload): void {
   if (e.type === 'pan-start') {
     dragging.value = true
-    baseX = dx.value
-    baseY = dy.value
+    baseX.value = dx.value
+    baseY.value = dy.value
   } else if (e.type === 'pan-move') {
-    let nx = baseX + (e.dx ?? 0)
-    let ny = baseY + (e.dy ?? 0)
+    let nx = baseX.value + (e.dx ?? 0)
+    let ny = baseY.value + (e.dy ?? 0)
     if (props.snapToGrid > 0) {
       nx = Math.round(nx / props.snapToGrid) * props.snapToGrid
       ny = Math.round(ny / props.snapToGrid) * props.snapToGrid

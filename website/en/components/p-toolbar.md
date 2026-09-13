@@ -64,14 +64,14 @@ Toolbar overflow fold
 
 | Event | Doc | Payload |
 |---|---|---|
-| `select` | An item is selected | `itemKey(item)` |
+| `select` | An item is selected | `String(ev?.currentTarget?.dataset?.value ?? '')` |
 
 ### Event details
 
 #### `select`
 
 - **Doc**: An item is selected
-- **Payload**: `itemKey(item)`
+- **Payload**: `String(ev?.currentTarget?.dataset?.value ?? '')`
 
 ## Implementation notes
 

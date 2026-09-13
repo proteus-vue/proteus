@@ -1,6 +1,8 @@
 <!-- src/components/p-action-sheet/index.vue —— 动作面板（★G-32 B4：shell.action-sheet S9）
      actions[{label,value?,color?}] + cancel + v-model 显隐 + select/cancel emit
-     双端同源码：div → view；MP 安全（遮罩 + 面板；无平台 API） -->
+     双端同源码：div → view；MP 安全（遮罩 + 面板；无平台 API）
+     ★WXML 无函数调用（S38）：label/style 经 computed 预计算为数据行（rows），模板只做属性访问；
+       循环内点击用 data-* + 事件对象（WXML bindtap 不能传参）。 -->
 <template>
   <div class="p-action-sheet">
     <!-- ★2026-09-07 弹层命中契约（p-drawer P7 同款）：关闭事件挂全屏 layer（可靠命中层），遮罩纯视觉，
@@ -9,13 +11,14 @@
       <div class="p-as-mask" />
       <div class="p-as-panel" @click.stop="noop">
         <div
-          v-for="act in actions"
-          :key="actLabel(act)"
+          v-for="row in rows"
+          :key="row.key"
           class="p-as-item"
-          :style="actStyle(act)"
-          @click="onSelect(act)"
+          :style="row.style"
+          :data-value="row.value"
+          @click="onSelect"
         >
-          {{ actLabel(act) }}
+          {{ row.label }}
         </div>
         <div class="p-as-cancel" @click="onCancel">{{ cancelText }}</div>
       </div>
@@ -25,35 +28,40 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CSSProperties } from 'vue'
+
+interface ActionItem {
+  label?: string
+  value?: string | number
+  color?: string
+}
 
 const props = defineProps({
   /** 显隐（v-model） */
   modelValue: { type: Boolean, default: false },
   /** 动作项 [{label,value?,color?}] */
-  actions: { type: Array as () => unknown[], default: () => [] },
+  actions: { type: Array as () => ActionItem[], default: () => [] },
   /** 取消文案 */
   cancelText: { type: String, default: '取消' },
 })
 
 const emit = defineEmits(['update:modelValue', 'select', 'cancel'])
 
-// ★MP 安全：字段访问走方法（数组泛型 unknown）
-function actLabel(act: unknown): string {
-  const a = act as { label?: string; value?: string | number }
-  return a.label ?? String(a.value ?? '')
-}
-function actValue(act: unknown): string {
-  const a = act as { value?: string | number; label?: string }
-  return String(a.value ?? a.label ?? '')
-}
-function actStyle(act: unknown): CSSProperties {
-  const a = act as { color?: string }
-  return a.color ? ({ color: a.color } as CSSProperties) : {}
-}
+/** ★预计算数据行（WXML 不能调函数——label/style 在 computed 里算好；
+ *  ★`value` 用方括号取值：点号写法会被编译器 ref 剥离规则误伤为 this.data.value；
+ *  MP 侧由 observers 随 actions 重算，见编译器 script/computed-observer） */
+const rows = computed(() =>
+  props.actions.map((act, i) => ({
+    key: i,
+    label: act.label != null ? act.label : String(act['value'] != null ? act['value'] : ''),
+    value: String(act['value'] != null ? act['value'] : act.label != null ? act.label : ''),
+    style: act.color ? 'color:' + act.color + ';' : '',
+  })),
+)
 
-function onSelect(act: unknown): void {
-  emit('select', actValue(act))
+function onSelect(e: unknown): void {
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  const v = ev?.currentTarget?.dataset?.value
+  emit('select', v == null ? '' : v)
   emit('update:modelValue', false)
 }
 function onCancel(): void {

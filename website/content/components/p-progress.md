@@ -34,13 +34,16 @@ order: 1018
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
 | `percent` | 当前进度 0-100（超界自动夹取） | `Number` | `0` | 否 |
-| `showInfo` | 是否显示右侧百分比文案 | `Boolean` | `true` | 否 |
-| `status` | 状态：active 进行中 / success 成功 / exception 异常 | `String` | `'active'` | 否 |
-| `strokeWidth` | 线宽 px（环形=环粗，线性=条高） | `Number` | `6` | 否 |
+| `showInfo` | 是否显示右侧百分比文案（官方 show-info） | `Boolean` | `true` | 否 |
+| `status` | 状态：active 进行中 / success 成功 / exception 异常（官方 active-mode 方向语义归入此处） | `String` | `'active'` | 否 |
+| `strokeWidth` | 线宽 px（环形=环粗，线性=条高）（官方 stroke-width） | `Number` | `6` | 否 |
 | `type` | 类型：line 线性 / circle 环形 | `String` | `'line'` | 否 |
-| `rounded` | 是否圆角 | `Boolean` | `true` | 否 |
-| `color` | 进度色（覆盖状态默认色） | `String` | `''` | 否 |
+| `rounded` | 是否圆角（官方 border-radius 语义归一：>0 即圆角） | `Boolean` | `true` | 否 |
+| `color` | 进度色（覆盖状态默认色）（官方 color） | `String` | `''` | 否 |
 | `trackColor` | 轨道底色 | `String` | `''` | 否 |
+| `active` | ★官方 active：进度条从左往右的**条纹动画** | `Boolean` | `false` | 否 |
+| `duration` | ★官方 duration：过渡时长 ms（官方为「每 1%」，本框架按整体过渡处理，见文件头边界） | `Number` | `0` | 否 |
+| `fontSize` | ★官方 font-size：右侧百分比字体大小 | `Number` | `12` | 否 |
 
 ### 属性详解
 
@@ -52,17 +55,17 @@ order: 1018
 #### `showInfo`
 
 - **类型**：`Boolean`　**默认值**：`true`　**必填**：否
-- **说明**：是否显示右侧百分比文案
+- **说明**：是否显示右侧百分比文案（官方 show-info）
 
 #### `status`
 
 - **类型**：`String`　**默认值**：`'active'`　**必填**：否
-- **说明**：状态：active 进行中 / success 成功 / exception 异常
+- **说明**：状态：active 进行中 / success 成功 / exception 异常（官方 active-mode 方向语义归入此处）
 
 #### `strokeWidth`
 
 - **类型**：`Number`　**默认值**：`6`　**必填**：否
-- **说明**：线宽 px（环形=环粗，线性=条高）
+- **说明**：线宽 px（环形=环粗，线性=条高）（官方 stroke-width）
 
 #### `type`
 
@@ -72,22 +75,42 @@ order: 1018
 #### `rounded`
 
 - **类型**：`Boolean`　**默认值**：`true`　**必填**：否
-- **说明**：是否圆角
+- **说明**：是否圆角（官方 border-radius 语义归一：>0 即圆角）
 
 #### `color`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：进度色（覆盖状态默认色）
+- **说明**：进度色（覆盖状态默认色）（官方 color）
 
 #### `trackColor`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
 - **说明**：轨道底色
 
+#### `active`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：★官方 active：进度条从左往右的**条纹动画**
+
+#### `duration`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：★官方 duration：过渡时长 ms（官方为「每 1%」，本框架按整体过渡处理，见文件头边界）
+
+#### `fontSize`
+
+- **类型**：`Number`　**默认值**：`12`　**必填**：否
+- **说明**：★官方 font-size：右侧百分比字体大小
+
 ## 实现要点
 
 - 双端同源码：div → view；纯样式计算（MP 安全——无 wx/document/window 直调）
 - percent 0-100；status=active/success/exception；支持线性/环形、竖向、自定义色与粗细
+- ★属性全覆盖（官方 9/9）：percent/show-info(→showInfo)/stroke-width(→strokeWidth)/
+- border-radius(→rounded)/color(→activeColor 等价)/active/duration/font-size(→fontSize)/
+- active-mode(→status 等价，官方动画方向映射为框架 status 语义)。
+- ★诚实边界：`duration` 官方语义为「进度增加 1% 所需毫秒」，本框架按**整体过渡时长**处理
+- （一次性过渡到目标值）——差异已在 API 表标注。
 
 ## 用法
 

@@ -33,7 +33,7 @@ order: 1022
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `options` | 选项 [{value,label}?] | `Array as () => unknown[]` | `() => []` | 否 |
+| `options` | 选项 [{value,label}?] | `Array as () => Array<{ value?: string \| number; label?: string }>` | `() => []` | 否 |
 | `modelValue` | 单选值 或 多选值数组 | `[String, Number, Array]` | `''` | 否 |
 | `multiple` | 多选模式 | `Boolean` | `false` | 否 |
 | `placeholder` | 占位文本 | `String` | `'请选择'` | 否 |
@@ -44,7 +44,7 @@ order: 1022
 
 #### `options`
 
-- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **类型**：`Array as () => Array<{ value?: string \| number; label?: string }>`　**默认值**：`() => []`　**必填**：否
 - **说明**：选项 [{value,label}?]
 
 #### `modelValue`
@@ -76,14 +76,14 @@ order: 1022
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `v` |
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `s` |
 
 ### 事件详解
 
 #### `update:modelValue`
 
 - **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
-- **载荷**：`v`（v-model 隐式：值本身）
+- **载荷**：`s`（v-model 隐式：值本身）
 
 ## 实现要点
 

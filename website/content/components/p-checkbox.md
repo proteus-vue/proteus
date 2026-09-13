@@ -33,39 +33,57 @@ order: 1005
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `modelValue` | 选中态（受控 v-model） | `Boolean` | `false` | 否 |
-| `indeterminate` | 半选态（父级不定——显式控制） | `Boolean` | `false` | 否 |
-| `disabled` | 禁用 | `Boolean` | `false` | 否 |
+| `modelValue` | 选中态（受控 v-model；★官方 checked 经语义归一为 modelValue） | `Boolean` | `false` | 否 |
+| `value` | ★官方 value：checkbox 标识（群选时随 change 携带，用于区分组内成员） | `String` | `''` | 否 |
+| `indeterminate` | 半选态（框架扩展：父级不定——显式控制，如全选组的一部分选中） | `Boolean` | `false` | 否 |
+| `disabled` | 是否禁用（★官方对齐） | `Boolean` | `false` | 否 |
+| `color` | 选中色（★官方 color；缺省微信绿 #07c160） | `String` | `''` | 否 |
 
 ### 属性详解
 
 #### `modelValue`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：选中态（受控 v-model）
+- **说明**：选中态（受控 v-model；★官方 checked 经语义归一为 modelValue）
+
+#### `value`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★官方 value：checkbox 标识（群选时随 change 携带，用于区分组内成员）
 
 #### `indeterminate`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：半选态（父级不定——显式控制）
+- **说明**：半选态（框架扩展：父级不定——显式控制，如全选组的一部分选中）
 
 #### `disabled`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：禁用
+- **说明**：是否禁用（★官方对齐）
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：选中色（★官方 color；缺省微信绿 #07c160）
 
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `next` |
+| `change` | 选中值变化 | `{ value: next, name: props.value }` |
 
 ### 事件详解
 
 #### `update:modelValue`
 
 - **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
-- **载荷**：`!props.modelValue`（v-model 隐式：值本身）
+- **载荷**：`next`（v-model 隐式：值本身）
+
+#### `change`
+
+- **说明**：选中值变化
+- **载荷**：`{ value: next, name: props.value }`
 
 ## 插槽
 
@@ -75,13 +93,16 @@ order: 1005
 
 ## 实现要点
 
-- checked 受控（v-model）+ indeterminate 半选 + group 归一（v-model:group 数组）
-- ★简化：单选态 v-model（checked），group 数组态由父级持有（modelValue 数组时进入群选）
+- ★形态（2026-09-13 定案，与 p-switch 一致）：**自绘**「小方框 + 勾」——官方 checkbox 的原生形态
+- 本身就是小方框（非开关），自绘可控且两端一致；不沿用原生 <checkbox> 组件（形态/尺寸跨端难以统一）。
+- ★属性对齐官方 4 项：`checked`(→modelValue 语义归一) / `disabled` / `color` / `value`(群选标识)。
+- ★事件契约：`change` 载荷 `{ detail: { value: 选中态, name: 群选标识 } }`（与官方 checkbox-group 的
+- `{ value: [标识...] }` 同源语义，单选用 boolean 更直观）；受控 v-model（update:modelValue）。
 
 ## 用法
 
 ```vue
-<p-checkbox v-model="value" :indeterminate="true" :disabled="true">
+<p-checkbox v-model="value" :value="'…'" :indeterminate="true">
   <p-text>内容</p-text>
 </p-checkbox>
 ```

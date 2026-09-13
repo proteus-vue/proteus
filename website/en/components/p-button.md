@@ -44,6 +44,7 @@ Button
 | `formType` | — | `String` | `''` | No |
 | `openType` | — | `String` | `''` | No |
 | `hoverClass` | — | `String` | `''` | No |
+| `theme` | — | `String` | `''` | No |
 | `hoverStopPropagation` | — | `Boolean` | `false` | No |
 | `hoverStartTime` | — | `Number` | `20` | No |
 | `hoverStayTime` | — | `Number` | `70` | No |
@@ -111,6 +112,11 @@ Button
 - **Doc**: —
 
 #### `hoverClass`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `theme`
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: —

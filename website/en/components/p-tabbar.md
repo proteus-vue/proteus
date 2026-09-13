@@ -33,14 +33,14 @@ Bottom tab bar
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
-| `tabs` | Tab items array ({key,label,badge?,icon?}) | `Array as () => unknown[]` | `() => []` | No |
+| `tabs` | Tab items array ({key,label,badge?,icon?}) | `Array as () => TabItem[]` | `() => []` | No |
 | `active` | Key of the currently active item | `[String, Number]` | `''` | No |
 
 ### Prop details
 
 #### `tabs`
 
-- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Type**: `Array as () => TabItem[]`　**Default**: `() => []`　**Required**: No
 - **Doc**: Tab items array ({key,label,badge?,icon?})
 
 #### `active`

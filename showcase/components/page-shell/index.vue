@@ -11,7 +11,7 @@ defineProps({
 
 <template>
   <view class="sp-shell">
-    <PSafe area="top" :fallback="20" />
+    <p-safe area="top" :fallback="20" />
     <view class="sp-shell-head">
       <text class="sp-shell-title">{{ title }}</text>
       <text v-if="subtitle" class="sp-shell-sub">{{ subtitle }}</text>

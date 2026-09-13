@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 106 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 108 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（60）
 
@@ -792,7 +792,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（32）
+## 脚本转换（34）
 
 ### `script/const-to-data`
 
@@ -860,6 +860,36 @@ after:  observers: {
 ```
 
 > why: 组件需要响应自身属性变化（列表 items 分页/加载更多、弹层 visible v-model、表单 value 同步等）；小程序无响应式系统，属性变化唯一通道是 observers
+
+### `script/computed-observer`
+
+**computed 派生值的依赖观察者（observers 重算 setData）**
+
+组件内 computed 的派生值（如 isChecked/boxStyle/columns）除在 ready() 初始化一次外，还按**依赖字段**生成 Component observers —— 依赖（props 或 data 字段）变化时重算并 setData；同一字段的多个 computed 合并进一个 observer；依赖提取用「字段引用扫描」（覆盖 this.data.f / f.value / props.f 三种写法）
+
+```
+before: const isChecked = computed(() => props.modelValue)  // 仅在 ready() 初始化一次
+after:  observers: {
+  modelValue(n, o) {
+    this.setData({ isChecked: this.data.modelValue })
+  },
+}
+```
+
+> why: 小程序无响应式系统：computed 此前**只在 ready() 求值一次**，父组件更新 props 或 data 变化后派生值永不重算 → 模板 class 绑定（读派生值）视觉不更新。真机实证：p-checkbox 勾选事件正常但 UI 不变（class 读派生 isChecked）；p-switch 侥幸正常只因 class 直接读 modelValue
+
+### `script/ref-nested-write`
+
+**ref 对象嵌套写补 setData（o.value.x / o.value[k] = v）**
+
+方法体中 `o.value.field = expr` / `o.value[key] = expr`（ref 持有对象/数组的字段写）→ 改写为 `this.data.o.field = expr` **并补 `this.setData({ o: this.data.o })`**；整体替换 `o.value = expr` 仍走原 setData 路径
+
+```
+before: picked.value[d.name] = true
+after:  this.data.picked[d.name] = true; this.setData({ picked: this.data.picked })
+```
+
+> why: 小程序视图由 setData 驱动：嵌套写此前只改 this.data、**不调用 setData** → 逻辑层数据已变但视图不重渲染（真机：p-checkbox 群选后计数/勾选视觉不变）
 
 ### `script/module-import`
 

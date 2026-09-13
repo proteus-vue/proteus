@@ -33,14 +33,14 @@ order: 2014
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `tabs` | 标签项数组（{key,label,badge?,icon?}） | `Array as () => unknown[]` | `() => []` | 否 |
+| `tabs` | 标签项数组（{key,label,badge?,icon?}） | `Array as () => TabItem[]` | `() => []` | 否 |
 | `active` | 当前激活项 key | `[String, Number]` | `''` | 否 |
 
 ### 属性详解
 
 #### `tabs`
 
-- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **类型**：`Array as () => TabItem[]`　**默认值**：`() => []`　**必填**：否
 - **说明**：标签项数组（{key,label,badge?,icon?}）
 
 #### `active`
@@ -70,7 +70,7 @@ order: 2014
 ## 实现要点
 
 - tabs（{key,label,badge?,icon?}[]）+ active 受控（v-model:active）+ select emit
-- 双端同源码：nav → view；item 字段经方法取（MP 安全：避免数组泛型 TS18046）
+- 双端同源码：nav → view；item 字段经 computed 预计算为数据行（WXML 禁止函数调用 S38；dataset 传 key）。
 
 ## 用法
 

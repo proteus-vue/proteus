@@ -49,7 +49,7 @@
     "check:alltarget": "node scripts/check-all-target-wording.mjs",
     "gen:mp-spec": "node scripts/gen-mp-spec.mjs",
     "check:mp-spec": "node scripts/gen-mp-spec.mjs --check",
-    "check:mp-attrs": "node scripts/audit-component-attrs.mjs --min 99",
+    "check:mp-attrs": "node scripts/audit-component-attrs.mjs --min 128",
     "gen:mp-attrs": "node scripts/gen-mp-component-attrs.mjs",
     "audit:website": "tsx packages/cli/src/index.ts audit d2 website/src",
     "check:live": "node website/scripts/verify-live.mjs",

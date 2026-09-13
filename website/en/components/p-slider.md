@@ -38,6 +38,10 @@ Slider
 | `max` | Maximum value | `Number` | `100` | No |
 | `step` | Step | `Number` | `1` | No |
 | `activeColor` | — | `String` | `'#07c160'` | No |
+| `color` | — | `String` | `''` | No |
+| `blockSize` | — | `Number` | `28` | No |
+| `blockColor` | — | `String` | `'#ffffff'` | No |
+| `showValue` | — | `Boolean` | `false` | No |
 | `disabled` | — | `Boolean` | `false` | No |
 
 ### Prop details
@@ -67,6 +71,26 @@ Slider
 - **Type**: `String`　**Default**: `'#07c160'`　**Required**: No
 - **Doc**: —
 
+#### `color`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `blockSize`
+
+- **Type**: `Number`　**Default**: `28`　**Required**: No
+- **Doc**: —
+
+#### `blockColor`
+
+- **Type**: `String`　**Default**: `'#ffffff'`　**Required**: No
+- **Doc**: —
+
+#### `showValue`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
 #### `disabled`
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
@@ -77,6 +101,8 @@ Slider
 | Event | Doc | Payload |
 |---|---|---|
 | `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `Number.isFinite(v) ? v : props.modelValue` |
+| `change` | — | `{ value: Number.isFinite(v) ? v : props.modelValue }` |
+| `changing` | — | `{ value: Number.isFinite(v) ? v : props.modelValue }` |
 
 ### Event details
 
@@ -84,6 +110,16 @@ Slider
 
 - **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
 - **Payload**: `Number.isFinite(v) ? v : props.modelValue` (implicit v-model: the value itself)
+
+#### `change`
+
+- **Doc**: —
+- **Payload**: `{ value: Number.isFinite(v) ? v : props.modelValue }`
+
+#### `changing`
+
+- **Doc**: —
+- **Payload**: `{ value: Number.isFinite(v) ? v : props.modelValue }`
 
 ## Implementation notes
 
