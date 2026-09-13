@@ -10,6 +10,18 @@ import { createTrace } from './trace'
 import { buildCompileIR, emptyScriptIR } from './ir/build'
 import type { CompileOptions, CompileResult } from './types'
 import { extractSfcMacros, renameModelVarsInWxml } from './sfc-macros'
+import { applyPlatformMacros } from './platform-macros'
+// ★平台编译期宏（条件显隐）：供构建配置（vite define / esbuild define）复用同一取值表
+export { applyPlatformMacros, applyPlatformMacrosInSfc, platformDefines } from './platform-macros'
+// ★平台变体解析（工程架构基础层）：业务代码/组件/静态资源/路由 四层共用的解析规则
+export {
+  VARIANT_PLATFORMS, VARIANT_SUFFIXES, CONCRETE_PLATFORMS,
+  normalizePlatform, platformFamily, platformFromBuildTarget, variantSuffixes,
+  splitVariant, variantCandidates, resolvePlatformVariant, resolvePlatformVariantWithExts,
+  isForeignVariant, pickVariant, effectiveVariants, mapPublicAssetVariants,
+} from './platform-variant'
+export type { VariantPlatform, ConcretePlatform, PlatformFamily } from './platform-variant'
+export type { PlatformTarget } from './platform-macros'
 
 /** djb2 哈希 → scoped 属性名（稳定：同文件同 scopeId；零依赖纯函数） */
 export function scopedIdFrom(filename: string): string {
@@ -79,14 +91,32 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   // scoped CSS（★2026-08 用户决策：默认 scoped）：非 <style global> 的 style 块即作用域化（类名后缀拼接）
   //   <style>（无标记）按 scoped 处理 + 编译期警告；<style global>（Proteus 扩展）显式全局（不作用域化）
   //   MVP 简化：scoped 组与 global 组分开转换输出（global 在前，可被 scoped 覆盖）
+  //   ★平台变体（2026-09-13）：<style src="./theme.css"> 经 loadStyleSrc 钩子加载（适配层按平台解析
+  //     变体 theme.<platform>.css）；此前 src 被**静默忽略**（样式丢失且无提示）——现加载失败显式告警。
+  const styleLoadWarnings: string[] = []
+  const styleSource = (s: (typeof descriptor.styles)[number]): string => {
+    const src = (s as { src?: string }).src
+    if (!src) return s.content
+    const loaded = options.loadStyleSrc?.(src, options.filename ?? 'anonymous.vue')
+    if (loaded == null) {
+      styleLoadWarnings.push(`<style src="${src}"> 未能加载（无 loadStyleSrc 钩子或文件不存在）——该样式块已跳过`)
+      return ''
+    }
+    return loaded
+  }
   const globalStyles = descriptor.styles.filter((s) => s.attrs?.global !== undefined)
   const scopedStyles = descriptor.styles.filter((s) => s.attrs?.global === undefined)
   const hasScoped = scopedStyles.length > 0
   const scopeId = hasScoped ? scopedIdFrom(options.filename ?? 'anonymous.vue') : undefined
   // 决策 trace（阶段二）：三阶段共用一条链路，产物侧可据此反查规则（★底线循环 ②）
   const tplTrace = createTrace('template')
-  const tpl = descriptor.template?.content ?? ''
-  const setup = descriptor.scriptSetup?.content ?? descriptor.script?.content ?? ''
+  // ★平台编译期宏（条件显隐）：__MP__/__WEB__/__TARGET__ → 该平台字面量。
+  //   template 用「模板模式」（原始替换——`v-if="__MP__"` 的标识符在属性引号内但语义是表达式）；
+  //   script 用「code 模式」（跳过字符串/注释——避免误改代码示例字符串，见 platform-macros.ts）。
+  //   MP 的 .vue 走本编译器（绕过 vite define），故替换必须在此处做；随后模板阶段静态裁剪死分支。
+  const platform = options.platform ?? 'mp'
+  const tpl = applyPlatformMacros(descriptor.template?.content ?? '', platform, 'template')
+  const setup = applyPlatformMacros(descriptor.scriptSetup?.content ?? descriptor.script?.content ?? '', platform, 'code')
   // ★15-page-scroll-container 批次2：页面滚动 API 桥接——检测页面声明的滚动生命周期（传给 template 绑定 scroll-view 事件）
   const pageScrollHooks = {
     hasOnPageScroll: /onPageScroll\s*\(/.test(setup),
@@ -147,7 +177,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const styleTrace = createTrace('style')
   // CSS 预处理器（v0.3 尾）：lang=scss/less 的 style 块先经 preprocessStyle 钩子转 css（适配层注入，编译器零依赖）
   const preprocess = (s: (typeof descriptor.styles)[number]): string =>
-    s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, s.content) : s.content
+    styleSource(s) && s.lang && options.preprocessStyle ? options.preprocessStyle(s.lang, styleSource(s)) : styleSource(s)
   // ★默认 scoped（2026-08）：<style> 无标记按 scoped 处理 + 警告（每文件一条）
   if (!options.rules?.disabled?.includes('style/default-scoped')) {
     for (const s of scopedStyles) {
@@ -184,7 +214,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     wxml,
     js: scriptResult.js,
     wxss: finalWxss,
-    warnings: [...tplResult.warnings, ...scriptResult.warnings],
+    warnings: [...tplResult.warnings, ...scriptResult.warnings, ...styleLoadWarnings],
     trace: [...tplTrace.events, ...scriptTrace.events, ...styleTrace.events],
     sourcemap: scriptResult.sourcemap,
   }

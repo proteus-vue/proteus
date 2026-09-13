@@ -278,3 +278,6 @@ export type {
   BaseNavigateOptions,
   NavigateOptions,
 } from './types'
+
+// ★平台变体（2026-09-13，第 2/4 层）：Web 端组件路径变体解析 + 路由平台门控
+export { resolveVariantComponentKey, routeAppliesToPlatform } from './variant'

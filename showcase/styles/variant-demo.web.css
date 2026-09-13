@@ -1,0 +1,10 @@
+/* 平台变体·CSS：Web 实现（紫色系） */
+.variant-card {
+  display: block;
+  padding: 18px;
+  border-radius: 14px;
+  background: #f3efff;
+  color: #7c5cff;
+  font-size: 13px;
+  border: 1px solid #d8ccff;
+}

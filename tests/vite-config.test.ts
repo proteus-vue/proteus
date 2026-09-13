@@ -28,7 +28,7 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     expect(needsGenRoutes).toBe(false)
     expect(config.configFile).toBe(false)
     expect(config.root).toBe(ROOT)
-    expect(config.plugins?.length).toBe(2) // vue + route-blocks
+    expect(config.plugins?.length).toBe(5) // variant + vue + platform-macros + public-assets + route-blocks
     expect(config.build?.outDir).toBe(path.join(ROOT, 'dist', 'web'))
     expect((config.define as Record<string, unknown>).__PROTEUS_DEBUG__).toBe(false)
   })
@@ -58,8 +58,8 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
       },
     )
     expect((config.server as { port?: number }).port).toBe(5999)
-    // 仍保留框架插件（vue + route-blocks）+ 别名 @ 追加（用户别名不被吞）
-    expect(config.plugins?.length).toBe(2)
+    // 仍保留框架插件（variant + vue + macro + public-assets + route-blocks）+ 别名 @ 追加（用户别名不被吞）
+    expect(config.plugins?.length).toBe(5)
     const aliases = (config.resolve?.alias as unknown as Array<{ find: string }>) ?? []
     expect(aliases.some((a) => a.find === '@')).toBe(true)
   })

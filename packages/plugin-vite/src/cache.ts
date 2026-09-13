@@ -66,6 +66,8 @@ export function compileCacheKey(
     fluidLayout?: unknown
     /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缓存键包含，防同源码跨渲染引擎命中错误缓存 */
     renderer?: 'skyline' | 'webview'
+    /** ★平台编译期宏目标（__MP__/__WEB__ 取值）——缓存键包含，防跨平台命中错误产物 */
+    platform?: 'mp' | 'web' | 'native' | 'ios' | 'android' | 'harmony'
   },
   projectRoot: string,
 ): string {

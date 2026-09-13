@@ -1,0 +1,9 @@
+/* 平台变体·CSS（第 5 层）：共享默认——无 .mp/.web 变体时生效 */
+.variant-card {
+  display: block;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f0f0f0;
+  color: #333;
+  font-size: 13px;
+}

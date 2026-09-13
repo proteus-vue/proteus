@@ -31,6 +31,10 @@ export interface RouteBlock {
   chunk?: string
   /** ★G-42/官网：仅 Web 路由——收录 web 路由表，MP app.json 不收录 + mpTransform 跳过编译 */
   webOnly?: boolean
+  /** ★平台变体·路由门控（2026-09-13，第 4 层）：本页仅在列出的平台编译/收录。
+   *  取值规范变体 id（web | mp | native；别名 skyline→mp、app→native）；未声明 = 全平台。
+   *  `webOnly: true` 等价 `platforms: ['web']`（向后兼容）。 */
+  platforms?: string[]
 }
 
 /** M2：嵌套路由树节点（tree.ts） */
