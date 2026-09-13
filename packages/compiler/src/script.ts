@@ -925,6 +925,7 @@ function extractComputedFromInit(
   data: Record<string, unknown>,
   warnings: string[],
   computedNames?: Set<string>,
+  propsVar?: string,
 ): ComputedInfo | null {
   // 箭头简写：computed(() => 表达式)（表达式体；块体 → 整段求值方法）
   const arrow = init.match(/^computed(?:<[^>]*>)?\s*\(\s*\(\)\s*=>\s*([\s\S]*?)\s*\)\s*;?$/)
@@ -961,15 +962,29 @@ function extractComputedFromInit(
     const setM = body.match(/\bset\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\}/)
     if (setM) setter = { param: setM[1].trim(), body: setM[2] }
   }
-  const deps = [...new Set(Array.from(rawExpr.matchAll(/\b([A-Za-z_$][\w$]*)\.value\b/g), (mm) => mm[1]))]
+  // ★2026-09-13 修复：`props.value`（open-type 风格的属性名恰为 value）不应被 ref 的 `.value` 剥离规则误伤
+  //   → 排除 `propsVar.value`（propsVar = defineProps 变量名，多为 props）。此前 `props.modelValue === props.value`
+  //   被改写成 `this.data.modelValue === this.data.props`（**props.value → this.data.props**）→ 恒不等 → radio 全失效。
+  // ★2026-09-13 修复：`props.value`（属性名恰为 value）不应被 ref 的 `.value` 剥离规则误伤——
+  //   此前 `props.modelValue === props.value` 被改写成 `this.data.modelValue === this.data.props`
+  //   （`props.value` → `this.data.props`）→ 恒不等 → p-radio **完全失效**（真机实测）。
+  //   处置：`.value` 重写只对**非 propsVar** 的标识符生效（propsVar 由 defineProps 提取）。
+  const refValueRe = /(?<!\w)([A-Za-z_$][\w$]*)\.value\b/g
+  const isPropRef = (id: string): boolean => propsVar !== undefined && id === propsVar
+  const deps = [
+    ...new Set(
+      Array.from(rawExpr.matchAll(refValueRe), (mm) => mm[1]).filter((id) => !isPropRef(id)),
+    ),
+  ]
   const missing = deps.filter((d) => !(d in data) && !(computedNames?.has(d)))
   if (missing.length) {
     warnings.push(
       `computed ${name} 依赖 ${missing.join('/')} 未在顶层 data 中定义（${name} 的依赖必须是本文件顶层 ref/reactive）`,
     )
   }
-  // 转写：x.value → this.data.x（与 ref 读取重写一致）；★#503 es5-safe（?? / ?. → 显式 null 检查）
-  const expr = rawExpr.replace(/\b([A-Za-z_$][\w$]*)\.value\b/g, 'this.data.$1')
+  // 转写：x.value → this.data.x（与 ref 读取重写一致）；★propsVar.value 原样保留
+  //   ★#503 es5-safe（?? / ?. → 显式 null 检查）
+  const expr = rawExpr.replace(refValueRe, (m, id: string) => (isPropRef(id) ? m : `this.data.${id}`))
   return { name, deps, expr, setter }
 }
 
@@ -1081,7 +1096,23 @@ function handleConstToData(
     return // 不进 data（运行时实例属性）
   }
   if (value === undefined && raw !== 'undefined' && !/^inject\s*\(/.test(raw.trim())) {
-    warnings.push(`const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`)
+    // ★2026-09-13 醒目化（今天三次踩同一坑：p-checkbox `ref<Record<string,boolean>>({...})`、
+    //   p-picker `ref<number[]>([])`）：带**类型实参**时初值无法静态求值 → data undefined →
+    //   依赖它的 computed/渲染整块失效（Web 正常、仅真机暴露）。给出可直接照做的修法。
+    // ★2026-09-13：两种常见不可求值形态都要醒目提示（此前只提示了泛型实参，漏了 as 断言）——
+    //   `ref<T>(…)` 与 `ref(… as T)` **都不能静态求值**（一天踩三次：p-checkbox picked / p-picker draft）。
+    const isGenericRef = /^\s*(ref|shallowRef|reactive|shallowReactive)\s*</.test(raw)
+    const isAsCast = /\bas\s+/.test(raw)
+    const hint = isGenericRef
+      ? '★去掉 <...> 类型实参'
+      : isAsCast
+        ? '★去掉 as 类型断言（断言在 computed/handler 内联处可用，不可包住 ref 初值）'
+        : ''
+    warnings.push(
+      hint
+        ? `const ${name} = ${raw.slice(0, 44)} **${isGenericRef ? '带类型实参' : '带 as 断言'}** → 初值无法静态求值，data.${name} 将为 undefined（MP 端引用它的模板/computed 会失效）——${hint}`
+        : `const ${name} 的初始值 "${raw.slice(0, 40)}" 无法静态求值，data.${name} 将设为 undefined（MVP 限制：仅支持字面量）`,
+    )
   }
   // ★#502 反黑盒：非有限数（Infinity/NaN）进 data → 微信 setData 序列化约束整次放弃/静默变 null（p-modal variants 真机根因）——编译期显式警告
   const hasNonFinite = (o: unknown): boolean => {
@@ -1112,6 +1143,8 @@ function extractData(
   constSourceTypes: Map<string, string>
 } {
   const data: Record<string, unknown> = {}
+  // ★props 变量名（`const props = defineProps(...)`）——用于避免把 `props.value` 误当 ref 的 `.value` 剥离
+  const propsVar = source.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*defineProps\s*[<(]/)?.[1]
   const runtimeInits: Array<{ name: string; call: string }> = []
   const reactiveInits: Array<{ name: string; srcType: string }> = []
   const letHandles: string[] = []
@@ -1121,7 +1154,17 @@ function extractData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const addLetHandle = (name: string, init: string | null, line: number): void => {
     if (!name || letHandles.includes(name)) return
-    if (init !== null && init !== 'null' && init !== 'undefined') return
+    if (init !== null && init !== 'null' && init !== 'undefined') {
+      // ★2026-09-13 → 真机实证静默陷阱（p-picker 二次打开卡死根因）：
+      //   顶层 `let x = <非 null/undefined>`（如 `let timer = 0`）**不产出任何东西** →
+      //   方法体里 `clearTimeout(timer)` / `timer = ...` 在组件实例上 **ReferenceError**（整段方法体中断）。
+      //   改用 ref（`const timer = ref(0)`），编译器会写进 data（this.data.timer）+ 赋值改写。
+      warnings.push(
+        `顶层 let ${name} = "${(init ?? '').slice(0, 30)}"（非 null/undefined 初始化）不会产出组件实例成员——` +
+          `方法体里引用/赋值它会 **ReferenceError**（真机静默陷阱：p-picker closeTimer）。请改用 \`const ${name} = ref(<初值>)\``,
+      )
+      return
+    }
     letHandles.push(name)
     trace?.add('script/const-to-data', {
       line,
@@ -1166,13 +1209,20 @@ function extractData(
       if (source.slice(lineStart, lm.index) !== '') continue
       addLetHandle(lm[1], lm[2], lineAt(source, lm.index))
     }
+    // ★顶层 let 非 null 初始化告警（同 addLetHandle 内的静默陷阱——文本回退路径也覆盖）
+    const badLetRe = /^\s*let\s+([A-Za-z_$][\w$]*)\s*=\s*(?!null\b|undefined\b)([^\n;]+)/gm
+    let bm: RegExpExecArray | null
+    while ((bm = badLetRe.exec(source))) {
+      if (source.slice(source.lastIndexOf('\n', bm.index) + 1, bm.index) !== '') continue
+      addLetHandle(bm[1], bm[2].trim(), lineAt(source, bm.index))
+    }
   }
   // 二次处理 computed（此时 data 已完整，可校验依赖）
   const computed: Record<string, ComputedInfo> = {}
   // ★#499 computed 链（visibleItems 依赖 visibleCount）：缺依赖校验须容忍另一 computed——链 dep 不再误报
   const computedNames = new Set(rawComputed.map((c) => c.name))
   for (const c of rawComputed) {
-    const info = extractComputedFromInit(c.name, c.init, data, warnings, computedNames)
+    const info = extractComputedFromInit(c.name, c.init, data, warnings, computedNames, propsVar)
     if (info) {
       computed[c.name] = info
       trace?.add('script/computed-to-data', {
@@ -1377,6 +1427,15 @@ function computedPatchEntries(
 }
 
 /** onLoad 初始化行：一次性计算全部 computed 派生字段（首次渲染前 data 就绪） */
+
+/** ★2026-09-13：按名取 computed 子集（供 observers 只重算该字段依赖的 computed） */
+function pickComputeds(all: Record<string, ComputedInfo>, names: string[]): Record<string, ComputedInfo> {
+  const out: Record<string, ComputedInfo> = {}
+  for (const n of names) if (all[n]) out[n] = all[n]
+  return out
+}
+
+/** ★2026-09-13 计算派生赋值行（ready + observers 共用）：返回 setData 语句（含 computed 链的顺序写入） */
 function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNames?: Set<string>, propsVar?: string, methodNames?: Set<string>): string {
   const entries = Object.entries(computeds)
   if (!entries.length) return ''
@@ -1384,8 +1443,13 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
   //  裸名词法查找 ReferenceError：p-grid attached 崩）；props.gap → this.data.gap（与方法体 propsVar 重写一致）
   //  ★2026-09-09 P2 spike 缺口：模块级函数在 computed 表达式内裸调用未改写（double(n.value) → 裸 double → ReferenceError）；
   //   复用 rewriteBareMethodCalls（与方法体同规则：methodNames 命中 → this.name(）
+  // ★2026-09-13：computed 表达式内的 TS 类型断言（`x as boolean`）此前**原样进产物** →
+  //   微信编译器报 `Unexpected identifier 'as'`（pg-glass 的 `resolved.value.ok as boolean` 真实踩到；
+  //   此前该表达式也会进 ready，但 ready 内联注入未触发校验，observers 生成后被 `validateJs` 抓到）。
+  //   文本级剥离：`EXPR as TYPE` → `EXPR`（类型形态贪婪匹配到分隔符/行尾，避免误吞后续表达式）。
+  const stripAs = (e: string): string => e.replace(/\bas\s+(?:const\b|[A-Za-z_$][\w$]*(?:\s*<[^>]*>)?(?:\[\])?(?:\s*\|\s*[A-Za-z_$][\w$]*(?:\[\])?)*)/g, '')
   const rewrite = (expr: string): string => {
-    let out = expr
+    let out = stripAs(expr)
     if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
     if (methodNames) out = rewriteBareMethodCalls(out, methodNames)
     if (runtimeInitNames) {
@@ -2158,6 +2222,28 @@ function rewriteRefAccess(
       }
       out = chunks.join('')
     }
+    // ★★2026-09-13 修复（真机：p-checkbox 群选无效）：**嵌套写** `name.value.field = expr` / `name.value[k] = expr`
+    //   此前只被「赋值」规则的**读取**路径转成 `this.data.name.field = ...` → **直接改 this.data、无 setData
+    //   → 小程序不重渲染**（视觉不变）。修：改写为「先改 this.data 再整体 setData」：
+    //     `name.value.x = 1`      → `this.data.name.x = 1; this.setData({ name: this.data.name })`
+    //     `name.value[k] = v`     → `this.data.name[k] = v; this.setData({ name: this.data.name })`
+    //   注意顺序：必须在「整体赋值」规则**之前**处理（否则 `name.value = ...` 会被整体规则先吃掉；
+    //   本规则用 `name.value(.\w+|[...])` 精确匹配嵌套形态，与整体赋值的 `name.value\s*=` 不冲突）。
+    if (!skip('script/ref-nested-write')) {
+      const nestedRe = new RegExp(`\\b${name}\\.value((?:\\.[A-Za-z_$][\\w$]*)|(?:\\[[^\\]]+\\]))\\s*=\\s*(?!=)`, 'g')
+      if (nestedRe.test(out)) {
+        trace?.add('script/ref-nested-write', {
+          line,
+          before: `${name}.value.field = expr（嵌套写）`,
+          after: `this.data.${name}.field = expr + setData({ ${name}: this.data.${name} })（★此前无 setData → 视觉不更新）`,
+        })
+        out = out.replace(nestedRe, (_m, access: string) => `${prop}${access} = `)
+        // 在包含这些写的语句末尾补 setData——简化：将每个 `this.data.name<x> = RHS;` 语句改为
+        //   `this.data.name<x> = RHS; this.setData({ name: this.data.name });`
+        const stmtRe = new RegExp(`(${prop.replace('.', '\\.')}(?:\\.[A-Za-z_$][\\w$]*|\\[[^\\]]+\\])\\s*=\\s*[^;\\n]+)`, 'g')
+        out = out.replace(stmtRe, `$1; this.setData({ ${name}: ${prop} })`)
+      }
+    }
     // 读取：name.value → this.data.name
     if (!skip('script/ref-read')) {
       if (new RegExp(`\\b${name}\\.value\\b`).test(out)) {
@@ -2800,14 +2886,91 @@ export function transformScriptToPage(
 
   // ★props 源 watch → WeChat observers（组件监听自身属性变化；Web 端即标准 Vue watch）
   const propWatches = Object.values(watches).filter((w) => w.propField)
-  if (extra.isComponent && propWatches.length) {
+  // ★★2026-09-13 修复（真机实测：p-checkbox 勾选事件正常但 **UI 不变**）：
+  //   computed 派生值在 MP 端此前**只在 ready() 算一次**（computedInitLine 仅进 ready）→
+  //   父组件更新 props / data 变化后，class 绑定等派生值**永不重算** → 视觉不更新。
+  //   （p-switch 侥幸正常只因模板 class 直接读 `modelValue`；p-checkbox 的 class 读派生 `isChecked` 即暴露。）
+  //   修法：按 computed 的**依赖字段**生成 observers 重算（微信 observers 支持监听自身 property 与 data）；
+  //   同一字段的多个 computed 一次重算；已由 propWatch 覆盖的字段合并进该 observer。
+  const propWatchFields = new Set(propWatches.map((w) => w.propField))
+  // ★依赖提取用「字段引用扫描」而非 c.deps（后者只认 `x.value` 形态，**漏了 `props.foo`**——
+  //   p-checkbox 的 `computed(() => props.modelValue)` 因此 deps 为空、observer 缺失）。
+  //   扫描 computed 源码文本，命中 data/props 字段即建立依赖（三种写法：this.data.f / f.value / props.f）。
+  const dataFieldNames = [...new Set([...Object.keys(data), ...Object.keys(props)])]
+  const refsField = (text: string, field: string): boolean => {
+    if (new RegExp(`this\\.data\\.${field}\\b`).test(text)) return true
+    if (new RegExp(`\\b${field}\\.value\\b`).test(text)) return true
+    if (propsVar && new RegExp(`\\b${propsVar}\\.${field}\\b`).test(text)) return true
+    return false
+  }
+  // ★★2026-09-13 传递闭包（真机：p-checkbox 取消勾选后紫色残留）：
+  //   `boxStyle` 依赖的是 **computed `isChecked`**，不是 prop `modelValue`——直接依赖扫描只建立
+  //   「字段 → 直接引用它的 computed」，链断了 → modelValue 变化重算了 isChecked、却**没重算 boxStyle**
+  //   → 旧的内联样式残留（视觉不更新）。
+  //   修法：先把 computed→computed 依赖闭包展开，再落字段映射（链上所有后继 computed 都随根字段重算）。
+  const computedNamesAll = Object.keys(computeds)
+  const directFields = new Map<string, string[]>() // computed → 直接引用的 数据/props 字段
+  const directComputeds = new Map<string, string[]>() // computed → 直接引用的其它 computed
+  for (const [cname, c] of Object.entries(computeds)) {
+    const text = `${c.blockBody ?? ''} ${c.expr}`
+    directFields.set(cname, dataFieldNames.filter((f) => f !== cname && refsField(text, f)))
+    directComputeds.set(
+      cname,
+      computedNamesAll.filter((n) => n !== cname && new RegExp(`\\b${n}\\b`).test(text)),
+    )
+  }
+  // 传递：某 computed 的「有效依赖字段」= 自身直接字段 ∪ 其依赖的 computed 的有效依赖字段
+  const effFields = new Map<string, string[]>()
+  const resolveFields = (cname: string, stack: Set<string>): string[] => {
+    const cached = effFields.get(cname)
+    if (cached) return cached
+    if (stack.has(cname)) return [] // 循环依赖保护
+    stack.add(cname)
+    const set = new Set(directFields.get(cname) ?? [])
+    for (const dep of directComputeds.get(cname) ?? []) {
+      for (const f of resolveFields(dep, stack)) set.add(f)
+    }
+    stack.delete(cname)
+    const arr = [...set]
+    effFields.set(cname, arr)
+    return arr
+  }
+  const computedDeps = new Map<string, string[]>()
+  for (const cname of computedNamesAll) {
+    for (const f of resolveFields(cname, new Set())) {
+      if (!computedDeps.has(f)) computedDeps.set(f, [])
+      computedDeps.get(f)!.push(cname)
+    }
+  }
+  if (extra.isComponent && (propWatches.length || computedDeps.size)) {
     lines.push('  observers: {')
+    const emitted = new Set<string>()
     for (const w of propWatches) {
       // ★#499：回调参数先归一为 n/o（微信 observers 实参固定 — 回调体引用开发者参数名如 w 必须同步改名）
       const observerBody = rw(renameWatchParamsToNo(w.body, w.params))
       const bodyLines = observerBody.split('\n')
-      lines.push(`    ${w.propField}(n, o) {`)
+      const pf = w.propField as string
+      lines.push(`    ${pf}(n, o) {`)
       for (const bl of bodyLines) lines.push(`      ${bl}`)
+      // ★同字段的派生 computed 合并进本 observer（避免 observers 对象键重复）
+      const merged = computedDeps.get(pf)
+      if (merged) {
+        const recalc = computedInitLine(pickComputeds(computeds, merged), runtimeInitNames, propsVar, methodNames)
+        if (recalc) for (const bl of recalc.split('\n')) lines.push(`      ${bl}`)
+      }
+      lines.push('    },')
+      emitted.add(pf)
+    }
+    for (const [dep, cnames] of computedDeps) {
+      if (emitted.has(dep)) continue
+      const recalc = computedInitLine(pickComputeds(computeds, cnames), runtimeInitNames, propsVar, methodNames)
+      if (!recalc) continue
+      trace?.add('script/computed-observer', {
+        before: `computed ${cnames.join('/')} 依赖 ${dep}`,
+        after: `observers[${dep}] → 依赖变化时重算 setData（修复 MP 派生值不更新）`,
+      })
+      lines.push(`    ${dep}(n, o) {`)
+      for (const bl of recalc.split('\n')) lines.push(`      ${bl}`)
       lines.push('    },')
     }
     lines.push('  },')

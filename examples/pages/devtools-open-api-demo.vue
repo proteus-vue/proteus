@@ -21,8 +21,8 @@ const paramsInput = ref('{"stores":[]}')
 // ★MP 安全：无类型标注（编译器只剥方法参数类型/方法体 as）——顶层 let 整段不进 data/methods（编译器丢弃）；
 //   ws 显式标注满足 tsc strict（丢弃后 MP 产物无 :）；pending 用 ref 对象（MP 方法体内裸标识符无法解析）
 let ws: WebSocket | null = null
-let seq = 0
-let recId = 0
+const seq = ref(0)
+const recId = ref(0)
 const pending = ref<Record<number, string>>({})
 
 /** 发送 CDP 风格命令（id 自增；label 用于响应回显） */
@@ -31,7 +31,7 @@ function send(method: string, params?: Record<string, unknown>, label?: string):
     log.value.push('⚠ WS 未连接')
     return
   }
-  const id = ++seq
+  const id = ++seq.value
   if (label) pending.value[id] = label
   ws.send(JSON.stringify({ id, method, params }))
 }
@@ -90,9 +90,9 @@ onMounted(() => {
     // 事件流：Proteus.event → 自绘迷你时间线（不依赖官方面板，展示开放接入）
     if (msg.method === 'Proteus.event' && msg.params) {
       const p = msg.params
-      recId += 1
+      recId.value += 1
       events.value.push({
-        id: recId,
+        id: recId.value,
         source: String(p.source ?? '?'),
         phase: String(p.phase ?? 'point'),
         name: String(p.name ?? '?'),
