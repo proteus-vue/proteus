@@ -39,7 +39,22 @@ Multiline textarea
 | `value` | Bound value | `String` | `''` | No |
 | `maxlength` | Maximum input length (<= 0 = unlimited) | `Number` | `-1` | No |
 | `placeholder` | Placeholder hint text | `String` | `''` | No |
+| `placeholderStyle` | — | `String` | `''` | No |
+| `placeholderClass` | — | `String` | `''` | No |
 | `focus` | Auto focus | `Boolean` | `false` | No |
+| `autoHeight` | — | `Boolean` | `false` | No |
+| `cursorSpacing` | — | `Number` | `0` | No |
+| `cursor` | — | `Number` | `-1` | No |
+| `selectionStart` | — | `Number` | `-1` | No |
+| `selectionEnd` | — | `Number` | `-1` | No |
+| `adjustPosition` | — | `Boolean` | `true` | No |
+| `holdKeyboard` | — | `Boolean` | `false` | No |
+| `disableDefaultPadding` | — | `Boolean` | `false` | No |
+| `confirmType` | — | `String` | `''` | No |
+| `confirmHold` | — | `Boolean` | `false` | No |
+| `adjustKeyboardTo` | — | `String` | `''` | No |
+| `fixed` | — | `Boolean` | `false` | No |
+| `showConfirmBar` | — | `Boolean` | `true` | No |
 
 ### Prop details
 
@@ -73,10 +88,85 @@ Multiline textarea
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: Placeholder hint text
 
+#### `placeholderStyle`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `placeholderClass`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
 #### `focus`
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Auto focus
+
+#### `autoHeight`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `cursorSpacing`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `cursor`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `selectionStart`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `selectionEnd`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `adjustPosition`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `holdKeyboard`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `disableDefaultPadding`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `confirmType`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `confirmHold`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `adjustKeyboardTo`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `fixed`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `showConfirmBar`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
 
 ## Events
 

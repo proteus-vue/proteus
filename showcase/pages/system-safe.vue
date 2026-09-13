@@ -13,7 +13,7 @@ function toggleFold() { fold.value = !fold.value }
   <page-shell title="安全区与自适应" subtitle="p-safe · 状态栏 / Home 指示器避让">
     <p-text class="sec">p-safe（area=top，状态栏避让）</p-text>
     <p-view class="card">
-      <psafe area="top" :fallback="20" />
+      <p-safe area="top" :fallback="20" />
       <p-text class="hint">↑ 顶部已避让状态栏（fallback=20px 兜底）</p-text>
     </p-view>
 
@@ -21,7 +21,7 @@ function toggleFold() { fold.value = !fold.value }
     <p-view class="card body">
       <p-text class="hint">主体内容</p-text>
     </p-view>
-    <psafe area="bottom" :fallback="16" />
+    <p-safe area="bottom" :fallback="16" />
     <p-text class="hint">↑ 底部已避让 Home 指示器</p-text>
   </page-shell>
 </template>

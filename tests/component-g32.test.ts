@@ -114,8 +114,13 @@ describe('G-32 B2/B4 组件落地（29 新组件：布局 6 + UI 基础 4 + Shel
       isComponent: true,
       filename: 'src/components/p-switch/index.vue',
     })
-    expect(sw.wxml).toContain('bindtap') // @click → bindtap（事件归一）
-    expect(sw.wxml).toContain('p-switch-on')
+    // ★2026-09-13 p-switch 设计定案（用户评审 + G-31）：**自绘**——
+    //   官方 <switch type="switch|checkbox"> 是平台历史包袱（checkbox 形态与 p-checkbox 重复），
+    //   且原生方角物理上做不到；改为 `shape: round|square`（都是开关）+ 自绘控制台。
+    expect(sw.wxml, '自绘（非原生 switch）').not.toContain('<switch')
+    expect(sw.wxml).toContain('bindtap="onToggle"')
+    expect(sw.wxml, 'shape 字面量变体应进产物').toContain('p-switch--square')
+    expect(sw.wxml, 'change 事件契约').toContain('bindtap="onToggle"')
     const tabbar = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-tabbar', 'index.vue'), 'utf-8'), {
       isComponent: true,
       filename: 'src/components/p-tabbar/index.vue',

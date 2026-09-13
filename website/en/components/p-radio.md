@@ -34,8 +34,10 @@ Radio (single choice)
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
 | `value` | Value of this item | `[String, Number]` | `''` | No |
-| `group` | Current selected value (held by the parent group) | `[String, Number]` | `''` | No |
+| `modelValue` | — | `[String, Number]` | `''` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
+| `color` | — | `String` | `''` | No |
+| `name` | — | `String` | `''` | No |
 
 ### Prop details
 
@@ -44,28 +46,44 @@ Radio (single choice)
 - **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
 - **Doc**: Value of this item
 
-#### `group`
+#### `modelValue`
 
 - **Type**: `[String, Number]`　**Default**: `''`　**Required**: No
-- **Doc**: Current selected value (held by the parent group)
+- **Doc**: —
 
 #### `disabled`
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Disabled
 
+#### `color`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `name`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
-| `update:group` | Two-way binding: fires when `group` changes (syncs the parent binding) | `props.value` |
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `props.value` |
+| `change` | — | `{ value: props.value, name: props.name }` |
 
 ### Event details
 
-#### `update:group`
+#### `update:modelValue`
 
-- **Doc**: Two-way binding: fires when `group` changes (syncs the parent binding)
+- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
 - **Payload**: `props.value` (implicit v-model: the value itself)
+
+#### `change`
+
+- **Doc**: —
+- **Payload**: `{ value: props.value, name: props.name }`
 
 ## Slots
 

@@ -33,7 +33,7 @@ Selector / overlay type
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
-| `options` | Options [{value,label}?] | `Array as () => unknown[]` | `() => []` | No |
+| `options` | Options [{value,label}?] | `Array as () => Array<{ value?: string \| number; label?: string }>` | `() => []` | No |
 | `modelValue` | Single-select value or an array of multi-select values | `[String, Number, Array]` | `''` | No |
 | `multiple` | Multi-select mode | `Boolean` | `false` | No |
 | `placeholder` | Placeholder text | `String` | `'请选择'` | No |
@@ -44,7 +44,7 @@ Selector / overlay type
 
 #### `options`
 
-- **Type**: `Array as () => unknown[]`　**Default**: `() => []`　**Required**: No
+- **Type**: `Array as () => Array<{ value?: string \| number; label?: string }>`　**Default**: `() => []`　**Required**: No
 - **Doc**: Options [{value,label}?]
 
 #### `modelValue`
@@ -76,14 +76,14 @@ Selector / overlay type
 
 | Event | Doc | Payload |
 |---|---|---|
-| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v` |
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `s` |
 
 ### Event details
 
 #### `update:modelValue`
 
 - **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
-- **Payload**: `v` (implicit v-model: the value itself)
+- **Payload**: `s` (implicit v-model: the value itself)
 
 ## Implementation notes
 

@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 72 个（已备详情页 2） */
+/** 组件：6 域 / 72 个（已备详情页 9） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -52,7 +52,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-button", desc: "按钮", route: "/subpackages/components/pages/p-button" },
       { name: "p-camera", desc: "相机", route: "" },
       { name: "p-canvas", desc: "画布", route: "" },
-      { name: "p-checkbox", desc: "多选", route: "" },
+      { name: "p-checkbox", desc: "多选", route: "/subpackages/components/pages/p-checkbox" },
       { name: "p-form", desc: "表单容器", route: "" },
       { name: "p-heading", desc: "标题", route: "" },
       { name: "p-icon", desc: "图标", route: "" },
@@ -64,19 +64,19 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-map", desc: "地图", route: "" },
       { name: "p-media", desc: "媒体统一入口", route: "" },
       { name: "p-nav-bar", desc: "导航栏", route: "" },
-      { name: "p-picker", desc: "原生日期/时间/城市选择", route: "" },
-      { name: "p-progress", desc: "进度条", route: "" },
-      { name: "p-radio", desc: "单选", route: "" },
+      { name: "p-picker", desc: "选择器", route: "/subpackages/components/pages/p-picker" },
+      { name: "p-progress", desc: "进度条", route: "/subpackages/components/pages/p-progress" },
+      { name: "p-radio", desc: "单选", route: "/subpackages/components/pages/p-radio" },
       { name: "p-rich-text", desc: "富文本", route: "" },
       { name: "p-scale", desc: "动态字号/密度", route: "" },
       { name: "p-select", desc: "选择器 / 弹层型", route: "" },
       { name: "p-selection", desc: "局部文本选区", route: "" },
       { name: "p-skeleton", desc: "骨架屏", route: "" },
-      { name: "p-slider", desc: "滑块", route: "" },
+      { name: "p-slider", desc: "滑块", route: "/subpackages/components/pages/p-slider" },
       { name: "p-svg", desc: "矢量图形", route: "" },
-      { name: "p-switch", desc: "开关", route: "" },
+      { name: "p-switch", desc: "开关", route: "/subpackages/components/pages/p-switch" },
       { name: "p-text", desc: "文本", route: "" },
-      { name: "p-textarea", desc: "多行文本域", route: "" },
+      { name: "p-textarea", desc: "多行文本域", route: "/subpackages/components/pages/p-textarea" },
     ],
   },
   {
@@ -279,7 +279,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 72,
-  componentReady: 2,
+  componentReady: 9,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 1,

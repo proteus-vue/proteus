@@ -1,57 +1,61 @@
 <!-- src/components/p-tabbar/index.vue —— 底部标签栏（★G-32 B2：shell.tabbar S3）
      tabs（{key,label,badge?,icon?}[]）+ active 受控（v-model:active）+ select emit
-     双端同源码：nav → view；item 字段经方法取（MP 安全：避免数组泛型 TS18046） -->
+     双端同源码：nav → view；item 字段经 computed 预计算为数据行（WXML 禁止函数调用 S38；dataset 传 key）。 -->
 <template>
   <nav class="p-tabbar">
     <div
-      v-for="t in tabs"
-      :key="tabKey(t)"
+      v-for="row in rows"
+      :key="row.key"
       class="p-tab"
-      :class="{ 'p-tab-on': tabKey(t) === String(active) }"
-      @click="onSelect(t)"
+      :class="{ 'p-tab-on': active == row.key }"
+      :data-value="row.key"
+      @click="onSelect"
     >
       <div class="p-tab-icon">
-        <p-icon v-if="tabIcon(t)" :name="tabIcon(t)" :size="20" />
+        <p-icon v-if="row.icon" :name="row.icon" :size="20" />
       </div>
-      <div class="p-tab-label">{{ tabLabel(t) }}</div>
-      <div v-if="tabBadge(t)" class="p-tab-badge">{{ tabBadge(t) }}</div>
+      <div class="p-tab-label">{{ row.label }}</div>
+      <div v-if="row.badge" class="p-tab-badge">{{ row.badge }}</div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import PIcon from '../p-icon/index.vue'
+
+interface TabItem {
+  key?: string | number
+  label?: string
+  badge?: string | number
+  icon?: string
+}
 
 const props = defineProps({
   /** 标签项数组（{key,label,badge?,icon?}） */
-  tabs: { type: Array as () => unknown[], default: () => [] },
+  tabs: { type: Array as () => TabItem[], default: () => [] },
   /** 当前激活项 key */
   active: { type: [String, Number], default: '' },
 })
 
 const emit = defineEmits(['update:active', 'select'])
 
-// ★MP 安全：字段访问走方法 + 方法体内 as 断言（MP 编译器剥方法体；避免模板内 unknown 直用）
-function tabKey(item: unknown): string {
-  const t = item as { key?: string | number }
-  return String(t.key ?? '')
-}
-function tabLabel(item: unknown): string {
-  const t = item as { label?: string }
-  return t.label ?? ''
-}
-function tabIcon(item: unknown): string {
-  const t = item as { icon?: string }
-  return t.icon ?? ''
-}
-function tabBadge(item: unknown): string {
-  const t = item as { badge?: string | number }
-  return String(t.badge ?? '')
-}
+/** ★预计算数据行（WXML 不能调函数——key/label/icon/badge 在此算好） */
+const rows = computed(() =>
+  props.tabs.map((t) => {
+    const key = String(t['key'] != null ? t['key'] : '')
+    return {
+      key,
+      label: t.label != null ? t.label : '',
+      icon: t.icon != null ? t.icon : '',
+      badge: t.badge != null && t.badge !== '' ? String(t.badge) : '',
+    }
+  }),
+)
 
-function onSelect(item: unknown): void {
-  const t = item as { key?: string | number }
-  const key = String(t.key ?? '')
+function onSelect(e: unknown): void {
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  const key = String(ev?.currentTarget?.dataset?.value ?? '')
   emit('update:active', key)
   emit('select', key)
 }

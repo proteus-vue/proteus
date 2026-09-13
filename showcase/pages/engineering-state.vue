@@ -23,7 +23,7 @@ const store = useCounterStore()
     <p-view class="card">
       <p-view class="kv"><p-text class="k">double（getter）</p-text><p-text class="v">{{ store.double }}</p-text></p-view>
       <p-view class="kv"><p-text class="k">steps（getter）</p-text><p-text class="v">{{ store.steps }}</p-text></p-view>
-      <p-view class="kv"><p-text class="k">history</p-text><p-text class="v">{{ store.history.join(', ') || '（空）' }}</p-text></p-view>
+      <p-view class="kv"><p-text class="k">history</p-text><p-text class="v">{{ store.historyText }}</p-text></p-view>
     </p-view>
 
     <p-text class="note">同一份 store 定义：Web 端 createWebPinia（LocalStorage 持久化），小程序端 createMpPinia（wx storage）。</p-text>

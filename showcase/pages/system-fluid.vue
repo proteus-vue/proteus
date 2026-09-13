@@ -13,22 +13,22 @@ const cols = ref([1, 2, 3, 4, 5, 6])
 <template>
   <page-shell title="柔性布局" subtitle="G-22 自适应网格 / 弹性栈 / 分栏 · 真渲染">
     <p-text class="sec">p-grid（自适应列数：容器变窄自动折行）</p-text>
-    <pgrid class="card" :min-col-width="96" :gap="10">
+    <p-grid class="card" :min-col-width="96" :gap="10">
       <p-view class="cell" v-for="c in cols" :key="c">{{ c }}</p-view>
-    </pgrid>
+    </p-grid>
 
     <p-text class="sec">p-stack（弹性栈：横向 + 换行）</p-text>
-    <pstack class="card" direction="row" :wrap="true" :gap="8">
+    <p-stack class="card" direction="row" :wrap="true" :gap="8">
       <p-view class="chip" v-for="c in cols" :key="c">项 {{ c }}</p-view>
-    </pstack>
+    </p-stack>
 
     <p-text class="sec">p-split（宽容器左右分栏，窄容器堆叠）</p-text>
-    <psplit class="card" :min-split-width="560" :gap="12">
+    <p-split class="card" :min-split-width="560" :gap="12">
       <template #aside>
         <p-view class="pane aside">aside（侧栏）</p-view>
       </template>
       <p-view class="pane main">main（主区）</p-view>
-    </psplit>
+    </p-split>
 
     <p-text class="note">调整 DevTools 模拟器宽度观察折行/分栏切换——零 @media，全部由容器查询驱动。</p-text>
   </page-shell>

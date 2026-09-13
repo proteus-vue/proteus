@@ -44,6 +44,7 @@ order: 1002
 | `formType` | form 内行为：submit / reset | `String` | `''` | 否 |
 | `openType` | 微信开放能力（contact/share/getPhoneNumber/openSetting/launchApp/chooseAvatar/…） | `String` | `''` | 否 |
 | `hoverClass` | 按下样式类：缺省（''）→ 用微信原生 button-hover 默认点击反馈（★勿传空串覆盖）； | `String` | `''` | 否 |
+| `theme` | 主题皮肤键：brand / success / danger / ghost（见 src/components/theme/registry.ts）。 | `String` | `''` | 否 |
 | `hoverStopPropagation` | 是否阻止祖先节点出现点击态 | `Boolean` | `false` | 否 |
 | `hoverStartTime` | 按住多久出现点击态（ms） | `Number` | `20` | 否 |
 | `hoverStayTime` | 松开后点击态保留时间（ms） | `Number` | `70` | 否 |
@@ -114,6 +115,11 @@ order: 1002
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
 - **说明**：按下样式类：缺省（''）→ 用微信原生 button-hover 默认点击反馈（★勿传空串覆盖）；
+
+#### `theme`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：主题皮肤键：brand / success / danger / ghost（见 src/components/theme/registry.ts）。
 
 #### `hoverStopPropagation`
 

@@ -34,6 +34,9 @@ Switch
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
 | `modelValue` | Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract) | `Boolean` | `false` | No |
+| `disabled` | — | `Boolean` | `false` | No |
+| `shape` | — | `String` | `'round'` | No |
+| `color` | — | `String` | `''` | No |
 | `loading` | Loading (switching disabled) | `Boolean` | `false` | No |
 
 ### Prop details
@@ -42,6 +45,21 @@ Switch
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Two-way bound value (v-model; for MP custom component v-model restrictions, see the useInput event contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `shape`
+
+- **Type**: `String`　**Default**: `'round'`　**Required**: No
+- **Doc**: —
+
+#### `color`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
 
 #### `loading`
 
@@ -52,14 +70,20 @@ Switch
 
 | Event | Doc | Payload |
 |---|---|---|
-| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `!props.modelValue` |
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `next` |
+| `change` | — | `{ value: next }` |
 
 ### Event details
 
 #### `update:modelValue`
 
 - **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
-- **Payload**: `!props.modelValue` (implicit v-model: the value itself)
+- **Payload**: `next` (implicit v-model: the value itself)
+
+#### `change`
+
+- **Doc**: —
+- **Payload**: `{ value: next }`
 
 ## Implementation notes
 

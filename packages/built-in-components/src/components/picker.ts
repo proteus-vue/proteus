@@ -10,9 +10,9 @@
 // 载荷对齐微信 change：{ detail: { value } }（selector 索引 / multiSelector 索引数组）
 import { defineComponent, h } from 'vue'
 
-const ITEM_H = 56 // 官方 .weui-picker__item height
-const BD_H = 280 // 官方 .weui-picker__bd height
-const INDICATOR_TOP = (BD_H - ITEM_H) / 2 // 112（官方 top）
+const ITEM_H = 48 // 官方 .weui-picker__item height（48）
+const BD_H = 240 // 官方 .weui-picker__bd height（240——半屏内，不再 280）
+const INDICATOR_TOP = (BD_H - ITEM_H) / 2 // 96（使选中项视觉居中）
 
 /** 取选项显示文本：range 元素为对象时按 range-key 取值 */
 function itemLabel(item: unknown, rangeKey?: string): string {
@@ -152,15 +152,43 @@ export const WebPicker = defineComponent({
       bd.className = 'pwp-bd'
       groups.forEach((g) => bd.appendChild(g.el))
 
-      // 底部确定按钮（官方 weui-half-screen-dialog__ft：weui-btn_primary 绿底 48px 居中）
-      const ft = document.createElement('div')
-      ft.className = 'pwp-ft'
-      const confirmBtn = document.createElement('button')
-      confirmBtn.className = 'pwp-confirm'
-      confirmBtn.textContent = String((attrs as Record<string, unknown>).confirmText ?? '确定')
-      ft.append(confirmBtn)
-
-      sheet.append(hd, bd, ft)
+      // 底部按钮区（★可配置）
+      //   show-buttons（默认 true）：false → 无底部按钮（仅弹层 + 关闭键）
+      //   button-mode：'single'（默认，单个「确定」，weui-btn_primary 绿底）
+      //                'double'（「取消」+「确定」并排——对齐原生 picker 的双手势，但保持 weui 现代视觉）
+      const a = attrs as Record<string, unknown>
+      const showButtons = a.showButtons !== false && a['show-buttons'] !== false
+      const buttonMode = String(a.buttonMode ?? a['button-mode'] ?? 'single')
+      let ft: HTMLElement | null = null
+      if (showButtons) {
+        ft = document.createElement('div')
+        ft.className = 'pwp-ft'
+        // ★尺寸用**单类**--sm（双按钮 120px），不用 :has()/后代选择器（Skyline 会剔除后代选择器）
+        const sizeCls = buttonMode === 'double' ? ' pwp-btn-sm' : ''
+        if (buttonMode === 'double') {
+          const cancelBtn = document.createElement('button')
+          cancelBtn.className = 'pwp-btn pwp-btn-cancel' + sizeCls
+          cancelBtn.textContent = String(a.cancelText ?? a['cancel-text'] ?? '取消')
+          ft.append(cancelBtn)
+        }
+        const confirmBtn = document.createElement('button')
+        confirmBtn.className = 'pwp-btn pwp-btn-confirm' + sizeCls
+        confirmBtn.textContent = String(a.confirmText ?? a['confirm-text'] ?? '确定')
+        ft.append(confirmBtn)
+        ft.addEventListener('click', (ev) => {
+          const t = ev.target as HTMLElement
+          if (t.classList.contains('pwp-btn-cancel')) {
+            close()
+            emit('cancel', {})
+          } else if (t.classList.contains('pwp-btn-confirm')) {
+            onConfirm()
+            close()
+          }
+        })
+        sheet.append(hd, bd, ft)
+      } else {
+        sheet.append(hd, bd)
+      }
       document.body.append(mask, sheet)
 
       // ★弹出动画：挂载后双 rAF 加 is-open（translate3d 上滑 0.3s）
@@ -199,12 +227,8 @@ export const WebPicker = defineComponent({
         close()
         emit('cancel', {})
       })
-      confirmBtn.addEventListener('click', () => {
-        onConfirm()
-        close()
-      })
 
-      return { sheet, mask, close, confirmBtn }
+      return { sheet, mask, close, ft }
     }
 
     /** selector 单列 */

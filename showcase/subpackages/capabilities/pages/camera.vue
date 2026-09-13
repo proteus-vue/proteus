@@ -40,7 +40,7 @@ const compatRows = ref([
   <page-shell title="useCamera 相机" subtitle="能力原语 C1 · capability.camera · 双端同源码">
     <demo-block index="01" title="真渲染演示" :has-output="true" desc="Web 端 getUserMedia / 小程序端原生 <camera>——同一份源码" :code="codeDemo">
       <template #demo>
-        <pcamera :height="200" device-position="back" @initdone="onCamReady" @error="onCamErr" />
+        <p-camera :height="200" device-position="back" @initdone="onCamReady" @error="onCamErr" />
       </template>
       <template #output>
         <p-text class="out">结果：相机就绪 {{ camReady ? '是' : '否' }}{{ camErr ? ' · ' + camErr : '' }}</p-text>

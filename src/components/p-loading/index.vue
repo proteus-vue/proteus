@@ -5,7 +5,7 @@
   <view v-if="visible" class="p-loading">
     <view class="p-loading-mask" />
     <view class="p-loading-panel">
-      <view class="p-loading-spinner" />
+      <view class="p-loading-spinner"><view class="p-loading-spinner-dot" /></view>
       <text v-if="text" class="p-loading-text">{{ text }}</text>
     </view>
   </view>
@@ -44,13 +44,28 @@ defineProps({
   flex-direction: column;
   align-items: center;
 }
+/* ★加载环（2026-09-13 真机实测重构）：**统一色 border 环 + 随转子元素点**——
+   ★不能再用 `border-top-color`（单边异色）画缺口弧：Skyline 下「单边异色 border + border-radius」
+   会渲染成**方块**（四组对照实验定论：统一色 border 正常、单边异色即崩、与 transform 动画无关）。
+   故用统一灰环（Skyline ✓）+ 一个白点随父旋转 → 旋转可见且两端都是圆。 */
 .p-loading-spinner {
+  position: relative;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-sizing: border-box;
   animation: proteus-loading-spin 800ms linear infinite;
+}
+.p-loading-spinner-dot {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: #fff;
 }
 .p-loading-text {
   color: #fff;

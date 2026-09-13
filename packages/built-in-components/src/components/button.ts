@@ -11,8 +11,17 @@ export const WebButton = defineComponent({
   emits: ['click', ...Object.values(OPEN_TYPE_EVENTS)],
   setup(_props, { slots, attrs, emit }) {
     const hovered = ref(false)
+    // ★多词属性名兼容（2026-09-13 真 bug）：WebButton 未声明 props（inheritAttrs:false），
+    //   父级（p-button SFC）写 `:open-type` / `:hover-class` 时，Vue 对**未声明**的 prop 保留
+    //   模板里的**原始 kebab 键**（attrs['open-type']），而 camelCase（attrs.openType）为 undefined
+    //   → open-type 与 hover-class 在 Web 端**静默失效**（单字属性 type/size/disabled 不受影响）。
+    //   统一按 camel 优先、kebab 回退取值（onClick 与 render 共用）。
+    const pick = (camel: string): unknown => {
+      const kebab = camel.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+      return (attrs as Record<string, unknown>)[camel] ?? (attrs as Record<string, unknown>)[kebab]
+    }
     const onClick = (e: Event) => {
-      const openType = (attrs as Record<string, unknown>).openType as string | undefined
+      const openType = pick('openType') as string | undefined
       if (openType && OPEN_TYPE_EVENTS[openType]) {
         const eventName = OPEN_TYPE_EVENTS[openType]
         // ★开放能力降级（反黑盒）：小程序为原生开放能力，Web 无微信对等 → 触发自定义事件由开发者处理
@@ -24,7 +33,9 @@ export const WebButton = defineComponent({
       emit('click', e)
     }
     return () => {
-      const { class: cls, openType, hoverClass, type, size, disabled, loading, plain, ...rest } = attrs as Record<string, unknown>
+      // 单字属性直接解构（`:type` → attrs.type，无 kebab 歧义）；多词的 open-type/hover-class 用 pick
+      const { class: cls, type, size, disabled, loading, plain, ...rest } = attrs as Record<string, unknown>
+      const hoverClass = pick('hoverClass') as string | undefined
       // ★布尔属性三态：true/'true'/'（小程序无值属性空串）→ 启用；false/undefined → 不启用。
       //   ★2026-09-07 e2e 弹层复测抓到：p-button 显式 :disabled=false/:loading=false 传 Vue 组件 attrs=false，
       //   旧 `!== undefined` 判定把 false 当「存在」→ Web 端全部按钮 disabled+loading（点不动）——改显式真值判定
@@ -32,8 +43,16 @@ export const WebButton = defineComponent({
       const isDisabled = boolOn(disabled)
       const isLoading = boolOn(loading)
       const isPlain = boolOn(plain)
-      // hover-class：小程序按下加类（默认 button-hover 背景变暗）；Web 用 pointer 事件切换
-      const hoverCls = (hoverClass as string) || 'proteus-web-button--hover'
+      // ★按下态类（2026-09-13 真 bug 修复）：Web 端**框架默认按下类必须始终存在**
+      //   （`.proteus-web-button--hover` 是框架叠加层样式的唯一挂载点）。
+      //   此前把父级 hover-class 直接当按下类 → p-button 传 `p-button--hover`（MP 侧的类名）
+      //   覆盖了框架默认类 → Web 端按下样式完全不匹配、无反馈。
+      //   现：框架默认类恒在；父级自定义 hover-class（非 'none'、非框架类本身）作为**附加类**。
+      const customHover = typeof hoverClass === 'string' && hoverClass && hoverClass !== 'none' && hoverClass !== 'proteus-web-button--hover'
+        ? hoverClass
+        : ''
+      const hoverOff = hoverClass === 'none'
+      const hoverCls = hoverOff ? '' : ['proteus-web-button--hover', customHover].filter(Boolean).join(' ')
       // ★变体类（对齐微信原生 button + weui-btn 视觉）：type/size/disabled/loading/plain
       const typeCls = type === 'primary' ? 'is-primary' : type === 'warn' ? 'is-warn' : 'is-default'
       const sizeCls = size === 'mini' ? 'is-mini' : ''

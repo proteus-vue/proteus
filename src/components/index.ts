@@ -206,3 +206,6 @@ export { computePopoverPosition } from './runtime/popover-position'
 export type { PopoverPlacement, PopoverPosition, PopoverPositionInput } from './runtime/popover-position'
 export { COMPONENT_TAG_PREFIX, EVENT_NAMES, SLOT_NAMES } from './contracts'
 export type { BaseProps } from './contracts'
+// ★主题皮肤注册表（编译器通道 POC）：主题键 SSOT + 类型
+export { THEME_SKINS, THEME_NAMES, themeClass } from './theme/registry'
+export type { ThemeSkin, ThemeName } from './theme/registry'

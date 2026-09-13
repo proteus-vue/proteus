@@ -33,39 +33,57 @@ order: 1019
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `value` | 本项值 | `[String, Number]` | `''` | 否 |
-| `group` | 当前选中值（父级 group 持有） | `[String, Number]` | `''` | 否 |
-| `disabled` | 禁用 | `Boolean` | `false` | 否 |
+| `value` | 本项标识（★官方 value；选中时随 change 携带） | `[String, Number]` | `''` | 否 |
+| `modelValue` | 当前选中值（★v-model；官方 checked 经语义归一——组选中值由父级持有） | `[String, Number]` | `''` | 否 |
+| `disabled` | 是否禁用（★官方对齐） | `Boolean` | `false` | 否 |
+| `color` | 选中色（★官方 color；缺省微信绿 #07c160） | `String` | `''` | 否 |
+| `name` | 组名（框架扩展：同组 radio 共享 name，便于 change 区分组） | `String` | `''` | 否 |
 
 ### 属性详解
 
 #### `value`
 
 - **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
-- **说明**：本项值
+- **说明**：本项标识（★官方 value；选中时随 change 携带）
 
-#### `group`
+#### `modelValue`
 
 - **类型**：`[String, Number]`　**默认值**：`''`　**必填**：否
-- **说明**：当前选中值（父级 group 持有）
+- **说明**：当前选中值（★v-model；官方 checked 经语义归一——组选中值由父级持有）
 
 #### `disabled`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：禁用
+- **说明**：是否禁用（★官方对齐）
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：选中色（★官方 color；缺省微信绿 #07c160）
+
+#### `name`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组名（框架扩展：同组 radio 共享 name，便于 change 区分组）
 
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `update:group` | v-model 双向绑定：`group`变化时触发（同步父级绑定） | `props.value` |
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `props.value` |
+| `change` | 选中值变化 | `{ value: props.value, name: props.name }` |
 
 ### 事件详解
 
-#### `update:group`
+#### `update:modelValue`
 
-- **说明**：v-model 双向绑定：`group`变化时触发（同步父级绑定）
+- **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
 - **载荷**：`props.value`（v-model 隐式：值本身）
+
+#### `change`
+
+- **说明**：选中值变化
+- **载荷**：`{ value: props.value, name: props.name }`
 
 ## 插槽
 
@@ -75,14 +93,17 @@ order: 1019
 
 ## 实现要点
 
-- value 本项值 + group 当前选中值（父级持有）→ 命中即选中
-- ★B2 简形：value + group 受控；切换 emit('update:group', value)
+- value 本项标识 + modelValue 当前选中值（父级持有，v-model）→ 相等即选中
+- ★属性对齐官方 4 项：`value` / `checked`(→modelValue 语义归一) / `disabled` / `color`
+- ★事件契约：`change` 载荷 `{ detail: { value, name } }`（官方 radio-group 的 change 携带选中 value）
+- ★形态（2026-09-13 定案）：**自绘**（圆形 + 内圆点）——原生 radio 的圆角尺寸跨端难统一；
+- 且 T2 提醒：圆点用 `background`（非单边异色 border）避免 Skyline 圆角失效。
 - 双端同源码；MP 安全（无平台 API）
 
 ## 用法
 
 ```vue
-<p-radio :value="'…'" :group="'…'" :disabled="true">
+<p-radio v-model="value" :value="'…'" :disabled="true">
   <p-text>内容</p-text>
 </p-radio>
 ```

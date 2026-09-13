@@ -33,14 +33,14 @@ order: 2012
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `options` | 分段项 [{label,value?}?]（value 缺省=label） | `Array as () => unknown[]` | `() => []` | 否 |
+| `options` | 分段项 [{label,value?}?]（value 缺省=label） | `Array as () => SegmentItem[]` | `() => []` | 否 |
 | `active` | 当前激活项 value | `[String, Number]` | `''` | 否 |
 
 ### 属性详解
 
 #### `options`
 
-- **类型**：`Array as () => unknown[]`　**默认值**：`() => []`　**必填**：否
+- **类型**：`Array as () => SegmentItem[]`　**默认值**：`() => []`　**必填**：否
 - **说明**：分段项 [{label,value?}?]（value 缺省=label）
 
 #### `active`
@@ -52,25 +52,25 @@ order: 2012
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `update:active` | v-model 双向绑定：`active`变化时触发（同步父级绑定） | `v` |
-| `select` | 选中某项 | `v` |
+| `update:active` | v-model 双向绑定：`active`变化时触发（同步父级绑定） | `s` |
+| `select` | 选中某项 | `s` |
 
 ### 事件详解
 
 #### `update:active`
 
 - **说明**：v-model 双向绑定：`active`变化时触发（同步父级绑定）
-- **载荷**：`v`（v-model 隐式：值本身）
+- **载荷**：`s`（v-model 隐式：值本身）
 
 #### `select`
 
 - **说明**：选中某项
-- **载荷**：`v`
+- **载荷**：`s`
 
 ## 实现要点
 
 - options[{label,value?}] + active 受控（v-model:active）+ select emit
-- 双端同源码：div → view；MP 安全（v-for + 方法取字段——S3 p-tabbar 惯例）
+- 双端同源码：div → view；字段经 computed 预计算为数据行（WXML 禁止函数调用 S38；dataset 传值）。
 
 ## 用法
 

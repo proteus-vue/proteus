@@ -6,13 +6,14 @@
   <div ref="rootEl" class="p-toolbar" :class="[{ 'p-toolbar-no-motion': reducedMotion }, mpCls]">
     <div class="p-toolbar-row">
       <button
-        v-for="item in visibleItems"
-        :key="itemKey(item)"
+        v-for="row in visibleRows"
+        :key="row.key"
         type="button"
         class="p-toolbar-item"
-        @click="onSelect(item)"
+        :data-value="row.key"
+        @click="onSelect"
       >
-        {{ itemLabel(item) }}
+        {{ row.label }}
       </button>
       <button v-if="hasMore" type="button" class="p-toolbar-more" @click="open = !open">
         {{ moreLabel }}<span v-if="hiddenCount > 0" class="p-toolbar-badge">{{ hiddenCount }}</span>
@@ -20,13 +21,14 @@
     </div>
     <div v-if="open && hasMore" class="p-toolbar-panel">
       <button
-        v-for="item in hiddenItems"
-        :key="itemKey(item)"
+        v-for="row in hiddenRows"
+        :key="row.key"
         type="button"
         class="p-toolbar-item"
-        @click="onPickHidden(item)"
+        :data-value="row.key"
+        @click="onPickHidden"
       >
-        {{ itemLabel(item) }}
+        {{ row.label }}
       </button>
     </div>
   </div>
@@ -97,16 +99,24 @@ function itemLabel(item: unknown): string {
 
 const visibleItems = computed(() => props.items.slice(0, visibleCount.value))
 const hiddenItems = computed(() => props.items.slice(visibleCount.value))
+/** ★预计算数据行（WXML 禁止函数调用 S38——key/label 在 computed 里算好；点击用 dataset 传值） */
+function toRows(list: unknown[]): Array<{ key: string; label: string }> {
+  return list.map((it) => ({ key: itemKey(it), label: itemLabel(it) }))
+}
+const visibleRows = computed(() => toRows(visibleItems.value))
+const hiddenRows = computed(() => toRows(hiddenItems.value))
 const hasMore = computed(() => hiddenItems.value.length > 0)
 const hiddenCount = computed(() => hiddenItems.value.length)
 
-function onPickHidden(item: unknown): void {
+function onPickHidden(e: unknown): void {
   open.value = false
-  emit('select', itemKey(item))
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  emit('select', String(ev?.currentTarget?.dataset?.value ?? ''))
 }
 
-function onSelect(item: unknown): void {
-  emit('select', itemKey(item))
+function onSelect(e: unknown): void {
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  emit('select', String(ev?.currentTarget?.dataset?.value ?? ''))
 }
 </script>
 

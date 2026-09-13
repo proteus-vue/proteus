@@ -33,43 +33,74 @@ order: 1027
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `modelValue` | 双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约） | `Boolean` | `false` | 否 |
-| `loading` | 加载中（禁切换） | `Boolean` | `false` | 否 |
+| `modelValue` | 开关状态（受控 v-model；★官方 checked 经语义归一为 modelValue） | `Boolean` | `false` | 否 |
+| `disabled` | 是否禁用（★官方对齐） | `Boolean` | `false` | 否 |
+| `shape` | ★形态（替代官方 type）：round 圆角（默认）/ square 方角——**都是开关**，仅圆角不同。 | `String` | `'round'` | 否 |
+| `color` | 打开态颜色（★官方对齐；缺省微信绿 #07c160） | `String` | `''` | 否 |
+| `loading` | ★框架扩展：加载中（禁切换 + 拇指内旋转指示器，与禁用态可分辨） | `Boolean` | `false` | 否 |
 
 ### 属性详解
 
 #### `modelValue`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：双向绑定值（v-model；MP 自定义组件 v-model 限制见 useInput 事件契约）
+- **说明**：开关状态（受控 v-model；★官方 checked 经语义归一为 modelValue）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否禁用（★官方对齐）
+
+#### `shape`
+
+- **类型**：`String`　**默认值**：`'round'`　**必填**：否
+- **说明**：★形态（替代官方 type）：round 圆角（默认）/ square 方角——**都是开关**，仅圆角不同。
+
+#### `color`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：打开态颜色（★官方对齐；缺省微信绿 #07c160）
 
 #### `loading`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：加载中（禁切换）
+- **说明**：★框架扩展：加载中（禁切换 + 拇指内旋转指示器，与禁用态可分辨）
 
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `!props.modelValue` |
+| `update:modelValue` | v-model 双向绑定：v-model 值变化时触发（同步父级绑定） | `next` |
+| `change` | 选中值变化 | `{ value: next }` |
 
 ### 事件详解
 
 #### `update:modelValue`
 
 - **说明**：v-model 双向绑定：v-model 值变化时触发（同步父级绑定）
-- **载荷**：`!props.modelValue`（v-model 隐式：值本身）
+- **载荷**：`next`（v-model 隐式：值本身）
+
+#### `change`
+
+- **说明**：选中值变化
+- **载荷**：`{ value: next }`
 
 ## 实现要点
 
-- checked 受控 v-model（modelValue ←→ update:modelValue）；loading 期间禁点
-- 双端同源码：div → view（Web 自绘开关；MP 编译器后续批次映射 switch 内置）
+- ★★设计决策（2026-09-13，用户评审 + G-31 铁律）——**自绘，不沿用原生 <switch>**：
+- · 官方 `<switch type="switch|checkbox">` 用「开关 / 复选框」二选一切换形态，是**平台历史包袱**
+- （checkbox 形态与 p-checkbox 语义重复、外观是独立小方框）。G-31 铁律禁止把平台私有形态
+- 上升为框架标准 → Proteus 改为 `shape: round | square`——「圆角 / 方角**开关**」，
+- 语义更纯粹（都是开关，只是圆角不同）。
+- · 原生 `<switch>` 的方角**物理上做不到**（wxss 无法改原生组件内部圆角）→ 必须自绘。
+- · 自绘同时解决：两端视觉完全一致、`shape` 可控、主题通道可作用、spinner 可精确居中。
+- ★事件契约：change 载荷 `{ detail: { value } }`（与 MP 原生 bind:change 一致），跨端同名，受控 v-model。
+- ★状态：disabled（淡化不可交互）/ loading（淡化 + **拇指内旋转指示器**）——两者视觉可分辨。
 
 ## 用法
 
 ```vue
-<p-switch v-model="value" :loading="true">
+<p-switch v-model="value" :disabled="true" :shape="'round'">
   <p-text>内容</p-text>
 </p-switch>
 ```

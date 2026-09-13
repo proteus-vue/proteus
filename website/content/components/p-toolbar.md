@@ -64,14 +64,14 @@ order: 2016
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `select` | 选中某项 | `itemKey(item)` |
+| `select` | 选中某项 | `String(ev?.currentTarget?.dataset?.value ?? '')` |
 
 ### 事件详解
 
 #### `select`
 
 - **说明**：选中某项
-- **载荷**：`itemKey(item)`
+- **载荷**：`String(ev?.currentTarget?.dataset?.value ?? '')`
 
 ## 实现要点
 

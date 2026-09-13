@@ -68,11 +68,18 @@ describe('wx API Web 模拟层（14-mp-first-semantics）', () => {
     expect(info.pixelRatio).toBeGreaterThan(0)
   })
 
-  it('open-type 降级事件映射（share → openshare；contact → opencontact）', () => {
-    expect(OPEN_TYPE_EVENTS.share).toBe('openshare')
-    expect(OPEN_TYPE_EVENTS.contact).toBe('opencontact')
-    expect(OPEN_TYPE_EVENTS.getUserInfo).toBe('opengetuseroinfo')
-    expect(OPEN_TYPE_EVENTS.getPhoneNumber).toBe('opengetphonenumber')
+  it('★open-type 事件映射与 MP 原生事件名对齐（contact → contact；share → share Web-only）', () => {
+    // MP 有原生事件（bind:contact）→ 同名，跨端契约一致
+    expect(OPEN_TYPE_EVENTS.contact).toBe('contact')
+    expect(OPEN_TYPE_EVENTS.getPhoneNumber).toBe('getphonenumber')
+    expect(OPEN_TYPE_EVENTS.getUserInfo).toBe('getuserinfo')
+    expect(OPEN_TYPE_EVENTS.openSetting).toBe('opensetting')
+    expect(OPEN_TYPE_EVENTS.launchApp).toBe('launchapp')
+    // MP 无事件（原生拉面板）→ Web-only 降级同名
+    expect(OPEN_TYPE_EVENTS.share).toBe('share')
+    // 旧错误前缀命名已废弃（opencontact/opengetphonenumber… 不再存在）；
+    // ★注意 openSetting 的官方事件名本就是 opensetting（bind:opensetting），是合法名。
+    expect(Object.values(OPEN_TYPE_EVENTS).some((v) => /^open(contact|getphonenumber|getuserinfo|launchapp|chooseavatar)/.test(v))).toBe(false)
   })
 
   it('installWxApi 注入全局 wx', () => {

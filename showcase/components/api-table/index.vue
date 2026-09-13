@@ -50,8 +50,21 @@ defineProps({
 }
 .api-list { display: block; }
 .api-row { display: block; padding: var(--sp-3) 0; border-bottom: 1px solid var(--sp-line-soft); }
-.api-line1 { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); }
-.api-name { display: block; flex: 1; min-width: 0; font-family: var(--sp-mono); font-size: 13.5px; font-weight: 700; color: var(--sp-brand-ink); }
+/* ★2026-09-13 真机修复（问题：属性名与类型「竖排 / 类型被挤出屏幕」）：
+   Skyline 下 `flex: 1` 的 text 会**扩张撑满整行**，把右侧类型挤到屏幕外（MP 对照实验：flex:1 与
+   flex:1+min-width:0 均溢出，仅 space-between+nowrap 正常）→ 改「两端对齐 + 名称不换行」。 */
+.api-line1 { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); justify-content: space-between; }
+.api-name {
+  display: block;
+  max-width: 62%; /* 名称过长截断省略，把空间让给类型（不撑满整行） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sp-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--sp-brand-ink);
+}
 .api-type {
   display: block;
   flex-shrink: 0;

@@ -1,44 +1,52 @@
 <!-- src/components/p-segment/index.vue —— 分段控制器（★G-32 B4：shell.segment S4）
      options[{label,value?}] + active 受控（v-model:active）+ select emit
-     双端同源码：div → view；MP 安全（v-for + 方法取字段——S3 p-tabbar 惯例） -->
+     双端同源码：div → view；字段经 computed 预计算为数据行（WXML 禁止函数调用 S38；dataset 传值）。 -->
 <template>
   <div class="p-segment">
     <div
-      v-for="opt in options"
-      :key="optValue(opt)"
+      v-for="row in rows"
+      :key="row.key"
       class="p-segment-item"
-      :class="{ 'p-segment-on': String(active) === optValue(opt) }"
-      @click="onSelect(opt)"
+      :class="{ 'p-segment-on': active == row.value }"
+      :data-value="row.value"
+      @click="onSelect"
     >
-      {{ optLabel(opt) }}
+      {{ row.label }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
+interface SegmentItem {
+  label?: string
+  value?: string | number
+}
+
 const props = defineProps({
   /** 分段项 [{label,value?}?]（value 缺省=label） */
-  options: { type: Array as () => unknown[], default: () => [] },
+  options: { type: Array as () => SegmentItem[], default: () => [] },
   /** 当前激活项 value */
   active: { type: [String, Number], default: '' },
 })
 
 const emit = defineEmits(['update:active', 'select'])
 
-// ★MP 安全：字段访问走方法（数组泛型 unknown）
-function optValue(opt: unknown): string {
-  const o = opt as { value?: string | number; label?: string }
-  return String(o.value ?? o.label ?? '')
-}
-function optLabel(opt: unknown): string {
-  const o = opt as { label?: string; value?: string | number }
-  return o.label ?? String(o.value ?? '')
-}
+/** ★预计算数据行（WXML 不能调函数；`value` 用方括号取值避开 ref 剥离规则误伤） */
+const rows = computed(() =>
+  props.options.map((opt, i) => {
+    const value = String(opt['value'] != null ? opt['value'] : opt.label != null ? opt.label : '')
+    return { key: value + '#' + i, value, label: opt.label != null ? opt.label : value }
+  }),
+)
 
-function onSelect(opt: unknown): void {
-  const v = optValue(opt)
-  emit('update:active', v)
-  emit('select', v)
+function onSelect(e: unknown): void {
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  const v = ev?.currentTarget?.dataset?.value
+  const s = v == null ? '' : String(v)
+  emit('update:active', s)
+  emit('select', s)
 }
 </script>
 

@@ -31,19 +31,19 @@ const autoVisible = ref(false)
 const keyboardHeight = ref(0)
 
 let vv: { height?: number; addEventListener?: (t: string, cb: () => void) => void; removeEventListener?: (t: string, cb: () => void) => void } | undefined
-let baseHeight = 0
+const baseHeight = ref(0)
 let onResize: (() => void) | undefined
 
 onMounted(() => {
   // components-allow-platform: Web visualViewport 键盘读数；MP 无 visualViewport → 恒不可见（由原生组件承接）
   const g = globalThis as { visualViewport?: typeof vv; innerHeight?: number }
   vv = g.visualViewport
-  baseHeight = g.innerHeight ?? 0
+  baseHeight.value = g.innerHeight ?? 0
   if (vv && typeof vv.addEventListener === 'function') {
     onResize = () => {
       const vh = vv?.height ?? 0
-      const visibleNow = vh > 0 && baseHeight > 0 && vh < baseHeight * 0.6
-      keyboardHeight.value = visibleNow ? Math.max(0, baseHeight - vh) : 0
+      const visibleNow = vh > 0 && baseHeight.value > 0 && vh < baseHeight.value * 0.6
+      keyboardHeight.value = visibleNow ? Math.max(0, baseHeight.value - vh) : 0
       autoVisible.value = visibleNow
     }
     vv.addEventListener('resize', onResize)

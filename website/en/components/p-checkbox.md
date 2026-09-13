@@ -34,8 +34,10 @@ Multi-select
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
 | `modelValue` | Checked state (controlled v-model) | `Boolean` | `false` | No |
+| `value` | — | `String` | `''` | No |
 | `indeterminate` | Indeterminate state (undetermined parent - explicit control) | `Boolean` | `false` | No |
 | `disabled` | Disabled | `Boolean` | `false` | No |
+| `color` | — | `String` | `''` | No |
 
 ### Prop details
 
@@ -43,6 +45,11 @@ Multi-select
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Checked state (controlled v-model)
+
+#### `value`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
 
 #### `indeterminate`
 
@@ -54,18 +61,29 @@ Multi-select
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Disabled
 
+#### `color`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
-| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `!props.modelValue` |
+| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `next` |
+| `change` | — | `{ value: next, name: props.value }` |
 
 ### Event details
 
 #### `update:modelValue`
 
 - **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
-- **Payload**: `!props.modelValue` (implicit v-model: the value itself)
+- **Payload**: `next` (implicit v-model: the value itself)
+
+#### `change`
+
+- **Doc**: —
+- **Payload**: `{ value: next, name: props.value }`
 
 ## Slots
 

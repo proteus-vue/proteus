@@ -93,11 +93,23 @@ describe('p-button（按钮）', () => {
     expect(wxss).toContain('var(--p-button-color')
   })
 
-  it('★点击反馈：hover-class 缺省不发属性（保留微信原生 button-hover 点击态）', () => {
+  it('★点击反馈：hover-class 缺省绑定框架类（保留原生默认态会替换彩色按钮底色）', () => {
     const { wxml } = compileComponent('p-button')
-    // ★真机 bug 修复（2026-09-13）：hoverClass 默认 '' 曾直接发射 → 空串覆盖原生默认点击态 → 无反馈。
-    //   现 `hoverClass || undefined`：缺省求值为 undefined，微信按「未传」处理 → 原生 button-hover 生效。
-    expect(wxml).toContain('hover-class="{{hoverClass || undefined}}"')
+    // 演进（2026-09-13 二改）：先前修复是「缺省求值 undefined → 用微信原生 button-hover」，
+    //   但用户实测「小程序里彩色按钮按下没反馈/观感错误」——微信原生 `button-hover` 缺省态是
+    //   `background-color:#dedede`（通用灰）或按 type 替换色（基础库实测 `.button-hover[type=primary]{
+    //   background-color:#179b16}`），会**替换**彩色按钮（theme/brand/自定义 --p-button-bg）的底色。
+    //   现改为缺省绑定框架自有的叠加类 `p-button--hover`（global 单类，background-image 叠加保留色相）。
+    //   空串语义仍保留：传 '' 之外的 'none' 关闭、自定义类名覆盖。
+    expect(wxml).toContain('hover-class="{{hoverClass || \'p-button--hover\'}}"')
+    // 该框架类必须在 <style global> 中定义（hover-class 由平台加到根节点，不经编译期 class 处理 → 无 scopeId 后缀）
+    const { wxss } = compileComponent('p-button')
+    expect(wxss).toContain('.p-button--hover {')
+    // ★为什么用 box-shadow（用户实测「时好时坏」的真因）：global 组排在 scoped 之前，而基类 scoped
+    //   规则用 `background:` **简写**会把 background-image 重置为 none → 叠加层被静默吃掉。
+    //   box-shadow 不被 background 简写影响 + !important 与顺序解耦。
+    expect(wxss, '按下态叠加应使用 box-shadow（background-image 会被 background 简写重置）').toContain('box-shadow')
+    expect(wxss, '按下态必须 !important（与 global/scoped 顺序解耦）').toContain('!important')
   })
 
   it('★官方属性全量：size/type/plain/form-type/open-type/hover-* 均发射到原生 <button>', () => {

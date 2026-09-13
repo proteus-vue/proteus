@@ -41,6 +41,9 @@ Progress bar
 | `rounded` | Whether the ends are rounded | `Boolean` | `true` | No |
 | `color` | Bar color (overrides the status default) | `String` | `''` | No |
 | `trackColor` | Track background color | `String` | `''` | No |
+| `active` | — | `Boolean` | `false` | No |
+| `duration` | — | `Number` | `0` | No |
+| `fontSize` | — | `Number` | `12` | No |
 
 ### Prop details
 
@@ -83,6 +86,21 @@ Progress bar
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: Track background color
+
+#### `active`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `duration`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `fontSize`
+
+- **Type**: `Number`　**Default**: `12`　**Required**: No
+- **Doc**: —
 
 ## Implementation notes
 

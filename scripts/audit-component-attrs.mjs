@@ -72,6 +72,18 @@ const SEMANTIC_ALIAS = {
   'indicator-style': ['indicatorStyle'],
   'mask-style': ['maskStyle'],
 }
+/**
+ * ★有意不沿用（G-31 铁律）：官方存在但**不应上升为框架语义**的平台私有形态/历史包袱。
+ *   命中者不计入覆盖缺口，但必须在下方给出**理由**（反黑盒：不静默忽略）。
+ *   判定依据：docs/proteus-end-alignment-plan/README.md「禁止将平台私有形态原样固化成框架语义」。
+ */
+const INTENTIONAL_SKIP = {
+  // 官方 <switch type="switch|checkbox">：以「开关还是复选框」二选一方式切换形态——微信历史包袱
+  //   （checkbox 形态与 p-checkbox 语义重复且外观是独立的小方框）。Proteus 改为 `shape: round|square`
+  //   ——「圆角 / 方角**开关**」，语义更纯粹（都是开关，只是圆角不同），且不引入第二个 checkbox 形态。
+  switch: { type: '平台历史包袱（checkbox 形态）→ 框架改用 shape=round|square（圆角/方角开关）' },
+}
+
 const norm = (s) => s.replace(/[-:]/g, '').toLowerCase() // open-type ↔ openType；bind:xxx
 /** 官方属性名在框架 props 里是否有等价（含语义别名） */
 function hasEquiv(officialName, propSet) {
@@ -85,10 +97,15 @@ for (const [tag, attrs] of Object.entries(ATTRS)) {
   const props = propsOf(dir)
   if (props === null) { rows.push({ tag, dir, status: 'no-component', total: attrs.length, covered: 0, missing: attrs.map(a => a.name) }); continue }
   const propSet = new Set(props.map(norm))
-  // 事件（bind:/catch:）不计入属性覆盖（框架用 @event 语义）
-  const attrOnly = attrs.filter(a => !/^(bind|catch)[:-]/.test(a.name))
-  const missing = attrOnly.filter(a => !hasEquiv(a.name, propSet)).map(a => a.name)
-  rows.push({ tag, dir, status: 'ok', total: attrOnly.length, covered: attrOnly.length - missing.length, missing })
+  // ★事件不计入属性覆盖（框架用 @event 语义）：按**类型**过滤 `type: 'eventhandle'`，
+  //   而非仅按 `bind:`/`catch:` 前缀——官方无值事件（如 button.createliveactivity、
+  //   movable-view.htouchmove/vtouchmove）名字不带前缀，仅看前缀会误算为属性缺口。
+  const attrOnly = attrs.filter(a => a.type !== 'eventhandle' && !/^(bind|catch)[:-]/.test(a.name))
+  // ★有意不沿用：从缺口统计中剔除（但登记表须有理由，见 INTENTIONAL_SKIP）
+  const skipped = INTENTIONAL_SKIP[tag] ?? {}
+  const counted = attrOnly.filter(a => !(a.name in skipped))
+  const missing = counted.filter(a => !hasEquiv(a.name, propSet)).map(a => a.name)
+  rows.push({ tag, dir, status: 'ok', total: counted.length, covered: counted.length - missing.length, missing, skipped: Object.keys(skipped) })
 }
 
 if (asJson) { console.log(JSON.stringify(rows, null, 1)); process.exit(0) }

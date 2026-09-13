@@ -33,45 +33,87 @@ Native date/time/city picker
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
-| `mode` | Mode: date / time / region | `String` | `'date'` | No |
-| `modelValue` | Value (date=YYYY-MM-DD; time=HH:mm; region=geolocation/text) | `String` | `''` | No |
-| `min` | Minimum boundary (native min for date/time) | `String` | `''` | No |
-| `max` | Maximum boundary | `String` | `''` | No |
+| `mode` | Mode: date / time / region | `String` | `'selector'` | No |
+| `range` | — | `Array` | `() => []` | No |
+| `rangeKey` | — | `String` | `''` | No |
+| `value` | — | `[Number, Array]` | `0` | No |
+| `disabled` | — | `Boolean` | `false` | No |
+| `headerText` | — | `String` | `''` | No |
+| `showButtons` | — | `Boolean` | `true` | No |
+| `buttonMode` | — | `String` | `'single'` | No |
 
 ### Prop details
 
 #### `mode`
 
-- **Type**: `String`　**Default**: `'date'`　**Required**: No
+- **Type**: `String`　**Default**: `'selector'`　**Required**: No
 - **Doc**: Mode: date / time / region
 
-#### `modelValue`
+#### `range`
+
+- **Type**: `Array`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `rangeKey`
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
-- **Doc**: Value (date=YYYY-MM-DD; time=HH:mm; region=geolocation/text)
+- **Doc**: —
 
-#### `min`
+#### `value`
+
+- **Type**: `[Number, Array]`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `headerText`
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
-- **Doc**: Minimum boundary (native min for date/time)
+- **Doc**: —
 
-#### `max`
+#### `showButtons`
 
-- **Type**: `String`　**Default**: `''`　**Required**: No
-- **Doc**: Maximum boundary
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `buttonMode`
+
+- **Type**: `String`　**Default**: `'single'`　**Required**: No
+- **Doc**: —
 
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
-| `update:modelValue` | Two-way binding: fires when v-model value changes (syncs the parent binding) | `v ?? ''` |
+| `change` | — | `{ value: props.mode === 'multiSelector' ? d.slice() : d[0] }` |
+| `cancel` | — | `e` |
+| `columnchange` | — | `{ column: i, value: next[i] }` |
 
 ### Event details
 
-#### `update:modelValue`
+#### `change`
 
-- **Doc**: Two-way binding: fires when v-model value changes (syncs the parent binding)
-- **Payload**: `v ?? ''` (implicit v-model: the value itself)
+- **Doc**: —
+- **Payload**: `{ value: props.mode === 'multiSelector' ? d.slice() : d[0] }`
+
+#### `cancel`
+
+- **Doc**: —
+- **Payload**: `e`
+
+#### `columnchange`
+
+- **Doc**: —
+- **Payload**: `{ column: i, value: next[i] }`
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
 
 ## Implementation notes
 

@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 106 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 108 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (60)
 
@@ -792,7 +792,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (32)
+## Script transforms (34)
 
 ### `script/const-to-data`
 
@@ -860,6 +860,36 @@ after:  observers: {
 ```
 
 > why: Components must react to their own property changes (list items pagination/load-more, overlay visible v-model, form value sync, etc.); mini programs have no reactive system, so observers are the only channel for property changes
+
+### `script/computed-observer`
+
+**Observers for computed derived values (recompute setData via observers)**
+
+Besides a one-time initialization in ready(), a component computed derived value (e.g. isChecked/boxStyle/columns) also emits Component observers keyed by its dependency field — when the dependency (a prop or a top-level data field) changes, it is recomputed and setData is called; multiple computeds on the same field merge into one observer; dependency extraction uses field-reference scanning (covering this.data.f / f.value / props.f)
+
+```
+before: const isChecked = computed(() => props.modelValue)  // 仅在 ready() 初始化一次
+after:  observers: {
+  modelValue(n, o) {
+    this.setData({ isChecked: this.data.modelValue })
+  },
+}
+```
+
+> why: Mini programs have no reactive system: a computed used to be evaluated only once in ready(), so after a parent updates props or data changes the derived value was never recomputed, leaving template class bindings (which read the derived value) visually stale. Real-device evidence: p-checkbox fires change but the UI does not change (its class reads the derived isChecked); p-switch happened to work only because its class reads modelValue directly
+
+### `script/ref-nested-write`
+
+**Nested ref writes emit setData (o.value.x / o.value[k] = v)**
+
+In a method body, `o.value.field = expr` / `o.value[key] = expr` (writing a field of a ref-held object/array) is rewritten to `this.data.o.field = expr` **plus `this.setData({ o: this.data.o })`**; whole replacement `o.value = expr` still uses the original setData path
+
+```
+before: picked.value[d.name] = true
+after:  this.data.picked[d.name] = true; this.setData({ picked: this.data.picked })
+```
+
+> why: The mini-program view is driven by setData: a nested write previously only mutated this.data without calling setData, so the logic layer changed while the view never re-rendered (real-device: p-checkbox group selection left the count/check visuals unchanged)
 
 ### `script/module-import`
 

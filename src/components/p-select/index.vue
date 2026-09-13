@@ -12,14 +12,15 @@
       <div class="p-select-mask" @click="close" />
       <div class="p-select-panel">
         <div
-          v-for="opt in options"
-          :key="valueOf(opt)"
+          v-for="row in rows"
+          :key="row.key"
           class="p-select-option"
-          :class="{ 'p-select-option-on': isSelected(opt) }"
-          @click="pick(opt)"
+          :class="{ 'p-select-option-on': row.selected }"
+          :data-value="row.value"
+          @click="pick"
         >
-          <span>{{ labelOf(opt) }}</span>
-          <span v-if="isSelected(opt)" class="p-select-check">✓</span>
+          <span>{{ row.label }}</span>
+          <span v-if="row.selected" class="p-select-check">✓</span>
         </div>
       </div>
     </template>
@@ -31,7 +32,7 @@ import { computed, ref } from 'vue'
 
 const props = defineProps({
   /** 选项 [{value,label}?] */
-  options: { type: Array as () => unknown[], default: () => [] },
+  options: { type: Array as () => Array<{ value?: string | number; label?: string }>, default: () => [] },
   /** 单选值 或 多选值数组 */
   modelValue: { type: [String, Number, Array], default: '' },
   /** 多选模式 */
@@ -57,19 +58,25 @@ function close(): void {
 }
 
 // ★MP 安全：字段访问走方法（数组泛型 unknown）
-function valueOf(opt: unknown): string {
-  const o = opt as { value?: string | number }
-  return String(o.value ?? '')
+function valueOf(opt: { value?: string | number; label?: string }): string {
+  return String(opt['value'] != null ? opt['value'] : '')
 }
-function labelOf(opt: unknown): string {
-  const o = opt as { label?: string }
-  return o.label ?? valueOf(opt)
+function labelOf(opt: { value?: string | number; label?: string }): string {
+  return opt.label != null ? opt.label : valueOf(opt)
 }
 
 const selectedValues = computed(() => {
   if (props.multiple) return (props.modelValue as Array<string | number> | null) ?? []
   return props.modelValue === '' ? [] : [props.modelValue]
 })
+
+/** ★预计算数据行（WXML 禁止函数调用 S38）——label/selected 均在此算好 */
+const rows = computed(() =>
+  props.options.map((opt, i) => {
+    const value = valueOf(opt)
+    return { key: value + '#' + i, value, label: labelOf(opt), selected: selectedValues.value.indexOf(value) >= 0 }
+  }),
+)
 
 const displayText = computed(() => {
   const sel = selectedValues.value
@@ -82,20 +89,18 @@ const displayText = computed(() => {
     .join(' / ')
 })
 
-function isSelected(opt: unknown): boolean {
-  return selectedValues.value.indexOf(valueOf(opt)) >= 0
-}
-
-function pick(opt: unknown): void {
-  const v = valueOf(opt)
+function pick(e: unknown): void {
+  const ev = e as { currentTarget?: { dataset?: { value?: unknown } } }
+  const v = ev?.currentTarget?.dataset?.value
+  const s = v == null ? '' : String(v)
   if (props.multiple) {
     const cur = selectedValues.value.slice()
-    const idx = cur.indexOf(v)
+    const idx = cur.indexOf(s)
     if (idx >= 0) cur.splice(idx, 1)
-    else cur.push(v)
+    else cur.push(s)
     emit('update:modelValue', cur)
   } else {
-    emit('update:modelValue', v)
+    emit('update:modelValue', s)
     open.value = false
   }
 }
