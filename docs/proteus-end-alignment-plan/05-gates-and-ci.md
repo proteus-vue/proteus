@@ -34,6 +34,36 @@ await assertPageRendered(driver, {
 
 **铁律**：演示页每页除渲染门禁外，**关键交互组件须有交互断言**（如 p-button：按下背景变化 + disabled 不可点 + loading 期间禁用）。**"能截图"不等于"渲染正确"**——两端的静态+动态都要真机/真实浏览器核验。
 
+### 1.2 ★API 表完整性门禁（2026-09-13 新增，p-button 范式沉淀）
+
+**背景**：p-button 收尾时发现演示页 Props 表只列了 14 项、而组件实现有 25 项；Events 表列 1 项、实现有 12 项——
+**文档漏一半，用户看文档就会漏掉能力**。
+
+**机制**：`tests/showcase-api-table.test.ts` —— 解析组件源码的 `defineProps({...})` / `defineEmits([...])`，
+与演示页 `apiRows` / `eventRows` 表第一列比对，**表必须 ⊇ 实现**：
+
+```ts
+const cases = [
+  { name: 'p-button', impl: 'src/components/p-button/index.vue', page: 'showcase/.../p-button.vue' },
+  // ★新增组件详情页时同步加一行
+]
+```
+
+**破坏性验证**：删掉 API 表任一行 → 测试报「演示页 Props 表缺：xxx」。
+
+### 1.3 ★事件契约门禁（2026-09-13 新增）
+
+**背景**：p-button 曾把 open-type 事件映射为 `opencontact`，而 p-button SFC 监听 `@contact` → **Web 端事件静默失效**。
+根因是「事件名凭印象编，未查权威清单」。
+
+**机制**（`tests/web-button.test.ts` + `tests/web.test.ts`）：
+- 断言 open-type 事件名**与 MP 原生 `bind:<name>` 对齐**（禁旧 `openopencontact` 式前缀命名；★注意
+  `openSetting` 的官方事件名本就是 `opensetting`，是合法名）；
+- 断言 WebButton **实际 emit** 的语义事件名与 SFC 监听名一致（端到端契约，非仅常量表）；
+- ★kebab 属性名兼容断言（`:open-type` 以 `attrs['open-type']` 到达时仍生效）；
+- ★自定义 hover-class 时框架默认按下类仍在（防上层类名覆盖框架样式挂载点）。
+
+
 ## 2. 棘轮（Ratchet）机制（★防退化）
 
 属性覆盖率**只许升不许降**——记录当前水位，CI 校验不低于水位：
@@ -41,9 +71,9 @@ await assertPageRendered(driver, {
 ```jsonc
 // docs/generated/alignment-ratchet.json
 {
-  "attrCovered": 99,
-  "attrTotal": 352,
-  "coveredMin": 99,               // CI：covered >= coveredMin，否则红
+  "attrCovered": 128,
+  "attrTotal": 348,
+  "coveredMin": 128,              // CI：covered >= coveredMin，否则红
   "note": "只增不减；补齐后上调 coveredMin"
 }
 ```
@@ -54,7 +84,7 @@ await assertPageRendered(driver, {
 
 ```jsonc
 {
-  "check:mp-attrs": "node scripts/gen-mp-component-attrs.mjs --check && node scripts/audit-component-attrs.mjs --min 99",
+  "check:mp-attrs": "node scripts/gen-mp-component-attrs.mjs --check && node scripts/audit-component-attrs.mjs --min 128",
   "check:mp-spec": "node scripts/gen-mp-spec.mjs --check",  // 已有
   "test:e2e:showcase": "pnpm run build:showcase:web && vitest run --no-file-parallelism tests/e2e-showcase-render.test.ts"
 }
