@@ -2,7 +2,7 @@
  "_comment": "微信小程序官方组件**属性级**清单快照——由 scripts/gen-mp-component-attrs.mjs 从官方文档抓取，勿手改。",
  "source": "https://developers.weixin.qq.com/miniprogram/dev/component/<tag>.html",
  "componentCount": 77,
- "attrTotal": 793,
+ "attrTotal": 771,
  "components": {
   "ad": [
    {
@@ -2106,114 +2106,6 @@
     "type": "eventhandle",
     "required": false,
     "desc": "组件错误时触发，例如创建或鉴权失败，e.detail = {longitude, latitude}"
-   },
-   {
-    "name": "id",
-    "type": "标记点 id",
-    "required": true,
-    "desc": "marker 点击事件回调会返回此 id。"
-   },
-   {
-    "name": "title",
-    "type": "标注点名",
-    "required": false,
-    "desc": "点击时显示，callout 存在时将被忽略"
-   },
-   {
-    "name": "alpha",
-    "type": "标注的透明度",
-    "required": false,
-    "desc": "默认 1，无透明，范围 0 ~ 1"
-   },
-   {
-    "name": "width",
-    "type": "标注图标宽度",
-    "required": false,
-    "desc": "默认为图片实际宽度"
-   },
-   {
-    "name": "height",
-    "type": "标注图标高度",
-    "required": false,
-    "desc": "默认为图片实际高度"
-   },
-   {
-    "name": "callout",
-    "type": "标记点上方的气泡窗口",
-    "required": false,
-    "desc": "支持的属性见下表，可识别换行符。"
-   },
-   {
-    "name": "label",
-    "type": "为标记点旁边增加标签",
-    "required": false,
-    "desc": "支持的属性见下表，可识别换行符。"
-   },
-   {
-    "name": "anchor",
-    "type": "经纬度在标注图标的锚点，默认底边中点",
-    "required": false,
-    "desc": "{x, y}，x 表示横向(0-1)，y 表示竖向(0-1)。{x: .5, y: 1} 表示底边中点"
-   },
-   {
-    "name": "aria-label",
-    "type": "无障碍访问，（属性）元素的额外描述",
-    "required": false,
-    "desc": "2.5.0"
-   },
-   {
-    "name": "collision",
-    "type": "碰撞类型",
-    "required": false,
-    "desc": "详见下表碰撞关系"
-   },
-   {
-    "name": "points",
-    "type": "经纬度数组",
-    "required": true,
-    "desc": "[{latitude: 0, longitude: 0}]"
-   },
-   {
-    "name": "color",
-    "type": "线的颜色",
-    "required": false,
-    "desc": "十六进制"
-   },
-   {
-    "name": "level",
-    "type": "压盖关系",
-    "required": false,
-    "desc": "默认为 abovelabels"
-   },
-   {
-    "name": "radius",
-    "type": "半径",
-    "required": true,
-    "desc": ""
-   },
-   {
-    "name": "position",
-    "type": "控件在地图的位置",
-    "required": true,
-    "desc": "控件相对地图位置"
-   },
-   {
-    "name": "clickable",
-    "type": "是否可点击",
-    "required": false,
-    "desc": "默认不可点击"
-   },
-   {
-    "name": "left",
-    "type": "距离地图的左边界多远",
-    "required": false,
-    "desc": "默认为0"
-   },
-   {
-    "name": "top",
-    "type": "距离地图的上边界多远",
-    "required": false,
-    "desc": "默认为0"
    }
   ],
   "match-media": [
@@ -3144,30 +3036,6 @@
     "type": "string",
     "required": false,
     "desc": "布局兼容模式"
-   },
-   {
-    "name": "name",
-    "type": "标签名",
-    "required": true,
-    "desc": "支持部分受信任的 HTML 节点"
-   },
-   {
-    "name": "attrs",
-    "type": "属性",
-    "required": false,
-    "desc": "支持部分受信任的属性，遵循 Pascal 命名法"
-   },
-   {
-    "name": "children",
-    "type": "子节点列表",
-    "required": false,
-    "desc": "结构和 nodes 一致"
-   },
-   {
-    "name": "text",
-    "type": "文本",
-    "required": true,
-    "desc": "支持entities"
    }
   ],
   "root-portal": [

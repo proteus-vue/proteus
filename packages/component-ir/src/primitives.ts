@@ -61,12 +61,12 @@ const LAYOUT: PrimitiveDef[] = [
 const UI: PrimitiveDef[] = [
   { id: 'U1', kind: 'ui', semantic: 'ui.text', tag: 'p-text', props: ['content', 'selectable', 'truncate', 'align', 'userSelect', 'overflow', 'maxLines', 'selectOnGesture', 'space', 'decode'], mpEquiv: '<text>', tier: 'L1', status: 'implemented' },
   { id: 'U2', kind: 'ui', semantic: 'ui.heading', tag: 'p-heading', props: ['level'], mpEquiv: '<h1>-<h6>', tier: 'L1', status: 'implemented' },
-  { id: 'U3', kind: 'ui', semantic: 'ui.rich-text', tag: 'p-rich-text', props: ['source', 'schema'], mpEquiv: '<rich-text>', tier: 'L1', status: 'implemented' },
+  { id: 'U3', kind: 'ui', semantic: 'ui.rich-text', tag: 'p-rich-text', props: ['nodes', 'space', 'userSelect', 'mode', 'source'], mpEquiv: '<rich-text>', tier: 'L1', status: 'implemented' },
   { id: 'U4', kind: 'ui', semantic: 'ui.icon', tag: 'p-icon', props: ['name', 'type', 'size', 'color', 'spin'], mpEquiv: '<icon>', tier: 'L1', status: 'implemented' },
   { id: 'U5', kind: 'ui', semantic: 'ui.image', tag: 'p-image', props: ['src', 'fit', 'placeholder', 'lazy', 'showMenuByLongpress', 'fadeIn', 'preload', 'webp', 'referrerPolicy'], mpEquiv: '<image>', tier: 'L1', status: 'implemented' },
   { id: 'U6', kind: 'ui', semantic: 'ui.avatar', tag: 'p-avatar', props: ['src', 'shape', 'size', 'fallback'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
-  { id: 'U7', kind: 'ui', semantic: 'ui.media', tag: 'p-media', props: ['kind', 'controls', 'autoplay', 'poster', 'loop', 'muted', 'pictureInPicture'], mpEquiv: '<video>+<audio>', tier: 'L1', status: 'implemented' },
-  { id: 'U8', kind: 'ui', semantic: 'ui.canvas', tag: 'p-canvas', props: ['engine', 'resolution'], mpEquiv: '<canvas>', tier: 'L1', status: 'implemented' },
+  { id: 'U7', kind: 'ui', semantic: 'ui.media', tag: 'p-media', props: ['kind', 'src', 'duration', 'controls', 'autoplay', 'loop', 'muted', 'initialTime', 'poster', 'objectFit', 'title', 'playBtnPosition', 'direction', 'showProgress', 'showFullscreenBtn', 'showPlayBtn', 'showCenterPlayBtn', 'showMuteBtn', 'showBottomProgress', 'enableProgressGesture', 'enablePlayGesture', 'pageGesture', 'vslideGesture', 'vslideGestureInFullscreen', 'autoPauseIfNavigate', 'autoPauseIfOpenNative', 'danmuList', 'danmuBtn', 'enableDanmu', 'pictureInPicture'], mpEquiv: '<video>+<audio>', tier: 'L1', status: 'implemented' },
+  { id: 'U8', kind: 'ui', semantic: 'ui.canvas', tag: 'p-canvas', props: ['engine', 'canvasId', 'disableScroll', 'resolution'], mpEquiv: '<canvas>', tier: 'L1', status: 'implemented' },
   { id: 'U9', kind: 'ui', semantic: 'ui.svg', tag: 'p-svg', props: ['path', 'viewbox'], mpEquiv: '无', tier: 'L1', status: 'implemented' },
   { id: 'U10', kind: 'ui', semantic: 'ui.input', tag: 'p-input', props: ['type', 'mask', 'validation', 'clearable'], mpEquiv: '<input>', tier: 'L1', status: 'implemented' },
   { id: 'U11', kind: 'ui', semantic: 'ui.textarea', tag: 'p-textarea', props: ['autosize', 'maxLength', 'count'], mpEquiv: '<textarea>', tier: 'L1', status: 'implemented' },
@@ -87,9 +87,9 @@ const UI: PrimitiveDef[] = [
   // ★权威标尺批 H：局部文本选区
   { id: 'U24', kind: 'ui', semantic: 'ui.selection', tag: 'p-selection', props: ['disableContextMenu', 'selectable'], mpEquiv: '<selection>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 I：相机
-  { id: 'U25', kind: 'ui', semantic: 'ui.camera', tag: 'p-camera', props: ['devicePosition', 'flash', 'aspectRatio'], mpEquiv: '<camera>', tier: 'L1', status: 'implemented' },
+  { id: 'U25', kind: 'ui', semantic: 'ui.camera', tag: 'p-camera', props: ['mode', 'resolution', 'devicePosition', 'flash', 'frameSize', 'aspectRatio'], mpEquiv: '<camera>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 J：地图
-  { id: 'U26', kind: 'ui', semantic: 'ui.map', tag: 'p-map', props: ['latitude', 'longitude', 'scale', 'markers'], mpEquiv: '<map>', tier: 'L1', status: 'implemented' },
+  { id: 'U26', kind: 'ui', semantic: 'ui.map', tag: 'p-map', props: ['latitude', 'longitude', 'scale', 'minScale', 'maxScale', 'markers', 'polyline', 'circles', 'polygons', 'includePoints', 'showLocation', 'layerStyle', 'rotate', 'skew', 'showCompass', 'showScale', 'enableZoom', 'enableScroll', 'enableRotate', 'enableSatellite', 'enableTraffic', 'enablePoi', 'enableBuilding', 'enableOverlooking', 'setting'], mpEquiv: '<map>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */
@@ -114,7 +114,7 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S15', kind: 'shell', semantic: 'shell.keyboard-accessory', tag: 'p-keyboard-accessory', props: ['visible', 'maxHeight', 'background'], mpEquiv: '<keyboard-accessory>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 J：内嵌网页 / 广告位
   { id: 'S16', kind: 'shell', semantic: 'shell.webview', tag: 'p-webview', props: ['src', 'height', 'sandbox'], mpEquiv: '<web-view>', tier: 'L1', status: 'implemented' },
-  { id: 'S17', kind: 'shell', semantic: 'shell.ad', tag: 'p-ad', props: ['unitId', 'adIntervals', 'adType', 'height'], mpEquiv: '<ad>', tier: 'L1', status: 'implemented' },
+  { id: 'S17', kind: 'shell', semantic: 'shell.ad', tag: 'p-ad', props: ['unitId', 'adIntervals', 'adType', 'adTheme', 'height'], mpEquiv: '<ad>', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §6 ④ 交互/手势原语 Gesture（10）——手势是声明式约束（v-gesture:* 指令 + 组件 + Hook） */
@@ -126,7 +126,7 @@ const GESTURE: PrimitiveDef[] = [
   { id: 'G5', kind: 'gesture', semantic: 'gesture.pinch', api: 'v-gesture:pinch', props: ['scale', 'onChange'], mpEquiv: 'touchstart/move 组合', tier: 'L1', status: 'planned' },
   { id: 'G6', kind: 'gesture', semantic: 'gesture.rotate', api: 'v-gesture:rotate', props: ['angle'], mpEquiv: '组合', tier: 'L1', status: 'planned' },
   { id: 'G7', kind: 'gesture', semantic: 'gesture.press', api: 'v-gesture:press', props: ['force'], mpEquiv: '3D Touch', tier: 'L1', status: 'planned' },
-  { id: 'G8', kind: 'gesture', semantic: 'gesture.draggable', tag: 'p-draggable', props: ['ghost', 'snapToGrid', 'onDrop'], mpEquiv: 'movable-view', tier: 'L1', status: 'implemented' },
+  { id: 'G8', kind: 'gesture', semantic: 'gesture.draggable', tag: 'p-draggable', props: ['direction', 'inertia', 'outOfBounds', 'x', 'y', 'damping', 'friction', 'disabled', 'scaleEnabled', 'scaleMin', 'scaleMax', 'scaleValue', 'animation', 'scaleArea', 'ghost', 'snapToGrid', 'onDrop'], mpEquiv: 'movable-view', tier: 'L1', status: 'implemented' },
   { id: 'G9', kind: 'gesture', semantic: 'gesture.scrollable', tag: 'p-scrollable', props: ['bounce', 'refresh', 'loadMore'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
   { id: 'G10', kind: 'gesture', semantic: 'gesture.use-gesture', api: 'useGesture()', props: ['recognizers', 'simultaneous'], mpEquiv: '无', tier: 'L1', status: 'planned' },
 ]

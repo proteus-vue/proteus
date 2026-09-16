@@ -33,10 +33,94 @@ Draggable element
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
+| `direction` | — | `String` | `'none'` | No |
+| `inertia` | — | `Boolean` | `false` | No |
+| `outOfBounds` | — | `Boolean` | `false` | No |
+| `x` | — | `[Number, String]` | `0` | No |
+| `y` | — | `[Number, String]` | `0` | No |
+| `damping` | — | `Number` | `20` | No |
+| `friction` | — | `Number` | `2` | No |
+| `disabled` | — | `Boolean` | `false` | No |
+| `scaleEnabled` | — | `Boolean` | `false` | No |
+| `scaleMin` | — | `Number` | `0.1` | No |
+| `scaleMax` | — | `Number` | `10` | No |
+| `scaleValue` | — | `Number` | `1` | No |
+| `animation` | — | `Boolean` | `true` | No |
+| `scaleArea` | — | `Boolean` | `false` | No |
 | `ghost` | Drag ghost (semi-transparent, follows the pointer) | `Boolean` | `false` | No |
 | `snapToGrid` | Grid snap step in px (0 = free drag) | `Number` | `0` | No |
 
 ### Prop details
+
+#### `direction`
+
+- **Type**: `String`　**Default**: `'none'`　**Required**: No
+- **Doc**: —
+
+#### `inertia`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `outOfBounds`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `x`
+
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `y`
+
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `damping`
+
+- **Type**: `Number`　**Default**: `20`　**Required**: No
+- **Doc**: —
+
+#### `friction`
+
+- **Type**: `Number`　**Default**: `2`　**Required**: No
+- **Doc**: —
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scaleEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scaleMin`
+
+- **Type**: `Number`　**Default**: `0.1`　**Required**: No
+- **Doc**: —
+
+#### `scaleMax`
+
+- **Type**: `Number`　**Default**: `10`　**Required**: No
+- **Doc**: —
+
+#### `scaleValue`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: —
+
+#### `animation`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `scaleArea`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 #### `ghost`
 
@@ -52,15 +136,27 @@ Draggable element
 
 | Event | Doc | Payload |
 |---|---|---|
-| `drag` | Dragging (gesture.draggable) | `{ x: nx, y: ny }` |
+| `change` | — | `d` |
+| `scale` | — | `normalizeDetail(e)` |
+| `drag` | Dragging (gesture.draggable) | `{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }` |
 | `drop` | Drag released | `{ x: dx.value, y: dy.value }` |
 
 ### Event details
 
+#### `change`
+
+- **Doc**: —
+- **Payload**: `d`
+
+#### `scale`
+
+- **Doc**: —
+- **Payload**: `normalizeDetail(e)`
+
 #### `drag`
 
 - **Doc**: Dragging (gesture.draggable)
-- **Payload**: `{ x: nx, y: ny }`
+- **Payload**: `{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }`
 
 #### `drop`
 
@@ -82,7 +178,7 @@ Draggable element
 ## Usage
 
 ```vue
-<p-draggable :ghost="…">
+<p-draggable :direction="…">
   <p-text>content</p-text>
 </p-draggable>
 ```

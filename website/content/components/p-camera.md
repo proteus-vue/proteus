@@ -33,11 +33,24 @@ order: 1003
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
+| `mode` | 应用模式：normal 拍照 / scanCode 扫码（对齐 mode；★仅初始化生效，不能动态变更） | `String` | `'normal'` | 否 |
+| `resolution` | 分辨率：low / medium / high（对齐 resolution；★不支持动态修改） | `String` | `'medium'` | 否 |
 | `devicePosition` | 摄像头朝向：back 后置 / front 前置（对齐 device-position） | `String` | `'back'` | 否 |
 | `flash` | 闪光灯：auto / on / off（对齐 flash） | `String` | `'auto'` | 否 |
+| `frameSize` | 期望的相机帧数据尺寸：small / medium / large（对齐 frame-size） | `String` | `'medium'` | 否 |
 | `aspectRatio` | 预览宽高比（padding-top 百分比；缺省 4:3） | `Number` | `4 / 3` | 否 |
 
 ### 属性详解
+
+#### `mode`
+
+- **类型**：`String`　**默认值**：`'normal'`　**必填**：否
+- **说明**：应用模式：normal 拍照 / scanCode 扫码（对齐 mode；★仅初始化生效，不能动态变更）
+
+#### `resolution`
+
+- **类型**：`String`　**默认值**：`'medium'`　**必填**：否
+- **说明**：分辨率：low / medium / high（对齐 resolution；★不支持动态修改）
 
 #### `devicePosition`
 
@@ -48,6 +61,11 @@ order: 1003
 
 - **类型**：`String`　**默认值**：`'auto'`　**必填**：否
 - **说明**：闪光灯：auto / on / off（对齐 flash）
+
+#### `frameSize`
+
+- **类型**：`String`　**默认值**：`'medium'`　**必填**：否
+- **说明**：期望的相机帧数据尺寸：small / medium / large（对齐 frame-size）
 
 #### `aspectRatio`
 
@@ -61,6 +79,8 @@ order: 1003
 | `initdone` | — | — |
 | `error` | 加载/执行失败 | `e` |
 | `ready` | — | `{ kind: 'camera', supported: true, granted: true }` |
+| `stop` | — | `e` |
+| `scancode` | — | `e` |
 
 ### 事件详解
 
@@ -79,6 +99,16 @@ order: 1003
 - **说明**：—
 - **载荷**：`{ kind: 'camera', supported: true, granted: true }`
 
+#### `stop`
+
+- **说明**：—
+- **载荷**：`e`
+
+#### `scancode`
+
+- **说明**：—
+- **载荷**：`e`
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -94,7 +124,7 @@ order: 1003
 ## 用法
 
 ```vue
-<p-camera :devicePosition="'back'" :flash="'auto'" :aspectRatio="4 / 3">
+<p-camera :mode="'normal'" :resolution="'medium'" :devicePosition="'back'">
   <p-text>内容</p-text>
 </p-camera>
 ```

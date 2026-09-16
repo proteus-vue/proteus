@@ -36,10 +36,32 @@ Map container
 | `latitude` | Center latitude | `Number` | `39.908823` | No |
 | `longitude` | Center longitude | `Number` | `116.39747` | No |
 | `scale` | Zoom level (3-20) | `Number` | `16` | No |
+| `minScale` | — | `Number` | `3` | No |
+| `maxScale` | — | `Number` | `20` | No |
 | `markers` | Marker list | `Array as () => MapMarkerItem[]` | `() => []` | No |
+| `covers` | — | `Array as () => Record<string` | `() => []` | No |
+| `polyline` | — | `Array as () => Record<string` | `() => []` | No |
+| `circles` | — | `Array as () => Record<string` | `() => []` | No |
+| `controls` | — | `Array as () => Record<string` | `() => []` | No |
+| `includePoints` | — | `Array as () => Record<string` | `() => []` | No |
 | `showLocation` | Show the current location dot | `Boolean` | `false` | No |
+| `polygons` | — | `Array as () => Record<string` | `() => []` | No |
+| `subkey` | — | `String` | `''` | No |
+| `layerStyle` | — | `Number` | `1` | No |
+| `rotate` | — | `Number` | `0` | No |
+| `skew` | — | `Number` | `0` | No |
+| `showCompass` | — | `Boolean` | `false` | No |
+| `showScale` | — | `Boolean` | `false` | No |
+| `enableOverlooking` | — | `Boolean` | `false` | No |
+| `enableAutoMaxOverlooking` | — | `Boolean` | `false` | No |
 | `enableZoom` | — | `Boolean` | `true` | No |
 | `enableScroll` | — | `Boolean` | `true` | No |
+| `enableRotate` | — | `Boolean` | `false` | No |
+| `enableSatellite` | — | `Boolean` | `false` | No |
+| `enableTraffic` | — | `Boolean` | `false` | No |
+| `enablePoi` | — | `Boolean` | `true` | No |
+| `enableBuilding` | — | `Boolean` | `false` | No |
+| `setting` | — | `Object as () => Record<string` | `() => ({` | No |
 | `height` | Height in px (default 300) | `Number` | `300` | No |
 | `placeholderText` | — | `String` | `'地图（宿主接入 SDK）'` | No |
 
@@ -60,15 +82,95 @@ Map container
 - **Type**: `Number`　**Default**: `16`　**Required**: No
 - **Doc**: Zoom level (3-20)
 
+#### `minScale`
+
+- **Type**: `Number`　**Default**: `3`　**Required**: No
+- **Doc**: —
+
+#### `maxScale`
+
+- **Type**: `Number`　**Default**: `20`　**Required**: No
+- **Doc**: —
+
 #### `markers`
 
 - **Type**: `Array as () => MapMarkerItem[]`　**Default**: `() => []`　**Required**: No
 - **Doc**: Marker list
 
+#### `covers`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `polyline`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `circles`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `controls`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `includePoints`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
 #### `showLocation`
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Show the current location dot
+
+#### `polygons`
+
+- **Type**: `Array as () => Record<string`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
+
+#### `subkey`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `layerStyle`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: —
+
+#### `rotate`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `skew`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `showCompass`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `showScale`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableOverlooking`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableAutoMaxOverlooking`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 #### `enableZoom`
 
@@ -78,6 +180,36 @@ Map container
 #### `enableScroll`
 
 - **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `enableRotate`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableSatellite`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableTraffic`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enablePoi`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `enableBuilding`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `setting`
+
+- **Type**: `Object as () => Record<string`　**Default**: `() => ({`　**Required**: No
 - **Doc**: —
 
 #### `height`
@@ -94,26 +226,68 @@ Map container
 
 | Event | Doc | Payload |
 |---|---|---|
-| `markertap` | — | `e` |
-| `regionchange` | — | `e` |
-| `tap` | — | `e` |
+| `markertap` | — | — |
+| `labeltap` | — | — |
+| `controltap` | — | — |
+| `callouttap` | — | — |
+| `updated` | — | — |
+| `regionchange` | — | — |
+| `poitap` | — | — |
+| `polylinetap` | — | — |
+| `tap` | — | — |
+| `error` | — | — |
 
 ### Event details
 
 #### `markertap`
 
 - **Doc**: —
-- **Payload**: `e`
+- **Payload**: none
+
+#### `labeltap`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `controltap`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `callouttap`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `updated`
+
+- **Doc**: —
+- **Payload**: none
 
 #### `regionchange`
 
 - **Doc**: —
-- **Payload**: `e`
+- **Payload**: none
+
+#### `poitap`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `polylinetap`
+
+- **Doc**: —
+- **Payload**: none
 
 #### `tap`
 
 - **Doc**: —
-- **Payload**: `e`
+- **Payload**: none
+
+#### `error`
+
+- **Doc**: —
+- **Payload**: none
 
 ## Slots
 

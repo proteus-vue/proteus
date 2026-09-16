@@ -8,11 +8,15 @@
     <camera
       v-if="isMp"
       class="p-camera__el"
+      :mode="mode"
+      :resolution="resolution"
       :device-position="devicePosition"
       :flash="flash"
-      mode="normal"
+      :frame-size="frameSize"
       @initdone="onInitDone"
       @error="onError"
+      @stop="onStop"
+      @scancode="onScanCode"
     >
       <slot />
     </camera>
@@ -37,15 +41,21 @@ import type { CSSProperties } from 'vue'
 import { isMpRuntime } from '../runtime/container-measure'
 
 const props = defineProps({
+  /** 应用模式：normal 拍照 / scanCode 扫码（对齐 mode；★仅初始化生效，不能动态变更） */
+  mode: { type: String, default: 'normal' },
+  /** 分辨率：low / medium / high（对齐 resolution；★不支持动态修改） */
+  resolution: { type: String, default: 'medium' },
   /** 摄像头朝向：back 后置 / front 前置（对齐 device-position） */
   devicePosition: { type: String, default: 'back' },
   /** 闪光灯：auto / on / off（对齐 flash） */
   flash: { type: String, default: 'auto' },
+  /** 期望的相机帧数据尺寸：small / medium / large（对齐 frame-size） */
+  frameSize: { type: String, default: 'medium' },
   /** 预览宽高比（padding-top 百分比；缺省 4:3） */
   aspectRatio: { type: Number, default: 4 / 3 },
 })
 
-const emit = defineEmits(['initdone', 'error', 'ready'])
+const emit = defineEmits(['initdone', 'error', 'ready', 'stop', 'scancode'])
 
 // ★★真机 bug 修复（2026-09-12）：`isMpRuntime()` 直接调用 → 编译器归 runtimeInit 实例属性（this.isMp），
 //   模板只能读 data → wx:if="{{isMp}}" 恒 false → MP 端错走 <video> Web 分支（真机渲染成 video 组件）。
@@ -101,6 +111,17 @@ function onInitDone(): void {
 
 function onError(e: unknown): void {
   emit('error', e)
+}
+
+/** 摄像头非正常终止（退出后台等，对齐 bind:stop） */
+function onStop(e: unknown): void {
+  active.value = false
+  emit('stop', e)
+}
+
+/** mode=scanCode 时扫码成功（对齐 bind:scancode） */
+function onScanCode(e: unknown): void {
+  emit('scancode', e)
 }
 
 onMounted(() => {

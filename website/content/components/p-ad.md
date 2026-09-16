@@ -36,6 +36,7 @@ order: 2002
 | `unitId` | 广告单元 id（对齐 unit-id；MP 平台后台创建） | `String` | `''` | 否 |
 | `adIntervals` | 广告自动刷新的间隔秒数（最小 30，对齐 ad-intervals） | `Number` | `0` | 否 |
 | `adType` | 广告类型（对齐 ad-type：banner / video / grid 等） | `String` | `''` | 否 |
+| `adTheme` | 广告主题（对齐 ad-theme：white / black，2.8.0+） | `String` | `'white'` | 否 |
 | `height` | 占位高度 px（Web 占位容器） | `Number` | `100` | 否 |
 | `placeholderText` | Web 占位文案 | `String` | `'广告位'` | 否 |
 
@@ -55,6 +56,11 @@ order: 2002
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
 - **说明**：广告类型（对齐 ad-type：banner / video / grid 等）
+
+#### `adTheme`
+
+- **类型**：`String`　**默认值**：`'white'`　**必填**：否
+- **说明**：广告主题（对齐 ad-theme：white / black，2.8.0+）
 
 #### `height`
 

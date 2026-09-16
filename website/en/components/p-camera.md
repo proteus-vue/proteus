@@ -33,11 +33,24 @@ Camera preview
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
+| `mode` | — | `String` | `'normal'` | No |
+| `resolution` | — | `String` | `'medium'` | No |
 | `devicePosition` | Camera facing: back / front (aligned with device-position) | `String` | `'back'` | No |
 | `flash` | Flash mode: auto / on / off (aligned with flash) | `String` | `'auto'` | No |
+| `frameSize` | — | `String` | `'medium'` | No |
 | `aspectRatio` | Preview aspect ratio (default 4:3) | `Number` | `4 / 3` | No |
 
 ### Prop details
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'normal'`　**Required**: No
+- **Doc**: —
+
+#### `resolution`
+
+- **Type**: `String`　**Default**: `'medium'`　**Required**: No
+- **Doc**: —
 
 #### `devicePosition`
 
@@ -48,6 +61,11 @@ Camera preview
 
 - **Type**: `String`　**Default**: `'auto'`　**Required**: No
 - **Doc**: Flash mode: auto / on / off (aligned with flash)
+
+#### `frameSize`
+
+- **Type**: `String`　**Default**: `'medium'`　**Required**: No
+- **Doc**: —
 
 #### `aspectRatio`
 
@@ -61,6 +79,8 @@ Camera preview
 | `initdone` | — | — |
 | `error` | — | `e` |
 | `ready` | — | `{ kind: 'camera', supported: true, granted: true }` |
+| `stop` | — | `e` |
+| `scancode` | — | `e` |
 
 ### Event details
 
@@ -79,6 +99,16 @@ Camera preview
 - **Doc**: —
 - **Payload**: `{ kind: 'camera', supported: true, granted: true }`
 
+#### `stop`
+
+- **Doc**: —
+- **Payload**: `e`
+
+#### `scancode`
+
+- **Doc**: —
+- **Payload**: `e`
+
 ## Slots
 
 | Slot | Doc |
@@ -94,7 +124,7 @@ Camera preview
 ## Usage
 
 ```vue
-<p-camera :devicePosition="…">
+<p-camera :mode="…">
   <p-text>content</p-text>
 </p-camera>
 ```

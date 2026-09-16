@@ -99,8 +99,12 @@ describe('组件接线契约（MP 产物含运行时测量）', () => {
       expect(src).toMatch(/isMpRuntime\(\)/)
     }
     // 降级告警契约
+    // ★p-draggable（端对齐批次3，2026-09-16）：此前 MP 端为「元素静态 + capabilityWarnOnce」静默降级
+    //   （Web-only 手势组件）→ 已升级为原生 movable-area/movable-view 双端同语义，故不再有该告警。
+    //   防「静默钉死」的契约改为：MP 分支必须真实承接原生 movable 组件。
     const drag = fs.readFileSync(path.resolve('packages/components/p-draggable/index.vue'), 'utf-8')
-    expect(drag).toMatch(/capabilityWarnOnce\('p-draggable'/)
+    expect(drag).toMatch(/<movable-area/)
+    expect(drag).toMatch(/<movable-view/)
     const sc = fs.readFileSync(path.resolve('packages/components/p-scroll/index.vue'), 'utf-8')
     expect(sc).toMatch(/capabilityWarnOnce\('p-scroll'/)
   })

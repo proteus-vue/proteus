@@ -1,19 +1,27 @@
 # 04 · 分批执行计划
 
-## 0. 当前基线（2026-09-14 · 批次 2 容器与外壳全部收口）
+## 0. 当前基线（2026-09-16 · 批次 3 宿主能力全部收口）
 
 ```
-属性覆盖：207/347 = 60%（棘轮底线 207）
-p-button 21/21 ✅（100%，范式参考实现）   p-input 12/26 🔶
-p-switch 3/3 ✅（**自绘 + shape 替代官方 type 包袱**）
-p-slider 10/10 ✅   p-progress 9/9 ✅
-p-checkbox 4/4 ✅  p-radio 4/4 ✅  p-picker 6/6 ✅  p-label 1/1 ✅
-p-textarea 21/21 ✅（原批次内最大缺口）
+属性覆盖：294/325 = 90%（棘轮底线 294）
+p-button 21/21 ✅（100%，范式参考实现）
 ★批次 1（高频表单）**全部 ✅**
 ★批次 2（容器与外壳）**全部 ✅**：p-view 4/4 · p-text 7/7 · p-icon 3/3 · p-image 7/7（含 cover-image）
   · p-page-container 9/9 · p-scroll-view 40/40 · p-router-link 13/13（navigator 语义纠偏）
-  · p-nav-bar 6/6（navigation-bar 语义纠偏）；下一批 = 批次 3（宿主能力）
+  · p-nav-bar 6/6（navigation-bar 语义纠偏）
+★批次 3（宿主能力）**全部 ✅**：p-media(video) 47/47 · p-map 29/29 · p-camera 5/5 · p-canvas 3/3
+  · p-webview 1/1 · p-ad 4/4 · p-rich-text 4/4 · p-draggable(movable-view) 13/13
+剩余（非本批）：p-input 12/26 🔶 · p-adaptive 0/7 · p-transition 1/8 · p-form 0/2 · p-list-view 0/1
+下一批 = 批次 4（属性降级声明 M6）/ 批次 5（无对应组件评估）
 ```
+
+> ★**标尺精度修复（2026-09-16）**：官方文档页把**子对象 schema**（map 的 marker/polyline/polygon/circle/
+> control/position 字段、rich-text 的 node/text 字段）与组件属性**混在同页的不同 h2 区块**——此前**全页扫描**
+> 把它们一并计入属性清单（map 61→43、rich-text 8→4；官方属性总数 793→771），制造**虚假缺口**，
+> 且会诱导把端私有结构固化成框架语义（违反 G-31 铁律）。生成器改为只采四类区块
+> （通用属性 / 属性说明 / Skyline 特有属性 / WebView 特有属性）。
+> 连带修正：**棘轮阈值改由 `alignment-ratchet.json` 驱动**（此前 `package.json` 硬编码 `--min 128`
+> 而 JSON 记 207 → 文档声称的底线从未真正执行，属软门禁）。
 
 > ★**标尺语义纠偏（2026-09-14）**：官方 `<navigator>`（声明式**导航链接**）此前被错映射到 `p-nav`（导航**栏**）——
 > 已按 SSOT `packages/component-ir/src/audit.ts` 纠正为 `engineering.router-link` = `p-router-link`（E18）；
@@ -48,17 +56,25 @@ p-textarea 21/21 ✅（原批次内最大缺口）
 | `p-text` | 7 | 7 | **7/7 ✅** |
 | `p-icon` | 3 | 3 | **3/3 ✅** |
 
-### 批次 3 · 宿主能力（含降级声明）
+### 批次 3 · 宿主能力（含降级声明）（★已完成 2026-09-16）
 | 组件 | 官方属性 | 当前 | 要点 |
 |---|---|---|---|
-| `p-media`（video） | 47 | 6 | 弹幕/播放控制/手势 |
-| `p-map` | 47 | 8 | markers/polyline/circles/controls |
-| `p-camera` | 5 | 2 | mode/resolution/frame-size |
-| `p-canvas` | 3 | 0 | type/canvas-id/disable-scroll |
-| `p-webview` | 4 | — | src 已验证；补 load/error 事件 |
-| `p-ad` | 4 | 3 | ad-theme |
-| `p-rich-text` | 8 | 0 | nodes/space/user-select |
-| `p-draggable`（movable） | 15 | 0 | direction/inertia/damping |
+| `p-media`（video） | 47 | **47/47 ✅** | 播放控制 + show-* 控件显隐族 + 手势族 + 弹幕族 + 画中画族 + 投屏/截屏/后台播放 + DRM 族 |
+| `p-map` | 29 | **29/29 ✅** | 缩放族 + 图层族（polyline/circles/polygons/include-points）+ 个性化 + 视角 + 交互族 + setting |
+| `p-camera` | 5 | **5/5 ✅** | mode / resolution / device-position / flash / frame-size（+ stop/scancode 事件） |
+| `p-canvas` | 3 | **3/3 ✅** | type→engine 归一 + canvas-id + disable-scroll |
+| `p-webview` | 1 | **1/1 ✅** | src 已验证；补 load 事件（跨端同名） |
+| `p-ad` | 4 | **4/4 ✅** | unit-id / ad-intervals / ad-type / ad-theme |
+| `p-rich-text` | 4 | **4/4 ✅** | nodes / space / user-select / mode（source 为 nodes 别名） |
+| `p-draggable`（movable） | 13 | **13/13 ✅** | ★由 Web-only 升级为双端：MP 原生 movable-area/movable-view（含 area 侧 scale-area） |
+
+**★本批要点（与批次 1/2 的差异）**：
+- **宿主能力组件多为「MP 原生 + Web 降级」双分支**——Web 端无标准 API（地图/相机/广告/DRM/画中画）
+  时**诚实占位或明确降级**，不伪造行为（延续 p-webview 既有纪律）。
+- **属性归一按 tag 限定**（`SEMANTIC_ALIAS_BY_TAG`）：官方 `canvas.type` → 框架 `engine`（含 skia）、
+  官方 `rich-text.nodes` → 保留 nodes（`source` 为别名）、官方 `movable-view.scale`（布尔）→ `scaleEnabled`
+  （避免与 `scaleMin/Max/Value` 数值族混读）。**同名不同义**不能进全局别名表。
+- **子对象 schema 不算组件属性**（标尺精度，见 §0 注）——marker/node 字段属数组元素结构。
 
 ### 批次 4 · 属性降级声明（M6）
 全组件属性补 `degradation`（EA-5）+ `PROP_NO_DEGRADATION` 门禁。

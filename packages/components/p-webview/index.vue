@@ -11,6 +11,7 @@
       class="p-webview__el"
       :src="src"
       @message="onMessage"
+      @load="onLoad"
       @error="onError"
     />
     <!-- MP + 非 URL（如包内本地 HTML）→ 诚实占位（★平台限制：小程序 <web-view> 不支持加载包内本地文件；
@@ -39,7 +40,7 @@ const props = defineProps({
   mpLocalHint: { type: String, default: 'web-view 仅支持 https 业务域名内的网页；小程序包内本地 HTML 不受平台支持（Web 端可加载）' },
 })
 
-const emit = defineEmits(['message', 'error'])
+const emit = defineEmits(['message', 'load', 'error'])
 
 // ★真机 bug 修复（2026-09-12）：computed 使 isMp 进 data（直调会成实例属性 → MP 错走 iframe 容器）
 const isMp = computed(() => isMpRuntime())
@@ -65,6 +66,7 @@ function ensureFrame(): void {
     el.style.width = '100%'
     el.style.height = '100%'
     el.style.border = '0'
+    el.addEventListener('load', () => emit('load', { src: props.src }))
     el.addEventListener('error', () => emit('error', { message: 'iframe load error' }))
     host.appendChild(el)
     frame = el
@@ -90,6 +92,10 @@ onUnmounted(() => {
 
 function onMessage(e: unknown): void {
   emit('message', e)
+}
+/** 网页加载成功（★官方 bind:load；Web iframe 同语义触发 → 跨端同名契约） */
+function onLoad(e: unknown): void {
+  emit('load', e)
 }
 function onError(e: unknown): void {
   emit('error', e)

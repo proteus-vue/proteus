@@ -65,11 +65,17 @@ Embedded web page
 | Event | Doc | Payload |
 |---|---|---|
 | `message` | — | `e` |
+| `load` | — | `e` |
 | `error` | — | `e` |
 
 ### Event details
 
 #### `message`
+
+- **Doc**: —
+- **Payload**: `e`
+
+#### `load`
 
 - **Doc**: —
 - **Payload**: `e`

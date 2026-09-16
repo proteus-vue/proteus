@@ -6,7 +6,7 @@ order: 3001
 
 # p-draggable
 
-可拖拽元素
+可拖拽/可缩放元素
 
 > 语义组件（Layer 0）· 域 **手势** · 编译期映射到各端原生控件，业务零平台分支。
 
@@ -33,34 +33,130 @@ order: 3001
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `ghost` | 拖拽拖影（半透明跟随） | `Boolean` | `false` | 否 |
-| `snapToGrid` | 网格吸附步长 px（0=自由拖拽） | `Number` | `0` | 否 |
+| `direction` | 移动方向：all / vertical / horizontal / none（★官方 direction） | `String` | `'none'` | 否 |
+| `inertia` | 是否带惯性（★官方 inertia） | `Boolean` | `false` | 否 |
+| `outOfBounds` | 超过可移动区域后是否仍可移动（回弹，★官方 out-of-bounds） | `Boolean` | `false` | 否 |
+| `x` | x 轴偏移（★官方 x；改变触发动画） | `[Number, String]` | `0` | 否 |
+| `y` | y 轴偏移（★官方 y） | `[Number, String]` | `0` | 否 |
+| `damping` | 阻尼系数（越大移动越快，★官方 damping，默认 20） | `Number` | `20` | 否 |
+| `friction` | 摩擦系数（必须 >0，★官方 friction，默认 2） | `Number` | `2` | 否 |
+| `disabled` | 是否禁用（★官方 disabled） | `Boolean` | `false` | 否 |
+| `scaleEnabled` | 是否支持双指缩放（★官方 scale；入参 scale 为官方保留属性名，框架侧用 scaleEnabled 避免与数值 scaleValue 混淆） | `Boolean` | `false` | 否 |
+| `scaleMin` | 缩放倍数最小值（★官方 scale-min，默认 0.1） | `Number` | `0.1` | 否 |
+| `scaleMax` | 缩放倍数最大值（★官方 scale-max，默认 10） | `Number` | `10` | 否 |
+| `scaleValue` | 缩放倍数（取值范围 0.1–10，★官方 scale-value） | `Number` | `1` | 否 |
+| `animation` | 是否使用动画（★官方 animation） | `Boolean` | `true` | 否 |
+| `scaleArea` | 缩放手势生效区域是否扩展到 movable-area（★官方 movable-area scale-area） | `Boolean` | `false` | 否 |
+| `ghost` | 拖拽拖影（半透明跟随；Web） | `Boolean` | `false` | 否 |
+| `snapToGrid` | 网格吸附步长 px（0=自由拖拽；Web） | `Number` | `0` | 否 |
 
 ### 属性详解
+
+#### `direction`
+
+- **类型**：`String`　**默认值**：`'none'`　**必填**：否
+- **说明**：移动方向：all / vertical / horizontal / none（★官方 direction）
+
+#### `inertia`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否带惯性（★官方 inertia）
+
+#### `outOfBounds`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：超过可移动区域后是否仍可移动（回弹，★官方 out-of-bounds）
+
+#### `x`
+
+- **类型**：`[Number, String]`　**默认值**：`0`　**必填**：否
+- **说明**：x 轴偏移（★官方 x；改变触发动画）
+
+#### `y`
+
+- **类型**：`[Number, String]`　**默认值**：`0`　**必填**：否
+- **说明**：y 轴偏移（★官方 y）
+
+#### `damping`
+
+- **类型**：`Number`　**默认值**：`20`　**必填**：否
+- **说明**：阻尼系数（越大移动越快，★官方 damping，默认 20）
+
+#### `friction`
+
+- **类型**：`Number`　**默认值**：`2`　**必填**：否
+- **说明**：摩擦系数（必须 >0，★官方 friction，默认 2）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否禁用（★官方 disabled）
+
+#### `scaleEnabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否支持双指缩放（★官方 scale；入参 scale 为官方保留属性名，框架侧用 scaleEnabled 避免与数值 scaleValue 混淆）
+
+#### `scaleMin`
+
+- **类型**：`Number`　**默认值**：`0.1`　**必填**：否
+- **说明**：缩放倍数最小值（★官方 scale-min，默认 0.1）
+
+#### `scaleMax`
+
+- **类型**：`Number`　**默认值**：`10`　**必填**：否
+- **说明**：缩放倍数最大值（★官方 scale-max，默认 10）
+
+#### `scaleValue`
+
+- **类型**：`Number`　**默认值**：`1`　**必填**：否
+- **说明**：缩放倍数（取值范围 0.1–10，★官方 scale-value）
+
+#### `animation`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：是否使用动画（★官方 animation）
+
+#### `scaleArea`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：缩放手势生效区域是否扩展到 movable-area（★官方 movable-area scale-area）
 
 #### `ghost`
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
-- **说明**：拖拽拖影（半透明跟随）
+- **说明**：拖拽拖影（半透明跟随；Web）
 
 #### `snapToGrid`
 
 - **类型**：`Number`　**默认值**：`0`　**必填**：否
-- **说明**：网格吸附步长 px（0=自由拖拽）
+- **说明**：网格吸附步长 px（0=自由拖拽；Web）
 
 ## Events
 
 | 事件 | 说明 | 载荷 |
 |---|---|---|
-| `drag` | 拖拽中（gesture.draggable） | `{ x: nx, y: ny }` |
+| `change` | 选中值变化 | `d` |
+| `scale` | — | `normalizeDetail(e)` |
+| `drag` | 拖拽中（gesture.draggable） | `{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }` |
 | `drop` | 拖拽释放 | `{ x: dx.value, y: dy.value }` |
 
 ### 事件详解
 
+#### `change`
+
+- **说明**：选中值变化
+- **载荷**：`d`
+
+#### `scale`
+
+- **说明**：—
+- **载荷**：`normalizeDetail(e)`
+
 #### `drag`
 
 - **说明**：拖拽中（gesture.draggable）
-- **载荷**：`{ x: nx, y: ny }`
+- **载荷**：`{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }`
 
 #### `drop`
 
@@ -75,14 +171,18 @@ order: 3001
 
 ## 实现要点
 
-- 基于 useGesture 的 pan 识别（Web Pointer Events）；ghost 半透明拖影 + snapToGrid 网格吸附 + drag/drop emit
-- 双端同源码：div → view；MP/原生端识别器映射后续批次（无手势 → 元素静态）
-- ★MP 安全：顶层函数调用 const（useGesture({...})）编译成运行时初始化会断——调用移入 onMounted（已验证模式）
+- 语义：把一个元素约束在容器内自由移动（可选缩放），支持惯性/阻尼/边界回弹/网格吸附。
+- ★端对齐批次3（2026-09-16）：由「Web-only 手势组件」升级为**双端同语义**——
+- · MP 端：原生 <movable-area> + <movable-view>（官方即此能力本体；官方 13 属性全量透传，
+- direction/inertia/out-of-bounds/x/y/damping/friction/disabled/scale/scale-min/scale-max/scale-value/animation
+- + movable-area 的 scale-area）。此前 MP 端为「元素静态 + 告警」，属真实能力缺口，本轮补齐。
+- · Web 端：Pointer Events 手势识别（既有 useGesture 路径）+ 同一属性面语义等价表达。
+- ★事件契约（跨端同名）：change（{x,y,source}）/ scale（{x,y,scale}）/ drag / drop。
 
 ## 用法
 
 ```vue
-<p-draggable :ghost="true" :snapToGrid="0">
+<p-draggable :direction="'none'" :inertia="true" :outOfBounds="true">
   <p-text>内容</p-text>
 </p-draggable>
 ```

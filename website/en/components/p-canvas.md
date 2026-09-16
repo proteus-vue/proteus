@@ -34,6 +34,8 @@ Canvas
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
 | `engine` | Render engine: 2d / webgl / skia | `String` | `'2d'` | No |
+| `canvasId` | — | `String` | `''` | No |
+| `disableScroll` | — | `Boolean` | `false` | No |
 | `width` | CSS width in px (0 = auto) | `Number` | `300` | No |
 | `height` | CSS height in px (0 = auto) | `Number` | `150` | No |
 | `resolution` | Resolution multiplier (>1 renders at high definition; internal canvas resolution = CSS size times the multiplier) | `Number` | `1` | No |
@@ -44,6 +46,16 @@ Canvas
 
 - **Type**: `String`　**Default**: `'2d'`　**Required**: No
 - **Doc**: Render engine: 2d / webgl / skia
+
+#### `canvasId`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `disableScroll`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 #### `width`
 

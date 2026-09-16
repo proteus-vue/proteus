@@ -51,6 +51,17 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-nav-bar', keySelector: '.p-nav-bar', label: 'p-nav-bar（真渲染导航栏）', minVisibleRatio: 1, expectedCount: 5 },
   // ★p-page-container 弹出层初始 visibility:hidden → 用触发按钮断言页面渲染
   { route: '/subpackages/components/pages/p-page-container', keySelector: 'button', label: 'p-page-container（触发按钮可见）', minVisibleRatio: 1 },
+  // ★批次 3（宿主能力，2026-09-16）——断言「页面结构真实渲染」（元素/占位/说明块可见）。
+  //   ★宿主能力本身（真实地图/相机/广告/内嵌网页）需真机核验，见 docs/miniprogram-acceptance-checklist.md。
+  //   expectedCount 为构建后实测值（见各页演示块数量）。
+  { route: '/subpackages/components/pages/p-rich-text', keySelector: '.p-rich-text', label: 'p-rich-text（富文本真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-canvas', keySelector: 'canvas', label: 'p-canvas（画布元素真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-draggable', keySelector: '.p-draggable', label: 'p-draggable（可拖拽元素真实渲染）', minVisibleRatio: 1, expectedCount: 5 },
+  { route: '/subpackages/components/pages/p-media', keySelector: '.p-media', label: 'p-media（媒体元素真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-ad', keySelector: '.p-ad', label: 'p-ad（广告占位真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-map', keySelector: '.p-map', label: 'p-map（地图宿主槽位真实渲染）', minVisibleRatio: 1, expectedCount: 5 },
+  { route: '/subpackages/components/pages/p-camera', keySelector: '.p-camera', label: 'p-camera（相机预览区真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-webview', keySelector: '.p-webview', label: 'p-webview（内嵌容器真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
   { route: '/subpackages/capabilities/pages/camera', keySelector: '[class*=db], [class*=out]', label: 'useCamera（能力详情样板）', minVisibleRatio: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },

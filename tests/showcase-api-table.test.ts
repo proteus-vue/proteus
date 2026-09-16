@@ -127,6 +127,47 @@ describe('★showcase API 表完整性（表 ⊇ 实现）', () => {
       impl: path.join(ROOT, 'packages/components/p-nav-bar/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-nav-bar.vue'),
     },
+    // ★端对齐批次 3（宿主能力，2026-09-16）
+    {
+      name: 'p-media',
+      impl: path.join(ROOT, 'packages/components/p-media/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-media.vue'),
+    },
+    {
+      name: 'p-map',
+      impl: path.join(ROOT, 'packages/components/p-map/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-map.vue'),
+    },
+    {
+      name: 'p-camera',
+      impl: path.join(ROOT, 'packages/components/p-camera/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-camera.vue'),
+    },
+    {
+      name: 'p-canvas',
+      impl: path.join(ROOT, 'packages/components/p-canvas/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-canvas.vue'),
+    },
+    {
+      name: 'p-webview',
+      impl: path.join(ROOT, 'packages/components/p-webview/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-webview.vue'),
+    },
+    {
+      name: 'p-ad',
+      impl: path.join(ROOT, 'packages/components/p-ad/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-ad.vue'),
+    },
+    {
+      name: 'p-rich-text',
+      impl: path.join(ROOT, 'packages/components/p-rich-text/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-rich-text.vue'),
+    },
+    {
+      name: 'p-draggable',
+      impl: path.join(ROOT, 'packages/components/p-draggable/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-draggable.vue'),
+    },
   ]
 
   for (const c of cases) {

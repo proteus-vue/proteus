@@ -33,31 +33,53 @@ order: 1020
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `source` | HTML/markdown 源 | `String` | `''` | 否 |
-| `schema` | 渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化） | `String` | `'html'` | 否 |
+| `nodes` | 节点列表 / HTML 字符串（★官方 nodes） | `[String, Array] as unknown as () => string \| RichTextNode[]` | `''` | 否 |
+| `space` | 显示连续空格：ensp / emsp / nbsp（★官方 space） | `String` | `''` | 否 |
+| `userSelect` | 文本是否可选（★官方 user-select；会使节点显示为 block） | `Boolean` | `false` | 否 |
+| `mode` | 布局兼容模式：default / compat（★官方 mode） | `String` | `'default'` | 否 |
+| `source` | HTML 源（框架可读别名——等价 nodes 的字符串形态，二者取其一） | `String` | `''` | 否 |
 
 ### 属性详解
+
+#### `nodes`
+
+- **类型**：`[String, Array] as unknown as () => string \| RichTextNode[]`　**默认值**：`''`　**必填**：否
+- **说明**：节点列表 / HTML 字符串（★官方 nodes）
+
+#### `space`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：显示连续空格：ensp / emsp / nbsp（★官方 space）
+
+#### `userSelect`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：文本是否可选（★官方 user-select；会使节点显示为 block）
+
+#### `mode`
+
+- **类型**：`String`　**默认值**：`'default'`　**必填**：否
+- **说明**：布局兼容模式：default / compat（★官方 mode）
 
 #### `source`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：HTML/markdown 源
-
-#### `schema`
-
-- **类型**：`String`　**默认值**：`'html'`　**必填**：否
-- **说明**：渲染 schema（HTML/MARKDOWN——B2 透传，后续批次严格化）
+- **说明**：HTML 源（框架可读别名——等价 nodes 的字符串形态，二者取其一）
 
 ## 实现要点
 
-- source HTML/markdown → 渲染；Web v-html 直渲，MP 编译器映射 rich-text node
-- ★B2 Web-first：source 透传 v-html（MP 端待 rich-text node 映射后续批次）
-- 双端同源码：div → view；无平台 API
+- 语义：受信任的富文本内容渲染（HTML 字符串 / 节点数组）。
+- ★端对齐批次3（2026-09-16）：对齐官方 <rich-text> 全量属性——
+- nodes（内容源，框架亦保留 source 作为可读别名）/ space（连续空格显示方式）/ user-select（文本可选）/ mode（布局兼容模式）。
+- ★双端实现：MP 端原生 <rich-text>（nodes 承接，官方做节点白名单过滤）；
+- Web 端 <view v-html>（浏览器原生解析；space/user-select 以 CSS 等价表达，mode 在 Web 无对等→诚实不伪造）。
+- ★安全边界：nodes 为**受信任内容**（同官方语义——官方对节点/属性做受信任过滤；Web 端 v-html 不做额外净化，
+- 传入不可信 HTML 须先经业务侧消毒，与 Vue v-html 的既有契约一致）。
 
 ## 用法
 
 ```vue
-<p-rich-text :source="'…'" :schema="'html'">
+<p-rich-text :nodes="'…'" :space="'…'" :userSelect="true">
   <p-text>内容</p-text>
 </p-rich-text>
 ```

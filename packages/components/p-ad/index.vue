@@ -10,6 +10,7 @@
       :unit-id="unitId"
       :ad-intervals="adIntervals"
       :ad-type="adType"
+      :ad-theme="adTheme"
       @load="onLoad"
       @error="onError"
       @close="onClose"
@@ -35,6 +36,8 @@ const props = defineProps({
   adIntervals: { type: Number, default: 0 },
   /** 广告类型（对齐 ad-type：banner / video / grid 等） */
   adType: { type: String, default: '' },
+  /** 广告主题（对齐 ad-theme：white / black，2.8.0+） */
+  adTheme: { type: String, default: 'white' },
   /** 占位高度 px（Web 占位容器） */
   height: { type: Number, default: 100 },
   /** Web 占位文案 */

@@ -36,8 +36,8 @@ order: 0
 |---|---|---|
 | [p-avatar](/docs/component/p-avatar) | 4 | 0 |
 | [p-button](/docs/component/p-button) | 25 | 11 |
-| [p-camera](/docs/component/p-camera) | 3 | 3 |
-| [p-canvas](/docs/component/p-canvas) | 4 | 0 |
+| [p-camera](/docs/component/p-camera) | 6 | 5 |
+| [p-canvas](/docs/component/p-canvas) | 6 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 5 | 2 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
@@ -47,13 +47,13 @@ order: 0
 | [p-label](/docs/component/p-label) | 2 | 1 |
 | [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
-| [p-map](/docs/component/p-map) | 9 | 3 |
-| [p-media](/docs/component/p-media) | 9 | 0 |
+| [p-map](/docs/component/p-map) | 31 | 10 |
+| [p-media](/docs/component/p-media) | 50 | 10 |
 | [p-nav-bar](/docs/component/p-nav-bar) | 11 | 1 |
 | [p-picker](/docs/component/p-picker) | 13 | 3 |
 | [p-progress](/docs/component/p-progress) | 11 | 0 |
 | [p-radio](/docs/component/p-radio) | 5 | 2 |
-| [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
+| [p-rich-text](/docs/component/p-rich-text) | 5 | 0 |
 | [p-scale](/docs/component/p-scale) | 3 | 0 |
 | [p-select](/docs/component/p-select) | 6 | 1 |
 | [p-selection](/docs/component/p-selection) | 2 | 1 |
@@ -69,7 +69,7 @@ order: 0
 | 组件 | Props | Events |
 |---|---|---|
 | [p-action-sheet](/docs/component/p-action-sheet) | 3 | 3 |
-| [p-ad](/docs/component/p-ad) | 5 | 3 |
+| [p-ad](/docs/component/p-ad) | 6 | 3 |
 | [p-drawer](/docs/component/p-drawer) | 4 | 1 |
 | [p-keyboard-accessory](/docs/component/p-keyboard-accessory) | 3 | 0 |
 | [p-mask](/docs/component/p-mask) | 6 | 1 |
@@ -84,13 +84,13 @@ order: 0
 | [p-tabbar](/docs/component/p-tabbar) | 2 | 2 |
 | [p-toast](/docs/component/p-toast) | 7 | 1 |
 | [p-toolbar](/docs/component/p-toolbar) | 4 | 1 |
-| [p-webview](/docs/component/p-webview) | 4 | 2 |
+| [p-webview](/docs/component/p-webview) | 4 | 3 |
 
 ## 手势（2）
 
 | 组件 | Props | Events |
 |---|---|---|
-| [p-draggable](/docs/component/p-draggable) | 2 | 2 |
+| [p-draggable](/docs/component/p-draggable) | 16 | 4 |
 | [p-scrollable](/docs/component/p-scrollable) | 5 | 2 |
 
 ## 工程（4）

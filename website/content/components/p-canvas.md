@@ -33,7 +33,9 @@ order: 1004
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `engine` | 渲染引擎：2d / webgl / skia | `String` | `'2d'` | 否 |
+| `engine` | 渲染引擎：2d / webgl / skia（★语义等价官方 <canvas type>；skia 非原生 canvas 类型 → MP 回落 2d） | `String` | `'2d'` | 否 |
+| `canvasId` | 画布唯一标识（★官方 canvas-id：CanvasContext 句柄；缺省按组件实例生成，保证唯一） | `String` | `''` | 否 |
+| `disableScroll` | 画布中移动且有绑定手势事件时禁止页面滚动/下拉刷新（★官方 disable-scroll） | `Boolean` | `false` | 否 |
 | `width` | CSS 宽 px（0=自适应） | `Number` | `300` | 否 |
 | `height` | CSS 高 px（0=自适应） | `Number` | `150` | 否 |
 | `resolution` | 分辨率倍率（>1 高清渲染；canvas 内部分辨率 = CSS × 倍率） | `Number` | `1` | 否 |
@@ -43,7 +45,17 @@ order: 1004
 #### `engine`
 
 - **类型**：`String`　**默认值**：`'2d'`　**必填**：否
-- **说明**：渲染引擎：2d / webgl / skia
+- **说明**：渲染引擎：2d / webgl / skia（★语义等价官方 <canvas type>；skia 非原生 canvas 类型 → MP 回落 2d）
+
+#### `canvasId`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：画布唯一标识（★官方 canvas-id：CanvasContext 句柄；缺省按组件实例生成，保证唯一）
+
+#### `disableScroll`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：画布中移动且有绑定手势事件时禁止页面滚动/下拉刷新（★官方 disable-scroll）
 
 #### `width`
 
@@ -68,14 +80,17 @@ order: 1004
 
 ## 实现要点
 
-- engine 2d/webgl/skia + resolution 分辨率感知
-- ★B2 Web-first：标准 canvas 元素承载 + width/height（devicePixelRatio 缩放后续批次）；
-- 宿主上下文经 slots/ref 透出（帧渲染属能力批次）
+- engine 2d/webgl/skia（语义等价官方 <canvas type>，经 audit SEMANTIC_ALIAS_BY_TAG 归一）+ resolution 分辨率感知。
+- ★端对齐批次3（2026-09-16）：补官方剩余属性 canvas-id / disable-scroll——
+- canvas-id 为画布唯一标识（建立 CanvasContext 的句柄，指定 type 后可省）；disable-scroll 阻止画布手势期间的页面滚动。
+- ★双端实现：MP 端原生 <canvas>（同层渲染；type=engine 决定 2d/webgl 上下文）；
+- Web 端 <canvas> 元素（context 经 engine 映射、canvas-id → DOM id、disable-scroll → touch-action:none）。
+- 共用同一语义属性面，不重复实现绘制逻辑（帧渲染属能力批次 getCanvasContext）。
 
 ## 用法
 
 ```vue
-<p-canvas :engine="'2d'" :width="300" :height="150">
+<p-canvas :engine="'2d'" :canvasId="'…'" :disableScroll="true">
   <p-text>内容</p-text>
 </p-canvas>
 ```

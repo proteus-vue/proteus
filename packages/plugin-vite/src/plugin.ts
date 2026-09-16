@@ -68,6 +68,14 @@ export const MP_ONLY_TAGS = new Set([
   'keyboard-accessory',
   'cover-view',
   'cover-image',
+  // ★端对齐批次3（2026-09-16）：宿主能力组件的 MP 原生标签——其模板用 v-if 双分支
+  //   （MP 原生 / Web 降级），Web 端死分支不渲染但会被 resolveComponent 提升解析 → 声明为自定义元素消除告警。
+  'rich-text',
+  'map',
+  'camera',
+  'canvas',
+  'ad',
+  'web-view',
 ])
 
 export function defaultScopedPlugin(): Plugin {

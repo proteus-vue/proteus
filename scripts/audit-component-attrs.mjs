@@ -1,6 +1,6 @@
 // scripts/audit-component-attrs.mjs —— 组件属性覆盖审计（官方属性级标尺）
 //   官方属性清单（miniprogram-component-attrs.json）vs 我们框架组件的 props → 报覆盖缺口。
-//   用法：node scripts/audit-component-attrs.mjs [--json] [--all]
+//   用法：node scripts/audit-component-attrs.mjs [--json] [--all] [--min N] [--update]
 //   组件映射：官方 <tag> ↔ 框架 p-<tag>（标签名一致时）；别名见 ALIAS。
 import fs from 'node:fs'
 import path from 'node:path'
@@ -12,9 +12,14 @@ const ATTRS = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/generated/minipro
 const COMPONENTS_DIR = path.join(ROOT, 'packages/components')
 const asJson = process.argv.includes('--json')
 const showAll = process.argv.includes('--all')
-// ★棘轮（05-gates-and-ci.md）：--min <covered> 覆盖率或绝对覆盖数低于阈值 → exit 1（只增不减）
+const update = process.argv.includes('--update')
+// ★棘轮（05-gates-and-ci.md）：阈值以 alignment-ratchet.json 为**单一事实源**（只增不减）。
+//   此前 package.json 硬编码 `--min 128` 而 JSON 记 207 → 文档声称的底线未被真正执行（软门禁）；
+//   现改为缺省读 JSON，`--min` 仅在本地试验时显式覆盖，`--update` 回写新水位。
+const RATCHET_PATH = path.join(ROOT, 'docs/generated/alignment-ratchet.json')
+const ratchet = fs.existsSync(RATCHET_PATH) ? JSON.parse(fs.readFileSync(RATCHET_PATH, 'utf8')) : {}
 const minIdx = process.argv.indexOf('--min')
-const minVal = minIdx >= 0 ? Number(process.argv[minIdx + 1]) : null
+const minVal = minIdx >= 0 ? Number(process.argv[minIdx + 1]) : (typeof ratchet.coveredMin === 'number' ? ratchet.coveredMin : null)
 
 /** 官方组件 tag → 框架组件目录名（默认 p-<tag>；别名例外） */
 const ALIAS = {
@@ -78,6 +83,18 @@ const SEMANTIC_ALIAS = {
   'indicator-style': ['indicatorStyle'],
   'mask-style': ['maskStyle'],
 }
+
+/** ★按官方组件限定的语义别名（优先于全局表）——用于「同名但语义不同」的归一，避免污染全局。
+ *   例：官方 <canvas type="2d|webgl"> 指**渲染上下文类型**，框架已归一为 `engine`（含 skia）；
+ *   而全局 `type` 在 button/scroll-view 等是**视觉/渲染模式**，不能一刀切 → 只能按 tag 限定。 */
+const SEMANTIC_ALIAS_BY_TAG = {
+  canvas: { type: ['engine'] },
+  'rich-text': { nodes: ['source'] },
+  // 官方 movable-view 的 `scale` 是**布尔开关**（是否支持双指缩放），而同一组件另有 `scale-min/max/value`
+  //   三个**数值**缩放属性——若沿用裸名 `scale` 作布尔，与数值族混读易错（`scale="1"` 到底是倍数还是开关？）。
+  //   框架归一为 `scaleEnabled`（语义更纯：缩放能力开关），数值族保持官方名。
+  'movable-view': { scale: ['scaleEnabled'] },
+}
 /**
  * ★有意不沿用（G-31 铁律）：官方存在但**不应上升为框架语义**的平台私有形态/历史包袱。
  *   命中者不计入覆盖缺口，但必须在下方给出**理由**（反黑盒：不静默忽略）。
@@ -95,10 +112,10 @@ const INTENTIONAL_SKIP = {
 }
 
 const norm = (s) => s.replace(/[-:]/g, '').toLowerCase() // open-type ↔ openType；bind:xxx
-/** 官方属性名在框架 props 里是否有等价（含语义别名） */
-function hasEquiv(officialName, propSet) {
+/** 官方属性名在框架 props 里是否有等价（含按 tag 限定 + 全局语义别名） */
+function hasEquiv(officialName, propSet, tag) {
   if (propSet.has(norm(officialName))) return true
-  const alts = SEMANTIC_ALIAS[officialName] ?? []
+  const alts = [...(SEMANTIC_ALIAS_BY_TAG[tag]?.[officialName] ?? []), ...(SEMANTIC_ALIAS[officialName] ?? [])]
   return alts.some((a) => propSet.has(norm(a)))
 }
 const rows = []
@@ -117,7 +134,7 @@ for (const [tag, attrs] of Object.entries(ATTRS)) {
   // ★有意不沿用：从缺口统计中剔除（但登记表须有理由，见 INTENTIONAL_SKIP）
   const skipped = INTENTIONAL_SKIP[tag] ?? {}
   const counted = attrOnly.filter(a => !(a.name in skipped))
-  const missing = counted.filter(a => !hasEquiv(a.name, propSet)).map(a => a.name)
+  const missing = counted.filter(a => !hasEquiv(a.name, propSet, tag)).map(a => a.name)
   rows.push({ tag, dir, status: 'ok', total: counted.length, covered: counted.length - missing.length, missing, skipped: Object.keys(skipped) })
 }
 
@@ -139,7 +156,16 @@ for (const r of (showAll ? withComp : withComp.filter(r => r.missing.length))) {
 if (noComp.length) console.log(`\n无对应框架组件（未映射）：${noComp.map(r => r.tag).join(', ')}`)
 
 // ★棘轮门禁：覆盖率不得低于阈值（防已补齐的属性回退）
-if (minVal !== null) {
+if (update) {
+  const next = {
+    ...ratchet,
+    attrCovered: grandCov,
+    attrTotal: grandTotal,
+    coveredMin: grandCov,
+  }
+  fs.writeFileSync(RATCHET_PATH, JSON.stringify(next, null, 1) + '\n')
+  console.log(`\n✍ 棘轮水位已更新：${grandCov}/${grandTotal} → ${path.relative(ROOT, RATCHET_PATH)}`)
+} else if (minVal !== null) {
   const pct = grandCov / grandTotal
   const belowPct = minVal <= 1 && pct < minVal
   const belowAbs = minVal > 1 && grandCov < minVal
@@ -147,5 +173,5 @@ if (minVal !== null) {
     console.error(`\n❌ 属性覆盖未达棘轮阈值：${grandCov}/${grandTotal} = ${(pct * 100).toFixed(0)}%（要求 ${minVal <= 1 ? (minVal * 100) + '%' : minVal}）`)
     process.exit(1)
   }
-  console.log(`\n✅ 属性覆盖达棘轮阈值（${grandCov}/${grandTotal}）`)
+  console.log(`\n✅ 属性覆盖达棘轮阈值（${grandCov}/${grandTotal}，底线 ${minVal}）`)
 }

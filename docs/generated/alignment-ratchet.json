@@ -1,7 +1,7 @@
 {
- "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs --min 校验，勿手改。",
- "attrCovered": 207,
- "attrTotal": 347,
- "coveredMin": 207,
- "note": "2026-09-14 批次2 容器与外壳推进：p-view/p-text/p-icon/p-image/p-page-container/p-scroll-view/p-picker 全部 100% + navigator→p-router-link / navigation-bar→p-nav-bar 语义纠偏（对齐 SSOT）+ worklet 回调不计属性（棘轮 128→207；分母 348→347 因 cover-view 私有属性登记 INTENTIONAL_SKIP）"
+ "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs 读取本文件校验（缺省阈值=coveredMin），勿手改；推进后跑 --update 回写。",
+ "attrCovered": 294,
+ "attrTotal": 325,
+ "coveredMin": 294,
+ "note": "2026-09-16 批次3 宿主能力全部收口（+88 属性，覆盖 206→294）：p-media(video) 47/47 · p-map 29/29 · p-camera 5/5 · p-canvas 3/3 · p-webview 1/1 · p-ad 4/4 · p-rich-text 4/4 · p-draggable(movable-view) 13/13。★同轮标尺精度修复：官方页把**子对象 schema**（map 的 marker/polyline/polygon/circle/control/position、rich-text 的 node/text 字段）与组件属性混在同页不同 h2 区块——此前全页扫描误计入清单（map 61→43、rich-text 8→4，官方属性总数 793→771），制造虚假缺口且诱导把端私有结构固化成框架语义（违反 G-31）。生成器改为只采「通用属性/属性说明/Skyline 特有属性/WebView 特有属性」四类区块。★棘轮阈值改由本文件驱动（此前 package.json 硬编码 --min 128 而本文件记 207 → 文档声称底线从未执行，软门禁）；本文件为单一事实源，补齐后跑 `--update` 上调。上一轮：2026-09-14 批次2 容器与外壳全部 100% + navigator/navigation-bar 语义纠偏"
 }

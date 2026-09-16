@@ -33,20 +33,38 @@ Rich text
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
+| `nodes` | — | `[String, Array] as unknown as () => string \| RichTextNode[]` | `''` | No |
+| `space` | — | `String` | `''` | No |
+| `userSelect` | — | `Boolean` | `false` | No |
+| `mode` | — | `String` | `'default'` | No |
 | `source` | HTML/markdown source | `String` | `''` | No |
-| `schema` | Render schema (HTML/MARKDOWN - B2 pass-through, to be strictly enforced in later batches) | `String` | `'html'` | No |
 
 ### Prop details
+
+#### `nodes`
+
+- **Type**: `[String, Array] as unknown as () => string \| RichTextNode[]`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `space`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `userSelect`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'default'`　**Required**: No
+- **Doc**: —
 
 #### `source`
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: HTML/markdown source
-
-#### `schema`
-
-- **Type**: `String`　**Default**: `'html'`　**Required**: No
-- **Doc**: Render schema (HTML/MARKDOWN - B2 pass-through, to be strictly enforced in later batches)
 
 ## Implementation notes
 
@@ -57,7 +75,7 @@ Rich text
 ## Usage
 
 ```vue
-<p-rich-text :source="…">
+<p-rich-text :nodes="…">
   <p-text>content</p-text>
 </p-rich-text>
 ```

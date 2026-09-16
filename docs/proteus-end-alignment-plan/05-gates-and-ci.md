@@ -69,22 +69,27 @@ const cases = [
 属性覆盖率**只许升不许降**——记录当前水位，CI 校验不低于水位：
 
 ```jsonc
-// docs/generated/alignment-ratchet.json
+// docs/generated/alignment-ratchet.json —— ★单一事实源（audit 缺省读它；--update 回写）
 {
-  "attrCovered": 128,
-  "attrTotal": 348,
-  "coveredMin": 128,              // CI：covered >= coveredMin，否则红
-  "note": "只增不减；补齐后上调 coveredMin"
+  "attrCovered": 294,
+  "attrTotal": 325,
+  "coveredMin": 294,              // CI：covered >= coveredMin，否则红
+  "note": "只增不减；补齐后 `node scripts/audit-component-attrs.mjs --update` 上调水位"
 }
 ```
 
 **理由**：本项目已踩过"手写矩阵自证同义反复"的坑（矩阵不写就永不红）；棘轮机制确保**已补齐的不会回退**。
 
+> ★**软门禁修正（2026-09-16）**：此前 `package.json` 把阈值**硬编码**为 `--min 128`，而 JSON 记 207 ——
+> 文档声称的底线**从未真正执行**（覆盖率掉到 128 才会红）。现改为 audit **缺省读 JSON 的 coveredMin**，
+> `--min` 仅用于本地试验性覆盖，`--update` 负责在补齐后上调水位。**门禁阈值必须有单一事实源**。
+
 ## 3. CI 接入（`package.json` scripts）
 
 ```jsonc
 {
-  "check:mp-attrs": "node scripts/gen-mp-component-attrs.mjs --check && node scripts/audit-component-attrs.mjs --min 128",
+  // ★标尺漂移检测 + 棘轮（阈值来自 alignment-ratchet.json，不在命令行硬编码）
+  "check:mp-attrs": "node scripts/gen-mp-component-attrs.mjs --check && node scripts/audit-component-attrs.mjs",
   "check:mp-spec": "node scripts/gen-mp-spec.mjs --check",  // 已有
   "test:e2e:showcase": "pnpm run build:showcase:web && vitest run --no-file-parallelism tests/e2e-showcase-render.test.ts"
 }

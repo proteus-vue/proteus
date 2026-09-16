@@ -36,6 +36,7 @@ Ad slot
 | `unitId` | Ad unit id (aligned with unit-id) | `String` | `''` | No |
 | `adIntervals` | Auto-refresh interval in seconds (min 30) | `Number` | `0` | No |
 | `adType` | Ad type (aligned with ad-type: banner / video / grid) | `String` | `''` | No |
+| `adTheme` | — | `String` | `'white'` | No |
 | `height` | Placeholder height in px (web) | `Number` | `100` | No |
 | `placeholderText` | Web placeholder text | `String` | `'广告位'` | No |
 
@@ -55,6 +56,11 @@ Ad slot
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
 - **Doc**: Ad type (aligned with ad-type: banner / video / grid)
+
+#### `adTheme`
+
+- **Type**: `String`　**Default**: `'white'`　**Required**: No
+- **Doc**: —
 
 #### `height`
 
