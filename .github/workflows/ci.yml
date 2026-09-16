@@ -60,7 +60,9 @@ jobs:
           npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform web
 
       - name: 组件库审计门禁（B8：no-platform-api / no-sync-storage / manifest-complete）
-        run: npx tsx packages/cli/src/index.ts components:audit src/components
+        # ★组件库拆包（2026-09-14）：组件由 src/components 迁至 packages/components（第 41 包）——
+        #   此处路径必须同步，否则审计在空目录上运行（0 组件 + manifest-complete 违规）→ 假红。
+        run: npx tsx packages/cli/src/index.ts components:audit packages/components
 
       - name: 官方能力覆盖门禁（★权威标尺：官方清单 spec 驱动 + 棘轮——未归类/覆盖回退即红）
         run: |
