@@ -70,7 +70,10 @@
       "@proteus-vue/component-ir": ["packages/component-ir/src/index.ts"],
       "@proteus-vue/render-backend": ["packages/render-backend/src/index.ts"],
       "@proteus-vue/style-safety": ["packages/style-safety/src/index.ts"],
-      "@proteus-vue/types": ["packages/types/src/index.ts"]
+      "@proteus-vue/types": ["packages/types/src/index.ts"],
+      // ★组件库拆包（2026-09-14）：@proteus-vue/components 为真实包——补 paths 供仓库内类型检查解析包根
+      "@proteus-vue/components": ["packages/components/index.ts"],
+      "@proteus-vue/components/*": ["packages/components/*"]
     }
   },
   "include": [
@@ -90,6 +93,12 @@
     "packages/web/src/**/*.d.ts",
     "packages/hmr/src/**/*.ts",
     "packages/devtools/src/**/*.ts",
+    // ★组件库拆包（2026-09-14）：组件源码由 src/components 迁至 packages/components——
+    //   include 必须同步，否则 global-components.d.ts（GlobalComponents 增强）脱离类型程序 →
+    //   tests/types/components-template.types.vue 的 @vue-expect-error 变「未使用」→ 根 vue-tsc 红。
+    "packages/components/**/*.ts",
+    "packages/components/**/*.d.ts",
+    "packages/components/**/*.vue",
     "vite.config.ts",
     "proteus.config.ts",
     "scripts/**/*.ts",

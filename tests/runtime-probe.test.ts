@@ -44,7 +44,7 @@ describe('★框架探针注册表（runtime/probe）', () => {
   it('注册表键稳定（编译器内联注入与消费端共用同一键）', () => {
     expect(PROBE_GLOBAL_KEY).toBe('__PROTEUS_PROBES__')
     recordProbe({ pid: 'z', tag: 'p', rect: null, ts: 1 })
-    expect((globalThis as Record<string, Record<string, unknown>>)[PROBE_GLOBAL_KEY].z.pid).toBe('z')
+    expect((globalThis as unknown as Record<string, Record<string, Record<string, unknown>>>)[PROBE_GLOBAL_KEY].z.pid).toBe('z')
   })
 
   it('同 pid 覆盖（测最新）', () => {

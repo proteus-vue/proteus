@@ -196,7 +196,7 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
           .map((e) => getComputedStyle(e).opacity),
         // shape=square：应为方角**开关**（52×32，与 round 同尺寸，仅圆角不同）——
         // 不再沿用官方 type=checkbox 的复选框形态（平台包袱，G-31 铁律）
-        squareSize: list.filter((e) => e.classList.contains('p-switch--square')).map((e) => [e.offsetWidth, e.offsetHeight]),
+        squareSize: list.filter((e) => e.classList.contains('p-switch--square')).map((e) => [(e as HTMLElement).offsetWidth, (e as HTMLElement).offsetHeight]),
         roundRadius: list.filter((e) => e.classList.contains('p-switch--round')).map((e) => getComputedStyle(e).borderRadius),
       }
     })
