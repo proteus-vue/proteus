@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/web",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.1",
   "description": "Proteus 小程序语义 Web 模拟层（14-mp-first-semantics）：wx API 模拟（wx.request/showToast/…）+ 聚合安装（内置组件 @proteus-vue/built-in-components + wx API）——以小程序为标准，Web 端完全对齐表现",
   "type": "module",
   "license": "Apache-2.0",
@@ -22,7 +22,7 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:vue --external:@proteus-vue/built-in-components"
   },
   "dependencies": {
-    "@proteus-vue/built-in-components": "0.1.0"
+    "@proteus-vue/built-in-components": "0.1.1-beta.1"
   },
   "peerDependencies": {
     "vue": "^3.4"
