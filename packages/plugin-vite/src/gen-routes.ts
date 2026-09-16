@@ -20,6 +20,7 @@ import { buildRouteTree } from '@proteus-vue/router/tree'
 import { resolveRouterConfig } from '@proteus-vue/types'
 import type { ProteusConfig } from './config'
 import { effectiveVariants, splitVariant } from '@proteus-vue/compiler'
+import { resolveComponentsRoot } from './resolve-components'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -28,11 +29,10 @@ export interface GenRoutesOptions {
   /** --trace-router：输出每条路由的生成决策（来源登记 + 父路由推导依据） */
   trace?: (msg: string) => void
   /**
-   * ★框架内置组件目录（组件库未拆包，决策 #115）：显式传入绝对路径（如 monorepo 根 src/components）；
-   * 缺省相对 root 的 src/components（create-proteus 模板工程用）
-   * ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
+   * ★语义组件库目录（@proteus-vue/components，2026-09-14 拆包）：**通常无需传入**——
+   * 自动从项目 node_modules 解析包根（`resolveComponentsRoot`）；本选项仅用于包未安装时的显式覆盖（测试）。
    */
-  frameworkComponentsDir?: string
+  componentsDir?: string
   /**
    * ★module-plan B5：模块契约（@proteus-vue/module 扫描产物，调用方 async 扫描后传入）：
    * 分包依赖（dependencies）与 preloadRule 生成——模块 chunk/name 与 config.subPackages 的 name/root 基名匹配
@@ -66,12 +66,16 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   // 应用根目录（页面/入口所在目录，从 pagesDir 推导：examples/pages → examples）
   const APP_DIR = path.resolve(ROOT, path.dirname(config.pagesDir))
   const OUT_DIR = path.join(ROOT, 'dist', 'mp-weixin')
-  // ★框架内置组件目录（@proteus-vue/components 未拆包时的定位方式，决策 #115）
-  // ★#495 修复：config.frameworkComponentsDir（相对 root）此前从未被 CLI 传入 → FW_COMPONENTS 落空
-  //  （examples 的组件目录是仓库根 ../src/components）→ 页面 usingComponents 与组件 component.json 双双缺失 →
-  //  WXML 未注册组件整块不渲染（柔性布局等全部 p-* 组件在 MP 失效，Web 正常）。相对路径基于 ROOT 归一。
-  const fwDir = options.frameworkComponentsDir
-  const FW_COMPONENTS = fwDir && path.isAbsolute(fwDir) ? fwDir : path.resolve(ROOT, fwDir ?? path.join('src', 'components'))
+  // ★语义组件库目录（@proteus-vue/components，2026-09-14 拆包）——从项目 node_modules 解析包根。
+  //  此前是「未拆包 alias 指仓库 src/components」（决策 #115）；拆包后包内即 .vue 源码，产物路径 proteus/<tag>/index 不变。
+  //  options.componentsDir 仅作包未安装时的显式覆盖（测试/特殊布局）。
+  const FW_COMPONENTS = options.componentsDir ? path.resolve(ROOT, options.componentsDir) : resolveComponentsRoot(ROOT)
+  if (!fs.existsSync(FW_COMPONENTS)) {
+    console.warn(
+      `[gen-routes] 未找到语义组件库 @proteus-vue/components（解析为 ${FW_COMPONENTS}）——` +
+        `p-* 组件将不被注册（页面 usingComponents 缺失 → WXML 整块不渲染）。请确认已安装依赖（npm i / pnpm i）。`,
+    )
+  }
   // ★module-plan B5：模块契约（分包依赖 / preloadRule）——模块名→chunk 映射 + 分包→模块映射
   const moduleChunks = new Map<string, string>() // 模块名 → chunk（缺省 = 模块名）
   for (const mc of options.moduleConfigs ?? []) moduleChunks.set(mc.name, mc.chunk ?? mc.name)

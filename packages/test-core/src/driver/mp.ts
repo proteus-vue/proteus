@@ -220,6 +220,23 @@ export function createMpDriver(mini: AutomatorMiniLike, debuggerHandle?: MpDebug
       if (!debuggerHandle?.refresh) needDebugger('refresh')
       await debuggerHandle!.refresh!()
     },
+    // ★★框架元素探针（2026-09-14）：读组件自测量注册表——**不依赖工具的元素查询**
+    //   （glass-easel 组件内部隔离、Skyline 无 selectAllComponents → 工具查不到内部节点）。
+    //   组件在 ready() 自测量并写 globalThis.__PROTEUS_PROBES__；此处经 evaluate 读同一 JS 上下文。
+    async probes(pid?: string) {
+      const body = pid
+        ? `const r = globalThis.__PROTEUS_PROBES__ || {}; return JSON.stringify(r[${JSON.stringify(pid)}] ? [r[${JSON.stringify(pid)}]] : [])`
+        : `const r = globalThis.__PROTEUS_PROBES__ || {}; return JSON.stringify(Object.keys(r).map(function (k) { return r[k] }))`
+      const raw = await mini.evaluate(new Function(`return () => { ${body} }`)())
+      try {
+        return JSON.parse(String(raw)) as import('./types').ProbeRecord[]
+      } catch {
+        return []
+      }
+    },
+    async enableProbes(): Promise<void> {
+      await mini.evaluate(new Function(`return () => { globalThis.__PROTEUS_PROBE_ALL__ = true; return true }`)())
+    },
   }
 }
 

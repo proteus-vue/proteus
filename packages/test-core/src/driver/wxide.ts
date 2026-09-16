@@ -15,14 +15,19 @@ export interface WxideMiniOptions {
   cliPath?: string
   /** 项目产物绝对路径（dist/mp-weixin） */
   project: string
-  /** 授权 clientName（缺省 zed——与 wechatide auth 一致） */
+  /** 授权 clientName（缺省读 PROTEUS_WXIDE_CLIENT → 'zed'——与 wechatide auth 一致） */
   client?: string
+}
+
+/** ★客户端名：显式 opts.client → 环境变量 PROTEUS_WXIDE_CLIENT → 'zed'（授权弹窗须与之一致） */
+function resolveClient(opts: WxideMiniOptions): string {
+  return opts.client || process.env.PROTEUS_WXIDE_CLIENT || 'zed'
 }
 
 /** ★统一 wechatide 调用：spawn + 解析 JSON + 提取业务值；失败抛带工具名的可行动错误 */
 export function callWxide(tool: string, args: Record<string, string | number | undefined>, opts: WxideMiniOptions): any {
   const bin = opts.cliPath || 'wechatide'
-  const argv = ['-c', opts.client || 'zed', tool, '--project', opts.project]
+  const argv = ['-c', resolveClient(opts), tool, '--project', opts.project]
   for (const [k, v] of Object.entries(args)) {
     if (v == null) continue
     // ★wechatide 参数必须带 '--' 前缀（'--fn-source' 已带则保留）；值转字符串

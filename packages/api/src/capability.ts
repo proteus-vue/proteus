@@ -5196,13 +5196,32 @@ function wxBridge(wx: WxLike): CapabilityBridge {
     },
     // ★组件实例 API 对齐（2026-09-12）：C58 元素查询（wx.createSelectorQuery）
     createElementQuery: (id) => {
+      // ★★框架元素探针回落（2026-09-14）：页面级 SelectorQuery **查不到自定义组件内部节点**
+      //   （glass-easel 隔离；Skyline 无 selectAllComponents）。组件自测量后写全局探针注册表
+      //   （`__PROTEUS_PROBES__`，见 runtime/probe + 编译器注入）→ 工具查不到时回落读取，
+      //   使 useElement（框架 API）也能读组件内部几何（而非只能绕过 API 直查 DOM）。
+      const probeFallback = (sel?: string): Record<string, number> | null => {
+        try {
+          const g = (globalThis ?? {}) as Record<string, unknown>
+          const reg = g.__PROTEUS_PROBES__ as Record<string, { rect?: Record<string, number> | null }> | undefined
+          if (!reg) return null
+          const token = (sel ?? '').replace(/^[#.]/, '')
+          const hit = reg[token]
+          return hit && hit.rect ? hit.rect : null
+        } catch {
+          return null
+        }
+      }
       const norm = (sel?: string): string => {
         const s = sel ?? id ?? ''
         return s.startsWith('#') ? s : s ? '#' + s : ''
       }
-      const execOne = <T,>(build: (q: WxSelectorQueryLike) => void): Promise<CapResult<T>> =>
+      const execOne = <T,>(build: (q: WxSelectorQueryLike) => void, sel?: string): Promise<CapResult<T>> =>
         new Promise<CapResult<T>>((resolve) => {
-          if (typeof wx.createSelectorQuery !== 'function') return resolve(capErr<T>('element.unsupported', 'wx.createSelectorQuery 缺失'))
+          if (typeof wx.createSelectorQuery !== 'function') {
+            const fb = probeFallback(sel)
+            return fb ? resolve(capOk(fb as T)) : resolve(capErr<T>('element.unsupported', 'wx.createSelectorQuery 缺失'))
+          }
           const q = wx.createSelectorQuery()
           try {
             build(q)
@@ -5212,7 +5231,12 @@ function wxBridge(wx: WxLike): CapabilityBridge {
           if (typeof q.exec !== 'function') return resolve(capErr<T>('element.unsupported', 'SelectorQuery.exec 缺失'))
           q.exec((res: unknown) => {
             const first = Array.isArray(res) ? res[0] : res
-            if (first == null) return resolve(capErr<T>('element.not-found', '未查询到元素'))
+            if (first == null) {
+              // ★工具查不到（组件内部节点）→ 回落探针注册表
+              const fb = probeFallback(sel)
+              if (fb) return resolve(capOk(fb as T))
+              return resolve(capErr<T>('element.not-found', '未查询到元素'))
+            }
             resolve(capOk(first as T))
           })
         })
@@ -5235,20 +5259,20 @@ function wxBridge(wx: WxLike): CapabilityBridge {
         boundingClientRect: (selector) => execOne<ElementRect>((q) => {
           const s = q.select?.(norm(selector))
           s?.boundingClientRect?.()
-        }),
+        }, selector),
         scrollOffset: (selector) => execOne<ElementScrollOffset>((q) => {
           const s = q.select?.(norm(selector))
           s?.scrollOffset?.()
-        }),
+        }, selector),
         fields: (options, selector) => execOne<ElementFieldsResult>((q) => {
           const s = q.select?.(norm(selector))
           s?.fields?.({ ...options })
-        }),
+        }, selector),
         size: (selector) =>
           execOne<ElementRect>((q) => {
             const s = q.select?.(norm(selector))
             s?.boundingClientRect?.()
-          }).then((r) => (r.ok ? capOk({ width: r.data.width ?? 0, height: r.data.height ?? 0 }) : (r as unknown as CapResult<{ width: number; height: number }>))),
+          }, selector).then((r) => (r.ok ? capOk({ width: r.data.width ?? 0, height: r.data.height ?? 0 }) : (r as unknown as CapResult<{ width: number; height: number }>))),
         batch: (selectors) => execMany<ElementRect>(selectors, (q, sel) => q.select?.(norm(sel))?.boundingClientRect?.()),
       }
     },

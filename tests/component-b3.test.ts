@@ -9,12 +9,12 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 
-const COMPONENTS_DIR = path.resolve('src/components')
-const FRAMEWORK_COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function compileComponent(tag: string) {
   const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-  return compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+  return compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
 }
 
 describe('p-scroll-view（滚动容器，薄包装）', () => {
@@ -27,8 +27,10 @@ describe('p-scroll-view（滚动容器，薄包装）', () => {
     expect(wxml).toContain('bind:scrolltolower="onScrollToLower"')
     expect(wxml).toContain('bind:refresherrefresh="onRefresherRefresh"')
     expect(wxml).toContain('<slot')
-    expect(js).toContain("this.triggerEvent('scroll', e)")
-    expect(js).toContain("this.triggerEvent('scrolltolower', e)")
+    // ★载荷归一（2026-09-14 真机 scroll 数字不变修复）：MP 原生 e={detail:{scrollTop}} → 取 e.detail
+    //   再 emit（triggerEvent 会再包 detail）——若直接 emit(e) 则父级 e.detail.scrollTop 恒 undefined。
+    expect(js).toContain("this.triggerEvent('scroll', this.normalize(e))")
+    expect(js).toContain("this.triggerEvent('scrolltolower', this.normalize(e))")
   })
 })
 
@@ -95,7 +97,7 @@ describe('virtual-list 兼容别名（转发 p-list-view）', () => {
       setDataBridge: { batchWindow: 16, perComponent: true },
       style: { px2rpx: true, rpxRatio: 2 },
     }
-    runGenRoutes({ config, root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     // 页面 → virtual-list；virtual-list 组件.json → p-list-view（嵌套解析）
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents['virtual-list']).toBe('/proteus/virtual-list/index')
@@ -129,7 +131,7 @@ describe('p-list-view / p-scroll-view 端到端（页面 usingComponents 自动�
       setDataBridge: { batchWindow: 16, perComponent: true },
       style: { px2rpx: true, rpxRatio: 2 },
     }
-    runGenRoutes({ config, root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents['p-scroll-view']).toBe('/proteus/p-scroll-view/index')
     expect(pageJson.usingComponents['p-list-view']).toBe('/proteus/p-list-view/index')

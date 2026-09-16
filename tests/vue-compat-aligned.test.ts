@@ -132,7 +132,7 @@ import { withDefaults } from 'vue'
 const p = withDefaults(defineProps<{ a: number; b?: string }>(), { b: 'hi' })
 </script>
 <template><view>{{ a }}{{ b }}</view></template>`,
-      { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true },
+      { filename: 'packages/components/p-probe/index.vue', ...opts, isComponent: true },
     )
     // 宏剥离：无裸 withDefaults 调用、无 const p 落 data
     expect((r as any).js).not.toMatch(/(?<![.\w])withDefaults\s*\(/)

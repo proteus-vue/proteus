@@ -9,7 +9,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { auditComponents } from '../packages/cli/src/component-audit'
 import { TAG_SEMANTIC_MAP, toComponentIR, SEMANTIC_ENUM } from '@proteus-vue/component-ir'
 
-const COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
 
 /** G-32 B2/B4 新落地组件（29 个——布局 6 + UI 基础 4 + Shell 7 + UI 视图 5 + UI 表单 5 + Gesture 2） */
 const NEW_TAGS = [
@@ -97,7 +97,7 @@ describe('G-32 B2/B4 组件落地（29 新组件：布局 6 + UI 基础 4 + Shel
   it('MP 编译：29 组件 compileVueSfc 全部产出（isComponent 模式）', () => {
     for (const tag of NEW_TAGS) {
       const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-      const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+      const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
       expect(wxml.length, `${tag} wxml 为空`).toBeGreaterThan(0)
       expect(js.length, `${tag} js 为空`).toBeGreaterThan(0)
       expect(wxss.length, `${tag} wxss 为空`).toBeGreaterThan(0)
@@ -107,12 +107,12 @@ describe('G-32 B2/B4 组件落地（29 新组件：布局 6 + UI 基础 4 + Shel
   it('代表性组件 MP 产物形态（wxml 结构）', () => {
     const icon = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-icon', 'index.vue'), 'utf-8'), {
       isComponent: true,
-      filename: 'src/components/p-icon/index.vue',
+      filename: 'packages/components/p-icon/index.vue',
     })
     expect(icon.wxml).toContain('p-icon')
     const sw = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-switch', 'index.vue'), 'utf-8'), {
       isComponent: true,
-      filename: 'src/components/p-switch/index.vue',
+      filename: 'packages/components/p-switch/index.vue',
     })
     // ★2026-09-13 p-switch 设计定案（用户评审 + G-31）：**自绘**——
     //   官方 <switch type="switch|checkbox"> 是平台历史包袱（checkbox 形态与 p-checkbox 重复），
@@ -123,7 +123,7 @@ describe('G-32 B2/B4 组件落地（29 新组件：布局 6 + UI 基础 4 + Shel
     expect(sw.wxml, 'change 事件契约').toContain('bindtap="onToggle"')
     const tabbar = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-tabbar', 'index.vue'), 'utf-8'), {
       isComponent: true,
-      filename: 'src/components/p-tabbar/index.vue',
+      filename: 'packages/components/p-tabbar/index.vue',
     })
     expect(tabbar.wxml).toContain('wx:for')
   })

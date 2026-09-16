@@ -2,7 +2,7 @@
 // ★官方属性级标尺门禁（2026-09-13）：官方 <button>/<input> 等组件的属性 vs 框架 props 覆盖。
 //   背景：此前覆盖度只到「组件名级」（有 p-button 就算覆盖），属性级缺口不可见
 //   （p-button 官方 22 属性我们只声明 2 个 → 真机用 size/type/open-type 全部失效）。
-//   SSOT：docs/generated/miniprogram-component-attrs.json（官方文档抓取）+ src/components/*/index.vue。
+//   SSOT：docs/generated/miniprogram-component-attrs.json（官方文档抓取）+ packages/components/*/index.vue。
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
@@ -24,7 +24,7 @@ const ALIAS: Record<string, string[]> = {
 
 const norm = (s: string) => s.replace(/[-:]/g, '').toLowerCase()
 function propsOf(dir: string): Set<string> {
-  const src = readFileSync(path.join(ROOT, 'src/components', dir, 'index.vue'), 'utf8')
+  const src = readFileSync(path.join(ROOT, 'packages/components', dir, 'index.vue'), 'utf8')
   const m = src.match(/defineProps\(\{([\s\S]*?)\n\}\)/)
   const out = new Set<string>()
   if (m) for (const km of m[1].matchAll(/^\s{2}([a-zA-Z][\w]*)\s*:/gm)) out.add(norm(km[1]))

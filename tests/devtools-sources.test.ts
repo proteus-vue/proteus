@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
 import { LifecycleOrchestrator } from '../packages/runtime/src/lifecycle'
 import type { LifecycleContext } from '../packages/runtime/src/lifecycle'
-import { componentRender, setTraceBus, setObservabilityEnabled } from '../src/components/runtime/observability'
+import { componentRender, setTraceBus, setObservabilityEnabled } from '../packages/components/runtime/observability'
 
 function makeCtx(): LifecycleContext {
   return { launchType: 'cold', network: 'wifi', platform: 'web', isMinimalMode: false }

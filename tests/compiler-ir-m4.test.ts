@@ -13,7 +13,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 const opts = { px2rpx: true, rpxRatio: 2 }
 
 const REPO_ROOT = path.resolve('.')
-const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('src/components')]
+const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('packages/components')]
 
 function walkVue(dir: string, acc: string[] = []): string[] {
   for (const f of fs.readdirSync(dir)) {
@@ -246,7 +246,7 @@ describe('★#505 M4 评审补丁 P1：ScriptIR 声明 × 真实文件自洽门�
     let checked = 0
     for (const file of FILES) {
       const rel = path.relative(REPO_ROOT, file)
-      const isComponent = rel.includes('src/components')
+      const isComponent = rel.includes('packages/components')
       const r = compileVueSfc(fs.readFileSync(file, 'utf-8'), { filename: file, isComponent })
       const s = r.ir?.script
       if (!s) {

@@ -144,6 +144,7 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
   const scriptResult = transformScriptToPage(setup, styleOpts, {
     file: options.filename,
     isComponent: options.isComponent,
+    scopeId,
     vModelBindings: tplResult.vModelBindings,
     usesNavigate: tplResult.usesNavigate,
     selfHandlers: tplResult.selfHandlers,

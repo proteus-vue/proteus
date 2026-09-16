@@ -7,14 +7,14 @@ import { describe, it, expect, afterAll } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { compileVueSfc, transformScriptToPage } from '@proteus-vue/compiler'
-import { getVirtualWindow } from '../src/components/runtime/virtual-window'
-import { capabilityWarnOnce, capabilityWarn } from '../src/components/runtime/capability'
+import { getVirtualWindow } from '../packages/components/runtime/virtual-window'
+import { capabilityWarnOnce, capabilityWarn } from '../packages/components/runtime/capability'
 
-const COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
 
 function compileComponent(tag: string) {
   const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-  return compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+  return compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
 }
 
 describe('getVirtualWindow 虚拟窗口数学（万级数据 → 恒定行数）', () => {

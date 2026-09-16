@@ -74,8 +74,7 @@ const config: ProteusConfig = {
   globalStyle: 'styles/tokens.css',
   // 包体积预算：官方演示主包 ≤1.2MB（微信上限 2MB）
   budget: { mainPackageKB: 1200, strict: false },
-  // ★框架内置组件目录（monorepo 根 src/components；相对 root 解析）
-  frameworkComponentsDir: '../src/components',
+  // ★组件库已拆包（2026-09-14）：@proteus-vue/components 由编译器自 node_modules 解析，无需配置
   // Web 端工程专属插件（框架内建 vue + route-blocks，此处补 defaultScoped）
   vite: async () => {
     const { defaultScopedPlugin } = await import('@proteus-vue/plugin-vite')
@@ -83,7 +82,7 @@ const config: ProteusConfig = {
       plugins: [defaultScopedPlugin()],
       resolve: {
         alias: [
-          { find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') },
+          // ★组件库已拆包（2026-09-14）：@proteus-vue/components 走 workspace 软链解析，无需 alias
           // ★框架组件（src/components）经 adapter L2 抽象消费 @proteus-vue/shared——根 node_modules 未 hoist
           { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },
           { find: '@proteus-vue/glass', replacement: path.join(__dirname, '../packages/glass/src/index.ts') },

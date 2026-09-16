@@ -1,16 +1,24 @@
 # 04 · 分批执行计划
 
-## 0. 当前基线（2026-09-13 · 批次 1 表单控件全部收口）
+## 0. 当前基线（2026-09-14 · 批次 2 容器与外壳全部收口）
 
 ```
-属性覆盖：128/348 = 37%（棘轮底线 128）
-p-button 21/21 ✅（100%，范式参考实现）   p-input 12/27 🔶
+属性覆盖：207/347 = 60%（棘轮底线 207）
+p-button 21/21 ✅（100%，范式参考实现）   p-input 12/26 🔶
 p-switch 3/3 ✅（**自绘 + shape 替代官方 type 包袱**）
 p-slider 10/10 ✅   p-progress 9/9 ✅
-p-checkbox 4/4 ✅  p-radio 4/4 ✅  p-picker 3/3 ✅  p-label 1/1 ✅
+p-checkbox 4/4 ✅  p-radio 4/4 ✅  p-picker 6/6 ✅  p-label 1/1 ✅
 p-textarea 21/21 ✅（原批次内最大缺口）
-★批次 1（高频表单）**全部 ✅**；下一批 = 批次 2（容器与外壳）
+★批次 1（高频表单）**全部 ✅**
+★批次 2（容器与外壳）**全部 ✅**：p-view 4/4 · p-text 7/7 · p-icon 3/3 · p-image 7/7（含 cover-image）
+  · p-page-container 9/9 · p-scroll-view 40/40 · p-router-link 13/13（navigator 语义纠偏）
+  · p-nav-bar 6/6（navigation-bar 语义纠偏）；下一批 = 批次 3（宿主能力）
 ```
+
+> ★**标尺语义纠偏（2026-09-14）**：官方 `<navigator>`（声明式**导航链接**）此前被错映射到 `p-nav`（导航**栏**）——
+> 已按 SSOT `packages/component-ir/src/audit.ts` 纠正为 `engineering.router-link` = `p-router-link`（E18）；
+> 官方 `<navigation-bar>`（导航条）→ `shell.nav` = `p-nav-bar`。同时 `worklet:*` 回调不再计入属性缺口。
+
 
 ## 1. 批次划分（按重要性/使用频率）
 
@@ -28,16 +36,17 @@ p-textarea 21/21 ✅（原批次内最大缺口）
 
 **理由**：表单是最常用的一组，且属性数中等（易一次做对）。
 
-### 批次 2 · 容器与外壳
-| 组件 | 官方属性 | 当前 |
-|---|---|---|
-| `p-scroll-view` | 44 | 6 |
-| `p-view` | 4 | 0 |
-| `p-page-container` | 9 | 4 |
-| `p-nav`（navigator） | 13 | 0 |
-| `p-image` | 7 | 3 |
-| `p-text` | 7 | 1 |
-| `p-icon` | 3 | 2 |
+### 批次 2 · 容器与外壳（★已完成）
+| 组件 | 官方属性 | 当前 | 目标 |
+|---|---|---|---|
+| `p-scroll-view` | 40 | 40 | **40/40 ✅** |
+| `p-view` | 4 | 4 | **4/4 ✅**（含 cover-view 私有属性登记 INTENTIONAL_SKIP） |
+| `p-page-container` | 9 | 9 | **9/9 ✅** |
+| `p-router-link`（navigator） | 13 | 13 | **13/13 ✅**（语义纠偏：navigator 是链接，SSOT → engineering.router-link） |
+| `p-nav-bar`（navigation-bar） | 6 | 6 | **6/6 ✅**（语义纠偏：navigation-bar → shell.nav） |
+| `p-image` | 7 | 7 | **7/7 ✅**（含 cover-image 的 referrer-policy） |
+| `p-text` | 7 | 7 | **7/7 ✅** |
+| `p-icon` | 3 | 3 | **3/3 ✅** |
 
 ### 批次 3 · 宿主能力（含降级声明）
 | 组件 | 官方属性 | 当前 | 要点 |
@@ -140,6 +149,11 @@ p-textarea 21/21 ✅（原批次内最大缺口）
 | T20 | **真机 picker 问题先折腾模拟器自动化** | 元素选择器/坐标 tap/touch 序列在 p-* 组件与离屏窗口下**全部无效**，耗时极长；而问题本来一眼可见 | ① 先 `get_simulator_console --command 'grep -n .'` 读**真机报错**；② 形态/视觉问题**直接要/看两端截图**，不用自动化复现人眼一秒能看清的东西 |
 | T21 | **擅自重构「已对齐」的实现**（如把 weui 对齐的 WebPicker 改成自认为的原生形态） | 改坏已正确的实现；且判断依据只是**自己一张旧版/非标准截图或直觉**，非权威规范 | **权威标准（weui 规格 / 官方示例 / 用户认可的实现）> 我的直觉**；用户说「差得很远」时**先确认哪一端是基准**；已对齐的实现要改**先对照规范或先问** |
 | T22 | **把 weui/官方形态当「教条」无条件照搬**（含陈旧/非现代设计） | 固化过时形态（如原生 picker「取消/确定」顶栏），与两端一致的现代体验相悖 | **weui 是参考不是教条**：吸收**正确的（现代）**设计（如半屏弹层 × + 居中标题 + 灰 indicator + 底部主按钮），**陈旧/非现代的设计不必照搬**；判定依据是**「设计是否现代/正确」，不是「是否出自 weui」**（见 `docs/weui-spec-reference.md` §0，与 G-31 一致） |
+| T23 | **组件根写原始 HTML 标签**（`<div>`/`<span>`/`<img>`） | Web 端保持原生元素 → **Web 模拟层不介入**（hover 反馈/长按菜单/scroll 事件全部静默失效）；MP 端正常 | 组件模板用**小程序标签**（`<view>`/`<text>`/`<image>`）——Web 插件改写为 `proteus-*` 复用模拟层（`docs/skyline-pitfalls.md` S50） |
+| T24 | **组件 emit 直接透传 MP 原生事件对象** | `triggerEvent` 再包一层 detail → 父级 `e.detail.scrollTop` 恒 undefined（滚动数字不变化） | emit **裸载荷**：`emit('x', e?.detail ?? e)`；父级统一读 `e.detail.x`（S51） |
+| T25 | **`<text>` 上写尺寸/flex/transform** | Skyline `<text>` 是行内文本节点，盒模型/transform 全失效（图标不显示、旋转中心偏） | 「盒 + 字形」用 `<view>` 盒承载（`transform-origin:50% 50%`），字形放内层 `<text>`（S52） |
+| T26 | **URL-encoded SVG data-URI 给 `<image>`** | Skyline 只完整渲染 **base64** SVG → URL-encoded 落**灰色方块** | data-URI 一律 `data:image/svg+xml;base64,<b64>`（S53） |
+| T27 | **父级手写 `@update:show`** | 编译器原样输出 `bind:update:show`（双冒号）与子组件单段 `update-show` **永不匹配** → 遮罩点遮关不掉 | 用 `v-model:show`；编译器已把 `@update:{arg}` 归一为 `update-{arg}`（S54） |
 
 
 ## 3. 验收标准（每批 · v2）

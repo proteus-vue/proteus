@@ -19,7 +19,7 @@ import { createNodeCompilerBackend, runCompilerConformance } from '@proteus-vue/
 import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
 
 const REPO_ROOT = path.resolve('.')
-const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('src/components')]
+const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('packages/components')]
 
 function walkVue(dir: string, acc: string[] = []): string[] {
   for (const f of fs.readdirSync(dir)) {
@@ -81,7 +81,7 @@ describe('★#505 M3 门禁①：真实文件 × 双管线交叉对齐（编译�
     const rel = path.relative(REPO_ROOT, file)
     it(rel, () => {
       const source = fs.readFileSync(file, 'utf-8')
-      const isComponent = rel.includes('src/components')
+      const isComponent = rel.includes('packages/components')
       // ① 主编译（真实产物 + CompileIR 语义声明快照）
       const main = compileVueSfc(source, { filename: file, isComponent })
       expect(main.ir, 'M1 快照必须附着').toBeDefined()

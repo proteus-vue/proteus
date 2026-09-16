@@ -5,7 +5,7 @@
 // 边界：形状属性动画（cx/d/stroke-dashoffset 等）无法用 CSS 表达 → 不转译（保留在 SVG 内，不播放）。
 import { describe, it, expect } from 'vitest'
 import { compileVueSfc } from '../packages/compiler/src/index'
-import { drawScene } from '../src/components/p-svg-canvas/engine'
+import { drawScene } from '../packages/components/p-svg-canvas/engine'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
 

@@ -601,4 +601,23 @@ export const SCRIPT_RULES: TransformRule[] = [
     source: 'packages/compiler/src/script.ts → handleConstToData（useTemplateRef 识别 + constSourceTypes templateref）+ rewriteRefAccess（templaterefVars 剥 .value）',
     decision: 'useTemplateRef 对齐（selectComponent 承接）',
   },
+  {
+    id: 'script/element-probe',
+    phase: 'script',
+    status: 'implemented',
+    title: '组件元素探针注入（组件自测量 → 全局注册表，E2E 降级通道）',
+    titleEn: 'Component element probe injection (self-measure → global registry, E2E fallback channel)',
+    description: '组件 ready() 注入自测量：wx.createSelectorQuery().in(this).select(根选择器).boundingClientRect() → 写 globalThis.__PROTEUS_PROBES__[pid]（+150ms 二次重测兜首帧未稳）；页面 onLoad 复位注册表（同页 key 稳定）。运行时门控：组件 pid 或 __PROTEUS_PROBE_ALL__（测试 driver.enableProbes() / PROTEUS_DEBUG 构建默认开）',
+    descriptionEn: 'Injects a self-measure block into component ready(): wx.createSelectorQuery().in(this).select(root).boundingClientRect() → writes globalThis.__PROTEUS_PROBES__[pid] (+150ms re-measure for first-frame settling); page onLoad resets the registry (stable per-page keys). Runtime-gated by component pid or __PROTEUS_PROBE_ALL__ (test driver.enableProbes() / on by default in PROTEUS_DEBUG builds)',
+    why: '自动化工具（wechatide/automator）只能查页面拥有的节点：组件内部节点被 glass-easel 隔离（createSelectorQuery 返回 null，Skyline 无 selectAllComponents）→ 组件内部几何/可见性无法断言（scroll-view 容器塌成细线两轮漏检）。测量必须从组件内部发起',
+    whyEn: 'Automation tools (wechatide/automator) only reach page-owned nodes: component internals are isolated by glass-easel (createSelectorQuery returns null; no selectAllComponents in Skyline), so internal geometry/visibility cannot be asserted (a collapsed scroll-view container slipped through twice). Measurement must originate inside the component',
+    when: '组件模式编译（isComponent）且未禁用 script/element-probe；页面模式注入注册表复位行',
+    example: {
+      before: '// 组件 ready()（无探针）',
+      after: "ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').boundingClientRect(r => globalThis.__PROTEUS_PROBES__[pid] = {...r}) */ }",
+    },
+    verify: 'tests/runtime-probe.test.ts + tests/p-batch2-contract.test.ts + tests/e2e-mp-probe.test.ts（真机）',
+    source: 'packages/compiler/src/script.ts → probeReadyCode / probeResetLine；注册表 packages/runtime/src/probe.ts；消费 packages/test-core/src/driver/{mp,web}.ts + packages/api/src/capability.ts（useElement 回落）',
+    decision: '框架元素探针（跨端 E2E 降级通道；框架 API 与测试共用）',
+  },
 ]

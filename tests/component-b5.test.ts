@@ -9,12 +9,12 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 
-const COMPONENTS_DIR = path.resolve('src/components')
-const FRAMEWORK_COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function compileComponent(tag: string) {
   const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-  return compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+  return compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
 }
 
 function compileComponentWxss(tag: string): string {
@@ -104,7 +104,7 @@ describe('gen-routes 端到端（弹层组件自动解析）', () => {
       setDataBridge: { batchWindow: 16, perComponent: true },
       style: { px2rpx: true, rpxRatio: 2 },
     }
-    runGenRoutes({ config, root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     for (const tag of ['p-mask', 'p-popup', 'p-toast', 'p-loading']) {
       expect(pageJson.usingComponents[tag]).toBe(`/proteus/${tag}/index`)

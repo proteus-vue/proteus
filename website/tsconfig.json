@@ -12,8 +12,6 @@
     "baseUrl": ".",
     "types": ["vite/client"],
     "paths": {
-      "@proteus-vue/components": ["../src/components/index.ts"],
-      "@proteus-vue/components/*": ["../src/components/*"],
       "@proteus-vue/shared": ["../packages/shared/src/index.ts"],
       "@proteus-vue/glass": ["../packages/glass/src/index.ts"],
       "@proteus-vue/worklet": ["../packages/worklet/src/index.ts"],

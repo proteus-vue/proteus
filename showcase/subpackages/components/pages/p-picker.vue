@@ -57,6 +57,11 @@ const apiRows = ref([
   ['headerText', '选择器标题（★官方 header-text；两端均映射为弹层标题）', 'string'],
   ['showButtons', '★是否显示底部按钮（默认 true）。false = 无底部按钮：**滚动即实时生效**（change 随滚动触发），关闭（×/遮罩）即结束', 'boolean'],
   ['buttonMode', '★底部按钮形态：single 单按钮「确定」（默认）/ double 双按钮「取消 + 确定」', 'string'],
+  ['indicatorStyle', '滚轮选中指示线样式（原生 picker-view indicator-style；缺省 48px 细线）', 'string'],
+  ['indicatorClass', '滚轮指示线附加类名（原生 picker-view indicator-class）', 'string'],
+  ['maskClass', '遮罩层附加类名（原生 picker-view mask-class）', 'string'],
+  ['maskStyle', '遮罩层内联样式（原生 picker-view mask-style）', 'string'],
+  ['immediateChange', '滚动即实时触发 change（原生 picker-view immediate-change）', 'boolean'],
 ])
 const eventRows = ref([
   ['change', '确认选择（★裸载荷 { value }：索引或索引数组）', '{ value: number | number[] }'],

@@ -175,8 +175,8 @@ export async function resolveProteusViteConfig(
 
   let plugins: Plugin[]
   if (isMp) {
-    const fcd = (config as { frameworkComponentsDir?: string }).frameworkComponentsDir
-    plugins = [virtualMpEntryPlugin(), mpTransform({ config, frameworkComponentsDir: fcd ? path.resolve(root, fcd) : undefined })]
+    // ★组件库已拆包（2026-09-14）：不再传 frameworkComponentsDir——mpTransform 自行从 node_modules 解析包根
+    plugins = [virtualMpEntryPlugin(), mpTransform({ config })]
   } else {
     const vueMod = await importFromRoot<{ default: (opts?: Record<string, unknown>) => Plugin }>(root, '@vitejs/plugin-vue')
     // ★平台宏 Web 通道（enforce:'pre'）：在 @vitejs/plugin-vue 编译 .vue **之前**做源码级宏替换——

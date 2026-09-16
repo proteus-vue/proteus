@@ -42,7 +42,7 @@ packages/
 3. **shims 归 shared**：`mp.d.ts`（wx/Page/RouteBuilder/RouteContext 全局）+ `events.d.ts` + `vue.d.ts` → `packages/shared/src/shims/`（全局声明，包内 include 即可）
 4. **gen-routes 归 plugin-vite**：`scripts/gen-routes.ts` → `packages/plugin-vite/src/gen-routes.ts`（构建链路统一；cli 可复用）
 5. **router 工厂化（★最大行为变化）**：`@proteus-vue/router` 提供 `createRouter(routes)`（去单例）——`examples/router/index.ts` 持路由表实例；auto-routes 生成位置 `routesOutput` 改为应用侧（`examples/router/auto-routes.ts`）
-6. **components 暂留 src/**：`src/components/`（virtual-list）本轮不拆（组件库是 v2.0 方向），别名 `@proteus-vue/components` → `src/components` 保持；规划文档标注
+6. ~~**components 暂留 src/**~~ **已于 2026-09-14 拆包**：`@proteus-vue/components` → `packages/components/`（第 41 包，发源码；alias 与 frameworkComponentsDir 已退役，见下文「定位与退役路径」）
 7. **别名精确化**：vite alias + tsconfig paths：`@proteus-vue/{router,runtime,plugin-vite,shared,compiler}` 各自映射包 src；**删除泛化 `@proteus-vue` → src/**（防误匹配）
 8. **create-proteus 模板重构**：模板不再复制框架 src/{platform,router,runtime,shims}——应用 `package.json` 依赖 `@proteus-vue/{router,runtime,shared}` + 框架组件；`src/` 只剩应用代码（main*/App.vue/pages/components 应用级）；snapshot-template.ts 调整
 
@@ -96,7 +96,7 @@ packages/
 ### 步骤 6：别名与引用面全量切换（✅ 已落地）
 
 - [x] vite alias / tsconfig paths：`@proteus-vue/{router,runtime,shared,compiler,plugin-vite,components}` 精确映射，**删除泛化 `@proteus-vue` → src/（防误匹配）**
-- [x] `@proteus-vue/components` → `src/components`（框架内置组件暂留 src，组件库 v2.0 方向）——vite 单键前缀匹配子路径（`@proteus-vue/components/virtual-list/index.vue`）+ tsconfig 双键（components/components/*）
+- [x] ~~`@proteus-vue/components` → `src/components`~~ → **2026-09-14 拆包为 `packages/components/`**（真实包，发源码；alias 已删，MP 改 node_modules 解析）
 - [x] 模板 vite.config 同步精确化（vendored 结构：@proteus-vue/shared → src/platform/index.ts（adapter 聚合）、@proteus-vue/router → src/router、@proteus-vue/runtime → src/runtime）
 - [x] 盘点确认：examples 全部 import 已是精确包路径（步骤 2-5 铺垫），无 `@proteus-vue` 泛化残留；`@/` 保留（无人用，兼容未来）
 - [x] 验证：vue-tsc 零错 + 219 测试 + 双端构建 + 模板快照
@@ -119,24 +119,27 @@ packages/
 - [x] docs/roadmap.md 工程化行 ✅（拆包 8 步完成）、compiler/create-proteus 行描述更新（npm 包形态）；docs/packages.md 升级正式文档（状态 ✅）；PROJECT_MEMORY 决策 #105
 - 决策：#105；遗留：npm 发包待启用（用户暂不发布）——发布后验证 `npm create` 真实端到端
 
-## 框架内置组件的定位与退役路径（v0.4 补充，★v2.0 完整规划）
+## 框架内置组件的定位与退役路径（v0.4 补充，★2026-09-14 已按 v2.0 规划完成拆包）
 
-**现状**（决策 #115 + 修复 f674ba0）：组件库未拆包，框架内置组件（virtual-list 等）在**仓库根 `src/components/`**（monorepo 内）而非应用工程内。
+**★现状（2026-09-14：组件库已拆包）**：`@proteus-vue/components` 已成为**真实 workspace 包**（`packages/components/`，
+第 41 包）——73 个 `p-*` 语义组件 + `pg-glass` + `virtual-list` + `runtime/contracts/theme` 共 90 文件。
+**包发源码**（`publishSource: true`，不产 dist）：① MP 编译器需在磁盘上扫 `.vue`（`<dir>/<tag>/index.vue`）；
+② 与「一份源码双端」一致（Web 由消费方 `@vitejs/plugin-vue` 编译）。
 
-| 侧 | 定位方式 | 说明 |
+| 侧 | 定位方式（拆包后） | 说明 |
 |---|---|---|
-| Web | vite alias `@proteus-vue/components` → 仓库根 `src/components` | 组件库未拆包时的显式映射（examples/vite.config.ts） |
-| MP 编译（plugin-vite） | `PluginOptions.frameworkComponentsDir` 显式传入仓库根组件目录 | 缺省相对工程根 `src/components`（create-proteus 模板工程用）；产物 rel 规范化 `proteus/<name>/index` |
-| MP page.json（gen-routes） | `GenRoutesOptions.frameworkComponentsDir` 显式传入同一目录 | 与插件同源；缺省同样相对工程根；collectComponents / writeComponentJsons 共用 |
+| Web | **workspace 软链**（`node_modules/@proteus-vue/components` → `packages/components`） | alias 已删除；`import ... from '@proteus-vue/components'` 直接可用 |
+| MP 编译（plugin-vite） | `resolveComponentsRoot(projectRoot)` 自 node_modules 解析包根（`resolve-components.ts`） | 「语义组件库目录」选项**已删除**；包缺失时**告警**（非静默） |
+| MP page.json（gen-routes） | 同上（同一解析器，两者共用） | 产物 rel 仍规范化 `proteus/<name>/index`（**对外契约不变**） |
 
-★路径基准踩坑：examples/scripts/gen-routes.ts 在 `scripts/` 子目录，传仓库根组件目录需 `../../src/components`（vite.config.ts 在工程根用 `../`）。
+**v2.0 四条退役条件——已全部完成**：
 
-**退役条件（v2.0 组件库拆包，★本参数生命周期终点）**：组件库拆为独立 `@proteus-vue/components` npm 包后：
+1. ✅ Web 侧删除 alias（根/examples/showcase/website 的 tsconfig + vite 配置共 7 处），业务代码直接 `import`
+2. ✅ MP 侧改自 node_modules 解析包根（复用步骤 7 的 `createRequire(projectRoot)` 先例）；产物路径不变
+3. ✅ `frameworkComponentsDir` 选项**已删除**（types config / config-layers / config-validate / plugin-vite 两处 / cli build+dev / 三个消费方配置）
+4. ✅ 消费方依赖升级为真实包（`workspace:*`，由 pnpm 软链）；`check-deps` 的 `@proteus-vue/components` 豁免已移除
 
-1. Web 侧删除 alias，业务代码直接 `import ... from '@proteus-vue/components'`
-2. MP 侧 plugin-vite / gen-routes 改为解析包内组件目录（复用 `resolvePkgPath` 的 node_modules 包内路径机制，步骤 7 已有先例）——产物路径 `proteus/<name>/index` 保持不变（对外契约）
-3. `frameworkComponentsDir` 两个选项退役（删除），同时删除缺省相对工程根 `src/components` 的兜底路径
-4. create-proteus 模板的 `@proteus-vue/components` 依赖（步骤 8 后模板已依赖 npm 包形态）自然升级为真实包
+★新增门禁：`check-package-health` 支持 `publishSource: true` 源码包分类（校验 `main`/`types`/`exports` 指向存在的源码文件、`files` 含 `index.ts`，跳过 dist 检查）。
 
 组件库本身的架构规划见 docs/proteus-component-plan/（L3 @proteus-vue/components：基础组件 + 业务组件，Web/Skyline 双端语义一致）。
 
@@ -152,7 +155,7 @@ packages/
 
 ## npm 发布记录（2026-08-31：beta 预览已全部发布）
 
-> ✅ **22 包全部已发布**（`npm run changeset:publish`，dist-tag `beta`；首发布时 npm 同时置 `latest`）。发布拓扑：contracts → types → api → app-config → shared → built-in-components → capabilities → compiler → css-compat → module → router → runtime → cli → create-proteus → devtools-runtime → i18n → pinia-sync → plugin-vite → renderer-app → security → test-core → web。
+> ✅ **22 包全部已发布**（*历史记录（2026-08-31 时点，现包规模 41）*：`npm run changeset:publish`，dist-tag `beta`；首发布时 npm 同时置 `latest`）。发布拓扑：contracts → types → api → app-config → shared → built-in-components → capabilities → compiler → css-compat → module → router → runtime → cli → create-proteus → devtools-runtime → i18n → pinia-sync → plugin-vite → renderer-app → security → test-core → web。
 >
 > - 包健康门禁 `npm run check:pkg`（22 包 0 error/0 warn）入 verify 末尾
 > - **发布凭据**：granular Automation token（只授权 `@proteus-vue` scope，可绕过 2FA）——因此脚手架包从裸名 `create-proteus` **收口改名 `@proteus-vue/create-proteus`**（命令 `npm create @proteus-vue/proteus my-app`），使全部产物统一受组织 token 管理（决策 #215）

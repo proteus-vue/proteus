@@ -3,7 +3,7 @@
 //   覆盖：延迟重测 / 测量成功驱动 onSize / null 与异常静默 / resize 重测 / disconnect 清理 / 运行时测量类
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createMpSizeObserverFactory } from '@proteus-vue/fluid'
-import { mpContainerObserverFactory, measureClass, isMpRuntime } from '../src/components/runtime/container-measure'
+import { mpContainerObserverFactory, measureClass, isMpRuntime } from '../packages/components/runtime/container-measure'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -93,15 +93,15 @@ describe('组件接线契约（MP 产物含运行时测量）', () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
     for (const tag of ['p-split', 'p-zone', 'p-toolbar']) {
-      const src = fs.readFileSync(path.resolve('src/components', tag, 'index.vue'), 'utf-8')
+      const src = fs.readFileSync(path.resolve('packages/components', tag, 'index.vue'), 'utf-8')
       expect(src).toMatch(/mpContainerObserverFactory/)
       expect(src).toMatch(/measureClass\(/)
       expect(src).toMatch(/isMpRuntime\(\)/)
     }
     // 降级告警契约
-    const drag = fs.readFileSync(path.resolve('src/components/p-draggable/index.vue'), 'utf-8')
+    const drag = fs.readFileSync(path.resolve('packages/components/p-draggable/index.vue'), 'utf-8')
     expect(drag).toMatch(/capabilityWarnOnce\('p-draggable'/)
-    const sc = fs.readFileSync(path.resolve('src/components/p-scroll/index.vue'), 'utf-8')
+    const sc = fs.readFileSync(path.resolve('packages/components/p-scroll/index.vue'), 'utf-8')
     expect(sc).toMatch(/capabilityWarnOnce\('p-scroll'/)
   })
 })

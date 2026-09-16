@@ -17,8 +17,8 @@ import { createNodeCompilerBackend } from '@proteus-vue/compiler-backend'
 
 const CRATE_DIR = path.resolve('packages/compiler-backend-rust')
 const BIN = path.join(CRATE_DIR, 'target', 'debug', 'proteus-cc-rust')
-// ★决策 #332 后扩展：真实页面（examples/pages + subpackages）+ 框架组件（src/components——v-if/v-else 顶层兄弟等形态）全部纳入
-const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('src/components')]
+// ★决策 #332 后扩展：真实页面（examples/pages + subpackages）+ 框架组件（packages/components——v-if/v-else 顶层兄弟等形态）全部纳入
+const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('packages/components')]
 const REPO_ROOT = path.resolve('.')
 
 /** 递归收集 .vue 文件（examples/pages + examples/subpackages） */

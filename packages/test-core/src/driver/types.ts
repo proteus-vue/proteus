@@ -157,6 +157,25 @@ export interface TestDriver {
   readonly ticket: TicketHandle
   /** ★CDP 会话句柄（web：注入 CDP session——性能/网络/DOM 域命令透传；mp：无 CDP 概念，降级抛错） */
   readonly cdp: CdpHandle
+  /**
+   * ★★框架元素探针读取（2026-09-14）：**不依赖自动化工具的元素查询**——
+   * 组件在 ready() 自测量根节点并写入全局注册表（`__PROTEUS_PROBES__`），本方法经 evaluate 直接读。
+   * 用途：工具查不到组件内部节点（glass-easel 隔离 / Skyline 无 selectAllComponents）时的**降级通道**。
+   * @param pid 组件 pid（缺省返回全部）
+   */
+  probes(pid?: string): Promise<ProbeRecord[]>
+  /** ★开启框架探针（注入 `__PROTEUS_PROBE_ALL__`；组件 ready 门控据此放行） */
+  enableProbes(): Promise<void>
+}
+
+/** ★探针记录（与 @proteus-vue/runtime/probe 的 ProbeRecord 同形；纯 JSON——跨进程安全） */
+export interface ProbeRecord {
+  pid: string
+  tag?: string
+  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number } | null
+  scroll?: { scrollTop: number; scrollLeft: number; scrollWidth: number; scrollHeight: number } | null
+  style?: Record<string, string> | null
+  ts: number
 }
 
 /** ★CDP 句柄（web debug 能力：通用透传 + 事件订阅） */

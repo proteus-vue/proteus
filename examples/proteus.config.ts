@@ -89,8 +89,7 @@ const config: ProteusConfig = {
     px2rpx: true,
     rpxRatio: 2,
   },
-  // ★#420 配置收敛：框架内置组件目录（组件库未拆包共享——monorepo 根 src/components；相对 root 解析）
-  frameworkComponentsDir: '../src/components',
+  // ★组件库已拆包（2026-09-14）：@proteus-vue/components 由编译器自 node_modules 解析，无需配置
   // 包体积预算：主包 ≤1.2MB（微信上限 2MB）；strict 时超限构建失败
   budget: {
     mainPackageKB: 1200,
@@ -99,7 +98,7 @@ const config: ProteusConfig = {
   // ★决策 #113 集中式 meta 已迁入上方 router.meta（★#492 项目级路由管理）
   // ★#420 配置收敛（原 vite.config.ts 内容收归此处——vite 配置由框架组装，本字段做工程专属扩展）：
   //   Web：框架内建 vue + route-blocks，此处补 defaultScoped（<style> 默认 scoped 对齐 MP 语义）/ devtools 中继 / docs 引擎；
-  //   mp：框架内建 mpTransform（frameworkComponentsDir 上方已声明）；
+  //   mp：框架内建 mpTransform（语义组件库自 node_modules 解析 @proteus-vue/components）；
   //   module-plan B4：Web manualChunks（有 modules/ 时自动生效）为 async 扫描——vite 字段支持 async 函数
   vite: async (ctx) => {
     const isMp = ctx.mode === 'mp-weixin'
@@ -116,7 +115,7 @@ const config: ProteusConfig = {
       plugins,
       resolve: {
         alias: [
-          { find: '@proteus-vue/components', replacement: path.join(__dirname, '../src/components') },
+          // ★组件库已拆包（2026-09-14）：@proteus-vue/components 走 workspace 软链解析，无需 alias
           // ★框架组件（src/components）经 adapter L2 抽象消费 @proteus-vue/shared——vite 需显式别名
           //   （根 node_modules 未 hoist shared，rollup 解析不到）；类型侧在 tsconfig paths 已补
           { find: '@proteus-vue/shared', replacement: path.join(__dirname, '../packages/shared/src/index.ts') },

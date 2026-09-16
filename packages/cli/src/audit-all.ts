@@ -17,6 +17,7 @@ import { runD2Audit, formatD2AuditDetail } from './d2-audit'
 import { readDisabledGates } from './gate-config'
 import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
 import { runFluidCheck, formatFluidCheck } from './fluid-check'
+import { resolveComponentsRoot } from '@proteus-vue/plugin-vite'
 
 /** 10 §CI 耗时预算：audit all < 12s */
 export const AUDIT_ALL_BUDGET_MS = 12000
@@ -118,11 +119,11 @@ export async function runAuditAll(root: string): Promise<AuditAllResult> {
     domains.push({ name: 'capabilities', ok: value.ok, ms, detail: value.text })
   }
 
-  // components：p-* 组件注册表 vs 使用（无 src/components 目录 → 跳过，非阻断）
+  // components：p-* 组件注册表 vs 使用（★组件库已拆包 2026-09-14：自 node_modules 解析包根；无包 → 跳过，非阻断）
   if (!disabled.has('components')) {
-    const componentsDir = path.join(root, 'src/components')
+    const componentsDir = resolveComponentsRoot(root)
     if (!fs.existsSync(componentsDir)) {
-      domains.push({ name: 'components', ok: true, ms: 0, detail: '[proteus-components] 无 src/components 目录——跳过', skipped: true })
+      domains.push({ name: 'components', ok: true, ms: 0, detail: '[proteus-components] 未安装 @proteus-vue/components——跳过', skipped: true })
     } else {
       const { value, ms } = await timed(() => {
         try {

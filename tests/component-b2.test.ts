@@ -11,15 +11,15 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 
-const COMPONENTS_DIR = path.resolve('src/components')
-const FRAMEWORK_COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function readSfc(tag: string): string {
   return fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
 }
 
 function compileComponent(tag: string) {
-  return compileVueSfc(readSfc(tag), { isComponent: true, filename: `src/components/${tag}/index.vue` })
+  return compileVueSfc(readSfc(tag), { isComponent: true, filename: `packages/components/${tag}/index.vue` })
 }
 
 describe('p-view（通用容器）', () => {
@@ -154,7 +154,7 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
       `<template><p-view><p-text>hi</p-text></p-view><p-button>go</p-button><p-image src="x" /></template>\n<route>\n{\n  "meta": { "title": "组件演示" }\n}\n</route>\n`,
     )
 
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
 
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents['p-view']).toBe('/proteus/p-view/index')
@@ -167,7 +167,7 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
     const root = path.join(TMP, 'typo')
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     writeFixture(root, 'src/pages/index.vue', `<template><pv-button>go</pv-button></template>\n`)
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents ?? {}).toEqual({})
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('pv-button'))
@@ -182,7 +182,7 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
       'src/pages/index.vue',
       `<template><p-split min-split-width="640"><template #aside><view class="a">侧栏</view></template><view class="b">主区</view></p-split><p-zone design-width="375" /><p-sidebar min-sidebar-width="640" /><p-modal /></template>\n`,
     )
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     for (const tag of ['p-split', 'p-zone', 'p-sidebar', 'p-modal']) {
       expect(pageJson.usingComponents[tag]).toBe(`/proteus/${tag}/index`)
@@ -196,7 +196,7 @@ describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', ()
       'src/pages/index.vue',
       `<template><!-- 示例：<p-view class="box">（注释文本不是真实使用） --><p-button>ok</p-button></template>\n`,
     )
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents['p-button']).toBe('/proteus/p-button/index')
     expect(pageJson.usingComponents['p-view']).toBeUndefined()

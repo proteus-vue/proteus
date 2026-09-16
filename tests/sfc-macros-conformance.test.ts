@@ -10,9 +10,9 @@ import { compileVueSfc } from '../packages/compiler/src/index'
 const opts = { px2rpx: true, rpxRatio: 2 }
 // ★代表性真实组件（对象形式 defineProps + 数组 defineEmits + 泛型形式各覆盖）
 const CASES: Array<[string, string]> = [
-  ['p-button', 'src/components/p-button/index.vue'],
-  ['p-list-view', 'src/components/p-list-view/index.vue'],
-  ['p-drawer', 'src/components/p-drawer/index.vue'],
+  ['p-button', 'packages/components/p-button/index.vue'],
+  ['p-list-view', 'packages/components/p-list-view/index.vue'],
+  ['p-drawer', 'packages/components/p-drawer/index.vue'],
 ]
 
 function compiledProps(file: string): Record<string, string> {
@@ -46,13 +46,13 @@ describe('手写宏实现 × compileScript 权威源一致性（地基对齐门�
   })
 
   it('p-button：权威 emits 含 click（compileScript 数组 emits）', () => {
-    const src = readFileSync('src/components/p-button/index.vue', 'utf8')
+    const src = readFileSync('packages/components/p-button/index.vue', 'utf8')
     const authoritative = extractSfcMacros(src, 'p-button.vue')
     expect(authoritative.emits).toContain('click')
   })
 
   it('p-input：权威 emits 含 input/confirm/focus/blur（手写 emit 实现的地基校准源）', () => {
-    const src = readFileSync('src/components/p-input/index.vue', 'utf8')
+    const src = readFileSync('packages/components/p-input/index.vue', 'utf8')
     const authoritative = extractSfcMacros(src, 'p-input.vue')
     for (const e of ['input', 'confirm', 'focus', 'blur']) expect(authoritative.emits, `emit ${e}`).toContain(e)
   })

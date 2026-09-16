@@ -26,6 +26,21 @@
 **环境**：微信开发者工具 2.02.2609082 Nightly（`/Volumes/data1/work/office-applications/wechatwebdevtools.app`）·
 已登录（appid `wx33bc04a52024def7`）· 渲染模式 **Skyline** · 模拟器 iPhone 12/13 Pro。
 
+> ★★**本机 wechatide 已确认可用**（2026-09-14）：skill-CLI 二进制在
+> **`/Volumes/data1/work/office-applications/wechatwebdevtools.app/Contents/MacOS/wechatide`**
+> （注意是 **`wechatide`** 不是同目录的 `cli`——后者是已弃用的 automator CLI，用它会让 e2e:mp 全链路静默失败）。
+> MP E2E 运行方式（cwd 仓库根）：
+> ```bash
+> PROTEUS_IDE_CLI="/Volumes/data1/work/office-applications/wechatwebdevtools.app/Contents/MacOS/wechatide" \
+>   npx tsx packages/cli/src/index.ts test e2e:mp showcase      # 全家桶
+> # 单文件：追加 PROTEUS_E2E_ONLY=e2e-mp-components
+> ```
+> 首次调用会弹授权窗（clientName=ZCode，须与 `-c` 一致）；`check_wechatide_status` 验登录态。
+>
+> ★**框架元素探针**（2026-09-14）：组件内部节点对工具不可达（glass-easel 隔离）→ 组件在 `ready()`
+> 自测量并写全局注册表，测试用 `driver.probes()` / `driver.enableProbes()` 读取（双端同 API）。
+> 详见 `docs/framework-element-probe.md`。
+
 | 页 / 组件 | 实测结果 | 证据 |
 |---|---|---|
 | **p-progress** | ✅ **线性 40%（蓝）+ success 100%（绿）+ 环形 60%（conic-gradient）全部正确渲染**，百分比文案正确 | 模拟器截图 |

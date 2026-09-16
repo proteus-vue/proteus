@@ -442,10 +442,11 @@ async function main(): Promise<void> {
               'run',
               '--no-file-parallelism',
               // ★2026-09-08 范围精准（用户：未改编译器不必跑 vue 能力对齐）：PROTEUS_E2E_ONLY=<file> 时只跑指定文件，
-              //   否则默认全家桶（smoke + vue-compat + popover）
+              //   否则默认全家桶（smoke + components + vue-compat + popover）
+              //   ★2026-09-14 新增 e2e-mp-components：内置组件**几何级**渲染/行为断言（补「不显示/塌陷/灰块」盲区）
               ...(process.env.PROTEUS_E2E_ONLY
                 ? [`tests/${process.env.PROTEUS_E2E_ONLY}.test.ts`]
-                : ['tests/e2e-mp-smoke.test.ts', 'tests/e2e-vue-compat.test.ts', 'tests/e2e-mp-popover.test.ts']),
+                : ['tests/e2e-mp-smoke.test.ts', 'tests/e2e-mp-components.test.ts', 'tests/e2e-mp-probe.test.ts', 'tests/e2e-vue-compat.test.ts', 'tests/e2e-mp-popover.test.ts']),
             ],
             {
               stdio: 'inherit',

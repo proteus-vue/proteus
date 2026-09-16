@@ -22,11 +22,11 @@ order: 0
 | [p-masonry](/docs/component/p-masonry) | 2 | 0 |
 | [p-safe](/docs/component/p-safe) | 3 | 0 |
 | [p-scroll](/docs/component/p-scroll) | 4 | 0 |
-| [p-scroll-view](/docs/component/p-scroll-view) | 9 | 3 |
+| [p-scroll-view](/docs/component/p-scroll-view) | 43 | 14 |
 | [p-sidebar](/docs/component/p-sidebar) | 4 | 0 |
 | [p-spacer](/docs/component/p-spacer) | 3 | 0 |
 | [p-stack](/docs/component/p-stack) | 3 | 0 |
-| [p-view](/docs/component/p-view) | 3 | 0 |
+| [p-view](/docs/component/p-view) | 7 | 0 |
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
 
@@ -41,16 +41,16 @@ order: 0
 | [p-checkbox](/docs/component/p-checkbox) | 5 | 2 |
 | [p-form](/docs/component/p-form) | 3 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
-| [p-icon](/docs/component/p-icon) | 4 | 0 |
-| [p-image](/docs/component/p-image) | 8 | 2 |
+| [p-icon](/docs/component/p-icon) | 5 | 0 |
+| [p-image](/docs/component/p-image) | 13 | 2 |
 | [p-input](/docs/component/p-input) | 14 | 4 |
 | [p-label](/docs/component/p-label) | 2 | 1 |
 | [p-list-view](/docs/component/p-list-view) | 9 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
 | [p-map](/docs/component/p-map) | 9 | 3 |
 | [p-media](/docs/component/p-media) | 9 | 0 |
-| [p-nav-bar](/docs/component/p-nav-bar) | 6 | 1 |
-| [p-picker](/docs/component/p-picker) | 8 | 3 |
+| [p-nav-bar](/docs/component/p-nav-bar) | 11 | 1 |
+| [p-picker](/docs/component/p-picker) | 13 | 3 |
 | [p-progress](/docs/component/p-progress) | 11 | 0 |
 | [p-radio](/docs/component/p-radio) | 5 | 2 |
 | [p-rich-text](/docs/component/p-rich-text) | 2 | 0 |
@@ -61,7 +61,7 @@ order: 0
 | [p-slider](/docs/component/p-slider) | 10 | 3 |
 | [p-svg](/docs/component/p-svg) | 4 | 0 |
 | [p-switch](/docs/component/p-switch) | 5 | 2 |
-| [p-text](/docs/component/p-text) | 4 | 0 |
+| [p-text](/docs/component/p-text) | 10 | 0 |
 | [p-textarea](/docs/component/p-textarea) | 22 | 4 |
 
 ## Page Shell (17)
@@ -76,7 +76,7 @@ order: 0
 | [p-modal](/docs/component/p-modal) | 8 | 2 |
 | [p-nav](/docs/component/p-nav) | 2 | 0 |
 | [p-page](/docs/component/p-page) | 3 | 0 |
-| [p-page-container](/docs/component/p-page-container) | 5 | 2 |
+| [p-page-container](/docs/component/p-page-container) | 10 | 2 |
 | [p-popover](/docs/component/p-popover) | 3 | 1 |
 | [p-popup](/docs/component/p-popup) | 8 | 1 |
 | [p-segment](/docs/component/p-segment) | 2 | 2 |
@@ -99,7 +99,7 @@ order: 0
 |---|---|---|
 | [p-animate](/docs/component/p-animate) | 4 | 0 |
 | [p-error-boundary](/docs/component/p-error-boundary) | 4 | 0 |
-| [p-router-link](/docs/component/p-router-link) | 3 | 1 |
+| [p-router-link](/docs/component/p-router-link) | 16 | 1 |
 | [p-transition](/docs/component/p-transition) | 4 | 0 |
 
 ## Capability Entry (3)

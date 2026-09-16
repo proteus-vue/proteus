@@ -11,7 +11,7 @@ import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
 
 const ROOT = path.resolve(__dirname, '..')
-const SRC = fs.readFileSync(path.join(ROOT, 'src/components/p-switch/index.vue'), 'utf-8')
+const SRC = fs.readFileSync(path.join(ROOT, 'packages/components/p-switch/index.vue'), 'utf-8')
 
 describe('★p-switch 设计契约', () => {
   it('① 用 shape（round/square）而非官方 type=switch|checkbox（平台包袱，G-31）', () => {
@@ -24,7 +24,7 @@ describe('★p-switch 设计契约', () => {
   })
 
   it('② 自绘（MP 产物为 view 自绘组件，非原生 switch）', () => {
-    const { wxml } = compileVueSfc(SRC, { isComponent: true, filename: 'src/components/p-switch/index.vue' })
+    const { wxml } = compileVueSfc(SRC, { isComponent: true, filename: 'packages/components/p-switch/index.vue' })
     expect(wxml, '不应含原生 <switch>（方角做不到）').not.toContain('<switch')
     expect(wxml).toContain('bindtap="onToggle"')
     expect(wxml, 'shape 字面量键应进产物').toContain('p-switch--square')

@@ -10,7 +10,7 @@ import path from 'node:path'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
 
-const FRAMEWORK_COMPONENTS_DIR = path.resolve('src/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
   return {
@@ -50,7 +50,7 @@ describe('build 产物契约（跨层一致性）', () => {
       path.join(root, 'subpackages/order/pages/list.vue'),
       `<template><view>订单列表</view></template>\n<route>\n{\n  "meta": { "title": "订单列表" }\n}\n</route>\n`,
     )
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
 
     // ① config.subPackages ↔ app.json.subPackages（pages 为分包内相对路径）
     const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
@@ -68,7 +68,7 @@ describe('build 产物契约（跨层一致性）', () => {
       path.join(pageDir, 'index.vue'),
       `<template><p-view><p-button>go</p-button></p-view></template>\n<route>\n{\n  "meta": { "title": "组件页" }\n}\n</route>\n`,
     )
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     for (const tag of Object.keys(pageJson.usingComponents ?? {})) {
       const rel = pageJson.usingComponents[tag]
@@ -98,7 +98,7 @@ describe('build 产物契约（跨层一致性）', () => {
     // 制造字母序首页非 index 的页面集合（a-demo 字母序在 index 前）
     writeFixture(path.join(pageDir, 'a-demo.vue'), `<template><view>a</view></template>\n`)
     writeFixture(path.join(pageDir, 'index.vue'), `<template><view>首页</view></template>\n`)
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
     expect(appJson.pages[0]).toBe('pages/index')
   })
@@ -109,7 +109,7 @@ describe('build 产物契约（跨层一致性）', () => {
       path.join(pageDir, 'index.vue'),
       `<script setup lang="ts">\nimport { fmt } from '../utils/format'\nconst x = fmt(1)\n</script>\n<template><view>{{ x }}</view></template>\n`,
     )
-    runGenRoutes({ config: makeConfig(), root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     // 编译产物契约由 plugin buildStart 完成（emitFile）；此处断言路由侧产物结构完整
     const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
     expect(appJson.pages).toContain('pages/index')

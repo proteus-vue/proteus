@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 72 个（已备详情页 9） */
+/** 组件：6 域 / 72 个（已备详情页 17） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -35,11 +35,11 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-masonry", desc: "瀑布流", route: "" },
       { name: "p-safe", desc: "安全区避让", route: "" },
       { name: "p-scroll", desc: "显式滚动容器", route: "" },
-      { name: "p-scroll-view", desc: "滚动容器", route: "" },
+      { name: "p-scroll-view", desc: "滚动容器", route: "/subpackages/components/pages/p-scroll-view" },
       { name: "p-sidebar", desc: "自适应导航栏", route: "" },
       { name: "p-spacer", desc: "弹性空白", route: "" },
       { name: "p-stack", desc: "弹性栈", route: "" },
-      { name: "p-view", desc: "通用容器", route: "" },
+      { name: "p-view", desc: "通用容器", route: "/subpackages/components/pages/p-view" },
       { name: "p-virtual-list", desc: "虚拟化长列表", route: "" },
       { name: "p-zone", desc: "容器断点分区", route: "" },
     ],
@@ -55,15 +55,15 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-checkbox", desc: "多选", route: "/subpackages/components/pages/p-checkbox" },
       { name: "p-form", desc: "表单容器", route: "" },
       { name: "p-heading", desc: "标题", route: "" },
-      { name: "p-icon", desc: "图标", route: "" },
-      { name: "p-image", desc: "图片", route: "" },
+      { name: "p-icon", desc: "图标", route: "/subpackages/components/pages/p-icon" },
+      { name: "p-image", desc: "图片", route: "/subpackages/components/pages/p-image" },
       { name: "p-input", desc: "输入框", route: "/subpackages/components/pages/p-input" },
       { name: "p-label", desc: "表单标签 / 控件关联", route: "" },
       { name: "p-list-view", desc: "虚拟长列表", route: "" },
       { name: "p-loading", desc: "加载中", route: "" },
       { name: "p-map", desc: "地图", route: "" },
       { name: "p-media", desc: "媒体统一入口", route: "" },
-      { name: "p-nav-bar", desc: "导航栏", route: "" },
+      { name: "p-nav-bar", desc: "导航栏", route: "/subpackages/components/pages/p-nav-bar" },
       { name: "p-picker", desc: "选择器", route: "/subpackages/components/pages/p-picker" },
       { name: "p-progress", desc: "进度条", route: "/subpackages/components/pages/p-progress" },
       { name: "p-radio", desc: "单选", route: "/subpackages/components/pages/p-radio" },
@@ -75,7 +75,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-slider", desc: "滑块", route: "/subpackages/components/pages/p-slider" },
       { name: "p-svg", desc: "矢量图形", route: "" },
       { name: "p-switch", desc: "开关", route: "/subpackages/components/pages/p-switch" },
-      { name: "p-text", desc: "文本", route: "" },
+      { name: "p-text", desc: "文本", route: "/subpackages/components/pages/p-text" },
       { name: "p-textarea", desc: "多行文本域", route: "/subpackages/components/pages/p-textarea" },
     ],
   },
@@ -91,7 +91,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-modal", desc: "弹窗", route: "" },
       { name: "p-nav", desc: "导航栏", route: "" },
       { name: "p-page", desc: "页面根容器", route: "" },
-      { name: "p-page-container", desc: "页面容器 / 底部弹出层", route: "" },
+      { name: "p-page-container", desc: "页面容器 / 弹出层", route: "/subpackages/components/pages/p-page-container" },
       { name: "p-popover", desc: "气泡浮层", route: "" },
       { name: "p-popup", desc: "弹层", route: "" },
       { name: "p-segment", desc: "分段控制器", route: "" },
@@ -108,7 +108,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
     items: [
       { name: "p-animate", desc: "动画声明——animation CSS 语义面", route: "" },
       { name: "p-error-boundary", desc: "错误兜底", route: "" },
-      { name: "p-router-link", desc: "声明式导航", route: "" },
+      { name: "p-router-link", desc: "声明式导航", route: "/subpackages/components/pages/p-router-link" },
       { name: "p-transition", desc: "过渡", route: "" },
     ],
   },
@@ -279,7 +279,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 72,
-  componentReady: 9,
+  componentReady: 17,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 1,

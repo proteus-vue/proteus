@@ -6,8 +6,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { compileVueSfc } from '../packages/compiler/src/index'
-import { sampleValues, evalAnim, primitiveToPathD, drawScene, shouldEmit } from '../src/components/p-svg-canvas/engine'
-import { tracePath, getPointAtLength, getPathLength } from '../src/components/p-svg-canvas/path-parser'
+import { sampleValues, evalAnim, primitiveToPathD, drawScene, shouldEmit } from '../packages/components/p-svg-canvas/engine'
+import { tracePath, getPointAtLength, getPathLength } from '../packages/components/p-svg-canvas/path-parser'
 
 const compile = (template: string) => compileVueSfc(`<template>${template}</template>`, { filename: 't.vue' }) as any
 
@@ -337,13 +337,13 @@ describe('回传节流（真机「15 秒后动画停止」根因——相位回�
   })
 
   it('组件源码契约：src 只用裸 tempFilePath（真机 wxfile:// 拼查询参数不渲染）', () => {
-    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    const src = readFileSync(new URL('../packages/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
     expect(src).not.toMatch(/tempFilePath\s*\+\s*['"`]\?/)
     expect(src).toMatch(/this\.setSrc\(r\.tempFilePath\)/)
   })
 
   it('组件源码契约：回传有在途保护（长跑防任务堆积）', () => {
-    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    const src = readFileSync(new URL('../packages/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
     // 未完成前不再发起下一帧转换
     expect(src).toMatch(/if \(this\.__converting\) return false/)
     // 成功/失败均需复位在途标记
@@ -351,7 +351,7 @@ describe('回传节流（真机「15 秒后动画停止」根因——相位回�
   })
 
   it('组件源码契约：先判节流再绘制（不发放的帧不白画）', () => {
-    const src = readFileSync(new URL('../src/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
+    const src = readFileSync(new URL('../packages/components/p-svg-canvas/index.vue', import.meta.url), 'utf-8')
     const fn = src.slice(src.indexOf('function renderFrame'))
     // shouldEmit 应出现在 drawScene 之前
     expect(fn.indexOf('shouldEmit')).toBeGreaterThan(-1)

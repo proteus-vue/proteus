@@ -38,10 +38,44 @@ Scroll container
 | `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
 | `scrollX` | Allows horizontal scrolling | `Boolean` | `false` | No |
 | `scrollY` | Allows vertical scrolling | `Boolean` | `true` | No |
-| `scrollTop` | Vertical scroll position (px) | `Number` | `0` | No |
-| `scrollLeft` | Horizontal scroll position (px) | `Number` | `0` | No |
+| `scrollTop` | Vertical scroll position (px) | `[Number, String]` | `0` | No |
+| `scrollLeft` | Horizontal scroll position (px) | `[Number, String]` | `0` | No |
+| `upperThreshold` | — | `[Number, String]` | `50` | No |
+| `lowerThreshold` | Distance in px from the bottom that triggers the scrolltolower event | `[Number, String]` | `50` | No |
+| `scrollIntoView` | — | `String` | `''` | No |
+| `scrollIntoViewOffset` | — | `Number` | `0` | No |
+| `scrollWithAnimation` | — | `Boolean` | `false` | No |
+| `enableBackToTop` | — | `Boolean` | `false` | No |
+| `enablePassive` | — | `Boolean` | `false` | No |
 | `refresherEnabled` | Enables the custom pull-down refresher | `Boolean` | `false` | No |
-| `lowerThreshold` | Distance in px from the bottom that triggers the scrolltolower event | `Number` | `50` | No |
+| `refresherThreshold` | — | `Number` | `45` | No |
+| `refresherDefaultStyle` | — | `String` | `'black'` | No |
+| `refresherBackground` | — | `String` | `'transparent'` | No |
+| `refresherTriggered` | — | `Boolean` | `false` | No |
+| `bounces` | — | `Boolean` | `true` | No |
+| `showScrollbar` | — | `Boolean` | `false` | No |
+| `fastDeceleration` | — | `Boolean` | `false` | No |
+| `scrollAnchoring` | — | `Boolean` | `false` | No |
+| `type` | — | `String` | `''` | No |
+| `associativeContainer` | — | `String` | `''` | No |
+| `reverse` | — | `Boolean` | `false` | No |
+| `clip` | — | `Boolean` | `true` | No |
+| `cacheExtent` | — | `Number` | `0` | No |
+| `minDragDistance` | — | `Number` | `0` | No |
+| `scrollIntoViewWithinExtent` | — | `Boolean` | `false` | No |
+| `scrollIntoViewAlignment` | — | `String` | `''` | No |
+| `padding` | — | `Array` | `[]` | No |
+| `refresherTwoLevelEnabled` | — | `Boolean` | `false` | No |
+| `refresherTwoLevelTriggered` | — | `Boolean` | `false` | No |
+| `refresherTwoLevelThreshold` | — | `Number` | `150` | No |
+| `refresherTwoLevelCloseThreshold` | — | `Number` | `80` | No |
+| `refresherTwoLevelScrollEnabled` | — | `Boolean` | `false` | No |
+| `refresherBallisticRefreshEnabled` | — | `Boolean` | `false` | No |
+| `refresherTwoLevelPinned` | — | `Boolean` | `false` | No |
+| `enableFlex` | — | `Boolean` | `false` | No |
+| `enhanced` | — | `Boolean` | `false` | No |
+| `pagingEnabled` | — | `Boolean` | `false` | No |
+| `usingSticky` | — | `Boolean` | `false` | No |
 
 ### Prop details
 
@@ -72,48 +106,284 @@ Scroll container
 
 #### `scrollTop`
 
-- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
 - **Doc**: Vertical scroll position (px)
 
 #### `scrollLeft`
 
-- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
 - **Doc**: Horizontal scroll position (px)
+
+#### `upperThreshold`
+
+- **Type**: `[Number, String]`　**Default**: `50`　**Required**: No
+- **Doc**: —
+
+#### `lowerThreshold`
+
+- **Type**: `[Number, String]`　**Default**: `50`　**Required**: No
+- **Doc**: Distance in px from the bottom that triggers the scrolltolower event
+
+#### `scrollIntoView`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `scrollIntoViewOffset`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `scrollWithAnimation`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableBackToTop`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enablePassive`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 #### `refresherEnabled`
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Enables the custom pull-down refresher
 
-#### `lowerThreshold`
+#### `refresherThreshold`
 
-- **Type**: `Number`　**Default**: `50`　**Required**: No
-- **Doc**: Distance in px from the bottom that triggers the scrolltolower event
+- **Type**: `Number`　**Default**: `45`　**Required**: No
+- **Doc**: —
+
+#### `refresherDefaultStyle`
+
+- **Type**: `String`　**Default**: `'black'`　**Required**: No
+- **Doc**: —
+
+#### `refresherBackground`
+
+- **Type**: `String`　**Default**: `'transparent'`　**Required**: No
+- **Doc**: —
+
+#### `refresherTriggered`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `bounces`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `showScrollbar`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `fastDeceleration`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scrollAnchoring`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `type`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `associativeContainer`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `reverse`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `clip`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `cacheExtent`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `minDragDistance`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `scrollIntoViewWithinExtent`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scrollIntoViewAlignment`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `padding`
+
+- **Type**: `Array`　**Default**: `[]`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelTriggered`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelThreshold`
+
+- **Type**: `Number`　**Default**: `150`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelCloseThreshold`
+
+- **Type**: `Number`　**Default**: `80`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelScrollEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `refresherBallisticRefreshEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `refresherTwoLevelPinned`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enableFlex`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `enhanced`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `pagingEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `usingSticky`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
 
 ## Events
 
 | Event | Doc | Payload |
 |---|---|---|
-| `scroll` | Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop) | `e` |
-| `scrolltolower` | Scrolled to the bottom (triggered by lowerThreshold) | `e` |
-| `refresherrefresh` | Custom pull-down refresher triggered | `e` |
+| `scroll` | Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop) | — |
+| `scrolltoupper` | — | — |
+| `scrolltolower` | Scrolled to the bottom (triggered by lowerThreshold) | — |
+| `refresherpulling` | — | — |
+| `refresherrefresh` | Custom pull-down refresher triggered | — |
+| `refresherrestore` | — | — |
+| `refresherabort` | — | — |
+| `refresherwillrefresh` | — | — |
+| `refresherstatuschange` | — | — |
+| `dragstart` | — | — |
+| `dragging` | — | — |
+| `dragend` | — | — |
+| `scrollstart` | — | — |
+| `scrollend` | — | — |
 
 ### Event details
 
 #### `scroll`
 
 - **Doc**: Scrolling (eventScrollTop normalization: MP e.detail.scrollTop / Web e.target.scrollTop)
-- **Payload**: `e`
+- **Payload**: none
+
+#### `scrolltoupper`
+
+- **Doc**: —
+- **Payload**: none
 
 #### `scrolltolower`
 
 - **Doc**: Scrolled to the bottom (triggered by lowerThreshold)
-- **Payload**: `e`
+- **Payload**: none
+
+#### `refresherpulling`
+
+- **Doc**: —
+- **Payload**: none
 
 #### `refresherrefresh`
 
 - **Doc**: Custom pull-down refresher triggered
-- **Payload**: `e`
+- **Payload**: none
+
+#### `refresherrestore`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `refresherabort`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `refresherwillrefresh`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `refresherstatuschange`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `dragstart`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `dragging`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `dragend`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `scrollstart`
+
+- **Doc**: —
+- **Payload**: none
+
+#### `scrollend`
+
+- **Doc**: —
+- **Payload**: none
 
 ## Slots
 
@@ -134,4 +404,4 @@ Scroll container
 </p-scroll-view>
 ```
 
-<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: src/components/p-scroll-view/index.vue -->
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/components/p-scroll-view/index.vue -->

@@ -13,6 +13,8 @@ Page({
     avatar: "/avatar.png",
   },
   onLoad(options) {
+    var __pg = (typeof globalThis !== 'undefined') ? globalThis : null
+    if (__pg) { __pg.__PROTEUS_PROBES__ = {}; __pg.__PROTEUS_PROBE_SEQ__ = 0 }
     const params = {}
     const keys = Object.keys(options || {})
     for (let i = 0; i < keys.length; i++) {
@@ -83,6 +85,8 @@ Page({
     text: "",
   },
   onLoad(options) {
+    var __pg = (typeof globalThis !== 'undefined') ? globalThis : null
+    if (__pg) { __pg.__PROTEUS_PROBES__ = {}; __pg.__PROTEUS_PROBE_SEQ__ = 0 }
     const params = {}
     const keys = Object.keys(options || {})
     for (let i = 0; i < keys.length; i++) {
@@ -146,6 +150,8 @@ Page({
     html: "<p>hi</p>",
   },
   onLoad(options) {
+    var __pg = (typeof globalThis !== 'undefined') ? globalThis : null
+    if (__pg) { __pg.__PROTEUS_PROBES__ = {}; __pg.__PROTEUS_PROBE_SEQ__ = 0 }
     const params = {}
     const keys = Object.keys(options || {})
     for (let i = 0; i < keys.length; i++) {
@@ -205,6 +211,8 @@ Page({
     count: 0,
   },
   onLoad(options) {
+    var __pg = (typeof globalThis !== 'undefined') ? globalThis : null
+    if (__pg) { __pg.__PROTEUS_PROBES__ = {}; __pg.__PROTEUS_PROBE_SEQ__ = 0 }
     const params = {}
     const keys = Object.keys(options || {})
     for (let i = 0; i < keys.length; i++) {

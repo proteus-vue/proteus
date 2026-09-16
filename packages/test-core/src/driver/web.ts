@@ -216,5 +216,21 @@ export function createWebDriver(page: PlaywrightPageLike, cdpSession?: CdpSessio
     async refresh(): Promise<void> {
       await page.reload()
     },
+    // ★★框架元素探针（2026-09-14）：Web 端同样可读组件自测量注册表（跨端统一通道）。
+    //   Web 无 glass-easel 隔离（DOM 可查），但探针提供**与 MP 一致**的断言面（同一 API 双端可用）。
+    async probes(pid?: string) {
+      const body = pid
+        ? `const r = globalThis.__PROTEUS_PROBES__ || {}; return JSON.stringify(r[${JSON.stringify(pid)}] ? [r[${JSON.stringify(pid)}]] : [])`
+        : `const r = globalThis.__PROTEUS_PROBES__ || {}; return JSON.stringify(Object.keys(r).map(function (k) { return r[k] }))`
+      const raw = await page.evaluate(body)
+      try {
+        return JSON.parse(String(raw)) as import('./types').ProbeRecord[]
+      } catch {
+        return []
+      }
+    },
+    async enableProbes(): Promise<void> {
+      await page.evaluate('globalThis.__PROTEUS_PROBE_ALL__ = true')
+    },
   }
 }

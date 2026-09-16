@@ -4,7 +4,7 @@
 //   theme 值落成根节点单类变体——而不是靠页面级 CSS 从外往里推（会被微信样式隔离挡住）。
 //
 //   本测试锁三件事（均可破坏性验证）：
-//     ① 注册表 SSOT 一致：src/components/theme/registry.ts 的主题键/色值 ↔ 各组件变体 CSS；
+//     ① 注册表 SSOT 一致：packages/components/theme/registry.ts 的主题键/色值 ↔ 各组件变体 CSS；
 //     ② 编译产物：p-button theme 变体在 wxml 是**字面量键**（编译期可后缀），在 wxss 是**单类选择器**；
 //     ③ 反模式拦截：变体选择器不得出现复合类 `.a.b`（Skyline 真机不支持）。
 import { describe, it, expect } from 'vitest'
@@ -16,15 +16,15 @@ const ROOT = path.resolve(__dirname, '..')
 const read = (p: string) => readFileSync(path.join(ROOT, p), 'utf8')
 
 function compileComponent(tag: string) {
-  return compileVueSfc(read(`src/components/${tag}/index.vue`), {
+  return compileVueSfc(read(`packages/components/${tag}/index.vue`), {
     isComponent: true,
-    filename: `src/components/${tag}/index.vue`,
+    filename: `packages/components/${tag}/index.vue`,
   })
 }
 
 /** 从注册表源码解析出主题键 → 色值（避免依赖包导出解析，直读 SSOT 文件） */
 function parseRegistry(): Record<string, { bg: string; color: string }> {
-  const src = read('src/components/theme/registry.ts')
+  const src = read('packages/components/theme/registry.ts')
   const out: Record<string, { bg: string; color: string }> = {}
   const re = /(\w+):\s*\{\s*key:\s*'(\w+)'[^}]*?bg:\s*'([^']+)'[^}]*?color:\s*'([^']+)'/g
   let m: RegExpExecArray | null
@@ -47,7 +47,7 @@ describe('★编译器通道主题皮肤（p-button POC）', () => {
       expect(wxml, `wxml 缺主题键 ${key} 的字面量判定`).toContain(`p-theme--${key}-`)
     }
     // 反模式：**模板区**出现动态拼接 'p-theme--' + theme → 动态类名无法后缀（MP 匹配不上）
-    const src = read('src/components/p-button/index.vue')
+    const src = read('packages/components/p-button/index.vue')
     const template = src.match(/<template>([\s\S]*?)<\/template>/)?.[1] ?? ''
     expect(template, '模板不得动态拼接主题类名').not.toMatch(/'p-theme--'\s*\+/)
   })
@@ -81,7 +81,7 @@ describe('★编译器通道主题皮肤（p-button POC）', () => {
   })
 
   it('Web 端：theme prop 参与组件契约（defineProps 声明）', () => {
-    const src = read('src/components/p-button/index.vue')
+    const src = read('packages/components/p-button/index.vue')
     expect(src).toMatch(/theme:\s*\{\s*type:\s*String/)
   })
 

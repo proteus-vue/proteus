@@ -48,7 +48,8 @@
     <view class="p-picker-root" :class="{ 'p-picker-root--open': shown }" @click="onMaskTap">
       <view
         class="p-picker-mask"
-        :class="{ 'p-picker-mask--enter': phase === 'enter', 'p-picker-mask--leave': phase === 'leave' }"
+        :class="[maskClass, { 'p-picker-mask--enter': phase === 'enter', 'p-picker-mask--leave': phase === 'leave' }]"
+        :style="maskStyle"
       />
       <view
         class="p-picker-sheet"
@@ -59,7 +60,13 @@
           <view class="p-picker-close" @click="onCloseTap">×</view>
           <text class="p-picker-title">{{ headerText }}</text>
         </view>
-        <picker-view class="p-picker-bd" indicator-style="height: 48px;" :value="draft" @change="onPvChange">
+        <picker-view
+          class="p-picker-bd"
+          :class="indicatorClass"
+          :indicator-style="indicatorStyle || undefined"
+          :value="draft"
+          @change="onPvChange"
+        >
           <picker-view-column v-for="(col, ci) in columns" :key="ci">
             <view v-for="(label, li) in col" :key="li" class="p-picker-item">{{ label }}</view>
           </picker-view-column>
@@ -103,6 +110,17 @@ const props = defineProps({
   showButtons: { type: Boolean, default: true },
   /** ★底部按钮形态：single 单按钮「确定」（默认）/ double「取消 + 确定」 */
   buttonMode: { type: String, default: 'single' },
+  // ── ★官方 <picker-view> 属性（2026-09-14 对齐，批次 2） ──
+  /** 滚轮选中指示线样式（原生 picker-view indicator-style；缺省 48px 细线） */
+  indicatorStyle: { type: String, default: 'height: 48px;' },
+  /** 滚轮指示线附加类名（原生 picker-view indicator-class） */
+  indicatorClass: { type: String, default: '' },
+  /** 遮罩层附加类名（原生 picker-view mask-class） */
+  maskClass: { type: String, default: '' },
+  /** 遮罩层内联样式（原生 picker-view mask-style） */
+  maskStyle: { type: String, default: '' },
+  /** 滚动即实时触发 change（原生 picker-view immediate-change；亦等价于 showButtons=false 的实时生效语义） */
+  immediateChange: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['change', 'cancel', 'columnchange'])
@@ -204,8 +222,8 @@ function onPvChange(e: unknown): void {
     }
   }
   draft.value = next
-  // ★无底部按钮：滚动即实时生效（关闭即结束，无需确认键）
-  if (!props.showButtons) emitChange()
+  // ★无底部按钮 / immediate-change：滚动即实时生效（关闭即结束，无需确认键）
+  if (!props.showButtons || props.immediateChange) emitChange()
 }
 
 /** 确定：裸载荷（selector → number；multiSelector → number[]） */

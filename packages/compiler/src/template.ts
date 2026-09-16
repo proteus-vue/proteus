@@ -1185,7 +1185,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           break
         }
         const raw = exprContent(dir.arg)
-        const mapped = ctx.eventMap[raw] ?? raw
+        // ★v-model 契约事件名单段化（与子组件侧 triggerEvent('update-{arg}') 同口径）：
+        //   父级写 `@update:show` 时 raw='update:show' → 若原样输出则产物 `bind:update:show`（双冒号），
+        //   而子组件 emit 的是单段 `update-show` → **两者永不匹配**（真机 p-page-container 遮罩点击
+        //   / v-model 组件关不掉的真根因）。此处归一 `update:{arg}` → `update-{arg}`，使手写
+        //   `@update:x` 与 `v-model:x`（后者本就走 update-x）同口径、两端一致。
+        const mapped = (ctx.eventMap[raw] ?? raw).replace(/^update:/, 'update-')
         // 修饰符：运行时 modifiers 是 { content }[]（与声明类型 string[] 不一致，做兼容）
         const mods = (dir.modifiers as unknown as Array<{ content?: string } | string>).map((m) =>
           typeof m === 'string' ? m : (m?.content ?? ''),

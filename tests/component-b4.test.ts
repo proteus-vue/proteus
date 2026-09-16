@@ -8,17 +8,17 @@ import path from 'node:path'
 import { compileVueSfc } from '@proteus-vue/compiler'
 import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
 import type { ProteusConfig } from '../packages/plugin-vite/src/config'
-import { eventField, eventValue, eventScrollTop } from '../src/components/runtime/event'
+import { eventField, eventValue, eventScrollTop } from '../packages/components/runtime/event'
 import { resolveSharedModule } from '../packages/plugin-vite/src/plugin'
 
-const COMPONENTS_DIR = path.resolve('src/components')
-const FRAMEWORK_COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
 
 function compileComponent(tag: string) {
   const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
   return compileVueSfc(sfc, {
     isComponent: true,
-    filename: `src/components/${tag}/index.vue`,
+    filename: `packages/components/${tag}/index.vue`,
     // 模拟插件 module-plan B0：相对共享模块 → require（独立编译需显式传入）
     moduleImports: [{ source: '../runtime/event', requirePath: './runtime/event' }],
   })
@@ -92,7 +92,7 @@ describe('p-list-view 事件归一（B3 组件接入 eventScrollTop，Web 滚动
     const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, 'p-list-view', 'index.vue'), 'utf-8')
     const { js } = compileVueSfc(sfc, {
       isComponent: true,
-      filename: 'src/components/p-list-view/index.vue',
+      filename: 'packages/components/p-list-view/index.vue',
       moduleImports: [{ source: '../runtime/event', requirePath: './runtime/event' }],
     })
     expect(js).toContain('eventScrollTop(e)')
@@ -104,7 +104,7 @@ describe('resolveSharedModule 框架资产重定位（appDir 之外 → proteus/
   it('框架组件引 runtime/event → relNoExt 重定位为 proteus/runtime/event（emitFile 不允许 ../ 越界）', () => {
     const root = path.resolve('.')
     const appDir = path.join(root, 'examples')
-    const frameworkDir = path.join(root, 'src/components')
+    const frameworkDir = path.join(root, 'packages/components')
     const r = resolveSharedModule(appDir, path.join(frameworkDir, 'p-input/index.vue'), '../runtime/event', frameworkDir)
     expect(r?.relNoExt).toBe('proteus/runtime/event')
     expect(r?.relNoExt).not.toMatch(/^\.\.\//)
@@ -142,7 +142,7 @@ describe('gen-routes 端到端（p-input / p-textarea 自动解析）', () => {
       setDataBridge: { batchWindow: 16, perComponent: true },
       style: { px2rpx: true, rpxRatio: 2 },
     }
-    runGenRoutes({ config, root, frameworkComponentsDir: FRAMEWORK_COMPONENTS_DIR })
+    runGenRoutes({ config, root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJson.usingComponents['p-input']).toBe('/proteus/p-input/index')
     expect(pageJson.usingComponents['p-textarea']).toBe('/proteus/p-textarea/index')

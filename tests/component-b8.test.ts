@@ -6,17 +6,17 @@ import os from 'node:os'
 import path from 'node:path'
 import { auditComponents, formatComponentAudit } from '../packages/cli/src/component-audit'
 import { compileVueSfc } from '@proteus-vue/compiler'
-import { componentRender, setObservabilityEnabled } from '../src/components/runtime/observability'
+import { componentRender, setObservabilityEnabled } from '../packages/components/runtime/observability'
 
-const COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
 
 function compileComponent(tag: string) {
   const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-  return compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+  return compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
 }
 
 describe('proteus components:audit —— 真实组件目录零违规（硬门禁基线）', () => {
-  it('src/components 审计通过：no-platform-api / no-sync-storage / manifest-complete 全部 OK', () => {
+  it('packages/components 审计通过：no-platform-api / no-sync-storage / manifest-complete 全部 OK', () => {
     const result = auditComponents(COMPONENTS_DIR)
     expect(result.ok, formatComponentAudit(result)).toBe(true)
     expect(result.componentCount).toBeGreaterThanOrEqual(16)

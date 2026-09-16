@@ -7,6 +7,8 @@ export type { DevtoolsRelayOptions } from './devtools-plugin'
 export { createProteusRelay } from './devtools-relay'
 export type { ProteusRelay, RelayRole } from './devtools-relay'
 export { runGenRoutes } from './gen-routes'
+// ★语义组件库包根解析（@proteus-vue/components，2026-09-14 拆包）：供外部/测试复用
+export { resolveComponentsRoot, componentsRootExists, COMPONENTS_PKG } from './resolve-components'
 export type { GenRoutesOptions } from './gen-routes'
 export type { ProteusConfig } from './config'
 export { resolveProteusViteConfig } from './vite-config'

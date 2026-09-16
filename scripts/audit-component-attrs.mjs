@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ATTRS = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/generated/miniprogram-component-attrs.json'), 'utf8')).components
-const COMPONENTS_DIR = path.join(ROOT, 'src/components')
+// ★组件库已拆包（2026-09-14）：@proteus-vue/components → packages/components（原仓库根 src/components）
+const COMPONENTS_DIR = path.join(ROOT, 'packages/components')
 const asJson = process.argv.includes('--json')
 const showAll = process.argv.includes('--all')
 // ★棘轮（05-gates-and-ci.md）：--min <covered> 覆盖率或绝对覆盖数低于阈值 → exit 1（只增不减）
@@ -20,13 +21,18 @@ const ALIAS = {
   'icon': 'p-icon', 'text': 'p-text', 'image': 'p-image', 'button': 'p-button',
   'input': 'p-input', 'textarea': 'p-textarea', 'switch': 'p-switch', 'slider': 'p-slider',
   'progress': 'p-progress', 'checkbox': 'p-checkbox', 'radio': 'p-radio', 'picker': 'p-picker',
-  'picker-view': 'p-picker', 'form': 'p-form', 'label': 'p-label', 'navigator': 'p-nav',
+  'picker-view': 'p-picker', 'form': 'p-form', 'label': 'p-label',
   'scroll-view': 'p-scroll-view', 'swiper': 'p-swipter', 'video': 'p-media', 'canvas': 'p-canvas',
   'map': 'p-map', 'camera': 'p-camera', 'web-view': 'p-webview', 'ad': 'p-ad',
   'rich-text': 'p-rich-text', 'view': 'p-view', 'movable-view': 'p-draggable',
   'movable-area': 'p-draggable', 'virtual-list': 'p-virtual-list', 'page-container': 'p-page-container',
   'share-element': 'p-transition', 'keyboard-accessory': 'p-keyboard-accessory',
   'match-media': 'p-adaptive', 'cover-view': 'p-view', 'cover-image': 'p-image',
+  // ★语义纠偏（2026-09-14，对齐 SSOT packages/component-ir/src/audit.ts）：
+  //   官方 <navigator> 是**声明式导航链接**（跳转 url/open-type/delta…），对应框架 engineering.router-link
+  //   = `p-router-link`（E18），**不是** p-nav（shell.nav 导航栏）；官方 <navigation-bar>（导航条）
+  //   才是 shell.nav → `p-nav-bar`（自绘）。此前 navigator→p-nav 属映射错误。
+  'navigator': 'p-router-link', 'navigation-bar': 'p-nav-bar',
 }
 
 /** 从框架组件源码抽 props 名（defineProps 块内的 camelCase 键） */
@@ -82,6 +88,10 @@ const INTENTIONAL_SKIP = {
   //   （checkbox 形态与 p-checkbox 语义重复且外观是独立的小方框）。Proteus 改为 `shape: round|square`
   //   ——「圆角 / 方角**开关**」，语义更纯粹（都是开关，只是圆角不同），且不引入第二个 checkbox 形态。
   switch: { type: '平台历史包袱（checkbox 形态）→ 框架改用 shape=round|square（圆角/方角开关）' },
+  // 官方 <cover-view scroll-top>：Skyline 同层渲染后 cover-view 已由通用 <view> 覆盖（SSOT audit.ts
+  //   「layout.box（Skyline 同层渲染后 view 即可覆盖）」）。scroll-top 是 cover-view **私有**滚动同步属性，
+  //   依赖被覆盖的原生组件上下文，不上升为通用容器 p-view 的语义（否则端私有属性泄漏）。
+  'cover-view': { 'scroll-top': 'cover-view 私有滚动同步；Skyline 后由通用 view 覆盖，不上升为 p-view 语义' },
 }
 
 const norm = (s) => s.replace(/[-:]/g, '').toLowerCase() // open-type ↔ openType；bind:xxx
@@ -100,7 +110,10 @@ for (const [tag, attrs] of Object.entries(ATTRS)) {
   // ★事件不计入属性覆盖（框架用 @event 语义）：按**类型**过滤 `type: 'eventhandle'`，
   //   而非仅按 `bind:`/`catch:` 前缀——官方无值事件（如 button.createliveactivity、
   //   movable-view.htouchmove/vtouchmove）名字不带前缀，仅看前缀会误算为属性缺口。
-  const attrOnly = attrs.filter(a => a.type !== 'eventhandle' && !/^(bind|catch)[:-]/.test(a.name))
+  //   ★worklet 回调同理（`worklet:onscrollstart` / type 'worklet'|'callback'）：是**事件回调**而非可声明属性。
+  const attrOnly = attrs.filter(a =>
+    a.type !== 'eventhandle' && a.type !== 'worklet' && a.type !== 'callback' &&
+    !/^(bind|catch|worklet)[:-]/.test(a.name))
   // ★有意不沿用：从缺口统计中剔除（但登记表须有理由，见 INTENTIONAL_SKIP）
   const skipped = INTENTIONAL_SKIP[tag] ?? {}
   const counted = attrOnly.filter(a => !(a.name in skipped))

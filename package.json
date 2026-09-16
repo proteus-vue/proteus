@@ -90,7 +90,8 @@
     "vite": "^5.0.0",
     "vitest": "^1.0.0",
     "vue-tsc": "^2.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@proteus-vue/components": "workspace:*"
   },
   "packageManager": "pnpm@9.15.9"
 }

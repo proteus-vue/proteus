@@ -169,6 +169,35 @@
 .proteus-web-image {
   display: block;
 }
+/* ★长按菜单（show-menu-by-longpress 的 Web 模拟）：自绘菜单 + 遮罩 */
+.proteus-web-image-wrap { position: relative; display: inline-block; }
+.proteus-web-image-menu-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.proteus-web-image-menu {
+  min-width: 160px;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.proteus-web-image-menu-item {
+  display: block;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #1a1a1e;
+  text-decoration: none;
+  text-align: center;
+}
+.proteus-web-image-menu-item + .proteus-web-image-menu-item {
+  border-top: 1px solid #f0f0f2;
+}
 
 /* ===== view/text 最小对齐（微信默认：block/inline + 继承；text 取消默认空隙）===== */
 .proteus-web-view {

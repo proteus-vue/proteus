@@ -20,6 +20,27 @@ export const MP_IDE_DEFAULT_PATHS: Record<string, string[]> = {
   ],
 }
 
+/**
+ * ★2026-09-14 修复：把「automator cli 路径」归一到**同目录的 wechatide 二进制**。
+ *   本项目 MP E2E 走 wechatide skill-CLI（automator 已弃用），`plan.ideCli` 会被：
+ *     ① index.ts 用 `-c <client> open_project_window/simulator_refresh` 调用；② 作为 PROTEUS_IDE_CLI 传给
+ *     spec（createWxideMini 的 cliPath → 再 spawn 同一二进制）。
+ *   若指向老 `cli`（automator），上述调用只会打印 help 到 stderr → 全链路静默失败
+ *   （实测：e2e:mp 19/19 报「输出非 JSON」）。故探测到 `.../MacOS/cli` 时改用同目录 `wechatide`。
+ */
+export function normalizeWxideBin(p: string, exists: (p: string) => boolean = fs.existsSync): string {
+  const base = path.basename(p).toLowerCase()
+  if (base === 'wechatide' || base === 'wechatide.exe') return p
+  if (base === 'cli' || base === 'cli.bat' || base === 'cli.js') {
+    const dir = path.dirname(p)
+    for (const name of ['wechatide', 'wechatide.exe', 'wechatide.cmd']) {
+      const sib = path.join(dir, name)
+      if (exists(sib)) return sib
+    }
+  }
+  return p
+}
+
 export interface MpIdeOptions {
   /** 显式指定 CLI 路径（proteus test e2e:mp --ide <path>） */
   override?: string
@@ -33,16 +54,16 @@ export interface MpIdeOptions {
   exists?: (p: string) => boolean
 }
 
-/** 解析 IDE CLI 路径：PROTEUS_IDE_CLI 环境变量 → 平台默认路径；全部缺失 → null */
+/** 解析 **wechatide skill-CLI** 路径：PROTEUS_IDE_CLI 环境变量 → 平台默认路径；归一到 wechatide 二进制 */
 export function resolveMpIdeCli(opts: MpIdeOptions = {}): string | null {
   const env = opts.env ?? process.env
   const exists = opts.exists ?? fs.existsSync
   const override = opts.override ?? env.PROTEUS_IDE_CLI
-  if (override && exists(override)) return override
+  if (override && exists(override)) return normalizeWxideBin(override, exists)
   const platform = opts.platform ?? process.platform
   const candidates = opts.defaultPaths ?? MP_IDE_DEFAULT_PATHS[platform] ?? []
   for (const p of candidates) {
-    if (exists(p)) return p
+    if (exists(p)) return normalizeWxideBin(p, exists)
   }
   return null
 }

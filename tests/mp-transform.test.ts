@@ -688,7 +688,7 @@ describe('虚拟列表（v0.4）', () => {
   })
 
   it('PListView 组件编译：properties（函数默认值忽略）+ 切片逻辑 + scroll-view 渲染 + observers', () => {
-    const src = fs.readFileSync(path.resolve('src/components/p-list-view/index.vue'), 'utf-8')
+    const src = fs.readFileSync(path.resolve('packages/components/p-list-view/index.vue'), 'utf-8')
     const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/p-list-view/index.vue' })
     // properties：函数默认值（() => []）忽略，仅 type
     expect(r.js).toContain('items: { type: Array }')
@@ -710,7 +710,7 @@ describe('虚拟列表（v0.4）', () => {
   })
 
   it('VirtualList 兼容别名：转发 p-list-view（原 API 表面不变）', () => {
-    const src = fs.readFileSync(path.resolve('src/components/virtual-list/index.vue'), 'utf-8')
+    const src = fs.readFileSync(path.resolve('packages/components/virtual-list/index.vue'), 'utf-8')
     const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/virtual-list/index.vue' })
     expect(r.wxml).toContain('<p-list-view')
     expect(r.wxml).toContain('items="{{items}}"')

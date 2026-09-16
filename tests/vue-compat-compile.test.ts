@@ -101,7 +101,7 @@ function set(v: string) { m.value = v }
 function read() { return m.value }
 </script>
 <template><view>{{ m }}</view></template>`
-    const r = compileVueSfc(src, { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true })
+    const r = compileVueSfc(src, { filename: 'packages/components/p-probe/index.vue', ...opts, isComponent: true })
     // prop 注册（properties.modelValue）
     expect(r.js).toMatch(/modelValue:\s*\{\s*type: String/)
     // 模板改名：{{ m }} → {{ modelValue }}
@@ -126,7 +126,7 @@ function set(v: string) { m.value = v }
 function read() { return m.value }
 </script>
 <template><view>{{ m }}</view></template>`
-    const r = compileVueSfc(src, { filename: 'src/components/p-probe/index.vue', ...opts, isComponent: true })
+    const r = compileVueSfc(src, { filename: 'packages/components/p-probe/index.vue', ...opts, isComponent: true })
     // prop 注册
     expect(r.js).toMatch(/title:\s*\{\s*type: String/)
     // 写 → triggerEvent('update-title')；读 → this.data.title；模板改名 {{ title }}

@@ -7,19 +7,33 @@ import os from 'node:os'
 import path from 'node:path'
 import { resolveMpIdeCli, planMpE2E, waitForAutomatorPort, diagnoseMpE2EEnv, formatMpE2EDiagnosis, isValidAppid, prepareMpE2EProject } from '../packages/cli/src/mp-e2e'
 
-describe('resolveMpIdeCli（IDE 路径探测）', () => {
+describe('resolveMpIdeCli（IDE 路径探测 + ★归一 wechatide 二进制）', () => {
   const exists = (p: string): boolean => p.includes('real')
 
-  it('环境变量 PROTEUS_IDE_CLI 指定且存在 → 优先使用', () => {
-    expect(resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/real/cli' }, exists })).toBe('/real/cli')
+  it('环境变量 PROTEUS_IDE_CLI 指向 wechatide → 原样使用', () => {
+    expect(resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/real/wechatide' }, exists })).toBe('/real/wechatide')
   })
 
-  it('环境变量指定但不存在 → 落平台默认路径', () => {
-    expect(resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/fake/cli' }, exists, platform: 'darwin', defaultPaths: ['/Applications/real/cli'] })).toBe('/Applications/real/cli')
+  it('★指向老 `cli`（automator）→ 归一为同目录 wechatide（修 e2e:mp 全链路「输出非 JSON」）', () => {
+    // 仅当同目录存在 wechatide 时才归一
+    const exists2 = (p: string): boolean => p === '/real/cli' || p === '/real/wechatide'
+    expect(resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/real/cli' }, exists: exists2 })).toBe('/real/wechatide')
   })
 
-  it('默认路径命中（注入 defaultPaths + exists）', () => {
-    const defaultPath = '/Applications/wechatwebdevtools.app/Contents/MacOS/cli'
+  it('指向 `cli` 但同目录无 wechatide → 保持原路径（不误改）', () => {
+    const exists2 = (p: string): boolean => p === '/real/cli'
+    expect(resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/real/cli' }, exists: exists2 })).toBe('/real/cli')
+  })
+
+  it('环境变量指定但不存在 → 落平台默认路径（并归一）', () => {
+    const exists2 = (p: string): boolean => p === '/Applications/real/wechatide'
+    expect(
+      resolveMpIdeCli({ env: { PROTEUS_IDE_CLI: '/fake/cli' }, exists: exists2, platform: 'darwin', defaultPaths: ['/Applications/real/wechatide'] }),
+    ).toBe('/Applications/real/wechatide')
+  })
+
+  it('默认路径命中（注入 defaultPaths + exists；已是 wechatide 不改）', () => {
+    const defaultPath = '/Applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
     expect(resolveMpIdeCli({ env: {}, exists: (p) => p === defaultPath, platform: 'darwin', defaultPaths: [defaultPath] })).toBe(defaultPath)
   })
 

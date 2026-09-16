@@ -81,8 +81,8 @@ export async function runDevProgrammatic(opts: DevOptions, root = process.cwd())
   const mode = opts.target === 'skyline' ? 'mp-weixin' : 'web'
   const resolved = await resolveProteusViteConfig({ root, command: 'serve', mode }, config as never)
   if (resolved.needsGenRoutes) {
-    // ★#495 同 build.ts：frameworkComponentsDir 传 gen-routes（组件目录/component.json 一致性）
-    runGenRoutes({ config: config as never, root, frameworkComponentsDir: (config as Record<string, unknown>).frameworkComponentsDir as string | undefined })
+    // ★组件库已拆包（2026-09-14）：gen-routes 自行解析 @proteus-vue/components 包根（同 build.ts）
+    runGenRoutes({ config: config as never, root })
   }
   const vite = await importViteFrom(root)
   const server = await vite.createServer(resolved.config)

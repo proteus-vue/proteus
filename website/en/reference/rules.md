@@ -7,7 +7,7 @@ generated: true
 
 # Compile rule catalog
 
-> 108 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 109 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
 ## Template transforms (60)
 
@@ -792,7 +792,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline has no clamp length function (per the official support table) — the Web end keeps real CSS clamp while the MP end uses the linear calc alternative (vw is naturally viewport-fluid with zero runtime cost; converged through real-device testing in #496 M3)
 
-## Script transforms (34)
+## Script transforms (35)
 
 ### `script/const-to-data`
 
@@ -1289,6 +1289,19 @@ after:  attached: this.b = this.selectComponent('#btn'); go() { (this.b) === nul
 ```
 
 > why: useTemplateRef is the Vue 3.5 component-instance-reference API; MP uses this.selectComponent('#id') (component/page queries a child instance); stripping .value preserves the instance-reference semantics (b.value reads the instance)
+
+### `script/element-probe`
+
+**Component element probe injection (self-measure → global registry, E2E fallback channel)**
+
+Injects a self-measure block into component ready(): wx.createSelectorQuery().in(this).select(root).boundingClientRect() → writes globalThis.__PROTEUS_PROBES__[pid] (+150ms re-measure for first-frame settling); page onLoad resets the registry (stable per-page keys). Runtime-gated by component pid or __PROTEUS_PROBE_ALL__ (test driver.enableProbes() / on by default in PROTEUS_DEBUG builds)
+
+```
+before: // 组件 ready()（无探针）
+after:  ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').boundingClientRect(r => globalThis.__PROTEUS_PROBES__[pid] = {...r}) */ }
+```
+
+> why: Automation tools (wechatide/automator) only reach page-owned nodes: component internals are isolated by glass-easel (createSelectorQuery returns null; no selectAllComponents in Skyline), so internal geometry/visibility cannot be asserted (a collapsed scroll-view container slipped through twice). Measurement must originate inside the component
 
 ## Style transforms (9)
 

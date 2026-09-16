@@ -10,7 +10,7 @@ import { compileVueSfc } from '@proteus-vue/compiler'
 import { auditComponents } from '../packages/cli/src/component-audit'
 import { TAG_SEMANTIC_MAP, toComponentIR, SEMANTIC_ENUM } from '@proteus-vue/component-ir'
 
-const COMPONENTS_DIR = path.resolve('src/components')
+const COMPONENTS_DIR = path.resolve('packages/components')
 
 const NEW_TAGS = ['p-transition', 'p-animate', 'p-router-link']
 
@@ -69,7 +69,7 @@ describe('G-32 B5 续二/尾巴 工程原语组件形态落地（E19/E20 动画 
   it('MP 编译：全部组件 compileVueSfc 产出（isComponent 模式——wxml/js/wxss 非空）', () => {
     for (const tag of NEW_TAGS) {
       const sfc = fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
-      const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `src/components/${tag}/index.vue` })
+      const { wxml, js, wxss } = compileVueSfc(sfc, { isComponent: true, filename: `packages/components/${tag}/index.vue` })
       expect(wxml.length, `${tag} wxml 为空`).toBeGreaterThan(0)
       expect(js.length, `${tag} js 为空`).toBeGreaterThan(0)
       expect(wxss.length, `${tag} wxss 为空`).toBeGreaterThan(0)
@@ -79,12 +79,12 @@ describe('G-32 B5 续二/尾巴 工程原语组件形态落地（E19/E20 动画 
   it('代表性产物：p-transition wxml 类绑定 + p-animate wxss 关键帧 @keyframes 保留', () => {
     const transition = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-transition', 'index.vue'), 'utf-8'), {
       isComponent: true,
-      filename: 'src/components/p-transition/index.vue',
+      filename: 'packages/components/p-transition/index.vue',
     })
     expect(transition.wxml).toContain('p-transition')
     const animate = compileVueSfc(fs.readFileSync(path.join(COMPONENTS_DIR, 'p-animate', 'index.vue'), 'utf-8'), {
       isComponent: true,
-      filename: 'src/components/p-animate/index.vue',
+      filename: 'packages/components/p-animate/index.vue',
     })
     expect(animate.wxml).toContain('p-animate')
     // ★纯 CSS 动画声明语义：@keyframes 保留在 wxss（Skyline animation CSS）

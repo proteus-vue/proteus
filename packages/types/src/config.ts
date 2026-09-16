@@ -139,9 +139,6 @@ export interface ProteusConfig {
    *   合并语义：plugins 追加在框架插件后、resolve.alias 拼接保框架 @、define/build 深合并。
    *   类型依赖：@proteus-vue/types 依赖 vite（仅类型引用，零运行时） */
   vite?: ViteUserConfig | ((ctx: ViteConfigContext) => ViteUserConfig | void | Promise<ViteUserConfig | void>)
-  /** ★框架内置组件目录（决策 #115 过渡：组件库未拆包时显式指向共享组件目录；缺省 root/src/components）
-   *   ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后删除 */
-  frameworkComponentsDir?: string
   /** ★#447 D-2 dogfooding 门禁（05-dogfooding-conformance D-2）：页面不裸写平台 API / 手写 @media / 引第三方 UI
    *   规则级可配（off/warn/error——缺省全部 error）；消费者：CLI `proteus audit d2`（★#448 官网/开发者双场景单引擎） */
   audit?: AuditConfig

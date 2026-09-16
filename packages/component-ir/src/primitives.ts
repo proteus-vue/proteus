@@ -39,7 +39,7 @@ export interface PrimitiveDef {
 
 /** G-32 §3 ① 布局原语（12）——G-22 泛化：swiper/scroll-view/movable 消灭为属性 */
 const LAYOUT: PrimitiveDef[] = [
-  { id: 'L1', kind: 'layout', semantic: 'layout.box', tag: 'p-box', props: ['aspectRatio', 'overflow'], mpEquiv: '<view>', tier: 'L1', status: 'implemented' },
+  { id: 'L1', kind: 'layout', semantic: 'layout.box', tag: 'p-box', props: ['aspectRatio', 'overflow', 'hoverClass', 'hoverStopPropagation', 'hoverStartTime', 'hoverStayTime'], mpEquiv: '<view>', tier: 'L1', status: 'implemented' },
   { id: 'L2', kind: 'layout', semantic: 'layout.inline', tag: 'p-inline', props: ['wrap'], mpEquiv: '<text> 内联', tier: 'L1', status: 'implemented' },
   { id: 'L3', kind: 'layout', semantic: 'layout.stack', tag: 'p-stack', props: ['direction', 'gap', 'align', 'wrap', 'snap', 'loop'], mpEquiv: 'flex + scroll-view + swiper', tier: 'L1', status: 'implemented' },
   { id: 'L4', kind: 'layout', semantic: 'layout.grid', tag: 'p-grid', props: ['minColWidth', 'maxCols', 'gap', 'autoFlow'], mpEquiv: '<view> + CSS Grid', tier: 'L1', status: 'implemented' },
@@ -49,7 +49,7 @@ const LAYOUT: PrimitiveDef[] = [
   { id: 'L7', kind: 'layout', semantic: 'layout.fit', tag: 'p-fit', props: ['mode'], mpEquiv: 'fit-content', tier: 'L1', status: 'implemented' },
   { id: 'L8', kind: 'layout', semantic: 'layout.spacer', tag: 'p-spacer', props: ['grow', 'shrink'], mpEquiv: 'flex:1', tier: 'L1', status: 'implemented' },
   { id: 'L9', kind: 'layout', semantic: 'layout.divider', tag: 'p-divider', props: ['orientation', 'inset'], mpEquiv: '<view> + border', tier: 'L1', status: 'implemented' },
-  { id: 'L10', kind: 'layout', semantic: 'layout.scroll', tag: 'p-scroll', props: ['axis', 'paging', 'refresh', 'indicator'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
+  { id: 'L10', kind: 'layout', semantic: 'layout.scroll', tag: 'p-scroll', props: ['axis', 'paging', 'refresh', 'indicator', 'upperThreshold', 'lowerThreshold', 'scrollIntoView', 'scrollWithAnimation', 'enableBackToTop', 'enablePassive', 'refresherEnabled', 'refresherTriggered', 'enhanced', 'bounces', 'scrollAnchoring', 'padding'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
   { id: 'L11', kind: 'layout', semantic: 'layout.virtual-list', tag: 'p-virtual-list', props: ['itemSize', 'buffer', 'direction'], mpEquiv: '<scroll-view> + 手动回收', tier: 'L1', status: 'implemented' },
   { id: 'L12', kind: 'layout', semantic: 'layout.masonry', tag: 'p-masonry', props: ['colCount', 'gap'], mpEquiv: '第三方瀑布流', tier: 'L1', status: 'implemented' },
   // ★#405 语义登记批：Fluid 体系剩余组件（语义层待多端映射 → planned L2——G-31.4 不足 3 端降级）
@@ -59,11 +59,11 @@ const LAYOUT: PrimitiveDef[] = [
 
 /** G-32 §4 ② 基础 UI 原语（18）——视图/内容 + 输入/表单 */
 const UI: PrimitiveDef[] = [
-  { id: 'U1', kind: 'ui', semantic: 'ui.text', tag: 'p-text', props: ['content', 'selectable', 'truncate', 'align'], mpEquiv: '<text>', tier: 'L1', status: 'implemented' },
+  { id: 'U1', kind: 'ui', semantic: 'ui.text', tag: 'p-text', props: ['content', 'selectable', 'truncate', 'align', 'userSelect', 'overflow', 'maxLines', 'selectOnGesture', 'space', 'decode'], mpEquiv: '<text>', tier: 'L1', status: 'implemented' },
   { id: 'U2', kind: 'ui', semantic: 'ui.heading', tag: 'p-heading', props: ['level'], mpEquiv: '<h1>-<h6>', tier: 'L1', status: 'implemented' },
   { id: 'U3', kind: 'ui', semantic: 'ui.rich-text', tag: 'p-rich-text', props: ['source', 'schema'], mpEquiv: '<rich-text>', tier: 'L1', status: 'implemented' },
-  { id: 'U4', kind: 'ui', semantic: 'ui.icon', tag: 'p-icon', props: ['name', 'size', 'color', 'spin'], mpEquiv: '<icon>', tier: 'L1', status: 'implemented' },
-  { id: 'U5', kind: 'ui', semantic: 'ui.image', tag: 'p-image', props: ['src', 'fit', 'placeholder', 'lazy'], mpEquiv: '<image>', tier: 'L1', status: 'implemented' },
+  { id: 'U4', kind: 'ui', semantic: 'ui.icon', tag: 'p-icon', props: ['name', 'type', 'size', 'color', 'spin'], mpEquiv: '<icon>', tier: 'L1', status: 'implemented' },
+  { id: 'U5', kind: 'ui', semantic: 'ui.image', tag: 'p-image', props: ['src', 'fit', 'placeholder', 'lazy', 'showMenuByLongpress', 'fadeIn', 'preload', 'webp', 'referrerPolicy'], mpEquiv: '<image>', tier: 'L1', status: 'implemented' },
   { id: 'U6', kind: 'ui', semantic: 'ui.avatar', tag: 'p-avatar', props: ['src', 'shape', 'size', 'fallback'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
   { id: 'U7', kind: 'ui', semantic: 'ui.media', tag: 'p-media', props: ['kind', 'controls', 'autoplay', 'poster', 'loop', 'muted', 'pictureInPicture'], mpEquiv: '<video>+<audio>', tier: 'L1', status: 'implemented' },
   { id: 'U8', kind: 'ui', semantic: 'ui.canvas', tag: 'p-canvas', props: ['engine', 'resolution'], mpEquiv: '<canvas>', tier: 'L1', status: 'implemented' },
@@ -75,7 +75,7 @@ const UI: PrimitiveDef[] = [
   { id: 'U14', kind: 'ui', semantic: 'ui.radio', tag: 'p-radio', props: ['value', 'group'], mpEquiv: '<radio>', tier: 'L1', status: 'implemented' },
   { id: 'U15', kind: 'ui', semantic: 'ui.switch', tag: 'p-switch', props: ['checked', 'loading'], mpEquiv: '<switch>', tier: 'L1', status: 'implemented' },
   { id: 'U16', kind: 'ui', semantic: 'ui.slider', tag: 'p-slider', props: ['min', 'max', 'step', 'range'], mpEquiv: '<slider>', tier: 'L1', status: 'implemented' },
-  { id: 'U17', kind: 'ui', semantic: 'ui.picker', tag: 'p-picker', props: ['mode', 'start', 'end'], mpEquiv: '<picker>', tier: 'L1', status: 'implemented' },
+  { id: 'U17', kind: 'ui', semantic: 'ui.picker', tag: 'p-picker', props: ['mode', 'start', 'end', 'indicatorStyle', 'indicatorClass', 'maskClass', 'maskStyle', 'immediateChange'], mpEquiv: '<picker>', tier: 'L1', status: 'implemented' },
   { id: 'U18', kind: 'ui', semantic: 'ui.form', tag: 'p-form', props: ['model', 'rules', 'layout'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
   // ★#405 语义登记批：反馈/状态类组件
   { id: 'U19', kind: 'ui', semantic: 'ui.loading', tag: 'p-loading', props: ['size', 'text'], mpEquiv: 'wx.showLoading 部分', tier: 'L2', status: 'planned' },
@@ -95,7 +95,7 @@ const UI: PrimitiveDef[] = [
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */
 const SHELL: PrimitiveDef[] = [
   { id: 'S1', kind: 'shell', semantic: 'shell.page', tag: 'p-page', props: ['title', 'statusBar', 'pullRefresh'], mpEquiv: '<page>', tier: 'L1', status: 'implemented' },
-  { id: 'S2', kind: 'shell', semantic: 'shell.nav', tag: 'p-nav', props: ['title', 'transparent'], mpEquiv: '导航栏配置', tier: 'L1', status: 'implemented' },
+  { id: 'S2', kind: 'shell', semantic: 'shell.nav', tag: 'p-nav', props: ['title', 'transparent', 'loading', 'frontColor', 'backgroundColor', 'colorAnimationDuration', 'colorAnimationTimingFunc'], mpEquiv: '导航栏配置', tier: 'L1', status: 'implemented' },
   { id: 'S3', kind: 'shell', semantic: 'shell.tabbar', tag: 'p-tabbar', props: ['tabs', 'active', 'badge'], mpEquiv: '<tabbar>', tier: 'L1', status: 'implemented' },
   { id: 'S4', kind: 'shell', semantic: 'shell.segment', tag: 'p-segment', props: ['options', 'active'], mpEquiv: '<segment>', tier: 'L1', status: 'implemented' },
   { id: 'S5', kind: 'shell', semantic: 'shell.drawer', tag: 'p-drawer', props: ['side', 'width', 'overlay'], mpEquiv: '组合', tier: 'L1', status: 'implemented' },
@@ -109,7 +109,7 @@ const SHELL: PrimitiveDef[] = [
   { id: 'S12', kind: 'shell', semantic: 'shell.popup', tag: 'p-popup', props: ['position', 'round', 'overlay'], mpEquiv: '组合（弹层）', tier: 'L2', status: 'planned' },
   { id: 'S13', kind: 'shell', semantic: 'shell.toolbar', tag: 'p-toolbar', props: ['items', 'itemWidth', 'moreWidth'], mpEquiv: '无（溢出折叠）', tier: 'L2', status: 'planned' },
   // ★能力颗粒度对齐 C2：页面容器（对齐小程序 <page-container>）
-  { id: 'S14', kind: 'shell', semantic: 'shell.page-container', tag: 'p-page-container', props: ['show', 'position', 'overlay', 'closeOnClickOverlay'], mpEquiv: '<page-container>', tier: 'L1', status: 'implemented' },
+  { id: 'S14', kind: 'shell', semantic: 'shell.page-container', tag: 'p-page-container', props: ['show', 'position', 'overlay', 'closeOnClickOverlay', 'duration', 'zIndex', 'closeOnSlideDown', 'overlayStyle', 'customStyle'], mpEquiv: '<page-container>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 H：键盘上方工具栏
   { id: 'S15', kind: 'shell', semantic: 'shell.keyboard-accessory', tag: 'p-keyboard-accessory', props: ['visible', 'maxHeight', 'background'], mpEquiv: '<keyboard-accessory>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 J：内嵌网页 / 广告位
@@ -255,7 +255,7 @@ const ENGINEERING: PrimitiveDef[] = [
   { id: 'E15', kind: 'engineering', semantic: 'engineering.router-relaunch', api: 'router.reLaunch()', mpEquiv: 'wx.reLaunch', tier: 'L1', status: 'planned' },
   { id: 'E16', kind: 'engineering', semantic: 'engineering.router-before-each', api: 'router.beforeEach()', mpEquiv: 'onLaunch 手动', tier: 'L1', status: 'planned' },
   { id: 'E17', kind: 'engineering', semantic: 'engineering.router-after-each', api: 'router.afterEach()', mpEquiv: '无', tier: 'L1', status: 'planned' },
-  { id: 'E18', kind: 'engineering', semantic: 'engineering.router-link', tag: 'p-router-link', props: ['to', 'replace', 'switchTab'], mpEquiv: '<navigator>', tier: 'L1', status: 'implemented' },
+  { id: 'E18', kind: 'engineering', semantic: 'engineering.router-link', tag: 'p-router-link', props: ['to', 'replace', 'switchTab', 'target', 'url', 'openType', 'delta', 'appId', 'path', 'extraData', 'version', 'shortLink', 'hoverClass', 'hoverStopPropagation', 'hoverStartTime', 'hoverStayTime'], mpEquiv: '<navigator>', tier: 'L1', status: 'implemented' },
   { id: 'E19', kind: 'engineering', semantic: 'engineering.transition', tag: 'p-transition', props: ['name', 'mode'], mpEquiv: 'transition CSS', tier: 'L1', status: 'implemented' },
   { id: 'E20', kind: 'engineering', semantic: 'engineering.animate', tag: 'p-animate', props: ['keyframes', 'duration'], mpEquiv: 'animation CSS', tier: 'L1', status: 'implemented' },
   { id: 'E21', kind: 'engineering', semantic: 'engineering.animation', api: 'useAnimation()', mpEquiv: 'wx.createAnimation', tier: 'L1', status: 'planned' },

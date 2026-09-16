@@ -1,0 +1,47 @@
+{
+  "name": "@proteus-vue/components",
+  "version": "0.1.0",
+  "description": "Proteus 语义组件库（p-*）：73 个跨端语义组件（p-button/p-form/p-scroll-view/p-page-container/…）+ pg-glass（液态玻璃）+ virtual-list + 组件层运行时（runtime/contracts/theme）——双端同源码，Web 由 Vite 编译、小程序由框架编译器编译",
+  "type": "module",
+  "license": "Apache-2.0",
+  "// publishSource": "★源码包：本包发布 TypeScript + Vue SFC 源码（不产 dist）——① MP 编译器需在磁盘上扫 .vue 源码（gen-routes/plugin-vite 的 path.join(dir, tag, 'index.vue')）② 与框架「一份源码双端」一致（Web 由消费方 @vitejs/plugin-vue 编译）。check-package-health 按此标记校验（跳过 dist 检查，改校验源码文件存在）。",
+  "publishSource": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "import": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./*": "./*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.ts",
+    "global-components.d.ts",
+    "contracts",
+    "runtime",
+    "theme",
+    "virtual-list",
+    "pg-glass",
+    "p-*",
+    "README.md"
+  ],
+  "scripts": {
+    "// build": "★源码包无构建步骤（不产 dist）。类型检查由消费方 vue-tsc 承担。",
+    "typecheck": "vue-tsc --noEmit -p ../../tsconfig.json"
+  },
+  "dependencies": {
+    "@proteus-vue/api": "0.2.0-beta.1",
+    "@proteus-vue/devtools-runtime": "0.1.0",
+    "@proteus-vue/fluid": "0.1.0",
+    "@proteus-vue/gesture": "0.1.0",
+    "@proteus-vue/glass": "0.1.0",
+    "@proteus-vue/shared": "0.2.0-beta.0",
+    "@proteus-vue/worklet": "0.1.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  }
+}

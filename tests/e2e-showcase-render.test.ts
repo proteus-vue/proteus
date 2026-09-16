@@ -41,6 +41,16 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-progress', keySelector: '.p-progress', label: 'p-progress（真渲染进度条）', minVisibleRatio: 1, expectedCount: 12 },
   // ★p-textarea 页（批次 1）：6 个文本域（基础 / 占位符 / 长度 / 自动增高 / 键盘 / 禁用）
   { route: '/subpackages/components/pages/p-textarea', keySelector: '.p-textarea', label: 'p-textarea（真渲染文本域）', minVisibleRatio: 1, expectedCount: 6 },
+  // ★批次 2（容器与外壳，2026-09-14）——expectedCount 为构建后实测值（见各页演示块）
+  { route: '/subpackages/components/pages/p-view', keySelector: '.p-view', label: 'p-view（真渲染容器）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-text', keySelector: '.p-text', label: 'p-text（真渲染文本）', minVisibleRatio: 1, expectedCount: 5 },
+  { route: '/subpackages/components/pages/p-icon', keySelector: '.p-icon', label: 'p-icon（真渲染图标）', minVisibleRatio: 1, expectedCount: 17 },
+  { route: '/subpackages/components/pages/p-image', keySelector: '.p-image', label: 'p-image（真渲染图片）', minVisibleRatio: 1, expectedCount: 5 },
+  { route: '/subpackages/components/pages/p-scroll-view', keySelector: '.p-scroll-view', label: 'p-scroll-view（真渲染滚动容器）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-router-link', keySelector: '.p-router-link', label: 'p-router-link（真渲染导航链接）', minVisibleRatio: 1, expectedCount: 5 },
+  { route: '/subpackages/components/pages/p-nav-bar', keySelector: '.p-nav-bar', label: 'p-nav-bar（真渲染导航栏）', minVisibleRatio: 1, expectedCount: 5 },
+  // ★p-page-container 弹出层初始 visibility:hidden → 用触发按钮断言页面渲染
+  { route: '/subpackages/components/pages/p-page-container', keySelector: 'button', label: 'p-page-container（触发按钮可见）', minVisibleRatio: 1 },
   { route: '/subpackages/capabilities/pages/camera', keySelector: '[class*=db], [class*=out]', label: 'useCamera（能力详情样板）', minVisibleRatio: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
@@ -200,5 +210,55 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
     expect(txt, 'MP 目标提示不应出现').not.toContain('当前构建目标：小程序')
     // 注：页面**代码示例块**会显示 `__MP__` 源码文本（教学用途，宏替换在 script 模式跳过字符串）——
     //   故此处不断言「页面无 __MP__」；宏替换正确性由单元测试与「MP-only 块不渲染」保证。
+  })
+
+  // ★Web 交互行为门禁（2026-09-14 新增，用户真机/浏览器复测驱动）：
+  //   背景——此前 Web E2E 只断言「元素存在且可见」，**不测交互行为**，于是
+  //   「view 无按压反馈」「scroll 事件数字不变」「长按无菜单」「scroll-top 复位无效」全绿逃逸。
+  //   本节对**行为**下断言（hover 时延 / scroll 载荷 / 长按菜单 / 受控滚动）。
+  it('★/subpackages/components/pages/p-view 按压反馈（hover-start-time / hover-stay-time 时效）', async () => {
+    await page.goto(BASE + '/subpackages/components/pages/p-view', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(600)
+    // hover-start-time=0 的演示块：按下立即出现按压类
+    const box = page.locator('.box--hover').first()
+    await box.scrollIntoViewIfNeeded()
+    const bb = await box.boundingBox()
+    await page.mouse.move(bb!.x + bb!.width / 2, bb!.y + bb!.height / 2)
+    await page.mouse.down()
+    await page.waitForTimeout(80)
+    expect(await box.getAttribute('class'), '按下后应出现自定义按压类 demo-hover').toContain('demo-hover')
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+  })
+
+  it('★/subpackages/components/pages/p-scroll-view 交互（scroll 载荷 + 受控 scroll-top 复位）', async () => {
+    await page.goto(BASE + '/subpackages/components/pages/p-scroll-view', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(700)
+    // ① scroll 事件载荷为**裸对象**（{ scrollTop }）：手动滚动后回显应含真实数字
+    const sc = page.locator('.proteus-web-scroll-view').nth(2)
+    await sc.evaluate((el) => { el.scrollTop = 150; el.dispatchEvent(new Event('scroll', { bubbles: true })) })
+    await page.waitForTimeout(300)
+    const outs = await page.locator('.out').allTextContents()
+    expect(outs.join('|'), '★scroll 回显应含真实 scrollTop（载荷单层——数字必须变）').toMatch(/top=1[0-9]{2}/)
+    // ② 受控 scroll-top：手动滚动（变量被回写）后点「回到顶部」应真的归 0
+    await page.locator('button', { hasText: '回到顶部' }).click()
+    await page.waitForTimeout(500)
+    expect(await sc.evaluate((el) => el.scrollTop), '★点「回到顶部」后滚动位置应归 0').toBe(0)
+    // ③ 点「滚到 200」应到 200
+    await page.locator('button', { hasText: '滚到 200' }).click()
+    await page.waitForTimeout(500)
+    expect(await sc.evaluate((el) => el.scrollTop), '★点「滚到 200」后应为 200').toBe(200)
+  })
+
+  it('★/subpackages/components/pages/p-image 长按菜单（show-menu-by-longpress 的 Web 模拟）', async () => {
+    await page.goto(BASE + '/subpackages/components/pages/p-image', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(700)
+    // 图片真实渲染（naturalWidth > 0——拦「src 无效/灰块」）
+    const natW = await page.locator('.proteus-web-image').first().evaluate((el) => (el as HTMLImageElement).naturalWidth)
+    expect(natW, '★图片应真实解码（naturalWidth > 0）').toBeGreaterThan(0)
+    // 右键（长按等价）弹出菜单
+    await page.locator('.proteus-web-image').last().click({ button: 'right', force: true })
+    await page.waitForTimeout(300)
+    expect(await page.locator('.proteus-web-image-menu').count(), '★长按/右键应弹出自绘菜单').toBeGreaterThan(0)
   })
 })

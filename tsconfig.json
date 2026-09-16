@@ -56,8 +56,6 @@
       "@proteus-vue/test-core/driver": ["packages/test-core/src/driver/index.ts"],
       "@proteus-vue/test-core": ["packages/test-core/src/index.ts"],
       "@proteus-vue/types/define-proteus": ["packages/types/src/define-proteus.ts"],
-      "@proteus-vue/components": ["src/components/index.ts"],
-      "@proteus-vue/components/*": ["src/components/*"],
       "@proteus-vue/compiler-backend": ["packages/compiler-backend/src/index.ts"],
       "@proteus-vue/compiler-backend/node": ["packages/compiler-backend/src/node.ts"],
       "@proteus-vue/gesture": ["packages/gesture/src/index.ts"],

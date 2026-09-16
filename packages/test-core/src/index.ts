@@ -14,3 +14,7 @@ export type { MountComponentOptions, MountedHost, UnifiedMpHost } from './mount'
 // ★端能力对齐配套：页面渲染门禁（跨端断言「页面真的渲染出来了吗」——补 E2E 的视觉盲区）
 export { assertPageRendered, collectRenderMetrics } from './assert-render'
 export type { RenderGateOptions, RenderGateResult } from './assert-render'
+// ★★框架元素探针断言原语（2026-09-14）：组件内部几何/可见/可滚——不依赖自动化工具元素查询
+//   （glass-easel 隔离下工具查不到组件内部；探针由组件自测量 + driver.probes() 读取）
+export { getProbe, assertProbeScrollable, assertProbeGeometry, assertProbeVisible } from './probe-assert'
+export type { ProbeProbeOptions } from './probe-assert'

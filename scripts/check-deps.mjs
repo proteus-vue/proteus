@@ -55,8 +55,9 @@ const BARE_RE = /(?:from\s*|import\s*\(|require\s*\()\s*['"]([^'"]+)['"]/g
 // 去除注释行后的裸模块提取（import/from 一般不在注释；URL 字符串内出现 'from' 的极少——以注释行剔除为主）
 
 const findings = {}
-// ★#422 豁免：@proteus-vue/components 未拆包（决策 #115）——examples/website 用 vite resolve.alias 指向仓库 src/components（非 node_modules 依赖）
-const ALIAS_VIRTUAL = new Set(['@proteus-vue/components'])
+// ★#422 豁免已移除（2026-09-14 拆包）：@proteus-vue/components 现为真实 workspace 依赖（node_modules 软链），
+//   不再是 alias 虚拟模块——故不再豁免（其缺失应被本门禁如实报出）。
+const ALIAS_VIRTUAL = new Set()
 // 模板目标：扫描 templates/**（无 src/scripts 约定）——声明集 = 模板自带 package.json
 const TPL_FILES = []
 for (const tt of TPL_TARGETS) {

@@ -4,7 +4,7 @@
 //   而首页正常。根因：分类用「路径含 /components/」反推 → 分包目录名恰好叫 components →
 //   页面被误判为组件 → 产物成 Component() 且跳过页面滚动容器包装（scroll-view）→ 整页不滚。
 //   本测试锁：**分包根下（哪怕路径含 components 字样）的文件一律是页面**；组件只来自
-//   <appDir>/components 与 frameworkComponentsDir。
+//   <appDir>/components 与 @proteus-vue/components 包。
 import { describe, it, expect, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -35,6 +35,7 @@ function makeProject() {
   write('src/subpackages/components/pages/p-input.vue')
   write('src/subpackages/capabilities/pages/camera.vue')
   // 真正的组件（两处）
+  // ★注意：这是**应用组件目录** <appDir>/components（= src/components），与语义组件库包（@proteus-vue/components）无关
   write('src/components/page-shell/index.vue')
   write('src/components/demo-block/index.vue')
   write('src/framework/p-button/index.vue')
@@ -50,7 +51,7 @@ function collect(root: string) {
       { root: 'subpackages/components' },
       { root: 'subpackages/capabilities' },
     ],
-    frameworkComponentsDir: path.join(root, 'src/framework'),
+    componentsDir: path.join(root, 'src/framework'),
   })
 }
 
@@ -66,7 +67,7 @@ describe('★MP 待编译清单分类（页面 vs 组件）', () => {
     expect(byRel.get('pages/index')).toBe(false)
   })
 
-  it('组件只来自 <appDir>/components 与 frameworkComponentsDir（isComponent=true）', () => {
+  it('组件只来自 <appDir>/components 与 @proteus-vue/components 包（isComponent=true）', () => {
     const root = makeProject()
     const entries = collect(root)
     const byRel = new Map(entries.map((e) => [e.rel, e.isComponent]))
@@ -86,7 +87,7 @@ describe('★MP 待编译清单分类（页面 vs 组件）', () => {
       appDir: path.join(root, 'src'),
       pagesDir: 'pages',
       subPackages: [{ root: 'subpackages/order' }],
-      frameworkComponentsDir: path.join(root, 'src/framework'),
+      componentsDir: path.join(root, 'src/framework'),
     })
     const byRel = new Map(entries.map((e) => [e.rel, e.isComponent]))
     expect(byRel.get('subpackages/order/pages/list')).toBe(false)
@@ -100,7 +101,7 @@ describe('★MP 待编译清单分类（页面 vs 组件）', () => {
       appDir: path.join(root, 'src'),
       pagesDir: 'pages',
       subPackages: [{ root: 'subpackages/components' }],
-      frameworkComponentsDir: path.join(root, 'src/framework'),
+      componentsDir: path.join(root, 'src/framework'),
       webOnlyPages: webOnly,
     })
     expect(entries.find((e) => e.rel === 'pages/index')).toBeUndefined()

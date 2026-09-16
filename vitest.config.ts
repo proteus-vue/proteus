@@ -44,8 +44,9 @@ export default defineConfig({
       // ★发布前收口（决策 #214）：测试统一走包名（去掉 packages 相对路径引入）——缺失 alias 补全
       { find: '@proteus-vue/api', replacement: fileURLToPath(new URL('./packages/api/src/index.ts', import.meta.url)) },
       { find: '@proteus-vue/built-in-components', replacement: fileURLToPath(new URL('./packages/built-in-components/src/index.ts', import.meta.url)) },
-      // ★组件库未拆包（决策 #115）：@proteus-vue/components → src/components（examples alias 同源；测试统一走包名）
-      { find: '@proteus-vue/components', replacement: fileURLToPath(new URL('./src/components/index.ts', import.meta.url)) },
+      // ★组件库已拆包（@proteus-vue/components → packages/components，2026-09-14）：测试仍显式 alias 指向包源码
+      //  （vitest 不经 pnpm workspace 软链解析 .ts 入口；与其余包同款显式映射）
+      { find: '@proteus-vue/components', replacement: fileURLToPath(new URL('./packages/components/index.ts', import.meta.url)) },
       // ★Fluid System（fluid-system-plan）：@proteus-vue/fluid 包（tests/fluid-system.test.ts 直接引用）
       { find: '@proteus-vue/fluid', replacement: fileURLToPath(new URL('./packages/fluid/src/index.ts', import.meta.url)) },
       // ★G-27（render-backend-1-plan M1.4）：@proteus-vue/render-backend 包（tests/render-backend.test.ts 直接引用）

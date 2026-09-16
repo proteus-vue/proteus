@@ -1,7 +1,7 @@
 // tests/audit-all.test.ts
 // ★test-framework B6 + M10 + #450：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
 // 八域聚合（route/module/config/i18n/capabilities/components/d2/devtools-budget）+ CI 耗时预算 <12s
-// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 src/components 跳过；capabilities 为 B5 真实门禁（演示页 @proteus-api-check-ignore 豁免）；
+// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 packages/components 跳过；capabilities 为 B5 真实门禁（演示页 @proteus-api-check-ignore 豁免）；
 //   d2 为 opt-in（proteus.config 声明 audit 才跑，未声明跳过）；devtools-budget 性能烟测
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
@@ -48,9 +48,12 @@ describe('proteus audit all（test-framework B6 全量门禁）', () => {
     }
     // fluid 如实报 demo 页布局违规（FLD 系——手写 @media/无障碍字号）
     expect(result.domains.find((d) => d.name === 'fluid')?.ok).toBe(false)
-    // components 无 src/components → 跳过（非阻断）
+    // ★组件库已拆包（2026-09-14）：components 域现在**真实运行**（解析 @proteus-vue/components 包根）并应全绿
+    //  （此前组件库在仓库根 src/components、examples 下无该目录 → 跳过；拆包后从 node_modules 解析到包）
     const components = result.domains.find((d) => d.name === 'components')
-    expect(components?.skipped).toBe(true)
+    expect(components?.skipped, 'components 域应真实运行（不再是跳过）').toBeFalsy()
+    expect(components?.ok, '75 个组件审计应全绿').toBe(true)
+    expect(String(components?.detail)).toContain('组件审计')
     // d2：examples 未声明 audit → opt-in 跳过（非阻断）
     const d2 = result.domains.find((d) => d.name === 'd2')
     expect(d2?.skipped).toBe(true)

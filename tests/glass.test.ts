@@ -223,7 +223,7 @@ describe('★G-07 CLI `proteus audit glass`（GLS001-006）', () => {
   it('<pg-glass> 与 pg-glass 组件自身实现均不误报', () => {
     expect(scanGlassSource('src/pages/a.vue', '<pg-glass preset="card"/>')).toHaveLength(0)
     // 组件自身实现即合法入口（唯一允许裸 backdrop-filter）
-    expect(scanGlassSource('src/components/pg-glass/index.vue', '@supports not (backdrop-filter: blur(1px)) {}')).toHaveLength(0)
+    expect(scanGlassSource('packages/components/pg-glass/index.vue', '@supports not (backdrop-filter: blur(1px)) {}')).toHaveLength(0)
   })
 
   it('行内 d2-exempt 豁免裸玻璃（JS // 与 CSS /* */ 两种写法）；-webkit- 前缀不重复计', () => {

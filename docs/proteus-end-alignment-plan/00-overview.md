@@ -119,8 +119,8 @@ Layer 3 │ 原生属性（各端实现）                          │  ← 端
 |---|---|---|
 | **M1 标尺机制** ✅ | 属性级生成器 + 审计 + 门禁 | `gen-mp-component-attrs` + `audit` + test 落地 |
 | **M2 参考实现** ✅ | `p-button` / `p-input` 属性全量对齐 | 21/22 · 12/27，门禁绿 |
-| **M3 高频表单** | `p-switch`/`p-slider`/`p-progress`/`p-checkbox`/`p-radio`/`p-picker`/`p-textarea` | 覆盖 ≥ 80% |
-| **M4 容器与外壳** | `p-view`/`p-scroll-view`/`p-page-container`/`p-nav`/`p-image`/`p-text` | 覆盖 ≥ 80% |
+| **M3 高频表单** ✅ | `p-switch`/`p-slider`/`p-progress`/`p-checkbox`/`p-radio`/`p-picker`/`p-textarea` | 全部 100% |
+| **M4 容器与外壳** ✅ | `p-view`/`p-scroll-view`/`p-page-container`/`p-router-link`(navigator)/`p-nav-bar`(navigation-bar)/`p-image`/`p-text`/`p-icon` | 全部 100% |
 | **M5 宿主能力** | `p-media`/`p-map`/`p-camera`/`p-canvas`/`p-webview`/`p-ad`/`p-rich-text` | 覆盖 ≥ 70%（含降级声明） |
 | **M6 降级声明** | 全组件属性补 `degradation`（EA-5） | 降级门禁绿 |
 | **M7 新端 Playbook** | 沉淀 `06-new-end-playbook.md`（iOS 起验证） | iOS 按 Playbook 对齐一遍通过 |

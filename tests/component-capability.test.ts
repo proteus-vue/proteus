@@ -6,7 +6,7 @@ import {
   getCapability,
   resetCapability,
   capabilityWarn,
-} from '../src/components/runtime/capability'
+} from '../packages/components/runtime/capability'
 
 afterEach(() => {
   vi.unstubAllGlobals() // ★vitest 全局残留：wx stub 必须清（不止 restoreAllMocks）

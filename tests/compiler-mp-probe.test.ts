@@ -21,7 +21,7 @@ function compileComponent(rel: string) {
 }
 
 describe('★mp-conformance 探针矩阵 P1/P2：p-modal 布局终案产物契约', () => {
-  const r = compileComponent('src/components/p-modal/index.vue')
+  const r = compileComponent('packages/components/p-modal/index.vue')
   const wxml = r.wxml ?? ''
   const wxss = r.wxss ?? ''
 
@@ -58,16 +58,26 @@ describe('★mp-conformance 探针矩阵 P3：v-model 事件名单段（G12 候�
   })
 
   it('P3b：组件自身 emit → triggerEvent 单段（update-visible / update-modelValue，零 update: 冒号名）', () => {
-    const modal = compileComponent('src/components/p-modal/index.vue')
+    const modal = compileComponent('packages/components/p-modal/index.vue')
     expect(modal.js).toContain("this.triggerEvent('update-visible', false)")
     expect(modal.js).not.toContain("triggerEvent('update:visible'")
-    const sw = compileComponent('src/components/p-switch/index.vue')
+    const sw = compileComponent('packages/components/p-switch/index.vue')
     expect(sw.js).not.toContain("triggerEvent('update:")
+  })
+
+  it('P3c：★手写 @update:{arg} 也归一到单段（真机遮罩点击关不掉根因）', () => {
+    // 子组件 emit('update:show') → triggerEvent('update-show')；父级手写 @update:show 若原样输出
+    // 则产物 bind:update:show（双冒号）→ 与子组件永不匹配。编译期须归一为 bind:update-show。
+    const src = '<script setup lang="ts">import { ref } from "vue"\nconst show = ref(false)\nfunction onUpdate() {}</script>\n'
+      + '<template><p-page-container :show="show" @update:show="onUpdate" @close="onUpdate"/></template>'
+    const r = compileVueSfc(src, { filename: 'pages/probe3c.vue', ...opts })
+    expect(r.wxml, '手写 @update:show 应归一为 bind:update-show').toContain('bind:update-show="onUpdate"')
+    expect(r.wxml, '不得出现双冒号 bind:update:show').not.toContain('bind:update:show')
   })
 })
 
 describe('★mp-conformance 探针矩阵 P4：p-input 受控契约（非 v-model）', () => {
-  const r = compileComponent('src/components/p-input/index.vue')
+  const r = compileComponent('packages/components/p-input/index.vue')
   it('P4：原生 input value="{{value}}" + bindinput（emit input 载荷 { value }，无 update-modelValue 契约面）', () => {
     expect(r.wxml).toContain('value="{{value}}"')
     expect(r.wxml).toContain('bindinput="onInput"')
@@ -77,7 +87,7 @@ describe('★mp-conformance 探针矩阵 P4：p-input 受控契约（非 v-model
 })
 
 describe('★mp-conformance 探针矩阵 P5：p-slider MP 映射（原生 slider 标签）', () => {
-  const r = compileComponent('src/components/p-slider/index.vue')
+  const r = compileComponent('packages/components/p-slider/index.vue')
   it('P5：模板原生 <slider bindchange> + update-modelValue 单段回传；无 <input type="range">', () => {
     expect(r.wxml).toMatch(/<slider[\s\S]*bindchange="onSliderChange"/)
     expect(r.wxml).not.toContain('type="range"')
@@ -100,7 +110,7 @@ describe('★mp-conformance 探针矩阵 P6：复测页整体产物（vmodel-mp-
 describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契约（真机 2026-09-07）', () => {
   // 真机探针实证：skyline 下遮罩元素自身不参与命中测试（事件落根容器）→
   // 修法：事件挂可靠层（根容器收非面板区点击）+ 面板 catchtap 吞冒泡 + 遮罩纯视觉 + 显式四边定位
-  const r = compileComponent('src/components/p-drawer/index.vue')
+  const r = compileComponent('packages/components/p-drawer/index.vue')
   const wxml = r.wxml ?? ''
   const wxss = r.wxss ?? ''
   const js = r.js ?? ''
@@ -135,7 +145,7 @@ describe('★mp-conformance 探针矩阵 P7：p-drawer Skyline 遮罩命中契�
   })
 
   it('P7e：side 静态分支（p-drawer-left/--right 字面量 scoped）——right 侧不再落静态位置（动态 side 类 Skyline 无 scoped 匹配）', () => {
-    const wxml = compileComponent('src/components/p-drawer/index.vue').wxml ?? ''
+    const wxml = compileComponent('packages/components/p-drawer/index.vue').wxml ?? ''
     expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-left-data-v-[\w]+/)
     expect(wxml).toMatch(/p-drawer-data-v-[\w]+ p-drawer-right-data-v-[\w]+/)
     expect(wxml).not.toContain('{{(side)')
@@ -146,7 +156,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   // 2026-09-07 批量：p-action-sheet / p-modal / p-popup / p-popover 关闭事件原绑遮罩元素
   // （skyline 下纯背景子节点不参与命中）→ 改挂全屏容器/layer + 面板 catch 吞冒泡 + 遮罩纯视觉
   it('P8a：p-action-sheet——layer 收 onCancel（wx:if modelValue），mask 无事件，panel catchtap=noop', () => {
-    const r = compileComponent('src/components/p-action-sheet/index.vue')
+    const r = compileComponent('packages/components/p-action-sheet/index.vue')
     const wxml = r.wxml ?? ''
     expect(wxml).toMatch(/<view wx:if="\{\{modelValue\}\}" bindtap="onCancel" class="p-as-layer-data-v-[\w]+/)
     expect(wxml).toMatch(/<view class="p-as-mask-data-v-[\w]+[^"]*" \/>/)
@@ -156,7 +166,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   })
 
   it('P8b：p-modal——关闭事件挂容器（onMaskTap），mask 无事件，panel catchtap=noop', () => {
-    const r = compileComponent('src/components/p-modal/index.vue')
+    const r = compileComponent('packages/components/p-modal/index.vue')
     const wxml = r.wxml ?? ''
     expect(wxml).toMatch(/<view wx:if="\{\{shown\}\}" bindtap="onMaskTap" class="p-modal-data-v-[\w]+/)
     expect(wxml).not.toMatch(/p-modal-mask[^>]*bindtap/)
@@ -165,7 +175,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   })
 
   it('P8c：p-popup——关闭事件挂容器（onLayerTap），mask 无事件，面板 catch:tap=noop；位置类静态字面量（skyline 动态类/动态 style 不可靠 → 左上角，修复实证）', () => {
-    const r = compileComponent('src/components/p-popup/index.vue')
+    const r = compileComponent('packages/components/p-popup/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
     const js = r.js ?? ''
@@ -187,7 +197,7 @@ describe('★mp-conformance 探针矩阵 P8：弹层族关闭事件挂可靠命�
   })
 
   it('P8d：p-popover——全屏 layer 收 close（无残留 mask 事件），显式四边定位，placement 静态四分支，常驻 overlay+visibility（skyline 终案：弃 wx:if/portal——wx:if 子树不渲染、portal 脱离破锚定）', () => {
-    const r = compileComponent('src/components/p-popover/index.vue')
+    const r = compileComponent('packages/components/p-popover/index.vue')
     const wxml = r.wxml ?? ''
     const wxss = r.wxss ?? ''
     expect(wxml).toMatch(/<view bindtap="close" class="p-popover-layer-data-v-[\w]+/)
@@ -216,7 +226,7 @@ describe('★mp-conformance 探针矩阵 P8e：p-popover 方案 A spike 契约�
   // 方案 A（Skyline 层叠解药）：打开时 adapter.measureRect('#'+uid) 测 trigger → computePopoverPosition 算
   //   fixed 视口坐标 → panelStyle 字符串（position:fixed;left;top）→ 浮层叠顶层；measureRect 失败 → panelStyle=''
   //   → 回退静态 .p-popover-{placement} 绝对锚定（终案）。契约锁：产物含 measureRect + setData panelStyle + uid。
-  const r = compileComponent('src/components/p-popover/index.vue')
+  const r = compileComponent('packages/components/p-popover/index.vue')
   const wxml = r.wxml ?? ''
   const js = r.js ?? ''
 
@@ -330,7 +340,7 @@ describe('★mp-conformance 探针矩阵 P13：:style 对象派生自动序列�
 describe('★mp-conformance 探针矩阵 P14：p-safe env/max 诚实边界（#501 Skyline 无 max 长度函数）', () => {
   // 避让逻辑（env(safe-area-inset-*) + max(env,Npx) 兜底）在 @proteus-vue/fluid resolveSafeAreaStyle 共享模块——
   // MP 产物无模块系统 → 组件产物不含 env/max 实现（unresolved import 诚实警告）；契约锁：safeStyle 走自动序列化 + hinge 边界
-  const r = compileComponent('src/components/p-safe/index.vue')
+  const r = compileComponent('packages/components/p-safe/index.vue')
   it('P14a：safeStyle 走 __proteusStyleString（对象绑定自动序列化通道；链式 init 双形态）', () => {
     expect(r.js).toMatch(/__proteusStyleString\(this\.proteusCalcSafeStyle\(\)\)/)
     expect(r.wxml).toContain('style="{{safeStyle}}"')
@@ -347,7 +357,7 @@ describe('★mp-conformance 探针矩阵 P14：p-safe env/max 诚实边界（#50
 describe('★mp-conformance 探针矩阵 P15：p-aspect 盒模型假设（#500 降级 hack 宽高全丢根因）', () => {
   // padding-top hack 依赖「高度 0 + padding 撑盒」——渲染端默认 border-box 则总高恒 0；契约：显式 content-box
   // + 内层 p-aspect-inner 承载 slot 与内联定位（MP 产物通配/子选择器被剔除 → .p-aspect-fallback > * 全局规则退役）
-  const r = compileComponent('src/components/p-aspect/index.vue')
+  const r = compileComponent('packages/components/p-aspect/index.vue')
   it('P15a：降级 padding hack 显式 box-sizing content-box + paddingTop 百分比', () => {
     expect(r.js).toMatch(/boxSizing\s*=\s*['"]content-box['"]/)
     expect(r.js).toMatch(/paddingTop\s*=\s*100\s*\/\s*ratio/)
@@ -413,7 +423,7 @@ describe('★事件跨组件边界 P10：p-button click 冒泡发射（供父级
   // ★2026-09-11：小程序原生 tap 不跨自定义组件边界 → 组件须 emit({bubbles,composed}) 让父级 bind:click 收到。
   //   契约锁：p-button 产物 triggerEvent 带 bubbles+composed（Web 端 Vue 忽略多余实参，无副作用）。
   it('p-button：triggerEvent("click", e, { bubbles, composed })', () => {
-    const r = compileComponent('src/components/p-button/index.vue')
+    const r = compileComponent('packages/components/p-button/index.vue')
     const js = r.js ?? ''
     expect(js).toMatch(/triggerEvent\('click',\s*e,\s*\{\s*bubbles:\s*true,\s*composed:\s*true\s*\}\)/)
   })

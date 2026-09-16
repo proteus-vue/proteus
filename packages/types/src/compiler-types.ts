@@ -175,6 +175,8 @@ export interface ScriptTransformOptions {
   file?: string
   /** 组件模式 → Component() 构造器 */
   isComponent?: boolean
+  /** ★scoped 类名后缀（scopeId）——组件探针需据根类名定位根节点（`.<tag>-<scopeId>`） */
+  scopeId?: string
   vModelBindings?: string[]
   usesNavigate?: boolean
   debug?: boolean

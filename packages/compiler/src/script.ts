@@ -1833,6 +1833,57 @@ function semanticGridInitCode(grids: Array<{ minColWidth: number; gap: number; i
 }
 
 /**
+ * ★框架元素探针注入（组件侧，2026-09-14）——
+ * 背景：自动化工具**查不到自定义组件内部节点**（glass-easel 隔离；Skyline 无 selectAllComponents），
+ *   测试无法断言「组件内部几何/可见性」（本轮 scroll-view 容器塌成细线即因此两轮漏检）。
+ * 解法：组件**自己**在 ready() 里用 `.in(this)` 组件作用域查询自己的根节点 → 写全局探针注册表
+ *   （`__PROTEUS_PROBES__`，形状见 @proteus-vue/runtime/probe）→ 测试经 evaluate 读同一注册表。
+ * ★零成本门控：pid 存在（组件声明「可被观测」）或全局开 `__PROTEUS_PROBE_ALL__`（测试注入）；
+ *   页面模式**不写探针代码**（页面节点工具可达，无需自测）。
+ * @param selectors 额外具名选择器（如容器内部 wrapper；来自 `<view pid="x" class="y">`）——本版仅测根。
+ */
+function probeReadyCode(tag: string, scopeId?: string): string {
+  const rootSel = scopeId ? `.${tag}-${scopeId}` : tag
+  // ES5 风格（对齐 semanticGridReadyCode；组件 ready 时 this=组件实例，.in(this) 组件作用域查询）
+  // 记录：rect（几何）+ scroll（scrollWidth/scrollHeight——★可滚性直接判据）+ fields.computedStyle（可见性判据）。
+  return [
+    'var __self = this',
+    '__self.__proteusProbe = function () {',
+    "  var __g = (typeof globalThis !== 'undefined') ? globalThis : (typeof wx !== 'undefined' ? wx : null)",
+    '  if (!__g) return',
+    '  var __pid = __self.data && __self.data.pid',
+    '  if (!__pid && !__g.__PROTEUS_PROBE_ALL__) return',
+    "  if (typeof wx === 'undefined' || typeof wx.createSelectorQuery !== 'function') return",
+    '  var __key = __self.__proteusProbeKey',
+    '  if (!__key) { __key = __pid || ("' + tag + '" + (__g.__PROTEUS_PROBE_SEQ__ = (__g.__PROTEUS_PROBE_SEQ__ || 0) + 1)); __self.__proteusProbeKey = __key }',
+    '  var __root = ' + JSON.stringify(rootSel),
+    '  var __q = wx.createSelectorQuery()',
+    '  if (typeof __q.in === "function") __q = __q.in(__self)',
+    '  __q.select(__root).boundingClientRect()',
+    '  __q.select(__root).scrollOffset()',
+    '  __q.select(__root).fields({ computedStyle: ["display", "visibility", "opacity", "overflowX", "overflowY"] })',
+    '  __q.exec(function (res) {',
+    '    res = res || []',
+    '    var rect = res[0], off = res[1], st = res[2]',
+    '    if (!rect && !off) return',
+    '    var __reg = __g.__PROTEUS_PROBES__ || (__g.__PROTEUS_PROBES__ = {})',
+    '    var __rec = __reg[__key] || {}',
+    '    __rec.pid = __key',
+    '    __rec.tag = ' + JSON.stringify(tag),
+    '    __rec.rect = rect || null',
+    '    __rec.scroll = off || null',
+    '    __rec.style = st || null',
+    '    __rec.ts = Date.now()',
+    '    __reg[__key] = __rec',
+    '  })',
+    '}',
+    '__self.__proteusProbe()',
+    // ★Skyline 首帧布局未稳（同 #496e）：延时二次重测兜底
+    'setTimeout(function () { if (__self.__proteusProbe) __self.__proteusProbe() }, 150)',
+  ].join('\n')
+}
+
+/**
  * ★#496d 柔性语义编译：p-grid 档位函数 + resize 重算（onReady 注入）——
  * ①SelectorQuery 实测容器宽（页面 padding 下屏宽近似会溢出，#496b）②wx.onWindowResize 重算：
  * 模拟器拖动宽度/真机旋转后 onLoad/onReady 不重跑，旧 px 档会让大容器一列且不满（复测根因）
@@ -2765,6 +2816,14 @@ export function transformScriptToPage(
     if (bridgeHooks.hasPageScrollTo) dataExtra.__proteusPageScrollTop = 0
   }
 
+  // ★框架元素探针（页面侧，2026-09-14）：页面 onLoad 时**复位注册表**（同页 key 稳定，便于测试断言），
+  //   并在**测试构建**（extra.debug —— PROTEUS_DEBUG=1 或测试运行）下默认开启探针（免测试手工注入全局开关）。
+  const probeResetLine = !extra.isComponent
+    ? [
+        "var __pg = (typeof globalThis !== 'undefined') ? globalThis : null",
+        "if (__pg) { __pg.__PROTEUS_PROBES__ = {}; __pg.__PROTEUS_PROBE_SEQ__ = 0" + (extra.debug ? '; __pg.__PROTEUS_PROBE_ALL__ = true' : '') + ' }',
+      ].join('\n')
+    : ''
   const semanticGrids = extra.semanticGrids ?? []
   const semanticGridInit = semanticGridInitCode(semanticGrids) // ★#496 档位求解段（init 最前）
   // ★#496b p-grid 默认 style（首帧/无 wx 时设计稿档——calc 百分比串）
@@ -3019,6 +3078,11 @@ export function transformScriptToPage(
       : ''
   // ★#496c onReady 精修段（页面 p-grid 档位——SelectorQuery 实测容器宽）
   const semanticGridReady = !extra.isComponent ? semanticGridReadyCode(semanticGrids) : ''
+  // ★框架元素探针（组件侧，2026-09-14）：组件自测量根节点 → 全局注册表（测试降级通道）。
+  //   门控在**运行时**（pid 或 __PROTEUS_PROBE_ALL__），编译期总是注入（零成本由运行时守）——
+  //   这样测试「开全局探针」无需重新编译组件。
+  const tagName = (extra.file ?? '').split('/').slice(-2, -1)[0] || 'unknown'
+  const probeReady = extra.isComponent && !disabled.has('script/element-probe') ? probeReadyCode(tagName, extra.scopeId) : ''
   // ★2026-09-09 真机复测实证（Skyline 模拟器）：微信 Component 生命周期是 ready——onReady 是 Page 专属，
   //   组件内 onReady() 被 glass-easel 静默忽略（当普通方法，永不触发）→ #499 移入组件 onReady 的派生
   //   /immediate 初始化全部失效（p-safe safeStyle 空 / p-aspect innerStyle 空 / p-modal variants 空）。
@@ -3026,14 +3090,10 @@ export function transformScriptToPage(
   //   可获取节点信息，语义与页面 onReady 对齐）；页面保持 onReady()。
   const readyHookName = extra.isComponent ? 'ready' : 'onReady'
   if (lifecycles.onReady) {
-    const readyBody = semanticGridReady
-      ? `${semanticGridReady}\n${compDerivedReady ? `${compDerivedReady}\n` : ''}${lifecycles.onReady}`
-      : compDerivedReady
-        ? `${compDerivedReady}\n${lifecycles.onReady}`
-        : lifecycles.onReady
+    const readyBody = [semanticGridReady, probeReady, compDerivedReady, lifecycles.onReady].filter(Boolean).join('\n')
     lines.push(`  ${readyHookName}() {\n${indentBody(rw(readyBody))}\n  },`)
-  } else if (semanticGridReady || compDerivedReady) {
-    lines.push(`  ${readyHookName}() {\n${indentBody(semanticGridReady ? `${semanticGridReady}${compDerivedReady ? `\n${compDerivedReady}` : ''}` : compDerivedReady)}\n  },`)
+  } else if (semanticGridReady || probeReady || compDerivedReady) {
+    lines.push(`  ${readyHookName}() {\n${indentBody([semanticGridReady, probeReady, compDerivedReady].filter(Boolean).join('\n'))}\n  },`)
   } else if (extra.debug) {
     // 调试：注入页面就绪日志（无显式 onReady 时）
     lines.push(`  onReady() {\n    console.log('[proteus][page] onReady ${extra.file ?? ''}', Date.now())\n  },`)
@@ -3160,7 +3220,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     }
   } else if (lifecycles.onLoad) {
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
-    const initLines = initLineSeq()
+    const initLines = [probeResetLine, ...initLineSeq()].filter(Boolean)
     const body = rw(lifecycles.onLoad)
     lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
@@ -3168,7 +3228,7 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）
     if (!disabled.has('script/onload-params')) {
       trace?.add('script/onload-params', { before: '（无显式 onLoad）', after: 'onLoad(options) → decodeURIComponent + JSON.parse + setData' })
-      const initLines = initLineSeq()
+      const initLines = [probeResetLine, ...initLineSeq()].filter(Boolean)
       lines.push(
         [
           '  onLoad(options) {',

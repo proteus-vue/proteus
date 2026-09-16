@@ -3,7 +3,7 @@
 //   故障背景：showcase 用 `<PSafe>`（PascalCase）→ 编译器 kebabCase 旧实现产出 `psafe`（缺连字符）
 //   → gen-routes 按 `psafe` 找不到组件目录 `p-safe` → usingComponents 未注册 → **组件静默不渲染**。
 //   同类：源码手写 `<pgrid>`/`<pcamera>`（缺连字符）同样注册失败。
-//   本测试扫描应用源码中的**框架组件标签**，要求小写 kebab 且与 src/components 目录名一致。
+//   本测试扫描应用源码中的**框架组件标签**，要求小写 kebab 且与 packages/components 目录名一致。
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -12,7 +12,7 @@ const ROOT = path.resolve(__dirname, '..')
 
 /** 框架内置组件目录名（p-*） */
 function frameworkTags(): Set<string> {
-  const dir = path.join(ROOT, 'src/components')
+  const dir = path.join(ROOT, 'packages/components')
   return new Set(
     fs.readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isDirectory() && e.name.startsWith('p-'))

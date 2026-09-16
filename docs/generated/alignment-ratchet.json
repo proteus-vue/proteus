@@ -1,7 +1,7 @@
 {
  "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs --min 校验，勿手改。",
- "attrCovered": 106,
- "attrTotal": 348,
- "coveredMin": 128,
- "note": "2026-09-13 批次1 推进：p-button/p-switch/p-checkbox/p-radio/p-picker 全部 100%（棘轮 101→106）"
+ "attrCovered": 207,
+ "attrTotal": 347,
+ "coveredMin": 207,
+ "note": "2026-09-14 批次2 容器与外壳推进：p-view/p-text/p-icon/p-image/p-page-container/p-scroll-view/p-picker 全部 100% + navigator→p-router-link / navigation-bar→p-nav-bar 语义纠偏（对齐 SSOT）+ worklet 回调不计属性（棘轮 128→207；分母 348→347 因 cover-view 私有属性登记 INTENTIONAL_SKIP）"
 }

@@ -3,6 +3,10 @@
 // ★pinia-plan（docs/proteus-pinia-plan）：持久化层（社区兼容 + 自研轻量）在 ./pinia/persistence，工厂在 ./pinia
 export { onReady, onUnload, onLoad, createPage, createComponent } from './pageLifecycle'
 export { setDataBridge } from './setDataBridge'
+// ★框架元素探针（跨端 E2E 降级通道，2026-09-14）：组件自测量 → 全局注册表 → 测试经 evaluate 读取
+//   （绕开自动化工具「查不到组件内部节点」的限制；设计见 probe.ts 头注）
+export { PROBE_GLOBAL_KEY, recordProbe, readProbes, clearProbes, probeEnabled } from './probe'
+export type { ProbeRecord, ProbeRect, ProbeScroll } from './probe'
 export { createStore, connectPageStore } from './store'
 export { createPersistedStatePlugin } from './pinia/persistence/plugin'
 export type { PersistOptions } from './pinia/persistence/plugin'

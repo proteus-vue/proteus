@@ -83,6 +83,11 @@ for (const entry of pkgDirs) {
   const name = pkg.name ?? ''
   /** bin 工具包（cli/@proteus-vue/create-proteus）：无库入口，豁免 main/types/exports 必填 */
   const isBinTool = Boolean(pkg.bin)
+  /** ★源码包（publishSource: true——如 @proteus-vue/components）：发布 TS/SFC 源码，不产 dist。
+   *  为何需要：① MP 编译器需在磁盘上扫 .vue 源码（gen-routes/plugin-vite 按 <dir>/<tag>/index.vue 定位）；
+   *  ② 与「一份源码双端」一致（Web 由消费方 @vitejs/plugin-vue 编译）。
+   *  校验改为：main/types/exports 指向**存在的源码文件**、files 含入口源文件，跳过 dist 检查。 */
+  const isSourcePkg = pkg.publishSource === true
 
   // ① 必填字段
   if (!name.startsWith('@proteus-vue/')) err('name 必须以 @proteus-vue/ 开头（全部产物收口到组织 scope）')
@@ -102,12 +107,17 @@ for (const entry of pkgDirs) {
     if (!pkg.types) err('缺 types')
     if (!pkg.exports) err('缺 exports（子路径不可达）')
   }
-  if (!Array.isArray(pkg.files) || !pkg.files.includes('dist')) err('files 缺 dist（发布物不完整）')
+  if (isSourcePkg) {
+    // ②s 源码包：files 须含入口源文件（而非 dist）
+    if (!Array.isArray(pkg.files) || !pkg.files.includes('index.ts')) err('源码包 files 缺 index.ts（发布物不完整）')
+  } else if (!Array.isArray(pkg.files) || !pkg.files.includes('dist')) err('files 缺 dist（发布物不完整）')
 
-  // ② main/types/exports → dist 文件存在
+  // ② main/types/exports → 文件存在（源码包校验源码；常规包校验 dist）
   const dist = path.join(pkgDir, 'dist')
   if (!isBinTool) {
-    if (pkg.main && !fs.existsSync(path.join(pkgDir, pkg.main))) err(`main ${pkg.main} 不存在（未构建？npm run build -w ${name}）`)
+    if (pkg.main && !fs.existsSync(path.join(pkgDir, pkg.main))) {
+      err(isSourcePkg ? `main ${pkg.main} 不存在（源码包入口缺失）` : `main ${pkg.main} 不存在（未构建？npm run build -w ${name}）`)
+    }
     if (pkg.types && !fs.existsSync(path.join(pkgDir, pkg.types))) err(`types ${pkg.types} 不存在`)
     if (pkg.exports && typeof pkg.exports === 'object') {
       for (const [sub, target] of Object.entries(pkg.exports)) {
@@ -120,7 +130,7 @@ for (const entry of pkgDirs) {
       }
     }
   }
-  if (!isBinTool && !fs.existsSync(path.join(dist, 'index.js'))) err('dist/index.js 不存在（未构建）')
+  if (!isBinTool && !isSourcePkg && !fs.existsSync(path.join(dist, 'index.js'))) err('dist/index.js 不存在（未构建）')
 
   // ③ files 完整性（README/skills 若存在应发布）
   if (fs.existsSync(path.join(pkgDir, 'README.md')) && (!pkg.files || !pkg.files.includes('README.md'))) warn('files 缺 README.md（README 存在但未发布）')

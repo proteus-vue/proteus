@@ -2,7 +2,7 @@
 // ★2026-09-12：p-sidebar「点击后自动收起」语义收窄——只有真实导航项（<a href> / [data-sidebar-close]）
 //   才收起抽屉；点击「折叠/展开一级域」等交互控件不再误关（移动端回归修复）。
 import { describe, it, expect } from 'vitest'
-import { shouldAutoCloseOnClick } from '../src/components/runtime/nav-close'
+import { shouldAutoCloseOnClick } from '../packages/components/runtime/nav-close'
 
 /** 轻量 DOM 形状 stub（鸭子类型——不依赖 jsdom 元素构造细节） */
 function node(tagName: string, attrs: Record<string, string> = {}, parent: unknown = null): unknown {

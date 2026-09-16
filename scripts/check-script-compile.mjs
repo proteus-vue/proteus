@@ -1,6 +1,6 @@
 // scripts/check-script-compile.mjs
 // ★#497 全量 script 编译门禁——防「demo 逐个暴露编译器形态缺口」循环：把 examples/pages + subpackages +
-//   src/components（proteus 内置组件）+ examples/components 全部 .vue 一次整包编译（compileVueSfc）+
+//   packages/components（语义组件库）+ examples/components 全部 .vue 一次整包编译（compileVueSfc）+
 //   js 产物语法校验（node --check）。任何形态缺口在 CI 红而非用户复测暴露（#494 全量扫描器固化）。
 //   用法：node scripts/check-script-compile.mjs（失败 exit 1）；接入 npm run verify + CI verify job
 import fs from 'node:fs'
@@ -34,7 +34,7 @@ const files = []
 collect(path.join(ROOT, 'examples/pages'), files)
 collect(path.join(ROOT, 'examples/subpackages'), files)
 collect(path.join(ROOT, 'examples/components'), files)
-collect(path.join(ROOT, 'src/components'), files) // proteus 内置组件（frameworkComponentsDir 指向）
+collect(path.join(ROOT, 'packages/components'), files) // ★语义组件库（2026-09-14 拆包）
 
 let pass = 0
 const failures = []

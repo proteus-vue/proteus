@@ -24,7 +24,7 @@ import { checkComponentSnapshot, TAG_SEMANTIC_MAP, toComponentIR } from '@proteu
 import type { IRNode, ProteusRenderBackend } from '@proteus-vue/render-backend'
 
 const REPO_ROOT = path.resolve('.')
-const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('src/components')]
+const WALK_ROOTS = [path.resolve('examples/pages'), path.resolve('examples/subpackages'), path.resolve('packages/components')]
 
 function walkVue(dir: string, acc: string[] = []): string[] {
   for (const f of fs.readdirSync(dir)) {

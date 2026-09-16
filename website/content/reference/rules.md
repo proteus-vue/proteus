@@ -7,7 +7,7 @@ generated: true
 
 # 编译规则目录
 
-> 108 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 109 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
 ## 模板转换（60）
 
@@ -792,7 +792,7 @@ after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意—�
 
 > why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
 
-## 脚本转换（34）
+## 脚本转换（35）
 
 ### `script/const-to-data`
 
@@ -1289,6 +1289,19 @@ after:  attached: this.b = this.selectComponent('#btn'); go() { (this.b) === nul
 ```
 
 > why: useTemplateRef 是 Vue 3.5 组件实例引用 API；MP 用 this.selectComponent('#id')（组件/页面查子组件实例）；.value 剥除保留实例引用语义（b.value 读实例）
+
+### `script/element-probe`
+
+**组件元素探针注入（组件自测量 → 全局注册表，E2E 降级通道）**
+
+组件 ready() 注入自测量：wx.createSelectorQuery().in(this).select(根选择器).boundingClientRect() → 写 globalThis.__PROTEUS_PROBES__[pid]（+150ms 二次重测兜首帧未稳）；页面 onLoad 复位注册表（同页 key 稳定）。运行时门控：组件 pid 或 __PROTEUS_PROBE_ALL__（测试 driver.enableProbes() / PROTEUS_DEBUG 构建默认开）
+
+```
+before: // 组件 ready()（无探针）
+after:  ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').boundingClientRect(r => globalThis.__PROTEUS_PROBES__[pid] = {...r}) */ }
+```
+
+> why: 自动化工具（wechatide/automator）只能查页面拥有的节点：组件内部节点被 glass-easel 隔离（createSelectorQuery 返回 null，Skyline 无 selectAllComponents）→ 组件内部几何/可见性无法断言（scroll-view 容器塌成细线两轮漏检）。测量必须从组件内部发起
 
 ## 样式转换（9）
 

@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const ROOT = path.resolve(__dirname, '..')
-const SRC = fs.readFileSync(path.join(ROOT, 'src/components/p-checkbox/index.vue'), 'utf-8')
+const SRC = fs.readFileSync(path.join(ROOT, 'packages/components/p-checkbox/index.vue'), 'utf-8')
 
 describe('★p-checkbox 契约', () => {
   it('① 官方属性全覆盖（modelValue/value/disabled/color）+ indeterminate 扩展', () => {

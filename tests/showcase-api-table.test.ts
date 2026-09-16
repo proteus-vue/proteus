@@ -48,43 +48,84 @@ describe('★showcase API 表完整性（表 ⊇ 实现）', () => {
   const cases = [
     {
       name: 'p-button',
-      impl: path.join(ROOT, 'src/components/p-button/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-button/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-button.vue'),
     },
     {
       name: 'p-switch',
-      impl: path.join(ROOT, 'src/components/p-switch/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-switch/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-switch.vue'),
     },
     {
       name: 'p-checkbox',
-      impl: path.join(ROOT, 'src/components/p-checkbox/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-checkbox/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-checkbox.vue'),
     },
     {
       name: 'p-radio',
-      impl: path.join(ROOT, 'src/components/p-radio/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-radio/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-radio.vue'),
     },
     {
       name: 'p-picker',
-      impl: path.join(ROOT, 'src/components/p-picker/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-picker/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-picker.vue'),
     },
     {
       name: 'p-slider',
-      impl: path.join(ROOT, 'src/components/p-slider/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-slider/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-slider.vue'),
     },
     {
       name: 'p-progress',
-      impl: path.join(ROOT, 'src/components/p-progress/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-progress/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-progress.vue'),
     },
     {
       name: 'p-textarea',
-      impl: path.join(ROOT, 'src/components/p-textarea/index.vue'),
+      impl: path.join(ROOT, 'packages/components/p-textarea/index.vue'),
       page: path.join(ROOT, 'showcase/subpackages/components/pages/p-textarea.vue'),
+    },
+    // ★批次 2（容器与外壳，2026-09-14）
+    {
+      name: 'p-view',
+      impl: path.join(ROOT, 'packages/components/p-view/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-view.vue'),
+    },
+    {
+      name: 'p-text',
+      impl: path.join(ROOT, 'packages/components/p-text/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-text.vue'),
+    },
+    {
+      name: 'p-icon',
+      impl: path.join(ROOT, 'packages/components/p-icon/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-icon.vue'),
+    },
+    {
+      name: 'p-image',
+      impl: path.join(ROOT, 'packages/components/p-image/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-image.vue'),
+    },
+    {
+      name: 'p-page-container',
+      impl: path.join(ROOT, 'packages/components/p-page-container/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-page-container.vue'),
+    },
+    {
+      name: 'p-scroll-view',
+      impl: path.join(ROOT, 'packages/components/p-scroll-view/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-scroll-view.vue'),
+    },
+    {
+      name: 'p-router-link',
+      impl: path.join(ROOT, 'packages/components/p-router-link/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-router-link.vue'),
+    },
+    {
+      name: 'p-nav-bar',
+      impl: path.join(ROOT, 'packages/components/p-nav-bar/index.vue'),
+      page: path.join(ROOT, 'showcase/subpackages/components/pages/p-nav-bar.vue'),
     },
   ]
 

@@ -11,7 +11,7 @@ import { createMpDriver } from './mp'
 import { createWxideMini, callWxide } from './wxide'
 export type { WxideMiniOptions } from './wxide'
 
-export type { TestDriver, TestElement, TestElementOptions, ElementWaitOptions, ElementWaitState, PageSnapshot, SystemSnapshot, ConsoleEntry, NetworkEntry } from './types'
+export type { TestDriver, TestElement, TestElementOptions, ElementWaitOptions, ElementWaitState, PageSnapshot, SystemSnapshot, ConsoleEntry, NetworkEntry, ProbeRecord } from './types'
 export type { PlaywrightPageLike, PlaywrightLocatorLike, AutomatorMiniLike, AutomatorElementLike, MpDebuggerLike, WxApiHandle, TicketHandle, CdpHandle, CdpSessionLike } from './types'
 export { createWebDriver } from './web'
 export { createMpDriver } from './mp'

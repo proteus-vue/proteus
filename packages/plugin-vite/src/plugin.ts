@@ -26,6 +26,7 @@ import { resolveRustCliBin, verifyDualCompilerEquivalence } from '@proteus-vue/c
 import type { TransformRuleOverrides } from '@proteus-vue/compiler'
 import type { ProteusConfig } from './config'
 import { matchWebviewPage } from './gen-routes'
+import { resolveComponentsRoot } from './resolve-components'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
 
@@ -385,12 +386,10 @@ export interface PluginOptions {
   /** ★底线循环 ①③：规则覆盖（缺省取 config.rules） */
   rules?: TransformRuleOverrides
   /**
-   * ★框架内置组件目录（@proteus-vue/components 组件库拆包前的定位方式，决策 #115）：
-   * 组件库未拆包，仓库在工程根之外（如 monorepo 根 src/components）时，工程显式传入绝对路径；
-   * 缺省相对工程根 src/components（create-proteus 模板工程用）
-   * ★v2.0 退役：@proteus-vue/components 拆为独立 npm 包后本选项删除（改 resolvePkgPath 包内路径，见 docs/packages.md）
+   * ★语义组件库目录（@proteus-vue/components，2026-09-14 拆包）：**通常无需传入**——
+   * 自动从项目 node_modules 解析包根（`resolveComponentsRoot`）；仅用于包未安装时的显式覆盖（测试）。
    */
-  frameworkComponentsDir?: string
+  componentsDir?: string
 }
 
 function walkVueFiles(dir: string, acc: string[] = []): string[] {
@@ -409,19 +408,19 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
  *  分包目录名常叫 components（如 subpackages/components/pages/*），旧启发式
  *  `file.includes('/components/')` 会把**页面**误判为组件 → 产物成 Component() 且跳过
  *  页面滚动容器包装 → 组件详情页整页无法滚动（首页正常，因其路径不含 components）。
- *  组件仅来自两处（与 gen-routes 解析口径一致）：<appDir>/components 与 frameworkComponentsDir。 */
+ *  组件仅来自两处（与 gen-routes 解析口径一致）：<appDir>/components 与 @proteus-vue/components 包。 */
 export function collectMpEntries(opts: {
   projectRoot: string
   appDir: string
   pagesDir: string
   subPackages: Array<{ root: string }>
-  frameworkComponentsDir: string
+  componentsDir: string
   webOnlyPages?: Set<string>
   onSkipWebOnly?: (file: string) => void
   /** ★平台变体（2026-09-13）：按该平台解析 `foo.mp.vue`/`foo.web.vue`（缺省 mp） */
   platform?: VariantPlatform
 }): Array<{ file: string; rel: string; isComponent: boolean }> {
-  const { projectRoot, appDir, pagesDir, subPackages, frameworkComponentsDir, webOnlyPages, onSkipWebOnly } = opts
+  const { projectRoot, appDir, pagesDir, subPackages, componentsDir, webOnlyPages, onSkipWebOnly } = opts
   const platform = opts.platform ?? 'mp'
   const out: Array<{ file: string; rel: string; isComponent: boolean }> = []
   const pushRel = (dir: string, isComponent: boolean) => {
@@ -442,12 +441,12 @@ export function collectMpEntries(opts: {
   // 应用组件（约定 <appRoot>/components/<name>/index.vue）
   pushRel(path.join(appDir, 'components'), true)
   // 框架内置组件（src/components/<name>/index.vue → 产物 proteus/<name>/index）
-  for (const f of effectiveVariants(walkVueFiles(frameworkComponentsDir), platform)) {
+  for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
       onSkipWebOnly?.(f)
       continue
     }
-    const relIn = path.relative(frameworkComponentsDir, splitVariant(f).base).replace(/\\/g, '/').replace(/\.vue$/, '')
+    const relIn = path.relative(componentsDir, splitVariant(f).base).replace(/\\/g, '/').replace(/\.vue$/, '')
     out.push({ file: f, rel: `proteus/${relIn}`, isComponent: true })
   }
   return out
@@ -537,13 +536,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
       //   components（如 subpackages/components/pages/*）会把**页面**误判为组件 →
       //   产物成 Component() 且跳过页面滚动容器包装（真机表现：组件详情页整页无法滚动）。
       //   分类逻辑抽为 collectMpEntries（可单测；回归锁 tests/plugin-mp-entries.test.ts）。
-      const frameworkComponents = opts.frameworkComponentsDir ?? path.join(projectRoot, 'src', 'components')
+      // ★语义组件库（@proteus-vue/components，2026-09-14 拆包）：从项目 node_modules 解析包根（源码随包发布）
+      const frameworkComponents = opts.componentsDir ? path.resolve(projectRoot, opts.componentsDir) : resolveComponentsRoot(projectRoot)
       const files = collectMpEntries({
         projectRoot,
         appDir,
         pagesDir: cfg.pagesDir,
         subPackages: effectiveSubPackages ?? [],
-        frameworkComponentsDir: frameworkComponents,
+        componentsDir: frameworkComponents,
         webOnlyPages,
         onSkipWebOnly: (f) => console.log(`[mp-transform] 跳过 webOnly 页面：${path.relative(projectRoot, f).replace(/\\/g, '/')}`),
       })
