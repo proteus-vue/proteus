@@ -1,0 +1,68 @@
+// src/components/global-components.d.ts
+// ★内置组件模板标签类型注册（GlobalComponents 声明合并）：
+//   业务页面模板里 <p-view>/<p-button> 等标签获得 props/emits 类型提示与校验（vue-tsc）
+//   双名注册：Pascal（<PView>）+ kebab（<p-view>，框架约定写法）
+// 新增内置组件：此处补两行（Pascal + kebab），并在 src/components/index.ts 聚合导出
+declare module 'vue' {
+  export interface GlobalComponents {
+    PView: typeof import('./p-view/index.vue')['default']
+    'p-view': typeof import('./p-view/index.vue')['default']
+    PText: typeof import('./p-text/index.vue')['default']
+    'p-text': typeof import('./p-text/index.vue')['default']
+    PImage: typeof import('./p-image/index.vue')['default']
+    'p-image': typeof import('./p-image/index.vue')['default']
+    PButton: typeof import('./p-button/index.vue')['default']
+    'p-button': typeof import('./p-button/index.vue')['default']
+    PScrollView: typeof import('./p-scroll-view/index.vue')['default']
+    'p-scroll-view': typeof import('./p-scroll-view/index.vue')['default']
+    PListView: typeof import('./p-list-view/index.vue')['default']
+    'p-list-view': typeof import('./p-list-view/index.vue')['default']
+    PInput: typeof import('./p-input/index.vue')['default']
+    'p-input': typeof import('./p-input/index.vue')['default']
+    PTextarea: typeof import('./p-textarea/index.vue')['default']
+    'p-textarea': typeof import('./p-textarea/index.vue')['default']
+    PMask: typeof import('./p-mask/index.vue')['default']
+    'p-mask': typeof import('./p-mask/index.vue')['default']
+    PPopup: typeof import('./p-popup/index.vue')['default']
+    'p-popup': typeof import('./p-popup/index.vue')['default']
+    PToast: typeof import('./p-toast/index.vue')['default']
+    'p-toast': typeof import('./p-toast/index.vue')['default']
+    PLoading: typeof import('./p-loading/index.vue')['default']
+    'p-loading': typeof import('./p-loading/index.vue')['default']
+    PNavBar: typeof import('./p-nav-bar/index.vue')['default']
+    'p-nav-bar': typeof import('./p-nav-bar/index.vue')['default']
+    PSkeleton: typeof import('./p-skeleton/index.vue')['default']
+    'p-skeleton': typeof import('./p-skeleton/index.vue')['default']
+    PErrorBoundary: typeof import('./p-error-boundary/index.vue')['default']
+    'p-error-boundary': typeof import('./p-error-boundary/index.vue')['default']
+    VirtualList: typeof import('./virtual-list/index.vue')['default']
+    'virtual-list': typeof import('./virtual-list/index.vue')['default']
+    // ★能力颗粒度对齐 C2
+    PProgress: typeof import('./p-progress/index.vue')['default']
+    'p-progress': typeof import('./p-progress/index.vue')['default']
+    PLabel: typeof import('./p-label/index.vue')['default']
+    'p-label': typeof import('./p-label/index.vue')['default']
+    PPageContainer: typeof import('./p-page-container/index.vue')['default']
+    'p-page-container': typeof import('./p-page-container/index.vue')['default']
+    // ★权威标尺批 H
+    PSelection: typeof import('./p-selection/index.vue')['default']
+    'p-selection': typeof import('./p-selection/index.vue')['default']
+    PKeyboardAccessory: typeof import('./p-keyboard-accessory/index.vue')['default']
+    'p-keyboard-accessory': typeof import('./p-keyboard-accessory/index.vue')['default']
+    // ★权威标尺批 I
+    PCamera: typeof import('./p-camera/index.vue')['default']
+    'p-camera': typeof import('./p-camera/index.vue')['default']
+    // ★权威标尺批 J
+    PWebview: typeof import('./p-webview/index.vue')['default']
+    'p-webview': typeof import('./p-webview/index.vue')['default']
+    PAd: typeof import('./p-ad/index.vue')['default']
+    'p-ad': typeof import('./p-ad/index.vue')['default']
+    PMap: typeof import('./p-map/index.vue')['default']
+    'p-map': typeof import('./p-map/index.vue')['default']
+    // ★批次 8：共享元素转场
+    PShareElement: typeof import('./p-share-element/index.vue')['default']
+    'p-share-element': typeof import('./p-share-element/index.vue')['default']
+  }
+}
+
+export {}

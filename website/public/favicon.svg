@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Proteus 网站图标（favicon）· 品牌立方体，白底圆角方形容器
+     与小程序头像同源（docs/brand/avatar.svg）：等距立方体三面各持一色。
+     ★favicon 尺寸小（16px），故：① 立方体占比放到最大（L=196，几乎满幅）
+     ② 用平涂高对比色（渐变在 16px 会糊）③ 白底保证在明/暗两种标签栏都可辨。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Proteus">
+  <title>Proteus</title>
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <polygon points="256,64 425.7,162 256,260 86.3,162" fill="#a78bfa"/>
+  <polygon points="86.3,162 256,260 256,456 86.3,358" fill="#34d399"/>
+  <polygon points="256,260 425.7,162 425.7,358 256,456" fill="#3b82f6"/>
+</svg>

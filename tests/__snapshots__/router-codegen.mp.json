@@ -1,0 +1,55 @@
+{
+  "pages": [
+    {
+      "path": "home",
+      "componentFramework": "glass-easel",
+      "renderer": "skyline",
+      "styleIsolation": "isolated",
+      "lazyCodeLoading": "requiredComponents",
+      "routeType": "slideUp"
+    },
+    {
+      "path": "home/profile",
+      "componentFramework": "glass-easel",
+      "renderer": "skyline",
+      "styleIsolation": "isolated",
+      "lazyCodeLoading": "requiredComponents",
+      "routeType": "slideUp",
+      "__parent": "home"
+    },
+    {
+      "path": "user",
+      "componentFramework": "glass-easel",
+      "renderer": "skyline",
+      "styleIsolation": "isolated",
+      "lazyCodeLoading": "requiredComponents",
+      "routeType": "slideUp"
+    },
+    {
+      "path": "user/order",
+      "componentFramework": "glass-easel",
+      "renderer": "skyline",
+      "styleIsolation": "isolated",
+      "lazyCodeLoading": "requiredComponents",
+      "routeType": "slideUp",
+      "__parent": "user"
+    }
+  ],
+  "componentFramework": "glass-easel",
+  "renderer": "skyline",
+  "lazyCodeLoading": "requiredComponents",
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#007AFF",
+    "list": [
+      {
+        "pagePath": "home",
+        "text": "首页"
+      },
+      {
+        "pagePath": "user",
+        "text": "我的"
+      }
+    ]
+  }
+}

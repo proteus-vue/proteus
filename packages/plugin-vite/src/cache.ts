@@ -1,0 +1,222 @@
+// packages/plugin-vite/src/cache.ts
+// ★build-plan M8：编译缓存 —— compileVueSfc 结果按「全入参哈希」缓存（铁律 #4：配置哈希 + 源码哈希 + 依赖哈希）
+// 正确性：任一输入变化（源码/px2rpx/rpxRatio/rules/moduleImports/组件标记/debug/编译器版本）→ 键变化 → 自动失效
+// 存储：磁盘 node_modules/.cache/proteus/compile/<key>.json + 进程内存 Map；debug 构建跳过缓存
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { createRequire } from 'node:module'
+
+export interface CompileCacheEntry {
+  wxml: string
+  js: string
+  wxss: string
+  warnings: string[]
+}
+
+export interface CompileCacheStats {
+  hits: number
+  misses: number
+}
+
+/** 编译器版本指纹（缓存键组成部分——编译器代码变更即全局失效）
+ * ★修复①：仅 package.json version 不足（代码改了版本没变 → 缓存命中旧产物）；改用 dist 代码内容哈希
+ * ★修复②（2026-08 真机复现）：vite 5.4 加载 config 时把插件 bundle 到 os.tmpdir() → import.meta.url 基准失效 →
+ *   require.resolve 找不到项目 node_modules（MODULE_NOT_FOUND）→ 恒 'unknown' → 指纹永不变化 → 改编译器代码缓存不失效
+ *   （8aac7c3 的 dist 指纹设计在 vite bundle 场景从未生效）。改以 projectRoot 为基准（createRequire(projectRoot)）显式解析 */
+export function getCompilerVersion(projectRoot: string): string {
+  try {
+    const require = createRequire(path.join(projectRoot, 'package.json'))
+    const pkgJsonPath = require.resolve('@proteus-vue/compiler/package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8')) as { version: string; main: string }
+    const dist = path.join(path.dirname(pkgJsonPath), pkg.main ?? 'dist/index.js')
+    const h = crypto.createHash('sha1')
+    h.update(fs.readFileSync(dist, 'utf-8'))
+    return `${pkg.version}-${h.digest('hex').slice(0, 8)}`
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** esbuild 版本（bundle 缓存键组成部分；同样以 projectRoot 为基准解析，避免 vite config bundle 基准失效） */
+export function getEsbuildVersion(projectRoot: string): string {
+  try {
+    const require = createRequire(path.join(projectRoot, 'package.json'))
+    const pkg = JSON.parse(fs.readFileSync(require.resolve('esbuild/package.json'), 'utf-8')) as { version: string }
+    return pkg.version
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** 计算缓存键：sha1(源码 + 全编译入参 JSON + 编译器版本) */
+export function compileCacheKey(
+  source: string,
+  options: {
+    rel: string
+    isComponent: boolean
+    px2rpx: boolean
+    rpxRatio: number
+    rules?: Record<string, unknown>
+    moduleImports?: Array<{ source: string; requirePath: string }>
+    annotateLines: boolean
+    debug: boolean
+    autoScrollContainer?: boolean
+    /** ★G-22 柔性布局：p-fluid 编译参数（缓存键包含——改 layout 配置失效） */
+    fluidLayout?: unknown
+    /** ★平台化薄接缝：MP 渲染引擎（skyline/webview）——缓存键包含，防同源码跨渲染引擎命中错误缓存 */
+    renderer?: 'skyline' | 'webview'
+    /** ★平台编译期宏目标（__MP__/__WEB__ 取值）——缓存键包含，防跨平台命中错误产物 */
+    platform?: 'mp' | 'web' | 'native' | 'ios' | 'android' | 'harmony'
+  },
+  projectRoot: string,
+): string {
+  const h = crypto.createHash('sha1')
+  h.update(source)
+  h.update('|')
+  h.update(JSON.stringify({ ...options, compilerVersion: getCompilerVersion(projectRoot) }))
+  return h.digest('hex')
+}
+
+/** 编译缓存：磁盘 + 内存双层（root 为项目根，缓存目录 node_modules/.cache/proteus/compile/） */
+export function createCompileCache(cacheDir: string): {
+  get(key: string): CompileCacheEntry | null
+  set(key: string, entry: CompileCacheEntry): void
+  stats(): CompileCacheStats
+} {
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const memory = new Map<string, CompileCacheEntry>()
+  let hits = 0
+  let misses = 0
+
+  return {
+    get(key: string): CompileCacheEntry | null {
+      const mem = memory.get(key)
+      if (mem) {
+        hits++
+        return mem
+      }
+      const file = path.join(cacheDir, `${key}.json`)
+      if (fs.existsSync(file)) {
+        try {
+          const entry = JSON.parse(fs.readFileSync(file, 'utf-8')) as CompileCacheEntry
+          memory.set(key, entry)
+          hits++
+          return entry
+        } catch {
+          // 损坏缓存 → 视为未命中（下次编译覆盖）
+        }
+      }
+      misses++
+      return null
+    },
+    set(key: string, entry: CompileCacheEntry): void {
+      memory.set(key, entry)
+      try {
+        fs.writeFileSync(path.join(cacheDir, `${key}.json`), JSON.stringify(entry))
+      } catch {
+        // 磁盘写失败不阻塞构建（缓存尽力而为）
+      }
+    },
+    stats() {
+      return { hits, misses }
+    },
+  }
+}
+
+// ============ 共享模块 esbuild bundle 缓存（M8 第二批） ============
+
+/** 输入文件快照（mtime+size 指纹，对齐 webpack/babel-loader 持久化缓存实践） */
+export interface BundleInputSnapshot {
+  file: string
+  mtimeMs: number
+  size: number
+}
+
+export interface BundleCacheEntry {
+  output: string
+  inputs: BundleInputSnapshot[]
+}
+
+/** bundle 缓存键：sha1(入口文件 + esbuild 版本 + 构建选项) */
+export function bundleCacheKey(entryFile: string, projectRoot: string): string {
+  const h = crypto.createHash('sha1')
+  h.update(entryFile)
+  h.update('|')
+  h.update(
+    JSON.stringify({
+      esbuild: getEsbuildVersion(projectRoot),
+      target: 'es2018',
+      format: 'cjs',
+      charset: 'utf8',
+      minify: true,
+      external: ['@proteus-vue/*'],
+    }),
+  )
+  return h.digest('hex')
+}
+
+/** 校验输入快照仍有效（文件存在 + mtime/size 未变 → 可复用） */
+function inputsValid(inputs: BundleInputSnapshot[]): boolean {
+  for (let i = 0; i < inputs.length; i++) {
+    try {
+      const st = fs.statSync(inputs[i].file)
+      if (st.mtimeMs !== inputs[i].mtimeMs || st.size !== inputs[i].size) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * esbuild bundle 缓存：磁盘 + 内存双层
+ * 键 = sha1(入口文件 + esbuild 版本 + 构建选项)；命中需输入快照全部有效（mtime+size 一致）
+ * 注意：首次构建需 metafile 记录输入集（第一次必然未命中，后续命中）
+ */
+export function createBundleCache(cacheDir: string): {
+  get(key: string): BundleCacheEntry | null
+  set(key: string, entry: BundleCacheEntry): void
+  stats(): CompileCacheStats
+} {
+  fs.mkdirSync(cacheDir, { recursive: true })
+  const memory = new Map<string, BundleCacheEntry>()
+  let hits = 0
+  let misses = 0
+
+  return {
+    get(key: string): BundleCacheEntry | null {
+      const mem = memory.get(key)
+      if (mem && inputsValid(mem.inputs)) {
+        hits++
+        return mem
+      }
+      const file = path.join(cacheDir, `${key}.json`)
+      if (fs.existsSync(file)) {
+        try {
+          const entry = JSON.parse(fs.readFileSync(file, 'utf-8')) as BundleCacheEntry
+          if (inputsValid(entry.inputs)) {
+            memory.set(key, entry)
+            hits++
+            return entry
+          }
+        } catch {
+          // 损坏/失效缓存 → 未命中
+        }
+      }
+      misses++
+      return null
+    },
+    set(key: string, entry: BundleCacheEntry): void {
+      memory.set(key, entry)
+      try {
+        fs.writeFileSync(path.join(cacheDir, `${key}.json`), JSON.stringify(entry))
+      } catch {
+        // 尽力而为
+      }
+    },
+    stats() {
+      return { hits, misses }
+    },
+  }
+}

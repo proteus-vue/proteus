@@ -1,0 +1,204 @@
+// tests/component-b2.test.ts
+// ★组件库落地评估 v2（B2）：基础组件 a（p-view / p-text / p-image / p-button）
+// 验证两件事：
+//   1. 组件 SFC 走既有编译管线 → MP 四件套正确（wxml 标签映射 / properties / 事件 / 节流逻辑）
+//   2. gen-routes 端到端：页面用 p-* 标签 → usingComponents /proteus/<tag>/index 自动解析
+import { describe, it, expect, afterAll, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { compileVueSfc } from '@proteus-vue/compiler'
+import { runGenRoutes } from '../packages/plugin-vite/src/gen-routes'
+import type { ProteusConfig } from '../packages/plugin-vite/src/config'
+
+const COMPONENTS_DIR = path.resolve('packages/components')
+const FRAMEWORK_COMPONENTS_DIR = path.resolve('packages/components')
+
+function readSfc(tag: string): string {
+  return fs.readFileSync(path.join(COMPONENTS_DIR, tag, 'index.vue'), 'utf-8')
+}
+
+function compileComponent(tag: string) {
+  return compileVueSfc(readSfc(tag), { isComponent: true, filename: `packages/components/${tag}/index.vue` })
+}
+
+describe('p-view（通用容器）', () => {
+  it('MP 产物：div → view + 插槽透传 + BaseProps properties', () => {
+    const { wxml, js } = compileComponent('p-view')
+    expect(wxml).toContain('<view')
+    expect(wxml).toMatch(/class="[^"]*\bp-view\b/) // 合并后单 class 属性：scope class + p-view + :class 绑定
+    expect(wxml).toContain('aria-label="{{ariaLabel}}"')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('Component({')
+    expect(js).toContain('pid: { type: String, value: "" }')
+    expect(js).toContain('disabled: { type: Boolean, value: false }')
+    expect(js).toContain('ariaLabel: { type: String, value: "" }')
+  })
+})
+
+describe('p-text（文本）', () => {
+  it('MP 产物：span → text + selectable 透传', () => {
+    const { wxml, js } = compileComponent('p-text')
+    expect(wxml).toContain('<text')
+    expect(wxml).toMatch(/class="[^"]*\bp-text\b/)
+    expect(wxml).toContain('selectable="{{selectable ? \'true\' : \'\'}}"')
+    expect(wxml).toContain('<slot')
+    expect(js).toContain('selectable: { type: Boolean, value: false }')
+  })
+})
+
+describe('p-image（图片）', () => {
+  it('MP 产物：img → image + mode/lazy-load/placeholder 映射 + bind:load/bind:error', () => {
+    const { wxml, js } = compileComponent('p-image')
+    expect(wxml).toContain('<image')
+    expect(wxml).toMatch(/class="[^"]*\bp-image\b/)
+    expect(wxml).toContain('src="{{src}}"')
+    expect(wxml).toContain('mode="{{mode}}"')
+    expect(wxml).toContain('lazy-load="{{lazyLoad ? \'true\' : \'\'}}"')
+    expect(wxml).toContain('bind:load="onLoad"')
+    expect(wxml).toContain('bind:error="onError"')
+    // mode 的 Web 映射走 CSS 类（编译器 computed 仅支持箭头表达式体，块体被忽略）
+    expect(wxml).toContain('p-image--')
+    // 事件转发 triggerEvent
+    expect(js).toContain("this.triggerEvent('load', e)")
+    expect(js).toContain("this.triggerEvent('error', e)")
+  })
+})
+
+describe('p-button（按钮）', () => {
+  it('MP 产物：button 透传 + disabled 联动 + bindtap + throttle 防重复', () => {
+    const { wxml, js } = compileComponent('p-button')
+    expect(wxml).toContain('<button')
+    expect(wxml).toMatch(/class="[^"]*\bp-button\b/)
+    // ★2026-09-07 e2e 弹层复测修复：false 时传 undefined（不输出 loading/disabled 假属性——WebButton
+    //   三态判定防 :disabled=false 被当存在 → Web 端全按钮 disabled）
+    expect(wxml).toContain('disabled="{{disabled || loading || undefined}}"')
+    expect(wxml).toContain('loading="{{loading || undefined}}"')
+    expect(wxml).toContain('bindtap="onClick"')
+    expect(js).toContain('throttle: { type: Number, value: 0 }')
+    // 节流：时间戳防抖，emit → triggerEvent
+    expect(js).toContain('this.data.throttle > 0')
+    // ★2026-09-11：click 带冒泡选项（bubbles+composed）——供跨组件边界父级 bind:click 接收（p-popover trigger）
+    expect(js).toMatch(/this\.triggerEvent\('click',\s*e,\s*\{\s*bubbles:\s*true,\s*composed:\s*true\s*\}\)/)
+  })
+
+  it('★禁用态视觉 + 主题变量（2026-09-12 真机修复：disabled 此前只有原生禁交互、无视觉区分）', () => {
+    const { wxml, wxss } = compileComponent('p-button')
+    // 禁用 class 绑定（编译产物：disabled?'is-disabled-<scope> ':'')
+    expect(wxml).toMatch(/disabled\?'is-disabled/)
+    // 禁用态样式（灰底 + 弱化文字；scope 后缀拼接为 .p-button-x.is-disabled-x）
+    expect(wxss).toMatch(/\.p-button[\w-]*\.is-disabled/)
+    // 主题变量（宿主可换肤：--p-button-bg 等）
+    expect(wxss).toContain('var(--p-button-bg')
+    expect(wxss).toContain('var(--p-button-color')
+  })
+
+  it('★点击反馈：hover-class 缺省绑定框架类（保留原生默认态会替换彩色按钮底色）', () => {
+    const { wxml } = compileComponent('p-button')
+    // 演进（2026-09-13 二改）：先前修复是「缺省求值 undefined → 用微信原生 button-hover」，
+    //   但用户实测「小程序里彩色按钮按下没反馈/观感错误」——微信原生 `button-hover` 缺省态是
+    //   `background-color:#dedede`（通用灰）或按 type 替换色（基础库实测 `.button-hover[type=primary]{
+    //   background-color:#179b16}`），会**替换**彩色按钮（theme/brand/自定义 --p-button-bg）的底色。
+    //   现改为缺省绑定框架自有的叠加类 `p-button--hover`（global 单类，background-image 叠加保留色相）。
+    //   空串语义仍保留：传 '' 之外的 'none' 关闭、自定义类名覆盖。
+    expect(wxml).toContain('hover-class="{{hoverClass || \'p-button--hover\'}}"')
+    // 该框架类必须在 <style global> 中定义（hover-class 由平台加到根节点，不经编译期 class 处理 → 无 scopeId 后缀）
+    const { wxss } = compileComponent('p-button')
+    expect(wxss).toContain('.p-button--hover {')
+    // ★为什么用 box-shadow（用户实测「时好时坏」的真因）：global 组排在 scoped 之前，而基类 scoped
+    //   规则用 `background:` **简写**会把 background-image 重置为 none → 叠加层被静默吃掉。
+    //   box-shadow 不被 background 简写影响 + !important 与顺序解耦。
+    expect(wxss, '按下态叠加应使用 box-shadow（background-image 会被 background 简写重置）').toContain('box-shadow')
+    expect(wxss, '按下态必须 !important（与 global/scoped 顺序解耦）').toContain('!important')
+  })
+
+  it('★官方属性全量：size/type/plain/form-type/open-type/hover-* 均发射到原生 <button>', () => {
+    const { wxml } = compileComponent('p-button')
+    for (const a of ['size', 'type', 'plain', 'form-type', 'open-type', 'hover-stop-propagation', 'hover-start-time', 'hover-stay-time', 'session-from', 'app-parameter', 'show-message-card']) {
+      expect(wxml, `缺官方属性 ${a}`).toContain(`${a}="{{`)
+    }
+  })
+})
+
+describe('gen-routes 端到端（p-* 组件 usingComponents 自动解析）', () => {
+  const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-comp-b2-'))
+  afterAll(() => {
+    fs.rmSync(TMP, { recursive: true, force: true })
+  })
+
+  function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
+    return {
+      platform: 'mp-weixin',
+      skyline: true,
+      appid: 'wx0000000000',
+      pagesDir: 'src/pages',
+      routesOutput: 'src/router/auto-routes.ts',
+      customRoute: { registerPresets: true, builders: {} },
+      setDataBridge: { batchWindow: 16, perComponent: true },
+      style: { px2rpx: true, rpxRatio: 2 },
+      ...extra,
+    }
+  }
+
+  function writeFixture(dir: string, rel: string, content: string): void {
+    const abs = path.join(dir, rel)
+    fs.mkdirSync(path.dirname(abs), { recursive: true })
+    fs.writeFileSync(abs, content)
+  }
+
+  it('页面使用 p-view/p-text/p-button/p-image → page.json usingComponents 指向 /proteus/<tag>/index', () => {
+    const root = path.join(TMP, 'demo')
+    writeFixture(
+      root,
+      'src/pages/index.vue',
+      `<template><p-view><p-text>hi</p-text></p-view><p-button>go</p-button><p-image src="x" /></template>\n<route>\n{\n  "meta": { "title": "组件演示" }\n}\n</route>\n`,
+    )
+
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
+
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJson.usingComponents['p-view']).toBe('/proteus/p-view/index')
+    expect(pageJson.usingComponents['p-text']).toBe('/proteus/p-text/index')
+    expect(pageJson.usingComponents['p-button']).toBe('/proteus/p-button/index')
+    expect(pageJson.usingComponents['p-image']).toBe('/proteus/p-image/index')
+  })
+
+  it('未注册的 p- 前缀标签 → 警告且不进 usingComponents（防拼写错误静默）', () => {
+    const root = path.join(TMP, 'typo')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    writeFixture(root, 'src/pages/index.vue', `<template><pv-button>go</pv-button></template>\n`)
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJson.usingComponents ?? {}).toEqual({})
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('pv-button'))
+    warnSpy.mockRestore()
+  })
+
+  it('★具名插槽之后的组件同样注册（旧模板体正则被内层 </template> 截断 → 后序组件漏 usingComponents 整块不渲染）', () => {
+    const root = path.join(TMP, 'slots')
+    // p-split 内先出现 <template #aside>（首个内层 </template>）——其后 p-zone/p-sidebar/p-modal 必须全量注册
+    writeFixture(
+      root,
+      'src/pages/index.vue',
+      `<template><p-split min-split-width="640"><template #aside><view class="a">侧栏</view></template><view class="b">主区</view></p-split><p-zone design-width="375" /><p-sidebar min-sidebar-width="640" /><p-modal /></template>\n`,
+    )
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    for (const tag of ['p-split', 'p-zone', 'p-sidebar', 'p-modal']) {
+      expect(pageJson.usingComponents[tag]).toBe(`/proteus/${tag}/index`)
+    }
+  })
+
+  it('HTML 注释里的 <p-xxx> 示例文本不误注册（标签扫描跳过注释块）', () => {
+    const root = path.join(TMP, 'comment')
+    writeFixture(
+      root,
+      'src/pages/index.vue',
+      `<template><!-- 示例：<p-view class="box">（注释文本不是真实使用） --><p-button>ok</p-button></template>\n`,
+    )
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJson.usingComponents['p-button']).toBe('/proteus/p-button/index')
+    expect(pageJson.usingComponents['p-view']).toBeUndefined()
+  })
+})

@@ -1,0 +1,113 @@
+{
+  "name": "@proteus-vue/types",
+  "version": "0.2.0-beta.1",
+  "description": "Proteus 框架级共享类型单一来源（types-plan B3）：Platform/PlatformTarget + ProteusConfig JSON Schema",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./mp": {
+      "types": "./dist/mp/index.d.ts",
+      "import": "./dist/mp/index.js",
+      "default": "./dist/mp/index.js"
+    },
+    "./mp/component-schema": {
+      "types": "./dist/mp/component-schema.d.ts",
+      "import": "./dist/mp/component-schema.js",
+      "default": "./dist/mp/component-schema.js"
+    },
+    "./mp/sdk-version": {
+      "types": "./dist/mp/sdk-version.d.ts",
+      "import": "./dist/mp/sdk-version.js",
+      "default": "./dist/mp/sdk-version.js"
+    },
+    "./mp/official-typings": {
+      "types": "./dist/mp/official-typings.d.ts",
+      "import": "./dist/mp/official-typings.js",
+      "default": "./dist/mp/official-typings.js"
+    },
+    "./index-shared": {
+      "types": "./dist/index-shared.d.ts",
+      "import": "./dist/index-shared.js",
+      "default": "./dist/index-shared.js"
+    },
+    "./compiler-types": {
+      "types": "./dist/compiler-types.d.ts",
+      "import": "./dist/compiler-types.js",
+      "default": "./dist/compiler-types.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "import": "./dist/capabilities.js",
+      "default": "./dist/capabilities.js"
+    },
+    "./router-types": {
+      "types": "./dist/router-types.d.ts",
+      "import": "./dist/router-types.js",
+      "default": "./dist/router-types.js"
+    },
+    "./api-types": {
+      "types": "./dist/api-types.d.ts",
+      "import": "./dist/api-types.js",
+      "default": "./dist/api-types.js"
+    },
+    "./platform-api": {
+      "types": "./dist/platform-api.d.ts",
+      "import": "./dist/platform-api.js",
+      "default": "./dist/platform-api.js"
+    },
+    "./lifecycle-types": {
+      "types": "./dist/lifecycle-types.d.ts",
+      "import": "./dist/lifecycle-types.js",
+      "default": "./dist/lifecycle-types.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "import": "./dist/utils.js",
+      "default": "./dist/utils.js"
+    },
+    "./ir-guards": {
+      "types": "./dist/ir-guards.d.ts",
+      "import": "./dist/ir-guards.js",
+      "default": "./dist/ir-guards.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js",
+      "default": "./dist/config.js"
+    },
+    "./define-proteus": {
+      "types": "./dist/define-proteus.d.ts",
+      "import": "./dist/define-proteus.js",
+      "default": "./dist/define-proteus.js"
+    },
+    "./config-schema": {
+      "types": "./dist/config-schema.d.ts",
+      "import": "./dist/config-schema.js",
+      "default": "./dist/config-schema.js"
+    },
+    "./proteus.config.schema.json": "./src/config-schema.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/index-shared.ts src/compiler-types.ts src/capabilities.ts src/router-types.ts src/api-types.ts src/platform-api.ts src/lifecycle-types.ts src/utils.ts src/ir-guards.ts src/config.ts src/config-schema.ts src/define-proteus.ts src/mp/index.ts src/mp/component-schema.ts src/mp/sdk-version.ts src/mp/official-typings.ts --bundle --format=esm --platform=node --outdir=dist"
+  },
+  "dependencies": {
+    "@proteus-vue/contracts": "0.1.0",
+    "vite": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "miniprogram-api-typings": "^5.2.3"
+  }
+}

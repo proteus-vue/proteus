@@ -1,0 +1,11 @@
+# MANIFEST - G-32 expected files (唯一事实源，verify.sh 以此为据)
+G-32-complete-semantic-architecture.md
+capability-catalog.md
+miniprogram-mapping.md
+degradation.md
+batches.md
+rules.md
+migration-examples.md
+architecture-update.md
+README.md
+CHECKSUM.md

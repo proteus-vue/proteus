@@ -1,0 +1,20 @@
+# G-40 打包白名单
+# 规则：
+#   1. '#' 开头为注释，不参与校验（防止把注释当文件路径）
+#   2. CHECKSUM.md 必须在此列出，否则双向比对会报"多余文件"
+#   3. pack.sh 会同时把本文件本身打进 zip（否则隔离目录无法校验）
+G-40-execution-carrier.md
+execution-carrier-spi.md
+realtime-escape.md
+zero-copy-batch.md
+conformance-suite.md
+carrier-reference.js
+rules.md
+batches.md
+architecture-update.md
+README.md
+MANIFEST
+verify.sh
+pack.sh
+run-all-verify.sh
+CHECKSUM.md

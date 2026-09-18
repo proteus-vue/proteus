@@ -1,0 +1,1248 @@
+/* @proteus-vue/devtools style.css —— Vue DevTools 质感暗色主题（VS Code 风格）
+   设计对照：侧栏导航 + 内容区 + 等宽数据 + 类型着色 + 强调色 #4fc3f7 */
+
+:root {
+  /* 色板（VS Code 深色） */
+  --pd-bg: #1e1e1e;
+  --pd-bg-panel: #252526;
+  --pd-bg-hover: #2a2d2e;
+  --pd-bg-active: #37373d;
+  --pd-border: #3e3e42;
+  --pd-border-soft: #333333;
+  --pd-text: #cccccc;
+  --pd-text-dim: #8a8a8a;
+  --pd-text-faint: #6b6b6b;
+  --pd-accent: #4fc3f7;
+  --pd-green: #4ec9b0;
+  --pd-orange: #ce9178;
+  --pd-red: #f14c4c;
+  --pd-yellow: #dcdcaa;
+  --pd-purple: #c586c0;
+  --pd-blue: #569cd6;
+  --pd-mono: 'SF Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+  /* 类型着色（状态 inspector） */
+  --pd-t-number: #b5cea8;
+  --pd-t-string: #ce9178;
+  --pd-t-boolean: #569cd6;
+  --pd-t-null: #808080;
+  --pd-t-key: #9cdcfe;
+  --pd-t-obj: #dcdcaa;
+}
+
+body.pd-body {
+  margin: 0;
+  background: var(--pd-bg);
+  color: var(--pd-text);
+  font: 13px/1.5 -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 面板骨架：顶栏 + 侧栏 + 内容 ───────────────────────────── */
+.pd-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--pd-bg);
+}
+
+.pd-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 40px;
+  background: var(--pd-bg-panel);
+  border-bottom: 1px solid var(--pd-border);
+  flex-shrink: 0;
+}
+
+.pd-header-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pd-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-header-title::before {
+  content: '◈';
+  color: var(--pd-accent);
+  font-size: 15px;
+}
+
+.pd-header-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--pd-text-faint);
+}
+
+.pd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pd-text-faint);
+}
+
+.pd-dot-on {
+  background: var(--pd-green);
+  box-shadow: 0 0 6px var(--pd-green);
+}
+
+.pd-body-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 侧栏导航（Vue DevTools Inspector 风格） */
+.pd-sidebar {
+  width: 150px;
+  flex-shrink: 0;
+  background: var(--pd-bg-panel);
+  border-right: 1px solid var(--pd-border);
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+.pd-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--pd-text-dim);
+  cursor: pointer;
+  user-select: none;
+  border-left: 2px solid transparent;
+}
+
+.pd-nav-item:hover {
+  background: var(--pd-bg-hover);
+  color: var(--pd-text);
+}
+
+.pd-nav-active {
+  background: var(--pd-bg-active);
+  color: var(--pd-text);
+  border-left-color: var(--pd-accent);
+}
+
+.pd-nav-icon {
+  width: 14px;
+  text-align: center;
+  font-size: 13px;
+}
+
+/* 内容区 */
+.pd-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.pd-view {
+  display: none;
+  height: 100%;
+}
+
+.pd-view-active {
+  display: block;
+}
+
+/* ── 通用控件 ──────────────────────────────────────────────── */
+.pd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--pd-text-faint);
+}
+
+.pd-btn {
+  background: var(--pd-bg-active);
+  border: 1px solid var(--pd-border);
+  color: var(--pd-text);
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pd-btn:hover {
+  border-color: var(--pd-accent);
+  color: var(--pd-accent);
+}
+
+.pd-empty {
+  color: var(--pd-text-faint);
+  padding: 40px 0;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* ── Timeline 视图 ─────────────────────────────────────────── */
+.pd-ruler {
+  display: flex;
+  border-bottom: 1px solid var(--pd-border-soft);
+  margin-bottom: 6px;
+  height: 18px;
+  font-size: 10px;
+  color: var(--pd-text-faint);
+}
+
+.pd-lane {
+  display: flex;
+  margin: 3px 0;
+  align-items: center;
+}
+
+.pd-lane-label {
+  width: 96px;
+  flex-shrink: 0;
+  color: var(--pd-accent);
+  text-align: right;
+  padding-right: 10px;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--pd-mono);
+}
+
+.pd-lane-track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  background: var(--pd-bg-panel);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pd-span {
+  position: absolute;
+  top: 2px;
+  height: 18px;
+  background: #2e7d32;
+  border-radius: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #e8f5e9;
+  cursor: default;
+  transition: filter 0.12s;
+}
+
+.pd-span:hover {
+  filter: brightness(1.35);
+  z-index: 2;
+}
+
+.pd-span-pending {
+  background: #b26a00;
+}
+
+.pd-span-dot {
+  background: #546e7a;
+}
+
+/* 虚拟滚动（万级 span 分块渲染）：spacer 占位 + 泳道绝对定位 */
+.pd-timeline-spacer {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Flamegraph 视图 ───────────────────────────────────────── */
+.pd-fg-board {
+  position: relative;
+  background: var(--pd-bg-panel);
+  border-radius: 4px;
+}
+
+.pd-fg-node {
+  position: absolute;
+  background: #1a5276;
+  border: 1px solid #2471a3;
+  border-radius: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #d4e6f1;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.pd-fg-node:hover {
+  filter: brightness(1.4);
+  z-index: 2;
+}
+
+.pd-fg-zero {
+  background: #3d3d3d;
+  border-color: #555;
+}
+
+/* ★合成「录制会话」根（视图层包装）：虚线边框 + 降透明度区分容器，与真实节点区分 */
+.pd-fg-session {
+  border-style: dashed;
+  opacity: 0.85;
+  cursor: default;
+}
+
+/* ★嵌套子容器（子块相对父块定位——经典火焰图堆叠） */
+.pd-fg-children {
+  position: absolute;
+}
+
+/* ★聚焦缩放：面包屑 + 返回上级 */
+.pd-fg-crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.pd-fg-crumb-item {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 3px;
+  color: var(--pd-text-dim);
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.pd-fg-crumb-item:hover {
+  border-color: var(--pd-accent);
+  color: var(--pd-accent);
+}
+
+.pd-fg-up {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 8px;
+}
+
+/* 对比模式：±10% 高亮（regression 红 / improvement 绿） */
+.pd-fg-reg {
+  background: #7b241c;
+  border-color: #e74c3c;
+}
+
+.pd-fg-imp {
+  background: #1e5128;
+  border-color: #27ae60;
+}
+
+/* ── M8 设备面板：概览卡片 + 能力表 + 内存曲线 ────────────────────── */
+.pd-dev-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 4px;
+}
+
+.pd-dev-card {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 120px;
+}
+
+.pd-dev-card-label {
+  font-size: 10px;
+  color: var(--pd-text-faint);
+}
+
+.pd-dev-card-value {
+  font-family: var(--pd-mono);
+  font-size: 13px;
+  color: var(--pd-accent);
+  margin-top: 2px;
+}
+
+.pd-dev-card-hint {
+  font-size: 10px;
+  color: var(--pd-yellow);
+  margin-top: 2px;
+}
+
+.pd-dev-ua {
+  padding: 2px 12px 8px;
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pd-dev-memory {
+  padding: 0 12px 10px;
+}
+
+.pd-dev-mem-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 64px;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.pd-dev-mem-col {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 2px;
+}
+
+.pd-dev-mem-total {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #3a3a3e;
+}
+
+.pd-dev-mem-used {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--pd-accent);
+  opacity: 0.85;
+}
+
+.pd-dev-mem-stat {
+  margin-top: 4px;
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-dim);
+}
+
+.pd-dev-caps {
+  padding: 0 12px 12px;
+}
+
+.pd-dev-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--pd-border-soft);
+  font-size: 12px;
+}
+
+.pd-dev-cap-mark {
+  width: 18px;
+  text-align: center;
+}
+
+.pd-dev-cap-ok .pd-dev-cap-name {
+  color: var(--pd-green);
+}
+
+.pd-dev-cap-no .pd-dev-cap-name {
+  color: var(--pd-text-dim);
+  text-decoration: line-through;
+}
+
+.pd-dev-cap-meta {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  font-family: var(--pd-mono);
+}
+
+.pd-cmp {
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: var(--pd-bg-panel);
+}
+
+.pd-cmp-head {
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  margin-bottom: 4px;
+}
+
+.pd-cmp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+.pd-cmp-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+/* ★P1：选中组件行（高亮 + 详情面板触发） */
+.pd-cmp-active {
+  background: var(--pd-bg-hover);
+  outline: 1px solid var(--pd-accent);
+}
+
+/* ★P1：组件详情面板（props/state inspector 树） */
+.pd-cmp-detail {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-top: 1px dashed var(--pd-border-soft);
+}
+
+.pd-cmp-detail-section {
+  margin-top: 6px;
+}
+
+.pd-cmp-detail-label {
+  font-size: 10px;
+  color: var(--pd-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+/* ★P1：页面元素高亮（install 侧选中组件 → 描边闪烁） */
+.pd-cmp-highlight {
+  outline: 3px solid var(--pd-accent) !important;
+  outline-offset: 2px;
+  transition: outline-color 0.3s ease;
+}
+
+/* ★P1.5：DOM 元素树（组件详情面板） */
+.pd-dom-node {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-dom-tag {
+  color: var(--pd-accent);
+}
+
+.pd-dom-id {
+  color: var(--pd-t-key);
+}
+
+.pd-dom-cls {
+  color: var(--pd-text-faint);
+}
+
+.pd-cmp-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pd-cmp-delta {
+  flex-shrink: 0;
+}
+
+.pd-cmp-regression .pd-cmp-delta { color: var(--pd-red); }
+.pd-cmp-improvement .pd-cmp-delta { color: var(--pd-green); }
+
+/* ── State 视图（key-value inspector 树） ─────────────────── */
+/* ★Pinia 面板布局：store 选择器 + 详情（state 树 + actions 时间线） */
+.pd-store-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pd-store-chip {
+  background: var(--pd-bg-active);
+  border: 1px solid var(--pd-border);
+  color: var(--pd-text-dim);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-family: var(--pd-mono);
+  cursor: pointer;
+}
+
+.pd-store-chip:hover {
+  color: var(--pd-text);
+}
+
+.pd-store-chip-active {
+  border-color: var(--pd-accent);
+  color: var(--pd-accent);
+}
+
+.pd-store-head {
+  padding: 6px 10px;
+  color: var(--pd-accent);
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pd-store-timeline {
+  margin-top: 4px;
+}
+
+.pd-tl-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 10px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.pd-tl-row:hover {
+  background: var(--pd-bg-hover);
+  border-left-color: var(--pd-accent);
+}
+
+.pd-tl-badge {
+  font-size: 9px;
+  padding: 0 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.pd-tl-action {
+  background: rgba(197, 134, 192, 0.18);
+  color: var(--pd-purple);
+}
+
+.pd-tl-patch {
+  background: rgba(78, 201, 176, 0.15);
+  color: var(--pd-green);
+}
+
+.pd-tl-name {
+  color: var(--pd-text);
+}
+
+.pd-tl-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+}
+.pd-store {
+  margin-bottom: 8px;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+}
+
+.pd-store summary {
+  padding: 6px 10px;
+  color: var(--pd-accent);
+  cursor: pointer;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+}
+
+.pd-store summary:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-inspector {
+  padding: 4px 0;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.pd-kv {
+  display: flex;
+  align-items: baseline;
+  padding: 1px 10px;
+  cursor: default;
+}
+
+.pd-kv:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-kv-toggle {
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--pd-text-faint);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pd-kv-key {
+  color: var(--pd-t-key);
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.pd-kv-value {
+  color: var(--pd-text);
+  word-break: break-all;
+}
+
+.pd-t-number { color: var(--pd-t-number); }
+.pd-t-string { color: var(--pd-t-string); }
+.pd-t-boolean { color: var(--pd-t-boolean); }
+.pd-t-null { color: var(--pd-t-null); font-style: italic; }
+.pd-t-obj { color: var(--pd-t-obj); }
+.pd-t-key { color: var(--pd-t-key); }
+
+/* ★双向调试：值编辑（可编辑提示 + 输入框） */
+.pd-kv-editable {
+  cursor: text;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.pd-kv-editable:hover {
+  background: var(--pd-bg-active);
+  outline: 1px solid var(--pd-border);
+}
+
+.pd-kv-edit {
+  background: var(--pd-bg-active);
+  border: 1px solid var(--pd-accent);
+  border-radius: 3px;
+  color: var(--pd-text);
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  padding: 0 4px;
+  min-width: 80px;
+  outline: none;
+}
+
+/* ── Route 视图 ────────────────────────────────────────────── */
+.pd-nav {
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  background: var(--pd-bg-panel);
+}
+
+.pd-nav-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+}
+
+.pd-route {
+  color: var(--pd-purple);
+}
+
+.pd-arrow {
+  color: var(--pd-text-faint);
+}
+
+.pd-nav-meta {
+  color: var(--pd-text-faint);
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.pd-guards {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pd-guard {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-family: var(--pd-mono);
+}
+
+.pd-guard-next { background: rgba(78, 201, 176, 0.15); color: var(--pd-green); }
+.pd-guard-redirect { background: rgba(206, 145, 120, 0.15); color: var(--pd-orange); }
+.pd-guard-cancel, .pd-guard-error { background: rgba(241, 76, 76, 0.15); color: var(--pd-red); }
+
+/* ── Errors 视图 ───────────────────────────────────────────── */
+.pd-error-card {
+  border: 1px solid var(--pd-border);
+  border-left: 3px solid var(--pd-red);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: var(--pd-bg-panel);
+}
+
+.pd-error-title {
+  font-weight: 600;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+}
+
+.pd-error-attr {
+  color: var(--pd-yellow);
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.pd-error-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 8px 0;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+}
+
+.pd-chain-node {
+  color: var(--pd-text-dim);
+  padding: 2px 10px;
+}
+
+.pd-chain-root {
+  color: #ff8a80;
+  font-weight: 600;
+  background: rgba(241, 76, 76, 0.1);
+  border-radius: 3px;
+}
+
+.pd-chain-up {
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  padding-left: 14px;
+}
+
+.pd-error-impact {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.pd-chip {
+  background: #263238;
+  color: var(--pd-green);
+  border-radius: 8px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-family: var(--pd-mono);
+}
+
+.pd-repro {
+  margin: 6px 0 0;
+  color: var(--pd-text-dim);
+  font-size: 11px;
+  padding-left: 18px;
+}
+
+.pd-repro li {
+  margin: 2px 0;
+}
+
+/* ── Tooltip 浮层（Vue DevTools 质感：暗色 + 边框 + 阴影 + mono） ── */
+.pd-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  max-width: 320px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pd-tooltip-title {
+  font-weight: 600;
+  color: var(--pd-accent);
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.pd-tooltip-line {
+  color: var(--pd-text-dim);
+  white-space: nowrap;
+}
+
+/* 滚动条 */
+.pd-content::-webkit-scrollbar,
+.pd-inspector::-webkit-scrollbar,
+.pd-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pd-content::-webkit-scrollbar-thumb,
+.pd-inspector::-webkit-scrollbar-thumb,
+.pd-sidebar::-webkit-scrollbar-thumb {
+  background: var(--pd-border);
+  border-radius: 4px;
+}
+
+/* ── Web 端浮动挂载（installProteusDevtools：右下角 ◈ 按钮 + 覆盖层） ── */
+.pd-floating-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #252526;
+  color: var(--pd-accent);
+  border: 1px solid var(--pd-border);
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.pd-floating-toggle:hover {
+  border-color: var(--pd-accent);
+}
+
+.pd-floating-host {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 9998;
+  width: min(760px, calc(100vw - 32px));
+  height: min(540px, calc(100vh - 80px));
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+}
+
+/* ★拖拽把手（面板 header）：光标 + 禁止选中文本 */
+.pd-floating-host .pd-header.pd-floating-draggable {
+  cursor: move;
+  user-select: none;
+}
+
+.pd-floating-host .pd-header.pd-floating-draggable:active {
+  cursor: grabbing;
+}
+
+/* ── M9 插件：network 瀑布 / 命令面板 / 崩溃占位 ────────────── */
+.pd-net {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pd-net-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-left: 3px solid var(--pd-green);
+  border-radius: 3px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+}
+
+.pd-net-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-net-error {
+  border-left-color: var(--pd-red);
+}
+
+.pd-net-name {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pd-net-meta {
+  flex-shrink: 0;
+  color: var(--pd-text-dim);
+}
+
+.pd-net-error .pd-net-meta {
+  color: var(--pd-red);
+}
+
+.pd-palette-btn {
+  margin-left: auto;
+}
+
+.pd-palette {
+  position: absolute;
+  top: 40px;
+  right: 14px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  z-index: 900;
+  padding: 4px 0;
+}
+
+.pd-palette-item {
+  padding: 5px 12px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text);
+  cursor: pointer;
+}
+
+.pd-palette-item:hover {
+  background: var(--pd-bg-active);
+  color: var(--pd-accent);
+}
+
+.pd-palette-empty {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--pd-text-faint);
+}
+
+.pd-plugin-crash {
+  border: 1px solid var(--pd-red);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: rgba(241, 76, 76, 0.08);
+}
+
+.pd-plugin-crash-title {
+  font-weight: 600;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  color: var(--pd-red);
+}
+
+.pd-plugin-crash-msg {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  font-family: var(--pd-mono);
+  word-break: break-all;
+}
+
+/* ── Components 视图（组件树） ────────────────────────────── */
+.pd-cmp-row {
+  display: flex;
+  align-items: baseline;
+  padding: 2px 6px;
+  font-family: var(--pd-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pd-cmp-row:hover {
+  background: var(--pd-bg-hover);
+}
+
+.pd-cmp-name {
+  color: var(--pd-t-key);
+}
+
+.pd-cmp-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  padding-right: 8px;
+}
+
+/* ── Pages 视图 ───────────────────────────────────────────── */
+.pd-section-head {
+  font-size: 11px;
+  color: var(--pd-text-dim);
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+
+.pd-page-stack,
+.pd-page-group {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.pd-page-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+}
+
+.pd-page-current {
+  color: var(--pd-accent);
+  font-weight: 600;
+}
+
+.pd-page-depth {
+  color: var(--pd-text-faint);
+  min-width: 14px;
+  text-align: right;
+}
+
+.pd-page-name {
+  color: var(--pd-green);
+}
+
+.pd-page-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+}
+
+/* ── Graph 依赖图视图（路由树） ───────────────────────────── */
+.pd-graph {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.pd-graph-node {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-graph-root .pd-graph-name {
+  color: var(--pd-accent);
+  font-weight: 600;
+}
+
+.pd-graph-line {
+  color: var(--pd-text-faint);
+  white-space: pre;
+}
+
+.pd-graph-name {
+  color: var(--pd-t-key);
+}
+
+.pd-graph-meta {
+  margin-left: auto;
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  padding-right: 8px;
+}
+
+/* ── Ownership 所有权视图（G-43 B4） ─────────────────────── */
+.pd-ownership {
+  background: var(--pd-bg-panel);
+  border: 1px solid var(--pd-border-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.pd-own-card-title {
+  color: var(--pd-text-faint);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0 4px;
+  border-bottom: 1px solid var(--pd-border-soft);
+  padding-bottom: 2px;
+}
+
+.pd-own-summary:first-child .pd-own-card-title {
+  margin-top: 0;
+}
+
+.pd-own-stats {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text-strong);
+}
+
+.pd-own-types {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  margin-top: 2px;
+}
+
+.pd-own-alert {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  padding: 1px 0;
+}
+
+.pd-own-alert-orphan {
+  color: #f87171;
+}
+
+.pd-own-alert-leak,
+.pd-own-alert-crosspage {
+  color: #fbbf24;
+}
+
+.pd-own-alert-longborrow {
+  color: var(--pd-accent);
+}
+
+.pd-own-chain {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-faint);
+  white-space: pre-wrap;
+}
+
+.pd-own-ok {
+  font-size: 11px;
+  color: #4ade80;
+}
+
+.pd-own-owner {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-t-key);
+  font-weight: 600;
+  padding: 2px 0 1px;
+}
+
+.pd-own-resource {
+  font-family: var(--pd-mono);
+  font-size: 11px;
+  color: var(--pd-text-mute);
+  padding-left: 10px;
+}
+
+.pd-own-tl {
+  font-family: var(--pd-mono);
+  font-size: 10px;
+  color: var(--pd-text-mute);
+  padding: 1px 0 1px 10px;
+}
+
+.pd-own-tl-unpaired {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+}

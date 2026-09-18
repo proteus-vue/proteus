@@ -1,0 +1,23 @@
+# G-47 Combined Conformance — MANIFEST
+
+status: v1
+updated: 2026-09-03
+
+files:
+| order | file                    | role |
+|-------|-------------------------|------|
+| 1     | 01-problem.md           | ★ 问题定义 + 三类交界处漏洞 |
+| 2     | 02-architecture.md      | 测试金字塔位置 + 组合点 + 矩阵 |
+| 3     | 03-spi.md               | Backend × Pool 契约 + 六不变量 API |
+| 4     | 04-security.md          | CCI 铁律 + 攻击树 + 反模式 |
+| 5     | conformance.md          | INV/INT/NEG 编号 + 23 项映射 |
+| 6     | reference-impl.cjs      | ★ 可运行参考实现 (23/23) |
+| 7     | rules.md                | CCI-01-06 + 全局 CMP097-102 |
+| 8     | architecture-update.md  | 原则 #13.34-36 + G 表增量 |
+| 9     | verify.sh               | 自包含验证（防残留/防表头） |
+| 10    | pack.sh                 | 安全打包（完整性断言 + 防递归） |
+
+invariants: INV-01..INV-06
+suites: INT-A(8) INT-B(3) INT-C(5) INT-D(2) INT-E(2) NEG(3) = 23
+rules: CCI-01..CCI-06 (= global CMP097-102)
+depends: G-27, G-44, G-45, G-46

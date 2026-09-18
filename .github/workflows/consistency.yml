@@ -1,0 +1,63 @@
+name: cross-layer-consistency
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# 全局门禁：任何违反规约的提交都在此 job 失败，阻断合并
+jobs:
+  consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run CrossLayerChecker
+        # 校验脚本仅用 Node 内置模块，无需 npm install
+        run: node scripts/check-consistency.js
+        working-directory: ${{ github.workspace }}
+
+      - name: Scope residual scan
+        # 兜底：全仓库 grep @proteus/（不含 @proteus-vue/），发现即失败。
+        # ★豁免集必须与 scripts/check-consistency.js 的 SCOPE_ALLOW 保持一致（后者为权威，
+        #   含路径维度判定；此处仅覆盖 checker 的 walk 未遍历到的文件类型/目录）。
+        #   允许集：fork 检测样本（container/core）· 生态示例名（backend-*/plugin-*/architecture）·
+        #   历史写法（compat-miniprogram）· 行内 `scope-allow: <理由>`。
+        run: |
+          set -e
+          hits=$(grep -rEn "@proteus/[a-zA-Z0-9-]+" \
+                   --include="*.md" --include="*.ts" --include="*.json" \
+                   --include="*.js" --include="*.mjs" --include="*.vue" . || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "@proteus-vue/" || true)
+          hits=$(printf '%s\n' "$hits" | grep -vE "@proteus/(container|core|architecture|backend-|plugin-|compat-miniprogram|x)" || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "scope-allow:" || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "^[[:space:]]*$" || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::Found legacy @proteus/ scope (should be @proteus-vue/)"
+            exit 1
+          fi
+          echo "scope clean"
+
+  # 分层锁定：包名合法 + types 零运行时依赖 + 构建配置齐备
+  layering:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run layering check
+        run: node scripts/check-consistency.js --layering
+        working-directory: ${{ github.workspace }}
+
+  # 契约先行：contracts.ts 变更需同步各层
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/check-consistency.js --focus=contracts
+        working-directory: ${{ github.workspace }}

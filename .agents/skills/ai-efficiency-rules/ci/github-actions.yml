@@ -1,0 +1,77 @@
+# 将本文件复制到仓库 .github/workflows/efficiency-audit.yml
+# 依赖：把 scripts/audit_efficiency.py 放到仓库 .github/scripts/ 下
+# 可选：把 .efficiency-audit.yaml 放到仓库根目录微调规则
+
+name: AI Efficiency Audit
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write          # 用于回写 PR 评论
+
+jobs:
+  efficiency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10          # 自身也遵守规范：绝不无上限挂起
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         # 需要与 base 分支做 diff
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run efficiency audit
+        id: audit
+        continue-on-error: true
+        run: |
+          mkdir -p .audit
+          python3 .github/scripts/audit_efficiency.py \
+            --diff-base "origin/${{ github.event.pull_request.base.ref || 'main' }}" \
+            --format md \
+            --output .audit/efficiency-report.md \
+            --fail-on error
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SARIF to GitHub Code Scanning
+        if: always()
+        continue-on-error: true
+        run: |
+          python3 .github/scripts/audit_efficiency.py \
+            --diff-base "origin/${{ github.event.pull_request.base.ref || 'main' }}" \
+            --format sarif --output .audit/efficiency.sarif --fail-on none || true
+        # 如需显示在 Security 页签，再追加：
+        # - uses: github/codeql-action/upload-sarif@v3
+        #   with:
+        #     sarif_file: .audit/efficiency.sarif
+        #     category: ai-efficiency
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: efficiency-audit-report
+          path: .audit/
+          if-no-files-found: ignore
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: efficiency-audit
+          path: .audit/efficiency-report.md
+
+      - name: Gate
+        if: steps.audit.outputs.exit_code == '1'
+        run: |
+          echo "::error::存在 error 级执行效率违规，请修复后重新提交"
+          exit 1

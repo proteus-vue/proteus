@@ -1,0 +1,171 @@
+// tests/audit-all.test.ts
+// ★test-framework B6 + M10 + #450：proteus audit all —— 全量审计门禁（10-blueprint-integration.md「proteus audit all」）
+// 八域聚合（route/module/config/i18n/capabilities/components/d2/devtools-budget）+ CI 耗时预算 <12s
+// ★route 域扫 pagesDir（resolvePagesDir 对齐 gen-routes）；components 无 packages/components 跳过；capabilities 为 B5 真实门禁（演示页 @proteus-api-check-ignore 豁免）；
+//   d2 为 opt-in（proteus.config 声明 audit 才跑，未声明跳过）；devtools-budget 性能烟测
+import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { runAuditAll, formatAuditAll, AUDIT_ALL_BUDGET_MS } from '../packages/cli/src/audit-all'
+
+/** 合法工程骨架（config 域校验通过）+ 可选 audit/gates 声明与页面文件 */
+function writeProject(dir: string, auditTs: string | null, pages: Record<string, string>, gatesTs?: string): void {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'audit-all-fixture', private: true }))
+  fs.writeFileSync(
+    path.join(dir, 'proteus.config.ts'),
+    `export default {
+  platform: 'web',
+  skyline: false,
+  appid: '',
+  pagesDir: 'src/pages',
+  routesOutput: 'src/router/auto-routes.ts',
+  customRoute: { registerPresets: false, builders: {} },
+  setDataBridge: { batchWindow: 16, perComponent: false },
+  style: { px2rpx: false, rpxRatio: 2 },
+  ${auditTs ?? ''}
+  ${gatesTs ?? ''}
+}
+`,
+  )
+  for (const [rel, content] of Object.entries(pages)) {
+    const full = path.join(dir, rel)
+    fs.mkdirSync(path.dirname(full), { recursive: true })
+    fs.writeFileSync(full, content)
+  }
+}
+
+describe('proteus audit all（test-framework B6 全量门禁）', () => {
+  it('examples：十域齐全 + 预算内 + 核心域绿（capabilities 演示页豁免后零违规；fluid 抓 FLD 布局违规；d2 未声明 audit 跳过）', async () => {
+    const result = await runAuditAll('examples')
+    expect(result.domains.map((d) => d.name).sort()).toEqual(['api-check', 'capabilities', 'components', 'config', 'd2', 'devtools-budget', 'fluid', 'i18n', 'module', 'route'])
+    expect(result.totalMs).toBeLessThan(AUDIT_ALL_BUDGET_MS)
+    expect(result.overBudget).toBe(false)
+    // 核心域全绿
+    for (const name of ['route', 'module', 'config', 'i18n', 'devtools-budget', 'api-check']) {
+      expect(result.domains.find((d) => d.name === name)?.ok, name).toBe(true)
+    }
+    // fluid 如实报 demo 页布局违规（FLD 系——手写 @media/无障碍字号）
+    expect(result.domains.find((d) => d.name === 'fluid')?.ok).toBe(false)
+    // ★组件库已拆包（2026-09-14）：components 域现在**真实运行**（解析 @proteus-vue/components 包根）并应全绿
+    //  （此前组件库在仓库根 src/components、examples 下无该目录 → 跳过；拆包后从 node_modules 解析到包）
+    const components = result.domains.find((d) => d.name === 'components')
+    expect(components?.skipped, 'components 域应真实运行（不再是跳过）').toBeFalsy()
+    expect(components?.ok, '75 个组件审计应全绿').toBe(true)
+    expect(String(components?.detail)).toContain('组件审计')
+    // d2：examples 未声明 audit → opt-in 跳过（非阻断）
+    const d2 = result.domains.find((d) => d.name === 'd2')
+    expect(d2?.skipped).toBe(true)
+    expect(d2?.detail).toContain('未声明 audit')
+    // capabilities：演示页带 @proteus-api-check-ignore 文件级豁免（刻意演示旧 wx API，同 api-check 约定）
+    // → 业务零平台 API 裸调 → 本域通过（B5 门禁与 api-check 共用豁免标记；见 packages/capabilities/src/check.ts）
+    expect(result.domains.find((d) => d.name === 'capabilities')?.ok).toBe(true)
+  })
+
+  it('空项目：各域跳过/零违规 → ok（独立编译模式语义）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-'))
+    try {
+      const result = await runAuditAll(dir)
+      expect(result.ok).toBe(true)
+      expect(result.overBudget).toBe(false)
+      // config/module 缺文件 → 跳过；route 空目录 → 零违规；components 无目录 → 跳过；d2 无配置 → 跳过
+      const config = result.domains.find((d) => d.name === 'config')
+      expect(config?.ok).toBe(true)
+      expect(config?.detail).toContain('跳过')
+      expect(result.domains.find((d) => d.name === 'd2')?.detail).toContain('跳过')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('formatAuditAll：汇总行含域数/失败数/耗时/预算', () => {
+    const text = formatAuditAll({
+      domains: [
+        { name: 'route', ok: true, ms: 1, detail: '[route] ok' },
+        { name: 'config', ok: false, ms: 2, detail: '[config] 失败' },
+      ],
+      ok: false,
+      totalMs: 3,
+      budgetMs: AUDIT_ALL_BUDGET_MS,
+      overBudget: false,
+    })
+    expect(text).toContain('2 域')
+    expect(text).toContain('1 失败')
+    expect(text).toContain('3ms')
+    expect(text).toContain('预算 12000ms')
+    expect(text).toContain('exit 1')
+  })
+})
+
+describe('proteus audit all：D-2 域 opt-in 语义（★#450）', () => {
+  it('声明 audit + 违规页面（手写 @media）→ d2 域失败 → audit all 失败', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-d2-'))
+    try {
+      writeProject(
+        dir,
+        `audit: { rules: { 'no-media-query': 'error' } },`,
+        { 'src/pages/media-demo.vue': `<template><div>x</div></template>\n<style>\n@media (max-width: 820px) { .x { color: red; } }\n</style>` },
+      )
+      const result = await runAuditAll(dir)
+      const d2 = result.domains.find((d) => d.name === 'd2')
+      expect(d2?.skipped).toBeFalsy()
+      expect(d2?.ok).toBe(false)
+      expect(d2?.detail).toContain('[W-6/C8]')
+      expect(result.ok).toBe(false)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('声明 audit 且规则 warn → d2 域通过（不阻断 audit all）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-d2-'))
+    try {
+      writeProject(
+        dir,
+        `audit: { rules: { 'no-media-query': 'warn' } },`,
+        { 'src/pages/media-demo.vue': `<template><div>x</div></template>\n<style>\n@media (max-width: 820px) { .x { color: red; } }\n</style>` },
+        `gates: { disabled: ['fluid'] },`, // @media 演示页对 FLD（fluid 域）同样违规——本用例只验 d2 warn 语义，关 fluid
+      )
+      const result = await runAuditAll(dir)
+      const d2 = result.domains.find((d) => d.name === 'd2')
+      expect(d2?.ok).toBe(true)
+      expect(d2?.detail).toContain('warn 1')
+      expect(result.ok).toBe(true)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('proteus audit all：gates.disabled 域级/preset 级过滤（★#456）', () => {
+  it('禁用域 → 从聚合中移除（余域照跑，结果 ok）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-gates-'))
+    try {
+      writeProject(dir, null, {}, `gates: { disabled: ['components', 'd2', 'fluid'] },`)
+      const result = await runAuditAll(dir)
+      const names = result.domains.map((d) => d.name)
+      expect(names).not.toContain('components')
+      expect(names).not.toContain('d2')
+      expect(names).not.toContain('fluid')
+      expect(names.sort()).toEqual(['api-check', 'capabilities', 'config', 'devtools-budget', 'i18n', 'module', 'route'])
+      expect(result.ok).toBe(true)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('禁用 preset audit → 单条 gates 域跳过注记 + ok（exit 0）', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-audit-gates-'))
+    try {
+      writeProject(dir, null, {}, `gates: { disabled: ['audit'] },`)
+      const result = await runAuditAll(dir)
+      expect(result.ok).toBe(true)
+      expect(result.domains).toHaveLength(1)
+      expect(result.domains[0]?.name).toBe('gates')
+      expect(result.domains[0]?.detail).toContain('gates.disabled 禁用')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})

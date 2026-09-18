@@ -1,0 +1,51 @@
+# Proteus 自动化测试框架
+
+官方配套测试方案。**Web 端 Vitest，小程序端 miniprogram-automator。**
+
+## 一句话架构
+> **Vitest 统一 L1-L3，仅 L4 E2E 按端分叉（Playwright / automator）。**
+
+## 文档清单
+
+| 文件 | 内容 | 状态 |
+|---|---|---|
+| 00-overview | 总览、分层、铁律、里程碑 | ✅ |
+| 01-vitest-unit | L1 单元 + wx mock | ✅ |
+| 02-snapshot-compile | L2 编译产物快照（@proteus-vue/test-core/snapshot：WXML 结构等值 + sourcemap 回源） | ✅ B2 |
+| 03-component-integration | L3 组件 + createMockContext | ✅ M3 |
+| 03b-mount-unified | **统一测试 API（@proteus-vue/test-core mount.ts）**：同一份 SFC → `mountComponent(platform: 'web'/'mp')` 双端挂载（Web @vue/test-utils 真实渲染 / MP 逻辑层 + WXML 归一化 host）+ `stateOf`/`textOf` 跨端统一断言 + `tap` 事件分发——状态完全共用、DOM 各自断言（06 铁律）；★web 分支需 happy-dom（esbuild TextEncoder 检查）、状态读 vm.$.setupState、increment 后文本断言先 await $nextTick | ✅ 统一 API |
+| 03c-driver-e2e | **统一测试 API（E2E 层 @proteus-vue/test-core/driver）**：一套 `TestDriver` 能力接口 → web（Playwright）/ mp（automator + 可选 wechatide debugger 句柄）；含 **debug 能力域**（consoleLogs/networkRequests/clearCache/refresh——`--debugger <module>` 可插拔装配）+ **小程序独有**（wxApi/ticket 子域——automator 原生，web 降级）+ **web CDP**（cdp 子域——注入 CDP session）；MP 经验内化（元素查询超时诊断、reLaunch 最稳通道、evaluate 必须传函数）；`createDriver({ platform, page/mini, cdp?/debugger? })` 统一入口——同一份跨端用例代码双端跑（tests/test-driver.test.ts 15 用例）；**全部能力接口说明见 §13** | ✅ 统一 API |
+| 04-e2e-web-playwright | Web E2E（路由/渲染 + 关键路径 data-testid）；★统一 driver 适配（@proteus-vue/test-core/driver：createDriver({platform:'web', page})) | ✅ B4 |
+| 05-e2e-mp-automator | 小程序 E2E（官方 SDK）——**examples 真机全链路跑通**（体检/副本/补丁/端口复用/冒烟断言 + 元素查询超时诊断 + --debugger 装配）；Page.getData 受模拟器激活态影响 → 断言用 reLaunch/currentPage/systemInfo；★统一 driver 适配（createDriver({platform:'mp', mini})） | ✅ B5 |
+| 06-cross-platform-assert | 跨端断言一致性（@proteus-vue/test-core 统一 tap/类型守卫 + stateOf/textOf 统一状态/文本读取） | ✅ B7 |
+| 07-fixtures-mock-wx | fixture + wx polyfill | ✅ |
+| 08-ci-strategy | CI 策略——§08「决策未定前 CI 只跑 L1-L3 + 快照 + Web Playwright」已落 proteus ci:init（automator 留 Mac runner 条件） | 🔶 决策待定 |
+| 09-app-end | **App 端（占位）**——预留 TestDriver 第三实现（createDriver({platform:'app'})，G-22 后接线） | ⏸ |
+| 10-blueprint-integration | Blueprint 150 页（P1-P5 业务路径待 v0.6 组件） | 🔶 |
+| 11-execution-batches | B1-B8 + Prompt | ✅ |
+| 12-placeholders | CI / App TODO | ✅ |
+| 13-test-driver-api | **统一测试 API 参考（TestDriver/TestElement 全部能力接口）**：入口工厂 · 全部方法签名/参数/返回 · 双端行为差异 · 注入句柄结构类型 · 完整跨端用例 · 边界扩展 | ✅ |
+| 14-agent-skill | **随包 Agent Skill（packages/test-core/skills/proteus-test/）**：AI 直接使用测试框架——意图→命令表 · TestDriver 能力索引 · 跨端用例模式 · MP 真机指南 · 环境坑合集（npm 发布后随 @proteus-vue/test-core 分发） | ✅ |
+| 15-mp-e2e-console-gate | **MP E2E 标准链路（Electron wechatide）**：console 零错门禁第一——每进一页先抓运行日志（error/ReferenceError/白屏在此拦截），绿后才允许元素/断言；链路 0-7 步骤细则 + 工具面 + 页面健康台账（2026-09-07 semantic 白屏事故 → 产物修复 → 门禁绿） | ✅ |
+
+## 方案可行性结论
+- ✅ Web 用 Vitest —— 正确
+- ✅ 小程序用 miniprogram-automator —— 正确（即"官方 SDK"）
+- ⚠️ automator 需 GUI → CI 降级已预留
+- ⏸ CI 环境 / App 端 —— 本期搁置，仅留接口
+
+## 依赖关系
+```
+Compiler → CLI → Types → Testing → DevTools → Build → Blueprint → Website
+                                                              ↑
+                                          本框架（复用 Testing fixture 思路）
+```
+
+## 快速开始（目标形态）
+```bash
+proteus test            # L1-L3 + 快照
+proteus test e2e:web    # Playwright
+proteus test e2e:mp     # automator（需 IDE 运行）
+```
+
+---

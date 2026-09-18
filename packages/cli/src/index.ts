@@ -1,0 +1,627 @@
+// packages/cli/src/index.ts
+// Proteus CLI 入口：proteus build / explain / rules / router:check / version / help
+// 核心逻辑（parseArgs / explainTarget / buildDir / listRules / checkRoutes）均为纯函数，可单测
+// （shebang 由 esbuild --banner 在构建时注入，源码不写）
+import fs from 'node:fs'
+import path from 'node:path'
+import net from 'node:net'
+import { fileURLToPath } from 'node:url'
+// ★B5 补丁脚本（src 与 dist 同指向仓库根 scripts/）——★2026-09-08 wechatide 标准后 automator 补丁不再需要，保留路径备用
+const AUTOMATOR_PATCH_SCRIPT = fileURLToPath(new URL('../../../scripts/patch-automator.mjs', import.meta.url))
+import { parseBuildArgs, parseExplainArgs, parseRulesArgs, parseRouterCheckArgs, parseModuleCheckArgs, parseModuleDuplicatesArgs, parseModuleAuditArgs, parseModuleInitArgs, parseCapabilityManifestArgs, parseCapabilityCheckArgs, parseComponentsAuditArgs, parseI18nCheckArgs, parseConfigCheckArgs, parseCssCheckArgs, parseStyleCheckArgs, parseCheckArgs, parseGenerateTypesArgs, parseMigrateTypesArgs, parseD2AuditArgs, parseGateArgs, formatHelpText } from './args'
+import { buildDir, planTargetedBuild, runTargetedBuildProgrammatic } from './build'
+import { parseConformanceArgs, runConformance, runConformanceDemo } from './conformance'
+import { parseHostArgs, runHostPush } from './host'
+import { scanRepoDirectory, formatRepoReport } from './repo-conformance'
+import { explainTarget } from './explain'
+import { listRules } from './rules'
+import { checkRoutes, formatRouterCheck } from './router-check'
+import { checkModuleConfigs } from './module-check'
+import { readSubPackageRoots, scanDuplicateModules, formatDuplicateReport } from './module-duplicates'
+import { runAuditModule } from './module-audit'
+import { runCoverageAudit } from './coverage-audit'
+import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
+import { writeModuleConfigSkeleton } from './module-init'
+import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
+import { auditComponents, formatComponentAudit } from './component-audit'
+import { runFluidCheck, formatFluidCheck } from './fluid-check'
+import { checkI18nUsage, formatI18nCheck } from './i18n-check'
+import { checkConfigFile } from './config-check'
+import { runCssCheck, formatCssCheck } from './css-check'
+import { runStyleCheck, formatStyleCheck } from './style-check'
+import { runCheck, formatCheck } from './check'
+import { parseDevArgs, runDev, hasLegacyViteConfig, runDevProgrammatic } from './dev'
+import { runHealthCheck, formatHealthReport } from './health'
+import { parseTestArgs, runTest } from './test'
+import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
+import { generateTypes, formatGenerateTypes } from './generate-types'
+import { migrateTypesFile, formatMigrateTypes } from './migrate-types'
+import { runMigrateMp } from './migrate-mp'
+import { parseCiArgs, planCiInit } from './ci'
+import { generateAppConfigSkeleton } from './app-config-gen'
+import { runAuditAll, formatAuditAll } from './audit-all'
+import { runDevtoolsBudget, formatDevtoolsBudget } from './devtools-budget'
+import { runD2Audit, formatD2Audit, resolveD2Target } from './d2-audit'
+import { runGlassAudit, formatGlassAudit } from './glass-audit'
+import { runGate, formatGateList } from './gate'
+import { planMpE2E, diagnoseMpE2EEnv, formatMpE2EDiagnosis, prepareMpE2EProject } from './mp-e2e'
+
+async function main(): Promise<void> {
+  const [cmd, ...rest] = process.argv.slice(2)
+
+  switch (cmd) {
+    case 'build': {
+      const args = parseBuildArgs(rest)
+      // ★#418 配置收敛：--target web|skyline|all → 工程构建。
+      //   无 vite.config.ts（新形态）→ 程序化驱动（resolveProteusViteConfig + vite build，CLI 组装全部配置）；
+      //   有 vite.config.ts（遗留工程）→ 旧路径（spawn 工程构建脚本）
+      if (args.target) {
+        try {
+          if (!hasLegacyViteConfig(process.cwd())) {
+            const r = await runTargetedBuildProgrammatic(args.target)
+            if (!r.ok) process.exitCode = 1
+          } else {
+            const plans = planTargetedBuild(process.cwd(), args.target)
+            const { spawnSync } = await import('node:child_process')
+            for (const plan of plans) {
+              console.log(`[proteus] build --target：${plan.script}（${plan.command} ${plan.args.join(' ')}）`)
+              const rr = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+              if (rr.status !== 0) {
+                console.error(`[proteus] build 失败（${plan.script} exit ${rr.status}）`)
+                process.exitCode = rr.status ?? 1
+                break
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`[proteus-build] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      const result = buildDir(args.inputDir, {
+        outDir: args.outDir,
+        px2rpx: args.px2rpx,
+        rpxRatio: args.rpxRatio,
+        debug: args.debug,
+        rules: args.rules,
+        compiler: args.compiler,
+      })
+      console.log(`[proteus] build：${result.files.length} 个页面 → ${args.outDir}`)
+      // ★G-29 编译器后端插拔：rust 模式的双编译校验统计（skipped → 降级提示；mismatch 已在 buildDir 抛红）
+      if (args.compiler === 'rust' && result.dualCheck) {
+        if (result.dualCheck.ok) console.log(`[proteus] compiler=rust：${result.dualCheck.ok} 页 Node/Rust 双编译语义等价（G-29.1）✅`)
+        if (result.dualCheck.skipped) console.warn(`[proteus] compiler=rust：${result.dualCheck.skipped} 页跳过双编译校验（${result.dualCheck.skippedReason ?? '未知'}）`)
+      }
+      if (args.debug) console.log(`[proteus] 决策 trace 已落盘：${result.traceFiles.length} 个（.transform-debug/）`)
+      if (result.warnings) console.warn(`[proteus] ⚠ ${result.warnings} 条编译警告（详见各文件，--debug 可看决策链）`)
+      break
+    }
+    case 'explain': {
+      const { target } = parseExplainArgs(rest)
+      console.log(explainTarget(target))
+      break
+    }
+    case 'rules': {
+      const { phase } = parseRulesArgs(rest)
+      console.log(listRules(phase))
+      break
+    }
+    case 'router:check': {
+      const { pagesDir } = parseRouterCheckArgs(rest)
+      console.log(formatRouterCheck(checkRoutes(pagesDir)))
+      break
+    }
+    case 'module:check': {
+      const { root, graph } = parseModuleCheckArgs(rest)
+      const { text, result, cycles, conflicts } = await checkModuleConfigs(root, graph)
+      console.log(text)
+      if (!result.modules.every((m) => m.ok) || result.duplicateNames.length || cycles.length || conflicts.length) process.exitCode = 1
+      break
+    }
+    case 'module:duplicates': {
+      const { distDir } = parseModuleDuplicatesArgs(rest)
+      const roots = readSubPackageRoots(distDir)
+      if (!roots.length) {
+        console.log('[proteus-module] 未找到分包（dist/mp-weixin/app.json 无 subPackages）——无需去重检测')
+        break
+      }
+      const duplicates = scanDuplicateModules(distDir, roots)
+      console.log(formatDuplicateReport(duplicates))
+      if (duplicates.length) process.exitCode = 1
+      break
+    }
+    case 'init': {
+      if (rest[0] !== 'module') throw new Error('proteus init 目前仅支持 module（proteus init module [dir]）')
+      const { root } = parseModuleInitArgs(rest.slice(1))
+      const out = writeModuleConfigSkeleton(root)
+      console.log(`[proteus] 已生成模块契约骨架：${out}`)
+      console.log('下一步：proteus module:check 校验 → proteus audit module 审计（详见 docs/proteus-module-plan/10-migration.md）')
+      break
+    }
+      case 'gate': {
+        // ★#453 统一门禁系统：gate ls（注册表目录）/ gate run <id|preset> [dir]（统一执行）
+        const args = parseGateArgs(rest)
+        try {
+          if (args.sub === 'ls') {
+            console.log(formatGateList(args.group))
+            break
+          }
+          const r = await runGate(args.id!, args.root ?? '.')
+          console.log(r.text)
+          if (!r.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-gate] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      case 'audit': {
+      // proteus audit module（M8.6 CI 门禁）；★B6：audit all 全量门禁（test-framework B6）；★M10：audit devtools-budget（性能预算）
+      if (rest[0] === 'all') {
+        const root = rest.find((a) => a !== 'all' && !a.startsWith('-')) ?? '.'
+        try {
+          const result = await runAuditAll(path.resolve(root))
+          console.log(formatAuditAll(result))
+          if (!result.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      // ★M10 性能预算烟测（devtools-plan M7.4；CI 10 倍余量上界抓病态回归）
+      if (rest[0] === 'devtools-budget') {
+        const result = runDevtoolsBudget()
+        console.log(formatDevtoolsBudget(result))
+        if (!result.ok) process.exitCode = 1
+        break
+      }
+      // ★G-32 B1：audit coverage（G-32.1 小程序能力 100% 覆盖 + 闭环一致性门禁）
+      if (rest[0] === 'coverage') {
+        const result = runCoverageAudit()
+        console.log(result.text)
+        if (!result.ok) process.exitCode = 1
+        break
+      }
+      // ★#448：audit d2（D-2 dogfooding 门禁——05-dogfooding-conformance D-2 机器化；规则级可配 proteus.config audit.rules）
+      if (rest[0] === 'd2') {
+        const { dir } = parseD2AuditArgs(rest.slice(1))
+        try {
+          const { scanDir, configFile } = await resolveD2Target(dir)
+          const report = await runD2Audit(scanDir, { configFile })
+          console.log(formatD2Audit(report))
+          if (!report.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      // ★G-07：audit glass（玻璃治理门禁 GLS001-006——裸 backdrop-filter / 嵌套 / 节点预算）
+      if (rest[0] === 'glass') {
+        const dir = rest.find((a) => a !== 'glass' && !a.startsWith('-')) ?? 'src'
+        try {
+          const result = runGlassAudit(path.resolve(dir))
+          console.log(formatGlassAudit(result))
+          if (!result.ok) process.exitCode = 1
+        } catch (e) {
+          console.error(`[proteus-audit] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      if (rest[0] !== 'module') throw new Error('proteus audit 支持 d2 / glass / module / devtools-budget / coverage / all（proteus audit d2 [dir] | audit glass [dir] | audit module [root] [--dist] | audit devtools-budget | audit coverage | audit all [root]）')
+      const { root, distDir, graphJson, graphJsonPath } = parseModuleAuditArgs(rest.slice(1))
+      const { text, audit } = await runAuditModule({ root, distDir, graphJson, graphJsonPath })
+      console.log(text)
+      if (!audit.ok) process.exitCode = 1
+      break
+    }
+    case 'capabilities:manifest': {
+      const { root, platform } = parseCapabilityManifestArgs(rest)
+      const { text } = await runCapabilityScan(root, undefined, platform)
+      console.log(text)
+      break
+    }
+    case 'capabilities:check': {
+      const { root } = parseCapabilityCheckArgs(rest)
+      const { text, violations } = runCapabilityCheck(root)
+      console.log(text)
+      if (violations.length) process.exitCode = 1
+      break
+    }
+    case 'api-check': {
+      // ★G-31 B7 / G-32.4：CMP007 门禁——回调式 API / 同步存储 / 裸全局调用（平台桥文件豁免）
+      const arg = rest[0] && !rest[0].startsWith('-') ? rest[0] : '.'
+      const result = runApiHookCheck(arg)
+      console.log(formatApiHookCheck(result))
+      if (!result.ok) process.exitCode = 1
+      break
+    }
+    case 'components:audit': {
+      const { root } = parseComponentsAuditArgs(rest)
+      const result = auditComponents(root)
+      console.log(formatComponentAudit(result))
+      if (!result.ok) process.exitCode = 1
+      break
+    }
+    case 'fluid:check': {
+      // ★G-22 柔性布局严格规则（FLD001-006）：扫描 pages/src 下 .vue
+      const dir = rest.find((a) => !a.startsWith('-')) ?? '.'
+      if (rest.filter((a) => !a.startsWith('-')).length > 1) throw new Error('proteus fluid:check 只接受一个目录/文件参数')
+      try {
+        const result = runFluidCheck(dir)
+        console.log(formatFluidCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-fluid] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'config:check': {
+      const { file } = parseConfigCheckArgs(rest)
+      try {
+        const { result, text } = await checkConfigFile(file)
+        console.log(text)
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'app-config:check': {
+      const file = rest.find((a) => !a.startsWith('-')) ?? 'app.config.ts'
+      try {
+        const result = await checkAppConfigFile(path.resolve(file))
+        console.log(formatAppConfigCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-app-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'i18n:check': {
+      const { root, catalog } = parseI18nCheckArgs(rest)
+      try {
+        const result = checkI18nUsage(root, catalog)
+        console.log(formatI18nCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-i18n] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'css:check': {
+      const { target, strict, fix, report } = parseCssCheckArgs(rest)
+      try {
+        const result = runCssCheck(target, { strict, fix })
+        console.log(formatCssCheck(result))
+        if (report) {
+          const fs = await import('node:fs')
+          fs.writeFileSync(report, JSON.stringify({ files: result.files, total: result.total, global: result.global, budgetChecks: result.budgetChecks }, null, 2))
+          console.log(`[proteus-css] 报告已落盘：${report}`)
+        }
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-css] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'style:check': {
+      const { target, platform } = parseStyleCheckArgs(rest)
+      const platforms: Array<'web' | 'skyline' | 'ios' | 'android' | 'harmony'> = ['web', 'skyline', 'ios', 'android', 'harmony']
+      try {
+        const result = runStyleCheck(target, { platform: (platforms as string[]).includes(platform) ? (platform as 'web') : 'web' })
+        console.log(formatStyleCheck(result))
+        if (!result.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-style] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'check': {
+      const { root, strictCss, strictStyle, strictRouter, strictCli } = parseCheckArgs(rest)
+      try {
+        const summary = await runCheck(root, { strictCss, strictStyle, strictRouter, strictCli })
+        console.log(formatCheck(summary))
+        if (!summary.ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-check] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'health': {
+      // ★工程/环境健康检查（与 check 领域门禁正交）：Node 版本/结构/依赖/产物/appid/IDE 一次性诊断
+      const root = rest[0] && !rest[0].startsWith('-') ? rest[0] : '.'
+      try {
+        const items = await runHealthCheck(root)
+        const { text, ok } = formatHealthReport(items)
+        console.log(text)
+        if (!ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-health] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'dev': {
+      const { target } = parseDevArgs(rest)
+      try {
+        // ★#418 配置收敛：无 vite.config.ts（新形态）→ 程序化驱动（框架组装 vite 配置）；有 → 遗留 spawn
+        if (!hasLegacyViteConfig(process.cwd())) {
+          const close = await runDevProgrammatic({ target })
+          process.on('SIGINT', () => void close().then(() => process.exit(0)))
+          process.on('SIGTERM', () => void close().then(() => process.exit(0)))
+        } else {
+          const plan = runDev({ target })
+          console.log(`[proteus] dev --target ${target}：${plan.command} ${plan.args.join(' ')}`)
+          const { spawn } = await import('node:child_process')
+          const child = spawn(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+          child.on('error', (e) => {
+            console.error(`[proteus] dev 启动失败：${e.message}`)
+            process.exitCode = 1
+          })
+          process.on('SIGINT', () => child.kill('SIGINT'))
+          process.on('SIGTERM', () => child.kill('SIGTERM'))
+        }
+      } catch (e) {
+        console.error(`[proteus-dev] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'test': {
+      const { scope, root, ide, port, debugger: debuggerModule } = parseTestArgs(rest)
+      if (scope === 'e2e:mp') {
+        // ★test-framework B5：环境体检 → 产物副本 → automator launch（内部 spawn IDE + trust + 轮询）
+        try {
+          const projectRoot = root ?? '.'
+          // ① 环境体检（★实测坑内化：占位 appid / 端口残留 / 产物缺失 一次性报告）
+          //   ★异步端口探测（net 无同步 API；busy-wait 不可靠——事件回调可能晚于循环退出）
+          const portBusy = await probePort(port ?? 9420)
+          const diagnosis = diagnoseMpE2EEnv({ root: projectRoot, port, ideCli: ide ?? undefined, isPortBusy: () => portBusy })
+          console.log(formatMpE2EDiagnosis(diagnosis))
+          if (!diagnosis.ok) {
+            process.exitCode = 1
+            break
+          }
+          // ★复用已运行 IDE：端口被占（自动化服务已在监听）→ connect 模式（不重复 launch，避免 Port in use）
+          const reuseIde = portBusy
+          const plan = planMpE2E({ root: projectRoot, port, ideCli: ide ?? undefined })
+          // ② 产物独立副本（避开 IDE 路径缓存 + 不污染 dist）
+          const prepared = prepareMpE2EProject(projectRoot)
+          if (!prepared) {
+            console.error('[proteus-test] 产物缺失：请先 npm run build:mp（产出 dist/mp-weixin）')
+            process.exitCode = 1
+            break
+          }
+          for (const s of plan.steps) console.log(s)
+          console.log(`[proteus-test] 使用独立副本：${prepared.projectDir}（每次重建，避 IDE 路径缓存）`)
+          // ★★2026-09-08：wechatide skill-CLI 为唯一标准（automator 与新 Electron IDE 不兼容——launch 报
+          //   "Failed to launch ... http port is open"）。改为：① 用 wechatide 开项目窗口（fullMode）+ 锁 skyline
+          //   渲染模式（private config skylineRenderEnable:true——面向 skyline 项目的判据）② 设 PROTEUS_MP_E2E_WXIDE=1
+          //   让 spec 走 createWxideMini（spawn wechatide 工具），不再 launch automator。
+          const { spawnSync } = await import('node:child_process')
+          const openWin = spawnSync(
+            plan.ideCli,
+            ['-c', 'zed', 'open_project_window', '--project', prepared.projectDir, '--window-mode', 'fullMode'],
+            { encoding: 'utf8', timeout: 60_000 },
+          )
+          if (openWin.status !== 0) console.warn(`[proteus-test] 开窗失败（可能已开）：${(openWin.stderr || '').slice(0, 200)}`)
+          // ★锁 skyline 渲染模式（private config——IDE 开窗可能覆写 private，开窗后写入再刷新页面生效）
+          try {
+            fs.writeFileSync(path.join(prepared.projectDir, 'project.private.config.json'), JSON.stringify({ setting: { skylineRenderEnable: true } }))
+          } catch {
+            /* private config 写了忽略 */
+          }
+          // ★★2026-09-08 根因修复：open_project_window 只开窗不编译——模拟器里小程序未编译加载 → 无活动页 →
+          //   automation_navigate/runtime_info 报 getPageMetaByWebviewId null（rawPath null）。必须 simulator_refresh
+          //   （=工具栏编译）把小程序编译进模拟器，automator 才有页面可驱动（实测 refresh 后 navigate 立刻 success）。
+          //   ★刷新后稍等编译/渲染稳定再跑（automator 需就绪活动页）。
+          const refresh = spawnSync(
+            plan.ideCli,
+            ['-c', 'zed', 'simulator_refresh', '--project', prepared.projectDir],
+            { encoding: 'utf8', timeout: 90_000 },
+          )
+          if (refresh.status !== 0) console.warn(`[proteus-test] simulator_refresh 失败（编译可能未就绪）：${(refresh.stderr || '').slice(0, 200)}`)
+          await new Promise((r) => setTimeout(r, 3000))
+          const r = spawnSync(
+            'npx',
+            // ★2026-09-08：MP E2E 全家桶——冒烟 + Vue 能力对齐真机验收 + p-popover 方案A（同一管理副本/窗口，逐能力真机断言）
+            //   ★--no-file-parallelism：vitest 默认并行跑多个文件，会同时对同一模拟器 navigate（冲突全败）→ 串行（同 test:e2e:web）
+            [
+              'vitest',
+              'run',
+              '--no-file-parallelism',
+              // ★2026-09-08 范围精准（用户：未改编译器不必跑 vue 能力对齐）：PROTEUS_E2E_ONLY=<file> 时只跑指定文件，
+              //   否则默认全家桶（smoke + components + vue-compat + popover）
+              //   ★2026-09-14 新增 e2e-mp-components：内置组件**几何级**渲染/行为断言（补「不显示/塌陷/灰块」盲区）
+              ...(process.env.PROTEUS_E2E_ONLY
+                ? [`tests/${process.env.PROTEUS_E2E_ONLY}.test.ts`]
+                : ['tests/e2e-mp-smoke.test.ts', 'tests/e2e-mp-components.test.ts', 'tests/e2e-mp-probe.test.ts', 'tests/e2e-vue-compat.test.ts', 'tests/e2e-mp-popover.test.ts']),
+            ],
+            {
+              stdio: 'inherit',
+              shell: process.platform === 'win32',
+              env: {
+                ...process.env,
+                PROTEUS_MP_E2E: '1',
+                PROTEUS_MP_E2E_WXIDE: '1',
+                PROTEUS_MP_E2E_CONNECT: reuseIde ? '1' : '0',
+                PROTEUS_AUTOMATOR_PORT: String(plan.port),
+                PROTEUS_IDE_CLI: plan.ideCli,
+                PROTEUS_MINI_PROGRAM_PATH: prepared.projectDir,
+                // ★debugger 适配模块（--debugger <module>，MpDebuggerLike——console/network/clearCache/refresh 注入）
+                ...(debuggerModule ? { PROTEUS_MP_DEBUGGER_MODULE: path.resolve(debuggerModule) } : {}),
+              },
+            },
+          )
+          if (r.status !== 0) process.exitCode = r.status ?? 1
+          console.log('[proteus-test] e2e:mp 完成——微信开发者工具仍在运行，可手动关闭')
+        } catch (e) {
+          console.error(`[proteus-test] ${(e as Error).message}`)
+          process.exitCode = 1
+        }
+        break
+      }
+      const plan = runTest({ scope })
+      if (plan.note) console.log(`[proteus-test] ${plan.note}`)
+      if (!plan.command) break // 理论不可达（e2e:mp 已分支）
+      try {
+        const { spawnSync } = await import('node:child_process')
+        const r = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+        if (r.status !== 0) process.exitCode = r.status ?? 1
+      } catch (e) {
+        console.error(`[proteus-test] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'generate': {
+      if (rest[0] !== 'types') throw new Error('proteus generate 目前仅支持 types（proteus generate types [--out <path>] [--check]）')
+      const { out, check } = parseGenerateTypesArgs(rest.slice(1))
+      const result = generateTypes({ out, check })
+      console.log(formatGenerateTypes(result))
+      if (!result.ok) process.exitCode = 1
+      break
+    }
+    case 'migrate': {
+      // ★G-31 B6：proteus migrate mp <file|dir> [--dry-run]（小程序 → Proteus 语义迁移 codemod）
+      if (rest[0] === 'mp') {
+        const target = rest.find((a) => a !== 'mp' && !a.startsWith('-')) ?? '.'
+        const dryRun = rest.includes('--dry-run')
+        const result = runMigrateMp(target, dryRun)
+        console.log(result.text)
+        break
+      }
+      if (rest[0] !== 'types') throw new Error('proteus migrate 支持 types（配置）/ mp（小程序语义迁移）：proteus migrate types <file> | migrate mp <file|dir> [--dry-run]')
+      const { file, dryRun } = parseMigrateTypesArgs(rest.slice(1))
+      try {
+        const { changed } = migrateTypesFile(file, dryRun)
+        console.log(formatMigrateTypes(file, changed, dryRun))
+      } catch (e) {
+        console.error(`[proteus-types] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'ci:init': {
+      // ★cli-plus M4：CI/CD 模板生成（02-build-pipeline.md §3）
+      const { options, dir } = parseCiArgs(rest)
+      try {
+        const { file } = planCiInit(dir, options)
+        console.log(`[proteus-ci] 已生成 ${file}（platform=${options.platform} targets=${options.targets.join(',')}）`)
+        console.log('流水线：proteus check（四域门禁）→ 逐端构建 → 产物归档；推送到 Git 远程后即触发')
+      } catch (e) {
+        console.error(`[proteus-ci] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'gen': {
+      // ★app-config G-35 M5：proteus gen config —— 生成 app.config.ts 骨架（06 §1）
+      if (rest[0] !== 'config') throw new Error('proteus gen 目前仅支持 config（proteus gen config [file]）')
+      const file = rest.find((a) => a !== 'config' && !a.startsWith('-')) ?? 'app.config.ts'
+      try {
+        const out = generateAppConfigSkeleton(path.resolve(file))
+        console.log(`[proteus-app-config] 已生成骨架：${out}`)
+        console.log('下一步：proteus app-config:check app.config.ts 校验 → 编辑 env/api/features 后接入运行时')
+      } catch (e) {
+        console.error(`[proteus-app-config] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'host': {
+      // ★G-45 B3：调试基座 CLI——host push <module-dir>（插件目录前置校验 CMP084/087 + push 信封生成）
+      //   devices/logs/serve 随 B4 transport 适配器落地
+      try {
+        const args = parseHostArgs(rest)
+        if (args.sub === 'push') {
+          process.exitCode = runHostPush(args)
+        }
+      } catch (e) {
+        console.error(`[proteus] ${e instanceof Error ? e.message : String(e)}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'conformance': {
+      // ★G-38 B2 尾：42 项 conformance（C-01~C-10）——默认 G-38 Node 参考；--backend 外部后端；--demo Terminal+Fallback 演示
+      // ★G-42 B5：--repo <dir> 仓库治理扫描（G-42.6 严禁 fork）
+      const args = parseConformanceArgs(rest.filter((a) => a !== '--demo'))
+      try {
+        const demo = rest.includes('--demo')
+        if (demo) {
+          const { text, ok } = await runConformanceDemo()
+          console.log(text)
+          if (!ok) process.exitCode = 1
+          break
+        }
+        if (args.repoDir) {
+          // G-42 B5：--repo 分支——fork 扫描宿主仓库
+          const result = scanRepoDirectory(args.repoDir)
+          const { text, ok } = formatRepoReport(args.repoDir, result)
+          console.log(text)
+          if (!ok) process.exitCode = 1
+          break
+        }
+        const { text, ok } = await runConformance(args)
+        console.log(text)
+        if (!ok) process.exitCode = 1
+      } catch (e) {
+        console.error(`[proteus-conformance] ${(e as Error).message}`)
+        process.exitCode = 1
+      }
+      break
+    }
+    case 'version':
+      console.log('0.1.0')
+      break
+    case 'help':
+    default:
+      // ★美化帮助（决策 #213）：分组 + ANSI 色彩（TTY 自动检测；非 TTY/CI 纯文本）
+      console.log(formatHelpText())
+      break
+  }
+}
+
+main().catch((err: Error) => {
+  console.error(`[proteus] ${err.message}`)
+  process.exitCode = 1
+})
+
+/** 端口占用异步探测（net.connect 短超时；e2e:mp 体检 + 复用判定） */
+async function probePort(port: number, timeoutMs = 500): Promise<boolean> {
+  // ★双栈探测（IPv4 + IPv6）：微信开发者工具 automation 可能只监听 IPv6（lsof: *:9420 IPv6）——
+  //   单 IPv4 探测会误判空闲 → 误走 launch 新实例 → 端口冲突 Failed to launch（真机实测踩坑）
+  for (const host of ['127.0.0.1', '::1']) {
+    const busy = await new Promise<boolean>((resolve) => {
+      const socket = net.connect({ port, host })
+      const timer = setTimeout(() => {
+        socket.destroy()
+        resolve(false)
+      }, timeoutMs)
+      socket.once('connect', () => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(true)
+      })
+      socket.once('error', () => {
+        clearTimeout(timer)
+        socket.destroy()
+        resolve(false)
+      })
+    })
+    if (busy) return true
+  }
+  return false
+}

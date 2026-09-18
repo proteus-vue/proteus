@@ -1,0 +1,232 @@
+// tests/gen-routes.test.ts
+// 路由表生成器冒烟测试（拆包步骤 5：gen-routes 归 @proteus-vue/plugin-vite，改为 runGenRoutes 纯函数）
+// 验证：auto-routes / app.json（主包+分包）/ page.json 全链路生成
+import { describe, it, expect, afterAll, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { runGenRoutes, matchWebviewPage } from '../packages/plugin-vite/src/gen-routes'
+import type { ProteusConfig } from '../packages/plugin-vite/src/config'
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-'))
+
+afterAll(() => {
+  fs.rmSync(TMP, { recursive: true, force: true })
+})
+
+/** 构造最小 config（指向临时工程） */
+function makeConfig(extra: Partial<ProteusConfig> = {}): ProteusConfig {
+  return {
+    platform: 'mp-weixin',
+    skyline: true,
+    appid: 'wx0000000000',
+    pagesDir: 'src/pages',
+    routesOutput: 'src/router/auto-routes.ts',
+    customRoute: { registerPresets: true, builders: {} },
+    setDataBridge: { batchWindow: 16, perComponent: true },
+    style: { px2rpx: true, rpxRatio: 2 },
+    ...extra,
+  }
+}
+
+function writeFixture(dir: string, rel: string, content: string): string {
+  const abs = path.join(dir, rel)
+  fs.mkdirSync(path.dirname(abs), { recursive: true })
+  fs.writeFileSync(abs, content)
+  return abs
+}
+
+describe('runGenRoutes：路由表生成全链路', () => {
+  it('主包页面 → auto-routes + app.json + page.json', () => {
+    const root = path.join(TMP, 'basic')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/pages/user/profile.vue', `<template><view>资料</view></template>\n<route>\n{\n  "meta": { "title": "个人资料" },\n  "params": { "id": "string" }\n}\n</route>\n`)
+
+    runGenRoutes({ config: makeConfig(), root })
+
+    // ★B5：project.config.json（小程序工程配置，automator/IDE 前置）
+    const projectConfig = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/project.config.json'), 'utf-8'))
+    expect(projectConfig.appid).toBe('wx0000000000')
+    expect(projectConfig.compileType).toBe('miniprogram')
+    expect(typeof projectConfig.projectname).toBe('string')
+
+    // auto-routes：路由记录 + RouteParamsByName 模块扩充
+    const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
+    expect(auto).toContain('name: "index"')
+    expect(auto).toContain('name: "user-profile"')
+    expect(auto).toContain("declare module '@proteus-vue/router/types'")
+    expect(auto).toContain("'user-profile': { id?: string }")
+
+    // app.json：主包页面声明
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    expect(appJson.pages).toEqual(['pages/index', 'pages/user/profile'])
+
+    // page.json：每页生成
+    expect(fs.existsSync(path.join(root, 'dist/mp-weixin/pages/user/profile.json'))).toBe(true)
+  })
+
+  it('分包页面 → app.json subPackages 分组', () => {
+    const root = path.join(TMP, 'subpkg')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/order/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单列表" }\n}\n</route>\n`)
+
+    runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/order', name: 'order' }] }), root })
+
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    expect(appJson.pages).toEqual(['pages/index'])
+    expect(appJson.subPackages).toEqual([{ root: 'subpackages/order', name: 'order', pages: ['pages/list'] }])
+  })
+
+  it('★module-plan B5：模块契约 → 分包依赖（dependencies）+ preloadRule 生成', () => {
+    const root = path.join(TMP, 'module-sub')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单列表" }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/user/pages/profile.vue', `<template><view>资料</view></template>\n<route>\n{\n  "meta": { "title": "资料" }\n}\n</route>\n`)
+
+    const moduleConfigs = [
+      // trade 分包模块：依赖 user 分包 + 预加载 user
+      { name: 'trade', chunk: 'trade', dependencies: { user: '^1.0.0', common: '^1.0.0' }, preload: ['user'] },
+      { name: 'user', chunk: 'user' },
+      // common 是主包模块（无分包）——不产生分包依赖
+      { name: 'common', chunk: 'common' },
+    ]
+    runGenRoutes({
+      config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }, { root: 'src/subpackages/user', name: 'user' }] }),
+      root,
+      moduleConfigs,
+    })
+
+    const appJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/app.json'), 'utf-8'))
+    const trade = appJson.subPackages.find((sp: { name: string }) => sp.name === 'trade')
+    // 依赖 user 分包；common 是主包模块不产生依赖
+    expect(trade.dependencies).toEqual(['user'])
+    // preloadRule：trade 分包入口页 → 预加载 user 分包
+    expect(appJson.preloadRule).toEqual({ 'subpackages/trade/pages/list': { network: 'all', packages: ['user'] } })
+    expect(appJson.subPackages.find((sp: { name: string }) => sp.name === 'user').dependencies).toBeUndefined()
+  })
+
+  it('★module-plan B5：模块依赖引用未知模块 → 警告（透明化）', () => {
+    const root = path.join(TMP, 'module-missing')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      runGenRoutes({
+        config: makeConfig(),
+        root,
+        moduleConfigs: [{ name: 'trade', chunk: 'trade', dependencies: { ghost: '^1.0.0' } }],
+      })
+      expect(warnSpy.mock.calls.some((c) => c[0].includes('ghost') && c[0].includes('未找到对应模块契约'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('<route> 块非法 JSON → 报错（透明化：严格校验含 loc，不吞错——双管线统一后不再是警告跳过）', () => {
+    const root = path.join(TMP, 'badjson')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
+    writeFixture(root, 'src/pages/broken.vue', `<template><view>坏</view></template>\n<route>\n{\n  "meta": {\n}\n</route>\n`)
+
+    expect(() => runGenRoutes({ config: makeConfig(), root })).toThrow(/不是合法 JSON/)
+  })
+
+  it('★Router M7.1：<route> 块 chunk 字段（与分包名对齐校验——不一致警告，非法值报错）', () => {
+    const root = path.join(TMP, 'm71')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页" }\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/list.vue', `<template><view>订单</view></template>\n<route>\n{\n  "meta": { "title": "订单" },\n  "chunk": "trade"\n}\n</route>\n`)
+    writeFixture(root, 'src/subpackages/trade/pages/detail.vue', `<template><view>详情</view></template>\n<route>\n{\n  "meta": { "title": "详情" },\n  "chunk": "user"\n}\n</route>\n`)
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })
+      // list.vue chunk=trade 与分包名对齐 → 不警告；detail.vue chunk=user 不一致 → 警告
+      expect(warnSpy.mock.calls.some((c) => c[0].includes('chunk') && c[0].includes('user') && c[0].includes('不一致'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+    }
+
+    // 非法 chunk（非 kebab-case）→ 报错
+    writeFixture(root, 'src/subpackages/trade/pages/bad.vue', `<template><view>x</view></template>\n<route>\n{\n  "meta": {},\n  "chunk": "Trade!"\n}\n</route>\n`)
+    expect(() => runGenRoutes({ config: makeConfig({ subPackages: [{ root: 'src/subpackages/trade', name: 'trade' }] }), root })).toThrow(/kebab-case/)
+  })
+
+  it('★决策 #113 集中式 meta：页面零 <route> 声明也收录，meta 从 config router.meta 注入（精确路径 > 目录前缀）', () => {
+    const root = path.join(TMP, 'config-meta')
+    writeFixture(root, 'src/pages/index.vue', `<template><view>首页</view></template>\n<route>\n{\n  "meta": { "title": "首页", "isTab": true }\n}\n</route>\n`)
+    writeFixture(root, 'src/pages/user/list.vue', `<template><view>列表</view></template>`)
+    writeFixture(root, 'src/pages/user/profile.vue', `<template><view>资料</view></template>`)
+
+    runGenRoutes({
+      config: makeConfig({
+        router: {
+          meta: {
+            // 目录级前缀：user 下全部页面
+            'user': { requiresAuth: true, transition: 'slideUp' },
+            // 精确路径覆盖目录级
+            'user/profile': { title: '个人资料' },
+          },
+        },
+      }),
+      root,
+    })
+
+    const auto = fs.readFileSync(path.join(root, 'src/router/auto-routes.ts'), 'utf-8')
+    // 无 <route> 块页面：path/name 推导 + 目录级 meta 注入
+    expect(auto).toContain('name: "user-list"')
+    expect(auto).toContain('"requiresAuth":true')
+    // 精确路径覆盖目录级（meta 断言用 name 索引的 RouteParamsByName key）
+    expect(auto).toContain("'user-profile': {  }") // 无 params
+    const userProfile = auto.match(/name: "user-profile"[^}]*\}[^}]*\}/)?.[0] ?? ''
+    expect(userProfile).toContain('"title":"个人资料"')
+    expect(userProfile).toContain('"requiresAuth":true') // 目录级保留（精确只覆盖 title）
+  })
+
+  it('★#505 M3 批 3：fluid/semantic-grid 规则状态决定页面 p-grid 的 usingComponents 注册（禁用回退运行时组件须注册，规则启用语义编译跳过）', () => {
+    const FW = path.resolve('packages/components')
+    const gridTpl = `<template><view class="page"><p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid></view></template>`
+    // 规则启用：p-grid 已被语义编译（产物无标签）→ 页面 page.json 不注册（#496 skipSemantic 语义）
+    const rootOn = path.join(TMP, 'grid-on')
+    writeFixture(rootOn, 'src/pages/index.vue', gridTpl)
+    runGenRoutes({ config: makeConfig(), root: rootOn, componentsDir: FW })
+    const pageJsonOn = JSON.parse(fs.readFileSync(path.join(rootOn, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJsonOn.usingComponents?.['p-grid']).toBeUndefined()
+    // 规则禁用：p-grid 回退运行时组件（编译产物保留 <p-grid> 标签）→ 必须注册——旧行为 skipSemantic 硬编码排除 →
+    //   wxml 引用 <p-grid> 而 page.json 不注册 = MP 整块不渲染（半失效产物）；修复后与编译侧规则状态一致
+    const rootOff = path.join(TMP, 'grid-off')
+    writeFixture(rootOff, 'src/pages/index.vue', gridTpl)
+    runGenRoutes({ config: makeConfig({ rules: { disabled: ['fluid/semantic-grid'] } }), root: rootOff, componentsDir: FW })
+    const pageJsonOff = JSON.parse(fs.readFileSync(path.join(rootOff, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    expect(pageJsonOff.usingComponents?.['p-grid']).toBe('/proteus/p-grid/index')
+  })
+})
+
+describe('★Skyline iOS 白屏兜底：page.webviewPages 页面级 WebView 降级通道', () => {
+  it('matchWebviewPage：页面名 / pages 前缀 / 分包 relInSub 三种形态命中；空/未设不命中', () => {
+    expect(matchWebviewPage(undefined, 'pages/home')).toBe(false)
+    expect(matchWebviewPage([], 'pages/home')).toBe(false)
+    // 页面名（推荐）
+    expect(matchWebviewPage(['home'], 'pages/home', undefined, 'pages/home')).toBe(true)
+    // 带 pages/ 前缀
+    expect(matchWebviewPage(['pages/home'], 'pages/home')).toBe(true)
+    // 分包内相对路径
+    expect(matchWebviewPage(['list'], undefined, 'pages/list', 'subpackages/order/pages/list')).toBe(true)
+    // 不命中
+    expect(matchWebviewPage(['other'], 'pages/home')).toBe(false)
+  })
+
+  it('端到端：命中页 page.json 无 renderer:skyline；未命中页仍 skyline + glass-easel', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-webview-'))
+    writeFixture(dir, 'src/pages/home.vue', '<template><div>home</div></template>')
+    writeFixture(dir, 'src/pages/detail.vue', '<template><div>detail</div></template>')
+    runGenRoutes({
+      config: makeConfig({ page: { autoScrollContainer: true, webviewPages: ['home'] } }),
+      root: dir,
+    })
+    const homeJson = JSON.parse(fs.readFileSync(path.join(dir, 'dist/mp-weixin/pages/home.json'), 'utf-8'))
+    const detailJson = JSON.parse(fs.readFileSync(path.join(dir, 'dist/mp-weixin/pages/detail.json'), 'utf-8'))
+    expect(homeJson.renderer, 'webviewPages 命中页不写 renderer:skyline（走 WebView 兜底）').toBeUndefined()
+    expect(homeJson.componentFramework).toBeUndefined()
+    expect(detailJson.renderer, '未命中页仍 Skyline').toBe('skyline')
+    expect(detailJson.componentFramework).toBe('glass-easel')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})

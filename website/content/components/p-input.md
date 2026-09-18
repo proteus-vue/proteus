@@ -1,0 +1,252 @@
+---
+title: p-input
+group: 内容与表单
+order: 1010
+---
+
+# p-input
+
+输入框
+
+> 语义组件（Layer 0）· 域 **内容与表单** · 编译期映射到各端原生控件，业务零平台分支。
+
+| 语义 | 域 | 小程序等价 |
+|---|---|---|
+| ui.input | 内容与表单 | `<input>`（L1 原语） |
+
+## 兼容进度
+
+| 端 | 兼容 | 说明 |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · 双端同源码编译目标（编译期映射 + 事件归一） |
+| 微信小程序 | ✅ | skyline（WebView 降级） · 原生控件映射 → `<input>`（L1 原语） |
+| Headless（SSR / 测试） | ✅ | headless · IR 渲染测试档（工具端） |
+| iOS 原生 | 🟡 | native-ios（UIKit） · 端原型映射——组件级接线未开始 |
+| Android 原生 | 🟡 | native-android（Jetpack） · 端原型映射——组件级接线未开始 |
+| 鸿蒙 | 🟡 | native-harmony（ArkUI） · 端原型映射——组件级接线未开始 |
+| Flutter 混合 | 🟡 | flutter · widget 级映射——组件级未验证 |
+| 快应用 | ⬜ | 快应用引擎（待定） · 端未开始 |
+
+> 状态口径：✅ 端已落地·本组件可用；🟡 端原型映射·组件级接线未开始；⬜ 端未开始。端架构对照（引擎 / 运行时 / 持久化）见 [端与成熟度](/docs/framework/ends-matrix)。
+
+## Props
+
+| 属性 | 说明 | 类型 | 默认值 | 必填 |
+|---|---|---|---|---|
+| `pid` | 组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约） | `String` | `''` | 否 |
+| `disabled` | 禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传） | `Boolean` | `false` | 否 |
+| `ariaLabel` | 无障碍标签（读屏器朗读文本） | `String` | `''` | 否 |
+| `value` | 绑定值 | `String` | `''` | 否 |
+| `type` | 类型变体 | `String` | `'text'` | 否 |
+| `maxlength` | 最大输入长度（≤ 0 = 不限） | `Number` | `-1` | 否 |
+| `placeholder` | 占位提示文本 | `String` | `''` | 否 |
+| `password` | 是否是密码类型（官方独立属性；等价 type="password"） | `Boolean` | `false` | 否 |
+| `placeholderStyle` | 占位符样式（内联样式字符串） | `String` | `''` | 否 |
+| `cursorSpacing` | 指定光标与键盘的距离（px） | `Number` | `0` | 否 |
+| `confirmType` | 键盘右下角按钮文字：send/search/next/go/done | `String` | `''` | 否 |
+| `cursor` | 光标位置 | `Number` | `-1` | 否 |
+| `autoHeight` | 是否自动增高（textarea 语义，input 端透传） | `Boolean` | `false` | 否 |
+| `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
+| `alwaysEmbed` | 强制 input 处于同层状态（iOS：默认 focus 时会切非同层） | `Boolean` | `false` | 否 |
+| `confirmHold` | 点击键盘右下角按钮时是否保持键盘不收起 | `Boolean` | `false` | 否 |
+| `adjustPosition` | 键盘弹起时是否自动上推页面（官方默认 true） | `Boolean` | `true` | 否 |
+| `holdKeyboard` | focus 时点击页面是否不收起键盘 | `Boolean` | `false` | 否 |
+| `cursorColor` | 光标颜色（iOS 十六进制；Android 仅 default/green） | `String` | `''` | 否 |
+| `selectionStart` | 光标起始位置（自动聚集时有效，需与 selectionEnd 搭配） | `Number` | `-1` | 否 |
+| `selectionEnd` | 光标结束位置（自动聚集时有效，需与 selectionStart 搭配） | `Number` | `-1` | 否 |
+| `placeholderClass` | placeholder 样式类名（与 placeholderStyle 互补：类 vs 内联样式） | `String` | `''` | 否 |
+| `safePasswordCertPath` | 安全键盘加密公钥路径（仅支持包内路径） | `String` | `''` | 否 |
+| `safePasswordLength` | 安全键盘输入密码长度 | `Number` | `0` | 否 |
+| `safePasswordTimeStamp` | 安全键盘加密时间戳 | `Number` | `0` | 否 |
+| `safePasswordNonce` | 安全键盘加密盐值 | `String` | `''` | 否 |
+| `safePasswordSalt` | 安全键盘计算 hash 盐值（指定 customHash 则无效） | `String` | `''` | 否 |
+| `safePasswordCustomHash` | 安全键盘计算 hash 的算法表达式，如 md5(sha1('foo' + sha256(sm3(passw))) | `String` | `''` | 否 |
+
+### 属性详解
+
+#### `pid`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）
+
+#### `disabled`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）
+
+#### `ariaLabel`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：无障碍标签（读屏器朗读文本）
+
+#### `value`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：绑定值
+
+#### `type`
+
+- **类型**：`String`　**默认值**：`'text'`　**必填**：否
+- **说明**：类型变体
+
+#### `maxlength`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：最大输入长度（≤ 0 = 不限）
+
+#### `placeholder`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：占位提示文本
+
+#### `password`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否是密码类型（官方独立属性；等价 type="password"）
+
+#### `placeholderStyle`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：占位符样式（内联样式字符串）
+
+#### `cursorSpacing`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：指定光标与键盘的距离（px）
+
+#### `confirmType`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：键盘右下角按钮文字：send/search/next/go/done
+
+#### `cursor`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标位置
+
+#### `autoHeight`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否自动增高（textarea 语义，input 端透传）
+
+#### `focus`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：自动聚焦
+
+#### `alwaysEmbed`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：强制 input 处于同层状态（iOS：默认 focus 时会切非同层）
+
+#### `confirmHold`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：点击键盘右下角按钮时是否保持键盘不收起
+
+#### `adjustPosition`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：键盘弹起时是否自动上推页面（官方默认 true）
+
+#### `holdKeyboard`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：focus 时点击页面是否不收起键盘
+
+#### `cursorColor`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：光标颜色（iOS 十六进制；Android 仅 default/green）
+
+#### `selectionStart`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标起始位置（自动聚集时有效，需与 selectionEnd 搭配）
+
+#### `selectionEnd`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标结束位置（自动聚集时有效，需与 selectionStart 搭配）
+
+#### `placeholderClass`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：placeholder 样式类名（与 placeholderStyle 互补：类 vs 内联样式）
+
+#### `safePasswordCertPath`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘加密公钥路径（仅支持包内路径）
+
+#### `safePasswordLength`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：安全键盘输入密码长度
+
+#### `safePasswordTimeStamp`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：安全键盘加密时间戳
+
+#### `safePasswordNonce`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘加密盐值
+
+#### `safePasswordSalt`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘计算 hash 盐值（指定 customHash 则无效）
+
+#### `safePasswordCustomHash`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘计算 hash 的算法表达式，如 md5(sha1('foo' + sha256(sm3(passw)))
+
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `input` | 输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约） | `{ value: eventValue(e) }` |
+| `confirm` | 键盘确认（回车/完成键） | `{ value: eventValue(e) }` |
+| `focus` | 获得焦点 | `e` |
+| `blur` | 失去焦点 | `e` |
+
+### 事件详解
+
+#### `input`
+
+- **说明**：输入变化（载荷 { value } 跨端归一——MP 自定义组件 v-model 仅覆盖原生 input/textarea，故显式事件契约）
+- **载荷**：`{ value: eventValue(e) }`
+
+#### `confirm`
+
+- **说明**：键盘确认（回车/完成键）
+- **载荷**：`{ value: eventValue(e) }`
+
+#### `focus`
+
+- **说明**：获得焦点
+- **载荷**：`e`
+
+#### `blur`
+
+- **说明**：失去焦点
+- **载荷**：`e`
+
+## 实现要点
+
+- 矩阵 01 §6：value / type / maxlength / placeholder / focus / disabled + @input/@confirm/@focus/@blur
+- 事件契约：`:value` + `@input`（载荷 { value } 跨端归一，替代 v-model——MP 自定义组件 v-model 仅覆盖原生 input/textarea）
+- 双端同源码：input 原生透传（tag/passthrough）；maxlength ≤ 0 = 不限（MP/Web 均忽略非法负值）
+
+## 用法
+
+```vue
+<p-input :disabled="true" :value="'…'" :type="'text'">
+  <p-text>内容</p-text>
+</p-input>
+```
+
+<!-- generated by website/scripts/gen-content.mjs · 源码 SSOT：packages/components/p-input/index.vue -->

@@ -1,0 +1,27 @@
+{
+  "name": "@proteus-vue/worklet",
+  "version": "0.1.0",
+  "description": "Proteus Worklet（Skyline UI 线程动画）：统一封装官方 wx.worklet（shared/derived/timing/spring/Easing/runOnJS）+ applyAnimatedStyle 绑定——非 Skyline 环境诚实降级 JS 线程，零硬依赖",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=browser --outfile=dist/index.js"
+  },
+  "dependencies": {
+    "@proteus-vue/shared": "0.2.0-beta.0"
+  }
+}

@@ -1,0 +1,1520 @@
+---
+title: 编译规则目录
+order: 41
+group: 工程命令
+generated: true
+---
+
+# 编译规则目录
+
+> 111 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+
+## 模板转换（62）
+
+### `tag/div-to-view`
+
+**div → view**
+
+块级容器 div → view（小程序通用容器）
+
+```
+before: <div class="home">…</div>
+after:  <view class="home">…</view>
+```
+
+> why: 小程序没有 div，view 是最通用容器标签；业务代码照写标准 HTML（§0.3 原则 1）
+
+### `tag/inline-to-text`
+
+**span → text**
+
+行内文本 span → text（小程序最小文本节点）
+
+```
+before: <span>hi</span>
+after:  <text>hi</text>
+```
+
+> why: 小程序无 span，text 是行内文本容器；text 默认不换行、可被 text 嵌套
+
+### `tag/heading-to-text`
+
+**h1–h6 → text**
+
+标题 h1-h6 → text，并自动附加 proteus-h1~h6 基础类（见 semantic/base-class）
+
+```
+before: <h1>标题</h1>
+after:  <text class="proteus-h1">标题</text>
+```
+
+> why: 小程序无标题标签；语义（大字号/加粗）由基础类还原（#58），视觉对齐 Web UA 样式
+
+### `tag/para-to-text`
+
+**p → text**
+
+段落 p → text，并自动附加 proteus-p 基础类（段距对齐 Web）
+
+```
+before: <p>段落</p>
+after:  <text class="proteus-p">段落</text>
+```
+
+> why: p 映射为 text 后无 UA 默认段距，基础类注入 margin: 0 0 1em 还原 Web 折叠间距（#59）
+
+### `tag/link-to-view`
+
+**a → view**
+
+链接 a → view（带 href 时升级为导航链接，见 nav/navigate-link）
+
+```
+before: <a href="/pages/user/index">用户</a>
+after:  <view class="proteus-a" data-url="/pages/user/index" bindtap="proteusNavigateTo">用户</view>
+```
+
+> why: 小程序无 a 标签；导航语义由 data-url + bindtap="proteusNavigateTo" 承担，样式语义由 proteus-a 基础类承担
+
+### `tag/image`
+
+**img → image**
+
+图片 img → image；:src 绑定经 directive/v-bind 转为 src="{{url}}"
+
+```
+before: <img :src="url" />
+after:  <image src="{{url}}" />
+```
+
+> why: 小程序图片标签是 image
+
+### `tag/passthrough`
+
+**同名标签保留**
+
+button / input / textarea / video / canvas / scroll-view / slot 同名保留（小程序原生即有）
+
+```
+before: <button>go</button>
+after:  <button>go</button>
+```
+
+> why: 这些标签在小程序原生存在，无需映射；input/textarea 同时是 v-model 的目标（directive/v-model）
+
+### `tag/router-link`
+
+**router-link → view**
+
+Vue Router 的 router-link → view + 导航链接（to 属性 → data-url）
+
+```
+before: <router-link to="/pages/user/index">用户</router-link>
+after:  <view data-url="/pages/user/index" bindtap="proteusNavigateTo">用户</view>
+```
+
+> why: 小程序无 Vue Router 组件；统一转导航链接（决策 #24：<a href> / <router-link> 同为导航入口）
+
+### `tag/rich-text`
+
+**v-html 容器 → rich-text**
+
+带 v-html 的容器元素 → rich-text（nodes="{{expr}}"）
+
+```
+before: <div v-html="html"></div>
+after:  <rich-text nodes="{{html}}" />
+```
+
+> why: 小程序无 innerHTML，富文本用 rich-text 组件渲染 HTML 节点
+
+### `tag/unknown-kebab`
+
+**未注册标签 kebab-case 原样输出**
+
+TAG_MAP 未覆盖的标签按 kebab-case 原样输出（组件 / 自定义元素逃生舱）
+
+```
+before: <custom-comp foo="bar" />
+after:  <custom-comp foo="bar" />
+```
+
+> why: 白名单映射 + 未知标签保守保留：标准 Vue 组件体系（原则 9）与原生组件逃生舱（痛点 #11 对策）依赖此通道
+
+### `tag/unknown-p-star`
+
+**p-* 标签须组件库语义登记——未登记警告**
+
+p- 前缀是框架保留（src/components 语义组件 + p-grid 等语义编译标签 = TAG_SEMANTIC_MAP 登记集）；未登记的 p-* = 拼写错误或未入库组件 → 编译期显式警告（产物仍按未注册自定义组件输出：MP 不渲染、无语义链接）
+
+```
+before: <p-buttn @click="go">x</p-buttn>
+after:  编译警告（未登记 p-*——拼写错误或未入库组件）；产物仍按未注册自定义组件输出
+```
+
+> why: 反黑盒（★#505 M3）：conformance 世界已把「p-* 存在但空白」（TAG_SEMANTIC_MAP 未登记）收紧为 render.semanticLink 显式失败，本规则把同源收紧带到主编译产物侧——旧行为静默输出，开发者在 MP 端看到整块不渲染无从归因
+
+### `directive/v-gesture`
+
+**v-gesture:<kind> → MP 原生事件（有对等者直映射，无对等者明示替代）**
+
+v-gesture:tap|longpress → bindtap/bindlongpress（MP 原生事件对等）；pan/pinch/rotate/press 无事件对等（官方为 worklet 手势处理器组件）→ 剥离并给出具体替代指引起
+
+```
+before: <view v-gesture:tap="onTap">x</view>
+after:  <view bindtap="onTap">x</view>
+```
+
+> why: 修「静默失效」缺陷：此前 v-gesture:* 一律落入 directive/custom 被剥离且警告「无对等机制」，但 gesture.tap 的 mpEquiv 明写 bindtap（原生真实存在）——两者矛盾，写 v-gesture:tap 的开发者在小程序上 handler 永不触发
+
+### `prop/no-degradation`
+
+**目标端 unsupported 属性 fail-closed 诊断（PROP_NO_DEGRADATION）**
+
+组件属性在目标端降级三态为 unsupported（本端无法实现）时，使用即产生编译期诊断（PROP_NO_DEGRADATION）；fallback（有意降级、行为已声明）不报
+
+```
+before: <p-media foo="x" />
+after:  编译诊断 PROP_NO_DEGRADATION（mp 端 unsupported）
+```
+
+> why: G-31.2 铁律：属性在各端必须声明 supported/fallback/unsupported；unsupported 的静默失败是「异端」（开发者到真机才发现），故编译期 fail-closed
+
+### `semantic/base-class`
+
+**语义标签自动附加 proteus-* 基础类**
+
+h1-h6/p/a 映射时自动附加 proteus-h1~h6 / proteus-p / proteus-a 类（与用户 class 合并、与 :class 插值拼接）
+
+```
+before: <h1 class="title">a</h1>
+after:  <text class="proteus-h1 title">a</text>
+```
+
+> why: Web 端 h1-h6/p/a 有浏览器 UA 默认样式，小程序 text/view 没有；基础类 + 基础 WXSS（style/semantic-base-wxss）还原两端视觉一致（#58）
+
+### `event/click-to-tap`
+
+**@click → bindtap（EVENT_MAP 全表）**
+
+标准事件 → 小程序事件：click→tap、input/change/submit/focus/blur/touch*/longpress/confirm 同名保留
+
+```
+before: <button @click="handleTap">go</button>
+after:  <button bindtap="handleTap">go</button>
+```
+
+> why: 小程序无 click，点击事件是 tap；其余事件命名一致（EVENT_MAP 集中在 tags.ts 与样式侧共用）
+
+### `event/modifier-catch`
+
+**.stop / .prevent 修饰符 → catch 前缀**
+
+@click.stop / @click.prevent → catchtap（阻止冒泡）；其余修饰符忽略
+
+```
+before: <a @click.stop="stopFn">s</a>
+after:  <a catchtap="stopFn">s</a>
+```
+
+> why: 小程序无事件修饰符语法，catch* 事件天然阻止冒泡，等价 .stop 语义；.prevent 无对等机制，映射为 catch 兜底
+
+### `event/modifier-self-once`
+
+**.self / .once 修饰符 → 包装方法（v0.3 尾）**
+
+@click.self="fn" → bindtap="proteusSelfFn"（e.target === e.currentTarget 才触发）；@click.once="fn" → bindtap="proteusOnceFn"（data 标记首次触发后不再触发）；仅对简单方法名 handler 包装
+
+```
+before: @click.self="handleTap" / @click.once="handleTap"
+after:  bindtap="proteusSelfHandleTap" / bindtap="proteusOnceHandleTap"（包装方法生成于 Page methods）
+```
+
+> why: 小程序无 .self/.once 原生语义，编译期生成包装方法（script 侧）：self 用事件源判断、once 用 data 标记；键位修饰符（@keyup.enter）无对等键盘事件 → 编译期警告（input 请用 @confirm）
+
+### `event/handler-simple-ref`
+
+**事件处理器仅支持简单方法引用**
+
+仅支持 handleTap / handleTap($event)；复杂表达式编译期警告并原样输出
+
+```
+before: @click="count > 0 ? go() : back()"
+after:  编译期警告：不是简单方法引用，原样输出（产物需人工处理）
+```
+
+> why: MVP 收缩（原则 10）：小程序事件处理器必须是 Page methods 中的方法名，内联表达式无法静态编译
+
+### `directive/v-if`
+
+**v-if → wx:if**
+
+v-if="show" → wx:if="{{show}}"
+
+```
+before: <p v-if="show">a</p>
+after:  <p wx:if="{{show}}">a</p>
+```
+
+> why: 小程序条件渲染指令是 wx:if
+
+### `directive/v-else-if`
+
+**v-else-if → wx:elif**
+
+v-else-if="cond" → wx:elif="{{cond}}"
+
+```
+before: <p v-else-if="b">c</p>
+after:  <p wx:elif="{{b}}">c</p>
+```
+
+> why: 小程序条件链指令是 wx:elif
+
+### `directive/v-else`
+
+**v-else → wx:else**
+
+v-else → wx:else（无值）
+
+```
+before: <p v-else>b</p>
+after:  <p wx:else>b</p>
+```
+
+> why: 小程序条件链指令是 wx:else
+
+### `directive/v-for`
+
+**v-for → wx:for / wx:for-item / wx:for-index**
+
+v-for="(item, idx) in list" → wx:for="{{list}}" + wx:for-item + wx:for-index（支持 in/of）
+
+```
+before: <div v-for="(item, idx) in list" :key="idx">{{ item }}</div>
+after:  <view wx:for="{{list}}" wx:for-item="item" wx:for-index="idx" wx:key="idx">{{ item }}</view>
+```
+
+> why: 小程序循环指令是 wx:for，且需显式声明 item/index 变量名
+
+### `directive/v-bind`
+
+**普通 :prop 绑定 → prop="{{expr}}"**
+
+:src / :href / 任意属性绑定 → 属性="{{表达式}}"，静态属性原样保留
+
+```
+before: <img :src="url" />
+after:  <image src="{{url}}" />
+```
+
+> why: 小程序属性绑定语法是 {{expr}}；静态属性（如 placeholder="x"）直接透传
+
+### `directive/v-bind-class`
+
+**:class 绑定（对象/数组语法 → 三元拼接）**
+
+:class="{ active: on }" → {{(on?'active ':'')}}；数组语法（v0.3）→ 逐项拼接（字符串/对象/简单变量/三元）
+
+```
+before: <p :class="[activeClass, { active: on }]">b</p>
+after:  <text class="proteus-p {{((activeClass)?(activeClass)+' ':'')+(on?'active ':'')}}">b</text>
+```
+
+> why: 小程序无 class 对象/数组语法，编译期为三元表达式拼接；数组语法 v0.3 补齐（splitTopLevel 顶层逗号分割，跳过字符串/括号内逗号）
+
+### `directive/v-bind-style`
+
+**:style 绑定（对象语法 → prop:{{expr}} 拼接；动态标识符派生对象自动序列化字符串 ★#500）**
+
+:style="{ color: c }" → style="color:{{c}}"；属性名 camelCase → kebab-case；★#500 动态标识符绑定（:style="boxStyle"，boxStyle 为 computed）→ 模板侧收集，script 侧同名 computed 派生值自动包 __proteusStyleString() 序列化为字符串（MP 双渲染器 style 属性仅收字符串——对象绑定静默失效，WebView 亦然，#496b 记录修正）
+
+```
+before: :style="{ backgroundColor: bg }" / :style="boxStyle"（computed 返回对象）
+after:  style="background-color:{{bg}}" / 派生值 setData 为 __proteusStyleString(...) 字符串
+```
+
+> why: 小程序 style 属性支持内联插值，逐属性编译可静态验证；★#500 用户 WebView 实测修正：MP 产物 style 绑定对象在双渲染器均静默失效（p-split gap/p-aspect 比例全死）——动态派生对象必须在数据侧序列化为字符串，编译器自动注入避免每个组件手写 styleToString
+
+### `directive/v-bind-key`
+
+**:key → wx:key（标识符/属性路径/*this——★#505 对齐官方 StaticStr 语义）**
+
+:key="idx" → wx:key="idx"、:key="item.id" → wx:key="item.id"、:key="item"（基础值列表）→ wx:key="*this"；含 {{}}/运算/括号的表达式编译期警告并忽略
+
+```
+before: :key="idx" / :key="item.id"
+after:  wx:key="idx" / wx:key="item.id"
+```
+
+> why: 官方 glass-easel parse 中 wx:key 是 StaticStr 形态（接受属性路径/*this，仅 {{}} 触发 DataBindingNotAllowed）——★#505 对齐实证：旧实现仅接受简单标识符，:key="t.id" 整个被丢（比产物无效更糟的编译期丢代码）
+
+### `directive/v-model`
+
+**v-model → 双向绑定编译（input 走 value+bindinput；★#500/#G12 自定义组件走 prop + 单段事件 update-arg）**
+
+input/textarea 的 v-model="x" → value="{{x}}" + bindinput="proteusOnXInput"；★#500 自定义组件 v-model[:arg]="x"（p-modal v-model:visible）→ {{arg}}="{{x}}" + bind:update-arg="proteusUpdateArgModel"（页面 setData 回写 e.detail）——旧产物无脑 bindinput → 组件双向绑定永不生效；★G12 候选 B（2026-09-07 Skyline 真机实证：双冒号 bind:update:* 被 glass-easel/微信编译链丢弃——p-modal 关不掉/p-switch/p-input 不回传）→ 事件名单段化 update:{arg} → update-{arg}（arg 语义在 IR 保留 vModelComponentHandlers.arg）
+
+```
+before: <input v-model="name" /> / <p-modal v-model:visible="show" />
+after:  <input value="{{name}}" bindinput="proteusOnNameInput" /> / <p-modal visible="{{show}}" bind:update-visible="proteusUpdateVisibleModel" />
+```
+
+> why: 小程序无 v-model 语法，需双向绑定的两半：value/prop 绑定 + 事件回写（script/vmodel-handler / vModelComponentHandlers）；★#500 Vue 组件 v-model 是核心语义（prop + update:arg 事件契约），必须按规范编译；★#505 M4：契约完整入 CompileIR（arg/propName 随声明携带，IR 快照单点自足可重建产物——不再旁路手抄丢字段）
+
+### `directive/v-html`
+
+**v-html → rich-text nodes**
+
+v-html="html" → rich-text nodes="{{html}}"（容器标签映射为 rich-text）
+
+```
+before: <div v-html="html"></div>
+after:  <rich-text nodes="{{html}}" />
+```
+
+> why: 小程序无 innerHTML，富文本用 rich-text 组件（原生能力兜底，痛点 #11 对策）
+
+### `directive/v-show`
+
+**v-show → hidden 属性**
+
+v-show="show" → hidden="{{!show}}"（小程序 hidden 属性 = display:none，元素始终渲染）
+
+```
+before: <p v-show="show">a</p>
+after:  <p hidden="{{!show}}">a</p>
+```
+
+> why: 小程序无 v-show 指令，hidden 属性语义对齐（display:none 切换）；元素保留在文档流中，与 v-if 的移除不同（v0.3 补齐，原为 MVP 限制）
+
+### `directive/v-text`
+
+**v-text → 元素内容覆盖为文本插值**
+
+v-text="expr" → <tag>{{ expr }}</tag>（v-text 覆盖子节点，输出文本插值——Vue 语义）；此前被当自定义指令剥离+警告（文本内容丢失——真 bug 非语义限制）
+
+```
+before: <view v-text="msg">child</view>
+after:  <view>{{ msg }}</view>
+```
+
+> why: 小程序无 v-text 指令，但 v-text 语义 =元素内容为文本值——映射为内容插值 {{ expr }}（元素保留 + 内容覆盖）；v-html→rich-text 同族
+
+### `template/teleport-root-portal`
+
+**<teleport> → <root-portal>（Skyline 官方：子树脱离页面层叠）**
+
+<teleport>content</teleport> → <root-portal>content</root-portal>（B2.25.2+，Skyline/WebView：子树脱离页面、类似 fixed position——弹窗/弹出层层叠正解，突破 z-index 层叠上下文）；to 目标 MP 无对等（root-portal 恒脱离页面 = fixed 等价，无 target 选择器）——警告说明忽略 to
+
+```
+before: <teleport to="body"><view class="overlay">hi</view></teleport>
+after:  <root-portal><view class="overlay">hi</view></root-portal>（脱离页面盖层）
+```
+
+> why: Skyline/WebView root-portal（官方组件）把子树脱离页面固定，正是 Vue <teleport> 弹层层叠/传送到 body 的跨端等价——解决 p-popover 等弹层被下层元素遮挡（z-index 层叠上下文）
+
+### `directive/v-once`
+
+**v-once 诚实对齐（静态剥离等价/含插值警告）**
+
+v-once 元素无 {{ }} 插值（纯静态）→ 剥离无警告（静态内容天然只渲染一次，语义等价）；含 {{ }} 插值 → 诚实警告（MP 数据驱动无「渲染一次」惰性）
+
+```
+before: <view v-once>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-once 语义 = 首次渲染后冻结；MP 数据驱动无静默化对应，静态内容天然满足，响应式内容无对等——诚实区分（不粉饰）
+
+### `directive/v-pre`
+
+**v-pre 诚实对齐（静态剥离等价/含插值警告）**
+
+compiler-dom 解析阶段已把 v-pre 元素内容跳过编译（{{ }} 变 raw TEXT），v-pre 属性不在 props——用元素原始源码（node.loc.source）检测；含 {{ }} → 诚实警告（WXML 无 raw 模式仍插值），纯静态 → 静默等价
+
+```
+before: <view v-pre>hello</view>
+after:  <view>hello</view>（静默剥离）
+```
+
+> why: v-pre 语义 = 跳过该节点编译；MP WXML 无 raw 模式（{{ }} 恒插值）——诚实区分静态等价 vs 插值不生效
+
+### `directive/custom`
+
+**自定义指令剥离（无对等警告）**
+
+v-focus 等自定义指令在小程序无对等机制——编译期警告并剥离（逻辑不执行），不再静默
+
+```
+before: <input v-focus />
+after:  <input /> + 警告（已剥离）
+```
+
+> why: 反黑盒（vue-compat Batch A，决策 #116）：平台无对等能力必须编译期显式警告
+
+### `template/is-component`
+
+**动态组件 <component :is> 无对等警告**
+
+<component :is> 动态组件在小程序无对等机制——警告（产物为无效标签），建议 v-if/v-else 条件渲染
+
+```
+before: <component :is="which" />
+after:  警告 + 原样输出（无效标签）
+```
+
+> why: 反黑盒（vue-compat Batch A，决策 #116）：不再静默输出无效产物
+
+### `event/inline-expression`
+
+**内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）**
+
+@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
+
+```
+before: @click="count++" / @click="showModal = !showModal"
+after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData
+```
+
+> why: Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应）：不再原样输出无效 bindtap
+
+### `slot/scoped-slot`
+
+**作用域插槽警告（★Batch 7：MP/Skyline 平台限制确认 + 替代模式）**
+
+<slot :item="x"> 作用域插槽在小程序无对等机制（父侧拿不到子数据）——★平台限制：微信无模板传参机制（webview 的 template import 无法动态选择多父模板，Skyline 不支持跨文件模板），uni-app/Taro MP 端同样不完整——编译期警告 + 替代模式：子组件 props 接收数据 + 自定义事件回调传数据（<MyList :items :item-tap>）
+
+```
+before: <slot :item="item" />
+after:  <slot /> + 警告（替代：props 传子 + triggerEvent 事件回调）
+```
+
+> why: 反黑盒（vue-compat-advance Batch 1/7，决策 #117）：不再静默输出无效属性；运行时等价受 MP 平台能力限制（非待办，替代模式 props+事件已由组件系统完整支持）
+
+### `slot/named-template`
+
+**具名插槽 MP 接线：<template #name> → <view slot="name">（微信 slot 机制；默认插槽解壳内联）**
+
+自定义组件子级的 <template #aside>（含多子元素/默认内容共存）旧产物丢 slot 名并包在 <template>（WXML 不渲染内容）→ 整段不可见（fluid-system-demo 侧边栏/容器全丢真机根因）——现在具名插槽发射 <view slot="aside"> 包装（微信父侧 slot 属性机制，组件侧 <slot name> 对位），默认插槽（#default/无参）解壳内联（微信默认插槽接受直接子节点）；<template v-if>/v-for 包装形态不受影响
+
+```
+before: <p-split><template #aside>…</template>…</p-split>
+after:  <p-split><view slot="aside">…</view>…</p-split>
+```
+
+> why: 跨端插槽语义等价（2026-09 真机实测）：Vue 命名插槽在微信的自定义组件机制是对位可映射的（slot 属性 ↔ <slot name>），此前编译器把内容丢进不渲染的 <template> 等于静默丢弃——违背反黑盒与双端同源码
+
+### `slot/scoped-template`
+
+**作用域默认插槽内容警告（#default="{ errors }"：内容渲染但参数不可用）**
+
+消费侧 <template #default="{ errors }"> 作用域默认插槽：微信 slot 不向内容传参——内容解壳按普通默认插槽渲染（不再包不渲染的 <template>），{ errors } 恒不可用：编译期警告 + 替代模式（props 传子 + 事件回调；与组件侧 <slot :errors> 的 slot/scoped-slot 警告同源）
+
+```
+before: <p-form><template #default="{ errors }">…</template></p-form>
+after:  解壳渲染 + 警告（{ errors } 不可用；替代：props 传子 + 事件回调）
+```
+
+> why: 反黑盒（vue-compat-advance Batch 7 平台限制）：作用域数据在 MP/Skyline 无模板传参机制，静默丢参等于假等价——内容仍渲染（视觉等价），参数不可用显式警告
+
+### `transition/component`
+
+**<transition> → 装饰式进入动画（子元素注入动画 class）**
+
+<transition name="fade"> 装饰式处理：过渡标签不输出，子元素注入 class="proteus-transition-{name}"（进入动画由重建自动播放）；wxss 按 usesTransition 按需注入 keyframes（fade/slide-up/scale）
+
+```
+before: <transition name="fade"><view v-if="on">X</view></transition>
+after:  <view class="proteus-transition-fade" wx:if="{{__tv0}}">X</view>
+```
+
+> why: Vue <transition> 运行时等价（vue-compat-advance Batch 2，决策 #117）：MP 无原生 Transition，编译注入动画 class + keyframes 补位；与路由 routeType 转场互补（元素级 vs 页面级）
+
+### `transition/leave-state`
+
+**<transition> 离开动画状态机（裸 ref v-if 延迟移除）**
+
+transition 直接子元素 v-if 为裸 ref 名时启用离开动画：v-if 改写 wx:if="{{__tv{i}}}"（显示状态，初始 = ref 初始值）+ class 插值 {{__tl{i} ? "...-leave" : ""}}（离开中切换 leave 动画）；script 生成 proteusTransitionToggle{i}()（ref 写入点注入：on 变 false → __tl{i}=true 播离开动画 + setTimeout 时长后 __tv{i}=false 延迟移除；on 变 true → 取消定时器恢复进入动画）；wxss 按需注入 leave class + keyframes（forwards 保持末帧）
+
+```
+before: <transition name="fade"><view v-if="on">X</view></transition>
+after:  <view wx:if="{{__tv0}}" class="proteus-transition-fade {{__tl0 ? 'proteus-transition-fade-leave' : ''}}">X</view> + data __tv0/__tl0 + proteusTransitionToggle0()
+```
+
+> why: Vue transition 离开语义：v-if 变 false 先播离开动画再移除（vue-compat-advance Batch 5）；MP wx:if 立即移除无动画——编译期状态机补位；仅裸 ref v-if 支持（复杂表达式保持 Batch 2 现状）
+
+### `template/template-ref`
+
+**模板 ref 无对等警告**
+
+ref="el" 模板 ref 在小程序无对等绑定（永不赋值）——警告，建议 this.selectComponent("#id")
+
+```
+before: <input ref="el" />
+after:  <input /> + 警告
+```
+
+> why: 反黑盒（vue-compat Batch A，决策 #116）：不再静默无效
+
+### `template/no-peer`
+
+**平台无对等组件警告（Transition/Teleport 等）**
+
+transition/transition-group/teleport/suspense/keep-alive 在小程序无对等组件——警告（原样输出不生效）
+
+```
+before: <transition name="fade">…</transition>
+after:  警告 + 原样输出
+```
+
+> why: 反黑盒（vue-compat Batch A，决策 #116）：转场请用路由 routeType，缓存/传送请移除
+
+### `template/svg-canvas`
+
+**含形状变化动画的 SVG → p-svg-canvas 组件（离屏 canvas 逐帧绘制）**
+
+SVG 含形状属性动画（cx/cy/r/d/stroke-dashoffset 等，CSS 无法表达）→ 编译期产出 SvgScene → 运行时 p-svg-canvas 组件用离屏 canvas 逐帧绘制 + 定时器驱动 + toDataURL 回传 image src
+
+```
+before: <svg><circle cx="20"><animate attributeName="cx" values="20;80;20"/></circle></svg>
+after:  <p-svg-canvas scene="{{proteusSvgScene1}}" />（离屏 canvas 逐帧）
+```
+
+> why: G-62 动画：<image> 静态光栅化（内部动画不播放）+ CSS 只能做整体变换 → 形状变化动画需逐帧重绘；实测离屏 canvas 可用（createPath2D 直接接受 SVG d / rAF 62fps / toDataURL 2ms），可见 canvas 的 node() 拿不到
+
+### `template/svg-anim-promote`
+
+**SVG 整体变换动画 → CSS @keyframes（作用于 image）**
+
+SVG 内部 <animateTransform rotate/scale/translate> 与 <animate opacity> → CSS @keyframes + 类名绑定 <image>；形状属性动画（cx/d/stroke-dashoffset）无法用 CSS 表达 → 不转译
+
+```
+before: <animateTransform type="rotate" from="0 50 50" to="360 50 50" dur="2s"/>
+after:  <image class="proteus-svg-anim-1"/> + .proteus-svg-anim-1 { animation: … } + @keyframes
+```
+
+> why: G-62 动画：真机实证 SVG 内部动画不播放（image 静态光栅化，§11.1），但 CSS 动画作用于 image 元素完全有效（三帧 MD5 各异）——整体变换类自动转译，形状变化类诚实不转
+
+### `template/svg-text-promote`
+
+**SVG <text> → 原生 <text> 叠加层（补 Skyline 丢弃文字短板）**
+
+静态 SVG <text>（含 tspan 拼接）编译期提取 → <view> 容器 + <image> + 绝对定位原生 <text>（viewBox 坐标 → 百分比、text-anchor → translateX、font-size/fill/font-weight 映射）；文字可选中、字体可控、随容器缩放
+
+```
+before: <svg><text x="50" y="25" text-anchor="middle">Hi</text></svg>
+after:  <view style="position:relative"><image …/><text style="position:absolute;left:50%;top:25%;transform:translateX(-50%)">Hi</text></view>
+```
+
+> why: G-62 text 短板：真机实证 Skyline 解码 SVG 成功但丢弃文字元素（WebView 正常，官方文档未记载）——编译期提升为原生 text 是零运行时正解（对比 canvas fillText 需运行时绘制）
+
+### `template/svg-hit`
+
+**SVG 图形事件命中（touchstart 坐标 + 几何判定）**
+
+静态 SVG 图形带 @click/@tap → 编译期收集几何（circle/rect/ellipse/path 包围盒）→ image 加 id + bindtouchstart → 运行时按 touches[0] 坐标换算 viewBox → 几何判定 → 调 handler
+
+```
+before: <svg><circle cx="30" cy="30" r="20" @click="onDot"/></svg>
+after:  <image id="proteus-svg-hit-1" bindtouchstart="proteusSvgHit1"/> + 命中方法
+```
+
+> why: G-62 事件命中：真机实证 Skyline tap 事件 detail/touches 全 undefined（无坐标），touchstart 的 touches[0] 带 pageX/pageY → 命中必须基于 touchstart；离屏 canvas 的 getImageData/isPointInPath 虽可用，但纯几何判定零运行时依赖、更轻
+
+### `template/svg-p2-unsupported`
+
+**SVG 子树内 use/symbol/text/tspan → 实测不支持警告（SVG→Skyline P2）**
+
+Skyline image 渲染 SVG 的实测支持表（真机 spike）：mask/clipPath/渐变/transform/dasharray/opacity/filter 全部支持；use/symbol/text/tspan 渲染为空白 → 编译期诚实警告
+
+```
+before: <svg><use href="#icon"/></svg>
+after:  lowering 为 image + 警告「实测不支持」
+```
+
+> why: G-62 SVG→Skyline P2：原方案假设 mask/clip-path 需 canvas 近似；真机实证 Skyline image 原生支持（P2 大幅简化）。仅 use/text 空白——提前告知避免真机踩坑（反黑盒）
+
+### `template/svg-dynamic`
+
+**动态 <svg> 子树 → computed 重生成 SVG data-URI（SVG→Skyline P1）**
+
+含动态绑定（:d/:fill/v-if/插值）的 SVG 子树 → computed（运行时拼 SVG 字符串 + encodeURIComponent → URL-encoded data-URI）+ <image src="{{proteusSvgN}}">；复用既有 computed 链路（依赖追踪/init/写入补丁重算）
+
+```
+before: <svg viewBox="0 0 24 24"><path :d="d" :fill="c"/></svg>
+after:  <image src="{{proteusSvg1}}" mode="aspectFit" /> + computed 拼 SVG 字符串
+```
+
+> why: G-62 SVG→Skyline P1：原 canvas 方案被 Skyline node() 通道阻塞（专项 §9）；地基探测实证「运行时拼 SVG → computed → setData → Skyline 重渲染 + 响应式有效」，且微信逻辑层无 btoa 须走 URL-encoded（真机 image-spike 验证）
+
+### `template/svg-to-image`
+
+**静态 <svg> 子树 → <image> data-URI（SVG→Skyline P0）**
+
+静态 SVG 子树（无 v-bind/v-if/v-for/插值/事件）序列化为 SVG 字符串 → base64 data-URI → <image src>（Skyline 实测可完整渲染 path/stroke/circle）；含动态绑定不 lowering（诚实警告，P1）
+
+```
+before: <svg viewBox="0 0 24 24"><path d="M12 2 L22 22" fill="red"/></svg>
+after:  <image src="data:image/svg+xml;base64,…" mode="aspectFit" />
+```
+
+> why: G-62 SVG→Skyline P0（决策：地基 spike 实证 Skyline <image> 完整渲染 SVG data-URI，而 canvas 路线被 node() 通道阻塞）——静态图标 80% 场景零改代码可用
+
+### `template/svg-no-peer`
+
+**SVG 命名空间标签在小程序无对等组件——警告**
+
+svg/path/circle/rect 等 SVG 标签在小程序无对等组件（微信无 <svg>，不渲染）——警告（原样输出但无效）；Skia 矢量映射为后续批次
+
+```
+before: <svg viewBox="…"><path d="…"/></svg>
+after:  警告 + 原样输出（不渲染）
+```
+
+> why: 反黑盒（★#505 G2 平台校验抓真实产物：p-svg 组件模板写 <svg>，旧行为静默当未注册自定义组件输出 → 产物无效标签真机不渲染）；矢量组件（p-svg/ui.svg mpEquiv 无）请用 image/背景图或等矢量批次
+
+### `nav/navigate-link`
+
+**<a href> / <router-link to> → 导航链接**
+
+带 href/to 的导航链接 → data-url + data-route-type + bindtap="proteusNavigateTo"（handler 由 script/nav-handler 注入）
+
+```
+before: <a href="/pages/user/index">用户</a>
+after:  <view class="proteus-a" data-url="/pages/user/index" bindtap="proteusNavigateTo">用户</view>
+```
+
+> why: Web 端 <a> 走浏览器导航，小程序端需转 data-url + 点击跳转（决策 #24）；保留前导 / 为绝对路径（#30 真机教训：无前导 / 会相对当前页目录解析导致双重前缀）
+
+### `nav/route-type`
+
+**导航链接 route-type 属性 → data-route-type**
+
+<a route-type="halfScreen"> → data-route-type="halfScreen"（proteusNavigateTo 透传为 wx.navigateTo 的 routeType）
+
+```
+before: <a href="/pages/user/profile" route-type="halfScreen">资料</a>
+after:  <view data-url="/pages/user/profile" data-route-type="halfScreen" bindtap="proteusNavigateTo">资料</view>
+```
+
+> why: Skyline 自定义路由转场从导航链接发起时，需把 routeType 传到运行期（决策 #44：routeType 双端同 API）
+
+### `node/interpolation`
+
+**插值 {{ expr }} 保留**
+
+{{ title }} → {{ title }}（表达式原样透传，文本节点紧凑单行输出）
+
+```
+before: <p>tapped {{ count }} times</p>
+after:  <text class="proteus-p">tapped {{ count }} times</text>
+```
+
+> why: 小程序插值语法同为 {{expr}}，无需转换；纯文本子节点紧凑单行保证产物可读（决策 #15）
+
+### `annotation/line-note`
+
+**PROTEUS_DEBUG 源码行号注释**
+
+annotateLines=true 时 WXML 每个元素前注入 <!-- @行号 标签 -->，产物可反查源码位置
+
+```
+before: 第 26 行 <h1>{{ title }}</h1>
+after:  <!-- @26 h1 -->
+<text class="proteus-h1">{{ title }}</text>
+```
+
+> why: 反编译黑盒机制（#17）：默认关闭，npm run debug:mp 开启——AI/人拿到产物即可定位到源码行
+
+### `template/scope-attr`
+
+**scoped CSS：用户 class 与 scopeId 拼接为单一类（★2026-08 真机重构：类名后缀）**
+
+<style scoped> 存在时，模板元素 class 值 token 追加 -scopeId（.box → box-data-v-xxx）；:class 字符串字面量/对象键同样后缀（动态变量类名编译期警告）；样式侧选择器 .box-data-v-xxx 匹配
+
+```
+before: <div class="card">…</div>
+after:  <view class="card-data-v-abc123">…</view>
+```
+
+> why: 小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline 不支持属性选择器/复合类选择器 → 类名拼接为唯一单类选择器路径；★#505 M5：禁用须与 style/scoped-css 配对（两相分别门控，单禁一侧 = 模板类与 wxss 选择器失配——模板侧禁用时显式配对警告）
+
+### `component/root-class`
+
+**组件标签 class 透传：root-class 属性 → 组件根节点 {{rootClass}}（Vue class 继承语义）**
+
+自定义组件标签（非原生基础标签）的 class（scope class + 用户 class + :class 绑定）合并为单个 root-class 属性发射；组件模板根节点 class 追加 {{rootClass}}；script 侧组件注入 rootClass property（value: ""）
+
+```
+before: <p-view class="box">…</p-view>
+after:  <p-view root-class="data-v-abc123 box" />（组件根节点 class="… {{rootClass}}"）
+```
+
+> why: Vue 的 class 继承语义（父组件 class 作用于子组件根节点）在微信无原生对等——组件 host 节点 class 合并后，页面 wxss 无法可靠作用（真机实测：p-view 外层容器 box 样式不生效，即使 styleIsolation: apply-shared）——编译期等价：class 经 root-class 属性传入组件，根节点绑定 {{rootClass}}，配合 apply-shared 让页面样式作用组件根节点
+
+### `component/multi-slot`
+
+**具名插槽开启 multipleSlots：Component options（微信默认单插槽）**
+
+微信自定义组件默认仅支持单个插槽（glass-easel 组件框架层，双渲染器一致）——不开启 multipleSlots 时 <slot name> 与内容 slot="name" 标记不按名路由，全部落入单一默认槽；编译器对所有 Component 产物注入 options: { multipleSlots: true }（单插槽组件不受影响）
+
+```
+before: Component({ properties… })
+after:  Component({ options: { multipleSlots: true }, properties… })
+```
+
+> why: Vue 具名插槽语义（#498 fluid-system-demo 真机实证：p-zone 选槽错乱 / p-sidebar nav 泄漏进默认插槽）依赖微信 multipleSlots 机制——不开启则具名插槽内容错位，双渲染器一致
+
+### `layout/auto-flex-row`
+
+**行内场景自动 flex row（Skyline 无 inline 布局）**
+
+容器直接子元素同时含 text 与行内控件（switch/slider/icon/image/button/input/textarea/checkbox/radio/label/navigator/progress）→ 自动附加 proteus-flex-row 类（display:flex;row;align-items:center）；BASE 注入对应规则
+
+```
+before: <view><switch/><text>开关</text></view>
+after:  <view class="proteus-flex-row"><switch/><text>开关</text></view>
+```
+
+> why: Skyline 引擎不支持 inline 布局（官方 Inline × 开发中）——text 天生 block 占满一行，行内排布（text + switch 同行）唯一路径是 flex row（用户实测）；自动检测免开发者手动包 flex（双端一致）
+
+### `component/progress-degrade`
+
+**progress 降级自定义 view 进度条（Skyline 官方不支持 progress）**
+
+小程序语义 <progress> 编译为自定义 view 结构（track/inner/info 三节点）——percent→宽度、active-color/color→填充色、stroke-width→高度、show-info（无值=真）→百分比文字；静态属性直出、绑定插值；BASE 注入 .proteus-progress 样式
+
+```
+before: <progress :percent="70" show-info />
+after:  <view class="proteus-progress"><view class="proteus-progress-track"><view class="proteus-progress-inner" style="width:{{70}}%;background-color:#07c160"></view></view><text wx:if="{{true}}" class="proteus-progress-info">{{70}}%</text></view>
+```
+
+> why: Skyline 组件支持表 progress 暂不考虑（真机实测不渲染）——降级自定义结构双端一致 + Skyline 可用（16-progress-skyline-degrade）
+
+### `fluid/semantic-grid`
+
+**p-grid 柔性语义编译（页面级 flex 档位容器）**
+
+<p-grid>（页面内）编译为容器 view flex(row/wrap/gap) + 直接子元素逐包 p-grid-item 档位容器（v-for/v-if/key 迁移包装层；style 绑 {{pgridStyleN}} px 档，script 注入默认档 + onLoad/onReady SelectorQuery 实测重算）；动态 props/组件内 → 回退运行时组件；禁用 → 整体回退运行时组件（产物保留 <p-grid> 标签，gen-routes 同步注册 usingComponents）
+
+```
+before: <p-grid :min-col-width="160" :gap="12"><view class="cell" /></p-grid>
+after:  <view class="p-grid" style="flex-direction:row;flex-wrap:wrap;gap:12px;..."><view class="p-grid-item" style="{{pgridStyle0}}">...</view></view>（script 注入档位）
+```
+
+> why: Skyline/WebView 无 CSS Grid——跨端网格只能编译器按端 codegen（#496 五轮实证：flex + px 档 + 实测容器宽才是 Skyline 可靠路径）；禁用须三侧一致（template 回退 + script 不注入 + gen-routes 注册），否则产物 wxml 引用 {{pgridStyleN}} 而 script 不注入默认档 = 半失效产物（★#505 M3 批 3 修复）
+
+### `fluid/p-fluid`
+
+**p-fluid 属性 → calc 线性流式声明（Skyline 无 clamp）**
+
+元素上的 p-fluid="prop(min, max)" 属性编译期为 calc 线性长度声明（linearFluid：calc(px + vw)——Skyline/WebView 共用 wxml，Skyline 官方表无 clamp/min/max）；多组 ; 分隔；解析失败（FLD003 无 prop(min,max) 区间）→ 剥离 + 警告不生成样式
+
+```
+before: <text p-fluid="font-size(14, 18)">x</text>
+after:  <text style="font-size: calc(15.77px + 1.1268vw)">x</text>（示意——数值随 designWidth/viewport）
+```
+
+> why: Skyline 无 clamp 长度函数（官方支持表）——Web 端可保留真实 CSS clamp，MP 端 calc 线性替代（vw 天然随窗流式零运行时；#496 M3 实测收敛）
+
+## 脚本转换（35）
+
+### `script/const-to-data`
+
+**顶层 const（ref/reactive/字面量）→ data**
+
+零缩进顶层 const → data 字段；ref(0)/reactive({...})/字面量在构建期静态求值，多行数组/对象字面量完整提取
+
+```
+before: const count = ref(0)
+const cards = ref([{ title: "a" }])
+after:  data: {
+  count: 0,
+  cards: [{ "title": "a" }],
+}
+```
+
+> why: 小程序页面状态在 data 中，响应式声明（ref/reactive）编译期为初始值求值（决策 #60：括号平衡扫描支持多行字面量；只提取零缩进顶层 const，不误取函数体内局部 const）
+
+### `script/computed-to-data`
+
+**computed 读路径 → data 派生字段（v0.3；★#499 支持块体整段求值）**
+
+顶层 const x = computed(() => expr) → data 不存；组件 onReady / 页面 onLoad 初始化 + 依赖 ref 写入 setData 时同步重算（expr 中 x.value → this.data.x、props.x → this.data.x）；★#499 块体 computed（() => { 语句; return expr }）编译为 proteusCalcX() 整段求值方法（派生 expr = this.proteusCalcX()）——此前块体被忽略，依赖方引用悬空 ReferenceError；末语句非 return → 警告忽略
+
+```
+before: const double = computed(() => count.value * 2)
+after:  data 不含 double；this.setData({ count: ..., double: this.data.count * 2 })（count 写入时合并，onLoad 初始化一次）
+```
+
+> why: 小程序无 computed 概念，编译期把 getter 转 data 派生：静态提取 getter 中的 ref 依赖 → 依赖写入时把重算表达式合并进同一 setData（v0.3 先做读路径；★#499 块体以整段方法求值对齐 Vue 响应语义——多语句局部变量/分支/模块函数均可）
+
+### `script/watch-to-methods`
+
+**watch → proteusWatchX 方法（v0.3）**
+
+watch(ref, (newVal, oldVal) => { body }) → methods 生成 proteusWatchX；依赖 ref 写入 setData 后自动调用（旧值在写入前保存）；immediate: true → onLoad 初始化调用一次
+
+```
+before: watch(count, (n, o) => {
+  log(n, o)
+})
+after:  proteusWatchCount(n, o) {
+  log(n, o)
+},
+// count 写入：const oldCount = this.data.count; ...setData(...); this.proteusWatchCount(this.data.count, oldCount)
+```
+
+> why: 小程序无 watch 概念，编译期模拟：依赖静态提取（单 ref）+ 写入点联动（setData 后调用回调，newVal/oldVal 由编译期保存）；MVP：仅单 ref 直接引用 + 箭头函数回调（数组源/函数源/function 回调警告）
+
+### `script/watch-props`
+
+**watch props 源 → WeChat observers（组件属性监听）**
+
+watch(props.x, (n, o) => { body }) 或 watch(() => props.x, ...) → Component observers: { x(n, o) { body } }（属性变化触发回调；Web 端即标准 Vue watch，全响应式）；immediate: true → 另生成 proteusWatchPropX 方法 + attached 初始化调用一次
+
+```
+before: watch(() => props.items, () => {
+  calc()
+})
+after:  observers: {
+  items(n, o) {
+    calc()
+  },
+}
+```
+
+> why: 组件需要响应自身属性变化（列表 items 分页/加载更多、弹层 visible v-model、表单 value 同步等）；小程序无响应式系统，属性变化唯一通道是 observers
+
+### `script/computed-observer`
+
+**computed 派生值的依赖观察者（observers 重算 setData）**
+
+组件内 computed 的派生值（如 isChecked/boxStyle/columns）除在 ready() 初始化一次外，还按**依赖字段**生成 Component observers —— 依赖（props 或 data 字段）变化时重算并 setData；同一字段的多个 computed 合并进一个 observer；依赖提取用「字段引用扫描」（覆盖 this.data.f / f.value / props.f 三种写法）
+
+```
+before: const isChecked = computed(() => props.modelValue)  // 仅在 ready() 初始化一次
+after:  observers: {
+  modelValue(n, o) {
+    this.setData({ isChecked: this.data.modelValue })
+  },
+}
+```
+
+> why: 小程序无响应式系统：computed 此前**只在 ready() 求值一次**，父组件更新 props 或 data 变化后派生值永不重算 → 模板 class 绑定（读派生值）视觉不更新。真机实证：p-checkbox 勾选事件正常但 UI 不变（class 读派生 isChecked）；p-switch 侥幸正常只因 class 直接读 modelValue
+
+### `script/ref-nested-write`
+
+**ref 对象嵌套写补 setData（o.value.x / o.value[k] = v）**
+
+方法体中 `o.value.field = expr` / `o.value[key] = expr`（ref 持有对象/数组的字段写）→ 改写为 `this.data.o.field = expr` **并补 `this.setData({ o: this.data.o })`**；整体替换 `o.value = expr` 仍走原 setData 路径
+
+```
+before: picked.value[d.name] = true
+after:  this.data.picked[d.name] = true; this.setData({ picked: this.data.picked })
+```
+
+> why: 小程序视图由 setData 驱动：嵌套写此前只改 this.data、**不调用 setData** → 逻辑层数据已变但视图不重渲染（真机：p-checkbox 群选后计数/勾选视觉不变）
+
+### `script/module-import`
+
+**跨模块引用：import → require 转换（module-plan B0）/ 剥离警告**
+
+setup 顶层 import：相对路径共享模块（moduleImports 命中）→ 产物顶部 const { x } = require("<相对产物路径>.js")（named/default/namespace/side 四形态）；vue/@proteus-vue/*/type/.vue 跳过（编译器静态/usingComponents/纯类型）；无法解析的路径 → 剥离 + 警告
+
+```
+before: import { formatTime } from "../utils/format"
+after:  const { formatTime } = require("../utils/format.js")（moduleImports 命中）；未收录路径 → 警告 + 剥离
+```
+
+> why: 反黑盒（vue-compat Batch A，决策 #116）：import 剥离不再静默，产物未定义引用显式提示；★module-plan B0：相对路径共享模块编译为独立产物 + require 转换，跨模块引用真正可用（后续 Pinia/API/Component 基建的地基）
+
+### `script/runtime-init`
+
+**函数调用初始化 → 运行时初始化实例属性（module-plan B0）**
+
+顶层 const x = fn()（静态求值失败）→ data 不含该字段；onLoad/attached 注入 this.x = fn()（实例属性，ES5 安全）；模板绑定不支持（读 this.data.x undefined）——共享逻辑请用模块 import
+
+```
+before: const store = usePlayerStore()
+after:  onLoad: this.store = usePlayerStore()（data 不含 store）
+```
+
+> why: 旧行为：函数调用初始化静态求值失败 → data.x = undefined 且调用丢失（静默坏）；B0 配合跨模块 require 让 useStore()/createX() 真实执行
+
+### `script/top-level-calls`
+
+**顶层副作用语句保留（★#494/#G12：零缩进调用注入 onLoad 初始化序，实例依赖后置 this 化）**
+
+零缩进顶层表达式语句（initAppConfig(x) / registerCapability(x) 等调用形态）注入 onLoad 初始化序：外部/import 初始化调用（无实例依赖）置最前（先于 runtimeInits——初始化先于读取，#494 config-demo 白屏根因之二）；callee 依赖实例的调用（方法名册成员 this.x() / runtimeInit 链式 this.host.y()）后置 runtimeInit 之后并 this 化（★G12 复测真机 bug：semantic-primitives-demo 顶层 refreshSplit() 裸名注入 onLoad → ReferenceError）；此前这类语句被静默丢弃
+
+```
+before: initAppConfig(appConfig) / refreshSplit() / host.registerFallback(x)
+after:  onLoad 初始化序：外部 init 前置原样；refreshSplit() → this.refreshSplit()（runtimeInit 后）；host 链式 → this.host.registerFallback(x)（runtimeInit 后）
+```
+
+> why: MP 页面无模块级作用域，<script setup> 顶层副作用必须显式注入生命周期才有执行时机——静默丢弃违背反黑盒红线
+
+### `script/app-config-binding`
+
+**app-config 模板绑定桥（★#494：快照 setData + onAppConfigChange 订阅）**
+
+const x = useAppConfig() / useFeatureFlag(k) 编译为命令式等价（getConfig() / getFeatureFlag(getConfig(), k)——无 Vue 实例要求）+ onLoad 快照 setData + onAppConfigChange 订阅刷新 + onUnload 退订；原样发射会在 onLoad 撞 useAppConfig 的 getCurrentInstance() 守卫（config-demo 白屏根因之一），且实例属性进不了 data、模板 {{ appConf.x }} 落空
+
+```
+before: const appConf = useAppConfig()
+after:  onLoad: this.setData({ appConf: getConfig() }) + onAppConfigChange(() => setData 刷新)
+```
+
+> why: Pinia store 桥（$subscribe → setData）的对位物——app-config 无 $subscribe，新增 onAppConfigChange 订阅 API 作为桥的数据源；web 端 useAppConfig 响应式语义不变（守卫保留）
+
+### `script/runtime-init-snapshot`
+
+**模板引用的 runtimeInit 快照进 data（★#494）**
+
+模板表达式引用了 runtimeInit 变量名（templateRefs ∩ runtimeInits）→ onLoad 在赋值后 setData({ name: this.name }) 快照进 data；app-config 桥覆盖的不重复。实例属性模板读不到——不快照则 {{ x }}/:style="x" 落空（config-demo 的 :style="guardStyle"）
+
+```
+before: :style="guardStyle"（guardStyle = makeGuardStyle() runtimeInit）
+after:  onLoad: this.setData({ guardStyle: this.guardStyle })
+```
+
+> why: runtimeInit 通道的既定限制是「实例属性：模板绑定不支持」——快照把一次性初始化值（guard.patch 产物等）带进 data，模板绑定可用；响应式场景仍应用 Pinia store 桥/app-config 桥
+
+### `script/store-binding`
+
+**Pinia store 模板绑定（pinia-plan 12 P1：$subscribe → setData 同步）**
+
+模板 {{ store.<field> }} 引用（template 收集 storeBindings）→ onLoad 注入：初始 setData({ field: this.store.field }) + store.$subscribe 订阅（变更 → setData，模板字段实时同步）；store 变量 = useXxxStore() 的 runtimeInit 实例属性；嵌套 store.current.title → current.title（store 前缀剥离）
+
+```
+before: {{ store.current.title }}
+after:  {{ current.title }} + onLoad: this.store.$subscribe(() => this.setData({ current: this.store.current }))
+```
+
+> why: MP 模板绑定读 this.data——store 是实例属性读不到；Pinia $subscribe 订阅 + setData 同步（对齐 store 桥 connectPageStore 模式），让 pinia-demo MP 端状态显示可用（pinia-plan 12）
+
+### `script/define-props`
+
+**defineProps → Component properties（v0.3 组件系统 + v0.3 尾泛型）**
+
+组件模式：defineProps({ label: String, initial: { type: Number, default: 0 } }) 或 TS 泛型 defineProps<{ label: string; count?: number }>() → properties（type + 默认值 value）；props.xxx 访问重写为 this.data.xxx
+
+```
+before: const props = defineProps<{ initial: number; label: string }>()
+after:  properties: {
+  initial: { type: Number, value: 0 },
+  label: { type: String, value: "" },
+}
+```
+
+> why: 小程序组件用 Component({ properties }) 声明外部属性；Vue 组件 props 编译期映射（v0.3，决策 #79）；对象形式（type/default）+ TS 泛型形式（string/number/boolean/object/Array/联合映射）
+
+### `script/define-emits`
+
+**defineEmits + emit() → triggerEvent（v0.3 组件系统）**
+
+组件模式：emit("xxx", payload) → this.triggerEvent("xxx", payload)；父组件 @xxx（非 EVENT_MAP）→ bind:xxx；★G12 候选 B：v-model 契约事件 'update:xxx' 首参归一单段 'update-xxx'（与父 bind:update-xxx 同口径——双冒号事件名被 Skyline/glass-easel 编译链丢弃）；非 update: 前缀事件名不动
+
+```
+before: emit('change', count.value)
+after:  this.triggerEvent('change', this.data.count)
+```
+
+> why: 小程序组件向父组件通信用 triggerEvent；Vue emit 编译期映射（v0.3，决策 #79）；MVP：约定 emit 变量名
+
+### `script/define-expose`
+
+**defineExpose → no-op + 校验（v0.3 尾）**
+
+组件模式：defineExpose({ ... }) 编译期 no-op——小程序组件 methods 天然可被 selectComponent 访问；校验声明成员：ref 值暴露无对等机制 → 警告
+
+```
+before: defineExpose({ reset })
+after:  no-op（reset 已在 methods，外部 selectComponent 可调）
+```
+
+> why: 小程序组件外部访问（selectComponent + 方法调用）天然覆盖 Vue 的 defineExpose 方法暴露语义；ref 值暴露需方法包装（v0.3 尾，决策 #91）
+
+### `script/define-model`
+
+**defineModel → v-model 组件契约（compileScript 权威源）**
+
+组件模式：const m = defineModel<T>([name]) 经 @vue/compiler-sfc 权威展开为 _useModel(__props, name)——注册 prop（默认 modelValue）+ m.value 读→this.data.<prop> / 写→triggerEvent("update-<prop>", v)（glass-easel 事件名 update-xxx）；模板 {{ m }} 改名 {{ <prop> }}。不手写抠宏语义（模型修饰符/嵌套未全接 → partial）。
+
+```
+before: const m = defineModel<string>()
+after:  properties.modelValue + m.value 读→this.data.modelValue / 写→this.triggerEvent("update-modelValue", v)
+```
+
+> why: Vue 能力对齐地基（不手造宏语义）：defineModel 的标准展开由 @vue/compiler-sfc 给出（bindings 分类 + props/emits 规约），框架只做 MP 适配（对齐 glass-easel 事件/属性规范），避免手写覆盖面不全致地基不牢。
+
+### `script/function-to-methods`
+
+**顶层 function 声明 → methods**
+
+顶层 function handleTap() {...} → methods 中的对象简写 handleTap() {...}
+
+```
+before: function handleTap() {
+  count.value++
+}
+after:  handleTap() {
+  this.setData({ count: (this.data.count === undefined || this.data.count === null ? 0 : this.data.count) + 1 })
+},
+```
+
+> why: 小程序页面逻辑在 methods 中；对象字面量内不能输出裸 function 声明（决策 #14：产物方法用对象简写）
+
+### `script/arrow-to-methods`
+
+**const 箭头函数 → methods**
+
+const fn = (params) => {...} → methods 中的 fn(params) {...}（支持 async）
+
+```
+before: const load = async () => {
+  const r = await fetchData()
+}
+after:  load() {
+  const r = await fetchData()
+},
+```
+
+> why: 小程序页面逻辑在 methods 中；const 箭头函数同样提取为方法
+
+### `script/lifecycle-map`
+
+**生命周期映射 onMounted → onReady / onUnmounted → onUnload**
+
+onMounted(() => {...}) → onReady() {...}；onUnmounted → onUnload；onLoad 透传
+
+```
+before: onMounted(() => { doInit() })
+after:  onReady() {
+  doInit()
+},
+```
+
+> why: Vue 组件生命周期与小程序页面生命周期不同名，编译期映射到小程序钩子
+
+### `script/ref-read`
+
+**方法内 ref 读取 → this.data.name**
+
+方法/生命周期体内的 name.value 读取 → this.data.name
+
+```
+before: const v = count.value
+after:  const v = this.data.count
+```
+
+> why: 小程序运行期状态在 this.data 中，编译期把 setup ref 访问重写为 data 访问（决策 #22）
+
+### `script/ref-write`
+
+**方法内 ref 赋值 → this.setData**
+
+方法/生命周期体内的 name.value = expr → this.setData({ name: expr })
+
+```
+before: count.value = count.value + 1
+after:  this.setData({ count: this.data.count + 1 })
+```
+
+> why: 小程序更新视图的唯一通道是 setData，编译期把赋值重写为 setData 调用（决策 #22；排除 ==/===/复合赋值）
+
+### `script/ref-incdec`
+
+**方法内 ref 自增/自减 → this.setData**
+
+name.value++ / -- / ++name.value → this.setData({ name: (null 检查 ? 0 : this.data.name) + 1 })
+
+```
+before: count.value++
+after:  this.setData({ count: (this.data.count === undefined || this.data.count === null ? 0 : this.data.count) + 1 })
+```
+
+> why: 自增/自减无表达式可提取，编译期为显式 setData 并做 null 兜底（决策 #22；不用 ?? 运算符——真机预览报 SyntaxError，决策 #36）
+
+### `script/vmodel-handler`
+
+**v-model 自动 handler 注入**
+
+模板出现 v-model="x" 时注入 proteusOnXInput(e) { this.setData({ x: e.detail.value }) }
+
+```
+before: （模板）<input v-model="name" />
+after:  proteusOnNameInput(e) { this.setData({ name: e.detail.value }) },
+```
+
+> why: 小程序无 v-model，回写方向由自动 handler 承担（决策 #29：方法名避免 __ 前缀，微信保留 _ 前缀可能导致绑定失效）
+
+### `script/nav-handler`
+
+**导航链接自动 handler 注入（proteusNavigateTo）**
+
+模板出现导航链接时注入 proteusNavigateTo(e)：读 data-url → wx.navigateTo（routeType 透传，fail 降级普通跳转）
+
+```
+before: （模板）<a href="/pages/user/index">用户</a>
+after:  proteusNavigateTo(e) {
+  const ds = e.currentTarget.dataset
+  const url = String(ds.url || "")
+  if (!url) return
+  const nav = { url: url, fail: ... }
+  if (ds.routeType) nav.routeType = ds.routeType
+  wx.navigateTo(nav)
+},
+```
+
+> why: 小程序导航统一走 wx.navigateTo；保留前导 / 为绝对路径（决策 #30 真机根因）；fail 降级保证自定义路由失败仍可跳转（#28）；方法名避开 __ 前缀（#29）
+
+### `page/scroll-bridge`
+
+**页面滚动 API 桥接（15-page-scroll-container：Skyline 页面不滚动，页面钩子靠 scroll-view 事件触发）**
+
+页面声明 onPageScroll/onReachBottom/onPullDownRefresh 时：自动包装 scroll-view 绑定对应事件（template 侧）+ 生成桥接方法（载荷归一：scroll-view e.detail.scrollTop → onPageScroll { scrollTop }）；手动 scroll-view 场景编译期歧义警告
+
+```
+before: function onPageScroll(e) { … }
+after:  自动包装 scroll-view bindscroll="proteusPageScroll" + proteusPageScroll(e) 载荷归一调用 onPageScroll
+```
+
+> why: Skyline 页面本身不滚动（滚动必须 scroll-view）——页面级滚动钩子不会被触发；桥接后 onPageScroll/onReachBottom/onPullDownRefresh 语义保留（与 Web 端一致）
+
+### `script/onload-params`
+
+**默认 onLoad 参数自动 decode**
+
+无显式 onLoad 时注入默认实现：遍历 options → decodeURIComponent → 结构化值（{/[ 开头）JSON.parse → setData
+
+```
+before: （无 onLoad）
+after:  onLoad(options) {
+  const params = {}
+  const keys = Object.keys(options || {})
+  for (let i = 0; i < keys.length; i++) {
+    ...
+  }
+  this.setData(params)
+},
+```
+
+> why: 路由参数经 query 传递，页面需还原为原始类型（决策 #19：仅对结构化值 JSON.parse，普通标量保持字符串——对齐 P3 契约 options.id === "1"）
+
+### `script/component-mode`
+
+**组件模式 → Component() 构造器**
+
+isComponent=true（components 目录下）→ Component({ data, methods, ... })，页面 → Page({ ... })
+
+```
+before: （组件 SFC）
+after:  Component({ data: {...}, ... })
+```
+
+> why: 小程序页面用 Page()，组件用 Component()（不同构造器形态，isComponent 分支已在 compiler/index.ts 透传）
+
+### `script/es5-safe`
+
+**生成代码 ES5 安全**
+
+产物规避 ?? / ?. / 数组解构 / 对象展开（显式 null 检查三元、索引循环 Object.keys、直接属性赋值）
+
+```
+before: // 禁止出现在产物中
+const [a, b] = arr
+const v = x ?? 0
+after:  // 产物实际形态
+const a = arr[0], b = arr[1]
+const v = (x === undefined || x === null ? 0 : x)
+```
+
+> why: 微信开发者工具将页面 JS 转 ES5 时依赖 babel helper 模块，helper 不在包内会报错（#32：arrayWithHoles 未定义）；真机预览直接报 ?? 语法错误（#36）
+
+### `script/provide-inject`
+
+**provide/inject → getApp().__proteusProvides 全局注册表桥（vue-compat-advance Batch 3/4）**
+
+顶层 provide("key", expr) / const x = inject("key"[, default]) 编译为注册表读写：页面 onLoad 单函数合并块（pageId 命名空间解析一次 + provide 注册 + inject setData）；组件 provide 放 created（先于子组件 attached 注入）、inject 放 attached；provide 值表达式重写裸 ref 名 / ref.value → this.data.<name>；inject 支持默认值（undefined 时取默认）；★Batch 4 响应式联动：裸 ref 提供（provide("key", refName)）→ ref 写入点注入 proteusSyncProvide（同步注册表值 + 通知订阅者），inject 侧订阅 __subs[key]（值变化 setData 刷新）+ detached/onUnload 取消；★Batch 6 页面级隔离：注册表按 pageId 命名空间（页面 onLoad __seq 生成 + 组件 getCurrentPages 栈顶解析，onUnload 删除命名空间防泄漏）；.value/字面量提供保持静态快照（对齐 Vue 语义：传 ref 联动、传值快照）
+
+```
+before: provide("user", userInfo)
+const theme = inject("theme", "light")
+after:  onLoad: const provides = (getApp().__proteusProvides || (getApp().__proteusProvides = {})); provides["user"] = this.data.userInfo; if (!provides.__subs) provides.__subs = {}; ...; this.setData({ theme: (provides["theme"] === undefined ? "light" : provides["theme"]) })；userInfo 写入点追加 this.proteusSyncProvide("user", "userInfo")（通知订阅者 setData 刷新）
+```
+
+> why: 小程序组件树无 provide/inject 机制（决策 #117）：全局注册表桥让页面向组件传值（含深层嵌套组件）；MVP 值快照（非响应式联动）+ 全局注册表（重名 key 后写覆盖），页面级隔离/响应式为后续
+
+### `script/reactive-runtime-init`
+
+**reactive/readonly/浅族 const → 运行时真 Proxy（@vue/reactivity）**
+
+顶层 const s = reactive({...})/readonly({...})/shallowReactive/shallowReadonly 编译为 runtime-init this.s = reactive({...})（@vue/reactivity 真 Proxy，携带 ReactiveFlags 标记位）而非内联普通 data——否则 isReactive(reactive obj) 语义丢失；ref/shallowRef/computed 仍保持编译期内联（MP 高效模型）；constSourceTypes 记为 reactive/readonly 供 isRef 内联判定（均非 ref-like → false）
+
+```
+before: const s = reactive({ name: "x" })
+after:  onLoad: this.s = reactive({ name: "x" })（真 Proxy；data 置 s: null 占位模板可读）+ 后续 setData 桥
+```
+
+> why: 小程序编译器此前把 reactive 内联成普通 data（无 Proxy）→ isReactive/isReadonly/isProxy 无法为真（无标记位）；引入运行时 @vue/reactivity（复用既有依赖，不造轮子）让 reactive 族返回真 Proxy，守卫读 ReactiveFlags 即可与 Web 同语义（对齐 uni-app @dcloudio/uni-mp-vue 做法——Vue3 reactivity 核心复用 + Proxy 桥接 setData）
+
+### `script/reactivity-runtime-require`
+
+**reactive 族/守卫按需注入 require('@vue/reactivity')**
+
+源码用到 reactive/readonly/shallowReactive/shallowReadonly/isReactive/isReadonly/isProxy/isShallow/toRaw 任一（词边界检测）→ 产物顶部注入 const { ...used } = require('@vue/reactivity')；reactive 族存在时额外补 effect（setData 桥用）；纯 ref/computed 页面不注入——普通页面保持纯内联轻量（按需注入）
+
+```
+before: import { reactive } from 'vue'
+const s = reactive({ name: 1 })
+after:  const { reactive, effect } = require('@vue/reactivity')（仅注入用到的符号；纯 ref 页无此行）
+```
+
+> why: vue import 在 MP 中被剥离（响应式走编译期内联），但 reactive 族/守卫需要运行时真函数；按需注入 @vue/reactivity（仅用到的 API）而非全量 vue——满足「有的不需要」的轻量诉求
+
+### `script/reactive-setdata-bridge`
+
+**reactive 族变更 → setData 桥（effect 读透 proxy → 视图刷新）**
+
+reactive/readonly 族 runtime-init 之后生成 per-const 桥：__proteusSyncReactive(name) 用 effect 读透 proxy（JSON 序列化即读透每个 getter/ownKeys → 任一字段变更触发重跑）→ setData({ [name]: 扁平快照 })；模板 {{ reactive.name }} 通过 data 占位 null + 桥持续 setData 读到视图；onUnload/detached 解绑 effect（__proteusDisposeReactive）防泄漏；初始 data 置 reactive 名为 null
+
+```
+before: const s = reactive({ name: "x" })
+// 方法内 s.name = "y"
+after:  onLoad: this.s = reactive({ name: "x" }); this.__proteusSyncReactive('s'); 变更 → 桥 effect 重跑 setData({ s: { name: "y" } })；onUnload 解绑
+```
+
+> why: reactive 走运行时真 Proxy 后，logic 层变更需桥接 setData 才能刷新视图（uni-app @dcloudio/uni-mp-vue 核心工作——Proxy 读写桥接 setData 同步模型）；effect 依赖追踪是零造轮子的标准做法（读透即追踪，变更自动重跑）
+
+### `script/define-options`
+
+**defineOptions 剥离 no-op（compileScript 权威源）**
+
+顶层 defineOptions({ name, inheritAttrs }) 剥离为编译期 no-op（不裸注入 onLoad → not defined）；name/inheritAttrs 经 @vue/compiler-sfc compileScript 权威提取（展开为组件 options 的 ...{} 段），MP 组件无组件级 name/inheritAttrs 对等 → 警告说明不生效（组件属性请走 properties/attrs 通道）
+
+```
+before: defineOptions({ name: "MyComp", inheritAttrs: false })
+after:  剥离为 no-op（产物不含 defineOptions；警告说明 name/inheritAttrs 不生效）
+```
+
+> why: defineOptions 是 <script setup> 宏，被当顶层副作用裸注入 onLoad → not defined；宏语义权威源 = compileScript（不手造）——剥离 + 提取语义元数据，非 fail-closed error（消除 unsupported）
+
+### `script/use-template-ref`
+
+**useTemplateRef → this.selectComponent（组件实例引用）**
+
+const b = useTemplateRef('x') → runtime-init this.b = this.selectComponent('#x')（组件实例引用）；方法体 b.value → this.b（剥 .value——实例属性非 data 字段）；模板 ref="x" → 注入 id="x" + 收集（template/template-ref）；selectComponent 需渲染树就绪（onLoad 可能 null，onReady 后可取——诚实时序边界）
+
+```
+before: const b = useTemplateRef('btn')
+function go() { b.value?.tap() }
+after:  attached: this.b = this.selectComponent('#btn'); go() { (this.b) === null || ... || this.b.tap() }（.value 剥除）
+```
+
+> why: useTemplateRef 是 Vue 3.5 组件实例引用 API；MP 用 this.selectComponent('#id')（组件/页面查子组件实例）；.value 剥除保留实例引用语义（b.value 读实例）
+
+### `script/element-probe`
+
+**组件元素探针注入（组件自测量 → 全局注册表，E2E 降级通道）**
+
+组件 ready() 注入自测量：wx.createSelectorQuery().in(this).select(根选择器).boundingClientRect() → 写 globalThis.__PROTEUS_PROBES__[pid]（+150ms 二次重测兜首帧未稳）；页面 onLoad 复位注册表（同页 key 稳定）。运行时门控：组件 pid 或 __PROTEUS_PROBE_ALL__（测试 driver.enableProbes() / PROTEUS_DEBUG 构建默认开）
+
+```
+before: // 组件 ready()（无探针）
+after:  ready() { this.__proteusProbe(); /* .in(this).select('.p-x-data-v-h').boundingClientRect(r => globalThis.__PROTEUS_PROBES__[pid] = {...r}) */ }
+```
+
+> why: 自动化工具（wechatide/automator）只能查页面拥有的节点：组件内部节点被 glass-easel 隔离（createSelectorQuery 返回 null，Skyline 无 selectAllComponents）→ 组件内部几何/可见性无法断言（scroll-view 容器塌成细线两轮漏检）。测量必须从组件内部发起
+
+## 样式转换（9）
+
+### `style/px-to-rpx`
+
+**px → rpx（仅 MP 端编译期生效）**
+
+CSS 数值 px → rpx（rpxRatio 默认 2：48px → 96rpx）；Web 端永不转换（Vite 原生处理）
+
+```
+before: padding: 48px;
+after:  padding: 96rpx;
+```
+
+> why: 小程序 rpx 是屏幕等比单位（750 设计稿），跨端 CSS 一致性的编译期吸收（决策 #9：MP 端 px→rpx，Web 端保持标准 CSS）
+
+### `style/selector-tag`
+
+**选择器 HTML 标签 → 小程序标签**
+
+选择器中的标签名重写为小程序标签（.links a → .links view、div > p → view > .proteus-p）；属性选择器/类名/ID/长标识符不误伤
+
+```
+before: .links a { color: #1a7af8; }
+after:  .links .proteus-a { color: #1a7af8; }
+```
+
+> why: 模板已把 div/a/h1 等映射为 view/text，若样式选择器不重写则匹配不到元素（决策 #57 修复的 bug）；命中条件=标签位于选择器起始或组合器之后，避免 .a/#input/tag-a 误伤
+
+### `style/selector-semantic`
+
+**语义标签选择器 → proteus-* 类选择器**
+
+h1-h6/p/a 选择器映射为基础类选择器（.card h3 → .card .proteus-h3、.links a → .links .proteus-a），而非标签
+
+```
+before: .card h3 { font-weight: 700; }
+after:  .card .proteus-h3 { font-weight: 700; }
+```
+
+> why: h3 与 p 都映射为 text，若都映射为标签，同特异性规则后写覆盖先写（决策 #61 修复：.card p 的 color 曾污染 h3）；模板侧已附加 proteus-* 类故精确匹配
+
+### `style/semantic-base-wxss`
+
+**注入语义基础 WXSS（h1-h6/p/a 视觉还原）**
+
+产物 WXSS 头部注入 .proteus-h1~h6/.proteus-p/.proteus-a 基础样式（对齐 HTML 标准附录 D：字号/字重/单边 em 段距/链接色），位于用户样式之前
+
+```
+before: // 源码无样式时产物仍含
+after:  .proteus-h1 { display: block; font-size: 64rpx; font-weight: 700; margin: 0 0 0.67em; }
+.proteus-p { display: block; margin: 0 0 1em; }
+.proteus-a { color: #1a7af8; text-decoration: underline; }
+```
+
+> why: Web 浏览器有 UA 默认样式，小程序 text/view 没有；注入基础类还原两端视觉一致（决策 #58）；margin 用单边 bottom + em 相对自身字号——Skyline 自研引擎不折叠 margin，单边 em 与 Web 折叠在主流程组合下视觉一致（决策 #59）
+
+### `style/default-scoped`
+
+**默认 scoped：<style> 无标记按局部作用域处理（★2026-08 用户决策）**
+
+非 <style global> 的 style 块均按 scoped 处理（类名后缀拼接）；<style> 无 scoped/global 标记时编译期警告；<style global>（Proteus 扩展）显式全局（不作用域化）；同文件 scoped+global 分组输出（global 在前）
+
+```
+before: <style>.box { color: red; }</style>
+after:  按 scoped 处理（.box-data-v-x）+ 警告提示全局出口 <style global>
+```
+
+> why: Vue 标准 <style> 为全局——Web 端泄漏到所有页面（真机实测：config-demo 无 scoped 的灰色背景串到内置组件演示页）；用户决策默认局部更安全（跨端一致：Web 端 vite 插件同步改写 <style> → <style scoped>）
+
+### `style/skyline-unsupported`
+
+**Skyline 不支持属性编译期警告**
+
+float、position: fixed 出现时编译期警告（不阻断构建）
+
+```
+before: .banner { position: fixed; }
+after:  警告：WXSS 检测到 Skyline 不支持的属性：position: fixed（编译期警告）
+```
+
+> why: Skyline 自研渲染引擎不支持这些布局属性，编译期警告让开发者提前知道（反黑盒原则：警告可见、可统计）
+
+### `style/skyline-selector`
+
+**Skyline 不兼容选择器规则级剔除（★#495b）**
+
+WXSS 产物中剔除含通配符 * 或 :deep 残留的选择器规则（Web 降级规则 .x-fallback > *、:deep(*) 编译后 .x *——微信 Skyline WXSS 编译器拒绝 token *，报 WXSS 文件编译错误）；Web 端保留（真浏览器可用）；剔除告警 + trace
+
+```
+before: .p-grid-fallback > * { min-width: ... }
+after:  该规则不出现在 wxss 产物 + 告警「WXSS 剔除 N 条 Skyline 不支持选择器规则」
+```
+
+> why: 跨端同源码：组件 slot 模型下 Web 真浏览器子选择器可用、Skyline WXSS 编译器拒绝通配——同规则双端语义不同，编译期按端剔除是唯一零运行时方案（Skyline 无对等能力时组件走自降级普通容器，G-22.2 朴素但正确）
+
+### `style/scoped-css`
+
+**scoped CSS：选择器类名后缀拼接（★2026-08 真机重构：单类选择器）**
+
+<style scoped> 存在时：选择器内每个类 token 追加 -scopeId（.box → .box-data-v-xxx 单一类选择器）；:deep(X) 去包装后统一后缀；@keyframes 帧/伪类伪元素/@规则不处理；逗号列表逐条
+
+```
+before: .card { color: red; }
+after:  .card-data-v-abc123 { color: red; }
+```
+
+> why: 小程序无 scoped CSS 原生机制，编译期类名后缀等价（v0.3，决策 #77）；★2026-08 真机重构：Skyline glass-easel 不支持属性选择器 [data-v]（f48460c 改 class 复合仍不匹配——.a.b 复合类选择器也静默丢弃，组件自身 wxss 匹配自身根节点都失效）→ 类名后缀是唯一 Skyline 确定支持的路径（单类选择器 ✓）
+
+### `transition/animation-wxss`
+
+**<transition> 进入动画 keyframes 注入**
+
+wxss 尾部注入 proteus-transition-* 进入动画（fade/slide-up/scale keyframes）——配合模板侧 transition 装饰 class
+
+```
+before: <transition name="fade">…
+after:  wxss 含 .proteus-transition-fade + @keyframes proteus-fade-in
+```
+
+> why: vue-compat-advance Batch 2（决策 #117）：<transition> 进入动画运行时等价（元素 wx:if 重建时 animation 自动播放）；离开动画 MP 无钩子
+
+## 产物校验（5）
+
+### `validate/js-syntax`
+
+**JS 产物语法自校验**
+
+new Function(js) 仅解析不执行，语法错误 → 校验失败并携带错误信息
+
+```
+before: // 若产物 js 含语法错误
+after:  CompilerError: [proteus-compiler] xxx.vue: js 产物语法错误：Unexpected token ...
+```
+
+> why: 反编译黑盒机制（决策 #17）：坏产物当场报错指明文件，绝不静默输出不可用的产物（对比 uni-app 产物无法定位问题）
+
+### `validate/js-platform-es5`
+
+**JS 产物按平台标准校验（微信 = ES5）**
+
+扫描产物残留的 ES2020 语法（?? ?. ??= ||= &&=，跳过字符串/模板/注释）→ 校验失败并报行号；校验器按平台标准而非宿主 Node 标准（new Function 认识 ES2020，?? / ?. 语法过但微信开发者工具 babel 不解析）
+
+```
+before: // 产物 js 含 p?.source ?? "?"（babel 失败路径残留）
+after:  CompilerError: [proteus-compiler] xxx.vue: 平台 JS 标准违规：ES2020 语法「??」残留于第 N 行第 M 列
+```
+
+> why: 决策 #504 用户点名盲区：node --check / new Function 认识 ES2020 → ?? 产物语法校验永远通过，微信预览上传期才 SyntaxError；把 ES5 tripwire 从外部门禁脚本内建进 compileVueSfc 自校验链，兜底 es5.ts babel 转译失败路径（error 时返回原样代码）
+
+### `validate/wxml-platform`
+
+**WXML 产物按平台标准校验（蓝本 glass-easel 官方错误码）**
+
+七项官方错误码检查：①DataBindingNotAllowed——wx:key 值含 {{}}（官方 wx:key 禁用数据绑定，直接指定 item 字段名或 *this）；②DuplicatedAttribute——同名属性重复（微信仅保留其一）；③AvoidUppercaseLetters——标签名含大写（产物自定义组件标签应 kebab-case 全小写；属性名大写豁免——camelCase 自定义属性如 modelValue 是合法绑定，官方亦为 Note 级）；④UnsupportedSyntax——绑定表达式含 ?. 可选链（官方 expr.rs 运算符表无 ?.——Skyline/glass-easel 解析不支持，命中即报错提示改守卫写法）；⑤InvalidAttribute——wx:key/wx:for-item/wx:for-index 无 wx:for 悬挂（官方 ForList 仅 for 存在时消费）；⑥InvalidAttribute——wx:elif/wx:else 悬挂（无前置同层 wx:if/wx:elif——官方分支组 find_if_element_index 找不到前置 If）；⑦DuplicatedStylePropertyNames——纯静态 style 串重复键（官方仅对 Value::Static style 拆分查重，含 {{}} 动态值不静态分析）
+
+```
+before: // 产物含 wx:key="{{x}}" / class 双属性 / <PModal> / {{ a?.b }} / wx:else 悬挂 / wx:key 无 wx:for / style="a:1;a:2"
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物平台标准违规：[DataBindingNotAllowed/InvalidAttribute/DuplicatedStylePropertyNames/…] …
+```
+
+> why: ★#505 G2 平台语义对齐：自造 IR 语义会错（wx:key 曾把 :key="t.id" 整句丢弃）——平台标准 = glass-easel 官方 parser 错误码（docs/compiler-platform-alignment.md §1.3）；产物正常形态永不命中，命中即编译器 bug（呼应「校验器按平台标准而非宿主标准」收紧）
+
+### `validate/wxml-pairing`
+
+**WXML 标签配对自校验**
+
+栈式扫描 WXML 标签配对（先剥离注释，避免行号注释干扰），未闭合/错配 → 校验失败
+
+```
+before: // 若产物 wxml 标签不配对
+after:  CompilerError: [proteus-compiler] xxx.vue: wxml 产物结构错误：</view> 与 <text> 不匹配（位置 N）
+```
+
+> why: 反编译黑盒机制（决策 #17）：模板转换出错的常见形态就是标签不配对，编译期拦截比真机报错好定位
+
+### `validate/compiler-error`
+
+**坏产物抛 CompilerError 指明文件**
+
+校验失败 → 抛 CompilerError（携带源文件名，消息含 [proteus-compiler] 前缀）
+
+```
+before: // 静默输出坏产物（反模式）
+after:  throw new CompilerError(filename, message)
+```
+
+> why: 反黑盒机制的统一错误通道：AI/开发者拿到错误即可定位到具体文件（错误 = 可操作的反馈，而非黑盒失败）
+
+<!-- generated by website/scripts/gen-reference.mjs · 源码 SSOT：packages/compiler/src/transforms/registry.ts TRANSFORM_RULES -->

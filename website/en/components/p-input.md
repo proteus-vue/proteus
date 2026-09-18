@@ -1,0 +1,252 @@
+---
+title: p-input
+group: 内容与表单
+order: 1010
+---
+
+# p-input
+
+Input
+
+> Semantic component (Layer 0) · domain **Content & Forms** · compiled to each target's native controls at build time — zero platform branches in business code.
+
+| Semantic | Domain | Mini Program equivalent |
+|---|---|---|
+| ui.input | Content & Forms | `<input>` (L1 primitive) |
+
+## Compat rollout
+
+| Target | Status | Notes |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<input>` (L1 primitive) |
+| Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
+| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
+| Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |
+| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — component-level wiring not started |
+| Flutter hybrid | 🟡 | flutter · widget-level mapping — component-level not yet verified |
+| Quick App | ⬜ | Quick App engine (TBD) · target not started |
+
+> Status scale: ✅ shipped & this component usable · 🟡 prototype mapping — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).
+
+## Props
+
+| Prop | Doc | Type | Default | Required |
+|---|---|---|---|---|
+| `pid` | Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract) | `String` | `''` | No |
+| `disabled` | Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled) | `Boolean` | `false` | No |
+| `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
+| `value` | Bound value | `String` | `''` | No |
+| `type` | Type variant | `String` | `'text'` | No |
+| `maxlength` | Maximum input length (≤ 0 = unlimited) | `Number` | `-1` | No |
+| `placeholder` | Placeholder hint text | `String` | `''` | No |
+| `password` | — | `Boolean` | `false` | No |
+| `placeholderStyle` | — | `String` | `''` | No |
+| `cursorSpacing` | — | `Number` | `0` | No |
+| `confirmType` | — | `String` | `''` | No |
+| `cursor` | — | `Number` | `-1` | No |
+| `autoHeight` | — | `Boolean` | `false` | No |
+| `focus` | Auto focus | `Boolean` | `false` | No |
+| `alwaysEmbed` | — | `Boolean` | `false` | No |
+| `confirmHold` | — | `Boolean` | `false` | No |
+| `adjustPosition` | — | `Boolean` | `true` | No |
+| `holdKeyboard` | — | `Boolean` | `false` | No |
+| `cursorColor` | — | `String` | `''` | No |
+| `selectionStart` | — | `Number` | `-1` | No |
+| `selectionEnd` | — | `Number` | `-1` | No |
+| `placeholderClass` | — | `String` | `''` | No |
+| `safePasswordCertPath` | — | `String` | `''` | No |
+| `safePasswordLength` | — | `Number` | `0` | No |
+| `safePasswordTimeStamp` | — | `Number` | `0` | No |
+| `safePasswordNonce` | — | `String` | `''` | No |
+| `safePasswordSalt` | — | `String` | `''` | No |
+| `safePasswordCustomHash` | — | `String` | `''` | No |
+
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `value`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Bound value
+
+#### `type`
+
+- **Type**: `String`　**Default**: `'text'`　**Required**: No
+- **Doc**: Type variant
+
+#### `maxlength`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: Maximum input length (≤ 0 = unlimited)
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Placeholder hint text
+
+#### `password`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `placeholderStyle`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `cursorSpacing`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `confirmType`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `cursor`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `autoHeight`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `focus`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Auto focus
+
+#### `alwaysEmbed`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `confirmHold`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `adjustPosition`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `holdKeyboard`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `cursorColor`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `selectionStart`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `selectionEnd`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `placeholderClass`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordCertPath`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordLength`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordTimeStamp`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordNonce`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordSalt`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordCustomHash`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `input` | Input changes (payload { value } normalized across targets -- v-model on MP custom components only covers native input/textarea, hence the explicit event contract) | `{ value: eventValue(e) }` |
+| `confirm` | Keyboard confirm (Enter / done key) | `{ value: eventValue(e) }` |
+| `focus` | Gained focus | `e` |
+| `blur` | Lost focus | `e` |
+
+### Event details
+
+#### `input`
+
+- **Doc**: Input changes (payload { value } normalized across targets -- v-model on MP custom components only covers native input/textarea, hence the explicit event contract)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `confirm`
+
+- **Doc**: Keyboard confirm (Enter / done key)
+- **Payload**: `{ value: eventValue(e) }`
+
+#### `focus`
+
+- **Doc**: Gained focus
+- **Payload**: `e`
+
+#### `blur`
+
+- **Doc**: Lost focus
+- **Payload**: `e`
+
+## Implementation notes
+
+- Matrix 01 §6: value / type / maxlength / placeholder / focus / disabled + @input/@confirm/@focus/@blur
+- Event contract: :value + @input (payload { value } normalized across targets, replacing v-model -- v-model on MP custom components only covers native input/textarea)
+- Dual-source for both targets: native input passthrough (tag/passthrough); maxlength ≤ 0 = unlimited (both MP and Web ignore invalid negative values)
+
+## Usage
+
+```vue
+<p-input :pid="…">
+  <p-text>content</p-text>
+</p-input>
+```
+
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/components/p-input/index.vue -->

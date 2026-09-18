@@ -1,0 +1,150 @@
+---
+title: p-image
+group: 内容与表单
+order: 1009
+---
+
+# p-image
+
+Image
+
+> Semantic component (Layer 0) · domain **Content & Forms** · compiled to each target's native controls at build time — zero platform branches in business code.
+
+| Semantic | Domain | Mini Program equivalent |
+|---|---|---|
+| ui.image | Content & Forms | `<image>` (L1 primitive) · `<cover-image>` (L1 primitive) |
+
+## Compat rollout
+
+| Target | Status | Notes |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<image>` (L1 primitive) · `<cover-image>` (L1 primitive) |
+| Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
+| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
+| Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |
+| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — component-level wiring not started |
+| Flutter hybrid | 🟡 | flutter · widget-level mapping — component-level not yet verified |
+| Quick App | ⬜ | Quick App engine (TBD) · target not started |
+
+> Status scale: ✅ shipped & this component usable · 🟡 prototype mapping — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).
+
+## Props
+
+| Prop | Doc | Type | Default | Required |
+|---|---|---|---|---|
+| `pid` | Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract) | `String` | `''` | No |
+| `disabled` | Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled) | `Boolean` | `false` | No |
+| `ariaLabel` | Accessibility label (text read aloud by screen readers) | `String` | `''` | No |
+| `src` | Resource URL (network / local / temporary paths) | `String` | `''` | No |
+| `alt` | Alternative text (image load failure / accessibility) | `String` | `''` | No |
+| `mode` | Mode / crop method (per-component enums -- see the type column) | `String` | `'aspectFill'` | No |
+| `lazyLoad` | Lazy loading (loads the resource only when it enters the viewport) | `Boolean` | `false` | No |
+| `placeholder` | Placeholder hint text | `String` | `''` | No |
+| `showMenuByLongpress` | — | `Boolean` | `false` | No |
+| `fadeIn` | — | `Boolean` | `false` | No |
+| `preload` | — | `Boolean` | `false` | No |
+| `webp` | — | `Boolean` | `false` | No |
+| `referrerPolicy` | — | `String` | `''` | No |
+
+### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Component instance id (debugging / observation / test targeting -- D-2 dogfooding contract)
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Disabled state (blocks interaction + de-emphasizes visuals; passes through to the native MP disabled)
+
+#### `ariaLabel`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Accessibility label (text read aloud by screen readers)
+
+#### `src`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Resource URL (network / local / temporary paths)
+
+#### `alt`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Alternative text (image load failure / accessibility)
+
+#### `mode`
+
+- **Type**: `String`　**Default**: `'aspectFill'`　**Required**: No
+- **Doc**: Mode / crop method (per-component enums -- see the type column)
+
+#### `lazyLoad`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Lazy loading (loads the resource only when it enters the viewport)
+
+#### `placeholder`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: Placeholder hint text
+
+#### `showMenuByLongpress`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `fadeIn`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `preload`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `webp`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `referrerPolicy`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `load` | Load completed | `e` |
+| `error` | Load / execution failed | `e` |
+
+### Event details
+
+#### `load`
+
+- **Doc**: Load completed
+- **Payload**: `e`
+
+#### `error`
+
+- **Doc**: Load / execution failed
+- **Payload**: `e`
+
+## Implementation notes
+
+- Matrix 01 §3: mode cropping (Web object-fit mapping / MP native mode passthrough) + lazy-load (Web loading=lazy / MP lazy-load) + placeholder
+- Dual-source for both targets: img → image (compile-time mapping); @load/@error event normalization
+- Note: no computed block bodies (the compiler only supports arrow-expression bodies); mode maps on Web via CSS classes (p-image--<mode>)
+
+## Usage
+
+```vue
+<p-image :pid="…">
+  <p-text>content</p-text>
+</p-image>
+```
+
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/components/p-image/index.vue -->

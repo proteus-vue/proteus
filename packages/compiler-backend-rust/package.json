@@ -1,0 +1,18 @@
+{
+  "name": "@proteus-vue/compiler-backend-rust",
+  "version": "0.1.0",
+  "description": "G-29 B2 RustBackend——cargo crate（proteus-cc-rust CLI：Vue SFC → 语义等价的 CompilerIR JSON）。npm 包为 bin 工具壳（check:pkg bin 豁免）；真实编译核心在 Rust 侧（Cargo.toml + src/）。Node/Rust/WASM 三端产出同一 CompilerIR（G-29.1 铁律）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "proteus-cc-rust": "bin/cli.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "cargo build --release"
+  }
+}

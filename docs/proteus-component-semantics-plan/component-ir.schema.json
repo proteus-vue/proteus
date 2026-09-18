@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proteus.dev/schemas/component-ir.json",
+  "title": "Proteus Component IR (C-IR)",
+  "description": "组件在编译期标准化后的中间表示，由各端 Render Backend 消费",
+  "type": "object",
+  "required": ["tag", "semantic", "props", "children"],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "description": "组件标签名（如 p-grid），仅用于源码定位，不参与后端映射",
+      "pattern": "^p-[a-z0-9-]+$"
+    },
+    "semantic": {
+      "type": "string",
+      "description": "语义类型（后端映射依据），格式：<domain>.<kind>",
+      "enum": [
+        "layout.box",
+        "layout.stack",
+        "layout.grid",
+        "layout.fluid",
+        "layout.adaptive",
+        "layout.fit",
+        "ui.text",
+        "ui.button",
+        "ui.image",
+        "ui.input",
+        "ui.list",
+        "ui.nav",
+        "capability.scan-qr",
+        "capability.pick-photo",
+        "capability.location"
+      ]
+    },
+    "props": {
+      "type": "object",
+      "description": "已校验的约束属性（不是平台样式指令）",
+      "additionalProperties": true
+    },
+    "children": {
+      "type": "array",
+      "items": { "$ref": "#" },
+      "default": []
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "引用的原生能力（G-28）",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "degradation": {
+      "type": "object",
+      "description": "降级声明（G-31.2 / G-30.4）",
+      "required": ["default"],
+      "properties": {
+        "default": { "type": ["string", "object"] },
+        "tiers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "tag": "p-grid",
+      "semantic": "layout.grid",
+      "props": { "minColWidth": 160, "maxCols": 4, "gap": 12 },
+      "children": [],
+      "capabilities": [],
+      "degradation": {
+        "default": "p-stack",
+        "tiers": { "3": "p-stack(direction=vertical)" }
+      }
+    }
+  ]
+}

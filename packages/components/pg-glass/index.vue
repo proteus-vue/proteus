@@ -1,0 +1,132 @@
+<template>
+  <div
+    class="pg-glass"
+    :class="classList"
+    :style="glassStyle"
+  >
+    <!-- ★#389 定位上下文归内层：根元素不写 position（消费方自由 sticky/absolute），noise/highlight 相对 __in 定位 -->
+    <div class="pg-glass__in">
+      <span v-if="showNoise" class="pg-glass__noise" aria-hidden="true" />
+      <span v-if="showBorder" class="pg-glass__highlight" aria-hidden="true" />
+      <slot />
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+// src/components/pg-glass/index.vue —— ★G-07 液态玻璃统一入口（B1 · Web/Skyline L1+L2 映射，规格：glass-plan/02+07+09）
+// 单入口铁律：业务只写 <pg-glass>，禁止平台分支/裸 backdrop-filter 散落页面（GLS001-006 + CSS017）
+// ★B1 收口：preset 表 / props 归一 / 三级降级决策全部下沉 @proteus-vue/glass（纯逻辑 SSOT，零依赖）——
+//   本组件只做「探测运行时环境 → resolveGlassLevel → 渲染」，不再内联硬编码表（消除多端解释分歧）
+// L1 必达：blur + tint + radius + border 全端一致；降级不崩溃：prefers-reduced-transparency / 无 backdrop-filter → 实色
+import { computed, onMounted, ref } from 'vue'
+import { resolveGlass, resolveGlassLevel, glassStyleFor, glassClassList } from '@proteus-vue/glass'
+
+const props = defineProps({
+  /** 预设（09-presets：navigationBar/tabBar/modal/card/floating/sidebar/custom） */
+  preset: { type: String, default: 'custom' },
+  /** 强度：none/thin/regular/thick/ultra 或自定义缩放数字（缺省 = 用 preset 档位） */
+  intensity: { type: [String, Number], default: undefined },
+  /** 着色（覆盖预设 tint） */
+  tint: { type: String, default: '' },
+  /** 圆角 px（覆盖预设） */
+  radius: { type: Number, default: 0 },
+  /** 是否高光边（L2；缺省 = 用 preset 值） */
+  border: { type: Boolean, default: undefined },
+  /** 噪点强度 0-1（L2；0 = 关闭；缺省 = 用 preset 值） */
+  noise: { type: Number, default: undefined },
+  /** 降级策略：solid（半透明实色）/ flat（无背景仅边框） */
+  fallback: { type: String, default: 'solid' },
+})
+
+// ★无障碍优先：prefers-reduced-transparency 自动关玻璃（降级实色——铁律 4）
+// ★MP 安全：逻辑层无 matchMedia/CSS.supports → 恒「支持」不降级；探测走 globalThis 而非裸 window（components:audit no-platform-api）
+const reducedTransparency = ref(false)
+const supportsBackdrop = ref(true)
+// ★MP 编译安全：函数体内回调提为函数声明（p-sidebar 同款，不用箭头参数标注）
+function onMediaChange(e: { matches: boolean }): void {
+  reducedTransparency.value = e.matches
+}
+onMounted(() => {
+  // ★探测表达式内联在函数体内（对齐 p-safe：顶层 const + 多行 as 类型会被编译器当响应式 data 误处理）
+  const g = globalThis as {
+    CSS?: { supports?: (prop: string, value: string) => boolean }
+    matchMedia?: (q: string) => { matches: boolean; addEventListener?: (t: string, cb: (e: { matches: boolean }) => void) => void }
+  }
+  // ★MP 编译安全：所有写 ref 的分支必须带花括号——单语句 if 会让编译器把 computed 派生重算注入成 `...,;` 非法 token
+  if (g.CSS && typeof g.CSS.supports === 'function') {
+    supportsBackdrop.value = g.CSS.supports('backdrop-filter', 'blur(1px)')
+  }
+  // components-allow-platform: 无障碍偏好探测（Web）；MP 无 matchMedia → 恒不降级（默认支持玻璃）
+  const mm = g.matchMedia ? g.matchMedia('(prefers-reduced-transparency: reduce)') : undefined
+  if (mm) {
+    reducedTransparency.value = mm.matches
+    if (mm.addEventListener) {
+      mm.addEventListener('change', onMediaChange)
+    }
+  }
+})
+
+const resolved = computed(() =>
+  resolveGlass({
+    preset: props.preset as never,
+    intensity: props.intensity as never,
+    tint: props.tint,
+    radius: props.radius,
+    border: props.border,
+    noise: props.noise,
+    fallback: props.fallback as never,
+  }),
+)
+
+const level = computed(() =>
+  resolveGlassLevel({
+    platform: 'web',
+    backdropFilter: supportsBackdrop.value,
+    reducedTransparency: reducedTransparency.value,
+  }),
+)
+
+const glassStyle = computed(() => {
+  const style = glassStyleFor(resolved.value, level.value)
+  // 噪点强度经 CSS 变量下传（仅 decoration 层用）
+  style['--pg-noise-opacity'] = String(resolved.value.noise)
+  return style
+})
+
+const classList = computed(() =>
+  glassClassList(resolved.value, level.value).concat(reducedTransparency.value ? ['pg-glass--reduced'] : []),
+)
+
+const showNoise = computed(() => resolved.value.noise > 0 && level.value !== 'solid' && !reducedTransparency.value)
+const showBorder = computed(() => resolved.value.border && level.value !== 'solid' && level.value !== 'flat' && !reducedTransparency.value)
+</script>
+
+<style scoped>
+/* ★#389 根元素不设 position/display——定位与布局归消费方；定位上下文归 __in（noise/highlight 锚点） */
+.pg-glass__in { position: relative; }
+@supports not (backdrop-filter: blur(1px)) {
+  .pg-glass { background: #121216; }
+}
+.pg-glass__noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--pg-noise-opacity, 0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+.pg-glass__highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+}
+.pg-glass--border { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
+.pg-glass--border-bottom { box-shadow: inset 0 -0.5px 0 0 rgba(255, 255, 255, 0.18); }
+.pg-glass--border-top { box-shadow: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.18); }
+.pg-glass--border-right { box-shadow: inset -0.5px 0 0 0 rgba(255, 255, 255, 0.18); }
+.pg-glass--solid, .pg-glass--flat { box-shadow: none; }
+</style>

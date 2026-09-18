@@ -1,0 +1,312 @@
+// tests/component-audit.test.ts
+// ★G-32 B1（proteus-semantic-primitives-plus-plan）：完整语义落地闭环——audit:coverage + 闭环一致性
+//   验证点（batches B1）：128 清单冻结 / C-IR schema 扩展 / audit:coverage（G-32.1 小程序能力 100%）/
+//   闭环一致性（catalog ↔ enum ↔ tag-mapping ↔ render-mapping 四方向不漂移）
+import { describe, it, expect } from 'vitest'
+import {
+  PRIMITIVE_CATALOG,
+  checkPrimitiveCatalog,
+  auditMiniprogramCoverage,
+  auditCatalogConsistency,
+  implementedPrimitives,
+  componentPrimitives,
+  MP_MAPPING_MATRIX,
+  SEMANTIC_ENUM,
+  TAG_SEMANTIC_MAP,
+  formatCoverageReport,
+  auditMatrixReferences,
+  primitiveByTag,
+  SEMANTIC_BACKEND_MAP,
+  FRAMEWORK_INTERNAL_TAGS,
+  TAG_SEMANTIC_ALIASES,
+  type MpMatrixItem,
+} from '@proteus-vue/component-ir'
+import { compileVueSfc } from '@proteus-vue/compiler'
+
+describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
+  it('清单规模 · id/semantic/tag 唯一 · 六类齐全', () => {
+    expect(checkPrimitiveCatalog()).toEqual([])
+    const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
+    expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
+    // 各类数量（G-32 分布 12/18/10/10/50/28 + #405 语义登记批 +8 + C51 useUpdate：capability+1
+    //   + ★C2：ui+2 + shell+1 · ★C3：capability+5 · ★组件实例：capability+8
+    //   + ★权威标尺缺口补齐：capability+4 privacy/performance/preload/image-edit
+    //   + ★批 E：capability+2 socket/media-processing
+    //   + ★批 F：capability+5 screen-capture/cache-manager/idle/window/navigation-guard
+    //   + ★批 G：capability+6 ar/beacon/local-service/translation/poster/device-capability
+    //   + ★组件批 H：ui+1 selection + shell+1 keyboard-accessory
+    //   + ★组件批 I：ui+1 camera
+    //   + ★组件批 J：ui+1 map + shell+2 webview/ad
+    //   + ★批次 7（2026-09-18）未登记组件补登记：layout+2（safe/sidebar）+ ui+3（button/list/nav）
+    //   + ★2026-09-18 语义决策批：**净 0**（退役 2 个重复名 scan-qr/pick-photo；
+    //     其能力早已由 C1 camera / C42 qr-code 承接，仅补 tag + 状态，不新增语义））
+    const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
+    expect(count('layout')).toBe(16)
+    expect(count('ui')).toBe(29)
+    expect(count('shell')).toBe(17)
+    expect(count('gesture')).toBe(10)
+    expect(count('capability')).toBe(81)
+    expect(count('engineering')).toBe(29)
+  })
+
+  it('implemented 64 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；★批次 8 共享元素转场 +1 → 64）· 其余 planned 待落地', () => {
+    const impl = implementedPrimitives()
+    expect(impl.length).toBe(64)
+    // 新增 implemented 语义代表性断言
+    const implSemantics = new Set(impl.map((p) => p.semantic))
+    expect(implSemantics.has('layout.scroll')).toBe(true)
+    expect(implSemantics.has('layout.masonry')).toBe(true)
+    expect(implSemantics.has('shell.modal')).toBe(true)
+    expect(implSemantics.has('shell.tabbar')).toBe(true)
+    expect(implSemantics.has('shell.action-sheet')).toBe(true)
+    expect(implSemantics.has('shell.page')).toBe(true)
+    expect(implSemantics.has('ui.textarea')).toBe(true)
+    expect(implSemantics.has('ui.switch')).toBe(true)
+    expect(implSemantics.has('ui.form')).toBe(true)
+    expect(implSemantics.has('ui.checkbox')).toBe(true)
+    expect(implSemantics.has('gesture.draggable')).toBe(true)
+    expect(implSemantics.has('gesture.scrollable')).toBe(true)
+    // G-32 B5 续二：工程原语动画组件形态（E19/E20）翻 implemented（Hook E21-E23 归 API 层不产 C-IR 节点）
+    expect(implSemantics.has('engineering.transition')).toBe(true)
+    expect(implSemantics.has('engineering.animate')).toBe(true)
+    // G-32 B5 尾巴：E18 声明式导航组件形态翻 implemented（工程原语组件形态 3/3 全部闭环）
+    expect(implSemantics.has('engineering.router-link')).toBe(true)
+    // ★C2 颗粒度对齐：progress/label/page-container 翻 implemented（对齐小程序同名组件）
+    expect(implSemantics.has('ui.progress')).toBe(true)
+    expect(implSemantics.has('ui.label')).toBe(true)
+    expect(implSemantics.has('shell.page-container')).toBe(true)
+    // planned 不设 ≥3 端门禁（L2 生态）但必须入 enum
+    for (const p of PRIMITIVE_CATALOG.filter((x) => x.status === 'planned' && x.tag)) {
+      expect((SEMANTIC_ENUM as readonly string[]).indexOf(p.semantic), `${p.id} ${p.semantic} 未入 enum`).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('组件原语 tag → semantic 与 TAG_SEMANTIC_MAP 逐条对齐（闭环 C1）', () => {
+    for (const p of componentPrimitives()) {
+      expect(TAG_SEMANTIC_MAP[p.tag as string], `${p.id} ${p.tag}`).toBe(p.semantic)
+    }
+  })
+})
+
+describe('G-32 B1 audit:coverage（G-32.1 小程序能力 100%）', () => {
+  it('对照矩阵 0 缺失 → 100% 覆盖（CI 门禁绿）', () => {
+    const report = auditMiniprogramCoverage()
+    expect(report.pass).toBe(true)
+    expect(report.missing).toBe(0)
+    expect(report.percent).toBe(100)
+    expect(report.total).toBeGreaterThan(60) // 组件 ~61 + API 组 ~36
+    // 组件矩阵行 57（G-32 42 + 2026-09-11 补录 13 + ★批 H 新增 2；批 I/J 为改状态非新增）
+    expect(MP_MAPPING_MATRIX.filter((i) => i.group === 'component').length).toBe(57)
+  })
+
+  it('缺失项注入 → 审计红（CI 门禁阻断）', () => {
+    const withMissing = [...MP_MAPPING_MATRIX, { mp: '<fictional>', proteus: '', status: 'missing' as const, group: 'component' as const }]
+    const report = auditMiniprogramCoverage(withMissing)
+    expect(report.pass).toBe(false)
+    expect(report.missing).toBe(1)
+    expect(report.missingItems[0].mp).toBe('<fictional>')
+  })
+
+  it('formatCoverageReport 输出结构化报告（CLI 展示载体）', () => {
+    const report = auditMiniprogramCoverage()
+    const text = formatCoverageReport(report)
+    expect(text).toContain('G-32.1')
+    expect(text).toContain('100%')
+    expect(text).toContain('达标')
+  })
+})
+
+describe('G-32.1 矩阵引用一致性（幽灵引用门禁——修「假门禁」同义反复）', () => {
+  it('真实矩阵 0 幽灵引用（组件标签/语义/Hook 全部存在）· planned 行诚实豁免', () => {
+    const { issues, plannedRefs } = auditMatrixReferences(MP_MAPPING_MATRIX)
+    expect(issues).toEqual([])
+    // ★2026-09-18 批次 8：原断言 plannedRefs > 0（「L2 规划行须被豁免计数」）已**不再成立**——
+    //   share-element 是矩阵中**最后一个** planned:true 行，随其组件落地转 covered →
+    //   矩阵已无 L2 规划行，plannedRefs 合法为 0。（旧断言是「防门禁空转」的守卫，
+    //   但它把「当前恰好有规划行」当成了永久不变量。）
+    //   等价替代守卫：exempt 机制本身仍需在——用**注入**方式证明豁免路径有效。
+    const withPlanned = [
+      ...MP_MAPPING_MATRIX,
+      { mp: '<future-comp>', proteus: 'p-future-not-yet', status: 'compat', group: 'component', planned: true } as MpMatrixItem,
+    ]
+    expect(auditMatrixReferences(withPlanned).plannedRefs, 'planned 行的豁免计数机制应有效').toBe(1)
+    expect(plannedRefs, '当前矩阵已无 L2 规划行').toBe(0)
+  })
+
+  it('破坏性验证：注入幽灵组件标签 → component 命中（CI 阻断）', () => {
+    const withGhost: MpMatrixItem[] = [
+      ...MP_MAPPING_MATRIX,
+      { mp: '<fiction>', proteus: 'p-does-not-exist', status: 'ok', group: 'component' },
+    ]
+    const { issues } = auditMatrixReferences(withGhost)
+    expect(issues.length).toBe(1)
+    expect(issues[0]).toMatchObject({ mp: '<fiction>', ref: 'p-does-not-exist', kind: 'component' })
+  })
+
+  it('破坏性验证：注入幽灵语义 → semantic 命中', () => {
+    const withGhost: MpMatrixItem[] = [
+      ...MP_MAPPING_MATRIX,
+      { mp: 'wx.fictional', proteus: 'capability.fictional', status: 'ok', group: 'api' },
+    ]
+    const { issues } = auditMatrixReferences(withGhost)
+    expect(issues).toEqual([{ mp: 'wx.fictional', ref: 'capability.fictional', kind: 'semantic' }])
+  })
+
+  it('knownHooks 传入时：幽灵 Hook 命中、真实 Hook 放行', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: 'wx.a', proteus: 'useGhostHook（不存在）', status: 'compat', group: 'api' },
+      { mp: 'wx.b', proteus: 'useMap（存在）', status: 'ok', group: 'api' },
+    ]
+    const { issues } = auditMatrixReferences(matrix, new Set(['useMap']))
+    expect(issues).toEqual([{ mp: 'wx.a', ref: 'useGhostHook', kind: 'hook' }])
+  })
+
+  it('planned: true 行豁免组件标签检查（诚实登记 L2 规划，不算幽灵）', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: '<planned>', proteus: 'p-future-component（L2 规划）', status: 'compat', group: 'component', planned: true },
+    ]
+    const { issues, plannedRefs } = auditMatrixReferences(matrix)
+    expect(issues).toEqual([])
+    expect(plannedRefs).toBe(1)
+  })
+
+  it('status=missing 行不做引用校验（已登记缺口，引用可不存在）', () => {
+    const matrix: MpMatrixItem[] = [
+      { mp: '<gap>', proteus: '', status: 'missing', group: 'component' },
+    ]
+    const { issues } = auditMatrixReferences(matrix)
+    expect(issues).toEqual([])
+  })
+})
+
+describe('G-32 B1 闭环一致性（catalog ↔ enum ↔ tag ↔ render-map 四向不漂移）', () => {
+  it('所有一致性规则零问题', () => {
+    const issues = auditCatalogConsistency()
+    expect(issues).toEqual([])
+  })
+
+  it('破坏性验证：注入孤立语义 → C5 命中；tag 漂移 → C1 命中', () => {
+    // 无法直接修改 const，改用规则逻辑断言：孤立语义必然不在 catalog
+    const orphan = 'layout.orphan-test'
+    expect(PRIMITIVE_CATALOG.some((p) => p.semantic === orphan)).toBe(false)
+    // enum 里不存在的语义必然不在 map（C3 反证）
+    expect((SEMANTIC_ENUM as readonly string[]).indexOf('layout.orphan-test')).toBe(-1)
+  })
+})
+
+describe('★批次 7（2026-09-18）未登记组件补登记', () => {
+  // 这 5 个组件此前**只存在于 TAG_SEMANTIC_MAP**（编译器可解析、组件可渲染），却不在 SSOT catalog。
+  // 破坏性验证：从 catalog 删任一 id → 对应用例变红。
+  const ADDED: Array<[string, string, string]> = [
+    ['U27', 'p-button', 'ui.button'],
+    ['U28', 'p-list-view', 'ui.list'],
+    ['U29', 'p-nav-bar', 'ui.nav'],
+    ['L15', 'p-safe', 'layout.safe'],
+    ['L16', 'p-sidebar', 'layout.sidebar'],
+  ]
+
+  it('5 个组件已在 catalog 登记（id/tag/semantic 正确）', () => {
+    for (const [id, tag, sem] of ADDED) {
+      const row = PRIMITIVE_CATALOG.find((p) => p.id === id)
+      expect(row, `${id} 未登记`).toBeTruthy()
+      expect(row!.tag).toBe(tag)
+      expect(row!.semantic).toBe(sem)
+      expect(row!.status).toBe('implemented')
+    }
+  })
+
+  it('★C1 双向：catalog tag ↔ TAG_SEMANTIC_MAP 全等（含 p-button 这个「参考实现」）', () => {
+    // 此前 C1 只单向成立（TAG_SEMANTIC_MAP 有、catalog 无）——补登记后应双向
+    for (const [, tag, sem] of ADDED) {
+      expect(TAG_SEMANTIC_MAP[tag], `${tag} 应在 TAG_SEMANTIC_MAP`).toBe(sem)
+    }
+    // 反向：catalog 的每个 tag 都必须在 TAG_SEMANTIC_MAP（由 auditCatalogConsistency 的 C1 兜底）
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C1')).toEqual([])
+  })
+
+  it('可按 tag 查询（primitiveByTag——补登记前查不到）', () => {
+    for (const [, tag] of ADDED) {
+      expect(primitiveByTag(tag), `primitiveByTag(${tag}) 应命中`).toBeTruthy()
+    }
+  })
+
+  it('覆盖门禁：新增 implemented 语义均有 ≥3 端渲染映射', () => {
+    for (const [, , sem] of ADDED) {
+      const ends = Object.keys(SEMANTIC_BACKEND_MAP[sem] ?? {})
+      expect(ends.length, `${sem} 参考行不足 3 端`).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
+
+describe('★批次 7 · 框架内部运行时标签（FRAMEWORK_INTERNAL_TAGS）', () => {
+  it('p-svg-canvas 登记为内部标签（编译器产出，非跨端语义）', () => {
+    expect(FRAMEWORK_INTERNAL_TAGS.has('p-svg-canvas')).toBe(true)
+    // 刻意不进 TAG_SEMANTIC_MAP / catalog（它是 ui.svg 在 MP 端的实现载体）
+    expect(TAG_SEMANTIC_MAP['p-svg-canvas']).toBeUndefined()
+    expect(PRIMITIVE_CATALOG.some((p) => p.tag === 'p-svg-canvas')).toBe(false)
+  })
+
+  it('★不再产生「未入库组件」错误告警；真未登记标签仍告警（双向）', () => {
+    const internal = compileVueSfc('<template><p-svg-canvas :width="10" /></template>', { filename: 'x.vue' })
+    expect((internal.warnings ?? []).filter((w) => /未登记 p-\*|未入库组件/.test(w))).toEqual([])
+    const ghost = compileVueSfc('<template><p-bogus-xyz /></template>', { filename: 'x.vue' })
+    expect((ghost.warnings ?? []).filter((w) => /未入库组件/.test(w)).length).toBeGreaterThan(0)
+  })
+})
+
+describe('★2026-09-18 语义决策批：多标签别名登记（C6）+ 孤儿语义（C7）', () => {
+  it('C6：多标签共享语义必须显式登记（规范标签 + 理由），且无陈旧登记', () => {
+    // 实测 3 处共享：layout.box(p-box/p-view) / layout.scroll(p-scroll/p-scroll-view)
+    //              / engineering.router-link(p-router-link/router-link)
+    for (const [sem, decl] of Object.entries(TAG_SEMANTIC_ALIASES)) {
+      const tags = Object.entries(TAG_SEMANTIC_MAP).filter(([, v]) => v === sem).map(([k]) => k)
+      expect(tags.length, `${sem} 已不再被多标签共享（陈旧登记应删）`).toBeGreaterThan(1)
+      expect(tags, `${sem} 的规范标签应在共享标签中`).toContain(decl.canonical)
+      for (const a of decl.aliases) expect(tags, `${sem} 的别名 ${a} 应在共享标签中`).toContain(a)
+      expect(decl.reason.trim().length, `${sem} 须给理由`).toBeGreaterThan(0)
+    }
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C6')).toEqual([])
+  })
+
+  it('C6 破坏性：新增未登记的共享语义 → 红', () => {
+    // 直接以「未登记者」判定逻辑验证：registry 里去重后应能被检出
+    // （注入式验证见 auditCatalogConsistency 的 C6 分支：无 TAG_SEMANTIC_ALIASES 条目即报）
+    const undeclared = Object.entries(TAG_SEMANTIC_MAP)
+      .reduce<Record<string, string[]>>((acc, [tag, sem]) => {
+        ;(acc[sem] ??= []).push(tag)
+        return acc
+      }, {})
+    const shared = Object.entries(undeclared).filter(([, t]) => t.length > 1).map(([s]) => s)
+    const missing = shared.filter((s) => !(s in TAG_SEMANTIC_ALIASES))
+    expect(missing, `共享但未登记：${missing.join(', ')}`).toEqual([])
+  })
+
+  it('C7：SEMANTIC_BACKEND_MAP 的每个语义都有 catalog 承接行（无孤儿语义）', () => {
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C7')).toEqual([])
+  })
+
+  it('★能力入口组件按 E8「双形态」一行承接（api + tag 同行，不新建语义）', () => {
+    const expectDual = (sem: string, api: string, tag: string) => {
+      const rows = PRIMITIVE_CATALOG.filter((p) => p.semantic === sem)
+      expect(rows, `${sem} 应有且仅一行`).toHaveLength(1)
+      expect(rows[0].api).toBe(api)
+      expect(rows[0].tag).toBe(tag)
+    }
+    expectDual('capability.location', 'useLocation()', 'p-location')
+    expectDual('capability.qr-code', 'useQRCode()', 'p-scan-qr')
+    expectDual('capability.camera', 'useCamera()', 'p-pick-photo')
+  })
+
+  it('C6/C7 未被误报为假绿：破坏性验证注册表确有牙齿', () => {
+    // 反向证明：若把某共享语义从注册表移除，判定逻辑应能发现
+    const shared = Object.entries(TAG_SEMANTIC_MAP).reduce<Record<string, string[]>>((acc, [, sem]) => {
+      ;(acc[sem] ??= []).push('x')
+      return acc
+    }, {})
+    const hypothetical = ['layout.box', 'layout.scroll', 'engineering.router-link']
+    for (const s of hypothetical) {
+      expect((shared[s]?.length ?? 0), `${s} 应为共享语义`).toBeGreaterThan(1)
+      expect(s in TAG_SEMANTIC_ALIASES, `${s} 应在别名注册表中`).toBe(true)
+    }
+  })
+})

@@ -1,0 +1,112 @@
+// src/components/runtime/capability.ts —— 组件层平台能力探测（组件库落地评估 v2 §4）
+// 组件代码不得直接 if (typeof wx !== 'undefined')，必须查询 capability（对齐 Draft v1 02-platform-capability.md）
+// 修正：不全局注入（$capability），组件内直接 import 本模块；探测惰性单例（首次调用求值，测试可先 stub 再调）
+// ★MP 产物安全（决策 #32/#36）：无 ?? / ?. / 对象展开 / 数组解构（共享模块 B0 机制编译进 MP 产物）
+// ★Skyline 线收口（2026-09-11）：运行时/渲染器判定改由 @proteus-vue/shared 的 SSOT 提供
+//   （detectRuntime/detectMpRenderer）——修「web 上 wx 模拟层致误判小程序」+ 新增 renderer 维度
+//   + worklet-animation 接 @proteus-vue/worklet 真实能力（不再恒 false）
+import { detectRuntime, detectMpRenderer } from '@proteus-vue/shared'
+import type { MpRenderer } from '@proteus-vue/shared'
+import { hasWorklet } from '@proteus-vue/worklet'
+
+/** 当前渲染后端：web=浏览器/SSR；skyline=微信小程序运行时（Skyline/WebView 渲染器差异归能力表）；app=v0.6 自定义渲染器占位 */
+export type PlatformBackend = 'web' | 'skyline' | 'app'
+
+/** 能力名：组件层关心的跨端能力（新增能力按 02-platform-capability.md §5 流程：加字段 + 探测 + 矩阵标注 + 单测） */
+export type CapabilityName =
+  | 'worklet-animation' // applyAnimatedStyle（当前未实现 → 恒 false，弹层走 CSS transition）
+  | 'recycle-manager'   // Skyline 长列表回收（当前未实现 → 恒 false，list-view 用 JS 切片）
+  | 'native-toast'      // wx.showToast 原生反馈
+  | 'webp'              // 图片 webp 格式
+  | 'passive-event'     // Web 被动事件监听
+
+export interface PlatformCapability {
+  backend: PlatformBackend
+  /** ★Skyline 线收口：渲染器维度（mp 时 skyline/webview；web 时 null）——组件据此分流降级 */
+  renderer: MpRenderer | null
+  /** 同步能力查询（启动期确定，setup() 求值一次缓存） */
+  has(name: CapabilityName): boolean
+  /** 异步探测（基础库版本 / 运行时特性），失败兜底默认值 */
+  detect(name: CapabilityName): Promise<boolean>
+}
+
+/** 降级告警（铁律 C6：⚠️/❌ 能力必须显式 warn，禁止静默失效） */
+export function capabilityWarn(tag: string, feature: string, fallback: string): void {
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn('[Proteus][' + tag + '] ' + feature + ' 不可用，已降级：' + fallback)
+  }
+}
+
+/** 降级告警（同 key 只 warn 一次，弹层等可能高频触发的组件防刷屏；B7） */
+const warnedKeys: Record<string, boolean> = {}
+export function capabilityWarnOnce(tag: string, feature: string, fallback: string): void {
+  const key = tag + ':' + feature
+  if (warnedKeys[key]) return
+  warnedKeys[key] = true
+  capabilityWarn(tag, feature, fallback)
+}
+
+/** 检测运行时后端（★SSOT：shared.detectRuntime，含 window 前置守卫——web 上 wx 模拟层不误判） */
+function detectBackend(): PlatformBackend {
+  return detectRuntime() === 'mp' ? 'skyline' : 'web'
+}
+
+/** wx 取值（不裸引用全局——globalThis 取值，MP 产物安全；★无 ?.——本文件约定） */
+function wxApi(): { showToast?: unknown } | null {
+  const g = globalThis as { wx?: { showToast?: unknown } }
+  return g.wx && typeof g.wx === 'object' ? g.wx : null
+}
+
+/** wx.showToast 是否存在 */
+function hasWxToast(): boolean {
+  const w = wxApi()
+  return w !== null && typeof w.showToast === 'function'
+}
+
+const DYNAMIC_CAPABILITIES = new Set(['webp', 'native-toast'])
+
+function syncHas(backend: PlatformBackend, name: CapabilityName): boolean {
+  switch (name) {
+    case 'worklet-animation':
+      // ★Skyline 线收口：真实判断（真·小程序 + Skyline 渲染器 + wx.worklet 存在）；WebView 无 worklet
+      return hasWorklet()
+    case 'recycle-manager':
+      return false // Skyline recycleManager 未接入，list-view 用 JS 切片
+    case 'native-toast':
+      return backend === 'skyline' && hasWxToast()
+    case 'webp':
+      return true // 现代浏览器/微信基础库默认支持；低版本由 detect 异步兜底
+    case 'passive-event':
+      return backend === 'web'
+    default:
+      return false
+  }
+}
+
+let cached: PlatformCapability | null = null
+
+/** 能力单例（惰性求值）：MP 端共享模块 require 缓存同路径同实例；Web 端 Vite 模块单例 */
+export function getCapability(): PlatformCapability {
+  if (cached) return cached
+  const backend = detectBackend()
+  const renderer: MpRenderer | null = backend === 'skyline' ? detectMpRenderer() : null
+  const capability: PlatformCapability = {
+    backend,
+    renderer,
+    has(name: CapabilityName) {
+      return syncHas(backend, name)
+    },
+    detect(name: CapabilityName) {
+      if (!DYNAMIC_CAPABILITIES.has(name)) return Promise.resolve(syncHas(backend, name))
+      // 异步探测（webp：Image decode / native-toast：wx 存在），失败兜底同步判定
+      return Promise.resolve(syncHas(backend, name))
+    },
+  }
+  cached = capability
+  return capability
+}
+
+/** 测试重置（vitest 环境切换 backend 用） */
+export function resetCapability(): void {
+  cached = null
+}

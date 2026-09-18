@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: test + build（拆包完成：全部 @proteus-vue/* 包独立构建）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖（--ignore-scripts：postinstall 构建移交显式步，避开 fresh 环境 install 期构建时序问题）
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 构建 workspace 包（cli/component-ir/desktop 等 dist——vue-tsc/tests 子路径解析需要）
+        run: node scripts/build-packages.mjs
+
+      - name: 类型检查（vue-tsc 全项目，含 packages/*）
+        run: npx vue-tsc --noEmit
+
+      - name: 示例工程类型检查（examples 独立 tsconfig，完整工程形态）
+        run: cd examples && npx vue-tsc --noEmit -p tsconfig.json
+
+      - name: 文档全端视角写作门禁（#487：双端世界观句式回归阻断——guides/framework zh+en）
+        run: node scripts/check-all-target-wording.mjs
+
+      - name: 全量 script 编译门禁（#497：examples+组件全部 .vue 一次整包编译 + js 语法校验——防 demo 逐个暴露编译器形态缺口）
+        run: node scripts/check-script-compile.mjs
+
+      - name: 单元测试（router / router-plan / gen-routes / plugin / runtime / compiler / golden / pinia）
+        run: pnpm test
+
+      - name: 依赖声明完整性审计（#422：pnpm 严格解析——import vs package.json 零缺失）
+        run: node scripts/check-deps.mjs
+
+      - name: stores 铁律门禁（M8.4：禁平台分支/直连存储）
+        run: |
+          if grep -rEn "wx\.setStorage|localStorage\.setItem|sessionStorage|if.*process\.env" examples/stores/ 2>/dev/null; then
+            echo "::error::stores/ 违规：禁止平台分支与直连存储（见 docs/pinia-stores-conventions.md）"
+            exit 1
+          fi
+          echo "stores 纯净性 OK（注册表完整性由 vue-tsc + stores-registry.types.ts 校验）"
+
+      - name: 能力体系门禁（platform-plan B5 平台规范硬卡 + B3 编译期分叉缺失报告）
+        run: |
+          npx tsx packages/cli/src/index.ts capabilities:check examples
+          npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform skyline
+          npx tsx packages/cli/src/index.ts capabilities:manifest examples --platform web
+
+      - name: 组件库审计门禁（B8：no-platform-api / no-sync-storage / manifest-complete）
+        # ★组件库拆包（2026-09-14）：组件由 src/components 迁至 packages/components（第 41 包）——
+        #   此处路径必须同步，否则审计在空目录上运行（0 组件 + manifest-complete 违规）→ 假红。
+        run: npx tsx packages/cli/src/index.ts components:audit packages/components
+
+      - name: 官方能力覆盖门禁（★权威标尺：官方清单 spec 驱动 + 棘轮——未归类/覆盖回退即红）
+        run: |
+          node scripts/gen-mp-spec.mjs --check
+          npx tsx packages/cli/src/index.ts audit coverage
+
+      - name: 端对齐属性棘轮门禁（★主标尺：官方属性级覆盖不得回退——只增不减）
+        # ★2026-09-18 补接线：此前该门禁**只在本地 `pnpm verify` 链**、不在 CI →
+        #   属性覆盖回退（本会话全部工作围绕的 310/310）可以推上去而 CI 不拦。
+        #   依赖官方文档页（需出网）；离线时脚本诚实跳过并告警，不误红（见 gen-mp-component-attrs.mjs --check）。
+        run: |
+          node scripts/gen-mp-component-attrs.mjs --check
+          node scripts/audit-component-attrs.mjs
+
+      - name: 官网目录数据门禁（catalog 快照幂等 + route 无死链 —— 防「可点击但页面不存在」）
+        run: node scripts/gen-showcase-catalog.mjs --check
+
+      - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
+        run: node scripts/check-package-health.js
+
+      - name: 属性降级声明门禁（批次 4 M6 · EA-5：全组件属性三态无空白格 + fallback 可观察 + 与官方清单交叉核对）
+        run: node scripts/audit-degradation.mjs
+
+      - name: 跨层一致性门禁（铁律 scope 统一 + G 表一致 + 包注册表对照）
+        run: node scripts/check-consistency.js
+
+      - name: 门禁通道一致性（★2026-09-18：防「CI 与 verify 两套门禁各自不完整」再度发生）
+        run: node scripts/check-gates-sync.mjs
+
+      - name: 原语清单生成物漂移门禁（★批次 7：gen:docs 此前从未接线，catalog.md 静默过期多批）
+        run: npx tsx scripts/gen-docs.ts --check
+
+      - name: 国际化消息审计（i18n-plan B2：缺失 key 阻断）
+        run: npx tsx packages/cli/src/index.ts i18n:check examples --catalog examples/locales/zh-CN.json
+
+      - name: 类型单一来源门禁（types-plan B7：generate types --check 防 schema 漂移）
+        run: |
+          npx tsx packages/cli/src/index.ts generate types
+          npx tsx packages/cli/src/index.ts generate types --check
+          npx tsx packages/cli/src/index.ts config:check examples/proteus.config.ts
+
+      - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
+        run: pnpm run build:mp
+
+      - name: Web 构建（示例工程）
+        run: pnpm run build:web
+
+      - name: 全部 @proteus-vue/* 包独立构建（compiler/router/runtime/shared/plugin-vite/cli/@proteus-vue/create-proteus → dist）
+        run: pnpm -r build
+
+      - name: 性能基准回归门禁（G-30：功能基准 >1.5x 基线阻断 / >1.2x 警告）
+        run: pnpm run bench
+
+      - name: 模板快照一致性（快照后 git 无差异 → 模板与主仓同步）
+        run: |
+          npx tsx scripts/snapshot-template.ts
+          git diff --exit-code -- packages/create-proteus/templates
+
+  website-docs:
+    name: 官网文档门禁（G-60 文档即契约：WIT 漂移阻断 + 生成器幂等）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 构建 workspace 包（官网 import @proteus-vue/* 走 dist）
+        run: node scripts/build-packages.mjs
+
+      - name: SPEC_LINT + 生成物漂移门禁（WIT SSOT 不一致即阻断）
+        run: cd website && pnpm run check:plugin-docs
+
+      - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
+        run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content
+
+      - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
+        run: cd website && pnpm run check:primitives
+
+      - name: 双语对齐门禁（★#493：EN overlay 与 zh 结构签名漂移阻断——章节/表格/围栏）
+        run: cd website && pnpm run check:en-drift
+
+      - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
+        run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts
+
+      - name: D-2 页面门禁（★#448：audit d2——官网=验证场零容忍）
+        run: npx tsx packages/cli/src/index.ts audit d2 website/src
+
+  e2e-web:
+    name: Web E2E（Playwright，需 Chromium）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: 构建 workspace 包（build:web 消费 @proteus-vue/* 的 dist——fresh 环境必需）
+        run: node scripts/build-packages.mjs
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
+        run: pnpm run test:e2e:web

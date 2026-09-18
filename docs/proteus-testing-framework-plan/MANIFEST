@@ -1,0 +1,15 @@
+# G-44 文件清单（白名单打包）
+G-44-testing-framework.md
+test-ir.md
+test-backend-spi.md
+breakpoint-3d-testing.md
+ci-pipeline.md
+rules.md
+batches.md
+architecture-update.md
+testing-reference.js
+README.md
+MANIFEST
+CHECKSUM.md
+verify.sh
+pack.sh

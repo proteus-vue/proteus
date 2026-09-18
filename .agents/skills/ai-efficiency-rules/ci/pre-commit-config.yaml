@@ -1,0 +1,13 @@
+# 将本文件内容合并进 .pre-commit-config.yaml
+# 依赖：scripts/audit_efficiency.py 放在仓库 tools/ 下
+
+repos:
+  - repo: local
+    hooks:
+      - id: ai-efficiency-audit
+        name: AI Efficiency Audit (staged)
+        entry: python3 tools/audit_efficiency.py --staged --fail-on error
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        description: 检测固定 sleep、无超时请求、重复 clone 等低效模式

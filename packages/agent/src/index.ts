@@ -1,0 +1,25 @@
+// packages/agent/src/index.ts —— @proteus-vue/agent 公共入口（G-36 B2 Agent Kit SDK）
+export { AgentKit } from './agent'
+export type { AgentKitOptions, GeneratePageInput, GeneratedPage, LlmLike } from './agent'
+export { IRBuilder, IRBuilderError } from './ir-builder'
+export type { IRNodeSpec, IRBuilderNode, DeviceAdaptation, BuiltPage } from './ir-builder'
+export { generateCode } from './codegen'
+export type { CodeFormat } from './codegen'
+export { withProteusRules } from './rules'
+export type { SystemRule } from './rules'
+export { intentToFlex, matchBlocks } from './skills/intent-to-flex'
+export type { IntentToFlexInput, IntentToFlexResult } from './skills/intent-to-flex'
+export { migrateMiniprogram } from './skills/migrate-miniprogram'
+export type { MigrateMiniprogramInput, MigrateMiniprogramResult, MigrationLogEntry } from './skills/migrate-miniprogram'
+export { validateGuardrails, generateWithRetry, repairSource, detectBareColors, detectWxUsage, detectMpTags, enrichIntent } from './guardrails'
+export type {
+  GuardrailCategory,
+  GuardrailError,
+  GuardrailReport,
+  GuardrailsInput,
+  GuardrailsOptions,
+  RetryInput,
+  ConstructInput,
+  Constructor,
+  RetryResult,
+} from './guardrails'

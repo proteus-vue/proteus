@@ -1,0 +1,6 @@
+{
+  "common.confirm": "确认",
+  "user.greeting": "你好，{name}",
+  "cart.items": "{count, plural, one {1 件} other {# 件}}",
+  "dir.label": "文字方向"
+}

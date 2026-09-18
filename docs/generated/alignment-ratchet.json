@@ -1,0 +1,7 @@
+{
+ "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs 读取本文件校验（缺省阈值=coveredMin），勿手改；推进后跑 --update 回写。",
+ "attrCovered": 318,
+ "attrTotal": 318,
+ "coveredMin": 318,
+ "note": "2026-09-18 批次 8 收官——**官方属性级覆盖 318/318 = 100%**（35 个已映射组件全覆盖）。本批新增 p-share-element 8/8（官方 <share-element> 共享元素转场，engineering.share-element / E29）——官方清单中**最后一个组件级 planned 项**。★两处改名决策（02-ir-prop-binding「保留字冲突 → 加前缀或改写」）：官方 `key` → `shuttleKey`（Vue vnode 保留属性，组件收不到）、官方 `transform`（boolean「是否动画」）→ `animate`（与 <view> 的 CSS transform 字符串属性类型冲突，vue-tsc TS2322）；两者均在审计 SEMANTIC_ALIAS_BY_TAG 登记。上批（批次外收口）为 310/310：p-input 26/26 · p-form 2/2 · p-list-view 1/1。★棘轮语义提醒：分母随新组件属性增长（310→318），分子同步全覆盖——属**能力真实增长**。"
+}

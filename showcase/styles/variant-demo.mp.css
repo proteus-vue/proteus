@@ -1,0 +1,10 @@
+/* 平台变体·CSS：小程序实现（绿色系，圆角 8rpx 语感） */
+.variant-card {
+  display: block;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #e8f8ee;
+  color: #07c160;
+  font-size: 26rpx;
+  border: 1px solid #b7ebc9;
+}

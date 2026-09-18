@@ -1,0 +1,186 @@
+---
+title: p-draggable
+group: 手势
+order: 3001
+---
+
+# p-draggable
+
+Draggable element
+
+> Semantic component (Layer 0) · domain **Gestures** · compiled to each target's native controls at build time — zero platform branches in business code.
+
+| Semantic | Domain | Mini Program equivalent |
+|---|---|---|
+| gesture.draggable | Gestures | `<movable-view>` (L1 primitive) · `<double-tap-gesture>` (L1 primitive) |
+
+## Compat rollout
+
+| Target | Status | Notes |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · dual-source compile target for both targets (compile-time mapping + event normalization) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · native control mapping → `<movable-view>` (L1 primitive) · `<double-tap-gesture>` (L1 primitive) |
+| Headless (SSR / testing) | ✅ | headless · IR render test tier (tooling target) |
+| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — component-level wiring not started |
+| Android native | 🟡 | native-android (Jetpack) · prototype mapping — component-level wiring not started |
+| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — component-level wiring not started |
+| Flutter hybrid | 🟡 | flutter · widget-level mapping — component-level not yet verified |
+| Quick App | ⬜ | Quick App engine (TBD) · target not started |
+
+> Status scale: ✅ shipped & this component usable · 🟡 prototype mapping — component-level wiring not started · ⬜ target not started. Target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).
+
+## Props
+
+| Prop | Doc | Type | Default | Required |
+|---|---|---|---|---|
+| `direction` | — | `String` | `'none'` | No |
+| `inertia` | — | `Boolean` | `false` | No |
+| `outOfBounds` | — | `Boolean` | `false` | No |
+| `x` | — | `[Number, String]` | `0` | No |
+| `y` | — | `[Number, String]` | `0` | No |
+| `damping` | — | `Number` | `20` | No |
+| `friction` | — | `Number` | `2` | No |
+| `disabled` | — | `Boolean` | `false` | No |
+| `scaleEnabled` | — | `Boolean` | `false` | No |
+| `scaleMin` | — | `Number` | `0.1` | No |
+| `scaleMax` | — | `Number` | `10` | No |
+| `scaleValue` | — | `Number` | `1` | No |
+| `animation` | — | `Boolean` | `true` | No |
+| `scaleArea` | — | `Boolean` | `false` | No |
+| `ghost` | Drag ghost (semi-transparent, follows the pointer) | `Boolean` | `false` | No |
+| `snapToGrid` | Grid snap step in px (0 = free drag) | `Number` | `0` | No |
+
+### Prop details
+
+#### `direction`
+
+- **Type**: `String`　**Default**: `'none'`　**Required**: No
+- **Doc**: —
+
+#### `inertia`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `outOfBounds`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `x`
+
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `y`
+
+- **Type**: `[Number, String]`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `damping`
+
+- **Type**: `Number`　**Default**: `20`　**Required**: No
+- **Doc**: —
+
+#### `friction`
+
+- **Type**: `Number`　**Default**: `2`　**Required**: No
+- **Doc**: —
+
+#### `disabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scaleEnabled`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `scaleMin`
+
+- **Type**: `Number`　**Default**: `0.1`　**Required**: No
+- **Doc**: —
+
+#### `scaleMax`
+
+- **Type**: `Number`　**Default**: `10`　**Required**: No
+- **Doc**: —
+
+#### `scaleValue`
+
+- **Type**: `Number`　**Default**: `1`　**Required**: No
+- **Doc**: —
+
+#### `animation`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `scaleArea`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `ghost`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: Drag ghost (semi-transparent, follows the pointer)
+
+#### `snapToGrid`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: Grid snap step in px (0 = free drag)
+
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `change` | — | `d` |
+| `scale` | — | `normalizeDetail(e)` |
+| `drag` | Dragging (gesture.draggable) | `{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }` |
+| `drop` | Drag released | `{ x: dx.value, y: dy.value }` |
+
+### Event details
+
+#### `change`
+
+- **Doc**: —
+- **Payload**: `d`
+
+#### `scale`
+
+- **Doc**: —
+- **Payload**: `normalizeDetail(e)`
+
+#### `drag`
+
+- **Doc**: Dragging (gesture.draggable)
+- **Payload**: `{ x: (d as { x?: number }).x ?? 0, y: (d as { y?: number }).y ?? 0 }`
+
+#### `drop`
+
+- **Doc**: Drag released
+- **Payload**: `{ x: dx.value, y: dy.value }`
+
+## Slots
+
+| Slot | Doc |
+|---|---|
+| default | Default slot (main content) |
+
+## Implementation notes
+
+- Pan recognition based on useGesture (Web Pointer Events); ghost semi-transparent drag ghost + snapToGrid grid snapping + drag/drop emits
+- Same source for both ends: div → view; recognizer mapping for MP/native ends lands in a later batch (no gesture → element stays static)
+- ★MP safe: a top-level function call bound to a const (useGesture({...})) breaks when compiled to runtime initialization - the call is moved into onMounted (verified pattern)
+
+## Usage
+
+```vue
+<p-draggable :direction="…">
+  <p-text>content</p-text>
+</p-draggable>
+```
+
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/components/p-draggable/index.vue -->

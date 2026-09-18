@@ -1,0 +1,175 @@
+---
+title: useSensor (capability.sensor)
+group: 设备与系统
+order: 1001
+---
+
+# useSensor
+
+useSensor: one-shot sensor read (accelerometer/compass/gyroscope)
+
+> Capability primitive C5 · `capability.sensor` · returns `SensorStream` · **Hook implemented** (API ready — target bridges in the table below)
+
+## Signature
+
+```ts
+useSensor(kind: SensorKind): Promise<CapResult<SensorSample>>
+```
+
+## Parameters
+
+Param,Type,Required,Doc
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | Sensor type (accelerometer / compass / gyroscope) |
+
+## Returns
+
+`Promise<CapResult<T>>` — iron rule: no callbacks, no try/catch duty; branch on `res.ok`:
+
+| Property | Type | Doc |
+|---|---|---|
+| `ok` | `boolean` | Succeeded `true` / failed `false` |
+| `data` | `SensorSample` | Success payload (structure below) |
+| `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+## Props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | Sensor type (echoes the requested kind) |
+| `x` | `number` | No | X-axis acceleration/component (accelerometer/gyroscope) |
+| `y` | `number` | No | Y-axis acceleration/component |
+| `z` | `number` | No | Z-axis acceleration/component |
+| `heading` | `number` | No | Compass heading (0-360°, relative to true north; compass only) |
+| `timestamp` | `number` | No | Sample timestamp (ms) |
+
+## Error codes
+
+| code | Doc |
+|---|---|
+| `sensor.unsupported` | Bridge does not provide readSensor (useSensor unavailable) |
+| `sensor.compass.unsupported` | — |
+| `sensor.gyroscope.unsupported` | — |
+| `sensor.accelerometer.unsupported` | — |
+| `sensor.timeout` | Sensor event timed out (requires device support / user permission) |
+| `sensor.start-failed` | — |
+| `sensor.stop-failed` | — |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
+## Compat rollout
+
+| Target | Status | Notes |
+|---|---|---|
+| Web SPA | ✅ | vue-dom · webBridge implementation (direct platform API) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → onAccelerometer/onCompass/onGyroscope |
+| Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
+| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
+| Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |
+| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — capability bridge not wired |
+| Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
+| Quick App | ⬜ | Quick App engine (TBD) · target not started |
+
+> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
+
+> Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Extension interfaces
+
+Beyond the primary hook `useSensor`, this capability also exposes these operation interfaces:
+
+### `useSensorStream`
+
+```ts
+useSensorStream(kind: SensorKind): CapResult<SensorStream>
+```
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | 类型 |
+
+#### `SensorStream` props
+
+| Prop | Type | Required | Doc |
+|---|---|---|---|
+| `kind` | `SensorKind` | Yes | 传感器类型（回显创建时传入的 kind） |
+
+#### `SensorStream` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `start` | `start(): Promise<CapResult<void>>` | 开始监听（幂等） |
+| `stop` | `stop(): Promise<CapResult<void>>` | 停止监听（释放底层 on* 订阅） |
+| `on` | `on(cb: (sample: SensorSample) => void): () => void` | 订阅采样（返回取消订阅；多订阅并存） |
+| `active` | `active(): boolean` | 是否监听中 |
+
+#### `start`
+
+```ts
+start(): Promise<CapResult<void>>
+```
+
+**Doc**: 开始监听（幂等）
+
+**Returns**: `Promise<CapResult<void>>`
+
+#### `stop`
+
+```ts
+stop(): Promise<CapResult<void>>
+```
+
+**Doc**: 停止监听（释放底层 on* 订阅）
+
+**Returns**: `Promise<CapResult<void>>`
+
+#### `on`
+
+```ts
+on(cb: (sample: SensorSample) => void): () => void
+```
+
+**Doc**: 订阅采样（返回取消订阅；多订阅并存）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `cb` | `(sample: SensorSample) => void` | Yes | — |
+
+**Returns**: `() => void`
+
+#### `active`
+
+```ts
+active(): boolean
+```
+
+**Doc**: 是否监听中
+
+**Returns**: `boolean`
+
+#### Referenced types
+
+**`SensorSample`** — C5 传感器采样（一次性读取当前值；compass 带 heading）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `kind` | `SensorKind` | 传感器类型（回显请求的 kind） |
+| `x` | `number` | X 轴加速度/分量（accelerometer/gyroscope） |
+| `y` | `number` | Y 轴加速度/分量 |
+| `z` | `number` | Z 轴加速度/分量 |
+| `heading` | `number` | 罗盘方位（0-360°，参考正北；仅 compass） |
+| `timestamp` | `number` | 采样时间戳（ms） |
+
+## Usage
+
+```ts
+const res = await useSensor('accelerometer')
+
+if (res.ok) {
+  console.log(res.data.kind, res.data.x, res.data.y, res.data.z)
+} else if (res.error.code.endsWith('.unsupported')) {
+  // platform unsupported → degradation path
+}
+```
+
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->

@@ -1,0 +1,158 @@
+---
+title: useCalendar (capability.calendar)
+group: 通知与分享
+order: 6004
+---
+
+# useCalendar
+
+useCalendar: Add a calendar event (wx.addPhoneCalendar; web → Err)
+
+> Capability primitive C20 · `capability.calendar` · returns `CalendarAPI` · **Hook implemented** (API ready — target bridges in the table below)
+
+## Signature
+
+```ts
+useCalendar(event: CalendarEvent): Promise<CapResult<void>>
+```
+
+## Parameters
+
+Param,Type,Required,Doc
+|---|---|---|---|
+| `event` | `CalendarEvent` | Yes | C20 calendar event (wx.addPhoneCalendar / web has no standard → degrades to undefined) |
+
+#### Properties of `event`
+
+| Property | Type | Required | Doc |
+|---|---|---|---|
+| `title` | `string` | Yes | Calendar event title |
+| `startTime` | `number` | Yes | Start timestamp (ms) |
+| `endTime` | `number` | No | End timestamp (ms) |
+| `alarms` | `number[]` | No | Advance reminders (minutes) |
+| `location` | `string` | No | Location |
+| `description` | `string` | No | Notes/description |
+
+## Returns
+
+`Promise<CapResult<T>>` — iron rule: no callbacks, no try/catch duty; branch on `res.ok`:
+
+| Property | Type | Doc |
+|---|---|---|
+| `ok` | `boolean` | Succeeded `true` / failed `false` |
+| `data` | `void` | No payload on success |
+| `error` | `CapError` | Present on failure: `code` (machine code) / `message` (human-readable reason) / `cause` (original exception) |
+
+## Error codes
+
+| code | Doc |
+|---|---|
+| `calendar.unsupported` | Bridge does not provide addCalendarEvent (useCalendar unavailable) |
+| `calendar.failed` | wx.addPhoneCalendar failed |
+
+> Platform unsupported → the `*.unsupported` family; business branches on `code`, no try/catch needed.
+
+## Compat rollout
+
+| Target | Status | Notes |
+|---|---|---|
+| Web SPA | ⚠️ | vue-dom · webBridge missing addCalendarEvent → explicit Err degradation (no direct platform API) |
+| WeChat Mini Program | ✅ | skyline (WebView fallback) · wx bridge → wx.addPhoneCalendar |
+| Headless (SSR / testing) | ✅ | headless · mock bridge injected (testing / SSR tier) |
+| iOS native | 🟡 | native-ios (UIKit) · prototype mapping — capability bridge not wired |
+| Android native | 🟡 | native-android (Jetpack) · prototype mapping — capability bridge not wired |
+| HarmonyOS | 🟡 | native-harmony (ArkUI) · prototype mapping — capability bridge not wired |
+| Flutter hybrid | 🟡 | flutter · same JS logic layer — capability bridge not wired |
+| Quick App | ⬜ | Quick App engine (TBD) · target not started |
+
+> Status scale: ✅ target shipped & this capability usable · ⚠️ target shipped but bridge missing → explicit `Err` degradation · 🟡 prototype mapping — capability bridge not wired · ⬜ target not started. Target architecture matrix → [Ends & maturity](/docs/framework/ends-matrix).
+
+> Iron rule: every capability primitive returns `Result<T>` (no callbacks / no global objects); platform unsupported → explicit `Err` degradation, zero platform branches in business code.
+
+## Extension interfaces
+
+Beyond the primary hook `useCalendar`, this capability also exposes these operation interfaces:
+
+### `useCalendarAPI`
+
+```ts
+useCalendarAPI(): CapResult<CalendarAPI>
+```
+
+#### `CalendarAPI` methods
+
+| Method | Signature | Doc |
+|---|---|---|
+| `add` | `add(event: CalendarEvent): Promise<CapResult<void>>` | 添加日程（wx.addPhoneCalendar） |
+| `remove` | `remove(eventId: string): Promise<CapResult<void>>` | 删除日程（wx 需用户确认，按 eventId；支持有限） |
+| `list` | `list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>` | 查询日程（无开放 API → 诚实 Err） |
+
+#### `add`
+
+```ts
+add(event: CalendarEvent): Promise<CapResult<void>>
+```
+
+**Doc**: 添加日程（wx.addPhoneCalendar）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `event` | `CalendarEvent` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+#### `remove`
+
+```ts
+remove(eventId: string): Promise<CapResult<void>>
+```
+
+**Doc**: 删除日程（wx 需用户确认，按 eventId；支持有限）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `eventId` | `string` | Yes | — |
+
+**Returns**: `Promise<CapResult<void>>`
+
+#### `list`
+
+```ts
+list(startTime?: number, endTime?: number): Promise<CapResult<CalendarEvent[]>>
+```
+
+**Doc**: 查询日程（无开放 API → 诚实 Err）
+
+| Param | Type | Required | Doc |
+|---|---|---|---|
+| `startTime` | `number` | No | — |
+| `endTime` | `number` | No | — |
+
+**Returns**: `Promise<CapResult<CalendarEvent[]>>`
+
+#### Referenced types
+
+**`CalendarEvent`** — C20 日历事件（wx.addPhoneCalendar / web 无标准 → 降级 undefined）
+
+| Prop/Method | Type | Doc |
+|---|---|---|
+| `title` | `string` | 日历事件标题 |
+| `startTime` | `number` | 开始时间戳（ms） |
+| `endTime` | `number` | 结束时间戳（ms） |
+| `alarms` | `number[]` | 提前提醒（分钟） |
+| `location` | `string` | 地点 |
+| `description` | `string` | 备注/描述 |
+
+## Usage
+
+```ts
+const res = await useCalendar({ title: 'Team sync', startTime: Date.now() + 3600000 })
+
+if (res.ok) {
+  // success — void payload
+} else if (res.error.code.endsWith('.unsupported')) {
+  // platform unsupported → degradation path
+}
+```
+
+<!-- generated by website/scripts/gen-content.mjs (en overlay) · source SSOT: packages/component-ir/src/primitives.ts + packages/api/src/capability.ts -->
