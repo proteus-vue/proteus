@@ -24,6 +24,7 @@ export type { MpSpecStatus, MpSpecClass, MpOfficialSpec, SpecCoverageReport } fr
 // ★批次 4（M6）：属性降级声明（EA-5/G-31.2）+ 编译期 PROP_NO_DEGRADATION 门禁
 export {
   DEGRADATION_TABLE,
+  MP_UNSUPPORTED_PROPS,
   degradeProp,
   degradationOf,
   auditDegradation,

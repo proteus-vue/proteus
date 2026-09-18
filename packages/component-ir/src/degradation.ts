@@ -165,12 +165,39 @@ export const DEGRADATION_TABLE: Record<string, DegradationMap> = (() => {
   return out
 })()
 
+/**
+ * ★性能预计算（2026-09-18）：tag → { kebab 属性名 → true }，**只收 `mp: unsupported` 的属性**。
+ *
+ * 编译器编译每个元素都要判「该属性在 mp 端是否 unsupported」。此前编译器在 `serializeElement`
+ * 里**逐元素**新建 Map 并对每个属性名跑 kebabCase → 实测 `compile-vue-sfc` 基准从 0.573ms
+ * 涨到 0.765ms（+33%，推过 1.2x 警告线）。改为模块加载时预计算一次：
+ * 每元素仅剩 **一次 kebabCase + 一次 Set.has**，零分配。
+ *
+ * 语义等价：诊断只关心 `mp === 'unsupported'`（`fallback` 有意降级、不报），故只需该子集。
+ */
+export const MP_UNSUPPORTED_PROPS: Record<string, Set<string>> = (() => {
+  const kebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+  const out: Record<string, Set<string>> = {}
+  for (const [tag, table] of Object.entries(DEGRADATION_TABLE)) {
+    const set = new Set<string>()
+    for (const [prop, entry] of Object.entries(table)) {
+      if (entry.mp === 'unsupported') set.add(kebab(prop))
+    }
+    if (set.size) out[tag] = set
+  }
+  return out
+})()
+
 /* ---------- 门禁（EA-5 验收 §6） ---------- */
 
 export interface DegradationIssue {
   tag: string
   prop: string
-  kind: 'missing' | 'behavior-gap'
+  /**
+   * missing = 空白格（保留以兼容既有消费方；表由规则构建后不再产生）；
+   * behavior-gap = 非 supported 但无可观察行为；table-divergence = 表与规则判定不一致。
+   */
+  kind: 'missing' | 'behavior-gap' | 'table-divergence'
   detail: string
 }
 

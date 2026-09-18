@@ -13,7 +13,7 @@ import type { FluidLayoutConfig, VModelComponentHandler } from '@proteus-vue/typ
 import { linearFluid, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
-import { TAG_SEMANTIC_MAP, DEGRADATION_TABLE, PROP_NO_DEGRADATION, FRAMEWORK_INTERNAL_TAGS } from '@proteus-vue/component-ir'
+import { TAG_SEMANTIC_MAP, MP_UNSUPPORTED_PROPS, PROP_NO_DEGRADATION, FRAMEWORK_INTERNAL_TAGS } from '@proteus-vue/component-ir'
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
@@ -1005,18 +1005,26 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   目标端 unsupported 的属性被使用时 **fail-closed** 诊断（`PROP_NO_DEGRADATION`）；
   //   fallback **不**报（有意降级，降级行为已在表中声明，非静默失败）。
   //   诚实边界：仅静态属性名可判定（`:prop` 动态名/展开跳过）；模板 kebab 与降级表 camel 键均为 kebab 归一比对。
+  //   ★性能：用 component-ir 预计算的 MP_UNSUPPORTED_PROPS（tag → kebab 名 Set）——
+  //   每元素仅一次 kebabCase + 一次 Set.has，零分配（此前逐元素新建 Map → 编译基准 +33%）。
   if (node.tag.startsWith('p-') && !ctx.disabled.has('prop/no-degradation')) {
-    const degTable = (ctx.degradationTable ?? DEGRADATION_TABLE)[node.tag]
-    if (degTable) {
-      const kebabTable = new Map(Object.entries(degTable).map(([k, v]) => [kebabCase(k), v]))
+    // 注入表（测试用）优先——从其派生 unsupported 集合；缺省走预计算常量
+    const unsupported = ctx.degradationTable
+      ? new Set(
+          Object.entries(ctx.degradationTable[node.tag] ?? {})
+            .filter(([, e]) => e.mp === 'unsupported')
+            .map(([k]) => camelToKebab(k)),
+        )
+      : MP_UNSUPPORTED_PROPS[node.tag]
+    if (unsupported?.size) {
       for (const p of node.props) {
         if (p.type !== NodeTypes.ATTRIBUTE) continue
-        const entry = kebabTable.get(kebabCase((p as AttributeNode).name))
-        if (entry?.mp !== 'unsupported') continue
-        const msg = `[${PROP_NO_DEGRADATION}] <${node.tag}> 的属性 "${(p as AttributeNode).name}" 在 mp 端 unsupported（本端无法实现）——继续使用会静默失败（违反 G-31.2）；请改用 @conditional 显式分支或移除该属性`
+        const name = (p as AttributeNode).name
+        if (!unsupported.has(camelToKebab(name))) continue
+        const msg = `[${PROP_NO_DEGRADATION}] <${node.tag}> 的属性 "${name}" 在 mp 端 unsupported（本端无法实现）——继续使用会静默失败（违反 G-31.2）；请改用 @conditional 显式分支或移除该属性`
         if (ctx.failFast) failFastThrow(ctx.filename, msg)
         ctx.warnings.push(msg)
-        ctx.trace?.add('prop/no-degradation', { line: node.loc.start.line, before: `<${node.tag} ${(p as AttributeNode).name}>`, after: '（mp unsupported——fail-closed 诊断）' })
+        ctx.trace?.add('prop/no-degradation', { line: node.loc.start.line, before: `<${node.tag} ${name}>`, after: '（mp unsupported——fail-closed 诊断）' })
       }
     }
   }
