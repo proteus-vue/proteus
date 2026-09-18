@@ -29,6 +29,7 @@ import { matchWebviewPage } from './gen-routes'
 import { resolveComponentsRoot } from './resolve-components'
 import { APP_LAUNCH_SKELETON } from './appSkeleton'
 import { createCompileCache, compileCacheKey, createBundleCache, bundleCacheKey } from './cache'
+import { collectUsedFrameworkComponents } from './tag-scan'
 
 /**
  * ★默认 scoped + 小程序语义标签改写（2026-08 用户决策）：
@@ -427,6 +428,8 @@ export function collectMpEntries(opts: {
   onSkipWebOnly?: (file: string) => void
   /** ★平台变体（2026-09-13）：按该平台解析 `foo.mp.vue`/`foo.web.vue`（缺省 mp） */
   platform?: VariantPlatform
+  /** ★框架组件输出策略（2026-09-18）：'used'（缺省，按引用闭包输出）/ 'all'（全量，逃生舱） */
+  componentEmit?: 'used' | 'all'
 }): Array<{ file: string; rel: string; isComponent: boolean }> {
   const { projectRoot, appDir, pagesDir, subPackages, componentsDir, webOnlyPages, onSkipWebOnly } = opts
   const platform = opts.platform ?? 'mp'
@@ -449,10 +452,22 @@ export function collectMpEntries(opts: {
   // 应用组件（约定 <appRoot>/components/<name>/index.vue）
   pushRel(path.join(appDir, 'components'), true)
   // 框架内置组件（src/components/<name>/index.vue → 产物 proteus/<name>/index）
+  // ★2026-09-18 按需输出：此前**无条件输出全部组件**（76 个 / 607 KB）到每个应用——
+  //   一个只用 3 个组件的真实应用也要白背 607 KB（微信主包硬限 2 MB）。
+  //   现按「页面实际引用闭包」过滤（含组件间传递依赖，见 tag-scan.ts）。
+  //   ★逃生舱：config.components.emit === 'all' 时保持旧行为（动态标签等非常规用法）。
+  const pageFiles = out.filter((t) => !t.isComponent).map((t) => t.file)
+  const emitAll = (opts.componentEmit ?? 'used') === 'all'
+  const usedComponents = emitAll ? null : collectUsedFrameworkComponents(pageFiles, componentsDir)
   for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
       onSkipWebOnly?.(f)
       continue
+    }
+    if (usedComponents) {
+      // 组件目录名 = 相对 componentsDir 的首段（p-view/index.vue → p-view）
+      const compName = path.relative(componentsDir, splitVariant(f).base).replace(/\\/g, '/').split('/')[0]
+      if (!usedComponents.has(compName)) continue
     }
     const relIn = path.relative(componentsDir, splitVariant(f).base).replace(/\\/g, '/').replace(/\.vue$/, '')
     out.push({ file: f, rel: `proteus/${relIn}`, isComponent: true })
@@ -554,6 +569,8 @@ export default function mpTransform(opts: PluginOptions): Plugin {
         componentsDir: frameworkComponents,
         webOnlyPages,
         onSkipWebOnly: (f) => console.log(`[mp-transform] 跳过 webOnly 页面：${path.relative(projectRoot, f).replace(/\\/g, '/')}`),
+        // ★框架组件按引用输出（2026-09-18）；PROTEUS_COMPONENTS_EMIT=all 回退全量（非常规用法逃生舱）
+        componentEmit: process.env.PROTEUS_COMPONENTS_EMIT === 'all' ? 'all' : 'used',
       })
       // ★ app.js 直出（绕开 rollup 打包）：读取 examples/main.mp.ts → esbuild 转译 TS → 纯文本资产
       // 微信 worklet 响应式重执行对打包代码不友好，原生直出与官方示例一致；

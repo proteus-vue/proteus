@@ -22,16 +22,21 @@ afterEach(() => {
 })
 
 /** 造一个与 showcase 同构的工程：分包目录名恰为 components */
+/** 在工程根下写文件（模块级——新增用例可复用） */
+function writeIn(root: string, rel: string, content = '<template><view /></template>') {
+  const full = path.join(root, rel)
+  fs.mkdirSync(path.dirname(full), { recursive: true })
+  fs.writeFileSync(full, content)
+}
+
 function makeProject() {
   const root = mkTemp()
-  const write = (rel: string, content = '<template><view /></template>') => {
-    const full = path.join(root, rel)
-    fs.mkdirSync(path.dirname(full), { recursive: true })
-    fs.writeFileSync(full, content)
-  }
+  const write = (rel: string, content = '<template><view /></template>') => writeIn(root, rel, content)
   write('src/pages/index.vue')
   // ★关键：分包根叫 components，页面路径含 /components/ —— 旧启发式误判的触发条件
-  write('src/subpackages/components/pages/p-button.vue')
+  // ★2026-09-18：页面须**真实引用** p-button——框架组件现按引用闭包输出（未引用即不产出），
+  //   故下面「proteus/p-button/index 存在」的断言以此为前提。
+  write('src/subpackages/components/pages/p-button.vue', '<template><p-button @tap="go">x</p-button></template>')
   write('src/subpackages/components/pages/p-input.vue')
   write('src/subpackages/capabilities/pages/camera.vue')
   // 真正的组件（两处）
@@ -106,5 +111,52 @@ describe('★MP 待编译清单分类（页面 vs 组件）', () => {
     })
     expect(entries.find((e) => e.rel === 'pages/index')).toBeUndefined()
     expect(entries.find((e) => e.rel === 'subpackages/components/pages/p-button')).toBeTruthy()
+  })
+})
+
+describe('★框架组件按引用输出（2026-09-18：修「无条件全量输出」体积缺陷）', () => {
+  it('未被任何页面引用的框架组件**不进**编译清单', () => {
+    const root = makeProject()
+    // 造一个未被引用的框架组件
+    writeIn(root, 'src/framework/p-unused-xyz/index.vue')
+    const byRel = new Map(collectMpEntries({
+      projectRoot: root,
+      appDir: path.join(root, 'src'),
+      pagesDir: 'src/pages',
+      subPackages: [{ root: 'src/subpackages/components' }, { root: 'src/subpackages/capabilities' }],
+      componentsDir: path.join(root, 'src/framework'),
+    }).map((e) => [e.rel, e.isComponent]))
+    expect(byRel.get('proteus/p-button/index'), '被引用的组件应产出').toBe(true)
+    expect(byRel.get('proteus/p-unused-xyz/index'), '未被引用的组件不应产出').toBeUndefined()
+  })
+
+  it('逃生舱：componentEmit=all 时回到全量输出', () => {
+    const root = makeProject()
+    writeIn(root, 'src/framework/p-unused-xyz/index.vue')
+    const byRel = new Map(collectMpEntries({
+      projectRoot: root,
+      appDir: path.join(root, 'src'),
+      pagesDir: 'src/pages',
+      subPackages: [{ root: 'src/subpackages/components' }, { root: 'src/subpackages/capabilities' }],
+      componentsDir: path.join(root, 'src/framework'),
+      componentEmit: 'all',
+    }).map((e) => [e.rel, e.isComponent]))
+    expect(byRel.get('proteus/p-unused-xyz/index')).toBe(true)
+  })
+
+  it('★组件间传递依赖计入闭包（A 用 B → B 也必须产出）', () => {
+    const root = makeProject()
+    writeIn(root, 'src/framework/p-outer/index.vue', '<template><p-inner /></template>')
+    writeIn(root, 'src/framework/p-inner/index.vue', '<template><view>x</view></template>')
+    writeIn(root, 'src/pages/uses-outer.vue', '<template><p-outer /></template>')
+    const byRel = new Map(collectMpEntries({
+      projectRoot: root,
+      appDir: path.join(root, 'src'),
+      pagesDir: 'src/pages',
+      subPackages: [],
+      componentsDir: path.join(root, 'src/framework'),
+    }).map((e) => [e.rel, e.isComponent]))
+    expect(byRel.get('proteus/p-outer/index'), '直接引用').toBe(true)
+    expect(byRel.get('proteus/p-inner/index'), '传递依赖（p-outer 内引用了 p-inner）').toBe(true)
   })
 })
