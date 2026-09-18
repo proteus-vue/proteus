@@ -107,9 +107,12 @@ describe('★批次外收口 · 映射修正（p-adaptive / p-transition 不是�
     expect(audit).not.toMatch(/'swiper':\s*'p-/)
   })
 
-  it('审计脚本移除 share-element → p-transition 错映射（语义不同：共享元素转场 ≠ Vue transition）', () => {
+  it('审计脚本不再把 share-element 错映射到 p-transition（语义不同：共享元素转场 ≠ Vue transition）', () => {
     const audit = auditCode()
-    expect(audit).not.toContain("'share-element'")
+    // ★2026-09-18 批次 8 后：share-element **已正确映射**到 p-share-element（组件已落地）——
+    //   本锁的不变量是「不得指向 p-transition」（页内过渡 ≠ 页面间共享元素转场）
+    expect(audit).not.toContain("'share-element': 'p-transition'")
+    expect(audit).toContain("'share-element': 'p-share-element'")
   })
 
   it('match-media 视口度量属性登记为「有意不沿用」（容器断点语义升级）', () => {

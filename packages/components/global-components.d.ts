@@ -59,6 +59,9 @@ declare module 'vue' {
     'p-ad': typeof import('./p-ad/index.vue')['default']
     PMap: typeof import('./p-map/index.vue')['default']
     'p-map': typeof import('./p-map/index.vue')['default']
+    // ★批次 8：共享元素转场
+    PShareElement: typeof import('./p-share-element/index.vue')['default']
+    'p-share-element': typeof import('./p-share-element/index.vue')['default']
   }
 }
 

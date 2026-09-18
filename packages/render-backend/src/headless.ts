@@ -81,6 +81,7 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'engineering.router-link': 'router-link',
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
   'engineering.transition': 'transition',
+  'engineering.share-element': 'share-element',
   'engineering.animate': 'animate',
   // ★能力颗粒度对齐 C2
   'ui.progress': 'progress',

@@ -103,6 +103,7 @@ export const SEMANTIC_ENUM = [
   'engineering.transition',
   'engineering.animate',
   'engineering.error-boundary',
+  'engineering.share-element',
   // —— 能力入口（G-28 组件化：p-* 能力入口组件；useXxx Hook 归 API 层不产生 C-IR 节点）——
   //   ★2026-09-18 语义去重：原列 'capability.scan-qr' / 'capability.pick-photo' 为**重复名**，
   //   已退役改为真实能力（组件的实现分别调用 useQRCode() / useCamera()，即 C42 / C1）——
@@ -181,6 +182,7 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   // G-32 ⑥ Engineering 组件形态（3）
   'p-router-link': 'engineering.router-link', // ★E18 组件形态（p- 前缀产 C-IR）
   'router-link': 'engineering.router-link', // ★兼容别名（Vue Router 风格 <router-link> 标签；非 catalog 条目——p-view 先例 G-31 B4）
+  'p-share-element': 'engineering.share-element', // ★批次 8：页面间共享元素转场（≠ p-transition 页内过渡）
   'p-transition': 'engineering.transition',
   'p-animate': 'engineering.animate',
   // G-31 能力入口

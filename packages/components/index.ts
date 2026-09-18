@@ -78,6 +78,7 @@ import PDraggable from './p-draggable/index.vue'
 import PScrollable from './p-scrollable/index.vue'
 // ★G-32 B5 续二：动画组件形态（engineering.transition / engineering.animate）
 import PTransition from './p-transition/index.vue'
+import PShareElement from './p-share-element/index.vue'
 import PAnimate from './p-animate/index.vue'
 // ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
 import PRouterLink from './p-router-link/index.vue'
@@ -177,6 +178,7 @@ export {
   PScrollable,
   // ★G-32 B5 续二：动画组件形态（engineering.transition / engineering.animate）
   PTransition,
+  PShareElement,
   PAnimate,
   // ★G-32 B5 尾巴：E18 声明式导航组件形态（engineering.router-link）
   PRouterLink,

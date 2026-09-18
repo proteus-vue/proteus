@@ -65,7 +65,7 @@ const MP_COMPONENTS: MpMatrixItem[] = [
   { mp: '<ad>', proteus: 'shell.ad（p-ad）', status: 'ok', group: 'component' },
   { mp: '<official-account>', proteus: 'useMiniProgram（微信私有）', status: 'private', group: 'component' },
   { mp: '<open-data>', proteus: 'useMiniProgram（微信私有）', status: 'private', group: 'component' },
-  { mp: '<share-element>', proteus: 'p-share-element（L2 规划）', status: 'compat', group: 'component', planned: true },
+  { mp: '<share-element>', proteus: 'engineering.share-element（p-share-element）', status: 'ok', group: 'component' },
   { mp: '<aria-component>', proteus: 'aria-* 属性（各组件 ariaLabel；两端原生支持）', status: 'ok', group: 'component' },
   { mp: '<page-container>', proteus: 'shell.page-container', status: 'ok', group: 'component' },
   { mp: '<voip-room>', proteus: 'useMiniProgram（微信 VOIP）', status: 'private', group: 'component' },

@@ -134,6 +134,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'engineering.router-link': 'UIButton.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'UIView.transition',
+    'engineering.share-element': 'UIView.matchedTransition',
     'engineering.animate': 'CAKeyframeAnimation',
     // ★能力颗粒度对齐 C2
     'ui.progress': 'UIProgressView',
@@ -202,6 +203,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'engineering.router-link': 'TextView.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'View.animate.transition',
+    'engineering.share-element': 'SharedElementTransition',
     'engineering.animate': 'ValueAnimator',
     // ★能力颗粒度对齐 C2
     'ui.progress': 'ProgressBar',
@@ -270,6 +272,7 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'engineering.router-link': 'Text.link',
     // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
     'engineering.transition': 'animateTo.transition',
+    'engineering.share-element': 'geometryTransition',
     'engineering.animate': 'Animator.transition',
     // ★能力颗粒度对齐 C2
     'ui.progress': 'Progress',

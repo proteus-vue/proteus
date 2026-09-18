@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 72 个（已备详情页 25） */
+/** 组件：6 域 / 73 个（已备详情页 26） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -109,6 +109,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-animate", desc: "动画声明——animation CSS 语义面", route: "" },
       { name: "p-error-boundary", desc: "错误兜底", route: "" },
       { name: "p-router-link", desc: "声明式导航", route: "/subpackages/components/pages/p-router-link" },
+      { name: "p-share-element", desc: "共享元素转场", route: "/subpackages/components/pages/p-share-element" },
       { name: "p-transition", desc: "过渡", route: "" },
     ],
   },
@@ -278,8 +279,8 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 
 export const CATALOG_STATS = {
   componentGroups: 6,
-  componentTotal: 72,
-  componentReady: 25,
+  componentTotal: 73,
+  componentReady: 26,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 1,

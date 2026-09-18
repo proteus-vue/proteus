@@ -19,7 +19,7 @@ export type PrimitiveKind = 'layout' | 'ui' | 'shell' | 'gesture' | 'capability'
 export type PrimitiveStatus = 'implemented' | 'planned'
 
 export interface PrimitiveDef {
-  /** 清单编号（L1..L12 / U1..U18 / S1..S10 / G1..G10 / C1..C50 / E1..E28） */
+  /** 清单编号（L1..L16 / U1..U29 / S1..S17 / G1..G10 / C1..C81 / E1..E29） */
   id: string
   kind: PrimitiveKind
   /** 语义标识（<domain>.<kind>——C-IR semantic / 能力属性） */
@@ -282,6 +282,8 @@ const ENGINEERING: PrimitiveDef[] = [
   { id: 'E26', kind: 'engineering', semantic: 'engineering.performance', api: 'usePerformance()', mpEquiv: 'wx.reportPerformance', tier: 'L1', status: 'planned' },
   { id: 'E27', kind: 'engineering', semantic: 'engineering.define-component', api: 'defineComponent()', mpEquiv: 'Component()', tier: 'L1', status: 'planned' },
   { id: 'E28', kind: 'engineering', semantic: 'engineering.define-capability', api: 'defineCapability()', mpEquiv: '无', tier: 'L1', status: 'planned' },
+  // ★批次 8（2026-09-18）：共享元素转场（官方 <share-element> 对齐）——能力由宿主提供，框架只声明语义
+  { id: 'E29', kind: 'engineering', semantic: 'engineering.share-element', tag: 'p-share-element', props: ['shuttleKey', 'animate', 'duration', 'easingFunction', 'transitionOnGesture', 'shuttleOnPush', 'shuttleOnPop', 'rectTweenType'], mpEquiv: '<share-element>（宿主跨页飞行动画）', tier: 'L1', status: 'implemented' },
 ]
 
 /** ★G-32 B1：128 原语冻结清单（唯一事实源） */

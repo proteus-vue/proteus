@@ -925,6 +925,25 @@ export const COMP_EN = {
     },
     events: { select: "An item is selected" },
   },
+  'p-share-element': {
+    desc: "Shared element transition (between pages) — ★aligned with the official <share-element>",
+    notes: [
+      "Shared elements across pages: elements with the same shuttle-key fly between pages during navigation (shuttle = the flying object); the transition itself is provided by the host (WeChat/native)",
+      "★Naming decision (02-ir-prop-binding, \"reserved-word conflicts → prefix or rename\"): the official `key` is NOT a prop in Vue (it is the vnode diff reserved attribute, so the component never receives it) → renamed to `shuttleKey`; the official `transform` (boolean: whether to animate) collides with the CSS transform string attribute on <view> → renamed to `animate`",
+      "★Cross-end honesty: on MP (Skyline) the attribute passes through to the native <share-element>; on Web there is no host shared-element transition → it degrades to a plain container (content visible, no flight) — use p-transition for in-page animation; native ends map to system shared-element transitions",
+      "The official worklet:onframe is a worklet callback (event semantics) — filtered by schema type and not counted as an attribute",
+    ],
+    props: {
+      shuttleKey: "Mapping marker (unique within a page; the same name on two pages means the same flying object) — ★official key (renamed: Vue reserved attribute)",
+      animate: "Whether to animate (false → position alignment only) — ★official transform (renamed: collides with CSS transform)",
+      duration: "Animation duration in ms (★official duration)",
+      easingFunction: "CSS easing function, e.g. ease / cubic-bezier(...) (★official easing-function)",
+      transitionOnGesture: "Whether to animate on gesture-back (★official transition-on-gesture)",
+      shuttleOnPush: "The flying object for the push phase (★official shuttle-on-push)",
+      shuttleOnPop: "The flying object for the pop phase (★official shuttle-on-pop)",
+      rectTweenType: "Animation interpolation curve (rect geometry tween type) (★official rect-tween-type)",
+    },
+  },
   'p-transition': {
     desc: "Transition (show/hide) — the semantics surface of CSS transition",
     notes: [

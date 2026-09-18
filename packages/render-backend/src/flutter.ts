@@ -93,6 +93,7 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'engineering.router-link': 'TextButton',
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20）
   'engineering.transition': 'AnimatedOpacity',
+  'engineering.share-element': 'Hero', // Flutter Hero 即共享元素
   'engineering.animate': 'AnimationController',
   // ★能力颗粒度对齐 C2
   'ui.progress': 'LinearProgressIndicator',

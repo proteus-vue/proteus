@@ -61,6 +61,7 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         // Engineering 组件形态（E18/E19/E20）
         "p-router-link" => Some("engineering.router-link"),
         "p-transition" => Some("engineering.transition"),
+        "p-share-element" => Some("engineering.share-element"), // ★批次 8：页面间共享元素转场
         "p-animate" => Some("engineering.animate"),
         // Capability 入口
         // ★2026-09-18 语义去重：原 capability.scan-qr / capability.pick-photo 为重复名，

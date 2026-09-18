@@ -46,12 +46,12 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(81)
-    expect(count('engineering')).toBe(28)
+    expect(count('engineering')).toBe(29)
   })
 
-  it('implemented 63 项（批次 7 +5 → 59；语义决策批净 0 → 59；★2026-09-18 手势 tap/longpress +2、能力双形态 +2 → 63）· 其余 planned 待落地', () => {
+  it('implemented 64 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；★批次 8 共享元素转场 +1 → 64）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(63)
+    expect(impl.length).toBe(64)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
@@ -120,8 +120,17 @@ describe('G-32.1 矩阵引用一致性（幽灵引用门禁——修「假门禁
   it('真实矩阵 0 幽灵引用（组件标签/语义/Hook 全部存在）· planned 行诚实豁免', () => {
     const { issues, plannedRefs } = auditMatrixReferences(MP_MAPPING_MATRIX)
     expect(issues).toEqual([])
-    // L2 规划行必须被豁免计数（否则门禁会对未实现组件误报）
-    expect(plannedRefs).toBeGreaterThan(0)
+    // ★2026-09-18 批次 8：原断言 plannedRefs > 0（「L2 规划行须被豁免计数」）已**不再成立**——
+    //   share-element 是矩阵中**最后一个** planned:true 行，随其组件落地转 covered →
+    //   矩阵已无 L2 规划行，plannedRefs 合法为 0。（旧断言是「防门禁空转」的守卫，
+    //   但它把「当前恰好有规划行」当成了永久不变量。）
+    //   等价替代守卫：exempt 机制本身仍需在——用**注入**方式证明豁免路径有效。
+    const withPlanned = [
+      ...MP_MAPPING_MATRIX,
+      { mp: '<future-comp>', proteus: 'p-future-not-yet', status: 'compat', group: 'component', planned: true } as MpMatrixItem,
+    ]
+    expect(auditMatrixReferences(withPlanned).plannedRefs, 'planned 行的豁免计数机制应有效').toBe(1)
+    expect(plannedRefs, '当前矩阵已无 L2 规划行').toBe(0)
   })
 
   it('破坏性验证：注入幽灵组件标签 → component 命中（CI 阻断）', () => {

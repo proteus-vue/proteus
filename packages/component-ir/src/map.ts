@@ -466,6 +466,16 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'GestureDetector.onLongPress',
     headless: 'longpress',
   },
+  // ★批次 8：共享元素转场（页面间）——各端系统级转场能力
+  'engineering.share-element': {
+    'vue-dom': 'div.proteus-share-element', // Web 无宿主共享元素转场 → 普通容器（降级，不飞）
+    'native-ios': 'UIView.matchedTransition',
+    'native-android': 'SharedElementTransition',
+    'native-harmony': 'geometryTransition', // ArkUI 几何过渡
+    skyline: 'share-element', // 微信原生（宿主跨页飞行）
+    flutter: 'Hero', // Flutter Hero 动画即共享元素
+    headless: 'share-element',
+  },
   'gesture.draggable': {
     'vue-dom': 'div.proteus-draggable',
     'native-ios': 'UIPanGestureRecognizer',

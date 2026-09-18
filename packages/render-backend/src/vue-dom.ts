@@ -87,6 +87,8 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'engineering.router-link': { tag: 'a', className: 'proteus-router-link' },
   // ★G-32 B5 续二：工程原语动画组件形态（E19/E20——纯 CSS 声明）
   'engineering.transition': { tag: 'div', className: 'proteus-transition' },
+  // ★批次 8：共享元素转场（Web 无宿主共享元素 → 普通容器降级）
+  'engineering.share-element': { tag: 'div', className: 'proteus-share-element' },
   'engineering.animate': { tag: 'div', className: 'proteus-animate' },
   // ★能力颗粒度对齐 C2：进度条 / 表单标签 / 页面容器
   'ui.progress': { tag: 'div', className: 'proteus-progress' },

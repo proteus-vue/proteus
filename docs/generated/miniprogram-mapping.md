@@ -1,7 +1,7 @@
 # 小程序全量能力对照矩阵（自动生成——SSOT = packages/component-ir/src/audit.ts MP_MAPPING_MATRIX）
 
 > ★由 `npm run gen:docs` 生成，勿手改。这是机器事实（catalog 与矩阵实时同步）；手工规划叙述见 `proteus-semantic-primitives-plus-plan/miniprogram-mapping.md`。
-> 总计 115 项（组件 57 + API 58）；✅ 103 · 🔄 5 · ⬛ 7 · ❌ 0
+> 总计 115 项（组件 57 + API 58）；✅ 104 · 🔄 4 · ⬛ 7 · ❌ 0
 
 ## 组件对照表
 
@@ -44,7 +44,7 @@
 | `<ad>` | shell.ad（p-ad） | ok |
 | `<official-account>` | useMiniProgram（微信私有） | private |
 | `<open-data>` | useMiniProgram（微信私有） | private |
-| `<share-element>` | p-share-element（L2 规划） | compat |
+| `<share-element>` | engineering.share-element（p-share-element） | ok |
 | `<aria-component>` | aria-* 属性（各组件 ariaLabel；两端原生支持） | ok |
 | `<page-container>` | shell.page-container | ok |
 | `<voip-room>` | useMiniProgram（微信 VOIP） | private |

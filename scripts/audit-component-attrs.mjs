@@ -32,6 +32,7 @@ const ALIAS = {
   'rich-text': 'p-rich-text', 'view': 'p-view', 'movable-view': 'p-draggable',
   'movable-area': 'p-draggable', 'virtual-list': 'p-virtual-list', 'page-container': 'p-page-container',
   'keyboard-accessory': 'p-keyboard-accessory',
+  'share-element': 'p-share-element',
   'match-media': 'p-adaptive', 'cover-view': 'p-view', 'cover-image': 'p-image',
   // ★2026-09-18 移除两处错误映射（批次外收口实测）：
   //   ① `'swiper': 'p-swipter'`——**拼写错误**（"swipter"），且 p-swiper 并不存在：
@@ -95,6 +96,10 @@ const SEMANTIC_ALIAS_BY_TAG = {
   //   三个**数值**缩放属性——若沿用裸名 `scale` 作布尔，与数值族混读易错（`scale="1"` 到底是倍数还是开关？）。
   //   框架归一为 `scaleEnabled`（语义更纯：缩放能力开关），数值族保持官方名。
   'movable-view': { scale: ['scaleEnabled'] },
+  // ★share-element 的两处改名（02-ir-prop-binding「保留字冲突 → 加前缀或改写」）：
+  //   官方 `key` 在 Vue 中是 vnode diff 保留属性（组件收不到）→ shuttleKey；
+  //   官方 `transform`（boolean「是否动画」）与 <view> 的 CSS transform 字符串属性类型冲突 → animate。
+  'share-element': { key: ['shuttleKey'], transform: ['animate'] },
 }
 /**
  * ★有意不沿用（G-31 铁律）：官方存在但**不应上升为框架语义**的平台私有形态/历史包袱。
