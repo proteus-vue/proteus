@@ -34,7 +34,7 @@ describe('G-31 validateComponentIR（B1 结构校验）', () => {
   it('★CMP006：capabilities 引用的属性缺 degradation 声明（G-31.2）', () => {
     const ir = {
       tag: 'p-scan-qr',
-      semantic: 'capability.scan-qr',
+      semantic: 'capability.qr-code',
       props: {},
       children: [],
       capabilities: [{ name: 'scanQR' }],
@@ -72,7 +72,7 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(TAG_SEMANTIC_MAP['p-grid']).toBe('layout.grid')
     expect(TAG_SEMANTIC_MAP['p-stack']).toBe('layout.stack')
     expect(TAG_SEMANTIC_MAP['p-adaptive']).toBe('layout.adaptive')
-    expect(TAG_SEMANTIC_MAP['p-scan-qr']).toBe('capability.scan-qr')
+    expect(TAG_SEMANTIC_MAP['p-scan-qr']).toBe('capability.qr-code')
   })
 
   it('★G-31 B4 + G-32 对齐：现有组件标签对齐 L1 语义（p-view/p-list-view/p-nav-bar/p-textarea/p-modal）', () => {
@@ -117,7 +117,7 @@ describe('G-31 semantic 映射（B1：Backend 消费 semantic 而非 tag）', ()
     expect(mapSemanticToBackend('layout.grid', 'vue-dom')).toBe('div.proteus-grid')
     expect(mapSemanticToBackend('layout.adaptive', 'native-android')).toBe('BottomSheetDialog')
     expect(mapSemanticToBackend('ui.text', 'native-harmony')).toBe('Text')
-    expect(mapSemanticToBackend('capability.scan-qr', 'skyline')).toBe('wx.scanCode')
+    expect(mapSemanticToBackend('capability.qr-code', 'skyline')).toBe('wx.scanCode')
     expect(mapSemanticToBackend('layout.grid', 'headless')).toBe('grid')
     expect(mapSemanticToBackend('unknown.semantic', 'vue-dom')).toBeNull()
   })

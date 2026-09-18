@@ -282,8 +282,8 @@ describe('★#505 M3 门禁⑧：D6 语义森林——compat 根页面的语义�
   it('capability.* 入口不因页面壳丢失（compat 根页面从 forest 逐根收集——旧行为 tree null 时整页能力声明空白）', () => {
     const back = createNodeCompilerBackend().compile({ filename: 'm3forest-cap.vue', source: '<template><view><p-scan-qr /><p-box /></view></template>' })
     expect(back.semantic.tree).toBeNull()
-    expect(back.semantic.forest?.map((f) => f.semantic)).toEqual(['capability.scan-qr', 'layout.box'])
-    expect(back.bindings.capabilities).toEqual([{ name: 'scan-qr', semantic: 'capability.scan-qr' }])
+    expect(back.semantic.forest?.map((f) => f.semantic)).toEqual(['capability.qr-code', 'layout.box'])
+    expect(back.bindings.capabilities).toEqual([{ name: 'qr-code', semantic: 'capability.qr-code' }])
   })
   it('compat 根 + 语义页面经 runCompilerConformance 全过（forestRooted/forestNonEmpty 核对在位）', () => {
     const result = runCompilerConformance(

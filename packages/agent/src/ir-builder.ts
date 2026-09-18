@@ -20,7 +20,7 @@ export class IRBuilderError extends Error {
 }
 
 export interface IRNodeSpec {
-  /** 语义标识（G-32 catalog——layout.stack/ui.text/capability.scan-qr…） */
+  /** 语义标识（G-32 catalog——layout.stack/ui.text/capability.qr-code…） */
   readonly semantic: string
   /** 显式 tag 覆盖（缺省按 semantic 反查 TAG_SEMANTIC_MAP） */
   readonly tag?: string

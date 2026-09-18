@@ -53,8 +53,8 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'ui.input': 'TextField',
   'ui.list': 'ListView',
   'ui.nav': 'Navigator',
-  'capability.scan-qr': 'scanQR',
-  'capability.pick-photo': 'pickPhoto',
+  'capability.qr-code': 'scanQR',
+  'capability.camera': 'pickPhoto',
   'capability.location': 'getLocation',
   // ★G-32 B1：新增 implemented 语义
   'layout.inline': 'InlineSpan',

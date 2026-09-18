@@ -12,7 +12,7 @@ order: 5002
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| capability.pick-photo | 能力入口 | — |
+| capability.camera | 能力入口 | — |
 
 ## 兼容进度
 

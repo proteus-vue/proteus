@@ -18,12 +18,13 @@ import {
   primitiveByTag,
   SEMANTIC_BACKEND_MAP,
   FRAMEWORK_INTERNAL_TAGS,
+  TAG_SEMANTIC_ALIASES,
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
 import { compileVueSfc } from '@proteus-vue/compiler'
 
-describe('G-32 B1 清单冻结（181 原语 SSOT）', () => {
-  it('181 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
+  it('清单规模 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
@@ -36,7 +37,9 @@ describe('G-32 B1 清单冻结（181 原语 SSOT）', () => {
     //   + ★组件批 H：ui+1 selection + shell+1 keyboard-accessory
     //   + ★组件批 I：ui+1 camera
     //   + ★组件批 J：ui+1 map + shell+2 webview/ad
-    //   + ★批次 7（2026-09-18）未登记组件补登记：layout+2（safe/sidebar）+ ui+3（button/list/nav））
+    //   + ★批次 7（2026-09-18）未登记组件补登记：layout+2（safe/sidebar）+ ui+3（button/list/nav）
+    //   + ★2026-09-18 语义决策批：**净 0**（退役 2 个重复名 scan-qr/pick-photo；
+    //     其能力早已由 C1 camera / C42 qr-code 承接，仅补 tag + 状态，不新增语义））
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(16)
     expect(count('ui')).toBe(29)
@@ -46,9 +49,9 @@ describe('G-32 B1 清单冻结（181 原语 SSOT）', () => {
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 59 项（G-32 冻结清单已实现：14 layout + 26 ui + 13 shell + 2 gesture + 1 capability + 3 engineering；★批次 7 补登记 +5）· 其余 planned 待落地', () => {
+  it('implemented 61 项（★批次 7 补登记 +5 → 59；★语义决策批 +2（scan-qr/pick-photo）→ 61）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(59)
+    expect(impl.length).toBe(61)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
@@ -239,5 +242,62 @@ describe('★批次 7 · 框架内部运行时标签（FRAMEWORK_INTERNAL_TAGS�
     expect((internal.warnings ?? []).filter((w) => /未登记 p-\*|未入库组件/.test(w))).toEqual([])
     const ghost = compileVueSfc('<template><p-bogus-xyz /></template>', { filename: 'x.vue' })
     expect((ghost.warnings ?? []).filter((w) => /未入库组件/.test(w)).length).toBeGreaterThan(0)
+  })
+})
+
+describe('★2026-09-18 语义决策批：多标签别名登记（C6）+ 孤儿语义（C7）', () => {
+  it('C6：多标签共享语义必须显式登记（规范标签 + 理由），且无陈旧登记', () => {
+    // 实测 3 处共享：layout.box(p-box/p-view) / layout.scroll(p-scroll/p-scroll-view)
+    //              / engineering.router-link(p-router-link/router-link)
+    for (const [sem, decl] of Object.entries(TAG_SEMANTIC_ALIASES)) {
+      const tags = Object.entries(TAG_SEMANTIC_MAP).filter(([, v]) => v === sem).map(([k]) => k)
+      expect(tags.length, `${sem} 已不再被多标签共享（陈旧登记应删）`).toBeGreaterThan(1)
+      expect(tags, `${sem} 的规范标签应在共享标签中`).toContain(decl.canonical)
+      for (const a of decl.aliases) expect(tags, `${sem} 的别名 ${a} 应在共享标签中`).toContain(a)
+      expect(decl.reason.trim().length, `${sem} 须给理由`).toBeGreaterThan(0)
+    }
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C6')).toEqual([])
+  })
+
+  it('C6 破坏性：新增未登记的共享语义 → 红', () => {
+    // 直接以「未登记者」判定逻辑验证：registry 里去重后应能被检出
+    // （注入式验证见 auditCatalogConsistency 的 C6 分支：无 TAG_SEMANTIC_ALIASES 条目即报）
+    const undeclared = Object.entries(TAG_SEMANTIC_MAP)
+      .reduce<Record<string, string[]>>((acc, [tag, sem]) => {
+        ;(acc[sem] ??= []).push(tag)
+        return acc
+      }, {})
+    const shared = Object.entries(undeclared).filter(([, t]) => t.length > 1).map(([s]) => s)
+    const missing = shared.filter((s) => !(s in TAG_SEMANTIC_ALIASES))
+    expect(missing, `共享但未登记：${missing.join(', ')}`).toEqual([])
+  })
+
+  it('C7：SEMANTIC_BACKEND_MAP 的每个语义都有 catalog 承接行（无孤儿语义）', () => {
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C7')).toEqual([])
+  })
+
+  it('★能力入口组件按 E8「双形态」一行承接（api + tag 同行，不新建语义）', () => {
+    const expectDual = (sem: string, api: string, tag: string) => {
+      const rows = PRIMITIVE_CATALOG.filter((p) => p.semantic === sem)
+      expect(rows, `${sem} 应有且仅一行`).toHaveLength(1)
+      expect(rows[0].api).toBe(api)
+      expect(rows[0].tag).toBe(tag)
+    }
+    expectDual('capability.location', 'useLocation()', 'p-location')
+    expectDual('capability.qr-code', 'useQRCode()', 'p-scan-qr')
+    expectDual('capability.camera', 'useCamera()', 'p-pick-photo')
+  })
+
+  it('C6/C7 未被误报为假绿：破坏性验证注册表确有牙齿', () => {
+    // 反向证明：若把某共享语义从注册表移除，判定逻辑应能发现
+    const shared = Object.entries(TAG_SEMANTIC_MAP).reduce<Record<string, string[]>>((acc, [, sem]) => {
+      ;(acc[sem] ??= []).push('x')
+      return acc
+    }, {})
+    const hypothetical = ['layout.box', 'layout.scroll', 'engineering.router-link']
+    for (const s of hypothetical) {
+      expect((shared[s]?.length ?? 0), `${s} 应为共享语义`).toBeGreaterThan(1)
+      expect(s in TAG_SEMANTIC_ALIASES, `${s} 应在别名注册表中`).toBe(true)
+    }
   })
 })

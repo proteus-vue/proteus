@@ -12,7 +12,7 @@ order: 5003
 
 | 语义 | 域 | 小程序等价 |
 |---|---|---|
-| capability.scan-qr | 能力入口 | — |
+| capability.qr-code | 能力入口 | — |
 
 ## 兼容进度
 

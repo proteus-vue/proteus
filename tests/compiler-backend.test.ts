@@ -147,9 +147,9 @@ describe('G-29 NodeBackend（B1 参考实现：真实模板编译 → CompilerIR
     })
     expect(ir.bindings.models).toEqual([{ name: 'modelValue', expr: 'keyword' }])
     expect(ir.bindings.handlers).toEqual([{ name: 'click', target: 'onSave' }])
-    expect(ir.bindings.capabilities).toEqual([{ name: 'scan-qr', semantic: 'capability.scan-qr' }])
+    expect(ir.bindings.capabilities).toEqual([{ name: 'qr-code', semantic: 'capability.qr-code' }])
     // capability 入口语义组件在 C-IR 树中
-    expect(ir.semantic.tree?.children[2]).toMatchObject({ tag: 'p-scan-qr', semantic: 'capability.scan-qr' })
+    expect(ir.semantic.tree?.children[2]).toMatchObject({ tag: 'p-scan-qr', semantic: 'capability.qr-code' })
   })
 
   it('★确定性（IR Golden 雏形）：同一 SFC 编译两次 → 深等；跨编译可 diff', () => {

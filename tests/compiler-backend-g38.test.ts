@@ -71,7 +71,7 @@ describe('G-38 Node 参考实现：transform', () => {
 
   it('capability.* 语义 → IRModule.capabilities（G-28 消费）', () => {
     const m = backend.transform(backend.parse({ content: '<p-scan-qr />' }))
-    expect(m.capabilities).toEqual([{ name: 'scan-qr', semantic: 'capability.scan-qr' }])
+    expect(m.capabilities).toEqual([{ name: 'qr-code', semantic: 'capability.qr-code' }])
   })
 
   it('兼容层容器内嵌 p-* 亦收集（G-38 语义=模板内全部语义组件清单）', () => {

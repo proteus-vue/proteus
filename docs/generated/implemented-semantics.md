@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **59** 个。
+> implemented 语义 **61** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -60,7 +60,9 @@
 | `shell.ad` | div.proteus-ad | UIView.ad | View.ad | AdSlot | ad | AdWidget | ad |
 | `gesture.draggable` | div.proteus-draggable | UIPanGestureRecognizer | GestureDetector | PanGesture | movable-view | Draggable | draggable |
 | `gesture.scrollable` | div.proteus-scrollable | UIScrollView.gesture | NestedScrollView | Scroll.gesture | scroll-view | Scrollable | scrollable |
+| `capability.camera` | input.proteus-pick-photo | UIImagePicker | PhotoPicker | PhotoViewPicker | wx.chooseMedia | pickPhoto | pick-photo |
 | `capability.location` | button.proteus-location | CLLocationManager | FusedLocation | geoLocationManager | wx.getLocation | getLocation | location |
+| `capability.qr-code` | button.proteus-scan-qr | AVCaptureSession | CameraX | ScanKit | wx.scanCode | scanQR | scan-qr |
 | `engineering.router-link` | a.proteus-router-link | UIButton.link | TextView.link | Text.link | navigator | TextButton | router-link |
 | `engineering.transition` | div.proteus-transition | UIView.transition | View.animate.transition | animateTo.transition | view.transition | AnimatedOpacity | transition |
 | `engineering.animate` | div.proteus-animate | CAKeyframeAnimation | ValueAnimator | Animator.transition | view.animation | AnimationController | animate |

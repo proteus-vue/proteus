@@ -30,7 +30,7 @@ group: 渲染与能力
 | `layout.split` | UISplitViewController | SlidingPaneLayout | SideBarContainer |
 | `ui.nav` | UINavigationController | NavigationRail | Navigation |
 | `gesture.draggable` | UIPanGestureRecognizer | GestureDetector | PanGesture |
-| `capability.scan-qr` | AVCaptureSession | CameraX | ScanKit |
+| `capability.qr-code` | AVCaptureSession | CameraX | ScanKit |
 | `capability.location` | CLLocationManager | FusedLocation | geoLocationManager |
 
 表为节选。全部行与 component-ir 的 `SEMANTIC_BACKEND_MAP` 各端列**同源**——映射表是 SSOT，后端实现与 conformance 参考表都从它对齐，不允许各写一份。
@@ -71,7 +71,7 @@ adapter.ops
 
 两条消费路径收敛到同一份目录（176 原语 SSOT，capability 族 81 项）：
 
-- **模板里**是能力入口语义——`capability.scan-qr` 在 vue-dom 端渲染为 `button.proteus-scan-qr`（能力实现由 Hook 注入）；
+- **模板里**是能力入口语义——`capability.qr-code` 在 vue-dom 端渲染为 `button.proteus-scan-qr`（能力实现由 Hook 注入）；
 - **脚本里**是 Hook——`createCapabilityHooks()` 返回能力 Hook 集合（覆盖 51 个能力原语；含 `useXxx` 及少量 `setXxx` / `authenticateXxx` 辅助）（`useCamera()` / `useLocation()` / `useQRCode()` …）。
 
 详见[能力系统](/docs/18-capability-system)与[平台 API](/docs/19-platform-api)。

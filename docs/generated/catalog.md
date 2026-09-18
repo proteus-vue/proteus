@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **181** 原语 · implemented **59**。
+> 总计 **181** 原语 · implemented **61**。
 
 ## layout — 布局（12）
 
@@ -99,9 +99,9 @@
 
 | # | 语义 | 形态 | 标签/API | 小程序等价 | 状态 |
 |---|------|------|----------|-----------|------|
-| C1 | `capability.camera` | api:useCamera() | `useCamera()` | wx.createCameraContext | planned |
+| C1 | `capability.camera` | tag:p-pick-photo | `p-pick-photo` | wx.createCameraContext | implemented |
 | C2 | `capability.microphone` | api:useMicrophone() | `useMicrophone()` | RecorderManager | planned |
-| C3 | `capability.location` | api:useLocation() | `useLocation()` | wx.getLocation | implemented |
+| C3 | `capability.location` | tag:p-location | `p-location` | wx.getLocation | implemented |
 | C4 | `capability.map` | api:useMap() | `useMap()` | wx.createMapContext | planned |
 | C5 | `capability.sensor` | api:useSensor() | `useSensor()` | onAccelerometer/onCompass/onGyroscope | planned |
 | C6 | `capability.vibrate` | api:useVibrate() | `useVibrate()` | wx.vibrateShort/Long | planned |
@@ -140,7 +140,7 @@
 | C39 | `capability.face-id` | api:useFaceID() | `useFaceID()` | 组合 | planned |
 | C40 | `capability.payment` | api:usePayment() | `usePayment()` | wx.requestPayment | planned |
 | C41 | `capability.login` | api:useLogin() | `useLogin()` | wx.login | planned |
-| C42 | `capability.qr-code` | api:useQRCode() | `useQRCode()` | wx.scanCode + canvas | planned |
+| C42 | `capability.qr-code` | tag:p-scan-qr | `p-scan-qr` | wx.scanCode + canvas | implemented |
 | C43 | `capability.file-system` | api:useFileSystem() | `useFileSystem()` | wx.getFileSystemManager | planned |
 | C44 | `capability.archive` | api:useArchive() | `useArchive()` | wx.compressFile | planned |
 | C45 | `capability.shortcut` | api:useShortcut() | `useShortcut()` | wx.addToDesktop | planned |

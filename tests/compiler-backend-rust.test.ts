@@ -65,12 +65,12 @@ describe('G-29 B2 RustBackend（同一 SFC → 语义等价 CompilerIR——G-29
     expect(seq).toContain('ui.text')
     expect(seq).toContain('ui.button')
     expect(seq).toContain('ui.input')
-    expect(seq).toContain('capability.scan-qr')
+    expect(seq).toContain('capability.qr-code')
     const sem = ir.semantic as { semantic_count: number; compat_count: number }
     expect(sem.semantic_count).toBe(7) // 7 个 p-* 语义节点
     expect(sem.compat_count).toBe(1) // 1 个 view 兼容层
     const bindings = ir.bindings as { capabilities: Array<{ name: string }>; models: Array<{ name: string; expr: string }>; handlers: Array<{ name: string; target: string }> }
-    expect(bindings.capabilities).toEqual([{ name: 'scan-qr', semantic: 'capability.scan-qr' }])
+    expect(bindings.capabilities).toEqual([{ name: 'qr-code', semantic: 'capability.qr-code' }])
     expect(bindings.models).toEqual([{ name: 'modelValue', expr: 'keyword' }])
     expect(bindings.handlers).toEqual([{ name: 'click', target: 'onSave' }])
   })

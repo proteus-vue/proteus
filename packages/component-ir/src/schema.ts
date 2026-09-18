@@ -104,9 +104,12 @@ export const SEMANTIC_ENUM = [
   'engineering.animate',
   'engineering.error-boundary',
   // —— 能力入口（G-28 组件化：p-* 能力入口组件；useXxx Hook 归 API 层不产生 C-IR 节点）——
-  'capability.scan-qr',
-  'capability.pick-photo',
+  //   ★2026-09-18 语义去重：原列 'capability.scan-qr' / 'capability.pick-photo' 为**重复名**，
+  //   已退役改为真实能力（组件的实现分别调用 useQRCode() / useCamera()，即 C42 / C1）——
+  //   本枚举收录的是「能作为 C-IR 节点出现的语义」，故此处列真实能力名（E8 双形态先例同源）。
   'capability.location',
+  'capability.qr-code',
+  'capability.camera',
 ] as const
 
 /** C-IR JSON Schema（等价于 plan component-ir.schema.json——TS 内嵌供校验/工具消费） */
@@ -181,8 +184,12 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-transition': 'engineering.transition',
   'p-animate': 'engineering.animate',
   // G-31 能力入口
-  'p-scan-qr': 'capability.scan-qr',
-  'p-pick-photo': 'capability.pick-photo',
+  // ★2026-09-18 语义去重：原 capability.scan-qr / capability.pick-photo 是**重复名**——
+  //   两个组件的实现分别调用 useQRCode() / useCamera()，对应真实能力即 C42 capability.qr-code /
+  //   C1 capability.camera（其 mpEquiv 与 hook 完全一致）。故**退役重复名、重指向真实能力**，
+  //   并按 E8 双形态在两行补 tag（而非新建语义）。
+  'p-scan-qr': 'capability.qr-code',
+  'p-pick-photo': 'capability.camera',
   'p-location': 'capability.location',
   // ★G-31 B4 现有组件对齐（src/components 实际标签 → L1 语义）
   'p-view': 'layout.box', // 原子容器 = p-box 角色
@@ -192,7 +199,9 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-safe': 'layout.safe',
   'p-sidebar': 'layout.sidebar',
   // ★#405 语义登记批：剩余 10 组件全量入图（EXTRA_KIND 文档兑底退役）——
-  //   9 个新语义（catalog planned L2：语义层待多端映射）+ p-scroll-view 复用 layout.scroll（p-view 先例）
+  //   9 个新语义（catalog planned L2：语义层待多端映射）+ p-scroll-view 复用 layout.scroll
+  //   （★2026-09-18 修正原文「p-view 先例」：显式 multi-tag 别名先例是上一行的 `router-link`
+  //    ——同一语义由两个标签提供；本条与 p-view 是并列的别名情形，非「先例」关系）
   'p-aspect': 'layout.aspect',
   'p-zone': 'layout.zone',
   'p-loading': 'ui.loading',
@@ -235,3 +244,50 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
  * 新增条目须给理由；**不得**用它绕过「新组件必须登记语义」的要求——仅限「实现载体」类。
  */
 export const FRAMEWORK_INTERNAL_TAGS: ReadonlySet<string> = new Set(['p-svg-canvas'])
+
+/**
+ * ★多标签共享语义的**显式别名登记**（2026-09-18）。
+ *
+ * 背景：`checkPrimitiveCatalog` 只校验 **catalog** 的 semantic 唯一，不校验 `TAG_SEMANTIC_MAP`
+ *   的**值**唯一——于是「两个标签指向同一语义」这一情形长期**无人校验**，实测存在 3 处：
+ *   `layout.box`（p-box / p-view）、`layout.scroll`（p-scroll / p-scroll-view）、
+ *   `engineering.router-link`（p-router-link / router-link）。
+ *
+ * 语义：这些**不是缺陷**（同一语义可由多个标签提供，如 `router-link` 是 Vue Router 风格兼容别名），
+ *   但**必须显式登记 + 给理由 + 指明规范标签**，否则属「悄悄重复」（新增重复值不再可能漏检——
+ *   由 auditCatalogConsistency 的 **C6** 强制）。
+ *
+ * ★规范标签（canonical）判定依据：**端对齐产物且实际被源码引用者**为规范；
+ *   另一者为 G-32 血统的兼容别名（历史组件，保留不删——删除属更大决策）。
+ *   ★实测源码引用（排除构建产物/缓存）：p-view 22 · p-scroll-view 2 · p-box 0 · p-scroll 1。
+ */
+export interface TagAliasDecl {
+  /** 规范标签（端对齐产物 + 实际使用；catalog 应登记此 tag） */
+  canonical: string
+  /** 兼容别名标签 */
+  aliases: string[]
+  reason: string
+}
+
+export const TAG_SEMANTIC_ALIASES: Record<string, TagAliasDecl> = {
+  'layout.box': {
+    canonical: 'p-view',
+    aliases: ['p-box'],
+    reason:
+      'p-view 为端对齐产物（对齐官方 <view> 按压反馈 4 属性、模板用 <view> 走 Web 模拟层）且实际被引用；' +
+      'p-box 为 G-32 L1 血统（aspectRatio/overflow 两个语义属性，当前零源码引用）——保留为兼容别名不删。' +
+      '★注：catalog L1 行的 props 是两者的并集，属「意图声明」，与两实现均不完全一致（见 audit C8 披露）。',
+  },
+  'layout.scroll': {
+    canonical: 'p-scroll-view',
+    aliases: ['p-scroll'],
+    reason:
+      'p-scroll-view 为端对齐产物（透传官方 <scroll-view> 全量属性：scroll-into-view/upper-threshold/refresher 全家桶/enhanced 等）；' +
+      'p-scroll 为 G-32 L10 血统（axis/paging/refresh/indicator 语义属性）。★注：catalog L10 行 props 同为两者并集。',
+  },
+  'engineering.router-link': {
+    canonical: 'p-router-link',
+    aliases: ['router-link'],
+    reason: 'router-link 是 Vue Router 风格标签兼容别名（framework 保留字，非 catalog 条目）。',
+  },
+}

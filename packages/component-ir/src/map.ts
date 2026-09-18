@@ -149,7 +149,9 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'nav',
   },
   // —— 能力入口（G-28 组件化）——
-  'capability.scan-qr': {
+  // ★2026-09-18 语义去重：原键 capability.scan-qr 为重复名（组件的实现调用 useQRCode()，
+  //   真实能力即 C42 capability.qr-code）——键已迁移，7 端渲染映射原样保留。
+  'capability.qr-code': {
     'vue-dom': 'button.proteus-scan-qr',
     'native-ios': 'AVCaptureSession',
     'native-android': 'CameraX',
@@ -158,7 +160,9 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'scanQR',
     headless: 'scan-qr',
   },
-  'capability.pick-photo': {
+  // ★2026-09-18 语义去重：原键 capability.pick-photo 为重复名（组件实现调用 useCamera()，
+  //   真实能力即 C1 capability.camera）——键已迁移，映射原样保留。
+  'capability.camera': {
     'vue-dom': 'input.proteus-pick-photo',
     'native-ios': 'UIImagePicker',
     'native-android': 'PhotoPicker',

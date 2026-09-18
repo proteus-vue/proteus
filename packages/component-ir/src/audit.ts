@@ -6,7 +6,7 @@
 //      implemented 语义 ∈ SEMANTIC_BACKEND_MAP（≥3 端由 checkSemanticCoverage 另行门禁）
 //   矩阵数据源：docs/proteus-semantic-primitives-plus-plan/miniprogram-mapping.md（社区对照表编码）
 import { SEMANTIC_BACKEND_MAP } from './map'
-import { SEMANTIC_ENUM, TAG_SEMANTIC_MAP } from './schema'
+import { SEMANTIC_ENUM, TAG_SEMANTIC_MAP, TAG_SEMANTIC_ALIASES } from './schema'
 import { PRIMITIVE_CATALOG } from './primitives'
 
 // —— ① 小程序全量能力对照矩阵（完整性标尺——miniprogram-mapping.md 编码） ——
@@ -299,6 +299,57 @@ export function auditCatalogConsistency(): ConsistencyIssue[] {
       if (!inCatalog) {
         issues.push({ rule: 'C5', detail: `${sem} 在 SEMANTIC_ENUM 但不在 catalog（孤立语义）` })
       }
+    }
+  }
+
+  // ★C6（2026-09-18 新增）：TAG_SEMANTIC_MAP 的多标签共享语义必须显式登记（防「悄悄重复」）。
+  //   背景：checkPrimitiveCatalog 只校验 catalog 的 semantic 唯一，**不校验 TAG_SEMANTIC_MAP 的「值」唯一**
+  //   → 「两个标签→同一语义」长期无人校验，实测潜伏 3 处（layout.box / layout.scroll / engineering.router-link）。
+  //   这类共享**不是缺陷**（如 router-link 是 Vue Router 风格兼容别名），但必须显式登记 + 给理由 + 指明规范标签。
+  {
+    const bySemantic = new Map<string, string[]>()
+    for (const [tag, sem] of Object.entries(TAG_SEMANTIC_MAP)) {
+      const list = bySemantic.get(sem) ?? []
+      list.push(tag)
+      bySemantic.set(sem, list)
+    }
+    const aliasKeys = Object.keys(TAG_SEMANTIC_ALIASES)
+    for (const [sem, tags] of bySemantic) {
+      if (tags.length <= 1) continue
+      const decl = TAG_SEMANTIC_ALIASES[sem]
+      if (!decl) {
+        issues.push({
+          rule: 'C6',
+          detail: `语义 ${sem} 被 ${tags.length} 个标签共享（${tags.join(', ')}）但未在 TAG_SEMANTIC_ALIASES 登记（须给理由 + 指明规范标签）`,
+        })
+        continue
+      }
+      const declared = new Set([decl.canonical, ...decl.aliases])
+      const undeclared = tags.filter((t) => !declared.has(t))
+      if (undeclared.length) {
+        issues.push({ rule: 'C6', detail: `${sem} 的共享标签 ${undeclared.join(', ')} 未在 TAG_SEMANTIC_ALIASES 中声明` })
+      }
+      if (!tags.includes(decl.canonical)) {
+        issues.push({ rule: 'C6', detail: `${sem} 的 canonical「${decl.canonical}」不在实际共享标签中` })
+      }
+      if (!decl.reason?.trim()) issues.push({ rule: 'C6', detail: `${sem} 的别名登记缺理由` })
+    }
+    // 反向：登记了但实际并不共享（陈旧登记）
+    for (const sem of aliasKeys) {
+      if ((bySemantic.get(sem)?.length ?? 0) <= 1) {
+        issues.push({ rule: 'C6', detail: `TAG_SEMANTIC_ALIASES 登记了 ${sem}，但它并未被多标签共享（陈旧登记）` })
+      }
+    }
+  }
+
+  // ★C7（2026-09-18 新增）：SEMANTIC_BACKEND_MAP 有条目、却无任何 catalog 行承接的语义 = **孤儿语义**。
+  //   背景：C5 只查「无 BACKEND 行」，反向缺口（有 BACKEND 行但 catalog 无对应语义）无人查——
+  //   实测 `capability.pick-photo` / `capability.scan-qr` 正落在此缺口（ENUM + BACKEND 7 端齐备，
+  //   但 catalog 中无对应行），同时它们的组件标签在 TAG_SEMANTIC_MAP 映射到该语义
+  //   → 标签可渲染、语义可映射，但 SSOT 查不到该语义（与批次 7 的 C1 单向问题同源）。
+  for (const sem of Object.keys(SEMANTIC_BACKEND_MAP)) {
+    if (!PRIMITIVE_CATALOG.some((p) => p.semantic === sem)) {
+      issues.push({ rule: 'C7', detail: `${sem} 在 SEMANTIC_BACKEND_MAP 但 catalog 无承接行（孤儿语义）` })
     }
   }
 

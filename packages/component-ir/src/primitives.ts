@@ -148,9 +148,10 @@ function cap(id: string, name: string, api: string, mpEquiv: string, returnType:
 
 const CAPABILITY: PrimitiveDef[] = [
   // 7.1 设备/硬件（15）
-  cap('C1', 'camera', 'useCamera()', 'wx.createCameraContext', 'Result<Media>'),
+  // ★2026-09-18 双形态（E8 先例）：能力入口组件 p-pick-photo 即 useCamera() 的声明式入口
+  { id: 'C1', kind: 'capability', semantic: 'capability.camera', api: 'useCamera()', tag: 'p-pick-photo', props: ['Result<Media>'], mpEquiv: 'wx.createCameraContext', tier: 'L1', status: 'implemented' },
   cap('C2', 'microphone', 'useMicrophone()', 'RecorderManager', 'Result<AudioBuffer>'),
-  { id: 'C3', kind: 'capability', semantic: 'capability.location', api: 'useLocation()', props: ['Result<Coords>'], mpEquiv: 'wx.getLocation', tier: 'L1', status: 'implemented' },
+  { id: 'C3', kind: 'capability', semantic: 'capability.location', api: 'useLocation()', tag: 'p-location', props: ['Result<Coords>'], mpEquiv: 'wx.getLocation', tier: 'L1', status: 'implemented' },
   cap('C4', 'map', 'useMap()', 'wx.createMapContext', 'MapController'),
   cap('C5', 'sensor', 'useSensor()', 'onAccelerometer/onCompass/onGyroscope', 'SensorStream'),
   cap('C6', 'vibrate', 'useVibrate()', 'wx.vibrateShort/Long', 'void'),
@@ -192,7 +193,8 @@ const CAPABILITY: PrimitiveDef[] = [
   cap('C39', 'face-id', 'useFaceID()', '组合', 'Result<boolean>'),
   cap('C40', 'payment', 'usePayment()', 'wx.requestPayment', 'Result<PayResult>'),
   cap('C41', 'login', 'useLogin()', 'wx.login', 'Result<Token>'),
-  cap('C42', 'qr-code', 'useQRCode()', 'wx.scanCode + canvas', 'Result<string>'),
+  // ★2026-09-18 双形态（E8 先例）：能力入口组件 p-scan-qr 即 useQRCode() 的声明式入口
+  { id: 'C42', kind: 'capability', semantic: 'capability.qr-code', api: 'useQRCode()', tag: 'p-scan-qr', props: ['Result<string>'], mpEquiv: 'wx.scanCode + canvas', tier: 'L1', status: 'implemented' },
   cap('C43', 'file-system', 'useFileSystem()', 'wx.getFileSystemManager', 'FSAdapter'),
   cap('C44', 'archive', 'useArchive()', 'wx.compressFile', 'Result<void>'),
   cap('C45', 'shortcut', 'useShortcut()', 'wx.addToDesktop', 'Result<void>'),

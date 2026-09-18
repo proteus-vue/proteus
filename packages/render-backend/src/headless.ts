@@ -41,8 +41,8 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'ui.input': 'input',
   'ui.list': 'list',
   'ui.nav': 'nav',
-  'capability.scan-qr': 'scan-qr',
-  'capability.pick-photo': 'pick-photo',
+  'capability.qr-code': 'scan-qr',
+  'capability.camera': 'pick-photo',
   'capability.location': 'location',
   // ★G-32 B1：新增 implemented 语义（与 component-ir SEMANTIC_BACKEND_MAP headless 列同源）
   'layout.inline': 'inline',

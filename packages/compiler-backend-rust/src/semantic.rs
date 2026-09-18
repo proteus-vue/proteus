@@ -63,8 +63,10 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         "p-transition" => Some("engineering.transition"),
         "p-animate" => Some("engineering.animate"),
         // Capability 入口
-        "p-scan-qr" => Some("capability.scan-qr"),
-        "p-pick-photo" => Some("capability.pick-photo"),
+        // ★2026-09-18 语义去重：原 capability.scan-qr / capability.pick-photo 为重复名，
+        //   已重指向真实能力（C42 qr-code / C1 camera——与 TAG_SEMANTIC_MAP 同步）
+        "p-scan-qr" => Some("capability.qr-code"),
+        "p-pick-photo" => Some("capability.camera"),
         "p-location" => Some("capability.location"),
         // ★#405 语义登记批（与 Node TAG_SEMANTIC_MAP 同步——剩余 10 组件全量入图）
         "p-aspect" => Some("layout.aspect"),

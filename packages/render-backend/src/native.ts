@@ -94,8 +94,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.input': 'UITextField',
     'ui.list': 'UITableView',
     'ui.nav': 'UINavigationController',
-    'capability.scan-qr': 'AVCaptureSession',
-    'capability.pick-photo': 'UIImagePicker',
+    'capability.qr-code': 'AVCaptureSession',
+    'capability.camera': 'UIImagePicker',
     'capability.location': 'CLLocationManager',
     // ★G-32 B1：新增 implemented 语义
     'layout.inline': 'UITextAttachment',
@@ -162,8 +162,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.input': 'EditText',
     'ui.list': 'RecyclerView',
     'ui.nav': 'NavigationRail',
-    'capability.scan-qr': 'CameraX',
-    'capability.pick-photo': 'PhotoPicker',
+    'capability.qr-code': 'CameraX',
+    'capability.camera': 'PhotoPicker',
     'capability.location': 'FusedLocation',
     // ★G-32 B1：新增 implemented 语义
     'layout.inline': 'TextView.inline',
@@ -230,8 +230,8 @@ const SEMANTIC_NATIVE_MAPS: Record<NativePlatform, Record<string, string>> = {
     'ui.input': 'TextInput',
     'ui.list': 'List',
     'ui.nav': 'Navigation',
-    'capability.scan-qr': 'ScanKit',
-    'capability.pick-photo': 'PhotoViewPicker',
+    'capability.qr-code': 'ScanKit',
+    'capability.camera': 'PhotoViewPicker',
     'capability.location': 'geoLocationManager',
     // ★G-32 B1：新增 implemented 语义
     'layout.inline': 'Span',

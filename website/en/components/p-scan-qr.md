@@ -12,7 +12,7 @@ QR scan capability entry
 
 | Semantic | Domain | Mini Program equivalent |
 |---|---|---|
-| capability.scan-qr | Capability Entry | — |
+| capability.qr-code | Capability Entry | — |
 
 ## Compat rollout
 

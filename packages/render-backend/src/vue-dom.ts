@@ -46,8 +46,8 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'ui.list': { tag: 'div', className: 'proteus-list' },
   'ui.nav': { tag: 'nav' },
   // ★G-31 B5：能力入口（G-28 组件化）——Web 端用标准元素承载，能力实现由 useNative 注入
-  'capability.scan-qr': { tag: 'button', className: 'proteus-scan-qr' },
-  'capability.pick-photo': { tag: 'input', className: 'proteus-pick-photo' },
+  'capability.qr-code': { tag: 'button', className: 'proteus-scan-qr' },
+  'capability.camera': { tag: 'input', className: 'proteus-pick-photo' },
   'capability.location': { tag: 'button', className: 'proteus-location' },
   // ★G-32 B1：新增 implemented 语义（与 component-ir SEMANTIC_BACKEND_MAP vue-dom 列同源）
   'layout.inline': { tag: 'div', className: 'proteus-inline' },

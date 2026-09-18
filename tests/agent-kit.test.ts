@@ -50,12 +50,12 @@ describe('G-36 B2 IRBuilder（不绑 LLM 构造 IR）', () => {
         semantic: 'ui.button',
         tag: 'p-button',
         props: { label: '扫码' },
-        capabilities: [{ name: 'scan-qr', degradation: '手动输入降级' }],
+        capabilities: [{ name: 'qr-code', degradation: '手动输入降级' }],
       })
       .build()
     const node = page.ir.children[0]
     expect(node.tag).toBe('p-button')
-    expect(node.capabilities).toEqual([{ name: 'scan-qr', degradation: '手动输入降级' }])
+    expect(node.capabilities).toEqual([{ name: 'qr-code', degradation: '手动输入降级' }])
   })
 
   it('未知 semantic（无组件形态）→ 显式报错（SSOT 纪律——不臆造 tag）', () => {
@@ -151,7 +151,7 @@ describe('G-36 B2 intent-to-flex Skill（规则引擎）', () => {
   it('能力区块携带 CMP006 降级声明（@conditional 降级节点）', async () => {
     const r = await intentToFlex({ intent: '扫码登录页' }, { mcp: createMcpServer() })
     const stack = r.page.ir.children[0]
-    const scan = stack.children.find((c) => c.semantic === 'capability.scan-qr')
+    const scan = stack.children.find((c) => c.semantic === 'capability.qr-code')
     expect(scan?.capabilities?.[0].degradation).toContain('降级')
   })
 })

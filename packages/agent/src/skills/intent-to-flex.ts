@@ -30,7 +30,7 @@ const BLOCK_RULES: readonly BlockRule[] = [
   { keywords: ['加购', '购物车', '购买', '下单', '按钮', 'buy', 'cart', 'button'], node: { semantic: 'ui.button', props: { variant: 'primary' } } },
   { keywords: ['输入', '表单', '搜索框', 'input', 'search'], node: { semantic: 'ui.input', props: { placeholder: '' } } },
   { keywords: ['列表', '网格', 'list', 'grid'], node: { semantic: 'layout.grid', props: { minColWidth: 160 } } },
-  { keywords: ['扫码', 'scan'], node: { semantic: 'capability.scan-qr', capabilities: [{ name: 'scan-qr', degradation: '手动输入降级' }] } },
+  { keywords: ['扫码', 'scan'], node: { semantic: 'capability.qr-code', capabilities: [{ name: 'qr-code', degradation: '手动输入降级' }] } },
 ]
 
 /** 实体识别：意图 → 命中区块序列（确定性规则引擎——同一意图恒同产出） */

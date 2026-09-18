@@ -12,7 +12,7 @@ Photo / album capability entry
 
 | Semantic | Domain | Mini Program equivalent |
 |---|---|---|
-| capability.pick-photo | Capability Entry | — |
+| capability.camera | Capability Entry | — |
 
 ## Compat rollout
 
