@@ -6,6 +6,7 @@
  *
  * 检查项：
  *  1. scope 残留扫描：`@proteus/<pkg>`（非 `@proteus-vue/<pkg>`）→ 失败（铁律 scope 统一）
+ *     ★豁免表 SCOPE_ALLOW / 行内标记 `scope-allow: <理由>`（见 §1 说明，未列入者仍失败）
  *  2. G 表跨文件一致：规约层三份文件的 G-xx 行集合必须一致（G-01~G-28，无缺口无重复）→ 失败
  *  3. 包注册表对照：00-architecture.md 注册表 vs packages/* 实际包名 → 报告（不失败，文档描述未来态）
  *  4. contracts 检查：packages/contracts 存在性 → 报告
@@ -14,6 +15,7 @@
  *  node scripts/check-consistency.js
  *  node scripts/check-consistency.js --focus=contracts   # 仅 contracts 检查
  *  node scripts/check-consistency.js --layering          # 分层检查（包名合法 + 类型包零运行时依赖）
+ *  node scripts/check-consistency.js --scope             # 仅 scope 扫描（规则自测用）
  */
 import fs from 'fs';
 import path from 'path';
@@ -60,27 +62,78 @@ function extractGSet(file) {
 }
 
 /* ---------- 1. scope 残留扫描 ---------- */
+
+/**
+ * scope 豁免表 —— 判定标准：**真实 drift = 代码/清单里真的依赖了 `@proteus/<pkg>`**
+ * （包名写错会导致 install/import 失败）。以下三类不是 drift，且「改对」反而破坏其存在意义：
+ *  - 检测样本：fork 指纹扫描器的检出目标本身就是「错误 scope」（改对则失去检出能力）；
+ *  - 生态示例名：规划文档中的第三方/平台后端与插件命名（`@proteus/backend-car` 等），永不属于框架 scope；
+ *  - 历史写法：决策 #215a 收口 @proteus-vue 组织 scope 时，保留 plan/历史文档与 compat 包 README 的旧写法。
+ * 每条必须给理由；`paths` 缺省=全仓生效（限定路径时正则相对仓库根、正斜杠）。
+ * 未列入者一律失败——新增豁免须在此显式登记，或在该行加 `// scope-allow: <理由>`。
+ */
+const SCOPE_ALLOW = [
+  {
+    token: /^@proteus\/(container|core)$/,
+    reason: 'G-42.6 fork 机器指纹检测样本——套件/测试/记忆文本中的「错误 scope」正是检出目标',
+  },
+  {
+    token: /^@proteus\/architecture$/,
+    reason: '官网规划文中的架构文档伪包名（非 npm 包）',
+  },
+  {
+    token: /^@proteus\/backend-/,
+    reason: 'G-30 通用后端规划示例（第三方/平台生态后端命名，非框架包）',
+  },
+  {
+    token: /^@proteus\/plugin-/,
+    reason: '编译器插件规划示例（第三方生态插件命名，非框架包）',
+  },
+  {
+    token: /^@proteus\/compat-miniprogram$/,
+    paths: [/^docs\//, /^packages\/compat-miniprogram\/README\.md$/, /^PROJECT_MEMORY\.md$/],
+    reason: '决策 #215a：plan/历史文档、compat 包 README 与项目记忆保留旧写法（真实包名 @proteus-vue/compat-miniprogram）；源码与清单中出现仍失败',
+  },
+  {
+    token: /^@proteus\/x$/,
+    reason: '记忆/文档中泛指「旧 scope」的占位符（如「plan 文档写 @proteus/x」），非真实包名',
+  },
+];
+
+/** 行内豁免标记：`scope-allow: <理由>`（理由非空，否则不豁免） */
+const SCOPE_INLINE_ALLOW = /scope-allow:\s*(\S.*)$/;
+const SCOPE_MAX_REPORT = 30;
+
 function checkScope() {
   console.log('\n[1/4] scope 残留扫描（@proteus/ 应为 @proteus-vue/）');
   const exts = new Set(['.md', '.ts', '.json', '.js', '.mjs', '.vue']);
   // 注意：@proteus-vue/ 中 @proteus 后是 '-'，不会被 @proteus\/ 命中，天然豁免
-  const scopeRe = /@proteus\/([a-zA-Z0-9-]+)/g;
-  let bad = [];
+  const bad = [];
+  const allowed = [];
   for (const file of walk(ROOT)) {
     if (!exts.has(path.extname(file))) continue;
+    const rel = path.relative(ROOT, file).split(path.sep).join('/');
     const content = fs.readFileSync(file, 'utf8');
-    const re = new RegExp(scopeRe.source, 'g');
-    let m;
-    while ((m = re.exec(content)) !== null) {
-      const lineNo = content.slice(0, m.index).split('\n').length;
-      bad.push(`${path.relative(ROOT, file)}:${lineNo} ${m[0]}`);
-      break; // 每文件只记一次
+    for (const [i, line] of content.split('\n').entries()) {
+      const re = /@proteus\/([a-zA-Z0-9-]+)/g;
+      let m;
+      while ((m = re.exec(line)) !== null) {
+        const token = m[0];
+        if (SCOPE_INLINE_ALLOW.test(line)) {
+          allowed.push(`${rel}:${i + 1} ${token}（行内豁免）`);
+        } else if (SCOPE_ALLOW.some((r) => r.token.test(token) && (!r.paths || r.paths.some((p) => p.test(rel))))) {
+          allowed.push(`${rel}:${i + 1} ${token}`);
+        } else {
+          bad.push(`${rel}:${i + 1} ${token}`);
+        }
+      }
     }
   }
   if (bad.length) {
-    bad.forEach((b) => fail(`遗留旧 scope: ${b}`));
+    bad.slice(0, SCOPE_MAX_REPORT).forEach((b) => fail(`遗留旧 scope: ${b}`));
+    if (bad.length > SCOPE_MAX_REPORT) fail(`…另有 ${bad.length - SCOPE_MAX_REPORT} 处（已截断）`);
   } else {
-    ok('无 @proteus/ 残留');
+    ok(`无非法 @proteus/ 残留（合法豁免 ${allowed.length} 处：检测样本 / 生态示例名 / 历史写法）`);
   }
 }
 
@@ -203,11 +256,15 @@ function checkLayering() {
 const args = process.argv.slice(2);
 const focusContracts = args.includes('--focus=contracts');
 const layering = args.includes('--layering');
+const scopeOnly = args.includes('--scope');
 
 if (focusContracts) {
   checkContracts();
 } else if (layering) {
   checkLayering();
+} else if (scopeOnly) {
+  // 仅 scope 扫描（供 tests/consistency-scope.test.ts 隔离验证规则本身）
+  checkScope();
 } else {
   checkScope();
   checkGTable();

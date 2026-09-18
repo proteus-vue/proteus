@@ -6,7 +6,7 @@
      ★B4 事件归一：onScroll 用 eventScrollTop（MP e.detail.scrollTop / Web e.target.scrollTop）
      ★注意：watch 回调必须花括号体（编译器仅支持 => { body }）；虚拟窗口必须搭配 scroll-view（Skyline 禁全局滚动） -->
 <template>
-  <scroll-view class="p-list-view" scroll-y :style="{ height: height + 'px' }" @scroll="onScroll">
+  <scroll-view class="p-list-view" scroll-y :style="scrollStyle" @scroll="onScroll">
     <view v-if="virtual" class="plv-ph" :style="{ height: start * itemHeight + 'px' }" />
     <view v-for="(item, i) in visible" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
       <text>{{ item.title }}</text>
@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { eventScrollTop } from '../runtime/event'
 import { getVirtualWindow } from '../runtime/virtual-window'
 import { componentRender } from '../runtime/observability'
@@ -30,6 +30,17 @@ const props = defineProps({
   bufferSize: { type: Number, default: 2 }, // 可视区外缓冲行数（平滑滚动的提前量）
   virtual: { type: Boolean, default: true }, // 虚拟开关（false = 全量渲染，小列表省组件切片开销）
   lazy: { type: Boolean, default: false }, // 懒挂载：首屏不渲染，首次滚动才计算
+  /** ★官方 <list-view> 属性对齐（2026-09-18）：长度 4 的数组，按 top/right/bottom/left 指定内边距 */
+  padding: { type: Array as any, default: () => [] },
+})
+
+// ★官方 list-view `padding`（4 元数组）→ CSS padding 简写；非 4 元视为未设置（保持原样式，不抛错）
+//   与 height 合并为单个 :style 绑定（模板内不做拼接——S38/T18：WXML 不支持模板表达式函数调用）
+const scrollStyle = computed(() => {
+  const p = (props.padding as unknown as number[]) ?? []
+  const style: Record<string, string> = { height: props.height + 'px' }
+  if (p.length === 4) style.padding = p.map((n) => n + 'px').join(' ')
+  return style
 })
 
 const start = ref(0)

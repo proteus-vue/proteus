@@ -2,7 +2,7 @@
  "_comment": "微信小程序官方组件**属性级**清单快照——由 scripts/gen-mp-component-attrs.mjs 从官方文档抓取，勿手改。",
  "source": "https://developers.weixin.qq.com/miniprogram/dev/component/<tag>.html",
  "componentCount": 77,
- "attrTotal": 771,
+ "attrTotal": 772,
  "components": {
   "ad": [
    {
@@ -1466,55 +1466,61 @@
     "desc": "音频冲突时是否静音"
    },
    {
-    "name": "bind:statechange",
+    "name": "enable-ipv6-first",
+    "type": "boolean",
+    "required": false,
+    "desc": "是否开启 IPv6 优先"
+   },
+   {
+    "name": "bindstatechange",
     "type": "eventhandle",
     "required": false,
     "desc": "播放状态变化事件，detail = {code}"
    },
    {
-    "name": "bind:fullscreenchange",
+    "name": "bindfullscreenchange",
     "type": "eventhandle",
     "required": false,
     "desc": "全屏变化事件，detail = {direction, fullScreen}"
    },
    {
-    "name": "bind:netstatus",
+    "name": "bindnetstatus",
     "type": "eventhandle",
     "required": false,
     "desc": "网络状态通知，detail = {info}"
    },
    {
-    "name": "bind:audiovolumenotify",
+    "name": "bindaudiovolumenotify",
     "type": "eventhandler",
     "required": false,
     "desc": "播放音量大小通知，detail = {}"
    },
    {
-    "name": "bind:enterpictureinpicture",
+    "name": "bindenterpictureinpicture",
     "type": "eventhandler",
     "required": false,
     "desc": "播放器进入小窗"
    },
    {
-    "name": "bind:leavepictureinpicture",
+    "name": "bindleavepictureinpicture",
     "type": "eventhandler",
     "required": false,
     "desc": "播放器退出小窗"
    },
    {
-    "name": "bind:castinguserselect",
+    "name": "bindcastinguserselect",
     "type": "eventhandler",
     "required": false,
     "desc": "用户选择投屏设备时触发 detail = { state: &quot;success&quot;/&quot;fail&quot; }"
    },
    {
-    "name": "bind:castingstatechange",
+    "name": "bindcastingstatechange",
     "type": "eventhandler",
     "required": false,
     "desc": "投屏成功/失败时触发 detail = { type, state: &quot;success&quot;/&quot;fail&quot; }"
    },
    {
-    "name": "bind:castinginterrupt",
+    "name": "bindcastinginterrupt",
     "type": "eventhandler",
     "required": false,
     "desc": "投屏被中断时触发"

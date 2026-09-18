@@ -236,6 +236,23 @@ export const TEMPLATE_RULES: TransformRule[] = [
     source: 'src/compiler/template.ts → serializeElement（未知 p-* 检测）',
   }),
 
+  // ============ 属性降级（EA-5 / G-31.2，批次 4 M6） ============
+  {
+    id: 'prop/no-degradation',
+    phase: 'template',
+    status: 'implemented',
+    title: '目标端 unsupported 属性 fail-closed 诊断（PROP_NO_DEGRADATION）',
+    titleEn: 'target-end unsupported props fail closed (PROP_NO_DEGRADATION)',
+    description: '组件属性在目标端降级三态为 unsupported（本端无法实现）时，使用即产生编译期诊断（PROP_NO_DEGRADATION）；fallback（有意降级、行为已声明）不报',
+    descriptionEn: 'when a component prop is declared unsupported on the target end, using it raises a compile-time diagnostic (PROP_NO_DEGRADATION); fallback (intentional, behavior declared) is not reported',
+    why: 'G-31.2 铁律：属性在各端必须声明 supported/fallback/unsupported；unsupported 的静默失败是「异端」（开发者到真机才发现），故编译期 fail-closed',
+    whyEn: 'G-31.2: every prop must declare supported/fallback/unsupported per end; silently failing unsupported props are the anti-pattern to eliminate, so the compiler fails closed',
+    when: 'p-* 组件的静态属性在降级表中该端为 unsupported 时',
+    example: { before: '<p-media foo="x" />', after: '编译诊断 PROP_NO_DEGRADATION（mp 端 unsupported）' },
+    verify: 'tests/degradation-batch4.test.ts（编译期诊断）+ scripts/audit-degradation.mjs（全表门禁）',
+    source: 'packages/compiler/src/template.ts → serializeElement（prop/no-degradation 分支）+ component-ir/degradation.ts',
+  },
+
   // ============ 语义基础类 ============
   {
     id: 'semantic/base-class',

@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **45** 个。
+> implemented 语义 **59** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -17,6 +17,8 @@
 | `layout.scroll` | div.proteus-scroll | UIScrollView | ScrollView | Scroll | scroll-view | ScrollView | scroll |
 | `layout.virtual-list` | div.proteus-virtual-list | UICollectionView | RecyclerView | List | list-view | ListView | virtual-list |
 | `layout.masonry` | div.proteus-masonry | UICollectionView.masonry | StaggeredGridLayoutManager | WaterFlow | grid.masonry | SliverMasonryGrid | masonry |
+| `layout.safe` | div.proteus-safe | safeAreaLayoutGuide | WindowInsets | getAvoidArea | env.safe-area | SafeArea | safe |
+| `layout.sidebar` | div.proteus-sidebar | UISplitViewController.side | NavigationRail | SideBarContainer | view.sidebar | NavigationRail | sidebar |
 | `ui.text` | span | UILabel | TextView | Text | text | Text | text |
 | `ui.heading` | div.proteus-heading | UILabel.heading | TextView.heading | Text.heading | text.heading | Text.heading | heading |
 | `ui.rich-text` | div.proteus-rich-text | UITextView.attributed | TextView.html | RichText | rich-text | RichText | rich-text |
@@ -35,6 +37,14 @@
 | `ui.slider` | div.proteus-slider | UISlider | SeekBar | Slider | slider | Slider | slider |
 | `ui.picker` | div.proteus-picker | UIDatePicker | DatePicker | DatePicker | picker-view | showDatePicker | picker |
 | `ui.form` | form | UIView.form | LinearLayout.form | FormComponent | form | Form | form |
+| `ui.progress` | div.proteus-progress | UIProgressView | ProgressBar | Progress | progress | LinearProgressIndicator | progress |
+| `ui.label` | label | UILabel.label | TextView.label | Text.label | label | Text.label | label |
+| `ui.selection` | div.proteus-selection | UITextView.selection | TextView.selection | Text.selection | selection | SelectableText | selection |
+| `ui.camera` | video.proteus-camera | AVCaptureVideoPreviewLayer | CameraX.PreviewView | XComponent.camera | camera | CameraPreview | camera |
+| `ui.map` | div.proteus-map | MKMapView | MapView | MapComponent | map | GoogleMap | map |
+| `ui.button` | button | UIButton | Button | Button | button | FilledButton | button |
+| `ui.list` | div.proteus-list | UITableView | RecyclerView | List | list-view | ListView | list |
+| `ui.nav` | nav | UINavigationController | NavigationRail | Navigation | navigator | Navigator | nav |
 | `shell.page` | div.proteus-page | UIViewController | Activity | Page | page | Scaffold | page |
 | `shell.nav` | nav.proteus-nav | UINavigationBar | Toolbar | NavigationBar | navigator | AppBar | nav |
 | `shell.tabbar` | nav.proteus-tabbar | UITabBar | BottomNavigationView | Tabs | tabbar | BottomNavigationBar | tabbar |
@@ -44,6 +54,10 @@
 | `shell.popover` | div.proteus-popover | UIPopoverController | PopupWindow | Popup | view.popover | showMenu | popover |
 | `shell.action-sheet` | div.proteus-action-sheet | UIAlertController.actionSheet | BottomSheet | ActionSheet | action-sheet | showModalBottomSheet | action-sheet |
 | `layout.split` | div.proteus-split | UISplitViewController | SlidingPaneLayout | SideBarContainer | view.split | Row | split |
+| `shell.page-container` | div.proteus-page-container | UIPresentationController | BottomSheetDialog | bindSheet | page-container | showModalBottomSheet | page-container |
+| `shell.keyboard-accessory` | div.proteus-keyboard-accessory | UIInputView | InputMethodService.accessory | KeyboardAccessory | keyboard-accessory | KeyboardAccessoryView | keyboard-accessory |
+| `shell.webview` | div.proteus-webview | WKWebView | WebView | Web | web-view | WebView | webview |
+| `shell.ad` | div.proteus-ad | UIView.ad | View.ad | AdSlot | ad | AdWidget | ad |
 | `gesture.draggable` | div.proteus-draggable | UIPanGestureRecognizer | GestureDetector | PanGesture | movable-view | Draggable | draggable |
 | `gesture.scrollable` | div.proteus-scrollable | UIScrollView.gesture | NestedScrollView | Scroll.gesture | scroll-view | Scrollable | scrollable |
 | `capability.location` | button.proteus-location | CLLocationManager | FusedLocation | geoLocationManager | wx.getLocation | getLocation | location |

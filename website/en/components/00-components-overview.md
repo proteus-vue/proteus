@@ -39,13 +39,13 @@ order: 0
 | [p-camera](/docs/component/p-camera) | 6 | 5 |
 | [p-canvas](/docs/component/p-canvas) | 6 | 0 |
 | [p-checkbox](/docs/component/p-checkbox) | 5 | 2 |
-| [p-form](/docs/component/p-form) | 3 | 1 |
+| [p-form](/docs/component/p-form) | 5 | 1 |
 | [p-heading](/docs/component/p-heading) | 1 | 0 |
 | [p-icon](/docs/component/p-icon) | 5 | 0 |
 | [p-image](/docs/component/p-image) | 13 | 2 |
-| [p-input](/docs/component/p-input) | 14 | 4 |
+| [p-input](/docs/component/p-input) | 28 | 4 |
 | [p-label](/docs/component/p-label) | 2 | 1 |
-| [p-list-view](/docs/component/p-list-view) | 9 | 0 |
+| [p-list-view](/docs/component/p-list-view) | 10 | 0 |
 | [p-loading](/docs/component/p-loading) | 5 | 0 |
 | [p-map](/docs/component/p-map) | 31 | 10 |
 | [p-media](/docs/component/p-media) | 50 | 10 |

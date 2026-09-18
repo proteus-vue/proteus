@@ -92,6 +92,12 @@ export interface TemplateTransformOptions extends StyleTransformOptions {
   }
   /** ★G-22 柔性布局：p-fluid 指令编译期 clamp 生成（designWidth/viewport） */
   fluidLayout?: FluidLayoutConfig
+  /**
+   * ★批次 4（M6）属性降级表覆盖（EA-5 诊断注入点）。
+   * 缺省 = component-ir 的 DEGRADATION_TABLE。注入用以便在「现状无 unsupported」时
+   * 验证编译期 `PROP_NO_DEGRADATION` fail-closed 路径（否则该路径无真实触发样本 = 不可证伪）。
+   */
+  degradationTable?: Record<string, Record<string, { mp: 'supported' | 'fallback' | 'unsupported'; web: 'supported' | 'fallback' | 'unsupported'; behavior?: string }>>
 }
 
 /** 自定义组件 v-model[:arg] 回写契约（★#500 prop + update:arg 事件 → 页面 setData）

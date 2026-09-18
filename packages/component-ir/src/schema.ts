@@ -217,3 +217,21 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   'p-ad': 'shell.ad',
   'p-map': 'ui.map',
 }
+
+/**
+ * ★框架**内部运行时标签**（2026-09-18 批次 7）：由编译器产出或仅供内部运行的组件标签——
+ * 它们**刻意不获得跨端语义**（不登记进 TAG_SEMANTIC_MAP / PRIMITIVE_CATALOG），
+ * 但必须在「未登记 p-*」反黑盒检查中被识别，否则产生**错误告警**。
+ *
+ * 判定依据（与 G-31 一致：不把平台私有的实现载体上升为框架语义）：
+ *  - `p-svg-canvas`：G-62 SVG 动画降级的 **MP 运行时载体**（`template/svg-canvas` 规则从 `<svg>`
+ *    形状变化动画产出，见 packages/compiler/src/template.ts）。组件自身文档写明
+ *    「MP-only 运行时组件——离屏 canvas 逐帧绘制依赖 wx.createOffscreenCanvas；Web 端不走此组件，
+ *    故无 L2 等价物」→ 它是 `ui.svg` 语义在 MP 端的**实现形态**，不是独立跨端语义。
+ *    ★修复背景：此前它被 `tag/unknown-p-star` 检查命中，编译期报
+ *    「未入库组件？产物将按未注册自定义组件输出（MP 端不渲染）」——**该断言是错的**
+ *    （组件确实在库中、产物亦由 gen-routes 正确注册），属误导告警（实测 155 个文件受影响面）。
+ *
+ * 新增条目须给理由；**不得**用它绕过「新组件必须登记语义」的要求——仅限「实现载体」类。
+ */
+export const FRAMEWORK_INTERNAL_TAGS: ReadonlySet<string> = new Set(['p-svg-canvas'])

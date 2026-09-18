@@ -16,6 +16,8 @@ import {
   SPEC_PRIVATE,
   SPEC_NA,
   SPEC_COMPONENT_OVERRIDE,
+  auditSpecOverrideRefs,
+  PRIMITIVE_CATALOG,
 } from '@proteus-vue/component-ir'
 import type { MpOfficialSpec } from '@proteus-vue/component-ir'
 
@@ -115,5 +117,46 @@ describe('★权威标尺：官方清单 spec 驱动覆盖度', () => {
     for (const n of SPEC_COMPONENT_OVERRIDE ? Object.keys(SPEC_COMPONENT_OVERRIDE) : []) {
       expect(spec.components, `override ${n} 非官方组件`).toContain(n)
     }
+  })
+})
+
+describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门禁）', () => {
+  it('SPEC_COMPONENT_OVERRIDE 的 covered 声明须指向已落地原语（悬空/planned 均 FAIL）', () => {
+    const r = auditSpecOverrideRefs(PRIMITIVE_CATALOG)
+    expect(r.coveredRefs, '应存在若干 covered 引用（防门禁空转）').toBeGreaterThan(0)
+    expect(r.issues, `问题：${JSON.stringify(r.issues)}`).toEqual([])
+  })
+
+  it('破坏性验证：指向 planned 原语的 covered → 报 unimplemented', () => {
+    const r = auditSpecOverrideRefs(PRIMITIVE_CATALOG, {
+      'tap-gesture-handler': { status: 'covered', proteus: 'gesture.tap' },
+    })
+    expect(r.issues).toHaveLength(1)
+    expect(r.issues[0].kind).toBe('unimplemented')
+    expect(r.issues[0].ref).toBe('gesture.tap')
+  })
+
+  it('破坏性验证：悬空引用（拼写错误）→ 报 semantic/component', () => {
+    const r = auditSpecOverrideRefs(PRIMITIVE_CATALOG, {
+      'long-press-gesture-handler': { status: 'covered', proteus: 'gesture.long-press' },
+    })
+    expect(r.issues).toHaveLength(1)
+    expect(r.issues[0].kind).toBe('semantic')
+  })
+
+  it('★诚实性回归：5 个手势处理器不得为 covered（其原语为 planned）', () => {
+    // 锁定本轮修正：这 5 条曾标 covered 但原语未落地（真·落地率虚高 5 项）
+    for (const tag of [
+      'tap-gesture-handler',
+      'long-press-gesture-handler',
+      'pan-gesture-handler',
+      'scale-gesture-handler',
+      'force-press-gesture-handler',
+    ]) {
+      expect(SPEC_COMPONENT_OVERRIDE[tag]?.status, `${tag} 应为 planned（原语未落地）`).toBe('planned')
+    }
+    // 已落地的两条仍为 covered（draggable 已实现）
+    expect(SPEC_COMPONENT_OVERRIDE['horizontal-drag-gesture-handler']?.status).toBe('covered')
+    expect(SPEC_COMPONENT_OVERRIDE['vertical-drag-gesture-handler']?.status).toBe('covered')
   })
 })

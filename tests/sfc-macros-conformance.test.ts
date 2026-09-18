@@ -18,7 +18,13 @@ const CASES: Array<[string, string]> = [
 function compiledProps(file: string): Record<string, string> {
   const src = readFileSync(file, 'utf8')
   const c = compileVueSfc(src, { filename: file, ...opts, isComponent: true })
-  const propsBlock = c.js.match(/properties:\s*\{([\s\S]*?)\n\s*\},/)?.[1] ?? ''
+  // ★块结束锚定 2 空格缩进的 `  },`（不是 \n\s*\},）——两种产物格式都要吃下：
+  //   ① 单行条目：`items: { type: Array },`
+  //   ② **多行展开**：源码含 `??`/`?.` 等 ES2020 语法时，transpileMpSafe（babel 重打印）会把
+  //      properties 整块展开成多行 `type:` 换行形态——语义相同，仅格式差异。
+  //   旧正则 `\n\s*\},` 在格式②下会**提前停在第一个 prop 的 `    },`**（缩进 4 空格也匹配 \s*）
+  //   → 只解析出 1 个 prop → 误报「漏了全部权威 prop」。按缩进精确锚定即可两种格式通吃。
+  const propsBlock = c.js.match(/properties:\s*\{([\s\S]*?)\n {2}\},/)?.[1] ?? ''
   // name → type（微信 properties type 字段——手写 extractProps 的类型映射）
   return Object.fromEntries([...propsBlock.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*\{\s*type:\s*(\w+)/g)].map((m) => [m[1], m[2]]))
 }

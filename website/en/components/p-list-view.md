@@ -42,6 +42,7 @@ Virtual list
 | `bufferSize` | Number of buffer rows beyond the visible area (headroom for smooth scrolling) | `Number` | `2` | No |
 | `virtual` | Virtualization toggle (false = full render; saves slicing overhead for small lists) | `Boolean` | `true` | No |
 | `lazy` | Lazy mount (does not render on the first screen; renders on the first scroll / when it first becomes visible) | `Boolean` | `false` | No |
+| `padding` | — | `Array` | `() => []` | No |
 
 ### Prop details
 
@@ -89,6 +90,11 @@ Virtual list
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Lazy mount (does not render on the first screen; renders on the first scroll / when it first becomes visible)
+
+#### `padding`
+
+- **Type**: `Array`　**Default**: `() => []`　**Required**: No
+- **Doc**: —
 
 ## Implementation notes
 

@@ -69,6 +69,15 @@ jobs:
           node scripts/gen-mp-spec.mjs --check
           npx tsx packages/cli/src/index.ts audit coverage
 
+      - name: 属性降级声明门禁（批次 4 M6 · EA-5：全组件属性三态无空白格 + fallback 可观察 + 与官方清单交叉核对）
+        run: node scripts/audit-degradation.mjs
+
+      - name: 跨层一致性门禁（铁律 scope 统一 + G 表一致 + 包注册表对照）
+        run: node scripts/check-consistency.js
+
+      - name: 原语清单生成物漂移门禁（★批次 7：gen:docs 此前从未接线，catalog.md 静默过期多批）
+        run: npx tsx scripts/gen-docs.ts --check
+
       - name: 国际化消息审计（i18n-plan B2：缺失 key 阻断）
         run: npx tsx packages/cli/src/index.ts i18n:check examples --catalog examples/locales/zh-CN.json
 

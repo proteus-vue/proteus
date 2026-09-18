@@ -3,7 +3,13 @@
      ★B2 简形：同步校验聚合（Promise 校验后续批次）+ layout 横竖排
      双端同源码；MP 安全（无平台 API） -->
 <template>
-  <form class="p-form" :class="'p-form-' + layout" @submit.prevent="onSubmit">
+  <form
+    class="p-form"
+    :class="'p-form-' + layout"
+    :report-submit="reportSubmit"
+    :report-submit-timeout="reportSubmitTimeout"
+    @submit.prevent="onSubmit"
+  >
     <slot :errors="errors" />
   </form>
 </template>
@@ -18,6 +24,12 @@ const props = defineProps({
   rules: { type: Object, default: () => ({}) },
   /** 布局：horizontal 横排 / vertical 纵排 */
   layout: { type: String, default: 'vertical' },
+  // ── ★官方 <form> 属性对齐 · 批次外收口（2026-09-18）──
+  //   均为 **MP 宿主能力**（formId 用于发送模板消息）；Web 无对应 → 降级为 no-op（降级表已声明 web:fallback）
+  /** 是否返回 formId 用于发送模板消息 */
+  reportSubmit: { type: Boolean, default: false },
+  /** 等待一段时间（毫秒）以确认 formId 是否生效（不指定则 formId 有很小概率无效——官方建议设置） */
+  reportSubmitTimeout: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['submit'])

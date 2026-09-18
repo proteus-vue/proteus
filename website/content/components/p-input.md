@@ -47,6 +47,20 @@ order: 1010
 | `cursor` | 光标位置 | `Number` | `-1` | 否 |
 | `autoHeight` | 是否自动增高（textarea 语义，input 端透传） | `Boolean` | `false` | 否 |
 | `focus` | 自动聚焦 | `Boolean` | `false` | 否 |
+| `alwaysEmbed` | 强制 input 处于同层状态（iOS：默认 focus 时会切非同层） | `Boolean` | `false` | 否 |
+| `confirmHold` | 点击键盘右下角按钮时是否保持键盘不收起 | `Boolean` | `false` | 否 |
+| `adjustPosition` | 键盘弹起时是否自动上推页面（官方默认 true） | `Boolean` | `true` | 否 |
+| `holdKeyboard` | focus 时点击页面是否不收起键盘 | `Boolean` | `false` | 否 |
+| `cursorColor` | 光标颜色（iOS 十六进制；Android 仅 default/green） | `String` | `''` | 否 |
+| `selectionStart` | 光标起始位置（自动聚集时有效，需与 selectionEnd 搭配） | `Number` | `-1` | 否 |
+| `selectionEnd` | 光标结束位置（自动聚集时有效，需与 selectionStart 搭配） | `Number` | `-1` | 否 |
+| `placeholderClass` | placeholder 样式类名（与 placeholderStyle 互补：类 vs 内联样式） | `String` | `''` | 否 |
+| `safePasswordCertPath` | 安全键盘加密公钥路径（仅支持包内路径） | `String` | `''` | 否 |
+| `safePasswordLength` | 安全键盘输入密码长度 | `Number` | `0` | 否 |
+| `safePasswordTimeStamp` | 安全键盘加密时间戳 | `Number` | `0` | 否 |
+| `safePasswordNonce` | 安全键盘加密盐值 | `String` | `''` | 否 |
+| `safePasswordSalt` | 安全键盘计算 hash 盐值（指定 customHash 则无效） | `String` | `''` | 否 |
+| `safePasswordCustomHash` | 安全键盘计算 hash 的算法表达式，如 md5(sha1('foo' + sha256(sm3(passw))) | `String` | `''` | 否 |
 
 ### 属性详解
 
@@ -119,6 +133,76 @@ order: 1010
 
 - **类型**：`Boolean`　**默认值**：`false`　**必填**：否
 - **说明**：自动聚焦
+
+#### `alwaysEmbed`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：强制 input 处于同层状态（iOS：默认 focus 时会切非同层）
+
+#### `confirmHold`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：点击键盘右下角按钮时是否保持键盘不收起
+
+#### `adjustPosition`
+
+- **类型**：`Boolean`　**默认值**：`true`　**必填**：否
+- **说明**：键盘弹起时是否自动上推页面（官方默认 true）
+
+#### `holdKeyboard`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：focus 时点击页面是否不收起键盘
+
+#### `cursorColor`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：光标颜色（iOS 十六进制；Android 仅 default/green）
+
+#### `selectionStart`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标起始位置（自动聚集时有效，需与 selectionEnd 搭配）
+
+#### `selectionEnd`
+
+- **类型**：`Number`　**默认值**：`-1`　**必填**：否
+- **说明**：光标结束位置（自动聚集时有效，需与 selectionStart 搭配）
+
+#### `placeholderClass`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：placeholder 样式类名（与 placeholderStyle 互补：类 vs 内联样式）
+
+#### `safePasswordCertPath`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘加密公钥路径（仅支持包内路径）
+
+#### `safePasswordLength`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：安全键盘输入密码长度
+
+#### `safePasswordTimeStamp`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：安全键盘加密时间戳
+
+#### `safePasswordNonce`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘加密盐值
+
+#### `safePasswordSalt`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘计算 hash 盐值（指定 customHash 则无效）
+
+#### `safePasswordCustomHash`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：安全键盘计算 hash 的算法表达式，如 md5(sha1('foo' + sha256(sm3(passw)))
 
 ## Events
 

@@ -10,12 +10,26 @@
     :maxlength="maxlength"
     :placeholder="placeholder"
     :placeholder-style="placeholderStyle"
+    :placeholder-class="placeholderClass"
     :cursor-spacing="cursorSpacing"
     :confirm-type="confirmType"
     :cursor="cursor"
     :disabled="disabled"
     :class="{ 'is-disabled': disabled }"
     :focus="focus"
+    :always-embed="alwaysEmbed"
+    :confirm-hold="confirmHold"
+    :adjust-position="adjustPosition"
+    :hold-keyboard="holdKeyboard"
+    :cursor-color="cursorColor"
+    :selection-start="selectionStart"
+    :selection-end="selectionEnd"
+    :safe-password-cert-path="safePasswordCertPath"
+    :safe-password-length="safePasswordLength"
+    :safe-password-time-stamp="safePasswordTimeStamp"
+    :safe-password-nonce="safePasswordNonce"
+    :safe-password-salt="safePasswordSalt"
+    :safe-password-custom-hash="safePasswordCustomHash"
     :aria-label="ariaLabel"
     @input="onInput"
     @confirm="onConfirm"
@@ -49,6 +63,37 @@ defineProps({
   /** 是否自动增高（textarea 语义，input 端透传） */
   autoHeight: { type: Boolean, default: false },
   focus: { type: Boolean, default: false },
+  // ── ★官方 <input> 属性对齐 · 批次外收口（2026-09-18）：键盘/同层/选区/安全键盘族 ──
+  //   均为 **MP 宿主透传**属性（Web 无对应能力 → 降级为 no-op，已在降级表声明 web:fallback）
+  /** 强制 input 处于同层状态（iOS：默认 focus 时会切非同层） */
+  alwaysEmbed: { type: Boolean, default: false },
+  /** 点击键盘右下角按钮时是否保持键盘不收起 */
+  confirmHold: { type: Boolean, default: false },
+  /** 键盘弹起时是否自动上推页面（官方默认 true） */
+  adjustPosition: { type: Boolean, default: true },
+  /** focus 时点击页面是否不收起键盘 */
+  holdKeyboard: { type: Boolean, default: false },
+  /** 光标颜色（iOS 十六进制；Android 仅 default/green） */
+  cursorColor: { type: String, default: '' },
+  /** 光标起始位置（自动聚集时有效，需与 selectionEnd 搭配） */
+  selectionStart: { type: Number, default: -1 },
+  /** 光标结束位置（自动聚集时有效，需与 selectionStart 搭配） */
+  selectionEnd: { type: Number, default: -1 },
+  /** placeholder 样式类名（与 placeholderStyle 互补：类 vs 内联样式） */
+  placeholderClass: { type: String, default: '' },
+  // 安全键盘族（官方 type="safe-password" 时生效；鸿蒙 OS 暂不支持）
+  /** 安全键盘加密公钥路径（仅支持包内路径） */
+  safePasswordCertPath: { type: String, default: '' },
+  /** 安全键盘输入密码长度 */
+  safePasswordLength: { type: Number, default: 0 },
+  /** 安全键盘加密时间戳 */
+  safePasswordTimeStamp: { type: Number, default: 0 },
+  /** 安全键盘加密盐值 */
+  safePasswordNonce: { type: String, default: '' },
+  /** 安全键盘计算 hash 盐值（指定 customHash 则无效） */
+  safePasswordSalt: { type: String, default: '' },
+  /** 安全键盘计算 hash 的算法表达式，如 md5(sha1('foo' + sha256(sm3(passw))) */
+  safePasswordCustomHash: { type: String, default: '' },
 })
 
 const emit = defineEmits(['input', 'confirm', 'focus', 'blur'])

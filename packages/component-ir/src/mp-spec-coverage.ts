@@ -272,12 +272,19 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   'radio-group': { status: 'na', proteus: 'p-radio 分组（消灭为子项）' },
   'picker-view-column': { status: 'na', proteus: 'p-picker 多列（消灭为属性）' },
   // Skyline 手势处理器 → 手势原语（gesture.* / v-gesture）
-  'tap-gesture-handler': { status: 'covered', proteus: 'gesture.tap' },
-  'double-tap-gesture-handler': { status: 'covered', proteus: 'gesture.draggable（tap 识别）' },
-  'long-press-gesture-handler': { status: 'covered', proteus: 'gesture.long-press' },
-  'pan-gesture-handler': { status: 'covered', proteus: 'gesture.pan' },
-  'scale-gesture-handler': { status: 'covered', proteus: 'gesture.pinch' },
-  'force-press-gesture-handler': { status: 'covered', proteus: 'gesture.press' },
+  // ★2026-09-18 诚实性修正：以下 5 条原标 covered，但其指向的 gesture 原语在 PRIMITIVE_CATALOG 中
+  //   为 **planned**（`gesture.long-press` 更是拼写错误——实际名为 `gesture.longpress`）。
+  //   covered 的定义是「有可运行等价」，而统一手势 API（`v-gesture:*`）尚未落地 →
+  //   按实测状态改标 planned（与 2026-09-16 属性标尺虚高同类修正：数字不粉饰）。
+  //   基础 tap/longpress 经原生 @tap/@longpress 可用，但 count/worklet 等组件本义无对等。
+  //   ★同时新增 auditSpecOverrideRefs 门禁——此前 override 表**完全不在引用校验范围内**，
+  //   故这 5 条虚高 + 1 处悬空引用长期未被发现。
+  'tap-gesture-handler': { status: 'planned', proteus: 'gesture.tap（v-gesture:tap 规划中；基础 @tap 原生可用）' },
+  'double-tap-gesture-handler': { status: 'covered', proteus: 'gesture.draggable（tap 识别，已落地）' },
+  'long-press-gesture-handler': { status: 'planned', proteus: 'gesture.longpress（v-gesture 规划中；基础 @longpress 原生可用）' },
+  'pan-gesture-handler': { status: 'planned', proteus: 'gesture.pan（v-gesture:pan 规划中）' },
+  'scale-gesture-handler': { status: 'planned', proteus: 'gesture.pinch（v-gesture:pinch 规划中）' },
+  'force-press-gesture-handler': { status: 'planned', proteus: 'gesture.press（v-gesture:press 规划中）' },
   'horizontal-drag-gesture-handler': { status: 'covered', proteus: 'gesture.draggable' },
   'vertical-drag-gesture-handler': { status: 'covered', proteus: 'gesture.draggable' },
   // Skyline 布局构建器 → 布局语义
@@ -309,6 +316,48 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   'store-gift': { status: 'private', proteus: '（微信小店礼品，私有）' },
   'store-home': { status: 'private', proteus: '（微信小店主页，私有）' },
   'store-product': { status: 'private', proteus: '（微信小店商品，私有）' },
+}
+
+/**
+ * ★2026-09-18 补门禁：`SPEC_COMPONENT_OVERRIDE` 的引用一致性。
+ *
+ * 背景（本轮实测发现）：`auditMatrixReferences` 只遍历 `MP_MAPPING_MATRIX`，
+ *   override 表**完全不在引用校验范围内** → 表里长期存在两类未被发现的缺陷：
+ *   ① **虚高覆盖**：5 个手势处理器标 `covered`，但指向的 `gesture.tap/pan/pinch/press`
+ *      在 PRIMITIVE_CATALOG 中是 `planned`（`covered` 的定义是「有可运行等价」）；
+ *   ② **悬空引用**：`gesture.long-press` 拼写错误（实际名为 `gesture.longpress`）。
+ *   两者都让「真·落地率」虚高且无人察觉。本函数把 override 表纳入同一校验。
+ *
+ * @param catalog      原语清单（SSOT，判定 covered 的引用是否真已落地）
+ * @param overrideTable 可选注入（测试用；缺省 = SPEC_COMPONENT_OVERRIDE）
+ * @returns issues 结构同矩阵引用检查；`dangling` 为未登记原语，`unimplemented` 为指向 planned 原语。
+ */
+export function auditSpecOverrideRefs(
+  catalog: ReadonlyArray<{ semantic: string; tag?: string; status: string }>,
+  overrideTable: Record<string, MpSpecClass> = SPEC_COMPONENT_OVERRIDE,
+): { issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' }>; coveredRefs: number } {
+  const bySemantic = new Map(catalog.map((p) => [p.semantic, p]))
+  const byTag = new Map(catalog.filter((p) => p.tag).map((p) => [p.tag as string, p]))
+  const issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' }> = []
+  let coveredRefs = 0
+
+  for (const [tag, cls] of Object.entries(overrideTable)) {
+    if (cls.status !== 'covered') continue // 仅 covered 的声明需要「真已落地」证据
+    const text = cls.proteus ?? ''
+    for (const m of text.matchAll(/\b(?:layout|ui|shell|gesture|capability|engineering)\.[a-z][\w-]*/g)) {
+      coveredRefs++
+      const p = bySemantic.get(m[0])
+      if (!p) issues.push({ mp: tag, ref: m[0], kind: 'semantic' })
+      else if (p.status === 'planned') issues.push({ mp: tag, ref: m[0], kind: 'unimplemented' })
+    }
+    for (const m of text.matchAll(/\bp-[a-z][\w-]*/g)) {
+      coveredRefs++
+      const p = byTag.get(m[0])
+      if (!p) issues.push({ mp: tag, ref: m[0], kind: 'component' })
+      else if (p.status === 'planned') issues.push({ mp: tag, ref: m[0], kind: 'unimplemented' })
+    }
+  }
+  return { issues, coveredRefs }
 }
 
 export interface SpecCoverageReport {
@@ -378,6 +427,12 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  coveredMin: 255, // 2026-09-12 基线（spec 382 项：covered 255 / planned 1（share-element，需宿主分享流）/ private 106 / na 20 / gap 0）——含 C65-C81 + 组件批 H/I/J
+  // ★2026-09-18 水位修正（非回退）：255 → 250。原 255 基线**含 5 条虚高**
+  //   （tap/long-press/pan/scale/force-press-gesture-handler 标 covered，但其手势原语为 planned）。
+  //   修正后实测 covered 250 / planned 6（share-element + 5 手势）/ private 106 / na 20 / gap 0。
+  //   这与 2026-09-16「属性总数 793→771」属同类修正——**修的是标尺，不是能力**：
+  //   真实可运行的等价物一件没少，只是不再把「规划中」记成「已落地」。
+  //   ★今后此值只增不减；若因**同类诚实性修正**需下调，必须在本注释写明被修正的具体条目。
+  coveredMin: 250, // 2026-09-18 修正基线（原 255 含 5 条手势虚高——见上注）
   gapMax: 0, // 全部官方项必须归类
 }

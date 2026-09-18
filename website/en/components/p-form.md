@@ -36,6 +36,8 @@ Form container
 | `model` | Form data model (the object being validated) | `Object` | `() => ({` | No |
 | `rules` | Validation rules {field: (value) => string \| null} (returns the error message; null = pass) | `Object` | `() => ({` | No |
 | `layout` | Layout: horizontal (side-by-side) / vertical (stacked) | `String` | `'vertical'` | No |
+| `reportSubmit` | — | `Boolean` | `false` | No |
+| `reportSubmitTimeout` | — | `Number` | `0` | No |
 
 ### Prop details
 
@@ -53,6 +55,16 @@ Form container
 
 - **Type**: `String`　**Default**: `'vertical'`　**Required**: No
 - **Doc**: Layout: horizontal (side-by-side) / vertical (stacked)
+
+#### `reportSubmit`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `reportSubmitTimeout`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
 
 ## Events
 

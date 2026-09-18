@@ -55,6 +55,9 @@ const LAYOUT: PrimitiveDef[] = [
   // ★#405 语义登记批：Fluid 体系剩余组件（语义层待多端映射 → planned L2——G-31.4 不足 3 端降级）
   { id: 'L13', kind: 'layout', semantic: 'layout.aspect', tag: 'p-aspect', props: ['ratio', 'maxWidth'], mpEquiv: '无（纵横比容器）', tier: 'L2', status: 'planned' },
   { id: 'L14', kind: 'layout', semantic: 'layout.zone', tag: 'p-zone', props: ['designWidth'], mpEquiv: '无（容器断点分区）', tier: 'L2', status: 'planned' },
+  // ★批次 7（2026-09-18）未登记组件补登记：安全区（刘海/折叠屏/降级）+ 侧边导航容器
+  { id: 'L15', kind: 'layout', semantic: 'layout.safe', tag: 'p-safe', props: ['area', 'fold', 'fallback'], mpEquiv: '无（安全区语义容器）', tier: 'L1', status: 'implemented' },
+  { id: 'L16', kind: 'layout', semantic: 'layout.sidebar', tag: 'p-sidebar', props: ['minSidebarWidth', 'navWidth', 'designWidth', 'toggleLabel'], mpEquiv: '无（容器断点侧栏）', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §4 ② 基础 UI 原语（18）——视图/内容 + 输入/表单 */
@@ -90,6 +93,13 @@ const UI: PrimitiveDef[] = [
   { id: 'U25', kind: 'ui', semantic: 'ui.camera', tag: 'p-camera', props: ['mode', 'resolution', 'devicePosition', 'flash', 'frameSize', 'aspectRatio'], mpEquiv: '<camera>', tier: 'L1', status: 'implemented' },
   // ★权威标尺批 J：地图
   { id: 'U26', kind: 'ui', semantic: 'ui.map', tag: 'p-map', props: ['latitude', 'longitude', 'scale', 'minScale', 'maxScale', 'markers', 'polyline', 'circles', 'polygons', 'includePoints', 'showLocation', 'layerStyle', 'rotate', 'skew', 'showCompass', 'showScale', 'enableZoom', 'enableScroll', 'enableRotate', 'enableSatellite', 'enableTraffic', 'enablePoi', 'enableBuilding', 'enableOverlooking', 'setting'], mpEquiv: '<map>', tier: 'L1', status: 'implemented' },
+  // ★批次 7（2026-09-18）未登记组件补登记：这 3 个组件此前**只存在于 TAG_SEMANTIC_MAP**（编译器能解析、
+  //   组件能渲染），但不在 SSOT catalog → C1 不变量（catalog tag ↔ TAG_SEMANTIC_MAP 双向）单向成立、
+  //   catalog 查询类 API（primitiveByTag / componentPrimitives）查不到它们。
+  //   ★p-button 尤其反讽：它是**端对齐全流程的参考实现**（21/21、SOP v2 范式），却不在语义清单里。
+  { id: 'U27', kind: 'ui', semantic: 'ui.button', tag: 'p-button', props: ['disabled', 'loading', 'throttle', 'size', 'type', 'plain', 'formType', 'openType', 'hoverClass', 'theme', 'hoverStopPropagation', 'hoverStartTime', 'hoverStayTime', 'lang', 'sessionFrom', 'sendMessageTitle', 'sendMessagePath', 'sendMessageImg', 'appParameter', 'showMessageCard', 'phoneNumberNoQuotaToast', 'needShowEntrance', 'entrancePath'], mpEquiv: '<button>', tier: 'L1', status: 'implemented' },
+  { id: 'U28', kind: 'ui', semantic: 'ui.list', tag: 'p-list-view', props: ['items', 'itemHeight', 'height', 'bufferSize', 'virtual', 'lazy', 'padding'], mpEquiv: '<list-view>（虚拟滚动）', tier: 'L1', status: 'implemented' },
+  { id: 'U29', kind: 'ui', semantic: 'ui.nav', tag: 'p-nav-bar', props: ['title', 'back', 'fixed', 'loading', 'frontColor', 'backgroundColor', 'colorAnimationDuration', 'colorAnimationTimingFunc'], mpEquiv: '<navigation-bar>（自绘）', tier: 'L1', status: 'implemented' },
 ]
 
 /** G-32 §5 ③ 容器/导航原语 Shell（10） */

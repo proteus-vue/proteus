@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **136** 原语 · implemented **45**。
+> 总计 **181** 原语 · implemented **59**。
 
 ## layout — 布局（12）
 
@@ -11,7 +11,7 @@
 | L2 | `layout.inline` | tag:p-inline | `p-inline` | <text> 内联 | implemented |
 | L3 | `layout.stack` | tag:p-stack | `p-stack` | flex + scroll-view + swiper | implemented |
 | L4 | `layout.grid` | tag:p-grid | `p-grid` | <view> + CSS Grid | implemented |
-| L5 | `layout.fluid` | tag:p-fluid | `p-fluid` | 响应式 CSS | implemented |
+| L5 | `layout.fluid` | — | `—` | 响应式 CSS（v-p-fluid 指令） | implemented |
 | L6 | `layout.adaptive` | tag:p-adaptive | `p-adaptive` | 无（容器宽度语义断点） | implemented |
 | L7 | `layout.fit` | tag:p-fit | `p-fit` | fit-content | implemented |
 | L8 | `layout.spacer` | tag:p-spacer | `p-spacer` | flex:1 | implemented |
@@ -21,6 +21,8 @@
 | L12 | `layout.masonry` | tag:p-masonry | `p-masonry` | 第三方瀑布流 | implemented |
 | L13 | `layout.aspect` | tag:p-aspect | `p-aspect` | 无（纵横比容器） | planned |
 | L14 | `layout.zone` | tag:p-zone | `p-zone` | 无（容器断点分区） | planned |
+| L15 | `layout.safe` | tag:p-safe | `p-safe` | 无（安全区语义容器） | implemented |
+| L16 | `layout.sidebar` | tag:p-sidebar | `p-sidebar` | 无（容器断点侧栏） | implemented |
 
 ## ui — UI（18）
 
@@ -47,6 +49,14 @@
 | U19 | `ui.loading` | tag:p-loading | `p-loading` | wx.showLoading 部分 | planned |
 | U20 | `ui.scale` | tag:p-scale | `p-scale` | 无（无障碍档位） | planned |
 | U21 | `ui.skeleton` | tag:p-skeleton | `p-skeleton` | 无 | planned |
+| U22 | `ui.progress` | tag:p-progress | `p-progress` | <progress> | implemented |
+| U23 | `ui.label` | tag:p-label | `p-label` | <label> | implemented |
+| U24 | `ui.selection` | tag:p-selection | `p-selection` | <selection> | implemented |
+| U25 | `ui.camera` | tag:p-camera | `p-camera` | <camera> | implemented |
+| U26 | `ui.map` | tag:p-map | `p-map` | <map> | implemented |
+| U27 | `ui.button` | tag:p-button | `p-button` | <button> | implemented |
+| U28 | `ui.list` | tag:p-list-view | `p-list-view` | <list-view>（虚拟滚动） | implemented |
+| U29 | `ui.nav` | tag:p-nav-bar | `p-nav-bar` | <navigation-bar>（自绘） | implemented |
 
 ## shell — Shell（10）
 
@@ -65,6 +75,10 @@
 | S11 | `shell.mask` | tag:p-mask | `p-mask` | 组合（遮罩层） | planned |
 | S12 | `shell.popup` | tag:p-popup | `p-popup` | 组合（弹层） | planned |
 | S13 | `shell.toolbar` | tag:p-toolbar | `p-toolbar` | 无（溢出折叠） | planned |
+| S14 | `shell.page-container` | tag:p-page-container | `p-page-container` | <page-container> | implemented |
+| S15 | `shell.keyboard-accessory` | tag:p-keyboard-accessory | `p-keyboard-accessory` | <keyboard-accessory> | implemented |
+| S16 | `shell.webview` | tag:p-webview | `p-webview` | <web-view> | implemented |
+| S17 | `shell.ad` | tag:p-ad | `p-ad` | <ad> | implemented |
 
 ## gesture — 手势（10）
 
@@ -135,6 +149,37 @@
 | C48 | `capability.embedded` | api:useEmbedded() | `useEmbedded()` | 无（被宿主嵌入） | planned |
 | C49 | `capability.live` | api:useLive() | `useLive()` | wx...（直播组件） | planned |
 | C50 | `capability.extension` | api:useExtension() | `useExtension()` | 无（插件/扩展点 G-21） | planned |
+| C51 | `capability.update` | api:useUpdate() | `useUpdate()` | wx.getUpdateManager | planned |
+| C52 | `capability.album` | api:useAlbum() | `useAlbum()` | wx.chooseMedia/saveImageToPhotosAlbum/previewMedia | planned |
+| C53 | `capability.worker` | api:useWorker() | `useWorker()` | wx.createWorker | planned |
+| C54 | `capability.address` | api:useAddress() | `useAddress()` | wx.chooseAddress | planned |
+| C55 | `capability.wifi` | api:useWifi() | `useWifi()` | wx.getConnectedWifi/getWifiList/connectWifi | planned |
+| C56 | `capability.we-run` | api:useWeRun() | `useWeRun()` | wx.getWeRunData | planned |
+| C57 | `capability.canvas` | api:useCanvas() | `useCanvas()` | wx.createCanvasContext/canvasToTempFilePath/createOffscreenCanvas | planned |
+| C58 | `capability.element-query` | api:useElement() | `useElement()` | wx.createSelectorQuery | planned |
+| C59 | `capability.intersection` | api:useIntersection() | `useIntersection()` | wx.createIntersectionObserver | planned |
+| C60 | `capability.media-query` | api:useMediaQuery() | `useMediaQuery()` | wx.createMediaQueryObserver | planned |
+| C61 | `capability.video` | api:useVideo() | `useVideo()` | wx.createVideoContext | planned |
+| C62 | `capability.audio` | api:useAudio() | `useAudio()` | wx.createInnerAudioContext | planned |
+| C63 | `capability.live-pusher` | api:useLivePusher() | `useLivePusher()` | wx.createLivePusherContext | planned |
+| C64 | `capability.ad` | api:useAd() | `useAd()` | wx.createRewardedVideoAd/createInterstitialAd/createBannerAd | planned |
+| C65 | `capability.privacy` | api:usePrivacy() | `usePrivacy()` | wx.getPrivacySetting/openPrivacyContract/requirePrivacyAuthorize | planned |
+| C66 | `capability.performance` | api:usePerformance() | `usePerformance()` | wx.getPerformance/reportPerformance | planned |
+| C67 | `capability.preload` | api:usePreload() | `usePreload()` | wx.preloadAssets/preloadSkylineView/preloadWebview/preDownloadSubpackage | planned |
+| C68 | `capability.image-edit` | api:useImageEdit() | `useImageEdit()` | wx.cropImage/editImage | planned |
+| C69 | `capability.socket` | api:useSocket() | `useSocket()` | wx.createUDPSocket/createTCPSocket | planned |
+| C70 | `capability.media-processing` | api:useMediaProcessing() | `useMediaProcessing()` | wx.createMediaContainer/createVideoDecoder/createMediaAudioPlayer | planned |
+| C71 | `capability.screen-capture` | api:useScreenCapture() | `useScreenCapture()` | wx.getScreenRecordingState/onScreenRecordingStateChanged/onUserCaptureScreen/checkIsPictureInPictureActive | planned |
+| C72 | `capability.cache-manager` | api:useCacheManager() | `useCacheManager()` | wx.createCacheManager | planned |
+| C73 | `capability.idle` | api:useIdle() | `useIdle()` | wx.requestIdleCallback/cancelIdleCallback | planned |
+| C74 | `capability.window` | api:useWindow() | `useWindow()` | wx.setWindowSize | planned |
+| C75 | `capability.navigation-guard` | api:useNavigationGuard() | `useNavigationGuard()` | wx.enableAlertBeforeUnload/disableAlertBeforeUnload | planned |
+| C76 | `capability.ar` | api:useAR() | `useAR()` | wx.createVKSession/isVKSupport | planned |
+| C77 | `capability.beacon` | api:useBeacon() | `useBeacon()` | wx.onBeaconServiceChange/onBeaconUpdate | planned |
+| C78 | `capability.local-service` | api:useLocalService() | `useLocalService()` | wx.onLocalServiceFound/Lost/ResolveFail/DiscoveryStop | planned |
+| C79 | `capability.translation` | api:useTranslation() | `useTranslation()` | wx.onUserTriggerTranslation/onUserOffTranslation | planned |
+| C80 | `capability.poster` | api:usePoster() | `usePoster()` | wx.onGeneratePoster | planned |
+| C81 | `capability.device-capability` | api:useDeviceCapability() | `useDeviceCapability()` | wx.checkDeviceSupportHevc | planned |
 
 ## engineering — 工程（28）
 

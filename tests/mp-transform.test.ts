@@ -691,7 +691,9 @@ describe('虚拟列表（v0.4）', () => {
     const src = fs.readFileSync(path.resolve('packages/components/p-list-view/index.vue'), 'utf-8')
     const r = compileVueSfc(src, { isComponent: true, filename: 'proteus/p-list-view/index.vue' })
     // properties：函数默认值（() => []）忽略，仅 type
-    expect(r.js).toContain('items: { type: Array }')
+    // ★格式无关比对：源码含 `??` 时 ES2020→ES5（transpileMpSafe/babel 重打印）会把 properties
+    //   展开成多行 `type:` 换行形态——语义相同、仅格式不同，故先归一空白再断言。
+    expect(r.js.replace(/\s+/g, ' ')).toContain('items: { type: Array }')
     // 切片逻辑：props 重写 + slice（方法体内改写为 this.data）
     expect(r.js).toContain('this.data.items.slice')
     // items 变化响应：props 源 watch → observers

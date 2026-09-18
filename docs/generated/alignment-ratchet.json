@@ -1,7 +1,7 @@
 {
  "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs 读取本文件校验（缺省阈值=coveredMin），勿手改；推进后跑 --update 回写。",
- "attrCovered": 294,
- "attrTotal": 325,
- "coveredMin": 294,
- "note": "2026-09-16 批次3 宿主能力全部收口（+88 属性，覆盖 206→294）：p-media(video) 47/47 · p-map 29/29 · p-camera 5/5 · p-canvas 3/3 · p-webview 1/1 · p-ad 4/4 · p-rich-text 4/4 · p-draggable(movable-view) 13/13。★同轮标尺精度修复：官方页把**子对象 schema**（map 的 marker/polyline/polygon/circle/control/position、rich-text 的 node/text 字段）与组件属性混在同页不同 h2 区块——此前全页扫描误计入清单（map 61→43、rich-text 8→4，官方属性总数 793→771），制造虚假缺口且诱导把端私有结构固化成框架语义（违反 G-31）。生成器改为只采「通用属性/属性说明/Skyline 特有属性/WebView 特有属性」四类区块。★棘轮阈值改由本文件驱动（此前 package.json 硬编码 --min 128 而本文件记 207 → 文档声称底线从未执行，软门禁）；本文件为单一事实源，补齐后跑 `--update` 上调。上一轮：2026-09-14 批次2 容器与外壳全部 100% + navigator/navigation-bar 语义纠偏"
+ "attrCovered": 310,
+ "attrTotal": 310,
+ "coveredMin": 310,
+ "note": "2026-09-18 批次外收口完成——**官方属性级覆盖达 100%（310/310）**，34 个已映射组件全部全覆盖：p-input 12→26/26（键盘/同层/选区/**安全键盘族** + placeholderClass）· p-form 0→2/2（report-submit 族，formId 宿主能力）· p-list-view 0→1/1（官方 padding 4 元数组 → CSS 简写，computed 归一）。★同轮**修正 3 处审计脚本映射缺陷**（并非补属性）：① `swiper:'p-swipter'` **拼写死亡配置**（p-swiper 不存在；swiper 已消灭为 layout.stack 属性）；② `share-element:'p-transition'` **语义错映射**（共享元素转场 ≠ Vue transition；框架承接 p-share-element 属 L2 规划）——制造 7 项**永远填不满的假缺口**；③ `match-media` 7 项**视口度量**登记为「有意不沿用」（框架用容器断点语义升级，见 INTENTIONAL_SKIP）。故分母 325→310（剔除 15 项错计），分子 294→310（+17 真实属性 -1 错计 duration）。★棘轮语义提醒：本次上调是『补真实属性 + 剔除错计』的合成结果，非单纯能力增长。"
 }

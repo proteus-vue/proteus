@@ -13,7 +13,7 @@ import type { FluidLayoutConfig, VModelComponentHandler } from '@proteus-vue/typ
 import { linearFluid, calcColumns } from './fluid-layout'
 import type { TransformTrace } from './trace'
 import { TAG_RULE_BY_TAG } from './transforms/template'
-import { TAG_SEMANTIC_MAP } from '@proteus-vue/component-ir'
+import { TAG_SEMANTIC_MAP, DEGRADATION_TABLE, PROP_NO_DEGRADATION, FRAMEWORK_INTERNAL_TAGS } from '@proteus-vue/component-ir'
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
@@ -347,6 +347,8 @@ interface SerializeContext {
   isPage?: boolean
   /** ★#496 柔性语义编译：p-grid 语义元素收集（script 注入档位 style 变量与求解段；index = style 变量序） */
   semanticGrids: Array<{ minColWidth: number; gap: number; index: number; defaultStyle: string }>
+  /** ★批次 4（M6）：属性降级表覆盖（缺省 = component-ir DEGRADATION_TABLE） */
+  degradationTable?: Record<string, Record<string, { mp: 'supported' | 'fallback' | 'unsupported'; web: 'supported' | 'fallback' | 'unsupported'; behavior?: string }>>
 }
 
 /**
@@ -991,11 +993,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   //   未登记 = 拼写错误或未入库组件：旧行为静默按未注册自定义组件输出（gen-routes 不注册 → MP 整块不渲染、无语义链接）
   //   反黑盒显式警告（与 conformance render.semanticLink「p-* 语义空白」收紧同源——本规则把同源收紧带到主编译产物侧）；
   //   config tags 映射显式覆盖的 p-*（用户自定义逃生舱）不警告
-  if (node.tag.startsWith('p-') && !TAG_SEMANTIC_MAP[node.tag] && !ctx.tagMap[node.tag] && !ctx.disabled.has('tag/unknown-p-star')) {
+  //   ★批次 7：框架内部运行时标签（FRAMEWORK_INTERNAL_TAGS——如编译器产出的 p-svg-canvas）
+  //   是**实现载体**而非未入库组件，须排除，否则产生「MP 端不渲染」的错误告警。
+  if (node.tag.startsWith('p-') && !TAG_SEMANTIC_MAP[node.tag] && !FRAMEWORK_INTERNAL_TAGS.has(node.tag) && !ctx.tagMap[node.tag] && !ctx.disabled.has('tag/unknown-p-star')) {
     ctx.warnings.push(
       `<${node.tag}> 以 p- 前缀命名但不在组件库语义登记表（TAG_SEMANTIC_MAP）——拼写错误或未入库组件？产物将按未注册自定义组件输出（MP 端不渲染、无语义链接）；请检查组件名或移除 p- 前缀`,
     )
     ctx.trace?.add('tag/unknown-p-star', { line: node.loc.start.line, before: `<${node.tag}>`, after: '（未登记 p-*：按未注册自定义组件输出——MP 不渲染）' })
+  }
+  // ★批次 4（M6）：属性降级声明门禁（EA-5 / G-31.2，见 03-degradation-tiers.md §2/§6）——
+  //   目标端 unsupported 的属性被使用时 **fail-closed** 诊断（`PROP_NO_DEGRADATION`）；
+  //   fallback **不**报（有意降级，降级行为已在表中声明，非静默失败）。
+  //   诚实边界：仅静态属性名可判定（`:prop` 动态名/展开跳过）；模板 kebab 与降级表 camel 键均为 kebab 归一比对。
+  if (node.tag.startsWith('p-') && !ctx.disabled.has('prop/no-degradation')) {
+    const degTable = (ctx.degradationTable ?? DEGRADATION_TABLE)[node.tag]
+    if (degTable) {
+      const kebabTable = new Map(Object.entries(degTable).map(([k, v]) => [kebabCase(k), v]))
+      for (const p of node.props) {
+        if (p.type !== NodeTypes.ATTRIBUTE) continue
+        const entry = kebabTable.get(kebabCase((p as AttributeNode).name))
+        if (entry?.mp !== 'unsupported') continue
+        const msg = `[${PROP_NO_DEGRADATION}] <${node.tag}> 的属性 "${(p as AttributeNode).name}" 在 mp 端 unsupported（本端无法实现）——继续使用会静默失败（违反 G-31.2）；请改用 @conditional 显式分支或移除该属性`
+        if (ctx.failFast) failFastThrow(ctx.filename, msg)
+        ctx.warnings.push(msg)
+        ctx.trace?.add('prop/no-degradation', { line: node.loc.start.line, before: `<${node.tag} ${(p as AttributeNode).name}>`, after: '（mp unsupported——fail-closed 诊断）' })
+      }
+    }
   }
   // 决策 trace：标签映射
   if (!ctx.disabled.has('tag/unknown-kebab') && !(tagRuleId && ctx.disabled.has(tagRuleId))) {
@@ -1654,6 +1677,8 @@ export function transformTemplateToWxml(
     isPage: opts.isComponent !== true,
     // ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数
     fluidLayout: opts.fluidLayout,
+    // ★批次 4（M6）：降级表覆盖（缺省 = component-ir DEGRADATION_TABLE）
+    degradationTable: opts.degradationTable,
   }
   const root = domParse(source, { onError: () => undefined })
   // ★平台编译期宏·静态条件裁剪（2026-09-13）：v-if/v-else 链中静态可求值的分支在此整块消除

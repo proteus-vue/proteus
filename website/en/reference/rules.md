@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 109 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 110 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (60)
+## Template transforms (61)
 
 ### `tag/div-to-view`
 
@@ -153,6 +153,19 @@ after:  编译警告（未登记 p-*——拼写错误或未入库组件）；�
 ```
 
 > why: anti-black-box (★#505 M3): the conformance world already tightens “p-* present but blank” (not in TAG_SEMANTIC_MAP) into an explicit render.semanticLink failure; this rule brings the same tightening to the main compiled artifact side — the old behavior emitted silently and developers could not attribute a whole block not rendering on MP
+
+### `prop/no-degradation`
+
+**target-end unsupported props fail closed (PROP_NO_DEGRADATION)**
+
+when a component prop is declared unsupported on the target end, using it raises a compile-time diagnostic (PROP_NO_DEGRADATION); fallback (intentional, behavior declared) is not reported
+
+```
+before: <p-media foo="x" />
+after:  编译诊断 PROP_NO_DEGRADATION（mp 端 unsupported）
+```
+
+> why: G-31.2: every prop must declare supported/fallback/unsupported per end; silently failing unsupported props are the anti-pattern to eliminate, so the compiler fails closed
 
 ### `semantic/base-class`
 

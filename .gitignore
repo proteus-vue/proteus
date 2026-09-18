@@ -19,6 +19,9 @@ coverage/
 !.env.example
 .proteus/
 
+# 本地 Agent 会话状态（含 plan 文件——非项目源码）
+.zcode/
+
 # local npm auth (never commit)
 .npmrc
 scripts/commit-msg.txt

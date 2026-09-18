@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 109 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 110 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（60）
+## 模板转换（61）
 
 ### `tag/div-to-view`
 
@@ -153,6 +153,19 @@ after:  编译警告（未登记 p-*——拼写错误或未入库组件）；�
 ```
 
 > why: 反黑盒（★#505 M3）：conformance 世界已把「p-* 存在但空白」（TAG_SEMANTIC_MAP 未登记）收紧为 render.semanticLink 显式失败，本规则把同源收紧带到主编译产物侧——旧行为静默输出，开发者在 MP 端看到整块不渲染无从归因
+
+### `prop/no-degradation`
+
+**目标端 unsupported 属性 fail-closed 诊断（PROP_NO_DEGRADATION）**
+
+组件属性在目标端降级三态为 unsupported（本端无法实现）时，使用即产生编译期诊断（PROP_NO_DEGRADATION）；fallback（有意降级、行为已声明）不报
+
+```
+before: <p-media foo="x" />
+after:  编译诊断 PROP_NO_DEGRADATION（mp 端 unsupported）
+```
+
+> why: G-31.2 铁律：属性在各端必须声明 supported/fallback/unsupported；unsupported 的静默失败是「异端」（开发者到真机才发现），故编译期 fail-closed
 
 ### `semantic/base-class`
 

@@ -54,7 +54,7 @@ checkSemanticCoverage(3) // G-31.4：每语义 ≥3 端映射
 
 ```
 Layer 0：Proteus 原生语义组件（p-* + useNative/useFetch）——本包
-Layer 1：@proteus/compat-miniprogram（旧小程序兼容层，独立包）
+Layer 1：@proteus-vue/compat-miniprogram（旧小程序兼容层，独立包）
 ```
 
 ## 路线

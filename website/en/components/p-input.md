@@ -47,6 +47,20 @@ Input
 | `cursor` | — | `Number` | `-1` | No |
 | `autoHeight` | — | `Boolean` | `false` | No |
 | `focus` | Auto focus | `Boolean` | `false` | No |
+| `alwaysEmbed` | — | `Boolean` | `false` | No |
+| `confirmHold` | — | `Boolean` | `false` | No |
+| `adjustPosition` | — | `Boolean` | `true` | No |
+| `holdKeyboard` | — | `Boolean` | `false` | No |
+| `cursorColor` | — | `String` | `''` | No |
+| `selectionStart` | — | `Number` | `-1` | No |
+| `selectionEnd` | — | `Number` | `-1` | No |
+| `placeholderClass` | — | `String` | `''` | No |
+| `safePasswordCertPath` | — | `String` | `''` | No |
+| `safePasswordLength` | — | `Number` | `0` | No |
+| `safePasswordTimeStamp` | — | `Number` | `0` | No |
+| `safePasswordNonce` | — | `String` | `''` | No |
+| `safePasswordSalt` | — | `String` | `''` | No |
+| `safePasswordCustomHash` | — | `String` | `''` | No |
 
 ### Prop details
 
@@ -119,6 +133,76 @@ Input
 
 - **Type**: `Boolean`　**Default**: `false`　**Required**: No
 - **Doc**: Auto focus
+
+#### `alwaysEmbed`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `confirmHold`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `adjustPosition`
+
+- **Type**: `Boolean`　**Default**: `true`　**Required**: No
+- **Doc**: —
+
+#### `holdKeyboard`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+#### `cursorColor`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `selectionStart`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `selectionEnd`
+
+- **Type**: `Number`　**Default**: `-1`　**Required**: No
+- **Doc**: —
+
+#### `placeholderClass`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordCertPath`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordLength`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordTimeStamp`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordNonce`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordSalt`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `safePasswordCustomHash`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
 
 ## Events
 

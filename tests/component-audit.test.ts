@@ -15,11 +15,15 @@ import {
   TAG_SEMANTIC_MAP,
   formatCoverageReport,
   auditMatrixReferences,
+  primitiveByTag,
+  SEMANTIC_BACKEND_MAP,
+  FRAMEWORK_INTERNAL_TAGS,
   type MpMatrixItem,
 } from '@proteus-vue/component-ir'
+import { compileVueSfc } from '@proteus-vue/compiler'
 
-describe('G-32 B1 清单冻结（176 原语 SSOT）', () => {
-  it('176 项 · id/semantic/tag 唯一 · 六类齐全', () => {
+describe('G-32 B1 清单冻结（181 原语 SSOT）', () => {
+  it('181 项 · id/semantic/tag 唯一 · 六类齐全', () => {
     expect(checkPrimitiveCatalog()).toEqual([])
     const kinds = new Set(PRIMITIVE_CATALOG.map((p) => p.kind))
     expect([...kinds].sort()).toEqual(['capability', 'engineering', 'gesture', 'layout', 'shell', 'ui'])
@@ -31,19 +35,20 @@ describe('G-32 B1 清单冻结（176 原语 SSOT）', () => {
     //   + ★批 G：capability+6 ar/beacon/local-service/translation/poster/device-capability
     //   + ★组件批 H：ui+1 selection + shell+1 keyboard-accessory
     //   + ★组件批 I：ui+1 camera
-    //   + ★组件批 J：ui+1 map + shell+2 webview/ad）
+    //   + ★组件批 J：ui+1 map + shell+2 webview/ad
+    //   + ★批次 7（2026-09-18）未登记组件补登记：layout+2（safe/sidebar）+ ui+3（button/list/nav））
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
-    expect(count('layout')).toBe(14)
-    expect(count('ui')).toBe(26)
+    expect(count('layout')).toBe(16)
+    expect(count('ui')).toBe(29)
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(81)
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 54 项（G-32 冻结清单已实现：12 layout + 23 ui + 13 shell + 2 gesture + 1 capability + 3 engineering）· 其余 planned 待落地', () => {
+  it('implemented 59 项（G-32 冻结清单已实现：14 layout + 26 ui + 13 shell + 2 gesture + 1 capability + 3 engineering；★批次 7 补登记 +5）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(54)
+    expect(impl.length).toBe(59)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)
@@ -174,5 +179,65 @@ describe('G-32 B1 闭环一致性（catalog ↔ enum ↔ tag ↔ render-map 四�
     expect(PRIMITIVE_CATALOG.some((p) => p.semantic === orphan)).toBe(false)
     // enum 里不存在的语义必然不在 map（C3 反证）
     expect((SEMANTIC_ENUM as readonly string[]).indexOf('layout.orphan-test')).toBe(-1)
+  })
+})
+
+describe('★批次 7（2026-09-18）未登记组件补登记', () => {
+  // 这 5 个组件此前**只存在于 TAG_SEMANTIC_MAP**（编译器可解析、组件可渲染），却不在 SSOT catalog。
+  // 破坏性验证：从 catalog 删任一 id → 对应用例变红。
+  const ADDED: Array<[string, string, string]> = [
+    ['U27', 'p-button', 'ui.button'],
+    ['U28', 'p-list-view', 'ui.list'],
+    ['U29', 'p-nav-bar', 'ui.nav'],
+    ['L15', 'p-safe', 'layout.safe'],
+    ['L16', 'p-sidebar', 'layout.sidebar'],
+  ]
+
+  it('5 个组件已在 catalog 登记（id/tag/semantic 正确）', () => {
+    for (const [id, tag, sem] of ADDED) {
+      const row = PRIMITIVE_CATALOG.find((p) => p.id === id)
+      expect(row, `${id} 未登记`).toBeTruthy()
+      expect(row!.tag).toBe(tag)
+      expect(row!.semantic).toBe(sem)
+      expect(row!.status).toBe('implemented')
+    }
+  })
+
+  it('★C1 双向：catalog tag ↔ TAG_SEMANTIC_MAP 全等（含 p-button 这个「参考实现」）', () => {
+    // 此前 C1 只单向成立（TAG_SEMANTIC_MAP 有、catalog 无）——补登记后应双向
+    for (const [, tag, sem] of ADDED) {
+      expect(TAG_SEMANTIC_MAP[tag], `${tag} 应在 TAG_SEMANTIC_MAP`).toBe(sem)
+    }
+    // 反向：catalog 的每个 tag 都必须在 TAG_SEMANTIC_MAP（由 auditCatalogConsistency 的 C1 兜底）
+    expect(auditCatalogConsistency().filter((i) => i.rule === 'C1')).toEqual([])
+  })
+
+  it('可按 tag 查询（primitiveByTag——补登记前查不到）', () => {
+    for (const [, tag] of ADDED) {
+      expect(primitiveByTag(tag), `primitiveByTag(${tag}) 应命中`).toBeTruthy()
+    }
+  })
+
+  it('覆盖门禁：新增 implemented 语义均有 ≥3 端渲染映射', () => {
+    for (const [, , sem] of ADDED) {
+      const ends = Object.keys(SEMANTIC_BACKEND_MAP[sem] ?? {})
+      expect(ends.length, `${sem} 参考行不足 3 端`).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
+
+describe('★批次 7 · 框架内部运行时标签（FRAMEWORK_INTERNAL_TAGS）', () => {
+  it('p-svg-canvas 登记为内部标签（编译器产出，非跨端语义）', () => {
+    expect(FRAMEWORK_INTERNAL_TAGS.has('p-svg-canvas')).toBe(true)
+    // 刻意不进 TAG_SEMANTIC_MAP / catalog（它是 ui.svg 在 MP 端的实现载体）
+    expect(TAG_SEMANTIC_MAP['p-svg-canvas']).toBeUndefined()
+    expect(PRIMITIVE_CATALOG.some((p) => p.tag === 'p-svg-canvas')).toBe(false)
+  })
+
+  it('★不再产生「未入库组件」错误告警；真未登记标签仍告警（双向）', () => {
+    const internal = compileVueSfc('<template><p-svg-canvas :width="10" /></template>', { filename: 'x.vue' })
+    expect((internal.warnings ?? []).filter((w) => /未登记 p-\*|未入库组件/.test(w))).toEqual([])
+    const ghost = compileVueSfc('<template><p-bogus-xyz /></template>', { filename: 'x.vue' })
+    expect((ghost.warnings ?? []).filter((w) => /未入库组件/.test(w)).length).toBeGreaterThan(0)
   })
 })

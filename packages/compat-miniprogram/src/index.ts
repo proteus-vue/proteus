@@ -4,7 +4,7 @@
 //     Step 1 装 compat 层旧代码跑通 → createWxCompat + bindCompatPlatform（wx.* + useStorage 委托 Proteus）
 //     Step 2 跑 codemod 批量转原生语义 → migrateMpSource（标签自动 + 存储直改 + manual 标注）
 //     Step 3 人工处理剩余（语义识别 scroll-view/swiper + 路由名表）
-//   包名收口 @proteus-vue 组织 scope（决策 #215a；plan 文档写 @proteus/compat-miniprogram）
+//   包名收口 @proteus-vue 组织 scope（决策 #215a；plan 文档写 @proteus/compat-miniprogram）  scope-allow: 提及旧 scope 写法本身（决策 #215a 历史说明，非依赖）
 import type { CapabilityHooks, PlatformAPI } from '@proteus-vue/api'
 import { createWxCompat } from './wx-compat'
 import type { WxCompat } from './wx-compat'

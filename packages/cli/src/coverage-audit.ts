@@ -6,7 +6,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { auditMiniprogramCoverage, auditMatrixReferences, auditCatalogConsistency, formatCoverageReport, checkPrimitiveCatalog, PRIMITIVE_CATALOG, MP_MAPPING_MATRIX, auditSpecCoverage, SPEC_RATCHET } from '@proteus-vue/component-ir'
+import { auditMiniprogramCoverage, auditMatrixReferences, auditCatalogConsistency, formatCoverageReport, checkPrimitiveCatalog, PRIMITIVE_CATALOG, MP_MAPPING_MATRIX, auditSpecCoverage, auditSpecOverrideRefs, SPEC_RATCHET } from '@proteus-vue/component-ir'
 import type { MpOfficialSpec } from '@proteus-vue/component-ir'
 
 /** 定位官方清单快照（仓根 docs/generated/；从 CLI 源位置回退到 cwd） */
@@ -91,6 +91,20 @@ export function runCoverageAudit(): { ok: boolean; text: string } {
     for (const i of refIssues.slice(0, 20)) lines.push(`  ✗ [${i.kind}] ${i.mp} → ${i.ref}`)
   } else {
     lines.push(`矩阵引用一致性 ✅ 全部引用真实存在（planned 豁免 ${plannedRefs} 处 L2 规划）`)
+  }
+
+  // ②-b-2 ★override 表引用一致性（2026-09-18 补）：SPEC_COMPONENT_OVERRIDE 此前**不在引用校验范围内**
+  //   → 实测发现 5 个手势处理器标 covered 却指向 planned 原语（虚高覆盖）+ 1 处悬空引用（gesture.long-press 拼写错）。
+  //   covered 的定义是「有可运行等价」：引用未登记（悬空）或指向 planned 原语（未落地）一律 FAIL。
+  const ov = auditSpecOverrideRefs(PRIMITIVE_CATALOG)
+  if (ov.issues.length) {
+    ok = false
+    lines.push(`override 引用一致性 ❌ ${ov.issues.length} 处问题（covered 声明须有真实已落地等价）：`)
+    for (const i of ov.issues.slice(0, 20)) {
+      lines.push(`  ✗ [${i.kind}] ${i.mp} → ${i.ref}${i.kind === 'unimplemented' ? '（原语为 planned，不可标 covered）' : '（原语未登记）'}`)
+    }
+  } else {
+    lines.push(`override 引用一致性 ✅ ${ov.coveredRefs} 处 covered 引用均有已落地等价`)
   }
 
   // ③ 闭环一致性（catalog ↔ enum ↔ tag ↔ render-map）

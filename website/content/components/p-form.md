@@ -36,6 +36,8 @@ order: 1006
 | `model` | 表单数据模型（校验对象） | `Object` | `() => ({` | 否 |
 | `rules` | 校验规则 {field: (value) => string \| null}（返回错误文案；null=通过） | `Object` | `() => ({` | 否 |
 | `layout` | 布局：horizontal 横排 / vertical 纵排 | `String` | `'vertical'` | 否 |
+| `reportSubmit` | 是否返回 formId 用于发送模板消息 | `Boolean` | `false` | 否 |
+| `reportSubmitTimeout` | 等待一段时间（毫秒）以确认 formId 是否生效（不指定则 formId 有很小概率无效——官方建议设置） | `Number` | `0` | 否 |
 
 ### 属性详解
 
@@ -53,6 +55,16 @@ order: 1006
 
 - **类型**：`String`　**默认值**：`'vertical'`　**必填**：否
 - **说明**：布局：horizontal 横排 / vertical 纵排
+
+#### `reportSubmit`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：是否返回 formId 用于发送模板消息
+
+#### `reportSubmitTimeout`
+
+- **类型**：`Number`　**默认值**：`0`　**必填**：否
+- **说明**：等待一段时间（毫秒）以确认 formId 是否生效（不指定则 formId 有很小概率无效——官方建议设置）
 
 ## Events
 
@@ -82,7 +94,7 @@ order: 1006
 ## 用法
 
 ```vue
-<p-form :layout="'vertical'">
+<p-form :layout="'vertical'" :reportSubmit="true" :reportSubmitTimeout="0">
   <p-text>内容</p-text>
 </p-form>
 ```

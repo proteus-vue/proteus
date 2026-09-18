@@ -27,12 +27,22 @@ const ALIAS = {
   'input': 'p-input', 'textarea': 'p-textarea', 'switch': 'p-switch', 'slider': 'p-slider',
   'progress': 'p-progress', 'checkbox': 'p-checkbox', 'radio': 'p-radio', 'picker': 'p-picker',
   'picker-view': 'p-picker', 'form': 'p-form', 'label': 'p-label',
-  'scroll-view': 'p-scroll-view', 'swiper': 'p-swipter', 'video': 'p-media', 'canvas': 'p-canvas',
+  'scroll-view': 'p-scroll-view', 'video': 'p-media', 'canvas': 'p-canvas',
   'map': 'p-map', 'camera': 'p-camera', 'web-view': 'p-webview', 'ad': 'p-ad',
   'rich-text': 'p-rich-text', 'view': 'p-view', 'movable-view': 'p-draggable',
   'movable-area': 'p-draggable', 'virtual-list': 'p-virtual-list', 'page-container': 'p-page-container',
-  'share-element': 'p-transition', 'keyboard-accessory': 'p-keyboard-accessory',
+  'keyboard-accessory': 'p-keyboard-accessory',
   'match-media': 'p-adaptive', 'cover-view': 'p-view', 'cover-image': 'p-image',
+  // ★2026-09-18 移除两处错误映射（批次外收口实测）：
+  //   ① `'swiper': 'p-swipter'`——**拼写错误**（"swipter"），且 p-swiper 并不存在：
+  //      官方 <swiper> 已被 `layout.stack` 的 snap/loop 语义**消灭为属性**（矩阵 audit.ts 同款判定），
+  //      故 swiper 本就属「无对应框架组件」，无需别名。旧错拼映射让该行静默落到 no-component，掩盖了真实原因。
+  //   ② `'share-element': 'p-transition'`——**语义错误**：官方 <share-element> 是**页面间共享元素转场**
+  //      （key/transform/shuttle-on-push|pop…），而 `p-transition` 是 engineering.transition
+  //      （Vue `<transition>` 包装：name/mode/duration/visible）——两者语义不同。框架的共享元素承接是
+  //      `p-share-element`（**L2 规划中，尚未实现**，见矩阵 audit.ts「p-share-element（L2 规划）」planned:true）。
+  //      旧映射把 share-element 的 8 个属性错记到 p-transition 名下 → 制造 7 项**永远填不满的假缺口**
+  //      （唯一"命中"的 duration 纯属命名巧合）。移除后 share-element 如实归入「无对应组件」。
   // ★语义纠偏（2026-09-14，对齐 SSOT packages/component-ir/src/audit.ts）：
   //   官方 <navigator> 是**声明式导航链接**（跳转 url/open-type/delta…），对应框架 engineering.router-link
   //   = `p-router-link`（E18），**不是** p-nav（shell.nav 导航栏）；官方 <navigation-bar>（导航条）
@@ -40,17 +50,8 @@ const ALIAS = {
   'navigator': 'p-router-link', 'navigation-bar': 'p-nav-bar',
 }
 
-/** 从框架组件源码抽 props 名（defineProps 块内的 camelCase 键） */
-function propsOf(dir) {
-  const f = path.join(COMPONENTS_DIR, dir, 'index.vue')
-  if (!fs.existsSync(f)) return null
-  const src = fs.readFileSync(f, 'utf8')
-  const m = src.match(/defineProps\(\{([\s\S]*?)\n\}\)/)
-  if (!m) return []
-  const names = new Set()
-  for (const km of m[1].matchAll(/^\s{2}([a-zA-Z][\w]*)\s*:/gm)) names.add(km[1])
-  return [...names]
-}
+// props 抽取与组件枚举下沉到共享工具（与 audit-degradation.mjs 同口径，避免两份正则漂移）
+const { propsOf, listComponentDirs } = await import('./lib/component-props.mjs')
 
 /** ★语义别名（官方属性名 → 框架等价 props 名）：框架用 Vue 惯例（modelValue/active 等），
  *  官方用原生命名（value/checked）——归一后再比对，避免把「命名差异」误报为「能力缺失」。 */
@@ -109,6 +110,25 @@ const INTENTIONAL_SKIP = {
   //   「layout.box（Skyline 同层渲染后 view 即可覆盖）」）。scroll-top 是 cover-view **私有**滚动同步属性，
   //   依赖被覆盖的原生组件上下文，不上升为通用容器 p-view 的语义（否则端私有属性泄漏）。
   'cover-view': { 'scroll-top': 'cover-view 私有滚动同步；Skyline 后由通用 view 覆盖，不上升为 p-view 语义' },
+  // ★官方 <match-media> 的**视口媒体查询**属性（2026-09-18 批次外收口判定）：
+  //   官方 match-media 是「**视口**条件下的条件渲染」组件（min-width/max-width/width/min-height/
+  //   max-height/height/orientation 描述的是**视口**尺寸与屏幕方向）。
+  //   框架的语义承接是 `p-adaptive` / `p-zone`（矩阵 audit.ts：「容器断点替代」）——即用
+  //   **容器断点**（`modes: 'sheet(0,600)|dialog(600,840)|popover(840,∞)'`，容器宽度驱动形态切换）
+  //   替代**视口查询**（语义升级：组件自适应所在容器而非整个视口，同构于 CSS container queries 替代 media queries）。
+  //   故官方这批**视口度量属性**不上升为框架语义——它们描述的正是被替代掉的旧机制。
+  //   判定依据同 cover-view 先例（G-31：不把被替代的平台机制原样固化成框架语义）。
+  //   ★诚实边界：框架目前确实**没有**「按视口条件条件渲染」的等价物；若将来需要，应新增独立语义
+  //   （如 `layout.viewport-query`）而非把它们挂到 p-adaptive 上。
+  'match-media': {
+    'min-width': '视口查询 → 容器断点语义升级（p-adaptive modes）；视口度量不上升为框架属性',
+    'max-width': '同上（视口度量 → 容器断点）',
+    width: '同上（视口度量 → 容器断点）',
+    'min-height': '同上（视口度量 → 容器断点）',
+    'max-height': '同上（视口度量 → 容器断点）',
+    height: '同上（视口度量 → 容器断点）',
+    orientation: '同上（屏幕方向 → 容器形态由断点决定；方向由各端窗口系统处理）',
+  },
 }
 
 const norm = (s) => s.replace(/[-:]/g, '').toLowerCase() // open-type ↔ openType；bind:xxx

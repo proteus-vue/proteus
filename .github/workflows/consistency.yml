@@ -24,11 +24,22 @@ jobs:
         working-directory: ${{ github.workspace }}
 
       - name: Scope residual scan
-        # 兜底：全仓库 grep @proteus/（不含 @proteus-vue/），发现即失败
+        # 兜底：全仓库 grep @proteus/（不含 @proteus-vue/），发现即失败。
+        # ★豁免集必须与 scripts/check-consistency.js 的 SCOPE_ALLOW 保持一致（后者为权威，
+        #   含路径维度判定；此处仅覆盖 checker 的 walk 未遍历到的文件类型/目录）。
+        #   允许集：fork 检测样本（container/core）· 生态示例名（backend-*/plugin-*/architecture）·
+        #   历史写法（compat-miniprogram）· 行内 `scope-allow: <理由>`。
         run: |
           set -e
-          if grep -rE "@proteus/[a-zA-Z0-9-]+" --include="*.md" --include="*.ts" --include="*.json" . \
-               | grep -v "@proteus-vue/" | grep -v "proteus-architecture"; then
+          hits=$(grep -rEn "@proteus/[a-zA-Z0-9-]+" \
+                   --include="*.md" --include="*.ts" --include="*.json" \
+                   --include="*.js" --include="*.mjs" --include="*.vue" . || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "@proteus-vue/" || true)
+          hits=$(printf '%s\n' "$hits" | grep -vE "@proteus/(container|core|architecture|backend-|plugin-|compat-miniprogram|x)" || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "scope-allow:" || true)
+          hits=$(printf '%s\n' "$hits" | grep -v "^[[:space:]]*$" || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
             echo "::error::Found legacy @proteus/ scope (should be @proteus-vue/)"
             exit 1
           fi

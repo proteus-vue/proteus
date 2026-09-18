@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PRIMITIVE_CATALOG, MP_MAPPING_MATRIX, SEMANTIC_BACKEND_MAP, implementedPrimitives } from '../packages/component-ir/src/index'
+import { PRIMITIVE_CATALOG, MP_MAPPING_MATRIX, SEMANTIC_BACKEND_MAP, implementedPrimitives, checkPrimitiveCatalog } from '../packages/component-ir/src/index'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_DIR = path.join(ROOT, 'docs', 'generated')
@@ -97,10 +97,20 @@ function buildImplemented(): string {
 
 // —— 写盘 + 幂等校验 ——
 
+// ★2026-09-18：新增 `--check` 漂移门禁模式（此前只有写盘模式，且**从未接入任何门禁** →
+//   生成物静默过期多批：catalog.md 长期停在「136 原语 · implemented 45」而实为 181/59）。
+const CHECK = process.argv.includes('--check')
+let drifted: string[] = []
+
 function write(name: string, content: string): void {
   const file = path.join(OUT_DIR, name)
   const full = content + '\n'
   const prev = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null
+  if (CHECK) {
+    if (prev !== full) drifted.push(path.relative(ROOT, file))
+    console.log(`gen-docs --check → ${path.relative(ROOT, file)}${prev === full ? ' ✅ 一致' : ' ❌ 漂移'}`)
+    return
+  }
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(file, full)
   // ★幂等判定：写入带尾部换行（full）——prev 与 full 比较（此前与 content 比较恒不等）
@@ -111,11 +121,27 @@ write('catalog.md', buildCatalog())
 write('miniprogram-mapping.md', buildMapping())
 write('implemented-semantics.md', buildImplemented())
 
-const catalogCheck = PRIMITIVE_CATALOG.length === 136 // ★#405 语义登记批后 136（128 为过期常量——每次 gen:docs 自检红已存在多批）
+// ★2026-09-18 修正：原自检 `length === 136` 是**硬编码常量**，自 #405 起即过期
+//   （注释自承「每次 gen:docs 自检红已存在多批」）→ 门禁长期红 = 形同废弃。
+//   改为**结构性自检**（与 checkPrimitiveCatalog 同源）：唯一性 + 与 id/语义计数一致 + 非空，
+//   使它在「新增原语」时不会误红，只在**真结构错误**（重复 id/重复语义/清单为空）时失败。
+const catalogIssues = checkPrimitiveCatalog()
+const catalogCheck = catalogIssues.length === 0
 const mappingCheck = MP_MAPPING_MATRIX.filter((i) => i.status === 'missing').length === 0
 const coverageCheck = implementedPrimitives().every((p) => Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length >= 3)
 if (!catalogCheck || !mappingCheck || !coverageCheck) {
-  console.error(`gen-docs 自检失败：catalog=${catalogCheck}（128）· mapping 缺失=${MP_MAPPING_MATRIX.filter((i) => i.status === 'missing').length} · 覆盖≥3端=${coverageCheck}`)
+  console.error(
+    `gen-docs 自检失败：catalog 结构=${catalogCheck}${catalogIssues.length ? `（${catalogIssues.join('; ')}）` : ''}` +
+      ` · mapping 缺失=${MP_MAPPING_MATRIX.filter((i) => i.status === 'missing').length} · 覆盖≥3端=${coverageCheck}`,
+  )
   process.exit(1)
 }
-console.log(`gen-docs 自检 ✅（${PRIMITIVE_CATALOG.length} 原语 · 矩阵 0 缺失 · implemented 全部 ≥3 端映射）`)
+console.log(`gen-docs 自检 ✅（${PRIMITIVE_CATALOG.length} 原语 · 结构无重复/无空洞 · 矩阵 0 缺失 · implemented 全部 ≥3 端映射）`)
+
+// ★漂移门禁收口：--check 模式下生成物与源不一致 → exit 1（供 CI / verify 链）
+if (CHECK && drifted.length) {
+  console.error(`\nDRIFT: ${drifted.length} 个生成物与源不一致——运行 npm run gen:docs 并提交：`)
+  for (const d of drifted) console.error(`  - ${d}`)
+  process.exit(1)
+}
+if (CHECK) console.log('CHECK OK — 生成物与源一致')
