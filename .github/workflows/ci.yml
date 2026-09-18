@@ -69,11 +69,28 @@ jobs:
           node scripts/gen-mp-spec.mjs --check
           npx tsx packages/cli/src/index.ts audit coverage
 
+      - name: 端对齐属性棘轮门禁（★主标尺：官方属性级覆盖不得回退——只增不减）
+        # ★2026-09-18 补接线：此前该门禁**只在本地 `pnpm verify` 链**、不在 CI →
+        #   属性覆盖回退（本会话全部工作围绕的 310/310）可以推上去而 CI 不拦。
+        #   依赖官方文档页（需出网）；离线时脚本诚实跳过并告警，不误红（见 gen-mp-component-attrs.mjs --check）。
+        run: |
+          node scripts/gen-mp-component-attrs.mjs --check
+          node scripts/audit-component-attrs.mjs
+
+      - name: 官网目录数据门禁（catalog 快照幂等 + route 无死链 —— 防「可点击但页面不存在」）
+        run: node scripts/gen-showcase-catalog.mjs --check
+
+      - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
+        run: node scripts/check-package-health.js
+
       - name: 属性降级声明门禁（批次 4 M6 · EA-5：全组件属性三态无空白格 + fallback 可观察 + 与官方清单交叉核对）
         run: node scripts/audit-degradation.mjs
 
       - name: 跨层一致性门禁（铁律 scope 统一 + G 表一致 + 包注册表对照）
         run: node scripts/check-consistency.js
+
+      - name: 门禁通道一致性（★2026-09-18：防「CI 与 verify 两套门禁各自不完整」再度发生）
+        run: node scripts/check-gates-sync.mjs
 
       - name: 原语清单生成物漂移门禁（★批次 7：gen:docs 此前从未接线，catalog.md 静默过期多批）
         run: npx tsx scripts/gen-docs.ts --check
