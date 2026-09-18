@@ -129,13 +129,17 @@ const SHELL: PrimitiveDef[] = [
 
 /** G-32 §6 ④ 交互/手势原语 Gesture（10）——手势是声明式约束（v-gesture:* 指令 + 组件 + Hook） */
 const GESTURE: PrimitiveDef[] = [
-  { id: 'G1', kind: 'gesture', semantic: 'gesture.tap', api: 'v-gesture:tap', props: ['count'], mpEquiv: 'bindtap', tier: 'L1', status: 'planned' },
-  { id: 'G2', kind: 'gesture', semantic: 'gesture.longpress', api: 'v-gesture:longpress', props: ['duration', 'onEnd'], mpEquiv: 'bindlongpress', tier: 'L1', status: 'planned' },
-  { id: 'G3', kind: 'gesture', semantic: 'gesture.swipe', api: 'v-gesture:swipe', props: ['direction', 'threshold'], mpEquiv: 'bindswipe', tier: 'L1', status: 'planned' },
-  { id: 'G4', kind: 'gesture', semantic: 'gesture.pan', api: 'v-gesture:pan', props: ['axis', 'bounds'], mpEquiv: 'bindtouchmove', tier: 'L1', status: 'planned' },
-  { id: 'G5', kind: 'gesture', semantic: 'gesture.pinch', api: 'v-gesture:pinch', props: ['scale', 'onChange'], mpEquiv: 'touchstart/move 组合', tier: 'L1', status: 'planned' },
-  { id: 'G6', kind: 'gesture', semantic: 'gesture.rotate', api: 'v-gesture:rotate', props: ['angle'], mpEquiv: '组合', tier: 'L1', status: 'planned' },
-  { id: 'G7', kind: 'gesture', semantic: 'gesture.press', api: 'v-gesture:press', props: ['force'], mpEquiv: '3D Touch', tier: 'L1', status: 'planned' },
+  // ★2026-09-18：G1/G2 由 planned → implemented——`v-gesture:tap|longpress` 已双端落地
+  //   （编译器新增 `directive/v-gesture` 规则：MP 映射 bindtap/bindlongpress；Web 走 Pointer 识别器）。
+  //   ★G3–G7 **保持 planned**：MP 端无事件对等（官方用 worklet 手势处理器<组件>，框架未生成），
+  //   mpEquiv 已改为**如实描述**（原值 bindswipe/bindtouchmove/组合/3D Touch 多为不准确表述）。
+  { id: 'G1', kind: 'gesture', semantic: 'gesture.tap', api: 'v-gesture:tap', props: ['count'], mpEquiv: 'bindtap（原生事件——编译器直映射）', tier: 'L1', status: 'implemented' },
+  { id: 'G2', kind: 'gesture', semantic: 'gesture.longpress', api: 'v-gesture:longpress', props: ['duration', 'onEnd'], mpEquiv: 'bindlongpress（原生事件——编译器直映射）', tier: 'L1', status: 'implemented' },
+  { id: 'G3', kind: 'gesture', semantic: 'gesture.swipe', api: 'v-gesture:swipe', props: ['direction', 'threshold'], mpEquiv: '无原生事件——需 @touchstart/@touchend 自行判定方向', tier: 'L1', status: 'planned' },
+  { id: 'G4', kind: 'gesture', semantic: 'gesture.pan', api: 'v-gesture:pan', props: ['axis', 'bounds'], mpEquiv: '无原生事件——官方 <pan-gesture-handler>（worklet）或 touch 族自行判定', tier: 'L1', status: 'planned' },
+  { id: 'G5', kind: 'gesture', semantic: 'gesture.pinch', api: 'v-gesture:pinch', props: ['scale', 'onChange'], mpEquiv: '无原生事件——官方 <scale-gesture-handler>（worklet）', tier: 'L1', status: 'planned' },
+  { id: 'G6', kind: 'gesture', semantic: 'gesture.rotate', api: 'v-gesture:rotate', props: ['angle'], mpEquiv: '无原生事件（MP 无 rotate 手势处理器）', tier: 'L1', status: 'planned' },
+  { id: 'G7', kind: 'gesture', semantic: 'gesture.press', api: 'v-gesture:press', props: ['force'], mpEquiv: '无原生事件——官方 <force-press-gesture-handler>（worklet，需 3D Touch 设备）', tier: 'L1', status: 'planned' },
   { id: 'G8', kind: 'gesture', semantic: 'gesture.draggable', tag: 'p-draggable', props: ['direction', 'inertia', 'outOfBounds', 'x', 'y', 'damping', 'friction', 'disabled', 'scaleEnabled', 'scaleMin', 'scaleMax', 'scaleValue', 'animation', 'scaleArea', 'ghost', 'snapToGrid', 'onDrop'], mpEquiv: 'movable-view', tier: 'L1', status: 'implemented' },
   { id: 'G9', kind: 'gesture', semantic: 'gesture.scrollable', tag: 'p-scrollable', props: ['bounce', 'refresh', 'loadMore'], mpEquiv: '<scroll-view>', tier: 'L1', status: 'implemented' },
   { id: 'G10', kind: 'gesture', semantic: 'gesture.use-gesture', api: 'useGesture()', props: ['recognizers', 'simultaneous'], mpEquiv: '无', tier: 'L1', status: 'planned' },

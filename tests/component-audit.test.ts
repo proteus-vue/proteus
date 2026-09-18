@@ -49,9 +49,9 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     expect(count('engineering')).toBe(28)
   })
 
-  it('implemented 61 项（★批次 7 补登记 +5 → 59；★语义决策批 +2（scan-qr/pick-photo）→ 61）· 其余 planned 待落地', () => {
+  it('implemented 63 项（批次 7 +5 → 59；语义决策批净 0 → 59；★2026-09-18 手势 tap/longpress +2、能力双形态 +2 → 63）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(61)
+    expect(impl.length).toBe(63)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)

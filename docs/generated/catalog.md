@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **181** 原语 · implemented **61**。
+> 总计 **181** 原语 · implemented **63**。
 
 ## layout — 布局（12）
 
@@ -84,13 +84,13 @@
 
 | # | 语义 | 形态 | 标签/API | 小程序等价 | 状态 |
 |---|------|------|----------|-----------|------|
-| G1 | `gesture.tap` | api:v-gesture:tap | `v-gesture:tap` | bindtap | planned |
-| G2 | `gesture.longpress` | api:v-gesture:longpress | `v-gesture:longpress` | bindlongpress | planned |
-| G3 | `gesture.swipe` | api:v-gesture:swipe | `v-gesture:swipe` | bindswipe | planned |
-| G4 | `gesture.pan` | api:v-gesture:pan | `v-gesture:pan` | bindtouchmove | planned |
-| G5 | `gesture.pinch` | api:v-gesture:pinch | `v-gesture:pinch` | touchstart/move 组合 | planned |
-| G6 | `gesture.rotate` | api:v-gesture:rotate | `v-gesture:rotate` | 组合 | planned |
-| G7 | `gesture.press` | api:v-gesture:press | `v-gesture:press` | 3D Touch | planned |
+| G1 | `gesture.tap` | api:v-gesture:tap | `v-gesture:tap` | bindtap（原生事件——编译器直映射） | implemented |
+| G2 | `gesture.longpress` | api:v-gesture:longpress | `v-gesture:longpress` | bindlongpress（原生事件——编译器直映射） | implemented |
+| G3 | `gesture.swipe` | api:v-gesture:swipe | `v-gesture:swipe` | 无原生事件——需 @touchstart/@touchend 自行判定方向 | planned |
+| G4 | `gesture.pan` | api:v-gesture:pan | `v-gesture:pan` | 无原生事件——官方 <pan-gesture-handler>（worklet）或 touch 族自行判定 | planned |
+| G5 | `gesture.pinch` | api:v-gesture:pinch | `v-gesture:pinch` | 无原生事件——官方 <scale-gesture-handler>（worklet） | planned |
+| G6 | `gesture.rotate` | api:v-gesture:rotate | `v-gesture:rotate` | 无原生事件（MP 无 rotate 手势处理器） | planned |
+| G7 | `gesture.press` | api:v-gesture:press | `v-gesture:press` | 无原生事件——官方 <force-press-gesture-handler>（worklet，需 3D Touch 设备） | planned |
 | G8 | `gesture.draggable` | tag:p-draggable | `p-draggable` | movable-view | implemented |
 | G9 | `gesture.scrollable` | tag:p-scrollable | `p-scrollable` | <scroll-view> | implemented |
 | G10 | `gesture.use-gesture` | api:useGesture() | `useGesture()` | 无 | planned |

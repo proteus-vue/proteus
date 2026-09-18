@@ -236,6 +236,23 @@ export const TEMPLATE_RULES: TransformRule[] = [
     source: 'src/compiler/template.ts → serializeElement（未知 p-* 检测）',
   }),
 
+  // ============ 手势指令（G-32 B4 ④） ============
+  {
+    id: 'directive/v-gesture',
+    phase: 'template',
+    status: 'implemented',
+    title: 'v-gesture:<kind> → MP 原生事件（有对等者直映射，无对等者明示替代）',
+    titleEn: 'v-gesture:<kind> maps to native MP events (direct map when equivalent, explicit alternative otherwise)',
+    description: 'v-gesture:tap|longpress → bindtap/bindlongpress（MP 原生事件对等）；pan/pinch/rotate/press 无事件对等（官方为 worklet 手势处理器组件）→ 剥离并给出具体替代指引起',
+    descriptionEn: 'v-gesture:tap|longpress become bindtap/bindlongpress (native MP event equivalents); pan/pinch/rotate/press have no event equivalent (the official form is worklet gesture-handler components) so they are stripped with a concrete alternative hint',
+    why: '修「静默失效」缺陷：此前 v-gesture:* 一律落入 directive/custom 被剥离且警告「无对等机制」，但 gesture.tap 的 mpEquiv 明写 bindtap（原生真实存在）——两者矛盾，写 v-gesture:tap 的开发者在小程序上 handler 永不触发',
+    whyEn: 'fixes silent failure: v-gesture:* used to fall into directive/custom, get stripped, and warn that nothing is equivalent — yet gesture.tap declares bindtap as its mpEquiv, so handlers written with v-gesture:tap never fired on MP',
+    when: '模板元素上有 v-gesture:<kind> 时',
+    example: { before: '<view v-gesture:tap="onTap">x</view>', after: '<view bindtap="onTap">x</view>' },
+    verify: 'tests/p-gesture-batch.test.ts（双路径 + 破坏性）',
+    source: 'packages/compiler/src/template.ts → serializeElement（case gesture）+ tags.ts GESTURE_MP_EVENTS/MP_GESTURE_ALTERNATIVES',
+  },
+
   // ============ 属性降级（EA-5 / G-31.2，批次 4 M6） ============
   {
     id: 'prop/no-degradation',

@@ -17,6 +17,7 @@ import { TAG_SEMANTIC_MAP, MP_UNSUPPORTED_PROPS, PROP_NO_DEGRADATION, FRAMEWORK_
 import { executeRule } from './transforms/registry'
 import type { RuleContext } from './transforms/types'
 import { resolveOverrides } from './overrides'
+import { GESTURE_MP_EVENTS, MP_GESTURE_ALTERNATIVES } from './tags'
 import { CompilerError } from './validate'
 import { lowerSvgToImage, lowerSvgDynamic, collectUnsupportedSvgTags, lowerSvgToScene } from './svg-lower'
 import type { SvgTextNode } from './svg-lower'
@@ -1279,6 +1280,48 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           isCatch ? 'event/modifier-catch' : isSelf || isOnce ? 'event/modifier-self-once' : 'event/click-to-tap',
           { line: node.loc.start.line, before: `@${raw}`, after: `${prefix}${mapped}` },
         )
+        break
+      }
+      case 'gesture': {
+        // ★2026-09-18：v-gesture:<kind> → MP 原生事件（修「静默剥离」缺陷）。
+        //   此前落到 default 分支被**剥离且不执行**并警告「小程序无对等机制」——但 catalog 的
+        //   gesture.tap/longpress 的 mpEquiv 明写 bindtap/bindlongpress（原生真实存在）→ 两者矛盾，
+        //   写 v-gesture:tap 的开发者在小程序上 handler **永不触发**（静默失效）。
+        //   ★诚实边界（关键）：仅映射**有真实原生事件对等**的手势；其余（pan/pinch/rotate/press）
+        //   MP 无简单事件对等（官方用 worklet 手势处理器组件：worklet:ongesture + 协商，非事件属性）
+        //   → 保留「剥离 + 警告」但给出**具体可行**的替代指引（不再笼统说「无对等机制」）。
+        if (ctx.disabled.has('directive/v-gesture')) {
+          ctx.warnings.push(`规则 directive/v-gesture 已被禁用（rules.disabled），v-gesture 已忽略`)
+          break
+        }
+        const kind = dir.arg ? exprContent(dir.arg).trim() : ''
+        const gestureEvent = GESTURE_MP_EVENTS[kind]
+        if (!gestureEvent) {
+          const alt = MP_GESTURE_ALTERNATIVES[kind] ?? '（该手势 MP 无等价；请用原生 *-gesture-handler 组件）'
+          ctx.warnings.push(
+            `v-gesture:${kind || '(缺手势名)'} 在小程序端无事件对等（官方用 worklet 手势处理器组件 ${kind}-gesture-handler）` +
+              `——已剥离。替代：改用 ${alt}`,
+          )
+          ctx.trace?.add('directive/v-gesture', { line: node.loc.start.line, before: `v-gesture:${kind}`, after: `（MP 无事件对等，已剥离并给出替代）` })
+          break
+        }
+        const flow = dir.exp
+        const gExp = flow && 'content' in flow ? exprContent(flow as { content: string }) : undefined
+        const gHandler = cleanHandler(gExp ?? '', ctx.warnings, ctx.failFast, ctx.filename)
+        const gMods = (dir.modifiers as unknown as Array<{ content?: string } | string>).map((m) =>
+          typeof m === 'string' ? m : (m.content ?? ''),
+        )
+        const gCatch = gMods.includes('catch') || gMods.includes('stop')
+        const gSelf = gMods.includes('self')
+        const gOnce = gMods.includes('once')
+        // self/once 在 MP 无对等（同 event/modifier-self-once 语义）——警告但照常绑定（不静默降级）
+        if (gSelf || gOnce) {
+          ctx.warnings.push(
+            `v-gesture:${kind} 的修饰符 .${[gSelf ? 'self' : '', gOnce ? 'once' : ''].filter(Boolean).join('.')} 在小程序无对等（已忽略该修饰符，事件照常绑定）——请改用事件属性 @tap 等（vue-compat Batch A）`,
+          )
+        }
+        attrs.push(`${gCatch ? 'catch' : 'bind'}${gestureEvent}="${gHandler}"`)
+        ctx.trace?.add('directive/v-gesture', { line: node.loc.start.line, before: `v-gesture:${kind}`, after: `${gCatch ? 'catch' : 'bind'}${gestureEvent}="${gHandler}"（MP 原生事件对等）` })
         break
       }
       case 'bind': {

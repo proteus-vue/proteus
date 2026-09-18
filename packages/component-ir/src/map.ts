@@ -444,6 +444,28 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     headless: 'form',
   },
   // ★G-32 B4 ④ Gesture 组件形态（drag/scrollable——指令/useGesture 属绑定层不产渲染节点）
+  // ★2026-09-18：tap / longpress 补映射——`v-gesture:tap|longpress` 已有**双端原生对等**
+  //   （MP 映射 bindtap/bindlongpress；Web 走 Pointer 识别器），故由 planned 转 implemented。
+  //   ★其余手势（swipe/pan/pinch/rotate/press）**刻意不补**：MP 端无事件对等
+  //   （官方用 worklet 手势处理器<组件>，框架未生成）→ 保持 planned（诚实边界，不凑端数）。
+  'gesture.tap': {
+    'vue-dom': 'v-gesture:tap（Pointer 识别器）',
+    'native-ios': 'UITapGestureRecognizer',
+    'native-android': 'GestureDetector.onSingleTapUp',
+    'native-harmony': 'TapGesture',
+    skyline: 'bindtap', // MP 原生事件（编译器 v-gesture:tap → bindtap，2026-09-18）
+    flutter: 'GestureDetector.onTap',
+    headless: 'tap',
+  },
+  'gesture.longpress': {
+    'vue-dom': 'v-gesture:longpress（Pointer 识别器）',
+    'native-ios': 'UILongPressGestureRecognizer',
+    'native-android': 'GestureDetector.onLongPress',
+    'native-harmony': 'LongPressGesture',
+    skyline: 'bindlongpress', // MP 原生事件（编译器 v-gesture:longpress → bindlongpress，2026-09-18）
+    flutter: 'GestureDetector.onLongPress',
+    headless: 'longpress',
+  },
   'gesture.draggable': {
     'vue-dom': 'div.proteus-draggable',
     'native-ios': 'UIPanGestureRecognizer',

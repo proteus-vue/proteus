@@ -7,9 +7,9 @@ generated: true
 
 # 编译规则目录
 
-> 110 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
+> 111 条编译规则——每条自带 AI 说明书（id / when / before → after / why）。SSOT = `@proteus-vue/compiler` TRANSFORM_RULES，与 `npx proteus rules` / Playground Trace 同源。
 
-## 模板转换（61）
+## 模板转换（62）
 
 ### `tag/div-to-view`
 
@@ -153,6 +153,19 @@ after:  编译警告（未登记 p-*——拼写错误或未入库组件）；�
 ```
 
 > why: 反黑盒（★#505 M3）：conformance 世界已把「p-* 存在但空白」（TAG_SEMANTIC_MAP 未登记）收紧为 render.semanticLink 显式失败，本规则把同源收紧带到主编译产物侧——旧行为静默输出，开发者在 MP 端看到整块不渲染无从归因
+
+### `directive/v-gesture`
+
+**v-gesture:<kind> → MP 原生事件（有对等者直映射，无对等者明示替代）**
+
+v-gesture:tap|longpress → bindtap/bindlongpress（MP 原生事件对等）；pan/pinch/rotate/press 无事件对等（官方为 worklet 手势处理器组件）→ 剥离并给出具体替代指引起
+
+```
+before: <view v-gesture:tap="onTap">x</view>
+after:  <view bindtap="onTap">x</view>
+```
+
+> why: 修「静默失效」缺陷：此前 v-gesture:* 一律落入 directive/custom 被剥离且警告「无对等机制」，但 gesture.tap 的 mpEquiv 明写 bindtap（原生真实存在）——两者矛盾，写 v-gesture:tap 的开发者在小程序上 handler 永不触发
 
 ### `prop/no-degradation`
 

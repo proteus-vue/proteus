@@ -128,12 +128,14 @@ describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门�
   })
 
   it('破坏性验证：指向 planned 原语的 covered → 报 unimplemented', () => {
+    // ★2026-09-18：改用**仍为 planned** 的原语做样本（原用 gesture.tap，其已落地转 implemented，
+    //   不再是「planned 原语」的有效样本 —— 门禁语义未变，仅换样本）。
     const r = auditSpecOverrideRefs(PRIMITIVE_CATALOG, {
-      'tap-gesture-handler': { status: 'covered', proteus: 'gesture.tap' },
+      'pan-gesture-handler': { status: 'covered', proteus: 'gesture.pan' },
     })
     expect(r.issues).toHaveLength(1)
     expect(r.issues[0].kind).toBe('unimplemented')
-    expect(r.issues[0].ref).toBe('gesture.tap')
+    expect(r.issues[0].ref).toBe('gesture.pan')
   })
 
   it('破坏性验证：悬空引用（拼写错误）→ 报 semantic/component', () => {
@@ -144,18 +146,26 @@ describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门�
     expect(r.issues[0].kind).toBe('semantic')
   })
 
-  it('★诚实性回归：5 个手势处理器不得为 covered（其原语为 planned）', () => {
-    // 锁定本轮修正：这 5 条曾标 covered 但原语未落地（真·落地率虚高 5 项）
-    for (const tag of [
-      'tap-gesture-handler',
-      'long-press-gesture-handler',
-      'pan-gesture-handler',
-      'scale-gesture-handler',
-      'force-press-gesture-handler',
-    ]) {
-      expect(SPEC_COMPONENT_OVERRIDE[tag]?.status, `${tag} 应为 planned（原语未落地）`).toBe('planned')
+  it('★诚实性回归：状态必须与**原语真实状态**一致（covered ↔ implemented 双向对齐）', () => {
+    // 这条断言随事实演进，锁的是「状态不得与原语漂移」这一不变量：
+    // · 2026-09-18 前：5 条手势处理器原语为 planned → 全标 planned（修正真·落地率虚高 5 项）
+    // · 2026-09-18 后：tap/longpress 经编译器 directive/v-gesture 落地（原语转 implemented）
+    //   → 该 2 条据实转 covered；pan/scale/force-press 仍 planned（MP 无事件对等）。
+    // ★判据：逐条比较 override 状态与 catalog 原语状态——任一漂移即红。
+    const semOf: Record<string, string> = {
+      'tap-gesture-handler': 'gesture.tap',
+      'long-press-gesture-handler': 'gesture.longpress',
+      'pan-gesture-handler': 'gesture.pan',
+      'scale-gesture-handler': 'gesture.pinch',
+      'force-press-gesture-handler': 'gesture.press',
     }
-    // 已落地的两条仍为 covered（draggable 已实现）
+    for (const [tag, sem] of Object.entries(semOf)) {
+      const prim = PRIMITIVE_CATALOG.find((x) => x.semantic === sem)
+      expect(prim, `${sem} 应在 catalog`).toBeTruthy()
+      const expected = prim!.status === 'implemented' ? 'covered' : 'planned'
+      expect(SPEC_COMPONENT_OVERRIDE[tag]?.status, `${tag} 状态应与 ${sem}（${prim!.status}）一致`).toBe(expected)
+    }
+    // 已落地的两条（draggable）
     expect(SPEC_COMPONENT_OVERRIDE['horizontal-drag-gesture-handler']?.status).toBe('covered')
     expect(SPEC_COMPONENT_OVERRIDE['vertical-drag-gesture-handler']?.status).toBe('covered')
   })

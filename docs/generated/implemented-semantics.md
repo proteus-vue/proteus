@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **61** 个。
+> implemented 语义 **63** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -58,6 +58,8 @@
 | `shell.keyboard-accessory` | div.proteus-keyboard-accessory | UIInputView | InputMethodService.accessory | KeyboardAccessory | keyboard-accessory | KeyboardAccessoryView | keyboard-accessory |
 | `shell.webview` | div.proteus-webview | WKWebView | WebView | Web | web-view | WebView | webview |
 | `shell.ad` | div.proteus-ad | UIView.ad | View.ad | AdSlot | ad | AdWidget | ad |
+| `gesture.tap` | v-gesture:tap（Pointer 识别器） | UITapGestureRecognizer | GestureDetector.onSingleTapUp | TapGesture | bindtap | GestureDetector.onTap | tap |
+| `gesture.longpress` | v-gesture:longpress（Pointer 识别器） | UILongPressGestureRecognizer | GestureDetector.onLongPress | LongPressGesture | bindlongpress | GestureDetector.onLongPress | longpress |
 | `gesture.draggable` | div.proteus-draggable | UIPanGestureRecognizer | GestureDetector | PanGesture | movable-view | Draggable | draggable |
 | `gesture.scrollable` | div.proteus-scrollable | UIScrollView.gesture | NestedScrollView | Scroll.gesture | scroll-view | Scrollable | scrollable |
 | `capability.camera` | input.proteus-pick-photo | UIImagePicker | PhotoPicker | PhotoViewPicker | wx.chooseMedia | pickPhoto | pick-photo |

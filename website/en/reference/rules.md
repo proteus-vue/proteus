@@ -7,9 +7,9 @@ generated: true
 
 # Compile rule catalog
 
-> 110 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
+> 111 compile rules — every rule ships its own AI explainer (id / when / before → after / why). SSOT = `@proteus-vue/compiler` TRANSFORM_RULES, same source as `npx proteus rules` and the Playground trace.
 
-## Template transforms (61)
+## Template transforms (62)
 
 ### `tag/div-to-view`
 
@@ -153,6 +153,19 @@ after:  编译警告（未登记 p-*——拼写错误或未入库组件）；�
 ```
 
 > why: anti-black-box (★#505 M3): the conformance world already tightens “p-* present but blank” (not in TAG_SEMANTIC_MAP) into an explicit render.semanticLink failure; this rule brings the same tightening to the main compiled artifact side — the old behavior emitted silently and developers could not attribute a whole block not rendering on MP
+
+### `directive/v-gesture`
+
+**v-gesture:<kind> maps to native MP events (direct map when equivalent, explicit alternative otherwise)**
+
+v-gesture:tap|longpress become bindtap/bindlongpress (native MP event equivalents); pan/pinch/rotate/press have no event equivalent (the official form is worklet gesture-handler components) so they are stripped with a concrete alternative hint
+
+```
+before: <view v-gesture:tap="onTap">x</view>
+after:  <view bindtap="onTap">x</view>
+```
+
+> why: fixes silent failure: v-gesture:* used to fall into directive/custom, get stripped, and warn that nothing is equivalent — yet gesture.tap declares bindtap as its mpEquiv, so handlers written with v-gesture:tap never fired on MP
 
 ### `prop/no-degradation`
 

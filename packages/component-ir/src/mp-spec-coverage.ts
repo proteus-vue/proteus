@@ -276,12 +276,14 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   //   为 **planned**（`gesture.long-press` 更是拼写错误——实际名为 `gesture.longpress`）。
   //   covered 的定义是「有可运行等价」，而统一手势 API（`v-gesture:*`）尚未落地 →
   //   按实测状态改标 planned（与 2026-09-16 属性标尺虚高同类修正：数字不粉饰）。
-  //   基础 tap/longpress 经原生 @tap/@longpress 可用，但 count/worklet 等组件本义无对等。
+  //   ★2026-09-18 复评：tap/longpress **已据实转 covered**（编译器新增 directive/v-gesture 规则，
+  //   双端原生事件对等：MP bindtap/bindlongpress、Web Pointer 识别器）；pan/pinch/press 仍 planned
+  //   （MP 无事件对等——官方是 worklet 手势处理器<组件>，非事件属性）。
   //   ★同时新增 auditSpecOverrideRefs 门禁——此前 override 表**完全不在引用校验范围内**，
   //   故这 5 条虚高 + 1 处悬空引用长期未被发现。
-  'tap-gesture-handler': { status: 'planned', proteus: 'gesture.tap（v-gesture:tap 规划中；基础 @tap 原生可用）' },
+  'tap-gesture-handler': { status: 'covered', proteus: 'gesture.tap（★2026-09-18 落地：编译器 v-gesture:tap → bindtap——MP 原生事件对等）' },
   'double-tap-gesture-handler': { status: 'covered', proteus: 'gesture.draggable（tap 识别，已落地）' },
-  'long-press-gesture-handler': { status: 'planned', proteus: 'gesture.longpress（v-gesture 规划中；基础 @longpress 原生可用）' },
+  'long-press-gesture-handler': { status: 'covered', proteus: 'gesture.longpress（★2026-09-18 落地：编译器 v-gesture:longpress → bindlongpress——MP 原生事件对等）' },
   'pan-gesture-handler': { status: 'planned', proteus: 'gesture.pan（v-gesture:pan 规划中）' },
   'scale-gesture-handler': { status: 'planned', proteus: 'gesture.pinch（v-gesture:pinch 规划中）' },
   'force-press-gesture-handler': { status: 'planned', proteus: 'gesture.press（v-gesture:press 规划中）' },
@@ -427,12 +429,16 @@ export function auditSpecCoverage(
  *   covered 下降 或 gap 上升 → CI 红（防「悄悄丢覆盖」）；改善后应手动调高 covered 锁定成果。
  */
 export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
-  // ★2026-09-18 水位修正（非回退）：255 → 250。原 255 基线**含 5 条虚高**
+  // ★2026-09-18 水位修正（非回退）：255 → 250（含 5 条手势虚高）；同日后又 **250 → 252**
+  //   （其中 tap/longpress 经编译器落地，见下）。原 255 基线**含 5 条虚高**
   //   （tap/long-press/pan/scale/force-press-gesture-handler 标 covered，但其手势原语为 planned）。
   //   修正后实测 covered 250 / planned 6（share-element + 5 手势）/ private 106 / na 20 / gap 0。
   //   这与 2026-09-16「属性总数 793→771」属同类修正——**修的是标尺，不是能力**：
   //   真实可运行的等价物一件没少，只是不再把「规划中」记成「已落地」。
   //   ★今后此值只增不减；若因**同类诚实性修正**需下调，必须在本注释写明被修正的具体条目。
-  coveredMin: 250, // 2026-09-18 修正基线（原 255 含 5 条手势虚高——见上注）
+  // ★2026-09-18 上调 250 → 252：tap/longpress 手势**真实落地**（编译器 directive/v-gesture 规则
+  //   → MP bindtap/bindlongpress + Web Pointer 识别器），spec 分类据实由 planned 转 covered。
+  //   与上次的「下调」性质相反——这次是**能力真实增长**（真·落地率 97%→98%）。
+  coveredMin: 252, // 2026-09-18 上行基线（250 修正基线 + tap/longpress 落地）
   gapMax: 0, // 全部官方项必须归类
 }
