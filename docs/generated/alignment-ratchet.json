@@ -1,7 +1,7 @@
 {
  "_comment": "端能力属性覆盖棘轮（只增不减）——由 scripts/audit-component-attrs.mjs 读取本文件校验（缺省阈值=coveredMin），勿手改；推进后跑 --update 回写。",
- "attrCovered": 310,
- "attrTotal": 310,
- "coveredMin": 310,
- "note": "2026-09-18 批次外收口完成——**官方属性级覆盖达 100%（310/310）**，34 个已映射组件全部全覆盖：p-input 12→26/26（键盘/同层/选区/**安全键盘族** + placeholderClass）· p-form 0→2/2（report-submit 族，formId 宿主能力）· p-list-view 0→1/1（官方 padding 4 元数组 → CSS 简写，computed 归一）。★同轮**修正 3 处审计脚本映射缺陷**（并非补属性）：① `swiper:'p-swipter'` **拼写死亡配置**（p-swiper 不存在；swiper 已消灭为 layout.stack 属性）；② `share-element:'p-transition'` **语义错映射**（共享元素转场 ≠ Vue transition；框架承接 p-share-element 属 L2 规划）——制造 7 项**永远填不满的假缺口**；③ `match-media` 7 项**视口度量**登记为「有意不沿用」（框架用容器断点语义升级，见 INTENTIONAL_SKIP）。故分母 325→310（剔除 15 项错计），分子 294→310（+17 真实属性 -1 错计 duration）。★棘轮语义提醒：本次上调是『补真实属性 + 剔除错计』的合成结果，非单纯能力增长。"
+ "attrCovered": 318,
+ "attrTotal": 318,
+ "coveredMin": 318,
+ "note": "2026-09-18 批次 8 收官——**官方属性级覆盖 318/318 = 100%**（35 个已映射组件全覆盖）。本批新增 p-share-element 8/8（官方 <share-element> 共享元素转场，engineering.share-element / E29）——官方清单中**最后一个组件级 planned 项**。★两处改名决策（02-ir-prop-binding「保留字冲突 → 加前缀或改写」）：官方 `key` → `shuttleKey`（Vue vnode 保留属性，组件收不到）、官方 `transform`（boolean「是否动画」）→ `animate`（与 <view> 的 CSS transform 字符串属性类型冲突，vue-tsc TS2322）；两者均在审计 SEMANTIC_ALIAS_BY_TAG 登记。上批（批次外收口）为 310/310：p-input 26/26 · p-form 2/2 · p-list-view 1/1。★棘轮语义提醒：分母随新组件属性增长（310→318），分子同步全覆盖——属**能力真实增长**。"
 }
