@@ -22,14 +22,22 @@
 
 | 态 | 含义 | 计数 |
 |---|---|---|
-| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **255** |
-| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **1** |
+| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **250** |
+| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **6** |
 | ⬛ **private** | 平台私有（微信独占——支付/交通卡/视频号/VoIP/人脸核身/营销…）；收敛 `useMiniProgram` / 宿主桥 | **106** |
-| ➖ **na** | 不适用（废弃 API / 构建期语义 / 被语义原语「消灭」的形态） | **17** |
+| ➖ **na** | 不适用（废弃 API / 构建期语义 / 被语义原语「消灭」的形态） | **20** |
 | ❌ **gap** | 未归类（**必须为 0**——漏登记即 CI 红） | **0** |
 
 > **口径**：`分类完整率 = (total−gap)/total = 100%`（官方项全部进了某个箱子）——**这不是「全实现」**。
-> **诚实指标**：`真·落地率 = covered / (covered+planned) = 255/256 = 99%`（可落地项中已可用的比例）。
+> **诚实指标**：`真·落地率 = covered / (covered+planned) = 250/256 = 97%`（可落地项中已可用的比例）。
+>
+> ★**2026-09-18 修正：255/99% → 250/97%（非能力回退，是标尺纠错）**——原基线含 **5 条虚高覆盖**：
+> `tap` / `long-press` / `pan` / `scale` / `force-press`-gesture-handler 标 `covered`，
+> 但其承接原语 `gesture.tap/longpress/pan/pinch/press` 在 `PRIMITIVE_CATALOG` 中为 **planned**
+> （`v-gesture:*` 统一手势 API 尚未落地；其中 `gesture.long-press` 更是拼写错误，实际名 `gesture.longpress`）。
+> `covered` 的定义是「有可运行等价」，故据实改标 `planned`。**真实可运行的等价物一件没少。**
+> 漏网根因：`SPEC_COMPONENT_OVERRIDE` 此前**不在引用校验范围内**（`auditMatrixReferences` 只遍历手写矩阵）
+> → 已补门禁 `auditSpecOverrideRefs`（悬空引用 + 指向 planned 原语一律 FAIL）。
 
 ## 2-b. 已按标尺补齐的批次
 
@@ -91,4 +99,4 @@
 - `private` 的判定含主观（是否值得跨端）——收敛到 `useMiniProgram` 诚实降级，非「不做」。
 
 ---
-_生成器 `scripts/gen-mp-spec.mjs` · 分类器 `packages/component-ir/src/mp-spec-coverage.ts` · 门禁 `proteus audit coverage` · 台账更新日期 2026-09-12_
+_生成器 `scripts/gen-mp-spec.mjs` · 分类器 `packages/component-ir/src/mp-spec-coverage.ts` · 门禁 `proteus audit coverage` · 台账更新日期 2026-09-18（含手势覆盖诚实性修正）_

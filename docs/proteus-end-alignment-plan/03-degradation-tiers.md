@@ -70,5 +70,5 @@
 |---|---|
 | `schema.ts` 能力属性降级字段 | ✅ 已有 |
 | Web `proteus-button` open-type 降级实现 | ✅ 参考实现 |
-| 组件属性降级表（全量） | ⬜ M6 |
-| `PROP_NO_DEGRADATION` 编译期门禁 | ⬜ M6 |
+| 组件属性降级表（全量） | ✅ `packages/component-ir/src/degradation.ts`（73 组件 / 417 属性） |
+| `PROP_NO_DEGRADATION` 编译期门禁 | ✅ `packages/compiler/src/template.ts`（规则 `prop/no-degradation`，fail-closed） |

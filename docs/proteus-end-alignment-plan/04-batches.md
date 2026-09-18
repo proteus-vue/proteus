@@ -1,9 +1,9 @@
 # 04 · 分批执行计划
 
-## 0. 当前基线（2026-09-16 · 批次 3 宿主能力全部收口）
+## 0. 当前基线（2026-09-18 · 批次 4/5/6 全部收官：官方属性级覆盖 100%）
 
 ```
-属性覆盖：294/325 = 90%（棘轮底线 294）
+属性覆盖：310/310 = 100%（棘轮底线 310）★批次外收口后达成
 p-button 21/21 ✅（100%，范式参考实现）
 ★批次 1（高频表单）**全部 ✅**
 ★批次 2（容器与外壳）**全部 ✅**：p-view 4/4 · p-text 7/7 · p-icon 3/3 · p-image 7/7（含 cover-image）
@@ -11,8 +11,13 @@ p-button 21/21 ✅（100%，范式参考实现）
   · p-nav-bar 6/6（navigation-bar 语义纠偏）
 ★批次 3（宿主能力）**全部 ✅**：p-media(video) 47/47 · p-map 29/29 · p-camera 5/5 · p-canvas 3/3
   · p-webview 1/1 · p-ad 4/4 · p-rich-text 4/4 · p-draggable(movable-view) 13/13
-剩余（非本批）：p-input 12/26 🔶 · p-adaptive 0/7 · p-transition 1/8 · p-form 0/2 · p-list-view 0/1
-下一批 = 批次 4（属性降级声明 M6）/ 批次 5（无对应组件评估）
+★批次外剩余 5 组件**已全部收口（2026-09-18）**：p-input 26/26 · p-form 2/2 · p-list-view 1/1
+  · p-adaptive 与 p-transition 经查为**映射缺陷**（非属性缺口，见批次 6）——**官方属性级覆盖 310/310 = 100%**
+★批次 4（属性降级声明 M6）**已完成（2026-09-18）**：73 组件 / 417 属性全部三态声明
+  （mp supported 412 · fallback 5；web supported 323 · fallback 94；99 条 fallback 全部带可观察行为）。
+  `scripts/audit-degradation.mjs`（check:degradation）接 CI + verify；编译期 `PROP_NO_DEGRADATION` 已接线。
+★批次 5（无对应组件评估）**已完成（2026-09-18）**——权威口径 84 组件 100% 归类；同轮修正 5 条虚高覆盖 + 补 override 引用门禁。
+★批次 6（批次外剩余组件）**已完成（2026-09-18）**——官方属性级覆盖 **310/310 = 100%**（34 个已映射组件全部全覆盖）
 ```
 
 > ★**标尺精度修复（2026-09-16）**：官方文档页把**子对象 schema**（map 的 marker/polyline/polygon/circle/
@@ -79,11 +84,66 @@ p-button 21/21 ✅（100%，范式参考实现）
 ### 批次 4 · 属性降级声明（M6）
 全组件属性补 `degradation`（EA-5）+ `PROP_NO_DEGRADATION` 门禁。
 
-### 批次 5 · 无对应组件评估
-43 个官方组件框架无对应，逐类判定：
-- **应新增**：`swiper`/`checkbox-group`/`radio-group`/`open-data`/`page-meta`/`navigation-bar`（语义有价值）
-- **归入已有语义**：`swiper-item`/`sticky-header`/`root-portal`（并入现有原语属性）
-- **不纳入（NA）**：`channel-live`/`voip-room`/`store-*`/`grid-builder`/`list-builder`（微信商业/内测能力，写明理由）
+### 批次 5 · 无对应组件评估（★已完成 2026-09-18 · 权威口径）
+
+> ★**本节原提案（2026-09-02）已过时**，落地时按权威标尺实测纠正：
+> 原文列的「应新增 swiper/navigation-bar」与「NA grid-builder/list-builder」**当时就已 covered**
+> （`swiper`→`layout.stack` 消灭为属性、`navigation-bar`→`shell.nav` p-nav-bar 自绘、
+> `grid-builder`→`layout.grid`、`list-builder`→`layout.virtual-list`），
+> 因提案早于批次 2（容器与外壳）与语义消灭决策。
+
+**权威判定（`packages/component-ir/src/mp-spec-coverage.ts` 的 `SPEC_COMPONENT_OVERRIDE`，35 条**——
+名不对齐/语义消灭/Skyline 专属的组件级显式分类；官方 84 组件已 100% 归类、gap=0）：
+
+| 类别 | 组件 | 判定 |
+|---|---|---|
+| **语义消灭为子项/属性** | `checkbox-group` / `radio-group` / `picker-view-column` | `na`——由 p-checkbox/p-radio/p-picker 分组或列属性承接 |
+| **同层渲染后冗余** | `cover-view` / `cover-image` | `na`——官方建议 view/image 替代 |
+| **内联子元素** | `span` / `editor-portal` | `na`——ui.text 内联 / rich-text 内联 |
+| **ARIA 属性文档页** | `aria-component` | `na`——非组件标签，aria-* 两端原生支持 |
+| **Skyline 手势处理器** | tap / long-press / pan / scale / force-press（5 个） | **`planned`**（★本轮据实修正，原误标 covered——见下） |
+| | horizontal-/vertical-drag / double-tap | `covered`——`gesture.draggable` 已实现 |
+| **Skyline 布局构建器** | `grid-builder` / `list-builder` / `nested-scroll-*` / `draggable-sheet` | `covered`——layout.grid / layout.virtual-list / layout.scroll / shell.page-container |
+| **平台私有（不纳入）** | `channel-live` / `channel-video` / `ad-custom` / `reward` / `store-*`(4) / `open-data*`(3) / `official-account-publish` / `voip-room` / `functional-page-navigator` / `open-container` / `native-component` | `private`——微信商业/类目资质/内测能力，收敛 `useMiniProgram`/宿主桥；理由已逐条写明 |
+
+★**本轮实质发现（批次 5 的真正产出）**：`SPEC_COMPONENT_OVERRIDE` 表此前**不在任何引用校验范围内**
+（`auditMatrixReferences` 只遍历手写矩阵 `MP_MAPPING_MATRIX`），导致表内长期潜伏两类缺陷且无人察觉：
+
+1. **虚高覆盖 ×5**——5 个手势处理器标 `covered`，但其承接原语 `gesture.tap/pan/pinch/press`
+   在 `PRIMITIVE_CATALOG` 中为 **planned**（`v-gesture:*` 统一手势 API 未落地）；
+   `covered` 的定义是「有可运行等价」→ 据实改标 `planned`。
+2. **悬空引用 ×1**——`gesture.long-press` 拼写错误（实际名为 `gesture.longpress`）。
+
+后果是「真·落地率」虚高 5 项（255/99% → 实测 **250/97%**）。
+**修复**：新增门禁 `auditSpecOverrideRefs`（covered 声明必须指向**已登记且已落地**的原语，
+悬空/planned 一律 FAIL），接入 `proteus audit coverage`；棘轮水位据实修正 255→250 并注明「修的是标尺，不是能力」
+（与 2026-09-16「官方属性总数 793→771」同类修正）。
+
+### 批次 6 · 批次外剩余组件收口（★已完成 2026-09-18）
+
+原「剩余（非本批）」列的 5 项，实测**分为两类**——只有 3 项是真属性缺口：
+
+| 组件 | 缺口 | 处置 |
+|---|---|---|
+| **p-input** | 12/26 → **26/26** | 补 14 项官方 `<input>` 透传：键盘/同层族（`alwaysEmbed`/`confirmHold`/`adjustPosition`/`holdKeyboard`）+ 光标选区族（`cursorColor`/`selectionStart`/`selectionEnd`）+ **安全键盘族 6 项**（`safePassword*`）+ `placeholderClass`；均 kebab 绑定到原生 `<input>` |
+| **p-form** | 0/2 → **2/2** | 补 `reportSubmit`/`reportSubmitTimeout`（formId 模板消息**宿主能力**） |
+| **p-list-view** | 0/1 → **1/1** | 补官方 `padding`（4 元数组 top/right/bottom/left）→ 经 computed 归一为 CSS padding 简写（S38：模板内不做拼接） |
+| ~~p-adaptive~~ | 0/7 | ★**非缺口**：官方 `match-media` 的 7 项是**视口度量**（min/max-width/height、orientation），框架以**容器断点**（p-adaptive `modes` / p-zone）作语义升级替代 → 登记「有意不沿用」（G-31：不把被替代的平台机制固化成框架语义） |
+| ~~p-transition~~ | 1/8 | ★**非缺口**：`share-element:'p-transition'` 是**语义错映射**——官方 `<share-element>` 是**页面间共享元素转场**（key/transform/shuttle-on-*），而 `p-transition` 是 `engineering.transition`（Vue `<transition>` 包装）。框架承接者 `p-share-element` 属 **L2 规划**。移除错映射后其 8 项如实归入「无对应组件」 |
+
+**同轮修正 3 处审计脚本（`scripts/audit-component-attrs.mjs`）映射缺陷**：
+① `'swiper': 'p-swipter'` —— **拼写死亡配置**（`p-swiper` 不存在；官方 `<swiper>` 已消灭为 `layout.stack` 属性），
+  让该行静默落进 no-component、掩盖真实原因；
+② `'share-element': 'p-transition'` —— 语义错映射，制造 **7 项永远填不满的假缺口**（唯一命中的 `duration` 纯属命名巧合）；
+③ `match-media` 7 项视口度量登记 `INTENTIONAL_SKIP`（附理由，反黑盒）。
+
+**分母/分子变化须如实理解**：325→**310**（剔除 15 项错计）、294→**310**（+17 真实属性 −1 错计）。
+故 100% 是「补真实属性 + 剔除错计」的**合成结果**，不是单纯能力增长。
+
+**另修 2 处测试脆弱性**（本轮踩坑）：源码含 `??`/`?.` 时 `transpileMpSafe`（babel 重打印）会把
+`properties` 整块由单行展开为多行——`tests/mp-transform.test.ts` 与 `tests/sfc-macros-conformance.test.ts`
+的**正则/断言依赖单行格式** → 假红。已改为格式无关（归一空白 + 按缩进精确锚定块尾）。
+19 个组件源码用了 `??`，此坑随时会再踩。
 
 ## 2. 每批的标准作业流程（SOP v2 · ★p-button 范式）
 

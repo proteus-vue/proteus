@@ -1,7 +1,13 @@
 # Proteus Semantic Primitives (G-32)
 
-> **完整语义原语架构**：6 大类 · 128 原语 · 覆盖小程序官方能力 100%  
+> **完整语义原语架构**：6 大类 · 原语清单以 `packages/component-ir/src/primitives.ts`（SSOT）为准 · 覆盖小程序官方能力 100%  
 > 以小程序现行全量能力为「完整性标尺」，但不继承其 API 设计。
+>
+> ★**当前规模（2026-09-18 批次 7 后）：181 原语 · implemented 59**——本目录各文档中的
+> **「128 原语」是 B1 冻结时的规划基线**（历史陈述，非现状）。权威现状见自动生成的
+> [`docs/generated/catalog.md`](../../generated/catalog.md)（按 kind 分组 + status，由 `pnpm gen:docs` 生成，
+> 漂移由 `pnpm check:docs` 门禁拦截）。后续陆续追加：C2 颗粒度对齐 · C3/C51-C81 能力 +
+> #405 语义登记批 + 批 H/I/J 组件 + 批次 7 补登记（button/list/nav/safe/sidebar）。
 
 ---
 

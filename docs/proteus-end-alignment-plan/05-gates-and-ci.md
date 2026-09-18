@@ -8,7 +8,7 @@
 | **属性覆盖门禁** | `tests/mp-component-attrs.test.ts` | p-button ≥90% / p-input 核心属性齐 | ✅ 已落地 |
 | **全量覆盖阈值** | `audit-component-attrs.mjs --min <pct>` | 全局覆盖率不低于棘轮底线 | ✅ 已落地（`--min 99`） |
 | **★页面渲染门禁** | `test:e2e:showcase`（`assertPageRendered`） | 每个演示页**元素真实可见**（非空白/非塌陷/整体不消失）+ 关键交互有反馈 | ✅ 已落地并接入 verify |
-| **降级声明门禁** | （M6） | 每个属性须声明三态（EA-5） | ⬜ M6 |
+| **降级声明门禁** | （M6） | 每个属性须声明三态（EA-5） | ✅ `scripts/audit-degradation.mjs`（73 组件/417 属性，无空白格 + fallback 可观察 + 官方清单交叉核对） |
 | **IR 契约门禁** | `audit.ts` 既有 | props 语义约束与组件一致 | 🔶 部分 |
 
 ### 1.1 ★页面渲染门禁（2026-09-13 新增，实测教训驱动）
