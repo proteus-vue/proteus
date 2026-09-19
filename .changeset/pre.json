@@ -61,6 +61,7 @@
     "step7-template",
     "sync-publish-drift",
     "sync-shared-pinia",
+    "sync-singleton-and-routes",
     "transparency-hardening",
     "web-sim-and-alignment-fixes"
   ]
