@@ -80,6 +80,9 @@ jobs:
       - name: 官网目录数据门禁（catalog 快照幂等 + route 无死链 —— 防「可点击但页面不存在」）
         run: node scripts/gen-showcase-catalog.mjs --check
 
+      - name: 能力详情页门禁（页面与数据表一致 —— 防手改生成物/漏重跑脚本）
+        run: node scripts/gen-capability-demo-pages.mjs --check
+
       - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
         run: node scripts/check-package-health.js
 
