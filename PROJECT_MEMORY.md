@@ -922,7 +922,7 @@
 
 ## 验证状态（最近一次）
 
-- ⚠ **npm 发布：已就绪待 token（2026-09-19）**：36 包已 bump（漂移归零）+ `checkset:publish` 自带漂移守门 + lockfile 已同步；**唯一阻塞 = npm token 失效（E401）**——用户重新生成 token 后 `npm run changeset:publish` 即可。
+- ⚠ **npm 发布：已就绪待 token（2026-09-19）**：36 包已 bump（漂移归零）+ `changeset:publish` 自带漂移守门 + lockfile 已同步；**唯一阻塞 = npm token 失效（E401）**——用户重新生成 token 后 `npm run changeset:publish` 即可。
 
 
 - ⚠ **npm 发布事故（2026-09-19，修复已落地·发布待用户 token）**：36/41 包「同版本不同内容」（CLI 在真实项目启动即崩，已本地复现）；防复发工具 `check-publish-drift` + `publish-all.sh` 内容校验已就位；**待办**：bump（走 changesets）→ 发布 → 干净目录实测。详见 `docs/packages.md`「npm 发布事故复盘」
