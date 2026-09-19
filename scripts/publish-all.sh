@@ -75,4 +75,42 @@ for dir in packages/*/; do
 done
 echo ""
 echo "RESULT: published $PUB - skipped $SKIP - drift-skipped $DRIFT - failed $FAIL"
+
+# ★发布后 dist-tag 归一（2026-09-19 取证发现的第三个缺口）：发布链的「幂等跳过」只跳过 publish，
+#   **不会动 dist-tag**——于是会出现「本仓已发新版，但 @beta/@latest 仍指向旧包」的漂移
+#   （实测：devtools-runtime 的 latest 曾长期指向只有 8 个导出的崩溃版 0.1.0）。
+#   canonical tag = pre 模式下 .changeset/pre.json 的 tag（本仓 beta），否则 latest。
+if [ "$FAIL" = "0" ]; then
+  echo ""
+  echo "=== dist-tag 归一核验（tag 必须指向本仓版本）==="
+  if node "$ROOT/scripts/sync-dist-tags.mjs" --check; then
+    :
+  else
+    echo ""
+    echo "✗ 存在 tag 漂移：用户按该 tag 安装会拿到旧包。"
+    echo "  修复：node scripts/sync-dist-tags.mjs --fix"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⚠ 本轮有失败项，跳过 dist-tag 核验（先修复失败项）。"
+fi
+
+# ★发布后冒烟验证（2026-09-19 事故的最后一环）：干净目录真实安装 + CLI 启动 + 导出面核对。
+#   「发布命令退出码 0」≠「用户装到的东西能用」——那次事故正是只看了退出码 0 就收工。
+if [ "$FAIL" = "0" ]; then
+  echo ""
+  echo "=== 发布后冒烟验证（干净目录安装 + CLI 启动 + 导出面）==="
+  if node "$ROOT/scripts/verify-publish-smoke.mjs" ${TAG_FLAG:+--tag beta}; then
+    :
+  else
+    echo ""
+    echo "✗ 冒烟验证失败：registry 上的包不可用（见上方失败项）。发布命令成功了，但用户侧会崩。"
+    exit 1
+  fi
+else
+  echo ""
+  echo "⚠ 本轮有失败项，跳过发布后冒烟验证（先修复失败项）。"
+fi
+
 exit $FAIL

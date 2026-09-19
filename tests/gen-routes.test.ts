@@ -197,6 +197,35 @@ describe('runGenRoutes：路由表生成全链路', () => {
     const pageJsonOff = JSON.parse(fs.readFileSync(path.join(rootOff, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
     expect(pageJsonOff.usingComponents?.['p-grid']).toBe('/proteus/p-grid/index')
   })
+
+  it('★2026-09-19：未装 @proteus-vue/components 的警告**仅在工程真的引用 p-* 时**触发（默认脚手架不再收到误导性警告）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // ① 默认脚手架形态：模板不用 p-*（真实现状——《create-proteus》模板仅 mp.d.ts 注释里提到 p-button）
+      const rootPlain = path.join(TMP, 'fw-unused')
+      writeFixture(rootPlain, 'src/pages/index.vue', '<template><view class="page">首页</view></template>\n')
+      writeFixture(rootPlain, 'src/components/plain/index.vue', '<template><view>普通组件</view></template>\n')
+      runGenRoutes({ config: makeConfig(), root: rootPlain, componentsDir: 'packages/components-nonexistent' })
+      const plainWarns = warn.mock.calls.map((c) => String(c[0])).filter((s) => s.includes('未找到语义组件库'))
+      expect(plainWarns).toHaveLength(0)
+
+      // ② 真实引用 <p-view>（未装 components）→ 必须告警（否则静默不渲染）
+      const rootUsed = path.join(TMP, 'fw-used')
+      writeFixture(rootUsed, 'src/pages/index.vue', '<template><view class="page"><p-view>块</p-view></view></template>\n')
+      warn.mockClear()
+      runGenRoutes({ config: makeConfig(), root: rootUsed, componentsDir: 'packages/components-nonexistent' })
+      expect(warn.mock.calls.map((c) => String(c[0])).some((s) => s.includes('未找到语义组件库'))).toBe(true)
+
+      // ③ 大写写法 <PView> 同样算引用（与 collectComponents 的大小写处理一致）
+      const rootPascal = path.join(TMP, 'fw-pascal')
+      writeFixture(rootPascal, 'src/pages/index.vue', '<template><view class="page"><PView>块</PView></view></template>\n')
+      warn.mockClear()
+      runGenRoutes({ config: makeConfig(), root: rootPascal, componentsDir: 'packages/components-nonexistent' })
+      expect(warn.mock.calls.map((c) => String(c[0])).some((s) => s.includes('未找到语义组件库'))).toBe(true)
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })
 
 describe('★Skyline iOS 白屏兜底：page.webviewPages 页面级 WebView 降级通道', () => {

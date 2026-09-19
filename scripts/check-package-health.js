@@ -34,6 +34,56 @@ for (const entry of fs.readdirSync(PKGS, { withFileTypes: true })) {
   }
 }
 
+/**
+ * ★模板依赖版本对齐（2026-09-19 事故）：`packages/create-proteus/templates/package.json` 是
+ *   **用户脚手架工程的依赖声明**——它此前不在任何门禁扫描范围内（本函数只扫 packages/*），
+ *   于是成为发布链上唯一无人看守的一环。实测事故：模板写 `^0.2.1-beta.0`（cli）、`^0.1.0`
+ *   （devtools-runtime），而 prerelease 的 caret 范围**够不到换元组后的新版本**
+ *   （`^0.1.0` 永不匹配 `0.1.1-beta.1`）→ 用户 `npm create` 出来的是旧 `cli@0.2.1-beta.0`，
+ *   旧 cli 又 **exact pin** 旧 `shared@0.2.0-beta.0`，与顶层新版冲突 → npm 无法提升 →
+ *   **嵌套第二份 @proteus-vue/shared** → 模块级单例被拆散（URL 变了视图不更新，无报错）。
+ *
+ * ★规则比包内依赖更严：模板必须用**精确版本**，不许带 `^`/`~`。
+ *   理由：caret 在 prerelease 下「同 (major,minor,patch) 元组才匹配预发布版」，元组一换
+ *   （0.2.x → 0.3.0）范围就静默封顶在旧版本上——这是**无报错的**降级。精确 pin 让
+ *   「模板声明的版本」与「本仓/已发布的版本」可逐字比对，也让用户装到的依赖树与我们实测过的一致。
+ */
+function checkTemplateAlignment() {
+  const tplDir = path.join(PKGS, 'create-proteus', 'templates')
+  if (!fs.existsSync(tplDir)) return
+  const tplFile = path.join(tplDir, 'package.json')
+  if (!fs.existsSync(tplFile)) return
+  let tpl
+  try {
+    tpl = JSON.parse(fs.readFileSync(tplFile, 'utf8'))
+  } catch (e) {
+    err(`模板 package.json 解析失败：${e.message}`)
+    return
+  }
+  const rel = path.relative(ROOT, tplFile)
+  for (const field of ['dependencies', 'devDependencies']) {
+    for (const [dep, range] of Object.entries(tpl[field] ?? {})) {
+      if (!dep.startsWith('@proteus-vue/')) continue
+      const actual = actualVersions[dep]
+      if (!actual) {
+        err(`模板依赖 ${dep}@${range}——workspace 无此包（${rel}）`)
+        continue
+      }
+      if (/^[\^~]/.test(range)) {
+        err(
+          `模板依赖用了范围 ${dep}@${range}（须为精确版本 ${actual}）——prerelease 的 caret 换元组后会静默封顶在旧版本，链式引发重复副本/单例拆散（${rel}）`,
+        )
+        continue
+      }
+      if (range !== actual) {
+        err(`模板依赖版本漂移：${dep} 声明 ${range} 但 workspace 实际 ${actual}——用户脚手架会装到旧包（${rel}）`)
+      } else {
+        ok(`模板 ${dep}@${actual} ✓`)
+      }
+    }
+  }
+}
+
 /** 依赖版本对齐：@proteus-vue/* 声明版本（去 ^/~）必须精确等于 workspace 实际版本 */
 function checkVersionAlignment(pkgFile, deps, label) {
   if (!deps) return
@@ -154,7 +204,11 @@ for (const entry of pkgDirs) {
   if (!isBinTool && pkg.main === undefined) warn('main 缺失（工具包可豁免，检查未计入）')
 }
 
-// ⑥ 发布清单（docs/packages.md）与 workspace 一致性
+// ⑥ 模板依赖对齐（用户脚手架工程的依赖声明——此前不在任何门禁覆盖内，见函数注释）
+console.log('\n[templates] create-proteus 模板依赖对齐')
+checkTemplateAlignment()
+
+// ⑦ 发布清单（docs/packages.md）与 workspace 一致性
 console.log('\n[packages] 汇总')
 console.log(`  ${pkgDirs.length} 个包 · ${errors} error / ${warns} warn`)
 if (errors) {

@@ -22,8 +22,8 @@ importers:
         specifier: ^2.31.1
         version: 2.31.1(@types/node@20.19.43)
       '@proteus-vue/cli':
-        specifier: 0.2.1-beta.0
-        version: 0.2.1-beta.0(@vue/compiler-dom@3.5.42)(@vue/compiler-sfc@3.5.42)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)))(vue@3.5.42(typescript@5.9.3))
+        specifier: workspace:*
+        version: link:packages/cli
       '@proteus-vue/components':
         specifier: workspace:*
         version: link:packages/components
@@ -1699,51 +1699,6 @@ packages:
   '@parcel/watcher@2.6.0':
     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
     engines: {node: '>= 10.0.0'}
-
-  '@proteus-vue/app-config@0.1.0':
-    resolution: {integrity: sha512-+gM06KzkTMuDyFtRPF+DPYkXjy6VIsZ0N5/nwhAvNTk1/2nl9geUWI9zpD5gmRHdllySVlrZGDWHbZWF4jPfOA==}
-    peerDependencies:
-      vue: ^3.4
-
-  '@proteus-vue/capabilities@0.1.0':
-    resolution: {integrity: sha512-14YfOwFnsL4euuGygYlyUUZp/g/mWZGFYG3HYj5EGn8O9aA9IuSDEos83cEsh5E9nDbFP5SgMiTc2n+GeaPJcQ==}
-
-  '@proteus-vue/cli@0.2.1-beta.0':
-    resolution: {integrity: sha512-tBKU1Nb59gHlLkOqDJ20TFDhjLlQt/OqpO/qJ1WVTNyeVgiBJ2a6r6pVsHZVMIgM1rpiyozentLag9eYbFEX1g==}
-    hasBin: true
-
-  '@proteus-vue/compiler@0.3.0-beta.0':
-    resolution: {integrity: sha512-2gQ+S9GuRIXLW1fXeLTL/naAZNzPYP5B4kUOM7AUFSYIh7bZAYbHo76KhElgK6p2kUzXc5uYutoifhTtVjSEkQ==}
-    peerDependencies:
-      '@vue/compiler-dom': ^3.4
-      '@vue/compiler-sfc': ^3.4
-
-  '@proteus-vue/contracts@0.1.0':
-    resolution: {integrity: sha512-HTHGiDBnwR0fxlxT1dYt5yKoU6u+U6lDxsrfV2cRNl5YKCu1DKT+pZNoCSnuyYWjk8tP4iCWZ+FAQ4Xr1g0D/Q==}
-
-  '@proteus-vue/css-compat@0.1.0':
-    resolution: {integrity: sha512-PKhS4Z3x1J0t6VrckfKiRe0X7+xUDXkM7KntQJVMAKBEaaQnG0jQg0ttT4OZkE7389SpG+D0lVcvP6rAfASpkw==}
-    peerDependencies:
-      '@vue/compiler-sfc': ^3.4
-
-  '@proteus-vue/module@0.1.0':
-    resolution: {integrity: sha512-6cvDpvHtKP7nl8hO3/CmK4zj0uQmRFgtqeZF1pjO2mTmBnl7oNDfILVuC4TvLgSJPQuBfhs6dLQJsIEI/r2F6A==}
-
-  '@proteus-vue/router@0.2.0-beta.0':
-    resolution: {integrity: sha512-Os87NT+dWc4NDopK5isoyHC4Ngd2u7b+K9PZF3nD4g9v+1MRyXNkHDf8LzVhTEsnrKB7RMsyy3dvUnfH/Ag6oA==}
-    peerDependencies:
-      '@vue/compiler-sfc': ^3.4
-
-  '@proteus-vue/runtime@0.2.0-beta.0':
-    resolution: {integrity: sha512-2JPRJLWSBas8AJuh6x6VQndwxhXuIORdVktb8vjEYnBls0aNwsEH9rmnqxPmhsrfObQMNb7sH4BlLYEwZljzNA==}
-    peerDependencies:
-      pinia: ^4.0.0
-
-  '@proteus-vue/shared@0.2.0-beta.0':
-    resolution: {integrity: sha512-ci4QmwfSrKuSPCkykq0Fhe3ssLc15JeoEPHjTgD/Hi8RX0S3GJxkPTX+h4ofEoFYXBbKwqtW/UObbs5UwbgcgA==}
-
-  '@proteus-vue/types@0.1.0':
-    resolution: {integrity: sha512-nXbUCtd8m5bZYzhEK7nEOoJ/yHsdFIMZ1YxbkoaL8vfVCC7e3DEZ2UTIhwbL+iuy2dKbs3Bm/gHp/e16AUiiaw==}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     resolution: {integrity: sha512-UZ8sUxPTiHWYX9QNdJedb1kDZSpS1t/VPWBWGSgqHNi9w3Cu6IXvu2mzbhiTiPvtrqgTQJ+zqiAq2iPIPilpaQ==}
@@ -3954,67 +3909,6 @@ snapshots:
       '@parcel/watcher-win32-arm64': 2.6.0
       '@parcel/watcher-win32-x64': 2.6.0
     optional: true
-
-  '@proteus-vue/app-config@0.1.0(vue@3.5.42(typescript@5.9.3))':
-    dependencies:
-      vue: 3.5.42(typescript@5.9.3)
-
-  '@proteus-vue/capabilities@0.1.0':
-    dependencies:
-      '@proteus-vue/types': 0.1.0
-      esbuild: 0.28.2
-
-  '@proteus-vue/cli@0.2.1-beta.0(@vue/compiler-dom@3.5.42)(@vue/compiler-sfc@3.5.42)(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)))(vue@3.5.42(typescript@5.9.3))':
-    dependencies:
-      '@proteus-vue/app-config': 0.1.0(vue@3.5.42(typescript@5.9.3))
-      '@proteus-vue/capabilities': 0.1.0
-      '@proteus-vue/compiler': 0.3.0-beta.0(@vue/compiler-dom@3.5.42)(@vue/compiler-sfc@3.5.42)
-      '@proteus-vue/css-compat': 0.1.0(@vue/compiler-sfc@3.5.42)
-      '@proteus-vue/module': 0.1.0
-      '@proteus-vue/router': 0.2.0-beta.0(@vue/compiler-sfc@3.5.42)
-      '@proteus-vue/runtime': 0.2.0-beta.0(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)))
-      '@proteus-vue/types': 0.1.0
-    transitivePeerDependencies:
-      - '@vue/compiler-dom'
-      - '@vue/compiler-sfc'
-      - pinia
-      - vue
-
-  '@proteus-vue/compiler@0.3.0-beta.0(@vue/compiler-dom@3.5.42)(@vue/compiler-sfc@3.5.42)':
-    dependencies:
-      '@proteus-vue/contracts': 0.1.0
-      '@proteus-vue/types': 0.1.0
-      '@vue/compiler-dom': 3.5.42
-      '@vue/compiler-sfc': 3.5.42
-
-  '@proteus-vue/contracts@0.1.0': {}
-
-  '@proteus-vue/css-compat@0.1.0(@vue/compiler-sfc@3.5.42)':
-    dependencies:
-      '@vue/compiler-sfc': 3.5.42
-      postcss: 8.5.28
-
-  '@proteus-vue/module@0.1.0':
-    dependencies:
-      esbuild: 0.28.2
-
-  '@proteus-vue/router@0.2.0-beta.0(@vue/compiler-sfc@3.5.42)':
-    dependencies:
-      '@proteus-vue/shared': 0.2.0-beta.0
-      '@proteus-vue/types': 0.1.0
-      '@vue/compiler-sfc': 3.5.42
-
-  '@proteus-vue/runtime@0.2.0-beta.0(pinia@4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3)))':
-    dependencies:
-      '@proteus-vue/contracts': 0.1.0
-      '@proteus-vue/shared': 0.2.0-beta.0
-      pinia: 4.0.3(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.42(typescript@5.9.3))
-
-  '@proteus-vue/shared@0.2.0-beta.0': {}
-
-  '@proteus-vue/types@0.1.0':
-    dependencies:
-      '@proteus-vue/contracts': 0.1.0
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     optional: true
