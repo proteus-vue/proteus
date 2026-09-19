@@ -2,9 +2,12 @@
 // ★G-22 柔性布局 B2/B3（fluid-layout-plan）：p-grid / p-stack / p-fit 组件挂载契约
 //   断言编译产物样式（CSS Grid minmax / flex 换行 / fit-content 内在尺寸）
 // @vitest-environment happy-dom（组件仅依赖 vue）
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
+import fs from 'node:fs'
 import { createApp, h, nextTick } from 'vue'
 import { PGrid, PStack, PFit } from '@proteus-vue/components'
+import { compileVueSfc } from '@proteus-vue/compiler'
+import { PRIMITIVE_CATALOG } from '@proteus-vue/component-ir'
 
 function mountComponent(comp: unknown, props: Record<string, unknown>): HTMLElement {
   const el = document.createElement('div')
@@ -136,37 +139,34 @@ describe('★G-22 柔性布局组件（B2/B3）', () => {
 //   依据 skyline-pitfalls S14「Skyline 的 view 不滚动」→ 吸附无载体（同 p-scroll 告警口径）
 describe('p-stack MP 产物契约（snap/loop 降级 + 反黑盒）', () => {
   const srcPath = 'packages/components/p-stack/index.vue'
-  async function compile(): Promise<string> {
-    const fsMod = await import('node:fs')
-    const { compileVueSfc } = await import('@proteus-vue/compiler')
-    const source = fsMod.readFileSync(srcPath, 'utf-8')
-    return compileVueSfc(source, { filename: 'p-stack', isComponent: true, px2rpx: false, rpxRatio: 2, debug: false }).js
-  }
+  // ★编译一次共享（beforeAll）：此前每个用例各自 `await import('@proteus-vue/compiler')`，
+  //   首次加载编译器在满负载（pnpm verify 全链）下超出 vitest 默认 5s 超时 → 假红。
+  //   编译本身 ~1s，但要避免把「模块加载」计入用例超时预算。
+  let js = ''
+  beforeAll(() => {
+    const source = fs.readFileSync(srcPath, 'utf-8')
+    js = compileVueSfc(source, { filename: 'p-stack', isComponent: true, px2rpx: false, rpxRatio: 2, debug: false }).js
+  }, 60_000)
 
-  it('产物含 isMp 守卫（MP 端不输出滚动样式——输出即静默无效属性）', async () => {
-    const js = await compile()
+  it('产物含 isMp 守卫（MP 端不输出滚动样式——输出即静默无效属性）', () => {
     expect(js).toMatch(/!this\.data\.isMp/)
   })
 
-  it('产物含降级告警接线（capabilityWarnOnce——降级须可观察，禁静默）', async () => {
-    const js = await compile()
+  it('产物含降级告警接线（capabilityWarnOnce——降级须可观察，禁静默）', () => {
     expect(js).toContain('capabilityWarnOnce')
     expect(js).toMatch(/不滚动/)
   })
 
-  it('产物类名走 computed（:class 数组项含 + 会被编译器跳过并告警）', async () => {
-    const js = await compile()
+  it('产物类名走 computed（:class 数组项含 + 会被编译器跳过并告警）', () => {
     expect(js).toMatch(/stackClass/)
     expect(js).not.toMatch(/array class|数组项/)
   })
 
-  it('★L3 属性登记一致：catalog props ⊇ 源码 defineProps（align/snap/loop）', async () => {
-    const fsMod = await import('node:fs')
-    const { PRIMITIVE_CATALOG } = await import('@proteus-vue/component-ir')
+  it('★L3 属性登记一致：catalog props ⊇ 源码 defineProps（align/snap/loop）', () => {
     const l3 = PRIMITIVE_CATALOG.find((p: { id: string }) => p.id === 'L3')
     expect(l3?.props).toEqual(expect.arrayContaining(['align', 'snap', 'loop']))
     // 源码真值包含三者（防「catalog 登记了但源码没实现」的反向漂移）
-    const source = fsMod.readFileSync(srcPath, 'utf-8')
+    const source = fs.readFileSync(srcPath, 'utf-8')
     for (const p of ['align', 'snap', 'loop']) expect(source, `源码缺 ${p}`).toMatch(new RegExp(`\\b${p}\\s*:\\s*\\{`))
   })
 })
