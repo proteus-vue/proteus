@@ -9,12 +9,12 @@
 | **`showcase/`（本目录）** | **对外**官方演示：信息架构、品牌视觉、能力全景 |
 | `examples/` | **内部**测试全家桶：编译/渲染边界用例（被 13 个测试当 fixture 引用，勿混用） |
 
-## 信息架构（5 tab + 10 二级页 + 分包详情）
+## 信息架构（5 tab + 11 二级页 + 分包详情｜主包共 16 页）
 
 **按官方演示的信息架构组织：tab 页按语义域分组列出全部条目（官网式分组），详情页按分包按需加载。**
 
 ```
-主包（15 页：5 tab + 10 二级）
+主包（16 页：5 tab + 11 二级）
 首页      品牌立方体 + 框架数据 + 分区入口
 组件 ★    分组目录（6 域 / 72 组件，对齐官网）→ 点入分包详情页
 语义      编译链路可视化 + 源码/多端对照
@@ -23,9 +23,12 @@
 
 分包（按大分类独立分包，按需加载）
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
-  p-button / p-input（样板已就位；目录页可点击进详情）
+  —— 进度 **26 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
 subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
-  camera（样板已就位）
+  —— 进度 **1 / 81**（camera 样板；范式已验证，其余待铺）
+
+★进度数字来源：`data/catalog.ts` 的 `CATALOG_STATS`（由 `scripts/gen-showcase-catalog.mjs`
+  从**详情页文件是否存在**自动判定，不手写）——`pnpm run check:showcase-catalog` 门禁保证不漂移。
 
 详情页形态（官方组件文档范式，后续全量页复用）
   —— 演示单元 = <demo-block>（标题+说明+实机演示+代码折叠+输出回显）
@@ -50,7 +53,7 @@ subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
 showcase/
 ├── proteus.config.ts     构建期配置（platform/skyline/appid/router.subPackages+tabBar+meta/globalStyle）
 ├── app.config.ts         运行时配置（app.name/version/features/theme）
-├── pages/                主包 15 页（5 tab + 10 二级）
+├── pages/                主包 16 页（5 tab + 11 二级）
 ├── subpackages/          ★分包（按大分类）
 │   ├── components/pages/    组件详情页（p-button / p-input 样板）
 │   └── capabilities/pages/  能力详情页（camera 样板）
