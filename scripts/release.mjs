@@ -172,7 +172,19 @@ if (pending.length === 0 && drifted.length === 0 && !REPUBLISH_ALL) {
 }
 
 if (DRY_RUN) {
-  console.log('\n[release] --dry-run 结束（未改动、未发布）')
+  // ★演练必须覆盖**发布命令本身**（2026-09-19 教训）：上一版的 --dry-run 在发布前就退出，
+  //   于是「命令被 npm 拒绝」这类错误要等到真发布才暴露（changesets 在 pre 模式下拒绝
+  //   自定义 tag，41 个包一个都没发出去）。现在用 `npm publish --dry-run` 走**完全相同的
+  //   命令路径**（同参数、同逐包循环），只是不推送 registry。
+  step('③', '演练发布命令（不推送 registry）')
+  const PUB_TAG = 'latest'
+  console.log(`  以 tag=${PUB_TAG} 对全部包执行 npm publish --dry-run——验证命令本身可用`)
+  try {
+    run('bash', ['scripts/publish-all.sh', '--tag', PUB_TAG, '--dry-run', '--skip-drift-check'], { capture: false })
+    console.log('\n[release] --dry-run 结束：发布命令已验证可用，未改动、未发布')
+  } catch {
+    die('发布命令演练失败（见上方 FAIL 项）——修好后再真实发布，避免又白跑一趟')
+  }
   process.exit(0)
 }
 
