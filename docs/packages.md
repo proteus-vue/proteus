@@ -163,31 +163,37 @@ packages/
 > - test-core 随包 skill（`skills/proteus-test/`）随发布物分发
 > - 验证：1058 单测 + check:pkg + Web E2E 13/13 + MP E2E 1/1 全绿；发布前 dry-run 确认 dist 内容正确
 
-**正式版（后续）**：
+**发布流程（一条命令）**：
 
 ```bash
-npx changeset pre exit   # 退出 pre 模式（当前 tag: beta 已是合法版本）
-npm run changeset:version   # ① 应用 7 个待发 changeset：bump + CHANGELOG + 自动对齐 workspace 包间精确依赖
-# ② ★手动同步 changesets 管不到的两处（否则 workspace 解析失败）：
-#   - examples/package.json：@proteus-vue/* 范围同步到新版本（private 包不被 changesets 管理）
-#   - packages/create-proteus/templates/package.json：同上（模板工程按新版本装包）
-npm install   # ③ 更新 lockfile
-npm run verify   # ④ 全绿
-npx tsx scripts/snapshot-template.ts && git diff --exit-code -- packages/create-proteus/templates   # ⑤ 模板无漂移
-# ⑥ 提交（版本 bump + changelog + 依赖同步）→ ⑦ 再执行真实发布：
-npm run changeset:publish   # 按依赖拓扑自动发布全部包；★末尾自动跑发布后冒烟验证
-# ⑧ 发布后打 tag 并 push
+pnpm release            # ① 凭据预检 ② 自动版本提升 ③ changeset publish ④ 发布核验
 ```
 
-> ★**发布后冒烟已内置**：`changeset:publish` 的末尾会自动执行
-> `scripts/verify-publish-smoke.mjs`——在干净临时目录跑**真实用户旅程**
-> （`npm create` → `npm install` → 检查依赖树无重复副本 → `proteus --help` → 导出面 → 版本一致）。
-> 也可单独执行：`npm run publish:smoke`（`--tag latest` 可换 tag；`--skip-journey` 跳过脚手架段；
-> `--keep` 保留临时目录便于排查）。**这是 2026-09-19 事故的最后一环**——
-> 「发布命令退出码 0」不等于「用户装到的东西能用」。
+> ★**设计原则：发布就是一条命令**（2026-09-19 用户反馈后收敛）。
+> 版本提升、模板/examples/根包 pin 同步、lockfile 更新这些**机械动作全部由脚本完成**，
+> 不要求人记步骤、也不在出错时把人挡在门外。
 >
-> ★**dist-tag 归一也已内置**：`changeset:publish` 会接着跑 `scripts/sync-dist-tags.mjs --check`。
-> 见下节《复盘续三》。
+> `scripts/release.mjs` 的四步：
+> 1. **凭据预检**——快失败，避免 36 行 E404 噪声掩盖真正的 E401；
+> 2. **自动版本提升**——未消费的 changeset → `changeset version`；**改了源码但没 bump 的包
+>    → 自动补 patch changeset 再 version**（不补会被 npm 静默跳过，用户拿到的仍是旧包——
+>    这正是那次真实事故的成因）；随后同步 pin + 更新 lockfile。
+>    ★pre 模式下 changesets 不删已消费的 `.md` 而是记进 `pre.json`，脚本据此判定「未消费」，
+>    不会把历史 changeset 误报为待处理。`--no-auto-version` 可改回人工决定版本级别；
+> 3. **发布**——`changeset publish`（按依赖拓扑自动排序）；
+> 4. **发布核验**——本仓版本是否都已上架 registry，未上架的包列名报错。
+>
+> 辅助命令：
+> - `pnpm release --dry-run`——只体检（凭据 + 待提升清单），不改动不发布；
+> - `pnpm publish:smoke`——**发布后深度实测**：干净目录跑真实用户旅程
+>   （`npm create` → `npm install` → 依赖树无重复副本 → `proteus --help` → 导出面），
+>   耗时 1~2 分钟，故**不在发布主流程内**，需要时单独跑；
+> - `pnpm publish:tags`——dist-tag 漂移报告（`npm dist-tag` 属包管理动作，
+>   不阻断发布；见下节《复盘续三》）。
+>
+> 发布完成后提交版本提升的改动：`git add -A && git commit -m "chore(release): 版本提升"`。
+>
+> **正式版切换**：`npx changeset pre exit` 后重跑 `pnpm release`，其余步骤同上（脚本不依赖 pre 模式）。
 
 ## ★npm 发布事故复盘（2026-09-19：CLI 在真实项目「启动即崩」）
 
