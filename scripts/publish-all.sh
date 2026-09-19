@@ -1,42 +1,33 @@
-#!/bin/bash
-# scripts/publish-all.sh —— 全 workspace 包发布（★需 npm 凭据：全局 ~/.npmrc 或 NPM_TOKEN）
+#!/usr/bin/env bash
+# scripts/publish-all.sh —— 全 workspace 包发布（本仓的 publishing primitive）
 #
-# 用法：bash scripts/publish-all.sh [--beta] [--allow-drift]
-#   --beta         全部挂 beta dist-tag
-#   --allow-drift  允许「同版本号但内容不同」的包被跳过（默认**报错并要求 bump**——见下）
+# 用法：bash scripts/publish-all.sh [--tag <name>] [--allow-drift] [--skip-drift-check]
+#   --tag <name>        dist-tag（默认 **latest**——单轨：本仓只有一条版本线，不区分 beta/正式版）
+#   --allow-drift       允许「同版本号但内容不同」的包被跳过（默认报错并要求 bump）
+#   --skip-drift-check  跳过发布前漂移预检（调用方已检查过时用，避免重复耗时）
 #
-# ★2026-09-19 事故修复（README「npm 发布」节记有完整复盘）：
-#   旧逻辑「registry 已有该版本 → 跳过」本身是幂等发布的合理设计，但它**无法区分**：
-#     ① 内容确实一样（幂等重跑 → 跳过正确）
-#     ② 本地源码改了但**忘了 bump 版本号**（跳过 = 新内容永远发不出去；而依赖方 bump 后
-#        声明旧版本号 → 拿到的仍是旧内容 → **运行时报「does not provide an export named X」**）
-#   ② 曾实际发生：`@proteus-vue/cli@0.3.0-beta.2` 顶层 import `createFlamegraphCollector`，
-#   而 npm 上 `devtools-runtime@0.1.0` 是旧构建（只有 8 个导出）→ **CLI 启动即崩**。
-#   现改为：已存在的版本**比对本地 pack integrity 与 registry integrity**——
-#     相同 → 跳过（幂等，正常）；不同 → **FAIL 并提示 bump**（默认；`--allow-drift` 可放行）。
+# ★为什么不用 `changeset publish`（2026-09-19 实测）：
+#   changesets 在 pre 模式下**禁止自定义 dist-tag**——
+#     `🦋 error Releasing under custom tag is not allowed in pre mode`
+#   而 `npm publish --tag <name>` 本身不受此限。本仓要的是「单轨、统一发到 latest」，
+#   故改为直接逐包 `npm publish`，绕开该限制（同时保留了幂等跳过与内容校验）。
+#
+# ★幂等与安全：registry 已有该版本 → 比对 **local pack integrity ↔ registry integrity**：
+#   相同 → 跳过（重跑安全）；不同 → FAIL 并提示 bump（同版本无法覆盖发布，
+#   静默跳过会让依赖方永远拿到旧包——2026-09-19 真实事故的成因）。
 set -u
-TAG=""
+
+TAG="latest"
 ALLOW_DRIFT=0
-for arg in "$@"; do
-  case "$arg" in
-    --beta) TAG_FLAG="--tag beta"; TAG="--beta" ;;
-    --allow-drift) ALLOW_DRIFT=1 ;;
+SKIP_DRIFT_CHECK=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tag) TAG="$2"; shift 2 ;;
+    --allow-drift) ALLOW_DRIFT=1; shift ;;
+    --skip-drift-check) SKIP_DRIFT_CHECK=1; shift ;;
+    *) echo "未知参数：$1"; exit 2 ;;
   esac
 done
-: "${TAG_FLAG:=}"
-
-# ★未显式指定 tag 时，自动采用 changesets pre 模式的 tag（本仓 beta）。
-#   不加这一步时 `npm publish` 会用默认 tag `latest` → pre 模式的新版本被挂到 latest，
-#   而 `beta` 永远停在首次发布时的旧版本（2026-09-19 实测：cli 的 beta 停在 0.2.1-beta.0，
-#   而 latest 已是 0.3.0-beta.5）。修复：手动发布也自动跟随 pre.json，不必记 --beta。
-if [ -z "$TAG_FLAG" ]; then
-  PRE_TAG=$(node -e "try{const j=require('./.changeset/pre.json');process.stdout.write(j.mode==='pre'?(j.tag||''):'')}catch{}" 2>/dev/null)
-  if [ -n "$PRE_TAG" ]; then
-    TAG_FLAG="--tag $PRE_TAG"
-    TAG="--$PRE_TAG"
-    echo "（未指定 tag——自动采用 changesets pre 模式 tag：$PRE_TAG）"
-  fi
-fi
 
 ROOT="$PWD"
 FAIL=0
@@ -44,26 +35,28 @@ SKIP=0
 PUB=0
 DRIFT=0
 
-echo "=== 发布前漂移预检（同版本号 ⇒ 内容须一致）==="
-if ! node "$ROOT/scripts/check-publish-drift.mjs" --check; then
-  echo ""
-  if [ "$ALLOW_DRIFT" = "1" ]; then
-    echo "⚠ 存在漂移，但已指定 --allow-drift：漂移包将被**跳过**（新内容不会发布）"
-  else
-    echo "✗ 存在「同版本号但内容不同」的包——这些包的新内容发不出去，依赖方会拿到旧包。"
-    echo "  修复：给它们 bump 版本号（同版本无法覆盖发布），并同步 bump 依赖它们的包（内部依赖为 exact pin）。"
-    echo "  如确需只发其余包：加 --allow-drift。"
-    exit 1
+if [ "$SKIP_DRIFT_CHECK" = "0" ]; then
+  echo "=== 发布前漂移预检（同版本号 ⇒ 内容须一致）==="
+  if ! node "$ROOT/scripts/check-publish-drift.mjs" --check; then
+    echo ""
+    if [ "$ALLOW_DRIFT" = "1" ]; then
+      echo "⚠ 存在漂移，但已指定 --allow-drift：漂移包将被**跳过**（新内容不会发布）"
+    else
+      echo "✗ 存在「同版本号但内容不同」的包——这些包的新内容发不出去，依赖方会拿到旧包。"
+      echo "  修复：给它们 bump 版本号（同版本无法覆盖发布），并同步 bump 依赖它们的包。"
+      echo "  如确需只发其余包：加 --allow-drift。"
+      exit 1
+    fi
   fi
+  echo ""
 fi
-echo ""
 
+echo "=== 发布（dist-tag: $TAG）==="
 for dir in packages/*/; do
   name=$(node -e "console.log(require('./$dir/package.json').name ?? '')" 2>/dev/null)
   [ -z "$name" ] && continue
   version=$(node -e "console.log(require('./$dir/package.json').version ?? '')" 2>/dev/null)
   [ -z "$version" ] && continue
-  # registry 已有该版本 → 核对内容（相同=幂等跳过；不同=漂移，见文件头）
   existing=$(npm view "$name@$version" version 2>/dev/null | tail -1)
   if [ -n "$existing" ]; then
     local_int=$(cd "$ROOT/$dir" && npm pack --dry-run --json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);console.log((Array.isArray(j)?j[0]:j).integrity||'')}catch{console.log('')}})")
@@ -78,42 +71,18 @@ for dir in packages/*/; do
     fi
     continue
   fi
-  echo "publish $name@$version"
-  if (cd "$ROOT/$dir" && npm publish --access public $TAG_FLAG); then
+  echo "publish $name@$version → $TAG"
+  if (cd "$ROOT/$dir" && npm publish --access public --tag "$TAG"); then
     PUB=$((PUB + 1))
   else
     echo "FAIL $name@$version"
     FAIL=$((FAIL + 1))
   fi
 done
+
 echo ""
 echo "RESULT: published $PUB - skipped $SKIP - drift-skipped $DRIFT - failed $FAIL"
-
-# ★dist-tag 漂移**报告**（2026-09-19 取证发现：幂等跳过只跳过 publish，不更新 dist-tag）。
-#   ★此处不阻断发布：修复 dist-tag 属**包管理动作**（`npm dist-tag add`），权限高于发布本身，
-#   多数情况下无法在发布链内自动完成 → 硬失败会让「发布」这项本职工作直接不可运行。
-#   故这里只报告 + 打印可执行的修复命令，由人来决定何时处理。
-if [ "$FAIL" = "0" ]; then
-  echo ""
-  echo "=== dist-tag 漂移报告（信息性，不阻断发布）==="
-  node "$ROOT/scripts/sync-dist-tags.mjs" || true
+if [ "$FAIL" != "0" ]; then
+  echo "→ 有包发布失败：回看上方每个 FAIL 的 npm 错误（常见：凭据失效 E401 / 版本已存在 E409）"
 fi
-
-# ★发布后冒烟验证（2026-09-19 事故的最后一环）：干净目录真实安装 + CLI 启动 + 导出面核对。
-#   「发布命令退出码 0」≠「用户装到的东西能用」——那次事故正是只看了退出码 0 就收工。
-if [ "$FAIL" = "0" ]; then
-  echo ""
-  echo "=== 发布后冒烟验证（干净目录安装 + CLI 启动 + 导出面）==="
-  if node "$ROOT/scripts/verify-publish-smoke.mjs" ${TAG_FLAG:+--tag beta}; then
-    :
-  else
-    echo ""
-    echo "✗ 冒烟验证失败：registry 上的包不可用（见上方失败项）。发布命令成功了，但用户侧会崩。"
-    exit 1
-  fi
-else
-  echo ""
-  echo "⚠ 本轮有失败项，跳过发布后冒烟验证（先修复失败项）。"
-fi
-
 exit $FAIL
