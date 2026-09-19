@@ -38,6 +38,17 @@ export interface GenRoutesOptions {
    * 分包依赖（dependencies）与 preloadRule 生成——模块 chunk/name 与 config.subPackages 的 name/root 基名匹配
    */
   moduleConfigs?: Array<{ name: string; chunk?: string; dependencies?: Record<string, string>; preload?: string[] }>
+  /**
+   * ★Web 目标只生成**应用侧路由表**（2026-09-19 修外部实战报告的第 3 条阻断项）：
+   *   `auto-routes.ts` 是 **双端共用** 产物（Web 的 RouterView 与 MP 的 app.json 同源），
+   *   但此前 gen-routes 只在 MP 目标被调用（`needsGenRoutes: isMp`）→ 使用 `proteus build --target web`
+   *   的工程新增页面后路由表不更新 → **页面 404**（外部项目实测：新增 `src/pages/editor/` 后
+   *   Web 构建成功但路由表未收录）。
+   *   `webOnly: true` 时：只 `scanPages → buildRoutes → validate → writeAutoRoutes`，
+   *   **跳过 MP 专属产物**（app.json/page.json/component.json/project.config.json，web 构建不需要）
+   *   且**不清理 `dist/mp-weixin`**（否则会把已构建的 MP 产物删掉——那不属于 web 构建的职责）。
+   */
+  webOnly?: boolean
 }
 
 /**
@@ -701,10 +712,16 @@ function writeProjectConfig(): void {
 }
 
   // ---- 主流程 ----
-  fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
   const pages = scanPages()
   const routes = buildRoutes(pages)
   validate(pages, routes)
+  // ★webOnly：只写双端共用的应用侧路由表，跳过 MP 专属产物（且不清理 dist/mp-weixin）
+  if (options.webOnly) {
+    writeAutoRoutes(routes)
+    console.log(`[gen-routes] （web 目标）已更新应用侧路由表：共 ${pages.length} 个页面`)
+    return
+  }
+  fs.rmSync(OUT_DIR, { recursive: true, force: true }) // 清理陈旧产物
   writeAutoRoutes(routes)
   writeAppJson(pages, routes)
   writePageJsons(pages)
