@@ -642,9 +642,11 @@ const virtualItems = Array.from({ length: 50 }, (_, i) => ({ title: '虚拟项 '
 // ★p-stack snap/loop 演示（轮播语义消灭形态）：真实滚动 → 回显定位（SOP ⑨ 演示须真交互）
 const carouselSlides = ['① 首屏', '② 第二屏', '③ 第三屏', '④ 末屏（继续滑 → 回环）']
 const carouselIndex = ref(0)
-function onCarouselScroll(e: { scrollLeft?: number }): void {
-  const step = 240 // 每屏宽 + gap（与样式一致）
-  const left = (e && typeof e.scrollLeft === 'number' ? e.scrollLeft : 0)
+function onCarouselScroll(e: { detail?: { scrollLeft?: number }; scrollLeft?: number }): void {
+  const step = 240 // 每屏宽 232 + gap 8（与样式一致）
+  // ★跨端载荷读法（与 showcase p-scroll-view 同范式）：MP 载荷在 e.detail，Web 为裸载荷
+  const d = e?.detail ?? e ?? {}
+  const left = typeof d.scrollLeft === 'number' ? d.scrollLeft : 0
   carouselIndex.value = Math.min(carouselSlides.length - 1, Math.round(left / step))
 }
 const tabs = [
