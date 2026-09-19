@@ -50,6 +50,7 @@
   "changesets": [
     "batch3-host-capabilities",
     "compiler-silent-traps",
+    "fix-template-deps-and-smoke",
     "framework-element-probe",
     "mp-e2e-wechatide-standard",
     "pinia-m1-m6",
