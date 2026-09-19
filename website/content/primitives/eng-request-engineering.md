@@ -1,6 +1,6 @@
 ---
 title: 请求工程（R1-R4：request/useQuery/enqueue/runOnce）
-order: 83
+order: 84
 group: 工程原语
 ---
 

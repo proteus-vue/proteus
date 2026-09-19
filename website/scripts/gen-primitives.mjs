@@ -19,7 +19,12 @@ const check = process.argv.includes('--check')
 const SOURCES = [
   { id: 'desktop', rel: 'packages/desktop', group: '桌面原语', prefix: 'desktop-', orderBase: 10 },
   { id: 'gesture', rel: 'packages/gesture', group: '手势原语', prefix: 'gesture-', orderBase: 60 },
-  { id: 'api', rel: 'packages/api', group: '工程原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$/, pkg: '@proteus-vue/api' },
+  // ★files 白名单（2026-09-19 修「官网静默缺页」）：api 包的工程原语模块有两类命名——
+  //   `*-engineering.ts`（E/R 系工厂）与**单文件原语**（`mcp.ts` = E30 WebMCP）。
+  //   实测：E30 落地后官网搜不到 useMCP，根因即此白名单未含 mcp.ts（页面是**生成物**，
+  //   不在此列就永远不进 content/primitives → docs-registry 的 glob 收录不到 → 搜索无结果）。
+  //   ⇒ 今后新增单文件原语必须同步此处。
+  { id: 'api', rel: 'packages/api', group: '工程原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$|^mcp\.ts$/, pkg: '@proteus-vue/api' },
 ]
 
 const TITLE_OVERRIDES = {
@@ -31,6 +36,7 @@ const TITLE_OVERRIDES = {
   'tooling-engineering': '工具工程原语（E24-E28：useDevTools/defineComponent…）',
   'request-engineering': '请求工程（R1-R4：request/useQuery/enqueue/runOnce）',
   'ownership-engineering': '所有权工程原语（PSS：useOwned/useBorrow…）',
+  mcp: 'WebMCP 接入（E30：useMCP / capabilityToTool）',
   scroll: '滚动观测原语（页面滚动进度 / 滚动态）',
   'window-message': '跨窗消息原语（iframe postMessage 收口）',
   anchor: '锚点定位原语（scrollToId）',
@@ -70,6 +76,7 @@ const SUMMARY_MAP = {
   'tooling-engineering': '工具工程原语 E24-E28：useDevTools/useInspector/defineComponent/defineCapability',
   'request-engineering': '请求工程 R1-R4：request 策略 / useQuery / enqueue / runOnce',
   'ownership-engineering': '所有权工程原语（PSS）：useOwned / useBorrow / 自动 drop',
+  mcp: '把框架能力暴露为浏览器内 agent 可调用工具——能力派生自动归一（ok → 结果 / Err → isError + 错误码）；小程序端诚实降级',
 }
 
 /** ★#466 端兼容表（家族级口径——与组件/能力页同构；状态四档对齐 ENDS 注册表） */

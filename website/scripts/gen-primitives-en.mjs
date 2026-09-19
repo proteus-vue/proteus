@@ -671,4 +671,26 @@ export const PRIM_EN = {
       createOwnershipEngineering: '★G-43 B5: creates the ownership reactive Hooks (useOwned/useBorrow — injectable, zero vue dependency)',
     },
   },
+  mcp: {
+    title: 'WebMCP integration (E30: useMCP / capabilityToTool)',
+    summary:
+      'Expose framework capabilities as agent-callable tools in the browser — capability-derived tools normalize responses automatically (ok → result / Err → isError + error code); honest degradation on mini program',
+    notes: [
+      '★E30 engineering.mcp (2026-09-19): WebMCP — the page registers tools for the in-browser agent.',
+      '· Spec surface (verified 2026-09): the namespace is `document.modelContext` (★ NOT navigator); there is NO `unregisterTool` — unregistration goes through `AbortSignal.abort()`; detect support by checking the method is **callable** (a bare empty object would otherwise be misread as supported)',
+      '· Inspired by VueUse v15 `useWebMCP` (document namespace / signal-based unregistration / callable-method detection / `{ isSupported, isRegistered, error }` return)',
+      '· ★Framework delta (not a copy): every capability primitive returns the unified `CapResult<T>` contract (G-32.4), so capabilities can be derived into MCP tools automatically — `ok` → tool result, `Err` → `isError` + error code; thrown errors never leak into the agent channel',
+      'Honest degradation (G-32.3): no `document` (mini program / SSR) → `isSupported=false`, nothing registered, no throw — never silently pretends success',
+      'Zero vue dependency: scope disposal is **injected** via `onDispose` (this package ships into MP artifacts; same injection precedent as createEngineering)',
+      'MP artifact-safe (decisions #32/#36): no `?.` / `??` / array destructuring; the global `document` is never touched at module top level',
+    ],
+    exports: {
+      useMCP: '★E30: register tools (explicit + capability-derived) on `document.modelContext`; returns live getters `{ isSupported, isRegistered, error, toolNames, ready, dispose }`',
+      capabilityToTool: 'Capability → MCP tool: normalizes the `CapResult<T>` contract into a tool response',
+      toToolResponse: 'Value → tool response (empty payloads become a readable success marker, never the literal "undefined")',
+      toErrorResponse: 'Error → tool response with `isError: true`',
+      McpToolDescriptor: 'Tool descriptor (spec subset: name / description / inputSchema / execute)',
+      McpCapabilityToolSpec: 'Capability tool spec (name / description / inputSchema / run)',
+    },
+  },
 }
