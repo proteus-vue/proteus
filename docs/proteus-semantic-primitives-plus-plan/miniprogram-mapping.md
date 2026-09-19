@@ -26,9 +26,9 @@
 | 1 | `<view>` | `<p-box>` / `<p-stack>` | ✅ | 语义拆分：块盒 vs 布局 |
 | 2 | `<text>` | `<p-text>` / `<p-heading>` | ✅ | 语义拆分：正文 vs 标题 |
 | 3 | `<image>` | `<p-image>` | ✅ | |
-| 4 | `<scroll-view>` | `<p-scroll>` / `<p-virtual-list>` | ✅ | 语义拆分：普通滚动 vs 虚拟化 |
-| 5 | `<swiper>` | `<p-stack snap="mandatory" loop>` | ✅ | **消灭为属性**（G-31 核心决策） |
-| 6 | `<swiper-item>` | `<p-stack>` 子项 | ✅ | 由父级布局约束 |
+| 4 | `<scroll-view>` | `<p-scroll>` / `<p-virtual-list>` | ✅ | 语义拆分：普通滚动 vs 虚拟化。★**1:1 迁移走 `<p-scroll-view>`**（端对齐产物：官方属性 40/40 全量透传、事件同名载荷归一）——codemod 已自动替换；`<p-scroll>` 为同语义别名（`layout.scroll`，登记见 `TAG_SEMANTIC_ALIASES`） |
+| 5 | `<swiper>` | `<p-stack snap="mandatory" loop>` | ⏳ | **消灭为属性**（G-31 核心决策）——★但 `snap`/`loop` **尚未实现**（p-stack 源码仅 `direction`/`wrap`/`gap`）：目标形态已定、属性待落地；codemod 标 manual 且**不再推荐**该未落地属性 |
+| 6 | `<swiper-item>` | `<p-stack>` 子项 | ⏳ | 由父级布局约束（随 `<swiper>` 一并决策） |
 | 7 | `<movable-area>` | `<p-scrollable>` 容器 | ✅ | |
 | 8 | `<movable-view>` | `<p-draggable>` | ✅ | |
 | 9 | `<cover-view>` | `<p-overlay>` (L2) | 🔄 | Web 兼容性 |

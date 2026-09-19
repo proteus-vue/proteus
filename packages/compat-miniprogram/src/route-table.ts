@@ -2,8 +2,13 @@
 // ★G-32 B6（proteus-semantic-primitives-plus-plan batches.md §1 B6——迁移工具链）：路由名表
 //   从旧小程序源码的 wx 导航调用（navigateTo/switchTab/reLaunch/redirectTo）收集路由目标
 //   → 生成「路由名候选表」：`router.push({ name, params })` 需要的 name（wx.navigateTo → router.push 语义化桥）
-//   命名对齐 router 包惯例（packages/router/src/scan.ts deriveNameFromFile：index 归并目录名、kebab 路径）：
-//   产出小驼峰 name（schema NAME_RE ^[a-z][a-zA-Z0-9]*$——显式路由名规范）
+//   ★命名与 router 包 deriveNameFromFile **逐条同规则**（index 归并目录名、剥 pages/subpackages 前缀、`/`→`-`）：
+//   产出 **kebab** name（如 pages/user/profile → `user-profile`）——这正是 derivePath 模式下框架
+//   gen-routes / scanRoutes 真实写进 routeMap 的 name（实测产物 auto-routes.js：`builtin-components-demo`）。
+//   ★2026-09-19 修正（本文件此前 bug）：原实现产出小驼峰（userProfile），依据是 schema NAME_RE
+//   （`^[a-z][a-zA-Z0-9]*$`）——但 NAME_RE 约束的是**显式 `<route name>`**；derivePath 推导名走
+//   NAME_KEBAB_RE（kebab）。规则抄错 → codemod 打印的 name 在 routeMap 里查不到（死引用）。
+//   一致性由 tests/route-table.test.ts 跨包断言（routeNameFromPath ≡ deriveNameFromFile）机器守住。
 //   纯函数可单测；幂等
 
 /** wx 导航 API（目标收集面） */
@@ -18,22 +23,20 @@ export interface RouteTarget {
   path: string
 }
 
-/** 路径 → 路由名候选（小驼峰；index 归并目录名——对齐 deriveNameFromFile + NAME_RE） */
+/**
+ * 路由路径 → 路由名（与 packages/router/src/scan.ts deriveNameFromFile **同规则**，见文件头）：
+ * index 归并目录名 · 剥 pages/subpackages 前缀 · `/`→`-`（kebab，非小驼峰）
+ */
 export function routeNameFromPath(path: string): string {
-  const clean = path.replace(/^\/+/, '').replace(/\.vue$/, '').split('?')[0]
-  let segs = clean.split('/').filter(Boolean)
-  // 剥 pages/subpackages 前缀（与 deriveNameFromFile 的 rel 语义一致）
-  if (segs[0] === 'pages' || segs[0] === 'subpackages') segs = segs.slice(1)
-  if (segs.length === 0) return 'index'
-  if (segs[segs.length - 1] === 'index') segs = segs.slice(0, -1)
-  if (segs.length === 0) return 'index'
-  // 全路径 kebab（user/profile → user-profile——deriveNameFromFile 惯例）→ 小驼峰
-  const kebab = segs.join('-')
-  return kebab
-    .split('-')
-    .filter(Boolean)
-    .map((s, i) => (i === 0 ? s.toLowerCase() : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))
-    .join('')
+  const clean = path.split('?')[0].replace(/^\/+/, '').replace(/\.vue$/, '')
+  const segs = clean.split('/').filter(Boolean)
+  const base = segs[segs.length - 1] ?? ''
+  if (base === 'index') {
+    const dir = segs.slice(0, -1).join('/')
+    const stripped = dir.replace(/^(pages|subpackages)(\/|$)/, '').replace(/\/$/, '')
+    return stripped ? stripped.replace(/\//g, '-') : 'index'
+  }
+  return clean.replace(/^(pages|subpackages)\//, '').replace(/\//g, '-')
 }
 
 /** 从单份源码收集导航目标（纯函数） */

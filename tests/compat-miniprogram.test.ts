@@ -13,6 +13,7 @@ import {
   MANUAL_TAGS,
 } from '@proteus-vue/compat-miniprogram'
 import { createPlatformAPI } from '@proteus-vue/api'
+import { propsOf } from '../scripts/lib/component-props.mjs'
 
 describe('G-31 B6 migrateMpSource（codemod 纯函数，幂等）', () => {
   it('标签自动替换：view/text/button/image/input → p-box/p-text/p-button/p-image/p-input', () => {
@@ -56,19 +57,38 @@ describe('G-31 B6 migrateMpSource（codemod 纯函数，幂等）', () => {
     expect(migrateMpSource(out)).toBe(out)
   })
 
-  it('语义识别标签标注：scroll-view/swiper → manual 注释（AI 辅助）', () => {
+  it('语义识别标签标注：swiper → manual 注释（无 1:1 组件）', () => {
     const src = '<scroll-view scroll-x><view /></scroll-view>\n<swiper><swiper-item /></swiper>'
     const out = migrateMpSource(src)
-    expect(out).toContain('[proteus-migrate:manual] <scroll-view>')
+    // ★2026-09-19：scroll-view 已入自动集（p-scroll-view 官方属性全量透传）——不再 manual 标注
+    expect(out).toContain('<p-scroll-view scroll-x>')
+    expect(out).not.toContain('[proteus-migrate:manual] <scroll-view>')
     expect(out).toContain('[proteus-migrate:manual] <swiper>')
     expect(migrateMpSource(out)).toBe(out)
   })
 
-  it('AUTO_CODEMOD_TAGS 覆盖 12 个 1:1 组件（migration.md §2 自动集）', () => {
-    expect(Object.keys(AUTO_CODEMOD_TAGS).length).toBe(12)
+  it('AUTO_CODEMOD_TAGS 覆盖 13 个 1:1 组件（含 scroll-view→p-scroll-view）', () => {
+    expect(Object.keys(AUTO_CODEMOD_TAGS).length).toBe(13)
     expect(AUTO_CODEMOD_TAGS.view).toBe('p-box')
-    expect(AUTO_CODEMOD_TAGS['scroll-view']).toBeUndefined() // 语义识别不在自动集
-    expect(MANUAL_TAGS['scroll-view']).toContain('p-scroll')
+    expect(AUTO_CODEMOD_TAGS['scroll-view']).toBe('p-scroll-view') // ★2026-09-19 由 manual 提升为 auto
+    expect(MANUAL_TAGS['scroll-view']).toBeUndefined()
+  })
+
+  it('★manual 提示文案纪律：提示里写的属性必须是目标组件真实 prop（防「照着做得到静默无效属性」）', () => {
+    // 历史缺陷（本用例针对的缺陷类）：swiper 行曾写 `p-stack snap="mandatory" loop`，
+    // 而 p-stack 源码只有 direction/wrap/gap——snap/loop 从未实现，迁移者照抄即静默无效。
+    // SSOT = 组件源码 defineProps（与 audit-component-attrs / audit-degradation 同口径）。
+    for (const [tag, hint] of Object.entries(MANUAL_TAGS)) {
+      const targetTag = hint.match(/\bp-[a-z-]+\b/)?.[0]
+      if (!targetTag) continue
+      const realProps = propsOf(targetTag)
+      expect(realProps, `MANUAL_TAGS['${tag}'] 指向的 ${targetTag} 无组件目录`).not.toBeNull()
+      const norm = (s: string) => s.replace(/[-_]/g, '').toLowerCase()
+      const realNorm = new Set((realProps ?? []).map(norm))
+      for (const am of hint.matchAll(/\b([a-zA-Z][\w-]*)\s*=/g)) {
+        expect(realNorm.has(norm(am[1])), `MANUAL_TAGS['${tag}'] 提示的属性 ${am[1]} 不在 ${targetTag} 的真实 props 中`).toBe(true)
+      }
+    }
   })
 
   it('countMigration 统计（标签/存储/manual 数量）', () => {

@@ -14,7 +14,7 @@
 | **B3** | M2 | ⑤ 能力 50（Native Backend iOS/Android） | G-28 NativeBackend | ✅ **能力 Hook 层两期落地（`@proteus-vue/api/capability.ts`）**：一期 10 useXxx + 二期 **useFetch（C26 迁移文档标题目标）/ usePermission（C16 web Permissions API）/ useStorage（C15 CompatStorage + createReactiveStorage 注入式响应式）** + CapabilityBridge 双桥（wx/web 全能力）+ probe 降级探测（含 fetch/permission/storage）——G-32.4 无回调/无全局对象/全类型/Result&lt;T&gt;；CMP007 门禁 `proteus api-check`；剩余 40 能力待续 | 6 人月 |
 | **B4** | M2-M3 | ③ Shell 10 + ④ Gesture 10 | G-27 + G-30 | ✅ **③ Shell 10 全落地** + **④ Gesture 核心落地**：`@proteus-vue/gesture` 包（纯识别器 tap/longpress/pan/swipe/pinch/rotate/press——createGestureRecognizer 状态机 + useGesture Hook G10 + v-gesture 指令 G1-G7，Web Pointer Events 接线，原生识别器映射后续）+ p-draggable G8/p-scrollable G9（gesture.draggable/scrollable 入 implemented，42 语义 × 6 后端 conformance） | 4 人月 |
 | **B5** | M3 | ⑥ 工程 28（路由/动画/生命周期） | G-17 + Vue | DevTools 集成 | 3 人月 |
-| **B6** | M3 | 对照矩阵自动化 + codemod + conformance 全绿 | G-31 migration | 迁移工具链 | 2 人月 |
+| **B6** | M3 | 对照矩阵自动化 + codemod + conformance 全绿 | G-31 migration | ✅ **对照矩阵自动化**（`scripts/gen-docs.ts` 生成 `docs/generated/miniprogram-mapping.md`，SSOT = `MP_MAPPING_MATRIX`；`check:docs` 漂移门禁接 CI）+ **codemod 完善**（`proteus migrate mp`：13 个 1:1 标签自动 + 同步存储直改 + manual 标注 + **路由名表 kebab 与 gen-routes 产物同名**；scroll-view 由 manual 提升为 auto、swiper 提示改指真实属性）+ **conformance 见 §3**（五套） | 2 人月 |
 
 **总工时**：≈ 20 人月（可与既有 150 人月路线图并行，不新增关键路径）
 
@@ -66,7 +66,7 @@ function audit() {
 - [x] `audit:coverage` 输出 100%——`proteus audit coverage`（实测：71 项 0 缺失，覆盖率 100% ✅）
 - [x] C-IR schema 扩展通过校验——SEMANTIC_ENUM 18→53（gesture/shell/engineering 三新域）；`validateComponentIR` 全量可校验
 - [x] 每个原语 conformance——26 个 implemented 语义 × 6 后端快照一致（G-31 B5 门禁）；planned 以待实现
-- [ ] 文档（本目录）与 registry 自动同步（`scripts/gen-docs.ts`）——剩余：自动生成脚本（B6 对照矩阵自动化收口）
+- [x] 文档（本目录）与 registry 自动同步（`scripts/gen-docs.ts`）——**已完成（B6 对照矩阵自动化收口）**：生成 `docs/generated/{catalog,miniprogram-mapping,implemented-semantics}.md`，`check:docs --check` 漂移门禁已接 CI（批次 7 接线）；本目录保留规划叙述，冲突以生成物为准
 
 ---
 
