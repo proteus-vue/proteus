@@ -63,7 +63,10 @@
     "test:e2e:showcase": "pnpm run build:showcase:web && vitest run --no-file-parallelism tests/e2e-showcase-render.test.ts",
     "gen:showcase-catalog": "node scripts/gen-showcase-catalog.mjs",
     "check:showcase-catalog": "node scripts/gen-showcase-catalog.mjs --check",
-    "check:capability-demo": "node scripts/gen-capability-demo-pages.mjs --check"
+    "check:capability-demo": "node scripts/gen-capability-demo-pages.mjs --check",
+    "publish:check": "node scripts/check-publish-drift.mjs --check",
+    "publish:report": "node scripts/check-publish-drift.mjs",
+    "publish:all": "bash scripts/publish-all.sh"
   },
   "dependencies": {
     "pinia": "^4.0.3",
