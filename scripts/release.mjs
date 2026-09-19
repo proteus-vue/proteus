@@ -190,29 +190,25 @@ if (pending.length || drifted.length) {
 }
 
 // ── ③ 发布 ──
-// ★单轨发布：全部包统一发到 `latest`（2026-09-19 用户要求「不要出现正式版标签，
-//   实际只有一条线」）。
-//   背景：changesets 默认 `getReleaseTag()` 会把「发布过的版本全是 prerelease」的包
-//   （publishedState==='only-pre'）**故意发到 `latest`**，其余包发到 preState.tag(beta)——
-//   同一批发布 tag 落点各不相同（实测：cli/plugin-vite → latest，create-proteus → beta），
-//   于是形成「有的在 beta 有的在 latest」的割裂，用户不知道该用哪个。
-//   决定：显式统一为 `latest`（源码 `if (tag) return tag` 表明显式 tag 优先级最高）。
-//   理由：① npm **强制**每个包必须有 `latest`（删掉它 `npm i <pkg>` 直接解析失败），
-//          无法真正「取消正式版标签」；② 文档里的安装命令都不带 tag（走 latest），
-//          让 latest 始终等于最新版，用户按文档装就拿对；③ 版本号本身带 `-beta.N`
-//          前缀，语义上仍是预发布，不存在「悄悄变成正式版」。
-//   注：`npm dist-tag`（事后改 tag）属包管理操作，会被 npm 要求交互式 2FA（实测 EOTP），
-//   而**发布时设置 tag 不受此限**——所以「发到 latest」是零手工的可行路径。
+// ★单轨：全部包统一发到 `latest`（2026-09-19 用户要求「不要出现正式版标签，实际只有一条线」）。
+//   npm **强制**每个包必须有 `latest`（删掉它 `npm i <pkg>` 直接解析失败），故不是取消该 tag，
+//   而是让它恒等于最新版本——文档里的安装命令都不带 tag，这样用户按文档装就拿对。
+//   版本号本身仍带 `-beta.N` 前缀，语义上仍是预发布。
+// ★为什么不用 `changeset publish --tag latest`（实测踩到）：
+//   changesets 在 pre 模式下**禁止自定义 tag**——报
+//   `Releasing under custom tag is not allowed in pre mode`，导致 41 个包一个都没发出去。
+//   而 `npm publish --tag <name>` 不受此限 → 改用本仓 publisher 逐包发布（见 publish-all.sh）。
 step('③', '发布到 npm')
 const PUB_TAG = 'latest'
 console.log(`  全部包统一发到 tag：${PUB_TAG}（单轨；版本号仍带 -beta.N 前缀）`)
 let publishExitNonZero = false
 try {
-  run('npx', ['changeset', 'publish', '--tag', PUB_TAG], { capture: false })
+  // --skip-drift-check：第 ② 步刚查过（且带缓存），无需重复
+  run('bash', ['scripts/publish-all.sh', '--tag', PUB_TAG, '--skip-drift-check'], { capture: false })
 } catch {
   publishExitNonZero = true
-  console.log('\n  ⚠ changeset publish 退出码非 0 —— 先不判定失败')
-  console.log('     常见且无害的成因：该版本此前已发布/已暂存 → npm E409，changesets 重试发布所致。')
+  console.log('\n  ⚠ 发布步骤退出码非 0 —— 先不判定失败')
+  console.log('     常见且无害的成因：该版本此前已发布（幂等跳过逻辑之外的情况）。')
   console.log('     是否真失败，由第 ④ 步按 registry 实际状态裁决。')
 }
 
@@ -255,28 +251,40 @@ function allLocalPackages() {
 }
 
 const targets = allLocalPackages()
-const MAX_WAIT_MS = 180_000 // npm 提示「几分钟」——上限 3 分钟
 const t0 = Date.now()
-let attempt = 0
-let missing = []
-for (;;) {
-  attempt++
-  const results = await Promise.all(targets.map((t) => versionExists(t.short, t.version)))
-  missing = targets.filter((_, i) => !results[i].exists)
-  if (missing.length === 0) break
-  const waited = Date.now() - t0
-  if (waited >= MAX_WAIT_MS) break
-  const waitMs = Math.min(15_000, 5_000 * attempt)
-  console.log(
-    `  ${missing.length} 个版本尚未可见（registry 传播窗口，第 ${attempt} 次查询）——${waitMs / 1000}s 后复查`,
-  )
-  await new Promise((r) => setTimeout(r, waitMs))
+
+/**
+ * 核验 registry 是否已收录本仓版本。
+ * ★两级等待（2026-09-19 实测整改）：上一版无论什么情况都盲等最多 3 分钟——
+ *   实测「一个都没发出去」时（changesets 拒绝自定义 tag → 41 个包全未发布），
+ *   它仍傻等 3 分钟才报错，纯属浪费时间（效率规范：等待必须有条件、有退出判定）。
+ *   · **一个都没可见** ⇒ 极可能是发布环节整批失败（而非传播延迟）→ **立即报错**，不等；
+ *   · **部分可见** ⇒ 才是真正的传播窗口 → 有界重试（上限 90s）。
+ */
+async function pollUntilVisible() {
+  let attempt = 0
+  for (;;) {
+    attempt++
+    const results = await Promise.all(targets.map((t) => versionExists(t.short, t.version)))
+    const miss = targets.filter((_, i) => !results[i].exists)
+    if (miss.length === 0) return miss
+    // 一批都没可见 → 判定为发布失败，不做无意义等待
+    if (miss.length === targets.length && attempt === 1) {
+      console.log('  ✗ 全部版本均未上架（一个都没有）——判定为发布环节整批失败，非传播延迟，不再等待')
+      return miss
+    }
+    if (Date.now() - t0 >= 90_000) return miss
+    const waitMs = Math.min(15_000, 5_000 * attempt)
+    console.log(`  ${miss.length}/${targets.length} 个版本尚未可见（传播窗口，第 ${attempt} 次）——${waitMs / 1000}s 后复查`)
+    await new Promise((r) => setTimeout(r, waitMs))
+  }
 }
+const missing = await pollUntilVisible()
 
 if (missing.length === 0) {
   console.log(`  ✅ 全部 ${targets.length} 个包的当前版本均已在 registry 上（用时 ${((Date.now() - t0) / 1000).toFixed(1)}s）`)
   if (publishExitNonZero) {
-    console.log('  （第 ③ 步的非零退出码确认为无害：版本此前已发布/已暂存，registry 状态正确）')
+    console.log('  （第 ③ 步的非零退出码确认为无害：版本此前已发布，registry 状态正确）')
   }
   // 顺带报告「同版本内容不同」的真漂移（发布核验的另一半）
   try {
@@ -291,10 +299,10 @@ if (missing.length === 0) {
     /* 漂移检查失败不影响发布已完成的结论 */
   }
 } else {
-  console.log(`  ✗ 等待 ${MAX_WAIT_MS / 1000}s 后以下 ${missing.length} 个版本仍不可见：`)
+  console.log(`  ✗ 以下 ${missing.length} 个版本未上架：`)
   for (const m of missing) console.log(`      - @proteus-vue/${m.short}@${m.version}`)
-  console.log('  可能成因：① 该包未包含在任何待发 changeset 中（未参与本次发布）')
-  console.log('            ② 发布确实失败（回看第 ③ 步输出中该包的 npm 错误）')
+  console.log('  可能成因：① 发布环节失败（回看第 ③ 步输出中该包的 npm 错误）')
+  console.log('            ② 该包未被任何 changeset 覆盖（未参与本次发布）')
   die('发布核验未通过（见上方清单）')
 }
 
