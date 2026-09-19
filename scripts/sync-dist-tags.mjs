@@ -60,6 +60,28 @@ function canonicalTag() {
   return 'latest'
 }
 
+/**
+ * 需要「指向本仓版本」的**全部** tag。
+ * ★pre 模式下除 canonical tag（beta）外，还要把 `latest` 一并拉齐（2026-09-19 用户要求：
+ *   「实际只有 beta 一条线，不要出现正式版标签」）。
+ *   · npm **强制**每个包必须存在 `latest`（删掉它 `npm i <pkg>` 会解析失败），无法真正移除；
+ *   · 但可以让 `latest` 永远等于当前 beta 版本 → 就不存在「另一条正式版」被服务出去，
+ *     也不会出现 `latest` 停在旧的崩溃版、而新版本只在 beta 的割裂状态。
+ *   · 且 changesets 对「从未发过正式版」的包会**故意发到 latest**（publishedState==='only-pre'），
+ *     不拉齐的话二者必然分叉——这正是今晚 cli/plugin-vite 落到 latest 的成因。
+ *   非 pre 模式（正式发版）下只治理 `latest` 一个 tag。
+ */
+function managedTags(canonical) {
+  const pre = path.join(ROOT, '.changeset', 'pre.json')
+  let inPre = false
+  try {
+    inPre = JSON.parse(fs.readFileSync(pre, 'utf8')).mode === 'pre'
+  } catch {
+    /* 非 pre 模式 */
+  }
+  return inPre ? [canonical, 'latest'] : [canonical]
+}
+
 function listPackages() {
   const out = []
   for (const e of fs.readdirSync(path.join(ROOT, 'packages'), { withFileTypes: true })) {
@@ -89,28 +111,41 @@ async function packument(full) {
 }
 
 const TAG = canonicalTag()
-console.log(`[dist-tags] canonical tag = ${TAG}${TAG_OVERRIDE ? '（--tag 指定）' : '（来自 .changeset/pre.json）'}`)
+const TAGS = managedTags(TAG)
+console.log(
+  `[dist-tags] 受管 tag：${TAGS.join(' + ')}${TAG_OVERRIDE ? '（--tag 指定）' : TAGS.length > 1 ? '（canonical 来自 .changeset/pre.json；latest 一并拉齐——本项目只有 beta 一条线，不让 latest 成为另一条正式版）' : '（来自 .changeset/pre.json）'}`,
+)
 
 const pkgs = listPackages()
 const rows = await Promise.all(
   pkgs.map(async (p) => {
     const d = await packument(p.full)
     if (d.error) return { ...p, err: d.error }
-    return { ...p, current: d.tags[TAG], published: d.versions.includes(p.version), tags: d.tags }
+    // 每个受管 tag 的偏差（tag 不存在 / 指向其它版本）
+    const offTags = TAGS.map((t) => ({ tag: t, current: d.tags[t] })).filter((x) => x.current !== p.version)
+    return { ...p, current: d.tags[TAG], published: d.versions.includes(p.version), tags: d.tags, offTags }
   }),
 )
 
 const unpublished = rows.filter((r) => !r.err && !r.published)
-const ok = rows.filter((r) => !r.err && r.published && r.current === r.version)
-const mismatch = rows.filter((r) => !r.err && r.published && r.current !== r.version)
+const ok = rows.filter((r) => !r.err && r.published && r.offTags.length === 0)
+const mismatch = rows.filter((r) => !r.err && r.published && r.offTags.length > 0)
 const errors = rows.filter((r) => r.err)
 
 if (mismatch.length) {
-  console.log(`\n★tag 未指向本仓版本（${mismatch.length} 个）——用户按 \`@${TAG}\` 装会拿到旧包：`)
-  for (const m of mismatch) {
-    const note = m.current === undefined ? `（${TAG} tag 不存在）` : `→ 指向 ${m.current}，本仓 ${m.version}`
-    console.log(`  ✗ ${m.short.padEnd(22)} ${note}`)
+  // ★紧凑报告：41 行「✗」既吓人又难读——按 tag 分组，每组给出「受影响包数 + 前几个例子」，
+  //   完整清单始终可用 --print 取得。判据是「用户按该 tag 装会拿到什么」。
+  const byTag = new Map()
+  for (const m of mismatch) for (const x of m.offTags) {
+    if (!byTag.has(x.tag)) byTag.set(x.tag, [])
+    byTag.get(x.tag).push(`${m.short}(${x.current ?? '缺失'}→${m.version})`)
   }
+  console.log(`\n★tag 未指向本仓版本：${mismatch.length} 个包受影响`)
+  for (const [tag, items] of byTag) {
+    const sample = items.slice(0, 4).join('，')
+    console.log(`  · ${tag}：${items.length} 个包  ${sample}${items.length > 4 ? ` …等 ${items.length} 个` : ''}`)
+  }
+  console.log(`  → 完整清单：node scripts/sync-dist-tags.mjs --print`)
 }
 if (unpublished.length) console.log(`\n· 本地领先未发布（正常，tag 无从指向）：${unpublished.length} 个`)
 if (errors.length) {
@@ -118,29 +153,38 @@ if (errors.length) {
   for (const e of errors) console.log(`  - ${e.short}: ${e.err}`)
 }
 
+/** 待执行的 dist-tag 命令（每个偏差 tag 一条） */
+function fixCommands() {
+  const cmds = []
+  for (const m of mismatch) for (const x of m.offTags) cmds.push(`npm dist-tag add ${m.full}@${m.version} ${x.tag}`)
+  return cmds
+}
+
 if (PRINT && mismatch.length) {
   console.log(`\n[dist-tags] 待执行的命令（需已登录且能通过 2FA；逐条执行）\n`)
-  for (const m of mismatch) console.log(`npm dist-tag add ${m.full}@${m.version} ${TAG}`)
+  for (const c of fixCommands()) console.log(c)
 } else if (FIX && mismatch.length) {
-  console.log(`\n[dist-tags] 开始修复（npm dist-tag add <pkg>@<ver> ${TAG}${OTP ? ' --otp ***' : ''}）`)
+  console.log(`\n[dist-tags] 开始修复${OTP ? '（--otp ***）' : ''}`)
   let failed = 0
   for (const m of mismatch) {
-    const spec = `${m.full}@${m.version}`
-    const args = ['dist-tag', 'add', spec, TAG]
-    if (OTP) args.push('--otp', OTP)
-    try {
-      execFileSync('npm', args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 })
-      console.log(`  ✅ ${spec} → ${TAG}`)
-    } catch (e) {
-      failed++
-      const msg = String(e.stderr ?? e).toString()
-      // EOTP 是「需要人工 2FA」而非脚本缺陷——单独给出可执行指引，避免误判为失败
-      if (/EOTP|one-time password/i.test(msg)) {
-        console.log(`  ⚠ ${spec}：需要一次性密码（2FA）`)
-        console.log(`      改用：npm dist-tag add ${spec} ${TAG} --otp <6位码>`)
-        console.log(`      或本脚本带 --otp：node scripts/sync-dist-tags.mjs --fix --otp <6位码>`)
-      } else {
-        console.log(`  ❌ ${spec}：${msg.slice(0, 160)}`)
+    for (const x of m.offTags) {
+      const spec = `${m.full}@${m.version}`
+      const args = ['dist-tag', 'add', spec, x.tag]
+      if (OTP) args.push('--otp', OTP)
+      try {
+        execFileSync('npm', args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 })
+        console.log(`  ✅ ${spec} → ${x.tag}`)
+      } catch (e) {
+        failed++
+        const msg = String(e.stderr ?? e).toString()
+        // EOTP 是「需要人工 2FA」而非脚本缺陷——单独给出可执行指引，避免误判为失败
+        if (/EOTP|one-time password/i.test(msg)) {
+          console.log(`  ⚠ ${spec} → ${x.tag}：需要一次性密码（2FA）`)
+          console.log(`      改用：npm dist-tag add ${spec} ${x.tag} --otp <6位码>`)
+          console.log(`      或本脚本带 --otp：node scripts/sync-dist-tags.mjs --fix --otp <6位码>`)
+        } else {
+          console.log(`  ❌ ${spec} → ${x.tag}：${msg.slice(0, 160)}`)
+        }
       }
     }
   }
@@ -151,5 +195,5 @@ if (PRINT && mismatch.length) {
   console.log(`     打印命令而不执行：node scripts/sync-dist-tags.mjs --print`)
   process.exitCode = 1
 } else if (!mismatch.length && !errors.length) {
-  console.log(`\n✅ 全部 ${ok.length} 个已发布包的 \`${TAG}\` tag 均指向本仓版本`)
+  console.log(`\n✅ 全部 ${ok.length} 个已发布包的 ${TAGS.map((t) => `\`${t}\``).join(' + ')} tag 均指向本仓版本`)
 }
