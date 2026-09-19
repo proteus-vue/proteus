@@ -36,6 +36,9 @@ order: 14
 | `direction` | 主轴方向：row（横向）/ column（纵向） | `String` | `'column'` | 否 |
 | `wrap` | 空间不足自动换行（仅 row） | `Boolean` | `false` | 否 |
 | `gap` | 子项间距（px） | `Number` | `0` | 否 |
+| `align` | 交叉轴对齐（flex 值；空串 = 不设置，保持 flex 默认 stretch） | `String` | `''` | 否 |
+| `snap` | 吸附：none / proximity / mandatory——非 none 时容器转滚动容器（轮播语义） | `String` | `'none'` | 否 |
+| `loop` | 循环：滚到末项后回环到首项（仅 snap 生效时有意义） | `Boolean` | `false` | 否 |
 
 ### 属性详解
 
@@ -54,6 +57,34 @@ order: 14
 - **类型**：`Number`　**默认值**：`0`　**必填**：否
 - **说明**：子项间距（px）
 
+#### `align`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：交叉轴对齐（flex 值；空串 = 不设置，保持 flex 默认 stretch）
+
+#### `snap`
+
+- **类型**：`String`　**默认值**：`'none'`　**必填**：否
+- **说明**：吸附：none / proximity / mandatory——非 none 时容器转滚动容器（轮播语义）
+
+#### `loop`
+
+- **类型**：`Boolean`　**默认值**：`false`　**必填**：否
+- **说明**：循环：滚到末项后回环到首项（仅 snap 生效时有意义）
+
+## Events
+
+| 事件 | 说明 | 载荷 |
+|---|---|---|
+| `scroll` | 滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop） | `payload` |
+
+### 事件详解
+
+#### `scroll`
+
+- **说明**：滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop）
+- **载荷**：`payload`
+
 ## 插槽
 
 | 插槽 | 说明 |
@@ -63,6 +94,13 @@ order: 14
 ## 实现要点
 
 - 方向 + 间距 + 智能换行：Web = flex + gap（wrap 时空间不足自动换行）
+- ★G-32 L3 属性补齐（2026-09-19）：align / snap / loop——**swiper 的语义消灭形态**
+- （G-31 §2.2 + rules.md「拒绝 <p-swiper>，轮播 = 一维排列 + 吸附 + 循环」）：
+- · snap（none/proximity/mandatory）：Web 用 CSS scroll-snap（容器转滚动 + 子项 snap-align）；
+- · loop：滚到末项后回环到首项（仅 snap 生效时有意义）；
+- · ★两端行为不同（SOP ⑤ 平台分支）：MP 端 view 不滚动（Skyline CSS overflow 无效 ——
+- skyline-pitfalls S14 实测，同 p-scroll 告警口径）→ 吸附无载体，降级为普通排列 +
+- capabilityWarnOnce 可观察提示（降级声明见 component-ir/degradation.ts）
 - 双端同源码：div → view（编译期映射）
 
 ## 用法

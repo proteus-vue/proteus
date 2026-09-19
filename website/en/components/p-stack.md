@@ -36,6 +36,9 @@ Flex stack
 | `direction` | Main-axis direction: row (horizontal) / column (vertical) | `String` | `'column'` | No |
 | `wrap` | Wrap automatically when space is insufficient (row only) | `Boolean` | `false` | No |
 | `gap` | Spacing between children (px) | `Number` | `0` | No |
+| `align` | — | `String` | `''` | No |
+| `snap` | — | `String` | `'none'` | No |
+| `loop` | — | `Boolean` | `false` | No |
 
 ### Prop details
 
@@ -53,6 +56,34 @@ Flex stack
 
 - **Type**: `Number`　**Default**: `0`　**Required**: No
 - **Doc**: Spacing between children (px)
+
+#### `align`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `snap`
+
+- **Type**: `String`　**Default**: `'none'`　**Required**: No
+- **Doc**: —
+
+#### `loop`
+
+- **Type**: `Boolean`　**Default**: `false`　**Required**: No
+- **Doc**: —
+
+## Events
+
+| Event | Doc | Payload |
+|---|---|---|
+| `scroll` | — | `payload` |
+
+### Event details
+
+#### `scroll`
+
+- **Doc**: —
+- **Payload**: `payload`
 
 ## Slots
 
