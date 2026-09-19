@@ -36,6 +36,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const checkOnly = process.argv.includes('--check')
 const asJson = process.argv.includes('--json')
 const TAG = 'proteus-publish-drift'
+/** registry/tarball 请求超时（毫秒）——网络挂起时不得无限等待（效率规范：请求须带超时） */
+const FETCH_TIMEOUT_MS = 20_000
 const only = (() => {
   const i = process.argv.indexOf('--only')
   return i >= 0 ? process.argv[i + 1] : null
@@ -82,7 +84,7 @@ function localPack(pkgDir) {
 async function registryVersionInfo(full, version) {
   const url = 'https://registry.npmjs.org/' + encodeURIComponent(full) + '/' + encodeURIComponent(version)
   try {
-    const r = await fetch(url, { headers: { 'user-agent': TAG } })
+    const r = await fetch(url, { headers: { 'user-agent': TAG }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (r.status === 404) return null
     if (!r.ok) return { error: `HTTP ${r.status}` }
     const d = await r.json()
@@ -117,7 +119,7 @@ function stable(v) {
 async function semanticCompare(pkgDir, packFiles, tarballUrl) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-pubcmp-'))
   try {
-    const res = await fetch(tarballUrl, { headers: { 'user-agent': TAG } })
+    const res = await fetch(tarballUrl, { headers: { 'user-agent': TAG }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!res.ok) return { error: `tarball HTTP ${res.status}` }
     const tgz = path.join(tmp, 'pkg.tgz')
     fs.writeFileSync(tgz, Buffer.from(await res.arrayBuffer()))

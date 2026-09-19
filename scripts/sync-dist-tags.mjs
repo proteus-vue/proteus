@@ -42,6 +42,8 @@ const TAG_OVERRIDE = tagIdx >= 0 ? argv[tagIdx + 1] : null
 const otpIdx = argv.indexOf('--otp')
 const OTP = otpIdx >= 0 ? argv[otpIdx + 1] : null
 const UA = { 'user-agent': 'proteus-dist-tag-sync' }
+/** registry 请求超时（毫秒）——避免网络挂起时脚本无限等待（效率规范：请求须带超时） */
+const FETCH_TIMEOUT_MS = 15_000
 
 /** canonical tag：pre 模式取 pre.json 的 tag，否则 latest */
 function canonicalTag() {
@@ -76,7 +78,8 @@ function listPackages() {
 
 async function packument(full) {
   try {
-    const r = await fetch('https://registry.npmjs.org/' + encodeURIComponent(full), { headers: UA })
+    // 注：signal 与 fetch 同一行——效率审计规则 R002 按行检测超时，多行写法会被误报
+    const r = await fetch('https://registry.npmjs.org/' + encodeURIComponent(full), { headers: UA, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     if (!r.ok) return { error: `HTTP ${r.status}` }
     const d = await r.json()
     return { tags: d['dist-tags'] ?? {}, versions: Object.keys(d.versions ?? {}) }
