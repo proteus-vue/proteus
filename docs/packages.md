@@ -179,6 +179,42 @@ npm run changeset:publish   # 按依赖拓扑自动发布全部包
 # ⑧ 发布后打 tag 并 push
 ```
 
+## ★npm 发布事故复盘（2026-09-19：CLI 在真实项目「启动即崩」）
+
+> **现场**：另一个项目（OPERATOR/web）装 npm 上的 `@proteus-vue/cli@0.3.0-beta.2` 后**无法启动**：
+> `SyntaxError: The requested module '@proteus-vue/devtools-runtime' does not provide an export named
+> 'createFlamegraphCollector'`（已在本仓本地 100% 复现）。
+>
+> **根因（发布机制缺陷，非单包问题）**：`scripts/publish-all.sh` 旧逻辑为
+> ```
+> existing=$(npm view "$name@$version" version); if [ -n "$existing" ]; then echo "skip ..."; continue; fi
+> ```
+> 「已存在该版本 → 跳过」对**幂等重跑**是正确的，但它**无法区分两种情况**：
+> ① 内容确实一致（跳过正确）；② **本地源码改了却没 bump 版本号**（跳过 = 新内容永远发不出去）。
+> 事故即 ②：`devtools-runtime` 等包改了但未 bump → 被静默跳过；依赖它的 `cli` bump 并发版 →
+> 声明 `0.1.0` 拿到的仍是**旧构建**（只有 8 个导出，本地有 30+）→ 顶层 import 失败 → 启动即崩。
+>
+> **实测范围（本次全量核对，41 包）**：**36 个包**「版本号相同但内容不同」（判据 = 本地
+> `npm pack` integrity ↔ registry `dist.integrity`，本地 pack 实测可复现）；仅 5 个一致
+> （均为未改动过的 `0.1.0`）。
+>
+> **修复（防复发，已落地）**：
+> 1. 新增 `scripts/check-publish-drift.mjs`——「同版本号 ⇒ 内容须一致」全量核验
+>    （`--check` 仅在「同版本不同内容」时 exit 1；「本地领先未发布」属正常状态不报错）。
+> 2. `publish-all.sh` 改为**发布前先跑漂移预检**，且已存在版本改判
+>    「integrity 相同 → 幂等跳过 / 不同 → FAIL 并提示 bump」（`--allow-drift` 可显式放行）。
+>    ★两个分支都已验证：内容一致（gesture/dev-host）→ 幂等跳过；内容不同 → 拦住。
+>
+> **待办（需 npm 凭据，token 已失效 E401）**：
+> 1. 给 36 个漂移包 bump 版本（建议走既有 changesets 流程——它能**自动对齐 workspace 精确依赖**；
+>    仓内 58 处内部依赖均为 exact pin，手工 bump 易漏）。beta 包 → beta 序号+1；正式包 → patch+1。
+> 2. `node scripts/check-publish-drift.mjs` 复核归零 → `npm run changeset:publish` 发布。
+> 3. **发布后**再跑一次漂移核验（应为 0 漂移）+ 在一个干净目录里 `npm i @proteus-vue/cli@latest`
+>    实测 `proteus --help` 可跑（本次事故正是「发布后没做这一步」才漏到用户侧）。
+>
+> **教训**：*「已发布」不等于「发布的是当前代码」*——发布幂等跳过必须带**内容校验**；
+> 且「发布后可用性」需要在**干净环境**里实测，而不是只看 publish 命令退出码 0。
+
 ## 验收清单（✅ 全部通过）
 
 - [x] `src/{platform,router,runtime,shims}` 全部移入 packages（`src/` 仅剩 components）
