@@ -165,33 +165,102 @@ if (pending.length || drifted.length) {
 }
 
 // ── ③ 发布 ──
+// ★`changeset publish` 退出码非 0 **不等于发布失败**：当某个版本此前已发布/已暂存，
+//   npm 返回 E409（"Cannot publish over previously staged/published version"），
+//   changesets 遂报 error 并在末尾以非零退出——但包其实**已经在线上**（实测踩到：
+//   3 个包全部发布成功，重跑时却因 E409 让整条命令崩掉，用户误以为发布失败）。
+//   故这里不立即判定失败，交由第 ④ 步按 **registry 实际状态**裁决（那才是用户视角的真相）。
 step('③', '发布到 npm')
-run('npx', ['changeset', 'publish'], { capture: false })
+let publishExitNonZero = false
+try {
+  run('npx', ['changeset', 'publish'], { capture: false })
+} catch {
+  publishExitNonZero = true
+  console.log('\n  ⚠ changeset publish 退出码非 0 —— 先不判定失败')
+  console.log('     常见且无害的成因：该版本此前已发布/已暂存 → npm E409，changesets 重试发布所致。')
+  console.log('     是否真失败，由第 ④ 步按 registry 实际状态裁决。')
+}
 
 // ── ④ 发布核验 ──
+// ★必须带**有界重试**：npm 发布完成后 registry 有**传播窗口**（npm 自己会提示
+//   "Your package is being processed and may take a few minutes to become available"）。
+//   单次查询会把「刚发布成功、尚未传播完」误判为「发布失败」——实测踩到：
+//   3 个包全部发布成功（changesets 明确 success），核验却立刻报「未上架」而 exit 1。
+//   归因：只有「查不到」才重试；一旦查到即通过。有上限、有退避，非盲等。
 step('④', '发布核验（本仓版本是否都已上架）')
-let post = null
-try {
-  post = JSON.parse(run('node', ['scripts/check-publish-drift.mjs', '--json']))
-} catch {
-  console.log('  （核验命令执行失败，跳过——发布本身已完成）')
-}
-if (post) {
-  const notPublished = post.unpublished ?? []
-  const realDrift = post.drift ?? []
-  if (notPublished.length === 0 && realDrift.length === 0) {
-    console.log(`  ✅ 全部 ${post.checked} 个包的当前版本均已在 registry 上`)
-  } else {
-    if (notPublished.length) {
-      console.log(`  ✗ 以下 ${notPublished.length} 个版本**未上架**（发布失败或被跳过）：`)
-      for (const u of notPublished) console.log(`      - @proteus-vue/${u.name}@${u.version}`)
-    }
-    if (realDrift.length) {
-      console.log(`  ✗ 以下 ${realDrift.length} 个包「同版本但内容不同」：`)
-      for (const d of realDrift) console.log(`      - @proteus-vue/${d.name}@${d.version}`)
-    }
-    die('发布核验未通过（见上方清单）')
+
+/** registry 上是否存在该版本（查 packument——比版本专用端点更早可见） */
+async function versionExists(short, version) {
+  const url = 'https://registry.npmjs.org/' + encodeURIComponent('@proteus-vue/' + short)
+  try {
+    const r = await fetch(url, { headers: { 'user-agent': 'proteus-release' }, signal: AbortSignal.timeout(20_000) })
+    if (!r.ok) return { exists: false, error: `HTTP ${r.status}` }
+    const d = await r.json()
+    return { exists: Object.prototype.hasOwnProperty.call(d.versions ?? {}, version) }
+  } catch (e) {
+    return { exists: false, error: String(e).slice(0, 80) }
   }
+}
+
+/** 本仓所有包的 name/version（核验对象） */
+function allLocalPackages() {
+  const out = []
+  const dir = path.join(ROOT, 'packages')
+  for (const d of fs.readdirSync(dir)) {
+    const f = path.join(dir, d, 'package.json')
+    if (!fs.existsSync(f)) continue
+    try {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'))
+      if (j.name?.startsWith('@proteus-vue/')) out.push({ short: j.name.replace('@proteus-vue/', ''), version: j.version })
+    } catch {
+      /* 非包目录 */
+    }
+  }
+  return out
+}
+
+const targets = allLocalPackages()
+const MAX_WAIT_MS = 180_000 // npm 提示「几分钟」——上限 3 分钟
+const t0 = Date.now()
+let attempt = 0
+let missing = []
+for (;;) {
+  attempt++
+  const results = await Promise.all(targets.map((t) => versionExists(t.short, t.version)))
+  missing = targets.filter((_, i) => !results[i].exists)
+  if (missing.length === 0) break
+  const waited = Date.now() - t0
+  if (waited >= MAX_WAIT_MS) break
+  const waitMs = Math.min(15_000, 5_000 * attempt)
+  console.log(
+    `  ${missing.length} 个版本尚未可见（registry 传播窗口，第 ${attempt} 次查询）——${waitMs / 1000}s 后复查`,
+  )
+  await new Promise((r) => setTimeout(r, waitMs))
+}
+
+if (missing.length === 0) {
+  console.log(`  ✅ 全部 ${targets.length} 个包的当前版本均已在 registry 上（用时 ${((Date.now() - t0) / 1000).toFixed(1)}s）`)
+  if (publishExitNonZero) {
+    console.log('  （第 ③ 步的非零退出码确认为无害：版本此前已发布/已暂存，registry 状态正确）')
+  }
+  // 顺带报告「同版本内容不同」的真漂移（发布核验的另一半）
+  try {
+    const post = JSON.parse(run('node', ['scripts/check-publish-drift.mjs', '--json']))
+    const realDrift = post.drift ?? []
+    if (realDrift.length) {
+      console.log(`  ✗ ${realDrift.length} 个包「同版本但内容不同」：`)
+      for (const d of realDrift) console.log(`      - @proteus-vue/${d.name}@${d.version}`)
+      die('存在真漂移（见上方清单）')
+    }
+  } catch {
+    /* 漂移检查失败不影响发布已完成的结论 */
+  }
+} else {
+  console.log(`  ✗ 等待 ${MAX_WAIT_MS / 1000}s 后以下 ${missing.length} 个版本仍不可见：`)
+  for (const m of missing) console.log(`      - @proteus-vue/${m.short}@${m.version}`)
+  console.log('  可能成因：① 该包未包含在任何待发 changeset 中（未参与本次发布）')
+  console.log('            ② 发布确实失败（回看第 ③ 步输出中该包的 npm 错误）')
+  die('发布核验未通过（见上方清单）')
 }
 
 console.log('\n✅ 发布完成')
