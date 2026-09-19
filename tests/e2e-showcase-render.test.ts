@@ -10,6 +10,7 @@ import type { PreviewServer } from 'vite'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import path from 'node:path'
+import fs from 'node:fs'
 import { createWebDriver } from '@proteus-vue/test-core/driver'
 import { assertPageRendered } from '@proteus-vue/test-core'
 
@@ -328,4 +329,51 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
       expect(page.url(), '★点转场入口应真的导航（URL 变化）——否则页面只是静态展示').not.toBe(urlBefore)
     }
   })
+})
+
+// ── ★能力详情页自动覆盖门禁（2026-09-19）：新页不必手写进 PAGES 也会被验 ──
+//   背景：PAGES 是手写清单 → 新增能力详情页**不会被自动覆盖**（静默漏检）；而能力详情页正在
+//   批量补齐（2026-09-19 起 1 → 9，脚本 gen-capability-demo-pages.mjs 产出）。
+//   本组用**目录扫描**自动发现所有能力详情页，逐页断言「渲染非空白 + 演示区有可点元素 +
+//   点击后输出区发生变化」——第③条是本组的核心：证明演示**真交互**而非静态摆设。
+describe('★能力详情页（自动发现：渲染 + 真交互）', () => {
+  const CAP_DIR = path.resolve(__dirname, '../showcase/subpackages/capabilities/pages')
+  const slugs = fs.existsSync(CAP_DIR)
+    ? fs.readdirSync(CAP_DIR).filter((f) => f.endsWith('.vue')).map((f) => f.replace(/\.vue$/, '')).sort()
+    : []
+
+  it('★至少存在 1 个能力详情页（防目录被清空后本组静默空跑）', () => {
+    expect(slugs.length, '能力详情页目录不应为空').toBeGreaterThan(0)
+  })
+
+  for (const slug of slugs) {
+    it(`/subpackages/capabilities/pages/${slug}（渲染 + 交互）`, async () => {
+      const route = `/subpackages/capabilities/pages/${slug}`
+      const errs: string[] = []
+      const onPageErr = (e: Error) => errs.push('PAGEERROR: ' + e.message)
+      page.on('pageerror', onPageErr)
+      try {
+        await page.goto(BASE + route, { waitUntil: 'networkidle' })
+        await page.waitForTimeout(900)
+        // ① 渲染非空白
+        const textLen = (await page.evaluate(() => document.body.innerText)).length
+        expect(textLen, `${route} 疑似空白`).toBeGreaterThan(20)
+        // ② 演示区存在可点元素（能力页范式：demo-block 内至少一个按钮）
+        const btns = page.locator('.db button, .db [role="button"], .db p-button')
+        const btnCount = await btns.count()
+        expect(btnCount, `${route} 演示区应有可点元素（按钮）`).toBeGreaterThan(0)
+        // ③ ★核心：点击后输出区**真的变化**（证明真交互，而非静态摆设）
+        const out = page.locator('.out').first()
+        const before = (await out.textContent()) ?? ''
+        await btns.first().scrollIntoViewIfNeeded()
+        await btns.first().click({ timeout: 5000 }).catch(() => undefined)
+        await page.waitForTimeout(1500)
+        const after = (await out.textContent()) ?? ''
+        expect(after, `${route} 点击后输出区应变化（真交互——原值 "${before.slice(0, 30)}"）`).not.toBe(before)
+        expect(errs, `${route} 交互期 JS 错误`).toEqual([])
+      } finally {
+        page.off('pageerror', onPageErr)
+      }
+    })
+  }
 })

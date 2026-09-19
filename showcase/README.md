@@ -25,7 +25,10 @@
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
   —— 进度 **26 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
 subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
-  —— 进度 **1 / 81**（camera 样板；范式已验证，其余待铺）
+  —— 进度 **9 / 81**（2026-09-19 起批量补齐：camera / vibrate / clipboard / network / device
+     / battery / orientation / screen / location——均为 Web 端**真有实现**的能力，演示可真交互）
+  —— 生成器：`scripts/gen-capability-demo-pages.mjs`（数据表 + 模板；`check:capability-demo` 门禁防漂移）
+  —— ★未铺的能力**不假装覆盖**：只为 Web 端有实现的能力生成可交互页（无实现的不生成，避免「点了没反应」）
 
 ★进度数字来源：`data/catalog.ts` 的 `CATALOG_STATS`（由 `scripts/gen-showcase-catalog.mjs`
   从**详情页文件是否存在**自动判定，不手写）——`pnpm run check:showcase-catalog` 门禁保证不漂移。

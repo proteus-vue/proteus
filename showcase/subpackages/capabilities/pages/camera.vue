@@ -6,8 +6,13 @@ import { ref } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'
-import { PText, PView } from '@proteus-vue/components'
+import { PText, PView, PButton } from '@proteus-vue/components'
 import PCamera from '@proteus-vue/components/p-camera/index.vue'
+import { createCapabilityHooks } from '@proteus-vue/api'
+
+// ★能力 Hook 实例（2026-09-19 补）：本页原先只有组件预览，缺「真调用能力 Hook」的交互——
+//   与其余能力详情页范式不一致（也不满足「演示须真交互」的门禁）。补一个按钮真调 useCamera()。
+const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code="'<camera>'" 会破坏 WXML 解析）
 const codeDemo = ref('const res = await useCamera()\nif (res.ok) { /* res.data: MediaAccess */ }\nelse { /* res.error.code === "camera.unsupported" */ }')
@@ -17,6 +22,15 @@ const camErr = ref('')
 function onCamReady() { camReady.value = true }
 function onCamErr(e: unknown) {
   camErr.value = (e as { errMsg?: string })?.errMsg || '相机不可用（模拟器无摄像头属预期）'
+}
+
+// ★真调用能力 Hook：回显 CapResult（ok → 设备信息；Err → 错误码）
+const hookOut = ref('点「调用 useCamera()」→ 走能力 Hook 拿 CapResult（与下方组件预览是两条入口，同一个能力）')
+async function onCallUseCamera(): Promise<void> {
+  const res = await cap.useCamera()
+  hookOut.value = res.ok
+    ? `✅ 设备：${res.data.kind ?? 'camera'} · 支持：${res.data.supported} · 已授权：${res.data.granted}`
+    : `⚠ 降级：${res.error.code} · ${res.error.message}`
 }
 
 const apiRows = ref([
@@ -43,7 +57,18 @@ const compatRows = ref([
         <p-camera :height="200" device-position="back" @initdone="onCamReady" @error="onCamErr" />
       </template>
       <template #output>
-        <p-text class="out">结果：相机就绪 {{ camReady ? '是' : '否' }}{{ camErr ? ' · ' + camErr : '' }}</p-text>
+        <p-text class="cam-out">结果：相机就绪 {{ camReady ? '是' : '否' }}{{ camErr ? ' · ' + camErr : '' }}</p-text>
+      </template>
+    </demo-block>
+
+    <demo-block index="02" title="能力 Hook 真调用" :has-output="true" desc="同一个能力的另一条入口：useCamera() 直接拿 CapResult（组件预览 vs Hook 调用，二者同源）" :code="codeDemo">
+      <template #demo>
+        <p-view class="btns">
+          <p-button size="small" @click="onCallUseCamera">调用 useCamera()</p-button>
+        </p-view>
+      </template>
+      <template #output>
+        <p-text class="out">{{ hookOut }}</p-text>
       </template>
     </demo-block>
 
@@ -53,6 +78,21 @@ const compatRows = ref([
 </template>
 
 <style scoped>
+.btns {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.cam-out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}
 .out {
   display: block;
   background: #f2fbf5;

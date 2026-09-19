@@ -46,7 +46,15 @@ export const routes: RouteRecord[] = [
   { name: "components-pages-p-view", path: "subpackages/components/pages/p-view", component: "../subpackages/components/pages/p-view.vue", subPackage: "components" },
   { name: "components-pages-p-webview", path: "subpackages/components/pages/p-webview", component: "../subpackages/components/pages/p-webview.vue", subPackage: "components" },
   { name: "components-pages-platform-variant", path: "subpackages/components/pages/platform-variant", component: "../subpackages/components/pages/platform-variant.vue", subPackage: "components" },
+  { name: "capabilities-pages-battery", path: "subpackages/capabilities/pages/battery", component: "../subpackages/capabilities/pages/battery.vue", subPackage: "capabilities" },
   { name: "capabilities-pages-camera", path: "subpackages/capabilities/pages/camera", component: "../subpackages/capabilities/pages/camera.vue", subPackage: "capabilities", meta: {"title":"useCamera 相机"} },
+  { name: "capabilities-pages-clipboard", path: "subpackages/capabilities/pages/clipboard", component: "../subpackages/capabilities/pages/clipboard.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-device", path: "subpackages/capabilities/pages/device", component: "../subpackages/capabilities/pages/device.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-location", path: "subpackages/capabilities/pages/location", component: "../subpackages/capabilities/pages/location.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-network", path: "subpackages/capabilities/pages/network", component: "../subpackages/capabilities/pages/network.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-orientation", path: "subpackages/capabilities/pages/orientation", component: "../subpackages/capabilities/pages/orientation.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-screen", path: "subpackages/capabilities/pages/screen", component: "../subpackages/capabilities/pages/screen.vue", subPackage: "capabilities" },
+  { name: "capabilities-pages-vibrate", path: "subpackages/capabilities/pages/vibrate", component: "../subpackages/capabilities/pages/vibrate.vue", subPackage: "capabilities" },
 ]
 
 export const tabRoutes: RouteRecord[] = routes.filter(r => r.meta?.isTab)
@@ -98,6 +106,14 @@ declare module '@proteus-vue/router/types' {
     'components-pages-p-view': {  },
     'components-pages-p-webview': {  },
     'components-pages-platform-variant': {  },
+    'capabilities-pages-battery': {  },
     'capabilities-pages-camera': {  },
+    'capabilities-pages-clipboard': {  },
+    'capabilities-pages-device': {  },
+    'capabilities-pages-location': {  },
+    'capabilities-pages-network': {  },
+    'capabilities-pages-orientation': {  },
+    'capabilities-pages-screen': {  },
+    'capabilities-pages-vibrate': {  },
   }
 }

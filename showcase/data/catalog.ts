@@ -132,7 +132,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
   },
 ]
 
-/** 能力：10 域 / 81 个（已备详情页 1） */
+/** 能力：10 域 / 81 个（已备详情页 9） */
 export const CAPABILITY_GROUPS: CatalogGroup[] = [
   {
     name: "网络与通信",
@@ -155,13 +155,13 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     desc: "传感器 / 电池 / 网络 / 剪贴板 / 屏幕 / 亮度",
     items: [
       { name: "useSensor", id: "capability.sensor", desc: "传感器一次性读取", route: "" },
-      { name: "useVibrate", id: "capability.vibrate", desc: "震动", route: "" },
-      { name: "useBattery", id: "capability.battery", desc: "电量", route: "" },
-      { name: "useNetwork", id: "capability.network", desc: "网络", route: "" },
-      { name: "useClipboard", id: "capability.clipboard", desc: "剪贴板", route: "" },
-      { name: "useScreen", id: "capability.screen", desc: "屏幕", route: "" },
-      { name: "useDevice", id: "capability.device", desc: "设备", route: "" },
-      { name: "useOrientation", id: "capability.orientation", desc: "屏幕方向", route: "" },
+      { name: "useVibrate", id: "capability.vibrate", desc: "震动", route: "/subpackages/capabilities/pages/vibrate" },
+      { name: "useBattery", id: "capability.battery", desc: "电量", route: "/subpackages/capabilities/pages/battery" },
+      { name: "useNetwork", id: "capability.network", desc: "网络", route: "/subpackages/capabilities/pages/network" },
+      { name: "useClipboard", id: "capability.clipboard", desc: "剪贴板", route: "/subpackages/capabilities/pages/clipboard" },
+      { name: "useScreen", id: "capability.screen", desc: "屏幕", route: "/subpackages/capabilities/pages/screen" },
+      { name: "useDevice", id: "capability.device", desc: "设备", route: "/subpackages/capabilities/pages/device" },
+      { name: "useOrientation", id: "capability.orientation", desc: "屏幕方向", route: "/subpackages/capabilities/pages/orientation" },
       { name: "useBrightness", id: "capability.brightness", desc: "读取当前亮度", route: "" },
       { name: "useKeyboard", id: "capability.keyboard", desc: "键盘生命周期句柄", route: "" },
       { name: "useElement", id: "capability.element-query", desc: "元素查询句柄", route: "" },
@@ -220,7 +220,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     name: "位置与地图",
     desc: "定位 / 地图 / 地址",
     items: [
-      { name: "useLocation", id: "capability.location", desc: "位置", route: "" },
+      { name: "useLocation", id: "capability.location", desc: "位置", route: "/subpackages/capabilities/pages/location" },
       { name: "useMap", id: "capability.map", desc: "地图上下文句柄", route: "" },
     ],
   },
@@ -283,5 +283,5 @@ export const CATALOG_STATS = {
   componentReady: 26,
   capabilityGroups: 10,
   capabilityTotal: 81,
-  capabilityReady: 1,
+  capabilityReady: 9,
 }
