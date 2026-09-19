@@ -31,7 +31,7 @@
     "create:build": "pnpm --filter @proteus-vue/create-proteus build",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish",
+    "changeset:publish": "node scripts/check-publish-drift.mjs --check && changeset publish",
     "verify": "node scripts/build-packages.mjs && pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm run check:mp-artifacts && pnpm -r build && npx vue-tsc --noEmit && npx vue-tsc --noEmit -p examples/tsconfig.json && pnpm run check:pkg && pnpm run check:deps && pnpm run check:script-compile && pnpm run check:en-drift && pnpm run check:content && pnpm run check:mp-spec && pnpm run check:mp-attrs && pnpm run check:degradation && pnpm run check:consistency && pnpm run check:docs && pnpm run check:showcase-catalog && pnpm run check:capability-demo && pnpm run check:gates-sync && pnpm run build:showcase:web && pnpm run test:e2e:showcase && pnpm run build:showcase:mp",
     "check:pkg": "node scripts/check-package-health.js",
     "check:en-drift": "node website/scripts/check-en-drift.mjs",
