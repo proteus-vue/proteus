@@ -247,6 +247,11 @@ export type { RouteTransition } from './transforms/transform-transition'
 export { generateWebRoutes, generateMpConfig, mergeAppJson, flattenNodes, toPageConfig } from './codegen'
 export type { MpPageConfig } from './codegen'
 
+// ★G-32 B6（2026-09-19）：路由名推导是**跨包公开契约**——迁移工具链（compat-miniprogram 路由名表
+//   `routeNameFromPath`）必须与 derivePath 模式下的真实产物同名，否则 codemod 建议的
+//   `router.push({ name })` 在 routeMap 中查不到（死引用）。导出供 tests/route-table.test.ts 跨包一致性断言。
+export { deriveNameFromFile } from './scan'
+
 // ★router-plus G-32 M1：路由语义层 + 五端导航映射 + 栈 diff
 //（NAVIGATION_MAP 映射语义 → 各端原生 API；computeRoutePatch 是转场事务的输入）
 export {

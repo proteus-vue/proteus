@@ -48,7 +48,7 @@ export function runMigrateMp(target: string, dryRun = false): MigrateMpResult {
     `[proteus-migrate] 扫描 ${files.length} 文件 · ${changedFiles} 变更 · 自动替换标签 ${totalTags} 处 · manual 标注 ${totalManual} 处${dryRun ? '（dry-run 未写回）' : ''}`,
   )
   if (totalManual) {
-    lines.push('提示：manual 标注项需人工处理（语义识别 scroll-view/swiper / 路由名表 / 能力提升）——详见 docs/proteus-component-semantics-plan/migration.md')
+    lines.push('提示：manual 标注项需人工处理（swiper 轮播语义识别 / 能力提升）——详见 docs/proteus-component-semantics-plan/migration.md')
   }
   // ★G-32 B6：路由名表（wx.navigateTo → router.push({ name }) 语义化桥的 name 候选）
   const table = buildRouteTable(allSources)
@@ -58,7 +58,7 @@ export function runMigrateMp(target: string, dryRun = false): MigrateMpResult {
     for (const t of table) {
       lines.push(`  ${t.path} → name: '${t.name}'（${t.apis.join('/')} ≤ router.push({ name })）`)
     }
-    lines.push('[proteus-migrate] 提示：若目标路径在 Proteus 工程 pagesDir 无对应页面，需在 gen-routes 的 scan 收录后补 name（约定式路由 derivePath）')
+    lines.push('[proteus-migrate] name 规则 = derivePath 推导（index 归并目录名、`/`→`-`，与框架 gen-routes 产物同名）；若目标页 <route> 块显式声明了 name，以显式名为准')
   }
   lines.push('[proteus-migrate] 迁移后建议：npm i @proteus-vue/compat-miniprogram + bindCompatPlatform(createPlatformAPI())（Step 1 兜底）')
   return { ok: true, files: reports, text: lines.join('\n') }

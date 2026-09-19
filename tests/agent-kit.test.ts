@@ -231,8 +231,11 @@ describe('G-36 B3 migrate-miniprogram Skill（G-31 B6 codemod 复用 + CMP019 �
     // tag auto
     expect(byFrom.get('<view>')?.status).toBe('auto')
     expect(byFrom.get('<view>')?.to).toBe('<p-box>')
-    // tag manual（语义识别）
-    expect(byFrom.get('<scroll-view>')?.status).toBe('manual')
+    // ★2026-09-19：scroll-view 由 manual 提升为 auto（p-scroll-view 官方属性全量透传，真 1:1）
+    expect(byFrom.get('<scroll-view>')?.status).toBe('auto')
+    expect(byFrom.get('<scroll-view>')?.to).toBe('<p-scroll-view>')
+    // tag manual（语义识别——swiper 无 1:1 组件，保留人工决策）
+    expect(byFrom.get('<swiper>')?.status).toBe('manual')
     // 存储（codemod 直改）不入日志（auto 集中在 tag）
     expect(byFrom.get('wx.request')?.status).toBe('auto')
     expect(byFrom.get('wx.request')?.to).toBe('useFetch()')
@@ -246,7 +249,7 @@ describe('G-36 B3 migrate-miniprogram Skill（G-31 B6 codemod 复用 + CMP019 �
     const r = await migrateMiniprogram({ source: MP_SOURCE }, { mcp: createMcpServer() })
     expect(r.stats.tagsReplaced).toBeGreaterThanOrEqual(2) // view/text/button
     expect(r.stats.storageReplaced).toBeGreaterThanOrEqual(1)
-    expect(r.stats.manualAnnotations).toBeGreaterThanOrEqual(2) // scroll-view + swiper
+    expect(r.stats.manualAnnotations).toBeGreaterThanOrEqual(1) // swiper（scroll-view 已于 2026-09-19 提升为 auto）
     expect(r.stats.wxApisFound).toBe(4) // setStorageSync/request/getSystemInfoSync/navigateTo
     expect(r.coverage).toBeGreaterThan(0)
     expect(r.coverage).toBeLessThanOrEqual(1)
