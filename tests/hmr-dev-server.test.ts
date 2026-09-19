@@ -144,7 +144,12 @@ describe('HMR Dev Server：watch → 防抖 → 增量编译 → 广播', () => 
     const server = createHmrDevServer({
       port: 0,
       watchRoots,
-      debounceMs: 50,
+      // ★防抖窗口取值纪律（2026-09-19 修 flake）：本用例的前提是「两次独立 writeFileSync 的
+      //   fs.watch 事件落进**同一**窗口」——而 fs.watch 是**逐文件异步投递**的（两次写之间
+      //   无时序保证）。窗口 50ms 时，满负载（pnpm verify 全链并行）下第二个事件可晚于窗口关闭
+      //   → compile 收到 1 个文件而非 2 个（实测间歇红；单跑必绿）。取 300ms 让该前提基本必然成立，
+      //   用例仍验证「合并」这一语义本身（不是把断言改松）。
+      debounceMs: 300,
       compile: (files) => {
         compileFiles.push(files)
         return files.map((f, i) => ({ id: i + 1, file: path.relative(dir, f), type: 'vue', action: 'update', timestamp: Date.now(), code: 'x' }))
