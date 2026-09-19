@@ -288,7 +288,9 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
         const cs = getComputedStyle(el)
         return {
           noise: cs.getPropertyValue('--pg-noise-opacity').trim(),
-          backdrop: cs.backdropFilter || cs.webkitBackdropFilter || '',
+          // ★用 getPropertyValue（标准方法，可读带前缀属性）——`cs.webkitBackdropFilter` 不在
+          //   TS 的 CSSStyleDeclaration 声明里（CI vue-tsc 报 TS2551）；getPropertyValue 无此问题
+          backdrop: cs.getPropertyValue('backdrop-filter') || cs.getPropertyValue('-webkit-backdrop-filter') || '',
         }
       })
     const before = await readVars()
