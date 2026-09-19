@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { verifyDualCompilerEquivalence, resolveRustCliBin } from '@proteus-vue/compiler-backend'
+import { verifyDualCompilerEquivalence, resolveRustCliBin, rustCliTimeoutMs, RUST_CLI_TIMEOUT_MS } from '@proteus-vue/compiler-backend'
 import { buildDir } from '../packages/cli/src/build'
 
 const RUST_BIN = path.resolve('packages/compiler-backend-rust/bin/cli.js') // npm bin 壳（debug binary 已构建 → 秒级）
@@ -108,6 +108,15 @@ describe('resolveRustCliBin', () => {
       delete process.env.PROTEUS_CC_RUST
     }
   })
+
+  it('★RUST_CLI_TIMEOUT_MS：预算须盖住 macOS 首次执行校验（防改回 30s 触发 ETIMEDOUT 误报）', () => {
+    // 根因（2026-09-19 实测）：pnpm verify 先 build-packages 重链 release 二进制，
+    // 紧随的测试首次执行该 Mach-O 触发系统校验——**耗时 71s**（第二次 0.17s）。
+    // 固定 30s → ETIMEDOUT → 被归为 rust-cli-error（"Rust CLI 执行失败"，掩盖真因），
+    // 且 buildDir 见 mismatch 直接 throw —— 冷缓存下「缺失→skipped 降级」的设计失效。
+    expect(RUST_CLI_TIMEOUT_MS).toBeGreaterThan(71_000)
+    expect(rustCliTimeoutMs()).toBe(RUST_CLI_TIMEOUT_MS) // 兼容签名同源
+  })
 })
 
 describe('buildDir 集成（proteus build --compiler rust 消费链）', () => {
@@ -152,7 +161,8 @@ function runRealRust(sfc: string): string {
   const tmp = path.join(os.tmpdir(), `proteus-dual-${Math.random().toString(36).slice(2)}.vue`)
   fs.writeFileSync(tmp, sfc, 'utf-8')
   try {
-    return execFileSync(process.execPath, [RUST_BIN, 'compile', tmp], { encoding: 'utf-8', timeout: 30000 })
+    // ★冷缓存 / macOS 首次执行预算（与默认 runner 同源，见 RUST_CLI_TIMEOUT_MS 注释）
+    return execFileSync(process.execPath, [RUST_BIN, 'compile', tmp], { encoding: 'utf-8', timeout: RUST_CLI_TIMEOUT_MS })
   } finally {
     fs.rmSync(tmp, { force: true })
   }
