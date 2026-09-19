@@ -26,3 +26,6 @@ coverage/
 .npmrc
 scripts/commit-msg.txt
 popover-open.png
+
+# 本地工具缓存（scripts/check-publish-drift.mjs 的 pack/判定缓存）
+.cache/
