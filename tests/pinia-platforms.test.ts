@@ -8,6 +8,15 @@ import { createWebPinia, createMpPinia, createSsrPinia, createAppPinia } from '.
 import { usePlayerStore } from '../examples/stores/player'
 import { getPlatform, MemoryAdapter, WxStorageAdapter } from '../packages/shared/src/storage'
 
+/** 条件等待（替代固定 sleep——本仓效率规范禁固定盲等；持久化/防抖本身是异步的） */
+async function waitFor(cond: () => boolean, timeoutMs = 8000): Promise<void> {
+  const t0 = Date.now()
+  while (!cond()) {
+    if (Date.now() - t0 > timeoutMs) throw new Error(`waitFor 超时（${timeoutMs}ms）`)
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+
 /** 模拟小程序 wx 存储全局（WxStorageAdapter 直连 wx） */
 function mockWx(): { data: Map<string, string> } {
   const data = new Map<string, string>()
@@ -64,7 +73,9 @@ describe('player store 跨端一致 + 持久化', () => {
     expect(s.playing).toBe(true)
     expect(s.historyCount).toBe(1)
     // 持久化：localStorage（jsdom 有）→ 防抖 50ms 后写盘
-    await new Promise((r) => setTimeout(r, 80))
+    // ★条件等待替代固定 sleep（2026-09-19）：原 `setTimeout(80)` 在满负载并行下不够 →
+    //   读到 null 假红（本仓效率规范禁固定盲等；等「真的写盘」才是确定性判据）
+    await waitFor(() => globalThis.localStorage.getItem('proteus:player-state') !== null)
     const raw = globalThis.localStorage.getItem('proteus:player-state')
     expect(raw).not.toBeNull()
     const saved = JSON.parse(raw!)

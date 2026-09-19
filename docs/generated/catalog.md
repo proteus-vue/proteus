@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **182** 原语 · implemented **64**。
+> 总计 **183** 原语 · implemented **64**。
 
 ## layout — 布局（12）
 
@@ -214,4 +214,5 @@
 | E27 | `engineering.define-component` | api:defineComponent() | `defineComponent()` | Component() | planned |
 | E28 | `engineering.define-capability` | api:defineCapability() | `defineCapability()` | 无 | planned |
 | E29 | `engineering.share-element` | tag:p-share-element | `p-share-element` | <share-element>（宿主跨页飞行动画） | implemented |
+| E30 | `engineering.mcp` | api:useMCP() | `useMCP()` | 无（浏览器侧 agent 通道；MP 端 isSupported=false 诚实降级） | planned |
 

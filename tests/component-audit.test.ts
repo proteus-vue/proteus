@@ -40,13 +40,14 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     //   + ★批次 7（2026-09-18）未登记组件补登记：layout+2（safe/sidebar）+ ui+3（button/list/nav）
     //   + ★2026-09-18 语义决策批：**净 0**（退役 2 个重复名 scan-qr/pick-photo；
     //     其能力早已由 C1 camera / C42 qr-code 承接，仅补 tag + 状态，不新增语义））
+    //   + ★2026-09-19 WebMCP 接入：engineering+1（E30 engineering.mcp / useMCP()）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
     expect(count('layout')).toBe(16)
     expect(count('ui')).toBe(29)
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
     expect(count('capability')).toBe(81)
-    expect(count('engineering')).toBe(29)
+    expect(count('engineering')).toBe(30)
   })
 
   it('implemented 64 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；★批次 8 共享元素转场 +1 → 64）· 其余 planned 待落地', () => {

@@ -7,6 +7,24 @@ import { createPinia, defineStore, setActivePinia } from 'pinia'
 import { installProteusDevtools } from '@proteus-vue/devtools'
 import { createTraceBus } from '@proteus-vue/devtools-runtime'
 
+// ★超时预算（2026-09-19）：本文件是 happy-dom 真实 DOM 挂载 + 面板 8 视图异步渲染，
+//   单跑 ~1s 但满负载并行（4 worker × 287 文件）下曾超 vitest 默认 5s →「Test timed out」假红。
+//   同 tests/hmr-dev-server.test.ts 既有做法：显式放宽文件级预算（不放松断言，只给真实渲染留量）。
+vi.setConfig({ testTimeout: 20000 })
+
+/**
+ * 条件等待（替代固定 sleep——本仓效率规范禁「固定盲等」）：
+ * 面板渲染/store 快照/时间旅行应用均为**异步**，固定 setTimeout 在满负载下不够长会假红。
+ * 这里等到**条件成立**才继续（上限 8s；超时则失败并由断言给出真实差异）。
+ */
+async function waitFor(cond: () => boolean, timeoutMs = 8000): Promise<void> {
+  const t0 = Date.now()
+  while (!cond()) {
+    if (Date.now() - t0 > timeoutMs) throw new Error(`waitFor 超时（${timeoutMs}ms）`)
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+
 describe('installProteusDevtools 一键接入', () => {
   it('挂载 ◈ 按钮 → 点击创建面板（8 视图 + pages 注入）→ 事件进面板 → 再点隐藏；destroy 清理', async () => {
     const app = createApp({})
@@ -179,24 +197,30 @@ describe('installProteusDevtools 一键接入', () => {
     const player = usePlayer()
     player.play()
     player.setVolume(0.4)
-    await new Promise((r) => setTimeout(r, 60))
+    await waitFor(() => /* 快照落定：等待面板可打开 */ document.querySelector('.pd-floating-toggle') !== null)
     // ★面板后开 → install 补发当前 store 快照（可恢复起点 = 面板打开时刻）
     const btn = document.querySelector('.pd-floating-toggle') as HTMLButtonElement
     btn.click()
     const host = document.querySelector('.pd-floating-host') as HTMLElement
-    await new Promise((r) => setTimeout(r, 40))
+    // ★条件等待替代固定 sleep（原 `setTimeout(40)` 在满负载下不够 → 读到旧值假红；
+    //   本仓效率规范禁固定盲等——改成「等到 nav 项真的渲染出来」）
+    await waitFor(() => host.querySelectorAll('.pd-nav-item').length > 0)
     // 面板开后再操作
     player.setVolume(0.5)
-    await new Promise((r) => setTimeout(r, 80))
+    await waitFor(() => {
+      const items = Array.from(host.querySelectorAll('.pd-nav-item'))
+      return items.some((n) => (n as HTMLElement).dataset.view === 'state')
+    })
     const navItems = Array.from(host.querySelectorAll('.pd-nav-item'))
     ;(navItems.find((n) => (n as HTMLElement).dataset.view === 'state') as HTMLElement).click()
     const stateView = host.querySelector('.pd-view[data-view="state"]') as HTMLElement
+    await waitFor(() => stateView.querySelector('.pd-range') !== null)
     const range = stateView.querySelector('.pd-range') as HTMLInputElement
     expect(range).not.toBeNull()
     // 拖到最左 → 恢复面板打开时状态（volume 0.4）
     range.value = '0'
     range.dispatchEvent(new Event('change'))
-    await new Promise((r) => setTimeout(r, 40))
+    await waitFor(() => player.volume === 0.4)
     expect(player.playing).toBe(true)
     expect(player.volume).toBe(0.4)
     // 拖到最右 → 最新（volume 0.5）

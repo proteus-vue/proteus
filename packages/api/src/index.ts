@@ -28,6 +28,9 @@ export { createRequestEngineering, defaultCacheKey, createCapabilityRequestClien
 export type { RequestEngineering, RequestEngineeringOptions, RequestExecutor, RequestCacheEntry, QueryState, QueryHandle, QueryOptions, RequestStrategyOptions } from './request-engineering'
 export { createOwnershipEngineering } from './ownership-engineering'
 export type { OwnershipEngineering, OwnershipEngineeringOptions, OwnershipReactivity, OwnedStateLike, OwnedLike, BorrowLike, OwnedView } from './ownership-engineering'
+// ★WebMCP 接入（E30 engineering.mcp）：把能力面暴露为 agent 可调用工具（能力派生 + CapResult 归一）
+export { useMCP, capabilityToTool, toToolResponse, toErrorResponse } from './mcp'
+export type { UseMCPOptions, UseMCPReturn, McpToolDescriptor, McpToolResponse, McpToolArgs, McpCapabilityToolSpec, McpModelContextLike, McpDocumentLike } from './mcp'
 export type {
   CapResult,
   CapabilityHooks,

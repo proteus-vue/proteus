@@ -284,6 +284,15 @@ const ENGINEERING: PrimitiveDef[] = [
   { id: 'E28', kind: 'engineering', semantic: 'engineering.define-capability', api: 'defineCapability()', mpEquiv: '无', tier: 'L1', status: 'planned' },
   // ★批次 8（2026-09-18）：共享元素转场（官方 <share-element> 对齐）——能力由宿主提供，框架只声明语义
   { id: 'E29', kind: 'engineering', semantic: 'engineering.share-element', tag: 'p-share-element', props: ['shuttleKey', 'animate', 'duration', 'easingFunction', 'transitionOnGesture', 'shuttleOnPush', 'shuttleOnPop', 'rectTweenType'], mpEquiv: '<share-element>（宿主跨页飞行动画）', tier: 'L1', status: 'implemented' },
+  // ★E30（2026-09-19）：WebMCP 接入——把**能力面**暴露为浏览器内 agent 可调用工具。
+  //   规范面：`document.modelContext.registerTool(...)`（★非 navigator）+ signal 注销（规范无 unregisterTool）；
+  //   灵感来自 VueUse v15 `useWebMCP`（document 命名空间 / signal 注销 / 方法可调用探测 / 三元组返回）。
+  //   框架差异化：能力面统一 `CapResult<T>` 契约（G-32.4）→ 能力可**自动**派生为工具、响应归一不必逐个手写。
+  //   ★状态口径（与 E1-E28 / C15 / C26 等同款，非本轮新引入）：hook 形态原语无**渲染后端映射**，
+  //   故按 catalog 既有约定记 `planned`——该字段反映「已在 SEMANTIC_BACKEND_MAP 登记 ≥3 端」，
+  //   不等于「代码未实现」（本原语已实现于 `packages/api/src/mcp.ts`）。
+  //   `mpEquiv: 无`：WebMCP 是浏览器侧 agent 通道，小程序无 `document.modelContext` → 如实降级（isSupported=false）。
+  { id: 'E30', kind: 'engineering', semantic: 'engineering.mcp', api: 'useMCP()', props: ['tools', 'capabilities', 'prefix'], mpEquiv: '无（浏览器侧 agent 通道；MP 端 isSupported=false 诚实降级）', tier: 'L1', status: 'planned' },
 ]
 
 /** ★G-32 B1：128 原语冻结清单（唯一事实源） */
