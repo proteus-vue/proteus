@@ -52,7 +52,7 @@
       </div>
       <div class="row">
         <p-text class="label">p-stack snap + loop（轮播 = swiper 语义消灭形态）：</p-text>
-        <p-stack direction="row" snap="mandatory" :loop="true" :gap="8" class="carousel" @scroll="onCarouselScroll">
+        <p-stack pid="carousel" direction="row" snap="mandatory" :loop="true" :gap="8" class="carousel" @scroll="onCarouselScroll">
           <div v-for="(s, i) in carouselSlides" :key="i" class="carousel-slide">{{ s }}</div>
         </p-stack>
         <p-text class="hint">横向滑动到底自动回环（Web）· MP 端降级为普通排列并提示 · 当前定位：{{ carouselIndex }}</p-text>

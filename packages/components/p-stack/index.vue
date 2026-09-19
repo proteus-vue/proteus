@@ -22,6 +22,8 @@ import { capabilityWarnOnce } from '../runtime/capability'
 
 // 对象形式 defineProps（编译器静态提取；MP 安全）
 const props = defineProps({
+  /** 元素标识（框架扩展，用于调试/定位——真机探针/几何断言的稳定锚点；同 p-scroll-view 惯例） */
+  pid: { type: String, default: '' },
   /** 主轴方向：row（横向）/ column（纵向） */
   direction: { type: String, default: 'column' },
   /** 空间不足自动换行（仅 row） */
