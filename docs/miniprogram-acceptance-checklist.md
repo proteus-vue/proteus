@@ -1,6 +1,6 @@
 # 小程序真机验收清单（官方能力对齐 · 2026-09-12）
 
-> **背景**：官方能力对齐已达 **250/256 = 97%**（2026-09-18 修正：原 255/99% 含 5 条手势虚高覆盖——见 `miniprogram-coverage-ledger.md`）（权威标尺 `proteus audit coverage`），但「已落地」此前仅到
+> **背景**：官方能力对齐已达 **252/256 = 98%**（2026-09-18 修正：原 255/99% 含 5 条手势虚高覆盖；2026-09-19 tap/longpress 落地 250→252，同轮再修 double-tap 引用错位 1 条——见 `miniprogram-coverage-ledger.md`）（权威标尺 `proteus audit coverage`），但「已落地」此前仅到
 > 「有代码 + 有测试」——**未经微信开发者工具/真机运行验证**。本文档是这一层的验收清单与执行指引。
 >
 > **执行前提**：安装微信开发者工具（本机当前未安装）→ 导入 `examples/dist/mp-weixin`（需真实 AppID + 基础库 ≥2.29.2）。
@@ -174,4 +174,4 @@
 > 发现偏差 → 记录复现路径 + 截图 + 设备/基础库版本 → 归入 `docs/capability-component-granularity.md` 或新批次。
 
 ---
-_生成日期 2026-09-12 · 权威标尺 `proteus audit coverage`（250/256 已落地，6 planned）· 构建 `pnpm run build:mp`_
+_生成日期 2026-09-12（覆盖数字于 2026-09-19 同步）· 权威标尺 `proteus audit coverage`（252/256 已落地，4 planned）· 构建 `pnpm run build:mp`_

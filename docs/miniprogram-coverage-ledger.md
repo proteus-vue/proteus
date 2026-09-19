@@ -22,14 +22,14 @@
 
 | 态 | 含义 | 计数 |
 |---|---|---|
-| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **250** |
-| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **6** |
+| ✅ **covered** | 有可运行等价（组件/语义/Hook；含改名承接：`batchGetStorageSync`→`useStorage`） | **252** |
+| 📋 **planned** | L2 已声明待落地（诚实登记，**非已实现**） | **4** |
 | ⬛ **private** | 平台私有（微信独占——支付/交通卡/视频号/VoIP/人脸核身/营销…）；收敛 `useMiniProgram` / 宿主桥 | **106** |
 | ➖ **na** | 不适用（废弃 API / 构建期语义 / 被语义原语「消灭」的形态） | **20** |
 | ❌ **gap** | 未归类（**必须为 0**——漏登记即 CI 红） | **0** |
 
 > **口径**：`分类完整率 = (total−gap)/total = 100%`（官方项全部进了某个箱子）——**这不是「全实现」**。
-> **诚实指标**：`真·落地率 = covered / (covered+planned) = 250/256 = 97%`（可落地项中已可用的比例）。
+> **诚实指标**：`真·落地率 = covered / (covered+planned) = 252/256 = 98%`（可落地项中已可用的比例）。
 >
 > ★**2026-09-18 修正：255/99% → 250/97%（非能力回退，是标尺纠错）**——原基线含 **5 条虚高覆盖**：
 > `tap` / `long-press` / `pan` / `scale` / `force-press`-gesture-handler 标 `covered`，
@@ -38,6 +38,13 @@
 > `covered` 的定义是「有可运行等价」，故据实改标 `planned`。**真实可运行的等价物一件没少。**
 > 漏网根因：`SPEC_COMPONENT_OVERRIDE` 此前**不在引用校验范围内**（`auditMatrixReferences` 只遍历手写矩阵）
 > → 已补门禁 `auditSpecOverrideRefs`（悬空引用 + 指向 planned 原语一律 FAIL）。
+>
+> ★**2026-09-19：tap/longpress 落地使 covered 250→252（能力真实增长）；同轮再修 1 条「引用错位」虚高**：
+> `double-tap-gesture-handler` 原标 `covered` 且引用 `gesture.draggable`（**拖拽**语义，与双击无关——
+> 双击识别实为 `gesture.tap` 的 `count`/`dblTapWindow`），且 MP `bindtap` 不带 count → 双击语义仅 Web 成立，
+> 据实转 `planned`（253→252）。**第三类缺陷：引用存在且已落地，但张冠李戴**——`auditSpecOverrideRefs` v1
+> 只校验「存在且已落地」故完全放过 → 同轮补 **语义配对门禁 `GESTURE_HANDLER_EXPECTED`**：covered 的
+> 手势处理器声明必须包含期望手势语义，否则报 `mismatched`（拼写错误仍归 `semantic`，两类缺陷各归其因）。
 
 ## 2-b. 已按标尺补齐的批次
 

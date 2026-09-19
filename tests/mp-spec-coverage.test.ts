@@ -16,6 +16,7 @@ import {
   SPEC_PRIVATE,
   SPEC_NA,
   SPEC_COMPONENT_OVERRIDE,
+  GESTURE_HANDLER_EXPECTED,
   auditSpecOverrideRefs,
   PRIMITIVE_CATALOG,
 } from '@proteus-vue/component-ir'
@@ -146,6 +147,28 @@ describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门�
     expect(r.issues[0].kind).toBe('semantic')
   })
 
+  it('★破坏性验证：语义错位（引用存在且已落地，但张冠李戴）→ 报 mismatched', () => {
+    // 本轮真实缺陷形态：double-tap-gesture-handler 曾标 covered 并引用 gesture.draggable——
+    // draggable **存在且已落地**，旧的「引用一致性」检查完全放过；实为拖拽语义，与双击无关。
+    const r = auditSpecOverrideRefs(PRIMITIVE_CATALOG, {
+      'tap-gesture-handler': { status: 'covered', proteus: 'gesture.draggable' },
+    })
+    expect(r.issues).toHaveLength(1)
+    expect(r.issues[0].kind).toBe('mismatched')
+    expect(r.issues[0].ref).toBe('gesture.tap') // 提示期望语义，便于修
+  })
+
+  it('★语义配对表覆盖全部 *-gesture-handler（防新增处理器漏登记）', () => {
+    for (const tag of Object.keys(GESTURE_HANDLER_EXPECTED)) {
+      expect(SPEC_COMPONENT_OVERRIDE[tag], `${tag} 应在 override 表`).toBeTruthy()
+    }
+    // 反向：override 表里的 gesture-handler 都必须有期望语义（新条目遗漏即红）
+    for (const tag of Object.keys(SPEC_COMPONENT_OVERRIDE)) {
+      if (!tag.endsWith('-gesture-handler')) continue
+      expect(GESTURE_HANDLER_EXPECTED[tag], `${tag} 缺 GESTURE_HANDLER_EXPECTED 登记`).toBeTruthy()
+    }
+  })
+
   it('★诚实性回归：状态必须与**原语真实状态**一致（covered ↔ implemented 双向对齐）', () => {
     // 这条断言随事实演进，锁的是「状态不得与原语漂移」这一不变量：
     // · 2026-09-18 前：5 条手势处理器原语为 planned → 全标 planned（修正真·落地率虚高 5 项）
@@ -154,6 +177,9 @@ describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门�
     // ★判据：逐条比较 override 状态与 catalog 原语状态——任一漂移即红。
     const semOf: Record<string, string> = {
       'tap-gesture-handler': 'gesture.tap',
+      // ★2026-09-19 补入：double-tap 属 tap 的 count 变体（MP bindtap 不带 count → 无对等），
+      //   原标 covered 且引用 draggable（错位）——据实转 planned。
+      'double-tap-gesture-handler': 'gesture.tap',
       'long-press-gesture-handler': 'gesture.longpress',
       'pan-gesture-handler': 'gesture.pan',
       'scale-gesture-handler': 'gesture.pinch',
@@ -162,7 +188,10 @@ describe('★2026-09-18 override 表引用一致性（本轮漏网根因的门�
     for (const [tag, sem] of Object.entries(semOf)) {
       const prim = PRIMITIVE_CATALOG.find((x) => x.semantic === sem)
       expect(prim, `${sem} 应在 catalog`).toBeTruthy()
-      const expected = prim!.status === 'implemented' ? 'covered' : 'planned'
+      // ★特例：double-tap 是 tap 语义的变体，MP 无 count 对等——即便 gesture.tap 已 implemented，
+      //   其**双击语义**在 MP 仍无等价 → 保持 planned（诚实边界，与上表「原语状态」判据的例外）
+      const expected =
+        tag === 'double-tap-gesture-handler' ? 'planned' : prim!.status === 'implemented' ? 'covered' : 'planned'
       expect(SPEC_COMPONENT_OVERRIDE[tag]?.status, `${tag} 状态应与 ${sem}（${prim!.status}）一致`).toBe(expected)
     }
     // 已落地的两条（draggable）
