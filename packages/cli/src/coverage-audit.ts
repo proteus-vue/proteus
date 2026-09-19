@@ -96,15 +96,23 @@ export function runCoverageAudit(): { ok: boolean; text: string } {
   // ②-b-2 ★override 表引用一致性（2026-09-18 补）：SPEC_COMPONENT_OVERRIDE 此前**不在引用校验范围内**
   //   → 实测发现 5 个手势处理器标 covered 却指向 planned 原语（虚高覆盖）+ 1 处悬空引用（gesture.long-press 拼写错）。
   //   covered 的定义是「有可运行等价」：引用未登记（悬空）或指向 planned 原语（未落地）一律 FAIL。
+  //   ★2026-09-19 加语义配对（GESTURE_HANDLER_EXPECTED）：仅「引用存在且已落地」还不够——
+  //   double-tap-gesture-handler 曾引用 gesture.draggable（拖拽），引用存在却张冠李戴（kind: mismatched）。
   const ov = auditSpecOverrideRefs(PRIMITIVE_CATALOG)
   if (ov.issues.length) {
     ok = false
     lines.push(`override 引用一致性 ❌ ${ov.issues.length} 处问题（covered 声明须有真实已落地等价）：`)
     for (const i of ov.issues.slice(0, 20)) {
-      lines.push(`  ✗ [${i.kind}] ${i.mp} → ${i.ref}${i.kind === 'unimplemented' ? '（原语为 planned，不可标 covered）' : '（原语未登记）'}`)
+      const hint =
+        i.kind === 'unimplemented'
+          ? '（原语为 planned，不可标 covered）'
+          : i.kind === 'mismatched'
+            ? `（★语义错位：该 gesture-handler 应承载 ${i.ref}，见 GESTURE_HANDLER_EXPECTED）`
+            : '（原语未登记）'
+      lines.push(`  ✗ [${i.kind}] ${i.mp} → ${i.ref}${hint}`)
     }
   } else {
-    lines.push(`override 引用一致性 ✅ ${ov.coveredRefs} 处 covered 引用均有已落地等价`)
+    lines.push(`override 引用一致性 ✅ ${ov.coveredRefs} 处 covered 引用均有已落地等价（含手势语义配对）`)
   }
 
   // ③ 闭环一致性（catalog ↔ enum ↔ tag ↔ render-map）

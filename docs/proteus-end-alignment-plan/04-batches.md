@@ -101,8 +101,10 @@ p-button 21/21 ✅（100%，范式参考实现）
 | **同层渲染后冗余** | `cover-view` / `cover-image` | `na`——官方建议 view/image 替代 |
 | **内联子元素** | `span` / `editor-portal` | `na`——ui.text 内联 / rich-text 内联 |
 | **ARIA 属性文档页** | `aria-component` | `na`——非组件标签，aria-* 两端原生支持 |
-| **Skyline 手势处理器** | tap / long-press / pan / scale / force-press（5 个） | **`planned`**（★本轮据实修正，原误标 covered——见下） |
-| | horizontal-/vertical-drag / double-tap | `covered`——`gesture.draggable` 已实现 |
+| **Skyline 手势处理器** | tap / long-press（2 个） | `covered`——`gesture.tap` / `gesture.longpress` 双端落地（编译器直映射 bindtap/bindlongpress） |
+| | pan / scale / force-press（3 个） | **`planned`**（★2026-09-18 据实修正，原误标 covered——见下） |
+| | double-tap（1 个） | **`planned`**（★2026-09-19 据实修正——原标 covered 且引用 `gesture.draggable`，**引用错位**：双击识别在 `gesture.tap` 的 count/dblTapWindow，与拖拽无关；且 MP bindtap 不带 count → 双击语义仅 Web 成立） |
+| | horizontal-/vertical-drag（2 个） | `covered`——`gesture.draggable` 已实现 |
 | **Skyline 布局构建器** | `grid-builder` / `list-builder` / `nested-scroll-*` / `draggable-sheet` | `covered`——layout.grid / layout.virtual-list / layout.scroll / shell.page-container |
 | **平台私有（不纳入）** | `channel-live` / `channel-video` / `ad-custom` / `reward` / `store-*`(4) / `open-data*`(3) / `official-account-publish` / `voip-room` / `functional-page-navigator` / `open-container` / `native-component` | `private`——微信商业/类目资质/内测能力，收敛 `useMiniProgram`/宿主桥；理由已逐条写明 |
 
@@ -118,6 +120,15 @@ p-button 21/21 ✅（100%，范式参考实现）
 **修复**：新增门禁 `auditSpecOverrideRefs`（covered 声明必须指向**已登记且已落地**的原语，
 悬空/planned 一律 FAIL），接入 `proteus audit coverage`；棘轮水位据实修正 255→250 并注明「修的是标尺，不是能力」
 （与 2026-09-16「官方属性总数 793→771」同类修正）。
+
+**★续修（2026-09-19）——第三类缺陷：引用错位（引用存在且已落地，但张冠李戴）**：
+`double-tap-gesture-handler` 标 `covered` 并引用 `gesture.draggable`（**拖拽**），而双击识别实际在
+`gesture.tap` 的 `count`/`dblTapWindow`（`recognizers.ts:229`）——`draggable` 存在且已落地，
+故 `auditSpecOverrideRefs` v1（只校验「存在且已落地」）**完全放过**。据实改标 `planned`
+（MP `bindtap` 不带 count → 双击语义仅 Web 成立）。同轮补 **`GESTURE_HANDLER_EXPECTED`**
+语义配对门禁：covered 的手势处理器声明必须包含**期望手势语义**，否则报 `mismatched`
+（判定纪律：仅在「写了已登记的 gesture 语义但种类不符」时归此类；拼写错误仍归 `semantic`，
+两类缺陷各归其因）。真·落地率相应为 **252/256 = 98%**（covered 253→252）。
 
 ### 批次 6 · 批次外剩余组件收口（★已完成 2026-09-18）
 

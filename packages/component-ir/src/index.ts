@@ -19,7 +19,7 @@ export { MP_MAPPING_MATRIX, auditMiniprogramCoverage, auditMatrixReferences, aud
 export type { MatrixRefIssue } from './audit'
 export type { CoverageReport, MpCoverageStatus, MpMatrixItem, ConsistencyIssue } from './audit'
 // ★权威标尺（2026-09-12）：小程序官方清单分类 + spec 驱动覆盖度门禁（修「手写矩阵自证」）
-export { classifySpecApi, classifySpecComponent, auditSpecCoverage, auditSpecOverrideRefs, SPEC_COVERED, SPEC_PLANNED, SPEC_PRIVATE, SPEC_NA, SPEC_COMPONENT_OVERRIDE, SPEC_RATCHET } from './mp-spec-coverage'
+export { classifySpecApi, classifySpecComponent, auditSpecCoverage, auditSpecOverrideRefs, GESTURE_HANDLER_EXPECTED, SPEC_COVERED, SPEC_PLANNED, SPEC_PRIVATE, SPEC_NA, SPEC_COMPONENT_OVERRIDE, SPEC_RATCHET } from './mp-spec-coverage'
 export type { MpSpecStatus, MpSpecClass, MpOfficialSpec, SpecCoverageReport } from './mp-spec-coverage'
 // ★批次 4（M6）：属性降级声明（EA-5/G-31.2）+ 编译期 PROP_NO_DEGRADATION 门禁
 export {

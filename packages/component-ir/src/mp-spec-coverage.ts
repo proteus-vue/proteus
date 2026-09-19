@@ -282,7 +282,16 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
   //   ★同时新增 auditSpecOverrideRefs 门禁——此前 override 表**完全不在引用校验范围内**，
   //   故这 5 条虚高 + 1 处悬空引用长期未被发现。
   'tap-gesture-handler': { status: 'covered', proteus: 'gesture.tap（★2026-09-18 落地：编译器 v-gesture:tap → bindtap——MP 原生事件对等）' },
-  'double-tap-gesture-handler': { status: 'covered', proteus: 'gesture.draggable（tap 识别，已落地）' },
+  // ★2026-09-19 诚实性修正（与本文件 `gesture.long-press` 拼写错误同类）：本节原标 `covered`
+  //   且引用 `gesture.draggable`（**拖拽**语义）——两处都不成立：
+  //   ① 引用错位：双击识别在 `gesture.tap` 的 `count`/`dblTapWindow`（recognizers.ts:229），
+  //      与 draggable（G8 = movable-view 拖拽）无关；
+  //   ② MP 无对等：`v-gesture:tap` 在 MP 只映射 bindtap（原生事件不带 count），编译器亦无 count
+  //      处理 → 双击语义仅 Web 成立。
+  //   ⇒ 按 pan/scale/force-press 同一标准（MP 无原生对等即 planned）据实改标 `planned`。
+  //   ★该错位长期漏网，因 auditSpecOverrideRefs 当时只校验「引用存在且已落地」——
+  //     本轮补 GESTURE_HANDLER_EXPECTED 语义配对门禁（同类错位今后必红）。
+  'double-tap-gesture-handler': { status: 'planned', proteus: 'gesture.tap 的 count 变体（Web 识别器支持双击；MP 原生 bindtap 不带 count，无对等）' },
   'long-press-gesture-handler': { status: 'covered', proteus: 'gesture.longpress（★2026-09-18 落地：编译器 v-gesture:longpress → bindlongpress——MP 原生事件对等）' },
   'pan-gesture-handler': { status: 'planned', proteus: 'gesture.pan（v-gesture:pan 规划中）' },
   'scale-gesture-handler': { status: 'planned', proteus: 'gesture.pinch（v-gesture:pinch 规划中）' },
@@ -334,18 +343,51 @@ export const SPEC_COMPONENT_OVERRIDE: Record<string, MpSpecClass> = {
  * @param overrideTable 可选注入（测试用；缺省 = SPEC_COMPONENT_OVERRIDE）
  * @returns issues 结构同矩阵引用检查；`dangling` 为未登记原语，`unimplemented` 为指向 planned 原语。
  */
+/**
+ * ★gesture-handler 组件 → **期望承载语义**（2026-09-19）。
+ *
+ * 背景（本轮实测发现）：`double-tap-gesture-handler` 长期标 `covered` 并引用
+ *   `gesture.draggable`（拖拽）——语义完全对不上，却因 `auditSpecOverrideRefs` 当时只校验
+ *   「引用存在且**已落地**」而无人发现（draggable 确实存在且已落地）。
+ *   「引用存在」≠「引用对得上」——本表把后者机器化：**covered 声明的引用必须包含期望语义**。
+ *
+ * 维护：新增 *-gesture-handler 类组件时同步本表；covered 行若换了承载语义须同步此处（否则 FAIL）。
+ */
+export const GESTURE_HANDLER_EXPECTED: Record<string, string> = {
+  'tap-gesture-handler': 'gesture.tap',
+  'double-tap-gesture-handler': 'gesture.tap', // 语义上属 tap 的 count 变体（当前 planned——MP 无对等）
+  'long-press-gesture-handler': 'gesture.longpress',
+  'pan-gesture-handler': 'gesture.pan',
+  'scale-gesture-handler': 'gesture.pinch',
+  'force-press-gesture-handler': 'gesture.press',
+  'horizontal-drag-gesture-handler': 'gesture.draggable',
+  'vertical-drag-gesture-handler': 'gesture.draggable',
+}
+
 export function auditSpecOverrideRefs(
   catalog: ReadonlyArray<{ semantic: string; tag?: string; status: string }>,
   overrideTable: Record<string, MpSpecClass> = SPEC_COMPONENT_OVERRIDE,
-): { issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' }>; coveredRefs: number } {
+): { issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' | 'mismatched' }>; coveredRefs: number } {
   const bySemantic = new Map(catalog.map((p) => [p.semantic, p]))
   const byTag = new Map(catalog.filter((p) => p.tag).map((p) => [p.tag as string, p]))
-  const issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' }> = []
+  const issues: Array<{ mp: string; ref: string; kind: 'semantic' | 'component' | 'unimplemented' | 'mismatched' }> = []
   let coveredRefs = 0
 
   for (const [tag, cls] of Object.entries(overrideTable)) {
     if (cls.status !== 'covered') continue // 仅 covered 的声明需要「真已落地」证据
     const text = cls.proteus ?? ''
+    // ★语义配对（GESTURE_HANDLER_EXPECTED）：covered 引用必须**对得上**组件名的手势种类——
+    //   防「引用存在但张冠李戴」（double-tap → gesture.draggable 即此类，长期漏网）。
+    //   ★判定纪律：只在「引用里确实写了**已登记的手势语义**、但种类不符」时报错位——
+    //   若写出了根本不存在的语义（如拼写错 gesture.long-press），那是悬空引用（下方 kind: semantic），
+    //   不应被重复报成错位（两类缺陷各有其因，报错也要归因准确）。
+    const expected = GESTURE_HANDLER_EXPECTED[tag]
+    if (expected) {
+      const gestureRefs = [...text.matchAll(/\bgesture\.[a-z][\w-]*/g)].map((m) => m[0]).filter((r) => bySemantic.has(r))
+      if (gestureRefs.length > 0 && !gestureRefs.includes(expected)) {
+        issues.push({ mp: tag, ref: expected, kind: 'mismatched' })
+      }
+    }
     for (const m of text.matchAll(/\b(?:layout|ui|shell|gesture|capability|engineering)\.[a-z][\w-]*/g)) {
       coveredRefs++
       const p = bySemantic.get(m[0])
@@ -439,6 +481,10 @@ export const SPEC_RATCHET: { coveredMin: number; gapMax: number } = {
   // ★2026-09-18 上调 250 → 252：tap/longpress 手势**真实落地**（编译器 directive/v-gesture 规则
   //   → MP bindtap/bindlongpress + Web Pointer 识别器），spec 分类据实由 planned 转 covered。
   //   与上次的「下调」性质相反——这次是**能力真实增长**（真·落地率 97%→98%）。
-  coveredMin: 252, // 2026-09-18 上行基线（250 修正基线 + tap/longpress 落地）
+  // ★2026-09-19 诚实性修正（下行 253→252，属「修标尺不是修能力」）：`double-tap-gesture-handler`
+  //   原标 covered 且引用 `gesture.draggable`（拖拽）——引用错位 + MP 无对等（bindtap 不带 count）
+  //   ⇒ 据实转 planned。**真实可运行的等价物一件没少**，只是不再把「仅 Web 成立」记成「两端已落地」。
+  //   该条即上次注释要求「因诚实性修正需下调时，必须写明被修正的具体条目」所指的条目。
+  coveredMin: 252, // 2026-09-18 上行基线（250 修正基线 + tap/longpress 落地）；2026-09-19 因 double-tap 修正后实测亦为 252
   gapMax: 0, // 全部官方项必须归类
 }
