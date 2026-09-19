@@ -8,42 +8,64 @@ import type { AppConfig, DeepPartial } from './types'
 import { deepMerge } from './merge'
 import { validateAppConfig } from './validate'
 
-let configRef: Ref<AppConfig> | null = null
+/**
+ * ★全局共享槽（2026-09-19，与 @proteus-vue/shared 的 adapter 同源修复）：
+ *   本模块是**有状态单例**（configRef 配置 + listeners 订阅者）。当依赖树里出现**两份**
+ *   @proteus-vue/app-config（npm 嵌套去重常见）时，模块被求值两次 → 两个独立槽位 →
+ *   `setConfig`/`initAppConfig` 更新的是 A 副本，而 `onAppConfigChange` 订阅挂到 B 副本
+ *   → **配置变更静默不通知**（无任何报错）。修法：槽位挂 `globalThis`，
+ *   同一 JS 上下文内所有副本共享同一份状态（对齐 runtime/probe.ts 的注册表做法）。
+ */
+const APP_CONFIG_GLOBAL_KEY = '__PROTEUS_APP_CONFIG_STORE__'
 
-// ★#494 配置变更监听器（MP 页面绑定桥的数据源——Pinia $subscribe 的对位物）：
-//   编译器将 useAppConfig()/useFeatureFlag() 桥接为快照 setData + onAppConfigChange 订阅刷新
-const listeners: Array<(config: AppConfig) => void> = []
+interface AppConfigStore {
+  configRef: Ref<AppConfig> | null
+  // ★#494 配置变更监听器（MP 页面绑定桥的数据源——Pinia $subscribe 的对位物）：
+  //   编译器将 useAppConfig()/useFeatureFlag() 桥接为快照 setData + onAppConfigChange 订阅刷新
+  listeners: Array<(config: AppConfig) => void>
+}
+
+function store(): AppConfigStore {
+  const g = globalThis as typeof globalThis & { [APP_CONFIG_GLOBAL_KEY]?: AppConfigStore }
+  const existing = g[APP_CONFIG_GLOBAL_KEY]
+  if (existing) return existing
+  const created: AppConfigStore = { configRef: null, listeners: [] }
+  g[APP_CONFIG_GLOBAL_KEY] = created
+  return created
+}
+
+const S = store()
 
 /**
  * 订阅配置变更（★#494）：setConfig/initAppConfig 更新时触发；返回取消订阅函数。
  * 不依赖 Vue 实例/watch——MP 页面 onLoad 内可直接使用。
  */
 export function onAppConfigChange(cb: (config: AppConfig) => void): () => void {
-  listeners.push(cb)
+  S.listeners.push(cb)
   return () => {
-    const i = listeners.indexOf(cb)
-    if (i >= 0) listeners.splice(i, 1)
+    const i = S.listeners.indexOf(cb)
+    if (i >= 0) S.listeners.splice(i, 1)
   }
 }
 
 function notifyListeners(config: AppConfig): void {
-  for (let i = 0; i < listeners.length; i++) listeners[i](config)
+  for (let i = 0; i < S.listeners.length; i++) S.listeners[i](config)
 }
 
 /** 初始化配置存储（应用启动时调用一次；重复调用 = 覆盖默认 + 保留已合并层） */
 export function initAppConfig(defaults: AppConfig): void {
-  if (configRef === null) {
-    configRef = ref(defaults)
+  if (S.configRef === null) {
+    S.configRef = ref(defaults)
   } else {
-    configRef.value = defaults
+    S.configRef.value = defaults
   }
-  notifyListeners(configRef.value)
+  notifyListeners(S.configRef.value)
 }
 
 /** 当前配置（未初始化时抛错——应用启动必须 init） */
 function requireConfig(): Ref<AppConfig> {
-  if (configRef === null) throw new Error('[app-config] 未初始化：应用启动时需调用 initAppConfig / defineAppConfig 入口初始化')
-  return configRef
+  if (S.configRef === null) throw new Error('[app-config] 未初始化：应用启动时需调用 initAppConfig / defineAppConfig 入口初始化')
+  return S.configRef
 }
 
 /** 命令式读取（02 §3，非响应式场景） */

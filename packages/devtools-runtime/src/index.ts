@@ -206,12 +206,15 @@ export function createTraceBus(options: TraceBusOptions = {}): TraceBus {
  *   // import.meta.env.DEV：vite 可靠注入（dev→true/build→false）；__PROTEUS_DEBUG__：build 期 define（PROTEUS_DEBUG=1 强制生产调试）
  *   // ⚠ 勿用纯 __PROTEUS_DEBUG__：vite 5.4 dev 模式 define 不替换源码，未短路会 ReferenceError；build 产物常量折叠 tree-shake 零开销
  */
-let singletonBus: TraceBus | null = null
+// ★全局共享槽（2026-09-19，与 @proteus-vue/shared 的 adapter / app-config 的 store 同源修复）：
+//   TraceBus 是**有状态单例**（事件缓冲 + 订阅者）。依赖树里出现两份 devtools-runtime 时，
+//   模块求值两次 → 两个总线实例 → 生产者 emit 到 A、面板订阅 B → **事件静默丢失**（无报错）。
+//   挂 globalThis 使同一 JS 上下文内所有副本共享同一总线（对齐 runtime/probe.ts 注册表做法）。
+const TRACE_BUS_GLOBAL_KEY = '__PROTEUS_TRACE_BUS__'
 export function getProteusTraceBus(): TraceBus {
-  if (singletonBus === null) {
-    singletonBus = createTraceBus()
-  }
-  return singletonBus
+  const g = globalThis as typeof globalThis & { [TRACE_BUS_GLOBAL_KEY]?: TraceBus }
+  if (!g[TRACE_BUS_GLOBAL_KEY]) g[TRACE_BUS_GLOBAL_KEY] = createTraceBus()
+  return g[TRACE_BUS_GLOBAL_KEY]
 }
 
 export { createTimelineCollector } from './timeline'
