@@ -177,6 +177,55 @@ describe.skipIf(!ENABLED || !HAS_SCROLL_PAGE)('★内置组件真机渲染/行�
   })
 })
 
+// ── ★p-stack snap/loop 的真机验收（2026-09-19）──
+//   设计：snap/loop 是 `<swiper>` 的语义消灭形态（G-31 §2.2）；Web 用 CSS scroll-snap 实现，
+//   而 MP 端 view 不滚动（skyline-pitfalls S14）→ **降级为普通排列 + 可观察提示**。
+//   ★本组用例分两层验证：
+//     ① 产物契约（静态、确定性）：MP 产物**不含**滚动/snap 样式（输出即静默无效属性）+ 含降级提示接线；
+//     ② 真机表征：页面真的能渲染起来（容器不塌陷）——snap 降级后仍是可用的普通 flex 排列。
+//   反向风险：若有人误把 web 侧滚动样式输出到 MP，① 会红（提示同步更新降级声明）。
+const STACK_PAGE = 'pages/semantic-primitives-demo'
+const HAS_STACK_PAGE = projectHasRoute(STACK_PAGE)
+
+describe.skipIf(!ENABLED || !HAS_STACK_PAGE)('★p-stack snap 的 MP 降级（产物契约 + 真机表征）', () => {
+  it('产物契约：组件 wxss 不含 scroll-snap/overflow 滚动样式（MP 容器不滚动）+ 含降级提示接线', () => {
+    const wxss = fs.readFileSync(path.join(PROJECT, 'proteus/p-stack/index.wxss'), 'utf-8')
+    // ★关键断言：`<style scoped>` 里的 `.p-stack-snap > :deep(*)` 规则被 Skyline 选择器剔除逻辑移除
+    //   （通配选择器 Skyline 拒绝）→ 产物 wxss 不应出现 snap 对齐声明
+    expect(wxss, '★MP 产物不得输出 scroll-snap 声明').not.toMatch(/scroll-snap/)
+    const js = fs.readFileSync(path.join(PROJECT, 'proteus/p-stack/index.js'), 'utf-8')
+    // 降级须可观察（反黑盒）：产物含 isMp 守卫 + capabilityWarnOnce 提示
+    expect(js, '★产物须含 isMp 守卫（MP 端不输出滚动样式）').toMatch(/isMp/)
+    expect(js, '★产物须含降级提示接线（capabilityWarnOnce）').toContain('capabilityWarnOnce')
+  })
+
+  it('真机表征：页面可渲染（轮播容器未塌陷——降级后仍是可用的普通排列）', async () => {
+    const { createWxideMini, createDriver } = await import('@proteus-vue/test-core/driver')
+    const mini = createWxideMini(opts)
+    const driver = createDriver({ platform: 'mp', mini })
+    await driver.enableProbes()
+    // ★导航重试（同 openPage 惯例）：IDE 会话在多次 E2E 运行后可能出现瞬时 unresponsive，
+    //   单次 reLaunch 失败只代表「该次没成功」，不代表页面有问题——重试一次再判定。
+    try {
+      await driver.reLaunch(`/${STACK_PAGE}`)
+    } catch {
+      await driver.waitFor(1200)
+      await driver.reLaunch(`/${STACK_PAGE}`)
+    }
+    await driver.waitFor(1500)
+    // ★用**显式 pid**（演示页轮播传了 pid="carousel"）——探针仅在 data.pid 存在或 PROBE_ALL 时注册，
+    //   显式 pid 给出稳定锚点（比猜 `stack + 序号` 可靠）。
+    //   ★不用全量 probes()：本页探针数十个，一次性返回体过大 → JSON 截断（实测 position 8042）。
+    const list = await driver.probes('carousel')
+    expect(list.length, '★页面应有 pid=carousel 的 p-stack 探针（真机渲染确认）').toBeGreaterThan(0)
+    const rect = list[0].rect
+    expect(rect, 'p-stack 应有几何数据（组件真渲染，非未挂载）').toBeTruthy()
+    expect(rect!.height, '★容器高度达标（无塌陷）').toBeGreaterThan(20)
+    expect(rect!.width, '★容器宽度达标').toBeGreaterThan(100)
+    await driver.close()
+  })
+})
+
 // ── ★用探针断言原语加固（2026-09-14）：组件**内部**容器几何/可滚——工具查不到、探针读得到 ──
 describe.skipIf(!ENABLED || !HAS_SCROLL_PAGE)('★组件内部几何（探针通道——拦「容器塌成一条线」）', () => {
   it('p-scroll-view 横向容器：高度达标 + 真的可横向滚动', async () => {
