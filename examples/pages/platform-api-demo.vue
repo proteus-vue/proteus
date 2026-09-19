@@ -205,6 +205,18 @@
     </view>
 
     <view class="pad-box">
+      <text class="pad-label">⑰ WebMCP 接入（E30：useMCP——把框架能力暴露为浏览器内 agent 可调用工具）</text>
+      <view class="pad-row">
+        <button class="pad-btn" data-testid="pad-mcp-probe" @click="onMcpProbe">探测支持</button>
+        <button class="pad-btn" data-testid="pad-mcp-register" @click="onMcpRegister">注册能力工具</button>
+        <button class="pad-btn" data-testid="pad-mcp-call" @click="onMcpCall">调用工具</button>
+        <button class="pad-btn" data-testid="pad-mcp-dispose" @click="onMcpDispose">注销</button>
+      </view>
+      <text class="pad-log" data-testid="pad-mcp-log">{{ mcpLog }}</text>
+      <text class="pad-sub">E30 engineering.mcp——规范面：document.modelContext.registerTool + signal 注销（★非 navigator；规范无 unregisterTool）；框架差异化：能力面统一 CapResult&lt;T&gt; 契约 → 能力可自动派生为工具（ok→结果 / Err→isError+错误码）。本机浏览器未实现 WebMCP 时如实降级（isSupported=false，不抛错）——可用下面「调用工具」验证派生工具的归一行为（不依赖浏览器支持）。</text>
+    </view>
+
+    <view class="pad-box">
       <text class="pad-label">对照（wx.* 直写 → platformAPI.* 收口）</text>
       <text class="pad-sub">
         wx.showToast → api.ui.showToast · wx.showModal → api.ui.showModal · wx.showActionSheet → api.ui.showActionSheet ·
@@ -215,8 +227,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract, createRequestEngineering } from '@proteus-vue/api'
+import { ref, computed, onUnmounted } from 'vue'
+import { createPlatformAPI, createCapabilityHooks, createEngineering, createRouterEngineering, createAnimationEngineering, createToolingEngineering, validateComponentMeta, validateCapabilityContract, createRequestEngineering, useMCP, capabilityToTool, capErr } from '@proteus-vue/api'
 import type { AnimationDriver, RequestExecutor, RequestResponse, RequestConfig } from '@proteus-vue/api'
 // ★工程原语动画组件形态（E19 p-transition / E20 p-animate——Web 按需 import）+ E18 声明式导航
 import { PTransition, PAnimate, PRouterLink } from '@proteus-vue/components'
@@ -800,6 +812,63 @@ async function onReqCache() {
   const r2 = await req.request({ url: '/profile', method: 'GET' }, { ttl: 10000 })
   const afterSecond = reqFetchCount.value
   reqLog.value = `request 缓存 → 首次 ${afterFirst - before} 次请求 · 二次 ${afterSecond - afterFirst} 次（ttl=10s 命中零重发）· data=${JSON.stringify(r2.data)}`
+}
+
+// ---------- ⑰ WebMCP 接入（E30：useMCP——能力 → agent 可调用工具） ----------
+// ★演示要点：① 真实探测 document.modelContext（未实现的浏览器如实降级）
+//            ② 能力派生工具（capabilityToTool）可在**不依赖浏览器支持**时直接验证归一行为
+const mcpLog = ref('点击「探测支持」查看本机 WebMCP 可用性')
+let mcpHandle: ReturnType<typeof useMCP> | null = null
+// 能力派生工具：用框架能力面（CapResult<T>）演示「ok → 结果 / Err → isError」的自动归一
+const mcpVibrateTool = capabilityToTool({
+  name: 'vibrate',
+  description: '震动提示（框架能力 useVibrate）',
+  run: () => cap.useVibrate(30),
+})
+function onMcpProbe(): void {
+  const d = (globalThis as { document?: { modelContext?: { registerTool?: unknown } } }).document
+  const supported = !!(d && d.modelContext && typeof d.modelContext.registerTool === 'function')
+  mcpLog.value = supported
+    ? '✅ 本机支持 WebMCP（document.modelContext.registerTool 可调用）——可点「注册能力工具」'
+    : '⚠ 本机浏览器未实现 WebMCP（document.modelContext 缺失）——useMCP 如实降级 isSupported=false（不抛错）；可用「调用工具」验证派生工具的归一行为'
+}
+function onMcpRegister(): void {
+  mcpHandle = useMCP({
+    prefix: 'demo_',
+    capabilities: [
+      { name: 'vibrate', description: '震动提示', run: () => cap.useVibrate(30) },
+      { name: 'clipboard_read', description: '读取剪贴板', run: () => cap.useClipboard() },
+      { name: 'network_type', description: '网络类型', run: () => cap.useNetwork() },
+    ],
+    onDispose: (fn) => {
+      // 演示页常驻：把注销挂到页面卸载（真实组件里传 onScopeDispose / onUnmounted）
+      onUnmounted(fn)
+    },
+  })
+  mcpHandle.ready.then(() => {
+    mcpLog.value = mcpHandle
+      ? mcpHandle.isSupported
+        ? `✅ 已注册 ${mcpHandle.toolNames.length} 个工具：${mcpHandle.toolNames.join(', ')}（isRegistered=${mcpHandle.isRegistered}）`
+        : '⚠ 环境不支持 WebMCP → 未注册（isSupported=false；工具名列表为空，诚实反映）'
+      : ''
+  })
+}
+async function onMcpCall(): Promise<void> {
+  // 直接调用派生工具（走 CapResult 归一——不依赖浏览器 WebMCP 支持）
+  const r1 = (await mcpVibrateTool.execute({})) as { content: Array<{ text: string }>; isError?: boolean }
+  const failTool = capabilityToTool({ name: 'demo_fail', description: '演示失败降级', run: () => capErr('demo.unsupported', '演示用的失败结果') })
+  const r2 = (await failTool.execute({})) as { content: Array<{ text: string }>; isError?: boolean }
+  mcpLog.value =
+    `capabilityToTool 归一：ok → "${r1.content[0].text}"（isError=${String(r1.isError ?? false)}）· ` +
+    `Err → "${r2.content[0].text}"（isError=${String(r2.isError)}）`
+}
+function onMcpDispose(): void {
+  if (!mcpHandle) {
+    mcpLog.value = '尚未注册（先点「注册能力工具」）'
+    return
+  }
+  mcpHandle.dispose()
+  mcpLog.value = '🔌 已注销（signal.abort——规范无 unregisterTool，注销即中断 signal）'
 }
 
 // ---------- ⑯ 声明式导航（G-32 B5 尾巴：E18 p-router-link——emit navigate → rx.push 语义委托） ----------
