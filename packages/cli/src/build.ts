@@ -88,6 +88,12 @@ export async function runTargetedBuildProgrammatic(
     if (resolved.needsGenRoutes) {
       // ★组件库已拆包（2026-09-14）：gen-routes 自行从 node_modules 解析 @proteus-vue/components 包根
       runGenRoutes({ config: config as never, root })
+    } else {
+      // ★web 目标也须更新**应用侧路由表**（2026-09-19 修外部实战报告第 3 条阻断项）：
+      //   `auto-routes.ts` 双端共用，但此前只在 MP 目标生成 → `proteus build --target web`
+      //   时新增页面不会进路由表 → **页面 404**（外部项目实测复现）。
+      //   webOnly：只写路由表，不产 MP 专属产物、不清 dist/mp-weixin（不越职责边界）。
+      runGenRoutes({ config: config as never, root, webOnly: true })
     }
     // 类型检查（工程有 vue-tsc 才跑；与模板 build:web/build:mp 的 vue-tsc --noEmit 对齐）
     if (hasVueTsc(root)) {

@@ -230,3 +230,39 @@ describe('★Skyline iOS 白屏兜底：page.webviewPages 页面级 WebView 降�
     fs.rmSync(dir, { recursive: true, force: true })
   })
 })
+
+// ── ★webOnly：web 目标更新应用侧路由表（2026-09-19 外部实战报告第 3 条阻断项）──
+//   外部项目实测：`proteus build --target web` 时 gen-routes 被跳过（needsGenRoutes: isMp）
+//   → 新增 src/pages/editor/ 后构建成功但 auto-routes.ts 未收录 → **页面 404**。
+//   修复后 web 目标以 webOnly 模式生成路由表（双端共用产物），且**不产 MP 专属产物 / 不清理 dist/mp-weixin**。
+describe('★runGenRoutes webOnly（web 目标的路由表更新）', () => {
+  it('webOnly：新增页面被收录进 auto-routes，且**不产生** MP 专属产物', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-web-'))
+    writeFixture(dir, 'src/pages/index.vue', '<template><div>home</div></template>')
+    runGenRoutes({ config: makeConfig(), root: dir, webOnly: true })
+    const out = path.join(dir, 'src/router/auto-routes.ts')
+    expect(fs.existsSync(out), 'webOnly 应生成应用侧路由表').toBe(true)
+    expect(fs.readFileSync(out, 'utf-8')).toContain('"index"')
+    // ★不越界：MP 专属产物不该出现（web 构建不需要）
+    expect(fs.existsSync(path.join(dir, 'dist/mp-weixin/app.json')), 'webOnly 不应产 app.json').toBe(false)
+    expect(fs.existsSync(path.join(dir, 'dist/mp-weixin/project.config.json')), 'webOnly 不应产 project.config.json').toBe(false)
+    // ★新增页面（模拟外部报告的编辑器页）
+    writeFixture(dir, 'src/pages/editor/index.vue', '<template><div>editor</div></template>')
+    runGenRoutes({ config: makeConfig(), root: dir, webOnly: true })
+    expect(fs.readFileSync(out, 'utf-8'), '★新增页面必须进路由表（否则 Web 端 404）').toContain('editor')
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('★webOnly 不清理既有 MP 产物（不越职责边界）', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-web2-'))
+    writeFixture(dir, 'src/pages/index.vue', '<template><div>home</div></template>')
+    // 先做一次完整 MP 生成（产出 dist/mp-weixin）
+    runGenRoutes({ config: makeConfig(), root: dir })
+    const appJson = path.join(dir, 'dist/mp-weixin/app.json')
+    expect(fs.existsSync(appJson)).toBe(true)
+    // 再跑 webOnly —— MP 产物必须**原样保留**（若 webOnly 走了 rmSync(OUT_DIR) 会被清空）
+    runGenRoutes({ config: makeConfig(), root: dir, webOnly: true })
+    expect(fs.existsSync(appJson), '★webOnly 不得删除已构建的 MP 产物').toBe(true)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})

@@ -83,6 +83,9 @@ export async function runDevProgrammatic(opts: DevOptions, root = process.cwd())
   if (resolved.needsGenRoutes) {
     // ★组件库已拆包（2026-09-14）：gen-routes 自行解析 @proteus-vue/components 包根（同 build.ts）
     runGenRoutes({ config: config as never, root })
+  } else {
+    // ★web 目标也须更新应用侧路由表（2026-09-19，同 build.ts）——否则 dev 期新增页面 404
+    runGenRoutes({ config: config as never, root, webOnly: true })
   }
   const vite = await importViteFrom(root)
   const server = await vite.createServer(resolved.config)
