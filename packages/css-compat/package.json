@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/css-compat",
-  "version": "0.1.1-beta.0",
+  "version": "0.3.0-beta.7",
   "description": "Proteus CSS 跨端兼容（G-21 B1）：--strict-css 校验（CSS001-012）+ 编译期重写（calc/vh/rgba）+ css-compat-report——纯逻辑零运行时依赖",
   "type": "module",
   "license": "Apache-2.0",

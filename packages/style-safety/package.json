@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/style-safety",
-  "version": "0.1.0",
+  "version": "0.3.0-beta.7",
   "description": "Proteus 样式运行时安全（G-31 B1+B2）：属性名白名单 + 值类型校验 + createStyleGuard 拦截记录（DevTools style-safety Inspector 数据源）——纯 TS 零依赖",
   "type": "module",
   "license": "Apache-2.0",

@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/compat-miniprogram",
-  "version": "0.1.1-beta.4",
+  "version": "0.3.0-beta.7",
   "description": "G-31 B6 Layer 1 兼容层（proteus-component-semantics-plan migration.md）：旧小程序迁移三步走——createWxCompat 运行时桥（wx.* 委托 Proteus）+ migrateMpSource codemod（标签自动/存储直改/manual 标注）+ useStorage 迁移目标",
   "type": "module",
   "license": "Apache-2.0",
@@ -22,6 +22,6 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js --external:@proteus-vue/api"
   },
   "dependencies": {
-    "@proteus-vue/api": "0.2.0-beta.4"
+    "@proteus-vue/api": "0.3.0-beta.7"
   }
 }

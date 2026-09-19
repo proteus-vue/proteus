@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/fluid",
-  "version": "0.1.1-beta.0",
+  "version": "0.3.0-beta.7",
   "description": "Proteus 柔性框架系统（fluid-system-plan）：FluidContext 响应式上下文 + 容器查询/容器断点 + 设备环境（折叠屏/车机）——多形态设备语义布局体系核心，零依赖",
   "type": "module",
   "license": "Apache-2.0",

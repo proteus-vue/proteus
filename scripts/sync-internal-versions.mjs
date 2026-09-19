@@ -98,13 +98,57 @@ for (const t of TARGETS) {
   }
 }
 
+/**
+ * ★「版本号必须一致」门禁（2026-09-19：彻查版本发布策略后的核心整改）。
+ *
+ * 背景——为什么版本管理会「越管越乱」：
+ *   本仓此前是**独立版本号 + 精确 pin** 的组合（41 个包各走各的版本、内部依赖 65 处
+ *   全是 exact pin）。任何一个包改动都要级联同步几十处 pin，人为维护必然漏 →
+ *   实测出现 **14 种不同版本号**散落在 41 个包里，且 tag 指向与本仓版本长期分叉。
+ *
+ * 整改：`.changeset/config.json` 启用 **fixed 分组** `"fixed": [["@proteus-vue/*"]]` ——
+ *   changesets 官方的「版本组锁定」机制：组内任一包要发版，**全组一起发同一版本号**。
+ *   实测生效：41 个包从 14 种版本号 → **1 种**（0.3.0-beta.7），65 处内部 pin 全部自动对齐。
+ *
+ * 本门禁把这个不变式锁死（fixed 配置若被误删/改坏，CI 当场红）：
+ *   ① 所有 @proteus-vue/* 包**版本号必须完全相同**；
+ *   ② 内部依赖 pin 必须等于该版本（或 workspace: 协议）。
+ */
+function assertUniformVersions() {
+  const byName = {}
+  for (const e of fs.readdirSync(path.join(ROOT, 'packages'), { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages', e.name, 'package.json'), 'utf8'))
+      if (j.name?.startsWith('@proteus-vue/')) byName[j.name] = j.version
+    } catch {
+      /* 非包目录 */
+    }
+  }
+  const versions = [...new Set(Object.values(byName))]
+  if (versions.length > 1) {
+    const groups = {}
+    for (const [n, v] of Object.entries(byName)) (groups[v] ??= []).push(n)
+    console.log(`\n[versions] ✗ 版本号不统一（${versions.length} 种）——fixed 分组未生效或被破坏：`)
+    for (const [v, names] of Object.entries(groups).sort()) {
+      console.log(`  ${v}：${names.length} 个包（${names.slice(0, 3).join(', ')}${names.length > 3 ? ' …' : ''}）`)
+    }
+    console.log('  → 检查 .changeset/config.json 的 "fixed": [["@proteus-vue/*"]]，再跑 npx changeset version')
+    return false
+  }
+  console.log(`\n[versions] ✅ 全部 ${Object.keys(byName).length} 个包版本号统一：${versions[0]}（fixed 分组生效）`)
+  return true
+}
+
 if (CHECK) {
+  const uniform = assertUniformVersions()
   if (stale.length) {
     console.log('[sync-internal] ✗ 内部依赖声明落后于 workspace（用户侧会装到旧包）：')
     for (const s of stale) console.log(`  - ${s}`)
     console.log('\n  → 修复：node scripts/sync-internal-versions.mjs')
     process.exit(1)
   }
+  if (!uniform) process.exit(1)
   console.log('[sync-internal] ✅ 模板与 examples 的内部依赖均已对齐 workspace 实际版本')
   process.exit(0)
 }
