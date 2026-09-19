@@ -12,6 +12,7 @@ import {
   DEGRADATION_TABLE,
   RULE_REGISTERED_PROPS,
   HOST_FALLBACK_TAGS,
+  TAG_SCOPED_MP_FALLBACK,
   auditDegradation,
   degradeProp,
   formatDegradationReport,
@@ -70,15 +71,30 @@ describe('★批次 4 · 属性降级声明（EA-5）', () => {
   })
 
   it('③ 官方 MP 属性不得被判 mp:fallback（自相矛盾）', () => {
+    // ★2026-09-19 与 scripts/audit-degradation.mjs 同口径：OFFICIAL 是**跨全部组件**的全局名字集合，
+    //   而本仓存在跨组件同名（loop 是 <video>/<audio> 官方属性、snap 是 <draggable-sheet> 官方属性），
+    //   框架 p-stack 另有自己的语义 loop/snap → 全局同名会误报。显式登记在 TAG_SCOPED_MP_FALLBACK
+    //   的（tag, prop）视为有据决策而豁免；未登记者照旧拦（豁免面很窄）。
     const bad: string[] = []
     for (const { tag, props } of SPECS) {
       for (const prop of props) {
         const entry = degradeProp(tag, prop)
         const isOfficial = OFFICIAL.has(kebab(prop)) || OFFICIAL.has(prop.toLowerCase())
-        if (isOfficial && entry.mp !== 'supported') bad.push(`${tag}.${prop}`)
+        const scoped = TAG_SCOPED_MP_FALLBACK[tag] && TAG_SCOPED_MP_FALLBACK[tag][prop]
+        if (isOfficial && entry.mp !== 'supported' && !scoped) bad.push(`${tag}.${prop}`)
       }
     }
     expect(bad).toHaveLength(0)
+  })
+
+  it('③b 豁免面可控：登记项必须真有 mp:fallback 判定（防「登记了却没生效」的假绿）', () => {
+    const registered = Object.entries(TAG_SCOPED_MP_FALLBACK)
+    expect(registered.length).toBeGreaterThan(0)
+    for (const [tag, props] of registered) {
+      for (const prop of Object.keys(props)) {
+        expect(degradeProp(tag, prop).mp, `${tag}.${prop} 登记为降级但判定非 fallback`).toBe('fallback')
+      }
+    }
   })
 
   it('④ 规则表无陈旧项（规则静默失效 = 假绿来源）', () => {

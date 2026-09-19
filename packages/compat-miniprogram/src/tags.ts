@@ -29,8 +29,8 @@ export const AUTO_CODEMOD_TAGS: Record<string, string> = {
 /** 需语义识别（manual 标注——语义还原为布局原语；AI Agent G-23 辅助）
  *  ★提示文案纪律：只写**已落地**的目标（不得指向未实现的 props——否则迁移者照着做会得到静默无效属性）。 */
 export const MANUAL_TAGS: Record<string, string> = {
-  swiper: '轮播语义——无 1:1 组件（layout.stack 目标形态 snap/loop 尚未实现）；候选 p-scroll-view scroll-x + paging-enabled',
-  'swiper-item': '随 swiper 一并决策（轮播子项）',
+  swiper: '轮播语义——无 1:1 组件，用 <p-stack direction="row" snap="mandatory" :loop="true"> 表达（★2026-09-19 已落地：snap/loop 可用；MP 端降级为普通排列+提示，如需原生翻页用 p-scroll-view 的 paging-enabled）',
+  'swiper-item': '轮播子项——随 swiper 转为 p-stack 的直接子项（每个子项即一屏）',
   'movable-area': 'gesture.scrollable 容器（p-scrollable）',
   'movable-view': 'gesture.draggable（p-draggable）',
   navigator: 'p-router-link（url → to 属性映射）',

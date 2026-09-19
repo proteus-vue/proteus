@@ -113,6 +113,30 @@ const WEB_EXTENSION_MP_FALLBACK: Record<string, string> = {
   searchable: '小程序无内建搜索语义，忽略并提示（由业务侧自绘）',
 }
 
+/**
+ * ★按 tag 限定的 mp: fallback（2026-09-19 新增机制）：属性在 Web 有实现、MP 无平台对等。
+ *
+ * 与 STYLE_WEB_FALLBACK 等「按属性名全局」的表不同——这里**按 tag 限定**，因为本仓存在
+ * **跨组件同名属性**（实测：`loop` 是 `<video>/<audio>` 的官方属性、`snap` 是 `<draggable-sheet>`
+ * 的官方属性，而框架的 `p-stack` 另有自己的语义 `loop`/`snap`）——按属性名全局判 fallback 会误伤。
+ *
+ * 依据：`p-stack` 的 `snap`/`loop` 是「轮播」语义消灭形态（G-31 §2.2、rules.md 拒绝 `<p-swiper>`），
+ *   但 MP 端容器滚动本身不成立——**Skyline 的 view 不滚动（CSS overflow 无效）**，这是本仓已实测
+ *   的结论（skyline-pitfalls S14 + `p-scroll` 同款告警：「小程序 view 不滚动——请改用 p-scroll-view」）。
+ *   容器不滚动 ⇒ 吸附/回环无载体（CSS scroll-snap 亦然）。
+ *   fallback 行为 = 普通排列 + `capabilityWarnOnce` 控制台提示（可观察，非静默失效）。
+ *   ★MP 端如需真轮播：用 `p-scroll-view` 的 `paging-enabled`（官方 Skyline 翻页属性，原生支持）。
+ */
+const TAG_PROP_MP_FALLBACK: Record<string, Record<string, string>> = {
+  'p-stack': {
+    snap: '小程序 view 不滚动（Skyline 无 CSS overflow 滚动，S14 实测）→ 吸附无载体，降级为普通排列 + 可观察提示；需翻页请用 p-scroll-view 的 paging-enabled',
+    loop: '回环依赖吸附容器，而小程序 view 不滚动（S14）→ 一并降级为普通排列 + 可观察提示',
+  },
+}
+
+/** ★导出供降级门禁做「显式登记的 tag 限定 fallback」豁免（区别于跨组件同名导致的误报） */
+export const TAG_SCOPED_MP_FALLBACK: typeof TAG_PROP_MP_FALLBACK = TAG_PROP_MP_FALLBACK
+
 /* ---------- 判定 ---------- */
 
 /** 规则表登记的全部「非缺省判定」属性名（供门禁做**陈旧规则**检测——规则指向不存在的属性即失效） */
@@ -121,6 +145,7 @@ export const RULE_REGISTERED_PROPS: string[] = [
   ...Object.keys(STYLE_WEB_FALLBACK),
   ...Object.keys(WEB_EXTENSION_MP_FALLBACK),
   ...Object.keys(MP_HOST_WEB_FALLBACK),
+  ...Object.values(TAG_PROP_MP_FALLBACK).flatMap((m) => Object.keys(m)),
 ]
 
 /** 宿主组件族 tag（web:fallback 的来源） */
@@ -140,6 +165,11 @@ export function degradeProp(tag: string | undefined, prop: string): DegradationE
   if (tag && HOST_TAGS[tag]) {
     return { mp: 'supported', web: 'fallback', behavior: HOST_TAGS[tag] }
   }
+
+  // ★tag 限定（先于属性名全局表判——更具体者优先）
+  const tagProp = tag ? TAG_PROP_MP_FALLBACK[tag] : undefined
+  const tagPropBehavior = tagProp ? tagProp[prop] : undefined
+  if (tagPropBehavior) return { mp: 'fallback', web: 'supported', behavior: tagPropBehavior }
 
   const webExt = WEB_EXTENSION_MP_FALLBACK[prop]
   if (webExt) return { mp: 'fallback', web: 'supported', behavior: webExt }
