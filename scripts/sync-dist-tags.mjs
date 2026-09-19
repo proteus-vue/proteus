@@ -18,8 +18,15 @@
 // 用法：
 //   node scripts/sync-dist-tags.mjs            # 报告
 //   node scripts/sync-dist-tags.mjs --check    # 不一致 → exit 1（门禁用）
-//   node scripts/sync-dist-tags.mjs --fix      # 执行 npm dist-tag add 修复
+//   node scripts/sync-dist-tags.mjs --fix      # 执行 npm dist-tag add 修复（需凭据；可能需要 OTP）
+//   node scripts/sync-dist-tags.mjs --fix --otp <6位码>   # 带一次性密码
 //   node scripts/sync-dist-tags.mjs --tag <t>  # 显式指定 canonical tag（覆盖 pre.json）
+//   node scripts/sync-dist-tags.mjs --print    # 只打印待执行的 npm 命令（便于手工执行）
+//
+// ★为什么需要 OTP：`npm dist-tag` 属**包管理**类操作——按 npm 政策，bypass-2FA 的 granular
+//   token 自 2026-07-31 起被限制用于此类操作，**必须**交互式 2FA（实测报 EOTP）。
+//   （对照：`npm publish` 仍可用 token 直接完成，`npm access list` 读操作也可。）
+//   若不便交互：在 npm 网页端 Packages → 该包 → Versions 里直接调整 dist-tag。
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -29,8 +36,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const CHECK = argv.includes('--check')
 const FIX = argv.includes('--fix')
+const PRINT = argv.includes('--print')
 const tagIdx = argv.indexOf('--tag')
 const TAG_OVERRIDE = tagIdx >= 0 ? argv[tagIdx + 1] : null
+const otpIdx = argv.indexOf('--otp')
+const OTP = otpIdx >= 0 ? argv[otpIdx + 1] : null
 const UA = { 'user-agent': 'proteus-dist-tag-sync' }
 
 /** canonical tag：pre 模式取 pre.json 的 tag，否则 latest */
@@ -105,22 +115,37 @@ if (errors.length) {
   for (const e of errors) console.log(`  - ${e.short}: ${e.err}`)
 }
 
-if (FIX && mismatch.length) {
-  console.log(`\n[dist-tags] 开始修复（npm dist-tag add <pkg>@<ver> ${TAG}）`)
+if (PRINT && mismatch.length) {
+  console.log(`\n[dist-tags] 待执行的命令（需已登录且能通过 2FA；逐条执行）\n`)
+  for (const m of mismatch) console.log(`npm dist-tag add ${m.full}@${m.version} ${TAG}`)
+} else if (FIX && mismatch.length) {
+  console.log(`\n[dist-tags] 开始修复（npm dist-tag add <pkg>@<ver> ${TAG}${OTP ? ' --otp ***' : ''}）`)
   let failed = 0
   for (const m of mismatch) {
     const spec = `${m.full}@${m.version}`
+    const args = ['dist-tag', 'add', spec, TAG]
+    if (OTP) args.push('--otp', OTP)
     try {
-      execFileSync('npm', ['dist-tag', 'add', spec, TAG], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 })
+      execFileSync('npm', args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000 })
       console.log(`  ✅ ${spec} → ${TAG}`)
     } catch (e) {
       failed++
-      console.log(`  ❌ ${spec}：${String(e.stderr ?? e).toString().slice(0, 160)}`)
+      const msg = String(e.stderr ?? e).toString()
+      // EOTP 是「需要人工 2FA」而非脚本缺陷——单独给出可执行指引，避免误判为失败
+      if (/EOTP|one-time password/i.test(msg)) {
+        console.log(`  ⚠ ${spec}：需要一次性密码（2FA）`)
+        console.log(`      改用：npm dist-tag add ${spec} ${TAG} --otp <6位码>`)
+        console.log(`      或本脚本带 --otp：node scripts/sync-dist-tags.mjs --fix --otp <6位码>`)
+      } else {
+        console.log(`  ❌ ${spec}：${msg.slice(0, 160)}`)
+      }
     }
   }
+  if (failed) console.log(`\n[dist-tags] ${failed} 个未能完成（见上方逐条指引）`)
   process.exitCode = failed ? 1 : 0
 } else if (mismatch.length && CHECK) {
   console.log(`\n  → 修复：node scripts/sync-dist-tags.mjs --fix   （或在 npm 网页端调整 dist-tags）`)
+  console.log(`     打印命令而不执行：node scripts/sync-dist-tags.mjs --print`)
   process.exitCode = 1
 } else if (!mismatch.length && !errors.length) {
   console.log(`\n✅ 全部 ${ok.length} 个已发布包的 \`${TAG}\` tag 均指向本仓版本`)
