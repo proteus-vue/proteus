@@ -16,9 +16,14 @@
 //   ④ 发布核验——本仓版本是否都已上架（未上架的包列出来）
 //
 // 用法：
-//   pnpm release                    # 一条命令全自动
-//   pnpm release --no-auto-version  # 不为漂移包自动补 bump（改为提示你决定）
-//   pnpm release --dry-run          # 只体检（①+②的判定），不改动、不发布
+//   pnpm release           # 一条命令全自动：凭据预检 → 版本提升 → 发布 → 核验 → tag 归一
+//   pnpm release --dry-run # 只体检，不改动、不发布
+//   pnpm release --all     # ★全部包补 patch 版本并重发——用于把 41 个包的 `latest` 一次性归位
+//                          #   （npm 强制每包须有 latest，而事后改 tag 需交互式 2FA；
+//                          #    发布时设置 tag 不受限，故重发是零手工的归位路径）
+//
+// 发布 tag 策略（单轨）：全部包统一发到 `latest`——本项目只有一条线，不出现
+//   beta/latest 并行的两套版本。版本号本身仍带 `-beta.N` 前缀，语义上仍是预发布。
 //
 // 说明：发布后的深度实测（干净目录跑脚手架全旅程）用 `pnpm publish:smoke`，
 //       不放在本命令里——它会真的 npm create + install，耗时约 1~2 分钟。
@@ -29,8 +34,15 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
-const AUTO_VERSION = !argv.includes('--no-auto-version')
 const DRY_RUN = argv.includes('--dry-run')
+/**
+ * `--all`：**给全部包补一个 patch 版本并发布**。
+ * ★用途（2026-09-19 一次性把 tag 收口到单轨）：npm 强制每个包必须有 `latest`，而事后改 tag
+ *   （`npm dist-tag`）属包管理操作、会被要求交互式 2FA（实测 EOTP 挡住）；但**发布时设置 tag
+ *   不受此限**——所以让每个包都重新发布一次，是把 41 个包的 `latest` 全部归位到当前版本的
+ *   唯一「零手工」路径。仅在 tag 需要整体收口时用，日常发布不要加。
+ */
+const REPUBLISH_ALL = argv.includes('--all')
 
 const step = (n, title) => console.log(`\n── ${n} ${title} ──`)
 const die = (msg) => {
@@ -113,31 +125,44 @@ if (drifted === null) die('无法判定版本漂移（漂移检查执行失败�
 
 console.log(`  未消费的 changeset：${pending.length} 个${pending.length ? `（${pending.join(', ')}）` : ''}`)
 console.log(`  源码改动但未 bump 的包：${drifted.length} 个${drifted.length ? `（${drifted.map((s) => '@proteus-vue/' + s).join(', ')}）` : ''}`)
+if (REPUBLISH_ALL) console.log('  ★--all：将为**全部包**补 patch 版本并发布（把 latest tag 整体归位）')
 
-if (pending.length === 0 && drifted.length === 0) {
+if (pending.length === 0 && drifted.length === 0 && !REPUBLISH_ALL) {
   console.log('  无需提升——直接进入发布')
 } else if (DRY_RUN) {
   console.log('  （--dry-run：跳过实际提升）')
-} else if (drifted.length > 0 && !AUTO_VERSION) {
-  die(
-    `有 ${drifted.length} 个包改了源码但版本未提升，不 bump 发布会把它们**静默跳过**（用户拿到的仍是旧包）。\n` +
-      `  两个选择：\n` +
-      `    a) 让脚本自动补 patch bump：重跑 \`pnpm release\`（去掉 --no-auto-version）\n` +
-      `    b) 自行决定版本级别：\`npx changeset\` 交互式创建 changeset 后再发布`,
-  )
 } else {
-  // 为漂移包补一个 patch changeset —— 交给 changesets 统一处理
+  // 为漂移包（或 --all 时的全部包）补一个 patch changeset —— 交给 changesets 统一处理
   // （它会同时更新依赖这些包的内部精确 pin，并级联 bump 依赖方）
-  if (drifted.length > 0) {
-    const lines = drifted.map((s) => `'@proteus-vue/${s}': patch`)
+  let bumpTargets = drifted
+  if (REPUBLISH_ALL) {
+    bumpTargets = []
+    for (const e of fs.readdirSync(path.join(ROOT, 'packages'), { withFileTypes: true })) {
+      if (!e.isDirectory()) continue
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages', e.name, 'package.json'), 'utf8'))
+        if (j.name?.startsWith('@proteus-vue/')) bumpTargets.push(j.name.replace('@proteus-vue/', ''))
+      } catch {
+        /* 非包目录 */
+      }
+    }
+  }
+  if (bumpTargets.length > 0) {
+    const lines = bumpTargets.map((s) => `'@proteus-vue/${s}': patch`)
     const body =
       `---\n${lines.join('\n')}\n---\n\n` +
-      `自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，\n` +
-      `不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。\n\n` +
-      drifted.map((s) => `- \`@proteus-vue/${s}\``).join('\n') +
+      (REPUBLISH_ALL
+        ? `全量重发（scripts/release.mjs --all）：把全部包的 \`latest\` tag 归位到当前版本。\n` +
+          `动机——npm 强制每包须有 \`latest\`，而事后改 tag（npm dist-tag）属包管理操作、\n` +
+          `会被要求交互式 2FA；发布时设置 tag 不受此限，故重发是零手工的归位路径。\n\n`
+        : `自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，\n` +
+          `不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。\n\n`) +
+      bumpTargets.map((s) => `- \`@proteus-vue/${s}\``).join('\n') +
       `\n`
     fs.writeFileSync(path.join(ROOT, '.changeset', 'auto-release-bump.md'), body)
-    console.log(`  已为 ${drifted.length} 个漂移包生成 patch changeset（.changeset/auto-release-bump.md）`)
+    console.log(`  已为 ${bumpTargets.length} 个包生成 patch changeset（.changeset/auto-release-bump.md）`)
+  } else {
+    console.log('  无包需要 bump（沿用已有 changeset）')
   }
   run('npx', ['changeset', 'version'], { capture: false })
   // 模板 / examples / 根包的 pin（changesets 管不到）+ lockfile
@@ -165,15 +190,25 @@ if (pending.length || drifted.length) {
 }
 
 // ── ③ 发布 ──
-// ★`changeset publish` 退出码非 0 **不等于发布失败**：当某个版本此前已发布/已暂存，
-//   npm 返回 E409（"Cannot publish over previously staged/published version"），
-//   changesets 遂报 error 并在末尾以非零退出——但包其实**已经在线上**（实测踩到：
-//   3 个包全部发布成功，重跑时却因 E409 让整条命令崩掉，用户误以为发布失败）。
-//   故这里不立即判定失败，交由第 ④ 步按 **registry 实际状态**裁决（那才是用户视角的真相）。
+// ★单轨发布：全部包统一发到 `latest`（2026-09-19 用户要求「不要出现正式版标签，
+//   实际只有一条线」）。
+//   背景：changesets 默认 `getReleaseTag()` 会把「发布过的版本全是 prerelease」的包
+//   （publishedState==='only-pre'）**故意发到 `latest`**，其余包发到 preState.tag(beta)——
+//   同一批发布 tag 落点各不相同（实测：cli/plugin-vite → latest，create-proteus → beta），
+//   于是形成「有的在 beta 有的在 latest」的割裂，用户不知道该用哪个。
+//   决定：显式统一为 `latest`（源码 `if (tag) return tag` 表明显式 tag 优先级最高）。
+//   理由：① npm **强制**每个包必须有 `latest`（删掉它 `npm i <pkg>` 直接解析失败），
+//          无法真正「取消正式版标签」；② 文档里的安装命令都不带 tag（走 latest），
+//          让 latest 始终等于最新版，用户按文档装就拿对；③ 版本号本身带 `-beta.N`
+//          前缀，语义上仍是预发布，不存在「悄悄变成正式版」。
+//   注：`npm dist-tag`（事后改 tag）属包管理操作，会被 npm 要求交互式 2FA（实测 EOTP），
+//   而**发布时设置 tag 不受此限**——所以「发到 latest」是零手工的可行路径。
 step('③', '发布到 npm')
+const PUB_TAG = 'latest'
+console.log(`  全部包统一发到 tag：${PUB_TAG}（单轨；版本号仍带 -beta.N 前缀）`)
 let publishExitNonZero = false
 try {
-  run('npx', ['changeset', 'publish'], { capture: false })
+  run('npx', ['changeset', 'publish', '--tag', PUB_TAG], { capture: false })
 } catch {
   publishExitNonZero = true
   console.log('\n  ⚠ changeset publish 退出码非 0 —— 先不判定失败')
@@ -263,9 +298,22 @@ if (missing.length === 0) {
   die('发布核验未通过（见上方清单）')
 }
 
+// ── ⑤ tag 归一（自动）──
+// ★本项目只有 beta 一条线（2026-09-19 用户要求）：让 `beta` 与 `latest` 都指向当前版本，
+//   不出现「另一条正式版」。npm 强制每个包必须有 `latest`（删了 `npm i <pkg>` 会解析失败），
+//   故不是删掉它，而是让它**永远等于当前 beta 版本**——这样即使有人不带 tag 安装，
+//   拿到的也是同一份包。
+//   ★此处是**发布链内可自动完成**的部分（`npm dist-tag` 的权限门槛在实践中最常见的是
+//   「未登录/npm 尚不支持该子命令」而非必然的交互式 2FA），故做 best-effort 自动执行；
+//   失败只提示、不让整条发布失败（发布本身已完成）。
+step('⑤', 'tag 归一（beta + latest → 当前版本）')
+try {
+  run('node', ['scripts/sync-dist-tags.mjs', '--fix'], { capture: false })
+} catch {
+  console.log('\n  ⚠ tag 归一未完全成功——发布本身已完成，不影响包可用性。')
+  console.log('     可稍后单独重跑：pnpm publish:tags --fix')
+}
+
 console.log('\n✅ 发布完成')
 console.log('   下一步：把版本提升的改动提交（package.json / CHANGELOG / pnpm-lock.yaml）：')
 console.log('     git add -A && git commit -m "chore(release): 版本提升"')
-if (PRE) {
-  console.log(`   提示：dist-tag 若要指向新版本，用 \`pnpm publish:tags\` 查看（属包管理动作，不阻断发布）`)
-}

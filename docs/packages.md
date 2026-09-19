@@ -166,34 +166,50 @@ packages/
 **发布流程（一条命令）**：
 
 ```bash
-pnpm release            # ① 凭据预检 ② 自动版本提升 ③ changeset publish ④ 发布核验
+pnpm release            # ① 凭据预检 ② 自动版本提升 ③ changeset publish ④ 发布核验 ⑤ tag 归一
+pnpm release --all      # （仅在需要把全部包的 latest 归位时）全部包补 patch 并重发
 ```
 
 > ★**设计原则：发布就是一条命令**（2026-09-19 用户反馈后收敛）。
 > 版本提升、模板/examples/根包 pin 同步、lockfile 更新这些**机械动作全部由脚本完成**，
 > 不要求人记步骤、也不在出错时把人挡在门外。
 >
-> `scripts/release.mjs` 的四步：
+> ★**发布 tag 策略：单轨（统一 `latest`）**——本项目只有一条线，不出现两套并行版本。
+> 背景：changesets 默认会按包的发布历史分流（`getReleaseTag()`：发布过的版本**全是**
+> prerelease 的包会被**故意发到 `latest`**，其余发到 preState.tag）——实测同一批发布中
+> `cli`/`plugin-vite` 去了 `latest` 而 `create-proteus` 去了 `beta`，形成
+> 「有的在 beta 有的在 latest」的割裂。现显式统一为 `latest`（源码 `if (tag) return tag`
+> 表明显式 tag 优先级最高）。
+> 理由：① npm **强制**每个包必须存在 `latest`（删掉它 `npm i <pkg>` 直接解析失败），
+> 无法真正取消该 tag；② 文档里的安装命令都不带 tag（走 `latest`），让 `latest` 恒等于最新版
+> 意味着用户按文档装就拿对；③ 版本号本身带 `-beta.N` 前缀，语义上仍是预发布。
+> 注：**事后**改 tag（`npm dist-tag`）属包管理操作，会被 npm 要求交互式 2FA（实测 EOTP），
+> 而**发布时设置 tag 不受此限**——所以「发到 latest」是零手工的可行路径；`pnpm release --all`
+> 即用此原理一次性把全部包的 `latest` 归位。
+>
+> `scripts/release.mjs` 的五步：
 > 1. **凭据预检**——快失败，避免 36 行 E404 噪声掩盖真正的 E401；
 > 2. **自动版本提升**——未消费的 changeset → `changeset version`；**改了源码但没 bump 的包
 >    → 自动补 patch changeset 再 version**（不补会被 npm 静默跳过，用户拿到的仍是旧包——
 >    这正是那次真实事故的成因）；随后同步 pin + 更新 lockfile。
 >    ★pre 模式下 changesets 不删已消费的 `.md` 而是记进 `pre.json`，脚本据此判定「未消费」，
->    不会把历史 changeset 误报为待处理。`--no-auto-version` 可改回人工决定版本级别；
-> 3. **发布**——`changeset publish`（按依赖拓扑自动排序）；
-> 4. **发布核验**——本仓版本是否都已上架 registry，未上架的包列名报错。
+>    不会把历史 changeset 误报为待处理；
+> 3. **发布**——`changeset publish --tag latest`。★退出码非 0 **不立即判定失败**：
+>    版本已存在时 npm 返回 E409（`Cannot publish over previously staged version`），
+>    changesets 遂以非零退出，但包其实已在线上（实测踩到，会让人误以为发布失败）；
+> 4. **发布核验**——逐个包查 registry 是否已收录本仓版本。★带**有界重试**：npm 自身有传播
+>    窗口（其提示为 "being processed and may take a few minutes"），单次查询会误报「未上架」
+>    （实测踩到）；只对「查不到」重试，查到即通过，上限 3 分钟；
+> 5. **tag 归一**——`beta` 与 `latest` 都指向当前版本；失败只提示，不让已完成的发布失败。
 >
 > 辅助命令：
 > - `pnpm release --dry-run`——只体检（凭据 + 待提升清单），不改动不发布；
 > - `pnpm publish:smoke`——**发布后深度实测**：干净目录跑真实用户旅程
 >   （`npm create` → `npm install` → 依赖树无重复副本 → `proteus --help` → 导出面），
 >   耗时 1~2 分钟，故**不在发布主流程内**，需要时单独跑；
-> - `pnpm publish:tags`——dist-tag 漂移报告（`npm dist-tag` 属包管理动作，
->   不阻断发布；见下节《复盘续三》）。
+> - `pnpm publish:tags`——tag 漂移报告（`--print` 打印命令；见下节《复盘续三》）。
 >
 > 发布完成后提交版本提升的改动：`git add -A && git commit -m "chore(release): 版本提升"`。
->
-> **正式版切换**：`npx changeset pre exit` 后重跑 `pnpm release`，其余步骤同上（脚本不依赖 pre 模式）。
 
 ## ★npm 发布事故复盘（2026-09-19：CLI 在真实项目「启动即崩」）
 
