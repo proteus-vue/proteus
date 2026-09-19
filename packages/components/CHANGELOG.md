@@ -1,5 +1,15 @@
 # @proteus-vue/components
 
+## 0.2.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/shared@0.2.0-beta.2
+  - @proteus-vue/devtools-runtime@0.1.1-beta.1
+  - @proteus-vue/api@0.2.0-beta.4
+  - @proteus-vue/worklet@0.1.1-beta.2
+
 ## 0.2.0-beta.1
 
 ### Patch Changes

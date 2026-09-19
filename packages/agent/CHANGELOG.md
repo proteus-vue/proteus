@@ -1,5 +1,11 @@
 # @proteus-vue/agent
 
+## 0.1.1-beta.4
+
+### Patch Changes
+
+- @proteus-vue/compat-miniprogram@0.1.1-beta.4
+
 ## 0.1.1-beta.3
 
 ### Patch Changes

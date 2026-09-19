@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/app-config",
-  "version": "0.1.1-beta.0",
+  "version": "0.1.1-beta.1",
   "description": "Proteus 应用全局配置（G-35）：四层合并（默认<env<platform<remote）+ 自研轻量校验（非法降级不崩溃）——纯 TS 零依赖，M1",
   "type": "module",
   "license": "Apache-2.0",
