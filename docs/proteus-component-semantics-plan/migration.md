@@ -22,7 +22,7 @@
 | `<button>` | `<p-button>` | codemod 自动 |
 | `<image>` | `<p-image>` | codemod 自动 |
 | `<scroll-view>` | `<p-scroll-view>` | **codemod 自动**（★2026-09-19：端对齐批次 2 已把官方属性 40/40 全量透传 → 真 1:1；`<p-stack direction>` 仅为可选的进一步语义精炼） |
-| `<swiper>` | `<p-stack snap="mandatory" loop>` | 语义识别（★目标形态未落地：`snap`/`loop` 尚不存在，codemod 只标 manual 不推荐） |
+| `<swiper>` | `<p-stack direction="row" snap="mandatory" loop>` | 语义识别（★2026-09-19 `snap`/`loop` 已落地；MP 端降级为普通排列 + 可观察提示） |
 | `<movable-view>` | `<p-draggable>` | codemod 自动（G-32 G8 已落地） |
 | `<input>` | `<p-input>` | codemod 自动 |
 | `<list>` / `<recycle-view>` | `<p-list>`（内置虚拟化） | codemod + 验证 |
@@ -69,7 +69,7 @@ Step 3：人工处理剩余（swiper 轮播语义 + 能力 reason）
 
 | 场景 | 原因 | 处理 |
 |------|------|------|
-| `swiper` → 轮播语义 | 无 1:1 组件；`p-stack snap/loop` 目标形态**尚未实现** | 人工决策（候选 `p-scroll-view` + `paging-enabled`）或 AI Agent（G-23）辅助 |
+| `swiper` → 轮播语义 | 无 1:1 组件，需识别「一维排列 + 吸附 + 循环」意图 | 人工决策或 AI Agent（G-23）辅助——目标形态 `<p-stack direction="row" snap="mandatory" loop>`（★2026-09-19 属性已落地） |
 | 自定义原生插件 | 散落在业务 | 封装为 Backend（G-28） |
 | 平台特有 ifdef | 违背 G-30.1 | 改为 `@conditional` |
 

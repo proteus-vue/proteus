@@ -43,8 +43,8 @@
   <swiper-item wx:for="{{banners}}"><image src="{{item}}"/></swiper-item>
 </swiper>
 
-<!-- 新：Proteus -->
-<p-stack direction="row" snap="mandatory" :loop="true" :autoplay="3000">
+<!-- 新：Proteus（★2026-09-19 snap/loop 已落地：Web CSS scroll-snap + 回环；MP 端普通排列 + 提示） -->
+<p-stack direction="row" snap="mandatory" :loop="true" align="center">
   <p-box v-for="banner in banners" :key="banner">
     <p-image :src="banner" fit="cover" />
   </p-box>
@@ -52,6 +52,11 @@
 ```
 
 **改进**：`swiper` 不是语义——它是「一维排列 + 吸附 + 循环」的组合。Proteus 用布局原语表达，**swiper 被消灭**。
+
+> ⚠ **尚未承接的官方属性（诚实边界）**：`autoplay` / `interval`（自动轮播定时）、`indicator-dots`（指示点）、
+> `duration` / `easing-function`（切换动画）当前**不在** `p-stack` 属性面内——上例**不要**写 `:autoplay`
+> （会作为透传属性落到渲染节点，无框架语义）。这些属「轮播增强」范畴；需要的项目请自绘定时器切换定位，
+> 或用 `p-scroll-view` 的原生翻页能力；如需框架级支持请提为后续批次。
 
 ### 1.3 `<movable-view>` → `<p-draggable>`
 

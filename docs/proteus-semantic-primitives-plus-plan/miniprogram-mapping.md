@@ -27,8 +27,8 @@
 | 2 | `<text>` | `<p-text>` / `<p-heading>` | ✅ | 语义拆分：正文 vs 标题 |
 | 3 | `<image>` | `<p-image>` | ✅ | |
 | 4 | `<scroll-view>` | `<p-scroll>` / `<p-virtual-list>` | ✅ | 语义拆分：普通滚动 vs 虚拟化。★**1:1 迁移走 `<p-scroll-view>`**（端对齐产物：官方属性 40/40 全量透传、事件同名载荷归一）——codemod 已自动替换；`<p-scroll>` 为同语义别名（`layout.scroll`，登记见 `TAG_SEMANTIC_ALIASES`） |
-| 5 | `<swiper>` | `<p-stack snap="mandatory" loop>` | ⏳ | **消灭为属性**（G-31 核心决策）——★但 `snap`/`loop` **尚未实现**（p-stack 源码仅 `direction`/`wrap`/`gap`）：目标形态已定、属性待落地；codemod 标 manual 且**不再推荐**该未落地属性 |
-| 6 | `<swiper-item>` | `<p-stack>` 子项 | ⏳ | 由父级布局约束（随 `<swiper>` 一并决策） |
+| 5 | `<swiper>` | `<p-stack snap="mandatory" loop>` | ✅ | **消灭为属性**（G-31 核心决策）——★2026-09-19 `snap`/`loop` **已落地**（p-stack L3 属性补齐：Web CSS scroll-snap + 回环；MP 端 view 不滚动故降级为普通排列 + 可观察提示，见 degradation 表）；codemod 提示已改指该真实形态 |
+| 6 | `<swiper-item>` | `<p-stack>` 子项 | ✅ | 每个子项即一屏（随 `<swiper>` 转 `p-stack` 直接子项） |
 | 7 | `<movable-area>` | `<p-scrollable>` 容器 | ✅ | |
 | 8 | `<movable-view>` | `<p-draggable>` | ✅ | |
 | 9 | `<cover-view>` | `<p-overlay>` (L2) | 🔄 | Web 兼容性 |

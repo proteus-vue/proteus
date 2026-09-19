@@ -50,6 +50,13 @@
         <p-text class="label">p-virtual-list（虚拟列表）：</p-text>
         <p-virtual-list :items="virtualItems" :item-height="36" :height="120" />
       </div>
+      <div class="row">
+        <p-text class="label">p-stack snap + loop（轮播 = swiper 语义消灭形态）：</p-text>
+        <p-stack direction="row" snap="mandatory" :loop="true" :gap="8" class="carousel" @scroll="onCarouselScroll">
+          <div v-for="(s, i) in carouselSlides" :key="i" class="carousel-slide">{{ s }}</div>
+        </p-stack>
+        <p-text class="hint">横向滑动到底自动回环（Web）· MP 端降级为普通排列并提示 · 当前定位：{{ carouselIndex }}</p-text>
+      </div>
     </section>
 
     <section class="block">
@@ -327,6 +334,7 @@ import {
   PText,
   PIcon,
   PInline,
+  PStack,
   PSpacer,
   PDivider,
   PScroll,
@@ -631,6 +639,14 @@ function onFormSubmit(payload: Record<string, unknown>): void {
 
 const heights = [60, 90, 48, 76, 110, 66, 84, 52]
 const virtualItems = Array.from({ length: 50 }, (_, i) => ({ title: '虚拟项 ' + (i + 1) }))
+// ★p-stack snap/loop 演示（轮播语义消灭形态）：真实滚动 → 回显定位（SOP ⑨ 演示须真交互）
+const carouselSlides = ['① 首屏', '② 第二屏', '③ 第三屏', '④ 末屏（继续滑 → 回环）']
+const carouselIndex = ref(0)
+function onCarouselScroll(e: { scrollLeft?: number }): void {
+  const step = 240 // 每屏宽 + gap（与样式一致）
+  const left = (e && typeof e.scrollLeft === 'number' ? e.scrollLeft : 0)
+  carouselIndex.value = Math.min(carouselSlides.length - 1, Math.round(left / step))
+}
 const tabs = [
   { key: 'home', label: '首页', icon: 'home' },
   { key: 'mine', label: '我的', icon: 'user' },
@@ -709,6 +725,24 @@ function onSheetSelect(value: string): void {
   padding: 8px;
   border-bottom: 1px solid #f2f3f5;
   font-size: 13px;
+}
+/* ★snap/loop 轮播演示：每屏固定宽 232 + gap 8 = 240（与 onCarouselScroll 的 step 对应） */
+.carousel {
+  width: 100%;
+  border: 1px solid #ebedf0;
+  border-radius: 6px;
+  padding: 4px;
+}
+.carousel-slide {
+  flex: 0 0 232px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #07c160;
 }
 .masonry-item {
   background: #fff;

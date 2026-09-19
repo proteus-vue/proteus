@@ -26,7 +26,7 @@ const asJson = process.argv.includes('--json')
 const probe = `
 import {
   auditDegradation, formatDegradationReport, DEGRADATION_TABLE,
-  RULE_REGISTERED_PROPS, HOST_FALLBACK_TAGS, degradeProp,
+  RULE_REGISTERED_PROPS, HOST_FALLBACK_TAGS, degradeProp, TAG_SCOPED_MP_FALLBACK,
 } from ${JSON.stringify(path.join(ROOT, 'packages/component-ir/src/degradation.ts'))}
 import { PRIMITIVE_CATALOG } from ${JSON.stringify(path.join(ROOT, 'packages/component-ir/src/primitives.ts'))}
 import { componentSpecs } from ${JSON.stringify(path.join(ROOT, 'scripts/lib/component-props.mjs'))}
@@ -45,13 +45,19 @@ const extra = []
 // ③a 官方 MP 属性被判 mp:fallback = 自相矛盾（官方端存在却被声明为降级）
 // ③b 非官方（框架 Web 专有）属性被判 mp:fallback 但无规则表依据 = 判定无出处
 // ★遍历 specs（全 73 组件，与标尺同口径）而非仅 DEGRADATION_TABLE（仅 catalog 62）
+// ★2026-09-19 精确化：officialNames 是**跨全部组件**的全局名字集合，而本仓存在跨组件同名
+//   （实测：loop 是 <video>/<audio> 官方属性、snap 是 <draggable-sheet> 官方属性；框架 p-stack
+//   另有自己的语义 loop/snap）→ 全局同名会把「框架自己的语义属性」误判为「官方透传属性被降级」。
+//   故：在 TAG_SCOPED_MP_FALLBACK 中**显式按 tag 登记**的降级视为「有据的决策」而豁免 ③a
+//   （豁免面很窄——仅该 tag 的该属性；未登记者照旧拦，如把 p-scroll-view 的 scroll-x 改降级仍会红）。
 const hostTags = new Set(HOST_FALLBACK_TAGS)
 for (const { tag, props } of specs) {
   const isHost = hostTags.has(tag)
   for (const prop of props) {
     const entry = degradeProp(tag, prop)
     const isOfficial = officialNames.has(kebab(prop)) || officialNames.has(prop.toLowerCase())
-    if (isOfficial && entry.mp !== 'supported') {
+    const explicitlyScoped = Boolean(TAG_SCOPED_MP_FALLBACK[tag] && TAG_SCOPED_MP_FALLBACK[tag][prop])
+    if (isOfficial && entry.mp !== 'supported' && !explicitlyScoped) {
       extra.push({ tag, prop, kind: 'official-not-mp-supported', detail: '官方 MP 存在的属性被判 mp:' + entry.mp + '（自相矛盾）' })
     }
     // 非官方且非宿主族却声明 mp:fallback → 除非在规则表登记（避免判定无出处）
