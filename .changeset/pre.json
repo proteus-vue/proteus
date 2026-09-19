@@ -48,6 +48,7 @@
     "@proteus-vue/components": "0.1.0"
   },
   "changesets": [
+    "batch3-host-capabilities",
     "compiler-silent-traps",
     "framework-element-probe",
     "mp-e2e-wechatide-standard",
@@ -58,6 +59,8 @@
     "step5-plugin-vite",
     "step6-alias",
     "step7-template",
+    "sync-publish-drift",
+    "sync-shared-pinia",
     "transparency-hardening",
     "web-sim-and-alignment-fixes"
   ]

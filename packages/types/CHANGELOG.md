@@ -1,5 +1,12 @@
 # @proteus-vue/types
 
+## 0.2.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/contracts@0.1.1-beta.0
+
 ## 0.2.0-beta.1
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @proteus-vue/compiler
 
+## 0.3.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @proteus-vue/component-ir@0.2.0-beta.1
+  - @proteus-vue/contracts@0.1.1-beta.0
+  - @proteus-vue/types@0.2.0-beta.2
+
 ## 0.3.0-beta.2
 
 ### Patch Changes
