@@ -117,7 +117,13 @@ export function collectCompilerEmittedTags(templateBody: string): Set<string> {
 
 /** 解析框架组件标签 → 组件目录（`${componentsDir}/<tag>/index.vue` 或 `<tag>.vue`）；无则 null */
 function resolveComponentFile(componentsDir: string, tag: string): string | null {
-  if (!tag.startsWith('p-')) return null
+  // ★2026-09-19 修前缀硬编码（真机暴露）：此前要求 `tag.startsWith('p-')`，
+  //   而本仓组件有 **`pg-` 前缀**（pg-glass，G-07 液态玻璃统一入口）——被判定为「非框架组件」
+  //   直接 return null → 按需输出把它静默剔除（产物只有 index.json，缺 js/wxml/wxss）
+  //   → 真机报 `pages/system-glass.json: usingComponents["pg-glass"] 未找到组件**、模拟器启动失败**。
+  //   判据改为**目录/文件真实存在**（本函数随后就会 existsSync）——不再依赖命名前缀假设；
+  //   非框架标签（div/view 等）自然落到 existsSync 失败 → 仍返回 null。
+  //   注：`p-`/`pg-` 之外的未来前缀同样自动覆盖，无需再改此处。
   const dirIndex = path.join(componentsDir, tag, 'index.vue')
   if (fs.existsSync(dirIndex)) return dirIndex
   const flat = path.join(componentsDir, `${tag}.vue`)
