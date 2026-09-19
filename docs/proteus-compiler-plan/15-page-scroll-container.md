@@ -52,7 +52,7 @@ Skyline 页面不滚动后，**页面级滚动 API 全部依赖滚动容器**—
 | 项 | 决策 |
 |---|---|
 | 包装时机 | template.ts 页面模式（非 isComponent）：顶层多元素 → 包 scroll-view；单元素 → 直接加 scroll-view 包裹（统一包） |
-| 高度 | `height: 100vh`（Skyline 视口；tabBar 页面需考虑底部遮挡——后续验证 `100vh` 语义） |
+| 高度 | `height: 100vh` —— ★**tabBar 遮挡问题已于 2026-09-19 真机实测关闭**：Skyline 的 `100vh` **按页面类型解析**（tabBar 页 → `windowHeight`=762，底边恰在 tabBar 顶边；非 tabBar 页 → `screenHeight`=844 满屏）⇒ **不存在遮挡**，无需特殊处理。回归锁见 `tests/e2e-mp-components.test.ts`「tabBar 页：自动滚动容器不被 tabBar 遮挡」 |
 | Skyline 性能 | 默认 list 模式；**长列表优化**（list-view 摊平）后续批次 |
 | Web 端 | scroll-view 需进 proteus-* 改写白名单 + Web 模拟组件（overflow div）——当前 p-scroll-view 兜底 |
 | 配置 | proteus.config 开关 `page.autoScrollContainer`（默认 true；false 关闭自动包装） |

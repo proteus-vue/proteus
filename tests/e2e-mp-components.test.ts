@@ -51,6 +51,18 @@ function projectHasRoute(route: string): boolean {
 const SCROLL_PAGE = 'subpackages/components/pages/p-scroll-view'
 const HAS_SCROLL_PAGE = projectHasRoute(SCROLL_PAGE)
 
+/** 项目 tabBar 页（第一个）——用于「100vh 是否被 tabBar 遮挡」的几何回归锁 */
+function firstTabBarPage(): string | null {
+  try {
+    const app = JSON.parse(fs.readFileSync(path.join(PROJECT, 'app.json'), 'utf-8')) as { tabBar?: { list?: Array<{ pagePath: string }> } }
+    const p = app.tabBar?.list?.[0]?.pagePath
+    return p ? p.replace(/^\//, '') : null
+  } catch {
+    return null
+  }
+}
+const TABBAR_PAGE = firstTabBarPage()
+
 if (CLIENT) opts.client = CLIENT
 
 /** ★类名 scope 后缀（data-v-xxx）由源文件内容哈希生成、**每次构建可能变**——
@@ -243,5 +255,46 @@ describe.skipIf(!ENABLED || !HAS_SCROLL_PAGE)('★组件内部几何（探针通
     await assertProbeGeometry(driver, horiz!.pid, { minWidth: 200, minHeight: 20 })
     await assertProbeScrollable(driver, horiz!.pid, 'x')
     await driver.close()
+  })
+})
+
+// ── ★tabBar 页 100vh 遮挡回归锁（2026-09-19，真机实测闭环）──
+//   背景：项目记忆长期挂着「tabBar 100vh 遮挡」为已知限制，计划文档也标「后续验证 100vh 语义」。
+//   实测结论（examples tabBar 页 pages/mine）：**Skyline 的 100vh 按页面类型解析**——
+//     tabBar 页 → 762（= windowHeight = tabBar 顶边）；非 tabBar 页 → 844（= screenHeight 满屏）
+//   ⇒ 自动滚动容器底边恰好落在 tabBar 顶边，**不存在遮挡**（该限制不成立，已据实关闭）。
+//   本用例把该结论锁成几何断言：容器高 ≈ windowHeight 且底边不越过 windowHeight。
+//   ★若将来有人把 `.proteus-page-scroll` 的高度改成不随页面类型解析的值（如硬编码 px 或改用
+//     screenHeight 语义），容器会伸到 tabBar 之下 → 断言红（可观察，不靠人肉复测）。
+describe.skipIf(!ENABLED || !TABBAR_PAGE || !projectHasRoute(TABBAR_PAGE ?? ''))('★tabBar 页：自动滚动容器不被 tabBar 遮挡（100vh 语义回归锁）', () => {
+  it('容器高 ≈ windowHeight（底边落在 tabBar 顶边，非 screenHeight）', () => {
+    openPage(TABBAR_PAGE as string)
+    settle(1200)
+    // ★页面级原生节点查询（.proteus-page-scroll 是页面根 scroll-view，非组件内部——可查到）
+    const raw = evalIn<string>(
+      `function(){ return new Promise(function(resolve){
+         var q = wx.createSelectorQuery();
+         q.select('.proteus-page-scroll').boundingClientRect();
+         q.exec(function(r){
+           var el = r[0];
+           wx.getSystemInfo({ success: function(si){
+             resolve(JSON.stringify({
+               route: getCurrentPages().slice(-1)[0].route,
+               containerH: el ? Math.round(el.height) : null,
+               containerBottom: el ? Math.round(el.bottom) : null,
+               windowHeight: si.windowHeight,
+               screenHeight: si.screenHeight
+             }));
+           }});
+         });
+       }); }`,
+    )
+    const d = JSON.parse(String(raw)) as { route: string; containerH: number | null; containerBottom: number | null; windowHeight: number; screenHeight: number }
+    expect(d.route, '应已进入 tabBar 页').toBe(TABBAR_PAGE)
+    expect(d.containerH, '应有自动包装的滚动容器（.proteus-page-scroll）').not.toBeNull()
+    // ★核心断言①：容器高随 windowHeight（tabBar 已扣除），而不是 screenHeight（整屏）
+    expect(Math.abs(d.containerH! - d.windowHeight), `★容器高应≈windowHeight（实测 ${d.containerH} vs ${d.windowHeight}；screenHeight=${d.screenHeight}）——若等于 screenHeight 即被 tabBar 遮挡`).toBeLessThanOrEqual(2)
+    // ★核心断言②：底边不越过 tabBar 顶边（越界即遮挡）
+    expect(d.containerBottom!, '★容器底边不得越过 windowHeight（越过即伸到 tabBar 之下）').toBeLessThanOrEqual(d.windowHeight + 1)
   })
 })
