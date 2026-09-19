@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/contracts",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.0",
   "description": "Proteus 跨层共享 DTO 契约（架构规约 L0 + types-plan §07）：RouteRecord/RouteMeta/RouteTransition/ApiResponse/StoreSnapshot/CapabilityDescriptor——零运行时依赖纯类型，types 包 re-export 兼容（同名必同义，铁律 #9）",
   "type": "module",
   "license": "Apache-2.0",

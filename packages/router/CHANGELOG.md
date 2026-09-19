@@ -1,5 +1,18 @@
 # @proteus-vue/router
 
+## 0.2.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/shared@0.2.0-beta.1
+
+## 0.2.0-beta.3
+
+### Patch Changes
+
+- @proteus-vue/types@0.2.0-beta.2
+
 ## 0.2.0-beta.2
 
 ### Patch Changes

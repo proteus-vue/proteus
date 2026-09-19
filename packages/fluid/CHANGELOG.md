@@ -1,6 +1,6 @@
-# @proteus-vue/mcp
+# @proteus-vue/fluid
 
-## 0.1.1-beta.1
+## 0.1.1-beta.0
 
 ### Patch Changes
 
@@ -16,16 +16,3 @@
 
   本次 bump 为**发布同步**（不含破坏性变更）；防复发改造见 `scripts/check-publish-drift.mjs`
   与 `publish-all.sh` 的内容校验（发布前自动拦截同类漂移）。
-
-- Updated dependencies
-- Updated dependencies
-  - @proteus-vue/component-ir@0.2.0-beta.1
-  - @proteus-vue/render-backend@0.1.1-beta.1
-
-## 0.1.1-beta.0
-
-### Patch Changes
-
-- Updated dependencies
-  - @proteus-vue/component-ir@0.1.1-beta.0
-  - @proteus-vue/render-backend@0.1.1-beta.0

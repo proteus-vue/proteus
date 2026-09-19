@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/runtime",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.3",
   "description": "Proteus 运行时：setData 桥接（批量 + 深层 diff）/ 页面生命周期 / store 桥 / app 骨架模板",
   "type": "module",
   "license": "Apache-2.0",
@@ -27,8 +27,8 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts src/style-safety/index.ts --bundle --format=esm --platform=node --outdir=dist --external:@proteus-vue/shared --external:@proteus-vue/contracts --external:pinia --external:vue"
   },
   "dependencies": {
-    "@proteus-vue/contracts": "0.1.0",
-    "@proteus-vue/shared": "0.2.0-beta.0"
+    "@proteus-vue/contracts": "0.1.1-beta.0",
+    "@proteus-vue/shared": "0.2.0-beta.1"
   },
   "peerDependencies": {
     "pinia": "^4.0.0",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "pinia": "^4.0.3",
-    "@proteus-vue/devtools-runtime": "0.1.0",
-    "@proteus-vue/types": "0.2.0-beta.1"
+    "@proteus-vue/devtools-runtime": "0.1.1-beta.0",
+    "@proteus-vue/types": "0.2.0-beta.2"
   }
 }

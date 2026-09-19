@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/agent",
-  "version": "0.1.1-beta.1",
+  "version": "0.1.1-beta.3",
   "description": "G-36 B2 Agent Kit SDK（proteus-ai-agent-plan 04-agent-kit）：IRBuilder（不绑 LLM 构造 ComponentIR）+ generateCode 规则引擎（IR→SFC/TS）+ withProteusRules 系统约束注入 + intent-to-flex Skill（规则引擎版意图→页面，LLM provider 可注入）——G-36 降级策略：LLM 不可用时走 IR 模板",
   "type": "module",
   "license": "Apache-2.0",
@@ -22,8 +22,8 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
   },
   "dependencies": {
-    "@proteus-vue/component-ir": "0.1.1-beta.0",
-    "@proteus-vue/mcp": "0.1.1-beta.0",
-    "@proteus-vue/compat-miniprogram": "0.1.1-beta.1"
+    "@proteus-vue/component-ir": "0.2.0-beta.1",
+    "@proteus-vue/mcp": "0.1.1-beta.1",
+    "@proteus-vue/compat-miniprogram": "0.1.1-beta.3"
   }
 }

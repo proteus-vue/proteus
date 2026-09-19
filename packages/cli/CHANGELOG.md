@@ -1,5 +1,35 @@
 # @proteus-vue/cli
 
+## 0.3.0-beta.4
+
+### Patch Changes
+
+- @proteus-vue/capabilities@0.1.1-beta.3
+- @proteus-vue/router@0.2.0-beta.4
+- @proteus-vue/runtime@0.2.0-beta.3
+- @proteus-vue/plugin-vite@0.2.0-beta.4
+
+## 0.3.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @proteus-vue/component-ir@0.2.0-beta.1
+  - @proteus-vue/plugin-vite@0.2.0-beta.3
+  - @proteus-vue/app-config@0.1.1-beta.0
+  - @proteus-vue/capabilities@0.1.1-beta.2
+  - @proteus-vue/compiler-backend@0.1.1-beta.1
+  - @proteus-vue/css-compat@0.1.1-beta.0
+  - @proteus-vue/devtools-runtime@0.1.1-beta.0
+  - @proteus-vue/fluid@0.1.1-beta.0
+  - @proteus-vue/module@0.1.1-beta.0
+  - @proteus-vue/render-backend@0.1.1-beta.1
+  - @proteus-vue/compiler@0.3.0-beta.3
+  - @proteus-vue/runtime@0.2.0-beta.2
+  - @proteus-vue/types@0.2.0-beta.2
+  - @proteus-vue/router@0.2.0-beta.3
+
 ## 0.3.0-beta.2
 
 ### Minor Changes
