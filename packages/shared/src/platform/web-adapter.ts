@@ -36,7 +36,9 @@ export function createWebAdapter(): PlatformAdapter {
     routeType?: string,
     nav: 'forward' | 'back' | 'replace' | 'reLaunch' | 'switchTab' = 'forward',
   ) => {
-    current = { route: url.split('?')[0].replace(/^\//, ''), routeType }
+    // ★保留 query 到当前页（2026-09-19）：此前只传给 listeners、当前页上不留 →
+    //   页内无法读到路由参数（外部实战报告第 4 条）。与 MP 的 Page.options 语义对齐。
+    current = { route: url.split('?')[0].replace(/^\//, ''), routeType, query: parseQuery(url) }
     listeners.forEach((l) => l(current.route, parseQuery(url), routeType, nav))
   }
 

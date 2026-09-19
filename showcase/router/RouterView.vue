@@ -6,16 +6,11 @@ import { computed, ref, defineAsyncComponent } from 'vue'
 import type { Component } from 'vue'
 import { routeMap } from './auto-routes'
 import { adapter } from '@proteus-vue/shared'
-import { webTransitionName, resolveVariantComponentKey, routeAppliesToPlatform } from '@proteus-vue/router'
+import { webTransitionName } from '@proteus-vue/router'
 
 // 懒加载全部页面（含分包页）：Web 端按页面自动 code-split
 // glob 相对本文件（examples/router/）→ examples/pages 与 examples/subpackages/*/pages
 const modules = import.meta.glob('../**/pages/**/*.vue')
-
-// ★平台变体·路由门控（第 4 层）：仅保留在 web 生效的路由（platforms 白名单 / webOnly）
-const activeRouteMap: Record<string, (typeof routeMap)[string]> = Object.fromEntries(
-  Object.entries(routeMap).filter(([, r]) => routeAppliesToPlatform(r as never, 'web')),
-)
 
 // 页面组件缓存 + 预热：异步组件首次挂载会跳过 Transition 动画（真机/浏览器验证"第一次无下沉转场"），
 // 预热使首次导航也同步挂载（chunk 已加载则 defineAsyncComponent 不再是异步 wrapper）
@@ -27,12 +22,23 @@ for (const [key, load] of Object.entries(modules)) {
 }
 const current = ref(adapter.getCurrentPages()[0]?.route || 'pages/index')
 
+// ★路由参数（2026-09-19 修：此前 Web 端参数**两条路都拿不到**——外部实战报告第 4 条，
+//   表现为写作页恒显示"第 0 章"）：
+//   · 小程序端参数走 `onLoad(options)`（编译产物注入）；
+//   · Web 端此前 onLoad 是 no-op（pageLifecycle）+ 本组件不传 props → 参数丢失。
+//   现把 query 透传给页面组件：页面用 `defineProps<{ id?: string }>()` 即可收到
+//   （未声明 props 的页面不受影响——query 作为 attrs 落到根元素且不渲染）。
+//   ★同时 adapter 的当前页也保留了 query（`getCurrentPages()[0].query`），
+//   需要命令式读取的页面两条路都可（与 MP `Page.options` 语义对齐）。
+const currentQuery = ref<Record<string, string>>(adapter.getCurrentPages()[0]?.query ?? {})
+
 // 路由变化 → 转场名（★透明化：routeType → Vue Transition 映射由框架共享表 webTransitionName 提供，
 //   不再 RouterView 私有硬编码；三端共用同一枚举见 packages/router/src/transforms/transform-transition.ts）
 const transitionName = ref('fade')
 let lastForwardName = 'fade' // 当前页进入时的转场名（后退时取其反向）
-adapter.onPageLoad?.((route, _query, routeType, nav) => {
+adapter.onPageLoad?.((route, query, routeType, nav) => {
   current.value = route || 'pages/index'
+  currentQuery.value = query ?? {}
   if (nav === 'back') {
     // 反向转场：用当前退出页进入时的转场名 + '-back'
     transitionName.value =
@@ -65,14 +71,12 @@ const barrierOpacity = computed(() => (transitionName.value.startsWith('halfscre
 const view = computed<Component | null>(() => {
   // routeMap 以 name 为键，这里收到的是 path，需按 path 回退查找（同 guards.getCurrentFrom）
   const rec =
-    activeRouteMap[currentRoute.value] || Object.values(activeRouteMap).find((r) => r.path === currentRoute.value)
+    routeMap[currentRoute.value] || Object.values(routeMap).find((r) => r.path === currentRoute.value)
   if (!rec) return null
-  // ★平台变体（第 2 层）：rec.component 是**基准路径**（login.vue）→ 解析到本平台变体（login.web.vue）@
-  const key = resolveVariantComponentKey(Object.keys(modules), rec.component, 'web') ?? rec.component
-  // 优先用缓存（同步挂载保证转场）
-  const cached = pageCache.get(key)
+  // rec.component 为相对 examples/router/ 的路径，与 glob 键一致；优先用缓存（同步挂载保证转场）
+  const cached = pageCache.get(rec.component)
   if (cached) return cached
-  const load = (modules as Record<string, () => Promise<unknown>>)[key]
+  const load = (modules as Record<string, () => Promise<unknown>>)[rec.component]
   return load ? defineAsyncComponent(load as () => Promise<Component>) : null
 })
 </script>
@@ -90,7 +94,9 @@ const view = computed<Component | null>(() => {
       :style="{ '--barrier-opacity': barrierOpacity }"
     />
     <Transition :name="transitionName" :mode="isLayered ? undefined : 'out-in'">
-      <component :is="view" v-if="view" :key="currentRoute" class="page" />
+      <!-- ★v-bind="currentQuery"：路由参数透传给页面（页面用 defineProps 声明即收到；
+           未声明的页面不受影响）。修 Web 端「参数两条路都拿不到」见 currentQuery 处注释 -->
+      <component :is="view" v-if="view" :key="currentRoute" v-bind="currentQuery" class="page" />
       <div v-else :key="'404'" class="page">404 Not Found</div>
     </Transition>
   </div>

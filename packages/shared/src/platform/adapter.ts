@@ -11,6 +11,14 @@
 /** 页面栈中的页面实例（MP 为 wx 页面实例的投影；Web 为路由描述对象） */
 export interface PageInstance {
   route: string
+  /**
+   * ★页面参数（2026-09-19 补，对齐小程序 `Page.options` 语义）：
+   *   MP 端由 `onLoad(options)` 提供；Web 端此前**丢弃** query（只传给 listeners）→
+   *   页内既拿不到 props 也读不到 options，**Web 端路由参数失效**（外部实战报告第 4 条：
+   *   写作页恒显示"第 0 章"）。现 Web 端在当前页上保留 query，使
+   *   `adapter.getCurrentPages()[0]?.query` 两端同形可读。
+   */
+  query?: Record<string, string>
   setData?(data: Record<string, unknown>): void
 }
 
