@@ -266,3 +266,24 @@ describe('★runGenRoutes webOnly（web 目标的路由表更新）', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 })
+
+// ── ★routesOutput 为空 = 显式关闭路由表生成（2026-09-19 CI 失败暴露）──
+//   官网（文档站）用自身 src/router.ts，不需要框架路由表；webOnly 修复后它被**误生成**
+//   auto-routes.ts（import @proteus-vue/router/types，而官网不依赖该包）→ CI 类型检查失败。
+describe('★runGenRoutes：routesOutput 显式关闭', () => {
+  it("routesOutput: '' → 不生成路由表（工程自带路由机制）", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-off-'))
+    writeFixture(dir, 'src/pages/index.vue', '<template><div>home</div></template>')
+    runGenRoutes({ config: makeConfig({ routesOutput: '' }), root: dir, webOnly: true })
+    expect(fs.existsSync(path.join(dir, 'src/router/auto-routes.ts')), "★routesOutput 为空时不得生成路由表").toBe(false)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('对照：routesOutput 非空 → 照常生成（防上一条误伤正常场景）', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-genroutes-on-'))
+    writeFixture(dir, 'src/pages/index.vue', '<template><div>home</div></template>')
+    runGenRoutes({ config: makeConfig(), root: dir, webOnly: true })
+    expect(fs.existsSync(path.join(dir, 'src/router/auto-routes.ts'))).toBe(true)
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+})

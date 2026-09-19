@@ -27,7 +27,13 @@ const config: ProteusConfig = {
   skyline: false,
   appid: '',
   pagesDir: 'src/pages',
-  routesOutput: 'src/router/auto-routes.ts',
+  // ★显式关闭框架路由表生成（2026-09-19）：官网是**文档站**，路由由自身的 `src/router.ts`
+  //   （vue-router 配置）驱动，**不使用**框架的应用侧路由表。此前 web 目标跳过 gen-routes
+  //   看不出问题；`webOnly`（web 目标也更新路由表）落地后会被误生成一个未使用的
+  //   `auto-routes.ts`，而它 import `@proteus-vue/router/types`——官网并不依赖该包
+  //   → 官网构建类型检查失败（CI 实测 `Cannot find module '@proteus-vue/router/types'`）。
+  //   `routesOutput: ''` 为框架提供的显式 opt-out 语义。
+  routesOutput: '',
   customRoute: { registerPresets: false, builders: {} },
   setDataBridge: { batchWindow: 16, perComponent: false },
   style: { px2rpx: false, rpxRatio: 2 },
