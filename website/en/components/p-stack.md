@@ -33,6 +33,7 @@ Flex stack
 
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
+| `pid` | — | `String` | `''` | No |
 | `direction` | Main-axis direction: row (horizontal) / column (vertical) | `String` | `'column'` | No |
 | `wrap` | Wrap automatically when space is insufficient (row only) | `Boolean` | `false` | No |
 | `gap` | Spacing between children (px) | `Number` | `0` | No |
@@ -41,6 +42,11 @@ Flex stack
 | `loop` | — | `Boolean` | `false` | No |
 
 ### Prop details
+
+#### `pid`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
 
 #### `direction`
 
@@ -99,7 +105,7 @@ Flex stack
 ## Usage
 
 ```vue
-<p-stack :direction="…">
+<p-stack :pid="…">
   <p-text>content</p-text>
 </p-stack>
 ```
