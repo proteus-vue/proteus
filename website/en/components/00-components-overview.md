@@ -25,7 +25,7 @@ order: 0
 | [p-scroll-view](/docs/component/p-scroll-view) | 43 | 14 |
 | [p-sidebar](/docs/component/p-sidebar) | 4 | 0 |
 | [p-spacer](/docs/component/p-spacer) | 3 | 0 |
-| [p-stack](/docs/component/p-stack) | 6 | 1 |
+| [p-stack](/docs/component/p-stack) | 7 | 1 |
 | [p-view](/docs/component/p-view) | 7 | 0 |
 | [p-virtual-list](/docs/component/p-virtual-list) | 3 | 0 |
 | [p-zone](/docs/component/p-zone) | 1 | 0 |
