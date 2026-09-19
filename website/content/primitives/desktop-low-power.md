@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `PowerInfo` | interface | 诚实降级：无 Battery API（桌面浏览器多数不支持 navigator.getBattery）→ supported:false（宿主桥接原生电量后续） |
+| `PowerInfo` | interface | ★G-24 B4（proteus-semantic-primitives-plan 01 §8 p-low-power）：低电量/低数据纯逻辑（NSProcessInfo lowP |
 | `BatteryLike` | interface | — |
 | `PowerEnv` | interface | — |
 | `detectLowPower` | function | ★detectLowPower：即时电量状态（getBattery 注入；无 API → supported:false 诚实降级） |

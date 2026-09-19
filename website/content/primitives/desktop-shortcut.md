@@ -36,14 +36,14 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `ShortcutMod` | type | 纯逻辑零 DOM 依赖（事件形状注入可单测）；MP 产物安全：无 ?. / ??；无数组解构 |
+| `ShortcutMod` | type | ★G-24 B1（proteus-semantic-primitives-plan 03 §3 p-shortcut）：键盘快捷键纯逻辑 |
 | `ShortcutKey` | type | — |
 | `ShortcutBinding` | interface | 解析结果：按键序列 + 语义 id |
 | `KeyEventLike` | interface | 键盘事件形状（Web KeyboardEvent 的注入式子集——测试可 mock） |
 | `detectShortcutPlatform` | function | ★#445 平台探测原语（纯函数注入式；调用方免碰 navigator——短标签用：Darwin/mac/iPhone/iPad → 'Mac'，其余 'web'） |
 | `parseShortcutExpr` | function | 解析 "mod+s:save" / "mod+shift+a" / "escape" → binding（大小写/空白容忍；非法段跳过） |
 | `normalizeMod` | function | 平台 mod 归一：darwin/mac → 'meta'（⌘）；其余 → 'ctrl'（PRIM005 自动遵循平台惯例） |
-| `matchShortcut` | function | / |
+| `matchShortcut` | function | 命中判定：修饰符 + 主键匹配（keys 顺序无关；mod = meta 或 ctrl 其一——Mac ⌘ / Win Ctrl，PRIM005） |
 | `shortcutLabel` | function | 快捷键标签（菜单栏显示——PRIM005 验收）：mod+s → '⌘S'（darwin）/ 'Ctrl+S' |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）

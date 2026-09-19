@@ -692,5 +692,53 @@ export const PRIM_EN = {
       McpToolDescriptor: 'Tool descriptor (spec subset: name / description / inputSchema / execute)',
       McpCapabilityToolSpec: 'Capability tool spec (name / description / inputSchema / run)',
     },
+    usage: [
+      {
+        code: `const cap = createCapabilityHooks()\n\nconst mcp = useMCP({\n  prefix: 'app_',\n  capabilities: [\n    { name: 'vibrate', description: 'Vibrate feedback', run: () => cap.useVibrate(30) },\n    { name: 'clipboard_read', description: 'Read clipboard', run: () => cap.useClipboard() },\n  ],\n  onDispose: onScopeDispose, // or onUnmounted — lifecycle handed back to the caller (zero vue dependency)\n})\n\nmcp.isSupported  // whether this environment implements WebMCP (callable-method detection)\nmcp.toolNames    // actually registered tool names (prefix included)`,
+        src: 'examples/pages/platform-api-demo.vue:836',
+      },
+      {
+        code: `// Capability → tool: ok → result; Err → isError + error code (CapResult normalized automatically)\nconst t = capabilityToTool({ name: 'locate', description: 'Locate', run: () => capOk({ lat: 1, lng: 2 }) })`,
+        src: 'tests/use-mcp.test.ts:120',
+      },
+    ],
+    usageNotes: [
+      '**Two ways to register**: `useMCP({ capabilities | tools })` — `capabilities` goes through **capability derivation** (the framework normalizes responses from `CapResult`); `tools` are **explicit declarations** with a fully custom `execute`.',
+      '**Capability derivation (the core delta of this primitive)**: you only write "tool name + description + arg schema" and the framework normalizes responses — `ok` → tool result, `Err` → `isError` + error code, and thrown errors never leak into the agent channel.',
+      '**Lifecycle**: `onDispose` is **injected** (pass `onScopeDispose` / `onUnmounted` from Vue); this package has zero vue dependency — the same implementation runs in MP artifacts and Node tests.',
+      '**Unregistration**: the spec has no `unregisterTool`; `dispose()` aborts the `AbortSignal` (idempotent).',
+      '**Degradation**: without `document.modelContext` (mini program / SSR / browsers that have not implemented the standard) → `isSupported=false`, nothing registered, **no throw** — reported honestly instead of silently pretending success.',
+      '**Detection discipline**: check that `registerTool` is **callable**, not merely that the object exists (a bare empty object would be misread as supported).',
+    ],
+    apiDetail: [
+      {
+        name: 'useMCP',
+        lines: [
+          'Signature: `useMCP(options: UseMCPOptions): UseMCPReturn`',
+          '`options`: `tools` (explicit) · `capabilities` (derived) · `prefix` (tool-name prefix) · `document` (injection, for tests) · `enabled` (probe without registering) · `onDispose` (scope disposal hook)',
+          'Returns `{ isSupported, isRegistered, error, toolNames, ready, dispose }` — ★state is exposed as **getters** (async registration / disposal stay readable, not a snapshot frozen at creation time)',
+          '`ready`: a Promise resolving when registration completes (including async `registerTool`) — `await` it when you need determinism',
+        ],
+      },
+      {
+        name: 'capabilityToTool',
+        lines: [
+          'Signature: `capabilityToTool(spec: McpCapabilityToolSpec, prefix?: string): McpToolDescriptor`',
+          '`spec.run` returns `CapResult<T>` (or a Promise of it) → normalized automatically: `ok` → tool result; `Err` → `isError: true` + `code: message`',
+          'Thrown errors are normalized the same way (exceptions never leak into the agent channel)',
+        ],
+      },
+      {
+        name: 'toToolResponse',
+        lines: [
+          'Value → tool response: strings pass through; **empty payloads (`undefined`/`null`) → `ok (no data)`** — ★never the literal `"undefined"` (most capabilities are `CapResult<void>`, and an agent would treat that string as valid data); everything else goes through `JSON.stringify`',
+          'Circular references / BigInt and other serialization failures → degrade to a string (tool responses must be serializable, never throw at the agent)',
+        ],
+      },
+      {
+        name: 'toErrorResponse',
+        lines: ['`Error` / non-Error values → `{ content, isError: true }` — so an agent retries or re-plans instead of parsing it as success'],
+      },
+    ],
   },
 }

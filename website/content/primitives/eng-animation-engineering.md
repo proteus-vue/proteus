@@ -49,8 +49,8 @@ MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 | `ScrollAnimationHandle` | interface | — |
 | `AnimationEngineeringOptions` | interface | createAnimationEngineering 注入项 |
 | `AnimationEngineering` | interface | G-32 §8 ③ 动画语义（E21-E23 Hook 形态；E19/E20 组件形态在 src/components） |
-| `interpolateAnimationProps` | function | / |
-| `createAnimationEngineering` | function | / |
+| `interpolateAnimationProps` | function | 纯函数：动画属性线性插值（E23 底座——from + (to - from) × t，缺失侧从 0 插） |
+| `createAnimationEngineering` | function | ★createAnimationEngineering：动画语义实例（注入式——reactivity + driver） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

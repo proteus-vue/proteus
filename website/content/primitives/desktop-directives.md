@@ -37,12 +37,12 @@ Web 官方接线（同 gesture 包 createGestureDirective 模式）；MP 端不�
 | `PermissionDirectiveOptions` | interface | — |
 | `ShortcutDirectiveValue` | interface | — |
 | `ContextMenuDirectiveValue` | interface | — |
-| `createHoverDirective` | function | / |
-| `createShortcutDirective` | function | / |
-| `createFocusTrapDirective` | function | / |
-| `createContextMenuDirective` | function | / |
-| `createPermissionDirective` | function | / |
-| `createCursorGlowDirective` | function | / |
+| `createHoverDirective` | function | p-hover：悬停态（mouseenter/mouseleave → hover class） |
+| `createShortcutDirective` | function | p-shortcut：全局键盘快捷键（keydown 命中 → handler(id)；mod 平台惯例自动遵循） |
+| `createFocusTrapDirective` | function | p-focus-trap：焦点陷阱（Tab 循环 + Shift+Tab 反向 + 打开聚焦首项 + 关闭恢复） |
+| `createContextMenuDirective` | function | p-context-menu：右键菜单（contextmenu → 防溢出定位菜单；点击/失焦销毁） |
+| `createPermissionDirective` | function | ★G-24 B2（proteus-semantic-primitives-plan 04 §权限前置）：v-p-permission——权限门禁指令 |
+| `createCursorGlowDirective` | function | ★G-24 B5：v-p-cursor-glow——指针跟随光晕（环境光随指针——AI 科技感的指针交互反馈） |
 | `createDesktopDirectives` | function | ★G-24 B1+B2+B5：指令工厂集（main.ts：Object.entries 注册 v-p-*） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）

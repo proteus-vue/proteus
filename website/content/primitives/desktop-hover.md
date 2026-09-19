@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `HoverPreset` | type | 纯逻辑零 DOM 依赖；MP 产物安全：无 ?. / ??；无数组解构 |
+| `HoverPreset` | type | ★G-24 B1（proteus-semantic-primitives-plan 03 §1 p-hover）：指针悬停纯逻辑 |
 | `PointerKind` | type | — |
 | `resolveHoverClass` | function | 预设 → CSS 类名（渲染层 <style> 定义过渡动画） |
 | `isHoverPointer` | function | pointer 判定：mouse/pen 支持 hover（光标可悬停）；touch/remote 降级（plan：iOS 编译期剔除 → tap 高亮） |

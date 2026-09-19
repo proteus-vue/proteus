@@ -123,7 +123,7 @@ function readHeader(src) {
     const t = raw.trim()
     if (/^import\s/.test(t)) break
     if (!COMMENT_LINE.test(t) && t !== '') break
-    let text = t.replace(/^(\/\/|\/\*|\*|\*\/)\s*/, '').trim()
+    let text = t.replace(/^(\/\/|\/\*|\*\/|\*)\s*/, '').trim()
     if (!text || text.startsWith('packages/')) continue // 文件路径行
     if (/^[=—\-·\s]+$/.test(text)) continue
     lines.push(text)
@@ -139,18 +139,29 @@ function readExports(src) {
     const t = (lines[i] || '').trim()
     const m = t.match(EXPORT_RE)
     if (!m) continue
-    let doc = ''
+    // ★注释抽取（2026-09-19 修两处）：向**上**收集整段注释，取**最靠近 `/**` 的那行**作为摘要。
+    //   ① 原地实现遇 ` */` 收尾行即当作内容 → 多行 JSDoc 的条目在官网显示为 `/`（垃圾值，
+    //      实测 capabilityToTool/useMCP 等全受影响）；修法：正则把 `\*\/` 排在 `\*` 之前。
+    //   ② 原地实现取「离 export 最近的一行」→ 拿到的是 JSDoc **末行**而非摘要行；
+    //      本仓惯例首行是 `★xxx：一句话`，故改为取收集序列的最后一个（= 最上面的内容行）。
+    const collected = []
     for (let j = i - 1; j >= 0; j--) {
       const prev = (lines[j] || '').trim()
       if (!prev) break
       if (!COMMENT_LINE.test(prev)) break
-      const text = prev.replace(/^(\/\/|\/\*|\*|\*\/)\s*/, '').trim()
-      if (text && !text.startsWith('packages/')) {
-        doc = text.replace(/\s*\*\/\s*$/, '').trim().replace(/^\*+\s?/, '')
-        break
-      }
+      const text = prev
+        .replace(/^(\/\/|\/\*|\*\/|\*)\s*/, '')
+        .trim()
+        .replace(/\s*\*\/\s*$/, '')
+        .trim()
+        .replace(/^\*+\s?/, '')
+      if (!text || text.startsWith('packages/')) continue
+      collected.push(text)
     }
-    out.push({ name: m[2], kind: m[1], doc: doc.slice(0, 90) })
+    const doc = collected.length ? collected[collected.length - 1] : ''
+    // 去掉句末标点：摘要取的是 JSDoc 首行，常以「。」/「.」结尾（原文是完整句），
+    // 表格「一句话」列带上标点显得脏——统一剥除
+    out.push({ name: m[2], kind: m[1], doc: doc.replace(/[。.]$/, '').slice(0, 90) })
   }
   return out
 }
@@ -196,6 +207,71 @@ const USAGE_MAP = {
   'state-restoration': [{ code: `const token = captureState('demo', 'view', { path, ts: Date.now() })`, src: 'examples/pages/semantic-primitives-demo.vue:495' }, { code: `restoreState('demo', 'view')`, src: 'examples/pages/semantic-primitives-demo.vue:499' }],
   tabs: [{ code: `resolveTabAfterClose(demoTabs.value, demoActive.value, id)`, src: 'examples/pages/semantic-primitives-demo.vue:436' }],
   'window-message': [{ code: `subscribeWindowMessage({ types: ['app-event'], onMessage })`, src: 'tests/desktop-web-primitives.test.ts' }],
+  mcp: [
+    {
+      code: `const cap = createCapabilityHooks()\n\nconst mcp = useMCP({\n  prefix: 'app_',\n  capabilities: [\n    { name: 'vibrate', description: '震动提示', run: () => cap.useVibrate(30) },\n    { name: 'clipboard_read', description: '读取剪贴板', run: () => cap.useClipboard() },\n  ],\n  onDispose: onScopeDispose, // 或 onUnmounted——生命周期交还调用方（零 vue 依赖）\n})\n\nmcp.isSupported  // 本环境是否实现 WebMCP（方法可调用判定）\nmcp.toolNames    // 实际注册的工具名（含前缀）`,
+      src: 'examples/pages/platform-api-demo.vue:836',
+    },
+    {
+      code: `// 能力 → 工具：ok → 结果；Err → isError + 错误码（CapResult 自动归一）\nconst t = capabilityToTool({ name: 'locate', description: '定位', run: () => capOk({ lat: 1, lng: 2 }) })`,
+      src: 'tests/use-mcp.test.ts:120',
+    },
+  ],
+}
+
+/**
+ * ★模块级「用法与降级」文案（2026-09-19 新增）：
+ *   此前 `packages/api` 全族共用一段家族 boilerplate——对 E30 这类**非工厂式**原语，
+ *   它写的是 `createXxxEngineering({ reactivity… })`，**句句无关**（E30 不注入 reactivity、
+ *   不是工厂、与 C-IR 编译期形态无关）。本表按模块给出准确说明；未登记者回落家族口径。
+ */
+const USAGE_NOTES = {
+  mcp: [
+    '**两步注册**：`useMCP({ capabilities | tools })` —— `capabilities` 走**能力派生**（框架据 `CapResult` 自动归一响应）；`tools` 走**显式声明**（完全自定义 `execute`）。',
+    '**能力派生（本原语的核心增量）**：只写「工具名 + 描述 + 参数 schema」，响应归一交给框架——`ok` → 工具结果、`Err` → `isError` + 错误码、实现抛错也不穿透到 agent 通道。',
+    '**生命周期**：`onDispose` **注入式**（Vue 侧传 `onScopeDispose` / `onUnmounted`）；本包零 vue 依赖——同一份实现可进 MP 产物与 Node 测试。',
+    '**注销语义**：规范无 `unregisterTool`，`dispose()` 即中断 `AbortSignal`（幂等）。',
+    '**降级**：无 `document.modelContext`（小程序 / SSR / 未实现该标准的浏览器）→ `isSupported=false`、不注册、**不抛错**——如实反映而非静默假装成功。',
+    '**探测纪律**：判 `registerTool` **可调用**而非对象存在（空对象会被误判为支持）。',
+  ],
+}
+
+/**
+ * ★模块级 API 明细（2026-09-19 新增）：补「怎么用 / 返回什么 / 边界」——
+ *   核心导出表只有「形态 + 一句话」，对 useMCP 这类带返回契约与降级面的原语不够；
+ *   本表按导出名补 2-3 行说明，未登记者不渲染该段（保持既有页不变）。
+ */
+const API_DETAIL = {
+  mcp: [
+    {
+      name: 'useMCP',
+      lines: [
+        '签名：`useMCP(options: UseMCPOptions): UseMCPReturn`',
+        '`options`：`tools`（显式工具）· `capabilities`（能力派生）· `prefix`（工具名前缀）· `document`（注入，测试用）· `enabled`（只探测不注册）· `onDispose`（作用域销毁钩子）',
+        '返回：`{ isSupported, isRegistered, error, toolNames, ready, dispose }` —— ★状态为 **getter**（异步注册 / 注销后能读到最新值，而非创建时的快照）',
+        '`ready`：Promise，等注册完成（含异步 `registerTool`）——需要确定性时 `await`',
+      ],
+    },
+    {
+      name: 'capabilityToTool',
+      lines: [
+        '签名：`capabilityToTool(spec: McpCapabilityToolSpec, prefix?: string): McpToolDescriptor`',
+        '`spec.run` 返回 `CapResult<T>`（或 Promise 包装）→ 自动归一：`ok` → 工具结果；`Err` → `isError: true` + `code: message`',
+        '实现抛错同样归一为工具响应（异常不穿透到 agent 通道）',
+      ],
+    },
+    {
+      name: 'toToolResponse',
+      lines: [
+        '值 → 工具响应：字符串直出；**空载荷（`undefined`/`null`）→ `ok（无返回数据）`**——★不能产出字面量 `"undefined"`（多数能力是 `CapResult<void>`，agent 会把该字符串当有效数据）；其余走 `JSON.stringify`',
+        '循环引用 / BigInt 等序列化失败 → 降级为字符串（工具响应必须可序列化，不得抛给 agent）',
+      ],
+    },
+    {
+      name: 'toErrorResponse',
+      lines: ['`Error` / 非 Error 值 → `{ content, isError: true }`——agent 据此重试或换策略，而非当成功解析'],
+    },
+  ],
 }
 
 function renderPage(srcDirAbs, rel, file, order, group) {
@@ -246,6 +322,20 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   }
   body.push('')
 
+  // ★模块级 API 明细（2026-09-19）：补「签名 / 返回 / 边界」——核心导出表只有一行一句话，
+  //   对带返回契约与降级面的原语（如 useMCP）不足；未登记者不渲染本段（既有页零变化）。
+  const apiDetail = API_DETAIL[file.replace(/\.ts$/, '')]
+  if (apiDetail && apiDetail.length) {
+    body.push('### API 明细')
+    body.push('')
+    for (const d of apiDetail) {
+      body.push(`#### \`${d.name}\``)
+      body.push('')
+      for (const l of d.lines) body.push(`- ${l}`)
+      body.push('')
+    }
+  }
+
   const base = file.replace(/\.ts$/, '')
   const usage = USAGE_MAP[base]
   if (usage && usage.length) {
@@ -261,7 +351,11 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   }
   body.push(`## 用法与降级`)
   body.push('')
-  if (rel === 'packages/gesture') {
+  const usageNotes = USAGE_NOTES[base]
+  if (usageNotes && usageNotes.length) {
+    // ★模块级准确文案（优先）——家族 boilerplate 对非工厂式原语会写成「句句无关」
+    for (const l of usageNotes) body.push(`- ${l}`)
+  } else if (rel === 'packages/gesture') {
     body.push('- 识别器纯逻辑零依赖：Web Pointer / MP touch 归一为 `GestureInput` → 语义手势事件（tap/pan/swipe/pinch/rotate/longpress…）——可单测')
     body.push('- Web 官方接线：`useGesture()` Hook 与 `v-gesture:<kind>="onX"` 指令；MP/原生端映射由各端 Backend 承接——「事件是 Backend 实现细节」')
     body.push('- 真实示例：`examples/pages/semantic-primitives-demo.vue`（v-gesture:tap）')
@@ -323,6 +417,19 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
     body.push('> No named exports (pure module / directive registration side) — see the source.')
   }
   body.push('')
+  // ★Per-module API detail (2026-09-19) — mirrors the zh section **and its order**
+  //   （zh 侧顺序是「核心导出 → API 明细 → 真实用法」；EN 若把 API 明细放最后会触发
+  //     check:en-drift 的结构漂移——该门禁按章节顺序比对，故两端须同序）
+  if (page.apiDetail?.length) {
+    body.push('### API detail')
+    body.push('')
+    for (const d of page.apiDetail) {
+      body.push(`#### \`${d.name}\``)
+      body.push('')
+      for (const l of d.lines) body.push(`- ${l}`)
+      body.push('')
+    }
+  }
   const usage = page.usage
   if (usage?.length) {
     body.push('## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)')
@@ -337,7 +444,12 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
   }
   body.push('## Usage & degradation')
   body.push('')
-  body.push(...SHARED_PRIM_EN.familyNotes[family])
+  // ★Per-module usage notes (2026-09-19) — family boilerplate is misleading for non-factory primitives
+  if (page.usageNotes?.length) {
+    for (const l of page.usageNotes) body.push(`- ${l}`)
+  } else {
+    body.push(...SHARED_PRIM_EN.familyNotes[family])
+  }
   body.push('')
   body.push(`<!-- generated by website/scripts/gen-primitives.mjs (en overlay) · SSOT：${rel}/src -->`)
   return body.join('\n')

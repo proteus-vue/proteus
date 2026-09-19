@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `ScrollState` | interface | 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实全局——同 network/lifecycle 族惯例） |
+| `ScrollState` | interface | ★#449 G-24 B5（proteus-semantic-primitives-plan 续批）：页面滚动观测原语——「滚动进度/滚动态」收口 |
 | `ScrollObserverEnv` | interface | — |
 | `ScrollObserver` | interface | — |
 | `readPageScroll` | function | 真实窗口/文档几何（SSR/无 DOM → 全零诚实态） |

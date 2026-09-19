@@ -35,7 +35,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `SplitColumn` | type | 纯函数零依赖；Web demo / 原生宿主共同消费 |
+| `SplitColumn` | type | ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation + 06 B3）：p-master-detail 纯逻辑 |
 | `SplitLayoutOptions` | interface | — |
 | `SplitLayout` | interface | — |
 | `computeSplitLayout` | function | ★computeSplitLayout：宽 → 列布局（映射 UISplitViewController collapse/双列/三列） |

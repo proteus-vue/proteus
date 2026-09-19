@@ -36,7 +36,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `PermissionState` | type | 纯逻辑零 DOM 直调；默认接线走注入（document/navigator 由调用方/指令工厂传 env——审计 no-platform-api 安全） |
+| `PermissionState` | type | ★G-24 B2（proteus-semantic-primitives-plan 04-system-integration §2 权限前置）：p-permission 纯逻辑 |
 | `PermissionEntry` | interface | — |
 | `PERMISSION_CATALOG` | const | ★语义 → web 权限通道（04 §1 p-permission 行 + 补充：有 web 标准者入表） |
 | `PermissionEnv` | interface | 权限查询注入面（默认接线在指令工厂/宿主侧——包内零直调） |

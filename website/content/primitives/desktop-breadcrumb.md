@@ -33,7 +33,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `Crumb` | interface | 纯函数（数据来自路由栈——宿主把当前路由 path 分段传入） |
+| `Crumb` | interface | ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation p-breadcrumb）：面包屑纯逻辑（路由栈推导） |
 | `crumbLabel` | function | 段 → 显示名：kebab/下划线 → 空格首字母大写（'user-profile' → 'User Profile'；'index' 归并为空由宿主处理） |
 | `deriveBreadcrumb` | function | ★deriveBreadcrumb：路由路径段（不含根 'index'）→ 面包屑链（末段 current=true） |
 

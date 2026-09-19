@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `CommandItem` | interface | 纯函数零依赖（面板 UI/快捷键接线由宿主——⌘K 全局监听同 p-shortcut B1 模式） |
+| `CommandItem` | interface | ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation p-command）：命令面板 ⌘K 纯逻辑 |
 | `CommandFilterResult` | interface | — |
 | `filterCommands` | function | ★filterCommands：子串过滤（title + keywords + group；大小写不敏感；稳定序） |
 | `moveCommandIndex` | function | ★moveCommandIndex：键盘 ↑↓ 移动（循环；空/越界回 0；无结果 -1） |

@@ -48,8 +48,8 @@ R3 enqueue（并发队列）· R4 dedupe（并发合并——R1/R2 内部共享�
 | `RequestEngineeringOptions` | interface | createRequestEngineering 注入项 |
 | `RequestEngineering` | interface | 请求数据层语义面（R1-R4） |
 | `defaultCacheKey` | function | 缺省缓存键：method + url + params 序列化（GET 语义——同 url 不同 query 视为不同资源） |
-| `createRequestEngineering` | function | / |
-| `createCapabilityRequestClient` | function | / |
+| `createRequestEngineering` | function | ★createRequestEngineering：请求数据层语义实例（注入式——client + reactivity + cache + concurrency） |
+| `createCapabilityRequestClient` | function | ★G-31 B7 收口：能力桥 → 请求执行器适配（useFetch 的底层桥成为策略请求的 client） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 
