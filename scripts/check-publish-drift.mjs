@@ -43,6 +43,57 @@ const only = (() => {
   return i >= 0 ? process.argv[i + 1] : null
 })()
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ★性能（2026-09-19 用户反馈「每次执行都那么慢」后整改）：
+//   实测单次 `npm pack --dry-run` ≈ 1.8s，41 个包串行 ≈ 73s；再加上「打包元数据噪声」
+//   路径要为 ~35 个包各下载一次 tarball——每次检查要几分钟，且**每次运行都从头重来**。
+//   三层缓存 + 并发，把热运行从「分钟级」降到「秒级」：
+//     ① pack 缓存：目录指纹（relpath+size+mtime 全量走查）不变 → 复用上次的 integrity/文件清单，
+//        **完全跳过 npm 进程**（41 次 spawn 是最大头）。
+//     ② 判定缓存：npm 版本**不可变** ⇒ `name@version + 本地 integrity + registry integrity`
+//        三者确定的结论（一致 / 仅打包噪声 / 真漂移）永久有效。三者任一变化即失效。
+//     ③ 并发：pack / 请求 / 比对按有限并发（默认 8）执行，冷运行也从 73s 降到 ~10s。
+//   安全边界：指纹走查**宁多勿少**（只排除 node_modules/.git）——多包含只会造成无害的
+//   缓存未命中，绝不漏检；判定缓存键含双侧 integrity，任一内容变化必然失效。
+// ─────────────────────────────────────────────────────────────────────────────
+const CACHE_FILE = path.join(ROOT, '.cache', 'publish-drift.json')
+const NO_CACHE = process.argv.includes('--no-cache')
+const CONCURRENCY = Number((process.argv.find((a) => a.startsWith('--concurrency=')) ?? '').split('=')[1]) || 8
+let cache = { packs: {}, verdicts: {} }
+if (!NO_CACHE) {
+  try {
+    const j = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
+    cache = { packs: j.packs ?? {}, verdicts: j.verdicts ?? {} }
+  } catch {
+    /* 无缓存 / 损坏 → 从空开始 */
+  }
+}
+function saveCache() {
+  if (NO_CACHE) return
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true })
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ version: 1, ...cache }))
+  } catch {
+    /* 缓存写失败不影响正确性 */
+  }
+}
+let cacheHits = { pack: 0, verdict: 0 }
+
+/** 有限并发 map（保持结果顺序）——避免 41 次 npm spawn / 网络请求串行等待 */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length)
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      out[i] = await fn(items[i], i)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
 /** workspace 内的 @proteus-vue/* 包 */
 function listPackages() {
   const dir = path.join(ROOT, 'packages')
@@ -64,8 +115,45 @@ function listPackages() {
 
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
 
-/** 本地 `npm pack --dry-run`：integrity + 将发布的文件清单 */
-function localPack(pkgDir) {
+/** 目录指纹：relpath + size + mtime 全量走查（排除 node_modules/.git）。
+ *  ★宁多勿少——多包含只会造成无害的缓存未命中，绝不漏检内容变化。 */
+function dirFingerprint(dir, base = '') {
+  const parts = []
+  const walk = (d, rel0) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name === '.git') continue
+      const rel = rel0 ? rel0 + '/' + e.name : e.name
+      const abs = path.join(d, e.name)
+      if (e.isDirectory()) walk(abs, rel)
+      else {
+        let st
+        try {
+          st = fs.statSync(abs)
+        } catch {
+          continue
+        }
+        parts.push(`${rel}:${st.size}:${Math.round(st.mtimeMs)}`)
+      }
+    }
+  }
+  walk(dir, base)
+  parts.sort()
+  return sha(parts.join('\n'))
+}
+
+/** 本地 `npm pack --dry-run`：integrity + 将发布的文件清单（★带指纹缓存，跳过 npm 进程） */
+function localPack(pkgDir, pkgRel) {
+  let fp = null
+  try {
+    fp = dirFingerprint(pkgDir)
+  } catch {
+    /* 走查失败 → 不缓存，直接 pack */
+  }
+  const hit = fp && cache.packs[pkgRel]
+  if (hit && hit.fp === fp) {
+    cacheHits.pack++
+    return { integrity: hit.integrity ?? null, files: hit.files ?? [] }
+  }
   try {
     const raw = execFileSync('npm', ['pack', '--dry-run', '--json'], {
       cwd: pkgDir,
@@ -75,7 +163,9 @@ function localPack(pkgDir) {
     })
     const j = JSON.parse(raw)
     const e = Array.isArray(j) ? j[0] : j
-    return { integrity: e.integrity ?? null, files: (e.files ?? []).map((f) => f.path) }
+    const out = { integrity: e.integrity ?? null, files: (e.files ?? []).map((f) => f.path) }
+    if (fp) cache.packs[pkgRel] = { fp, integrity: out.integrity, files: out.files }
+    return out
   } catch {
     return null
   }
@@ -173,47 +263,47 @@ if (!pkgs.length) {
 
 const report = { checked: 0, identical: [], noise: [], drift: [], unpublished: [], errors: [] }
 
-for (const p of pkgs) {
-  report.checked++
-  const local = localPack(p.dir)
+const t0 = Date.now()
+const verdicts = await mapLimit(pkgs, CONCURRENCY, async (p) => {
+  const pkgRel = path.relative(ROOT, p.dir)
+  const local = localPack(p.dir, pkgRel)
   const remote = await registryVersionInfo(p.full, p.version)
-  if (!remote) {
-    report.unpublished.push({ name: p.short, version: p.version })
-    continue
+  if (!remote) return { name: p.short, version: p.version, kind: 'unpublished' }
+  if (remote.error) return { name: p.short, version: p.version, kind: 'error', error: remote.error }
+  if (!local) return { name: p.short, version: p.version, kind: 'error', error: '本地 pack 失败（dist 未构建？）' }
+
+  // ★判定缓存：结论由 name@version + 双侧 integrity 唯一确定（npm 版本不可变）→ 命中即跳过下载比对
+  const vKey = `${p.full}@${p.version}|${local.integrity ?? ''}|${remote.integrity ?? ''}`
+  const cached = cache.verdicts[vKey]
+  if (cached && cached.kind) {
+    cacheHits.verdict++
+    return { name: p.short, version: p.version, ...cached }
   }
-  if (remote.error) {
-    report.errors.push({ name: p.short, version: p.version, error: remote.error })
-    continue
+  const save = (v) => {
+    cache.verdicts[vKey] = v
+    return { name: p.short, version: p.version, ...v }
   }
-  if (!local) {
-    report.errors.push({ name: p.short, version: p.version, error: '本地 pack 失败（dist 未构建？）' })
-    continue
-  }
-  if (local.integrity && local.integrity === remote.integrity) {
-    report.identical.push({ name: p.short, version: p.version })
-    continue
-  }
+
+  if (local.integrity && local.integrity === remote.integrity) return save({ kind: 'identical' })
   // integrity 不同 → 慢判（区分「打包元数据噪声」与「真漂移」）
-  if (!remote.tarball) {
-    report.errors.push({ name: p.short, version: p.version, error: 'registry 未返回 tarball 地址' })
-    continue
-  }
+  if (!remote.tarball) return { name: p.short, version: p.version, kind: 'error', error: 'registry 未返回 tarball 地址' }
   const cmp = await semanticCompare(p.dir, local.files, remote.tarball)
-  if (cmp.error) {
-    report.errors.push({ name: p.short, version: p.version, error: cmp.error })
-    continue
-  }
-  if (cmp.missing.length === 0 && cmp.different.length === 0) {
-    report.noise.push({ name: p.short, version: p.version, extraInNpm: cmp.extraInNpm })
-  } else {
-    report.drift.push({
-      name: p.short,
-      version: p.version,
-      missing: cmp.missing,
-      different: cmp.different,
-      extraInNpm: cmp.extraInNpm,
-    })
-  }
+  if (cmp.error) return { name: p.short, version: p.version, kind: 'error', error: cmp.error }
+  if (cmp.missing.length === 0 && cmp.different.length === 0) return save({ kind: 'noise', extraInNpm: cmp.extraInNpm })
+  return { name: p.short, version: p.version, kind: 'drift', missing: cmp.missing, different: cmp.different, extraInNpm: cmp.extraInNpm }
+})
+
+for (const v of verdicts) {
+  report.checked++
+  if (v.kind === 'unpublished') report.unpublished.push({ name: v.name, version: v.version })
+  else if (v.kind === 'error') report.errors.push({ name: v.name, version: v.version, error: v.error })
+  else if (v.kind === 'identical') report.identical.push({ name: v.name, version: v.version })
+  else if (v.kind === 'noise') report.noise.push({ name: v.name, version: v.version, extraInNpm: v.extraInNpm })
+  else if (v.kind === 'drift') report.drift.push({ name: v.name, version: v.version, missing: v.missing, different: v.different, extraInNpm: v.extraInNpm })
+}
+saveCache()
+if (!asJson && (cacheHits.pack || cacheHits.verdict)) {
+  console.log(`[${TAG}] 缓存命中：pack ${cacheHits.pack} · 判定 ${cacheHits.verdict}（用时 ${((Date.now() - t0) / 1000).toFixed(1)}s）`)
 }
 
 if (asJson) {
