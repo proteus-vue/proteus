@@ -163,6 +163,39 @@ packages/
 > - test-core 随包 skill（`skills/proteus-test/`）随发布物分发
 > - 验证：1058 单测 + check:pkg + Web E2E 13/13 + MP E2E 1/1 全绿；发布前 dry-run 确认 dist 内容正确
 
+## ★版本策略：单版本号（fixed 分组）——2026-09-19 根治「版本号对不齐」
+
+> **背景（用户彻查要求）**：changesets 本为简化版本管理，实际却越管越乱，出现「版本号对不齐」
+> 这类低级问题。彻查结论：**问题不在 changesets，而在配置缺了关键一环**。
+>
+> **根因**：本仓用「**独立版本号 + 精确 pin**」的组合——41 个包各走各的版本，内部依赖
+> **65 处全是 exact pin**。任何一个包改动都要级联同步几十处，人为维护必然漏。实测后果：
+>
+> | 症状 | 实测数据 |
+> |---|---|
+> | 版本号种类 | **14 种**（`0.1.1-beta.0` ~ `0.3.0-beta.7`）散落在 41 个包 |
+> | tag 与本仓分叉 | `cli` 的 `beta` 停在 `0.2.1-beta.0`，`latest` 已到 `0.3.0-beta.6` |
+> | 级联面 | 改 1 个包要跟 **65 处 pin** + 模板 7 处 |
+> | `fixed` 配置 | `[]` —— changesets 官方的**版本组锁定机制根本没开** |
+>
+> **整改：启用 fixed 分组**（`.changeset/config.json`）：
+>
+> ```json
+> "fixed": [["@proteus-vue/*"]]
+> ```
+>
+> 支持 micromatch glob（已核 `@changesets/config` 源码确认）。语义：**组内任一包要发版，
+> 全组一起发同一版本号**。
+> **实测生效**：`npx changeset version` → **41 个包全部 `0.3.0-beta.7`**（14 种 → **1 种**）；
+> `sync-internal-versions` 自动对齐 65 处内部 pin + 模板 7 处，**零手工**。
+>
+> **门禁锁死该不变式**（`scripts/sync-internal-versions.mjs::assertUniformVersions`）：
+> ① 所有 `@proteus-vue/*` 版本号必须完全相同；② 内部 pin 必须等于该版本（或 `workspace:`）。
+> 破坏性验证：把 `agent` 改成 `0.1.0` → 门禁红并指名该包；恢复 → 绿。已接入 CI 与 `pnpm verify`。
+>
+> **收益**：今后「版本号对不齐」在**结构上不可能发生**——不必再靠人肉同步 65 处 pin。
+> 代价：任一包有改动，全组一起升版本号（对本仓「整体交付一套框架」的定位是正确取舍）。
+
 **发布流程（一条命令）**：
 
 ```bash
