@@ -343,6 +343,40 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
   return body.join('\n')
 }
 
+/**
+ * ★分类覆盖度校验（2026-09-19 补，防「新模块静默不进官网」）：
+ *   背景——E30 `mcp.ts` 落地后官网搜不到，根因是 SOURCES 白名单未含该文件；
+ *   而 `--check` 只在「已生成页与源不一致」时报错，**首次遗漏是静默的**（页面不存在 → 无漂移可比）。
+ *   本表显式登记「有意不在本分区」的模块及理由；未登记且不在白名单的模块 → FAIL。
+ */
+const COVERED_ELSEWHERE = {
+  // api 包中的非「工程原语模块」——各有归属分区/用途
+  adapters: '内部适配器（非原语面，随 client 实现）',
+  auth: '认证实现（能力面见 capabilities/auth.md）',
+  capability: '★能力原语由 gen-content.mjs 生成到 content/capabilities/（81 页）',
+  client: 'API 客户端实现（非原语面）',
+  platform: 'PlatformAPI 工厂（由 guides/reference 覆盖）',
+  types: '类型定义（无运行面）',
+}
+let coverageIssues = 0
+for (const src of SOURCES) {
+  // ★仅对「定义了 files 白名单」的源做覆盖度校验——未定义白名单的源默认全收（desktop/gesture 即此类），
+  //   对它们做校验会把「本就该全收」的模块误报为缺口（本校验初版即犯此错，实测报出 24 项假缺口）。
+  if (!src.files) continue
+  const dir = path.join(WEBSITE, '..', src.rel, 'src')
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.ts') || f === 'index.ts') continue
+    const name = f.replace(/\.ts$/, '')
+    if (src.files.test(f)) continue
+    if (COVERED_ELSEWHERE[name]) continue
+    console.error(
+      `❌ 原语覆盖缺口：${src.rel}/src/${f} 既不在 SOURCES 白名单，也未在 COVERED_ELSEWHERE 声明归属——` +
+        `新原语模块会被官网静默漏掉（搜索不到）。请二选一：加入 files 白名单 或 在 COVERED_ELSEWHERE 写明理由。`,
+    )
+    coverageIssues++
+  }
+}
+
 const modules = SOURCES.flatMap((src) => {
   const dir = path.join(WEBSITE, '..', src.rel, 'src')
   return fs
@@ -378,8 +412,14 @@ if (!check) {
   for (const [file, md] of generatedEn) fs.writeFileSync(path.join(OUT_EN, file), md)
 }
 if (check) {
-  console.log(drifted ? '❌ 原语页漂移（--check）' : `OK: ${generated.size} 个原语模块页与源一致`)
-  process.exitCode = drifted ? 1 : 0
+  if (coverageIssues > 0) {
+    console.log(`❌ 原语覆盖缺口 ${coverageIssues} 项（--check）——见上方清单`)
+  } else {
+    console.log(drifted ? '❌ 原语页漂移（--check）' : `OK: ${generated.size} 个原语模块页与源一致（覆盖度校验通过）`)
+  }
+  process.exitCode = drifted || coverageIssues > 0 ? 1 : 0
 } else {
+  if (coverageIssues > 0) console.log(`⚠ 原语覆盖缺口 ${coverageIssues} 项（生成已继续，但请补登记）`)
   console.log(`generated: ${generated.size} primitives zh + en ${generatedEn.size}`)
+  if (coverageIssues > 0) process.exitCode = 1
 }
