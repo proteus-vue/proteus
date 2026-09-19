@@ -1,12 +1,12 @@
 {
   "name": "@proteus-vue/render-backend",
-  "version": "0.1.1-beta.1",
+  "version": "0.3.0-beta.7",
   "description": "G-27 ProteusRenderBackend SPI：可插拔渲染后端接口 + conformance test + 官方后端原型（Headless/VueDom） + G-41 nodeOps Dispatcher——Render anywhere, on any engine（M1.4）",
   "type": "module",
   "license": "Apache-2.0",
   "dependencies": {
-    "@proteus-vue/component-ir": "0.2.0-beta.1",
-    "@proteus-vue/contracts": "0.1.1-beta.0"
+    "@proteus-vue/component-ir": "0.3.0-beta.7",
+    "@proteus-vue/contracts": "0.3.0-beta.7"
   },
   "peerDependencies": {
     "@vue/runtime-core": "^3.4.0"
