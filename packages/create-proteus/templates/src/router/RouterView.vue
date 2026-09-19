@@ -22,12 +22,23 @@ for (const [key, load] of Object.entries(modules)) {
 }
 const current = ref(adapter.getCurrentPages()[0]?.route || 'pages/index')
 
+// ★路由参数（2026-09-19 修：此前 Web 端参数**两条路都拿不到**——外部实战报告第 4 条，
+//   表现为写作页恒显示"第 0 章"）：
+//   · 小程序端参数走 `onLoad(options)`（编译产物注入）；
+//   · Web 端此前 onLoad 是 no-op（pageLifecycle）+ 本组件不传 props → 参数丢失。
+//   现把 query 透传给页面组件：页面用 `defineProps<{ id?: string }>()` 即可收到
+//   （未声明 props 的页面不受影响——query 作为 attrs 落到根元素且不渲染）。
+//   ★同时 adapter 的当前页也保留了 query（`getCurrentPages()[0].query`），
+//   需要命令式读取的页面两条路都可（与 MP `Page.options` 语义对齐）。
+const currentQuery = ref<Record<string, string>>(adapter.getCurrentPages()[0]?.query ?? {})
+
 // 路由变化 → 转场名（★透明化：routeType → Vue Transition 映射由框架共享表 webTransitionName 提供，
 //   不再 RouterView 私有硬编码；三端共用同一枚举见 packages/router/src/transforms/transform-transition.ts）
 const transitionName = ref('fade')
 let lastForwardName = 'fade' // 当前页进入时的转场名（后退时取其反向）
-adapter.onPageLoad?.((route, _query, routeType, nav) => {
+adapter.onPageLoad?.((route, query, routeType, nav) => {
   current.value = route || 'pages/index'
+  currentQuery.value = query ?? {}
   if (nav === 'back') {
     // 反向转场：用当前退出页进入时的转场名 + '-back'
     transitionName.value =
@@ -83,7 +94,9 @@ const view = computed<Component | null>(() => {
       :style="{ '--barrier-opacity': barrierOpacity }"
     />
     <Transition :name="transitionName" :mode="isLayered ? undefined : 'out-in'">
-      <component :is="view" v-if="view" :key="currentRoute" class="page" />
+      <!-- ★v-bind="currentQuery"：路由参数透传给页面（页面用 defineProps 声明即收到；
+           未声明的页面不受影响）。修 Web 端「参数两条路都拿不到」见 currentQuery 处注释 -->
+      <component :is="view" v-if="view" :key="currentRoute" v-bind="currentQuery" class="page" />
       <div v-else :key="'404'" class="page">404 Not Found</div>
     </Transition>
   </div>

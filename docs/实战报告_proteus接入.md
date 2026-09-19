@@ -121,3 +121,23 @@ proteus 是**小程序语义**——参数本该走 `onLoad(options)`。
    `create-proteus` 模板里带上 `vite.config.ts` 桥接
 3. **Web 端补路由参数注入**（onLoad 或 props 任一条）
 4. 组件查找失败的报错里**带上"应放哪"**
+
+---
+
+## 七、proteus 侧处理回执（2026-09-19）
+
+> 本报告的三条阻断项已全部处理，两条设计发现也已完成核实与修复。
+
+| 报告条目 | 处理结果 |
+|---|---|
+| 1. CLI 依赖未发布导出（阻断） | ✅ **已修**——发布链路根因修复（`publish-all.sh` 的「已存在版本即跳过」无法区分幂等重跑与「改了没 bump」，已改为 integrity 内容校验 + 新增 `check-publish-drift` 门禁）；36 包重新发布后干净目录实测：**CLI 启动 exit 0**，devtools-runtime 原缺失的 8 个导出全部到位 |
+| 2. CLI 不组装 vite 配置（阻断） | ✅ **已修**——本地模板早已是 CLI 驱动新形态（`proteus build --target web`，不再手写 `vite.config.ts` / `scripts/gen-routes.ts`），已随本次发布上线 |
+| 3. CLI 不生成路由表 | ✅ **已修**——根因 `needsGenRoutes: isMp` 让 Web 目标跳过 gen-routes，而 `auto-routes.ts` 是双端共用产物；现 web 目标以 `webOnly` 模式更新路由表（**不产 MP 专属产物、不清理 dist/mp-weixin**）。端到端实测：新增页面 → `build:web` → 路由表收录 + MP 产物完好；回归锁 ×2（含破坏性验证） |
+| 4. 路由参数 Web 端拿不到（易踩） | ✅ **已修**（双路补齐）——① adapter 当前页保留 `query`（对齐 MP `Page.options`，`getCurrentPages()[0].query` 可读）；② `RouterView` 把 query `v-bind` 给页面（页面 `defineProps` 即收到）。回归锁 ×3（含破坏性验证） |
+| 5. 组件查找报错不友好 | ⬜ **待办**——已记录，将在后续批次改进报错文案（补「应放 `components/<kebab-name>/index.vue`」指引） |
+
+**报告作者的判断很准确**，特别是第 2、3 条的归纳——「编排逻辑没有随包发布，已发布的 CLI 更像编译命令包装器」正是问题本质：
+编排能力早已在源码中，但 npm 上的旧版本没有它，而发布机制又让新版本发不出去（第 1 条）。三者是同一条链路上的因果。
+
+感谢这份基于真实项目的报告——它直接推动了发布链路的内容校验门禁（此前无任何机制能发现「同版本号、内容不同」），
+以及 Web 目标路由表的修复（本仓 showcase 也踩过同一坑，此前只能手工绕过）。
