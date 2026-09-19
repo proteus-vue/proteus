@@ -13,21 +13,21 @@
     "proteus": "proteus"
   },
   "dependencies": {
-    "@proteus-vue/router": "^0.2.0-beta.0",
-    "@proteus-vue/runtime": "^0.2.0-beta.0",
-    "@proteus-vue/shared": "^0.2.0-beta.0",
+    "@proteus-vue/router": "0.2.0-beta.5",
+    "@proteus-vue/runtime": "0.2.0-beta.4",
+    "@proteus-vue/shared": "0.2.0-beta.2",
     "vue": "^3.4.0"
   },
   "devDependencies": {
-    "@proteus-vue/cli": "^0.2.1-beta.0",
-    "@proteus-vue/compiler": "^0.3.0-beta.0",
-    "@proteus-vue/plugin-vite": "^0.2.0-beta.0",
+    "@proteus-vue/cli": "0.3.0-beta.5",
+    "@proteus-vue/compiler": "0.3.0-beta.3",
+    "@proteus-vue/devtools-runtime": "0.1.1-beta.1",
+    "@proteus-vue/plugin-vite": "0.2.0-beta.5",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "vite": "^5.0.0",
-    "vue-tsc": "^2.0.0",
-    "@proteus-vue/devtools-runtime": "^0.1.0"
+    "vue-tsc": "^2.0.0"
   }
 }

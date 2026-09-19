@@ -81,7 +81,11 @@ export function runGenRoutes(options: GenRoutesOptions): void {
   //  此前是「未拆包 alias 指仓库 src/components」（决策 #115）；拆包后包内即 .vue 源码，产物路径 proteus/<tag>/index 不变。
   //  options.componentsDir 仅作包未安装时的显式覆盖（测试/特殊布局）。
   const FW_COMPONENTS = options.componentsDir ? path.resolve(ROOT, options.componentsDir) : resolveComponentsRoot(ROOT)
-  if (!fs.existsSync(FW_COMPONENTS)) {
+  // ★2026-09-19 假阳性修复：此警告此前**无条件**触发——但刚 `npm create` 出来的模板工程并不使用
+  //   p-* 组件，于是每个新用户第一次构建都会看到「p-* 组件将不被注册」的误导性警告。
+  //   改为：仅当工程**确实引用了 p-* 标签**时才提示（真正用到而未安装才是问题）。
+  //   注：未解析的具体标签另有一条更精确的逐标签警告（见 collectComponents 末尾）。
+  if (!fs.existsSync(FW_COMPONENTS) && appUsesFrameworkComponents(APP_DIR)) {
     console.warn(
       `[gen-routes] 未找到语义组件库 @proteus-vue/components（解析为 ${FW_COMPONENTS}）——` +
         `p-* 组件将不被注册（页面 usingComponents 缺失 → WXML 整块不渲染）。请确认已安装依赖（npm i / pnpm i）。`,
@@ -143,6 +147,26 @@ function walkVueFiles(dir: string, acc: string[] = []): string[] {
     else if (entry.name.endsWith('.vue')) acc.push(full)
   }
   return acc
+}
+
+/**
+ * 工程内是否有任何 .vue 实际引用了框架语义组件（`<p-*>` / `<P*>`）——
+ * 用于「未安装 @proteus-vue/components」警告的**条件化**（2026-09-19：旧版无条件告警，
+ * 让不使用 p-* 的默认脚手架工程在首次构建时收到误导性警告）。
+ * 成本：一次全量 .vue 文本扫描（构建期一次，可忽略）。
+ */
+function appUsesFrameworkComponents(appDir: string): boolean {
+  for (const f of walkVueFiles(appDir)) {
+    let src: string
+    try {
+      src = fs.readFileSync(f, 'utf8')
+    } catch {
+      continue
+    }
+    // <p-view> / <p-view/> / <PView> ——语义组件两写皆可（对齐 collectComponents 的大小写处理）
+    if (/<[pP]-[a-z][\w-]*[\s/>]/.test(src) || /<P[A-Z][\w]*[\s/>]/.test(src)) return true
+  }
+  return false
 }
 
 /**

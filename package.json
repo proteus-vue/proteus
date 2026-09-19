@@ -30,10 +30,11 @@
     "create": "tsx packages/create-proteus/src/index.ts",
     "create:build": "pnpm --filter @proteus-vue/create-proteus build",
     "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:publish": "node scripts/check-publish-auth.mjs && node scripts/check-publish-drift.mjs --check && changeset publish",
-    "verify": "node scripts/build-packages.mjs && pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm run check:mp-artifacts && pnpm -r build && npx vue-tsc --noEmit && npx vue-tsc --noEmit -p examples/tsconfig.json && pnpm run check:pkg && pnpm run check:deps && pnpm run check:script-compile && pnpm run check:en-drift && pnpm run check:content && pnpm run check:mp-spec && pnpm run check:mp-attrs && pnpm run check:degradation && pnpm run check:consistency && pnpm run check:docs && pnpm run check:showcase-catalog && pnpm run check:capability-demo && pnpm run check:gates-sync && pnpm run build:showcase:web && pnpm run test:e2e:showcase && pnpm run build:showcase:mp",
+    "changeset:version": "changeset version && node scripts/sync-internal-versions.mjs",
+    "changeset:publish": "node scripts/check-publish-auth.mjs && node scripts/check-publish-drift.mjs --check && changeset publish && node scripts/sync-dist-tags.mjs --check && node scripts/verify-publish-smoke.mjs",
+    "verify": "node scripts/build-packages.mjs && pnpm run test && pnpm run build:web && pnpm run build:mp && pnpm run check:mp-artifacts && pnpm -r build && npx vue-tsc --noEmit && npx vue-tsc --noEmit -p examples/tsconfig.json && pnpm run check:pkg && pnpm run check:internal-versions && pnpm run check:deps && pnpm run check:script-compile && pnpm run check:en-drift && pnpm run check:content && pnpm run check:mp-spec && pnpm run check:mp-attrs && pnpm run check:degradation && pnpm run check:consistency && pnpm run check:docs && pnpm run check:showcase-catalog && pnpm run check:capability-demo && pnpm run check:gates-sync && pnpm run build:showcase:web && pnpm run test:e2e:showcase && pnpm run build:showcase:mp",
     "check:pkg": "node scripts/check-package-health.js",
+    "check:internal-versions": "node scripts/sync-internal-versions.mjs --check",
     "check:en-drift": "node website/scripts/check-en-drift.mjs",
     "check:content": "cd website && npx tsx scripts/gen-content.mjs --check",
     "check:script-compile": "node scripts/check-script-compile.mjs",
@@ -66,6 +67,8 @@
     "check:capability-demo": "node scripts/gen-capability-demo-pages.mjs --check",
     "publish:check": "node scripts/check-publish-drift.mjs --check",
     "publish:report": "node scripts/check-publish-drift.mjs",
+    "publish:smoke": "node scripts/verify-publish-smoke.mjs",
+    "publish:tags": "node scripts/sync-dist-tags.mjs",
     "publish:all": "bash scripts/publish-all.sh"
   },
   "dependencies": {
@@ -75,7 +78,7 @@
   "devDependencies": {
     "@babel/parser": "7.29.8",
     "@changesets/cli": "^2.31.1",
-    "@proteus-vue/cli": "0.2.1-beta.0",
+    "@proteus-vue/cli": "workspace:*",
     "@proteus-vue/devtools-runtime": "workspace:*",
     "@proteus-vue/fluid": "workspace:*",
     "@proteus-vue/gesture": "workspace:*",

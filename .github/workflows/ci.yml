@@ -86,6 +86,9 @@ jobs:
       - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
         run: node scripts/check-package-health.js
 
+      - name: 内部版本对齐门禁（★2026-09-19 事故：模板/examples 的 @proteus-vue/* 声明必须 = workspace 实际——陈旧会让用户装到旧包并产生重复副本）
+        run: node scripts/sync-internal-versions.mjs --check
+
       - name: 属性降级声明门禁（批次 4 M6 · EA-5：全组件属性三态无空白格 + fallback 可观察 + 与官方清单交叉核对）
         run: node scripts/audit-degradation.mjs
 

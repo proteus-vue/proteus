@@ -175,9 +175,19 @@ npm install   # ③ 更新 lockfile
 npm run verify   # ④ 全绿
 npx tsx scripts/snapshot-template.ts && git diff --exit-code -- packages/create-proteus/templates   # ⑤ 模板无漂移
 # ⑥ 提交（版本 bump + changelog + 依赖同步）→ ⑦ 再执行真实发布：
-npm run changeset:publish   # 按依赖拓扑自动发布全部包
+npm run changeset:publish   # 按依赖拓扑自动发布全部包；★末尾自动跑发布后冒烟验证
 # ⑧ 发布后打 tag 并 push
 ```
+
+> ★**发布后冒烟已内置**：`changeset:publish` 的末尾会自动执行
+> `scripts/verify-publish-smoke.mjs`——在干净临时目录跑**真实用户旅程**
+> （`npm create` → `npm install` → 检查依赖树无重复副本 → `proteus --help` → 导出面 → 版本一致）。
+> 也可单独执行：`npm run publish:smoke`（`--tag latest` 可换 tag；`--skip-journey` 跳过脚手架段；
+> `--keep` 保留临时目录便于排查）。**这是 2026-09-19 事故的最后一环**——
+> 「发布命令退出码 0」不等于「用户装到的东西能用」。
+>
+> ★**dist-tag 归一也已内置**：`changeset:publish` 会接着跑 `scripts/sync-dist-tags.mjs --check`。
+> 见下节《复盘续三》。
 
 ## ★npm 发布事故复盘（2026-09-19：CLI 在真实项目「启动即崩」）
 
@@ -214,6 +224,106 @@ npm run changeset:publish   # 按依赖拓扑自动发布全部包
 >
 > **教训**：*「已发布」不等于「发布的是当前代码」*——发布幂等跳过必须带**内容校验**；
 > 且「发布后可用性」需要在**干净环境**里实测，而不是只看 publish 命令退出码 0。
+
+### 复盘续（2026-09-19 二次取证：★根因不止一处，且**第一轮修复没覆盖用户旅程**）
+
+发版成功后，用新写的**发布后冒烟脚本**在干净目录跑「真实用户旅程」，抓到**第二层根因**——
+它不是 `publish-all.sh` 的缺陷，而是**模板依赖声明**的缺陷，**修完第一层后它依然复现**：
+
+```
+$ npm create @proteus-vue/proteus@beta my-app && cd my-app && npm install   # 用户真实旅程
+$ 检查依赖树（实测，修复前）
+  cli                  0.2.1-beta.0                  ← 不是修好的 0.3.0-beta.5
+  devtools-runtime     0.1.0                        ← 正是「只有 8 个导出」的崩溃版
+  shared               0.2.0-beta.0 | 0.2.0-beta.2  ⚠★重复副本
+  router               0.2.0-beta.0 | 0.2.0-beta.5  ⚠★重复副本
+  runtime              0.2.0-beta.0 | 0.2.0-beta.4  ⚠★重复副本
+  compiler             0.3.0-beta.0 | 0.3.0-beta.3  ⚠★重复副本
+  module / contracts / types                        ⚠★重复副本（共 7 个包）
+```
+
+**根因（prerelease 的 caret 语义）**：`packages/create-proteus/templates/package.json` 写的是范围——
+`"@proteus-vue/cli": "^0.2.1-beta.0"`、`"@proteus-vue/devtools-runtime": "^0.1.0"`。
+但 caret 对**预发布版**的规则是「**仅当 (major,minor,patch) 元组完全相同**才匹配该元组的预发布版」：
+
+* `^0.1.0` **永远不会**匹配 `0.1.1-beta.1`（元组变了）→ 用户装到 **0.1.0**（8 导出的旧包）；
+* `^0.2.1-beta.0` 也够不到 `0.3.0-beta.5`（元组 0.2.1 → 0.3.0）→ 用户装到 **0.2.1-beta.0**。
+
+**链式后果（为什么变成「重复副本」）**：旧 `cli@0.2.1-beta.0` 的内部依赖是 **exact pin**
+（本仓 58 处内部依赖均为此形态）`shared@0.2.0-beta.0`，而顶层已解析出 `shared@0.2.0-beta.2`——
+npm 无法提升到同一份 → **在 `node_modules/@proteus-vue/cli/node_modules/` 下嵌套第二份副本**
+→ 两个物理副本 = **模块被求值两次 = 模块级单例被拆散**（本仓已用 `globalThis` 挂单例，
+但那解决的是「跨副本共享」；依赖树自洽才不会产生无谓副本）。
+
+> ★这解释了实战报告作者观察到的「URL 变了视图不更新、且**无任何报错**」——它和 CLI 崩溃是
+> **同一根因的两个表现**。此前当作两个独立问题，正是因为缺少**端到端的用户旅程实测**。
+
+**修复**：
+1. 模板内部依赖全部改**精确版本**（对齐 workspace 实际）：`router 0.2.0-beta.5` ·
+   `runtime 0.2.0-beta.4` · `shared 0.2.0-beta.2` · `cli 0.3.0-beta.5` · `compiler 0.3.0-beta.3` ·
+   `plugin-vite 0.2.0-beta.5` · `devtools-runtime 0.1.1-beta.1`。
+2. **补门禁（缺口所在）**：`scripts/check-package-health.js` 此前只扫 `packages/*/package.json`，
+   **从不扫模板**——模板是发布链上唯一无人看守的一环。新增 `checkTemplateAlignment()`：
+   模板的 `@proteus-vue/*` 依赖必须**精确等于** workspace 版本，且**禁止 `^`/`~`**
+   （范围在 prerelease 下会静默降级）。破坏性验证：改回 `^0.2.1-beta.0` → 红；`0.1.0` → 红；恢复 → 绿。
+3. 新增 `scripts/verify-publish-smoke.mjs`（发布后冒烟，接入 `changeset:publish` 与 `publish-all.sh`），
+   把**真实用户旅程**作为第一条断言：`npm create` → `npm install` → 依赖树**无重复副本** +
+   装到的 cli == 本仓版本 → `proteus --help` → 导出面 → 版本一致。
+   实测：修复前 **5/10 失败**（精确指认 7 个重复副本包），修复后全绿。
+
+> **教训（第二层）**：门禁只覆盖「仓库内部一致性」不够——**用户旅程**（脚手架 → 安装 → 构建）
+> 必须有一条机器化的端到端断言。这次掉在覆盖外的是「模板」，下次可能是别的环。
+> 判据应是：*发布链上每个「用户可见的产物」都要有对应断言，而不只是「源文件之间一致」。*
+
+### 复盘续二（2026-09-19 三次取证：警告类假阳性）
+
+同一轮用户旅程还暴露一个**误导性警告**：默认脚手架工程首次 `proteus build` 会打印
+`[gen-routes] 未找到语义组件库 @proteus-vue/components …… p-* 组件将不被注册（WXML 整块不渲染）`，
+而**模板根本不使用 `p-*` 组件**（实测：模板仅在 `src/shims/mp.d.ts` 的注释里提到 `p-button`）。
+**修复**：该警告改为条件触发——仅当工程内**确有 `.vue` 引用 `<p-*>` 或 `<P*>`** 时才提示
+（未解析的具体标签另有更精确的逐标签警告）。三态实测：默认模板 **0 警告** · 用 `<p-view>` **告警** ·
+用 `<PView>`（大写）**告警**。回归锁入 `tests/gen-routes.test.ts`。
+
+### 复盘续三（2026-09-19 四次取证：dist-tag 漂移——「已发布」≠「tag 指向它」）
+
+修完上面两处后，冒烟脚本仍在「用户实际装到哪个版本」上报错。深挖发现**第三个独立缺口**：
+发布链的**幂等跳过路径只跳过 `publish`，不会更新 dist-tag**。于是 registry 上长期存在这种状态
+（实测快照）：
+
+```
+@proteus-vue/devtools-runtime   latest=0.1.0        beta=0.1.1-beta.1
+                                ^^^^^^^^ 正是「只有 8 个导出」的崩溃版本
+@proteus-vue/cli                latest=0.3.0-beta.5 beta=0.2.1-beta.0
+@proteus-vue/shared             latest=0.2.0-beta.2 beta=0.2.0-beta.0
+```
+
+两个方向都错：不带 tag 安装 `devtools-runtime` 的用户拿到**崩溃版**；而按本仓 pre-release 约定
+用 `@beta` 的用户拿到**旧包**（`beta` 停在首次发布时的版本）。全量核对：**12 个包的 canonical tag
+未指向本仓版本**（cli / compiler / plugin-vite / router / runtime / shared / pinia-sync +
+5 个包连 `beta` tag 都不存在）。
+
+**根因**：`published` 与 `dist-tags` 是 registry 上**相互独立**的两件事——「版本已存在于 registry」
+不代表「任何 tag 指向它」。此前所有检查（drift / 冒烟 / publish-all）都只看版本是否存在。
+
+**修复**：
+1. 新增 `scripts/sync-dist-tags.mjs`（`publish:tags`）——canonical tag 判定：
+   pre 模式（`.changeset/pre.json` 存在）取 `pre.json.tag`（本仓 `beta`），否则 `latest`；
+   仅对**已发布**的版本要求 tag 指向它（本地领先未发布属正常，不报错）。`--check` 门禁 / `--fix` 修复。
+2. 接入 `changeset:publish`（发布后 `--check`）与 `publish-all.sh`（发布后核验，不一致即失败并给出修复命令）。
+3. 全量实测：`--check` 报 **12 个**不一致、退出码 1（门禁有效）。
+
+> **修复命令**（需 npm 凭据，属发布动作）：`node scripts/sync-dist-tags.mjs --fix`
+> ——把 12 个包的 `beta` tag 指向本仓版本。`latest` 的选择见下。
+>
+> ★**`latest` 待你决策**：pre-release 模式下 changesets **有意不动 `latest`**（保持指向上一稳定版），
+> 这是设计而非缺陷。但 `devtools-runtime` 的 `latest=0.1.0` 恰是崩溃版——若你希望「不带 tag 安装
+> 也不会踩崩溃版」，可显式把 `latest` 也指向 `0.1.1-beta.1`（`npm dist-tag add @proteus-vue/devtools-runtime@0.1.1-beta.1 latest`）；
+> 若坚持 `latest` 保持稳定版语义，则维持现状（`cli` 等包已 exact-pin 新版本，功能不受影响）。
+> 本脚本默认**只治理 canonical tag**，不擅自改 `latest`。
+
+> **教训（第三层）**：*「已发布」≠「装得到」≠「tag 指向它」*——registry 上有三层独立状态
+> （版本存在 / tag 指向 / 内容一致），发布链的核验必须**逐层覆盖**。
+
 
 ## 验收清单（✅ 全部通过）
 

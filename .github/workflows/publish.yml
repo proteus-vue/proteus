@@ -1,0 +1,166 @@
+# .github/workflows/publish.yml —— ★npm 发布（OIDC trusted publishing，无长期 token）
+#
+# 为什么用 OIDC 而不是 NPM_TOKEN（2026-09-19 事故后的凭据侧整改）：
+#   · 现状：本地 `changeset:publish` 依赖 `~/.npmrc` 里的 **granular access token**。它已实测失效过一次
+#     （E401 被 36 行 E404 噪声掩盖，排查耗时）；token 是长期凭据，过期/轮换/泄露都要人工介入。
+#   · npm 政策：bypass-2FA 的 granular token 自 2026-07-31 起被限制用于账号/包管理类操作，
+#     **且计划 2027-01 起同样失去「直接发布」能力**——现在迁移正当时。
+#   · OIDC（trusted publishing）：GitHub Actions 用**短时** OIDC token 换取发布权，仓库里**不存任何密钥**，
+#     且自动生成 provenance 证明（公开仓库 + 公开包时）。
+#
+# ★启用前需在 npmjs.com 逐包配置 trusted publisher（每个包一次，见文末「启用步骤」）：
+#     包 → Settings → Trusted Publisher → GitHub Actions：
+#       Organization or user:  proteus-vue
+#       Repository:             proteus
+#       Workflow filename:      publish.yml      ← 必须与**本文件名逐字一致**
+#       Environment name:       （留空——本 workflow 未用 environment）
+#       Allowed actions:        建议选「npm stage publish」或按需允许 npm publish
+#   本仓 41 个包需各配一次；未配置的包在本 workflow 里会发布失败（错误信息会指名该包）。
+#   ★若暂时只想验证链路，可先在 1~2 个包上配置，其余包继续走本地 no-token 流程。
+#
+# ★触发方式：手动（workflow_dispatch）。发布是**有意的动作**，不做「push 即发」——
+#   版本号变更由 changesets 产生 PR（见 changeset.yml），合并后在 Actions 页手动触发本 workflow。
+name: Publish (npm trusted publishing)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'dist-tag（本仓处于 pre-release 模式时用 beta；正式版用 latest）'
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - latest
+      dry_run:
+        description: '仅演练：不真正发布（npm publish --dry-run）'
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  publish:
+    name: 发布 @proteus-vue/* 到 npm
+    runs-on: ubuntu-latest
+    # ★OIDC 的两个必要权限：id-token 用于换取发布权，contents 用于 provenance 关联提交
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      # ★node 24 / npm ≥ 11.5.1 是 trusted publishing 的硬性要求（npm 11.5.1 起支持 OIDC）
+      # ★package-manager-cache: false —— 官方明确要求「发布构建不要用缓存」
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: 核对 npm 版本（trusted publishing 需 ≥ 11.5.1）
+        run: |
+          npm --version
+          node -e "
+            const [maj, min] = require('child_process').execSync('npm --version').toString().trim().split('.').map(Number)
+            if (maj < 11 || (maj === 11 && min < 5)) {
+              console.error('::error::npm 版本过低（' + maj + '.' + min + '）——trusted publishing 需 ≥ 11.5.1')
+              process.exit(1)
+            }
+            console.log('npm 版本满足 OIDC 要求')
+          "
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: 构建 workspace 包
+        run: node scripts/build-packages.mjs
+
+      # ★发布前漂移核验：本地 pack ↔ registry 同版本内容必须一致
+      #   （防「改了源码忘 bump」——同版本无法覆盖发布，新内容会永远发不出去）
+      - name: 发布前漂移核验
+        run: node scripts/check-publish-drift.mjs --check
+
+      # ★门禁：模板依赖对齐（2026-09-19 事故根因之一——模板 prerelease caret 够不到新版本）
+      - name: 门禁（包健康 + 模板依赖对齐）
+        run: node scripts/check-package-health.js
+
+      - name: 门禁（内部版本对齐：模板/examples/根包的 @proteus-vue/* 必须 = workspace 实际）
+        run: node scripts/sync-internal-versions.mjs --check
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: 发布（OIDC trusted publishing）
+        if: ${{ !inputs.dry_run }}
+        run: pnpm changeset publish --tag ${{ inputs.tag }}
+        # ★这里**故意不设 NODE_AUTH_TOKEN**：OIDC 在 publish 时自动生效。
+        #   设了 token 反而会绕过 OIDC（且仓库里就又多了一份长期凭据）。
+
+      - name: 演练（不发布）
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "dry run —— 逐包执行 npm publish --dry-run（校验 tarball 内容，不推 registry）"
+          for d in packages/*/; do
+            name=$(node -e "console.log(require('./$d/package.json').name ?? '')" 2>/dev/null)
+            [ -z "$name" ] && continue
+            echo "--- $name ---"
+            (cd "$d" && npm publish --dry-run --tag ${{ inputs.tag }})
+          done
+
+  # ★发布后冒烟：干净目录跑**真实用户旅程**（npm create → 装依赖 → 检查重复副本 → CLI 启动 → 导出面）。
+  #   这是 2026-09-19 事故的最后一环——「发布命令退出码 0」不等于「用户装到的东西能用」。
+  #   dry_run 时跳过（registry 上没有新版本，旅程必然失败）。
+  verify-published:
+    name: 发布后冒烟（真实用户旅程）
+    needs: publish
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      # 不给 setup-node 传 node-version 的 registry 缓存即可；这里只需 node
+      - name: 真实用户旅程冒烟
+        run: node scripts/verify-publish-smoke.mjs --tag ${{ inputs.tag }}
+
+      # ★dist-tag 归一核验（2026-09-19 取证发现：幂等跳过不会更新 dist-tag → tag 可能长期指向旧包）
+      - name: dist-tag 归一核验
+        run: node scripts/sync-dist-tags.mjs --check --tag ${{ inputs.tag }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 启用步骤（需在 npmjs.com 逐包操作；本仓 41 个包）
+#   1. 打开 https://www.npmjs.com/package/@proteus-vue/<包名>/access
+#   2. Trusted Publisher → GitHub Actions，按下表填写：
+#        Organization or user : proteus-vue
+#        Repository            : proteus
+#        Workflow filename     : publish.yml
+#        Environment name      : （留空）
+#        Allowed actions       : npm publish（或 npm stage publish）
+#   3. 保存。npmjs 上的 trusted publisher 连接的字段创建后**不可编辑**，只能删除重建。
+#
+# 已知限制（npm 官方文档）：
+#   · 仅支持 GitHub 托管的 runner（不支持 self-hosted）
+#   · 每包最多 10 个 trusted publisher
+#   · provenance 仅在「OIDC 发布 + 公开仓库 + 公开包」时自动生成
+#   · OIDC 只作用于 `npm publish` / `npm stage publish`，其他 npm stage 子命令仍需交互认证
+#   · OIDC 状态不体现在 `npm whoami` 里
+#   · package.json 的 `repository.url` 必须与 GitHub 仓库逐字匹配（★本仓各包当前**无** repository 字段，
+#     启用 OIDC 前需补上 `"repository": {"type":"git","url":"https://github.com/proteus-vue/proteus.git"}`）
+# ─────────────────────────────────────────────────────────────────────────────
