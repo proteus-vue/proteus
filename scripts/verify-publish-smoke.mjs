@@ -48,6 +48,19 @@ function localVersion(short) {
   return JSON.parse(fs.readFileSync(f, 'utf8')).version
 }
 
+/** registry 上是否已存在该包的该版本（判「发布成功」的权威依据） */
+async function registryHasVersion(short, version) {
+  const url = 'https://registry.npmjs.org/' + encodeURIComponent('@proteus-vue/' + short)
+  try {
+    const r = await fetch(url, { headers: { 'user-agent': 'proteus-publish-smoke' }, signal: AbortSignal.timeout(20_000) })
+    if (!r.ok) return { error: `HTTP ${r.status}` }
+    const d = await r.json()
+    return { exists: Object.prototype.hasOwnProperty.call(d.versions ?? {}, version) }
+  } catch (e) {
+    return { error: String(e).slice(0, 80) }
+  }
+}
+
 /** 在指定目录跑命令，返回 { ok, out, err }（不抛） */
 function run(cmd, args, cwd, timeoutMs = 300_000) {
   try {
@@ -213,17 +226,22 @@ try {
     record('导出面探测执行', false, (pr.err || pr.out).slice(0, 200))
   }
 
-  // ── ④ 版本一致 ──
-  console.log('\n── ④ 版本一致（防「发的是旧版」）──')
-  for (const short of ['cli', 'shared', 'devtools-runtime']) {
-    const pkgJson = path.join(dir, 'node_modules', '@proteus-vue', short, 'package.json')
-    if (!fs.existsSync(pkgJson)) {
-      record(`${short} 版本`, true, '未在顶层（非直接依赖，跳过）')
+  // ── ④ 发布成功核验：本仓版本必须已上架 registry ──
+  // ★为什么**不**拿「按 tag 装到的版本」跟本仓比对（曾因此产生误导性失败）：
+  //   `@beta` 装到的版本与本仓不一致有**两种成因**，症状相同但性质完全不同——
+  //     ① 发布失败/被跳过（真问题，本脚本要拦）；② **tag 漂移**（版本已上架，只是 tag 没指过去；
+  //     属包管理动作，由 scripts/sync-dist-tags.mjs 单独报告与处理）。
+  //   区分二者的判据：**本仓版本是否已在 registry 上**。已上架 ⇒ 发布成功，tag 漂移另案处理。
+  console.log('\n── ④ 发布成功核验（本仓版本须已在 registry 上）──')
+  for (const short of ['cli', 'shared', 'devtools-runtime', 'plugin-vite', 'create-proteus']) {
+    const local = localVersion(short)
+    if (local === null) continue
+    const r = await registryHasVersion(short, local)
+    if (r.error) {
+      record(`${short}@${local} 已上架`, false, `registry 查询失败：${r.error}`)
       continue
     }
-    const installed = JSON.parse(fs.readFileSync(pkgJson, 'utf8')).version
-    const local = localVersion(short)
-    record(`${short} 装到的版本 == 本仓`, local === null || installed === local, `registry=${installed} 本仓=${local}`)
+    record(`${short}@${local} 已上架`, r.exists, r.exists ? '' : '未发布——该包被跳过或发布失败')
   }
 } catch (e) {
   record('冒烟流程', false, String(e).slice(0, 200))
