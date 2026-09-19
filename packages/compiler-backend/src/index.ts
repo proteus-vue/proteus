@@ -25,7 +25,7 @@ export { runCompilerConformance, DEFAULT_CONFORMANCE_SFC } from './conformance'
 export type { ConformanceCheck, ConformanceResult } from './conformance'
 export { createNodeCompilerBackend } from './node'
 // ★G-29 阶段 A：编译器后端插拔消费点（config.compiler.backend='rust' / proteus build --compiler rust）
-export { verifyDualCompilerEquivalence, resolveRustCliBin } from './dual-check'
+export { verifyDualCompilerEquivalence, resolveRustCliBin, rustCliTimeoutMs, RUST_CLI_TIMEOUT_MS } from './dual-check'
 export type { CompilerBackendChoice } from './dual-check'
 // ★G-38（compiler-backend-spi-plan）B1/B2-Node 参考实现：parse/transform/emit 三阶段 SPI（决策 #334）
 export { createG38NodeBackend, g38Hash } from './g38'

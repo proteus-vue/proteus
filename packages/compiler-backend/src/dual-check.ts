@@ -113,12 +113,31 @@ export function verifyDualCompilerEquivalence(
   return details.length ? { status: 'mismatch', details, reason: 'ir-drift' } : { status: 'ok', details: [] }
 }
 
+/**
+ * ★Rust CLI 执行超时预算（2026-09-19 修「冷缓存/首次执行误报」）：
+ *   健康执行仅 ~10ms，但有两个**合法的慢路径**：
+ *   ① `bin/cli.js` 是 npm bin 壳——二进制未构建时会先跑 `cargo build --release`（首次编译可达分钟级）；
+ *   ② **macOS 对刚写出的 Mach-O 首次执行要做一次系统校验**——实测 `pnpm verify` 场景
+ *      （build-packages 重链 release 二进制 → 紧随测试首次执行）**耗时 71s**，第二次回到 0.17s。
+ *   固定 30s 超时在①（冷缓存）与②（刚重链）下必然触发 → 底层 ETIMEDOUT → 被上层归为
+ *   `rust-cli-error`（"Rust CLI 执行失败"）**掩盖真实原因**；且 `buildDir` 见 mismatch 直接 throw →
+ *   设计本意的「二进制缺失 → skipped 降级、构建照常」在冷缓存下失效。
+ *   故取单一宽预算（覆盖 ①+②+执行本身）：健康的慢只发生一次，而真正的损坏二进制
+ *   （退出码非 0）依然**立即**失败——超时不是错误检测手段，只是挂死兜底。
+ */
+export const RUST_CLI_TIMEOUT_MS = 300_000
+
+/** 兼容旧签名（曾按「是否已构建」给 30s/600s 两档——两档都盖不住 macOS 首次执行校验，见上） */
+export function rustCliTimeoutMs(_bin?: string): number {
+  return RUST_CLI_TIMEOUT_MS
+}
+
 /** 默认 Rust runner：临时 .vue → `node bin/cli.js compile` → IR JSON stdout */
 function runRustCli(bin: string, source: string): string {
   const tmp = path.join(os.tmpdir(), `proteus-dual-${Math.random().toString(36).slice(2)}.vue`)
   fs.writeFileSync(tmp, source, 'utf-8')
   try {
-    return execFileSync(process.execPath, [bin, 'compile', tmp], { encoding: 'utf-8', timeout: 30000 })
+    return execFileSync(process.execPath, [bin, 'compile', tmp], { encoding: 'utf-8', timeout: RUST_CLI_TIMEOUT_MS })
   } finally {
     fs.rmSync(tmp, { force: true })
   }

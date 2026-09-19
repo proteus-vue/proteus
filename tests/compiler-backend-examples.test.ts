@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createNodeCompilerBackend } from '@proteus-vue/compiler-backend'
+import { createNodeCompilerBackend, RUST_CLI_TIMEOUT_MS } from '@proteus-vue/compiler-backend'
 
 const CRATE_DIR = path.resolve('packages/compiler-backend-rust')
 const BIN = path.join(CRATE_DIR, 'target', 'debug', 'proteus-cc-rust')
@@ -36,7 +36,9 @@ function compileWithRust(sfc: string): Record<string, unknown> {
   const tmp = path.join(os.tmpdir(), `proteus-rust-${Math.random().toString(36).slice(2)}.vue`)
   fs.writeFileSync(tmp, sfc, 'utf-8')
   try {
-    const raw = execFileSync(BIN, ['compile', tmp], { encoding: 'utf-8', timeout: 30000 })
+    // ★超时统一走共享预算（RUST_CLI_TIMEOUT_MS）：macOS 对刚 cargo 构建出的 Mach-O 首次执行
+    //   要做系统校验（实测 71s）——固定 30s 会让「冷缓存/刚重链」误报 ETIMEDOUT
+    const raw = execFileSync(BIN, ['compile', tmp], { encoding: 'utf-8', timeout: RUST_CLI_TIMEOUT_MS })
     return JSON.parse(raw) as Record<string, unknown>
   } finally {
     fs.rmSync(tmp, { force: true })
