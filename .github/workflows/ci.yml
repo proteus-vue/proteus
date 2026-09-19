@@ -107,6 +107,9 @@ jobs:
       - name: 小程序构建（示例工程：gen-routes → vue-tsc → vite build:mp）
         run: pnpm run build:mp
 
+      - name: 小程序产物完整性门禁（引用闭环：声明 ⇒ 四件套存在——防「未找到组件」启动失败）
+        run: pnpm run check:mp-artifacts
+
       - name: Web 构建（示例工程）
         run: pnpm run build:web
 

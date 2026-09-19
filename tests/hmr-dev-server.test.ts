@@ -12,11 +12,17 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-/** 等待条件成立（真实 fs.watch / WS 事件均为异步；★并行负载下 FSEvents 可能延迟 → 15s 余量） */
-async function waitFor(fn: () => boolean, timeoutMs = 15000): Promise<void> {
+/**
+ * 等待条件成立（真实 fs.watch / WS 事件均为异步）。
+ * ★超时预算纪律（2026-09-19 修 flake）：本文件用例统一声明 `{ timeout: 60000 }`（实时 fs.watch 集成），
+ *   但内部 waitFor 此前独立用 15s 默认值——**两套预算不一致**：满负载（pnpm verify 全链并行）下
+ *   fs.watch 事件延迟可超 15s → `waitFor 超时` 假红，而用例自己的 60s 预算根本没机会生效。
+ *   默认值改为与用例预算同量级；需要更快失败的场景仍可显式传 timeoutMs。
+ */
+async function waitFor(fn: () => boolean, timeoutMs = 45000): Promise<void> {
   const t0 = Date.now()
   while (!fn()) {
-    if (Date.now() - t0 > timeoutMs) throw new Error('waitFor 超时')
+    if (Date.now() - t0 > timeoutMs) throw new Error(`waitFor 超时（${timeoutMs}ms 内条件未成立）`)
     await new Promise((r) => setTimeout(r, 15))
   }
 }
