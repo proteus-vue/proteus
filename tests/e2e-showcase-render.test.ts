@@ -272,4 +272,58 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
     await page.waitForTimeout(300)
     expect(await page.locator('.proteus-web-image-menu').count(), '★长按/右键应弹出自绘菜单').toBeGreaterThan(0)
   })
+
+
+  // ── ★G-07 液态玻璃：真交互锁（2026-09-19 补；此前仅有渲染断言）──
+  //   命题「调整强度 → 玻璃观感真的改变」必须在**计算样式**层面成立——只断言元素存在不够
+  //   （可能滑块没接线 / 强度未生效）。pg-glass 是框架旗舰能力（单入口铁律 GLS001-006），
+  //   故锁：拖动强度 → `--pg-noise-opacity`（由 intensity 派生）实际变化。
+  it('★/pages/system-glass 强度滑块：拖动 → 玻璃参数真的改变（噪声/模糊派生值）', async () => {
+    await page.goto(BASE + '/pages/system-glass', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(800)
+    const glass = page.locator('.pg-glass').first()
+    await glass.scrollIntoViewIfNeeded()
+    const readVars = () =>
+      glass.evaluate((el) => {
+        const cs = getComputedStyle(el)
+        return {
+          noise: cs.getPropertyValue('--pg-noise-opacity').trim(),
+          backdrop: cs.backdropFilter || cs.webkitBackdropFilter || '',
+        }
+      })
+    const before = await readVars()
+    // 拖到最右（强度拉满）——用真实滑块交互而非直接改数据
+    const slider = page.locator('.p-slider').first()
+    await slider.scrollIntoViewIfNeeded()
+    const box = await slider.boundingBox()
+    if (box) {
+      await page.mouse.move(box.x + 2, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2, { steps: 8 })
+      await page.mouse.up()
+    }
+    await page.waitForTimeout(400)
+    const after = await readVars()
+    // 核心断言：强度变化必须**可观测**（噪声不透明度是 intensity 的直接派生；两者至少一项变化）
+    const changed = before.noise !== after.noise || before.backdrop !== after.backdrop
+    expect(changed, `★调整强度应改变玻璃参数（before=${JSON.stringify(before)} after=${JSON.stringify(after)}）`).toBe(true)
+  })
+
+  // ── ★转场动效：真交互锁（2026-09-19 补）──
+  //   命题「点转场入口真的发生导航」——该页价值就是触发真实跳转（halfScreen/slideUp/scaleDown），
+  //   若路由未接线则页面沦为静态展示。锁：点击后 URL 真的变化。
+  it('★/pages/transitions 转场入口：点击真的触发导航（URL 变化）', async () => {
+    await page.goto(BASE + '/pages/transitions', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(700)
+    const urlBefore = page.url()
+    // 页面上任一可点条目（按钮/链接/catalog 行）——滚动后点击第一个
+    const clickable = page.locator('button, a, [class*=chevron]').first()
+    await clickable.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(150)
+    if (await clickable.count()) {
+      await clickable.click().catch(() => undefined)
+      await page.waitForTimeout(900)
+      expect(page.url(), '★点转场入口应真的导航（URL 变化）——否则页面只是静态展示').not.toBe(urlBefore)
+    }
+  })
 })
