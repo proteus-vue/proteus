@@ -36,7 +36,7 @@ UI 状态恢复令牌：capture / restore / 过滤可恢复（永续场景）
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `RestoreStorage` | interface | 纯函数 + storage 注入可单测；Web 载体 localStorage/sessionStorage（桌面/刷新恢复） |
+| `RestoreStorage` | interface | ★G-24 B4（proteus-semantic-primitives-plan 01 §8 p-state-restoration）：状态恢复纯逻辑（iOS UIStateRe |
 | `restoreKey` | function | 命名空间化存储键：'proteus-restore:page:scroll' |
 | `buildRestoreToken` | function | ★buildRestoreToken：状态 → 恢复令牌（JSON 序列化；undefined/函数字段剔除——可序列化白名单） |
 | `filterRestorable` | function | ★filterRestorable：白名单过滤（敏感字段不入恢复态——安全默认） |

@@ -35,10 +35,10 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `FocusableElement` | interface | 纯逻辑零 DOM 依赖（元素形状注入）；MP 产物安全：无 ?. / ??；无数组解构 |
+| `FocusableElement` | interface | ★G-24 B1（proteus-semantic-primitives-plan 03 §4 p-focus-trap）：焦点陷阱纯逻辑（无障碍刚需） |
 | `FocusTrapOptions` | interface | — |
 | `FocusTrap` | interface | — |
-| `createFocusTrap` | function | / |
+| `createFocusTrap` | function | ★createFocusTrap：焦点陷阱（Tab 在容器内循环、Shift+Tab 反向；打开聚焦首项、关闭恢复先前焦点） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

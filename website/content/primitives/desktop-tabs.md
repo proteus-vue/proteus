@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `DesktopTab` | interface | 映射：UISegmentedControl / TabLayout（01 §7）；与移动端 p-tabbar（S3 底部）区分——桌面窗口 tabs（可关、多行/滚动由宿主） |
+| `DesktopTab` | interface | ★G-24 B3（proteus-semantic-primitives-plan 01 §7 Navigation p-tabs）：桌面标签页纯逻辑 |
 | `TabCloseResult` | interface | — |
 | `resolveTabAfterClose` | function | ★resolveTabAfterClose：关闭 tab 后的激活迁移 |
 | `normalizeTabs` | function | ★normalizeTabs：激活合法性归一（激活 id 缺失/不存在 → 首个；空 → null） |

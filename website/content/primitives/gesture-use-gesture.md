@@ -36,7 +36,7 @@ group: 手势原语
 |---|---|---|
 | `GestureHandlers` | type | — |
 | `UseGestureOptions` | interface | — |
-| `useGesture` | function | / |
+| `useGesture` | function | ★G10 useGesture()：组合手势 Hook——绑定元素 → 识别器 → 语义手势事件回调 |
 | `VGestureBindingValue` | interface | ★G1-G7 v-gesture 指令工厂：v-gesture:tap="onTap" / v-gesture:pan="onPan"（值=回调或 { handler, confi |
 | `createGestureDirective` | function | 指令工厂（createApp 前用 app.directive('gesture', createGestureDirective())） |
 

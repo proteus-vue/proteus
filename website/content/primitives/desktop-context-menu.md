@@ -34,12 +34,12 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `MenuItem` | interface | 纯逻辑零 DOM 依赖；MP 产物安全：无 ?. / ??；无数组解构 |
+| `MenuItem` | interface | ★G-24 B1（proteus-semantic-primitives-plan 03 §2 p-context-menu）：右键上下文菜单纯逻辑（触摸长按/鼠标右键归一） |
 | `MenuPoint` | interface | 触发点（鼠标右键坐标 / 触摸长按坐标——归一） |
 | `MenuSize` | interface | 菜单弹出尺寸（防溢出定位用） |
 | `ViewportSize` | interface | 视口尺寸（防溢出定位用；缺省 1024×768 兜底） |
 | `PositionedMenu` | interface | — |
-| `buildMenuPosition` | function | / |
+| `buildMenuPosition` | function | 防溢出定位：菜单在 (x,y) 弹出，若超出视口右/下边缘 → 翻转（菜单左上角对齐边缘内侧，留 4px 安全距） |
 | `menuPointFrom` | function | 长按/右键归一触发点（注入坐标——Web contextmenu e.clientX/Y / 触摸长按合成） |
 | `buildContextMenu` | function | 菜单构建（校验 + 危险项归一 + 定位合并一步到位——指令层薄封装） |
 

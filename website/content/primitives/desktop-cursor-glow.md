@@ -39,7 +39,7 @@ group: 桌面原语
 | `CURSOR_GLOW_DEFAULTS` | const | 默认值（Proteus design-tokens：brand 紫 / brand2 青） |
 | `prefersReducedMotion` | function | — |
 | `hasFinePointer` | function | 是否精确指针环境（mouse/pen——触屏不启用；无 matchMedia 环境 = 非 Web，禁用） |
-| `createCursorGlow` | function | / |
+| `createCursorGlow` | function | 创建指针跟随光晕层（fixed 全屏，pointer-events:none；z-index 0——内容层之上、背景之上无遮挡） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

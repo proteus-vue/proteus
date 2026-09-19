@@ -47,17 +47,17 @@ MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 | `ComponentPropDef` | interface | 组件 prop 描述（类型化声明——编译器静态提取 + MP properties 对齐） |
 | `ComponentMeta` | interface | 组件定义（C-IR 元信息：semantic 供 toComponentIR/渲染后端消费） |
 | `validateComponentMeta` | function | 纯函数：校验组件定义（返回错误列表；空 = 合法）——E27 声明期验证，编译器/开发期消费 |
-| `defineComponent` | function | / |
+| `defineComponent` | function | ★E27 defineComponent：类型化组件定义（含 C-IR 元信息） |
 | `CapabilityContract` | interface | 能力合同（G-30 降级链声明） |
 | `CapabilityAvailability` | interface | 实现可用性表（resolveCapabilityChain 入参） |
 | `CapabilityDefinition` | interface | E28 defineCapability 句柄 |
 | `validateCapabilityContract` | function | 纯函数：校验能力合同（返回错误列表；空 = 合法） |
-| `resolveCapabilityChain` | function | / |
+| `resolveCapabilityChain` | function | 纯函数：降级链解析（G-30）——自身可用 → 自身；否则依序返回链上第一个可用；全不可用 → undefined |
 | `DefineCapabilityOptions` | interface | — |
-| `defineCapability` | function | / |
+| `defineCapability` | function | ★E28 defineCapability：能力降级声明（G-30） |
 | `ToolingEngineeringOptions` | interface | createToolingEngineering 注入项 |
 | `ToolingEngineering` | interface | G-32 §8 ④ 工程化语义（E24-E28） |
-| `createToolingEngineering` | function | / |
+| `createToolingEngineering` | function | ★createToolingEngineering：工程化语义实例（注入式——reactivity + 各句柄可注入源） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

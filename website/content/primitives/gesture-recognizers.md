@@ -34,14 +34,14 @@ Backend 映射：Web 用 Pointer Events；iOS UIGestureRecognizer / Android Gest
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `GesturePoint` | interface | Backend 映射：Web 用 Pointer Events；iOS UIGestureRecognizer / Android GestureDetector / 鸿蒙手势系统 |
+| `GesturePoint` | interface | ★G-32 B4 ④ Gesture（proteus-semantic-primitives-plus-plan §6）：手势识别器（纯逻辑零依赖——可单测） |
 | `GestureInputKind` | type | — |
 | `GestureInput` | interface | — |
 | `GestureEvent` | type | 语义手势事件（输出——开发者消费的声明式约束结果） |
 | `GestureKind` | type | — |
 | `GestureEventHandler` | type | — |
 | `GestureRecognizerConfig` | interface | — |
-| `createGestureRecognizer` | function | / |
+| `createGestureRecognizer` | function | 手势识别器（状态机）：feed(input) → 手势事件回调 |
 
 ## 用法与降级
 

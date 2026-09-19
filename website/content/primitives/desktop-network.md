@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `NetworkKind` | type | 与 @proteus-vue/api useNetwork（CapResult 双桥）互补：本模块为桌面/全终端注入式 tracker（无 vue 依赖） |
+| `NetworkKind` | type | ★G-24 B4（proteus-semantic-primitives-plan 01 §8 p-network-status）：网络状态纯逻辑（NWPathMonitor /  |
 | `NetworkInfo` | interface | — |
 | `NetworkEnv` | interface | — |
 | `detectNetwork` | function | ★detectNetwork：即时网络状态（online + kind + effectiveType） |

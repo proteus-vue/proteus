@@ -35,7 +35,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `NotifyPayload` | interface | 纯逻辑零 DOM 直调（env 注入——审计 no-platform-api 安全）；缺 Notification → Err（G-32.3 非抛同步异常风格——返回结果对象） |
+| `NotifyPayload` | interface | ★G-24 B2（proteus-semantic-primitives-plan 04-system-integration §1 p-notify）：通知纯逻辑 |
 | `NotifyResult` | interface | — |
 | `NotificationLike` | interface | web Notification 形态（注入面——真实实现为全局 Notification） |
 | `NotificationCtor` | interface | — |

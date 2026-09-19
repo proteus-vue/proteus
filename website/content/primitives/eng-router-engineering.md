@@ -39,7 +39,7 @@ MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 | `CurrentRoute` | interface | 当前路由读取结果（E10 useRoute） |
 | `RouterEngineeringOptions` | interface | createRouterEngineering 注入项 |
 | `RouterEngineering` | interface | G-32 §8 ⑥ 路由语义化（E10-E17） |
-| `createRouterEngineering` | function | / |
+| `createRouterEngineering` | function | ★createRouterEngineering：路由语义化实例（注入式——router + reactivity + 当前路由源） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

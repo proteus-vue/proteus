@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `PageUrlEnv` | interface | 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实 location/history——同 network/lifecycle 族惯例） |
+| `PageUrlEnv` | interface | ★#449 G-24 B5（proteus-semantic-primitives-plan 续批，p-deeplink 地址栏伴侣）：页面 URL 读写原语 |
 | `currentPageOrigin` | function | 当前页 origin（无 location 环境 → ''） |
 | `currentPagePathname` | function | 当前页 pathname（无 location 环境 → ''） |
 | `replacePageUrl` | function | ★replacePageUrl：同址替换地址栏（history.replaceState——不产生历史记录；无 history 环境静默） |

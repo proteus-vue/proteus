@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `WindowMessage` | interface | 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实全局——同 network/lifecycle 族惯例） |
+| `WindowMessage` | interface | ★#449 G-24 B5（proteus-semantic-primitives-plan 续批）：跨窗消息原语——postMessage 收口（来源校验 + type 过滤） |
 | `WindowMessageEnv` | interface | — |
 | `WindowMessageOptions` | interface | — |
 | `WindowMessageHandle` | interface | — |

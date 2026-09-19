@@ -124,6 +124,7 @@ export function capabilityToTool(spec: McpCapabilityToolSpec, prefix = ''): McpT
 
 /* ---------- 注册（useMCP） ---------- */
 
+/** useMCP 入参：工具来源（显式/能力派生）+ document 注入 + 生命周期钩子 */
 export interface UseMCPOptions {
   /** 显式工具声明 */
   tools?: McpToolDescriptor[]
@@ -142,6 +143,7 @@ export interface UseMCPOptions {
   onDispose?: (fn: () => void) => void
 }
 
+/** useMCP 返回值：状态经 getter 实时读（异步注册/注销后可见）+ 注册工具名 + ready + dispose */
 export interface UseMCPReturn {
   /** 运行环境是否支持 WebMCP（方法可调用判定，非对象存在判定） */
   readonly isSupported: boolean

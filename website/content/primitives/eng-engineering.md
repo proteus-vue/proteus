@@ -41,7 +41,7 @@ MP 产物安全（决策 #32/#36）：无 ?. / ??；无数组解构
 | `ParamSource` | type | 页面参数源（wx onLoad(options) / web URL query——代码侧注入） |
 | `EngineeringOptions` | interface | 工程原语注入项 |
 | `Engineering` | interface | G-32 §8 ⑥ 工程原语语义面（E1-E9 首期） |
-| `createEngineering` | function | / |
+| `createEngineering` | function | ★createEngineering：工程原语统一实例（注入式——单测/多端可替换 reactivity/lifecycle/param 源） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 

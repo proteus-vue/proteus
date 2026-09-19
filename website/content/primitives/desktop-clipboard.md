@@ -34,7 +34,7 @@ env 注入可单测；env 省略 → 回落真实浏览器全局（typeof 守卫
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `ClipboardResult` | interface | env 注入可单测；env 省略 → 回落真实浏览器全局（typeof 守卫——封装只在框架包内，页面零裸平台 API） |
+| `ClipboardResult` | interface | ★G-24 B2（proteus-semantic-primitives-plan 04-system-integration §1 p-clipboard）：剪贴板纯逻辑 |
 | `ClipboardEnv` | interface | — |
 | `clipboardSupported` | function | — |
 | `copyText` | function | ★copyText：写剪贴板——Clipboard API（异步 Promise）→ execCommand('copy') 降级（textarea 临时选择）→ unsuppor |

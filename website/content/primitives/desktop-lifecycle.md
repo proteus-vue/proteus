@@ -34,7 +34,7 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `AppPhase` | type | · createLifecycleTracker：Web visibilitychange/focus 订阅 → onPhase（env 注入可单测；缺省 env 直连 docum |
+| `AppPhase` | type | ★G-24 B4（proteus-semantic-primitives-plan 01 §8 Lifecycle p-lifecycle）：应用前后台/激活纯逻辑 |
 | `LifecycleEnv` | interface | — |
 | `phaseOf` | function | 前后台相位归一（hidden → background；否则 foreground） |
 | `LifecycleTracker` | interface | — |

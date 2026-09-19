@@ -36,7 +36,7 @@ Compiler 侧：iOS Associated Domains + apple-app-site-association / Android int
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `DeepLink` | interface | 纯函数零依赖；非法 URL → null（不抛） |
+| `DeepLink` | interface | ★G-24 B2（proteus-semantic-primitives-plan 04-system-integration §深链）：p-deeplink 纯逻辑 |
 | `DeepLinkMatch` | interface | — |
 | `parseDeepLink` | function | 解析深链 URL：'proteus://user/profile?id=1' → { scheme, host, path, query }；相对 '/user/1' → sche |
 | `matchDeepLink` | function | 参数化匹配：':name' 段捕获；字面量段须相等；scheme/host 缺省不约束（相对 path 模式通配任意 scheme） |

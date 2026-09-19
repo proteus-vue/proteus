@@ -34,8 +34,8 @@ group: 桌面原语
 
 | 导出 | 形态 | 一句话（源码注释） |
 |---|---|---|
-| `AnchorScrollEnv` | interface | 分层：纯逻辑 + Web 接线（env 注入可单测；缺省回落真实 document——同 network/lifecycle 族惯例） |
-| `scrollToId` | function | / |
+| `AnchorScrollEnv` | interface | ★#449 G-24 B5（proteus-semantic-primitives-plan 续批）：锚点定位原语——scrollIntoView 收口（元素查询在框架包内） |
+| `scrollToId` | function | ★scrollToId：定位 id 锚点并滚动（options.delayMs > 0 → 延时执行——等目标渲染） |
 
 ## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
 
