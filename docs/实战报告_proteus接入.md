@@ -189,6 +189,24 @@ web/
 
 ---
 
+## 六-b、proteus 侧处理回执（2026-09-19 二次，针对本轮新发现）
+
+> 报告中「adapter 单例分裂」一条是**最有价值的发现**——发布事故有报错，而它是**完全静默**的。
+> 已按报告建议修复，并扩展到同类风险点。
+
+| 报告建议 | 处理 |
+|---|---|
+| ① `adapter` 等单例改用 `globalThis`/`Symbol.for` | ✅ **已修**——`shared` 的 adapter 挂 `__PROTEUS_ADAPTER_{WEB,MP}__`；同类风险一并改造：`app-config`（`configRef` **+ `listeners`** 同槽——只共享前者不够，订阅者仍会分裂）、`devtools-runtime` 的 `getProteusTraceBus()`（否则生产者 emit A、面板订阅 B） |
+| ② 重发 `devtools-runtime` | ✅ **已完成**——`0.1.1-beta.0` 已发布，实测 **12 个导出**（含 `createFlamegraphCollector` / `createTimelineCollector`），不再是 3 个 |
+| ③ `create-proteus` 模板显式声明 `shared` | ✅ **本地模板已有**（`"@proteus-vue/shared": "^0.2.0-beta.0"`；报告所测旧模板无此声明）——实测脚手架工程解析为**单副本** |
+| ④ Web 端补路由参数注入 | ✅ **已修**（上一轮）——adapter 当前页保留 `query` + RouterView `v-bind` 透传给页面 |
+| ⑤ 旧委托路径加防重入标记 | ⬜ 未处理（待评估——请补充复现路径） |
+| ⑥ 组件查找失败报「应放哪」 | ⬜ 待办（已登记） |
+
+**验证方式（双向闭环）**：用两份 dist 副本模拟真实嵌套场景——
+修复后：同实例 ✅ + 跨副本事件送达 ✅；修复前形态（模块级单例）：**分裂 ❌ + 静默失败 ❌**（与报告描述一致）。
+回归锁含两条结构性断言（「不得退回模块级单例」「listeners 必须与 configRef 同槽」），防止未来重构退化。
+
 ## 七、给 proteus 的建议（按优先级）
 
 1. **`adapter` / `traceBus` 等模块级单例改用 `globalThis` 或 `Symbol.for`**
