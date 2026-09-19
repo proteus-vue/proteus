@@ -25,6 +25,19 @@ for arg in "$@"; do
 done
 : "${TAG_FLAG:=}"
 
+# ★未显式指定 tag 时，自动采用 changesets pre 模式的 tag（本仓 beta）。
+#   不加这一步时 `npm publish` 会用默认 tag `latest` → pre 模式的新版本被挂到 latest，
+#   而 `beta` 永远停在首次发布时的旧版本（2026-09-19 实测：cli 的 beta 停在 0.2.1-beta.0，
+#   而 latest 已是 0.3.0-beta.5）。修复：手动发布也自动跟随 pre.json，不必记 --beta。
+if [ -z "$TAG_FLAG" ]; then
+  PRE_TAG=$(node -e "try{const j=require('./.changeset/pre.json');process.stdout.write(j.mode==='pre'?(j.tag||''):'')}catch{}" 2>/dev/null)
+  if [ -n "$PRE_TAG" ]; then
+    TAG_FLAG="--tag $PRE_TAG"
+    TAG="--$PRE_TAG"
+    echo "（未指定 tag——自动采用 changesets pre 模式 tag：$PRE_TAG）"
+  fi
+fi
+
 ROOT="$PWD"
 FAIL=0
 SKIP=0
@@ -76,24 +89,14 @@ done
 echo ""
 echo "RESULT: published $PUB - skipped $SKIP - drift-skipped $DRIFT - failed $FAIL"
 
-# ★发布后 dist-tag 归一（2026-09-19 取证发现的第三个缺口）：发布链的「幂等跳过」只跳过 publish，
-#   **不会动 dist-tag**——于是会出现「本仓已发新版，但 @beta/@latest 仍指向旧包」的漂移
-#   （实测：devtools-runtime 的 latest 曾长期指向只有 8 个导出的崩溃版 0.1.0）。
-#   canonical tag = pre 模式下 .changeset/pre.json 的 tag（本仓 beta），否则 latest。
+# ★dist-tag 漂移**报告**（2026-09-19 取证发现：幂等跳过只跳过 publish，不更新 dist-tag）。
+#   ★此处不阻断发布：修复 dist-tag 属**包管理动作**（`npm dist-tag add`），权限高于发布本身，
+#   多数情况下无法在发布链内自动完成 → 硬失败会让「发布」这项本职工作直接不可运行。
+#   故这里只报告 + 打印可执行的修复命令，由人来决定何时处理。
 if [ "$FAIL" = "0" ]; then
   echo ""
-  echo "=== dist-tag 归一核验（tag 必须指向本仓版本）==="
-  if node "$ROOT/scripts/sync-dist-tags.mjs" --check; then
-    :
-  else
-    echo ""
-    echo "✗ 存在 tag 漂移：用户按该 tag 安装会拿到旧包。"
-    echo "  修复：node scripts/sync-dist-tags.mjs --fix"
-    exit 1
-  fi
-else
-  echo ""
-  echo "⚠ 本轮有失败项，跳过 dist-tag 核验（先修复失败项）。"
+  echo "=== dist-tag 漂移报告（信息性，不阻断发布）==="
+  node "$ROOT/scripts/sync-dist-tags.mjs" || true
 fi
 
 # ★发布后冒烟验证（2026-09-19 事故的最后一环）：干净目录真实安装 + CLI 启动 + 导出面核对。

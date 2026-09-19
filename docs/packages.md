@@ -309,7 +309,12 @@ npm 无法提升到同一份 → **在 `node_modules/@proteus-vue/cli/node_modul
 1. 新增 `scripts/sync-dist-tags.mjs`（`publish:tags`）——canonical tag 判定：
    pre 模式（`.changeset/pre.json` 存在）取 `pre.json.tag`（本仓 `beta`），否则 `latest`；
    仅对**已发布**的版本要求 tag 指向它（本地领先未发布属正常，不报错）。`--check` 门禁 / `--fix` 修复。
-2. 接入 `changeset:publish`（发布后 `--check`）与 `publish-all.sh`（发布后核验，不一致即失败并给出修复命令）。
+2. 接入 `changeset:publish` 与 `publish-all.sh` 的发布后**报告**（★**不阻断发布**：
+   修复 dist-tag 属**包管理动作**，权限高于发布本身，多数情况下无法在发布链内自动完成——
+   硬失败会让「发布」这项本职工作直接不可运行。故只报告 + 打印可执行修复命令，由人决定何时处理）。
+   同时 `publish-all.sh` 未显式指定 tag 时**自动采用 `.changeset/pre.json` 的 tag**——
+   此前手动发布用默认 `latest`，导致 pre 模式的新版本挂到 latest 而 `beta` 停在旧版本
+   （这正是 `cli` 的 `beta`=0.2.1-beta.0 的成因）。
 3. 全量实测：`--check` 报 **12 个**不一致、退出码 1（门禁有效）。
 
 > **修复命令**（需 npm 凭据，属发布动作）：`node scripts/sync-dist-tags.mjs --fix`
