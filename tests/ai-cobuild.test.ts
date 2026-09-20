@@ -96,4 +96,35 @@ describe('AI 共建三方一致性（报告 ↔ 台账 ↔ 回执）', () => {
     expect(agents).toContain('ai-cobuild')
     expect(agents).toContain('check:cobuild')
   })
+
+  // ★2026-09-20（F-34 同步实战）：外部的实质验证结论必须能覆盖框架的 n_a 占位，且**不得**被误报为冲突。
+  //   n_a = 「修复未发布，验证不适用」，是框架侧占位而非经过考虑的结论；规范里 verification 属
+  //   「外部优先」字段。此前脚本只在外部 passed/failed 时让位 → 外部填 unverified（用工作树源码复测 6/6
+  //   后诚实标注「有效但未发布」）时被误判冲突，迫使人工裁决（本该零人工）。
+  //   ★破坏性：撤掉 sync-cobuild.mjs 里 `mine[f] === 'n_a'` 那条分支 → 本用例当场红。
+  it('★外部实质结论覆盖框架 n_a 占位（不误报冲突）', () => {
+    const src = fs.readFileSync(path.join(root, 'scripts/sync-cobuild.mjs'), 'utf8')
+    // 规则形态：verification 字段上「框架 n_a + 外部有值」→ 采纳外部（changes.push / mine[f] = ee[f]）
+    expect(src, 'n_a 覆盖规则必须在位（否则外部 unverified 被误判冲突）').toMatch(
+      /f === 'verification' && mine\.verification === 'n_a' && ee\.verification/,
+    )
+    const i = src.indexOf("mine.verification === 'n_a'")
+    expect(src.slice(i, i + 600), 'n_a 分支必须采纳外部值（而非落入 conflicts）').toContain('mine[f] = ee[f]')
+    // 规范文档里必须写着「verification 只能由使用方给出」——规则与文档同源
+    const spec = fs.readFileSync(path.join(root, 'docs/ai-cobuild-spec.md'), 'utf8')
+    expect(spec, '规范须声明 verification 的归属（外部给出，框架自测不算）').toMatch(
+      /verification=passed\*\*\s*只能由使用方给出|复测是使用方的事/,
+    )
+  })
+
+  // ★台账的框架侧元数据（rounds / verification_breakdown）是「被整份覆盖」的直接受害者
+  //   （2026-09-20 已发生两次）。这里锁死在位，配合 cobuild-check 规则 F 形成双保险。
+  it('★台账保留框架侧元数据（防外部副本整份覆盖）', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(root, 'docs/外部报告台账.json'), 'utf8')) as Record<string, unknown>
+    expect(Array.isArray(raw.rounds) && (raw.rounds as unknown[]).length > 0, 'rounds 不得丢失').toBe(true)
+    expect(typeof raw.verification_breakdown === 'object' && raw.verification_breakdown !== null, 'verification_breakdown 不得丢失').toBe(true)
+    // found_by=framework 的自查条目也是被覆盖的高危项（框架自找的缺陷不来自外部报告）
+    const fw = (raw.entries as LedgerEntry[]).filter((e) => e.found_by === 'framework')
+    expect(fw.length, '框架自查条目不得丢失').toBeGreaterThan(0)
+  })
 })
