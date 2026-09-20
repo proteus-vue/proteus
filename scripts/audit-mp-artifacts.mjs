@@ -29,10 +29,14 @@ const MP_DIR = path.resolve(ROOT, dirArg >= 0 && argv[dirArg + 1] ? argv[dirArg 
 const QUARTET = ['.js', '.wxml', '.wxss', '.json']
 
 const issues = []
+/** 提示级（不判失败，但值得看）——如「有组件声明却无本体、且无人引用」（F-30 的早期信号） */
+const warnings = []
 let checkedPages = 0
 let checkedRefs = 0
 /** 产物 js 文件数（③ 语法/改写扫描——见 auditJsOutputs） */
 let checkedJs = 0
+/** 框架组件产物数（F-30 完整性对账） */
+let checkedFrameworkComponents = 0
 
 /**
  * 解析 usingComponents 的引用路径 → 产物内绝对路径（无扩展名）。
@@ -103,7 +107,90 @@ if (!fs.existsSync(APP_JSON)) {
   }
   // ② app.json / app.js 自身声明（顶层 usingComponents——全局组件）
   checkJson(APP_JSON, visited)
-  // ③ ★2026-09-20（外部实战报告第十三节两个编译器 bug 的产物侧兜底）：
+
+  // ③ ★★2026-09-20（外部实战报告 F-30，真机阻断级）：**产物完整性对账**——
+  //    上述 ① ② 是「声明 ⇒ 产物存在」；F-30 的形态是**声明本身就没生成**：
+  //    页面经应用组件中转引用框架组件 → 按需输出把 76 个组件全判「未引用」→ 只产出 index.json
+  //    → 真机报 `usingComponents["p-drawer"] 未找到组件`、模拟器启动失败。
+  //    而「按需输出 0 个」当时被当作合法结果、无告警 → 四道门禁全放行。
+  //    ▲教训（报告原文）：「产物验收必须对着**应有清单**数，不能对着现有清单数」。
+  //    故此处与**框架组件源目录**对账：产物里出现 index.json 的框架组件，必须四件套齐全；
+  //    且若源目录存在但产物一个都没输出 → 提示（可能是按需过滤误判）。
+  auditFrameworkComponentCompleteness()
+}
+
+/**
+ * 框架组件产物完整性（F-30 的直接判据）：**凡在产物里出现了 `index.json` 的目录**，
+ * 就必须四件套齐全——只有声明没有本体 = 真机 `usingComponents` 未找到组件、启动失败。
+ *
+ * ★判据收紧（避免两类误报，实测于本仓 examples 产物）：
+ *   ① 只认「有 index.json」的目录为**组件**——`proteus/runtime/` 之类是 runtime/*.ts 的同名输出目录
+ *      （里面是 capability.js 等），无 index.*，不是组件，不该按组件校验；
+ *   ② 未被任何 json `usingComponents` 引用的**孤立** index.json：不判失败（小程序不会加载它），
+ *      但作为「产出了未使用的组件声明」提示——它正是「按需输出过滤」出问题的早期信号（F-30 形态）。
+ */
+function auditFrameworkComponentCompleteness() {
+  const proteusDir = path.join(MP_DIR, 'proteus')
+  if (!fs.existsSync(proteusDir)) return
+  // 收集产物里所有 usingComponents 的目标（判断一个组件声明是否真会被加载）
+  const referenced = new Set()
+  const collectRefs = (d) => {
+    let entries
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) collectRefs(p)
+      else if (e.name.endsWith('.json')) {
+        try {
+          const j = JSON.parse(fs.readFileSync(p, 'utf-8'))
+          for (const t of Object.values(j.usingComponents ?? {})) referenced.add(String(t))
+        } catch {
+          /* 非组件 json / 解析失败 */
+        }
+      }
+    }
+  }
+  collectRefs(MP_DIR)
+
+  let dirs
+  try {
+    dirs = fs.readdirSync(proteusDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+  } catch {
+    return
+  }
+  // ★只把「有 index.json」的当作组件目录（排除 runtime/ 之类的同名输出目录）
+  const componentDirs = dirs.filter((name) => fs.existsSync(path.join(proteusDir, name, 'index.json')))
+  checkedFrameworkComponents = componentDirs.length
+  for (const name of componentDirs) {
+    const base = path.join(proteusDir, name, 'index')
+    const missing = QUARTET.filter((ext) => !fs.existsSync(base + ext))
+    if (!missing.length) continue
+    const isReferenced = referenced.has(`/proteus/${name}/index`)
+    if (isReferenced) {
+      // 被引用却缺本体 → 真机会崩（F-30 的致命形态）
+      issues.push({
+        kind: 'framework-component-incomplete',
+        via: `proteus/${name}`,
+        missing: missing.map((e) => e.replace('.', '')),
+        detail:
+          '框架组件产物不完整（有声明、有引用，但无组件本体）——真机会报 usingComponents 未找到组件、**模拟器启动失败**。' +
+          '若这是「按需输出」过滤的结果，说明过滤误判了引用（见 tag-scan.ts collectUsedFrameworkComponents）',
+      })
+    } else {
+      // 未被引用的孤立声明 → 不崩，但提示（F-30 的早期信号：过滤逻辑出问题的形态）
+      warnings.push({
+        kind: 'orphan-component-json',
+        via: `proteus/${name}`,
+        missing: missing.map((e) => e.replace('.', '')),
+        detail: '产物里有组件声明（index.json）但无本体、且无任何 usingComponents 引用它——不致命，但属「按需输出」异常信号',
+      })
+    }
+  }
+  // ④ ★2026-09-20（外部实战报告第十三节两个编译器 bug 的产物侧兜底）：
   //    「产物能不能真正跑起来」不只取决于引用闭环，还取决于**每份 js 是不是合法且未被改坏的 JS**：
   //      · Bug A：setter 参数带 TS 类型注解原样进产物 → `Unexpected token ':'`（阻断构建）；
   //      · Bug B：方法体正则字面量被当作变量改写 → `/\s/g` 变 `/\this.s/g`（**语法合法、静默改行为**）。
@@ -163,14 +250,19 @@ function auditJsOutputs() {
 
 const ok = issues.length === 0
 if (asJson) {
-  console.log(JSON.stringify({ dir: path.relative(ROOT, MP_DIR), pages: checkedPages, refs: checkedRefs, issues, ok }, null, 2))
+  console.log(JSON.stringify({ dir: path.relative(ROOT, MP_DIR), pages: checkedPages, refs: checkedRefs, issues, warnings, ok }, null, 2))
 } else {
   console.log('小程序产物完整性审计（引用闭环：声明 ⇒ 四件套存在）')
   console.log(`  产物目录：${path.relative(ROOT, MP_DIR)}`)
-  console.log(`  页面 ${checkedPages} 个 · 组件引用 ${checkedRefs} 处 · js 产物 ${checkedJs} 个`)
+  console.log(`  页面 ${checkedPages} 个 · 组件引用 ${checkedRefs} 处 · js 产物 ${checkedJs} 个 · 框架组件 ${checkedFrameworkComponents} 个`)
   if (ok) {
     console.log('  ✅ 全部声明引用均有完整产物（页面四件套 + usingComponents 递归）')
     console.log('  ✅ 全部 js 产物语法可解析、无正则改写/参数注解残留')
+    if (warnings.length) {
+      console.log(`  ⚠ ${warnings.length} 项提示（不判失败）：`)
+      for (const w of warnings.slice(0, 8)) console.log(`    - [${w.kind}] ${w.via}（缺 ${w.missing.join('/')}）：${w.detail}`)
+      if (warnings.length > 8) console.log(`    …另有 ${warnings.length - 8} 项`)
+    }
   } else {
     console.log(`  ❌ ${issues.length} 项问题：`)
     for (const i of issues.slice(0, 30)) {
@@ -180,6 +272,7 @@ if (asJson) {
       else if (i.kind === 'missing-file') console.log(`    - [引用缺文件] ${i.via} → ${i.tag}（${i.target}）`)
       else if (i.kind === 'js-syntax') console.log(`    - [js 语法错误] ${i.via}：${i.detail}`)
       else if (i.kind === 'regex-mangled') console.log(`    - [正则被改写] ${i.via}：${i.detail}`)
+      else if (i.kind === 'framework-component-incomplete') console.log(`    - [框架组件产物不完整] ${i.via}（缺 ${i.missing.join('/')}）：${i.detail}`)
       else if (i.kind === 'param-type-annotation') console.log(`    - [参数残留 TS 注解] ${i.via}：${i.detail}`)
       else console.log(`    - [${i.kind}] ${i.via}：${i.detail}`)
     }

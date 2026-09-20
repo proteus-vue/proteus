@@ -81,14 +81,48 @@ describe('build 产物契约（跨层一致性）', () => {
     }
   })
 
-  it('每个组件产物必有 component.json（component: true 最小声明 + 嵌套 usingComponents）', () => {
-    // p-view：无嵌套 → { component: true }；virtual-list：嵌套 p-list-view → component + usingComponents
+  // ★2026-09-20 契约收紧（F-30 连带形态）：组件**声明与本体同源**——
+  //   此前 `writeComponentJsons` 无条件为**全部 76 个**框架组件写 index.json，而按需输出（插件阶段）
+  //   只产用到的本体 → 产物里出现「有声明、无本体」的空壳（被引用时真机报未找到组件、**启动失败**）。
+  //   现改为：gen-routes **只为**「按引用闭包算出的组件集」写声明，与插件阶段的本体输出同源。
+  //
+  // ★本用例的边界：`runGenRoutes` 只负责**声明**（本体由 vite 插件阶段产出，属另一相）。
+  //   故此处断言的是**声明侧契约**：declared ⊆ used（不多声明）；本体完整性由
+  //   `scripts/audit-mp-artifacts.mjs`（真构建产物审计）与 tag-scan 的 F-30 用例覆盖。
+  it('组件声明契约：只为「实际引用闭包」内的组件写声明（不多声明）', () => {
+    // 页面只引用 p-view / p-button
+    writeFixture(path.join(pageDir, 'index.vue'), `<template><p-view><p-button>go</p-button></p-view></template>\n`)
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
+    const proteusDir = path.join(root, 'dist/mp-weixin/proteus')
+    const declared = fs
+      .readdirSync(proteusDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && fs.existsSync(path.join(proteusDir, e.name, 'index.json')))
+      .map((e) => e.name)
+    expect(declared.length, '页面引用了框架组件，应产出声明').toBeGreaterThan(0)
+    // ★核心：不得为未引用的组件写声明（F-30 的空壳正是由此产生）
+    expect(declared.sort()).toEqual(['p-button', 'p-view'])
+    // 被引用的组件必须有声明（不能因过滤而漏声明）
+    const pageJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/pages/index.json'), 'utf-8'))
+    for (const [, rel] of Object.entries(pageJson.usingComponents ?? {})) {
+      if (!String(rel).startsWith('/proteus/')) continue
+      const name = String(rel).split('/')[2]
+      expect(fs.existsSync(path.join(proteusDir, name, 'index.json')), `${name} 被引用但无声明`).toBe(true)
+    }
+  })
+
+  it('组件声明契约：component: true + styleIsolation: apply-shared（p-view）', () => {
     const viewJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/p-view/index.json'), 'utf-8'))
     expect(viewJson.component).toBe(true)
     expect(viewJson.usingComponents).toBeUndefined()
     // ★样式穿透契约：页面 wxss 需作用到组件根节点（<p-view class="box"> 外层容器样式），
     //   styleIsolation 必须为 apply-shared（默认 isolated 会挡住页面样式，2026-08 真机实测）
     expect(viewJson.styleIsolation).toBe('apply-shared')
+  })
+
+  it('组件嵌套声明契约：组件自身引用其他框架组件时写 usingComponents', () => {
+    // virtual-list 的模板含 <p-list-view> → 用它验证「嵌套 usingComponents」契约
+    writeFixture(path.join(pageDir, 'index.vue'), `<template><virtual-list :items="[]" /></template>\n`)
+    runGenRoutes({ config: makeConfig(), root, componentsDir: FRAMEWORK_COMPONENTS_DIR })
     const vlJson = JSON.parse(fs.readFileSync(path.join(root, 'dist/mp-weixin/proteus/virtual-list/index.json'), 'utf-8'))
     expect(vlJson.component).toBe(true)
     expect(vlJson.usingComponents['p-list-view']).toBe('/proteus/p-list-view/index')
