@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest'
 import {
   compileVueSfc,
   transformTemplateToWxml,
+  transformScriptToPage,
   scanWxmlPlatformIssues,
   validateWxmlPlatform,
   assertValidResult,
@@ -125,5 +126,105 @@ describe('★#505 G2 端到端：compileVueSfc 正常产物过 wxml 平台校验
   it('wxml 产物经 transformTemplateToWxml 单独调用同样零命中', () => {
     const { wxml } = transformTemplateToWxml('<div class="page"><h1>Title</h1><p v-if="ok" class="x">hi</p></div>', opts)
     expect(scanWxmlPlatformIssues(wxml)).toEqual([])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★★2026-09-20 外部实战报告第二十四节（**真机黑屏根因**）回归锁：
+//   三类 WXML 违规此前**完全静默**通过框架校验（`validateJs` 只看 JS、平台校验不覆盖
+//   表达式语法与标签合法性）→ 微信 wxml 编译器直接拒绝 → 外部工程整屏黑屏、排查多轮。
+//   判据（报告原文）：「build:mp 退出码 0、产物齐全、usingComponents 全通，但微信编译器直接拒绝」。
+// ─────────────────────────────────────────────────────────────────────────────
+describe('★WXML 三类静默违规（F-32 真机黑屏根因）', () => {
+  const opts3 = { filename: 't.vue', px2rpx: true, rpxRatio: 2 }
+
+  it('① 模板字面量（反引号 / ${}）→ 必须报 TemplateLiteralInExpression（WXML 表达式不支持）', () => {
+    const src = '<script setup>\nconst x = ref(1)\n</script>\n<template><view :title="`a ${x} b`">t</view></template>'
+    expect(() => compileVueSfc(src, opts3), '含模板字面量的绑定必须在编译期被拦截').toThrow(/TemplateLiteralInExpression/)
+    // 对照：预计算到 script（报告给出的正当修法）→ 通过
+    const fixedSrc = '<script setup>\nconst x = ref(1)\nconst t = computed(() => `a ${x.value} b`)\n</script>\n<template><view :title="t">t</view></template>'
+    expect(() => compileVueSfc(fixedSrc, opts3), '预计算后应通过').not.toThrow()
+  })
+
+  it('② `<template>` 带 v-if 且含子元素 → 必须报 TemplateChildNodes（WXML 的 template 是定义块）', () => {
+    const src = '<script setup>\nconst ok = ref(true)\n</script>\n<template><view><template v-if="ok"><view>a</view><view>b</view></template></view></template>'
+    expect(() => compileVueSfc(src, opts3), '<template v-if> 片段容器必须在编译期被拦截').toThrow(/TemplateChildNodes/)
+    // 对照：改用真实节点（报告给出的正当修法）→ 通过
+    const fixedSrc = '<script setup>\nconst ok = ref(true)\n</script>\n<template><view><view v-if="ok"><view>a</view><view>b</view></view></view></template>'
+    expect(() => compileVueSfc(fixedSrc, opts3), '改为 <view v-if> 后应通过').not.toThrow()
+  })
+
+  it('③ 常见 HTML 标签自动映射为 WXML 等价结构（不再原样进产物）', () => {
+    const pairs: Array<[string, string]> = [
+      ['<details><summary>s</summary></details>', 'view'],
+      ['<strong>t</strong>', 'text'],
+      ['<pre>code</pre>', 'text'],
+      ['<table><tr><td>c</td></tr></table>', 'view'],
+      ['<select><option>a</option></select>', 'view'],
+      ['<header>h</header>', 'view'],
+      ['<ul><li>i</li></ul>', 'view'],
+      ['<br/>', 'view'],
+    ]
+    for (const [frag, expected] of pairs) {
+      const src = `<script setup>\nconst dummy = 1\n</script>\n<template><view>${frag}</view></template>`
+      const r = compileVueSfc(src, opts3)
+      // 原标签不得残留
+      const tagName = /^<([a-z]+)/.exec(frag)?.[1] ?? ''
+      expect(r.wxml, `<${tagName}> 不应原样进产物`).not.toMatch(new RegExp(`<${tagName}[\\s>]`))
+      expect(r.wxml, `<${tagName}> 应映射为 <${expected}>`).toContain(`<${expected}`)
+    }
+  })
+
+  it('③ 未映射的 HTML 标签 → 报 UnknownHtmlTag（而非静默原样输出）', () => {
+    // `scanWxmlPlatformIssues` 是**产物侧兜底**：作用于已生成的 wxml（不经过 TAG_MAP 映射）。
+    // 故直接喂一个含 HTML 标签的 wxml，模拟「映射表遗漏 / 未来新增 HTML 标签」的形态。
+    const wxml = '<view><header>h</header><details><summary>s</summary></details></view>'
+    const issues = scanWxmlPlatformIssues(wxml)
+    expect(issues.map((i) => i.code)).toContain('UnknownHtmlTag')
+    // kebab-case 自定义组件不受影响（避免误伤）
+    expect(scanWxmlPlatformIssues('<view><my-widget /></view>').map((i) => i.code)).not.toContain('UnknownHtmlTag')
+    expect(scanWxmlPlatformIssues('<view><p-view /></view>').map((i) => i.code)).not.toContain('UnknownHtmlTag')
+  })
+
+  it('正常产物零命中（回归边界——校验不得误报）', () => {
+    const src = '<script setup>\nconst ok = ref(true)\nconst n = ref(1)\n</script>\n<template><view class="page"><text v-if="ok">{{ n }}</text><view v-for="i in [1,2]" :key="i"><text>{{ i }}</text></view><p-view>x</p-view></view></template>'
+    const r = compileVueSfc(src, opts3)
+    const codes = scanWxmlPlatformIssues(r.wxml).map((i) => i.code)
+    expect(codes).toEqual([])
+  })
+})
+
+// ★2026-09-20 外部实战报告 F-31：store 识别依赖**未文档化的硬编码命名**
+//   （变量名必须为 `store` **且** 工厂名匹配 `use*Store()`）——
+//   而 Pinia 官方对变量名/工厂名无任何约定（`const s = useSession()` 完全合法）
+//   → 外部工程**全工程 store 绑定静默失效**（模板拿不到值、零告警）。
+//   修法：放宽（唯一候选即可）+ 未识别时**告警**（静默失败一律归框架）。
+describe('★store 识别（F-31）：放宽判据 + 未识别时告警', () => {
+  const O = { px2rpx: true, rpxRatio: 2 } as never
+  const binds = { storeBindings: ['projects'] } as never
+
+  it('精确形态（store + useXxxStore）仍识别，且**不产生 store 识别告警**', () => {
+    const r = transformScriptToPage('const store = usePlayerStore()\nconst dummy = 1', O, { file: 't.vue', ...(binds as object) } as never)
+    expect(r.js, '应生成 store 订阅').toMatch(/\$subscribe|__proteusStoreUnsub/)
+    // 注意：此处只断言「无 store 识别失败告警」——runtimeInit 另有一条「函数调用初始化」告警属既有行为
+    const ws = (r.warnings ?? []).join('\n')
+    expect(ws, '精确匹配不应报「未能识别出 store」').not.toMatch(/未能识别出 store/)
+  })
+
+  it('★放宽：变量名非 store、但只有唯一 useXxxStore() 候选 → 仍识别（变量名不再是门槛）', () => {
+    const r = transformScriptToPage('const s = usePlayerStore()\nconst dummy = 1', O, { file: 't.vue', ...(binds as object) } as never)
+    expect(r.js, '唯一候选应被识别').toMatch(/\$subscribe|__proteusStoreUnsub/)
+  })
+
+  it('★未识别时**必须告警**（不能静默失效）', () => {
+    const r = transformScriptToPage('const s = useSession()\nconst dummy = 1', O, { file: 't.vue', ...(binds as object) } as never)
+    const ws = (r.warnings ?? []).join('\n')
+    expect(ws, '模板引用了 store 字段但未识别出 store → 必须告警').toMatch(/store/)
+    expect(ws).toMatch(/useXxxStore|变量名为 store|不会生效/)
+  })
+
+  it('未引用 store 字段时不报「未能识别出 store」（回归边界）', () => {
+    const r = transformScriptToPage('const s = useSession()\nconst dummy = 1', O, { file: 't.vue' } as never)
+    expect((r.warnings ?? []).join('\n')).not.toMatch(/未能识别出 store/)
   })
 })

@@ -146,7 +146,7 @@ export function assertValidResult(result: CompileResult, filename: string): void
 
 /** 单条 wxml 平台违规（code = 官方 ParseErrorKind 蓝本） */
 export interface WxmlPlatformIssue {
-  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax' | 'InvalidAttribute' | 'DuplicatedStylePropertyNames'
+  code: 'DataBindingNotAllowed' | 'DuplicatedAttribute' | 'AvoidUppercaseLetters' | 'UnsupportedSyntax' | 'InvalidAttribute' | 'DuplicatedStylePropertyNames' | 'TemplateLiteralInExpression' | 'TemplateChildNodes' | 'UnknownHtmlTag'
   message: string
   /** wxml 字符偏移（定位用） */
   at: number
@@ -303,6 +303,68 @@ export function scanWxmlPlatformIssues(wxml: string): WxmlPlatformIssue[] {
       seenKeys.add(key)
     }
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ★★2026-09-20（外部实战报告第二十四节，真机黑屏根因）：补三类「微信 wxml 编译器会拒绝」
+  //   但**框架原先不查**的违规——它们在构建期完全静默（`validateJs` 只看 JS、本函数原先不覆盖
+  //   表达式语法与标签合法性），只有开发者工具的「编译错误」面板会报，外部工程为此排查多轮。
+  //
+  //   ① TemplateLiteralInExpression：绑定表达式含模板字面量（反引号 / ${}）——
+  //      WXML 表达式不支持 → `Fatal: unexpected character inside expression`（整页编译失败）。
+  //   ② TemplateChildNodes：`<template>` 带 wx:if/wx:for 且**含子元素**——
+  //      WXML 的 `<template>` 是定义块（is=/data=），不是 Vue 的片段容器
+  //      → `missing module name` / `child nodes are not allowed`。应改 `<view v-if>`。
+  //   ③ UnknownHtmlTag：常见 HTML 标签未命中映射表而**原样进产物** → 微信无此标签 → 编译失败/渲染异常。
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // ① 模板字面量（属性值与文本插值都查；`{{ }}` 内出现反引号或 `${` 即违规）
+  for (const m of wxml.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
+    const expr = m[1] ?? ''
+    if (expr.includes(String.fromCharCode(96)) || expr.includes('${')) {
+      issues.push({
+        code: 'TemplateLiteralInExpression',
+        message: `绑定表达式含模板字面量（反引号 / 美元大括号）：{{ ${expr.trim().slice(0, 60)} }}——WXML 表达式不支持，微信报 "unexpected character inside expression"。请把字符串拼接移到 script 预计算（computed 或 data 字段）`,
+        at: m.index ?? 0,
+      })
+    }
+  }
+
+  // ② `<template>` 作为片段容器（带 wx:if/wx:for 且含子元素）
+  for (const m of wxml.matchAll(/<template\b([^>]*?)>([\s\S]*?)<\/template>/g)) {
+    const attrs = m[1] ?? ''
+    const body = m[2] ?? ''
+    const hasChildren = /<[a-zA-Z]/.test(body.trim())
+    if (hasChildren && /wx:(if|elif|else|for)\b/.test(attrs)) {
+      issues.push({
+        code: 'TemplateChildNodes',
+        message: `<template${attrs.trim() ? ' ' + attrs.trim().slice(0, 40) : ''}> 含子元素——WXML 的 <template> 是定义块（is=/data=），不是 Vue 的片段容器（微信报 "child nodes are not allowed"/"missing module name"）。请改用 <view wx:if>`,
+        at: m.index ?? 0,
+      })
+    }
+  }
+
+  // ③ 常见 HTML 标签原样进产物（微信无此标签）
+  //   判据：只查**已知 HTML 标签清单**（避免误伤 kebab-case 自定义组件与框架 proteus-*/p-* 标签）。
+  //   ★`label` / `audio` **不在此列**——它们是微信 wxml 原生组件（已核官方组件清单）。
+  const KNOWN_HTML_TAGS = new Set([
+    'section', 'article', 'aside', 'nav', 'main', 'header', 'footer', 'figure', 'figcaption',
+    'details', 'summary', 'dialog', 'fieldset', 'legend',
+    'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+    'strong', 'b', 'em', 'i', 'u', 's', 'small', 'mark', 'sub', 'sup',
+    'code', 'pre', 'kbd', 'samp', 'var', 'abbr', 'cite', 'q', 'blockquote', 'time', 'address',
+    'select', 'option', 'optgroup', 'datalist', 'output', 'meter',
+    'hr', 'br', 'picture', 'source', 'track', 'iframe',
+  ])
+  for (const tag of scanOpenTags(wxml)) {
+    if (!KNOWN_HTML_TAGS.has(tag.name)) continue
+    issues.push({
+      code: 'UnknownHtmlTag',
+      message: `标签 <${tag.name}> 是 HTML 标签、微信 wxml 无此原生标签——未被映射（TAG_MAP 遗漏）而原样进产物，微信编译会失败或渲染异常。请改用 WXML 等价结构（块级 → <view>、文本类 → <text>）`,
+      at: tag.at,
+    })
+  }
+
   return issues
 }
 

@@ -3028,8 +3028,25 @@ export function transformScriptToPage(
   for (const ni of reactiveInits) dataExtra[ni.name] = null
 
   // ★pinia-plan 12 P1：模板 store 绑定——store 变量（useXxxStore() runtimeInit）存在且模板引用了 store.<field>
+  // ★★2026-09-20（外部实战报告 F-31）：**放宽识别 + 未识别时告警**。
+  //   旧判据是两条**未文档化的硬编码**：变量名必须字面量等于 `store` **且** 工厂名匹配 `use*Store()`。
+  //   而 Pinia 官方对变量名/工厂名**无任何约定**（`const s = useSession()` 完全合法）→
+  //   外部工程 `const s = useSession()` 两条都不满足 → **全工程 store 绑定静默失效**（模板拿不到值，零告警）。
+  //   修法分两步：
+  //     ① 放宽：优先精确匹配（`store` + `use*Store()`）；否则回退**唯一候选**——若本文件里
+  //        恰好只有一个 `use*Store()` 形态的 runtimeInit，就用它（变量名不再是门槛）；
+  //     ② 未识别时**告警**（静默失效最危险——按共建规范「静默失败一律归框架」）。
   const storeBindings = extra.storeBindings ?? []
-  const storeVar = runtimeInits.find((i) => i.name === 'store' && /^use\w*Store\(/.test(i.call))?.name
+  const storeCandidates = runtimeInits.filter((i) => /^use\w*Store\(/.test(i.call))
+  const strict = storeCandidates.find((i) => i.name === 'store')
+  const storeVar = strict?.name ?? (storeCandidates.length === 1 ? storeCandidates[0].name : undefined)
+  if (storeBindings.length && !storeVar) {
+    warnings.push(
+      `模板引用了 store 字段（${storeBindings.join(' / ')}），但未能识别出 store 变量——MP 端绑定不会生效（构建通过但真机取不到值）。\n` +
+        `  识别要求：① 变量声明为 \`const store = useXxxStore()\`（变量名须为 store），或 ② 本文件**只有一个** \`useXxxStore()\` 调用。\n` +
+        `  当前未满足${storeCandidates.length > 1 ? `（检测到多个 useXxxStore()：${storeCandidates.map((i) => i.name).join(' / ')}——请把用于模板绑定的那个命名为 store）` : '（未检测到任何 useXxxStore() 形态的调用）'}。`,
+    )
+  }
   const storeBindingInit = storeVar && storeBindings.length ? storeBindingLine(storeBindings, storeVar) : ''
   if (storeBindingInit) {
     trace?.add('script/store-binding', {

@@ -8,7 +8,10 @@
       <div class="p-select-value">{{ displayText || placeholder }}</div>
       <span class="p-select-arrow">▾</span>
     </div>
-    <template v-if="open">
+    <!-- ★2026-09-20（外部实战报告第二十四节）：`<template v-if>` 在 WXML 是**定义块**（is=/data=）、
+         不是 Vue 片段容器 → 微信报 "child nodes are not allowed"（外部工程由此黑屏）。
+         本分支含两个兄弟节点（mask + panel），故用无样式 <view> 包裹并把 v-if 落到它上面。 -->
+    <view v-if="open" class="p-select-layer">
       <div class="p-select-mask" @click="close" />
       <div class="p-select-panel">
         <div
@@ -23,7 +26,7 @@
           <span v-if="row.selected" class="p-select-check">✓</span>
         </div>
       </div>
-    </template>
+    </view>
   </div>
 </template>
 
