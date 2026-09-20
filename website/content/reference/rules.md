@@ -468,16 +468,16 @@ after:  警告 + 原样输出（无效标签）
 
 ### `event/inline-expression`
 
-**内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）**
+**内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型；★F-35 箭头函数）**
 
-@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
+@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）、★#500 赋值型（x = !x / x = 字面量）与 ★F-35 箭头函数（(n) => fn(n) / (n) => fn(n.id) / () => fn(1) / (n) => store.fn(n)；参数按事件类型绑定载荷——自定义事件 e.detail / 原生事件 e）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告
 
 ```
-before: @click="count++" / @click="showModal = !showModal"
-after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData
+before: @click="count++" / @click="showModal = !showModal" / @open="(n) => continueWriting(n)"
+after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData / bind:open="proteusInlineContinueWritingPayloadDet" + 方法 this.continueWriting(e.detail)
 ```
 
-> why: Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应）：不再原样输出无效 bindtap
+> why: Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应；★F-35 同族：箭头处理器原样输出 → bind:open="(n) => fn(n)" 整句非法方法名 → 真机事件永不触发且只有一条控制台警告）
 
 ### `slot/scoped-slot`
 

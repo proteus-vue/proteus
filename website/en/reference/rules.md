@@ -468,16 +468,16 @@ after:  警告 + 原样输出（无效标签）
 
 ### `event/inline-expression`
 
-**inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments)**
+**inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments; ★F-35 arrow functions)**
 
-@click="count++" (increment/decrement), @click="fn(1)" (a simple method call) and ★#500 assignments (x = !x / x = literal) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning
+@click="count++" (increment/decrement), @click="fn(1)" (a simple method call), ★#500 assignments (x = !x / x = literal) and ★F-35 arrow functions ((n) => fn(n) / (n) => fn(n.id) / () => fn(1) / (n) => store.fn(n); the parameter binds to the event payload by event kind — e.detail for custom events, e for native ones) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning
 
 ```
-before: @click="count++" / @click="showModal = !showModal"
-after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData
+before: @click="count++" / @click="showModal = !showModal" / @open="(n) => continueWriting(n)"
+after:  bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData / bind:open="proteusInlineContinueWritingPayloadDet" + 方法 this.continueWriting(e.detail)
 ```
 
-> why: support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap): no longer emitting an invalid bindtap as-is
+> why: support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap; ★F-35 same family: an arrow handler emitted verbatim → bind:open="(n) => fn(n)", an invalid method name, so the event never fires and only a console warning appears)
 
 ### `slot/scoped-slot`
 
