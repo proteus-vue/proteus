@@ -2,7 +2,7 @@
   "version": 1,
   "project": "operator-web",
   "report": "docs/实战报告_proteus接入.md",
-  "last_verified_published": "0.3.0-beta.12",
+  "last_verified_published": "0.3.0-beta.15",
   "last_verified_at": "2026-09-20",
   "schema": {
     "说明": "外部实战报告 → 修复 → 验证 的逐条对账台账。目标是让「报 N 修 M」可机器核对，而不是靠散文。",
@@ -537,7 +537,7 @@
       "verification": "unverified",
       "evidence": "npx 上 compiler@0.3.0-beta.12 已含 F-27/F-28 修复（实测通过），但台账这两条仍写 fix_state=worktree / fixed_in=null / verification=unverified。框架同批提交完成修复+发布（3b508aa5、dd65004f），台账回填是独立动作 → 出现窗口期",
       "repro": "对比 `npm view @proteus-vue/compiler dist-tags` 与 docs/外部报告台账.json 中该轮条目的 fix_state/fixed_in",
-      "verification_note": "[framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确",
+      "verification_note": "[framework] 框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts\n[external] 影响：① 框架侧 ledger:check 低估收口率；② 外部方若只信台账就不会去复测，闭环停在台账上。建议：发布脚本里加一步，发布成功后按包版本回填台账（或加门禁：worktree 条目的 fixed_in 版本若已在 registry 存在则报错提示回填）。规范铁律 2 说「修了必须发布才算数」，但未规定「发布了必须立刻回填台账」，而铁律 4 依赖台账准确\n[external] 框架侧已加固（工作树）：check:cobuild 新增「台账框架侧元数据完整」规则 + sync:cobuild 修复（原文被整份覆盖的第二次事故）",
       "fix_state": "worktree",
       "fixed_in": null
     },
@@ -546,7 +546,7 @@
       "title": "框架组件按需输出失效：引用链经应用组件时，76 个 p-* 组件只产出 index.json（真机启动失败）",
       "kind": "compiler",
       "severity": "blocker",
-      "round": 9,
+      "round": 8,
       "reported_in": "0.3.0-beta.12",
       "found_by": "external",
       "status": "fixed",
@@ -556,37 +556,58 @@
       "verification_note": "[framework] 框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测\n[external] [external · 真机复测] 框架组件产物从 0 → 3 个（真正被引用的）；usingComponents 9 条映射全部四件套齐全（F-30 核心判据）。另用工作树源码独立复测 collectUsedFrameworkComponents：经应用组件收集 2 个（修前 0）、页面直写 1 个，与报告最小复现一致",
       "fix_state": "worktree",
       "fixed_in": null,
-      "verified_by": "external"
+      "verified_by": "external",
+      "report_section": "二十二 / 二十三"
     },
     {
       "id": "F-31",
       "title": "store 绑定依赖未文档化的硬编码命名（变量名必须为 store、工厂名必须匹配 use*Store）",
       "kind": "compiler",
       "severity": "major",
-      "round": 10,
+      "round": 8,
       "reported_in": "0.3.0-beta.12",
       "found_by": "external",
       "status": "fixed",
-      "verification": "unverified",
+      "verification": "passed",
       "evidence": "模板 {{ store.x }} 拿不到值（产物 setData({store: 整个对象})，模板绑定不支持）。位置：packages/compiler/src/script.ts:3032 —— `runtimeInits.find((i) => i.name === 'store' && /^use\\w*Store\\(/.test(i.call))`",
       "repro": "用官方 examples/pages/pinia-demo.vue 只改声明做对照：`const store = usePlayerStore()` → ✅ 字段展开+$subscribe；`const s = usePlayerStore()` → ❌ setData({s: this.s})；`const session = ...` → ❌ 同上；`const store = useSessionStore()` → ✅（函数名含 Store 即可）",
-      "verification_note": "框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测",
+      "verification_note": "[framework] 框架侧已修（工作树）：(a) **放宽识别**——精确匹配（store + use*Store()）之外，若本文件只有一个 use*Store() 形态的 runtimeInit 则**直接采用**（变量名不再是门槛）；(b) **未识别时告警**（此前完全静默）——告知识别要求与当前原因（多个候选时列出，提示把目标命名为 store）。回归锁 4 例（精确/放宽/必须告警/未引用不告警）。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] beta.15 源码核对：判据已放宽为「本文件唯一 useXxxStore() 即可」（不再强制变量名叫 store），且未识别时新增醒目告警（此前完全静默）",
       "fix_state": "worktree",
-      "fixed_in": null
+      "fixed_in": null,
+      "verified_by": "external",
+      "report_section": "二十三"
     },
     {
       "id": "F-32",
       "title": "WXML 三类违规未被构建期拦截：模板字面量 / <template> 子节点 / 非 WXML 标签（微信编译失败→整页黑屏）",
       "kind": "compiler",
       "severity": "blocker",
-      "round": 11,
+      "round": 8,
       "reported_in": "0.3.0-beta.12",
       "found_by": "external",
       "status": "fixed",
-      "verification": "unverified",
+      "verification": "passed",
       "evidence": "微信开发者工具控制台 8 条 WXML 编译错误：`Fatal: unexpected character inside expression`（反引号模板字面量，chapter-tree×2/editor×1/workbench×2/writing-progress×1）、`Error: child nodes are not allowed for this element`（<template wx:if> 含子元素，writing-progress）、`Error: missing module name`。结果：整页黑屏，而 build:mp 退出码 0、产物齐全",
       "repro": "① compileVueSfc(`<text :title=\"\\`第 ${n} 章\\`\">x</text>`) → 期望报错，现状静默产出；② `<template v-if><text>a</text><text>b</text></template>` → 期望报错，现状静默产出；③ `<table><tr><td>a</td></tr></table>` → 期望报错或映射，现状原样输出",
-      "verification_note": "框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测",
+      "verification_note": "[framework] 框架侧已修（工作树）：`validateWxmlPlatform` 新增三类检查——① TemplateLiteralInExpression（绑定含反引号/${}）② TemplateChildNodes（<template> 带 v-if/v-for 且含子元素）③ UnknownHtmlTag（未映射的常见 HTML 标签）；并**补全 TAG_MAP**（details/summary/pre/table/select/header/strong/b/em/ul/li… → view/text）。★连带修掉我们自己组件库两处同形缺陷（p-draggable / p-select 的 `<template v-if>`）。验收：examples + showcase + 外部工程三方构建全通过、产物零违规。回归锁 9 例。★待发布 + 待外部复测\n[external] [external · 第十一轮复测] registry beta.15 实测：① 模板字面量 → 报错拦截（新错误码 TemplateLiteralInExpression）；② <template> 含子元素 → 报错拦截（TemplateChildNodes）；③ 非 WXML 标签 → 自动映射（table/details/select/header→view，pre/strong→text）；合法模板正常通过",
+      "fix_state": "worktree",
+      "fixed_in": null,
+      "verified_by": "external",
+      "report_section": "二十四"
+    },
+    {
+      "id": "F-33",
+      "title": "用户 vite.define 在 MP 端不生效（产物残留未替换标识符）→ 运行时取值失败并触发栈溢出",
+      "kind": "compiler",
+      "severity": "major",
+      "round": 11,
+      "reported_in": "0.3.0-beta.15",
+      "found_by": "external",
+      "status": "fixed",
+      "verification": "unverified",
+      "evidence": "proteus.config.ts 配置 vite.define: { __API_BASE__: ... }（MP 无 dev proxy，API 绝对地址靠它注入），但 dist/mp-weixin/store/session.js 里 `typeof __API_BASE__` 原样残留未被替换；真机 console：`RangeError: Maximum call stack size exceeded`（取值失败路径在 store $subscribe 链里反复触发）",
+      "repro": "proteus.config.ts 配 vite.define.__API_BASE__，任意 .ts 模块里用 __API_BASE__，然后：dist/web/assets/*.js → 已替换 ✅；dist/mp-weixin/**/*.js → 原样残留 ❌",
+      "verification_note": "框架侧已修（工作树）**两条 MP 通道**：① 共享模块 esbuild 直出——define 合并 `cfg.vite.define`（与 vite 路径同源，用户 define 在框架白名单之后，语义同 vite 的 { ...framework, ...user }）；② `main.mp.ts` → app.js（纯 esbuildTransform 无 define，故做文本级替换，与既有 __PROTEUS_DEBUG__ 同一手法）。★实测（你们的配置）：MP 产物 `__API_BASE__` 零残留、正确注入 `http://127.0.0.1:8760`；外部工程重建后产物门禁全绿。回归锁 2 例（define 合并且 MP/Web 同源 + 两条直出通道源码断言），破坏性验证：撤掉合并 → 当场红。★待发布 + 待外部复测",
       "fix_state": "worktree",
       "fixed_in": null
     }
@@ -649,25 +670,11 @@
       "summary": "小程序构建首次通过；F-27/F-28 独立复测通过并升为 external；发现台账滞后（F-29）与版本组 linked 的消费侧影响"
     },
     {
-      "round": 9,
-      "version": "0.3.0-beta.12",
-      "date": "2026-09-20",
-      "report_section": "二十二",
-      "summary": "真机（模拟器）验证抓到 F-30（阻断级）：框架组件按需输出失效（引用经应用组件时 76 个组件全空壳）→ 真机启动失败；并自我修正第八轮「构建成功」结论"
-    },
-    {
-      "round": 10,
-      "version": "0.3.0-beta.12",
-      "date": "2026-09-20",
-      "report_section": "二十三",
-      "summary": "真机复测：F-30 确认修复；查出 4 项适配缺口（缺 main.mp.ts / app.wxss / 非 WXML 标签 / store 绑定）+ F-31（store 硬编码命名）"
-    },
-    {
       "round": 11,
-      "version": "0.3.0-beta.12",
+      "version": "0.3.0-beta.15",
       "date": "2026-09-20",
-      "report_section": "二十四",
-      "summary": "黑屏根因（用户提供控制台报错）：WXML 三类违规（模板字面量 / template 子节点 / 非 WXML 标签）未被构建期拦截"
+      "report_section": "二十五",
+      "summary": "F-31/F-32 修复确认（external）；真机链路全线打通（首页正常渲染、console 仅剩 F-33 引起的栈溢出）；新发现 F-33（vite.define 在 MP 端失效）"
     }
   ],
   "verification_breakdown": {

@@ -637,9 +637,19 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             "    var __proteusPiniaMod = require('./_proteus/runtime.js')\n" +
             '    if (__proteusPiniaMod && __proteusPiniaMod.createMpPinia) __proteusPiniaMod.createMpPinia()'
           : '    // （未检测到 store 使用——跳过 Pinia 安装）'
-        const appJs = applyPlatformMacros(assembleAppJs(code, presets, piniaInstall)
+        // ★★2026-09-20（F-33 第二处）：`main.mp.ts` → app.js 走的是 **esbuildTransform（纯 TS 转译，无 define）**
+        //   + 字符串拼接 → 用户 `vite.define` 的宏在 app.js 里**同样残留**（实测：`__API_BASE__` 原样）。
+        //   本路径不经 bundler，故在此做**文本级替换**（与上方 `__PROTEUS_DEBUG__` 同一手法）。
+        //   替换规则：`__NAME__` → 其 define 值（值是 JSON 字面量串，如 '"\u200bhttp://..."' → 直接落原文）。
+        let appJsSource = assembleAppJs(code, presets, piniaInstall)
           .replace(/__PROTEUS_DEBUG__/g, isDebug ? 'true' : 'false')
-          .replace(/"worklet"/g, "'worklet'"), 'mp', 'code')
+          .replace(/"worklet"/g, "'worklet'")
+        const userDefine = (cfg.vite as { define?: Record<string, string> } | undefined)?.define ?? {}
+        for (const [key, val] of Object.entries(userDefine)) {
+          if (!/^[A-Za-z_$][\w$]*$/.test(key)) continue // 只替换裸标识符形态的宏（`process.env.X` 等由 esbuild 路径处理）
+          appJsSource = appJsSource.replace(new RegExp(`\\b${key}\\b`, 'g'), val)
+        }
+        const appJs = applyPlatformMacros(appJsSource, 'mp', 'code')
         this.emitFile({ type: 'asset', fileName: 'app.js', source: appJs })
         console.log(`[mp-transform] app.js 已直出（${isDebug ? 'debug' : '正式'}），内置预设：${presets.map((p) => p.name).join('/') || '无'}${appUsesStore ? '，Pinia 已安装' : ''}`)
       }
@@ -805,6 +815,14 @@ export default function mpTransform(opts: PluginOptions): Plugin {
             // ★#495c define 注入：esbuild 直出资产不经 vite define——宏在此替换（config.skyline → __PROTEUS_SKYLINE__）
             // ★vendor 单例化（2026-09-12）：pinia/vue 的 CJS 入口有 `process.env.NODE_ENV` 分支，小程序无 process
             //   → 必须 define 掉（否则运行时崩/带 dev 分支体积）；Vue flag 一并显式声明消除警告
+            // ★★2026-09-20（外部实战报告 F-33，major · 静默失败）：**合并用户 `vite.define`**。
+            //   此前这里是**硬编码白名单**，用户的 define 只经 vite 路径合并（vite-config.ts），
+            //   而 MP 的共享模块走 esbuild 直出 → 用户宏**原样残留**（构建通过、零告警、产物"看起来"正常）。
+            //   外部工程实测后果：`__API_BASE__` 未替换 → 取值空串 → API 失败路径在 store 订阅链里反复触发
+            //   → 真机 `RangeError: Maximum call stack size exceeded`。
+            //   这是**官方推荐的配置位置**（create-proteus 模板的 proteus.config.ts 就有 vite.define 字段），
+            //   故必须与 vite 路径同源。合并顺序：用户 define 在框架白名单**之后**（用户可覆盖框架默认，
+            //   与 vite 路径 `{ ...framework, ...user }` 语义一致）。
             define: {
               __PROTEUS_DEBUG__: isDebug ? 'true' : 'false',
               __PROTEUS_SKYLINE__: cfg.skyline ? 'true' : 'false',
@@ -814,6 +832,7 @@ export default function mpTransform(opts: PluginOptions): Plugin {
               __VUE_OPTIONS_API__: 'true',
               __VUE_PROD_DEVTOOLS__: 'false',
               __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false',
+              ...((cfg.vite as { define?: Record<string, string> } | undefined)?.define ?? {}),
             },
             // ★external：@proteus-vue/* 与 vendor 单例（pinia/vue）→ 产物 _proteus/<name>.js
             //   （微信 require 缓存同路径同实例 → 全产物共享同一份，杜绝重复内联导致的实例分裂）
