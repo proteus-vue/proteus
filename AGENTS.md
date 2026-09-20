@@ -10,7 +10,12 @@
    - 若宿主未提供 Skill 工具，则读 `.agents/skills/ai-efficiency-rules/SKILL.md` 并遵守其三条总则。
    - 参考文件在同目录 `references/`（完整规范 / 自检清单 / 代码模板 / 审计规则）。
 2. **读 `PROJECT_MEMORY.md` 顶部「当前状态速览」**（新会话以此为准），再按 §「会话恢复指引」顺序阅读。
-3. 只改该改的：改动前先用 grep 定位，避免整读大文件；改完跑对应门禁（见下）。
+3. **★涉及外部实战报告（`docs/实战报告_proteus接入.md`）时，先挂载 `Skill(ai-cobuild)`**：
+   该 Skill 是跨项目共建闭环的硬性规范（四条铁律：报了必须立项 / 修了必须发布 / 发了必须独立验证 /
+   闭环必须留回执），配套机器门禁 `pnpm check:ledger`（台账自洽）+ `pnpm check:cobuild`（报告↔台账↔回执 三方对齐）。
+   完整规范见 `docs/ai-cobuild-spec.md`。**处理报告 = 按该 Skill 的七步协议走，不要凭印象改代码。**
+   - 若宿主未提供 Skill 工具，则读 `.agents/skills/ai-cobuild/SKILL.md` 并遵守其四条铁律。
+4. 只改该改的：改动前先用 grep 定位，避免整读大文件；改完跑对应门禁（见下）。
 
 ## 1. 效率规范要点（Skill 内三条不可协商总则）
 
@@ -25,6 +30,10 @@
 pnpm test                 # 全量单测（Node ≥ 22；jsdom 27 为 ESM-only，Node 18 会误报）
 pnpm check:mp-attrs       # 端对齐属性棘轮（只增不减）
 pnpm check:content        # 官网内容生成幂等
+pnpm check:stats          # 官网数字 vs 源码实际值（防「数字过时」静默上线）
+pnpm check:ledger         # 外部报告台账自洽（schema/枚举/repro/related）
+pnpm check:cobuild        # AI 共建三方一致（报告↔台账↔回执）
+pnpm ledger:check         # 收口率报告（**发布前**跑：未收口项 exit 1）
 pnpm verify               # 全量门禁（较重）
 ```
 
