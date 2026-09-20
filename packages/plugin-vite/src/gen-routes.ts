@@ -21,6 +21,10 @@ import { resolveRouterConfig } from '@proteus-vue/types'
 import type { ProteusConfig } from './config'
 import { effectiveVariants, splitVariant } from '@proteus-vue/compiler'
 import { resolveComponentsRoot } from './resolve-components'
+// ★2026-09-20（F-30 连带形态）：组件**声明**（本文件 writeComponentJsons）与组件**本体输出**
+//   （plugin.ts 的按需过滤）必须同源——否则产物出现「有声明、无本体」的空壳。
+//   故此处复用同一个收集函数（不是另写一份等价逻辑）。
+import { collectUsedFrameworkComponents } from './tag-scan'
 
 /** 入口选项：config 为项目编译配置，root 为项目根目录（默认 process.cwd()） */
 export interface GenRoutesOptions {
@@ -33,6 +37,16 @@ export interface GenRoutesOptions {
    * 自动从项目 node_modules 解析包根（`resolveComponentsRoot`）；本选项仅用于包未安装时的显式覆盖（测试）。
    */
   componentsDir?: string
+  /**
+   * ★G-05 按需输出（2026-09-20，修 F-30 的连带形态）：**只为本集合内的框架组件写 `index.json` 声明**。
+   *   背景：`writeComponentJsons` 原**无条件遍历全部 76 个框架组件**写声明，而插件侧按需只输出用到的
+   *   那几个的**本体** → 产物里出现 74 个「有声明、无本体」的空壳。
+   *   危害分两级：① 被引用的空壳 = 真机 `usingComponents 未找到组件`、**启动失败**（F-30 的致命形态）；
+   *   ② 未被引用的空壳 = 不崩，但污染产物、且是「声明与本体不同源」的信号（本次实际命中）。
+   *   根治：让**声明与本体同源**——由调用方把「实际输出的组件集」传进来（plugin 侧算出的 usedComponents），
+   *   不传则保持旧行为（全量声明，兼容既有调用方/测试）。
+   */
+  emittedComponents?: ReadonlySet<string> | null
   /**
    * ★module-plan B5：模块契约（@proteus-vue/module 扫描产物，调用方 async 扫描后传入）：
    * 分包依赖（dependencies）与 preloadRule 生成——模块 chunk/name 与 config.subPackages 的 name/root 基名匹配
@@ -703,7 +717,19 @@ function writePageJsons(pages: PageInfo[]): void {
  * 有嵌套时附加 usingComponents（组件 A 的模板用组件 B 时声明 B；产物路径与插件 rel 一致：
  * 应用组件 /components/...、框架组件 /proteus/...）
  */
-function writeComponentJsons(): void {
+/**
+ * 计算「本轮实际输出的框架组件集合」——与 plugin.ts 的按需输出**同一个函数**（故口径必然一致）。
+ *
+ * ★逃生舱：`PROTEUS_COMPONENTS_EMIT=all` 时返回 null（= 不过滤，声明与本体都全量）——
+ *   与 plugin.ts 的判定保持同一环境变量（两处必须一致，否则又会出现声明/本体分叉）。
+ */
+function computeEmittedComponents(pages: PageInfo[]): ReadonlySet<string> | null {
+  if (process.env.PROTEUS_COMPONENTS_EMIT === 'all') return null
+  // pages 全部是页面（writeComponentJsons 的组件扫描在 APP_DIR/components，不在此列）
+  return collectUsedFrameworkComponents(pages.map((p) => p.file), FW_COMPONENTS, path.join(APP_DIR, 'components'))
+}
+
+function writeComponentJsons(emittedComponents?: ReadonlySet<string> | null): void {
   const roots = [
     { dir: path.join(APP_DIR, 'components'), prefix: 'components' },
     { dir: FW_COMPONENTS, prefix: 'proteus' },
@@ -713,6 +739,14 @@ function writeComponentJsons(): void {
     if (!fs.existsSync(dir)) continue
     for (const f of walkVueFiles(dir)) {
       const rel = path.relative(dir, f).replace(/\\/g, '/').replace(/\.vue$/, '')
+      // ★2026-09-20（F-30 连带形态）：框架组件的声明**必须与本体同源**——
+      //   只为本轮**实际输出本体**的组件写声明；否则产物里会出现「有声明、无本体」的空壳，
+      //   被引用时真机报 usingComponents 未找到组件、启动失败。
+      //   （应用组件不受此限制：它们总是全量编译，无「按需」概念。）
+      if (prefix === 'proteus' && emittedComponents) {
+        const compName = rel.split('/')[0]
+        if (!emittedComponents.has(compName)) continue
+      }
       const comps = collectComponents(f)
       const outFile = path.join(OUT_DIR, prefix, `${rel}.json`)
       fs.mkdirSync(path.dirname(outFile), { recursive: true })
@@ -768,7 +802,14 @@ function writeProjectConfig(): void {
   writeAutoRoutes(routes)
   writeAppJson(pages, routes)
   writePageJsons(pages)
-  writeComponentJsons()
+  // ★2026-09-20（F-30 连带形态根治）：组件**声明与本体同源**——
+  //   默认按「页面实际引用闭包」过滤（与本项目插件侧的按需输出用**同一个函数**，
+  //   故两处口径不可能再分叉）；显式传 emittedComponents 时以调用方为准（测试/逃生舱）。
+  const emitted =
+    options.emittedComponents !== undefined
+      ? options.emittedComponents
+      : computeEmittedComponents(pages)
+  writeComponentJsons(emitted)
   writeProjectConfig()
   console.log(`[gen-routes] 完成：共 ${pages.length} 个页面`)
 }

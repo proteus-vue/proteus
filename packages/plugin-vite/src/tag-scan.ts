@@ -132,6 +132,29 @@ function resolveComponentFile(componentsDir: string, tag: string): string | null
 }
 
 /**
+ * ★2026-09-20（外部实战报告 F-30，真机阻断级）：解析**应用组件**标签 → 文件。
+ *
+ * 背景：`collectUsedFrameworkComponents` 的 BFS 此前**只解析框架组件目录**——
+ *   遇到应用组件（`src/components/xxx`）时 `resolveComponentFile` 返回 null → `continue` →
+ *   **不入队、其模板永不扫描**。而官方推荐形态正是「页面 → 应用组件 → 框架组件」：
+ *     pages/workbench.vue → components/job-drawer/index.vue → <p-drawer> / <p-button> / …
+ *   → 链在第一步就断，`used` 为空 → 76 个框架组件全被判「未引用」，只产出 index.json（缺 js/wxml/wxss）
+ *   → 真机 `usingComponents["p-drawer"] 未找到组件`、**模拟器启动失败**。
+ *   而构建期「按需输出 0 个组件」被当作合法结果，无任何告警 → 四道门禁全放行。
+ *
+ * 解析顺序与 `gen-routes` 的 `collectComponents` **同源**（应用组件优先，再框架组件）——
+ *   两处必须一致，否则「声明了」与「输出了」会再次分叉（正是本次缺陷的形态）。
+ */
+function resolveAppComponentFile(appComponentsDir: string | null | undefined, tag: string): string | null {
+  if (!appComponentsDir) return null
+  const dirIndex = path.join(appComponentsDir, tag, 'index.vue')
+  if (fs.existsSync(dirIndex)) return dirIndex
+  const flat = path.join(appComponentsDir, `${tag}.vue`)
+  if (fs.existsSync(flat)) return flat
+  return null
+}
+
+/**
  * 计算页面**实际引用**的框架组件目录集合（含组件间传递依赖闭包）。
  *
  * 用途：MP 产物只输出用到的组件（而非全量 76 个 = 607 KB）——对每个真实应用都是可观瘦身。
@@ -140,11 +163,14 @@ function resolveComponentFile(componentsDir: string, tag: string): string | null
  *
  * @param pageFiles  页面源文件绝对路径（主包 + 分包，**须已排除 webOnly 页面**）
  * @param componentsDir 框架组件根目录
+ * @param appComponentsDir ★应用组件根目录（`<appRoot>/components`；F-30 修复新增）——
+ *   不传则只解析框架组件（向后兼容），但**经应用组件中转的框架组件会被漏掉**（即 F-30 缺陷）。
  * @returns 组件目录名集合（如 `p-view`）；空集表示「未引用任何框架组件」
  */
 export function collectUsedFrameworkComponents(
   pageFiles: readonly string[],
   componentsDir: string,
+  appComponentsDir?: string | null,
 ): Set<string> {
   const used = new Set<string>()
   const visitedFiles = new Set<string>()
@@ -174,6 +200,15 @@ export function collectUsedFrameworkComponents(
     }
 
     for (const tag of tags) {
+      // ★★2026-09-20（F-30 修复，真机阻断级）：**先查应用组件**——解析顺序与 gen-routes 同源。
+      //   此前只查框架组件目录 → 应用组件在此被 `continue` 丢弃 → 其模板永不扫描 →
+      //   「页面 → 应用组件 → 框架组件」这条官方推荐形态的链**在第一步就断**（used 恒空）。
+      //   应用组件自身不必计入返回值（返回值语义是「框架组件」），但**必须入队继续扫描**。
+      const appFile = resolveAppComponentFile(appComponentsDir, tag)
+      if (appFile) {
+        queue.push(appFile)
+        continue
+      }
       if (used.has(tag)) continue
       const compFile = resolveComponentFile(componentsDir, tag)
       if (!compFile) continue

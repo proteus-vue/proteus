@@ -492,7 +492,12 @@ export function collectMpEntries(opts: {
   //   ★逃生舱：config.components.emit === 'all' 时保持旧行为（动态标签等非常规用法）。
   const pageFiles = out.filter((t) => !t.isComponent).map((t) => t.file)
   const emitAll = (opts.componentEmit ?? 'used') === 'all'
-  const usedComponents = emitAll ? null : collectUsedFrameworkComponents(pageFiles, componentsDir)
+  // ★2026-09-20（F-30 修复，真机阻断级）：必须把**应用组件根目录**传进去——
+  //   否则 BFS 遇到应用组件就 `continue`，「页面 → 应用组件 → 框架组件」的链断裂 →
+  //   used 恒空 → 76 个框架组件只产出 index.json（缺 js/wxml/wxss）→ 真机启动失败。
+  const usedComponents = emitAll
+    ? null
+    : collectUsedFrameworkComponents(pageFiles, componentsDir, path.join(appDir, 'components'))
   for (const f of effectiveVariants(walkVueFiles(componentsDir), platform)) {
     if (webOnlyPages?.has(f)) {
       onSkipWebOnly?.(f)
