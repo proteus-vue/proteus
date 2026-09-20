@@ -1333,3 +1333,339 @@ function onInput() {}
 > 我们当时只改了 `rewriteInstanceRefsSafe`，另两处朴素正则继续误改。beta.10 已收敛为**唯一原语**
 > （`mapCodeOutsideLiterals`）+ 结构性守卫测试（未受字面量保护的裸标识符改写一律红）。
 > 详见第六轮回执（第十五节）与台账 F-17。
+
+---
+
+## 二十一、★ 第八轮复测：`0.3.0-beta.12/13`（2026-09-20）—— **小程序构建首次成功**；F-27/F-28 已修复发布
+
+> 本轮结果：**F-27/F-28 确认修复并已发布**（独立复测通过）；
+> **`npm run build:mp` 首次退出码 0 并产出完整四件套**（wxml 10 / js 17 / wxss 10 / json 88）——
+> 这是从第五轮开始追这条链路以来的第一次。另有两条框架侧变化值得记录（版本组策略、台账滞后）。
+
+### 一、★ 里程碑：小程序构建首次通过
+
+> ⚠️ **本结论已被修正——见第二十二节。** 我在这里只验证了"构建退出码 + 页面产物"，
+> 未验证**框架组件产物**：当时 76 个 `proteus/p-*` 组件**全部只有 index.json、组件本体零输出**
+> （真机因此启动失败，F-30）。"构建通过"与"产物可用"是两件事。
+
+```
+npm run build:mp  → 退出码 0 · ✓ built in 768ms
+
+产物：125 个文件
+  wxml 10 · js 17 · wxss 10 · json 88
+  5 个页面四件套齐全（index / workbench / editor / search / newbook）
+  app.json：pages 5 条 · skyline rendererOptions 就位
+  project.config.json：compileType=miniprogram · skylineRenderEnable=true
+```
+
+**产物质量审计**（不只看"构建成功"，逐文件扫描已知缺陷模式）：
+
+| 检查项 | 结果 |
+|---|---|
+| 正则被误改写（`\\this.x`，Bug B 家族） | ✅ 0 处 |
+| wxml 重复属性（DuplicatedAttribute） | ✅ 0 处 |
+| `?.` 残留（WXML 不支持） | ✅ 0 处 |
+| TS 语法残留 / `undefined`·`NaN` 进模板 | ✅ 0 处 |
+| **F-27 产物形态抽查**（newbook） | ✅ handler `proteusOnFTitleInput` / 键路径 `'f.title'` / 9 个 handler 全对 |
+| **F-28 产物形态抽查**（book-search） | ✅ `bindinput="proteusMergeQAndOnInput"`（合并为 1 个）+ 合并函数已生成 |
+
+**Web 端同时全绿**：typecheck 0 错 · `build:web` 2.92s · 真实 Chromium 回归 **7/7**
+（首页/工作台/写作页/尺寸 900=900/自动保存/跨页 6 次/控制台零报错）。
+
+### 二、F-27 / F-28 独立复测（用 registry 上的 beta.12）
+
+| 条目 | 复测 | 结果 |
+|---|---|---|
+| **F-27**（`v-model` 对象属性 → 非法 JS） | `f.title` / `o.a.b` / `arr[0]` 三种形态 | ✅ 全部通过；产物 `proteusOnFTitleInput` + `{'f.title': …}` |
+| **F-28**（`v-model` + `@input` → 重复 bindinput） | 同元素组合 | ✅ `bindinput` 合并为 1 个，生成 `proteusMerge…` |
+
+框架的修法（读其台账）：F-27 新增 `packages/compiler/src/model-path.ts`（handler 名与 setData 键路径安全，
+**template/script 两侧同源**）；F-28 模板序列化时检测多个 `bindinput` → 合并为
+`proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。
+两处都有回归锁（5 例 + 3 例，含与 Bug D 的组合场景）。→ **台账这 2 条建议升级为 `verified_by=external`。**
+
+### 三、★ 发现：台账滞后于实际发布（流程问题，非代码缺陷）
+
+**现象**：npx 上的 `compiler@0.3.0-beta.12` 已包含 F-27/F-28 修复（我已实测），
+但仓库台账里这两条仍写着 `fix_state: worktree` / `fixed_in: null` / `verification: unverified`。
+
+**为什么会发生**：框架在同一批提交里完成了「修复 → 发布 → 推版本号」（commit `3b508aa5` 修四项、
+`dd65004f` 版本提升），但**台账回填是另一个动作**，中间出现了一个"已发布但台账未更新"的窗口。
+
+**影响**：
+- 对**框架方**：`pnpm ledger:check` 会把这些已发布的条目继续算作"未发布"，
+  **收口率被低估**（框架侧看到的是 26/28 而非实际值）。
+- 对**外部方**：按规范第 4 节流程，我应该在"框架修复并发布"后才复测；
+  但台账说 `worktree`（未发布）——**如果我只信台账就不会去复测，闭环会停在这里**。
+  本轮我是**先去 npm 查了版本**才发现已发布。这说明：
+  **台账的 `fix_state` 不能是"最后更新者的记忆"，必须能被 `npm view` 校验**（规范第 2 节其实写了这条要求）。
+
+**建议**：
+1. 把 `fixed_in` 的写入与发布动作**绑成一步**（发布脚本里加一步：发布成功后按包版本回填台账
+   `fix_state=published` + `fixed_in=<实际发布的版本>`）——这与框架已有的「发布后核验」是同一时机；
+2. 或加一条门禁：`fix_state=worktree` 的条目若其 `fixed_in` 版本**已在 registry 上存在** → 报错提示回填。
+   （可复用 `verify-publish-smoke` 里已有的 registry 查询能力）
+
+> **这条不是抱怨，是规范自身的一个缺口**：规范第 1 节铁律 2 说"修了必须发布才算数"，
+> 但没有说"**发布了必须立刻回填台账**"。而铁律 4（闭环必须留回执）依赖台账准确。
+
+### 四、另一条框架侧变化：版本组策略 `fixed` → `linked`
+
+本轮升级时发现各包 latest **不再统一**（cli/runtime 到 beta.13，compiler/components/router 到 beta.12，
+shared/fluid 仍 beta.11）。查框架提交：`da65958a feat(versioning): 版本组策略 fixed → linked（41 → 4，只发变更的包）`
++ `dd65004f chore(release): 版本提升 0.3.0-beta.12/13（linked 语义：18 发 / 23 跳）`。
+
+**我方实测的消费侧影响**：
+- ✅ 我的工程按各包 latest 分别钉版后安装正常（9 个包装齐）
+- ✅ **`shared` 仍是唯一 1 份**（linked 策略没有破坏去重——这是上次事故的关键防线）
+- ⚠️ 但这意味着**第 4 轮报告里"版本号统一"的结论已过期**：现在外部用户**不能**再写
+  "所有包都装同一个版本号"，必须逐包对齐。`create-proteus` 模板与文档需要同步说明。
+
+> 建议：既然版本组从 41 收到 4，**在文档/模板里把这些版本组显式列出来**（哪几个包必须同版），
+> 否则外部用户仍会按旧习惯写 `@0.3.0-beta.13`（而 components 没有 .13）→ 装不上。
+
+### 五、真机（微信模拟器）验证：需要人工授权
+
+本机**有**微信开发者工具（`/Volumes/data1/work/office-applications/wechatwebdevtools.app`），
+其 `wechatide` skill-cli 可编程调用（`open_project_window` / `get_simulator_console` / `simulator_open_page` 等）。
+但我调用时返回：
+
+```
+{"status":"pending","message":"Waiting for user authorization."}
+```
+
+即**需要人工在工具里确认授权**（首次调用会弹窗，clientName 须与 `-c` 参数一致）。
+这一层我无法自行完成，**如实报告为"未验证"**，不写成通过。
+
+此外真机还需真实 AppID（当前产物用的是占位 `wx0000000000`）——
+按框架 `AGENTS.md` 第 3 节，这一步需要工程侧配好 AppID 后才能完成。
+
+### 六、当前状态
+
+```
+✅ Vue SFC 编译
+✅ JS 产物语法
+✅ WXML 校验
+✅ 小程序构建（首次通过，且产物质量审计清洁）
+⏸️ 真机/模拟器 —— 待人工授权（本机工具已就位）
+```
+
+**MP 目标从"不可用"变为"可构建"**：五轮追下来（beta.9 卡 Bug C → beta.11 卡 F-27/F-28 → beta.12 全通），
+这条链路终于打通。剩余的是真机验证（需授权）与持续回归。
+
+### 七、最小复现（回归用例）
+
+```ts
+// F-27（已修，保留为回归锁）
+compileVueSfc(`<script setup lang="ts">
+const f = ref({ title: '' })
+</script>
+<template><input v-model="f.title" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })
+// 期望：proteusOnFTitleInput + setData {'f.title': …}（旧版：Unexpected token '.'）
+
+// F-28（已修）
+compileVueSfc(`<script setup lang="ts">
+const q = ref('')
+function onInput() {}
+</script>
+<template><input v-model="q" @input="onInput" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })
+// 期望：bindinput ×1（合并为 proteusMergeQAndOnInput）（旧版：DuplicatedAttribute）
+```
+
+---
+
+## 二十二、★ 真机（模拟器）验证：**启动失败** —— 抓到 F-30（阻断级），并修正第八轮结论
+
+> 本轮在开发者工具授权后做了**真机（模拟器）验证**——这是共建规范第 4 节要求的最后一层。
+> 结果：**模拟器启动失败**，暴露一个构建期完全看不到的缺陷（F-30）。
+> **同时必须修正我上一节（第八轮）的结论**：我写"小程序构建首次成功"时只验证了**构建退出码 + 页面产物**，
+> 没有验证**框架组件产物**——那 76 个组件当时就是空的。
+
+### 一、真机结果：启动失败
+
+```
+Error: components/job-drawer/index.json: ["usingComponents"]["p-drawer"]:
+       "/proteus/p-drawer/index"，在 .../dist/mp-weixin/proteus/p-drawer/index 路径下未找到组件
+```
+
+**产物实况**：
+
+| 类型 | 应有 | 实有 |
+|---|---|---|
+| 页面四件套（5 页） | 20 | ✅ 20 |
+| **应用组件**（5 个） | 20 | ✅ 20 |
+| **框架组件**（76 个 `proteus/p-*`） | **304** | ❌ **76**（只有 `index.json`，缺 js/wxml/wxss **全部**） |
+
+即：**76 个框架组件一个都没被编译**，但每个都有一条 `index.json` 声明 → 真机解析 `usingComponents` 时找不到组件 → 启动失败。
+
+### 二、根因：`collectUsedFrameworkComponents` 的遍历**不进入应用组件**
+
+**位置**：`packages/plugin-vite/src/tag-scan.ts:145`（`collectUsedFrameworkComponents`）
+
+该函数用 BFS 收集"页面实际引用的框架组件"（用于按需输出，避免全量 76 个 = 607 KB）。但循环体是：
+
+```ts
+for (const tag of tags) {
+  const compFile = resolveComponentFile(componentsDir, tag)  // ← 只在**框架组件目录**里找
+  if (!compFile) continue                                    // ← 应用组件在此被丢弃
+  used.add(tag)
+  queue.push(compFile)
+}
+```
+
+`resolveComponentFile` 只在 `componentsDir`（框架的 `node_modules/@proteus-vue/components`）里查找。
+**应用组件（`src/components/xxx`）找不到 → `continue` → 不入队 → 它的模板永远不会被扫描**。
+而我们的框架组件使用**全部经由应用组件**：
+
+```
+pages/workbench.vue → components/job-drawer/index.vue → <p-drawer> / <p-button> / <p-scroll>
+                     → components/chapter-tree/…     → …
+```
+
+→ 这条链在第一步就断了，`used` 集合为空 → 76 个组件全被"按需输出"剔除。
+
+**最小复现**（用框架源码直接调用，含干净对照）：
+
+```ts
+// 场景 A：page → my-card(应用组件) → p-button(框架组件)
+collectUsedFrameworkComponents([page], componentsDir)
+//   → 收集到 0 个  ← 缺陷（应为 1：p-button）
+
+// 场景 B（对照）：page 直接 → p-button(框架组件)
+collectUsedFrameworkComponents([pageDirect], componentsDir)
+//   → 收集到 1 个  ✅ 正常
+```
+
+**对照实验（在真实工程里做的）**：我们所有框架组件都经由应用组件引用，
+所以本工程 `used.size === 0`。我临时在 `index.vue` 里**直接**写一个 `<p-button>` → 重新构建 →
+`proteus/p-button/` 立刻产出完整四件套（`index.js/json/wxml/wxss`），
+其余 75 个仍为空。**干净证明是"遍历不进应用组件"，而非组件本身编译有问题。**
+
+> **这条与框架自己的注释形成印证**：`tag-scan.ts:120-126` 有一段 2026-09-19 的修复注释，
+> 记录的正是**同类症状**——`resolveComponentFile` 曾因硬编码 `tag.startsWith('p-')`
+> 把 `pg-` 前缀组件判为非框架组件 → "按需输出把它静默剔除（产物只有 index.json，缺 js/wxml/wxss）
+> → 真机报 usingComponents 未找到组件、模拟器启动失败"。
+> **同一个函数、同一种失败形态（只有 index.json），这次的原因是遍历面不全**——
+> 说明这条路径缺少"产物完整性"的门禁保护。
+
+### 三、为什么构建期一切正常（四道门禁全放行）
+
+| 检查 | 为什么没拦住 |
+|---|---|
+| `proteus build --target mp` 退出码 | 构建本身成功（"按需输出 0 个组件"被认为是合法结果，无告警） |
+| 我第八轮的产物审计 | 我只扫了"已知缺陷模式"（正则误改 / 重复属性 / TS 残留）**和页面文件**，没检查"声明的组件是否真的有产物" |
+| `gen-routes` 的 81 个 `component.json` | 它生成的是**声明**（`usingComponents` 映射），恰好是这些声明指向了不存在的文件 |
+| 框架自身测试 | 跑在 workspace 软链源码上，且大概率没有"应用组件中转"这一形态的用例 |
+
+> **与我第八轮的措辞对照**：我写"构建首次成功"时的验证是"退出码 0 + 四件套计数 + 缺件模式扫描"。
+> 数字看起来对了（125 个文件、wxml 10 / js 17 / wxss 10），**但那个统计里根本不包含应然的 304 个组件文件**——
+> 我拿"实际有什么"当分母，而不是"应该有什么"。**这是本轮最该记的教训：产物验收必须对着"应有清单"数，不能对着"现有清单"数。**
+
+### 四、影响面与严重度
+
+- **严重度：blocker**（真机完全无法启动；模拟器与真机都会失败）
+- **影响面：任何用框架组件、且组件经由应用组件引用的工程**。
+  这恰好是**官方推荐形态**——`AGENTS.md` 与 `create-proteus` 模板都主张组件放 `src/components/`。
+  只有当页面**直接**写 `<p-xxx>` 时才不触发。
+- **我方工程命中**：`job-drawer`（p-drawer / p-button / p-scroll）、以及 chapter-tree 等（若用到框架组件）。
+
+### 五、修复建议
+
+1. **BFS 需同时解析应用组件目录**：`resolveComponentFile(tag)` 之外，再查
+   `<appRoot>/components/<tag>/index.vue`（gen-routes 已经在用这个解析顺序，见其报错文案
+   "应用组件放这里 → …；框架组件放这里 → …"）——两处应**同源**。
+2. **加"产物完整性"门禁（根治）**：构建收尾时校验每个 `usingComponents` 的映射目标
+   **四件套是否存在**（js/wxml/wxss + json）。这条能一并覆盖上一轮 `pg-` 前缀的同类事故。
+3. **`gen-routes` 的告警应升级为错误**：它其实**知道**自己在写一条指向不存在文件的声明
+   （它生成 `component.json` 时就是在写 `usingComponents`），但只告警不报错。
+
+### 六、真机验证的其余部分（已就绪，待 F-30 修复后重跑）
+
+- ✅ 微信开发者工具已授权登录（`loginExpired: false`）
+- ✅ `open_project_window` 成功打开项目（`winId: s0`）
+- ✅ `simulator_screenshot` / `get_simulator_console` 工具可用
+- ❌ 模拟器启动失败（F-30）
+
+修复后可用同一套工具重跑：打开项目 → 截图 → 读 console → `simulator_open_page` 逐页验证。
+
+### 七、最小复现（可直接做回归用例）
+
+```ts
+import { collectUsedFrameworkComponents } from './tag-scan'
+// 构造：page.vue 用 <my-card>；src/components/my-card/index.vue 用 <p-button>
+collectUsedFrameworkComponents([pageFile], componentsDir)
+// 期望 ≥1（含 p-button）；现状 0
+```
+
+---
+
+## 二十三、维护方处理回执（第 7~9 轮）
+
+> 这三轮你们做的事比我们多——**首次按规范协作**、把小程序编译追到真机、**并自己修正了结论**。
+> 下面是我们这侧的处理。
+
+### 一、第 7 轮（F-27 / F-28）：已修 → 已发布 → **你们复测通过**
+
+| 条目 | 我们的修法 | 状态 |
+|---|---|---|
+| **F-27** `v-model` 绑对象属性/数组元素产出非法 JS | 新增 `packages/compiler/src/model-path.ts`（handler 名与 setData 键**路径安全**，template/script 两侧同源）；路径键按小程序语法加引号 | ✅ `0.3.0-beta.12` 发布 → **你们独立复测通过**（`verified_by=external`） |
+| **F-28** `v-model` + `@input` → bindinput 重复 | 模板序列化末尾**合并同名 bindinput** 为 `proteusMerge<Model>And<Handler>`（先回写数据再调用户 handler） | ✅ 同上 |
+
+你们的批评（**「三份实现只修一份」**）我们在第六轮已认并根治；本轮这两条是那一根治的延续。
+
+### 二、第 8 轮的 F-29（台账滞后）：**这是规范自身的缺口，你们说得对**
+
+> 我们的规范写了「修了必须发布才算数」，但**没写「发布了必须立刻回填台账」**——
+> 而铁律 4（闭环必须留回执）依赖台账准确。
+
+已加固三处：
+
+1. **`check:cobuild` 新增规则 F「台账框架侧元数据完整」**——`rounds`/`verification_breakdown` 必须在位、
+   `found_by=framework` 条目数不得为 0。（顺带说：**这条规则建立后立刻自己抓出了第二次「整份覆盖」**——
+   有人把外部台账副本整份覆盖过来，抹掉了 28 条里的 8 条框架自查条目与全部元数据。）
+2. **`sync:cobuild` 按字段归属合并**（外部主导「问题定义」/框架主导「修复状态」/外部优先「验证结论」），
+   不整份覆盖；`verification_note` 是**双方视角的合并容器**（`[external] …` + `[framework] …`），不是冲突字段。
+3. 台账元数据的回归锁（`tests/ai-cobuild.test.ts`）。
+
+**关于你们第 4 节提的「模板/文档需说明各包版本不再统一」——完全正确，我们补上了**（见下面第 4 点）。
+
+### 三、第 9 轮的 F-30（真机阻断）：**已修，且你们的两条修复建议都采纳了**
+
+你们的根因定位**准确**（我们用你们的最小复现当场复现：场景 A 收集 0 个 / 场景 B 正常）。修法：
+
+| # | 你们建议 | 我们的实现 |
+|---|---|---|
+| 1 | BFS 需同时解析应用组件目录（与 gen-routes 同源） | ✅ `collectUsedFrameworkComponents` 增加 `appComponentsDir` 参数，BFS 先查应用组件再查框架组件——与 `gen-routes.collectComponents` **同一解析顺序** |
+| 2 | 加「产物完整性」门禁（根治） | ✅ `audit-mp-artifacts` 新增**框架组件完整性对账**：有声明必须四件套齐全；**被引用却缺本体 → FAIL**（未被引用的孤立声明记提示） |
+| 3 | gen-routes 的告警应升级为错误 | ✅ 更进一步：**从源头消除**——`gen-routes` 的 `writeComponentJsons` 改为**只为按需输出的组件写声明**（与插件用同一个函数 `computeEmittedComponents`），声明与本体从此同源 |
+
+> ★**你们的 F-30 还牵出一个我们没料到的连带形态**：`gen-routes` 原本**无条件为全部 76 个框架组件写声明**，
+> 而按需输出只产用到的本体 → 产物里有 74 个「有声明、无本体」的空壳。
+> 我们的产物门禁在修复后**又抓出了 3 个「被引用却缺本体」**（框架组件互相引用时链也断）——
+> 说明你们指出的「缺少产物完整性门禁」这条判断，覆盖面比单看 F-30 更广。
+
+**验收（你们工程的真实产物）**：
+
+```
+修复前：proteus/ 下 76 个目录，全部只有 index.json（空壳）→ 真机启动失败
+修复后：proteus/ 下 3 个目录（p-drawer / p-button / p-scroll），四件套齐全 · 门禁全绿
+```
+
+### 四、我们这侧的两项变化（你们会感知到）
+
+1. **版本组策略 `fixed` → `linked`**（你们第 4 节已发现并实测）：只 bump/发布**实际变更**的包。
+   —— ⚠️ **你们指出的「外部不能再写统一版本号」是对的**：现在各包 latest 按需前进
+   （本批实测 23 包 beta.11 / 12 包 beta.12 / 6 包 beta.13）。**逐包对齐**（用 `npm view <pkg> dist-tags.latest`）
+   或直接用 `workspace:*/`^范围`。这条我们会在模板与文档里补说明。
+2. **`proteus cobuild init` 已随包分发**：你们可以弃用我上次人工投递的那份副本，
+   改用官方命令（幂等、不覆盖已写内容）——这样以后不会再出现两边工件漂移。
+
+### 五、下一步
+
+- **F-30 与 F-29 的修复待发布**（本批会以 linked 语义发布，只发变更的包）——发布后请复测；
+- 复测通过后，台账里这两条会升为 `verified_by=external`；
+- 你们的真机验证工具链已就绪（授权 + open_project_window + screenshot），**F-30 修复后可直接重跑**。
+
+> 最后说一句：**你们在第八轮自建的那条「构建成功」结论、又在第九轮自己修正它**——
+> 这个动作比任何一次「发现问题」都更有价值。我们的规范里把「产物验收必须对着应有清单数」
+> 写成了反模式条目，出处就是你们这次。
