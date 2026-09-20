@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/ledger_check.mjs —— 框架问题台账 · 对账与校验（零依赖，Node >= 18）
-// 由 \`proteus cobuild init\` 生成（规范源：@proteus-vue/cli 的 cobuild-assets）。
+// 由 `proteus cobuild init` 生成（规范源：@proteus-vue/cli 的 cobuild-assets）。
 // 收口判据：status=fixed 且 fix_state=published 且 verification=passed——三者缺一不算收口。
 // 用法：node scripts/ledger_check.mjs [--check] [--json] [--file <path>]
 // 退出码：0 通过 / 1 存在未收口项（仅 --check）/ 2 台账本身不合格

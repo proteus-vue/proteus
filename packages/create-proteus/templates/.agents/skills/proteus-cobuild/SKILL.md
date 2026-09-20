@@ -6,36 +6,36 @@ description: 参与 Proteus 框架共建——把"使用框架时撞到的问题
 # 参与 Proteus 框架共建
 
 > 你撞到框架问题时：**该不该报、报到哪、什么格式、什么时候算修好**——本文档全讲清。
-> 机制自检：\`proteus cobuild check\`（文件齐备）/ \`node scripts/ledger_check.mjs --check\`（台账合格）。
+> 机制自检：`proteus cobuild check`（文件齐备）/ `node scripts/ledger_check.mjs --check`（台账合格）。
 
 ## 0. 三件事
 
 | 问题 | 答案 |
 |---|---|
 | **什么时候该报** | 框架**该做到却没做到**、或**静默失败**（不报错但行为错）时——判据见 §2 |
-| **报到哪** | 本工程 \`docs/框架问题台账.json\`（加一条）+ \`docs/实战报告_proteus接入.md\`（追加一节） |
+| **报到哪** | 本工程 `docs/框架问题台账.json`（加一条）+ `docs/实战报告_proteus接入.md`（追加一节） |
 | **什么格式** | §3 两个模板，照着填；**最小复现是硬要求** |
 
 ## 1. 谁负责什么（避免两边改同一份）
 
 | 字段 | 谁维护 |
 |---|---|
-| \`id\` \`title\` \`kind\` \`severity\` \`round\` \`reported_in\` \`evidence\` \`repro\` | **你（外部）**——问题的定义 |
-| \`status\` \`fix_state\` \`fixed_in\` | 框架方——修复的状态 |
-| \`verification\` \`verified_by\` | **你（外部）优先**——验证结论 |
+| `id` `title` `kind` `severity` `round` `reported_in` `evidence` `repro` | **你（外部）**——问题的定义 |
+| `status` `fix_state` `fixed_in` | 框架方——修复的状态 |
+| `verification` `verified_by` | **你（外部）优先**——验证结论 |
 
-> ★框架方自测只能标 \`verified_by=framework\`；**只有你在自己工程里用最小复现跑通，才能标 \`external\`**。
+> ★框架方自测只能标 `verified_by=framework`；**只有你在自己工程里用最小复现跑通，才能标 `external`**。
 > 你的复测是唯一能把"框架自测通过"升级为"独立验证通过"的证据——这是你的核心价值。
 
 ## 2. 什么时候该报
 
-**该报**：框架承诺的能力没做到（\`onMounted(async () => {…})\` 丢 \`async\` 标记 → 产物语法错）/ **静默失败**（正则 \`/\\s/g\` 被改坏，构建却通过）/ 报错**指向无关模块** / 发布物缺件（装了包用不了）/ 文档数字与实际不符。
+**该报**：框架承诺的能力没做到（`onMounted(async () => {…})` 丢 `async` 标记 → 产物语法错）/ **静默失败**（正则 `/\\s/g` 被改坏，构建却通过）/ 报错**指向无关模块** / 发布物缺件（装了包用不了）/ 文档数字与实际不符。
 
-**不该报**：平台限制（WXML 不支持 \`?.\`）→ 这是**你的适配**，记 \`consumer_notes\`；你自己的业务逻辑；**探针本身不可靠**导致的误报（先验证探针）。
+**不该报**：平台限制（WXML 不支持 `?.`）→ 这是**你的适配**，记 `consumer_notes`；你自己的业务逻辑；**探针本身不可靠**导致的误报（先验证探针）。
 
 | 情形 | 归属 |
 |---|---|
-| 框架标 \`aligned\` 但没对齐（**有对照实验证明本可做到**） | **框架缺陷** |
+| 框架标 `aligned` 但没对齐（**有对照实验证明本可做到**） | **框架缺陷** |
 | 平台本身不支持 | 平台限制 → 你适配 |
 | **静默失败**（不报错但错 / 报错指错方向） | **一律归框架** |
 | 产出**语法合法但语义错**的产物 | **框架缺陷（最危险）** |
@@ -44,10 +44,10 @@ description: 参与 Proteus 框架共建——把"使用框架时撞到的问题
 
 ### ① 报告：追加一节
 
-\`docs/实战报告_proteus接入.md\`——**标题格式是机器对齐的锚点，必须照写**：
+`docs/实战报告_proteus接入.md`——**标题格式是机器对齐的锚点，必须照写**：
 
-\`\`\`markdown
-## 第N轮复测：\`<被复测的版本号>\`（YYYY-MM-DD）—— 一句话结论
+```markdown
+## 第N轮复测：`<被复测的版本号>`（YYYY-MM-DD）—— 一句话结论
 
 ### 一、结论速览
 | 项 | 结果 | 证据 |
@@ -62,15 +62,15 @@ description: 参与 Proteus 框架共建——把"使用框架时撞到的问题
 ### 四、我方适配（平台限制，非框架缺陷）
 
 ### 五、诚实澄清（可选，如测试脚本的误报）
-\`\`\`
+```
 
 **硬要求**：① 标题带**版本号**；② 每条问题带**最小复现**；③ 区分「框架缺陷」与「我方适配」。
 
 ### ② 台账：加一条
 
-\`docs/框架问题台账.json\` 的 \`entries\` 追加：
+`docs/框架问题台账.json` 的 `entries` 追加：
 
-\`\`\`json
+```json
 {
   "id": "F-27",
   "title": "一句话说清问题（能当 issue 标题）",
@@ -84,33 +84,43 @@ description: 参与 Proteus 框架共建——把"使用框架时撞到的问题
   "evidence": "可复制的报错/现象关键片段",
   "repro": "最小复现（命令或代码）"
 }
-\`\`\`
+```
 
-- \`id\` **延续编号，分配后永不变更**（跨仓库对账锚点）；
-- \`kind\`：packaging | cli | compiler | runtime | router | release | process | docs；
-- \`severity\`：blocker（阻断使用/构建）| major（功能受损或静默错）| minor（体验/文档）；
-- 新报的 \`status=open\`、\`verification=unverified\`，**不要填** \`fix_state\`/\`fixed_in\`（框架方发布后填）。
+- `id` **延续编号，分配后永不变更**（跨仓库对账锚点）；
+- `kind`：packaging | cli | compiler | runtime | router | release | process | docs；
+- `severity`：blocker（阻断使用/构建）| major（功能受损或静默错）| minor（体验/文档）；
+- 新报的 `status=open`、`verification=unverified`，**不要填** `fix_state`/`fixed_in`（框架方发布后填）。
+
+## 3.5 ★版本号：各包可能不同（linked 分组）
+
+本仓（Proteus 框架）用 changesets `linked` 分组：**只 bump/发布实际变更的包**——
+故各包 `latest` 会按需前进（例如同一批里 23 包 beta.11、12 包 beta.12、6 包 beta.13）。
+
+**消费侧正确做法**：
+- 逐包对齐 `npm view <pkg> dist-tags.latest`（最准）；
+- 或用范围 `^0.3.0-beta.12`（注意 prerelease 的 caret 元组语义）；
+- ❌ **不要写死「所有包都装同一版本号」**——某包没发到该版本就装不上。
 
 ## 4. 闭环
 
-\`\`\`
+```
 你报 → 框架复现并修 → 发布新版 → 写回执（改了什么/怎么验/哪个版本）
                                     ↓
                     你 git pull 框架仓库，看台账里你那条的 fix_state=published + fixed_in
                                     ↓
                     升级到该版本 → 用你的最小复现复测 → 台账回写 verification=passed + verified_by=external
-\`\`\`
+```
 
 ## 5. 提交前自检
 
-\`\`\`bash
+```bash
 proteus cobuild check                # 共建文件齐备（skill/台账/报告/校验器/AGENTS.md 指针）
 node scripts/ledger_check.mjs --check  # 台账合格 + 无未收口项（未收口会列出）
-\`\`\`
+```
 
-- [ ] 报告标题含 \`第N轮复测\` + **版本号**；
+- [ ] 报告标题含 `第N轮复测` + **版本号**；
 - [ ] 每条新问题都有**最小复现**；
-- [ ] 台账加了条目，\`id\` 延续、枚举取值合法；
+- [ ] 台账加了条目，`id` 延续、枚举取值合法；
 - [ ] 区分了「框架缺陷」与「我方适配」；
 - [ ] 自己的误报/不确定处单列澄清（**诚实比数量值钱**）。
 
@@ -122,7 +132,7 @@ node scripts/ledger_check.mjs --check  # 台账合格 + 无未收口项（未收
 | 把平台限制当框架缺陷 | 用 §2 判定表先分类，省双方时间 |
 | 复测时不分「全修」与「只修一条路径」 | 明确指出"修了一半"极有价值（真实案例：一个 bug 三处实现只修一处） |
 | 自己误报不澄清 | 会让框架方基于错误信息改代码 |
-| 台账不更新 | 收口率失真；\`fix_state=worktree\` 对 npm 用户等于没修 |
+| 台账不更新 | 收口率失真；`fix_state=worktree` 对 npm 用户等于没修 |
 
 ---
 
