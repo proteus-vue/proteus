@@ -1189,12 +1189,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         }
         // 非裸 ref（复杂表达式）或非 transition 子元素：Batch 2 现状（立即显隐）
         if (ctx.transitionCtx) ctx.transitionCtx.ref = undefined // 复杂表达式不启用状态机
-        attrs.push(`wx:if="{{${exprContent(dir.exp)}}}"`)
-        ctx.trace?.add('directive/v-if', { line: node.loc.start.line, before: `v-if="${exprContent(dir.exp)}"`, after: `wx:if="{{${exprContent(dir.exp)}}}"` })
+        // ★2026-09-20（外部实战报告 F-34）：指令表达式也必须走 store 前缀剥离——此前只接了插值/：prop，
+        //   `v-if="store.err"` 原样进产物（`{{store.err}}`）→ 数据来了模板取不到（Web 无此问题，走 Vue 运行时）。
+        attrs.push(`wx:if="{{${rewriteStoreRefs(exprContent(dir.exp), ctx)}}}"`)
+        ctx.trace?.add('directive/v-if', { line: node.loc.start.line, before: `v-if="${exprContent(dir.exp)}"`, after: `wx:if="{{${rewriteStoreRefs(exprContent(dir.exp), ctx)}}}"` })
         break
       case 'else-if':
         if (ctx.disabled.has('directive/v-else-if')) break
-        attrs.push(`wx:elif="{{${exprContent(dir.exp)}}}"`)
+        attrs.push(`wx:elif="{{${rewriteStoreRefs(exprContent(dir.exp), ctx)}}}"`)
         ctx.trace?.add('directive/v-else-if', { line: node.loc.start.line, before: 'v-else-if', after: 'wx:elif' })
         break
       case 'else':
@@ -1204,7 +1206,8 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         break
       case 'for': {
         if (ctx.disabled.has('directive/v-for')) { ctx.warnings.push('规则 directive/v-for 已被禁用（rules.disabled），v-for 已忽略'); break }
-        const f = parseForExpr(exprContent(dir.exp))
+        // ★2026-09-20（F-34）：v-for 的列表表达式同样须剥离 store 前缀（否则 `{{store.projects}}` 原样进产物）
+        const f = parseForExpr(rewriteStoreRefs(exprContent(dir.exp), ctx))
         attrs.push(`wx:for="{{${f.list}}}"`)
         if (f.item) attrs.push(`wx:for-item="${f.item}"`)
         if (f.index) attrs.push(`wx:for-index="${f.index}"`)
@@ -1237,9 +1240,12 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
         //   判定经规则 apply（event/inline-expression）；其余走 cleanHandler（警告原样）。
         //   禁用规则 → 不包装 → bindtap="x = !x" 原样输出（#500 缺陷形态 + 反黑盒警告——删规则即红）。
         const rawHandler = exprContent(dir.exp)
+        // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
+        const isCustomEvent = !(raw in ctx.eventMap)
         let inline: { name: string; code: string } | null = null
         if (!isSelf && !isOnce && !ctx.disabled.has('event/inline-expression')) {
-          const inlineCtx: RuleContext = { input: { exp: rawHandler } }
+          // ★F-35：箭头处理器的参数绑定随事件类型分派——自定义事件载荷在 e.detail，原生事件本体在 e
+          const inlineCtx: RuleContext = { input: { exp: rawHandler, payload: isCustomEvent ? 'detail' : 'event' } }
           executeRule('event/inline-expression', inlineCtx)
           inline = (inlineCtx.output as { name: string; code: string } | null | undefined) ?? null
         }
@@ -1259,7 +1265,6 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
           ctx.warnings.push(keyMsg)
         }
         // 自定义事件（非 EVENT_MAP，如组件 triggerEvent 事件）→ bind:/catch: 冒号形式（微信自定义组件事件标准）
-        const isCustomEvent = !(raw in ctx.eventMap)
         const prefix = `${isCatch ? 'catch' : 'bind'}${isCustomEvent ? ':' : ''}`
         // ★#505 校准族：.self/.once 包装判定与命名经规则 apply（event/modifier-self-once）——
         //   简单方法名 + self/once → proteusSelf/Once<Cap>（script 生成包装方法）；复杂表达式 → null（原样）。
@@ -1437,14 +1442,14 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
       }
       case 'html':
         if (ctx.disabled.has('directive/v-html')) { ctx.warnings.push('规则 directive/v-html 已被禁用（rules.disabled），v-html 已忽略'); break }
-        attrs.push(`nodes="{{${exprContent(dir.exp)}}}"`)
+        attrs.push(`nodes="{{${rewriteStoreRefs(exprContent(dir.exp), ctx)}}}"`)
         ctx.trace?.add('directive/v-html', { line: node.loc.start.line, before: 'v-html', after: 'rich-text nodes' })
         break
       case 'show':
         if (ctx.disabled.has('directive/v-show')) break
         // v-show → hidden 属性（小程序 hidden = display:none，元素始终渲染，语义对齐 v-show）
         // ★#500 复合表达式加括号：!a || b 语义——旧产物 (!a)||b → p-sidebar nav 恒可见真机根因；裸标识符保持无括号
-        const showExpr = exprContent(dir.exp)
+        const showExpr = rewriteStoreRefs(exprContent(dir.exp), ctx)
         const showNeg = /^[\w$.]+$/.test(showExpr.trim()) ? `!${showExpr.trim()}` : `!(${showExpr})`
         attrs.push(`hidden="{{${showNeg}}}"`)
         ctx.trace?.add('directive/v-show', { line: node.loc.start.line, before: `v-show="${showExpr}"`, after: `hidden="{{${showNeg}}}"` })

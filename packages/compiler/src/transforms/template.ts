@@ -52,11 +52,44 @@ function isWrapperSafeArgs(argsRaw: string): boolean {
 }
 
 /**
- * ★#505 内联事件表达式 → 包装方法（event/inline-expression 规则 apply 的实现，自 template.ts tryInlineHandler 迁入——逻辑单点化）。
- * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2) / x = !x / x = 字面量 / store.method(...)。
- * 返回 null = 不可校准形态 → 调用方走 cleanHandler 警告原样输出。
+ * ★F-35 箭头函数事件处理器的参数重写：参数标识符 → 事件载荷（自定义事件 e.detail / 原生事件 e）。
+ * 仅允许「参数本身（可带 .prop 链）+ 字面量」；出现其它裸标识符（setup 局部变量，方法作用域取不到）→ null。
+ * 字符串字面量先占位保护，避免改到内容里的标识符。
+ * usedPayload 由**替换动作本身**报告（而非事后正则猜测）——`(n) => log('n')` 的字面量不得被当成用到了载荷。
  */
-function tryInlineExpressionToWrapper(exp: string): { name: string; code: string } | null {
+function rewriteArrowArgs(argsRaw: string, param: string, bind: string): { text: string; usedPayload: boolean } | null {
+  const lits: string[] = []
+  const masked = argsRaw.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, (m) => {
+    lits.push(m)
+    return `\u0000${lits.length - 1}\u0000`
+  })
+  let ok = true
+  let usedPayload = false
+  const rewritten = masked.replace(/(\.?)([A-Za-z_$][\w$]*)/g, (whole, dot: string, id: string) => {
+    if (dot === '.') return whole // 属性访问（x.id 的 .id）不重写
+    if (param !== '' && id === param) {
+      usedPayload = true
+      return bind
+    }
+    if (id === 'true' || id === 'false' || id === 'null' || id === 'undefined') return id
+    ok = false
+    return whole
+  })
+  if (!ok) return null
+  return { text: rewritten.replace(/\u0000(\d+)\u0000/g, (_, i: string) => lits[Number(i)]), usedPayload }
+}
+
+/**
+ * ★#505 内联事件表达式 → 包装方法（event/inline-expression 规则 apply 的实现，自 template.ts tryInlineHandler 迁入——逻辑单点化）。
+ * 支持：count++ / count-- / ++count / --count / fn(1) / fn('a', 2) / x = !x / x = 字面量 / store.method(...)
+ *      / ★F-35 箭头函数（(n) => fn(n) / (n) => fn(n.id) / () => fn(1) / (n) => store.fn(n)）。
+ * 返回 null = 不可校准形态 → 调用方走 cleanHandler 警告原样输出。
+ * opts.payload：箭头参数绑定的载荷来源——'detail'（自定义组件事件，emit 载荷在 e.detail）/ 'event'（原生事件本体）。
+ */
+function tryInlineExpressionToWrapper(
+  exp: string,
+  opts?: { payload?: 'detail' | 'event' },
+): { name: string; code: string } | null {
   const t = exp.trim()
   // 自增/自减（对齐 ref 重写：this.data.x ± 1，决策 #36）
   let m = t.match(/^([\w$]+)\+\+$/) ?? t.match(/^\+\+([\w$]+)$/)
@@ -111,6 +144,35 @@ function tryInlineExpressionToWrapper(exp: string): { name: string; code: string
     return {
       name: `proteusStore${capitalize(method)}${key}`,
       code: `this.store.${method}(${args.replace(/\bstore\./g, 'this.store.')})`,
+    }
+  }
+  // ★F-35 箭头函数事件处理器（Vue 常见写法 @open="(n) => continueWriting(n)"）。
+  //   旧行为：cleanHandler 警告 + **原样输出** → 产物 bind:open="(n) => continueWriting(n)"——
+  //   事件属性值是**方法名**，整句是非法方法名 → 真机事件永不触发且只有一条控制台警告（静默失效）。
+  //   与 #500（赋值型原样输出）/ #505（方法调用型）同族：校准「单方法调用体」的箭头形态。
+  const arrow = t.match(/^(?:\(\s*([\w$]*)\s*\)|([\w$]+))\s*=>\s*([\s\S]+)$/)
+  if (arrow) {
+    const param = arrow[1] ?? arrow[2] ?? ''
+    const body = arrow[3].trim().replace(/;$/, '').trim()
+    // 体必须是单方法调用（无嵌套括号；store. 前缀视为 this.store.）；参数经 rewriteArrowArgs 严格校验
+    const call = body.match(/^(?:store\.)?([\w$]+)\s*\(([^()]*)\)$/)
+    if (call && (body.startsWith('store.') || !call[1].includes('.'))) {
+      const method = call[1]
+      const isStore = body.startsWith('store.')
+      const bind = opts?.payload === 'event' ? 'e' : 'e.detail'
+      const bound = rewriteArrowArgs(call[2], param, bind)
+      if (bound !== null) {
+        // 名称去重键：载荷绑定本身 → Payload（可读）；**载荷来源参与命名**——同一 @x="(n)=>fn(n)"
+        //   在自定义事件（e.detail）与原生事件（e）上方法体不同，若同名则 inlineHandlers 按名去重会错用方法体。
+        const argsKey = bound.usedPayload
+          ? 'Payload'
+          : bound.text.replace(/[^A-Za-z0-9_$+-]/g, '').replace(/-/g, 'Minus').replace(/\+/g, 'Plus') || 'NoArgs'
+        const marker = bound.usedPayload ? (opts?.payload === 'event' ? 'Evt' : 'Det') : ''
+        return {
+          name: `${isStore ? 'proteusStore' : 'proteusInline'}${capitalize(method)}${argsKey}${marker}`,
+          code: `${isStore ? 'this.store.' : 'this.'}${method}(${bound.text})`,
+        }
+      }
     }
   }
   return null
@@ -695,23 +757,23 @@ export const TEMPLATE_RULES: TransformRule[] = [
     id: 'event/inline-expression',
     phase: 'template',
     status: 'implemented',
-    title: '内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型）',
-    titleEn: 'inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments)',
-    description: '@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）与 ★#500 赋值型（x = !x / x = 字面量）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告',
-    descriptionEn: '@click="count++" (increment/decrement), @click="fn(1)" (a simple method call) and ★#500 assignments (x = !x / x = literal) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning',
-    why: 'Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应）：不再原样输出无效 bindtap',
-    whyEn: 'support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap): no longer emitting an invalid bindtap as-is',
-    when: '事件处理器为自增/自减、简单方法调用（无 . 链）或赋值型（RHS 为字面量/!标识符）时',
-    example: { before: '@click="count++" / @click="showModal = !showModal"', after: 'bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData' },
-    verify: 'tests/vue-compat.test.ts 内联表达式用例 + tests/mp-transform.test.ts #500 赋值用例',
+    title: '内联事件表达式 → 包装方法（vue-compat Batch B；★#500 赋值型；★F-35 箭头函数）',
+    titleEn: 'inline event expressions → wrapper methods (vue-compat Batch B; ★#500 assignments; ★F-35 arrow functions)',
+    description: '@click="count++"（自增/自减）、@click="fn(1)"（简单方法调用；参数为裸标识符/字面量——含小数与负数如 0.4/-1、含点的字符串）、★#500 赋值型（x = !x / x = 字面量）与 ★F-35 箭头函数（(n) => fn(n) / (n) => fn(n.id) / () => fn(1) / (n) => store.fn(n)；参数按事件类型绑定载荷——自定义事件 e.detail / 原生事件 e）→ 生成 proteusInlineXxx 包装方法（setData 更新 / this.fn(1)），产物可运行；成员访问参数（fn(t.id)）、裸标识符 RHS 赋值（可能为 v-for 项变量，方法作用域取不到）与复杂表达式仍反黑盒警告',
+    descriptionEn: '@click="count++" (increment/decrement), @click="fn(1)" (a simple method call), ★#500 assignments (x = !x / x = literal) and ★F-35 arrow functions ((n) => fn(n) / (n) => fn(n.id) / () => fn(1) / (n) => store.fn(n); the parameter binds to the event payload by event kind — e.detail for custom events, e for native ones) → a proteusInlineXxx wrapper method is generated (setData update / this.fn(1)), keeping the output runnable; assignments whose RHS is a bare identifier (possibly a v-for item variable, unreachable in method scope) and complex expressions still produce an anti-black-box warning',
+    why: 'Vue 常见写法支持（决策 #116 Batch B / #500 真机实证：赋值型整句当方法名 → bindtap="x = !x" 点击无反应；★F-35 同族：箭头处理器原样输出 → bind:open="(n) => fn(n)" 整句非法方法名 → 真机事件永不触发且只有一条控制台警告）',
+    whyEn: 'support for common Vue patterns (decision #116 Batch B / #500 real-device evidence: an assignment emitted verbatim as the handler name → bindtap="x = !x" with no response on tap; ★F-35 same family: an arrow handler emitted verbatim → bind:open="(n) => fn(n)", an invalid method name, so the event never fires and only a console warning appears)',
+    when: '事件处理器为自增/自减、简单方法调用（无 . 链）、赋值型（RHS 为字面量/!标识符）或箭头函数（体为单方法调用，参数仅用于传参/取属性）时',
+    example: { before: '@click="count++" / @click="showModal = !showModal" / @open="(n) => continueWriting(n)"', after: 'bindtap="proteusInlineIncCount" + 方法 setData / bindtap="proteusInlineSetShowModalShowModal" + 方法 setData / bind:open="proteusInlineContinueWritingPayloadDet" + 方法 this.continueWriting(e.detail)' },
+    verify: 'tests/vue-compat.test.ts 内联表达式用例 + tests/mp-transform.test.ts #500 赋值用例 + tests/pinia-mp-compile.test.ts F-35 箭头用例（含破坏性验证）',
     source: 'packages/compiler/src/transforms/template.ts → tryInlineExpressionToWrapper（★#505 自 template.ts 迁入，逻辑单点）+ template.ts 调用点 executeRule + script.ts → inlineHandlers 注入',
-    decision: '#116 / #500',
+    decision: '#116 / #500 / F-35',
     // ★#505：描述层 → 执行层（第四条真实 apply）——内联表达式校准判定整体迁入规则：
     //   input { exp } → output { name, code } | null（null = 不可校准形态 → 调用方走 cleanHandler 警告原样）。
     //   禁用本规则 → 不包装 → bindtap="x = !x" 原样输出（#500 缺陷形态）+ 反黑盒警告（删规则即红）。
     apply: (ctx: RuleContext) => {
-      const input = (ctx.input ?? {}) as { exp?: string }
-      ctx.output = tryInlineExpressionToWrapper(input.exp ?? '')
+      const input = (ctx.input ?? {}) as { exp?: string; payload?: 'detail' | 'event' }
+      ctx.output = tryInlineExpressionToWrapper(input.exp ?? '', { payload: input.payload })
     },
   },
   {
