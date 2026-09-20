@@ -1,5 +1,12 @@
 # @proteus-vue/cli
 
+## 0.3.0-beta.17
+
+### Patch Changes
+
+- Updated dependencies
+  - @proteus-vue/plugin-vite@0.3.0-beta.17
+
 ## 0.3.0-beta.15
 
 ### Patch Changes
