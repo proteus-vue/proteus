@@ -21,6 +21,86 @@ export const TAG_MAP: Record<string, string> = {
   canvas: 'canvas',
   'scroll-view': 'scroll-view',
   slot: 'slot',
+  // ★★2026-09-20（外部实战报告第二十三/二十四节）：**补全常见 HTML 标签 → WXML 等价映射**。
+  //   此前这些标签落到「未知标签逃生舱」**原样输出** → 微信 wxml 编译器直接拒绝（或渲染异常）：
+  //   外部工程实测因 <details>/<summary>/<pre>/<table>/<select>/<option>/<label>/<br> 等
+  //   导致**模拟器整屏黑屏**（构建期零报错、产物看似齐全）。
+  //   语义映射原则：块级 → view；行内/文本类 → text；表格/列表/折叠等无对等物 → view/text
+  //   （样式与交互由 CSS + 显式状态承担，见报告第二十四节的正当适配）。
+  //   块级容器
+  section: 'view',
+  article: 'view',
+  aside: 'view',
+  nav: 'view',
+  main: 'view',
+  header: 'view',
+  footer: 'view',
+  figure: 'view',
+  figcaption: 'text',
+  details: 'view',
+  summary: 'text',
+  dialog: 'view',
+  form: 'form',
+  fieldset: 'view',
+  legend: 'text',
+  // 列表
+  ul: 'view',
+  ol: 'view',
+  li: 'view',
+  dl: 'view',
+  dt: 'text',
+  dd: 'text',
+  // 表格（微信无表格组件 → view 结构 + CSS）
+  table: 'view',
+  thead: 'view',
+  tbody: 'view',
+  tfoot: 'view',
+  tr: 'view',
+  th: 'text',
+  td: 'text',
+  caption: 'text',
+  // 行内 / 语义文本
+  strong: 'text',
+  b: 'text',
+  em: 'text',
+  i: 'text',
+  u: 'text',
+  s: 'text',
+  small: 'text',
+  mark: 'text',
+  sub: 'text',
+  sup: 'text',
+  code: 'text',
+  pre: 'text',
+  kbd: 'text',
+  samp: 'text',
+  var: 'text',
+  abbr: 'text',
+  cite: 'text',
+  q: 'text',
+  blockquote: 'view',
+  time: 'text',
+  address: 'text',
+  // 表单控件（无对等物者映射为 view/text，交互由 picker/state 承担）
+  select: 'view',
+  option: 'view',
+  optgroup: 'view',
+  // ★注：`label` / `audio` **不映射**——它们是微信 wxml 原生组件（表单组件/媒体组件），
+  //   映射会把可用能力降级（p-label 的 `for` 关联、p-media 的 audio 分支都会失效；
+  //   实测被 tests/component-b6 与 tests/p-batch3-contract 抓住）。
+  datalist: 'view',
+  output: 'text',
+  meter: 'view',
+  progress: 'progress',
+  // 其它常见
+  hr: 'view',
+  br: 'view',
+  picture: 'image',
+  source: 'view',
+  track: 'view',
+  iframe: 'web-view',
+  // ★注：`template` **不映射**——它在 WXML 里是定义块（is=/data=），语义与 Vue 的片段容器不同，
+  //   属「须改写法」而非「可映射」（见第二十四节：`<template v-if>` 应改为 `<view v-if>`）。
 }
 
 export const EVENT_MAP: Record<string, string> = {

@@ -9,8 +9,10 @@
 <template>
   <view class="p-draggable-root">
     <!-- MP：原生 movable-area（约束容器）+ movable-view（被拖动元素） -->
-    <template v-if="isMp">
-      <movable-area class="p-draggable-area" :scale-area="scaleArea">
+    <!-- ★2026-09-20（外部实战报告第二十四节）：`<template v-if>` 在 WXML 里是**定义块**（is=/data=），
+         不是 Vue 的片段容器 → 微信报 "child nodes are not allowed"/"missing module name"（外部工程由此黑屏）。
+         本分支只包一个元素，故直接把 v-if 落在真实节点上（语义等价，产物合法）。 -->
+    <movable-area v-if="isMp" class="p-draggable-area" :scale-area="scaleArea">
         <movable-view
           class="p-draggable-view"
           :direction="direction"
@@ -31,8 +33,7 @@
         >
           <slot />
         </movable-view>
-      </movable-area>
-    </template>
+    </movable-area>
     <!-- Web：Pointer 手势（保留既有实现）——★用原生 <div> 而非中性标签：
          手势经 useGesture 绑定 Pointer Events 到真实 DOM 元素（<view> 会被改写为 proteus-view 组件，
          拿到的不是元素，bind 失效）。本分支 v-else 平台死分支，MP 端不渲染。
