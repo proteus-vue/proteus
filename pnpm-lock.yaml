@@ -103,76 +103,76 @@ importers:
   examples:
     dependencies:
       '@proteus-vue/api':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/api
       '@proteus-vue/app-config':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/app-config
       '@proteus-vue/built-in-components':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/built-in-components
       '@proteus-vue/capabilities':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/capabilities
       '@proteus-vue/compat-miniprogram':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/compat-miniprogram
       '@proteus-vue/components':
         specifier: workspace:*
         version: link:../packages/components
       '@proteus-vue/desktop':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/desktop
       '@proteus-vue/dev-host':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/dev-host
       '@proteus-vue/devtools':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/devtools
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/devtools-runtime
       '@proteus-vue/docs':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/docs
       '@proteus-vue/fluid':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/fluid
       '@proteus-vue/gesture':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/gesture
       '@proteus-vue/glass':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/glass
       '@proteus-vue/i18n':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/i18n
       '@proteus-vue/module':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/module
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/render-backend
       '@proteus-vue/router':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/router
       '@proteus-vue/runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/runtime
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/shared
       '@proteus-vue/style-safety':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/style-safety
       '@proteus-vue/test-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/test-ir
       '@proteus-vue/web':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/web
       '@proteus-vue/worklet':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/worklet
       '@vue/devtools-api':
         specifier: ^8.0.0
@@ -185,16 +185,16 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/compiler
       '@proteus-vue/hmr':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/hmr
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -218,22 +218,22 @@ importers:
   packages/agent:
     dependencies:
       '@proteus-vue/compat-miniprogram':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../compat-miniprogram
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
       '@proteus-vue/mcp':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../mcp
 
   packages/api:
     dependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
     devDependencies:
       '@types/node':
@@ -249,10 +249,10 @@ importers:
   packages/built-in-components:
     dependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
     devDependencies:
       '@types/node':
@@ -265,10 +265,10 @@ importers:
   packages/capabilities:
     dependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       esbuild:
         specifier: ^0.28.2
@@ -281,56 +281,56 @@ importers:
   packages/cli:
     dependencies:
       '@proteus-vue/app-config':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../app-config
       '@proteus-vue/capabilities':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../capabilities
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../compiler-backend
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
       '@proteus-vue/css-compat':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../css-compat
       '@proteus-vue/dev-host':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../dev-host
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../devtools-runtime
       '@proteus-vue/fluid':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../fluid
       '@proteus-vue/module':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../module
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../plugin-vite
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../render-backend
       '@proteus-vue/router':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../router
       '@proteus-vue/runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../runtime
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
     devDependencies:
       '@proteus-vue/compat-miniprogram':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../compat-miniprogram
       '@vue/compiler-dom':
         specifier: ^3.5.42
@@ -345,7 +345,7 @@ importers:
   packages/compat-miniprogram:
     dependencies:
       '@proteus-vue/api':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../api
 
   packages/compiler:
@@ -369,13 +369,13 @@ importers:
         specifier: ^7.29.0
         version: 7.29.7(@babel/core@7.29.7)
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
       '@proteus-vue/contracts':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../contracts
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
     devDependencies:
       '@babel/parser':
@@ -394,11 +394,11 @@ importers:
   packages/compiler-backend:
     dependencies:
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
     devDependencies:
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       '@vue/compiler-dom':
         specifier: ^3.5.42
@@ -412,31 +412,31 @@ importers:
   packages/component-ir:
     dependencies:
       '@proteus-vue/contracts':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../contracts
 
   packages/components:
     dependencies:
       '@proteus-vue/api':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../api
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../devtools-runtime
       '@proteus-vue/fluid':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../fluid
       '@proteus-vue/gesture':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../gesture
       '@proteus-vue/glass':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../glass
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@proteus-vue/worklet':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../worklet
       vue:
         specifier: ^3.4.0
@@ -471,13 +471,13 @@ importers:
   packages/devtools:
     dependencies:
       '@proteus-vue/capabilities':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../capabilities
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../devtools-runtime
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../render-backend
     devDependencies:
       '@types/node':
@@ -518,14 +518,14 @@ importers:
   packages/hmr:
     dependencies:
       '@proteus-vue/runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../runtime
       ws:
         specifier: ^8.18.0
         version: 8.21.3
     devDependencies:
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       '@types/node':
         specifier: ^20.0.0
@@ -543,10 +543,10 @@ importers:
   packages/mcp:
     dependencies:
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../render-backend
 
   packages/module:
@@ -571,19 +571,19 @@ importers:
   packages/plugin-vite:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../compiler-backend
       '@proteus-vue/module':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../module
       '@proteus-vue/router':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../router
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       esbuild:
         specifier: ^0.28.2
@@ -608,10 +608,10 @@ importers:
   packages/render-backend:
     dependencies:
       '@proteus-vue/component-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../component-ir
       '@proteus-vue/contracts':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../contracts
       '@vue/runtime-core':
         specifier: ^3.4.0
@@ -629,10 +629,10 @@ importers:
   packages/router:
     dependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
     devDependencies:
       '@vue/compiler-sfc':
@@ -642,20 +642,20 @@ importers:
   packages/runtime:
     dependencies:
       '@proteus-vue/contracts':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../contracts
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       vue:
         specifier: ^3.4.0
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../devtools-runtime
       '@proteus-vue/types':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../types
       pinia:
         specifier: ^4.0.3
@@ -678,7 +678,7 @@ importers:
   packages/test-core:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../compiler
     devDependencies:
       '@vue/compiler-sfc':
@@ -702,7 +702,7 @@ importers:
   packages/types:
     dependencies:
       '@proteus-vue/contracts':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../contracts
       vite:
         specifier: ^5.0.0
@@ -718,11 +718,11 @@ importers:
   packages/web:
     dependencies:
       '@proteus-vue/built-in-components':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../built-in-components
     devDependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
       '@types/node':
         specifier: ^20.0.0
@@ -734,58 +734,58 @@ importers:
   packages/worklet:
     dependencies:
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../shared
 
   showcase:
     dependencies:
       '@proteus-vue/api':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/api
       '@proteus-vue/app-config':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/app-config
       '@proteus-vue/built-in-components':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/built-in-components
       '@proteus-vue/capabilities':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/capabilities
       '@proteus-vue/components':
         specifier: workspace:*
         version: link:../packages/components
       '@proteus-vue/desktop':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/desktop
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/devtools-runtime
       '@proteus-vue/fluid':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/fluid
       '@proteus-vue/gesture':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/gesture
       '@proteus-vue/glass':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/glass
       '@proteus-vue/i18n':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/i18n
       '@proteus-vue/router':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/router
       '@proteus-vue/runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/runtime
       '@proteus-vue/shared':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/shared
       '@proteus-vue/web':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/web
       '@proteus-vue/worklet':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/worklet
       pinia:
         specifier: ^4.0.3
@@ -795,13 +795,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -825,40 +825,40 @@ importers:
   website:
     dependencies:
       '@proteus-vue/api':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/api
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.12
         version: link:../packages/compiler
       '@proteus-vue/compiler-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/compiler-backend
       '@proteus-vue/components':
         specifier: workspace:*
         version: link:../packages/components
       '@proteus-vue/desktop':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/desktop
       '@proteus-vue/devtools-runtime':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/devtools-runtime
       '@proteus-vue/docs':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/docs
       '@proteus-vue/fluid':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/fluid
       '@proteus-vue/gesture':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/gesture
       '@proteus-vue/i18n':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/i18n
       '@proteus-vue/render-backend':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/render-backend
       '@proteus-vue/test-ir':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.11
         version: link:../packages/test-ir
       miniprogram-api-typings:
         specifier: ^3.12.2
@@ -871,10 +871,10 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/cli
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.7
+        specifier: 0.3.0-beta.13
         version: link:../packages/plugin-vite
       '@vitejs/plugin-vue':
         specifier: ^5.0.0

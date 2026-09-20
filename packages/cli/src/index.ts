@@ -22,6 +22,8 @@ import { runAuditModule } from './module-audit'
 import { runCoverageAudit } from './coverage-audit'
 import { runApiHookCheck, formatApiHookCheck } from './api-hook-check'
 import { writeModuleConfigSkeleton } from './module-init'
+// ★AI 共建工具包（2026-09-20）：proteus cobuild init/check —— 把共建机制随包分发给**任何**使用 Proteus 的工程
+import { cobuildInit, cobuildCheck, formatCobuildInit, formatCobuildCheck } from './cobuild'
 import { runCapabilityScan, runCapabilityCheck } from './capability-manifest'
 import { auditComponents, formatComponentAudit } from './component-audit'
 import { runFluidCheck, formatFluidCheck } from './fluid-check'
@@ -30,7 +32,7 @@ import { checkConfigFile } from './config-check'
 import { runCssCheck, formatCssCheck } from './css-check'
 import { runStyleCheck, formatStyleCheck } from './style-check'
 import { runCheck, formatCheck } from './check'
-import { parseDevArgs, runDev, hasLegacyViteConfig, runDevProgrammatic } from './dev'
+import { parseDevArgs, runDev, hasLegacyViteConfig, runDevProgrammatic, detectDelegationLoop, DELEGATED_ENV } from './dev'
 import { runHealthCheck, formatHealthReport } from './health'
 import { parseTestArgs, runTest } from './test'
 import { checkAppConfigFile, formatAppConfigCheck, appConfigCheckSummary } from './app-config-check'
@@ -64,8 +66,16 @@ async function main(): Promise<void> {
             const plans = planTargetedBuild(process.cwd(), args.target)
             const { spawnSync } = await import('node:child_process')
             for (const plan of plans) {
+              // ★防重入（2026-09-20）：遗留分支委派的是工程自己的 npm script，
+              //   而模板里该脚本的命令就是 `proteus build`——不拦就是无限递归。
+              const loop = detectDelegationLoop(process.cwd(), plan.script)
+              if (loop) throw new Error(loop)
               console.log(`[proteus] build --target：${plan.script}（${plan.command} ${plan.args.join(' ')}）`)
-              const rr = spawnSync(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+              const rr = spawnSync(plan.command, plan.args, {
+                stdio: 'inherit',
+                shell: process.platform === 'win32',
+                env: { ...process.env, [DELEGATED_ENV]: '1' },
+              })
               if (rr.status !== 0) {
                 console.error(`[proteus] build 失败（${plan.script} exit ${rr.status}）`)
                 process.exitCode = rr.status ?? 1
@@ -137,6 +147,23 @@ async function main(): Promise<void> {
       const out = writeModuleConfigSkeleton(root)
       console.log(`[proteus] 已生成模块契约骨架：${out}`)
       console.log('下一步：proteus module:check 校验 → proteus audit module 审计（详见 docs/proteus-module-plan/10-migration.md）')
+      break
+    }
+    // ★proteus cobuild —— AI 共建工具包（2026-09-20）：把共建机制随包分发到**任意**使用 Proteus 的工程。
+    //   init：安装 skill + 台账骨架 + 报告模板 + 校验器 + AGENTS.md 指针（幂等，可重复跑；--force 覆盖）
+    //   check：自检文件齐备（可挂 CI / 发布前）——缺失即 exit 1 并给可执行修法
+    case 'cobuild': {
+      const sub = rest[0] ?? 'check'
+      const force = rest.includes('--force')
+      if (sub === 'init') {
+        console.log(formatCobuildInit(cobuildInit({ force })))
+      } else if (sub === 'check') {
+        const r = cobuildCheck({})
+        console.log(formatCobuildCheck(r))
+        if (!r.ok) process.exitCode = 1
+      } else {
+        throw new Error(`proteus cobuild 支持 init / check（收到：${sub}）`)
+      }
       break
     }
       case 'gate': {
@@ -362,9 +389,16 @@ async function main(): Promise<void> {
           process.on('SIGTERM', () => void close().then(() => process.exit(0)))
         } else {
           const plan = runDev({ target })
+          // ★防重入（2026-09-20）：同 build —— dev 脚本同样可能是 `proteus dev`（模板默认）
+          const loop = detectDelegationLoop(process.cwd(), `dev（${plan.command} ${plan.args.join(' ')}）`)
+          if (loop) throw new Error(loop)
           console.log(`[proteus] dev --target ${target}：${plan.command} ${plan.args.join(' ')}`)
           const { spawn } = await import('node:child_process')
-          const child = spawn(plan.command, plan.args, { stdio: 'inherit', shell: process.platform === 'win32' })
+          const child = spawn(plan.command, plan.args, {
+            stdio: 'inherit',
+            shell: process.platform === 'win32',
+            env: { ...process.env, [DELEGATED_ENV]: '1' },
+          })
           child.on('error', (e) => {
             console.error(`[proteus] dev 启动失败：${e.message}`)
             process.exitCode = 1

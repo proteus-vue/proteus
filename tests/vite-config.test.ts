@@ -28,7 +28,11 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
     expect(needsGenRoutes).toBe(false)
     expect(config.configFile).toBe(false)
     expect(config.root).toBe(ROOT)
-    expect(config.plugins?.length).toBe(5) // variant + vue + platform-macros + public-assets + route-blocks
+    // variant + vue + platform-macros + public-assets + route-blocks + ★p-fluid 布局改写
+    // （★2026-09-20：p-fluid 改写此前**未注册**于 Web 分支 → Web 端属性静默不生效，见实战报告第十一节第二条）
+    expect(config.plugins?.length).toBe(6)
+    const names = (config.plugins ?? []).map((p) => (p as { name?: string }).name)
+    expect(names).toContain('proteus-p-fluid-layout')
     expect(config.build?.outDir).toBe(path.join(ROOT, 'dist', 'web'))
     expect((config.define as Record<string, unknown>).__PROTEUS_DEBUG__).toBe(false)
   })
@@ -58,8 +62,8 @@ describe('#418 框架组装 vite 配置（resolveProteusViteConfig）', () => {
       },
     )
     expect((config.server as { port?: number }).port).toBe(5999)
-    // 仍保留框架插件（variant + vue + macro + public-assets + route-blocks）+ 别名 @ 追加（用户别名不被吞）
-    expect(config.plugins?.length).toBe(5)
+    // 仍保留框架插件（variant + vue + macro + public-assets + route-blocks + p-fluid）+ 别名 @ 追加（用户别名不被吞）
+    expect(config.plugins?.length).toBe(6)
     const aliases = (config.resolve?.alias as unknown as Array<{ find: string }>) ?? []
     expect(aliases.some((a) => a.find === '@')).toBe(true)
   })

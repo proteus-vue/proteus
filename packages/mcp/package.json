@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/mcp",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.11",
   "description": "G-36 B1 MCP Server（proteus-ai-agent-plan 03-mcp-server）：AI 工具标准协议核心——11 工具（search_primitives/get_primitive/list_primitives/get_design_token/check_capability/get_capability_matrix/lookup_miniprogram/validate_ir/run_conformance/generate_code/write_file）+ 5 Resources + 3 Prompts + 鉴权与工具策略（CMP021：read_only/write/require_confirm + 速率限制）——传输无关核心（stdio/HTTP 适配器后续接入）",
   "type": "module",
   "license": "Apache-2.0",
@@ -22,7 +22,7 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js"
   },
   "dependencies": {
-    "@proteus-vue/component-ir": "0.3.0-beta.7",
-    "@proteus-vue/render-backend": "0.3.0-beta.7"
+    "@proteus-vue/component-ir": "0.3.0-beta.11",
+    "@proteus-vue/render-backend": "0.3.0-beta.11"
   }
 }

@@ -570,6 +570,11 @@ export const HELP_GROUPS: HelpGroup[] = [
         desc: '★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）\n      默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）',
         descEn: '★CI/CD template generation (G-33 M4): .github/workflows/proteus.yml, etc. (proteus check gates → per-target builds → artifact archiving)\n      default platform=github targets=web,skyline; writes into the current directory (or <dir>)',
       },
+      {
+        usage: 'proteus cobuild <init|check> [--force]',
+        desc: '★AI 共建工具包（2026-09-20）：把「向框架方报缺陷并跟踪到修复」的机制装进本工程——\n      init 生成 .agents/skills/proteus-cobuild/SKILL.md（AI 入口文档）+ docs/框架问题台账.json（对账台账）\n      + docs/实战报告_proteus接入.md（报告模板）+ scripts/ledger_check.mjs（校验器）+ AGENTS.md 指针段落（幂等）\n      check 自检文件齐备（可挂 CI）；新工程由 create-proteus 模板自带，无需手动 init',
+        descEn: '★AI co-build kit (2026-09-20): installs the "report defects to the framework and track to resolution" workflow —\n      init generates .agents/skills/proteus-cobuild/SKILL.md (AI entry doc) + docs/框架问题台账.json (reconciliation ledger)\n      + docs/实战报告_proteus接入.md (report template) + scripts/ledger_check.mjs (validator) + an AGENTS.md pointer section (idempotent)\n      check self-verifies completeness (CI-friendly); new projects ship it via the create-proteus template',
+      },
     ],
   },
   {

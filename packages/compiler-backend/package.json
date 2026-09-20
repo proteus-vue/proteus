@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/compiler-backend",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.13",
   "description": "G-29 编译器可插拔后端：CompilerIR 契约 + conformance（CMP002/CMP004 + G-31.1 语义链接）+ NodeBackend 参考实现（真实模板编译 → C-IR 语义树）——编译、逻辑、UI、能力四维可插拔（原则 #10 终极形态）",
   "type": "module",
   "license": "Apache-2.0",
@@ -27,7 +27,7 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/component-ir && esbuild src/node.ts --bundle --format=esm --platform=neutral --outfile=dist/node.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@proteus-vue/component-ir"
   },
   "dependencies": {
-    "@proteus-vue/component-ir": "0.3.0-beta.7"
+    "@proteus-vue/component-ir": "0.3.0-beta.11"
   },
   "peerDependencies": {
     "@vue/compiler-dom": "^3.4",
@@ -36,6 +36,6 @@
   "devDependencies": {
     "@vue/compiler-dom": "^3.5.42",
     "@vue/compiler-sfc": "^3.5.42",
-    "@proteus-vue/types": "0.3.0-beta.7"
+    "@proteus-vue/types": "0.3.0-beta.12"
   }
 }

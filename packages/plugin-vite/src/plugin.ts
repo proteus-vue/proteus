@@ -79,6 +79,41 @@ export const MP_ONLY_TAGS = new Set([
   'web-view',
 ])
 
+/**
+ * ★G-22 柔性布局（Web 端）：`p-fluid="font-size(20, 32)"` 属性 → `v-p-fluid="'font-size(20, 32)'"` 指令。
+ *
+ * ★为什么单独成插件（2026-09-20 修外部实战报告第十一节第二条）：此前这一改写**捆在**
+ *   `defaultScopedPlugin` 里，而框架的 Web 分支（`resolveProteusViteConfig`）只注册了 5 个插件、
+ *   **从未注册它** → Web 端 `p-fluid` 原样留在 DOM、不生成任何样式、也不报错（静默失效）。
+ *   而用户**不能**直接把 `defaultScopedPlugin` 加进去——它顺带把原生标签改写成 MP 标签
+ *   （`<button>`→`<proteus-button>`、`<textarea>`→`<proteus-textarea>`…），没有 `installWebPlatform`
+ *   注册这些全局组件的工程会**整页渲染不出来**（实测报 Failed to resolve component: proteus-*）。
+ *   → 拆开：本插件只做 p-fluid 改写（可被框架默认注册，零副作用），MP 标签改写仍留在
+ *     `defaultScopedPlugin`（需要 Web 模拟层的工程显式启用）。
+ *   配套运行时：`installFluidLayout(app)` 注册 `v-p-fluid` 指令（@proteus-vue/components）。
+ *   幂等：` v-p-fluid=` 的 `-` 前不是空白，故 `\sp-fluid=` 不会二次匹配。
+ */
+export function pFluidLayoutPlugin(): Plugin {
+  return {
+    name: 'proteus-p-fluid-layout',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.endsWith('.vue')) return null
+      const out = rewritePFluidAttribute(code)
+      return out === code ? null : { code: out, map: null }
+    },
+  }
+}
+
+/** p-fluid 属性 → v-p-fluid 指令（唯一实现，供两个插件共用；幂等） */
+function rewritePFluidAttribute(code: string): string {
+  // （MP 端由编译器模板规则处理同名属性；Web 端改写为自定义指令——一套源码语法，两端各自求解）
+  return code.replace(/\sp-fluid=("[^"]*"|'[^']*')/g, (_m: string, q: string) => {
+    const inner = q.slice(1, -1).replace(/'/g, "\\'")
+    return ` v-p-fluid="'${inner}'"`
+  })
+}
+
 export function defaultScopedPlugin(): Plugin {
   return {
     name: 'proteus-default-scoped',
@@ -112,10 +147,9 @@ export function defaultScopedPlugin(): Plugin {
       }
       // ★G-22 柔性布局（Web 端）：p-fluid="font-size(20, 32)" 属性 → v-p-fluid="'font-size(20, 32)'" 指令
       //   （MP 端由编译器模板规则处理同名属性；Web 端改写为自定义指令——一套源码语法，两端各自求解）
-      out = out.replace(/\sp-fluid=("[^"]*"|'[^']*')/g, (_m: string, q: string) => {
-        const inner = q.slice(1, -1).replace(/'/g, "\\'")
-        return ` v-p-fluid="'${inner}'"`
-      })
+      //   ★2026-09-20：同一改写也由 pFluidLayoutPlugin 单独提供（框架 Web 分支默认注册那个）；
+      //     本插件的改写保留——它面向需要 Web 模拟层的工程（它们本就要连标签改写一起用）。
+      out = rewritePFluidAttribute(out)
       return out === code ? null : { code: out, map: null }
     },
   }

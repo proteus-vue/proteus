@@ -1,5 +1,51 @@
 # @proteus-vue/types
 
+## 0.3.0-beta.12
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/compiler`
+  - `@proteus-vue/types`
+
+## 0.3.0-beta.11
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.11
+
+## 0.3.0-beta.10
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.10
+
+## 0.3.0-beta.9
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.9
+
+## 0.3.0-beta.8
+
+### Patch Changes
+
+- 自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，
+  不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。
+
+  - `@proteus-vue/built-in-components`
+  - `@proteus-vue/cli`
+  - `@proteus-vue/compiler-backend-rust`
+  - `@proteus-vue/components`
+  - `@proteus-vue/create-proteus`
+  - `@proteus-vue/plugin-vite`
+  - `@proteus-vue/test-ir`
+  - `@proteus-vue/types`
+  - @proteus-vue/contracts@0.3.0-beta.8
+
 ## 0.3.0-beta.7
 
 ### Patch Changes

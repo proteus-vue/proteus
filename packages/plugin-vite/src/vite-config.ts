@@ -16,7 +16,7 @@ import {
   splitVariant, mapPublicAssetVariants,
 } from '@proteus-vue/compiler'
 import type { VariantPlatform } from '@proteus-vue/compiler'
-import mpTransform, { MP_ONLY_TAGS } from './plugin'
+import mpTransform, { MP_ONLY_TAGS, pFluidLayoutPlugin } from './plugin'
 
 export interface ProteusViteContext {
   /** 工程根（proteus.config.ts 所在目录） */
@@ -188,7 +188,20 @@ export async function resolveProteusViteConfig(
     const vue = vueMod.default({
       template: { compilerOptions: { isCustomElement: (tag: string) => MP_ONLY_TAGS.has(tag) } },
     })
-    plugins = [platformVariantPlugin(root, 'web'), vue, platformMacroPlugin('web'), platformPublicAssetsPlugin(root, 'web'), routeBlocksPlugin()]
+    // ★G-22 柔性布局（2026-09-20 修外部实战报告第十一节第二条）：Web 分支此前**没有**注册
+    //   p-fluid 属性改写（只有 MP 分支经 mpTransform 处理）→ `<h1 p-fluid="font-size(20,32)">`
+    //   在 Web 端原样留在 DOM、不生成任何样式、也不报错（静默失效）。
+    //   这里注册**只做 p-fluid 改写**的插件（不带 MP 标签改写——那会把原生 <button>/<input>
+    //   变成 Web 端未必注册的 proteus-* 组件，没有 Web 模拟层的工程会整页渲染不出来）。
+    //   配套：业务需在入口调 installFluidLayout(app) 注册 v-p-fluid 指令（@proteus-vue/components）。
+    plugins = [
+      platformVariantPlugin(root, 'web'),
+      vue,
+      platformMacroPlugin('web'),
+      platformPublicAssetsPlugin(root, 'web'),
+      routeBlocksPlugin(),
+      pFluidLayoutPlugin(),
+    ]
   }
 
   // —— 框架内置配置（原模板 vite.config.ts 逻辑）——
