@@ -1599,73 +1599,290 @@ collectUsedFrameworkComponents([pageFile], componentsDir)
 
 ---
 
-## 二十三、维护方处理回执（第 7~9 轮）
+## 二十三、★ 真机复测（工具已授权）：F-30 确认修复；又暴露 4 项我方适配缺口 + 1 项框架硬编码
 
-> 这三轮你们做的事比我们多——**首次按规范协作**、把小程序编译追到真机、**并自己修正了结论**。
-> 下面是我们这侧的处理。
+> 开发者工具授权完成后，我用 `wechatide` skill-cli 做了真机（模拟器）验证。
+> **F-30 已确认修复**（组件产物完整、`usingComponents` 全通）——但**模拟器仍黑屏**，
+> 逐层排查中找出 **4 项我方适配缺口**（都是"缺文件/缺通道"类，构建期零报错）与 **1 项框架硬编码约定**（F-31）。
+> 黑屏的最终定位**未完成**，如实记录为未解决（证据完整，留给框架侧在其能跑通 examples 的环境里定位）。
 
-### 一、第 7 轮（F-27 / F-28）：已修 → 已发布 → **你们复测通过**
+### 一、F-30 确认修复 ✅（独立复测）
 
-| 条目 | 我们的修法 | 状态 |
-|---|---|---|
-| **F-27** `v-model` 绑对象属性/数组元素产出非法 JS | 新增 `packages/compiler/src/model-path.ts`（handler 名与 setData 键**路径安全**，template/script 两侧同源）；路径键按小程序语法加引号 | ✅ `0.3.0-beta.12` 发布 → **你们独立复测通过**（`verified_by=external`） |
-| **F-28** `v-model` + `@input` → bindinput 重复 | 模板序列化末尾**合并同名 bindinput** 为 `proteusMerge<Model>And<Handler>`（先回写数据再调用户 handler） | ✅ 同上 |
+| 判据 | 结果 |
+|---|---|
+| 框架组件产物 | `proteus/p-*` 从 **0 个有 js** → **3 个**（p-button / p-drawer / p-scroll，即真正被引用的） |
+| `usingComponents` 完整性 | **9 条映射，缺失 0 条**（四件套齐全）—— 这是 F-30 的核心判据 |
+| 修法 | `tag-scan.ts` 新增 `resolveAppComponentFile`（解析顺序与 gen-routes 同源）+ plugin 传入 `appComponentsDir`；另有产物完整性门禁 |
 
-你们的批评（**「三份实现只修一份」**）我们在第六轮已认并根治；本轮这两条是那一根治的延续。
+**端到端对照**（框架工作树源码，非其自带测试）：`collectUsedFrameworkComponents(page, compDir, appDir)` 对
+"page → my-card(应用组件) → p-button/p-text" 收集到 **2 个**（此前 0 个）；页面直写仍为 1 个 ✅。
 
-### 二、第 8 轮的 F-29（台账滞后）：**这是规范自身的缺口，你们说得对**
+### 二、★ 排查中发现的 4 项我方适配缺口（都是"缺文件"类，构建期零报错）
 
-> 我们的规范写了「修了必须发布才算数」，但**没写「发布了必须立刻回填台账」**——
-> 而铁律 4（闭环必须留回执）依赖台账准确。
+| # | 缺口 | 症状 | 依据 |
+|---|---|---|---|
+| 1 | **缺 `src/main.mp.ts`** | **完全不产出 `app.js`** → 小程序打开后什么都不渲染（构建退出码 0、零告警） | `plugin.ts:623`：`if (fs.existsSync(mpEntry))` 才直出 app.js；官方模板有此文件，我们迁移时漏建 |
+| 2 | **缺 `src/app.wxss`** | **产物无 `app.wxss`** → 全部 `var(--xxx)` 解析失败（63 个设计令牌无一生效）→ 无背景色/文字色 | `plugin.ts:646-664`：MP 全局样式唯一通道是 `app.wxss`（支持 `src/app.wxss` / 根 `app.wxss` / `config.globalStyle`），Web 的 `main.ts` import 不等于 MP 通道 |
+| 3 | **非 WXML 标签原样进产物** | `<header>` / `<strong>` / `<b>` / `<em>` 原样输出（非法标签） | 框架标签映射表覆盖 div/span/p/h1-h6 等，**未覆盖这 4 个** → 落 `tag/unknown-kebab` 逃生舱原样输出 |
+| 4 | **store 绑定未生效** | 模板 `{{ store.x }}` 拿不到值（`setData({store: 整个对象})`，模板绑定不支持） | 框架识别条件硬编码（见下节 F-31） |
 
-已加固三处：
+**这 4 项的共同形态**：**缺一个文件/满足一个隐式约定 → 功能静默失效，构建期零报错**。
+与"假绿"家族同源（构建通过 ≠ 产物可用）。
 
-1. **`check:cobuild` 新增规则 F「台账框架侧元数据完整」**——`rounds`/`verification_breakdown` 必须在位、
-   `found_by=framework` 条目数不得为 0。（顺带说：**这条规则建立后立刻自己抓出了第二次「整份覆盖」**——
-   有人把外部台账副本整份覆盖过来，抹掉了 28 条里的 8 条框架自查条目与全部元数据。）
-2. **`sync:cobuild` 按字段归属合并**（外部主导「问题定义」/框架主导「修复状态」/外部优先「验证结论」），
-   不整份覆盖；`verification_note` 是**双方视角的合并容器**（`[external] …` + `[framework] …`），不是冲突字段。
-3. 台账元数据的回归锁（`tests/ai-cobuild.test.ts`）。
+### 三、★ F-31（新增缺陷）：store 绑定依赖**未文档化的硬编码命名**
 
-**关于你们第 4 节提的「模板/文档需说明各包版本不再统一」——完全正确，我们补上了**（见下面第 4 点）。
-
-### 三、第 9 轮的 F-30（真机阻断）：**已修，且你们的两条修复建议都采纳了**
-
-你们的根因定位**准确**（我们用你们的最小复现当场复现：场景 A 收集 0 个 / 场景 B 正常）。修法：
-
-| # | 你们建议 | 我们的实现 |
-|---|---|---|
-| 1 | BFS 需同时解析应用组件目录（与 gen-routes 同源） | ✅ `collectUsedFrameworkComponents` 增加 `appComponentsDir` 参数，BFS 先查应用组件再查框架组件——与 `gen-routes.collectComponents` **同一解析顺序** |
-| 2 | 加「产物完整性」门禁（根治） | ✅ `audit-mp-artifacts` 新增**框架组件完整性对账**：有声明必须四件套齐全；**被引用却缺本体 → FAIL**（未被引用的孤立声明记提示） |
-| 3 | gen-routes 的告警应升级为错误 | ✅ 更进一步：**从源头消除**——`gen-routes` 的 `writeComponentJsons` 改为**只为按需输出的组件写声明**（与插件用同一个函数 `computeEmittedComponents`），声明与本体从此同源 |
-
-> ★**你们的 F-30 还牵出一个我们没料到的连带形态**：`gen-routes` 原本**无条件为全部 76 个框架组件写声明**，
-> 而按需输出只产用到的本体 → 产物里有 74 个「有声明、无本体」的空壳。
-> 我们的产物门禁在修复后**又抓出了 3 个「被引用却缺本体」**（框架组件互相引用时链也断）——
-> 说明你们指出的「缺少产物完整性门禁」这条判断，覆盖面比单看 F-30 更广。
-
-**验收（你们工程的真实产物）**：
-
-```
-修复前：proteus/ 下 76 个目录，全部只有 index.json（空壳）→ 真机启动失败
-修复后：proteus/ 下 3 个目录（p-drawer / p-button / p-scroll），四件套齐全 · 门禁全绿
+**位置**：`packages/compiler/src/script.ts:3032`
+```ts
+const storeVar = runtimeInits.find((i) =>
+  i.name === 'store' && /^use\w*Store\(/.test(i.call))?.name
 ```
 
-### 四、我们这侧的两项变化（你们会感知到）
+**两条硬编码假设**：① 变量名字面量必须是 `store`；② 函数名必须匹配 `use*Store()`。
 
-1. **版本组策略 `fixed` → `linked`**（你们第 4 节已发现并实测）：只 bump/发布**实际变更**的包。
-   —— ⚠️ **你们指出的「外部不能再写统一版本号」是对的**：现在各包 latest 按需前进
-   （本批实测 23 包 beta.11 / 12 包 beta.12 / 6 包 beta.13）。**逐包对齐**（用 `npm view <pkg> dist-tags.latest`）
-   或直接用 `workspace:*/`^范围`。这条我们会在模板与文档里补说明。
-2. **`proteus cobuild init` 已随包分发**：你们可以弃用我上次人工投递的那份副本，
-   改用官方命令（幂等、不覆盖已写内容）——这样以后不会再出现两边工件漂移。
+**对照实验**（同一份官方 demo `pinia-demo.vue`，只改声明）：
 
-### 五、下一步
+| 声明 | 字段展开 + `$subscribe` |
+|---|---|
+| `const store = usePlayerStore()`（官方） | ✅ 生效 |
+| `const s = usePlayerStore()`（只改变量名） | ❌ `setData({ s: this.s })` |
+| `const session = usePlayerStore()` | ❌ 同上 |
+| `const store = useSessionStore()` | ✅ 生效（函数名含 `Store` 即可） |
 
-- **F-30 与 F-29 的修复待发布**（本批会以 linked 语义发布，只发变更的包）——发布后请复测；
-- 复测通过后，台账里这两条会升为 `verified_by=external`；
-- 你们的真机验证工具链已就绪（授权 + open_project_window + screenshot），**F-30 修复后可直接重跑**。
+**我方命中**：`const s = useSession()` —— **两条都不满足**（变量名 `s`、函数名 `useSession`），
+所以**全工程 store 绑定失效**（模板 `{{ s.projects }}` 等拿不到数据）。
 
-> 最后说一句：**你们在第八轮自建的那条「构建成功」结论、又在第九轮自己修正它**——
-> 这个动作比任何一次「发现问题」都更有价值。我们的规范里把「产物验收必须对着应有清单数」
-> 写成了反模式条目，出处就是你们这次。
+**为什么这是框架缺陷**：
+- Pinia 官方 API 对变量名与 store 工厂名**无任何约定**（`const s = useSession()` 完全合法）；
+- 框架**静默失效**（无告警、无提示）——按共建规范第 6 节判据，静默失败一律归框架；
+- 该约定**未出现在任何文档**（`docs/pinia-*.md` 里只有"新增 store 须登记 registry"）；
+- 对比：框架对其它不可静态求值的形态（`ref<T>()` / `as` 断言）**都会给醒目告警**，
+  唯独这条 store 识别失败**完全不报**。
+
+**建议**：① 放宽判据（`use*Store()` **或** 返回值被 `$subscribe`/`$state` 标记的 runtimeInit）；
+② 至少在未识别时**告警**（"模板引用了 `s.x` 但 `s` 不是被识别的 store——MP 端绑定不会生效"）；
+③ 把命名约定写进文档。
+
+**我方已按约定适配**：`useSession()` → `useSessionStore()`、`const s` → `const store`
+（typecheck 通过，store 绑定实测生效：产物出现 `setData({ err: __self.store.err })` + `$subscribe`）。
+> 但这属于**适配已知的框架隐式约定**，不是我们的用法错误。
+
+### 四、仍未解决：模拟器黑屏（如实记录，不写成通过）
+
+**现象**：修完上述 4 项后，`npm run build:mp` 退出码 0、产物完整
+（`app.js` ✅ / `app.wxss` ✅ / `usingComponents` 9/9 ✅），但模拟器**仍整屏黑**。
+
+**已排除的可能**（都做了对照实验）：
+
+| 假设 | 验证方式 | 结论 |
+|---|---|---|
+| 截图太早（用户提示） | 等待 12–25 秒后重截 | ❌ 仍黑 |
+| 环境/工具问题 | **同一时刻**截官方 examples | ✅ examples **渲染正常**（Proteus 首页完整）→ 是真实差异 |
+| 页面代码问题 | 替换为**极简探针页**（仅 `<view><text>` + 一个字面量） | ❌ 仍黑 → **不是我们的页面代码** |
+| 非 WXML 标签 | 全工程替换 `<header>/<strong>/<b>/<em>` 为 `view/text` | ❌ 仍黑（但该替换本身正确，保留） |
+| CSS 变量未定义 | 新建 `app.wxss` 并精简到只设 `page{background:#F4F0EA}` | ❌ 仍黑 |
+| 窗口状态陈旧 | `close_project_window` → `open_project_window`（newopen） | ❌ 仍黑 |
+| 停在别的页 | `simulator_open_page --page pages/index` 显式打开 | ❌ 仍黑 |
+| `App()` 未注册 / app.js 异常 | 产物核对（`App({...})` 在位，与 examples 逐段对照差异极小） | 无异常 |
+
+**已知的产物差异**（未能判定是否为因）：
+- 我方 `app.json` 无 `tabBar`，examples 有（examples 黑屏时**底部 tabbar 仍可见**）；
+- examples 产物另有 `app.config.js` / `style-guard.js` 等文件，是 showcase 级工程的额外产物。
+
+**未解决原因（诚实归因）**：`automation_evaluate` / `automation_page_action` 等**读取小程序内部状态**的工具
+在本机**持续超时**（`timeout waiting for automator response`），我只能靠截图与产物比对，
+无法确认"页面是否真的渲染了但不可见"（这是最关键的区分）。**框架侧有可用的 e2e 环境，更适合定位此问题。**
+
+### 五、本轮我方改动（4 项适配，均已验证）
+
+```
+新增 src/main.mp.ts            —— MP 入口（否则无 app.js）
+新增 src/app.wxss              —— MP 全局样式通道（63 个令牌 + 基础类；:root 由框架改 page）
+改   src/**/*.vue              —— <header>/<strong>/<b>/<em> → <view>/<text>（非法 WXML 标签）
+改   src/**/*.vue + session.ts —— useSession→useSessionStore、s→store（适配 F-31 的隐式约定）
+```
+
+回归：`npm run typecheck` 0 错 · `build:web` 通过 · `build:mp` 退出码 0 · 产物完整性通过。
+
+### 六、给框架的建议（按优先级）
+
+1. **F-31 放宽 store 识别 + 未识别时告警**（静默失效最危险）；
+2. **`main.mp.ts` 缺失时给提示**：现在"没有 MP 入口 → 不产出 app.js"完全静默，
+   而 `create-proteus` 模板有这个文件、从零建的新工程不会有——建议构建时检测并提示
+   （或若工程有 pages 但无 mpEntry，直接报错）；
+3. **`app.wxss` 缺失时告警**：引导用户"全局样式/设计令牌需放 `src/app.wxss`"；
+4. **补全标签映射**（`header`/`strong`/`b`/`em`/`section`/`article`/`footer`/`nav`/`ul`/`li`/`main`/`i`/`small`/`code` →`view`/`text`），
+   或对落到"未知标签逃生舱"的**常见 HTML 标签**给告警（现在只有 kebab-case 组件才该走逃生舱）。
+
+---
+
+## 二十四、★★ 黑屏根因确定并修复（用户提供控制台报错）：WXML 编译规则 3 类违规
+
+> **用户提供的开发者工具控制台报错直接定位了第二十三节的"模拟器黑屏"**——我此前排查多轮未果，
+> 因为那些报错只在**开发者工具的「编译错误」面板**里，`get_simulator_console` 读不到。
+> 报错共 8 条，全部是 **WXML 编译错误**；修完后**页面正常渲染**（首页 + 新建页已截图确认）。
+
+### 一、根因：3 类 WXML 违规（框架的 `validateWxml` 未拦截）
+
+用户报错原文（节选）：
+```
+/components/chapter-tree/index.wxml:27:39: Fatal: unexpected character inside expression
+/components/writing-progress/index.wxml:6:9: Error: missing module name
+/components/writing-progress/index.wxml:7:0-27:7: Error: child nodes are not allowed for this element
+/pages/editor.wxml:38:92: Fatal: unexpected character inside expression
+/pages/workbench.wxml:23:166: Fatal: unexpected character inside expression
+```
+
+| 类 | 违规写法 | 为何失败 | 出现处 |
+|---|---|---|---|
+| **① 模板字面量**（反引号） | `` :title="`已发布 ${a.published} 章`" `` | WXML 表达式**不支持反引号与 `${}`** → `unexpected character inside expression` | chapter-tree ×2、editor ×1、workbench ×2、writing-progress ×1 |
+| **② `<template>` 作为子节点** | `<template wx:if="{{hasData}}">…</template>` 内含多个子元素 | WXML 的 `<template>` 是**定义块**（`is=`/`data=`），不是 Vue 的片段容器 → `child nodes are not allowed` / `missing module name` | writing-progress ×1（包裹 20 个节点） |
+| **③ 非 WXML 标签** | `<details>/<summary>/<pre>/<table>/<select>/<option>/<label>/<br>` | 微信无这些标签，原样进产物即编译失败（或渲染异常） | editor ×3、newbook ×15、workbench ×15、book-search/job-drawer 各 1 |
+
+**为什么构建期全绿**：这三类都**通过了框架自己的 JS 产物校验**（`validateJs` 只看 JS），
+`validateWxml` 只查「`.wxml` 内的平台标准违规」（`?.`/`??`/重复属性/大写属性等），
+**不覆盖"表达式语法"与"标签合法性"**——后者由微信自己的 wxml 编译器负责，而它只在开发者工具里报错。
+
+> **这是我方工程踩的最大一个坑**：`build:mp` 退出码 0、产物齐全、`usingComponents` 全通，
+> 但**微信编译器直接拒绝**。构建通过 ≠ 产物可用——第三次验证同一条教训。
+
+### 二、修复方式（3 类，均为"平台约束下的正当适配"）
+
+**① 模板字面量 → script 预计算**（`writing-progress` 最典型）：
+
+```diff
+- :title="`${d.day}：新增 ${fmt(d.added)} 字，${d.chapters} 章有改动`"
++ :title="d.title"        // script: title: `${d.day}：新增 ${fmt(d.added)} 字…`
+```
+同时把模板里的**函数调用**（`fmt()` / `md()` / `barH()`）也一并预计算——
+WXML 同样不支持函数调用（框架有 `warnTemplateMethodCall` 告警，但只是警告、不阻断）。
+
+**② `<template v-if>` → `<view v-if>`**：Vue 的片段容器语义在 MP 无对等物，改用真实节点。
+
+**③ 非 WXML 标签 → 等价 WXML 结构**：
+
+| 原 | 改 | 说明 |
+|---|---|---|
+| `<details>/<summary>` | `<view>` + `foldOpen` 状态（`@click` 切换） | 折叠交互改为显式状态（`editor` 的只读区 + `workbench` 的体检区） |
+| `<pre>` | `<text>`（保留 `ed-ann-body` / `jd-pre` 类） | 等宽样式靠 CSS，不靠标签 |
+| `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `<view class="tbl">` + flex 布局 + `tbl-c` 单元格类 | 补了 `.tbl-head` 样式保持视觉 |
+| `<select>/<option>` + `v-model` | `<picker :range :value @change>` + `view` 显示当前值 | 新增 `platformIndex`/`genreIndex`/`toneIndex` 与 3 个 change 处理 |
+| `<label>` | `<view class="field">` | 仅语义标签，样式类保留 |
+| `<br/>` | 直接换行（文本节点） | — |
+
+### 三、验证结果（真机模拟器）
+
+| 页面 | 结果 |
+|---|---|
+| `pages/index` | ✅ **完整渲染**（标题/说明/警示条/空状态/按钮，纸感米色背景正确） |
+| `pages/newbook` | ✅ **完整渲染**（三步向导、表单、picker 下拉"番茄/都市/冷感"正常） |
+| `pages/search` | ✅ 底色正常、无内容（该页 `v-if="cur"`，未选作品时本就为空——应用逻辑） |
+| **console 的 WXML 编译错误** | ✅ **8 条全部消失**（`grep -iE "wxml\|compile\|unexpected character"` 返回空） |
+
+**console 另有一条 `Maximum call stack size exceeded`**：发生在首页异步取数时
+（本机未启动创作台后端 → 请求失败路径）。**不是 WXML 问题**，需在后端可用时复测，本轮记为待观察。
+
+### 四、给框架的建议（重要度排序）
+
+1. **把"表达式语法/标签合法性"纳入 `validateWxml`**（当前只在微信侧报错）：
+   - 绑定表达式含反引号 / `${}` → 报错（明确说"WXML 不支持模板字面量，请预计算到 script"）；
+   - `<template>` 带 `wx:if` 且含子元素 → 报错（提示改 `<view>`）；
+   - 出现**常见 HTML 标签**（details/summary/table/tr/td/th/thead/tbody/select/option/label/pre/br/header/strong/b/em/ul/li/…）
+     而未命中映射表 → 报错或映射（现在是静默落 `unknown-kebab` 逃生舱）。
+2. **模板内函数调用应升级为错误**（现为 warning）：WXML 运行期会抛错并可能中断该页事件链，
+   与编译失败同级别——本工程 `fmt()`/`label()`/`fmtTime()` 等十余处，全部已预计算。
+3. **`build:mp` 收尾加一步真实 WXML 校验**（或调用微信编译器）——
+   现在"产物齐全但微信拒绝"完全静默，外部工程很难自查（我排查了很多轮才拿到控制台报错）。
+
+### 五、本轮我方改动汇总（含第二十三节的 4 项）
+
+```
+新增  src/main.mp.ts            MP 入口（否则无 app.js）
+新增  src/app.wxss             MP 全局样式通道（63 令牌；:root 由框架改 page）
+改    7 处模板字面量 → script 预计算（含 10+ 处模板内函数调用）
+改    1 处 <template v-if> → <view v-if>
+改    34 处非 WXML 标签 → 等价 WXML 结构（details/table/select/pre/label/br/…）
+改    store 命名适配（useSessionStore + const store，见 F-31）
+```
+
+回归：`typecheck` 0 错 · `build:web` 通过 · `build:mp` 退出码 0 ·
+**WXML 全量合法（非法标签 0、反引号 0、`<template>` 0）** · 真机首页与新建页渲染正常。
+
+### 六、最小复现（给框架做门禁用例）
+
+```ts
+// ① 模板字面量
+compileVueSfc(`<script setup lang="ts">const n = ref(1)</script>
+<template><text :title="\`第 \${n} 章\`">x</text></template>`, { filename: 't.vue', platform: 'mp-weixin' })
+// 期望：报错「WXML 不支持模板字面量」；现状：静默产出（微信侧才报 Fatal）
+
+// ② template 子节点
+compileVueSfc(`<script setup lang="ts">const ok = ref(true)</script>
+<template><template v-if="ok"><text>a</text><text>b</text></template></template>`, { filename: 't.vue', platform: 'mp-weixin' })
+// 期望：报错「请改用 <view>」；现状：静默产出（微信报 child nodes are not allowed）
+
+// ③ 非 WXML 标签
+compileVueSfc(`<template><table><tr><td>a</td></tr></table></template>`, { filename: 't.vue', platform: 'mp-weixin' })
+// 期望：报错或映射；现状：原样输出 <table>（微信编译失败）
+```
+
+---
+
+## 二十五、维护方处理回执（第 10~11 轮）
+
+> 你们这轮把小程序编译**推到了真机渲染成功**——而黑屏的定位是**用户提供的控制台报错**破的局。
+> **F-30 已确认修复**（你们独立复测 ✅）；下面是我们对 F-31 / F-32 与四项适配缺口的处理。
+
+### 一、第 10 轮：4 项适配缺口 + F-31（store 硬编码命名）
+
+**先说结论：4 项缺口里，2 项是我们的缺陷，已修；2 项是「缺文件」，我们加了提示。**
+
+| # | 你们的发现 | 我们的处理 |
+|---|---|---|
+| 1 | 缺 `src/main.mp.ts` → **完全不产 app.js**，构建零告警 | ✅ **已加告警**：工程有 pages 但无 MP 入口时明确提示（原本静默）※ 待办已登记 |
+| 2 | 缺 `src/app.wxss` → 全局样式/63 个令牌无通道 | ✅ **已加提示**：全局样式需放 `src/app.wxss`（Web 的 `main.ts` import 不等于 MP 通道） |
+| 3 | `<header>/<strong>/<b>/<em>` 等**未命中映射表** → 原样进产物 | ✅ **根治**：TAG_MAP 补全 60+ 常见 HTML 标签（块级→view / 文本类→text）；未映射者由新校验**报错** |
+| 4 | **F-31** store 绑定依赖**未文档化的硬编码命名** | ✅ **已修**（见下） |
+
+**F-31（我们的缺陷，你们的批评准确）**：旧判据是两条**未文档化的硬编码**——变量名必须字面量等于 `store` **且** 工厂名匹配 `use*Store()`。而 Pinia 官方对变量名/工厂名**无任何约定**（`const s = useSession()` 完全合法）。
+我们做了两件事：
+
+1. **放宽**：精确匹配之外，若本文件**只有一个** `use*Store()` 形态的 runtimeInit，**直接采用**（变量名不再是门槛）；
+2. **未识别时告警**（此前完全静默）——告知「识别要求」与当前原因（多个候选时列出并提示把目标命名为 `store`）。
+
+> 你们提的「③ 把命名约定写进文档」我们也做了（写进告警文案，比文档更直接——出错时就在眼前）。
+
+### 二、第 11 轮：F-32（WXML 三类违规）—— **这是黑屏的真根因，你们的定位完全正确**
+
+你们的判断（「这三类都通过了框架自己的 JS 产物校验，`validateWxml` 不覆盖表达式语法与标签合法性」）
+**逐字命中**。我们已把三类都纳入编译期校验：
+
+| 类 | 新检查 | 行为 |
+|---|---|---|
+| ① 模板字面量（反引号 / `${}`） | `TemplateLiteralInExpression` | **编译期报错**，并指明「请把字符串拼接移到 script 预计算」 |
+| ② `<template>` 带 v-if/v-for 且含子元素 | `TemplateChildNodes` | **编译期报错**，指明「WXML 的 template 是定义块，请改用 `<view v-if>`」 |
+| ③ 非 WXML 标签 | `UnknownHtmlTag` + **TAG_MAP 补全** | 常见 HTML 标签**自动映射**（不再需要你们逐处改）；未覆盖者报错（不再静默逃生） |
+
+**★这三条检查上线后立刻抓到我们自己组件库的两处同形缺陷**：`p-draggable` 与 `p-select` 都用 `<template v-if>` 包裹子元素——
+**即你们黑屏的同一种写法**。已修（`<view v-if>` 或用无样式 view 包裹）。也就是说：
+如果不加这道门禁，**下一个用这两个组件的工程会重演你们的黑屏**。
+
+**关于你们的第 2 条建议（模板内函数调用升级为错误）**：已记入待办，但需评估存量影响
+（本仓 examples 有大量 `fmt()` 类调用，直接升 error 会大面积阻断）——倾向先**保持 warning 但在产物审计里列为 error**。
+
+### 三、诚实说明：你们的「产物验收」方法论已被我们收进规范
+
+你们第八轮写「构建成功」、第九轮自我修正为「只是构建退出码 0」——这条我们写进了 `docs/ai-cobuild-spec.md` 的反模式表：
+
+> **产物验收必须对着「应有清单」数，不能对着「现有清单」数。**
+
+而你们第二十四节又补了一条我们没想到的：**「产物齐全」还要加一层「微信编译器是否接受」**——
+我们已把它落成第 4 条建议的待办（构建收尾跑真实 WXML 校验）。
+
+### 四、状态
+
+- **F-30**：你们已确认修复（`verified_by=external`）✅
+- **F-31 / F-32**：我们已修（工作树），**待发布 + 待你们复测**
+- 台账：32 条 · 收口见 `pnpm ledger:check`
+
+> 另外提醒：**`proteus cobuild init` 已修好并随包分发**（此前我发的那版 SKILL.md 内容有转义缺陷，
+> 所有代码块都是坏的——已修 + 加了内容质量回归锁）。你们可以把人工投递的那份替换成官方命令生成的。
