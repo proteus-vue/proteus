@@ -2,7 +2,7 @@
   "version": 1,
   "project": "operator-web",
   "report": "docs/实战报告_proteus接入.md",
-  "last_verified_published": "0.3.0-beta.11",
+  "last_verified_published": "0.3.0-beta.12",
   "last_verified_at": "2026-09-20",
   "schema": {
     "说明": "外部实战报告 → 修复 → 验证 的逐条对账台账。目标是让「报 N 修 M」可机器核对，而不是靠散文。",
@@ -500,12 +500,13 @@
       "reported_in": "0.3.0-beta.11",
       "found_by": "external",
       "status": "fixed",
-      "verification": "unverified",
+      "verification": "passed",
       "evidence": "CompilerError: js 产物语法错误：Unexpected token '.'（newbook.vue 8 处，整个新建作品表单）；v-model=\"arr[0]\" → Unexpected token '['",
       "repro": "compileVueSfc(`<script setup lang=\"ts\">const f = ref({ title: '' })</script><template><input v-model=\"f.title\" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })",
-      "verification_note": "[framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）",
+      "verification_note": "[framework] 框架侧已定位并修复（工作树）：新增 packages/compiler/src/model-path.ts（handler 名与 setData 键路径安全，template/script 两侧同源）；`f.title` → `proteusOnFTitleInput` + `{ 'f.title': … }`，数组/深层路径同理。回归锁 5 例（含真实工程 newbook.vue 复测）。★待发布 + 待外部复测\n[external] 边界已刻画：对象属性 / 深层路径 / select / textarea / .lazy / 数组元素全部失败；简单变量 v-model 正常。beta.9 同样复现（长期存在，此前被 Bug A/B/C 遮挡）\n[external] [external · 第八轮复测] registry 包 beta.12 实测三种形态全部通过：f.title / o.a.b / arr[0]；产物 handler=proteusOnFTitleInput、setData 键路径=\"f.title\"。另：框架本工程全量构建通过（newbook 8 处全部产出正确 handler）",
       "fix_state": "worktree",
-      "fixed_in": null
+      "fixed_in": null,
+      "verified_by": "external"
     },
     {
       "id": "F-28",
@@ -516,10 +517,43 @@
       "reported_in": "0.3.0-beta.11",
       "found_by": "external",
       "status": "fixed",
-      "verification": "unverified",
+      "verification": "passed",
       "evidence": "wxml 产物平台标准违规：[DuplicatedAttribute] <input> 属性 bindinput 重复（微信仅保留其一——编译器应合并）",
       "repro": "compileVueSfc(`<script setup lang=\"ts\">const q = ref(''); function onInput() {}</script><template><input v-model=\"q\" @input=\"onInput\" /></template>`, { filename: 't.vue', platform: 'mp-weixin' })",
-      "verification_note": "[framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建",
+      "verification_note": "[framework] 框架侧已修（工作树）：模板序列化时检测同元素多个 bindinput → 合并为 `proteusMerge<Model>And<Handler>(e) { this.<vmodel>(e); this.<user>(e) }`（先回写数据再调用户 handler）。回归锁 3 例（含与 Bug D 的组合场景）。★待发布 + 待外部复测\n[external] 边界：仅 v-model+@input 组合重复；@keydown / @blur / 单独使用均正常。框架报错文案已写「编译器应合并」，属已知待实现能力，但当前阻断构建\n[external] [external · 第八轮复测] registry 包 beta.12 实测：产物 bindinput 合并为 1 个（bindinput=\"proteusMergeQAndOnInput\"），合并函数已生成",
+      "fix_state": "worktree",
+      "fixed_in": null,
+      "verified_by": "external"
+    },
+    {
+      "id": "F-29",
+      "title": "台账滞后于实际发布：fix_state 仍标 worktree 而包已上 registry",
+      "kind": "process",
+      "severity": "major",
+      "round": 8,
+      "reported_in": "0.3.0-beta.12",
+      "found_by": "external",
+      "status": "fixed",
+      "verification": "unverified",
+      "evidence": "npx 上 compiler@0.3.0-beta.12 已含 F-27/F-28 修复（实测通过），但台账这两条仍写 fix_state=worktree / fixed_in=null / verification=unverified。框架同批提交完成修复+发布（3b508aa5、dd65004f），台账回填是独立动作 → 出现窗口期",
+      "repro": "对比 `npm view @proteus-vue/compiler dist-tags` 与 docs/外部报告台账.json 中该轮条目的 fix_state/fixed_in",
+      "verification_note": "框架侧已加固（工作树）：(a) check:cobuild 新增**规则 F「台账框架侧元数据完整」**——rounds/verification_breakdown 必须在位、found_by=framework 条目不得为 0（本轮它自己抓出了第二次整份覆盖）；(b) sync:cobuild 按字段归属合并（不覆盖）；(c) 台账元数据回归锁 tests/ai-cobuild.test.ts",
+      "fix_state": "worktree",
+      "fixed_in": null
+    },
+    {
+      "id": "F-30",
+      "title": "框架组件按需输出失效：引用链经应用组件时，76 个 p-* 组件只产出 index.json（真机启动失败）",
+      "kind": "compiler",
+      "severity": "blocker",
+      "round": 9,
+      "reported_in": "0.3.0-beta.12",
+      "found_by": "external",
+      "status": "fixed",
+      "verification": "unverified",
+      "evidence": "真机（微信模拟器）启动失败：components/job-drawer/index.json: [\"usingComponents\"][\"p-drawer\"]: \"/proteus/p-drawer/index\" 路径下未找到组件。产物实况：76 个 proteus/p-* 目录只有 index.json，js/wxml/wxss 全部缺失（0/304 应有文件）。构建退出码 0、无告警。",
+      "repro": "collectUsedFrameworkComponents([pageFile], componentsDir)：构造 page 用 <my-card>、src/components/my-card/index.vue 用 <p-button> → 收集到 0 个（应为 ≥1）。对照：page 直接写 <p-button> → 收集到 1 个 ✅",
+      "verification_note": "框架侧已修（工作树）：(a) tag-scan BFS 增加**应用组件目录**解析（解析顺序与 gen-routes 同源）→ 「页面→应用组件→框架组件」链不再断；(b) gen-routes 的 writeComponentJsons 改为**只为按需输出的组件写声明**（与 plugin 用同一函数 computeEmittedComponents）→ 消除「有声明、无本体」空壳；(c) audit-mp-artifacts 增加框架组件完整性对账（被引用却缺本体 → FAIL）。验收：外部工程重建后 proteus/ 从 76 个空壳降到 3 个齐全组件，门禁全绿。★待发布 + 待外部复测",
       "fix_state": "worktree",
       "fixed_in": null
     }
@@ -573,6 +607,20 @@
       "date": "2026-09-20",
       "report_section": "十七",
       "summary": "首次按共建规范协作；独立复测 13 条 framework 档（编译器类 7/7 通过 → 升级 external）；新发现 Bug D（v-model 绑对象属性，blocker）/ Bug E（v-model + @input 同元素，major）"
+    },
+    {
+      "round": 8,
+      "version": "0.3.0-beta.12",
+      "date": "2026-09-20",
+      "report_section": "二十一",
+      "summary": "小程序构建首次通过；F-27/F-28 独立复测通过并升为 external；发现台账滞后（F-29）与版本组 linked 的消费侧影响"
+    },
+    {
+      "round": 9,
+      "version": "0.3.0-beta.12",
+      "date": "2026-09-20",
+      "report_section": "二十二",
+      "summary": "真机（模拟器）验证抓到 F-30（阻断级）：框架组件按需输出失效（引用经应用组件时 76 个组件全空壳）→ 真机启动失败；并自我修正第八轮「构建成功」结论"
     }
   ],
   "verification_breakdown": {
