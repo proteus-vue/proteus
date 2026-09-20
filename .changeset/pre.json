@@ -48,7 +48,7 @@
     "@proteus-vue/components": "0.1.0"
   },
   "changesets": [
-    "auto-release-bump-1789900280032-lsfr9",
+    "auto-release-bump-1789904999895-9z53k",
     "batch3-host-capabilities",
     "compiler-silent-traps",
     "fix-template-deps-and-smoke",
