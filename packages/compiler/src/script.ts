@@ -12,6 +12,8 @@ import { transpileMpSafe } from './es5'
 // ★★2026-09-08 立项（proteus-compiler-vue-align-plan）：Vue 全能力基准线——vue 命名导入逐个查对齐状态，
 //   aligned 静默 / partial·unsupported+degrade 警告 / unsupported 无降级 抛 CompilerError（反黑盒 fail-closed）
 import { CompilerError } from './validate'
+// ★2026-09-20（外部报告 F-27/Bug D）：v-model 路径安全的 handler 名与 setData 键（与 template 侧同源）
+import { inputModelHandler, setDataEntry } from './model-path'
 import { vueCompatStatus, vueCompatLevel, VUE_PUBLIC_CONSTS } from './vue-compat'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +63,62 @@ export function isReactiveRuntimeInit(init: string): string | null {
 
 /** 运行时守卫（读 ReactiveFlags 标记位，需 reactive 族真 Proxy 才有语义）——走 runtime-init 但在「函数调用初始化」警告里改准确地说明 */
 export const REACTIVITY_RUNTIME_GUARDS = new Set(['isReactive', 'isReadonly', 'isProxy', 'isShallow', 'toRaw'])
+
+/**
+ * ★2026-09-20（外部实战报告第十三节 Bug A）：剥离**参数位**的 TS 类型注解，只留参数名。
+ *
+ * 产物是 JS——签名里带注解即语法错误（`proteusSetC(v: string) {` → `Unexpected token ':'`）。
+ * 这里处理的是正则捕获出来的**片段文本**（非完整可解析源码），故按参数位的有限语法形态剥离：
+ *   `v: string` → `v`　`v?: T` → `v`　`v = 1` → `v = 1`（默认值属 JS 语法，保留）
+ *   `v: T = 1` → `v = 1`　`v: { a: number }` → `v`（对象/联合/泛型里的 `:` 由深度跟踪跳过）
+ * 带 `?`（可选参数）时同时去掉 `?`——JS 无该语法。
+ * 逗号分隔的多参数逐个处理（`(a: string, b: number)`）。
+ */
+export function stripParamTypeAnnotation(paramText: string): string {
+  // 顶层逗号切分（跳过 {} [] () <> 内的逗号——`a: { x: number, y: number }` 不得被切开；
+  // 泛型实参的逗号同理，如 `a: Record<string, number>`）
+  const parts: string[] = []
+  let depth = 0
+  let cur = ''
+  for (let i = 0; i < paramText.length; i++) {
+    const c = paramText[i]
+    if (c === '{' || c === '[' || c === '(' || c === '<') depth++
+    else if (c === '}' || c === ']' || c === ')' || c === '>') depth--
+    if (c === ',' && depth === 0) {
+      parts.push(cur)
+      cur = ''
+      continue
+    }
+    cur += c
+  }
+  if (cur.trim()) parts.push(cur)
+
+  const cleaned = parts
+    .map((p) => {
+      const s = p.trim()
+      if (!s) return ''
+      // 取「参数名 + 可选 `?`」前缀（标识符；解构参数 `{...}` / `[...]` 无类型注解可剥，原样）
+      const m = /^([A-Za-z_$][\w$]*)(\?)?\s*:/.exec(s)
+      if (!m) return s
+      const name = m[1]
+      // `: Type` 之后是否还有 `= 默认值`？有则保留（JS 合法），无则只留参数名
+      let rest = s.slice(m[0].length)
+      let depth2 = 0
+      let eq = -1
+      for (let i = 0; i < rest.length; i++) {
+        const c = rest[i]
+        if (c === '{' || c === '[' || c === '(' || c === '<') depth2++
+        else if (c === '}' || c === ']' || c === ')' || c === '>') depth2--
+        else if (c === '=' && depth2 === 0 && rest[i + 1] !== '=' && rest[i - 1] !== '=' && rest[i - 1] !== '!' && rest[i - 1] !== '<' && rest[i - 1] !== '>') {
+          eq = i
+          break
+        }
+      }
+      return eq >= 0 ? `${name} = ${rest.slice(eq + 1).trim()}` : name
+    })
+    .filter(Boolean)
+  return cleaned.join(', ')
+}
 
 /** 解析 script 顶层语句（TS 插件；失败 → null 触发回退） */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -959,8 +1017,23 @@ function extractComputedFromInit(
     const getM = body.match(/\bget\s*:\s*\(\)\s*=>\s*([\s\S]*?)(?=,\s*\bset\s*:|$)/)
     rawExpr = getM?.[1]?.trim()
     if (!rawExpr || rawExpr.startsWith('{')) return null
-    const setM = body.match(/\bset\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\}/)
-    if (setM) setter = { param: setM[1].trim(), body: setM[2] }
+    // ★2026-09-20 一并修同族第三处（外部实战报告第十三节「对照用例」暴露）：`set: function (v) { … }`
+    //   —— 此前只匹配箭头形态（`… ) => {`），function 形态**完全不匹配** → 不生成 `proteusSetX` 方法
+    //   → 对 `d.value = x` 的写入**静默丢弃**（无任何告警）。报告把它列为「✅ 通过（走另一条解析路径）」
+    //   实为「不报语法错」，而写路径已失效——属本项目反复记录的最危险形态（绿灯假象）。
+    //   现支持三种标准写法：箭头 / `function (v)` / 对象方法简写 `set(v)`。
+    const setM =
+      body.match(/\bset\s*:\s*\(([^)]*)\)\s*=>\s*\{([\s\S]*?)\}/) ??
+      body.match(/\bset\s*:\s*function\s*(?:[A-Za-z_$][\w$]*)?\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/) ??
+      body.match(/\bset\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/)
+    // ★2026-09-20 修外部实战报告第十三节 Bug A（阻断级）：setter 参数此前**原样取正则捕获文本**，
+    //   于是 TS 类型注解跟着进产物 —— `set: (v: string) => {}` → 产物 `proteusSetC(v: string) {`
+    //   → **JS 语法错误、该页编译直接失败**（`Unexpected token ':'`；外部工程 2 个文件命中）。
+    //   `computed({ get, set })` 是最标准的 Vue 写法，故影响面很大。
+    //   修法：剥离类型注解——`param: Type` / `param?: Type` / `param: Type = 默认值` 只保留 `param`。
+    //   （不用 AST 是因为此处上下文只有正则捕获的**片段文本**，不是完整可解析的源码——
+    //     而类型注解的语法在参数位上形态有限，剥离规则可穷举；已用回归锁锁住四种形态。）
+    if (setM) setter = { param: stripParamTypeAnnotation(setM[1].trim()), body: setM[2] }
   }
   // ★2026-09-13 修复：`props.value`（open-type 风格的属性名恰为 value）不应被 ref 的 `.value` 剥离规则误伤
   //   → 排除 `propsVar.value`（propsVar = defineProps 变量名，多为 props）。此前 `props.modelValue === props.value`
@@ -1453,9 +1526,12 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
     if (propsVar) out = out.replace(new RegExp(`\\b${propsVar}\\.([A-Za-z_$][\\w$]*)`, 'g'), 'this.data.$1')
     if (methodNames) out = rewriteBareMethodCalls(out, methodNames)
     if (runtimeInitNames) {
-      for (const name of runtimeInitNames) {
-        out = out.replace(new RegExp(`(?<!\\.)\\b${name}\\b`, 'g'), `this.${name}`)
-      }
+      // ★★2026-09-20 外部实战报告第十四节（Bug B 残留 · 两条路径之一）：此前这里是朴素正则
+      //   `out.replace(new RegExp('(?<!\\.)\\b' + name + '\\b','g'), 'this.'+name)` —— 它只排除属性访问，
+      //   **不排除字符串/正则/注释** → 误改 `'count s here'` 里的字符串内容、`/\s/g` 里的 `\s`。
+      //   现改为复用统一扫描器（`rewriteInstanceRefsSafe`，唯一实现）——报告的核心教训：
+      //   **同一件事有多份实现，修一份就等于没修**。
+      out = rewriteInstanceRefsSafe(out, runtimeInitNames)
     }
     return out
   }
@@ -1468,6 +1544,174 @@ function computedInitLine(computeds: Record<string, ComputedInfo>, runtimeInitNa
     return `${assigns.join('\n')}\nthis.setData({ ${rewritten.map(([n]) => `${n}: this.data.${n}`).join(', ')} })`
   }
   return `this.setData({ ${rewritten.map(([n, expr]) => `${n}: ${expr}`).join(', ')} })`
+}
+
+/**
+ * ★★2026-09-20 外部实战报告第十四节后的**结构性收敛**：把「按 token 改写标识符」变成唯一的可复用原语。
+ *
+ * 背景（报告原话）：*「同一件事有三份实现，修一份就等于没修」*——Bug B 的正则误改问题在 `script.ts` 里有
+ * **四处**独立实现，我们只修了一处（`rewriteInstanceRefsSafe`），结果另三处继续误改正则与字符串。
+ * 逐处打补丁的路子已被证明不可靠，故抽出本函数：
+ * 它**只负责字面量边界**（字符串/模板串/正则/注释），把等价于「代码位」的片段交给 `mapCode` 处理。
+ * 于是任一改写点 = `mapCodeOutsideLiterals(src, seg => 我的改写(seg))`，**字面量保护自动生效**，
+ * 不可能再出现「某处忘了跳正则」。
+ *
+ * 与 `rewriteInstanceRefsSafe` 的分工：后者是「标识符改写器」（含属性访问/对象 key/声明位/括号栈等语义规则），
+ * 本函数是「字面量分割器」。二者正交——需要标识符语义时用前者，需要别的改写规则时用本函数包一层。
+ *
+ * @param src 待处理文本（表达式或方法体）
+ * @param mapCode 仅对**代码片段**调用的改写函数（可能被调用多次——按字面量切分）
+ */
+export function mapCodeOutsideLiterals(src: string, mapCode: (code: string) => string): string {
+  return mapCodeOutsideLiteralsWithOffset(src, (code) => mapCode(code))
+}
+
+/**
+ * 同上，但把**片段在原文中的起始偏移**一并交给回调——供「改写需要原位置信息」的场景使用
+ * （如 `rewriteBareMethodCalls` 要按 `plainFunctionBodyRanges` 的绝对偏移决定 `self.` 还是 `this.`）。
+ */
+export function mapCodeOutsideLiteralsWithOffset(src: string, mapCode: (code: string, offset: number) => string): string {
+  let out = ''
+  let i = 0
+  const len = src.length
+  let chunkStart = 0
+  /** 刷新累积的代码片段（经 mapCode 改写后写出） */
+  const flush = (end: number): void => {
+    if (end > chunkStart) out += mapCode(src.slice(chunkStart, end), chunkStart)
+    chunkStart = end
+  }
+  let prevSig = '' // 上一个有效（非空白）字符——用于 `/` 的除号/正则消歧
+  let prevIdent: string | null = null
+  const KEYWORD_BEFORE_REGEX = /^(?:return|typeof|instanceof|in|of|new|delete|void|case|do|else|yield|await)$/
+  while (i < len) {
+    const ch = src[i]
+    // 字符串
+    if (ch === '\'' || ch === '"') {
+      flush(i)
+      let j = i + 1
+      while (j < len) {
+        if (src[j] === '\\') { j += 2; continue }
+        if (src[j] === ch) { j++; break }
+        j++
+      }
+      out += src.slice(i, j)
+      chunkStart = j
+      i = j
+      prevSig = ch
+      prevIdent = null
+      continue
+    }
+    // 模板串：整体拷贝**但 `${}` 内插值递归处理**（插值里的裸名同样需要改写）
+    if (ch === '`') {
+      flush(i)
+      out += '`'
+      i++
+      while (i < len) {
+        if (src[i] === '\\') { out += src.slice(i, i + 2); i += 2; continue }
+        if (src[i] === '`') { out += '`'; i++; break }
+        if (src[i] === '$' && src[i + 1] === '{') {
+          out += '${'
+          i += 2
+          let depth = 1
+          let k = i
+          while (k < len && depth > 0) {
+            const c2 = src[k]
+            if (c2 === '\\') { k += 2; continue }
+            if (c2 === '\'' || c2 === '"') {
+              const q = c2
+              k++
+              while (k < len) {
+                if (src[k] === '\\') { k += 2; continue }
+                if (src[k] === q) { k++; break }
+                k++
+              }
+              continue
+            }
+            if (c2 === '`') { k++; while (k < len) { if (src[k] === '\\') { k += 2; continue } if (src[k] === '`') { k++; break } k++ } continue }
+            if (c2 === '{') { depth++; k++; continue }
+            if (c2 === '}') { depth--; k++; continue }
+            k++
+          }
+          const innerEnd = depth === 0 ? k - 1 : k
+          out += mapCodeOutsideLiteralsWithOffset(src.slice(i, innerEnd), (c, o) => mapCode(c, i + o))
+          if (depth === 0) { out += '}'; i = k } else i = k
+          continue
+        }
+        out += src[i]
+        i++
+      }
+      chunkStart = i
+      prevSig = '`'
+      prevIdent = null
+      continue
+    }
+    // 注释（行 + 块）
+    if (ch === '/' && src[i + 1] === '/') {
+      flush(i)
+      const e = src.indexOf('\n', i)
+      const j = e < 0 ? len : e
+      out += src.slice(i, j)
+      chunkStart = j
+      i = j
+      prevSig = '/'
+      prevIdent = null
+      continue
+    }
+    if (ch === '/' && src[i + 1] === '*') {
+      flush(i)
+      const e = src.indexOf('*/', i + 2)
+      const j = e < 0 ? len : e + 2
+      out += src.slice(i, j)
+      chunkStart = j
+      i = j
+      prevSig = '/'
+      prevIdent = null
+      continue
+    }
+    // 正则字面量（判据见 rewriteInstanceRefsSafe 同名注释）
+    if (ch === '/') {
+      const isDivision = prevSig !== '' && /[\w$)\]}'"`]/.test(prevSig) && !KEYWORD_BEFORE_REGEX.test(prevIdent ?? '')
+      if (!isDivision) {
+        let j = i + 1
+        let inClass = false
+        let closed = false
+        while (j < len) {
+          const c = src[j]
+          if (c === '\\') { j += 2; continue }
+          if (c === '\n') break
+          if (c === '[') inClass = true
+          else if (c === ']') inClass = false
+          else if (c === '/' && !inClass) { closed = true; j++; break }
+          j++
+        }
+        if (closed) {
+          while (j < len && /[a-z]/i.test(src[j])) j++
+          flush(i)
+          out += src.slice(i, j)
+          chunkStart = j
+          i = j
+          prevSig = '/'
+          prevIdent = null
+          continue
+        }
+      }
+    }
+    // 代码位：更新 prevSig / prevIdent（供下一轮 `/` 消歧），但不在此处 flush
+    if (!/\s/.test(ch)) {
+      prevSig = ch
+      if (/[A-Za-z_$]/.test(ch)) {
+        let j = i + 1
+        while (j < len && /[\w$]/.test(src[j])) j++
+        prevIdent = src.slice(i, j)
+        i = j
+        continue
+      }
+      prevIdent = null
+    }
+    i++
+  }
+  flush(len)
+  return out
 }
 
 /** ★2026-09-08 修复：runtime-init call 内裸 runtimeInit 名 → this.<name> 的**安全**改写。
@@ -1573,6 +1817,49 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       prevIdent = null
       continue
     }
+    // 块注释（★2026-09-20 补：此前只识别 `//`，块注释内的裸名会被误改——与正则同族问题）
+    if (ch === '/' && call[i + 1] === '*') {
+      const end = call.indexOf('*/', i + 2)
+      const j = end < 0 ? len : end + 2
+      out += call.slice(i, j)
+      i = j
+      prevSig = '/'
+      prevIdent = null
+      continue
+    }
+    // ★★2026-09-20 修外部实战报告第十三节 Bug B（隐蔽 · 静默语义损坏）：**正则字面量整段跳过**。
+    //   此前扫描器只识别字符串/模板串/注释，**不识别正则字面量** → `/...\s.../ ` 里的 `\s` 被当成裸标识符
+    //   改写成 `\this.s` / `\this.data.s`。产物**语法合法**（`\t` 转义 + 后续字符）→ 构建通过、Web 端不受影响
+    //   （不走这条编译器）、但**真机行为静默错误**：`/\s/g` 变 `/\this.s/g`（空白不再被匹配）、
+    //   `/[\s\S]*?/` 变 `/[\this.s\S]*?/`（跨行匹配失效）。外部工程产物中实测 10 处。
+    //   判据（标准启发式，与报告建议一致）：`/` 前一个**有效 token** 决定它是除号还是正则起始——
+    //     前为标识符/数字/`)`/`]`/`}`/字符串/模板/正则 → 除法；否则（行首、`(`、`,`、`=`、`:`、`[`、`!`、
+    //     `&`、`|`、`?`、`{`、`;`、`return` 等关键字后）→ 正则起始，整段跳到未转义的闭合 `/`，并吞掉标志位。
+    if (ch === '/') {
+      const isDivision = prevSig !== '' && /[\w$)\]}'"`]/.test(prevSig) && !/^(?:return|typeof|instanceof|in|of|new|delete|void|case|do|else)$/.test(prevIdent ?? '')
+      if (!isDivision) {
+        let j = i + 1
+        let inClass = false
+        let closed = false
+        while (j < len) {
+          const c = call[j]
+          if (c === '\\') { j += 2; continue }
+          if (c === '\n') break // 正则不跨行 → 视为误判，回退按除号处理
+          if (c === '[') inClass = true
+          else if (c === ']') inClass = false
+          else if (c === '/' && !inClass) { closed = true; j++; break }
+          j++
+        }
+        if (closed) {
+          while (j < len && /[a-z]/i.test(call[j])) j++ // 标志位 gimsuy
+          out += call.slice(i, j)
+          i = j
+          prevSig = '/'
+          prevIdent = null
+          continue
+        }
+      }
+    }
     // 括号栈（`{` 需分类对象/块；`(`/`[` 恒非 key 位）
     if (ch === '{' || ch === '[' || ch === '(') {
       let obj = true
@@ -1594,10 +1881,18 @@ export function rewriteInstanceRefsSafe(call: string, names: ReadonlySet<string>
       let j = i + 1
       while (j < len && isNameChar(call[j])) j++
       const word = call.slice(i, j)
+      // ★2026-09-20：先留一份**前一个**标识符——声明位判定要用它（`prevIdent` 马上会被覆盖成当前词，
+      //   此前把检查写成 `prevIdent === 'const'` 是**死代码**：永远在拿当前词跟自己比 →
+      //   本地声明 `const cap = …` 被误改成 `const this.cap = …`（真机语法错，compiler-ir-m3 门禁抓到）。
+      //   旧的 rewriteBareMethodCalls 正则用 `(const\s+|let\s+|var\s+)?` 把关键字一起匹配来规避，统一扫描器须显式记录。）
+      const prevWord = prevIdent
       prevIdent = word
       if (names.has(word)) {
         // ① 属性访问（.x / ?.x 的 x 是属性名）→ 不改写
         if (prevSig === '.') { out += word; i = j; prevSig = ''; continue }
+        // ①b 声明位不改写——`const s = 1` / `let s` / `var s` 里的 s 是**新绑定**，
+        //    改写成 `this.s` 会变成语法错误（`const this.s = 1`）。判据用**前一个**标识符（见上）。
+        if (prevWord === 'const' || prevWord === 'let' || prevWord === 'var') { out += word; i = j; prevSig = ''; continue }
         // ② 对象字面量内 key 位（栈顶为对象 `{` 且前一有效字符是 `{`/`,`）：完整 key `{ a: 1 }` 后跟 `:` → 纯 key 不改；
         //    简写 `{ a }` 后跟 `,`/`}`/`)` → key+value 引用 → 转完整 `a: <prefix>a`。参数位/数组位/块内逗号后标识符非 key → 值引用改写
         const top = stack[stack.length - 1]
@@ -2073,30 +2368,36 @@ function rewriteBareMethodCalls(body: string, methodNames: Set<string>, runtimeI
   //   处理：字符级扫描标出普通 function 体范围 → 体内方法调用改 self.name()，并注入 `var self = this`。
   const fnRanges = plainFunctionBodyRanges(out)
   const needsSelf = fnRanges.length > 0
-  for (const name of methodNames) {
-    // ★2026-09-09 canvas-probe 实证：方法作为**值**引用（name.bind(this) / 传给回调）也需 this. 化——
-    //   此前只改 `name(` 调用形态，`loop.bind(this)` 的裸 loop → ReferenceError
-    out = out.replace(new RegExp(`(?<![\\w$.:])${name}\\.bind\\s*\\(`, 'g'), `this.${name}.bind(`)
-    const re = new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g')
-    if (!needsSelf) {
-      out = out.replace(re, `this.${name}(`)
-      continue
+  // ★★2026-09-20 外部实战报告第十四节（同族第 3 处）：方法名改写原先直接对**整段 body** 跑正则 →
+  //   字符串里的 `'call save() now'` 会被改成 `'call this.save() now'`（实测），正则里的方法名同理有风险。
+  //   现用 `mapCodeOutsideLiterals` 把「代码位」切出来再改写——字面量保护自动生效。
+  //   注意：`fnRanges` 是**偏移量**，切分后偏移会变——故此处按片段重新计算（每个片段的起始偏移 = 原偏移）。
+  out = mapCodeOutsideLiteralsWithOffset(out, (code, offset) => {
+    let seg = code
+    for (const name of methodNames) {
+      // ★2026-09-09 canvas-probe 实证：方法作为**值**引用（name.bind(this) / 传给回调）也需 this. 化——
+      //   此前只改 `name(` 调用形态，`loop.bind(this)` 的裸 loop → ReferenceError
+      seg = seg.replace(new RegExp(`(?<![\\w$.:])${name}\\.bind\\s*\\(`, 'g'), `this.${name}.bind(`)
+      const re = new RegExp(`(?<![\\w$.])${name}\\s*\\(`, 'g')
+      if (!needsSelf) {
+        seg = seg.replace(re, `this.${name}(`)
+        continue
+      }
+      // 逐匹配判断：落在普通 function 体内 → self.，否则 this.（偏移用「片段起始 + 片内位置」还原）
+      seg = seg.replace(re, (m: string, segOffset: number) => {
+        const abs = offset + segOffset
+        const inPlainFn = fnRanges.some((r) => abs > r.start && abs < r.end)
+        return inPlainFn ? `self.${name}(` : `this.${name}(`
+      })
     }
-    // 逐匹配判断：落在普通 function 体内 → self.，否则 this.
-    out = out.replace(re, (m: string, offset: number) => {
-      const inPlainFn = fnRanges.some((r) => offset > r.start && offset < r.end)
-      return inPlainFn ? `self.${name}(` : `this.${name}(`
-    })
-  }
+    return seg
+  })
   if (needsSelf && out.includes('self.')) out = injectSelfVar(out, fnRanges)
   if (runtimeInitNames) {
-    for (const name of runtimeInitNames) {
-      // 裸标识符 → this.<name>；三例外：属性访问（.name）、声明处（const/let/var name）、保持原样
-      out = out.replace(
-        new RegExp(`(?<!\\.)\\b(const\\s+|let\\s+|var\\s+)?${name}\\b`, 'g'),
-        (m, decl) => (decl ? m : `this.${name}`),
-      )
-    }
+    // ★★2026-09-20 外部实战报告第十四节（Bug B 残留 · 两条路径之二）：同 computedInitLine——
+    //   原朴素正则（带 const/let/var 声明例外）不排除字符串/正则/注释 → 误改字符串与正则字面量。
+    //   现复用统一扫描器；声明例外的语义已并入扫描器（见 rewriteInstanceRefsSafe ①b）。
+    out = rewriteInstanceRefsSafe(out, runtimeInitNames)
   }
   return out
 }
@@ -2306,9 +2607,15 @@ function rewriteRefAccess(
   return out
 }
 /** 生命周期映射：onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad */
-function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>, warnings: string[] = []): { onReady?: string; onUnload?: string; onLoad?: string } {
+function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Set<string>, warnings: string[] = []): { onReady?: string; onUnload?: string; onLoad?: string; asyncKeys: Set<'onReady' | 'onUnload' | 'onLoad'> } {
   const out: { onReady?: string; onUnload?: string; onLoad?: string } = {}
-  if (disabled?.has('script/lifecycle-map')) return out
+  // ★2026-09-20 外部实战报告第十四节 Bug C（阻断级）：生命周期回调的 **async 标记**此前被丢弃 →
+  //   `onMounted(async () => { await … })` 产出 `onReady() { await … }` → **语法错误、该页编译失败**
+  //   （`await is only valid in async functions`；外部工程 3 个文件命中，含首页）。
+  //   Vue 官方支持异步生命周期回调（其返回值被忽略、不 await），且**普通 async 方法在产物里本就保留 async**
+  //   （对照实验已证）——故这是漏带标记，不是平台限制。此处记录哪些键是 async，产物生成处据此写 `async onReady()`。
+  const asyncKeys = new Set<'onReady' | 'onUnload' | 'onLoad'>()
+  if (disabled?.has('script/lifecycle-map')) return { ...out, asyncKeys }
   // ★#497 批 2：AST 顶层回调发现（onMounted→onReady / onUnmounted→onUnload / onLoad→onLoad）+ 未映射 onXxx 警告（全树扫描）
   const body = topLevelAst(source)
   if (body) {
@@ -2352,13 +2659,15 @@ function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Se
       const first = hits[0]
       const cb = (first.args[0] as { body?: { start?: number } }).body
       if (!cb || typeof cb.start !== 'number') continue
+      // ★Bug C：回调自身是否 async（AST 上的 async 字段）——产物须保留该标记
+      if ((first.args[0] as { async?: boolean }).async === true) asyncKeys.add(h.key)
       const inner = extractBracedBody(source, cb.start)
       if (inner !== null) {
         out[h.key] = inner
         trace?.add('script/lifecycle-map', { line: first.line, before: `${h.name}()`, after: h.key })
       }
     }
-    return out
+    return { ...out, asyncKeys }
   }
   // —— 文本回退路径 ——
   const hooks = [
@@ -2382,9 +2691,13 @@ function extractLifecycles(source: string, trace?: TransformTrace, disabled?: Se
     const braceIdx = source.indexOf('{', m.index)
     const body = extractBracedBody(source, braceIdx)
     trace?.add('script/lifecycle-map', { line: lineAt(source, m.index), before: m[0].replace(/\s*\(/, '()'), after: h.key })
+    // ★Bug C（文本回退路径同样要带 async 标记）：`onMounted(async () => {…})` / `onMounted(async function () {…})`
+    if (/\basync\s*(?:\(|function|[A-Za-z_$])/.test(source.slice(m.index, braceIdx < 0 ? m.index + 80 : braceIdx))) {
+      asyncKeys.add(h.key)
+    }
     if (body !== null) out[h.key] = body
   }
-  return out
+  return { ...out, asyncKeys }
 }
 
 function indentBody(body: string): string {
@@ -2606,13 +2919,17 @@ export function transformScriptToPage(
     if (disabled.has('script/computed-to-data')) break
     const deps = new Set<string>(ds.deps)
     // 表达式内裸标识符 → this.data.<name>（跳过属性访问/已限定/标签名——片段树已隔离，这里只处理表达式）
-    const rwExpr = (expr: string): string => {
-      let out = expr
-      for (const d of deps) {
-        out = out.replace(new RegExp(`(?<![\\w$.])${d}(?![\\w$])`, 'g'), `this.data.${d}`)
-      }
-      return out
-    }
+    // ★2026-09-20 外部实战报告第十四节（同族第 4 处，报告未列，本仓顺带挖出）：此改写原先也是朴素正则，
+    //   会把表达式内的**字符串内容**一起改（实测 `'has s inside'` → `'this.data.has this.data.s this.data.inside'`）。
+    //   现用 `mapCodeOutsideLiterals` 包一层——字面量保护自动生效，无需在此重复实现。
+    const rwExpr = (expr: string): string =>
+      mapCodeOutsideLiterals(expr, (code) => {
+        let seg = code
+        for (const d of deps) {
+          seg = seg.replace(new RegExp(`(?<![\\w$.])${d}(?![\\w$])`, 'g'), `this.data.${d}`)
+        }
+        return seg
+      })
     // 片段树 → 模板字面量源码（lit 转义反引号/${；expr 内联；if → 三元）
     const emit = (parts: Array<{ t: string; v?: string; cond?: string; parts?: unknown[] }>): string =>
       parts
@@ -2921,20 +3238,35 @@ export function transformScriptToPage(
   }
 
   // v-model 自动 handler：proteusOnXxxInput(e) { this.setData({ xxx: e.detail.value }) }
+  // ★2026-09-20（外部报告 F-27/Bug D）：绑定**路径**（`f.title` / `arr[0]`）此前当简单标识符处理 →
+  //   handler 名含 `.`（`proteusOnF.titleInput`）+ setData 键含 `.`（`{ f.title: … }`）→ **双处非法 JS**。
+  //   现 handler 名与 setData 键统一走 model-path（与 template 侧同源，保证两端一致）；
+  //   路径键按小程序语法加引号（setData 支持 `'a.b'` 写入嵌套字段）。
   const vmodelDisabled = disabled.has('script/vmodel-handler')
   for (const name of vModelBindings) {
     if (!vmodelDisabled) {
-      methodNames.add(`proteusOn${capitalize(name)}Input`)
-      pushMethod(`  proteusOn${capitalize(name)}Input(e) { this.setData({ ${name}: e.detail.value }) },`)
+      methodNames.add(inputModelHandler(name))
+      pushMethod(`  ${inputModelHandler(name)}(e) { this.setData({ ${setDataEntry(name, 'e.detail.value')} }) },`)
     }
   }
   // ★#500 自定义组件 v-model[:arg] 回写 handler：proteusUpdate<Arg>Model(e) { this.setData({ model: e.detail }) }
   //   （组件 triggerEvent('update:xxx', 值) → e.detail 直接为新值；非 input 形态不走 e.detail.value）
+  //   ★2026-09-20：handler 名同样走 model-path（与 template 侧同源）；路径绑定（v-model:x="obj.p"）的
+  //   setData 键也须加引号——否则 `{ obj.p: e.detail }` 非法。
   for (const h of extra.vModelComponentHandlers ?? []) {
     if (!vmodelDisabled) {
       methodNames.add(h.name)
-      pushMethod(`  ${h.name}(e) { this.setData({ ${h.model}: e.detail }) },`)
+      pushMethod(`  ${h.name}(e) { this.setData({ ${setDataEntry(h.model, 'e.detail')} }) },`)
     }
+  }
+  // ★2026-09-20（外部报告 F-28/Bug E）：v-model 与 @input 同元素的**合并处理器**——
+  //   模板侧把两个 bindinput 合成一个方法名（先写回数据、再调用户 handler，保证用户读到最新值），
+  //   此处按名生成方法体。不生成 → 产物绑定了不存在的方法（运行时静默不触发）。
+  for (const h of extra.vModelMergedHandlers ?? []) {
+    if (vmodelDisabled) continue
+    methodNames.add(h.name)
+    const body = h.calls.map((c) => `this.${c}(e)`).join('; ')
+    pushMethod(`  ${h.name}(e) { ${body} },`)
   }
   if (vModelBindings.length && !vmodelDisabled) {
     trace?.add('script/vmodel-handler', {
@@ -3089,9 +3421,11 @@ export function transformScriptToPage(
   //   组件发射 ready()（微信文档 Component lifecycles：created/attached/ready/detached——ready = 布局就绪，
   //   可获取节点信息，语义与页面 onReady 对齐）；页面保持 onReady()。
   const readyHookName = extra.isComponent ? 'ready' : 'onReady'
+  // ★Bug C：生命周期回调若为 async → 产物方法必须带 async（否则体内 await 是语法错误）
+  const readyAsync = lifecycles.asyncKeys.has('onReady') ? 'async ' : ''
   if (lifecycles.onReady) {
     const readyBody = [semanticGridReady, probeReady, compDerivedReady, lifecycles.onReady].filter(Boolean).join('\n')
-    lines.push(`  ${readyHookName}() {\n${indentBody(rw(readyBody))}\n  },`)
+    lines.push(`  ${readyAsync}${readyHookName}() {\n${indentBody(rw(readyBody))}\n  },`)
   } else if (semanticGridReady || probeReady || compDerivedReady) {
     lines.push(`  ${readyHookName}() {\n${indentBody([semanticGridReady, probeReady, compDerivedReady].filter(Boolean).join('\n'))}\n  },`)
   } else if (extra.debug) {
@@ -3123,7 +3457,8 @@ export function transformScriptToPage(
     const isComp = extra.isComponent
     const pre = isComp ? [unsubLine, reactiveDisposeLine].filter(Boolean).join('\n') : [unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, reactiveDisposeLine, pageCleanupLine].filter(Boolean).join('\n')
     const hook = isComp ? 'detached' : 'onUnload'
-    lines.push(`  ${hook}() {
+    const unloadAsync = lifecycles.asyncKeys.has('onUnload') ? 'async ' : ''
+    lines.push(`  ${unloadAsync}${hook}() {
 ${indentBody(pre ? `${pre}
 ${unloadBody}` : unloadBody)}
   },`)
@@ -3222,7 +3557,8 @@ ${indentBody([unsubLine, appConfigUnsubLine, semGridOffLine, storeDisposeLine, r
     // 显式 onLoad（页面）：顶层副作用调用 + computed 初始化 + immediate watch + provide/inject 注入在方法体前（★#494 initLineSeq）
     const initLines = [probeResetLine, ...initLineSeq()].filter(Boolean)
     const body = rw(lifecycles.onLoad)
-    lines.push(`  onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
+    const loadAsync = lifecycles.asyncKeys.has('onLoad') ? 'async ' : ''
+    lines.push(`  ${loadAsync}onLoad(options) {\n${indentBody(initLines.length ? `${initLines.join('\n')}\n${body}` : body)}\n  },`)
   } else {
     // 默认 onLoad：路由参数自动 decode 并注入 data（P5 契约，与 runtime/pageLifecycle 的 createPage 行为一致）
     // 注意：不用数组解构/对象展开（微信 ES5 转译需要 babel helper 模块，真机报 arrayWithHoles 未定义）

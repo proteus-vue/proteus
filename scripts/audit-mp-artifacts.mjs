@@ -31,6 +31,8 @@ const QUARTET = ['.js', '.wxml', '.wxss', '.json']
 const issues = []
 let checkedPages = 0
 let checkedRefs = 0
+/** 产物 js 文件数（③ 语法/改写扫描——见 auditJsOutputs） */
+let checkedJs = 0
 
 /**
  * 解析 usingComponents 的引用路径 → 产物内绝对路径（无扩展名）。
@@ -101,6 +103,62 @@ if (!fs.existsSync(APP_JSON)) {
   }
   // ② app.json / app.js 自身声明（顶层 usingComponents——全局组件）
   checkJson(APP_JSON, visited)
+  // ③ ★2026-09-20（外部实战报告第十三节两个编译器 bug 的产物侧兜底）：
+  //    「产物能不能真正跑起来」不只取决于引用闭环，还取决于**每份 js 是不是合法且未被改坏的 JS**：
+  //      · Bug A：setter 参数带 TS 类型注解原样进产物 → `Unexpected token ':'`（阻断构建）；
+  //      · Bug B：方法体正则字面量被当作变量改写 → `/\s/g` 变 `/\this.s/g`（**语法合法、静默改行为**）。
+  //    报告建议「编译产物输出前跑语法校验」——编译器内 `assertValidResult` 已有（故 Bug A 表现为编译失败
+  //    而非崩在真机），但那是**单页编译**时做的，且 Bug B 那种「合法但错」的产物语法校验抓不到。
+  //    故在此对**整包产物**补两道扫描：语法可解析性 + 改写特征（真机才暴露的形态）。
+  auditJsOutputs()
+}
+
+/**
+ * 产物 js 自检：① 语法可解析 ② 正则字面量污染特征（`/\this` 形态）③ 参数位残留 TS 注解。
+ * 语法用 `new Function`（与编译器 validateJs 同法——产物为 ES5 安全语法，宿主 Node 可解析）。
+ */
+function auditJsOutputs() {
+  const jsFiles = []
+  const walk = (d) => {
+    let entries
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.js')) jsFiles.push(p)
+    }
+  }
+  walk(MP_DIR)
+  checkedJs = jsFiles.length
+  for (const f of jsFiles) {
+    let src
+    try {
+      src = fs.readFileSync(f, 'utf-8')
+    } catch {
+      continue
+    }
+    // ① 语法
+    try {
+      // eslint-disable-next-line no-new-func
+      new Function(src)
+    } catch (err) {
+      const msg = err.message
+      const m = /(\d+):(\d+)/.exec(msg)
+      let snippet = ''
+      if (m) snippet = (src.split('\n')[Number(m[1]) - 1] ?? '').trim().slice(0, 120)
+      issues.push({ kind: 'js-syntax', via: path.relative(MP_DIR, f), detail: `${msg}${snippet ? ` ← ${snippet}` : ''}` })
+    }
+    // ② 正则污染（Bug B 的产物形态）
+    const hits = src.match(/\/[^/\n]*\\this[^/\n]*\//g)
+    if (hits) issues.push({ kind: 'regex-mangled', via: path.relative(MP_DIR, f), detail: `正则被改写：${hits.slice(0, 3).join(' , ')}` })
+    // ③ 参数位残留类型注解（Bug A 的产物形态；语法校验通常先抓到，此处给出更明确归因）
+    const anno = /proteusSet\w+\([^)]*:/.exec(src)
+    if (anno) issues.push({ kind: 'param-type-annotation', via: path.relative(MP_DIR, f), detail: `参数位残留 TS 注解：${anno[0].slice(0, 80)}` })
+  }
 }
 
 const ok = issues.length === 0
@@ -109,9 +167,10 @@ if (asJson) {
 } else {
   console.log('小程序产物完整性审计（引用闭环：声明 ⇒ 四件套存在）')
   console.log(`  产物目录：${path.relative(ROOT, MP_DIR)}`)
-  console.log(`  页面 ${checkedPages} 个 · 组件引用 ${checkedRefs} 处`)
+  console.log(`  页面 ${checkedPages} 个 · 组件引用 ${checkedRefs} 处 · js 产物 ${checkedJs} 个`)
   if (ok) {
     console.log('  ✅ 全部声明引用均有完整产物（页面四件套 + usingComponents 递归）')
+    console.log('  ✅ 全部 js 产物语法可解析、无正则改写/参数注解残留')
   } else {
     console.log(`  ❌ ${issues.length} 项问题：`)
     for (const i of issues.slice(0, 30)) {
@@ -119,6 +178,9 @@ if (asJson) {
       else if (i.kind === 'missing-quartet') console.log(`    - [缺文件] ${i.via} → ${i.target}（缺 ${i.missing.join('/')}）`)
       else if (i.kind === 'missing-page') console.log(`    - [页面缺四件套] ${i.via}（缺 ${i.missing.join('/')}）`)
       else if (i.kind === 'missing-file') console.log(`    - [引用缺文件] ${i.via} → ${i.tag}（${i.target}）`)
+      else if (i.kind === 'js-syntax') console.log(`    - [js 语法错误] ${i.via}：${i.detail}`)
+      else if (i.kind === 'regex-mangled') console.log(`    - [正则被改写] ${i.via}：${i.detail}`)
+      else if (i.kind === 'param-type-annotation') console.log(`    - [参数残留 TS 注解] ${i.via}：${i.detail}`)
       else console.log(`    - [${i.kind}] ${i.via}：${i.detail}`)
     }
     if (issues.length > 30) console.log(`    …另有 ${issues.length - 30} 项`)
