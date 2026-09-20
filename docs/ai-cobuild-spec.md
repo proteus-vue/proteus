@@ -143,6 +143,13 @@ pnpm ledger:check     # ③ 收口率报告：有未收口项 → exit 1（**发
 - **⑥ 回归锁必须能红**：不能红的测试不算测试（本项目每个修复都做破坏性验证）；
 - **⑩ 复测是使用方的事**：维护方的自测**不算**独立验证（`verification=passed` 只能由使用方给出，
   或在台账里明确标注 `found_by=framework` 的自查项）。
+- **⑪ 字段归属决定同步方向**（走 `pnpm sync:cobuild`，**不要**人工复制台账文件——已两次导致
+  `rounds`/`verification_breakdown`/框架自查条目被整份覆盖）：
+  外部主导「问题的定义」（id/title/severity/round/evidence/repro）· 框架主导「修复的状态」
+  （status/fix_state/fixed_in）· **`verification`/`verified_by` 外部优先**——框架侧的 `n_a`
+  （未发布故不适用）只是占位，使用方给出实质结论（passed/failed/partial/unverified）时一律采纳，
+  **不算冲突**；`verification_note` 不是冲突字段而是「双方视角容器」，两侧的 `[external]` /
+  `[framework]` 段都要保留（合并由脚本完成，见 `scripts/sync-cobuild.mjs`）。
 
 ---
 

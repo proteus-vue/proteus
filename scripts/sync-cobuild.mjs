@@ -115,6 +115,13 @@ for (const ee of ext.entries ?? []) {
     if (extVerified && mineUnverified) {
       changes.push({ kind: 'ledger-update', id: ee.id, field: f, from: mine[f], to: ee[f] })
       mine[f] = ee[f]
+    } else if (f === 'verification' && mine.verification === 'n_a' && ee.verification) {
+      // ★n_a 是**框架侧占位**（修复未发布时「不适用」），不是经过考虑的结论 ——
+      //   规范里 verification 属「外部优先」，故外部的实质结论（如 unverified/partial）覆盖它，不算冲突。
+      //   2026-09-20 实例：F-34 框架填 n_a（未发布故不适用），外部用工作树源码复测 6/6 后填 unverified
+      //   （诚实：修复有效但未发布故不能称 passed）——按外部优先采纳，脚本不应误报冲突。
+      changes.push({ kind: 'ledger-update', id: ee.id, field: f, from: mine[f], to: ee[f] })
+      mine[f] = ee[f]
     } else if (f === 'verification' && mine.verification === 'passed' && ee.verification !== 'passed') {
       // 框架已验通过、外部还没验 → 不算冲突，只是外部落后（记提示）
       changes.push({ kind: 'note', id: ee.id, detail: `外部 verification=${ee.verification}，框架已=${mine.verification}（外部尚未复测新版）` })
