@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/components",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.12",
   "description": "Proteus 语义组件库（p-*）：73 个跨端语义组件（p-button/p-form/p-scroll-view/p-page-container/…）+ pg-glass（液态玻璃）+ virtual-list + 组件层运行时（runtime/contracts/theme）——双端同源码，Web 由 Vite 编译、小程序由框架编译器编译",
   "type": "module",
   "license": "Apache-2.0",
@@ -25,7 +25,7 @@
     "theme",
     "virtual-list",
     "pg-glass",
-    "p-*",
+    "p-*/**",
     "README.md"
   ],
   "scripts": {
@@ -33,13 +33,13 @@
     "typecheck": "vue-tsc --noEmit -p ../../tsconfig.json"
   },
   "dependencies": {
-    "@proteus-vue/api": "0.3.0-beta.7",
-    "@proteus-vue/devtools-runtime": "0.3.0-beta.7",
-    "@proteus-vue/fluid": "0.3.0-beta.7",
-    "@proteus-vue/gesture": "0.3.0-beta.7",
-    "@proteus-vue/glass": "0.3.0-beta.7",
-    "@proteus-vue/shared": "0.3.0-beta.7",
-    "@proteus-vue/worklet": "0.3.0-beta.7"
+    "@proteus-vue/api": "0.3.0-beta.12",
+    "@proteus-vue/devtools-runtime": "0.3.0-beta.11",
+    "@proteus-vue/fluid": "0.3.0-beta.11",
+    "@proteus-vue/gesture": "0.3.0-beta.11",
+    "@proteus-vue/glass": "0.3.0-beta.11",
+    "@proteus-vue/shared": "0.3.0-beta.11",
+    "@proteus-vue/worklet": "0.3.0-beta.11"
   },
   "peerDependencies": {
     "vue": "^3.4.0"

@@ -26,13 +26,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'dist-tag（本仓处于 pre-release 模式时用 beta；正式版用 latest）'
+        description: 'dist-tag（★默认 latest——本仓唯一可维护的 tag：npm dist-tag 需 2FA，发布时设 tag 不受限）'
         required: true
-        default: beta
+        default: latest
         type: choice
         options:
-          - beta
           - latest
+          - beta
       dry_run:
         description: '仅演练：不真正发布（npm publish --dry-run）'
         required: true
@@ -86,6 +86,13 @@ jobs:
       - name: 发布前漂移核验
         run: node scripts/check-publish-drift.mjs --check
 
+      # ★发布物内容核验（2026-09-20 事故后新增）：核对**实际打出去的包里有什么**——
+      #   files 每项命中、入口在包内、入口的相对 import 闭包在包内可解析。
+      #   上一版 `components` 丢了全部 74 个 p-* 组件，四道既有门禁全部放行，就是因为
+      #   没有任何一道在检查发布物内容（它们查的都是「我声明的」）。本步是那个缺口的补位。
+      - name: 发布物内容核验（files 命中 / 入口 / 相对 import 闭包）
+        run: node scripts/check-publish-contents.mjs
+
       # ★门禁：模板依赖对齐（2026-09-19 事故根因之一——模板 prerelease caret 够不到新版本）
       - name: 门禁（包健康 + 模板依赖对齐）
         run: node scripts/check-package-health.js
@@ -96,22 +103,23 @@ jobs:
       - name: 单元测试
         run: pnpm test
 
-      - name: 发布（OIDC trusted publishing）
+      # ★发布走本仓 publisher（2026-09-20 事故后收敛）：pnpm 打包 + npm publish <tarball>。
+      #   为什么不再用 `changeset publish`：① pre 模式下它禁止自定义 tag（2026-09-19 已踩，41 包全未发出）；
+      #   ② 它的打包器取决于包管理器环境，本地发布链已因「pnpm 打包 → npm 打包」的切换把 74 个组件静默丢掉。
+      #   现在声明与打包器解耦：pnpm 决定包内容（标准 glob），npm 负责上传（OIDC/provenance 只认 npm，
+      #   且 npm 上传 tarball 时按字节原样上传——实测 integrity 与本地 sha512 一致）。
+      #   --skip-content-check/--skip-drift-check：上面两步已查过（且带缓存）。
+      - name: 发布（OIDC trusted publishing；pnpm 打包 + npm 上传）
         if: ${{ !inputs.dry_run }}
-        run: pnpm changeset publish --tag ${{ inputs.tag }}
+        run: bash scripts/publish-all.sh --tag ${{ inputs.tag }} --skip-content-check --skip-drift-check
         # ★这里**故意不设 NODE_AUTH_TOKEN**：OIDC 在 publish 时自动生效。
         #   设了 token 反而会绕过 OIDC（且仓库里就又多了一份长期凭据）。
 
       - name: 演练（不发布）
         if: ${{ inputs.dry_run }}
-        run: |
-          echo "dry run —— 逐包执行 npm publish --dry-run（校验 tarball 内容，不推 registry）"
-          for d in packages/*/; do
-            name=$(node -e "console.log(require('./$d/package.json').name ?? '')" 2>/dev/null)
-            [ -z "$name" ] && continue
-            echo "--- $name ---"
-            (cd "$d" && npm publish --dry-run --tag ${{ inputs.tag }})
-          done
+        # ★走**完全相同的命令路径**（同打包器、同参数），只是不推 registry——
+        #   避免「演练的路径与真实发布的路径不同」导致演练通过而真发失败。
+        run: bash scripts/publish-all.sh --tag ${{ inputs.tag }} --dry-run --skip-content-check --skip-drift-check
 
   # ★发布后冒烟：干净目录跑**真实用户旅程**（npm create → 装依赖 → 检查重复副本 → CLI 启动 → 导出面）。
   #   这是 2026-09-19 事故的最后一环——「发布命令退出码 0」不等于「用户装到的东西能用」。
@@ -141,8 +149,11 @@ jobs:
         run: node scripts/verify-publish-smoke.mjs --tag ${{ inputs.tag }}
 
       # ★dist-tag 归一核验（2026-09-19 取证发现：幂等跳过不会更新 dist-tag → tag 可能长期指向旧包）
-      - name: dist-tag 归一核验
-        run: node scripts/sync-dist-tags.mjs --check --tag ${{ inputs.tag }}
+      # ★2026-09-20 调整：canonical 改为 latest（发布时写入的那个）。`beta` 属**历史遗留 tag**，
+      #   归位它需要 `npm dist-tag`（受 2FA 保护，本仓无 OTP）——改用重发实现：`pnpm realign:beta`。
+      #   故本步**不再把 inputs.tag 传进去当判定基准**（那是「本次发布用的 tag」，不是 canonical）。
+      - name: dist-tag 归一核验（canonical = latest）
+        run: node scripts/sync-dist-tags.mjs --check
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 启用步骤（需在 npmjs.com 逐包操作；本仓 41 个包）

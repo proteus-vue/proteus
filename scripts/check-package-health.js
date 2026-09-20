@@ -160,6 +160,14 @@ for (const entry of pkgDirs) {
   if (isSourcePkg) {
     // ②s 源码包：files 须含入口源文件（而非 dist）
     if (!Array.isArray(pkg.files) || !pkg.files.includes('index.ts')) err('源码包 files 缺 index.ts（发布物不完整）')
+  } else if (pkg.bin && !pkg.main && !pkg.exports) {
+    // ②b ★纯 bin 工具包（如 compiler-backend-rust：npm 侧只有 bin 壳 + crate 源码，
+    //    编译核心由 cargo 产出 target/release 二进制，**无 dist**）——
+    //    此前这里一律要求 files 含 "dist"，该包为过门禁写了 `"dist"` 却从未产出 dist →
+    //    门禁只查磁盘不查「实际发布物」，于是「声明了什么」与「发出去了什么」长期不一致
+    //    （2026-09-20 发布物内容门禁上线后暴露）。改为按**实际发布物**校验：
+    //    bin 目标存在 + files 命中非空（具体内容由 check-publish-contents 逐条核对）。
+    if (!Array.isArray(pkg.files) || !pkg.files.length) err('bin 工具包 files 为空（发布物不完整）')
   } else if (!Array.isArray(pkg.files) || !pkg.files.includes('dist')) err('files 缺 dist（发布物不完整）')
 
   // ② main/types/exports → 文件存在（源码包校验源码；常规包校验 dist）

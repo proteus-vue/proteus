@@ -17,16 +17,25 @@
 //
 // 用法：
 //   node scripts/sync-dist-tags.mjs            # 报告
-//   node scripts/sync-dist-tags.mjs --check    # 不一致 → exit 1（门禁用）
-//   node scripts/sync-dist-tags.mjs --fix      # 执行 npm dist-tag add 修复（需凭据；可能需要 OTP）
+//   node scripts/sync-dist-tags.mjs --check    # canonical（latest）不一致 → exit 1（门禁用）
+//   node scripts/sync-dist-tags.mjs --fix      # 执行 npm dist-tag add 修复（**需交互式 2FA/OTP**）
 //   node scripts/sync-dist-tags.mjs --fix --otp <6位码>   # 带一次性密码
-//   node scripts/sync-dist-tags.mjs --tag <t>  # 显式指定 canonical tag（覆盖 pre.json）
+//   node scripts/sync-dist-tags.mjs --tag <t>  # 显式指定 canonical tag（默认 latest）
 //   node scripts/sync-dist-tags.mjs --print    # 只打印待执行的 npm 命令（便于手工执行）
 //
-// ★为什么需要 OTP：`npm dist-tag` 属**包管理**类操作——按 npm 政策，bypass-2FA 的 granular
-//   token 自 2026-07-31 起被限制用于此类操作，**必须**交互式 2FA（实测报 EOTP）。
-//   （对照：`npm publish` 仍可用 token 直接完成，`npm access list` 读操作也可。）
-//   若不便交互：在 npm 网页端 Packages → 该包 → Versions 里直接调整 dist-tag。
+// ★★2026-09-20 重要变更：canonical tag 从 `beta`（pre.json）**改为恒为 `latest`**——
+//   因为 `npm dist-tag` 属**受 2FA 保护**的操作（bypass-2FA 的 granular token 自 2026-07-31 起
+//   被限制用于包管理类操作，实测报 **EOTP**），而本仓账号没有可用的 OTP → 该命令**根本执行不了**。
+//   唯一能改 tag 的地方是**发布时设 tag**（`npm publish --tag <t>`，不受该限制；已实测可用），
+//   所以「可维护的 tag」只有发布时写入的那个，即 `latest`。
+//   · `latest`：canonical——发布时写入 + 每次 `pnpm release` 核验；
+//   · `beta`：**历史遗留 tag**（changesets pre 模式时代的产物）——只报告、不参与判定、不尝试修复。
+//     如需把它也归位：`pnpm realign:beta`（用**重发**实现，无需 OTP）。
+//
+// ★为什么需要 OTP（旧记录，保留）：`npm dist-tag` 属**包管理**类操作——按 npm 政策，bypass-2FA 的
+//   granular token 自 2026-07-31 起被限制用于此类操作，**必须**交互式 2FA（实测报 EOTP）。
+//   （对照：`npm publish --tag <t>` 仍可用 token 完成，`npm access list` 读操作也可。）
+//   若确有 OTP：在 npm 网页端 Packages → 该包 → Versions 里直接调整 dist-tag 亦可。
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -45,41 +54,23 @@ const UA = { 'user-agent': 'proteus-dist-tag-sync' }
 /** registry 请求超时（毫秒）——避免网络挂起时脚本无限等待（效率规范：请求须带超时） */
 const FETCH_TIMEOUT_MS = 15_000
 
-/** canonical tag：pre 模式取 pre.json 的 tag，否则 latest */
+/**
+ * canonical tag：**恒为 `latest`**（2026-09-20 起；判定与修复都只针对它）。
+ * ★为什么不再默认取 pre.json 的 `beta`：见文件头「重要变更」——`npm dist-tag` 需要交互式 2FA，
+ *   本仓没有 OTP → 该命令执行不了；唯一可维护的 tag 是**发布时写入**的那个（latest）。
+ * `--tag <t>` 仍可覆盖（发布链传入本次发布用的 tag 时用它）。
+ */
 function canonicalTag() {
   if (TAG_OVERRIDE) return TAG_OVERRIDE
-  const pre = path.join(ROOT, '.changeset', 'pre.json')
-  if (fs.existsSync(pre)) {
-    try {
-      const j = JSON.parse(fs.readFileSync(pre, 'utf8'))
-      if (j.mode === 'pre' && j.tag) return j.tag
-    } catch {
-      /* 解析失败退回 latest */
-    }
-  }
   return 'latest'
 }
 
-/**
- * 需要「指向本仓版本」的**全部** tag。
- * ★pre 模式下除 canonical tag（beta）外，还要把 `latest` 一并拉齐（2026-09-19 用户要求：
- *   「实际只有 beta 一条线，不要出现正式版标签」）。
- *   · npm **强制**每个包必须存在 `latest`（删掉它 `npm i <pkg>` 会解析失败），无法真正移除；
- *   · 但可以让 `latest` 永远等于当前 beta 版本 → 就不存在「另一条正式版」被服务出去，
- *     也不会出现 `latest` 停在旧的崩溃版、而新版本只在 beta 的割裂状态。
- *   · 且 changesets 对「从未发过正式版」的包会**故意发到 latest**（publishedState==='only-pre'），
- *     不拉齐的话二者必然分叉——这正是今晚 cli/plugin-vite 落到 latest 的成因。
- *   非 pre 模式（正式发版）下只治理 `latest` 一个 tag。
- */
+/** 历史遗留 tag：只报告、不参与判定（pre 模式时代的 `beta`；归位用 `pnpm realign:beta` 重发实现） */
+const LEGACY_TAGS = ['beta']
+
+/** 受管 tag（= canonical 自身；判定与 --fix 都只作用于它） */
 function managedTags(canonical) {
-  const pre = path.join(ROOT, '.changeset', 'pre.json')
-  let inPre = false
-  try {
-    inPre = JSON.parse(fs.readFileSync(pre, 'utf8')).mode === 'pre'
-  } catch {
-    /* 非 pre 模式 */
-  }
-  return inPre ? [canonical, 'latest'] : [canonical]
+  return [canonical]
 }
 
 function listPackages() {
@@ -113,7 +104,7 @@ async function packument(full) {
 const TAG = canonicalTag()
 const TAGS = managedTags(TAG)
 console.log(
-  `[dist-tags] 受管 tag：${TAGS.join(' + ')}${TAG_OVERRIDE ? '（--tag 指定）' : TAGS.length > 1 ? '（canonical 来自 .changeset/pre.json；latest 一并拉齐——本项目只有 beta 一条线，不让 latest 成为另一条正式版）' : '（来自 .changeset/pre.json）'}`,
+  `[dist-tags] canonical tag：${TAG}${TAG_OVERRIDE ? '（--tag 指定）' : '（默认——发布时写入的那个；npm dist-tag 需 2FA，本仓无 OTP）'}`,
 )
 
 const pkgs = listPackages()
@@ -121,9 +112,13 @@ const rows = await Promise.all(
   pkgs.map(async (p) => {
     const d = await packument(p.full)
     if (d.error) return { ...p, err: d.error }
-    // 每个受管 tag 的偏差（tag 不存在 / 指向其它版本）
+    // canonical 偏差（判定项）
     const offTags = TAGS.map((t) => ({ tag: t, current: d.tags[t] })).filter((x) => x.current !== p.version)
-    return { ...p, current: d.tags[TAG], published: d.versions.includes(p.version), tags: d.tags, offTags }
+    // 历史遗留 tag 偏差（信息项，不判定）
+    const legacyOff = LEGACY_TAGS.filter((t) => t !== TAG)
+      .map((t) => ({ tag: t, current: d.tags[t] }))
+      .filter((x) => x.current !== p.version)
+    return { ...p, current: d.tags[TAG], published: d.versions.includes(p.version), tags: d.tags, offTags, legacyOff }
   }),
 )
 
@@ -131,6 +126,26 @@ const unpublished = rows.filter((r) => !r.err && !r.published)
 const ok = rows.filter((r) => !r.err && r.published && r.offTags.length === 0)
 const mismatch = rows.filter((r) => !r.err && r.published && r.offTags.length > 0)
 const errors = rows.filter((r) => r.err)
+
+// ── 历史遗留 tag（信息项，不判定、不修复）──
+// `beta` 是 changesets pre 模式时代的 canonical tag；现在 canonical 是 `latest`。
+// 归位它**不能用 npm dist-tag**（需交互式 2FA，本仓无 OTP）——唯一路径是**重发**：
+//   pnpm realign:beta   （连续两次「提升 + 重发」：先发到 beta，再发到 latest）
+const legacyRows = rows.filter((r) => !r.err && r.published && (r.legacyOff ?? []).length > 0)
+if (legacyRows.length) {
+  const byTag = new Map()
+  for (const r of legacyRows)
+    for (const x of r.legacyOff) {
+      if (!byTag.has(x.tag)) byTag.set(x.tag, [])
+      byTag.get(x.tag).push(`${r.short}(${x.current ?? '缺失'}→${r.version})`)
+    }
+  console.log(`\n· 历史遗留 tag 未指向当前版本：${legacyRows.length} 个包（**不影响最新版安装**，但按该 tag 装会拿到旧包）`)
+  for (const [tag, items] of byTag) {
+    console.log(`  · ${tag}：${items.length} 个包  ${items.slice(0, 4).join('，')}${items.length > 4 ? ` …等 ${items.length} 个` : ''}`)
+  }
+  console.log('  → 归位（无需 OTP，用重发实现）：pnpm realign:beta')
+  console.log('     若有 OTP 也可直接改 tag：pnpm publish:tags --fix --otp <6位码>')
+}
 
 if (mismatch.length) {
   // ★紧凑报告：41 行「✗」既吓人又难读——按 tag 分组，每组给出「受影响包数 + 前几个例子」，

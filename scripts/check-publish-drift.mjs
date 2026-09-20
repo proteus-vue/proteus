@@ -8,8 +8,10 @@
 //   后者会让新内容永远发不出去，而依赖方 bump 后声明旧版本号 → 拿到的仍是旧包。
 //
 // ★判据（两层，先快后准）：
-//   ① 快判：本地 `npm pack` 的 **tarball integrity** ↔ registry 的 `dist.integrity`。
+//   ① 快判：本地 **pnpm pack** 的 tarball integrity ↔ registry 的 `dist.integrity`。
 //      相同 → 判「内容一致」，不再下载（绝大多数包走这条路径）。
+//      ★打包器必须是 pnpm（与发布同源，见 localPack 注释）：npm 打包器不展开 files 里的
+//        纯目录通配 → 会漏掉整个组件目录，且「两侧都缺件」会被误判成一致（2026-09-20 事故）。
 //   ② 慢判（integrity 不同时）：**下载 npm tarball → 逐文件语义比对**。
 //      ★为什么需要第二层（2026-09-19 实测教训）：tarball 字节含**打包元数据**——
 //        npm 发布时会**注入 LICENSE**（本仓各包本地均无该文件，根 LICENSE 被 npm 带上）、
@@ -31,6 +33,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { packPackage, cleanupPack } from './lib/pack-package.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const checkOnly = process.argv.includes('--check')
@@ -45,8 +48,8 @@ const only = (() => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ★性能（2026-09-19 用户反馈「每次执行都那么慢」后整改）：
-//   实测单次 `npm pack --dry-run` ≈ 1.8s，41 个包串行 ≈ 73s；再加上「打包元数据噪声」
-//   路径要为 ~35 个包各下载一次 tarball——每次检查要几分钟，且**每次运行都从头重来**。
+//   实测单次 `pnpm pack` ≈ 0.3s（比 npm pack 快），41 个包串行仍然可观；
+//   再加上「打包元数据噪声」路径要为 ~35 个包各下载一次 tarball——每次检查要几分钟，且**每次运行都从头重来**。
 //   三层缓存 + 并发，把热运行从「分钟级」降到「秒级」：
 //     ① pack 缓存：目录指纹（relpath+size+mtime 全量走查）不变 → 复用上次的 integrity/文件清单，
 //        **完全跳过 npm 进程**（41 次 spawn 是最大头）。
@@ -57,13 +60,16 @@ const only = (() => {
 //   缓存未命中，绝不漏检；判定缓存键含双侧 integrity，任一内容变化必然失效。
 // ─────────────────────────────────────────────────────────────────────────────
 const CACHE_FILE = path.join(ROOT, '.cache', 'publish-drift.json')
+/** ★缓存版本：打包器从 npm 换成 pnpm（2026-09-20）→ 旧条目的 integrity/文件清单**语义已变**，
+ *  必须整体失效，否则会拿 npm 打包时代的结论当成本次发布的内容依据。 */
+const CACHE_VERSION = 2
 const NO_CACHE = process.argv.includes('--no-cache')
 const CONCURRENCY = Number((process.argv.find((a) => a.startsWith('--concurrency=')) ?? '').split('=')[1]) || 8
 let cache = { packs: {}, verdicts: {} }
 if (!NO_CACHE) {
   try {
     const j = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
-    cache = { packs: j.packs ?? {}, verdicts: j.verdicts ?? {} }
+    if ((j.version ?? 1) >= CACHE_VERSION) cache = { packs: j.packs ?? {}, verdicts: j.verdicts ?? {} }
   } catch {
     /* 无缓存 / 损坏 → 从空开始 */
   }
@@ -72,7 +78,7 @@ function saveCache() {
   if (NO_CACHE) return
   try {
     fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true })
-    fs.writeFileSync(CACHE_FILE, JSON.stringify({ version: 1, ...cache }))
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ version: CACHE_VERSION, ...cache }))
   } catch {
     /* 缓存写失败不影响正确性 */
   }
@@ -141,7 +147,11 @@ function dirFingerprint(dir, base = '') {
   return sha(parts.join('\n'))
 }
 
-/** 本地 `npm pack --dry-run`：integrity + 将发布的文件清单（★带指纹缓存，跳过 npm 进程） */
+/** 本地打包（★与发布同一个打包器：pnpm——带指纹缓存，跳过 pack 进程）
+ *  ★为什么必须是 pnpm（2026-09-20 事故）：本脚本此前用 `npm pack` 取「本地将发布的内容」，
+ *    而 npm 打包器**不展开 files 里的纯目录通配**（`"p-*"` → 74 个组件全丢）。
+ *    更糟的是：两侧都出自 npm 打包（registry 那侧也是 npm 发布的产物）→ 同样缺件反而被判
+ *    「内容一致」，门禁形同虚设。改用 pnpm 打包后，本判据与**用户实际会装到的东西**对齐。 */
 function localPack(pkgDir, pkgRel) {
   let fp = null
   try {
@@ -155,15 +165,9 @@ function localPack(pkgDir, pkgRel) {
     return { integrity: hit.integrity ?? null, files: hit.files ?? [] }
   }
   try {
-    const raw = execFileSync('npm', ['pack', '--dry-run', '--json'], {
-      cwd: pkgDir,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 120_000,
-    })
-    const j = JSON.parse(raw)
-    const e = Array.isArray(j) ? j[0] : j
-    const out = { integrity: e.integrity ?? null, files: (e.files ?? []).map((f) => f.path) }
+    const p = packPackage(pkgDir)
+    const out = { integrity: p.integrity, files: p.files }
+    cleanupPack(p)
     if (fp) cache.packs[pkgRel] = { fp, integrity: out.integrity, files: out.files }
     return out
   } catch {
