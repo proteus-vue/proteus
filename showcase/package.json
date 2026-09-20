@@ -36,9 +36,9 @@
     "@proteus-vue/components": "workspace:*"
   },
   "devDependencies": {
-    "@proteus-vue/cli": "0.3.0-beta.15",
+    "@proteus-vue/cli": "0.3.0-beta.17",
     "@proteus-vue/compiler": "0.3.0-beta.15",
-    "@proteus-vue/plugin-vite": "0.3.0-beta.15",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.17",
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "tsx": "^4.0.0",
