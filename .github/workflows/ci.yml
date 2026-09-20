@@ -86,6 +86,12 @@ jobs:
       - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
         run: node scripts/check-package-health.js
 
+      # ★发布物内容门禁（2026-09-20 事故后新增）：核对**实际打出去的包里有什么**——
+      #   `components` 曾丢了全部 74 个 p-* 组件而其余门禁全绿（它们查的是「我声明的」）。
+      #   放在 CI 每次跑，是为了在 PR 阶段就拦住「files 声明改了但通配不展开」这类回退。
+      - name: 发布物内容门禁（files 命中 / 入口 / 相对 import 闭包全在包内）
+        run: node scripts/check-publish-contents.mjs
+
       - name: 内部版本对齐门禁（★2026-09-19 事故：模板/examples 的 @proteus-vue/* 声明必须 = workspace 实际——陈旧会让用户装到旧包并产生重复副本）
         run: node scripts/sync-internal-versions.mjs --check
 
@@ -162,6 +168,31 @@ jobs:
 
       - name: 双语对齐门禁（★#493：EN overlay 与 zh 结构签名漂移阻断——章节/表格/围栏）
         run: cd website && pnpm run check:en-drift
+
+      # ★2026-09-20 新增：官网数字门禁——`website/src/stats.ts` 声明的数字必须与源码实际值一致
+      #   （此前无任何校验，实测 8 项里 7 项长期过时：包数 40/41 并存、单测 2966→3441、原语 176→183…）
+      - name: 官网数字门禁（stats.ts 声明值 vs 源码实际值——防「数字过时」静默上线）
+        run: cd website && pnpm run check:stats
+
+      # ★2026-09-20 新增：外部报告台账门禁——`docs/外部报告台账.json` 的**schema 与自洽性**校验
+      #   （必填字段 / 枚举合法 / blocker 必带 repro / partial 必带 related / fixed_in 不得比已验版本新；
+      #    台账本身不合格 → exit 2 → CI 红）。
+      #   ★注意这里**故意不加 --check**：--check 会把「已修未发布 / 验证不充分」也算未收口 → 常驻红，
+      #     那不是 CI 该拦的（未发布是正常中间态）。发布前想确认「报 N 收口 M」用 `pnpm ledger:check`。
+      - name: 外部报告台账门禁（schema 与自洽性——防台账腐化）
+        run: node scripts/ledger-check.mjs
+
+      # ★2026-09-20 新增：AI 共建**三方一致性**门禁（报告 ↔ 台账 ↔ 回执）——补的是「报了没立项」这个洞：
+      #   实测挖出报告第九节报的 fluid 缺件（阻断级）**压根没进台账**，没有任何机器判据能发现。
+      #   五条规则：报了必须立项 / 立项必须有出处 / 版本口径一致 / 已收口轮次必须有回执 / 回执必须有轮次。
+      - name: AI 共建三方一致性门禁（报告 ↔ 台账 ↔ 回执——防「报了没立项」）
+        run: node scripts/cobuild-check.mjs --check
+
+      # ★2026-09-20 新增：共建工具包**分发一致性**门禁——规范源（packages/cli/src/cobuild-assets.ts，
+      #   随 @proteus-vue/cli 发布）与 create-proteus 模板里的副本必须逐字一致。
+      #   防的是「机制在 CLI 与模板两处漂移」——那样新工程自带的和 proteus cobuild init 装出来的会不一样。
+      - name: 共建工具包分发一致性门禁（规范源 ↔ 脚手架模板）
+        run: npx tsx scripts/gen-cobuild-kit.mjs --check
 
       - name: 官网文档引擎测试（WIT 解析/SPEC_DIFF 破坏性分类/播放器/审计）
         run: npx vitest run tests/website-plugin-docs.test.ts tests/website-playground.test.ts tests/cli-d2-audit.test.ts tests/website-docs-engine.test.ts tests/website-reference.test.ts

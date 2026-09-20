@@ -13,7 +13,12 @@
 //   ① registry 安装（cli + shared + devtools-runtime，从 npm 拉，不含本仓任何本地状态）
 //   ② CLI 启动 `proteus --help` 退出码 0（原事故暴露点：顶层 import 了未发布的导出）
 //   ③ 关键导出面（devtools-runtime 曾缺失的 8 个导出 + shared.adapter 的成员）
-//   ④ 版本一致（装到的 == 本仓要发的，防「发的是旧版」）
+//   ④ 发布成功核验（装到的 == 本仓要发的，防「发的是旧版」）
+//   ⑤ ★组件库可用性（2026-09-20 事故后补）：干净目录装 `@proteus-vue/components` +
+//      真的用 vite 构建一个 import 了 p-* 组件的页面。**这一步是本次事故唯一的检出手段**——
+//      该版本 registry 上只有 17 个文件（74 个 p-* 组件全丢），上面四步全绿，因为
+//      ①③④ 根本没有装 components（包清单里没有它），而仓库内测试跑的是 workspace 软链源码
+//      （74 个组件都在磁盘上）→ 只有「npm 安装形态 + 真实构建」能暴露「文件不在包里」。
 //
 // ★与 check-publish-drift 的分工：那个管「发布前，本地 pack ↔ registry 同版本内容一致」；
 //   本脚本管「发布后，用户真装真跑真的能用」。前者防发不出去，后者防装到不能用。
@@ -48,6 +53,23 @@ function localVersion(short) {
   return JSON.parse(fs.readFileSync(f, 'utf8')).version
 }
 
+/** 本仓全部 @proteus-vue/* 包（④ 的核验对象；扩面见该处注释） */
+function listLocalPackages() {
+  const dir = path.join(ROOT, 'packages')
+  const out = []
+  for (const d of fs.readdirSync(dir)) {
+    const f = path.join(dir, d, 'package.json')
+    if (!fs.existsSync(f)) continue
+    try {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'))
+      if (j.name?.startsWith('@proteus-vue/') && j.version) out.push({ short: j.name.replace('@proteus-vue/', ''), version: j.version })
+    } catch {
+      /* 非包目录 */
+    }
+  }
+  return out
+}
+
 /** registry 上是否已存在该包的该版本（判「发布成功」的权威依据） */
 async function registryHasVersion(short, version) {
   const url = 'https://registry.npmjs.org/' + encodeURIComponent('@proteus-vue/' + short)
@@ -59,6 +81,39 @@ async function registryHasVersion(short, version) {
   } catch (e) {
     return { error: String(e).slice(0, 80) }
   }
+}
+
+/** 本仓 components 源码里的 p-* 组件文件数（用于与安装形态对比——本次事故是「目录在、文件全丢」） */
+function countLocalComponents() {
+  const dir = path.join(ROOT, 'packages', 'components')
+  let n = 0
+  try {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!e.isDirectory() || !e.name.startsWith('p-')) continue
+      if (fs.existsSync(path.join(dir, e.name, 'index.vue'))) n++
+    }
+  } catch {
+    /* 读不到 → 0（调用方据 0 跳过下限断言） */
+  }
+  return n
+}
+
+/** 安装形态下的 components 包内 p-* 文件数（.vue 计） */
+function countInstalledComponents(pkgDir) {
+  let files = 0
+  const dirs = []
+  try {
+    for (const e of fs.readdirSync(pkgDir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue
+      dirs.push(e.name)
+      if (!e.name.startsWith('p-')) continue
+      const idx = path.join(pkgDir, e.name)
+      for (const f of fs.readdirSync(idx)) if (f.endsWith('.vue')) files++
+    }
+  } catch {
+    /* 包不存在 → 0 */
+  }
+  return { files, dirs: dirs.length }
 }
 
 /** 在指定目录跑命令，返回 { ok, out, err }（不抛） */
@@ -233,15 +288,89 @@ try {
   //     属包管理动作，由 scripts/sync-dist-tags.mjs 单独报告与处理）。
   //   区分二者的判据：**本仓版本是否已在 registry 上**。已上架 ⇒ 发布成功，tag 漂移另案处理。
   console.log('\n── ④ 发布成功核验（本仓版本须已在 registry 上）──')
-  for (const short of ['cli', 'shared', 'devtools-runtime', 'plugin-vite', 'create-proteus']) {
-    const local = localVersion(short)
-    if (local === null) continue
-    const r = await registryHasVersion(short, local)
-    if (r.error) {
-      record(`${short}@${local} 已上架`, false, `registry 查询失败：${r.error}`)
-      continue
+  // ★2026-09-20 扩面：此前只核 5 个包（cli/shared/devtools-runtime/plugin-vite/create-proteus），
+  //   而本次事故的 `components` 恰好不在其中。改为核**全部 workspace 包**——发布是整批的，
+  //   「哪个包漏发了」必须一个不漏地查出来（代价只是几个 registry 查询）。
+  const allPkgs = listLocalPackages()
+  const missingPkgs = []
+  for (const p of allPkgs) {
+    const r = await registryHasVersion(p.short, p.version)
+    if (r.error || !r.exists) missingPkgs.push(`${p.short}@${p.version}${r.error ? `（查询失败：${r.error}）` : ''}`)
+  }
+  record(
+    `全部 ${allPkgs.length} 个包的本仓版本已上架`,
+    missingPkgs.length === 0,
+    missingPkgs.length ? missingPkgs.slice(0, 8).join(', ') + (missingPkgs.length > 8 ? ` …共 ${missingPkgs.length} 个` : '') : `已核 ${allPkgs.length} 个`,
+  )
+
+  // ── ⑤ ★组件库可用性：装 components + 真的用 vite 构建一个 import p-* 的页面 ──
+  // ★为什么必须有这一步（2026-09-20 事故）：`@proteus-vue/components@0.3.0-beta.7` 发布时
+  //   丢了全部 74 个 `p-*` 组件（registry tarball 17 个文件），任何工程 import 组件库
+  //   **构建立即失败**：`Could not resolve "./p-view/index.vue"`。而上面四步全绿——
+  //   因为它们从未安装 components。判据必须是**安装形态 + 真实构建**：
+  //   仓库内测试跑 workspace 软链源码（74 个组件都在磁盘上），永远发现不了「文件不在包里」。
+  console.log('\n── ⑤ 组件库可用性（安装形态 + 真实 vite 构建）──')
+  const compDir = path.join(dir, 'component-app')
+  fs.mkdirSync(compDir, { recursive: true })
+  // ★必须在本目录放一个 package.json（2026-09-20 实测踩到）：目录里没有 package.json 时，
+  //   npm 会**向上遍历**找到父目录的 package.json，并把 node_modules 装到**父目录**——
+  //   于是本目录下什么都没有，检查报「包内 0 个 .vue」的**假失败**（真实包是好的）。
+  fs.writeFileSync(
+    path.join(compDir, 'package.json'),
+    JSON.stringify({ name: 'proteus-smoke-components', private: true, version: '1.0.0' }, null, 2) + '\n',
+  )
+  const compVer = localVersion('components')
+  const localComps = compVer ? countLocalComponents() : 0
+  const compInstall = runWithPropagation(
+    'components 安装',
+    'npm',
+    ['install', '--no-audit', '--no-fund', `@proteus-vue/components@${compVer ?? TAG}`, 'vite@5', '@vitejs/plugin-vue@5', 'vue'],
+    compDir,
+    600_000,
+  )
+  if (!compInstall.ok) {
+    record('安装 @proteus-vue/components', false, (compInstall.err || compInstall.out).slice(0, 240))
+  } else {
+    // ★安装位置自检：若 node_modules 没落在本目录（npm 向上找父 package.json 的经典陷阱），
+    //   报明确原因而不是「包内 0 个 .vue」的假失败。
+    if (!fs.existsSync(path.join(compDir, 'node_modules', '@proteus-vue', 'components'))) {
+      record('components 装在预期目录', false, `未在 ${path.relative(dir, compDir)}/node_modules 下找到——npm 可能向上装了（本目录缺 package.json）`)
     }
-    record(`${short}@${local} 已上架`, r.exists, r.exists ? '' : '未发布——该包被跳过或发布失败')
+    // ① 安装形态下组件文件真的在（本次事故的直接形态：目录在、文件全丢）
+    const installed = countInstalledComponents(path.join(compDir, 'node_modules', '@proteus-vue', 'components'))
+    record(
+      '安装后 p-* 组件文件齐全（文件真在包里）',
+      installed.files > 0 && (localComps === 0 || installed.files >= localComps * 0.9),
+      `包内 ${installed.files} 个 .vue（本仓源码 ${localComps} 个）`,
+    )
+    // ② 真的 import + 真的构建（聚合入口与按路径两条路都验）
+    fs.writeFileSync(
+      path.join(compDir, 'entry.mjs'),
+      `import { PView, PButton } from '@proteus-vue/components'\n` +
+        `import PDrawer from '@proteus-vue/components/p-drawer/index.vue'\n` +
+        `export default { PView, PButton, PDrawer }\n`,
+    )
+    fs.writeFileSync(
+      path.join(compDir, 'App.vue'),
+      `<template>\n  <p-view><p-button>ok</p-button></p-view>\n</template>\n` +
+        `<script setup>\nimport { PView, PButton } from '@proteus-vue/components'\n</script>\n`,
+    )
+    fs.writeFileSync(path.join(compDir, 'index.html'), `<div id="app"></div><script type="module" src="/main.js"></script>\n`)
+    fs.writeFileSync(
+      path.join(compDir, 'main.js'),
+      `import { createApp } from 'vue'\nimport App from './App.vue'\ncreateApp(App).mount('#app')\n`,
+    )
+    fs.writeFileSync(
+      path.join(compDir, 'vite.config.mjs'),
+      `import { defineConfig } from 'vite'\nimport vue from '@vitejs/plugin-vue'\n` +
+        `export default defineConfig({ plugins: [vue()], build: { write: false } })\n`,
+    )
+    const build = run(path.join(compDir, 'node_modules', '.bin', 'vite'), ['build', '--logLevel', 'error'], compDir, 300_000)
+    record(
+      'import @proteus-vue/components + vite 构建成功',
+      build.ok,
+      build.ok ? '' : (build.err || build.out).slice(0, 300),
+    )
   }
 } catch (e) {
   record('冒烟流程', false, String(e).slice(0, 200))
