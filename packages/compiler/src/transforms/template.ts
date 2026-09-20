@@ -4,6 +4,8 @@
 // ★阶段三分派层示范：implemented 规则可携带 apply()——AI 覆盖 apply 即生效（底线循环 ①）
 import { TAG_MAP, EVENT_MAP, SEMANTIC_CLASS } from '../tags'
 import type { TransformRule, RuleContext } from './types'
+// ★2026-09-20（外部报告 F-27 / Bug D）：v-model 路径（obj.prop / arr[0]）→ handler 名必须路径安全
+import { inputModelHandler, componentModelHandler } from '../model-path'
 
 /** 表驱动规则工厂：从 TAG_MAP 取同源映射（改 tags.ts 自动生效，测试防遗漏） */
 function tagRule(
@@ -546,18 +548,19 @@ export const TEMPLATE_RULES: TransformRule[] = [
         //   旧命名 proteusUpdate{PropName}Model 只含 propName（arg/modelValue），同页多个无 arg
         //   v-model（p-switch/p-drawer/p-popover/p-action-sheet 全 modelValue）或同 arg 多 model
         //   会撞名 → script 去重后只剩第一个 handler → 其余组件回写丢失（真机：drawer/as/popover 关闭无效）。
-        //   新命名与 input 侧 proteusOn{Model}Input 对仗：proteusUpdate{Model}Model（arg 语义在 IR 保留）
+        // ★2026-09-20（F-27/Bug D）：handler 名统一由 model-path 派生（路径安全）——
+        //   旧命名 `proteusUpdate${capitalize(model)}Model` 对 `f.title` 会产出 `proteusUpdateF.titleModel`（含 `.`，非法）。
         ctx.output = {
           kind: 'component',
           model,
           propName,
-          updateHandler: `proteusUpdate${capitalize(model)}Model`,
+          updateHandler: componentModelHandler(model),
         }
       } else {
         ctx.output = {
           kind: 'input',
           model,
-          inputHandler: `proteusOn${capitalize(model)}Input`,
+          inputHandler: inputModelHandler(model),
         }
       }
     },

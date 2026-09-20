@@ -342,6 +342,8 @@ interface SerializeContext {
   templateRefNames: Set<string>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（prop + update:arg 事件 → 页面 setData；★#505 M4 完整契约含 arg/propName） */
   vModelComponentHandlers: VModelComponentHandler[]
+  /** ★2026-09-20（F-28/Bug E）：`v-model` 与 `@input` 同元素时的**合并处理器**（两个 bindinput → 一个） */
+  vModelMergedHandlers: Array<{ name: string; calls: string[] }>
   /** ★G-22 柔性布局：p-fluid 编译期 clamp 生成参数（designWidth/viewport；缺省 375/320-1440） */
   fluidLayout?: FluidLayoutConfig
   /** ★#496 页面上下文标记（语义编译仅页面——组件内 p-grid 走运行时组件；Skyline query 需页面 onReady） */
@@ -1535,6 +1537,32 @@ function serializeElement(node: ElementNode, ctx: SerializeContext): string {
   }
   // ★G-22 柔性布局：static style 发射（用户静态 style + p-fluid 生成 clamp 合并）
   if (staticStyle) attrs.push(`style="${escapeXml(staticStyle)}"`)
+  // ★★2026-09-20（外部报告 F-28 / Bug E）：`v-model` 与 `@input` **同元素**时二者都发射 `bindinput` →
+  //   WXML 重复属性（微信仅保留其一 → `@input` 的副作用静默失效；框架校验器报 DuplicatedAttribute 阻断构建）。
+  //   Vue 语义是「双向绑定 + 额外副作用」，两者**都应执行** → 合并为一个 handler：
+  //     `proteusMerge<Model>And<Handler>(e) { this.<vmodelHandler>(e); this.<userHandler>(e) }`
+  //   先写回数据再调用户 handler（用户 handler 常读最新值）。其余事件（@blur/@keydown…）不受影响。
+  {
+    const bindIdx = attrs.map((a, i) => (a.startsWith('bindinput="') ? i : -1)).filter((i) => i >= 0)
+    if (bindIdx.length > 1) {
+      const names = bindIdx.map((i) => /bindinput="([^"]*)"/.exec(attrs[i])?.[1] ?? '').filter(Boolean)
+      // 第一个是 v-model 的 handler（v-model 在 attrs 中先于 @input 处理），其余是用户事件 handler
+      const [vmodelHandler, ...userHandlers] = names
+      const suffix = vmodelHandler.replace(/^proteusOn/, '').replace(/Input$/, '')
+      const merged = `proteusMerge${suffix}And${userHandlers.map((h) => h.charAt(0).toUpperCase() + h.slice(1)).join('And')}`
+      if (!ctx.vModelMergedHandlers.some((h) => h.name === merged)) {
+        ctx.vModelMergedHandlers.push({ name: merged, calls: [vmodelHandler, ...userHandlers] })
+      }
+      // 只保留合并后的那一个 bindinput
+      for (const i of [...bindIdx].reverse()) attrs.splice(i, 1)
+      attrs.push(`bindinput="${merged}"`)
+      ctx.trace?.add('directive/v-model', {
+        line: node.loc.start.line,
+        before: `v-model + ${userHandlers.map((h) => '@input=' + h).join(' / ')}（同元素 → bindinput 重复）`,
+        after: `bindinput="${merged}"（合并：先回写再调用户 handler）`,
+      })
+    }
+  }
   const attrStr = attrs.length ? ` ${attrs.join(' ')}` : ''
   // 反黑盒：注入源码行号注释（默认关闭，dev 调试开启）
   const lineNote = ctx.annotateLines ? `<!-- @${node.loc.start.line} ${node.tag} -->\n` : ''
@@ -1723,6 +1751,7 @@ export function transformTemplateToWxml(
     // ★2026-09-08 useTemplateRef/模板 ref 承接（ref="x" → id + 收集）
     templateRefNames: new Set<string>(),
     vModelComponentHandlers: [],
+    vModelMergedHandlers: [],
     // ★#496 柔性语义编译：p-grid 收集
     semanticGrids: [],
     isPage: opts.isComponent !== true,
@@ -1817,6 +1846,7 @@ export function transformTemplateToWxml(
     dynamicSvgs: ctx.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器
     vModelComponentHandlers: ctx.vModelComponentHandlers,
+    vModelMergedHandlers: ctx.vModelMergedHandlers,
     semanticGrids: ctx.semanticGrids,
     // ★15-page-scroll-container：已自动包滚动容器（compileVueSfc 据此注入高度样式）
     pageScrollWrapped: autoScroll && !alreadyScroll,

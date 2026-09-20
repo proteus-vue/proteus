@@ -151,6 +151,8 @@ export interface TemplateTransformResult {
   dynamicSvgs?: Array<{ computedName: string; parts: SvgPart[]; deps: string[]; viewBox: string }>
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（页面 setData 方法） */
   vModelComponentHandlers?: VModelComponentHandler[]
+  /** ★2026-09-20（F-28/Bug E）：v-model 与 @input 同元素 → 合并处理器（两个 bindinput 合一） */
+  vModelMergedHandlers?: Array<{ name: string; calls: string[] }>
   /** ★15-page-scroll-container：页面已自动包滚动容器（compileVueSfc 据此注入高度样式） */
   pageScrollWrapped?: boolean
   warnings: string[]
@@ -202,6 +204,8 @@ export interface ScriptTransformOptions {
   templateRefNames?: string[]
   /** ★#500 自定义组件 v-model[:arg] 回写处理器（setData 方法名 + 字段） */
   vModelComponentHandlers?: VModelComponentHandler[]
+  /** ★2026-09-20（F-28/Bug E）：合并处理器（按名生成方法，体内依次调用 calls） */
+  vModelMergedHandlers?: Array<{ name: string; calls: string[] }>
   /** ★module-plan B0：跨模块引用映射（import 转 require） */
   moduleImports?: Array<{ source: string; requirePath: string }>
   /** ★2026-09-08 P1（defineModel 地基）：compileScript 权威源的模型引用（var→propName）——m.value 读写重写 + prop 注册 */

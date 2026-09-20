@@ -448,6 +448,80 @@ function setN() {
     expect(js).toContain('this.proteusSetDouble(10)')
   })
 
+  // ★★2026-09-20 外部实战报告第十三节 Bug A（阻断级）回归锁：setter 参数带 **TS 类型注解**时，
+  //   此前正则捕获原样进产物 → `proteusSetC(v: string) {` → **JS 语法错误、该页编译失败**
+  //   （`Unexpected token ':'`；外部工程 2 个文件命中）。`computed({ get, set })` 是最标准的 Vue 写法。
+  //   四种参数形态全部锁住（含此前恰好正常的 `set: function(v: T)` 形态——防修复引入回归）。
+  it('computed 写路径：setter 参数带类型注解 → 注解必须剥离（Bug A 回归锁）', () => {
+    const forms: Array<[string, string]> = [
+      ["const t = ref('')\nconst c = computed({ get: () => t.value, set: (v: string) => { t.value = v } })", 'proteusSetC(v) {'],
+      ["const t = ref(0)\nconst c = computed({ get: () => t.value, set: (v?: number) => { t.value = v ?? 0 } })", 'proteusSetC(v) {'],
+      ["const t = ref('')\nconst c = computed({ get: () => t.value, set: (v: string = 'x') => { t.value = v } })", "proteusSetC(v = 'x') {"],
+      ["const t = ref(0)\nconst c = computed({ get: () => t.value, set: (v: { n: number }) => { t.value = v.n } })", 'proteusSetC(v) {'],
+    ]
+    for (const [src, want] of forms) {
+      const { js } = transformScriptToPage(src, opts)
+      expect(js, `setter 签名应剥离类型注解：${want}`).toContain(want)
+      // 产物不得残留参数位注解（`(v:` / `(v?:` 这类形态）
+      expect(js).not.toMatch(/proteusSet\w+\(\s*\w+\s*\??\s*:/)
+    }
+  })
+
+  it('computed 写路径：set: function(v: T) 形态同样不残留注解', () => {
+    const src = "const t = ref('')\nconst c = computed({ get: () => t.value, set: function (v: string) { t.value = v } })"
+    const { js } = transformScriptToPage(src, opts)
+    expect(js).not.toMatch(/proteusSet\w+\([^)]*:/)
+  })
+
+  // ★2026-09-20 同族第三处（报告「对照用例」暴露）：`set: function (v) {…}` 此前**只匹配箭头形态** →
+  //   不生成 proteusSetX → 对 `c.value = x` 的写入**静默丢弃**（无告警，且不报语法错）。
+  //   报告把它记为「✅ 通过」，实为「不报语法错」——写路径已失效。三种标准写法现全部支持。
+  it('computed 写路径：三种 setter 写法（箭头 / function / 方法简写）都生成 setter 与写调用', () => {
+    const forms = [
+      'set: (v) => { t.value = v }',
+      'set: function (v) { t.value = v }',
+      'set(v) { t.value = v }',
+    ]
+    for (const setter of forms) {
+      const src = `const t = ref('')\nconst c = computed({ get: () => t.value, ${setter} })\nfunction go() {\n  c.value = 'x'\n}`
+      const { js } = transformScriptToPage(src, opts)
+      expect(js, `${setter} 应生成 setter 方法`).toContain('proteusSetC(v) {')
+      expect(js, `${setter} 的写入应接到 setter`).toContain('this.proteusSetC(')
+    }
+  })
+
+  // ★★2026-09-20 外部实战报告第十三节 Bug B（隐蔽 · 静默语义损坏）回归锁：方法体里的**正则字面量**
+  //   此前被 `rewriteInstanceRefsSafe` 当成裸标识符改写 —— `/\s/g` → `/\this.data.s/g`。
+  //   产物**语法合法**（`\t` 转义 + 后续字符）→ 构建通过、Web 端不受影响（不走这条编译器），
+  //   但**真机行为静默错误**（空白不再被匹配、`[\s\S]` 跨行匹配失效）。外部工程产物中 10 处。
+  it('方法体正则字面量不被改写（Bug B 回归锁）', () => {
+    const s = 'const s = 1' // 触发条件：存在同名顶层变量
+    const { js } = transformScriptToPage(`${s}\nfunction f() { return (x || '').replace(/\\s/g, '') }`, opts)
+    expect(js, '正则字面量应原样').toContain("replace(/\\s/g, '')")
+    expect(js, '不得把 \\s 当成变量 s 改写').not.toContain('\\this')
+    expect(js).not.toContain('\\this.data')
+  })
+
+  it('方法体字符类正则（[\\s\\S]）与标志位完整保留', () => {
+    const { js } = transformScriptToPage(
+      "const s = 1\nfunction strip(t) { return t.replace(/【x】[\\s\\S]*?【\\/x】/g, '') }",
+      opts,
+    )
+    expect(js).toContain('/【x】[\\s\\S]*?【\\/x】/g')
+    expect(js).not.toContain('\\this')
+  })
+
+  it('正则与除法消歧：真除法表达式不被误判为正则起始', () => {
+    const { js } = transformScriptToPage('const a = 10\nfunction f(b) { return a / b / 2 }', opts)
+    // a 是顶层 const → 应改写为 this.data.a；除号结构保留
+    expect(js).toMatch(/this\.data\.a\s*\/\s*b\s*\/\s*2/)
+  })
+
+  it('块注释内的裸名不被改写（与正则同族问题一并锁住）', () => {
+    const { js } = transformScriptToPage('const a = 1\nfunction f() { /* a 在此仅为注释 */ return 2 }', opts)
+    expect(js).toContain('/* a 在此仅为注释 */')
+  })
+
   it('computed 写路径：只读（无 setter）赋值 → 注释忽略（产物无副作用）', () => {
     const src = 'const count = ref(0)\nconst ro = computed(() => count.value + 1)\nfunction bad() {\n  ro.value = 5\n}'
     const { js } = transformScriptToPage(src, opts)
@@ -903,6 +977,67 @@ describe('transformScriptToPage（script → Page 构造器）', () => {
   it('v-model handler 注入：proteusOnXxxInput(e) { this.setData(...) }', () => {
     const { js } = transformScriptToPage('', opts, { vModelBindings: ['text'] })
     expect(js).toContain('proteusOnTextInput(e) { this.setData({ text: e.detail.value }) }')
+  })
+
+  // ★★2026-09-20 外部实战报告 F-27（Bug D，阻断级）回归锁：`v-model` 绑定**路径**（对象属性 / 数组元素）
+  //   此前被当简单标识符 → handler 名含 `.`（`proteusOnF.titleInput`）+ setData 键含 `.`（`{ f.title: … }`）
+  //   → **双处非法 JS**（`Unexpected token '.'`），整页构建失败。
+  //   而 `v-model="f.title"` 是 Vue 表单最常见写法（外部工程 8 处、整个新建作品表单），且**长期存在**。
+  it('★v-model 绑路径（对象属性/数组元素）：handler 名与 setData 键都必须路径安全（Bug D）', () => {
+    const { js } = transformScriptToPage('', opts, { vModelBindings: ['f.title'] })
+    expect(js, 'handler 名不得含 .').toContain('proteusOnFTitleInput(e)')
+    expect(js, 'setData 路径键须加引号').toContain("this.setData({ 'f.title': e.detail.value })")
+    expect(js, '不得残留非法方法名').not.toMatch(/proteusOn[\w]*\./)
+
+    const arr = transformScriptToPage('', opts, { vModelBindings: ['arr[0]'] })
+    expect(arr.js).toContain('proteusOnArr0Input(e)')
+    expect(arr.js).toContain("this.setData({ 'arr[0]': e.detail.value })")
+    expect(arr.js).not.toMatch(/proteusOn[\w]*\[/)
+
+    const deep = transformScriptToPage('', opts, { vModelBindings: ['a.b.c'] })
+    expect(deep.js).toContain('proteusOnABCInput(e)')
+    expect(deep.js).toContain("this.setData({ 'a.b.c': e.detail.value })")
+
+    // 对照：简单标识符产物保持原样（向后兼容）
+    const simple = transformScriptToPage('', opts, { vModelBindings: ['title'] })
+    expect(simple.js).toContain('proteusOnTitleInput(e) { this.setData({ title: e.detail.value }) }')
+  })
+
+  it('★v-model 绑路径：整包编译产出合法 JS（Bug D 端到端）', () => {
+    const src = '<script setup>\nconst f = ref({ title: \'\' })\n</script>\n<template><input v-model="f.title" /></template>'
+    const r = compileVueSfc(src, { filename: 't.vue', ...opts })
+    // eslint-disable-next-line no-new-func
+    expect(() => new Function(r.js), '产物必须是合法 JS').not.toThrow()
+    expect(r.wxml).toContain('bindinput="proteusOnFTitleInput"')
+  })
+
+  // ★★2026-09-20 外部实战报告 F-28（Bug E，major）回归锁：`v-model` 与 `@input` **同元素** →
+  //   两者都发射 `bindinput` → WXML 重复属性（微信仅保留其一 → @input 副作用静默失效；
+  //   框架校验器报 DuplicatedAttribute 阻断构建）。Vue 语义是「双向绑定 + 额外副作用」，两者都应执行。
+  it('★v-model 与 @input 同元素：合并为一个 bindinput（Bug E）', () => {
+    const src = '<script setup>\nconst q = ref(\'\')\nfunction onInput() {}\n</script>\n<template><input v-model="q" @input="onInput" /></template>'
+    const r = compileVueSfc(src, { filename: 't.vue', ...opts })
+    const n = (r.wxml.match(/bindinput=/g) ?? []).length
+    expect(n, 'bindinput 必须只有一个').toBe(1)
+    const bound = /bindinput="([^"]+)"/.exec(r.wxml)?.[1] ?? ''
+    expect(r.js, `产物必须生成被绑定的方法 ${bound}`).toContain(`${bound}(e) {`)
+    // 合并体必须同时调用 v-model 回写与用户 handler（顺序：先回写再调用户）
+    expect(r.js).toMatch(new RegExp(`${bound}\\(e\\) \\{ this\\.proteusOnQInput\\(e\\); this\\.onInput\\(e\\) \\}`))
+  })
+
+  it('★v-model 与 @input 合并：路径绑定 + 合并共存（Bug D×E 组合）', () => {
+    const src = '<script setup>\nconst f = ref({ title: \'\' })\nfunction onIn() {}\n</script>\n<template><input v-model="f.title" @input="onIn" /></template>'
+    const r = compileVueSfc(src, { filename: 't.vue', ...opts })
+    expect((r.wxml.match(/bindinput=/g) ?? []).length).toBe(1)
+    // eslint-disable-next-line no-new-func
+    expect(() => new Function(r.js)).not.toThrow()
+  })
+
+  it('★其它事件（@blur/@keydown）不与 v-model 冲突（非回归边界）', () => {
+    const src = '<script setup>\nconst q = ref(\'\')\nfunction onBlur() {}\n</script>\n<template><input v-model="q" @blur="onBlur" /></template>'
+    const r = compileVueSfc(src, { filename: 't.vue', ...opts })
+    expect((r.wxml.match(/bindinput=/g) ?? []).length).toBe(1)
+    expect(r.wxml).toContain('bindblur="onBlur"')
   })
 
   it('usesNavigate → 自动注入 proteusNavigateTo handler（方法名避开 __ 前缀）', () => {
