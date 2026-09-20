@@ -296,6 +296,17 @@ proteus ci:init [--platform <github|gitlab|circleci>] [--targets <a,b>] [dir]
 ★CI/CD 模板生成（G-33 M4）：.github/workflows/proteus.yml 等（proteus check 门禁 → 逐端构建 → 产物归档）
       默认 platform=github targets=web,skyline；写入当前目录（或 <dir>）
 
+### `proteus cobuild`
+
+```bash
+proteus cobuild <init|check> [--force]
+```
+
+★AI 共建工具包（2026-09-20）：把「向框架方报缺陷并跟踪到修复」的机制装进本工程——
+      init 生成 .agents/skills/proteus-cobuild/SKILL.md（AI 入口文档）+ docs/框架问题台账.json（对账台账）
+      + docs/实战报告_proteus接入.md（报告模板）+ scripts/ledger_check.mjs（校验器）+ AGENTS.md 指针段落（幂等）
+      check 自检文件齐备（可挂 CI）；新工程由 create-proteus 模板自带，无需手动 init
+
 ## 诊断与工具
 
 ### `proteus explain`

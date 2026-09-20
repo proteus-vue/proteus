@@ -167,6 +167,8 @@ export function compileVueSfc(source: string, options: CompileOptions = {}): Com
     dynamicSvgs: tplResult.dynamicSvgs,
     // ★#500 自定义组件 v-model 回写处理器
     vModelComponentHandlers: tplResult.vModelComponentHandlers,
+    // ★2026-09-20（F-28/Bug E）：v-model + @input 同元素 → 合并处理器（script 生成方法）
+    vModelMergedHandlers: tplResult.vModelMergedHandlers,
     semanticGrids: tplResult.semanticGrids,
     moduleImports: options.moduleImports,
     modelRefs: sfcMacros.ok ? sfcMacros.modelRefs : undefined,

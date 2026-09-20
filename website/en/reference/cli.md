@@ -296,6 +296,17 @@ proteus ci:init [--platform <github|gitlab|circleci>] [--targets <a,b>] [dir]
 ★CI/CD template generation (G-33 M4): .github/workflows/proteus.yml, etc. (proteus check gates → per-target builds → artifact archiving)
       default platform=github targets=web,skyline; writes into the current directory (or <dir>)
 
+### `proteus cobuild`
+
+```bash
+proteus cobuild <init|check> [--force]
+```
+
+★AI co-build kit (2026-09-20): installs the "report defects to the framework and track to resolution" workflow —
+      init generates .agents/skills/proteus-cobuild/SKILL.md (AI entry doc) + docs/框架问题台账.json (reconciliation ledger)
+      + docs/实战报告_proteus接入.md (report template) + scripts/ledger_check.mjs (validator) + an AGENTS.md pointer section (idempotent)
+      check self-verifies completeness (CI-friendly); new projects ship it via the create-proteus template
+
 ## Diagnostics & tools
 
 ### `proteus explain`

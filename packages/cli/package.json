@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/cli",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.13",
   "description": "Proteus 命令行：proteus build（独立编译）/ explain（决策 trace + AI 说明书）/ rules（规则目录）",
   "type": "module",
   "license": "Apache-2.0",
@@ -15,28 +15,28 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@vue/compiler-sfc --external:@vue/compiler-dom --external:@vue/runtime-core --external:@proteus-vue/router --external:@proteus-vue/module --external:@proteus-vue/compiler --external:@proteus-vue/capabilities --external:@proteus-vue/css-compat --external:@proteus-vue/runtime --external:@proteus-vue/app-config --external:@proteus-vue/devtools-runtime --external:@proteus-vue/render-backend --external:@proteus-vue/dev-host --external:@proteus-vue/plugin-vite --external:esbuild --banner:js=\"#!/usr/bin/env node\""
   },
   "dependencies": {
-    "@proteus-vue/app-config": "0.3.0-beta.7",
-    "@proteus-vue/capabilities": "0.3.0-beta.7",
-    "@proteus-vue/compiler": "0.3.0-beta.7",
-    "@proteus-vue/compiler-backend": "0.3.0-beta.7",
-    "@proteus-vue/component-ir": "0.3.0-beta.7",
-    "@proteus-vue/css-compat": "0.3.0-beta.7",
-    "@proteus-vue/dev-host": "0.3.0-beta.7",
-    "@proteus-vue/devtools-runtime": "0.3.0-beta.7",
-    "@proteus-vue/fluid": "0.3.0-beta.7",
-    "@proteus-vue/module": "0.3.0-beta.7",
-    "@proteus-vue/render-backend": "0.3.0-beta.7",
-    "@proteus-vue/router": "0.3.0-beta.7",
-    "@proteus-vue/runtime": "0.3.0-beta.7",
-    "@proteus-vue/types": "0.3.0-beta.7",
-    "@proteus-vue/plugin-vite": "0.3.0-beta.7",
+    "@proteus-vue/app-config": "0.3.0-beta.11",
+    "@proteus-vue/capabilities": "0.3.0-beta.12",
+    "@proteus-vue/compiler": "0.3.0-beta.12",
+    "@proteus-vue/compiler-backend": "0.3.0-beta.13",
+    "@proteus-vue/component-ir": "0.3.0-beta.11",
+    "@proteus-vue/css-compat": "0.3.0-beta.11",
+    "@proteus-vue/dev-host": "0.3.0-beta.11",
+    "@proteus-vue/devtools-runtime": "0.3.0-beta.11",
+    "@proteus-vue/fluid": "0.3.0-beta.11",
+    "@proteus-vue/module": "0.3.0-beta.11",
+    "@proteus-vue/render-backend": "0.3.0-beta.11",
+    "@proteus-vue/router": "0.3.0-beta.12",
+    "@proteus-vue/runtime": "0.3.0-beta.13",
+    "@proteus-vue/types": "0.3.0-beta.12",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.13",
     "esbuild": "^0.28.2"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",
     "@vue/compiler-dom": "^3.5.42",
-    "@proteus-vue/plugin-vite": "0.3.0-beta.7",
-    "@proteus-vue/compat-miniprogram": "0.3.0-beta.7",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.13",
+    "@proteus-vue/compat-miniprogram": "0.3.0-beta.12",
     "vite": "^5.0.0"
   }
 }

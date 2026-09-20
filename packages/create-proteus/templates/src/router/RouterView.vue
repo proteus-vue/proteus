@@ -54,10 +54,15 @@ adapter.onPageLoad?.((route, query, routeType, nav) => {
 
 const currentRoute = computed(() => current.value || 'pages/index')
 
-// 层叠转场（routeType 前进/后退）：新旧同屏重叠 → 绝对定位 + default 模式；
-// fade / replace / reset / tab 用 out-in（先退后进）
-const layeredNames = ['halfscreen', 'slide-up', 'scale', 'halfscreen-back', 'slide-up-back', 'scale-back']
-const isLayered = computed(() => layeredNames.includes(transitionName.value))
+// ★★2026-09-20：**所有转场统一走层叠路径**（新旧同屏重叠 → 绝对定位 + default 模式），
+//   不再使用 `<Transition mode="out-in">`。原因见外部实战报告第十一节第五条（阻断级）：
+//   out-in 依赖 Vue 的 `afterLeave` 回调复位 BaseTransition 的 `state.isLeaving`；实测在特定页面
+//   （离开「工作台」后）该回调**永久不触发** → `state.isLeaving` 恒为 true → 此后**每一次**页面切换
+//   都被短路成空注释（URL 变了 / 页面空白 / 控制台零报错 / 永久卡死，必须刷新）。
+//   触发条件未定位到根因（外部项目已二分排除抽屉、内容区块、柔性布局、导航方式），
+//   但**层叠路径不依赖任何完成回调**——统一走它可整类消除该失败模式（外部项目已实测通过）。
+//   层叠语义同时更贴近小程序：旧页保留、新页覆盖，而不是先销毁后渲染。
+const isLayered = true
 
 // 遮罩对齐 MP barrierColor：halfScreen 0.4 / scaleDown 0.8（forward + back 都显示）；slideUp opaque 无遮罩
 // 遮罩常驻但被停留页(z:2)盖住：forward 时旧页(z:0)暴露在遮罩下淡入，back 时前页(z:0)暴露在遮罩下淡出
@@ -82,10 +87,12 @@ const view = computed<Component | null>(() => {
 </script>
 
 <template>
-  <!-- routeType 转场全部层叠（default 模式 + 绝对定位重叠 → 新旧同屏）：
-       halfScreen/slideUp/scaleDown 各自层叠语义；默认 fade 用 out-in 先退后进
+  <!-- 转场全部层叠（default 模式 + 绝对定位重叠 → 新旧同屏）：
+       各 routeType 自带层叠语义（halfScreen/slideUp/scaleDown 的 enter/leave 规则），
+       fade 亦为交叉淡入；**不用 out-in**（其 afterLeave 不触发会让该 RouterView 永久卡死，
+       见 script 中 isLayered 处注释与外部实战报告第十一节第五条）
        :key 按路由强制重挂载触发过渡 -->
-  <div class="router-view" :class="{ layered: isLayered }">
+  <div class="router-view layered">
     <!-- 遮罩层（对齐 MP barrierColor）：旧页/前页(z:0)之上、停留页(z:2)之下；forward 淡入压暗，back 淡出抬起 -->
     <div
       v-if="showBarrier"
@@ -93,7 +100,7 @@ const view = computed<Component | null>(() => {
       :class="{ 'barrier-out': isBack }"
       :style="{ '--barrier-opacity': barrierOpacity }"
     />
-    <Transition :name="transitionName" :mode="isLayered ? undefined : 'out-in'">
+    <Transition :name="transitionName">
       <!-- ★v-bind="currentQuery"：路由参数透传给页面（页面用 defineProps 声明即收到；
            未声明的页面不受影响）。修 Web 端「参数两条路都拿不到」见 currentQuery 处注释 -->
       <component :is="view" v-if="view" :key="currentRoute" v-bind="currentQuery" class="page" />
@@ -103,7 +110,7 @@ const view = computed<Component | null>(() => {
 </template>
 
 <style scoped>
-/* 层叠容器：所有 routeType 转场时新旧页同屏绝对定位重叠 */
+/* 层叠容器：所有转场均为新旧同屏绝对定位重叠（不再有 out-in 分支，见 script 注释） */
 .router-view {
   position: relative;
   min-height: 100vh;
@@ -295,7 +302,7 @@ const view = computed<Component | null>(() => {
   transform: translateY(100%);
 }
 
-/* replace（redirectTo）：替换当前页——旧页轻微缩小淡出、新页淡入（out-in） */
+/* replace（redirectTo）：替换当前页——旧页轻微缩小淡出、新页淡入（层叠交叉） */
 .replace-enter-active,
 .replace-leave-active {
   transition:

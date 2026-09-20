@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/component-ir",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.11",
   "description": "G-31 组件与 API 语义化（component-semantics-plan B1）：Component IR（C-IR）schema + 属性约束校验 + semantic 映射——组件=语义、属性=约束、Backend 消费 semantic 而非 tag（零依赖纯逻辑）",
   "type": "module",
   "license": "Apache-2.0",
@@ -22,6 +22,6 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
   },
   "dependencies": {
-    "@proteus-vue/contracts": "0.3.0-beta.7"
+    "@proteus-vue/contracts": "0.3.0-beta.11"
   }
 }

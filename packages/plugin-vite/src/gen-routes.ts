@@ -660,7 +660,16 @@ function collectComponents(file: string, skipSemantic = false): Record<string, s
       out[tag] = `/proteus/${tag}/index`
       continue
     }
-    console.warn(`[gen-routes] ${file} 使用了组件 <${tag}>，但未找到 ${appCandidates.join(' 或 ')} 或框架组件 ${fwCandidates.join(' 或 ')}`)
+    // ★2026-09-20（外部实战报告第七节第 8 条）：报错必须**带上"应放哪"**——只说"未找到"，
+    //   用户无从下手（尤其是从别的框架迁过来时不知道该建什么目录、该不该起大写名）。
+    console.warn(
+      `[gen-routes] ${file} 使用了组件 <${tag}>，但未找到其源码：\n` +
+        `    应用组件放这里 → ${appCandidates.join('\n                     或 ')}\n` +
+        `    框架组件放这里 → ${fwCandidates.join('\n                     或 ')}\n` +
+        `    （应用组件目录相对 pagesDir 的上级，即 <pagesDir>/../components/<tag>/index.vue）\n` +
+        `    若这是小程序内置/宿主标签，请确认拼写，或在 proteus.config.ts 的 page 配置中声明；\n` +
+        `    该标签本次**未写入 usingComponents**，真机会报 usingComponents 未找到组件。`,
+    )
   }
   return out
 }

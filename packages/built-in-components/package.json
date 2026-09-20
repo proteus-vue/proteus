@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/built-in-components",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.12",
   "description": "Proteus 框架内置组件（以微信小程序内置组件为基准）：view/text/button/input/image/scroll-view/textarea/switch/slider/icon/progress/navigator/picker 的跨端组件本体 + install + MpComponentSchema 契约对照——与扩展组件（@proteus-vue/components，p-* 生态组件）区分",
   "type": "module",
   "license": "Apache-2.0",
@@ -24,8 +24,8 @@
     "build": "tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:vue --external:@proteus-vue/shared"
   },
   "dependencies": {
-    "@proteus-vue/shared": "0.3.0-beta.7",
-    "@proteus-vue/types": "0.3.0-beta.7"
+    "@proteus-vue/shared": "0.3.0-beta.11",
+    "@proteus-vue/types": "0.3.0-beta.12"
   },
   "peerDependencies": {
     "vue": "^3.4"

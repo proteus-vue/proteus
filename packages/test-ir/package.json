@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/test-ir",
-  "version": "0.3.0-beta.7",
+  "version": "0.3.0-beta.11",
   "description": "G-44 B1（proteus-testing-framework-plan）：验证语义层——Test IR（可序列化测试语义：AssertionNode/ActOp/Profile3D）+ TestBackend SPI 五官方后端（Node/JSCarrier/AOT/Host/Device）+ 断言解释器 + ConformanceRunner 统一汇总 + 三维断点矩阵生成器（100 profiles）——测试代码不再绑定断言库/运行器/设备（第八次泛化）",
   "type": "module",
   "license": "Apache-2.0",

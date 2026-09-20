@@ -1,5 +1,29 @@
 # @proteus-vue/component-ir
 
+## 0.3.0-beta.11
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.11
+
+## 0.3.0-beta.10
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.10
+
+## 0.3.0-beta.9
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.9
+
+## 0.3.0-beta.8
+
+### Patch Changes
+
+- @proteus-vue/contracts@0.3.0-beta.8
+
 ## 0.3.0-beta.7
 
 ### Patch Changes

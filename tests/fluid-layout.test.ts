@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateClamp, linearFluid, deriveBreakpoints, calcColumns, gridTemplate, transformTemplateToWxml } from '@proteus-vue/compiler'
 import { createFluidStyle, parseFluidExpr, applyFluidStyle } from '@proteus-vue/components'
-import { defaultScopedPlugin } from '@proteus-vue/plugin-vite'
+import { defaultScopedPlugin, pFluidLayoutPlugin } from '@proteus-vue/plugin-vite'
 
 describe('fluid-layout B1（纯算法）', () => {
   it('generateClamp：设计稿 375 → clamp(20px, calc(15.77px + 1.1268vw), 32px)（01 §4.1 已验证输出）', () => {
@@ -89,10 +89,56 @@ describe('★G-22 p-fluid Web 运行时（指令 + 属性改写）', () => {
     expect(el.getAttribute('style')).toBe('color:red; font-size: clamp(20px, calc(15.77px + 1.1268vw), 32px)')
   })
 
+  // ★2026-09-20 修外部实战报告第十一节第四条（阻断级）：指令同时挂 mounted/updated，
+  //   Vue 的元素级 updated 在父组件每次重渲染时触发 → 旧实现（无条件追加 style 字符串）
+  //   会让声明数随更新次数线性增长（实测 13 次）。此断言锁死「重复执行结果恒定」。
+  it('applyFluidStyle：重复调用（updated 每次重渲染触发）**不再累加**——幂等', () => {
+    const el = document.createElement('div')
+    applyFluidStyle(el, 'font-size(20, 32)', 375, 1440)
+    const once = el.getAttribute('style') ?? ''
+    for (let i = 0; i < 30; i++) applyFluidStyle(el, 'font-size(20, 32)', 375, 1440)
+    const after = el.getAttribute('style') ?? ''
+    expect(after).toBe(once)
+    expect(after.split('font-size').length - 1).toBe(1)
+  })
+
+  it('applyFluidStyle：表达式变化时更新为新值（不是只写一次）——多组各写一条', () => {
+    const el = document.createElement('div')
+    applyFluidStyle(el, 'font-size(20, 32)', 375, 1440)
+    applyFluidStyle(el, 'font-size(24, 40) gap(8, 16)', 375, 1440)
+    const style = el.getAttribute('style') ?? ''
+    expect(style).toContain('font-size: clamp(24px')
+    expect(style).toContain('gap: clamp(8px')
+    expect(style.split('font-size').length - 1).toBe(1)
+  })
+
   it('defaultScopedPlugin：p-fluid 属性 → v-p-fluid 指令（一套源码语法两端求解）', () => {
     const plugin = defaultScopedPlugin()
     const out = (plugin.transform as (code: string, id: string) => { code: string } | null)('<template><h1 p-fluid="font-size(20, 32)">x</h1></template>', '/x.vue')
     expect(out?.code).toContain('v-p-fluid="\'font-size(20, 32)\'"')
     expect(out?.code).not.toContain(' p-fluid=')
+  })
+
+  // ★2026-09-20 修外部实战报告第十一节第二条：p-fluid 改写此前**捆在** defaultScopedPlugin 里，
+  //   而框架 Web 分支从未注册它 → Web 端属性原样留在 DOM、静默不生成样式。
+  //   拆出 pFluidLayoutPlugin 后：① 框架 Web 分支默认注册它（vite-config）；② 它**不做** MP 标签改写，
+  //   故不会把原生 <button>/<input> 变成 Web 端未必注册的 proteus-* 组件（那会让整页渲染不出来）。
+  it('pFluidLayoutPlugin：只改写 p-fluid，**不**动原生标签（可安全默认注册于 Web 分支）', () => {
+    const plugin = pFluidLayoutPlugin()
+    const code = '<template><h1 p-fluid="font-size(20, 32)">x</h1><button>ok</button><input /></template>'
+    const out = (plugin.transform as (code: string, id: string) => { code: string } | null)(code, '/x.vue')
+    expect(out?.code).toContain('v-p-fluid="\'font-size(20, 32)\'"')
+    expect(out?.code).not.toContain(' p-fluid=')
+    // ★关键断言：原生标签**不被**改成 proteus-*（defaultScopedPlugin 会改，故它不能进 Web 默认链）
+    expect(out?.code).toContain('<button>ok</button>')
+    expect(out?.code).toContain('<input />')
+    expect(out?.code).not.toContain('proteus-button')
+    expect(out?.code).not.toContain('proteus-input')
+  })
+
+  it('pFluidLayoutPlugin：非 .vue 文件不动（id 过滤）', () => {
+    const plugin = pFluidLayoutPlugin()
+    const out = (plugin.transform as (code: string, id: string) => unknown)('<template><h1 p-fluid="x">x</h1></template>', '/x.ts')
+    expect(out).toBeNull()
   })
 })

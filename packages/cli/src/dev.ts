@@ -47,6 +47,42 @@ export function hasLegacyViteConfig(root: string): boolean {
   return fs.existsSync(path.join(root, 'vite.config.ts')) || fs.existsSync(path.join(root, 'vite.config.mts')) || fs.existsSync(path.join(root, 'vite.config.js'))
 }
 
+/**
+ * ★委派防重入标记（2026-09-20 修外部实战报告第十一节第四条）。
+ *
+ * 遗留分支的实现是「spawn 工程自己的 `npm run build:web`」，而 create-proteus 模板里
+ * `build:web` 的定义正是 `proteus build --target web`——**同一个命令**。于是只要工程里存在
+ * `vite.config.ts`（比如用户按旧文档加的桥接文件），就会：
+ *   `proteus build` → `npm run build:web` → `proteus build` → … 无限递归（实测：刷屏且无明确错误）。
+ *
+ * 修法：委派时在子进程环境里打标记；子进程再进来时若**同时**满足「有 legacy vite.config.ts」
+ * 且「带着标记」（= 我就是被自己委派起来的），就**不再委派**，而是给出可执行的错误说明。
+ * 不用「有标记就走程序化」是因为那会绕过用户 vite.config.ts 的配置，产出与预期不符的构建——
+ * 报错让人明确选择（删掉 vite.config.ts，或把 npm script 指到真正的构建命令）更安全。
+ */
+export const DELEGATED_ENV = 'PROTEUS_DELEGATED'
+
+/** 当前进程是否由 proteus 的委派分支拉起（见 DELEGATED_ENV） */
+export function isDelegatedRun(): boolean {
+  return process.env[DELEGATED_ENV] === '1'
+}
+
+/**
+ * 委派前的重入检查：检测到「被委派 + 仍有 legacy vite.config.ts」的组合即判定为自递归。
+ * @returns 递归时的错误提示（调用方抛错），否则 null
+ */
+export function detectDelegationLoop(root: string, script: string): string | null {
+  if (!isDelegatedRun() || !hasLegacyViteConfig(root)) return null
+  return (
+    `检测到**自递归**：工程存在 vite.config.ts，${script} 被委派执行时又跑回了 proteus 自己。\n` +
+    `  成因：package.json 里该脚本的命令就是 \`proteus build/dev\`（create-proteus 模板的默认写法），\n` +
+    `        而遗留分支的判据恰好是「工程里有没有 vite.config.ts」→ 委派 → 又命中遗留分支 → 无限递归。\n` +
+    `  修法（二选一）：\n` +
+    `    ① 删掉 vite.config.ts——新版 CLI 会自组 vite 配置（推荐，模板已不含该文件）；\n` +
+    `    ② 或把 package.json 里该脚本改成真正的构建命令（如 \`vite build\`），不再回调 proteus。`
+  )
+}
+
 /** 遗留 spawn 计划（纯函数）：web → Vite dev server；skyline → MP watch 构建；app 端待 M3 */
 export function runDev(opts: DevOptions): SpawnPlan {
   switch (opts.target) {

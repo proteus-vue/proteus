@@ -141,6 +141,147 @@ packages/
 
 ★新增门禁：`check-package-health` 支持 `publishSource: true` 源码包分类（校验 `main`/`types`/`exports` 指向存在的源码文件、`files` 含 `index.ts`，跳过 dist 检查）。
 
+
+## 版本组策略：fixed → linked（★2026-09-20）
+
+**背景：两次都是被真实代价推动的。**
+
+| 阶段 | 配置 | 解决的问题 | 引入的代价 |
+|---|---|---|---|
+| 2026-09-19 | **fixed** `[["@proteus-vue/*"]]` | 「41 包各走各的版本（实测 **14 种**）+ 65 处 exact pin 靠人同步必漏」 | **每次发布都要 bump + 重发全部 41 个包** |
+| 2026-09-20 | **linked** `[["@proteus-vue/*"]]` | 只 bump/发布**实际变更**的包 | 各包预发布序号会不同（不再是 41 包同号） |
+
+**fixed 的代价实测**（切换的直接动因）：
+
+```
+只给 compiler 写一个 patch changeset → npx changeset version
+  fixed：41 个包全部 → 0.3.0-beta.12   （连内容从未变过的 docs/mcp 也要重发；
+                                        它们已积累 7~10 个版本号）
+  linked：4 个包 → 0.3.0-beta.12        （compiler + 依赖它的 cli/plugin-vite/test-core）
+          37 个包停留在 0.3.0-beta.11
+```
+
+**linked 的语义**（读 `@changesets/assemble-release-plan` 源码 + 实验确认）：
+
+- 只遍历**已产生 release**（`type !== "none"`）的包 → 未变更的**不 bump**；
+- 但**依赖方自动级联**（实测：改 1 个叶子包 → 4 个包；改 `shared` → **16 个包**），
+  这正是防「依赖 pin 指向旧版 → 重复副本/单例拆散」的关键机制；
+- 组内**已发布的包仍保持同号**，故不会退回「14 种版本号」的乱局。
+
+**配套改动**：
+
+1. `.changeset/config.json`：`fixed: []` + `linked: [["@proteus-vue/*"]]`；
+2. **门禁判据改写**（`check:internal-versions`）：从「41 包版本号必须完全相同」改为
+   **「必须同在一条 `major.minor.patch` 线」**（如都 `0.3.0`，`-beta.N` 序号可不同）。
+   这条仍能拦住真正的分裂（某包被单独提到 0.4.0/1.0.0），又允许 linked 的按需发版；
+3. **发布器省掉白做的活**（`publish-all.sh`）：把「查 registry」提到「打包」**之前**——
+   此前顺序是「打包 → 查 registry → 跳过」，于是 linked 下 37 个未变更的包仍被逐个打包（纯浪费）。
+   现在 registry 已有该版本 → **直接 skip，不打包**；
+4. **回归锁** `tests/version-group.test.ts`：linked 配置必须在位、fixed 必须为空、
+   所有包同一条版本线、examples/模板的 pin 指向各包**自己的**版本（`workspace:*` 合法）。
+   破坏性验证：改回 fixed → 测试当场红。
+
+> ★**注意**：`--dry-run` 仍会走全部 41 个包（它的职责是验证「发布命令本身可用」，不能跳步）。
+
+## 外部报告台账：让「报 N 修 M」可机器核对（★2026-09-20）
+
+**问题**：外部实战报告（OPERATOR/web）提出的问题、修复、验证状态此前散落在 `PROJECT_MEMORY` 与回执段落里，
+是**散文**——无法机器核对。最直接的教训：第六轮报告指出「一个 bug 有三条路径」，我们只修了一条，
+**没有任何机制能发现「报 3 修 1」**，靠下一轮外部复测才撞出来。
+
+**做法**：`docs/外部报告台账.json`（自描述 schema）+ `scripts/ledger-check.mjs`（对账与校验）。
+
+**收口（resolved）判据 = 三件事同时成立**：
+
+1. `status=fixed` —— 代码改对了；
+2. `fix_state=published` —— **已上 npm**（只改工作树 → 用户拿不到，不算收口）；
+3. `verification=passed` —— **被独立复测过**（只有框架自测不算「用户拿得到且被验证过」）。
+
+**用法**：
+
+| 命令 | 用途 |
+|---|---|
+| `pnpm check:ledger` | **schema 门禁**——必填字段 / 枚举合法 / blocker 必带 repro / partial 必带 related / `fixed_in` 不得超前于已验版本。台账不合格 → exit 2。**已接入 CI 与 `pnpm verify`** |
+| `pnpm ledger:check` | **发布前自查**——有未收口项（未发布 / 验证不充分 / 部分修复）即 exit 1。回答「报 N 条，真正收口了几条」 |
+| `node scripts/ledger-check.mjs` | 对账报告（恒退出 0，含逐条未收口说明） |
+
+> 为什么 CI 只跑 schema 模式而不跑 `--check`：后者会把「已修未发布」也算未收口 → 常驻红。
+> **未发布是正常中间态**，不是 CI 该拦的；但它是**发布前**必须被看见的状态。
+
+**当前台账**：25 条（external 18 / framework 7），真实收口率见 `pnpm ledger:check` 输出——
+把「我们自己发现的同类缺陷」也登记进去（`found_by=framework`），是因为**外部报告没提 ≠ 不存在**：
+本次补登的 7 条里有 3 条是发布物缺陷（`types` 死子路径、`rust` 包缺 crate 源码、两个包 README 悬空声明），
+2 条是 Bug B 的同族漏网路径（方法名 / 动态 SVG 误改字符串），这些**外部报告都没写**，但同属「已修/待发」范畴。
+
+**破坏性验证**：人为植入 3 处腐化（blocker 缺 repro / partial 缺 related / `fixed_in` 超前）→ 门禁全部抓出、exit 2 → 还原绿。
+
+## 官网数字：从「宣称」到「可重算」（★2026-09-20）
+
+**问题**：`website/src/stats.ts` 自称「数字单一来源，禁止散落硬编码」，但**没有任何门禁校验它**。
+实测 8 项里 **7 项长期过时**：
+
+| 项 | 官网旧值 | 实际值 |
+|---|---|---|
+| @proteus-vue/* 包 | 40（且同页 Hero 写 40、数字区写 41——**一个页面两个数**） | **41** |
+| 单测全绿 | 2966 | **3441**（290 文件） |
+| 语义原语 SSOT | 176 | **183** |
+| implemented 语义 | 54 | **64** |
+| 语义组件 | 66 | **76** |
+| 编译规则 | 106 | **111** |
+| conformance 套件入口 | 8 | **10** |
+| plan 文档 | 81 | **85** |
+
+根因与 2026-09-20 的发布物事故**同形**：*只检查「我声明的」，不核对「实际是什么」*。
+
+**修法三层**：
+
+1. **单一来源收敛**——`stats.ts` 补 `id`（供门禁定位）与 `labelEn`（英文页从同一数组派生）；
+   `Home.vue` 的 Hero 与 `STATS_EN` 原先**各自硬编码一份数字**（中文改了英文不改），现全部从 `STATS` 派生。
+2. **新增门禁 `check:stats`**（`website/scripts/check-stats.ts`，已接 CI + `verify`）：
+   凡**可机器重算**的 7 项，逐项与源码实际值比对（读 `PRIMITIVE_CATALOG` / `implementedPrimitives()` /
+   `listTransformRules()` / 扫包目录 / 扫 conformance 入口），不符即 CI 红。
+   唯一豁免 `tests`（需跑全量套件，代价高）——在 `stats.ts` 注释里写明由发布前手动核对。
+   **破坏性验证**：把组件数改回 66 → 门禁报 `✗ components: 声明 66 但实际 76`、exit 1 → 还原绿。
+3. **计数规则明确化**——原先的「8 conformance 套件」无对应规则可重算，现写明为
+   `packages/*/src/*conformance*.ts` 文件数（10）；「× 6 后端」写明为
+   `SEMANTIC_BACKEND_MAP` 的 6 个**端**键（vue-dom/skyline/native-ios/native-android/native-harmony/flutter，
+   另有 headless 参考后端不属端）。
+
+> 另修正 `PROJECT_MEMORY.md` 项目概览的「40 个包」→ **41**（该文件是新会话的权威依据，
+> 它写错会让后续每个会话都从错数出发）。
+
+## 发布打包：声明与打包器解耦（★2026-09-20 事故根治）
+
+**一次真实事故**：`@proteus-vue/components@0.3.0-beta.7` 全量发布后，registry 上的包**只有 17 个文件**——
+74 个 `p-*` 组件一个都没进去（本地源码与 `pnpm pack` 都是 94 个）。任何工程 import 组件库立即构建失败
+（`Could not resolve "./p-view/index.vue"`），而**四道既有门禁全部放行**。
+
+**根因两层**：
+
+1. `packages/components/package.json` 的 `files` 里写的是**纯目录通配** `"p-*"`——
+   **npm 打包器不展开它**（`"p-*/"` 也不行，必须 `"p-*/**"`），而 pnpm 打包器正常展开。
+2. 各门禁检查的都是「**我声明的**」（源码文件在不在、构建产物在不在、包清单里有没有写），
+   **没有一道检查「实际打出去的包里有什么」**——因此同一份声明在 npm 打包器下静默丢件时，全线绿灯。
+
+事故链：09-19 22:36 的 `0.2.0-beta.2` 走 `changeset publish`（pnpm 仓库内部调 `pnpm publish` → 完整）
+→ 23:33 为绕开 changesets 在 pre 模式禁止自定义 tag 的限制，改为逐包 `npm publish`（修复本身正确）
+→ 23:37 全量发布**首次经 npm 打包器** → 74 个组件静默丢失。
+
+### 落地的三条规则（**后续所有发布都必须遵守**）
+
+| 规则 | 说明 |
+|---|---|
+| **打包器固定为 pnpm** | 唯一实现：`scripts/lib/pack-package.mjs`（`pnpm pack`，字节确定——同输入两次 sha512 相同，故可与 registry 的 `dist.integrity` 直接比对）。`files` 里需要通配目录时一律写 `"dir/**"`，**禁止**裸目录通配 |
+| **上传仍走 npm** | `npm publish <tarball>`：OIDC trusted publishing / provenance 只认 npm，而 npm 上传 tarball 时**按字节原样上传**（实测 `--dry-run` 报的 integrity 与本地 tarball sha512 一致）→ 打包器与上传器职责可安全分离 |
+| **发布物内容必须过门禁** | `pnpm check:publish-contents`（`scripts/check-publish-contents.mjs`，已接 CI + `verify`）：用**发布时同一个打包器**逐包核对——`files` 每项命中 ≥1 文件、入口在包内、**入口的相对 import 闭包在包内可解析** |
+
+> 该门禁首跑即抓出**三处同族缺陷**（都不是本次事故，但同属「声明与发布物不符」）：
+> `types` 的 exports 子路径指向从不发布的 `./src/config-schema.ts`；
+> `compiler-backend-rust` 声明了从未产出的 `dist`（且包内无 `Cargo.toml`/`src/` → **发出去根本跑不起来**，已修并从 tarball 实测 `cargo build` 成功）；
+> `test-ir`/`compiler-backend-rust` 声明 `README.md` 但磁盘无该文件（已补齐）。
+
+**回归锁**：`tests/publish-contents.test.ts`（6 例，含破坏性验证——把 `files` 回退成 `"p-*"` 时测试当场红）。
+
 组件库本身的架构规划见 docs/proteus-component-plan/（L3 @proteus-vue/components：基础组件 + 业务组件，Web/Skyline 双端语义一致）。
 
 ## 风险与对策
@@ -287,6 +428,8 @@ pnpm release --all      # （仅在需要把全部包的 latest 归位时）全�
 
 ```
 $ npm create @proteus-vue/proteus@beta my-app && cd my-app && npm install   # 用户真实旅程
+# ★注（2026-09-20）：此行是当时的**历史记录**。`@beta` 现已是历史遗留 tag（归位需重发：pnpm realign:beta）；
+#   当前请用不带 tag 的 `npm create @proteus-vue/proteus my-app`（latest 恒指向最新版）。
 $ 检查依赖树（实测，修复前）
   cli                  0.2.1-beta.0                  ← 不是修好的 0.3.0-beta.5
   devtools-runtime     0.1.0                        ← 正是「只有 8 个导出」的崩溃版
