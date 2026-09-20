@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "project": "{{name}}",
+  "report": "docs/实战报告_proteus接入.md（本工程）",
+  "last_verified_published": null,
+  "last_verified_at": null,
+  "schema": {
+    "说明": "外部实战报告 → 修复 → 验证 的逐条对账台账。目标是让「报 N 修 M」可机器核对，而不是靠散文。由 proteus cobuild init 生成。",
+    "字段": {
+      "id": "稳定编号，一旦分配不得更改（对账的锚点）",
+      "title": "一句话说清问题",
+      "kind": "packaging | cli | compiler | runtime | router | release | process | docs",
+      "severity": "blocker（阻断使用/构建） | major（功能受损或静默错误） | minor（体验/文档）",
+      "round": "第几轮复测",
+      "reported_in": "在哪个版本上发现",
+      "found_by": "external（你） | framework（框架自查）",
+      "status": "open | fixed | partial | by_design",
+      "fix_state": "published（已上 npm） | worktree（仅工作树）——status=fixed 时必填",
+      "fixed_in": "修复出现在哪个版本（fix_state=published 时必填）",
+      "verification": "passed（复测通过） | partial | unverified | failed | n_a",
+      "verified_by": "external（你在本工程复测） | framework（框架方自证）——verification=passed 时必填",
+      "verification_note": "验证方式的一句话（双方视角会合并保留）",
+      "evidence": "现象/报错（可复制片段）",
+      "repro": "最小复现（命令或代码）",
+      "related": "关联条目 id 数组（残留问题指向原条目）"
+    },
+    "对账规则": [
+      "只有 status=fixed 且 fix_state=published 且 verification=passed 才算「收口」",
+      "fix_state=worktree → 未发布：不得计入已修（npm 用户拿不到）",
+      "status=partial → 必须带 related 指向跟踪条目，防止「修一半当修完」",
+      "severity=blocker 的条目必须带 repro"
+    ]
+  },
+  "consumer_notes": [],
+  "entries": []
+}
