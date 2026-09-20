@@ -127,13 +127,79 @@ console.log(`  未消费的 changeset：${pending.length} 个${pending.length ? 
 console.log(`  源码改动但未 bump 的包：${drifted.length} 个${drifted.length ? `（${drifted.map((s) => '@proteus-vue/' + s).join(', ')}）` : ''}`)
 if (REPUBLISH_ALL) console.log('  ★--all：将为**全部包**补 patch 版本并发布（把 latest tag 整体归位）')
 
+/**
+ * 为给定包写一个 patch changeset（唯一文件名）+ 跑 `changeset version` + 同步 pin。
+ * ★抽成函数是为了**迭代**（见下方收敛循环）——linked 分组下需要多轮才能到不动点。
+ */
+function bumpPackages(targets, { reason }) {
+  // 记录提升前的版本（下方核验「版本真的前进了」——防文件名碰撞导致的静默 no-op）
+  const versionBefore = {}
+  for (const s of targets) {
+    try {
+      versionBefore[s] = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages', s, 'package.json'), 'utf8')).version
+    } catch {
+      /* 读不到 → 核验时跳过该包 */
+    }
+  }
+  const lines = targets.map((s) => `'@proteus-vue/${s}': patch`)
+  const body =
+    `---\n${lines.join('\n')}\n---\n\n` +
+    reason +
+    targets.map((s) => `- \`@proteus-vue/${s}\``).join('\n') +
+    `\n`
+  // ★★文件名必须**唯一**（2026-09-20 实测踩到的静默失败，阻断级）：
+  //   pre-release 模式下 changesets **不删除**已消费的 changeset，而是把文件名记进
+  //   `.changeset/pre.json` 的 `changesets` 数组；而 `changeset version` 会**跳过任何已在册的文件名**。
+  //   固定名 → 第二次发布起写成即已在册 → `changeset version` **静默 no-op** → 版本原地不动
+  //   → 发布时逐包判「内容一致 → skip」→ 整条命令打印成功却一个包都没发。
+  for (const f of fs.readdirSync(path.join(ROOT, '.changeset'))) {
+    if (/^auto-release-bump.*\.md$/.test(f)) {
+      try {
+        fs.rmSync(path.join(ROOT, '.changeset', f))
+      } catch {
+        /* 清理失败不影响（新文件用唯一名） */
+      }
+    }
+  }
+  const csName = `auto-release-bump-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.md`
+  fs.writeFileSync(path.join(ROOT, '.changeset', csName), body)
+  console.log(`  已为 ${targets.length} 个包生成 patch changeset（.changeset/${csName}）`)
+
+  run('npx', ['changeset', 'version'], { capture: false })
+  // ★版本提升的**结果核验**（2026-09-20 加固）：静默 no-op 之所以危险，是它会一路绿灯走到「发布成功」的假象。
+  //   此处用**版本号是否真的前进**做判据——没动就是没 bump，直接失败。
+  const bumped = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages', targets[0], 'package.json'), 'utf8')).version
+  const before = versionBefore[targets[0]]
+  if (before && bumped === before) {
+    die(
+      `版本提升**没有生效**：@proteus-vue/${targets[0]} 仍是 ${bumped}（未前进）。\n` +
+        `  最可能的原因：生成的 changeset 文件名已在 .changeset/pre.json 的已消费清单里\n` +
+        `  （pre 模式下 changesets 会跳过在册文件名 → 静默 no-op）。请检查 .changeset/ 与 pre.json。`,
+    )
+  }
+  console.log(`  版本提升核验：@proteus-vue/${targets[0]} ${before ?? '?'} → ${bumped} ✓`)
+  // 模板 / examples / 根包的 pin（changesets 管不到）
+  run('node', ['scripts/sync-internal-versions.mjs'], { capture: false })
+  return targets
+}
+
+let round = 0
+const bumpedAll = []
 if (pending.length === 0 && drifted.length === 0 && !REPUBLISH_ALL) {
   console.log('  无需提升——直接进入发布')
 } else if (DRY_RUN) {
   console.log('  （--dry-run：跳过实际提升）')
 } else {
-  // 为漂移包（或 --all 时的全部包）补一个 patch changeset —— 交给 changesets 统一处理
-  // （它会同时更新依赖这些包的内部精确 pin，并级联 bump 依赖方）
+  // ── ★收敛循环（2026-09-20：linked 分组后必须迭代）──
+  // 为什么一轮不够：linked 下只 bump「内容有变更」的包。而 bump 一个包会**更新依赖它的 pin**
+  //   （精确 pin 写在 package.json 里 → 依赖方的**内容**随之变化）→ 依赖方也成了「内容变了但版本没变」
+  //   → 不 bump 就发不出去（npm 版本不可变）。
+  //   ★特别地，**devDependencies 不会触发 changesets 的级联**（它只管 deps/peerDeps），
+  //     但本仓的 sync-internal-versions 会更新它们 → 必然产生这类「附带变更」。
+  //   实测（2026-09-20 本轮）：一轮 bump 后仍剩 4 个包漂移（runtime / hmr / compiler-backend / create-proteus，
+  //     全是 devDeps pin 被更新所致）；再 bump 一轮即收敛。
+  //   故此处迭代到不动点（有上限，防意外不收敛）。
+  // ★bumpedAll / round 声明在分支**外**：下方的「提升后漂移复核」要用它们判定「是否已覆盖」。
   let bumpTargets = drifted
   if (REPUBLISH_ALL) {
     bumpTargets = []
@@ -147,28 +213,55 @@ if (pending.length === 0 && drifted.length === 0 && !REPUBLISH_ALL) {
       }
     }
   }
-  if (bumpTargets.length > 0) {
-    const lines = bumpTargets.map((s) => `'@proteus-vue/${s}': patch`)
-    const body =
-      `---\n${lines.join('\n')}\n---\n\n` +
-      (REPUBLISH_ALL
-        ? `全量重发（scripts/release.mjs --all）：把全部包的 \`latest\` tag 归位到当前版本。\n` +
-          `动机——npm 强制每包须有 \`latest\`，而事后改 tag（npm dist-tag）属包管理操作、\n` +
-          `会被要求交互式 2FA；发布时设置 tag 不受此限，故重发是零手工的归位路径。\n\n`
-        : `自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，\n` +
-          `不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。\n\n`) +
-      bumpTargets.map((s) => `- \`@proteus-vue/${s}\``).join('\n') +
-      `\n`
-    fs.writeFileSync(path.join(ROOT, '.changeset', 'auto-release-bump.md'), body)
-    console.log(`  已为 ${bumpTargets.length} 个包生成 patch changeset（.changeset/auto-release-bump.md）`)
-  } else {
-    console.log('  无包需要 bump（沿用已有 changeset）')
+  const reason = REPUBLISH_ALL
+    ? `全量重发（scripts/release.mjs --all）：把全部包的 \`latest\` tag 归位到当前版本。\n` +
+      `动机——npm 强制每包须有 \`latest\`，而事后改 tag（npm dist-tag）属包管理操作、\n` +
+      `会被要求交互式 2FA；发布时设置 tag 不受此限，故重发是零手工的归位路径。\n\n`
+    : `自动补 bump（scripts/release.mjs）：以下包有本地源码变更但版本号未提升，\n` +
+      `不 bump 会被 npm 静默跳过——依赖方声明的旧版本号拿到的仍是旧内容。\n\n`
+
+  const MAX_ROUNDS = 6
+  round = 0
+  // bumpedAll 为外层变量（见上）
+  while (bumpTargets.length > 0 && round < MAX_ROUNDS) {
+    round++
+    if (round > 1) console.log(`\n  ── 收敛第 ${round} 轮（上一轮 bump 更新了依赖方 pin → 产生新的待 bump 包）──`)
+    bumpPackages(bumpTargets, { reason })
+    bumpedAll.push(...bumpTargets)
+    // 复核：还有漂移 → 下一轮（linked 语义下这是正常现象，不是错误）
+    const after = driftedPackages()
+    if (after === null) die('版本提升后无法复核漂移')
+    const fresh = after.filter((s) => !bumpedAll.includes(s))
+    if (fresh.length === 0) {
+      if (after.length === 0) break
+      // 剩下的都是已 bump 过的（理论上不该出现）→ 交给下方 postcheck 处理
+      break
+    }
+    bumpTargets = fresh
   }
-  run('npx', ['changeset', 'version'], { capture: false })
-  // 模板 / examples / 根包的 pin（changesets 管不到）+ lockfile
+  if (round >= MAX_ROUNDS) die(`版本提升未收敛（${MAX_ROUNDS} 轮后仍有漂移）——请检查依赖环或手动处理`)
+  console.log(`  版本提升完成（共 ${round} 轮，涉及 ${new Set(bumpedAll).size} 个包）`)
+}
+
+// ── ②b 提升后置同步（★**无条件执行**，不再只在提升分支里跑）──
+// ★2026-09-20 加固：这两步原先写在上面 else（提升）分支的末尾，于是「提升中途崩溃 → 重跑」时
+//   会因为「无需提升」而**整段跳过**它们 → 脚手架模板的 pin 永久停在旧版本（用户 `npm create`
+//   会装到旧包），而这条路径**不在发布链的任何校验里**（check:internal-versions 门禁不参与发布）。
+//   两步都是**幂等**的（已对齐则 no-op），故移到分支外无条件执行，把「崩过就半途而废」变成自愈。
+if (!DRY_RUN) {
   run('node', ['scripts/sync-internal-versions.mjs'], { capture: false })
   run('pnpm', ['install', '--lockfile-only', '--no-frozen-lockfile'], { capture: false })
-  console.log('  版本提升完成')
+  // ★发布前自查：模板/examples/根包 pin 必须与 workspace 一致——这是「用户能装到新包」的前提
+  try {
+    run('node', ['scripts/sync-internal-versions.mjs', '--check'], { capture: true })
+    console.log('  内部版本对齐核验：模板 / examples / 根包 pin 均 = workspace ✓')
+  } catch (e) {
+    die(
+      '内部版本对齐核验未通过（模板/examples/根包 pin 与 workspace 不一致）——\n' +
+        "  用户 `npm create` 会装到旧包。详见：node scripts/sync-internal-versions.mjs --check\n" +
+        `  ${String(e.stdout ?? e.message ?? e).slice(0, 300)}`,
+    )
+  }
 }
 
 if (DRY_RUN) {
@@ -189,16 +282,22 @@ if (DRY_RUN) {
 }
 
 // ── 提升后再核一次漂移，确保发出的确实是当前代码 ──
+// ★2026-09-20（linked 分组后）：判据从「必须为 0」改为**「必须已被 bump 覆盖」**——
+//   linked 语义下「有包漂移」不一定是错误：它可能是**下一轮才该 bump** 的（我们已在上面收敛循环里迭代）。
+//   到这一步仍有漂移，才是真问题（某包改了但没人 bump 它 → 发不出去）。
 if (pending.length || drifted.length) {
   const after = driftedPackages()
   if (after === null) die('版本提升后无法复核漂移')
-  if (after.length) {
+  // 收敛循环已 bump 过的包 → 它们现在版本已前进，不算「未覆盖」
+  const bumpedSet = new Set(bumpedAll.map((s) => s))
+  const uncovered = after.filter((s) => !bumpedSet.has(s))
+  if (uncovered.length) {
     die(
-      `版本提升后仍有 ${after.length} 个包漂移：${after.map((s) => '@proteus-vue/' + s).join(', ')}\n` +
+      `版本提升后仍有 ${uncovered.length} 个包漂移且未被 bump：${uncovered.map((s) => '@proteus-vue/' + s).join(', ')}\n` +
         `  这通常意味着这些包没被任何 changeset 覆盖到——请检查 .changeset/ 或手动处理。`,
     )
   }
-  console.log('  漂移复核：0（待发的都是新版本）')
+  console.log(`  漂移复核：0 个未覆盖（本轮共 bump ${bumpedSet.size} 个包，收敛 ${round} 轮）`)
 }
 
 // ── ③ 发布 ──
@@ -271,8 +370,16 @@ const t0 = Date.now()
  *   实测「一个都没发出去」时（changesets 拒绝自定义 tag → 41 个包全未发布），
  *   它仍傻等 3 分钟才报错，纯属浪费时间（效率规范：等待必须有条件、有退出判定）。
  *   · **一个都没可见** ⇒ 极可能是发布环节整批失败（而非传播延迟）→ **立即报错**，不等；
- *   · **部分可见** ⇒ 才是真正的传播窗口 → 有界重试（上限 90s）。
+ *   · **部分可见** ⇒ 才是真正的传播窗口 → 有界重试。
+ * ★窗口按「还剩几个」分级（2026-09-20 实跑教训）：那轮 41 包全部发布成功，但最后一个
+ *   （pinia-sync）比其余晚到——核验在 **90s 上限**处停手判失败，而它随后就可见了。
+ *   npm 自己提示的是 "may take a few minutes"；**既然只有极少数还没到，多等是有价值的**，
+ *   而「整批不见」那种真失败仍然第一时间报错（不受影响）。故：
+ *     · 剩余 ≥ 一半 → 90s 上限（可能确实有问题，别干等）
+ *     · 剩余 < 一半 → 300s 上限（正常传播，值得等）
  */
+const FULL_WINDOW_MS = 300_000
+const PARTIAL_WINDOW_MS = 90_000
 async function pollUntilVisible() {
   let attempt = 0
   for (;;) {
@@ -285,13 +392,17 @@ async function pollUntilVisible() {
       console.log('  ✗ 全部版本均未上架（一个都没有）——判定为发布环节整批失败，非传播延迟，不再等待')
       return miss
     }
-    if (Date.now() - t0 >= 90_000) return miss
-    const waitMs = Math.min(15_000, 5_000 * attempt)
+    const windowMs = miss.length * 2 < targets.length ? FULL_WINDOW_MS : PARTIAL_WINDOW_MS
+    if (Date.now() - t0 >= windowMs) return miss
+    const waitMs = Math.min(20_000, 5_000 * attempt)
     console.log(`  ${miss.length}/${targets.length} 个版本尚未可见（传播窗口，第 ${attempt} 次）——${waitMs / 1000}s 后复查`)
     await new Promise((r) => setTimeout(r, waitMs))
   }
 }
 const missing = await pollUntilVisible()
+
+/** 是否阻断整条发布（漂移/缺版本等硬失败）；tag 归一与收尾统计仍要跑 */
+let releaseFailed = false
 
 if (missing.length === 0) {
   console.log(`  ✅ 全部 ${targets.length} 个包的当前版本均已在 registry 上（用时 ${((Date.now() - t0) / 1000).toFixed(1)}s）`)
@@ -305,7 +416,8 @@ if (missing.length === 0) {
     if (realDrift.length) {
       console.log(`  ✗ ${realDrift.length} 个包「同版本但内容不同」：`)
       for (const d of realDrift) console.log(`      - @proteus-vue/${d.name}@${d.version}`)
-      die('存在真漂移（见上方清单）')
+      console.log('  → 修复：给这些包 bump 版本（同版本无法覆盖发布）。')
+      releaseFailed = true
     }
   } catch {
     /* 漂移检查失败不影响发布已完成的结论 */
@@ -314,24 +426,38 @@ if (missing.length === 0) {
   console.log(`  ✗ 以下 ${missing.length} 个版本未上架：`)
   for (const m of missing) console.log(`      - @proteus-vue/${m.short}@${m.version}`)
   console.log('  可能成因：① 发布环节失败（回看第 ③ 步输出中该包的 npm 错误）')
-  console.log('            ② 该包未被任何 changeset 覆盖（未参与本次发布）')
-  die('发布核验未通过（见上方清单）')
+  console.log('            ② 传播窗口未走完（npm 提示 "may take a few minutes"）——可稍后单独复查：')
+  console.log('               node scripts/check-publish-drift.mjs --only <包名>')
+  console.log('  ③ 该包未被任何 changeset 覆盖（未参与本次发布）')
+  // ★不再 `die()` 立即退出（2026-09-20 实跑教训）：核验失败曾让第 ⑤ 步 tag 归一**永不执行**，
+  //   而 tag 与「版本是否可见」是 registry 上两件独立的事——发布已成功的包，其 tag 仍应归一。
+  //   故记为失败、继续走完收尾，最后统一以非零码退出。
+  releaseFailed = true
 }
 
-// ── ⑤ tag 归一（自动）──
-// ★本项目只有 beta 一条线（2026-09-19 用户要求）：让 `beta` 与 `latest` 都指向当前版本，
-//   不出现「另一条正式版」。npm 强制每个包必须有 `latest`（删了 `npm i <pkg>` 会解析失败），
-//   故不是删掉它，而是让它**永远等于当前 beta 版本**——这样即使有人不带 tag 安装，
-//   拿到的也是同一份包。
-//   ★此处是**发布链内可自动完成**的部分（`npm dist-tag` 的权限门槛在实践中最常见的是
-//   「未登录/npm 尚不支持该子命令」而非必然的交互式 2FA），故做 best-effort 自动执行；
-//   失败只提示、不让整条发布失败（发布本身已完成）。
-step('⑤', 'tag 归一（beta + latest → 当前版本）')
+// ── ⑤ tag 核验（canonical = latest）──
+// ★★2026-09-20 重写（实测教训）：本步原为「跑 `npm dist-tag add` 把 beta 与 latest 都拉齐」，
+//   但那是**执行不了**的——`npm dist-tag` 属受 2FA 保护的包管理操作（bypass-2FA token 自
+//   2026-07-31 起被限制用于此类操作），实测报 **EOTP**，而本仓账号没有可用的 OTP 设备。
+//   唯一能写入 tag 的地方是**发布时**：`npm publish --tag <t>`（不受该限制）。
+//   → 本步改为**核验**（不尝试改 tag）：
+//     · `latest` 是发布时写入的 canonical → 必须指向当前版本，不符即判失败；
+//     · `beta` 属历史遗留 tag → 只报告，并指向无需 OTP 的归位路径（pnpm realign:beta）。
+step('⑤', 'tag 核验（canonical = latest）')
 try {
-  run('node', ['scripts/sync-dist-tags.mjs', '--fix'], { capture: false })
+  run('node', ['scripts/sync-dist-tags.mjs', '--check'], { capture: false })
 } catch {
-  console.log('\n  ⚠ tag 归一未完全成功——发布本身已完成，不影响包可用性。')
-  console.log('     可稍后单独重跑：pnpm publish:tags --fix')
+  console.log('\n  ✗ canonical（latest）tag 与当前版本不一致（见上方清单）。')
+  console.log('     这通常意味着有包「此前已发布同版本 → 跳过演出」，其 tag 未随本次发布更新。')
+  console.log('     归位（无需 OTP）：pnpm realign:beta（重发实现）或手工 npm dist-tag（需 2FA）。')
+  releaseFailed = true
+}
+
+if (releaseFailed) {
+  console.log('\n⚠ 发布已完成，但上面的核验项**未全部通过**（见第 ④ 步清单）。')
+  console.log('   包本身已推到 registry；未通过的多为**传播窗口**或**真漂移**，按提示复查即可。')
+  console.log('   版本提升的改动仍需提交：git add -A && git commit -m "chore(release): 版本提升"')
+  process.exit(1)
 }
 
 console.log('\n✅ 发布完成')
