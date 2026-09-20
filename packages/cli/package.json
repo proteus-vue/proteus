@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/cli",
-  "version": "0.3.0-beta.14",
+  "version": "0.3.0-beta.15",
   "description": "Proteus 命令行：proteus build（独立编译）/ explain（决策 trace + AI 说明书）/ rules（规则目录）",
   "type": "module",
   "license": "Apache-2.0",
@@ -17,7 +17,7 @@
   "dependencies": {
     "@proteus-vue/app-config": "0.3.0-beta.11",
     "@proteus-vue/capabilities": "0.3.0-beta.12",
-    "@proteus-vue/compiler": "0.3.0-beta.12",
+    "@proteus-vue/compiler": "0.3.0-beta.15",
     "@proteus-vue/compiler-backend": "0.3.0-beta.13",
     "@proteus-vue/component-ir": "0.3.0-beta.11",
     "@proteus-vue/css-compat": "0.3.0-beta.11",
@@ -29,13 +29,13 @@
     "@proteus-vue/router": "0.3.0-beta.12",
     "@proteus-vue/runtime": "0.3.0-beta.13",
     "@proteus-vue/types": "0.3.0-beta.12",
-    "@proteus-vue/plugin-vite": "0.3.0-beta.14",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.15",
     "esbuild": "^0.28.2"
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.5.42",
     "@vue/compiler-dom": "^3.5.42",
-    "@proteus-vue/plugin-vite": "0.3.0-beta.14",
+    "@proteus-vue/plugin-vite": "0.3.0-beta.15",
     "@proteus-vue/compat-miniprogram": "0.3.0-beta.12",
     "vite": "^5.0.0"
   }

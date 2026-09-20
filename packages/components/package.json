@@ -1,6 +1,6 @@
 {
   "name": "@proteus-vue/components",
-  "version": "0.3.0-beta.12",
+  "version": "0.3.0-beta.15",
   "description": "Proteus 语义组件库（p-*）：73 个跨端语义组件（p-button/p-form/p-scroll-view/p-page-container/…）+ pg-glass（液态玻璃）+ virtual-list + 组件层运行时（runtime/contracts/theme）——双端同源码，Web 由 Vite 编译、小程序由框架编译器编译",
   "type": "module",
   "license": "Apache-2.0",

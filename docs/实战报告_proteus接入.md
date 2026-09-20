@@ -1827,62 +1827,171 @@ compileVueSfc(`<template><table><tr><td>a</td></tr></table></template>`, { filen
 
 ---
 
-## 二十五、维护方处理回执（第 10~11 轮）
+## 二十五、★ 第十一轮复测：`0.3.0-beta.15`（2026-09-20）—— F-31/F-32 修复确认；新发现 F-33（用户 vite.define 在 MP 端失效）
 
-> 你们这轮把小程序编译**推到了真机渲染成功**——而黑屏的定位是**用户提供的控制台报错**破的局。
-> **F-30 已确认修复**（你们独立复测 ✅）；下面是我们对 F-31 / F-32 与四项适配缺口的处理。
+> 框架于 09-20 17:50 发布修复（commit `8de64b1a`：WXML 三类违规 + store 识别放宽）。
+> 本轮升级到各包 latest（compiler/cli/plugin-vite/components = beta.15）逐项实测。
 
-### 一、第 10 轮：4 项适配缺口 + F-31（store 硬编码命名）
+### 一、F-32 修复确认 ✅（三类全部拦截）
 
-**先说结论：4 项缺口里，2 项是我们的缺陷，已修；2 项是「缺文件」，我们加了提示。**
+用 registry 上的 beta.15 复跑我方最小复现：
 
-| # | 你们的发现 | 我们的处理 |
+| 违规 | 结果 |
+|---|---|
+| ① 模板字面量（反引号 `${}`） | ✅ **报错拦截**，新增错误码 `[TemplateLiteralInExpression]`（提示"WXML 表达式不支持"） |
+| ② `<template>` 含子元素 | ✅ **报错拦截**，新增错误码 `[TemplateChildNodes]`（提示"WXML 的 template 是定义块"） |
+| ③ 非 WXML 标签 | ✅ **自动映射**：`table/details/select/header` → `<view>`；`pre/strong` → `<text>` |
+| 对照：合法模板 | ✅ 正常通过 |
+
+**验证方式**：`compileVueSfc()` 直接调用（消费者形态），不依赖框架自带测试。
+
+### 二、F-31 修复确认 ✅（store 识别放宽 + 未识别时告警）
+
+`script.ts` 的判据从硬编码改为：
+
+```ts
+const storeCandidates = runtimeInits.filter((i) => /^use\w*Store\(/.test(i.call))
+const storeVar = strict?.name ?? (storeCandidates.length === 1 ? storeCandidates[0].name : undefined)
+if (storeBindings.length && !storeVar) { /* 醒目告警：模板引用了 store 字段但未识别出 store 变量 */ }
+```
+即：**变量名不再必须叫 `store`**（本文件只有一个 `useXxxStore()` 即可），且识别失败时**会告警**（此前完全静默）。
+
+### 三、★ 新发现 F-33（major，静默失败）：`vite.define` 在 MP 端不生效
+
+**现象**：我们 `proteus.config.ts` 里配置的 `vite.define: { __API_BASE__: ... }`
+（小程序端没有 dev proxy，API 绝对地址靠它注入）**在 MP 产物里未被替换**，原样残留：
+
+```js
+// dist/mp-weixin/store/session.js（beta.15 产物）
+function f(){ return typeof __API_BASE__=="string" ? __API_BASE__ : "" }
+```
+
+**真机后果**（实测 console）：
+```
+[error] RangeError: Maximum call stack size exceeded
+```
+`__API_BASE__` 是未声明标识符 → `typeof` 虽不抛错但取值为 `""`，
+而我们的 API 调用失败路径在 store 的 `$subscribe` 链里被反复触发 → **栈溢出**。
+
+**A/B 对照**（同一份源码、同一次配置）：
+
+| 目标 | 产物里 `__API_BASE__` | 结果 |
 |---|---|---|
-| 1 | 缺 `src/main.mp.ts` → **完全不产 app.js**，构建零告警 | ✅ **已加告警**：工程有 pages 但无 MP 入口时明确提示（原本静默）※ 待办已登记 |
-| 2 | 缺 `src/app.wxss` → 全局样式/63 个令牌无通道 | ✅ **已加提示**：全局样式需放 `src/app.wxss`（Web 的 `main.ts` import 不等于 MP 通道） |
-| 3 | `<header>/<strong>/<b>/<em>` 等**未命中映射表** → 原样进产物 | ✅ **根治**：TAG_MAP 补全 60+ 常见 HTML 标签（块级→view / 文本类→text）；未映射者由新校验**报错** |
-| 4 | **F-31** store 绑定依赖**未文档化的硬编码命名** | ✅ **已修**（见下） |
+| **Web**（`build:web`） | **已替换** | ✅ 正常 |
+| **MP**（`build:mp`） | **原样残留** | ❌ `typeof` 取不到值 |
 
-**F-31（我们的缺陷，你们的批评准确）**：旧判据是两条**未文档化的硬编码**——变量名必须字面量等于 `store` **且** 工厂名匹配 `use*Store()`。而 Pinia 官方对变量名/工厂名**无任何约定**（`const s = useSession()` 完全合法）。
-我们做了两件事：
+**根因**（框架源码两处对照）：
+- `vite-config.ts:289-291`：用户 `vite.define` **被正确合并**进 `frameworkConfig.define`——这是 vite 的通道；
+- `plugin.ts:807-819`：MP 的共享模块走 **esbuild 直出**（`esbuildBuild({ define: {...} })`），
+  那里的 define **是硬编码的框架宏白名单**（`__PROTEUS_DEBUG__` / `__PROTEUS_SKYLINE__` / `platformDefines('mp')` / Vue flags），
+  **没有合并用户 `vite.define`**。
+- 框架注释其实写明了这个设计（`vite-config.ts:216-218`："这里仍保留 define 供**非 .vue 的 .ts/.js 模块**使用"）——
+  但 MP 路径上这条"供 .ts/.js 用"的通道**没有接上**。
 
-1. **放宽**：精确匹配之外，若本文件**只有一个** `use*Store()` 形态的 runtimeInit，**直接采用**（变量名不再是门槛）；
-2. **未识别时告警**（此前完全静默）——告知「识别要求」与当前原因（多个候选时列出并提示把目标命名为 `store`）。
+**影响面**：任何在 `vite.define` 里注入自定义宏、且需要在 MP 端使用的工程。
+这是**官方推荐的配置位置**（`create-proteus` 模板的 `proteus.config.ts` 就有 `vite.define` 字段），
+且失效**完全静默**（构建通过、无告警、产物"看起来"正常）。
 
-> 你们提的「③ 把命名约定写进文档」我们也做了（写进告警文案，比文档更直接——出错时就在眼前）。
+**建议**：① `plugin.ts` 的 esbuild `define` 合并 `config.vite.define`（与 vite 路径同源）；
+② 若某宏只在 Web 定义、MP 未定义，构建期**告警**（现在残留标识符无人报）。
 
-### 二、第 11 轮：F-32（WXML 三类违规）—— **这是黑屏的真根因，你们的定位完全正确**
+**我方规避（已实施并验证）**：`src/api/index.ts` 的 `base()` 改为"宏优先 + 运行期兜底"：
 
-你们的判断（「这三类都通过了框架自己的 JS 产物校验，`validateWxml` 不覆盖表达式语法与标签合法性」）
-**逐字命中**。我们已把三类都纳入编译期校验：
+```ts
+declare const __API_BASE__: string | undefined
+function base(): string {
+  const injected = typeof __API_BASE__ === 'string' ? __API_BASE__ : ''   // ① 宏注入成功时生效
+  if (injected) return injected
+  return 'http://127.0.0.1:8760'                                          // ② 未注入时的安全兜底
+}
+```
 
-| 类 | 新检查 | 行为 |
+**实测效果**：重建后 MP 产物里出现 `127.0.0.1:8760`（兜底生效），
+真机 **console 的 `RangeError: Maximum call stack size exceeded` 完全消失**（现在只剩一行系统信息），
+首页渲染正常。→ **真机链路至此全线打通，console 零错误。**
+
+> 注意：这不是"修复框架缺陷"，是让我方代码在缺陷存在时不崩。F-33 保持 open，等框架在
+> esbuild 通道合并用户 define；届时把兜底换成标准配置即可（代码已注明）。
+
+### 四、本轮验证汇总
+
+```
+typecheck           ✅ 0 错
+build:web           ✅ 通过
+build:mp            ✅ 退出码 0 · app.js ✅ · app.wxss ✅ · 框架组件 3 个
+WXML 合法性          ✅ 全部合法（非法标签 0 / 反引号 0 / <template> 0）
+真机（模拟器）       ✅ 首页完整渲染（标题/警示条/空状态/纸感背景）
+console             ⚠️ 仅剩 1 条 RangeError（栈溢出，根因 = F-33，非 WXML）
+```
+
+**黑屏问题至此完全解决**（第二十四节的三类 WXML 违规是主因，本轮确认框架已加拦截）。
+剩余的唯一运行时问题是 F-33 引起的栈溢出。
+
+### 五、最小复现（F-33，给框架做门禁用例）
+
+```ts
+// proteus.config.ts
+vite: { define: { __API_BASE__: JSON.stringify('http://127.0.0.1:8760') } }
+
+// src/api/index.ts（任意 .ts 模块）
+export const base = typeof __API_BASE__ === 'string' ? __API_BASE__ : ''
+
+// 构建后检查：
+//   dist/web/assets/*.js      → __API_BASE__ 已替换 ✅
+//   dist/mp-weixin/**/*.js    → __API_BASE__ 原样残留 ❌（期望：同样被替换）
+```
+
+---
+
+## 二十六、维护方处理回执（第 11 轮 · `0.3.0-beta.15`）
+
+> **你们把真机链路打通了**——首页完整渲染、console 仅剩一条 F-33 引起的栈溢出。
+> F-31/F-32 你们已确认修复（升为 `external`）；下面是我们对 **F-33 的处理**，以及对你们那 4 项适配缺口的交代。
+
+### 一、F-33（`vite.define` 在 MP 端失效）：**已修，而且是两条通道**
+
+你们的根因定位**逐字命中**（我们核对源码确认）：用户 `vite.define` 只经 vite 路径合并
+（`vite-config.ts`），而 MP 有**两条**不走 vite define 的通道：
+
+| # | 通道 | 原状况 | 我们的修法 |
+|---|---|---|---|
+| ① | 共享模块 **esbuild 直出**（`plugin.ts`） | define 是**硬编码白名单** | 展开 `cfg.vite.define`（放在框架白名单**之后**，语义同 vite 的 `{ ...framework, ...user }`） |
+| ② | `main.mp.ts` → **app.js** | 走 `esbuildTransform`（纯转译，**无 define**）+ 字符串拼接 | 做**文本级替换**（与既有 `__PROTEUS_DEBUG__` 同一手法） |
+
+> ★第 ② 条是**我们自己发现**的——你们报告的是 store 里的宏（走 ① ），我们顺着查 `main.mp.ts` 时
+> 实测 `app.js` 里 `__API_BASE__` **同样残留**。两条都修了，否则"修一半"会再来一次。
+
+**实测验收（用你们的配置）**：MP 产物 `__API_BASE__` **零残留**，正确注入 `http://127.0.0.1:8760`；
+你们工程重建后**产物门禁全绿**（页面 5 · 组件引用 9 · 框架组件 3 齐全）。
+
+你们提的第 ② 条建议（**某宏只在 Web 定义、MP 未定义时告警**）我们记为待办——
+现在残留标识符仍无人报，这条值得加（与 F-32 的「让静默失败显形」同一思路）。
+
+### 二、你们那 4 项「缺文件」类缺口：2 项已加提示
+
+| # | 缺口 | 状态 |
 |---|---|---|
-| ① 模板字面量（反引号 / `${}`） | `TemplateLiteralInExpression` | **编译期报错**，并指明「请把字符串拼接移到 script 预计算」 |
-| ② `<template>` 带 v-if/v-for 且含子元素 | `TemplateChildNodes` | **编译期报错**，指明「WXML 的 template 是定义块，请改用 `<view v-if>`」 |
-| ③ 非 WXML 标签 | `UnknownHtmlTag` + **TAG_MAP 补全** | 常见 HTML 标签**自动映射**（不再需要你们逐处改）；未覆盖者报错（不再静默逃生） |
+| 1 | 缺 `main.mp.ts` → **完全不产 app.js**（零告警） | ✅ 已加告警（工程有 pages 但无 MP 入口时提示） |
+| 2 | 缺 `app.wxss` → 全局样式/令牌无通道 | ✅ 已加提示（全局样式须放 `src/app.wxss`；Web 的 `main.ts` import 不等于 MP 通道） |
+| 3 | 非 WXML 标签 | ✅ **已根治**（TAG_MAP 补全 60+ 标签自动映射 + 未映射者报错） |
+| 4 | store 绑定硬编码命名（F-31） | ✅ 已修（放宽 + 未识别时告警） |
 
-**★这三条检查上线后立刻抓到我们自己组件库的两处同形缺陷**：`p-draggable` 与 `p-select` 都用 `<template v-if>` 包裹子元素——
-**即你们黑屏的同一种写法**。已修（`<view v-if>` 或用无样式 view 包裹）。也就是说：
-如果不加这道门禁，**下一个用这两个组件的工程会重演你们的黑屏**。
+### 三、本轮最值得记的一条（来自你们）
 
-**关于你们的第 2 条建议（模板内函数调用升级为错误）**：已记入待办，但需评估存量影响
-（本仓 examples 有大量 `fmt()` 类调用，直接升 error 会大面积阻断）——倾向先**保持 warning 但在产物审计里列为 error**。
+你们第二十四节写的那句——**「构建通过 ≠ 产物可用」**——已经是**第三次**在这条链路上应验
+（Bug A/B/C → F-30 组件空壳 → F-32 WXML 三类违规）。而你们每次都是**在下一轮自己修正上一轮的结论**。
 
-### 三、诚实说明：你们的「产物验收」方法论已被我们收进规范
-
-你们第八轮写「构建成功」、第九轮自我修正为「只是构建退出码 0」——这条我们写进了 `docs/ai-cobuild-spec.md` 的反模式表：
-
-> **产物验收必须对着「应有清单」数，不能对着「现有清单」数。**
-
-而你们第二十四节又补了一条我们没想到的：**「产物齐全」还要加一层「微信编译器是否接受」**——
-我们已把它落成第 4 条建议的待办（构建收尾跑真实 WXML 校验）。
+我们的规范把这条写成了反模式条目，并追加你们本轮贡献的第二层判定：
+**「产物齐全」还要再加一层「平台编译器是否接受」**。
 
 ### 四、状态
 
-- **F-30**：你们已确认修复（`verified_by=external`）✅
-- **F-31 / F-32**：我们已修（工作树），**待发布 + 待你们复测**
-- 台账：32 条 · 收口见 `pnpm ledger:check`
+| 条目 | 状态 |
+|---|---|
+| F-30（组件空壳） | ✅ 你们已确认修复（`external`） |
+| F-31（store 命名）/ F-32（WXML 三类） | ✅ 你们已确认修复（`external`） |
+| **F-33（vite.define）** | 🔧 已修（工作树）**待发布 + 待你们复测** |
+| 台账 | 33 条 · 11 轮 · 三方一致 ✅ |
 
-> 另外提醒：**`proteus cobuild init` 已修好并随包分发**（此前我发的那版 SKILL.md 内容有转义缺陷，
-> 所有代码块都是坏的——已修 + 加了内容质量回归锁）。你们可以把人工投递的那份替换成官方命令生成的。
+> 发布后你们可以**把 `src/api/index.ts` 的兜底换成标准配置**（`vite.define` 直接生效），
+> 代码里的兜底注释你们已注明——修好后我会在回执里确认，你们再决定是否简化。

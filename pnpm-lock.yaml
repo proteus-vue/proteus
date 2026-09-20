@@ -185,16 +185,16 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../packages/compiler
       '@proteus-vue/hmr':
         specifier: 0.3.0-beta.13
         version: link:../packages/hmr
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -287,7 +287,7 @@ importers:
         specifier: 0.3.0-beta.12
         version: link:../capabilities
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.13
@@ -311,7 +311,7 @@ importers:
         specifier: 0.3.0-beta.11
         version: link:../module
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../plugin-vite
       '@proteus-vue/render-backend':
         specifier: 0.3.0-beta.11
@@ -571,7 +571,7 @@ importers:
   packages/plugin-vite:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.13
@@ -678,7 +678,7 @@ importers:
   packages/test-core:
     dependencies:
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../compiler
     devDependencies:
       '@vue/compiler-sfc':
@@ -795,13 +795,13 @@ importers:
         version: 3.5.42(typescript@5.9.3)
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/cli
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../packages/compiler
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/plugin-vite
       '@types/node':
         specifier: ^20.0.0
@@ -828,7 +828,7 @@ importers:
         specifier: 0.3.0-beta.12
         version: link:../packages/api
       '@proteus-vue/compiler':
-        specifier: 0.3.0-beta.12
+        specifier: 0.3.0-beta.15
         version: link:../packages/compiler
       '@proteus-vue/compiler-backend':
         specifier: 0.3.0-beta.13
@@ -871,10 +871,10 @@ importers:
         version: 4.6.4(vue@3.5.42(typescript@5.9.3))
     devDependencies:
       '@proteus-vue/cli':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/cli
       '@proteus-vue/plugin-vite':
-        specifier: 0.3.0-beta.14
+        specifier: 0.3.0-beta.15
         version: link:../packages/plugin-vite
       '@vitejs/plugin-vue':
         specifier: ^5.0.0
