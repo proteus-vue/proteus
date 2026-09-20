@@ -99,22 +99,24 @@ for (const t of TARGETS) {
 }
 
 /**
- * ★「版本号必须一致」门禁（2026-09-19：彻查版本发布策略后的核心整改）。
+ * ★版本组不变式门禁（2026-09-20：从「全同号」改为 **linked** 语义）。
  *
- * 背景——为什么版本管理会「越管越乱」：
- *   本仓此前是**独立版本号 + 精确 pin** 的组合（41 个包各走各的版本、内部依赖 65 处
- *   全是 exact pin）。任何一个包改动都要级联同步几十处 pin，人为维护必然漏 →
- *   实测出现 **14 种不同版本号**散落在 41 个包里，且 tag 指向与本仓版本长期分叉。
+ * 演进史（两次都是被真实代价推动的）：
+ *   · 2026-09-19：本仓是「独立版本号 + 精确 pin」（41 包各走各的版本、内部依赖 65 处 exact pin）
+ *     → 实测 **14 种版本号**散落、级联同步靠人必然漏。整改为 **fixed 分组**：组内任一包发版则全组同号。
+ *   · 2026-09-20：fixed 的代价显现——**每次发布都要 bump + 重发全部 41 个包**。
+ *     实测（本仓）：只改 `compiler` 一个包写 changeset，`npx changeset version` 仍把 **41 包全部**提到新版本；
+ *     连内容从未变过的 `docs`/`mcp` 也已积累 7~10 个版本号。而真正变更的只有 3 个包。
+ *     → 改用 **linked 分组**：**只 bump 实际变更的包**，组内已发布的包仍保持同号；
+ *       依赖方由 changesets **自动级联**（实测：改 1 个叶子包 → 4 个包；改 `shared` → 16 个包）。
  *
- * 整改：`.changeset/config.json` 启用 **fixed 分组** `"fixed": [["@proteus-vue/*"]]` ——
- *   changesets 官方的「版本组锁定」机制：组内任一包要发版，**全组一起发同一版本号**。
- *   实测生效：41 个包从 14 种版本号 → **1 种**（0.3.0-beta.7），65 处内部 pin 全部自动对齐。
- *
- * 本门禁把这个不变式锁死（fixed 配置若被误删/改坏，CI 当场红）：
- *   ① 所有 @proteus-vue/* 包**版本号必须完全相同**；
- *   ② 内部依赖 pin 必须等于该版本（或 workspace: 协议）。
+ * 判据相应改变——**不再要求 41 包全同号**（那正是被舍弃的机制），守住真正重要的那条：
+ *   **同一条版本线**：所有 @proteus-vue/* 必须共享同一个 `major.minor.patch`（如 `0.3.0`）。
+ *   pre 模式（`-beta.N`）下各包的预发布序号可以不同——它天然表达「该包自哪个版本起未再变更」。
+ *   这条能拦住真正的分裂（某包被单独提到 0.4.0 / 1.0.0），又允许 linked 的按需发版。
+ *   ★内部依赖 pin 的逐条一致性由本脚本的同步/校验逻辑负责（TARGETS + stale），与本判据互补。
  */
-function assertUniformVersions() {
+function assertLinkedVersions() {
   const byName = {}
   for (const e of fs.readdirSync(path.join(ROOT, 'packages'), { withFileTypes: true })) {
     if (!e.isDirectory()) continue
@@ -125,23 +127,47 @@ function assertUniformVersions() {
       /* 非包目录 */
     }
   }
-  const versions = [...new Set(Object.values(byName))]
-  if (versions.length > 1) {
-    const groups = {}
-    for (const [n, v] of Object.entries(byName)) (groups[v] ??= []).push(n)
-    console.log(`\n[versions] ✗ 版本号不统一（${versions.length} 种）——fixed 分组未生效或被破坏：`)
-    for (const [v, names] of Object.entries(groups).sort()) {
-      console.log(`  ${v}：${names.length} 个包（${names.slice(0, 3).join(', ')}${names.length > 3 ? ' …' : ''}）`)
+  const total = Object.keys(byName).length
+  /** `0.3.0-beta.11` → base `0.3.0`（预发布序号不参与「同线」判定） */
+  const baseOf = (v) => {
+    const m = /^(\d+\.\d+\.\d+)/.exec(String(v))
+    return m ? m[1] : String(v)
+  }
+  const bases = new Map()
+  const versions = new Map()
+  for (const [n, v] of Object.entries(byName)) {
+    const b = baseOf(v)
+    if (!bases.has(b)) bases.set(b, [])
+    bases.get(b).push(n)
+    if (!versions.has(v)) versions.set(v, [])
+    versions.get(v).push(n)
+  }
+  if (bases.size > 1) {
+    console.log(`\n[versions] ✗ 版本线分裂（${bases.size} 条 major.minor.patch）——linked 分组未生效或某包被单独提版：`)
+    for (const [b, names] of [...bases.entries()].sort()) {
+      console.log(`  ${b}：${names.length} 个包（${names.slice(0, 4).join(', ')}${names.length > 4 ? ' …' : ''}）`)
     }
-    console.log('  → 检查 .changeset/config.json 的 "fixed": [["@proteus-vue/*"]]，再跑 npx changeset version')
+    console.log('  → 检查 .changeset/config.json 的 "linked": [["@proteus-vue/*"]]，再跑 npx changeset version')
     return false
   }
-  console.log(`\n[versions] ✅ 全部 ${Object.keys(byName).length} 个包版本号统一：${versions[0]}（fixed 分组生效）`)
+  const base = [...bases.keys()][0]
+  const spread = [...versions.entries()].sort()
+  if (spread.length === 1) {
+    console.log(`\n[versions] ✅ 全部 ${total} 个包同号：${spread[0][0]}（本批全部改过）`)
+  } else {
+    const newest = spread[spread.length - 1]
+    const oldest = spread[0]
+    console.log(
+      `\n[versions] ✅ 同在 ${base} 线（linked 分组生效）：${total} 个包 · ${spread.length} 个预发布序号` +
+        `（最新 ${newest[0]}：${newest[1].length} 个包 · 最旧 ${oldest[0]}：${oldest[1].length} 个包）`,
+    )
+    console.log('  （linked 语义：只 bump 实际变更的包；未变更的停在「上次变更时的版本」——依赖方由 changesets 自动级联）')
+  }
   return true
 }
 
 if (CHECK) {
-  const uniform = assertUniformVersions()
+  const uniform = assertLinkedVersions()
   if (stale.length) {
     console.log('[sync-internal] ✗ 内部依赖声明落后于 workspace（用户侧会装到旧包）：')
     for (const s of stale) console.log(`  - ${s}`)
