@@ -127,3 +127,47 @@ describe('AI 共建工具包分发', () => {
     expect(out).toContain('模板与规范源一致')
   }, 300_000)
 })
+
+// ★★2026-09-20：**生成物内容质量**回归锁——共建工具包是「发给外部工程的文件」，
+//   此前 `cobuild-assets.ts` 里的反引号**过度转义**（源码写成 `\\\``），
+//   导致生成的 SKILL.md 里所有代码块变成 `\`\`\``、校验器脚本也带杂散反斜杠——
+//   等于**对外分发的是坏文件**，而既有测试只查「文件存在」，全绿放行。
+//   教训（与产物完整性同源）：**分发的工件必须校验内容，不能只校验存在性**。
+describe('共建工具包内容质量（分发的工件必须内容正确）', () => {
+  it('生成的 SKILL.md 无杂散反斜杠（反引号转义正确）', () => {
+    const dir = freshDir('esc-skill')
+    cobuildInit({ root: dir })
+    const skill = fs.readFileSync(path.join(dir, '.agents/skills/proteus-cobuild/SKILL.md'), 'utf8')
+    expect(skill, '不得出现 \\` 形态的杂散反斜杠').not.toMatch(/\\`/)
+    // 必须含正常的三反引号代码块
+    expect(skill).toContain('```bash')
+    expect(skill).toContain('```json')
+  })
+
+  it('生成的校验器是合法 JS（可被 node --check 解析）', () => {
+    const dir = freshDir('esc-checker')
+    cobuildInit({ root: dir })
+    const checker = path.join(dir, 'scripts/ledger_check.mjs')
+    expect(() => execFileSync('node', ['--check', checker], { stdio: 'pipe' }), '生成的校验器必须是合法 JS').not.toThrow()
+    // 内容不得含杂散反斜杠（会破坏脚本或输出）
+    expect(fs.readFileSync(checker, 'utf8')).not.toMatch(/\\`/)
+  })
+
+  it('生成的台账骨架与报告模板是合法 JSON / 正常 markdown', () => {
+    const dir = freshDir('esc-ledger')
+    cobuildInit({ root: dir })
+    const ledgerPath = path.join(dir, 'docs/框架问题台账.json')
+    expect(() => JSON.parse(fs.readFileSync(ledgerPath, 'utf8'))).not.toThrow()
+    const report = fs.readFileSync(path.join(dir, 'docs/实战报告_proteus接入.md'), 'utf8')
+    expect(report).not.toMatch(/\\`/)
+    expect(report).toContain('## 第一轮复测')
+  })
+
+  it('生成的 AGENTS.md 段落无杂散转义', () => {
+    const dir = freshDir('esc-agents')
+    cobuildInit({ root: dir })
+    const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8')
+    expect(agents).not.toMatch(/\\`/)
+    expect(agents).toContain('```')
+  })
+})
