@@ -435,6 +435,26 @@ if (missing.length === 0) {
   releaseFailed = true
 }
 
+// ★台账待翻转提醒（2026-09-20，F-29 复发后加）：发布是「台账 fix_state 应翻 published」的唯一时机，
+//   而人工「想起来去改」已被证伪两次（F-25→F-29，F-29→本轮）。这里在发布链末端强制列出清单：
+//   本次发布的包覆盖了哪些仍标 fix_state=worktree 的条目 → 逐条点名，提示改 + 跑 check:cobuild。
+try {
+  const ledger = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', '外部报告台账.json'), 'utf8'))
+  const publishedNames = new Set(targets.map((t) => `@proteus-vue/${t.short}`))
+  const pending = (ledger.entries ?? []).filter(
+    (e) => e.fix_state === 'worktree' && (e.packages ?? []).some((p) => publishedNames.has(p)),
+  )
+  if (pending.length) {
+    console.log(`\n  ★台账待翻转 ${pending.length} 条：其所属包本次已发布，fix_state 仍标 worktree（worktree → published + 填 fixed_in）`)
+    for (const e of pending) {
+      console.log(`      - ${e.id}（${e.packages.join(', ')}）：${String(e.title).slice(0, 60)}`)
+    }
+    console.log('  → 改 docs/外部报告台账.json 后跑：pnpm check:ledger && pnpm check:cobuild')
+  }
+} catch {
+  /* 台账缺失/损坏不阻断发布（check:ledger 是它自己的门禁） */
+}
+
 // ── ⑤ tag 核验（canonical = latest）──
 // ★★2026-09-20 重写（实测教训）：本步原为「跑 `npm dist-tag add` 把 beta 与 latest 都拉齐」，
 //   但那是**执行不了**的——`npm dist-tag` 属受 2FA 保护的包管理操作（bypass-2FA token 自

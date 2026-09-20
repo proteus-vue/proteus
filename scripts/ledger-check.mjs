@@ -91,6 +91,12 @@ function validate (entries, published) {
     if (e.status === 'partial' && !(e.related && e.related.length)) {
       errs.push(`${id}: status=partial 必须带 related 指向跟踪条目（防「修一半当修完」）`)
     }
+    // ★packages 字段（2026-09-20，F-29 复发后加）：未发布的条目必须声明「修复属于哪个/哪些包」。
+    //   这是发布链末端「刚发的包里有未翻转条目」检查的唯一依据——没有它，台账滞后只能靠人工回想
+    //   （已证伪两次：F-25→F-29，F-29→本轮 F-27~F-32 全体滞后）。
+    if (e.fix_state === 'worktree' && !(Array.isArray(e.packages) && e.packages.length)) {
+      errs.push(`${id}: fix_state=worktree 必须给 packages（该修复所属包，如 ["@proteus-vue/compiler"]）——发布后据此提醒翻状态`)
+    }
   }
   return errs
 }
