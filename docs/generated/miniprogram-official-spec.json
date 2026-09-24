@@ -2,6 +2,7 @@
   "_comment": "微信小程序官方能力清单快照（权威标尺）——由 scripts/gen-mp-spec.mjs 生成，勿手改。",
   "componentsSource": "https://developers.weixin.qq.com/miniprogram/dev/component/",
   "apisSource": "miniprogram-api-typings `interface Wx`",
+  "componentsNote": "online（索引页已摘链但页面仍存活，保留：reward）",
   "componentCount": 84,
   "apiCount": 298,
   "components": [
