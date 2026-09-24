@@ -23,7 +23,13 @@ const dividerStyle = computed(() => {
   if (props.orientation === 'vertical') {
     const style: CSSProperties = {
       borderLeft: '1px solid ' + lineColor,
-      height: '100%',
+      // ★垂直分隔线的可见性修复（2026-09-24 实测）：
+      //   `height: 100%` 在**内容驱动高度**的父容器里无法解析（百分比高度需父级有确定高度）→
+      //   分隔线塌成 0 高、完全不可见（实测：p-stack row 里 h=0，E2E 可见占比 2/4 报红）。
+      //   改 `alignSelf: stretch`——flex 父容器下沿交叉轴撑满（行内分隔的正确语义）；
+      //   minHeight 兜底：非 flex 父容器（align-self 无效）时至少 1em 可见，不再静默消失。
+      alignSelf: 'stretch',
+      minHeight: '1em',
       marginLeft: props.inset + 'px',
       marginRight: props.inset + 'px',
       display: 'inline-block',
