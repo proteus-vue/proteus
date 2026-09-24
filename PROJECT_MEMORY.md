@@ -18,9 +18,55 @@
 ---
 
 ## 当前状态速览（最近一次更新：2026-09-24）★新会话以此为准
+### ★今日收尾总览（2026-09-24 一整日，先读这一块）
+
+**一句话**：showcase 详情页从「组件 26/73 · 能力 9/81」推进到 **组件 73/73（全量齐备）· 能力 29/81**；过程中挖出并修掉 **8 个真缺陷**（含 3 个框架级）与 **1 个门禁盲区**；新增 2 道机器门禁。发布仍被 npm 凭据阻塞（与代码无关）。
+
+**① 交付（8 个批次）**
+| 线 | 起点 → 终点 | 说明 |
+|---|---|---|
+| 组件详情页 | 26 → **73/73 ✅** | 批次 4~8；目录页不再有「规划中」占位 |
+| 能力详情页 | 9 → **29/81** | 批次 2/9；余 52 多为空订阅/恒降级类，按判据不收 |
+
+**② 今日修掉的真缺陷（★这是本日最有价值的部分）**
+| # | 缺陷 | 性质 | 影响 |
+|---|---|---|---|
+| 1 | **Web 端 `@tap` 从未归一** | **框架级** | p-mask/p-popup 等 5 个组件的点遮罩关闭在 Web 端静默失效 |
+| 2 | **`eventField` 不认裸载荷** | **框架级** | p-list-view 虚拟滚动在 Web 端完全失效（滚动条动、内容不动，零报错） |
+| 3 | **p-list-view 缺底部占位** | 组件缺陷 | 滚动范围被截断（500 行 scrollHeight 仅 315px，应 22000px）→ 滚不到列表后半段 |
+| 4 | **p-divider 垂直线不可见** | 组件缺陷 | `height:100%` 在内容驱动父容器下解析为 0 → 完全不可见 |
+| 5 | **p-avatar 破图** | 组件缺陷 | `broken` 从未被模板消费 → 声明了兜底却显示破图 |
+| 6 | **mp-spec 索引页摘链→静默丢件** | 工具缺陷 | 官方索引页摘掉仍在线组件的链接 → 盲刷快照会丢真组件 |
+| 7 | **API 表分隔行泄漏** | 数据缺陷 | `splitRow` 的 slice(-1) 误用 → markdown 分隔行当数据行进表，影响全部 20 页 |
+| 8 | **生成器 title 未转义** | 工具缺陷 | 含 `area="top"` 的 title 导致 Web 构建失败 |
+| ★ | **showcase 102 个详情页从未类型检查** | **门禁盲区** | `tsconfig.include` 缺 `subpackages/**` → 补齐后立刻暴露 13 处契约错误（device 用 system/实际是 os+version 等） |
+
+**③ 新增机器门禁（2 道，均已接 verify + CI）**
+- `check:component-demo`（组件页与数据表一致性；API 表从官网内容 SSOT 解析，杜绝手写漂移）
+- `vue-tsc -p showcase/tsconfig.json`（详情页类型检查——补上 102 页盲区）
+
+**④ 当前验证状态（全部已跑通）**
+- 门禁 **12 道 ✅** + showcase 类型检查 **0 错误**（13→0）· 根 `vue-tsc` **0 错误**
+- 单测 **3539/3539**（+10 新回归锁）· showcase Web E2E **120/120** · MP 真机 **7/7**（含批次 4~9 全部新页）
+- 破坏性验证：今日 8 处修复全部做过（回退修法 → 门禁精确报红）
+
+**⑤ 阻塞项（需用户本人操作，与代码无关）**
+- **npm 发布凭据 401**：`~/.npmrc` 的 token 不在账号 granular token 列表内 → `pnpm release` 每个包都失败。
+  修法：在 npmjs.com 生成 granular access token（Read and write、含 `@proteus-vue`、**勾 bypass 2FA**）覆盖 `:_authToken=`。
+- 后果：**F-29 / F-34 / F-35 仍 `fix_state=worktree`**（真实收口率 **32/35 = 91%**）；工作树 `compiler` 已 bump 到 `0.3.0-beta.19`，registry 仍 `0.3.0-beta.15`。**发布前请跑 `pnpm ledger:check`**。
+
+**⑥ 下一步候选（按价值排序）**
+1. **发布**（解阻塞后）：`pnpm release` → 跑 `pnpm ledger:check` 翻状态 → 发布后冒烟（干净目录真实用户旅程）。
+2. **能力页余 52 个**：需先定「如何诚实演示不支持」的形态（当前判据不收空订阅/恒降级类——建议做成「契约与降级语义说明」页而非假交互）。
+3. **showcase 组件页的手写 API 表**：早期批次（p-button 等手写页）仍是手写表，可迁移到 SSOT 生成器（如同批次的组件页）。
+
+**⑦ 环境备注**
+- 微信开发者工具路径已固定 `/Volumes/data1/applications/wechatwebdevtools.app`（已写入 CLI 默认探测表 → **跑 MP E2E 不必再传 `PROTEUS_IDE_CLI`**）。
+- MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
+- 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
+
 - **★本会话·批次 9（能力页 19→29/81）+ ★★补齐「showcase 详情页从未类型检查」的门禁盲区（2026-09-24 续六，★★★用户「继续」）**：
-  **① 先取证再选页（本轮方法论核心）**——上次我判断「能力页剩余多为 Web 无标准对等」，本轮**用数据修正了该判断**：逐个把 62 个未出页的 hook 与其桥方法比对 webBridge 真实实现体，得 **32 个有真实现 / 9 个显式降级 / 21 个待查**；再排除「返回空订阅（getBeacon/getPoster/getTranslation/getLocalService）或恒返回 unsupported 句柄（getPrivacy/getPreload/getImageEdit/getCalendar/getWindow/createLivePusher/joinLiveRoom/getScreenCapture/getRecorder/createCameraContext）」的伪实现，最终选 **10 页真能跑通成功路径**的：`log / download / file-system / canvas / app-lifecycle / page-lifecycle / navigation-guard / keyboard / biometric / background`。★**取证教训（差点写错事实）**：首次用 `indexOf('
-    name:')` 在整文件里找实现，命中的是 **wxBridge（MP 侧）**——若不核对就会把小程序行为写进 Web 演示。**必须在 webBridge 段内取**。
+  **① 先取证再选页（本轮方法论核心）**——上次我判断「能力页剩余多为 Web 无标准对等」，本轮**用数据修正了该判断**：逐个把 62 个未出页的 hook 与其桥方法比对 webBridge 真实实现体，得 **32 个有真实现 / 9 个显式降级 / 21 个待查**；再排除「返回空订阅（getBeacon/getPoster/getTranslation/getLocalService）或恒返回 unsupported 句柄（getPrivacy/getPreload/getImageEdit/getCalendar/getWindow/createLivePusher/joinLiveRoom/getScreenCapture/getRecorder/createCameraContext）」的伪实现，最终选 **10 页真能跑通成功路径**的：`log / download / file-system / canvas / app-lifecycle / page-lifecycle / navigation-guard / keyboard / biometric / background`。★**取证教训（差点写错事实）**：首次用 indexOf 在整文件里找实现（模式为「换行 + 方法名 + 冒号」）' name:')` 在整文件里找实现，命中的是 **wxBridge（MP 侧）**——若不核对就会把小程序行为写进 Web 演示。**必须在 webBridge 段内取**。
   **② ★★门禁盲区（本轮最大价值，与批次 8 的虚拟滚动同属「本可避免却长期存在」类）**——调试 `background` 页时发现：`showcase/tsconfig.json` 的 `include` **不含 `subpackages/**`** → **102 个详情页（组件 73 + 能力 29）从来没有被类型检查过**。补上后**立刻暴露 13 处真实错误**（全部是页面与 API 契约不符，此前在页面上会取到 undefined）：
     · `device` 用 `data.system`（契约是 `os` + `version`）· `screen` 用 `pixelRatio`（契约是 `dpr`）· `network` 用 `kind`（契约是 `type`）· `biometric` 传 `{reason}`（契约是 `{prompt}`）· `performance` 传 `'resource'`（契约只收 `navigation/render/script`）· `file-system` 未判 `ok` 就取 `.data`（CapResult 是判别联合）· `p-checkbox` 的 `picked[f.id]` 缺索引签名 · `p-rich-text` 的 nodes 类型未收窄 · `p-button` 模板用平台宏 `__MP__`/`__WEB__`/`__TARGET__` 未作 setup 绑定。
     **修法**：能力页 6 处改数据表、组件页 3 处改页面代码；并给 showcase shims 补平台宏声明（此前 `types` 数组里写了相对路径 `./shims/*.d.ts` —— **types 只接受包名**，这些 shim 实际从未加载，靠 include 才生效）。
