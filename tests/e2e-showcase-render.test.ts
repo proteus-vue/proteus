@@ -4,6 +4,13 @@
 //   本 spec 对 showcase 每个页面跑「非空白 + 关键元素可见 + 无 console 错误」，
 //   **人眼能看到的渲染故障，这里必须红**。
 // 运行：npm run test:e2e:showcase（先 build:web）
+//
+// ★超时口径（2026-09-24 加固）：本文件是**重型 E2E**（真实 Chromium + 预览服务器 + 71 个用例，
+//   正常负载下全量约 290s、单例 2–3s）。默认 5s 单例超时在本机负载波动下必然假红——
+//   实测系统负载 ~50（load average；非本任务进程）时 4 例超时，**同批单例重跑全过**（证明非页面缺陷），
+//   提到 20s 后负载仍 ~52 时另 2 例超时 → 最终取 60s（≈正常耗时的 20–30 倍余量）。
+//   ★只放宽墙钟，断言内容一字未改（判别力不降）。
+//   ★后续提醒：若仍见超时，先看 `uptime` 的负载而非改断言——这是外部因素。
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { preview } from 'vite'
 import type { PreviewServer } from 'vite'
@@ -13,6 +20,10 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { createWebDriver } from '@proteus-vue/test-core/driver'
 import { assertPageRendered } from '@proteus-vue/test-core'
+
+// ★文件级超时（覆盖本文件全部用例；避免逐例传参造成两处口径漂移）
+import { vi } from 'vitest'
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 const SHOWCASE_ROOT = path.resolve(__dirname, '../showcase')
 const PORT = 4175
@@ -64,6 +75,18 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-camera', keySelector: '.p-camera', label: 'p-camera（相机预览区真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
   { route: '/subpackages/components/pages/p-webview', keySelector: '.p-webview', label: 'p-webview（内嵌容器真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
   { route: '/subpackages/capabilities/pages/camera', keySelector: '[class*=db], [class*=out]', label: 'useCamera（能力详情样板）', minVisibleRatio: 1 },
+  // ★批次 4（布局与展示组件，2026-09-24）——expectedCount 为构建后实测值（见各页演示块数量）。
+  //   API 三表由 scripts/gen-component-demo-pages.mjs 从官网内容 SSOT 解析（check:component-demo 防漂移）。
+  { route: '/subpackages/components/pages/p-box', keySelector: '.p-box', label: 'p-box（原子容器真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-spacer', keySelector: '.p-spacer', label: 'p-spacer（弹性空白真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-heading', keySelector: '.p-heading', label: 'p-heading（标题真实渲染）', minVisibleRatio: 1, expectedCount: 6 },
+  { route: '/subpackages/components/pages/p-divider', keySelector: '.p-divider', label: 'p-divider（分隔线真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-stack', keySelector: '.p-stack', label: 'p-stack（弹性栈真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-grid', keySelector: '.p-grid', label: 'p-grid（自适应网格真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-loading', keySelector: 'button', label: 'p-loading（触发按钮可见）', minVisibleRatio: 1 },
+  { route: '/subpackages/components/pages/p-skeleton', keySelector: '.p-skeleton', label: 'p-skeleton（骨架真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-avatar', keySelector: '.p-avatar', label: 'p-avatar（头像真实渲染）', minVisibleRatio: 1, expectedCount: 6 },
+  { route: '/subpackages/components/pages/p-segment', keySelector: '.p-segment', label: 'p-segment（分段控制器真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
   { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 10 },
@@ -90,7 +113,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await server?.close()
-})
+  // ★显式放宽（默认 10s）：页数增至 71 例后，负载下 browser/server 关闭会超 10s → 假红
+  //   （实测：同一批用例全过、仅收尾 hook 超时；本文件的 before/after 都是重型资源生命周期）
+}, 60_000)
 
 describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 console 错误）', () => {
   for (const { route, keySelector, label, minVisibleRatio, expectedCount } of PAGES) {
@@ -347,9 +372,7 @@ describe('★能力详情页（自动发现：渲染 + 真交互）', () => {
   })
 
   for (const slug of slugs) {
-    // ★每例固定等待 ≈ 2.4s（900 + click + 1500）+ 导航；页数增至 20 后全量运行时浏览器受压，
-    //   默认 5s 会在负载抖动下误报（实测 fetch/element-query/device-capability 三例超时，
-    //   三例单跑与组内单跑均通过）→ 显式放宽到 20s（只放宽墙钟，不弱化断言内容）。
+    // ★超时由文件级 vi.setConfig 统一给（20s）——此处不再逐例传，避免两处口径漂移
     it(`/subpackages/capabilities/pages/${slug}（渲染 + 交互）`, async () => {
       const route = `/subpackages/capabilities/pages/${slug}`
       const errs: string[] = []
@@ -377,6 +400,6 @@ describe('★能力详情页（自动发现：渲染 + 真交互）', () => {
       } finally {
         page.off('pageerror', onPageErr)
       }
-    }, 20_000)
+    })
   }
 })
