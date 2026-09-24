@@ -16,7 +16,7 @@
 ```
 主包（16 页：5 tab + 11 二级）
 首页      品牌立方体 + 框架数据 + 分区入口
-组件 ★    分组目录（6 域 / 72 组件，对齐官网）→ 点入分包详情页
+组件 ★    分组目录（6 域 / 73 组件，对齐官网）→ 点入分包详情页
 语义      编译链路可视化 + 源码/多端对照
 能力 ★    分组目录（10 域 / 81 Hook，对齐官网）→ 点入分包详情页
 我的      应用信息（app-config）+ 技术栈 + 关于
@@ -25,8 +25,10 @@
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
   —— 进度 **26 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
 subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
-  —— 进度 **9 / 81**（2026-09-19 起批量补齐：camera / vibrate / clipboard / network / device
-     / battery / orientation / screen / location——均为 Web 端**真有实现**的能力，演示可真交互）
+  —— 进度 **19 / 81**（2026-09-19 首批 9 页：camera / vibrate / clipboard / network / device
+     / battery / orientation / screen / location；2026-09-24 第二批 10 页：storage / cookie / fetch
+     / permission / media-query / element-query / intersection / idle / performance / device-capability
+     ——均为 Web 端**真有实现**的能力，演示页按钮实测走通成功路径并回显真实数据）
   —— 生成器：`scripts/gen-capability-demo-pages.mjs`（数据表 + 模板；`check:capability-demo` 门禁防漂移）
   —— ★未铺的能力**不假装覆盖**：只为 Web 端有实现的能力生成可交互页（无实现的不生成，避免「点了没反应」）
 
@@ -58,8 +60,8 @@ showcase/
 ├── app.config.ts         运行时配置（app.name/version/features/theme）
 ├── pages/                主包 16 页（5 tab + 11 二级）
 ├── subpackages/          ★分包（按大分类）
-│   ├── components/pages/    组件详情页（p-button / p-input 样板）
-│   └── capabilities/pages/  能力详情页（camera 样板）
+│   ├── components/pages/    组件详情页（26 页：p-button / p-input / …）
+│   └── capabilities/pages/  能力详情页（19 页：camera / storage / fetch / …）
 ├── data/catalog.ts       ★目录数据（AUTO-GENERATED，单一事实源 = 官网内容）
 ├── components/           应用组件（brand-cube / page-shell / demo-block / api-table / catalog-list）
 ├── router/               路由单例 + RouterView（Web 端转场）

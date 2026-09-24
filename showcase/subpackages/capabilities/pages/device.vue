@@ -43,7 +43,7 @@ const compatRows = ref([
   <page-shell title="useDevice 设备信息" subtitle="能力原语 · capability.device · 双端同源码">
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
-        <p-view class="btns">
+        <p-view id="demo-btns" class="btns">
           <p-button size="small" @click="onDevice">读取设备信息</p-button>
         </p-view>
       </template>
