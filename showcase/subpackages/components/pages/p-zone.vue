@@ -18,11 +18,6 @@ const codes = ref({
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "designWidth",
     "设计稿宽度（容器断点推导基准；缺省 375）",
     "Number"
@@ -30,11 +25,6 @@ const apiRows = ref([
 ])
 const eventRows = ref([])
 const slotRows = ref([
-  [
-    "---",
-    "---",
-    "—"
-  ],
   [
     "sm",
     "具名插槽",
@@ -57,11 +47,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

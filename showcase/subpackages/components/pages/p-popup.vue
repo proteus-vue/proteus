@@ -1,7 +1,7 @@
-<!-- showcase/subpackages/components/pages/p-skeleton.vue —— p-skeleton 骨架屏 组件演示（官方形态）
+<!-- showcase/subpackages/components/pages/p-popup.vue —— p-popup 弹层 组件演示（官方形态）
      ★由 scripts/gen-component-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      ★API 三表（Props / Events / 插槽）+ 兼容进度**从官网内容 SSOT 解析**
-       （website/content/components/p-skeleton.md ← gen-content.mjs ← packages/components/p-skeleton/index.vue）
+       （website/content/components/p-popup.md ← gen-content.mjs ← packages/components/p-popup/index.vue）
        ——组件改了源码，check:content 与本页门禁都会红，页面不会「悄悄过时」。
      ★演示部分（各 demo 块的用法与状态）逐组件手写——页面的价值所在，无法机械化。 -->
 <script setup lang="ts">
@@ -9,16 +9,21 @@ import { ref } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'
-import { PButton, PSkeleton, PText } from '@proteus-vue/components'
+import { PButton, PPopup, PText, PView } from '@proteus-vue/components'
 
 // ★代码片段放 data（含 < > " 的属性字面量会破坏 WXML 解析）
 const codes = ref({
-  basic: "<!-- visible=false → 渲染真实内容（默认插槽） -->\n<p-skeleton :visible=\"loading\" avatar :lines=\"[90, 70, 80]\">\n  <p-text>真实内容</p-text>\n</p-skeleton>",
+  basic: "<!-- position: bottom / center / top；closeOnMask 点遮罩关闭 -->\n<p-popup :visible=\"visible\" position=\"bottom\" @close=\"onClose\">\n  <p-text>弹层内容</p-text>\n</p-popup>",
 })
 
-const skVisible = ref(true)
-function toggleSkeleton(): void {
-  skVisible.value = !skVisible.value
+const popupVisible = ref(false)
+const popupPos = ref('bottom')
+function openPopup(pos: string): void {
+  popupPos.value = pos
+  popupVisible.value = true
+}
+function onPopupClose(): void {
+  popupVisible.value = false
 }
 
 const apiRows = ref([
@@ -43,17 +48,33 @@ const apiRows = ref([
     "Boolean"
   ],
   [
-    "avatar",
-    "是否头部头像形状（骨架屏）",
+    "position",
+    "位置/方位",
+    "String"
+  ],
+  [
+    "closeOnMask",
+    "点遮罩是否关闭",
     "Boolean"
   ],
   [
-    "lines",
-    "行数（骨架屏占位行数）",
-    "Array"
+    "maskOpacity",
+    "遮罩透明度（0-1）",
+    "Number"
+  ],
+  [
+    "duration",
+    "持续时间（ms）",
+    "Number"
   ]
 ])
-const eventRows = ref([])
+const eventRows = ref([
+  [
+    "close",
+    "关闭",
+    "—"
+  ]
+])
 const slotRows = ref([
   [
     "default",
@@ -106,16 +127,20 @@ const compatRows = ref([
 </script>
 
 <template>
-  <page-shell title="p-skeleton 骨架屏" subtitle="业务组件 · 骨架屏 · 双端同源码">
-    <demo-block index="01" title="绑定加载态（visible 切换骨架 / 真实内容）" desc="★点按钮切换：visible=true 显示 shimmer 骨架，false 渲染默认插槽的真实内容——骨架屏的正确用法是「绑定加载态」，不是常驻" :has-output="true" :code="codes.basic">
+  <page-shell title="p-popup 弹层" subtitle="页面外壳 · 基础弹层 · 双端同源码">
+    <demo-block index="01" title="三个方位（bottom / center / top）+ 点遮罩关闭" desc="★点按钮从对应方位弹出，自带走位动画（duration 0 = 按位置自动）；点遮罩 emit close 关闭" :has-output="true" :code="codes.basic">
       <template #demo>
-        <p-button size="small" @click="toggleSkeleton">{{ skVisible ? '切换到真实内容' : '切换回骨架' }}</p-button>
-          <p-skeleton :visible="skVisible" avatar :lines="[90, 70, 80]">
-            <p-text>真实内容已就绪（骨架消失）</p-text>
-          </p-skeleton>
+        <p-view class="btns">
+            <p-button size="small" @click="openPopup('bottom')">底部</p-button>
+            <p-button size="small" @click="openPopup('center')">居中</p-button>
+            <p-button size="small" @click="openPopup('top')">顶部</p-button>
+          </p-view>
+          <p-popup :visible="popupVisible" :position="popupPos" @close="onPopupClose">
+            <p-text>弹层内容（点遮罩关闭）</p-text>
+          </p-popup>
       </template>
       <template #output>
-        <p-text class="out">★lines 为数组（宽度百分比）——规避 MP `wx:for` 需数组、range 不可用</p-text>
+        <p-text class="out">★是 p-mask 的「带面板 + 动画」上位形态：弹层族的基础件，p-modal / p-drawer / p-action-sheet 都可由它组合</p-text>
       </template>
     </demo-block>
 
@@ -125,3 +150,7 @@ const compatRows = ref([
     <api-table title="双端兼容进度" :columns="['端', '说明', '状态']" :rows="compatRows" />
   </page-shell>
 </template>
+
+<style scoped>
+.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+</style>

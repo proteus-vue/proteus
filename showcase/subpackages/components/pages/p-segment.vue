@@ -29,11 +29,6 @@ function onSegSelect(v: unknown): void {
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "options",
     "分段项 [{label,value?}?]（value 缺省=label）",
     "Array as () => SegmentItem[]"
@@ -45,11 +40,6 @@ const apiRows = ref([
   ]
 ])
 const eventRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "update:active",
     "v-model 双向绑定：active变化时触发（同步父级绑定）",
@@ -69,11 +59,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

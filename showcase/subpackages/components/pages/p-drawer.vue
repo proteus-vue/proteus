@@ -1,7 +1,7 @@
-<!-- showcase/subpackages/components/pages/p-skeleton.vue —— p-skeleton 骨架屏 组件演示（官方形态）
+<!-- showcase/subpackages/components/pages/p-drawer.vue —— p-drawer 侧滑抽屉 组件演示（官方形态）
      ★由 scripts/gen-component-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      ★API 三表（Props / Events / 插槽）+ 兼容进度**从官网内容 SSOT 解析**
-       （website/content/components/p-skeleton.md ← gen-content.mjs ← packages/components/p-skeleton/index.vue）
+       （website/content/components/p-drawer.md ← gen-content.mjs ← packages/components/p-drawer/index.vue）
        ——组件改了源码，check:content 与本页门禁都会红，页面不会「悄悄过时」。
      ★演示部分（各 demo 块的用法与状态）逐组件手写——页面的价值所在，无法机械化。 -->
 <script setup lang="ts">
@@ -9,51 +9,45 @@ import { ref } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'
-import { PButton, PSkeleton, PText } from '@proteus-vue/components'
+import { PButton, PDrawer, PText, PView } from '@proteus-vue/components'
 
 // ★代码片段放 data（含 < > " 的属性字面量会破坏 WXML 解析）
 const codes = ref({
-  basic: "<!-- visible=false → 渲染真实内容（默认插槽） -->\n<p-skeleton :visible=\"loading\" avatar :lines=\"[90, 70, 80]\">\n  <p-text>真实内容</p-text>\n</p-skeleton>",
+  basic: "<!-- v-model:open 受控；side: left / right；overlay 点遮罩关闭 -->\n<p-drawer v-model=\"open\" side=\"left\" :width=\"280\">\n  <p-text>抽屉内容</p-text>\n</p-drawer>",
 })
 
-const skVisible = ref(true)
-function toggleSkeleton(): void {
-  skVisible.value = !skVisible.value
-}
+const drawerLeft = ref(false)
+const drawerRight = ref(false)
 
 const apiRows = ref([
   [
-    "pid",
-    "组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）",
+    "modelValue",
+    "展开状态（v-model:open）",
+    "Boolean"
+  ],
+  [
+    "side",
+    "侧向：left / right",
     "String"
   ],
   [
-    "disabled",
-    "禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）",
+    "width",
+    "抽屉宽度 px",
+    "Number"
+  ],
+  [
+    "overlay",
+    "遮罩（点击关闭）",
     "Boolean"
-  ],
-  [
-    "ariaLabel",
-    "无障碍标签（读屏器朗读文本）",
-    "String"
-  ],
-  [
-    "visible",
-    "是否可见（显隐由响应式数据驱动，零平台分支）",
-    "Boolean"
-  ],
-  [
-    "avatar",
-    "是否头部头像形状（骨架屏）",
-    "Boolean"
-  ],
-  [
-    "lines",
-    "行数（骨架屏占位行数）",
-    "Array"
   ]
 ])
-const eventRows = ref([])
+const eventRows = ref([
+  [
+    "update:modelValue",
+    "v-model 双向绑定：v-model 值变化时触发（同步父级绑定）",
+    "false"
+  ]
+])
 const slotRows = ref([
   [
     "default",
@@ -106,16 +100,22 @@ const compatRows = ref([
 </script>
 
 <template>
-  <page-shell title="p-skeleton 骨架屏" subtitle="业务组件 · 骨架屏 · 双端同源码">
-    <demo-block index="01" title="绑定加载态（visible 切换骨架 / 真实内容）" desc="★点按钮切换：visible=true 显示 shimmer 骨架，false 渲染默认插槽的真实内容——骨架屏的正确用法是「绑定加载态」，不是常驻" :has-output="true" :code="codes.basic">
+  <page-shell title="p-drawer 侧滑抽屉" subtitle="页面外壳 · 侧向抽屉 · 双端同源码">
+    <demo-block index="01" title="左右两侧（side）+ 点遮罩关闭（overlay）" desc="★两个独立抽屉：左侧与右侧分别受控；width 控制展开宽度；overlay 开启时点遮罩 emit update:modelValue(false) 关闭" :has-output="true" :code="codes.basic">
       <template #demo>
-        <p-button size="small" @click="toggleSkeleton">{{ skVisible ? '切换到真实内容' : '切换回骨架' }}</p-button>
-          <p-skeleton :visible="skVisible" avatar :lines="[90, 70, 80]">
-            <p-text>真实内容已就绪（骨架消失）</p-text>
-          </p-skeleton>
+        <p-view class="btns">
+            <p-button size="small" @click="drawerLeft = true">从左侧滑出</p-button>
+            <p-button size="small" @click="drawerRight = true">从右侧滑出</p-button>
+          </p-view>
+          <p-drawer v-model="drawerLeft" side="left" :width="260">
+            <p-text>左侧抽屉（点遮罩关闭）</p-text>
+          </p-drawer>
+          <p-drawer v-model="drawerRight" side="right" :width="260">
+            <p-text>右侧抽屉（点遮罩关闭）</p-text>
+          </p-drawer>
       </template>
       <template #output>
-        <p-text class="out">★lines 为数组（宽度百分比）——规避 MP `wx:for` 需数组、range 不可用</p-text>
+        <p-text class="out">★面板内点击用显式 noop 方法承载 .stop（MP 的 catchtap 无值形式不可编译——源码注释记录该约束）</p-text>
       </template>
     </demo-block>
 
@@ -125,3 +125,7 @@ const compatRows = ref([
     <api-table title="双端兼容进度" :columns="['端', '说明', '状态']" :rows="compatRows" />
   </page-shell>
 </template>
+
+<style scoped>
+.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+</style>

@@ -1,7 +1,7 @@
-<!-- showcase/subpackages/components/pages/p-skeleton.vue —— p-skeleton 骨架屏 组件演示（官方形态）
+<!-- showcase/subpackages/components/pages/p-tabbar.vue —— p-tabbar 底部标签栏 组件演示（官方形态）
      ★由 scripts/gen-component-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      ★API 三表（Props / Events / 插槽）+ 兼容进度**从官网内容 SSOT 解析**
-       （website/content/components/p-skeleton.md ← gen-content.mjs ← packages/components/p-skeleton/index.vue）
+       （website/content/components/p-tabbar.md ← gen-content.mjs ← packages/components/p-tabbar/index.vue）
        ——组件改了源码，check:content 与本页门禁都会红，页面不会「悄悄过时」。
      ★演示部分（各 demo 块的用法与状态）逐组件手写——页面的价值所在，无法机械化。 -->
 <script setup lang="ts">
@@ -9,55 +9,52 @@ import { ref } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'
-import { PButton, PSkeleton, PText } from '@proteus-vue/components'
+import { PTabbar, PText } from '@proteus-vue/components'
 
 // ★代码片段放 data（含 < > " 的属性字面量会破坏 WXML 解析）
 const codes = ref({
-  basic: "<!-- visible=false → 渲染真实内容（默认插槽） -->\n<p-skeleton :visible=\"loading\" avatar :lines=\"[90, 70, 80]\">\n  <p-text>真实内容</p-text>\n</p-skeleton>",
+  basic: "<!-- tabs: [{key,label,icon?}]；active 受控 + select 事件 -->\n<p-tabbar :tabs=\"tabs\" v-model:active=\"active\" @select=\"onSelect\" />",
 })
 
-const skVisible = ref(true)
-function toggleSkeleton(): void {
-  skVisible.value = !skVisible.value
+const tabActive = ref('home')
+const tabLast = ref('（暂无）')
+const tabTabs = ref([
+  { key: 'home', label: '首页' },
+  { key: 'find', label: '发现' },
+  { key: 'mine', label: '我的' },
+])
+function onTabSelect(k: unknown): void {
+  tabLast.value = String(k)
 }
 
 const apiRows = ref([
   [
-    "pid",
-    "组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）",
-    "String"
+    "tabs",
+    "标签项数组（{key,label,badge?,icon?}）",
+    "Array as () => TabItem[]"
   ],
   [
-    "disabled",
-    "禁用态（禁交互 + 弱化视觉；MP 原生 disabled 透传）",
-    "Boolean"
-  ],
-  [
-    "ariaLabel",
-    "无障碍标签（读屏器朗读文本）",
-    "String"
-  ],
-  [
-    "visible",
-    "是否可见（显隐由响应式数据驱动，零平台分支）",
-    "Boolean"
-  ],
-  [
-    "avatar",
-    "是否头部头像形状（骨架屏）",
-    "Boolean"
-  ],
-  [
-    "lines",
-    "行数（骨架屏占位行数）",
-    "Array"
+    "active",
+    "当前激活项 key",
+    "[String, Number]"
   ]
 ])
-const eventRows = ref([])
+const eventRows = ref([
+  [
+    "update:active",
+    "v-model 双向绑定：active变化时触发（同步父级绑定）",
+    "key"
+  ],
+  [
+    "select",
+    "选中某项",
+    "key"
+  ]
+])
 const slotRows = ref([
   [
-    "default",
-    "默认插槽（组件主内容）",
+    "—",
+    "无插槽",
     "—"
   ]
 ])
@@ -106,16 +103,13 @@ const compatRows = ref([
 </script>
 
 <template>
-  <page-shell title="p-skeleton 骨架屏" subtitle="业务组件 · 骨架屏 · 双端同源码">
-    <demo-block index="01" title="绑定加载态（visible 切换骨架 / 真实内容）" desc="★点按钮切换：visible=true 显示 shimmer 骨架，false 渲染默认插槽的真实内容——骨架屏的正确用法是「绑定加载态」，不是常驻" :has-output="true" :code="codes.basic">
+  <page-shell title="p-tabbar 底部标签栏" subtitle="页面外壳 · shell.tabbar · 双端同源码">
+    <demo-block index="01" title="受控切换（tabs / active / select）" desc="★点标签项切换激活态；select 事件回传 key（v-model:active 同步回写）" :has-output="true" :code="codes.basic">
       <template #demo>
-        <p-button size="small" @click="toggleSkeleton">{{ skVisible ? '切换到真实内容' : '切换回骨架' }}</p-button>
-          <p-skeleton :visible="skVisible" avatar :lines="[90, 70, 80]">
-            <p-text>真实内容已就绪（骨架消失）</p-text>
-          </p-skeleton>
+        <p-tabbar :tabs="tabTabs" v-model:active="tabActive" @select="onTabSelect" />
       </template>
       <template #output>
-        <p-text class="out">★lines 为数组（宽度百分比）——规避 MP `wx:for` 需数组、range 不可用</p-text>
+        <p-text class="out">当前：{{ tabActive }} · 最后 select：{{ tabLast }}</p-text>
       </template>
     </demo-block>
 
