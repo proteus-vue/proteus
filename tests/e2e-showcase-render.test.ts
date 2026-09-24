@@ -87,6 +87,17 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-skeleton', keySelector: '.p-skeleton', label: 'p-skeleton（骨架真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   { route: '/subpackages/components/pages/p-avatar', keySelector: '.p-avatar', label: 'p-avatar（头像真实渲染）', minVisibleRatio: 1, expectedCount: 6 },
   { route: '/subpackages/components/pages/p-segment', keySelector: '.p-segment', label: 'p-segment（分段控制器真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  // ★批次 5（Fluid 布局 + 外壳基础，2026-09-24）——expectedCount 为构建后实测值。
+  { route: '/subpackages/components/pages/p-aspect', keySelector: '.p-aspect', label: 'p-aspect（纵横比容器真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-fit', keySelector: '.p-fit', label: 'p-fit（内在尺寸真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-inline', keySelector: '.p-inline', label: 'p-inline（行内容器真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-zone', keySelector: '.p-zone', label: 'p-zone（容器断点分区真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-scale', keySelector: '.p-scale', label: 'p-scale（动态字号/密度真实渲染）', minVisibleRatio: 1, expectedCount: 7 },
+  { route: '/subpackages/components/pages/p-label', keySelector: '.p-label', label: 'p-label（表单标签真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-safe', keySelector: '.p-safe', label: 'p-safe（安全区避让真实渲染）', minVisibleRatio: 1, expectedCount: 3 },
+  { route: '/subpackages/components/pages/p-split', keySelector: '.p-split', label: 'p-split（自适应分栏真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-mask', keySelector: 'button', label: 'p-mask（触发按钮可见）', minVisibleRatio: 1 },
+  { route: '/subpackages/components/pages/p-toast', keySelector: 'button', label: 'p-toast（触发按钮可见）', minVisibleRatio: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
   { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 10 },

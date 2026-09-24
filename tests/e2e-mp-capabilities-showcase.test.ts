@@ -19,7 +19,7 @@ import { createDriver, createWxideMini } from '@proteus-vue/test-core/driver'
 import type { MpDebuggerLike } from '@proteus-vue/test-core/driver'
 
 const WXIDE_CLI =
-  process.env.PROTEUS_IDE_CLI || '/Volumes/data1/work/office-applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
+  process.env.PROTEUS_IDE_CLI || '/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
 const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || 'dist/mp-weixin'
 const ENABLED = process.env.PROTEUS_MP_E2E_WXIDE === '1'
 
@@ -52,6 +52,80 @@ const WX_APIS = [
   'getPerformance', // performance
   'checkDeviceSupportHevc', // device-capability
 ]
+
+/** ★批次 5（2026-09-24）Fluid 布局 + 外壳基础：slug → 页面 data 特征（判据同批次 4）。 */
+const COMPONENT_PAGES_5: Array<{ slug: string; featureKey: string; featureHint: string }> = [
+  { slug: 'p-aspect', featureKey: 'codes', featureHint: 'ratio' },
+  { slug: 'p-fit', featureKey: 'codes', featureHint: 'maxRatio' },
+  { slug: 'p-inline', featureKey: 'codes', featureHint: 'wrap' },
+  { slug: 'p-zone', featureKey: 'codes', featureHint: 'sm' },
+  { slug: 'p-scale', featureKey: 'codes', featureHint: 'density' },
+  { slug: 'p-label', featureKey: 'labelClicks', featureHint: '暂无' },
+  { slug: 'p-safe', featureKey: 'codes', featureHint: 'fallback' },
+  { slug: 'p-split', featureKey: 'codes', featureHint: 'minSplitWidth' },
+  { slug: 'p-mask', featureKey: 'maskVisible', featureHint: 'false' },
+  { slug: 'p-toast', featureKey: 'toastVisible', featureHint: 'false' },
+]
+
+describe.skipIf(!ENABLED)('showcase 组件详情页批次 5 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '10 个新组件页逐个 reLaunch 可达、演示态字段正确、API 三表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint } of COMPONENT_PAGES_5) {
+        const route = `/subpackages/components/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            tableOk:
+              Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
+              Array.isArray(d.eventRows) &&
+              Array.isArray(d.slotRows) &&
+              Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
+          })
+        }).replace('__FEATURE_KEY__', featureKey)
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          if (featureVal.includes(featureHint) && tableOk) break
+        }
+        if (!featureVal.includes(featureHint)) {
+          failures.push(`${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`)
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物（apiRows/eventRows/slotRows/compatRows 应有值）`)
+      }
+      expect(failures, `批次 5 组件页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
 
 /** ★批次 4（2026-09-24）布局与展示组件页。
  *  ★判据为何用页面 data 而非页面文本：MP 端**组件内部节点隔离**（页面级 SelectorQuery 查不到，
