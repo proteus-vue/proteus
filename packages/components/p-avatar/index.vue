@@ -3,8 +3,10 @@
      双端同源码：img → image；MP 安全（纯 props/样式；binderror 事件归一后续批次） -->
 <template>
   <div class="p-avatar" :class="'p-avatar-' + shape" :style="avatarStyle">
+    <!-- ★缺图兜底：src 为空 **或** 图片加载失败（broken）→ 显示 fallback 首字符。
+         此前 `broken` 只被赋值、模板从不读取 → 声明了兜底却显示破图（静默失效）。 -->
     <img
-      v-if="src"
+      v-if="src && !broken"
       class="p-avatar-img"
       :src="src"
       :alt="fallbackText"
