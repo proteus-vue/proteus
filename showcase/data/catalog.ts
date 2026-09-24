@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 73 个（已备详情页 65） */
+/** 组件：6 域 / 73 个（已备详情页 73） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -40,7 +40,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-spacer", desc: "弹性空白", route: "/subpackages/components/pages/p-spacer" },
       { name: "p-stack", desc: "弹性栈", route: "/subpackages/components/pages/p-stack" },
       { name: "p-view", desc: "通用容器", route: "/subpackages/components/pages/p-view" },
-      { name: "p-virtual-list", desc: "虚拟化长列表", route: "" },
+      { name: "p-virtual-list", desc: "虚拟化长列表", route: "/subpackages/components/pages/p-virtual-list" },
       { name: "p-zone", desc: "容器断点分区", route: "/subpackages/components/pages/p-zone" },
     ],
   },
@@ -53,13 +53,13 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-camera", desc: "相机", route: "/subpackages/components/pages/p-camera" },
       { name: "p-canvas", desc: "画布", route: "/subpackages/components/pages/p-canvas" },
       { name: "p-checkbox", desc: "多选", route: "/subpackages/components/pages/p-checkbox" },
-      { name: "p-form", desc: "表单容器", route: "" },
+      { name: "p-form", desc: "表单容器", route: "/subpackages/components/pages/p-form" },
       { name: "p-heading", desc: "标题", route: "/subpackages/components/pages/p-heading" },
       { name: "p-icon", desc: "图标", route: "/subpackages/components/pages/p-icon" },
       { name: "p-image", desc: "图片", route: "/subpackages/components/pages/p-image" },
       { name: "p-input", desc: "输入框", route: "/subpackages/components/pages/p-input" },
       { name: "p-label", desc: "表单标签 / 控件关联", route: "/subpackages/components/pages/p-label" },
-      { name: "p-list-view", desc: "虚拟长列表", route: "" },
+      { name: "p-list-view", desc: "虚拟长列表", route: "/subpackages/components/pages/p-list-view" },
       { name: "p-loading", desc: "加载中", route: "/subpackages/components/pages/p-loading" },
       { name: "p-map", desc: "地图", route: "/subpackages/components/pages/p-map" },
       { name: "p-media", desc: "媒体统一入口", route: "/subpackages/components/pages/p-media" },
@@ -70,7 +70,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-rich-text", desc: "富文本", route: "/subpackages/components/pages/p-rich-text" },
       { name: "p-scale", desc: "动态字号/密度", route: "/subpackages/components/pages/p-scale" },
       { name: "p-select", desc: "选择器 / 弹层型", route: "/subpackages/components/pages/p-select" },
-      { name: "p-selection", desc: "局部文本选区", route: "" },
+      { name: "p-selection", desc: "局部文本选区", route: "/subpackages/components/pages/p-selection" },
       { name: "p-skeleton", desc: "骨架屏", route: "/subpackages/components/pages/p-skeleton" },
       { name: "p-slider", desc: "滑块", route: "/subpackages/components/pages/p-slider" },
       { name: "p-svg", desc: "矢量图形", route: "/subpackages/components/pages/p-svg" },
@@ -86,7 +86,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-action-sheet", desc: "动作面板", route: "/subpackages/components/pages/p-action-sheet" },
       { name: "p-ad", desc: "广告位", route: "/subpackages/components/pages/p-ad" },
       { name: "p-drawer", desc: "侧滑抽屉", route: "/subpackages/components/pages/p-drawer" },
-      { name: "p-keyboard-accessory", desc: "键盘上方工具栏", route: "" },
+      { name: "p-keyboard-accessory", desc: "键盘上方工具栏", route: "/subpackages/components/pages/p-keyboard-accessory" },
       { name: "p-mask", desc: "遮罩", route: "/subpackages/components/pages/p-mask" },
       { name: "p-modal", desc: "弹窗", route: "/subpackages/components/pages/p-modal" },
       { name: "p-nav", desc: "导航栏", route: "/subpackages/components/pages/p-nav" },
@@ -125,9 +125,9 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
     name: "能力入口",
     desc: "扫码 / 选照片 / 定位",
     items: [
-      { name: "p-location", desc: "定位能力入口", route: "" },
-      { name: "p-pick-photo", desc: "拍照/相册能力入口", route: "" },
-      { name: "p-scan-qr", desc: "扫码能力入口", route: "" },
+      { name: "p-location", desc: "定位能力入口", route: "/subpackages/components/pages/p-location" },
+      { name: "p-pick-photo", desc: "拍照/相册能力入口", route: "/subpackages/components/pages/p-pick-photo" },
+      { name: "p-scan-qr", desc: "扫码能力入口", route: "/subpackages/components/pages/p-scan-qr" },
     ],
   },
 ]
@@ -280,7 +280,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 73,
-  componentReady: 65,
+  componentReady: 73,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 19,

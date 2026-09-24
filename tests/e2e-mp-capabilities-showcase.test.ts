@@ -53,6 +53,89 @@ const WX_APIS = [
   'checkDeviceSupportHevc', // device-capability
 ]
 
+/** ★批次 8（2026-09-24，收官）表单族 + 虚拟列表 + 能力入口：slug → 页面 data 特征。 */
+const COMPONENT_PAGES_8: Array<{ slug: string; featureKey: string; featureHint: string }> = [
+  { slug: 'p-form', featureKey: 'formMsg', featureHint: '尚未提交' },
+  { slug: 'p-selection', featureKey: 'selDetail', featureHint: '划选' },
+  { slug: 'p-keyboard-accessory', featureKey: 'kaVisible', featureHint: 'false' },
+  { slug: 'p-list-view', featureKey: 'lvCount', featureHint: '点按钮' },
+  { slug: 'p-virtual-list', featureKey: 'vlItems', featureHint: 'p-virtual-list' },
+  { slug: 'p-location', featureKey: 'locMsg', featureHint: '点按钮' },
+  { slug: 'p-scan-qr', featureKey: 'qrMsg', featureHint: '扫码' },
+  { slug: 'p-pick-photo', featureKey: 'pickMsg', featureHint: '选一张' },
+]
+
+describe.skipIf(!ENABLED)('showcase 组件详情页批次 8 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '8 个新组件页逐个 reLaunch 可达、演示态字段正确、API 三表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint } of COMPONENT_PAGES_8) {
+        const route = `/subpackages/components/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        const expectedRoute = route.replace(/^\//, '')
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        let featureOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            tableOk:
+              Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
+              Array.isArray(d.eventRows) &&
+              Array.isArray(d.slotRows) &&
+              Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
+          })
+        }).replace(/__FEATURE_KEY__/g, featureKey)
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          featureOk = featureVal.includes(featureHint)
+          if (featureOk && tableOk) break
+          // ★导航后校验路由（冷启动首个 reLaunch 可能静默停留首页——见批次 7 注释）
+          if (landedRoute !== expectedRoute && i < 3) {
+            try {
+              await driver.reLaunch(route)
+            } catch {
+              /* 重试失败则继续轮询 */
+            }
+          }
+        }
+        if (!featureOk) {
+          failures.push(`${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`)
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物（apiRows/eventRows/slotRows/compatRows 应有值）`)
+      }
+      expect(failures, `批次 8 组件页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
+
 /** ★批次 7（2026-09-24）工程类 + 剩余布局/外壳：slug → 页面 data 特征（判据同批次 4/5/6）。 */
 const COMPONENT_PAGES_7: Array<{ slug: string; featureKey: string; featureHint: string; requireKey?: boolean }> = [
   { slug: 'p-animate', featureKey: 'codes', featureHint: 'keyframes' },

@@ -119,6 +119,17 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-svg', keySelector: '.p-svg', label: 'p-svg（矢量图形真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
   { route: '/subpackages/components/pages/p-toolbar', keySelector: '.p-toolbar', label: 'p-toolbar（工具栏真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   { route: '/subpackages/components/pages/p-sidebar', keySelector: '.p-sidebar', label: 'p-sidebar（响应式侧栏真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  // ★批次 8（表单族 + 虚拟列表 + 能力入口，2026-09-24）——收官批次
+  { route: '/subpackages/components/pages/p-form', keySelector: '.p-form', label: 'p-form（表单容器真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-selection', keySelector: '.p-selection', label: 'p-selection（选区容器真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  // ★初始 visible=false → 组件 display:none（正确行为）→ 断言目标用**触发按钮**（同 p-mask/p-popup 口径），
+  //   实测教训：拿「初始不可见的组件本身」当 keySelector 会误报渲染故障
+  { route: '/subpackages/components/pages/p-keyboard-accessory', keySelector: 'button', label: 'p-keyboard-accessory（触发按钮可见）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-list-view', keySelector: '.p-list-view', label: 'p-list-view（虚拟列表真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-virtual-list', keySelector: '.p-list-view', label: 'p-virtual-list（转发实现真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-location', keySelector: '.p-location', label: 'p-location（定位入口真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-scan-qr', keySelector: '.p-scan-qr', label: 'p-scan-qr（扫码入口真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-pick-photo', keySelector: '.p-pick-photo', label: 'p-pick-photo（选图入口真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
   { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 10 },
@@ -191,6 +202,49 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
     await page.locator('.db button').nth(1).click()
     await page.waitForTimeout(700)
     expect(await page.locator('.crash-probe').count(), '重置后子树应恢复渲染').toBe(1)
+  })
+
+  // ★虚拟列表滚动实证锁（2026-09-24 批次 8）：两个真缺陷（缺底部占位 / 裸载荷读不到）修复后，
+  //   必须证明「滚动真的移动窗口」——只断言「行数少」不足以区分「虚拟化生效」与「根本没滚动」。
+  it('★/subpackages/components/pages/p-list-view 交互（滚动真的移动虚拟窗口）', async () => {
+    await page.goto(BASE + '/subpackages/components/pages/p-list-view', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(900)
+    const list = page.locator('.p-list-view').first()
+    const firstRow = () => list.locator('.plv-row').first().textContent()
+    const rowCount = () => list.locator('.plv-row').count()
+    expect(await rowCount(), '虚拟模式应只渲染可视窗口（远小于 500）').toBeLessThan(20)
+    const before = (await firstRow()) ?? ''
+    // 滚到中间（真实滚动 + 派发 scroll 事件；框架 Web 层以裸载荷 emit）
+    await list.evaluate((el) => {
+      // ★把**根节点自身**也纳入候选：可滚动节点就是 .p-list-view 根（其子节点只有占位块与行）
+      const self = el as HTMLElement
+      const sc = [self, ...Array.from(self.querySelectorAll('*'))].find(
+        (n) => (n as HTMLElement).scrollHeight > (n as HTMLElement).clientHeight,
+      ) as HTMLElement | undefined
+      if (sc) {
+        sc.scrollTop = 2200
+        sc.dispatchEvent(new Event('scroll', { bubbles: true }))
+      }
+    })
+    await page.waitForTimeout(900)
+    const after = (await firstRow()) ?? ''
+    expect(after, `滚动后首行应变化（滚动前 "${before.slice(0, 20)}"）`).not.toBe(before)
+    expect(await rowCount(), '滚动后渲染行数仍应恒定（虚拟化）').toBeLessThan(20)
+    // 滚到末尾也要能到（底部占位提供的滚动范围）
+    await list.evaluate((el) => {
+      // ★把**根节点自身**也纳入候选：可滚动节点就是 .p-list-view 根（其子节点只有占位块与行）
+      const self = el as HTMLElement
+      const sc = [self, ...Array.from(self.querySelectorAll('*'))].find(
+        (n) => (n as HTMLElement).scrollHeight > (n as HTMLElement).clientHeight,
+      ) as HTMLElement | undefined
+      if (sc) {
+        sc.scrollTop = sc.scrollHeight
+        sc.dispatchEvent(new Event('scroll', { bubbles: true }))
+      }
+    })
+    await page.waitForTimeout(900)
+    const tail = (await firstRow()) ?? ''
+    expect(tail, `应能滚到列表末尾（实际首行 "${tail.slice(0, 24)}"）`).toContain('第 4')
   })
 
   // ★p-button 交互门禁（2026-09-13 用户实测教训）：按钮「存在且可见」还不够——
