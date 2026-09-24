@@ -19,21 +19,21 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 73 个（已备详情页 36） */
+/** 组件：6 域 / 73 个（已备详情页 46） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
     desc: "网格 / 弹性栈 / 分区 / 安全区 / 滚动 / 虚拟列表",
     items: [
       { name: "p-adaptive", desc: "容器形态自适应", route: "" },
-      { name: "p-aspect", desc: "纵横比容器", route: "" },
+      { name: "p-aspect", desc: "纵横比容器", route: "/subpackages/components/pages/p-aspect" },
       { name: "p-box", desc: "原子容器", route: "/subpackages/components/pages/p-box" },
       { name: "p-divider", desc: "分隔线", route: "/subpackages/components/pages/p-divider" },
-      { name: "p-fit", desc: "内在尺寸", route: "" },
+      { name: "p-fit", desc: "内在尺寸", route: "/subpackages/components/pages/p-fit" },
       { name: "p-grid", desc: "自适应网格", route: "/subpackages/components/pages/p-grid" },
-      { name: "p-inline", desc: "行内容器", route: "" },
+      { name: "p-inline", desc: "行内容器", route: "/subpackages/components/pages/p-inline" },
       { name: "p-masonry", desc: "瀑布流", route: "" },
-      { name: "p-safe", desc: "安全区避让", route: "" },
+      { name: "p-safe", desc: "安全区避让", route: "/subpackages/components/pages/p-safe" },
       { name: "p-scroll", desc: "显式滚动容器", route: "" },
       { name: "p-scroll-view", desc: "滚动容器", route: "/subpackages/components/pages/p-scroll-view" },
       { name: "p-sidebar", desc: "自适应导航栏", route: "" },
@@ -41,7 +41,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-stack", desc: "弹性栈", route: "/subpackages/components/pages/p-stack" },
       { name: "p-view", desc: "通用容器", route: "/subpackages/components/pages/p-view" },
       { name: "p-virtual-list", desc: "虚拟化长列表", route: "" },
-      { name: "p-zone", desc: "容器断点分区", route: "" },
+      { name: "p-zone", desc: "容器断点分区", route: "/subpackages/components/pages/p-zone" },
     ],
   },
   {
@@ -58,7 +58,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-icon", desc: "图标", route: "/subpackages/components/pages/p-icon" },
       { name: "p-image", desc: "图片", route: "/subpackages/components/pages/p-image" },
       { name: "p-input", desc: "输入框", route: "/subpackages/components/pages/p-input" },
-      { name: "p-label", desc: "表单标签 / 控件关联", route: "" },
+      { name: "p-label", desc: "表单标签 / 控件关联", route: "/subpackages/components/pages/p-label" },
       { name: "p-list-view", desc: "虚拟长列表", route: "" },
       { name: "p-loading", desc: "加载中", route: "/subpackages/components/pages/p-loading" },
       { name: "p-map", desc: "地图", route: "/subpackages/components/pages/p-map" },
@@ -68,7 +68,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-progress", desc: "进度条", route: "/subpackages/components/pages/p-progress" },
       { name: "p-radio", desc: "单选", route: "/subpackages/components/pages/p-radio" },
       { name: "p-rich-text", desc: "富文本", route: "/subpackages/components/pages/p-rich-text" },
-      { name: "p-scale", desc: "动态字号/密度", route: "" },
+      { name: "p-scale", desc: "动态字号/密度", route: "/subpackages/components/pages/p-scale" },
       { name: "p-select", desc: "选择器 / 弹层型", route: "" },
       { name: "p-selection", desc: "局部文本选区", route: "" },
       { name: "p-skeleton", desc: "骨架屏", route: "/subpackages/components/pages/p-skeleton" },
@@ -87,7 +87,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-ad", desc: "广告位", route: "/subpackages/components/pages/p-ad" },
       { name: "p-drawer", desc: "侧滑抽屉", route: "" },
       { name: "p-keyboard-accessory", desc: "键盘上方工具栏", route: "" },
-      { name: "p-mask", desc: "遮罩", route: "" },
+      { name: "p-mask", desc: "遮罩", route: "/subpackages/components/pages/p-mask" },
       { name: "p-modal", desc: "弹窗", route: "" },
       { name: "p-nav", desc: "导航栏", route: "" },
       { name: "p-page", desc: "页面根容器", route: "" },
@@ -95,9 +95,9 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-popover", desc: "气泡浮层", route: "" },
       { name: "p-popup", desc: "弹层", route: "" },
       { name: "p-segment", desc: "分段控制器", route: "/subpackages/components/pages/p-segment" },
-      { name: "p-split", desc: "自适应分栏", route: "" },
+      { name: "p-split", desc: "自适应分栏", route: "/subpackages/components/pages/p-split" },
       { name: "p-tabbar", desc: "底部标签栏", route: "" },
-      { name: "p-toast", desc: "轻提示", route: "" },
+      { name: "p-toast", desc: "轻提示", route: "/subpackages/components/pages/p-toast" },
       { name: "p-toolbar", desc: "工具栏溢出折叠", route: "" },
       { name: "p-webview", desc: "内嵌网页", route: "/subpackages/components/pages/p-webview" },
     ],
@@ -280,7 +280,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 73,
-  componentReady: 36,
+  componentReady: 46,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 19,

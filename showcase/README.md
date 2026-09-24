@@ -23,7 +23,9 @@
 
 分包（按大分类独立分包，按需加载）
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
-  —— 进度 **36 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 进度 **46 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 2026-09-24 批次 5（10 页）：p-aspect / p-fit / p-inline / p-zone / p-scale / p-label
+     / p-safe / p-split / p-mask / p-toast（Fluid 布局 + 外壳基础）
   —— 2026-09-24 批次 4（10 页）：p-box / p-stack / p-grid / p-spacer / p-heading / p-divider
      / p-loading / p-skeleton / p-avatar / p-segment
   —— 生成器：`scripts/gen-component-demo-pages.mjs`（`check:component-demo` 门禁防漂移）

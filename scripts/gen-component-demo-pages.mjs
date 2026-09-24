@@ -461,6 +461,296 @@ function onSegSelect(v: unknown): void {
     ],
     styles: ``,
   },
+  // ─────────────────── 批次 5（2026-09-24）：Fluid 布局 + 外壳基础（10 页） ───────────────────
+  {
+    file: 'p-aspect',
+    title: 'p-aspect 纵横比容器',
+    subtitle: '布局原语 · Fluid System S2 · 双端同源码',
+    state: ``,
+    codes: [
+      ['ratio', `<!-- 16:9（默认）与 1:1 -->\n<p-aspect :ratio="16 / 9"><p-text>16 : 9</p-text></p-aspect>\n<p-aspect :ratio="1"><p-text>1 : 1</p-text></p-aspect>`],
+      ['maxw', `<!-- 限制最大宽度 + 1:1 -->\n<p-aspect :ratio="1" :max-width="120"><p-text>1 : 1（≤120px）</p-text></p-aspect>`],
+    ],
+    demos: [
+      {
+        title: '宽高比（ratio）',
+        desc: '只声明宽/高比，高度由宽度推导；★Web 走原生 CSS aspect-ratio，Skyline 不支持时降级为 padding-top hack（内容驱动盒高）',
+        code: 0,
+        demo: `<p-aspect class="box" :ratio="16 / 9"><p-text>16 : 9</p-text></p-aspect>
+          <p-aspect class="box" :ratio="1"><p-text>1 : 1</p-text></p-aspect>`,
+      },
+      {
+        title: '限制最大宽度（maxWidth）',
+        desc: 'maxWidth 给盒宽设上限（0 = 不限）——与 ratio 组合可做定宽比例的媒体位',
+        code: 1,
+        demo: `<p-aspect class="box" :ratio="1" :max-width="120"><p-text>1 : 1（≤120px）</p-text></p-aspect>`,
+        hasOutput: true,
+        output: '★降级可观察：Skyline 无 CSS aspect-ratio → padding-top hack（源码 #500 显式 content-box，否则高度恒 0）',
+      },
+    ],
+    styles: `.box { background: #eef2ff; border: 1px solid #d6ddff; border-radius: var(--sp-radius-sm); margin-bottom: var(--sp-2); }
+.box > :deep(*) { display: flex; align-items: center; justify-content: center; }`,
+  },
+  {
+    file: 'p-fit',
+    title: 'p-fit 内在尺寸',
+    subtitle: '布局原语 · Fluid System B3 · 双端同源码',
+    state: ``,
+    codes: [['fit', `<!-- 宽度由内容决定，但不超过容器 maxRatio（默认 0.8 = 80%） -->\n<p-fit><p-text>短</p-text></p-fit>\n<p-fit :max-ratio="0.8"><p-text>很长很长…</p-text></p-fit>`]],
+    demos: [
+      {
+        title: '内容驱动宽度 + 上限（maxRatio）',
+        desc: '宽度 fit-content（随内容），maxRatio 防止动态内容撑爆容器——★第二行的长文本被 80% 上限截断换行',
+        code: 0,
+        demo: `<p-fit class="fit-box"><p-text>短内容</p-text></p-fit>
+          <p-fit class="fit-box"><p-text>很长很长很长很长很长很长很长很长很长的文本内容，用来观察 80% 上限生效</p-text></p-fit>`,
+        hasOutput: true,
+        output: '★Skyline 无 fit-content → width 走 auto（内容驱动天然），maxWidth 上限仍生效',
+      },
+    ],
+    styles: `.fit-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-inline',
+    title: 'p-inline 行内容器',
+    subtitle: '布局原语 · layout.inline · 双端同源码',
+    state: ``,
+    codes: [
+      ['wrap', `<!-- 不折行（默认） vs 允许折行 -->\n<p-inline :gap="8"><p-text>一</p-text><p-text>二</p-text></p-inline>\n<p-inline :gap="8" wrap>…</p-inline>`],
+      ['align', `<!-- 主轴/交叉轴对齐 -->\n<p-inline :gap="8" justify="space-between" align="center">…</p-inline>`],
+    ],
+    demos: [
+      {
+        title: '折行开关（wrap）+ 间距（gap）',
+        desc: '行内盒语义（对齐 CSS inline-flex）；wrap 开启后内容超宽自动折行——★对比上下两块',
+        code: 0,
+        demo: `<p-inline class="row" :gap="6">
+            <p-text class="chip">1</p-text><p-text class="chip">2</p-text><p-text class="chip">3</p-text>
+            <p-text class="chip">4</p-text><p-text class="chip">5</p-text><p-text class="chip">6</p-text>
+            <p-text class="chip">7</p-text><p-text class="chip">8</p-text><p-text class="chip">9</p-text>
+          </p-inline>
+          <p-inline class="row" :gap="6" wrap>
+            <p-text class="chip">1</p-text><p-text class="chip">2</p-text><p-text class="chip">3</p-text>
+            <p-text class="chip">4</p-text><p-text class="chip">5</p-text><p-text class="chip">6</p-text>
+            <p-text class="chip">7</p-text><p-text class="chip">8</p-text><p-text class="chip">9</p-text>
+          </p-inline>`,
+      },
+      {
+        title: '对齐（justify / align）',
+        desc: 'justify 主轴对齐（space-between 把两端顶开），align 交叉轴对齐',
+        code: 1,
+        demo: `<p-inline class="row space" :gap="8" justify="space-between" align="center">
+            <p-text class="chip">左</p-text>
+            <p-text class="chip">中</p-text>
+            <p-text class="chip">右</p-text>
+          </p-inline>`,
+      },
+    ],
+    styles: `.row { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: var(--sp-2); }
+.row.space { background: #eef2ff; }
+.chip { background: #dbeafe; border-radius: var(--sp-radius-sm); padding: 2px 8px; }`,
+  },
+  {
+    file: 'p-zone',
+    title: 'p-zone 容器断点分区',
+    subtitle: '布局原语 · Fluid System S1 · 容器级响应式',
+    state: ``,
+    codes: [['zone', `<!-- 按**容器宽度**（非视口）渲染对应命名槽 -->\n<p-zone>\n  <template #sm><p-text>窄：单列</p-text></template>\n  <template #md><p-text>中：两列</p-text></template>\n  <template #lg><p-text>宽：三列</p-text></template>\n</p-zone>`]],
+    demos: [
+      {
+        title: '容器断点 → 命名槽（sm / md / lg / xl）',
+        desc: '按**容器**宽度（不是视口）选槽渲染——四个槽各写不同内容，当前只渲染命中的那一个；★缩窄模拟器视口可观察切换（窄屏命中 sm）',
+        code: 0,
+        demo: `<p-zone class="zone">
+            <template #sm><p-text class="zone-slot">窄容器 → sm 槽（单列）</p-text></template>
+            <template #md><p-text class="zone-slot">中容器 → md 槽</p-text></template>
+            <template #lg><p-text class="zone-slot">宽容器 → lg 槽</p-text></template>
+            <template #xl><p-text class="zone-slot">超宽容器 → xl 槽</p-text></template>
+          </p-zone>`,
+        hasOutput: true,
+        output: '★容器级（非视口级）响应式：Web 走 ResizeObserver，MP 走 SelectorQuery 运行时测量（容器断点在真机同样生效）',
+      },
+    ],
+    styles: `.zone { background: #eef2ff; border: 1px solid #d6ddff; border-radius: var(--sp-radius-sm); padding: var(--sp-3); }
+.zone-slot { font-weight: 600; }`,
+  },
+  {
+    file: 'p-scale',
+    title: 'p-scale 动态字号 / 密度',
+    subtitle: '布局原语 · Fluid System S4 · 无障碍档位',
+    state: ``,
+    codes: [['level', `<!-- 字号级别 0 小 / 1 标准 / 2 大 / 3 特大 -->\n<p-scale :level="0"><p-text>小号</p-text></p-scale>\n<p-scale :level="3"><p-text>特大</p-text></p-scale>`],
+      ['density', `<!-- 密度：compact / regular / comfortable -->\n<p-scale density="compact">…</p-scale>\n<p-scale density="comfortable">…</p-scale>`]],
+    demos: [
+      {
+        title: '字号级别（level 0–3）',
+        desc: '容器 font-size = base × 级别倍率 × 全局字号缩放（--proteus-font-scale）；★子项用 em 继承即随缩放',
+        code: 0,
+        demo: `<p-scale class="scale-row" :level="0"><p-text>级别 0（小）· 子项 em 继承</p-text></p-scale>
+          <p-scale class="scale-row" :level="1"><p-text>级别 1（标准·默认）</p-text></p-scale>
+          <p-scale class="scale-row" :level="2"><p-text>级别 2（大）</p-text></p-scale>
+          <p-scale class="scale-row" :level="3"><p-text>级别 3（特大）</p-text></p-scale>`,
+      },
+      {
+        title: '密度（density）',
+        desc: 'compact 紧凑 / regular 常规 / comfortable 宽松（无障碍）——影响行高与 --proteus-density-gap 间距 token',
+        code: 1,
+        demo: `<p-scale class="scale-row" density="compact"><p-text>紧凑密度</p-text></p-scale>
+          <p-scale class="scale-row" density="regular"><p-text>常规密度</p-text></p-scale>
+          <p-scale class="scale-row" density="comfortable"><p-text>宽松密度（无障碍）</p-text></p-scale>`,
+        hasOutput: true,
+        output: '★宿主可注入 --proteus-font-scale 做系统级字号缩放（折叠屏/平板/用户无障碍设置），组件侧零改动',
+      },
+    ],
+    styles: `.scale-row { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-label',
+    title: 'p-label 表单标签',
+    subtitle: 'UI 原语 · ui.label · 对齐小程序 <label>',
+    state: `const labelClicks = ref('（暂无）')
+function onLabelClick(): void {
+  labelClicks.value = '已点击 · ' + Date.now().toString().slice(-4)
+}`,
+    codes: [['for', `<!-- for 关联控件 id：点标签聚焦/切换该控件 -->\n<p-label for="demo-name">用户名</p-label>\n<p-input id="demo-name" placeholder="点上面的标签会聚焦这里" />`],
+      ['block', `<!-- block：整行块级标签 -->\n<p-label :block="true">整行标签</p-label>`]],
+    demos: [
+      {
+        title: '关联控件（for + 控件 id）',
+        desc: '★点「用户名」标签 → 下方输入框获得焦点（对齐小程序 <label for> 与 HTML label for 语义）；同时标签自身 emit click',
+        code: 0,
+        demo: `<p-label for="demo-name" @click="onLabelClick">用户名（点我聚焦输入框）</p-label>
+          <p-input id="demo-name" placeholder="点上面的标签会聚焦这里" />`,
+        hasOutput: true,
+        output: '标签点击：{{ labelClicks }}',
+      },
+      {
+        title: '块级标签（block）',
+        desc: 'block=true → 整行块级（默认 inline-flex 与控件同行）',
+        code: 1,
+        demo: `<p-label :block="true" class="block-label">整行标签（display: block）</p-label>`,
+      },
+    ],
+    styles: `.block-label { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }`,
+  },
+  {
+    file: 'p-safe',
+    title: 'p-safe 安全区避让',
+    subtitle: '布局原语 · Fluid System S2 · 双端同源码',
+    state: ``,
+    codes: [['top', `<!-- 顶部安全区（刘海/状态栏/胶囊） -->\n<p-safe area="top" :fallback="20">\n  <p-text>内容避开顶部安全区</p-text>\n</p-safe>`],
+      ['bottom', `<!-- 底部安全区（Home Indicator） -->\n<p-safe area="bottom" :fallback="12">…</p-safe>`]],
+    demos: [
+      {
+        title: '顶部安全区（area="top" + fallback 兜底）',
+        desc: '★fallback 是无刘海/桌面环境下的**最小**内边距（max() 包裹）——没有它，env()=0 时该块会塌成 0 高（演示会「看不见」）',
+        code: 0,
+        demo: `<p-safe class="safe-box" area="top" :fallback="20">
+            <p-text>内容避开顶部安全区（fallback 20px）</p-text>
+          </p-safe>`,
+      },
+      {
+        title: '底部安全区（area="bottom"）',
+        desc: '底部 Home Indicator 避让；★MP 端 env() 整条声明被丢弃 → 组件改走运行时读数（getWindowInfo + 胶囊下沿），真机同样生效',
+        code: 1,
+        demo: `<p-safe class="safe-box" area="bottom" :fallback="12">
+            <p-text>内容避开底部安全区（fallback 12px）</p-text>
+          </p-safe>`,
+        hasOutput: true,
+        output: '★折叠屏 hinge 避让：:fold 开启后 display-mode=fold/span 时左右避开折叠区域（env(fold-*)，把系统能力搬进框架）',
+      },
+    ],
+    styles: `.safe-box { background: #eef2ff; border: 1px solid #d6ddff; border-radius: var(--sp-radius-sm); }`,
+  },
+  {
+    file: 'p-split',
+    title: 'p-split 自适应分栏',
+    subtitle: '布局原语 · Fluid System S1 · 平板/多窗口核心',
+    state: ``,
+    codes: [['split', `<!-- 容器宽 ≥ minSplitWidth → 并排；窄于此 → 堆叠 -->\n<p-split :min-split-width="640" :gap="12">\n  <template #aside><p-text>侧栏</p-text></template>\n  <p-text>主区</p-text>\n</p-split>`],
+      ['always', `<!-- 小阈值（200）→ 在当前窄容器里也并排，便于观察两种形态 -->\n<p-split :min-split-width="200" :gap="12">…</p-split>`]],
+    demos: [
+      {
+        title: '默认阈值 640 → 当前容器窄，堆叠',
+        desc: '★按**容器**宽度（非视口）求解：窄容器堆叠（column），达到阈值并排（row）',
+        code: 0,
+        demo: `<p-split class="split-box" :min-split-width="640" :gap="10">
+            <template #aside><p-text class="side">侧栏（堆叠时在上）</p-text></template>
+            <p-text class="main">主区内容</p-text>
+          </p-split>`,
+      },
+      {
+        title: '小阈值 200 → 当前容器即并排',
+        desc: '把 minSplitWidth 降到 200，同一容器立即切到并排形态（对照上块）',
+        code: 1,
+        demo: `<p-split class="split-box" :min-split-width="200" :gap="10">
+            <template #aside><p-text class="side">侧栏</p-text></template>
+            <p-text class="main">主区（并排形态）</p-text>
+          </p-split>`,
+        hasOutput: true,
+        output: '★MP 端同样生效：Skyline 无 ResizeObserver → 走 SelectorQuery 运行时测量（容器响应式不再是 Web 专属）',
+      },
+    ],
+    styles: `.split-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: var(--sp-2); }
+.side { background: #dbeafe; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.main { background: #fff; border-radius: var(--sp-radius-sm); padding: var(--sp-3); flex: 1; }`,
+  },
+  {
+    file: 'p-mask',
+    title: 'p-mask 遮罩',
+    subtitle: '页面外壳 · 弹层体系基调 · 双端同源码',
+    state: `const maskVisible = ref(false)
+function showMask(): void {
+  maskVisible.value = true
+}
+function onMaskClose(): void {
+  maskVisible.value = false
+}`,
+    codes: [['basic', `<!-- visible 受控；close-on-tap 缺省开启（点遮罩 emit close） -->\n<p-mask :visible="maskVisible" :opacity="0.5" @close="onMaskClose" />`]],
+    demos: [
+      {
+        title: '显隐与点击关闭（visible + closeOnTap）',
+        desc: '★点按钮显示遮罩 → **点遮罩本体关闭**（closeOnTap 缺省 true，emit close 由父置 visible=false）；遮罩无动画，动画由弹层组件自行编排',
+        code: 0,
+        demo: `<p-button size="small" @click="showMask">显示遮罩（点遮罩关闭）</p-button>
+          <p-mask :visible="maskVisible" :opacity="0.45" @close="onMaskClose" />`,
+        hasOutput: true,
+        output: '★遮罩是 fixed 全屏（z-index 1000）：显示期间会挡住下层交互——这正是遮罩的目的；关闭由 closeOnTap 的 close 事件驱动',
+      },
+    ],
+    styles: ``,
+  },
+  {
+    file: 'p-toast',
+    title: 'p-toast 轻提示',
+    subtitle: '页面外壳 · 轻提示 · 双端同源码',
+    state: `const toastVisible = ref(false)
+const toastPos = ref('center')
+function showToast(pos: string): void {
+  toastPos.value = pos
+  toastVisible.value = true
+}
+function onToastClose(): void {
+  toastVisible.value = false
+}`,
+    codes: [['basic', `<!-- duration 到点自动 emit close（0 = 不自动关） -->\n<p-toast :visible="toastVisible" text="操作成功" :duration="1500" :position="pos" @close="onToastClose" />`]],
+    demos: [
+      {
+        title: '自动关闭 + 三个位置（center / top / bottom）',
+        desc: '★点按钮弹出轻提示，1.5s 后**自动 emit close**（父置 visible=false）；三个位置对照（自带淡入动画）',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-button size="small" @click="showToast('center')">居中</p-button>
+            <p-button size="small" @click="showToast('top')">顶部</p-button>
+            <p-button size="small" @click="showToast('bottom')">底部</p-button>
+          </p-view>
+          <p-toast :visible="toastVisible" text="操作成功（1.5s 自动关闭）" :duration="1500" :position="toastPos" @close="onToastClose" />`,
+        hasOutput: true,
+        output: '★避开了原生 wx.showToast 的限制：自绘 toast 支持自定义位置与时长，两端视觉一致（组件内定时器在 onUnmounted 清理）',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }`,
+  },
 ]
 
 // ───────────────────────── ③ 渲染 ─────────────────────────
@@ -484,7 +774,11 @@ function renderPage(p) {
       const idx = String(i + 1).padStart(2, '0')
       const hasOut = Boolean(d.hasOutput)
       const codeKey = p.codes[d.code][0]
-      const open = `    <demo-block index="${idx}" title="${d.title}" desc="${d.desc.replace(/"/g, '&quot;')}" :has-output="${hasOut}" :code="codes.${codeKey}">`
+      // ★属性值必须转义双引号：title/desc 里出现 `area="top"` 这类字面量时，
+      //   直接拼进 title="…" 会让 Vue 解析器报「Attribute name cannot contain U+0022」
+      //   （实测：p-safe 的 title 含 area="top" → Web 构建失败）→ 统一走 escAttr。
+      const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      const open = `    <demo-block index="${idx}" title="${escAttr(d.title)}" desc="${escAttr(d.desc)}" :has-output="${hasOut}" :code="codes.${codeKey}">`
       const demoSlot = `      <template #demo>\n        ${d.demo}\n      </template>`
       const outSlot = hasOut ? `\n      <template #output>\n        <p-text class="out">${d.output}</p-text>\n      </template>` : ''
       return `${open}\n${demoSlot}${outSlot}\n    </demo-block>`
