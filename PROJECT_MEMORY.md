@@ -18,6 +18,18 @@
 ---
 
 ## 当前状态速览（最近一次更新：2026-09-24）★新会话以此为准
+- **★本会话·批次 9（能力页 19→29/81）+ ★★补齐「showcase 详情页从未类型检查」的门禁盲区（2026-09-24 续六，★★★用户「继续」）**：
+  **① 先取证再选页（本轮方法论核心）**——上次我判断「能力页剩余多为 Web 无标准对等」，本轮**用数据修正了该判断**：逐个把 62 个未出页的 hook 与其桥方法比对 webBridge 真实实现体，得 **32 个有真实现 / 9 个显式降级 / 21 个待查**；再排除「返回空订阅（getBeacon/getPoster/getTranslation/getLocalService）或恒返回 unsupported 句柄（getPrivacy/getPreload/getImageEdit/getCalendar/getWindow/createLivePusher/joinLiveRoom/getScreenCapture/getRecorder/createCameraContext）」的伪实现，最终选 **10 页真能跑通成功路径**的：`log / download / file-system / canvas / app-lifecycle / page-lifecycle / navigation-guard / keyboard / biometric / background`。★**取证教训（差点写错事实）**：首次用 `indexOf('
+    name:')` 在整文件里找实现，命中的是 **wxBridge（MP 侧）**——若不核对就会把小程序行为写进 Web 演示。**必须在 webBridge 段内取**。
+  **② ★★门禁盲区（本轮最大价值，与批次 8 的虚拟滚动同属「本可避免却长期存在」类）**——调试 `background` 页时发现：`showcase/tsconfig.json` 的 `include` **不含 `subpackages/**`** → **102 个详情页（组件 73 + 能力 29）从来没有被类型检查过**。补上后**立刻暴露 13 处真实错误**（全部是页面与 API 契约不符，此前在页面上会取到 undefined）：
+    · `device` 用 `data.system`（契约是 `os` + `version`）· `screen` 用 `pixelRatio`（契约是 `dpr`）· `network` 用 `kind`（契约是 `type`）· `biometric` 传 `{reason}`（契约是 `{prompt}`）· `performance` 传 `'resource'`（契约只收 `navigation/render/script`）· `file-system` 未判 `ok` 就取 `.data`（CapResult 是判别联合）· `p-checkbox` 的 `picked[f.id]` 缺索引签名 · `p-rich-text` 的 nodes 类型未收窄 · `p-button` 模板用平台宏 `__MP__`/`__WEB__`/`__TARGET__` 未作 setup 绑定。
+    **修法**：能力页 6 处改数据表、组件页 3 处改页面代码；并给 showcase shims 补平台宏声明（此前 `types` 数组里写了相对路径 `./shims/*.d.ts` —— **types 只接受包名**，这些 shim 实际从未加载，靠 include 才生效）。
+  **③ 新门禁接线**——`npx vue-tsc --noEmit -p showcase/tsconfig.json` 接入 verify 链与 CI（与根/examples 的 vue-tsc 同款形态，不新增 check 名；`check:gates-sync` 曾拦下我第一版「新增 check 但 CI 匹配不上」的写法）。
+  **④ ★background 页的真因（我自己的 bug，非框架缺陷）**——报 `onEvent is not a function`。逐层排除（产物无陈旧、桥绑定正确、运行时判定 web、直调 chunk 导出正常）后，用**一次实测定论**：`useBackground()` 返回 **Promise**（异步 hook），而同族的 `useAppLifecycle()`/`useKeyboard()` 返回**同步 CapResult**——我照抄了后者的写法，直接当句柄用。修：`await` + 解包 `.ok/.data`。★期间我在同一个问题上花了过多轮次，中途该更早做「形状实测」（一行 evaluate 就能定论），这是效率教训。
+  **⑤ 真交互实测 10/10**（Web）：log 真写入 · **download 真 fetch 站内资源（HTTP 200）** · file-system 读写往返 · **canvas 真绘制 + 真导出 data URL（1534 字符）** · app/page-lifecycle 订阅与取消 · **navigation-guard 真开启卸载拦截** · keyboard 订阅 · biometric 探测通过（认证走失败路径并已按实说明）· background 订阅成功。
+  **⑥ MP 真机**：**7/7 全过**（批次 9+8+7+6+5+4+能力页）；破坏性验证（改 download hint）精确报红。★断言踩坑两处（我的笔误）：能力页字段名是 `codeDemo` 而我写了 `codes`（组件页命名）；空数组字段（phases/pPhases/bgEvents）值与 hint 都无法判别 → 引入 `requireKey` 语义。
+  **⑦ 验证汇总**——门禁 **12 道 + 新 showcase 类型检查**全 ✅ · 根 `vue-tsc` 0 错误 · **showcase 类型检查 0 错误（13→0）** · showcase Web E2E **120/120** · MP 真机 **7/7** · 单测 **3539/3539**。README 已更新（能力页 29/81 + 选页判据）。
+  **⑧ 未完成**：能力页 **29/81**（余 52，多为空订阅/恒降级类——按判据不收；若要覆盖，需先想清「如何诚实演示不支持」的形态）。⚠ 发布阻塞仍未解（F-29/F-34/F-35 待换 npm token）。
 - **★本会话·批次 8 收官（65→73/73，组件详情页全量齐备）+ 修掉「虚拟滚动在 Web 端完全失效」的两个真缺陷（2026-09-24 续五，★★★用户「继续」）**：
   **① 组件详情页 73/73 全量齐备**——批次 8 交付 8 页：`p-form / p-selection / p-keyboard-accessory / p-list-view / p-virtual-list / p-location / p-scan-qr / p-pick-photo`。目录页所有条目均可点击，无「规划中」占位。
   **② ★演示边界先定住再动手（按要求）**——这三类组件性质不同，先取证实现面再写演示：**(a) 虚拟列表**：读源码确认是真虚拟化（`items.slice(start, start+count)` + 占位撑高）→ 主张「只渲染可视窗口」**可机器验证**，故演示做成**可自证**（页内按钮数 DOM 行数）+ 全量对照块（`virtual=false`）；**(b) 能力入口**：读 `webBridge` 确认 `scanQR/createQR` 无实现、`getAlbum.pick` 有实现 → 三个入口页按真实可用性分「成功路径」与「**显式降级路径**」（error 事件带机器码），并把「能力缺失时框架行为必须可观测」写成本页的价值；**(c) 表单**：`p-form` 的 `rules` 是**函数表**（MP 端 WXML 数据无法承载函数）→ 校验规则放页面层，演示里空提交真的弹出 2 条错误、填对后真的通过。

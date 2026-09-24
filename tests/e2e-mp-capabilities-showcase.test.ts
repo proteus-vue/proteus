@@ -53,6 +53,92 @@ const WX_APIS = [
   'checkDeviceSupportHevc', // device-capability
 ]
 
+/** ★批次 9（2026-09-24）Web 端有真实现的能力页：slug → 页面 data 特征。 */
+const CAPABILITY_PAGES_9: Array<{ slug: string; featureKey: string; featureHint: string; requireKey?: boolean }> = [
+  { slug: 'log', featureKey: 'codeDemo', featureHint: 'useLog' },
+  { slug: 'download', featureKey: 'codeDemo', featureHint: 'responseType' },
+  { slug: 'file-system', featureKey: 'codeDemo', featureHint: 'writeFile' },
+  { slug: 'canvas', featureKey: 'codeDemo', featureHint: 'createContext' },
+  // ★phases/pPhases/bgEvents 初值是**空数组** → 值与 hint 都无法判别（'[]' 不含 '['）→ 用 requireKey 语义
+  { slug: 'app-lifecycle', featureKey: 'phases', featureHint: '', requireKey: true },
+  { slug: 'page-lifecycle', featureKey: 'pPhases', featureHint: '', requireKey: true },
+  { slug: 'navigation-guard', featureKey: 'codeDemo', featureHint: 'enable' },
+  { slug: 'keyboard', featureKey: 'kbInfo', featureHint: '未订阅' },
+  { slug: 'biometric', featureKey: 'codeDemo', featureHint: 'authenticateBiometric' },
+  { slug: 'background', featureKey: 'bgEvents', featureHint: '', requireKey: true },
+]
+
+describe.skipIf(!ENABLED)('showcase 能力详情页批次 9 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '10 个新能力页逐个 reLaunch 可达、演示态字段正确、API 表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint, requireKey } of CAPABILITY_PAGES_9) {
+        const route = `/subpackages/capabilities/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        const expectedRoute = route.replace(/^\//, '')
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        let featureOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            hasKey: Object.prototype.hasOwnProperty.call(d, '__FEATURE_KEY__'),
+            tableOk: Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0,
+          })
+        }).replace(/__FEATURE_KEY__/g, featureKey)
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean; hasKey: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          featureOk = requireKey ? parsed.hasKey : featureVal.includes(featureHint)
+          if (featureOk && tableOk) break
+          if (landedRoute !== expectedRoute && i < 3) {
+            try {
+              await driver.reLaunch(route)
+            } catch {
+              /* 重试失败则继续轮询 */
+            }
+          }
+        }
+        if (!featureOk) {
+          failures.push(
+            requireKey
+              ? `${slug}: 页面 data 缺字段 ${featureKey}（路由 ${landedRoute}）`
+              : `${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`,
+          )
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物`)
+      }
+      expect(failures, `批次 9 能力页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
+
 /** ★批次 8（2026-09-24，收官）表单族 + 虚拟列表 + 能力入口：slug → 页面 data 特征。 */
 const COMPONENT_PAGES_8: Array<{ slug: string; featureKey: string; featureHint: string }> = [
   { slug: 'p-form', featureKey: 'formMsg', featureHint: '尚未提交' },
@@ -109,7 +195,7 @@ describe.skipIf(!ENABLED)('showcase 组件详情页批次 8 · MP 真机（页�
         for (let i = 0; i < 10; i++) {
           await driver.waitFor(700)
           const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
-          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean }
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean; hasKey: boolean }
           landedRoute = parsed.route
           featureVal = parsed.feature
           tableOk = parsed.tableOk

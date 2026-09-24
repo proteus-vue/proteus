@@ -1,4 +1,4 @@
-<!-- showcase/subpackages/capabilities/pages/device-capability.vue —— 能力详情页（useDeviceCapability，官方形态）
+<!-- showcase/subpackages/capabilities/pages/app-lifecycle.vue —— 能力详情页（useAppLifecycle，官方形态）
      ★由 scripts/gen-capability-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      范式同 camera.vue：能力说明 + 真交互演示 + API 表 + 双端兼容进度。
      ★真交互：按钮真调用能力 Hook，输出区回显 Result<T>（成功/失败 + 错误码）。 -->
@@ -14,45 +14,51 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const h = useDeviceCapability()\nif (h.ok) {\n  const hevc = await h.data.supportsHevc()\n  /* hevc.data: boolean */\n}")
+const codeDemo = ref("const lc = useAppLifecycle()\nlc.onShow(() => {}); lc.onHide(() => {})\n/* lc.phase: PENDING | LAUNCH | SHOW | HIDE */")
 
-const out = ref('点击按钮探测本机是否支持 HEVC（H.265）硬解码')
-async function onHevc(): Promise<void> {
-  const h = cap.useDeviceCapability()
-  if (!h.ok) {
-    out.value = `⚠ 降级：${h.error.code}`
-    return
-  }
-  const r = await h.data.supportsHevc()
-  out.value = r.ok
-    ? `✅ HEVC(H.265) 硬解支持：${r.data}`
-    : `⚠ 降级：${r.error.code}`
+// ★订阅型能力：订阅本身不产生即时输出（要切标签页才会回调）——看下方「已记录的阶段」
+const out = ref('订阅已就绪——切换浏览器标签页/最小化窗口可观察 phase 变化')
+let unsub: (() => void) | null = null
+const phases = ref<string[]>([])
+function onSubscribe(): void {
+  const lc = cap.useAppLifecycle()
+  phases.value = [lc.phase]
+  const offShow = lc.onShow(() => { phases.value.push('SHOW') })
+  const offHide = lc.onHide(() => { phases.value.push('HIDE') })
+  unsub = () => { offShow(); offHide() }
+  out.value = `✅ 已订阅（当前 phase=${lc.phase}）——切换标签页观察`
+}
+function onUnsubscribe(): void {
+  if (!unsub) { out.value = '（尚未订阅）'; return }
+  unsub(); unsub = null
+  out.value = '✅ 已取消订阅（释放监听）'
 }
 
 const apiRows = ref([
-  ["useDeviceCapability()", "设备能力探测句柄（★同步返回 CapResult）", "CapResult<DeviceCapabilityAPI>"],
-  ["supportsHevc()", "是否支持 HEVC（H.265）硬解码", "Promise<CapResult<boolean>>"],
-  ["error.code", "机器码：device-capability.unsupported（无探测通道）等", "string"],
+  ["useAppLifecycle()", "应用生命周期句柄（★同步返回，非 CapResult）", "AppLifecycle"],
+  ["phase", "当前阶段：'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE'", "string"],
+  ["onLaunch(cb) / onShow(cb) / onHide(cb)", "订阅启动 / 进前台 / 退后台（返回取消函数）", "() => void"],
 ])
 const compatRows = ref([
-  ["Web SPA", "MediaSource.isTypeSupported（判 codecs hvc1 / hev1；无 MSE → Err）", "✅"],
-  ["微信小程序", "wx.checkDeviceSupportHevc（真机硬解能力）", "✅"],
+  ["Web SPA", "Page Visibility API（visibilitychange；★真可触发——切标签页）", "✅"],
+  ["微信小程序", "wx.onAppShow / onAppHide / onLaunch", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
   ["iOS / Android / 鸿蒙 / Flutter", "端原型映射·能力桥未接线（Err 显式降级）", "🟡"],
 ])
 </script>
 
 <template>
-  <page-shell title="useDeviceCapability 设备能力探测" subtitle="能力原语 · capability.device-capability · 双端同源码">
+  <page-shell title="useAppLifecycle 应用生命周期" subtitle="能力原语 · capability.app-lifecycle · 双端同源码">
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
         <p-view id="demo-btns" class="btns">
-          <p-button size="small" @click="onHevc">探测 HEVC 支持</p-button>
+          <p-button size="small" @click="onSubscribe">订阅生命周期</p-button>
+          <p-button size="small" @click="onUnsubscribe">取消订阅</p-button>
         </p-view>
       </template>
       <template #output>
         <p-text class="out">{{ out }}</p-text>
-      </template>
+        <p-text class="out out-extra">已记录的阶段：{{ phases.join(" → ") || "（暂无）" }}</p-text>      </template>
     </demo-block>
 
     <api-table title="API" :columns="['签名 / 字段', '说明', '类型']" :rows="apiRows" />

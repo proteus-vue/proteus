@@ -86,4 +86,11 @@ const compatRows = ref([
   font-weight: 600;
   word-break: break-all;
 }
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
+}
 </style>

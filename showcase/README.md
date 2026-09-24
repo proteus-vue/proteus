@@ -39,7 +39,11 @@ subpackages/components/pages/<name>    组件详情页（每组件一页，官�
      `website/content/components/<tag>.md` ← `gen-content.mjs` ← `packages/components/<tag>/index.vue`
      ⇒ 组件改了源码，`check:content` 与本页门禁都会红，页面不会「悄悄过时」
 subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
-  —— 进度 **19 / 81**（2026-09-19 首批 9 页：camera / vibrate / clipboard / network / device
+  —— 进度 **29 / 81**（2026-09-24 批次 9（10 页）：log / download / file-system / canvas
+     / app-lifecycle / page-lifecycle / navigation-guard / keyboard / biometric / background
+     ——★选页判据：逐个核对 webBridge 真实实现体，只收「能跑通成功路径」的；
+     返回空订阅或恒 unsupported 句柄的一律不收（那类页面只能展示「不支持」，名不副实）；
+     2026-09-19 首批 9 页：camera / vibrate / clipboard / network / device
      / battery / orientation / screen / location；2026-09-24 第二批 10 页：storage / cookie / fetch
      / permission / media-query / element-query / intersection / idle / performance / device-capability
      ——均为 Web 端**真有实现**的能力，演示页按钮实测走通成功路径并回显真实数据）

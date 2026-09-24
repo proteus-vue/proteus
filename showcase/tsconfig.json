@@ -13,7 +13,10 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "./shims/mp.d.ts", "./shims/events.d.ts", "./shims/vue.d.ts"],
+    // ★2026-09-24 修正：types 数组只接受**包名**，相对路径 d.ts 不会被加载
+    //   （此前写了 ./shims/*.d.ts 但实际从未生效——全局声明如 __MP__ 因此缺失）。
+    //   这些 shim 由下方 include 的 "shims/**/*.d.ts" 正常纳入类型程序。
+    "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
       "@proteus-vue/shared": ["../packages/shared/src/index.ts"],
@@ -26,6 +29,13 @@
   "include": [
     "pages/**/*.ts",
     "pages/**/*.vue",
+    // ★2026-09-24 补盲区：subpackages 下是**全部详情页**（组件 73 + 能力 29 = 102 页），
+    //   此前不在 include 内 → 这些页面的类型完全未被检查。
+    //   实测事故：能力页把**异步 hook**（useBackground 返回 Promise）当同步句柄用
+    //   （`cap.useBackground().onEvent(...)`）→ 运行时 TypeError，而**所有门禁全绿**
+    //   （vue-tsc 不覆盖 + E2E 只测前几个按钮 + 构建不报错）。
+    "subpackages/**/*.ts",
+    "subpackages/**/*.vue",
     "router/**/*.ts",
     "router/**/*.vue",
     "components/**/*.vue",

@@ -10,7 +10,9 @@ import { PRichText, PText } from '@proteus-vue/components'
 
 // ★字面量必须直接内联进 ref()（编译器静态求值：标识符初值 → data 为 undefined，见 S33/S57）
 const html = ref('<p style="margin:0 0 8px">这是<strong>富文本</strong>：支持 <em>斜体</em>、<span style="color:#7c5cff">着色</span>。</p><ul style="margin:0;padding-left:20px"><li>列表项 A</li><li>列表项 B</li></ul>')
-const nodes = ref([
+// ★类型（2026-09-24 类型检查暴露）：nodes 的 type/children[].type 需为**字面量**联合
+//   （p-rich-text 契约是 'text' | 'node'），as const 收窄，否则被推断为 string 而类型不符
+const nodes = ref<Array<Record<string, unknown>>>([
   { type: 'node', name: 'h3', attrs: { style: 'margin:0 0 6px;font-size:15px' }, children: [{ type: 'text', text: '节点数组形态' }] },
   { type: 'node', name: 'p', attrs: { style: 'margin:0;color:#666' }, children: [{ type: 'text', text: 'structured nodes（官方 nodes 数组）' }] },
 ])

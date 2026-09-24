@@ -1,4 +1,4 @@
-<!-- showcase/subpackages/capabilities/pages/device-capability.vue —— 能力详情页（useDeviceCapability，官方形态）
+<!-- showcase/subpackages/capabilities/pages/biometric.vue —— 能力详情页（useBiometric，官方形态）
      ★由 scripts/gen-capability-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      范式同 camera.vue：能力说明 + 真交互演示 + API 表 + 双端兼容进度。
      ★真交互：按钮真调用能力 Hook，输出区回显 Result<T>（成功/失败 + 错误码）。 -->
@@ -14,40 +14,43 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const h = useDeviceCapability()\nif (h.ok) {\n  const hevc = await h.data.supportsHevc()\n  /* hevc.data: boolean */\n}")
+const codeDemo = ref("const ok = await useBiometric()          // 平台是否支持\nconst auth = await authenticateBiometric({ reason: \"验证身份\" })")
 
-const out = ref('点击按钮探测本机是否支持 HEVC（H.265）硬解码')
-async function onHevc(): Promise<void> {
-  const h = cap.useDeviceCapability()
-  if (!h.ok) {
-    out.value = `⚠ 降级：${h.error.code}`
-    return
-  }
-  const r = await h.data.supportsHevc()
+const out = ref('① 探测平台是否支持；② 发起认证（★需真实认证器——无认证器的环境会走失败路径，这是正确行为）')
+async function onCheck(): Promise<void> {
+  const r = await cap.useBiometric()
+  out.value = r.ok ? `✅ 平台支持生物识别：${r.data}（WebAuthn ${r.data ? '可用' : '不可用'}）` : `⚠ 降级：${r.error.code}`
+}
+async function onAuth(): Promise<void> {
+  // ★修正（类型检查暴露）：契约字段名是 prompt，非 reason
+  const r = await cap.authenticateBiometric({ prompt: '验证身份以继续（WebAuthn 平台认证器）' })
+  // ★诚实说明：WebAuthn 认证需**真实认证器**（指纹/面容/PIN）。无认证器的环境（如 CI/无头浏览器、
+  //   未注册凭据的桌面浏览器）必然返回 biometric.failed —— 这是正确行为，不是缺陷。
   out.value = r.ok
-    ? `✅ HEVC(H.265) 硬解支持：${r.data}`
-    : `⚠ 降级：${r.error.code}`
+    ? `✅ 认证通过：${r.data}`
+    : `⚠ 降级：${r.error.code}（无认证器/用户取消时即为此结果——需在支持 WebAuthn 的真实设备上重试）`
 }
 
 const apiRows = ref([
-  ["useDeviceCapability()", "设备能力探测句柄（★同步返回 CapResult）", "CapResult<DeviceCapabilityAPI>"],
-  ["supportsHevc()", "是否支持 HEVC（H.265）硬解码", "Promise<CapResult<boolean>>"],
-  ["error.code", "机器码：device-capability.unsupported（无探测通道）等", "string"],
+  ["useBiometric()", "平台是否支持（WebAuthn 可用性入口）；返回 Promise<CapResult<boolean>>", "CapResult<boolean>"],
+  ["authenticateBiometric(options)", "发起认证（WebAuthn 平台认证器 / wx.startSoterAuthentication）", "Promise<CapResult<boolean>>"],
+  ["error.code", "机器码：biometric.unsupported（无 WebAuthn / 需 HTTPS）等", "string"],
 ])
 const compatRows = ref([
-  ["Web SPA", "MediaSource.isTypeSupported（判 codecs hvc1 / hev1；无 MSE → Err）", "✅"],
-  ["微信小程序", "wx.checkDeviceSupportHevc（真机硬解能力）", "✅"],
+  ["Web SPA", "WebAuthn（★需 HTTPS/安全上下文——真机认证器由系统弹出）", "✅"],
+  ["微信小程序", "wx.checkIsSupportFingerPrint / startSoterAuthentication", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
   ["iOS / Android / 鸿蒙 / Flutter", "端原型映射·能力桥未接线（Err 显式降级）", "🟡"],
 ])
 </script>
 
 <template>
-  <page-shell title="useDeviceCapability 设备能力探测" subtitle="能力原语 · capability.device-capability · 双端同源码">
+  <page-shell title="useBiometric 生物识别" subtitle="能力原语 · capability.biometric · 双端同源码">
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
         <p-view id="demo-btns" class="btns">
-          <p-button size="small" @click="onHevc">探测 HEVC 支持</p-button>
+          <p-button size="small" @click="onCheck">探测支持</p-button>
+          <p-button size="small" @click="onAuth">发起认证</p-button>
         </p-view>
       </template>
       <template #output>

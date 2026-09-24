@@ -1,4 +1,4 @@
-<!-- showcase/subpackages/capabilities/pages/device-capability.vue —— 能力详情页（useDeviceCapability，官方形态）
+<!-- showcase/subpackages/capabilities/pages/navigation-guard.vue —— 能力详情页（useNavigationGuard，官方形态）
      ★由 scripts/gen-capability-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      范式同 camera.vue：能力说明 + 真交互演示 + API 表 + 双端兼容进度。
      ★真交互：按钮真调用能力 Hook，输出区回显 Result<T>（成功/失败 + 错误码）。 -->
@@ -14,40 +14,42 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const h = useDeviceCapability()\nif (h.ok) {\n  const hevc = await h.data.supportsHevc()\n  /* hevc.data: boolean */\n}")
+const codeDemo = ref("const g = useNavigationGuard()\nif (g.ok) {\n  await g.data.enable(\"有未保存的修改，确定离开？\")\n  /* 用户尝试离开页面时弹确认 */\n}")
 
-const out = ref('点击按钮探测本机是否支持 HEVC（H.265）硬解码')
-async function onHevc(): Promise<void> {
-  const h = cap.useDeviceCapability()
-  if (!h.ok) {
-    out.value = `⚠ 降级：${h.error.code}`
-    return
-  }
-  const r = await h.data.supportsHevc()
-  out.value = r.ok
-    ? `✅ HEVC(H.265) 硬解支持：${r.data}`
-    : `⚠ 降级：${r.error.code}`
+const out = ref('点击「开启拦截」后，尝试关闭标签页/刷新会弹出浏览器原生确认框')
+async function onEnable(): Promise<void> {
+  const g = cap.useNavigationGuard()
+  if (!g.ok) { out.value = `⚠ 降级：${g.error.code}`; return }
+  const r = await g.data.enable('有未保存的修改，确定离开？')
+  out.value = r.ok ? '✅ 已开启卸载拦截——现在尝试刷新/关闭标签页，浏览器会弹出确认' : `⚠ 降级：${r.error.code}`
+}
+async function onDisable(): Promise<void> {
+  const g = cap.useNavigationGuard()
+  if (!g.ok) { out.value = `⚠ 降级：${g.error.code}`; return }
+  const r = await g.data.disable()
+  out.value = r.ok ? '✅ 已关闭卸载拦截（可自由离开）' : `⚠ 降级：${r.error.code}`
 }
 
 const apiRows = ref([
-  ["useDeviceCapability()", "设备能力探测句柄（★同步返回 CapResult）", "CapResult<DeviceCapabilityAPI>"],
-  ["supportsHevc()", "是否支持 HEVC（H.265）硬解码", "Promise<CapResult<boolean>>"],
-  ["error.code", "机器码：device-capability.unsupported（无探测通道）等", "string"],
+  ["useNavigationGuard()", "导航拦截句柄（★同步返回 CapResult）", "CapResult<NavigationGuardAPI>"],
+  ["enable(message)", "开启卸载前确认（message 为询问文案）", "Promise<CapResult<void>>"],
+  ["disable()", "关闭卸载前确认", "Promise<CapResult<void>>"],
 ])
 const compatRows = ref([
-  ["Web SPA", "MediaSource.isTypeSupported（判 codecs hvc1 / hev1；无 MSE → Err）", "✅"],
-  ["微信小程序", "wx.checkDeviceSupportHevc（真机硬解能力）", "✅"],
+  ["Web SPA", "beforeunload（★真拦截——刷新/关标签页弹原生确认）", "✅"],
+  ["微信小程序", "wx.enableAlertBeforeUnload（返回上一页时确认）", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
   ["iOS / Android / 鸿蒙 / Flutter", "端原型映射·能力桥未接线（Err 显式降级）", "🟡"],
 ])
 </script>
 
 <template>
-  <page-shell title="useDeviceCapability 设备能力探测" subtitle="能力原语 · capability.device-capability · 双端同源码">
+  <page-shell title="useNavigationGuard 导航拦截" subtitle="能力原语 · capability.navigation-guard · 双端同源码">
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
         <p-view id="demo-btns" class="btns">
-          <p-button size="small" @click="onHevc">探测 HEVC 支持</p-button>
+          <p-button size="small" @click="onEnable">开启拦截</p-button>
+          <p-button size="small" @click="onDisable">关闭拦截</p-button>
         </p-view>
       </template>
       <template #output>
