@@ -34,6 +34,27 @@ export const WebView = defineComponent({
 
       const active = typeof hoverClass === 'string' && hoverClass !== '' && hoverClass !== 'none'
       const handlers: Record<string, unknown> = {}
+      // ★跨端事件归一：`@tap` 必须在 Web 端等价于点击（2026-09-24 实测缺陷）
+      //   小程序 `<view>` 的原生事件是 `tap`（`bind:tap`），框架把它列为跨端事件
+      //   （compiler/tags.ts 的 REAL_NATIVE 事件表）；但 Web 端此前**没有任何 tap→click 归一**
+      //   → 组件里写 `@tap="onTap"`（p-mask / p-popup 等弹层）的 Web 行为**静默失效**：
+      //   `onTap` 作为未知属性透传到 div，DOM 不认识 `tap`，永不触发（实测：点遮罩不关闭）。
+      //   修在此处（Web 模拟层的唯一入口）：把 `tap` 监听原样接到 click 上——原生 tap 与
+      //   现代浏览器的 click 语义等价（移动端 300ms 延迟已移除）。
+      //   ★只做转发不改语义：`@click` 与 `@tap` 各自独立挂载，两者同时写会各触发一次（与 MP 端一致）。
+      if (typeof rest.onTap === 'function') {
+        const tapHandler = rest.onTap
+        const clickHandler = rest.onClick // ★两者同写时串联（handlers 展开在后，直接赋值会吃掉 onClick）
+        handlers.onClick =
+          typeof clickHandler === 'function'
+            ? (e: Event) => {
+                ;(clickHandler as (e: Event) => void)(e)
+                ;(tapHandler as (e: Event) => void)(e)
+              }
+            : tapHandler
+        delete rest.onTap
+      }
+      delete rest['on-tap']
       if (active) {
         handlers.onPointerdown = (e: Event) => {
           if (hoverStop) e.stopPropagation()
