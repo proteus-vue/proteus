@@ -111,6 +111,21 @@ declare const __PROTEUS_DEBUG__: boolean
 /** Skyline 渲染开关（mp 构建时由 vite define 注入 proteus.config.skyline） */
 declare const __PROTEUS_SKYLINE__: boolean
 
+// ★平台编译期宏（条件显隐）：构建期替换为该平台字面量，配合 v-if 静态裁剪死分支。
+//   用法：<p-button v-if="__MP__" open-type="contact">客服</p-button>
+//         <view v-if="__TARGET__ === 'web'">仅 Web</view>
+//   ★2026-09-24 补：showcase 此前**缺这些声明**，导致 p-button 页用宏时类型检查报
+//   「Property '__MP__' does not exist」——而该错误长期未暴露，是因为
+//   showcase/subpackages 当时不在 tsconfig include 内（同批修的盲区）。
+//   声明来源与 examples/shims/mp.d.ts 保持一致（见 packages/compiler/src/platform-macros.ts）。
+declare const __MP__: boolean
+declare const __WEB__: boolean
+declare const __NATIVE__: boolean
+declare const __IOS__: boolean
+declare const __ANDROID__: boolean
+declare const __HARMONY__: boolean
+declare const __TARGET__: 'web' | 'mp' | 'ios' | 'android' | 'harmony' | 'native'
+
 /** ★平台编译期宏（条件显隐）：构建期替换为该平台字面量，配合 v-if 静态裁剪死分支。
  *  用法：<p-button v-if="__MP__" open-type="contact">客服</p-button>
  *        <view v-if="__TARGET__ === 'web'">仅 Web</view>

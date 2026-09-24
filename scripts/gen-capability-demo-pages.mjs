@@ -63,14 +63,14 @@ async function onWrite(): Promise<void> {
 async function onNetwork(): Promise<void> {
   const res = await cap.useNetwork()
   out.value = res.ok
-    ? \`✅ 在线：\${res.data.online} · 类型：\${res.data.kind ?? '未知'}\`
+    ? \`✅ 在线：\${res.data.online} · 类型：\${res.data.type}\`
     : \`⚠ 降级：\${res.error.code}\`
 }`,
     buttons: `[['探测网络', 'onNetwork']]`,
     api: [
       ['useNetwork()', '当前网络状态；返回 Promise<CapResult<NetworkType>>', 'CapResult<NetworkType>'],
       ['data.online', '是否在线', 'boolean'],
-      ['data.kind', "连接类型：'wifi' | '4g' | '5g' | 'ethernet' | …（不可判定时 undefined）", 'string?'],
+      ['data.type', "网络类型：'unknown' | 'wifi' | 'cellular' | 'none'（web 无细分 → unknown）", 'string'],
       ['error.code', '机器码：network.unsupported 等', 'string'],
     ],
     compat: [
@@ -88,7 +88,8 @@ async function onNetwork(): Promise<void> {
 async function onDevice(): Promise<void> {
   const res = await cap.useDevice()
   // ★过滤空段（浏览器不暴露型号 → 原写法会产出 "web · Web · " 这类尾巴）
-  const parts = res.ok ? [res.data.platform, res.data.model, res.data.system].filter(Boolean) : []
+  // ★修正（类型检查暴露）：契约字段是 os + version，非 system（此前取了 undefined）
+  const parts = res.ok ? [res.data.platform, res.data.model, res.data.os, res.data.version].filter(Boolean) : []
   out.value = res.ok ? \`✅ \${parts.join(' · ') || '（平台未提供详细信息）'}\` : \`⚠ 降级：\${res.error.code}\`
 }`,
     buttons: `[['读取设备信息', 'onDevice']]`,
@@ -96,7 +97,7 @@ async function onDevice(): Promise<void> {
       ['useDevice()', '设备/系统信息；返回 Promise<CapResult<CapDeviceInfo>>', 'CapResult<CapDeviceInfo>'],
       ['data.platform', '平台标识（web / devtools / ios / android…）', 'string?'],
       ['data.model', '设备型号（浏览器多为空）', 'string?'],
-      ['data.system', '系统版本', 'string?'],
+      ['data.os / data.version', '操作系统名（iOS / Android / macOS…）/ 系统版本号', 'string'],
       ['error.code', '机器码：device.unsupported 等', 'string'],
     ],
     compat: [
@@ -164,14 +165,14 @@ async function onOrientation(): Promise<void> {
 async function onScreen(): Promise<void> {
   const res = await cap.useScreen()
   out.value = res.ok
-    ? \`✅ \${res.data.width}×\${res.data.height} · DPR \${res.data.pixelRatio != null ? res.data.pixelRatio : '不可用'}\`
+    ? \`✅ \${res.data.width}×\${res.data.height} · DPR \${res.data.dpr ?? '不可用'}\`
     : \`⚠ 降级：\${res.error.code}\`
 }`,
     buttons: `[['读取屏幕', 'onScreen']]`,
     api: [
       ['useScreen()', '屏幕尺寸/像素比；返回 Promise<CapResult<ScreenInfo>>', 'CapResult<ScreenInfo>'],
       ['data.width / height', '逻辑像素尺寸', 'number'],
-      ['data.pixelRatio', '设备像素比（DPR）', 'number?'],
+      ['data.dpr', '设备像素比（物理像素 / CSS 像素）', 'number'],
       ['error.code', '机器码：screen.unsupported 等', 'string'],
     ],
     compat: [
@@ -487,7 +488,7 @@ function onIdle(): void {
     file: 'performance',
     title: 'usePerformance 性能条目',
     subtitle: '能力原语 · capability.performance · 双端同源码',
-    code: 'const h = usePerformance()\nif (h.ok) {\n  const list = await h.data.getEntries("resource")\n  /* list.data: PerformanceEntry[] */\n}',
+    code: 'const h = usePerformance()\nif (h.ok) {\n  const list = await h.data.getEntries("navigation")\n  /* list.data: PerformanceEntry[] */\n}',
     demo: `const out = ref('点击按钮读取本页资源加载条目（真实 performance 数据）')
 async function onEntries(): Promise<void> {
   const h = cap.usePerformance()
@@ -495,12 +496,14 @@ async function onEntries(): Promise<void> {
     out.value = \`⚠ 降级：\${h.error.code}\`
     return
   }
-  const entries = await h.data.getEntries('resource')
+  // ★修正（类型检查暴露）：契约只接受 'navigation' | 'render' | 'script'
+  //   （web 实现内部把这三者映射为浏览器侧的 'resource' —— 见 webBridge.webType）
+  const entries = await h.data.getEntries('navigation')
   out.value = entries.ok
-    ? \`✅ 资源条目 \${entries.data.length} 条 · 累计 \${entries.data.reduce((n, e) => n + (e.duration || 0), 0).toFixed(1)}ms\`
+    ? \`✅ navigation 条目 \${entries.data.length} 条 · 累计 \${entries.data.reduce((n, e) => n + (e.duration || 0), 0).toFixed(1)}ms\`
     : \`⚠ 降级：\${entries.error.code}\`
 }`,
-    buttons: `[['读取资源条目', 'onEntries']]`,
+    buttons: `[['读取 navigation 条目', 'onEntries']]`,
     api: [
       ['usePerformance()', '性能句柄（★同步返回 CapResult）', 'CapResult<PerformanceAPI>'],
       ['getEntries(entryType?)', '按类型读条目：navigation / render / script（缺省全部）', 'Promise<CapResult<PerformanceEntry[]>>'],
@@ -540,6 +543,341 @@ async function onHevc(): Promise<void> {
     compat: [
       ['Web SPA', 'MediaSource.isTypeSupported（判 codecs hvc1 / hev1；无 MSE → Err）', '✅'],
       ['微信小程序', 'wx.checkDeviceSupportHevc（真机硬解能力）', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  // ─────────── 批次 9（2026-09-24）：Web 端**真能成功**的能力（工程/系统类，10 页） ───────────
+  // ★选页判据（先取证再动手）：逐个核对 webBridge 的真实实现体——只收「能跑通成功路径」的；
+  //   返回空订阅（getBeacon/getPoster/getTranslation/getLocalService）或恒返回 unsupported 句柄
+  //   （getPrivacy/getPreload/getImageEdit/getCalendar/getWindow/createLivePusher/joinLiveRoom）的
+  //   一律不收——那类页面只能展示「不支持」，做成「能力页」名不副实。
+  //   ★另注（取证教训）：曾按 `indexOf('\n    name:')` 在整文件里找实现，命中的是 **wxBridge**（MP 侧）
+  //   → 差点把小程序行为写进 Web 演示。务必在 webBridge 段内取。
+  {
+    file: 'log',
+    title: 'useLog 日志上报',
+    subtitle: '能力原语 · capability.log · 双端同源码',
+    code: 'const logger = useLog()\nawait logger.log("user-action", { id: 1 })\nawait logger.warn("slow-render", { ms: 120 })\nawait logger.error("boom", { code: 500 })',
+    demo: `const out = ref('点击按钮写一条日志（Web 落 console，小程序落 wx 日志上报）')
+async function onLog(): Promise<void> {
+  const logger = cap.useLog()
+  const r = await logger.log('proteus-demo', { at: Date.now() })
+  out.value = r.ok ? '✅ 日志已写入（请打开浏览器控制台查看 proteus-demo）' : \`⚠ 降级：\${r.error.code}\`
+}
+async function onWarn(): Promise<void> {
+  const logger = cap.useLog()
+  const r = await logger.warn('proteus-demo-warn', { level: 'warn' })
+  out.value = r.ok ? '✅ warn 级日志已写入（控制台可见）' : \`⚠ 降级：\${r.error.code}\`
+}`,
+    buttons: `[['写 log', 'onLog'], ['写 warn', 'onWarn']]`,
+    api: [
+      ['useLog()', '日志器（★同步返回 Logger，非 CapResult）', 'Logger'],
+      ['log(message, data?)', '普通日志；返回 Promise<CapResult<void>>', 'Promise<CapResult<void>>'],
+      ['warn(message, data?)', '警告日志', 'Promise<CapResult<void>>'],
+      ['error(message, data?)', '错误日志（可触发上报）', 'Promise<CapResult<void>>'],
+    ],
+    compat: [
+      ['Web SPA', 'console.log/warn/error（真写入，可在控制台核验）', '✅'],
+      ['微信小程序', 'wx 日志上报通道', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'download',
+    title: 'useDownload 下载',
+    subtitle: '能力原语 · capability.download · 双端同源码',
+    code: 'const res = await useDownload("/assets/demo-fetch.json", { responseType: "json" })\nif (res.ok) { /* res.data.status / res.data.data */ }',
+    demo: `const out = ref('点击按钮下载站内静态资源（真实 fetch，非模拟）')
+async function onDownload(): Promise<void> {
+  const res = await cap.useDownload('/assets/demo-fetch.json', { responseType: 'json' })
+  out.value = res.ok
+    ? \`✅ HTTP \${res.data.status} · 收到 \${JSON.stringify(res.data.data).slice(0, 48)}…\`
+    : \`⚠ 降级：\${res.error.code}\`
+}`,
+    buttons: `[['下载 JSON（真 fetch）', 'onDownload']]`,
+    api: [
+      ['useDownload(url, options?, onProgress?)', '下载文件；返回 Promise<CapResult<DownloadResult>>', 'CapResult<DownloadResult>'],
+      ['options.responseType', "返回类型：'blob'（web 默认）/ 'path'（wx tempFilePath）/ 'text' / 'json'", 'string'],
+      ['data.status / data.data', 'HTTP 状态码 / 响应体（形态由 responseType 决定）', 'number / unknown'],
+      ['data.progress', '进度百分比（0–100）', 'number'],
+      ['error.code', '机器码：download.failed 等', 'string'],
+    ],
+    compat: [
+      ['Web SPA', 'fetch + blob/text/json（★真下载，可用站内资源核验）', '✅'],
+      ['微信小程序', 'wx.downloadFile（responseType=path 返回 tempFilePath）', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'file-system',
+    title: 'useFileSystem 文件系统',
+    subtitle: '能力原语 · capability.file-system · 双端同源码',
+    code: 'const fs = useFileSystem()\nif (fs.supported) {\n  await fs.writeFile("/demo/a.txt", "hello")\n  const r = await fs.readFile("/demo/a.txt")   // r.data === "hello"\n}',
+    demo: `const out = ref('点击按钮做一次「写入 → 读回 → 列目录」往返')
+async function onFs(): Promise<void> {
+  const fs = cap.useFileSystem()
+  const w = await fs.writeFile('/demo/note.txt', 'hello-proteus ' + Date.now())
+  if (!w.ok) { out.value = \`⚠ 降级：\${w.error.code}\`; return }
+  const r = await fs.readFile('/demo/note.txt')
+  const list = await fs.readdir('/demo')
+  // ★修正（类型检查暴露）：CapResult 是**判别联合**——必须先判 ok 才能访问 data
+  //   （此前在 err 分支也直接取 .data，属类型不安全的写法）
+  const dirCount = list.ok && Array.isArray(list.data) ? list.data.length : 0
+  out.value = r.ok
+    ? \`✅ 读回 "\${String(r.data).slice(0, 28)}" · 目录 \${dirCount} 项\`
+    : \`⚠ 降级：\${r.error.code}\`
+}`,
+    buttons: `[['写入并读回', 'onFs']]`,
+    api: [
+      ['useFileSystem()', '文件系统适配器（★同步返回 FSAdapter；supported=是否可用）', 'FSAdapter'],
+      ['writeFile(path, data)', '写入文本（覆盖；不存在则创建）', 'Promise<CapResult<void>>'],
+      ['readFile(path)', '读取文本（UTF-8）', 'Promise<CapResult<string>>'],
+      ['appendFile / copyFile / rename / remove', '追加 / 复制 / 重命名 / 删除', 'Promise<CapResult<…>>'],
+      ['exists / stat / mkdir / rmdir / readdir', '存在性 / 元信息 / 建目录 / 删目录 / 列目录', 'Promise<CapResult<…>>'],
+    ],
+    compat: [
+      ['Web SPA', '★内存降级（可读写但非持久——Web 无标准同步 FS，OPFS 需安全上下文）', '✅'],
+      ['微信小程序', 'wx.getFileSystemManager（真持久化到 USER_DATA_PATH）', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'canvas',
+    title: 'useCanvas 画布控制',
+    subtitle: '能力原语 · capability.canvas · 双端同源码',
+    code: 'const res = useCanvas("#demo-canvas")\nif (res.ok) {\n  const ctx = res.data.createContext()   // 方法名对齐官方 CanvasContext\n  /* ctx.setFillStyle / fillRect / draw / toDataURL … */\n}',
+    demo: `const out = ref('点击按钮用 Canvas 控制器真画一个矩形，并导出 data URL')
+function onDraw(): void {
+  const res = cap.useCanvas('demo-canvas')
+  if (!res.ok) { out.value = \`⚠ 降级：\${res.error.code}\`; return }
+  const c = res.data.createContext()
+  if (!c.ok) { out.value = \`⚠ 降级：\${c.error.code}\`; return }
+  const ctx = c.data
+  ctx.setFillStyle('#4f6bff')
+  ctx.fillRect(8, 8, 60, 36)
+  ctx.setFillStyle('#07c160')
+  ctx.fillRect(76, 20, 40, 24)
+  ctx.draw()
+  out.value = '✅ 已绘制两个矩形（画布区域可见变化）'
+}
+async function onExport(): Promise<void> {
+  const res = cap.useCanvas('demo-canvas')
+  if (!res.ok) { out.value = \`⚠ 降级：\${res.error.code}\`; return }
+  const url = await res.data.toDataURL()
+  out.value = url.ok ? \`✅ 已导出 data URL（\${String(url.data).slice(0, 40)}…，共 \${String(url.data).length} 字符）\` : \`⚠ 降级：\${url.error.code}\`
+}`,
+    buttons: `[['绘制矩形', 'onDraw'], ['导出 data URL', 'onExport']]`,
+    demoHtml: '<canvas id="demo-canvas" width="240" height="120" style="width:240px;height:120px;border:1px solid #e5e6eb;border-radius:8px"></canvas>',
+    api: [
+      ['useCanvas(id)', '画布控制器（★同步返回 CapResult；id 去 # 前缀）', 'CapResult<CanvasController>'],
+      ['createContext()', '旧版 2D 上下文（方法名对齐官方 CanvasContext）', 'CapResult<CanvasContext>'],
+      ['node()', '取画布节点（用于 rAF / 标准 getContext）', 'Promise<CapResult<CanvasNode>>'],
+      ['toTempFilePath(options?)', '导出临时文件路径（wx 原生；web 返回 data URL）', 'Promise<CapResult<string>>'],
+      ['toDataURL(options?)', '导出 data URL', 'Promise<CapResult<string>>'],
+    ],
+    compat: [
+      ['Web SPA', 'HTMLCanvasElement（★真绘制 + 真导出）', '✅'],
+      ['微信小程序', 'wx.createCanvasContext / canvasToTempFilePath', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'app-lifecycle',
+    title: 'useAppLifecycle 应用生命周期',
+    subtitle: '能力原语 · capability.app-lifecycle · 双端同源码',
+    code: 'const lc = useAppLifecycle()\nlc.onShow(() => {}); lc.onHide(() => {})\n/* lc.phase: PENDING | LAUNCH | SHOW | HIDE */',
+    extraOut: ['已记录的阶段：{{ phases.join(" → ") || "（暂无）" }}'],
+    demo: `// ★订阅型能力：订阅本身不产生即时输出（要切标签页才会回调）——看下方「已记录的阶段」
+const out = ref('订阅已就绪——切换浏览器标签页/最小化窗口可观察 phase 变化')
+let unsub: (() => void) | null = null
+const phases = ref<string[]>([])
+function onSubscribe(): void {
+  const lc = cap.useAppLifecycle()
+  phases.value = [lc.phase]
+  const offShow = lc.onShow(() => { phases.value.push('SHOW') })
+  const offHide = lc.onHide(() => { phases.value.push('HIDE') })
+  unsub = () => { offShow(); offHide() }
+  out.value = \`✅ 已订阅（当前 phase=\${lc.phase}）——切换标签页观察\`
+}
+function onUnsubscribe(): void {
+  if (!unsub) { out.value = '（尚未订阅）'; return }
+  unsub(); unsub = null
+  out.value = '✅ 已取消订阅（释放监听）'
+}`,
+    buttons: `[['订阅生命周期', 'onSubscribe'], ['取消订阅', 'onUnsubscribe']]`,
+    api: [
+      ['useAppLifecycle()', '应用生命周期句柄（★同步返回，非 CapResult）', 'AppLifecycle'],
+      ['phase', "当前阶段：'PENDING' | 'LAUNCH' | 'SHOW' | 'HIDE'", 'string'],
+      ['onLaunch(cb) / onShow(cb) / onHide(cb)', '订阅启动 / 进前台 / 退后台（返回取消函数）', '() => void'],
+    ],
+    compat: [
+      ['Web SPA', 'Page Visibility API（visibilitychange；★真可触发——切标签页）', '✅'],
+      ['微信小程序', 'wx.onAppShow / onAppHide / onLaunch', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'page-lifecycle',
+    title: 'usePageLifecycle 页面生命周期',
+    subtitle: '能力原语 · capability.page-lifecycle · 双端同源码',
+    code: 'const pl = usePageLifecycle()\npl.onLoad(() => {}); pl.onShow(() => {})\n/* pl.phase: IDLE | LOAD | SHOW | HIDE */',
+    extraOut: ['已记录的阶段：{{ pPhases.join(" → ") || "（暂无）" }}'],
+    demo: `const out = ref('订阅已就绪——切换标签页可看到 onShow/onHide 回调记录')
+let unsubP: (() => void) | null = null
+const pPhases = ref<string[]>([])
+function onPSubscribe(): void {
+  const pl = cap.usePageLifecycle()
+  pPhases.value = [pl.phase]
+  const offShow = pl.onShow(() => { pPhases.value.push('SHOW') })
+  const offHide = pl.onHide(() => { pPhases.value.push('HIDE') })
+  unsubP = () => { offShow(); offHide() }
+  out.value = \`✅ 已订阅（当前 phase=\${pl.phase}）\`
+}
+function onPUnsubscribe(): void {
+  if (!unsubP) { out.value = '（尚未订阅）'; return }
+  unsubP(); unsubP = null
+  out.value = '✅ 已取消订阅'
+}`,
+    buttons: `[['订阅页面生命周期', 'onPSubscribe'], ['取消订阅', 'onPUnsubscribe']]`,
+    api: [
+      ['usePageLifecycle()', '页面生命周期句柄（★同步返回）', 'PageLifecycle'],
+      ['phase', "当前阶段：'IDLE' | 'LOAD' | 'SHOW' | 'HIDE'", 'string'],
+      ['onLoad(cb) / onShow(cb) / onHide(cb)', '订阅页面加载 / 显示 / 隐藏（返回取消函数）', '() => void'],
+    ],
+    compat: [
+      ['Web SPA', 'document visibilitychange（同 app-lifecycle 通道；★可切标签页触发）', '✅'],
+      ['微信小程序', 'wx.onPageShow / onPageHide / Page.onLoad', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'navigation-guard',
+    title: 'useNavigationGuard 导航拦截',
+    subtitle: '能力原语 · capability.navigation-guard · 双端同源码',
+    code: 'const g = useNavigationGuard()\nif (g.ok) {\n  await g.data.enable("有未保存的修改，确定离开？")\n  /* 用户尝试离开页面时弹确认 */\n}',
+    demo: `const out = ref('点击「开启拦截」后，尝试关闭标签页/刷新会弹出浏览器原生确认框')
+async function onEnable(): Promise<void> {
+  const g = cap.useNavigationGuard()
+  if (!g.ok) { out.value = \`⚠ 降级：\${g.error.code}\`; return }
+  const r = await g.data.enable('有未保存的修改，确定离开？')
+  out.value = r.ok ? '✅ 已开启卸载拦截——现在尝试刷新/关闭标签页，浏览器会弹出确认' : \`⚠ 降级：\${r.error.code}\`
+}
+async function onDisable(): Promise<void> {
+  const g = cap.useNavigationGuard()
+  if (!g.ok) { out.value = \`⚠ 降级：\${g.error.code}\`; return }
+  const r = await g.data.disable()
+  out.value = r.ok ? '✅ 已关闭卸载拦截（可自由离开）' : \`⚠ 降级：\${r.error.code}\`
+}`,
+    buttons: `[['开启拦截', 'onEnable'], ['关闭拦截', 'onDisable']]`,
+    api: [
+      ['useNavigationGuard()', '导航拦截句柄（★同步返回 CapResult）', 'CapResult<NavigationGuardAPI>'],
+      ['enable(message)', '开启卸载前确认（message 为询问文案）', 'Promise<CapResult<void>>'],
+      ['disable()', '关闭卸载前确认', 'Promise<CapResult<void>>'],
+    ],
+    compat: [
+      ['Web SPA', 'beforeunload（★真拦截——刷新/关标签页弹原生确认）', '✅'],
+      ['微信小程序', 'wx.enableAlertBeforeUnload（返回上一页时确认）', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'keyboard',
+    title: 'useKeyboard 键盘高度',
+    subtitle: '能力原语 · capability.keyboard · 双端同源码',
+    code: 'const kb = useKeyboard()\nkb.onChange((info) => { /* info.height / info.visible */ })',
+    extraOut: ['键盘快照：{{ kbInfo }}'],
+    demo: `const out = ref('订阅已就绪——点下方输入框唤起软键盘（移动端/开发者工具设备模拟）可观察高度')
+let unsubK: (() => void) | null = null
+const kbInfo = ref('（未订阅）')
+function onSubscribeKb(): void {
+  const kb = cap.useKeyboard()
+  unsubK = kb.onChange((info) => {
+    kbInfo.value = \`高度 \${info.height}px · 可见：\${info.visible}\`
+  })
+  kbInfo.value = \`当前快照：高度 \${kb.info.height}px · 可见：\${kb.info.visible}\`
+  out.value = '✅ 已订阅键盘变化（info 会实时更新）'
+}
+function onUnsubscribeKb(): void {
+  if (!unsubK) { out.value = '（尚未订阅）'; return }
+  unsubK(); unsubK = null
+  out.value = '✅ 已取消订阅'
+}`,
+    buttons: `[['订阅键盘变化', 'onSubscribeKb'], ['取消订阅', 'onUnsubscribeKb']]`,
+    api: [
+      ['useKeyboard()', '键盘生命周期句柄（★同步返回）', 'KeyboardLifecycle'],
+      ['info', '当前键盘状态快照 { height, visible }', 'KeyboardInfo'],
+      ['onChange(cb)', '订阅键盘高度变化（返回取消函数）', '() => void'],
+    ],
+    compat: [
+      ['Web SPA', 'visualViewport（软键盘挤压视口时高度变化；桌面端键盘不挤压 → 恒 0 可见）', '✅'],
+      ['微信小程序', 'wx.onKeyboardHeightChange', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'biometric',
+    title: 'useBiometric 生物识别',
+    subtitle: '能力原语 · capability.biometric · 双端同源码',
+    code: 'const ok = await useBiometric()          // 平台是否支持\nconst auth = await authenticateBiometric({ reason: "验证身份" })',
+    demo: `const out = ref('① 探测平台是否支持；② 发起认证（★需真实认证器——无认证器的环境会走失败路径，这是正确行为）')
+async function onCheck(): Promise<void> {
+  const r = await cap.useBiometric()
+  out.value = r.ok ? \`✅ 平台支持生物识别：\${r.data}（WebAuthn \${r.data ? '可用' : '不可用'}）\` : \`⚠ 降级：\${r.error.code}\`
+}
+async function onAuth(): Promise<void> {
+  // ★修正（类型检查暴露）：契约字段名是 prompt，非 reason
+  const r = await cap.authenticateBiometric({ prompt: '验证身份以继续（WebAuthn 平台认证器）' })
+  // ★诚实说明：WebAuthn 认证需**真实认证器**（指纹/面容/PIN）。无认证器的环境（如 CI/无头浏览器、
+  //   未注册凭据的桌面浏览器）必然返回 biometric.failed —— 这是正确行为，不是缺陷。
+  out.value = r.ok
+    ? \`✅ 认证通过：\${r.data}\`
+    : \`⚠ 降级：\${r.error.code}（无认证器/用户取消时即为此结果——需在支持 WebAuthn 的真实设备上重试）\`
+}`,
+    buttons: `[['探测支持', 'onCheck'], ['发起认证', 'onAuth']]`,
+    api: [
+      ['useBiometric()', '平台是否支持（WebAuthn 可用性入口）；返回 Promise<CapResult<boolean>>', 'CapResult<boolean>'],
+      ['authenticateBiometric(options)', '发起认证（WebAuthn 平台认证器 / wx.startSoterAuthentication）', 'Promise<CapResult<boolean>>'],
+      ['error.code', '机器码：biometric.unsupported（无 WebAuthn / 需 HTTPS）等', 'string'],
+    ],
+    compat: [
+      ['Web SPA', 'WebAuthn（★需 HTTPS/安全上下文——真机认证器由系统弹出）', '✅'],
+      ['微信小程序', 'wx.checkIsSupportFingerPrint / startSoterAuthentication', '✅'],
+      ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
+    ],
+  },
+  {
+    file: 'background',
+    title: 'useBackground 前后台事件',
+    subtitle: '能力原语 · capability.background · 双端同源码',
+    code: 'const bg = useBackground()\nconst off = bg.onEvent((e) => { /* e.type: "enter-background" | "enter-foreground" */ })',
+    extraOut: ['已记录事件：{{ bgEvents.join(" → ") || "（暂无）" }}'],
+    demo: `const out = ref('订阅已就绪——切走标签页（进入后台）再切回，事件会被记录')
+let unsubB: (() => void) | null = null
+const bgEvents = ref<string[]>([])
+async function onSubscribeBg(): Promise<void> {
+  // ★useBackground() 是**异步** hook（返回 Promise<CapResult<BackgroundAPI>>）——
+  //   必须先 await 再解包 .ok/.data 才能拿到句柄；直接当同步句柄用会得到
+  //   「onEvent is not a function」（实测定论：raw 返回 Promise，无句柄字段）。
+  //   ★同族的 useAppLifecycle / useKeyboard 是**同步** CapResult，两者形态不同，不能照抄。
+  const r = await cap.useBackground()
+  if (!r.ok) { out.value = \`⚠ 降级：\${r.error.code}\`; return }
+  unsubB = r.data.onEvent((e) => { bgEvents.value.push(e.type) })
+  out.value = '✅ 已订阅前后台变化——切走/切回标签页观察下方记录'
+}
+function onUnsubscribeBg(): void {
+  if (!unsubB) { out.value = '（尚未订阅）'; return }
+  unsubB(); unsubB = null
+  out.value = '✅ 已取消订阅'
+}`,
+    buttons: `[['订阅前后台', 'onSubscribeBg'], ['取消订阅', 'onUnsubscribeBg']]`,
+    api: [
+      ['useBackground()', '前后台事件句柄（★同步返回）', 'BackgroundAPI'],
+      ['onEvent(cb)', "订阅前后台切换（载荷 type: 'enter-background' | 'enter-foreground' + time；返回取消函数）", '() => void'],
+      ['onMemoryWarning(cb) / onThemeChange(cb) / onWindowResize(cb)', '内存警告 / 主题切换 / 窗口尺寸变化（Web 端按平台支持度降级）', '() => void'],
+    ],
+    compat: [
+      ['Web SPA', 'document visibilitychange（★真可触发——切标签页）', '✅'],
+      ['微信小程序', 'wx.onAppShow / onAppHide（前后台切换）', '✅'],
       ['Headless（SSR/测试）', 'mock 桥注入', '✅'],
     ],
   },
@@ -590,10 +928,10 @@ ${compatRows}
         <p-view id="demo-btns" class="btns">
 ${btnTpl}
         </p-view>
-      </template>
+${p.demoHtml ? `        ${p.demoHtml}\n` : ''}      </template>
       <template #output>
         <p-text class="out">{{ out }}</p-text>
-      </template>
+${(p.extraOut ?? []).map((line) => `        <p-text class="out out-extra">${line.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p-text>`).join('\n')}      </template>
     </demo-block>
 
     <api-table title="API" :columns="['签名 / 字段', '说明', '类型']" :rows="apiRows" />
@@ -617,6 +955,13 @@ ${btnTpl}
   color: #2f7a4d;
   font-weight: 600;
   word-break: break-all;
+}
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
 }
 </style>
 `

@@ -39,7 +39,9 @@ const fruits = ref([
   { id: 'cherry', name: '樱桃' },
 ])
 // ★MP 约束：ref 不带类型实参（初值须可静态求值）；类型用「字面量 as 断言」（断言在字面量上，编译期剥离后仍是字面量）
-const picked = ref({ apple: true, banana: false, cherry: false })
+// ★类型（2026-09-24 类型检查暴露）：模板用 picked[f.id] 索引 → 需索引签名，
+//   否则 TS7053「不能用作索引类型」（此前页面不在类型检查范围内的漏网项）
+const picked = ref<Record<string, boolean>>({ apple: true, banana: false, cherry: false })
 const pickedCount = computed(() => Object.values(picked.value).filter(Boolean).length)
 function onGroupChange(e: unknown) {
   // ★跨端读法：e?.detail ?? e（Web 直接收载荷、MP 收 e.detail）

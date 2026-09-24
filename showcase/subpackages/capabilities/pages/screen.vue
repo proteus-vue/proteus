@@ -20,14 +20,14 @@ const out = ref('点击按钮读取屏幕信息')
 async function onScreen(): Promise<void> {
   const res = await cap.useScreen()
   out.value = res.ok
-    ? `✅ ${res.data.width}×${res.data.height} · DPR ${res.data.pixelRatio != null ? res.data.pixelRatio : '不可用'}`
+    ? `✅ ${res.data.width}×${res.data.height} · DPR ${res.data.dpr ?? '不可用'}`
     : `⚠ 降级：${res.error.code}`
 }
 
 const apiRows = ref([
   ["useScreen()", "屏幕尺寸/像素比；返回 Promise<CapResult<ScreenInfo>>", "CapResult<ScreenInfo>"],
   ["data.width / height", "逻辑像素尺寸", "number"],
-  ["data.pixelRatio", "设备像素比（DPR）", "number?"],
+  ["data.dpr", "设备像素比（物理像素 / CSS 像素）", "number"],
   ["error.code", "机器码：screen.unsupported 等", "string"],
 ])
 const compatRows = ref([
@@ -72,5 +72,12 @@ const compatRows = ref([
   color: #2f7a4d;
   font-weight: 600;
   word-break: break-all;
+}
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
 }
 </style>

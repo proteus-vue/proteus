@@ -132,7 +132,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
   },
 ]
 
-/** 能力：10 域 / 81 个（已备详情页 19） */
+/** 能力：10 域 / 81 个（已备详情页 29） */
 export const CAPABILITY_GROUPS: CatalogGroup[] = [
   {
     name: "网络与通信",
@@ -142,7 +142,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useWebSocket", id: "capability.websocket", desc: "WebSocket 连接句柄", route: "" },
       { name: "useSocketTask", id: "capability.socket-task", desc: "底层 SocketTask 句柄", route: "" },
       { name: "useUpload", id: "capability.upload", desc: "上传文件", route: "" },
-      { name: "useDownload", id: "capability.download", desc: "下载文件", route: "" },
+      { name: "useDownload", id: "capability.download", desc: "下载文件", route: "/subpackages/capabilities/pages/download" },
       { name: "useDataChannel", id: "capability.data-channel", desc: "数据通道", route: "" },
       { name: "useBluetooth", id: "capability.bluetooth", desc: "蓝牙状态", route: "" },
       { name: "useNFC", id: "capability.nfc", desc: "NFC 状态", route: "" },
@@ -163,7 +163,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useDevice", id: "capability.device", desc: "设备", route: "/subpackages/capabilities/pages/device" },
       { name: "useOrientation", id: "capability.orientation", desc: "屏幕方向", route: "/subpackages/capabilities/pages/orientation" },
       { name: "useBrightness", id: "capability.brightness", desc: "读取当前亮度", route: "" },
-      { name: "useKeyboard", id: "capability.keyboard", desc: "键盘生命周期句柄", route: "" },
+      { name: "useKeyboard", id: "capability.keyboard", desc: "键盘生命周期句柄", route: "/subpackages/capabilities/pages/keyboard" },
       { name: "useElement", id: "capability.element-query", desc: "元素查询句柄", route: "/subpackages/capabilities/pages/element-query" },
       { name: "useIntersection", id: "capability.intersection", desc: "交叉观察句柄", route: "/subpackages/capabilities/pages/intersection" },
       { name: "useMediaQuery", id: "capability.media-query", desc: "媒体查询句柄", route: "/subpackages/capabilities/pages/media-query" },
@@ -182,7 +182,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useMicrophone", id: "capability.microphone", desc: "麦克风访问", route: "" },
       { name: "useQRCode", id: "capability.qr-code", desc: "扫码", route: "" },
       { name: "useLive", id: "capability.live", desc: "直播房间", route: "" },
-      { name: "useCanvas", id: "capability.canvas", desc: "画布控制器", route: "" },
+      { name: "useCanvas", id: "capability.canvas", desc: "画布控制器", route: "/subpackages/capabilities/pages/canvas" },
       { name: "useVideo", id: "capability.video", desc: "视频控制器", route: "" },
       { name: "useAudio", id: "capability.audio", desc: "音频控制器", route: "" },
       { name: "useLivePusher", id: "capability.live-pusher", desc: "直播推流控制器", route: "" },
@@ -196,7 +196,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     items: [
       { name: "useStorage", id: "capability.storage", desc: "存储句柄", route: "/subpackages/capabilities/pages/storage" },
       { name: "useCookie", id: "capability.cookie", desc: "Cookie 罐", route: "/subpackages/capabilities/pages/cookie" },
-      { name: "useFileSystem", id: "capability.file-system", desc: "文件系统句柄", route: "" },
+      { name: "useFileSystem", id: "capability.file-system", desc: "文件系统句柄", route: "/subpackages/capabilities/pages/file-system" },
       { name: "useArchive", id: "capability.archive", desc: "压缩文件", route: "" },
     ],
   },
@@ -204,16 +204,16 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     name: "应用与生命周期",
     desc: "应用与页面生命周期 / 前后台 / 嵌入",
     items: [
-      { name: "useAppLifecycle", id: "capability.app-lifecycle", desc: "应用生命周期订阅句柄", route: "" },
-      { name: "usePageLifecycle", id: "capability.page-lifecycle", desc: "页面生命周期订阅句柄", route: "" },
-      { name: "useBackground", id: "capability.background", desc: "后台/前台切换订阅", route: "" },
+      { name: "useAppLifecycle", id: "capability.app-lifecycle", desc: "应用生命周期订阅句柄", route: "/subpackages/capabilities/pages/app-lifecycle" },
+      { name: "usePageLifecycle", id: "capability.page-lifecycle", desc: "页面生命周期订阅句柄", route: "/subpackages/capabilities/pages/page-lifecycle" },
+      { name: "useBackground", id: "capability.background", desc: "后台/前台切换订阅", route: "/subpackages/capabilities/pages/background" },
       { name: "useMiniProgram", id: "capability.mini-program", desc: "跳小程序", route: "" },
       { name: "useEmbedded", id: "capability.embedded", desc: "宿主嵌入上下文", route: "" },
       { name: "useExtension", id: "capability.extension", desc: "扩展/插件", route: "" },
       { name: "usePreload", id: "capability.preload", desc: "预加载句柄", route: "" },
       { name: "useIdle", id: "capability.idle", desc: "空闲调度", route: "/subpackages/capabilities/pages/idle" },
       { name: "useWindow", id: "capability.window", desc: "窗口", route: "" },
-      { name: "useNavigationGuard", id: "capability.navigation-guard", desc: "卸载拦截", route: "" },
+      { name: "useNavigationGuard", id: "capability.navigation-guard", desc: "卸载拦截", route: "/subpackages/capabilities/pages/navigation-guard" },
     ],
   },
   {
@@ -246,7 +246,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     items: [
       { name: "usePermission", id: "capability.permission", desc: "权限状态", route: "/subpackages/capabilities/pages/permission" },
       { name: "useAuth", id: "capability.auth", desc: "认证状态组合", route: "" },
-      { name: "useBiometric", id: "capability.biometric", desc: "生物识别支持性检测", route: "" },
+      { name: "useBiometric", id: "capability.biometric", desc: "生物识别支持性检测", route: "/subpackages/capabilities/pages/biometric" },
       { name: "useFaceID", id: "capability.face-id", desc: "人脸识别认证", route: "" },
       { name: "usePayment", id: "capability.payment", desc: "拉起支付", route: "" },
       { name: "useLogin", id: "capability.login", desc: "登录", route: "" },
@@ -259,7 +259,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     desc: "日志 / 性能 / 埋点",
     items: [
       { name: "useAnalytics", id: "capability.analytics", desc: "埋点句柄", route: "" },
-      { name: "useLog", id: "capability.log", desc: "日志句柄", route: "" },
+      { name: "useLog", id: "capability.log", desc: "日志句柄", route: "/subpackages/capabilities/pages/log" },
       { name: "usePerformance", id: "capability.performance", desc: "性能句柄", route: "/subpackages/capabilities/pages/performance" },
     ],
   },
@@ -283,5 +283,5 @@ export const CATALOG_STATS = {
   componentReady: 73,
   capabilityGroups: 10,
   capabilityTotal: 81,
-  capabilityReady: 19,
+  capabilityReady: 29,
 }

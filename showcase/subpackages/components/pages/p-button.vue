@@ -17,7 +17,7 @@ const codes = ref({
   attrs: '<p-button size="mini">mini</p-button><p-button type="primary">primary</p-button><p-button type="warn">warn</p-button><p-button :plain="true">镂空</p-button>',
   themes: '<p-button theme="brand">品牌</p-button><p-button theme="success">成功</p-button><p-button theme="danger">危险</p-button><p-button theme="ghost">幽灵</p-button>',
   themeDynamic: '<p-button :theme="dynTheme" @click="cycleTheme">切换主题</p-button>',
-  macro: '<p-button v-if="__MP__" open-type="contact">客服</p-button>\n<view v-if="__TARGET__ === \'web\'">仅 Web</view>',
+  macro: '<p-button v-if="mpMacro" open-type="contact">客服</p-button>\n<view v-if="__TARGET__ === \'web\'">仅 Web</view>',
   openType: '<p-button open-type="contact" @contact="onContact">客服</p-button>\n<p-button open-type="share" @share="onShare">分享</p-button>',
 })
 
@@ -34,8 +34,15 @@ function cycleTheme() {
   themeIdx.value = (themeIdx.value + 1) % THEME_KEYS.length
   dynTheme.value = THEME_KEYS[themeIdx.value]
 }
-// ★平台宏演示：__MP__ 在构建期被替换为字面量 → 该常量反映当前构建目标（仅用于回显）
-const isMpBuild = __MP__
+// ★平台宏演示：这些宏在构建期被替换为字面量 → 反映当前构建目标。
+// ★模板里用宏必须**经 setup 绑定**（2026-09-24 类型检查暴露）：Vue 模板只解析 setup 返回值，
+//   裸全局宏在模板里会被当作「组件实例属性」查询 → vue-tsc 报
+//   「Property '__MP__' does not exist」（脚本区用同一宏却正常）。
+//   故先读到具名常量，模板引用具名常量（宏替换仍由编译器完成）。
+const mpMacro: boolean = __MP__
+const webMacro: boolean = __WEB__
+const targetMacro: string = __TARGET__
+const isMpBuild = mpMacro
 // open-type 双端事件回显
 const openTypeLog = ref('（点击上面按钮）')
 function onOpenTypeContact() {
@@ -199,9 +206,9 @@ const slotRows = ref([['default', '按钮文本内容', '—']])
       <template #demo>
         <view class="row">
           <!-- ★仅小程序：open-type 开放能力（Web 无对等，编译期整块消除） -->
-          <p-button v-if="__MP__" open-type="contact" @contact="onContact">客服会话（仅小程序）</p-button>
-          <p-button v-if="__WEB__" @click="onWebOnlyClick">Web 端占位</p-button>
-          <view v-if="__TARGET__ === 'web'" class="macro-note">当前构建目标：Web</view>
+          <p-button v-if="mpMacro" open-type="contact" @contact="onContact">客服会话（仅小程序）</p-button>
+          <p-button v-if="webMacro" @click="onWebOnlyClick">Web 端占位</p-button>
+          <view v-if="targetMacro === 'web'" class="macro-note">当前构建目标：Web</view>
           <view v-else class="macro-note">当前构建目标：小程序</view>
         </view>
       </template>

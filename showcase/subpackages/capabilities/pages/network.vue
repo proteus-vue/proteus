@@ -20,14 +20,14 @@ const out = ref('点击按钮探测当前网络状态')
 async function onNetwork(): Promise<void> {
   const res = await cap.useNetwork()
   out.value = res.ok
-    ? `✅ 在线：${res.data.online} · 类型：${res.data.kind ?? '未知'}`
+    ? `✅ 在线：${res.data.online} · 类型：${res.data.type}`
     : `⚠ 降级：${res.error.code}`
 }
 
 const apiRows = ref([
   ["useNetwork()", "当前网络状态；返回 Promise<CapResult<NetworkType>>", "CapResult<NetworkType>"],
   ["data.online", "是否在线", "boolean"],
-  ["data.kind", "连接类型：'wifi' | '4g' | '5g' | 'ethernet' | …（不可判定时 undefined）", "string?"],
+  ["data.type", "网络类型：'unknown' | 'wifi' | 'cellular' | 'none'（web 无细分 → unknown）", "string"],
   ["error.code", "机器码：network.unsupported 等", "string"],
 ])
 const compatRows = ref([
@@ -72,5 +72,12 @@ const compatRows = ref([
   color: #2f7a4d;
   font-weight: 600;
   word-break: break-all;
+}
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
 }
 </style>

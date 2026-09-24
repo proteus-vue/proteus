@@ -86,6 +86,11 @@ jobs:
       - name: 组件详情页与数据表一致（--check）
         run: node scripts/gen-component-demo-pages.mjs --check
 
+      # ★2026-09-24 补：showcase 详情页类型检查（subpackages 下 102 页此前完全未检查——
+      #   实测漏掉「把异步 hook 当同步句柄用」的运行时 TypeError）
+      - name: 类型检查（showcase 详情页，含 subpackages）
+        run: npx vue-tsc --noEmit -p showcase/tsconfig.json
+
       - name: 包健康门禁（包名/导出/构建配置齐备 —— 拆包后尤其重要）
         run: node scripts/check-package-health.js
 

@@ -20,7 +20,8 @@ const out = ref('点击按钮读取设备信息')
 async function onDevice(): Promise<void> {
   const res = await cap.useDevice()
   // ★过滤空段（浏览器不暴露型号 → 原写法会产出 "web · Web · " 这类尾巴）
-  const parts = res.ok ? [res.data.platform, res.data.model, res.data.system].filter(Boolean) : []
+  // ★修正（类型检查暴露）：契约字段是 os + version，非 system（此前取了 undefined）
+  const parts = res.ok ? [res.data.platform, res.data.model, res.data.os, res.data.version].filter(Boolean) : []
   out.value = res.ok ? `✅ ${parts.join(' · ') || '（平台未提供详细信息）'}` : `⚠ 降级：${res.error.code}`
 }
 
@@ -28,7 +29,7 @@ const apiRows = ref([
   ["useDevice()", "设备/系统信息；返回 Promise<CapResult<CapDeviceInfo>>", "CapResult<CapDeviceInfo>"],
   ["data.platform", "平台标识（web / devtools / ios / android…）", "string?"],
   ["data.model", "设备型号（浏览器多为空）", "string?"],
-  ["data.system", "系统版本", "string?"],
+  ["data.os / data.version", "操作系统名（iOS / Android / macOS…）/ 系统版本号", "string"],
   ["error.code", "机器码：device.unsupported 等", "string"],
 ])
 const compatRows = ref([
@@ -73,5 +74,12 @@ const compatRows = ref([
   color: #2f7a4d;
   font-weight: 600;
   word-break: break-all;
+}
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
 }
 </style>

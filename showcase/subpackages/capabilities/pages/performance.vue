@@ -14,7 +14,7 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const h = usePerformance()\nif (h.ok) {\n  const list = await h.data.getEntries(\"resource\")\n  /* list.data: PerformanceEntry[] */\n}")
+const codeDemo = ref("const h = usePerformance()\nif (h.ok) {\n  const list = await h.data.getEntries(\"navigation\")\n  /* list.data: PerformanceEntry[] */\n}")
 
 const out = ref('点击按钮读取本页资源加载条目（真实 performance 数据）')
 async function onEntries(): Promise<void> {
@@ -23,9 +23,11 @@ async function onEntries(): Promise<void> {
     out.value = `⚠ 降级：${h.error.code}`
     return
   }
-  const entries = await h.data.getEntries('resource')
+  // ★修正（类型检查暴露）：契约只接受 'navigation' | 'render' | 'script'
+  //   （web 实现内部把这三者映射为浏览器侧的 'resource' —— 见 webBridge.webType）
+  const entries = await h.data.getEntries('navigation')
   out.value = entries.ok
-    ? `✅ 资源条目 ${entries.data.length} 条 · 累计 ${entries.data.reduce((n, e) => n + (e.duration || 0), 0).toFixed(1)}ms`
+    ? `✅ navigation 条目 ${entries.data.length} 条 · 累计 ${entries.data.reduce((n, e) => n + (e.duration || 0), 0).toFixed(1)}ms`
     : `⚠ 降级：${entries.error.code}`
 }
 
@@ -49,7 +51,7 @@ const compatRows = ref([
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
         <p-view id="demo-btns" class="btns">
-          <p-button size="small" @click="onEntries">读取资源条目</p-button>
+          <p-button size="small" @click="onEntries">读取 navigation 条目</p-button>
         </p-view>
       </template>
       <template #output>
@@ -78,5 +80,12 @@ const compatRows = ref([
   color: #2f7a4d;
   font-weight: 600;
   word-break: break-all;
+}
+.out-extra {
+  margin-top: var(--sp-2);
+  background: #f7f8fa;
+  border-color: #e5e6eb;
+  color: #4b5563;
+  font-weight: 500;
 }
 </style>
