@@ -23,11 +23,6 @@ function toggleSkeleton(): void {
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "pid",
     "组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）",
     "String"
@@ -61,22 +56,12 @@ const apiRows = ref([
 const eventRows = ref([])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

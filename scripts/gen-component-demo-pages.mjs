@@ -43,7 +43,10 @@ function splitRow(line) {
   cells.push(cur)
   let out = cells.map((c) => c.trim())
   if (out[0] === '') out = out.slice(1)
-  if (out[out.length - 1] === '') out = out.slice(-1) === '' ? out.slice(0, -1) : out
+  // ★2026-09-24 修复：此处原写 `out.slice(-1) === '' ? …` —— `slice(-1)` 返回**数组**，
+  //   与字符串比较恒为 false → 尾部空单元从未被移除 → `isSeparator` 判定失败 →
+  //   markdown 的 `|---|` 分隔行被当成数据行进入 API 表（实测渲染出 `["---","---","---"]`）。
+  if (out.length > 0 && out[out.length - 1] === '') out = out.slice(0, -1)
   return out
 }
 
@@ -751,6 +754,279 @@ function onToastClose(): void {
     ],
     styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }`,
   },
+  // ─────────────────── 批次 6（2026-09-24）：弹层族 + 外壳基础（10 页） ───────────────────
+  {
+    file: 'p-modal',
+    title: 'p-modal 弹窗',
+    subtitle: '页面外壳 · 形态自适应弹窗 · 双端同源码',
+    state: `const modalVisible = ref(false)
+const modalLast = ref('（暂无）')
+function openModal(): void {
+  modalVisible.value = true
+}
+// ★观察显隐变化用 watch，**不要**再写 @update:visible——v-model:visible 已隐含该绑定，
+//   两者同写会产出重复的 bind:update-visible（MP 编译器按平台标准报违规并中止构建）
+watch(modalVisible, (v) => {
+  modalLast.value = v ? '打开' : '关闭'
+})`,
+    codes: [['basic', `<!-- v-model:visible 受控 + 标题/关闭按钮/点遮罩关闭 -->\n<p-modal v-model:visible="visible" title="标题">\n  <p-text>内容</p-text>\n</p-modal>`]],
+    demos: [
+      {
+        title: '受控显隐 + 点遮罩关闭（v-model:visible）',
+        desc: '★点按钮打开；点遮罩或右上角 × 关闭（maskClosable / closable 缺省开启）；★形态区间自适应：pAdaptive 按**宽度**选 sheet(0–600) / dialog(600–840) / popover(840+)',
+        code: 0,
+        demo: `<p-button size="small" @click="openModal">打开弹窗</p-button>
+          <p-modal v-model:visible="modalVisible" title="形态自适应弹窗">
+            <p-text>手机宽度 → sheet 形态（贴底）；平板 → dialog 居中；宽屏 → popover</p-text>
+          </p-modal>`,
+        hasOutput: true,
+        output: '最后操作：{{ modalLast }}（经 watch 观察 v-model 变化）',
+      },
+    ],
+    styles: ``,
+  },
+  {
+    file: 'p-popup',
+    title: 'p-popup 弹层',
+    subtitle: '页面外壳 · 基础弹层 · 双端同源码',
+    state: `const popupVisible = ref(false)
+const popupPos = ref('bottom')
+function openPopup(pos: string): void {
+  popupPos.value = pos
+  popupVisible.value = true
+}
+function onPopupClose(): void {
+  popupVisible.value = false
+}`,
+    codes: [['basic', `<!-- position: bottom / center / top；closeOnMask 点遮罩关闭 -->\n<p-popup :visible="visible" position="bottom" @close="onClose">\n  <p-text>弹层内容</p-text>\n</p-popup>`]],
+    demos: [
+      {
+        title: '三个方位（bottom / center / top）+ 点遮罩关闭',
+        desc: '★点按钮从对应方位弹出，自带走位动画（duration 0 = 按位置自动）；点遮罩 emit close 关闭',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-button size="small" @click="openPopup('bottom')">底部</p-button>
+            <p-button size="small" @click="openPopup('center')">居中</p-button>
+            <p-button size="small" @click="openPopup('top')">顶部</p-button>
+          </p-view>
+          <p-popup :visible="popupVisible" :position="popupPos" @close="onPopupClose">
+            <p-text>弹层内容（点遮罩关闭）</p-text>
+          </p-popup>`,
+        hasOutput: true,
+        output: '★是 p-mask 的「带面板 + 动画」上位形态：弹层族的基础件，p-modal / p-drawer / p-action-sheet 都可由它组合',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }`,
+  },
+  {
+    file: 'p-drawer',
+    title: 'p-drawer 侧滑抽屉',
+    subtitle: '页面外壳 · 侧向抽屉 · 双端同源码',
+    state: `const drawerLeft = ref(false)
+const drawerRight = ref(false)`,
+    codes: [['basic', `<!-- v-model:open 受控；side: left / right；overlay 点遮罩关闭 -->\n<p-drawer v-model="open" side="left" :width="280">\n  <p-text>抽屉内容</p-text>\n</p-drawer>`]],
+    demos: [
+      {
+        title: '左右两侧（side）+ 点遮罩关闭（overlay）',
+        desc: '★两个独立抽屉：左侧与右侧分别受控；width 控制展开宽度；overlay 开启时点遮罩 emit update:modelValue(false) 关闭',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-button size="small" @click="drawerLeft = true">从左侧滑出</p-button>
+            <p-button size="small" @click="drawerRight = true">从右侧滑出</p-button>
+          </p-view>
+          <p-drawer v-model="drawerLeft" side="left" :width="260">
+            <p-text>左侧抽屉（点遮罩关闭）</p-text>
+          </p-drawer>
+          <p-drawer v-model="drawerRight" side="right" :width="260">
+            <p-text>右侧抽屉（点遮罩关闭）</p-text>
+          </p-drawer>`,
+        hasOutput: true,
+        output: '★面板内点击用显式 noop 方法承载 .stop（MP 的 catchtap 无值形式不可编译——源码注释记录该约束）',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }`,
+  },
+  {
+    file: 'p-action-sheet',
+    title: 'p-action-sheet 动作面板',
+    subtitle: '页面外壳 · 底部动作面板 · 双端同源码',
+    state: `const sheetVisible = ref(false)
+const sheetLast = ref('（暂无）')
+const sheetActions = ref([
+  { label: '拍照' },
+  { label: '从相册选择' },
+  { label: '删除', color: '#e54d42' },
+])
+function openSheet(): void {
+  sheetVisible.value = true
+}
+function onSheetSelect(v: unknown): void {
+  sheetLast.value = '选中：' + String(v)
+}
+function onSheetCancel(): void {
+  sheetLast.value = '取消'
+}`,
+    codes: [['basic', `<!-- actions: [{label, value?, color?}]；select / cancel 事件 -->\n<p-action-sheet v-model="open" :actions="actions" cancel-text="取消"\n  @select="onSelect" @cancel="onCancel" />`]],
+    demos: [
+      {
+        title: '动作项 + 危险色 + 取消（actions / select / cancel）',
+        desc: '★点按钮弹出；点动作项 emit select 并自动关闭，点取消 emit cancel；color 给单项着色（如删除用红）',
+        code: 0,
+        demo: `<p-button size="small" @click="openSheet">打开动作面板</p-button>
+          <p-action-sheet v-model="sheetVisible" :actions="sheetActions" cancel-text="取消"
+            @select="onSheetSelect" @cancel="onSheetCancel" />`,
+        hasOutput: true,
+        output: '{{ sheetLast }}',
+      },
+    ],
+    styles: ``,
+  },
+  {
+    file: 'p-popover',
+    title: 'p-popover 气泡浮层',
+    subtitle: '页面外壳 · 锚定气泡 · 双端同源码',
+    state: `const popoverVisible = ref(false)`,
+    codes: [['basic', `<!-- trigger 插槽 = 触发区；placement 定位；默认插槽 = 气泡内容 -->\n<p-popover v-model="open" placement="bottom">\n  <template #trigger><p-button size="small">点我</p-button></template>\n  <p-text>气泡内容</p-text>\n</p-popover>`]],
+    demos: [
+      {
+        title: '触发区 + 四个方位（placement）',
+        desc: '★点触发区开合气泡；placement: bottom / top / left / right；点浮层外关闭（overlay 层）',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-popover v-model="popoverVisible" placement="bottom">
+              <template #trigger><p-button size="small">底部气泡</p-button></template>
+              <p-text>这是气泡内容（点外部关闭）</p-text>
+            </p-popover>
+          </p-view>`,
+        hasOutput: true,
+        output: '★实现要点：用标准 `<teleport to="body">` 逃逸页面层叠（编译器转 Skyline root-portal）——定位用 fixed+坐标，不依赖相对锚定',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; }`,
+  },
+  {
+    file: 'p-nav',
+    title: 'p-nav 导航栏',
+    subtitle: '页面外壳 · shell.nav · 双端同源码',
+    state: ``,
+    codes: [['basic', `<!-- title + left/right 插槽；transparent 透明模式 -->\n<p-nav title="页面标题">\n  <template #left><p-text>返回</p-text></template>\n  <template #right><p-text>更多</p-text></template>\n</p-nav>`]],
+    demos: [
+      {
+        title: '标题 + 左右插槽',
+        desc: '声明式导航栏：中间标题居中（插槽内容优先于 title），左右各 64px 最小操作区',
+        code: 0,
+        demo: `<p-nav class="nav-demo" title="声明式导航栏">
+            <template #left><p-text class="nav-side">← 返回</p-text></template>
+            <template #right><p-text class="nav-side">更多 ›</p-text></template>
+          </p-nav>`,
+      },
+      {
+        title: '透明模式（transparent）',
+        desc: 'transparent 去掉背景与底边——用于与页面背景融合的场景（如沉浸式头图）',
+        code: 0,
+        demo: `<p-nav class="nav-demo nav-transparent-demo" title="透明导航栏" transparent>
+            <template #left><p-text class="nav-side">← 返回</p-text></template>
+          </p-nav>`,
+        hasOutput: true,
+        output: '★与 p-tabbar 同属 shell 族：页面框架件由组件声明，不依赖平台原生导航配置',
+      },
+    ],
+    styles: `.nav-demo { border: 1px solid #e5e6eb; border-radius: var(--sp-radius-sm); margin-bottom: var(--sp-2); }
+.nav-transparent-demo { background: linear-gradient(135deg, #eef2ff, #f7f8fa); border-style: dashed; }
+.nav-side { font-size: 13px; color: #4f6bff; }`,
+  },
+  {
+    file: 'p-tabbar',
+    title: 'p-tabbar 底部标签栏',
+    subtitle: '页面外壳 · shell.tabbar · 双端同源码',
+    state: `const tabActive = ref('home')
+const tabLast = ref('（暂无）')
+const tabTabs = ref([
+  { key: 'home', label: '首页' },
+  { key: 'find', label: '发现' },
+  { key: 'mine', label: '我的' },
+])
+function onTabSelect(k: unknown): void {
+  tabLast.value = String(k)
+}`,
+    codes: [['basic', `<!-- tabs: [{key,label,icon?}]；active 受控 + select 事件 -->\n<p-tabbar :tabs="tabs" v-model:active="active" @select="onSelect" />`]],
+    demos: [
+      {
+        title: '受控切换（tabs / active / select）',
+        desc: '★点标签项切换激活态；select 事件回传 key（v-model:active 同步回写）',
+        code: 0,
+        demo: `<p-tabbar :tabs="tabTabs" v-model:active="tabActive" @select="onTabSelect" />`,
+        hasOutput: true,
+        output: '当前：{{ tabActive }} · 最后 select：{{ tabLast }}',
+      },
+    ],
+    styles: ``,
+  },
+  {
+    file: 'p-page',
+    title: 'p-page 页面根容器',
+    subtitle: '页面外壳 · shell.page · 双端同源码',
+    state: ``,
+    codes: [['basic', `<!-- 页面根容器：statusBar 顶部避让 / pullRefresh 下拉刷新 -->\n<p-page title="标题" status-bar pull-refresh>\n  <p-text>页面内容</p-text>\n</p-page>`]],
+    demos: [
+      {
+        title: '基础容器 + statusBar 避让',
+        desc: '页面根容器（默认无样式，仅提供页面级语义与扩展点）；statusBar 开启顶部状态栏避让',
+        code: 0,
+        demo: `<p-page class="page-demo" status-bar>
+            <p-text>页面内容（statusBar 已开启顶部避让）</p-text>
+          </p-page>`,
+      },
+      {
+        title: '下拉刷新开关（pullRefresh）',
+        desc: 'pullRefresh 声明式开启下拉刷新（由宿主/页面装配接线；组件只声明意图，不直调平台 API）',
+        code: 0,
+        demo: `<p-page class="page-demo" pull-refresh>
+            <p-text>页面内容（pullRefresh 已声明）</p-text>
+          </p-page>`,
+        hasOutput: true,
+        output: '★页面框架件的分工：p-page 提供根语义，p-nav/p-tabbar 提供栏位，p-safe 提供安全区——三者组合即完整页面骨架',
+      },
+    ],
+    styles: `.page-demo { border: 1px solid #e5e6eb; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-select',
+    title: 'p-select 选择器',
+    subtitle: '内容与表单 · ui.select · 双端同源码',
+    state: `const selValue = ref('')
+const selMultiple = ref<string[]>([])
+const selOptions = ref([
+  { value: 'vue', label: 'Vue' },
+  { value: 'react', label: 'React' },
+  { value: 'svelte', label: 'Svelte' },
+])
+function onSelChange(v: unknown): void {
+  selValue.value = String(v)
+}
+function onMultiChange(v: unknown): void {
+  selMultiple.value = Array.isArray(v) ? (v as string[]).map(String) : []
+}`,
+    codes: [['single', `<!-- 单选（默认）-->\n<p-select :options="options" placeholder="请选择" />`],
+      ['multi', `<!-- 多选：modelValue 为数组 -->\n<p-select :options="options" multiple :model-value="[]" />`]],
+    demos: [
+      {
+        title: '单选（options + placeholder）',
+        desc: '★点选择器展开选项；选中后回显 label，change 同步 modelValue',
+        code: 0,
+        demo: `<p-select :options="selOptions" placeholder="请选择一个框架" :model-value="selValue" @update:model-value="onSelChange" />`,
+        hasOutput: true,
+        output: '当前值：{{ selValue || "（未选择）" }}',
+      },
+      {
+        title: '多选（multiple）',
+        desc: 'multiple 开启后 modelValue 为数组，可多选累加',
+        code: 1,
+        demo: `<p-select :options="selOptions" multiple placeholder="可多选" :model-value="selMultiple" @update:model-value="onMultiChange" />`,
+      },
+    ],
+    styles: ``,
+  },
 ]
 
 // ───────────────────────── ③ 渲染 ─────────────────────────
@@ -758,6 +1034,20 @@ function onToastClose(): void {
 function renderPage(p) {
   const api = loadApi(p.file)
   if (!api) throw new Error(`无法从官网内容解析 API：${p.file}（website/content/components/${p.file}.md 缺失或无 Props 表）`)
+  // ★生成期硬校验（2026-09-24 补）：API 表里不得出现「分隔行泄漏」或空行——
+  //   此前 splitRow 的尾部空单元缺陷让 `|---|` 混进数据（渲染成 ["---","---","---"]），
+  //   静默进了两个批次。宁可在生成时炸，也不要产出脏表（本仓「反静默」纪律）。
+  for (const [name, table] of Object.entries({ Props: api.props, Events: api.events, 插槽: api.slots, 兼容进度: api.compat })) {
+    for (const row of table) {
+      const joined = row.join('')
+      if (/^[-:\s|]*$/.test(joined) || row.some((c) => c === '')) {
+        throw new Error(
+          `API 表校验失败（${p.file} · ${name}）：疑似分隔行泄漏或空单元格 → ${JSON.stringify(row)}\n` +
+            '  请检查 website/content/components/' + p.file + '.md 的表格格式与解析器（scripts/gen-component-demo-pages.mjs）',
+        )
+      }
+    }
+  }
   const imports = new Set(['PText'])
   for (const d of p.demos) for (const m of d.demo.matchAll(/<([a-z]+-[a-z-]+)/g)) {
     imports.add(
@@ -780,7 +1070,11 @@ function renderPage(p) {
       const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
       const open = `    <demo-block index="${idx}" title="${escAttr(d.title)}" desc="${escAttr(d.desc)}" :has-output="${hasOut}" :code="codes.${codeKey}">`
       const demoSlot = `      <template #demo>\n        ${d.demo}\n      </template>`
-      const outSlot = hasOut ? `\n      <template #output>\n        <p-text class="out">${d.output}</p-text>\n      </template>` : ''
+      // ★output 文本直接进模板插值 → 其中的 `<` 会被 Vue SFC 解析器当成真标签
+      //   （实测：写 `<teleport to="body">` 字面量导致 "Element is missing end tag"、构建失败）
+      //   → 统一转义尖括号（模板里按文本显示，语义不变）。
+      const outText = String(d.output ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const outSlot = hasOut ? `\n      <template #output>\n        <p-text class="out">${outText}</p-text>\n      </template>` : ''
       return `${open}\n${demoSlot}${outSlot}\n    </demo-block>`
     })
     .join('\n\n')
@@ -797,7 +1091,7 @@ function renderPage(p) {
        ——组件改了源码，check:content 与本页门禁都会红，页面不会「悄悄过时」。
      ★演示部分（各 demo 块的用法与状态）逐组件手写——页面的价值所在，无法机械化。 -->
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ${p.state && /\bwatch\(/.test(p.state) ? 'ref, watch' : 'ref'} } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'

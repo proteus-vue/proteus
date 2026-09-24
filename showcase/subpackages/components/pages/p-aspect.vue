@@ -19,11 +19,6 @@ const codes = ref({
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "ratio",
     "宽/高比（如 16/9 = 1.777；默认 1.777）",
     "Number"
@@ -37,22 +32,12 @@ const apiRows = ref([
 const eventRows = ref([])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

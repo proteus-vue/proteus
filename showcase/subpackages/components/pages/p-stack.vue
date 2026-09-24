@@ -22,11 +22,6 @@ const snapMode = ref('none')
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "pid",
     "元素标识（框架扩展，用于调试/定位——真机探针/几何断言的稳定锚点；同 p-scroll-view 惯例）",
     "String"
@@ -64,11 +59,6 @@ const apiRows = ref([
 ])
 const eventRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "scroll",
     "滚动（eventScrollTop 归一：MP e.detail.scrollTop / Web e.target.scrollTop）",
     "payload"
@@ -76,22 +66,12 @@ const eventRows = ref([
 ])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

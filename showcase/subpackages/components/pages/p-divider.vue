@@ -19,11 +19,6 @@ const codes = ref({
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "orientation",
     "方向：horizontal 水平 / vertical 垂直",
     "String"
@@ -48,11 +43,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

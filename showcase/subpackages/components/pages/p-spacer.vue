@@ -21,11 +21,6 @@ const spacerGrow = ref(1)
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "grow",
     "弹性增长比例（默认 1——占满剩余空间）",
     "Number"
@@ -50,11 +45,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

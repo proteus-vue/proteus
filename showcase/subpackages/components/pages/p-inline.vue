@@ -19,11 +19,6 @@ const codes = ref({
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "wrap",
     "允许折行（默认不折行）",
     "Boolean"
@@ -47,22 +42,12 @@ const apiRows = ref([
 const eventRows = ref([])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

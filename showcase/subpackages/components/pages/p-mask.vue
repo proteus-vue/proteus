@@ -26,11 +26,6 @@ function onMaskClose(): void {
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "pid",
     "组件实例标识（调试/观测/测试定位用——D-2 dogfooding 契约）",
     "String"
@@ -63,11 +58,6 @@ const apiRows = ref([
 ])
 const eventRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "close",
     "关闭",
     "—"
@@ -81,11 +71,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

@@ -19,11 +19,6 @@ const codes = ref({
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "minSplitWidth",
     "容器宽度达到此值 → 并排分栏（px；窄于此 → 堆叠）",
     "Number"
@@ -42,11 +37,6 @@ const apiRows = ref([
 const eventRows = ref([])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "aside",
     "具名插槽",
     "—"
@@ -58,11 +48,6 @@ const slotRows = ref([
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

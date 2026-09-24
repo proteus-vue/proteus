@@ -53,6 +53,90 @@ const WX_APIS = [
   'checkDeviceSupportHevc', // device-capability
 ]
 
+/** ★批次 6（2026-09-24）弹层族 + 外壳基础：slug → 页面 data 特征（判据同批次 4/5）。 */
+const COMPONENT_PAGES_6: Array<{ slug: string; featureKey: string; featureHint: string; requireKey?: boolean }> = [
+  { slug: 'p-modal', featureKey: 'codes', featureHint: 'v-model:visible' },
+  { slug: 'p-popup', featureKey: 'popupPos', featureHint: 'bottom' },
+  { slug: 'p-drawer', featureKey: 'codes', featureHint: 'overlay' },
+  { slug: 'p-action-sheet', featureKey: 'sheetLast', featureHint: '暂无' },
+  { slug: 'p-popover', featureKey: 'popoverVisible', featureHint: 'false' },
+  { slug: 'p-nav', featureKey: 'codes', featureHint: 'transparent' },
+  { slug: 'p-tabbar', featureKey: 'tabActive', featureHint: 'home' },
+  { slug: 'p-page', featureKey: 'codes', featureHint: 'pull-refresh' },
+  // ★p-select 的演示态初值是**空串**（未选择）——「含子串」判据对空串无判别力，
+  //   故此条用 hasKey 语义（断言该键确实在页面 data 里，证明演示状态已初始化）
+  { slug: 'p-select', featureKey: 'selValue', featureHint: '', requireKey: true },
+]
+
+describe.skipIf(!ENABLED)('showcase 组件详情页批次 6 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '9 个新组件页逐个 reLaunch 可达、演示态字段正确、API 三表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint, requireKey } of COMPONENT_PAGES_6) {
+        const route = `/subpackages/components/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        let featureOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            hasKey: Object.prototype.hasOwnProperty.call(d, '__FEATURE_KEY__'),
+            tableOk:
+              Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
+              Array.isArray(d.eventRows) &&
+              Array.isArray(d.slotRows) &&
+              Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
+          })
+        }).replace(/__FEATURE_KEY__/g, featureKey) // ★必须**全局**替换：probe 里引用了两次占位符，
+            //   而 String.replace(字符串) 只换第一处（实测：hasKey 检查的是占位符键 → 恒 false，
+            //   p-select 的真机断言假红）。用正则 /g 保证两处都替换。
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean; hasKey: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          featureOk = requireKey ? parsed.hasKey : featureVal.includes(featureHint)
+          if (featureOk && tableOk) break
+        }
+        if (!featureOk) {
+          failures.push(
+            requireKey
+              ? `${slug}: 页面 data 缺字段 ${featureKey}（路由 ${landedRoute}）`
+              : `${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`,
+          )
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物（apiRows/eventRows/slotRows/compatRows 应有值）`)
+      }
+      expect(failures, `批次 6 组件页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
+
 /** ★批次 5（2026-09-24）Fluid 布局 + 外壳基础：slug → 页面 data 特征（判据同批次 4）。 */
 const COMPONENT_PAGES_5: Array<{ slug: string; featureKey: string; featureHint: string }> = [
   { slug: 'p-aspect', featureKey: 'codes', featureHint: 'ratio' },
@@ -99,13 +183,16 @@ describe.skipIf(!ENABLED)('showcase 组件详情页批次 5 · MP 真机（页�
           return JSON.stringify({
             route: p?.route ?? '',
             feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            hasKey: Object.prototype.hasOwnProperty.call(d, '__FEATURE_KEY__'),
             tableOk:
               Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
               Array.isArray(d.eventRows) &&
               Array.isArray(d.slotRows) &&
               Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
           })
-        }).replace('__FEATURE_KEY__', featureKey)
+        }).replace(/__FEATURE_KEY__/g, featureKey) // ★必须**全局**替换：probe 里引用了两次占位符，
+            //   而 String.replace(字符串) 只换第一处（实测：hasKey 检查的是占位符键 → 恒 false，
+            //   p-select 的真机断言假红）。用正则 /g 保证两处都替换。
         for (let i = 0; i < 10; i++) {
           await driver.waitFor(700)
           const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
@@ -179,13 +266,16 @@ describe.skipIf(!ENABLED)('showcase 组件详情页 · MP 真机（页面可达 
           return JSON.stringify({
             route: p?.route ?? '',
             feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            hasKey: Object.prototype.hasOwnProperty.call(d, '__FEATURE_KEY__'),
             tableOk:
               Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
               Array.isArray(d.eventRows) &&
               Array.isArray(d.slotRows) &&
               Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
           })
-        }).replace('__FEATURE_KEY__', featureKey)
+        }).replace(/__FEATURE_KEY__/g, featureKey) // ★必须**全局**替换：probe 里引用了两次占位符，
+            //   而 String.replace(字符串) 只换第一处（实测：hasKey 检查的是占位符键 → 恒 false，
+            //   p-select 的真机断言假红）。用正则 /g 保证两处都替换。
         for (let i = 0; i < 10; i++) {
           await driver.waitFor(700)
           const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))

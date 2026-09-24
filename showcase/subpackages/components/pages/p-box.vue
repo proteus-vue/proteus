@@ -21,11 +21,6 @@ const inBox = ref('内容自适应（未设比例）')
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "aspectRatio",
     "宽高比（如 '16/9'；0/空 = 不设）——Skyline 无 aspect-ratio → 降级为不约束（内容撑高）",
     "String"
@@ -39,22 +34,12 @@ const apiRows = ref([
 const eventRows = ref([])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",

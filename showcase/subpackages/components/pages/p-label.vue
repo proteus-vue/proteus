@@ -24,11 +24,6 @@ function onLabelClick(): void {
 
 const apiRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "for",
     "关联控件的 id（对齐小程序 <label for> / HTML label for）",
     "String"
@@ -41,11 +36,6 @@ const apiRows = ref([
 ])
 const eventRows = ref([
   [
-    "---",
-    "---",
-    "---"
-  ],
-  [
     "click",
     "点击/轻触（throttle 节流后触发）",
     "e"
@@ -53,22 +43,12 @@ const eventRows = ref([
 ])
 const slotRows = ref([
   [
-    "---",
-    "---",
-    "—"
-  ],
-  [
     "default",
     "默认插槽（组件主内容）",
     "—"
   ]
 ])
 const compatRows = ref([
-  [
-    "---",
-    "---",
-    "---"
-  ],
   [
     "Web SPA",
     "✅",
