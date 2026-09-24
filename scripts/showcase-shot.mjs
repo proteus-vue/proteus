@@ -8,7 +8,7 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const PROJECT = path.join(ROOT, 'showcase/dist/mp-weixin')
-const CLI = process.env.PROTEUS_IDE_CLI || '/Volumes/data1/work/office-applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
+const CLI = process.env.PROTEUS_IDE_CLI || '/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
 const PORT = process.env.PROTEUS_AUTOMATOR_PORT || '9439'
 
 const args = process.argv.slice(2)
