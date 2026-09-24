@@ -18,6 +18,17 @@
 ---
 
 ## 当前状态速览（最近一次更新：2026-09-24）★新会话以此为准
+- **★本会话·批次 8 收官（65→73/73，组件详情页全量齐备）+ 修掉「虚拟滚动在 Web 端完全失效」的两个真缺陷（2026-09-24 续五，★★★用户「继续」）**：
+  **① 组件详情页 73/73 全量齐备**——批次 8 交付 8 页：`p-form / p-selection / p-keyboard-accessory / p-list-view / p-virtual-list / p-location / p-scan-qr / p-pick-photo`。目录页所有条目均可点击，无「规划中」占位。
+  **② ★演示边界先定住再动手（按要求）**——这三类组件性质不同，先取证实现面再写演示：**(a) 虚拟列表**：读源码确认是真虚拟化（`items.slice(start, start+count)` + 占位撑高）→ 主张「只渲染可视窗口」**可机器验证**，故演示做成**可自证**（页内按钮数 DOM 行数）+ 全量对照块（`virtual=false`）；**(b) 能力入口**：读 `webBridge` 确认 `scanQR/createQR` 无实现、`getAlbum.pick` 有实现 → 三个入口页按真实可用性分「成功路径」与「**显式降级路径**」（error 事件带机器码），并把「能力缺失时框架行为必须可观测」写成本页的价值；**(c) 表单**：`p-form` 的 `rules` 是**函数表**（MP 端 WXML 数据无法承载函数）→ 校验规则放页面层，演示里空提交真的弹出 2 条错误、填对后真的通过。
+  **③ ★★缺陷 A：p-list-view 缺底部占位 → 滚动范围被截断（用户永远滚不到列表后半段）**——模板只有顶部占位（`start*itemHeight`），未渲染行数的高度从未进布局 → 实测 500 行 × 44px 的列表 `scrollHeight` 仅 **315px**（应 22000px）→ 只能「棘轮式」往下蹭。修：补底部占位 `(total-start-count)*itemHeight`；修后 scrollHeight = **22007px**（正确）。
+  **④ ★★缺陷 B：eventField 不认「裸载荷」→ 虚拟滚动在 Web 端完全失效（静默）**——框架 Web 模拟层按约定 emit **裸载荷**（WebScrollView emit `{scrollTop,...}`，无 detail/target 外壳），而 `runtime/event.ts` 的 `eventField` 只认 `e.detail` / `e.target` → **裸载荷恒读不到值** → 滚动事件里 scrollTop 恒 0 → 窗口不更新 → 列表永远停在首屏那几行（滚动条动、内容不动，**零报错**）。这与前几批的 `@tap` 属**同一类缺陷**：归一函数未覆盖框架自己的 Web 发射形态。修：`eventField` 补裸载荷分支（优先级 detail > target > 裸载荷）。修后实测：滚 2200px → 显示第 51–57 行（顶部占位 2200px）；滚到末尾 → 第 455–461 行；渲染行数**恒定 7 行**。
+  **⑤ 两个缺陷都加了回归锁 + 破坏性验证**——(a) `tests/list-view-virtual-scroll.test.ts`（4 例：上下双占位总高 = total×itemHeight / 只渲染可视窗口 / virtual=false 无占位 / 数据少于视口时底部占位为 0），摘掉底部占位 → 精确报红「应有**两个**占位块: expected 1 to be 2」；(b) `tests/event-field-bare-payload.test.ts`（6 例：三种载荷形态 / 优先级 / 缺失不抛错 / 类型不符不误取），摘掉裸载荷分支 → 精确报红「裸载荷 scrollTop 必须被读到: expected +0 to be 2200」。
+  **⑥ E2E 新增「虚拟滚动实证锁」**（`e2e-showcase-render.test.ts`）——只断言「行数少」无法区分「虚拟化生效」与「根本没滚动」→ 锁滚动后**首行真的变化** + 行数仍恒定 + **能滚到末尾**。★踩坑：定位滚动容器时 `list.querySelectorAll('*')` 找不到（**可滚动节点就是 `.p-list-view` 根自身**）→ 把根节点纳入候选后通过。
+  **⑦ 门禁又抓到我一个演示设计错误**——p-keyboard-accessory 初始 `visible=false`（组件 `display:none` 是正确行为），我却把组件本身当可见性断言目标 → E2E 报「关键元素可见 0/1」。改用**触发按钮**作 keySelector（同 p-mask/p-popup 口径），并把这条口径写进注释防复发。
+  **⑧ 真机一轮过**——MP 真机 **6/6**（批次 8+7+6+5+4+能力页），破坏性验证（改 p-form hint）精确报红。★批次 8 的真机断言也已内置「导航后校验路由」重试（批次 7 发现的冷启动瞬态）。
+  **⑨ 验证汇总**——门禁 **12 道全 ✅** · 根 `vue-tsc` 0 错误 · showcase Web E2E **110/110** · MP 真机 **6/6** · 单测 **3539/3539**（+10 新锁）。README 已改为 **73/73 ✅ 全量齐备**。
+  **⑩ 组件详情页线收口**：**73/73**（经 8 个批次）。**能力详情页仍 19/81**（剩余多为「Web 端无标准对等」的句柄，按既定诚实边界不该造假演示——是数据表可写但价值低，需另行判断）。⚠ 发布阻塞仍未解（F-29/F-34/F-35 待换 npm token）。
 - **★本会话·批次 7（55→65/73，工程类 + 剩余布局/外壳）+ 错误边界「真捕获」实证（2026-09-24 续四，★★★用户「继续」）**：
   **① 批次 7 交付 10 页**：`p-animate / p-transition / p-error-boundary / p-scroll / p-scrollable / p-adaptive / p-masonry / p-svg / p-toolbar / p-sidebar` → 组件页 **65/73**（仅余 8：能力入口 p-location/p-scan-qr/p-pick-photo、虚拟列表 p-list-view/p-virtual-list、表单 p-form/p-selection、外壳 p-keyboard-accessory）。
   **② ★★本轮最有价值：错误边界做了「真捕获」实证，而不是静态兜底 UI**——`p-error-boundary` 最容易做成花架子（只展示 fallback 长什么样，捕获能力无从验证）。为此新建页面专用本地组件 `showcase/components/crash-probe/index.vue`（`crash=true` 时在**渲染期**抛错，用**方法**而非 computed 以规避 MP「不支持块体 computed」限制）→ 演示页真能触发子树崩溃。**Web 实测**：崩溃前子树=1 → 点崩溃后 兜底容器=1 且**崩溃子树从 DOM 消失**（证明是真的替换而非叠加）、兜底文案正确、点重置后子树恢复（v-if 卸载 + nextTick 重挂载）。并为此**新增专用交互锁**（`e2e-showcase-render.test.ts` 的 p-error-boundary 用例，断言捕获+复位四步），**破坏性验证**：让 crash-probe 不再抛错 → 精确报红「崩溃后应显示兜底容器: expected +0 to be 1」。

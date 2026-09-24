@@ -1342,6 +1342,243 @@ function onTbSelect(v: unknown): void {
     styles: `.sb-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
 .sb-nav-item { display: block; padding: 6px 8px; border-radius: var(--sp-radius-sm); background: #eef2ff; margin-bottom: 6px; }`,
   },
+  // ─────────────────── 批次 8（2026-09-24）：表单族 + 虚拟列表 + 能力入口（8 页，收官） ───────────────────
+  {
+    file: 'p-form',
+    title: 'p-form 表单容器',
+    subtitle: '内容与表单 · ui.form · 双端同源码',
+    state: `const formModel = ref({ name: '', age: '' })
+const formErrors = ref<Record<string, string>>({})
+const formMsg = ref('（尚未提交）')
+// ★规则放**页面**（不放 rules prop）：rules 是函数表，MP 端 WXML 数据无法承载函数——
+//   表单校验留在这层既双端可用，也让「校验失败长什么样」立即可见。
+function validateForm(): Record<string, string> {
+  const errs: Record<string, string> = {}
+  if (!String(formModel.value.name).trim()) errs.name = '请输入用户名'
+  const age = String(formModel.value.age)
+  if (!age) errs.age = '请输入年龄'
+  else if (!/^\\d+$/.test(age)) errs.age = '年龄必须是数字'
+  else if (Number(age) < 18) errs.age = '年龄需满 18 岁'
+  return errs
+}
+function onSubmit(): void {
+  const errs = validateForm()
+  formErrors.value = errs
+  formMsg.value = Object.keys(errs).length ? '校验未通过（见各字段下方红色提示）' : '校验通过 → submit 事件已触发'
+}`,
+    codes: [['basic', `<!-- form 提供表单语义 + submit 事件；字段与校验由页面组织 -->\n<p-form :model="model" layout="vertical" @submit="onSubmit">\n  <p-label for="f-name">用户名</p-label>\n  <p-input id="f-name" v-model="model.name" />\n  <p-button form-type="submit">提交</p-button>\n</p-form>`]],
+    demos: [
+      {
+        title: '提交触发校验（submit + 字段错误回显）',
+        desc: '★点「提交」触发校验：故意留空 → 各字段下方出现红色错误提示；填对后再点 → 提交通过（这是表单容器的真实职责：聚合校验时机与 submit 事件）',
+        code: 0,
+        demo: `<p-form layout="vertical" @submit="onSubmit">
+            <p-view class="fd">
+              <p-label for="f-name">用户名</p-label>
+              <p-input id="f-name" :model-value="formModel.name" placeholder="留空试试" @update:model-value="(v: unknown) => { formModel.name = String(v ?? '') }" />
+              <p-text v-if="formErrors.name" class="fe">{{ formErrors.name }}</p-text>
+            </p-view>
+            <p-view class="fd">
+              <p-label for="f-age">年龄</p-label>
+              <p-input id="f-age" :model-value="formModel.age" placeholder="试试 17 或 abc" @update:model-value="(v: unknown) => { formModel.age = String(v ?? '') }" />
+              <p-text v-if="formErrors.age" class="fe">{{ formErrors.age }}</p-text>
+            </p-view>
+            <p-button size="small" form-type="submit">提交</p-button>
+          </p-form>`,
+        hasOutput: true,
+        output: '{{ formMsg }}',
+      },
+    ],
+    styles: `.fd { margin-bottom: var(--sp-3); }
+.fe { display: block; color: #e54d42; font-size: 12px; margin-top: 4px; }`,
+  },
+  {
+    file: 'p-selection',
+    title: 'p-selection 局部文本选区',
+    subtitle: '内容与表单 · ui.selection · 双端同源码',
+    state: `const selDetail = ref('（用鼠标/手指划选上方文本试试）')
+function onSelectionChange(d: unknown): void {
+  const p = d as { isCollapsed?: boolean; selectedString?: string; firstOffset?: number; lastOffset?: number }
+  selDetail.value = p?.isCollapsed
+    ? '选区已折叠（未选中内容）'
+    : \`选中 "\${p?.selectedString ?? ''}"（偏移 \${p?.firstOffset ?? 0}→\${p?.lastOffset ?? 0}）\`
+}`,
+    codes: [['basic', `<!-- 选区变化 emit selectionchange（载荷对齐小程序 event.detail） -->\n<p-selection @selectionchange="onSel">\n  <p-text>可划选的文本内容…</p-text>\n</p-selection>`]],
+    demos: [
+      {
+        title: '划选文本 → selectionchange 载荷',
+        desc: '★用鼠标拖拽划选下方文本：选中内容与偏移量会实时回显（载荷 isCollapsed / selectedString / firstOffset / lastOffset 对齐小程序同名事件）',
+        code: 0,
+        demo: `<p-selection class="sel-box" @selectionchange="onSelectionChange">
+            <p-text>这是一段可以划选的文本内容。选中其中几个字，下方会实时显示选中的字符串与起止偏移——选区语义与小程序 selectionchange 事件对齐。</p-text>
+          </p-selection>`,
+        hasOutput: true,
+        output: '{{ selDetail }}',
+      },
+    ],
+    styles: `.sel-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-3); user-select: text; }`,
+  },
+  {
+    file: 'p-keyboard-accessory',
+    title: 'p-keyboard-accessory 键盘上方工具栏',
+    subtitle: '页面外壳 · 键盘附属栏 · 双端同源码',
+    state: `const kaVisible = ref(false)
+function toggleKa(): void {
+  kaVisible.value = !kaVisible.value
+}`,
+    codes: [['basic', `<!-- visible 缺省 undefined → 自动感知键盘高度；显式传值则可手动控制 -->\n<p-keyboard-accessory :visible="visible" :max-height="200">\n  <p-text>工具栏内容</p-text>\n</p-keyboard-accessory>`]],
+    demos: [
+      {
+        title: '显式控制显隐（visible 受控）',
+        desc: '★visible 不传 → 组件自动感知键盘高度（真机聚焦输入框时出现）；传布尔值 → 由页面控制。演示用**显式模式**展示样式与显隐（真实键盘检测需真机聚焦输入框）',
+        code: 0,
+        demo: `<p-button size="small" @click="toggleKa">{{ kaVisible ? '隐藏工具栏' : '显示工具栏' }}</p-button>
+          <p-keyboard-accessory class="ka-box" :visible="kaVisible" :max-height="200">
+            <p-text>工具栏（键盘上方固定，maxHeight 200px）</p-text>
+          </p-keyboard-accessory>`,
+        hasOutput: true,
+        output: '★自动模式：内部经 visualViewport 判定「视口高度 < 基准高度 × 0.6」视为键盘弹起——真机上聚焦输入框即触发，无需业务代码',
+      },
+    ],
+    styles: `.ka-box { background: #eef2ff; border: 1px solid #d6ddff; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-top: var(--sp-2); }`,
+  },
+  {
+    file: 'p-list-view',
+    title: 'p-list-view 虚拟长列表',
+    subtitle: '内容与表单 · 虚拟化长列表 · 双端同源码',
+    state: `// ★500 条数据，但**只渲染可视窗口内那几行**（虚拟化）——渲染行数由 DOM 实测按钮/门禁验证
+const lvItems = ref(Array.from({ length: 500 }, (_, i) => ({ title: '第 ' + (i + 1) + ' 行 · 固定行高 44px' })))
+const lvCount = ref('点按钮实测 DOM 里真实渲染了多少行')
+function countRendered(): void {
+  // ★Web 端数真实 DOM 行数；MP 端无 document → 由真机断言覆盖（不假装测到）
+  if (typeof document === 'undefined') {
+    lvCount.value = '（MP 端请在真机断言中查看渲染行数）'
+    return
+  }
+  // ★必须**限定在本页第一个列表内**数：页面上还有 virtual=false 的对照列表（500 行），
+  //   全局 querySelectorAll('.plv-row') 会把两者相加（实测报出 507），得出误导性结论。
+  const firstList = document.querySelectorAll('.p-list-view')[0]
+  const n = firstList ? firstList.querySelectorAll('.plv-row').length : 0
+  lvCount.value = \`数据 \${lvItems.value.length} 条 · 本列表 DOM 实际渲染 \${n} 行（虚拟化只渲染可视窗口）\`
+}`,
+    codes: [['basic', `<!-- items + itemHeight + height：只渲染可视窗口（含 bufferSize 行缓冲） -->\n<p-list-view :items="items" :item-height="44" :height="220" :buffer-size="2" />`],
+      ['full', `<!-- virtual=false → 小列表可选全量渲染（省去切片与占位开销） -->\n<p-list-view :items="items" :virtual="false" :height="220" />`]],
+    demos: [
+      {
+        title: '500 条数据 → 只渲染可视窗口（virtual 缺省开）',
+        desc: '★滚动这个 500 行的列表：DOM 里始终只有可视区那几行（+2 行缓冲），滚动时靠占位块撑高——点按钮**实测**当前 DOM 行数',
+        code: 0,
+        demo: `<p-button size="small" @click="countRendered">数一数 DOM 实际渲染行数</p-button>
+          <p-list-view class="lv-box" :items="lvItems" :item-height="44" :height="220" :buffer-size="2" />`,
+        hasOutput: true,
+        output: '{{ lvCount }}',
+      },
+      {
+        title: '关掉虚拟化对照（virtual=false）',
+        desc: 'virtual=false → 500 行全部进 DOM；★上下两块对比同样滚动，DOM 行数差异即虚拟化的实际效果',
+        code: 1,
+        demo: `<p-list-view class="lv-box" :items="lvItems" :virtual="false" :item-height="44" :height="220" />`,
+      },
+    ],
+    styles: `.lv-box { border: 1px solid #e5e6eb; border-radius: var(--sp-radius-sm); margin-top: var(--sp-2); }`,
+  },
+  {
+    file: 'p-virtual-list',
+    title: 'p-virtual-list 虚拟化长列表（语义别名）',
+    subtitle: '布局 · layout.virtual-list · 转发 p-list-view 单实现',
+    state: `const vlItems = ref(Array.from({ length: 500 }, (_, i) => ({ title: '第 ' + (i + 1) + ' 行（p-virtual-list）' })))
+const vlLog = ref('滚动列表看看（窗口跨行时才更新）')
+function onVlScroll(): void {
+  vlLog.value = '滚动事件 ' + Date.now().toString().slice(-4)
+}`,
+    codes: [['basic', `<!-- 与 p-list-view 同一实现（薄转发层，API 表面 items/itemHeight/height） -->\n<p-virtual-list :items="items" :item-height="44" :height="220" />`]],
+    demos: [
+      {
+        title: '与 p-list-view 同机制（语义命名版）',
+        desc: '★G-32 语义命名为 p-virtual-list；旧标签 virtual-list 兼容保留。它与 p-list-view 是**同一实现**（转发层），不存在第二套虚拟化代码',
+        code: 0,
+        demo: `<p-virtual-list class="vl-box" :items="vlItems" :item-height="44" :height="200" :buffer-size="2" />`,
+        hasOutput: true,
+        output: '★诚实说明：本页与 p-list-view 共用实现——页面价值在记录「两个标签同一个实现」这件事，避免后人误以为有两套虚拟化',
+      },
+    ],
+    styles: `.vl-box { border: 1px solid #e5e6eb; border-radius: var(--sp-radius-sm); }`,
+  },
+  {
+    file: 'p-location',
+    title: 'p-location 定位能力入口',
+    subtitle: '能力入口 · capability.location · 双端同源码',
+    state: `const locMsg = ref('点按钮触发定位（浏览器会弹权限申请；拒绝 → 显式降级，不是静默失败）')
+function onLocate(data: unknown): void {
+  const c = data as { latitude?: number; longitude?: number; accuracy?: number }
+  locMsg.value = \`✅ 定位成功：纬度 \${c?.latitude?.toFixed(4)} · 经度 \${c?.longitude?.toFixed(4)} · 精度 \${c?.accuracy?.toFixed(0)}m\`
+}
+function onLocateError(msg: unknown): void {
+  locMsg.value = \`⚠ 降级（error 事件）：\${String(msg)}\`
+}`,
+    codes: [['basic', `<!-- 声明式入口：点击触发 useLocation()；成功 emit locate，失败 emit error -->\n<p-location label="获取当前位置" @locate="onLocate" @error="onLocateError" />`]],
+    demos: [
+      {
+        title: '点击触发定位（locate / error 双事件）',
+        desc: '★点按钮真调 `useLocation()`：允许授权 → locate 事件带经纬度；拒绝/不支持 → error 事件带机器码（**两条路径都是显式事件**，不会静默无反应）',
+        code: 0,
+        demo: `<p-location class="cap-entry" label="获取当前位置" @locate="onLocate" @error="onLocateError" />`,
+        hasOutput: true,
+        output: '{{ locMsg }}',
+      },
+    ],
+    styles: `.cap-entry { background: #eef2ff; border-radius: var(--sp-radius-sm); padding: var(--sp-3); margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-scan-qr',
+    title: 'p-scan-qr 扫码能力入口',
+    subtitle: '能力入口 · capability.scan-qr · 双端同源码',
+    state: `const qrMsg = ref('点按钮触发扫码——Web 端能力不可用时会走显式降级（这正是要看的行为）')
+function onScan(data: unknown): void {
+  qrMsg.value = \`✅ 扫码成功：\${String(data)}\`
+}
+function onScanError(msg: unknown): void {
+  qrMsg.value = \`⚠ 降级（error 事件）：\${String(msg)}｜Web 端无标准扫码 API → 框架给显式错误码，不是「点了没反应」\`
+}`,
+    codes: [['basic', `<!-- 成功 emit scan，失败 emit error（能力缺失是 error 路径，不是静默） -->\n<p-scan-qr label="扫一扫" @scan="onScan" @error="onScanError" />`]],
+    demos: [
+      {
+        title: '点击触发扫码（Web 端展示显式降级路径）',
+        desc: '★点按钮：Web 端 `webBridge` 无扫码实现 → 触发 **error 事件**并带机器码（真机小程序端走 `wx.scanCode` 成功路径）。★这个演示的意义正是「能力缺失时框架的行为必须可观测」',
+        code: 0,
+        demo: `<p-scan-qr class="cap-entry" label="扫一扫" @scan="onScan" @error="onScanError" />`,
+        hasOutput: true,
+        output: '{{ qrMsg }}',
+      },
+    ],
+    styles: `.cap-entry { background: #fff7ed; border-radius: var(--sp-radius-sm); padding: var(--sp-3); margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-pick-photo',
+    title: 'p-pick-photo 选图能力入口',
+    subtitle: '能力入口 · capability.album · 双端同源码',
+    state: `const pickMsg = ref('点按钮从本地选一张图片（Web 走系统文件选择器；取消 → 显式降级）')
+function onPick(data: unknown): void {
+  const files = Array.isArray(data) ? data : []
+  const first = files[0] as { path?: string; size?: number } | undefined
+  pickMsg.value = \`✅ 已选 \${files.length} 张：\${first?.path?.slice(0, 60) ?? ''}\${first?.size ? ' · ' + Math.round(first.size / 1024) + 'KB' : ''}\`
+}
+function onPickError(msg: unknown): void {
+  pickMsg.value = \`⚠ 降级（error 事件）：\${String(msg)}\`
+}`,
+    codes: [['basic', `<!-- 成功 emit pick（MediaFile[]），失败/取消 emit error -->\n<p-pick-photo label="选择图片" @pick="onPick" @error="onPickError" />`]],
+    demos: [
+      {
+        title: '点击选图（Web 走 <input type=file>，取消/失败走 error）',
+        desc: '★点按钮打开系统文件选择器：选中 → pick 事件带文件信息；取消 → **error 事件**（显式，不是静默）。★Web 端能力真实可用（`getAlbum.pick` 已实现），小程序端走 `wx.chooseMedia`',
+        code: 0,
+        demo: `<p-pick-photo class="cap-entry" label="选择图片" @pick="onPick" @error="onPickError" />`,
+        hasOutput: true,
+        output: '{{ pickMsg }}',
+      },
+    ],
+    styles: `.cap-entry { background: #f2fbf5; border-radius: var(--sp-radius-sm); padding: var(--sp-3); margin-bottom: var(--sp-2); }`,
+  },
 ]
 
 // ───────────────────────── ③ 渲染 ─────────────────────────
