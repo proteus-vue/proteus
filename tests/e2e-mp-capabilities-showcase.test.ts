@@ -53,6 +53,99 @@ const WX_APIS = [
   'checkDeviceSupportHevc', // device-capability
 ]
 
+/** ★批次 7（2026-09-24）工程类 + 剩余布局/外壳：slug → 页面 data 特征（判据同批次 4/5/6）。 */
+const COMPONENT_PAGES_7: Array<{ slug: string; featureKey: string; featureHint: string; requireKey?: boolean }> = [
+  { slug: 'p-animate', featureKey: 'codes', featureHint: 'keyframes' },
+  { slug: 'p-transition', featureKey: 'trName', featureHint: 'fade' },
+  { slug: 'p-error-boundary', featureKey: 'ebMounted', featureHint: 'true' },
+  { slug: 'p-scroll', featureKey: 'codes', featureHint: 'paging' },
+  { slug: 'p-scrollable', featureKey: 'scLoading', featureHint: 'false' },
+  { slug: 'p-adaptive', featureKey: 'codes', featureHint: 'modes' },
+  { slug: 'p-masonry', featureKey: 'codes', featureHint: 'col-count' },
+  { slug: 'p-svg', featureKey: 'codes', featureHint: 'path' },
+  { slug: 'p-toolbar', featureKey: 'tbLast', featureHint: '暂无' },
+  { slug: 'p-sidebar', featureKey: 'codes', featureHint: 'min-sidebar-width' },
+]
+
+describe.skipIf(!ENABLED)('showcase 组件详情页批次 7 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '10 个新组件页逐个 reLaunch 可达、演示态字段正确、API 三表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint, requireKey } of COMPONENT_PAGES_7) {
+        const route = `/subpackages/components/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        // ★导航后**校验路由**（2026-09-24 实测）：reLaunch 返回 success 不等于页面已切过去——
+        //   每次真机会话的首个 reLaunch 可能静默停留在 pages/index（冷启动瞬态）→
+        //   断言会误报「演示态未渲染（路由 pages/index）」。故导航后先确认路由，不符则重试。
+        const expectedRoute = route.replace(/^\//, '')
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        let featureOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            hasKey: Object.prototype.hasOwnProperty.call(d, '__FEATURE_KEY__'),
+            tableOk:
+              Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
+              Array.isArray(d.eventRows) &&
+              Array.isArray(d.slotRows) &&
+              Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
+          })
+        }).replace(/__FEATURE_KEY__/g, featureKey)
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean; hasKey: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          featureOk = requireKey ? parsed.hasKey : featureVal.includes(featureHint)
+          if (featureOk && tableOk) break
+          // 路由还没到位 → 再发一次导航（最多 3 次，避免无上限重试）
+          if (landedRoute !== expectedRoute && i < 3) {
+            try {
+              await driver.reLaunch(route)
+            } catch {
+              /* 重试失败则继续轮询 */
+            }
+          }
+        }
+        if (!featureOk) {
+          failures.push(
+            requireKey
+              ? `${slug}: 页面 data 缺字段 ${featureKey}（路由 ${landedRoute}）`
+              : `${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`,
+          )
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物（apiRows/eventRows/slotRows/compatRows 应有值）`)
+      }
+      expect(failures, `批次 7 组件页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
+
 /** ★批次 6（2026-09-24）弹层族 + 外壳基础：slug → 页面 data 特征（判据同批次 4/5）。 */
 const COMPONENT_PAGES_6: Array<{ slug: string; featureKey: string; featureHint: string; requireKey?: boolean }> = [
   { slug: 'p-modal', featureKey: 'codes', featureHint: 'v-model:visible' },

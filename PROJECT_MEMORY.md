@@ -18,6 +18,16 @@
 ---
 
 ## 当前状态速览（最近一次更新：2026-09-24）★新会话以此为准
+- **★本会话·批次 7（55→65/73，工程类 + 剩余布局/外壳）+ 错误边界「真捕获」实证（2026-09-24 续四，★★★用户「继续」）**：
+  **① 批次 7 交付 10 页**：`p-animate / p-transition / p-error-boundary / p-scroll / p-scrollable / p-adaptive / p-masonry / p-svg / p-toolbar / p-sidebar` → 组件页 **65/73**（仅余 8：能力入口 p-location/p-scan-qr/p-pick-photo、虚拟列表 p-list-view/p-virtual-list、表单 p-form/p-selection、外壳 p-keyboard-accessory）。
+  **② ★★本轮最有价值：错误边界做了「真捕获」实证，而不是静态兜底 UI**——`p-error-boundary` 最容易做成花架子（只展示 fallback 长什么样，捕获能力无从验证）。为此新建页面专用本地组件 `showcase/components/crash-probe/index.vue`（`crash=true` 时在**渲染期**抛错，用**方法**而非 computed 以规避 MP「不支持块体 computed」限制）→ 演示页真能触发子树崩溃。**Web 实测**：崩溃前子树=1 → 点崩溃后 兜底容器=1 且**崩溃子树从 DOM 消失**（证明是真的替换而非叠加）、兜底文案正确、点重置后子树恢复（v-if 卸载 + nextTick 重挂载）。并为此**新增专用交互锁**（`e2e-showcase-render.test.ts` 的 p-error-boundary 用例，断言捕获+复位四步），**破坏性验证**：让 crash-probe 不再抛错 → 精确报红「崩溃后应显示兜底容器: expected +0 to be 1」。
+  **③ 生成器改造（support 本地组件）**——演示页需要 `@proteus-vue/components` 之外的本地组件时，新增 `localComponents` 字段：生成相对路径 import。★踩坑：首版把「排除本地组件名」的 `imports.delete` 写在扫描**之前** → 被扫描重新加回 → 产出**重复 import**（`CrashProbe` 同时来自本地与组件库，构建必炸）→ 修为「扫描后删除」。
+  **④ MP 编译器再抓我一个错误**：错误边界复位原写 `:key="reloadKey"`（Web 重挂载手法）→ 编译器报 `[InvalidAttribute] wx:key 无 wx:for 悬挂` 并中止构建（wx:key 只对 wx:for 有意义）→ 改 `v-if` 显式卸载 + `nextTick` 重挂载，两端语义一致；生成器同步支持按需 import `nextTick`。
+  **⑤ ★真机冷启动瞬态（新发现，已内化）**——批次 7 首跑只有 `p-animate` 失败且**实际路由是 `pages/index`**：reLaunch 返回 success 但页面**没切过去**（每次真机会话的首个导航可静默停留首页）。修：导航后**校验当前路由**，不符则重试（有界 3 次）——这条对所有批次都适用，已写进断言注释。
+  **⑥ 真机环境处置（本轮遇到两种不同错误，靠权威探针区分）**——(a) `timeout waiting for automator response` → `simulator_refresh` + 轮询即恢复；(b) `cant find runtimeid by projectpath` → **模拟器里该项目窗口没了** → `open_project_window --window-mode fullMode` + `simulator_refresh` 后恢复。★教训固化：**不同错误串对应不同处置**，必须先手调底层工具拿权威错误再决定，不能根据上次经验盲修（本轮我先按 (a) 处置而实际是 (b)，白跑一轮）。
+  **⑦ 真交互实测 6/6**（Web）：错误边界真捕获+可复位、p-animate 实测 `animation-name=p-animate-fade / duration=0.6s / iterations=infinite`（动画真在跑）、p-transition 隐藏类切换、**p-scrollable 真滚动触底** emit load-more、p-sidebar 窄容器折叠 + 点切换条展开、p-toolbar 点项回显 `bold`。
+  **⑧ 验证汇总**——门禁 **12 道全 ✅** · 根 `vue-tsc` 0 错误 · showcase Web E2E **101/101** · MP 真机 **5/5** · 单测 **3529/3529**。README 已同步（65/73 + 批次 7 清单）。
+  **⑨ 未完成（诚实口径）**：组件页 **65/73**（余 8 见上）；能力页 19/81 未动。⚠ 发布阻塞仍未解（F-29/F-34/F-35 待换 npm token）。★p-svg 是 **Web-first**（MP 端矢量映射走 Skia，后续批次）——页面已按实标注该边界，不假装双端齐备。
 - **★本会话·批次 6（46→55/73，弹层/外壳族）+ 修掉「分隔行泄漏进 API 表」的解析器缺陷（2026-09-24 续三，★★★用户「继续」+「已重新登录」）**：
   **① 批次 6 交付 9 页**：`p-modal / p-popup / p-drawer / p-action-sheet / p-popover / p-nav / p-tabbar / p-page / p-select`（弹层族 + 外壳基础）→ 组件页 **55/73**。先提取 API 面再写演示（弹层族重点看 emits 与关闭路径）。
   **② ★生成器/编译器两道门禁各自抓到我一个错误（本轮价值最高的部分）**——(a) **MP 编译器拦下 `bind:update-visible` 重复**：我在 p-modal 演示里同时写 `v-model:visible` 与 `@update:visible`，而 v-model 已隐含后者 → 编译器按平台标准报违规并中止构建（`[DuplicatedAttribute]`）。修：观察显隐改用 `watch`（并给生成器加了按需 import watch 的逻辑）。(b) **Web 构建拦下裸尖括号**：output 演示文本里写了 `<teleport to="body">` 字面量 → Vue SFC 解析器当成真标签报 `Element is missing end tag`。★**修在生成器层**（output 统一转义 `<`/`>`）而非只改这一处数据，同类错误不会再出现。

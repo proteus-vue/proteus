@@ -1027,6 +1027,321 @@ function onMultiChange(v: unknown): void {
     ],
     styles: ``,
   },
+  // ─────────────────── 批次 7（2026-09-24）：工程类 + 剩余布局/外壳（10 页） ───────────────────
+  {
+    file: 'p-animate',
+    title: 'p-animate 动画声明',
+    subtitle: '工程 · animation CSS 语义面 · 双端同源码',
+    state: ``,
+    codes: [['presets', `<!-- 预设动画名：fade / bounce / pulse / shake / zoom-in / spin -->\n<p-animate keyframes="pulse" :duration="1200" loop>\n  <p-text>循环脉冲</p-text>\n</p-animate>`],
+      ['delay', `<!-- delay 延迟 + duration 时长 + loop 开关 -->\n<p-animate keyframes="shake" :duration="600" :delay="300" :loop="false">…</p-animate>`]],
+    demos: [
+      {
+        title: '六个预设（fade / bounce / pulse / shake / spin / zoom-in）',
+        desc: '预设名 → 全局 @keyframes 类（p-animate-{name}）；★全部在动，用于直观对照',
+        code: 0,
+        demo: `<p-view class="anim-row">
+            <p-animate class="anim-cell" keyframes="fade"><p-text>fade</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="bounce"><p-text>bounce</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="pulse"><p-text>pulse</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="shake"><p-text>shake</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="spin"><p-text>spin</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="zoom-in"><p-text>zoom</p-text></p-animate>
+          </p-view>`,
+      },
+      {
+        title: '时长与延迟（duration / delay / loop）',
+        desc: 'duration 控制周期（ms），delay 延迟启动，loop=false 只播一次——★不 loop、不 delay 的脉冲会「动一下就停」',
+        code: 1,
+        demo: `<p-view class="anim-row">
+            <p-animate class="anim-cell" keyframes="pulse" :duration="600" loop><p-text>600ms</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="pulse" :duration="2000" loop><p-text>2000ms</p-text></p-animate>
+            <p-animate class="anim-cell" keyframes="pulse" :duration="1200" :delay="800" loop><p-text>延迟 800</p-text></p-animate>
+          </p-view>`,
+        hasOutput: true,
+        output: '★动画走 CSS @keyframes（双端一致）：组件只声明语义，不写平台动画 API',
+      },
+    ],
+    styles: `.anim-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.anim-cell { background: #eef2ff; border-radius: var(--sp-radius-sm); padding: var(--sp-3) var(--sp-2); text-align: center; min-width: 64px; }`,
+  },
+  {
+    file: 'p-transition',
+    title: 'p-transition 过渡',
+    subtitle: '工程 · 进入/离开过渡 · 双端同源码',
+    state: `const trVisible = ref(true)
+const trName = ref('fade')
+function toggleTr(): void {
+  trVisible.value = !trVisible.value
+}
+function setTr(n: string): void {
+  trName.value = n
+  trVisible.value = true
+}`,
+    codes: [['basic', `<!-- name: fade / slide-up / slide-down / slide-left / slide-right / zoom -->\n<!-- mode: in / out / both；visible 驱动显隐 -->\n<p-transition name="slide-up" mode="both" :visible="show">\n  <p-text>内容</p-text>\n</p-transition>`]],
+    demos: [
+      {
+        title: '六个预设 + 显隐切换（name / visible）',
+        desc: '★点按钮切换显隐（观察过渡），点预设名切换形态；★切「隐藏」时会看到淡出/位移，切「显示」是反向过程',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-button size="small" @click="toggleTr">{{ trVisible ? '隐藏' : '显示' }}</p-button>
+            <p-button size="small" @click="setTr('fade')">fade</p-button>
+            <p-button size="small" @click="setTr('slide-up')">slide-up</p-button>
+            <p-button size="small" @click="setTr('zoom')">zoom</p-button>
+          </p-view>
+          <p-transition class="tr-stage" :name="trName" mode="both" :visible="trVisible">
+            <p-text>{{ trName }} 过渡内容</p-text>
+          </p-transition>`,
+        hasOutput: true,
+        output: '当前预设：{{ trName }} · 可见：{{ trVisible ? "是" : "否" }}',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
+.tr-stage { background: #eef2ff; border-radius: var(--sp-radius-sm); padding: var(--sp-4); text-align: center; }`,
+  },
+  {
+    file: 'p-error-boundary',
+    // ★页面专用本地组件：错误边界演示需要一个真的会崩溃的子组件
+    localComponents: ['crash-probe'],
+    title: 'p-error-boundary 错误兜底',
+    subtitle: '工程 · 错误边界 · 双端同源码',
+    state: `const ebCrash = ref(false)
+const ebMounted = ref(true)
+function crashNow(): void {
+  ebCrash.value = true
+}
+function resetCrashed(): void {
+  // ★错误状态由组件内部持有 → 必须先卸载再挂载才能真正复位。
+  //   ★不用 :key（那是「换 key 即重挂载」的 Web 手法）——MP 的 wx:key 只对 wx:for 有意义，
+  //     独立使用会被编译器判为悬挂属性并**中止构建**（实测 [InvalidAttribute] wx:key 无 wx:for 悬挂）。
+  //   用 v-if 显式卸载 → nextTick 后重新挂载，两端语义一致。
+  ebMounted.value = false
+  ebCrash.value = false
+  void nextTick(() => {
+    ebMounted.value = true
+  })
+}`,
+    codes: [['basic', `<!-- 捕获后代组件渲染/生命周期错误 → 显示 fallback 槽（缺省 fallbackText） -->\n<p-error-boundary fallback-text="出错了，请重试">\n  <p-text>正常内容</p-text>\n</p-error-boundary>`],
+      ['slot', `<!-- 自定义兜底：fallback 命名槽 -->\n<p-error-boundary>\n  <template #fallback><p-text>自定义兜底 UI</p-text></template>\n  <p-text>正常内容</p-text>\n</p-error-boundary>`]],
+    demos: [
+      {
+        title: '捕获子树错误 → 显示兜底',
+        desc: '★点「触发子组件崩溃」会让下方的子组件在渲染期抛错，错误边界捕获后显示兜底文案（而不是整页白屏）；点「重置」重新挂载',
+        code: 0,
+        demo: `<p-view class="btns">
+            <p-button size="small" @click="crashNow">触发子组件崩溃</p-button>
+            <p-button size="small" @click="resetCrashed">重置</p-button>
+          </p-view>
+          <p-error-boundary v-if="ebMounted" fallback-text="⚠ 子树出错了（错误边界已兜底）">
+            <crash-probe :crash="ebCrash" />
+          </p-error-boundary>`,
+        hasOutput: true,
+        output: '★错误边界是「隔离故障」的基础件：一棵子树崩了不影响其他区域（onErrorCaptured + return false 阻止继续冒泡）',
+      },
+    ],
+    styles: `.btns { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }`,
+  },
+  {
+    file: 'p-scroll',
+    title: 'p-scroll 显式滚动容器',
+    subtitle: '布局 · layout.scroll · 双端同源码',
+    state: ``,
+    codes: [['y', `<!-- 纵向滚动（默认）+ 分页/下拉刷新/指示器声明 -->\n<p-scroll axis="y" paging refresh indicator>\n  <p-text>内容</p-text>\n</p-scroll>`],
+      ['x', `<!-- 横向滚动：axis="x" -->\n<p-scroll axis="x">…</p-scroll>`]],
+    demos: [
+      {
+        title: '纵向滚动（axis="y"）',
+        desc: '★真滚动容器：内容超出即滚动；paging 声明分页、refresh 声明下拉刷新、indicator 控制滚动条——★Skyline 下 CSS overflow 无效（平台限制，见组件注释），需用 p-scroll-view',
+        code: 0,
+        demo: `<p-scroll class="scroll-box" axis="y" indicator>
+            <p-text v-for="i in 12" :key="i" class="scroll-line">第 {{ i }} 行内容（超出容器高度即产生滚动）</p-text>
+          </p-scroll>`,
+      },
+      {
+        title: '横向滚动（axis="x"）',
+        desc: 'axis="x" 切换主轴——内容超宽即横向滚动',
+        code: 1,
+        demo: `<p-scroll class="scroll-box-x" axis="x">
+            <p-text v-for="i in 8" :key="i" class="scroll-card">{{ i }}</p-text>
+          </p-scroll>`,
+        hasOutput: true,
+        output: '★与 p-scroll-view / p-stack snap 的分工：p-scroll 是「显式滚动容器」，滚动行为需宿主容器有确定高度',
+      },
+    ],
+    styles: `.scroll-box { height: 120px; background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.scroll-line { display: block; padding: 6px 0; border-bottom: 1px solid #eceef2; }
+.scroll-box-x { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.scroll-card { display: inline-block; min-width: 64px; background: #dbeafe; border-radius: var(--sp-radius-sm); padding: var(--sp-3); text-align: center; margin-right: var(--sp-2); }`,
+  },
+  {
+    file: 'p-scrollable',
+    title: 'p-scrollable 可滚动区域',
+    subtitle: '手势 · 滚动 + 加载更多 · 双端同源码',
+    state: `const scLog = ref('（滚动看看）')
+const scLoading = ref(false)
+function onLoadMore(): void {
+  scLog.value = '触底 → load-more 触发 · ' + Date.now().toString().slice(-4)
+  scLoading.value = true
+  setTimeout(() => {
+    scLoading.value = false
+  }, 900)
+}`,
+    codes: [['basic', `<!-- height 固定滚动区；触底 40px 内 emit load-more -->\n<p-scrollable :height="160" load-more :loading="loading" @load-more="onLoadMore">\n  <p-text>内容</p-text>\n</p-scrollable>`]],
+    demos: [
+      {
+        title: '触底加载更多（loadMore / load-more / loading）',
+        desc: '★滚动到底部（触底 40px 内）会 emit load-more 并回显——真滚动触发，不是点击模拟',
+        code: 0,
+        demo: `<p-scrollable class="sc-box" :height="160" load-more :loading="scLoading" @load-more="onLoadMore">
+            <p-text v-for="i in 14" :key="i" class="scroll-line">第 {{ i }} 行（滚到底部触发加载）</p-text>
+          </p-scrollable>`,
+        hasOutput: true,
+        output: '{{ scLog }}（loading 时页脚显示「加载中…」）',
+      },
+    ],
+    styles: `.sc-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.scroll-line { display: block; padding: 6px 0; border-bottom: 1px solid #eceef2; }`,
+  },
+  {
+    file: 'p-adaptive',
+    title: 'p-adaptive 容器形态自适应',
+    subtitle: '布局 · 形态区间声明 · 双端同源码',
+    state: ``,
+    codes: [['basic', `<!-- modes: 形态区间声明（sheet / dialog / popover 按宽度切换） -->\n<p-adaptive modes="sheet(0, 600) | dialog(600, 840)">\n  <p-text>内容</p-text>\n</p-adaptive>`]],
+    demos: [
+      {
+        title: '形态区间（modes）——同 p-modal 的形态求解',
+        desc: '★按**容器宽度**求解形态区间（sheet(0,600) / dialog(600,840) / popover(840+)）；当前窄容器应命中 sheet 形态；★改 modes 可自定义区间',
+        code: 0,
+        demo: `<p-adaptive class="ad-box" modes="sheet(0, 600) | dialog(600, 840) | popover(840, 9999)">
+            <p-text>当前形态由容器宽度决定（窄容器 → sheet）</p-text>
+          </p-adaptive>`,
+        hasOutput: true,
+        output: '★p-modal 的 pAdaptive 属性与之一脉相承：同一套「形态区间声明」语义，弹窗只是它的一个消费者',
+      },
+    ],
+    styles: `.ad-box { background: #eef2ff; border: 1px solid #d6ddff; border-radius: var(--sp-radius-sm); padding: var(--sp-3); }`,
+  },
+  {
+    file: 'p-masonry',
+    title: 'p-masonry 瀑布流',
+    subtitle: '布局 · layout.masonry · 双端同源码',
+    state: ``,
+    codes: [['basic', `<!-- 列数 + 间距；子项自动避免跨列断开 -->\n<p-masonry :col-count="2" :gap="12">\n  <p-text>卡片 1</p-text>\n  <p-text>卡片 2</p-text>\n</p-masonry>`]],
+    demos: [
+      {
+        title: '两列瀑布流（colCount / gap）',
+        desc: 'CSS columns 实现：子项高度不齐时自动错落填充（break-inside: avoid 防跨列断开）；★子项高度不同才看得出瀑布流效果',
+        code: 0,
+        demo: `<p-masonry class="ms-box" :col-count="2" :gap="10">
+            <p-text class="ms-item" style="height: 60px">卡片 1（矮）</p-text>
+            <p-text class="ms-item" style="height: 96px">卡片 2（高）</p-text>
+            <p-text class="ms-item" style="height: 72px">卡片 3（中）</p-text>
+            <p-text class="ms-item" style="height: 88px">卡片 4（较高）</p-text>
+            <p-text class="ms-item" style="height: 56px">卡片 5</p-text>
+            <p-text class="ms-item" style="height: 80px">卡片 6</p-text>
+          </p-masonry>`,
+      },
+      {
+        title: '三列（colCount=3）',
+        desc: '同一批内容换成三列——列数只声明，填充由引擎计算',
+        code: 0,
+        demo: `<p-masonry class="ms-box" :col-count="3" :gap="8">
+            <p-text class="ms-item" style="height: 56px">1</p-text>
+            <p-text class="ms-item" style="height: 80px">2</p-text>
+            <p-text class="ms-item" style="height: 64px">3</p-text>
+            <p-text class="ms-item" style="height: 72px">4</p-text>
+            <p-text class="ms-item" style="height: 48px">5</p-text>
+            <p-text class="ms-item" style="height: 88px">6</p-text>
+          </p-masonry>`,
+        hasOutput: true,
+        output: '★实现：CSS columns（Web 原生能力）+ --p-masonry-gap 间距 token——不做 JS 布局计算',
+      },
+    ],
+    styles: `.ms-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.ms-item { display: block; background: #dbeafe; border-radius: var(--sp-radius-sm); padding: var(--sp-2); margin-bottom: 0; }`,
+  },
+  {
+    file: 'p-svg',
+    title: 'p-svg 矢量图形',
+    subtitle: 'UI 原语 · ui.svg · Web-first（MP 走 Skia 映射）',
+    state: ``,
+    codes: [['basic', `<!-- path = SVG path d 数据；颜色随 currentColor -->\n<p-svg path="M12 2 L22 22 L2 22 Z" :size="32" color="#4f6bff" />`]],
+    demos: [
+      {
+        title: '路径渲染 + 尺寸 / 颜色（path / size / color）',
+        desc: '★矢量优先（无位图）：path 的 fill 随 currentColor，颜色由 color 控制；size 同时设定宽高',
+        code: 0,
+        demo: `<p-view class="svg-row">
+            <p-svg path="M12 2 L22 22 L2 22 Z" :size="32" color="#4f6bff" />
+            <p-svg path="M12 2 A10 10 0 1 1 11.99 2 Z" :size="32" color="#07c160" />
+            <p-svg path="M4 6 h16 v12 h-16 Z" :size="32" color="#e54d42" />
+            <p-svg path="M12 2 L22 22 L2 22 Z" :size="48" color="#7c5cff" />
+          </p-view>`,
+        hasOutput: true,
+        output: '★诚实边界：p-svg 当前是 **Web-first**（内联 svg 元素）——MP 端矢量映射走 Skia（后续批次）；需要跨端矢量图形时用 p-icon 或 SVG→image 路线',
+      },
+    ],
+    styles: `.svg-row { display: flex; gap: var(--sp-3); align-items: center; background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-3); }`,
+  },
+  {
+    file: 'p-toolbar',
+    title: 'p-toolbar 工具栏溢出折叠',
+    subtitle: '页面外壳 · 溢出折叠 · 双端同源码',
+    state: `const tbLast = ref('（暂无）')
+const tbItems = ref([
+  { key: 'bold', label: '加粗' },
+  { key: 'italic', label: '斜体' },
+  { key: 'under', label: '下划线' },
+  { key: 'strike', label: '删除线' },
+  { key: 'code', label: '代码' },
+  { key: 'link', label: '链接' },
+  { key: 'image', label: '图片' },
+  { key: 'table', label: '表格' },
+])
+function onTbSelect(v: unknown): void {
+  tbLast.value = String(v)
+}`,
+    codes: [['basic', `<!-- items: [{key,label}]；容器宽度不足时溢出项收进「更多」 -->\n<p-toolbar :items="items" :item-width="80" more-label="更多" @select="onSelect" />`]],
+    demos: [
+      {
+        title: '溢出折叠（items / itemWidth / moreLabel / select）',
+        desc: '★点任意项 emit select；容器不够宽时，放不下的项自动收进「更多」并显示数量角标（点「更多」展开）——★缩窄窗口可看到折叠变化',
+        code: 0,
+        demo: `<p-toolbar :items="tbItems" :item-width="72" more-label="更多" @select="onTbSelect" />`,
+        hasOutput: true,
+        output: '最后点击：{{ tbLast }}',
+      },
+    ],
+    styles: ``,
+  },
+  {
+    file: 'p-sidebar',
+    title: 'p-sidebar 自适应导航栏',
+    subtitle: '页面外壳 · 响应式侧栏 · 双端同源码',
+    state: ``,
+    codes: [['basic', `<!-- 容器宽 ≥ minSidebarWidth → 常驻侧栏；窄于此 → 折叠（点「导航」展开） -->\n<p-sidebar :min-sidebar-width="640" :nav-width="200" toggle-label="导航">\n  <template #nav><p-text>导航项</p-text></template>\n  <p-text>主内容</p-text>\n</p-sidebar>`]],
+    demos: [
+      {
+        title: '响应式侧栏（窄容器 → 折叠态，点切换条展开）',
+        desc: '★按**容器宽度**求解：≥ minSidebarWidth 常驻侧栏（side-rail），窄于此折叠为切换条——★点「☰ 导航」展开抽屉式导航（真交互）',
+        code: 0,
+        demo: `<p-sidebar class="sb-box" :min-sidebar-width="640" :nav-width="180" toggle-label="导航">
+            <template #nav>
+              <p-text class="sb-nav-item">概览</p-text>
+              <p-text class="sb-nav-item">组件</p-text>
+              <p-text class="sb-nav-item">能力</p-text>
+            </template>
+            <p-text>主内容区（侧栏随容器宽度自适应：宽则常驻，窄则折叠为切换条）</p-text>
+          </p-sidebar>`,
+        hasOutput: true,
+        output: '★与 p-split 同族：容器级响应式（Web 用容器查询运行时，MP 用 SelectorQuery 测量）——业务零媒体查询代码',
+      },
+    ],
+    styles: `.sb-box { background: #f7f8fa; border-radius: var(--sp-radius-sm); padding: var(--sp-2); }
+.sb-nav-item { display: block; padding: 6px 8px; border-radius: var(--sp-radius-sm); background: #eef2ff; margin-bottom: 6px; }`,
+  },
 ]
 
 // ───────────────────────── ③ 渲染 ─────────────────────────
@@ -1049,6 +1364,9 @@ function renderPage(p) {
     }
   }
   const imports = new Set(['PText'])
+  // ★页面专用本地组件（如错误边界演示的 crash-probe）：从相对路径导入，**不属于** @proteus-vue/components。
+  //   故先把它们的 PascalCase 名从扫描结果里排除（在扫描**之后**删，否则会被重新加回）。
+  const localNames = (p.localComponents ?? []).map((n) => n.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join(''))
   for (const d of p.demos) for (const m of d.demo.matchAll(/<([a-z]+-[a-z-]+)/g)) {
     imports.add(
       m[1]
@@ -1057,6 +1375,7 @@ function renderPage(p) {
         .join(''),
     )
   }
+  for (const n of localNames) imports.delete(n)
   const importList = [...imports].sort()
   const codeEntries = p.codes.map(([k, v]) => `  ${k}: ${JSON.stringify(v)},`).join('\n')
   const demoBlocks = p.demos
@@ -1091,11 +1410,17 @@ function renderPage(p) {
        ——组件改了源码，check:content 与本页门禁都会红，页面不会「悄悄过时」。
      ★演示部分（各 demo 块的用法与状态）逐组件手写——页面的价值所在，无法机械化。 -->
 <script setup lang="ts">
-import { ${p.state && /\bwatch\(/.test(p.state) ? 'ref, watch' : 'ref'} } from 'vue'
+import { ${[
+        'ref',
+        /\bwatch\(/.test(p.state ?? '') ? 'watch' : null,
+        /\bnextTick\(/.test(p.state ?? '') ? 'nextTick' : null,
+      ]
+        .filter(Boolean)
+        .join(', ')} } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
 import DemoBlock from '../../../components/demo-block/index.vue'
 import ApiTable from '../../../components/api-table/index.vue'
-import { ${importList.join(', ')} } from '@proteus-vue/components'
+${(p.localComponents ?? []).map((n) => `import ${n.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')} from '../../../components/${n}/index.vue'`).join('\n')}${(p.localComponents ?? []).length ? '\n' : ''}import { ${importList.join(', ')} } from '@proteus-vue/components'
 
 // ★代码片段放 data（含 < > " 的属性字面量会破坏 WXML 解析）
 const codes = ref({

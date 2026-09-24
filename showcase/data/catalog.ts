@@ -19,24 +19,24 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 73 个（已备详情页 55） */
+/** 组件：6 域 / 73 个（已备详情页 65） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
     desc: "网格 / 弹性栈 / 分区 / 安全区 / 滚动 / 虚拟列表",
     items: [
-      { name: "p-adaptive", desc: "容器形态自适应", route: "" },
+      { name: "p-adaptive", desc: "容器形态自适应", route: "/subpackages/components/pages/p-adaptive" },
       { name: "p-aspect", desc: "纵横比容器", route: "/subpackages/components/pages/p-aspect" },
       { name: "p-box", desc: "原子容器", route: "/subpackages/components/pages/p-box" },
       { name: "p-divider", desc: "分隔线", route: "/subpackages/components/pages/p-divider" },
       { name: "p-fit", desc: "内在尺寸", route: "/subpackages/components/pages/p-fit" },
       { name: "p-grid", desc: "自适应网格", route: "/subpackages/components/pages/p-grid" },
       { name: "p-inline", desc: "行内容器", route: "/subpackages/components/pages/p-inline" },
-      { name: "p-masonry", desc: "瀑布流", route: "" },
+      { name: "p-masonry", desc: "瀑布流", route: "/subpackages/components/pages/p-masonry" },
       { name: "p-safe", desc: "安全区避让", route: "/subpackages/components/pages/p-safe" },
-      { name: "p-scroll", desc: "显式滚动容器", route: "" },
+      { name: "p-scroll", desc: "显式滚动容器", route: "/subpackages/components/pages/p-scroll" },
       { name: "p-scroll-view", desc: "滚动容器", route: "/subpackages/components/pages/p-scroll-view" },
-      { name: "p-sidebar", desc: "自适应导航栏", route: "" },
+      { name: "p-sidebar", desc: "自适应导航栏", route: "/subpackages/components/pages/p-sidebar" },
       { name: "p-spacer", desc: "弹性空白", route: "/subpackages/components/pages/p-spacer" },
       { name: "p-stack", desc: "弹性栈", route: "/subpackages/components/pages/p-stack" },
       { name: "p-view", desc: "通用容器", route: "/subpackages/components/pages/p-view" },
@@ -73,7 +73,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-selection", desc: "局部文本选区", route: "" },
       { name: "p-skeleton", desc: "骨架屏", route: "/subpackages/components/pages/p-skeleton" },
       { name: "p-slider", desc: "滑块", route: "/subpackages/components/pages/p-slider" },
-      { name: "p-svg", desc: "矢量图形", route: "" },
+      { name: "p-svg", desc: "矢量图形", route: "/subpackages/components/pages/p-svg" },
       { name: "p-switch", desc: "开关", route: "/subpackages/components/pages/p-switch" },
       { name: "p-text", desc: "文本", route: "/subpackages/components/pages/p-text" },
       { name: "p-textarea", desc: "多行文本域", route: "/subpackages/components/pages/p-textarea" },
@@ -98,7 +98,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-split", desc: "自适应分栏", route: "/subpackages/components/pages/p-split" },
       { name: "p-tabbar", desc: "底部标签栏", route: "/subpackages/components/pages/p-tabbar" },
       { name: "p-toast", desc: "轻提示", route: "/subpackages/components/pages/p-toast" },
-      { name: "p-toolbar", desc: "工具栏溢出折叠", route: "" },
+      { name: "p-toolbar", desc: "工具栏溢出折叠", route: "/subpackages/components/pages/p-toolbar" },
       { name: "p-webview", desc: "内嵌网页", route: "/subpackages/components/pages/p-webview" },
     ],
   },
@@ -106,11 +106,11 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
     name: "工程",
     desc: "路由链接 / 转场 / 动画 / 错误边界",
     items: [
-      { name: "p-animate", desc: "动画声明——animation CSS 语义面", route: "" },
-      { name: "p-error-boundary", desc: "错误兜底", route: "" },
+      { name: "p-animate", desc: "动画声明——animation CSS 语义面", route: "/subpackages/components/pages/p-animate" },
+      { name: "p-error-boundary", desc: "错误兜底", route: "/subpackages/components/pages/p-error-boundary" },
       { name: "p-router-link", desc: "声明式导航", route: "/subpackages/components/pages/p-router-link" },
       { name: "p-share-element", desc: "共享元素转场", route: "/subpackages/components/pages/p-share-element" },
-      { name: "p-transition", desc: "过渡", route: "" },
+      { name: "p-transition", desc: "过渡", route: "/subpackages/components/pages/p-transition" },
     ],
   },
   {
@@ -118,7 +118,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
     desc: "可拖拽 / 可滚动",
     items: [
       { name: "p-draggable", desc: "可拖拽/可缩放元素", route: "/subpackages/components/pages/p-draggable" },
-      { name: "p-scrollable", desc: "可滚动区域", route: "" },
+      { name: "p-scrollable", desc: "可滚动区域", route: "/subpackages/components/pages/p-scrollable" },
     ],
   },
   {
@@ -280,7 +280,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 export const CATALOG_STATS = {
   componentGroups: 6,
   componentTotal: 73,
-  componentReady: 55,
+  componentReady: 65,
   capabilityGroups: 10,
   capabilityTotal: 81,
   capabilityReady: 19,
