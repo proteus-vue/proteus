@@ -8,11 +8,22 @@ interface Shape {
   target?: Record<string, unknown>
 }
 
-/** 跨端读取事件字段：MP e.detail.x 优先，Web e.target.x 兜底，均缺失返回 undefined */
+/**
+ * 跨端读取事件字段：MP e.detail.x 优先，Web e.target.x 兜底，均缺失返回 undefined。
+ *
+ * ★2026-09-24 修复（实测缺陷）：补**裸载荷**分支。框架的 Web 模拟层按约定 emit **裸载荷**
+ *   （如 WebScrollView emit `{ scrollTop, scrollLeft, ... }`，无 detail/target 外壳），
+ *   而此函数原本只认 e.detail / e.target → 裸载荷恒读不到值。
+ *   后果实测：p-list-view 的虚拟滚动在 Web 端**完全失效**——滚动事件读到的 scrollTop 恒为 0
+ *   → 窗口不更新 → 列表永远停在首屏那几行（滚动条动、内容不动：人眼可见但无任何报错）。
+ *   与既有 `e?.detail ?? e` 的手写读法一致：裸载荷 = 事件对象自身就是载荷。
+ */
 export function eventField(e: unknown, key: string): unknown {
   const ev = (e ?? null) as Shape | null
   if (ev && ev.detail && ev.detail[key] !== undefined) return ev.detail[key]
   if (ev && ev.target && ev.target[key] !== undefined) return ev.target[key]
+  // ★裸载荷（框架 Web 模拟层约定）：事件对象自身带该字段
+  if (ev && (ev as Record<string, unknown>)[key] !== undefined) return (ev as Record<string, unknown>)[key]
   return undefined
 }
 

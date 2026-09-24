@@ -7,10 +7,16 @@
      ★注意：watch 回调必须花括号体（编译器仅支持 => { body }）；虚拟窗口必须搭配 scroll-view（Skyline 禁全局滚动） -->
 <template>
   <scroll-view class="p-list-view" scroll-y :style="scrollStyle" @scroll="onScroll">
+    <!-- ★上下**双**占位块（2026-09-24 修复）：此前只有顶部占位 →
+         滚动范围 = 顶部占位 + 渲染行数，剩余行数的高度从未进布局 ⇒
+         列表内容区总高被截断（实测 500 行数据 scrollHeight 仅 315px = 7 行高），
+         用户**永远滚不到列表后半段**，且「行数恒定」的虚拟化主张无法被验证。
+         现在：顶部占位 = start*itemHeight，底部占位 = (total-start-count)*itemHeight。 -->
     <view v-if="virtual" class="plv-ph" :style="{ height: start * itemHeight + 'px' }" />
     <view v-for="(item, i) in visible" :key="i" class="plv-row" :style="{ height: itemHeight + 'px' }">
       <text>{{ item.title }}</text>
     </view>
+    <view v-if="virtual" class="plv-ph" :style="{ height: tailHeight + 'px' }" />
   </scroll-view>
 </template>
 
@@ -46,6 +52,8 @@ const scrollStyle = computed(() => {
 const start = ref(0)
 const visible = ref([{ title: '' }])
 const ready = ref(false)
+// ★底部占位高度（px）：剩余未渲染行数 × 行高——与顶部占位一起保证滚动内容总高 = total*itemHeight
+const tailHeight = ref(0)
 
 // 计算可视窗口（方法体内 props.x → this.data.x 改写 ✓）；lazy 模式下首次滚动（onScroll 置 ready）前不渲染
 // ★B7：窗口数学抽纯函数 getVirtualWindow（可单测：10k 数据 → 恒定行数），此处只做切片
@@ -62,6 +70,8 @@ function calc() {
     props.items.length,
   )
   visible.value = props.virtual ? props.items.slice(w.start, w.start + w.count) : props.items
+  // ★底部占位同步（仅虚拟模式）：未渲染行数 × 行高——保证滚动范围覆盖全部数据
+  tailHeight.value = props.virtual ? Math.max(0, props.items.length - w.start - w.count) * props.itemHeight : 0
   // ★B8 渲染埋点（默认 no-op；开发开 setObservabilityEnabled(true) 后输出）
   componentRender('p-list-view', { durationMs: Date.now() - t0, itemCount: props.virtual ? w.count : props.items.length, strategy: props.virtual ? 'virtual' : 'full' })
 }
