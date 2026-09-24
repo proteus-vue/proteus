@@ -6,9 +6,12 @@ import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 
-/** 各平台微信开发者工具 CLI 常见路径（macOS / Windows；按版本/安装位置回退） */
+/** 各平台微信开发者工具 CLI 常见路径（macOS / Windows；按版本/安装位置回退）
+ *  ★macOS 首选本机实际安装位（`/Volumes/data1/applications`，2026-09-24 用户确认的当前路径）；
+ *    非本机则回退标准 `/Applications`——顺序即优先级（首个存在者胜出）。 */
 export const MP_IDE_DEFAULT_PATHS: Record<string, string[]> = {
   darwin: [
+    '/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/cli',
     '/Applications/wechatwebdevtools.app/Contents/MacOS/cli',
     '/Applications/微信web开发者工具.app/Contents/MacOS/cli',
     '/Applications/wechat-devtools.app/Contents/MacOS/cli',

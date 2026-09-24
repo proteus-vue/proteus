@@ -43,13 +43,17 @@ Skyline 踩坑总账见 `docs/skyline-pitfalls.md`。
 
 ## 3. 真机 / 小程序 E2E（本机 wechatide 已可用）
 
-微信开发者工具 **已安装**，路径固定在 `/Volumes/data1/work/office-applications/wechatwebdevtools.app`。
+微信开发者工具 **已安装**，路径固定在 `/Volumes/data1/applications/wechatwebdevtools.app`
+（★2026-09-24 迁移到此；旧路径 `/Volumes/data1/work/office-applications/...` 已废弃）。
 **不要**再假设「本机未安装」或「无法真机验证」——先按下面跑。
 
 ```bash
 # MP E2E（几何级组件断言 + 冒烟 + vue-compat + popover 全家桶）
-PROTEUS_IDE_CLI="/Volumes/data1/work/office-applications/wechatwebdevtools.app/Contents/MacOS/wechatide" \
-  npx tsx packages/cli/src/index.ts test e2e:mp showcase
+# ★路径已写入 CLI 默认探测表（packages/cli/src/mp-e2e.ts 的 MP_IDE_DEFAULT_PATHS）→ 无需再传环境变量
+npx tsx packages/cli/src/index.ts test e2e:mp showcase
+# 若需显式指定（换机/换安装位）：
+# PROTEUS_IDE_CLI="/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/wechatide" \
+#   npx tsx packages/cli/src/index.ts test e2e:mp showcase
 # 只跑某文件：再设 PROTEUS_E2E_ONLY=e2e-mp-components
 ```
 
