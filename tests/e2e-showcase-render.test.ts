@@ -108,6 +108,17 @@ const PAGES: Array<{ route: string; keySelector: string; label: string; minVisib
   { route: '/subpackages/components/pages/p-tabbar', keySelector: '.p-tabbar', label: 'p-tabbar（标签栏真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   { route: '/subpackages/components/pages/p-page', keySelector: '.p-page', label: 'p-page（页面根容器真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
   { route: '/subpackages/components/pages/p-select', keySelector: '.p-select', label: 'p-select（选择器真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  // ★批次 7（工程类 + 剩余布局/外壳，2026-09-24）——expectedCount 为构建后实测值。
+  { route: '/subpackages/components/pages/p-animate', keySelector: '.p-animate', label: 'p-animate（动画容器真实渲染）', minVisibleRatio: 1, expectedCount: 9 },
+  { route: '/subpackages/components/pages/p-transition', keySelector: '.p-transition', label: 'p-transition（过渡容器真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-error-boundary', keySelector: '.crash-probe', label: 'p-error-boundary（初始正常子树可见）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-scroll', keySelector: '.p-scroll', label: 'p-scroll（滚动容器真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-scrollable', keySelector: '.p-scrollable', label: 'p-scrollable（可滚动区真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-adaptive', keySelector: '.p-adaptive', label: 'p-adaptive（形态自适应真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-masonry', keySelector: '.p-masonry', label: 'p-masonry（瀑布流真实渲染）', minVisibleRatio: 1, expectedCount: 2 },
+  { route: '/subpackages/components/pages/p-svg', keySelector: '.p-svg', label: 'p-svg（矢量图形真实渲染）', minVisibleRatio: 1, expectedCount: 4 },
+  { route: '/subpackages/components/pages/p-toolbar', keySelector: '.p-toolbar', label: 'p-toolbar（工具栏真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
+  { route: '/subpackages/components/pages/p-sidebar', keySelector: '.p-sidebar', label: 'p-sidebar（响应式侧栏真实渲染）', minVisibleRatio: 1, expectedCount: 1 },
   // ★分组目录页（官网式信息架构）：断言分组卡片可见
   { route: '/pages/components', keySelector: '[class*=cat-group]', label: '组件库分组目录', minVisibleRatio: 1, expectedCount: 6 },
   { route: '/pages/capabilities', keySelector: '[class*=cat-group]', label: '能力分组目录', minVisibleRatio: 1, expectedCount: 10 },
@@ -161,6 +172,26 @@ describe('★showcase 页面渲染门禁（非空白 + 关键元素可见 + 无 
       }
     })
   }
+
+  // ★p-error-boundary 真交互锁（2026-09-24 批次 7）：错误边界最容易沦为「只展示兜底 UI 的静态页」——
+  //   本用例必须证明**捕获真的发生**（子组件渲染期抛错 → 兜底出现 → 可复位），
+  //   否则页面看起来一样，实际隔离故障的能力为零。
+  it('★/subpackages/components/pages/p-error-boundary 交互（真捕获 + 可复位）', async () => {
+    await page.goto(BASE + '/subpackages/components/pages/p-error-boundary', { waitUntil: 'networkidle' })
+    await page.waitForTimeout(800)
+    expect(await page.locator('.crash-probe').count(), '初始应有正常子树').toBe(1)
+    // ① 触发子组件渲染期抛错 → 兜底接管（子树从 DOM 消失）
+    await page.locator('.db button').first().click()
+    await page.waitForTimeout(600)
+    expect(await page.locator('.p-error-boundary').count(), '崩溃后应显示兜底容器').toBe(1)
+    expect(await page.locator('.crash-probe').count(), '崩溃的子树应被兜底替换（不再在 DOM 中）').toBe(0)
+    const fb = ((await page.locator('.p-error-boundary').textContent()) ?? '').trim()
+    expect(fb, '兜底应显示 fallbackText').toContain('子树出错了')
+    // ② 复位后恢复（错误状态由组件内部持有 → 必须真正重挂载才有效）
+    await page.locator('.db button').nth(1).click()
+    await page.waitForTimeout(700)
+    expect(await page.locator('.crash-probe').count(), '重置后子树应恢复渲染').toBe(1)
+  })
 
   // ★p-button 交互门禁（2026-09-13 用户实测教训）：按钮「存在且可见」还不够——
   //   还要能**按下有反馈**（此前 Web 端 hover-class 已加但背景不变；原生 disabled/loading 视觉/行为）。

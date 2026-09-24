@@ -23,7 +23,9 @@
 
 分包（按大分类独立分包，按需加载）
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
-  —— 进度 **55 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 进度 **65 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 2026-09-24 批次 7（10 页）：p-animate / p-transition / p-error-boundary / p-scroll
+     / p-scrollable / p-adaptive / p-masonry / p-svg / p-toolbar / p-sidebar（工程类 + 剩余布局/外壳）
   —— 2026-09-24 批次 6（9 页）：p-modal / p-popup / p-drawer / p-action-sheet / p-popover
      / p-nav / p-tabbar / p-page / p-select（弹层族 + 外壳基础）
   —— 2026-09-24 批次 5（10 页）：p-aspect / p-fit / p-inline / p-zone / p-scale / p-label
@@ -70,7 +72,7 @@ showcase/
 ├── app.config.ts         运行时配置（app.name/version/features/theme）
 ├── pages/                主包 16 页（5 tab + 11 二级）
 ├── subpackages/          ★分包（按大分类）
-│   ├── components/pages/    组件详情页（55 页：p-button / p-stack / p-modal / …）
+│   ├── components/pages/    组件详情页（65 页：p-button / p-stack / p-modal / …）
 │   └── capabilities/pages/  能力详情页（19 页：camera / storage / fetch / …）
 ├── data/catalog.ts       ★目录数据（AUTO-GENERATED，单一事实源 = 官网内容）
 ├── components/           应用组件（brand-cube / page-shell / demo-block / api-table / catalog-list）
