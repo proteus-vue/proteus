@@ -1,4 +1,4 @@
-<!-- showcase/subpackages/capabilities/pages/clipboard.vue —— 能力详情页（useClipboard，官方形态）
+<!-- showcase/subpackages/capabilities/pages/permission.vue —— 能力详情页（usePermission，官方形态）
      ★由 scripts/gen-capability-demo-pages.mjs 生成（勿手改——改数据表后重跑）。
      范式同 camera.vue：能力说明 + 真交互演示 + API 表 + 双端兼容进度。
      ★真交互：按钮真调用能力 Hook，输出区回显 Result<T>（成功/失败 + 错误码）。 -->
@@ -14,39 +14,36 @@ import { createCapabilityHooks } from '@proteus-vue/api'
 const cap = createCapabilityHooks()
 
 // ★代码片段放 data（含 < > "。直写 :code 字面量会破坏 WXML 解析）
-const codeDemo = ref("const read = await useClipboard()\nconst write = await setClipboard(\"hello\")\nif (read.ok) { /* read.data: string */ }")
+const codeDemo = ref("const res = await usePermission(\"geolocation\")\nif (res.ok) { /* res.data.state: \"granted\" | \"denied\" | \"prompt\" */ }")
 
-const out = ref('点击按钮读/写剪贴板（浏览器需用户手势 + 权限）')
-async function onRead(): Promise<void> {
-  const res = await cap.useClipboard()
-  out.value = res.ok ? `✅ 读到：${res.data || '（空）'}` : `⚠ 降级：${res.error.code}`
-}
-async function onWrite(): Promise<void> {
-  const res = await cap.setClipboard('Proteus showcase · ' + Date.now())
-  out.value = res.ok ? '✅ 已写入剪贴板（可点「读取」验证往返）' : `⚠ 降级：${res.error.code}`
+const out = ref('点击按钮查询 geolocation 权限状态（只查询，不触发弹窗）')
+async function onPermission(): Promise<void> {
+  const res = await cap.usePermission('geolocation')
+  out.value = res.ok
+    ? `✅ geolocation：${res.data.state}（granted / denied / prompt）`
+    : `⚠ 降级：${res.error.code}`
 }
 
 const apiRows = ref([
-  ["useClipboard()", "读取剪贴板文本；返回 Promise<CapResult<string>>", "CapResult<string>"],
-  ["setClipboard(text)", "写入剪贴板文本；返回 Promise<CapResult<void>>", "CapResult<void>"],
-  ["data", "读到的文本（useClipboard 成功时）", "string"],
-  ["error.code", "机器码：clipboard.unsupported（无 Clipboard API）等", "string"],
+  ["usePermission(name)", "查询权限状态；返回 Promise<CapResult<PermissionState>>", "CapResult<PermissionState>"],
+  ["data.permission", "回显权限名（与入参一致）", "string"],
+  ["data.state", "授权状态：'granted' | 'denied' | 'prompt'（未询问）", "string"],
+  ["error.code", "机器码：permission.unsupported（无 Permissions API / 该权限名不被支持）", "string"],
 ])
 const compatRows = ref([
-  ["Web SPA", "navigator.clipboard（需安全上下文 + 用户手势）", "✅"],
-  ["微信小程序", "wx.getClipboardData / wx.setClipboardData", "✅"],
+  ["Web SPA", "navigator.permissions.query（只读查询；不受支持的权限名 → Err 而非假 granted）", "✅"],
+  ["微信小程序", "wx.getSetting（读 scope 授权位；映射为 granted / denied / prompt）", "✅"],
   ["Headless（SSR/测试）", "mock 桥注入", "✅"],
   ["iOS / Android / 鸿蒙 / Flutter", "端原型映射·能力桥未接线（Err 显式降级）", "🟡"],
 ])
 </script>
 
 <template>
-  <page-shell title="useClipboard 剪贴板" subtitle="能力原语 · capability.clipboard · 双端同源码">
+  <page-shell title="usePermission 权限查询" subtitle="能力原语 · capability.permission · 双端同源码">
     <demo-block index="01" title="真交互演示" :has-output="true" desc="同一份源码、同一个 Result&lt;T&gt; 契约——按 res.ok 分支，无回调、无 try/catch 义务" :code="codeDemo">
       <template #demo>
         <p-view id="demo-btns" class="btns">
-          <p-button size="small" @click="onRead">读取剪贴板</p-button>
-          <p-button size="small" @click="onWrite">写入剪贴板</p-button>
+          <p-button size="small" @click="onPermission">查询 geolocation 权限</p-button>
         </p-view>
       </template>
       <template #output>

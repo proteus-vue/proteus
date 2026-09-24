@@ -347,6 +347,9 @@ describe('★能力详情页（自动发现：渲染 + 真交互）', () => {
   })
 
   for (const slug of slugs) {
+    // ★每例固定等待 ≈ 2.4s（900 + click + 1500）+ 导航；页数增至 20 后全量运行时浏览器受压，
+    //   默认 5s 会在负载抖动下误报（实测 fetch/element-query/device-capability 三例超时，
+    //   三例单跑与组内单跑均通过）→ 显式放宽到 20s（只放宽墙钟，不弱化断言内容）。
     it(`/subpackages/capabilities/pages/${slug}（渲染 + 交互）`, async () => {
       const route = `/subpackages/capabilities/pages/${slug}`
       const errs: string[] = []
@@ -374,6 +377,6 @@ describe('★能力详情页（自动发现：渲染 + 真交互）', () => {
       } finally {
         page.off('pageerror', onPageErr)
       }
-    })
+    }, 20_000)
   }
 })

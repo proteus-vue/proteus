@@ -1,0 +1,5 @@
+{
+  "name": "proteus",
+  "capability": "fetch",
+  "note": "能力详情页 useFetch 演示用的同源静态资源（离线可跑，不依赖外部网络）"
+}

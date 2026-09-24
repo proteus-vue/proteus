@@ -132,13 +132,13 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
   },
 ]
 
-/** 能力：10 域 / 81 个（已备详情页 9） */
+/** 能力：10 域 / 81 个（已备详情页 19） */
 export const CAPABILITY_GROUPS: CatalogGroup[] = [
   {
     name: "网络与通信",
     desc: "请求 / WebSocket / 上传下载 / 蓝牙 / NFC",
     items: [
-      { name: "useFetch", id: "capability.fetch", desc: "通信/权限/存储", route: "" },
+      { name: "useFetch", id: "capability.fetch", desc: "通信/权限/存储", route: "/subpackages/capabilities/pages/fetch" },
       { name: "useWebSocket", id: "capability.websocket", desc: "WebSocket 连接句柄", route: "" },
       { name: "useSocketTask", id: "capability.socket-task", desc: "底层 SocketTask 句柄", route: "" },
       { name: "useUpload", id: "capability.upload", desc: "上传文件", route: "" },
@@ -164,14 +164,14 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useOrientation", id: "capability.orientation", desc: "屏幕方向", route: "/subpackages/capabilities/pages/orientation" },
       { name: "useBrightness", id: "capability.brightness", desc: "读取当前亮度", route: "" },
       { name: "useKeyboard", id: "capability.keyboard", desc: "键盘生命周期句柄", route: "" },
-      { name: "useElement", id: "capability.element-query", desc: "元素查询句柄", route: "" },
-      { name: "useIntersection", id: "capability.intersection", desc: "交叉观察句柄", route: "" },
-      { name: "useMediaQuery", id: "capability.media-query", desc: "媒体查询句柄", route: "" },
+      { name: "useElement", id: "capability.element-query", desc: "元素查询句柄", route: "/subpackages/capabilities/pages/element-query" },
+      { name: "useIntersection", id: "capability.intersection", desc: "交叉观察句柄", route: "/subpackages/capabilities/pages/intersection" },
+      { name: "useMediaQuery", id: "capability.media-query", desc: "媒体查询句柄", route: "/subpackages/capabilities/pages/media-query" },
       { name: "useScreenCapture", id: "capability.screen-capture", desc: "录屏/截屏", route: "" },
       { name: "useCacheManager", id: "capability.cache-manager", desc: "缓存管理", route: "" },
       { name: "useAR", id: "capability.ar", desc: "AR/XR 视觉算法", route: "" },
       { name: "useBeacon", id: "capability.beacon", desc: "iBeacon", route: "" },
-      { name: "useDeviceCapability", id: "capability.device-capability", desc: "设备能力探测", route: "" },
+      { name: "useDeviceCapability", id: "capability.device-capability", desc: "设备能力探测", route: "/subpackages/capabilities/pages/device-capability" },
     ],
   },
   {
@@ -194,8 +194,8 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     name: "存储与文件",
     desc: "存储 / 文件系统 / 压缩 / Cookie",
     items: [
-      { name: "useStorage", id: "capability.storage", desc: "存储句柄", route: "" },
-      { name: "useCookie", id: "capability.cookie", desc: "Cookie 罐", route: "" },
+      { name: "useStorage", id: "capability.storage", desc: "存储句柄", route: "/subpackages/capabilities/pages/storage" },
+      { name: "useCookie", id: "capability.cookie", desc: "Cookie 罐", route: "/subpackages/capabilities/pages/cookie" },
       { name: "useFileSystem", id: "capability.file-system", desc: "文件系统句柄", route: "" },
       { name: "useArchive", id: "capability.archive", desc: "压缩文件", route: "" },
     ],
@@ -211,7 +211,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
       { name: "useEmbedded", id: "capability.embedded", desc: "宿主嵌入上下文", route: "" },
       { name: "useExtension", id: "capability.extension", desc: "扩展/插件", route: "" },
       { name: "usePreload", id: "capability.preload", desc: "预加载句柄", route: "" },
-      { name: "useIdle", id: "capability.idle", desc: "空闲调度", route: "" },
+      { name: "useIdle", id: "capability.idle", desc: "空闲调度", route: "/subpackages/capabilities/pages/idle" },
       { name: "useWindow", id: "capability.window", desc: "窗口", route: "" },
       { name: "useNavigationGuard", id: "capability.navigation-guard", desc: "卸载拦截", route: "" },
     ],
@@ -244,7 +244,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     name: "账号与支付",
     desc: "登录 / 支付 / 生物识别 / 联系人",
     items: [
-      { name: "usePermission", id: "capability.permission", desc: "权限状态", route: "" },
+      { name: "usePermission", id: "capability.permission", desc: "权限状态", route: "/subpackages/capabilities/pages/permission" },
       { name: "useAuth", id: "capability.auth", desc: "认证状态组合", route: "" },
       { name: "useBiometric", id: "capability.biometric", desc: "生物识别支持性检测", route: "" },
       { name: "useFaceID", id: "capability.face-id", desc: "人脸识别认证", route: "" },
@@ -260,7 +260,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
     items: [
       { name: "useAnalytics", id: "capability.analytics", desc: "埋点句柄", route: "" },
       { name: "useLog", id: "capability.log", desc: "日志句柄", route: "" },
-      { name: "usePerformance", id: "capability.performance", desc: "性能句柄", route: "" },
+      { name: "usePerformance", id: "capability.performance", desc: "性能句柄", route: "/subpackages/capabilities/pages/performance" },
     ],
   },
   {
@@ -283,5 +283,5 @@ export const CATALOG_STATS = {
   componentReady: 26,
   capabilityGroups: 10,
   capabilityTotal: 81,
-  capabilityReady: 9,
+  capabilityReady: 19,
 }
