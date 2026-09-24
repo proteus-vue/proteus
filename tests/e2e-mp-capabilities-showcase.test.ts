@@ -53,6 +53,86 @@ const WX_APIS = [
   'checkDeviceSupportHevc', // device-capability
 ]
 
+/** ★批次 4（2026-09-24）布局与展示组件页。
+ *  ★判据为何用页面 data 而非页面文本：MP 端**组件内部节点隔离**（页面级 SelectorQuery 查不到，
+ *    与既有结论一致），而页面 data 是可达通道。data 里带 codes/apiRows/eventRows/slotRows/compatRows
+ *    ⇒ 证明该页的演示代码片段 + **从官网内容 SSOT 解析出的 API 三表**真的进了 MP 产物（非空壳页）；
+ *    `feature` 为该页**独有**的演示状态字段值（证明是这一页，不是通用骨架）。 */
+const COMPONENT_PAGES: Array<{ slug: string; featureKey: string; featureHint: string }> = [
+  { slug: 'p-box', featureKey: 'codes', featureHint: 'aspect-ratio' },
+  { slug: 'p-spacer', featureKey: 'codes', featureHint: 'p-spacer' },
+  { slug: 'p-heading', featureKey: 'codes', featureHint: 'level' },
+  { slug: 'p-divider', featureKey: 'codes', featureHint: 'orientation' },
+  { slug: 'p-stack', featureKey: 'codes', featureHint: 'snap' },
+  { slug: 'p-grid', featureKey: 'codes', featureHint: 'min-col-width' },
+  { slug: 'p-loading', featureKey: 'loadingVisible', featureHint: 'false' },
+  { slug: 'p-skeleton', featureKey: 'skVisible', featureHint: 'true' },
+  { slug: 'p-avatar', featureKey: 'codes', featureHint: 'fallback' },
+  { slug: 'p-segment', featureKey: 'segActive', featureHint: '全部' },
+]
+
+describe.skipIf(!ENABLED)('showcase 组件详情页 · MP 真机（页面可达 + 演示态 + API 表进产物）', () => {
+  it(
+    '10 个新组件页逐个 reLaunch 可达、演示态字段正确、API 三表已进产物',
+    async () => {
+      const mini = createWxideMini({ cliPath: WXIDE_CLI, project: PROJECT, client: 'zed' })
+      const driver = createDriver({ platform: 'mp', mini })
+      const failures: string[] = []
+      for (const { slug, featureKey, featureHint } of COMPONENT_PAGES) {
+        const route = `/subpackages/components/pages/${slug}`
+        let launched = false
+        for (let i = 0; i < 3 && !launched; i++) {
+          try {
+            await driver.reLaunch(route)
+            launched = true
+          } catch {
+            await driver.waitFor(1500)
+          }
+        }
+        if (!launched) {
+          failures.push(`${slug}: reLaunch 失败（3 次）`)
+          continue
+        }
+        // ★有界轮询（首屏冷启动下页面 data 落地晚于导航返回）。
+        // ★evaluate 闭包会被序列化下发，拿不到外层变量 → 用占位符 + 字符串替换烘焙特征键名。
+        let landedRoute = ''
+        let featureVal = ''
+        let tableOk = false
+        const probeSrc = String(() => {
+          const pages = getCurrentPages()
+          const p = pages[pages.length - 1]
+          const d = (p?.data ?? {}) as Record<string, unknown>
+          return JSON.stringify({
+            route: p?.route ?? '',
+            feature: JSON.stringify(d['__FEATURE_KEY__'] ?? ''),
+            tableOk:
+              Array.isArray(d.apiRows) && (d.apiRows as unknown[]).length > 0 &&
+              Array.isArray(d.eventRows) &&
+              Array.isArray(d.slotRows) &&
+              Array.isArray(d.compatRows) && (d.compatRows as unknown[]).length > 0,
+          })
+        }).replace('__FEATURE_KEY__', featureKey)
+        for (let i = 0; i < 10; i++) {
+          await driver.waitFor(700)
+          const snap = String(await driver.evaluate(new Function(`return ${probeSrc}`)() as () => string))
+          const parsed = JSON.parse(snap) as { route: string; feature: string; tableOk: boolean }
+          landedRoute = parsed.route
+          featureVal = parsed.feature
+          tableOk = parsed.tableOk
+          if (featureVal.includes(featureHint) && tableOk) break
+        }
+        if (!featureVal.includes(featureHint)) {
+          failures.push(`${slug}: 演示态字段 ${featureKey} 未含 "${featureHint}"（实际 ${featureVal.slice(0, 60)}，路由 ${landedRoute}）`)
+        }
+        if (!tableOk) failures.push(`${slug}: API 表未进产物（apiRows/eventRows/slotRows/compatRows 应有值）`)
+      }
+      expect(failures, `组件页真机断言失败：\n${failures.join('\n')}`).toEqual([])
+      await driver.close()
+    },
+    300_000,
+  )
+})
+
 describe.skipIf(!ENABLED)('showcase 能力详情页 · MP 真机（页面可达 + 演示态渲染 + 桥依赖 API 齐备）', () => {
   it(
     '10 个新能力页逐个 reLaunch 可达且渲染出各自演示态；wxBridge 依赖的 wx API 全部存在于该运行时',

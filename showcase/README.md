@@ -23,7 +23,13 @@
 
 分包（按大分类独立分包，按需加载）
 subpackages/components/pages/<name>    组件详情页（每组件一页，官方形态）
-  —— 进度 **26 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 进度 **36 / 73**（已备详情页的条目在目录页可点击；未备者标「规划中」）
+  —— 2026-09-24 批次 4（10 页）：p-box / p-stack / p-grid / p-spacer / p-heading / p-divider
+     / p-loading / p-skeleton / p-avatar / p-segment
+  —— 生成器：`scripts/gen-component-demo-pages.mjs`（`check:component-demo` 门禁防漂移）
+  —— ★API 三表（Props / Events / 插槽）+ 兼容进度**从官网内容 SSOT 解析**、不手写：
+     `website/content/components/<tag>.md` ← `gen-content.mjs` ← `packages/components/<tag>/index.vue`
+     ⇒ 组件改了源码，`check:content` 与本页门禁都会红，页面不会「悄悄过时」
 subpackages/capabilities/pages/<name>  能力详情页（每 Hook 一页）
   —— 进度 **19 / 81**（2026-09-19 首批 9 页：camera / vibrate / clipboard / network / device
      / battery / orientation / screen / location；2026-09-24 第二批 10 页：storage / cookie / fetch
@@ -60,7 +66,7 @@ showcase/
 ├── app.config.ts         运行时配置（app.name/version/features/theme）
 ├── pages/                主包 16 页（5 tab + 11 二级）
 ├── subpackages/          ★分包（按大分类）
-│   ├── components/pages/    组件详情页（26 页：p-button / p-input / …）
+│   ├── components/pages/    组件详情页（36 页：p-button / p-stack / p-avatar / …）
 │   └── capabilities/pages/  能力详情页（19 页：camera / storage / fetch / …）
 ├── data/catalog.ts       ★目录数据（AUTO-GENERATED，单一事实源 = 官网内容）
 ├── components/           应用组件（brand-cube / page-shell / demo-block / api-table / catalog-list）
