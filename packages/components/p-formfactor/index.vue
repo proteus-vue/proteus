@@ -86,14 +86,25 @@ function senseFormFast(): DeviceForm {
   return 'phone'
 }
 
-/** 形态驱动的视觉变量（★Web 用对象、MP 端由编译器转字符串——与 p-zone 同口径） */
+/** 形态驱动的视觉语言（★形态级主题——TV/车机暗色沉浸、10ft 大字号、焦点环可见）
+ *  MP 兼容：输出 CSS 变量对象（编译器转字符串；变量在 scoped 样式内经 var() 消费） */
 const rootStyle = computed(() => {
   const p = profile.value
+  const v = p.visual
   const gap = p.density === 'compact' ? '8px' : p.density === 'comfortable' ? '18px' : '12px'
   return {
     '--pf-scale': String(p.scale),
     '--pf-gap': gap,
     '--pf-pad': p.input === 'remote' ? '20px' : '14px',
+    '--pf-bg': v.bg,
+    '--pf-surface': v.surface,
+    '--pf-text': v.text,
+    '--pf-dim': v.dim,
+    '--pf-brand': v.brand,
+    '--pf-accent': v.accent,
+    '--pf-font': v.font + 'px',
+    '--pf-radius': v.radius + 'px',
+    '--pf-focus-ring': v.focus === 'ring' ? '3px' : '0px',
   }
 })
 
@@ -104,8 +115,9 @@ defineExpose({ form, profile, caps })
 <style scoped>
 .p-formfactor {
   display: block;
-  background: #f7f8fa;
-  color: #17171f;
+  /* ★视觉语言由形态画像注入（浅色 / TV·车机暗色沉浸） */
+  background: var(--pf-bg, #f7f8fa);
+  color: var(--pf-text, #17171f);
   font-size: calc(13px * var(--pf-scale, 1));
   height: 100%;
   overflow: hidden;
@@ -204,12 +216,26 @@ defineExpose({ form, profile, caps })
 .form-pc .pf-recommend :deep(.pf-rec-card) { transition: box-shadow 0.16s ease, transform 0.16s ease; }
 .form-pc .pf-recommend :deep(.pf-rec-card:hover) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); }
 
-/* ── 拓扑：hero-focus-row（TV / 车机——大 Hero + 焦点海报行） ── */
+/* ── 拓扑：hero-focus-row（TV——10ft 沉浸：大 Hero + 横滑海报胶囊 + 焦点环） ── */
+.topo-hero-focus-row { padding: calc(var(--pf-pad, 14px) * 1.1); }
+.topo-hero-focus-row .pf-media { aspect-ratio: 16 / 7; }
+.topo-hero-focus-row .pf-info > :deep(strong:first-child) { font-size: calc(20px * var(--pf-scale, 1)) !important; }
 .topo-hero-focus-row .pf-body { display: flex; flex-direction: column; gap: var(--pf-gap); overflow: hidden; }
 .topo-hero-focus-row .pf-media { flex: 0 0 auto; }
 .topo-hero-focus-row .pf-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--pf-gap) * 0.7); justify-content: center; }
 .topo-hero-focus-row .pf-recommend--row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
-.topo-hero-focus-row .pf-recommend--row :deep(.pf-rec-card) { flex: 0 0 116px; }
+.topo-hero-focus-row .pf-recommend--row :deep(.pf-rec-card) {
+  flex: 0 0 auto;
+  width: calc(150px * var(--pf-scale, 1));
+  aspect-ratio: 16 / 9;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+}
+/* 车机：大热区瓦片（3 列等宽，驾驶员余光可辨；焦点环粗） */
+.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
+  min-height: calc(92px * var(--pf-scale, 1));
+  justify-content: center;
+}
 /* 宽容器：Hero 与信息并排（大屏横置——电视/车机常态） */
 @media (min-width: 760px) {
   .topo-hero-focus-row .pf-body {
@@ -246,6 +272,23 @@ defineExpose({ form, profile, caps })
   font-size: calc(10.5px * var(--pf-scale, 1));
 }
 
-/* 焦点态：遥控形态首个操作元素高亮（焦点树视觉基线——真实焦点转移由宿主 d-pad 驱动） */
-.input-remote .pf-actions :deep(> :first-child) { box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.3); }
+/* ★焦点可见（遥控/键盘形态）：首个操作元素带焦点环（真实焦点转移由宿主 d-pad / Tab 驱动） */
+.input-remote .pf-actions :deep(> :first-child),
+.form-pc .pf-actions :deep(> :first-child) {
+  box-shadow: 0 0 0 var(--pf-focus-ring, 0px) var(--pf-brand, #7c5cff);
+  outline: none;
+}
+/* 暗色主题（TV/车机）：卡片与文字用形态视觉语言变量 */
+.form-tv :deep(.pf-rec-card),
+.form-car :deep(.pf-rec-card) {
+  background: var(--pf-surface, rgba(255, 255, 255, 0.12));
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--pf-text, #fff);
+}
+.form-tv :deep(.pf-rec-name),
+.form-car :deep(.pf-rec-name),
+.form-tv :deep(.pf-rec-pt),
+.form-car :deep(.pf-rec-pt) { color: var(--pf-dim, #bcd0e8); }
+.form-tv :deep(.pf-rec-pt),
+.form-car :deep(.pf-rec-pt) { color: var(--pf-accent, #ffb13d); font-weight: 800; }
 </style>
