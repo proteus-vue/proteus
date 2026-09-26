@@ -99,6 +99,13 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·报告余项批：能力三态 + 折叠屏姿态集 + 表冠视觉（2026-09-26 续十四，用户「继续做完剩余项」）**：
+  **① ★能力三态（报告 P2-2，语义正确性修复）**：`CapsLevel = supported / fallback / unsupported`（保留布尔兼容 + `capsEnabled/capsDegraded/capsLabel` 助手，`formSupports` 三态归一）。**语义修正**：此前布尔无法区分「降级」与「不支持」——车机 SKU 被**直接删除**，而设计本意是**降级**（驾驶场景语音/旋钮单选替代多选）；现渲染**降级路径**（琥珀虚线框 + 🎙 提示）。面板改三态显示（绿/琥珀/灰）。★**过程中修复我自己引入的 bug**：批量 `true→'supported'` 误改了 `FormFrame` 的布尔字段（`frame.notch` 变字符串 `'supported'`）→ 被测试抓到（`expected 'supported' to be true`）→ 已修。**教训：批量替换必须限定作用域（caps vs frame）。**
+  **② 折叠屏姿态集（报告 P0-2）**：`FormPosture`（folded 外屏 340×800 / tabletop 半折 673×420 水平铰链 / expanded 内屏 673×841）+ 校验门禁（三姿态齐备 · 展开宽于折叠 · 拓扑须不同）；页面姿态切换器 + URL 直达（`?device=fold&posture=folded`）。**⚠ 诚实标注（未收敛）**：姿态的**拓扑 class 与画像覆盖已生效**，但内容层（`fluid-product` 的 `.fp-*` 样式按 duo 假设编写）在折叠态下未完全重排——视觉上仍是双栏内容。根因：内容槽样式与拓扑耦合，正确修法是让内容槽样式也走形态变量（下一轮）。
+  **③ 手表表冠视觉（报告 P1-1）**：物理表冠图形（右侧圆形凸起 + 刻度纹 + 内阴影）+ 焦点态微亮（旋钮驱动线索）。
+  **④ 验证**：formfactor **21/21** · focus-nav **9/9** · 组件审计 **77/77** ✅ · 根 vue-tsc 0 错误 · 部署 run 36237218193 success。
+  **遗留（诚实口径）**：①折叠屏姿态的内容层重排（如上）；②TV overscan 的 padding 实际生效需在真实大屏验证；③caps 三态的 `fallback` 目前仅车机 SKU 一例（其余形态未声明 fallback 语义——待真实降级场景出现时补）。
+
 - **★本会话·报告余项收口：焦点引擎 + TV overscan + 手表暗色常亮（2026-09-26 续十三，用户「继续剩余项」）**：
   **① ★焦点引擎（报告 P1-4，TV/车机此前根本不可操作的关键缺口）**：新增 `packages/fluid/src/focus-nav.ts`——**几何空间导航**纯逻辑（方向过滤 → 主轴距离 + 交叉轴偏移×权重 → 同行优先 → tie-break）；`p-formfactor` 接入后遥控（dpad）/键盘（keyboard）形态**自动启用**：roving tabindex + ↑↓←→ 移动 + Enter/Space 触发 + 首焦点定位 + 焦点行 scrollIntoView。回归锁 `tests/fluid-focus-nav.test.ts` 9 例。★**测试抓到算法缺陷**：Hero 宽块 + 等距卡片场景会随机选中中间那张 → 加确定性 tie-break（交叉轴对齐 → 主轴距离 → 几何顺序）。
   **② TV overscan**（报告 P1-4）：safe side 0→96 / bottom 0→54（1080p 5% 安全区；此前 1.76%）。
