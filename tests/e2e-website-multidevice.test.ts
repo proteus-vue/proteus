@@ -59,10 +59,11 @@ async function probeLiveGeometry(): Promise<{
   frameW: number
   frameH: number
   capsDigest: string
+  truncated: string[]
 }> {
   return page.evaluate((blocks: string[]) => {
     const frame = document.querySelector('.frame') as HTMLElement | null
-    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0, capsDigest: '' }
+    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0, capsDigest: '', truncated: [] }
     const inner = frame.querySelector('.p-formfactor') as HTMLElement
     const topo = inner.getAttribute('data-pf-topology') ?? '?'
     const fr = frame.getBoundingClientRect()
@@ -155,6 +156,16 @@ async function probeLiveGeometry(): Promise<{
     // ★能力证据面（三审）：data-pf-caps 是「最终生效三态」的机器可读声明——
     //   同一面的断言把「声明 ≠ 空头」变成可证伪：面板/根类说支持的，这里必须是 supported/fallback。
     const capsDigest = (frame.querySelector('.p-formfactor') as HTMLElement | null)?.getAttribute('data-pf-caps') ?? ''
+    // ★标签截断检查（2026-09-27 用户实测）：一屏形态（glance/dashboard/hero）的主标签
+    //   必须**能读全**——车机瓦片曾把「替换耳罩」截成「替…」（名称只剩 20px）。
+    //   判据：文本节点 scrollWidth > clientWidth（即被 ellipsis 截断）。
+    const truncated: string[] = []
+    for (const sel of ['.pf-heading .fp-name', '.pf-price', '.fp-rec-name']) {
+      const el = frame.querySelector(sel) as HTMLElement | null
+      if (!el || el.offsetParent === null) continue
+      if (el.scrollWidth > el.clientWidth + 1) truncated.push(`${sel}("${(el.textContent || '').trim().slice(0, 8)}")`)
+    }
+
     // ★叠加拓扑（hero-focus-row）：媒体是**背景层**——其容器与文本层重叠是设计（上面已排除），
     //   但媒体的**可见内容**（产品图/图标）压住可交互项就是真缺陷。
     //   2026-09-27 用户实测「图片位置奇怪」的机器化判据：破坏性验证（撤掉信息列限宽）
@@ -189,6 +200,7 @@ async function probeLiveGeometry(): Promise<{
       frameW: Math.round(fr.width),
       frameH: Math.round(fr.height),
       capsDigest,
+      truncated,
     }
   }, BLOCKS)
 }
@@ -264,7 +276,8 @@ describe('★多端同屏 · 真几何门禁（双视口：窄舞台 + 宽舞台
     expect(problems, `同会话切换几何问题：\n${problems.join('\n')}`).toEqual([])
   }, 120_000)
 
-  for (const vw of [1280, 1600]) {
+  // ★视口集合（2026-09-27）：1280 窄舞台 / **1512 = 用户实际屏幕** / 1600 设计评审宽舞台
+  for (const vw of [1280, 1512, 1600]) {
     it(`视口 ${vw}：七形态零重叠 · 一屏形态零裁切且不滚动`, async () => {
       await page.setViewportSize({ width: vw, height: 900 })
       const report: Record<string, unknown> = {}
@@ -279,6 +292,7 @@ describe('★多端同屏 · 真几何门禁（双视口：窄舞台 + 宽舞台
         if (ONE_SCREEN.includes(form)) {
           if (g.clipped.length) problems.push(`${form}: 一屏形态出现裁切 ${g.clipped.join(', ')}（frame ${g.frameW}×${g.frameH}）`)
           if (g.bodyScrollable) problems.push(`${form}: 一屏形态内容溢出（body 可滚动 = 需要滚动才能看完）`)
+          if (g.truncated.length) problems.push(`${form}: 主标签被截断 ${g.truncated.join(', ')}（一屏形态须能读全）`)
         }
       }
       expect(problems, `视口 ${vw} 几何问题：\n${problems.join('\n')}\n实测：${JSON.stringify(report, null, 1)}`).toEqual([])
