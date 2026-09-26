@@ -941,7 +941,36 @@ function genComponents(ir, ends) {
     idx.push('')
   }
   writeDoc(path.join(OUT_COMP, '00-components-overview.md'), idx.join('\n'))
+  // ★2026-09-26 组件总览画廊：同源数据再产出结构化索引（组件总览页的卡片画廊消费——
+  //   与 md 总览同一 indexRows，props/events 与源码实时一致；官网重做 https 参考样式）。
+  emitComponentIndex(byDomain, ok, DOMAIN_ORDER)
   return ok
+}
+
+/** 组件总览画廊的结构化索引（website/src/data/component-index.ts；zh 域分组 + EN 域名，同源 SSOT） */
+function emitComponentIndex(byDomain, total, DOMAIN_ORDER) {
+  const domains = Object.keys(byDomain)
+    .sort((a, b) => DOMAIN_ORDER.indexOf(a) - DOMAIN_ORDER.indexOf(b))
+    .map((domain) => ({
+      key: domain,
+      en: DOMAIN_EN[domain] ?? domain,
+      components: byDomain[domain]
+        .sort((a, b) => a.dir.localeCompare(b.dir))
+        .map((r) => ({ dir: r.dir, props: r.props, emits: r.emits })),
+    }))
+  const ts = [
+    '// 由 website/scripts/gen-content.mjs 生成（勿手改）——组件总览画廊的结构化索引。',
+    '// SSOT：packages/components/*/index.vue 的 defineProps/defineEmits（与 md 总览同一 indexRows）。',
+    `export interface ComponentIndexEntry { dir: string; props: number; emits: number }`,
+    `export interface ComponentIndexDomain { key: string; en: string; components: ComponentIndexEntry[] }`,
+    `export interface ComponentIndex { total: number; domains: ComponentIndexDomain[] }`,
+    '',
+    `export const componentIndex: ComponentIndex = ${JSON.stringify({ total, domains }, null, 2)}`,
+    '',
+  ].join('\n')
+  const dataDir = path.join(ROOT, 'website', 'src', 'data')
+  fs.mkdirSync(dataDir, { recursive: true })
+  fs.writeFileSync(path.join(dataDir, 'component-index.ts'), ts)
 }
 
 // —— ② 能力页 ——
