@@ -228,3 +228,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Web E2E（SPA 跳转 / 转场 / tap 计数）
         run: pnpm run test:e2e:web
+
+      # ★2026-09-26：官网多端同屏「真几何」门禁（双视口 × 七形态，真 Chromium 布局）——
+      #   jsdom 无布局引擎，此前「内容重叠」类缺陷只能在用户机上被发现
+      - name: 官网真几何门禁（多端同屏 · 窄/宽双视口）
+        run: pnpm run test:e2e:website
