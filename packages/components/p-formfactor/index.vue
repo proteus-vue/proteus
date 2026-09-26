@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars } from '@proteus-vue/fluid'
 import type { DeviceForm } from '@proteus-vue/fluid'
 
@@ -87,6 +87,15 @@ onUnmounted(() => {
   ro?.disconnect()
   ro = null
 })
+
+// ★宿主注入宽度变化 → 重求解（2026-09-26 专家审查：此前无 watch，切端后 measured 仍是旧帧宽
+//   → 手机被按车机帧宽算 k=1.5（整体放大 1.5×）；现跟随 prop 变化）
+watch(
+  () => props.width,
+  (w) => {
+    if (w > 0 && Math.abs(w - measured.value) > 2) measured.value = w
+  },
+)
 
 const form = computed(() => (props.declared as DeviceForm | null) ?? senseFormFast())
 const profile = computed(() => FORM_PROFILES[form.value])
@@ -131,23 +140,46 @@ const rootStyle = computed(() => {
   }
 })
 
-defineExpose({ form, profile, caps })
 </script>
 
 <style scoped>
 .p-formfactor {
-  display: block;
+  /* ★flex 列（2026-09-26 专家审查）：此前 display:block 让 .pf-tabbar 的 margin-top:auto 失效
+     → Tab 栏被 overflow:hidden 裁掉 45%（手机/折叠屏唯一导航不可用） */
+  display: flex;
+  flex-direction: column;
   /* ★视觉语言由形态画像注入（浅色 / TV·车机暗色沉浸） */
   background: var(--pf-bg, #f7f8fa);
   color: var(--pf-text, #17171f);
   font-size: var(--pf-font);
   height: 100%;
-  overflow: hidden;
   padding: calc(var(--pf-pad) * 1.1);
   box-sizing: border-box;
+  overflow: hidden;
 }
-.pf-body { display: block; height: 100%; }
+/* ★内容溢出 → 设备内滚动（专家审查：此前 overflow:hidden 硬裁掉推荐区且不可达，
+   与页面「没有裁剪」的声明矛盾） */
+.pf-body { overflow-y: auto; scrollbar-width: thin; }
+.pf-body::-webkit-scrollbar { width: 4px; }
+.pf-body::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--pf-text, #000) 22%, transparent); border-radius: 2px; }
+.pf-body::-webkit-scrollbar-track { background: transparent; }
+.pf-body { display: block; flex: 1 1 auto; min-height: 0; }
 .pf-rail { display: none; }
+/* ★包裹层布局（2026-09-26）：原写在父组件（fluid-product）的 scoped 样式里 → 元素属本组件，
+   父 scope 永不匹配（跨组件 scoped 边界）→ SKU 无间距被拆行 / CTA 堆叠不撑满（平板溢出主因）。
+   布局归拥有者：在此定义。 */
+.pf-sku { display: flex; flex-wrap: wrap; gap: calc(var(--pf-u) * 0.55); align-items: center; }
+.pf-actions { display: flex; flex-wrap: wrap; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); align-items: stretch; }
+/* ★仅无栅格拓扑用 flex info（栅格拓扑的 .pf-info 由 grid-area 定位于各自区块——
+   2026-09-26：通用 flex 曾覆盖 dashboard/rail-grid 的 grid-area → 内容塌成只剩主图） */
+.topo-stack .pf-info,
+.topo-glance .pf-info,
+.topo-duo .pf-info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pf-gap) * var(--pf-gap-dense));
+  min-width: 0;
+}
 /* 推荐区默认：自适应网格（形态拓扑可覆盖——焦点行形态转横排海报流） */
 .pf-recommend { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 10px; }
 
@@ -238,79 +270,82 @@ defineExpose({ form, profile, caps })
 .form-pc .pf-recommend :deep(.pf-rec-card) { transition: box-shadow 0.16s ease, transform 0.16s ease; }
 .form-pc .pf-recommend :deep(.pf-rec-card:hover) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); }
 
-/* ── 拓扑：hero-focus-row（TV——10ft 沉浸：大 Hero + 横滑海报胶囊 + 焦点环） ── */
+/* ── 拓扑：hero-focus-row（TV——10ft 沉浸：全宽 Hero → 信息 → 横滑海报流）──
+   ★2026-09-26 专家审查修正：此前与车机 dashboard 同构（'media info'/'rec rec'）且用视口 @media；
+   现为**纵向流**（Hero 置顶全宽 → 信息 → 海报行），与车机（横向 dashboard）明显不同。 */
 .topo-hero-focus-row { padding: calc(var(--pf-pad) * 1.1); }
-.topo-hero-focus-row .pf-media { aspect-ratio: 16 / 7; }
-.topo-hero-focus-row .pf-info > :deep(strong:first-child) { font-size: calc(20px * 1) !important; }
-.topo-hero-focus-row .pf-body { display: flex; flex-direction: column; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); overflow: hidden; }
-.topo-hero-focus-row .pf-media { flex: 0 0 auto; }
-.topo-hero-focus-row .pf-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(calc(var(--pf-gap) * var(--pf-gap-dense)) * 0.7); justify-content: center; }
-.topo-hero-focus-row .pf-recommend--row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
+.topo-hero-focus-row .pf-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-gap);
+  min-height: 0;
+  overflow-y: auto;
+}
+.topo-hero-focus-row .pf-media {
+  flex: 0 0 auto;
+  max-height: 46%;
+  overflow: hidden;
+  border-radius: calc(var(--pf-radius) * 1.2);
+}
+.topo-hero-focus-row .pf-info {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pf-gap) * 0.7);
+  min-width: 0;
+}
+.topo-hero-focus-row .pf-recommend--row {
+  flex: 1 0 auto;
+  display: flex;
+  gap: calc(var(--pf-gap) * 1.6);
+  overflow-x: auto;
+  padding-bottom: calc(var(--pf-u) * 0.5);
+  scrollbar-width: none;
+  align-items: flex-start;
+}
+.topo-hero-focus-row .pf-recommend--row::-webkit-scrollbar { display: none; }
 .topo-hero-focus-row .pf-recommend--row :deep(.pf-rec-card) {
   flex: 0 0 auto;
-  width: calc(150px * 1);
+  width: calc(var(--pf-u) * 9.5);
   aspect-ratio: 16 / 9;
   justify-content: center;
-  backdrop-filter: blur(6px);
 }
-/* 车机：大热区瓦片（3 列等宽，驾驶员余光可辨；焦点环粗） */
-.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
-  min-height: calc(92px * 1);
-  justify-content: center;
-}
-/* 宽容器：Hero 与信息并排（大屏横置——电视/车机常态） */
-@media (min-width: 760px) {
-  .topo-hero-focus-row .pf-body {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: 'media info' 'rec rec';
-  }
-  .topo-hero-focus-row .pf-media { grid-area: media; }
-  .topo-hero-focus-row .pf-info { grid-area: info; }
-  .topo-hero-focus-row .pf-recommend { grid-area: rec; }
-}
+
 /* ── 拓扑：dashboard（车机——单层大热区卡片，驾驶降干扰：信息层级扁平、热区大） ── */
 .topo-dashboard .pf-body {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   grid-template-rows: auto auto;
   grid-template-areas: 'media info' 'rec rec';
-  gap: calc(calc(var(--pf-gap) * var(--pf-gap-dense)) * 1.2);
+  gap: calc(var(--pf-gap) * 1.2);
   align-content: start;
+  min-height: 0;
 }
-.topo-dashboard .pf-media { grid-area: media; }
-.topo-dashboard .pf-info { grid-area: info; display: flex; flex-direction: column; gap: calc(calc(var(--pf-gap) * var(--pf-gap-dense)) * 0.8); justify-content: center; }
-.topo-dashboard .pf-recommend { grid-area: rec; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-/* 驾驶提醒条（车机专有语义：driveAware 形态显示，非车机不渲染） */
+.topo-dashboard .pf-media { grid-area: media; align-self: start; }
+.topo-dashboard .pf-info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pf-gap) * 0.8);
+  justify-content: center;
+  min-width: 0;
+}
+.topo-dashboard .pf-recommend {
+  grid-area: rec;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--pf-gap) * 1.2);
+}
+/* 驾驶提醒条（车机专有语义：driveAware 形态显示） */
 .is-drive .pf-info::after {
-  content: '⚠ 驾驶中：已精简信息层级与动效';
+  content: '\26A0 \9A7E\9A76\4E2D\FF1A\5DF2\7CBE\7B80\4FE1\606F\5C42\7EA7\4E0E\52A8\6548';
   display: block;
   margin-top: 6px;
   padding: 6px 10px;
-  border-radius: calc(var(--pf-radius) * 0.8);
+  border-radius: 8px;
   background: rgba(255, 180, 84, 0.16);
-  color: #a06a1f;
-  font-size: calc(10.5px * 1);
+  color: #f0c07a;
+  font-size: calc(var(--pf-font) * 0.8);
 }
 
-/* ★焦点可见（遥控/键盘形态）：首个操作元素带焦点环（真实焦点转移由宿主 d-pad / Tab 驱动） */
-.input-remote .pf-actions :deep(> :first-child),
-.form-pc .pf-actions :deep(> :first-child) {
-  box-shadow: 0 0 0 var(--pf-focus-ring, 0px) var(--pf-brand, #7c5cff);
-  outline: none;
-}
-/* 暗色主题（TV/车机）：卡片与文字用形态视觉语言变量 */
-.form-tv :deep(.pf-rec-card),
-.form-car :deep(.pf-rec-card) {
-  background: var(--pf-surface, rgba(255, 255, 255, 0.12));
-  border-color: rgba(255, 255, 255, 0.14);
-  color: var(--pf-text, #fff);
-}
-.form-tv :deep(.pf-rec-name),
-.form-car :deep(.pf-rec-name),
-.form-tv :deep(.pf-rec-pt),
-.form-car :deep(.pf-rec-pt) { color: var(--pf-dim, #bcd0e8); }
-.form-tv :deep(.pf-rec-pt),
-.form-car :deep(.pf-rec-pt) { color: var(--pf-accent, #ffb13d); font-weight: 800; }
 </style>
