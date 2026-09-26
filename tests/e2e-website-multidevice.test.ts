@@ -73,9 +73,32 @@ async function probeLiveGeometry(): Promise<{
     const clipped: string[] = []
     for (const [sel, el] of els) {
       const r = el.getBoundingClientRect()
-      // 只判「在可视区内却越出设备框」的块（滚动容器外的部分不算裁切）
+      // ① 横向越出设备框 —— 任何形态都不允许（纵向可滚动是形态设计，横向不是）
+      if (r.right > fr.right + 1 || r.left < fr.left - 1) clipped.push(sel)
+      // ② 纵向越出：仅当该块**在可视区内有实质部分**才算裁切（滚动容器外的正常内容不算）
       const vis = inter(r, br)
-      if (vis.w > 2 && vis.h > 2 && (r.top < fr.top - 1 || r.bottom > fr.bottom + 1 || r.right > fr.right + 1)) clipped.push(sel)
+      if (vis.w > 2 && vis.h > 2 && (r.top < fr.top - 1 || r.bottom > fr.bottom + 1)) clipped.push(sel)
+    }
+    // ③ 子元素横向越界（★破坏性验证暴露的盲区：容器 overflow:hidden 会把溢出的**子项**裁掉，
+    //    容器自身矩形完全正常 → 只看容器抓不到「瓦片被裁半截」）。逐个子项量。
+    //    ★例外：祖先里有**横向滚动容器**（overflow-x auto/scroll）时越界是设计（海报流可横滑），跳过。
+    const inHScroller = (el: Element): boolean => {
+      let cur: Element | null = el.parentElement
+      while (cur && cur !== frame) {
+        const ox = getComputedStyle(cur).overflowX
+        if (ox === 'auto' || ox === 'scroll') return true
+        cur = cur.parentElement
+      }
+      return false
+    }
+    for (const el of [...body.querySelectorAll('*')].slice(0, 200)) {
+      if ((el as HTMLElement).offsetParent === null) continue
+      const r = el.getBoundingClientRect()
+      if (r.width < 4 || r.height < 4) continue
+      if (r.right > fr.right + 1 || r.left < fr.left - 1) {
+        if (inHScroller(el)) continue
+        clipped.push(`${el.className.toString().split(' ')[0] || el.tagName}(子项)`)
+      }
     }
     const overlaps: string[] = []
     for (let i = 0; i < els.length; i++) {
