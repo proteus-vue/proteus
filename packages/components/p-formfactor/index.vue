@@ -737,6 +737,11 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
 }
+/* ★驾驶只呈现前 3 个选项（第 4+ 项**显式不渲染**——行车中翻找不可滚动内容是分心源）。
+   此前靠「溢出被裁」偶然达成：窄舞台下确实看不见，但宽舞台会半截露出且属不可控行为，故显式隐藏。 */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card):nth-child(n + 4) { display: none; }
+/* 瓦片宽由列轨道给出（1fr 等分），不被内容撑宽——否则 5 项会各自撑到 162px 溢出画布 */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) { width: 100%; min-width: 0; }
 /* 驾驶提醒徽标：**绝对定位贴媒体角**（不占纵向预算——8/3 窄画布容不下第三行文字；
    但仍真实渲染 = driveAware 能力有可观测后果）。用 p 元素的默认行内尺寸做小胶囊。 */
 .p-formfactor.topo-dashboard .pf-drive-hint {
