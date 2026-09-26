@@ -91,18 +91,34 @@ The G-44 test layer has parameterized the three-dimensional matrix: `W_BREAK [32
 
 Component layout decisions (column count, split panes, folding) use container breakpoints; popup / navigation form switching uses form tiers; full-target adaptation uses the three-dimensional characteristics. There are also device-environment signals: `createDeviceEnv`'s folded-form `displayMode` (standard / fold / span / expand) and drive-mode — foldable-hinge avoidance and the ban on motion effects while driving (`shouldReduceMotion`) both come from it.
 
-## Landing status (honest tiering)
+## Landing status (honest tiering; updated 2026-09-27)
 
-- ✅ `formForWidth` tier solving + the 100-profile three-dimensional breakpoint matrix (`@proteus-vue/test-ir`, G-44; the Device backend solves the p-adaptive form by width tier)
-- ✅ Folded-form `displayMode`, drive-mode injection, `prefers-reduced-motion` — `createDeviceEnv` + `shouldReduceMotion` (Fluid System S2 / S3)
+**Breakpoint / characteristic solving layer**
+
+- ✅ `formForWidth` tier solving + the 100-profile three-dimensional breakpoint matrix (`@proteus-vue/test-ir`, G-44)
 - ✅ Container-level breakpoint derivation and solving — `deriveContainerBreakpoints` / `resolveBreakpoint` (`@proteus-vue/fluid`)
-- 📋 `useContainerProfile()` composite query, in-vehicle / TV / watch primitives (focus engine, crown, single-column one screen) — the G-25 component-layer plan is logged but not yet implemented
-- 📋 Companion iron rules: in-vehicle driving-safe (VEH001) / TV focus mode (TV001) / watch single-column (WATCH001) / no hand-written `if (isTV)` — query container characteristics instead (BP003)
+- ✅ Folded-form `displayMode`, drive-mode injection, `prefers-reduced-motion` — `createDeviceEnv` + `shouldReduceMotion`
 
-> Status legend: ✅ landed and verifiable · 📋 planned and logged (plan + reference implementation, no runnable integration).
+**Form layer (the G-25 component layer — landed; this section previously said "not implemented", corrected 2026-09-27)**
+
+- ✅ The in-vehicle / TV / watch primitives **are all implemented**: the focus engine (geometric spatial navigation
+  via `navigateFocus`, auto-enabled by capability), crown semantics (`caps.crown` + visual hint + hit area),
+  single-column one-screen (`glance` topology: media/recommendation hidden, title clamped to 2 lines)
+- ✅ TV focus mode (`hero-focus-row` topology + `caps.focusRows` poster row + a 3px accent focus ring)
+- ✅ In-vehicle driving-safe (`caps.driveAware` motion gate + `caps.skuMulti='fallback'` degradation bar +
+  4th-and-later recommendations not rendered + 76dp hit areas)
+- ✅ The **runtime shape** of the three-dimensional characteristics: `FORM_PROFILES` (7 form profiles) +
+  `resolveFluidMetrics` (container-driven metrics) — see [Form profiles](/docs/system/06-form-profiles)
+  and [Fluid metrics](/docs/system/07-fluid-metrics)
+- ⬜ `useContainerProfile()` composite-query entry (a runtime convenience wrapper over the Profile3D matrix)
+
+> Status legend: ✅ landed and verifiable · ⬜ not started / not implemented.
+> The companion iron rules still apply: in-vehicle driving-safe (VEH001) / TV focus mode (TV001) /
+> watch single-column (WATCH001) / no hand-written `if (isTV)` — use container characteristics and form profiles (BP003).
 
 ## Next steps
 
+- [Form profiles](/docs/system/06-form-profiles): how "form" lands as the framework's SSOT
 - [Full-target adaptation](/docs/21-device-adaptation): G-24 desktop primitives + G-25 full-target
 - [Flex System overview](/docs/system/01-overview): back to the big picture
 - [Containers & hosts](/docs/framework/33-containers-hosts): container form and host runtime
