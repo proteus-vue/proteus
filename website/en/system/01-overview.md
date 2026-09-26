@@ -6,43 +6,54 @@ group: 柔性系统
 
 # Flex System
 
-> **Declare intent, not sizes; write content, not form branches.** You state *what* you want; the container and the device form decide *how* it lays out.
+**The Flex System is Proteus's layout engine.** You declare only *what* you want — a font size that varies between two widths, a minimum card width, when a sidebar should appear — and the framework works out *how* to lay it out from the **container width** and the **device form**.
+
+In one line, three things it replaces:
+
+- **Replaces breakpoints**: no `@media`; type scales **continuously** between two sizes (no jump at a breakpoint)
+- **Replaces hand-computed column counts**: say "at least 250px per column" and the count is solved from the container — correct inside a rail, a split view or a card
+- **Replaces form branches**: one codebase becomes a cockpit on an in-car display and a poster row on TV (see the [Multi-device demo](/multi-device))
+
+## See it: the same grid, two ways
+
+Hand-written responsive CSS (breakpoints plus hand-computed columns — and it **fails as soon as the container narrows**):
+
+```css
+/* Four breakpoints, four column counts — fine full-screen, wrong inside a rail or a split view */
+.grid { display: grid; grid-template-columns: repeat(1, 1fr); }
+@media (min-width: 768px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1440px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+```
+
+The Flex System (declare only a minimum column width; the count is solved from the **container**):
+
+```vue
+<p-grid :min-col-width="250" :gap="14">
+  <p-box v-for="item in items" :key="item.id" />
+</p-grid>
+```
+
+The difference is not "a few lines saved": `@media` solves against the **viewport**, while a component lives inside a **container** — the same card is 1440px full-screen, 700px in a split view, 300px inside a dashboard tile, and viewport breakpoints fail for all of it.
 
 ## Get started in 30 seconds
 
+The other two common primitives (fluid typography, adaptive sidebar):
+
 ```vue
 <template>
-  <!-- 1. Fluid typography: 32px at the 375 design width → 54px at a 1440 viewport, interpolated continuously (zero jumps) -->
+  <!-- Fluid typography: 32px at the 375 design width → 54px at a 1440 viewport, interpolated continuously (zero jumps) -->
   <p-heading :level="1" v-p-fluid="'font-size(32, 54)'">One semantic model.</p-heading>
 
-  <!-- 2. Fluid grid: declare only "at least this wide per column" — the column count is solved from the container -->
-  <p-grid :min-col-width="250" :gap="14">
-    <p-box v-for="item in items" :key="item.id" />
-  </p-grid>
-
-  <!-- 3. Adaptive sidebar: a rail when the container is wide enough, a collapsing toggle bar when it is not -->
-  <p-sidebar :min-sidebar-width="720" :nav-width="200">
+  <!-- Adaptive sidebar: a rail when the container is wide enough, a collapsing "☰ nav" bar when it is not -->
+  <p-sidebar :min-sidebar-width="720" :nav-width="224">
     <template #nav>…</template>
     …
   </p-sidebar>
 </template>
 ```
 
-Three declarations solve three things: **continuous type scaling, automatic column counts, adaptive navigation**. No `@media`, no JS width branches, no `window.innerWidth`.
-
-> This is the **real code running on this site's home page** (`website/src/pages/Home.vue`), not an illustration — resize the window to verify.
-
-## What it solves
-
-| What you want | Hand-written responsive CSS | Flex System |
-|---|---|---|
-| Type that scales with the screen | Three or four breakpoints, jumping at each | One line: `v-p-fluid="'font-size(32, 54)'"`, continuous |
-| Card column count that adapts | Hand-computed columns + breakpoints | `p-grid :min-col-width="250"`, solved automatically |
-| A component inside a split view / card | `@media` keys off the **viewport** and fails → JS fallback | Solved against the **container**, correct wherever it sits |
-| One codebase on seven devices | One branch set per target / `#ifdef` | **Zero form branches**; the framework swaps layout and capability set |
-| Parity across targets (native) | Native targets have no media queries — immediate mismatch | Semantic primitives + each target's native container |
-
-The third row is the crux: **media queries solve against the viewport, but a component lives inside a container.** The same card is 1440px full-screen, 700px in a split view, 300px inside a dashboard tile — viewport breakpoints fail for all of it.
+> The key declarations match real code running on this site (the grid and fluid typography come from the home page, `website/src/pages/Home.vue`; the sidebar is **the very docs page you are reading**, `DocsPage.vue`); the child elements are simplified. Resize the window to verify.
 
 ## Three core concepts
 
