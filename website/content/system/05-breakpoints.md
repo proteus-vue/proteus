@@ -91,18 +91,31 @@ G-44 测试层已把三维矩阵参数化：`W_BREAK [320,600,840,1200,1920] × 
 
 组件布局决策（列数、分栏、折叠）用容器断点；弹层 / 导航形态切换用形态档位；全终端适配用三维特征。另外还有设备环境信号：`createDeviceEnv` 的折叠形态 `displayMode`（standard / fold / span / expand）与 drive-mode——折叠屏铰链避让、驾驶中禁动效（`shouldReduceMotion`）都从它来。
 
-## 落地状态（诚实分级）
+## 落地状态（诚实分级，2026-09-27 更新）
 
-- ✅ `formForWidth` 档位求解 + 100 profiles 三维断点矩阵（`@proteus-vue/test-ir`，G-44；Device 后端按宽度档位求解 p-adaptive form）
-- ✅ 折叠形态 `displayMode`、drive-mode 注入、`prefers-reduced-motion`——`createDeviceEnv` + `shouldReduceMotion`（Fluid System S2 / S3）
+**断点/特征求解层**
+
+- ✅ `formForWidth` 档位求解 + 100 profiles 三维断点矩阵（`@proteus-vue/test-ir`，G-44）
 - ✅ 容器级断点推导与求解——`deriveContainerBreakpoints` / `resolveBreakpoint`（`@proteus-vue/fluid`）
-- 📋 `useContainerProfile()` 组合查询、车机 / TV / 手表原语（焦点引擎、表冠、单列一屏）——G-25 组件层 plan 已入库未实现
-- 📋 配套铁律：车机 driving-safe（VEH001）/ TV 焦点模式（TV001）/ 手表单列（WATCH001）/ 禁止手动 `if (isTV)`——用容器特征查询替代（BP003）
+- ✅ 折叠形态 `displayMode`、drive-mode 注入、`prefers-reduced-motion`——`createDeviceEnv` + `shouldReduceMotion`
 
-> 状态图例：✅ 已落地可验证 · 📋 规划已入库（plan + 参考实现，无可运行集成）。
+**形态层（G-25 组件层，已落地——本节此前标为"未实现"，2026-09-27 修正）**
+
+- ✅ 车机 / TV / 手表原语**均已实现**：焦点引擎（`navigateFocus` 几何空间导航 + 能力驱动自动启用）、
+  表冠语义（`caps.crown` + 视觉提示 + 热区）、单列一屏（`glance` 拓扑：隐媒体/推荐、标题限 2 行）
+- ✅ TV 焦点模式（`hero-focus-row` 拓扑 + `caps.focusRows` 横向焦点行 + 3px 强调色焦点环）
+- ✅ 车机 driving-safe（`caps.driveAware` 降动效 + `caps.skuMulti='fallback'` 降级条 + 第 4+ 推荐项不渲染 + 76dp 热区）
+- ✅ 三维特征的**运行时落地形态**：`FORM_PROFILES`（7 形态画像）+ `resolveFluidMetrics`（容器驱动度量）
+  ——详见[形态画像](/docs/system/06-form-profiles)与[流体度量](/docs/system/07-fluid-metrics)
+- ⬜ `useContainerProfile()` 组合查询入口（三维 Profile3D 的运行时便捷封装）
+
+> 状态图例：✅ 已落地可验证 · ⬜ 端未开始 / 未实现。
+> 配套铁律仍适用：车机 driving-safe（VEH001）/ TV 焦点模式（TV001）/ 手表单列（WATCH001）/
+> 禁止手动 `if (isTV)`——用容器特征与形态画像替代（BP003）。
 
 ## 下一步
 
+- [形态画像（Form Profiles）](/docs/system/06-form-profiles)：本页讲的「形态」在框架里的 SSOT 落地
 - [全终端适配](/docs/21-device-adaptation)：G-24 桌面原语 + G-25 全终端
 - [柔性系统总览](/docs/system/01-overview)：回到全景
 - [容器与宿主](/docs/framework/33-containers-hosts)：容器形态与宿主运行时

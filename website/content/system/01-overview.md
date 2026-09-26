@@ -67,15 +67,38 @@ rpx 也不是答案。rpx 是「单位换算」（值 × 屏幕宽 / 750），�
 </template>
 ```
 
-## 三大件 + 原语全家桶
+## 两层能力（本专区 11 篇的组织方式）
 
-柔性系统的三个旗舰能力（本专区各有一篇）：
+柔性系统用**两层**解决适配问题——第一层管「组件活在容器里」，第二层管「设备形态是一等公民」：
 
-| 旗舰 | 原语 | 一句话 | 深入阅读 |
-|---|---|---|---|
-| 分屏 | `p-split` | 窄容器堆叠、宽容器并排——平板 / 车机 / 多窗口核心原语 | [容器查询](/docs/system/02-container-query) · [布局组件](/docs/13-layout-components) |
-| 柔性网格 | `p-grid` | 只声明最小列宽，列数自动求解 | [柔性网格](/docs/system/03-fluid-grid) |
-| 自适应侧边栏 | `p-sidebar` | 宽容器 side-rail、窄容器折叠切换条（VitePress 同款交互） | [自适应侧边栏](/docs/system/04-sidebar) |
+**第一层：容器求解**（G-22 起，已稳定）
+
+| 能力 | 原语 / API | 一句话 |
+|---|---|---|
+| 流式排版 | `p-fluid` / `v-p-fluid` | 声明 `font-size(30, 60)`，clamp 连续插值零跳变 |
+| 柔性网格 | `p-grid` | 只声明最小列宽，列数自动求解 |
+| 弹性栈 | `p-stack` / `p-fit` | 换行 / 内在尺寸 |
+| 容器查询 | `createContainerQuery` | 按**容器**而非视口求解断点 |
+| 分屏 | `p-split` | 窄容器堆叠、宽容器并排 |
+| 自适应侧边栏 | `p-sidebar` | 宽容器 side-rail、窄容器折叠切换条 |
+| 形态区间 | `p-adaptive` | sheet / dialog / popover 按容器宽切换 |
+
+→ 深入：[容器查询](/docs/system/02-container-query) · [柔性网格](/docs/system/03-fluid-grid) · [自适应侧边栏](/docs/system/04-sidebar) · [断点与形态](/docs/system/05-breakpoints)
+
+**第二层：形态求解**（2026-09 重构，本专区新增 6 篇）
+
+| 能力 | SSOT / API | 一句话 |
+|---|---|---|
+| 形态画像 | `FORM_PROFILES` | 7 形态一张表：拓扑/导航/视觉/度量/能力 |
+| 流体度量 | `resolveFluidMetrics` | 尺寸只由容器宽度驱动（无绝对 px、无 scale） |
+| 能力三态 | `CapsLevel` + `FORM_CAP_KEYS` | supported / fallback / unsupported，每项有渲染后果 |
+| 折叠姿态 | `postures[]` | 折叠/半折/展开的连续重排，含姿态级度量 |
+| 焦点导航 | `navigateFocus` | 遥控/旋钮的空间导航（几何求解，非 DOM 顺序） |
+| 形态容器 | `p-formfactor` | 业务只写语义槽，框架换布局/导航/能力集 |
+
+→ 深入：[形态画像](/docs/system/06-form-profiles) · [流体度量](/docs/system/07-fluid-metrics) · [能力三态](/docs/system/08-capabilities) · [折叠姿态](/docs/system/09-postures) · [焦点导航](/docs/system/10-focus-navigation) · [一套内容槽七种形态](/docs/system/11-formfactor-composition)
+
+**一句话记住两层的关系**：第一层让「卡片放进窄容器」正确，第二层让「同一份代码在车机上就是驾驶舱、在 TV 上就是海报流」。
 
 原语全家桶与落地批次（诚实分级）：
 
@@ -87,6 +110,7 @@ rpx 也不是答案。rpx 是「单位换算」（值 × 屏幕宽 / 750），�
 | S3 导航 | `p-sidebar` / `p-toolbar`（溢出折叠）+ 车机 d-pad 焦点 + drive-mode 动效门 | ✅ |
 | S4 无障碍 | `p-scale` 动态字号 / 密度 + FLD012/013 规则 | ✅ |
 | G-22.5 形态 | `p-adaptive` 形态区间表达式（sheet / dialog / popover 三档），`p-modal` 形态自动切换 | ✅ |
+| **L2 形态层** | **形态画像 7 形态 + 流体度量 v3 + 能力三态 14 项 + 折叠三姿态 + 焦点导航引擎 + `p-formfactor` 容器** | **✅** |
 | S5 全端 | 组件目录入包 + App 端原生求解器接口 | ⬜ |
 
 > 状态图例：✅ 已落地可验证 · ⬜ 规划已入库。
@@ -109,6 +133,6 @@ proteus fluid:check   # 编译期门禁：FLD 规则机器可查，CI 强制
 
 ## 下一步
 
-- [容器查询：按容器求解](/docs/system/02-container-query)：createContainerQuery 真实 API 与求解基准
-- [柔性网格](/docs/system/03-fluid-grid)：p-grid 只声明最小列宽
-- [自适应侧边栏](/docs/system/04-sidebar)：三态状态机 + 车机 d-pad 焦点
+- **容器求解层**：[容器查询](/docs/system/02-container-query) · [柔性网格](/docs/system/03-fluid-grid) · [自适应侧边栏](/docs/system/04-sidebar) · [断点与形态](/docs/system/05-breakpoints)
+- **形态求解层**：[形态画像](/docs/system/06-form-profiles) · [流体度量](/docs/system/07-fluid-metrics) · [能力三态](/docs/system/08-capabilities) · [折叠姿态](/docs/system/09-postures) · [焦点导航](/docs/system/10-focus-navigation) · [一套内容槽，七种形态](/docs/system/11-formfactor-composition)
+- **动手验证**：[多端同屏演示](/multi-device)（可切七形态 / 折叠三姿态，右栏看能力三态）

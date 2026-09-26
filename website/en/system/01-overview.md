@@ -67,15 +67,38 @@ Real usage on this website (the Hero comes from the homepage; the sidebar comes 
 </template>
 ```
 
-## The three flagship capabilities + the whole primitive family
+## Two layers (how this section's 11 pages are organised)
 
-The Flex System's three flagship capabilities (one page each in this section):
+The Flex System solves adaptation in **two layers** — the first keeps "a component living inside a container" correct; the second makes "device form" a first-class citizen:
 
-| Capability | Primitive | In one sentence | Read more |
-|---|---|---|---|
-| Split panes | `p-split` | Narrow containers stack, wide containers sit side by side — the core primitive for tablets / vehicle dashboards / multi-window | [Container queries: solved against the container](/docs/system/02-container-query) · [Layout components](/docs/13-layout-components) |
-| Fluid grid | `p-grid` | Declare only a minimum column width; the column count is solved automatically | [Fluid grid](/docs/system/03-fluid-grid) |
-| Adaptive sidebar | `p-sidebar` | A side rail in wide containers, a collapsing toggle bar in narrow ones (the same interaction as VitePress) | [Adaptive sidebar](/docs/system/04-sidebar) |
+**Layer 1 — container solving** (since G-22, stable)
+
+| Capability | Primitive / API | In one sentence |
+|---|---|---|
+| Fluid typography | `p-fluid` / `v-p-fluid` | Declare `font-size(30, 60)`; clamp interpolates continuously, zero jumps |
+| Fluid grid | `p-grid` | Declare only a minimum column width; the column count is solved automatically |
+| Flexible stack | `p-stack` / `p-fit` | Wrapping / intrinsic size |
+| Container queries | `createContainerQuery` | Breakpoints solved against the **container**, not the viewport |
+| Split panes | `p-split` | Narrow containers stack, wide containers sit side by side |
+| Adaptive sidebar | `p-sidebar` | A side rail in wide containers, a collapsing toggle bar in narrow ones |
+| Form ranges | `p-adaptive` | sheet / dialog / popover switching by container width |
+
+→ Read more: [Container queries](/docs/system/02-container-query) · [Fluid grid](/docs/system/03-fluid-grid) · [Adaptive sidebar](/docs/system/04-sidebar) · [Breakpoints & forms](/docs/system/05-breakpoints)
+
+**Layer 2 — form solving** (2026-09 rebuild; 6 new pages in this section)
+
+| Capability | SSOT / API | In one sentence |
+|---|---|---|
+| Form profiles | `FORM_PROFILES` | One table for 7 forms: topology / navigation / visual / metrics / capabilities |
+| Fluid metrics | `resolveFluidMetrics` | Sizes driven by container width alone (no absolute px, no scale) |
+| Capability tri-state | `CapsLevel` + `FORM_CAP_KEYS` | supported / fallback / unsupported — every entry has a render consequence |
+| Fold postures | `postures[]` | Continuous rearrangement across folded / tabletop / expanded, with posture-level metrics |
+| Focus navigation | `navigateFocus` | Spatial navigation for remotes / crowns (geometric, not DOM order) |
+| Form container | `p-formfactor` | Business writes semantic slots; the framework swaps layout / navigation / capability set |
+
+→ Read more: [Form profiles](/docs/system/06-form-profiles) · [Fluid metrics](/docs/system/07-fluid-metrics) · [Capability tri-state](/docs/system/08-capabilities) · [Fold postures](/docs/system/09-postures) · [Focus navigation](/docs/system/10-focus-navigation) · [One set of slots, seven forms](/docs/system/11-formfactor-composition)
+
+**One sentence for the two layers**: layer 1 makes "a card inside a narrow container" correct; layer 2 makes "the same code a cockpit on an in-car display and a poster row on TV".
 
 The whole primitive family, with its landing batches (honest tiering):
 
@@ -87,6 +110,7 @@ The whole primitive family, with its landing batches (honest tiering):
 | S3 navigation | `p-sidebar` / `p-toolbar` (overflow folding) + in-vehicle d-pad focus + drive-mode motion gate | ✅ |
 | S4 accessibility | `p-scale` dynamic font size / density + FLD012/013 rules | ✅ |
 | G-22.5 forms | `p-adaptive` form-range expressions (the sheet / dialog / popover tiers), `p-modal` auto-switching forms | ✅ |
+| **L2 form layer** | **7 form profiles + fluid metrics v3 + 14 capability tri-states + 3 fold postures + focus navigation engine + the `p-formfactor` container** | **✅** |
 | S5 all ends | Component catalog goes into the packages + the App-side native solver interface | ⬜ |
 
 > Status legend: ✅ landed and verifiable · ⬜ planned and logged.
@@ -108,6 +132,10 @@ proteus fluid:check   # compile-time gate: the FLD rules are machine-checkable; 
 This is not a slogan: the official site you are reading is zero `@media` end to end (the W-6 fluid-framework-first principle — the CI gate blocks hand-written breakpoints) — typography goes through `v-p-fluid` clamp, the capability cards go through `p-grid`, and the docs pages go through `p-sidebar`. **The official site itself is the Flex System's proving ground.**
 
 ## Next steps
+
+- **Container solving layer**: [Container queries](/docs/system/02-container-query) · [Fluid grid](/docs/system/03-fluid-grid) · [Adaptive sidebar](/docs/system/04-sidebar) · [Breakpoints & forms](/docs/system/05-breakpoints)
+- **Form solving layer**: [Form profiles](/docs/system/06-form-profiles) · [Fluid metrics](/docs/system/07-fluid-metrics) · [Capability tri-state](/docs/system/08-capabilities) · [Fold postures](/docs/system/09-postures) · [Focus navigation](/docs/system/10-focus-navigation) · [One set of slots, seven forms](/docs/system/11-formfactor-composition)
+- **Try it live**: [Multi-device demo](/multi-device) (switch seven forms / three fold postures; the right panel shows the capability tri-state)
 
 - [Container queries: solved against the container](/docs/system/02-container-query): the real createContainerQuery API and its solving baseline
 - [Fluid grid](/docs/system/03-fluid-grid): p-grid declares only the minimum column width
