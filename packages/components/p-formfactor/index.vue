@@ -928,8 +928,12 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 名称可伸缩（占余量并省略），图标与价格按内容宽 */
+/* 名称可伸缩（占余量），图标按内容宽 */
 .p-formfactor.topo-dashboard .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
+/* ★瓦片信息层级（2026-09-27 用户实测）：图标+名称+价格三件横排把名称挤到 20px（「替…」），
+   驾驶舱可读性要求「一眼读全标签」——而 driveAware 能力本就声明「已精简信息层级与动效」。
+   故驾驶形态瓦片只留 **图标 + 名称**（价格属详情信息：英雄区/详情页仍有，行车中不该比价）。 */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.fp-rec-pt) { display: none; }
 
 /* keyboard：键盘可达元素加可见焦点环（PC）*/
 .has-keyboard :deep(*:focus-visible) {
