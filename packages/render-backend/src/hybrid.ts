@@ -121,6 +121,10 @@ export function createHybridRenderer(options: HybridRendererOptions): HybridRend
       }
       return handle
     },
+    // ★2026-09-26 文本保留：'#text' → 委托默认后端（文本无 semantic 不可路由——区域语义由父元素决定）
+    createText(text) {
+      return defaultBackend.createText(text)
+    },
     insert(child, parent, anchor) {
       const b = backendOf(child)
       if (!b) return

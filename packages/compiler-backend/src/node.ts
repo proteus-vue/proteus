@@ -97,7 +97,22 @@ function elementToRenderNode(el: ElementNode, acc: BindingAccumulator): RenderNo
     // ★G-31 语义链接：p-* 标签 → TAG_SEMANTIC_MAP 语义（渲染树 semantic 与 C-IR 树同源）；非 p- → undefined（Layer 1 兼容层）
     semantic: el.tag.startsWith('p-') ? TAG_SEMANTIC_MAP[el.tag] : undefined,
     props,
-    children: flattenChildNodes(el.children).filter((c) => c.type === NodeTypes.ELEMENT).map((c) => elementToRenderNode(c as ElementNode, acc)),
+    // ★2026-09-26 文本保留：此前 filter(ELEMENT) 把文本节点整个丢掉 → 所有渲染后端
+    //   （vuedom/native/flutter）产出无字树（多端同屏控件树无内容的根源）。
+    //   静态 TEXT → { type:'#text', text }；插值 INTERPOLATION → { type:'#text', props:{expr} }
+    //   （编译期不求值——G-29 生产端只看结构）。additive：无文本子节点时 children 形状不变。
+    children: flattenChildNodes(el.children).flatMap((c) => {
+      if (c.type === NodeTypes.ELEMENT) return [elementToRenderNode(c as ElementNode, acc)]
+      if (c.type === NodeTypes.TEXT) {
+        const content = (c as { content: string }).content.trim()
+        return content ? [{ type: '#text', props: {}, children: [], text: content, loc: { line: c.loc.start.line, column: c.loc.start.column } }] : []
+      }
+      if (c.type === NodeTypes.INTERPOLATION) {
+        const exp = exprContent((c as { content: unknown }).content)
+        return [{ type: '#text', props: exp ? { expr: exp } : {}, children: [], loc: { line: c.loc.start.line, column: c.loc.start.column } }]
+      }
+      return []
+    }),
     loc: { line: el.loc.start.line, column: el.loc.start.column },
   }
 }

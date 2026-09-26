@@ -7,6 +7,7 @@ import type { BackendCapabilities, IRNode, NodeHandle, ProteusRenderBackend } fr
 
 interface DocumentLike {
   createElement(tag: string): HTMLElement
+  createTextNode(text: string): Text
 }
 
 function defaultDocument(): DocumentLike {
@@ -106,8 +107,11 @@ export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {
   const documentLike = doc ?? defaultDocument()
 
   function ensureEl(handle: NodeHandle): HTMLElement {
+    // ★文本节点（nodeType 3）无 tagName——insert/textContent 合法操作对象，放行
     const el = handle as HTMLElement
-    if (!el || typeof el.tagName !== 'string') throw new Error('VueDomBackend: 非法句柄')
+    if (!el || (typeof el.tagName !== 'string' && (el as unknown as { nodeType?: number }).nodeType !== 3)) {
+      throw new Error('VueDomBackend: 非法句柄')
+    }
     return el
   }
 
@@ -127,6 +131,11 @@ export function createVueDomBackend(doc?: DocumentLike): ProteusRenderBackend {
         }
       }
       return documentLike.createElement(node.type)
+    },
+
+    // ★2026-09-26 文本保留：IR '#text' 节点 → 真实文本节点（此前 createText 无实现——IR 无文本节点）
+    createText(text: string): NodeHandle {
+      return documentLike.createTextNode(text) as unknown as NodeHandle
     },
 
     insert(child, parent, anchor) {

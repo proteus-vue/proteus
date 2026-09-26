@@ -171,6 +171,9 @@ export function createNodeOpsDispatcher(initialBackend: ProteusRenderBackend): P
 
 /** ★H-03 机器验证助手：把 IR 树用某后端渲染（递归 createElement + insert），返回根句柄 */
 export function renderIRTree(backend: ProteusRenderBackend, ir: IRNode, insertInto?: (child: NodeHandle, parent: NodeHandle) => void): NodeHandle {
+  // ★2026-09-26 文本节点派发：编译 IR 此前丢文本（filter(ELEMENT)），本分支从未触达——
+  //   IR 保留文本后，'#text' → createText（SPI 已定义、五后端现已补实现）
+  if (ir.type === '#text') return backend.createText(ir.text ?? '')
   const root = backend.createElement(ir)
   for (const child of ir.children) {
     const c = renderIRTree(backend, child)

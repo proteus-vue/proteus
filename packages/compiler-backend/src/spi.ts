@@ -45,6 +45,10 @@ export interface RenderNode {
   props: Record<string, unknown>
   children: RenderNode[]
   loc: SourceLoc
+  /** ★2026-09-26 文本保留（修「渲染 IR 丢静态文本」）：type='#text' 节点的字面内容；
+   *  动态插值文本 = type:'#text' + props.expr（编译期不求值——G-29 原则），后端渲染占位。
+   *  additive 扩展：既有消费者（无 text 的元素节点）零影响。 */
+  text?: string
 }
 
 export interface RenderIR {

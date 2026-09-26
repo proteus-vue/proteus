@@ -47,6 +47,8 @@ describe('G-27 runBackendConformance（B1 接口完整性自检）', () => {
         input: ['touch', 'gesture' as never], // 非法输入类型
       },
       createElement: () => 'el-1', // 非唯一句柄（恒同引用）
+      // ★2026-09-26 文本保留：SPI 新增 createText（五后端与 hybrid 均已实现）
+      createText: () => 'text-1',
       insert: undefined as never, // 缺必选方法
       remove: () => {},
       patchProp: () => {},

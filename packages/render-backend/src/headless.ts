@@ -136,7 +136,20 @@ export function createHeadlessBackend(): ProteusRenderBackend {
       return n
     },
 
-    insert(child, parent, anchor) {
+        // ★2026-09-26 文本保留：'#text' → 文本节点（内存树）
+    createText(text: string): NodeHandle {
+      const n: HeadlessNode = {
+        id: nextId++,
+        type: '#text',
+        props: {},
+        children: [],
+        parent: null,
+        text,
+      }
+      return n as never as NodeHandle
+    },
+
+insert(child, parent, anchor) {
       const c = ensureNode(child)
       const p = ensureNode(parent)
       if (c.parent) {
