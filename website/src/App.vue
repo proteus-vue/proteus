@@ -32,11 +32,14 @@ const links: NavLink[] = [
   { to: '/playground', label: 'Playground', key: 'playground' },
   // ★#489 同一份语义 → 六端形态（站内页——同壳同风格、双语）
   { to: '/multi-device', label: '多端同屏', key: 'multidev' },
+  // ★2026-09-26 P0-3：生态栏目（官方工程案例起步——对标 Flutter Showcase 的导航位）
+  { to: '/ecosystem', label: '生态', key: 'ecosystem' },
 ]
 /** 导航文案（双语 key） */
 function navText(l: { key: string; label: string }): string {
   if (l.key === 'home') return t('app.home')
   if (l.key === 'multidev') return t('app.multidev')
+  if (l.key === 'ecosystem') return t('app.ecosystem')
   return l.label
 }
 
@@ -133,6 +136,12 @@ watch(() => route.fullPath, () => {
 
     <p-view v-p-fluid="'padding(20, 28)'" class="footer">
       <p-text class="footer-line">Proteus — One semantic model. Any render engine. Zero native glue.</p-text>
+      <p-stack direction="row" :gap="16" wrap class="footer-links">
+        <a class="footer-link" href="https://github.com/proteus-vue/proteus" target="_blank" rel="noreferrer">GitHub ↗</a>
+        <a class="footer-link" href="https://github.com/proteus-vue/proteus/issues" target="_blank" rel="noreferrer">{{ t('app.footerIssues') }}</a>
+        <a class="footer-link" href="https://www.npmjs.com/org/proteus-vue" target="_blank" rel="noreferrer">npm ↗</a>
+        <router-link to="/changelog" class="footer-link">{{ t('app.footerChangelog') }}</router-link>
+      </p-stack>
       <p-text class="footer-dim">{{ t('app.footer') }}</p-text>
     </p-view>
   </p-page>
@@ -313,4 +322,14 @@ watch(() => route.fullPath, () => {
 }
 .footer-line { color: var(--muted); font-size: 13px; }
 .footer-dim { color: var(--muted); font-size: 12px; }
+
+.footer-links { margin-top: 8px; }
+.footer-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.footer-link:hover { color: var(--brand-ink); }
 </style>

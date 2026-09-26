@@ -81,6 +81,9 @@ const zh = {
   'home.journeyGo': '进入 →',
   // —— App 壳（★#475）——
   'app.home': '首页',
+  'app.ecosystem': '生态',
+  'app.footerIssues': 'Issues 反馈',
+  'app.footerChangelog': '版本与动态',
   'app.docs': '文档',
   'app.multidev': '多端同屏',
   'app.footer': '官网用 Proteus 自身构建（dogfooding）：p-* 语义组件 + @proteus-vue/docs 文档引擎 + G-22 柔性布局（零 @media）',
@@ -183,6 +186,9 @@ const en = {
   'home.journeyGo': 'Open →',
   // —— App shell（★#475）——
   'app.home': 'Home',
+  'app.ecosystem': 'Ecosystem',
+  'app.footerIssues': 'Issues',
+  'app.footerChangelog': 'Releases',
   'app.docs': 'Docs',
   'app.multidev': 'Multi-device',
   'app.footer': 'This site is built with Proteus itself (dogfooding): p-* semantic components + the @proteus-vue/docs engine + G-22 fluid layout (zero @media)',

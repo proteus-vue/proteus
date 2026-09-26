@@ -6,6 +6,20 @@ group: 开始
 
 # 环境要求
 
+## 30 秒创建工程
+
+环境就绪后，一条命令生成 Web + 微信小程序双端工程（详见[创建你的第一个工程](/docs/05-create-project)）：
+
+```bash
+npm create @proteus-vue/proteus my-app
+cd my-app && npm install
+npm run dev:web     # 浏览器直接跑 Web 端
+```
+
+> 想先看看能做出什么？打开 [Playground](/playground) 在浏览器里改代码、实时看编译产物——零安装。
+
+## 环境清单
+
 开始之前，准备以下环境：
 
 | 依赖 | 版本要求 | 用途 |
