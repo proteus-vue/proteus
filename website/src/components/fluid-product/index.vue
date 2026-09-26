@@ -93,7 +93,7 @@ const recs = [
 
 <style scoped>
 /* 演示内容样式（★与形态无关——形态引起的排列/配色差异全在 p-formfactor 内） */
-.fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(12px * var(--pf-scale, 1)); }
+.fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(var(--pf-font) * 1.05); }
 .fp-rail-item { padding: 8px 10px; border-radius: 7px; color: var(--pf-dim, #666); }
 .fp-rail-item.on { background: color-mix(in srgb, var(--pf-brand, #7c5cff) 16%, transparent); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
@@ -104,45 +104,45 @@ const recs = [
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.22), rgba(171, 155, 255, 0.08));
   display: grid;
   place-items: center;
-  font-size: calc(46px * var(--pf-scale, 1));
+  font-size: calc(var(--pf-font) * 2.4);
   min-height: 90px;
 }
-.fp-name { display: block; font-size: calc(17px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-text, #17171f); }
-.fp-desc { display: block; color: var(--pf-dim, #777); font-size: calc(12px * var(--pf-scale, 1)); margin-top: 4px; line-height: 1.5; }
-.fp-price { display: block; font-size: calc(24px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-accent, #7c5cff); }
+.fp-name { display: block; font-size: calc(var(--pf-font) * 1.45); font-weight: 800; color: var(--pf-text, #17171f); }
+.fp-desc { display: block; color: var(--pf-dim, #777); font-size: calc(var(--pf-font) * 1.05); margin-top: 4px; line-height: 1.5; }
+.fp-price { display: block; font-size: calc(var(--pf-font) * 1.6); font-weight: 800; color: var(--pf-accent, #7c5cff); }
 
 .pf-sku { display: flex; flex-wrap: wrap; gap: 8px; }
 .fp-sku {
-  padding: 8px 12px;
+  padding: calc(var(--pf-u) * 0.5) calc(var(--pf-u) * 0.8);
   border: 1px solid color-mix(in srgb, var(--pf-text, #17171f) 18%, transparent);
   border-radius: var(--pf-radius, 8px);
   background: var(--pf-surface, #fff);
   color: var(--pf-text, #17171f);
-  font-size: calc(12px * var(--pf-scale, 1));
+  font-size: calc(var(--pf-font) * 1.05);
   cursor: pointer;
 }
 .fp-sku.on { border-color: var(--pf-brand, #7c5cff); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
-.pf-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.pf-actions { display: flex; gap: var(--pf-gap); flex-wrap: wrap; }
 .fp-primary {
   flex: 1 1 auto;
-  padding: 12px 18px;
+  padding: calc(var(--pf-u) * 0.7) calc(var(--pf-u) * 1.1);
   border: none;
   border-radius: var(--pf-radius, 9px);
   background: var(--pf-brand, #7c5cff);
   color: #fff;
-  font-size: calc(14px * var(--pf-scale, 1));
+  font-size: calc(var(--pf-font) * 1.05);
   font-weight: 800;
   cursor: pointer;
 }
 .fp-ghost {
   flex: 0 0 auto;
-  padding: 12px 18px;
+  padding: calc(var(--pf-u) * 0.7) calc(var(--pf-u) * 1.1);
   border: 1px solid var(--pf-brand, #7c5cff);
   border-radius: var(--pf-radius, 9px);
   background: transparent;
   color: var(--pf-brand, #7c5cff);
-  font-size: calc(14px * var(--pf-scale, 1));
+  font-size: calc(var(--pf-font) * 1.05);
   font-weight: 700;
   cursor: pointer;
 }
@@ -151,13 +151,13 @@ const recs = [
   background: var(--pf-surface, #fff);
   border: 1px solid color-mix(in srgb, var(--pf-text, #17171f) 12%, transparent);
   border-radius: var(--pf-radius, 10px);
-  padding: 12px;
+  padding: calc(var(--pf-u) * 0.75);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(var(--pf-gap) * 0.9);
   align-items: center;
 }
-.fp-rec-ic { font-size: calc(26px * var(--pf-scale, 1)); }
-.fp-rec-name { font-size: calc(11.5px * var(--pf-scale, 1)); color: var(--pf-dim, #555); }
-.fp-rec-pt { font-size: calc(12.5px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-accent, #7c5cff); }
+.fp-rec-ic { font-size: calc(var(--pf-font) * 1.9); }
+.fp-rec-name { font-size: calc(var(--pf-font) * 0.85); color: var(--pf-dim, #555); }
+.fp-rec-pt { font-size: calc(var(--pf-font) * 0.95); font-weight: 800; color: var(--pf-accent, #7c5cff); }
 </style>

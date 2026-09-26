@@ -15,7 +15,7 @@
 //
 // ★诚实边界：端能力表（TARGETS.caps）在本页按端注入——真实项目里它来自端 profile
 //   （与组件文档「双端兼容进度表」同源协议：supported / fallback / unsupported 三态）。
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
@@ -49,35 +49,39 @@ const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) =
  *   展示切片 cropW = 只截取该端**代表性区域**（如 PC 取「侧栏+主区」、TV 取「Hero+信息区」），
  *   使每端缩放在 0.4~0.85 之间 → 内容可读、形态差异可辨（业界设计稿展示的通行手法）。
  */
-/** 窄→宽排序（视觉同屏的稳定顺序） */
+/** 窄→宽排序（切换器稳定顺序） */
 const ordered = computed(() => [...TARGETS].sort((a, b) => a.profile.viewport.width - b.profile.viewport.width))
 
-/** 缩略条展示宽（小图：看形态轮廓） */
-const THUMB_W = 128
-/** 主展示裁剪宽（★可读性关键：超出此宽只截取代表区，缩放 0.5~1 → 大屏内容也能看清） */
-const MAIN_CROP_W = 740
+/** 舞台可用宽（帧宽的约束来源——ResizeObserver 实测） */
+const stageWidth = ref(640)
+const stageEl = ref<HTMLElement | null>(null)
+let stageRo: ResizeObserver | null = null
+onMounted(() => {
+  const g = globalThis as { ResizeObserver?: typeof ResizeObserver }
+  if (typeof g.ResizeObserver !== 'function' || !stageEl.value) return
+  stageRo = new g.ResizeObserver((entries) => {
+    const w = entries[0]?.contentRect?.width ?? 0
+    if (w > 0) stageWidth.value = w
+  })
+  stageRo.observe(stageEl.value)
+})
+onUnmounted(() => {
+  stageRo?.disconnect()
+  stageRo = null
+})
 
-/**
- * ★展示模型（主展示 + 缩略条）：
- *   主展示：设备视口按 MAIN_CROP_W 裁剪（多出的部分裁掉，露出侧栏/Hero 等特征区），
- *          缩放 = min(1, 740/vw) → 手表/手机满量呈现，大屏 0.39~0.58 倍（文字仍可读）
- *   缩略条：全部七形态小图并排（视觉同屏），点击切换主展示
- */
-function viewOf(t: Target) {
-  const vw = t.profile.viewport.width
-  const vh = t.profile.viewport.height
-  const scale = Math.min(1, MAIN_CROP_W / vw)
-  const cropW = Math.min(vw, MAIN_CROP_W)
-  const displayW = Math.round(cropW * scale)
-  const displayH = Math.round(Math.min(vh, 520 / Math.max(scale, 0.4)) * scale)
-  return { cropW, displayW, displayH, scale }
-}
-function thumbView(t: Target) {
-  const vw = t.profile.viewport.width
-  const vh = t.profile.viewport.height
-  const scale = THUMB_W / vw
-  return { displayW: THUMB_W, displayH: Math.round(Math.min(vh, vw * 0.7) * scale), scale }
-}
+/** ★帧宽（展示宽）= min(画像上限宽, 舞台可用宽) —— 真实 mockup 的尺寸约束 */
+const frameWidth = computed(() => Math.round(Math.min(target.value.profile.frame.maxWidth, stageWidth.value)))
+
+/** ★设备帧样式（真实 mockup：比例 + 帧宽 + 圆角——由画像 frame 驱动，代码零硬编码） */
+const frameStyle = computed(() => {
+  const f = target.value.profile.frame
+  return {
+    aspectRatio: f.ar.replace('/', ' / '),
+    width: `${frameWidth.value}px`,
+    borderRadius: `${f.radius}px`,
+  }
+})
 
 const active = ref<DeviceForm>('car')
 
@@ -106,17 +110,17 @@ const visibleTargets = computed(() => {
 })
 const target = computed(() => TARGETS.find((t) => t.key === active.value) ?? TARGETS[0]!)
 
-/** 右侧推导行（★全部来自形态画像——非页面硬编码） */
+/** 右侧推导行（★全部来自形态画像——非页面硬编码；口径对齐旧版 TARGET/FORM/INPUT/NAV/BACKEND） */
 const rows = computed(() => {
   const t = target.value
   const p = t.profile
   return [
-    { k: isEn.value ? 'form' : '设备形态', v: `${isEn.value ? p.label.en : p.label.zh}（${isEn.value ? t.profile.form : p.form}）` },
-    { k: 'input', v: p.input },
-    { k: isEn.value ? 'layout topology' : '布局拓扑', v: p.topology },
-    { k: isEn.value ? 'navigation' : '导航形态', v: p.nav },
-    { k: isEn.value ? 'density / scale' : '密度 / 缩放', v: `${p.density} · ${p.scale}×` },
-    { k: isEn.value ? 'viewport' : '典型视口', v: `${p.viewport.width} × ${p.viewport.height}` },
+    { k: 'TARGET', v: isEn.value ? p.label.en : p.label.zh },
+    { k: 'FORM', v: p.topology },
+    { k: 'INPUT', v: p.input },
+    { k: 'NAV', v: p.nav },
+    { k: 'DISTANCE', v: p.distance },
+    { k: 'VISUAL', v: `${p.visual.theme} · ${p.visual.accent}` },
   ]
 })
 
@@ -141,116 +145,97 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
   <p-view class="six-root">
     <header class="hero">
       <h1>
-        {{ isEn ? 'One source, ' : '同一份源码，' }}<em>{{ isEn ? 'seven terminals, radically different forms' : '七种终端，形态完全不同' }}</em>
+        {{ isEn ? 'One source, ' : '同一份源码，' }}<em>{{ isEn ? 'seven form factors' : '七种设备形态' }}</em>
       </h1>
       <p>
         {{
           isEn
-            ? 'The business writes one set of semantic content slots — nothing else. The framework senses the device form and derives layout topology, navigation, capability set, density, scale and hit-area size automatically. Same file, seven forms, zero per-device branching.'
-            : '业务只写一份语义内容槽——没有别的。框架感知设备形态后，自动推导布局拓扑、导航形态、能力集、密度、缩放与热区尺寸。同一份文件、七种形态、业务零分支。'
+            ? 'The same semantic content slots render into a watch / phone / foldable / tablet / PC / in-car / TV. Form drives layout topology, navigation, visual language and capability set; container width drives every dimension (fluid). No scaling tricks, no cropping.'
+            : '同一份语义内容槽，渲染成手表 / 手机 / 折叠屏 / 平板 / PC / 车机 / TV。形态决定布局拓扑、导航、视觉语言与能力集；容器宽度决定一切尺寸（流体）。没有缩放花招、没有裁剪。'
         }}
       </p>
       <p-view class="honest">
         <p-text class="honest-text">
           {{
             isEn
-              ? '✅ Real: form-factor profiles (FORM_PROFILES SSOT in @proteus-vue/fluid) + p-formfactor auto-orchestration + all seven frames rendering the left file. 🟡 Forms are declared by the host (watch/car/tv cannot be auto-detected on the web) — detecting pointer/touch and viewport is real.'
-              : '✅ 真实：形态画像表（@proteus-vue/fluid 的 FORM_PROFILES SSOT）+ p-formfactor 自动编排 + 七端渲染的都是左栏那份文件。🟡 形态由宿主声明（Web 无法自动识别手表/车机/TV）——指针/触控与视口探测是真实的。'
+              ? '✅ Real: FORM_PROFILES (SSOT) + p-formfactor orchestration + fluid metrics from the container. 🟡 Forms are declared by the host (a browser cannot auto-detect watch / car / TV) — the profile is a declarative table, exactly like the component compatibility tables.'
+              : '✅ 真实：FORM_PROFILES（形态画像 SSOT）+ p-formfactor 自动编排 + 尺寸由容器宽度流体求解。🟡 形态由宿主声明（浏览器无法自动识别手表/车机/TV）——画像表是声明式的，与组件兼容进度表同一套协议。'
           }}
         </p-text>
       </p-view>
     </header>
 
     <section class="work">
-      <!-- 左：源码（?raw = 正在执行的这份文件） -->
+      <!-- 左：内容槽源码（?raw = 正在执行的这份文件） -->
       <div class="col col--src">
         <div class="col-title">
           <span class="dot" />
-          {{ isEn ? 'Content slots · this exact file is running' : '内容槽 · 运行的就是这份文件' }}
+          {{ isEn ? 'Content slots · this exact file runs' : '内容槽 · 运行的就是这份文件' }}
           <button type="button" class="mini" @click="showSource = !showSource">{{ showSource ? (isEn ? 'hide' : '收起') : (isEn ? 'show' : '展开') }}</button>
         </div>
         <pre v-if="showSource" class="src"><code>{{ fluidSource }}</code></pre>
         <div class="src-foot">
           <span class="eq">✓</span>
-          {{
-            isEn
-              ? `${sourceLines} lines · imported with ?raw from the very component being rendered — zero dual source`
-              : `${sourceLines} 行 · ?raw 直读「正在被渲染的那个组件」——零双源`
-          }}
+          {{ isEn ? 'zero per-device branching — the framework derives everything' : '零形态分支——全部由框架推导' }}
         </div>
       </div>
 
-      <!-- 中：同屏（真实渲染 mosaic） -->
+      <!-- 中：设备舞台（真实 mockup：居中 · 完整 · 无裁剪） -->
       <div class="col col--stage">
-        <div class="col-title"><span class="dot" /><span class="live">LIVE</span> {{ isEn ? 'Same screen · all real renders' : '同屏 · 全部真实渲染' }}</div>
-        <div class="filters">
-          <button
-            v-for="f in FILTERS"
-            :key="f.k"
-            type="button"
-            class="filter-pill"
-            :class="{ on: filter === f.k }"
-            @click="filter = f.k"
-          >{{ isEn ? f.en : f.zh }}</button>
-        </div>
-        <!-- ★主展示：当前形态的细节（可读尺寸） -->
-        <div class="main-stage">
-          <div class="ms-head">
-            <span class="ms-nm">{{ target.ic }} {{ isEn ? target.profile.label.en : target.profile.label.zh }}</span>
-            <span class="ms-topo">{{ target.profile.topology }}</span>
-            <span class="ms-input">{{ target.profile.input }}</span>
-          </div>
-          <div
-            class="ms-body"
-            :style="{ width: `${viewOf(target).displayW}px`, height: `${viewOf(target).displayH}px`, borderColor: target.profile.caps.focusRows ? 'rgba(255,180,84,0.4)' : 'var(--line)' }"
-          >
-            <div
-              class="ms-screen"
-              :style="{
-                width: `${target.profile.viewport.width}px`,
-                height: `${target.profile.viewport.height}px`,
-                transform: `scale(${viewOf(target).scale})`,
-              }"
-            >
-              <FluidProduct :form="target.key" :width="target.profile.viewport.width" :height="target.profile.viewport.height" />
-            </div>
-          </div>
-        </div>
+        <div class="col-title"><span class="dot" /><span class="live">LIVE</span> {{ isEn ? 'Device stage · real render' : '设备舞台 · 真实渲染' }}</div>
 
-        <!-- ★缩略条：七形态视觉同屏（点击切换） -->
-        <div class="thumbs">
+        <!-- 设备切换器（旧版形态：一排设备按钮 + 形态/输入/导航/后端摘要） -->
+        <div class="switcher">
           <button
             v-for="t in visibleTargets"
             :key="t.key"
             type="button"
-            class="thumb"
-            :class="{ on: t.key === active }"
+            class="dev-btn"
+            :class="{ active: t.key === active }"
             @click="active = t.key"
           >
-            <span class="thumb-nm">{{ t.ic }} {{ isEn ? t.profile.label.en : t.profile.label.zh }}</span>
-            <span class="thumb-ic" :style="{ width: `${thumbView(t).displayW}px`, height: `${thumbView(t).displayH}px` }">
-              <span
-                class="thumb-screen"
-                :style="{ width: `${t.profile.viewport.width}px`, height: `${t.profile.viewport.height}px`, transform: `scale(${thumbView(t).scale})` }"
-              >
-                <FluidProduct :form="t.key" :width="t.profile.viewport.width" :height="t.profile.viewport.height" />
-              </span>
-            </span>
-            <span class="thumb-topo">{{ t.profile.topology }}</span>
+            <span class="dev-ic">{{ t.ic }}</span>
+            <span class="dev-nm">{{ isEn ? t.profile.label.en : t.profile.label.zh }}</span>
+            <span class="dev-meta">{{ t.profile.input }}</span>
           </button>
+        </div>
+
+        <!-- 形态摘要条 -->
+        <div class="device-meta">
+          <span><b>{{ isEn ? 'Current' : '当前端' }}：</b>{{ isEn ? target.profile.label.en : target.profile.label.zh }}</span>
+          <span class="backend-tag">{{ target.profile.topology }} · {{ target.profile.nav }}</span>
+          <span class="dm-dist">{{ target.profile.distance }}</span>
+        </div>
+
+        <!-- ★真实设备帧：居中 + 比例外框 + 刘海/状态栏 + 完整呈现（不裁剪、不缩放） -->
+        <div ref="stageEl" class="frame-host">
+          <div
+            class="frame"
+            :class="{ 'has-notch': target.profile.frame.notch }"
+            :style="frameStyle"
+          >
+            <span v-if="target.profile.frame.notch" class="notch" aria-hidden="true" />
+            <div v-if="target.profile.frame.statusBar" class="statusbar">
+              <span>9:41</span>
+              <span>▮▮▮ ⌁</span>
+            </div>
+            <div class="app-body">
+              <FluidProduct :form="target.key" :width="frameWidth" :height="frameWidth" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 右：能力声明（真实数据） -->
+      <!-- 右：渲染决策 + 能力声明（对齐旧版：TARGET/FORM/INPUT/NAV/BACKEND + 能力勾选） -->
       <div class="col col--panel">
-        <div class="col-title"><span class="dot" />{{ isEn ? 'Declaration · derived from the container' : '能力声明 · 由容器真实推导' }}</div>
+        <div class="col-title"><span class="dot" />{{ isEn ? 'Render decision / capabilities' : '渲染决策 / 能力' }}</div>
         <div class="ir">
           <div v-for="r in rows" :key="r.k" class="row">
             <span class="k">{{ r.k }}</span>
             <span class="v">{{ r.v }}</span>
           </div>
         </div>
-        <h4 class="cap-title">{{ isEn ? 'Capability declarations (from the form profile)' : '能力声明（来自形态画像 SSOT）' }}</h4>
+        <h4 class="cap-title">{{ isEn ? 'Capability declarations' : '能力声明（按端勾选）' }}</h4>
         <div class="cap-table">
           <div
             v-for="c in CAP_LABELS"
@@ -260,15 +245,15 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
           >
             <span class="cap-dot" />
             <span class="cap-nm">{{ isEn ? c.en : c.zh }}</span>
-            <span class="cap-v">{{ target.profile.caps[c.k] ? (isEn ? 'declared' : '声明支持') : (isEn ? 'auto-degraded' : '自动降级') }}</span>
+            <span class="cap-v">{{ target.profile.caps[c.k] ? (isEn ? 'declared' : '声明支持') : (isEn ? 'degraded' : '需条件降级') }}</span>
           </div>
         </div>
         <p-view class="cap-note">
           <p-text class="cap-note-text">
             {{
               isEn
-                ? 'Click a device to inspect its declaration — the highlighted one drives the branches you see rendered.'
-                : '点击任一设备查看其能力声明——高亮项即源码里真实生效的分支。'
+                ? 'Green = Backend declares support · Orange = the source degrades conditionally (e.g. no multi-SKU on car, no dense info on TV).'
+                : '绿 = Backend 已声明支持 · 橙 = 源码走条件降级（如车机无 SKU 多选、TV 无高密度信息）。'
             }}
           </p-text>
         </p-view>
@@ -295,6 +280,7 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 
 .work { margin-top: 22px; display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.5fr) minmax(0, 0.75fr); gap: 16px; }
 .col { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 0; }
+.col--stage { display: flex; flex-direction: column; }
 .col-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 12px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
 .live { font-size: 10px; font-weight: 800; letter-spacing: 0.6px; color: var(--ok, #3ddc97); }
@@ -313,58 +299,73 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 /* 形态筛选 pills */
 .filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
 .filter-pill {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .filter-pill:hover { color: var(--ink); }
 .filter-pill.on { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.55); background: var(--brand-soft); }
 
-/* 主展示（细节可读） */
-.main-stage { margin-bottom: 14px; }
-.ms-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
-.ms-nm { font-size: 13px; font-weight: 800; color: var(--ink); }
-.ms-topo {
-  font-family: var(--mono); font-size: 10.5px; color: var(--brand-ink);
-  background: var(--brand-soft); border-radius: 999px; padding: 3px 9px;
+/* ★设备切换器（旧版形态：一排设备按钮） */
+.switcher { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 12px; }
+.dev-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 4px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel2); color: var(--muted); cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.ms-input { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
-.ms-body {
-  max-width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+.dev-btn:hover { border-color: rgba(124, 92, 255, 0.5); }
+.dev-btn.active { border-color: var(--brand); background: var(--brand-soft); color: var(--ink); }
+.dev-ic { font-size: 17px; }
+.dev-nm { font-size: 11.5px; font-weight: 700; }
+.dev-meta { font-size: 9.5px; opacity: 0.75; }
+
+/* 形态摘要条 */
+.device-meta {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted);
+  margin-bottom: 12px; padding-bottom: 9px;
+  border-bottom: 1px dashed var(--line);
+}
+.device-meta b { color: var(--ink); }
+.backend-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 6px;
+  background: var(--brand-soft); color: var(--brand-ink); font-weight: 700;
+}
+.dm-dist { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+
+/* ★★设备帧（真实 mockup：居中 + 比例外框 + 完整呈现——不裁剪不缩放） */
+.frame-host {
+  width: 100%; display: flex; align-items: flex-start; justify-content: center;
+  min-height: 420px; padding: 4px;
+}
+.frame {
+  position: relative; width: 100%; margin: 0 auto;
+  transition: max-width 0.3s ease, aspect-ratio 0.3s ease;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  border: 2px solid var(--line);
   overflow: hidden;
   background: #f7f8fa;
-  position: relative;
 }
-.ms-screen { transform-origin: top left; }
-
-/* 缩略条（七形态视觉同屏对比） */
-.thumbs { display: flex; flex-wrap: wrap; gap: 9px; }
-.thumb {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 8px;
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
+.notch {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 96px; height: 20px; background: #000;
+  border-radius: 0 0 12px 12px; z-index: 5;
 }
-.thumb:hover { border-color: rgba(124, 92, 255, 0.5); }
-.thumb.on { border-color: var(--brand); box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.35); }
-.thumb-nm { font-size: 10.5px; font-weight: 700; color: var(--ink); }
-.thumb-ic { display: block; overflow: hidden; border-radius: 6px; background: #f7f8fa; position: relative; }
-.thumb-screen { transform-origin: top left; display: block; }
-.thumb-topo { font-family: var(--mono); font-size: 9px; color: var(--dim); }
+.statusbar {
+  height: 24px; background: #fff; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 12px; font-size: 9.5px; color: #556; border-bottom: 1px solid #eef0f6; flex-shrink: 0;
+}
+.app-body { position: absolute; inset: 0; }
+.frame.has-notch .app-body { top: 24px; }
+.frame:not(.has-notch) .app-body { top: 24px; }
+.frame:has(.statusbar) .app-body { top: 24px; }
+.frame .app-body { overflow: auto; }
+/* 帧内滚动（真实设备行为：内容超出时设备内滚动，而非被裁切） */
+.frame .app-body::-webkit-scrollbar { width: 4px; }
+.frame .app-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 2px; }
+.frame .app-body > * { height: 100%; }
 
 /* 右侧面板 */
 .ir { display: grid; gap: 7px; }
