@@ -167,6 +167,18 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(side(resolveFrameVars(tv, 3840)['--pf-safe-side'])).toBeCloseTo(96, 0)
   })
 
+  it('★媒体展示尺度（2026-09-27 用户实测）：hero 形态 ×2.6（10ft 主视觉），其余 ×1', () => {
+    // 英雄区是 10ft 主视觉：媒体内容在 620px 缩略壳里若只有 ~43px 会像贴纸浮在大画布上。
+    // 框架按形态声明尺度，业务用变量消费（零形态分支）。
+    expect(resolveFrameVars(FORM_PROFILES.tv)['--pf-media-scale']).toBe('2.6')
+    expect(resolveFrameVars(FORM_PROFILES.car)['--pf-media-scale']).toBe('1')
+    expect(resolveFrameVars(FORM_PROFILES.phone)['--pf-media-scale']).toBe('1')
+    // 只有 hero 拓扑得到放大（防以后误加到别的形态）
+    for (const f of ['watch', 'phone', 'fold', 'tablet', 'pc', 'car'] as DeviceForm[]) {
+      expect(resolveFrameVars(FORM_PROFILES[f])['--pf-media-scale'], `${f} 不应放大媒体`).toBe('1')
+    }
+  })
+
   it('★展示壳规格（mockup 帧）：七形态比例/上限宽/刘海/状态栏齐备且合法', () => {
     for (const [f, p] of Object.entries(FORM_PROFILES) as Array<[DeviceForm, FormProfile]>) {
       expect(/^\d+\/\d+$/.test(p.frame.ar), `${f} ar`).toBe(true)

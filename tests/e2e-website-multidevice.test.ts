@@ -155,6 +155,32 @@ async function probeLiveGeometry(): Promise<{
     // ★能力证据面（三审）：data-pf-caps 是「最终生效三态」的机器可读声明——
     //   同一面的断言把「声明 ≠ 空头」变成可证伪：面板/根类说支持的，这里必须是 supported/fallback。
     const capsDigest = (frame.querySelector('.p-formfactor') as HTMLElement | null)?.getAttribute('data-pf-caps') ?? ''
+    // ★叠加拓扑（hero-focus-row）：媒体是**背景层**——其容器与文本层重叠是设计（上面已排除），
+    //   但媒体的**可见内容**（产品图/图标）压住可交互项就是真缺陷。
+    //   2026-09-27 用户实测「图片位置奇怪」的机器化判据：破坏性验证（撤掉信息列限宽）
+    //   会让产品图贴住「收藏」按钮，而旧的容器级排除规则恰好放行。
+    if (topo === 'hero-focus-row') {
+      const media = frame.querySelector('.pf-media') as HTMLElement | null
+      const coverEl = media?.firstElementChild as HTMLElement | null
+      if (coverEl) {
+        let box: DOMRect | null = null
+        if (coverEl.tagName === 'IMG' || coverEl.tagName === 'SVG') box = coverEl.getBoundingClientRect()
+        else {
+          const rng = document.createRange()
+          rng.selectNodeContents(coverEl)
+          const b = rng.getBoundingClientRect()
+          if (b.width > 2 && b.height > 2) box = b as DOMRect
+        }
+        if (box) {
+          for (const [sel, el] of els) {
+            if (!['.pf-actions', '.pf-heading', '.pf-price', '.pf-tabbar'].includes(sel)) continue
+            const ab = inter(box, el.getBoundingClientRect())
+            if (ab.w > 2 && ab.h > 2) overlaps.push(`${sel}×media-content`)
+          }
+        }
+      }
+    }
+
     return {
       topo,
       clipped: [...new Set(clipped)],

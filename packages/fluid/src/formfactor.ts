@@ -558,6 +558,10 @@ export function resolveFrameVars(profile: FormProfile, containerWidth = 0): Reco
   return {
     // ★形态级媒体比例（2026-09-26 二次复审 P1：此前 0 发射点 → 7 形态全走 4/3 fallback）
     '--pf-media-ar': profile.mediaRatio.replace('/', ' / '),
+    // ★媒体展示尺度（2026-09-27 用户实测）：英雄区是**10ft 主视觉**——媒体内容（产品图/封面）
+    //   在 620px 缩略壳里只有 ~43px，像一枚贴纸浮在大画布上（「图片位置奇怪」的观感来源之一）。
+    //   框架按形态声明尺度：hero 形态 ×2.6（10ft 主视觉），其余 ×1。业务侧用变量消费（零分支）。
+    '--pf-media-scale': profile.topology === 'hero-focus-row' ? '2.6' : '1',
     // ★安全区（复审 P1：0 发射点已修；三审再修「物理量按展示缩放投影」——见函数注释）
     '--pf-safe-side': safePx(profile.safe?.side),
     '--pf-safe-bottom': safePx(profile.safe?.bottom),

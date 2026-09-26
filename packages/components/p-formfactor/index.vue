@@ -689,11 +689,24 @@ onUnmounted(() => {
 /* ★跨行媒体不得反向决定行高（第三轮实测根因）：封面的 aspect-ratio:16/9 让 min-content = 帧宽×9/16
    （540 → 279px）→ hero 行被撑到 279，海报行归零、拓扑失去身份。宽高比交给轨道（同车机处置）。 */
 .topo-hero-focus-row .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
+/* ★英雄区媒体构图（2026-09-27 用户三次实测）：
+   ① 媒体是**背景层**，其内容此前居中 → 正好压在左下文本层之间（截图：耳机夹在标题与按钮中间）；
+   ② 10ft 主视觉的媒体太小（~43px，像贴纸）；③ 右上对齐后又贴住「收藏」按钮。
+   定稿：信息列限宽 62%（左文本列）+ 媒体内容**右中**对齐并消费 `--pf-media-scale`（×2.6）
+   —— 经典「左文右图」Hero 构图，两者分列互不侵占。（只改对齐/尺度，不动行高与宽高比。） */
+.p-formfactor.topo-hero-focus-row .pf-media > :deep(*) {
+  place-items: center end;
+  padding-right: calc(var(--pf-u) * 2.2);
+}
 /* 信息层与英雄图同格（叠加）——底部左对齐，10ft 下标题/价格/CTA 同屏 */
 .topo-hero-focus-row .pf-info {
   grid-row: 1;
   grid-column: 1;
   align-self: end;
+  /* ★左文本列限宽（2026-09-27 用户实测三次）：此前信息层横跨整幅英雄区 →
+     操作按钮铺到最右，与右上主视觉冲突（产品图贴着「收藏」按钮）。
+     真实 TV Hero 是**左文本列 + 右主视觉列**：信息列 ≤62%，右侧留给产品图，互不侵占。 */
+  max-width: 62%;
   z-index: 2;
   display: flex;
   flex-direction: column;
