@@ -50,6 +50,15 @@
     <nav v-if="caps.tabs && $slots.tabbar" class="pf-tabbar">
       <slot name="tabbar" />
     </nav>
+
+    <!-- ★能力渲染点（专家报告 P1-4：让每项 caps 可被视觉证伪） -->
+    <!-- drawer：抽屉把手（触控形态声明支持） -->
+    <span v-if="caps.drawer" class="pf-drawer-hint" aria-hidden="true" />
+    <!-- crown：表冠提示（手表/车机声明支持旋钮/表冠） -->
+    <span v-if="caps.crown" class="pf-crown-hint" aria-hidden="true">↕</span>
+    <!-- keyboard：快捷键提示（PC 声明支持物理键盘） -->
+    <span v-if="caps.keyboard" class="pf-key-hint" aria-hidden="true">⌘K</span>
+    <!-- notch：安全区避让（异形屏声明——内容额外让出顶部） -->
   </div>
 </template>
 
@@ -113,9 +122,28 @@ function senseFormFast(): DeviceForm {
 }
 
 /** MP 兼容：:class 数组项不用模板字面量——聚合成单一字符串 */
+/**
+ * ★根类（2026-09-26 专家报告 P1-4）：把**全部 14 项 caps** 映射为根类——
+ *   每项都能被 CSS/行为消费（面板绿点由此可证伪；此前 9 项零消费者 = 空头声明）。
+ */
 const rootClass = computed(() => {
   const p = profile.value
-  return `topo-${p.topology} form-${form.value} input-${p.input}` + (p.caps.driveAware ? ' is-drive' : '')
+  const c = p.caps
+  return [
+    `topo-${p.topology}`,
+    `form-${form.value}`,
+    `input-${p.input}`,
+    c.driveAware ? 'is-drive' : '',
+    c.hover ? 'has-hover' : '',
+    c.dpad ? 'has-dpad' : '',
+    c.crown ? 'has-crown' : '',
+    c.dense ? 'is-dense' : '',
+    c.focusTree ? 'has-focus-tree' : '',
+    c.multiCol ? 'has-multicol' : '',
+    c.drawer ? 'has-drawer' : '',
+    c.notch ? 'has-notch' : '',
+    c.keyboard ? 'has-keyboard' : '',
+  ].filter(Boolean).join(' ')
 })
 
 /**
@@ -365,4 +393,80 @@ const rootStyle = computed(() => {
   font-size: calc(var(--pf-font) * 0.8);
 }
 
+
+/* ═══ ★能力消费点（2026-09-26 专家报告 P1-4：每项 caps 必须有可观测后果）═══ */
+
+/* hover：仅声明 hover 的形态有悬浮反馈 + 指针手型（触控/遥控形态零 hover）*/
+.has-hover :deep(button),
+.has-hover :deep(.pf-rec-card) {
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.has-hover :deep(button:hover),
+.has-hover :deep(.pf-rec-card:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+/* 触屏 PC 守卫：hover 能力仅在真有 hover 的设备上生效（报告 P1-5）*/
+@media (hover: none) {
+  .has-hover :deep(button:hover),
+  .has-hover :deep(.pf-rec-card:hover) { transform: none; box-shadow: none; }
+}
+
+/* dpad / focusTree：遥控形态热区放大 + 焦点顺序（焦点环已由 :focus-visible 提供）*/
+.has-dpad :deep(button),
+.has-focus-tree :deep(button) { min-height: var(--pf-control); }
+.has-dpad :deep(.pf-rec-card),
+.has-focus-tree :deep(.pf-rec-card) { min-height: calc(var(--pf-control) * 0.85); }
+
+/* keyboard：键盘可达元素加可见焦点环（PC）*/
+.has-keyboard :deep(*:focus-visible) {
+  outline: var(--pf-focus-ring, 3px) solid var(--pf-accent, #7c5cff);
+  outline-offset: 2px;
+}
+
+/* dense：紧凑间距（高密度形态——PC 声明支持）*/
+.is-dense { --pf-gap-dense: 0.8; }
+
+/* multiCol：多列并排（推荐区列数由 --pf-cols 驱动，这里兜底网格密度）*/
+.has-multicol .pf-recommend { grid-auto-flow: dense; }
+
+/* drawer：抽屉把手（触控形态）*/
+.pf-drawer-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--pf-safe-bottom, 0px) + 4px);
+  transform: translateX(-50%);
+  width: 34%;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--pf-text, #000) 18%, transparent);
+  pointer-events: none;
+}
+
+/* crown：旋钮/表冠提示（手表 / 车机）*/
+.pf-crown-hint {
+  position: absolute;
+  right: calc(var(--pf-u) * 0.3);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: calc(var(--pf-font) * 0.9);
+  color: var(--pf-dim, #888);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* keyboard：快捷键提示（PC）*/
+.pf-key-hint {
+  position: absolute;
+  right: calc(var(--pf-u) * 0.6);
+  bottom: calc(var(--pf-u) * 0.6);
+  font-size: calc(var(--pf-font) * 0.75);
+  color: var(--pf-dim, #888);
+  border: 1px solid color-mix(in srgb, var(--pf-dim, #888) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  opacity: 0.75;
+  pointer-events: none;
+}
 </style>
