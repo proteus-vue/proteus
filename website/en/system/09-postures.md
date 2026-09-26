@@ -8,13 +8,26 @@ group: 柔性系统
 
 > **A foldable is a dynamic form**: one device switches between "folded cover screen / tabletop / expanded inner screen", and an app should not restart, should not lose state, and should rearrange continuously. The Flex System makes postures first-class data — `postures[]` declares each posture's topology, navigation, viewport and metric baseline.
 
-## The three postures
+## First, two fold types are **two different devices**
+
+A foldable is not one device with two postures — the inner/outer aspect ratios are **exactly inverted** between the two kinds (measured from Samsung's site):
+
+| Device kind | Inner display | Outer display | Half-fold hinge |
+|---|---|---|---|
+| **Book style / horizontal fold** (Z Fold6 · Mate X5 · MIX Fold) | 2160×1856 → **near-square 0.86** | 968×2376 → **tall strip 0.44** | **Vertical** (Book mode, two halves left/right) |
+| **Flip style / vertical fold** (Z Flip6 · MIX Flip) | 2640×1080 → **tall strip 0.44** | 720×748 → **near-square 0.96** | **Horizontal** (TableTop mode, display above / controls below) |
+
+This repo therefore splits them into two forms: `fold` (book style) and `flip` (flip style) — previously merged into one `fold`, which produced data that does not exist on real devices ("expanded 0.70 / folded 0.69, almost identical") and **mismatched a horizontal hinge onto a book-style device**. Xiaomi's *Large-screen App UX Design Guide* explicitly distinguishes "Book mode (horizontal fold)" from "TableTop mode (vertical fold)" — the direct basis for this split.
+
+## Postures (fold · book style)
+
+
 
 | Posture `key` | Viewport | Topology | Navigation | Notable semantics |
 |---|---|---|---|---|
-| `folded` (cover) | **466×678** | `stack` single column | **side-tabs** | Wide and short — controls move to the side, preserving vertical space |
-| `tabletop` (flex mode) | 673×420 | `stack` | **side-tabs** | Horizontal hinge — top half displays, bottom half operates |
-| `expanded` (inner) | **626×890** | `duo` two panes | **side-tabs** | Media + details side by side |
+| `folded` (cover) | **320×727** (0.44 tall strip) | `stack` single column | `side-tabs` | The cover behaves like a narrow phone |
+| `book` (half-folded) | **596×693** (0.86 near-square) | `stack` | `side-tabs` | **Vertical** hinge — two halves left/right |
+| `expanded` (inner) | **596×693** | `duo` two panes | `side-tabs` | Media + details side by side |
 
 > Viewports and navigation are aligned with **Apple's HIG "Designing for iPhone Duo"** (new page, 2026-09-09) and the official tech specs: iPhone Duo's inner display is 1878×2670px @430ppi ≈ 626×890pt and the outer display 1398×2034px @460ppi ≈ 466×678pt.
 > The key takeaway: the cover display is **wider and shorter than a phone** (466×678, ratio 0.69), not a Z Fold-style tall narrow strip; the system therefore moves toolbars/tab bars **to the side** to preserve vertical content space, and keeps them on the same side in landscape on the inner display.
@@ -28,6 +41,14 @@ postures: [
   { key: 'expanded', topology: 'duo',   nav: 'tabs', viewport: { width: 673, height: 841 } },
 ]
 ```
+
+## Postures (flip · flip style)
+
+| Posture `key` | Viewport | Topology | Navigation | Notable semantics |
+|---|---|---|---|---|
+| `folded` (cover) | **340×354** (0.96 near-square) | `glance` one screen | `page-stack` | Small cover-card display |
+| `tabletop` (flex mode) | **360×420** | `stack` | `side-tabs` | **Horizontal** hinge — display above, controls below |
+| `expanded` (inner) | **360×820** (0.44 tall strip) | `stack` single column | `bottom-tabs` | A conventional portrait phone |
 
 ## The continuity contract
 

@@ -721,6 +721,63 @@ onUnmounted(() => {
   line-height: 1;
 }
 
+/* ★★半折 · Book 模式（2026-09-28）：**竖直铰链**（书本式左右对折）——
+   Z Fold6 外屏 0.44 / 内屏 0.86 实测规格；半折时内屏被竖直接缝分成左右两半:
+     · 左侧 = 展示（媒体 + 标题 + 价格）· 右侧 = 操作（规格 + 主操作 + 推荐）
+     · 中间 = 折痕带（**竖直**，"两侧不得有元素"——与 tabletop 同规则，只是轴转了 90°）
+   依据：小米规范「Book 书本模式（左右对折）」+ 「避免区域 3 内出现任何元素」。 */
+.p-formfactor.posture-book .pf-body {
+  display: grid;
+  /* 左半 | 折痕带 | 右半 */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+}
+.p-formfactor.posture-book .pf-media {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+.p-formfactor.posture-book .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
+.p-formfactor.posture-book .pf-info {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: calc(var(--pf-gap) * 0.4);
+  padding: calc(var(--pf-u) * 0.8);
+  min-width: 0;
+}
+.p-formfactor.posture-book .pf-info :deep(.fp-desc) { display: none; }
+/* ★折痕带（第 2 列）：**空列**——无元素分配（小米「区域 3 内避免出现任何元素」） */
+.p-formfactor.posture-book .pf-body::before {
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  min-width: max(var(--pf-fold-band, 0px), calc(var(--pf-gap) * 1.2));
+  pointer-events: none;
+}
+/* 右半：操作区（规格 + 主操作 + 推荐） */
+.p-formfactor.posture-book .pf-sku,
+.p-formfactor.posture-book .pf-sku-fallback,
+.p-formfactor.posture-book .pf-actions,
+.p-formfactor.posture-book .pf-recommend {
+  grid-column: 3;
+  min-width: 0;
+}
+.p-formfactor.posture-book .pf-sku,
+.p-formfactor.posture-book .pf-sku-fallback { grid-row: 1; align-self: start; justify-self: start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.p-formfactor.posture-book .pf-sku::-webkit-scrollbar { display: none; }
+.p-formfactor.posture-book .pf-sku :deep(*) { flex: 0 0 auto; }
+.p-formfactor.posture-book .pf-actions { grid-row: 1; align-self: center; min-height: var(--pf-control, 44px); }
+.p-formfactor.posture-book .pf-recommend { grid-row: 1; align-self: end; min-height: 0; overflow: hidden; }
+.p-formfactor.posture-book .pf-recommend :deep(.pf-rec-card) { min-height: 0; max-height: var(--pf-control, 44px); overflow: hidden; }
+
 /* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ──
    ★2026-09-26 二次复审实测：半折（tabletop 673×420）下 1:1 媒体高 = 全宽 ≈ 440px，
    远超视口高 → 标题/价格/CTA 全被推到折线以下（Tab 在但主操作不可见）。

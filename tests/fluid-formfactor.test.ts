@@ -147,25 +147,33 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(font).toBeGreaterThanOrEqual(11) // WCAG 可读底线（此前 9.7px）
   })
 
-  it('★iPhone Duo 对齐（2026-09-28 借鉴 Apple HIG）：外屏宽而矮 · 控件侧置 · 跨姿态一致功能', () => {
-    // Apple HIG「Designing for iPhone Duo」（2026-09-09 新增页）+ 官方技术规格：
-    //   内屏 1878×2670px @430ppi ≈ 626×890pt · 外屏 1398×2034px @460ppi ≈ 466×678pt
-    //   关键指导：① 宽而矮的外屏把工具栏/Tab 移到**侧边**（vertical controls，保垂直内容空间）
-    //            ② 内屏横向时控件保持同侧（跨屏连续）③ 跨姿态保持**同样功能**
+  it('★两类折叠各自自洽（2026-09-28 按真机规格）：fold 内方外长 · flip 内长外方（比例互换）', () => {
+    // 实测（三星官网）：Fold6 内 2160×1856(0.86)/外 968×2376(0.44) · Flip6 内 2640×1080(0.44)/外 720×748(0.96)
+    //   ⇒ 两类设备的内外屏比例**恰好互换**——这证明「折叠屏」不能只用一个画像（此前本仓把二者混为一个）。
     const fold = FORM_PROFILES.fold
-    const folded = fold.postures?.find((x) => x.key === 'folded')
-    const expanded = fold.postures?.find((x) => x.key === 'expanded')
-    // ① 外屏真实比例：宽而矮（而非 Z Fold 式窄长）——旧值 340×800（w/h=0.43），真机 466/678=0.69
-    expect(folded!.viewport.width).toBeGreaterThan(folded!.viewport.height * 0.6)
-    // ② 控件侧置：折叠/展开两姿态都用 side-tabs（跨姿态同侧）
-    expect(folded!.nav).toBe('side-tabs')
-    expect(expanded!.nav).toBe('side-tabs')
-    // ③ 内屏视口对齐真机（626×890pt 量级）
-    expect(expanded!.viewport.width).toBeGreaterThanOrEqual(600)
-    expect(expanded!.viewport.width / expanded!.viewport.height).toBeCloseTo(626 / 890, 1)
-    // ④ 展开视口 > 折叠视口（连续性语义保持不变）
-    expect(expanded!.viewport.width).toBeGreaterThan(folded!.viewport.width)
-    // ⑤ 校验器认可新 nav 取值
+    const flip = FORM_PROFILES.flip
+    const fFolded = fold.postures!.find((x) => x.key === 'folded')!
+    const fExpanded = fold.postures!.find((x) => x.key === 'expanded')!
+    const pFolded = flip.postures!.find((x) => x.key === 'folded')!
+    const pExpanded = flip.postures!.find((x) => x.key === 'expanded')!
+    const ar = (p: { viewport: { width: number; height: number } }): number => p.viewport.width / p.viewport.height
+    // ① fold（书本式）：内屏近方形（0.86 量级）· 外屏竖长条（0.44 量级）
+    expect(ar(fExpanded)).toBeGreaterThan(0.75)
+    expect(ar(fExpanded)).toBeLessThan(1)
+    expect(ar(fFolded)).toBeLessThan(0.55)
+    // ② flip（翻盖式）：内屏竖长条（0.44）· 外屏近方形（0.96）——与 fold 相反
+    expect(ar(pExpanded)).toBeLessThan(0.55)
+    expect(ar(pFolded)).toBeGreaterThan(0.8)
+    // ③ 两类设备半折的铰链方向相反（Book 竖直 / TableTop 水平）
+    expect(fold.postures!.find((x) => x.key === 'book')!.hinge).toBe('vertical')
+    expect(flip.postures!.find((x) => x.key === 'tabletop')!.hinge).toBe('horizontal')
+    // ④ 控件侧置（Apple vertical controls）：fold 三姿态同侧
+    expect(fFolded.nav).toBe('side-tabs')
+    expect(fExpanded.nav).toBe('side-tabs')
+    // ⑤ 视口连续性：展开 > 折叠（两类设备都成立）
+    expect(fExpanded.viewport.width).toBeGreaterThan(fFolded.viewport.width)
+    expect(pExpanded.viewport.height).toBeGreaterThan(pFolded.viewport.height)
+    // ⑥ 校验器认可（含半折语义与 hinge 一致性检查）
     expect(validateFormProfiles()).toEqual([])
   })
 
@@ -185,10 +193,14 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(Number.parseFloat(aspectMediaCap('tall'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('wide')))
     expect(Number.parseFloat(aspectMediaCap('wide'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('ultra-wide')))
     // 同一形态不同姿态落入不同分类（证明姿态感知必要）
+    // ★2026-09-28：fold（书本式）两姿态——外屏竖长条(tall) / 内屏近方形(tall，0.86<0.85 判据外)
     const folded = FORM_PROFILES.fold.postures!.find((x) => x.key === 'folded')!
-    const table = FORM_PROFILES.fold.postures!.find((x) => x.key === 'tabletop')!
+    const expanded = FORM_PROFILES.fold.postures!.find((x) => x.key === 'expanded')!
     expect(resolveAspectClass(folded.viewport.width, folded.viewport.height)).toBe('tall')
-    expect(resolveAspectClass(table.viewport.width, table.viewport.height)).toBe('wide')
+    expect(resolveAspectClass(expanded.viewport.width, expanded.viewport.height)).toBe('balanced')
+    // flip（翻盖式）半折是横置坐立（tabletop，宽高比 0.86 → balanced）
+    const flipTable = FORM_PROFILES.flip.postures!.find((x) => x.key === 'tabletop')!
+    expect(resolveAspectClass(flipTable.viewport.width, flipTable.viewport.height)).toBe('balanced')
   })
 
   it('★安全区按展示缩放投影（2026-09-27）：TV overscan 在缩略壳内仍为**设备的 5%**', () => {
@@ -293,7 +305,8 @@ describe('★形态画像表（SSOT）自洽性', () => {
     }
     // ★折叠屏内屏近方形（专家报告 P1-1：曾 520 会被自身阈值判成 phone）
     const foldW = FORM_PROFILES.fold.viewport.width
-    expect(foldW).toBeGreaterThanOrEqual(600)
+    // Fold6 内屏 2160px @430ppi ≈ 596pt（真实规格）——阈值从 600 调为 560 以容纳真机值
+    expect(foldW).toBeGreaterThanOrEqual(560)
     const { width: fw, height: fh } = FORM_PROFILES.fold.viewport
     expect(fw / fh).toBeGreaterThan(0.7) // 近方形（真实 Z Fold 内屏 0.86）
     expect(fw / fh).toBeLessThan(1)
@@ -321,24 +334,37 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(capsLabel(FORM_PROFILES.tv.caps.skuMulti)).toBe('unsupported')
   })
 
-  it('★折叠屏姿态集（报告 P0-2）：折叠/半折/展开三态 + 连续性（视口递增 · 拓扑切换）', () => {
-    const postures = FORM_PROFILES.fold.postures
-    expect(postures, '折叠屏须声明姿态集').toBeTruthy()
-    const keys = postures!.map((x) => x.key)
-    expect(keys).toEqual(['folded', 'tabletop', 'expanded'])
-    const folded = postures!.find((x) => x.key === 'folded')!
-    const tabletop = postures!.find((x) => x.key === 'tabletop')!
-    const expanded = postures!.find((x) => x.key === 'expanded')!
-    // ★连续性：折叠态 → 展开态视口变宽，且拓扑从单列切到双窗格（app continuity 语义）
-    // ★连续性：展开态（内屏 673）宽于折叠态（外屏 340）——折叠态视口须显著更窄
-    expect(expanded.viewport.width).toBeGreaterThan(folded.viewport.width)
-    expect(folded.viewport.width).toBeLessThan(500)
-    expect(folded.topology).not.toBe(expanded.topology)
-    expect(expanded.topology).toBe('duo')
-    expect(folded.topology).toBe('stack')
-    // 半折有水平铰链（上半展示 / 下半操作）
-    expect(tabletop.hinge).toBe('horizontal')
-    // 单姿态形态不应有 postures（避免无意义复杂度）
+  it('★两类折叠的姿态集（2026-09-28）：fold=书本式（book 竖直铰链）· flip=翻盖式（tabletop 水平铰链）', () => {
+    // ★关键认知：**两种折叠是两类设备**（小米规范原文分 Book「书本模式」/ TableTop「桌面模式」），
+    //   不是同一设备的两姿态——真机内外屏比例恰好互换（见上一个用例）。
+    // ① fold（书本式 / 左右对折）
+    const foldP = FORM_PROFILES.fold.postures
+    expect(foldP, 'fold 须声明姿态集').toBeTruthy()
+    expect(foldP!.map((x) => x.key).sort()).toEqual(['book', 'expanded', 'folded'])
+    const fFolded = foldP!.find((x) => x.key === 'folded')!
+    const fBook = foldP!.find((x) => x.key === 'book')!
+    const fExpanded = foldP!.find((x) => x.key === 'expanded')!
+    // 连续性：展开态宽于折叠态（外屏 320 → 内屏 596），且拓扑 stack → duo
+    expect(fExpanded.viewport.width).toBeGreaterThan(fFolded.viewport.width)
+    expect(fFolded.viewport.width).toBeLessThan(500)
+    expect(fExpanded.topology).toBe('duo')
+    expect(fFolded.topology).toBe('stack')
+    // 半折 = Book 模式（**竖直**铰链，左右两半——「像翻书一样」）
+    expect(fBook.hinge).toBe('vertical')
+    // ② flip（翻盖式 / 上下对折）
+    const flipP = FORM_PROFILES.flip.postures
+    expect(flipP, 'flip 须声明姿态集').toBeTruthy()
+    expect(flipP!.map((x) => x.key).sort()).toEqual(['expanded', 'folded', 'tabletop'])
+    const pFolded = flipP!.find((x) => x.key === 'folded')!
+    const pTable = flipP!.find((x) => x.key === 'tabletop')!
+    const pExpanded = flipP!.find((x) => x.key === 'expanded')!
+    // 连续性：展开态**更高**（竖长条：外屏近方形 → 内屏 360×820）
+    expect(pExpanded.viewport.height).toBeGreaterThan(pFolded.viewport.height)
+    // 半折 = TableTop 模式（**水平**铰链，上半展示 / 下半操作）
+    expect(pTable.hinge).toBe('horizontal')
+    // ③ 两类折叠的半折铰链方向必须相反（否则说明画像混用了两类设备的语义）
+    expect(fBook.hinge).not.toBe(pTable.hinge)
+    // ④ 单姿态形态不应有 postures（避免无意义复杂度）
     for (const f of ['phone', 'watch', 'pc', 'tv', 'car', 'tablet'] as DeviceForm[]) {
       expect(FORM_PROFILES[f].postures, `${f} 不应声明姿态集`).toBeFalsy()
     }

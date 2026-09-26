@@ -27,11 +27,11 @@ const WEBSITE_ROOT = path.resolve(__dirname, '../website')
 
 /** 切换器按钮文案（zh 站 —— 与 MultiDevice 的 label.zh 同源） */
 const FORM_LABEL: Record<string, string> = {
-  watch: '手表', phone: '手机', fold: '折叠屏', tablet: '平板', pc: 'PC / Mac', car: '车机', tv: 'TV / 大屏',
+  watch: '手表', phone: '手机', flip: '小折叠', fold: '折叠屏', tablet: '平板', pc: 'PC / Mac', car: '车机', tv: 'TV / 大屏',
 }
 /** 一屏形态（内容必须装下，不滚动）；其余为可滚动形态 */
 const ONE_SCREEN = ['watch', 'car', 'tv']
-const ALL_FORMS = ['watch', 'phone', 'fold', 'tablet', 'pc', 'car', 'tv']
+const ALL_FORMS = ['watch', 'phone', 'flip', 'fold', 'tablet', 'pc', 'car', 'tv']
 /** 核心内容块（重叠/裁切判据；刻意叠加的组合在探针里排除） */
 const BLOCKS = ['.pf-heading', '.pf-price', '.pf-actions', '.pf-recommend', '.pf-media', '.pf-sku-fallback', '.pf-sku', '.pf-tabbar', '.pf-rail', '.pf-drive-hint']
 
