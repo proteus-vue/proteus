@@ -26,20 +26,23 @@ function emitsOf(file: string): string[] {
   return [...m[1].matchAll(/['"]([a-zA-Z][\w]*)['"]/g)].map((x) => x[1])
 }
 
-/** 从演示页的 apiRows 表提取第一列（属性名，kebab 或 camel） */
+/** 从演示页的 apiRows 表提取第一列（属性名，kebab 或 camel）
+ *  ★兼容两种行格式（2026-09-26）：手写页的单引号整行 `['size', …]` 与
+ *  SSOT 生成页的 JSON 多行形式（`[\n  "size",`，JSON.stringify(…, null, 2) 产物）。
+ *  行首 `[` + 空白 + 引号才认作行首——误匹配只会多报不会漏报，对 ⊇ 断言无害。 */
 function apiRowsOf(pageFile: string): string[] {
   const src = fs.readFileSync(pageFile, 'utf-8')
   const m = src.match(/const apiRows = ref\(\[([\s\S]*?)\n\]\)/)
   if (!m) return []
-  return [...m[1].matchAll(/\['([^']+)'/g)].map((x) => x[1])
+  return [...m[1].matchAll(/\[\s*(['"])([^'"\]]+)\1\s*,?/g)].map((x) => x[2])
 }
 
-/** 从演示页的 eventRows 表提取第一列（事件名；可能含 "a / b" 合并写法） */
+/** 从演示页的 eventRows 表提取第一列（事件名；可能含 "a / b" 合并写法）；行格式同上 */
 function eventRowsOf(pageFile: string): string[] {
   const src = fs.readFileSync(pageFile, 'utf-8')
   const m = src.match(/const eventRows = ref\(\[([\s\S]*?)\n\]\)/)
   if (!m) return []
-  return [...m[1].matchAll(/\['([^']+)'/g)].map((x) => x[1])
+  return [...m[1].matchAll(/\[\s*(['"])([^'"\]]+)\1\s*,?/g)].map((x) => x[2])
 }
 
 const norm = (s: string) => s.replace(/[-:]/g, '').toLowerCase()
