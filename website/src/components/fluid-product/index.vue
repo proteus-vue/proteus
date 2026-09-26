@@ -1,24 +1,24 @@
 <script setup lang="ts">
 // ══════════════════════════════════════════════════════════════════════════════
-// 柔性系统演示源 —— 同一份源码，六端形态（多端同屏页左栏展示的就是本文件的真实源码）
+// 柔性系统演示内容 —— 同一份「语义内容」，交给 <p-formfactor> 按设备形态自动编排
 //
-// 两条柔性机制（都在本文件里真实生效，页面上是真执行不是示意图）：
-//   ① 容器断点（p-zone）：按**容器宽度**（不是视口）选命名槽——手表 sm / 手机 md /
-//      折叠 lg / 宽屏 xl；`<template #sm>` 里是完全不同的布局，不是同一布局缩放。
-//   ② 能力声明（caps）：端声明不支持的能力走**降级分支**（v-if="caps.xxx"）——
-//      手表无底部 Tab、车机无 SKU 多选（条件降级）、TV 用焦点行而非 hover。
+// ★这个文件里**没有任何形态判断**（没有 if (form === 'car')、没有断点槽、没有能力判断）——
+//   业务只声明内容槽（media/heading/price/sku/actions/recommend/rail/tabbar），
+//   框架据形态画像自动决定：布局拓扑 / 导航形态 / 能力槽取舍 / 密度 / 缩放 / 热区尺寸。
+//   这正是「柔性系统」与「响应式布局」的分水岭。
 //
-// 端注册表（端能力表实现在宿主——此处由本页按端注入；真实项目里来自端 profile）
+// 形态由宿主声明（演示页逐个声明）；真实 App 里来自端 profile。
 // ══════════════════════════════════════════════════════════════════════════════
 import { ref } from 'vue'
+import type { DeviceForm } from '@proteus-vue/fluid'
 
 const props = defineProps<{
-  /** 输入形态：触控 / 鼠标 / 遥控器 / 表冠（能力声明的一部分） */
-  form: 'touch' | 'cursor' | 'remote' | 'dial'
-  /** 端能力声明：缺省 = 该端声明不支持该能力（走降级分支，不静默失败） */
-  caps?: { tabs?: boolean; rail?: boolean; focusRows?: boolean; dense?: boolean }
+  form: DeviceForm
+  width: number
+  height: number
 }>()
 
+// 纯业务状态（与形态无关）
 const product = {
   name: '无线降噪耳机 Pro',
   price: 1299,
@@ -27,169 +27,136 @@ const product = {
 const skus = ['曜石黑', '月光白', '雾霾蓝']
 const picked = ref('曜石黑')
 const counted = ref(1)
+const recs = [
+  { ic: '🎵', name: '替换耳罩', price: 39 },
+  { ic: '🔌', name: '音频线', price: 59 },
+  { ic: '🎒', name: '收纳包', price: 99 },
+  { ic: '🔋', name: '充电底座', price: 199 },
+  { ic: '📦', name: '旅行套装', price: 299 },
+]
 </script>
 
 <template>
-  <p-zone :design-width="375" class="fp">
-    <!-- ── sm（手表 198px · 表冠形态）：一屏一意 —— 只有名称 / 价格 / 主操作 ── -->
-    <template #sm>
-      <div class="fp-watch">
-        <span class="fp-watch-name">{{ product.name }}</span>
-        <strong class="fp-price">¥{{ product.price }}</strong>
-        <button class="fp-big" @click="counted++">{{ counted > 1 ? '已加购 ' + counted : '加购' }}</button>
-        <span v-if="form === 'dial'" class="fp-hint">↕ 表冠滚动</span>
+  <!-- ★框架组件：一行接形态，其余全自动（拓扑/能力/密度/缩放/热区） -->
+  <p-formfactor :declared="form" :width="width" :height="height">
+    <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
+    <template #rail>
+      <span class="fp-brand">🎧 云端商城</span>
+      <span class="fp-rail-item on">首页</span>
+      <span class="fp-rail-item">音频</span>
+      <span class="fp-rail-item">订单</span>
+      <span class="fp-rail-item">设置</span>
+    </template>
+
+    <!-- 主视觉 -->
+    <template #media>
+      <div class="fp-cover">🎧</div>
+    </template>
+
+    <!-- 标题与描述 -->
+    <template #heading>
+      <strong class="fp-name">{{ product.name }}</strong>
+      <span class="fp-desc">{{ product.desc }}</span>
+    </template>
+
+    <!-- 价格 -->
+    <template #price>
+      <strong class="fp-price">¥{{ product.price }}</strong>
+    </template>
+
+    <!-- 多规格（★车机形态声明不支持 skuMulti → 框架自动不渲染，业务无感） -->
+    <template #sku>
+      <span v-for="s in skus" :key="s" class="fp-sku" :class="{ on: picked === s }" @click="picked = s">{{ s }}</span>
+    </template>
+
+    <!-- 主操作（遥控/旋钮形态框架自动放大热区） -->
+    <template #actions>
+      <button class="fp-primary" @click="counted++">{{ counted > 1 ? '已加购 ' + counted : '加入购物车' }}</button>
+      <button class="fp-ghost">立即购买 →</button>
+    </template>
+
+    <!-- 推荐（★TV/车机形态框架自动转横向焦点海报流） -->
+    <template #recommend>
+      <div v-for="r in recs" :key="r.name" class="pf-rec-card fp-rec">
+        <span class="fp-rec-ic">{{ r.ic }}</span>
+        <span class="fp-rec-name">{{ r.name }}</span>
+        <span class="fp-rec-pt">¥{{ r.price }}</span>
       </div>
     </template>
 
-    <!-- ── md（手机 390px · 触控）：竖屏单列 —— 大图 / SKU / 双按钮 / 底部 Tab ── -->
-    <template #md>
-      <div class="fp-phone">
-        <div class="fp-cover">🎧</div>
-        <h3 class="fp-name">{{ product.name }}</h3>
-        <span class="fp-desc">{{ product.desc }}</span>
-        <strong class="fp-price">¥{{ product.price }}</strong>
-        <div class="fp-skus">
-          <span v-for="s in skus" :key="s" class="fp-sku" :class="{ on: picked === s }" @click="picked = s">{{ s }}</span>
-        </div>
-        <div class="fp-btns">
-          <button class="fp-primary" @click="counted++">加入购物车</button>
-          <button class="fp-ghost">立即购买</button>
-        </div>
-        <!-- 能力声明：手表/车机声明 tabs=false → 不渲染（降级分支可见） -->
-        <nav v-if="caps?.tabs" class="fp-tabbar">
-          <span class="on">首页</span><span>发现</span><span>购物车</span><span>我的</span>
-        </nav>
-      </div>
+    <!-- 底部 Tab（★仅声明 tabs 的形态渲染：手机 / 折叠屏） -->
+    <template #tabbar>
+      <span class="on">首页</span><span>发现</span><span>购物车</span><span>我的</span>
     </template>
-
-    <!-- ── lg（折叠屏 / 小平板 469-608px）：图 + 详情双列 —— 过渡形态 ── -->
-    <template #lg>
-      <div class="fp-duo">
-        <div class="fp-cover fp-cover--duo">🎧</div>
-        <div class="fp-body">
-          <h3 class="fp-name">{{ product.name }}</h3>
-          <span class="fp-desc">{{ product.desc }}</span>
-          <strong class="fp-price">¥{{ product.price }}</strong>
-          <div class="fp-skus">
-            <span v-for="s in skus" :key="s" class="fp-sku" :class="{ on: picked === s }" @click="picked = s">{{ s }}</span>
-          </div>
-          <button class="fp-primary" @click="counted++">加入购物车</button>
-        </div>
-      </div>
-    </template>
-
-    <!-- ── xl（平板 / PC / 车机 / TV，≥609px）：侧栏 + 主体 —— 形态由能力声明分岔 ── -->
-    <template #xl>
-      <div class="fp-wide">
-        <!-- 能力声明：PC/平板声明 rail=true（侧栏）；手机/手表/TV 无侧栏 -->
-        <aside v-if="caps?.rail" class="fp-rail">
-          <span class="fp-brand">🎧 云端商城</span>
-          <span class="on">首页</span><span>音频</span><span>订单</span><span>设置</span>
-        </aside>
-        <div class="fp-main">
-          <!-- 遥控器形态（车机 / TV）：横向焦点行（海报流）+ 大热区——d-pad 可达 -->
-          <template v-if="caps?.focusRows">
-            <div class="fp-hero">
-              <div class="fp-cover fp-cover--hero">🎧</div>
-              <div class="fp-hero-info">
-                <h3 class="fp-name">{{ product.name }}</h3>
-                <strong class="fp-price">¥{{ product.price }}</strong>
-                <span class="fp-desc">{{ product.desc }}</span>
-                <!-- 能力声明：车机 form=remote → 大焦点按钮；焦点态由 d-pad 语义驱动 -->
-                <div class="fp-btns">
-                  <button class="fp-primary fp-focus" @click="counted++">▶ 加入购物车</button>
-                  <button class="fp-ghost">＋ 收藏</button>
-                </div>
-              </div>
-            </div>
-            <h4 class="fp-rail-title">为你推荐 · 焦点行</h4>
-            <div class="fp-focus-row">
-              <div v-for="i in 5" :key="i" class="fp-card">
-                <span class="fp-card-ic">🎵</span>
-                <span class="fp-card-name">推荐 {{ i }}</span>
-                <span class="fp-card-pt">¥{{ 199 * i }}</span>
-              </div>
-            </div>
-          </template>
-          <!-- 触控 / 鼠标形态（平板 / PC）：多列图文 + SKU（车机声明无 SKU 多选 → 此处不达） -->
-          <template v-else>
-            <div class="fp-cols">
-              <div class="fp-cover fp-cover--col">🎧</div>
-              <div class="fp-body">
-                <h3 class="fp-name">{{ product.name }}</h3>
-                <span class="fp-desc">{{ product.desc }}</span>
-                <strong class="fp-price">¥{{ product.price }}</strong>
-                <div class="fp-skus">
-                  <span v-for="s in skus" :key="s" class="fp-sku" :class="{ on: picked === s }" @click="picked = s">{{ s }}</span>
-                </div>
-                <div class="fp-btns">
-                  <button class="fp-primary" @click="counted++">加入购物车</button>
-                  <button class="fp-ghost">立即购买</button>
-                </div>
-                <!-- 鼠标形态：hover 提示（TV/车机无 hover → 不渲染） -->
-                <span v-if="form === 'cursor'" class="fp-hint">💻 悬停查看详情（hover 态）</span>
-              </div>
-              <div class="fp-aside">
-                <span class="fp-aside-t">服务</span>
-                <span>7 天无理由</span><span>顺丰包邮</span><span>一年保修</span>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </template>
-  </p-zone>
+  </p-formfactor>
 </template>
 
 <style scoped>
-.fp { background: #f7f8fa; color: #17171f; height: 100%; overflow: hidden; font-size: 13px; }
+/* 演示内容样式（★与形态无关——形态引起的排列差异全在 p-formfactor 内） */
+.fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(12px * var(--pf-scale, 1)); }
+.fp-rail-item { padding: 8px 10px; border-radius: 7px; color: #666; }
+.fp-rail-item.on { background: #f0edff; color: #7c5cff; font-weight: 700; }
 
-/* ── sm：手表 ── */
-.fp-watch { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 14px 12px; text-align: center; }
-.fp-watch-name { font-size: 11px; color: #666; }
-.fp-big { width: 92px; height: 44px; border: none; border-radius: 22px; background: #7c5cff; color: #fff; font-size: 14px; font-weight: 800; }
-.fp-hint { font-size: 10px; color: #999; }
+.fp-cover {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef0ff, #e3e7f8);
+  display: grid;
+  place-items: center;
+  font-size: calc(46px * var(--pf-scale, 1));
+  min-height: 96px;
+}
+.fp-name { display: block; font-size: calc(16px * var(--pf-scale, 1)); font-weight: 800; }
+.fp-desc { display: block; color: #777; font-size: calc(11.5px * var(--pf-scale, 1)); margin-top: 4px; }
+.fp-price { display: block; font-size: calc(22px * var(--pf-scale, 1)); font-weight: 800; color: #7c5cff; }
 
-/* ── md：手机 ── */
-.fp-phone { height: 100%; overflow-y: auto; padding: 14px 14px 0; display: flex; flex-direction: column; gap: 8px; }
-.fp-cover { height: 128px; border-radius: 12px; background: linear-gradient(135deg, #eef0ff, #e3e7f8); display: grid; place-items: center; font-size: 44px; }
-.fp-name { margin: 0; font-size: 16px; font-weight: 800; }
-.fp-desc { color: #777; font-size: 11.5px; }
-.fp-price { font-size: 22px; font-weight: 800; color: #7c5cff; }
-.fp-skus { display: flex; flex-wrap: wrap; gap: 7px; }
-.fp-sku { padding: 7px 11px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 11.5px; }
+.pf-sku { display: flex; flex-wrap: wrap; gap: 8px; }
+.fp-sku {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  font-size: calc(11.5px * var(--pf-scale, 1));
+  cursor: pointer;
+}
 .fp-sku.on { border-color: #7c5cff; color: #7c5cff; font-weight: 700; }
-.fp-btns { display: flex; gap: 8px; }
-.fp-primary { flex: 1; padding: 11px; border: none; border-radius: 9px; background: #7c5cff; color: #fff; font-size: 13px; font-weight: 700; }
-.fp-ghost { flex: 0 0 auto; padding: 11px 14px; border: 1px solid #7c5cff; border-radius: 9px; background: #fff; color: #7c5cff; font-size: 13px; font-weight: 700; }
-.fp-tabbar { margin-top: auto; display: flex; border-top: 1px solid #e6e8f0; padding: 8px 0 10px; }
-.fp-tabbar span { flex: 1; text-align: center; font-size: 11px; color: #999; }
-.fp-tabbar .on { color: #7c5cff; font-weight: 800; }
 
-/* ── lg：双列 ── */
-.fp-duo { height: 100%; display: grid; grid-template-columns: 210px 1fr; gap: 14px; padding: 14px; }
-.fp-cover--duo { height: 100%; }
-.fp-body { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.pf-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.fp-primary {
+  flex: 1 1 auto;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 9px;
+  background: #7c5cff;
+  color: #fff;
+  font-size: calc(13px * var(--pf-scale, 1));
+  font-weight: 700;
+  cursor: pointer;
+}
+.fp-ghost {
+  flex: 0 0 auto;
+  padding: 11px 16px;
+  border: 1px solid #7c5cff;
+  border-radius: 9px;
+  background: #fff;
+  color: #7c5cff;
+  font-size: calc(13px * var(--pf-scale, 1));
+  font-weight: 700;
+  cursor: pointer;
+}
 
-/* ── xl：宽屏（侧栏 + 主体） ── */
-.fp-wide { height: 100%; display: flex; }
-.fp-rail { width: 132px; flex-shrink: 0; background: #fff; border-right: 1px solid #e6e8f0; display: flex; flex-direction: column; gap: 4px; padding: 12px 10px; }
-.fp-brand { font-size: 11.5px; font-weight: 800; margin-bottom: 8px; }
-.fp-rail span { padding: 8px 10px; border-radius: 7px; color: #666; font-size: 12px; }
-.fp-rail .on { background: #f0edff; color: #7c5cff; font-weight: 700; }
-.fp-main { flex: 1; min-width: 0; overflow-y: auto; padding: 14px; }
-.fp-hero { display: grid; grid-template-columns: 200px 1fr; gap: 16px; }
-.fp-cover--hero { height: 148px; }
-.fp-hero-info { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.fp-focus { border-radius: 10px; padding: 13px 26px; font-size: 15px; box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.28); }
-.fp-rail-title { margin: 16px 0 8px; font-size: 13px; color: #555; }
-.fp-focus-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
-.fp-card { flex: 0 0 108px; background: #fff; border: 1px solid #e6e8f0; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 5px; align-items: center; }
-.fp-card-ic { font-size: 26px; }
-.fp-card-name { font-size: 11px; color: #555; }
-.fp-card-pt { font-size: 12px; font-weight: 800; color: #7c5cff; }
-.fp-cols { display: grid; grid-template-columns: 220px 1fr 130px; gap: 16px; }
-.fp-cover--col { height: 170px; }
-.fp-aside { display: flex; flex-direction: column; gap: 7px; font-size: 11.5px; color: #666; background: #fff; border: 1px solid #e6e8f0; border-radius: 10px; padding: 12px; height: fit-content; }
-.fp-aside-t { font-weight: 800; color: #17171f; }
+.fp-rec {
+  background: #fff;
+  border: 1px solid #e6e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+}
+.fp-rec-ic { font-size: calc(26px * var(--pf-scale, 1)); }
+.fp-rec-name { font-size: calc(11px * var(--pf-scale, 1)); color: #555; }
+.fp-rec-pt { font-size: calc(12px * var(--pf-scale, 1)); font-weight: 800; color: #7c5cff; }
 </style>

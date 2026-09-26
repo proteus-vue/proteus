@@ -55,6 +55,8 @@ const LAYOUT: PrimitiveDef[] = [
   // ★#405 语义登记批：Fluid 体系剩余组件（语义层待多端映射 → planned L2——G-31.4 不足 3 端降级）
   { id: 'L13', kind: 'layout', semantic: 'layout.aspect', tag: 'p-aspect', props: ['ratio', 'maxWidth'], mpEquiv: '无（纵横比容器）', tier: 'L2', status: 'planned' },
   { id: 'L14', kind: 'layout', semantic: 'layout.zone', tag: 'p-zone', props: ['designWidth'], mpEquiv: '无（容器断点分区）', tier: 'L2', status: 'planned' },
+  // ★★Fluid System v2（2026-09-26）：柔性形态容器——按设备形态自动编排布局拓扑/能力/密度/缩放
+  { id: 'L26', kind: 'layout', semantic: 'layout.formfactor', tag: 'p-formfactor', props: ['declared', 'width', 'height'], mpEquiv: '无（形态编排容器：glance/stack/duo/rail-split/rail-grid/dashboard/hero-focus-row）', tier: 'L2', status: 'implemented' },
   // ★批次 7（2026-09-18）未登记组件补登记：安全区（刘海/折叠屏/降级）+ 侧边导航容器
   { id: 'L15', kind: 'layout', semantic: 'layout.safe', tag: 'p-safe', props: ['area', 'fold', 'fallback'], mpEquiv: '无（安全区语义容器）', tier: 'L1', status: 'implemented' },
   { id: 'L16', kind: 'layout', semantic: 'layout.sidebar', tag: 'p-sidebar', props: ['minSidebarWidth', 'navWidth', 'designWidth', 'toggleLabel'], mpEquiv: '无（容器断点侧栏）', tier: 'L1', status: 'implemented' },

@@ -1,7 +1,7 @@
 # G-32 原语清单（自动生成——SSOT = packages/component-ir/src/primitives.ts）
 
 > ★由 `npm run gen:docs` 生成，勿手改。手工维护的叙述性规划见各 plan 文档。
-> 总计 **183** 原语 · implemented **64**。
+> 总计 **184** 原语 · implemented **65**。
 
 ## layout — 布局（12）
 
@@ -21,6 +21,7 @@
 | L12 | `layout.masonry` | tag:p-masonry | `p-masonry` | 第三方瀑布流 | implemented |
 | L13 | `layout.aspect` | tag:p-aspect | `p-aspect` | 无（纵横比容器） | planned |
 | L14 | `layout.zone` | tag:p-zone | `p-zone` | 无（容器断点分区） | planned |
+| L26 | `layout.formfactor` | tag:p-formfactor | `p-formfactor` | 无（形态编排容器：glance/stack/duo/rail-split/rail-grid/dashboard/hero-focus-row） | implemented |
 | L15 | `layout.safe` | tag:p-safe | `p-safe` | 无（安全区语义容器） | implemented |
 | L16 | `layout.sidebar` | tag:p-sidebar | `p-sidebar` | 无（容器断点侧栏） | implemented |
 

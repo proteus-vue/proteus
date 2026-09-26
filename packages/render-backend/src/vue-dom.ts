@@ -40,6 +40,8 @@ const SEMANTIC_WEB_MAP: Record<string, { tag: string; className?: string }> = {
   'layout.split': { tag: 'div', className: 'proteus-split' },
   'layout.safe': { tag: 'div', className: 'proteus-safe' },
   'layout.sidebar': { tag: 'div', className: 'proteus-sidebar' },
+  // ★★Fluid System v2：柔性形态容器
+  'layout.formfactor': { tag: 'div', className: 'proteus-formfactor' },
   'ui.text': { tag: 'span' },
   'ui.button': { tag: 'button' },
   'ui.image': { tag: 'img' },

@@ -6,9 +6,9 @@ order: 0
 
 # 组件总览
 
-> 73 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
+> 74 个语义组件（6 域）——props/events 由源码 SSOT 生成（`website/scripts/gen-content.mjs`），与框架实现实时一致。
 
-## 布局（17）
+## 布局（18）
 
 | 组件 | Props | Events |
 |---|---|---|
@@ -17,6 +17,7 @@ order: 0
 | [p-box](/docs/component/p-box) | 2 | 0 |
 | [p-divider](/docs/component/p-divider) | 3 | 0 |
 | [p-fit](/docs/component/p-fit) | 1 | 0 |
+| [p-formfactor](/docs/component/p-formfactor) | 3 | 0 |
 | [p-grid](/docs/component/p-grid) | 2 | 0 |
 | [p-inline](/docs/component/p-inline) | 4 | 0 |
 | [p-masonry](/docs/component/p-masonry) | 2 | 0 |

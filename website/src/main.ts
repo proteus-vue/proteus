@@ -21,6 +21,7 @@ import {
   PAnimate,
   PgGlass,
   PZone,
+  PFormfactor,
   installFluidLayout,
 } from '@proteus-vue/components'
 // ★G-24 B1 桌面交互原语：v-p-hover（官网卡片 hover 语义——Pure logic 双端接线）
@@ -34,6 +35,8 @@ const components: Record<string, unknown> = {
   'p-view': PView,
   // ★2026-09-26 多端同屏（柔性系统）：容器断点分区——p-zone 就是本页演示的主角
   'p-zone': PZone,
+  // ★★Fluid System v2：形态容器（多端同屏页的主角——形态自动编排）
+  'p-formfactor': PFormfactor,
   'p-text': PText,
   'p-heading': PHeading,
   'p-grid': PGrid,

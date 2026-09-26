@@ -47,6 +47,7 @@ const SEMANTIC_FLUTTER_MAP: Record<string, string> = {
   'layout.split': 'Row',
   'layout.safe': 'SafeArea',
   'layout.sidebar': 'NavigationRail',
+  'layout.formfactor': 'LayoutBuilder.formFactor',
   'ui.text': 'Text',
   'ui.button': 'FilledButton',
   'ui.image': 'Image',

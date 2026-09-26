@@ -35,6 +35,7 @@ const SEMANTIC_HEADLESS_MAP: Record<string, string> = {
   'layout.split': 'split',
   'layout.safe': 'safe',
   'layout.sidebar': 'sidebar',
+  'layout.formfactor': 'formfactor',
   'ui.text': 'text',
   'ui.button': 'button',
   'ui.image': 'image',

@@ -93,6 +93,16 @@ export const SEMANTIC_BACKEND_MAP: Record<string, Partial<Record<BackendId | 'we
     flutter: 'NavigationRail',
     headless: 'sidebar',
   },
+  // ★★Fluid System v2（2026-09-26）：柔性形态容器——各端按形态画像编排拓扑/能力/密度/缩放
+  'layout.formfactor': {
+    'vue-dom': 'div.proteus-formfactor',
+    'native-ios': 'UIViewController.formFactor',
+    'native-android': 'FormFactorLayout',
+    'native-harmony': 'GridRow.formFactor',
+    skyline: 'view.formfactor',
+    flutter: 'LayoutBuilder.formFactor',
+    headless: 'formfactor',
+  },
   // —— 基础 UI 原语 ——
   'ui.text': {
     'vue-dom': 'span',

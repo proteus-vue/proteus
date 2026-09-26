@@ -126,7 +126,7 @@ describe('G-31 B5 conformance：三端渲染快照一致', () => {
     //   + ★语义决策批（scan-qr/pick-photo 双形态，净 0）+ ★手势 tap/longpress 落地 2
     //   + ★能力入口双形态（C1/C42 转 implemented）+ ★批次 8 共享元素转场：implemented 语义 = 64（planned 不设门禁）
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(64)
+    expect(impl.length).toBe(65) // ★2026-09-26 Fluid System v2 +1
     for (const p of impl) {
       expect(Object.keys(SEMANTIC_BACKEND_MAP[p.semantic] ?? {}).length, `${p.semantic} 参考行不足`).toBeGreaterThanOrEqual(3)
     }
