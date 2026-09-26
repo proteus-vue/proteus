@@ -10,9 +10,11 @@
 //     收起/展开改 v-show（已加载的 iframe 保活，二次展开零等待）
 //   · 「新窗口打开」直达 showcase 页（可交互完整版）
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { locale } from '../i18n'
 
 const props = defineProps<{ dir: string }>()
 
+const isEn = computed(() => locale.value === 'en')
 const src = computed(() => `/showcase/subpackages/components/pages/${props.dir}`)
 const checked = ref(false) // HEAD 预检完成
 const available = ref(false) // 演示页存在
@@ -83,19 +85,24 @@ onBeforeUnmount(() => {
   ro?.disconnect()
   if (paintRaf) cancelAnimationFrame(paintRaf)
 })
+
+const title = computed(() => (isEn.value ? 'Live demo (real compiled output · interactive)' : '在线演示（真实编译产物 · 可交互）'))
+const collapseLabel = computed(() => (open.value ? (isEn.value ? 'Collapse' : '收起') : isEn.value ? 'Expand demo' : '展开演示'))
+const openTabLabel = computed(() => (isEn.value ? 'Open in new tab ↗' : '新窗口打开 ↗'))
+const loadingLabel = computed(() => (isEn.value ? 'Loading live demo…' : '正在加载在线演示…'))
 </script>
 
 <template>
   <div v-if="!checked" class="cd cd--pending">
-    <span class="cd-pending-text">正在检查在线演示…</span>
+    <span class="cd-pending-text">{{ isEn ? 'Checking live demo…' : '正在检查在线演示…' }}</span>
   </div>
   <div v-else-if="available" class="cd">
     <header class="cd-head">
       <span class="cd-badge">● LIVE</span>
-      <span class="cd-title">在线演示（真实编译产物 · 可交互）</span>
+      <span class="cd-title">{{ title }}</span>
       <span class="cd-actions">
-        <button type="button" class="cd-btn" @click="open = !open">{{ open ? '收起' : '展开演示' }}</button>
-        <a class="cd-btn cd-btn--brand" :href="src" target="_blank" rel="noopener">新窗口打开 ↗</a>
+        <button type="button" class="cd-btn" @click="open = !open">{{ collapseLabel }}</button>
+        <a class="cd-btn cd-btn--brand" :href="src" target="_blank" rel="noopener">{{ openTabLabel }}</a>
       </span>
     </header>
     <div v-show="open" class="cd-stage" :style="{ height: `${height}px` }">
@@ -104,20 +111,24 @@ onBeforeUnmount(() => {
         <span class="cd-skel-bar cd-skel-bar--title" />
         <span class="cd-skel-bar cd-skel-bar--block" />
         <span class="cd-skel-bar cd-skel-bar--block cd-skel-bar--short" />
-        <span class="cd-skel-hint">正在加载在线演示…</span>
+        <span class="cd-skel-hint">{{ loadingLabel }}</span>
       </div>
       <iframe
         ref="frame"
         class="cd-frame"
         :src="src"
-        :title="`组件演示：${dir}`"
+        :title="`Live demo: ${dir}`"
         loading="lazy"
         @load="loaded = true"
       />
     </div>
   </div>
   <div v-else class="cd cd--missing">
-    <span class="cd-pending-text">在线演示未部署（showcase 子站构建缺失）——文档与 API 表仍为源码 SSOT。</span>
+    <span class="cd-pending-text">
+      {{ isEn
+        ? 'Live demo not deployed (showcase sub-site build missing) — docs & API tables remain source-of-truth.'
+        : '在线演示未部署（showcase 子站构建缺失）——文档与 API 表仍为源码 SSOT。' }}
+    </span>
   </div>
 </template>
 
