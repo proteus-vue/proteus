@@ -339,6 +339,9 @@ onUnmounted(() => {
   /* ★定位宿主（2026-09-26 复审）：三个 absolute 徽标此前依赖宿主 .frame 有 position:relative，
      否则飞到视口右下角——框架组件必须自持定位上下文 */
   position: relative;
+  /* ★容器上下文（2026-09-26 第三轮）：形态内部按**自身宽度**（= 帧宽/真实设备宽）取舍，
+     与 stage/viewport 无关——窄舞台上 TV 也能保住海报行（见 hero-focus-row 的 @container） */
+  container-type: inline-size;
   /* ★flex 列（2026-09-26 专家审查）：此前 display:block 让 .pf-tabbar 的 margin-top:auto 失效
      → Tab 栏被 overflow:hidden 裁掉 45%（手机/折叠屏唯一导航不可用） */
   display: flex;
@@ -574,9 +577,11 @@ onUnmounted(() => {
 .topo-hero-focus-row { padding: calc(var(--pf-pad) * 1.1); }
 .topo-hero-focus-row .pf-body {
   display: grid;
-  /* ★实测（二次复审）：叠加内容高 212px（标题 37 + 描述 37 + 价格 46 + CTA 76 + 间距 16）——
-     hero 行须 ≥ 该值，否则 align-self:end 会把标题顶出帧顶被裁；70% 命中（海报行余 30% ≈ 卡高 87 = 16/9）。 */
-  grid-template-rows: minmax(0, 70%) minmax(0, 1fr);
+  /* ★实测（第三轮，双视口）：叠加内容高 212px（标题 37 + 描述 37 + 价格 46 + CTA 76 + 间距 16）——
+     固定 70% 只在**设计帧宽**（620）成立：窄舞台（1280 视口 → 帧 540）下 70% = 176px < 212px
+     → align-self:end 把标题顶出帧顶被裁。定稿 min-content 下限：hero 行**永不小于内容**（不裁切），
+     海报行吸收剩余（极端窄时变矮，但永不重叠）——「宁可内容矮，不可内容叠」。 */
+  grid-template-rows: minmax(min-content, 70%) minmax(0, 1fr);
   gap: var(--pf-gap);
   min-height: 0;
   overflow: hidden;
@@ -597,7 +602,9 @@ onUnmounted(() => {
   background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--pf-bg, #000) 82%, transparent) 100%);
   pointer-events: none;
 }
-.topo-hero-focus-row .pf-media > :deep(*) { height: 100%; min-height: 0; }
+/* ★跨行媒体不得反向决定行高（第三轮实测根因）：封面的 aspect-ratio:16/9 让 min-content = 帧宽×9/16
+   （540 → 279px）→ hero 行被撑到 279，海报行归零、拓扑失去身份。宽高比交给轨道（同车机处置）。 */
+.topo-hero-focus-row .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
 /* 信息层与英雄图同格（叠加）——底部左对齐，10ft 下标题/价格/CTA 同屏 */
 .topo-hero-focus-row .pf-info {
   grid-row: 1;
@@ -617,6 +624,13 @@ onUnmounted(() => {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+/* ★窄帧简化（第三轮实测）：帧宽 < 560 时叠加内容 212px 会吃掉整个英雄行 → 海报行归零、拓扑失去身份。
+   按 10ft 语义收描述（抬腕/远距离本就读不完第二行小字），把高度让给海报行——
+   取舍次序：标题+价格+CTA 必保 > 海报行必有一张 > 描述可弃。 */
+@container (max-width: 559px) {
+  .topo-hero-focus-row :deep(.fp-desc) { display: none; }
+  .topo-hero-focus-row .pf-info { gap: calc(var(--pf-gap) * 0.3); padding: calc(var(--pf-u) * 0.8); }
 }
 .topo-hero-focus-row .pf-recommend--row {
   grid-row: 2;
@@ -641,102 +655,110 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ── 拓扑：dashboard（车机——驾驶舱 HMI：左媒体 + 右信息 + 底大热区行）──
-   ★2026-09-26 二次复审第三轮实测：8/3 扁画布（620×232）内容区仅 196px 高，而
-   「媒体 + 标题 + 价格 + 降级条 + CTA + 推荐行」纵排需 ≈370px → 标题被顶出帧顶、CTA 与瓦片重叠。
-   定稿：`display: contents` 让信息子项直接成为网格项，按驾驶舱层级重新分区——
-     ① 左媒体纵跨信息两行（16/9 → 填满左列高度）② 标题单行 ③ 价格与降级条同排 ④
-     主操作与推荐瓦片同处底行：**选项与确认键同层**（拇指/旋钮一跳可达，驾驶舱惯例）。
-   推荐位只留 3 个（帧宽已给足热区）：行车中翻找第 4、5 个选项是分心源，宁可让后续项不可达。 */
+/* ── 拓扑：dashboard（车机——驾驶舱 HMI：媒体 | 信息 / 主操作 | 推荐）──
+   ★2026-09-26 三轮实测定稿（前两轮都是「只在宽舞台验证」的教训）：
+   8/3 扁画布在**窄舞台**（1280 视口 → 帧宽 540 → 内容区仅 165px）下，四行纵排
+   （标题/价格/操作/提醒）需要 ≈197px → 网格行被压缩到内容之下，**元素互相重叠**。
+   定稿：两行两列，行高带 min-content 下限（宁可裁剪，绝不重叠——重叠是视觉垃圾）：
+     上排『媒体 | 信息（标题 / 价格 + 降级条）』· 下排『主操作 | 推荐瓦片』
+     · 提醒条改为**绝对定位徽标**（贴媒体角，不占纵向预算）
+   内容预算（165px）= 信息 68 + 操作 76 + 间距 6 ≈ 150 ✓；宽舞台时上排自动长高（1fr）。
+   推荐位只留 3 个：行车中翻找第 4、5 个选项是分心源（第 4+ 项不可达是刻意的）。 */
+/* ★2026-09-26 三轮实测定稿（教训：前两轮都只在宽舞台验证）：
+     根因① `.pf-actions` 是 `.pf-info` 的**子元素**（模板既定结构）——不给 info 开 display:contents，
+             `grid-area: actions` 会落到 info 的隐式行里（实测 info 变 4 行 158px → 顶爆车身行高 → 兄弟重叠）。
+     根因② 跨行媒体若保留 16:9 内在高度，会反向把行撑开（定格 aspect-ratio:auto 后消除）。
+     根因③ 行高用 minmax(min-content, …) 留底：**宁可底部裁切，绝不元素重叠**（重叠是视觉垃圾）。
+   层级（驾驶舱惯例）：媒体 | 标题/价格+降级条；主操作与推荐瓦片同处底行（选项与确认键一跳可达）。 */
 .p-formfactor.topo-dashboard .pf-body {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.75fr) minmax(0, 1.35fr);
-  /* ★行高（二维实测定稿）：auto 行被**跨行媒体**的 16:9 内在高度撑开（媒体 126px →
-     头部两行 118px、底行只剩 13px，瓦片塌成细条）。故：
-       ① 跨行媒体封面填满轨道（aspect-ratio: auto）→ 不再反向撑行；
-       ② 底行钉死 --pf-control 下限（热区不可小于 76dp）；③ 提醒条独占一行。 */
-  grid-template-rows: minmax(0, auto) minmax(0, auto) minmax(var(--pf-control), 1fr) auto;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 2.28fr);
+  grid-template-rows: minmax(min-content, auto) minmax(min-content, auto) minmax(var(--pf-control), auto);
   grid-template-areas:
-    'media heading heading'
-    'media price   sku'
-    'actions rec    rec'
-    'hint   hint   hint';
-  gap: calc(var(--pf-gap) * 0.8);
+    'media heading'
+    'media info'
+    'actions rec';
+  gap: calc(var(--pf-gap) * 0.45);
   min-height: 0;
   overflow: hidden;
 }
 .topo-dashboard .pf-media {
   grid-area: media;
+  position: relative;
   align-self: stretch;
   min-height: 0;
   overflow: hidden;
   border-radius: calc(var(--pf-radius) * 1.1);
 }
-/* ★跨行媒体不得反向决定行高：封面填满轨道（宽高比交给轨道），否则 16:9 内在高度撑爆行 */
+/* 媒体不得反向决定行高：封面填满轨道（宽高比交给轨道） */
 .p-formfactor.topo-dashboard .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
-/* ★信息列拆为网格项（display: contents）：此前整列只能整块摆放，纵向预算装不下 */
+/* ★信息列拆为网格项（car 专有）：heading/price/sku/actions 直接成为 body 网格项——
+   否则 actions 会被困在 info 子网格里（根因①），与底行瓦片互相重叠。 */
 .topo-dashboard .pf-info { display: contents; }
-.topo-dashboard .pf-heading { grid-area: heading; align-self: center; min-width: 0; }
-/* 标题单行（驾驶舱一行可读，长度溢出省略——这是 196px 预算的硬约束） */
+.topo-dashboard .pf-heading { grid-area: heading; align-self: end; min-width: 0; }
+/* 标题单行（驾驶舱一行可读，长度溢出省略——纵向预算的硬约束） */
 .p-formfactor.topo-dashboard .pf-heading :deep(.fp-name) {
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.topo-dashboard .pf-price { grid-area: price; align-self: center; }
-.topo-dashboard .pf-sku, .topo-dashboard .pf-sku-fallback { grid-area: sku; align-self: center; justify-self: start; }
-/* 驾驶精简：长文描述（仪表盘上不可读）不占纵向预算——driveAware 语义的真实体现 */
+/* 价格 + 降级条同排（省一整行纵向预算） */
+.topo-dashboard .pf-price { grid-area: info; align-self: start; justify-self: start; }
+.topo-dashboard .pf-sku, .topo-dashboard .pf-sku-fallback { grid-area: info; align-self: start; justify-self: center; min-width: 0; }
+/* 驾驶精简：长文描述不占纵向预算（仪表盘上不可读）——driveAware 语义的真实体现 */
 .is-drive .pf-info :deep(.fp-desc) { display: none; }
 /* 主操作（底行左格）：两个等分大热区（≥76dp），与推荐瓦片同层 */
 .topo-dashboard .pf-actions {
   grid-area: actions;
   align-items: stretch;
+  align-self: stretch;
   flex-wrap: nowrap;
-  align-self: center;
-  gap: calc(var(--pf-gap) * 0.7);
+  gap: calc(var(--pf-gap) * 0.5);
   min-height: 0;
 }
 .topo-dashboard .pf-actions :deep(button) {
   flex: 1 1 0;
   min-width: 0;
-  padding-left: calc(var(--pf-u) * 0.5);
-  padding-right: calc(var(--pf-u) * 0.5);
+  padding-left: calc(var(--pf-u) * 0.4);
+  padding-right: calc(var(--pf-u) * 0.4);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* ★特异性提升（.p-formfactor.topo-dashboard）：`.has-multicol .pf-recommend { grid-auto-flow: dense }`
-   与本块同权重且在后 → 曾把车机单行瓦片折成两行（行高 133px → 上排信息被压到 54px、标题溢出帧顶）。
-   多列能力在驾驶形态的正确表达是「一行 N 个热区」，不是折行。 */
+/* ★特异性提升：`.has-multicol .pf-recommend { grid-auto-flow: dense }` 曾把车机单行瓦片折成两行 */
 .p-formfactor.topo-dashboard .pf-recommend {
   grid-area: rec;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  gap: calc(var(--pf-gap) * 0.8);
+  gap: calc(var(--pf-gap) * 0.5);
   min-height: 0;
   overflow: hidden;
 }
-/* 驾驶形态只呈现前 3 个选项（第 4+ 项不可达：行车中翻找不可滚动内容 = 分心源） */
-.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card):nth-child(n + 4) { display: none; }
-.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
-  min-height: 0;
-  overflow: hidden;
-  justify-content: center;
-  padding: calc(var(--pf-u) * 0.4);
-  gap: calc(var(--pf-u) * 0.25);
-}
-/* 驾驶提醒条：真实网格行（此前 ::after 绝对定位 → 覆盖底行；且 display:contents 下伪元素行为不确定） */
-.pf-drive-hint {
-  grid-area: hint;
-  padding: calc(var(--pf-u) * 0.25) calc(var(--pf-u) * 0.6);
+/* 驾驶提醒徽标：**绝对定位贴媒体角**（不占纵向预算——8/3 窄画布容不下第三行文字；
+   但仍真实渲染 = driveAware 能力有可观测后果）。用 p 元素的默认行内尺寸做小胶囊。 */
+.p-formfactor.topo-dashboard .pf-drive-hint {
+  /* ★同格叠加（不是 position:absolute——abspos 的含块是 .p-formfactor 而非网格容器，
+     grid-area 实际不生效、窄帧越列压标题）。作为普通网格项与 .pf-media **共用 media 区域**：
+     网格按区域定位天然把它限制在媒体列内；DOM 靠后 → 自然叠在封面之上。 */
+  grid-area: media;
+  align-self: start;
+  justify-self: stretch;
+  z-index: 2;
+  margin: calc(var(--pf-u) * 0.4);
+  padding: calc(var(--pf-u) * 0.2) calc(var(--pf-u) * 0.45);
   border-radius: calc(var(--pf-radius) * 0.7);
-  background: color-mix(in srgb, var(--pf-accent, #ffb13d) 16%, transparent);
+  background: color-mix(in srgb, var(--pf-bg, #10142a) 72%, transparent);
   color: var(--pf-accent, #ffb13d);
-  font-size: calc(var(--pf-font) * 0.68);
+  font-size: calc(var(--pf-font) * 0.6);
+  line-height: 1.35;
   text-align: center;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ═══ ★能力消费点（2026-09-26 专家报告 P1-4：每项 caps 必须有可观测后果）═══ */
