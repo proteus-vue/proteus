@@ -44,7 +44,20 @@ export type LayoutTopology =
   | 'dashboard'
 
 /** 导航形态（形态驱动——车机焦点树 / TV 海报行 / 手表页栈 / PC 侧栏） */
-export type NavTopology = 'page-stack' | 'bottom-tabs' | 'tabs' | 'rail' | 'side-nav' | 'focus-tree' | 'focus-row'
+export type NavTopology =
+  | 'page-stack'
+  | 'bottom-tabs'
+  | 'tabs'
+  // ★side-tabs（2026-09-28 借鉴 Apple HIG「Designing for iPhone Duo」）：**宽而矮**的折叠外屏
+  //   垂直空间紧张 → 系统把工具栏/Tab 栏移到**侧边**（vertical controls）以保留内容高度。
+  //   Apple 原文：「toolbars, tab bars, and navigation controls … move to the side, preserving
+  //   vertical space for content」，并强调「keep controls' relative positions as similar as possible」
+  //   跨姿态一致。对应我们的 folded 外屏（466×678 —— 比手机更宽更矮）。
+  | 'side-tabs'
+  | 'rail'
+  | 'side-nav'
+  | 'focus-tree'
+  | 'focus-row'
 
 /** 形态能力声明（组件据此自动降级；未声明 = 不支持）
  *  ★能力清单对齐设计本意（旧版六端能力表）：SKU多选 / 底部Tab / 悬停态 / d-pad遥控焦点 /
@@ -308,11 +321,22 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     //   连续性语义：视口 340 → 673，拓扑 stack → duo（状态跨姿态连续重排，不重启）
     postures: [
       // ★折叠态度量（三审）：外屏 = 窄手机——用 phone 级基准（ref 300），不用内屏 ref 420
-      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 340, height: 800 }, ratio: { baseFont: 13, ref: 300, min: 0.85, max: 1.5 } },
-      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'tabs', viewport: { width: 673, height: 420 }, hinge: 'horizontal' },
-      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'tabs', viewport: { width: 673, height: 841 } },
+      // ★折叠态（2026-09-28 对齐 Apple HIG「Designing for iPhone Duo」）：
+      //   ① 视口 340×800 → **466×678**（Duo 外屏 1398×2034px @460ppi ≈ 466×678pt）——
+      //      真实折叠外屏是「比手机更宽更矮」，不是窄长竖屏（旧值来自 Z Fold 式窄外屏）；
+      //   ② nav bottom-tabs → **side-tabs**：Apple 明确「宽而矮的外屏把控件移到侧边，
+      //      以保留垂直空间」，且内屏横向时控件保持同侧（跨屏连续）。
+      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 466, height: 678 }, ratio: { baseFont: 13, ref: 340, min: 0.85, max: 1.5 } },
+      // ★半折（2026-09-28）：视口 673×420 是**横屏**——Apple HIG 明确「controls remain on the side
+      //   in landscape to preserve a continuous experience」，且要求跨姿态控件位置一致
+      //   （用户不应随姿态变化重新学习操作在哪）→ nav 统一 side-tabs（三姿态同侧）。
+      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 673, height: 420 }, hinge: 'horizontal' },
+      // ★展开态（2026-09-28）：内屏横向时控件**保持侧边**（Apple：controls remain on the side
+      //   in landscape to preserve a continuous experience at the same vertical height）——
+      //   跨姿态控件位置一致，用户不用重新学习操作在哪。
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 626, height: 890 } },
     ],
-    viewport: { width: 673, height: 841 },
+    viewport: { width: 626, height: 890 }, // ★2026-09-28：对齐 Duo 内屏（1878×2670px @430ppi ≈ 626×890pt）
     distance: 'arm',
     visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
@@ -596,7 +620,7 @@ export function validateFormProfiles(
   const problems: string[] = []
   const forms: DeviceForm[] = ['watch', 'phone', 'fold', 'tablet', 'pc', 'car', 'tv']
   const topologies: LayoutTopology[] = ['glance', 'stack', 'duo', 'rail-split', 'rail-grid', 'hero-focus-row', 'dashboard']
-  const navs: NavTopology[] = ['page-stack', 'bottom-tabs', 'tabs', 'rail', 'side-nav', 'focus-tree', 'focus-row']
+  const navs: NavTopology[] = ['page-stack', 'bottom-tabs', 'tabs', 'side-tabs', 'rail', 'side-nav', 'focus-tree', 'focus-row']
   for (const f of forms) {
     const p = profiles[f]
     if (!p) {
@@ -671,7 +695,7 @@ export function validateFormProfiles(
     // ★④ 跨字段自洽（2026-09-26 三审）
     const has = (k: keyof FormCaps): boolean => capsEnabled(p.caps[k])
     // nav ↔ caps：声明的导航形态必须真有渲染它的能力（否则导航永不出现）
-    if ((p.nav === 'bottom-tabs' || p.nav === 'tabs') && !has('tabs')) {
+    if ((p.nav === 'bottom-tabs' || p.nav === 'tabs' || p.nav === 'side-tabs') && !has('tabs')) {
       problems.push(`${f}: nav=${p.nav} 但 caps.tabs 未支持（导航永不渲染）`)
     }
     if ((p.nav === 'rail' || p.nav === 'side-nav') && !has('sidebar')) {

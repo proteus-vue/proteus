@@ -145,6 +145,28 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(font).toBeGreaterThanOrEqual(11) // WCAG 可读底线（此前 9.7px）
   })
 
+  it('★iPhone Duo 对齐（2026-09-28 借鉴 Apple HIG）：外屏宽而矮 · 控件侧置 · 跨姿态一致功能', () => {
+    // Apple HIG「Designing for iPhone Duo」（2026-09-09 新增页）+ 官方技术规格：
+    //   内屏 1878×2670px @430ppi ≈ 626×890pt · 外屏 1398×2034px @460ppi ≈ 466×678pt
+    //   关键指导：① 宽而矮的外屏把工具栏/Tab 移到**侧边**（vertical controls，保垂直内容空间）
+    //            ② 内屏横向时控件保持同侧（跨屏连续）③ 跨姿态保持**同样功能**
+    const fold = FORM_PROFILES.fold
+    const folded = fold.postures?.find((x) => x.key === 'folded')
+    const expanded = fold.postures?.find((x) => x.key === 'expanded')
+    // ① 外屏真实比例：宽而矮（而非 Z Fold 式窄长）——旧值 340×800（w/h=0.43），真机 466/678=0.69
+    expect(folded!.viewport.width).toBeGreaterThan(folded!.viewport.height * 0.6)
+    // ② 控件侧置：折叠/展开两姿态都用 side-tabs（跨姿态同侧）
+    expect(folded!.nav).toBe('side-tabs')
+    expect(expanded!.nav).toBe('side-tabs')
+    // ③ 内屏视口对齐真机（626×890pt 量级）
+    expect(expanded!.viewport.width).toBeGreaterThanOrEqual(600)
+    expect(expanded!.viewport.width / expanded!.viewport.height).toBeCloseTo(626 / 890, 1)
+    // ④ 展开视口 > 折叠视口（连续性语义保持不变）
+    expect(expanded!.viewport.width).toBeGreaterThan(folded!.viewport.width)
+    // ⑤ 校验器认可新 nav 取值
+    expect(validateFormProfiles()).toEqual([])
+  })
+
   it('★安全区按展示缩放投影（2026-09-27）：TV overscan 在缩略壳内仍为**设备的 5%**', () => {
     // 用户实测「TV 四周都有边界、不沉浸」的根因：96px 是**真机 1920 的 5%**，
     // 却按绝对 px 塞进 620px 缩略壳 = 15.5%（比真机大三倍）。物理量必须按展示缩放投影。

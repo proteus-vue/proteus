@@ -12,9 +12,12 @@ group: 柔性系统
 
 | Posture `key` | Viewport | Topology | Navigation | Notable semantics |
 |---|---|---|---|---|
-| `folded` (cover) | 340×800 | `stack` single column | bottom-tabs | Metrics follow the **narrow-phone** baseline (`ratio.ref: 300`) |
-| `tabletop` (flex mode) | 673×420 | `stack` | tabs | Horizontal hinge — top half displays, bottom half operates |
-| `expanded` (inner) | 673×841 | `duo` two panes | tabs | Media + details side by side |
+| `folded` (cover) | **466×678** | `stack` single column | **side-tabs** | Wide and short — controls move to the side, preserving vertical space |
+| `tabletop` (flex mode) | 673×420 | `stack` | **side-tabs** | Horizontal hinge — top half displays, bottom half operates |
+| `expanded` (inner) | **626×890** | `duo` two panes | **side-tabs** | Media + details side by side |
+
+> Viewports and navigation are aligned with **Apple's HIG "Designing for iPhone Duo"** (new page, 2026-09-09) and the official tech specs: iPhone Duo's inner display is 1878×2670px @430ppi ≈ 626×890pt and the outer display 1398×2034px @460ppi ≈ 466×678pt.
+> The key takeaway: the cover display is **wider and shorter than a phone** (466×678, ratio 0.69), not a Z Fold-style tall narrow strip; the system therefore moves toolbars/tab bars **to the side** to preserve vertical content space, and keeps them on the same side in landscape on the inner display.
 
 ```ts
 // packages/fluid/src/formfactor.ts (fold profile excerpt)
@@ -38,10 +41,12 @@ postures: [
 Tabletop is the physical form of "top half displays, bottom half operates", with only 420pt of visible height. The implementation makes **prioritised trade-offs** rather than scaling everything down:
 
 - Media capped at 40% (the top pane keeps content, the bottom stays operable)
-- Description and SKU options collapse (secondary information is unreadable in a half-folded glance)
-- Primary actions and tabs stay within reach
+- **Only** the long description collapses (secondary information); **the SKU picker stays** — it is the purchase path
+- Primary actions and tabs stay within reach (tabs move to the side)
 
-Content must not cross the crease: with a horizontal hinge the crease runs across the middle (the demo draws a horizontal crease from `posture.hinge`; a permanent vertical crease was a bug).
+> ★Two corrections from Apple's HIG (2026-09-28):
+> 1. **No longer hides the SKU picker** — two rules apply: "Maintain the same functionality across device poses" (every pose must reach the **same controls and content**) and "Avoid extreme layout changes as people fold … favor small adjustments over rearrangement" (controls that disappear or shift dramatically are harder to find). Hiding the SKU dropped functionality, so it now uses a compact arrangement instead.
+> 2. **Crease semantics**: content must not cross the crease (with a horizontal hinge the crease runs across the middle; the demo draws it from `posture.hinge` — a permanent vertical crease was a bug).
 
 ## Hinge geometry
 

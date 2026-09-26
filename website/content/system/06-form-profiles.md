@@ -29,7 +29,7 @@ group: 柔性系统
 |---|---|---|---|---|---|---|
 | `watch` | dial（表冠） | compact | `glance` 一屏一意 | page-stack | glance 抬腕 | dark（AMOLED 常亮） |
 | `phone` | touch | regular | `stack` 单列 + Tab | bottom-tabs | arm 臂长 | light |
-| `fold` | touch | regular | `duo` 双窗格（展开态） | tabs | arm | light |
+| `fold` | touch | regular | `duo` 双窗格（展开态） | side-tabs（三姿态侧置） | arm | light |
 | `tablet` | touch | regular | `rail-split` 侧栏分栏 | rail | arm | light |
 | `pc` | cursor | regular | `rail-grid` 侧栏多列 | side-nav | desk 桌面 | light |
 | `car` | remote（旋钮） | comfortable | `dashboard` 驾驶舱 | focus-tree | dashboard 驾驶位 | dark |
