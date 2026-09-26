@@ -191,6 +191,44 @@ export interface FormFrame {
 export type ViewingDistance = 'glance' | 'arm' | 'desk' | 'dashboard' | '10ft'
 
 /**
+ * ★★宽高比分类（2026-09-28，两条国内/国际独立信源共同指向）：
+ *   · 华为《布局基础》：断点分**横向断点**（宽度）与**纵向断点**（宽高比）两条独立维度，
+ *     原则二「高度相对宽度较小的窗口，可根据宽高比信息进行横向窗口或类方形窗口的差异化设计」。
+ *   · 小米《大屏应用 UX 设计指南》：给出**高度断点**（480/900dp）并要求
+ *     「**不要使用 rotation，而是根据宽高的大小做布局处理**」；且「宽高比小于 16:9 的窗口」需特殊处理。
+ *   ⇒ 二元 orientation（h>w）不足以表达——车机 8/3（2.67）与平板 4/3（1.33）同为 landscape 但形态迥异。
+ */
+export type AspectClass = 'tall' | 'balanced' | 'wide' | 'ultra-wide'
+
+/** 宽高比分类（输入为容器/视口尺寸；非法尺寸回退 balanced） */
+export function resolveAspectClass(width: number, height: number): AspectClass {
+  if (!(width > 0) || !(height > 0)) return 'balanced'
+  const r = width / height
+  if (r < 0.85) return 'tall' // 竖屏/近方（手机 0.46 · 折叠展开 0.70）
+  if (r < 1.35) return 'balanced' // 类方形
+  if (r < 2.0) return 'wide' // 含小米「16:9 = 1.78」阈值（平板 1.43 · PC 1.60 · TV 1.78）
+  return 'ultra-wide' // 极扁（车机 8/3 = 2.67）
+}
+
+/**
+ * 媒体区高度上限（占可用高度的比例）——按宽高比分配（小米/华为「高度是独立维度」的可执行形态）。
+ * 此前逐拓扑硬编码（stack 46% / tabletop 40%），同一个值在极扁画布上会挤没信息区。
+ * 越扁的画布，媒体越该让位给信息与操作。
+ */
+export function aspectMediaCap(aspect: AspectClass): string {
+  switch (aspect) {
+    case 'tall':
+      return '46%'
+    case 'balanced':
+      return '42%'
+    case 'wide':
+      return '36%'
+    default:
+      return '28%' // ultra-wide（车机这类极扁画布）
+  }
+}
+
+/**
  * ★★折叠屏姿态（2026-09-26 报告 P0-2）：折叠屏的本质是**动态形态**——
  *   `folded`（折叠态：外屏，单屏窄）· `tabletop`（半折：上半展示 + 下半操作）
  *   `expanded`（展开态：内屏，双窗格）

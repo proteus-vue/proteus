@@ -44,6 +44,12 @@ Tabletop is the physical form of "top half displays, bottom half operates", with
 - **Only** the long description collapses (secondary information); **the SKU picker stays** — it is the purchase path
 - Primary actions and tabs stay within reach (tabs move to the side)
 
+> ★★The three-region rule (2026-09-28, borrowed from the **shared Chinese-vendor baseline**: the ITGSA white paper / Xiaomi's "Large-screen App UX Design Guide", co-signed by OPPO, vivo and Xiaomi):
+> "Gather display content into region 2, sink interactive controls into region 1, and **avoid placing any element inside region 3**" — region 2 = upper half (display), region 1 = lower half (controls), region 3 = the crease/deformation band.
+> This implementation uses an **empty grid row**: the crease band is row 2 and **no element is assigned to it**, so "nothing inside the band" is guaranteed structurally (machine criterion: `tests/fluid-formfactor-render.test.ts` asserts the four-row grid and the band's `::before` placeholder on row 2).
+>
+> ★Companion guidance: "**do not use rotation; lay out by width and height**" (Xiaomi) and Huawei's *Layout Basics*, which splits breakpoints into **horizontal (width) and vertical (aspect ratio)** as two independent dimensions — this repo therefore adds `resolveAspectClass` (tall / balanced / wide / ultra-wide) and makes the media height cap tighten with aspect ratio (`aspectMediaCap`): the flatter the canvas, the more media yields to information and controls. An in-car 8/3 (ultra-wide) and a TV 16:9 (wide) are thus distinguished — something a binary `orientation` cannot do.
+>
 > ★Two corrections from Apple's HIG (2026-09-28):
 > 1. **No longer hides the SKU picker** — two rules apply: "Maintain the same functionality across device poses" (every pose must reach the **same controls and content**) and "Avoid extreme layout changes as people fold … favor small adjustments over rearrangement" (controls that disappear or shift dramatically are harder to find). Hiding the SKU dropped functionality, so it now uses a compact arrangement instead.
 > 2. **Crease semantics**: content must not cross the crease (with a horizontal hinge the crease runs across the middle; the demo draws it from `posture.hinge` — a permanent vertical crease was a bug).
