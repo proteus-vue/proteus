@@ -25,6 +25,12 @@ const SOURCES = [
   //   不在此列就永远不进 content/primitives → docs-registry 的 glob 收录不到 → 搜索无结果）。
   //   ⇒ 今后新增单文件原语必须同步此处。
   { id: 'api', rel: 'packages/api', group: '工程语义原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$|^mcp\.ts$/, pkg: '@proteus-vue/api' },
+  // ★★2026-09-27：补 `worklet` 包——官网手册此前**完全没有它**（用户实测搜不到）。
+  //   根因与 E30 useMCP 缺页同类但更根本：不是白名单漏了某个文件，而是**整个包未登记** →
+  //   生成器根本不遍历它 → docs-registry glob 收不到 → 搜索无结果。
+  //   ★新增包级覆盖门禁（见文件末尾 `checkPackageCoverage`），防第三次。
+  //   定位：Skyline UI 线程动画原语（官方 wx.worklet 封装 + 非 Skyline 诚实降级 JS 线程）
+  { id: 'worklet', rel: 'packages/worklet', group: '渲染原语', prefix: 'wl-', orderBase: 110 },
 ]
 
 /**
@@ -35,6 +41,7 @@ const GROUP_EN = {
   桌面语义原语: 'Desktop semantic primitives',
   手势语义原语: 'Gesture semantic primitives',
   工程语义原语: 'Engineering semantic primitives',
+  渲染原语: 'Rendering primitives',
 }
 
 const TITLE_OVERRIDES = {
@@ -109,6 +116,19 @@ const ENDS_FAMILY = {
     ['Android 原生', '🟡', 'GestureDetector 映射规划'],
     ['鸿蒙', '🟡', '手势系统映射规划'],
     ['Flutter 混合', '🟡', '手势映射未开始'],
+    ['快应用', '⬜', '端未开始'],
+  ],
+  // ★worklet 家族（2026-09-27 新增）：能力面在**小程序 Skyline**（UI 线程），Web/其余端是**诚实降级**
+  //   ——不能照抄 desktop/api 的家族表（worklet 的核心端是 MP 而非 Web）。
+  worklet: [
+    ['微信小程序（Skyline）', '✅', '官方 `wx.worklet`（shared/derived/timing/spring/decay/runOnJS/runOnUI）+ `applyAnimatedStyle` 绑定；编译器已验证 `worklet:xxx` 属性透传'],
+    ['微信小程序（WebView）', '✅', '**诚实降级**：JS 线程 rAF 插值（同 API，行为如实：`hasWorklet() === false`，无 UI 线程隔离）'],
+    ['Web SPA', '✅', '同一降级路径（rAF 插值）——可用于本地预览与单测；`hasWorklet() === false` 如实上报'],
+    ['Headless（SSR / 测试）', '✅', '纯逻辑 Node 可跑（`resetWorklet` 供测试重置）'],
+    ['iOS 原生', '🟡', '映射规划——原生动画驱动未开始'],
+    ['Android 原生', '🟡', '映射规划——原生动画驱动未开始'],
+    ['鸿蒙', '🟡', '映射规划（ArkUI animateTo）未开始'],
+    ['Flutter 混合', '🟡', 'widget 动画映射未开始'],
     ['快应用', '⬜', '端未开始'],
   ],
   api: [
@@ -284,6 +304,15 @@ const API_DETAIL = {
   ],
 }
 
+/** ★家族判定（zh/EN 共用）：新包必须在此登记，否则会继承 api 的家族措辞（worklet 初版即误继承
+ *  desktop 措辞：「注入式可在逻辑层跑」「createDesktopDirectives()」——全不对）。 */
+function familyOf(rel) {
+  if (rel === 'packages/desktop') return 'desktop'
+  if (rel === 'packages/gesture') return 'gesture'
+  if (rel === 'packages/worklet') return 'worklet'
+  return 'api'
+}
+
 function renderPage(srcDirAbs, rel, file, order, group) {
   const src = fs.readFileSync(path.join(srcDirAbs, file), 'utf8')
   const header = readHeader(src)
@@ -302,6 +331,8 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   body.push('')
   if (rel === 'packages/api') {
     body.push('> 来源模块 `@proteus-vue/api`（工程原语工厂——**注入式**：消费方注入 reactivity/driver/routerLike 等，api 包零 vue 依赖；MP 产物安全子集：无 `?.`/`??`/数组解构）。')
+  } else if (rel === 'packages/worklet') {
+    body.push('> 来源模块 `@proteus-vue/worklet`（**Skyline UI 线程动画**——封装官方 `wx.worklet`；非 Skyline 环境**诚实降级** JS 线程 rAF 插值，不假装有 UI 线程隔离。详见 [Skyline 踩坑总账](/docs/framework/skyline-pitfalls)）。')
   } else {
     body.push(`> 来源模块 \`@proteus-vue/${rel.replace('packages/', '')}\`（Pure logic + Web 接线——env 注入可单测，缺省回落真实全局）。平台映射 / 降级链见模块头原文。`)
   }
@@ -309,7 +340,7 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   if (header.length) body.push(...header.map((l) => l.startsWith('★') ? `**${l}**` : l), '')
 
   // ★#466 端兼容进度（家族级口径——与组件/能力页同构；生成自 ENDS 注册表同名端序）
-  const family = rel === 'packages/desktop' ? 'desktop' : rel === 'packages/gesture' ? 'gesture' : 'api'
+  const family = familyOf(rel)
   const endsRows = ENDS_FAMILY[family]
   if (endsRows) {
     body.push('## 兼容进度')
@@ -365,6 +396,12 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   if (usageNotes && usageNotes.length) {
     // ★模块级准确文案（优先）——家族 boilerplate 对非工厂式原语会写成「句句无关」
     for (const l of usageNotes) body.push(`- ${l}`)
+  } else if (rel === 'packages/worklet') {
+    body.push('- **入口**：`shared(initial)` / `derived(fn)` 建共享值 → `timing/spring/decay` 描述动画 → `applyAnimatedStyle(scope, selector, updater, config)` 绑定到组件样式（返回解绑函数）')
+    body.push('- **模板侧零运行时 API**：`worklet:style="{{animatedStyle}}"` 由**编译器透传**官方 WXML 前缀（无需 import）')
+    body.push('- **诚实降级**：非 Skyline（WebView / Web / SSR）→ 同 API 的 JS 线程 rAF 插值，`hasWorklet() === false` / `real === false`，**不假装有 UI 线程隔离**')
+    body.push('- **能力探测**：用 `hasWorklet()` 判「真·小程序 + Skyline 渲染器 + `wx.worklet` 存在」三者齐备；组件层能力矩阵 SSOT 见 `@proteus-vue/shared` 的 `detectMpRenderer`')
+    body.push('- 真实消费：`packages/components/runtime/capability.ts` 的 `hasWorklet()` 能力探测；Skyline 侧限制见 [Skyline 踩坑总账](/docs/framework/skyline-pitfalls)')
   } else if (rel === 'packages/gesture') {
     body.push('- 识别器纯逻辑零依赖：Web Pointer / MP touch 归一为 `GestureInput` → 语义手势事件（tap/pan/swipe/pinch/rotate/longpress…）——可单测')
     body.push('- Web 官方接线：`useGesture()` Hook 与 `v-gesture:<kind>="onX"` 指令；MP/原生端映射由各端 Backend 承接——「事件是 Backend 实现细节」')
@@ -403,10 +440,11 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
   body.push(page.summary || '—')
   body.push('')
   if (rel === 'packages/api') body.push(SHARED_PRIM_EN.apiCallout)
+  else if (rel === 'packages/worklet') body.push(SHARED_PRIM_EN.workletCallout)
   else body.push(SHARED_PRIM_EN.sourceCallout(rel.replace('packages/', '')))
   body.push('')
   if (page.notes?.length) body.push(...page.notes.map((l) => (l.startsWith('★') ? `**${l}**` : l)), '')
-  const family = rel === 'packages/desktop' ? 'desktop' : rel === 'packages/gesture' ? 'gesture' : 'api'
+  const family = familyOf(rel)
   const endsRows = FAMILY_EN[family]
   if (endsRows) {
     body.push('## Compat rollout')
@@ -481,7 +519,77 @@ const COVERED_ELSEWHERE = {
   platform: 'PlatformAPI 工厂（由 guides/reference 覆盖）',
   types: '类型定义（无运行面）',
 }
+/**
+ * ★★包级文档覆盖门禁（2026-09-27，防「worklet 缺页」第三次）：
+ *   此前的覆盖度校验只对「已登记进 SOURCES 的源」做**文件级**校验——
+ *   于是「整个包没登记」这种更根本的漏页**对它完全不可见**（worklet 就是这样漏的）。
+ *   现改为**包级**先行校验：仓库里所有含 `src/*.ts` 的框架包，必须二选一——
+ *     ① 登记进 SOURCES（生成逐条页面）② 在 COVERED_PACKAGES 声明归属（写明官网哪一节覆盖它）
+ *   ⇒ 新增包若两处都没有 → 门禁红（而不是静默从官网上消失）。
+ */
+const COVERED_PACKAGES = {
+  'built-in-components': '组件分区（content/components，由 gen-content.mjs 生成 74 页）',
+  capabilities: '能力分区（content/capabilities，由 gen-content.mjs 生成 81 页）',
+  'component-ir': '框架分区 /docs/framework（C-IR 契约）',
+  compiler: '工具链分区（插件 API / 编译规则）',
+  'compiler-backend': '工具链分区（渲染后端 SPI）',
+  'compiler-backend-rust': '工具链分区（Rust 后端等价性）',
+  contracts: '框架分区（style/route/store 契约）',
+  fluid: '柔性系统分区（content/system，5 页）',
+  glass: '柔性系统分区（玻璃语义）',
+  mcp: '工具链分区（MCP 服务）',
+  router: '指南分区（路由语义）',
+  runtime: '框架分区（运行时）',
+  shared: '框架分区（共享工具）',
+  types: '工程参考（类型定义，无运行面）',
+  web: '框架分区（Web 后端）',
+  worklet: '渲染原语（本生成器 SOURCES 登记）',
+  csscompat: '工程参考',
+  'css-compat': '工具链分区（CSS 兼容参考）',
+  'compat-miniprogram': '指南分区（小程序兼容层——由 guides 覆盖，非独立原语面）',
+  devtools: '工具链分区（DevTools 面板——chrome 扩展形态，非原语面）',
+  hmr: '工具链分区（HMR）',
+  i18n: '框架分区（i18n）',
+  'pinia-sync': '框架分区（状态同步）',
+  'plugin-vite': '工具链分区（Vite 插件）',
+  'render-backend': '工具链分区（渲染后端注册表）',
+  'renderer-app': '框架分区（渲染器应用壳）',
+  security: '框架分区（安全）',
+  'style-safety': '工具链分区（样式安全）',
+  module: '工具链分区（模块系统）',
+  docs: '工具链分区（文档引擎）',
+  'app-config': '工具链分区（应用配置）',
+  'dev-host': '工具链分区（开发宿主）',
+  'devtools-runtime': '工具链分区（DevTools 运行时）',
+  desktop: '桌面语义原语（本生成器 SOURCES 登记）',
+  gesture: '手势语义原语（本生成器 SOURCES 登记）',
+  api: '工程语义原语（本生成器 SOURCES 登记）',
+  agent: '框架分区（AI Agent，G-36）',
+  cli: '工具链分区（CLI 命令面）',
+  'create-proteus': '指南分区（脚手架）',
+  test: '内部测试基建（非官网面）',
+  'test-core': '内部测试基建（非官网面）',
+  'test-ir': '内部测试基建（非官网面）',
+}
 let coverageIssues = 0
+{
+  const pkgRoot = path.join(WEBSITE, '..', 'packages')
+  const declared = new Set(SOURCES.map((s) => s.rel.replace('packages/', '')))
+  for (const d of fs.readdirSync(pkgRoot, { withFileTypes: true })) {
+    if (!d.isDirectory()) continue
+    const name = d.name
+    if (declared.has(name)) continue
+    const srcDir = path.join(pkgRoot, name, 'src')
+    if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) continue
+    if (COVERED_PACKAGES[name]) continue
+    console.error(
+      `❌ 包级文档覆盖缺口：packages/${name} 有 src/ 但既未登记进 SOURCES，也未在 COVERED_PACKAGES 声明归属——` +
+        `它的原语文档页不会被生成（官网搜索不到）。请二选一：登记 SOURCES（逐条出页）或在 COVERED_PACKAGES 写明官网覆盖位置。`,
+    )
+    coverageIssues++
+  }
+}
+
 for (const src of SOURCES) {
   // ★仅对「定义了 files 白名单」的源做覆盖度校验——未定义白名单的源默认全收（desktop/gesture 即此类），
   //   对它们做校验会把「本就该全收」的模块误报为缺口（本校验初版即犯此错，实测报出 24 项假缺口）。

@@ -1,6 +1,18 @@
 // website/scripts/gen-primitives-en.mjs —— 原语分区英文字段（★#482：生成器双语输出，与 zh 同源推导）
 //   PRIM_EN[模块名] = { title?, summary, notes[], exports{…}, usage[{code,src}] }——未登记模块 zh-only（EN 态 #noEn 回退）
 export const FAMILY_EN = {
+  // ★worklet 家族（2026-09-27）：能力核心端是**小程序 Skyline**，Web/其余端是诚实降级
+  worklet: [
+    ['WeChat Mini Program (Skyline)', '✅', 'Official `wx.worklet` (shared/derived/timing/spring/decay/runOnJS/runOnUI) + `applyAnimatedStyle` binding; the compiler pass-through for `worklet:xxx` is verified'],
+    ['WeChat Mini Program (WebView)', '✅', '**Honest degradation**: JS-thread rAF interpolation (same API, reported truthfully: `hasWorklet() === false`, no UI-thread isolation)'],
+    ['Web SPA', '✅', 'Same degradation path (rAF interpolation) — usable for local preview and unit tests; `hasWorklet()` reports `false` truthfully'],
+    ['Headless (SSR/testing)', '✅', 'Pure logic runs on Node (`resetWorklet` for test resets)'],
+    ['iOS native', '🟡', 'Mapping planned — native animation driver not started'],
+    ['Android native', '🟡', 'Mapping planned — native animation driver not started'],
+    ['HarmonyOS', '🟡', 'Mapping planned (ArkUI animateTo) not started'],
+    ['Flutter hybrid', '🟡', 'Widget animation mapping not started'],
+    ['Quick App', '⬜', 'target not started'],
+  ],
   desktop: [
     ['Web SPA', '✅', 'Official wiring: pure logic + env fallback to globals; v-p-* directives (registered via createDesktopDirectives)'],
     ['WeChat Mini Program', '🟡', 'Pure logic unit-testable; directives not registered (desktop interactions have no counterpart — stripped at compile time); page wiring is up to the host'],
@@ -36,11 +48,20 @@ export const FAMILY_EN = {
 export const SHARED_PRIM_EN = {
   sourceCallout: (pkg) =>
     `> Source module \`@proteus-vue/${pkg}\` (pure logic + Web wiring — env-injected for testing, falls back to real globals when absent). Platform mapping / degradation chain → see the module header source.`,
+  workletCallout:
+    '> Source module `@proteus-vue/worklet` (**Skyline UI-thread animation** — wraps the official `wx.worklet`; off Skyline it **degrades honestly** to JS-thread rAF interpolation instead of pretending to have UI-thread isolation. See the [Skyline pitfalls ledger](/docs/framework/skyline-pitfalls)).',
   apiCallout:
     '> Source module `@proteus-vue/api` (engineering primitive factories — **injection-based**: the consumer injects reactivity/driver/routerLike etc., the api package has zero vue dependency; MP artifact-safe subset: no `?.`/`??`/array destructuring).',
   legend:
     '> Status scale: ✅ target shipped & this primitive usable · 🟡 prototype mapping — wiring not started · ⬜ target not started. Family-level mechanism coverage (not a per-target on-device verification matrix); target architecture matrix (engine / runtime / persistence) → [Ends & maturity](/docs/framework/ends-matrix).',
   familyNotes: {
+    worklet: [
+      '- **entry**: `shared(initial)` / `derived(fn)` create shared values → `timing/spring/decay` describe the animation → `applyAnimatedStyle(scope, selector, updater, config)` binds it to component styles (returns an unbind function)',
+      '- **zero runtime API in templates**: `worklet:style="{{animatedStyle}}"` is passed through by the **compiler** as the official WXML prefix (no import needed)',
+      '- **honest degradation**: off Skyline (WebView / Web / SSR) → the same API interpolates on the JS thread via rAF; `hasWorklet() === false` / `real === false` — it never pretends to have UI-thread isolation',
+      '- **capability probe**: `hasWorklet()` requires all three (real Mini Program + Skyline renderer + `wx.worklet`); the component-level capability matrix SSOT lives in `@proteus-vue/shared` (`detectMpRenderer`)',
+      '- real consumer: the `hasWorklet()` probe in `packages/components/runtime/capability.ts`; Skyline limits → [Skyline pitfalls](/docs/framework/skyline-pitfalls)',
+    ],
     desktop: [
       '- pure-logic functions: env-injected for testing; browser defaults fall back (`typeof` guards — wrapping lives only inside framework packages, pages keep zero raw platform APIs)',
       '- directive/component forms: `v-p-*` registered via `createDesktopDirectives()` (not registered on MP → degrades naturally)',
@@ -65,6 +86,52 @@ export const SHARED_PRIM_EN = {
  * exports = { 导出名: 一句话英文 }（readExports 提取的 doc 对应）；usage = 真实用法 EN（仅当 zh USAGE_MAP 该模块有条目；code 行内注释已译英）。
  */
 export const PRIM_EN = {
+  // ★worklet 家族（2026-09-27 新增页面）：EN overlay——此前官网手册整包缺失
+  runtime: {
+    title: 'Worklet runtime',
+    summary: 'Skyline UI-thread runtime — wraps the official `wx.worklet`, degrades honestly to the JS thread elsewhere',
+    notes: [
+      '★Skyline line closure (2026-09-11): the worklet runtime — a wrapper over the official wx.worklet plus honest degradation off Skyline.',
+      'Official surface: wx.worklet.shared/derived/timing/spring/decay/sequence/delay/repeat/Easing/runOnJS/runOnUI + component `applyAnimatedStyle(selector, workletFn)` (binds UI-thread-driven styles).',
+      'Degradation: off Skyline (WebView / Web / SSR) → JS-thread requestAnimationFrame interpolation — the capability is declared honestly (no pretending).',
+      'Principle: never reference wx bare (read from globalThis); the capability matrix SSOT is `detectMpRenderer` in @proteus-vue/shared.',
+    ],
+    exports: {
+      hasWorklet: 'Whether real Skyline worklets are available (real Mini Program + Skyline renderer + wx.worklet present)',
+      createWorkletRuntime: 'Create the worklet runtime (lazy singleton)',
+      getWorklet: 'Read the current runtime (undefined before first creation)',
+      workletRuntime: 'Lazy singleton instance',
+      resetWorklet: 'Reset for tests',
+    },
+  },
+  easing: {
+    title: 'Easing presets',
+    summary: 'Worklet easing presets and resolution (named easing → cubic-bezier function)',
+    notes: [
+      'Easing presets shared by the worklet animation configs (timing/spring/decay).',
+      'Pure functions — unit-testable without the UI thread, usable on every end.',
+    ],
+    exports: {
+      EASING: 'Named easing preset table',
+      resolveEasing: 'Resolve an easing key or custom function into an easing function',
+    },
+  },
+  types: {
+    title: 'Worklet types',
+    summary: 'Shared value / animation config / official wx.worklet surface typings',
+    notes: [
+      'Type-only module: the shared-value shape and animation configs (timing/spring/decay) consumed across the package.',
+      'The `WxWorkletLike` interface mirrors the official wx.worklet surface so the runtime can be injected in tests.',
+    ],
+    exports: {
+      SharedValue: 'Shared value handle (value + reactivity glue)',
+      WorkletAnimation: 'Animation handle returned by timing/spring/decay',
+      WorkletTimingConfig: 'Timing animation config (duration/easing)',
+      WorkletSpringConfig: 'Spring animation config (stiffness/damping/mass)',
+      WorkletDecayConfig: 'Decay animation config (velocity/deceleration)',
+      WxWorkletLike: 'Official wx.worklet surface (injectable for tests)',
+    },
+  },
   hover: {
     title: "p-hover",
     summary: "Hover-state semantics (brighten/lift/underline) — touch auto-degrades to tap highlight",
