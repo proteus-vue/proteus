@@ -13,7 +13,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["./src/shims/mp.d.ts", "./src/shims/events.d.ts"]
+    "types": ["./src/shims/mp.d.ts", "./src/shims/events.d.ts", "./src/shims/import-meta.d.ts"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"]
 }
