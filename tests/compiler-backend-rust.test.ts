@@ -110,15 +110,18 @@ describe('G-29 B2 RustBackend（同一 SFC → 语义等价 CompilerIR——G-29
     expect(render.root.semantic).toBeUndefined()
   })
 
-  it('动态绑定 props 提取：:min-col-width → { expr } / 静态字符串 → 原值', () => {
+  it('动态绑定 props 提取：:min-col-width → { expr }（camelize 对齐 Node）/ 静态字符串 → 原值', () => {
     const sfc = `<template>
   <p-grid :min-col-width="160" label="网格" :max-cols="4" />
 </template>`
     const { ir } = compileWithRust(sfc)
     const root = (ir.render as { root: { props: Record<string, unknown>; semantic: string } }).root
     expect(root.semantic).toBe('layout.grid')
-    expect(root.props['min-col-width']).toEqual({ expr: '160' })
-    expect(root.props['max-cols']).toEqual({ expr: '4' })
+    // ★2026-09-26 修正：断言与 Node 侧对齐（camelize——@vue/shared camelize 同款）。
+    //   旧断言 kebab key（min-col-width）从未被双端等价测试覆盖到（彼时 Rust 与 Node 都缺该对齐，
+    //   而本测试只测 Rust 单侧）——文本保留修复暴露 diff 后一并修正。
+    expect(root.props['minColWidth']).toEqual({ expr: '160' })
+    expect(root.props['maxCols']).toEqual({ expr: '4' })
     expect(root.props['label']).toBe('网格')
   })
 

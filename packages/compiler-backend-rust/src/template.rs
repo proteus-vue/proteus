@@ -12,6 +12,8 @@ pub struct TmplElement {
     pub children: Vec<TmplElement>,
     pub line: usize,
     pub column: usize,
+    /// ★文本节点（tag = "#text"）：condense 后的字面内容（与 Vue whitespace:condense 对齐）
+    pub text: Option<String>,
 }
 
 /// 属性值形状（静态字符串 → 字符串；:绑定 → { "expr": "..." }；布尔 → true）
@@ -19,8 +21,8 @@ fn attr_value(name: &str, raw: Option<&str>) -> (String, serde_json::Value) {
     // 动态绑定 :attr="expr"
     if name.starts_with(':') || name.starts_with("v-bind:") {
         let key = name.trim_start_matches(':').trim_start_matches("v-bind:");
-        let expr = raw.unwrap_or("");
-        return (key.to_string(), serde_json::json!({ "expr": expr }));
+        // ★2026-09-26 与 Node camelize 对齐（min-col-width → minColWidth）
+        return (camelize(key), serde_json::json!({ "expr": raw.unwrap_or("") }));
     }
     // 事件 @click="fn"
     if name.starts_with('@') || name.starts_with("v-on:") {
@@ -122,7 +124,65 @@ pub fn scan_template(template: &str) -> Option<TmplElement> {
             Some(i) => i,
             None => break,
         };
-        // 跳过 < 之前的文本（< 处可能是注释/闭合/开始标签）
+        // ★2026-09-26 文本保留：'< ' 之前的文本 run 不再跳过——拆（静态/插值）+ condense
+        //   （对齐 Vue whitespace:condense：含换行的空白序列 → ' '；纯空白含换行 → 丢弃；
+        //   插值 {{expr}} → 独立 #text 节点 props.expr——与 Node 侧 INTERPOLATION 同构）
+        {
+            let raw_text = &rest[..lt];
+            if !raw_text.is_empty() {
+                let (line, column) = position_at(template, offset);
+                let mut segs: Vec<TmplElement> = Vec::new();
+                let mut cursor = raw_text;
+                let mut consumed = 0usize;
+                while !cursor.is_empty() {
+                    match cursor.find("{{") {
+                        Some(open_i) => {
+                            if open_i > 0 {
+                                segs.push(mk_text_node(&cursor[..open_i], line, column));
+                            }
+                            let after_open = &cursor[open_i + 2..];
+                            let close_i = after_open.find("}}");
+                            match close_i {
+                                Some(ci) => {
+                                    let expr = after_open[..ci].trim().to_string();
+                                    segs.push(TmplElement {
+                                        tag: "#text".to_string(),
+                                        props: vec![("expr".to_string(), serde_json::json!(expr))],
+                                        children: Vec::new(),
+                                        line,
+                                        column,
+                                        text: None,
+                                    });
+                                    consumed += open_i + 2 + ci + 2;
+                                    cursor = &after_open[ci + 2..];
+                                }
+                                None => {
+                                    segs.push(mk_text_node(cursor, line, column));
+                                    consumed += cursor.len();
+                                    cursor = "";
+                                }
+                            }
+                        }
+                        None => {
+                            segs.push(mk_text_node(cursor, line, column));
+                            consumed += cursor.len();
+                            cursor = "";
+                        }
+                    }
+                }
+                // 挂到栈顶（无栈 = 顶层文本 → 忽略——与 Node 单根语义一致）
+                // ★condense 为 None 的段（纯空白含换行——元素间空白）不建节点（对齐 Node trim→空→丢弃）
+                if let Some(parent) = stack.last_mut() {
+                    for t in segs {
+                        if t.text.is_none() && t.props.is_empty() {
+                            continue;
+                        }
+                        parent.children.push(t);
+                    }
+                }
+                let _ = consumed;
+            }
+        }
         let after = &rest[lt..];
         let (line, column) = position_at(template, offset + lt);
 
@@ -187,6 +247,7 @@ pub fn scan_template(template: &str) -> Option<TmplElement> {
             children: Vec::new(),
             line,
             column,
+            text: None,
         };
         if discard_depth > 0 {
             // 丢弃子树内部：继续配对计数（不建树）
@@ -265,14 +326,99 @@ fn parse_attrs(s: &str) -> Vec<(String, serde_json::Value)> {
     out
 }
 
+/// kebab → camel（与 Node @vue/shared camelize 对齐：min-col-width → minColWidth）
+fn camelize(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut upper_next = false;
+    for ch in s.chars() {
+        if ch == '-' || ch == ':' {
+            upper_next = true;
+        } else if upper_next {
+            out.extend(ch.to_uppercase());
+            upper_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// 文本 run → #text 节点（condense 对齐 Vue：含换行空白序列 → ' '；纯空白含换行 → None 丢弃）
+fn mk_text_node(raw: &str, line: usize, column: usize) -> TmplElement {
+    let condensed = condense_whitespace(raw);
+    TmplElement {
+        tag: "#text".to_string(),
+        props: Vec::new(),
+        children: Vec::new(),
+        line,
+        column,
+        text: condensed,
+    }
+}
+
+/// ★condense（实测对齐 @vue/compiler whitespace:condense）：
+///   含换行的空白序列 → ' '；结果纯空白含换行 → None（元素间空白删除）；
+///   其余首尾 trim（实测："  纯缩进前缀" → "纯缩进前缀"）
+fn condense_whitespace(raw: &str) -> Option<String> {
+    let mut out = String::new();
+    let mut in_ws = false;
+    let mut ws_has_nl = false;
+    for ch in raw.chars() {
+        if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\u{c}' {
+            in_ws = true;
+            if ch == '\n' {
+                ws_has_nl = true;
+            }
+        } else {
+            if in_ws {
+                out.push(if ws_has_nl { ' ' } else { ' ' });
+                in_ws = false;
+                ws_has_nl = false;
+            }
+            out.push(ch);
+        }
+    }
+    if in_ws && !ws_has_nl {
+        out.push(' ');
+    }
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        // ★与 Node 侧对齐：content.trim() 为空 → 丢弃（不区分是否含换行——Node 实现为准）
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
 /// 元素树 → 渲染 IR 节点（语义链接 + props + 行号）——p-* 标签 → semantic_for_tag
 pub fn element_to_render_node(
     el: &TmplElement,
     semantic_for: &dyn Fn(&str) -> Option<&'static str>,
 ) -> RenderNode {
+    // ★2026-09-26 文本节点：#text → RenderNode（静态 = text 字段；插值 = props.expr——与 Node 同构）
+    if el.tag == "#text" {
+        let mut props: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        for (k, v) in &el.props {
+            props.insert(k.clone(), v.clone());
+        }
+        return RenderNode {
+            node_type: "#text".to_string(),
+            semantic: None,
+            props: serde_json::Value::Object(props),
+            children: Vec::new(),
+            loc: SourceLoc {
+                line: el.line,
+                column: el.column,
+            },
+            text: el.text.clone(),
+        };
+    }
     let mut props: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     for (k, v) in &el.props {
         // 事件/指令不入 props（bindings 收集在 main；render 树保留静态 + :bind 约束属性）
+        // ★2026-09-26 与 Node 对齐：非约束属性（样式/身份走各自通道）不入渲染树 props
+        if k == "class" || k == "style" || k == "id" || k == "key" || k == "ref" {
+            continue;
+        }
         if k.starts_with('@')
             || k.starts_with("v-on:")
             || k.starts_with("v-model")
@@ -299,5 +445,6 @@ pub fn element_to_render_node(
             line: el.line,
             column: el.column,
         },
+        text: None,
     }
 }

@@ -167,7 +167,12 @@ pub fn count_cir(node: &serde_json::Value) -> usize {
 /// 兼容层元素计数（渲染树无 semantic 的元素——view/text/scroll-view 等）
 pub fn count_compat(node: &RenderNode) -> usize {
     let mut n = 0usize;
-    if node.semantic.is_none() {
+    // ★2026-09-26 与 Node countCompat 对齐：文本/插值/注释节点不算兼容层元素
+    if node.semantic.is_none()
+        && node.node_type != "#text"
+        && node.node_type != "#interpolation"
+        && node.node_type != "#comment"
+    {
         n += 1;
     }
     for c in &node.children {
