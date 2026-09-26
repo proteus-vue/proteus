@@ -775,7 +775,11 @@ onUnmounted(() => {
   /* ★列宽（三审五修）：此前 0.72fr/2.28fr → 主操作格仅 128px，两枚按钮被压成
      「立即…」「＋…」（缩略壳里文案不可读）。改为近等分：媒体列 ~48%（16:9 封面仍够宽），
      主操作格 ~52% → 两枚按钮各 ~127px 完整可读。 */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  /* ★三列（2026-09-27 用户实测四报）：媒体 | 价格 | 降级条——把右列拆成两子列，
+     才能让「标题/价格」组成一个可整体居中的块（见下行区的对称留白行）。 */
+  /* 价格列按内容宽（auto：¥1299 本就短），余量给「媒体列」与「降级条列」——
+     降级条是宿主文案（长度不可控），此前按比例分列会把它截成「语音或旋钮…」。 */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.05fr);
   /* ★末行 1fr 吸收剩余高度（三审：此前 auto → 内容按 min-content 顶满，**零余量**，
      帧宽差 7px 即让 body 变成可滚动 → 「驾驶禁止细滚动」被破坏、几何门禁红）。
      现：热区行吸收剩余并内部裁切（瓦片 min-height:0），body 恒定不滚动。 */
@@ -787,11 +791,18 @@ onUnmounted(() => {
   /* ★层级（三审四修）：媒体行吸收剩余（**主视觉占大块**），价格行与热区行按内容定高。
      此前 1fr 落在热区行 → 瓦片被拉伸到 103px（比主视觉还高）、主操作被挤成 58px 宽。
      热区下限由按钮/tile 自身 min-height 保证；行可收缩（不做滚动，驾驶禁细滚动）。 */
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  /* ★行结构（2026-09-27 用户实测四报）：标题+价格必须**作为一组在媒体面板内垂直居中**。
+     此前富余空间全给标题行且标题 `align-self:end` → 整组贴底，上方一大块空白
+     （用户实测：「右边标题价格这些整体是不是靠下了点」）。
+     定稿：在「标题..价格」组上下各放一条对称留白行（1fr/1fr）——组永远居中，
+     且留白随画布变高自动增长（窄画布时归零，不影响既有「恒不溢出」纪律）。 */
+  grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'media heading'
-    'media info'
-    'actions rec';
+    'media  t       t'
+    'media  heading heading'
+    'media  price   sku'
+    'media  b       b'
+    'actions rec    rec';
   gap: calc(var(--pf-gap) * 0.45);
   min-height: 0;
   overflow: hidden;
@@ -811,7 +822,7 @@ onUnmounted(() => {
 /* ★信息列拆为网格项（car 专有）：heading/price/sku/actions 直接成为 body 网格项——
    否则 actions 会被困在 info 子网格里（根因①），与底行瓦片互相重叠。 */
 .topo-dashboard .pf-info { display: contents; }
-.topo-dashboard .pf-heading { grid-area: heading; align-self: end; min-width: 0; }
+.topo-dashboard .pf-heading { grid-area: heading; align-self: center; min-width: 0; }
 /* 标题单行（驾驶舱一行可读，长度溢出省略——纵向预算的硬约束） */
 .p-formfactor.topo-dashboard .pf-heading :deep(.fp-name) {
   display: -webkit-box;
@@ -820,8 +831,8 @@ onUnmounted(() => {
   overflow: hidden;
 }
 /* 价格 + 降级条同排（省一整行纵向预算） */
-.topo-dashboard .pf-price { grid-area: info; align-self: start; justify-self: start; }
-.topo-dashboard .pf-sku, .topo-dashboard .pf-sku-fallback { grid-area: info; align-self: start; justify-self: center; min-width: 0; }
+.topo-dashboard .pf-price { grid-area: price; align-self: center; justify-self: start; }
+.topo-dashboard .pf-sku, .topo-dashboard .pf-sku-fallback { grid-area: sku; align-self: center; justify-self: start; min-width: 0; }
 /* 驾驶精简：长文描述不占纵向预算（仪表盘上不可读）——driveAware 语义的真实体现 */
 .is-drive .pf-info :deep(.fp-desc) { display: none; }
 /* 主操作（底行左格）：两个等分大热区（≥76dp），与推荐瓦片同层 */
