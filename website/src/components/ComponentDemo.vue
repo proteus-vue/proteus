@@ -10,6 +10,9 @@
 //     收起/展开改 v-show（已加载的 iframe 保活，二次展开零等待）
 //   · 「新窗口打开」直达 showcase 页（可交互完整版）
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+// ★D-2 dogfooding（2026-09-26）：HTTP 预检走能力原语 useFetch（能力桥按端选择执行面），
+//   页面零裸 fetch——与「页面不裸写平台 API」纪律一致；缺桥/网络失败 → CapResult.ok=false（诚实降级）
+import { createCapabilityHooks } from '@proteus-vue/api'
 import { locale } from '../i18n'
 
 const props = defineProps<{ dir: string }>()
@@ -26,17 +29,12 @@ const frame = ref<HTMLIFrameElement | null>(null)
 let ro: ResizeObserver | undefined
 let paintRaf = 0
 
-// HEAD 预检（目录存在性）：失败 = 演示未部署，占位降级
-fetch(src.value, { method: 'HEAD' })
-  .then((r) => {
-    available.value = r.ok
-  })
-  .catch(() => {
-    available.value = false
-  })
-  .finally(() => {
-    checked.value = true
-  })
+// 预检（演示页存在性）：失败 = 演示未部署/未构建（本地 dev），占位降级
+const caps = createCapabilityHooks()
+caps.useFetch<string>(src.value).then((r) => {
+  available.value = r.ok
+  checked.value = true
+})
 
 function measure() {
   try {

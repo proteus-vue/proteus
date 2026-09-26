@@ -364,7 +364,9 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 </template>
 
 <style scoped>
-.six-root { max-width: 1440px; margin: 0 auto; padding: 6px 0 44px; }
+.six-root {
+  /* ★容器上下文（2026-09-26 D-2）：.work 的断点由**容器宽**判定（非视口） */
+  container-type: inline-size; max-width: 1440px; margin: 0 auto; padding: 6px 0 44px; }
 .hero h1 { color: var(--ink); font-size: 26px; font-weight: 800; margin: 6px 0 10px; }
 .hero h1 em { color: var(--brand-ink); font-style: normal; }
 .hero > p { color: var(--muted); font-size: 13.5px; line-height: 1.75; max-width: 820px; }
@@ -535,7 +537,9 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .cap-note { margin-top: 12px; }
 .cap-note-text { font-size: 11px; color: var(--dim); line-height: 1.6; }
 
-@media (max-width: 1240px) {
+/* ★2026-09-26 D-2：原 @media 视口断点 → @container 容器查询（.work 自身即容器——
+   窄容器（分栏容器变窄）落单栏，与页面宽度解耦：嵌入卡片/分栏容器里同样正确） */
+@container (max-width: 1240px) {
   .work { grid-template-columns: 1fr; }
 }
 </style>
