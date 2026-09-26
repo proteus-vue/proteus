@@ -81,7 +81,30 @@ export interface FormCaps {
   driveAware: boolean
 }
 
-/** 视觉语言（★形态级主题——TV/车机是暗色沉浸，10ft 与驾驶场景的真实观感） */
+/**
+ * ★★流体度量（v3 核心，2026-09-26 重设计）：
+ *   形态**不携带绝对尺寸**——所有尺寸 = 基准单位 × 倍数，基准单位由**容器宽度**推导：
+ *     unit = clamp(min, containerWidth × base, max)
+ *   `base` 表达「该形态的相对尺度」（10ft 大屏相对更大 / 桌面密排相对更小），
+ *   `min/max` 是可读性护栏（mockup 尺寸不缩成蚂蚁字 / 真实大屏不无限放大）。
+ *   ★这样同一形态在**任意容器宽**都渲染正确——无需 scale 变换、无需裁剪
+ *   （旧版缺陷：绝对 px + 缩放变换 → 只能按「自然视口」渲染再裁切）。
+ */
+export interface FluidRatio {
+  /** ★设计基准字号 px（k=1 时的正文大小——各形态的真实内容尺度差异在此表达） */
+  baseFont: number
+  /** ★基准容器宽（该形态内容舒适承载宽——容器 = ref 时 k=1 用设计尺寸） */
+  ref: number
+  /** 尺寸系数下限（防 mockup 缩成蚂蚁字） */
+  min: number
+  /** 尺寸系数上限（防大容器无限放大） */
+  max: number
+}
+
+/**
+ * 视觉语言（形态级主题——离散；TV/车机是暗色沉浸，10ft 与驾驶场景的真实观感）
+ * ★尺寸不在此（见 FluidRatio）——此处只有颜色、焦点语义与流体比例。
+ */
 export interface FormVisual {
   /** 主题：light = 常规浅色；dark = 沉浸暗色（TV/车机） */
   theme: 'light' | 'dark'
@@ -97,12 +120,29 @@ export interface FormVisual {
   brand: string
   /** 强调色（价格/焦点——TV 用暖橙） */
   accent: string
-  /** 基准字号（**设备像素**——10ft 形态用大字号，随视口缩放后比例仍正确） */
-  font: number
-  /** 圆角 */
-  radius: number
-  /** 焦点环（遥控/键盘形态必有——焦点必须可见；触控/指针形态 none） */
+  /** 焦点环（遥控/键盘形态必有——焦点必须可见；触控形态 none） */
   focus: 'none' | 'ring'
+  /** ★流体度量（容器驱动——见 FluidRatio） */
+  ratio: FluidRatio
+}
+
+/**
+ * 形态帧规格（真实 mockup 的框架级支持——旧版设计本意）：
+ *   aspect-ratio 决定外框比例；maxWidth 是**展示宽上限**（mockup 舒适尺寸）；
+ *   notch = 异形屏（刘海）；statusBar = 顶部状态栏（手机/平板类）。
+ * ★帧只影响展示壳，不参与内容度量（内容度量由容器实际宽度驱动）。
+ */
+export interface FormFrame {
+  /** 宽高比（如 '9/16'） */
+  ar: string
+  /** 展示宽上限 px（mockup 尺寸——居中展示） */
+  maxWidth: number
+  /** 异形屏（刘海） */
+  notch: boolean
+  /** 顶部状态栏 */
+  statusBar: boolean
+  /** 外框圆角（px——按形态：手表更圆 / PC 方） */
+  radius: number
 }
 
 /** 视角距离档（诚实标注：10ft = 电视观看距离；驾驶 = 车机；桌面 = 臂长） */
@@ -122,8 +162,8 @@ export interface FormProfile {
   topology: LayoutTopology
   /** 导航形态 */
   nav: NavTopology
-  /** 视觉缩放（10ft TV 放大 / 手表紧凑；1 = 基准） */
-  scale: number
+  /** ★展示壳规格（mockup 帧：比例/上限宽/刘海/状态栏——居中完整展示） */
+  frame: FormFrame
   /** ★视觉语言（形态级主题——TV/车机暗色沉浸、10ft 大字号、焦点环可见） */
   visual: FormVisual
   /** 典型视口（文档/演示用；真实值以容器查询为准） */
@@ -158,11 +198,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'compact',
     topology: 'glance', // 一屏一意（抬腕场景）
     nav: 'page-stack', // 页栈（无 Tab 无侧栏）
-    scale: 0.85, // 小屏紧凑
     viewport: { width: 198, height: 242 },
     distance: 'glance', // 抬腕一瞥
     // 视觉语言：紧凑大字（小屏一瞥可读）· 浅色 · 无焦点环
-    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', font: 17, radius: 12, focus: 'none' },
+    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', focus: 'none', ratio: { baseFont: 12, ref: 240, min: 0.72, max: 1.6 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: false, radius: 34 },
     caps: { ...CAPS_BASE, crown: true }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
   },
   phone: {
@@ -172,11 +213,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'stack', // 单列纵向
     nav: 'bottom-tabs', // 底部 Tab
-    scale: 1,
     viewport: { width: 390, height: 844 },
     distance: 'arm', // 臂长
     // 视觉语言：常规触控（浅色 · 单列大热区 · 无焦点环）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', font: 14, radius: 9, focus: 'none' },
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 11, ref: 300, min: 0.7, max: 1.5 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '9/16', maxWidth: 300, notch: true, statusBar: true, radius: 22 },
     caps: { ...CAPS_BASE, skuMulti: true, tabs: true, dense: true, drawer: true, notch: true },
   },
   fold: {
@@ -186,10 +228,11 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'duo', // 展开态：主图 + 详情双列（display-mode: fold/span）
     nav: 'tabs',
-    scale: 1,
     viewport: { width: 520, height: 720 },
     distance: 'arm',
-    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', font: 15, radius: 10, focus: 'none' },
+    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '3/4', maxWidth: 420, notch: false, statusBar: true, radius: 18 },
     caps: { ...CAPS_BASE, skuMulti: true, multiCol: true, dense: true, drawer: true, notch: true },
   },
   tablet: {
@@ -199,11 +242,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'rail-split', // 侧栏 + 主体分栏
     nav: 'rail',
-    scale: 1,
     viewport: { width: 834, height: 1112 },
     distance: 'arm',
     // 视觉语言：分栏阅读（浅色 · 中等字号 · 无焦点环）
-    visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', font: 16, radius: 10, focus: 'none' },
+    visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12.5, ref: 520, min: 0.68, max: 1.5 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '4/3', maxWidth: 520, notch: false, statusBar: true, radius: 20 },
     caps: { ...CAPS_BASE, skuMulti: true, sidebar: true, multiCol: true, dense: true, drawer: true },
   },
   pc: {
@@ -213,11 +257,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'rail-grid', // 侧栏 + 多列网格
     nav: 'side-nav',
-    scale: 1,
     viewport: { width: 1440, height: 900 },
     distance: 'desk', // 桌面臂长（信息密度最高）
     // 视觉语言：桌面密排（浅色 · 三栏 · hover 反馈 · 键盘焦点环细）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', font: 18, radius: 8, focus: 'ring' }, // 键盘 Tab 可达 → 焦点环可见
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', focus: 'ring', ratio: { baseFont: 12, ref: 620, min: 0.62, max: 1.45 } }, // 键盘 Tab 可达 → 焦点环可见
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '16/10', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     caps: { ...CAPS_BASE, hover: true, skuMulti: true, sidebar: true, multiCol: true, dense: true, keyboard: true },
   },
   car: {
@@ -227,11 +272,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'comfortable', // 驾驶场景：大间距大热区
     topology: 'dashboard', // 驾驶大卡片（单层大热区——与 TV 的 lean-back 海报流本质不同）
     nav: 'focus-tree',
-    scale: 1.15, // 远距离可读
     viewport: { width: 1280, height: 480 },
     distance: 'dashboard', // 驾驶位
     // ★视觉语言：驾驶暗色舱（暗底 + 高亮大热区瓦片 + 暖橙强调 + 焦点环粗——驾驶员余光可辨）
-    visual: { theme: 'dark', bg: '#10142a', surface: '#ffffff', text: '#10142a', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', font: 26, radius: 12, focus: 'ring' },
+    visual: { theme: 'dark', bg: '#10142a', surface: '#ffffff', text: '#10142a', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '16/9', maxWidth: 640, notch: false, statusBar: false, radius: 14 },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
     caps: { ...CAPS_BASE, dpad: true, crown: true, focusTree: true, dense: true, multiCol: true, focusRows: true, driveAware: true },
   },
@@ -242,11 +288,12 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'comfortable',
     topology: 'hero-focus-row', // 大 Hero + 横向海报流
     nav: 'focus-row',
-    scale: 1.4, // 10ft lean-back 观看距离 → 字号放大
     viewport: { width: 1920, height: 1080 },
     distance: '10ft', // 客厅沙发距离
     // ★视觉语言：10ft 沉浸暗色（深蓝底 + 半透明海报胶囊 + 暖橙价格 + 焦点环粗）
-    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', font: 38, radius: 10, focus: 'ring' },
+    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 14, ref: 620, min: 0.68, max: 2.2 } },
+    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
+    frame: { ar: '16/9', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     // ★TV 能力画像：10ft 远距离 → 不做高密度信息、无 hover（遥控器）、无侧栏（水平海报流主导）
     caps: { ...CAPS_BASE, dpad: true, focusRows: true, multiCol: true },
   },
@@ -330,6 +377,71 @@ export function probePointer(
   return { coarse, fine, hover }
 }
 
+/**
+ * ★★流体度量求解（v3 核心 API）：容器宽 + 形态 → CSS 变量表
+ *
+ *   k = clamp(ratio.min, containerWidth / ratio.ref, ratio.max)   // 尺寸系数
+ *   unit = k px（所有尺寸 = unit × 语义倍数：font 1× / title 1.35× / gap 0.55× / control 3.2×）
+ *
+ * ★ratio.ref = 该形态的**基准容器宽**（内容舒适承载宽）：
+ *   容器 = ref → k = 1（设计尺寸）；容器更窄 → 内容等比缩小（mockup 场景）；
+ *   容器更宽 → 等比放大（真实大屏场景）。min/max 是可读性护栏（防蚂蚁字 / 防无限放大）。
+ *
+ * ★为什么这样设计（旧版缺陷的对症修复）：
+ *   旧版形态携带**绝对 px**（TV font 38px）→ 只能按「自然视口」渲染再靠 scale 变换缩到展示区
+ *   （内容被裁切、非居中）。改为「容器驱动比例」后，**同一形态在任意容器宽都正确渲染**：
+ *   mockup 尺寸与真实设备尺寸走同一条公式，只是 k 不同——无缩放变换、无裁剪。
+ */
+export interface FluidMetrics {
+  /** 尺寸系数（已 clamp） */
+  k: number
+  /** 是否被护栏截断（诊断用） */
+  clamped: 'none' | 'min' | 'max'
+  /** CSS 变量表（--pf-u / --pf-font / --pf-title / --pf-gap / --pf-pad / --pf-radius / --pf-control） */
+  vars: Record<string, string>
+}
+
+export function resolveFluidMetrics(containerWidth: number, profile: FormProfile): FluidMetrics {
+  const r = profile.visual.ratio
+  const w = containerWidth > 0 ? containerWidth : r.ref
+  const raw = w / r.ref
+  let k = raw
+  let clamped: FluidMetrics['clamped'] = 'none'
+  if (containerWidth <= 0) {
+    k = 1 // 容器不可测（SSR/MP 首帧）→ 按设计尺寸（渲染端自决，朴素但正确）
+  } else if (raw < r.min) {
+    k = r.min
+    clamped = 'min'
+  } else if (raw > r.max) {
+    k = r.max
+    clamped = 'max'
+  }
+  const px = (m: number): string => `${Math.round(r.baseFont * k * m * 100) / 100}px`
+  const control = profile.caps.dpad ? 3.6 : 3.0 // 遥控形态热区更大
+  return {
+    k: Math.round(k * 100) / 100,
+    clamped,
+    vars: {
+      '--pf-u': px(1),
+      '--pf-font': px(1),
+      '--pf-title': px(1.35),
+      '--pf-gap': px(0.55),
+      '--pf-pad': px(1),
+      '--pf-radius': px(0.6),
+      '--pf-control': px(control),
+    },
+  }
+}
+
+/** 形态帧 CSS 变量（展示壳——比例/上限宽/刘海；帧只影响壳，不参与内容度量） */
+export function resolveFrameVars(profile: FormProfile): Record<string, string> {
+  return {
+    '--pf-ar': profile.frame.ar.replace('/', ' / '),
+    '--pf-frame-max': `${profile.frame.maxWidth}px`,
+    '--pf-frame-radius': `${profile.frame.radius}px`,
+  }
+}
+
 /** 能力判定（组件消费入口）：某形态是否声明支持该能力 */
 export function formSupports(form: DeviceForm, cap: keyof FormCaps): boolean {
   return FORM_PROFILES[form]?.caps[cap] === true
@@ -356,7 +468,17 @@ export function validateFormProfiles(
     if (p.form !== f) problems.push(`${f}: form 字段自洽（实际 ${p.form}）`)
     if (!topologies.includes(p.topology)) problems.push(`${f}: 非法拓扑 ${p.topology}`)
     if (!navs.includes(p.nav)) problems.push(`${f}: 非法导航 ${p.nav}`)
-    if (!(p.scale > 0)) problems.push(`${f}: 缩放须为正数（实际 ${p.scale}）`)
+    // ★流体度量护栏：min<max 且 base>0（防「不可读的 mockup」与「无上限放大」）
+    const r = p.visual.ratio
+    if (!(r.ref > 0)) problems.push(`${f}: ratio.ref 须为正数（实际 ${r.ref}）`)
+    if (!(r.min > 0 && r.max > r.min)) problems.push(`${f}: ratio 护栏非法（min ${r.min} / max ${r.max}）`)
+    // ★ref 应与展示壳上限宽同量级（mockup 下 k≈1——防止「ref 与帧宽不匹配导致内容比例怪异」）
+    if (r.ref < p.frame.maxWidth * 0.6 || r.ref > p.frame.maxWidth * 1.6) {
+      problems.push(`${f}: ratio.ref（${r.ref}）与 frame.maxWidth（${p.frame.maxWidth}）量级不匹配`)
+    }
+    // ★展示壳规格
+    if (!/^\d+\/\d+$/.test(p.frame.ar)) problems.push(`${f}: frame.ar 非法（${p.frame.ar}）`)
+    if (!(p.frame.maxWidth >= 180)) problems.push(`${f}: frame.maxWidth 过小（${p.frame.maxWidth}）`)
     if (p.caps.focusRows && p.input === 'touch') problems.push(`${f}: 焦点行要求遥控类输入（实际 ${p.input}）`)
     if (p.topology === 'glance' && p.caps.dense) problems.push(`${f}: 一屏一意（glance）不应声明 dense`)
     if (p.density === 'compact' && p.input === 'remote') problems.push(`${f}: 遥控形态不应 compact（远距离可读性）`)
@@ -364,11 +486,13 @@ export function validateFormProfiles(
     if ((p.caps.dpad || p.caps.keyboard) && p.visual.focus !== 'ring') {
       problems.push(`${f}: 遥控/键盘形态必须焦点可见（visual.focus 应为 ring）`)
     }
-    if (p.distance === '10ft' && p.visual.font < 30) {
-      problems.push(`${f}: 10ft 观看距离字号过小（${p.visual.font}px，应 ≥30）`)
+    // ★距离语义护栏（改到 ratio.max——绝对 px 已随容器驱动移除）
+    // 远距离形态：基准容器宽须足够大（真实大屏）+ k 上限允许放大（远距离可读）
+    if (p.distance === '10ft' && (p.visual.ratio.ref < 560 || p.visual.ratio.max < 1.8)) {
+      problems.push(`${f}: 10ft 形态的 ref/max 不足（ref ${p.visual.ratio.ref} / max ${p.visual.ratio.max}）`)
     }
-    if (p.distance === 'dashboard' && p.visual.font < 22) {
-      problems.push(`${f}: 驾驶距离字号过小（${p.visual.font}px，应 ≥22）`)
+    if (p.distance === 'dashboard' && (p.visual.ratio.ref < 560 || p.visual.ratio.max < 1.5)) {
+      problems.push(`${f}: 驾驶形态的 ref/max 不足（ref ${p.visual.ratio.ref} / max ${p.visual.ratio.max}）`)
     }
     if (p.caps.focusRows && p.input !== 'remote') problems.push(`${f}: 焦点行要求遥控输入`)
     if (!(p.visual.bg && p.visual.text && p.visual.brand)) problems.push(`${f}: 视觉语言缺关键色`)

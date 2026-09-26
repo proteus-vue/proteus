@@ -15,6 +15,7 @@ import {
   formSupports,
   validateFormProfiles,
   createFormFactor,
+  resolveFluidMetrics,
   type DeviceForm,
   type FormProfile,
 } from '../packages/fluid/src/formfactor'
@@ -40,7 +41,7 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(FORM_PROFILES.car.caps.skuMulti).toBe(false)
     expect(FORM_PROFILES.car.density).toBe('comfortable')
     // TV：10ft 观看距离 → 1.4 倍视觉缩放 + 无高密度信息
-    expect(FORM_PROFILES.tv.scale).toBe(1.4)
+    expect(FORM_PROFILES.tv.visual.ratio.max).toBeGreaterThanOrEqual(2) // 10ft 可放大
     expect(FORM_PROFILES.tv.caps.dense).toBe(false)
   })
 
@@ -49,7 +50,8 @@ describe('★形态画像表（SSOT）自洽性', () => {
     const fingerprints = forms.map((f) => {
       const p = FORM_PROFILES[f]
       const capsOn = (Object.keys(p.caps) as Array<keyof typeof p.caps>).filter((k) => p.caps[k]).sort().join(',')
-      return `${p.topology}|${p.nav}|${p.input}|${p.density}|${p.scale}|${capsOn}`
+      // ★指纹含视觉语言（主题/强调色）与流体基准——形态差异的多维度（不止布局）
+      return `${p.topology}|${p.nav}|${p.input}|${p.density}|${p.visual.theme}|${p.visual.accent}|${p.visual.ratio.ref}|${capsOn}`
     })
     const uniq = new Set(fingerprints)
     expect(uniq.size, `大屏四形态指纹须两两不同，实际：\n${fingerprints.join('\n')}`).toBe(4)
@@ -65,15 +67,58 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(FORM_PROFILES.car.nav).not.toBe(FORM_PROFILES.tv.nav)
   })
 
+  it('★流体度量（v3）：尺寸由容器宽驱动——同一形态任意容器宽都正确（无缩放/无裁剪）', () => {
+    // k = clamp(min, containerWidth / ref, max)：ref 处 k=1（设计尺寸）
+    const atRef = resolveFluidMetrics(FORM_PROFILES.car.visual.ratio.ref, FORM_PROFILES.car)
+    expect(atRef.k).toBe(1)
+    expect(atRef.clamped).toBe('none')
+    expect(atRef.vars['--pf-font']).toBe(`${FORM_PROFILES.car.visual.ratio.baseFont}px`)
+    // 窄容器（mockup 缩放）→ k < 1 但受 min 护栏；宽容器（真实设备）→ k > 1 但受 max 护栏
+    const narrow = resolveFluidMetrics(300, FORM_PROFILES.car)
+    expect(narrow.k).toBeLessThan(1)
+    expect(narrow.clamped).toBe('min')
+    expect(Number.parseFloat(narrow.vars['--pf-font'])).toBeGreaterThanOrEqual(FORM_PROFILES.car.visual.ratio.baseFont * FORM_PROFILES.car.visual.ratio.min - 0.01)
+    const wide = resolveFluidMetrics(1920, FORM_PROFILES.car)
+    expect(wide.k).toBe(FORM_PROFILES.car.visual.ratio.max)
+    expect(wide.clamped).toBe('max')
+    // 均匀缩放：所有变量同比（无失真）
+    const a = resolveFluidMetrics(320, FORM_PROFILES.phone)
+    const b = resolveFluidMetrics(640, FORM_PROFILES.phone)
+    const ratio = b.k / a.k
+    const fa = Number.parseFloat(a.vars['--pf-font'])
+    const fb = Number.parseFloat(b.vars['--pf-font'])
+    expect(Math.abs(fb / fa - ratio)).toBeLessThan(0.02)
+    // 容器不可测（SSR/MP 首帧）→ 按设计尺寸（k=1），不抛错
+    expect(resolveFluidMetrics(0, FORM_PROFILES.tv).k).toBe(1)
+    // 遥控形态热区更大（d-pad 可达）
+    const carCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.car).vars['--pf-control'])
+    const phoneCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.phone).vars['--pf-control'])
+    expect(carCtl).toBeGreaterThan(phoneCtl)
+  })
+
+  it('★展示壳规格（mockup 帧）：七形态比例/上限宽/刘海/状态栏齐备且合法', () => {
+    for (const [f, p] of Object.entries(FORM_PROFILES) as Array<[DeviceForm, FormProfile]>) {
+      expect(/^\d+\/\d+$/.test(p.frame.ar), `${f} ar`).toBe(true)
+      expect(p.frame.maxWidth, `${f} maxWidth`).toBeGreaterThanOrEqual(180)
+      expect(p.frame.radius, `${f} radius`).toBeGreaterThan(0)
+    }
+    // 手机有刘海+状态栏；手表/PC/车机/TV 无
+    expect(FORM_PROFILES.phone.frame.notch).toBe(true)
+    expect(FORM_PROFILES.phone.frame.statusBar).toBe(true)
+    expect(FORM_PROFILES.tv.frame.notch).toBe(false)
+    // 帧上限宽：小屏 < 大屏（视觉层级正确）
+    expect(FORM_PROFILES.watch.frame.maxWidth).toBeLessThan(FORM_PROFILES.pc.frame.maxWidth)
+  })
+
   it('★视觉语言（形态级主题）：TV/车机暗色沉浸 · 10ft 大字号 · 遥控焦点环可见', () => {
     // 旧版设计本意：TV 是 lean-back 暗色沉浸（不是把浅色 UI 塞进大框）
     expect(FORM_PROFILES.tv.visual.theme).toBe('dark')
     expect(FORM_PROFILES.car.visual.theme).toBe('dark')
     expect(FORM_PROFILES.phone.visual.theme).toBe('light')
-    // 观看距离决定字号（10ft 38px / 驾驶 26px / 桌面 18px / 手机 14px）
-    expect(FORM_PROFILES.tv.visual.font).toBeGreaterThanOrEqual(30)
-    expect(FORM_PROFILES.car.visual.font).toBeGreaterThanOrEqual(22)
-    expect(FORM_PROFILES.tv.visual.font).toBeGreaterThan(FORM_PROFILES.phone.visual.font)
+    // 观看距离决定尺度的**上限**（10ft/驾驶须能放大到远距离可读——ratio.max 护栏）
+    expect(FORM_PROFILES.tv.visual.ratio.max).toBeGreaterThanOrEqual(2)
+    expect(FORM_PROFILES.car.visual.ratio.max).toBeGreaterThanOrEqual(1.5)
+    expect(FORM_PROFILES.tv.visual.ratio.baseFont).toBeGreaterThan(FORM_PROFILES.phone.visual.ratio.baseFont)
     // 遥控/键盘形态焦点必须可见（焦点环）；触控形态无
     expect(FORM_PROFILES.tv.visual.focus).toBe('ring')
     expect(FORM_PROFILES.car.visual.focus).toBe('ring')
