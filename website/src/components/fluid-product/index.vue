@@ -161,7 +161,8 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.22), rgba(171, 155, 255, 0.08));
   display: grid;
   place-items: center;
-  font-size: calc(var(--pf-font) * 2.4);
+  /* ★消费框架的媒体展示尺度（hero/10ft 形态更大）——业务零形态分支 */
+  font-size: calc(var(--pf-font) * 2.4 * var(--pf-media-scale, 1));
   min-height: 90px;
 }
 .fp-name { display: block; font-size: calc(var(--pf-font) * 1.45); font-weight: 800; color: var(--pf-text, #17171f); }
