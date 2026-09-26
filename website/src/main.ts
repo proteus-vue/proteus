@@ -20,6 +20,7 @@ import {
   PToast,
   PAnimate,
   PgGlass,
+  PZone,
   installFluidLayout,
 } from '@proteus-vue/components'
 // ★G-24 B1 桌面交互原语：v-p-hover（官网卡片 hover 语义——Pure logic 双端接线）
@@ -31,6 +32,8 @@ const app = createApp(App)
 // ★D-2：p-* 语义组件全局注册（模板写 <p-view>/<p-text>/…——禁第三方 UI、禁裸 div 布局）
 const components: Record<string, unknown> = {
   'p-view': PView,
+  // ★2026-09-26 多端同屏（柔性系统）：容器断点分区——p-zone 就是本页演示的主角
+  'p-zone': PZone,
   'p-text': PText,
   'p-heading': PHeading,
   'p-grid': PGrid,
