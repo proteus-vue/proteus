@@ -546,14 +546,21 @@ export function resolveFluidMetrics(containerWidth: number, profile: FormProfile
   }
 }
 
-/** 形态帧 CSS 变量（展示壳——比例/上限宽/刘海；帧只影响壳，不参与内容度量） */
-export function resolveFrameVars(profile: FormProfile): Record<string, string> {
+/** 形态帧 CSS 变量（展示壳——比例/上限宽/刘海；帧只影响壳，不参与内容度量）
+ *  ★containerWidth（2026-09-27）：**安全区是设备物理量**（TV overscan = 真机 1920 的 5% = 96px），
+ *  必须按展示缩放投影进缩略壳——否则 96px 塞进 620px 帧 = 15.5%（比真机大三倍），
+ *  用户实测「TV 不沉浸、四周都是边界」。传 0/不传 → 按设计帧宽投影（mockup 默认口径）。 */
+export function resolveFrameVars(profile: FormProfile, containerWidth = 0): Record<string, string> {
+  const deviceW = profile.viewport.width > 0 ? profile.viewport.width : profile.frame.maxWidth
+  const w = containerWidth > 0 ? containerWidth : profile.frame.maxWidth
+  const showScale = Math.min(1, w / deviceW) // 展示缩放（真机/超宽 → 1）
+  const safePx = (dp: number | undefined): string => `${Math.round((dp ?? 0) * showScale * 100) / 100}px`
   return {
     // ★形态级媒体比例（2026-09-26 二次复审 P1：此前 0 发射点 → 7 形态全走 4/3 fallback）
     '--pf-media-ar': profile.mediaRatio.replace('/', ' / '),
-    // ★安全区（复审 P1：此前 0 发射点 → overscan/Home Indicator 完全无效）
-    '--pf-safe-side': `${profile.safe?.side ?? 0}px`,
-    '--pf-safe-bottom': `${profile.safe?.bottom ?? 0}px`,
+    // ★安全区（复审 P1：0 发射点已修；三审再修「物理量按展示缩放投影」——见函数注释）
+    '--pf-safe-side': safePx(profile.safe?.side),
+    '--pf-safe-bottom': safePx(profile.safe?.bottom),
     // ★铰链几何（二次复审 P1：折叠屏折痕此前只是装饰；现把真实铰链带交给布局消费——
     //   真机（Web foldable）有 env(fold-*) → 双栏按窗格成列；无该 API 的环境回退 0px = 现有行为）
     ...(profile.frame.hinge

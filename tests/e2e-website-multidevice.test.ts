@@ -91,6 +91,18 @@ async function probeLiveGeometry(): Promise<{
     //   按 CSS 规范把 overflow-x 也解析为 auto ⇒ **所有后代恒被跳过**（这条检查 100% 死代码，
     //   恰好漏掉它本来要防的「车机瓦片被裁半截」）。
     //   改为**实测**是否真能横向滚动（scrollWidth > clientWidth + 1）；只有真滚动容器才放行越界。
+    const inVScroller = (el: Element): boolean => {
+      let cur: Element | null = el.parentElement
+      while (cur && cur !== body) {
+        const h = cur as HTMLElement
+        if (h.scrollHeight > h.clientHeight + 1) {
+          const oy = getComputedStyle(cur).overflowY
+          if (oy === 'auto' || oy === 'scroll') return true
+        }
+        cur = cur.parentElement
+      }
+      return false
+    }
     const inHScroller = (el: Element): boolean => {
       let cur: Element | null = el.parentElement
       while (cur && cur !== frame) {
@@ -109,7 +121,16 @@ async function probeLiveGeometry(): Promise<{
       if (r.width < 4 || r.height < 4) continue
       if (r.right > fr.right + 1 || r.left < fr.left - 1) {
         if (inHScroller(el)) continue
-        clipped.push(`${el.className.toString().split(' ')[0] || el.tagName}(子项)`)
+        clipped.push(`${el.className.toString().split(' ')[0] || el.tagName}(子项横向)`)
+      }
+      // ★2026-09-27 补盲区（用户实测抓到）：**纵向**子项被裁此前完全没查——
+      //   车机瓦片因 max-height 把「图标/名称/价格」三行压进 40px 行 → 下半截被 overflow 裁掉，
+      //   而门禁只看横向越界 + 少数「核心块」的纵向，正好放行。现逐子项查纵向；
+      //   例外：祖先含纵向滚动容器（内容本可滚），或**祖先自身 overflow:hidden 且已知会裁**（
+      //   如媒体封面、缩略图内部的装饰）——这类由「核心块不裁」断言覆盖，不在此重复报。
+      if (r.bottom > fr.bottom + 1) {
+        if (inVScroller(el)) continue
+        clipped.push(`${el.className.toString().split(' ')[0] || el.tagName}(子项纵向)`)
       }
     }
     const overlaps: string[] = []

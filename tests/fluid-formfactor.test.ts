@@ -17,6 +17,7 @@ import {
   validateFormProfiles,
   createFormFactor,
   resolveFluidMetrics,
+  resolveFrameVars,
   capsLabel,
   capsEnabled,
   capsDegraded,
@@ -142,6 +143,28 @@ describe('★形态画像表（SSOT）自洽性', () => {
     const m = resolveFluidMetrics(340, eff)
     const font = Number.parseFloat(m.vars['--pf-font'])
     expect(font).toBeGreaterThanOrEqual(11) // WCAG 可读底线（此前 9.7px）
+  })
+
+  it('★安全区按展示缩放投影（2026-09-27）：TV overscan 在缩略壳内仍为**设备的 5%**', () => {
+    // 用户实测「TV 四周都有边界、不沉浸」的根因：96px 是**真机 1920 的 5%**，
+    // 却按绝对 px 塞进 620px 缩略壳 = 15.5%（比真机大三倍）。物理量必须按展示缩放投影。
+    const tv = FORM_PROFILES.tv
+    const wide = resolveFrameVars(tv, 620)
+    const narrow = resolveFrameVars(tv, 540)
+    const side = (v: string) => Number.parseFloat(v)
+    // 620 帧：96 × (620/1920) = 31px ≈ 帧宽 5%
+    expect(side(wide['--pf-safe-side'])).toBeCloseTo(31, 0)
+    expect(side(wide['--pf-safe-side']) / 620).toBeCloseTo(0.05, 2)
+    // 540 帧：96 × (540/1920) = 27px
+    expect(side(narrow['--pf-safe-side'])).toBeCloseTo(27, 0)
+    // 不传宽 → 按设计帧宽（mockup 默认口径）投影
+    const dflt = side(resolveFrameVars(tv)['--pf-safe-side']!)
+    expect(dflt).toBeCloseTo(96 * (tv.frame.maxWidth / 1920), 0)
+    // 底部同理（54 × 620/1920 = 17.4px）
+    expect(side(wide['--pf-safe-bottom'])).toBeCloseTo(17, 0)
+    // 真机/超宽：满值（不做反向放大）
+    expect(side(resolveFrameVars(tv, 1920)['--pf-safe-side'])).toBeCloseTo(96, 0)
+    expect(side(resolveFrameVars(tv, 3840)['--pf-safe-side'])).toBeCloseTo(96, 0)
   })
 
   it('★展示壳规格（mockup 帧）：七形态比例/上限宽/刘海/状态栏齐备且合法', () => {

@@ -214,7 +214,7 @@ const rootStyle = computed(() => {
   const metrics = resolveFluidMetrics(metricWidth.value, metProfile)
   return {
     ...metrics.vars,
-    ...resolveFrameVars(p),
+    ...resolveFrameVars(p, metricWidth.value),
     // ★dense 能力并入内联值（三审：此前 .is-dense 的同名变量被内联恒覆盖 = 能力零后果）
     '--pf-gap-dense': String(
       capsEnabled(p.caps.dense)
@@ -894,12 +894,29 @@ onUnmounted(() => {
 /* ★瓦片热区（三审二修）：仍保 76dp 的 0.85 倍下限，但**驾驶形态**由行高吸收（避免行被顶起） */
 .has-dpad :deep(.pf-rec-card),
 .has-focus-tree :deep(.pf-rec-card) { min-height: calc(var(--pf-control) * 0.85); }
-/* 瓦片：与主操作**同高**（一跳可达的视觉对齐），但不随剩余空间拉伸 */
+/* ★瓦片（2026-09-27 用户实测修复）：8/3 扁画布容不下「图标/名称/价格」三行竖排——
+   瓦片被压到 40px 而行内容需 87px → 名称与价格溢出被裁（用户截图：瓦片下半截消失）。
+   驾驶舱语义本就是**一行大热区**：改紧凑横排（图标｜名称｜价格 同一行），内容高 ≈1 行，
+   与主操作等高对齐且不再溢出。 */
 .p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
   align-self: stretch;
   min-height: 0;
-  max-height: calc(var(--pf-control) * 1.15);
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--pf-u) * 0.35);
+  padding: calc(var(--pf-u) * 0.4);
+  overflow: hidden;
 }
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 名称可伸缩（占余量并省略），图标与价格按内容宽 */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
 
 /* keyboard：键盘可达元素加可见焦点环（PC）*/
 .has-keyboard :deep(*:focus-visible) {
