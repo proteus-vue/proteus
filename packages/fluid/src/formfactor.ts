@@ -196,6 +196,10 @@ export interface FormPosture {
   viewport: { width: number; height: number }
   /** 半折铰链方向（tabletop 水平铰链——上半展示/下半操作） */
   hinge?: 'horizontal' | 'vertical'
+  /** ★姿态级度量覆盖（2026-09-26 三审）：外屏（340pt）在内屏基准（ref:420）下 k=0.81
+   *  → 正文 9.7px、规格 Chip 22px（连 WCAG 2.5.8 的 24px 都不达）。
+   *  外屏沿用内屏度量基准是错的——Samsung/Google 均按「窄手机」处理外屏。 */
+  ratio?: FluidRatio
 }
 
 /** 形态画像（声明式 SSOT——布局/导航/能力/密度/缩放**与视觉语言**全从这里推导） */
@@ -303,7 +307,8 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // ★姿态集（报告 P0-2）：折叠态外屏（单列+Tab）→ 半折 tabletop（水平铰链）→ 展开态内屏（双窗格）
     //   连续性语义：视口 340 → 673，拓扑 stack → duo（状态跨姿态连续重排，不重启）
     postures: [
-      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 340, height: 800 } },
+      // ★折叠态度量（三审）：外屏 = 窄手机——用 phone 级基准（ref 300），不用内屏 ref 420
+      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 340, height: 800 }, ratio: { baseFont: 13, ref: 300, min: 0.85, max: 1.5 } },
       { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'tabs', viewport: { width: 673, height: 420 }, hinge: 'horizontal' },
       { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'tabs', viewport: { width: 673, height: 841 } },
     ],
@@ -371,7 +376,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
     // ★车机能力画像（2026-09-26 三态）：多规格**降级**而非删除——驾驶场景用「语音/旋钮单选」
     //   替代多选（旧版设计本意：`@conditional` 退化为单选/语音选择），不是「不支持」
-    caps: { ...CAPS_BASE, skuMulti: 'fallback', dpad: 'supported', crown: 'supported', focusTree: 'supported', dense: 'supported', multiCol: 'supported', focusRows: 'supported', driveAware: 'supported' },
+    // ★dense 撤除（2026-09-26 三审）：接口注释明示「10ft 与驾驶场景为 false」，此前误声明支持
+    //   且内联 --pf-gap-dense 恒覆盖 .is-dense → 无任何有效后果（声明与语义双错）。
+    caps: { ...CAPS_BASE, skuMulti: 'fallback', dpad: 'supported', crown: 'supported', focusTree: 'supported', multiCol: 'supported', focusRows: 'supported', driveAware: 'supported' },
   },
   tv: {
     form: 'tv',
@@ -494,7 +501,7 @@ export interface FluidMetrics {
   k: number
   /** 是否被护栏截断（诊断用） */
   clamped: 'none' | 'min' | 'max'
-  /** CSS 变量表（--pf-u / --pf-font / --pf-title / --pf-gap / --pf-pad / --pf-radius / --pf-control） */
+  /** CSS 变量表（--pf-u / --pf-font / --pf-gap / --pf-pad / --pf-radius / --pf-control——全部有真实消费者） */
   vars: Record<string, string>
 }
 
@@ -514,16 +521,23 @@ export function resolveFluidMetrics(containerWidth: number, profile: FormProfile
     clamped = 'max'
   }
   const px = (m: number): string => `${Math.round(r.baseFont * k * m * 100) / 100}px`
-  // ★热区（2026-09-26 专家审查）：遥控/车机形态须有**绝对下限**（AAOS 建议主操作 ≥76dp）
-  //   此前纯倍数（baseFont×k×3.6）在窄容器下只有 35px——行车中按不准
-  const control = profile.caps.dpad ? Math.max(3.6, 76 / (r.baseFont * k)) : 3.0
+  // ★热区下限（2026-09-26 三审定稿）——**物理量按设备尺度换算**，不是容器绝对 px：
+  //   · 规范下限：遥控/驾驶 ≥76dp（AAOS）· 触控/旋钮 ≥44dp（HIG 44pt / Material 48dp 保守下界）
+  //   · 但展示壳（mockup）只是真机的**等比縮略**：车机帧 540 / 真机 1280 → 42% 尺度。
+  //     若把 76px 当绝对 px 塞进 540 帧，热区会占内容高 44% → 主视觉被挤没、文案只剩省略号
+  //     （实测：立即购买被压到 58px 宽）。正确语义 = `minDp × 展示缩放`，真机（w ≥ 设备宽）时为满值。
+  //   · 并修同类三态裸真值：`profile.caps.dpad ? …` 对 'unsupported' 恒真
+  //     → 76dp 下限曾外溢到全部 7 形态（3.0 分支不可达、测试断言被削成永真）。
+  const deviceW = profile.viewport.width > 0 ? profile.viewport.width : r.ref
+  const showScale = Math.min(1, w / deviceW) // 展示缩放（真机/超宽 → 1，不做反向放大）
+  const minDp = capsEnabled(profile.caps.dpad) ? 76 : 44
+  const control = Math.max(2.6, (minDp * showScale) / (r.baseFont * k))
   return {
     k: Math.round(k * 100) / 100,
     clamped,
     vars: {
       '--pf-u': px(1),
       '--pf-font': px(1),
-      '--pf-title': px(1.35),
       '--pf-gap': px(0.55),
       '--pf-pad': px(1),
       '--pf-radius': px(0.6),
@@ -535,9 +549,6 @@ export function resolveFluidMetrics(containerWidth: number, profile: FormProfile
 /** 形态帧 CSS 变量（展示壳——比例/上限宽/刘海；帧只影响壳，不参与内容度量） */
 export function resolveFrameVars(profile: FormProfile): Record<string, string> {
   return {
-    '--pf-ar': profile.frame.ar.replace('/', ' / '),
-    '--pf-frame-max': `${profile.frame.maxWidth}px`,
-    '--pf-frame-radius': `${profile.frame.radius}px`,
     // ★形态级媒体比例（2026-09-26 二次复审 P1：此前 0 发射点 → 7 形态全走 4/3 fallback）
     '--pf-media-ar': profile.mediaRatio.replace('/', ' / '),
     // ★安全区（复审 P1：此前 0 发射点 → overscan/Home Indicator 完全无效）
@@ -546,8 +557,11 @@ export function resolveFrameVars(profile: FormProfile): Record<string, string> {
     // ★铰链几何（二次复审 P1：折叠屏折痕此前只是装饰；现把真实铰链带交给布局消费——
     //   真机（Web foldable）有 env(fold-*) → 双栏按窗格成列；无该 API 的环境回退 0px = 现有行为）
     ...(profile.frame.hinge
-      ? { '--pf-fold-left': 'env(fold-left, 0px)', '--pf-fold-width': 'env(fold-width, 0px)' }
+      ? { '--pf-fold-width': 'env(fold-width, 0px)' }
       : {}),
+    // ★notch 的真实消费量（2026-09-26 三审：此前 notch 只有类名、零后果——声明不可证伪）：
+    //   真机刘海屏（Web standalone / 沉浸模式）经 env(safe-area-inset-top) 让位；桌面 env=0 无副作用
+    ...(capsEnabled(profile.caps.notch) ? { '--pf-safe-top': 'env(safe-area-inset-top, 0px)' } : {}),
   }
 }
 
@@ -559,8 +573,11 @@ export function formSupports(form: DeviceForm, cap: keyof FormCaps): boolean {
 
 /**
  * 形态画像校验（SSOT 门禁——新增形态/能力时防止漏填）：
- * ① 七形态画像齐备且 form 字段自洽 ② 拓扑/导航枚举合法 ③ 缩放为正数
- * ④ focusRows 与 input 自洽（焦点行要求遥控类输入）⑤ dense 与 topology 不矛盾（glance 必须 compact+非 dense）
+ * ① 七形态齐备 / form 自洽 / 拓扑·导航枚举合法 / 度量护栏 / 展示壳规格
+ * ② 姿态集齐备 · 视口递增 · 折叠/展开拓扑不同 · 姿态级度量护栏
+ * ③ 颜色对比度（text/bg ≥4.5 · accent/bg ≥3）
+ * ④ ★跨字段自洽（2026-09-26 三审：此前 nav↔caps、topology↔caps、input↔caps 的矛盾可静默通过——
+ *    「nav=tabs 但 caps.tabs 不支持」这类组合会让导航永不渲染，正是折叠屏踩过的坑）
  */
 export function validateFormProfiles(
   profiles: Record<DeviceForm, FormProfile> = FORM_PROFILES,
@@ -638,6 +655,60 @@ export function validateFormProfiles(
     if (/^#[0-9a-f]{6}$/i.test(p.visual.accent) && /^#[0-9a-f]{6}$/i.test(p.visual.bg)) {
       const c = contrast(p.visual.accent, p.visual.bg)
       if (c < 3) problems.push(`${f}: 强调色/背景对比度 ${c.toFixed(2)}:1 < 3:1（价格类信息不可读）`)
+    }
+
+    // ★④ 跨字段自洽（2026-09-26 三审）
+    const has = (k: keyof FormCaps): boolean => capsEnabled(p.caps[k])
+    // nav ↔ caps：声明的导航形态必须真有渲染它的能力（否则导航永不出现）
+    if ((p.nav === 'bottom-tabs' || p.nav === 'tabs') && !has('tabs')) {
+      problems.push(`${f}: nav=${p.nav} 但 caps.tabs 未支持（导航永不渲染）`)
+    }
+    if ((p.nav === 'rail' || p.nav === 'side-nav') && !has('sidebar')) {
+      problems.push(`${f}: nav=${p.nav} 但 caps.sidebar 未支持（导航永不渲染）`)
+    }
+    if ((p.nav === 'focus-tree' || p.nav === 'focus-row') && !has('dpad')) {
+      problems.push(`${f}: nav=${p.nav} 但 caps.dpad 未支持（焦点导航无法启用）`)
+    }
+    // topology ↔ caps/input
+    if (p.topology === 'hero-focus-row' && (p.input !== 'remote' || !has('focusRows'))) {
+      problems.push(`${f}: hero-focus-row 要求 remote 输入且 caps.focusRows 支持`)
+    }
+    if (p.topology === 'dashboard' && p.input !== 'remote') {
+      problems.push(`${f}: dashboard 拓扑要求 remote 输入（驾驶场景）`)
+    }
+    if (p.topology === 'glance' && p.density !== 'compact') {
+      problems.push(`${f}: glance 拓扑要求 compact 密度（一屏一意）`)
+    }
+    if ((p.topology === 'rail-split' || p.topology === 'rail-grid') && !has('sidebar')) {
+      problems.push(`${f}: ${p.topology} 拓扑要求 caps.sidebar 支持`)
+    }
+    // input ↔ caps
+    if (has('crown') && p.input !== 'dial' && p.input !== 'remote') {
+      problems.push(`${f}: caps.crown 支持但 input=${p.input}（表冠/旋钮属 dial/remote）`)
+    }
+    if (has('hover') && p.input !== 'cursor') {
+      problems.push(`${f}: caps.hover 支持但 input=${p.input}（悬停属指针输入）`)
+    }
+    if (has('driveAware') && p.distance !== 'dashboard') {
+      problems.push(`${f}: caps.driveAware 支持但 distance=${p.distance}（驾驶降干扰属 dashboard 距离）`)
+    }
+    if (has('dense') && (p.distance === '10ft' || p.distance === 'dashboard' || p.topology === 'glance')) {
+      problems.push(`${f}: caps.dense 与远距/驾驶/一屏语义矛盾（10ft·dashboard·glance 不做高密度）`)
+    }
+    // 媒体比例格式
+    if (!/^\d+\/\d+$/.test(p.mediaRatio)) problems.push(`${f}: mediaRatio 非法（${p.mediaRatio}）`)
+    // 姿态 nav/ratio 也须自洽
+    if (p.postures) {
+      for (const po of p.postures) {
+        if ((po.nav === 'bottom-tabs' || po.nav === 'tabs') && !has('tabs')) {
+          problems.push(`${f}/${po.key}: nav=${po.nav} 但 caps.tabs 未支持`)
+        }
+        if (po.ratio) {
+          if (!(po.ratio.ref > 0) || !(po.ratio.min > 0 && po.ratio.max > po.ratio.min)) {
+            problems.push(`${f}/${po.key}: 姿态级 ratio 护栏非法（ref ${po.ratio.ref} / min ${po.ratio.min} / max ${po.ratio.max}）`)
+          }
+        }
+      }
     }
   }
   return problems

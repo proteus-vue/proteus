@@ -22,6 +22,7 @@
     :data-pf-posture="posture || ''"
     :data-pf-topology="profile.topology"
     :data-pf-nav="profile.nav"
+    :data-pf-caps="capsDigest"
     :style="rootStyle"
   >
     <!-- 侧栏（能力声明 sidebar：未声明的形态自动不渲染——手机/手表/车机/TV） -->
@@ -53,8 +54,8 @@
         </div>
       </div>
 
-      <!-- 驾驶提醒条（driveAware 能力消费点：真实网格行，不覆盖内容） -->
-      <p v-if="capsEnabled(caps.driveAware)" class="pf-drive-hint">⚠ {{ driveHint }}</p>
+      <!-- 驾驶提醒条（driveAware 能力消费点：真实网格项，与媒体同格——不占纵向预算） -->
+      <p v-if="capsEnabled(caps.driveAware)" class="pf-drive-hint">⚠{{ driveHint ? ' ' + driveHint : '' }}</p>
 
       <!-- 推荐区：焦点行形态自动横排（TV/车机海报流），其余形态网格/列表 -->
       <div v-if="$slots.recommend" class="pf-recommend" :class="{ 'pf-recommend--row': capsEnabled(caps.focusRows) }">
@@ -80,16 +81,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery, capsEnabled, capsLabel } from '@proteus-vue/fluid'
+import { FORM_PROFILES, FORM_CAP_KEYS, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery, capsEnabled, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FocusDirection, FocusRect } from '@proteus-vue/fluid'
 
 const props = defineProps({
   /** 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 */
   declared: { type: String as () => DeviceForm | null, default: null },
-  /** 降级路径提示文案（宿主注入——组件层不含 i18n 依赖） */
+  /** 降级路径提示文案（宿主注入——组件层不含 i18n 依赖；缺省走中性英文图标串） */
   degradedHint: { type: String, default: '' },
-  /** ★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文） */
-  driveHint: { type: String, default: '驾驶中：已精简信息层级与动效，仅保留核心购买路径' },
+  /** ★驾驶提醒文案（driveAware 形态显示；**宿主注入优先**——三审：此前默认值硬编码中文，
+   *  EN 站点会出中文；缺省为语言中性的短标记，由宿主按 locale 覆盖） */
+  driveHint: { type: String, default: '' },
   /** ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） */
   posture: { type: String, default: '' },
   /** 容器尺寸注入（宿主/测试；缺省用容器自身测量） */
@@ -97,23 +99,29 @@ const props = defineProps({
   height: { type: Number, default: 0 },
 })
 
-/** 容器实测宽（★流体度量的输入——所有尺寸由它驱动；无缩放变换、无裁剪） */
+/** 容器实测宽（★流体度量的输入——所有尺寸由它驱动；无缩放变换、无裁剪）
+ *  ★2026-09-26 三审修复「宽度冻结」：此前 props.width 只在 onMounted 赋值一次，
+ *  同一会话内切换宿主注入宽度（演示页切设备 / 端形态变化）时度量**不跟随**——
+ *  实测 car(760)→tv(620) 后 TV 字号偏大 22%（22.1px vs 18px）。 */
 const measured = ref(props.width > 0 ? props.width : 0)
+watch(
+  () => props.width,
+  (w) => {
+    if (w > 0 && Math.abs(w - measured.value) > 0.5) measured.value = w
+  },
+)
+/** 度量输入宽（★单一入口：宿主注入优先，其次自测；两路都响应式） */
+const metricWidth = computed(() => props.width > 0 ? props.width : measured.value)
 const rootEl = ref<HTMLElement | null>(null)
-let ro: ResizeObserver | null = null
 
 /** 容器观测走 @proteus-vue/fluid 的 createContainerQuery（★审计纪律：组件内不直用 DOM API——
  *   Web 走 ResizeObserver，MP 走 SelectorQuery，SSR/无观测器自动降级静态） */
 let query: { destroy: () => void } | null = null
 onMounted(() => {
-  if (props.width > 0) {
-    // 宿主注入宽度（演示页/端 profile）——不必自测
-    measured.value = props.width
-    return
-  }
+  if (props.width > 0) return // 宿主注入宽度（演示页/端 profile）——不必自测
   const el = (rootEl.value as unknown as { $el?: HTMLElement })?.$el ?? (rootEl.value as unknown as HTMLElement)
   if (!el || typeof el !== 'object') return
-  const ctx = createContainerQuery(el, { designWidth: props.width || 375 })
+  const ctx = createContainerQuery(el, { designWidth: 375 })
   ctx.subscribe((st) => {
     if (st.width > 0 && Math.abs(st.width - measured.value) > 2) measured.value = st.width
   })
@@ -124,7 +132,7 @@ onUnmounted(() => {
   query = null
 })
 
-// ★焦点引擎也需要矩形测量——走同一观测原语（审计纪律：不直用 getBoundingClientRect）
+// ★焦点引擎的矩形测量（见 measureElementRect 的诚实边界说明）
 const form = computed(() => (props.declared as DeviceForm | null) ?? senseFormFast())
 /** ★姿态覆盖（报告 P0-2）：折叠屏按 posture 切换拓扑/视口——业务零分支 */
 const postureDef = computed(() => {
@@ -141,7 +149,7 @@ const caps = computed(() => profile.value.caps)
 /** ★SKU 能力三态（supported / fallback / unsupported——报告 P2-2） */
 const skuLevel = computed(() => capsLabel(caps.value.skuMulti))
 /** 降级提示（宿主可经 props 覆盖；缺省走形态中性的简短说明——组件层不依赖 i18n） */
-const skuFallbackHint = computed(() => props.degradedHint || 'pick by voice / rotary')
+const skuFallbackHint = computed(() => props.degradedHint || '🎙︎/↻')
 
 /** 无声明时的兜底推断（SSR/MP 安全——只读注入的尺寸） */
 function senseFormFast(): DeviceForm {
@@ -166,9 +174,10 @@ const rootClass = computed(() => {
     `topo-${p.topology}`,
     `form-${form.value}`,
     `input-${p.input}`,
-    // ★姿态类（2026-09-26 二次复审）：tabletop 半折需按「上半展示/下半操作」取舍，
-    //   仅 data-* 诊断属性不够——姿态必须能驱动样式
-    props.posture ? `posture-${props.posture}` : '',
+    // ★姿态类（2026-09-26 二次复审）：tabletop 半折需按「上半展示/下半操作」取舍。
+    //   三审修：必须**有该姿态定义**才落类——此前 phone + posture=tabletop 会套上
+    //   .posture-tabletop（隐藏 SKU 槽 + 压封面 40%），而画像/拓扑毫无变化 = 声明与渲染打脸。
+    postureDef.value ? `posture-${props.posture}` : '',
     capsEnabled(c.driveAware) ? 'is-drive' : '',
     capsEnabled(c.hover) ? 'has-hover' : '',
     capsEnabled(c.dpad) ? 'has-dpad' : '',
@@ -183,17 +192,35 @@ const rootClass = computed(() => {
 })
 
 /**
+ * ★★能力可观测面（2026-09-26 三审）：机器可读的「本形态最终生效的能力三态」——
+ *   形如 `dpad=supported;skuMulti=fallback;hover=unsupported`（按 FORM_CAP_KEYS 顺序稳定排序）。
+ *   这是「声明 ≠ 空头」的**证据面**：外部可用 `document.querySelector('[data-pf-caps]')` 断言，
+ *   门禁/e2e 亦可据此对账（此前只有 rootClass，无法区分「有类名」与「真支持」）。
+ */
+const capsDigest = computed(() => {
+  const c = caps.value
+  return FORM_CAP_KEYS.map((k) => `${k}=${capsLabel(c[k])}`).join(';')
+})
+
+/**
  * ★★尺寸全部由**容器宽度**驱动（resolveFluidMetrics）——视觉语言（色彩）+ 流体度量（尺寸）
  *   移除旧方案的 px 绝对值与 scale 变换：同一形态在任意容器宽都渲染正确（无裁剪、无缩放失真）。
  */
 const rootStyle = computed(() => {
   const p = profile.value
   const v = p.visual
-  const metrics = resolveFluidMetrics(measured.value || props.width, p)
+  // ★姿态级度量（三审）：折叠态外屏用 phone 级基准（否则 k=0.81 → 正文 9.7px）
+  const metProfile = postureDef.value?.ratio ? { ...p, visual: { ...p.visual, ratio: postureDef.value.ratio } } : p
+  const metrics = resolveFluidMetrics(metricWidth.value, metProfile)
   return {
     ...metrics.vars,
     ...resolveFrameVars(p),
-    '--pf-gap-dense': p.density === 'compact' ? '0.7' : p.density === 'comfortable' ? '1.35' : '1',
+    // ★dense 能力并入内联值（三审：此前 .is-dense 的同名变量被内联恒覆盖 = 能力零后果）
+    '--pf-gap-dense': String(
+      capsEnabled(p.caps.dense)
+        ? Math.min(p.density === 'compact' ? 0.7 : p.density === 'comfortable' ? 1.35 : 1, 0.82)
+        : (p.density === 'compact' ? 0.7 : p.density === 'comfortable' ? 1.35 : 1),
+    ),
     '--pf-bg': v.bg,
     '--pf-scheme': v.theme === 'dark' ? 'dark' : 'light',
     '--pf-surface': v.surface,
@@ -214,7 +241,10 @@ const rootStyle = computed(() => {
  *   · MP 安全：无 DOM 时引擎不启动（形态静态渲染）
  */
 // ★三态归一（2026-09-26 二次复审 P0）：`Boolean('unsupported')` 恒真 → 触控形态也被接管
-const focusEnabled = computed(() => capsEnabled(caps.value.dpad) || capsEnabled(caps.value.keyboard))
+// ★引擎启用条件（2026-09-26 三审）：**只给遥控系**（dpad）——此前把 keyboard（PC）也算进来，
+//   导致桌面用户的 Tab 顺序被 roving 降为单停靠点、方向键/空格被劫持（WCAG 2.1.1/2.4.3 违规）。
+//   PC 的键盘可达性走原生 DOM 顺序 + :focus-visible 焦点环（已由 .has-keyboard 提供）。
+const focusEnabled = computed(() => capsEnabled(caps.value.dpad))
 const focusedId = ref('')
 
 function collectFocusables(): HTMLElement[] {
@@ -235,14 +265,21 @@ function collectFocusables(): HTMLElement[] {
 }
 
 /**
- * 焦点候选的矩形测量（★审计纪律：组件内不直用 getBoundingClientRect——
- * 走 @proteus-vue/fluid 的测量入口；MP 环境返回零矩形使引擎自然不启用）。
+ * 焦点候选的矩形测量（★诚实边界，三审纠正）：此前注释声称「不直用 getBoundingClientRect、
+ * 走 fluid 的测量入口」——但 fluid 并无该入口，代码本就直用。现如实说明：
+ * 测量经统一包装（缺测量能力/抛错 → 零矩形使引擎自然静默降级，MP 安全）。
  */
+let focusSeq = 0
 function measureFocusables(els: HTMLElement[]): FocusRect[] {
   return els.map((el, i) => {
     const r = measureElementRect(el)
-    const id = el.dataset?.pfFocusId ?? `f${i}`
-    if (el.dataset) el.dataset.pfFocusId = id
+    // ★稳定 id（三审）：此前用数组下标 `f${i}`——候选增删后下标漂移/撞名，`find` 可能聚焦错元素。
+    //   改为「首次挂载分配单调自增 id，此后沿用 dataset 值」。
+    let id = el.dataset?.pfFocusId
+    if (!id) {
+      id = `pf${++focusSeq}_${i}`
+      if (el.dataset) el.dataset.pfFocusId = id
+    }
     return { id, x: r.left, y: r.top, width: r.width, height: r.height }
   })
 }
@@ -280,6 +317,10 @@ function applyFocus(id: string): void {
 function onKeydown(e: Event): void {
   if (!focusEnabled.value) return
   const ke = e as KeyboardEvent
+  // ★可编辑元素守卫（三审）：文本输入中的方向键属于光标移动，引擎不得劫持
+  const tgt = ke.target as HTMLElement | null
+  const tag = tgt && tgt.tagName ? tgt.tagName.toLowerCase() : ''
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tgt && (tgt as HTMLElement).isContentEditable)) return
   const dir = DIR_KEYS[ke.key]
   const els = collectFocusables()
   if (els.length === 0) return
@@ -308,28 +349,62 @@ function onFocusIn(e: Event): void {
   if (t.dataset.pfFocusId) focusedId.value = t.dataset.pfFocusId
 }
 
-onMounted(() => {
-  if (!focusEnabled.value) return
-  const el = rootEl.value as unknown as HTMLElement | null
-  el?.addEventListener?.('keydown', onKeydown as EventListener)
-  el?.addEventListener?.('focusin', onFocusIn as EventListener)
+/** 接线/解绑（★2026-09-26 三审：此前只在 onMounted 判一次 → 同会话切换形态后
+ *  「该接管时没接管」（phone→car 方向键全失效）、「不该接管时残留」；现随 focusEnabled 响应） */
+function attachEngine(): void {
+  const el = (rootEl.value as unknown as { $el?: HTMLElement })?.$el ?? (rootEl.value as unknown as HTMLElement)
+  if (!el || typeof el.addEventListener !== 'function') return
+  el.addEventListener('keydown', onKeydown as EventListener)
+  el.addEventListener('focusin', onFocusIn as EventListener)
+  engineEl = el
+  reinitFocus()
+}
+function detachEngine(): void {
+  if (!engineEl || typeof engineEl.removeEventListener !== 'function') return
+  engineEl.removeEventListener('keydown', onKeydown as EventListener)
+  engineEl.removeEventListener('focusin', onFocusIn as EventListener)
+  engineEl = null
+}
+let engineEl: HTMLElement | null = null
+
+/** 重建首焦点与 roving tabindex（形态/姿态/候选集变化后调用——否则 focusedId 悬空 →
+ *  按任意方向键都跳到左上首个元素、Enter 静默空击） */
+function reinitFocus(): void {
   nextTick(() => {
     const els = collectFocusables()
     if (els.length === 0) return
+    // 候选集重建 → 旧 id 可能失效：优先保留仍在场的目标，否则取首焦点
+    const keep = focusedId.value && els.some((x) => x.dataset?.pfFocusId === focusedId.value)
+    if (keep) {
+      applyFocus(focusedId.value)
+      return
+    }
     const rects = measureFocusables(els)
     const first = navigateFocus(null, rects, 'down', { preferredFirst: rects[0]?.id })
     if (!first) return
-    // ★初值（复审 P0）：focusedId 必须落定 → 进入形态后第一次 Enter 即生效（此前首个 Enter 空击）
     focusedId.value = first
     els.forEach((x) => x.setAttribute('tabindex', x.dataset?.pfFocusId === first ? '0' : '-1'))
     const t = els.find((x) => x.dataset?.pfFocusId === first)
     t?.focus?.({ preventScroll: true })
   })
+}
+
+onMounted(() => {
+  watch(
+    focusEnabled,
+    (on) => {
+      if (on) attachEngine()
+      else detachEngine()
+    },
+    { immediate: true },
+  )
+  // 形态/姿态变化 → 候选集与几何都变了，重建焦点
+  watch([() => form.value, () => props.posture], () => {
+    if (focusEnabled.value) reinitFocus()
+  })
 })
 onUnmounted(() => {
-  const el = rootEl.value as unknown as HTMLElement | null
-  el?.removeEventListener?.('keydown', onKeydown as EventListener)
-  el?.removeEventListener?.('focusin', onFocusIn as EventListener)
+  detachEngine()
 })
 
 </script>
@@ -339,6 +414,9 @@ onUnmounted(() => {
   /* ★定位宿主（2026-09-26 复审）：三个 absolute 徽标此前依赖宿主 .frame 有 position:relative，
      否则飞到视口右下角——框架组件必须自持定位上下文 */
   position: relative;
+  /* ★安全区消费（三审修复）：此前写在本块的 padding-left/right/bottom，被**拓扑块的
+     `padding: calc(...)` 简写**（同特异性、源序在后）整段覆盖 → TV overscan 96px 实测变 22px、
+     平板 20px 变 0（「已落地」第二次落空）。现改为**拓扑块一律用 longhand**，本块只给默认值。 */
   /* ★容器上下文（2026-09-26 第三轮）：形态内部按**自身宽度**（= 帧宽/真实设备宽）取舍，
      与 stage/viewport 无关——窄舞台上 TV 也能保住海报行（见 hero-focus-row 的 @container） */
   container-type: inline-size;
@@ -359,6 +437,8 @@ onUnmounted(() => {
   padding-left: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-side, 0px));
   padding-right: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-side, 0px));
   padding-bottom: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-bottom, 0px));
+  /* notch 消费量（三审：此前 caps.notch 只有类名、零后果）——真机刘海经 env 让位，桌面 env=0 无副作用 */
+  padding-top: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-top, 0px));
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -521,7 +601,7 @@ onUnmounted(() => {
 /* ★1.0 定稿尺（2026-09-26 二次复审实测）：多倍 --pf-u 在 mockup 帧宽（520）下把侧栏撑到 237px
    （占帧 46%）→ 主体塌成 73px 列、"内容溢出。改为**占容器比例 + 上下限**：
    比例保证随容器流体，clamp 保证小帧不霸屏、大屏不缩水。 */
-.topo-rail-split { display: grid; grid-template-columns: clamp(64px, 22%, 132px) 1fr; gap: 0; padding: 0; }
+.topo-rail-split { display: grid; grid-template-columns: clamp(64px, 22%, 132px) 1fr; gap: 0; padding-top: 0; padding-bottom: 0; }
 .topo-rail-split .pf-rail {
   display: flex;
   flex-direction: column;
@@ -542,7 +622,7 @@ onUnmounted(() => {
 .topo-rail-split .pf-recommend { grid-column: 1 / -1; }
 
 /* ── 拓扑：rail-grid（PC——侧栏 + 多列网格 + hover 语义） ── */
-.topo-rail-grid { display: grid; grid-template-columns: clamp(72px, 20%, 150px) 1fr; gap: 0; padding: 0; }
+.topo-rail-grid { display: grid; grid-template-columns: clamp(72px, 20%, 150px) 1fr; gap: 0; padding-top: 0; padding-bottom: 0; }
 .topo-rail-grid .pf-rail {
   display: flex;
   flex-direction: column;
@@ -574,14 +654,18 @@ onUnmounted(() => {
    上轮实现把媒体与信息拆成上下两块 → 「Hero + 信息 + 海报行」三块叠加高度超帧高，
    CTA 被切 60px、海报行落到折线以下。现按旧版语义：英雄区 + **信息叠加在英雄图上**（底部渐变蒙层），
    海报行占余下高度 → 首屏同时可见 Hero + CTA + 完整海报卡。 */
-.topo-hero-focus-row { padding: calc(var(--pf-pad) * 1.1); }
+/* ★longhand（三审）：padding 简写会整段覆盖 .p-formfactor 的安全区 left/right/bottom */
+.topo-hero-focus-row { padding-top: calc(var(--pf-pad) * 1.1); padding-bottom: calc(var(--pf-pad) * 1.1); }
 .topo-hero-focus-row .pf-body {
   display: grid;
   /* ★实测（第三轮，双视口）：叠加内容高 212px（标题 37 + 描述 37 + 价格 46 + CTA 76 + 间距 16）——
      固定 70% 只在**设计帧宽**（620）成立：窄舞台（1280 视口 → 帧 540）下 70% = 176px < 212px
      → align-self:end 把标题顶出帧顶被裁。定稿 min-content 下限：hero 行**永不小于内容**（不裁切），
      海报行吸收剩余（极端窄时变矮，但永不重叠）——「宁可内容矮，不可内容叠」。 */
-  grid-template-rows: minmax(min-content, 70%) minmax(0, 1fr);
+  /* ★行分配（三审六修）：英雄行放权到「内容的 min-content」（不裁切），海报行吸收剩余。
+     海报卡在窄帧的**内容预算**另由 @container 削减（见下：帧 <560 收起价格行）——
+     两行内容在同一画布内争高度是硬冲突，只能按「标题/价格/CTA 必保 > 至少一张完整卡 > 卡内次要信息」取舍。 */
+  grid-template-rows: minmax(min-content, 60%) minmax(0, 1fr);
   gap: var(--pf-gap);
   min-height: 0;
   overflow: hidden;
@@ -631,6 +715,9 @@ onUnmounted(() => {
 @container (max-width: 559px) {
   .topo-hero-focus-row :deep(.fp-desc) { display: none; }
   .topo-hero-focus-row .pf-info { gap: calc(var(--pf-gap) * 0.3); padding: calc(var(--pf-u) * 0.8); }
+  /* 海报卡同步瘦身：收起价格行（窄帧里三行装不下 → 卡内文字会被裁；
+     「至少一张完整卡」比「卡上带价」更重要——价格在英雄区已给出） */
+  .topo-hero-focus-row :deep(.fp-rec-pt) { display: none; }
 }
 .topo-hero-focus-row .pf-recommend--row {
   grid-row: 2;
@@ -672,8 +759,22 @@ onUnmounted(() => {
    层级（驾驶舱惯例）：媒体 | 标题/价格+降级条；主操作与推荐瓦片同处底行（选项与确认键一跳可达）。 */
 .p-formfactor.topo-dashboard .pf-body {
   display: grid;
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 2.28fr);
-  grid-template-rows: minmax(min-content, auto) minmax(min-content, auto) minmax(var(--pf-control), auto);
+  /* ★列宽（三审五修）：此前 0.72fr/2.28fr → 主操作格仅 128px，两枚按钮被压成
+     「立即…」「＋…」（缩略壳里文案不可读）。改为近等分：媒体列 ~48%（16:9 封面仍够宽），
+     主操作格 ~52% → 两枚按钮各 ~127px 完整可读。 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  /* ★末行 1fr 吸收剩余高度（三审：此前 auto → 内容按 min-content 顶满，**零余量**，
+     帧宽差 7px 即让 body 变成可滚动 → 「驾驶禁止细滚动」被破坏、几何门禁红）。
+     现：热区行吸收剩余并内部裁切（瓦片 min-height:0），body 恒定不滚动。 */
+  /* ★三审三修——「恒不溢出」的稳健写法：三行 min 全为 0（内容紧张时轨道**可收缩**，
+     由容器 overflow:hidden 兜底裁切几像素），而不是让内容把轨道顶破→出现滚动。
+     为什么不能靠 min-content：车机内容高度 ≈ 容器高度（零余量），换字体/换 DPR 就多出 1-4px
+     （实测 Playwright Chromium 比本机浏览器多 4px → body 变可滚动 = 驾驶禁细滚动被破坏）。
+     取舍：驾驶场景「宁可裁一像素，绝不出现滚动条/重叠」。 */
+  /* ★层级（三审四修）：媒体行吸收剩余（**主视觉占大块**），价格行与热区行按内容定高。
+     此前 1fr 落在热区行 → 瓦片被拉伸到 103px（比主视觉还高）、主操作被挤成 58px 宽。
+     热区下限由按钮/tile 自身 min-height 保证；行可收缩（不做滚动，驾驶禁细滚动）。 */
+  grid-template-rows: minmax(0, 1fr) auto auto;
   grid-template-areas:
     'media heading'
     'media info'
@@ -682,6 +783,8 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
 }
+/* 驾驶形态：内容一屏装下，**永不可滚动**（AAOS：行驶中不做精细滚动） */
+.p-formfactor.topo-dashboard .pf-body { overflow: hidden; }
 .topo-dashboard .pf-media {
   grid-area: media;
   position: relative;
@@ -718,8 +821,8 @@ onUnmounted(() => {
   min-height: 0;
 }
 .topo-dashboard .pf-actions :deep(button) {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: calc(var(--pf-u) * 3.2); /* 不窄于「▶…」+ 内边距（此前被压到 58px 只剩省略号） */
   padding-left: calc(var(--pf-u) * 0.4);
   padding-right: calc(var(--pf-u) * 0.4);
   overflow: hidden;
@@ -788,17 +891,59 @@ onUnmounted(() => {
 /* dpad / focusTree：遥控形态热区放大 + 焦点顺序（焦点环已由 :focus-visible 提供）*/
 .has-dpad :deep(button),
 .has-focus-tree :deep(button) { min-height: var(--pf-control); }
+/* ★瓦片热区（三审二修）：仍保 76dp 的 0.85 倍下限，但**驾驶形态**由行高吸收（避免行被顶起） */
 .has-dpad :deep(.pf-rec-card),
 .has-focus-tree :deep(.pf-rec-card) { min-height: calc(var(--pf-control) * 0.85); }
+/* 瓦片：与主操作**同高**（一跳可达的视觉对齐），但不随剩余空间拉伸 */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
+  align-self: stretch;
+  min-height: 0;
+  max-height: calc(var(--pf-control) * 1.15);
+}
 
 /* keyboard：键盘可达元素加可见焦点环（PC）*/
 .has-keyboard :deep(*:focus-visible) {
   outline: var(--pf-focus-ring, 3px) solid var(--pf-accent, #6f4ae8);
   outline-offset: 2px;
 }
+/* ★遥控/驾驶（三审）：visual.focus='ring' 此前**只被 has-keyboard 消费**——TV/车机声明了 focus:ring
+   却只有 1-2px UA 默认环（10ft/余光场景不可辨）。现挂 dpad/focusTree，并加放大+投影（Android TV 惯例）；
+   `outline-offset:-2` 让环贴内缘，避免被海报行的 overflow 裁掉。 */
+.has-dpad :deep(*:focus-visible),
+.has-focus-tree :deep(*:focus-visible) {
+  outline: var(--pf-focus-ring, 3px) solid var(--pf-accent, #ffb13d);
+  outline-offset: -2px;
+  /* ★不加 scale（三审实测）：驾驶形态的主操作是**满行高**的大热区，focus 放大 4% 会让
+     getBoundingClientRect 增大 4%（104→108px）、上下各溢出 2px → 被 overflow 裁掉边缘，
+     且几何门禁把它判为溢出（真实缺陷）。10ft/余光的可见性由 3px 强调色环 + 提亮 + 投影保证，
+     这些都不改变布局几何（几何稳定 > 视觉花哨）。 */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pf-accent, #ffb13d) 45%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.45);
+  filter: brightness(1.07);
+  transition: box-shadow 0.14s ease, filter 0.14s ease;
+}
+/* 海报行内的卡片：环改内缩 + 不裁切（overflow-x auto 会裁外扩环） */
+.has-dpad :deep(.pf-rec-card:focus-visible),
+.has-focus-tree :deep(.pf-rec-card:focus-visible) { outline-offset: -3px; }
 
-/* dense：紧凑间距（高密度形态——PC 声明支持）*/
-.is-dense { --pf-gap-dense: 0.8; }
+/* ★dense 折叠（三审）：此前 .is-dense 被内联 --pf-gap-dense 恒覆盖（零后果）；
+   现由内联样式按 density×dense 能力共同计算，此规则仅作兜底注释位（见 rootStyle） */
+
+/* ★减弱动效（三审）：prefers-reduced-motion 此前在形态容器内完全未接
+   （p-sidebar/p-toolbar 已接，唯独承载 hover/reveal 动效的此处漏了） */
+@media (prefers-reduced-motion: reduce) {
+  .has-hover :deep(button),
+  .has-hover :deep(.pf-rec-card),
+  .has-dpad :deep(*:focus-visible),
+  .has-focus-tree :deep(*:focus-visible) {
+    transition: none;
+    filter: none;
+  }
+  .is-drive :deep(*) { animation: none !important; }
+}
+
+/* dense：紧凑间距——★已并入内联 --pf-gap-dense（三审：此前此规则被内联恒覆盖 = 零后果）。
+   保留类名（诊断/外部钩子），数值由 rootStyle 计算。 */
 
 /* multiCol：多列并排（推荐区列数由 --pf-cols 驱动，这里兜底网格密度）*/
 .has-multicol .pf-recommend { grid-auto-flow: dense; }

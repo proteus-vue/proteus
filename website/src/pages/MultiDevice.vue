@@ -151,7 +151,14 @@ type FilterKey = 'all' | 'touch' | 'cursor' | 'remote'
 const initial = (route.query.form as string) ?? 'all'
 const filter = ref<FilterKey>(initial === 'touch' || initial === 'cursor' || initial === 'remote' ? initial : 'all')
 watch(filter, (f) => {
-  void router.replace({ query: f === 'all' ? {} : { form: f } })
+  // ★三审修：此前 `{ form: f }` 整体替换 query → 会清掉 device/posture（切筛选即丢当前端）；
+  //   与 active/postureKey 的 watcher 一样保留其余字段。
+  void router.replace({
+    query: {
+      ...route.query,
+      form: f === 'all' ? undefined : f,
+    },
+  })
 })
 const FILTERS: Array<{ k: FilterKey; zh: string; en: string }> = [
   { k: 'all', zh: '全部形态', en: 'All forms' },
@@ -167,6 +174,10 @@ const visibleTargets = computed(() => {
   return list.filter((t) => t.profile.input === 'remote')
 })
 const target = computed(() => TARGETS.find((t) => t.key === active.value) ?? TARGETS[0]!)
+// ★三审：筛选后当前端可能不在可见列表（切换器只剩一个按钮且无法恢复）→ 自动落到首个可见端
+watch(visibleTargets, (list) => {
+  if (list.length && !list.some((t) => t.key === active.value)) active.value = list[0]!.key
+})
 
 /** 右侧推导行（★全部来自生效画像——非页面硬编码；折叠屏姿态覆盖后同步反映） */
 const rows = computed(() => {
@@ -256,6 +267,20 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
       <!-- 中：设备舞台（真实 mockup：居中 · 完整 · 无裁剪） -->
       <div class="col col--stage">
         <div class="col-title"><span class="dot" /><span class="live">LIVE</span> {{ isEn ? 'Device stage · real render' : '设备舞台 · 真实渲染' }}</div>
+
+        <!-- 形态族筛选（按输入族聚焦：触控系 / 指针系 / 遥控系——?form= 可分享直达） -->
+        <div class="filters">
+          <button
+            v-for="ff in FILTERS"
+            :key="ff.k"
+            type="button"
+            class="filter-pill"
+            :class="{ on: filter === ff.k }"
+            @click="filter = ff.k"
+          >
+            {{ isEn ? ff.en : ff.zh }}
+          </button>
+        </div>
 
         <!-- 设备切换器（旧版形态：一排设备按钮 + 形态/输入/导航/后端摘要） -->
         <div class="switcher">
@@ -411,6 +436,7 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .filter-pill.on { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.55); background: var(--brand-soft); }
 
 /* ★设备切换器（旧版形态：一排设备按钮） */
+.filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
 .switcher { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 12px; }
 .dev-btn {
   display: flex; flex-direction: column; align-items: center; gap: 3px;

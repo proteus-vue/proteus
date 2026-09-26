@@ -97,9 +97,51 @@ describe('★形态画像表（SSOT）自洽性', () => {
     // 遥控形态热区更大（d-pad 可达）
     const carCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.car).vars['--pf-control'])
     const phoneCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.phone).vars['--pf-control'])
-    // ★车机热区有 76dp 绝对下限（AAOS）——下限生效时可能与遥控同值（饱和），故断言 ≥
-    expect(carCtl).toBeGreaterThanOrEqual(phoneCtl)
-    expect(carCtl).toBeGreaterThanOrEqual(76)
+    // ★热区下限语义（三审定稿）：物理 dp 按**展示缩放**投影——同一容器宽下不同形态的
+    //   「帧内 px」不可直接比较（车机是 50% 缩略、手机是 1:1）。比较必须换算到**设备尺度 dp**：
+    //     car  640px 帧 → scale 0.50 → 39px 帧内 = 78dp ✓（AAOS ≥76）
+    //     phone 640px 帧 → scale 1.00 → 50.7px 帧内 = 50.7dp ✓（HIG ≥44）
+    //   绝对 px 版本（曾把 76px 塞进缩略帧）会把主视觉挤没——当时的 ≥76 断言之所以「通过」
+    //   是因为 phone 也被错算成 76（`caps.dpad ? …` 三态裸真值），属永真断言。
+    const dpOf = (form: DeviceForm, ctl: number): number => {
+      const p = FORM_PROFILES[form]
+      return ctl / (Math.min(1, 640 / p.viewport.width) || 1)
+    }
+    expect(dpOf('car', carCtl)).toBeGreaterThanOrEqual(76)
+    expect(dpOf('phone', phoneCtl)).toBeGreaterThanOrEqual(44)
+    expect(dpOf('car', carCtl)).toBeGreaterThan(dpOf('phone', phoneCtl))
+  })
+
+  it('★热区下限（三审）：**在设备尺度上**任何形态 × 任何容器宽 → ≥44dp（遥控/驾驶 ≥76dp）', () => {
+    // 规范依据：Apple HIG 44pt / Material 48dp（保守取 44）· AAOS 76dp。
+    // ★物理语义：展示壳是等比缩略——540px 帧展示 1280pt 车机 = 42% 尺度，
+    //   76dp 在帧内投影为 ~32px。故断言**换算回设备尺度**后的等效 dp，而非帧内绝对 px
+    //   （早期版本把 76px 当绝对 px 塞进缩略帧 → 热区占内容高 44%、主视觉被挤没）。
+    const cases: Array<[DeviceForm, number]> = [
+      ['watch', 240], ['watch', 198], ['phone', 300], ['phone', 390], ['phone', 430],
+      ['fold', 470], ['fold', 340], ['tablet', 520], ['tablet', 1194],
+      ['pc', 620], ['pc', 1440], ['car', 760], ['car', 1280], ['tv', 620], ['tv', 1920],
+    ]
+    for (const [form, w] of cases) {
+      const p = FORM_PROFILES[form]
+      const m = resolveFluidMetrics(w, p)
+      const px = Number.parseFloat(m.vars['--pf-control'])
+      const deviceW = p.viewport.width
+      const showScale = Math.min(1, w / deviceW)
+      // 帧内 px → 设备尺度 px（÷ 展示缩放）；再与 dp 下限比较（1dp ≈ 1px @1x）
+      const dp = px / (showScale || 1)
+      const need = capsEnabled(p.caps.dpad) ? 76 : 44
+      expect(dp, `${form}@${w} 热区换算 ${dp.toFixed(1)}dp < ${need}dp（帧内 ${px.toFixed(1)}px）`).toBeGreaterThanOrEqual(need - 0.6)
+    }
+  })
+
+  it('★姿态级度量（三审）：折叠态外屏用 phone 级基准 → 正文不再 9.7px', () => {
+    const folded = FORM_PROFILES.fold.postures?.find((x) => x.key === 'folded')
+    expect(folded?.ratio, '折叠态须有姿态级 ratio（否则外层 340pt 用内屏 ref:420）').toBeTruthy()
+    const eff = { ...FORM_PROFILES.fold, visual: { ...FORM_PROFILES.fold.visual, ratio: folded!.ratio! } }
+    const m = resolveFluidMetrics(340, eff)
+    const font = Number.parseFloat(m.vars['--pf-font'])
+    expect(font).toBeGreaterThanOrEqual(11) // WCAG 可读底线（此前 9.7px）
   })
 
   it('★展示壳规格（mockup 帧）：七形态比例/上限宽/刘海/状态栏齐备且合法', () => {
@@ -146,8 +188,10 @@ describe('★形态画像表（SSOT）自洽性', () => {
     }
     // 语义正确性：TV 有遥控焦点/焦点行/多列但无 SKU 多选·无高密度·无侧栏（旧版勾选态）
     expect(FORM_PROFILES.tv.caps).toMatchObject({ dpad: 'supported', focusRows: 'supported', multiCol: 'supported', skuMulti: 'unsupported', dense: 'unsupported', sidebar: 'unsupported' })
-    // 车机：d-pad + 表冠 + 焦点树 + 密集 + 驾驶降干扰；无多规格
-    expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: 'supported', crown: 'supported', focusTree: 'supported', dense: 'supported', driveAware: 'supported', skuMulti: 'fallback' })
+    // 车机：d-pad + 表冠 + 焦点树 + 驾驶降干扰；无多规格（fallback）
+    // ★三审：dense 撤除（接口注释明示「10ft 与驾驶场景为 false」，此前误声明且无有效后果）
+    expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: 'supported', crown: 'supported', focusTree: 'supported', driveAware: 'supported', skuMulti: 'fallback' })
+    expect(FORM_PROFILES.car.caps.dense).toBe('unsupported')
   })
 
   it('★形态级媒体比例 + 安全区 + 铰链（专家报告：旧版 mediaAr 丢失 / 安全区缺失 / 无铰链语义）', () => {
@@ -272,6 +316,18 @@ describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有�
     // ★教训（7 位复审专家一致命中）：`Boolean('unsupported')` 恒真 → 未支持的能力反而渲染出徽标
     //   （手表/手机上出现 ⌘K 与表冠，与同屏面板「未支持」自相矛盾）。
     //   本门禁：模板与脚本里禁止裸用 caps.X / caps.value.X 做真值判断，必须走 capsEnabled/capsLabel。
+    //   ★2026-09-26 三审扩面：同时扫 **fluid/src/*.ts**——同类缺陷曾在 SSOT 内存活
+    //   （`profile.caps.dpad ? … : 3.0` 让 76dp 下限外溢到全部形态，而门禁只扫 .vue）。
+    const fluidSrc = fs
+      .readdirSync(require('node:path').resolve(__dirname, '../packages/fluid/src'))
+      .filter((f: string) => f.endsWith('.ts'))
+      .map((f: string) => fs.readFileSync(require('node:path').resolve(__dirname, '../packages/fluid/src', f), 'utf8'))
+      .join('\n')
+    const bareFluid = [...fluidSrc.matchAll(/(?:if \(|\?\s|Boolean\()\s*[^\n]*caps(?:\.value)?\.(\w+)\b(?![\w(])/g)]
+      .map((m) => m[0])
+      .filter((line) => !/capsEnabled\(|capsLabel\(|capsDegraded\(/.test(line))
+      .filter((line) => !/\/\//.test(line))
+    expect(bareFluid, `fluid/src 内发现裸真值判断（三态字符串恒真）：\n${bareFluid.join('\n')}`).toEqual([])
     const bare = [...comp.matchAll(/(?:v-if|:class|Boolean\()\s*[^\n]*caps(?:\.value)?\.(\w+)\b(?![\w(])/g)]
       .map((m) => m[0].trim())
       .filter((line) => !/capsEnabled\(|capsLabel\(/.test(line))

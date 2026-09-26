@@ -25,11 +25,15 @@ import path from 'node:path'
 const BASE = 'http://localhost:4176'
 const WEBSITE_ROOT = path.resolve(__dirname, '../website')
 
+/** 切换器按钮文案（zh 站 —— 与 MultiDevice 的 label.zh 同源） */
+const FORM_LABEL: Record<string, string> = {
+  watch: '手表', phone: '手机', fold: '折叠屏', tablet: '平板', pc: 'PC / Mac', car: '车机', tv: 'TV / 大屏',
+}
 /** 一屏形态（内容必须装下，不滚动）；其余为可滚动形态 */
 const ONE_SCREEN = ['watch', 'car', 'tv']
 const ALL_FORMS = ['watch', 'phone', 'fold', 'tablet', 'pc', 'car', 'tv']
 /** 核心内容块（重叠/裁切判据；刻意叠加的组合在探针里排除） */
-const BLOCKS = ['.pf-heading', '.pf-price', '.pf-actions', '.pf-recommend', '.pf-media', '.pf-sku-fallback', '.pf-tabbar']
+const BLOCKS = ['.pf-heading', '.pf-price', '.pf-actions', '.pf-recommend', '.pf-media', '.pf-sku-fallback', '.pf-sku', '.pf-tabbar', '.pf-rail', '.pf-drive-hint']
 
 let server: PreviewServer
 let browser: Browser
@@ -54,10 +58,11 @@ async function probeLiveGeometry(): Promise<{
   bodyScrollable: boolean
   frameW: number
   frameH: number
+  capsDigest: string
 }> {
   return page.evaluate((blocks: string[]) => {
     const frame = document.querySelector('.frame') as HTMLElement | null
-    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0 }
+    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0, capsDigest: '' }
     const inner = frame.querySelector('.p-formfactor') as HTMLElement
     const topo = inner.getAttribute('data-pf-topology') ?? '?'
     const fr = frame.getBoundingClientRect()
@@ -82,11 +87,18 @@ async function probeLiveGeometry(): Promise<{
     // ③ 子元素横向越界（★破坏性验证暴露的盲区：容器 overflow:hidden 会把溢出的**子项**裁掉，
     //    容器自身矩形完全正常 → 只看容器抓不到「瓦片被裁半截」）。逐个子项量。
     //    ★例外：祖先里有**横向滚动容器**（overflow-x auto/scroll）时越界是设计（海报流可横滑），跳过。
+    // ★2026-09-26 三审修复「恒真跳过」：旧实现看 computed overflowX——而 `.pf-body{overflow-y:auto}`
+    //   按 CSS 规范把 overflow-x 也解析为 auto ⇒ **所有后代恒被跳过**（这条检查 100% 死代码，
+    //   恰好漏掉它本来要防的「车机瓦片被裁半截」）。
+    //   改为**实测**是否真能横向滚动（scrollWidth > clientWidth + 1）；只有真滚动容器才放行越界。
     const inHScroller = (el: Element): boolean => {
       let cur: Element | null = el.parentElement
       while (cur && cur !== frame) {
-        const ox = getComputedStyle(cur).overflowX
-        if (ox === 'auto' || ox === 'scroll') return true
+        const h = cur as HTMLElement
+        if (h.scrollWidth > h.clientWidth + 1) {
+          const ox = getComputedStyle(cur).overflowX
+          if (ox === 'auto' || ox === 'scroll') return true
+        }
         cur = cur.parentElement
       }
       return false
@@ -109,6 +121,8 @@ async function probeLiveGeometry(): Promise<{
         // TV 信息叠加在英雄图上、驾驶提醒徽标叠媒体 —— 刻意设计，排除
         if (topo === 'hero-focus-row' && pair.includes('.pf-media')) continue
         if (pair.includes('.pf-sku-fallback') && pair.includes('.pf-media')) continue
+        // ★驾驶提醒徽标与媒体**同格**是刻意叠加（徽标是轻量注释层，不参与排版高度）
+        if (pair.includes('.pf-drive-hint') && (pair.includes('.pf-media') || pair.includes('.pf-heading'))) continue
         const a = A.getBoundingClientRect()
         const b = B.getBoundingClientRect()
         const av = inter(a, br)
@@ -117,6 +131,9 @@ async function probeLiveGeometry(): Promise<{
         if (av.w > 2 && av.h > 2 && bv.w > 2 && bv.h > 2 && ab.w > 2 && ab.h > 2) overlaps.push(pair)
       }
     }
+    // ★能力证据面（三审）：data-pf-caps 是「最终生效三态」的机器可读声明——
+    //   同一面的断言把「声明 ≠ 空头」变成可证伪：面板/根类说支持的，这里必须是 supported/fallback。
+    const capsDigest = (frame.querySelector('.p-formfactor') as HTMLElement | null)?.getAttribute('data-pf-caps') ?? ''
     return {
       topo,
       clipped: [...new Set(clipped)],
@@ -124,11 +141,82 @@ async function probeLiveGeometry(): Promise<{
       bodyScrollable: body.scrollHeight > body.clientHeight + 1,
       frameW: Math.round(fr.width),
       frameH: Math.round(fr.height),
+      capsDigest,
     }
   }, BLOCKS)
 }
 
+/** 画像声明的能力三态（zh 表单值）——与组件 data-pf-caps 对账用 */
+const CAPS_EXPECT: Record<string, string> = {
+  watch: 'crown=supported',
+  car: 'skuMulti=fallback;dpad=supported;crown=supported;focusTree=supported;focusRows=supported;driveAware=supported',
+  tv: 'dpad=supported;focusRows=supported;multiCol=supported',
+  phone: 'skuMulti=supported;tabs=supported;dense=supported;drawer=supported;notch=supported',
+  pc: 'hover=supported;skuMulti=supported;sidebar=supported;multiCol=supported;dense=supported;keyboard=supported',
+}
+
+describe('★多端同屏 · 能力证据面（data-pf-caps 与画像声明逐项对账）', () => {
+  it('每个形态的三态摘要必须与其画像声明逐项一致（含 fallback 与 unsupported）', async () => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const problems: string[] = []
+    for (const form of ALL_FORMS) {
+      await page.goto(`${BASE}/multi-device?device=${form}`)
+      await page.waitForSelector('.frame .p-formfactor', { timeout: 15_000 })
+      await page.waitForTimeout(240)
+      const digest = await page.evaluate(() =>
+        document.querySelector('.frame .p-formfactor')?.getAttribute('data-pf-caps') ?? '',
+      )
+      const pairs = Object.fromEntries(digest.split(';').filter(Boolean).map((kv) => kv.split('=') as [string, string]))
+      // ① 14 项齐全（键集 SSOT）
+      if (Object.keys(pairs).length !== 14) problems.push(`${form}: data-pf-caps 仅 ${Object.keys(pairs).length} 项（应 14）`)
+      // ② 三态取值合法
+      for (const [k, v] of Object.entries(pairs)) {
+        if (!['supported', 'fallback', 'unsupported'].includes(v)) problems.push(`${form}: ${k} 非法取值 ${v}`)
+      }
+      // ③ 与画像声明一致（抽查关键项；避免把 CSS 类名当证据）
+      const expect = CAPS_EXPECT[form]
+      if (expect) {
+        for (const kv of expect.split(';')) {
+          const [k, v] = kv.split('=') as [string, string]
+          if (pairs[k] !== v) problems.push(`${form}: ${k} 实测 ${pairs[k]} ≠ 声明 ${v}`)
+        }
+      }
+      // ④ 「有类名但没声明」的反向检查：支持的项不该被漏成 unsupported
+      const supportedCount = Object.values(pairs).filter((v) => v !== 'unsupported').length
+      if (supportedCount === 0) problems.push(`${form}: 无任何 supported/fallback（疑似摘要生成失败）`)
+    }
+    expect(problems, `能力证据面对账失败：\n${problems.join('\n')}`).toEqual([])
+  }, 120_000)
+})
+
 describe('★多端同屏 · 真几何门禁（双视口：窄舞台 + 宽舞台）', () => {
+  // ★2026-09-26 三审补：**同会话点切换器**（真交互路径）——冷启动 goto 每条都重新挂载，
+  //   抓不到「度量冻结在首帧」（实测 car→tv 字号偏大 22%）。切换后仍须零重叠零裁切。
+  it('同会话切换七形态（点切换器，非 goto）：零重叠 · 一屏形态零裁切', async () => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`${BASE}/multi-device?device=car`)
+    await page.waitForSelector('.frame .p-formfactor', { timeout: 15_000 })
+    await page.waitForTimeout(300)
+    const problems: string[] = []
+    for (const form of ALL_FORMS) {
+      // 点设备切换器里的对应按钮（真交互），而非重新导航
+      const btn = page.locator('.dev-btn', { hasText: FORM_LABEL[form] })
+      if ((await btn.count()) !== 1) {
+        problems.push(`${form}: 切换器按钮不唯一（count=${await btn.count()}）`)
+        continue
+      }
+      await btn.click()
+      await page.waitForTimeout(260)
+      const g = await probeLiveGeometry()
+      if (g.overlaps.length) problems.push(`${form}(切换): 重叠 ${g.overlaps.join(', ')}`)
+      if (ONE_SCREEN.includes(form)) {
+        if (g.clipped.length) problems.push(`${form}(切换): 裁切 ${g.clipped.join(', ')}（frame ${g.frameW}×${g.frameH}）`)
+        if (g.bodyScrollable) problems.push(`${form}(切换): 内容溢出`)
+      }
+    }
+    expect(problems, `同会话切换几何问题：\n${problems.join('\n')}`).toEqual([])
+  }, 120_000)
+
   for (const vw of [1280, 1600]) {
     it(`视口 ${vw}：七形态零重叠 · 一屏形态零裁切且不滚动`, async () => {
       await page.setViewportSize({ width: vw, height: 900 })
