@@ -99,6 +99,14 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★★本会话·分派 7 位领域专家审查柔性系统 + 批量修复跨形态 P0（2026-09-26 续十一，★★★用户「请分派7个子代理站在专业视角审查验收」）**：
+  **审查方式**：先采集七形态截图（`/tmp/form-review/*.png`，含整页 + 设备帧特写），再并行分派 7 个 general-purpose 子代理，各以**该形态领域专家**视角（watchOS/Wear、iOS HIG/Material、Samsung/Google foldable、iPad HIG、桌面 Web、AAOS/ISO 15008 车载、Google TV Leanback/tvOS）审查截图 + 源码，输出「一句话判定 / 问题清单（P0-P2，含现象-证据-影响-修法）/ 规范核对表 / 与旧版差距」。**七份报告共性缺陷高度一致，证明问题确实是框架级的。**
+  **★★跨形态共性缺陷（4+ 位专家独立命中）**：①**真焦点系统不存在**——焦点环是静态 box-shadow 挂在首个子元素（与按钮同色 1:1 不可见）+ `outline:none` 抹掉真焦点；海报卡是不可聚焦 div；`focus-tree/focus-row/dpad/keyboard` 全是声明。②**Tab 栏被裁 45%**——`.p-formfactor` 是 `display:block` → `margin-top:auto` 失效 + `overflow:hidden`（手机/折叠屏唯一导航不可达）。③**包裹层布局跨组件失效**——`.pf-sku/.pf-actions` 的 flex+gap 写在**父组件** scoped 里、元素却属**子组件** → 永不匹配。④**内容被硬裁且不可达**（与页面「没有裁剪」声明矛盾）。⑤**度量不更新**——无 `watch(props.width)` → 切端后按旧帧宽算 k=1.5。⑥**帧顶 24px 死区**——三条 CSS 无条件 `top:24px`（无状态栏形态白吃 + 暗色形态露浅色底）。⑦**TV 与车机同构** + TV 用**视口 @media**。⑧**车机标题隐形**（`text === bg` = `#10142a` = 1.00:1）+ `surface:#fff` 夜间白块（17.1:1 眩光）。
+  **修复（本轮）**：真 `:focus-visible` 焦点环（强调色 + offset）· flex 列容器（Tab 钉底）· 包裹层布局移回拥有者组件 · 溢出改设备内滚动 · `watch(props.width)` · 帧顶条件化 + 帧底色随画像 · TV 重写为纵向流（全宽 Hero → 信息 → 横滑海报流，与车机横向 dashboard 区分）· 车机色值（浅字 + 半透明面，价格 10.05:1）· 度量修正（TV 14→18/2.6、PC 12→13、手机 11→13、手表 ref→198）· 车机热区绝对下限 76dp。
+  **新增门禁**：对比度护栏（正文/背景 <4.5:1 或强调色 <3:1 判失败——防「文字隐形」类）· 帧规格合法性 · `ratio.ref` 与 `frame.maxWidth` 量级匹配。回归锁 17/17；关联 6 套件 139/139；根 vue-tsc 0 错误；部署 run 36234797003 success。
+  **★过程教训（诚实记录）**：修 TV 骨架时用 python 字符串替换误删了 `</style>` 与 dashboard 拓扑 CSS → Vue SFC 报「Element is missing end tag」，先用 `@vue/compiler-sfc` 的 `parse()` 定位到行号才修对。**教训：大块 CSS 替换后用 SFC parse 校验，且替换要留锚点。**
+  **未完成（审查清单余项，按专家优先级）**：①`caps` 14 项仅 5-6 项有消费者（面板绿色徽章不可证伪）→ 需为每项找消费者或降级标注；②折叠屏缺 posture/hinge/continuity（P0）；③TV/车机焦点引擎（roving tabindex + 方向键）；④安全区/overscan（TV 5%、iPad 20pt、手机 Home Indicator）；⑤侧栏宽度入画像（现 128px/148px 硬编码）；⑥`mediaRatio` 画像字段（旧版有 `mediaAr`，丢失）；⑦手表时间/表冠/暗色常亮。
+
 - **★★本会话·形态视觉语言 + 能力清单对齐旧版（用户第二次指正「还是差得远」，2026-09-26 续十）**：
   **① 用户诊断**：形态差异不止布局——TV 真正的形态还包括**视觉语言**（暗色沉浸底 / 10ft 大字号 / 海报胶囊 / 焦点环），我此前七端都是同一套浅色 UI 塞进不同框里 + 能力声明只有固定几项。
   **② FormVisual（形态级主题）**：`theme/bg/surface/text/dim/brand/accent/font/radius/focus`——TV 深蓝 `#0f1838` 沉浸 + 38px 字号 + 暖橙 `#ffb13d` 价格 + 3px 焦点环（对齐旧版 `flexible-multi-device.html` 的 `.tv-root/.tv-hero/.tv-focus` 设计）；车机暗色驾驶舱 `#10142a` + 26px（余光可辨）；手表 17px 紧凑 / 手机 14 / 平板 16 / PC 18 桌面密排。**ViewingDistance** 语义档（glance/arm/desk/dashboard/10ft）决定字号与热区。
