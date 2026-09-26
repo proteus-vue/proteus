@@ -44,6 +44,18 @@ group: 渲染原语
 | `WorkletEasing` | interface | Easing 命名空间（官方 Easing 模块面） |
 | `WxWorkletLike` | interface | wx.worklet 结构（不裸引用 wx 全局——注入探测） |
 
+## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）
+
+```ts
+import type { SharedValue, WorkletTimingConfig, WorkletSpringConfig, WxWorkletLike } from '@proteus-vue/worklet'
+
+const cfg: WorkletTimingConfig = { duration: 300, easing: 'easeOut' }   // timing/decay/spring 三族配置
+const spring: WorkletSpringConfig = { stiffness: 180, damping: 14, mass: 1 }
+// WxWorkletLike = 官方 wx.worklet 的最小接口面（测试可注入 fake，无需真机）
+declare const v: SharedValue<number>; v.value // 读写都走 .value
+```
+> 出处：`packages/worklet/src/types.ts（SharedValue / 三族配置 / WxWorkletLike）`
+
 ## 用法与降级
 
 - **入口**：`shared(initial)` / `derived(fn)` 建共享值 → `timing/spring/decay` 描述动画 → `applyAnimatedStyle(scope, selector, updater, config)` 绑定到组件样式（返回解绑函数）

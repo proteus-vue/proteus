@@ -89,6 +89,39 @@ export const PRIM_EN = {
   // ★worklet 家族（2026-09-27 新增页面）：EN overlay——此前官网手册整包缺失
   runtime: {
     title: 'Worklet runtime',
+    usage: [
+      {
+        code: `import { shared, timing, spring, applyAnimatedStyle, hasWorklet, getWorklet } from '@proteus-vue/worklet'
+
+// 1) shared values (UI-thread on Skyline; the same API holds plain values elsewhere)
+const offset = shared(0)
+const scale = shared(1)
+
+// 2) describe animations (same semantics as the official timing/spring)
+const a = timing(offset, 120, { duration: 300, easing: 'easeOut' })
+const s = spring(scale, 1.06, { stiffness: 180, damping: 14 })
+a.start?.(); s.start?.()
+
+// 3) bind to component styles (returns an unbind fn; UI-thread driven on Skyline, applied once elsewhere)
+const unbind = applyAnimatedStyle(this, '.card', () => ({
+  transform: \`translateX(\${offset.value}px) scale(\${scale.value})\`,
+}))
+
+// 4) capability probe (never fail silently — report honestly when unavailable)
+if (hasWorklet()) {
+  // real Mini Program + Skyline: UI-thread isolation (frequent scroll/gesture work won't block JS)
+} else {
+  // honest degradation: \`getWorklet().real === false\`; animation runs on the JS thread via rAF (correct, no isolation)
+}
+onUnmounted(() => unbind())`,
+        src: 'packages/worklet/README.md (usage) + src/runtime.ts:hasWorklet/getWorklet',
+      },
+      {
+        code: `<!-- template side: the official WXML prefix is passed through by the **compiler** — no runtime API import -->
+<view worklet:style="{{animatedStyle}}">…</view>`,
+        src: 'packages/worklet/README.md (template side) + docs/skyline-pitfalls.md:227 (pass-through verified)',
+      },
+    ],
     summary: 'Skyline UI-thread runtime — wraps the official `wx.worklet`, degrades honestly to the JS thread elsewhere',
     notes: [
       '★Skyline line closure (2026-09-11): the worklet runtime — a wrapper over the official wx.worklet plus honest degradation off Skyline.',
@@ -106,6 +139,17 @@ export const PRIM_EN = {
   },
   easing: {
     title: 'Easing presets',
+    usage: [
+      {
+        code: `import { Easing, resolveEasing } from '@proteus-vue/worklet'
+
+// Named easings (Skyline prefers the official native ones; other ends use the same curve as pure functions)
+const ease = Easing.easeOut                   // built-ins: linear/quad/cubic/circle/sin/exp/bounce/ease/elastic
+const custom = resolveEasing((t) => t * t)    // custom curve → normalized into an easing function
+const byKey = resolveEasing('cubicInOut')     // string keys work too (unknown key → linear fallback)`,
+        src: 'packages/worklet/src/easing.ts (EASING / resolveEasing)',
+      },
+    ],
     summary: 'Worklet easing presets and resolution (named easing → cubic-bezier function)',
     notes: [
       'Easing presets shared by the worklet animation configs (timing/spring/decay).',
@@ -118,6 +162,17 @@ export const PRIM_EN = {
   },
   types: {
     title: 'Worklet types',
+    usage: [
+      {
+        code: `import type { SharedValue, WorkletTimingConfig, WorkletSpringConfig, WxWorkletLike } from '@proteus-vue/worklet'
+
+const cfg: WorkletTimingConfig = { duration: 300, easing: 'easeOut' }  // timing/decay/spring config families
+const spring: WorkletSpringConfig = { stiffness: 180, damping: 14, mass: 1 }
+// WxWorkletLike = the minimal official wx.worklet surface (tests can inject a fake — no device needed)
+declare const v: SharedValue<number>; v.value // read & write go through .value`,
+        src: 'packages/worklet/src/types.ts (SharedValue / config families / WxWorkletLike)',
+      },
+    ],
     summary: 'Shared value / animation config / official wx.worklet surface typings',
     notes: [
       'Type-only module: the shared-value shape and animation configs (timing/spring/decay) consumed across the package.',

@@ -43,6 +43,18 @@ The `WxWorkletLike` interface mirrors the official wx.worklet surface so the run
 | `WorkletEasing` | interface | — |
 | `WxWorkletLike` | interface | Official wx.worklet surface (injectable for tests) |
 
+## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)
+
+```ts
+import type { SharedValue, WorkletTimingConfig, WorkletSpringConfig, WxWorkletLike } from '@proteus-vue/worklet'
+
+const cfg: WorkletTimingConfig = { duration: 300, easing: 'easeOut' }  // timing/decay/spring config families
+const spring: WorkletSpringConfig = { stiffness: 180, damping: 14, mass: 1 }
+// WxWorkletLike = the minimal official wx.worklet surface (tests can inject a fake — no device needed)
+declare const v: SharedValue<number>; v.value // read & write go through .value
+```
+> Origin: `packages/worklet/src/types.ts (SharedValue / config families / WxWorkletLike)`
+
 ## Usage & degradation
 
 - **entry**: `shared(initial)` / `derived(fn)` create shared values → `timing/spring/decay` describe the animation → `applyAnimatedStyle(scope, selector, updater, config)` binds it to component styles (returns an unbind function)

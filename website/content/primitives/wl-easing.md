@@ -36,6 +36,18 @@ group: 渲染原语
 | `EASING` | const | Easing 纯实现（降级路径 + 测试基准；真实 Skyline 用原生 Easing） |
 | `resolveEasing` | function | 字符串缓动名 → 函数（timing config.easing 可为字符串） |
 
+## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）
+
+```ts
+import { Easing, resolveEasing } from '@proteus-vue/worklet'
+
+// 命名缓动（Skyline 优先用官方原生；其余端用同曲线的纯函数）
+const ease = Easing.easeOut            // 内置集：linear/quad/cubic/circle/sin/exp/bounce/ease/elastic
+const custom = resolveEasing((t) => t * t)   // 自定义曲线 → 归一为缓动函数
+const byKey = resolveEasing('cubicInOut')    // 字符串键也接（未知键 → 线性兜底）
+```
+> 出处：`packages/worklet/src/easing.ts（EASING / resolveEasing）`
+
 ## 用法与降级
 
 - **入口**：`shared(initial)` / `derived(fn)` 建共享值 → `timing/spring/decay` 描述动画 → `applyAnimatedStyle(scope, selector, updater, config)` 绑定到组件样式（返回解绑函数）

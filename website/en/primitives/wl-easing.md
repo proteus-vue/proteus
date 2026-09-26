@@ -36,6 +36,18 @@ Pure functions — unit-testable without the UI thread, usable on every end.
 | `EASING` | const | Named easing preset table |
 | `resolveEasing` | function | Resolve an easing key or custom function into an easing function |
 
+## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)
+
+```ts
+import { Easing, resolveEasing } from '@proteus-vue/worklet'
+
+// Named easings (Skyline prefers the official native ones; other ends use the same curve as pure functions)
+const ease = Easing.easeOut                   // built-ins: linear/quad/cubic/circle/sin/exp/bounce/ease/elastic
+const custom = resolveEasing((t) => t * t)    // custom curve → normalized into an easing function
+const byKey = resolveEasing('cubicInOut')     // string keys work too (unknown key → linear fallback)
+```
+> Origin: `packages/worklet/src/easing.ts (EASING / resolveEasing)`
+
 ## Usage & degradation
 
 - **entry**: `shared(initial)` / `derived(fn)` create shared values → `timing/spring/decay` describe the animation → `applyAnimatedStyle(scope, selector, updater, config)` binds it to component styles (returns an unbind function)

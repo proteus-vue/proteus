@@ -42,6 +42,41 @@ group: 渲染原语
 | `workletRuntime` | const | — |
 | `resetWorklet` | function | 测试重置 |
 
+## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）
+
+```ts
+import { shared, timing, spring, applyAnimatedStyle, hasWorklet, getWorklet } from '@proteus-vue/worklet'
+
+// 1) 建共享值（Skyline 上跑在 UI 线程；其余环境是同 API 的普通值）
+const offset = shared(0)
+const scale = shared(1)
+
+// 2) 描述动画（官方 timing/spring 同名语义）
+const a = timing(offset, 120, { duration: 300, easing: 'easeOut' })
+const s = spring(scale, 1.06, { stiffness: 180, damping: 14 })
+a.start?.(); s.start?.()
+
+// 3) 绑定到组件样式（返回解绑函数；Skyline = UI 线程驱动，其余 = 一次性应用）
+const unbind = applyAnimatedStyle(this, '.card', () => ({
+  transform: `translateX(${offset.value}px) scale(${scale.value})`,
+}))
+
+// 4) 能力探测（禁止静默失效——不可用时如实告知）
+if (hasWorklet()) {
+  // 真·小程序 + Skyline：UI 线程隔离（高频滚动/手势不阻塞 JS）
+} else {
+  // 诚实降级：`getWorklet().real === false`，动画走 JS 线程 rAF（行为对，无隔离）
+}
+onUnmounted(() => unbind())
+```
+> 出处：`packages/worklet/README.md（用法）+ src/runtime.ts:hasWorklet/getWorklet`
+
+```ts
+<!-- 模板侧：官方 WXML 前缀由**编译器透传**，无需 import 任何运行时 API -->
+<view worklet:style="{{animatedStyle}}">…</view>
+```
+> 出处：`packages/worklet/README.md（模板侧）+ docs/skyline-pitfalls.md:227（编译器已验证透传）`
+
 ## 用法与降级
 
 - **入口**：`shared(initial)` / `derived(fn)` 建共享值 → `timing/spring/decay` 描述动画 → `applyAnimatedStyle(scope, selector, updater, config)` 绑定到组件样式（返回解绑函数）

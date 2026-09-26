@@ -41,7 +41,7 @@ Layering: pure logic (this module, unit-testable) + thin directive (directives.t
 | `hasFinePointer` | function | Whether the environment has a fine pointer (mouse/pen — not enabled on touch; no matchMedia environment = non-Web, disabled) |
 | `createCursorGlow` | function | / |
 
-## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)
+## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)
 
 ```ts
 <p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>
