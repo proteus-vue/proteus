@@ -31,3 +31,6 @@ export type { FluidDensity, ScaleStyleOptions } from './scale'
 // ★p-adaptive（adaptive-container-plan B1+B2）：容器形态自适应纯逻辑（解析/校验/求解 + Controller/形态样式）
 export { parseAdaptiveExpression, validateAdaptiveRanges, computeAdaptiveForm, createAdaptiveController, resolveAdaptiveFormStyle } from './adaptive'
 export type { AdaptiveVariant, AdaptiveDiagnostic, AdaptiveController, AdaptiveControllerOptions, AdaptiveControllerState } from './adaptive'
+// ★★Fluid System v2（2026-09-26）：设备形态感知层——形态画像/求解/能力判定（布局拓扑与能力自动推导）
+export { FORM_PROFILES, formLabel, senseForm, probePointer, formSupports, validateFormProfiles, createFormFactor } from './formfactor'
+export type { DeviceForm, InputMode, LayoutTopology, NavTopology, FormCaps, FormProfile, FormSense, ResolvedForm, FormFactor, FormFactorOptions, FormFactorState, MediaQueryListLike } from './formfactor'
