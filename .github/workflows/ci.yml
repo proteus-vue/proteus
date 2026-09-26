@@ -171,6 +171,11 @@ jobs:
       - name: 参考文档漂移门禁（CLI/编译规则目录/CSS 兼容规则/组件能力页与源一致）
         run: cd website && pnpm run check:reference && pnpm run check:css-compat && pnpm run check:content
 
+      # ★2026-09-27：文档组件名对账（vue 代码块里引用不存在的组件会让读者照抄报错——
+      #   `p-card` 曾在 3 处文档里潜伏，既有门禁全放行）
+      - name: 文档组件名对账门禁（vue 代码块 ↔ 已注册组件）
+        run: cd website && pnpm run check:doc-components
+
       - name: 原语分区漂移门禁（★#460：desktop 模块页由源码生成，勿手改）
         run: cd website && pnpm run check:primitives
 

@@ -28,7 +28,7 @@ Three breakpoints × every page × every container position — the canonical fo
 
 ```vue
 <p-grid :min-col-width="160" :gap="12">
-  <p-card v-for="item in items" :key="item.id" />
+  <p-box v-for="item in items" :key="item.id" />
 </p-grid>
 ```
 
