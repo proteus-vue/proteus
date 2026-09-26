@@ -34,6 +34,9 @@ Form-factor orchestrator (layout topology per device form)
 | Prop | Doc | Type | Default | Required |
 |---|---|---|---|---|
 | `declared` | Host-declared device form (authoritative; watch/car/tv must be declared — not auto-detectable on the web) | `String as () => DeviceForm \| null` | `null` | No |
+| `degradedHint` | — | `String` | `''` | No |
+| `driveHint` | — | `String` | `'驾驶中：已精简信息层级与动效，仅保留核心购买路径'` | No |
+| `posture` | — | `String` | `''` | No |
 | `width` | Container width (host injection; drives sensing when not declared) | `Number` | `0` | No |
 | `height` | Container height | `Number` | `0` | No |
 
@@ -43,6 +46,21 @@ Form-factor orchestrator (layout topology per device form)
 
 - **Type**: `String as () => DeviceForm \| null`　**Default**: `null`　**Required**: No
 - **Doc**: Host-declared device form (authoritative; watch/car/tv must be declared — not auto-detectable on the web)
+
+#### `degradedHint`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `driveHint`
+
+- **Type**: `String`　**Default**: `'驾驶中：已精简信息层级与动效，仅保留核心购买路径'`　**Required**: No
+- **Doc**: —
+
+#### `posture`
+
+- **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
 
 #### `width`
 

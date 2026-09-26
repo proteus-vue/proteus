@@ -245,6 +245,14 @@ const CAPS_BASE: FormCaps = {
   driveAware: 'unsupported',
 }
 
+/**
+ * ★能力键全量序列（SSOT）——面板/审计/文档遍历能力的唯一入口。
+ * 派生自 CAPS_BASE（每个画像都 spread 它 → 键集恒等），新增能力字段自动入列，
+ * 杜绝「面板只列 10/14、恰好漏掉手表唯一支持的 crown」这类手工清单漂移。
+ * （tests/fluid-formfactor.test.ts 断言每个画像的 caps 键集与之逐项相等）
+ */
+export const FORM_CAP_KEYS = Object.freeze(Object.keys(CAPS_BASE) as Array<keyof FormCaps>)
+
 /** ★形态画像表（SSOT）——每项差异都有真实设备依据（注释标注） */
 export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
   watch: {
@@ -260,7 +268,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // ★视觉语言（2026-09-26 报告 P1-3/P2-1）：手表是 **AMOLED 暗色常亮**形态——
     //   此前浅色（#f2f4fa）在暗色页面上形成眩光块、AMOLED 不省电、夜间不友好；
     //   对比度按 AA 校验（text/bg 18.9:1 · accent/bg 9.8:1）
-    visual: { theme: 'dark', bg: '#000000', surface: '#141418', text: '#f5f6fa', dim: '#9aa3b2', brand: '#7c5cff', accent: '#ff9f43', focus: 'none', ratio: { baseFont: 13, ref: 198, min: 0.9, max: 1.6 } },
+    visual: { theme: 'dark', bg: '#000000', surface: '#141418', text: '#f5f6fa', dim: '#9aa3b2', brand: '#6f4ae8', accent: '#ff9f43', focus: 'none', ratio: { baseFont: 13, ref: 198, min: 0.9, max: 1.6 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     // ★状态栏 = 时间（报告 P1-4：watchOS/Wear 上「时间」是表盘第一锚点，缺了会立刻显得假）
     frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: true, radius: 34, watchFace: true },
@@ -278,7 +286,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 390, height: 844 },
     distance: 'arm', // 臂长
     // 视觉语言：常规触控（浅色 · 单列大热区 · 无焦点环）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 13, ref: 300, min: 0.7, max: 1.5 } }, // ★触控正文（审查：真机 390pt 下 ≈16.9pt ≈ HIG 17pt）
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 13, ref: 300, min: 0.7, max: 1.5 } }, // ★触控正文（审查：真机 390pt 下 ≈16.9pt ≈ HIG 17pt）
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '9/16', maxWidth: 300, notch: true, statusBar: true, radius: 22 },
     caps: { ...CAPS_BASE, skuMulti: 'supported', tabs: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
@@ -301,10 +309,13 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     ],
     viewport: { width: 673, height: 841 },
     distance: 'arm',
-    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
+    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '6/7', maxWidth: 470, notch: false, statusBar: true, radius: 18, hinge: true },
-    caps: { ...CAPS_BASE, skuMulti: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
+    // ★nav↔caps 自洽（2026-09-26 二次复审 P1）：三姿态的 nav 均为 tabs/bottom-tabs，
+    //   但 caps.tabs 曾为 unsupported → Tab 栏被能力过滤永久不渲染 = 折叠屏**零导航**。
+    //   折叠屏就是触控大屏（展开态 673×841），Tab 是其真实导航形态，故声明 supported。
+    caps: { ...CAPS_BASE, tabs: 'supported', skuMulti: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
   },
   tablet: {
     form: 'tablet',
@@ -318,7 +329,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 1194, height: 834 },
     distance: 'arm',
     // 视觉语言：分栏阅读（浅色 · 中等字号 · 无焦点环）
-    visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12.5, ref: 520, min: 0.68, max: 1.5 } },
+    visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 12.5, ref: 520, min: 0.68, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '4/3', maxWidth: 520, notch: false, statusBar: true, radius: 20 },
     caps: { ...CAPS_BASE, skuMulti: 'supported', sidebar: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported' },
@@ -334,7 +345,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 1440, height: 900 },
     distance: 'desk', // 桌面臂长（信息密度最高）
     // 视觉语言：桌面密排（浅色 · 三栏 · hover 反馈 · 键盘焦点环细）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', focus: 'ring', ratio: { baseFont: 13, ref: 620, min: 0.62, max: 1.45 } }, // ★桌面字 ≥ 平板（审查：曾 12 < 12.5） // 键盘 Tab 可达 → 焦点环可见
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'ring', ratio: { baseFont: 13, ref: 620, min: 0.62, max: 1.45 } }, // ★桌面字 ≥ 平板（审查：曾 12 < 12.5） // 键盘 Tab 可达 → 焦点环可见
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/10', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     caps: { ...CAPS_BASE, hover: 'supported', skuMulti: 'supported', sidebar: 'supported', multiCol: 'supported', dense: 'supported', keyboard: 'supported' },
@@ -354,7 +365,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // ★色值修正（2026-09-26 专家审查）：text 曾 == bg（#10142a）→ 标题对比度 1.00:1 完全隐形；
     //   surface 曾 = #ffffff → 夜间白块眩光（17.1:1）且暖橙价格在白底仅 1.81:1。
     //   改为浅色文字 + 半透明卡面（对齐 TV 写法）→ 价格 #ffb13d on 暗底 = 10.05:1
-    visual: { theme: 'dark', bg: '#10142a', surface: 'rgba(255,255,255,0.10)', text: '#eef2ff', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
+    visual: { theme: 'dark', bg: '#10142a', surface: 'rgba(255,255,255,0.10)', text: '#eef2ff', dim: '#8b93a7', brand: '#6f4ae8', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '8/3', maxWidth: 760, notch: false, statusBar: false, radius: 14 },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
@@ -370,13 +381,14 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     topology: 'hero-focus-row', // 大 Hero + 横向海报流
     nav: 'focus-row',
     mediaRatio: '16/9',
-    safe: { side: 0, bottom: 0 },
+    // ★overscan（2026-09-26 二次复审纠正：上轮提交信息声称已改 96/54 但代码实为 0/0——现真正落地）
+    safe: { side: 96, bottom: 54 },
     viewport: { width: 1920, height: 1080 },
     distance: '10ft', // 客厅沙发距离
     // ★视觉语言：10ft 沉浸暗色（深蓝底 + 半透明海报胶囊 + 暖橙价格 + 焦点环粗）
     // ★10ft 度量修正（专家审查：14px 相对 PC 12px 只大 1.17×，而观看距离差 5×；
     //   1080p 实机 30.8px ≈ 15.4sp 低于 Android TV 正文下限 16sp）→ baseFont 18 / max 2.6
-    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 18, ref: 620, min: 0.68, max: 2.6 } },
+    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#6f4ae8', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 18, ref: 620, min: 0.68, max: 2.6 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/9', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     // ★TV 能力画像：10ft 远距离 → 不做高密度信息、无 hover（遥控器）、无侧栏（水平海报流主导）
@@ -526,6 +538,16 @@ export function resolveFrameVars(profile: FormProfile): Record<string, string> {
     '--pf-ar': profile.frame.ar.replace('/', ' / '),
     '--pf-frame-max': `${profile.frame.maxWidth}px`,
     '--pf-frame-radius': `${profile.frame.radius}px`,
+    // ★形态级媒体比例（2026-09-26 二次复审 P1：此前 0 发射点 → 7 形态全走 4/3 fallback）
+    '--pf-media-ar': profile.mediaRatio.replace('/', ' / '),
+    // ★安全区（复审 P1：此前 0 发射点 → overscan/Home Indicator 完全无效）
+    '--pf-safe-side': `${profile.safe?.side ?? 0}px`,
+    '--pf-safe-bottom': `${profile.safe?.bottom ?? 0}px`,
+    // ★铰链几何（二次复审 P1：折叠屏折痕此前只是装饰；现把真实铰链带交给布局消费——
+    //   真机（Web foldable）有 env(fold-*) → 双栏按窗格成列；无该 API 的环境回退 0px = 现有行为）
+    ...(profile.frame.hinge
+      ? { '--pf-fold-left': 'env(fold-left, 0px)', '--pf-fold-width': 'env(fold-width, 0px)' }
+      : {}),
   }
 }
 
