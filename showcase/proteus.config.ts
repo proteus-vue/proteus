@@ -79,6 +79,10 @@ const config: ProteusConfig = {
   vite: async () => {
     const { defaultScopedPlugin } = await import('@proteus-vue/plugin-vite')
     return {
+      // ★子路径部署（2026-09-26）：PROTEUS_BASE=/showcase/ 时官网 iframe 嵌演示页——
+      //   vite base 注入资源前缀 + import.meta.env.BASE_URL（web-adapter 据此剥/补路由）；
+      //   缺省 '/'（本地 dev / 根路径部署）不变。
+      base: process.env.PROTEUS_BASE ?? '/',
       plugins: [defaultScopedPlugin()],
       resolve: {
         alias: [

@@ -6,7 +6,7 @@
   "description": "Proteus 官方演示小程序：一套 Vue 语义源码 → 小程序（Skyline）+ Web，全面演示框架能力",
   "scripts": {
     "dev:web": "proteus dev --target web",
-    "build:web": "proteus build --target web",
+    "build:web": "proteus build --target web && node scripts/emit-spa-routes.mjs",
     "dev:mp": "proteus dev --target skyline",
     "build:mp": "proteus build --target skyline",
     "debug:mp": "PROTEUS_DEBUG=1 proteus build --target skyline",

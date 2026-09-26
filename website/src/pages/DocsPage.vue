@@ -6,6 +6,7 @@ import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { findDoc, sections, enModule, enTitleFor } from '../docs-registry'
 import ComponentGallery from '../components/ComponentGallery.vue'
+import ComponentDemo from '../components/ComponentDemo.vue'
 import { createScrollSpy } from '@proteus-vue/desktop'
 import { locale, setLocale, t, sectionName, groupName } from '../i18n'
 
@@ -34,6 +35,9 @@ const displayDoc = computed(() => (isEn.value && variant.value ? variant.value :
 const docHtml = computed(() => displayDoc.value?.html ?? '')
 // ★2026-09-26 组件总览页特判：卡片画廊 + 折叠速查表（数据与 md 同源，见 ComponentGallery）
 const isOverview = computed(() => sectionKey.value === 'components' && activeSlug.value === '00-components-overview')
+// ★2026-09-26 组件详情页嵌真交互演示：slug（p-button）= showcase 演示页路由——
+//   73 个演示从资产孤岛变成组件文档的第一屏（P0-1，对标 MUI/TDesign 的组件页形态）
+const isComponentPage = computed(() => sectionKey.value === 'components' && activeSlug.value.startsWith('p-'))
 // ★TOC 优化（防御）：目录文本剥 markdown 标记（`code`/**bold**/[link](x) 等）——无论 docs 引擎版本/缓存如何，目录始终纯文本
 function stripMd(text: string): string {
   return String(text ?? '')
@@ -195,6 +199,10 @@ watch(
               <summary class="ovr-summary">{{ isEn ? 'Quick reference tables' : '按域速查表（Props / Events 计数）' }}</summary>
               <p-view class="doc-body ovr-doc-body" v-html="docHtml"></p-view>
             </details>
+          </template>
+          <template v-else-if="isComponentPage && !noEn">
+            <ComponentDemo :dir="activeSlug" />
+            <p-view class="doc-body" v-html="docHtml"></p-view>
           </template>
           <p-view v-else-if="!noEn" class="doc-body" v-html="docHtml"></p-view>
 
