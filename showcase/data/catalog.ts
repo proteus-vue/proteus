@@ -19,7 +19,7 @@ export interface CatalogGroup {
   items: CatalogItem[]
 }
 
-/** 组件：6 域 / 73 个（已备详情页 73） */
+/** 组件：6 域 / 74 个（已备详情页 73） */
 export const COMPONENT_GROUPS: CatalogGroup[] = [
   {
     name: "布局",
@@ -30,6 +30,7 @@ export const COMPONENT_GROUPS: CatalogGroup[] = [
       { name: "p-box", desc: "原子容器", route: "/subpackages/components/pages/p-box" },
       { name: "p-divider", desc: "分隔线", route: "/subpackages/components/pages/p-divider" },
       { name: "p-fit", desc: "内在尺寸", route: "/subpackages/components/pages/p-fit" },
+      { name: "p-formfactor", desc: "★★柔性形态容器", route: "" },
       { name: "p-grid", desc: "自适应网格", route: "/subpackages/components/pages/p-grid" },
       { name: "p-inline", desc: "行内容器", route: "/subpackages/components/pages/p-inline" },
       { name: "p-masonry", desc: "瀑布流", route: "/subpackages/components/pages/p-masonry" },
@@ -279,7 +280,7 @@ export const CAPABILITY_GROUPS: CatalogGroup[] = [
 
 export const CATALOG_STATS = {
   componentGroups: 6,
-  componentTotal: 73,
+  componentTotal: 74,
   componentReady: 73,
   capabilityGroups: 10,
   capabilityTotal: 81,

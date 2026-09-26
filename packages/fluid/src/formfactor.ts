@@ -145,6 +145,8 @@ export interface FormFrame {
   radius: number
   /** ★铰链（折叠屏：竖向折痕在正中——专家报告 P1-2：内容不得跨折痕） */
   hinge?: boolean
+  /** ★表盘（手表：状态栏渲染为时间 + complication——报告 P1-4） */
+  watchFace?: boolean
 }
 
 /** 视角距离档（诚实标注：10ft = 电视观看距离；驾驶 = 车机；桌面 = 臂长） */
@@ -207,10 +209,13 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     mediaRatio: '1/1',
     viewport: { width: 198, height: 242 },
     distance: 'glance', // 抬腕一瞥
-    // 视觉语言：紧凑大字（小屏一瞥可读）· 浅色 · 无焦点环
-    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', focus: 'none', ratio: { baseFont: 13, ref: 198, min: 0.9, max: 1.6 } }, // ★ref 对齐真机 198（审查：曾 240 → 真机偏小 21%）
+    // ★视觉语言（2026-09-26 报告 P1-3/P2-1）：手表是 **AMOLED 暗色常亮**形态——
+    //   此前浅色（#f2f4fa）在暗色页面上形成眩光块、AMOLED 不省电、夜间不友好；
+    //   对比度按 AA 校验（text/bg 18.9:1 · accent/bg 9.8:1）
+    visual: { theme: 'dark', bg: '#000000', surface: '#141418', text: '#f5f6fa', dim: '#9aa3b2', brand: '#7c5cff', accent: '#ff9f43', focus: 'none', ratio: { baseFont: 13, ref: 198, min: 0.9, max: 1.6 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
-    frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: false, radius: 34 }, // 展示壳上限宽 240（真机 198——k>1 时放大展示）
+    // ★状态栏 = 时间（报告 P1-4：watchOS/Wear 上「时间」是表盘第一锚点，缺了会立刻显得假）
+    frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: true, radius: 34, watchFace: true },
     caps: { ...CAPS_BASE, crown: true }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
   },
   phone: {

@@ -222,9 +222,9 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
             <span v-if="target.profile.frame.notch" class="notch" aria-hidden="true" />
             <!-- ★折叠屏铰链折痕（报告 P1-2：内容不得跨折痕——此处为视觉提示） -->
             <span v-if="target.profile.frame.hinge" class="hinge" aria-hidden="true" />
-            <div v-if="target.profile.frame.statusBar" class="statusbar">
-              <span>9:41</span>
-              <span>▮▮▮ ⌁</span>
+            <div v-if="target.profile.frame.statusBar" class="statusbar" :class="{ 'statusbar--watch': target.profile.frame.watchFace }">
+              <span>{{ target.profile.frame.watchFace ? '10:24' : '9:41' }}</span>
+              <span>{{ target.profile.frame.watchFace ? '❤️ 72' : '▮▮▮ ⌁' }}</span>
             </div>
             <div class="app-body">
               <FluidProduct :form="target.key" :width="frameWidth" :height="frameWidth" />
@@ -370,6 +370,14 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   width: 96px; height: 20px; background: #000;
   border-radius: 0 0 12px 12px; z-index: 5;
+}
+.statusbar--watch {
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  background: #000;
+  color: #f5f6fa;
+  border-bottom-color: #26262d;
 }
 .statusbar {
   height: 24px; background: #fff; display: flex; align-items: center; justify-content: space-between;

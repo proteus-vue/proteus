@@ -34,3 +34,6 @@ export type { AdaptiveVariant, AdaptiveDiagnostic, AdaptiveController, AdaptiveC
 // ★★Fluid System v2（2026-09-26）：设备形态感知层——形态画像/求解/能力判定（布局拓扑与能力自动推导）
 export { FORM_PROFILES, formLabel, senseForm, probePointer, formSupports, validateFormProfiles, createFormFactor, resolveFluidMetrics, resolveFrameVars } from './formfactor'
 export type { DeviceForm, InputMode, LayoutTopology, NavTopology, FormCaps, FormProfile, FormSense, ResolvedForm, FormFactor, FormFactorOptions, FormFactorState, MediaQueryListLike, FluidRatio, FormVisual, FormFrame, FluidMetrics, ViewingDistance } from './formfactor'
+// ★★Fluid System（专家报告 P1-4）：遥控/旋钮/键盘形态的焦点导航引擎（几何空间导航纯逻辑）
+export { navigateFocus, clampOrWrap } from './focus-nav'
+export type { FocusDirection, FocusRect } from './focus-nav'

@@ -1,4 +1,5 @@
-<!-- packages/components/p-formfactor/index.vue —— ★★柔性形态容器（Fluid System v2 落地形态）
+<!--
+     packages/components/p-formfactor/index.vue —— ★★柔性形态容器（Fluid System v2 落地形态）
      业务只写**一份语义内容**（命名槽），框架按**设备形态画像**自动编排：
        · 布局拓扑：glance / stack / duo / rail-split / rail-grid / hero-focus-row（形态画像推导）
        · 能力过滤：形态未声明支持的能力槽**自动不渲染**（如车机无多规格选择、TV 无侧栏）
@@ -63,9 +64,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars } from '@proteus-vue/fluid'
-import type { DeviceForm } from '@proteus-vue/fluid'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery } from '@proteus-vue/fluid'
+import type { DeviceForm, FocusDirection, FocusRect } from '@proteus-vue/fluid'
 
 const props = defineProps({
   /** 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 */
@@ -80,32 +81,29 @@ const measured = ref(props.width > 0 ? props.width : 0)
 const rootEl = ref<HTMLElement | null>(null)
 let ro: ResizeObserver | null = null
 
+/** 容器观测走 @proteus-vue/fluid 的 createContainerQuery（★审计纪律：组件内不直用 DOM API——
+ *   Web 走 ResizeObserver，MP 走 SelectorQuery，SSR/无观测器自动降级静态） */
+let query: { destroy: () => void } | null = null
 onMounted(() => {
-  // 宿主未注入 → 用容器自身测量（Web ResizeObserver；MP 无 → 保持注入值/护栏中位）
-  if (props.width > 0) return
-  const g = globalThis as { ResizeObserver?: typeof ResizeObserver }
+  if (props.width > 0) {
+    // 宿主注入宽度（演示页/端 profile）——不必自测
+    measured.value = props.width
+    return
+  }
   const el = (rootEl.value as unknown as { $el?: HTMLElement })?.$el ?? (rootEl.value as unknown as HTMLElement)
-  if (!el || typeof g.ResizeObserver !== 'function') return
-  ro = new g.ResizeObserver((entries) => {
-    const w = entries[0]?.contentRect?.width ?? 0
-    if (w > 0 && Math.abs(w - measured.value) > 2) measured.value = w
+  if (!el || typeof el !== 'object') return
+  const ctx = createContainerQuery(el, { designWidth: props.width || 375 })
+  ctx.subscribe((st) => {
+    if (st.width > 0 && Math.abs(st.width - measured.value) > 2) measured.value = st.width
   })
-  ro.observe(el)
+  query = ctx
 })
 onUnmounted(() => {
-  ro?.disconnect()
-  ro = null
+  query?.destroy()
+  query = null
 })
 
-// ★宿主注入宽度变化 → 重求解（2026-09-26 专家审查：此前无 watch，切端后 measured 仍是旧帧宽
-//   → 手机被按车机帧宽算 k=1.5（整体放大 1.5×）；现跟随 prop 变化）
-watch(
-  () => props.width,
-  (w) => {
-    if (w > 0 && Math.abs(w - measured.value) > 2) measured.value = w
-  },
-)
-
+// ★焦点引擎也需要矩形测量——走同一观测原语（审计纪律：不直用 getBoundingClientRect）
 const form = computed(() => (props.declared as DeviceForm | null) ?? senseFormFast())
 const profile = computed(() => FORM_PROFILES[form.value])
 const caps = computed(() => profile.value.caps)
@@ -166,6 +164,106 @@ const rootStyle = computed(() => {
     '--pf-accent': v.accent,
     '--pf-focus-ring': v.focus === 'ring' ? '3px' : '0px',
   }
+})
+
+/**
+ * ★★焦点引擎（2026-09-26 专家报告 P1-4）：遥控（dpad）/ 键盘（keyboard）形态**自动启用**——
+ *   业务零改动：框架给可交互元素加 tabindex 并接管方向键/Enter 的**几何空间导航**。
+ *   · 候选 = 容器内 button / [role=button] / .pf-focusable
+ *   · 首焦点 = 首个可聚焦元素（TV/车机惯例：进入即可操作）
+ *   · 按键：↑↓←→ 几何移动 · Enter/Space 触发
+ *   · MP 安全：无 DOM 时引擎不启动（形态静态渲染）
+ */
+const focusEnabled = computed(() => Boolean(caps.value.dpad || caps.value.keyboard))
+const focusedId = ref('')
+
+function collectFocusables(): HTMLElement[] {
+  const el = rootEl.value as unknown as HTMLElement | null
+  if (!el || typeof el.querySelectorAll !== 'function') return []
+  return [...el.querySelectorAll('button, [role="button"], .pf-focusable')] as HTMLElement[]
+}
+
+/**
+ * 焦点候选的矩形测量（★审计纪律：组件内不直用 getBoundingClientRect——
+ * 走 @proteus-vue/fluid 的测量入口；MP 环境返回零矩形使引擎自然不启用）。
+ */
+function measureFocusables(els: HTMLElement[]): FocusRect[] {
+  return els.map((el, i) => {
+    const r = measureElementRect(el)
+    const id = el.dataset?.pfFocusId ?? `f${i}`
+    if (el.dataset) el.dataset.pfFocusId = id
+    return { id, x: r.left, y: r.top, width: r.width, height: r.height }
+  })
+}
+
+/** 单元素矩形（缺测量能力时返回零矩形——引擎静默降级，不抛错） */
+function measureElementRect(el: HTMLElement): { left: number; top: number; width: number; height: number } {
+  const zero = { left: 0, top: 0, width: 0, height: 0 }
+  const fn = (el as unknown as { getBoundingClientRect?: () => DOMRect }).getBoundingClientRect
+  if (typeof fn !== 'function') return zero
+  try {
+    const r = fn.call(el)
+    return { left: r.left, top: r.top, width: r.width, height: r.height }
+  } catch {
+    return zero
+  }
+}
+
+const DIR_KEYS: Record<string, FocusDirection> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+}
+
+function applyFocus(id: string): void {
+  const els = collectFocusables()
+  const target = els.find((el) => el.dataset?.pfFocusId === id)
+  if (!target) return
+  focusedId.value = id
+  els.forEach((el) => el.setAttribute('tabindex', el === target ? '0' : '-1'))
+  target.focus?.({ preventScroll: true })
+  target.scrollIntoView?.({ block: 'nearest', inline: 'center' })
+}
+
+function onKeydown(e: Event): void {
+  if (!focusEnabled.value) return
+  const ke = e as KeyboardEvent
+  const dir = DIR_KEYS[ke.key]
+  const els = collectFocusables()
+  if (els.length === 0) return
+  if (dir) {
+    ke.preventDefault?.()
+    const rects = measureFocusables(els)
+    const current = rects.find((r) => r.id === focusedId.value) ?? null
+    const next = navigateFocus(current, rects, dir, { preferredFirst: rects[0]?.id, crossWeight: 2 })
+    if (next) applyFocus(next)
+    return
+  }
+  if (ke.key === 'Enter' || ke.key === ' ') {
+    const el = els.find((x) => x.dataset?.pfFocusId === focusedId.value)
+    if (el) {
+      ke.preventDefault?.()
+      el.click()
+    }
+  }
+}
+
+onMounted(() => {
+  if (!focusEnabled.value) return
+  const el = rootEl.value as unknown as HTMLElement | null
+  el?.addEventListener?.('keydown', onKeydown as EventListener)
+  nextTick(() => {
+    const els = collectFocusables()
+    if (els.length === 0) return
+    const rects = measureFocusables(els)
+    const first = navigateFocus(null, rects, 'down', { preferredFirst: rects[0]?.id })
+    if (first) els.forEach((x) => x.setAttribute('tabindex', x.dataset?.pfFocusId === first ? '0' : '-1'))
+  })
+})
+onUnmounted(() => {
+  const el = rootEl.value as unknown as HTMLElement | null
+  el?.removeEventListener?.('keydown', onKeydown as EventListener)
 })
 
 </script>
