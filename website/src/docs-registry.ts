@@ -75,9 +75,11 @@ export function enTitleFor(base: string, slug: string): string | undefined {
 
 export const sections: DocSection[] = [
   buildSection('guide', '指南', '/docs', guideModules, '指南'),
-  buildSection('framework', '框架', '/docs/framework', frameworkModules, '总览'),
+  // ★2026-09-26 P1d 轻量：组件/能力前移（使用者最高频入口优先于概念章节；
+  //   展示序重排——路由/侧栏/URL 零变化）。「原语/柔性系统」的命名属内容概念，不在此改
   buildSection('components', '组件', '/docs/component', componentModules, '组件'),
   buildSection('capabilities', '能力', '/docs/capability', capabilityModules, '能力'),
+  buildSection('framework', '框架', '/docs/framework', frameworkModules, '总览'),
   buildSection('primitives', '原语', '/docs/primitives', primitiveModules, '原语'), // ★#460 原语分区：组件/能力的第三张脸——非组件形态家族逐条（desktop 模块由 gen-primitives 生成）
   buildSection('system', '柔性系统', '/docs/system', systemModules, '柔性系统'),
   buildSection('plugins', '插件 API', '/docs/plugin', pluginModules, '插件 API'),
