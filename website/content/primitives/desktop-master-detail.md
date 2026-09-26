@@ -1,7 +1,7 @@
 ---
 title: p-master-detail
 order: 22
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-master-detail

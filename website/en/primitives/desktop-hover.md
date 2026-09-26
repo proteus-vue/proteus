@@ -1,7 +1,7 @@
 ---
 title: p-hover
 order: 19
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-hover

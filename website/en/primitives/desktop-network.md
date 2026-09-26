@@ -1,7 +1,7 @@
 ---
 title: p-network-status
 order: 23
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-network-status

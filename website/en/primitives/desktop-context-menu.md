@@ -1,7 +1,7 @@
 ---
 title: p-context-menu
 order: 14
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-context-menu

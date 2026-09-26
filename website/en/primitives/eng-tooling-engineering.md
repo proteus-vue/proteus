@@ -1,7 +1,7 @@
 ---
 title: Tooling engineering primitives (E24-E28: useDevTools/defineComponent…)
 order: 86
-group: 工程原语
+group: Engineering primitives
 ---
 
 # Tooling engineering primitives (E24-E28: useDevTools/defineComponent…)

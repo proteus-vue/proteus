@@ -1,7 +1,7 @@
 ---
 title: p-low-power
 order: 21
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-low-power

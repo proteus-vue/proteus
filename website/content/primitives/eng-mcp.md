@@ -1,7 +1,7 @@
 ---
 title: WebMCP 接入（E30：useMCP / capabilityToTool）
 order: 82
-group: 工程原语
+group: 工程语义原语
 ---
 
 # WebMCP 接入（E30：useMCP / capabilityToTool）

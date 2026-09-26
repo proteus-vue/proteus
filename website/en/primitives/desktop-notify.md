@@ -1,7 +1,7 @@
 ---
 title: p-notify
 order: 24
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-notify

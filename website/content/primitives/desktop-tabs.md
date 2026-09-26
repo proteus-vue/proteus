@@ -1,7 +1,7 @@
 ---
 title: p-tabs
 order: 30
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-tabs

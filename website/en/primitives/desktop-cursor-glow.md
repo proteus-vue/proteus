@@ -1,7 +1,7 @@
 ---
 title: p-cursor-glow
 order: 15
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-cursor-glow

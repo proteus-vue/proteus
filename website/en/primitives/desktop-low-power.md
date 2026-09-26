@@ -1,7 +1,7 @@
 ---
 title: p-low-power
 order: 21
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-low-power

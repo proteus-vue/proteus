@@ -1,7 +1,7 @@
 ---
 title: 桌面指令工厂（createDesktopDirectives：v-p-* 注册）
 order: 17
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # 桌面指令工厂（createDesktopDirectives：v-p-* 注册）

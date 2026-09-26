@@ -1,7 +1,7 @@
 ---
 title: 锚点定位原语（scrollToId）
 order: 10
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # 锚点定位原语（scrollToId）
