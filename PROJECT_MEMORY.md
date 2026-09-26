@@ -99,6 +99,16 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★★本会话·Fluid System v2：设备形态升为一等概念（根治「只是响应式布局 + 能力堆积木」，2026-09-26 续九，★★★用户两次指正）**：
+  **① 用户诊断（准确）**：(a) 能力声明只有固定 4 项；(b) 大屏设备（PC/平板/车机/TV）形态几乎无差异；(c) 「和传统响应式布局没有任何大的差异」；(d) 要求「布局和能力根据设备形态自动感知变化」。根因核实：旧柔性系统**只有容器宽度一个维度**（断点 sm/md/lg/xl）——PC 1280 与车机 1280、TV 1920 在系统眼里只有宽度差；`env.ts` 有设备信号但无形态概念；`p-zone` 要业务自己写四个槽（=响应式）。
+  **② 新增形态感知层 `packages/fluid/src/formfactor.ts`**：`FORM_PROFILES` 七形态画像 SSOT（watch/phone/fold/tablet/pc/car/tv × input/density/topology/nav/scale/viewport + **10 项能力声明**）；三层感知（**宿主声明 > 环境探测 pointer/hover+视口 > 兜底**），★watch/car/tv 不可自动识别故不猜（诚实边界）；`senseForm`/`formSupports`/`probePointer`/`createFormFactor`（响应式）/`validateFormProfiles`（门禁）；拓扑枚举新增 **dashboard**（车机驾驶大卡片）与 **hero-focus-row**（TV lean-back 海报流）——**车机与 TV 拓扑刻意不同**。
+  **③ 能力画像有真实设备依据**：车机（driveAware 驾驶降干扰 + 无多规格选择/分心风险 + comfortable 密度 + 1.15× 缩放）、TV（1.4× 10ft 缩放 + 无高密度 + 无侧栏）、PC（唯一 hover + 键盘）、手表（glance 一屏一意 + compact + 无 Tab）。
+  **④ 新组件 `p-formfactor`（形态容器）**：业务只写一份语义内容槽（media/heading/price/sku/actions/recommend/rail/tabbar），框架按形态画像**自动编排**——拓扑自动、能力槽自动降级（车机无 SKU 选择 / TV 无侧栏 / 手表无 Tab）、密度缩放自动、遥控形态热区自动放大 + 驾驶降干扰动效限制。**业务侧零 if-else**。MP 编译兼容：顶层无工厂副作用 / 无类型实参 / `:class` 聚合为字符串 / 无 window 依赖。
+  **⑤ 页面重建**：左栏 `?raw` 直读正在执行的同一份文件（**内容槽版本，无任何形态判断**）；中栏**主展示（切片+缩放，细节可读）+ 七形态缩略条**（视觉同屏，点击切换）；右栏形态画像推导 + **全量 10 项能力声明**；形态族筛选 `?form=touch|cursor|remote`（可分享直达）；端清单从 FORM_PROFILES 读（页面零重复定义）。
+  **⑥ 框架登记（四向一致性门禁全过）**：primitives(L26) + SEMANTIC_ENUM + TAG_SEMANTIC_MAP + SEMANTIC_BACKEND_MAP + 五后端映射（vue-dom/native×3/flutter/headless）+ Rust semantic 表 + 中英内容页 + stats（184 原语/65 implemented/77 组件）。
+  **⑦ 验证**：新增回归锁 `tests/fluid-formfactor.test.ts`（13 例，★核心一条 = **大屏四形态指纹必须两两不同**，防退回响应式）；affected 7 套件 256/256；全量单测仅 2 预存环境失败；根 vue-tsc 0 错误；门禁 content/docs/stats/gates-sync 全绿；部署 run 36231843927 success + 线上包实证（FORM_PROFILES/hero-focus-row/driveAware 均在）。
+  **⑧ 教训**：① 「响应式」与「柔性」的分水岭 = 前者按尺寸缩放同一布局，后者按**形态**换布局/导航/能力集；② 大屏同质化的根因是「拓扑由宽度派生」——必须让形态成为独立维度；③ 框架登记链路长（7 处），新组件必须走全链否则门禁红。
+
 - **★本会话·多端同屏方向纠正 + 挖出框架级缺陷「渲染 IR 丢静态文本」（2026-09-26 续八，★★★用户指正方向）**：
   **① 方向纠正（用户）**：我把多端同屏做成了「后端渲染决策展示」，偏离设计本意——**柔性系统**要讲的是「一套代码打通差异化的多端平台」：大屏/车机/手表差异极大、形态完全不同、能力声明也完全不同。已按此重建。
   **② ★★框架级真缺陷（本轮最大价值）**：`compiler-backend` 的 `elementToRenderNode` 用 `.filter(c => c.type === ELEMENT)` **显式丢弃全部文本节点** → **所有渲染后端（vuedom/native/flutter/headless）产出的都是无字树**。此前未被发现的原因：Playground 控件树 readback 只看控件名（树形对、名对，就没人看内容）+ 多端同屏用的是静态道具（不经过这条链路）。修法（additive SPI 扩展）：RenderNode/IRNode +`text`；静态 TEXT / 插值 INTERPOLATION → `#text` 节点（插值用 props.expr，编译期不求值）；SPI 新增 `createText`（五后端 + hybrid 各补实现）；`renderIRTree` 派发 `#text`。实证：vuedom 真渲染出完整商品页（标题/SKU/按钮文案全有）· native iOS 控件树 `UILabel.heading → text "无线降噪耳机 Pro"`。
