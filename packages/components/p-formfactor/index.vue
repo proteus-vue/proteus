@@ -16,6 +16,9 @@
     ref="rootEl"
     class="p-formfactor"
     :class="rootClass"
+    :data-pf-form="form"
+    :data-pf-posture="posture || ''"
+    :data-pf-topology="profile.topology"
     :style="rootStyle"
   >
     <!-- 侧栏（能力声明 sidebar：未声明的形态自动不渲染——手机/手表/车机/TV） -->

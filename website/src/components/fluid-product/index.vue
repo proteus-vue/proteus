@@ -18,6 +18,8 @@ const isEn = computed(() => locale.value === 'en')
 
 const props = defineProps<{
   form: DeviceForm
+  /** ★姿态（折叠屏动态形态：folded / tabletop / expanded——透传给框架容器，业务零分支） */
+  posture?: string
   width: number
   height: number
 }>()
@@ -42,7 +44,7 @@ const recs = [
 
 <template>
   <!-- ★框架组件：一行接形态，其余全自动（拓扑 / 视觉语言 / 能力 / 密度 / 缩放 / 热区） -->
-  <p-formfactor :declared="form" :width="width" :height="height">
+  <p-formfactor :declared="form" :posture="posture ?? ''" :width="width" :height="height">
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>
       <span class="fp-brand">🎧 云端商城</span>
