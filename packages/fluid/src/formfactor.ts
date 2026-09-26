@@ -143,6 +143,8 @@ export interface FormFrame {
   statusBar: boolean
   /** 外框圆角（px——按形态：手表更圆 / PC 方） */
   radius: number
+  /** ★铰链（折叠屏：竖向折痕在正中——专家报告 P1-2：内容不得跨折痕） */
+  hinge?: boolean
 }
 
 /** 视角距离档（诚实标注：10ft = 电视观看距离；驾驶 = 车机；桌面 = 臂长） */
@@ -166,6 +168,10 @@ export interface FormProfile {
   frame: FormFrame
   /** ★视觉语言（形态级主题——TV/车机暗色沉浸、10ft 大字号、焦点环可见） */
   visual: FormVisual
+  /** ★媒体比例（专家报告 P2-2：旧版有 mediaAr，重建时丢失——形态级媒体形态差异） */
+  mediaRatio: string
+  /** ★安全区（专家报告 P1-3：TV overscan 5% / iPad 20pt 握持 / 手机 Home Indicator） */
+  safe?: { side?: number; bottom?: number; top?: number }
   /** 典型视口（文档/演示用；真实值以容器查询为准） */
   viewport: { width: number; height: number }
   /** 能力声明（14 项——未声明即不支持，组件自动降级） */
@@ -198,6 +204,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'compact',
     topology: 'glance', // 一屏一意（抬腕场景）
     nav: 'page-stack', // 页栈（无 Tab 无侧栏）
+    mediaRatio: '1/1',
     viewport: { width: 198, height: 242 },
     distance: 'glance', // 抬腕一瞥
     // 视觉语言：紧凑大字（小屏一瞥可读）· 浅色 · 无焦点环
@@ -213,6 +220,8 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'stack', // 单列纵向
     nav: 'bottom-tabs', // 底部 Tab
+    mediaRatio: '4/3',
+    safe: { side: 0, bottom: 34 },
     viewport: { width: 390, height: 844 },
     distance: 'arm', // 臂长
     // 视觉语言：常规触控（浅色 · 单列大热区 · 无焦点环）
@@ -228,11 +237,13 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'duo', // 展开态：主图 + 详情双列（display-mode: fold/span）
     nav: 'tabs',
-    viewport: { width: 520, height: 720 },
+    mediaRatio: '1/1',
+    safe: { side: 0, bottom: 16 },
+    viewport: { width: 673, height: 841 },
     distance: 'arm',
     visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
-    frame: { ar: '3/4', maxWidth: 420, notch: false, statusBar: true, radius: 18 },
+    frame: { ar: '6/7', maxWidth: 470, notch: false, statusBar: true, radius: 18, hinge: true },
     caps: { ...CAPS_BASE, skuMulti: true, multiCol: true, dense: true, drawer: true, notch: true },
   },
   tablet: {
@@ -242,7 +253,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'rail-split', // 侧栏 + 主体分栏
     nav: 'rail',
-    viewport: { width: 834, height: 1112 },
+    mediaRatio: '4/3',
+    safe: { side: 20, bottom: 24 },
+    viewport: { width: 1194, height: 834 },
     distance: 'arm',
     // 视觉语言：分栏阅读（浅色 · 中等字号 · 无焦点环）
     visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12.5, ref: 520, min: 0.68, max: 1.5 } },
@@ -257,6 +270,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'regular',
     topology: 'rail-grid', // 侧栏 + 多列网格
     nav: 'side-nav',
+    mediaRatio: '16/10',
     viewport: { width: 1440, height: 900 },
     distance: 'desk', // 桌面臂长（信息密度最高）
     // 视觉语言：桌面密排（浅色 · 三栏 · hover 反馈 · 键盘焦点环细）
@@ -272,6 +286,8 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'comfortable', // 驾驶场景：大间距大热区
     topology: 'dashboard', // 驾驶大卡片（单层大热区——与 TV 的 lean-back 海报流本质不同）
     nav: 'focus-tree',
+    mediaRatio: '16/9',
+    safe: { side: 8, bottom: 8 },
     viewport: { width: 1280, height: 480 },
     distance: 'dashboard', // 驾驶位
     // ★视觉语言：驾驶暗色舱（暗底 + 高亮大热区瓦片 + 暖橙强调 + 焦点环粗——驾驶员余光可辨）
@@ -280,7 +296,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     //   改为浅色文字 + 半透明卡面（对齐 TV 写法）→ 价格 #ffb13d on 暗底 = 10.05:1
     visual: { theme: 'dark', bg: '#10142a', surface: 'rgba(255,255,255,0.10)', text: '#eef2ff', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
-    frame: { ar: '16/9', maxWidth: 640, notch: false, statusBar: false, radius: 14 },
+    frame: { ar: '8/3', maxWidth: 760, notch: false, statusBar: false, radius: 14 },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
     caps: { ...CAPS_BASE, dpad: true, crown: true, focusTree: true, dense: true, multiCol: true, focusRows: true, driveAware: true },
   },
@@ -291,6 +307,8 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     density: 'comfortable',
     topology: 'hero-focus-row', // 大 Hero + 横向海报流
     nav: 'focus-row',
+    mediaRatio: '16/9',
+    safe: { side: 0, bottom: 0 },
     viewport: { width: 1920, height: 1080 },
     distance: '10ft', // 客厅沙发距离
     // ★视觉语言：10ft 沉浸暗色（深蓝底 + 半透明海报胶囊 + 暖橙价格 + 焦点环粗）

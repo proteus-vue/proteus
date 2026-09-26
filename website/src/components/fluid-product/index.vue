@@ -11,6 +11,10 @@
 // ══════════════════════════════════════════════════════════════════════════════
 import { ref } from 'vue'
 import type { DeviceForm } from '@proteus-vue/fluid'
+import { computed } from 'vue'
+import { locale } from '../../i18n'
+
+const isEn = computed(() => locale.value === 'en')
 
 const props = defineProps<{
   form: DeviceForm
@@ -42,10 +46,10 @@ const recs = [
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>
       <span class="fp-brand">🎧 云端商城</span>
-      <span class="fp-rail-item on">首页</span>
-      <span class="fp-rail-item">音频</span>
-      <span class="fp-rail-item">订单</span>
-      <span class="fp-rail-item">设置</span>
+      <span class="fp-rail-item on"><i class="fp-rail-ic">🏠</i>{{ isEn ? 'Home' : '首页' }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">🎵</i>{{ isEn ? 'Audio' : '音频' }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">📦</i>{{ isEn ? 'Orders' : '订单' }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">⚙️</i>{{ isEn ? 'Settings' : '设置' }}</span>
     </template>
 
     <!-- 主视觉 -->
@@ -94,12 +98,23 @@ const recs = [
 <style scoped>
 /* 演示内容样式（★与形态无关——形态引起的排列/配色差异全在 p-formfactor 内） */
 .fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(var(--pf-font) * 1.05); }
-.fp-rail-item { padding: 8px 10px; border-radius: 7px; color: var(--pf-dim, #666); }
+.fp-rail-item {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--pf-u) * 0.5);
+  min-height: calc(var(--pf-u) * 3.2);
+  padding: calc(var(--pf-u) * 0.5) calc(var(--pf-u) * 0.8);
+  border-radius: calc(var(--pf-radius) * 0.8);
+  color: var(--pf-dim, #666);
+  cursor: pointer;
+}
+.fp-rail-ic { font-style: normal; font-size: calc(var(--pf-font) * 1.05); }
 .fp-rail-item.on { background: color-mix(in srgb, var(--pf-brand, #7c5cff) 16%, transparent); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
 .fp-cover {
   width: 100%;
-  aspect-ratio: 16 / 10;
+  height: 100%;
+  aspect-ratio: var(--pf-media-ar, 4 / 3);
   border-radius: var(--pf-radius, 10px);
   background: linear-gradient(135deg, rgba(124, 92, 255, 0.22), rgba(171, 155, 255, 0.08));
   display: grid;

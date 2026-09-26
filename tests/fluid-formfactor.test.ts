@@ -142,6 +142,33 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: true, crown: true, focusTree: true, dense: true, driveAware: true, skuMulti: false })
   })
 
+  it('★形态级媒体比例 + 安全区 + 铰链（专家报告：旧版 mediaAr 丢失 / 安全区缺失 / 无铰链语义）', () => {
+    // 媒体比例按形态（旧版设计意图：phone 4/3 · tablet/fold 1/1 · pc 16/10 · car/tv 16/9）
+    expect(FORM_PROFILES.phone.mediaRatio).toBe('4/3')
+    expect(FORM_PROFILES.tablet.mediaRatio).toBe('4/3')
+    expect(FORM_PROFILES.fold.mediaRatio).toBe('1/1')
+    expect(FORM_PROFILES.car.mediaRatio).toBe('16/9')
+    expect(FORM_PROFILES.tv.mediaRatio).toBe('16/9')
+    // 安全区：iPad 握持 20pt / 手机 Home Indicator 34pt / 车机边缘
+    expect(FORM_PROFILES.tablet.safe?.side).toBe(20)
+    expect(FORM_PROFILES.phone.safe?.bottom).toBe(34)
+    expect(FORM_PROFILES.car.safe?.side).toBeGreaterThan(0)
+    // 铰链语义：仅折叠屏有（内容不得跨折痕）
+    expect(FORM_PROFILES.fold.frame.hinge).toBe(true)
+    for (const f of ['phone', 'tablet', 'pc', 'car', 'tv', 'watch'] as DeviceForm[]) {
+      expect(FORM_PROFILES[f].frame.hinge, `${f} 不应有铰链`).toBeFalsy()
+    }
+    // ★折叠屏内屏近方形（专家报告 P1-1：曾 520 会被自身阈值判成 phone）
+    const foldW = FORM_PROFILES.fold.viewport.width
+    expect(foldW).toBeGreaterThanOrEqual(600)
+    const { width: fw, height: fh } = FORM_PROFILES.fold.viewport
+    expect(fw / fh).toBeGreaterThan(0.7) // 近方形（真实 Z Fold 内屏 0.86）
+    expect(fw / fh).toBeLessThan(1)
+    // 平板横屏（专家报告 P1-5/P2-4：曾竖屏视口配横屏帧）
+    const { width: tw, height: th } = FORM_PROFILES.tablet.viewport
+    expect(tw).toBeGreaterThan(th)
+  })
+
   it('formLabel 双语 + 未知形态回退', () => {
     expect(formLabel('tv', 'zh')).toBe('TV / 大屏')
     expect(formLabel('tv', 'en')).toBe('TV / Large screen')

@@ -220,8 +220,25 @@ const rootStyle = computed(() => {
 .pf-tabbar :deep(*) { flex: 1; text-align: center; font-size: calc(11px * 1); color: #999; }
 
 /* ── 拓扑：duo（折叠屏——主图 + 详情双列） ── */
-.topo-duo .pf-body { display: grid; grid-template-columns: minmax(150px, 42%) 1fr; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); align-items: start; }
-.topo-duo .pf-info { display: flex; flex-direction: column; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); }
+/* ★折叠屏真双窗格（2026-09-26 报告 P0-1）：等宽 1:1 + 左栏撑满
+   （此前 42/58 非对称 + align-items:start → 左栏仅一图，展开后 2/3 空置） */
+.topo-duo .pf-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: calc(var(--pf-gap) * var(--pf-gap-dense));
+  align-items: stretch;
+  min-height: 0;
+}
+.topo-duo .pf-media { align-self: stretch; display: flex; }
+.topo-duo .pf-media > :deep(*) { width: 100%; }
+.topo-duo .pf-info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pf-gap) * var(--pf-gap-dense));
+  justify-content: center;
+  min-width: 0;
+}
 .topo-duo .pf-recommend { grid-column: 1 / -1; }
 
 /* ── 拓扑：rail-split（平板——侧栏 + 主体分栏） ── */

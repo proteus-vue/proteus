@@ -220,6 +220,8 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
             :style="frameStyle"
           >
             <span v-if="target.profile.frame.notch" class="notch" aria-hidden="true" />
+            <!-- ★折叠屏铰链折痕（报告 P1-2：内容不得跨折痕——此处为视觉提示） -->
+            <span v-if="target.profile.frame.hinge" class="hinge" aria-hidden="true" />
             <div v-if="target.profile.frame.statusBar" class="statusbar">
               <span>9:41</span>
               <span>▮▮▮ ⌁</span>
@@ -352,6 +354,17 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
   border: 2px solid var(--line);
   overflow: hidden;
   background: #f7f8fa;
+}
+.hinge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.06));
+  z-index: 4;
+  pointer-events: none;
 }
 .notch {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
