@@ -21,6 +21,10 @@ pub struct RenderNode {
     pub props: serde_json::Value,
     pub children: Vec<RenderNode>,
     pub loc: SourceLoc,
+    /// ★2026-09-26 文本保留（与 TS 侧 additive 对齐——修「渲染 IR 丢静态文本」）：
+    ///   type="#text" 节点的字面内容；动态插值 = type="#text" + props.expr（编译期不求值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

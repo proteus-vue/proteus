@@ -232,6 +232,7 @@ fn main() {
                     props: serde_json::Value::Object(serde_json::Map::new()),
                     children: Vec::new(),
                     loc: ir::SourceLoc { line: 1, column: 1 },
+                    text: None,
                 },
             },
             semantic: ir::SemanticIR {
