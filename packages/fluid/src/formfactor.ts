@@ -201,9 +201,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 198, height: 242 },
     distance: 'glance', // 抬腕一瞥
     // 视觉语言：紧凑大字（小屏一瞥可读）· 浅色 · 无焦点环
-    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', focus: 'none', ratio: { baseFont: 12, ref: 240, min: 0.72, max: 1.6 } },
+    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', focus: 'none', ratio: { baseFont: 13, ref: 198, min: 0.9, max: 1.6 } }, // ★ref 对齐真机 198（审查：曾 240 → 真机偏小 21%）
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
-    frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: false, radius: 34 },
+    frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: false, radius: 34 }, // 展示壳上限宽 240（真机 198——k>1 时放大展示）
     caps: { ...CAPS_BASE, crown: true }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
   },
   phone: {
@@ -216,7 +216,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 390, height: 844 },
     distance: 'arm', // 臂长
     // 视觉语言：常规触控（浅色 · 单列大热区 · 无焦点环）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 11, ref: 300, min: 0.7, max: 1.5 } },
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 13, ref: 300, min: 0.7, max: 1.5 } }, // ★触控正文（审查：真机 390pt 下 ≈16.9pt ≈ HIG 17pt）
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '9/16', maxWidth: 300, notch: true, statusBar: true, radius: 22 },
     caps: { ...CAPS_BASE, skuMulti: true, tabs: true, dense: true, drawer: true, notch: true },
@@ -260,7 +260,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 1440, height: 900 },
     distance: 'desk', // 桌面臂长（信息密度最高）
     // 视觉语言：桌面密排（浅色 · 三栏 · hover 反馈 · 键盘焦点环细）
-    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', focus: 'ring', ratio: { baseFont: 12, ref: 620, min: 0.62, max: 1.45 } }, // 键盘 Tab 可达 → 焦点环可见
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', focus: 'ring', ratio: { baseFont: 13, ref: 620, min: 0.62, max: 1.45 } }, // ★桌面字 ≥ 平板（审查：曾 12 < 12.5） // 键盘 Tab 可达 → 焦点环可见
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/10', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     caps: { ...CAPS_BASE, hover: true, skuMulti: true, sidebar: true, multiCol: true, dense: true, keyboard: true },
@@ -275,7 +275,10 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 1280, height: 480 },
     distance: 'dashboard', // 驾驶位
     // ★视觉语言：驾驶暗色舱（暗底 + 高亮大热区瓦片 + 暖橙强调 + 焦点环粗——驾驶员余光可辨）
-    visual: { theme: 'dark', bg: '#10142a', surface: '#ffffff', text: '#10142a', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
+    // ★色值修正（2026-09-26 专家审查）：text 曾 == bg（#10142a）→ 标题对比度 1.00:1 完全隐形；
+    //   surface 曾 = #ffffff → 夜间白块眩光（17.1:1）且暖橙价格在白底仅 1.81:1。
+    //   改为浅色文字 + 半透明卡面（对齐 TV 写法）→ 价格 #ffb13d on 暗底 = 10.05:1
+    visual: { theme: 'dark', bg: '#10142a', surface: 'rgba(255,255,255,0.10)', text: '#eef2ff', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 15, ref: 640, min: 0.65, max: 1.8 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/9', maxWidth: 640, notch: false, statusBar: false, radius: 14 },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
@@ -291,7 +294,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     viewport: { width: 1920, height: 1080 },
     distance: '10ft', // 客厅沙发距离
     // ★视觉语言：10ft 沉浸暗色（深蓝底 + 半透明海报胶囊 + 暖橙价格 + 焦点环粗）
-    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 14, ref: 620, min: 0.68, max: 2.2 } },
+    // ★10ft 度量修正（专家审查：14px 相对 PC 12px 只大 1.17×，而观看距离差 5×；
+    //   1080p 实机 30.8px ≈ 15.4sp 低于 Android TV 正文下限 16sp）→ baseFont 18 / max 2.6
+    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', focus: 'ring', ratio: { baseFont: 18, ref: 620, min: 0.68, max: 2.6 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/9', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     // ★TV 能力画像：10ft 远距离 → 不做高密度信息、无 hover（遥控器）、无侧栏（水平海报流主导）
@@ -417,7 +422,9 @@ export function resolveFluidMetrics(containerWidth: number, profile: FormProfile
     clamped = 'max'
   }
   const px = (m: number): string => `${Math.round(r.baseFont * k * m * 100) / 100}px`
-  const control = profile.caps.dpad ? 3.6 : 3.0 // 遥控形态热区更大
+  // ★热区（2026-09-26 专家审查）：遥控/车机形态须有**绝对下限**（AAOS 建议主操作 ≥76dp）
+  //   此前纯倍数（baseFont×k×3.6）在窄容器下只有 35px——行车中按不准
+  const control = profile.caps.dpad ? Math.max(3.6, 76 / (r.baseFont * k)) : 3.0
   return {
     k: Math.round(k * 100) / 100,
     clamped,
@@ -496,6 +503,25 @@ export function validateFormProfiles(
     }
     if (p.caps.focusRows && p.input !== 'remote') problems.push(`${f}: 焦点行要求遥控输入`)
     if (!(p.visual.bg && p.visual.text && p.visual.brand)) problems.push(`${f}: 视觉语言缺关键色`)
+    // ★对比度护栏（专家审查实锤「车机标题隐形」）：正文/背景须达 WCAG AA 4.5:1
+    const contrast = (a: string, b: string): number => {
+      const lum = (hex: string): number => {
+        const h = hex.replace('#', '')
+        const rgb = [0, 2, 4].map((i) => Number.parseInt(h.slice(i, i + 2), 16) / 255)
+        const lin = rgb.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+        return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!
+      }
+      const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x)
+      return (l1! + 0.05) / (l2! + 0.05)
+    }
+    if (/^#[0-9a-f]{6}$/i.test(p.visual.text) && /^#[0-9a-f]{6}$/i.test(p.visual.bg)) {
+      const c = contrast(p.visual.text, p.visual.bg)
+      if (c < 4.5) problems.push(`${f}: 正文/背景对比度 ${c.toFixed(2)}:1 < 4.5:1（文字不可读）`)
+    }
+    if (/^#[0-9a-f]{6}$/i.test(p.visual.accent) && /^#[0-9a-f]{6}$/i.test(p.visual.bg)) {
+      const c = contrast(p.visual.accent, p.visual.bg)
+      if (c < 3) problems.push(`${f}: 强调色/背景对比度 ${c.toFixed(2)}:1 < 3:1（价格类信息不可读）`)
+    }
   }
   return problems
 }

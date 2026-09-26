@@ -113,6 +113,8 @@ const recs = [
 
 .pf-sku { display: flex; flex-wrap: wrap; gap: 8px; }
 .fp-sku {
+  flex: 0 0 auto;
+  white-space: nowrap;
   padding: calc(var(--pf-u) * 0.5) calc(var(--pf-u) * 0.8);
   border: 1px solid color-mix(in srgb, var(--pf-text, #17171f) 18%, transparent);
   border-radius: var(--pf-radius, 8px);

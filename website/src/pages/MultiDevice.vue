@@ -76,10 +76,15 @@ const frameWidth = computed(() => Math.round(Math.min(target.value.profile.frame
 /** ★设备帧样式（真实 mockup：比例 + 帧宽 + 圆角——由画像 frame 驱动，代码零硬编码） */
 const frameStyle = computed(() => {
   const f = target.value.profile.frame
+  const v = target.value.profile.visual
   return {
     aspectRatio: f.ar.replace('/', ' / '),
     width: `${frameWidth.value}px`,
     borderRadius: `${f.radius}px`,
+    // ★帧/内容底色随画像（暗色形态不露浅色底——专家审查：车机/TV 沉浸被破坏）
+    background: v.bg,
+    // ★顶部让位仅在声明状态栏时生效
+    '--frame-top': f.statusBar ? '24px' : '0px',
   }
 })
 
@@ -357,14 +362,11 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
   height: 24px; background: #fff; display: flex; align-items: center; justify-content: space-between;
   padding: 0 12px; font-size: 9.5px; color: #556; border-bottom: 1px solid #eef0f6; flex-shrink: 0;
 }
-.app-body { position: absolute; inset: 0; }
-.frame.has-notch .app-body { top: 24px; }
-.frame:not(.has-notch) .app-body { top: 24px; }
-.frame:has(.statusbar) .app-body { top: 24px; }
-.frame .app-body { overflow: auto; }
-/* 帧内滚动（真实设备行为：内容超出时设备内滚动，而非被裁切） */
-.frame .app-body::-webkit-scrollbar { width: 4px; }
-.frame .app-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.18); border-radius: 2px; }
+/* ★帧顶偏移条件化（2026-09-26 专家审查）：此前三条规则全为 top:24px（无条件）→
+   无状态栏形态（PC/车机/TV/手表）白吃 24px 并在暗色形态露出浅色帧底（破坏沉浸）。
+   改为：仅当画像声明 statusBar 时才让出顶部位。 */
+.app-body { position: absolute; inset: 0; top: var(--frame-top, 0px); }
+/* 帧内滚动由内容层（p-formfactor 的 .pf-body）负责，外层不叠加滚动容器 */
 .frame .app-body > * { height: 100%; }
 
 /* 右侧面板 */
