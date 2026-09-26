@@ -17,7 +17,50 @@
 
 ---
 
-## 当前状态速览（最近一次更新：2026-09-27 用户实测四报收口）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-27 worklet 文档补页 + 验证纪律）★新会话以此为准
+
+### ★worklet 官网缺页（已补）+ ★★部署验证纪律（三次踩坑后定稿）
+
+**一句话**：用户问「是不是没实现 worklet？官网手册没这个」——**实现是真的，官网整包缺页**（生成器 `SOURCES` 未登记该包）；已补 3 页（zh 34 + EN 34）+ **包级覆盖门禁**，并在官网搜索实测可搜到。同时把「部署后验证」的纪律彻底定稿（此前我三次用错方法，浪费用户时间）。
+
+**① worklet 实现现状（回答用户问题）**
+- **真实实现**（非空壳）：`packages/worklet`（408 行）——封装官方 `wx.worklet`
+  （`shared`/`derived`/`timing`/`spring`/`decay`/`runOnJS`/`runOnUI`/`Easing` + `applyAnimatedStyle`），
+  非 Skyline **诚实降级** JS 线程 rAF 插值；`tests/worklet.test.ts` 15/15；
+  真实消费者 = `packages/components/runtime/capability.ts` 的 `hasWorklet()`。
+- **缺页根因**：`website/scripts/gen-primitives.mjs` 的 `SOURCES` 只登记 desktop/gesture/api 三包 →
+  worklet **整包未被遍历** → docs-registry glob 收不到 → 搜索无结果。与 E30 useMCP 缺页同类但更根本
+  （不是文件级白名单漏项，而是**包级未登记**），而既有覆盖度校验只对「已登记源」做文件级校验 → **不可见**。
+
+**② 本次交付（提交 `6c4682c9` + 部署 `40b5c07f`，线上浏览器实测通过）**
+- `SOURCES` 增 worklet（group `渲染原语` / prefix `wl-` / EN `Rendering primitives`）；出页 wl-easing / wl-runtime / wl-types。
+- ★**家族模板分支 `familyOf()`**：worklet 初版继承 desktop 措辞时写出**错误内容**
+  （「注入式可在逻辑层跑」「createDesktopDirectives()」）→ 现加专属分支：来源 callout、
+  端矩阵（**Skyline 首要**：MP-Skyline ✅ / MP-WebView ✅降级 / Web ✅降级 / Headless ✅ / 原生 🟡）、
+  用法与降级（入口三步 / `worklet:style` 编译器透传 / `hasWorklet()===false` 诚实降级 / 真实消费）。
+  EN overlay + EN 端矩阵 + 总览页家族表（zh/EN 双语结构对齐）。
+- ★**包级文档覆盖门禁**：所有含 `src/*.ts` 的包必须二选一（登记 SOURCES / 在 `COVERED_PACKAGES` 声明归属）。
+  **上线即抓到两个漏掉的包**：`compat-miniprogram`、`devtools`（已按真实归属登记）。
+  破坏性验证：移除一条声明 → 红并指名；恢复 → 34/34 绿。
+- 线上实测（真浏览器）：37 个原语链接含 wl-*、搜索 `worklet` 出 3 条、侧栏「渲染原语 3」。
+
+**③ ★★部署验证纪律（本条最重要——我在此连错三次）**
+| 我用过的错误方法 | 为什么错 | 
+|---|---|
+| 轮询 `/multi-device` 的 HTML 抓 CSS 文件名 | **HTML 有 CDN 缓存** → 线上已更新我仍见旧哈希 |
+| grep **主 bundle** 找文档标记 | 文档内容在**独立 chunk** 里 → 主 bundle 必然找不到 → 假报 old |
+| JS 文件名已变仍判 old | 名字变化本身就是部署生效的证据；判据与证据不匹配 |
+**正确做法（唯一）**：
+1. **用项目自带工具** `pnpm check:live`（= `website/scripts/verify-live.mjs`，已在 pages.yml 的
+   「部署后核验」步骤里跑）——它比对**承载改动的入口哈希**并带 CDN 传播重试；
+2. 或**真浏览器量 DOM**（权威口径）：打开线上页面断言可见事实（导航项/搜索结果/几何/`data-pf-*`）；
+3. **不要手搓**：凡「取远程 → 比字符串 → 循环等待」的自制脚本，先查仓库里有没有现成工具
+   （`verify-live.mjs` 存在已久，我却重复造了更差的）；
+4. **判定即证据**：改了文档就验文档可见性、改了样式就验 computed style + 资产哈希，
+   不要拿 A 的证据去证 B。
+5. ★**效率兜底**：若验证需要 >2 轮循环或 >1 分钟，直接告诉用户「部署已触发，可自行刷新查看」——
+   用户的目视检查比我反复轮询更快（用户原话：「等你验证还不如我直接去看」）。
+
 
 ### ★★四报收口：构图层（新类别）+ 线上验证方法纠正
 
