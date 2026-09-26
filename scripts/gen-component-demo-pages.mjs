@@ -1579,6 +1579,1885 @@ function onPickError(msg: unknown): void {
     ],
     styles: `.cap-entry { background: #f2fbf5; border-radius: var(--sp-radius-sm); padding: var(--sp-3); margin-bottom: var(--sp-2); }`,
   },
+
+// ───────────────────────── ②b 手写页迁移（2026-09-26）：26 个早期手写页（批次 1~3）并入 SSOT 生成 ─────────────────────────
+  {
+    file: 'p-ad',
+    title: "p-ad 广告位",
+    subtitle: "页面外壳 · 广告容器（Web 占位 / MP 原生）",
+    codes: [
+      ['banner', '<p-ad unit-id="adunit-xxxx" ad-type="banner" />'],
+      ['video', '<p-ad unit-id="adunit-xxxx" ad-type="video" :ad-intervals="30" />'],
+      ['theme', '<p-ad unit-id="adunit-xxxx" ad-theme="black" />'],
+      ['slot', '<p-ad><p-view>自建广告内容</p-view></p-ad>'],
+    ],
+    demos: [
+      {
+        title: "Banner 广告",
+        desc: "unit-id 为必填；Web 端显示占位（无广告联盟标准）",
+        code: 0,
+        demo: `<p-ad unit-id="adunit-demo-banner" ad-type="banner" />`,
+      },
+      {
+        title: "视频广告与刷新间隔",
+        desc: "ad-type=video；ad-intervals ≥30 秒自动刷新",
+        code: 1,
+        demo: `<p-ad unit-id="adunit-demo-video" ad-type="video" :ad-intervals="30" />`,
+      },
+      {
+        title: "主题",
+        desc: "ad-theme=black 深色主题（★官方 ad-theme）",
+        code: 2,
+        demo: `<p-ad unit-id="adunit-demo-theme" ad-theme="black" />`,
+      },
+      {
+        title: "自建广告（插槽）",
+        desc: "Web 端可用默认插槽替换占位，接入宿主自建广告桥",
+        code: 3,
+        demo: `<p-ad>
+  <p-view class="custom-ad"><p-text>自建广告位（插槽内容）</p-text></p-view>
+</p-ad>`,
+        hasOutput: true,
+        output: `插槽生效：占位文案被替换为自建内容`,
+      },
+    ],
+    styles: `.custom-ad { padding: var(--sp-4); background: linear-gradient(135deg, #f0ecff, #e6f7ff); border-radius: 6px; text-align: center; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-button',
+    title: "p-button 按钮",
+    subtitle: "触发操作的按钮 · 双端同源码",
+    state: `// 演示状态
+const count = ref(0)
+const loading = ref(false)
+const lastEvent = ref('（暂无）')
+const throttleCount = ref(0)
+// ★主题皮肤（编译器通道）：theme 值 → 组件根节点单类变体，样式定义在组件自身 scoped wxss
+const THEME_KEYS = ['', 'brand', 'success', 'danger', 'ghost']
+const dynTheme = ref('brand')
+const themeIdx = ref(1)
+function cycleTheme() {
+  themeIdx.value = (themeIdx.value + 1) % THEME_KEYS.length
+  dynTheme.value = THEME_KEYS[themeIdx.value]
+}
+// ★平台宏演示：这些宏在构建期被替换为字面量 → 反映当前构建目标。
+// ★模板里用宏必须**经 setup 绑定**（2026-09-24 类型检查暴露）：Vue 模板只解析 setup 返回值，
+//   裸全局宏在模板里会被当作「组件实例属性」查询 → vue-tsc 报
+//   「Property '__MP__' does not exist」（脚本区用同一宏却正常）。
+//   故先读到具名常量，模板引用具名常量（宏替换仍由编译器完成）。
+const mpMacro: boolean = __MP__
+const webMacro: boolean = __WEB__
+const targetMacro: string = __TARGET__
+const isMpBuild = mpMacro
+// open-type 双端事件回显
+const openTypeLog = ref('（点击上面按钮）')
+function onOpenTypeContact() {
+  openTypeLog.value = 'contact 触发 ✓（MP 原生 / Web 降级同名）'
+}
+function onOpenTypeShare() {
+  openTypeLog.value = 'share 触发 ✓（Web-only 降级；MP 走原生分享面板）'
+}
+function onContact(e: unknown) {
+  lastEvent.value = 'contact 事件（开放能力）'
+}
+function onWebOnlyClick() {
+  lastEvent.value = 'Web-only 按钮点击'
+}
+
+// 演示 1：基础点击
+function onBasicClick() {
+  count.value++
+  lastEvent.value = \`click @ \${Date.now() % 100000}\`
+}
+// 演示 2：加载态（点击后 1.2s 恢复）
+function onLoadingClick() {
+  loading.value = true
+  lastEvent.value = 'loading 开始'
+  setTimeout(() => {
+    loading.value = false
+    lastEvent.value = 'loading 结束'
+  }, 1200)
+}
+// 演示 4：节流（throttle=800ms 内重复点击被忽略）
+function onThrottledClick() {
+  throttleCount.value++
+}`,
+    codes: [
+      ['basic', '<p-button @click="onBasicClick">点击我</p-button>'],
+      ['disabled', '<p-button :disabled="true">禁用按钮</p-button>'],
+      ['loading', '<p-button :loading="loading" @click="submit">提交</p-button>'],
+      ['throttle', '<p-button :throttle="800" @click="onClick">连点试试</p-button>'],
+      ['attrs', '<p-button size="mini">mini</p-button><p-button type="primary">primary</p-button><p-button type="warn">warn</p-button><p-button :plain="true">镂空</p-button>'],
+      ['themes', '<p-button theme="brand">品牌</p-button><p-button theme="success">成功</p-button><p-button theme="danger">危险</p-button><p-button theme="ghost">幽灵</p-button>'],
+      ['themeDynamic', '<p-button :theme="dynTheme" @click="cycleTheme">切换主题</p-button>'],
+      ['macro', '<p-button v-if="mpMacro" open-type="contact">客服</p-button>\n<view v-if="__TARGET__ === \'web\'">仅 Web</view>'],
+      ['openType', '<p-button open-type="contact" @contact="onContact">客服</p-button>\n<p-button open-type="share" @share="onShare">分享</p-button>'],
+    ],
+    demos: [
+      {
+        title: "基础用法",
+        desc: "默认按钮，点击触发 click 事件",
+        code: 0,
+        demo: `<p-button @click="onBasicClick">点击我</p-button>`,
+        hasOutput: true,
+        output: `结果：点击次数 {{ count }}`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 禁用交互；MP 端透传原生 disabled",
+        code: 1,
+        demo: `<view class="row">
+  <p-button>可用按钮</p-button>
+  <p-button :disabled="true">禁用按钮</p-button>
+</view>`,
+      },
+      {
+        title: "加载态",
+        desc: "loading 期间自动禁用点击（透传 MP 原生 loading）",
+        code: 2,
+        demo: `<p-button :loading="loading" @click="onLoadingClick">提交</p-button>`,
+        hasOutput: true,
+        output: `结果：状态 {{ loading ? '加载中…' : '就绪' }}`,
+      },
+      {
+        title: "点击节流",
+        desc: "throttle=800ms：间隔内的重复点击被忽略（防连点重复提交）",
+        code: 3,
+        demo: `<p-button :throttle="800" @click="onThrottledClick">连点试试</p-button>`,
+        hasOutput: true,
+        output: `结果：生效 {{ throttleCount }} 次 · 快速连点计数明显少于点击次数即节流生效`,
+      },
+      {
+        title: "事件回显",
+        desc: "click 事件的实时回显（弹起气泡 + 组合事件语义）",
+        demo: `<p-button @click="onBasicClick">触发事件</p-button>`,
+        hasOutput: true,
+        output: `结果：最后事件 {{ lastEvent }}`,
+      },
+      {
+        title: "官方属性对齐",
+        desc: "size / type / plain —— 对齐小程序原生 button 视觉变体",
+        code: 4,
+        demo: `<view class="row">
+  <p-button size="mini">mini</p-button>
+  <p-button type="primary">primary</p-button>
+  <p-button type="warn">warn</p-button>
+  <p-button :plain="true">镂空</p-button>
+</view>`,
+      },
+      {
+        title: "主题皮肤（编译器通道）",
+        desc: "theme 属性 → 编译期落成组件根节点单类变体，样式在组件自身 scoped wxss 内定义（不跨组件边界 → 绕过小程序样式隔离）",
+        code: 5,
+        demo: `<view class="row">
+  <p-button theme="brand">品牌</p-button>
+  <p-button theme="success">成功</p-button>
+  <p-button theme="danger">危险</p-button>
+  <p-button theme="ghost">幽灵</p-button>
+</view>`,
+      },
+      {
+        title: "主题动态切换",
+        desc: "theme 支持运行时变量（:theme 绑定）——点击循环切换，无需刷新页面",
+        code: 6,
+        demo: `<view class="row">
+  <p-button :theme="dynTheme" @click="cycleTheme">切换主题</p-button>
+</view>`,
+        hasOutput: true,
+        output: `当前主题：{{ dynTheme || '（框架缺省）' }}`,
+      },
+      {
+        title: "平台条件显隐（编译期宏）",
+        desc: "标准 v-if + 构建期宏 __MP__/__WEB__/__TARGET__——编译期静态裁剪，死分支不进产物（替代 uni-app 的 #ifdef，零新语法）",
+        code: 7,
+        demo: `<view class="row">
+  <!-- ★仅小程序：open-type 开放能力（Web 无对等，编译期整块消除） -->
+  <p-button v-if="mpMacro" open-type="contact" @contact="onContact">客服会话（仅小程序）</p-button>
+  <p-button v-if="webMacro" @click="onWebOnlyClick">Web 端占位</p-button>
+  <view v-if="targetMacro === 'web'" class="macro-note">当前构建目标：Web</view>
+  <view v-else class="macro-note">当前构建目标：小程序</view>
+</view>`,
+      },
+      {
+        title: "open-type 双端事件契约",
+        desc: "同一 @contact 两端都触发：MP 原生开放能力；Web 无对等 → 发同名降级事件（事件名与 MP 对齐，无需条件编译）",
+        code: 8,
+        demo: `<view class="row">
+  <p-button open-type="contact" @contact="onOpenTypeContact">客服会话（@contact）</p-button>
+  <p-button open-type="share" @share="onOpenTypeShare">分享（@share，Web 降级）</p-button>
+</view>`,
+        hasOutput: true,
+        output: `结果：{{ openTypeLog }}`,
+      },
+    ],
+    styles: `/* ★align-items:center（2026-09-13）：裸 flex 默认 align-items:stretch 会把矮按钮（mini）**拉伸**到
+   与最高按钮同高——Web 端实测 mini 被拉到 37px，而小程序端保持自然高 32px → 用户看到「两端尺寸差别大」。
+   显式 center 让各按钮保持自身高度（两端一致）。 */
+.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}
+.macro-note {
+  display: block;
+  font-size: 12px;
+  color: var(--sp-text-3);
+  padding: var(--sp-2) 0;
+}`,
+  },
+  {
+    file: 'p-camera',
+    title: "p-camera 相机",
+    subtitle: "内容基元 · 相机预览与拍照（Web 需授权）",
+    state: `const state = ref('等待相机事件…')
+function onReady() { state.value = 'ready：Web 相机已启动' }
+function onInitDone() { state.value = 'initdone：MP 相机初始化完成' }
+function onError(e: unknown) { state.value = 'error：' + JSON.stringify(e) }`,
+    codes: [
+      ['base', '<p-camera @initdone="onInitDone" />'],
+      ['front', '<p-camera device-position="front" flash="on" />'],
+      ['res', '<p-camera resolution="high" frame-size="large" />'],
+      ['scan', '<p-camera mode="scanCode" @scancode="onScanCode" />'],
+    ],
+    demos: [
+      {
+        title: "相机预览",
+        desc: "MP 原生 <camera>；Web getUserMedia（未授权时显示明确提示）",
+        code: 0,
+        demo: `<p-camera @ready="onReady" @initdone="onInitDone" @error="onError" />`,
+        hasOutput: true,
+        output: `{{ state }}`,
+      },
+      {
+        title: "朝向与闪光灯",
+        desc: "device-position=front 前置；flash=on 强制闪光",
+        code: 1,
+        demo: `<p-camera device-position="front" flash="on" />`,
+      },
+      {
+        title: "分辨率与帧尺寸",
+        desc: "resolution / frame-size（★仅初始化生效，不可动态修改）",
+        code: 2,
+        demo: `<p-camera resolution="high" frame-size="large" />`,
+      },
+      {
+        title: "扫码模式",
+        desc: "mode=scanCode：MP 端原生扫码；Web 端无对等能力（诚实降级为普通预览）",
+        code: 3,
+        demo: `<p-camera mode="scanCode" @error="onError" />`,
+      },
+    ],
+    styles: `.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-canvas',
+    title: "p-canvas 画布",
+    subtitle: "内容基元 · 2d / webgl 上下文 + 高清倍率",
+    state: `const info = ref('canvas-id 已生成；改用 canvas-id 属性可自定义句柄标识')`,
+    codes: [
+      ['base', '<p-canvas :width="240" :height="140" />'],
+      ['id', '<p-canvas canvas-id="main-canvas" :width="240" :height="140" />'],
+      ['scroll', '<p-canvas :disable-scroll="true" />'],
+      ['dpr', '<p-canvas :resolution="2" :width="120" :height="80" />'],
+    ],
+    demos: [
+      {
+        title: "基础画布",
+        desc: "engine 缺省 2d；canvas-id 由组件自动生成保证唯一",
+        code: 0,
+        demo: `<p-canvas :width="240" :height="140" />`,
+      },
+      {
+        title: "自定义 canvas-id",
+        desc: "canvas-id 是绘制上下文的句柄标识（指定后无需再传 type）",
+        code: 1,
+        demo: `<p-canvas canvas-id="main-canvas" :width="240" :height="140" />`,
+        hasOutput: true,
+        output: `{{ info }}`,
+      },
+      {
+        title: "禁止画布内滚动",
+        desc: "disable-scroll：画布中的手势不触发页面滚动/下拉刷新",
+        code: 2,
+        demo: `<p-canvas :disable-scroll="true" :width="240" :height="140" />`,
+      },
+      {
+        title: "高清倍率",
+        desc: "resolution=2 → 内部分辨率翻倍（CSS 尺寸不变，渲染更清晰）",
+        code: 3,
+        demo: `<p-canvas :resolution="2" :width="120" :height="80" />`,
+      },
+    ],
+    styles: `.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-checkbox',
+    title: "p-checkbox 多选",
+    subtitle: "复选框 · 自绘小方框双端一致",
+    state: `const on = ref(true)
+const onColor = ref(true)
+const lastEvent = ref('（暂无）')
+
+// ★事件契约：change 载荷 { detail: { value: 选中态, name: 群选标识 } }
+// ★跨端事件载荷读法（框架约定）：组件 emit 裸载荷 → Web 端 handler 直接收到载荷，
+//   MP 端收到的事件对象 \`e.detail\` 才是载荷 → \`e?.detail ?? e\` 两端通吃。
+function payload(e: unknown): { value?: unknown; name?: string } {
+  const p = e as { detail?: { value?: unknown; name?: string } }
+  return (p?.detail ?? p) as { value?: unknown; name?: string }
+}
+function onChange(e: unknown) {
+  const d = payload(e)
+  lastEvent.value = \`\${d?.name || '单个'} → \${d?.value}\`
+}
+
+// 群选：value 作标识，选中态各自 v-model
+const fruits = ref([
+  { id: 'apple', name: '苹果' },
+  { id: 'banana', name: '香蕉' },
+  { id: 'cherry', name: '樱桃' },
+])
+// ★MP 约束：ref 不带类型实参（初值须可静态求值）；类型用「字面量 as 断言」（断言在字面量上，编译期剥离后仍是字面量）
+// ★类型（2026-09-24 类型检查暴露）：模板用 picked[f.id] 索引 → 需索引签名，
+//   否则 TS7053「不能用作索引类型」（此前页面不在类型检查范围内的漏网项）
+const picked = ref<Record<string, boolean>>({ apple: true, banana: false, cherry: false })
+const pickedCount = computed(() => Object.values(picked.value).filter(Boolean).length)
+function onGroupChange(e: unknown) {
+  // ★跨端读法：e?.detail ?? e（Web 直接收载荷、MP 收 e.detail）
+  const raw = e as { detail?: { name?: string; value?: unknown }; name?: string; value?: unknown }
+  const d = (raw?.detail ?? raw) as { name?: string; value?: unknown }
+  // ★整体替换写法：ref 无类型实参、初值可静态求值；拼新对象 → 编译器走 setData 路径。
+  //   （ref 对象「嵌套字段写」亦受框架支持，见 registry 的 script/ref-nested-write；
+  //    注释内不写具体代码形态，避免被编译器规则误匹配。）
+  if (d?.name) picked.value = { ...picked.value, [d.name]: Boolean(d.value) }
+}`,
+    codes: [
+      ['basic', '<p-checkbox v-model="on" @change="onChange">同意协议</p-checkbox>'],
+      ['indeterminate', '<p-checkbox :model-value="false" :indeterminate="true">半选</p-checkbox>'],
+      ['disabled', '<p-checkbox :model-value="true" disabled>禁用（已选）</p-checkbox>'],
+      ['color', '<p-checkbox v-model="on" color="#7c5cff">品牌紫</p-checkbox>'],
+      ['group', '<p-checkbox v-for="f in fruits" :key="f.id" :value="f.id" :model-value="picked[f.id]" @change="onGroupChange">{{ f.name }}</p-checkbox>'],
+    ],
+    demos: [
+      {
+        title: "基础用法（受控 v-model）",
+        desc: "v-model 受控；切换触发 change（载荷含选中态与标识）",
+        code: 0,
+        demo: `<view class="row">
+  <p-checkbox v-model="on" value="agree" @change="onChange">同意协议</p-checkbox>
+</view>`,
+        hasOutput: true,
+        output: `状态：{{ on ? '已勾选' : '未勾选' }} · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "半选态",
+        desc: "indeterminate 表达「部分选中」（★框架扩展；常用于全选组）",
+        code: 1,
+        demo: `<view class="row">
+  <p-checkbox :model-value="false" :indeterminate="true">半选</p-checkbox>
+  <p-checkbox :model-value="true">全选</p-checkbox>
+  <p-checkbox :model-value="false">未选</p-checkbox>
+</view>`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可交互 + 淡化（★两端状态视觉统一）",
+        code: 2,
+        demo: `<view class="row">
+  <p-checkbox :model-value="true" disabled>禁用（已选）</p-checkbox>
+  <p-checkbox :model-value="false" disabled>禁用（未选）</p-checkbox>
+</view>`,
+      },
+      {
+        title: "自定义颜色",
+        desc: "color 设定选中色（★官方 color 属性；缺省微信绿）",
+        code: 3,
+        demo: `<view class="row">
+  <p-checkbox v-model="onColor" color="#7c5cff">品牌紫</p-checkbox>
+</view>`,
+      },
+      {
+        title: "群选（value 标识）",
+        desc: "多个 checkbox 用 value 区分标识；change 携带 name 回传选中项",
+        code: 4,
+        demo: `<view class="row">
+  <p-checkbox
+    v-for="f in fruits"
+    :key="f.id"
+    :model-value="picked[f.id]"
+    :value="f.id"
+    @change="onGroupChange"
+  >{{ f.name }}</p-checkbox>
+</view>`,
+        hasOutput: true,
+        output: `已选 {{ pickedCount }} / {{ fruits.length }} 项`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-draggable',
+    title: "p-draggable 可拖拽",
+    subtitle: "手势原语 · 容器内拖动（MP movable-view / Web Pointer）",
+    state: `const pos1 = ref('x: 0, y: 0')
+const pos2 = ref('x: 0, y: 0')
+const pos3 = ref('x: 0, y: 0')
+
+function onChange1(e: unknown) { const d = e as { x?: number; y?: number }; pos1.value = 'x: ' + (d?.x ?? 0) + ', y: ' + (d?.y ?? 0) }
+function onChange2(e: unknown) { const d = e as { x?: number; y?: number }; pos2.value = 'x: ' + (d?.x ?? 0) + ', y: ' + (d?.y ?? 0) }
+function onChange3(e: unknown) { const d = e as { x?: number; y?: number }; pos3.value = 'x: ' + (d?.x ?? 0) + ', y: ' + (d?.y ?? 0) }`,
+    codes: [
+      ['base', '<p-draggable direction="all" @change="onChange">拖动我</p-draggable>'],
+      ['snap', '<p-draggable direction="all" :snap-to-grid="24" ghost @change="onChange">网格吸附</p-draggable>'],
+      ['axis', '<p-draggable direction="horizontal" @change="onChange">仅横向</p-draggable>'],
+      ['inertia', '<p-draggable direction="all" inertia :damping="20" :friction="2" out-of-bounds />'],
+    ],
+    demos: [
+      {
+        title: "自由拖动",
+        desc: "direction=all 容器内自由移动；change 回显实时坐标",
+        code: 0,
+        demo: `<p-view class="stage">
+  <p-draggable direction="all" @change="onChange1">
+    <p-view class="chip"><p-text>拖动我</p-text></p-view>
+  </p-draggable>
+</p-view>`,
+        hasOutput: true,
+        output: `{{ pos1 }}`,
+      },
+      {
+        title: "网格吸附 + 拖影",
+        desc: "snap-to-grid=24 吸附到 24px 网格；ghost 拖动时半透明",
+        code: 1,
+        demo: `<p-view class="stage">
+  <p-draggable direction="all" :snap-to-grid="24" ghost @change="onChange2">
+    <p-view class="chip chip--alt"><p-text>吸附 24px</p-text></p-view>
+  </p-draggable>
+</p-view>`,
+        hasOutput: true,
+        output: `{{ pos2 }}`,
+      },
+      {
+        title: "轴向约束 / 禁用",
+        desc: "direction=horizontal 仅横向；disabled 完全禁止拖动",
+        code: 2,
+        demo: `<p-view class="stage stage--short">
+  <p-draggable direction="horizontal" @change="onChange3">
+    <p-view class="chip"><p-text>仅横向</p-text></p-view>
+  </p-draggable>
+  <p-draggable direction="all" disabled>
+    <p-view class="chip chip--off"><p-text>已禁用</p-text></p-view>
+  </p-draggable>
+</p-view>`,
+        hasOutput: true,
+        output: `{{ pos3 }}`,
+      },
+      {
+        title: "惯性 / 阻尼 / 越界",
+        desc: "inertia + damping + friction + out-of-bounds（官方物理族）",
+        code: 3,
+        demo: `<p-view class="stage">
+  <p-draggable direction="all" inertia :damping="20" :friction="2" out-of-bounds>
+    <p-view class="chip chip--alt"><p-text>惯性拖动</p-text></p-view>
+  </p-draggable>
+</p-view>`,
+      },
+    ],
+    styles: `.stage { position: relative; height: 160px; border: 1px dashed var(--p-border, #d8d8dc); border-radius: var(--sp-radius-sm); background: #fafafc; padding: var(--sp-3); overflow: hidden; }
+.stage--short { display: flex; flex-direction: column; gap: var(--sp-3); height: auto; }
+.chip { display: inline-block; padding: var(--sp-2) var(--sp-3); background: #7c5cff; color: #fff; border-radius: 999px; font-size: 13px; }
+.chip--alt { background: #22b573; }
+.chip--off { background: #c8c9cc; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-icon',
+    title: "p-icon 图标",
+    subtitle: "内容基元 · 内置矢量字形，零资源",
+    codes: [
+      ['types', '<p-icon type="success" /><p-icon type="info" /><p-icon type="warn" /><p-icon type="waiting" />'],
+      ['size', '<p-icon name="star" :size="24" color="#ffc300" />'],
+      ['spin', '<p-icon name="waiting" :spin="true" />'],
+    ],
+    demos: [
+      {
+        title: "官方 type 取值",
+        desc: "对齐官方 <icon> 的 type 语义（success/info/warn/waiting…）",
+        code: 0,
+        demo: `<view class="row">
+  <p-icon type="success" />
+  <p-icon type="success_no_circle" />
+  <p-icon type="info" />
+  <p-icon type="warn" />
+  <p-icon type="waiting" />
+  <p-icon type="cancel" />
+  <p-icon type="download" />
+  <p-icon type="clear" />
+</view>`,
+      },
+      {
+        title: "尺寸与颜色",
+        desc: "size 控制字号与盒尺寸；color 同 CSS color",
+        code: 1,
+        demo: `<view class="row">
+  <p-icon name="star" :size="16" color="#ffc300" />
+  <p-icon name="star" :size="24" color="#ffc300" />
+  <p-icon name="heart" :size="24" color="#ef4d4d" />
+  <p-icon name="search" :size="24" color="#1a7af8" />
+</view>`,
+      },
+      {
+        title: "旋转与常用名",
+        desc: "spin 旋转（加载态）；name 走框架字形表",
+        code: 2,
+        demo: `<view class="row">
+  <p-icon name="back" :size="20" />
+  <p-icon name="more" :size="20" />
+  <p-icon name="home" :size="20" />
+  <p-icon name="user" :size="20" />
+  <p-icon name="waiting" :size="20" :spin="true" />
+</view>`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }`,
+  },
+  {
+    file: 'p-image',
+    title: "p-image 图片",
+    subtitle: "内容基元 · 三种裁剪模式 + 懒加载 + 渐显",
+    state: `// ★内联 SVG 必须 **base64** data-URI：Skyline <image> 只完整渲染 base64 编码的 SVG
+//   （URL-encoded 形态真机渲染为**灰色方块**——见 docs/skyline-pitfalls.md / svg-lower.ts 地基实证）。
+// ★★字面量必须**直接内联进 ref()**：\`ref(SOME_CONST)\`（标识符初值）编译器**静态求值不出** → data.img1 = undefined
+//   → MP 端图片 src 为空（真机不显示），而 Web 正常（编译期 inject 保留变量）。见 S33 / S57。
+const img1 = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjN2M1Y2ZmIi8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSI1MiIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC45Ii8+PC9zdmc+')
+const img2 = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMjJiNTczIi8+PHBhdGggZD0iTTEwMCAyMiBMMTUwIDc4IEw1MCA3OCBaIiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjkyIi8+PC9zdmc+')
+const loaded = ref('等待图片 load 事件…')
+function onLoad() {
+  loaded.value = '✅ load 事件已触发（图片载入完成）'
+}`,
+    codes: [
+      ['fill', '<p-image src="…" mode="aspectFill" />'],
+      ['lazy', '<p-image src="…" lazy-load fade-in @load="onLoad" />'],
+      ['menu', '<p-image src="…" show-menu-by-longpress />'],
+    ],
+    demos: [
+      {
+        title: "裁剪模式（mode）",
+        desc: "aspectFill=覆盖 / widthFix=宽满自适应 / scaleToFill=拉伸填充",
+        code: 0,
+        demo: `<view class="row">
+  <view class="frame"><p-image :src="img1" mode="aspectFill" /></view>
+  <view class="frame frame--wide"><p-image :src="img2" mode="widthFix" /></view>
+  <view class="frame"><p-image :src="img1" mode="scaleToFill" /></view>
+</view>`,
+      },
+      {
+        title: "懒加载与渐显",
+        desc: "lazy-load 进入范围才加载；fade-in 加载完成淡入（★官方 lazy-load / fade-in）",
+        code: 1,
+        demo: `<view class="frame"><p-image :src="img1" lazy-load fade-in @load="onLoad" /></view>`,
+        hasOutput: true,
+        output: `{{ loaded }}`,
+      },
+      {
+        title: "长按菜单",
+        desc: "show-menu-by-longpress 长按显示菜单（★官方 show-menu-by-longpress）",
+        code: 2,
+        demo: `<view class="frame"><p-image :src="img1" show-menu-by-longpress /></view>`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap; }
+.frame { width: 100px; height: 100px; overflow: hidden; border-radius: var(--sp-radius-sm); background: #f2f2f4; }
+.frame--wide { width: 200px; height: auto; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-input',
+    title: "p-input 输入框",
+    subtitle: "文本输入 · 受控组件（value + input 回写）",
+    state: `const lastInput = ref('')
+const text = ref('')
+const numVal = ref('')
+const pwdVal = ref('')
+const limited = ref('')
+const lastEvent = ref('（暂无）')
+
+// ★事件载荷契约：p-input emit **{ value }**（无 detail 包裹——见 examples 的正确接法）。
+//   此前误按 MP 原生 e.detail.value 取值 → 恒 undefined → 「输入后结果不变化」（真机+Web 复现）。
+function pickValue(e: unknown): string {
+  const p = e as { value?: string; detail?: { value?: string } }
+  return String(p?.value ?? p?.detail?.value ?? '')
+}
+function onInput(e: unknown) {
+  const v = pickValue(e)
+  lastInput.value = v
+  text.value = v
+}
+function onNumInput(e: unknown) { numVal.value = pickValue(e) }
+function onPwdInput(e: unknown) { pwdVal.value = pickValue(e) }
+function onLimitedInput(e: unknown) { limited.value = pickValue(e) }
+function evt(name: string) {
+  lastEvent.value = name + ' @ ' + (Date.now() % 100000)
+}`,
+    codes: [
+      ['basic', '<p-input placeholder="请输入" @input="onInput" />'],
+      ['controlled', '<p-input :value="text" @input="onInput" />'],
+      ['types', '<p-input type="number" /><p-input type="password" />'],
+      ['maxlength', '<p-input :maxlength="10" />'],
+      ['focus', '<p-input :focus="true" />'],
+      ['disabled', '<p-input :disabled="true" value="禁用内容" />'],
+    ],
+    demos: [
+      {
+        title: "基础用法",
+        desc: "受控输入：@input 事件回传 { value }",
+        code: 0,
+        demo: `<p-input placeholder="请输入内容" @input="onInput" />`,
+        hasOutput: true,
+        output: `结果：实时输入 {{ lastInput || '（空）' }}`,
+      },
+      {
+        title: "受控绑定",
+        desc: "value 受控 + @input 回写（v-model 的双端等价写法）",
+        code: 1,
+        demo: `<p-input :value="text" placeholder="输入后同步到下方" @input="onInput" />`,
+        hasOutput: true,
+        output: `结果：同步值 {{ text || '（空）' }} · 长度 {{ text.length }}`,
+      },
+      {
+        title: "输入类型",
+        desc: "type=number 数字键盘 / type=password 密码遮蔽",
+        code: 2,
+        demo: `<view class="col">
+  <p-input type="number" placeholder="数字键盘" @input="onNumInput" />
+  <p-input type="password" placeholder="密码输入" @input="onPwdInput" />
+</view>`,
+        hasOutput: true,
+        output: `结果：number={{ numVal || '空' }} · password={{ pwdVal ? '已输入' + pwdVal.length + '位' : '空' }}`,
+      },
+      {
+        title: "字数限制",
+        desc: "maxlength=10 限制最大输入长度",
+        code: 3,
+        demo: `<p-input :maxlength="10" placeholder="最多 10 字" @input="onLimitedInput" />`,
+        hasOutput: true,
+        output: `结果：已输入 {{ limited.length }} / 10`,
+      },
+      {
+        title: "自动聚焦",
+        desc: "focus=true 时进入页面即获取焦点（调起键盘）",
+        code: 4,
+        demo: `<p-input :focus="true" placeholder="进入即聚焦" />`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可编辑",
+        code: 5,
+        demo: `<p-input :disabled="true" value="禁用内容" />`,
+      },
+      {
+        title: "事件回显",
+        desc: "focus / blur / confirm 事件实时回显",
+        demo: `<p-input placeholder="聚焦 / 失焦 / 回车试试" @focus="evt('focus')" @blur="evt('blur')" @confirm="evt('confirm')" />`,
+        hasOutput: true,
+        output: `结果：最后事件 {{ lastEvent }}`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-map',
+    title: "p-map 地图",
+    subtitle: "页面外壳 · 地图容器（MP 原生 / Web 宿主槽位）",
+    state: `const near = ref('等待 markertap / regionchange 事件…')
+function onMarkerTap(e: unknown) { near.value = 'markertap: ' + JSON.stringify(e) }
+function onRegionChange(e: unknown) { const d = e as { type?: string }; near.value = 'regionchange: type=' + (d?.type ?? 'unknown') }
+
+// ★字面量直接内联进 ref()（编译器静态求值：标识符初值 → data undefined，见 S33/S57）
+const marker = ref([{ id: 1, latitude: 39.908823, longitude: 116.39747, title: '天安门' }])
+const line = ref([{ points: [{ latitude: 39.908823, longitude: 116.39747 }, { latitude: 39.918823, longitude: 116.40747 }], color: '#7c5cff', width: 4 }])`,
+    codes: [
+      ['base', '<p-map :latitude="39.90" :longitude="116.39" :scale="16" />'],
+      ['marker', '<p-map :markers="marker" @markertap="onMarkerTap" />'],
+      ['scale', '<p-map :min-scale="5" :max-scale="18" />'],
+      ['view', '<p-map :rotate="30" :skew="20" show-compass show-scale />'],
+      ['enable', '<p-map enable-satellite enable-traffic :enable-rotate="false" />'],
+    ],
+    demos: [
+      {
+        title: "基础地图",
+        desc: "latitude / longitude / scale 定位与缩放",
+        code: 0,
+        demo: `<p-map :latitude="39.908823" :longitude="116.39747" :scale="16" :height="220" />`,
+      },
+      {
+        title: "标记点与事件",
+        desc: "markers 标注；点击标记/拖动视野经事件回显（Web 端需宿主接 SDK 才有交互）",
+        code: 1,
+        demo: `<p-map :markers="marker" :height="220" @markertap="onMarkerTap" @regionchange="onRegionChange" />`,
+        hasOutput: true,
+        output: `{{ near }}`,
+      },
+      {
+        title: "缩放范围与路线",
+        desc: "min-scale / max-scale 约束缩放；polyline 绘制路线",
+        code: 2,
+        demo: `<p-map :min-scale="5" :max-scale="18" :polyline="line" :height="220" />`,
+      },
+      {
+        title: "视角与指南针",
+        desc: "rotate / skew 视角倾斜 + 指南针与比例尺",
+        code: 3,
+        demo: `<p-map :rotate="30" :skew="20" show-compass show-scale :height="220" />`,
+      },
+      {
+        title: "图层开关",
+        desc: "卫星图 / 路况 / POI / 建筑物等图层启用族",
+        code: 4,
+        demo: `<p-view class="wrap">
+  <p-map enable-satellite :enable-poi="false" :height="200" />
+</p-view>`,
+      },
+    ],
+    styles: `.wrap { display: block; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-media',
+    title: "p-media 媒体",
+    subtitle: "内容基元 · image / video / audio / live 统一入口",
+    state: `// ★字面量直接内联进 ref()（编译器静态求值：标识符初值 → data undefined，见 S33/S57）
+const cover = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMjIyMjI2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZpbGw9IiNmZmYiIGZvbnQtc2l6ZT0iMTYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuMzVlbSI+5bCB6Z2iPC90ZXh0Pjwvc3ZnPg==')
+const state = ref('等待播放事件…')
+function onPlay() { state.value = '▶ play 事件（播放中）' }
+function onPause() { state.value = '⏸ pause 事件（已暂停）' }
+function onEnded() { state.value = '⏹ ended 事件（播放结束）' }`,
+    codes: [
+      ['image', '<p-media kind="image" src="…" />'],
+      ['video', '<p-media kind="video" src="…" :poster="cover" controls object-fit="contain" />'],
+      ['ctrl', '<p-media kind="video" :show-center-play-btn="false" :show-fullscreen-btn="false" />'],
+      ['live', '<p-media kind="live" src="…" is-live />'],
+    ],
+    demos: [
+      {
+        title: "图片",
+        desc: "kind=image 走图片分支（等价 p-image 的宽满自适应）",
+        code: 0,
+        demo: `<p-view class="frame"><p-media kind="image" :src="cover" /></p-view>`,
+      },
+      {
+        title: "视频与播放事件",
+        desc: "controls/object-fit/poster 透传；播放状态经事件回显（★浏览器自动播放策略可能需先点击）",
+        code: 1,
+        demo: `<p-view class="frame"><p-media kind="video" :src="''" :poster="cover" controls object-fit="contain" @play="onPlay" @pause="onPause" @ended="onEnded" /></p-view>`,
+        hasOutput: true,
+        output: `{{ state }}`,
+      },
+      {
+        title: "控件显隐族",
+        desc: "show-center-play-btn / show-fullscreen-btn 等控制原生控件显示",
+        code: 2,
+        demo: `<p-view class="frame"><p-media kind="video" :src="''" :poster="cover" :show-center-play-btn="false" :show-fullscreen-btn="false" /></p-view>`,
+      },
+      {
+        title: "直播源",
+        desc: "kind=live + is-live（★官方 is-live；MP 端原生 video 承接）",
+        code: 3,
+        demo: `<p-view class="frame"><p-media kind="live" :src="''" :poster="cover" :is-live="true" /></p-view>`,
+      },
+    ],
+    styles: `.frame { width: 320px; max-width: 100%; border-radius: var(--sp-radius-sm); overflow: hidden; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-nav-bar',
+    title: "p-nav-bar 导航栏",
+    subtitle: "页面外壳 · 对齐官方 navigation-bar",
+    state: `const lastEvent = ref('（点击返回观察 back 事件）')
+function onBack() {
+  lastEvent.value = 'back 事件触发（页面决定导航，组件不直接调路由）'
+}`,
+    codes: [
+      ['base', '<p-nav-bar title="页面标题" />'],
+      ['back', '<p-nav-bar title="详情页" back @back="onBack" />'],
+      ['slots', '<p-nav-bar title="插槽"><template #right><p-icon name="more" /></template></p-nav-bar>'],
+      ['loading', '<p-nav-bar title="加载中" loading />'],
+      ['color', '<p-nav-bar title="深色导航" background-color="#1a1a1e" front-color="#ffffff" />'],
+    ],
+    demos: [
+      {
+        title: "基础与返回",
+        desc: "title 标题；back 显示返回（仅 emit）",
+        code: 1,
+        demo: `<view class="col">
+  <p-nav-bar title="基础标题" />
+  <p-nav-bar title="详情页" back @back="onBack" />
+</view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "右侧插槽",
+        desc: "left/right 插槽承载操作区",
+        code: 2,
+        demo: `<p-nav-bar title="带操作">
+  <template #right><p-text class="act">更多</p-text></template>
+</p-nav-bar>`,
+      },
+      {
+        title: "loading 指示",
+        desc: "loading 在标题区显示加载指示（★官方 loading）",
+        code: 3,
+        demo: `<p-nav-bar title="加载中" loading />`,
+      },
+      {
+        title: "配色（front-color / background-color）",
+        desc: "深色导航条；换色动画（★官方 front-color / background-color）",
+        code: 4,
+        demo: `<p-nav-bar title="深色导航" background-color="#1a1a1e" front-color="#ffffff" back />`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.act { color: #1a7af8; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-page-container',
+    title: "p-page-container 页面容器",
+    subtitle: "页面外壳 · 底部/顶部/居中弹出层",
+    state: `const show = ref(false)
+const showTop = ref(false)
+const showCenter = ref(false)
+const showNoOverlay = ref(false)
+const showSlide = ref(false)
+const lastEvent = ref('（未触发 close）')
+function onClose() {
+  lastEvent.value = 'close 事件触发'
+}`,
+    codes: [
+      ['base', '<p-page-container v-model:show="show" @close="onClose"><p-view>内容</p-view></p-page-container>'],
+      ['top', '<p-page-container v-model:show="showTop" position="top">…</p-page-container>'],
+      ['center', '<p-page-container v-model:show="showCenter" position="center">…</p-page-container>'],
+      ['overlay', '<p-page-container v-model:show="showNoOverlay" :overlay="false">…</p-page-container>'],
+      ['slide', '<p-page-container v-model:show="showSlide" close-on-slide-down>…</p-page-container>'],
+    ],
+    demos: [
+      {
+        title: "基础弹出（底部）",
+        desc: "v-model:show 控制；点击遮罩关闭（update:show 回写）",
+        code: 0,
+        demo: `<p-button @click="show = true">打开底部容器</p-button>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "位置（position）",
+        desc: "top 从顶部弹出 / center 居中弹出（★官方 position）",
+        code: 1,
+        demo: `<view class="row">
+  <p-button size="mini" @click="showTop = true">顶部（top）</p-button>
+  <p-button size="mini" @click="showCenter = true">居中（center）</p-button>
+</view>`,
+      },
+      {
+        title: "无遮罩 / 下滑关闭",
+        desc: "overlay=false 无遮罩；close-on-slide-down 下滑关闭（触摸手势）",
+        code: 3,
+        demo: `<view class="row">
+  <p-button size="mini" @click="showNoOverlay = true">无遮罩</p-button>
+  <p-button size="mini" @click="showSlide = true">下滑关闭</p-button>
+</view>`,
+      },
+    ],
+    extraTemplate: `<p-page-container v-model:show="show" @close="onClose">
+  <p-view class="panel"><p-text>底部弹出层内容（bottom）——点遮罩关闭</p-text></p-view>
+</p-page-container>
+<p-page-container v-model:show="showTop" position="top" @close="onClose">
+  <p-view class="panel"><p-text>顶部弹出层内容（top，从上滑入）</p-text></p-view>
+</p-page-container>
+<p-page-container v-model:show="showCenter" position="center" @close="onClose">
+  <p-view class="panel"><p-text>居中弹出层内容（center）</p-text></p-view>
+</p-page-container>
+<p-page-container v-model:show="showNoOverlay" :overlay="false" @close="onClose">
+  <p-view class="panel"><p-text>无遮罩弹出层（overlay=false）</p-text></p-view>
+</p-page-container>
+<p-page-container v-model:show="showSlide" close-on-slide-down @close="onClose">
+  <p-view class="panel"><p-text>下滑关闭（下滑 40px 关闭）</p-text></p-view>
+</p-page-container>
+`,
+    styles: `.row { display: flex; flex-direction: row; gap: var(--sp-3); }
+.panel { padding: var(--sp-4); }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-picker',
+    title: "p-picker 选择器",
+    subtitle: "滚轮选择 · weui 标准双端一致",
+    state: `// 单列
+const cities = ref(['北京', '上海', '广州', '深圳', '杭州'])
+const idx = ref(0)
+// 多列（各列静态数据；联动由开发者据 columnchange 改 range 驱动）
+const multi = ref([
+  ['2026', '2027', '2028'],
+  ['01', '02', '03'],
+])
+const multiIdx = ref([0, 0])
+const lastEvent = ref('（暂无）')
+// ★模板内不可调用函数（WXML 表达式限制，S38）→ 用 computed 派生展示串
+const multiIdxText = computed(() => multiIdx.value.join(', '))
+
+function pick(e: unknown): { value?: unknown; column?: number } {
+  const p = e as { detail?: { value?: unknown; column?: number }; value?: unknown; column?: number }
+  return (p?.detail ?? p) as { value?: unknown; column?: number }
+}
+function onChange(e: unknown) {
+  const v = pick(e).value
+  if (typeof v === 'number') {
+    idx.value = v
+    lastEvent.value = \`选中「\${cities.value[v]}」（索引 \${v}）\`
+  } else if (Array.isArray(v)) {
+    multiIdx.value = v as number[]
+    lastEvent.value = \`多列索引 [\${(v as number[]).join(', ')}]\`
+  }
+}
+function onColumnChange(e: unknown) {
+  const d = pick(e)
+  lastEvent.value = \`列 \${d.column} → 索引 \${d.value}\`
+}`,
+    codes: [
+      ['basic', '<p-picker mode="selector" :range="cities" :value="idx" @change="onChange">\n  <p-text>{{ cities[idx] }}</p-text>\n</p-picker>'],
+      ['multi', '<p-picker mode="multiSelector" :range="multi" :value="multiIdx" @change="onMultiChange" />'],
+      ['disabled', '<p-picker mode="selector" :range="cities" disabled><p-text>禁用</p-text></p-picker>'],
+      ['header', '<p-picker mode="selector" :range="cities" header-text="选择城市">…</p-picker>'],
+      ['buttons', '<p-picker mode="selector" :range="cities" button-mode="double"><p-text>双按钮</p-text></p-picker>\n<p-picker mode="selector" :range="cities" :show-buttons="false"><p-text>无按钮</p-text></p-picker>'],
+    ],
+    demos: [
+      {
+        title: "单列选择（selector）",
+        desc: "range 一维数组；点击触发区打开滚轮（两端同款 weui 半屏弹层）",
+        code: 0,
+        demo: `<p-picker mode="selector" :range="cities" :value="idx" header-text="选择城市" @change="onChange">
+  <p-text class="field">{{ cities[idx] }}</p-text>
+</p-picker>`,
+        hasOutput: true,
+        output: `当前：{{ cities[idx] }} · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "多列选择（multiSelector）",
+        desc: "range 二维数组（各列一个数组）；columnchange 用于联动改 range",
+        code: 1,
+        demo: `<p-picker mode="multiSelector" :range="multi" :value="multiIdx" header-text="选择年月" @change="onChange" @columnchange="onColumnChange">
+  <p-text class="field">{{ multi[0][multiIdx[0]] }} - {{ multi[1][multiIdx[1]] }}</p-text>
+</p-picker>`,
+        hasOutput: true,
+        output: `当前：[{{ multiIdxText }}] · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "标题（header-text）",
+        desc: "★官方 header-text：两端均为弹层居中标题",
+        code: 3,
+        demo: `<p-picker mode="selector" :range="cities" :value="idx" header-text="选择城市">
+  <p-text class="field">点击选择（标题：选择城市）</p-text>
+</p-picker>`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可交互 + 淡化（★官方对齐）",
+        code: 2,
+        demo: `<p-picker mode="selector" :range="cities" disabled>
+  <p-text class="field">禁用（不可打开）</p-text>
+</p-picker>`,
+      },
+      {
+        title: "底部按钮（可配置）",
+        desc: "★button-mode 控制单/双按钮；show-buttons=false 无底部按钮（滚动即实时生效，关闭即结束）",
+        code: 4,
+        demo: `<view class="picker-row">
+  <p-picker mode="selector" :range="cities" header-text="双按钮" button-mode="double" @change="onChange">
+    <p-text class="field">双按钮（取消 + 确定）</p-text>
+  </p-picker>
+  <p-picker mode="selector" :range="cities" header-text="无按钮" :show-buttons="false" @change="onChange">
+    <p-text class="field">无底部按钮（滚动即生效）</p-text>
+  </p-picker>
+</view>`,
+      },
+    ],
+    styles: `.picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.field {
+  display: block;
+  min-height: 48px;
+  line-height: 48px;
+  padding: 0 16px;
+  border: 1px solid #d1d1d1;
+  border-radius: 4px;
+  background: #fff;
+  box-sizing: border-box;
+  font-size: 17px;
+  color: rgba(0, 0, 0, 0.9);
+}
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-progress',
+    title: "p-progress 进度条",
+    subtitle: "进度展示 · 线性 / 环形双端一致",
+    state: `const dyn = ref(20)
+function range() {
+  dyn.value = (dyn.value + 30) % 130
+}`,
+    codes: [
+      ['line', '<p-progress :percent="40" />'],
+      ['status', '<p-progress :percent="100" status="success" /><p-progress :percent="60" status="exception" />'],
+      ['circle', '<p-progress :percent="70" type="circle" />'],
+      ['stroke', '<p-progress :percent="50" :stroke-width="12" :rounded="true" />'],
+      ['color', '<p-progress :percent="60" color="#7c5cff" track-color="#eee" />'],
+      ['active', '<p-progress :percent="40" active />'],
+      ['duration', '<p-progress :percent="dyn" :duration="1200" />'],
+      ['info', '<p-progress :percent="80" :show-info="false" /><p-progress :percent="80" :font-size="18" />'],
+    ],
+    demos: [
+      {
+        title: "线性（基础）",
+        desc: "percent 控制进度；默认显示右侧百分比",
+        code: 0,
+        demo: `<p-progress :percent="40" />`,
+      },
+      {
+        title: "状态（status）",
+        desc: "active 进行中（默认蓝）/ success 成功（绿）/ exception 异常（红）",
+        code: 1,
+        demo: `<view class="col">
+  <p-progress :percent="60" status="active" />
+  <p-progress :percent="100" status="success" />
+  <p-progress :percent="60" status="exception" />
+</view>`,
+      },
+      {
+        title: "环形（type=circle）",
+        desc: "conic-gradient 绘制环形进度（纯 CSS，两端可用）",
+        code: 2,
+        demo: `<view class="row">
+  <p-progress :percent="70" type="circle" />
+  <p-progress :percent="100" type="circle" status="success" />
+</view>`,
+      },
+      {
+        title: "粗细与圆角",
+        desc: "stroke-width 条高；rounded 圆角（★官方 border-radius）",
+        code: 3,
+        demo: `<view class="col">
+  <p-progress :percent="50" :stroke-width="12" />
+  <p-progress :percent="50" :stroke-width="12" :rounded="false" />
+</view>`,
+      },
+      {
+        title: "自定义颜色",
+        desc: "color 进度色 · track-color 轨道底色（★官方 color）",
+        code: 4,
+        demo: `<p-progress :percent="60" color="#7c5cff" track-color="#eee" />`,
+      },
+      {
+        title: "条纹动画与过渡时长",
+        desc: "active 条纹滚动；duration 控制过渡时长（★官方 active / duration）",
+        code: 5,
+        demo: `<view class="col">
+  <p-progress :percent="dyn" active :duration="600" />
+  <p-button size="mini" @click="range">推进 30</p-button>
+</view>`,
+        hasOutput: true,
+        output: `当前 percent：{{ dyn }}（点击推进，观察过渡 + 条纹）`,
+      },
+      {
+        title: "信息与字号（show-info / font-size）",
+        desc: "show-info=false 隐藏文案；font-size 调整百分比字号（★官方 show-info / font-size）",
+        code: 7,
+        demo: `<view class="col">
+  <p-progress :percent="80" :show-info="false" />
+  <p-progress :percent="80" :font-size="18" />
+</view>`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-4); }
+.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-4); }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-radio',
+    title: "p-radio 单选",
+    subtitle: "单选框 · 自绘圆形双端一致",
+    state: `const plan = ref('x')
+const brand = ref('p')
+const lastEvent = ref('（暂无）')
+
+// ★跨端读法：组件 emit 裸载荷 → Web 直接是载荷、MP 是 e.detail（\`e?.detail ?? e\` 通吃）
+function onChange(e: unknown) {
+  const p = e as { detail?: { value?: unknown }; value?: unknown }
+  const d = (p?.detail ?? p) as { value?: unknown }
+  lastEvent.value = \`选中 \${d?.value}\`
+}`,
+    codes: [
+      ['basic', '<p-radio v-model="plan" value="x">方案 X</p-radio>\n<p-radio v-model="plan" value="y">方案 Y</p-radio>'],
+      ['disabled', '<p-radio model-value="a" value="a" disabled>禁用（选中）</p-radio>'],
+      ['color', '<p-radio v-model="brand" value="p" color="#7c5cff">品牌紫</p-radio>'],
+    ],
+    demos: [
+      {
+        title: "基础用法（单选组）",
+        desc: "同组 radio 共享 v-model；value 为组内标识，选中即命中",
+        code: 0,
+        demo: `<view class="row">
+  <p-radio v-model="plan" value="x" name="plan" @change="onChange">方案 X</p-radio>
+  <p-radio v-model="plan" value="y" name="plan" @change="onChange">方案 Y</p-radio>
+</view>`,
+        hasOutput: true,
+        output: `当前选中：{{ plan }} · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可交互 + 淡化（★两端状态视觉统一）",
+        code: 1,
+        demo: `<view class="row">
+  <p-radio :model-value="'a'" value="a" disabled>禁用（选中）</p-radio>
+  <p-radio :model-value="'a'" value="b" disabled>禁用（未选）</p-radio>
+</view>`,
+      },
+      {
+        title: "自定义颜色",
+        desc: "color 设定选中色（★官方 color 属性；缺省微信绿）",
+        code: 2,
+        demo: `<view class="row">
+  <p-radio v-model="brand" value="p" color="#7c5cff">品牌紫</p-radio>
+</view>`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-rich-text',
+    title: "p-rich-text 富文本",
+    subtitle: "内容基元 · HTML / 节点数组渲染",
+    state: `// ★字面量必须直接内联进 ref()（编译器静态求值：标识符初值 → data 为 undefined，见 S33/S57）
+const html = ref('<p style="margin:0 0 8px">这是<strong>富文本</strong>：支持 <em>斜体</em>、<span style="color:#7c5cff">着色</span>。</p><ul style="margin:0;padding-left:20px"><li>列表项 A</li><li>列表项 B</li></ul>')
+// ★类型（2026-09-24 类型检查暴露）：nodes 的 type/children[].type 需为**字面量**联合
+//   （p-rich-text 契约是 'text' | 'node'），as const 收窄，否则被推断为 string 而类型不符
+const nodes = ref<Array<Record<string, unknown>>>([
+  { type: 'node', name: 'h3', attrs: { style: 'margin:0 0 6px;font-size:15px' }, children: [{ type: 'text', text: '节点数组形态' }] },
+  { type: 'node', name: 'p', attrs: { style: 'margin:0;color:#666' }, children: [{ type: 'text', text: 'structured nodes（官方 nodes 数组）' }] },
+])
+const spaces = ref('连续空格（默认压缩）:  1  2  3\\n启用 space=nbsp:  1  2  3')`,
+    codes: [
+      ['html', '<p-rich-text nodes="<p>HTML 字符串</p>" />'],
+      ['nodes', '<p-rich-text :nodes="nodes" />'],
+      ['space', '<p-rich-text :nodes="text" space="nbsp" user-select />'],
+    ],
+    demos: [
+      {
+        title: "HTML 字符串",
+        desc: "nodes 传入 HTML 字符串（MP 原生 rich-text / Web v-html）",
+        code: 0,
+        demo: `<view class="box"><p-rich-text :nodes="html" /></view>`,
+      },
+      {
+        title: "节点数组",
+        desc: "structured nodes（type/name/attrs/children）——跨端同数据结构",
+        code: 1,
+        demo: `<view class="box"><p-rich-text :nodes="nodes" /></view>`,
+      },
+      {
+        title: "空格与可选",
+        desc: "space 控制连续空格呈现；user-select 使文本可选中",
+        code: 2,
+        demo: `<view class="box">
+  <p-rich-text :nodes="spaces" space="nbsp" user-select />
+</view>`,
+        hasOutput: true,
+        output: `space=nbsp 下连续空格保留；user-select 后可拖选文本`,
+      },
+    ],
+    styles: `.box { padding: var(--sp-3); border: 1px solid var(--p-border, #e5e5e5); border-radius: var(--sp-radius-sm); background: #fff; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-router-link',
+    title: "p-router-link 声明式导航",
+    subtitle: "工程原语 · 语义导航链接（对齐官方 navigator）",
+    state: `const lastEvent = ref('（点击链接观察 navigate 载荷）')
+function onNavigate(payload: Record<string, unknown>) {
+  const mode = payload.switchTab ? 'switchTab' : payload.replace ? 'replace' : 'push'
+  lastEvent.value = \`navigate → \${mode}(\${JSON.stringify(payload.to || payload.path)}) · open-type=\${payload.openType}\`
+}`,
+    codes: [
+      ['base', '<p-router-link to="home" @navigate="onNavigate">首页</p-router-link>'],
+      ['replace', '<p-router-link to="home" replace @navigate="onNavigate">replace 进入</p-router-link>'],
+      ['tab', '<p-router-link to="mine" switch-tab @navigate="onNavigate">switchTab</p-router-link>'],
+      ['official', '<p-router-link url="/pages/home" open-type="redirect" @navigate="onNavigate">官方 url 写法</p-router-link>'],
+    ],
+    demos: [
+      {
+        title: "框架语义（to）",
+        desc: "to 为路由名/路径；点击 emit('navigate', payload)",
+        code: 0,
+        demo: `<view class="row">
+  <p-router-link class="link" to="home" @navigate="onNavigate">首页</p-router-link>
+  <p-router-link class="link" to="user" @navigate="onNavigate">个人中心</p-router-link>
+</view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "replace / switchTab",
+        desc: "replace 替换当前页；switch-tab 切 Tab",
+        code: 1,
+        demo: `<view class="row">
+  <p-router-link class="link" to="home" replace @navigate="onNavigate">replace</p-router-link>
+  <p-router-link class="link" to="mine" switch-tab @navigate="onNavigate">switchTab</p-router-link>
+</view>`,
+      },
+      {
+        title: "官方 url 写法",
+        desc: "不传 to 时回退官方 url；open-type 决定跳转方式",
+        code: 3,
+        demo: `<p-router-link class="link" url="/pages/home" open-type="redirect" @navigate="onNavigate">官方 url + redirect</p-router-link>`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.link { color: #1a7af8; padding: var(--sp-1) var(--sp-2); }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; word-break: break-all; }`,
+  },
+  {
+    file: 'p-scroll-view',
+    title: "p-scroll-view 滚动容器",
+    subtitle: "布局基元 · Skyline 页面滚动的唯一入口",
+    state: `const items = ref(Array.from({ length: 20 }, (_, i) => \`列表项 \${i + 1}\`))
+const hItems = ref(Array.from({ length: 8 }, (_, i) => \`横向 \${i + 1}\`))
+const scrollTop = ref(0)
+const lastEvent = ref('（滚动容器观察事件）')
+const lowerCount = ref(0)
+
+// ★scroll-top 是**受控**属性：只有值**变化**时才驱动滚动（同官方语义——设同一值不重复滚动）。
+//   故 onScroll 回写当前滚动位置（手动滚动 → scrollTop 跟随），这样「回到顶部」才产生 0 的**变化**。
+//   ★★但**编程滚动期间必须停止回写**：否则滚动途中的中间值（480/460…）被回写成新 prop →
+//     scroll-view 又被拉回中间值 → 表现为「只往上滚一点、回不到顶」（真机实测）。
+//     用 **pending 目标值**（不用定时器——避免与编译器 ref/断言规则打架，S49/S33）：
+//     编程滚动设 \`pending = 目标\`；onScroll 到达目标即清除 pending，此后恢复回写。
+const pendingScroll = ref(99999)
+
+function commandScroll(v: number) {
+  pendingScroll.value = v
+  scrollTop.value = v
+}
+function jump(v: number) {
+  commandScroll(v)
+  lastEvent.value = \`scroll-top 设为 \${v}\`
+}
+function reset() {
+  commandScroll(0)
+  lowerCount.value = 0
+  lastEvent.value = '已重置滚动位置（回到顶部）'
+}
+function onScroll(e: any) {
+  const d = e?.detail ?? e ?? {}
+  const top = Math.round(d.scrollTop ?? 0)
+  const commanding = pendingScroll.value < 99999
+  const arrived = Math.abs(top - pendingScroll.value) <= 1
+  // 编程滚动中：到达目标才解除；期间不回写（避免与滚动动画抢控制权 → 「回不到顶」）
+  if (commanding && arrived) pendingScroll.value = 99999
+  const shouldSync = !commanding && scrollTop.value !== top
+  if (shouldSync) scrollTop.value = top
+  lastEvent.value = \`scroll：top=\${top} left=\${Math.round(d.scrollLeft ?? 0)}\`
+}
+function onLower() {
+  lowerCount.value++
+  lastEvent.value = \`scrolltolower 第 \${lowerCount.value} 次（lower-threshold 触发）\`
+}`,
+    codes: [
+      ['y', '<p-scroll-view scroll-y style="height:200px">…</p-scroll-view>'],
+      ['x', '<p-scroll-view scroll-x class="hscroll"><view v-for="…" class="hchip">…</view></p-scroll-view>'],
+      ['pos', '<p-scroll-view :scroll-top="scrollTop" :scroll-with-animation="true" @scroll="onScroll">…</p-scroll-view>'],
+      ['threshold', '<p-scroll-view :lower-threshold="30" @scrolltolower="onLower">…</p-scroll-view>'],
+    ],
+    demos: [
+      {
+        title: "纵向滚动",
+        desc: "scroll-y 纵向滚动；@scroll 回显位置",
+        code: 0,
+        demo: `<p-scroll-view class="scroll-y" scroll-y @scroll="onScroll" @scrolltolower="onLower">
+  <p-text v-for="it in items" :key="it" class="item">{{ it }}</p-text>
+</p-scroll-view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "横向滚动",
+        desc: "scroll-x + enable-flex（Skyline 下 scroll-view 内横向排列需 enable-flex + flex row；子项用原生 view）",
+        code: 1,
+        demo: `<!-- ★横向子项用**原生 <view>**（不是自定义组件）——Skyline 下自定义组件宿主在 flex 容器里不可靠；
+     容器加内层 flex row wrapper（scroll-view 自身是滚动宿主，横向内容放其内层 view） -->
+<p-scroll-view class="scroll-x" scroll-x :scroll-y="false" enable-flex>
+  <view class="scroll-x__inner">
+    <view v-for="it in hItems" :key="it" class="chip">{{ it }}</view>
+  </view>
+</p-scroll-view>`,
+      },
+      {
+        title: "滚动位置控制",
+        desc: "scroll-top 受控：值变化时驱动滚动（同官方语义）",
+        code: 2,
+        demo: `<view class="col">
+  <p-scroll-view class="scroll-y" scroll-y :scroll-top="scrollTop" :scroll-with-animation="true" @scroll="onScroll">
+    <p-text v-for="it in items" :key="it" class="item">{{ it }}</p-text>
+  </p-scroll-view>
+  <view class="row">
+    <p-button size="mini" @click="jump(200)">滚到 200</p-button>
+    <p-button size="mini" @click="reset">回到顶部</p-button>
+  </view>
+</view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "触底阈值",
+        desc: "lower-threshold 控制触底触发距离；@scrolltolower 回显",
+        code: 3,
+        demo: `<p-scroll-view class="scroll-y" scroll-y :lower-threshold="30" @scrolltolower="onLower">
+  <p-text v-for="it in items" :key="it" class="item">{{ it }}</p-text>
+</p-scroll-view>`,
+        hasOutput: true,
+        output: `scrolltolower 触发次数：{{ lowerCount }}`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.row { display: flex; flex-direction: row; gap: var(--sp-3); }
+.scroll-y { height: 180px; border: 1px solid var(--p-border, #e5e5e5); border-radius: var(--sp-radius-sm); background: #fff; }
+/* ★横向滚动：容器**不设 flex**（scroll-view 是滚动宿主）；内层 wrapper 用 flex row 不换行承载子项；
+   ★不用后代/复合选择器做布局（Skyline 剔除）——各元素单类各自声明。 */
+/* ★横向 scroll-view 必须有**确定高度**（同竖向需确定宽度）：Skyline 下 scroll-view 无固定高会塌成一条线
+   → 内容被裁、「看不到」（真机实测：加 height 前是细线，加后正常）。chips 40 + margin 16 = 56 */
+.scroll-x { width: 100%; height: 56px; border: 1px solid var(--p-border, #e5e5e5); border-radius: var(--sp-radius-sm); background: #fff; overflow: hidden; }
+.scroll-x__inner { display: inline-flex; flex-direction: row; white-space: nowrap; }
+.item { display: block; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid #f0f0f2; }
+.chip { flex: none; display: flex; align-items: center; padding: var(--sp-2) var(--sp-4); margin: var(--sp-2); background: #eef2ff; border-radius: var(--sp-radius-sm); white-space: nowrap; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-share-element',
+    title: "p-share-element 共享元素转场",
+    subtitle: "工程 · 对齐官方 share-element",
+    state: `const lastEvent = ref('（切换开关观察属性生效）')
+const animate = ref(true)
+const duration = ref(300)`,
+    codes: [
+      ['base', '<p-share-element shuttle-key="cover"><p-image src="cover.png" /></p-share-element>'],
+      ['animate', '<p-share-element shuttle-key="cover" :animate="false">…</p-share-element>'],
+      ['duration', '<p-share-element shuttle-key="cover" :duration="600" easing-function="ease-in-out">…</p-share-element>'],
+      ['shuttle', '<p-share-element shuttle-key="cover" shuttle-on-push="cover" shuttle-on-pop="detail">…</p-share-element>'],
+    ],
+    demos: [
+      {
+        title: "基础（shuttle-key 配对）",
+        desc: "两页中 shuttle-key 相同的元素由宿主做跨页飞行动画",
+        code: 0,
+        demo: `<view class="col">
+  <p-share-element shuttle-key="cover" class="shuttle">
+    <p-text class="body">封面（shuttle-key=&quot;cover&quot;）</p-text>
+  </p-share-element>
+  <p-text class="hint">↑ Web 端为普通容器；真机（Skyline/原生）可见飞行动画</p-text>
+</view>`,
+      },
+      {
+        title: "animate 开关",
+        desc: "animate=false → 仅位置对齐、无过渡",
+        code: 1,
+        demo: `<view class="col">
+  <p-button size="small" @tap="(animate = !animate, lastEvent = 'animate = ' + animate)">切换 animate（当前 {{ animate }}）</p-button>
+  <p-share-element shuttle-key="cover" :animate="animate" class="shuttle">
+    <p-text class="body">animate={{ animate }}</p-text>
+  </p-share-element>
+</view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "时长与缓动",
+        desc: "duration / easing-function 控制飞行节奏",
+        code: 2,
+        demo: `<view class="col">
+  <p-button size="small" @tap="(duration = duration === 300 ? 600 : 300, lastEvent = 'duration = ' + duration + 'ms')">切换时长（当前 {{ duration }}ms）</p-button>
+  <p-share-element shuttle-key="cover" :duration="duration" easing-function="ease-in-out" class="shuttle">
+    <p-text class="body">{{ duration }}ms · ease-in-out</p-text>
+  </p-share-element>
+</view>`,
+        hasOutput: true,
+        output: `{{ lastEvent }}`,
+      },
+      {
+        title: "方向控制（shuttle-on-push / shuttle-on-pop）",
+        desc: "分别指定 push 与 pop 阶段的飞跃物",
+        code: 3,
+        demo: `<p-share-element shuttle-key="cover" shuttle-on-push="cover" shuttle-on-pop="detail" class="shuttle">
+  <p-text class="body">push→cover · pop→detail</p-text>
+</p-share-element>`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.shuttle {
+  padding: 10px 12px;
+  border: 1px dashed #c9ccd6;
+  border-radius: 8px;
+  background: #fafbfe;
+}
+.body { font-size: 13px; color: #1c1b22; }
+.hint { font-size: 11.5px; color: #8a8fa0; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-slider',
+    title: "p-slider 滑块",
+    subtitle: "滑动输入 · 中性标签双端同源码",
+    state: `const val = ref(40)
+const val10 = ref(30)
+const valColor = ref(60)
+const valBlock = ref(50)
+const lastEvent = ref('（暂无）')
+
+// ★事件契约：change/changing 载荷 { value }（跨端读法 e?.detail ?? e）
+function onChange(e: unknown) {
+  const p = e as { detail?: { value?: unknown }; value?: unknown }
+  const v = Number((p?.detail ?? p)?.value)
+  if (Number.isFinite(v)) {
+    lastEvent.value = \`change → \${v}\`
+  }
+}
+function onChanging(e: unknown) {
+  const p = e as { detail?: { value?: unknown }; value?: unknown }
+  const v = Number((p?.detail ?? p)?.value)
+  if (Number.isFinite(v)) {
+    lastEvent.value = \`changing → \${v}\`
+  }
+}`,
+    codes: [
+      ['basic', '<p-slider v-model="val" :min="0" :max="100" :step="1" @change="onChange" />'],
+      ['step', '<p-slider v-model="val10" :min="0" :max="100" :step="10" />'],
+      ['color', '<p-slider v-model="val" active-color="#7c5cff" color="#e5e5e5" block-color="#7c5cff" />'],
+      ['block', '<p-slider v-model="val" :block-size="16" block-color="#07c160" />'],
+      ['showValue', '<p-slider v-model="val" show-value />'],
+      ['disabled', '<p-slider :model-value="40" disabled />'],
+    ],
+    demos: [
+      {
+        title: "基础用法（min/max/step + v-model）",
+        desc: "拖动改变取值；完成拖动触发 change",
+        code: 0,
+        demo: `<p-slider v-model="val" :min="0" :max="100" :step="1" @change="onChange" @changing="onChanging" />`,
+        hasOutput: true,
+        output: `当前值：{{ val }} · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "步长（step）",
+        desc: "step=10 → 取值按 10 递增（用于档位选择）",
+        code: 1,
+        demo: `<p-slider v-model="val10" :min="0" :max="100" :step="10" @change="onChange" />`,
+        hasOutput: true,
+        output: `当前值：{{ val10 }}（档位 {{ val10 / 10 }} 级）`,
+      },
+      {
+        title: "颜色（激活色 / 背景条 / 滑块）",
+        desc: "active-color 已选轨道 · color 未选背景条 · block-color 滑块（★官方三色属性）",
+        code: 2,
+        demo: `<p-slider v-model="valColor" active-color="#7c5cff" color="#e5e5e5" block-color="#7c5cff" />`,
+        hasOutput: true,
+        output: `当前值：{{ valColor }}`,
+      },
+      {
+        title: "滑块尺寸（block-size）",
+        desc: "block-size 12–28：小滑块适合精细调节（★官方 block-size）",
+        code: 3,
+        demo: `<p-slider v-model="valBlock" :block-size="16" block-color="#07c160" />`,
+        hasOutput: true,
+        output: `当前值：{{ valBlock }}（滑块 16px）`,
+      },
+      {
+        title: "显示当前值（show-value）",
+        desc: "show-value 在滑块旁显示数值（★官方 show-value）",
+        code: 4,
+        demo: `<p-slider v-model="val" show-value />`,
+        hasOutput: true,
+        output: `当前值：{{ val }}`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可交互 + 整体淡化（★官方对齐）",
+        code: 5,
+        demo: `<p-slider :model-value="40" disabled show-value />`,
+      },
+    ],
+    styles: `.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-switch',
+    title: "p-switch 开关",
+    subtitle: "开关选择器 · 中性标签双端同源码",
+    state: `const on = ref(true)
+const onDisabled = ref(false)
+const onRound = ref(true)
+const onSquare = ref(true)
+const onColor = ref(true)
+const onLoading = ref(true)
+const lastEvent = ref('（暂无）')
+
+// ★事件契约：change 载荷 { detail: { value } }（与 MP 原生 bind:change 一致）
+// ★跨端读法：组件 emit 裸载荷 → Web 直接是载荷、MP 是 e.detail（\`e?.detail ?? e\` 通吃）
+function onChange(e: unknown) {
+  const p = e as { detail?: { value?: unknown }; value?: unknown }
+  const v = Boolean((p?.detail ?? p)?.value)
+  lastEvent.value = \`change → \${v}\`
+}`,
+    codes: [
+      ['basic', '<p-switch v-model="on" @change="onChange" />'],
+      ['disabled', '<p-switch :model-value="true" disabled />'],
+      ['shapes', '<p-switch shape="round" /><p-switch shape="square" />'],
+      ['color', '<p-switch v-model="on" color="#7c5cff" />'],
+      ['loading', '<p-switch v-model="on" loading />'],
+    ],
+    demos: [
+      {
+        title: "基础用法（受控 v-model）",
+        desc: "v-model 受控；切换触发 change（载荷与 MP 原生一致）",
+        code: 0,
+        demo: `<view class="row">
+  <p-switch v-model="on" @change="onChange" />
+</view>`,
+        hasOutput: true,
+        output: `状态：{{ on ? '开' : '关' }} · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可交互 + 整体淡化（★两端状态视觉统一；基础库 disabled opacity .3）",
+        code: 1,
+        demo: `<view class="row">
+  <p-switch :model-value="false" disabled />
+  <p-switch :model-value="true" disabled />
+</view>`,
+      },
+      {
+        title: "形态（shape）",
+        desc: "round 圆角开关 / square 方角开关——★都是开关，仅圆角不同（不沿用官方 type=checkbox 的复选框形态：平台历史包袱，与 p-checkbox 语义重复）",
+        code: 2,
+        demo: `<view class="row">
+  <p-switch v-model="onRound" shape="round" />
+  <p-switch v-model="onSquare" shape="square" />
+</view>`,
+      },
+      {
+        title: "自定义颜色",
+        desc: "color 设定打开态轨道色（★官方 color 属性；缺省微信绿）",
+        code: 3,
+        demo: `<view class="row">
+  <p-switch v-model="onColor" color="#7c5cff" />
+</view>`,
+      },
+      {
+        title: "加载态",
+        desc: "loading 期间禁切换 + 旋转指示器（★与禁用态可分辨；框架扩展，两端一致）",
+        code: 4,
+        demo: `<view class="row">
+  <p-switch v-model="onLoading" loading @change="onChange" />
+</view>`,
+      },
+    ],
+    styles: `.row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-text',
+    title: "p-text 文本",
+    subtitle: "内容基元 · 可选 / 溢出 / 空格处理",
+    state: `const long = ref('这是一段足够长的示例文本，用于演示 overflow=ellipsis 与 max-lines 两种溢出处理方式的差异，请观察行尾表现。')`,
+    codes: [
+      ['base', '<p-text>普通文本</p-text>'],
+      ['select', '<p-text user-select>这段文本可以选中复制</p-text>'],
+      ['ellipsis', '<p-text overflow="ellipsis" style="width:200px">很长的文本会被裁剪为省略号…</p-text>'],
+      ['clamp', '<p-text :max-lines="2" style="width:240px">多行文本最多显示两行，超出部分被裁剪…</p-text>'],
+      ['space', '<p-text space="emsp">用 emsp 显示连续空格</p-text>'],
+      ['gesture', '<p-text select-on-gesture>允许通过手势选择文本</p-text>'],
+    ],
+    demos: [
+      {
+        title: "可选文本（user-select）",
+        desc: "user-select 使文本可被选中复制（官方 user-select）",
+        code: 1,
+        demo: `<p-text class="para" user-select>这段文本可以被选中并复制（user-select）。</p-text>`,
+      },
+      {
+        title: "溢出处理",
+        desc: "overflow=ellipsis 单行省略号；max-lines 多行钳制",
+        code: 2,
+        demo: `<view class="col">
+  <p-text class="clip1" overflow="ellipsis">{{ long }}</p-text>
+  <p-text class="clip2" :max-lines="2">{{ long }}</p-text>
+</view>`,
+      },
+      {
+        title: "连续空格与手势选择",
+        desc: "space=emsp/ensp/nbsp 显示连续空格；select-on-gesture 手势选择",
+        code: 4,
+        demo: `<view class="col">
+  <p-text space="emsp">A   B（emsp 连续空格）</p-text>
+  <p-text select-on-gesture>允许通过手势选择文本（select-on-gesture）</p-text>
+</view>`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.para { display: block; line-height: 1.6; }
+.clip1 { display: block; width: 200px; }
+.clip2 { display: block; width: 240px; line-height: 1.6; }`,
+  },
+  {
+    file: 'p-textarea',
+    title: "p-textarea 多行文本域",
+    subtitle: "多行输入 · 双端同源码",
+    state: `const val = ref('')
+const txt = ref('禁用状态下的文本内容')
+const lastEvent = ref('（暂无）')
+
+// ★事件契约：input/confirm 载荷 { value }（跨端读法 e?.detail ?? e）
+function readValue(e: unknown): string {
+  const p = e as { detail?: { value?: unknown }; value?: unknown }
+  const v = (p?.detail ?? p)?.value
+  return typeof v === 'string' ? v : ''
+}
+function onInput(e: unknown) {
+  val.value = readValue(e)
+  lastEvent.value = \`input → "\${val.value}"\`
+}
+function onConfirm(e: unknown) {
+  lastEvent.value = \`confirm → "\${readValue(e)}"\`
+}
+function onFocus() {
+  lastEvent.value = 'focus'
+}
+function onBlur() {
+  lastEvent.value = 'blur'
+}`,
+    codes: [
+      ['basic', '<p-textarea :value="val" placeholder="请输入内容" @input="onInput" />'],
+      ['placeholder', '<p-textarea :value="val" placeholder="自定义占位符" placeholder-style="color:#7c5cff;font-size:16px" />'],
+      ['maxlength', '<p-textarea :value="val" :maxlength="20" placeholder="最多 20 字" @input="onInput" />'],
+      ['autoHeight', '<p-textarea :value="val" auto-height placeholder="随内容自动增高" />'],
+      ['focus', '<p-textarea :value="val" :focus="true" placeholder="自动聚焦" />'],
+      ['disabled', '<p-textarea :value="txt" disabled />'],
+      ['keyboard', '<p-textarea :value="val" :cursor-spacing="20" confirm-type="send" :confirm-hold="true" @confirm="onConfirm" />'],
+    ],
+    demos: [
+      {
+        title: "基础用法（value + @input）",
+        desc: "受控写法：value 传入 + @input 回写（载荷 { value }）",
+        code: 0,
+        demo: `<p-textarea :value="val" placeholder="请输入内容" @input="onInput" @focus="onFocus" @blur="onBlur" />`,
+        hasOutput: true,
+        output: `内容：「{{ val }}」 · 最后事件：{{ lastEvent }}`,
+      },
+      {
+        title: "占位符与样式",
+        desc: "placeholder 文案 + placeholder-style 内联样式（★官方两属性）",
+        code: 1,
+        demo: `<p-textarea :value="val" placeholder="自定义占位符" placeholder-style="color:#7c5cff;font-size:16px" />`,
+      },
+      {
+        title: "最大长度（maxlength）",
+        desc: "超过 maxlength 无法继续输入（★官方 maxlength）",
+        code: 2,
+        demo: `<p-textarea :value="val" :maxlength="20" placeholder="最多 20 字" @input="onInput" />`,
+        hasOutput: true,
+        output: `已输入 {{ val.length }} 字`,
+      },
+      {
+        title: "自动增高（auto-height）",
+        desc: "内容增多时高度自适应（★官方 auto-height）",
+        code: 3,
+        demo: `<p-textarea :value="val" auto-height placeholder="随内容自动增高（多打几行试试）" />`,
+      },
+      {
+        title: "聚焦与键盘参数",
+        desc: "focus 自动聚焦；cursor-spacing / cursor / selection-* / adjust-* 控制光标与键盘（★官方系列属性）",
+        code: 6,
+        demo: `<p-textarea :value="val" :cursor-spacing="20" confirm-type="send" :confirm-hold="true" placeholder="按住输入并观察键盘行为" @confirm="onConfirm" />`,
+      },
+      {
+        title: "禁用态",
+        desc: "disabled 不可编辑 + 淡化（★官方对齐）",
+        code: 5,
+        demo: `<p-textarea :value="txt" disabled />`,
+      },
+    ],
+    styles: `.out {
+  display: block;
+  background: #f2fbf5;
+  border: 1px solid #d6f0e0;
+  border-radius: var(--sp-radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12.5px;
+  color: #2f7a4d;
+  font-weight: 600;
+}`,
+  },
+  {
+    file: 'p-view',
+    title: "p-view 通用容器",
+    subtitle: "布局基元 · 纵向 flex 容器 + 按压反馈",
+    codes: [
+      ['base', '<p-view>内容</p-view>'],
+      ['hover', '<p-view hover-class="my-hover" :hover-start-time="0" :hover-stay-time="200">按住我</p-view>'],
+      ['none', '<p-view hover-class="none">按住无反馈</p-view>'],
+      ['disabled', '<p-view disabled>禁用</p-view>'],
+    ],
+    demos: [
+      {
+        title: "基础容器",
+        desc: "display:flex 纵向；box-sizing 与双端对齐",
+        code: 0,
+        demo: `<p-view class="box"><p-text>普通容器内容</p-text></p-view>`,
+      },
+      {
+        title: "按压反馈（hover-*）",
+        desc: "官方 hover-class / hover-start-time / hover-stay-time：按住出现按压态",
+        code: 1,
+        demo: `<p-view class="box box--hover" hover-class="demo-hover" :hover-start-time="0" :hover-stay-time="200">
+  <p-text>按住我看反馈（松手 200ms 后消失）</p-text>
+</p-view>`,
+        hasOutput: true,
+        output: `MP：hover-class="demo-hover" 由平台在按下时加类；Web：模拟层等效反馈`,
+      },
+      {
+        title: "关闭按压 / 禁用",
+        desc: "hover-class=none 无反馈；disabled 整体淡化",
+        code: 2,
+        demo: `<p-view class="col">
+  <p-view class="box" hover-class="none"><p-text>hover-class=none（无按压态）</p-text></p-view>
+  <p-view class="box" disabled><p-text>disabled 容器</p-text></p-view>
+</p-view>`,
+      },
+    ],
+    styles: `.col { display: flex; flex-direction: column; gap: var(--sp-3); }
+.box { padding: var(--sp-3); border: 1px solid var(--p-border, #e5e5e5); border-radius: var(--sp-radius-sm); background: #fff; }
+.box--hover { border-style: dashed; }
+.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
+  {
+    file: 'p-webview',
+    title: "p-webview 内嵌网页",
+    subtitle: "页面外壳 · 承载宿主 WebView / iframe",
+    state: `const state = ref('等待 load / error 事件…')
+function onLoad(e: unknown) { const d = e as { src?: string }; state.value = 'load：' + (d?.src ?? '(已加载)') }
+function onError(e: unknown) { state.value = 'error：' + JSON.stringify(e) }
+
+const remote = ref('https://example.com')
+const local = ref('/about')`,
+    codes: [
+      ['remote', '<p-webview src="https://example.com" :height="240" />'],
+      ['local', '<p-webview src="/about" :height="240" />'],
+      ['events', '<p-webview src="…" @load="onLoad" @error="onError" @message="onMessage" />'],
+    ],
+    demos: [
+      {
+        title: "远程网页",
+        desc: "Web 用 iframe 直接加载；MP 需配置业务域名（未配置时平台拒绝加载）",
+        code: 0,
+        demo: `<p-webview :src="remote" :height="240" @load="onLoad" @error="onError" />`,
+        hasOutput: true,
+        output: `{{ state }}`,
+      },
+      {
+        title: "本地路径（诚实降级）",
+        desc: "Web 端 iframe 可加载包内页面；★MP 端平台不支持包内本地 HTML → 显示明确提示",
+        code: 1,
+        demo: `<p-webview :src="local" :height="240" />`,
+      },
+      {
+        title: "事件契约",
+        desc: "load / error / message 跨端同名（Web iframe 同语义触发）",
+        code: 2,
+        demo: `<p-webview :src="remote" :height="200" @load="onLoad" @error="onError" />`,
+      },
+    ],
+    styles: `.out { display: block; font-size: 12.5px; color: #2f7a4d; }`,
+  },
 ]
 
 // ───────────────────────── ③ 渲染 ─────────────────────────
@@ -1604,7 +3483,9 @@ function renderPage(p) {
   // ★页面专用本地组件（如错误边界演示的 crash-probe）：从相对路径导入，**不属于** @proteus-vue/components。
   //   故先把它们的 PascalCase 名从扫描结果里排除（在扫描**之后**删，否则会被重新加回）。
   const localNames = (p.localComponents ?? []).map((n) => n.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join(''))
-  for (const d of p.demos) for (const m of d.demo.matchAll(/<([a-z]+-[a-z-]+)/g)) {
+  // ★extraTemplate（页面级弹层实例等裸模板）与演示模板一样参与组件扫描（2026-09-26 手写页迁移）
+  const templateSources = [...p.demos.map((d) => d.demo), ...(p.extraTemplate ? [p.extraTemplate] : [])]
+  for (const tsrc of templateSources) for (const m of tsrc.matchAll(/<([a-z]+-[a-z-]+)/g)) {
     imports.add(
       m[1]
         .split('-')
@@ -1615,16 +3496,17 @@ function renderPage(p) {
   for (const n of localNames) imports.delete(n)
   const importList = [...imports].sort()
   const codeEntries = p.codes.map(([k, v]) => `  ${k}: ${JSON.stringify(v)},`).join('\n')
+  // ★code 可选（2026-09-26 手写页迁移）：不传则不发射 :code → demo-block 的 v-if="code" 隐藏代码面板
+  const codeAttrOf = (d) => (d.code != null ? ` :code="codes.${p.codes[d.code][0]}"` : '')
   const demoBlocks = p.demos
     .map((d, i) => {
       const idx = String(i + 1).padStart(2, '0')
       const hasOut = Boolean(d.hasOutput)
-      const codeKey = p.codes[d.code][0]
       // ★属性值必须转义双引号：title/desc 里出现 `area="top"` 这类字面量时，
       //   直接拼进 title="…" 会让 Vue 解析器报「Attribute name cannot contain U+0022」
       //   （实测：p-safe 的 title 含 area="top" → Web 构建失败）→ 统一走 escAttr。
       const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-      const open = `    <demo-block index="${idx}" title="${escAttr(d.title)}" desc="${escAttr(d.desc)}" :has-output="${hasOut}" :code="codes.${codeKey}">`
+      const open = `    <demo-block index="${idx}" title="${escAttr(d.title)}" desc="${escAttr(d.desc)}" :has-output="${hasOut}"${codeAttrOf(d)}>`
       const demoSlot = `      <template #demo>\n        ${d.demo}\n      </template>`
       // ★output 文本直接进模板插值 → 其中的 `<` 会被 Vue SFC 解析器当成真标签
       //   （实测：写 `<teleport to="body">` 字面量导致 "Element is missing end tag"、构建失败）
@@ -1651,6 +3533,11 @@ import { ${[
         'ref',
         /\bwatch\(/.test(p.state ?? '') ? 'watch' : null,
         /\bnextTick\(/.test(p.state ?? '') ? 'nextTick' : null,
+        /\bcomputed\(/.test(p.state ?? '') ? 'computed' : null,
+        /\breactive\(/.test(p.state ?? '') ? 'reactive' : null,
+        /\bwatchEffect\(/.test(p.state ?? '') ? 'watchEffect' : null,
+        /\bonMounted\(/.test(p.state ?? '') ? 'onMounted' : null,
+        /\bonUnmounted\(/.test(p.state ?? '') ? 'onUnmounted' : null,
       ]
         .filter(Boolean)
         .join(', ')} } from 'vue'
@@ -1672,7 +3559,7 @@ const compatRows = ref(${JSON.stringify(api.compat, null, 2)})
 
 <template>
   <page-shell title="${p.title}" subtitle="${p.subtitle}">
-${demoBlocks}
+${demoBlocks}${p.extraTemplate ? `\n\n${p.extraTemplate.split('\n').map((l) => (l ? `    ${l}` : l)).join('\n')}` : ''}
 
     <api-table title="Props" :columns="['属性', '说明', '类型']" :rows="apiRows" />
     <api-table title="Events" :columns="['事件', '说明', '载荷']" :rows="eventRows" />
