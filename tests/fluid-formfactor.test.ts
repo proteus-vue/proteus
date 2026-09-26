@@ -65,6 +65,38 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(FORM_PROFILES.car.nav).not.toBe(FORM_PROFILES.tv.nav)
   })
 
+  it('★视觉语言（形态级主题）：TV/车机暗色沉浸 · 10ft 大字号 · 遥控焦点环可见', () => {
+    // 旧版设计本意：TV 是 lean-back 暗色沉浸（不是把浅色 UI 塞进大框）
+    expect(FORM_PROFILES.tv.visual.theme).toBe('dark')
+    expect(FORM_PROFILES.car.visual.theme).toBe('dark')
+    expect(FORM_PROFILES.phone.visual.theme).toBe('light')
+    // 观看距离决定字号（10ft 38px / 驾驶 26px / 桌面 18px / 手机 14px）
+    expect(FORM_PROFILES.tv.visual.font).toBeGreaterThanOrEqual(30)
+    expect(FORM_PROFILES.car.visual.font).toBeGreaterThanOrEqual(22)
+    expect(FORM_PROFILES.tv.visual.font).toBeGreaterThan(FORM_PROFILES.phone.visual.font)
+    // 遥控/键盘形态焦点必须可见（焦点环）；触控形态无
+    expect(FORM_PROFILES.tv.visual.focus).toBe('ring')
+    expect(FORM_PROFILES.car.visual.focus).toBe('ring')
+    expect(FORM_PROFILES.phone.visual.focus).toBe('none')
+    // 强调色：TV/车机用暖橙价格（旧版 #ffb13d）
+    expect(FORM_PROFILES.tv.visual.accent).toBe('#ffb13d')
+    // 距离档语义
+    expect(FORM_PROFILES.tv.distance).toBe('10ft')
+    expect(FORM_PROFILES.car.distance).toBe('dashboard')
+  })
+
+  it('★能力清单 14 项（对齐旧版六端能力表：SKU/Tab/hover/d-pad/表冠/密度/焦点树/焦点行/多列/侧栏 + 框架补充）', () => {
+    const keys = Object.keys(FORM_PROFILES.tv.caps)
+    expect(keys.length).toBe(14)
+    for (const k of ['skuMulti', 'tabs', 'hover', 'dpad', 'crown', 'dense', 'focusTree', 'focusRows', 'multiCol', 'sidebar']) {
+      expect(keys, `能力清单应含 ${k}（旧版能力表项）`).toContain(k)
+    }
+    // 语义正确性：TV 有遥控焦点/焦点行/多列但无 SKU 多选·无高密度·无侧栏（旧版勾选态）
+    expect(FORM_PROFILES.tv.caps).toMatchObject({ dpad: true, focusRows: true, multiCol: true, skuMulti: false, dense: false, sidebar: false })
+    // 车机：d-pad + 表冠 + 焦点树 + 密集 + 驾驶降干扰；无多规格
+    expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: true, crown: true, focusTree: true, dense: true, driveAware: true, skuMulti: false })
+  })
+
   it('formLabel 双语 + 未知形态回退', () => {
     expect(formLabel('tv', 'zh')).toBe('TV / 大屏')
     expect(formLabel('tv', 'en')).toBe('TV / Large screen')

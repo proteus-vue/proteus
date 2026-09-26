@@ -4,7 +4,7 @@
 //
 // ★这个文件里**没有任何形态判断**（没有 if (form === 'car')、没有断点槽、没有能力判断）——
 //   业务只声明内容槽（media/heading/price/sku/actions/recommend/rail/tabbar），
-//   框架据形态画像自动决定：布局拓扑 / 导航形态 / 能力槽取舍 / 密度 / 缩放 / 热区尺寸。
+//   框架据形态画像自动决定：布局拓扑 / 导航形态 / 视觉语言 / 能力槽取舍 / 密度 / 缩放 / 热区。
 //   这正是「柔性系统」与「响应式布局」的分水岭。
 //
 // 形态由宿主声明（演示页逐个声明）；真实 App 里来自端 profile。
@@ -22,7 +22,7 @@ const props = defineProps<{
 const product = {
   name: '无线降噪耳机 Pro',
   price: 1299,
-  desc: '40h 续航 · 自适应降噪 · 空间音频',
+  desc: '40h 续航 · 自适应降噪 · 空间音频 · Hi-Res 认证',
 }
 const skus = ['曜石黑', '月光白', '雾霾蓝']
 const picked = ref('曜石黑')
@@ -37,7 +37,7 @@ const recs = [
 </script>
 
 <template>
-  <!-- ★框架组件：一行接形态，其余全自动（拓扑/能力/密度/缩放/热区） -->
+  <!-- ★框架组件：一行接形态，其余全自动（拓扑 / 视觉语言 / 能力 / 密度 / 缩放 / 热区） -->
   <p-formfactor :declared="form" :width="width" :height="height">
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>
@@ -59,7 +59,7 @@ const recs = [
       <span class="fp-desc">{{ product.desc }}</span>
     </template>
 
-    <!-- 价格 -->
+    <!-- 价格（暗色形态由框架换成暖橙强调色） -->
     <template #price>
       <strong class="fp-price">¥{{ product.price }}</strong>
     </template>
@@ -69,10 +69,10 @@ const recs = [
       <span v-for="s in skus" :key="s" class="fp-sku" :class="{ on: picked === s }" @click="picked = s">{{ s }}</span>
     </template>
 
-    <!-- 主操作（遥控/旋钮形态框架自动放大热区） -->
+    <!-- 主操作（遥控/旋钮形态框架自动放大热区 + 加焦点环；车机只留 2 个大热区） -->
     <template #actions>
-      <button class="fp-primary" @click="counted++">{{ counted > 1 ? '已加购 ' + counted : '加入购物车' }}</button>
-      <button class="fp-ghost">立即购买 →</button>
+      <button class="fp-primary" @click="counted++">▶ 立即购买</button>
+      <button class="fp-ghost">＋ 收藏</button>
     </template>
 
     <!-- 推荐（★TV/车机形态框架自动转横向焦点海报流） -->
@@ -92,64 +92,65 @@ const recs = [
 </template>
 
 <style scoped>
-/* 演示内容样式（★与形态无关——形态引起的排列差异全在 p-formfactor 内） */
+/* 演示内容样式（★与形态无关——形态引起的排列/配色差异全在 p-formfactor 内） */
 .fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(12px * var(--pf-scale, 1)); }
-.fp-rail-item { padding: 8px 10px; border-radius: 7px; color: #666; }
-.fp-rail-item.on { background: #f0edff; color: #7c5cff; font-weight: 700; }
+.fp-rail-item { padding: 8px 10px; border-radius: 7px; color: var(--pf-dim, #666); }
+.fp-rail-item.on { background: color-mix(in srgb, var(--pf-brand, #7c5cff) 16%, transparent); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
 .fp-cover {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #eef0ff, #e3e7f8);
+  aspect-ratio: 16 / 10;
+  border-radius: var(--pf-radius, 10px);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.22), rgba(171, 155, 255, 0.08));
   display: grid;
   place-items: center;
   font-size: calc(46px * var(--pf-scale, 1));
-  min-height: 96px;
+  min-height: 90px;
 }
-.fp-name { display: block; font-size: calc(16px * var(--pf-scale, 1)); font-weight: 800; }
-.fp-desc { display: block; color: #777; font-size: calc(11.5px * var(--pf-scale, 1)); margin-top: 4px; }
-.fp-price { display: block; font-size: calc(22px * var(--pf-scale, 1)); font-weight: 800; color: #7c5cff; }
+.fp-name { display: block; font-size: calc(17px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-text, #17171f); }
+.fp-desc { display: block; color: var(--pf-dim, #777); font-size: calc(12px * var(--pf-scale, 1)); margin-top: 4px; line-height: 1.5; }
+.fp-price { display: block; font-size: calc(24px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-accent, #7c5cff); }
 
 .pf-sku { display: flex; flex-wrap: wrap; gap: 8px; }
 .fp-sku {
   padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  font-size: calc(11.5px * var(--pf-scale, 1));
+  border: 1px solid color-mix(in srgb, var(--pf-text, #17171f) 18%, transparent);
+  border-radius: var(--pf-radius, 8px);
+  background: var(--pf-surface, #fff);
+  color: var(--pf-text, #17171f);
+  font-size: calc(12px * var(--pf-scale, 1));
   cursor: pointer;
 }
-.fp-sku.on { border-color: #7c5cff; color: #7c5cff; font-weight: 700; }
+.fp-sku.on { border-color: var(--pf-brand, #7c5cff); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
 .pf-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .fp-primary {
   flex: 1 1 auto;
-  padding: 11px 16px;
+  padding: 12px 18px;
   border: none;
-  border-radius: 9px;
-  background: #7c5cff;
+  border-radius: var(--pf-radius, 9px);
+  background: var(--pf-brand, #7c5cff);
   color: #fff;
-  font-size: calc(13px * var(--pf-scale, 1));
-  font-weight: 700;
+  font-size: calc(14px * var(--pf-scale, 1));
+  font-weight: 800;
   cursor: pointer;
 }
 .fp-ghost {
   flex: 0 0 auto;
-  padding: 11px 16px;
-  border: 1px solid #7c5cff;
-  border-radius: 9px;
-  background: #fff;
-  color: #7c5cff;
-  font-size: calc(13px * var(--pf-scale, 1));
+  padding: 12px 18px;
+  border: 1px solid var(--pf-brand, #7c5cff);
+  border-radius: var(--pf-radius, 9px);
+  background: transparent;
+  color: var(--pf-brand, #7c5cff);
+  font-size: calc(14px * var(--pf-scale, 1));
   font-weight: 700;
   cursor: pointer;
 }
 
 .fp-rec {
-  background: #fff;
-  border: 1px solid #e6e8f0;
-  border-radius: 10px;
+  background: var(--pf-surface, #fff);
+  border: 1px solid color-mix(in srgb, var(--pf-text, #17171f) 12%, transparent);
+  border-radius: var(--pf-radius, 10px);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -157,6 +158,6 @@ const recs = [
   align-items: center;
 }
 .fp-rec-ic { font-size: calc(26px * var(--pf-scale, 1)); }
-.fp-rec-name { font-size: calc(11px * var(--pf-scale, 1)); color: #555; }
-.fp-rec-pt { font-size: calc(12px * var(--pf-scale, 1)); font-weight: 800; color: #7c5cff; }
+.fp-rec-name { font-size: calc(11.5px * var(--pf-scale, 1)); color: var(--pf-dim, #555); }
+.fp-rec-pt { font-size: calc(12.5px * var(--pf-scale, 1)); font-weight: 800; color: var(--pf-accent, #7c5cff); }
 </style>

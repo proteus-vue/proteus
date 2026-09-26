@@ -46,20 +46,31 @@ export type LayoutTopology =
 /** 导航形态（形态驱动——车机焦点树 / TV 海报行 / 手表页栈 / PC 侧栏） */
 export type NavTopology = 'page-stack' | 'bottom-tabs' | 'tabs' | 'rail' | 'side-nav' | 'focus-tree' | 'focus-row'
 
-/** 形态能力声明（组件据此自动降级；未声明 = 不支持） */
+/** 形态能力声明（组件据此自动降级；未声明 = 不支持）
+ *  ★能力清单对齐设计本意（旧版六端能力表）：SKU多选 / 底部Tab / 悬停态 / d-pad遥控焦点 /
+ *    表冠旋钮 / 高密度信息 / 焦点树大热区 / 横向焦点行海报流 / 多列并排 / 侧栏
+ *    + 框架补充：抽屉 · 异形屏 · 物理键盘 · 驾驶降干扰 */
 export interface FormCaps {
-  /** 指针悬停态（触控/遥控形态为 false——hover 样式与提示自动不渲染） */
-  hover: boolean
   /** 多规格/SKU 选择（车机驾驶场景分心风险 → false，走精简分支） */
   skuMulti: boolean
   /** 底部 Tab 栏 */
   tabs: boolean
-  /** 侧栏（持久导航） */
-  sidebar: boolean
-  /** 横向焦点行（海报流——遥控器/旋钮可达） */
-  focusRows: boolean
+  /** 指针悬停态（触控/遥控形态为 false——hover 样式与提示自动不渲染） */
+  hover: boolean
+  /** d-pad / 遥控焦点（遥控形态必有——大热区 + 焦点可见） */
+  dpad: boolean
+  /** 表冠 / 旋钮（手表表冠、车机旋钮——连续调节输入） */
+  crown: boolean
   /** 高密度信息（一屏塞多组信息——10ft 观看距离与驾驶场景为 false） */
   dense: boolean
+  /** 焦点树 / 大热区（车机驾驶场景——分层焦点导航） */
+  focusTree: boolean
+  /** 横向焦点行（海报流——TV lean-back） */
+  focusRows: boolean
+  /** 多列并排（大屏信息密度表达） */
+  multiCol: boolean
+  /** 侧栏（持久导航） */
+  sidebar: boolean
   /** 抽屉/侧滑弹层（触控形态支持；遥控形态用全屏 dialog 替代） */
   drawer: boolean
   /** 异形屏/刘海（顶部安全区预留） */
@@ -70,12 +81,41 @@ export interface FormCaps {
   driveAware: boolean
 }
 
-/** 形态画像（声明式 SSOT——布局/导航/能力/密度/缩放全从这里推导） */
+/** 视觉语言（★形态级主题——TV/车机是暗色沉浸，10ft 与驾驶场景的真实观感） */
+export interface FormVisual {
+  /** 主题：light = 常规浅色；dark = 沉浸暗色（TV/车机） */
+  theme: 'light' | 'dark'
+  /** 画布底色 */
+  bg: string
+  /** 卡片/面板底 */
+  surface: string
+  /** 主文字 */
+  text: string
+  /** 次文字 */
+  dim: string
+  /** 品牌色（按钮/选中） */
+  brand: string
+  /** 强调色（价格/焦点——TV 用暖橙） */
+  accent: string
+  /** 基准字号（**设备像素**——10ft 形态用大字号，随视口缩放后比例仍正确） */
+  font: number
+  /** 圆角 */
+  radius: number
+  /** 焦点环（遥控/键盘形态必有——焦点必须可见；触控/指针形态 none） */
+  focus: 'none' | 'ring'
+}
+
+/** 视角距离档（诚实标注：10ft = 电视观看距离；驾驶 = 车机；桌面 = 臂长） */
+export type ViewingDistance = 'glance' | 'arm' | 'desk' | 'dashboard' | '10ft'
+
+/** 形态画像（声明式 SSOT——布局/导航/能力/密度/缩放**与视觉语言**全从这里推导） */
 export interface FormProfile {
   form: DeviceForm
   label: { zh: string; en: string }
   /** 输入方式 */
   input: InputMode
+  /** 观看/操作距离（形态语义——决定字号与热区尺寸） */
+  distance: ViewingDistance
   /** 信息密度（字号/行高/间距——resolveDensity 消费） */
   density: FluidDensity
   /** 布局拓扑（框架自动选用） */
@@ -84,19 +124,25 @@ export interface FormProfile {
   nav: NavTopology
   /** 视觉缩放（10ft TV 放大 / 手表紧凑；1 = 基准） */
   scale: number
+  /** ★视觉语言（形态级主题——TV/车机暗色沉浸、10ft 大字号、焦点环可见） */
+  visual: FormVisual
   /** 典型视口（文档/演示用；真实值以容器查询为准） */
   viewport: { width: number; height: number }
-  /** 能力声明 */
+  /** 能力声明（14 项——未声明即不支持，组件自动降级） */
   caps: FormCaps
 }
 
 const CAPS_BASE: FormCaps = {
-  hover: false,
   skuMulti: false,
   tabs: false,
-  sidebar: false,
-  focusRows: false,
+  hover: false,
+  dpad: false,
+  crown: false,
   dense: false,
+  focusTree: false,
+  focusRows: false,
+  multiCol: false,
+  sidebar: false,
   drawer: false,
   notch: false,
   keyboard: false,
@@ -114,7 +160,10 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'page-stack', // 页栈（无 Tab 无侧栏）
     scale: 0.85, // 小屏紧凑
     viewport: { width: 198, height: 242 },
-    caps: { ...CAPS_BASE, notch: false },
+    distance: 'glance', // 抬腕一瞥
+    // 视觉语言：紧凑大字（小屏一瞥可读）· 浅色 · 无焦点环
+    visual: { theme: 'light', bg: '#f2f4fa', surface: '#ffffff', text: '#17171f', dim: '#77808f', brand: '#7c5cff', accent: '#e05b5b', font: 17, radius: 12, focus: 'none' },
+    caps: { ...CAPS_BASE, crown: true }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
   },
   phone: {
     form: 'phone',
@@ -125,6 +174,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'bottom-tabs', // 底部 Tab
     scale: 1,
     viewport: { width: 390, height: 844 },
+    distance: 'arm', // 臂长
+    // 视觉语言：常规触控（浅色 · 单列大热区 · 无焦点环）
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', font: 14, radius: 9, focus: 'none' },
     caps: { ...CAPS_BASE, skuMulti: true, tabs: true, dense: true, drawer: true, notch: true },
   },
   fold: {
@@ -136,7 +188,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'tabs',
     scale: 1,
     viewport: { width: 520, height: 720 },
-    caps: { ...CAPS_BASE, skuMulti: true, dense: true, drawer: true, notch: true },
+    distance: 'arm',
+    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', font: 15, radius: 10, focus: 'none' },
+    caps: { ...CAPS_BASE, skuMulti: true, multiCol: true, dense: true, drawer: true, notch: true },
   },
   tablet: {
     form: 'tablet',
@@ -147,7 +201,10 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'rail',
     scale: 1,
     viewport: { width: 834, height: 1112 },
-    caps: { ...CAPS_BASE, skuMulti: true, sidebar: true, dense: true, drawer: true },
+    distance: 'arm',
+    // 视觉语言：分栏阅读（浅色 · 中等字号 · 无焦点环）
+    visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', font: 16, radius: 10, focus: 'none' },
+    caps: { ...CAPS_BASE, skuMulti: true, sidebar: true, multiCol: true, dense: true, drawer: true },
   },
   pc: {
     form: 'pc',
@@ -158,7 +215,10 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'side-nav',
     scale: 1,
     viewport: { width: 1440, height: 900 },
-    caps: { ...CAPS_BASE, hover: true, skuMulti: true, sidebar: true, dense: true, keyboard: true },
+    distance: 'desk', // 桌面臂长（信息密度最高）
+    // 视觉语言：桌面密排（浅色 · 三栏 · hover 反馈 · 键盘焦点环细）
+    visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', font: 18, radius: 8, focus: 'ring' }, // 键盘 Tab 可达 → 焦点环可见
+    caps: { ...CAPS_BASE, hover: true, skuMulti: true, sidebar: true, multiCol: true, dense: true, keyboard: true },
   },
   car: {
     form: 'car',
@@ -169,8 +229,11 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'focus-tree',
     scale: 1.15, // 远距离可读
     viewport: { width: 1280, height: 480 },
+    distance: 'dashboard', // 驾驶位
+    // ★视觉语言：驾驶暗色舱（暗底 + 高亮大热区瓦片 + 暖橙强调 + 焦点环粗——驾驶员余光可辨）
+    visual: { theme: 'dark', bg: '#10142a', surface: '#ffffff', text: '#10142a', dim: '#8b93a7', brand: '#7c5cff', accent: '#ffb13d', font: 26, radius: 12, focus: 'ring' },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
-    caps: { ...CAPS_BASE, focusRows: true, driveAware: true },
+    caps: { ...CAPS_BASE, dpad: true, crown: true, focusTree: true, dense: true, multiCol: true, focusRows: true, driveAware: true },
   },
   tv: {
     form: 'tv',
@@ -181,8 +244,11 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'focus-row',
     scale: 1.4, // 10ft lean-back 观看距离 → 字号放大
     viewport: { width: 1920, height: 1080 },
+    distance: '10ft', // 客厅沙发距离
+    // ★视觉语言：10ft 沉浸暗色（深蓝底 + 半透明海报胶囊 + 暖橙价格 + 焦点环粗）
+    visual: { theme: 'dark', bg: '#0f1838', surface: 'rgba(255,255,255,0.12)', text: '#ffffff', dim: '#bcd0e8', brand: '#7c5cff', accent: '#ffb13d', font: 38, radius: 10, focus: 'ring' },
     // ★TV 能力画像：10ft 远距离 → 不做高密度信息、无 hover（遥控器）、无侧栏（水平海报流主导）
-    caps: { ...CAPS_BASE, focusRows: true },
+    caps: { ...CAPS_BASE, dpad: true, focusRows: true, multiCol: true },
   },
 }
 
@@ -294,6 +360,18 @@ export function validateFormProfiles(
     if (p.caps.focusRows && p.input === 'touch') problems.push(`${f}: 焦点行要求遥控类输入（实际 ${p.input}）`)
     if (p.topology === 'glance' && p.caps.dense) problems.push(`${f}: 一屏一意（glance）不应声明 dense`)
     if (p.density === 'compact' && p.input === 'remote') problems.push(`${f}: 遥控形态不应 compact（远距离可读性）`)
+    // ★视觉语言自洽：遥控/键盘形态必须可见焦点（焦点环）；10ft/驾驶形态字号须显著放大
+    if ((p.caps.dpad || p.caps.keyboard) && p.visual.focus !== 'ring') {
+      problems.push(`${f}: 遥控/键盘形态必须焦点可见（visual.focus 应为 ring）`)
+    }
+    if (p.distance === '10ft' && p.visual.font < 30) {
+      problems.push(`${f}: 10ft 观看距离字号过小（${p.visual.font}px，应 ≥30）`)
+    }
+    if (p.distance === 'dashboard' && p.visual.font < 22) {
+      problems.push(`${f}: 驾驶距离字号过小（${p.visual.font}px，应 ≥22）`)
+    }
+    if (p.caps.focusRows && p.input !== 'remote') problems.push(`${f}: 焦点行要求遥控输入`)
+    if (!(p.visual.bg && p.visual.text && p.visual.brand)) problems.push(`${f}: 视觉语言缺关键色`)
   }
   return problems
 }
