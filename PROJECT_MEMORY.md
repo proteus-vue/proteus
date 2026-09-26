@@ -17,7 +17,41 @@
 
 ---
 
-## 当前状态速览（最近一次更新：2026-09-26 用户实测纠错）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-27 七视角复审 + 三审收口）★新会话以此为准
+
+### ★★柔性系统七视角复审与三审收口（提交 1609b3bc · 部署已验证）
+
+**一句话**：七位子代理（OS 规范/跨端架构/能力体系/输入无障碍/运行时性能/缺陷猎手/产品价值）独立复审后，**两个视角不约而同指出「我上轮声称已修但实测未生效」的两处**（安全区、宽度冻结）——均已按根因修复，并把「能力声明≠空头」从口号做成**机器可证伪**（新增 `data-pf-caps` 证据面 + 对账门禁）。路线图落 `docs/proteus-fluid-system-plan/02-os-level-roadmap.md`。
+
+**① 三审 P0（多视角共同命中）**
+- **安全区第二次落空**：`.p-formfactor` 的 padding longhand 被**拓扑块的 `padding: 简写`**（同特异性、源序在后）整段覆盖 → 浏览器实测 TV overscan 96px→22px、平板 20px→0。修法：拓扑块一律 longhand；补 `--pf-safe-top`（notch 首次有真实消费量）。**线上实测 TV left=96px ✅**
+- **度量冻结**：`props.width` 只在 onMounted 赋值一次 → 同会话切设备度量不跟随（car→tv 字号错 22%）。修法：watch + `metricWidth` 单一入口；e2e 补「同会话点切换器」用例（冷启动 goto 抓不到）。
+- **热区三态裸真值**（与上轮 P0 同类，**活在 SSOT 里**）：`profile.caps.dpad ? … : 3.0` 对 `'unsupported'` 恒真 → 76dp 下限外溢全 7 形态、原测试断言因此永真。修法：`capsEnabled` + **物理量按展示缩放投影**（76dp 是设备物理要求：540px 缩略壳展示 1280pt 车机 → ~39px 帧内；此前当绝对 px 塞进缩略帧 → 热区占内容高 44%、主视觉被挤没）。新增 15 组穷举断言（换算回设备尺度 ≥44dp / 遥控 ≥76dp）。
+- **折叠态度量错基准**：外屏 340pt 沿用内屏 `ref:420` → 正文 9.7px、Chip 22px（<WCAG 2.5.8 的 24px）。`FormPosture` 增 `ratio` 覆盖（外屏按窄手机 ref:300）→ 正文 14.7px、Chip 41px。
+
+**② 三审 P1**
+- 焦点引擎只在 onMounted 接线一次 → 同会话切形态后「该接管不接管/不该接管残留」。修：`watch(focusEnabled)` 接解绑 + 形态变化重建 + **稳定候选 id**（原用数组下标会撞名）+ 可编辑元素守卫。
+- **PC 不再被几何引擎夺走原生 Tab 顺序**（曾违反 WCAG 2.4.3/2.1.1）→ 启用条件收窄为 `dpad`。
+- TV/车机声明 `focus:'ring'` 却只有 UA 默认细环 → 环挂 `dpad/focusTree`；★并**实测出「focus scale(1.04) 破坏几何」**（满行高热区上下溢出 2px 被裁、门禁判溢出）→ 改几何稳定的「环+投影+提亮」。线上实测：3px 琥珀环 + 方向键在 CTA/瓦片间移动 ✅
+- `prefers-reduced-motion` 在形态容器内未接 → 补；`caps.dense` 规则被内联同名变量恒覆盖（零后果）+ car 声明与自身语义矛盾 → 并入内联、car 撤除 dense。
+- 姿态类未做形态校验（`phone + posture=tabletop` 会隐藏 SKU/压封面）→ 仅当画像真有该姿态才落类。
+- `driveHint/degradedHint` 默认值硬编码中文（EN 站出中文）→ 宿主注入优先 + 中性缺省；演示内容槽双语化（EN 站实测 `hasCJK=false`）。
+
+**③ 门禁升级（本轮最重要的方法论产出）**
+- ★**e2e「子项横向越界」此前是死代码**：判据看 computed `overflowX`，而 `.pf-body{overflow-y:auto}` 按规范把 overflow-x 也解析为 auto → 所有后代恒被跳过（恰好漏掉它要防的车机瓦片裁切）。改「实测 `scrollWidth > clientWidth`」。→ **教训：门禁必须做破坏性验证，能红才算门禁**（本轮两次验证，第一次竟未红）。
+- **三态静态扫描从只扫 `.vue` 扩到 `fluid/src/*.ts`**（上面的 SSOT 缺陷正活在这层）。
+- ★**新增能力证据面** `data-pf-caps`（14 项三态机器可读摘要，`k=v;k=v` 稳定排序）+ e2e 对账用例（逐形态比对画像声明）。这是「声明 ≠ 空头」从口号变**可机器证伪**的一步。
+- 校验器补 **12 条跨字段规则**（nav↔caps / topology↔caps / input↔caps / 姿态 nav 与 ratio 护栏）；docstring 与实际对齐（此前承诺 ④⑤ 但未实现）。
+- 清理零消费者变量：`--pf-title`/`--pf-ar`/`--pf-frame-max`/`--pf-frame-radius`/`--pf-fold-left`。
+
+**④ 七视角一致结论（写进路线图）**
+- 形态画像 + 容器驱动度量 + 能力三态这条链**已达业界上游**（Flutter/SwiftUI/Compose/ArkUI 无一同时具备）。
+- 但它当前是**「一台没有传感器的柔性系统」**：最大结构性缺口是**信号源**（宿主实测能力、真机姿态事件、系统偏好），不是渲染层。
+- 待办（**不要重复报告为新发现**）：运行时能力协商（`CapsReport → negotiateCaps → CapFallbackRegistry`）、形态感知服务（`createFormFactor` 零生产消费者）、系统偏好联动（theme 写死）、跨形态状态连续契约（现状靠 Vue 不重建的副产品）、纵向流体（`props.height` 死）、每后端一致性契约（现只有控件名词汇表）、MP Skyline 降级分支、真机 TV 按键性能（5-15ms/键）。
+- 产品化最弱环：能力面板**只断言不演示**、真几何门禁**只在 CI 里**。快速赢清单见路线图 §4（页面证据条/一致性矩阵/交互式画像浏览器/第 8 形态接入演示/`proteus fluid check` 对外化）。
+
+**⑤ 验证**：fluid 90/90 · 真几何门禁 4/4（双视口 + 同会话切换 + 能力对账）· 官网/根 `vue-tsc` 0 错 · audit d2 PASS · `check:content`/`check:stats`/`check:mp-attrs`/`check:gates-sync` 全绿 · 线上实测（TV 安全区 96/54、caps 摘要 14 项、crown 仅 watch/car、car SKU fallback、bodyFits 全 true）。
+
 
 ### ★★用户实测纠错：窄舞台重叠（本轮最重要的教训）
 
