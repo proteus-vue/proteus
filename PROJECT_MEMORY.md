@@ -99,6 +99,8 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·总览页用户反馈三连修（2026-09-26 续四，用户实测反馈）**：①画廊与折叠速查表内容重复 → **总览页只保留画廊**（md 表格仍在内容层供搜索索引，页面不渲染）；②标题偏小 → 30→38px（副标题 14px）；③右侧「本页导读」锚点全指向下方表格 → 域分区加 `id=ovr-<i>` + scroll-margin-top 153px，DocsPage 总览页 tocFlat 覆盖为域列表（滚动高亮走既有 createScrollSpy 同机制）。部署 run 36223169614 success，线上 CSS 实证 38px + 锚点偏移生效。★设计取舍记录：md 表格从「页面渲染」退为「纯搜索/数据层」——总览页信息形态 = 画廊单一事实，导读 = 画廊目录。
+
 - **★本会话·官网对标优化 P0-1/P0-2 落地：组件详情页嵌 showcase 真演示（iframe 同源）+ 首页多端同屏前置（2026-09-26 续三，★★★用户「好的」批准按评审顺序动手）**：
   **① P0-1 组件页嵌真演示（73 页全覆盖，改一次模板）**——`ComponentDemo.vue`（HEAD 预检降级 / 同源 iframe 量 contentDocument 真实高 + ResizeObserver 跟随 / LIVE 徽标 + 新窗口打开）接入 DocsPage 的 `isComponentPage` 特判；showcase 部署配套三件：`proteus.config.ts` 支持 `PROTEUS_BASE`（vite.base）、`emit-spa-routes.mjs`（构建后把 index.html 落成每条路由真实目录——GitHub Pages 无 /showcase 级 404 兜底，119 条深链全可直达）、pages.yml 增 showcase 构建合入步。
   **② 框架级补丁：web-adapter 子路径 base 支持**——此前裸读 `location.pathname`，子路径部署路由全错；修为 stripBase（读剥 base）/withBase（写补 base）+ **尾斜杠归一**（目录式部署 /dir 必 301 到 /dir/，route 恒带尾斜杠）；回归锁 `tests/web-adapter-base.test.ts`（jsdom + vi.stubEnv BASE_URL，9 例含缺省直通防回归）。
