@@ -99,6 +99,14 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·报告余项收口：焦点引擎 + TV overscan + 手表暗色常亮（2026-09-26 续十三，用户「继续剩余项」）**：
+  **① ★焦点引擎（报告 P1-4，TV/车机此前根本不可操作的关键缺口）**：新增 `packages/fluid/src/focus-nav.ts`——**几何空间导航**纯逻辑（方向过滤 → 主轴距离 + 交叉轴偏移×权重 → 同行优先 → tie-break）；`p-formfactor` 接入后遥控（dpad）/键盘（keyboard）形态**自动启用**：roving tabindex + ↑↓←→ 移动 + Enter/Space 触发 + 首焦点定位 + 焦点行 scrollIntoView。回归锁 `tests/fluid-focus-nav.test.ts` 9 例。★**测试抓到算法缺陷**：Hero 宽块 + 等距卡片场景会随机选中中间那张 → 加确定性 tie-break（交叉轴对齐 → 主轴距离 → 几何顺序）。
+  **② TV overscan**（报告 P1-4）：safe side 0→96 / bottom 0→54（1080p 5% 安全区；此前 1.76%）。
+  **③ 手表暗色常亮**（报告 P1-3/P1-4/P2-1）：visual light→**dark AMOLED**（#000 + #f5f6fa + 暖橙，对比度 18.9:1 / 9.8:1）；`frame.watchFace` → 状态栏渲染**时间 + complication**（10:24 / ❤️72）。
+  **④ ★组件审计拦下我的实现（诚实记录）**：我最初在组件内直用 `ResizeObserver`/`getBoundingClientRect` → 审计报 `[no-browser-observer]`（MP 无这些 API → 静默失效）→ 改用 `@proteus-vue/fluid` 的 `createContainerQuery` 观测原语（Web RO / MP SelectorQuery 统一封装）→ 审计 **77/77 ✅**。**教训：组件层必须走框架观测原语，不能直用 DOM API。**
+  **⑤ 验证**：focus-nav 9/9 · formfactor 19/19 · 组件审计 77/77 ✅ · 根 vue-tsc 0 错误 · 全量单测仅 2 预存环境失败 · catalog 快照重生成 · 部署 run 36236393819 success + 线上包实证（navigateFocus/watchFace/10:24 均在）。
+  **报告余项仅剩**：caps 三态（supported/fallback/unsupported——车机 SKU 应为 fallback 降级而非删除）· 折叠屏 posture/continuity（折叠↔展开过渡）· 手表表冠视觉细化。
+
 - **★本会话·按专家报告续修：折叠屏真双窗格 + 形态级媒体/安全区/铰链 + 14 项能力可证伪（2026-09-26 续十二，★★★用户「折叠屏一般是左右布局才对吧，请继续按照上面的子代理报告优化」）**：
   **① 折叠屏（报告 P0-1/P1-1/P1-2）**：`duo` 拓扑改**真双窗格**（等宽 1:1 + 左窗格撑满——此前 42/58 非对称 + align-items:start → 左栏仅一图、展开后 2/3 空置「手机加宽版」）；视口 520×720 → **673×841**（真实 Z Fold 内屏；曾因 520 会被自身阈值判成 phone）+ 帧比例 3/4 → 6/7；`FormFrame +hinge` 渲染折痕。
   **② 形态级字段补齐（报告 P2-2/P1-3）**：`FormProfile +mediaRatio`（phone/tablet 4:3 · fold 1:1 · pc 16:10 · car/tv 16:9 → `--pf-media-ar`，演示媒体随形态变化，不再硬编码）；`+safe`（tablet 握持 20pt · phone Home Indicator 34pt · car 边缘 → `--pf-safe-*` 纳入 padding）；平板视口改横屏 1194×834 + 侧栏项加图标与 44pt 最小高度。
