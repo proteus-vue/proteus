@@ -24,6 +24,29 @@
 - **能并行就并行，能批量就批量**：无依赖的调用合并同批发出。
 - 冲突优先级：**正确性 > 安全性 > 效率**。
 
+### ★★ 红线：禁止固定 sleep 盲等（2026-09-27 起有工具级拦截）
+
+- **`sleep ≥ 5s` 会被 hook 拦截**（PreToolUse → `scripts/hooks/deny-sleep.mjs`，返回 deny + 替代方案）。
+  · hook 脚本**已入库**（`scripts/hooks/deny-sleep.mjs`），配置在 `.zcode/config.json`（该目录 gitignore，
+    属本地配置）：新 worktree/新机器请把下方 `hooks` 块加进 `.zcode/config.json` 并**重启会话**——
+    ZCode 在会话启动时读取 hooks 源，中途创建不生效。
+  · 安装片段（`hooks.enabled` 必填，否则配置文件的 hooks 默认不运行）：
+    ```json
+    { "hooks": { "enabled": true, "events": { "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "process", "command": "node",
+          "args": ["${ZCODE_PROJECT_DIR}/scripts/hooks/deny-sleep.mjs"], "timeoutMs": 5000 } ] } ] } } }
+    ```
+  · 自测：`printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 100"}}' | node scripts/hooks/deny-sleep.mjs`
+    → 应输出 `permissionDecision: deny`。
+- **部署/线上核验**：跑一次 `pnpm check:live`（仓库自带 `website/scripts/verify-live.mjs`，带 CDN 传播重试）。
+  **不要**自行写 `for i in ...; do curl ...; sleep N; done` 轮询——这正是被拦截的模式。
+- **等条件就绪**：`bash .agents/skills/ai-efficiency-rules/scripts/wait_for.sh --http <url> --timeout 90`。
+- **无法判定时（等 CI 队列等）**：**直接告诉用户「已触发，请刷新查看」**——用户目视验收比 AI 轮询快。
+  （用户原话：「等你验证还不如我直接去看」「不用验证了，已经生效了」——已发生 3 次，记牢。）
+- 禁止的三种错误验证法（均实测踩过）：① 轮询 HTML 抓 CSS 哈希（有 CDN 缓存）；
+  ② grep 主 bundle 找文档标记（内容在独立 chunk）；③ 资产名已变仍判 old。
+
 ## 2. 项目门禁（改代码后按需运行）
 
 ```bash
