@@ -12,9 +12,14 @@ group: 柔性系统
 
 | 姿态 `key` | 视口 | 拓扑 | 导航 | 特殊语义 |
 |---|---|---|---|---|
-| `folded` 折叠态（外屏） | 340×800 | `stack` 单列 | bottom-tabs | 度量按**窄手机**基准（`ratio.ref: 300`） |
-| `tabletop` 半折（桌面模式） | 673×420 | `stack` | tabs | 水平铰链——上半展示 / 下半操作 |
-| `expanded` 展开态（内屏） | 673×841 | `duo` 双窗格 | tabs | 主图 + 详情分列 |
+| `folded` 折叠态（外屏） | **466×678** | `stack` 单列 | **side-tabs** 侧置 | 宽而矮——控件侧置保留垂直内容空间 |
+| `tabletop` 半折（桌面模式） | 673×420 | `stack` | **side-tabs** | 水平铰链——上半展示 / 下半操作 |
+| `expanded` 展开态（内屏） | **626×890** | `duo` 双窗格 | **side-tabs** | 主图 + 详情分列 |
+
+> 视口与导航均按 **Apple HIG「Designing for iPhone Duo」**（2026-09-09 新增页）与官方技术规格对齐：
+> iPhone Duo 内屏 1878×2670px @430ppi ≈ 626×890pt、外屏 1398×2034px @460ppi ≈ 466×678pt。
+> 关键结论：折叠外屏是**「比手机更宽更矮」**（466×678，宽高比 0.69），不是 Z Fold 式窄长竖屏；
+> 因而系统把工具栏/Tab 栏**移到侧边**以保留垂直内容空间，并在内屏横向时保持同侧。
 
 ```ts
 // packages/fluid/src/formfactor.ts（fold 画像摘录）
@@ -38,10 +43,12 @@ postures: [
 半折是「上半屏展示、下半屏操作」的物理形态，可视高度只有 420pt。实现按**优先级取舍**而非等比压缩：
 
 - 媒体区上限 40%（保证上屏有内容、下屏可操作）
-- 描述与规格收起（抬腕/半折场景读不完次要信息）
-- 主操作与 Tab 保留在可达位置
+- **只**收起长描述（次要信息）；**规格（SKU）保留**——它是购买路径
+- 主操作与 Tab 保留在可达位置（Tab 侧置）
 
-内容不得跨折痕：水平铰链时折痕横贯中部（演示页按 `posture.hinge` 画横折痕，此前恒为竖折痕是错的）。
+> ★两处按 Apple HIG 修正（2026-09-28）：
+> ① **不再隐藏 SKU**——原文两条：「Maintain the same functionality across device poses」（跨姿态必须能访问**同样的控件与内容**）与「Avoid extreme layout changes as people fold … favor small adjustments over rearrangement」（控件消失或大位移会让人找不到）。SKU 被隐藏即丢功能，现改为紧凑排布。
+> ② **折痕语义**：内容不得跨折痕（水平铰链时折痕横贯中部，演示页按 `posture.hinge` 画横折痕；此前恒为竖折痕是错的）。
 
 ## 铰链几何
 

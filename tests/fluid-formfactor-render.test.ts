@@ -85,10 +85,12 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
 
   it('⑥ 姿态覆盖：fold + tabletop → data-pf-nav=tabs（nav 字段必须有渲染后果）', async () => {
     const folded = await mountForm('fold', { posture: 'folded' })
-    expect(root(folded).dataset.pfNav).toBe('bottom-tabs')
+    // ★2026-09-28 借鉴 Apple HIG（iPhone Duo）：宽而矮的外屏把控件移到侧边 → side-tabs
+    expect(root(folded).dataset.pfNav).toBe('side-tabs')
     expect(root(folded).dataset.pfPosture).toBe('folded')
     const table = await mountForm('fold', { posture: 'tabletop' })
-    expect(root(table).dataset.pfNav).toBe('tabs')
+    // ★2026-09-28 Apple HIG：三姿态控件统一侧置（横屏侧边 + 跨姿态位置一致）
+    expect(root(table).dataset.pfNav).toBe('side-tabs')
     const expanded = await mountForm('fold', { posture: 'expanded' })
     expect(root(expanded).dataset.pfTopology).toBe('duo')
   })

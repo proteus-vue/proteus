@@ -29,7 +29,7 @@ Conclusion: a form is the combination of **input continuity + viewing distance +
 |---|---|---|---|---|---|---|
 | `watch` | dial (crown) | compact | `glance` one screen, one meaning | page-stack | glance | dark (always-on AMOLED) |
 | `phone` | touch | regular | `stack` single column + tabs | bottom-tabs | arm | light |
-| `fold` | touch | regular | `duo` two panes (expanded) | tabs | arm | light |
+| `fold` | touch | regular | `duo` two panes (expanded) | side-tabs (all postures) | arm | light |
 | `tablet` | touch | regular | `rail-split` rail + split | rail | arm | light |
 | `pc` | cursor | regular | `rail-grid` rail + grid | side-nav | desk | light |
 | `car` | remote (rotary) | comfortable | `dashboard` cockpit | focus-tree | dashboard | dark |

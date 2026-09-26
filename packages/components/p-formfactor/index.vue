@@ -174,6 +174,9 @@ const rootClass = computed(() => {
     `topo-${p.topology}`,
     `form-${form.value}`,
     `input-${p.input}`,
+    // ★导航轴线类（2026-09-28）：nav 此前只有 data-pf-nav 诊断属性、CSS 零消费。
+    //   现落根类——side-tabs（Apple HIG「vertical controls」）据此把 Tab 栏移到侧边。
+    `nav-${p.nav}`,
     // ★姿态类（2026-09-26 二次复审）：tabletop 半折需按「上半展示/下半操作」取舍。
     //   三审修：必须**有该姿态定义**才落类——此前 phone + posture=tabletop 会套上
     //   .posture-tabletop（隐藏 SKU 槽 + 压封面 40%），而画像/拓扑毫无变化 = 声明与渲染打脸。
@@ -546,9 +549,17 @@ onUnmounted(() => {
    需 ≈320px 而可用 ≈200px → 主操作落在折线以下。按半折的真实使用取舍：
    只留「封面 + 标题 + 价格 + 主操作」（描述/规格收起——折叠态外屏同样收），
    并把封面压到 40% 以内，让上屏（媒体）与下屏（信息 + 操作）各自完整。 */
+/* ★半折取舍修正（2026-09-28 借鉴 Apple HIG）：原文两条——
+   ① 「Maintain the same functionality across device poses」：控件可能溢出/内容可移动，
+      **但必须保证所有姿态都能访问相同的控件与内容**；
+   ② 「Avoid extreme layout changes as people fold the device … favor small adjustments
+      over rearrangement」（控件消失或大位移会让人找不到）。
+   故：**不再隐藏 SKU 槽**（它是购买路径，隐藏即丢功能），只收起次要的长描述；
+   Apple 示例（Mail 半折仍可读列表与邮件）与「overlay arrangement 半折时主次分居两侧」同义。 */
 .p-formfactor.posture-tabletop .pf-media { max-height: 40%; }
 .p-formfactor.posture-tabletop .pf-info :deep(.fp-desc) { display: none; }
-.p-formfactor.posture-tabletop .pf-sku { display: none; }
+/* SKU 保留但紧凑（横向压缩间距，不换行两次占高） */
+.p-formfactor.posture-tabletop .pf-sku { gap: calc(var(--pf-u) * 0.3); }
 .p-formfactor.posture-tabletop .pf-actions { min-height: 0; }
 
 /* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ──
@@ -569,6 +580,31 @@ onUnmounted(() => {
    现走形态色（未选中 = dim，选中 = brand）+ 流体字号。选中态由内容槽的 .on 提供，此处兜底。 */
 .pf-tabbar :deep(*) { flex: 1; text-align: center; font-size: calc(var(--pf-font) * 0.9); color: var(--pf-dim, #616875); }
 .pf-tabbar :deep(.on) { color: var(--pf-brand, #6f4ae8); font-weight: 700; }
+/* ★vertical controls（2026-09-28 借鉴 Apple HIG「Designing for iPhone Duo」）：
+   宽而矮的外屏垂直空间紧张 → 系统把工具栏/Tab 栏移到**侧边**以保留内容高度。
+   Apple 原文：「toolbars, tab bars, and navigation controls … move to the side,
+   preserving vertical space for content」。此处把 Tab 栏从底部改为**右侧竖排**。 */
+.p-formfactor.nav-side-tabs { flex-direction: row-reverse; }
+.p-formfactor.nav-side-tabs .pf-tabbar {
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 0;
+  border-top: none;
+  /* 与内屏保持同侧（Apple：same side in landscape —— 跨姿态控件位置一致，用户不重学） */
+  border-left: 1px solid color-mix(in srgb, var(--pf-text, #000) 12%, transparent);
+  padding: 0 calc(var(--pf-u) * 0.5);
+  min-width: calc(var(--pf-u) * 4.6);
+}
+.p-formfactor.nav-side-tabs .pf-tabbar :deep(*) {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--pf-u) * 0.2);
+  padding: calc(var(--pf-u) * 0.55) 0;
+  min-height: var(--pf-control, 44px);
+  justify-content: center;
+}
 
 /* ── 拓扑：duo（折叠屏——主图 + 详情双列） ── */
 /* ★折叠屏真双窗格（2026-09-26 报告 P0-1）：等宽 1:1 + 左栏撑满
