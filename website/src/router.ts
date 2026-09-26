@@ -9,6 +9,8 @@ import Home from './pages/Home.vue'
 import DocsPage from './pages/DocsPage.vue'
 import Playground from './pages/Playground.vue'
 import MultiDevice from './pages/MultiDevice.vue'
+import Ecosystem from './pages/Ecosystem.vue'
+import Changelog from './pages/Changelog.vue'
 
 export const router = createRouter({
   // ★GitHub Pages 子路径部署：base 跟随 vite（import.meta.env.BASE_URL——Vercel 根路径 = '/' 行为不变）
@@ -17,6 +19,8 @@ export const router = createRouter({
     { path: '/', name: 'home', component: Home },
     { path: '/playground', name: 'playground', component: Playground },
     { path: '/multi-device', name: 'multidev', component: MultiDevice },
+    { path: '/ecosystem', name: 'ecosystem', component: Ecosystem },
+    { path: '/changelog', name: 'changelog', component: Changelog },
     { path: '/docs', redirect: '/docs/01-intro' },
     { path: '/docs/:slug', name: 'guide', component: DocsPage },
     { path: '/docs/component/:slug', name: 'doc-component', component: DocsPage },

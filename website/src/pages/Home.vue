@@ -278,7 +278,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       <span class="rb-item"><span class="rb-dot" />{{ t('home.relVersion') }}</span>
       <span class="rb-item">{{ t('home.relLicense') }}</span>
       <span class="rb-item">{{ t('home.relBuild') }}</span>
-      <router-link to="/docs/01-intro" class="rb-link">{{ t('home.relMore') }}</router-link>
+      <router-link to="/changelog" class="rb-link">{{ t('home.relMore') }}</router-link>
     </p-stack>
     <!-- 1. Hero：双栏（左文案 + 右产品视觉）——参考「专业组件库官网」构图 -->
     <p-view v-p-fluid="'padding-top(24, 44) padding-bottom(40, 76)'" class="hero">
