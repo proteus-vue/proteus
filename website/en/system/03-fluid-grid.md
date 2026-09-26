@@ -49,10 +49,10 @@ A 320px container → 1 column, 768px → 4 columns, 1440px → 8 columns; it ch
 | Column count | Written by hand once per breakpoint | auto-fill solves it automatically |
 | Breakpoint magic numbers | 768 / 1024 / 1440 scattered everywhere | none (only the min-col-width semantics) |
 | Container context | Viewport breakpoints fail for cards / split panes | Automatically correct by container width |
-| Cross-end mapping | CSS only | iOS `UICollectionView` / Android `GridLayoutManager` / HarmonyOS `Grid` / Web CSS Grid |
+| Cross-end mapping | CSS only | Native containers: iOS `UICollectionView` / Android `GridLayoutManager` / HarmonyOS `Grid` / Web CSS Grid; self-drawing backends: Flutter `GridView`/`Wrap`, `skia` |
 | Governance | none | The FLD004 gate forces min-col-width to be declared |
 
-Principle #10 projected once more: the framework defines the "adaptive grid" semantics, and each end implements it with **its own system-level grid container** — Proteus does not simulate grids.
+Principle #10 projected once more: the framework defines the "adaptive grid" semantics and each target implements it with **its own grid implementation** — a native layout container (CSS Grid / `UIStackView`+AutoLayout / `ConstraintLayout` / ArkUI `Grid`) or a third-party self-drawing backend (Flutter `GridView`/`Wrap`, the `skia` backend). Proteus does not simulate grid geometry.
 
 ## A real example: this website
 

@@ -49,10 +49,10 @@ gap: 12px;
 | 列数 | 每个断点手写一遍 | auto-fill 自动求解 |
 | 断点魔数 | 768 / 1024 / 1440 散落各处 | 无（只有 min-col-width 语义） |
 | 容器位置 | 视口断点对卡片 / 分屏失效 | 按容器宽自动正确 |
-| 跨端映射 | 仅 CSS | iOS `UICollectionView` / Android `GridLayoutManager` / 鸿蒙 `Grid` / Web CSS Grid |
+| 跨端映射 | 仅 CSS | 原生容器：iOS `UICollectionView` / Android `GridLayoutManager` / 鸿蒙 `Grid` / Web CSS Grid；自绘后端：Flutter `GridView`/`Wrap`、`skia` |
 | 治理 | 无 | FLD004 门禁强制声明 min-col-width |
 
-原则 #10 的又一次投影：框架定义「自适应网格」语义，各端用**各自的系统级网格容器**实现——Proteus 不模拟网格。
+原则 #10 的又一次投影：框架定义「自适应网格」语义，各端用**自己的网格实现**——原生布局容器（CSS Grid / `UIStackView`+AutoLayout / `ConstraintLayout` / ArkUI `Grid`）或第三方自绘后端（Flutter `GridView`/`Wrap`、`skia` 后端）——Proteus 不模拟网格几何。
 
 ## 真实示例：本官网
 

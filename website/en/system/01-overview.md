@@ -6,7 +6,9 @@ group: 柔性系统
 
 # Flex System
 
-**The Flex System is Proteus's layout engine.** You declare only *what* you want — a font size that varies between two widths, a minimum card width, when a sidebar should appear — and the framework works out *how* to lay it out from the **container width** and the **device form**.
+**The Flex System is Proteus's layout semantics layer.** You declare only *what* you want — a font size that varies between two widths, a minimum card width, when a sidebar should appear — and the framework derives *which structure, what metrics, which capabilities* from the **container width** and the **device form**, then hands the geometry to each target's **layout implementation**.
+
+> **The boundary, stated plainly**: the framework does **not** build its own cross-target layout engine (no in-house Yoga / Skia as a unified engine). It hands the semantics to each target — either a **native layout container** (CSS Grid / `UIStackView` / `ConstraintLayout` / ArkUI / Skyline) **or a third-party self-drawing engine backend** (`BackendId` already registers `skia` / `canvas2d` / `flutter`; the Flutter backend's layout reuses Flutter's internal Yoga layer). Both kinds of backend consume **the same layout semantics** — which is exactly where "one codebase, isomorphic across targets" lands.
 
 In one line, three things it replaces:
 
