@@ -99,6 +99,15 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★★本会话·形态视觉语言 + 能力清单对齐旧版（用户第二次指正「还是差得远」，2026-09-26 续十）**：
+  **① 用户诊断**：形态差异不止布局——TV 真正的形态还包括**视觉语言**（暗色沉浸底 / 10ft 大字号 / 海报胶囊 / 焦点环），我此前七端都是同一套浅色 UI 塞进不同框里 + 能力声明只有固定几项。
+  **② FormVisual（形态级主题）**：`theme/bg/surface/text/dim/brand/accent/font/radius/focus`——TV 深蓝 `#0f1838` 沉浸 + 38px 字号 + 暖橙 `#ffb13d` 价格 + 3px 焦点环（对齐旧版 `flexible-multi-device.html` 的 `.tv-root/.tv-hero/.tv-focus` 设计）；车机暗色驾驶舱 `#10142a` + 26px（余光可辨）；手表 17px 紧凑 / 手机 14 / 平板 16 / PC 18 桌面密排。**ViewingDistance** 语义档（glance/arm/desk/dashboard/10ft）决定字号与热区。
+  **③ 能力清单 10 → 14 项**（对齐旧版六端能力表 `DEVICES.caps`）：+`dpad`/`crown`/`focusTree`/`multiCol`，并按旧版勾选态补全七形态（TV: dpad+focusRows+multiCol；车机: dpad+crown+focusTree+dense+driveAware；表: crown；折叠/平板/PC: multiCol）。
+  **④ p-formfactor 应用视觉语言**：CSS 变量注入（`--pf-bg/text/brand/accent/font/radius/focus-ring`）+ 遥控/键盘形态焦点环 + TV/车机暗色卡片与暖橙价格；拓扑增强（TV 海报胶囊 16:9 + 模糊底；车机大热区瓦片 3 列）。
+  **⑤ 校验门禁扩展**（防「浅色 UI 塞大框」回归）：遥控/键盘形态必须焦点可见；10ft 字号 ≥30；驾驶 ≥22；dark 主题关键色齐备。
+  **⑥ 验证**：回归锁 +2 例（视觉语言断言 / 14 项能力断言）→ **15/15**；全量单测仅 2 预存环境失败；根 vue-tsc 0 错误；部署 run 36232488675 success + 线上包实证（0f1838/ffb13d/ViewingDistance/dpad 均在）。
+  **⑦ 教训（形态设计的完整定义）**：形态 = **布局拓扑 + 导航 + 视觉语言 + 能力集 + 密度/缩放 + 输入语义**，六者缺一都会「看起来只是响应式」。此前只做了前两者 + 部分能力 → 用户判定「差得远」。
+
 - **★★本会话·Fluid System v2：设备形态升为一等概念（根治「只是响应式布局 + 能力堆积木」，2026-09-26 续九，★★★用户两次指正）**：
   **① 用户诊断（准确）**：(a) 能力声明只有固定 4 项；(b) 大屏设备（PC/平板/车机/TV）形态几乎无差异；(c) 「和传统响应式布局没有任何大的差异」；(d) 要求「布局和能力根据设备形态自动感知变化」。根因核实：旧柔性系统**只有容器宽度一个维度**（断点 sm/md/lg/xl）——PC 1280 与车机 1280、TV 1920 在系统眼里只有宽度差；`env.ts` 有设备信号但无形态概念；`p-zone` 要业务自己写四个槽（=响应式）。
   **② 新增形态感知层 `packages/fluid/src/formfactor.ts`**：`FORM_PROFILES` 七形态画像 SSOT（watch/phone/fold/tablet/pc/car/tv × input/density/topology/nav/scale/viewport + **10 项能力声明**）；三层感知（**宿主声明 > 环境探测 pointer/hover+视口 > 兜底**），★watch/car/tv 不可自动识别故不猜（诚实边界）；`senseForm`/`formSupports`/`probePointer`/`createFormFactor`（响应式）/`validateFormProfiles`（门禁）；拓扑枚举新增 **dashboard**（车机驾驶大卡片）与 **hero-focus-row**（TV lean-back 海报流）——**车机与 TV 拓扑刻意不同**。
