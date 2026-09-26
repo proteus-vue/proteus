@@ -11,7 +11,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 import { ref } from 'vue'
 import type { DeviceForm } from '@proteus-vue/fluid'
-import { computed } from 'vue'
+import { computed, watchEffect } from 'vue'
 import { locale } from '../../i18n'
 
 const isEn = computed(() => locale.value === 'en')
@@ -24,34 +24,74 @@ const props = defineProps<{
   height: number
 }>()
 
-// 纯业务状态（与形态无关）
-const product = {
-  name: '无线降噪耳机 Pro',
-  price: 1299,
-  desc: '40h 续航 · 自适应降噪 · 空间音频 · Hi-Res 认证',
+// 纯业务状态（与形态无关）——★三审：文案按 locale 取值（此前 EN 站整块输出中文，
+// 演示页在英文语境下不可读；数据形状保持单份，仅文案双语）
+const COPY = {
+  zh: {
+    name: '无线降噪耳机 Pro',
+    desc: '40h 续航 · 自适应降噪 · 空间音频 · Hi-Res 认证',
+    skus: ['曜石黑', '月光白', '雾霾蓝'],
+    buy: '立即购买',
+    fav: '＋ 收藏',
+    tabs: ['首页', '发现', '购物车', '我的'],
+    rail: ['首页', '音频', '订单', '设置'],
+    brand: '🎧 云端商城',
+    recs: [
+      { ic: '🎵', name: '替换耳罩', price: 39 },
+      { ic: '🔌', name: '音频线', price: 59 },
+      { ic: '🎒', name: '收纳包', price: 99 },
+      { ic: '🔋', name: '充电底座', price: 199 },
+      { ic: '📦', name: '旅行套装', price: 299 },
+    ],
+    degraded: '🎙/↻ 语音或旋钮选择',
+    drive: '驾驶中：已精简层级与动效',
+  },
+  en: {
+    name: 'Noise-Cancelling Headphones Pro',
+    desc: '40 h battery · Adaptive ANC · Spatial audio · Hi-Res certified',
+    skus: ['Obsidian', 'Moonlight', 'Haze'],
+    buy: 'Buy now',
+    fav: '＋ Save',
+    tabs: ['Home', 'Discover', 'Cart', 'Me'],
+    rail: ['Home', 'Audio', 'Orders', 'Settings'],
+    brand: '🎧 Cloud Store',
+    recs: [
+      { ic: '🎵', name: 'Ear pads', price: 39 },
+      { ic: '🔌', name: 'Audio cable', price: 59 },
+      { ic: '🎒', name: 'Carry case', price: 99 },
+      { ic: '🔋', name: 'Charging dock', price: 199 },
+      { ic: '📦', name: 'Travel kit', price: 299 },
+    ],
+    degraded: '🎙/↻ pick by voice or rotary',
+    drive: 'Driving: simplified hierarchy & motion',
+  },
 }
-const skus = ['曜石黑', '月光白', '雾霾蓝']
-const picked = ref('曜石黑')
+const t = computed(() => (isEn.value ? COPY.en : COPY.zh))
+const product = computed(() => ({ name: t.value.name, price: 1299, desc: t.value.desc }))
+const skus = computed(() => t.value.skus)
+const picked = ref('')
 const counted = ref(1)
-const recs = [
-  { ic: '🎵', name: '替换耳罩', price: 39 },
-  { ic: '🔌', name: '音频线', price: 59 },
-  { ic: '🎒', name: '收纳包', price: 99 },
-  { ic: '🔋', name: '充电底座', price: 199 },
-  { ic: '📦', name: '旅行套装', price: 299 },
-]
+const recs = computed(() => t.value.recs)
+// 选中项随语言/数据初始化（保持「已选中」语义）
+watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
 </script>
 
 <template>
   <!-- ★框架组件：一行接形态，其余全自动（拓扑 / 视觉语言 / 能力 / 密度 / 缩放 / 热区） -->
-  <p-formfactor :declared="form" :posture="posture ?? ''" :width="width" :height="height">
+  <p-formfactor
+    :declared="form"
+    :posture="posture ?? ''"
+    :width="width"
+    :degraded-hint="t.degraded"
+    :drive-hint="t.drive"
+  >
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>
-      <span class="fp-brand">🎧 云端商城</span>
-      <span class="fp-rail-item on"><i class="fp-rail-ic">🏠</i>{{ isEn ? 'Home' : '首页' }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">🎵</i>{{ isEn ? 'Audio' : '音频' }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">📦</i>{{ isEn ? 'Orders' : '订单' }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">⚙️</i>{{ isEn ? 'Settings' : '设置' }}</span>
+      <span class="fp-brand">{{ t.brand }}</span>
+      <span class="fp-rail-item on"><i class="fp-rail-ic">🏠</i>{{ t.rail[0] }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">🎵</i>{{ t.rail[1] }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">📦</i>{{ t.rail[2] }}</span>
+      <span class="fp-rail-item"><i class="fp-rail-ic">⚙️</i>{{ t.rail[3] }}</span>
     </template>
 
     <!-- 主视觉 -->
@@ -77,8 +117,8 @@ const recs = [
 
     <!-- 主操作（遥控/旋钮形态框架自动放大热区 + 加焦点环；车机只留 2 个大热区） -->
     <template #actions>
-      <button class="fp-primary" @click="counted++">▶ 立即购买</button>
-      <button class="fp-ghost">＋ 收藏</button>
+      <button class="fp-primary" @click="counted++">▶ {{ t.buy }}</button>
+      <button class="fp-ghost">{{ t.fav }}</button>
     </template>
 
     <!-- 推荐（★TV/车机形态框架自动转横向焦点海报流） -->
@@ -92,7 +132,7 @@ const recs = [
 
     <!-- 底部 Tab（★仅声明 tabs 的形态渲染：手机 / 折叠屏） -->
     <template #tabbar>
-      <span class="on">首页</span><span>发现</span><span>购物车</span><span>我的</span>
+      <span v-for="(tb, i) in t.tabs" :key="tb" :class="{ on: i === 0 }">{{ tb }}</span>
     </template>
   </p-formfactor>
 </template>

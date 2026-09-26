@@ -107,10 +107,12 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
   it('⑧ 根类覆盖全部声明能力（能力 → CSS 后果的接线不可漏项）', async () => {
     const el = await mountForm('car')
     const cls = root(el).classList
-    // 车机声明：dpad / crown / focusTree / dense / multiCol / focusRows / driveAware
-    for (const c of ['has-dpad', 'has-crown', 'has-focus-tree', 'is-dense', 'has-multicol', 'is-drive']) {
+    // 车机声明：dpad / crown / focusTree / multiCol / focusRows / driveAware
+    // ★三审：dense 已撤除（驾驶场景不做高密度——与接口注释一致）
+    for (const c of ['has-dpad', 'has-crown', 'has-focus-tree', 'has-multicol', 'is-drive']) {
       expect(cls.contains(c), `车机应有 ${c}`).toBe(true)
     }
+    expect(cls.contains('is-dense'), '车机不应有 is-dense（dense 已撤除）').toBe(false)
     // 未声明：hover / keyboard / sidebar / notch / drawer / tabs
     for (const c of ['has-hover', 'has-keyboard', 'has-notch', 'has-drawer']) {
       expect(cls.contains(c), `车机不应有 ${c}`).toBe(false)

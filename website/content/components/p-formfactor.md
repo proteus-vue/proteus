@@ -34,8 +34,8 @@ order: 6
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
 | `declared` | 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 | `String as () => DeviceForm \| null` | `null` | 否 |
-| `degradedHint` | 降级路径提示文案（宿主注入——组件层不含 i18n 依赖） | `String` | `''` | 否 |
-| `driveHint` | ★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文） | `String` | `'驾驶中：已精简信息层级与动效，仅保留核心购买路径'` | 否 |
+| `degradedHint` | 降级路径提示文案（宿主注入——组件层不含 i18n 依赖；缺省走中性英文图标串） | `String` | `''` | 否 |
+| `driveHint` | ★驾驶提醒文案（driveAware 形态显示；**宿主注入优先**——三审：此前默认值硬编码中文， | `String` | `''` | 否 |
 | `posture` | ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） | `String` | `''` | 否 |
 | `width` | 容器尺寸注入（宿主/测试；缺省用容器自身测量） | `Number` | `0` | 否 |
 | `height` | 高度（px） | `Number` | `0` | 否 |
@@ -50,12 +50,12 @@ order: 6
 #### `degradedHint`
 
 - **类型**：`String`　**默认值**：`''`　**必填**：否
-- **说明**：降级路径提示文案（宿主注入——组件层不含 i18n 依赖）
+- **说明**：降级路径提示文案（宿主注入——组件层不含 i18n 依赖；缺省走中性英文图标串）
 
 #### `driveHint`
 
-- **类型**：`String`　**默认值**：`'驾驶中：已精简信息层级与动效，仅保留核心购买路径'`　**必填**：否
-- **说明**：★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文）
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★驾驶提醒文案（driveAware 形态显示；**宿主注入优先**——三审：此前默认值硬编码中文，
 
 #### `posture`
 
@@ -103,7 +103,7 @@ order: 6
 ## 用法
 
 ```vue
-<p-formfactor :declared="null" :degradedHint="'…'" :posture="'…'">
+<p-formfactor :declared="null" :degradedHint="'…'" :driveHint="'…'">
   <template #rail>…</template>
   <template #media>…</template>
   <p-text>内容</p-text>
