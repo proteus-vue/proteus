@@ -1,7 +1,7 @@
 ---
 title: p-clipboard
 order: 12
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-clipboard

@@ -1,7 +1,7 @@
 ---
 title: p-cursor-glow
 order: 15
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-cursor-glow

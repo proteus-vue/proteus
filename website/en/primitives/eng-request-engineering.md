@@ -1,7 +1,7 @@
 ---
 title: Request engineering (R1-R4: request/useQuery/enqueue/runOnce)
 order: 84
-group: Engineering primitives
+group: Engineering semantic primitives
 ---
 
 # Request engineering (R1-R4: request/useQuery/enqueue/runOnce)

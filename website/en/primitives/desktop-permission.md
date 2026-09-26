@@ -1,7 +1,7 @@
 ---
 title: p-permission
 order: 26
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-permission

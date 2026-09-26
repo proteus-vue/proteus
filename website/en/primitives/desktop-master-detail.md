@@ -1,7 +1,7 @@
 ---
 title: p-master-detail
 order: 22
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-master-detail

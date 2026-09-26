@@ -1,7 +1,7 @@
 ---
 title: Gesture recognizers (tap/pan/swipe/pinch/rotate)
 order: 60
-group: Gesture primitives
+group: Gesture semantic primitives
 ---
 
 # Gesture recognizers (tap/pan/swipe/pinch/rotate)

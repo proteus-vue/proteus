@@ -1,7 +1,7 @@
 ---
 title: p-network-status
 order: 23
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-network-status

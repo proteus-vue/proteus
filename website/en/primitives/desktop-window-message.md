@@ -1,7 +1,7 @@
 ---
 title: Cross-window message primitive (iframe postMessage funnel)
 order: 31
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # Cross-window message primitive (iframe postMessage funnel)

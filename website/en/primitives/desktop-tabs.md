@@ -1,7 +1,7 @@
 ---
 title: p-tabs
 order: 30
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-tabs

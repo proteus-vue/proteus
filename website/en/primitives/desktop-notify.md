@@ -1,7 +1,7 @@
 ---
 title: p-notify
 order: 24
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-notify

@@ -1,7 +1,7 @@
 ---
 title: p-breadcrumb
 order: 11
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-breadcrumb

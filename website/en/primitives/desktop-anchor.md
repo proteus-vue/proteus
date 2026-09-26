@@ -1,7 +1,7 @@
 ---
 title: Anchor positioning primitive (scrollToId)
 order: 10
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # Anchor positioning primitive (scrollToId)

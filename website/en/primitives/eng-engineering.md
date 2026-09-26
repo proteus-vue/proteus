@@ -1,7 +1,7 @@
 ---
 title: Basic engineering primitives (E1-E9: useState/useComputed/useWatch/useLifecycle…)
 order: 81
-group: Engineering primitives
+group: Engineering semantic primitives
 ---
 
 # Basic engineering primitives (E1-E9: useState/useComputed/useWatch/useLifecycle…)

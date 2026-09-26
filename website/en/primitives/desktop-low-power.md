@@ -1,7 +1,7 @@
 ---
 title: p-low-power
 order: 21
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-low-power

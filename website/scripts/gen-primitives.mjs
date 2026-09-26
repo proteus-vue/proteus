@@ -17,15 +17,25 @@ const check = process.argv.includes('--check')
 
 /** ★#460/#462 生成源（多包）：{ id, rel, group, prefix, orderBase }——desktop 模块 + gesture 接线 */
 const SOURCES = [
-  { id: 'desktop', rel: 'packages/desktop', group: '桌面原语', prefix: 'desktop-', orderBase: 10 },
-  { id: 'gesture', rel: 'packages/gesture', group: '手势原语', prefix: 'gesture-', orderBase: 60 },
+  { id: 'desktop', rel: 'packages/desktop', group: '桌面语义原语', prefix: 'desktop-', orderBase: 10 },
+  { id: 'gesture', rel: 'packages/gesture', group: '手势语义原语', prefix: 'gesture-', orderBase: 60 },
   // ★files 白名单（2026-09-19 修「官网静默缺页」）：api 包的工程原语模块有两类命名——
   //   `*-engineering.ts`（E/R 系工厂）与**单文件原语**（`mcp.ts` = E30 WebMCP）。
   //   实测：E30 落地后官网搜不到 useMCP，根因即此白名单未含 mcp.ts（页面是**生成物**，
   //   不在此列就永远不进 content/primitives → docs-registry 的 glob 收录不到 → 搜索无结果）。
   //   ⇒ 今后新增单文件原语必须同步此处。
-  { id: 'api', rel: 'packages/api', group: '工程原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$|^mcp\.ts$/, pkg: '@proteus-vue/api' },
+  { id: 'api', rel: 'packages/api', group: '工程语义原语', prefix: 'eng-', orderBase: 80, files: /(^|-|\/)?engineering\.ts$|^mcp\.ts$/, pkg: '@proteus-vue/api' },
 ]
+
+/**
+ * ★EN 组名映射（2026-09-26）：rename 提交曾**手改生成页**的 group → 重跑生成器即回退（漂移根因）。
+ *   组名随 SOURCES.group 走同一 SSOT——新增分区必须在此登记英文名，否则 EN 页发中文组名。
+ */
+const GROUP_EN = {
+  桌面语义原语: 'Desktop semantic primitives',
+  手势语义原语: 'Gesture semantic primitives',
+  工程语义原语: 'Engineering semantic primitives',
+}
 
 const TITLE_OVERRIDES = {
   recognizers: 'Gesture 识别器（tap/pan/swipe/pinch/rotate）',
@@ -377,6 +387,7 @@ function renderPage(srcDirAbs, rel, file, order, group) {
 function renderEnPage(srcDirAbs, rel, file, order, group) {
   const base = file.replace(/\.ts$/, '')
   const page = PRIM_EN[base]
+  const groupEn = GROUP_EN[group] || group
   const src = fs.readFileSync(path.join(srcDirAbs, file), 'utf8')
   const header = readHeader(src)
   const exports = readExports(src)
@@ -384,7 +395,7 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
   body.push('---')
   body.push(`title: ${page.title || base}`)
   body.push(`order: ${order}`)
-  body.push('group: ' + group)
+  body.push('group: ' + groupEn)
   body.push('---')
   body.push('')
   body.push(`# ${page.title || base}`)

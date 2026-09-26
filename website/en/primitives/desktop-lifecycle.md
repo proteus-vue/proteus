@@ -1,7 +1,7 @@
 ---
 title: p-lifecycle
 order: 20
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-lifecycle
