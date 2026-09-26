@@ -45,7 +45,17 @@
 - **两个生成器抢 `scripts/` 目录**：snapshot-template 的 MANAGED 含整个 `scripts/` → 清空共建工具包生成物（`ledger_check.mjs`）→ kit 门禁必红。修法：按**所有权切分**（`scripts/` 归 kit，snapshot 不再清理该目录），双生成器互为幂等。
 - 模板快照同步（shims/import-meta.d.ts 补入）。
 
-**⑤ ★部署链路陷阱（已记录）**：`[deploy]` run 会被**紧随其后的普通 push 取消**（concurrency cancel-in-progress 同 group）；无 `[deploy]` 的 run 显示 success 但**触发门整条跳过**（steps 全 skipped）——**判别看 job steps 是否真 ran，不看 run conclusion**。真部署会执行「部署后核验（verify-live）」。→ 部署提交后**不要再 push**，等它跑完。
+**⑤ 第二轮（用户复查后）：车机瓦片被裁半截 + 门禁盲区**
+- 车机「只呈现前 3 个选项」的显式规则在重写中丢失，退化成「靠 overflow:hidden 裁掉第 4/5 个」
+  → 恢复显式 `nth-child(n+4){display:none}` + 瓦片 `width:100%`（交列轨道，不被内容撑宽）。
+- ★**门禁盲区（破坏性验证抓到的）**：几何门禁第一版只量**容器**矩形——容器 `overflow:hidden`
+  裁掉**子项**时容器自身矩形完全正常 → 第一次破坏性验证**没红**。补两条：逐子项量横向越界 +
+  **例外**（祖先含 `overflow-x:auto/scroll` 时跳过——TV 海报流可横滑是设计）。
+  第二轮破坏性验证：回退车机瓦片规则 → 门禁红并列出 `pf-rec-card(子项)`；还原 → 绿。
+- ★方法论升级：**门禁自身也要做破坏性验证**（能红才算门禁）——本轮两次验证，第一次竟未红，
+  正是「以为有门禁实则漏检」的典型案例。
+
+**⑥ ★部署链路陷阱（已记录）**：`[deploy]` run 会被**紧随其后的普通 push 取消**（concurrency cancel-in-progress 同 group）；无 `[deploy]` 的 run 显示 success 但**触发门整条跳过**（steps 全 skipped）——**判别看 job steps 是否真 ran，不看 run conclusion**。真部署会执行「部署后核验（verify-live）」。→ 部署提交后**不要再 push**，等它跑完。
 
 
 ### ★柔性系统二次复审 P0/P1 收口（提交 77c6bac4 · 部署 e7f9084e）
