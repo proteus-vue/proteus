@@ -14,12 +14,13 @@
 // ★15 铁律：进页第一动作 = console 零错门禁（consoleLogs 过滤 error/not defined/ReferenceError…）→ 绿后才断言。
 // ★新增能力：在 CAPABILITY_CASES 加一项（route + 断言函数），npm test 不受影响（本文件 e2e-* 被排除）。
 import { describe, it, expect } from 'vitest'
+import path from 'node:path'
 import { createDriver, createWxideMini, callWxide } from '@proteus-vue/test-core/driver'
 import type { MpDebuggerLike } from '@proteus-vue/test-core/driver'
 import type { TestDriver } from '@proteus-vue/test-core/driver'
 
 const WXIDE_CLI = process.env.PROTEUS_IDE_CLI || '/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
-const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || 'dist/mp-weixin'
+const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || path.resolve(__dirname, '..', 'examples/dist/mp-weixin')
 const ENABLED = process.env.PROTEUS_MP_E2E_WXIDE === '1'
 
 /** wechatide debugger 句柄：console 零错门禁 */

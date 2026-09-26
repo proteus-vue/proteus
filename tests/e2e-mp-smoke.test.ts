@@ -9,6 +9,7 @@
 // ★本机未装 IDE → 默认跳过（PROTEUS_MP_E2E 未置位）
 // ⚠ 文件被根 test 排除（tests/e2e-*.test.ts 通配，与 Web E2E 平级）
 import { describe, it, expect } from 'vitest'
+import path from 'node:path'
 import { createDriver, createWxideMini } from '@proteus-vue/test-core/driver'
 import type { AutomatorMiniLike, MpDebuggerLike } from '@proteus-vue/test-core/driver'
 import { runSharedSmoke } from './e2e-driver-shared'
@@ -18,7 +19,7 @@ const AUTOMATOR_MODULE = 'miniprogram-automator'
 // ★CLI（proteus test e2e:mp）注入：端口 / IDE CLI / 项目产物路径 / debugger 适配模块
 const AUTOMATOR_PORT = Number(process.env.PROTEUS_AUTOMATOR_PORT ?? '9420')
 const IDE_CLI = process.env.PROTEUS_IDE_CLI ?? ''
-const PROJECT_PATH = process.env.PROTEUS_MINI_PROGRAM_PATH ?? 'dist/mp-weixin'
+const PROJECT_PATH = process.env.PROTEUS_MINI_PROGRAM_PATH ?? path.resolve(__dirname, '..', 'examples/dist/mp-weixin')
 const DEBUGGER_MODULE = process.env.PROTEUS_MP_DEBUGGER_MODULE ?? ''
 
 /** ★debugger 适配模块装配（--debugger <module>，MpDebuggerLike 形状）：动态 import（字符串变量），失败给可行动提示 */

@@ -23,7 +23,7 @@ import { callWxide } from '@proteus-vue/test-core/driver'
 import type { WxideMiniOptions } from '@proteus-vue/test-core/driver'
 
 const ENABLED = process.env.PROTEUS_MP_E2E === '1'
-const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH ?? 'showcase/dist/mp-weixin'
+const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH ?? path.resolve(__dirname, '..', 'showcase/dist/mp-weixin')
 const IDE_CLI = process.env.PROTEUS_IDE_CLI ?? undefined
 const CLIENT = process.env.PROTEUS_WXIDE_CLIENT ?? 'zed'
 
