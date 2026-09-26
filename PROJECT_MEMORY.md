@@ -59,6 +59,18 @@
 - 面板仍只显示形态级能力，不含「端 profile 注入的运行时能力」（如真实设备是否有表冠）——属当前设计边界。
 - showcase 侧未做 MP 真机回归（本轮改动集中在 Web 端形态渲染 + 纯逻辑）。
 
+**⑧ ★部署链路一个真陷阱（本轮踩到并记录）**
+- 现象：`[deploy]` 提交推送后，线上仍服务**修复前的旧 bundle**（`main-CEIt3GUT.js` 里 `pf-drive-hint`/`pf-safe-side` 计数均为 0）。
+- 根因：pages.yml 的 `concurrency: { group: pages, cancel-in-progress: true }`——`[deploy]` 那次 run 被**紧随其后的普通 push**（无标记，触发门只跳过步骤但 run 仍占用同 group）**取消**；后续几个无 `[deploy]` 的 run 显示「success」其实是**触发门整条跳过**（job conclusion=success、steps 全 skipped，极易误判为部署成功）。
+- 判别法：不要看 run 的 `conclusion`，要看 **job steps 里 `触发门` 之后的步骤是否真的 ran**（skipped 数=0 才是真部署）；真部署会执行「部署后核验（verify-live：线上 main hash = 本次构建）」。
+- 处置：重新推一次纯 `[deploy]` 空提交并等它跑完（不要在它后面再 push）。**线上验收（proteus-vue.cn/multi-device）**：capRows 14 · 假徽标 0 · nav 正确（页栈/侧栏/焦点树/tabs）· 安全区 96/54 · CTA 全在首屏 · 三态分布正确（车机 fallback=1）· 半折 posture=tabletop 且 Tab 导航在位。
+
+**⑨ 顺带修掉 3 处 CI 文档门禁（先前多提交持续红，均已转绿）**
+- `check:primitives` 31 页全漂：**「原语→语义原语」重命名改了生成页却没改生成器 SSOT** → 重跑即回退。已把组名（zh + 新增 `GROUP_EN` 英文映射）收进生成器。
+- `check:en-drift`：`guides/04-requirements` zh 加了章节、EN overlay 未同步 → 补齐。
+- `check-all-target-wording`：「双端工程」写法把 Web/小程序当作框架完整答案 → 改写为「已接线 Web/小程序 + 其余端直食同一语义 IR」（EN 同义同步）。
+- ★方法论：**生成物页面绝不手改**——改了必被 `--check` 判漂移；改生成器 SSOT 才是正解。
+
 ### ★收尾总览（2026-09-26：最后 26 个手写页并入 SSOT 生成器，73/73 全量机检）
 **一句话**：showcase 组件详情页 73/73 里**最后 26 个手写页（批次 1~3）全部并入 SSOT 生成器**——`check:component-demo` 覆盖面从 47 页扩到 **73 页全量**，API 表「手写漂移」盲区清零；另修掉 MP E2E 链路 3 个环境级真缺陷（其一为 test-core 驱动真修复）。发布阻塞未变（npm 凭据，需用户操作）。
 
