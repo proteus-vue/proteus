@@ -17,7 +17,41 @@
 
 ---
 
-## 当前状态速览（最近一次更新：2026-09-24）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-26）★新会话以此为准
+### ★收尾总览（2026-09-26：最后 26 个手写页并入 SSOT 生成器，73/73 全量机检）
+**一句话**：showcase 组件详情页 73/73 里**最后 26 个手写页（批次 1~3）全部并入 SSOT 生成器**——`check:component-demo` 覆盖面从 47 页扩到 **73 页全量**，API 表「手写漂移」盲区清零；另修掉 MP E2E 链路 3 个环境级真缺陷（其一为 test-core 驱动真修复）。发布阻塞未变（npm 凭据，需用户操作）。
+
+**① 迁移（26 页全量，机械抽取不手抄）**
+- 方法：解析原手写页（codes/state/演示块/样式/extraTemplate）→ 生成 PAGES 数据表 → 插入 `gen-component-demo-pages.mjs`（尾部 ②b 区）→ 重跑生成。**语义保真验证 26/26**：codes 值级一致（123 个）、state 原文一致、115 个演示块逐行归一比对一致、styles/extraTemplate 逐字一致；47 个旧生成页零漂移。
+- 生成器 schema 三扩展：`code` 可选（缺省不发射 :code → demo-block 隐藏代码面板，p-button/p-input 的「事件回显」块需要）；vue API 自动 import 补 `computed/reactive/watchEffect/onMounted/onUnmounted`（p-checkbox/p-picker 用 computed）；`extraTemplate`（页面级弹层实例，p-page-container 的 5 个 p-page-container 挂页面级）+ 其 import 扫描。
+- 回归锁适配：`tests/showcase-api-table.test.ts` 的 apiRows/eventRows 解析器从「单引号整行」扩到兼容 SSOT 生成页的 JSON 多行形式（表 ⊇ 实现 24+2 页全绿）。
+- 按现状保真的两个原页面行为点：p-button「平台条件显隐」块写了 #output 但未声明 :has-output（输出区原本就隐藏）；p-input 原只有 2 张表（生成后补齐标准 4 表）。
+
+**② 过程中抓到的两个生成器/解析坑（都已修）**
+- 嵌套 template：p-nav-bar 演示内含 `<template #right>`，非贪婪正则截断 → 生成页标签不闭合 → **Web 构建报 `Element is missing end tag`**（保真验证脚本同解析器抓不住——截断两两相消；构建门禁兜住）。
+- 自己引入的双引号 bug：`codeAttrOf` 已带闭合引号又拼 `">` → 全部生成页 demo-block 开标签多一个引号 → 47 个旧生成页意外漂移（diff --stat 暴露）。**教训：格式性漂移要「语义 diff + 旧页零漂移断言」双通道，单一 --check 抓不住两边同脏。**
+
+**③ MP E2E 环境真缺陷 3 项（与本迁移无关，被今日真机验证暴露，全部已修/已处置）**
+- ★**IDE 安全设置「服务端口」被关**（09-24 后 IDE 更新/重启回退）→ CLI 全链路「wait WechatIDE authorization timeout」。处置：设置→安全设置→服务端口开启（GUI；辅助功能菜单导航 + CGEvent 点击代开）。
+- ★★**wechatide CLI 对「管道 stdout」在退出时丢弃未刷写尾部**：>8192 字节**恒定截断**、exit 0（同命令 zsh 管道/文件重定向 20154 字节完整、spawnSync 管道 8192）。探针 JSON（p-scroll-view 页 22801 字符）必炸「Unterminated string」。**修法（真修复进库）**：`packages/test-core/src/driver/wxide.ts` 的 callWxide 改 **stdout 临时文件重定向**（文件=同步写，完整）。
+- ★3 个 e2e 测试文件项目路径改绝对路径（`path.resolve(__dirname,'..','examples/dist/mp-weixin')` 等）：wechatide CLI 不认「相对路径+符号链接」组合（报「项目路径不存在」）；且 **examples 系测试（smoke/vue-compat/popover）必须 `test e2e:mp examples` scope**——scope=showcase 时运行器注入 showcase 副本给全部文件，examples 页面不存在属**预期失败**（非回归）。
+- 运维内化：多轮运行会在 IDE 堆多项目窗口 → `close_project_window` 清理后即恢复；冷启动首导航瞬态重跑即过（既有已知）。
+
+**④ 验证汇总（全部实测）**
+- 门禁：`check:component-demo`（73/73 与数据表一致）✅ · `check:content` ✅ · showcase `vue-tsc` 0 错误 ✅
+- 构建：`build:showcase:web` ✅ · `build:showcase:mp` ✅（警告为既有降级注记）
+- Web E2E **120/120** ✅（含 p-button 18 按钮/p-switch 7 开关等精确数量断言 + 全部交互锁——演示行为完整保留的实证）
+- MP 真机：`e2e-mp-components` **6 过/2 skip** ✅ · `e2e-mp-probe` **5/5** ✅ · `test e2e:mp examples`（smoke+vue-compat+popover）**22 过/10 skip** ✅
+- 单测 3537/3539：2 败 = `publish-contents.test.ts` 的 `pnpm pack --json`（本机 pnpm 9.5.0 不支持）——**干净 HEAD stash 复核实证预存**，与本次无关。
+
+**⑤ 环境注记**
+- 微信开发者工具 Nightly 2.02.2609232；服务端口开关位于 设置→安全设置。
+- 根 `dist/mp-weixin` 现为指向 `examples/dist/mp-weixin` 的符号链接（gitignore 产物；此前缺失——直接 vitest 跑 examples 系测试需要它）。
+- 未跟踪文件 `.agents/skills/ai-efficiency-rules.zip` 仍未提交未删除。
+
+**⑥ 未完成（诚实口径）**：能力页 **29/81**（余 52 按判据不收，形态待定）；⚠ 发布阻塞未解（F-29/F-34/F-35 待换 npm token，真实收口率 32/35=91%）。
+
+
 ### ★今日收尾总览（2026-09-24 一整日，先读这一块）
 
 **一句话**：showcase 详情页从「组件 26/73 · 能力 9/81」推进到 **组件 73/73（全量齐备）· 能力 29/81**；过程中挖出并修掉 **8 个真缺陷**（含 3 个框架级）与 **1 个门禁盲区**；新增 2 道机器门禁。发布仍被 npm 凭据阻塞（与代码无关）。
@@ -64,6 +98,21 @@
 - 微信开发者工具路径已固定 `/Volumes/data1/applications/wechatwebdevtools.app`（已写入 CLI 默认探测表 → **跑 MP E2E 不必再传 `PROTEUS_IDE_CLI`**）。
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
+
+- **★本会话·官网组件总览页重做：纯表格 → 卡片画廊（域分区 + 73 个手绘 SVG 字形），数据仍源码 SSOT（2026-09-26 续，★★★用户给参考图）**：
+  **① 架构：生成器加一份结构化产出，渲染层特判一页**——`gen-content.mjs` 在写 md 总览的同一 `indexRows` 上**再产出 `website/src/data/component-index.ts`**（域分组 + 组件 dir/props/emits + EN 域名；组件总数变化时画廊自动跟随）；`DocsPage.vue` 只对 `slug=00-components-overview` 特判：画廊在上 + 原 md 表格收进 `<details>` 折叠速查区（h1/blockquote 隐藏防重复）——其余文档页渲染路径零改动，搜索/TOC 门禁不受影响。
+  **② 视觉**：`ComponentGallery.vue`（大标题 + 克制的品牌柔光装饰 + 域分区标题带计数徽标 + `repeat(auto-fill,minmax(210px,1fr))` 卡片网格 + hover 上浮描边 + router-link 跳转）+ `ComponentGlyph.vue`（**73 个手绘 SVG 微缩字形**，viewBox 120×80，中性面+单一品牌强调，对齐站点深色令牌；p-button 双按钮形态对齐参考图、p-map/p-location 定位 pin、p-scan-qr 扫描线等）；窄屏 ≤720px 隐藏装饰。
+  **③ 验证**：`check:content` 幂等 ✅ · `check:stats` ✅ · `check:docs` ✅ · website `vue-tsc` 0 错误 ✅ · 构建 ✅；浏览器实测（history 路由 SPA 需带 fallback 的静态服务）：六域 73 卡全渲染、字形可识别、卡片跳转 ✅、EN 态画廊随 i18n 切英文 ✅、折叠速查表展开正常 ✅、390px 窄屏单列 ✅。途中两处自查修正：装饰胶囊被头部 overflow 裁切 → 收进盒内；窄屏装饰压字 → 媒体查询隐藏。
+  **④ 未完成**：等用户过目视觉方向（如需更贴近参考图的浅色卡片/更大字形，改 ComponentGlyph/ComponentGallery 即可）；改动未提交。
+
+- **★本会话·showcase 收官：最后 26 个手写页（批次 1~3）并入 SSOT 生成器，check:component-demo 覆盖 47→73 全量（2026-09-26，★★★用户「继续推进showcase」）**：
+  **① 方法论：机械抽取、不做手抄**——写一次性脚本解析 26 个手写页（codes 对象/state/演示块三段/#output/styles/页面级 extraTemplate）→ 产出 PAGES 数据表条目 → 插入生成器 ②b 区 → 重跑生成。保真验证脚本对 git 原版与生成版做**同解析器对拍**：codes 值级（eval 字面量）、state 原文、115 个演示块逐行归一、styles/extraTemplate 逐字 → **26/26 ✅**；47 个旧生成页 diff 为零（防「两边同脏」）。
+  **② 生成器 schema 三扩展（均为迁移倒逼的最小扩展）**：`code` 可选（不发射 :code → demo-block `v-if="code"` 隐藏代码面板——p-button/p-input 的「事件回显」块原本无代码面板）；vue import 自动探测补 computed/reactive/watchEffect/onMounted/onUnmounted；`extraTemplate` 字段（p-page-container 的 5 个页面级弹层实例——slot 内容在 demo 块内无法承载 v-model 双向弹层）并参与组件 import 扫描。
+  **③ showcase-api-table 回归锁适配**——原解析器只认手写页单引号行，SSOT 生成页是 JSON 多行（`[\n "size",`）→ 解析器改「行首 `[`+空白+引号」通用形式（误匹配只多报不漏报，对 ⊇ 断言无害）。24+2 页「表 ⊇ 实现」全绿。
+  **④ 两个坑（诚实记录）**：(a) p-nav-bar 演示内嵌 `<template #right>` → 非贪婪正则截断 → 生成页 `Element is missing end tag`（Web 构建抓住；保真脚本同解析器抓不住——截断两两相消）→ 修为「#demo 取 #output 前最后一个 </template>」+ 两端空白行 trim；(b) codeAttrOf 双引号拼接 bug 让全部 73 页开标签多一个引号 → 靠「旧 47 页零漂移」断言暴露 → 修复后收敛到恰好 26 个文件变更。
+  **⑤ MP E2E 三项环境修复**（详见上方收尾总览 ③）：IDE 服务端口开关回退→代开；★wechatide CLI 管道 stdout 8192 字节截断→test-core driver 改临时文件重定向（**真修复**，`packages/test-core/src/driver/wxide.ts`）；3 个 e2e 文件项目路径改绝对 + examples 系测试用 `test e2e:mp examples` scope（scope=showcase 时 examples 系失败属预期——运行器注入的是 showcase 副本）。
+  **⑥ 验证**：Web E2E **120/120**（p-button 18 按钮等精确数量断言全过=演示行为零变化的实证）· MP 真机 components **6过/2skip** + probe **5/5** + examples **22过/10skip** · 门禁 component-demo/content/showcase-vue-tsc 全 ✅ · build web+mp ✅ · 单测 3537/3539（2 败=publish-contents 的 pnpm 9.5.0 `pack --json` 环境预存，stash 复核实证）。
+  **⑦ 未完成**：能力页 29/81（余 52 按判据不收）；⚠ 发布阻塞未解（F-29/F-34/F-35 待 npm token）。
 
 - **★本会话·批次 9（能力页 19→29/81）+ ★★补齐「showcase 详情页从未类型检查」的门禁盲区（2026-09-24 续六，★★★用户「继续」）**：
   **① 先取证再选页（本轮方法论核心）**——上次我判断「能力页剩余多为 Web 无标准对等」，本轮**用数据修正了该判断**：逐个把 62 个未出页的 hook 与其桥方法比对 webBridge 真实实现体，得 **32 个有真实现 / 9 个显式降级 / 21 个待查**；再排除「返回空订阅（getBeacon/getPoster/getTranslation/getLocalService）或恒返回 unsupported 句柄（getPrivacy/getPreload/getImageEdit/getCalendar/getWindow/createLivePusher/joinLiveRoom/getScreenCapture/getRecorder/createCameraContext）」的伪实现，最终选 **10 页真能跑通成功路径**的：`log / download / file-system / canvas / app-lifecycle / page-lifecycle / navigation-guard / keyboard / biometric / background`。★**取证教训（差点写错事实）**：首次用 indexOf 在整文件里找实现（模式为「换行 + 方法名 + 冒号」）' name:')` 在整文件里找实现，命中的是 **wxBridge（MP 侧）**——若不核对就会把小程序行为写进 Web 演示。**必须在 webBridge 段内取**。
