@@ -8,6 +8,9 @@
 // ★体验内化（05/15 铁律）：console 零错门禁第一 → 稳通道（reLaunch/currentPage/evaluate）断言 → 元素级待激活态。
 //   p-* 组件内部不可见（glass-easel 组件 DOM 隔离）→ 交互/断言走 evaluate 调页面方法。
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { AutomatorMiniLike, AutomatorElementLike } from './types'
 
 export interface WxideMiniOptions {
@@ -34,11 +37,28 @@ export function callWxide(tool: string, args: Record<string, string | number | u
     const flag = k.startsWith('--') ? k : `--${k}`
     argv.push(flag, String(v))
   }
-  const res = spawnSync(bin, argv, { encoding: 'utf8', timeout: 60_000 })
-  if (res.status !== 0) {
-    throw new Error(`[wxide] ${tool} 退出码 ${res.status}：${cliHint(tool, res.stderr || res.stdout)}`)
+  // ★stdout 必须走临时文件，不能走管道（2026-09-26 实测）：
+  //   wechatide 对「管道 stdout」在退出时丢弃未刷写的尾部——超过 8192 字节的输出**恒定截断**
+  //   （同一命令：zsh 管道/文件重定向 20154 字节完整，Node spawnSync 管道 8192 字节、exit 0），
+  //   探针 JSON（p-scroll-view 页实测 22801 字符）等长输出经 evaluate 必然解析报
+  //   「Unterminated string」。文件重定向是同步写，完整返回。
+  const outPath = path.join(os.tmpdir(), `wxide-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.out`)
+  const outFd = fs.openSync(outPath, 'w')
+  let res: ReturnType<typeof spawnSync>
+  try {
+    res = spawnSync(bin, argv, { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', outFd, 'pipe'] })
+  } finally {
+    fs.closeSync(outFd)
   }
-  const body = parseJsonOutput(res.stdout || '', tool)
+  const outText = fs.existsSync(outPath) ? fs.readFileSync(outPath, 'utf8') : ''
+  fs.rmSync(outPath, { force: true })
+  if (res.error) {
+    throw new Error(`[wxide] ${tool} 进程失败：${String(res.error)}`)
+  }
+  if (res.status !== 0) {
+    throw new Error(`[wxide] ${tool} 退出码 ${res.status}：${cliHint(tool, res.stderr || outText)}`)
+  }
+  const body = parseJsonOutput(outText, tool)
   const resObj = (body.result ?? body) as Record<string, unknown>
   if (resObj && resObj.success === false) {
     throw new Error(`[wxide] ${tool} 失败：${String((resObj as Record<string, unknown>).error ?? (resObj as Record<string, unknown>).message ?? JSON.stringify(resObj))}`)

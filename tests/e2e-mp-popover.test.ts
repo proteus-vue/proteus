@@ -21,7 +21,7 @@ import { createDriver, createWxideMini, callWxide } from '@proteus-vue/test-core
 import type { MpDebuggerLike } from '@proteus-vue/test-core/driver'
 
 const WXIDE_CLI = process.env.PROTEUS_IDE_CLI || '/Volumes/data1/applications/wechatwebdevtools.app/Contents/MacOS/wechatide'
-const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || 'dist/mp-weixin'
+const PROJECT = process.env.PROTEUS_MINI_PROGRAM_PATH || path.resolve(__dirname, '..', 'examples/dist/mp-weixin')
 const ENABLED = process.env.PROTEUS_MP_E2E_WXIDE === '1'
 
 /** ★wechatide debugger 句柄：console 零错门禁（get_simulator_console 全量 → 本端 parse error 行） */
