@@ -20,6 +20,7 @@ Everything Proteus ships boils down to **one semantic catalog (183 primitives, t
 | Desktop/system | desktop (G-24, 21 modules) | —— | `createScrollObserver` `copyText` `v-p-shortcut`… | **this section (below)** |
 | Gesture | gesture (G-32 B4) | `p-*` gesture components | `v-gesture` `useGesture` | **this section (below)** |
 | Engineering primitives | engineering (E1-E28 + R1-R4) | `p-animate` `p-router-link` (component form) | `createEngineering`-family injection-based factories | **this section (below)** |
+| Rendering primitives | worklet (Skyline UI-thread animation) | —— | `shared` `timing` `applyAnimatedStyle` | **this section (below)** |
 
 > Forms are not copies: the same semantic (say `layout.grid`) can be both `p-grid` (component form) and registered in the catalog entry — **two consumption faces share one semantic inventory** (the 183 SSOT). That is "semantic convergence".
 
@@ -36,6 +37,8 @@ The pages below are produced by the source-code generator (SSOT = `packages/desk
 **Gesture primitives (gesture — this section)**: `Gesture recognizer` (tap/pan/swipe/pinch/rotate… pure logic, zero dependencies; Web Pointer / MP touch normalized into GestureInput) + `useGesture` Hook / `v-gesture` directive (official Web wiring) — "events are a Backend implementation detail"; MP/native ends are taken over by each end's own Backend.
 
 **Engineering primitives (engineering — this section)**: six **injection-based factories** for E1-E28 + R1-R4 (`createEngineering` basics / `createRouterEngineering` / `createAnimationEngineering` / `createToolingEngineering` / `createRequestEngineering` R1-R4 / `createOwnershipEngineering` PSS) — the consumer injects reactivity etc.; the api package has zero vue dependency; MP artifact-safe subset.
+
+**Rendering primitives (worklet — this section)**: the unified entry for Skyline **UI-thread animation** — `shared` / `derived` / `timing` / `spring` / `decay` / `runOnJS` / `runOnUI` / `applyAnimatedStyle` (wrapping the official `wx.worklet`); off Skyline (WebView / Web / SSR) it **degrades honestly** to JS-thread rAF interpolation (`hasWorklet() === false` — it never pretends to have UI-thread isolation). Template-side `worklet:style` is passed through by the compiler, no runtime API needed. Skyline limits → [Skyline pitfalls ledger](/docs/framework/skyline-pitfalls).
 
 Every entry is: **one-line positioning (what it does) → per-target compat rollout (family-level metric) → source positioning quote (module header) → core export table → real usage (dogfooding provenance) → usage & degradation**. Step-by-step examples: [Desktop primitives](/docs/30-desktop-primitives) and [Quality gates](/docs/29-quality-gates) (the official site itself uses these primitives).
 
