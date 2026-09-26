@@ -71,6 +71,23 @@ jobs:
           pnpm --filter website build
           cp website/dist/index.html website/dist/404.html # GitHub Pages SPA 刷新兜底（无服务端 rewrite）
 
+      # ★2026-09-26 P0-1：官网组件详情页 iframe 嵌 showcase 真交互演示——
+      #   showcase 以 /showcase/ 子路径构建（web-adapter 按 BASE_URL 剥/补路由），
+      #   产 SPA 深链目录（emit-spa-routes：GitHub Pages 无 /showcase 级 404 兜底），
+      #   整体拷进 website/dist/showcase 同源部署（iframe 同源 → 自适应高可用）。
+      - name: 构建 showcase Web（/showcase/ 子路径 + 深链落盘）
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          PROTEUS_BASE: /showcase/
+        run: pnpm --filter proteus-showcase build:web
+
+      - name: 合入 showcase 产物并检查
+        if: steps.gate.outputs.ok == 'true'
+        run: |
+          cp -r showcase/dist/web website/dist/showcase
+          test -f website/dist/showcase/subpackages/components/pages/p-button/index.html
+          grep -q '/showcase/assets/' website/dist/showcase/subpackages/components/pages/p-button/index.html && echo 'showcase 深链 + base 前缀 ✓'
+
       - name: 检查产物（双入口 + 根路径 assets 前缀）
         if: steps.gate.outputs.ok == 'true'
         run: |

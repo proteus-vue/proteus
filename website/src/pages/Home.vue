@@ -409,6 +409,21 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       </p-grid>
     </p-view>
 
+    <!-- 4.5 多端同屏前置（2026-09-26 P0-2：全站最强演示资产上首页——对标 Flutter 首页的多设备视觉） -->
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(20, 40)'" data-reveal class="sec">
+      <router-link to="/multi-device" class="md-band" v-p-hover>
+        <p-view class="md-band-main">
+          <span class="sec-eyebrow">{{ t('home.mdEyebrow') }}</span>
+          <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="md-band-title">{{ t('home.mdTitle') }}</p-heading>
+          <p-text class="md-band-sub">{{ t('home.mdSub') }}</p-text>
+          <span class="md-band-cta">{{ t('home.mdCta') }} →</span>
+        </p-view>
+        <p-view class="md-band-devices" aria-hidden="true">
+          <span v-for="d in ['📱 手机', '📐 平板', '💻 PC / Mac', '🚗 车机', '📺 TV / 大屏', '⌚ 手表']" :key="d" class="md-chip">{{ d }}</span>
+        </p-view>
+      </router-link>
+    </p-view>
+
     <!-- 5. 适用场景（3 图标卡） -->
     <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec scenarios">
       <p-view class="sec-head">
@@ -980,4 +995,57 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 }
 .revealed .card, .revealed .stat { opacity: 1; transform: none; }
 .no-motion .card, .no-motion .stat { opacity: 1; transform: none; transition: none; }
+
+/* ── 多端同屏前置横幅（2026-09-26 P0-2）：整卡可点 → /multi-device ── */
+.md-band {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 30px 34px;
+  background:
+    radial-gradient(520px 220px at 92% 10%, rgba(124, 92, 255, 0.14), transparent 70%),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  text-decoration: none;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.md-band:hover {
+  border-color: rgba(124, 92, 255, 0.55);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+}
+.md-band-main { flex: 1; min-width: 0; display: block; }
+.md-band-title { color: var(--ink); margin: 10px 0 8px; }
+.md-band-sub { color: var(--muted); font-size: 13.5px; line-height: 1.7; display: block; max-width: 560px; }
+.md-band-cta {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-ink);
+}
+.md-band-devices {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 8px;
+  flex-shrink: 0;
+}
+.md-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--brand-soft);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: 999px;
+  padding: 7px 13px;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .md-band { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .md-band-devices { grid-template-columns: repeat(3, auto); }
+}
 </style>
