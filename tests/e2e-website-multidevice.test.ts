@@ -60,10 +60,11 @@ async function probeLiveGeometry(): Promise<{
   frameH: number
   capsDigest: string
   truncated: string[]
+  balance: string[]
 }> {
   return page.evaluate((blocks: string[]) => {
     const frame = document.querySelector('.frame') as HTMLElement | null
-    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0, capsDigest: '', truncated: [] }
+    if (!frame) return { topo: '?', clipped: ['<no .frame>'], overlaps: [], bodyScrollable: false, frameW: 0, frameH: 0, capsDigest: '', truncated: [], balance: [] }
     const inner = frame.querySelector('.p-formfactor') as HTMLElement
     const topo = inner.getAttribute('data-pf-topology') ?? '?'
     const fr = frame.getBoundingClientRect()
@@ -156,11 +157,32 @@ async function probeLiveGeometry(): Promise<{
     // ★能力证据面（三审）：data-pf-caps 是「最终生效三态」的机器可读声明——
     //   同一面的断言把「声明 ≠ 空头」变成可证伪：面板/根类说支持的，这里必须是 supported/fallback。
     const capsDigest = (frame.querySelector('.p-formfactor') as HTMLElement | null)?.getAttribute('data-pf-caps') ?? ''
+    // ★构图平衡（2026-09-27 用户实测四报：「右边标题价格整体靠下」）：
+    //   此前门禁只查重叠/裁切，**没查内容在画布里的构图位置**——于是「信息组贴底、
+    //   上方一大块空白」全绿通过。判据：车机右列信息组（标题..价格/降级条）的垂直中心
+    //   必须与左列媒体面板的垂直中心对齐（容差 10px，覆盖字体度量差异）。
+    const balance: string[] = []
+    if (topo === 'dashboard') {
+      const media = frame.querySelector('.pf-media') as HTMLElement | null
+      const head = frame.querySelector('.pf-heading') as HTMLElement | null
+      const priceEl = frame.querySelector('.pf-price') as HTMLElement | null
+      const skuEl = frame.querySelector('.pf-sku, .pf-sku-fallback') as HTMLElement | null
+      if (media && head && priceEl) {
+        const m = media.getBoundingClientRect()
+        const h = head.getBoundingClientRect()
+        const p = priceEl.getBoundingClientRect()
+        const sk = skuEl ? skuEl.getBoundingClientRect() : null
+        const groupCenter = (h.top + Math.max(p.bottom, sk ? sk.bottom : p.bottom)) / 2
+        const delta = Math.round(groupCenter - (m.top + m.height / 2))
+        if (Math.abs(delta) > 10) balance.push(`信息组与媒体面板未垂直居中（偏差 ${delta}px）`)
+      }
+    }
+
     // ★标签截断检查（2026-09-27 用户实测）：一屏形态（glance/dashboard/hero）的主标签
     //   必须**能读全**——车机瓦片曾把「替换耳罩」截成「替…」（名称只剩 20px）。
     //   判据：文本节点 scrollWidth > clientWidth（即被 ellipsis 截断）。
     const truncated: string[] = []
-    for (const sel of ['.pf-heading .fp-name', '.pf-price', '.fp-rec-name']) {
+    for (const sel of ['.pf-heading .fp-name', '.pf-price', '.fp-rec-name', '.pf-sku-fallback']) {
       const el = frame.querySelector(sel) as HTMLElement | null
       if (!el || el.offsetParent === null) continue
       if (el.scrollWidth > el.clientWidth + 1) truncated.push(`${sel}("${(el.textContent || '').trim().slice(0, 8)}")`)
@@ -201,6 +223,7 @@ async function probeLiveGeometry(): Promise<{
       frameH: Math.round(fr.height),
       capsDigest,
       truncated,
+      balance,
     }
   }, BLOCKS)
 }
@@ -289,6 +312,7 @@ describe('★多端同屏 · 真几何门禁（双视口：窄舞台 + 宽舞台
         const g = await probeLiveGeometry()
         report[form] = g
         if (g.overlaps.length) problems.push(`${form}: 核心块重叠 ${g.overlaps.join(', ')}`)
+      if (g.balance.length) problems.push(`${form}: 构图失衡 ${g.balance.join(', ')}`)
         if (ONE_SCREEN.includes(form)) {
           if (g.clipped.length) problems.push(`${form}: 一屏形态出现裁切 ${g.clipped.join(', ')}（frame ${g.frameW}×${g.frameH}）`)
           if (g.bodyScrollable) problems.push(`${form}: 一屏形态内容溢出（body 可滚动 = 需要滚动才能看完）`)
