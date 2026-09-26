@@ -41,7 +41,7 @@ group: 桌面语义原语
 | `hasFinePointer` | function | 是否精确指针环境（mouse/pen——触屏不启用；无 matchMedia 环境 = 非 Web，禁用） |
 | `createCursorGlow` | function | 创建指针跟随光晕层（fixed 全屏，pointer-events:none；z-index 0——内容层之上、背景之上无遮挡） |
 
-## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）
 
 ```ts
 <p-page v-p-cursor-glow="{ size: 520, color, accent, lerp: 0.14 }" …>

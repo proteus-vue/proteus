@@ -209,6 +209,64 @@ function humanName(file, header) {
 
 /** ★#460 真实用法（dogfooding 出处——官网自身/示例工程真实调用，非示意图）：模块 basename → 用法条目 */
 const USAGE_MAP = {
+  // ★2026-09-27（用户实测）：worklet 页此前**只有概念文字、没有演示代码**——
+  //   文档的「可复制性」是这套页面的核心价值。以下代码取自包 README/源码（同仓可自证），
+  //   并给出 **Skyline 与降级两条路径**的对照（诚实边界的可读形态）。
+  runtime: [
+    {
+      code: `import { shared, timing, spring, applyAnimatedStyle, hasWorklet, getWorklet } from '@proteus-vue/worklet'
+
+// 1) 建共享值（Skyline 上跑在 UI 线程；其余环境是同 API 的普通值）
+const offset = shared(0)
+const scale = shared(1)
+
+// 2) 描述动画（官方 timing/spring 同名语义）
+const a = timing(offset, 120, { duration: 300, easing: 'easeOut' })
+const s = spring(scale, 1.06, { stiffness: 180, damping: 14 })
+a.start?.(); s.start?.()
+
+// 3) 绑定到组件样式（返回解绑函数；Skyline = UI 线程驱动，其余 = 一次性应用）
+const unbind = applyAnimatedStyle(this, '.card', () => ({
+  transform: \`translateX(\${offset.value}px) scale(\${scale.value})\`,
+}))
+
+// 4) 能力探测（禁止静默失效——不可用时如实告知）
+if (hasWorklet()) {
+  // 真·小程序 + Skyline：UI 线程隔离（高频滚动/手势不阻塞 JS）
+} else {
+  // 诚实降级：\`getWorklet().real === false\`，动画走 JS 线程 rAF（行为对，无隔离）
+}
+onUnmounted(() => unbind())`,
+      src: 'packages/worklet/README.md（用法）+ src/runtime.ts:hasWorklet/getWorklet',
+    },
+    {
+      code: `<!-- 模板侧：官方 WXML 前缀由**编译器透传**，无需 import 任何运行时 API -->
+<view worklet:style="{{animatedStyle}}">…</view>`,
+      src: 'packages/worklet/README.md（模板侧）+ docs/skyline-pitfalls.md:227（编译器已验证透传）',
+    },
+  ],
+  easing: [
+    {
+      code: `import { Easing, resolveEasing } from '@proteus-vue/worklet'
+
+// 命名缓动（Skyline 优先用官方原生；其余端用同曲线的纯函数）
+const ease = Easing.easeOut            // 内置集：linear/quad/cubic/circle/sin/exp/bounce/ease/elastic
+const custom = resolveEasing((t) => t * t)   // 自定义曲线 → 归一为缓动函数
+const byKey = resolveEasing('cubicInOut')    // 字符串键也接（未知键 → 线性兜底）`,
+      src: 'packages/worklet/src/easing.ts（EASING / resolveEasing）',
+    },
+  ],
+  types: [
+    {
+      code: `import type { SharedValue, WorkletTimingConfig, WorkletSpringConfig, WxWorkletLike } from '@proteus-vue/worklet'
+
+const cfg: WorkletTimingConfig = { duration: 300, easing: 'easeOut' }   // timing/decay/spring 三族配置
+const spring: WorkletSpringConfig = { stiffness: 180, damping: 14, mass: 1 }
+// WxWorkletLike = 官方 wx.worklet 的最小接口面（测试可注入 fake，无需真机）
+declare const v: SharedValue<number>; v.value // 读写都走 .value`,
+      src: 'packages/worklet/src/types.ts（SharedValue / 三族配置 / WxWorkletLike）',
+    },
+  ],
   'use-gesture': [{ code: `<div v-gesture:tap="onTapG" class="gesture-demo">{{ tapMsg }}</div>`, src: 'examples/pages/semantic-primitives-demo.vue:197' }],
   engineering: [{ code: `const eng = createEngineering({ reactivity: { ref, computed, watch } })\nconst engCount = eng.useState(0)`, src: 'examples/pages/platform-api-demo.vue:483·487' }],
   'router-engineering': [{ code: `const rx = createRouterEngineering({ routerLike: { … } })`, src: 'examples/pages/platform-api-demo.vue:505' }],
@@ -380,7 +438,13 @@ function renderPage(srcDirAbs, rel, file, order, group) {
   const base = file.replace(/\.ts$/, '')
   const usage = USAGE_MAP[base]
   if (usage && usage.length) {
-    body.push('## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）')
+    // ★诚实标题（2026-09-27）：出处分两类——「官网自身/示例工程在跑」（dogfooding）与
+    //   「包 README/源码」（同仓可自证但**未经运行**）。此前只有前者一种标题，
+    //   worklet 这类新补页面套用它就变成不实的「非示意图」声明。
+    const isDogfood = usage.some((u) => /website\/src|examples\//.test(u.src))
+    body.push(isDogfood
+      ? '## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）'
+      : '## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）')
     body.push('')
     for (const u of usage) {
       body.push('```ts')
@@ -481,7 +545,11 @@ function renderEnPage(srcDirAbs, rel, file, order, group) {
   }
   const usage = page.usage
   if (usage?.length) {
-    body.push('## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)')
+    // ★诚实标题（与 zh 同口径）：出处分 dogfooding 与「包 README/源码」两类
+    const isDogfoodEn = usage.some((u) => /website\/src|examples\//.test(u.src))
+    body.push(isDogfoodEn
+      ? '## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)'
+      : '## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)')
     body.push('')
     for (const u of usage) {
       body.push('```ts')

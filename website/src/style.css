@@ -137,15 +137,19 @@ body {
   overflow-x: auto;
 }
 .doc-body pre code { background: none; border: none; padding: 0; color: var(--ink); line-height: 1.7; }
-/* ★#386 语法高亮接线（docs 引擎 span.docs-tok-* → design-tokens syntax 色；#386b 补 attr、#386c 补 fn；★#408 补 type） */
-.doc-body .docs-tok-keyword { color: var(--syn-kw); }
-.doc-body .docs-tok-string { color: var(--syn-str); }
-.doc-body .docs-tok-comment { color: var(--syn-com); }
-.doc-body .docs-tok-tag { color: var(--syn-tag); }
-.doc-body .docs-tok-fn { color: var(--syn-fn); }
-.doc-body .docs-tok-number,
-.doc-body .docs-tok-attr { color: var(--syn-attr); }
-.doc-body .docs-tok-type { color: var(--syn-type); }
+/* ★#386 语法高亮接线（docs 引擎 span.docs-tok-* → design-tokens syntax 色；#386b 补 attr、#386c 补 fn；★#408 补 type）
+   ★2026-09-27 作用域扩展：此前只在 `.doc-body` 内生效——于是**非文档页**（多端同屏的源码区、
+   Playground 的 IR 面板）虽然调了同一个 `highlight()`，token 却没有取色源（用户实测：
+   「多端同屏左边的代码区没有高亮」）。现改为**全局可命中**：任何页面拿到 docs 引擎的
+   `span.docs-tok-*` 都自动上色（同一套 token 色，非另造一份）。 */
+.docs-tok-keyword { color: var(--syn-kw); }
+.docs-tok-string { color: var(--syn-str); }
+.docs-tok-comment { color: var(--syn-com); }
+.docs-tok-tag { color: var(--syn-tag); }
+.docs-tok-fn { color: var(--syn-fn); }
+.docs-tok-number,
+.docs-tok-attr { color: var(--syn-attr); }
+.docs-tok-type { color: var(--syn-type); }
 .doc-body blockquote {
   margin: 12px 0;
   border-left: 3px solid var(--brand);

@@ -41,6 +41,41 @@ Principle: never reference wx bare (read from globalThis); the capability matrix
 | `workletRuntime` | const | Lazy singleton instance |
 | `resetWorklet` | function | Reset for tests |
 
+## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)
+
+```ts
+import { shared, timing, spring, applyAnimatedStyle, hasWorklet, getWorklet } from '@proteus-vue/worklet'
+
+// 1) shared values (UI-thread on Skyline; the same API holds plain values elsewhere)
+const offset = shared(0)
+const scale = shared(1)
+
+// 2) describe animations (same semantics as the official timing/spring)
+const a = timing(offset, 120, { duration: 300, easing: 'easeOut' })
+const s = spring(scale, 1.06, { stiffness: 180, damping: 14 })
+a.start?.(); s.start?.()
+
+// 3) bind to component styles (returns an unbind fn; UI-thread driven on Skyline, applied once elsewhere)
+const unbind = applyAnimatedStyle(this, '.card', () => ({
+  transform: `translateX(${offset.value}px) scale(${scale.value})`,
+}))
+
+// 4) capability probe (never fail silently — report honestly when unavailable)
+if (hasWorklet()) {
+  // real Mini Program + Skyline: UI-thread isolation (frequent scroll/gesture work won't block JS)
+} else {
+  // honest degradation: `getWorklet().real === false`; animation runs on the JS thread via rAF (correct, no isolation)
+}
+onUnmounted(() => unbind())
+```
+> Origin: `packages/worklet/README.md (usage) + src/runtime.ts:hasWorklet/getWorklet`
+
+```ts
+<!-- template side: the official WXML prefix is passed through by the **compiler** — no runtime API import -->
+<view worklet:style="{{animatedStyle}}">…</view>
+```
+> Origin: `packages/worklet/README.md (template side) + docs/skyline-pitfalls.md:227 (pass-through verified)`
+
 ## Usage & degradation
 
 - **entry**: `shared(initial)` / `derived(fn)` create shared values → `timing/spring/decay` describe the animation → `applyAnimatedStyle(scope, selector, updater, config)` binds it to component styles (returns an unbind function)

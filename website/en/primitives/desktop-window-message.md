@@ -40,7 +40,7 @@ Layering: pure logic + Web wiring — env-injected for unit testing, falls back 
 | `WindowMessageHandle` | interface | — |
 | `subscribeWindowMessage` | function | ★subscribeWindowMessage: cross-window message subscription (origin allowlist validation + type filtering; destroy cleanup) |
 
-## Real usage (dogfooding provenance — the official site itself / example projects run it live, not illustrative)
+## Usage (from the package README / source signatures — verifiable in-repo; no runtime screenshot attached)
 
 ```ts
 subscribeWindowMessage({ types: ['app-event'], onMessage })

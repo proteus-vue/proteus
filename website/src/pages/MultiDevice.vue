@@ -24,6 +24,9 @@ import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FormProfile } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
+// ★2026-09-27（用户实测）：源码区此前是**纯文本**（无高亮）——而站点已有零依赖高亮器
+// （@proteus-vue/docs 的 highlight，文档站与 Playground 都在用同一套）。直接复用，不另造。
+import { highlight } from '@proteus-vue/docs'
 
 const isEn = computed(() => locale.value === 'en')
 const showSource = ref(true)
@@ -223,6 +226,8 @@ function capsTextOf(k: keyof FormProfile['caps']): string {
 }
 
 const sourceLines = computed(() => fluidSource.split('\n').length)
+/** 高亮后的源码（highlight 内部已 escapeHtml——v-html 安全；vue 语言走 SFC 拆块） */
+const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
 </script>
 
 <template>
@@ -257,7 +262,8 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
           {{ isEn ? 'Content slots · this exact file runs' : '内容槽 · 运行的就是这份文件' }}
           <button type="button" class="mini" @click="showSource = !showSource">{{ showSource ? (isEn ? 'hide' : '收起') : (isEn ? 'show' : '展开') }}</button>
         </div>
-        <pre v-if="showSource" class="src"><code>{{ fluidSource }}</code></pre>
+        <!-- ★v-html：内容由 docs 引擎 highlight() 生成（已 escapeHtml，见 style.css 的 docs-tok-* 取色） -->
+        <pre v-if="showSource" class="src"><code v-html="sourceHtml" /></pre>
         <div class="src-foot">
           <span class="eq">✓</span>
           {{ isEn ? 'zero per-device branching — the framework derives everything' : '零形态分支——全部由框架推导' }}

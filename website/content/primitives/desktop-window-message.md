@@ -40,7 +40,7 @@ group: 桌面语义原语
 | `WindowMessageHandle` | interface | — |
 | `subscribeWindowMessage` | function | ★subscribeWindowMessage：跨窗消息订阅（origin 白名单校验 + type 过滤；destroy 清理） |
 
-## 真实用法（dogfooding 出处——官网自身/示例工程在跑，非示意图）
+## 用法（取自包 README / 源码签名——同仓可自证；未附运行时截图）
 
 ```ts
 subscribeWindowMessage({ types: ['app-event'], onMessage })
