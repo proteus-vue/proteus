@@ -50,7 +50,11 @@ function copyFile(src: string, dest: string, replace?: Array<[RegExp, string]>):
 
 // 清理受管路径（保留手写模板：package.json / proteus.config.ts / tsconfig.json /
 // src/main* / src/App.vue / src/pages/ / src/router/auto-routes.ts）
-const MANAGED = ['src/platform', 'src/runtime', 'src/router', 'src/shims', 'scripts', 'vite-plugin-mp-transform.ts']
+// ★2026-09-26：`scripts/` 移出受管路径——共建工具包的 `scripts/ledger_check.mjs` 由
+//   gen-cobuild-kit.mjs 拥有（规范源 packages/cli/src/cobuild-assets.ts）。此前两生成器互相打架：
+//   snapshot 先 `rm -rf scripts/` → cobuild-kit --check 报「缺失」→ 先跑 snapshot 后跑 kit 才绿。
+//   现按**所有权切分**：snapshot 只管应用壳/类型/入口；scripts/ 归 kit（快照不再清空该目录）。
+const MANAGED = ['src/platform', 'src/runtime', 'src/router', 'src/shims', 'vite-plugin-mp-transform.ts']
 // 手写的占位文件不在脚本管理范围：暂存（放 TPL 外，避免被 rm 连带删除）后恢复
 function stash(rel: string): void {
   const src = path.join(TPL, rel)
@@ -82,4 +86,5 @@ copied.push(copyFile(path.join(ROOT, 'examples', 'index.html'), path.join(TPL, '
 
 console.log(`[snapshot] 已快照 ${copied.length} 个文件到 packages/create-proteus/templates/`)
 console.log('提示：package.json / proteus.config.ts / tsconfig.json / src/main* / src/App.vue / src/pages/ / src/router/auto-routes.ts 为手写模板，改主仓时记得同步')
-console.log('★#418：vite.config.ts / scripts/ 已从模板移除（框架组装 vite 配置 + CLI 内建 gen-routes/mp 入口）')
+console.log('★#418：vite.config.ts 已从模板移除（框架组装 vite 配置 + CLI 内建 gen-routes/mp 入口）')
+console.log('★2026-09-26：scripts/ 归共建工具包生成器（gen-cobuild-kit.mjs）所有，snapshot 不再清空该目录')
