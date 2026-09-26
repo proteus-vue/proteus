@@ -66,7 +66,7 @@ const subtitle = computed(() =>
     </header>
 
     <!-- 域分区 → 卡片网格 -->
-    <section v-for="d in componentIndex.domains" :key="d.key" class="cg-domain">
+    <section v-for="(d, di) in componentIndex.domains" :key="d.key" :id="`ovr-${di}`" class="cg-domain">
       <h3 class="cg-domain-title">
         {{ domainName(d.key, d.en) }}
         <span class="cg-count">{{ d.components.length }}</span>
@@ -102,14 +102,14 @@ const subtitle = computed(() =>
 }
 .cg-title {
   margin: 0;
-  font-size: 30px;
+  font-size: 38px;
   font-weight: 800;
   letter-spacing: 0.5px;
   color: var(--ink);
 }
 .cg-sub {
-  margin: 8px 0 0;
-  font-size: 13.5px;
+  margin: 10px 0 0;
+  font-size: 14px;
   color: var(--muted);
   max-width: 640px;
   line-height: 1.7;
@@ -158,7 +158,7 @@ const subtitle = computed(() =>
 }
 
 /* ── 域分区 ── */
-.cg-domain { margin-top: 26px; }
+.cg-domain { margin-top: 26px; scroll-margin-top: 153px; }
 .cg-domain-title {
   display: flex;
   align-items: center;

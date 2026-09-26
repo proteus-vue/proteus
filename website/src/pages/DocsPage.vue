@@ -6,6 +6,7 @@ import { computed, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { findDoc, sections, enModule, enTitleFor } from '../docs-registry'
 import ComponentGallery from '../components/ComponentGallery.vue'
+import { componentIndex } from '../data/component-index'
 import ComponentDemo from '../components/ComponentDemo.vue'
 import { createScrollSpy } from '@proteus-vue/desktop'
 import { locale, setLocale, t, sectionName, groupName } from '../i18n'
@@ -45,9 +46,18 @@ function stripMd(text: string): string {
     .replace(/[*_`~]/g, '') // 行内标记符
     .trim()
 }
-const tocFlat = computed(() =>
-  ((variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? []).map((t2: { depth: number; text: string; id: string }) => ({ ...t2, text: stripMd(t2.text) })),
-)
+// ★2026-09-26 反馈：总览页画廊与折叠速查表重复 + 导读锚点全指向下方表格 →
+//   总览页只保留画廊；导读改为画廊各域分区（id=ovr-<i>，滚动高亮同机制）
+const tocFlat = computed(() => {
+  if (isOverview.value) {
+    return componentIndex.domains.map((d, i) => ({
+      depth: 2 as const,
+      text: isEn.value ? `${d.en} (${d.components.length})` : `${d.key}（${d.components.length}）`,
+      id: `ovr-${i}`,
+    }))
+  }
+  return ((variant.value && isEn.value ? variant.value.tocFlat : current.value.doc.tocFlat) ?? []).map((t2: { depth: number; text: string; id: string }) => ({ ...t2, text: stripMd(t2.text) }))
+})
 // ★导航体验（2026-09-11）：① 锚点跳转不被吸顶栏遮挡（scroll-margin 见 style）
 //   ② 目录滚动高亮（scroll-spy）——★2026-09-12 收口为框架原语 createScrollSpy（#477）：
 //      页面零裸 window/document（原 getBoundingClientRect/scrollY/getElementById 全在 @proteus-vue/desktop 内）
@@ -193,13 +203,7 @@ watch(
           <!-- 文档引擎 html（md 内含 H1，页面头不再重复）——未翻译页在英文态下不渲染中文正文 -->
           <!-- ★2026-09-26 组件总览页重做：卡片画廊（结构化数据，SSOT 同源）在上 + md 速查表收进折叠区。
                只特判此页，其余文档页渲染路径零改动。 -->
-          <template v-if="isOverview">
-            <ComponentGallery />
-            <details class="ovr-tables">
-              <summary class="ovr-summary">{{ isEn ? 'Quick reference tables' : '按域速查表（Props / Events 计数）' }}</summary>
-              <p-view class="doc-body ovr-doc-body" v-html="docHtml"></p-view>
-            </details>
-          </template>
+          <ComponentGallery v-if="isOverview" />
           <template v-else-if="isComponentPage && !noEn">
             <ComponentDemo :dir="activeSlug" />
             <p-view class="doc-body" v-html="docHtml"></p-view>
@@ -232,28 +236,6 @@ watch(
 </template>
 
 <style scoped>
-/* ★2026-09-26 组件总览：画廊在上，md 速查表收进折叠区（默认收起；表格样式沿用 doc-body） */
-.ovr-tables { margin-top: 26px; }
-.ovr-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-.ovr-summary:hover { color: var(--ink); border-color: rgba(124, 92, 255, 0.5); }
-.ovr-tables[open] .ovr-summary { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.5); }
-/* 折叠区内的 md 正文：h1/blockquote 与画廊头部重复 → 隐藏；表格间距收紧 */
-.ovr-doc-body { margin-top: 14px; }
-.ovr-doc-body :deep(h1:first-of-type),
-.ovr-doc-body :deep(blockquote:first-of-type) { display: none; }
-
 /* ★#384：布局与折叠交互全部归 p-sidebar 组件（collapsed 模式内建切换条）——
    页面只写卡片视觉；side-rail 态侧栏卡片 sticky 避让导航 */
 .guide { padding-bottom: 48px; }
