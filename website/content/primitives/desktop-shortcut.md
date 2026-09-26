@@ -1,7 +1,7 @@
 ---
 title: p-shortcut
 order: 28
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-shortcut

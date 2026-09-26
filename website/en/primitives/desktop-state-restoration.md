@@ -1,7 +1,7 @@
 ---
 title: p-state-restoration
 order: 29
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-state-restoration

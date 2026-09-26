@@ -1,7 +1,7 @@
 ---
 title: 跨窗消息原语（iframe postMessage 收口）
 order: 31
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # 跨窗消息原语（iframe postMessage 收口）

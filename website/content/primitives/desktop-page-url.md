@@ -1,7 +1,7 @@
 ---
 title: 页面 URL 读写原语（location / history 收口）
 order: 25
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # 页面 URL 读写原语（location / history 收口）

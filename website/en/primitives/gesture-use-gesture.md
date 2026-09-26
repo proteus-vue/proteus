@@ -1,7 +1,7 @@
 ---
 title: useGesture Hook + v-gesture directive (Web wiring)
 order: 61
-group: 手势原语
+group: Gesture primitives
 ---
 
 # useGesture Hook + v-gesture directive (Web wiring)

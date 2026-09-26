@@ -1,7 +1,7 @@
 ---
 title: WebMCP integration (E30: useMCP / capabilityToTool)
 order: 82
-group: 工程原语
+group: Engineering primitives
 ---
 
 # WebMCP integration (E30: useMCP / capabilityToTool)

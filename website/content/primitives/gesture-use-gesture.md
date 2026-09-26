@@ -1,7 +1,7 @@
 ---
 title: useGesture Hook + v-gesture 指令（Web 接线）
 order: 61
-group: 手势原语
+group: 手势语义原语
 ---
 
 # useGesture Hook + v-gesture 指令（Web 接线）

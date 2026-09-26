@@ -1,7 +1,7 @@
 ---
 title: p-breadcrumb
 order: 11
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-breadcrumb

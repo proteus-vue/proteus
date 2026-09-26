@@ -1,7 +1,7 @@
 ---
 title: p-deeplink
 order: 16
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-deeplink

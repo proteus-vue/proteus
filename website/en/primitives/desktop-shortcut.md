@@ -1,7 +1,7 @@
 ---
 title: p-shortcut
 order: 28
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-shortcut

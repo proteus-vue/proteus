@@ -1,7 +1,7 @@
 ---
 title: p-focus-trap
 order: 18
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-focus-trap

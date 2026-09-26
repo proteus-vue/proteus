@@ -1,7 +1,7 @@
 ---
 title: 路由工程原语（E10-E18：useRoute/push/back/守卫…）
 order: 85
-group: 工程原语
+group: 工程语义原语
 ---
 
 # 路由工程原语（E10-E18：useRoute/push/back/守卫…）

@@ -1,7 +1,7 @@
 ---
 title: 动画工程原语（E19-E23：useAnimation/useScrollAnimation…）
 order: 80
-group: 工程原语
+group: 工程语义原语
 ---
 
 # 动画工程原语（E19-E23：useAnimation/useScrollAnimation…）

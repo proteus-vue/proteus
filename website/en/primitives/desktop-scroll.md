@@ -1,7 +1,7 @@
 ---
 title: Scroll observation primitive (page scroll progress / scroll state)
 order: 27
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # Scroll observation primitive (page scroll progress / scroll state)

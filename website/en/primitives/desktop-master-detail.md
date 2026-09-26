@@ -1,7 +1,7 @@
 ---
 title: p-master-detail
 order: 22
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-master-detail

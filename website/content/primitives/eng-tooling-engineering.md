@@ -1,7 +1,7 @@
 ---
 title: 工具工程原语（E24-E28：useDevTools/defineComponent…）
 order: 86
-group: 工程原语
+group: 工程语义原语
 ---
 
 # 工具工程原语（E24-E28：useDevTools/defineComponent…）

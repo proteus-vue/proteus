@@ -1,7 +1,7 @@
 ---
 title: p-command
 order: 13
-group: 桌面原语
+group: Desktop primitives
 ---
 
 # p-command

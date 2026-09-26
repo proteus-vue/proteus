@@ -1,7 +1,7 @@
 ---
 title: Gesture 识别器（tap/pan/swipe/pinch/rotate）
 order: 60
-group: 手势原语
+group: 手势语义原语
 ---
 
 # Gesture 识别器（tap/pan/swipe/pinch/rotate）

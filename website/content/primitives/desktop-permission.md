@@ -1,7 +1,7 @@
 ---
 title: p-permission
 order: 26
-group: 桌面原语
+group: 桌面语义原语
 ---
 
 # p-permission
