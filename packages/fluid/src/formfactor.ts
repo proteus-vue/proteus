@@ -50,35 +50,60 @@ export type NavTopology = 'page-stack' | 'bottom-tabs' | 'tabs' | 'rail' | 'side
  *  ★能力清单对齐设计本意（旧版六端能力表）：SKU多选 / 底部Tab / 悬停态 / d-pad遥控焦点 /
  *    表冠旋钮 / 高密度信息 / 焦点树大热区 / 横向焦点行海报流 / 多列并排 / 侧栏
  *    + 框架补充：抽屉 · 异形屏 · 物理键盘 · 驾驶降干扰 */
+/**
+ * ★★能力三态（2026-09-26 报告 P2-2 收口）：对齐组件兼容进度表协议
+ *   `supported`   = 该形态**声明支持**（正常渲染）
+ *   `fallback`    = **有条件降级**（渲染降级替代路径——如车机 SKU 走「语音/旋钮单选取代」，
+ *                    而非直接删除；此前的布尔 false 把「降级」与「不支持」混为一谈）
+ *   `unsupported` = 不支持（不渲染，且**不宜**以任何形式假造）
+ *   ★布尔兼容：`true → supported`、`false → unsupported`（既有消费点零改动）。
+ */
+export type CapsLevel = 'supported' | 'fallback' | 'unsupported' | boolean
+
+/** 判定：该能力是否「有渲染/行为路径」（supported 或 fallback） */
+export function capsEnabled(level: CapsLevel | undefined): boolean {
+  return level === true || level === 'supported' || level === 'fallback'
+}
+/** 判定：是否**降级路径**（需渲染替代形态） */
+export function capsDegraded(level: CapsLevel | undefined): boolean {
+  return level === 'fallback'
+}
+/** 三态标签（UI 展示/门禁用） */
+export function capsLabel(level: CapsLevel | undefined): 'supported' | 'fallback' | 'unsupported' {
+  if (level === true || level === 'supported') return 'supported'
+  if (level === 'fallback') return 'fallback'
+  return 'unsupported'
+}
+
 export interface FormCaps {
   /** 多规格/SKU 选择（车机驾驶场景分心风险 → false，走精简分支） */
-  skuMulti: boolean
+  skuMulti: CapsLevel
   /** 底部 Tab 栏 */
-  tabs: boolean
+  tabs: CapsLevel
   /** 指针悬停态（触控/遥控形态为 false——hover 样式与提示自动不渲染） */
-  hover: boolean
+  hover: CapsLevel
   /** d-pad / 遥控焦点（遥控形态必有——大热区 + 焦点可见） */
-  dpad: boolean
+  dpad: CapsLevel
   /** 表冠 / 旋钮（手表表冠、车机旋钮——连续调节输入） */
-  crown: boolean
+  crown: CapsLevel
   /** 高密度信息（一屏塞多组信息——10ft 观看距离与驾驶场景为 false） */
-  dense: boolean
+  dense: CapsLevel
   /** 焦点树 / 大热区（车机驾驶场景——分层焦点导航） */
-  focusTree: boolean
+  focusTree: CapsLevel
   /** 横向焦点行（海报流——TV lean-back） */
-  focusRows: boolean
+  focusRows: CapsLevel
   /** 多列并排（大屏信息密度表达） */
-  multiCol: boolean
+  multiCol: CapsLevel
   /** 侧栏（持久导航） */
-  sidebar: boolean
+  sidebar: CapsLevel
   /** 抽屉/侧滑弹层（触控形态支持；遥控形态用全屏 dialog 替代） */
-  drawer: boolean
+  drawer: CapsLevel
   /** 异形屏/刘海（顶部安全区预留） */
-  notch: boolean
+  notch: CapsLevel
   /** 物理/软键盘输入（PC 支持键盘快捷键；触控形态无） */
-  keyboard: boolean
+  keyboard: CapsLevel
   /** 驾驶降干扰（限制动效 + 精简信息层级——车机专有语义） */
-  driveAware: boolean
+  driveAware: CapsLevel
 }
 
 /**
@@ -138,19 +163,40 @@ export interface FormFrame {
   /** 展示宽上限 px（mockup 尺寸——居中展示） */
   maxWidth: number
   /** 异形屏（刘海） */
-  notch: boolean
+  notch: CapsLevel
   /** 顶部状态栏 */
-  statusBar: boolean
+  statusBar: CapsLevel
   /** 外框圆角（px——按形态：手表更圆 / PC 方） */
   radius: number
   /** ★铰链（折叠屏：竖向折痕在正中——专家报告 P1-2：内容不得跨折痕） */
-  hinge?: boolean
+  hinge?: CapsLevel
   /** ★表盘（手表：状态栏渲染为时间 + complication——报告 P1-4） */
-  watchFace?: boolean
+  watchFace?: CapsLevel
 }
 
 /** 视角距离档（诚实标注：10ft = 电视观看距离；驾驶 = 车机；桌面 = 臂长） */
 export type ViewingDistance = 'glance' | 'arm' | 'desk' | 'dashboard' | '10ft'
+
+/**
+ * ★★折叠屏姿态（2026-09-26 报告 P0-2）：折叠屏的本质是**动态形态**——
+ *   `folded`（折叠态：外屏，单屏窄）· `tabletop`（半折：上半展示 + 下半操作）
+ *   `expanded`（展开态：内屏，双窗格）
+ *   ★连续性（app continuity）：状态与视口在姿态间**连续重排**（不重启、不丢状态）——
+ *   框架据 postures 切换拓扑/导航/视口，业务零分支。
+ */
+export interface FormPosture {
+  /** 姿态键 */
+  key: 'folded' | 'tabletop' | 'expanded'
+  label: { zh: string; en: string }
+  /** 该姿态的布局拓扑 */
+  topology: LayoutTopology
+  /** 该姿态的导航 */
+  nav: NavTopology
+  /** 该姿态视口（连续性：折叠 340 → 展开 673） */
+  viewport: { width: number; height: number }
+  /** 半折铰链方向（tabletop 水平铰链——上半展示/下半操作） */
+  hinge?: 'horizontal' | 'vertical'
+}
 
 /** 形态画像（声明式 SSOT——布局/导航/能力/密度/缩放**与视觉语言**全从这里推导） */
 export interface FormProfile {
@@ -174,6 +220,8 @@ export interface FormProfile {
   mediaRatio: string
   /** ★安全区（专家报告 P1-3：TV overscan 5% / iPad 20pt 握持 / 手机 Home Indicator） */
   safe?: { side?: number; bottom?: number; top?: number }
+  /** ★姿态集（折叠屏等**动态形态**——折叠/半折/展开；单姿态形态可省） */
+  postures?: FormPosture[]
   /** 典型视口（文档/演示用；真实值以容器查询为准） */
   viewport: { width: number; height: number }
   /** 能力声明（14 项——未声明即不支持，组件自动降级） */
@@ -181,20 +229,20 @@ export interface FormProfile {
 }
 
 const CAPS_BASE: FormCaps = {
-  skuMulti: false,
-  tabs: false,
-  hover: false,
-  dpad: false,
-  crown: false,
-  dense: false,
-  focusTree: false,
-  focusRows: false,
-  multiCol: false,
-  sidebar: false,
-  drawer: false,
-  notch: false,
-  keyboard: false,
-  driveAware: false,
+  skuMulti: 'unsupported',
+  tabs: 'unsupported',
+  hover: 'unsupported',
+  dpad: 'unsupported',
+  crown: 'unsupported',
+  dense: 'unsupported',
+  focusTree: 'unsupported',
+  focusRows: 'unsupported',
+  multiCol: 'unsupported',
+  sidebar: 'unsupported',
+  drawer: 'unsupported',
+  notch: 'unsupported',
+  keyboard: 'unsupported',
+  driveAware: 'unsupported',
 }
 
 /** ★形态画像表（SSOT）——每项差异都有真实设备依据（注释标注） */
@@ -216,7 +264,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     // ★状态栏 = 时间（报告 P1-4：watchOS/Wear 上「时间」是表盘第一锚点，缺了会立刻显得假）
     frame: { ar: '1/1', maxWidth: 240, notch: false, statusBar: true, radius: 34, watchFace: true },
-    caps: { ...CAPS_BASE, crown: true }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
+    caps: { ...CAPS_BASE, crown: 'supported' }, // ★表冠（旧版 cap）+ 无 Tab（一屏一意不设 tabbar）
   },
   phone: {
     form: 'phone',
@@ -233,7 +281,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 13, ref: 300, min: 0.7, max: 1.5 } }, // ★触控正文（审查：真机 390pt 下 ≈16.9pt ≈ HIG 17pt）
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '9/16', maxWidth: 300, notch: true, statusBar: true, radius: 22 },
-    caps: { ...CAPS_BASE, skuMulti: true, tabs: true, dense: true, drawer: true, notch: true },
+    caps: { ...CAPS_BASE, skuMulti: 'supported', tabs: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
   },
   fold: {
     form: 'fold',
@@ -244,12 +292,19 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     nav: 'tabs',
     mediaRatio: '1/1',
     safe: { side: 0, bottom: 16 },
+    // ★姿态集（报告 P0-2）：折叠态外屏（单列+Tab）→ 半折 tabletop（水平铰链）→ 展开态内屏（双窗格）
+    //   连续性语义：视口 340 → 673，拓扑 stack → duo（状态跨姿态连续重排，不重启）
+    postures: [
+      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 340, height: 800 } },
+      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'tabs', viewport: { width: 673, height: 420 }, hinge: 'horizontal' },
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'tabs', viewport: { width: 673, height: 841 } },
+    ],
     viewport: { width: 673, height: 841 },
     distance: 'arm',
     visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#777f8c', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '6/7', maxWidth: 470, notch: false, statusBar: true, radius: 18, hinge: true },
-    caps: { ...CAPS_BASE, skuMulti: true, multiCol: true, dense: true, drawer: true, notch: true },
+    caps: { ...CAPS_BASE, skuMulti: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
   },
   tablet: {
     form: 'tablet',
@@ -266,7 +321,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     visual: { theme: 'light', bg: '#f4f6fb', surface: '#ffffff', text: '#1a2a55', dim: '#6b7280', brand: '#7c5cff', accent: '#7c5cff', focus: 'none', ratio: { baseFont: 12.5, ref: 520, min: 0.68, max: 1.5 } },
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '4/3', maxWidth: 520, notch: false, statusBar: true, radius: 20 },
-    caps: { ...CAPS_BASE, skuMulti: true, sidebar: true, multiCol: true, dense: true, drawer: true },
+    caps: { ...CAPS_BASE, skuMulti: 'supported', sidebar: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported' },
   },
   pc: {
     form: 'pc',
@@ -282,7 +337,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     visual: { theme: 'light', bg: '#f7f8fa', surface: '#ffffff', text: '#17171f', dim: '#667085', brand: '#7c5cff', accent: '#7c5cff', focus: 'ring', ratio: { baseFont: 13, ref: 620, min: 0.62, max: 1.45 } }, // ★桌面字 ≥ 平板（审查：曾 12 < 12.5） // 键盘 Tab 可达 → 焦点环可见
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/10', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
-    caps: { ...CAPS_BASE, hover: true, skuMulti: true, sidebar: true, multiCol: true, dense: true, keyboard: true },
+    caps: { ...CAPS_BASE, hover: 'supported', skuMulti: 'supported', sidebar: 'supported', multiCol: 'supported', dense: 'supported', keyboard: 'supported' },
   },
   car: {
     form: 'car',
@@ -303,7 +358,9 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '8/3', maxWidth: 760, notch: false, statusBar: false, radius: 14 },
     // ★车机能力画像（真实约束）：驾驶中不做精细多规格选择（分心风险）、无悬停、限制动效
-    caps: { ...CAPS_BASE, dpad: true, crown: true, focusTree: true, dense: true, multiCol: true, focusRows: true, driveAware: true },
+    // ★车机能力画像（2026-09-26 三态）：多规格**降级**而非删除——驾驶场景用「语音/旋钮单选」
+    //   替代多选（旧版设计本意：`@conditional` 退化为单选/语音选择），不是「不支持」
+    caps: { ...CAPS_BASE, skuMulti: 'fallback', dpad: 'supported', crown: 'supported', focusTree: 'supported', dense: 'supported', multiCol: 'supported', focusRows: 'supported', driveAware: 'supported' },
   },
   tv: {
     form: 'tv',
@@ -323,7 +380,7 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '16/9', maxWidth: 620, notch: false, statusBar: false, radius: 12 },
     // ★TV 能力画像：10ft 远距离 → 不做高密度信息、无 hover（遥控器）、无侧栏（水平海报流主导）
-    caps: { ...CAPS_BASE, dpad: true, focusRows: true, multiCol: true },
+    caps: { ...CAPS_BASE, dpad: 'supported', focusRows: 'supported', multiCol: 'supported' },
   },
 }
 
@@ -474,7 +531,8 @@ export function resolveFrameVars(profile: FormProfile): Record<string, string> {
 
 /** 能力判定（组件消费入口）：某形态是否声明支持该能力 */
 export function formSupports(form: DeviceForm, cap: keyof FormCaps): boolean {
-  return FORM_PROFILES[form]?.caps[cap] === true
+  // ★三态归一（2026-09-26）：supported / fallback 都算「有路径」；仅 unsupported 为 false
+  return capsEnabled(FORM_PROFILES[form]?.caps[cap])
 }
 
 /**
@@ -509,11 +567,26 @@ export function validateFormProfiles(
     // ★展示壳规格
     if (!/^\d+\/\d+$/.test(p.frame.ar)) problems.push(`${f}: frame.ar 非法（${p.frame.ar}）`)
     if (!(p.frame.maxWidth >= 180)) problems.push(`${f}: frame.maxWidth 过小（${p.frame.maxWidth}）`)
-    if (p.caps.focusRows && p.input === 'touch') problems.push(`${f}: 焦点行要求遥控类输入（实际 ${p.input}）`)
-    if (p.topology === 'glance' && p.caps.dense) problems.push(`${f}: 一屏一意（glance）不应声明 dense`)
+    // ★姿态自洽（报告 P0-2）：三姿态齐备 · 视口递增 · 展开态拓扑 ≠ 折叠态拓扑（连续性语义）
+    if (p.postures) {
+      const keys = p.postures.map((x) => x.key)
+      for (const need of ['folded', 'tabletop', 'expanded'] as const) {
+        if (!keys.includes(need)) problems.push(`${f}: 姿态集缺 ${need}`)
+      }
+      const folded = p.postures.find((x) => x.key === 'folded')
+      const expanded = p.postures.find((x) => x.key === 'expanded')
+      if (folded && expanded) {
+        if (!(expanded.viewport.width > folded.viewport.width)) {
+          problems.push(`${f}: 展开态视口须宽于折叠态（连续性语义）`)
+        }
+        if (folded.topology === expanded.topology) {
+          problems.push(`${f}: 折叠态与展开态拓扑须不同（否则无「形态切换」可言）`)
+        }
+      }
+    }
     if (p.density === 'compact' && p.input === 'remote') problems.push(`${f}: 遥控形态不应 compact（远距离可读性）`)
     // ★视觉语言自洽：遥控/键盘形态必须可见焦点（焦点环）；10ft/驾驶形态字号须显著放大
-    if ((p.caps.dpad || p.caps.keyboard) && p.visual.focus !== 'ring') {
+    if ((capsEnabled(p.caps.dpad) || capsEnabled(p.caps.keyboard)) && p.visual.focus !== 'ring') {
       problems.push(`${f}: 遥控/键盘形态必须焦点可见（visual.focus 应为 ring）`)
     }
     // ★距离语义护栏（改到 ratio.max——绝对 px 已随容器驱动移除）
@@ -524,7 +597,6 @@ export function validateFormProfiles(
     if (p.distance === 'dashboard' && (p.visual.ratio.ref < 560 || p.visual.ratio.max < 1.5)) {
       problems.push(`${f}: 驾驶形态的 ref/max 不足（ref ${p.visual.ratio.ref} / max ${p.visual.ratio.max}）`)
     }
-    if (p.caps.focusRows && p.input !== 'remote') problems.push(`${f}: 焦点行要求遥控输入`)
     if (!(p.visual.bg && p.visual.text && p.visual.brand)) problems.push(`${f}: 视觉语言缺关键色`)
     // ★对比度护栏（专家审查实锤「车机标题隐形」）：正文/背景须达 WCAG AA 4.5:1
     const contrast = (a: string, b: string): number => {

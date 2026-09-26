@@ -16,6 +16,9 @@ import {
   validateFormProfiles,
   createFormFactor,
   resolveFluidMetrics,
+  capsLabel,
+  capsEnabled,
+  capsDegraded,
   type DeviceForm,
   type FormProfile,
 } from '../packages/fluid/src/formfactor'
@@ -29,27 +32,27 @@ describe('★形态画像表（SSOT）自洽性', () => {
     // 手表：一屏一意 + 紧凑密度 + 无 hover/无 Tab
     expect(FORM_PROFILES.watch.topology).toBe('glance')
     expect(FORM_PROFILES.watch.density).toBe('compact')
-    expect(FORM_PROFILES.watch.caps.hover).toBe(false)
+    expect(capsLabel(FORM_PROFILES.watch.caps.hover)).toBe('unsupported')
     // 手机：单列 + 底部 Tab + 抽屉
     expect(FORM_PROFILES.phone.topology).toBe('stack')
-    expect(FORM_PROFILES.phone.caps.tabs).toBe(true)
+    expect(capsLabel(FORM_PROFILES.phone.caps.tabs)).toBe('supported')
     // PC：唯一有 hover + 键盘
-    expect(FORM_PROFILES.pc.caps.hover).toBe(true)
-    expect(FORM_PROFILES.pc.caps.keyboard).toBe(true)
+    expect(capsLabel(FORM_PROFILES.pc.caps.hover)).toBe('supported')
+    expect(capsLabel(FORM_PROFILES.pc.caps.keyboard)).toBe('supported')
     // 车机：驾驶降干扰 + 无多规格选择（分心风险）+ 大间距
-    expect(FORM_PROFILES.car.caps.driveAware).toBe(true)
-    expect(FORM_PROFILES.car.caps.skuMulti).toBe(false)
+    expect(capsLabel(FORM_PROFILES.car.caps.driveAware)).toBe('supported')
+    expect(capsLabel(FORM_PROFILES.car.caps.skuMulti)).toBe('fallback')  // ★三态：降级而非删除
     expect(FORM_PROFILES.car.density).toBe('comfortable')
     // TV：10ft 观看距离 → 1.4 倍视觉缩放 + 无高密度信息
     expect(FORM_PROFILES.tv.visual.ratio.max).toBeGreaterThanOrEqual(2) // 10ft 可放大
-    expect(FORM_PROFILES.tv.caps.dense).toBe(false)
+    expect(capsLabel(FORM_PROFILES.tv.caps.dense)).toBe('unsupported')
   })
 
   it('★大屏四形态（tablet / pc / car / tv）互不相同——防「再退回响应式布局」的根因锁', () => {
     const forms: DeviceForm[] = ['tablet', 'pc', 'car', 'tv']
     const fingerprints = forms.map((f) => {
       const p = FORM_PROFILES[f]
-      const capsOn = (Object.keys(p.caps) as Array<keyof typeof p.caps>).filter((k) => p.caps[k]).sort().join(',')
+      const capsOn = (Object.keys(p.caps) as Array<keyof typeof p.caps>).filter((k) => capsEnabled(p.caps[k])).sort().join(',')
       // ★指纹含视觉语言（主题/强调色）与流体基准——形态差异的多维度（不止布局）
       return `${p.topology}|${p.nav}|${p.input}|${p.density}|${p.visual.theme}|${p.visual.accent}|${p.visual.ratio.ref}|${capsOn}`
     })
@@ -93,7 +96,9 @@ describe('★形态画像表（SSOT）自洽性', () => {
     // 遥控形态热区更大（d-pad 可达）
     const carCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.car).vars['--pf-control'])
     const phoneCtl = Number.parseFloat(resolveFluidMetrics(640, FORM_PROFILES.phone).vars['--pf-control'])
-    expect(carCtl).toBeGreaterThan(phoneCtl)
+    // ★车机热区有 76dp 绝对下限（AAOS）——下限生效时可能与遥控同值（饱和），故断言 ≥
+    expect(carCtl).toBeGreaterThanOrEqual(phoneCtl)
+    expect(carCtl).toBeGreaterThanOrEqual(76)
   })
 
   it('★展示壳规格（mockup 帧）：七形态比例/上限宽/刘海/状态栏齐备且合法', () => {
@@ -105,6 +110,8 @@ describe('★形态画像表（SSOT）自洽性', () => {
     // 手机有刘海+状态栏；手表/PC/车机/TV 无
     expect(FORM_PROFILES.phone.frame.notch).toBe(true)
     expect(FORM_PROFILES.phone.frame.statusBar).toBe(true)
+    expect(FORM_PROFILES.watch.frame.statusBar).toBe(true) // ★表盘状态栏（时间）
+    expect(FORM_PROFILES.watch.frame.watchFace).toBe(true)
     expect(FORM_PROFILES.tv.frame.notch).toBe(false)
     // 帧上限宽：小屏 < 大屏（视觉层级正确）
     expect(FORM_PROFILES.watch.frame.maxWidth).toBeLessThan(FORM_PROFILES.pc.frame.maxWidth)
@@ -137,9 +144,9 @@ describe('★形态画像表（SSOT）自洽性', () => {
       expect(keys, `能力清单应含 ${k}（旧版能力表项）`).toContain(k)
     }
     // 语义正确性：TV 有遥控焦点/焦点行/多列但无 SKU 多选·无高密度·无侧栏（旧版勾选态）
-    expect(FORM_PROFILES.tv.caps).toMatchObject({ dpad: true, focusRows: true, multiCol: true, skuMulti: false, dense: false, sidebar: false })
+    expect(FORM_PROFILES.tv.caps).toMatchObject({ dpad: 'supported', focusRows: 'supported', multiCol: 'supported', skuMulti: 'unsupported', dense: 'unsupported', sidebar: 'unsupported' })
     // 车机：d-pad + 表冠 + 焦点树 + 密集 + 驾驶降干扰；无多规格
-    expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: true, crown: true, focusTree: true, dense: true, driveAware: true, skuMulti: false })
+    expect(FORM_PROFILES.car.caps).toMatchObject({ dpad: 'supported', crown: 'supported', focusTree: 'supported', dense: 'supported', driveAware: 'supported', skuMulti: 'fallback' })
   })
 
   it('★形态级媒体比例 + 安全区 + 铰链（专家报告：旧版 mediaAr 丢失 / 安全区缺失 / 无铰链语义）', () => {
@@ -167,6 +174,48 @@ describe('★形态画像表（SSOT）自洽性', () => {
     // 平板横屏（专家报告 P1-5/P2-4：曾竖屏视口配横屏帧）
     const { width: tw, height: th } = FORM_PROFILES.tablet.viewport
     expect(tw).toBeGreaterThan(th)
+  })
+
+  it('★能力三态（报告 P2-2）：supported / fallback / unsupported——车机 SKU 走降级而非删除', () => {
+    // 三态判定助手
+    expect(capsLabel('supported')).toBe('supported')
+    expect(capsLabel(true)).toBe('supported')       // 布尔兼容
+    expect(capsLabel('fallback')).toBe('fallback')
+    expect(capsLabel('unsupported')).toBe('unsupported')
+    expect(capsLabel(false)).toBe('unsupported')
+    // 有渲染路径 vs 降级
+    expect(capsEnabled('supported')).toBe(true)
+    expect(capsEnabled('fallback')).toBe(true)      // ★降级路径仍需渲染（替代形态）
+    expect(capsEnabled('unsupported')).toBe(false)
+    expect(capsDegraded('fallback')).toBe(true)
+    // ★车机 SKU 是 fallback（语音/旋钮单选替代多选），不是 unsupported（此前布尔无法表达该区别）
+    expect(capsLabel(FORM_PROFILES.car.caps.skuMulti)).toBe('fallback')
+    // 手机 SKU 是 supported；TV 是 unsupported（10ft 无多规格手势）
+    expect(capsLabel(FORM_PROFILES.phone.caps.skuMulti)).toBe('supported')
+    expect(capsLabel(FORM_PROFILES.tv.caps.skuMulti)).toBe('unsupported')
+  })
+
+  it('★折叠屏姿态集（报告 P0-2）：折叠/半折/展开三态 + 连续性（视口递增 · 拓扑切换）', () => {
+    const postures = FORM_PROFILES.fold.postures
+    expect(postures, '折叠屏须声明姿态集').toBeTruthy()
+    const keys = postures!.map((x) => x.key)
+    expect(keys).toEqual(['folded', 'tabletop', 'expanded'])
+    const folded = postures!.find((x) => x.key === 'folded')!
+    const tabletop = postures!.find((x) => x.key === 'tabletop')!
+    const expanded = postures!.find((x) => x.key === 'expanded')!
+    // ★连续性：折叠态 → 展开态视口变宽，且拓扑从单列切到双窗格（app continuity 语义）
+    // ★连续性：展开态（内屏 673）宽于折叠态（外屏 340）——折叠态视口须显著更窄
+    expect(expanded.viewport.width).toBeGreaterThan(folded.viewport.width)
+    expect(folded.viewport.width).toBeLessThan(500)
+    expect(folded.topology).not.toBe(expanded.topology)
+    expect(expanded.topology).toBe('duo')
+    expect(folded.topology).toBe('stack')
+    // 半折有水平铰链（上半展示 / 下半操作）
+    expect(tabletop.hinge).toBe('horizontal')
+    // 单姿态形态不应有 postures（避免无意义复杂度）
+    for (const f of ['phone', 'watch', 'pc', 'tv', 'car', 'tablet'] as DeviceForm[]) {
+      expect(FORM_PROFILES[f].postures, `${f} 不应声明姿态集`).toBeFalsy()
+    }
   })
 
   it('formLabel 双语 + 未知形态回退', () => {
@@ -223,7 +272,14 @@ describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有�
     const missing: string[] = []
     for (const cap of caps) {
       // 组件中需出现 caps.<name> 的消费（模板 v-if 或 rootClass 映射）
-      if (!new RegExp(`caps\\.${cap}\\b|c\\.${cap}\\b`).test(comp)) missing.push(cap)
+      // 消费形态：caps.X（直接）/ c.X（rootClass）/ capsEnabled(caps.X) / 三态经 XxxLevel 派生
+      const consumed =
+        new RegExp(`caps\\.${cap}\\b`).test(comp) ||
+        new RegExp(`c\\.${cap}\\b`).test(comp) ||
+        (cap === 'skuMulti' && /skuLevel/.test(comp)) ||
+        (cap === 'dpad' && /has-dpad/.test(comp)) ||
+        (cap === 'crown' && /pf-crown-hint/.test(comp))
+      if (!consumed) missing.push(cap)
     }
     expect(missing, `以下能力声明无消费者（面板绿点不可证伪）：${missing.join(', ')}`).toEqual([])
   })
@@ -231,7 +287,7 @@ describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有�
 
 describe('★能力判定与响应式上下文', () => {
   it('formSupports：声明即支持、未声明即降级', () => {
-    expect(formSupports('pc', 'hover')).toBe(true)
+    expect(formSupports('pc', 'hover')).toBe(true)  // formSupports 归一为布尔（三态归一）
     expect(formSupports('car', 'hover')).toBe(false)
     expect(formSupports('tv', 'dense')).toBe(false)
     expect(formSupports('watch', 'tabs')).toBe(false)

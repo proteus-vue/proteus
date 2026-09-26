@@ -19,7 +19,7 @@
     :style="rootStyle"
   >
     <!-- 侧栏（能力声明 sidebar：未声明的形态自动不渲染——手机/手表/车机/TV） -->
-    <aside v-if="caps.sidebar && $slots.rail" class="pf-rail">
+    <aside v-if="capsEnabled(caps.sidebar) && $slots.rail" class="pf-rail">
       <slot name="rail" />
     </aside>
 
@@ -32,9 +32,13 @@
       <div class="pf-info">
         <slot name="heading" />
         <slot name="price" />
-        <!-- ★能力过滤：形态未声明 skuMulti（车机驾驶分心风险）→ 多规格槽自动不渲染 -->
-        <div v-if="caps.skuMulti && $slots.sku" class="pf-sku">
+        <!-- ★能力三态（2026-09-26 报告 P2-2）：supported → 多规格；fallback → **降级路径**
+             （车机驾驶场景以「语音/旋钮单选」替代多选，而非删除）；unsupported → 不渲染 -->
+        <div v-if="skuLevel === 'supported' && $slots.sku" class="pf-sku">
           <slot name="sku" />
+        </div>
+        <div v-else-if="skuLevel === 'fallback'" class="pf-sku-fallback">
+          <span class="pf-sku-fb-label">🎙 {{ skuFallbackHint }}</span>
         </div>
         <div v-if="$slots.actions" class="pf-actions">
           <slot name="actions" />
@@ -48,7 +52,7 @@
     </div>
 
     <!-- 底部 Tab（能力声明 tabs：未声明的形态自动不渲染——手表/平板/PC/车机/TV） -->
-    <nav v-if="caps.tabs && $slots.tabbar" class="pf-tabbar">
+    <nav v-if="capsEnabled(caps.tabs) && $slots.tabbar" class="pf-tabbar">
       <slot name="tabbar" />
     </nav>
 
@@ -65,12 +69,16 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery } from '@proteus-vue/fluid'
+import { FORM_PROFILES, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery, capsEnabled, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FocusDirection, FocusRect } from '@proteus-vue/fluid'
 
 const props = defineProps({
   /** 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 */
   declared: { type: String as () => DeviceForm | null, default: null },
+  /** 降级路径提示文案（宿主注入——组件层不含 i18n 依赖） */
+  degradedHint: { type: String, default: '' },
+  /** ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） */
+  posture: { type: String, default: '' },
   /** 容器尺寸注入（宿主/测试；缺省用容器自身测量） */
   width: { type: Number, default: 0 },
   height: { type: Number, default: 0 },
@@ -105,8 +113,22 @@ onUnmounted(() => {
 
 // ★焦点引擎也需要矩形测量——走同一观测原语（审计纪律：不直用 getBoundingClientRect）
 const form = computed(() => (props.declared as DeviceForm | null) ?? senseFormFast())
-const profile = computed(() => FORM_PROFILES[form.value])
+/** ★姿态覆盖（报告 P0-2）：折叠屏按 posture 切换拓扑/视口——业务零分支 */
+const postureDef = computed(() => {
+  if (!props.posture) return null
+  return (FORM_PROFILES[form.value]?.postures ?? []).find((x) => x.key === props.posture) ?? null
+})
+const baseProfile = computed(() => FORM_PROFILES[form.value])
+/** 生效画像（姿态覆盖拓扑；视口由宿主经 width 注入——保持度量单一入口） */
+const profile = computed(() => {
+  const po = postureDef.value
+  return po ? { ...baseProfile.value, topology: po.topology, nav: po.nav } : baseProfile.value
+})
 const caps = computed(() => profile.value.caps)
+/** ★SKU 能力三态（supported / fallback / unsupported——报告 P2-2） */
+const skuLevel = computed(() => capsLabel(caps.value.skuMulti))
+/** 降级提示（宿主可经 props 覆盖；缺省走形态中性的简短说明——组件层不依赖 i18n） */
+const skuFallbackHint = computed(() => props.degradedHint || 'pick by voice / rotary')
 
 /** 无声明时的兜底推断（SSR/MP 安全——只读注入的尺寸） */
 function senseFormFast(): DeviceForm {
@@ -131,16 +153,16 @@ const rootClass = computed(() => {
     `topo-${p.topology}`,
     `form-${form.value}`,
     `input-${p.input}`,
-    c.driveAware ? 'is-drive' : '',
-    c.hover ? 'has-hover' : '',
-    c.dpad ? 'has-dpad' : '',
-    c.crown ? 'has-crown' : '',
-    c.dense ? 'is-dense' : '',
-    c.focusTree ? 'has-focus-tree' : '',
-    c.multiCol ? 'has-multicol' : '',
-    c.drawer ? 'has-drawer' : '',
-    c.notch ? 'has-notch' : '',
-    c.keyboard ? 'has-keyboard' : '',
+    capsEnabled(c.driveAware) ? 'is-drive' : '',
+    capsEnabled(c.hover) ? 'has-hover' : '',
+    capsEnabled(c.dpad) ? 'has-dpad' : '',
+    capsEnabled(c.crown) ? 'has-crown' : '',
+    capsEnabled(c.dense) ? 'is-dense' : '',
+    capsEnabled(c.focusTree) ? 'has-focus-tree' : '',
+    capsEnabled(c.multiCol) ? 'has-multicol' : '',
+    capsEnabled(c.drawer) ? 'has-drawer' : '',
+    capsEnabled(c.notch) ? 'has-notch' : '',
+    capsEnabled(c.keyboard) ? 'has-keyboard' : '',
   ].filter(Boolean).join(' ')
 })
 
@@ -306,6 +328,20 @@ onUnmounted(() => {
   gap: calc(var(--pf-gap) * var(--pf-gap-dense));
   min-width: 0;
 }
+/* ★SKU 降级路径（fallback——车机驾驶：语音/旋钮单选替代多选） */
+.pf-sku-fallback {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--pf-u) * 0.6);
+  padding: calc(var(--pf-u) * 0.6) calc(var(--pf-u) * 0.9);
+  border: 1px dashed color-mix(in srgb, var(--pf-accent, #ffb13d) 55%, transparent);
+  border-radius: var(--pf-radius, 8px);
+  background: color-mix(in srgb, var(--pf-accent, #ffb13d) 10%, transparent);
+  min-height: var(--pf-control);
+}
+.pf-sku-fb-label { font-size: calc(var(--pf-font) * 0.85); color: var(--pf-accent, #ffb13d); font-weight: 700; }
+.pf-sku-fb-val { font-size: calc(var(--pf-font) * 0.95); color: var(--pf-text, #fff); }
+
 /* 推荐区默认：自适应网格（形态拓扑可覆盖——焦点行形态转横排海报流） */
 .pf-recommend { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 10px; }
 
@@ -542,16 +578,27 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* crown：旋钮/表冠提示（手表 / 车机）*/
+/* ★表冠/旋钮（2026-09-26 细化）：物理表冠图形——右侧圆形凸起 + 刻度纹（手表/车机旋钮语义） */
 .pf-crown-hint {
   position: absolute;
-  right: calc(var(--pf-u) * 0.3);
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: calc(var(--pf-font) * 0.9);
-  color: var(--pf-dim, #888);
-  opacity: 0.7;
+  right: calc(var(--pf-u) * -0.35);
+  top: 38%;
+  width: calc(var(--pf-u) * 1.15);
+  height: calc(var(--pf-u) * 3.4);
+  border-radius: calc(var(--pf-u) * 0.6);
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pf-dim, #888) 55%, transparent) 0 1px,
+    transparent 1px 3px
+  ), color-mix(in srgb, var(--pf-text, #fff) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pf-dim, #888) 45%, transparent);
+  box-shadow: inset -1px 0 2px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+}
+/* 旋钮态反馈：焦点在操作区时表冠微亮（旋钮驱动的视觉线索） */
+.has-crown:focus-within .pf-crown-hint {
+  border-color: var(--pf-accent, #ffb13d);
+  background-color: color-mix(in srgb, var(--pf-accent, #ffb13d) 18%, transparent);
 }
 
 /* keyboard：快捷键提示（PC）*/
