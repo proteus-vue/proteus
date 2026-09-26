@@ -212,6 +212,23 @@ describe('★形态求解：声明 > 探测 > 兜底', () => {
   })
 })
 
+describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有消费者）', () => {
+  it('14 项 caps 每一项都在组件层有消费点（静态扫描——防「空头声明」回归）', () => {
+    const fs = require('node:fs') as typeof import('node:fs')
+    const comp = fs.readFileSync(
+      require('node:path').resolve(__dirname, '../packages/components/p-formfactor/index.vue'),
+      'utf8',
+    )
+    const caps = Object.keys(FORM_PROFILES.tv.caps)
+    const missing: string[] = []
+    for (const cap of caps) {
+      // 组件中需出现 caps.<name> 的消费（模板 v-if 或 rootClass 映射）
+      if (!new RegExp(`caps\\.${cap}\\b|c\\.${cap}\\b`).test(comp)) missing.push(cap)
+    }
+    expect(missing, `以下能力声明无消费者（面板绿点不可证伪）：${missing.join(', ')}`).toEqual([])
+  })
+})
+
 describe('★能力判定与响应式上下文', () => {
   it('formSupports：声明即支持、未声明即降级', () => {
     expect(formSupports('pc', 'hover')).toBe(true)
