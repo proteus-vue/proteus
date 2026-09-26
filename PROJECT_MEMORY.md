@@ -99,6 +99,14 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·官网对标优化 P0-1/P0-2 落地：组件详情页嵌 showcase 真演示（iframe 同源）+ 首页多端同屏前置（2026-09-26 续三，★★★用户「好的」批准按评审顺序动手）**：
+  **① P0-1 组件页嵌真演示（73 页全覆盖，改一次模板）**——`ComponentDemo.vue`（HEAD 预检降级 / 同源 iframe 量 contentDocument 真实高 + ResizeObserver 跟随 / LIVE 徽标 + 新窗口打开）接入 DocsPage 的 `isComponentPage` 特判；showcase 部署配套三件：`proteus.config.ts` 支持 `PROTEUS_BASE`（vite.base）、`emit-spa-routes.mjs`（构建后把 index.html 落成每条路由真实目录——GitHub Pages 无 /showcase 级 404 兜底，119 条深链全可直达）、pages.yml 增 showcase 构建合入步。
+  **② 框架级补丁：web-adapter 子路径 base 支持**——此前裸读 `location.pathname`，子路径部署路由全错；修为 stripBase（读剥 base）/withBase（写补 base）+ **尾斜杠归一**（目录式部署 /dir 必 301 到 /dir/，route 恒带尾斜杠）；回归锁 `tests/web-adapter-base.test.ts`（jsdom + vi.stubEnv BASE_URL，9 例含缺省直通防回归）。
+  **③ P0-2 首页横幅**：「适用场景」前插整卡可点多端同屏横幅（品牌柔光 + 六端 chips + CTA），i18n 补 zh/en 四键。
+  **④ 两次部署失败的归因链（诚实记录）**：(a) `ReturnType<typeof spawnSync>` 吞 encoding 特化（上次已修）；(b) 本轮 **TS2339**：shared 声明构建下 `import.meta.env` 无类型——本地 dist 陈旧掩盖（tsc 跳过未变产物）、CI 新鲜必红 → `src/shims/import-meta.d.ts` + tsconfig types 挂载。★双重教训入库：**本地「缓存命中构建通过」≠ 新鲜环境通过——改 packages/* 后清该包 dist 复跑；showcase 构建消费链 = @proteus-vue/web(dist 打包内联 shared) → 改 shared 后必须先 build-packages 再 build showcase**。
+  **⑤ 验证与上线**：adapter 回归锁 9/9 · 全量单测（仅 2 预存环境失败）· 根/website vue-tsc 0 错误 · 门禁 content/stats/gates-sync ✅ · 本地全链（build web×2 + iframe 内点按钮回显 0→1 真交互实测）；部署 run 36222495691 success，线上实证：showcase 深链 301→200 + src=/showcase/assets ✓、官网 bundle 含 cd-frame/md-band 标记。
+  **⑥ 后续（评审清单余项）**：P0-3 Showcase/生态栏目、P1 Changelog 页/IA 收敛/社区层/快速开始一键命令、P2 SEO-OG/EN 完整度/品牌插画。
+
 - **★本会话·官网组件总览页重做：纯表格 → 卡片画廊（域分区 + 73 个手绘 SVG 字形），数据仍源码 SSOT（2026-09-26 续，★★★用户给参考图）**：
   **① 架构：生成器加一份结构化产出，渲染层特判一页**——`gen-content.mjs` 在写 md 总览的同一 `indexRows` 上**再产出 `website/src/data/component-index.ts`**（域分组 + 组件 dir/props/emits + EN 域名；组件总数变化时画廊自动跟随）；`DocsPage.vue` 只对 `slug=00-components-overview` 特判：画廊在上 + 原 md 表格收进 `<details>` 折叠速查区（h1/blockquote 隐藏防重复）——其余文档页渲染路径零改动，搜索/TOC 门禁不受影响。
   **② 视觉**：`ComponentGallery.vue`（大标题 + 克制的品牌柔光装饰 + 域分区标题带计数徽标 + `repeat(auto-fill,minmax(210px,1fr))` 卡片网格 + hover 上浮描边 + router-link 跳转）+ `ComponentGlyph.vue`（**73 个手绘 SVG 微缩字形**，viewBox 120×80，中性面+单一品牌强调，对齐站点深色令牌；p-button 双按钮形态对齐参考图、p-map/p-location 定位 pin、p-scan-qr 扫描线等）；窄屏 ≤720px 隐藏装饰。
