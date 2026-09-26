@@ -5,7 +5,7 @@ export interface ComponentIndexDomain { key: string; en: string; components: Com
 export interface ComponentIndex { total: number; domains: ComponentIndexDomain[] }
 
 export const componentIndex: ComponentIndex = {
-  "total": 73,
+  "total": 74,
   "domains": [
     {
       "key": "布局",
@@ -34,6 +34,11 @@ export const componentIndex: ComponentIndex = {
         {
           "dir": "p-fit",
           "props": 1,
+          "emits": 0
+        },
+        {
+          "dir": "p-formfactor",
+          "props": 3,
           "emits": 0
         },
         {
