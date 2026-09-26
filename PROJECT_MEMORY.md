@@ -50,6 +50,34 @@
 
 ## 当前状态速览（最近一次更新：2026-09-27 柔性系统文档重组）★新会话以此为准
 
+### ★折叠设计借鉴 Apple HIG「Designing for iPhone Duo」（提交 `89c634e0`）
+
+**用户提示**：Apple 的 iPhone Duo 已发布，想必有独家折叠适配指南可直接借鉴。
+**★我的训练数据里没有此设备——全部现查一手资料**（Apple 官网 + 开发者文档 + HIG）：
+- `/iphone-duo/`：首款折叠 iPhone，$1999 起，10/16 预订、10/23 发售
+- 官方技术规格：内屏 **1878×2670px @430ppi ≈ 626×890pt** · 外屏 **1398×2034px @460ppi ≈ 466×678pt**
+- HIG **新增专页** `designing-for-iphone-duo`（2026-09-09）+ 6 个 Tech Talks（含 `Strike a pose with adaptive layouts on iPhone Duo`）
+- ★注：HIG 的 `layout` 页**零处**提及 foldable/hinge/posture（16 处 size class）——折叠指导集中在专页
+
+**Apple 三条关键指导 → 我们抓到的三个真缺陷**
+| Apple HIG 原文 | 我们此前的实现 | 处置 |
+|---|---|---|
+| 「toolbars, tab bars, navigation controls … **move to the side**, preserving vertical space」 | 三姿态全底部 tabs | ✅ 新增 `side-tabs` 拓扑 + `.nav-side-tabs` CSS（侧置竖排） |
+| 「controls **remain on the side in landscape** … keep relative positions as similar as possible」 | 半折横屏仍底部 tabs | ✅ 三姿态统一 side-tabs（同侧不重学） |
+| 「**Maintain the same functionality across device poses**」+「Avoid extreme layout changes …」 | 半折**隐藏** SKU（购买路径） | ✅ 改紧凑保留（只收长描述） |
+
+**顺带纠正一个错误认知**：折叠外屏是**「比手机更宽更矮」**（Duo 466×678，宽高比 0.69），
+不是我此前按 Z Fold 假设的窄长竖屏（340×800，0.43）——视口、`ratio.ref`、nav 全部按真机改。
+
+**实现与验证**：`NavTopology` 8 值（新增 `side-tabs`）+ 校验器 + `nav↔caps` 规则；
+根类加 `nav-*`（nav 此前 CSS 零消费）；姿态视口/度量对齐真机。
+新增断言 5 条 + fluid 93/93 + 真几何门禁 5/5；浏览器实测（Tab 左侧竖排 611px、半折三色 SKU 完整可见）；
+文档 zh/en 同步并标注 Apple 依据。
+
+**诚实边界**：对齐的是 **Apple 公开 HIG + 官方规格**（查文档所得），**Duo 真机未验证**（无设备）。
+未做的后续项：Apple `ToolbarItemVisibilityPriority` 溢出优先级、`ReservedRegion` API 的分区避让
+（我们的 `--pf-fold-width` 只避让铰链带）、overlay arrangement 的「半折主次分居两侧」完整语义。
+
 ### ★柔性系统文档重组（提交 `66491a2a` · 部署 `f1e4ecf0`）
 
 **一句话**：一天重构（形态画像 v2 / 流体度量 v3 / 能力三态 / 折叠姿态 / 焦点引擎 / `p-formfactor`）
