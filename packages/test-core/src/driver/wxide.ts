@@ -7,7 +7,7 @@
 //   内部 spawn `wechatide -c <client> <tool> --project <path> ...` + 解析嵌套 JSON。
 // ★体验内化（05/15 铁律）：console 零错门禁第一 → 稳通道（reLaunch/currentPage/evaluate）断言 → 元素级待激活态。
 //   p-* 组件内部不可见（glass-easel 组件 DOM 隔离）→ 交互/断言走 evaluate 调页面方法。
-import { spawnSync } from 'node:child_process'
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -44,7 +44,7 @@ export function callWxide(tool: string, args: Record<string, string | number | u
   //   「Unterminated string」。文件重定向是同步写，完整返回。
   const outPath = path.join(os.tmpdir(), `wxide-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.out`)
   const outFd = fs.openSync(outPath, 'w')
-  let res: ReturnType<typeof spawnSync>
+  let res: SpawnSyncReturns<string>
   try {
     res = spawnSync(bin, argv, { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', outFd, 'pipe'] })
   } finally {
