@@ -99,6 +99,8 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·嵌入演示加载白屏优化（2026-09-26 续五，用户反馈「点开白屏一段时间」）**：根因 = iframe 挂载到 showcase 应用首帧绘制之间的「下载+JS 启动+异步路由块」空窗只有空白浅底。修法两招：①**骨架垫底**——iframe 初始透明、骨架屏（浅色系+品牌微光扫过+加载提示）置于下层，应用首帧绘制后自然盖住零闪烁；painted 判定 = 同源读 contentDocument `#app` 有子节点（有界 rAF 轮询 60 帧+异常兜底，load 事件早于异步路由块渲染不能直接用）。②**收起/展开改 v-show 保活**——已加载 iframe 不销毁，二次展开零等待（实测 200ms 恢复）。部署 run 36223805178 success，线上 bundle 实证含 cd-skel/waitPainted。
+
 - **★本会话·总览页用户反馈三连修（2026-09-26 续四，用户实测反馈）**：①画廊与折叠速查表内容重复 → **总览页只保留画廊**（md 表格仍在内容层供搜索索引，页面不渲染）；②标题偏小 → 30→38px（副标题 14px）；③右侧「本页导读」锚点全指向下方表格 → 域分区加 `id=ovr-<i>` + scroll-margin-top 153px，DocsPage 总览页 tocFlat 覆盖为域列表（滚动高亮走既有 createScrollSpy 同机制）。部署 run 36223169614 success，线上 CSS 实证 38px + 锚点偏移生效。★设计取舍记录：md 表格从「页面渲染」退为「纯搜索/数据层」——总览页信息形态 = 画廊单一事实，导读 = 画廊目录。
 
 - **★本会话·官网对标优化 P0-1/P0-2 落地：组件详情页嵌 showcase 真演示（iframe 同源）+ 首页多端同屏前置（2026-09-26 续三，★★★用户「好的」批准按评审顺序动手）**：
