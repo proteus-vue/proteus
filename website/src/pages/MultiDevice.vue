@@ -20,7 +20,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
 // ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
-import { FORM_PROFILES } from '@proteus-vue/fluid'
+import { FORM_PROFILES, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FormProfile } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
@@ -52,6 +52,15 @@ const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) =
 /** 窄→宽排序（切换器稳定顺序） */
 const ordered = computed(() => [...TARGETS].sort((a, b) => a.profile.viewport.width - b.profile.viewport.width))
 
+/** 内容层度量输入宽（与帧显示宽一致——报告：曾用 maxWidth 导致大屏形态内容溢出） */
+const contentWidth = computed(() => {
+  const po = activePosture.value
+  if (po && target.value.key === 'fold') {
+    return Math.round(Math.min(po.viewport.width, stageWidth.value) * (po.viewport.width < 500 ? 0.62 : 1))
+  }
+  return frameWidth.value
+})
+
 /** 舞台可用宽（帧宽的约束来源——ResizeObserver 实测） */
 const stageWidth = ref(640)
 const stageEl = ref<HTMLElement | null>(null)
@@ -77,9 +86,17 @@ const frameWidth = computed(() => Math.round(Math.min(target.value.profile.frame
 const frameStyle = computed(() => {
   const f = target.value.profile.frame
   const v = target.value.profile.visual
+  const po = activePosture.value
+  // ★折叠屏姿态：帧比例与宽度随姿态（报告 P0-2 连续性——视口变化即重排）
+  const ar = po && target.value.key === 'fold'
+    ? `${po.viewport.width} / ${po.viewport.height}`
+    : f.ar.replace('/', ' / ')
+  const w = po && target.value.key === 'fold'
+    ? Math.round(Math.min(po.viewport.width, stageWidth.value) * (po.viewport.width < 500 ? 0.62 : 1))
+    : frameWidth.value
   return {
-    aspectRatio: f.ar.replace('/', ' / '),
-    width: `${frameWidth.value}px`,
+    aspectRatio: ar,
+    width: `${w}px`,
     borderRadius: `${f.radius}px`,
     // ★帧/内容底色随画像（暗色形态不露浅色底——专家审查：车机/TV 沉浸被破坏）
     background: v.bg,
@@ -88,13 +105,43 @@ const frameStyle = computed(() => {
   }
 })
 
-const active = ref<DeviceForm>('car')
+const route = useRoute()
+const router = useRouter()
+
+// ★形态也可经 URL 直达（?device=fold——与 ?posture=folded 组合即「折叠屏 × 折叠态」可分享链接）
+const active = ref<DeviceForm>(
+  (TARGETS.some((t) => t.key === route.query.device) ? (route.query.device as DeviceForm) : 'car'),
+)
+
+/** ★折叠屏姿态（报告 P0-2）：折叠 / 半折 / 展开——切换即演示「连续性」（视口与拓扑随之变化） */
+const postureKey = ref<'folded' | 'tabletop' | 'expanded'>(
+  (['folded', 'tabletop', 'expanded'] as const).includes(route.query.posture as never)
+    ? (route.query.posture as 'folded' | 'tabletop' | 'expanded')
+    : 'expanded',
+)
+watch([postureKey, active], ([po, dev]) => {
+  void router.replace({
+    query: {
+      ...route.query,
+      device: dev === 'car' ? undefined : dev,
+      posture: po === 'expanded' ? undefined : po,
+    },
+  })
+})
+const foldPostures = computed(() => FORM_PROFILES.fold.postures ?? [])
+const activePosture = computed(() => foldPostures.value.find((x) => x.key === postureKey.value) ?? null)
+/** 当前生效的形态画像（折叠屏时按姿态覆盖拓扑/视口） */
+const effectiveProfile = computed(() => {
+  const base = target.value.profile
+  const po = activePosture.value
+  if (!po || target.value.key !== 'fold') return base
+  return { ...base, topology: po.topology, nav: po.nav, viewport: po.viewport }
+})
 
 /** 形态筛选（按输入族聚焦查看——触控系 / 指针系 / 遥控系；默认全部） */
 type FilterKey = 'all' | 'touch' | 'cursor' | 'remote'
 // ★URL query 驱动（?form=remote）——筛选状态可分享、可直达、可复现（与 Playground 分享链接同思路）
-const route = useRoute()
-const router = useRouter()
+
 const initial = (route.query.form as string) ?? 'all'
 const filter = ref<FilterKey>(initial === 'touch' || initial === 'cursor' || initial === 'remote' ? initial : 'all')
 watch(filter, (f) => {
@@ -142,6 +189,17 @@ const CAP_LABELS: Array<{ k: keyof FormProfile['caps']; zh: string; en: string }
   { k: 'keyboard', zh: '物理键盘', en: 'hardware keyboard' },
   { k: 'driveAware', zh: '驾驶降干扰', en: 'drive-aware' },
 ]
+
+/** ★能力三态（报告 P2-2）：supported 绿 / fallback 琥珀（降级路径）/ unsupported 灰 */
+function capsLevelOf(k: keyof FormProfile['caps']): 'supported' | 'fallback' | 'unsupported' {
+  return capsLabel(target.value.profile.caps[k])
+}
+function capsTextOf(k: keyof FormProfile['caps']): string {
+  const lv = capsLevelOf(k)
+  if (lv === 'supported') return isEn.value ? 'supported' : '声明支持'
+  if (lv === 'fallback') return isEn.value ? 'fallback path' : '降级路径'
+  return isEn.value ? 'unsupported' : '未支持'
+}
 
 const sourceLines = computed(() => fluidSource.split('\n').length)
 </script>
@@ -205,6 +263,21 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
           </button>
         </div>
 
+        <!-- ★折叠屏姿态切换（报告 P0-2：折叠/半折/展开——演示 app continuity） -->
+        <div v-if="target.key === 'fold' && foldPostures.length" class="postures">
+          <button
+            v-for="po in foldPostures"
+            :key="po.key"
+            type="button"
+            class="posture-btn"
+            :class="{ on: postureKey === po.key }"
+            @click="postureKey = po.key"
+          >
+            {{ isEn ? po.label.en : po.label.zh }}
+            <span class="posture-dim">{{ po.viewport.width }}×{{ po.viewport.height }}</span>
+          </button>
+        </div>
+
         <!-- 形态摘要条 -->
         <div class="device-meta">
           <span><b>{{ isEn ? 'Current' : '当前端' }}：</b>{{ isEn ? target.profile.label.en : target.profile.label.zh }}</span>
@@ -227,7 +300,12 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
               <span>{{ target.profile.frame.watchFace ? '❤️ 72' : '▮▮▮ ⌁' }}</span>
             </div>
             <div class="app-body">
-              <FluidProduct :form="target.key" :width="frameWidth" :height="frameWidth" />
+              <FluidProduct
+                :form="target.key"
+                :posture="target.key === 'fold' ? postureKey : ''"
+                :width="contentWidth"
+                :height="contentWidth"
+              />
             </div>
           </div>
         </div>
@@ -248,11 +326,11 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
             v-for="c in CAP_LABELS"
             :key="c.k"
             class="cap-row"
-            :class="{ on: target.profile.caps[c.k] }"
+            :class="`cap-${capsLevelOf(c.k)}`"
           >
             <span class="cap-dot" />
             <span class="cap-nm">{{ isEn ? c.en : c.zh }}</span>
-            <span class="cap-v">{{ target.profile.caps[c.k] ? (isEn ? 'declared' : '声明支持') : (isEn ? 'degraded' : '需条件降级') }}</span>
+            <span class="cap-v">{{ capsTextOf(c.k) }}</span>
           </div>
         </div>
         <p-view class="cap-note">
@@ -328,6 +406,25 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .dev-nm { font-size: 11.5px; font-weight: 700; }
 .dev-meta { font-size: 9.5px; opacity: 0.75; }
 
+/* ★折叠屏姿态切换（连续性演示）*/
+.postures { display: flex; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
+.posture-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.posture-btn:hover { color: var(--ink); }
+.posture-btn.on { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.55); background: var(--brand-soft); }
+.posture-dim { font-family: var(--mono); font-size: 9.5px; color: var(--dim); }
+
 /* 形态摘要条 */
 .device-meta {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -398,9 +495,13 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .cap-title { margin: 16px 0 8px; font-size: 12.5px; color: var(--muted); }
 .cap-table { display: grid; gap: 6px; }
 .cap-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; background: rgba(255, 180, 84, 0.07); border: 1px solid rgba(255, 180, 84, 0.22); }
-.cap-row.on { background: rgba(61, 220, 151, 0.08); border-color: rgba(61, 220, 151, 0.28); }
+/* ★三态视觉（报告 P2-2）：supported 绿 / fallback 琥珀 / unsupported 灰 */
+.cap-row.cap-supported { background: rgba(61, 220, 151, 0.08); border-color: rgba(61, 220, 151, 0.28); }
+.cap-row.cap-fallback { background: rgba(255, 180, 84, 0.14); border-color: rgba(255, 180, 84, 0.45); }
+.cap-row.cap-unsupported { background: rgba(255, 255, 255, 0.02); border-color: var(--line); opacity: 0.6; }
 .cap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn, #ffb454); }
-.cap-row.on .cap-dot { background: var(--ok, #3ddc97); }
+.cap-row.cap-supported .cap-dot { background: var(--ok, #3ddc97); }
+.cap-row.cap-fallback .cap-dot { background: var(--warn, #ffb454); }
 .cap-nm { flex: 1; font-size: 11.5px; color: var(--ink); }
 .cap-v { font-size: 10px; color: var(--dim); }
 .cap-note { margin-top: 12px; }
