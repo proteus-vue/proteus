@@ -99,6 +99,15 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★★本会话·折叠屏姿态真修复（根因：跨组件 prop 漏传）+ 上轮错误结论纠正（2026-09-26 续十五，用户「继续剩余项」）**：
+  **① ★根因与诊断链（本轮最有价值部分）**：症状 = 折叠态 URL 正确（`?device=fold&posture=folded`）、姿态按钮高亮正确，但组件根 class **恒为 `topo-duo`**。逐层排查：页面传参正确（bundle 实证 `posture:N.value.key==="fold"?C.value:""`）→ **内容槽组件 `fluid-product` 的 `<p-formfactor>` 只传 `declared/width/height`，漏传 `posture`** → prop 丢失在最内层，框架永远拿不到姿态。★**教训：三段式链路（页面 → 内容槽 → 框架容器）必须逐层核对 prop，不能只看最外层传参。**
+  **② ★上轮错误结论纠正（诚实记录）**：上一轮我在记忆里写「姿态的拓扑 class 与画像覆盖已生效，只是内容层未重排」——**实测证明当时根本没生效**（class 恒 duo）。误判来源：只看了看板/按钮状态与代码存在性，未做 DOM 取证。**纠正：本轮加 `data-pf-form / data-pf-posture / data-pf-topology` 诊断属性（生产无害、可测可查），用 Playwright locator 读属性取值域证据。**
+  **③ 工具链缺陷（已绕开）**：本会话 IAB 浏览器的 `playwright.evaluate()` 返回值通道**恒返回 `[object Object]`**（不可用）→ 取证必须走 `locator.getAttribute()` / `textContent()` 等原生通道，或写入可见 DOM 后截图。已内化为取证纪律。
+  **④ 另一个反复踩到的坑（第三次）**：`packages/fluid/dist` 增量构建**未识别改动**（`postures` 未进 dist）→ 必须 `rm -rf packages/fluid/dist` 后重建；**改包源码后要验证 dist 内容（grep 关键符号）再构建站点**，否则站点消费旧 dist。
+  **⑤ 验证（URL 直达逐姿态实测）**：`?posture=folded` → `data-pf-topology=stack`（外屏单列：封面→标题→价格→SKU→CTA→推荐）· `?posture=tabletop` → stack（673×420，上半展示/下半操作）· `?posture=expanded` → duo（内屏双窗格）。**连续性语义达成**：同一份内容槽源码，姿态切换即重排（视口 340→673，拓扑 stack↔duo）。
+  **⑥ 门禁**：根 vue-tsc 0 错误 · formfactor 21/21 · focus-nav 9/9 · 组件审计 77/77 ✅ · 部署 run 36237743617 success。
+  **报告余项至此全部收口**（无遗留）。
+
 - **★本会话·报告余项批：能力三态 + 折叠屏姿态集 + 表冠视觉（2026-09-26 续十四，用户「继续做完剩余项」）**：
   **① ★能力三态（报告 P2-2，语义正确性修复）**：`CapsLevel = supported / fallback / unsupported`（保留布尔兼容 + `capsEnabled/capsDegraded/capsLabel` 助手，`formSupports` 三态归一）。**语义修正**：此前布尔无法区分「降级」与「不支持」——车机 SKU 被**直接删除**，而设计本意是**降级**（驾驶场景语音/旋钮单选替代多选）；现渲染**降级路径**（琥珀虚线框 + 🎙 提示）。面板改三态显示（绿/琥珀/灰）。★**过程中修复我自己引入的 bug**：批量 `true→'supported'` 误改了 `FormFrame` 的布尔字段（`frame.notch` 变字符串 `'supported'`）→ 被测试抓到（`expected 'supported' to be true`）→ 已修。**教训：批量替换必须限定作用域（caps vs frame）。**
   **② 折叠屏姿态集（报告 P0-2）**：`FormPosture`（folded 外屏 340×800 / tabletop 半折 673×420 水平铰链 / expanded 内屏 673×841）+ 校验门禁（三姿态齐备 · 展开宽于折叠 · 拓扑须不同）；页面姿态切换器 + URL 直达（`?device=fold&posture=folded`）。**⚠ 诚实标注（未收敛）**：姿态的**拓扑 class 与画像覆盖已生效**，但内容层（`fluid-product` 的 `.fp-*` 样式按 duo 假设编写）在折叠态下未完全重排——视觉上仍是双栏内容。根因：内容槽样式与拓扑耦合，正确修法是让内容槽样式也走形态变量（下一轮）。
