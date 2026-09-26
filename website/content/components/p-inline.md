@@ -1,7 +1,7 @@
 ---
 title: p-inline
 group: 布局
-order: 7
+order: 8
 ---
 
 # p-inline

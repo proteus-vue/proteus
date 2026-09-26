@@ -72,6 +72,7 @@ pub fn semantic_for_tag(tag: &str) -> Option<&'static str> {
         // ★#405 语义登记批（与 Node TAG_SEMANTIC_MAP 同步——剩余 10 组件全量入图）
         "p-aspect" => Some("layout.aspect"),
         "p-zone" => Some("layout.zone"),
+        "p-formfactor" => Some("layout.formfactor"),
         "p-loading" => Some("ui.loading"),
         "p-scale" => Some("ui.scale"),
         "p-skeleton" => Some("ui.skeleton"),

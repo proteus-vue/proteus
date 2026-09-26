@@ -38,6 +38,7 @@ export const SEMANTIC_ENUM = [
   // ★#405 语义登记批：组件库扩展组件（Fluid S1-S4 + 工程兜底，语义层待 L2 落地——G-31.4 降级 planned）
   'layout.aspect',
   'layout.zone',
+  'layout.formfactor', // ★★Fluid System v2：柔性形态容器（形态编排）
   // —— 基础 UI 原语（G-32 ② UI 18 + 既有按钮）——
   'ui.text',
   'ui.heading',
@@ -206,6 +207,7 @@ export const TAG_SEMANTIC_MAP: Record<string, string> = {
   //    ——同一语义由两个标签提供；本条与 p-view 是并列的别名情形，非「先例」关系）
   'p-aspect': 'layout.aspect',
   'p-zone': 'layout.zone',
+  'p-formfactor': 'layout.formfactor', // ★★Fluid System v2：柔性形态容器
   'p-loading': 'ui.loading',
   'p-scale': 'ui.scale',
   'p-skeleton': 'ui.skeleton',

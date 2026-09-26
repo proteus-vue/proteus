@@ -42,7 +42,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'primitives',
-    value: '183',
+    value: '184',
     label: '语义原语 SSOT',
     labelEn: 'semantic primitives SSOT',
     source: 'PRIMITIVE_CATALOG.length（@proteus-vue/component-ir）',
@@ -50,7 +50,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'implemented',
-    value: '64',
+    value: '65',
     label: 'implemented 语义 × 6 端',
     labelEn: 'implemented semantics × 6 ends',
     // 6 端 = vue-dom / skyline / native-ios / native-android / native-harmony / flutter；
@@ -60,7 +60,7 @@ export const STATS: StatItem[] = [
   },
   {
     id: 'components',
-    value: '76',
+    value: '77',
     label: '语义组件（p-* / pg-glass / virtual-list）',
     labelEn: 'semantic components (p-* / pg-glass / virtual-list)',
     source: 'proteus components:audit packages/components（76 组件全部通过）',

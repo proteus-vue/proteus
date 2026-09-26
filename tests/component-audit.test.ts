@@ -42,7 +42,8 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     //     其能力早已由 C1 camera / C42 qr-code 承接，仅补 tag + 状态，不新增语义））
     //   + ★2026-09-19 WebMCP 接入：engineering+1（E30 engineering.mcp / useMCP()）
     const count = (k: string) => PRIMITIVE_CATALOG.filter((p) => p.kind === k).length
-    expect(count('layout')).toBe(16)
+    //   + ★2026-09-26 Fluid System v2：layout+1（formfactor 形态编排容器）
+    expect(count('layout')).toBe(17)
     expect(count('ui')).toBe(29)
     expect(count('shell')).toBe(17)
     expect(count('gesture')).toBe(10)
@@ -50,9 +51,11 @@ describe('G-32 B1 清单冻结（SSOT 规模快照）', () => {
     expect(count('engineering')).toBe(30)
   })
 
-  it('implemented 64 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；★批次 8 共享元素转场 +1 → 64）· 其余 planned 待落地', () => {
+  it('implemented 65 项（批次 7 +5 → 59；语义决策批净 0；手势 tap/longpress +2、能力双形态 +2 → 63；批次 8 +1 → 64；★2026-09-26 Fluid System v2 +1 → 65）· 其余 planned 待落地', () => {
     const impl = implementedPrimitives()
-    expect(impl.length).toBe(64)
+    expect(impl.length).toBe(65)
+    // ★Fluid System v2 形态容器
+    expect(new Set(impl.map((p) => p.semantic)).has('layout.formfactor')).toBe(true)
     // 新增 implemented 语义代表性断言
     const implSemantics = new Set(impl.map((p) => p.semantic))
     expect(implSemantics.has('layout.scroll')).toBe(true)

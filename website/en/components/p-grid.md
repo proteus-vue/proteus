@@ -1,7 +1,7 @@
 ---
 title: p-grid
 group: 布局
-order: 6
+order: 7
 ---
 
 # p-grid

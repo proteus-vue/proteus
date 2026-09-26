@@ -15,85 +15,124 @@
 //
 // ★诚实边界：端能力表（TARGETS.caps）在本页按端注入——真实项目里它来自端 profile
 //   （与组件文档「双端兼容进度表」同源协议：supported / fallback / unsupported 三态）。
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
+// ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
+import { FORM_PROFILES } from '@proteus-vue/fluid'
+import type { DeviceForm, FormProfile } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
 
 const isEn = computed(() => locale.value === 'en')
 const showSource = ref(true)
 
+/** ★端清单 = FORM_PROFILES 的形态 SSOT（布局/导航/能力/缩放全部从画像读，页面不重复定义） */
 interface Target {
-  key: string
+  key: DeviceForm
   ic: string
-  nm: { zh: string; en: string }
-  /** 设备视口（自然尺寸——p-zone 按此宽度真实判断点） */
-  w: number
-  h: number
-  /** 展示宽（mosaic 视觉适配：scale = dw / w；断点判定按布局尺寸 w，不受缩放影响） */
-  dw: number
-  /** 输入形态（能力声明） */
-  form: 'touch' | 'cursor' | 'remote' | 'dial'
-  /** 端能力声明：true = 该端声明支持；缺省 = 不支持（源码走降级分支） */
-  caps: { tabs?: boolean; rail?: boolean; focusRows?: boolean; dense?: boolean }
-  /** 形态/导航说明（右侧面板） */
-  nav: { zh: string; en: string }
+  profile: FormProfile
+}
+const ICONS: Record<DeviceForm, string> = {
+  watch: '⌚', phone: '📱', fold: '📖', tablet: '📐', pc: '💻', car: '🚗', tv: '📺',
+}
+const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) => ({
+  key: k,
+  ic: ICONS[k],
+  profile: FORM_PROFILES[k],
+}))
+
+/**
+ * ★展示模型（解决「真实设备宽度差 10 倍 → 等比缩放后大屏内容看不清」）：
+ *   渲染视口 = 真实设备尺寸（p-formfactor 据此判定形态，形态语义真实）
+ *   展示切片 cropW = 只截取该端**代表性区域**（如 PC 取「侧栏+主区」、TV 取「Hero+信息区」），
+ *   使每端缩放在 0.4~0.85 之间 → 内容可读、形态差异可辨（业界设计稿展示的通行手法）。
+ */
+/** 窄→宽排序（视觉同屏的稳定顺序） */
+const ordered = computed(() => [...TARGETS].sort((a, b) => a.profile.viewport.width - b.profile.viewport.width))
+
+/** 缩略条展示宽（小图：看形态轮廓） */
+const THUMB_W = 128
+/** 主展示裁剪宽（★可读性关键：超出此宽只截取代表区，缩放 0.5~1 → 大屏内容也能看清） */
+const MAIN_CROP_W = 740
+
+/**
+ * ★展示模型（主展示 + 缩略条）：
+ *   主展示：设备视口按 MAIN_CROP_W 裁剪（多出的部分裁掉，露出侧栏/Hero 等特征区），
+ *          缩放 = min(1, 740/vw) → 手表/手机满量呈现，大屏 0.39~0.58 倍（文字仍可读）
+ *   缩略条：全部七形态小图并排（视觉同屏），点击切换主展示
+ */
+function viewOf(t: Target) {
+  const vw = t.profile.viewport.width
+  const vh = t.profile.viewport.height
+  const scale = Math.min(1, MAIN_CROP_W / vw)
+  const cropW = Math.min(vw, MAIN_CROP_W)
+  const displayW = Math.round(cropW * scale)
+  const displayH = Math.round(Math.min(vh, 520 / Math.max(scale, 0.4)) * scale)
+  return { cropW, displayW, displayH, scale }
+}
+function thumbView(t: Target) {
+  const vw = t.profile.viewport.width
+  const vh = t.profile.viewport.height
+  const scale = THUMB_W / vw
+  return { displayW: THUMB_W, displayH: Math.round(Math.min(vh, vw * 0.7) * scale), scale }
 }
 
-const TARGETS: Target[] = [
-  { key: 'watch', ic: '⌚', nm: { zh: '手表', en: 'Watch' }, w: 198, h: 214, dw: 168, form: 'dial', caps: { dense: true }, nav: { zh: '一屏一意 · 表冠滚动', en: 'one screen · crown' } },
-  { key: 'phone', ic: '📱', nm: { zh: '手机', en: 'Phone' }, w: 390, h: 640, dw: 206, form: 'touch', caps: { tabs: true, dense: true }, nav: { zh: '单列 · 底部 Tab', en: 'single column · tab bar' } },
-  { key: 'fold', ic: '📖', nm: { zh: '折叠屏 / 小平板', en: 'Fold / small tablet' }, w: 520, h: 520, dw: 246, form: 'touch', caps: { dense: true }, nav: { zh: '图 + 详情双列', en: 'duo columns' } },
-  { key: 'tablet', ic: '📐', nm: { zh: '平板', en: 'Tablet' }, w: 834, h: 520, dw: 290, form: 'touch', caps: { rail: true, dense: true }, nav: { zh: '侧栏 + 多列', en: 'side rail · columns' } },
-  { key: 'pc', ic: '💻', nm: { zh: 'PC / Mac', en: 'PC / Mac' }, w: 1280, h: 620, dw: 372, form: 'cursor', caps: { rail: true }, nav: { zh: '侧栏 + 三列 + hover', en: 'rail · 3 cols · hover' } },
-  { key: 'car', ic: '🚗', nm: { zh: '车机', en: 'In-car' }, w: 1280, h: 420, dw: 372, form: 'remote', caps: { focusRows: true, dense: true }, nav: { zh: '焦点行 · d-pad 大热区', en: 'focus rows · d-pad targets' } },
-  { key: 'tv', ic: '📺', nm: { zh: 'TV / 大屏', en: 'TV / large screen' }, w: 1920, h: 620, dw: 420, form: 'remote', caps: { focusRows: true }, nav: { zh: '海报流 · 遥控焦点', en: 'poster rail · remote focus' } },
+const active = ref<DeviceForm>('car')
+
+/** 形态筛选（按输入族聚焦查看——触控系 / 指针系 / 遥控系；默认全部） */
+type FilterKey = 'all' | 'touch' | 'cursor' | 'remote'
+// ★URL query 驱动（?form=remote）——筛选状态可分享、可直达、可复现（与 Playground 分享链接同思路）
+const route = useRoute()
+const router = useRouter()
+const initial = (route.query.form as string) ?? 'all'
+const filter = ref<FilterKey>(initial === 'touch' || initial === 'cursor' || initial === 'remote' ? initial : 'all')
+watch(filter, (f) => {
+  void router.replace({ query: f === 'all' ? {} : { form: f } })
+})
+const FILTERS: Array<{ k: FilterKey; zh: string; en: string }> = [
+  { k: 'all', zh: '全部形态', en: 'All forms' },
+  { k: 'touch', zh: '触控系（表/手机/折叠/平板）', en: 'Touch (watch/phone/fold/tablet)' },
+  { k: 'cursor', zh: '指针系（PC）', en: 'Pointer (PC)' },
+  { k: 'remote', zh: '遥控系（车机 / TV）', en: 'Remote (car / TV)' },
 ]
-
-/** 窄→宽排序展示（同屏 mosaic） */
-const ordered = computed(() => [...TARGETS].sort((a, b) => a.w - b.w))
-
-/** 缩放 = 展示宽 / 自然宽（ResizeObserver 按布局尺寸测量——断点判定不受 scale 影响） */
-function scaleOf(t: Target): number {
-  return t.dw / t.w
-}
-
-/** 断点阈值（与 @proteus-vue/fluid DEFAULT_BREAKPOINT_RATIOS × designWidth 375 同源） */
-const BP = [
-  { name: 'sm', min: 188 },
-  { name: 'md', min: 328 },
-  { name: 'lg', min: 469 },
-  { name: 'xl', min: 609 },
-]
-function bpOf(w: number): string {
-  let hit = 'sm'
-  for (const b of BP) if (w >= b.min) hit = b.name
-  return hit
-}
-
-/** 能力声明表（右侧面板——supported ✅ / 未声明 🟡 条件降级） */
-const CAP_KEYS = [
-  { k: 'tabs', zh: '底部 Tab', en: 'bottom tabs' },
-  { k: 'rail', zh: '侧栏', en: 'side rail' },
-  { k: 'focusRows', zh: '焦点行 / 大热区', en: 'focus rows / d-pad' },
-  { k: 'dense', zh: '高密度信息', en: 'dense info' },
-] as const
-
-const active = ref('car')
+const visibleTargets = computed(() => {
+  const list = ordered.value
+  if (filter.value === 'all') return list
+  if (filter.value === 'touch') return list.filter((t) => t.profile.input === 'touch')
+  if (filter.value === 'cursor') return list.filter((t) => t.profile.input === 'cursor')
+  return list.filter((t) => t.profile.input === 'remote')
+})
 const target = computed(() => TARGETS.find((t) => t.key === active.value) ?? TARGETS[0]!)
 
-/** 右侧：当前端真实推导行（断点 = 容器宽真实求解；形态/导航 = 能力声明推导） */
+/** 右侧推导行（★全部来自形态画像——非页面硬编码） */
 const rows = computed(() => {
   const t = target.value
+  const p = t.profile
   return [
-    { k: isEn.value ? 'target' : '目标端', v: isEn.value ? t.nm.en : t.nm.zh },
-    { k: isEn.value ? 'viewport' : '容器宽', v: `${t.w} × ${t.h}` },
-    { k: 'breakpoint', v: `${bpOf(t.w)}（p-zone 真实求解——决定渲染哪个槽）` },
-    { k: 'form', v: t.form },
-    { k: 'nav', v: isEn.value ? t.nav.en : t.nav.zh },
+    { k: isEn.value ? 'form' : '设备形态', v: `${isEn.value ? p.label.en : p.label.zh}（${isEn.value ? t.profile.form : p.form}）` },
+    { k: 'input', v: p.input },
+    { k: isEn.value ? 'layout topology' : '布局拓扑', v: p.topology },
+    { k: isEn.value ? 'navigation' : '导航形态', v: p.nav },
+    { k: isEn.value ? 'density / scale' : '密度 / 缩放', v: `${p.density} · ${p.scale}×` },
+    { k: isEn.value ? 'viewport' : '典型视口', v: `${p.viewport.width} × ${p.viewport.height}` },
   ]
 })
+
+/** 能力清单（★画像 SSOT 全量——不是固定的 4 项） */
+const CAP_LABELS: Array<{ k: keyof FormProfile['caps']; zh: string; en: string }> = [
+  { k: 'hover', zh: '指针悬停态', en: 'pointer hover' },
+  { k: 'skuMulti', zh: '多规格选择', en: 'multi-SKU picker' },
+  { k: 'tabs', zh: '底部 Tab 栏', en: 'bottom tabs' },
+  { k: 'sidebar', zh: '持久侧栏', en: 'persistent sidebar' },
+  { k: 'focusRows', zh: '横向焦点行', en: 'focus rows' },
+  { k: 'dense', zh: '高密度信息', en: 'dense info' },
+  { k: 'drawer', zh: '抽屉 / 侧滑弹层', en: 'drawer / sheet' },
+  { k: 'notch', zh: '异形屏安全区', en: 'notch safe area' },
+  { k: 'keyboard', zh: '物理键盘', en: 'hardware keyboard' },
+  { k: 'driveAware', zh: '驾驶降干扰', en: 'drive-aware' },
+]
 
 const sourceLines = computed(() => fluidSource.split('\n').length)
 </script>
@@ -107,16 +146,16 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
       <p>
         {{
           isEn
-            ? 'Not the same layout scaled — the same file renders into entirely different structures per target. Two real mechanisms from the Fluid System drive it: container breakpoints (p-zone switches named slots by container width) and capability declarations (unsupported features take degradation branches).'
-            : '不是同一布局的缩放——同一份文件在不同端渲染出完全不同的结构。驱动它的是柔性系统的两条真实机制：容器断点（p-zone 按容器宽度选命名槽）与能力声明（不支持的能力走降级分支）。下面每一个设备框都是真实渲染。'
+            ? 'The business writes one set of semantic content slots — nothing else. The framework senses the device form and derives layout topology, navigation, capability set, density, scale and hit-area size automatically. Same file, seven forms, zero per-device branching.'
+            : '业务只写一份语义内容槽——没有别的。框架感知设备形态后，自动推导布局拓扑、导航形态、能力集、密度、缩放与热区尺寸。同一份文件、七种形态、业务零分支。'
         }}
       </p>
       <p-view class="honest">
         <p-text class="honest-text">
           {{
             isEn
-              ? '✅ Real: container queries (p-zone), capability-driven branches, all seven frames render the actual SFC shown on the left. 🟡 This page injects the per-target capability table — in a real app it comes from the target profile (same supported / fallback / unsupported protocol as the component compatibility tables).'
-              : '✅ 真实：容器断点（p-zone）、能力声明分支、七端渲染的都是左栏那份源码本身。🟡 端能力表由本页按端注入——真实项目里来自端 profile（与组件文档兼容进度表同一套 supported / fallback / unsupported 协议）。'
+              ? '✅ Real: form-factor profiles (FORM_PROFILES SSOT in @proteus-vue/fluid) + p-formfactor auto-orchestration + all seven frames rendering the left file. 🟡 Forms are declared by the host (watch/car/tv cannot be auto-detected on the web) — detecting pointer/touch and viewport is real.'
+              : '✅ 真实：形态画像表（@proteus-vue/fluid 的 FORM_PROFILES SSOT）+ p-formfactor 自动编排 + 七端渲染的都是左栏那份文件。🟡 形态由宿主声明（Web 无法自动识别手表/车机/TV）——指针/触控与视口探测是真实的。'
           }}
         </p-text>
       </p-view>
@@ -127,7 +166,7 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
       <div class="col col--src">
         <div class="col-title">
           <span class="dot" />
-          {{ isEn ? 'Source · this exact file is running' : '源码 · 运行的就是这份文件' }}
+          {{ isEn ? 'Content slots · this exact file is running' : '内容槽 · 运行的就是这份文件' }}
           <button type="button" class="mini" @click="showSource = !showSource">{{ showSource ? (isEn ? 'hide' : '收起') : (isEn ? 'show' : '展开') }}</button>
         </div>
         <pre v-if="showSource" class="src"><code>{{ fluidSource }}</code></pre>
@@ -144,24 +183,61 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
       <!-- 中：同屏（真实渲染 mosaic） -->
       <div class="col col--stage">
         <div class="col-title"><span class="dot" /><span class="live">LIVE</span> {{ isEn ? 'Same screen · all real renders' : '同屏 · 全部真实渲染' }}</div>
-        <div class="grid">
+        <div class="filters">
+          <button
+            v-for="f in FILTERS"
+            :key="f.k"
+            type="button"
+            class="filter-pill"
+            :class="{ on: filter === f.k }"
+            @click="filter = f.k"
+          >{{ isEn ? f.en : f.zh }}</button>
+        </div>
+        <!-- ★主展示：当前形态的细节（可读尺寸） -->
+        <div class="main-stage">
+          <div class="ms-head">
+            <span class="ms-nm">{{ target.ic }} {{ isEn ? target.profile.label.en : target.profile.label.zh }}</span>
+            <span class="ms-topo">{{ target.profile.topology }}</span>
+            <span class="ms-input">{{ target.profile.input }}</span>
+          </div>
           <div
-            v-for="t in ordered"
-            :key="t.key"
-            class="device"
-            :class="{ active: t.key === active }"
-            @click="active = t.key"
+            class="ms-body"
+            :style="{ width: `${viewOf(target).displayW}px`, height: `${viewOf(target).displayH}px`, borderColor: target.profile.caps.focusRows ? 'rgba(255,180,84,0.4)' : 'var(--line)' }"
           >
-            <div class="dev-head">
-              <span class="dev-nm">{{ t.ic }} {{ isEn ? t.nm.en : t.nm.zh }}</span>
-              <span class="dev-bp">{{ bpOf(t.w) }}</span>
-            </div>
-            <div class="dev-body" :style="{ width: `${t.dw}px`, height: `${Math.round(t.h * scaleOf(t))}px` }">
-              <div class="dev-screen" :style="{ width: `${t.w}px`, height: `${t.h}px`, transform: `scale(${scaleOf(t)})` }">
-                <FluidProduct :form="t.form" :caps="t.caps" />
-              </div>
+            <div
+              class="ms-screen"
+              :style="{
+                width: `${target.profile.viewport.width}px`,
+                height: `${target.profile.viewport.height}px`,
+                transform: `scale(${viewOf(target).scale})`,
+              }"
+            >
+              <FluidProduct :form="target.key" :width="target.profile.viewport.width" :height="target.profile.viewport.height" />
             </div>
           </div>
+        </div>
+
+        <!-- ★缩略条：七形态视觉同屏（点击切换） -->
+        <div class="thumbs">
+          <button
+            v-for="t in visibleTargets"
+            :key="t.key"
+            type="button"
+            class="thumb"
+            :class="{ on: t.key === active }"
+            @click="active = t.key"
+          >
+            <span class="thumb-nm">{{ t.ic }} {{ isEn ? t.profile.label.en : t.profile.label.zh }}</span>
+            <span class="thumb-ic" :style="{ width: `${thumbView(t).displayW}px`, height: `${thumbView(t).displayH}px` }">
+              <span
+                class="thumb-screen"
+                :style="{ width: `${t.profile.viewport.width}px`, height: `${t.profile.viewport.height}px`, transform: `scale(${thumbView(t).scale})` }"
+              >
+                <FluidProduct :form="t.key" :width="t.profile.viewport.width" :height="t.profile.viewport.height" />
+              </span>
+            </span>
+            <span class="thumb-topo">{{ t.profile.topology }}</span>
+          </button>
         </div>
       </div>
 
@@ -174,12 +250,17 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
             <span class="v">{{ r.v }}</span>
           </div>
         </div>
-        <h4 class="cap-title">{{ isEn ? 'Capability declarations' : '能力声明（按端）' }}</h4>
+        <h4 class="cap-title">{{ isEn ? 'Capability declarations (from the form profile)' : '能力声明（来自形态画像 SSOT）' }}</h4>
         <div class="cap-table">
-          <div v-for="c in CAP_KEYS" :key="c.k" class="cap-row" :class="{ on: Boolean((target.caps as Record<string, boolean | undefined>)[c.k]) }">
+          <div
+            v-for="c in CAP_LABELS"
+            :key="c.k"
+            class="cap-row"
+            :class="{ on: target.profile.caps[c.k] }"
+          >
             <span class="cap-dot" />
             <span class="cap-nm">{{ isEn ? c.en : c.zh }}</span>
-            <span class="cap-v">{{ (target.caps as Record<string, boolean | undefined>)[c.k] ? (isEn ? 'declared' : '声明支持') : (isEn ? 'degraded' : '降级分支') }}</span>
+            <span class="cap-v">{{ target.profile.caps[c.k] ? (isEn ? 'declared' : '声明支持') : (isEn ? 'auto-degraded' : '自动降级') }}</span>
           </div>
         </div>
         <p-view class="cap-note">
@@ -229,25 +310,61 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .src-foot { margin-top: 10px; font-size: 11px; color: var(--dim); }
 .eq { color: var(--ok, #3ddc97); font-weight: 800; }
 
-/* 同屏 mosaic */
-.grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
-.device { flex: 0 0 auto; }
-.device {
+/* 形态筛选 pills */
+.filters { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.filter-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.filter-pill:hover { color: var(--ink); }
+.filter-pill.on { color: var(--brand-ink); border-color: rgba(124, 92, 255, 0.55); background: var(--brand-soft); }
+
+/* 主展示（细节可读） */
+.main-stage { margin-bottom: 14px; }
+.ms-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.ms-nm { font-size: 13px; font-weight: 800; color: var(--ink); }
+.ms-topo {
+  font-family: var(--mono); font-size: 10.5px; color: var(--brand-ink);
+  background: var(--brand-soft); border-radius: 999px; padding: 3px 9px;
+}
+.ms-input { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.ms-body {
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 10px;
+  overflow: hidden;
+  background: #f7f8fa;
+  position: relative;
+}
+.ms-screen { transform-origin: top left; }
+
+/* 缩略条（七形态视觉同屏对比） */
+.thumbs { display: flex; flex-wrap: wrap; gap: 9px; }
+.thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px;
   background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
-.device:hover { border-color: rgba(124, 92, 255, 0.5); }
-.device.active { border-color: var(--brand); box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.35); }
-.dev-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.dev-nm { font-size: 11.5px; font-weight: 700; color: var(--ink); }
-.dev-bp { font-family: var(--mono); font-size: 10px; color: var(--brand-ink); background: var(--brand-soft); border-radius: 999px; padding: 2px 8px; }
-.dev-body { overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: #f7f8fa; position: relative; }
-.dev-screen { transform-origin: top left; }
-.dev-screen :deep(.fp) { width: 100%; }
+.thumb:hover { border-color: rgba(124, 92, 255, 0.5); }
+.thumb.on { border-color: var(--brand); box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.35); }
+.thumb-nm { font-size: 10.5px; font-weight: 700; color: var(--ink); }
+.thumb-ic { display: block; overflow: hidden; border-radius: 6px; background: #f7f8fa; position: relative; }
+.thumb-screen { transform-origin: top left; display: block; }
+.thumb-topo { font-family: var(--mono); font-size: 9px; color: var(--dim); }
 
 /* 右侧面板 */
 .ir { display: grid; gap: 7px; }

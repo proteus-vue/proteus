@@ -1,7 +1,7 @@
 # implemented 语义 × 后端映射（自动生成——SSOT = SEMANTIC_BACKEND_MAP + catalog status）
 
 > ★由 `npm run gen:docs` 生成，勿手改。覆盖门禁：每语义 ≥3 端映射（G-31.4）。
-> implemented 语义 **64** 个。
+> implemented 语义 **65** 个。
 
 | 语义 | vue-dom | native-ios | native-android | native-harmony | skyline | flutter | headless |
 |------|---------|-----------|----------------|----------------|---------|---------|----------|
@@ -17,6 +17,7 @@
 | `layout.scroll` | div.proteus-scroll | UIScrollView | ScrollView | Scroll | scroll-view | ScrollView | scroll |
 | `layout.virtual-list` | div.proteus-virtual-list | UICollectionView | RecyclerView | List | list-view | ListView | virtual-list |
 | `layout.masonry` | div.proteus-masonry | UICollectionView.masonry | StaggeredGridLayoutManager | WaterFlow | grid.masonry | SliverMasonryGrid | masonry |
+| `layout.formfactor` | div.proteus-formfactor | UIViewController.formFactor | FormFactorLayout | GridRow.formFactor | view.formfactor | LayoutBuilder.formFactor | formfactor |
 | `layout.safe` | div.proteus-safe | safeAreaLayoutGuide | WindowInsets | getAvoidArea | env.safe-area | SafeArea | safe |
 | `layout.sidebar` | div.proteus-sidebar | UISplitViewController.side | NavigationRail | SideBarContainer | view.sidebar | NavigationRail | sidebar |
 | `ui.text` | span | UILabel | TextView | Text | text | Text | text |

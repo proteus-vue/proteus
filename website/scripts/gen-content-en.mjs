@@ -973,6 +973,20 @@ export const COMP_EN = {
       height: "Height of the visible viewport in px",
     },
   },
+  // ★★Fluid System v2（2026-09-26）：柔性形态容器
+  'p-formfactor': {
+    desc: "Form-factor orchestrator (layout topology per device form)",
+    notes: [
+      "Business writes ONE set of semantic content slots — the framework derives layout topology / navigation / capability set / density / scale / hit-area size from the device form profile",
+      "Seven form profiles: watch / phone / fold / tablet / pc / car / tv (FORM_PROFILES SSOT in @proteus-vue/fluid)",
+      "Capability slots auto-degrade (e.g. car declares no multi-SKU, TV declares no sidebar) — zero per-device branching in business code",
+    ],
+    props: {
+      declared: "Host-declared device form (authoritative; watch/car/tv must be declared — not auto-detectable on the web)",
+      width: "Container width (host injection; drives sensing when not declared)",
+      height: "Container height",
+    },
+  },
   'p-zone': {
     desc: "Container-breakpoint zone",
     notes: [

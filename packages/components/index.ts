@@ -27,6 +27,8 @@ import PFit from './p-fit/index.vue'
 // ★Fluid System（fluid-system-plan S1）：自适应分栏 / 容器断点分区
 import PSplit from './p-split/index.vue'
 import PZone from './p-zone/index.vue'
+// ★★Fluid System v2：柔性形态容器（业务写一份语义槽，框架按设备形态画像自动编排）
+import PFormfactor from './p-formfactor/index.vue'
 // ★Fluid System（fluid-system-plan S2）：安全区避让 / 纵横比容器
 import PSafe from './p-safe/index.vue'
 import PAspect from './p-aspect/index.vue'
@@ -127,6 +129,7 @@ export {
   // ★Fluid System
   PSplit,
   PZone,
+  PFormfactor,
   // ★Fluid System S2
   PSafe,
   PAspect,
