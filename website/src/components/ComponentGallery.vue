@@ -123,8 +123,9 @@ const subtitle = computed(() =>
   height: 120px;
   pointer-events: none;
 }
-/* 窄屏隐藏装饰：说明文字全区可读（装饰是纯点缀，不值得与文案争空间） */
-@media (max-width: 720px) {
+/* 窄**容器**隐藏装饰：说明文字全区可读（装饰是纯点缀，不值得与文案争空间）
+   ★2026-09-26 D-2：原为 @media 视口断点 → 改 @container（响应归容器，与 p-grid/v-p-fluid 同源） */
+@container (max-width: 720px) {
   .cg-deco { display: none; }
 }
 .cg-deco-pill {

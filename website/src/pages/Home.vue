@@ -595,7 +595,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .btn-text.ghost { color: var(--ink); }
 
 /* ---- 通用区块头（eyebrow + 居中标题 + 副标题） ---- */
-.sec { max-width: 1180px; margin: 0 auto; }
+.sec { max-width: 1180px; margin: 0 auto; container-type: inline-size; }
 .sec-head { text-align: center; max-width: 700px; margin: 0 auto 48px; align-items: center; }
 .sec-eyebrow {
   display: inline-block;
@@ -1044,7 +1044,8 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   padding: 7px 13px;
   white-space: nowrap;
 }
-@media (max-width: 900px) {
+/* ★2026-09-26 D-2：原 @media 视口断点 → @container（横幅自身是容器——嵌在任意宽度容器里都成立） */
+@container (max-width: 900px) {
   .md-band { flex-direction: column; align-items: flex-start; gap: 18px; }
   .md-band-devices { grid-template-columns: repeat(3, auto); }
 }
