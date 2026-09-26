@@ -21,7 +21,13 @@
 import type { FluidDensity } from './scale'
 
 /** 设备形态（一等概念） */
-export type DeviceForm = 'watch' | 'phone' | 'fold' | 'tablet' | 'pc' | 'car' | 'tv'
+export type DeviceForm = 'watch' | 'phone' | 'flip' | 'fold' | 'tablet' | 'pc' | 'car' | 'tv'
+// ★flip（2026-09-28）：与 fold 并列的第 8 形态——**两种折叠是两类设备**，不是同一设备的两姿态：
+//   · fold  = 书本式 / 左右对折（Z Fold6 · Mate X5 · MIX Fold）：内屏近方形 · 外屏竖长条 · 铰链**竖直**
+//   · flip  = 翻盖式 / 上下对折（Z Flip6 · MIX Flip · 华为 Pocket）：内屏竖长条 · 外屏近方形 · 铰链**水平**
+//   实测规格（三星官网）：Fold6 内 2160×1856(0.86)/外 968×2376(0.44)·
+//                        Flip6 内 2640×1080(0.44)/外 720×748(0.96)——内外屏比例**互换**。
+//   小米《大屏应用 UX 设计指南》原文明分「TableTop 桌面模式（上下对折）」与「Book 书本模式（左右对折）」。
 
 /** 输入方式（形态的本质特征之一——决定命中区尺寸/焦点模型/悬停语义） */
 export type InputMode = 'touch' | 'cursor' | 'remote' | 'dial'
@@ -237,7 +243,7 @@ export function aspectMediaCap(aspect: AspectClass): string {
  */
 export interface FormPosture {
   /** 姿态键 */
-  key: 'folded' | 'tabletop' | 'expanded'
+  key: 'folded' | 'tabletop' | 'book' | 'expanded'
   label: { zh: string; en: string }
   /** 该姿态的布局拓扑 */
   topology: LayoutTopology
@@ -245,7 +251,7 @@ export interface FormPosture {
   nav: NavTopology
   /** 该姿态视口（连续性：折叠 340 → 展开 673） */
   viewport: { width: number; height: number }
-  /** 半折铰链方向（tabletop 水平铰链——上半展示/下半操作） */
+  /** 半折铰链方向（tabletop=水平铰链「上展示/下操作」· book=竖直铰链「左右分区」） */
   hinge?: 'horizontal' | 'vertical'
   /** ★姿态级度量覆盖（2026-09-26 三审）：外屏（340pt）在内屏基准（ref:420）下 k=0.81
    *  → 正文 9.7px、规格 Chip 22px（连 WCAG 2.5.8 的 24px 都不达）。
@@ -357,32 +363,47 @@ export const FORM_PROFILES: Record<DeviceForm, FormProfile> = {
     safe: { side: 0, bottom: 16 },
     // ★姿态集（报告 P0-2）：折叠态外屏（单列+Tab）→ 半折 tabletop（水平铰链）→ 展开态内屏（双窗格）
     //   连续性语义：视口 340 → 673，拓扑 stack → duo（状态跨姿态连续重排，不重启）
+    // ★★★fold = **书本式（左右对折）**（2026-09-28 按真机规格重写）：
+    //   实测 Z Fold6（三星官网）：内屏 2160×1856px / 7.6" → **近方形 0.86**；
+    //                             外屏 968×2376px / 6.3" → **竖长条 0.44**（像一部窄手机）
+    //   ★修正：此前把「Duo 外屏 466×678（0.69，宽而矮）」当作所有折叠的外屏——那是 flip 的形态；
+    //     且展开 0.70 / 折叠 0.69 几乎同比例，而真机是 0.86 / 0.44（**互换**）。
+    //   半折用 **book**（竖直铰链、左右两半）——小米规范原文的 Book「像翻书一样」模式。
     postures: [
-      // ★折叠态度量（三审）：外屏 = 窄手机——用 phone 级基准（ref 300），不用内屏 ref 420
-      // ★折叠态（2026-09-28 对齐 Apple HIG「Designing for iPhone Duo」）：
-      //   ① 视口 340×800 → **466×678**（Duo 外屏 1398×2034px @460ppi ≈ 466×678pt）——
-      //      真实折叠外屏是「比手机更宽更矮」，不是窄长竖屏（旧值来自 Z Fold 式窄外屏）；
-      //   ② nav bottom-tabs → **side-tabs**：Apple 明确「宽而矮的外屏把控件移到侧边，
-      //      以保留垂直空间」，且内屏横向时控件保持同侧（跨屏连续）。
-      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 466, height: 678 }, ratio: { baseFont: 13, ref: 340, min: 0.85, max: 1.5 } },
-      // ★半折（2026-09-28）：视口 673×420 是**横屏**——Apple HIG 明确「controls remain on the side
-      //   in landscape to preserve a continuous experience」，且要求跨姿态控件位置一致
-      //   （用户不应随姿态变化重新学习操作在哪）→ nav 统一 side-tabs（三姿态同侧）。
-      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 673, height: 420 }, hinge: 'horizontal' },
-      // ★展开态（2026-09-28）：内屏横向时控件**保持侧边**（Apple：controls remain on the side
-      //   in landscape to preserve a continuous experience at the same vertical height）——
-      //   跨姿态控件位置一致，用户不用重新学习操作在哪。
-      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 626, height: 890 } },
+      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 320, height: 727 }, ratio: { baseFont: 13, ref: 320, min: 0.85, max: 1.5 } },
+      { key: 'book', label: { zh: '半折（书本模式）', en: 'Half-folded (book)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 596, height: 693 }, hinge: 'vertical' },
+      // 内屏近方形（Fold6 2160×1856 = 0.86）——596 宽对应高 ≈ 693
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'duo', nav: 'side-tabs', viewport: { width: 596, height: 693 } },
     ],
-    viewport: { width: 626, height: 890 }, // ★2026-09-28：对齐 Duo 内屏（1878×2670px @430ppi ≈ 626×890pt）
+    viewport: { width: 596, height: 693 },
     distance: 'arm',
     visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 12, ref: 420, min: 0.7, max: 1.5 } },
-    // 展示壳（mockup 帧——居中完整展示：比例/上限宽/刘海/状态栏）
     frame: { ar: '6/7', maxWidth: 470, notch: false, statusBar: true, radius: 18, hinge: true },
-    // ★nav↔caps 自洽（2026-09-26 二次复审 P1）：三姿态的 nav 均为 tabs/bottom-tabs，
-    //   但 caps.tabs 曾为 unsupported → Tab 栏被能力过滤永久不渲染 = 折叠屏**零导航**。
-    //   折叠屏就是触控大屏（展开态 673×841），Tab 是其真实导航形态，故声明 supported。
     caps: { ...CAPS_BASE, tabs: 'supported', skuMulti: 'supported', multiCol: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
+  },
+  // ★★★flip（2026-09-28 新增第 8 形态）= **翻盖式（上下对折）**：
+  //   实测 Z Flip6（三星官网）：内屏 2640×1080px / 6.7" → **竖长条 0.44**；外屏 720×748px / 3.4" → **近方形 0.96**
+  //   ——与 fold 恰好**互换**（fold 内方外长 · flip 内长外方）。
+  //   半折用 **tabletop**（水平铰链）：机身坐立，**上半屏展示 + 下半屏操作**（小米规范 TableTop 模式）。
+  flip: {
+    form: 'flip',
+    label: { zh: '小折叠（翻盖）', en: 'Flip' },
+    input: 'touch',
+    density: 'regular',
+    topology: 'stack',
+    nav: 'bottom-tabs',
+    mediaRatio: '4/3',
+    safe: { side: 0, bottom: 16 },
+    postures: [
+      { key: 'folded', label: { zh: '折叠态（外屏）', en: 'Folded (cover)' }, topology: 'glance', nav: 'page-stack', viewport: { width: 340, height: 354 }, ratio: { baseFont: 13, ref: 340, min: 0.85, max: 1.4 } },
+      { key: 'tabletop', label: { zh: '半折（桌面模式）', en: 'Tabletop (flex)' }, topology: 'stack', nav: 'side-tabs', viewport: { width: 360, height: 420 }, hinge: 'horizontal' },
+      { key: 'expanded', label: { zh: '展开态（内屏）', en: 'Expanded (inner)' }, topology: 'stack', nav: 'bottom-tabs', viewport: { width: 360, height: 820 } },
+    ],
+    viewport: { width: 360, height: 820 },
+    distance: 'arm',
+    visual: { theme: 'light', bg: '#f6f7fb', surface: '#ffffff', text: '#17171f', dim: '#616875', brand: '#6f4ae8', accent: '#6f4ae8', focus: 'none', ratio: { baseFont: 13, ref: 360, min: 0.8, max: 1.5 } },
+    frame: { ar: '9/19', maxWidth: 300, notch: true, statusBar: true, radius: 22, hinge: true },
+    caps: { ...CAPS_BASE, skuMulti: 'supported', tabs: 'supported', dense: 'supported', drawer: 'supported', notch: 'supported' },
   },
   tablet: {
     form: 'tablet',
@@ -656,7 +677,7 @@ export function validateFormProfiles(
   profiles: Record<DeviceForm, FormProfile> = FORM_PROFILES,
 ): string[] {
   const problems: string[] = []
-  const forms: DeviceForm[] = ['watch', 'phone', 'fold', 'tablet', 'pc', 'car', 'tv']
+  const forms: DeviceForm[] = ['watch', 'phone', 'flip', 'fold', 'tablet', 'pc', 'car', 'tv']
   const topologies: LayoutTopology[] = ['glance', 'stack', 'duo', 'rail-split', 'rail-grid', 'hero-focus-row', 'dashboard']
   const navs: NavTopology[] = ['page-stack', 'bottom-tabs', 'tabs', 'side-tabs', 'rail', 'side-nav', 'focus-tree', 'focus-row']
   for (const f of forms) {
@@ -682,8 +703,23 @@ export function validateFormProfiles(
     // ★姿态自洽（报告 P0-2）：三姿态齐备 · 视口递增 · 展开态拓扑 ≠ 折叠态拓扑（连续性语义）
     if (p.postures) {
       const keys = p.postures.map((x) => x.key)
-      for (const need of ['folded', 'tabletop', 'expanded'] as const) {
+      for (const need of ['folded', 'expanded'] as const) {
         if (!keys.includes(need)) problems.push(`${f}: 姿态集缺 ${need}`)
+      }
+      // ★半折姿态（2026-09-28）：**两类折叠各有自己的半折语义**，二者有其一即可——
+      //   · tabletop = 水平铰链（翻盖式上下对折：上半展示 / 下半操作）
+      //   · book     = 竖直铰链（书本式左右对折：左右两半）
+      //   （小米规范原文分 TableTop「桌面模式」与 Book「书本模式」）
+      if (!keys.includes('tabletop') && !keys.includes('book')) {
+        problems.push(`${f}: 姿态集缺半折姿态（tabletop 或 book 至少其一）`)
+      }
+      // ★铰链方向必须与半折语义一致（防「水平铰链却叫 book」这类自相矛盾）
+      const half = p.postures.find((x) => x.key === 'tabletop') ?? p.postures.find((x) => x.key === 'book')
+      if (half) {
+        const want = half.key === 'tabletop' ? 'horizontal' : 'vertical'
+        if (half.hinge !== want) {
+          problems.push(`${f}: 半折姿态 ${half.key} 的 hinge 应为 ${want}（实际 ${half.hinge ?? '未声明'}）`)
+        }
       }
       const folded = p.postures.find((x) => x.key === 'folded')
       const expanded = p.postures.find((x) => x.key === 'expanded')

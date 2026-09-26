@@ -21,7 +21,7 @@ import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
 // ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
 import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel } from '@proteus-vue/fluid'
-import type { DeviceForm, FormProfile } from '@proteus-vue/fluid'
+import type { DeviceForm, FormProfile, FormPosture } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
 // ★2026-09-27（用户实测）：源码区此前是**纯文本**（无高亮）——而站点已有零依赖高亮器
@@ -38,7 +38,7 @@ interface Target {
   profile: FormProfile
 }
 const ICONS: Record<DeviceForm, string> = {
-  watch: '⌚', phone: '📱', fold: '📖', tablet: '📐', pc: '💻', car: '🚗', tv: '📺',
+  watch: '⌚', phone: '📱', flip: '📲', fold: '📖', tablet: '📐', pc: '💻', car: '🚗', tv: '📺',
 }
 const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) => ({
   key: k,
@@ -60,7 +60,7 @@ const contentWidth = computed(() => frameWidth.value)
 /** ★帧高（真实视口高——内容层据此判定首屏/安全区；此前页面把宽当高传，height 是死参数） */
 const frameHeight = computed(() => {
   const po = activePosture.value
-  if (po && target.value.key === 'fold') return po.viewport.height
+  if (po && activePostures.value.length) return po.viewport.height
   return target.value.profile.viewport.height
 })
 
@@ -89,7 +89,7 @@ onUnmounted(() => {
 const frameWidth = computed(() => {
   const base = Math.round(Math.min(target.value.profile.frame.maxWidth, stageWidth.value))
   const po = activePosture.value
-  if (po && target.value.key === 'fold') return Math.round(Math.min(base, po.viewport.width))
+  if (po && activePostures.value.length) return Math.round(Math.min(base, po.viewport.width))
   return base
 })
 
@@ -99,7 +99,7 @@ const frameStyle = computed(() => {
   const v = target.value.profile.visual
   const po = activePosture.value
   // ★折叠屏姿态：帧比例与宽度随姿态（报告 P0-2 连续性——视口变化即重排）
-  const ar = po && target.value.key === 'fold'
+  const ar = po && activePostures.value.length
     ? `${po.viewport.width} / ${po.viewport.height}`
     : f.ar.replace('/', ' / ')
   const w = frameWidth.value
@@ -123,9 +123,13 @@ const active = ref<DeviceForm>(
 )
 
 /** ★折叠屏姿态（报告 P0-2）：折叠 / 半折 / 展开——切换即演示「连续性」（视口与拓扑随之变化） */
-const postureKey = ref<'folded' | 'tabletop' | 'expanded'>(
-  (['folded', 'tabletop', 'expanded'] as const).includes(route.query.posture as never)
-    ? (route.query.posture as 'folded' | 'tabletop' | 'expanded')
+// ★2026-09-28：姿态键改为**从画像 SSOT 派生**（不再硬编码三元组）——
+//   两类折叠各有半折键（fold=book · flip=tabletop），硬编码会让新姿态无法直达。
+type PostureKey = FormPosture['key']
+const ALL_POSTURES: PostureKey[] = ['folded', 'tabletop', 'book', 'expanded']
+const postureKey = ref<PostureKey>(
+  ALL_POSTURES.includes(route.query.posture as PostureKey)
+    ? (route.query.posture as PostureKey)
     : 'expanded',
 )
 watch([postureKey, active], ([po, dev]) => {
@@ -137,13 +141,14 @@ watch([postureKey, active], ([po, dev]) => {
     },
   })
 })
-const foldPostures = computed(() => FORM_PROFILES.fold.postures ?? [])
-const activePosture = computed(() => foldPostures.value.find((x) => x.key === postureKey.value) ?? null)
+// ★2026-09-28：姿态集来源从前端硬编码 fold → **当前形态的画像**（两类折叠各有姿态集）
+const activePostures = computed(() => target.value.profile.postures ?? [])
+const activePosture = computed(() => activePostures.value.find((x) => x.key === postureKey.value) ?? null)
 /** 当前生效的形态画像（折叠屏时按姿态覆盖拓扑/视口） */
 const effectiveProfile = computed(() => {
   const base = target.value.profile
   const po = activePosture.value
-  if (!po || target.value.key !== 'fold') return base
+  if (!po || !activePostures.value.length) return base
   return { ...base, topology: po.topology, nav: po.nav, viewport: po.viewport }
 })
 
@@ -178,6 +183,13 @@ const visibleTargets = computed(() => {
 })
 const target = computed(() => TARGETS.find((t) => t.key === active.value) ?? TARGETS[0]!)
 // ★三审：筛选后当前端可能不在可见列表（切换器只剩一个按钮且无法恢复）→ 自动落到首个可见端
+// 切形态时把姿态重置为该形态的缺省（否则会带着上一个形态的姿态键）
+watch(active, () => {
+  const list = activePostures.value
+  if (list.length && !list.some((x) => x.key === postureKey.value)) {
+    postureKey.value = (list.find((x) => x.key === 'expanded') ?? list[list.length - 1]!).key
+  }
+})
 watch(visibleTargets, (list) => {
   if (list.length && !list.some((t) => t.key === active.value)) active.value = list[0]!.key
 })
@@ -305,9 +317,9 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
         </div>
 
         <!-- ★折叠屏姿态切换（报告 P0-2：折叠/半折/展开——演示 app continuity） -->
-        <div v-if="target.key === 'fold' && foldPostures.length" class="postures">
+        <div v-if="activePostures.length" class="postures">
           <button
-            v-for="po in foldPostures"
+            v-for="po in activePostures"
             :key="po.key"
             type="button"
             class="posture-btn"
@@ -349,7 +361,7 @@ const sourceHtml = computed(() => highlight(fluidSource, 'vue'))
             <div class="app-body">
               <FluidProduct
                 :form="target.key"
-                :posture="target.key === 'fold' ? postureKey : ''"
+                :posture="activePostures.length ? postureKey : ''"
                 :width="contentWidth"
                 :height="frameHeight"
               />
