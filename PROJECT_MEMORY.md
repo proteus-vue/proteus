@@ -17,7 +17,36 @@
 
 ---
 
-## 当前状态速览（最近一次更新：2026-09-26 二次复审收口）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-26 用户实测纠错）★新会话以此为准
+
+### ★★用户实测纠错：窄舞台重叠（本轮最重要的教训）
+
+**一句话**：用户机（1280 视口）实测「调整后很多布局乱了、内容叠在一起」——我在**宽舞台（1600）**验证全绿就交付了。**同一形态在不同舞台宽度下行高预算不同**，这是本轮最贵的教训，已用**真几何门禁**堵口。
+
+**① 两处真缺陷（都按根因修，不是调参数）**
+- **车机 dashboard**：`.pf-actions` 是 `.pf-info` 的**子元素**（模板既定结构）——给 info 开 `display:contents` 时 `grid-area: actions` 落进 info 的**隐式行**（实测 info 变 4 行 158px）→ 撑爆车身 → 标题/价格/推荐瓦片互相重叠。修法：信息列拆为网格项 + 三行区域（`media|heading` / `media|info` / `actions|rec`）。
+  - 附带抓到两处：`.has-multicol` 的 `grid-auto-flow:dense` 覆盖车机单行约束（提特异性）；驾驶提醒徽标 `position:absolute + grid-area` **无效**（abspos 含块是 `.p-formfactor` 而非网格容器）→ 改**同格网格项**叠加。
+- **TV hero-focus-row**：封面 `aspect-ratio:16/9` 让 min-content = 帧宽×9/16（540→279px）→ hero 行吃掉整画布、**海报行归零**（拓扑失去身份）。修法：释放宽高比（交轨道）+ hero 行 `minmax(min-content, 70%)`（永不小于内容：**宁可行矮，不可裁切**）+ 帧宽 <560 的 `@container` 收描述。
+
+**② 新增真几何门禁（jsdom 盲区的机器化堵口）**
+- `tests/e2e-website-multidevice.test.ts` + `pnpm test:e2e:website`（已接 CI Web E2E job）：
+  真 Chromium + 真布局，**双视口（1280 窄 / 1600 宽）× 七形态**，按设计纪律分档——
+  一屏形态（watch/car/tv）零裁切·零重叠·不滚动；可滚动形态（phone/fold/tablet/pc）零重叠。
+- **破坏性验证**：回退 TV 的 aspect-ratio 修复 → 双视口当场红；还原即绿。
+- ★我一度加了个 jsdom 版「网格区域不重复」结构测试，识别出它**永真**（jsdom 不解析 SFC 样式表）后**主动删除**——不留无效门禁（诚实边界）。
+
+**③ 方法论（写进纪律）**
+- **布局改动必须在两种以上舞台宽度验证**（1280 用户机 + 1600 设计机），且优先用真浏览器量几何（`getBoundingClientRect` 相交），不要凭截图目测。
+- 形态内部的取舍用 **`@container`（容器 = 帧/设备宽）**，不要用视口 `@media`——后者让「同一形态在不同舞台上表现不同」，正是本 bug 的土壤。
+
+**④ 同批交付：D-2 与 CI 门禁转绿（此前多提交持续红）**
+- D-2 官网 dogfooding：4 处违规清零——`ComponentDemo` 裸 `fetch` → 走能力原语 `createCapabilityHooks().useFetch()`；三处手写 `@media` → `@container`（Gallery 装饰 / MultiDevice 三栏 / Home 横幅）。
+- 三个文档门禁：`check:primitives`（重命名只改生成页未改生成器 SSOT → 31 页全漂，已把组名收进生成器 + 补 `GROUP_EN` 英文映射）、`check:en-drift`（guides/04-requirements EN overlay 缺章节）、`check-all-target-wording`（「双端工程」写法）。
+- **两个生成器抢 `scripts/` 目录**：snapshot-template 的 MANAGED 含整个 `scripts/` → 清空共建工具包生成物（`ledger_check.mjs`）→ kit 门禁必红。修法：按**所有权切分**（`scripts/` 归 kit，snapshot 不再清理该目录），双生成器互为幂等。
+- 模板快照同步（shims/import-meta.d.ts 补入）。
+
+**⑤ ★部署链路陷阱（已记录）**：`[deploy]` run 会被**紧随其后的普通 push 取消**（concurrency cancel-in-progress 同 group）；无 `[deploy]` 的 run 显示 success 但**触发门整条跳过**（steps 全 skipped）——**判别看 job steps 是否真 ran，不看 run conclusion**。真部署会执行「部署后核验（verify-live）」。→ 部署提交后**不要再 push**，等它跑完。
+
 
 ### ★柔性系统二次复审 P0/P1 收口（提交 77c6bac4 · 部署 e7f9084e）
 
