@@ -99,6 +99,13 @@
 - MP 真机常见两种错误串需**分别处置**：`timeout waiting for automator response` → `simulator_refresh` + 轮询；`cant find runtimeid by projectpath` → 模拟器无该项目窗口 → `open_project_window` + `simulator_refresh`。**先手调底层工具拿权威错误再动手**。
 - 工作树有一个**非本任务产出的**未跟踪文件 `.agents/skills/ai-efficiency-rules.zip`（未提交，未删除）。
 
+- **★本会话·按专家报告续修：折叠屏真双窗格 + 形态级媒体/安全区/铰链 + 14 项能力可证伪（2026-09-26 续十二，★★★用户「折叠屏一般是左右布局才对吧，请继续按照上面的子代理报告优化」）**：
+  **① 折叠屏（报告 P0-1/P1-1/P1-2）**：`duo` 拓扑改**真双窗格**（等宽 1:1 + 左窗格撑满——此前 42/58 非对称 + align-items:start → 左栏仅一图、展开后 2/3 空置「手机加宽版」）；视口 520×720 → **673×841**（真实 Z Fold 内屏；曾因 520 会被自身阈值判成 phone）+ 帧比例 3/4 → 6/7；`FormFrame +hinge` 渲染折痕。
+  **② 形态级字段补齐（报告 P2-2/P1-3）**：`FormProfile +mediaRatio`（phone/tablet 4:3 · fold 1:1 · pc 16:10 · car/tv 16:9 → `--pf-media-ar`，演示媒体随形态变化，不再硬编码）；`+safe`（tablet 握持 20pt · phone Home Indicator 34pt · car 边缘 → `--pf-safe-*` 纳入 padding）；平板视口改横屏 1194×834 + 侧栏项加图标与 44pt 最小高度。
+  **③ ★14 项能力全部可证伪（报告 P1-4，最伤诚实边界的一条）**：审计发现 **9 项零消费者**（hover/dpad/crown/dense/focusTree/multiCol/drawer/notch/keyboard）→ 全部映射为根类并提供**可观测后果**：hover→悬浮抬升+pointer（含 `@media (hover:none)` 守卫）· dpad/focusTree→热区放大 · keyboard→焦点环 + **⌘K 提示** · dense→紧凑间距 · multiCol→多列流 · drawer→抽屉把手 · crown→旋钮提示（右缘 ↕）。**新增棘轮门禁**：静态扫描组件源码，任一项 caps 无消费点即判失败。
+  **④ 验证**：回归锁 **19/19** · 根 vue-tsc 0 错误 · 浏览器实测折叠屏（双窗格 + 铰链折痕）、平板（侧栏图标 + 分栏）、PC（⌘K + 多列 + 侧栏）· 部署 run 36235642377 success + 线上包实证。
+  **未完成（报告余项）**：①focus 引擎（roving tabindex + 方向键实际导航——现只有焦点环，无焦点转移逻辑）；②TV overscan 5% 实际 padding；③手表时间/表冠视觉、暗色常亮；④caps 三态（supported/fallback/unsupported，现为布尔——车机 SKU 应为 fallback 而非删除）；⑤折叠屏 posture/continuity（折叠↔展开过渡）。
+
 - **★★本会话·分派 7 位领域专家审查柔性系统 + 批量修复跨形态 P0（2026-09-26 续十一，★★★用户「请分派7个子代理站在专业视角审查验收」）**：
   **审查方式**：先采集七形态截图（`/tmp/form-review/*.png`，含整页 + 设备帧特写），再并行分派 7 个 general-purpose 子代理，各以**该形态领域专家**视角（watchOS/Wear、iOS HIG/Material、Samsung/Google foldable、iPad HIG、桌面 Web、AAOS/ISO 15008 车载、Google TV Leanback/tvOS）审查截图 + 源码，输出「一句话判定 / 问题清单（P0-P2，含现象-证据-影响-修法）/ 规范核对表 / 与旧版差距」。**七份报告共性缺陷高度一致，证明问题确实是框架级的。**
   **★★跨形态共性缺陷（4+ 位专家独立命中）**：①**真焦点系统不存在**——焦点环是静态 box-shadow 挂在首个子元素（与按钮同色 1:1 不可见）+ `outline:none` 抹掉真焦点；海报卡是不可聚焦 div；`focus-tree/focus-row/dpad/keyboard` 全是声明。②**Tab 栏被裁 45%**——`.p-formfactor` 是 `display:block` → `margin-top:auto` 失效 + `overflow:hidden`（手机/折叠屏唯一导航不可达）。③**包裹层布局跨组件失效**——`.pf-sku/.pf-actions` 的 flex+gap 写在**父组件** scoped 里、元素却属**子组件** → 永不匹配。④**内容被硬裁且不可达**（与页面「没有裁剪」声明矛盾）。⑤**度量不更新**——无 `watch(props.width)` → 切端后按旧帧宽算 k=1.5。⑥**帧顶 24px 死区**——三条 CSS 无条件 `top:24px`（无状态栏形态白吃 + 暗色形态露浅色底）。⑦**TV 与车机同构** + TV 用**视口 @media**。⑧**车机标题隐形**（`text === bg` = `#10142a` = 1.00:1）+ `surface:#fff` 夜间白块（17.1:1 眩光）。
