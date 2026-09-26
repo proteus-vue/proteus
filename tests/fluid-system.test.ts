@@ -338,13 +338,23 @@ describe('Fluid System S2 纯逻辑（resolveSafeAreaStyle 安全区样式）', 
     expect(resolveSafeAreaStyle({ area: 'diagonal' })).toEqual({})
   })
 
-  it('fold + displayMode=fold/span → hinge 左右避让（fold-right 由 fold-left+fold-width 推导）', () => {
-    const hinge = {
-      paddingLeft: 'env(fold-left, 0px)',
-      paddingRight: 'calc(100% - env(fold-left, 0px) - env(fold-width, 0px))',
-    }
-    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'fold' })).toEqual(hinge)
-    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'span' })).toEqual(hinge)
+  it('★fold/span 铰链：fold 限左窗格 · span 只暴露几何量（复审 P1——旧式两侧内边距之和=100% → 内容宽 0）', () => {
+    // fold（单窗格）：右内边距 = 右窗格 + 铰链带 = 100% - fold-left（不是再叠一个 fold-left 缩进）
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'fold' })).toEqual({
+      '--pf-fold-left': 'env(fold-left, 0px)',
+      '--pf-fold-width': 'env(fold-width, 0px)',
+      paddingLeft: 'env(safe-area-inset-left, 0px)',
+      paddingRight: 'calc(100% - env(fold-left, 0px))',
+    })
+    // span（双窗格）：单流内容不能靠内边距回避中置铰链 → 只给几何量 + 铰链带间隙
+    expect(resolveSafeAreaStyle({ fold: true, displayMode: 'span' })).toEqual({
+      '--pf-fold-left': 'env(fold-left, 0px)',
+      '--pf-fold-width': 'env(fold-width, 0px)',
+      columnGap: 'env(fold-width, 0px)',
+    })
+    // ★内边距之和不得吃掉整个宽度（旧缺陷的判别式：中置铰链下 padding 总量 < 100%）
+    const foldStyle = resolveSafeAreaStyle({ fold: true, displayMode: 'fold' })
+    expect(foldStyle.paddingLeft).not.toContain('fold-left')
   })
 
   it('fold 开关守卫：expand/standard 不生效；fold=false 即使 displayMode=fold 也不生效', () => {

@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   FORM_PROFILES,
+  FORM_CAP_KEYS,
   formLabel,
   senseForm,
   probePointer,
@@ -262,6 +263,23 @@ describe('★形态求解：声明 > 探测 > 兜底', () => {
 })
 
 describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有消费者）', () => {
+  it('★三态真值安全（二次复审 P0）：组件内不得对 CapsLevel 做裸真值判断', () => {
+    const fs = require('node:fs') as typeof import('node:fs')
+    const comp = fs.readFileSync(
+      require('node:path').resolve(__dirname, '../packages/components/p-formfactor/index.vue'),
+      'utf8',
+    )
+    // ★教训（7 位复审专家一致命中）：`Boolean('unsupported')` 恒真 → 未支持的能力反而渲染出徽标
+    //   （手表/手机上出现 ⌘K 与表冠，与同屏面板「未支持」自相矛盾）。
+    //   本门禁：模板与脚本里禁止裸用 caps.X / caps.value.X 做真值判断，必须走 capsEnabled/capsLabel。
+    const bare = [...comp.matchAll(/(?:v-if|:class|Boolean\()\s*[^\n]*caps(?:\.value)?\.(\w+)\b(?![\w(])/g)]
+      .map((m) => m[0].trim())
+      .filter((line) => !/capsEnabled\(|capsLabel\(/.test(line))
+      // 允许：三态助手内部实现（formfactor 包，不在此文件）
+      .filter((line) => !/skuLevel|capsLevelOf|cap-|has-/.test(line))
+    expect(bare, `发现裸真值判断（三态字符串恒真）：\n${bare.join('\n')}`).toEqual([])
+  })
+
   it('14 项 caps 每一项都在组件层有消费点（静态扫描——防「空头声明」回归）', () => {
     const fs = require('node:fs') as typeof import('node:fs')
     const comp = fs.readFileSync(
@@ -282,6 +300,15 @@ describe('★★能力可证伪性（专家报告 P1-4：面板绿点必须有�
       if (!consumed) missing.push(cap)
     }
     expect(missing, `以下能力声明无消费者（面板绿点不可证伪）：${missing.join(', ')}`).toEqual([])
+  })
+
+  it('★FORM_CAP_KEYS 是能力键 SSOT：七画像的 caps 键集逐项与之相等（面板派生依据）', () => {
+    // 面板/审计遍历 FORM_CAP_KEYS；若某画像漏写字段（键集小于 SSOT）→ 面板会把它当 unsupported 显示，
+    // 属「悄悄降级」；多写字段则是幽灵字段。两侧都必须红。
+    expect(FORM_CAP_KEYS.length).toBe(14)
+    for (const [form, profile] of Object.entries(FORM_PROFILES)) {
+      expect(Object.keys(profile.caps).sort(), `${form} 的 caps 键集与 SSOT 不一致`).toEqual([...FORM_CAP_KEYS].sort())
+    }
   })
 })
 

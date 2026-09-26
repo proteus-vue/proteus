@@ -1,10 +1,12 @@
 <!--
      packages/components/p-formfactor/index.vue —— ★★柔性形态容器（Fluid System v2 落地形态）
      业务只写**一份语义内容**（命名槽），框架按**设备形态画像**自动编排：
-       · 布局拓扑：glance / stack / duo / rail-split / rail-grid / hero-focus-row（形态画像推导）
-       · 能力过滤：形态未声明支持的能力槽**自动不渲染**（如车机无多规格选择、TV 无侧栏）
-       · 密度与缩放：形态画像的 density/scale 自动应用（10ft TV 放大 1.4 / 手表 0.85 紧凑）
-       · 输入语义：遥控/旋钮形态自动放大热区（d-pad 可达），触控/指针形态常规
+       · 布局拓扑：glance / stack / duo / rail-split / rail-grid / hero-focus-row / dashboard（形态画像推导）
+       · 能力三态过滤：supported → 渲染；fallback → 渲染**降级路径**（如车机语音/旋钮单选）；
+         unsupported → 自动不渲染（如 TV 无侧栏）。判定一律走 capsEnabled/capsLabel，禁裸真值
+       · 流体度量与视觉语言：尺寸由**容器宽度**驱动（resolveFluidMetrics，k=clamp(min,w/ref,max)）；
+         主题色/暗色沉浸/安全区/铰链几何由画像注入（无绝对 px、无 transform: scale）
+       · 输入语义：遥控/旋钮形态自动放大热区（d-pad ≥76dp 绝对下限），触控/指针形态常规
      业务侧零 if-else（不需要写「如果是车机就…」）——这正是「柔性系统」与「响应式布局」的分水岭：
      响应式按**尺寸**缩放同一套布局；柔性系统按**形态**换布局、换导航、换能力集。
 
@@ -19,6 +21,7 @@
     :data-pf-form="form"
     :data-pf-posture="posture || ''"
     :data-pf-topology="profile.topology"
+    :data-pf-nav="profile.nav"
     :style="rootStyle"
   >
     <!-- 侧栏（能力声明 sidebar：未声明的形态自动不渲染——手机/手表/车机/TV） -->
@@ -33,8 +36,10 @@
       </div>
 
       <div class="pf-info">
-        <slot name="heading" />
-        <slot name="price" />
+        <!-- ★包裹层（2026-09-26 二次复审）：标题/价格此前是裸槽 → 拓扑无法单独编排它们
+             （车机须把「价格」与「SKU 降级条」排成同一行以压进 8/3 扁画布） -->
+        <div v-if="$slots.heading" class="pf-heading"><slot name="heading" /></div>
+        <div v-if="$slots.price" class="pf-price"><slot name="price" /></div>
         <!-- ★能力三态（2026-09-26 报告 P2-2）：supported → 多规格；fallback → **降级路径**
              （车机驾驶场景以「语音/旋钮单选」替代多选，而非删除）；unsupported → 不渲染 -->
         <div v-if="skuLevel === 'supported' && $slots.sku" class="pf-sku">
@@ -48,8 +53,11 @@
         </div>
       </div>
 
+      <!-- 驾驶提醒条（driveAware 能力消费点：真实网格行，不覆盖内容） -->
+      <p v-if="capsEnabled(caps.driveAware)" class="pf-drive-hint">⚠ {{ driveHint }}</p>
+
       <!-- 推荐区：焦点行形态自动横排（TV/车机海报流），其余形态网格/列表 -->
-      <div v-if="$slots.recommend" class="pf-recommend" :class="{ 'pf-recommend--row': caps.focusRows }">
+      <div v-if="$slots.recommend" class="pf-recommend" :class="{ 'pf-recommend--row': capsEnabled(caps.focusRows) }">
         <slot name="recommend" />
       </div>
     </div>
@@ -61,11 +69,11 @@
 
     <!-- ★能力渲染点（专家报告 P1-4：让每项 caps 可被视觉证伪） -->
     <!-- drawer：抽屉把手（触控形态声明支持） -->
-    <span v-if="caps.drawer" class="pf-drawer-hint" aria-hidden="true" />
+    <span v-if="capsEnabled(caps.drawer)" class="pf-drawer-hint" aria-hidden="true" />
     <!-- crown：表冠提示（手表/车机声明支持旋钮/表冠） -->
-    <span v-if="caps.crown" class="pf-crown-hint" aria-hidden="true">↕</span>
+    <span v-if="capsEnabled(caps.crown)" class="pf-crown-hint" aria-hidden="true">↕</span>
     <!-- keyboard：快捷键提示（PC 声明支持物理键盘） -->
-    <span v-if="caps.keyboard" class="pf-key-hint" aria-hidden="true">⌘K</span>
+    <span v-if="capsEnabled(caps.keyboard)" class="pf-key-hint" aria-hidden="true">⌘K</span>
     <!-- notch：安全区避让（异形屏声明——内容额外让出顶部） -->
   </div>
 </template>
@@ -80,6 +88,8 @@ const props = defineProps({
   declared: { type: String as () => DeviceForm | null, default: null },
   /** 降级路径提示文案（宿主注入——组件层不含 i18n 依赖） */
   degradedHint: { type: String, default: '' },
+  /** ★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文） */
+  driveHint: { type: String, default: '驾驶中：已精简信息层级与动效，仅保留核心购买路径' },
   /** ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） */
   posture: { type: String, default: '' },
   /** 容器尺寸注入（宿主/测试；缺省用容器自身测量） */
@@ -156,6 +166,9 @@ const rootClass = computed(() => {
     `topo-${p.topology}`,
     `form-${form.value}`,
     `input-${p.input}`,
+    // ★姿态类（2026-09-26 二次复审）：tabletop 半折需按「上半展示/下半操作」取舍，
+    //   仅 data-* 诊断属性不够——姿态必须能驱动样式
+    props.posture ? `posture-${props.posture}` : '',
     capsEnabled(c.driveAware) ? 'is-drive' : '',
     capsEnabled(c.hover) ? 'has-hover' : '',
     capsEnabled(c.dpad) ? 'has-dpad' : '',
@@ -182,6 +195,7 @@ const rootStyle = computed(() => {
     ...resolveFrameVars(p),
     '--pf-gap-dense': p.density === 'compact' ? '0.7' : p.density === 'comfortable' ? '1.35' : '1',
     '--pf-bg': v.bg,
+    '--pf-scheme': v.theme === 'dark' ? 'dark' : 'light',
     '--pf-surface': v.surface,
     '--pf-text': v.text,
     '--pf-dim': v.dim,
@@ -199,13 +213,25 @@ const rootStyle = computed(() => {
  *   · 按键：↑↓←→ 几何移动 · Enter/Space 触发
  *   · MP 安全：无 DOM 时引擎不启动（形态静态渲染）
  */
-const focusEnabled = computed(() => Boolean(caps.value.dpad || caps.value.keyboard))
+// ★三态归一（2026-09-26 二次复审 P0）：`Boolean('unsupported')` 恒真 → 触控形态也被接管
+const focusEnabled = computed(() => capsEnabled(caps.value.dpad) || capsEnabled(caps.value.keyboard))
 const focusedId = ref('')
 
 function collectFocusables(): HTMLElement[] {
   const el = rootEl.value as unknown as HTMLElement | null
   if (!el || typeof el.querySelectorAll !== 'function') return []
-  return [...el.querySelectorAll('button, [role="button"], .pf-focusable')] as HTMLElement[]
+  // ★候选集（2026-09-26 二次复审 P1）：此前仅 button/[role=button]/.pf-focusable——
+  //   业务内容里真实可点的 span（规格）.fp-sku 与 div.pf-rec-card 对遥控/键盘**不可达**
+  //   （TV 海报流点不动 = 焦点行形同虚设）。现纳入内容槽的交互类名。
+  return [
+    ...el.querySelectorAll(
+      'button, [role="button"], .pf-focusable, .pf-rec-card, .fp-sku, .fp-rail-item, .pf-tabbar > *',
+    ),
+  ].filter((x): x is HTMLElement => {
+    const h = x as HTMLElement
+    // 排除不可见/被禁用的（含 display:none 的能力过滤残留）
+    return !h.hasAttribute('disabled') && h.offsetParent !== null
+  }) as HTMLElement[]
 }
 
 /**
@@ -274,27 +300,45 @@ function onKeydown(e: Event): void {
   }
 }
 
+/** ★焦点态同步（复审 P1）：外部 Tab/点击使真实焦点漂移时，把引擎的 focusedId 拉回真实值——
+ *  否则「点击 A 后按 →」会从引擎记的旧 B 出发，方向键跳到反直觉的目标。 */
+function onFocusIn(e: Event): void {
+  const t = e.target as HTMLElement | null
+  if (!t || !t.dataset) return
+  if (t.dataset.pfFocusId) focusedId.value = t.dataset.pfFocusId
+}
+
 onMounted(() => {
   if (!focusEnabled.value) return
   const el = rootEl.value as unknown as HTMLElement | null
   el?.addEventListener?.('keydown', onKeydown as EventListener)
+  el?.addEventListener?.('focusin', onFocusIn as EventListener)
   nextTick(() => {
     const els = collectFocusables()
     if (els.length === 0) return
     const rects = measureFocusables(els)
     const first = navigateFocus(null, rects, 'down', { preferredFirst: rects[0]?.id })
-    if (first) els.forEach((x) => x.setAttribute('tabindex', x.dataset?.pfFocusId === first ? '0' : '-1'))
+    if (!first) return
+    // ★初值（复审 P0）：focusedId 必须落定 → 进入形态后第一次 Enter 即生效（此前首个 Enter 空击）
+    focusedId.value = first
+    els.forEach((x) => x.setAttribute('tabindex', x.dataset?.pfFocusId === first ? '0' : '-1'))
+    const t = els.find((x) => x.dataset?.pfFocusId === first)
+    t?.focus?.({ preventScroll: true })
   })
 })
 onUnmounted(() => {
   const el = rootEl.value as unknown as HTMLElement | null
   el?.removeEventListener?.('keydown', onKeydown as EventListener)
+  el?.removeEventListener?.('focusin', onFocusIn as EventListener)
 })
 
 </script>
 
 <style scoped>
 .p-formfactor {
+  /* ★定位宿主（2026-09-26 复审）：三个 absolute 徽标此前依赖宿主 .frame 有 position:relative，
+     否则飞到视口右下角——框架组件必须自持定位上下文 */
+  position: relative;
   /* ★flex 列（2026-09-26 专家审查）：此前 display:block 让 .pf-tabbar 的 margin-top:auto 失效
      → Tab 栏被 overflow:hidden 裁掉 45%（手机/折叠屏唯一导航不可用） */
   display: flex;
@@ -302,18 +346,29 @@ onUnmounted(() => {
   /* ★视觉语言由形态画像注入（浅色 / TV·车机暗色沉浸） */
   background: var(--pf-bg, #f7f8fa);
   color: var(--pf-text, #17171f);
+  /* ★暗色形态让 UA 控件（滚动条等）走暗色（复审：暗底 + 亮色 UA 滚动条 = 夜间眩光） */
+  color-scheme: var(--pf-scheme, light);
   font-size: var(--pf-font);
   height: 100%;
+  /* ★安全区消费（2026-09-26 二次复审：此前 --pf-safe-* 零消费者 → TV overscan / 手机 Home
+     Indicator 完全无效）。与形态 padding 取 max 而非叠加（避免大屏双重留白） */
   padding: calc(var(--pf-pad) * 1.1);
+  padding-left: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-side, 0px));
+  padding-right: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-side, 0px));
+  padding-bottom: max(calc(var(--pf-pad) * 1.1), var(--pf-safe-bottom, 0px));
   box-sizing: border-box;
   overflow: hidden;
 }
 /* ★内容溢出 → 设备内滚动（专家审查：此前 overflow:hidden 硬裁掉推荐区且不可达，
-   与页面「没有裁剪」的声明矛盾） */
-.pf-body { overflow-y: auto; scrollbar-width: thin; }
-.pf-body::-webkit-scrollbar { width: 4px; }
-.pf-body::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--pf-text, #000) 22%, transparent); border-radius: 2px; }
-.pf-body::-webkit-scrollbar-track { background: transparent; }
+   与页面「没有裁剪」的声明矛盾）
+   ★滚动条配色（2026-09-26 二次复审）：此前 scrollbar-width:thin + ::-webkit-scrollbar 并存 →
+   Chrome 121+ 在 scrollbar-width !== auto 时**丢弃** ::-webkit-* 定制 → 暗色形态出现 17:1 亮色滚动条
+   （夜间眩光）。改用标准 scrollbar-color（跟随形态文字色）+ 形态主题 color-scheme。 */
+.pf-body {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--pf-text, #000) 26%, transparent) transparent;
+}
 .pf-body { display: block; flex: 1 1 auto; min-height: 0; }
 .pf-rail { display: none; }
 /* ★包裹层布局（2026-09-26）：原写在父组件（fluid-product）的 scoped 样式里 → 元素属本组件，
@@ -335,14 +390,19 @@ onUnmounted(() => {
 .pf-sku-fallback {
   display: flex;
   align-items: center;
-  gap: calc(var(--pf-u) * 0.6);
-  padding: calc(var(--pf-u) * 0.6) calc(var(--pf-u) * 0.9);
+  gap: calc(var(--pf-u) * 0.5);
+  padding: calc(var(--pf-u) * 0.4) calc(var(--pf-u) * 0.7);
   border: 1px dashed color-mix(in srgb, var(--pf-accent, #ffb13d) 55%, transparent);
   border-radius: var(--pf-radius, 8px);
   background: color-mix(in srgb, var(--pf-accent, #ffb13d) 10%, transparent);
-  min-height: var(--pf-control);
+  /* ★这不是可点控件（真正的操作走语音/旋钮）→ 不占 76dp 热区下限，压成单行胶囊；
+     且**不得换行**（窄列里曾折成 136px 高块，把标题挤出行外） */
+  min-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
 }
-.pf-sku-fb-label { font-size: calc(var(--pf-font) * 0.85); color: var(--pf-accent, #ffb13d); font-weight: 700; }
+.pf-sku-fb-label { font-size: calc(var(--pf-font) * 0.85); color: var(--pf-accent, #ffb13d); font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .pf-sku-fb-val { font-size: calc(var(--pf-font) * 0.95); color: var(--pf-text, #fff); }
 
 /* 推荐区默认：自适应网格（形态拓扑可覆盖——焦点行形态转横排海报流） */
@@ -361,7 +421,10 @@ onUnmounted(() => {
   transition-duration: 0.08s !important;
 }
 
-/* ── 拓扑：glance（手表——一屏一意：只留核心信息与主操作） ── */
+/* ── 拓扑：glance（手表——一屏一意：只留核心信息与主操作） ──
+   ★2026-09-26 二次复审实测：240×240 表盘正文区仅 177px，而「标题+描述+价格+双按钮」需 209px
+   → 底部被裁 32px（一屏一意被破坏）。按抬腕场景的真实取舍收口：
+     · 描述不显示（表盘上读不到第二行小字）· 名称限 2 行 · 主/次操作并排不换行。 */
 .topo-glance .pf-media { display: none; }
 .topo-glance .pf-recommend { display: none; }
 .topo-glance .pf-body {
@@ -369,12 +432,49 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--pf-gap) * var(--pf-gap-dense));
+  gap: calc(var(--pf-gap) * 0.55 * var(--pf-gap-dense));
   text-align: center;
 }
+.topo-glance .pf-info :deep(.fp-desc) { display: none; }
+.topo-glance .pf-heading :deep(.fp-name) {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* 双操作并排（不换行——换行会吃掉一屏预算） */
+.p-formfactor.topo-glance .pf-actions {
+  flex-wrap: nowrap;
+  width: 100%;
+  gap: calc(var(--pf-u) * 0.4);
+}
+.p-formfactor.topo-glance .pf-actions :deep(button) {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: calc(var(--pf-u) * 0.35);
+  padding-right: calc(var(--pf-u) * 0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-/* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ── */
+/* ── 姿态：tabletop 半折（水平铰链——上屏展示 / 下屏操作，内容不得跨折痕） ──
+   ★2026-09-26 二次复审实测：673×420 视口下手机式单列（媒体+标题+描述+价格+规格+CTA）
+   需 ≈320px 而可用 ≈200px → 主操作落在折线以下。按半折的真实使用取舍：
+   只留「封面 + 标题 + 价格 + 主操作」（描述/规格收起——折叠态外屏同样收），
+   并把封面压到 40% 以内，让上屏（媒体）与下屏（信息 + 操作）各自完整。 */
+.p-formfactor.posture-tabletop .pf-media { max-height: 40%; }
+.p-formfactor.posture-tabletop .pf-info :deep(.fp-desc) { display: none; }
+.p-formfactor.posture-tabletop .pf-sku { display: none; }
+.p-formfactor.posture-tabletop .pf-actions { min-height: 0; }
+
+/* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ──
+   ★2026-09-26 二次复审实测：半折（tabletop 673×420）下 1:1 媒体高 = 全宽 ≈ 440px，
+   远超视口高 → 标题/价格/CTA 全被推到折线以下（Tab 在但主操作不可见）。
+   单列拓扑的媒体不得吃掉视口的一半：以可用高度为上限（46%），超出部分裁切（封面本就装饰性）。 */
 .topo-stack .pf-body { display: flex; flex-direction: column; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); overflow-y: auto; }
+.topo-stack .pf-media { flex: 0 0 auto; max-height: 46%; overflow: hidden; }
+.topo-stack .pf-media > :deep(*) { height: 100%; min-height: 0; }
 .pf-tabbar {
   display: flex;
   margin-top: auto;
@@ -382,7 +482,10 @@ onUnmounted(() => {
   padding: 8px 0 10px;
   background: inherit;
 }
-.pf-tabbar :deep(*) { flex: 1; text-align: center; font-size: calc(11px * 1); color: #999; }
+/* ★Tab 栏（2026-09-26 二次复审 P2）：字色曾硬编码 #999（白底 2.85:1 <AA）且字号 11px 不随形态；
+   现走形态色（未选中 = dim，选中 = brand）+ 流体字号。选中态由内容槽的 .on 提供，此处兜底。 */
+.pf-tabbar :deep(*) { flex: 1; text-align: center; font-size: calc(var(--pf-font) * 0.9); color: var(--pf-dim, #616875); }
+.pf-tabbar :deep(.on) { color: var(--pf-brand, #6f4ae8); font-weight: 700; }
 
 /* ── 拓扑：duo（折叠屏——主图 + 详情双列） ── */
 /* ★折叠屏真双窗格（2026-09-26 报告 P0-1）：等宽 1:1 + 左栏撑满
@@ -392,6 +495,9 @@ onUnmounted(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1fr) auto;
   gap: calc(var(--pf-gap) * var(--pf-gap-dense));
+  /* ★铰链带消费（二次复审）：真机（Web foldable）env(fold-width) > 0 时列间距自动让开折痕，
+     无该 API/普通屏幕回退 0px → 与设计间距一致（内容不跨折痕） */
+  column-gap: max(calc(var(--pf-gap) * var(--pf-gap-dense)), var(--pf-fold-width, 0px));
   align-items: stretch;
   min-height: 0;
 }
@@ -407,7 +513,12 @@ onUnmounted(() => {
 .topo-duo .pf-recommend { grid-column: 1 / -1; }
 
 /* ── 拓扑：rail-split（平板——侧栏 + 主体分栏） ── */
-.topo-rail-split { display: grid; grid-template-columns: 128px 1fr; gap: 0; padding: 0; }
+/* ★侧栏宽（2026-09-26 二次复审）：曾硬编码 128px/148px/12px → 不随容器流体；
+   现由 --pf-u 驱动（移动形态的侧栏本就该随容器缩放），并在小容器下有下限。 */
+/* ★1.0 定稿尺（2026-09-26 二次复审实测）：多倍 --pf-u 在 mockup 帧宽（520）下把侧栏撑到 237px
+   （占帧 46%）→ 主体塌成 73px 列、"内容溢出。改为**占容器比例 + 上下限**：
+   比例保证随容器流体，clamp 保证小帧不霸屏、大屏不缩水。 */
+.topo-rail-split { display: grid; grid-template-columns: clamp(64px, 22%, 132px) 1fr; gap: 0; padding: 0; }
 .topo-rail-split .pf-rail {
   display: flex;
   flex-direction: column;
@@ -415,11 +526,12 @@ onUnmounted(() => {
   background: #fff;
   border-right: 1px solid #e6e8f0;
   padding: 12px 10px;
-  font-size: calc(12px * 1);
+  font-size: calc(var(--pf-font) * 0.92);
 }
 .topo-rail-split .pf-body {
   display: grid;
-  grid-template-columns: minmax(160px, 46%) 1fr;
+  /* ★媒体列硬下限（曾 160px）在窄帧下挤压信息列 → 改为纯比例分配（minmax 0 防内容撑破） */
+  grid-template-columns: minmax(0, 46%) minmax(0, 1fr);
   gap: calc(var(--pf-gap) * var(--pf-gap-dense));
   padding: calc(var(--pf-pad) * 1.1);
   align-items: start;
@@ -427,7 +539,7 @@ onUnmounted(() => {
 .topo-rail-split .pf-recommend { grid-column: 1 / -1; }
 
 /* ── 拓扑：rail-grid（PC——侧栏 + 多列网格 + hover 语义） ── */
-.topo-rail-grid { display: grid; grid-template-columns: 148px 1fr; gap: 0; padding: 0; }
+.topo-rail-grid { display: grid; grid-template-columns: clamp(72px, 20%, 150px) 1fr; gap: 0; padding: 0; }
 .topo-rail-grid .pf-rail {
   display: flex;
   flex-direction: column;
@@ -435,7 +547,7 @@ onUnmounted(() => {
   background: #fff;
   border-right: 1px solid #e6e8f0;
   padding: 12px 10px;
-  font-size: calc(12px * 1);
+  font-size: calc(var(--pf-font) * 0.92);
 }
 .topo-rail-grid .pf-body {
   display: grid;
@@ -455,81 +567,177 @@ onUnmounted(() => {
 /* ── 拓扑：hero-focus-row（TV——10ft 沉浸：全宽 Hero → 信息 → 横滑海报流）──
    ★2026-09-26 专家审查修正：此前与车机 dashboard 同构（'media info'/'rec rec'）且用视口 @media；
    现为**纵向流**（Hero 置顶全宽 → 信息 → 海报行），与车机（横向 dashboard）明显不同。 */
+/* ★10ft 首屏纪律（2026-09-26 二次复审 P0）：旧版 TV 的 t1/t2/价格/CTA **都在 hero 内**；
+   上轮实现把媒体与信息拆成上下两块 → 「Hero + 信息 + 海报行」三块叠加高度超帧高，
+   CTA 被切 60px、海报行落到折线以下。现按旧版语义：英雄区 + **信息叠加在英雄图上**（底部渐变蒙层），
+   海报行占余下高度 → 首屏同时可见 Hero + CTA + 完整海报卡。 */
 .topo-hero-focus-row { padding: calc(var(--pf-pad) * 1.1); }
 .topo-hero-focus-row .pf-body {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  /* ★实测（二次复审）：叠加内容高 212px（标题 37 + 描述 37 + 价格 46 + CTA 76 + 间距 16）——
+     hero 行须 ≥ 该值，否则 align-self:end 会把标题顶出帧顶被裁；70% 命中（海报行余 30% ≈ 卡高 87 = 16/9）。 */
+  grid-template-rows: minmax(0, 70%) minmax(0, 1fr);
   gap: var(--pf-gap);
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .topo-hero-focus-row .pf-media {
-  flex: 0 0 auto;
-  max-height: 46%;
+  grid-row: 1;
+  grid-column: 1;
+  position: relative;
   overflow: hidden;
   border-radius: calc(var(--pf-radius) * 1.2);
+  min-height: 0;
 }
+/* 底部渐变蒙层：保证叠加文字在任意封面上可读（对比度由蒙层保证，不依赖封面内容） */
+.topo-hero-focus-row .pf-media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--pf-bg, #000) 82%, transparent) 100%);
+  pointer-events: none;
+}
+.topo-hero-focus-row .pf-media > :deep(*) { height: 100%; min-height: 0; }
+/* 信息层与英雄图同格（叠加）——底部左对齐，10ft 下标题/价格/CTA 同屏 */
 .topo-hero-focus-row .pf-info {
-  flex: 0 0 auto;
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: calc(var(--pf-gap) * 0.7);
+  gap: calc(var(--pf-gap) * 0.45);
   min-width: 0;
+  padding: calc(var(--pf-u) * 1.1);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+/* 10ft：描述限一行（沙发距离读不完多行小字；保证标题/价格/CTA 同屏是硬约束） */
+.topo-hero-focus-row :deep(.fp-desc) {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .topo-hero-focus-row .pf-recommend--row {
-  flex: 1 0 auto;
+  grid-row: 2;
+  grid-column: 1;
   display: flex;
-  gap: calc(var(--pf-gap) * 1.6);
+  gap: calc(var(--pf-gap) * 1.4);
   overflow-x: auto;
-  padding-bottom: calc(var(--pf-u) * 0.5);
+  overflow-y: hidden;
+  padding-bottom: calc(var(--pf-u) * 0.4);
   scrollbar-width: none;
-  align-items: flex-start;
+  align-items: stretch;
+  min-height: 0;
 }
 .topo-hero-focus-row .pf-recommend--row::-webkit-scrollbar { display: none; }
 .topo-hero-focus-row .pf-recommend--row :deep(.pf-rec-card) {
   flex: 0 0 auto;
-  width: calc(var(--pf-u) * 9.5);
-  aspect-ratio: 16 / 9;
+  width: calc(var(--pf-u) * 9);
+  /* ★至少一张完整卡（首屏纪律）：高度随行高自适应而非固定比例，超出由横向滚动承接 */
+  height: 100%;
+  min-height: 0;
   justify-content: center;
+  overflow: hidden;
 }
 
-/* ── 拓扑：dashboard（车机——单层大热区卡片，驾驶降干扰：信息层级扁平、热区大） ── */
-.topo-dashboard .pf-body {
+/* ── 拓扑：dashboard（车机——驾驶舱 HMI：左媒体 + 右信息 + 底大热区行）──
+   ★2026-09-26 二次复审第三轮实测：8/3 扁画布（620×232）内容区仅 196px 高，而
+   「媒体 + 标题 + 价格 + 降级条 + CTA + 推荐行」纵排需 ≈370px → 标题被顶出帧顶、CTA 与瓦片重叠。
+   定稿：`display: contents` 让信息子项直接成为网格项，按驾驶舱层级重新分区——
+     ① 左媒体纵跨信息两行（16/9 → 填满左列高度）② 标题单行 ③ 价格与降级条同排 ④
+     主操作与推荐瓦片同处底行：**选项与确认键同层**（拇指/旋钮一跳可达，驾驶舱惯例）。
+   推荐位只留 3 个（帧宽已给足热区）：行车中翻找第 4、5 个选项是分心源，宁可让后续项不可达。 */
+.p-formfactor.topo-dashboard .pf-body {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  grid-template-rows: auto auto;
-  grid-template-areas: 'media info' 'rec rec';
-  gap: calc(var(--pf-gap) * 1.2);
-  align-content: start;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.75fr) minmax(0, 1.35fr);
+  /* ★行高（二维实测定稿）：auto 行被**跨行媒体**的 16:9 内在高度撑开（媒体 126px →
+     头部两行 118px、底行只剩 13px，瓦片塌成细条）。故：
+       ① 跨行媒体封面填满轨道（aspect-ratio: auto）→ 不再反向撑行；
+       ② 底行钉死 --pf-control 下限（热区不可小于 76dp）；③ 提醒条独占一行。 */
+  grid-template-rows: minmax(0, auto) minmax(0, auto) minmax(var(--pf-control), 1fr) auto;
+  grid-template-areas:
+    'media heading heading'
+    'media price   sku'
+    'actions rec    rec'
+    'hint   hint   hint';
+  gap: calc(var(--pf-gap) * 0.8);
+  min-height: 0;
+  overflow: hidden;
+}
+.topo-dashboard .pf-media {
+  grid-area: media;
+  align-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: calc(var(--pf-radius) * 1.1);
+}
+/* ★跨行媒体不得反向决定行高：封面填满轨道（宽高比交给轨道），否则 16:9 内在高度撑爆行 */
+.p-formfactor.topo-dashboard .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
+/* ★信息列拆为网格项（display: contents）：此前整列只能整块摆放，纵向预算装不下 */
+.topo-dashboard .pf-info { display: contents; }
+.topo-dashboard .pf-heading { grid-area: heading; align-self: center; min-width: 0; }
+/* 标题单行（驾驶舱一行可读，长度溢出省略——这是 196px 预算的硬约束） */
+.p-formfactor.topo-dashboard .pf-heading :deep(.fp-name) {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.topo-dashboard .pf-price { grid-area: price; align-self: center; }
+.topo-dashboard .pf-sku, .topo-dashboard .pf-sku-fallback { grid-area: sku; align-self: center; justify-self: start; }
+/* 驾驶精简：长文描述（仪表盘上不可读）不占纵向预算——driveAware 语义的真实体现 */
+.is-drive .pf-info :deep(.fp-desc) { display: none; }
+/* 主操作（底行左格）：两个等分大热区（≥76dp），与推荐瓦片同层 */
+.topo-dashboard .pf-actions {
+  grid-area: actions;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  align-self: center;
+  gap: calc(var(--pf-gap) * 0.7);
   min-height: 0;
 }
-.topo-dashboard .pf-media { grid-area: media; align-self: start; }
-.topo-dashboard .pf-info {
-  grid-area: info;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--pf-gap) * 0.8);
-  justify-content: center;
+.topo-dashboard .pf-actions :deep(button) {
+  flex: 1 1 0;
   min-width: 0;
+  padding-left: calc(var(--pf-u) * 0.5);
+  padding-right: calc(var(--pf-u) * 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.topo-dashboard .pf-recommend {
+/* ★特异性提升（.p-formfactor.topo-dashboard）：`.has-multicol .pf-recommend { grid-auto-flow: dense }`
+   与本块同权重且在后 → 曾把车机单行瓦片折成两行（行高 133px → 上排信息被压到 54px、标题溢出帧顶）。
+   多列能力在驾驶形态的正确表达是「一行 N 个热区」，不是折行。 */
+.p-formfactor.topo-dashboard .pf-recommend {
   grid-area: rec;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(var(--pf-gap) * 1.2);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(var(--pf-gap) * 0.8);
+  min-height: 0;
+  overflow: hidden;
 }
-/* 驾驶提醒条（车机专有语义：driveAware 形态显示） */
-.is-drive .pf-info::after {
-  content: '\26A0 \9A7E\9A76\4E2D\FF1A\5DF2\7CBE\7B80\4FE1\606F\5C42\7EA7\4E0E\52A8\6548';
-  display: block;
-  margin-top: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(255, 180, 84, 0.16);
-  color: #f0c07a;
-  font-size: calc(var(--pf-font) * 0.8);
+/* 驾驶形态只呈现前 3 个选项（第 4+ 项不可达：行车中翻找不可滚动内容 = 分心源） */
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card):nth-child(n + 4) { display: none; }
+.p-formfactor.topo-dashboard .pf-recommend :deep(.pf-rec-card) {
+  min-height: 0;
+  overflow: hidden;
+  justify-content: center;
+  padding: calc(var(--pf-u) * 0.4);
+  gap: calc(var(--pf-u) * 0.25);
 }
-
+/* 驾驶提醒条：真实网格行（此前 ::after 绝对定位 → 覆盖底行；且 display:contents 下伪元素行为不确定） */
+.pf-drive-hint {
+  grid-area: hint;
+  padding: calc(var(--pf-u) * 0.25) calc(var(--pf-u) * 0.6);
+  border-radius: calc(var(--pf-radius) * 0.7);
+  background: color-mix(in srgb, var(--pf-accent, #ffb13d) 16%, transparent);
+  color: var(--pf-accent, #ffb13d);
+  font-size: calc(var(--pf-font) * 0.68);
+  text-align: center;
+}
 
 /* ═══ ★能力消费点（2026-09-26 专家报告 P1-4：每项 caps 必须有可观测后果）═══ */
 
@@ -558,7 +766,7 @@ onUnmounted(() => {
 
 /* keyboard：键盘可达元素加可见焦点环（PC）*/
 .has-keyboard :deep(*:focus-visible) {
-  outline: var(--pf-focus-ring, 3px) solid var(--pf-accent, #7c5cff);
+  outline: var(--pf-focus-ring, 3px) solid var(--pf-accent, #6f4ae8);
   outline-offset: 2px;
 }
 

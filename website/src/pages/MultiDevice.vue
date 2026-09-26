@@ -6,10 +6,10 @@
 //
 // ★零伪造：左栏展示的就是本页正在执行的**同一份源码**（?raw 直读 fluid-product/index.vue），
 //   中栏七端全部在页面上**真渲染**——
-//     · 每端设备框是**自然宽度**（手表 198 / 手机 390 / 车机 1280 / TV 1920…），
-//       transform: scale 只做视觉缩放（ResizeObserver 按布局尺寸测量，断点判定不受影响）；
-//     · p-zone 按**容器宽度**真实求解断点槽（sm/md/lg/xl）——各端真的是不同的布局分支，
-//       不是同一份布局的缩放；
+//     · 设备框是**真实 mockup**（比例/圆角/刘海/状态栏/折痕由画像 frame 驱动，居中完整呈现）；
+//       内容度量宽 = 帧显示宽（≤ 画像上限宽与舞台可用宽），无 transform: scale、无裁剪；
+//     · 形态画像（FORM_PROFILES）驱动拓扑/导航/能力/视觉语言/流体度量——同一份内容槽换形态即换形态，
+//       与响应式布局的分水岭：不是按尺寸缩放同一套布局，而是按形态换布局、换导航、换能力集；
 //     · 能力声明（tabs/rail/focusRows）真实驱动降级分支（v-if）——车机声明无 SKU 多选、
 //       手表声明无底部 Tab，源码里能看到分支，页面上能看到差异。
 //
@@ -20,7 +20,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { locale } from '../i18n'
 import FluidProduct from '../components/fluid-product/index.vue'
 // ★★Fluid System v2：形态画像 SSOT（本页所有形态信息都从这里读——页面不重复定义能力/拓扑）
-import { FORM_PROFILES, capsLabel } from '@proteus-vue/fluid'
+import { FORM_PROFILES, FORM_CAP_KEYS, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FormProfile } from '@proteus-vue/fluid'
 // ★SSOT：左栏源码 = 正在执行的这份文件（vite ?raw——零双源，不存在「展示的源码 ≠ 跑的源码」）
 import fluidSource from '../components/fluid-product/index.vue?raw'
@@ -52,13 +52,13 @@ const TARGETS: Target[] = (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) =
 /** 窄→宽排序（切换器稳定顺序） */
 const ordered = computed(() => [...TARGETS].sort((a, b) => a.profile.viewport.width - b.profile.viewport.width))
 
-/** 内容层度量输入宽（与帧显示宽一致——报告：曾用 maxWidth 导致大屏形态内容溢出） */
-const contentWidth = computed(() => {
+/** 内容层度量输入宽（★与帧显示宽同一口径——展示缩放系数已移除，不再污染流体解算） */
+const contentWidth = computed(() => frameWidth.value)
+/** ★帧高（真实视口高——内容层据此判定首屏/安全区；此前页面把宽当高传，height 是死参数） */
+const frameHeight = computed(() => {
   const po = activePosture.value
-  if (po && target.value.key === 'fold') {
-    return Math.round(Math.min(po.viewport.width, stageWidth.value) * (po.viewport.width < 500 ? 0.62 : 1))
-  }
-  return frameWidth.value
+  if (po && target.value.key === 'fold') return po.viewport.height
+  return target.value.profile.viewport.height
 })
 
 /** 舞台可用宽（帧宽的约束来源——ResizeObserver 实测） */
@@ -79,8 +79,16 @@ onUnmounted(() => {
   stageRo = null
 })
 
-/** ★帧宽（展示宽）= min(画像上限宽, 舞台可用宽) —— 真实 mockup 的尺寸约束 */
-const frameWidth = computed(() => Math.round(Math.min(target.value.profile.frame.maxWidth, stageWidth.value)))
+/** ★帧宽（展示宽）= min(画像上限宽, 舞台可用宽, 姿态视口宽)——真实 mockup 的尺寸约束。
+ *  ★2026-09-26 二次复审 P1：此前折叠态乘 0.62「展示缩放系数」→ 该系数泄漏进流体解算
+ *  （折叠态度量宽仅 211px → k 被 clamp 到 min 0.70 → 字号恒为下限，与真机不符），
+ *  且 frame.maxWidth 被姿态分支绕过。现统一「展示宽 = 度量宽」：无魔法系数、无缩放变换。 */
+const frameWidth = computed(() => {
+  const base = Math.round(Math.min(target.value.profile.frame.maxWidth, stageWidth.value))
+  const po = activePosture.value
+  if (po && target.value.key === 'fold') return Math.round(Math.min(base, po.viewport.width))
+  return base
+})
 
 /** ★设备帧样式（真实 mockup：比例 + 帧宽 + 圆角——由画像 frame 驱动，代码零硬编码） */
 const frameStyle = computed(() => {
@@ -91,9 +99,7 @@ const frameStyle = computed(() => {
   const ar = po && target.value.key === 'fold'
     ? `${po.viewport.width} / ${po.viewport.height}`
     : f.ar.replace('/', ' / ')
-  const w = po && target.value.key === 'fold'
-    ? Math.round(Math.min(po.viewport.width, stageWidth.value) * (po.viewport.width < 500 ? 0.62 : 1))
-    : frameWidth.value
+  const w = frameWidth.value
   return {
     aspectRatio: ar,
     width: `${w}px`,
@@ -162,10 +168,9 @@ const visibleTargets = computed(() => {
 })
 const target = computed(() => TARGETS.find((t) => t.key === active.value) ?? TARGETS[0]!)
 
-/** 右侧推导行（★全部来自形态画像——非页面硬编码；口径对齐旧版 TARGET/FORM/INPUT/NAV/BACKEND） */
+/** 右侧推导行（★全部来自生效画像——非页面硬编码；折叠屏姿态覆盖后同步反映） */
 const rows = computed(() => {
-  const t = target.value
-  const p = t.profile
+  const p = effectiveProfile.value
   return [
     { k: 'TARGET', v: isEn.value ? p.label.en : p.label.zh },
     { k: 'FORM', v: p.topology },
@@ -176,23 +181,28 @@ const rows = computed(() => {
   ]
 })
 
-/** 能力清单（★画像 SSOT 全量——不是固定的 4 项） */
-const CAP_LABELS: Array<{ k: keyof FormProfile['caps']; zh: string; en: string }> = [
-  { k: 'hover', zh: '指针悬停态', en: 'pointer hover' },
-  { k: 'skuMulti', zh: '多规格选择', en: 'multi-SKU picker' },
-  { k: 'tabs', zh: '底部 Tab 栏', en: 'bottom tabs' },
-  { k: 'sidebar', zh: '持久侧栏', en: 'persistent sidebar' },
-  { k: 'focusRows', zh: '横向焦点行', en: 'focus rows' },
-  { k: 'dense', zh: '高密度信息', en: 'dense info' },
-  { k: 'drawer', zh: '抽屉 / 侧滑弹层', en: 'drawer / sheet' },
-  { k: 'notch', zh: '异形屏安全区', en: 'notch safe area' },
-  { k: 'keyboard', zh: '物理键盘', en: 'hardware keyboard' },
-  { k: 'driveAware', zh: '驾驶降干扰', en: 'drive-aware' },
-]
+/** 能力清单（★画像 SSOT 全量 14 项——顺序与文案由 FORM_CAP_KEYS 派生，页面不手工维护清单） */
+const CAP_TEXT: Record<string, { zh: string; en: string }> = {
+  hover: { zh: '指针悬停态', en: 'pointer hover' },
+  skuMulti: { zh: '多规格选择', en: 'multi-SKU picker' },
+  tabs: { zh: '底部 Tab 栏', en: 'bottom tabs' },
+  sidebar: { zh: '持久侧栏', en: 'persistent sidebar' },
+  dpad: { zh: '遥控 / 方向键焦点', en: 'd-pad focus' },
+  crown: { zh: '表冠 / 旋钮', en: 'crown / rotary' },
+  focusTree: { zh: '焦点树导航', en: 'focus tree' },
+  focusRows: { zh: '横向焦点行', en: 'focus rows' },
+  multiCol: { zh: '多列并排', en: 'multi-column' },
+  dense: { zh: '高密度信息', en: 'dense info' },
+  drawer: { zh: '抽屉 / 侧滑弹层', en: 'drawer / sheet' },
+  notch: { zh: '异形屏安全区', en: 'notch safe area' },
+  keyboard: { zh: '物理键盘', en: 'hardware keyboard' },
+  driveAware: { zh: '驾驶降干扰', en: 'drive-aware' },
+}
+const CAP_LABELS = FORM_CAP_KEYS.map((k) => ({ k, ...(CAP_TEXT[k] ?? { zh: k, en: k }) }))
 
 /** ★能力三态（报告 P2-2）：supported 绿 / fallback 琥珀（降级路径）/ unsupported 灰 */
 function capsLevelOf(k: keyof FormProfile['caps']): 'supported' | 'fallback' | 'unsupported' {
-  return capsLabel(target.value.profile.caps[k])
+  return capsLabel(effectiveProfile.value.caps[k])
 }
 function capsTextOf(k: keyof FormProfile['caps']): string {
   const lv = capsLevelOf(k)
@@ -293,8 +303,14 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
             :style="frameStyle"
           >
             <span v-if="target.profile.frame.notch" class="notch" aria-hidden="true" />
-            <!-- ★折叠屏铰链折痕（报告 P1-2：内容不得跨折痕——此处为视觉提示） -->
-            <span v-if="target.profile.frame.hinge" class="hinge" aria-hidden="true" />
+            <!-- ★折叠屏铰链折痕（报告 P1-2 + 二次复审：方向随姿态——tabletop 是水平铰链，
+                 此前恒定竖折痕 → 折痕方向与真实铰链矛盾） -->
+            <span
+              v-if="target.profile.frame.hinge"
+              class="hinge"
+              :class="{ 'hinge--h': activePosture?.hinge === 'horizontal' }"
+              aria-hidden="true"
+            />
             <div v-if="target.profile.frame.statusBar" class="statusbar" :class="{ 'statusbar--watch': target.profile.frame.watchFace }">
               <span>{{ target.profile.frame.watchFace ? '10:24' : '9:41' }}</span>
               <span>{{ target.profile.frame.watchFace ? '❤️ 72' : '▮▮▮ ⌁' }}</span>
@@ -304,7 +320,7 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
                 :form="target.key"
                 :posture="target.key === 'fold' ? postureKey : ''"
                 :width="contentWidth"
-                :height="contentWidth"
+                :height="frameHeight"
               />
             </div>
           </div>
@@ -463,6 +479,17 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
   z-index: 4;
   pointer-events: none;
 }
+/* ★水平铰链（tabletop 半折）：横贯折痕 */
+.hinge--h {
+  top: 50%;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  width: auto;
+  height: 10px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.06));
+}
 .notch {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%);
   width: 96px; height: 20px; background: #000;
@@ -499,9 +526,10 @@ const sourceLines = computed(() => fluidSource.split('\n').length)
 .cap-row.cap-supported { background: rgba(61, 220, 151, 0.08); border-color: rgba(61, 220, 151, 0.28); }
 .cap-row.cap-fallback { background: rgba(255, 180, 84, 0.14); border-color: rgba(255, 180, 84, 0.45); }
 .cap-row.cap-unsupported { background: rgba(255, 255, 255, 0.02); border-color: var(--line); opacity: 0.6; }
-.cap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn, #ffb454); }
+.cap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim, #6a6a78); }
 .cap-row.cap-supported .cap-dot { background: var(--ok, #3ddc97); }
 .cap-row.cap-fallback .cap-dot { background: var(--warn, #ffb454); }
+.cap-row.cap-unsupported .cap-dot { background: var(--dim, #6a6a78); }
 .cap-nm { flex: 1; font-size: 11.5px; color: var(--ink); }
 .cap-v { font-size: 10px; color: var(--dim); }
 .cap-note { margin-top: 12px; }

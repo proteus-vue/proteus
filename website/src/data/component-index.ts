@@ -38,7 +38,7 @@ export const componentIndex: ComponentIndex = {
         },
         {
           "dir": "p-formfactor",
-          "props": 3,
+          "props": 6,
           "emits": 0
         },
         {

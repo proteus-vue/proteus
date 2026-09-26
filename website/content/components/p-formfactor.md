@@ -33,8 +33,11 @@ order: 6
 
 | 属性 | 说明 | 类型 | 默认值 | 必填 |
 |---|---|---|---|---|
-| `declared` | 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 环境探测（Web 可推断 phone/fold/tablet/pc） | `String as () => DeviceForm \| null` | `null` | 否 |
-| `width` | 容器尺寸注入（宿主/测试；缺省读 window） | `Number` | `0` | 否 |
+| `declared` | 宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断 | `String as () => DeviceForm \| null` | `null` | 否 |
+| `degradedHint` | 降级路径提示文案（宿主注入——组件层不含 i18n 依赖） | `String` | `''` | 否 |
+| `driveHint` | ★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文） | `String` | `'驾驶中：已精简信息层级与动效，仅保留核心购买路径'` | 否 |
+| `posture` | ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） | `String` | `''` | 否 |
+| `width` | 容器尺寸注入（宿主/测试；缺省用容器自身测量） | `Number` | `0` | 否 |
 | `height` | 高度（px） | `Number` | `0` | 否 |
 
 ### 属性详解
@@ -42,12 +45,27 @@ order: 6
 #### `declared`
 
 - **类型**：`String as () => DeviceForm \| null`　**默认值**：`null`　**必填**：否
-- **说明**：宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 环境探测（Web 可推断 phone/fold/tablet/pc）
+- **说明**：宿主声明形态（权威）——watch/car/tv 必须声明；缺省 → 按注入/测量尺寸推断
+
+#### `degradedHint`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：降级路径提示文案（宿主注入——组件层不含 i18n 依赖）
+
+#### `driveHint`
+
+- **类型**：`String`　**默认值**：`'驾驶中：已精简信息层级与动效，仅保留核心购买路径'`　**必填**：否
+- **说明**：★驾驶提醒文案（driveAware 形态显示；宿主注入，缺省中文）
+
+#### `posture`
+
+- **类型**：`String`　**默认值**：`''`　**必填**：否
+- **说明**：★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口）
 
 #### `width`
 
 - **类型**：`Number`　**默认值**：`0`　**必填**：否
-- **说明**：容器尺寸注入（宿主/测试；缺省读 window）
+- **说明**：容器尺寸注入（宿主/测试；缺省用容器自身测量）
 
 #### `height`
 
@@ -70,10 +88,12 @@ order: 6
 ## 实现要点
 
 - 业务只写**一份语义内容**（命名槽），框架按**设备形态画像**自动编排：
-- · 布局拓扑：glance / stack / duo / rail-split / rail-grid / hero-focus-row（形态画像推导）
-- · 能力过滤：形态未声明支持的能力槽**自动不渲染**（如车机无多规格选择、TV 无侧栏）
-- · 密度与缩放：形态画像的 density/scale 自动应用（10ft TV 放大 1.4 / 手表 0.85 紧凑）
-- · 输入语义：遥控/旋钮形态自动放大热区（d-pad 可达），触控/指针形态常规
+- · 布局拓扑：glance / stack / duo / rail-split / rail-grid / hero-focus-row / dashboard（形态画像推导）
+- · 能力三态过滤：supported → 渲染；fallback → 渲染**降级路径**（如车机语音/旋钮单选）；
+- unsupported → 自动不渲染（如 TV 无侧栏）。判定一律走 capsEnabled/capsLabel，禁裸真值
+- · 流体度量与视觉语言：尺寸由**容器宽度**驱动（resolveFluidMetrics，k=clamp(min,w/ref,max)）；
+- 主题色/暗色沉浸/安全区/铰链几何由画像注入（无绝对 px、无 transform: scale）
+- · 输入语义：遥控/旋钮形态自动放大热区（d-pad ≥76dp 绝对下限），触控/指针形态常规
 - 业务侧零 if-else（不需要写「如果是车机就…」）——这正是「柔性系统」与「响应式布局」的分水岭：
 - 响应式按**尺寸**缩放同一套布局；柔性系统按**形态**换布局、换导航、换能力集。
 - ★诚实边界：形态来自宿主声明（declared，权威）或环境探测（Web 可推断 phone/fold/tablet/pc；
@@ -83,7 +103,7 @@ order: 6
 ## 用法
 
 ```vue
-<p-formfactor :declared="null" :width="0" :height="0">
+<p-formfactor :declared="null" :degradedHint="'…'" :posture="'…'">
   <template #rail>…</template>
   <template #media>…</template>
   <p-text>内容</p-text>
