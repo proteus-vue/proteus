@@ -1,7 +1,7 @@
 ---
 title: p-deeplink
 order: 16
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-deeplink

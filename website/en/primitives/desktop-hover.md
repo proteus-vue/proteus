@@ -1,7 +1,7 @@
 ---
 title: p-hover
 order: 19
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-hover

@@ -1,7 +1,7 @@
 ---
 title: p-focus-trap
 order: 18
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-focus-trap

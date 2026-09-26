@@ -8,7 +8,7 @@ group: 开始
 
 ## 30 秒创建工程
 
-环境就绪后，一条命令生成 Web + 微信小程序双端工程（详见[创建你的第一个工程](/docs/05-create-project)）：
+环境就绪后，一条命令生成工程骨架（当前脚手架面向**已接线的 Web / 微信小程序**；原生/Flutter 等其余端直食同一语义 IR，接入进度见[端与成熟度](/docs/framework/ends-matrix)，详见[创建你的第一个工程](/docs/05-create-project)）：
 
 ```bash
 npm create @proteus-vue/proteus my-app

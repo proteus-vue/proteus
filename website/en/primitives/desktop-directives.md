@@ -1,7 +1,7 @@
 ---
 title: Desktop directives factory (createDesktopDirectives: v-p-* registration)
 order: 17
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # Desktop directives factory (createDesktopDirectives: v-p-* registration)

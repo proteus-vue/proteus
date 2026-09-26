@@ -1,7 +1,7 @@
 ---
 title: p-state-restoration
 order: 29
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-state-restoration

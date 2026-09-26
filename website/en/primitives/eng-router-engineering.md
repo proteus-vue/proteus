@@ -1,7 +1,7 @@
 ---
 title: Routing engineering primitives (E10-E18: useRoute/push/back/guards…)
 order: 85
-group: Engineering primitives
+group: Engineering semantic primitives
 ---
 
 # Routing engineering primitives (E10-E18: useRoute/push/back/guards…)

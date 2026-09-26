@@ -1,7 +1,7 @@
 ---
 title: p-context-menu
 order: 14
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-context-menu

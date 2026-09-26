@@ -1,7 +1,7 @@
 ---
 title: Ownership engineering primitives (PSS: useOwned/useBorrow…)
 order: 83
-group: Engineering primitives
+group: Engineering semantic primitives
 ---
 
 # Ownership engineering primitives (PSS: useOwned/useBorrow…)

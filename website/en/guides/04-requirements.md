@@ -6,6 +6,20 @@ group: 开始
 
 # Environment requirements
 
+## Create a project in 30 seconds
+
+Once the environment is ready, one command scaffolds the project skeleton (the generator currently targets **the wired Web / WeChat Mini Program ends**; the remaining ends — native / Flutter — consume the same semantic IR directly, progress in [Ends & maturity](/docs/framework/ends-matrix); see [Create your first project](/docs/05-create-project)):
+
+```bash
+npm create @proteus-vue/proteus my-app
+cd my-app && npm install
+npm run dev:web     # run the Web side in a browser
+```
+
+> Want to see what it can do first? Open [Playground](/playground) to edit code in the browser and watch the compiled output live — zero install.
+
+## Environment checklist
+
 Before you start, prepare the following environment:
 
 | Dependency | Version | Purpose |

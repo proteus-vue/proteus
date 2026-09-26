@@ -1,7 +1,7 @@
 ---
 title: p-shortcut
 order: 28
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-shortcut

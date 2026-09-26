@@ -1,7 +1,7 @@
 ---
 title: Page URL read/write primitive (location / history chokepoint)
 order: 25
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # Page URL read/write primitive (location / history chokepoint)

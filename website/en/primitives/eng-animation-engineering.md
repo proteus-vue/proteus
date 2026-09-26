@@ -1,7 +1,7 @@
 ---
 title: Animation engineering primitives (E19-E23: useAnimation/useScrollAnimation…)
 order: 80
-group: Engineering primitives
+group: Engineering semantic primitives
 ---
 
 # Animation engineering primitives (E19-E23: useAnimation/useScrollAnimation…)

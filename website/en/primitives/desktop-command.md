@@ -1,7 +1,7 @@
 ---
 title: p-command
 order: 13
-group: Desktop primitives
+group: Desktop semantic primitives
 ---
 
 # p-command
