@@ -46,6 +46,18 @@ postures: [
 - **只**收起长描述（次要信息）；**规格（SKU）保留**——它是购买路径
 - 主操作与 Tab 保留在可达位置（Tab 侧置）
 
+> ★★三区域规则（2026-09-28 借鉴**国内厂商统一基线**：ITGSA 金标联盟白皮书 / 小米《大屏应用 UX 设计指南》原文，OPPO·vivo·小米共同署名）：
+> 「将展示性内容收拢至区域 2，将可交互功能下沉至区域 1，并**避免区域 3 内出现任何元素**」
+> —— 区域 2 = 上半屏（展示）· 区域 1 = 下半屏（操作）· 区域 3 = 折痕/形变区。
+> 本实现取「**空网格行**」：折痕带是第 2 行，**不分配给任何元素** → 「带内无元素」由结构保证
+> （机器判据：`tests/fluid-formfactor-render.test.ts` 断言四行网格 + 折痕带 `::before` 占位在第 2 行）。
+>
+> ★配套原文：「**不要使用 rotation，而是根据宽高的大小做布局处理**」（小米）与华为《布局基础》把
+> 断点分为**横向（宽度）+ 纵向（宽高比）**两条独立维度 —— 本仓据此新增 `resolveAspectClass`
+> （tall / balanced / wide / ultra-wide）并让媒体高度上限随宽高比收紧（`aspectMediaCap`）：
+> 越扁的画布，媒体越让位给信息与操作。车机 8/3（ultra-wide）与 TV 16:9（wide）因此区分开——
+> 二元 `orientation` 做不到这件事。
+>
 > ★两处按 Apple HIG 修正（2026-09-28）：
 > ① **不再隐藏 SKU**——原文两条：「Maintain the same functionality across device poses」（跨姿态必须能访问**同样的控件与内容**）与「Avoid extreme layout changes as people fold … favor small adjustments over rearrangement」（控件消失或大位移会让人找不到）。SKU 被隐藏即丢功能，现改为紧凑排布。
 > ② **折痕语义**：内容不得跨折痕（水平铰链时折痕横贯中部，演示页按 `posture.hinge` 画横折痕；此前恒为竖折痕是错的）。

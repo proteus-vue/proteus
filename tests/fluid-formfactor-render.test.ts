@@ -12,9 +12,11 @@
 //     ⑥ 姿态覆盖：fold + tabletop → data-pf-nav='tabs'（nav 字段必须有渲染后果）
 //     ⑦ Tab 栏：仅声明 tabs 的形态渲染（fold 已修——此前 unsupported 导致三姿态零导航）
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
 import { createApp, h, nextTick } from 'vue'
 import { PFormfactor } from '@proteus-vue/components'
-import { FORM_PROFILES, capsEnabled, type DeviceForm } from '@proteus-vue/fluid'
+import { FORM_PROFILES, capsEnabled, resolveAspectClass, type DeviceForm } from '@proteus-vue/fluid'
 
 /** 挂载 p-formfactor（注入全部内容槽——组件按能力过滤各槽的渲染） */
 async function mountForm(form: DeviceForm, opts: { posture?: string; width?: number } = {}): Promise<HTMLElement> {
@@ -118,6 +120,49 @@ describe('★p-formfactor 渲染与能力声明同源（二次复审 P0 回归�
     // 未声明：hover / keyboard / sidebar / notch / drawer / tabs
     for (const c of ['has-hover', 'has-keyboard', 'has-notch', 'has-drawer']) {
       expect(cls.contains(c), `车机不应有 ${c}`).toBe(false)
+    }
+  })
+})
+
+describe('★国内厂商折叠规范落地（2026-09-28 小米/ITGSA 三区域 + 宽高比）', () => {
+  it('半折：body 是「展示行 · **折痕空行** · 操作行 · 推荐行」四行网格（区域 3 结构上无元素）', async () => {
+    // 小米《大屏应用 UX 设计指南》原文：「避免区域 3 内出现任何元素」（区域 3 = 折痕/形变区）。
+    // 实现取「**空网格行**」：第 2 行不分配给任何元素 → 「带内无元素」由结构保证，而非样式巧合。
+    const el = await mountForm('fold', { posture: 'tabletop' })
+    await nextTick()
+    const body = el.querySelector('.pf-body') as HTMLElement
+    expect(body, '半折须有 .pf-body').toBeTruthy()
+    // 断言：样式表声明了 4 行网格 + 折痕带伪元素占位（构建期可证伪——删掉规则即红）
+    const styleText = fs.readFileSync(
+      path.resolve(__dirname, '../packages/components/p-formfactor/index.vue'),
+      'utf8',
+    )
+    const startAt = styleText.indexOf('.p-formfactor.posture-tabletop .pf-body {')
+    const endAt = styleText.indexOf('/* ── 拓扑：stack（手机')
+    const tabletopBlock = styleText.slice(startAt, endAt > startAt ? endAt : startAt + 6000)
+    // ① 四行网格（展示 · 折痕带 · 操作 · 推荐）
+    expect(/(grid-template-rows:[^;]*){2}/.test(tabletopBlock.replace(/\s+/g, ' ')) || tabletopBlock.includes('grid-template-rows'), '半折须声明行分配').toBe(true)
+    const rowCount = (tabletopBlock.match(/grid-template-rows:([^;]*);/) || [])[1]
+      ?.trim().split(/\s+(?![^(]*\))/).length ?? 0
+    expect(rowCount, `半折应为 4 行网格（实际 ${rowCount}）`).toBe(4)
+    // ② 折痕带是**空行**：用 ::before 占位且无内容分配（`grid-row: 2`）
+    expect(tabletopBlock, '折痕带须用 ::before 占位在第 2 行').toContain('grid-row: 2')
+    // ③ SKU 与主操作在第 3 行（下半屏=操作区）、推荐在第 4 行
+    expect(tabletopBlock).toContain('grid-row: 3')
+    expect(tabletopBlock).toContain('grid-row: 4')
+    // ④ SKU 不被隐藏（Apple「跨姿态同样功能」；本仓曾隐藏 = 丢购买路径）
+    expect(tabletopBlock).not.toMatch(/posture-tabletop[^}]*\.pf-sku\s*{[^}]*display:\s*none/)
+  })
+
+  it('宽高比分类：极扁（车机）与竖屏（折叠外屏）分属不同类，媒体上限随宽高比收紧', () => {
+    const cases: Array<[number, number, string]> = [
+      [1280, 480, 'ultra-wide'], // 车机 8/3
+      [1920, 1080, 'wide'], // TV 16:9
+      [673, 420, 'wide'], // 半折
+      [466, 678, 'tall'], // Duo 外屏
+    ]
+    for (const [w, h, want] of cases) {
+      expect(resolveAspectClass(w, h), `${w}x${h}`).toBe(want)
     }
   })
 })

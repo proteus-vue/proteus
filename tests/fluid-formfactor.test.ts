@@ -18,6 +18,8 @@ import {
   createFormFactor,
   resolveFluidMetrics,
   resolveFrameVars,
+  resolveAspectClass,
+  aspectMediaCap,
   capsLabel,
   capsEnabled,
   capsDegraded,
@@ -165,6 +167,28 @@ describe('★形态画像表（SSOT）自洽性', () => {
     expect(expanded!.viewport.width).toBeGreaterThan(folded!.viewport.width)
     // ⑤ 校验器认可新 nav 取值
     expect(validateFormProfiles()).toEqual([])
+  })
+
+  it('★宽高比分类（2026-09-28 华为「纵向断点」/ 小米「高度断点 + 禁用 rotation」）', () => {
+    // 小米原文：断点有**宽度**（600/840dp）与**高度**（480/900dp）两条独立维度，且
+    //   「不要使用 rotation，而是根据宽高的大小做布局处理」；华为《布局基础》同理把
+    //   纵向断点定义为**宽高比**。二元 orientation（h>w）无法区分车机 8/3 与平板 4/3。
+    expect(resolveAspectClass(1920, 1080)).toBe('wide') // TV 16:9
+    expect(resolveAspectClass(1280, 480)).toBe('ultra-wide') // 车机 8:3（极扁）
+    expect(resolveAspectClass(1194, 834)).toBe('wide') // 平板 4:3（1.43）
+    expect(resolveAspectClass(1440, 900)).toBe('wide') // PC 16:10
+    expect(resolveAspectClass(466, 678)).toBe('tall') // Duo 外屏（0.69 竖）
+    expect(resolveAspectClass(673, 420)).toBe('wide') // 半折（1.60 扁）
+    expect(resolveAspectClass(198, 242)).toBe('tall') // 手表
+    expect(resolveAspectClass(0, 100)).toBe('balanced') // 非法尺寸回退
+    // 媒体高度上限随宽高比收紧（越扁越让位给信息与操作）
+    expect(Number.parseFloat(aspectMediaCap('tall'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('wide')))
+    expect(Number.parseFloat(aspectMediaCap('wide'))).toBeGreaterThan(Number.parseFloat(aspectMediaCap('ultra-wide')))
+    // 同一形态不同姿态落入不同分类（证明姿态感知必要）
+    const folded = FORM_PROFILES.fold.postures!.find((x) => x.key === 'folded')!
+    const table = FORM_PROFILES.fold.postures!.find((x) => x.key === 'tabletop')!
+    expect(resolveAspectClass(folded.viewport.width, folded.viewport.height)).toBe('tall')
+    expect(resolveAspectClass(table.viewport.width, table.viewport.height)).toBe('wide')
   })
 
   it('★安全区按展示缩放投影（2026-09-27）：TV overscan 在缩略壳内仍为**设备的 5%**', () => {

@@ -22,6 +22,7 @@
     :data-pf-posture="posture || ''"
     :data-pf-topology="profile.topology"
     :data-pf-nav="profile.nav"
+    :data-pf-aspect="aspect"
     :data-pf-caps="capsDigest"
     :style="rootStyle"
   >
@@ -81,7 +82,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FORM_PROFILES, FORM_CAP_KEYS, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery, capsEnabled, capsLabel } from '@proteus-vue/fluid'
+import { FORM_PROFILES, FORM_CAP_KEYS, resolveAspectClass, aspectMediaCap, resolveFluidMetrics, resolveFrameVars, navigateFocus, createContainerQuery, capsEnabled, capsLabel } from '@proteus-vue/fluid'
 import type { DeviceForm, FocusDirection, FocusRect } from '@proteus-vue/fluid'
 
 const props = defineProps({
@@ -195,6 +196,16 @@ const rootClass = computed(() => {
 })
 
 /**
+ * ★宽高比分类（2026-09-28 华为「纵向断点」+ 小米「高度断点 / 禁用 rotation」两条独立信源）：
+ *   姿态感知——同一形态不同姿态宽高比差异极大（折叠 466×678 竖 · 半折 673×420 扁），
+ *   媒体高度上限与折痕带据此分配；并作为 `data-pf-aspect` 诊断值对外可断言。
+ */
+const aspect = computed(() => {
+  const vp = postureDef.value?.viewport ?? profile.value.viewport
+  return resolveAspectClass(vp.width, vp.height)
+})
+
+/**
  * ★★能力可观测面（2026-09-26 三审）：机器可读的「本形态最终生效的能力三态」——
  *   形如 `dpad=supported;skuMulti=fallback;hover=unsupported`（按 FORM_CAP_KEYS 顺序稳定排序）。
  *   这是「声明 ≠ 空头」的**证据面**：外部可用 `document.querySelector('[data-pf-caps]')` 断言，
@@ -218,6 +229,14 @@ const rootStyle = computed(() => {
   return {
     ...metrics.vars,
     ...resolveFrameVars(p, metricWidth.value),
+    // ★宽高比派生的媒体高度上限（取代逐拓扑硬编码 46%/40%）+ 分类诊断值
+    '--pf-media-cap': aspectMediaCap(aspect.value),
+    // ★折痕带（小米《大屏 UX 指南》三区域规则里的「区域 3：避免落任何元素」）：
+    //   竖向铰链（duo 左右分栏）取 env(fold-width)；水平铰链（半折上下分区）取 env(fold-height)。
+    //   水平铰链（半折）→ 折痕横贯，带高为纵向厚度；竖向铰链（展开双栏）→ 带宽为横向厚度。
+    '--pf-fold-band': postureDef.value?.hinge === 'horizontal'
+      ? 'env(fold-height, 0px)'
+      : (p.frame.hinge ? 'env(fold-width, 0px)' : '0px'),
     // ★dense 能力并入内联值（三审：此前 .is-dense 的同名变量被内联恒覆盖 = 能力零后果）
     '--pf-gap-dense': String(
       capsEnabled(p.caps.dense)
@@ -556,18 +575,158 @@ onUnmounted(() => {
       over rearrangement」（控件消失或大位移会让人找不到）。
    故：**不再隐藏 SKU 槽**（它是购买路径，隐藏即丢功能），只收起次要的长描述；
    Apple 示例（Mail 半折仍可读列表与邮件）与「overlay arrangement 半折时主次分居两侧」同义。 */
-.p-formfactor.posture-tabletop .pf-media { max-height: 40%; }
+/* ★★三区域规则（2026-09-28 借鉴国内厂商统一基线 ITGSA 白皮书 / 小米《大屏应用 UX 设计指南》原文）：
+   「将展示性内容收拢至区域 2，将可交互功能下沉至区域 1，并**避免区域 3 内出现任何元素**」
+     区域 2 = 上半屏（展示）· 区域 1 = 下半屏（操作）· 区域 3 = 折痕/形变区。
+   ★配套原文：「不要使用 rotation，而是根据宽高的大小做布局处理」→ 媒体高度按**宽高比**上限。
+   ⚠ 与 Apple HIG「跨姿态保持同样功能」一致：SKU **不隐藏**（隐藏即丢购买路径）。
+
+   ★定稿（三轮实测：百分比分配在 236px 内容高里反复互相挤压 → 主操作被压到 17px）。
+   改为**预算式**（每段有明确的呼吸空间，用 --pf-control 锚住热区）：
+     · body = 4 行：展示段(1fr) · 折痕带(auto) · 操作段(--pf-control 锚定) · 推荐段(auto，可收缩)
+     · 展示段内：左媒体（宽 42%，按宽高比限高）| 右文案（标题+价格，垂直居中）
+     · 操作段内：SKU（左，单行横滚）| 主操作（右，min-height = --pf-control）
+   这样「折痕带无元素」由**空行**结构保证；热区由 --pf-control 保证；推荐段最后收缩。 */
+.p-formfactor.posture-tabletop .pf-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* 展示段吸收剩余但**不侵占**操作段：56% / auto / auto(≥control) / auto */
+  grid-template-rows: minmax(0, 56%) auto auto minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+}
+/* ★媒体（2026-09-28 实测）：`align-self:center` + `max-height:100%` 会让内容溢出行高、
+   跨进折痕带（实测 fp-cover 落在带内）。改为**填满行高**（stretch）——行高已按 56% 预算限定，
+   内容自行裁剪，绝不可能越出行。 */
+.p-formfactor.posture-tabletop .pf-media {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: stretch;
+  justify-self: start;
+  width: 42%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+.p-formfactor.posture-tabletop .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
+.p-formfactor.posture-tabletop .pf-info {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--pf-gap) * 0.5);
+  justify-content: center;
+  align-self: stretch;
+  min-width: 0;
+  padding-left: calc(42% + var(--pf-gap) * 1.2);
+}
 .p-formfactor.posture-tabletop .pf-info :deep(.fp-desc) { display: none; }
-/* SKU 保留但紧凑（横向压缩间距，不换行两次占高） */
-.p-formfactor.posture-tabletop .pf-sku { gap: calc(var(--pf-u) * 0.3); }
-.p-formfactor.posture-tabletop .pf-actions { min-height: 0; }
+/* ★折痕带（第 2 行）：**空行**——无元素分配（小米「区域 3 内避免出现任何元素」结构保证） */
+/* ★折痕带（2026-09-28 实测补强）：除空行占位外，再给上下相邻行加**边界收口**——
+   此前推荐卡的图标因行内居中略微上溢、触到带子边界（实测 fp-rec-ic 落在带内）。
+   收口 = 带子自身不动（无元素），相邻行各自 overflow:hidden 已保证内容不越行。 */
+.p-formfactor.posture-tabletop .pf-body::before {
+  content: '';
+  grid-row: 2;
+  grid-column: 1;
+  min-height: max(var(--pf-fold-band, 0px), calc(var(--pf-gap) * 1.2));
+  pointer-events: none;
+}
+/* ★操作段（第 3 行）：SKU 左（单行横滚）+ 主操作右（热区由 --pf-control 锚定） */
+.p-formfactor.posture-tabletop .pf-sku,
+.p-formfactor.posture-tabletop .pf-sku-fallback {
+  grid-row: 3;
+  grid-column: 1;
+  justify-self: start;
+  align-self: center;
+  /* ★SKU 宽度（2026-09-28 实测）：44% 仍让按钮只剩 54% → 两枚按钮各 ~27% 文案被截成「▶…」。
+     收窄到 34%（规格本身可横滚），把宽度让给**主操作**——文案可读优先于规格同屏数量。 */
+  width: 34%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: calc(var(--pf-u) * 0.3);
+}
+.p-formfactor.posture-tabletop .pf-sku::-webkit-scrollbar { display: none; }
+.p-formfactor.posture-tabletop .pf-sku :deep(*) { flex: 0 0 auto; }
+.p-formfactor.posture-tabletop .pf-actions {
+  grid-row: 3;
+  grid-column: 1;
+  justify-self: end;
+  align-self: center;
+  /* ★主操作宽度（2026-09-28 实测收口）：半折可用宽 ~436px，SKU + 两枚按钮三者共存必然紧张。
+     按优先级取舍：**主操作文案必须完整可读**（购买路径）→ 主按钮 `flex: 1 1 auto` 保内容宽、
+     次要按钮（收藏）可压。SKU 收窄至 34% 且可横滚（规格同屏数量 < 主操作可读性）。 */
+  width: 64%;
+  min-height: var(--pf-control, 44px);
+  flex-wrap: nowrap;
+  gap: calc(var(--pf-gap) * 0.5);
+}
+.p-formfactor.posture-tabletop .pf-actions :deep(button) {
+  /* 主按钮按内容保宽（购买路径文案不可截断）；其余等分收缩 */
+  min-width: 0;
+  padding-left: calc(var(--pf-u) * 0.4);
+  padding-right: calc(var(--pf-u) * 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ★半折操作区（2026-09-28 实测第四轮定稿）：
+   可用宽 ~436px，而「SKU（可横滚）+ 主操作 + 次操作」三者同排时文案必被截断（实测 76px 仍截）。
+   物理约束无法用压缩解决 → 按**重要性取舍**：半折只保留**主操作**（购买路径），
+   次操作（收藏）隐藏——与 Apple「控件可溢出，但功能与内容必须可达」并不矛盾（收藏非购买路径，
+   且在外屏/展开态仍可用）。这与车机「只留 3 个推荐项」的取舍同源：场景化裁剪，不是功能删除。 */
+.p-formfactor.posture-tabletop .pf-actions :deep(button:first-child) { flex: 1 1 auto; }
+.p-formfactor.posture-tabletop .pf-actions :deep(button:not(:first-child)) { display: none; }
+/* ★推荐段（第 4 行）——2026-09-28 实测定稿：半折可视高仅 236px，放不下
+   「展示 + 操作 + 完整三行卡推荐」。按三条原则取「单行紧凑卡」：
+     · 小米「展示性内容收拢至上半屏、可交互功能下沉至下半屏」→ 推荐属**次要内容**，可精简
+     · Apple「跨姿态保持同样功能」→ 推荐**不删除**（仍在，可点，仍是大热区），只是**降为单行**
+       并换用横排布局（图标｜名称｜价格 同行，同车机的处理）
+     · 不裁切、不跨折痕带：卡片高度由行高约束，内容单行 ∴ 装得下
+   注意这与「车机只留 3 个」不同：这里是**同一批项、单行呈现**，不是减少项数。 */
+.p-formfactor.posture-tabletop .pf-recommend {
+  grid-row: 4;
+  grid-column: 1;
+  min-height: 0;
+  overflow: hidden;
+  align-content: start;
+  padding-top: 0;
+  /* 卡片贴行顶（align-content:start 已生效），并禁止行内元素上溢到折痕带 */
+  align-items: start;
+}
+.p-formfactor.posture-tabletop .pf-recommend :deep(.pf-rec-card) {
+  min-height: 0;
+  max-height: var(--pf-control, 44px);
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--pf-u) * 0.35);
+  padding: calc(var(--pf-u) * 0.3) calc(var(--pf-u) * 0.45);
+}
+.p-formfactor.posture-tabletop .pf-recommend :deep(.pf-rec-card) > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p-formfactor.posture-tabletop .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
+/* ★图标行高归一（2026-09-28 实测）：emoji 图标字号 1.9u + 默认 line-height 使**盒高 41px > 卡高 35px**
+   → 盒模型上溢 3px 触到折痕带（虽被 overflow:hidden 裁剪，几何上仍越界）。
+   显式 line-height:1 + 字号收一档 ⇒ 盒高落在卡内，不靠裁剪掩盖。 */
+.p-formfactor.posture-tabletop .pf-recommend :deep(.fp-rec-ic) {
+  font-size: calc(var(--pf-font) * 1.1);
+  line-height: 1;
+}
 
 /* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ──
    ★2026-09-26 二次复审实测：半折（tabletop 673×420）下 1:1 媒体高 = 全宽 ≈ 440px，
    远超视口高 → 标题/价格/CTA 全被推到折线以下（Tab 在但主操作不可见）。
    单列拓扑的媒体不得吃掉视口的一半：以可用高度为上限（46%），超出部分裁切（封面本就装饰性）。 */
 .topo-stack .pf-body { display: flex; flex-direction: column; gap: calc(var(--pf-gap) * var(--pf-gap-dense)); overflow-y: auto; }
-.topo-stack .pf-media { flex: 0 0 auto; max-height: 46%; overflow: hidden; }
+.topo-stack .pf-media { flex: 0 0 auto; max-height: var(--pf-media-cap, 46%); overflow: hidden; }
 .topo-stack .pf-media > :deep(*) { height: 100%; min-height: 0; }
 .pf-tabbar {
   display: flex;
