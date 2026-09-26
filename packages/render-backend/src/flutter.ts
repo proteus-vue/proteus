@@ -164,7 +164,20 @@ export function createFlutterBackend(): ProteusRenderBackend {
       return descriptor
     },
 
-    insert(child, parent, anchor) {
+        // ★2026-09-26 文本保留：'#text' → Text widget 描述符
+    createText(text: string): NodeHandle {
+      const descriptor: FlutterWidgetDescriptor = {
+        id: nextId++,
+        widget: 'Text',
+        props: {},
+        children: [],
+        parent: null,
+        text,
+      }
+      return descriptor as never as NodeHandle
+    },
+
+insert(child, parent, anchor) {
       const c = ensureNode(child)
       const p = ensureNode(parent)
       if (c.parent) {

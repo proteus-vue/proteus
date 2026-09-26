@@ -329,6 +329,23 @@ export function createNativeBackend(adapter?: NativeViewAdapter, platform: Nativ
       return descriptor
     },
 
+    // ★2026-09-26 文本保留：'#text' → 文本描述符（type 'text'，text 字段承载内容——
+    //   readback/控件树即见真实文案；真机渲染通道接线时映射 Text/Label 内容）
+    createText(text: string): NodeHandle {
+      const descriptor: NativeViewDescriptor = {
+        id: nextId++,
+        type: 'text',
+        props: {},
+        children: [],
+        parent: null,
+        text,
+        handle: null,
+      }
+      // ★mock 适配器约定「句柄 = 描述符自身」（createView 同款）——insert 时 insertView(child.handle)
+      descriptor.handle = descriptor as never
+      return descriptor as never as NodeHandle
+    },
+
     insert(child, parent, anchor) {
       const c = ensureNode(child)
       const p = ensureNode(parent)

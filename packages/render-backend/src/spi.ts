@@ -17,6 +17,8 @@ export interface IRNode {
   props: Record<string, unknown>
   children: IRNode[]
   ref?: unknown
+  /** ★2026-09-26 文本保留：type='#text' 节点的字面内容（additive——既有消费者零影响） */
+  text?: string
 }
 
 /** 布局约束（后端可自带布局器，否则走框架 IR 求解） */
@@ -72,6 +74,8 @@ export interface ProteusRenderBackend {
 
   // —— 节点操作集（对齐 Vue nodeOps 事实标准）——
   createElement(node: IRNode): NodeHandle
+  /** ★2026-09-26 文本保留：'#text' 节点 → 文本句柄（此前 IR 无文本节点，SPI 未列——现必选） */
+  createText(text: string): NodeHandle
   insert(child: NodeHandle, parent: NodeHandle, anchor?: NodeHandle): void
   remove(child: NodeHandle): void
   patchProp(el: NodeHandle, key: string, prev: unknown, next: unknown): void
