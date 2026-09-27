@@ -104,6 +104,55 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★DCP-2 实测：Skyline 的 Grid 退化为 block（结论收紧）（2026-09-29，提交 `5d9a9a5e`）
+
+**触发**：DCP-1 定案 Taffy 后，DCP-2（Profile 是否开放 Grid）待决。我建议「开放为 L2」并**自行附加了前置条件**
+「需补 Skyline 实测」——用户批准。**这次是前置条件把结论否掉了**，按 Profile 第一原则（三端交集优先）如实收紧。
+
+| 端 | Grid 实测 | 判定 |
+|---|---|---|
+| App（Taffy 0.14） | 3×2 布局正确 | ✅ |
+| Web（浏览器） | 原生 Grid | ✅ |
+| **Skyline** | 子项 1/2 的 x **都是 52**（未分列）、纵向堆叠 | ❌ **退化为 block** |
+
+**实测读数**（模拟器 · 基础库 3.17.3 · 探针页 `css-profile-probe.vue`）：
+```
+容器 <view style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
+  g-item1 → x=52, y=884   （第 1 列）
+  g-item2 → x=52          ← 应在第 2 列（x≈127），未分列
+  g-item3 → y=916         ← 纵向堆叠
+flex 对照组（同页同通道）→ x=52, 72, 92  ✅ 正确横排
+```
+
+**★内置对照组是这条结论可信的关键**（方法论）：同页、同 `createSelectorQuery` 通道下
+flex 正确而 grid 不正确 → **排除「探针本身故障」**。单看 grid 读数无法区分「不支持」与「探针坏了」。
+
+**★最终口径（Profile v1）**：① Grid 不进 Profile 无条件支持集 ② **允许有条件可用**：
+Web/App 正常生成，**Skyline 必须发可观察降级警告**（`capabilityWarnOnce`，禁止静默降级）
+③ Lint W-CSS-105 给嵌套 flex 改写建议 ④ 探针已内置判据，未来 Skyline 支持可复跑解禁。
+
+**★探针自身两个缺陷（发现即修，不留在报告里）**
+| # | 缺陷 | 说明 |
+|---|---|---|
+| 1 | **原 `c-grid` 用例等于恒真** | 只测容器几何（150×40）——容器有显式宽高时，「真 grid」与「block 退化」**几何完全相同** → 改为**子项级判据**（是否真分列/换行） |
+| 2 | 计数 bug（输出 `32/31`） | 分子遍历 `rows`（含追加的语义行）、分母用 `results.length` → 口径不一致；已统一 |
+
+**★固化方法论（写进探针页注释）**：**「属性被接受」≠「语义生效」**。
+凡可能被静默忽略的特性，必须测**能区分语义的观测量**，且每项都配**同页对照组**。
+
+**★新增设备端门禁** `tests/e2e-mp-css-profile-grid.test.ts`（5 项）：
+核心断言的写法是「**若 Skyline 未来支持 Grid 则测试变红**」→ 强制重新评估 DCP-2（这正是想要的）。
+另含**同源守卫**（解析探针页源码断言判定表达式与对照组存在，沿用 `gates-sync` 的「唯一事实来源」先例，
+防两处逻辑漂移）。2 项无需设备（CI 可跑）+ 3 项需模拟器。破坏性验证两项通过。
+
+**★踩坑（设备端门禁的就绪条件）**：CLI 的 `open_project_window` + `simulator_refresh` 之后，
+模拟器**仍需一小段时间完成编译加载**；直接 `automation_navigate` 会偶发「退出码 1」。
+既有 `e2e-mp-probe.test.ts` 的 `enableProbes()` 起了同样作用（它就是一次 evaluate 调用）。
+→ 新增就先 `evaluate` 探测（**有上限退避重试，非无界轮询**）。另：直跑 vitest 会
+`spawnSync wechatide ENOENT`（默认路径表在 CLI 层），**必须经 `proteus test e2e:mp` 入口**。
+
+---
+
 ### ★★DCP-1 决策完成：排版核心语言 = Rust + Taffy 0.14（2026-09-29，提交 `629e548c`）
 
 **背景**：方案 §5.6 把 DCP-1（C+++Yoga vs Rust+Taffy）列为「M1 之前必须定案，逾期变更成本极高」。
