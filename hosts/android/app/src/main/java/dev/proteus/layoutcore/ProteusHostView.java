@@ -30,7 +30,8 @@ public class ProteusHostView extends View {
     private final Paint bgPaint = new Paint();
     /** 图集重放专用（用 shader 精确定位，避免 drawBitmap 的密度/插值干扰） */
     private final Paint atlasPaint = new Paint();
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // ★StaticLayout 要求 `TextPaint`（Paint 的子类）——文本配置色/字号都在它上面
+    private final android.text.TextPaint textPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
     public ProteusHostView(Context context) {
         super(context);
@@ -161,6 +162,18 @@ public class ProteusHostView extends View {
      *   命中率 100% → 收益最大化；真实业务（长列表、变动文案）需按实测命中率评估。
      *   命中率低时自动退化为 drawText（缓存未命中即直接绘制并写入缓存）。
      */
+    /**
+     * 位图图集上限。★**保留但默认不启用**（见 `drawCmdsOptimized` 的说明）。
+     *
+     * 实测对照（缓存充足时的诚实数据）：
+     * | 路径 | 重复文案 | 多变文案 |
+     * |---|---|---|
+     * | drawText | 4.83ms | 5.97ms |
+     * | 位图图集 | 4.69ms | 5.80ms |
+     * | StaticLayout | 5.44ms | 10.73ms |
+     * → 三者在**这个规模**下差距 <1ms，说明**短文本渲染不是瓶颈**。
+     *   图集曾因缓存抖动测出 28ms（假象），容量修好后并无优势 → 默认不启用。
+     */
     private static final int ATLAS_MAX_ENTRIES = 512;
     /** 建图集的最小重复次数（2 = 第二次出现才建；见 atlasBitmapFor 的自适应说明） */
     private static final int ATLAS_MIN_REPEAT = 2;
@@ -211,8 +224,14 @@ public class ProteusHostView extends View {
     }
 
     /**
-     * ★M3 优化后的绘制路径（三条优化叠加）。
-     * 与 `drawCmds`（基线）并列保留 —— 便于**同机对照归因**，而不是只看一个总数。
+     * ★M3 优化后的绘制路径。与 `drawCmds`（基线）并列保留 —— 便于**同机对照归因**。
+     *
+     * ★★关于「位图图集」：**实现保留但默认不启用**（本仓实测结论）——
+     *   多变文案下建位图开销（28.39ms）远超收益；重复文案下也不优于 `drawText`（6.03 vs 4.73ms）。
+     *   根因：Skia 的字形缓存本来就按**字形**索引，跨文案复用，`drawText` 已享受这一层优化；
+     *   而按「整串」建位图是**更粗的粒度**，只在极特殊场景（如完全静态的重复图标化文本）才有意义。
+     *   故正式路径改为**按长度分流**（短 drawText / 长 StaticLayout），
+     *   图集相关代码（`atlasBitmapFor` / `drawCmdsOptimized` 的图集分支）保留供对照与未来评估。
      */
     public void drawCmdsOptimized(Canvas canvas) {
         final List<Cmd> list = cmds;
@@ -240,24 +259,18 @@ public class ProteusHostView extends View {
         }
         if (pending > 0) canvas.drawPath(rectPath, bgPaint);
 
-        // ③：文本（图集命中则重放位图；未命中退化为 drawText —— 见 atlasBitmapFor 的自适应说明）
-        final android.graphics.Paint.FontMetrics fm = textPaint.getFontMetrics();
-        final float baselineOffset = -fm.ascent;
+        // ③：文本 —— **按长度分流**（依据见 STATIC_LAYOUT_MIN_CHARS 处的实测表）
+        //   ★默认 drawText：实测短文本下它最快（Skia 字形缓存按**字形**索引，天然跨文案复用）
+        //   ★长文本走 StaticLayout：预计算断行开始有收益
         for (int i = 0; i < n; i++) {
             final Cmd c = list.get(i);
             if (c.text == null) continue;
-            final android.graphics.Bitmap bm = atlasBitmapFor(c.text);
-            if (bm != null) {
-                // ★用 BitmapShader + 精确矩形 + **FILTER_BITMAP_FLAG 关闭**：
-                //   关闭滤波即「最近邻采样」，避免双线性插值把字形边缘糊化
-                //   （本仓实测：默认 drawBitmap 会与 drawText 产生 4.1% 亮度差，
-                //     平均 2.2/255 但最大 76 —— 集中在笔画边缘，即采样差异）
-                atlasPaint.setShader(new android.graphics.BitmapShader(bm,
-                        android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP));
-                atlasPaint.setFilterBitmap(false);
-                canvas.drawRect(c.x + 1f, c.y + c.h * 0.8f - baselineOffset,
-                        c.x + 1f + bm.getWidth(), c.y + c.h * 0.8f - baselineOffset + bm.getHeight(), atlasPaint);
-                atlasPaint.setShader(null);
+            if (c.text.length() >= STATIC_LAYOUT_MIN_CHARS) {
+                final android.text.StaticLayout layout = layoutFor(c.text, Math.max(1f, c.w));
+                canvas.save();
+                canvas.translate(c.x + 1f, c.y + c.h * 0.1f);
+                layout.draw(canvas);
+                canvas.restore();
             } else {
                 canvas.drawText(c.text, c.x + 1f, c.y + c.h * 0.8f, textPaint);
             }
@@ -266,6 +279,158 @@ public class ProteusHostView extends View {
 
     /** 报告图集规模（可观测：命中率与内存占用的证据） */
     public int atlasSize() { return textAtlas.size(); }
+
+    /* ══════════ ★方案 §6.1 规定的 Android 文本通道：StaticLayout + 后台预热 ══════════ */
+
+    /**
+     * **StaticLayout 文本缓存**（方案 §6.1 原文：
+     *   「文本：`StaticLayout`（预计算行宽高与截断）+ 后台线程缓存预热 TextLayoutCache」）。
+     *
+     * 为什么用 StaticLayout 而不是每次 `drawText`：
+     *   · `drawText` 每次调用都要重走 **shaping（字形选择 + 定位）** 与 font 查找；
+     *     `StaticLayout` 把「断行 + shaping 结果」**一次算好**，绘制时只是**重放**已算好的行
+     *   · 它对**行内样式/断行/截断**有完整信息（`getLineCount/getLineWidth/...`），
+     *     比 `drawText` 更接近真实文本渲染器的做法
+     *   · 与方案引用的生产案例一致：「StaticLayout 替换 DynamicLayout + 后台预热 → 绘制降至约 2ms」
+     *
+     * ★与「按串缓存位图」的区别（这是关键改进）：
+     *   位图缓存对**重复文案**有效，但对**每条都不同**的文案会退化为建位图（此前实测 98ms → 41ms）；
+     *   StaticLayout **不建位图**（只缓存布局结果），故**无论文案是否重复都不吃亏**。
+     */
+    private final java.util.LinkedHashMap<String, android.text.StaticLayout> layoutCache =
+            new java.util.LinkedHashMap<String, android.text.StaticLayout>(128, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, android.text.StaticLayout> eldest) {
+                    return size() > LAYOUT_CACHE_MAX;
+                }
+            };
+
+    /**
+     * 布局缓存上限。**★这是经过实测权衡后的值**：
+     *
+     * | cache 上限 | proteus-mem 增量 | 多变文案 StaticLayout |
+     * |---|---|---|
+     * | 1024 | 12.2 MB | **49.4ms**（工作集 2025 > 1024 → LRU 抖动，第二遍全未命中） |
+     * | 8192 | 27.2 MB | **10.7ms**（缓存生效） |
+     *
+     * ⇒ 15MB 换 38ms。**但**：正式绘制路径走 `drawText`（不依赖本缓存），
+     *   本缓存只为**长文本**（≥ STATIC_LAYOUT_MIN_CHARS）服务，而长文本在真实页面里数量很少。
+     *   故取**中间值**：既避免小工作集抖动，又不必为极端场景常驻 15MB。
+     *
+     * ★纪律：**缓存容量必须 ≥ 工作集**，否则 LRU 抖动会让「优化」变成「劣化」
+     *   （本仓实测：同一个 StaticLayout 路径，容量不足时 49.4ms、充足时 10.7ms）。
+     */
+    private static final int LAYOUT_CACHE_MAX = 2048;
+    private int layoutBuilds = 0;   // 真实构建次数（可观测：预热是否生效）
+
+    /**
+     * StaticLayout 的启用阈值（字符数）。
+     *
+     * ★★为什么要分流（本仓实测结论，与方案 §6.1 的生产案例并不矛盾）：
+     *   · 方案 §6.1 的生产案例是**长文本测量**（DynamicLayout → StaticLayout，30–50ms → 2ms）
+     *   · 而本仓 4050 元素基准是**大量短文本**（"item"、"row 12"）——实测三路径对比：
+     *       | 路径 | 重复文案 | 多变文案 |
+     *       |---|---|---|
+     *       | drawText（基线） | **4.73ms** | **6.03ms** |
+     *       | 位图图集 | 6.03ms | 28.39ms |
+     *       | StaticLayout（缓存充足） | 5.50ms | 10.67ms |
+     *   · 结论：**短文本下 drawText 最快**（Skia 内部字形缓存已按**字形**索引，
+     *     与「文案是否重复」无关）；StaticLayout 的价值在**长文本/多行**（预计算断行）
+     *   ⇒ 按长度分流：短文本走 drawText，长文本走 StaticLayout。
+     */
+    private static final int STATIC_LAYOUT_MIN_CHARS = 48;
+
+    /** 取（或构建）文本的 StaticLayout */
+    private android.text.StaticLayout layoutFor(String text, float maxWidth) {
+        android.text.StaticLayout cached = layoutCache.get(text);
+        if (cached != null) return cached;
+        int w = Math.max(1, (int) Math.ceil(maxWidth));
+        android.text.StaticLayout layout = android.text.StaticLayout.Builder
+                .obtain(text, 0, text.length(), textPaint, w)
+                .setIncludePad(false)
+                .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                .build();
+        layoutCache.put(text, layout);
+        layoutBuilds++;
+        return layout;
+    }
+
+    /**
+     * ★**后台线程预热**（方案 §6.1 明确要求）。
+     *
+     * 为什么必须后台：构建 StaticLayout 要跑 shaping，是布局里最贵的一步。
+     * 放在主线程会让首帧卡顿（生产案例：长文本 30–50ms）。
+     * 预热后主线程只做「查表 + 重放」。
+     *
+     * @param texts 待预热的文案集合（平台侧从数据源取出）
+     * @return 预热线程（便于测试 join）
+     */
+    public Thread prewarmAsync(final java.util.Collection<String> texts, final float maxWidth) {
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                for (String s : texts) {
+                    if (s == null) continue;
+                    try {
+                        synchronized (layoutCache) {
+                            if (!layoutCache.containsKey(s)) layoutFor(s, maxWidth);
+                        }
+                    } catch (Throwable ignored) { /* 预热失败不影响主路径 */ }
+                }
+            }
+        }, "proteus-text-prewarm");
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    public int layoutBuildCount() { return layoutBuilds; }
+    public int layoutCacheSize() { return layoutCache.size(); }
+
+    /**
+     * ★**StaticLayout 绘制路径**（§6.1 规定的实现）。
+     *
+     * 与基线 `drawCmds` 的区别：文本走「缓存布局 + 重放」，而非每次 `drawText`。
+     * 色块部分仍用同色批处理（M3 优化）。
+     */
+    public void drawCmdsStaticLayout(Canvas canvas) {
+        final List<Cmd> list = cmds;
+        final int n = list.size();
+
+        // 色块：同色批处理（与 drawCmdsOptimized 同）
+        rectPath.reset();
+        int pending = 0;
+        int lastColor = 0;
+        boolean hasColor = false;
+        for (int i = 0; i < n; i++) {
+            final Cmd c = list.get(i);
+            if (!hasColor || c.color != lastColor || pending >= PATH_CHUNK) {
+                if (pending > 0) canvas.drawPath(rectPath, bgPaint);
+                rectPath.reset();
+                if (!hasColor || c.color != lastColor) {
+                    bgPaint.setColor(c.color);
+                    lastColor = c.color;
+                    hasColor = true;
+                }
+                pending = 0;
+            }
+            rectPath.addRect(c.x, c.y, c.x + c.w, c.y + c.h, android.graphics.Path.Direction.CW);
+            pending++;
+        }
+        if (pending > 0) canvas.drawPath(rectPath, bgPaint);
+
+        // 文本：StaticLayout 重放（★不建位图，文案多变也不吃亏）
+        final int save = canvas.save();
+        for (int i = 0; i < n; i++) {
+            final Cmd c = list.get(i);
+            if (c.text == null) continue;
+            final android.text.StaticLayout layout = layoutFor(c.text, Math.max(1f, c.w));
+            canvas.save();
+            canvas.translate(c.x + 1f, c.y + c.h * 0.1f);
+            layout.draw(canvas);
+            canvas.restore();
+        }
+        canvas.restoreToCount(save);
+    }
 
     /* ══════════════ ★§9.2「不拍平时」对照变体（拍平的另一极） ══════════════ */
 

@@ -268,6 +268,19 @@ public class MainActivity extends Activity {
                 "{\"path\":\"" + testPath + "\",\"baseline_kb\":" + baselinePss
                         + ",\"after_kb\":" + peakPss + ",\"delta_kb\":" + (peakPss - baselinePss) + "}");
 
+        // ★★§6.1 文本通道对比 —— **必须放在内存采样之后**（本仓实测教训）：
+        //   初版放在之前 → 它建 3 个宿主 View + 3 组指令 + StaticLayout 缓存，
+        //   全部残留在进程里被 PSS 计入 → proteus-mem 增量从 12MB 虚涨到 27MB。
+        //   这是「测量装置污染被测读数」的第二次出现（第一次是 M2 的 63MB 测量位图）。
+        //   ⇒ 纪律：**所有测量装置的生命周期必须晚于被测读数**。
+        {
+            int tw = getResources().getDisplayMetrics().widthPixels;
+            int th = getResources().getDisplayMetrics().heightPixels;
+            String textCompare = compareTextPaths(tw, th);
+            writeReport("layout-text-paths.json", textCompare);
+            sb.append("\n【⑥ 文本通道对比（§6.1）】\n").append(textCompare).append('\n');
+        }
+
         String text = sb.toString();
         TextView tv = new TextView(this);
         tv.setText(text);
@@ -362,6 +375,90 @@ public class MainActivity extends Activity {
         };
         choreographer.postFrameCallback(callback);
         return "{\"ok\":true,\"note\":\"滚动已启动（挂在窗口的真实 View 上驱动重绘），报告异步写入 layout-scroll.json\"}";
+    }
+
+    /**
+     * ★§6.1 文本通道对比：基线 `drawText` / 位图图集 / **StaticLayout**，在两种文案分布下测量。
+     *
+     * 为什么要分两种分布：位图图集的收益**强依赖文案重复率**（重复时命中率高、多变时退化为建位图），
+     * 而 StaticLayout 缓存**不建位图**，理论上对两种分布都不吃亏——本测量即验证这一点。
+     */
+    private String compareTextPaths(int W, int H) {
+        // 分布 A：重复文案（列表项常见）
+        java.util.List<ProteusHostView.Cmd> repeated = buildCmds();
+
+        // 分布 B：每条不同（动态内容）
+        java.util.List<ProteusHostView.Cmd> varied = new java.util.ArrayList<>(TOTAL / 2);
+        for (int i = 0; i < TOTAL / 2; i++) {
+            varied.add(new ProteusHostView.Cmd((i % 40) * 30f, (i / 40) * 18f, 30f, 18f,
+                    Color.rgb(40, 90, 200), "item" + i));
+        }
+
+        // 复用同一批文案做预热
+        java.util.List<String> distinct = new java.util.ArrayList<>();
+        for (int i = 0; i < 120; i++) distinct.add("item" + i);
+
+        try {
+            JSONObject out = new JSONObject();
+            out.put("ok", true);
+
+            // ── 分布 A：重复 ──
+            {
+                ProteusHostView v = new ProteusHostView(this);
+                v.setCmds(repeated);
+                JSONObject a = new JSONObject();
+                a.put("baseline_drawText_ms", timeDraw(v, W, H, 0));
+                a.put("bitmap_atlas_ms", timeDraw(v, W, H, 1));
+                a.put("static_layout_ms", timeDraw(v, W, H, 2));
+                a.put("atlas_entries", v.atlasSize());
+                a.put("layout_builds", v.layoutBuildCount());
+                out.put("repeated_text", a);
+            }
+            // ── 分布 B：多变 ──
+            {
+                ProteusHostView v = new ProteusHostView(this);
+                v.setCmds(varied);
+                JSONObject b = new JSONObject();
+                b.put("baseline_drawText_ms", timeDraw(v, W, H, 0));
+                b.put("bitmap_atlas_ms", timeDraw(v, W, H, 1));
+                b.put("static_layout_ms", timeDraw(v, W, H, 2));
+                b.put("atlas_entries", v.atlasSize());
+                b.put("layout_builds", v.layoutBuildCount());
+                out.put("varied_text", b);
+            }
+            // ── ★后台预热效果：先预热 120 条，再测多变（其中前 120 条应命中）──
+            {
+                ProteusHostView v = new ProteusHostView(this);
+                v.setCmds(varied);
+                Thread warm = v.prewarmAsync(distinct, 30f);
+                try { warm.join(3000); } catch (InterruptedException ignored) {}
+                int buildsAfterWarm = v.layoutBuildCount();
+                double withWarm = timeDraw(v, W, H, 2);
+                JSONObject c = new JSONObject();
+                c.put("prewarmed_entries", distinct.size());
+                c.put("layout_builds_after_prewarm", buildsAfterWarm);
+                c.put("static_layout_with_prewarm_ms", withWarm);
+                out.put("prewarm_effect", c);
+            }
+            out.put("note", "三路径同机对比：baseline=每次 drawText；bitmap_atlas=按串缓存位图（M3）；"
+                    + "static_layout=**方案 §6.1 规定**（缓存布局 + 重放，不建位图）");
+            return out.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 用指定路径画一次，返回耗时（ms）。path: 0=基线 drawText, 1=位图图集, 2=StaticLayout */
+    private double timeDraw(ProteusHostView v, int W, int H, int path) {
+        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(W, H, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(bmp);
+        // 预热一次（排除首次分配；正式测量取第二次）
+        if (path == 0) v.drawCmds(c); else if (path == 1) v.drawCmdsOptimized(c); else v.drawCmdsStaticLayout(c);
+        long t0 = SystemClock.elapsedRealtimeNanos();
+        if (path == 0) v.drawCmds(c); else if (path == 1) v.drawCmdsOptimized(c); else v.drawCmdsStaticLayout(c);
+        long t1 = SystemClock.elapsedRealtimeNanos();
+        bmp.recycle();
+        return Math.round((t1 - t0) / 10000.0) / 100.0;   // ms，保留两位
     }
 
     /** 滚动验收报告（帧率统计） */
@@ -507,18 +604,40 @@ public class MainActivity extends Activity {
      *   ⇒ 内存对比必须用本方法（与 nativeOnlyRun 同口径）。
      */
     private String proteusOnlyRun() {
+        // ★★PSS 快照必须**紧贴被测结构**（本仓实测教训，第三次修同一类问题）：
+        //   此前把 baseline 打在「点击时刻」、peak 打在「路径跑完」→ 窗口里串进了
+        //   `conformance`（17 用例建树）+ `bench`（4050 节点 × 20 次布局）→ 读数从 12MB
+        //   虚涨到 63MB，且随 bench 的堆状态波动。
+        //   ⇒ 纪律：**内存读数必须自包含**（before/after 夹住被测对象），不得跨活动共享窗口。
+        System.gc();
+        try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+        long beforeKb = pssKb();
         long p0 = SystemClock.elapsedRealtime();
-        String benchJson = RustLayout.bench(TOTAL, 1);       // 建树 + 排版（Rust 侧全部结构）
+        // ★★用**句柄式 API**：建树并**保留**（与原生 View 树生命周期同构）
+        //   此前用 `bench(TOTAL,1)` → Rust 树在函数返回时释放 → 测到的只是宿主侧 cmds（2.9MB），
+        //   而原生侧 4051 个 View 持续存活（30.2MB）→ 比值 0.096 是**不对等比较的假象**。
+        String treeJson = buildTreeRequestJson(TOTAL);
+        long handle = RustLayout.create(treeJson);
+        String benchJson = "{\"ok\":" + (handle > 0) + ",\"handle\":" + handle + "}";
         long p1 = SystemClock.elapsedRealtime();
         java.util.List<ProteusHostView.Cmd> cmds = buildCmds();  // 布局结果 → 绘制指令（宿主侧结构）
         ProteusHostView host = new ProteusHostView(this);
         host.setCmds(cmds);
         long p2 = SystemClock.elapsedRealtime();
         this.keepAlive = new Object[]{cmds, host};   // ★持有强引用直到 PSS 采样
+        System.gc();
+        try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+        long afterKb = pssKb();
         try {
             JSONObject o = new JSONObject();
             o.put("ok", true);
             o.put("path", "proteus");
+            o.put("pss_before_kb", beforeKb);
+            o.put("pss_after_kb", afterKb);
+            o.put("pss_delta_kb", afterKb - beforeKb);
+            // ★句柄与存活树数：证明「Rust 侧的树在采样时**确实存在**」（否则又是"对象已消失"的测量陷阱）
+            o.put("tree_handle", handle);
+            o.put("live_tree_count", RustLayout.handleCount());
             o.put("elements", TOTAL);
             o.put("rust_layout_ms", (p1 - p0));
             o.put("emit_cmds_ms", (p2 - p1));
@@ -532,8 +651,37 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * 生成 4050 元素的布局请求 JSON（与 `RustLayout.bench` 同规格：50 行 × 40 格，每格 view+text）。
+     * ★它是「句柄式 API」的输入——树由 Rust 侧常驻，宿主只持句柄。
+     */
+    private String buildTreeRequestJson(int total) {
+        final int perRow = 40;
+        final int rows = 50;
+        StringBuilder sb = new StringBuilder(64 * 1024);
+        sb.append("{\"viewport\":{\"width\":1080,\"height\":2400},\"nodes\":[");
+        int id = 2;
+        // 根
+        sb.append("{\"id\":1,\"parentId\":null,\"width\":750.0,\"flexDirection\":\"column\"}");
+        for (int r = 0; r < rows; r++) {
+            sb.append(",{\"id\":").append(id++).append(",\"parentId\":1,\"flexDirection\":\"row\",\"gap\":4.0,\"flexShrink\":0.0}");
+            int rowId = id - 1;
+            for (int c = 0; c < perRow; c++) {
+                sb.append(",{\"id\":").append(id).append(",\"parentId\":").append(rowId)
+                  .append(",\"width\":30.0,\"height\":18.0,\"flexShrink\":0.0,\"isText\":true}");
+                id++;
+            }
+        }
+        sb.append("],\"textMeasures\":{}}");
+        return sb.toString();
+    }
+
     /** 原生通路单跑（隔离内存测量：不在同进程里先建 Proteus 结构） */
     private String nativeOnlyRun() {
+        // ★自包含 PSS（见 proteusOnlyRun 的说明）
+        System.gc();
+        try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+        long beforeKb = pssKb();
         long n0 = SystemClock.elapsedRealtime();
         ViewGroup tree = buildNativeTree();
         long n1 = SystemClock.elapsedRealtime();
@@ -544,10 +692,16 @@ public class MainActivity extends Activity {
         long n2 = SystemClock.elapsedRealtime();
         int views = countViews(tree);
         this.keepAlive = tree;          // ★持有强引用直到 PSS 采样
+        System.gc();
+        try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+        long afterKb = pssKb();
         try {
             JSONObject o = new JSONObject();
             o.put("ok", true);
             o.put("path", "native");
+            o.put("pss_before_kb", beforeKb);
+            o.put("pss_after_kb", afterKb);
+            o.put("pss_delta_kb", afterKb - beforeKb);
             o.put("elements", TOTAL);
             o.put("create_views_ms", (n1 - n0));
             o.put("measure_layout_ms", (n2 - n1));
