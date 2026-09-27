@@ -74,6 +74,15 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 
 ---
 
+> ★**DCP-2 决策记录（2026-09-29，用户确认）**：Grid **开放为 L2**。
+> · App 侧：Taffy 0.14 原生支持（实测 3×2 Grid 正确；Yoga 的 `YGDisplay` 枚举无 Grid）
+> · **前提（不可跳过）**：本 Profile 主张「三端交集优先」，故 Web 与 Skyline 的 Grid 语义
+>   **必须补齐实测**后才能把 grid 从「🟡 待定」正式改为「✅ L2」——
+>   现有 Skyline 实测已记「grid 属性被接受，但是否真按 grid 布局未验证（可能是 block 退化）」（§2 表）。
+> · 在 Skyline 视觉验收完成前：**App 端可用 Grid，但跨端一致性不受保证**，编译期应给出提示而非报错。
+
+---
+
 ## 2. 三端基线对照
 
 | 维度 | Web | Skyline（小程序） | App（NativeVapor） |
@@ -177,7 +186,7 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 | gap / row-gap / column-gap | — | ✅ |
 | position: relative / absolute | 需 containing block 判定 | 🟡 M3 |
 | overflow: hidden / scroll | — | 🟡 M3 |
-| **grid** | 可评估现成实现或降级为嵌套 flex | 🟡 待定 |
+| **grid** | Taffy 0.14 已原生支持（Yoga 无） | 🟡 **DCP-2 已决：开放为 L2**（★待补 Skyline 视觉验收） |
 | text-overflow / max-lines 截断 | 依赖平台文本度量 | 🟡 M3 |
 
 ### L3 · 高成本（默认关闭，编译期标记，按需启用）
@@ -281,7 +290,7 @@ Step 7  输出 ComputedStyle + PaintHint
 ```ts
 interface ComputedStyle {
   // 布局
-  display: 'flex' | 'none'          // L2，grid 待定
+  display: 'flex' | 'grid' | 'none'  // L2（grid 依 DCP-2 定案开放；Skyline 侧待视觉验收）
   flexDirection: 'row' | 'column' | 'row-reverse' | 'column-reverse'
   justifyContent: JustifyValue
   alignItems: AlignValue
@@ -414,7 +423,7 @@ interface PaintHint {
 | W-CSS-102 | 使用了 `!important` | 建议改用 @layer |
 | W-CSS-103 | 使用了 ID 选择器 | 特异性过高，后续覆盖困难 |
 | W-CSS-104 | 单节点动态属性数接近阈值 | — |
-| W-CSS-105 | 使用了 grid（若 Profile 未开放） | 提供嵌套 flex 改写建议 |
+| ~~W-CSS-105~~ | ~~使用了 grid（若 Profile 未开放）~~ | **已废止**（DCP-2 定案开放 Grid 为 L2）；Skyline 视觉验收完成前改为**提示级**：跨端一致性暂不受保证 |
 
 ### 7.3 lint 与 Web 端的关系（关键）
 
