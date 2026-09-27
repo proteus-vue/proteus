@@ -104,6 +104,43 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★Rust 排版核心骨架落地：与浏览器对拍 67 节点最大偏差 0.375dp（2026-09-29，提交 `a0ec5923`）
+
+**DCP-1 定案后的第一步**：把 L1 排版核心的 Rust 实现立起来（`packages/layout-core-rust/`），
+并以**浏览器**为基准真值做 conformance 对拍（方案 §5.7 口径——不是锚定自家 TS 实现）。
+
+**出口条件（已达成）**：`cargo test` → **比对 67 个节点，最大偏差 0.375dp（容差 0.5dp）**
+· golden 由 `tests/e2e-layout-core-pixel.test.ts` 跑**真实 Chromium** 时冻结
+  （引擎就绪输入 + 浏览器实测输出）→ Rust 侧**无需浏览器**即可回归
+· **破坏性验证**：改一个节点的宽度 → 与基线差必然超标（证明比对不是「照着 golden 抄答案」）
+
+**模块**（按方案 §5.1 硬约束「引擎原生 API 不得泄漏」）：
+`style.rs`（引擎就绪样式）· `node.rs`（扁平节点树）· `engine.rs`（**LayoutEngine 抽象** + 度量注入契约）
+· `taffy_engine.rs`（Taffy 后端，**唯一**允许出现 `taffy::` 的文件）· `tests/conformance.rs`（6 项测试）
+
+**★★三条实测踩坑（taffy 0.14 的真实 API 契约，已写进代码注释）**
+| # | 坑 | 症状与修法 |
+|---|---|---|
+| 1 | **measure 回调必须走 `taffy::compute_leaf_layout`**（官方 examples/measure.rs 的写法） | 我最初手写「回显 style.size」→ **auto 轴被回显成 0 → stretch 后的宽度压成 0**（column 容器内 auto 宽子项：浏览器 260 → 手写实现 0）。该函数负责解析 style 尺寸 / min-max 夹取 / padding 换算，**只把「内容尺寸」交给度量函数** |
+| 2 | **taffy 的 `location` 已含 `content_box_inset`（padding+border）偏移** | 叠加绝对坐标时**不要再加父 padding**（三层嵌套用例所有子级坐标都多 10dp = 父 padding） |
+| 3 | **布局边界 = 显式宽高 ∧ 有子级** | 「有子级」不可省：叶子若被判为边界，脏传播停在叶子自己，**auto 尺寸的祖先会漏重排**（对拍测试直接暴露该缺口） |
+
+**★方法论收获**：坑 #1 我是靠「二分对照实验」定位的——把 `compute_layout` 与
+`compute_layout_with_measure` 在**其余条件完全相同**下对比（前者 50×30、后者 0×0），
+一眼看出是回调返回值覆盖了 style 尺寸；再查官方示例找到正确写法。
+**若靠读源码推理，我大概率会卡在「`.or(node_size)` 看起来应该优先」的误判上。**
+
+**★顺带修的两处仓库问题**
+1. `check:pkg` 把新的 Rust crate 当 npm 包报错 → 加「有 Cargo.toml ∧ 无 package.json」双条件豁免，
+   且**跳过数可见**（`42 个包（跳过 1 个 Rust crate）`）——避免静默跳过掩盖「忘了写 package.json」。
+   破坏性验证：移走 i18n 的 package.json → 仍报错 ✅
+2. vitest 扫到 `spike/tools/yoga-3.2.1/` 里的 **Yoga 官方测试**（选型 spike 下载的第三方源码）
+   → vitest.config 的 exclude 补 `spike/tools`、`spike/target`
+
+**验证**：`cargo test` 6/6 · 全量单测 3669 passed / 3 failed（预存环境问题）· check:pkg 42 包 0 error
+
+---
+
 ### ★★DCP-2 实测：Skyline 的 Grid 退化为 block（结论收紧）（2026-09-29，提交 `5d9a9a5e`）
 
 **触发**：DCP-1 定案 Taffy 后，DCP-2（Profile 是否开放 Grid）待决。我建议「开放为 L2」并**自行附加了前置条件**
