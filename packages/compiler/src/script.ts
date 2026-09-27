@@ -2564,7 +2564,24 @@ function rewriteRefAccess(
               prevCh === '+' || prevCh === '-' || prevCh === '*' || prevCh === '/' || prevCh === '%' ||
               prevCh === '&' || prevCh === '|' || prevCh === '=' || prevCh === '(' || prevCh === '[' ||
               prevCh === '<' || prevCh === '>'
-            if (!continues) break
+            // ★★2026-09-29 真机缺陷修复（**Prettier 风格三元仍被截断**）：上面的「只看前一行末字符」
+            //   漏掉了**续行符写在行首**的写法——而 Prettier/ESLint 默认格式化结果正是这种：
+            //     out.value = rect.ok      ← 换行前末字符是 `k`（标识符），不在续行符集 → 被截断
+            //       ? `✅ ...`                产物：setData({ out: rect.ok }) + 悬空三元（语法错/语义错）
+            //       : `⚠ ...`
+            //   实测影响面：**生成的能力演示页普遍中招**（download / fetch / network / vibrate /
+            //   biometric / file-system / performance / element-query …）→ MP 端点按钮只显示 `true`，
+            //   结果文案永不出现（我最初误判为「框架能力 Hook 失效」，实为编译器截断）。
+            //   修法：**两个方向都判** —— 前一行末字符属续行符，**或** 下一行首非空白字符属
+            //   `? : . ,`（这四种在 JS 中**不可能作为语句开头**，故不会误吞以 `if` / `this` / 标识符
+            //   开头的独立语句——那正是 2026-09-09 当初改成「只看前一行」的原因）。
+            if (!continues) {
+              let j = i + 1
+              while (j < rest.length && /[ \t\r\n]/.test(rest[j]!)) j++
+              const nextCh = rest[j] ?? ''
+              const continuesNext = nextCh === '?' || nextCh === ':' || nextCh === '.' || nextCh === ','
+              if (!continuesNext) break
+            }
           }
           i++
         }

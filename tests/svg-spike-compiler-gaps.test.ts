@@ -25,8 +25,11 @@ describe('SVG spike 暴露的编译器缺口（回归锁）', () => {
 
   it('② ref 赋值多行三元 RHS 完整保留（不被换行截断）', () => {
     const r = compile('const s = ref("")\nfunction f() { const ok = true; s.value = ok\n  ? "yes"\n  : "no" }', '<template><view>{{ s }}</view></template>')
-    // 三元完整进 setData（含 ? : 两分支）
-    expect(r.js).toMatch(/setData\(\{ s: ok[\s\S]*\? "yes"[\s\S]*: "no"/)
+    // ★★2026-09-29 修正「假通过」：原断言用 [\s\S]* 跨分支匹配 —— 能跨过 `setData({s: ok })`
+    //   的闭合 `})` 去匹配**悬空三元**，故截断产物（真实缺陷形态）也能通过。
+    //   改为**归一空白后按完整串比对**（截断与否的唯一判据）。
+    const norm = (x: string) => x.replace(/\s+/g, ' ')
+    expect(norm(r.js), '三元须完整位于 setData 内（不含悬空三元）').toContain('setData({ s: ok ? "yes" : "no" })')
   })
 
   it('② 多行对象 / 多行链式 RHS 完整保留', () => {
@@ -43,6 +46,25 @@ describe('SVG spike 暴露的编译器缺口（回归锁）', () => {
     const r2 = compile('const n = ref(0)\nfunction f() { n.value = 1\n  this.other() }\nfunction other() {}', '<template><view>{{ n }}</view></template>')
     expect(r2.js).toMatch(/setData\(\{ n: 1 \}\)/)
     expect(r2.js).toMatch(/this\.other\(\)/)
+  })
+
+  it('②★ Prettier 风格三元（? / : 在**行首**）不被截断——2026-09-29 真机缺陷回归锁', () => {
+    // 背景：真实源码经 Prettier 格式化后，三元的 ? / : 落在**行首**，
+    //   而续行判定只看「换行前末字符」（此处是标识符 `ok`）→ 被截断成 setData({s: ok}) + 悬空三元。
+    //   实测影响面：生成的能力演示页普遍中招（download/fetch/network/vibrate/element-query…）
+    //   → MP 端点按钮只显示 `true`，结果文案永不出现。
+    const norm = (x: string) => x.replace(/\s+/g, ' ')
+    const r = compile('const ok = ref(true)\nconst s = ref("")\nfunction f() { s.value = ok.value\n  ? "yes"\n  : "no" }', '<template><view>{{ s }}</view></template>')
+    expect(norm(r.js), '行首 ? 的三元须完整保留').toContain('setData({ s: this.data.ok ? "yes" : "no" })')
+    // 反向：不得出现「悬空三元」（截断的指纹）
+    expect(r.js, '不得残留悬空三元').not.toMatch(/\}\s*\)\s*\n\s*\?/)
+  })
+
+  it('②★ 行首续行符不误吞独立语句（if / this 调用仍独立）', () => {
+    const norm = (x: string) => x.replace(/\s+/g, ' ')
+    const a = compile('const n = ref(0)\nfunction f() { n.value = 1\n  if (n.value) { console.log("x") } }', '<template><view>{{ n }}</view></template>')
+    expect(norm(a.js)).toContain('setData({ n: 1 })')
+    expect(norm(a.js)).toContain('if (this.data.n)')
   })
 
   it('② 单行 RHS 形态不回归（既有产物形态锁定）', () => {

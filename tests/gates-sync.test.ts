@@ -31,12 +31,32 @@ function coveredByCi(name: string): boolean {
   return subs.some((s) => scripts[s] && coveredByCi(s))
 }
 
+/**
+ * ★★2026-09-29 修复「双份名单必然漂移」：
+ *   本测试与 `scripts/check-gates-sync.mjs` 原本**各自维护一份 LOCAL_ONLY 白名单**——
+ *   实测漂移：我新增 4 个 `check:ios-*` 只在 .mjs 里登记 → 本测试红、而 .mjs 绿。
+ *   ⇒ 单一事实源：从 `check-gates-sync.mjs` 的 LOCAL_ONLY 解析声明（含理由），测试只判「是否被声明」。
+ *   理由一并断言非空（防「登记了却没写为什么 CI 跑不了」——那正是该字段存在的意义）。
+ */
+function declaredLocalOnly(): Map<string, string> {
+  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'check-gates-sync.mjs'), 'utf8')
+  const block = src.match(/const LOCAL_ONLY\s*=\s*\{([\s\S]*?)\n\}/)?.[1] ?? ''
+  const out = new Map<string, string>()
+  for (const m of block.matchAll(/'(check:[\w-]+)'\s*:\s*'([^']*)'/g)) out.set(m[1]!, m[2]!)
+  return out
+}
+
 describe('★门禁通道一致性（CI ⟷ verify 不得分叉）', () => {
-  it('每个 check:* 脚本都被 CI 引用（新增门禁必须接线）', () => {
+  it('每个 check:* 脚本都被 CI 引用（或按 check-gates-sync.mjs 的 LOCAL_ONLY 声明豁免）', () => {
+    const localOnly = declaredLocalOnly()
     const unwired = Object.keys(scripts)
       .filter((k) => k.startsWith('check:'))
       .filter((k) => !coveredByCi(k))
-    expect(unwired, `未接入任何 workflow：${unwired.join(', ')}（接线或登记 LOCAL_ONLY）`).toEqual([])
+      .filter((k) => !localOnly.has(k))
+    expect(unwired, `未接入任何 workflow：${unwired.join(', ')}（接线或在 check-gates-sync.mjs 登记 LOCAL_ONLY）`).toEqual([])
+    // 豁免必须写理由（空理由 = 未思考的豁免）
+    const noReason = [...localOnly.entries()].filter(([, why]) => why.trim().length < 6).map(([k]) => k)
+    expect(noReason, `LOCAL_ONLY 缺理由：${noReason.join(', ')}`).toEqual([])
   })
 
   it('★verify 链含 build-packages + 根 vue-tsc（本地无类型盲区）', () => {

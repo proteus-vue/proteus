@@ -6,10 +6,19 @@
        返回真实几何）逐条测量存疑特性，用**几何反推**该特性是否被 Skyline 接受。
      诚实边界：Skyline 无 `window.getComputedStyle` → 判得了「生效/未生效」，判不了数值精度；
        精确数值仍需真机视觉验收。
-     ★踩坑记录（三处，供后续探针页复用）：
-       ① 能力 Hook `useElement` 在 MP 端**句柄可创建但测量无返回**（rows 恒空）→ 改用原生 API；
-       ② `automation_evaluate` 的 fn-source 必须是**裸函数**（IIFE 会失败，见 driver 注释）；
-       ③ MP 编译管线对**复杂 TS 类型**（interface / 泛型实参）支持有限 → 本文件用朴素写法。 -->
+     ★踩坑记录（供后续探针页复用）：
+       ① **MP 编译后 ref 值落在 `data` 上**，不在实例属性上——E2E 里读 `p.rows` 恒 undefined；
+          正解读 `p.data.rows`。（我最初把这一条**误判为「框架 Hook useElement 失效」并写进仓库**，
+          经 A/B 对照证伪：`useElement` 返回 OK:100x20、原生 API 同样 OK:100x20，**框架无缺陷**。）
+       ② ★**真正的框架缺陷（本轮已修）**：编译器 `script/ref-write` 的**续行判定只看前一行末字符**，
+          导致 **Prettier 风格三元**（`?` / `:` 在**行首**）被截断——
+          `out.value = cond\n  ? A\n  : B` → `setData({out: cond})` + **悬空三元**。
+          影响面：生成的能力演示页普遍中招（download/fetch/network/vibrate/element-query…），
+          MP 端点按钮只显示 `true`，结果文案永不出现。修法见 `packages/compiler/src/script.ts`
+          的「行首续行符探测」分支 + `tests/svg-spike-compiler-gaps.test.ts` 的两条新回归锁。
+       ③ `automation_evaluate` 的 fn-source 必须是**裸函数**（IIFE 会失败，见 driver 注释）；
+       ④ MP 编译管线对**复杂 TS 类型**（interface / 泛型实参）支持有限 → 用朴素写法；
+       ⑤ 选择器：页面级原生节点须用 **id 选择器**（类选择器不达）。 -->
 <script setup>
 import { ref } from 'vue'
 import PageShell from '../../../components/page-shell/index.vue'
@@ -44,6 +53,15 @@ const CASES = [
   { id: 'c-sticky', feature: 'position: sticky', shifted: false },
   { id: 'c-grid', feature: 'display: grid', shifted: false },
   { id: 'c-inline', feature: 'display: inline-block', shifted: false },
+]
+
+// ★模板里不得出现函数调用样式（WXML S38）→ 把代码片段/表格提到 script 常量
+const codeRun = 'runProbe()'
+const codeRows = '见 rows'
+const apiRows = [
+  ['wx.createSelectorQuery', '页面上下文可用（实测 Skyline 亦可）', 'SelectorQuery'],
+  ['select(id)', '须 id 选择器（类选择器不达页面级原生节点）', 'NodesRef'],
+  ['boundingClientRect', '读元素几何', 'Promise'],
 ]
 
 const out = ref('点「跑探针」→ 逐条测量 CSS 特性在 Skyline 端的接受情况')
@@ -85,7 +103,7 @@ async function runProbe() {
 
 <template>
   <page-shell title="CSS Profile 探针" subtitle="为 CSS Profile 规格提供 Skyline 实测基线">
-    <demo-block index="01" title="跑探针" :has-output="true" desc="逐条测量 CSS 特性在 Skyline 端是否被接受（几何反推）" :code="'runProbe()'">
+    <demo-block index="01" title="跑探针" :has-output="true" desc="逐条测量 CSS 特性在 Skyline 端是否被接受（几何反推）" :code="codeRun">
       <template #demo>
         <p-view class="btns">
           <p-button size="small" @click="runProbe">跑探针</p-button>
@@ -119,7 +137,7 @@ async function runProbe() {
         <view id="c-inline" style="display:inline-block;width:80px;height:20px" />
       </template>
     </demo-block>
-    <demo-block index="02" title="测量结果" :has-output="false" desc="逐条给出几何实测值与生效判定" :code="'见 rows'">
+    <demo-block index="02" title="测量结果" :has-output="false" desc="逐条给出几何实测值与生效判定" :code="codeRows">
       <template #demo>
         <view v-for="(r, i) in rows" :key="i" class="row">
           <text class="ft">{{ r.feature }}</text>
@@ -128,7 +146,7 @@ async function runProbe() {
         </view>
       </template>
     </demo-block>
-    <api-table title="探针用法" :rows="[['wx.createSelectorQuery()', '页面上下文可用（实测 Skyline 亦可）', 'SelectorQuery'], ['select(id)', '须 id 选择器（类选择器不达页面级原生节点）', 'NodesRef'], ['boundingClientRect()', '读元素几何', 'Promise']]" />
+    <api-table title="探针用法" :rows="apiRows" />
   </page-shell>
 </template>
 
