@@ -104,6 +104,48 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★真机实验跑通 + H4 被证伪（2026-09-29，提交 `89ab76a1`）
+
+**真机：iPhone 12（iPhone13,2）· iOS 26.3** —— 全链路打通（探测→编译→签名→安装→启动→取回）。
+**排掉四个阻塞（都可复现的坑，值得记）**：
+① **Xcode 登录后证书不会自动生成**——只在**构建某工程**时才申请。我用最小 .xcodeproj +
+   `-allowProvisioningUpdates -allowProvisioningDeviceRegistration` 触发，
+   拿到 `Apple Development: lyunlai@dingtalk.com` + Personal Team（`F4R3P3L477`）。
+   ⇒ `swiftc` 直编无 xcodeproj，故新增 **`provision.sh`**「借最小工程申请描述文件」。
+② **entitlements 不能手工拼**：报 `0xe8008016 invalid entitlements`——免费个人团队描述文件
+   **还要求** `com.apple.developer.team-identifier` + `keychain-access-groups`。
+   ⇒ **原样导出**描述文件里的 entitlements（`PlistBuddy -x -c 'Print :Entitlements'`）。
+③ 设备上需**信任开发者**（错误文案：profile not explicitly trusted）。
+④ **真机报告在沙盒**不在 stdout：`devicectl device copy from --domain-type appDataContainer`。
+
+**真机数据（3 次重跑中位）vs 模拟器（4 次中位）**
+| 路线 | 模拟器 | 真机 |
+|---|---|---|
+| A UIView + AutoLayout | 651.3 | **547.7** |
+| B UIView + 手算 frame | 465.7 | **381.0** |
+| C CALayer + 手算 frame | 272.2 | **197.6** |
+★**真机更快（15–30%）且方差小得多**（真机 C 各轮 197.6/189.5/197.6 <5%；模拟器 37%）
+⇒ **性能决策优先信真机**，模拟器只适合探路。归因与模拟器一致：**AutoLayout 与 UIView 各占约一半**，
+CALayer 路线 **2.8×** 于基线。
+
+**★★H4 被真机证伪（本轮最重要技术结论）**
+原 exp4「固定总数、只变深度」测不出深度影响，但**该设计区分不了两种假设** → 补测 exp6 二维对照
+（总数 {500,2000,5000} × 深度 {1,20}）：
+- **节点总数效应 +870%**（500→5000）
+- **layer 深度效应 −12~17%**（1→20，反而略降）
+⇒ **commit 成本由「节点总数」决定，与「layer tree 深度」无关。**
+方案文档 H4「commit 递归 → 拍平是刚需」**不成立**——拍平仍要做，但目标改为**「减少节点总数」**
+（验收口径 = 宿主视图数），**不再以「保持 layer tree 扁平」作架构约束**。两份文档已同步。
+
+**门禁 `check:ios-exp-docs` 迭代到第 5 版**（前四版都实测出漏洞，全部记在脚本注释）：
+① 只查正确数字存在→别处插错值能过 ② 扫全文三位数→误伤 ③ 按行分组→同行多实验仍误伤
+④ `标签[^0-9]{0,80}?`→表格内数字被窗口排除 ⑤ 窗口取第一个数字→**标签互为子串时串扰**
+（`CALayer + 手算 frame` 吃到 272）。
+**定稿：按 Markdown 表格行结构化解析**（行首标识 → 行内每个数字须被真值解释）+ 真值集含**真机/模拟器两套**。
+破坏性验证：改真机 C=333 / 模拟器 A=999 均被精确抓住。
+
+---
+
 ### ★真机已配对，唯一剩余阻塞 = 签名身份（2026-09-29，提交 `a57cd1a8`）
 
 **当前设备状态（已核实）**：
