@@ -137,11 +137,15 @@ run_one "proteus" "proteus-perf" 1
 echo "── 通路：proteus-noflatten（§9.2「不拍平」指标）──"
 run_one "proteus-noflatten" "proteus-noflatten" 1
 
+# ★§9.3 长列表验收：4000 行滚到底再回滚（复用池 + 内存收敛）
+echo "── 通路：recycle（§9.3 长列表）──"
+run_one "recycle" "recycle" 1
+
 echo
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-memory.json layout-env.json; do
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true

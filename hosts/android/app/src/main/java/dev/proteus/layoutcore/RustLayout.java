@@ -29,6 +29,7 @@ final class RustLayout {
     private static native String nativeVersion();
     private static native String nativeConformance(String goldenJson);
     private static native String nativeBench(int nodeCount, int iterations);
+    private static native String nativeRecycleBench(int rows, int frames);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -58,5 +59,10 @@ final class RustLayout {
 
     static String bench(int nodeCount, int iterations) {
         return loaded ? nativeBench(nodeCount, iterations) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
+    }
+
+    /** ★§9.3 长列表复用池跑批（4000 行 / 滚到底再回滚） */
+    static String recycleBench(int rows, int frames) {
+        return loaded ? nativeRecycleBench(rows, frames) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
     }
 }

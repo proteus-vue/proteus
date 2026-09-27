@@ -17,6 +17,7 @@
 //   · `engine`          → `layout/`（**抽象边界**：引擎原生 API 不得泄漏）
 //   · `taffy_engine`    → `layout/` 的实现（唯一允许出现 taffy:: 的文件）
 //   · `ffi`             → **C ABI 边界**（三端共享：iOS ObjC++ / Android JNI / 鸿蒙 NAPI）
+//   · `recycle`         → **列表复用池 + 生命周期状态机**（§12.6 三档 + 方向敏感预加载区）
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
@@ -25,6 +26,7 @@ pub mod ffi;
 #[cfg(target_os = "android")]
 pub mod jni;
 pub mod node;
+pub mod recycle;
 pub mod style;
 pub mod taffy_engine;
 
@@ -35,7 +37,12 @@ pub use node::{LNode, LayoutTree, NodeIndex, TextMeasureRequest, NO_PARENT};
 pub use style::{Display, Edges, FlexDirection, LStyle, Overflow, Position, Rect, Size};
 pub use taffy_engine::TaffyEngine;
 
+// ★M3 `recycle/`：列表复用池 + 生命周期状态机（§5.1 / §12.6）
+pub use recycle::{Lifecycle, ListStateMachine, ListWindow, RecycleConfig, RecyclePool, ScrollDirection, VisibleRange};
+
 // ★crate 根转出（供 jni.rs 以 `crate::xxx` 引用，避免两处逻辑分叉）
+//   ★仅在 Android 目标下转出：非 Android 时无人引用 → 会产生 unused_imports 警告
 #[cfg(target_os = "android")]
 pub(crate) use ffi::into_java_string;
+#[cfg(target_os = "android")]
 pub(crate) use ffi::{json_str, run_bench, run_conformance};

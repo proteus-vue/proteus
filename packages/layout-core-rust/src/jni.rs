@@ -78,3 +78,23 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeBench<'local
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/// `RustLayout.nativeRecycleBench(rows: Int, frames: Int): String`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleBench<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    rows: jni::sys::jint,
+    frames: jni::sys::jint,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let r = if rows <= 0 { 4000usize } else { rows as usize };
+        let f = if frames <= 0 { 400usize } else { frames as usize };
+        match crate::recycle::run_recycle_bench(r, f) {
+            Ok(s) => s,
+            Err(e) => format!("{{\"ok\":false,\"error\":{}}}", crate::json_str(&e)),
+        }
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}
