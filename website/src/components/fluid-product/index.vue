@@ -13,6 +13,8 @@ import { ref } from 'vue'
 import type { DeviceForm } from '@proteus-vue/fluid'
 import { computed, watchEffect } from 'vue'
 import { locale } from '../../i18n'
+// ★自绘图标集（2026-09-29 风格统一）：内容槽图标改为同源线性图标（原为 emoji，跨平台字形不一）
+import DemoIcon from '../DemoIcon.vue'
 
 const isEn = computed(() => locale.value === 'en')
 
@@ -37,18 +39,19 @@ const COPY = {
     desc: '40h 续航 · 自适应降噪 · 空间音频 · Hi-Res 认证',
     skus: ['曜石黑', '月光白', '雾霾蓝'],
     buy: '立即购买',
-    fav: '＋ 收藏',
+    fav: '收藏',
     tabs: ['首页', '发现', '购物车', '我的'],
     rail: ['首页', '音频', '订单', '设置'],
-    brand: '🎧 云端商城',
+    railIcons: ['home', 'audio', 'orders', 'settings'],
+    brand: '云端商城',
     recs: [
-      { ic: '🎵', name: '替换耳罩', price: 39 },
-      { ic: '🔌', name: '音频线', price: 59 },
-      { ic: '🎒', name: '收纳包', price: 99 },
-      { ic: '🔋', name: '充电底座', price: 199 },
-      { ic: '📦', name: '旅行套装', price: 299 },
+      { ic: 'earpads', name: '替换耳罩', price: 39 },
+      { ic: 'cable', name: '音频线', price: 59 },
+      { ic: 'case', name: '收纳包', price: 99 },
+      { ic: 'battery-charge', name: '充电底座', price: 199 },
+      { ic: 'box', name: '旅行套装', price: 299 },
     ],
-    degraded: '🎙/↻ 语音或旋钮选择',
+    degraded: '语音或旋钮选择',
     drive: '驾驶中：已精简层级与动效',
   },
   en: {
@@ -56,18 +59,19 @@ const COPY = {
     desc: '40 h battery · Adaptive ANC · Spatial audio · Hi-Res certified',
     skus: ['Obsidian', 'Moonlight', 'Haze'],
     buy: 'Buy now',
-    fav: '＋ Save',
+    fav: 'Save',
     tabs: ['Home', 'Discover', 'Cart', 'Me'],
     rail: ['Home', 'Audio', 'Orders', 'Settings'],
-    brand: '🎧 Cloud Store',
+    railIcons: ['home', 'audio', 'orders', 'settings'],
+    brand: 'Cloud Store',
     recs: [
-      { ic: '🎵', name: 'Ear pads', price: 39 },
-      { ic: '🔌', name: 'Audio cable', price: 59 },
-      { ic: '🎒', name: 'Carry case', price: 99 },
-      { ic: '🔋', name: 'Charging dock', price: 199 },
-      { ic: '📦', name: 'Travel kit', price: 299 },
+      { ic: 'earpads', name: 'Ear pads', price: 39 },
+      { ic: 'cable', name: 'Audio cable', price: 59 },
+      { ic: 'case', name: 'Carry case', price: 99 },
+      { ic: 'battery-charge', name: 'Charging dock', price: 199 },
+      { ic: 'box', name: 'Travel kit', price: 299 },
     ],
-    degraded: '🎙/↻ pick by voice or rotary',
+    degraded: 'pick by voice or rotary',
     drive: 'Driving: simplified hierarchy & motion',
   },
 }
@@ -99,16 +103,16 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
   >
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>
-      <span class="fp-brand">{{ t.brand }}</span>
-      <span class="fp-rail-item on"><i class="fp-rail-ic">🏠</i>{{ t.rail[0] }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">🎵</i>{{ t.rail[1] }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">📦</i>{{ t.rail[2] }}</span>
-      <span class="fp-rail-item"><i class="fp-rail-ic">⚙️</i>{{ t.rail[3] }}</span>
+      <span class="fp-brand"><DemoIcon class="fp-brand-ic" name="headphones" />{{ t.brand }}</span>
+      <span class="fp-rail-item on"><DemoIcon class="fp-rail-ic" :name="t.railIcons[0]!" />{{ t.rail[0] }}</span>
+      <span class="fp-rail-item"><DemoIcon class="fp-rail-ic" :name="t.railIcons[1]!" />{{ t.rail[1] }}</span>
+      <span class="fp-rail-item"><DemoIcon class="fp-rail-ic" :name="t.railIcons[2]!" />{{ t.rail[2] }}</span>
+      <span class="fp-rail-item"><DemoIcon class="fp-rail-ic" :name="t.railIcons[3]!" />{{ t.rail[3] }}</span>
     </template>
 
     <!-- 主视觉 -->
     <template #media>
-      <div class="fp-cover">🎧</div>
+      <div class="fp-cover"><DemoIcon class="fp-cover-ic" name="headphones" /></div>
     </template>
 
     <!-- 标题与描述 -->
@@ -129,14 +133,14 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
 
     <!-- 主操作（遥控/旋钮形态框架自动放大热区 + 加焦点环；车机只留 2 个大热区） -->
     <template #actions>
-      <button class="fp-primary" @click="counted++">▶ {{ t.buy }}</button>
-      <button class="fp-ghost">{{ t.fav }}</button>
+      <button class="fp-primary" @click="counted++"><DemoIcon class="fp-btn-ic" name="cart" />{{ t.buy }}</button>
+      <button class="fp-ghost"><DemoIcon class="fp-btn-ic" name="bookmark" />{{ t.fav }}</button>
     </template>
 
     <!-- 推荐（★TV/车机形态框架自动转横向焦点海报流） -->
     <template #recommend>
       <div v-for="r in recs" :key="r.name" class="pf-rec-card fp-rec">
-        <span class="fp-rec-ic">{{ r.ic }}</span>
+        <DemoIcon class="fp-rec-ic" :name="r.ic" />
         <span class="fp-rec-name">{{ r.name }}</span>
         <span class="fp-rec-pt">¥{{ r.price }}</span>
       </div>
@@ -151,7 +155,7 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
 
 <style scoped>
 /* 演示内容样式（★与形态无关——形态引起的排列/配色差异全在 p-formfactor 内） */
-.fp-brand { font-weight: 800; margin-bottom: 8px; font-size: calc(var(--pf-font) * 1.05); }
+.fp-brand { display: flex; align-items: center; gap: calc(var(--pf-u) * 0.4); font-weight: 800; margin-bottom: 8px; font-size: calc(var(--pf-font) * 1.05); }
 .fp-rail-item {
   display: flex;
   align-items: center;
@@ -162,7 +166,8 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
   color: var(--pf-dim, #666);
   cursor: pointer;
 }
-.fp-rail-ic { font-style: normal; font-size: calc(var(--pf-font) * 1.05); }
+.fp-brand-ic { font-size: calc(var(--pf-font) * 1.3); }
+.fp-rail-ic { font-size: calc(var(--pf-font) * 1.05); flex-shrink: 0; }
 .fp-rail-item.on { background: color-mix(in srgb, var(--pf-brand, #7c5cff) 16%, transparent); color: var(--pf-brand, #7c5cff); font-weight: 700; }
 
 .fp-cover {
@@ -174,7 +179,7 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
   display: grid;
   place-items: center;
   /* ★消费框架的媒体展示尺度（hero/10ft 形态更大）——业务零形态分支 */
-  font-size: calc(var(--pf-font) * 2.4 * var(--pf-media-scale, 1));
+  color: var(--pf-brand, #6f4ae8);
   min-height: 90px;
 }
 .fp-name { display: block; font-size: calc(var(--pf-font) * 1.45); font-weight: 800; color: var(--pf-text, #17171f); }
@@ -229,7 +234,9 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
   gap: calc(var(--pf-gap) * 0.9);
   align-items: center;
 }
-.fp-rec-ic { font-size: calc(var(--pf-font) * 1.9); }
+.fp-rec-ic { font-size: calc(var(--pf-font) * 1.5); color: var(--pf-brand, #6f4ae8); }
+.fp-cover-ic { font-size: calc(var(--pf-font) * 2.4 * var(--pf-media-scale, 1)); }
+.fp-btn-ic { font-size: calc(var(--pf-font) * 1.15); margin-right: calc(var(--pf-u) * 0.35); }
 .fp-rec-name { font-size: calc(var(--pf-font) * 0.85); color: var(--pf-dim, #555); }
 .fp-rec-pt { font-size: calc(var(--pf-font) * 0.95); font-weight: 800; color: var(--pf-accent, #7c5cff); }
 </style>

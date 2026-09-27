@@ -65,7 +65,9 @@
           <slot name="sku" />
         </div>
         <div v-else-if="skuLevel === 'fallback'" class="pf-sku-fallback">
-          <span class="pf-sku-fb-label">🎙 {{ skuFallbackHint }}</span>
+          <!-- ★不再硬编码 emoji 前缀（2026-09-29 风格统一）：框架只给结构，图标/文案由宿主注入；
+               MP 侧内联 SVG 不可用，故框架层不引入图标依赖（端如需图标走 p-svg / 图片） -->
+          <span class="pf-sku-fb-label">{{ skuFallbackHint }}</span>
         </div>
         <div v-if="$slots.actions" class="pf-actions">
           <slot name="actions" />
@@ -73,7 +75,7 @@
       </div>
 
       <!-- 驾驶提醒条（driveAware 能力消费点：真实网格项，与媒体同格——不占纵向预算） -->
-      <p v-if="capsEnabled(caps.driveAware)" class="pf-drive-hint">⚠{{ driveHint ? ' ' + driveHint : '' }}</p>
+      <p v-if="capsEnabled(caps.driveAware)" class="pf-drive-hint">{{ driveHint || 'drive-aware' }}</p>
 
       <!-- 推荐区：焦点行形态自动横排（TV/车机海报流），其余形态网格/列表 -->
       <div v-if="$slots.recommend" class="pf-recommend" :class="{ 'pf-recommend--row': capsEnabled(caps.focusRows) }">
@@ -169,7 +171,7 @@ const caps = computed(() => profile.value.caps)
 /** ★SKU 能力三态（supported / fallback / unsupported——报告 P2-2） */
 const skuLevel = computed(() => capsLabel(caps.value.skuMulti))
 /** 降级提示（宿主可经 props 覆盖；缺省走形态中性的简短说明——组件层不依赖 i18n） */
-const skuFallbackHint = computed(() => props.degradedHint || '🎙︎/↻')
+const skuFallbackHint = computed(() => props.degradedHint || 'voice / rotary')
 
 /** 无声明时的兜底推断（SSR/MP 安全——只读注入的尺寸） */
 function senseFormFast(): DeviceForm {

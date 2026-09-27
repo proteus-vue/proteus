@@ -49,7 +49,7 @@ unsupported  → do not render (this form genuinely has no such path)
 
 (`—` = unsupported; the table is derived from `FORM_CAP_KEYS × FORM_PROFILES` and reconciled entry by entry with the source)
 
-Two entries are worth noting: **the in-car `skuMulti` is the only fallback** — it renders a "🎙/↻ pick by voice or rotary" degradation bar (the host may inject copy via `degraded-hint`) instead of silently deleting it; and **TV has no `dense`** — dense information is unreadable at a 10ft viewing distance.
+Two entries are worth noting: **the in-car `skuMulti` is the only fallback** — it renders a "pick by voice or rotary" degradation bar (copy is injected by the host via `degraded-hint`; the framework layer ships no emoji/glyphs — inline SVG is unavailable on mini-programs, so icons belong to `p-svg` or image assets) instead of silently deleting it; and **TV has no `dense`** — dense information is unreadable at a 10ft viewing distance.
 
 ## Consumers: every entry needs an observable consequence
 
