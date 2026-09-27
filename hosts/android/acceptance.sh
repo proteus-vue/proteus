@@ -172,7 +172,7 @@ echo
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json; do
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-recycle.json layout-memory.json layout-env.json layout-hit.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true
@@ -182,6 +182,14 @@ echo "    报告目录：$DEST"
 ls -1 "$DEST" | head -10
 
 echo
+echo "==> 跨端命中一致性（M3 事件系统：同一份探针 → 两端逐位相同）"
+# ★需要 iOS 的报告（hosts/ios/results/layout-core-bench-ios.json）；缺失时脚本会如实说明并跳过比对
+if [ -f "$ROOT/hosts/ios/results/layout-core-bench-ios.json" ]; then
+  python3 "$ROOT/hosts/cross-device-hit.py" "$DEST/layout-hit.json" "$ROOT/hosts/ios/results/layout-core-bench-ios.json" 2>&1 | tail -12 | sed 's/^/    /'
+else
+  echo "    ⚠ 未找到 iOS 报告（先跑 bash hosts/ios/run-layout-bench.sh）——跳过跨端比对"
+fi
+
 echo "==> 采集 Perfetto trace（§9.2 权威核判定）"
 # ★与滚动测量并行抓取：先起 trace，再触发滚动（trace 需覆盖测量窗口）
 CFG="$(dirname "$0")/perfetto-config.txt"

@@ -1802,6 +1802,8 @@ public class MainActivity extends Activity {
         final int[][] probes = {{150, 30}, {150, 90}, {100, 110}, {150, 140}, {150, 290}, {400, 400}};
 
         StringBuilder log = new StringBuilder();
+        // ★逐探针的冒泡链（供跨端核验脚本与 iOS 互证——chain 是事件派发的实际依据）
+        org.json.JSONObject chainsOut = new org.json.JSONObject();
         int agree = 0, compared = 0, mismatch = 0;
         log.append("  探针          核心(Rust)    镜像(Android)   端到端(host)   结果\n");
         log.append("  " + "-".repeat(66) + "\n");
@@ -1823,6 +1825,12 @@ public class MainActivity extends Activity {
             int e2eTarget = host.lastHitTarget;
 
             compared++;
+            // 记录核心给出的冒泡链（自浅到深？——接口约定为 target 自身 + 祖先，自深到浅）
+            try {
+                org.json.JSONObject cj = new org.json.JSONObject(hj);
+                org.json.JSONArray ca = cj.optJSONArray("chain");
+                if (ca != null) chainsOut.put(px + "," + py, ca);
+            } catch (Exception ignored) {}
             boolean ok = (coreTarget == mirrorTarget) && (coreTarget == e2eTarget);
             if (ok) agree++; else mismatch++;
             log.append(String.format("  (%3d,%3d)      %-12s %-14s %-14s %s%n",
@@ -1870,6 +1878,7 @@ public class MainActivity extends Activity {
             out.put("scroll_offset_check", scrollOk);
             out.put("touch_events", host.touchEventCount);   // 真实 MotionEvent 数（脚本路径为 0；见 dispatchHit 注释）
             out.put("log", log.toString());
+            out.put("chains", chainsOut);
             out.put("detail", detail.toString());
             out.put("note", "★三层验证：核心语义由浏览器 golden 覆盖（3547 探针）；"
                     + "此处对拍**独立实现**（Android View 体系的 dispatchTouchEvent）与**端到端**（真实宿主 + JNI）。"
