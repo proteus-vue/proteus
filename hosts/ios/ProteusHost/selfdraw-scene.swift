@@ -238,6 +238,11 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return CGSize(width: ceil(size.width), height: ceil(size.height))
     }
 
+    /// 报告 / 快照文件名（自绘场景 vs 逻辑层基准各自独立，避免互相覆盖）
+    /// ★由控制器按启动参数（`--bench`）设置。
+    static var reportFileName = "selfdraw-report"
+    static var snapshotName = "selfdraw-final"
+
     deinit {
         if handle != 0 { _ = proteus_layout_destroy(handle) }
     }
@@ -358,7 +363,10 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
 
     func snapshot(_ name: String) -> String {
-        guard let view = view, let path = view.snapshot(named: name) else {
+        // ★名以宿主注入的 `SelfDrawBridge.snapshotName` 为准（JS 侧传参仅作兼容）——
+        //   两端各命名会让产物散落；命名权收归宿主一处。
+        let effective = SelfDrawBridge.snapshotName.isEmpty ? name : SelfDrawBridge.snapshotName
+        guard let view = view, let path = view.snapshot(named: effective) else {
             return "{\"ok\":false,\"error\":\"截图失败\"}"
         }
         return jsonString(["ok": true, "path": path])
@@ -400,7 +408,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         }
 
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let url = dir.appendingPathComponent("selfdraw-report.json")
+        let url = dir.appendingPathComponent("\(SelfDrawBridge.reportFileName).json")
         if let d = try? JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys]) {
             try? d.write(to: url)
         }
@@ -451,10 +459,16 @@ final class SelfDrawViewController: UIViewController {
             NSLog("[proteus] JS 异常: %@", exc?.toString() ?? "?")
         }
 
-        // bundle 从 app 包读取（esbuild 打出的单文件 IIFE）
-        guard let url = Bundle.main.url(forResource: "bundle-selfdraw", withExtension: "js"),
+        // ★模式：`--bench` 跑逻辑层基准（复杂响应式用例 + 规模扫描），否则跑自绘场景
+        let isBench = ProcessInfo.processInfo.arguments.contains("--bench")
+        if isBench {
+            SelfDrawBridge.reportFileName = "logic-bench-report"
+            SelfDrawBridge.snapshotName = "bench-final"
+        }
+        let bundleName = isBench ? "bundle-bench" : "bundle-selfdraw"
+        guard let url = Bundle.main.url(forResource: bundleName, withExtension: "js"),
               let src = try? String(contentsOf: url, encoding: .utf8) else {
-            NSLog("[proteus] 缺少 bundle-selfdraw.js")
+            NSLog("[proteus] 缺少 %@.js", bundleName)
             return
         }
         let vp = jsonString(["width": w, "height": h])
@@ -468,7 +482,58 @@ final class SelfDrawViewController: UIViewController {
         //   重渲染**永远不会发生**（实测 patch=0、节点数不变，看起来像响应式失效）。
         //   正解：每次 evaluateScript 之间**返回主线程**，让微任务排空，再进入下一相位。
         //   下面用 `DispatchQueue.main.async` 串起来——这等价于把 VM 事件循环手工补上。
-        schedulePhases(ctx: ctx, url: url)
+        if isBench {
+            driveBench(ctx: ctx)
+        } else {
+            schedulePhases(ctx: ctx, url: url)
+        }
+    }
+
+    /// ★★逻辑层基准的驱动器：**逐用例**调用 `__proteus.step()`，每次之间让出主线程。
+    ///
+    /// 为什么这样驱动（同自绘场景的结论）：JSC 的 `evaluateScript` 不排空微任务，
+    /// 而 Vue 的更新调度是微任务 ⇒ 一个用例跑完必须返回主线程，响应式才落地。
+    /// 故：step → 让出 N 轮 → step …… 直到全部用例完成。
+    private func driveBench(ctx: JSContext) {
+        let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
+        let casesJson = evalJs("__proteus.cases()")
+        NSLog("[proteus] bench 用例清单：%@", String(casesJson.prefix(160)))
+
+        // 每个用例的让出轮数：用例内 await nextTick 若干次（G 组 60 次），故给足轮次
+        var rounds = 0
+        let maxRounds = 4000
+        func pumpOnce(_ cont: @escaping () -> Void) {
+            DispatchQueue.main.async { cont() }
+        }
+        func loop() {
+            rounds += 1
+            if rounds > maxRounds { NSLog("[proteus] bench 超轮次上限"); return }
+            let stepOut = evalJs("__proteus.step()")
+            let prog = evalJs("__proteus.progress()")
+            // 每完成若干用例记一次日志（避免日志爆炸）
+            if rounds % 20 == 1 {
+                NSLog("[proteus] bench 进度：%@ / step=%@", String(prog.prefix(120)), String(stepOut.prefix(60)))
+            }
+            if stepOut.contains("\"done\":true") {
+                // 收尾：让微任务彻底排空后再写报告
+                var tail = 0
+                func finishTail() {
+                    if tail < 12 { tail += 1; pumpOnce(finishTail); return }
+                    let out = evalJs("__proteus.finish()")
+                    NSLog("[proteus] bench 完成：%@", String(out.prefix(200)))
+                }
+                finishTail()
+                return
+            }
+            // ★每个用例让出 4 轮（Vue 的微任务 + 用例内的 nextTick 链都在这几轮里排空）
+            var left = 4
+            func next() {
+                if left > 0 { left -= 1; pumpOnce(next); return }
+                loop()
+            }
+            next()
+        }
+        loop()
     }
 
     /// 相位驱动的调度器
