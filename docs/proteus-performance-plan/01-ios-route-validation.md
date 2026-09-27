@@ -192,32 +192,52 @@ A 548ms ──[省 167ms]──> B 381ms ──[省 183ms]──> C 198ms
 2. 180MB 差距**几乎全部来自「每个文本元素一个独立 backing store」**（CATextLayer 各自位图）；
 3. 文本唯一化只让 C 多 35MB ⇒ 说明系统**并未大量共享文本光栅化缓存**，主因确是 per-element 位图。
 
-#### 第三轮：拍平路线的完整取舍（这是**最终推荐**）
+#### 第三轮：再隔离「文本渲染器」——**主因是 CATextLayer，不是 CALayer**
+
+第二轮虽证明「layer 本身更省」，但 180MB 的差仍混杂着**文本渲染器**这一变量（C 组用 CATextLayer、
+B 组用 UILabel）。据 `docs/iOS端内存诊断Checklist.md` §P0-1 的假设
+（「系统 UILabel 对单色 string 有优化；自绘路径默认 sRGB 全通道 → 每文本层多耗约 4 倍」）
+追加三个变体：
+
+| 变体 | 增量内存 | 隔离出的变量 |
+|---|---|---|
+| B UIView + **UILabel** 文本 | 100.9 MB | 系统 label 渲染器 + UIView 结构 |
+| C CALayer + **CATextLayer** 文本 | 186.9 MB | 自绘文本渲染器 + CALayer 结构 |
+| **I CALayer 结构 + UILabel 文本** | **96.0 MB** | ← **结构用 layer、文本用系统 label** |
+| **J CATextLayer + `contentsFormat = .gray8Uint`** | **114.9 MB** | ← Checklist P0-1 |
+| K CATextLayer + `isOpaque` | 187.0 MB | ← Checklist P0-4（**无效**） |
+
+**⇒ 决定性判读**：
+1. **I（96.0MB）≈ B（100.9MB）≪ C（186.9MB）** ⇒ **主因是「CATextLayer 的 backing store 格式」**，
+   而非「CALayer vs UIView」。用系统 label 渲染文本时，**CALayer 结构甚至比纯 UIView 更省**。
+2. **J 证实 Checklist §P0-1 有效**：仅加 `contentsFormat = .gray8Uint` 就让 CATextLayer
+   从 186.9 → **114.9 MB（−39%，省 72MB）**——单通道格式对纯色文本的收益是真实的。
+3. **K 证实 `isOpaque` 对内存无效**（187.0 ≈ 186.9）——与研究一致（opaque 只省 alpha 通道，不减分配）。
+
+#### 第四轮：拍平路线（**最终推荐**）
 
 | 路线 | 耗时 | 增量内存 | 相对 A |
 |---|---|---|---|
-| A UIView + AutoLayout | 525.1 ms | 104.7 MB | 基线 |
-| B UIView + 手算 frame | 365.2 ms | 100.8 MB | 内存 −4% |
-| C CALayer + 手算 frame | 190.5 ms | 186.8 MB | 内存 **+78%** |
+| A UIView + AutoLayout | 525.1 ms | 104.6 MB | 基线 |
+| B UIView + 手算 frame | 365.2 ms | 100.9 MB | 内存 −4% |
+| C CALayer + CATextLayer | 190.5 ms | 186.9 MB | 内存 **+79%** |
 | **H ★拍平（一行一 layer）** | **129.9 ms** | **17.7 MB** | **耗时 −75% · 内存 −83%** |
 
-**⇒ 拍平路线在两项指标上同时最优**：比 CALayer 路线**再快 32%**，内存只有其 **1/10**。
+**⇒ 拍平路线两项同时最优**：比 CALayer 路线再快 **32%**，内存仅其 **1/10**。
 
-**机制**：H 把一行（40 个元素）合并成 **1 个 layer + 1 个 backing store**，
-4000 个元素 → 50 个绘制对象（而非 4000 个）⇒ 位图总量降两个数量级，同时省掉大量
-独立 layer 的合成开销（这解释了它为何也更快）。
+**机制**：4000 个元素 → **50 个绘制对象**（而非 4000）⇒ backing store 总量降两个数量级，
+同时省掉大量独立 layer 的合成开销（故也更快）。
 
-**★与业界做法一致（调研核实，均带来源）**：
-- **uni-app x 蒸汽模式**：官方文档称 `flatten` = 「不创建独立元素，而是绘制在父上」，
-  并声称内存低于原生 view；其路线是「**原生渲染管线 + 自研 UI 框架（自研排版+组件）**」，
-  **不是自绘**（引自 https://doc.dcloud.net.cn/uni-app-x/app-vapor.html）
-- **Texture（Pinterest）** `shouldRasterizeDescendants` / 子树光栅化：**不创建**子 view/layer
-- **ArkUI** `markNodeGroup`：子树合并绘制；**RN Fabric** view flattening：合并纯布局节点
+**★「真拍平 vs 假拍平」辨析**（Checklist §5.1 的警告，本实验已验证）：
+- **真拍平**（本实验 H）：**不创建子 layer**，文本绘制进**父级已有的** backing store
+  ⇒ 50 个 row layer 各有 1 块位图，总量 = 50 块（本实验即此形态）；
+- **假拍平**（危险）：为合并而**新建一张合成位图**，再把子节点画进去 ⇒ 位图总量反而增加。
+- 判据：**看 backing store 总数是降了还是涨了**——不能只看 layer 数。
 
-**★拍平的已知代价（业界文档一致，必须继承）**：拍平节点**不支持事件（click/touch）、
-不支持截图 API、不支持 z-index/background-image**——与 uni-app x 官方对 `flatten` 的约束完全一致。
-⇒ 实现时须在 **IR 层判定**「哪些节点可拍平」（无事件、无 transform、非动画目标、非自定义组件根），
-且**违规必须编译期报错**（本仓「诚实边界」纪律）。
+**★与业界一致（调研带来源）**：uni-app x 蒸汽模式 `flatten`（官方原文「不创建独立元素，绘制在父上」，
+路线是「原生渲染管线 + 自研 UI 框架」**非自绘**）· Texture `shouldRasterizeDescendants`
+（**不创建**子 view/layer）· ArkUI `markNodeGroup` · RN view flattening。
+**代价（业界一致）**：拍平节点**不支持事件/截图/z-index** ⇒ 须 IR 层判定 + 编译期报错。
 
 **⇒ 对方案文档 D4（拍平）的最终建议**：
 - **拍平从「优化项」升为「主路径」**：它是 iOS 侧唯一同时赢得耗时与内存的手段；

@@ -718,6 +718,77 @@ func buildMemVariant(host: UIView, kind: String) {
     if kind == "A" { buildAutoLayout(host: host); return }
     if kind == "H" { buildCompactRows(host: host); return }
 
+    // ── I/J/K：用户 Checklist §P0-1 的假设验证 ──────────────────────────────
+    //   I: CALayer 结构 + **UILabel 作为子视图**（文本用系统 label，结构用 layer）
+    //      ⇒ 若 I 接近 B（100MB）而非 C（187MB），则证明**主因是 CATextLayer 而非 CALayer**
+    //   J: CATextLayer + `contentsFormat = gray8Uint`（Checklist P0-1：单通道紧凑格式）
+    //   K: CATextLayer + opaque + 匹配 contentsScale（Checklist P0-4/§5.5）
+    if kind == "I" || kind == "J" || kind == "K" {
+        var textCache: [String: CGSize] = [:]
+        for t in TEXTS { textCache[t] = measure(t) }
+        var y: CGFloat = 0
+        for r in 0..<rows {
+            var rowH3 = rowH
+            var sizes: [CGSize] = []
+            for c in 0..<cols {
+                let t = TEXTS[(r * cols + c) % TEXTS.count]
+                let sz = textCache[t] ?? measure(t)
+                sizes.append(sz)
+                rowH3 = max(rowH3, sz.height + ITEM_PAD * 2)
+            }
+            let rowFrame = CGRect(x: 0, y: y, width: host.bounds.width, height: rowH3)
+            let row = CALayer()
+            row.frame = rowFrame
+            row.backgroundColor = UIColor(white: 0.12, alpha: 1).cgColor
+            host.layer.addSublayer(row)
+            var x: CGFloat = 0
+            for c in 0..<cols {
+                let sz = sizes[c]
+                let w = sz.width + ITEM_PAD * 2
+                let itemFrame = CGRect(x: x, y: 0, width: w, height: rowH3)
+                let t = TEXTS[(r * cols + c) % TEXTS.count]
+
+                if kind == "I" {
+                    // 结构用 CALayer，文本用系统 UILabel（作为子视图）
+                    let item = CALayer()
+                    item.frame = itemFrame
+                    item.backgroundColor = UIColor(white: 0.2, alpha: 1).cgColor
+                    row.addSublayer(item)
+                    // UILabel 必须依附于 UIView（这里用 row 的宿主视图做容器，逐行加）
+                    let lbl = UILabel(frame: CGRect(x: itemFrame.minX + ITEM_PAD, y: ITEM_PAD,
+                                                    width: sz.width, height: sz.height))
+                    lbl.font = FONT; lbl.textColor = .white; lbl.text = t
+                    // 用宿主视图承载（CALayer 不能直接加 UILabel）——语义等价：结构是 layer，文本是 UILabel
+                    host.addSubview(lbl)
+                } else {
+                    let item = CALayer()
+                    item.frame = itemFrame
+                    item.backgroundColor = UIColor(white: 0.2, alpha: 1).cgColor
+                    row.addSublayer(item)
+                    let tl = CATextLayer()
+                    if kind == "J" {
+                        // P0-1：单通道紧凑格式（纯色文本）
+                        if #available(iOS 13.0, *) { tl.contentsFormat = .gray8Uint }
+                    }
+                    tl.contentsScale = UIScreen.main.scale
+                    if kind == "K" {
+                        tl.isOpaque = true
+                        tl.backgroundColor = UIColor(white: 0.2, alpha: 1).cgColor
+                    }
+                    tl.frame = CGRect(x: ITEM_PAD, y: ITEM_PAD, width: sz.width, height: sz.height)
+                    tl.string = t
+                    tl.font = FONT; tl.fontSize = FONT.pointSize
+                    tl.foregroundColor = UIColor.white.cgColor
+                    tl.isWrapped = false
+                    item.addSublayer(tl)
+                }
+                x += w + ITEM_GAP
+            }
+            y += rowH3 + ROW_GAP
+        }
+        return
+    }
+
     var textCache: [String: CGSize] = [:]
     for t in TEXTS { textCache[t] = measure(t) }
     var y: CGFloat = 0
