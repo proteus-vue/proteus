@@ -35,6 +35,9 @@ func proteus_layout_version() -> UnsafeMutablePointer<CChar>
 @_silgen_name("proteus_layout_free_string")
 func proteus_layout_free_string(_ ptr: UnsafeMutablePointer<CChar>)
 
+@_silgen_name("proteus_layout_profile")
+func proteus_layout_profile(_ json: UnsafePointer<CChar>, _ useBlob: Bool) -> UnsafeMutablePointer<CChar>
+
 func takeString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     defer { proteus_layout_free_string(ptr) }
     return String(cString: ptr)
@@ -73,6 +76,28 @@ enum BenchSpec {
     ///   §9.2 要求 item 不设宽高（尺寸由内部文字撑开）→ 无度量则尺寸为 0（本仓实测踩到）。
     ///   真实实现里这是**平台注入**的度量回调（CoreText/StaticLayout），这里用固定值模拟。
     static let textSize = CGSize(width: 24, height: 14)
+
+    /// **定宽高对照请求**（同规模、无内容测量）——用于分离「规模」与「尺寸模式」两个变量
+    static func requestJSONFixedSize() -> String {
+        var s = "{\"viewport\":{\"width\":750,\"height\":2400},\"nodes\":["
+        s += "{\"id\":1,\"parentId\":null,\"width\":750.0,\"flexDirection\":\"column\"}"
+        var id = 2
+        let w = String(format: "%.1f", textSize.width)
+        let h = String(format: "%.1f", textSize.height)
+        for _ in 0..<rows {
+            s += ",{\"id\":\(id),\"parentId\":1,\"flexDirection\":\"row\",\"gap\":4.0,\"flexShrink\":0.0}"
+            let rowId = id; id += 1
+            for _ in 0..<cols {
+                // ★view 直接给定宽高（不求内容）—— 与「内容撑开」构成唯一变量差异
+                s += ",{\"id\":\(id),\"parentId\":\(rowId),\"width\":\(w),\"height\":\(h),\"flexShrink\":0.0}"
+                let itemId = id; id += 1
+                s += ",{\"id\":\(id),\"parentId\":\(itemId),\"width\":\(w),\"height\":\(h),\"flexShrink\":0.0,\"isText\":true}"
+                id += 1
+            }
+        }
+        s += "],\"textMeasures\":{}}"
+        return s
+    }
 
     static func requestJSON() -> String {
         var s = "{\"viewport\":{\"width\":750,\"height\":2400},\"nodes\":["
@@ -266,6 +291,18 @@ final class BenchViewController: UIViewController {
 
         // ── 基线内存（建场景前）──
         let baseMB = physFootprintMB()
+
+        // ── ⓪ ★真机分解计时（定位 76ms 的构成 —— 不靠推断）──
+        //   ★两个变量必须分离：**规模**（4051 节点）vs **尺寸模式**（内容撑开 / 定宽高）
+        //     ① 内容撑开（§9.2 规格，item 不设宽高）  → 触发内容测量
+        //     ② 定宽高（对照）                        → 无内容测量
+        let jsonForProf = BenchSpec.requestJSON()
+        out["profile_json"] = jsonForProf.withCString { takeString(proteus_layout_profile($0, false)) }
+        out["profile_blob"] = jsonForProf.withCString { takeString(proteus_layout_profile($0, true)) }
+
+        // ② 定宽高对照（同规模、无内容测量）
+        let jsonFixed = BenchSpec.requestJSONFixedSize()
+        out["profile_fixed_size"] = jsonFixed.withCString { takeString(proteus_layout_profile($0, false)) }
 
         // ── ① Rust 布局（4051 节点）──
         let json = BenchSpec.requestJSON()

@@ -17,10 +17,12 @@
 //   · `engine`          → `layout/`（**抽象边界**：引擎原生 API 不得泄漏）
 //   · `taffy_engine`    → `layout/` 的实现（唯一允许出现 taffy:: 的文件）
 //   · `ffi`             → **C ABI 边界**（三端共享：iOS ObjC++ / Android JNI / 鸿蒙 NAPI）
+//   · `blob`            → **二进制扁平化产物**（M0 计划项；实测证实的硬需求，见模块头注释）
 //   · `recycle`         → **列表复用池 + 生命周期状态机**（§12.6 三档 + 方向敏感预加载区）
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
+pub mod blob;
 pub mod engine;
 pub mod ffi;
 #[cfg(target_os = "android")]
