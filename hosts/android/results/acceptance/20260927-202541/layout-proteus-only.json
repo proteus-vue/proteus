@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "path": "proteus",
+  "elements": 4051,
+  "rust_layout_ms": 5,
+  "emit_cmds_ms": 1,
+  "total_ms": 6,
+  "cmd_count": 2000,
+  "view_count": 1,
+  "note": "内存专用路径：只建结构（Rust 树 + 指令表），不分配测量位图"
+}

@@ -1,0 +1,34 @@
+=== Rust 排版核心 · Android 真机验证 ===
+设备：Xiaomi M098FE · Android 17（API 37）
+ABI：arm64-v8a
+引擎：proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）
+JNI 符号自检：✓ 通过
+测试通路：proteus-noflatten（脚本以 --es path 注入，两次冷启动隔离内存）
+起始 PSS：59671 KB
+
+【① 与浏览器基准的一致性】
+{"ok":true,"cases":17,"compared_nodes":67,"max_delta_dp":0.375,"tolerance_dp":0.5,"failures":[]}
+
+【② 4050 元素布局性能（纯排版）】
+{"ok":true,"node_count":4051,"iterations":20,"median_ms":1.98,"min_ms":1.866,"max_ms":7.485,"measure_calls_first":0}
+
+【③ Proteus 不拍平形态（每元素一个绘制对象）】
+{
+  "ok": true,
+  "path": "proteus-noflatten",
+  "elements": 4051,
+  "rust_layout_ms": 5,
+  "emit_cmds_ms": 0,
+  "build_render_nodes_ms": 9,
+  "draw_all_nodes_ms": 0,
+  "total_ms": 14,
+  "render_node_count": 2000,
+  "note": "★不拍平形态：每元素一个 RenderNode（独立绘制对象）——§9.2 要求其耗时仍 ≤ 原生"
+}
+
+【④ §9.2 环境核验】
+观测到的 CPU：0,1,2,3,4,5（prime=0 · normal=6）
+温度：95000 → 95000 (m°C)
+
+【⑤ 增量内存（§9.2，纯结构口径）】
+baseline=59671 KB · after=87988 KB · delta=28317 KB

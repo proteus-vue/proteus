@@ -238,4 +238,50 @@ public class ProteusHostView extends View {
 
     /** 报告图集规模（可观测：命中率与内存占用的证据） */
     public int atlasSize() { return textAtlas.size(); }
+
+    /* ══════════════ ★§9.2「不拍平时」对照变体（拍平的另一极） ══════════════ */
+
+    /**
+     * ★「不拍平」结构：**每个元素创建自己的绘制对象**（Android 上 = 一个 `RenderNode`）。
+     *
+     * 与主路径的区别（即方案 §12.3 的两种形态）：
+     *   · **真拍平**（主路径 `drawCmds`/`drawCmdsOptimized`）：不创建绘制对象，
+     *     所有指令直接下发到**宿主已有的 Canvas**（复用宿主 backing store）→ ✅ 采用
+     *   · **不拍平**（本方法）：每元素一个 `RenderNode`（各自持有 DisplayList + 可能的离屏缓冲）
+     *     → 正是 iOS 实验里「一行一个 layer」在 Android 的同构形态
+     *
+     * 为何要测：§9.2 明确要求「**不拍平时的耗时仍 ≤ 原生**」——
+     * 拍平只对静态子树生效，动态内容（列表、轮播）不走拍平，故这是**能力下限**的验证。
+     */
+    private final java.util.List<android.graphics.RenderNode> unflattened =
+            new java.util.ArrayList<>();
+
+    /** 建立「不拍平」结构（每元素一个独立绘制对象） */
+    public void buildUnflattened() {
+        unflattened.clear();
+        final int n = cmds.size();
+        for (int i = 0; i < n; i++) {
+            final Cmd c = cmds.get(i);
+            android.graphics.RenderNode node = new android.graphics.RenderNode("el");
+            // 位置设在自身坐标（子节点内部用相对坐标绘制）
+            node.setPosition((int) c.x, (int) c.y, (int) (c.x + c.w), (int) (c.y + c.h));
+            android.graphics.RecordingCanvas rc = node.beginRecording();
+            bgPaint.setColor(c.color);
+            rc.drawRect(0f, 0f, c.w, c.h, bgPaint);
+            if (c.text != null) rc.drawText(c.text, 1f, c.h * 0.8f, textPaint);
+            node.endRecording();
+            unflattened.add(node);
+        }
+    }
+
+    /** 绘制「不拍平」结构（逐个 drawRenderNode，不做任何批量） */
+    public void drawUnflattened(Canvas canvas) {
+        final int n = unflattened.size();
+        for (int i = 0; i < n; i++) {
+            canvas.drawRenderNode(unflattened.get(i));
+        }
+    }
+
+    /** 报告「不拍平」结构的对象数（供报告与内存归因） */
+    public int unflattenedCount() { return unflattened.size(); }
 }
