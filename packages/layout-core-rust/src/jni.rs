@@ -98,3 +98,44 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeRecycleBench
     .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
     into_java_string(&mut env, out)
 }
+
+/// `RustLayout.nativeCreate(requestJson: String): Long` —— 建树并**保留**（返回句柄）
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeCreate<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JString<'local>,
+) -> jni::sys::jlong {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> i64 {
+        let raw: String = match env.get_string(&request) {
+            Ok(s) => s.into(),
+            Err(_) => return 0,
+        };
+        let c = match std::ffi::CString::new(raw) {
+            Ok(c) => c,
+            Err(_) => return 0,
+        };
+        unsafe { crate::ffi::proteus_layout_create(c.as_ptr()) as i64 }
+    }))
+    .unwrap_or(0)
+}
+
+/// `RustLayout.nativeDestroy(handle: Long): Boolean`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeDestroy<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jni::sys::jboolean {
+    let ok = std::panic::catch_unwind(|| crate::ffi::proteus_layout_destroy(handle as u64)).unwrap_or(false);
+    if ok { 1 } else { 0 }
+}
+
+/// `RustLayout.nativeHandleCount(): Int`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHandleCount<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jni::sys::jint {
+    std::panic::catch_unwind(|| crate::ffi::proteus_layout_handle_count()).unwrap_or(0) as i32
+}

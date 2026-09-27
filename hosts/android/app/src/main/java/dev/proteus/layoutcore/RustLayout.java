@@ -30,6 +30,9 @@ final class RustLayout {
     private static native String nativeConformance(String goldenJson);
     private static native String nativeBench(int nodeCount, int iterations);
     private static native String nativeRecycleBench(int rows, int frames);
+    private static native long nativeCreate(String requestJson);
+    private static native boolean nativeDestroy(long handle);
+    private static native int nativeHandleCount();
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -59,6 +62,27 @@ final class RustLayout {
 
     static String bench(int nodeCount, int iterations) {
         return loaded ? nativeBench(nodeCount, iterations) : "{\"ok\":false,\"error\":\"native 未加载：" + loadError + "\"}";
+    }
+
+    /**
+     * ★**建树并保留**（返回句柄；0 = 失败）。
+     *
+     * 为什么需要（本仓实测暴露）：方案 §5.1 的节点树语义是「页面存活期间常驻」，
+     * 而早期 API（conformance / bench）用完即弃 → ① 真实 App 无法持有页面树
+     * ② 内存对比时拿「渲染完即销毁」对「一直持有」，比值是假象。
+     */
+    static long create(String requestJson) {
+        return loaded ? nativeCreate(requestJson) : 0L;
+    }
+
+    /** 释放句柄（页面销毁） */
+    static boolean destroy(long handle) {
+        return loaded && nativeDestroy(handle);
+    }
+
+    /** 当前存活的树数（诊断：确认 destroy 真的释放） */
+    static int handleCount() {
+        return loaded ? nativeHandleCount() : -1;
     }
 
     /** ★§9.3 长列表复用池跑批（4000 行 / 滚到底再回滚） */

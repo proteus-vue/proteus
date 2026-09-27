@@ -221,23 +221,30 @@ for r in rows:
     if primen > len(cls) / 2: prime_warn.append(label)
     print(f"{idx:<6}{label:<28}{delta:<14}{tag:<28}{tb}→{ta}")
 
-# ★按通路聚合：内存只用 `-mem` 纯结构口径（`proteus-perf` 含 63MB 测量位图，混入会失真）
-import collections
+# ★★内存读数以 **app 自报的 pss_delta_kb** 为准（自包含窗口），
+#   不再用脚本侧 before/after（那个窗口里串了 conformance + bench，读数会虚涨）
+import collections, glob
 agg = collections.defaultdict(list)
-for r in rows:
-    if 'first-install' in r[1]: continue
-    if not (r[2].isdigit() and r[3].isdigit()): continue
-    name = r[1].split('-')[0]
-    if 'mem' in r[1]: name = 'proteus-mem'
-    elif r[1].startswith('native'): name = 'native'
-    elif 'perf' in r[1]: name = 'proteus-perf(含测量位图，不计入内存对比)'
-    agg[name].append(int(r[3]) - int(r[2]))
+for f in glob.glob(os.path.join(dest, 'layout-*-only.json')) + glob.glob(os.path.join(dest, 'layout-proteus-only.json')):
+    try:
+        j = json.load(open(f))
+        path = j.get('path', '')
+        if 'pss_delta_kb' in j:
+            agg[path].append(j['pss_delta_kb'])
+    except Exception:
+        pass
+# 兜底：若 app 自报不可用，回落到脚本侧（并标注口径）
+if not agg:
+    for r in rows:
+        if 'first-install' in r[1] or not (r[2].isdigit() and r[3].isdigit()):
+            continue
+        agg['(脚本侧口径) ' + r[1].split('-')[0]].append(int(r[3]) - int(r[2]))
 
 print()
-print("═══ 增量内存汇总（§9.2 · 纯结构口径，排除 first-install）═══")
+print("═══ 增量内存汇总（§9.2 · **app 自报的自包含窗口**）═══")
 for k, v in agg.items():
     print(f"  {k}: 均值 {int(statistics.mean(v))} KB（{v}）")
-pm = agg.get('proteus-mem', [])
+pm = agg.get('proteus-mem', []) or agg.get('proteus', [])
 nv = agg.get('native', [])
 if pm and nv:
     p_, n_ = statistics.mean(pm), statistics.mean(nv)

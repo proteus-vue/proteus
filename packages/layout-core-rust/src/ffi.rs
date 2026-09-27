@@ -381,6 +381,101 @@ pub unsafe extern "C" fn proteus_layout_run(request_json: *const c_char) -> *mut
     }
 }
 
+/* ────────────────────────── ★句柄式生命周期 API（树常驻，符合 §5.1 节点树语义） ────────────────────────── */
+
+/// 全局树注册表：handle → LayoutTree
+///
+/// ★★为什么必须有它（本仓实测暴露的两件事）：
+///   ① **架构缺口**：方案 §5.1 的节点树语义是「页面存活期间常驻」，而此前的 FFI
+///      （`conformance` / `bench`）都是**用完即弃**——真实 App 无法持有一棵页面树。
+///   ② **测量不对等**：内存对比时，原生侧 4051 个 View **持续存活**，
+///      而 Proteus 侧的 Rust 树在 `bench()` 返回时就释放了 →
+///      相当于拿「渲染完即销毁」对「一直持有」，得到的 0.096 比值是**假象**。
+///
+///   句柄式 API 让宿主能：`create`（建树并保留）→ 多次 `rects`（读几何）→ `destroy`（释放），
+///   与原生 View 树的生命周期**同构**，measurement 才可比。
+static TREE_REGISTRY: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, LayoutTree>>> =
+    std::sync::OnceLock::new();
+static NEXT_HANDLE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn registry() -> &'static std::sync::Mutex<std::collections::HashMap<u64, LayoutTree>> {
+    TREE_REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// **建树并保留**（返回句柄；0 = 失败）。
+///
+/// # Safety
+/// `request_json` 须为有效 NUL 结尾 C 字符串。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u64 {
+    let r = std::panic::catch_unwind(|| -> Result<u64, String> {
+        if request_json.is_null() {
+            return Err("request_json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(request_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let req: LayoutRequest = serde_json::from_str(raw).map_err(|e| format!("请求解析失败：{e}"))?;
+        let (mut tree, _) = build_tree(&req)?;
+        // 立即布局一次（真实语义：建树后即有几何）
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(&req)));
+        let constraint = match (req.viewport.width, req.viewport.height) {
+            (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
+            (w, _) if w > 0.0 => RootConstraint::loose_width(w),
+            _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+        };
+        engine.layout(&mut tree, constraint);
+        let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        registry().lock().map_err(|_| "注册表锁失败".to_string())?.insert(handle, tree);
+        Ok(handle)
+    });
+    match r {
+        Ok(Ok(h)) => h,
+        _ => 0,
+    }
+}
+
+/// 读句柄对应的绝对矩形（JSON）
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let tree = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let abs = tree.absolute_rects();
+        let mut rects = serde_json::Map::new();
+        for (i, r) in abs.iter().enumerate() {
+            if let Some(r) = r {
+                rects.insert(
+                    tree.nodes[i].id.to_string(),
+                    serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height}),
+                );
+            }
+        }
+        Ok(serde_json::json!({"ok": true, "node_count": tree.len(), "rects": rects}).to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// **释放句柄**（宿主在页面销毁时调用）
+#[no_mangle]
+pub extern "C" fn proteus_layout_destroy(handle: u64) -> bool {
+    let r = std::panic::catch_unwind(|| -> bool {
+        registry().lock().map(|mut m| m.remove(&handle).is_some()).unwrap_or(false)
+    });
+    r.unwrap_or(false)
+}
+
+/// 当前存活的树数量（诊断/验收：确认 destroy 真的释放了）
+#[no_mangle]
+pub extern "C" fn proteus_layout_handle_count() -> u32 {
+    registry().lock().map(|m| m.len() as u32).unwrap_or(0)
+}
+
 /* ────────────────────────── 实现（与 FFI 解耦，便于单测） ────────────────────────── */
 
 /// ★唯一的布局执行路径：`LayoutRequest` → （树, 绝对矩形）
@@ -637,6 +732,49 @@ mod tests {
         let out = run_conformance("{ not json").expect_err("坏 JSON 应返回 Err");
         assert!(out.contains("解析失败"), "错误信息应指明解析失败：{out}");
         assert!(run_bench(0, 1).is_err(), "node_count=0 应报错");
+    }
+
+    /// ★句柄生命周期：create → rects → destroy → 再次 rects 应失败
+    #[test]
+    fn handle_lifecycle_creates_retains_destroys() {
+        let req = serde_json::json!({
+            "viewport": {"width": 375.0, "height": 812.0},
+            "nodes": [
+                {"id": 1, "parentId": null, "width": 300.0, "height": 100.0, "flexDirection": "column"},
+                {"id": 2, "parentId": 1, "width": 50.0, "height": 30.0}
+            ],
+            "textMeasures": {}
+        }).to_string();
+        let c = std::ffi::CString::new(req).unwrap();
+        let h = unsafe { proteus_layout_create(c.as_ptr()) };
+        assert!(h > 0, "create 应返回有效句柄");
+        assert!(proteus_layout_handle_count() >= 1, "树应常驻");
+
+        // 读几何
+        let p = unsafe { proteus_layout_rects(h) };
+        let out = unsafe { std::ffi::CStr::from_ptr(p) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p) };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["node_count"], 2);
+
+        // 释放后应查不到（★这是「destroy 真的释放」的证据）
+        assert!(proteus_layout_destroy(h), "destroy 应成功");
+        let p2 = unsafe { proteus_layout_rects(h) };
+        let out2 = unsafe { std::ffi::CStr::from_ptr(p2) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p2) };
+        assert!(out2.contains("\"ok\":false"), "释放后读应失败：{out2}");
+    }
+
+    /// 破坏性：无效句柄不得 panic
+    #[test]
+    fn invalid_handle_is_safe() {
+        let p = unsafe { proteus_layout_rects(999999) };
+        assert!(!p.is_null());
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p) };
+        assert!(s.contains("\"ok\":false"));
+        assert!(!proteus_layout_destroy(999999), "销毁无效句柄应返回 false");
     }
 
     /// FFI 边界：空指针 / 非法 UTF-8 不得 panic
