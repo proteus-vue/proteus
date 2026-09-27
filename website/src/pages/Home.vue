@@ -12,6 +12,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { STATS, COMPARE_MATRIX, type StatItem } from '../stats'
 import TransformDemo from '../components/TransformDemo.vue'
 import FeatureIcon from '../components/FeatureIcon.vue'
+// ★2026-09-29：多端同屏横幅的形态芯片改为**自绘图标 + 从画像 SSOT 派生**
+//   （此前手写 6 个 emoji 芯片：漏了 fold/flip 两类折叠屏，且硬编码中文——EN 站也显示中文）
+import DemoIcon from '../components/DemoIcon.vue'
+import { FORM_PROFILES } from '@proteus-vue/fluid'
+import type { DeviceForm } from '@proteus-vue/fluid'
 import WireframeCore from '../components/WireframeCore.vue'
 import VectorOrb from '../components/VectorOrb.vue'
 // ★#475 首页国际化（chrome t() + 数据数组 locale 双份）
@@ -174,10 +179,23 @@ const scenariosEn = [
   { icon: 'box', title: 'Design systems & libraries', desc: '183 semantic primitives SSOT drive 76 semantic components + design tokens; layout semantics checked at compile time, not patched with CSS.' },
 ]
 
+/** ★多端同屏横幅·形态芯片：图标名 + 标签**全部从 FORM_PROFILES 派生**（SSOT）——
+ *  加减形态时这里自动跟随（此前手写列表漏掉折叠屏两类、也不会随语言切换）。 */
+const DEVICE_ICONS: Record<DeviceForm, string> = {
+  watch: 'watch', phone: 'phone', flip: 'flip', fold: 'fold', tablet: 'tablet', pc: 'pc', car: 'car', tv: 'tv',
+}
+const deviceChips = computed(() =>
+  (Object.keys(FORM_PROFILES) as DeviceForm[]).map((k) => ({
+    key: k,
+    ic: DEVICE_ICONS[k],
+    label: locale.value === 'en' ? FORM_PROFILES[k].label.en : FORM_PROFILES[k].label.zh,
+  })),
+)
+
 // 生态支持（技术栈）
 const stackItems = [
   { name: 'Vue 3', short: 'V', color: '#42b883' },
-  { name: 'Vite', short: '⚡', color: '#a996ff' },
+  { name: 'Vite', short: 'Vt', color: '#a996ff' },
   { name: 'TypeScript', short: 'TS', color: '#3178c6' },
   { name: 'Pinia', short: 'P', color: '#ffd54f' },
   { name: 'UnoCSS', short: 'U', color: '#e5e7eb' },
@@ -419,7 +437,9 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
           <span class="md-band-cta">{{ t('home.mdCta') }} →</span>
         </p-view>
         <p-view class="md-band-devices" aria-hidden="true">
-          <span v-for="d in ['📱 手机', '📐 平板', '💻 PC / Mac', '🚗 车机', '📺 TV / 大屏', '⌚ 手表']" :key="d" class="md-chip">{{ d }}</span>
+          <span v-for="d in deviceChips" :key="d.key" class="md-chip">
+            <DemoIcon class="md-chip-ic" :name="d.ic" />{{ d.label }}
+          </span>
         </p-view>
       </router-link>
     </p-view>
@@ -1031,6 +1051,7 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
   gap: 8px;
   flex-shrink: 0;
 }
+.md-chip-ic { font-size: 13px; color: var(--brand-ink); }
 .md-chip {
   display: inline-flex;
   align-items: center;

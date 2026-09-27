@@ -11,6 +11,7 @@ import { searchDocs, type SearchIndexEntry } from '@proteus-vue/docs'
 // ★#468 chrome 双语（doc.i18n）
 import { createFocusTrap, shortcutLabel, detectShortcutPlatform, scrollToId } from '@proteus-vue/desktop'
 import { t, sectionName } from './i18n'
+import DemoIcon from './components/DemoIcon.vue'
 
 interface Hit extends SearchIndexEntry {
   /** 所属页标题（面包屑 分区 · 页） */
@@ -132,7 +133,7 @@ const hintText = computed(() => t('search.hint'))
 
 <template>
   <button v-p-shortcut="{ expr: 'mod+k:open', handler: () => toggle(true) }" class="docsearch-trigger" type="button" :aria-label="triggerLabel" @click="toggle(true)">
-    <span class="ds-icon" aria-hidden="true">⌕</span>
+    <DemoIcon class="ds-icon" name="search" aria-hidden="true" />
     <span class="ds-placeholder">{{ triggerLabel }}</span>
     <kbd class="ds-kbd">{{ shortcutKbd }}</kbd>
   </button>
@@ -141,7 +142,7 @@ const hintText = computed(() => t('search.hint'))
     <div v-if="open" class="docsearch-overlay" @click.self="toggle(false)">
       <div ref="modalEl" v-p-shortcut="{ expr: 'escape:close', handler: () => toggle(false) }" class="docsearch-modal" role="dialog" aria-modal="true">
         <div class="docsearch-inputrow">
-          <span class="ds-icon" aria-hidden="true">⌕</span>
+          <DemoIcon class="ds-icon" name="search" aria-hidden="true" />
           <input ref="inputEl" v-model="q" type="search" class="docsearch-input" :placeholder="placeholder" @keydown="onInputKey" />
           <kbd class="ds-kbd">Esc</kbd>
         </div>
@@ -197,7 +198,7 @@ const hintText = computed(() => t('search.hint'))
   padding: 1px 5px;
   background: var(--panel2);
 }
-.ds-icon { font-size: 15px; line-height: 1; }
+.ds-icon { font-size: 15px; line-height: 1; color: currentColor; flex-shrink: 0; }
 
 /* 弹层 */
 .docsearch-overlay {

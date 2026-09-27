@@ -5,12 +5,14 @@
 //   /脚手架工程）——每个案例都开源可查，不做不可验证的宣称；「你的项目」卡为诚实占位。
 import { computed } from 'vue'
 import { locale } from '../i18n'
+// ★2026-09-29 风格统一：卡片图标改自绘线性图标（原为 emoji 🌐🧩📱⚡🚀——跨平台字形不一）
+import DemoIcon from '../components/DemoIcon.vue'
 
 const isEn = computed(() => locale.value === 'en')
 
 const cases = computed(() => [
   {
-    icon: '🌐',
+    icon: 'globe',
     title: isEn.value ? 'This website' : 'Proteus 官网本身',
     desc: isEn.value
       ? 'The site you are reading is built with Proteus itself — p-grid is rendering this page right now. Fluid layout with zero @media, docs compiled from markdown at build time.'
@@ -20,7 +22,7 @@ const cases = computed(() => [
     linkText: isEn.value ? 'View home' : '回到首页',
   },
   {
-    icon: '🧩',
+    icon: 'blocks',
     title: isEn.value ? 'Showcase demo app' : 'Showcase 演示站',
     desc: isEn.value
       ? '73 component pages with live interactive demos, plus capability demos — one Vue source compiled to Web and WeChat mini-program (Skyline). It also powers the live demo embedded in every component doc page.'
@@ -30,7 +32,7 @@ const cases = computed(() => [
     linkText: isEn.value ? 'Browse components' : '浏览组件',
   },
   {
-    icon: '📱',
+    icon: 'phone',
     title: isEn.value ? 'Multi-device demo' : '多端同屏',
     desc: isEn.value
       ? 'One product-detail page rendered into eight device forms — watch / phone / foldable (book) / flip / tablet / PC / in-car / TV. Switch the form and watch the render decision change, not your code.'
@@ -40,7 +42,7 @@ const cases = computed(() => [
     linkText: isEn.value ? 'Open demo' : '打开演示',
   },
   {
-    icon: '⚡',
+    icon: 'bolt',
     title: isEn.value ? 'create-proteus scaffold' : 'create-proteus 脚手架工程',
     desc: isEn.value
       ? 'One command generates a 32-file dual-target project (Web + WeChat mini-program): compile pipeline, router, runtime, app skeleton — everything the docs describe, ready to run.'
@@ -67,7 +69,7 @@ const cases = computed(() => [
 
     <div class="eco-grid">
       <article v-for="c in cases" :key="c.title" class="eco-card">
-        <span class="eco-icon" aria-hidden="true">{{ c.icon }}</span>
+        <DemoIcon class="eco-icon" :name="c.icon" />
         <h2 class="eco-card-title">{{ c.title }}</h2>
         <p class="eco-card-desc">{{ c.desc }}</p>
         <p class="eco-tags">
@@ -79,7 +81,7 @@ const cases = computed(() => [
 
       <!-- 诚实占位：生态成长中 -->
       <article class="eco-card eco-card--placeholder">
-        <span class="eco-icon" aria-hidden="true">🚀</span>
+        <DemoIcon class="eco-icon" name="plus-circle" />
         <h2 class="eco-card-title">{{ isEn ? 'Your project here' : '你的项目' }}</h2>
         <p class="eco-card-desc">
           {{
@@ -132,7 +134,7 @@ const cases = computed(() => [
   transition: border-color 0.16s ease, transform 0.16s ease;
 }
 .eco-card:hover { border-color: rgba(124, 92, 255, 0.5); transform: translateY(-2px); }
-.eco-icon { font-size: 26px; line-height: 1; }
+.eco-icon { font-size: 26px; line-height: 1; color: var(--brand-ink); }
 .eco-card-title { color: var(--ink); font-size: 16.5px; font-weight: 700; margin: 0; }
 .eco-card-desc { color: var(--muted); font-size: 13px; line-height: 1.75; margin: 0; flex: 1; }
 .eco-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
