@@ -139,3 +139,23 @@ pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeHandleCount<
 ) -> jni::sys::jint {
     std::panic::catch_unwind(|| crate::ffi::proteus_layout_handle_count()).unwrap_or(0) as i32
 }
+
+/// `RustLayout.nativeReadRects(handle: Long): String`
+#[no_mangle]
+pub extern "system" fn Java_dev_proteus_layoutcore_RustLayout_nativeReadRects<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jni::sys::jlong,
+) -> jstring {
+    let out = std::panic::catch_unwind(|| -> String {
+        let p = unsafe { crate::ffi::proteus_layout_rects(handle as u64) };
+        if p.is_null() {
+            return "{\"ok\":false,\"error\":\"null\"}".to_string();
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        unsafe { crate::ffi::proteus_layout_free_string(p) };
+        s
+    })
+    .unwrap_or_else(|_| "{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string());
+    into_java_string(&mut env, out)
+}

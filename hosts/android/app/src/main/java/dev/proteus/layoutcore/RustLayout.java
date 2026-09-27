@@ -33,6 +33,7 @@ final class RustLayout {
     private static native long nativeCreate(String requestJson);
     private static native boolean nativeDestroy(long handle);
     private static native int nativeHandleCount();
+    private static native String nativeReadRects(long handle);
 
     static boolean isLoaded() { return loaded; }
     static String getLoadError() { return loadError; }
@@ -78,6 +79,11 @@ final class RustLayout {
     /** 释放句柄（页面销毁） */
     static boolean destroy(long handle) {
         return loaded && nativeDestroy(handle);
+    }
+
+    /** 读取句柄对应的绝对矩形（JSON；供截图回归等场景把几何映射到屏幕坐标） */
+    static String readRects(long handle) {
+        return loaded ? nativeReadRects(handle) : "{\"ok\":false,\"error\":\"native 未加载\"}";
     }
 
     /** 当前存活的树数（诊断：确认 destroy 真的释放） */

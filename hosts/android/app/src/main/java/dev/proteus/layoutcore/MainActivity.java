@@ -204,6 +204,15 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("shot".equals(testPath)) {
+            // ★★截图回归（内容级等价验证）
+            //   目的：闭环验证「**Rust 算出的几何 → 屏幕上的真实像素**」。
+            //   此前像素校验比的是「两条光栅化路径」（drawText vs drawBitmap）——**不可比**；
+            //   本路径比的是「几何预测」与「屏幕实际呈现」，两侧独立、真正可比。
+            sb.append("【③ 截图回归场景】\n");
+            String shot = setupScreenshotScene();
+            sb.append(shot).append('\n');
+            writeReport("layout-shot-scene.json", shot);
         } else if ("recycle".equals(testPath)) {
             // ★§9.3 长列表验收：4000 行滚到底再回滚，看复用率与内存收敛
             sb.append("【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】\n");
@@ -282,10 +291,16 @@ public class MainActivity extends Activity {
         }
 
         String text = sb.toString();
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextSize(9f);
-        root.addView(tv);
+        // ★★截图模式下**不要**把报告文本加到界面上（本仓实测教训）：
+        //   报告 TextView 是后加的子 View → **盖在场景之上** → 其文本行被截进截图，
+        //   在场景里表现为「行内部出现灰色横条」（实测 y=732/760-772 正是文字行）。
+        //   截图核验要求屏幕上只有被测场景；报告已写文件，不需要上屏。
+        if (!"shot".equals(testPath)) {
+            TextView tv = new TextView(this);
+            tv.setText(text);
+            tv.setTextSize(9f);
+            root.addView(tv);
+        }
         writeReport("layout-report.txt", text);
         Log.i(TAG, text);
     }
@@ -375,6 +390,142 @@ public class MainActivity extends Activity {
         };
         choreographer.postFrameCallback(callback);
         return "{\"ok\":true,\"note\":\"滚动已启动（挂在窗口的真实 View 上驱动重绘），报告异步写入 layout-scroll.json\"}";
+    }
+
+    /**
+     * ★★截图回归场景：用 **Rust 核心算出的几何** 摆放 20 行色块 + 文本，
+     * 并把「每行应有的屏幕坐标与颜色」写入报告 —— 供宿主机截图后**逐点核验**。
+     *
+     * 设计要点（决定这个测试是否有效）：
+     *   · **位置来自 Rust 几何**（`RustLayout.create` → `rects`），不是硬编码
+     *     → 若 Rust 布局算错，屏幕上的色块就会出现在错误位置，截图核验**必然失败**
+     *   · **颜色可区分且可预测**：每行用公式生成的颜色，宿主机能独立算出期望值
+     *   · **留出安全区**：避开状态栏/刘海（顶部 144px 是设备 cutout，见 dumpsys display）
+     *   · **全屏单色背景**：便于区分「未绘制区域」与「绘制区域」
+     */
+    private String setupScreenshotScene() {
+        final int ROWS = 20;
+        // 场景参数（宿主机需知道同样的公式来独立算期望值）
+        final int ROW_H = 40;
+        final int ROW_W = 600;
+        final int LEFT = 60;
+        final int TOP = 200;      // ★避开状态栏（设备 cutout 顶部 144px）
+
+        // ① 用 Rust 核心构建「20 行」的布局树（column，每行定高）
+        StringBuilder nodes = new StringBuilder(8 * 1024);
+        nodes.append("{\"viewport\":{\"width\":").append(LEFT * 2 + ROW_W).append(",\"height\":").append(TOP + ROWS * ROW_H + 100).append("},\"nodes\":[");
+        nodes.append("{\"id\":1,\"parentId\":null,\"width\":").append(ROW_W).append(".0,\"flexDirection\":\"column\"}");
+        for (int i = 0; i < ROWS; i++) {
+            nodes.append(",{\"id\":").append(i + 2).append(",\"parentId\":1,\"width\":").append(ROW_W)
+                 .append(".0,\"height\":").append(ROW_H).append(".0}");
+        }
+        nodes.append("],\"textMeasures\":{}}");
+
+        long handle = RustLayout.create(nodes.toString());
+        String rectsJson = handle > 0 ? RustLayout.readRects(handle) : null;
+
+        // ② 把 Rust 几何映射到屏幕坐标（加 LEFT/TOP 偏移），生成绘制指令
+        java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>(ROWS);
+        org.json.JSONArray expect = new org.json.JSONArray();
+        try {
+            org.json.JSONObject root = new org.json.JSONObject(rectsJson);
+            org.json.JSONObject rects = root.getJSONObject("rects");
+            for (int i = 0; i < ROWS; i++) {
+                org.json.JSONObject r = rects.getJSONObject(String.valueOf(i + 2));
+                float x = LEFT + (float) r.getDouble("x");
+                float y = TOP + (float) r.getDouble("y");
+                float w = (float) r.getDouble("width");
+                float h = (float) r.getDouble("height");
+                int color = rowColor(i);
+                cmds.add(new ProteusHostView.Cmd(x, y, w, h, color, null));
+                org.json.JSONObject e = new org.json.JSONObject();
+                e.put("row", i);
+                e.put("x", Math.round(x));
+                e.put("y", Math.round(y));
+                e.put("w", Math.round(w));
+                e.put("h", Math.round(h));
+                e.put("color", String.format("#%06X", color & 0xFFFFFF));
+                expect.put(e);
+            }
+        } catch (Exception ex) {
+            return "{\"ok\":false,\"error\":\"几何解析失败：" + ex.getMessage() + "\"}";
+        }
+
+        // ③ 绘制到窗口内的真实 View（截图才有内容）
+        final ProteusHostView scene = new ProteusHostView(this);
+        scene.setCmds(cmds);
+        scene.setBackgroundColor(0xFFFFFFFF);   // 白底：便于区分未绘制区
+        // ★★必须用**绝对定位**（本仓实测教训）：
+        //   初版用 MATCH_PARENT + addView(scene, 0, lp) → View 被排在按钮之后（下移 272px），
+        //   屏幕实际位置与「Rust 几何 + 偏移」的预测相差整整一个按钮高度 → 核验全红。
+        //   正解：`X=0, Y=0` 绝对定位，让 View 左上角与屏幕原点对齐 ⇒ 坐标可直接对应。
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1080, 2400);
+        lp.leftMargin = 0;
+        lp.topMargin = 0;
+        root.addView(scene, lp);
+        // ★隐藏按钮：Material Button 有默认 elevation，会**盖在场景 View 之上**
+        //   （即使场景后添加）→ 遮住顶部若干行，且其背景色会被误采样。
+        runButton.setVisibility(android.view.View.GONE);
+
+        if (handle > 0) RustLayout.destroy(handle);
+
+        // ★★必须等 View **完成布局**再读位置（本仓实测教训）：
+        //   初版立即读 `getLocationOnScreen/getWidth` → 得到 origin=(0,312)、size=0×0
+        //   （布局尚未执行）→ 核验脚本按错误原点对齐 → 全红。
+        //   正解：`post()` 到消息队列（布局之后执行）。
+        final org.json.JSONArray expectedFinal = expect;
+        final int rowsFinal = ROWS, rowHFinal = ROW_H, rowWFinal = ROW_W;
+        final int leftFinal = LEFT, topFinal = TOP;
+        scene.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    int[] loc = new int[2];
+                    scene.getLocationOnScreen(loc);
+                    org.json.JSONObject o = new org.json.JSONObject();
+                    o.put("ok", true);
+                    o.put("path", "shot");
+                    o.put("rows", rowsFinal);
+                    o.put("row_h", rowHFinal);
+                    o.put("row_w", rowWFinal);
+                    o.put("offset_left", leftFinal);
+                    o.put("offset_top", topFinal);
+                    o.put("expected", expectedFinal);
+                    o.put("view_origin_x", loc[0]);
+                    o.put("view_origin_y", loc[1]);
+                    o.put("view_width", scene.getWidth());
+                    o.put("view_height", scene.getHeight());
+                    o.put("note", "★expected 坐标来自 **Rust 核心几何**（经 LEFT/TOP 偏移）；"
+                            + "view_origin_* 是场景 View 在**屏幕**上的实际原点（布局完成后读取）");
+                    writeReport("layout-shot-scene.json", o.toString(2));
+                } catch (Exception e) {
+                    writeReport("layout-shot-scene.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+                }
+            }
+        });
+
+        // 返回占位（真实报告由上面的 post 异步写入）
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "shot");
+            o.put("rows", ROWS);
+            o.put("row_h", ROW_H);
+            o.put("row_w", ROW_W);
+            o.put("offset_left", LEFT);
+            o.put("offset_top", TOP);
+            o.put("note", "占位报告——真实报告由 scene.post() 在**布局完成后**写入（含 view_origin_*）");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 行色：可预测的公式（宿主机用同一公式独立计算期望值） */
+    private static int rowColor(int i) {
+        int r = 40 + (i * 10) % 200;
+        int g = 90 + (i * 17) % 150;
+        int b = 200 - (i * 7) % 150;
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     /**
