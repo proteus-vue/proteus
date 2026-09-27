@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：2026-09-29 **App 路线 M2/M3 验收完成 · layout-core 度量缓存已改内容寻址**）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-29 **App 路线 M2/M3 验收完成 · M3 事件系统（命中测试）已落地**）★新会话以此为准
 
 ### ★★柔性系统已**阶段收口** —— 收口文档 `docs/proteus-fluid-system-plan/04-closure.md`
 
@@ -101,6 +101,67 @@ emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / �
 **分层纪律**：框架层 `p-formfactor` **不引入图标依赖**（MP 端内联 SVG 不可用）——只去掉硬编码
 emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕`（表冠方向）与 `⌘K`（快捷键图例）保留。
 门禁：演示三文件出现 emoji 即红 + DemoIcon 必须覆盖全部所需图标名（`fluid-formfactor-render.test.ts`）。
+
+---
+
+### ★★★M3 事件系统落地：命中测试（两相位绘制序 + 裁剪感知）三端共享（2026-09-29，提交 `2377abb1`）
+
+**触发**：检查宿主代码发现 —— **自绘路线完全无法响应输入**（无 `onTouchEvent`、无「坐标 → 节点」映射）。
+这是 M3「事件系统、手势」缺失的**几何地基**。
+
+**① 核心（`packages/layout-core-rust/src/hit.rs`，新增）**
+· `paint_order` = **唯一绘制序真相来源**；`hit_path` 是其**严格逆序**
+  ⇒ 二者共享同一份顺序逻辑，不可能漂移（「看到的在上 = 点到的在上」）
+· `hit_path`（`elementsFromPoint` 语义）与 `bubble_chain`（DOM 冒泡语义）**必须分开**：
+  子级溢出父盒时，父不在命中路径上**但仍是冒泡目标**（只返回 target 会让宿主算错）
+· 裁剪参与命中且**不得回落到父级**；半开区间 `[x,x+w)`；`display:none` 整棵不可命中；防父指针成环
+
+**★★② 抓到一个错误模型：绘制序是「两相位」而非纯树序**
+初版 = 「每个父级内子级按树序」。用**真实 Chromium 探针**（`tests/paint-order-probe.mjs`）实测后**证明是错的**：
+CSS 里定位元素（relative/absolute）绘制在**在流**元素之上；且**相位按「层叠上下文」而非按父级** ——
+深处 `static` 子树里的 absolute，仍绘制在更外层**后置**的 static 兄弟之上（探针 D/E 实证）。
+⇒ 改两相位模型（在流 → 定位，各自递归）。6 例真值冻结 `tests/golden/paint-order-probes.json`，
+由 `conformance_paint_order_against_browser_probes` **机器核验**（不是躺在文档里的一段话）。
+
+**③ 本次抓到的三个真 bug（**每个都由新增测试而非生产事故发现**）**
+| # | bug | 发现者 |
+|---|---|---|
+| 1 | `emit_context` 从不输出定位节点自身（注释误以为上游已收下）→ 定位节点**整个从绘制序消失** | 新增的两相位单元测试 |
+| 2 | MirrorHit 无条件覆盖 `lastTarget` → 记到**最后**接收者（根）→ 六探针全「不一致」，**看起来像 Rust 错了，实际是测量装置错了** | 真机首跑 |
+| 3 | e2e 比对用 `delta > TOLERANCE` —— **NaN 比较恒 false** → 求解器产出 NaN 几何仍**静默通过** | golden 混入非法值后仍全绿 |
+
+**④ 测量装置本身必须先被验证（三处修正，本轮主要教训）**
+· **e2e CSS 翻译最小化**：初版给**所有**非 absolute 元素加 `position:relative`（为对齐 containing block），
+  却**悄悄改变层叠语义**（relative 属定位元素 → 提到相位 2）→ 浏览器给出的命中序**与真实 CSS 不符**，
+  对拍**测的是翻译层的假象**。改为只有「有 absolute 子级的」节点才 relative。
+· **补全 relative**：harness 类型 + CSS 翻译缺 relative（求解器与 Rust 核心**都已支持**）。
+· **独立实现对标**：`MirrorHit` 用 Android 自己的 `ViewGroup.dispatchTouchEvent` 回答同一问题
+  （与 Rust 无共享代码 ⇒ 有信息量）。**如实标注边界**：Android 子 View 超出父边界收不到触摸，
+  而 CSS `overflow:visible` 时子级仍可命中 ⇒ 镜像**只用于「子级在父盒内」**的用例。
+
+**⑤ 出口条件（全部达成）**
+| 层 | 读数 |
+|---|---|
+| 布局 conformance | 82 节点 · 最大偏差 **0.375dp**（容差 0.5）· 21 用例 |
+| 命中 conformance | **3547 探针**逐位等于 Chromium `elementsFromPoint`（438 有命中） |
+| 绘制序 conformance | 6 个浏览器探针（含 D/E 层叠上下文反例） |
+| **真机（Redmi）** | 核心 / Android 原生派发 / 端到端 **6/6 一致**；**滚动偏移换算判别性通过** |
+
+**破坏性验证**：子级探测改回正序 → conformance 立刻报不一致；忽略裁剪 → 破坏性测试报错。
+
+**⑥ 端到端接线**
+`proteus_layout_hit_test`（跨界返回**整条链**：宿主派发需要冒泡链）→ JNI `nativeHitTest` →
+`RustLayout.hitTest` → `ProteusHostView.onTouchEvent`/`dispatchHit`（**含滚动偏移换算**：
+屏幕坐标 + `scrollY` → 内容坐标；漏了就「越往下滚错得越多」）→ `MainActivity --es path hit` 场景。
+
+**验证**：`cargo test` **49 项全绿**（40 lib + 9 conformance）；`tsc --noEmit` 零错误。
+`pnpm test` 3672 项中 3 项失败，**均已核实为既存/环境问题**（`gate.test.ts` 在改动前工作区同样失败；
+`publish-contents` 因本机 pnpm 不支持 `pack --json`；`desktop-b2` 测试顺序抖动，单独跑两次全过）。
+
+**⑦ 顺带补 Profile 两处规范**
+· **L2-1 层叠相位**（新章）：把上述两相位模型写成**规范口径** + 诚实边界（未实现 z-index / fixed / sticky）
+· **W-CSS-106**（警告级，**规格而非已实现**——W-CSS-101~105 同样尚未实现）：
+  「大列表项的内容自适应尺寸」提示内禀成本（真机 69.15ms vs 11.33ms = 6.1×，见上文内容测量条目）
 
 ---
 
