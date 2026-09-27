@@ -61,7 +61,7 @@ The eight slots (`rail` / `media` / `heading` / `price` / `sku` / `actions` / `r
 |---|---|---|---|---|
 | Watch | One screen, one meaning (media/recommendation not rendered) | page stack | description collapsed, title clamped to 2 lines, two buttons side by side | dark AMOLED |
 | Phone | Single column + tabs | bottom-tabs | All capabilities available | light |
-| Foldable | Two panes when expanded | tabs | SKU available; tabletop collapses description/options | light |
+| Foldable | Two panes when expanded · wide/portrait half-open | side-tabs | SKU available; half-open collapses description & secondary action (with reasons) | light |
 | Tablet | Rail + split | rail | + multi-column recommendations | light |
 | PC | Rail + three columns + hover | side-nav | + hover / keyboard focus ring | light |
 | In-car | Cockpit (media ｜ info / actions ｜ tiles) | focus-tree | SKU → **degradation bar**, only 3 recommendations, 76dp hit areas | dark cockpit |

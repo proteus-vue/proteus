@@ -22,6 +22,11 @@ const props = defineProps<{
   posture?: string
   width: number
   height: number
+  /** ★★业务备注（2026-09-29 · 连续性演示）：**宿主持有的业务状态**——
+   *  姿态/形态切换时它必须保持不变（Apple「同样功能」/ 小米·vivo「状态保存和延续」的可见证据）。 */
+  note?: string
+  /** ★★端注入的折痕带宽度 px（机型几何交给端——真机读 env(fold-*) / FoldingFeature.bounds 后注入） */
+  creaseBand?: number
 }>()
 
 // 纯业务状态（与形态无关）——★三审：文案按 locale 取值（此前 EN 站整块输出中文，
@@ -77,13 +82,20 @@ watchEffect(() => { if (!picked.value) picked.value = t.value.skus[0]! })
 </script>
 
 <template>
-  <!-- ★框架组件：一行接形态，其余全自动（拓扑 / 视觉语言 / 能力 / 密度 / 缩放 / 热区） -->
+  <!-- ★框架组件：一行接形态，其余全自动（拓扑 / 视觉语言 / 能力 / 密度 / 缩放 / 热区）
+       ★★业务状态的**证据面**（2026-09-29 连续性演示）：data-biz-* 把「切换前后业务状态不变」
+       变成机器可断言的事实（姿态切换不重建实例 → 选中的规格/计数/备注保持）——
+       这不是「框架保证状态连续」（那是契约级能力，属 OS 路线图），而是演示层可验证的证据。 -->
   <p-formfactor
     :declared="form"
     :posture="posture ?? ''"
     :width="width"
     :degraded-hint="t.degraded"
     :drive-hint="t.drive"
+    :crease-band="creaseBand ?? 0"
+    :data-biz-sku="picked"
+    :data-biz-count="String(counted)"
+    :data-biz-note="props.note ?? ''"
   >
     <!-- 侧栏（仅声明 sidebar 的形态渲染：平板 / PC） -->
     <template #rail>

@@ -37,6 +37,7 @@ Form-factor orchestrator (layout topology per device form)
 | `degradedHint` | — | `String` | `''` | No |
 | `driveHint` | — | `String` | `''` | No |
 | `posture` | — | `String` | `''` | No |
+| `creaseBand` | — | `Number` | `0` | No |
 | `width` | Container width (host injection; drives sensing when not declared) | `Number` | `0` | No |
 | `height` | Container height | `Number` | `0` | No |
 
@@ -60,6 +61,11 @@ Form-factor orchestrator (layout topology per device form)
 #### `posture`
 
 - **Type**: `String`　**Default**: `''`　**Required**: No
+- **Doc**: —
+
+#### `creaseBand`
+
+- **Type**: `Number`　**Default**: `0`　**Required**: No
 - **Doc**: —
 
 #### `width`

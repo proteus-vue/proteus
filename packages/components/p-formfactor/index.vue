@@ -23,6 +23,8 @@
     :data-pf-topology="profile.topology"
     :data-pf-nav="profile.nav"
     :data-pf-aspect="aspect"
+    :data-pf-crease="creaseDigest"
+    :data-pf-crease-geom="creaseGeomDigest"
     :data-pf-caps="capsDigest"
     :style="rootStyle"
   >
@@ -31,7 +33,22 @@
       <slot name="rail" />
     </aside>
 
+    <!-- ★★折痕带（2026-09-29 用户实测纠错）：只在**真能看到折痕的姿态**渲染——
+         折叠态（外屏）根本没有折痕，此前演示页在折叠态也画一条 → 假折痕。
+         位置由画像 postures[].crease 驱动：半开=窗口底缘（朝向用户的那半屏下方是铰链）·
+         展开态=贯穿中部（fold 竖直 / flip 水平）。带内**不得有元素**（小米三区域「区域 3」）。 -->
     <div class="pf-body">
+      <!-- ★★折痕带（2026-09-29 用户实测纠错——此前「折叠态/展开态也画折痕」＝假折痕）：
+           只在**半开（悬停）姿态**渲染：窗只覆盖内屏的一半（朝向用户那半），铰链在其**底缘** →
+           折痕带是内容网格的**最后一行**（结构空行，小米/ITGSA「区域 3 内避免出现任何元素」）。
+           几何由画像 postures[].crease 声明 + --pf-crease-band（端可注入真机铰链带宽度）。 -->
+      <span
+        v-if="creaseBand"
+        class="pf-crease"
+        :data-pf-crease="creaseDigest"
+        aria-hidden="true"
+      />
+
       <!-- 主视觉 -->
       <div v-if="$slots.media" class="pf-media">
         <slot name="media" />
@@ -93,8 +110,10 @@ const props = defineProps({
   /** ★驾驶提醒文案（driveAware 形态显示；**宿主注入优先**——三审：此前默认值硬编码中文，
    *  EN 站点会出中文；缺省为语言中性的短标记，由宿主按 locale 覆盖） */
   driveHint: { type: String, default: '' },
-  /** ★姿态（折叠屏等动态形态：folded / tabletop / expanded——覆盖画像的拓扑与视口） */
+  /** ★姿态（折叠屏等动态形态：folded / book / tabletop / expanded——覆盖画像的拓扑与视口） */
   posture: { type: String, default: '' },
+  /** ★★端注入·折痕带宽度 px（真机读 env(fold-*) / FoldingFeature.bounds 后注入；0 = 演示壳默认） */
+  creaseBand: { type: Number, default: 0 },
   /** 容器尺寸注入（宿主/测试；缺省用容器自身测量） */
   width: { type: Number, default: 0 },
   height: { type: Number, default: 0 },
@@ -206,6 +225,23 @@ const aspect = computed(() => {
 })
 
 /**
+ * ★★折痕几何（2026-09-29 用户实测纠错）：
+ *   ① **折叠态（外屏）没有折痕**——此前演示页按 `frame.hinge` 恒画一条 → 假折痕（用户实测）。
+ *      框架画像现在强制「折叠态不得声明 crease」，本组件只在**真有折痕带**的姿态渲染它。
+ *   ② **半开（悬停）姿态**：窗口只覆盖内屏的一半（朝向用户那半），铰链在其底缘 →
+ *      折痕带 = 内容网格最后一行（结构空行，「区域 3 内无元素」由结构保证）。
+ *   ③ **展开（平坦）姿态**：折痕是屏幕上的浅痕、不构成布局区域 → **不画带**
+ *      （duo 双窗格之间以真实间距分栏，分界即铰链位置）。
+ *   `data-pf-crease-geom` 如实上报姿态几何（端注入/断言用），`data-pf-crease` 只在上报**已渲染的带**。
+ */
+const creaseDef = computed(() => postureDef.value?.crease ?? null)
+/** 已渲染的折痕带（仅半开：`horizontal-bottom`；其余姿态 = 空串） */
+const creaseBand = computed(() => (creaseDef.value?.at === 'bottom' ? creaseDef.value : null))
+const creaseDigest = computed(() => (creaseBand.value ? `${creaseBand.value.axis}-${creaseBand.value.at}` : ''))
+/** 折痕几何（含未渲染的展开态——`vertical-middle` / `horizontal-middle`） */
+const creaseGeomDigest = computed(() => (creaseDef.value ? `${creaseDef.value.axis}-${creaseDef.value.at}` : ''))
+
+/**
  * ★★能力可观测面（2026-09-26 三审）：机器可读的「本形态最终生效的能力三态」——
  *   形如 `dpad=supported;skuMulti=fallback;hover=unsupported`（按 FORM_CAP_KEYS 顺序稳定排序）。
  *   这是「声明 ≠ 空头」的**证据面**：外部可用 `document.querySelector('[data-pf-caps]')` 断言，
@@ -237,6 +273,11 @@ const rootStyle = computed(() => {
     '--pf-fold-band': postureDef.value?.hinge === 'horizontal'
       ? 'env(fold-height, 0px)'
       : (p.frame.hinge ? 'env(fold-width, 0px)' : '0px'),
+    // ★★折痕带宽度（2026-09-29）：半开态的真实铰链区宽度——演示壳按流体单位给可辨识宽度，
+    //   真机上由端注入（env(fold-height) 为真机铰链带；Props 亦可覆盖 → 「端注入几何」入口）。
+    '--pf-crease-band': props.creaseBand > 0
+      ? `${props.creaseBand}px`
+      : 'max(calc(var(--pf-u) * 1.2), 8px, env(fold-height, 0px))',
     // ★dense 能力并入内联值（三审：此前 .is-dense 的同名变量被内联恒覆盖 = 能力零后果）
     '--pf-gap-dense': String(
       capsEnabled(p.caps.dense)
@@ -563,85 +604,182 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* ── 姿态：tabletop 半折（水平铰链——上屏展示 / 下屏操作，内容不得跨折痕） ──
-   ★2026-09-26 二次复审实测：673×420 视口下手机式单列（媒体+标题+描述+价格+规格+CTA）
-   需 ≈320px 而可用 ≈200px → 主操作落在折线以下。按半折的真实使用取舍：
-   只留「封面 + 标题 + 价格 + 主操作」（描述/规格收起——折叠态外屏同样收），
-   并把封面压到 40% 以内，让上屏（媒体）与下屏（信息 + 操作）各自完整。 */
-/* ★半折取舍修正（2026-09-28 借鉴 Apple HIG）：原文两条——
-   ① 「Maintain the same functionality across device poses」：控件可能溢出/内容可移动，
-      **但必须保证所有姿态都能访问相同的控件与内容**；
-   ② 「Avoid extreme layout changes as people fold the device … favor small adjustments
-      over rearrangement」（控件消失或大位移会让人找不到）。
-   故：**不再隐藏 SKU 槽**（它是购买路径，隐藏即丢功能），只收起次要的长描述；
-   Apple 示例（Mail 半折仍可读列表与邮件）与「overlay arrangement 半折时主次分居两侧」同义。 */
-/* ★★三区域规则（2026-09-28 借鉴国内厂商统一基线 ITGSA 白皮书 / 小米《大屏应用 UX 设计指南》原文）：
-   「将展示性内容收拢至区域 2，将可交互功能下沉至区域 1，并**避免区域 3 内出现任何元素**」
-     区域 2 = 上半屏（展示）· 区域 1 = 下半屏（操作）· 区域 3 = 折痕/形变区。
-   ★配套原文：「不要使用 rotation，而是根据宽高的大小做布局处理」→ 媒体高度按**宽高比**上限。
-   ⚠ 与 Apple HIG「跨姿态保持同样功能」一致：SKU **不隐藏**（隐藏即丢购买路径）。
+/* ── 姿态：半开（悬停 half-open）——**两类设备两种布局** ─────────────────────────
+   ★★★2026-09-29 用户实测纠错（重构）：
+   ① **半开 = 内屏的一半**（朝向用户那半）；另一半平放/背向。此前 fold 把半开与展开写成同值
+      （596×693），演示里「切姿态几乎无变化」——那是我造的错数据。
+   ② **命名**：书本式是 half-**open**（悬停态，被打开约 90°），不是「半折」（翻盖式才折了一半）。
+   ③ **两种半开必须长得不一样**（否则小米的 TableTop / Book 两种模式在演示里看不出）：
+        · 书本式（fold · Book 模式）：设备转 90°，窗口是 **横长条**（693×298，2.33:1）——
+          左半 = 展示（媒体+标题+价格）· 右半 = 操作（规格 + 主操作 + 推荐）· 铰链在**底缘**
+        · 翻盖式（flip · TableTop 模式）：窗口是内屏上半 **竖方形**（360×440，0.82）——
+          上半 = 展示（媒体+标题+价格）· 下半 = 操作（规格 + 主操作）· 铰链在**底缘**
+   ④ **折痕带**：铰链在窗口底缘 → 带是内容网格的**最后一行**（结构空行，小米/ITGSA「区域 3 内无元素」）。
+      展开态折痕贯穿中部但不画带（平坦态折痕是浅痕、不是布局区域），折叠态无折痕（此前恒画 = 假折痕）。
+   ★取舍纪律不变（Apple HIG「跨姿态保持同样功能」）：SKU **不隐藏**（购买路径），只收起长描述。 */
 
-   ★定稿（三轮实测：百分比分配在 236px 内容高里反复互相挤压 → 主操作被压到 17px）。
-   改为**预算式**（每段有明确的呼吸空间，用 --pf-control 锚住热区）：
-     · body = 4 行：展示段(1fr) · 折痕带(auto) · 操作段(--pf-control 锚定) · 推荐段(auto，可收缩)
-     · 展示段内：左媒体（宽 42%，按宽高比限高）| 右文案（标题+价格，垂直居中）
-     · 操作段内：SKU（左，单行横滚）| 主操作（右，min-height = --pf-control）
-   这样「折痕带无元素」由**空行**结构保证；热区由 --pf-control 保证；推荐段最后收缩。 */
-.p-formfactor.posture-tabletop .pf-body {
+/* 折痕带（半开姿态专用；由画像 crease.at='bottom' 驱动渲染）：横贯整宽、带内无元素 */
+.pf-crease {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--pf-crease-band, 10px);
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--pf-text, #000) 10%, transparent) 0 6px,
+    color-mix(in srgb, var(--pf-text, #000) 4%, transparent) 6px 12px
+  );
+  border-top: 1px dashed color-mix(in srgb, var(--pf-text, #000) 22%, transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 书本式半开（fold · Book 模式）：**左半 = 展示（媒体为底 + 标题/价格叠加）· 右半 = 操作**
+   —— 窗口是横长条（693×298，2.33:1），铰链在底缘（折痕带为窗口底部一条）。
+   ★结构（2026-09-29 实测两轮收口）：只用**三个网格项**（媒体 / 信息列 / 推荐列）——
+   · 媒体作 col1 的**背景层**，信息列（flex 列）叠在它下缘：标题 / 价格 / 规格 / 主操作；
+   · col2 = 推荐列（可纵向滚动）——把「次要内容」放在独立列，不参与主展示区的纵向预算；
+   · 不用 display:contents 拆 info（实测：拆出 5 个网格项后推荐列的 auto 行被压到 63px
+     而其内容 192px → 上溢压住主操作按钮）。
+   依据：小米 Book 模式（左右对折「像翻书一样」）+ 三区域规则（折痕带内无元素）。 */
+.p-formfactor.posture-book .pf-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(var(--pf-gap) * 0.6);
+  overflow: hidden;
+  /* 给底缘折痕带留位（带自身绝对定位在窗口底部） */
+  padding-bottom: var(--pf-crease-band, 10px);
+}
+.p-formfactor.posture-book .pf-media {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: calc(var(--pf-radius) * 0.9);
+}
+.p-formfactor.posture-book .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
+/* 信息列叠在媒体之上（下缘对齐）——**二维**（左：标题/价格 · 右：规格/主操作），
+   横长条里纵向只有 ~150px，四项竖排会互相压扁（实测 SKU 被压到 2px）：
+   分两列后信息列总高 ≈ max(左 40px, 右 72px) —— 装得下且不压扁。 */
+.p-formfactor.posture-book .pf-info {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 1;
+  display: grid;
+  /* 展示区左半约 210px 宽 → 三行（标题 / 规格 / 价格+主操作）；
+     价格、规格、主操作同挤一行会把规格压到 20px（实测）——分三行后每项都有正常宽度。 */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-content: end;
+  align-items: center;
+  gap: calc(var(--pf-gap) * 0.3) calc(var(--pf-gap) * 0.5);
+  padding: calc(var(--pf-u) * 0.7);
+  min-width: 0;
+  min-height: 0;
+}
+.p-formfactor.posture-book .pf-heading { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+.p-formfactor.posture-book .pf-sku,
+.p-formfactor.posture-book .pf-sku-fallback { grid-column: 1 / -1; grid-row: 2; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.p-formfactor.posture-book .pf-price { grid-column: 1; grid-row: 3; }
+.p-formfactor.posture-book .pf-actions { grid-column: 2; grid-row: 3; justify-self: end; min-width: 0; flex-wrap: nowrap; min-height: var(--pf-control, 44px); }
+.p-formfactor.posture-book .pf-info :deep(.fp-desc) { display: none; }
+/* 标题单行（横长条里两行标题会顶掉主操作） */
+.p-formfactor.posture-book .pf-heading :deep(.fp-name) {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.p-formfactor.posture-book .pf-sku::-webkit-scrollbar { display: none; }
+.p-formfactor.posture-book .pf-sku :deep(*) { flex: 0 0 auto; }
+.p-formfactor.posture-book .pf-actions :deep(button) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 横长条里「价格 | 规格 | 主操作 + 次操作」同行必然挤爆 → 只留主操作（购买路径）；
+   次操作在外屏/展开态仍可达（S4 的「功能对照条」会显式说明被收起的控件与理由）。 */
+.p-formfactor.posture-book .pf-actions :deep(button:first-child) { flex: 1 1 auto; }
+.p-formfactor.posture-book .pf-actions :deep(button:not(:first-child)) { display: none; }
+/* 推荐列（col2）：**纵向紧凑列表**（图标｜名称｜价格 同行）——独立列，不挤主展示区 */
+.p-formfactor.posture-book .pf-recommend {
+  grid-column: 2;
+  grid-row: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  /* 展示段吸收剩余但**不侵占**操作段：56% / auto / auto(≥control) / auto */
-  grid-template-rows: minmax(0, 56%) auto auto minmax(0, 1fr);
-  gap: 0;
-  overflow: hidden;
-}
-/* ★媒体（2026-09-28 实测）：`align-self:center` + `max-height:100%` 会让内容溢出行高、
-   跨进折痕带（实测 fp-cover 落在带内）。改为**填满行高**（stretch）——行高已按 56% 预算限定，
-   内容自行裁剪，绝不可能越出行。 */
-.p-formfactor.posture-tabletop .pf-media {
-  grid-row: 1;
-  grid-column: 1;
-  align-self: stretch;
-  justify-self: start;
-  width: 42%;
+  grid-auto-rows: minmax(0, auto);
+  gap: calc(var(--pf-gap) * 0.35);
   min-height: 0;
-  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  align-content: start;
+}
+.p-formfactor.posture-book .pf-recommend::-webkit-scrollbar { display: none; }
+.p-formfactor.posture-book .pf-recommend :deep(.pf-rec-card) {
+  min-height: 0;
+  max-height: var(--pf-control, 44px);
   overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: calc(var(--pf-u) * 0.35);
+  padding: calc(var(--pf-u) * 0.3) calc(var(--pf-u) * 0.45);
+}
+.p-formfactor.posture-book .pf-recommend :deep(.pf-rec-card) > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.p-formfactor.posture-book .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
+.p-formfactor.posture-book .pf-recommend :deep(.fp-rec-ic) { font-size: calc(var(--pf-font) * 1.05); line-height: 1; }
+
+/* 翻盖式半折（flip · TableTop 桌面模式）：上半展示 / 下半操作——竖方形窗口，铰链在底缘 */
+.p-formfactor.posture-tabletop .pf-body {
+  display: grid;
+  grid-template-columns: 46% minmax(0, 1fr);
+  /* 行：展示（媒体跨 1-2 行 · 标题 / 价格在文案列）| 操作 | 推荐 | 折痕空行（::after） */
+  grid-template-rows: minmax(0, 1fr) auto minmax(min-content, auto) minmax(0, auto) auto;
+  gap: calc(var(--pf-gap) * 0.4);
+  overflow: hidden;
+  padding-bottom: var(--pf-crease-band, 10px);
+}
+.p-formfactor.posture-tabletop .pf-info { display: contents; }
+.p-formfactor.posture-tabletop .pf-media {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: calc(var(--pf-radius) * 0.9);
 }
 .p-formfactor.posture-tabletop .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
-.p-formfactor.posture-tabletop .pf-info {
+.p-formfactor.posture-tabletop .pf-heading {
+  grid-column: 2;
   grid-row: 1;
-  grid-column: 1;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--pf-gap) * 0.5);
-  justify-content: center;
-  align-self: stretch;
+  align-self: end;
   min-width: 0;
-  padding-left: calc(42% + var(--pf-gap) * 1.2);
+}
+.p-formfactor.posture-tabletop .pf-price {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  justify-self: start;
 }
 .p-formfactor.posture-tabletop .pf-info :deep(.fp-desc) { display: none; }
-/* ★折痕带（第 2 行）：**空行**——无元素分配（小米「区域 3 内避免出现任何元素」结构保证） */
-/* ★折痕带（2026-09-28 实测补强）：除空行占位外，再给上下相邻行加**边界收口**——
-   此前推荐卡的图标因行内居中略微上溢、触到带子边界（实测 fp-rec-ic 落在带内）。
-   收口 = 带子自身不动（无元素），相邻行各自 overflow:hidden 已保证内容不越行。 */
-.p-formfactor.posture-tabletop .pf-body::before {
-  content: '';
-  grid-row: 2;
-  grid-column: 1;
-  min-height: max(var(--pf-fold-band, 0px), calc(var(--pf-gap) * 1.2));
-  pointer-events: none;
-}
-/* ★操作段（第 3 行）：SKU 左（单行横滚）+ 主操作右（热区由 --pf-control 锚定） */
 .p-formfactor.posture-tabletop .pf-sku,
 .p-formfactor.posture-tabletop .pf-sku-fallback {
-  grid-row: 3;
   grid-column: 1;
-  justify-self: start;
+  grid-row: 3;
   align-self: center;
-  /* ★SKU 宽度（2026-09-28 实测）：44% 仍让按钮只剩 54% → 两枚按钮各 ~27% 文案被截成「▶…」。
-     收窄到 34%（规格本身可横滚），把宽度让给**主操作**——文案可读优先于规格同屏数量。 */
-  width: 34%;
+  justify-self: stretch;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
@@ -650,20 +788,14 @@ onUnmounted(() => {
 .p-formfactor.posture-tabletop .pf-sku::-webkit-scrollbar { display: none; }
 .p-formfactor.posture-tabletop .pf-sku :deep(*) { flex: 0 0 auto; }
 .p-formfactor.posture-tabletop .pf-actions {
+  grid-column: 2;
   grid-row: 3;
-  grid-column: 1;
-  justify-self: end;
   align-self: center;
-  /* ★主操作宽度（2026-09-28 实测收口）：半折可用宽 ~436px，SKU + 两枚按钮三者共存必然紧张。
-     按优先级取舍：**主操作文案必须完整可读**（购买路径）→ 主按钮 `flex: 1 1 auto` 保内容宽、
-     次要按钮（收藏）可压。SKU 收窄至 34% 且可横滚（规格同屏数量 < 主操作可读性）。 */
-  width: 64%;
+  justify-self: stretch;
   min-height: var(--pf-control, 44px);
   flex-wrap: nowrap;
-  gap: calc(var(--pf-gap) * 0.5);
 }
 .p-formfactor.posture-tabletop .pf-actions :deep(button) {
-  /* 主按钮按内容保宽（购买路径文案不可截断）；其余等分收缩 */
   min-width: 0;
   padding-left: calc(var(--pf-u) * 0.4);
   padding-right: calc(var(--pf-u) * 0.4);
@@ -671,28 +803,25 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* ★半折操作区（2026-09-28 实测第四轮定稿）：
-   可用宽 ~436px，而「SKU（可横滚）+ 主操作 + 次操作」三者同排时文案必被截断（实测 76px 仍截）。
-   物理约束无法用压缩解决 → 按**重要性取舍**：半折只保留**主操作**（购买路径），
-   次操作（收藏）隐藏——与 Apple「控件可溢出，但功能与内容必须可达」并不矛盾（收藏非购买路径，
-   且在外屏/展开态仍可用）。这与车机「只留 3 个推荐项」的取舍同源：场景化裁剪，不是功能删除。 */
+/* 主操作保内容宽（购买路径文案不可截断）；次操作收起（外屏/展开态仍可达——S4 功能对照条显式说明） */
 .p-formfactor.posture-tabletop .pf-actions :deep(button:first-child) { flex: 1 1 auto; }
 .p-formfactor.posture-tabletop .pf-actions :deep(button:not(:first-child)) { display: none; }
-/* ★推荐段（第 4 行）——2026-09-28 实测定稿：半折可视高仅 236px，放不下
-   「展示 + 操作 + 完整三行卡推荐」。按三条原则取「单行紧凑卡」：
-     · 小米「展示性内容收拢至上半屏、可交互功能下沉至下半屏」→ 推荐属**次要内容**，可精简
-     · Apple「跨姿态保持同样功能」→ 推荐**不删除**（仍在，可点，仍是大热区），只是**降为单行**
-       并换用横排布局（图标｜名称｜价格 同行，同车机的处理）
-     · 不裁切、不跨折痕带：卡片高度由行高约束，内容单行 ∴ 装得下
-   注意这与「车机只留 3 个」不同：这里是**同一批项、单行呈现**，不是减少项数。 */
+/* 折痕空行（第 4 行）：无元素分配（小米「区域 3 内避免出现任何元素」结构保证）——
+   注：这条 `::after` 只作**结构证明**（网格末行确实存在且为空），可见折痕由 .pf-crease 绘制。 */
+.p-formfactor.posture-tabletop .pf-body::after {
+  content: '';
+  grid-row: 5;
+  grid-column: 1 / -1;
+  min-height: 0;
+  pointer-events: none;
+}
+/* 推荐段（第 4 行，跨两列）：单行紧凑卡（图标｜名称｜价格 同行） */
 .p-formfactor.posture-tabletop .pf-recommend {
+  grid-column: 1 / -1;
   grid-row: 4;
-  grid-column: 1;
   min-height: 0;
   overflow: hidden;
   align-content: start;
-  padding-top: 0;
-  /* 卡片贴行顶（align-content:start 已生效），并禁止行内元素上溢到折痕带 */
   align-items: start;
 }
 .p-formfactor.posture-tabletop .pf-recommend :deep(.pf-rec-card) {
@@ -713,70 +842,13 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 .p-formfactor.posture-tabletop .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
-/* ★图标行高归一（2026-09-28 实测）：emoji 图标字号 1.9u + 默认 line-height 使**盒高 41px > 卡高 35px**
-   → 盒模型上溢 3px 触到折痕带（虽被 overflow:hidden 裁剪，几何上仍越界）。
+/* ★图标行高归一（2026-09-28 实测）：emoji 图标字号 1.9u + 默认 line-height 使盒高 > 卡高
+   → 盒模型上溢触到折痕带（虽被 overflow:hidden 裁剪，几何上仍越界）。
    显式 line-height:1 + 字号收一档 ⇒ 盒高落在卡内，不靠裁剪掩盖。 */
 .p-formfactor.posture-tabletop .pf-recommend :deep(.fp-rec-ic) {
   font-size: calc(var(--pf-font) * 1.1);
   line-height: 1;
 }
-
-/* ★★半折 · Book 模式（2026-09-28）：**竖直铰链**（书本式左右对折）——
-   Z Fold6 外屏 0.44 / 内屏 0.86 实测规格；半折时内屏被竖直接缝分成左右两半:
-     · 左侧 = 展示（媒体 + 标题 + 价格）· 右侧 = 操作（规格 + 主操作 + 推荐）
-     · 中间 = 折痕带（**竖直**，"两侧不得有元素"——与 tabletop 同规则，只是轴转了 90°）
-   依据：小米规范「Book 书本模式（左右对折）」+ 「避免区域 3 内出现任何元素」。 */
-.p-formfactor.posture-book .pf-body {
-  display: grid;
-  /* 左半 | 折痕带 | 右半 */
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
-  overflow: hidden;
-}
-.p-formfactor.posture-book .pf-media {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: stretch;
-  justify-self: stretch;
-  min-height: 0;
-  overflow: hidden;
-}
-.p-formfactor.posture-book .pf-media > :deep(*) { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; }
-.p-formfactor.posture-book .pf-info {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: calc(var(--pf-gap) * 0.4);
-  padding: calc(var(--pf-u) * 0.8);
-  min-width: 0;
-}
-.p-formfactor.posture-book .pf-info :deep(.fp-desc) { display: none; }
-/* ★折痕带（第 2 列）：**空列**——无元素分配（小米「区域 3 内避免出现任何元素」） */
-.p-formfactor.posture-book .pf-body::before {
-  content: '';
-  grid-column: 2;
-  grid-row: 1;
-  min-width: max(var(--pf-fold-band, 0px), calc(var(--pf-gap) * 1.2));
-  pointer-events: none;
-}
-/* 右半：操作区（规格 + 主操作 + 推荐） */
-.p-formfactor.posture-book .pf-sku,
-.p-formfactor.posture-book .pf-sku-fallback,
-.p-formfactor.posture-book .pf-actions,
-.p-formfactor.posture-book .pf-recommend {
-  grid-column: 3;
-  min-width: 0;
-}
-.p-formfactor.posture-book .pf-sku,
-.p-formfactor.posture-book .pf-sku-fallback { grid-row: 1; align-self: start; justify-self: start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.p-formfactor.posture-book .pf-sku::-webkit-scrollbar { display: none; }
-.p-formfactor.posture-book .pf-sku :deep(*) { flex: 0 0 auto; }
-.p-formfactor.posture-book .pf-actions { grid-row: 1; align-self: center; min-height: var(--pf-control, 44px); }
-.p-formfactor.posture-book .pf-recommend { grid-row: 1; align-self: end; min-height: 0; overflow: hidden; }
-.p-formfactor.posture-book .pf-recommend :deep(.pf-rec-card) { min-height: 0; max-height: var(--pf-control, 44px); overflow: hidden; }
 
 /* ── 拓扑：stack（手机——单列纵向 + 底部 Tab） ──
    ★2026-09-26 二次复审实测：半折（tabletop 673×420）下 1:1 媒体高 = 全宽 ≈ 440px，
@@ -825,10 +897,20 @@ onUnmounted(() => {
 /* ── 拓扑：duo（折叠屏——主图 + 详情双列） ── */
 /* ★折叠屏真双窗格（2026-09-26 报告 P0-1）：等宽 1:1 + 左栏撑满
    （此前 42/58 非对称 + align-items:start → 左栏仅一图，展开后 2/3 空置） */
+/* ── 拓扑：duo（折叠屏展开态——**两个等宽窗格**，分界即铰链位置） ──
+   ★2026-09-26 报告 P0-1：等宽 1:1 + 左栏撑满（此前 42/58 非对称 + align-items:start → 左栏仅一图）
+   ★★★2026-09-29 用户实测纠错（「duo 双窗格看不出」+「展开态帧宽下 .pf-actions × .pf-recommend 重叠」）：
+     根因是**行预算**——`1fr auto` 让推荐行先按 auto 吃掉 240px，信息列被压到 243px 却装不下
+     （标题、描述、价格、两行规格、双操作 共需 ≈300px）→ 内容溢出到推荐行 → 重叠。
+     修法：① 行结构改为「信息行取 min-content 下限（装得下才不重叠）· 推荐行吸收剩余」；
+           ② 展开态（近方形内屏）里推荐卡改**单行紧凑卡**（图标｜名称｜价格 同行），
+              两行卡片预算 ≈100px 而非 240px——把纵向还给主窗格（真实内屏也是「主内容 + 次要行」）；
+           ③ 规格槽单行横滚（不折两行），主操作与规格同排。 */
 .topo-duo .pf-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr) auto;
+  /* 信息行不得小于其内容（min-content 下限 = 不重叠的硬保证）；推荐行吸收剩余并裁剪 */
+  grid-template-rows: minmax(min-content, 1fr) minmax(0, auto);
   gap: calc(var(--pf-gap) * var(--pf-gap-dense));
   /* ★铰链带消费（二次复审）：真机（Web foldable）env(fold-width) > 0 时列间距自动让开折痕，
      无该 API/普通屏幕回退 0px → 与设计间距一致（内容不跨折痕） */
@@ -845,7 +927,36 @@ onUnmounted(() => {
   justify-content: center;
   min-width: 0;
 }
-.topo-duo .pf-recommend { grid-column: 1 / -1; }
+/* 规格槽：单行横滚（两行规格会把信息列顶出预算——窄窗格里的通行取舍） */
+.topo-duo .pf-sku { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.topo-duo .pf-sku::-webkit-scrollbar { display: none; }
+.topo-duo .pf-sku :deep(*) { flex: 0 0 auto; }
+/* 推荐行：吸收剩余高度；卡为**单行紧凑卡**（图标｜名称｜价格 同行） */
+.topo-duo .pf-recommend {
+  grid-column: 1 / -1;
+  min-height: 0;
+  overflow: hidden;
+  align-content: start;
+}
+.topo-duo .pf-recommend :deep(.pf-rec-card) {
+  min-height: 0;
+  max-height: var(--pf-control, 44px);
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--pf-u) * 0.35);
+  padding: calc(var(--pf-u) * 0.3) calc(var(--pf-u) * 0.45);
+}
+.topo-duo .pf-recommend :deep(.pf-rec-card) > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topo-duo .pf-recommend :deep(.fp-rec-name) { flex: 1 1 auto; }
+.topo-duo .pf-recommend :deep(.fp-rec-ic) { font-size: calc(var(--pf-font) * 1.1); line-height: 1; }
 
 /* ── 拓扑：rail-split（平板——侧栏 + 主体分栏） ── */
 /* ★侧栏宽（2026-09-26 二次复审）：曾硬编码 128px/148px/12px → 不随容器流体；
