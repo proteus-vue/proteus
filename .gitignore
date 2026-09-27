@@ -44,3 +44,6 @@ hosts/ios/experiments/device/build/
 hosts/ios/experiments/device/.provision-work/
 hosts/ios/experiments/device/results/mem-*.json
 hosts/ios/experiments/device/results/memory-isolated.txt
+
+# ★本地工具链（JDK / NDK 等大体积工具，保持在 data1，不入库）
+.tools/
