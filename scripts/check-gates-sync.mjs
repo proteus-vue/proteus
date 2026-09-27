@@ -34,6 +34,7 @@ const LOCAL_ONLY = {
   'check:ios-host': '需 macOS + Xcode（swiftc/JavaScriptCore）；CI 为 ubuntu-latest',
   'check:ios-perf': '同上（性能基线需真实 JavaScriptCore；真机数字另需模拟器/设备）',
   'check:ios-exp-docs': '文档↔实验数字一致性；依赖 hosts/ios/experiments/results/（本机跑出的产物，不入库）',
+  'check:ios-exp-compile': '实验代码（模拟器/真机两变体）可编译性；需 Xcode 工具链（CI 为 ubuntu-latest）',
 }
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))

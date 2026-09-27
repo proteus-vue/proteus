@@ -14,9 +14,9 @@ SIM="${1:-iPhone 18 Pro}"
 BUNDLE_ID="dev.proteus.experiments"
 
 echo "==> ① 编译（release 优化——性能实验必须 -O）"
-SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 mkdir -p "$BUILD" "$RESULTS"
-xcrun swiftc -O -sdk "$SDK" -Xcc -isysroot -Xcc "$SDK" \
+# ★`xcrun --sdk iphonesimulator swiftc`——避免 clang 误用 macOS sysroot（见 run-device.sh 注释）
+xcrun --sdk iphonesimulator swiftc -O \
   -target arm64-apple-ios15.0-simulator \
   -framework UIKit -framework CoreText \
   -parse-as-library \
