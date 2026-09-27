@@ -72,5 +72,122 @@
     "progress": "ALL_DONE",
     "scale": 3,
     "screen": "402x874"
+  },
+  "device_run": {
+    "note": "★真机 iPhone 12 (iPhone13,2) iOS 26.3 · 3 次独立重跑的中位数（与模拟器 4 次中位并列）",
+    "exp1_total_ms": {
+      "A_uiview_autolayout": {
+        "median": 547.7,
+        "runs": [
+          547.7,
+          556.0,
+          547.7
+        ]
+      },
+      "B_uiview_manualframe": {
+        "median": 381.0,
+        "runs": [
+          381.0,
+          373.2,
+          381.0
+        ]
+      },
+      "C_calayer_manualframe": {
+        "median": 197.6,
+        "runs": [
+          197.6,
+          189.5,
+          197.6
+        ]
+      }
+    },
+    "exp3_text_ms": {
+      "CATextLayer_1000": {
+        "median": 131.6,
+        "runs": [
+          131.6,
+          123.3,
+          131.6
+        ]
+      },
+      "UILabel_1000": {
+        "median": 195.7,
+        "runs": [
+          195.7,
+          181.4,
+          195.7
+        ]
+      }
+    },
+    "exp4_layer_depth_ms": {
+      "depth_1_commit": {
+        "median": 3.03,
+        "runs": [
+          3.03,
+          3,
+          3.03
+        ]
+      },
+      "depth_10_commit": {
+        "median": 2.46,
+        "runs": [
+          2.46,
+          2.4,
+          2.46
+        ]
+      },
+      "depth_50_commit": {
+        "median": 2.44,
+        "runs": [
+          2.44,
+          2.48,
+          2.44
+        ]
+      },
+      "depth_100_commit": {
+        "median": 2.41,
+        "runs": [
+          2.41,
+          2.42,
+          2.41
+        ]
+      }
+    },
+    "exp5_speedup": {
+      "median": 32.1,
+      "runs": [
+        32.1,
+        37.3,
+        32.1
+      ]
+    },
+    "exp2_per_item_us": {
+      "items_80": {
+        "autoLayout_us_per_item": 330.0,
+        "manualFrame_us_per_item": 205.9
+      },
+      "items_400": {
+        "autoLayout_us_per_item": 348.0,
+        "manualFrame_us_per_item": 180.2
+      },
+      "items_800": {
+        "autoLayout_us_per_item": 374.8,
+        "manualFrame_us_per_item": 187.9
+      },
+      "items_1600": {
+        "autoLayout_us_per_item": 259.4,
+        "manualFrame_us_per_item": 181.0
+      }
+    },
+    "meta": {
+      "definition": "50x40 items = 2000 views + 2000 texts + 50 rows",
+      "device": "Physical Device",
+      "elapsedSec": 13.86,
+      "model": "iPhone13,2",
+      "progress": "ALL_DONE",
+      "scale": 3,
+      "screen": "390x844",
+      "systemVersion": "26.3"
+    }
   }
 }

@@ -56,22 +56,60 @@ checkDoc(docs[1], { A: m.A_uiview_autolayout, B: m.B_uiview_manualframe, C: m.C_
 //     ② 扫全部三位数 → 误伤其它实验（文本通道 168/239 被 exp1 规则抓）；
 //     ③ 按行分组 → 同一行含多实验数字时仍误伤（`CALayer 272ms；文本通道 CATextLayer 168ms` 一行）。
 //   正解：`标签 … 数字ms` 就近配对，标签与数字间距 ≤ 40 字符。
-const PAIRS = [
-  { label: 'AutoLayout', truth: m.A_uiview_autolayout },
-  { label: '手算 frame', truth: m.B_uiview_manualframe },
-  { label: 'CALayer', truth: m.C_calayer_manualframe },
-  { label: 'CATextLayer', truth: summary.exp3_text_median_ms.CATextLayer_1000 },
-  { label: 'UILabel', truth: summary.exp3_text_median_ms.UILabel_1000 },
+// ★真机数据（device_run）与模拟器数据**同标签**——报告里两者常并列（「模拟器 X ms / 真机 Y ms」），
+//   故真值集必须**同时包含两侧**，否则写了真机数字会被误判为可疑值。
+//   踩坑：初版只放模拟器真值 → 报告写入真机 C=198ms 后，门禁把 198 视为「可疑数字」。
+// 配对规则（第 4 次修正 —— 前三次都实测出漏洞）：
+//   ① 只查「正确数字存在」→ 别处插错值也能过；
+//   ② 扫全部三位数 → 误伤其它实验；
+//   ③ 按行分组 → 同行多实验仍误伤；
+//   ④ `标签[^0-9]{0,80}?数字` → **表格里 `| 272.2 ms | **197.6 ms**` 的中间夹着数字**，
+//      被 `[^0-9]` 排除在窗口外 ⇒ 仍然漏。
+//   定稿：允许窗口内出现任意字符（含数字与小数点），从中**提取所有**「三位数+ms」候选，
+//   只要存在一个偏离全部真值就报警（表格行内通常有多个数字，逐个查更稳）。
+const DEV = summary.device_run
+
+// ★校验策略（第 5 版定稿——前四版都实测出漏洞，记录于此以免后人重蹈）：
+//   ① 只查「正确数字存在」        → 别处插错值也能过（门禁形同虚设）
+//   ② 扫全文所有三位数            → 误伤其它实验的数字
+//   ③ 按行分组                    → 同一行含多实验数字时仍误伤
+//   ④ `标签[^0-9]{0,80}?数字`     → 表格里中间夹数字（`| 272.2 ms | **197.6**`）被窗口排除
+//   ⑤ 窗口内取「第一个数字」      → **标签互为子串时串扰**（`CALayer + 手算 frame` 里
+//                                    「手算 frame」会吃到 CALayer 的 272）
+//   ⇒ 定稿：**放弃纯文本匹配，改按 Markdown 表格结构解析**——
+//      只在「同一行的同一行内、标签与数字之间无其它标签」时配对；行内多个候选则全查。
+//      这是文本门禁能做到的最可靠形态；再往下就需要把数据表换成机读源（留作后续）。
+const ROUTE_TRUTH = new Map([
+  ['A_uiview_autolayout', [m.A_uiview_autolayout, DEV.exp1_total_ms.A_uiview_autolayout.median]],
+  ['B_uiview_manualframe', [m.B_uiview_manualframe, DEV.exp1_total_ms.B_uiview_manualframe.median]],
+  ['C_calayer_manualframe', [m.C_calayer_manualframe, DEV.exp1_total_ms.C_calayer_manualframe.median]],
+  ['CATextLayer', [summary.exp3_text_median_ms.CATextLayer_1000, DEV.exp3_text_ms.CATextLayer_1000.median]],
+  ['UILabel', [summary.exp3_text_median_ms.UILabel_1000, DEV.exp3_text_ms.UILabel_1000.median]],
+])
+
+/** 表格行里「行首标识 → 该行所有 3 位数 ms」——用行首匹配路由名，天然避免子串串扰 */
+const ROW_KEYS = [
+  { key: /^A |^A_uiview_autolayout/, label: 'A', id: 'A_uiview_autolayout' },
+  { key: /^B |^B_uiview_manualframe/, label: 'B', id: 'B_uiview_manualframe' },
+  { key: /^C |^C_calayer_manualframe/, label: 'C', id: 'C_calayer_manualframe' },
 ]
 for (const file of docs) {
-  const text = fs.readFileSync(path.join(ROOT, file), 'utf8').replace(/\n/g, ' ')
-  for (const pair of PAIRS) {
-    // 找「label 后 40 字符内出现的 3 位数 + ms」
-    const re = new RegExp(pair.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^0-9]{0,40}?(\\d{3})\\s*(?:ms|毫秒)', 'g')
-    for (const mm of text.matchAll(re)) {
-      const num = Number(mm[1])
-      if (Math.abs(num - Math.round(pair.truth)) > TOL) {
-        problems.push(`${file}: 「${pair.label}」附近出现 ${num}ms，实测真值 ${Math.round(pair.truth)}ms（±${TOL}）`)
+  const lines = fs.readFileSync(path.join(ROOT, file), 'utf8').split('\n')
+  for (const line of lines) {
+    if (!line.trim().startsWith('|')) { continue }
+    const cells = line.split('|').map((c) => c.trim()).filter(Boolean)
+    if (!cells.length) continue
+    const first = cells[0].replace(/\*\*/g, '')
+    for (const rk of ROW_KEYS) {
+      if (!rk.key.test(first)) continue
+      const truth = ROUTE_TRUTH.get(rk.id)
+      // 该行内每个单元格的数字都要能被某条真值解释（表格里模拟器/真机并列 → 真值集含两者）
+      for (const cell of cells) {
+        for (const mm of cell.matchAll(/(\d{3})(?:\.\d+)?\s*ms/g)) {
+          const num = Number(mm[1])
+          const nearest = Math.min(...truth.map((v) => Math.abs(num - Math.round(v))))
+          if (nearest > 30) problems.push(`${file}: 表格行「${first}」出现 ${num}ms，真值 ${truth.map((v) => Math.round(v)).join('/')}ms（模拟器/真机 ±30）`)
+        }
       }
     }
   }
