@@ -69,13 +69,31 @@ function readRulesJson(file: string): TransformRuleOverrides {
 export interface ExplainArgs {
   /** .vue 文件路径 或 规则 ID */
   target: string
+  /** ★M0：额外输出渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint） */
+  withIR?: boolean
+  /** ★M0：只显示受阻（不可拍平）节点——排查「为什么这个不能拍平」 */
+  onlyBlocked?: boolean
+  /** ★M0：节点显示上限（防输出爆炸） */
+  maxNodes?: number
 }
 
 export function parseExplainArgs(argv: string[]): ExplainArgs {
-  const target = argv[0]
+  // ★M0（2026-09-29）：新增 --ir（渲染 IR 决策 trace——拍平资格/静态子树/PaintHint）、
+  //   --only-blocked（只显示受阻节点）、--max-nodes N（输出上限，防爆炸）。
+  const flags = new Set(argv.filter((a) => a.startsWith('--')))
+  const rest = argv.filter((a) => !a.startsWith('--'))
+  const mi = argv.indexOf('--max-nodes')
+  const maxNodes = mi >= 0 ? Number(argv[mi + 1]) : undefined
+  const target = rest[0]
   if (!target) throw new Error('proteus explain 需要一个参数：<vue 文件路径 | 规则 ID>')
-  if (argv.length > 1) throw new Error(`多余参数：${argv.slice(1).join(' ')}`)
-  return { target }
+  const extra = rest.slice(1).filter((a) => !(mi >= 0 && a === argv[mi + 1]))
+  if (extra.length) throw new Error(`多余参数：${extra.join(' ')}`)
+  return {
+    target,
+    ...(flags.has('--ir') ? { withIR: true } : {}),
+    ...(flags.has('--only-blocked') ? { onlyBlocked: true } : {}),
+    ...(Number.isFinite(maxNodes) ? { maxNodes: maxNodes as number } : {}),
+  }
 }
 
 export function parseRulesArgs(argv: string[]): { phase?: string } {
@@ -582,9 +600,9 @@ export const HELP_GROUPS: HelpGroup[] = [
     titleEn: 'Diagnostics & tools',
     entries: [
       {
-        usage: 'proteus explain <vue 文件 | 规则 ID>',
-        desc: 'vue 文件 → 决策 trace（该文件实际触发的全部转换规则）\n      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）',
-        descEn: 'vue file → decision trace (all transform rules actually triggered by that file)\n      rule ID → the AI manual for that rule (what/why/when/example/verify/source)',
+        usage: 'proteus explain <vue 文件 | 规则 ID> [--ir] [--only-blocked] [--max-nodes N]',
+        desc: 'vue 文件 → 决策 trace（该文件实际触发的全部转换规则）\n      规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）\n      --ir     → 追加渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint；M0）',
+        descEn: 'vue file → decision trace (all transform rules actually triggered by that file)\n      rule ID → the AI manual for that rule (what/why/when/example/verify/source)\n      --ir     → also print the render-IR decision trace (flatten eligibility / static subtree / PaintHint; M0)',
       },
       {
         usage: 'proteus rules [template | script | style | validate]',

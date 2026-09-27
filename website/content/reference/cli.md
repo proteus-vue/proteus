@@ -312,11 +312,12 @@ proteus cobuild <init|check> [--force]
 ### `proteus explain`
 
 ```bash
-proteus explain <vue 文件 | 规则 ID>
+proteus explain <vue 文件 | 规则 ID> [--ir] [--only-blocked] [--max-nodes N]
 ```
 
 vue 文件 → 决策 trace（该文件实际触发的全部转换规则）
       规则 ID  → 该规则的 AI 说明书（what/why/when/example/verify/source）
+      --ir     → 追加渲染 IR 决策 trace（拍平资格 / 静态子树 / PaintHint；M0）
 
 ### `proteus rules`
 

@@ -78,12 +78,21 @@ export function analyzePTree(tree: PTree, opts: AnalyzeOptions = {}): AnalyzeRes
     const f = facts.get(node.id)
     const ownDynamic =
       (boundProps.get(node.id)?.length ?? 0) > 0 || (f?.dynamicProps?.length ?? 0) > 0
-    const hasEvent = f?.hasEvent === true
+    // ★2026-09-29：`hasEvent` 优先取 facts，**回退读节点已写入的 flags**——
+    //   build 阶段已把事实写进 flags，重复分析（build 内部已分析一次）时 facts 可能不再传入，
+    //   若只认 facts 会导致「第二次分析把有事件的节点判回静态」（trace 测试正是这样暴露的）。
+    const hasEvent = f?.hasEvent === true || node.flags.hasEvent === true
     let childrenStatic = true
     for (const child of node.children) {
       if (!walk(child)) childrenStatic = false
     }
-    const isStatic = !ownDynamic && childrenStatic
+    // ★★2026-09-29 修复（由 trace 测试暴露的语义缺陷）：
+    //   `hasEvent` 原先**只参与拍平判定、不参与静态性判定** → 出现「有事件却标为静态子树」的矛盾
+    //   （staticSubtree 的定义即「整棵子树无动态绑定」，而事件处理器本身就是动态的）。
+    //   后果：`paintHint.staticSubtree`/`isStatic` 对带事件节点给出错误答案，
+    //   而这两个标志是**光栅化缓存/静态提升**的依据 ⇒ 会把交互节点当成静态内容缓存（真机表现为点击无响应或残留）。
+    //   修：静态性 = 无动态绑定 ∧ 无事件 ∧ 后代静态。
+    const isStatic = !ownDynamic && !hasEvent && childrenStatic
     node.flags.isStatic = isStatic
     node.flags.hasEvent = hasEvent
     node.flags.isNativeHost = node.kind === 'native-host'

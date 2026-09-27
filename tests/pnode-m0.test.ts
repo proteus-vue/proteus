@@ -234,3 +234,64 @@ describe('★★M0 · 语义 → 绘制类型映射与可复现性', () => {
     expect(buildPTree(input, { startId: 100 }).roots[0]!.id).toBe(100)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ★M0 出口条件（计划 §M0）：「proteus explain 能输出拍平/静态提升的完整决策 trace」
+// ══════════════════════════════════════════════════════════════════════════════
+describe('★★M0 出口条件 · 决策 trace 可解释性', () => {
+  it('trace 含统计摘要（拍平率）+ 逐节点决策 + 受阻理由', async () => {
+    const { formatPTrace } = await import('../packages/component-ir/src/index')
+    const tree = buildPTree([
+      { kind: 'view', tag: 'view', style: 'background:#000', children: [{ kind: 'text', tag: 'text', text: 'x' }] },
+      { kind: 'view', tag: 'view', facts: { hasEvent: true }, style: 'background:#111' },
+    ])
+    const { analyzePTree } = await import('../packages/component-ir/src/index')
+    const analysis = analyzePTree(tree)
+    const out = formatPTrace(tree, analysis)
+    // ① 统计摘要（拍平率是实测关心的核心指标）
+    expect(out).toContain('拍平率')
+    expect(out).toContain('可拍平 2')
+    // ② 逐节点决策 + 可拍平标记
+    expect(out).toContain('✅可拍平')
+    // ③ ★受阻理由必须**具体**（不是笼统的「不可拍平」）——这是排查的前提。
+    //   注意：带事件的节点同时含「子树含动态绑定」（事件即动态）+「绑定事件」两条理由——
+    //   两条都对且都有用（前者说明静态性受影响、后者说明拍平后事件不可达），故按「含」断言。
+    expect(out).toContain('⛔受阻：')
+    expect(out).toContain('绑定事件')
+    expect(out, '理由须具体到原因，不是笼统的「不可拍平」').not.toMatch(/⛔受阻：不可拍平/)
+    // ④ 参照数据（把实测基线写进 trace，读者能立即判断当前拍平率是否正常）
+    expect(out).toContain('186.7→17.7MB')
+  })
+
+  it('--only-blocked 只列受阻节点（排查「为什么这个不能拍平」）', async () => {
+    const { formatPTrace, analyzePTree } = await import('../packages/component-ir/src/index')
+    const tree = buildPTree([
+      { kind: 'view', tag: 'view', style: 'background:#000' },
+      { kind: 'view', tag: 'view', facts: { hasEvent: true } },
+    ])
+    const out = formatPTrace(tree, analyzePTree(tree), { onlyBlocked: true })
+    expect(out).toContain('⛔受阻')
+    expect(out).not.toContain('✅可拍平')
+    expect(out).toContain('（仅受阻项）')
+  })
+
+  it('--max-nodes 限制输出（本仓效率规范：输出控制）', async () => {
+    const { formatPTrace, analyzePTree } = await import('../packages/component-ir/src/index')
+    const many = Array.from({ length: 30 }, () => ({ kind: 'view' as const, tag: 'view', style: 'background:#000' }))
+    const tree = buildPTree(many)
+    const out = formatPTrace(tree, analyzePTree(tree), { maxNodes: 5 })
+    expect(out).toContain('省略 25 个节点')
+  })
+
+  it('诊断输出：error 优先列出，warn 截断到 20 条', async () => {
+    const { formatPTrace, analyzePTree } = await import('../packages/component-ir/src/index')
+    const tree = buildPTree([
+      { kind: 'view', tag: 'view', style: 'grid-template-columns:1fr' }, // error
+      { kind: 'view', tag: 'view', facts: { hasEvent: true, requestFlatten: true } }, // flatten-violation error
+    ])
+    const out = formatPTrace(tree, analyzePTree(tree))
+    expect(out).toContain('[css.out-of-profile]')
+    expect(out).toContain('[css.flatten-violation]')
+    expect(out).toContain('error 2')
+  })
+})
