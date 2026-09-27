@@ -16,10 +16,12 @@
 //   · `style` / `node`  → `node/`（扁平节点树）
 //   · `engine`          → `layout/`（**抽象边界**：引擎原生 API 不得泄漏）
 //   · `taffy_engine`    → `layout/` 的实现（唯一允许出现 taffy:: 的文件）
+//   · `ffi`             → **C ABI 边界**（三端共享：iOS ObjC++ / Android JNI / 鸿蒙 NAPI）
 //   · `conformance`     → 以**浏览器 golden** 为准的对拍（tests/ 侧消费）
 //
 // ★尚未落地（诚实边界，后续里程碑）：`flatten/` `materialize/` `paint-hint/` `recycle/` `render/`
 pub mod engine;
+pub mod ffi;
 pub mod node;
 pub mod style;
 pub mod taffy_engine;
