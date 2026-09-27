@@ -182,6 +182,23 @@ echo "    报告目录：$DEST"
 ls -1 "$DEST" | head -10
 
 echo
+echo "==> 采集 Perfetto trace（§9.2 权威核判定）"
+# ★与滚动测量并行抓取：先起 trace，再触发滚动（trace 需覆盖测量窗口）
+CFG="$(dirname "$0")/perfetto-config.txt"
+TRACE="/data/misc/perfetto-traces/acceptance.pftrace"
+"$ADB" shell am force-stop "$PKG" >/dev/null 2>&1; sleep 1
+"$ADB" shell am start -n "$ACTIVITY" --es path scroll >/dev/null 2>&1; sleep 4
+cat "$CFG" | "$ADB" shell "perfetto --txt -c - -o $TRACE" >/dev/null 2>&1 &
+PF_PID=$!
+sleep 6                      # 让 trace 先跑起来（覆盖触发前的一段）
+"$ADB" shell "am broadcast -a dev.proteus.RUN --es path scroll -p $PKG" >/dev/null 2>&1
+wait $PF_PID 2>/dev/null || true
+"$ADB" pull "$TRACE" "$DEST/acceptance.pftrace" >/dev/null 2>&1 || true
+if [ -f "$DEST/acceptance.pftrace" ]; then
+  PY="$ROOT/.tools/py"
+  PYTHONPATH="$PY" python3 "$(dirname "$0")/perfetto-analyze.py" "$DEST/acceptance.pftrace" "$PKG" 2>&1 | tail -16 | sed 's/^/    /'
+fi
+
 echo "==> 采集系统帧率读数（§9.3 权威口径：dumpsys gfxinfo）"
 GFX="$DEST/gfxinfo.txt"
 # ★必须先 reset，否则 gfxinfo 是**进程生命周期累计**（含冷启动画面），与滚动无关
