@@ -133,11 +133,15 @@ done
 echo "── 通路：proteus（性能与一致性，单轮）──"
 run_one "proteus" "proteus-perf" 1
 
+# ★§9.2 第二行指标：不拍平时的耗时（拍平只对静态子树生效，动态内容走这条路径）
+echo "── 通路：proteus-noflatten（§9.2「不拍平」指标）──"
+run_one "proteus-noflatten" "proteus-noflatten" 1
+
 echo
 echo "==> 取回报告"
 DEST="$OUT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"
-for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-memory.json layout-env.json; do
+for f in layout-report.txt layout-conformance.json layout-bench.json layout-compare-native.json layout-native-only.json layout-proteus-only.json layout-noflatten.json layout-memory.json layout-env.json; do
   "$ADB" shell "run-as $PKG cat files/$f" >/dev/null 2>&1 && continue   # debug 包兼容
   # ★release 包：从外置存储拉（getExternalFilesDir）
   "$ADB" pull "/sdcard/Android/data/$PKG/files/$f" "$DEST/$f" >/dev/null 2>&1 || true

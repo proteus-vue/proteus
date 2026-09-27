@@ -200,6 +200,11 @@ public class MainActivity extends Activity {
             String nativeOnly = nativeOnlyRun();
             sb.append(nativeOnly).append('\n');
             writeReport("layout-native-only.json", nativeOnly);
+        } else if ("proteus-noflatten".equals(testPath)) {
+            sb.append("【③ Proteus 不拍平形态（每元素一个绘制对象）】\n");
+            String nf = proteusNoFlattenRun();
+            sb.append(nf).append('\n');
+            writeReport("layout-noflatten.json", nf);
         } else if ("proteus-mem".equals(testPath)) {
             // ★内存专用口径：与 nativeOnlyRun 对等（都不分配测量位图）
             sb.append("【③ Proteus 通路（内存专用：只建结构）】\n");
@@ -213,8 +218,13 @@ public class MainActivity extends Activity {
             writeReport("layout-compare-native.json", compare);
         }
 
-        // ★§9.2 核判定：测试尾部再采几次，汇总本次运行观测到的 CPU 集合
+        // ★§9.2 核判定：测试尾部收口采样器；并对**未启动持续采样**的通路（内存/不拍平）
+        //   补齐采样（否则那些轮次没有 env 报告，核判定无从谈起）
         try { cpuSampler.join(3500); } catch (InterruptedException ignored) {}
+        for (int i = 0; i < 5; i++) {
+            int c = mainThreadCpu();
+            if (c >= 0) synchronized (observedCpus) { observedCpus.add(c); }
+        }
         int tempAfter = readTemp();
         StringBuilder cpuStr = new StringBuilder();
         for (Integer c : observedCpus) {
@@ -255,6 +265,70 @@ public class MainActivity extends Activity {
         root.addView(tv);
         writeReport("layout-report.txt", text);
         Log.i(TAG, text);
+    }
+
+    /**
+     * ★★§9.2 第二行指标「**不拍平时的耗时仍 ≤ 原生**」的对照实现。
+     *
+     * 拍平只对**静态子树**生效（§12.3 的 `flattenEligible` 判定）；列表滚动、动态内容等
+     * 场景不走拍平 → 故必须验证「最坏形态下仍不输原生」，这是**能力下限**。
+     *
+     * 形态对应：
+     *   · 拍平（主路径）：4050 条指令 → 直接画进宿主 Canvas（**0 个独立绘制对象**）
+     *   · 不拍平（本方法）：4050 个 `RenderNode`（**每元素一个独立绘制对象**）
+     *   · 原生：4051 个 View（恰好也是「每元素一个对象」——与本形态同量级）
+     *
+     * 计时分段与原生对齐（创建 / 录制布局 / 绘制），便于**同口径**比较。
+     */
+    private String proteusNoFlattenRun() {
+        final int W = 1080, H = 2400;
+
+        long p0 = SystemClock.elapsedRealtime();
+        String benchJson = RustLayout.bench(TOTAL, 1);   // Rust 排版（几何）
+        java.util.List<ProteusHostView.Cmd> cmds = buildCmds();
+        long p1 = SystemClock.elapsedRealtime();
+
+        ProteusHostView host = new ProteusHostView(this);
+        host.setCmds(cmds);
+        long p2 = SystemClock.elapsedRealtime();
+        host.buildUnflattened();                          // ★建 4050 个独立绘制对象
+        long p3 = SystemClock.elapsedRealtime();
+
+        // ★★必须用**硬件加速的 Canvas**（`RenderNode.beginRecording()`）：
+        //   实测踩到 `IllegalArgumentException: Software rendering doesn't support drawRenderNode`
+        //   ——`drawRenderNode` 只能作用于硬件加速 Canvas；用软件位图会直接抛异常。
+        //   （这也是 M3 的同一课：性能测量必须走**真实渲染路径**，软件光栅化不是它。）
+        android.graphics.RenderNode root = new android.graphics.RenderNode("noflatten-root");
+        root.setPosition(0, 0, W, H);
+        android.graphics.RecordingCanvas rc = root.beginRecording();
+        long p4 = SystemClock.elapsedRealtime();
+        host.drawUnflattened(rc);                         // ★逐个 drawRenderNode
+        long p5 = SystemClock.elapsedRealtime();
+        root.endRecording();
+        this.keepAlive = new Object[]{cmds, host, root};
+
+        double layoutMs = (p1 - p0);
+        double emitMs = (p2 - p1);
+        double buildNodesMs = (p3 - p2);
+        double drawMs = (p5 - p4);
+        double totalMs = (p5 - p0);
+
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("path", "proteus-noflatten");
+            o.put("elements", TOTAL);
+            o.put("rust_layout_ms", layoutMs);
+            o.put("emit_cmds_ms", emitMs);
+            o.put("build_render_nodes_ms", buildNodesMs);
+            o.put("draw_all_nodes_ms", drawMs);
+            o.put("total_ms", totalMs);
+            o.put("render_node_count", host.unflattenedCount());
+            o.put("note", "★不拍平形态：每元素一个 RenderNode（独立绘制对象）——§9.2 要求其耗时仍 ≤ 原生");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
     }
 
     /**
