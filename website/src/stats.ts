@@ -25,11 +25,11 @@ export interface StatItem {
 export const STATS: StatItem[] = [
   {
     id: 'packages',
-    value: '41',
+    value: '42',
     label: '@proteus-vue/* 包',
     labelEn: '@proteus-vue/* packages',
-    source: 'pnpm check:pkg（41 包 0 error；41 个 packages/* 目录）',
-    sourceEn: 'pnpm check:pkg (41 packages, 0 errors; 41 packages/* dirs)',
+    source: 'pnpm check:pkg（42 包 0 error；42 个 packages/* 目录）',
+    sourceEn: 'pnpm check:pkg (42 packages, 0 errors; 42 packages/* dirs)',
   },
   {
     id: 'tests',

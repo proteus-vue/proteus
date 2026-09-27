@@ -12,7 +12,7 @@
 - **核心理念（架构方向已定案，决策 #290）**：**一份标准 Vue 源码 → 语义 IR（C-IR/CompilerIR）→ 可插拔渲染后端**（Render anywhere, on any engine）；不再是「小程序编译器」——小程序降级为 Layer 1 兼容层
 - **四层可插拔（原则 #10 终极形态）**：编译（G-29 CompilerBackend）/ 逻辑（JS 引擎）/ UI（G-27 RenderBackend）/ 能力（G-28 NativeBackend）
 - **技术栈**：Vue 3.4+ / Vite 5 / TypeScript 5.4+ / 微信基础库 2.29.2+（Skyline + wx.router）
-- **包规模**：41 个 @proteus-vue/* workspace 包（check:pkg 0 error；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41；版本统一 0.3.0-beta.8，见「当前状态速览」）
+- **包规模**：42 个 @proteus-vue/* workspace 包（★2026-09-29 layout-core = App 排版核心，第 42 个）（check:pkg 0 error；31→38 修正 → G-07 glass 39 → Skyline 收口 worklet 40 → ★2026-09-14 组件库拆包 `@proteus-vue/components` 41；版本统一 0.3.0-beta.8，见「当前状态速览」）
 - **文档**：`docs/proteus-architecture.md`（L0 规约·真理来源）→ `docs/board-inventory.md`（全景索引）→ `docs/roadmap.md`（版本线）→ `roadmap-2-plan`（里程碑线）→ 各 plan
 
 ---
@@ -48,7 +48,7 @@
   只有**可复制代码块**里的引用才真正有害。
 · 破坏性验证：恢复 `p-card` → 红并精确报 `03-fluid-grid.md:31`；还原 → 575 md 全过。
 
-## 当前状态速览（最近一次更新：2026-09-29 柔性系统阶段收口）★新会话以此为准
+## 当前状态速览（最近一次更新：2026-09-29 **App 路线 M1 完成**）★新会话以此为准
 
 ### ★★柔性系统已**阶段收口** —— 收口文档 `docs/proteus-fluid-system-plan/04-closure.md`
 
@@ -101,6 +101,66 @@ emoji（⌚📱📲📖📐💻🚗📺 / 🎧🎵🔌🎒🔋📦🏠⚙️ / �
 **分层纪律**：框架层 `p-formfactor` **不引入图标依赖**（MP 端内联 SVG 不可用）——只去掉硬编码
 emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕`（表冠方向）与 `⌘K`（快捷键图例）保留。
 门禁：演示三文件出现 emoji 即红 + DemoIcon 必须覆盖全部所需图标名（`fluid-formfactor-render.test.ts`）。
+
+---
+
+### ★★App 路线 M1 完成：排版核心（Node 参考实现 + 两条出口条件全达成）（2026-09-29）
+
+**新包 `@proteus-vue/layout-core`**（第 42 个包；`packages/layout-core/`）——App 端高性能渲染的排版核心，
+先做 **Node 参考实现**（用户确认的落地顺序）：布局正确性未达标时谈性能无意义；
+C++ 移植以本实现为**语义基准**，避免「边写 C++ 边猜语义」。
+
+**四个模块**：`types.ts`（约束契约/UNBOUNDED 哨兵）· `flex.ts`（flex 求解：单次测量 + 百分比语义落点
+`constraintFor`）· `dirty.ts`（脏区 + 度量缓存 + **布局边界**）· `render-cmd.ts`（平台无关绘制指令流 + 拍平并入）
+· `from-pnode.ts`（M0 渲染 IR → 布局输入；**% 不在适配层解算**——基准是父内容盒，适配层拿不到）。
+
+**★两条出口条件（计划原文）均已达成，且有机器证据**
+1. **Headless 指令流 vs 真实浏览器布局逐像素比对** —— `tests/e2e-layout-core-pixel.test.ts`
+   · 17 用例 / 67 个有盒节点 · x/y/w/h **全部 ≤ 0.5dp** · Chromium 为基准真值
+   · **一处对计划原文的改进**：原文写「与 VueDom 后端比对」，但 VueDom 自己不做布局（`layout:'native'`，
+     交给浏览器）——与之比对等于「用浏览器验证浏览器」。故直接用 Chromium，并遵守仓库既有口径（CSS Profile §8.1）。
+2. **T2 对照证明 `isLayoutBoundary` 真实生效** —— 开边界 **0.59ms / 重排 4 节点 / 作用域=边界子树**；
+   关边界退化为 **1.55ms / 整树根 / 重排 15 节点**（结构量 + 墙钟双双显著劣化）。
+   这正是 §5.4 要防的 RN 事故形状（无边界 → dirty 级联到根）。
+
+**实测数字**（356 节点 / 深度 12；`npx vitest run tests/layout-core-*` 可复跑）
+| 指标 | 实测 |
+|---|---|
+| 单次测量 | `measureCalls == nodeCount`（10501 节点树精确相等） |
+| 增量布局（单点变更） | 访问 **4.8%** 节点 · 文本 shaping **1 次**（全量 8000 次）· 提速 **4.0×** |
+| T1 深层脏更新 | **0.59ms**（预算 3ms） |
+| T4 高频 60 连击 | P50 0.15ms / P95 **0.63ms** / max 1.18ms |
+
+**★★对拍（浏览器基准真值）抓出 6 个真实语义缺陷——全是自测不会发现的**（这条经验最值钱）
+| # | 缺陷 | 偏差实证 |
+|---|---|---|
+| 1 | 主轴 auto 的 flex base size 应为 **max-content**，不是「填满可用」 | 嵌套 row→column 差 112dp |
+| 2 | 主轴尺寸被 grow/shrink 改变后**子树必须按最终尺寸重排**（精化测量） | 父 228 宽、内部仍按 34 摆 |
+| 3 | 交叉轴对齐参照系 = **容器内容盒**，不是「可用空间」 | 视口 667 下居中 16dp 文本，y 差 323.5dp |
+| 4 | `left/top` 从**父 padding 盒**起算，**不叠加**父 padding | 父 padding-left 30 → 差 30dp |
+| 5 | min/max 夹取需**冻结—再分配**（CSS §9.7） | 被夹住的空间不转给兄弟 → 差 35dp |
+| 6 | `display:none` 在 CSS 中**无盒**（无 rects / 无绘制指令） | 父 padding 被算成其原点 |
+
+**修 #2 时顺带解决了「精化与单次测量的张力」**：精化重排会再次走到叶子，
+但**文本 shaping 绝不重跑**——给 `measureText` 加 `(节点, 最大宽)` 记忆化（计划 §5.3 的原话正是此意）。
+净效果：`measureCalls ≤ 2 × nodeCount` 仍成立，且文本度量零重复。
+
+**读数口径两处校正（写进注释，避免下次误读）**
+- `measureReused` 计的是**命中次数**：命中一个子树根即**整棵子树不下钻**（500 次命中覆盖 8000 叶子）；
+  真正的效率读数应与 `nodeCount` 对比的是 **`measureCalls − measureReused`**
+- 增量重排的等价性必须与「同状态全量重排」对拍（随机 30 次改动 × 全节点：全部 < 0.001dp）
+
+**验证**：layout 相关 **47 用例**（19 + 8 + 10 + 7 + 3 像素）· 全量 **3669 passed / 3 failed**（**预存环境问题**：
+`pnpm pack --json` 在本地 pnpm 9.5.0 不支持——已用 git stash 验证与本次改动无关）·
+根 vue-tsc 干净 · `check:pkg` 42 包 0 error · 破坏性验证 9 项（4 个 flex 语义 + 5 个 dirty/指令流）全部按预期变红。
+
+**★过程教训（两条，都值得记住）**
+1. **改动 `node_modules` 前先确认 pnpm 版本**：本仓 `packageManager: pnpm@9.15.9`，本地 CLI 是 9.5.0，
+   `pnpm install` 会因「模块目录由其他 pnpm 建」而**提示清空重建**；非 TTY 下该提示被自动确认 →
+   根 `node_modules` 被清空。**正确做法**：`npx pnpm@9.15.9 install --lockfile-only --config.confirmModulesPurge=false`
+   （只改 lockfile，不碰 node_modules）；新包若需 link，手工按 pnpm 结构建软链或补跑一次真 install。
+2. **新建 workspace 包后要同步的地方有三处**：`pnpm-lock.yaml`（否则 `--frozen-lockfile` 的 CI 会红）、
+   `website/src/stats.ts` 的包数（`check:stats`）、`check:pkg`（要 `dist` 存在）。漏一处就有一个门禁红。
 
 ---
 
