@@ -3,6 +3,30 @@
 > 适用版本：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
 > 目标端：Android（优先）、iOS、HarmonyOS NEXT
 > 交付形态：新增 App 自研渲染后端，与既有 Web / Skyline 后端并行，由 `proteus.config.ts` 切换
+>
+> ---
+> **★开工前假设验证（2026-09-29，真机 iPhone 12 / iOS 26.3 实测）** —— 完整报告见
+> [`proteus-performance-plan/01-ios-route-validation.md`](./proteus-performance-plan/01-ios-route-validation.md)，
+> 实验代码 `hosts/ios/experiments/`（可复跑：`bash hosts/ios/experiments/device/run-device.sh`）。
+>
+> | 假设 | 结论 |
+> |---|---|
+> | H1 跳过 UIView 更快 | ✅ 成立（与「绕开 AutoLayout」**各占约一半**收益） |
+> | H2 AutoLayout 指数级上升 | ⚠️ 结论成立、**理由不成立**：实测**线性**（每项 ~1.6×） |
+> | H3 UILabel 30 vs CATextLayer 58 FPS | ❌ **未复现**：五变体全部 55.8–59.3 FPS、丢帧 ≤0.7% |
+> | H4 layer 深度决定 commit 成本 | ❌ **证伪**：总数效应 **+870%**、深度效应 **−12~17%** |
+> | H5 文本度量可缓存 | ✅ **32–49×**（建议提到 M1 首批） |
+> | §12.1 backing store 色彩空间假设 | ✅ **证实**：`gray8Uint` 让 CATextLayer **−39%（省 72MB）** |
+>
+> **★内存主因（三层隔离，11 变体）——比 §12.1 的原假设更精确**：
+> | 层 | 实测 | 结论 |
+> |---|---|---|
+> | view vs layer | CALayer 仅色块 **4.9MB** < UIView **9.8MB** | **CALayer 本身更省**（原「CALayer +78%」结论有误） |
+> | 文本渲染器 | CALayer 结构 + **UILabel** **96.0MB** ≪ CALayer + **CATextLayer** **186.9MB** | **主因是 CATextLayer 的 backing store 格式** |
+> | 拍平 | **一行一 layer**：**129.9ms / 17.7MB** | ✅ **两项同时最优**（比 C 路线再快 32%、内存 −83%） |
+>
+> ⇒ §12.2 的 **P0-1 已验证有效**（−39%）；**P0-4 的 `isOpaque` 项实测无效**（只省 alpha，不减分配）；
+> §12.3「真/假拍平」的判据已实测（**看 backing store 总数降没降，不是看 layer 数**）。
 
 ---
 
@@ -375,13 +399,17 @@ export default defineConfig({
 
 **对照组**：Android 原生 View 体系实现同一测试（线性布局）
 
-**合格线（建议）**：
+**合格线（建议）与 ★本仓实测（真机 iPhone 12 / iOS 26.3，4050 元素）**：
 
-| 指标 | 合格 | 目标 |
-|---|---|---|
-| 4050 渲染耗时 vs 原生 View | ≤ 原生耗时 | ≤ 原生 × 0.6 |
-| 不拍平时的耗时 | 仍 ≤ 原生 | 同上 |
-| 增量内存 | ≤ 原生 | ≤ 原生 × 0.8 |
+| 指标 | 合格 | 目标 | 实测 |
+|---|---|---|---|
+| 4050 渲染耗时 vs 原生 View | ≤ 原生耗时 | ≤ 原生 × 0.6 | **拍平 129.9ms** vs 原生 525.1ms = **×0.25 ✅** |
+| 不拍平时的耗时 | 仍 ≤ 原生 | 同上 | CALayer 路线 190.5ms = ×0.36 ✅ |
+| 增量内存 | ≤ 原生 | ≤ 原生 × 0.8 | **拍平 17.7MB** vs 104.6MB = **×0.17 ✅**；CALayer+CATextLayer 186.9MB = ×1.79 ❌ |
+
+> ⇒ **拍平路线全面达标**；未拍平的 CALayer 路线**内存不达标**（须配合 §12 的 P0-1 等修复）。
+> **诚实边界**：上表「原生 View」用的是本仓等价实现（UIView + AutoLayout，525.1ms/104.6MB），
+> 非严格手写 UIKit 最优实现——真实原生可能更快，故本表**不应作为对外性能宣称**。
 
 **测试环境要求（Android，极易产生错误数据）**：
 
@@ -416,6 +444,7 @@ export default defineConfig({
 | 8 | **一致性 vs 兼容性** | 复杂组件自研保证一致，原子组件与原生组件映射保证兼容（见 D5） |
 | 9 | **不要提前优化** | 先接 Yoga 跑通全链路，再考虑自研布局。布局正确性不达标时谈性能无意义 |
 | 10 | **工程量的量级** | 业界同类方案自述为"数千项工程优化"。Compose 走同一路线但比 View 体系更慢，说明方向正确不等于结果正确 |
+| 11 | **★文本的 backing store**（本仓实测新增） | **每个 CATextLayer 一块 sRGB 全通道位图 ≈ 90KB**（2000 个 = 180MB）。修复次序：① `contentsFormat = gray8Uint`（−39%，已验证）② 拍平（−83%，已验证）③ 结构用 CALayer + 文本用系统 label（−49%，已验证）。**详见 §12** |
 
 ---
 
@@ -438,9 +467,21 @@ export default defineConfig({
 
 ### 12.1 首要假设：backing store 色彩空间未优化
 
-**首要怀疑对象，优先验证。**
+**✅ 本仓已实测证实（2026-09-29，真机 iPhone 12）——无需再排查。**
 
-系统 `UILabel` 对**单色** string 做了优化处理，**可节省约 75% 的 Backing Store**，并能自动更新 backing store 尺寸以适配富文本或 emoji。实测的 78% 与该数字高度吻合，应作为第一排查目标。
+系统 `UILabel` 对**单色** string 做了优化处理，**可节省约 75% 的 Backing Store**，并能自动更新 backing store 尺寸以适配富文本或 emoji。实测的 78% 与该数字高度吻合。
+
+**实测数据（11 变体进程隔离矩阵）**：
+
+| 变体 | 增量内存 | 说明 |
+|---|---|---|
+| C CALayer 结构 + **CATextLayer** 文本 | 186.9 MB | 症状复现 |
+| **I CALayer 结构 + UILabel 文本** | **96.0 MB** | ⇒ **主因确是文本渲染器**（比纯 UIView 方案还省 5%） |
+| **J CATextLayer + `contentsFormat = .gray8Uint`** | **114.9 MB** | ⇒ **本假设证实：−39%（省 72MB）** |
+| K CATextLayer + `isOpaque` | 187.0 MB | ⇒ `isOpaque` **无效**（只省 alpha 通道，不减分配） |
+
+**⇒ 结论**：主因**不是**「CALayer vs UIView」（仅色块对照：CALayer 4.9MB **反而比** UIView 9.8MB 省），
+而是**CATextLayer 的 backing store 默认走 sRGB 全通道**。故 §12.2 的 **P0-1 是首要且已验证有效**的修复项。
 
 机制：
 
@@ -456,6 +497,12 @@ export default defineConfig({
 | P0-2 | **纯色背景绝不进绘制流程** | `backgroundColor` 直接画到 frameBuffer，不需要 backing store。若背景色也走自绘，则每个背景节点都在白分配位图 |
 | P0-3 | **用 `contents` 替代 `drawRect`** | 将 image 设为 `contents` 可**阻止图层为 backing store 申请内存**，图层直接以该 image 作为 backing store；多个 layer 使用同一 image 时**共享内存**而非各自开辟 |
 | P0-4 | **消灭离屏渲染** | 阴影必须设 `shadowPath`；避免 `cornerRadius` + `masksToBounds` 同时开启；避免 `mask` |
+
+**★实测状态（2026-09-29）**：
+- **P0-1 已验证有效**：`gray8Uint` 使 CATextLayer 186.9 → **114.9 MB（−39%）**；
+- **P0-2 架构上天然满足**：仅色块变体 4.9 MB（`backgroundColor` 确认不进 backing store）；
+- **P0-3 未测**（无重复图片场景）；
+- **P0-4 的 `isOpaque` 项实测无效**（187.0 ≈ 186.9）；离屏渲染需 Instruments（未测）。
 
 **关于 `shouldRasterize` 的硬性约束**：
 - 启用后**至少触发一次离屏渲染**，并消耗额外内存
@@ -476,6 +523,14 @@ export default defineConfig({
 业内真实教训：曾有实现尝试将三张小图绘制到一张大图上再展示，结果**内存炸掉**，最终改回多视图实现。
 
 原因：合并位图尺寸为子节点并集，且任一子节点变化都要重绘整块；列表场景下是灾难。
+
+**✅ 本仓已实测验证（2026-09-29）**：H 变体（一行一个 layer、文本绘制进**父级 layer**）
+取得 **129.9ms + 17.7MB**——**耗时与内存同时最优**（对比 C 路线 190.5ms/186.9MB：
+再快 32%、内存降到 1/10）。构造即「真拍平」形状：**4050 元素 → 50 个绘制对象**
+（50 块位图，而非 4000 块）。
+
+**判据（实测得出，建议写进判定规则）**：验证拍平是否「真」——**看 backing store 总数是降了还是涨了**，
+不能只看 layer 数（假拍平也会减少 layer 数，但位图总量上升）。
 
 **强制规则**：`flattenEligible` 判定（§3.1）必须追加条件——
 1. 子树必须**完全静态**（无任何动态绑定）
