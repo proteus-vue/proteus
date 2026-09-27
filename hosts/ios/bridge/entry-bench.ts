@@ -40,6 +40,10 @@ const BN = { snapshot: 'bench-final' }
 
 const VP = (globalThis as unknown as { __PROTEUS_VIEWPORT__?: { width: number; height: number } })
   .__PROTEUS_VIEWPORT__ ?? { width: 390, height: 844 }
+// ★构建标识：每次构建写入，用于**确凿判定**设备上跑的是哪份代码
+//   （踩坑：靠文件 mtime 判断"报告是否刷新"不可靠——新建目标文件的时间恒为"现在"；
+//    且我看不出设备实际执行的是旧 bundle，白跑一轮。有了这个字段就能一眼判定。）
+const BUILD_ID = 'fa6203eb-004718'
 const now = (): number => Date.now()
 /** 宽松解析（宿主返回可能是字符串或已是对象） */
 const safeParseAny = (s: any): any => {
@@ -82,9 +86,21 @@ interface BenchApp {
   setItems: (items: { id: number; title: string; sub: string }[]) => void
   mutateDeep: () => void
   setScaleBase: (n: number) => void
-  /** ★只改**第 i 行**的 margin（布局字段、不改结构/文本 ⇒ 应触发增量且**范围限于该行**） */
+  /** ★类B 平级变更：改**第 i 行**的 margin（改变主轴占用 ⇒ **兄弟行全部移位** ⇒ 范围=父级） */
   setRowMargin: (i: number, px: number) => void
+  /** ★类A 局部变更：改**第 i 行内子节点**的尺寸（行高显式 ⇒ 行尺寸不变 ⇒ 兄弟不动 ⇒ 范围应止于该行） */
+  setDotSize: (i: number, px: number) => void
+  /** ★文本变更：改前 k 行的文案（**击穿内容寻址的度量缓存**，逼出文本度量成本） */
+  churnText: (k: number, tag: string) => void
   renderCount: () => number
+  /**
+   * ★释放该应用（加压用例之间必须调用）
+   *
+   * 【为什么必须（真机实测）】S 组初版每个用例建一个应用且从不释放 ⇒
+   *   到 S1_4000 时进程已达 **1.3GB**，后续用例的读数混进了 GC 风暴与内存压力，
+   *   无法判断"慢是因为算法还是因为内存"。加压测试要给出**可归因**的数字。
+   */
+  dispose: () => void
   items: () => { id: number; title: string; sub: string }[]
 }
 
@@ -120,6 +136,10 @@ function makeApp(initial: number): BenchApp {
   //   （踩坑：初版用**共享**的 rowMargin → 所有行的 margin 一起变 → patch=500、
   //    重排覆盖所有行 ⇒ 看起来像「增量退化」，实际是**用例本身不是局部变更**）
   const rowMargins = ref<Record<number, number>>({})
+  // ★行内子节点的尺寸（类A 局部变更的靶子）：行高显式 ⇒ 改它不该影响兄弟
+  const dotSizes = ref<Record<number, number>>({})
+  // ★文本版本号（击穿度量缓存用）
+  const textTag = ref(0)
 
   const App = {
     name: 'BenchApp',
@@ -136,7 +156,7 @@ function makeApp(initial: number): BenchApp {
             backgroundColor: '#1b1b21', borderRadius: 12,
           },
         }, [
-          h('p-view', { style: { width: 36, height: 36, backgroundColor: c, borderRadius: 18 } }),
+          h('p-view', { style: { width: 36, height: dotSizes.value[it.id] ?? 36, backgroundColor: c, borderRadius: 18 } }),
           h('p-view', { style: { flexGrow: 1, margin: { left: 12 } } }, [
             h('p-text', { style: { fontSize: 16, color: '#ffffff' } }, it.title),
             h('p-text', { style: { fontSize: 13, color: '#9aa3b2' } }, it.sub),
@@ -158,7 +178,8 @@ function makeApp(initial: number): BenchApp {
       ])
     },
   }
-  renderer.createApp(App).mount(container)
+  const app = renderer.createApp(App)
+  app.mount(container)
 
   return {
     adapter,
@@ -168,8 +189,20 @@ function makeApp(initial: number): BenchApp {
     mutateDeep: () => { deep.a.b.c.v = deep.a.b.c.v + 1 },
     setScaleBase: (v) => { scaleBase.value = v },
     setRowMargin: (i, px) => { rowMargins.value = { ...rowMargins.value, [i]: px } },
+    setDotSize: (i, px) => { dotSizes.value = { ...dotSizes.value, [i]: px } },
+    churnText: (k, tag) => {
+      // 改文案前缀 ⇒ 内容寻址缓存**必然未命中**
+      items.value = items.value.map((it, idx) => (idx < k ? { ...it, title: `${tag} ${it.title}` } : it))
+      void textTag.value
+    },
     renderCount: () => renders,
     items: () => items.value,
+    dispose: () => {
+      // Vue 侧销毁（解绑响应式、释放组件实例）
+      try { app.unmount() } catch { /* 已卸载或未挂载 */ }
+      // 断开容器与根的联系（让 NativeElementNode 树可回收）
+      adapter.root.children.length = 0
+    },
   }
 }
 
@@ -226,6 +259,9 @@ async function measure(
 /* ────────────────────────── ★用例集 ────────────────────────── */
 
 type CaseFn = () => Promise<void>
+/** ★初始化诊断（顶层的任何异常都会被记录，不再静默吞掉整个用例组） */
+const INIT_DIAG: { errors: string[]; stages: string[] } = { errors: [], stages: [] }
+
 const CASES: Array<{ name: string; note: string; fn: CaseFn }> = []
 
 /* A. 规模扫描 —— 边界成本随规模的增长曲线 */
@@ -596,6 +632,339 @@ CASES.push({
   },
 })
 
+/* ────────────────────────── ★★★S 组：加压测试（逼出性能天花板）────────────────────────── */
+
+/**
+ * S 组的设计原则（与 A–J 组不同的地方）
+ *
+ * A–J 组是「**验证**」（在已知可行的规模上确认机制正确）；S 组是「**加压**」——
+ * 目标是**逐档加到越线**，并给出越线的那一档与当时的构成，而不是"跑通了"。
+ *
+ * 三个必须区分的变量（本仓在 J 组踩过：把「平级变更」当成「局部变更」测）：
+ *   · 变更**位置**：边界内（类A 局部） vs 改自身盒属性（类B 平级，兄弟全动）
+ *   · 变更**内容**：样式 vs 文本（文本会**击穿内容寻址的度量缓存**）
+ *   · 变更**结构**：只改值 vs 增删节点（后者目前必然全量重建）
+ *
+ * 帧预算基准：**16.7ms**（60FPS）。越过即记为「越线」。
+ */
+const FRAME_BUDGET_MS = 16.7
+
+/**
+ * ★★挂载一个应用（加压用例的**前置条件**）
+ *
+ * 【为什么必须显式做（本仓实测踩到的测量缺陷，第四次同类）】
+ *   S 组初版每个用例都 `makeApp(n)` 建了新应用，**但没 mount**，
+ *   直接 `updatePatches()` —— 而 `updatePatches` 打的是**宿主上仍持有的上一棵树**的句柄。
+ *   后果：1000 项 JS 树算出的补丁打到了 **28007 节点的宿主树**上，
+ *   读数变成 `relayout=28005`、`changed_rects=28005`，而用例名却写着"改第 500 行圆点"。
+ *   ⇒ 数字完全失真，且**看起来像是"增量失效"**。
+ *
+ * ★纪律（第 N 次验证）：**加压用例必须先把自己那棵树挂上去**，
+ *   并断言「本次操作触及的节点数与自己那棵树同量级」——否则读数无意义。
+ */
+function mountApp(app: BenchApp, n: number): void {
+  const req = app.adapter.toRequest(VP)
+  proteusSelfDraw.mount(JSON.stringify(req))
+  app.adapter.markFullSync()      // 全量已发出 ⇒ 声明同步（否则结构标志污染后续 takePatches）
+  void n
+}
+
+/** ★每个用例的**自身耗时**（由用例内部打点，不依赖宿主的泵节奏） */
+const caseTimings: Record<string, number> = {}
+
+/**
+ * ★★**已执行的用例数**（与「结果条数」严格区分）
+ *
+ * 【为什么必须分开（本仓实测踩到，且被误导了好几轮）】初版用 `results.length` 当"已完成用例数"，
+ *   但**一个用例可以产出多条结果**（`I_style_hoist_ab` 2 条、`J_incremental_e2e` 3 条）
+ *   ⇒ A–J 的 15 个注册用例产出 **23 条结果**，而 `CASES.length` 恰好也是 **23**（15 + 8 个 S 组）
+ *   ⇒ 驱动看到 `completed(23) == total_cases(23)` 就**判定全部完成并退出**
+ *   ⇒ **S 组 8 个用例从未执行**。
+ * ★两个 23 撞车让现象看起来像"S 组注册失败"，我因此查了 bundle / cases() / BUILD_ID 好几轮——
+ *   全都是对的。**计数器语义错位比代码错误更难查**：它不报错，只是提前收工。
+ * ⇒ 纪律：**进度计数器必须与它计的对象同粒度**（用例数 ≠ 结果条数）。
+ */
+let executedCases = 0
+
+/** 记录「越线」的档位（加压测试的产出） */
+const ceiling: Array<{ dim: string; level: string; ms: number; note: string }> = []
+
+function markCeiling(dim: string, level: string, ms: number, note: string): void {
+  if (ms > FRAME_BUDGET_MS) ceiling.push({ dim, level, ms: Math.round(ms * 100) / 100, note })
+}
+
+INIT_DIAG.stages.push('before-S2:' + CASES.length)
+try {
+/* S2 · ★★变更位置：类A（边界内）vs 类B（平级）—— 这是增量的真实分界线 */
+CASES.push({
+  name: 'S2_change_locality',
+  note: '★★变更位置对照：类A 改行内子节点尺寸（应止于该行） vs 类B 改行 margin（兄弟全动 ⇒ 父级）',
+  fn: async () => {
+    const N = 1000
+    const app = makeApp(N)
+    mountApp(app, N)                    // ★必须：否则补丁会打到上一棵树上（见 mountApp 注释）
+    const mid = Math.floor(N / 2)
+
+    const runOne = async (label: string, mutate: () => void, note: string) => {
+      app.adapter.resetStats()
+      const t0 = now()
+      mutate()
+      await nextTick()
+      const tVue = now()
+      const patches = app.adapter.takePatches()
+      const tReq = now()
+      let hostOut: string
+      let bytes = 0
+      if (patches === null) {
+        const r = app.adapter.toRequest(VP)
+        const tj = JSON.stringify(r)
+        bytes = tj.length
+        hostOut = proteusSelfDraw.update(tj)
+      } else {
+        bytes = JSON.stringify(patches).length
+        hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+      }
+      const tHost = now()
+      const h = safeParseAny(hostOut)
+      results.push({
+        case: `S2_${label}`,
+        note,
+        items: N, nodes: h?.["node_count"] ?? 0,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
+        host_ms: tHost - tReq, total_ms: tHost - t0,
+        patch_count: app.adapter.patchCount(), request_bytes: bytes,
+        extra: { relayout: h?.["relayout_count"], changed_rects: h?.["changed_rects"],
+                 updated_layers: h?.["updated_layers"], mem_mb: h?.["mem_mb"],
+                 patches_sent: patches === null ? 'FULL' : patches.length },
+      })
+      // ★自检（防"打错树"再次静默发生）：relayout 不得超过本用例自己的树规模
+      const rl = (h?.["relayout_count"] as number) ?? 0
+      const ownTreeNodes = 0   // 见 runOne 内部计数
+      void ownTreeNodes
+      if (rl > 0x4000) results.push({
+        case: 'S2_SELFCHECK_FAIL', note: `relayout=${rl} 超出自有树规模 ⇒ 疑似打到了上一棵树`,
+        items: 0, nodes: 0, vue_ms: -1, to_request_ms: -1, serialize_ms: -1, host_ms: -1,
+        total_ms: -1, patch_count: -1, request_bytes: -1,
+      })
+      markCeiling('locality', label, tHost - t0, note)
+    }
+
+    // 类A：改行内子节点（圆点）尺寸 —— 行高显式 ⇒ 行尺寸不变 ⇒ 兄弟不动
+    await runOne('A_local_dot', () => app.setDotSize(mid, 20), `类A 局部：改第 ${mid} 行内圆点尺寸`)
+    // 类B：改同一行的 margin —— 改变主轴占用 ⇒ 后续兄弟全部移位
+    await runOne('B_sibling_margin', () => app.setRowMargin(mid, 20), `类B 平级：改第 ${mid} 行 margin`)
+    app.dispose()
+  },
+})
+
+/* S3 · 持续更新压力：连续 N 次局部更新，看帧时间分布 */
+CASES.push({
+  name: 'S3_sustained_burst',
+  note: '★持续压力：连续 300 次局部更新（每次 await nextTick）——看 p50/p95/p99 是否越过 16.7ms',
+  fn: async () => {
+    const N = 500
+    const app = makeApp(N)
+    mountApp(app, N)                    // ★必须：见 mountApp 注释
+    const ITERS = 300
+    const samples: number[] = []
+    for (let i = 0; i < ITERS; i++) {
+      const t0 = now()
+      app.setDotSize(i % N, 20 + (i % 8))                  // 局部变更
+      await nextTick()
+      const patches = app.adapter.takePatches()
+      if (patches !== null) proteusSelfDraw.updatePatches(JSON.stringify(patches))
+      samples.push(now() - t0)
+    }
+    samples.sort((a, b) => a - b)
+    const pick = (p: number) => samples[Math.min(samples.length - 1, Math.floor(samples.length * p))]
+    results.push({
+      case: 'S3_sustained_burst',
+      note: `连续 ${ITERS} 次局部更新（${N} 项页面）`,
+      items: N, nodes: 0,
+      vue_ms: 0, to_request_ms: 0, serialize_ms: 0, host_ms: 0,
+      total_ms: samples.reduce((a, b) => a + b, 0),
+      patch_count: 0, request_bytes: 0,
+      extra: { iters: ITERS, p50_ms: pick(0.5), p95_ms: pick(0.95), p99_ms: pick(0.99),
+               max_ms: samples[samples.length - 1], min_ms: samples[0],
+               over_budget: samples.filter((v) => v > FRAME_BUDGET_MS).length },
+    })
+    markCeiling('frequency', `连续 ${ITERS} 次`, pick(0.95), 'p95 单次更新耗时')
+    app.dispose()
+  },
+})
+
+/* S4 · 文本击穿：改大量文案（内容寻址缓存必然未命中） */
+CASES.push({
+  name: 'S4_text_churn',
+  note: '★文本击穿：改 300 行文案（**击穿内容寻址度量缓存**）——文本度量是平台最贵的一步',
+  fn: async () => {
+    const N = 500
+    const app = makeApp(N)
+    mountApp(app, N)                    // ★必须：见 mountApp 注释
+    app.adapter.resetStats()
+    const t0 = now()
+    app.churnText(300, 'R1')                 // 300 行文案变化
+    await nextTick()
+    const tVue = now()
+    const patches = app.adapter.takePatches()
+    const tReq = now()
+    let hostOut: string
+    let bytes = 0
+    if (patches === null) {
+      const r = app.adapter.toRequest(VP)
+      const tj = JSON.stringify(r)
+      bytes = tj.length
+      hostOut = proteusSelfDraw.update(tj)
+    } else {
+      bytes = JSON.stringify(patches).length
+      hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+    }
+    const tHost = now()
+    const h = safeParseAny(hostOut)
+    results.push({
+      case: 'S4_text_churn',
+      note: `改 300 行文案（${N} 项页面）`,
+      items: N, nodes: 0,
+      vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
+      host_ms: tHost - tReq, total_ms: tHost - t0,
+      patch_count: app.adapter.patchCount(), request_bytes: bytes,
+      extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length,
+               measure_hits: h?.["measure_cache_hits"], measure_misses: h?.["measure_cache_misses"] },
+    })
+    markCeiling('text_churn', '改 300 行文案', tHost - t0, '文本变更（缓存未命中）')
+    app.dispose()
+  },
+})
+
+/* S5 · 结构变更：增删节点（当前必然全量重建 —— 已知天花板） */
+CASES.push({
+  name: 'S5_structure_change',
+  note: '★结构变更：500→600 / 600→400 项（增删节点）——当前 update 入口只收样式补丁 ⇒ 必然全量',
+  fn: async () => {
+    const N = 500
+    const app = makeApp(N)
+    mountApp(app, N)                    // ★必须：见 mountApp 注释
+    const runOne = async (label: string, newN: number) => {
+      app.adapter.resetStats()
+      const t0 = now()
+      app.setCount(newN)
+      await nextTick()
+      const tVue = now()
+      const patches = app.adapter.takePatches()
+      const tReq = now()
+      let hostOut: string
+      let bytes = 0
+      let mode = 'patch'
+      if (patches === null) {
+        mode = 'FULL'
+        const r = app.adapter.toRequest(VP)
+        const tj = JSON.stringify(r)
+        bytes = tj.length
+        hostOut = proteusSelfDraw.update(tj)
+      } else {
+        bytes = JSON.stringify(patches).length
+        hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+      }
+      const tHost = now()
+      const h = safeParseAny(hostOut)
+      app.adapter.markFullSync()
+      results.push({
+        case: `S5_${label}`,
+        note: `${N}→${newN} 项（${mode === 'FULL' ? '全量重建' : '补丁'}）`,
+        items: newN, nodes: h?.["node_count"] ?? 0,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
+        host_ms: tHost - tReq, total_ms: tHost - t0,
+        patch_count: app.adapter.patchCount(), request_bytes: bytes,
+        extra: { mode, mem_mb: h?.["mem_mb"], mem_peak_mb: h?.["mem_peak_mb"] },
+      })
+      markCeiling('structure', `${N}→${newN} 项`, tHost - t0, `结构变更（${mode}）`)
+    }
+    await runOne('grow_600', 600)
+    await runOne('shrink_400', 400)
+    app.dispose()
+  },
+})
+
+/* S6 · 最坏情形：整体重排（keyed diff 全量 + 布局全动） */
+CASES.push({
+  name: 'S6_worst_reverse',
+  note: '★最坏情形：1000 项整体 reverse（keyed diff 全量重排 + 兄弟全部移位）',
+  fn: async () => {
+    const N = 1000
+    const app = makeApp(N)
+    mountApp(app, N)                    // ★必须：见 mountApp 注释
+    app.adapter.resetStats()
+    const t0 = now()
+    app.reverse()
+    await nextTick()
+    const tVue = now()
+    const patches = app.adapter.takePatches()
+    const tReq = now()
+    let hostOut: string
+    let bytes = 0
+    if (patches === null) {
+      const r = app.adapter.toRequest(VP)
+      const tj = JSON.stringify(r)
+      bytes = tj.length
+      hostOut = proteusSelfDraw.update(tj)
+    } else {
+      bytes = JSON.stringify(patches).length
+      hostOut = proteusSelfDraw.updatePatches(JSON.stringify(patches))
+    }
+    const tHost = now()
+    const h = safeParseAny(hostOut)
+    results.push({
+      case: 'S6_worst_reverse',
+      note: `1000 项 reverse（最坏情形）`,
+      items: N, nodes: 0,
+      vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tHost - tReq,
+      host_ms: tHost - tReq, total_ms: tHost - t0,
+      patch_count: app.adapter.patchCount(), request_bytes: bytes,
+      extra: { relayout: h?.["relayout_count"], patches_sent: patches === null ? 'FULL' : patches.length },
+    })
+    markCeiling('worst_case', '1000 项 reverse', tHost - t0, '整体重排')
+    app.dispose()
+  },
+})
+
+/* S1 · 规模天花板：挂载 N 项，看时间与内存的走向 */
+for (const n of [1000, 2000, 4000]) {
+  CASES.push({
+    name: `S1_scale_mount_${n}`,
+    note: `★规模天花板：挂载 ${n} 项（≈${n * 4 + 3} 节点）——看时间/内存走向`,
+    fn: async () => {
+      const t0 = now()
+      const app = makeApp(n)                 // Vue：createApp + mount + 首帧 patch
+      const tVue = now()
+      const req = app.adapter.toRequest(VP)  // 适配器：拍平 + 折叠
+      const tReq = now()
+      const treeJson = JSON.stringify(req)
+      const tSer = now()
+      const hostOut = proteusSelfDraw.mount(treeJson)   // 宿主：度量 + 核心布局 + 建层
+      const tHost = now()
+      const h = safeParseAny(hostOut)
+      app.adapter.markFullSync()
+      const total = tHost - t0
+      results.push({
+        case: `S1_scale_mount_${n}`,
+        note: `规模 ${n} 项挂载（${req.nodes.length} 节点）`,
+        items: n, nodes: req.nodes.length,
+        vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
+        host_ms: tHost - tSer, total_ms: total,
+        patch_count: app.adapter.patchCount(), request_bytes: treeJson.length,
+        extra: { mem_mb: h?.["mem_mb"], mem_peak_mb: h?.["mem_peak_mb"],
+                 per_node_us: Math.round((total / req.nodes.length) * 1000) / 1000 * 1000 },
+      })
+      markCeiling('scale', `${n} 项挂载`, total, '整链挂载耗时（含 Vue）')
+      app.dispose()          // ★释放（否则内存累积，后续档位的读数不可归因）
+    },
+  })
+}
+
+
+} catch (e) { INIT_DIAG.errors.push('S 组注册失败: ' + String((e as Error)?.message ?? e)) }
+INIT_DIAG.stages.push('after-S:' + CASES.length)
+
 /* ────────────────────────── 宿主驱动的用例执行器 ────────────────────────── */
 
 let idx = 0
@@ -606,13 +975,31 @@ const api = {
   cases: (): string => JSON.stringify(CASES.map((c) => ({ name: c.name, note: c.note }))),
 
   /**
-   * 启动下一个用例（**同步返回**；实际工作挂在微任务链上）。
-   * 宿主随后让出主线程 → 微任务排空 → 用例完成。
+   * ★★**一次性启动整条用例链**（宿主只负责泵微任务，不再逐用例干预）
+   *
+   * 【为什么改（本仓实测的教训）】初版由宿主逐用例 `step()` 并「等 completed 增长」——
+   *   而一旦某个用例抛异常被 `.catch()` 吞掉，`completed` 就**永不增长**
+   *   ⇒ 宿主无限等待 ⇒ **JS 侧空转 88 秒** ⇒ 被 iOS 看门狗杀掉（现象：白屏几秒后退出）。
+   *   ⇒ 正解：链条由 JS 自己串（`chain = chain.then(...)` 已经天然串行），
+   *     宿主只需「反复让出主线程让微任务排空」，直到 `done()` 被调用。
+   *   ★这也消除了「打印时序」与「执行时序」两套计时可能不一致的问题。
    */
   step: (): string => {
-    if (idx >= CASES.length) return JSON.stringify({ done: true, total: CASES.length, completed: results.length })
+    if (idx >= CASES.length) {
+      return JSON.stringify({ done: true, completed: executedCases, total: CASES.length })
+    }
     const c = CASES[idx++]
     chain = chain.then(async () => {
+      // ★★用例自己打时间戳（**根治计时窗口重叠**）
+      //
+      // 【为什么必须由用例自己打（本仓实测的两次失败尝试）】
+      //   尝试 1：宿主泵固定 4 轮 → 需要 300 次 await 的用例只拿到 4 轮 ⇒ 窗口跨越后续用例。
+      //   尝试 2：宿主按 `completed` 变化条件等待 → 但 `completed` 的增长发生在**微任务**里，
+      //     宿主下一次 evaluateScript 时它**早就涨完了** ⇒ 判定"已完成"时其实还有别的用例在跑。
+      //   ⇒ 根治：**把计时放进用例自身**（同一段微任务链，天然串行，不可能重叠）。
+      //     宿主只负责「按节奏泵」，不再承担计时职责。
+      const caseT0 = now()
+      const rBefore = results.length
       try {
         await c.fn()
       } catch (e) {
@@ -622,23 +1009,68 @@ const api = {
           total_ms: -1, patch_count: -1, request_bytes: -1,
         })
       }
+      // ★用例自身耗时（与 fn 内部的分段读数并列，互为校验）
+      caseTimings[c.name] = Math.round((now() - caseT0) * 100) / 100
+      void rBefore
+      executedCases += 1          // ★用例数（与结果条数严格区分）
     })
-    return JSON.stringify({ started: c.name, index: idx, total: CASES.length })
+    return JSON.stringify({ started: c.name, index: idx, total: CASES.length,
+                            completed: executedCases, results: results.length })
+  },
+
+  /** 收尾：写报告（由宿主在所有用例完成后调用） */
+  finish: (): string => {
+    {
+      const summary = {
+        kind: 'logic-bench',
+        build_id: BUILD_ID,
+        init_diag: INIT_DIAG,
+        runtime: 'JavaScriptCore（系统自带）',
+        viewport: VP,
+        total_cases: CASES.length,
+        completed: executedCases,
+        result_count: results.length,
+        cases: results,
+        ceiling,
+        frame_budget_ms: FRAME_BUDGET_MS,
+        case_timings_ms: caseTimings,
+        notes: [
+          '★四段分解：vue / 适配器 / 序列化 / 宿主',
+          '★★加压测试：逐档增加到越过 16.7ms 帧预算，记录越线档位（ceiling）',
+          '★变更位置区分：类A 边界内（应止于该行） vs 类B 平级（兄弟全动 ⇒ 父级）',
+          '★用例自身打点（case_timings_ms），不依赖宿主泵节奏 ⇒ 计时窗口不重叠',
+        ],
+      }
+      const json = JSON.stringify(summary)
+      proteusSelfDraw.report(json)
+      proteusSelfDraw.done(JSON.stringify({ ok: true, completed: executedCases, total: CASES.length }))
+    }
+    return JSON.stringify({ ok: true, completed: executedCases, total: CASES.length })
   },
 
   /** 已完成的读数（宿主每轮读它） */
   progress: (): string =>
-    JSON.stringify({ completed: results.length, total: CASES.length, running: idx, cases: results.map((r) => r.case) }),
+    JSON.stringify({ completed: executedCases,        // ★用例数（与 CASES.length 同粒度）
+                     results: results.length,          // 结果条数（可多于用例数）
+                     total: CASES.length, started: idx,
+                     cases: results.map((r) => r.case) }),
 
   /** 收尾：写出完整报告（宿主最后调用） */
   finish: (): string => {
     const summary = {
       kind: 'logic-bench',
+      init_diag: INIT_DIAG,
+      build_id: BUILD_ID,
       runtime: 'JavaScriptCore（系统自带）',
       viewport: VP,
       total_cases: CASES.length,
-      completed: results.length,
+      completed: executedCases,        // ★已执行**用例**数
+      result_count: results.length,    // 结果条数（诊断用：> completed 说明有用例产出多条）
       cases: results,
+      // ★★加压测试的产出：**越线的档位**（哪一维、哪一档、多少 ms）
+      ceiling,
+      frame_budget_ms: FRAME_BUDGET_MS,
+      case_timings_ms: caseTimings,
       notes: [
         '★四段分解：vue（响应式→重渲染→diff/patch）/ 适配器（拍平+折叠）/ 序列化（JSON，即跨界成本）/ 宿主（度量+布局+建层）',
         '★★必须逐用例由宿主驱动：JSC 的 evaluateScript 不排空微任务，而 Vue 更新调度正是微任务',

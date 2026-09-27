@@ -43,6 +43,14 @@ echo "==> ① 构建 TS 侧（renderer-app 的 dist —— 自绘适配器所在
 # ★必须先构建：bundle 用 alias 指向 dist（renderer-app 不是根依赖，无 node_modules link）
 (cd "$ROOT" && pnpm --filter @proteus-vue/renderer-app run build 2>&1 | tail -2)
 
+# ★本次构建标识：注入 bundle + 用于「报告是否就绪」的内容判定
+BUILD_ID="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo nogit)-$(date +%H%M%S)"
+export PROTEUS_BUILD_ID="$BUILD_ID"
+if [ -f "$HERE/bridge/inject-build-id.mjs" ]; then
+  (cd "$ROOT" && node hosts/ios/bridge/inject-build-id.mjs "$BUILD_ID") || true
+fi
+echo "==> 本次 BUILD_ID：$BUILD_ID"
+
 echo "==> ② JS bundle（两个都建——见步骤⑤的说明）"
 (cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
 (cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
@@ -128,6 +136,11 @@ echo "==> ⑦ 安装并启动"
 xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | grep -iE "installed|error" | tail -2 || true
 # ★★从**桌面点开**等价于不带参数启动 = 自绘场景（两个 bundle 都在包内，任选其一都可用）。
 #   `--bench` 只是显式指定跑基准。
+# ★★必须先**终止旧进程**（本仓实测踩到：`process launch` 对已运行的应用只是切到前台，
+#   于是「重装 + 启动」后跑的还是**旧代码**，而报告 build_id 不变——我因此白查了好几轮，
+#   还误以为「S 组注册失败」。⇒ 纪律：重装后必须 terminate 再 launch。）
+xcrun devicectl device process terminate --device "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+sleep 2
 if [ "$MODE" = "bench" ]; then
   xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench 2>&1 | tail -2 || true
 else
@@ -145,21 +158,29 @@ if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE=
 #   跑完远超当初写的 6 秒 ⇒ 取回的是**上一次运行的残留报告**，
 #   读数全是旧的；我还因此误判成「新代码没生效」，白查一轮。
 #   ⇒ 改为：记录本地 mtime → 反复尝试取回 → 直到 mtime 前移（或超时）。
-LOCAL_MTIME=$(stat -f %m "$HERE/results/$REPORT_FILE" 2>/dev/null || echo 0)
+# ★★判据必须是**内容**（报告的 build_id == 本次构建），不能用文件 mtime：
+#   拷贝动作本身就会刷新 mtime ⇒ 若拿 mtime 判「是否就绪」，会**永远判定为就绪**
+#   （本仓实测：脚本报「等待 0s」但拿到的其实是上一轮的残留报告）。
 WAITED=0
-while [ "$WAITED" -lt 120 ]; do
+TIMEOUT=600
+while [ "$WAITED" -lt "$TIMEOUT" ]; do
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
     --destination "$HERE/results/$REPORT_FILE" >/dev/null 2>&1 || true
-  NEW_MTIME=$(stat -f %m "$HERE/results/$REPORT_FILE" 2>/dev/null || echo 0)
-  if [ "$NEW_MTIME" -gt "$LOCAL_MTIME" ]; then
-    echo "    报告已就绪（等待 ${WAITED}s）"
-    break
-  fi
-  sleep 2
-  WAITED=$((WAITED + 2))
+  OK=$(python3 - "$HERE/results/$REPORT_FILE" "$BUILD_ID" <<'PYCHK' 2>/dev/null || echo 0
+import json, sys
+try:
+    jr = (json.load(open(sys.argv[1])).get('js_report') or {})
+    print(1 if jr.get('build_id') == sys.argv[2] else 0)
+except Exception:
+    print(0)
+PYCHK
+)
+  if [ "$OK" = "1" ]; then echo "    报告已就绪（build_id=${BUILD_ID}，等待 ${WAITED}s）"; break; fi
+  sleep 5
+  WAITED=$((WAITED + 5))
 done
-if [ "$WAITED" -ge 120 ]; then echo "    ⚠ 等待报告超时（120s）——可能仍在运行"; fi
+if [ "$WAITED" -ge "$TIMEOUT" ]; then echo "    ⚠ 等待超时（${TIMEOUT}s）——报告仍未含本次 build_id"; fi
 
 for f in "$REPORT_FILE" "$SNAP_FILE"; do
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \

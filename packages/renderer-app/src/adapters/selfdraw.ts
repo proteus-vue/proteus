@@ -192,6 +192,30 @@ function layoutStyleOf(props: Record<string, unknown>): Record<string, unknown> 
   return out
 }
 
+/**
+ * 布局子集的**稳定签名**（用来判断"布局上是否真的变了"）
+ *
+ * 只序列化布局字段 ⇒ 改颜色/圆角不会让节点标脏（绘制不影响几何）。
+ * ★排序键 + 数值归一，保证同一布局产出同一签名（避免键序差异造成假变更）。
+ */
+function styleSig(v: unknown): string {
+  if (!v || typeof v !== 'object') return ''
+  const layout = layoutStyleOf(v as Record<string, unknown>)
+  const keys = Object.keys(layout).sort()
+  const parts: string[] = []
+  for (const k of keys) {
+    const val = layout[k]
+    if (val && typeof val === 'object') {
+      const sub = Object.keys(val as Record<string, unknown>).sort()
+        .map((sk) => `${sk}:${(val as Record<string, unknown>)[sk]}`).join(',')
+      parts.push(`${k}{${sub}}`)
+    } else {
+      parts.push(`${k}:${val}`)
+    }
+  }
+  return parts.join('|')
+}
+
 /** 边值折叠（margin/padding：数值或 {top,right,bottom,left}） */
 function foldEdges(v: unknown): SelfDrawEdges | undefined {
   if (typeof v === 'number' || typeof v === 'string') {
@@ -386,13 +410,24 @@ export function createSelfDrawAdapter(): SelfDrawAdapter {
       }
       if (next === null || next === undefined) delete el.props[key]
       else el.props[key] = next
-      // ★只有**布局键**才标脏（绘制键改了不影响几何 ⇒ 不必让核心重排）
+      // ★★只有「**布局字段的值真的变了**」才标脏
+      //
+      // 【为什么必须比 value，而不是"patchProp 被调用过"（真机实测定位）】
+      //   Vue 每次重渲染都会**新建 style 对象**（`style: { height: 56, margin: {...} }`），
+      //   而 `patchProp` **只要引用不同就会被调用**（Vue 不做深比较）。
+      //   初版只看"含布局键"⇒ 每个节点都被标脏 ⇒ 实测「只改一个圆点尺寸」发出
+      //   **3002 个补丁**、核心 `relayout=7005`（整树）⇒ 增量完全失效，
+      //   且被误读成"局部变更也能触发整树重排"。
+      //   ⇒ 正解：用 `layoutStyleOf(prev)` vs `layoutStyleOf(next)` **比布局子集**。
+      //     （这正是 SFC 编译器 `_hoisted_*` 所做优化的**运行时等价物**：
+      //      编译器让对象引用不变 ⇒ patchProp 根本不调用；这里兜住"客户端没走编译器"的情形。）
+      const prevSig = styleSig(key === 'style' ? prev : {})
+      const nextSig = styleSig(key === 'style' ? next : {})
       if (key === 'style') {
-        // 整对象 style（Vue 的常见下发形态）：含布局键才标脏
-        const so = next && typeof next === 'object' ? (next as Record<string, unknown>) : {}
-        if (Object.keys(so).some((k) => LAYOUT_KEYS.has(k))) dirty.add(el)
+        if (prevSig !== nextSig) dirty.add(el)
       } else if (LAYOUT_KEYS.has(key)) {
-        dirty.add(el)
+        // 单键下发（key 就是布局键）：比该键的前后值
+        if (JSON.stringify(prev ?? null) !== JSON.stringify(next ?? null)) dirty.add(el)
       }
       patches++
     },

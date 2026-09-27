@@ -44,6 +44,22 @@ func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
     return String(cString: ptr)
 }
 
+/// 当前进程的**实际内存占用**（MB）
+///
+/// ★用 `phys_footprint`：这是 iOS 上最贴近「真实占用」的口径（含 dirty + compressed），
+///   也是系统 OOM 杀进程时看的那个数。加压测试要给出「内存天花板」，不能用估算值。
+func physFootprintMB() -> Double {
+    var info = task_vm_info_data_t()
+    var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+    let kr = withUnsafeMutablePointer(to: &info) {
+        $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+            task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+        }
+    }
+    guard kr == KERN_SUCCESS else { return -1 }
+    return Double(info.phys_footprint) / 1024.0 / 1024.0
+}
+
 /* ────────────────────────── JS ↔ 宿主 协议 ────────────────────────── */
 
 @objc protocol SelfDrawExports: JSExport {
@@ -62,6 +78,9 @@ func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
 }
 
 /* ────────────────────────── 宿主（自绘） ────────────────────────── */
+
+/// bench 完成标志（由 JS 链尾的 `done()` 置位；宿主据此收尾）
+enum BenchDone { static var flag = false }
 
 final class SelfDrawView: UIView {
 
@@ -336,6 +355,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
     /// 报告 / 快照文件名（自绘场景 vs 逻辑层基准各自独立，避免互相覆盖）
     /// ★由控制器按启动参数（`--bench`）设置。
+    /// 进程内存峰值（MB）——加压测试的「内存天花板」读数
+    static var memPeakMB: Double = 0
     static var reportFileName = "selfdraw-report"
     static var snapshotName = "selfdraw-final"
 
@@ -344,6 +365,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
 
     func mount(_ treeJson: String) -> String {
+        // ★每次 mount 重置内存峰值：加压是**逐档递增**的，峰值必须按档记，
+        //   否则高档位的数字里混着低档位的占用，无法判断"哪一档越线"
+        SelfDrawBridge.memPeakMB = physFootprintMB()
         return render(treeJson: treeJson, phase: "mount")
     }
 
@@ -375,9 +399,13 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 
         // 无有效补丁 ⇒ 什么都不用做（例如只改了颜色）
         if applied == 0 {
+            let m0 = physFootprintMB()
+            SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, m0)
             return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
                                "patch_count": 0, "relayout_count": 0, "changed_rects": 0,
-                               "updated_layers": 0, "update_ms": round(updateMs * 100) / 100])
+                               "updated_layers": 0, "mem_mb": round(m0 * 10) / 10,
+                               "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
+                               "update_ms": round(updateMs * 100) / 100])
         }
 
         var changed: [(id: Int, abs: CGRect)] = []
@@ -395,6 +423,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             return "{\"ok\":false,\"error\":\"变化集与本地层不匹配（需全量重建）\"}"
         }
         let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        let mem = physFootprintMB()
+        SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, mem)
         lastTiming = ["measure_ms": 0, "layout_ms": (updateMs * 100).rounded() / 100,
                       "build_layers_ms": (layersMs * 100).rounded() / 100,
                       "host_total_ms": (totalMs * 100).rounded() / 100]
@@ -465,6 +495,9 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         //   故只在「纯样式变更」时走增量；一旦**节点增删**或文本集合变化，
         //   就退回 `create`（正确性优先——宁可重建，也不要用错的度量算几何）。
         let tRenderStart = CFAbsoluteTimeGetCurrent()
+        let memStart = physFootprintMB()
+        // ★峰值随行就市更新（increment 场景下内存不回落，峰值才有意义）
+        SelfDrawBridge.memPeakMB = max(SelfDrawBridge.memPeakMB, memStart)
         var usedIncremental = false
         var patchCount = 0
         var relayoutCount = 0
@@ -529,6 +562,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
                         "incremental": true, "patch_count": patchCount,
                         "relayout_count": relayoutCount,
                         "changed_rects": changed.count, "updated_layers": updatedLayers,
+                        "mem_mb": round(physFootprintMB() * 10) / 10,
+                        "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
                         // ★宿主侧分段（定位剩余耗时；本仓纪律：不靠推断）
                         "parse_ms": round(parseMs * 100) / 100,
                         "in_bytes": treeJson.count,
@@ -610,6 +645,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "relayout_count": relayoutCount,
             "changed_rects": changedCount,
             "updated_layers": updatedLayerCount,
+            "mem_mb": round(physFootprintMB() * 10) / 10,
+            "mem_peak_mb": round(SelfDrawBridge.memPeakMB * 10) / 10,
         ]
         return jsonString(out)
     }
@@ -631,6 +668,7 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     }
 
     func done(_ summaryJson: String) {
+        BenchDone.flag = true
         var out: [String: Any] = [:]
         out["engine"] = takeCString(proteus_layout_version())
         out["js_report"] = jsReport
@@ -828,46 +866,80 @@ final class SelfDrawViewController: UIViewController {
     /// 为什么这样驱动（同自绘场景的结论）：JSC 的 `evaluateScript` 不排空微任务，
     /// 而 Vue 的更新调度是微任务 ⇒ 一个用例跑完必须返回主线程，响应式才落地。
     /// 故：step → 让出 N 轮 → step …… 直到全部用例完成。
+    /// ★★bench 驱动：**只负责泵微任务**，不干预用例推进
+    ///
+    /// 【为什么这么简单（本仓实测的教训）】初版由宿主逐用例 `step()` 并等 `completed` 增长；
+    ///   一旦某个用例异常被吞，`completed` 永不增长 ⇒ 宿主无限等待 ⇒ **JS 空转 88 秒**
+    ///   ⇒ 被 iOS 看门狗杀掉（现象：白屏几秒后闪退）。
+    ///   ⇒ 现在：JS 侧 `runAll()` 一次性把整条用例链排进微任务；宿主只做**两件事**：
+    ///     ① 反复让出主线程（让 JSC 排空微任务队列）② 看 `done()` 标志是否置位
+    ///   ★同时加**总时长上限**：到点就收尾报告，绝不无限泵（本仓「等待必须有条件」纪律）。
+    /// ★★bench 驱动：**一次一个用例**（本仓实测的关键修复）
+    ///
+    /// 【为什么不能一次性排完（真机看门狗实证）】曾把整条用例链一次性排进微任务，
+    ///   而 JSC 在 `evaluateScript` 返回时会**把队列一次排空** ⇒ 23 个用例（含 4000 项挂载）
+    ///   连续跑完、**中间从不回主线程** ⇒ 主线程 88 秒无响应 ⇒ 被 iOS 看门狗杀掉
+    ///   （现象：白屏几秒后闪退；`cpu_resource` 日志显示 Total CPU Time 88.2s 全在 JavaScriptCore）。
+    ///   ⇒ 正解：**每个用例一次 `step()`**，用例之间让出主线程（runloop 呼吸）。
+    ///
+    /// 【两个上限（本仓「等待必须有条件」纪律）】
+    ///   · 单用例泵动轮数上限（防某个用例卡死）
+    ///   · 总时长上限（超时也写报告，绝不无限等）
     private func driveBench(ctx: JSContext) {
         let evalJs = { (expr: String) -> String in ctx.evaluateScript(expr)?.toString() ?? "null" }
-        let casesJson = evalJs("__proteus.cases()")
-        NSLog("[proteus] bench 用例清单：%@", String(casesJson.prefix(160)))
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let totalSecLimit = 300.0
+        let perCaseRoundLimit = 3000
+        var roundsForCase = 0
+        var beforeCompleted = 0
 
-        // 每个用例的让出轮数：用例内 await nextTick 若干次（G 组 60 次），故给足轮次
-        var rounds = 0
-        let maxRounds = 4000
-        func pumpOnce(_ cont: @escaping () -> Void) {
-            DispatchQueue.main.async { cont() }
+        func num(_ json: String, _ key: String) -> Int {
+            guard let r = json.range(of: "\"\(key)\":") else { return 0 }
+            let rest = json[r.upperBound...].drop(while: { $0 == " " })
+            return Int(rest.prefix(while: { $0.isNumber })) ?? 0
         }
-        func loop() {
-            rounds += 1
-            if rounds > maxRounds { NSLog("[proteus] bench 超轮次上限"); return }
-            let stepOut = evalJs("__proteus.step()")
-            let prog = evalJs("__proteus.progress()")
-            // 每完成若干用例记一次日志（避免日志爆炸）
-            if rounds % 20 == 1 {
-                NSLog("[proteus] bench 进度：%@ / step=%@", String(prog.prefix(120)), String(stepOut.prefix(60)))
-            }
-            if stepOut.contains("\"done\":true") {
-                // 收尾：让微任务彻底排空后再写报告
-                var tail = 0
-                func finishTail() {
-                    if tail < 12 { tail += 1; pumpOnce(finishTail); return }
-                    let out = evalJs("__proteus.finish()")
-                    NSLog("[proteus] bench 完成：%@", String(out.prefix(200)))
-                }
-                finishTail()
+
+        func nextCase() {
+            let elapsed = CFAbsoluteTimeGetCurrent() - t0
+            if elapsed > totalSecLimit {
+                NSLog("[proteus] bench 总时长超 %.0fs —— 强制收尾（已完成 %d）", totalSecLimit, beforeCompleted)
+                _ = evalJs("__proteus.finish()")
                 return
             }
-            // ★每个用例让出 4 轮（Vue 的微任务 + 用例内的 nextTick 链都在这几轮里排空）
-            var left = 4
-            func next() {
-                if left > 0 { left -= 1; pumpOnce(next); return }
-                loop()
+            let out = evalJs("__proteus.step()")
+            if out.contains("\"done\":true") {
+                let fin = evalJs("__proteus.finish()")
+                NSLog("[proteus] bench 全部完成（%.1fs）：%@", elapsed, String(fin.prefix(160)))
+                return
             }
-            next()
+            roundsForCase = 0
+            waitCase()
         }
-        loop()
+
+        /// 等**当前用例**跑完（`completed` 增长），期间让出主线程
+        func waitCase() {
+            roundsForCase += 1
+            let prog = evalJs("__proteus.progress()")
+            let completed = num(prog, "completed")
+            if completed > beforeCompleted {
+                beforeCompleted = completed
+                // 每 2 个用例报一次（避免日志爆炸）
+                if completed % 2 == 1 {
+                    NSLog("[proteus] bench %d/%d（%.1fs，本轮泵 %d）", completed, num(prog, "total"),
+                          CFAbsoluteTimeGetCurrent() - t0, roundsForCase)
+                }
+                DispatchQueue.main.async { nextCase() }
+                return
+            }
+            if roundsForCase > perCaseRoundLimit {
+                NSLog("[proteus] bench 用例泵动超限（%d 轮）——跳过并继续", perCaseRoundLimit)
+                DispatchQueue.main.async { nextCase() }
+                return
+            }
+            DispatchQueue.main.async { waitCase() }
+        }
+
+        nextCase()
     }
 
     /// 相位驱动的调度器
