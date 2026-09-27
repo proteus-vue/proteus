@@ -104,6 +104,40 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★M4 起点：iOS CALayer 路线跑通（12/12，与 Android 同一核验脚本）（2026-09-29，提交 `0a42c515`）
+
+方案 §6.2 规格：**宿主 UIView + CALayer 树（跳过 UIView），绕开 AutoLayout，几何由排版核心驱动**。
+此前 iOS 竖切走的是 JS Dispatcher → UIKit 默认布局，**Rust 核心未接入**；本轮补 M4 起点。
+
+**★★真机结果（iPhone 12）：12/12 行通过，失败 0**
+用的是**与 Android 完全相同的核验脚本**（`hosts/android/screenshot-verify.py`）。
+
+| 端 | 渲染路径 |
+|---|---|
+| Android | 单宿主 ViewGroup + **Canvas 指令**（自绘） |
+| **iOS（本轮）** | 宿主 UIView + **CALayer 树**（跳过 UIView） |
+
+**两条完全不同的渲染路径，用同一个 Rust 核心 + 同一套场景规格 + 同一个核验脚本，都通过**
+→ 这是「一套语义多引擎」的**可验证证据**（而非文档承诺）。
+
+**★实现（§6.2 逐条）**：宿主管 CALayer 树 · 每行一个 `CALayer`（跳过 UIView，零 Responder Chain/布局开销）
+· 几何全来自 `proteus_layout_create/rects`（**无一条约束**）· `CATextLayer`（含 `contentsScale`，
+不设会模糊）· 树扁平（硬约束 1）· 不设 `cornerRadius+masksToBounds+shadow` 组合（硬约束 2）。
+
+**★三个实测坑**
+| # | 坑 | 正解 |
+|---|---|---|
+| 1 | **iOS 27 SDK 强制 UIScene 生命周期** | 不用 Scene → 应用 0.5s 后退出、Documents 为空、**无崩溃报告**（只能 `log show` 看到）→ `@main` + `configurationForConnecting` + SceneDelegate（**本仓第二次踩**，见 M1 记录） |
+| 2 | **`devicectl` 无截图子命令** | 改 **app 内自截图**：`UIGraphicsImageRenderer` + `layer.render(in:)`（★必须 `layer.render`；`snapshotView` 不含 CALayer 子层） |
+| 3 | 截图与 point 坐标不一致 | `UIGraphicsImageRendererFormat.scale = 1.0` → 像素与 point 1:1 |
+
+**破坏性验证**：CALayer 偏移 7pt → 12 行全部检出 + 自动 `dy=-12` 诊断。
+
+**交付**：`calayer-scene.swift` · `run-calayer-scene.sh`（含描述文件自动匹配）· `README-CALAYER.md`
+· `results/calayer-scene.{png,json,verify.json}`
+
+---
+
 ### ★★滚动同步落地：z-order 约束下的 native-host 跟随与裁剪（2026-09-29，提交 `f75f3773`）
 
 方案坑位 #4：「原生组件混用**层级与滚动同步需专门设计**」。上轮已实测 z-order 约束，本轮补**滚动同步**。
