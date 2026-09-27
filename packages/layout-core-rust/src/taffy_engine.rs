@@ -48,6 +48,8 @@ pub struct TaffyEngine {
     measure_calls: usize,
     /// 缓存命中次数（增量效果的直接读数）
     measure_hits: usize,
+    /// 最近一次全量布局的根约束（退化保护用：无边界时增量退回全量，须用**同一约束**）
+    last_root_constraint: Option<RootConstraint>,
     /// 节点索引 → taffy NodeId（`build_taffy` 填充；`layout` 每次重建）
     taffy_ids: Vec<NodeId>,
 }
@@ -60,7 +62,16 @@ impl Default for TaffyEngine {
 
 impl TaffyEngine {
     pub fn new() -> Self {
-        Self { measurer: None, measure_cache: HashMap::new(), measure_calls: 0, measure_hits: 0, taffy_ids: Vec::new() }
+        Self {
+            measurer: None,
+            measure_cache: HashMap::new(),
+            measure_calls: 0,
+            measure_hits: 0,
+            taffy_ids: Vec::new(),
+            // ★记下最近一次全量布局的根约束：增量在「无边界 ⇒ 退化为全量」时**精确复用**它
+            //   （不自己猜约束——猜错会让退化路径静默改变语义，比慢更糟）
+            last_root_constraint: None,
+        }
     }
 
     /// 注入平台文本度量（构造期）
@@ -222,7 +233,7 @@ impl TaffyEngine {
     /// 执行一轮 taffy 布局（含度量回调）
     fn run_taffy(&mut self, tree: &LayoutTree, taffy: &mut TaffyTree<u32>, roots: &[NodeIndex], constraint: RootConstraint) -> LayoutOutput {
         // ★字段级解构：让 `measurer` 与 `measure_cache` 同时可变借用（互不相交）
-        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids } = self;
+        let TaffyEngine { measurer, measure_cache, measure_calls, measure_hits, taffy_ids, last_root_constraint: _ } = self;
         *measure_calls = 0;
         *measure_hits = 0;
 
@@ -330,6 +341,8 @@ impl TaffyEngine {
 
 impl LayoutEngine for TaffyEngine {
     fn layout(&mut self, tree: &mut LayoutTree, constraint: RootConstraint) -> LayoutOutput {
+        // ★记下本次根约束：增量在「无边界 ⇒ 退回全量」时要**精确复用**它，而不是自己猜
+        self.last_root_constraint = Some(constraint);
         let roots = tree.roots.clone();
         let mut taffy = self.build_taffy(tree);
         let out = self.run_taffy(tree, &mut taffy, &roots, constraint);
@@ -348,6 +361,23 @@ impl LayoutEngine for TaffyEngine {
     ///   留到 M2 有真机数据后再评估——先保证语义正确。
     fn layout_incremental(&mut self, tree: &mut LayoutTree, dirty: NodeIndex) -> LayoutOutput {
         let scope = self.relayout_scope_of(tree, dirty);
+
+        // ★★退化保护：重排范围 == 根 ⇒ 直接走全量，别做「拷贝整树再布局」
+        //
+        // 【为什么必须有（本仓实测）】没有布局边界时 scope 会一路到根，
+        //   而本实现为范围子树**重建** taffy 树 ⇒ 白拷一整棵树：
+        //   实测 **0.6×**（比全量更慢）。有边界时才是 45–644×。
+        //   ⇒ 宁可退化为全量（1.0×），也不要「越用越慢」的假增量。
+        let is_root_scope = tree.get(scope).parent == NO_PARENT;
+        if is_root_scope {
+            // 复用最近一次全量布局的约束（首次无记录时用「紧尺寸」兜底：范围是整树，
+            // 根若为 auto 尺寸，MaxContent 语义与全量首帧一致）
+            let c = self.last_root_constraint.unwrap_or(RootConstraint {
+                width: AvailableSpace::MaxContent,
+                height: AvailableSpace::MaxContent,
+            });
+            return self.layout(tree, c);
+        }
 
         // 边界有显式宽高 ⇒ 根约束就是它自己的尺寸（这正是「边界」的定义）
         let scope_style = tree.get(scope).style.clone();
@@ -475,14 +505,31 @@ fn preorder(tree: &LayoutTree, root: NodeIndex) -> Vec<NodeIndex> {
 }
 
 /// 拷贝子树到新树（前序，与 `preorder` 顺序一致）
+///
+/// ★★必须**清空克隆体的 parent/children**（本仓实测抓到的真 bug，曾导致栈溢出）：
+///   节点是按**索引**互指的（`parent: NodeIndex` / `children: Vec<NodeIndex>`）。
+///   直接 `clone()` 会把**原树的索引**带进新树，而新树的索引空间完全不同：
+///     · 子树根的 `parent` 仍是原树索引 —— 若恰为 0 且自己有索引 0，就成**自环**
+///     · `children` 仍指向原树索引 —— 那些索引在新树里要么越界，要么是**无关节点**
+///   后果：布局的父子遍历遇自环 → **无限递归 → 栈溢出**
+///   （现象：4 个节点就能复现；只有「重排范围落在布局边界上」时才触发 ——
+///    而没有边界时 scope=根、`parent_new == NO_PARENT` 的分支不同，故此前未暴露）
+///
+/// ★为什么此前没被测出：既有测试只验证了 `relayout_scope_of`（纯函数），
+///   **从未调用 `layout_incremental` 本身** ⇒ 真正的增量路径零覆盖。
+///   教训与全仓一致：**测了「范围算得对」不等于测了「按范围重排跑得通」**。
 fn copy_subtree(tree: &LayoutTree, idx: NodeIndex, out: &mut LayoutTree, parent_new: NodeIndex) -> NodeIndex {
-    let new_idx = out.push(tree.get(idx).clone());
+    let mut cloned = tree.get(idx).clone();
+    cloned.parent = NO_PARENT;      // ★清空：由下面按**新树索引**重建
+    cloned.children.clear();        // ★清空：旧索引在新树里无意义（越界或指向无关节点）
+    let new_idx = out.push(cloned);
     if parent_new != NO_PARENT {
         out.nodes[new_idx as usize].parent = parent_new;
         out.nodes[parent_new as usize].children.push(new_idx);
     }
-    for i in 0..tree.get(idx).children.len() {
-        let c = tree.get(idx).children[i];
+    // ★按值取子级列表（`tree.get(idx)` 的借用与 `out` 可变借用不冲突，但显式 clone 更清晰）
+    let children: Vec<NodeIndex> = tree.get(idx).children.clone();
+    for c in children {
         copy_subtree(tree, c, out, new_idx);
     }
     new_idx

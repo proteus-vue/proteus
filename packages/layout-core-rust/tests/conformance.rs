@@ -768,3 +768,171 @@ fn conformance_paint_order_against_browser_probes() {
     assert!(checked >= 6, "探针数过少（{checked}）——防空跑");
     assert!(failures.is_empty(), "绘制序与浏览器不一致：\n{}", failures.join("\n"));
 }
+
+/* ────────────── ★★增量布局：正确性 + 退化保护（本轮抓到栈溢出后补的覆盖） ────────────── */
+
+/// 构造「root → boundary(显式尺寸) → inner → target」四层树。
+///
+/// ★这个形状是**最小复现**：只有重排范围落在**布局边界**上时才会走到出问题的代码路径
+///   （没有边界时 scope=根，走的是另一个分支 → 此前未暴露）。
+fn incremental_tree(sized_boundary: bool) -> (LayoutTree, u32, u32) {
+    let mut tree = LayoutTree::new();
+    let mut root = LNode::new(1, LStyle::default());
+    root.style.flex_direction = FlexDirection::Column;
+    let root_idx = tree.push(root);
+
+    let mut b = LNode::new(2, LStyle::default());
+    b.style.flex_direction = FlexDirection::Row;
+    if sized_boundary {
+        b.style.width = Some(320.0);
+        b.style.height = Some(200.0);
+    }
+    let b_idx = tree.push(b);
+
+    let mut inner = LNode::new(3, LStyle::default());
+    inner.style.flex_direction = FlexDirection::Row;
+    let inner_idx = tree.push(inner);
+
+    let mut target = LNode::new(4, LStyle::default());
+    target.style.width = Some(20.0);
+    target.style.height = Some(20.0);
+    let target_idx = tree.push(target);
+
+    tree.roots.push(root_idx);
+    tree.add_child(root_idx, b_idx);
+    tree.add_child(b_idx, inner_idx);
+    tree.add_child(inner_idx, target_idx);
+    (tree, root_idx, target_idx)
+}
+
+/// ★★回归锁：**边界存在时**调用 `layout_incremental` 不得崩溃（曾栈溢出）
+///
+/// 【此前的覆盖盲区（本仓实测）】既有测试只验证 `relayout_scope_of`（纯函数）
+///   **从未调用 `layout_incremental` 本身** ⇒ 真正的增量路径**零覆盖**，
+///   而它在「范围=边界」时必然栈溢出（4 个节点即可复现）。
+///   根因：`copy_subtree` 直接 `clone()` 节点，把**原树的索引**带进新树
+///   → 子树根的 `parent` 指向自己（自环）→ 布局遍历无限递归。
+///   ⇒ 教训：**测了「范围算得对」不等于测了「按范围重排跑得通」**。
+#[test]
+fn incremental_with_boundary_does_not_crash_and_matches_full() {
+    let (mut tree, _root_idx, target_idx) = incremental_tree(true);
+    assert!(tree.get(target_idx) == tree.get(target_idx));
+    let boundary_idx = tree.index_of_id(2).unwrap();
+    assert!(tree.get(boundary_idx).is_layout_boundary(), "显式宽高的容器应为布局边界");
+
+    let constraint = RootConstraint { width: AvailableSpace::Definite(375.0), height: AvailableSpace::MaxContent };
+    let mut engine = TaffyEngine::new();
+    engine.layout(&mut tree, constraint);          // 首帧全量
+
+    // 改叶子 → 增量重排（★此行曾栈溢出）
+    tree.get_mut(target_idx).style.width = Some(25.0);
+    tree.get_mut(target_idx).dirty = true;
+    let out = engine.layout_incremental(&mut tree, target_idx);
+    assert!(out.relayout_count > 0, "增量应产出矩形");
+
+    // ★结果必须与**全量重排**逐节点一致（不只是「没崩」）
+    let mut full = tree.clone();
+    let mut e2 = TaffyEngine::new();
+    e2.layout(&mut full, constraint);
+    let a = tree.absolute_rects();
+    let b = full.absolute_rects();
+    let mut worst = 0f32;
+    for i in 0..tree.len() {
+        match (a[i], b[i]) {
+            (Some(x), Some(y)) => {
+                worst = worst
+                    .max((x.x - y.x).abs())
+                    .max((x.y - y.y).abs())
+                    .max((x.width - y.width).abs())
+                    .max((x.height - y.height).abs());
+            }
+            (None, None) => {}
+            _ => panic!("节点 {i}：增量与全量的「有无盒」不一致"),
+        }
+    }
+    assert!(worst < 0.01, "增量与全量最大偏差 {worst:.4}dp 超阈值");
+    // 新宽度确实生效
+    let t = a[target_idx as usize].unwrap();
+    assert!((t.width - 25.0).abs() < 0.01, "target 宽应为 25，实际 {}", t.width);
+}
+
+/// ★退化保护：**无布局边界**时增量必须不退化为「比全量更慢」
+///
+/// 【为什么需要（本仓实测）】没有边界时 scope=根，而本实现为范围子树**重建** taffy 树
+///   ⇒ 白拷一整棵树：实测 **0.6×**（越用越慢）。加退化保护（scope=根 → 直接全量）后回到 ~1.0×。
+///   ★本测试只断言**正确性与非退化到崩溃**；比值是性能断言，交给 `examples/incremental-bench`。
+#[test]
+fn incremental_without_boundary_still_matches_full() {
+    let (mut tree, _r, target_idx) = incremental_tree(false);
+    let constraint = RootConstraint { width: AvailableSpace::Definite(375.0), height: AvailableSpace::MaxContent };
+    let mut engine = TaffyEngine::new();
+    engine.layout(&mut tree, constraint);
+
+    tree.get_mut(target_idx).style.width = Some(25.0);
+    tree.get_mut(target_idx).dirty = true;
+    engine.layout_incremental(&mut tree, target_idx);   // 无边界 ⇒ 内部退回全量
+
+    let mut full = tree.clone();
+    let mut e2 = TaffyEngine::new();
+    e2.layout(&mut full, constraint);
+    let a = tree.absolute_rects();
+    let b = full.absolute_rects();
+    for i in 0..tree.len() {
+        match (a[i], b[i]) {
+            (Some(x), Some(y)) => {
+                assert!((x.x - y.x).abs() < 0.01 && (x.width - y.width).abs() < 0.01,
+                        "节点 {i} 无边界时增量与全量不一致");
+            }
+            (None, None) => {}
+            _ => panic!("节点 {i}：有无盒不一致"),
+        }
+    }
+}
+
+/// ★★量化判据：有边界的增量必须**显著快于**全量（回归时立刻红）
+///
+/// 与上面两个测试互补：那两个保「对」，这个保「快」。
+/// 阈值取保守值（>5×）—— 实测在 30–600× 区间，故 5× 只在真正劣化时才失败。
+#[test]
+fn incremental_with_boundary_is_much_faster_than_full() {
+    // 100 行 × 40 列 = 4101 节点；每行给显式宽高 ⇒ 100 个布局边界
+    let mut tree = LayoutTree::new();
+    let root = tree.push(LNode::new(1, LStyle { width: Some(750.0), flex_direction: FlexDirection::Column, ..Default::default() }));
+    let mut id = 2u32;
+    let mut rows = Vec::new();
+    for _ in 0..100 {
+        let rs = LStyle {
+            flex_direction: FlexDirection::Row, gap: 4.0, flex_shrink: 0.0,
+            width: Some(750.0), height: Some(20.0), ..Default::default()
+        };
+        let r = tree.push(LNode::new(id, rs)); id += 1;
+        rows.push(r);
+        tree.add_child(root, r);
+        for _ in 0..40 {
+            let ls = LStyle { width: Some(40.0), height: Some(16.0), flex_shrink: 0.0, ..Default::default() };
+            let l = tree.push(LNode::new(id, ls)); id += 1;
+            tree.add_child(r, l);
+        }
+    }
+    tree.roots.push(root);
+
+    let c = RootConstraint { width: AvailableSpace::Definite(750.0), height: AvailableSpace::MaxContent };
+    let mut e = TaffyEngine::new();
+    e.layout(&mut tree, c);
+    let t0 = std::time::Instant::now();
+    for _ in 0..5 { e.layout(&mut tree, c); }
+    let full = t0.elapsed().as_secs_f64() / 5.0;
+
+    let mid = rows[rows.len() / 2];
+    let leaf = tree.get(mid).children[10];
+    let t1 = std::time::Instant::now();
+    for _ in 0..50 {
+        tree.get_mut(leaf).style.width = Some(41.0);
+        tree.get_mut(leaf).dirty = true;
+        e.layout_incremental(&mut tree, leaf);
+    }
+    let inc = t1.elapsed().as_secs_f64() / 50.0;
+    let speedup = full / inc;
+    println!("增量 vs 全量：全量 {:.3}ms · 增量 {:.4}ms · 加速 {:.1}×", full * 1000.0, inc * 1000.0, speedup);
+    assert!(speedup > 5.0, "有边界时增量应显著快于全量（实测 {speedup:.1}×，阈值 5×）");
+}

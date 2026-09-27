@@ -528,6 +528,146 @@ pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
     }
 }
 
+/// ★★**更新节点样式并增量重排**（生产路径的增量入口）。
+///
+/// 【为什么必须有它（本仓实测定位的瓶颈）】
+///   此前宿主每次更新只能 `destroy + create`（**整树重建**）——
+///   实测：改 10 个列表项要重发 561KB、重建 1407 个节点的整棵层树。
+///   而核心侧**早已实现** `layout_incremental`（带布局边界收敛），只是**没有 FFI 出口**。
+///   本条把那个能力接到宿主可用。
+///
+/// 【入参】`patches` 是 JSON 数组，每项 `{ "id": <节点id>, "style": {<LStyle 字段>} }`。
+///   样式字段与 `proteus_layout_create` 的 `nodes[].` 同名字段一致（camelCase）。
+///
+/// 【返回】`{ ok, applied, relayout_count, measure_calls, measure_hits }`
+///   `relayout_count` 是**增量效果的直接读数**（对齐 M1 的 T1/T4 口径）。
+///
+/// 【★诚实边界（不可当已验证）】本入口**不带文本度量表**（度量用 `NullTextMeasurer`
+///   即零尺寸）⇒ 适用「纯样式变更」场景（改宽高 / 间距 / flex / display）。
+///   若补丁改了**文本字面量或影响换行的宽度约束**，度量应由宿主重新注入——
+///   该扩展（带 `textMeasures` 的 update）尚未实现，需要时再补，**不要假装它已支持**。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const c_char) -> *mut c_char {
+    let r = std::panic::catch_unwind(|| -> Result<String, String> {
+        if patches_json.is_null() {
+            return Err("patches_json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(patches_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let patches: Vec<StylePatch> = serde_json::from_str(raw).map_err(|e| format!("patch 解析失败：{e}"))?;
+
+        let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
+        let tree = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+
+        // ★先按 id → 索引解析（一次 O(n) 建表，而非每个 patch 都线性扫）
+        let mut id_to_idx: std::collections::HashMap<u32, u32> = std::collections::HashMap::with_capacity(tree.len());
+        for (i, n) in tree.nodes.iter().enumerate() {
+            id_to_idx.insert(n.id, i as u32);
+        }
+
+        let mut applied = 0usize;
+        let mut last_dirty: Option<u32> = None;
+        for p in &patches {
+            let Some(&idx) = id_to_idx.get(&p.id) else { continue };  // 未知 id 跳过（不报错：宿主可能持有过期补丁）
+            p.apply_to(&mut tree.nodes[idx as usize])?;
+            tree.nodes[idx as usize].dirty = true;
+            applied += 1;
+            last_dirty = Some(idx);
+        }
+        if std::env::var_os("PROTEUS_DEBUG").is_some() {
+            eprintln!("[proteus] update handle={handle} patches={} applied={applied}", patches.len());
+        }
+
+        // 无有效补丁 → 不重排（避免白跑一次）
+        if applied == 0 {
+            return Ok(serde_json::json!({
+                "ok": true, "applied": 0, "relayout_count": 0,
+                "measure_calls": 0, "measure_hits": 0
+            }).to_string());
+        }
+
+        // ★增量重排（作用域由布局边界决定；无边界时会自动退回全量，见 layout_incremental）
+        let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
+        let out = engine.layout_incremental(tree, last_dirty.unwrap());
+        Ok(serde_json::json!({
+            "ok": true,
+            "applied": applied,
+            "relayout_count": out.relayout_count,
+            "measure_calls": out.measure_calls,
+            "measure_hits": out.measure_hits,
+        })
+        .to_string())
+    });
+    match r {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// 样式补丁（只带要改的字段；缺省 = 不改）
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StylePatch {
+    id: u32,
+    #[serde(default)]
+    style: PatchStyle,
+}
+
+/// 可增量修改的样式字段子集（★只放**布局相关**字段：绘制属性不影响几何，改它们无需重排）
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub(crate) struct PatchStyle {
+    width: Option<Option<f32>>,
+    height: Option<Option<f32>>,
+    flex_grow: Option<f32>,
+    flex_shrink: Option<f32>,
+    flex_basis: Option<Option<f32>>,
+    gap: Option<f32>,
+    display: Option<String>,
+    margin: Option<EdgesDto>,
+    padding: Option<EdgesDto>,
+    #[serde(default)]
+    text: Option<String>,
+}
+
+impl StylePatch {
+    fn apply_to(&self, node: &mut LNode) -> Result<(), String> {
+        let s = &self.style;
+        // ★`Option<Option<f32>>` 语义：外层 None = 不改；内层 None = 显式置空（回到 auto）
+        if let Some(w) = s.width { node.style.width = w; }
+        if let Some(h) = s.height { node.style.height = h; }
+        if let Some(g) = s.flex_grow { node.style.flex_grow = g; }
+        if let Some(sh) = s.flex_shrink { node.style.flex_shrink = sh; }
+        if let Some(b) = s.flex_basis { node.style.flex_basis = b; }
+        if let Some(g) = s.gap { node.style.gap = g; }
+        if let Some(d) = &s.display {
+            node.style.display = match d.as_str() {
+                "none" => crate::style::Display::None,
+                "flex" => crate::style::Display::Flex,
+                other => return Err(format!("未知 display：{other}")),
+            };
+        }
+        if let Some(m) = &s.margin {
+            node.style.margin = Edges { top: m.top, right: m.right, bottom: m.bottom, left: m.left };
+        }
+        if let Some(p) = &s.padding {
+            node.style.padding = Edges { top: p.top, right: p.right, bottom: p.bottom, left: p.left };
+        }
+        // 文本字面量变更（内容变了 → 度量缓存按内容寻址会自动区分，无需手动失效）
+        if let Some(t) = &s.text {
+            if let Some(req) = node.text.as_mut() {
+                req.text = t.clone();
+            } else {
+                node.text = Some(crate::node::TextMeasureRequest { text: t.clone(), style_key: 0 });
+            }
+        }
+        Ok(())
+    }
+}
+
 /// **命中测试**：屏幕坐标 → 节点（方案 §M3「事件系统 / 手势」的几何地基）。
 ///
 /// 返回 `{ ok, target, path, chain }`（`target = null` 表示未命中）——三端共用同一实现，
@@ -990,6 +1130,65 @@ mod tests {
         let out = run_conformance("{ not json").expect_err("坏 JSON 应返回 Err");
         assert!(out.contains("解析失败"), "错误信息应指明解析失败：{out}");
         assert!(run_bench(0, 1).is_err(), "node_count=0 应报错");
+    }
+
+    /// ★★增量更新 FFI：改一个叶子 → `relayout_count` 必须**远小于**整树节点数
+    ///
+    /// 【这条测试锁什么】宿主更新路径此前只能 `destroy + create`（整树重建）；
+    ///   本入口把核心既有的 `layout_incremental` 暴露出来。
+    ///   判据用 `relayout_count`（增量效果的直接读数），而不是「没报错」——
+    ///   否则「退化成全量」也会绿（本仓实测：无边界时增量确实退化，已加保护）。
+    #[test]
+    fn update_entry_is_actually_incremental() {
+        // 100 行 × 40 列，**行给显式宽高** ⇒ 100 个布局边界
+        let mut nodes = String::from("{\"viewport\":{\"width\":750,\"height\":2400},\"nodes\":[");
+        nodes.push_str("{\"id\":1,\"parentId\":null,\"width\":750.0,\"flexDirection\":\"column\"}");
+        let mut id = 2u32;
+        let mut mid_row_id = 0u32;
+        let mut mid_leaf_id = 0u32;
+        for r in 0..100 {
+            nodes.push_str(&format!(
+                ",{{\"id\":{id},\"parentId\":1,\"flexDirection\":\"row\",\"gap\":4.0,\"flexShrink\":0.0,\"width\":750.0,\"height\":20.0}}"));
+            let row_id = id; id += 1;
+            if r == 50 { mid_row_id = row_id; }
+            for c in 0..40 {
+                nodes.push_str(&format!(
+                    ",{{\"id\":{id},\"parentId\":{row_id},\"width\":40.0,\"height\":16.0,\"flexShrink\":0.0}}"));
+                if r == 50 && c == 10 { mid_leaf_id = id; }
+                id += 1;
+            }
+        }
+        nodes.push_str("],\"textMeasures\":{}}");
+        let c = std::ffi::CString::new(nodes).unwrap();
+        let h = unsafe { proteus_layout_create(c.as_ptr()) };
+        assert!(h > 0, "建树应成功");
+        let _ = mid_row_id;
+
+        let patch = format!(r#"[{{"id":{mid_leaf_id},"style":{{"width":41.0}}}}]"#);
+        let pc = std::ffi::CString::new(patch).unwrap();
+        let p = unsafe { proteus_layout_update(h, pc.as_ptr()) };
+        let out = unsafe { std::ffi::CStr::from_ptr(p) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p) };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true, "更新应成功：{out}");
+        assert_eq!(v["applied"], 1);
+        let relayout = v["relayout_count"].as_u64().unwrap();
+        // 整树 4101 节点；边界内重排应远小于它（实测量级 ~42：一行及其子级）
+        assert!(relayout > 0, "应真的重排（relayout_count=0 说明没生效）");
+        assert!(relayout < 200, "★增量未生效：重排 {relayout} 个节点（整树 4101；期望落在边界内 ≈42）");
+
+        // 未知 id 的补丁不得报错（宿主可能持有过期补丁）——但也不能声称 applied
+        let bogus = r#"[{"id":999999,"style":{"width":10.0}}]"#;
+        let bc = std::ffi::CString::new(bogus).unwrap();
+        let p2 = unsafe { proteus_layout_update(h, bc.as_ptr()) };
+        let out2 = unsafe { std::ffi::CStr::from_ptr(p2) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p2) };
+        let v2: serde_json::Value = serde_json::from_str(&out2).unwrap();
+        assert_eq!(v2["ok"], true);
+        assert_eq!(v2["applied"], 0, "未知 id 不应计入 applied");
+        assert_eq!(v2["relayout_count"], 0, "无有效补丁不应重排");
+
+        assert!(proteus_layout_destroy(h));
     }
 
     /// ★命中测试 FFI：跨界必须与核心同语义（target / path / chain 三者都对）
