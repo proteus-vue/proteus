@@ -33,3 +33,8 @@ popover-open.png
 hosts/**/build/
 hosts/**/*.app/
 hosts/**/verify-jsc
+# 实验构建产物与**单次运行**原始数据（本机产物）
+hosts/ios/experiments/build/
+hosts/ios/experiments/results/experiments.json
+hosts/ios/experiments/results/run*.json
+# ★但 summary.json 入库：它是「4 次重跑中位」的权威汇总，是文档数字的证据（同 stats.ts 的定位）
