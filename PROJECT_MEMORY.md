@@ -104,6 +104,33 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★真机实验已就绪（2026-09-29，提交 `19deac56`）——待用户插设备 + 登录 Apple ID
+
+用户「真机我有」→ 把模拟器测不出的两条假设（**H4 layer 深度→commit**、**H3 滚动 FPS**）
+的真机实验准备到「插上就能跑」。**当前两个阻塞（本机实测，非猜测）**：
+
+| 阻塞 | 证据 | 解决 |
+|---|---|---|
+| **无代码签名身份** | `security find-identity -v -p codesigning` → **0 valid identities**；Xcode 未登录 Apple ID | Xcode → Settings → Accounts 登录（免费个人团队即可） |
+| **设备未连接** | `devicectl list devices` 只有模拟器；`system_profiler` 无 USB iOS 设备 | 数据线 + 设备上点「信任」（Xcode 记录过 UDID `00008101-001938AC1A68801E`=此前连过） |
+
+**新增**：`hosts/ios/experiments/device/`（真机版实验 + `run-device.sh` + `check-compile.mjs` + README）。
+真机版与模拟器版**测试定义完全一致** → 数字可直接交叉对比；
+差异：① commit 走 **IPC 到 backboardd**（模拟器同进程 → H4 在模拟器=无效测量）
+② 加 **os_signpost** 埋点（Instruments 时间轴对齐）③ meta 记录机型/系统版本。
+`run-device.sh` 探不到前置时**明确报错并列步骤**（不静默失败）。
+
+**顺手修掉**：① 三个构建脚本的 `clang: using sysroot for 'macOS' but targeting 'arm64-apple-ios'` 警告
+——根因 `swiftc -sdk` 只影响 Swift 前端、clang 链接仍用 macOS sysroot →
+统一改 `xcrun --sdk <sdk> swiftc`（二进制 platform 正确：模拟器 7 / 真机 2）；
+② 设备探测 bug（旧 awk 会把模拟器算进来且取到名字片段而非 UDID）；
+③ 新增 `check:ios-exp-compile`（两变体编译门禁）→ 24 CI + **4** 本地声明。
+
+**★模拟器基线回归观察（再次印证）**：回归跑时 A/B/C 同时升高（783/553/417 vs 651/466/272，+20~50%）
+——**同机不同负载下波动明显** ⇒ 性能棘轮门禁**只应做同机回退检测**，不可跨机器/跨负载比较。
+
+---
+
 ### ★★开工前假设验证（2026-09-29，提交 `2bc6ed3c`）——4 条假设实测，1 条证伪 / 1 条无法验证
 
 用户「先别急着开工，把开工前的验证跑通」→ 针对 `docs/Proteus_App端高性能渲染落地方案.md`
