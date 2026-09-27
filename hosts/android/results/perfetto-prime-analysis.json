@@ -1,0 +1,58 @@
+{
+  "trace": "scroll3.pftrace",
+  "process": "dev.proteus.layoutcore",
+  "total_ms": 852.67,
+  "normal_core_ms": 649.37,
+  "prime_core_ms": 203.3,
+  "prime_ratio": 0.2384,
+  "per_cpu": [
+    {
+      "cpu": 0,
+      "slices": 1121,
+      "ms": 466.85,
+      "prime": false
+    },
+    {
+      "cpu": 7,
+      "slices": 6,
+      "ms": 202.15,
+      "prime": true
+    },
+    {
+      "cpu": 5,
+      "slices": 177,
+      "ms": 62.86,
+      "prime": false
+    },
+    {
+      "cpu": 4,
+      "slices": 167,
+      "ms": 62.77,
+      "prime": false
+    },
+    {
+      "cpu": 1,
+      "slices": 167,
+      "ms": 56.37,
+      "prime": false
+    },
+    {
+      "cpu": 6,
+      "slices": 4,
+      "ms": 1.15,
+      "prime": true
+    },
+    {
+      "cpu": 3,
+      "slices": 3,
+      "ms": 0.31,
+      "prime": false
+    },
+    {
+      "cpu": 2,
+      "slices": 2,
+      "ms": 0.2,
+      "prime": false
+    }
+  ]
+}

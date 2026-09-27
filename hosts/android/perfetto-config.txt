@@ -1,0 +1,29 @@
+# hosts/android/perfetto-config.txt —— §9.2 核判定用的 trace 配置
+# 用途：抓 sched_switch（核归属）+ process_stats（进程名绑定）
+# 用法：cat perfetto-config.txt | adb shell "perfetto --txt -c - -o /data/misc/perfetto-traces/x.pftrace"
+#
+# ★两个实测坑（详见 perfetto-analyze.py 注释）：
+#   ① `perfetto -c <文件路径>` 会 permission denied → 必须用 **stdin 传 config**
+#   ② 输出路径用 /data/misc/perfetto-traces/（该目录 shell 可写）
+buffers { size_kb: 32768 fill_policy: DISCARD }
+data_sources {
+  config {
+    name: "linux.ftrace"
+    target_buffer: 0
+    ftrace_config {
+      ftrace_events: "sched/sched_switch"
+      ftrace_events: "sched/sched_waking"
+      buffer_size_kb: 32768
+    }
+  }
+}
+data_sources {
+  config {
+    name: "linux.process_stats"
+    target_buffer: 0
+    process_stats_config {
+      scan_all_processes_on_start: true
+    }
+  }
+}
+duration_ms: 25000

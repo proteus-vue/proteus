@@ -1,2 +1,6 @@
 # 构建产物（APK / class / dex / keystore —— 本地生成，勿入库）
 build/
+
+# Perfetto trace：仅保留一份样本作证据（scroll3.pftrace）；后续验收的 trace 不入库
+# （分析结果 *.analysis.json 入库——小且可读）
+results/acceptance/*/*.pftrace
