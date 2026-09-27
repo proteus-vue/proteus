@@ -29,6 +29,7 @@ import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdr
 interface SelfDrawNative {
   mount(treeJson: string): string
   update(treeJson: string): string
+  updatePatches(patchesJson: string): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
@@ -534,6 +535,8 @@ CASES.push({
       app.adapter.resetStats()
       const req0 = app.adapter.toRequest(VP)
       proteusSelfDraw.mount(JSON.stringify(req0))
+      // ★全量已发出 ⇒ 声明"已同步"（否则挂载产生的结构变化会污染下一次 takePatches）
+      app.adapter.markFullSync()
 
       // ★改「样式」——只动 margin（布局字段）但**不增删节点、不改文本**
       //   ⇒ 宿主 diffPatches 应产出非空补丁 → 走 proteus_layout_update（增量）
@@ -542,26 +545,51 @@ CASES.push({
       app.setRowMargin(Math.floor(n / 2), 20)    // ★只改**中间一行**（真正的局部变更）
       await nextTick()
       const tVue = now()
-      const req = app.adapter.toRequest(VP)
+      // ★★补丁路径：只发**改动过的节点**的样式（不再遍历整树、不再序列化整树）
+      const patches = app.adapter.takePatches()
+      const patchesDiag = patches === null ? 'NULL(结构变化)' : `len=${patches.length}`
       const tReq = now()
-      const treeJson = JSON.stringify(req)
+      let hostOut: string
+      let sentBytes: number
+      let nodeCount: number
+      if (patches === null) {
+        const req = app.adapter.toRequest(VP)
+        nodeCount = req.nodes.length
+        const treeJson = JSON.stringify(req)
+        sentBytes = treeJson.length
+        hostOut = proteusSelfDraw.update(treeJson)
+      } else {
+        const pj = JSON.stringify(patches)
+        sentBytes = pj.length
+        hostOut = proteusSelfDraw.updatePatches(pj)
+        nodeCount = n
+      }
       const tSer = now()
-      const hostOut = proteusSelfDraw.update(treeJson)
       const tHost = now()
       const h = safeParseAny(hostOut)
       results.push({
         case: `J_incremental_${n}`,
-        note: `规模 ${n}：改 1 行样式（margin）→ 期望走增量`,
-        items: n, nodes: req.nodes.length,
+        note: `规模 ${n}：改 1 行样式（margin）→ 走**补丁**路径`,
+        items: n, nodes: nodeCount,
         vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
         host_ms: tHost - tSer, total_ms: tHost - t0,
-        patch_count: app.adapter.patchCount(), request_bytes: treeJson.length,
+        patch_count: app.adapter.patchCount(), request_bytes: sentBytes,
         extra: {
           host_incremental: h?.["incremental"],
           host_patches: h?.["patch_count"],
           host_relayout: h?.["relayout_count"],
           host_layout_ms: h?.["layout_ms"],
           host_build_layers_ms: h?.["build_layers_ms"],
+          // ★宿主侧分段（定位剩余耗时的唯一依据）
+          host_timing: h?.["_host_timing"],
+          host_changed_rects: h?.["changed_rects"],
+          host_updated_layers: h?.["updated_layers"],
+          patches_diag: patchesDiag,
+          host_parse_ms: h?.["parse_ms"],
+          host_in_bytes: h?.["in_bytes"],
+          host_total_ms: h?.["host_total_ms"],
+          host_measure_hits: h?.["measure_cache_hits"],
+          host_measure_misses: h?.["measure_cache_misses"],
         },
       })
     }

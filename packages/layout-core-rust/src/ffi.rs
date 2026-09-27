@@ -335,6 +335,45 @@ fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
     for r in &root_ids {
         tree.roots.push(index_of[r]);
     }
+    // ★★输入图完整性校验（本仓实测血的教训：坏输入曾把真机应用打崩）
+    //
+    // 【为什么必须有】宿主传来的节点表是**它自己拼的**，一个 id 冲突或自环就会被
+    //   taffy 的 `compute_preliminary` 变成**无限递归 → 爆栈 → signal 11（应用闪退）**。
+    //   实测案例：适配器里两个 id 分配器各自从 1 开始 ⇒ 请求里出现 `parentId === id`
+    //   （自环）⇒ 真机闪退。**布局核心是库，不能因为调用方给错数据就崩掉宿主进程。**
+    //
+    // 校验三件事（都是 O(n)）：
+    //   ① id 唯一（重复 id 会让 index_of 指向错误的节点 ⇒ 树结构错乱）
+    //   ② 无自环（`parentId == id`）
+    //   ③ 父子图是**森林**（每个节点只有一个父；沿 parent 上溯必然终止）
+    //   —— ③ 用「上溯步数不超过节点数」判定，等价于「无环」。
+    {
+        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::with_capacity(tree.len());
+        for n in &tree.nodes {
+            if !seen.insert(n.id) {
+                return Err(format!("节点 id 重复：{}（宿主传入了冲突的 id）", n.id));
+            }
+            if n.parent != crate::node::NO_PARENT && n.parent == (index_of[&n.id]) {
+                return Err(format!("节点 {} 的 parent 指向自己（自环）", n.id));
+            }
+        }
+        // 无环性：逐节点上溯，步数不得超过节点总数
+        for i in 0..tree.len() {
+            let mut cur = tree.nodes[i].parent;
+            let mut steps = 0usize;
+            while cur != crate::node::NO_PARENT {
+                if (cur as usize) >= tree.len() {
+                    return Err(format!("节点 {} 的 parent={cur} 越界", tree.nodes[i].id));
+                }
+                steps += 1;
+                if steps > tree.len() {
+                    return Err(format!("父子关系存在**环**（从节点 {} 上溯超过 {} 步）——请检查 id 分配是否冲突", tree.nodes[i].id, tree.len()));
+                }
+                cur = tree.nodes[cur as usize].parent;
+            }
+        }
+    }
+
     Ok((tree, root_ids))
 }
 
@@ -452,11 +491,35 @@ pub unsafe extern "C" fn proteus_layout_run(request_json: *const c_char) -> *mut
 ///
 ///   句柄式 API 让宿主能：`create`（建树并保留）→ 多次 `rects`（读几何）→ `destroy`（释放），
 ///   与原生 View 树的生命周期**同构**，measurement 才可比。
-static TREE_REGISTRY: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, LayoutTree>>> =
+/// 注册表条目：树 + **id → 索引**缓存
+///
+/// ★★为什么必须缓存（本机 release 实测）：`proteus_layout_update` 每次都要把补丁的
+///   **节点 id** 解析成**数组索引**。初版每次更新都重建这张表（O(n)）——
+///   实测 20501 节点要 **3.14ms**，而同一更新的**真正重排只要 0.15ms** ⇒
+///   即 **95% 的更新时间花在「查表准备」而非布局**。
+///   且这个开销随**整树规模**增长（与增量「只随范围增长」的目标直接矛盾）。
+///   树结构在 update 路径上**不变**（本入口只改样式）⇒ 表可缓存、建树时一次性建好。
+pub(crate) struct TreeEntry {
+    pub(crate) tree: LayoutTree,
+    /// 节点 id → 索引（建树时构建一次；update 直接复用）
+    pub(crate) id_to_idx: std::collections::HashMap<u32, u32>,
+}
+
+impl TreeEntry {
+    fn new(tree: LayoutTree) -> Self {
+        let mut id_to_idx = std::collections::HashMap::with_capacity(tree.len());
+        for (i, n) in tree.nodes.iter().enumerate() {
+            id_to_idx.insert(n.id, i as u32);
+        }
+        Self { tree, id_to_idx }
+    }
+}
+
+static TREE_REGISTRY: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u64, TreeEntry>>> =
     std::sync::OnceLock::new();
 static NEXT_HANDLE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-fn registry() -> &'static std::sync::Mutex<std::collections::HashMap<u64, LayoutTree>> {
+fn registry() -> &'static std::sync::Mutex<std::collections::HashMap<u64, TreeEntry>> {
     TREE_REGISTRY.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
@@ -482,7 +545,8 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
         };
         engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        registry().lock().map_err(|_| "注册表锁失败".to_string())?.insert(handle, tree);
+        registry().lock().map_err(|_| "注册表锁失败".to_string())?
+            .insert(handle, TreeEntry::new(tree));
         Ok(handle)
     });
     match r {
@@ -499,7 +563,7 @@ pub unsafe extern "C" fn proteus_layout_create(request_json: *const c_char) -> u
 pub unsafe extern "C" fn proteus_layout_rects(handle: u64) -> *mut c_char {
     let r = std::panic::catch_unwind(|| -> Result<String, String> {
         let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
-        let tree = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
         let abs = tree.absolute_rects();
         let mut rects = serde_json::Map::new();
         for (i, r) in abs.iter().enumerate() {
@@ -558,23 +622,35 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         let raw = unsafe { CStr::from_ptr(patches_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
         let patches: Vec<StylePatch> = serde_json::from_str(raw).map_err(|e| format!("patch 解析失败：{e}"))?;
 
+        let t_start = std::time::Instant::now();
         let mut reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
-        let tree = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let entry = reg.get_mut(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let t_lock = t_start.elapsed().as_secs_f64() * 1000.0;
+        let t_idmap0 = std::time::Instant::now();
+        // ★直接借用**缓存的** id→索引表（建树时已建好）
+        //   初版每次重建（O(n)）—— 实测 20501 节点 3.14ms，而真正重排仅 0.15ms ⇒ 95% 白花
+        let id_to_idx = &entry.id_to_idx;
 
         // ★先按 id → 索引解析（一次 O(n) 建表，而非每个 patch 都线性扫）
-        let mut id_to_idx: std::collections::HashMap<u32, u32> = std::collections::HashMap::with_capacity(tree.len());
-        for (i, n) in tree.nodes.iter().enumerate() {
-            id_to_idx.insert(n.id, i as u32);
-        }
+        let t_idmap = t_idmap0.elapsed().as_secs_f64() * 1000.0;
 
+        // ★先把要改的索引算出来（只读 id 表），再取 tree 的可变借用
+        let mut targets: Vec<(u32, usize)> = Vec::with_capacity(patches.len());
+        for p in &patches {
+            if let Some(&idx) = entry.id_to_idx.get(&p.id) {
+                targets.push((p.id, idx as usize));
+            }
+        }
+        let tree = &mut entry.tree;
         let mut applied = 0usize;
         let mut last_dirty: Option<u32> = None;
-        for p in &patches {
-            let Some(&idx) = id_to_idx.get(&p.id) else { continue };  // 未知 id 跳过（不报错：宿主可能持有过期补丁）
-            p.apply_to(&mut tree.nodes[idx as usize])?;
-            tree.nodes[idx as usize].dirty = true;
+        for (id, idx) in targets {
+            // ★按 id 在补丁里找（targets 跳过了未知 id，故不能按下标对齐）
+            let Some(p) = patches.iter().find(|q| q.id == id) else { continue };
+            p.apply_to(&mut tree.nodes[idx])?;
+            tree.nodes[idx].dirty = true;
             applied += 1;
-            last_dirty = Some(idx);
+            last_dirty = Some(idx as u32);
         }
         if std::env::var_os("PROTEUS_DEBUG").is_some() {
             eprintln!("[proteus] update handle={handle} patches={} applied={applied}", patches.len());
@@ -589,14 +665,53 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         }
 
         // ★增量重排（作用域由布局边界决定；无边界时会自动退回全量，见 layout_incremental）
+        let dirty = last_dirty.unwrap();
+        let scope = {
+            // ★先把 scope 记下来：下面要用它算「变化节点的绝对坐标」
+            let e = TaffyEngine::new();
+            e.relayout_scope_of(tree, dirty)
+        };
+        let t_eng0 = std::time::Instant::now();
         let mut engine = TaffyEngine::new().with_measurer(Box::new(crate::engine::NullTextMeasurer));
-        let out = engine.layout_incremental(tree, last_dirty.unwrap());
+        let out = engine.layout_incremental(tree, dirty);
+        let t_engine_new = t_eng0.elapsed().as_secs_f64() * 1000.0;
+
+        // ★★只返回**变化节点**的绝对矩形（宿主据此只更新那几个 layer，而不是重建整棵层树）
+        //
+        // 【为什么能只算这几个（正确性依据）】重排范围由**布局边界**决定，
+        //   而边界的定义是「对外尺寸与内容无关」⇒ 边界自身及其外部的绝对位置**不变**。
+        //   故：变化节点的绝对坐标 = 边界父链的原点（不变，可 O(深度) 算出）
+        //       + 子树内的相对累加（只遍历范围子树，O(范围)）。
+        //   ⇒ 总代价 O(深度 + 范围)，与整树规模无关。
+        //
+        // 【诚实边界】若范围退化为根（无边界），这里返回的就是**整树**的矩形
+        //   —— 与全量等价，宿主仍能正确处理（只是没有收益）。
+        let t_collect0 = std::time::Instant::now();
+        let mut changed = serde_json::Map::new();
+        {
+            let (pox, poy) = parent_origin_of(tree, scope);
+            collect_abs_subtree(tree, scope, pox, poy, &mut changed);
+        }
+        let t_collect = t_collect0.elapsed().as_secs_f64() * 1000.0;
+        // 整树矩形仍可经 proteus_layout_rects 取（兼容）；此处只给变化集
+        let _ = &out;
         Ok(serde_json::json!({
             "ok": true,
             "applied": applied,
             "relayout_count": out.relayout_count,
             "measure_calls": out.measure_calls,
             "measure_hits": out.measure_hits,
+            "scope_id": tree.get(scope).id,
+            "changed_count": changed.len(),
+            "rects": changed,
+            // ★分段计时（诊断用：定位剩下的 cost 在哪一段）
+            "_timing": {
+                "lock_ms": (t_lock * 100.0).round() / 100.0,
+                "idmap_ms": (t_idmap * 100.0).round() / 100.0,
+                "engine_and_relayout_ms": (t_engine_new * 100.0).round() / 100.0,
+                "collect_changed_ms": (t_collect * 100.0).round() / 100.0,
+                "total_ms": (t_start.elapsed().as_secs_f64() * 1000.0 * 100.0).round() / 100.0,
+            },
         })
         .to_string())
     });
@@ -604,6 +719,53 @@ pub unsafe extern "C" fn proteus_layout_update(handle: u64, patches_json: *const
         Ok(Ok(s)) => into_c_string(s),
         Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
         Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
+/// 计算某节点**父链原点之和**（O(深度)）——即「传给它父级的那个原点」
+///
+/// ★坐标约定回顾（与 `LayoutTree::absolute_rects` 同）：节点的 `rect.x` 是**相对父**的，
+///   故绝对 x = 从根到该节点**所有祖先**的 `rect.x` 之和 + 自身的 `rect.x`。
+///   本函数返回**不含自身**的那部分（= 父级原点），供子树遍历逐层累加。
+pub(crate) fn parent_origin_of(tree: &LayoutTree, idx: u32) -> (f32, f32) {
+    let mut chain: Vec<u32> = Vec::with_capacity(8);
+    let mut cur = tree.get(idx).parent;
+    let mut guard = 0usize;
+    while cur != crate::node::NO_PARENT && guard <= tree.len() {
+        chain.push(cur);
+        cur = tree.get(cur).parent;
+        guard += 1;
+    }
+    let (mut ox, mut oy) = (0.0f32, 0.0f32);
+    for &n in chain.iter().rev() {
+        let r = tree.get(n).rect;
+        ox += r.x;
+        oy += r.y;
+    }
+    (ox, oy)
+}
+
+/// 遍历范围子树，产出「**绝对**矩形」表（只覆盖该子树 ⇒ O(范围)）
+pub(crate) fn collect_abs_subtree(
+    tree: &LayoutTree,
+    idx: u32,
+    parent_ox: f32,
+    parent_oy: f32,
+    out: &mut serde_json::Map<String, serde_json::Value>,
+) {
+    let node = tree.get(idx);
+    if node.style.display == crate::style::Display::None {
+        return;      // 无盒：不下钻（与 absolute_rects 同规则）
+    }
+    let r = node.rect;
+    let abs_x = parent_ox + r.x;
+    let abs_y = parent_oy + r.y;
+    out.insert(
+        node.id.to_string(),
+        serde_json::json!({"x": abs_x, "y": abs_y, "width": r.width, "height": r.height}),
+    );
+    for &c in &node.children {
+        collect_abs_subtree(tree, c, abs_x, abs_y, out);
     }
 }
 
@@ -686,7 +848,7 @@ impl StylePatch {
 pub unsafe extern "C" fn proteus_layout_hit_test(handle: u64, x: f32, y: f32) -> *mut c_char {
     let r = std::panic::catch_unwind(|| -> Result<String, String> {
         let reg = registry().lock().map_err(|_| "注册表锁失败".to_string())?;
-        let tree = reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?;
+        let tree = &reg.get(&handle).ok_or_else(|| format!("句柄 {handle} 不存在"))?.tree;
         let res = crate::hit::hit_result(tree, x, y);
         let ids = |v: &Vec<crate::node::NodeIndex>| -> Vec<u32> { v.iter().map(|&i| tree.get(i).id).collect() };
         Ok(serde_json::json!({
@@ -730,7 +892,8 @@ pub unsafe extern "C" fn proteus_layout_create_blob(ptr: *const u8, len: u32) ->
         };
         engine.layout(&mut tree, constraint);
         let handle = NEXT_HANDLE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        registry().lock().map_err(|_| "注册表锁失败".to_string())?.insert(handle, tree);
+        registry().lock().map_err(|_| "注册表锁失败".to_string())?
+            .insert(handle, TreeEntry::new(tree));
         Ok(handle)
     });
     match r {
@@ -1189,6 +1352,119 @@ mod tests {
         assert_eq!(v2["relayout_count"], 0, "无有效补丁不应重排");
 
         assert!(proteus_layout_destroy(h));
+    }
+
+    /// ★★增量更新返回的「变化集」必须是**正确的绝对坐标**（与全量布局逐节点一致）
+    ///
+    /// 【为什么这条必须有】宿主将**直接采用**这些矩形去改 layer 的 frame ——
+    ///   若绝对坐标算错，屏幕上就是**错位**（而且因为只更新这几个节点，看起来像"随机错位"，
+    ///   极难归因）。故必须与「全量布局的绝对矩形」逐位比对，而不是只断言"有返回"。
+    #[test]
+    fn update_entry_returns_correct_absolute_rects_for_changed_nodes() {
+        // 与 update_entry_is_actually_incremental 同构：100 行 × 40 列，行显式宽高 ⇒ 有边界
+        let mut nodes = String::from("{\"viewport\":{\"width\":750,\"height\":2400},\"nodes\":[");
+        nodes.push_str("{\"id\":1,\"parentId\":null,\"width\":750.0,\"flexDirection\":\"column\"}");
+        let mut id = 2u32;
+        let mut mid_leaf = 0u32;
+        let mut mid_row = 0u32;
+        for r in 0..100u32 {
+            nodes.push_str(&format!(
+                ",{{\"id\":{id},\"parentId\":1,\"flexDirection\":\"row\",\"gap\":4.0,\"flexShrink\":0.0,\"width\":750.0,\"height\":20.0}}"));
+            let row_id = id; id += 1;
+            if r == 50 { mid_row = row_id; }
+            for c in 0..40u32 {
+                nodes.push_str(&format!(
+                    ",{{\"id\":{id},\"parentId\":{row_id},\"width\":40.0,\"height\":16.0,\"flexShrink\":0.0}}"));
+                if r == 50 && c == 10 { mid_leaf = id; }
+                id += 1;
+            }
+        }
+        nodes.push_str("],\"textMeasures\":{}}");
+        let c = std::ffi::CString::new(nodes).unwrap();
+        let h = unsafe { proteus_layout_create(c.as_ptr()) };
+        assert!(h > 0);
+
+        // 改中间行的一个叶子
+        let patch = format!(r#"[{{"id":{mid_leaf},"style":{{"width":41.0}}}}]"#);
+        let pc = std::ffi::CString::new(patch).unwrap();
+        let p = unsafe { proteus_layout_update(h, pc.as_ptr()) };
+        let out = unsafe { std::ffi::CStr::from_ptr(p) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p) };
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true, "{out}");
+        let changed = v["rects"].as_object().expect("应返回变化集");
+        assert!(!changed.is_empty(), "变化集不应为空");
+        let scope_id = v["scope_id"].as_u64().unwrap();
+        let _ = mid_row;
+
+        // ★金标准：直接读**当前句柄**的全量绝对矩形（它已含本次变更）
+        //   —— 该路径走 `absolute_rects()` 整树遍历，与变化集的「增量算法」是**独立实现**
+        //     ⇒ 两者一致才说明增量算法真的对（而不是同一份逻辑的自证）
+        let p2 = unsafe { proteus_layout_rects(h) };
+        let full = unsafe { std::ffi::CStr::from_ptr(p2) }.to_str().unwrap().to_string();
+        unsafe { proteus_layout_free_string(p2) };
+        let fv: serde_json::Value = serde_json::from_str(&full).unwrap();
+        let all = fv["rects"].as_object().unwrap();
+
+        let mut worst = 0f64;
+        let mut compared = 0usize;
+        for (k, cr) in changed {
+            let Some(fr) = all.get(k) else { panic!("#{k} 在变化集里但全量里没有") };
+            for f in ["x", "y", "width", "height"] {
+                let a = cr[f].as_f64().unwrap();
+                let b = fr[f].as_f64().unwrap();
+                worst = worst.max((a - b).abs());
+            }
+            compared += 1;
+        }
+        println!("变化集 {compared} 个节点（scope=#{scope_id}），与全量绝对坐标最大偏差 {worst:.4}dp");
+        assert!(compared > 0, "应至少比对 1 个节点");
+        assert!(worst < 0.01, "★变化集的绝对坐标与全量不一致（差 {worst:.4}dp）⇒ 宿主会画错位");
+        assert!(proteus_layout_destroy(h));
+    }
+
+    /// ★★回归锁：**坏输入图必须被拒绝**，而不是把宿主打崩
+    ///
+    /// 【为什么这条必须有（真机 signal 11 的教训）】适配器里两个 id 分配器各自从 1 开始
+    ///   ⇒ 请求里出现自环（`parentId == id`）⇒ taffy 无限递归 → **爆栈 → 应用闪退**。
+    ///   布局核心是**库**：拿错数据应当返回错误，而不是终止宿主进程。
+    ///   ★这类缺陷只有在「宿主真的拼错树」时才暴露，而**真机启动路径**正是第一次机会。
+    #[test]
+    fn malformed_input_graph_is_rejected_not_crashing() {
+        // ① 自环：节点 1 的 parent 是自己
+        let selfloop = r#"{"viewport":{"width":100,"height":100},"nodes":[
+            {"id":1,"parentId":1,"width":50.0,"height":50.0}
+        ],"textMeasures":{}}"#;
+        let c = std::ffi::CString::new(selfloop).unwrap();
+        // ★这一行以前会**爆栈**（栈溢出是 abort，测试进程会直接死掉）
+        let h = unsafe { proteus_layout_create(c.as_ptr()) };
+        assert_eq!(h, 0, "自环输入必须被拒绝（返回 0），而不是崩");
+
+        // ② 重复 id
+        let dup = r#"{"viewport":{"width":100,"height":100},"nodes":[
+            {"id":1,"parentId":null,"width":50.0,"height":50.0},
+            {"id":1,"parentId":null,"width":50.0,"height":50.0}
+        ],"textMeasures":{}}"#;
+        let c2 = std::ffi::CString::new(dup).unwrap();
+        assert_eq!(unsafe { proteus_layout_create(c2.as_ptr()) }, 0, "重复 id 必须被拒绝");
+
+        // ③ 两节点互指（2-cycle）
+        let cycle = r#"{"viewport":{"width":100,"height":100},"nodes":[
+            {"id":1,"parentId":2,"width":50.0,"height":50.0},
+            {"id":2,"parentId":1,"width":50.0,"height":50.0}
+        ],"textMeasures":{}}"#;
+        let c3 = std::ffi::CString::new(cycle).unwrap();
+        assert_eq!(unsafe { proteus_layout_create(c3.as_ptr()) }, 0, "互相引用必须被拒绝");
+
+        // ④ 对照：**合法**输入仍应成功（证明校验没有误伤）
+        let good = r#"{"viewport":{"width":100,"height":100},"nodes":[
+            {"id":1,"parentId":null,"width":100.0,"height":100.0,"flexDirection":"column"},
+            {"id":2,"parentId":1,"width":50.0,"height":50.0}
+        ],"textMeasures":{}}"#;
+        let c4 = std::ffi::CString::new(good).unwrap();
+        let h4 = unsafe { proteus_layout_create(c4.as_ptr()) };
+        assert!(h4 > 0, "合法输入不应被拒绝");
+        assert!(proteus_layout_destroy(h4));
     }
 
     /// ★命中测试 FFI：跨界必须与核心同语义（target / path / chain 三者都对）

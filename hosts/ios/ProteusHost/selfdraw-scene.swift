@@ -49,8 +49,10 @@ func takeCString(_ ptr: UnsafeMutablePointer<CChar>) -> String {
 @objc protocol SelfDrawExports: JSExport {
     /// 首次挂载：渲染树 JSON → 建 Rust 树 + CALayer 树；返回耗时分解
     func mount(_ treeJson: String) -> String
-    /// 更新（Vue diff 后重发整树——本脚手架先整树，增量更新属后续优化）
+    /// 更新（Vue diff 后重发整树——★**保留给结构变化**用：增删节点时必须整树）
     func update(_ treeJson: String) -> String
+    /// ★★**增量更新**：只发改动过的节点的样式补丁（跨边界字节数从 280KB 降到几十字节）
+    func updatePatches(_ patchesJson: String) -> String
     /// 截图落盘（验证「屏幕上真的画出来了」）
     func snapshot(_ name: String) -> String
     /// JS 侧自报读数（Vue mount / update 耗时 + patch 次数）
@@ -72,6 +74,10 @@ final class SelfDrawView: UIView {
     private(set) var metaByNodeId: [Int: [String: Any]] = [:]
     /// 节点 id → **绝对原点**（用于把核心的绝对坐标换算为 CALayer 的父相对坐标）
     private var absOriginByNodeId: [Int: CGPoint] = [:]
+    /// ★节点 id → 已建好的 CALayer（**增量更新的前提**：有它才能只改frame、不重建）
+    private var layersById: [Int: CALayer] = [:]
+    /// 节点 id → 父 id（增量更新时判断父子关系用）
+    private var parentById: [Int: Int] = [:]
     /// 实际下发的 CALayer frame（**父相对**）与父 id —— 供核验脚本对照核心几何
     private(set) var builtFrames: [Int: CGRect] = [:]
     private(set) var builtParents: [Int: Int] = [:]
@@ -98,6 +104,8 @@ final class SelfDrawView: UIView {
         rectsByNodeId.removeAll(keepingCapacity: true)
         metaByNodeId.removeAll(keepingCapacity: true)
         absOriginByNodeId.removeAll(keepingCapacity: true)
+        layersById.removeAll(keepingCapacity: true)
+        parentById.removeAll(keepingCapacity: true)
         builtFrames.removeAll(keepingCapacity: true)
         builtParents.removeAll(keepingCapacity: true)
         CATransaction.commit()
@@ -159,6 +167,8 @@ final class SelfDrawView: UIView {
                                  width: item.rect.width, height: item.rect.height)
             builtFrames[item.id] = layer.frame
             builtParents[item.id] = item.parentId ?? -1
+            layersById[item.id] = layer
+            parentById[item.id] = item.parentId ?? -1
             if let pid = item.parentId, let parent = byId[pid] {
                 parent.addSublayer(layer)
             } else {
@@ -171,6 +181,62 @@ final class SelfDrawView: UIView {
         }
         builtLayerCount = layerNodes.count
         CATransaction.commit()
+    }
+
+    /// ★★**增量更新层**：只改「核心报告变化的那些节点」的 frame（不重建、不销毁任何层）
+    ///
+    /// 【为什么这是关键优化（真机实测）】此前每次更新都 `clearLayers + buildLayers`：
+    ///   3507 节点实测 **build_layers = 80.7ms**（占宿主总耗时的一半以上）。
+    ///   而核心现在能返回**变化集**（`proteus_layout_update` 的 `rects` 字段，
+    ///   实测只改 1 行时仅 41 个节点）⇒ 这里就只改这 41 个层的 frame。
+    ///
+    /// 【坐标系】核心给的是**绝对**rect；CALayer 的 frame 是**父相对** ⇒ 需减去父的绝对原点。
+    ///   父的绝对原点从 `absOriginByNodeId` 取（该表在增量过程中被**就地更新**——
+    ///   故必须按**树序（父在前）**处理：父的原点先更新完，子才能用对）。
+    ///   核心返回的顺序是 JSON 对象（无序）⇒ 本函数按节点 id 排序不安全，
+    ///   改为**按父链深度排序**（深度小的先处理）。
+    ///
+    /// - Returns: 实际更新的层数；有任何一个节点在本地找不到对应 layer 则返回 -1（调用方应退回全量重建）
+    func updateLayersIncremental(
+        changed: [(id: Int, abs: CGRect)]
+    ) -> Int {
+        guard !changed.isEmpty else { return 0 }
+        // 逐节点检查是否都有对应的已有层；缺任何一个 ⇒ 退回全量（正确性优先）
+        for c in changed where layersById[c.id] == nil { return -1 }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        // ★按父链深度升序处理（保证用到父的**已更新**原点）
+        let sorted = changed.sorted { depthOf($0.id) < depthOf($1.id) }
+        var updated = 0
+        for c in sorted {
+            guard let layer = layersById[c.id] else { continue }
+            let pid = parentById[c.id] ?? -1
+            let parentOrigin = pid >= 0 ? (absOriginByNodeId[pid] ?? .zero) : .zero
+            absOriginByNodeId[c.id] = c.abs.origin
+            let f = CGRect(x: c.abs.minX - parentOrigin.x, y: c.abs.minY - parentOrigin.y,
+                           width: c.abs.width, height: c.abs.height)
+            layer.frame = f
+            builtFrames[c.id] = f
+            rectsByNodeId[c.id] = c.abs
+            updated += 1
+        }
+        return updated
+    }
+
+    /// 节点在层树中的深度（沿 `parentById` 上溯；带防环保护）
+    private func depthOf(_ id: Int) -> Int {
+        var d = 0
+        var cur = parentById[id] ?? -1
+        var guard_ = 0
+        while cur >= 0 && guard_ < 4096 {
+            d += 1
+            cur = parentById[cur] ?? -1
+            guard_ += 1
+        }
+        return d
     }
 
     /// ★实际 CALayer frame 清单（宿主侧读数）——与核心 rects 对照，证明「几何真的被用上了」
@@ -233,16 +299,40 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
     private(set) var lastNodeCount = 0
     private(set) var lastTreeHash = ""
 
+    /// ★★文本度量缓存：**内容寻址**（键 = 文本 ⊕ 字号），与核心 §5.3 同款原则
+    ///
+    /// 【为什么必须缓存（真机实测定位）】宿主此前每次更新都对**全部节点**重跑 CoreText：
+    ///   3507 节点实测 **28.96ms**——而该次更新只改了一个 margin，**文本一个字都没变**
+    ///   ⇒ 100% 是白跑。（这也是「整树操作」在本链路上的最后一处。）
+    ///
+    /// 【为什么是内容寻址而非按节点缓存】同一文案会在多个节点出现
+    ///   （列表里的「说明文字」「分组标题」）⇒ 按内容缓存可直接复用；
+    ///   且文本变没变，内容 hash 天然知道，无需额外的失效逻辑。
+    ///
+    /// 【与核心的关系】核心侧也有度量缓存（同样内容寻址）；两侧独立：
+    ///   宿主的缓存省的是**跨界调用**（CoreText），核心的缓存省的是**重复回调**。
+    private static var measureCache: [String: CGSize] = [:]
+
     /// CoreText 度量（★平台注入：核心不自研文本，Profile §L4）
     static func measureText(_ text: String, fontSize: CGFloat) -> CGSize {
         if text.isEmpty { return .zero }
+        let key = "\(fontSize)\u{1}\(text)"
+        if let hit = measureCache[key] { measureCacheHits += 1; return hit }
+        measureCacheMisses += 1
         let font = UIFont.systemFont(ofSize: fontSize)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
         let size = (text as NSString).size(withAttributes: attrs)
         // ★向上取整到整点：真机实测文本宽度常带小数（如 47.33pt），
         //   而宿主按整点布置 CALayer 更稳定；同时避免「同一文本两次测量差 0.001」导致布局抖动
-        return CGSize(width: ceil(size.width), height: ceil(size.height))
+        let rounded = CGSize(width: ceil(size.width), height: ceil(size.height))
+        measureCache[key] = rounded
+        return rounded
     }
+
+    /// 度量缓存命中/未命中（诊断：证明缓存真的生效）
+    private(set) static var measureCacheHits = 0
+    private(set) static var measureCacheMisses = 0
+    static func resetMeasureStats() { measureCacheHits = 0; measureCacheMisses = 0 }
 
     /// 报告 / 快照文件名（自绘场景 vs 逻辑层基准各自独立，避免互相覆盖）
     /// ★由控制器按启动参数（`--bench`）设置。
@@ -261,18 +351,77 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         return render(treeJson: treeJson, phase: "update")
     }
 
+    /// ★★增量更新：把 JS 侧的**样式补丁**直接转给核心（不经过宿主 diff、不解析整树）
+    ///
+    /// 【为什么这条路径能省掉大头（真机实测分解，3507 节点只改 1 行）
+    ///   · 旧路径（整树）：JS 序列化整树 → **跨 JSExport 编组 280KB ≈ 70ms** → 宿主解析 8.6ms
+    ///     → 宿主 diff 9.5ms → 核心重排 **0.07ms** ⇒ 99.9% 花在「搬运整树」，与布局无关
+    ///   · 新路径（补丁）：几十字节跨越 → 核心重排 0.07ms → 只改变化的 layer
+    ///   ★关键观察：**「改了什么」是 JS 侧已知的**（Vue 的 patchProp 直接告诉了我们），
+    ///     让宿主再 diff 一遍整树是纯粹的重复劳动。
+    func updatePatches(_ patchesJson: String) -> String {
+        guard let view = view, handle != 0 else {
+            return "{\"ok\":false,\"error\":\"未建树或未接入核心\"}"
+        }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let out = patchesJson.withCString { takeCString(proteus_layout_update(handle, $0)) }
+        let updateMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        guard out.contains("\"ok\":true") else {
+            return "{\"ok\":false,\"error\":\"update 失败\",\"raw\":\(jsonEscape(String(out.prefix(200))))}"
+        }
+        let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
+        let applied = (o?["applied"] as? Int) ?? 0
+        let relayout = (o?["relayout_count"] as? Int) ?? 0
+
+        // 无有效补丁 ⇒ 什么都不用做（例如只改了颜色）
+        if applied == 0 {
+            return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
+                               "patch_count": 0, "relayout_count": 0, "changed_rects": 0,
+                               "updated_layers": 0, "update_ms": round(updateMs * 100) / 100])
+        }
+
+        var changed: [(id: Int, abs: CGRect)] = []
+        if let rm = o?["rects"] as? [String: [String: Double]] {
+            for (k, r) in rm {
+                guard let nid = Int(k) else { continue }
+                changed.append((id: nid, abs: CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0,
+                                                    width: r["width"] ?? 0, height: r["height"] ?? 0)))
+            }
+        }
+        let tL = CFAbsoluteTimeGetCurrent()
+        let updated = view.updateLayersIncremental(changed: changed)
+        let layersMs = (CFAbsoluteTimeGetCurrent() - tL) * 1000
+        if updated < 0 {
+            return "{\"ok\":false,\"error\":\"变化集与本地层不匹配（需全量重建）\"}"
+        }
+        let totalMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        lastTiming = ["measure_ms": 0, "layout_ms": (updateMs * 100).rounded() / 100,
+                      "build_layers_ms": (layersMs * 100).rounded() / 100,
+                      "host_total_ms": (totalMs * 100).rounded() / 100]
+        return jsonString(["ok": true, "path": "updatePatches", "incremental": true,
+                           "in_bytes": patchesJson.count,
+                           "patch_count": applied, "relayout_count": relayout,
+                           "changed_rects": changed.count, "updated_layers": updated,
+                           "update_ms": round(updateMs * 100) / 100,
+                           "layers_ms": round(layersMs * 100) / 100,
+                           "host_total_ms": round(totalMs * 100) / 100])
+    }
+
     /// 核心：渲染树 → (CoreText 度量) → Rust 核心 → CALayer 树
     private func render(treeJson: String, phase: String) -> String {
         guard let view = view else { return "{\"ok\":false,\"error\":\"view 未设置\"}" }
         let t0 = CFAbsoluteTimeGetCurrent()
 
+        let tParse0 = CFAbsoluteTimeGetCurrent()
         guard let data = treeJson.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let nodes = root["nodes"] as? [[String: Any]] else {
             return "{\"ok\":false,\"error\":\"渲染树 JSON 解析失败\"}"
         }
+        let parseMs = (CFAbsoluteTimeGetCurrent() - tParse0) * 1000
 
-        // ── ① 注入文本度量（平台职责：CoreText）──
+        // ── ① 注入文本度量（平台职责：CoreText；命中内容寻址缓存）──
+        SelfDrawBridge.resetMeasureStats()
         let tMeasure0 = CFAbsoluteTimeGetCurrent()
         var textMeasures: [String: [String: Double]] = [:]
         for n in nodes {
@@ -315,22 +464,82 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
         // ★兼容边界（诚实标注）：`proteus_layout_update` 当前**不带文本度量表**，
         //   故只在「纯样式变更」时走增量；一旦**节点增删**或文本集合变化，
         //   就退回 `create`（正确性优先——宁可重建，也不要用错的度量算几何）。
+        let tRenderStart = CFAbsoluteTimeGetCurrent()
         var usedIncremental = false
         var patchCount = 0
         var relayoutCount = 0
+        var changedCount = 0
+        var updatedLayerCount = 0
         var layoutMs = 0.0
         var rectsJsonStr = ""
 
-        if handle != 0, let patches = diffPatches(from: lastNodes, to: nodes) {
+        // ★★增量更新（本题的核心优化路径）
+        //
+        // 【两处「整树操作」都要消掉（真机实测定位）】
+        //   ① `proteus_layout_rects` —— 读**全量** rects（3507 条 → 280KB JSON → 解析），实测 ~9ms
+        //   ② `clearLayers + buildLayers` —— 销毁并重建**全部** CALayer，实测 **80.7ms**（占宿主一半以上）
+        //   ⇒ 现在改为：核心只回**变化集**（`rects` 字段，实测只改 1 行时 41 个节点），
+        //     宿主只改这些层的 frame（不重建、不销毁）。
+        //   ★顺序很关键：先算变化集与补丁（都在内存里），**再**决定要不要碰层树 ——
+        //     若变化集缺失/与本地层不匹配，就退回全量（正确性优先）。
+        let tDiff0 = CFAbsoluteTimeGetCurrent()
+        let maybePatches = handle != 0 ? diffPatches(from: lastNodes, to: nodes) : nil
+        let diffMs = (CFAbsoluteTimeGetCurrent() - tDiff0) * 1000
+        if let patches = maybePatches {
             let pj = jsonString2(patches)
+            let tUpd0 = CFAbsoluteTimeGetCurrent()
             let out = pj.withCString { takeCString(proteus_layout_update(handle, $0)) }
+            let updateMs = (CFAbsoluteTimeGetCurrent() - tUpd0) * 1000
             if out.contains("\"ok\":true") {
-                usedIncremental = true
                 let o = (try? JSONSerialization.jsonObject(with: Data(out.utf8))) as? [String: Any]
                 patchCount = (o?["applied"] as? Int) ?? 0
                 relayoutCount = (o?["relayout_count"] as? Int) ?? 0
-                layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
-                rectsJsonStr = takeCString(proteus_layout_rects(handle))
+
+                // ★变化集 → 只在层树上改这几个
+                var changed: [(id: Int, abs: CGRect)] = []
+                if let rm = o?["rects"] as? [String: [String: Double]] {
+                    for (k, r) in rm {
+                        guard let nid = Int(k) else { continue }
+                        changed.append((id: nid, abs: CGRect(x: r["x"] ?? 0, y: r["y"] ?? 0,
+                                                            width: r["width"] ?? 0, height: r["height"] ?? 0)))
+                    }
+                }
+                let tLayers0 = CFAbsoluteTimeGetCurrent()
+                let updatedLayers = view.updateLayersIncremental(changed: changed)
+                let layersMs = (CFAbsoluteTimeGetCurrent() - tLayers0) * 1000
+                if updatedLayers >= 0 {
+                    usedIncremental = true
+                    changedCount = changed.count
+                    updatedLayerCount = updatedLayers
+                    layoutMs = (CFAbsoluteTimeGetCurrent() - tLayout0) * 1000
+                    // ★不再读全量 rects、不再重建层 —— 这就是省下来的部分
+                    lastNodes = nodes
+                    let el = (CFAbsoluteTimeGetCurrent() - tRenderStart) * 1000
+                    let t = ["measure_ms": measureMs, "layout_ms": layoutMs,
+                             "build_layers_ms": 0.0, "host_total_ms": el]
+                    lastTiming = t
+                    lastNodeCount = nodes.count
+                    lastTreeHash = String(format: "%08x", treeJson.hashValue)
+                    return jsonString([
+                        "ok": true, "path": phase, "node_count": nodes.count,
+                        "layer_count": view.builtLayerCount, "request_bytes": reqJson.count,
+                        "measure_ms": round(measureMs * 100) / 100,
+                        "layout_ms": round(layoutMs * 100) / 100,
+                        "build_layers_ms": 0, "host_total_ms": round(el * 100) / 100,
+                        "incremental": true, "patch_count": patchCount,
+                        "relayout_count": relayoutCount,
+                        "changed_rects": changed.count, "updated_layers": updatedLayers,
+                        // ★宿主侧分段（定位剩余耗时；本仓纪律：不靠推断）
+                        "parse_ms": round(parseMs * 100) / 100,
+                        "in_bytes": treeJson.count,
+                        "measure_cache_hits": SelfDrawBridge.measureCacheHits,
+                        "measure_cache_misses": SelfDrawBridge.measureCacheMisses,
+                        "_host_timing": ["diff_ms": round(diffMs * 100) / 100,
+                                         "update_ffi_ms": round(updateMs * 100) / 100,
+                                         "layers_ms": round(layersMs * 100) / 100,
+                                         "measure_ms": round(measureMs * 100) / 100],
+                    ])
+                }
             }
         }
         if !usedIncremental {
@@ -399,6 +608,8 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
             "incremental": usedIncremental,
             "patch_count": patchCount,
             "relayout_count": relayoutCount,
+            "changed_rects": changedCount,
+            "updated_layers": updatedLayerCount,
         ]
         return jsonString(out)
     }
@@ -470,6 +681,29 @@ final class SelfDrawBridge: NSObject, SelfDrawExports {
 ///
 /// 【只比布局字段】绘制属性（背景色/圆角/字号）**不影响几何** ⇒ 不进补丁，
 ///   避免用「无关变化」触发重排（这是增量能否真正省下来的关键）。
+/// 上一帧全量请求的字节数（诊断：证明增量路径确实没走整树序列化）
+private var lastFullRequestBytes = 0
+
+/// 组装**全量**核心请求（只在首帧 / 结构变更时调用——见调用点的成本说明）
+func buildFullRequest(nodes: [[String: Any]], textMeasures: [String: [String: Double]], root: [String: Any]) -> String {
+    var req: [String: Any] = ["viewport": root["viewport"] as? [String: Any] ?? ["width": 390, "height": 844],
+                             "nodes": nodes, "textMeasures": textMeasures]
+    if var ns = req["nodes"] as? [[String: Any]] {
+        for i in ns.indices {
+            ns[i].removeValue(forKey: "backgroundColor")
+            ns[i].removeValue(forKey: "color")
+            ns[i].removeValue(forKey: "fontSize")
+            ns[i].removeValue(forKey: "borderRadius")
+        }
+        req["nodes"] = ns
+    }
+    guard let d = try? JSONSerialization.data(withJSONObject: req),
+          let str = String(data: d, encoding: .utf8) else { return "{}" }
+    lastFullRequestBytes = str.count
+    return str
+}
+
+/// 树 diff：把「上一帧 → 本帧」的**样式变化**算成补丁数组（增量更新的输入）
 func diffPatches(from prev: [[String: Any]], to next: [[String: Any]]) -> [[String: Any]]? {
     if prev.isEmpty { return nil }
     if prev.count != next.count { return nil }                 // 结构变化 → 全量

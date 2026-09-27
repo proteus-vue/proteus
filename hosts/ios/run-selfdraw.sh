@@ -43,12 +43,9 @@ echo "==> ① 构建 TS 侧（renderer-app 的 dist —— 自绘适配器所在
 # ★必须先构建：bundle 用 alias 指向 dist（renderer-app 不是根依赖，无 node_modules link）
 (cd "$ROOT" && pnpm --filter @proteus-vue/renderer-app run build 2>&1 | tail -2)
 
-echo "==> ② JS bundle（Vue + 适配器 → 单文件 IIFE）[$MODE]"
-if [ "$MODE" = "bench" ]; then
-  (cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
-else
-  (cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
-fi
+echo "==> ② JS bundle（两个都建——见步骤⑤的说明）"
+(cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
+(cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
 
 echo "==> ③ 编译 Rust 核心（iOS release）"
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -64,11 +61,13 @@ xcrun --sdk iphoneos swiftc -O -target arm64-apple-ios15.0 \
   -o "$APP/ProteusSelfDraw" "$HERE/ProteusHost/selfdraw-scene.swift" "$LIB"
 
 echo "==> ⑤ 组装 .app"
-if [ "$MODE" = "bench" ]; then
-  cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
-else
-  cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
-fi
+# ★★两个 bundle **都装**（本仓实测踩到：只装当前模式那个 ⇒ 从桌面点开时
+#   没有 `--bench` 启动参数 ⇒ 找不到 bundle-selfdraw.js ⇒ 应用起不来（黑屏/闪退）。
+#   修复：构建阶段把两个都编出来、都塞进 .app；运行时按启动参数选。
+(cd "$ROOT" && node hosts/ios/bridge/build-selfdraw.mjs 2>&1 | tail -1)
+(cd "$ROOT" && node hosts/ios/bridge/build-bench.mjs 2>&1 | tail -1)
+cp "$HERE/bridge/dist/bundle-selfdraw.js" "$APP/bundle-selfdraw.js"
+cp "$HERE/bridge/dist/bundle-bench.js" "$APP/bundle-bench.js"
 # ★描述文件与 entitlements 从**描述文件原样提取**（本仓 iOS 竖切实测的坑：
 #   手工拼装会 0xe8008016 invalid entitlements；免费个人团队还需 team-identifier
 #   + keychain-access-groups，少一项即无效）
@@ -127,19 +126,41 @@ echo "    身份：$IDENTITY · 描述文件：$(basename "$PROFILE")"
 
 echo "==> ⑦ 安装并启动"
 xcrun devicectl device install app --device "$UDID" "$APP" 2>&1 | grep -iE "installed|error" | tail -2 || true
+# ★★从**桌面点开**等价于不带参数启动 = 自绘场景（两个 bundle 都在包内，任选其一都可用）。
+#   `--bench` 只是显式指定跑基准。
 if [ "$MODE" = "bench" ]; then
-  # ★启动参数：宿主据此选择 bundle 与报告名（`--bench`）
   xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" --bench 2>&1 | tail -2 || true
 else
   xcrun devicectl device process launch --device "$UDID" "$BUNDLE_ID" 2>&1 | tail -2 || true
 fi
 
 echo "==> ⑧ 取回报告与截图"
-sleep 6
 mkdir -p "$HERE/results"
 REPORT_FILE="selfdraw-report.json"
 SNAP_FILE="selfdraw-final.png"
 if [ "$MODE" = "bench" ]; then REPORT_FILE="logic-bench-report.json"; SNAP_FILE="bench-final.png"; fi
+# ★条件等待：报告必须**比开始时新**才算本次运行完成
+#
+# 【为什么不能用固定 sleep（本仓踩坑）】bench 有 19 个用例、最大 1000 项规模，
+#   跑完远超当初写的 6 秒 ⇒ 取回的是**上一次运行的残留报告**，
+#   读数全是旧的；我还因此误判成「新代码没生效」，白查一轮。
+#   ⇒ 改为：记录本地 mtime → 反复尝试取回 → 直到 mtime 前移（或超时）。
+LOCAL_MTIME=$(stat -f %m "$HERE/results/$REPORT_FILE" 2>/dev/null || echo 0)
+WAITED=0
+while [ "$WAITED" -lt 120 ]; do
+  xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" --source "Documents/$REPORT_FILE" \
+    --destination "$HERE/results/$REPORT_FILE" >/dev/null 2>&1 || true
+  NEW_MTIME=$(stat -f %m "$HERE/results/$REPORT_FILE" 2>/dev/null || echo 0)
+  if [ "$NEW_MTIME" -gt "$LOCAL_MTIME" ]; then
+    echo "    报告已就绪（等待 ${WAITED}s）"
+    break
+  fi
+  sleep 2
+  WAITED=$((WAITED + 2))
+done
+if [ "$WAITED" -ge 120 ]; then echo "    ⚠ 等待报告超时（120s）——可能仍在运行"; fi
+
 for f in "$REPORT_FILE" "$SNAP_FILE"; do
   xcrun devicectl device copy from --device "$UDID" --domain-type appDataContainer \
     --domain-identifier "$BUNDLE_ID" --source "Documents/$f" \
