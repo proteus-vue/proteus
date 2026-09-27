@@ -128,6 +128,8 @@ let throughputChain: Promise<void> | null = null
  * ★异步：Vue 的更新是**微任务**（queueJob → Promise.then）。这里用 `nextTick` 串起来，
  *   而微任务要等**本次 evaluateScript 返回**才排空 ⇒ 宿主必须**再调一次**读结果（见 `pending()`）。
  */
+const hostRawByPhase: Record<string, unknown> = {}
+
 function measureAsync(
   label: string,
   t0: number,
@@ -142,7 +144,8 @@ function measureAsync(
       const tReq = now()
       const treeJson = JSON.stringify(req)
       const tSer = now()
-      hostCall(treeJson)
+      // ★存下宿主原始返回（含 incremental / patch_count / relayout_count 三读数）
+      hostRawByPhase[label] = safeParse(hostCall(treeJson))
       const tHost = now()
       phaseOut[label] = {
         vue_ms: tVue - t0, to_request_ms: tReq - tVue, serialize_ms: tSer - tReq,
@@ -256,6 +259,8 @@ const api = {
       // ★未知键必须为空：非空即「写了但没生效」（本仓实测正是靠它抓到 style 未展开）
       unknown_keys: (adapter as unknown as { unknownKeys?: () => Record<string, number> }).unknownKeys?.() ?? {},
       host_final_raw: safeParse(hostOut),
+      // ★★每个相位的宿主原始返回（增量读数在这里，逐相位可比）
+      host_raw_by_phase: hostRawByPhase,
       snapshot: safeParse(shot),
       notes: [
         '★本链路里没有任何 UIKit 布局参与：几何全部来自 Rust 排版核心',

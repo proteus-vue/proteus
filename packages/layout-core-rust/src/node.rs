@@ -90,14 +90,74 @@ impl LNode {
         }
     }
 
-    /// 是否为布局边界（§5.4）：宽高均显式 **且自身有子级** ⇒ 内部变更不外溢
+    /// 是否为布局边界（§5.4）：**两个轴的对外尺寸都与内容无关** 且自身有子级
+    /// ⇒ 内部变更不外溢，脏传播可在此停止。
     ///
     /// ★「有子级」这个条件不可省（本仓 conformance 实测暴露）：叶子节点虽常有显式宽高，
     ///   但它没有「内部」可言；若把它判为边界，脏传播会**停在叶子自己**，
     ///   而其祖先若为 auto 尺寸（尺寸随内容变化）就会**漏重排**。
     ///   边界的意义是「我罩住我的子树，我的对外尺寸不因子树而变」——叶子没有子树，故不适用。
+    ///
+    /// ★★本轮新增：**交叉轴 stretch 也算「尺寸与内容无关」**（真机实测发现的关键缺口）
+    ///
+    /// 【为什么必须认 stretch（本仓实测）】App 里的列表行常见写法是
+    /// `{ height: 56 }` **只写高、不写宽** —— 宽度由父的 `align-items: stretch` 撑开
+    /// （跨端框架与 CSS 的默认行为）。此时行的宽 = 父内容盒宽，**与行自己的内容无关**；
+    /// 高也是显式的 ⇒ **两个轴都与内容无关 ⇒ 它本来就是边界**。
+    /// 但旧判据只认 `style.width.is_some()` ⇒ 行全部被判为**非边界**
+    /// ⇒ 重排范围一路到根 ⇒ 增量退化为全量（实测：宿主增量路径因此**一次都没触发**）。
+    ///
+    /// 【判据】对每个轴分别判断「该轴尺寸是否由内容决定」：
+    ///   · 显式 `width`/`height` → 与内容无关 ✓
+    ///   · 交叉轴 + 父侧 `align-items: stretch`（或自身 `align-self: stretch`）→ 由父决定 ✓
+    ///   · 主轴且无显式尺寸 → **由内容决定** ✗（这正是 auto 尺寸链不能当边界的原因）
+    ///
+    /// 【诚实边界】本判据只看「样式声明」，不解析父级实际生效的 align-items。
+    ///   调用方（布局核心）在**已经知道父级**的上下文里可传 `parent_align_items`；
+    ///   传 `None` 时退化为旧行为（只认显式尺寸）——保守，宁可少判边界也不误判。
     pub fn is_layout_boundary(&self) -> bool {
-        self.style.is_layout_boundary() && !self.children.is_empty()
+        self.is_layout_boundary_with(None, None) && !self.children.is_empty()
+    }
+
+    /// 带父级上下文的边界判定
+    ///
+    /// - `parent_align_items`：父的 `align-items`（`None` = 未知 → 保守处理）
+    /// - `parent_horizontal`：**父的主轴是否为横轴**（`None` = 未知 → 保守）
+    ///
+    /// ★★`parent_horizontal` 不可省（本仓实测抓到的第二个错）：stretch 作用在节点的
+    ///   **交叉轴**上，而「哪个轴是交叉轴」由**父**的 flex-direction 决定，**不是节点自己的**。
+    ///   （踩坑：用节点自己的 direction 判 → `{height:56}` 的行被算成「主轴无显式尺寸」→ 仍非边界。
+    ///    实际上它在 column 父里，交叉轴是**横**，而横由 stretch 撑开、竖是显式高 ⇒ 本来就该是边界。）
+    pub fn is_layout_boundary_with(
+        &self,
+        parent_align_items: Option<&str>,
+        parent_horizontal: Option<bool>,
+    ) -> bool {
+        if self.children.is_empty() || self.style.display != crate::style::Display::Flex {
+            return false;
+        }
+        // 节点在**父的**轴系下的主/交叉轴
+        let horizontal = parent_horizontal.unwrap_or_else(|| self.style.flex_direction.is_horizontal());
+        let main_explicit = if horizontal { self.style.width.is_some() } else { self.style.height.is_some() };
+        let cross_explicit = if horizontal { self.style.height.is_some() } else { self.style.width.is_some() };
+        // 主轴：**只有显式尺寸**才与内容无关。
+        //
+        // ★★`flex_grow > 0` **不能**当作内容无关（我一度这么写，推导后发现是错的）：
+        //   grow 节点的主轴尺寸 = base + grow_share × free_space；
+        //   若自身内容变化 Δ，则 base 增 Δ、free_space 减 Δ ⇒ 尺寸变化 Δ(1 − grow_share)
+        //   ⇒ 只要 grow_share ≠ 1，尺寸仍依赖内容 ⇒ **误判为边界会漏重排 → 几何错**。
+        //   （正确性 > 性能：宁可少判边界，也不要错的几何。）
+        let main_ok = main_explicit;
+        // 交叉轴：显式，或 stretch（自身 align-self 优先；否则看父 align-items，缺省即 stretch）
+        let self_stretch = matches!(self.style.align_self.as_deref(), Some("stretch"));
+        let cross_ok = cross_explicit
+            || self_stretch
+            || match parent_align_items {
+                Some("stretch") => true,
+                None => true,          // 未知 → 按 CSS 默认（stretch）保守判定
+                Some(_) => false,
+            };
+        main_ok && cross_ok
     }
 
     /// 主轴可用尺寸（`None` = 不限）
