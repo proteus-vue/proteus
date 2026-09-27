@@ -131,12 +131,15 @@ pub(crate) struct NodeDto {
     #[serde(default)]
     pub(crate) is_text: bool,
     /// ★原生宿主节点（L3：webview/map/广告/相机）——布局无影响，但宿主据此创建原生 View
-    // ★必须可省略：调用方（含本仓自己的请求构造器）不会为「非文本节点」写 isText:false
     #[serde(default)]
     pub(crate) native_host: bool,
     /// 语义标签（诊断用；如 `shell.webview`）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) semantic: Option<String>,
+    /// **字体签名**（编译器/平台算出的稳定哈希）——进度量缓存键，见 Profile §5.3
+    /// （键 = 文本 hash + 字体 + 宽度约束；Rust 侧不解析字体属性，只透传签名）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) text_style_key: Option<u32>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Default)]
@@ -190,6 +193,7 @@ impl NodeDto {
             is_text: false,
             native_host: false,
             semantic: None,
+            text_style_key: None,
         }
     }
 }
@@ -302,7 +306,10 @@ fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
         let mut node = LNode::new(dto.id, style);
         // 文本叶子：金标用 `isText`，宿主可直传 `text`；两者都视为「需要度量」
         if dto.is_text || dto.text.is_some() {
-            node.text = Some(crate::node::TextMeasureRequest { text: dto.text.clone().unwrap_or_default() });
+            node.text = Some(crate::node::TextMeasureRequest {
+                text: dto.text.clone().unwrap_or_default(),
+                style_key: dto.text_style_key.unwrap_or(0),
+            });
         }
         // ★原生宿主标记（L3）：布局无影响，但会**回传**给宿主，供其创建原生 View
         node.native_host = dto.native_host;

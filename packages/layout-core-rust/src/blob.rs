@@ -36,7 +36,7 @@
 use crate::ffi::LayoutRequest;
 
 pub const MAGIC: u32 = 0x5459_4C50; // "PLYT"（小端）
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;   // v2：新增 text_style_key（度量缓存键的「字体」维度）
 pub const HEADER_BYTES: usize = 20;
 /// `parent_id` 的无父哨兵（与 `node.rs` 的 `NO_PARENT` 一致）
 pub const NO_PARENT: u32 = u32::MAX;
@@ -78,6 +78,8 @@ pub const E_OVERFLOW: u8 = 1 << 6;
 pub const FLAG_IS_TEXT: u8 = 1 << 0;
 pub const FLAG_NATIVE_HOST: u8 = 1 << 1;
 pub const FLAG_HAS_TEXT_LITERAL: u8 = 1 << 2;
+/// 节点带字体签名（其后紧跟一个 u32）
+pub const FLAG_HAS_STYLE_KEY: u8 = 1 << 3;
 
 /* ── 枚举取值表（与 `taffy_engine.rs` 的 parse_* 严格对应）── */
 const FLEX_DIRECTION_VALUES: [&str; 4] = ["row", "column", "row-reverse", "column-reverse"];
@@ -254,6 +256,10 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
         if has_literal {
             flags |= FLAG_HAS_TEXT_LITERAL;
         }
+        let style_key = n.text_style_key;
+        if style_key.unwrap_or(0) != 0 {
+            flags |= FLAG_HAS_STYLE_KEY;
+        }
 
         nw.u32(fm);
         nw.u8(em);
@@ -319,6 +325,9 @@ pub fn encode(req: &LayoutRequest) -> Vec<u8> {
             while nw.buf.len() % 4 != 0 {
                 nw.u8(0);
             }
+        }
+        if flags & FLAG_HAS_STYLE_KEY != 0 {
+            nw.u32(style_key.unwrap_or(0));
         }
 
         nodes_bytes += nw.buf.len();
@@ -454,6 +463,9 @@ pub fn decode(buf: &[u8]) -> Result<LayoutRequest> {
         }
         n.is_text = flags & FLAG_IS_TEXT != 0;
         n.native_host = flags & FLAG_NATIVE_HOST != 0;
+        if flags & FLAG_HAS_STYLE_KEY != 0 {
+            n.text_style_key = Some(r.u32()?);
+        }
 
         nodes.push(n);
     }
