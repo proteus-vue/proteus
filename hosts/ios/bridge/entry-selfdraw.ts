@@ -39,6 +39,7 @@ import { createSelfDrawAdapter } from '@proteus-vue/renderer-app/adapters/selfdr
 interface SelfDrawNative {
   mount(treeJson: string): string
   update(treeJson: string): string
+  updatePatches(patchesJson: string): string
   snapshot(name: string): string
   report(json: string): void
   done(summaryJson: string): void
