@@ -21,12 +21,10 @@ echo "==> ① JS bundle（Vue + Dispatcher + NativeBackend → 单文件 IIFE）
 node "$HERE/bridge/build.mjs"
 
 echo "==> ② Swift 编译（swiftc → 模拟器 SDK）"
-SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 TARGET="arm64-apple-ios15.0-simulator"
 mkdir -p "$BUILD"
-xcrun swiftc \
-  -sdk "$SDK" \
-  -Xcc -isysroot -Xcc "$SDK" \
+# ★`xcrun --sdk iphonesimulator swiftc`——避免 clang 误用 macOS sysroot
+xcrun --sdk iphonesimulator swiftc \
   -target "$TARGET" \
   -framework UIKit -framework JavaScriptCore \
   -parse-as-library \
