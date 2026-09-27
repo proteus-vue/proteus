@@ -540,6 +540,12 @@ importers:
         specifier: ^20.0.0
         version: 20.19.43
 
+  packages/layout-core:
+    dependencies:
+      '@proteus-vue/component-ir':
+        specifier: 0.3.0-beta.11
+        version: link:../component-ir
+
   packages/mcp:
     dependencies:
       '@proteus-vue/component-ir':

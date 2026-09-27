@@ -3,30 +3,6 @@
 > 适用版本：Proteus v2.47+（Vue 3.4 / Vite 5 / TS 5.4）
 > 目标端：Android（优先）、iOS、HarmonyOS NEXT
 > 交付形态：新增 App 自研渲染后端，与既有 Web / Skyline 后端并行，由 `proteus.config.ts` 切换
->
-> ---
-> **★开工前假设验证（2026-09-29，真机 iPhone 12 / iOS 26.3 实测）** —— 完整报告见
-> [`proteus-performance-plan/09-ios-route-validation.md`](./proteus-performance-plan/09-ios-route-validation.md)，
-> 实验代码 `hosts/ios/experiments/`（可复跑：`bash hosts/ios/experiments/device/run-device.sh`）。
->
-> | 假设 | 结论 |
-> |---|---|
-> | H1 跳过 UIView 更快 | ✅ 成立（与「绕开 AutoLayout」**各占约一半**收益） |
-> | H2 AutoLayout 指数级上升 | ⚠️ 结论成立、**理由不成立**：实测**线性**（每项 ~1.6×） |
-> | H3 UILabel 30 vs CATextLayer 58 FPS | ❌ **未复现**：五变体全部 55.8–59.3 FPS、丢帧 ≤0.7% |
-> | H4 layer 深度决定 commit 成本 | ❌ **证伪**：总数效应 **+870%**、深度效应 **−12~17%** |
-> | H5 文本度量可缓存 | ✅ **32–49×**（建议提到 M1 首批） |
-> | §12.1 backing store 色彩空间假设 | ✅ **证实**：`gray8Uint` 让 CATextLayer **−39%（省 72MB）** |
->
-> **★内存主因（三层隔离，11 变体）——比 §12.1 的原假设更精确**：
-> | 层 | 实测 | 结论 |
-> |---|---|---|
-> | view vs layer | CALayer 仅色块 **4.9MB** < UIView **9.8MB** | **CALayer 本身更省**（原「CALayer +78%」结论有误） |
-> | 文本渲染器 | CALayer 结构 + **UILabel** **96.0MB** ≪ CALayer + **CATextLayer** **186.9MB** | **主因是 CATextLayer 的 backing store 格式** |
-> | 拍平 | **一行一 layer**：**129.9ms / 17.7MB** | ✅ **两项同时最优**（比 C 路线再快 32%、内存 −83%） |
->
-> ⇒ §12.2 的 **P0-1 已验证有效**（−39%）；**P0-4 的 `isOpaque` 项实测无效**（只省 alpha，不减分配）；
-> §12.3「真/假拍平」的判据已实测（**看 backing store 总数降没降，不是看 layer 数**）。
 
 ---
 
@@ -114,14 +90,18 @@ UI 框架层（组件 + 排版）          ❌ 弃用系统组件，自研
 - 只有最终的"把指令交给系统"那一步是平台代码
 - 与既有 `RustBackend`（`proteus-cc-rust` CLI → 同一份 CompilerIR JSON）天然契合，codegen 到 C++ 是现有能力的延伸
 
-### D3. 布局引擎：Yoga 起步，自研替换
+### D3. 布局引擎：引擎可替换，Yoga 起步
 
 | 阶段 | 方案 | 理由 |
 |---|---|---|
-| M0–M2 | **Yoga**（Flexbox 成熟实现） | 快速验证全链路，避免布局正确性成为瓶颈 |
-| M3+ | 自研布局引擎 | Yoga 为通用性牺牲了部分性能；蒸汽模式的性能收益部分来自自研排版 |
+| M0–M2 | **Yoga**（Flexbox 成熟实现），或按 DCP-1 结论选 Taffy | 快速验证全链路，避免布局正确性成为瓶颈 |
+| M3+ | 按需评估自研 / Taffy | 需先回答"在哪一点上做得比现有引擎好"（见 §5.0.6） |
+
+**详见 §5.0 布局引擎选型与 §5.6 决策检查点。**
 
 **布局协议约束（必须遵守）**：约束自顶向下、尺寸自底向上、**严格单次测量**，禁止 View 体系那种"父子多轮 measure"。这点是 Compose 相对 View 体系做对的地方，直接抄。
+
+**抽象边界约束**：`LayoutEngine` 接口必须在 M1 落地，引擎原生 API 不得泄漏到 `layout/` 模块之外（§5.1）。
 
 ### D4. 拍平（Flatten）在 IR 层判定，不在运行时判定
 
@@ -217,20 +197,88 @@ interface DynamicBinding {
 
 ---
 
-## 5. C++ 排版核心规格（`@proteus-vue/layout-core`）
+## 5. 排版核心规格（`@proteus-vue/layout-core`）
+
+### 5.0 布局引擎选型
+
+#### 5.0.1 结论
+
+**M1–M2 使用 Yoga；M3 再评估自研或替换。** 排版核心语言（C++ / Rust）**必须在 M1 之前定案**（见 §5.6）。
+
+#### 5.0.2 Yoga 现状（纠正常见误解）
+
+Yoga 并非停止维护。2026 年仍在持续提交：
+
+| 时间 | 变更 |
+|---|---|
+| 2026-02 | **移除 CocoaPods 支持**（iOS 接入改走 SwiftPM / CMake） |
+| 2026-03 | Android 构建升级至 Gradle 9 / AGP 8.12 / SDK 36 |
+| 2026-06 | 新增符合规范的 CSS Flexbox §4.5 `auto-min-size` opt-in |
+| 2026-08 | 修复 shrink-factor 除法的浮点近零问题 |
+
+编译器要求已提升至 **C++20**。
+
+但需注意：Yoga 处于**维护模式**，演进绑定在 React Native 的需求上——**不会为 Proteus 的需求新增能力**（如 Grid）。
+
+#### 5.0.3 Yoga 的经典缺点：对 Proteus 大部分不成立
+
+| 常见批评 | 对 Proteus 是否成立 | 原因 |
+|---|---|---|
+| 不解析 CSS，需手动设置属性 | ❌ **不成立** | 编译期折叠（CSS Profile §4）已产出 `ComputedStyle`，本就不会给布局引擎传 CSS 字符串 |
+| 不处理文本，measure 由宿主提供 | ❌ **不成立** | `text_measure` 本就是平台注入（StaticLayout / CoreText），见 §5.2 |
+| 仅支持 Flexbox，无 Grid | ⚠️ 部分成立 | 取决于 Profile 是否开放 Grid（目前 L2 待定） |
+
+**结论**：Yoga 被诟病最多的两点，恰是 Proteus 架构已解决的两点。它在链路中就是一个纯粹的「约束输入 → 坐标输出」黑盒，这正是其设计定位。
+
+#### 5.0.4 替代方案对比
+
+| 方案 | 语言 | 布局能力 | 维护状态 | 适配度 |
+|---|---|---|---|---|
+| **Yoga** | C++ | Flexbox（无 Grid） | 活跃但偏维护模式，绑 RN | 若核心定 C++ 则零 FFI 直连 |
+| **Taffy** | Rust | **Flexbox + Grid** | 活跃开发（Bevy / Dioxus / Zellij 在用） | 若核心定 Rust 则同栈 |
+| Stretch | Rust | Flexbox，更严格遵循 Web 标准 | 需核实当前状态 | 绑定生态较薄 |
+| 自研 | — | 按需 | 完全可控 | 数千项工程优化量级，Compose 前车之鉴 |
+
+#### 5.0.5 排版核心语言的二选一（关键决策）
+
+| | C++ 排版核心 + Yoga | Rust 排版核心 + Taffy |
+|---|---|---|
+| 与 `proteus-cc-rust` 同栈 | ❌ | ✅ |
+| 布局能力 | Flexbox | Flexbox + **Grid** |
+| 接入平台层 | JNI / ObjC++ / NAPI | 同（均需跨到平台） |
+| 生态成熟度 | Yoga 十余年生产验证 | Taffy 较新 |
+| 已知成本 | — | iOS 侧 ObjC++ 桥接略复杂 |
+
+**此项必须在 M1 前定案**：排版核心语言一旦选定，后期更换成本极高。
+
+#### 5.0.6 不要因「Yoga 老」而自研
+
+反直觉但重要的证据：某纯 TypeScript 布局引擎通过两项**算法**优化（主轴位置由累积和改为线性递推；默认值字段在构建期折叠为常量），使 hot-structural 场景从 **450µs 降至 70µs**，最终在 9 个场景中全部快过 WASM Yoga。作者结论：
+
+> Yoga 的优势不在算术速度——其 C++ kernel 又快又调优得好，但**在该负载下算术速度根本不是瓶颈**。
+
+**双向启示**：
+1. 「Yoga 是 C++ 所以快」不构成不自研的理由——瓶颈在 dirty 传播、边界跨越、默认值处理等架构层面
+2. 「Yoga 是老设计」也不构成必须自研的理由——老内核经十余年生产打磨，正确性远高于快速重写版本
+
+**自研前必须能回答**：我要在哪一点上做得比 Yoga 好？否则即为重复劳动。
 
 ### 5.1 模块划分
 
 ```
 layout-core/
 ├── node/          节点树（扁平数组 + 父/兄弟索引）
-├── layout/        Flexbox 布局（Yoga 起步，预留自研接口 LayoutEngine）
+├── layout/        LayoutEngine 接口 + 实现（Yoga / Taffy / 自研，可切换）
 ├── text/          文本度量抽象（平台实现注入）
 ├── flatten/       拍平规则（编译期判定的运行时执行）
-├── recycle/       列表复用池
+├── materialize/   节点 → 平台 layer 的懒创建与回收（见 §12.5）
+├── paint-hint/    绘制提示（见 §12.4）
+├── recycle/       列表复用池 + 生命周期状态机（见 §12.6）
 ├── dirty/         脏区域标记与最小重排传播
 └── render/        绘制指令流生成（平台无关）
 ```
+
+**强制约束**：`layout/` 模块的**实现 API（Yoga / Taffy 的原生 API）不得出现在该模块之外**。上层只能依赖 `LayoutEngine` 抽象接口，以保证后续可替换。
 
 ### 5.2 关键接口
 
@@ -251,6 +299,21 @@ void tree_emit(LayoutTree*, RenderCmdList* out);
 void text_measure(const TextInput*, TextMetrics* out, PlatformTextCtx*);
 ```
 
+**布局引擎抽象（可替换边界，必须实现）**：
+
+```cpp
+class LayoutEngine {
+public:
+  virtual ~LayoutEngine();
+  // 全量布局
+  virtual void layout(Node* root, float w, float h) = 0;
+  // 增量布局：从 dirty 节点出发，遇布局边界即停止向上传播
+  virtual void layoutIncremental(Node* dirtyRoot) = 0;
+  // 文本度量回调由宿主注册
+};
+// 内置实现：YogaEngine / TaffyEngine / ProteusEngine（后续）
+```
+
 ### 5.3 性能硬约束
 
 | 约束 | 说明 |
@@ -259,6 +322,61 @@ void text_measure(const TextInput*, TextMetrics* out, PlatformTextCtx*);
 | 无运行时字符串解析 | 样式键在编译期转为枚举 |
 | 节点分配池化 | 列表复用由 `recycle/` 统一管理，滚动时不触发堆分配 |
 | 文本度量可缓存 | 度量结果按 (文本 hash, 字体, 宽度约束) 缓存，支持后台线程预热 |
+
+### 5.4 防退化：dirty 冒泡压力测试（M1 必做）
+
+#### 5.4.1 风险来源
+
+React Native 生产实测：350 个活跃布局节点，因**无约束嵌套 Flexbox 容器**导致 dirty 标记向上级联至根节点，C++ 布局计算耗时从 **1.2ms 飙升至 28.4ms**（60 FPS 预算仅 16.67ms，120Hz ProMotion 仅 8.33ms），造成严重布局抖动。
+
+**归因**：这不是 Yoga 慢，而是上层**缺少布局边界**。若不做 `isLayoutBoundary`，换成任何引擎（含自研）都会踩同一个坑。
+
+#### 5.4.2 强制测试项
+
+| 用例 | 场景 | 合格线 |
+|---|---|---|
+| T1 深层脏更新 | 350+ 节点树，在深度 12 处修改布局属性 | 单次布局 **≤ 3ms** |
+| T2 无边界对照 | 关闭 `isLayoutBoundary` 跑同一用例 | 必须**显著劣于** T1（证明边界生效） |
+| T3 无约束容器 | `flexGrow: 1` / 未定义高度的容器嵌套 | 不得触发根节点全量重算 |
+| T4 高频更新 | 快速滚动中连续 patch | P95 ≤ 3ms |
+
+**T2 是关键**：若关闭边界与开启边界性能无差异，说明 `isLayoutBoundary` 未真正生效，不得进入 M2。
+
+### 5.5 跨端精度一致性策略（M1 定案，不可延后）
+
+#### 5.5.1 风险来源
+
+| 平台 | 精度 |
+|---|---|
+| Yoga / 多数引擎 | 支持小数像素（如 40.5） |
+| 鸿蒙 ArkUI | **强制整数像素**（四舍五入） |
+
+真实案例：鸿蒙端用 `flex: 1/3` 实现三列布局，ArkUI 将 0.333 舍入为 0.33，累计误差导致第三列错位。
+
+**此问题 Yoga 与自研引擎均无法解决**——它属于 Profile 与舍入策略层，必须在 Proteus 侧定死。
+
+#### 5.5.2 强制规则
+
+1. **统一舍入策略**：在 Profile 中定义唯一的像素舍入规则（建议：布局计算保留浮点，仅在最终写入平台层时做一次舍入），三端一致
+2. **禁止依赖分数 flex 的多列等分布局**，lint 层提供改写建议（如 `width: 33.33%`）
+3. **折叠屏 / 窗口尺寸变化**需主动监听并触发重排（鸿蒙侧窗口变更处理需专门验证）
+4. **大字体回归测试**：特大字体下的 flex 溢出问题必须提前暴露
+
+### 5.6 决策检查点
+
+| 编号 | 决策项 | 时点 | 说明 |
+|---|---|---|---|
+| DCP-1 | 排版核心语言（C++ / Rust） | **M1 之前** | 需半天 spike 对比 Yoga vs Taffy，逾期变更成本极高 |
+| DCP-2 | Profile 是否开放 Grid | M1 | 直接影响 DCP-1（Yoga 无 Grid） |
+| DCP-3 | 是否自研布局引擎 | M3 | 需先回答 §5.0.6 的问题 |
+
+### 5.7 可用工具：以浏览器作为布局真值基准
+
+Yoga 的测试方式值得直接复用：
+
+> 写 HTML 片段描述节点结构 → 在 Chrome 中渲染 → Chrome 按 CSS Flexbox 规范算出期望布局 → 该结果作为测试用例预期值 → 引擎自算一遍做对比
+
+Proteus 的 **Web 端本身就是浏览器**，因此 conformance 门禁可直接**读取浏览器的 `getComputedStyle` 与 `getBoundingClientRect` 作为基准真值**，与 App 端排版结果逐节点比对。这比手写期望值覆盖面广、且天然与浏览器行为对齐。
 
 ---
 
@@ -341,14 +459,52 @@ export default defineConfig({
 
 **出口条件**：`proteus explain` 能输出拍平/静态提升的完整决策 trace。
 
-### M1 · C++ 排版核心骨架（≈3 人周）
+### M0.5 · 排版核心语言 Spike（≈0.5 人周）★ 决策前置
 
-- [ ] 节点树（扁平数组）
-- [ ] 接入 Yoga，实现单次测量布局
-- [ ] 脏区域标记与最小重排
-- [ ] 平台无关绘制指令流
+- [ ] Yoga vs Taffy 对比 spike（接入成本、Grid 支持、性能）
+- [ ] 决定排版核心语言：C++ 还是 Rust（DCP-1）
+- [ ] 决定 Profile 是否开放 Grid（DCP-2）
 
-**出口条件**：Headless 后端能输出正确的指令流，与 VueDom 后端布局结果逐像素比对通过。
+**出口条件**：DCP-1 / DCP-2 有书面结论。**此决策不得延后至 M1 之后。**
+
+### M1 · 排版核心骨架 —— ✅ **已用 Node 参考实现完成**（2026-09-29）
+
+> **落地路径调整（用户已确认）**：先做 **Node 侧参考实现**（`packages/layout-core`）而非直接 C++。
+> 理由：布局正确性未达标时谈性能无意义；Node 侧反馈环最快（单测毫秒级），且能直接与浏览器对拍。
+> C++ 移植（M2+）以本实现为**语义基准**，避免「边写 C++ 边猜语义」。
+
+- [x] 节点树（扁平数组语义 + 稳定整数 id + 父指针）
+- [x] **自研 flex 求解器**（未接 Yoga——先证明语义；DCP-1 的引擎选择见 M0.5）
+- [x] **单次测量布局**（`measureCalls == nodeCount` 由测试精确锁定）
+- [x] `LayoutEngine` 接口边界（`ConstraintFor` 是百分比语义的唯一落点，见 §5.1）
+- [x] **脏区域标记与最小重排**（`isLayoutBoundary` 生效 + 度量缓存复用）
+- [ ] 跨端舍入策略定案（§5.5）——待 M2 真机数据
+- [x] 平台无关绘制指令流（`RenderCmd`：背景/文本/图片/边框 + 裁剪，含拍平并入清单）
+- [x] **dirty 冒泡压力测试 T1–T4（§5.4）**
+
+**出口条件（均已达成）**：
+1. ✅ 指令流正确：`tests/layout-core-render-cmd.test.ts`（绝对坐标 / 拍平不新建位图 / 裁剪边界）
+2. ✅ **布局与真实浏览器逐像素一致**：`tests/e2e-layout-core-pixel.test.ts`——
+   17 用例 / 67 个有盒节点，**x/y/w/h 全部 ≤ 0.5dp**（Chromium 为基准真值）
+3. ✅ **T2 对照证明 `isLayoutBoundary` 真实生效**：开边界重排 4 节点/0.59ms（作用域=边界子树），
+   关边界退化为整树根/15 节点/1.55ms——**结构量与墙钟双双显著劣化**
+
+**实测数字**（356 节点 / 深度 12；`npx vitest run tests/layout-core-*` 可复跑）：
+| 指标 | 实测 |
+|---|---|
+| 单次测量 | `measureCalls == nodeCount`（10501 节点树实测） |
+| 增量布局（单点变更） | 访问 **4.8%** 节点、文本 shaping **1 次**（全量 8000 次）、提速 **4.0×** |
+| T1 深层脏更新（356 节点 / 深度 12） | **0.59ms**（预算 3ms） |
+| T2 无边界对照 | **1.55ms** + 重排范围扩到整树根（15 节点） |
+| T4 高频更新 60 连击 | P50 **0.15ms** / P95 **0.63ms** / max 1.18ms |
+
+**★对拍暴露并修掉的真实语义缺陷**（都是浏览器基准真值抓出来的，不是自测发现的）：
+1. 主轴 auto 的 flex base size 应为 **max-content**（不是「填满可用」）——嵌套 row→column 差 112dp
+2. 主轴尺寸被 grow/shrink 改变后，**子树必须按最终尺寸重排**（精化测量；靠文本度量记忆化控制成本）
+3. 交叉轴对齐的参照系是**容器内容盒**，不是「可用空间」（视口 667 下居中 16dp 文本，y 差 323.5dp）
+4. `left/top` 从**父 padding 盒**起算，不叠加父 padding（父 padding-left 30 时差 30dp）
+5. min/max 夹取需**冻结—再分配**（CSS §9.7），否则被夹住的空间不会转给兄弟（差 35dp）
+6. `display:none` 在 CSS 中**无盒**（不产生 rects，也不产生绘制指令）
 
 ### M2 · Android 端最小闭环（≈3 人周）★ 关键验证点
 
@@ -399,17 +555,13 @@ export default defineConfig({
 
 **对照组**：Android 原生 View 体系实现同一测试（线性布局）
 
-**合格线（建议）与 ★本仓实测（真机 iPhone 12 / iOS 26.3，4050 元素）**：
+**合格线（建议）**：
 
-| 指标 | 合格 | 目标 | 实测 |
-|---|---|---|---|
-| 4050 渲染耗时 vs 原生 View | ≤ 原生耗时 | ≤ 原生 × 0.6 | **拍平 129.9ms** vs 原生 525.1ms = **×0.25 ✅** |
-| 不拍平时的耗时 | 仍 ≤ 原生 | 同上 | CALayer 路线 190.5ms = ×0.36 ✅ |
-| 增量内存 | ≤ 原生 | ≤ 原生 × 0.8 | **拍平 17.7MB** vs 104.6MB = **×0.17 ✅**；CALayer+CATextLayer 186.9MB = ×1.79 ❌ |
-
-> ⇒ **拍平路线全面达标**；未拍平的 CALayer 路线**内存不达标**（须配合 §12 的 P0-1 等修复）。
-> **诚实边界**：上表「原生 View」用的是本仓等价实现（UIView + AutoLayout，525.1ms/104.6MB），
-> 非严格手写 UIKit 最优实现——真实原生可能更快，故本表**不应作为对外性能宣称**。
+| 指标 | 合格 | 目标 |
+|---|---|---|
+| 4050 渲染耗时 vs 原生 View | ≤ 原生耗时 | ≤ 原生 × 0.6 |
+| 不拍平时的耗时 | 仍 ≤ 原生 | 同上 |
+| 增量内存 | ≤ 原生 | ≤ 原生 × 0.8 |
 
 **测试环境要求（Android，极易产生错误数据）**：
 
@@ -442,21 +594,26 @@ export default defineConfig({
 | 6 | **AutoLayout（iOS）** | 必须绕开，CPU 消耗随视图数指数级上升 |
 | 7 | **commit 递归（iOS）** | layer tree 深度直接决定 commit 成本，拍平是刚需而非优化 |
 | 8 | **一致性 vs 兼容性** | 复杂组件自研保证一致，原子组件与原生组件映射保证兼容（见 D5） |
-| 9 | **不要提前优化** | 先接 Yoga 跑通全链路，再考虑自研布局。布局正确性不达标时谈性能无意义 |
+| 9 | **不要提前优化** | 先接成熟引擎跑通全链路，再考虑自研布局。布局正确性不达标时谈性能无意义 |
 | 10 | **工程量的量级** | 业界同类方案自述为"数千项工程优化"。Compose 走同一路线但比 View 体系更慢，说明方向正确不等于结果正确 |
-| 11 | **★文本的 backing store**（本仓实测新增） | **每个 CATextLayer 一块 sRGB 全通道位图 ≈ 90KB**（2000 个 = 180MB）。修复次序：① `contentsFormat = gray8Uint`（−39%，已验证）② 拍平（−83%，已验证）③ 结构用 CALayer + 文本用系统 label（−49%，已验证）。**详见 §12** |
+| 11 | **dirty 冒泡** | 无约束嵌套容器会让 dirty 级联到根，实测 350 节点可从 1.2ms 恶化到 28.4ms。必须做 `isLayoutBoundary` 并跑 §5.4 的 T2 对照 |
+| 12 | **跨端像素精度** | 鸿蒙强制整数像素，Yoga 支持小数。分数 flex 多列布局会产生累计误差错位，必须在 Profile 层定死舍入策略（§5.5） |
+| 13 | **引擎 API 泄漏** | Yoga / Taffy 的原生 API 若泄漏到 `layout/` 之外，后续替换成本极高。M1 必须锁死抽象边界 |
 
 ---
 
 ## 11. 给实现 LLM 的执行指令
 
-1. **严格按 M0 → M5 顺序推进**，禁止跳阶段。M2 是唯一的生死关，未通过 §9.2 验收前不得开始 M3。
+1. **严格按 M0 → M0.5 → M1 → M5 顺序推进**，禁止跳阶段。M2 是唯一的生死关，未通过 §9.2 验收前不得开始 M3。
 2. **每个阶段结束必须通过对应门禁**（conformance / Golden / perf-ratchet），再进入下一阶段。
 3. **IR 扩展不得破坏既有五后端**：Headless / VueDom / Skyline 后端的既有测试必须全绿。
 4. **新增转换规则必须自带 AI 说明书**，与既有 69 条规则的约定一致。
 5. **`proteus explain` 必须能 trace 每一项编译期决策**（静态提升、拍平、布局边界判定），否则无法定位问题。
 6. **不实现自绘**：任何引入 Surface / TextureView / XComponent 作为渲染画布的实现都视为违反架构约束，应被拒绝。
 7. **遇到 §10 的坑位时**，优先选择"映射原生组件"而非"自研"，除非该组件已在 §9 验收中确认为瓶颈。
+8. **M0.5 的排版核心语言决策不得跳过或延后**。C++ / Rust 一旦选定，后期更换成本极高。
+9. **布局引擎原生 API 不得出现在 `layout/` 模块之外**。任何直接调用 Yoga / Taffy API 的上层代码视为违反架构约束，应被拒绝。
+10. **不得因"Yoga 是老设计"而自研布局引擎**。自研前必须先书面回答 §5.0.6 的问题。
 
 ---
 
@@ -467,21 +624,9 @@ export default defineConfig({
 
 ### 12.1 首要假设：backing store 色彩空间未优化
 
-**✅ 本仓已实测证实（2026-09-29，真机 iPhone 12）——无需再排查。**
+**首要怀疑对象，优先验证。**
 
-系统 `UILabel` 对**单色** string 做了优化处理，**可节省约 75% 的 Backing Store**，并能自动更新 backing store 尺寸以适配富文本或 emoji。实测的 78% 与该数字高度吻合。
-
-**实测数据（11 变体进程隔离矩阵）**：
-
-| 变体 | 增量内存 | 说明 |
-|---|---|---|
-| C CALayer 结构 + **CATextLayer** 文本 | 186.9 MB | 症状复现 |
-| **I CALayer 结构 + UILabel 文本** | **96.0 MB** | ⇒ **主因确是文本渲染器**（比纯 UIView 方案还省 5%） |
-| **J CATextLayer + `contentsFormat = .gray8Uint`** | **114.9 MB** | ⇒ **本假设证实：−39%（省 72MB）** |
-| K CATextLayer + `isOpaque` | 187.0 MB | ⇒ `isOpaque` **无效**（只省 alpha 通道，不减分配） |
-
-**⇒ 结论**：主因**不是**「CALayer vs UIView」（仅色块对照：CALayer 4.9MB **反而比** UIView 9.8MB 省），
-而是**CATextLayer 的 backing store 默认走 sRGB 全通道**。故 §12.2 的 **P0-1 是首要且已验证有效**的修复项。
+系统 `UILabel` 对**单色** string 做了优化处理，**可节省约 75% 的 Backing Store**，并能自动更新 backing store 尺寸以适配富文本或 emoji。实测的 78% 与该数字高度吻合，应作为第一排查目标。
 
 机制：
 
@@ -497,12 +642,6 @@ export default defineConfig({
 | P0-2 | **纯色背景绝不进绘制流程** | `backgroundColor` 直接画到 frameBuffer，不需要 backing store。若背景色也走自绘，则每个背景节点都在白分配位图 |
 | P0-3 | **用 `contents` 替代 `drawRect`** | 将 image 设为 `contents` 可**阻止图层为 backing store 申请内存**，图层直接以该 image 作为 backing store；多个 layer 使用同一 image 时**共享内存**而非各自开辟 |
 | P0-4 | **消灭离屏渲染** | 阴影必须设 `shadowPath`；避免 `cornerRadius` + `masksToBounds` 同时开启；避免 `mask` |
-
-**★实测状态（2026-09-29）**：
-- **P0-1 已验证有效**：`gray8Uint` 使 CATextLayer 186.9 → **114.9 MB（−39%）**；
-- **P0-2 架构上天然满足**：仅色块变体 4.9 MB（`backgroundColor` 确认不进 backing store）；
-- **P0-3 未测**（无重复图片场景）；
-- **P0-4 的 `isOpaque` 项实测无效**（187.0 ≈ 186.9）；离屏渲染需 Instruments（未测）。
 
 **关于 `shouldRasterize` 的硬性约束**：
 - 启用后**至少触发一次离屏渲染**，并消耗额外内存
@@ -523,14 +662,6 @@ export default defineConfig({
 业内真实教训：曾有实现尝试将三张小图绘制到一张大图上再展示，结果**内存炸掉**，最终改回多视图实现。
 
 原因：合并位图尺寸为子节点并集，且任一子节点变化都要重绘整块；列表场景下是灾难。
-
-**✅ 本仓已实测验证（2026-09-29）**：H 变体（一行一个 layer、文本绘制进**父级 layer**）
-取得 **129.9ms + 17.7MB**——**耗时与内存同时最优**（对比 C 路线 190.5ms/186.9MB：
-再快 32%、内存降到 1/10）。构造即「真拍平」形状：**4050 元素 → 50 个绘制对象**
-（50 块位图，而非 4000 块）。
-
-**判据（实测得出，建议写进判定规则）**：验证拍平是否「真」——**看 backing store 总数是降了还是涨了**，
-不能只看 layer 数（假拍平也会减少 layer 数，但位图总量上升）。
 
 **强制规则**：`flattenEligible` 判定（§3.1）必须追加条件——
 1. 子树必须**完全静态**（无任何动态绑定）
@@ -630,3 +761,9 @@ Proteus 的 C++ 节点树本就与 CALayer 解耦，**天然支持该优化**：
 - 将 image 设为 CALayer 的 `contents` 可阻止图层为 backing store 申请内存，多个 layer 使用同一 image 时共享内存
 - 离屏渲染缓存上限为屏幕总像素的 2.5 倍，约 100ms 未使用即丢弃；`shouldRasterize` 至少触发一次离屏渲染
 - Texture（原 AsyncDisplayKit）的 `ASDisplayNode` 懒创建 layer、图层预合成、Preload/Display/Visible 三档状态机与滚动方向动态交换预加载区域
+- Yoga 2026 年仍在维护提交（2026-02 移除 CocoaPods 支持、2026-03 Gradle 9/AGP 8.12、2026-06 Flexbox §4.5 auto-min-size、2026-08 shrink-factor 浮点修复），编译器要求已升至 C++20；但处于维护模式，演进绑定 React Native 需求
+- React Native 生产实测：350 节点树因无约束嵌套容器导致 dirty 级联到根，C++ 布局耗时从 1.2ms 恶化至 28.4ms（60 FPS 预算 16.67ms，120Hz 为 8.33ms）
+- 鸿蒙 ArkUI 强制整数像素，Yoga 支持小数像素；`flex: 1/3` 三列布局因 0.333 舍入为 0.33 产生累计误差导致第三列错位
+- 纯 TypeScript 布局引擎通过算法优化（主轴位置累积和改为线性递推、默认值字段构建期折叠）使 hot-structural 场景从 450µs 降至 70µs，结论为"算术速度不是瓶颈"
+- 布局引擎对比：Yoga（C++，Flexbox，绑 RN）、Taffy（Rust，Flexbox + Grid，Bevy/Dioxus/Zellij 在用）、Stretch（Rust，更严格遵循 Web 标准）
+- Yoga 测试方法：写 HTML 片段在 Chrome 渲染，以浏览器按 CSS Flexbox 规范算出的布局作为测试预期值

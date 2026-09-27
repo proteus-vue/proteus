@@ -1,0 +1,27 @@
+{
+  "name": "@proteus-vue/layout-core",
+  "version": "0.3.0-beta.11",
+  "description": "★★M1（App 端高性能渲染）：排版核心——渲染 IR → 布局几何求解（flex 子集 · 严格单次测量 · 零依赖）",
+  "type": "module",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@proteus-vue/component-ir": "0.3.0-beta.11"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json --emitDeclarationOnly && esbuild src/index.ts --bundle --format=esm --platform=neutral --outfile=dist/index.js"
+  }
+}
