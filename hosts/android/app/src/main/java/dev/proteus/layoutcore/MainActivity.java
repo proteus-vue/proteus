@@ -204,6 +204,16 @@ public class MainActivity extends Activity {
             sb.append("【③ §9.3 平台侧滚动（Choreographer 帧率 + RenderNode 池）】\n");
             String start = scrollListRun();
             sb.append(start).append('\n');
+        } else if ("shot-scroll-native".equals(testPath)) {
+            // ★★z-order 约束下的**滚动同步**验证（方案坑位 #4）
+            //   场景：20 行列表，**第 5 行是 native-host（WebView）**；程序驱动滚动到若干位置，
+            //   每个位置截图核验：① native-host 是否跟随（translationY = -scrollY）
+            //                     ② 滚出视口是否被裁（INVISIBLE）
+            //                     ③ 自绘内容与原生 View 的**相对位置**是否保持（不脱节）
+            sb.append("【③ 滚动 + native-host 同步】\n");
+            String s1 = setupScrollNativeScene();
+            sb.append(s1).append('\n');
+            writeReport("layout-scroll-native.json", s1);
         } else if ("shot-native".equals(testPath)) {
             // ★★M3 原生组件混用（方案 L3：「map / webview / 广告 / 第三方 SDK 以原生 View 嵌入」）
             //   验证三件事：
@@ -715,6 +725,190 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
         }
+    }
+
+    /**
+     * ★★滚动 + native-host 同步场景。
+     *
+     * 布局（由 Rust 算出）：24 行，每行 60px；**第 6 行（seq5）是 native-host（WebView）**。
+     * 视口：屏幕可见区（宿主全屏）。
+     *
+     * 验证方式：程序依次设置**多个 scrollY**（0 / 120 / 300 / 700），
+     * 每次**不重新建场景**，只调 `setContentScrollY()` —— 然后截图核验：
+     *   · native-host 的 `translationY` == -scrollY（跟随）
+     *   · 当 native-host 完全滚出视口 → 不可见（裁剪）
+     *   · 自绘行与 native-host 仍保持 60px 行距（**同步不脱节**）
+     */
+    private String setupScrollNativeScene() {
+        final int W = 750, ROW_H = 60, ROWS = 24;
+        final int HOST_ROW = 5;                  // native-host 在第 6 行
+        final int LEFT = 60, TOP = 200;
+
+        StringBuilder nodes = new StringBuilder(16 * 1024);
+        nodes.append("{\"viewport\":{\"width\":").append(W).append(",\"height\":").append(ROW_H * 40).append("},\"nodes\":[");
+        nodes.append("{\"id\":1,\"parentId\":null,\"width\":").append(W).append(".0,\"flexDirection\":\"column\"}");
+        for (int i = 0; i < ROWS; i++) {
+            nodes.append(",{\"id\":").append(i + 2).append(",\"parentId\":1,\"width\":").append(W)
+                 .append(".0,\"height\":").append(ROW_H).append(".0");
+            if (i == HOST_ROW) {
+                nodes.append(",\"nativeHost\":true,\"semantic\":\"shell.webview\"");
+            }
+            nodes.append("}");
+        }
+        nodes.append("],\"textMeasures\":{}}");
+
+        long handle = RustLayout.create(nodes.toString());
+        if (handle <= 0) return "{\"ok\":false,\"error\":\"Rust 建树失败\"}";
+        String rectsJson = RustLayout.readRects(handle);
+
+        java.util.Set<Integer> nativeIds = new java.util.HashSet<>();
+        try {
+            org.json.JSONArray nh = new org.json.JSONObject(rectsJson).optJSONArray("native_hosts");
+            if (nh != null) for (int i = 0; i < nh.length(); i++) nativeIds.add(nh.getInt(i));
+        } catch (Exception ignored) {}
+
+        java.util.List<ProteusHostView.Cmd> cmds = new java.util.ArrayList<>();
+        java.util.Map<Integer, android.graphics.RectF> nativeRects = new java.util.HashMap<>();
+        org.json.JSONArray expect = new org.json.JSONArray();
+        try {
+            org.json.JSONObject rects = new org.json.JSONObject(rectsJson).getJSONObject("rects");
+            for (int i = 0; i < ROWS; i++) {
+                int nodeId = i + 2;
+                org.json.JSONObject r = rects.getJSONObject(String.valueOf(nodeId));
+                float x = LEFT + (float) r.getDouble("x");
+                float y = TOP + (float) r.getDouble("y");
+                float w = (float) r.getDouble("width");
+                float h = (float) r.getDouble("height");
+                boolean isNative = nativeIds.contains(nodeId);
+                if (isNative) {
+                    nativeRects.put(nodeId, new android.graphics.RectF(x, y, x + w, y + h));
+                } else {
+                    cmds.add(new ProteusHostView.Cmd(x, y, w, h, scrollRowColor(i), null));
+                }
+                org.json.JSONObject e = new org.json.JSONObject();
+                e.put("seq", i);
+                e.put("nodeId", nodeId);
+                e.put("kind", isNative ? "native-host" : "self-draw");
+                e.put("contentY", Math.round(y));       // 内容坐标系（不含滚动）
+                e.put("h", Math.round(h));
+                e.put("w", Math.round(w));
+                expect.put(e);
+            }
+        } catch (Exception ex) {
+            if (handle > 0) RustLayout.destroy(handle);
+            return "{\"ok\":false,\"error\":\"几何解析失败：" + ex.getMessage() + "\"}";
+        }
+
+        final ProteusHostView scene = new ProteusHostView(this);
+        scene.setCmds(cmds);
+        scene.setBackgroundColor(0xFFFFFFFF);
+
+        final int hostNodeId = nativeIds.iterator().next();
+        android.webkit.WebView wv = new android.webkit.WebView(this);
+        wv.setBackgroundColor(0xFF1565C0);
+        wv.loadDataWithBaseURL(null, "<html><body style='margin:0;background:#1565C0'></body></html>",
+                "text/html", "UTF-8", null);
+        scene.addNativeHost(hostNodeId, wv);
+        scene.setNativeHostGeometry(nativeRects);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1080, 2400);
+        lp.leftMargin = 0; lp.topMargin = 0;
+        root.addView(scene, lp);
+        runButton.setVisibility(android.view.View.GONE);
+
+        final long h2 = handle;
+        final org.json.JSONArray expectFinal = expect;
+        final int hostIdFinal = hostNodeId;
+        final int rowsFinal = ROWS, rowHFinal = ROW_H;
+        final int topFinal = TOP;
+        // ★滚动序列（每次只改 scrollY，不重建场景）
+        final int[] SCROLLS = {0, 120, 300, 700};
+        final int[] step = {0};
+        final org.json.JSONArray reports = new org.json.JSONArray();
+
+        Runnable doStep = new Runnable() {
+            @Override public void run() {
+                if (step[0] >= SCROLLS.length) {
+                    // 全部完成：写报告
+                    try {
+                        int[] loc = new int[2];
+                        scene.getLocationOnScreen(loc);
+                        org.json.JSONObject o = new org.json.JSONObject();
+                        o.put("ok", true);
+                        o.put("path", "shot-scroll-native");
+                        o.put("rows", rowsFinal);
+                        o.put("row_h", rowHFinal);
+                        o.put("offset_left", LEFT);
+                        o.put("offset_top", topFinal);
+                        o.put("native_host_node_id", hostIdFinal);
+                        o.put("expected", expectFinal);
+                        o.put("scroll_steps", reports);
+                        o.put("view_origin_x", loc[0]);
+                        o.put("view_origin_y", loc[1]);
+                        o.put("view_width", scene.getWidth());
+                        o.put("view_height", scene.getHeight());
+                        o.put("note", "★每个 scrollY 一步：调 setContentScrollY() **不重建场景**，"
+                                + "然后由宿主机在对应时刻截图核验（native-host 跟随 + 裁剪 + 与自绘同步）");
+                        writeReport("layout-scroll-native.json", o.toString(2));
+                    } catch (Exception e) {
+                        writeReport("layout-scroll-native.json", "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}");
+                    }
+                    if (h2 > 0) RustLayout.destroy(h2);
+                    return;
+                }
+                int sy = SCROLLS[step[0]];
+                scene.setContentScrollY(sy);
+                // ★每步**单独写一份报告**（时序解耦）：
+                //   若只写一份汇总报告，宿主机必须精确猜「何时截图」——
+                //   本仓在真机时序上已踩过多次（渲染过渡期抓到黑屏）。
+                //   改为「每步一个文件 + 停留 2 秒」→ 宿主机可从容抓图后逐个核验。
+                try {
+                    int[] loc = new int[2];
+                    scene.getLocationOnScreen(loc);
+                    org.json.JSONObject st = new org.json.JSONObject();
+                    st.put("ok", true);
+                    st.put("step", step[0]);
+                    st.put("scrollY", sy);
+                    st.put("rows", rowsFinal);
+                    st.put("row_h", rowHFinal);
+                    st.put("offset_left", LEFT);
+                    st.put("offset_top", topFinal);
+                    st.put("native_host_node_id", hostIdFinal);
+                    st.put("expected", expectFinal);
+                    st.put("sync_dump", new org.json.JSONArray(scene.scrollSyncDump()));
+                    st.put("view_origin_x", loc[0]);
+                    st.put("view_origin_y", loc[1]);
+                    st.put("view_width", scene.getWidth());
+                    st.put("view_height", scene.getHeight());
+                    writeReport("layout-scroll-step" + step[0] + ".json", st.toString(2));
+                    android.util.Log.i(TAG, "滚动步 " + step[0] + " scrollY=" + sy + " 已就绪");
+                } catch (Exception e) {
+                    android.util.Log.e(TAG, "写滚动步报告失败", e);
+                }
+                step[0]++;
+                scene.postDelayed(this, 2000);   // ★每步停留 2 秒（宿主机从容截图）
+            }
+        };
+        scene.postDelayed(doStep, 500);
+
+        try {
+            org.json.JSONObject o = new org.json.JSONObject();
+            o.put("ok", true);
+            o.put("path", "shot-scroll-native");
+            o.put("scroll_sequence", SCROLLS);
+            o.put("note", "占位——真实报告在滚动序列跑完后写入（每步间隔 700ms）");
+            return o.toString(2);
+        } catch (Exception e) {
+            return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+        }
+    }
+
+    /** 滚动场景的行色（与 seq 绑定，便于核验同步） */
+    private static int scrollRowColor(int i) {
+        int r = 60 + (i * 23) % 180;
+        int g = 120 + (i * 31) % 130;
+        int b = 180 - (i * 17) % 150;
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     /** 自绘行色（与 shot 场景的行色错开，便于区分两类场景） */

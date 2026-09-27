@@ -124,3 +124,31 @@ PYTHONPATH=.tools/py python3 native-host-verify.py nh.json nh.png
 | 自绘行复核 | 4/4 ✓ |
 
 **破坏性验证**：native-host 几何偏移 25px → **2 处失败被检出**（位置不符 + 相邻自绘行被遮）。
+
+## 滚动同步（z-order 约束下，方案坑位 #4）
+
+```bash
+# 用「等状态文件就绪」而非固定 sleep 抓图（★关键：exec-out screencap 传输耗时会错位）
+bash hosts/android/scroll-sequence.sh   # 见脚本；或按 README 手动两步
+PYTHONPATH=.tools/py python3 scroll-sync-verify.py <报告目录> <截图目录>
+```
+
+**验三件事**（期望由宿主机按规格独立重算）：
+1. **native-host 跟随**：`translationY == -scrollY`（且 `layoutTop` 不变 = 零 layout 成本）
+2. **滚出视口被裁**：超出视口时 `INVISIBLE` + 屏幕上无残留像素
+3. **与自绘内容同步**：同一 scrollY 下，自绘行与 native-host 相对位置不变
+
+**实测（4 个 scrollY：0 / 120 / 300 / 700）**：全部通过——
+native-host 跟随 ✓ · 裁剪 ✓ · 自绘行 23/23、23/23、21/21、15/15 ✓
+
+### 两条关键设计
+
+| 决策 | 理由 |
+|---|---|
+| native-host 平移用 **`setTranslationY`** 而非重新 `layout()` | `layout()` 会触发子 View 测量（每帧重跑）；`translationY` 只影响绘制变换（RecyclerView 同款做法） |
+| native-host 裁剪**必须手动做** | Android 的 `clipChildren` 只能裁到**父 View 边界**；滚动容器可能只是页面一部分 → 必须按视口显式判定。**这就是方案说「滚动同步需专门设计」的实质** |
+
+### 实测坑
+
+**★截图时序**：用固定 `sleep` 抓多步序列时，`exec-out screencap` 的**传输耗时**会让截图落后一步
+（实测：步0 的图实际是步1 的状态，表现为「整体偏移 120px」）。正解：**等状态文件就绪再截图**。
