@@ -10,6 +10,17 @@ export default defineConfig({
   // ★G-22 柔性布局组件测试：启用 vue 插件（SFC 挂载测试；不影响既有非 SFC 测试）
   plugins: [vue()],
   test: {
+    // ★排除第三方源码树（spike/ 下为 DCP-1 选型 spike 下载的 Yoga/Taffy 源码与构建产物）：
+    //   它们自带官方测试（如 yoga 的 javascript/tests/*.test.ts），被 vitest 扫到会以本仓配置跑、必然失败。
+    //   这是**选型 spike 的副产物**，不属于本仓测试面。
+    //   （Rust 侧的 conformance 由 `cargo test` 负责，不在此列）
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/spike/tools/**',
+      '**/spike/target/**',
+    ],
     // ★并行 worker 上限：hmr-dev-server 等真实 fs.watch（macOS FSEvents）测试在满核并行 + 系统负载下事件延迟可超 15s
     //   （实测 8 核满载 4 连败 / 4 worker 全绿）→ 保守限流，单测稳定性优先于并行吞吐
     poolOptions: {
