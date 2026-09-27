@@ -74,12 +74,35 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 
 ---
 
-> ★**DCP-2 决策记录（2026-09-29，用户确认）**：Grid **开放为 L2**。
-> · App 侧：Taffy 0.14 原生支持（实测 3×2 Grid 正确；Yoga 的 `YGDisplay` 枚举无 Grid）
-> · **前提（不可跳过）**：本 Profile 主张「三端交集优先」，故 Web 与 Skyline 的 Grid 语义
->   **必须补齐实测**后才能把 grid 从「🟡 待定」正式改为「✅ L2」——
->   现有 Skyline 实测已记「grid 属性被接受，但是否真按 grid 布局未验证（可能是 block 退化）」（§2 表）。
-> · 在 Skyline 视觉验收完成前：**App 端可用 Grid，但跨端一致性不受保证**，编译期应给出提示而非报错。
+> ### ★★DCP-2 决策记录（2026-09-29）：Grid **不进入 Profile 的无条件支持集**
+>
+> **用户已批准「开放为 L2」，但批准时附带的前置条件（补 Skyline 实测）实测结果为「不支持」**——
+> 按本 Profile 的**第一原则（三端交集优先）**，结论必须相应收紧。这是「证据推翻假设」的正常结果。
+>
+> | 端 | Grid 实测 | 判定 |
+> |---|---|---|
+> | **App**（Taffy 0.14） | 3×2 Grid 布局正确（cell[3].y=30） | ✅ 真支持 |
+> | **Web**（浏览器） | 原生 Grid，标准实现 | ✅ 真支持 |
+> | **Skyline**（微信容器） | ★**退化为 block**：子项 1/2 的 x **都是 52**（未分列）、子项纵向堆叠 | ❌ **不支持** |
+>
+> **★Skyline 实测证据（2026-09-29，模拟器 · 基础库 3.17.3）**：
+> ```
+> 容器：<view style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
+>   g-item1 → x=52, y=884      ← 第 1 列
+>   g-item2 → x=52             ← ★应到第 2 列（x≈127），实测仍在 52 → 未分列
+>   g-item3 → y=916            ← 纵向堆叠（相邻项 16px 高 + 堆叠）
+> flex 对照组（同页/同测量通道）→ x=52, 72, 92  ✅ 正确横排（证明测量通道有效，非探针故障）
+> ```
+> **内置对照组是这条结论可信的关键**：同一页面、同一 `createSelectorQuery` 通道下
+> flex 正确而 grid 不正确 → 排除「探针坏了」的可能。
+>
+> **据此的 Profile 口径（v1）**：
+> 1. Grid **不列入 Profile 的无条件支持集**（否则「Web 跑通 ≠ App/Skyline 一致」，违反 §7.3）
+> 2. 但**允许有条件的可用性**：编译期检测到 `display:grid` 时——
+>    · Web / App：正常生成
+>    · **Skyline：必须发出可观察的降级警告**（复用既有 `capabilityWarnOnce` 机制，**禁止静默降级**）
+> 3. Lint 给出**嵌套 flex 改写建议**（W-CSS-105 恢复为警告级，措辞改为「跨端不一致」而非「未开放」）
+> 4. 若未来 Skyline 支持 Grid，本条目可解禁——探针页 `css-profile-probe.vue` 已含判据，可复跑验证
 
 ---
 
@@ -90,7 +113,7 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 | 样式实现 | 浏览器原生 CSS | 微信容器 CSS（Skyline 渲染器） | **自研渲染引擎（UCSS Profile）** |
 | 选择器能力 | 完整 CSS | **id 选择器可达页面级原生节点**（实测）；类选择器不达 | 编译期折叠，运行时仅查表 |
 | 层叠/继承 | 浏览器运行时计算 | 容器实现 | **编译期计算，运行时零成本** |
-| 布局 | 完整（block/inline/grid/flex） | flex 可用；**grid 属性被接受但未验证布局语义** | flex（M3+ 评估 grid） |
+| 布局 | 完整（block/inline/grid/flex） | flex 可用；★**grid 实测退化为 block**（2026-09-29） | flex + **grid**（Taffy 原生） |
 | 单位 | px/em/rem/%/vw/vh/… | **px / rpx / % / vw / vh / em / rem 全部可用且精确**（实测，见下表） | 编译期折叠为逻辑像素或比例系数 |
 
 ### ★Skyline 端实测（2026-09-29，基础库 3.17.3，iPhone 12/13 模拟器）
@@ -186,7 +209,7 @@ Web 端是**零转换直跑标准 SPA**，用的就是浏览器原生 CSS。因�
 | gap / row-gap / column-gap | — | ✅ |
 | position: relative / absolute | 需 containing block 判定 | 🟡 M3 |
 | overflow: hidden / scroll | — | 🟡 M3 |
-| **grid** | Taffy 0.14 已原生支持（Yoga 无） | 🟡 **DCP-2 已决：开放为 L2**（★待补 Skyline 视觉验收） |
+| **grid** | App/Web 真支持（Taffy/浏览器）；★**Skyline 实测退化为 block** | ⚠️ **有条件可用**（非 Profile 无条件集）：Skyline 必须发降级警告 |
 | text-overflow / max-lines 截断 | 依赖平台文本度量 | 🟡 M3 |
 
 ### L3 · 高成本（默认关闭，编译期标记，按需启用）
@@ -290,7 +313,7 @@ Step 7  输出 ComputedStyle + PaintHint
 ```ts
 interface ComputedStyle {
   // 布局
-  display: 'flex' | 'grid' | 'none'  // L2（grid 依 DCP-2 定案开放；Skyline 侧待视觉验收）
+  display: 'flex' | 'grid' | 'none'  // grid 为「有条件可用」：Skyline 端退化为 block（须警告）
   flexDirection: 'row' | 'column' | 'row-reverse' | 'column-reverse'
   justifyContent: JustifyValue
   alignItems: AlignValue
@@ -423,7 +446,7 @@ interface PaintHint {
 | W-CSS-102 | 使用了 `!important` | 建议改用 @layer |
 | W-CSS-103 | 使用了 ID 选择器 | 特异性过高，后续覆盖困难 |
 | W-CSS-104 | 单节点动态属性数接近阈值 | — |
-| ~~W-CSS-105~~ | ~~使用了 grid（若 Profile 未开放）~~ | **已废止**（DCP-2 定案开放 Grid 为 L2）；Skyline 视觉验收完成前改为**提示级**：跨端一致性暂不受保证 |
+| W-CSS-105 | 使用了 grid | **跨端不一致**：Web/App 真支持，**Skyline 实测退化为 block**（子项纵向堆叠）。提供嵌套 flex 改写建议；Skyline 端必须发可观察降级警告 |
 
 ### 7.3 lint 与 Web 端的关系（关键）
 

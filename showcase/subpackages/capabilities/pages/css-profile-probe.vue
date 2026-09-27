@@ -27,6 +27,12 @@ import ApiTable from '../../../components/api-table/index.vue'
 import { PText, PView, PButton } from '@proteus-vue/components'
 
 // 探针项：id + 特性名 + 是否用「水平位移」判定（transform / relative 用位移，其余用宽高）
+//
+// ★方法论（2026-09-29 由 DCP-2 实测教训固化）：**「属性被接受」≠「语义生效」**。
+//   c-grid 原先只测容器几何（150×40）——但容器有显式宽高时，「真 grid」与「block 退化」
+//   几何**完全相同**，该用例等于恒真。故凡「可能被静默忽略」的特性，必须测**能区分语义的观测量**：
+//   · grid → 子项是否真分列/换行（而非容器宽高）
+//   · 每项语义判定都必须配**同页对照组**（如 flex），以排除「探针本身坏了」
 const CASES = [
   { id: 'c-basic', feature: 'width / height / background-color', shifted: false },
   { id: 'c-flex', feature: 'display: flex', shifted: false },
@@ -51,8 +57,16 @@ const CASES = [
   { id: 'c-rem', feature: 'width: 5rem', shifted: false },
   { id: 'c-fixed', feature: 'position: fixed', shifted: false },
   { id: 'c-sticky', feature: 'position: sticky', shifted: false },
-  { id: 'c-grid', feature: 'display: grid', shifted: false },
+  { id: 'c-grid', feature: 'display: grid（容器几何）', shifted: false },
   { id: 'c-inline', feature: 'display: inline-block', shifted: false },
+  // ★语义判定组（DCP-2 用）：单看容器几何判不出 grid 是否真生效（容器有显式宽高时，
+  //   「真 grid 布局」与「block 退化」几何相同）→ 必须比对**子项位置**。
+  { id: 'g-item1', feature: 'grid 子项 1 位置', shifted: true },
+  { id: 'g-item2', feature: 'grid 子项 2 位置（应第 2 列）', shifted: true },
+  { id: 'g-item3', feature: 'grid 子项 3 位置（应第 2 行）', shifted: true },
+  { id: 'f-item1', feature: 'flex 对照·子项 1', shifted: true },
+  { id: 'f-item2', feature: 'flex 对照·子项 2', shifted: true },
+  { id: 'f-item3', feature: 'flex 对照·子项 3', shifted: true },
 ]
 
 // ★模板里不得出现函数调用样式（WXML S38）→ 把代码片段/表格提到 script 常量
@@ -92,8 +106,49 @@ async function runProbe() {
     results.push({ feature: c.feature, actual: w + 'x' + h + ' @x=' + x, verdict: ok ? '生效' : '未生效' })
   })
   rows.value = results
+
+  // ★DCP-2 语义判定：grid 是否**真按两列布局**（而非 block 退化）
+  //   判据（来自浏览器真值——Web 端 `grid-template-columns:1fr 1fr` 且 3 个 20px 子项）：
+  //     · grid 子项 2 的 x ≈ 子项 1 的 x + 75（列宽 = 150/2），且与子项 1 **同行**
+  //     · grid 子项 3 换到第 2 行（y > 第 1 行）
+  //     · flex 对照组三个子项应**依次横排**（x 递增 20）——这是 Skyline 确认支持的基线
+  const byId = {}
+  CASES.forEach((c, i) => { byId[c.id] = rects[i] })
+  const gi1 = byId['g-item1'], gi2 = byId['g-item2'], gi3 = byId['g-item3']
+  const fi1 = byId['f-item1'], fi2 = byId['f-item2'], fi3 = byId['f-item3']
+
+  let gridVerdict = '无法判定（子项几何未取到）'
+  if (gi1 && gi2 && gi3) {
+    const gx1 = gi1.left, gx2 = gi2.left, gy1 = gi1.top, gy3 = gi3.top
+    const twoColumns = gx2 - gx1 > 40 && Math.abs(gi1.top - gi2.top) < 2
+    const wrapped = gy3 - gy1 > 10
+    gridVerdict = twoColumns && wrapped
+      ? '✅ 真 grid（子项 2 在第 2 列同行 · 子项 3 换行）'
+      : twoColumns
+        ? '⚠️ 部分（分列生效但换行存疑）'
+        : '❌ 未按 grid 布局（退化为 block——子项 2 未到第 2 列）'
+    rows.value = results.concat([{
+      feature: '★grid 语义判定（DCP-2 判据）',
+      actual: `g1.x=${Math.round(gx1)} g2.x=${Math.round(gx2)} g1.y=${Math.round(gy1)} g3.y=${Math.round(gy3)}`,
+      verdict: gridVerdict,
+    }])
+  }
+  if (fi1 && fi2 && fi3) {
+    const flexOk = fi2.left - fi1.left > 10 && fi3.left - fi2.left > 10 && Math.abs(fi1.top - fi2.top) < 2
+    rows.value = rows.value.concat([{
+      feature: 'flex 对照组（基线）',
+      actual: `x=${Math.round(fi1.left)},${Math.round(fi2.left)},${Math.round(fi3.left)}`,
+      verdict: flexOk ? '✅ 横排（基线确认）' : '❌ 异常（探针环境有问题）',
+    }])
+  }
+
+  // ★计数口径修正：分子与分母必须同一集合（此前分子遍历 rows.value（含追加行）、
+  //   分母用 results.length → 出现「32/31」这种自相矛盾的读数）
   const pass = results.filter((r) => r.verdict === '生效').length
-  out.value = '探针完成：' + pass + '/' + results.length + ' 项几何判据通过'
+  const semantic = rows.value.length - results.length
+  out.value = '探针完成：几何 ' + pass + '/' + results.length + ' 项通过'
+    + (semantic > 0 ? ' · 语义判定 ' + semantic + ' 项（见下表 ★ 行）' : '')
+    + '；grid 语义：' + gridVerdict
   // 写入 driver.probes() 的读取通道（见 packages/test-core/src/driver/mp.ts）
   const g = globalThis
   g.__PROTEUS_PROBES__ = g.__PROTEUS_PROBES__ || {}
@@ -133,8 +188,18 @@ async function runProbe() {
         <view id="c-rem" style="width:5rem;height:20px" />
         <view id="c-fixed" style="position:fixed;width:80px;height:20px" />
         <view id="c-sticky" style="position:sticky;top:0;width:100px;height:20px" />
-        <view id="c-grid" style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px" />
+        <view id="c-grid" style="display:grid;grid-template-columns:1fr 1fr;width:150px;height:40px">
+          <view id="g-item1" style="width:20px;height:16px;background-color:#6f4ae8" />
+          <view id="g-item2" style="width:20px;height:16px;background-color:#e84a6f" />
+          <view id="g-item3" style="width:20px;height:16px;background-color:#4ae89c" />
+        </view>
         <view id="c-inline" style="display:inline-block;width:80px;height:20px" />
+        <!-- ★flex 对照组：同样三个 20px 子项放进 display:flex 容器 -->
+        <view id="c-flexctrl" style="display:flex;width:150px;height:40px">
+          <view id="f-item1" style="width:20px;height:16px" />
+          <view id="f-item2" style="width:20px;height:16px" />
+          <view id="f-item3" style="width:20px;height:16px" />
+        </view>
       </template>
     </demo-block>
     <demo-block index="02" title="测量结果" :has-output="false" desc="逐条给出几何实测值与生效判定" :code="codeRows">
