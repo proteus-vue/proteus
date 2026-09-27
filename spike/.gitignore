@@ -1,0 +1,11 @@
+# ★DCP-1 spike 的构建产物（勿入库）
+#   · target/  cargo 构建缓存（本地约 40M；CARGO_TARGET_DIR 亦指向此处）
+#   · tools/   本地安装的 cmake/ninja（pip --target）+ Yoga 源码与构建（约 163M）
+#   复跑方式见 docs/proteus-performance-plan/11-dcp1-layout-engine.md §7
+target/
+tools/
+
+# 编译产物（Yoga 侧探针二进制——用 §7 的命令重新生成）
+*.o
+yoga_probe
+yoga_perf
