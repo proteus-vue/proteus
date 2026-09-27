@@ -1,43 +1,43 @@
 {
-  "create_total_ms" : 44,
+  "create_total_ms" : 12.69,
   "elements" : 4051,
   "engine" : "proteus-layout-core 0.1.0 · engine=taffy-0.14 · taffy 锁定 0.14（0.13 有 measure 指数退化）",
   "flattened" : {
-    "build_ms" : 0.84999999999999998,
+    "build_ms" : 0.88,
     "delta_mb" : 3.8999999999999999,
-    "draw_ms" : 22.309999999999999,
-    "footprint_mb" : 8.6999999999999993,
+    "draw_ms" : 22.48,
+    "footprint_mb" : 8.5,
     "layers" : 50
   },
   "native_uikit" : {
-    "build_ms" : 110.20999999999999,
-    "delta_mb" : 16.399999999999999,
-    "footprint_mb" : 21.199999999999999,
-    "layout_ms" : 8.5,
+    "build_ms" : 110.23,
+    "delta_mb" : 16.600000000000001,
+    "footprint_mb" : 21.300000000000001,
+    "layout_ms" : 8.5399999999999991,
     "views" : 4050
   },
   "note" : "★几何全部来自 Rust 核心；三种形态同进程顺序测量（base 为建场景前的 footprint）；request JSON 通道含 serde 解析成本（生产应为二进制扁平化，见 M0 计划）",
   "ok" : true,
-  "profile_blob" : "{\"blob_bytes\":105291,\"build_tree_ms\":0.59,\"decode_blob_ms\":0.49,\"decode_json_ms\":1.04,\"encode_blob_ms\":0.18,\"json_bytes\":280999,\"layout_ms\":42.54,\"measured_with\":\"blob\",\"nodes\":4051,\"ok\":true}",
-  "profile_fixed_size" : "{\"blob_bytes\":113291,\"build_tree_ms\":0.55,\"decode_blob_ms\":0.36,\"decode_json_ms\":0.93,\"encode_blob_ms\":0.17,\"json_bytes\":317543,\"layout_ms\":11.33,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
-  "profile_json" : "{\"blob_bytes\":105291,\"build_tree_ms\":2.01,\"decode_blob_ms\":1.52,\"decode_json_ms\":3.18,\"encode_blob_ms\":0.68,\"json_bytes\":280999,\"layout_ms\":69.15,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
-  "read_rects_ms" : 5.0300000000000002,
+  "profile_blob" : "{\"blob_bytes\":105291,\"build_tree_ms\":1.3,\"decode_blob_ms\":1.14,\"decode_json_ms\":1.92,\"encode_blob_ms\":0.43,\"json_bytes\":280999,\"layout_ms\":17.45,\"measured_with\":\"blob\",\"nodes\":4051,\"ok\":true}",
+  "profile_fixed_size" : "{\"blob_bytes\":113291,\"build_tree_ms\":0.87,\"decode_blob_ms\":0.5,\"decode_json_ms\":1.38,\"encode_blob_ms\":0.26,\"json_bytes\":317543,\"layout_ms\":4.82,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
+  "profile_json" : "{\"blob_bytes\":105291,\"build_tree_ms\":1.31,\"decode_blob_ms\":1.46,\"decode_json_ms\":3.1,\"encode_blob_ms\":0.65,\"json_bytes\":280999,\"layout_ms\":16.95,\"measured_with\":\"json\",\"nodes\":4051,\"ok\":true}",
+  "read_rects_ms" : 5,
   "rect_count" : 4051,
   "request_json_bytes" : 280999,
-  "rust_layout_ms" : 44,
+  "rust_layout_ms" : 12.69,
   "rust_layout_note" : "含 serde 解析 349KB JSON + 4051 节点的内容测量（item 不设宽高）",
   "unflattened" : {
-    "build_ms" : 11.94,
+    "build_ms" : 12.19,
     "delta_mb" : 6,
-    "draw_ms" : 34.890000000000001,
-    "footprint_mb" : 10.800000000000001,
+    "draw_ms" : 35.729999999999997,
+    "footprint_mb" : 10.699999999999999,
     "layers" : 4051
   },
   "verdict" : {
     "flat_pass" : true,
-    "flat_vs_native_ratio" : 0.23599999999999999,
+    "flat_vs_native_ratio" : 0.23300000000000001,
     "target" : "≤ 1.15（方案 §9.4）",
     "unflat_pass" : true,
-    "unflat_vs_native_ratio" : 0.36299999999999999
+    "unflat_vs_native_ratio" : 0.35999999999999999
   }
 }

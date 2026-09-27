@@ -30,8 +30,12 @@ use crate::style::{Display, FlexDirection, LStyle, Overflow, Position, Rect, Siz
 pub struct TaffyEngine {
     /// 文本度量（平台注入；`None` = 全部文本按零尺寸）
     measurer: Option<Box<dyn TextMeasurer>>,
-    /// ★度量记忆化：`node_id → (max_width 位表示 → Size)`
-    measure_cache: HashMap<u32, HashMap<u32, Size>>,
+    /// ★度量记忆化：**扁平键** `(node_id << 32) | max_width.to_bits()` → Size
+    ///
+    /// 为什么不用嵌套 HashMap（本仓实测发现的热点）：
+    ///   4051 节点内容撑开场景下 taffy 产生 **22000 次缓存命中**——
+    ///   每次命中在嵌套结构里要走「两次哈希 + 两轮探测」；扁平化后降为**一次**。
+    measure_cache: HashMap<u64, Size>,
     /// 本轮 measure 调用**总次数**（未命中缓存的次数）——D3 判据的可观测读数
     measure_calls: usize,
     /// 缓存命中次数（增量效果的直接读数）
@@ -75,7 +79,7 @@ impl TaffyEngine {
 
     /// 当前度量缓存条目数
     pub fn measure_cache_entries(&self) -> usize {
-        self.measure_cache.values().map(|m| m.len()).sum()
+        self.measure_cache.len()
     }
 
     /// 清空度量缓存（字体切换等全局失效场景）
@@ -216,6 +220,11 @@ impl TaffyEngine {
 
         let avail = taffy::Size { width: to_taffy_space(constraint.width), height: to_taffy_space(constraint.height) };
         let nodes: &[LNode] = &tree.nodes;
+        // ★id → 节点索引（供回调 O(1) 直取；见回调内说明）
+        let mut id_index: HashMap<u32, u32> = HashMap::with_capacity(nodes.len());
+        for (i, n) in nodes.iter().enumerate() {
+            id_index.insert(n.id, i as u32);
+        }
 
         for &root in roots {
             let taffy_root = taffy_ids[root as usize];
@@ -242,19 +251,21 @@ impl TaffyEngine {
                                 let Some(nid) = node_id_v else {
                                     return taffy::Size { width: 0.0, height: 0.0 };
                                 };
-                                let Some(node) = nodes.iter().find(|n| n.id == nid) else {
+                                // ★★用 **id → 索引**映射直取（O(1)），而非 `nodes.iter().find()`（O(n)）
+                                //   本仓实测：4051 节点内容撑开场景有 22000 次度量回调 →
+                                //   线性扫描退化为 O(n × 回调数)，是最大热点
+                                let Some(&nidx) = id_index.get(&nid) else {
                                     return taffy::Size { width: 0.0, height: 0.0 };
                                 };
+                                let node = &nodes[nidx as usize];
                                 let Some(req) = &node.text else {
                                     return taffy::Size { width: 0.0, height: 0.0 };
                                 };
 
                                 // 度量可用的最大宽：已知宽优先，其次父宽，否则不限
                                 let max_w = known.width.or(avail.width.into_option()).unwrap_or(f32::INFINITY);
-                                let key = if max_w.is_finite() { max_w.to_bits() } else { f32::INFINITY.to_bits() };
-
-                                let per_node = measure_cache.entry(nid).or_default();
-                                if let Some(s) = per_node.get(&key) {
+                                let key = measure_key(nid, max_w);
+                                if let Some(s) = measure_cache.get(&key) {
                                     *measure_hits += 1;
                                     return taffy::Size { width: s.width, height: s.height };
                                 }
@@ -263,7 +274,7 @@ impl TaffyEngine {
                                     None => Size::default(),
                                 };
                                 *measure_calls += 1;
-                                per_node.insert(key, measured);
+                                measure_cache.insert(key, measured);
                                 taffy::Size { width: measured.width, height: measured.height }
                             },
                         )
@@ -356,12 +367,8 @@ impl LayoutEngine for TaffyEngine {
         if let Some(m) = sub_engine.measurer.take() {
             self.measurer = Some(m);
         }
-        for (node_id, per) in sub_engine.measure_cache {
-            let dst = self.measure_cache.entry(node_id).or_default();
-            for (k, v) in per {
-                dst.insert(k, v);
-            }
-        }
+        // 扁平缓存直接 extend（子树的度量成果不丢）
+        self.measure_cache.extend(sub_engine.measure_cache);
 
         LayoutOutput { rects, measure_calls: out.measure_calls, measure_hits: out.measure_hits, relayout_count: count }
     }
@@ -388,6 +395,16 @@ impl TaffyEngine {
         }
         boundary.unwrap_or(cur)
     }
+}
+
+/// 度量缓存键：`(node_id << 32) | max_width.to_bits()`
+///
+/// ★64 位组合键的两个约束（均满足，故安全）：node_id 是 u32（左移 32 不溢出 u64）；
+///   f32 的位表示是 u32（放入低 32 位不丢信息）。
+#[inline]
+fn measure_key(node_id: u32, max_w: f32) -> u64 {
+    let w = if max_w.is_finite() { max_w.to_bits() } else { f32::INFINITY.to_bits() };
+    ((node_id as u64) << 32) | (w as u64)
 }
 
 /// 前序索引序列（与 `copy_subtree` 的产出顺序**必须一致**——两者都是「自身 → 子级依次」）
