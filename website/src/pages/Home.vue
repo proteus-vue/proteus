@@ -189,6 +189,8 @@ const deviceChips = computed(() =>
     key: k,
     ic: DEVICE_ICONS[k],
     label: locale.value === 'en' ? FORM_PROFILES[k].label.en : FORM_PROFILES[k].label.zh,
+    // 副行 = 该形态的布局拓扑（代码名，语言中立）——墙面由此「每格都有信息」，而非一排空标签
+    topology: FORM_PROFILES[k].topology,
   })),
 )
 
@@ -427,20 +429,29 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
       </p-grid>
     </p-view>
 
-    <!-- 4.5 多端同屏前置（2026-09-26 P0-2：全站最强演示资产上首页——对标 Flutter 首页的多设备视觉） -->
-    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(20, 40)'" data-reveal class="sec">
-      <router-link to="/multi-device" class="md-band" v-p-hover>
-        <p-view class="md-band-main">
-          <span class="sec-eyebrow">{{ t('home.mdEyebrow') }}</span>
-          <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="md-band-title">{{ t('home.mdTitle') }}</p-heading>
-          <p-text class="md-band-sub">{{ t('home.mdSub') }}</p-text>
-          <span class="md-band-cta">{{ t('home.mdCta') }} →</span>
-        </p-view>
-        <p-view class="md-band-devices" aria-hidden="true">
-          <span v-for="d in deviceChips" :key="d.key" class="md-chip">
-            <DemoIcon class="md-chip-ic" :name="d.ic" />{{ d.label }}
+    <!-- 4.5 多端同屏（★2026-09-29 用户实测「与下面板块风格不一致」→ 重构为上下布局）：
+         ① 结构对齐相邻区块：`sec-head`（居中 eyebrow/标题/副文）在**上**、内容在**下**——
+            此前是左文右签的独立横幅（自带渐变/圆角/hover），与上下「居中标题 + 卡片网格」的语言不同；
+         ② 设备从「一排小签」升为**设备墙**：8 格等宽瓦片（图标徽章 + 形态名 + 拓扑代码名），
+            4×2 排布——既承载形态数量（八种），也让「形态决定拓扑」这句主张在墙面上可读；
+         ③ 整面墙仍是**单一可点目标**（进入演示），瓦片为装饰层（aria-hidden）——一个链接、一个落点。 -->
+    <p-view v-p-fluid="'padding-top(40, 88) padding-bottom(40, 88)'" data-reveal class="sec md">
+      <p-view class="sec-head">
+        <span class="sec-eyebrow">{{ t('home.mdEyebrow') }}</span>
+        <p-heading :level="2" v-p-fluid="'font-size(22, 32)'" class="sec-title">{{ t('home.mdTitle') }}</p-heading>
+        <p-text class="sec-sub">{{ t('home.mdSub') }}</p-text>
+      </p-view>
+      <router-link to="/multi-device" class="md-wall" v-p-hover>
+        <p-view class="md-wall-grid" aria-hidden="true">
+          <span v-for="d in deviceChips" :key="d.key" class="md-tile">
+            <span class="md-tile-ic"><DemoIcon :name="d.ic" /></span>
+            <span class="md-tile-txt">
+              <span class="md-tile-nm">{{ d.label }}</span>
+              <span class="md-tile-topo">{{ d.topology }}</span>
+            </span>
           </span>
         </p-view>
+        <span class="md-wall-cta">{{ t('home.mdCta') }} →</span>
       </router-link>
     </p-view>
 
@@ -1017,57 +1028,80 @@ const compareRows = computed(() => (enOn() ? COMPARE_EN : COMPARE_MATRIX))
 .no-motion .card, .no-motion .stat { opacity: 1; transform: none; transition: none; }
 
 /* ── 多端同屏前置横幅（2026-09-26 P0-2）：整卡可点 → /multi-device ── */
-.md-band {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 30px 34px;
+/* ---- 4.5 多端同屏设备墙（上下布局：sec-head + 4×2 瓦片；与相邻区块同一套 sec 语言） ---- */
+.md-wall {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  padding: 22px 22px 18px;
+  /* 品牌辉光收敛到顶部中央（此前在右上角——与居中标题的轴线不对齐） */
   background:
-    radial-gradient(520px 220px at 92% 10%, rgba(124, 92, 255, 0.14), transparent 70%),
+    radial-gradient(680px 220px at 50% -20%, rgba(124, 92, 255, 0.14), transparent 72%),
     var(--panel);
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   text-decoration: none;
   transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
-.md-band:hover {
+.md-wall:hover {
   border-color: rgba(124, 92, 255, 0.55);
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.36);
 }
-.md-band-main { flex: 1; min-width: 0; display: block; }
-.md-band-title { color: var(--ink); margin: 10px 0 8px; }
-.md-band-sub { color: var(--muted); font-size: 13.5px; line-height: 1.7; display: block; max-width: 560px; }
-.md-band-cta {
-  display: inline-block;
-  margin-top: 14px;
+/* ★特异性（2026-09-29 实测）：`p-view` 组件自带 `.p-view{display:flex}`（scoped 后同为 0,2,0），
+   源序在页面样式之后 → 单元件类选择器压不掉它（实测 display 仍为 flex、8 格塌成单列）。
+   按本仓既有做法（同 `.channels .p-grid`）用**后代选择器**提权到 0,3,0。 */
+.md-wall .md-wall-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.md-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--panel2);
+  border: 1px solid var(--line-soft);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.md-wall:hover .md-tile { border-color: rgba(124, 92, 255, 0.3); background: rgba(124, 92, 255, 0.06); }
+.md-tile-ic {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  border: 1px solid rgba(124, 92, 255, 0.25);
+  font-size: 16px;
+}
+.md-tile-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.md-tile-nm {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 副行 = 拓扑代码名（语言中立）：等宽小字，弱化但可读——「形态决定拓扑」的视觉证据 */
+.md-tile-topo { color: var(--dim); font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2px; }
+.md-wall-cta {
+  display: block;
+  width: fit-content;
+  margin: 16px auto 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--brand-ink);
 }
-.md-band-devices {
-  display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 8px;
-  flex-shrink: 0;
+/* ★容器查询（零 @media）：墙自身是容器——嵌在窄容器（分栏/嵌入）里同样成立 */
+.md-wall { container-type: inline-size; }
+@container (max-width: 720px) {
+  .md-wall .md-wall-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.md-chip-ic { font-size: 13px; color: var(--brand-ink); }
-.md-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--brand-soft);
-  border: 1px solid rgba(124, 92, 255, 0.3);
-  border-radius: 999px;
-  padding: 7px 13px;
-  white-space: nowrap;
-}
-/* ★2026-09-26 D-2：原 @media 视口断点 → @container（横幅自身是容器——嵌在任意宽度容器里都成立） */
-@container (max-width: 900px) {
-  .md-band { flex-direction: column; align-items: flex-start; gap: 18px; }
-  .md-band-devices { grid-template-columns: repeat(3, auto); }
+@container (max-width: 380px) {
+  .md-wall .md-wall-grid { grid-template-columns: minmax(0, 1fr); }
+  .md-tile { flex-direction: column; gap: 7px; text-align: center; }
 }
 </style>
