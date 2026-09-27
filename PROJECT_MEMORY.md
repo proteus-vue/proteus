@@ -104,6 +104,43 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★CSS Profile P1 完成：Skyline 支持矩阵实测（2026-09-29，提交 `73a83e86`）
+
+**触发**：用户提供 `docs/Proteus_CSS_Profile规格.md`（CSS 受支持子集规格：L0–L5 分级 +
+编译期折叠算法 + 动态 class 属性维度分解 + lint 规则）→ 按其 §9 实施顺序做 **P1 前置项**
+（文档标注「必须先做，否则 Profile 无基线」）。
+
+**★实测结果（25/25 通过，基础库 3.17.3 · iPhone 12/13 模拟器）**
+| 特性 | 实测 | 判定 |
+|---|---|---|
+| `width:50vw` | **195px**（390×50%，精确） | ✅ |
+| `height:10vh` | **84px**（844×10%，精确） | ✅ |
+| `width:100rpx` | **52px**（390/750×100，精确） | ✅ |
+| em / rem / % | 50 / 73 / 143 px | ✅ 精确 |
+| `transform:translateX(30px)` | **@x=82**（基线 52） | ✅ 位移精确 |
+| `position:relative/absolute` | @x=82 / @x=62 | ✅ |
+| flex·gap·radius·border·opacity·shadow·gradient | 几何正常 | ✅ |
+| `position:fixed` | **@x=0**（异常，脱离常规流） | ⚠️ 需谨慎 |
+| sticky / grid / z-index | 属性被接受 | ⚠️ **布局语义未验证**（需视觉验收） |
+
+**★修正文档一处假设**：§2 原写「vw/vh 通常被忽略或解析为 0」——**实测不成立**（全部可用且精确），
+该表述已删除。另修正两处过时数字：69 条规则 → **111 条**；Vue 3.4 → **3.5**。
+
+**探针页**：`showcase/subpackages/capabilities/pages/css-profile-probe.vue`（可复跑）。
+
+**★四个坑（都记进探针页注释）**
+| # | 坑 | 解 |
+|---|---|---|
+| ① | 能力 Hook `useElement` 在 MP 端**句柄可创建但测量无返回**（rows 恒空） | 改用原生 `wx.createSelectorQuery` |
+| ② | `automation_evaluate` 的 fn-source **必须裸函数**（IIFE 报错）——**driver 注释早有此纪律，我没先读** | 用裸函数 |
+| ③ | MP 编译管线**对复杂 TS 类型支持有限**（interface/泛型实参 → js 产物语法错） | 朴素写法 |
+| ④ | 运行时掉线（`cant find runtimeid` / `timeout waiting for automator`） | `open_project_window` + `simulator_refresh` + **有界轮询**（≤6 次） |
+
+★教训：**动手前先读仓库既有注释/文档**——坑②的答案就写在 `driver/wxide.ts` 的代码注释里，
+我花了三轮才「重新发现」它。这与「不重新发明」纪律同源。
+
+---
+
 ### ★★内存主因三层定位（2026-09-29，提交 `f2314117`/`1efe14f8`）——用户 Checklist 证实有效
 
 **触发**：用户问「CALayer 内存问题业内没方案吗？uni-app x 蒸汽模式好像也走这路线」+
