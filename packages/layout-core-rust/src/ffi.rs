@@ -15,7 +15,7 @@
 //   释放必须用 `proteus_layout_free_string`（不能直接 free——分配器可能不同）。
 use std::ffi::{c_char, CStr, CString};
 
-use crate::engine::{LayoutEngine, RootConstraint, TableTextMeasurer};
+use crate::engine::{AvailableSpace, LayoutEngine, RootConstraint, TableTextMeasurer};
 use crate::node::{LNode, LayoutTree};
 use crate::style::{Edges, FlexDirection, LStyle, Overflow, Position, Size};
 use crate::taffy_engine::TaffyEngine;
@@ -179,27 +179,6 @@ struct SizeDto {
     height: f32,
 }
 
-/// 布局响应：`节点id → 绝对矩形`
-#[derive(serde::Serialize)]
-struct LayoutResponse {
-    /// id → {x, y, width, height}（绝对坐标，相对根原点）
-    rects: std::collections::HashMap<u32, RectOut>,
-    /// 未命中缓存的度量次数（真实向平台要度量的次数）
-    measure_calls: usize,
-    /// 度量缓存命中次数
-    measure_hits: usize,
-    /// 参与布局的节点数
-    node_count: usize,
-}
-
-#[derive(serde::Serialize)]
-struct RectOut {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-}
-
 /// 把 DTO 转成引擎就绪的扁平树
 fn build_tree(req: &LayoutRequest) -> Result<(LayoutTree, Vec<u32>), String> {
     let mut tree = LayoutTree::new();
@@ -329,6 +308,27 @@ pub unsafe extern "C" fn proteus_layout_conformance(golden_json: *const c_char) 
     }
 }
 
+/// **长列表验收入口**（§9.3）：模拟 4000 行列表的滚动（含**回滚**）过程，
+/// 用 Rust 侧复用池 + 状态机跑一遍，返回「复用率 / 内存收敛读数」JSON。
+///
+/// ★为何在 Rust 侧跑：复用池是**平台无关逻辑**（方案 §1）——它决定「滚动时是否发生堆分配」，
+///   而该行为与平台无关、可用纯逻辑精确验证（比在平台侧数 layer 更直接）。
+///   平台侧只需按本模块给出的 `to_acquire` / `to_release` 执行动作。
+///
+/// # Safety
+/// 返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_recycle_bench(rows: u32, frames: u32) -> *mut c_char {
+    let result = std::panic::catch_unwind(|| -> Result<String, String> {
+        crate::recycle::run_recycle_bench(rows.max(1) as usize, frames.max(1) as usize)
+    });
+    match result {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /// **真机性能入口**：构建 `node_count` 个节点的列式列表并重复布局，返回耗时统计 JSON。
 ///
 /// # Safety
@@ -343,7 +343,63 @@ pub unsafe extern "C" fn proteus_layout_bench(node_count: u32, iterations: u32) 
     }
 }
 
+/// **通用布局入口**（宿主用）：传入请求 JSON（含 viewport / nodes / textMeasures），返回绝对矩形。
+///
+/// ★为什么必须有它（本仓实测暴露）：初版只有 `conformance` 与 `bench` 两个入口，
+///   而 conformance 内部**内联**了布局逻辑且使用 golden 的 viewport ——
+///   结果是 `LayoutRequest.viewport` 字段被构造却从未读取（编译器警告直接指出）。
+///   宿主若要跑**自己的**树（真实业务页面）就无处可去。
+///   现统一为本函数：conformance / 宿主调用 / 未来平台入口都走它。
+///
+/// # Safety
+/// `request_json` 须为有效 NUL 结尾 C 字符串；返回指针须用 `proteus_layout_free_string` 释放。
+#[no_mangle]
+pub unsafe extern "C" fn proteus_layout_run(request_json: *const c_char) -> *mut c_char {
+    let result = std::panic::catch_unwind(|| -> Result<String, String> {
+        if request_json.is_null() {
+            return Err("request_json 为空指针".into());
+        }
+        let raw = unsafe { CStr::from_ptr(request_json) }.to_str().map_err(|e| format!("入参非 UTF-8：{e}"))?;
+        let req: LayoutRequest = serde_json::from_str(raw).map_err(|e| format!("请求解析失败：{e}"))?;
+        let (_tree, abs) = layout_request(&req)?;
+        let mut rects = serde_json::Map::new();
+        for (i, r) in abs.iter().enumerate() {
+            if let Some(r) = r {
+                let id = req.nodes[i].id;
+                rects.insert(
+                    id.to_string(),
+                    serde_json::json!({"x": r.x, "y": r.y, "width": r.width, "height": r.height}),
+                );
+            }
+        }
+        Ok(serde_json::json!({"ok": true, "node_count": req.nodes.len(), "rects": rects}).to_string())
+    });
+    match result {
+        Ok(Ok(s)) => into_c_string(s),
+        Ok(Err(e)) => into_c_string(format!("{{\"ok\":false,\"error\":{}}}", json_str(&e))),
+        Err(_) => into_c_string("{\"ok\":false,\"error\":\"panic（已捕获）\"}".to_string()),
+    }
+}
+
 /* ────────────────────────── 实现（与 FFI 解耦，便于单测） ────────────────────────── */
+
+/// ★唯一的布局执行路径：`LayoutRequest` → （树, 绝对矩形）
+///
+/// 所有入口（conformance / 宿主 / 未来平台）都必须走这里——
+/// 保证「测试验证的路径」与「宿主使用的路径」是同一条。
+fn layout_request(req: &LayoutRequest) -> Result<(LayoutTree, Vec<Option<crate::style::Rect>>), String> {
+    let (mut tree, _) = build_tree(req)?;
+    let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(req)));
+    // ★viewport 在这里被真正使用（此前是构造了但没人读）
+    let constraint = match (req.viewport.width, req.viewport.height) {
+        (w, h) if w > 0.0 && h > 0.0 => RootConstraint::definite(w, h),
+        (w, _) if w > 0.0 => RootConstraint::loose_width(w),
+        _ => RootConstraint { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+    };
+    engine.layout(&mut tree, constraint);
+    let abs = tree.absolute_rects();
+    Ok((tree, abs))
+}
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -399,14 +455,9 @@ pub(crate) fn run_conformance(raw: &str) -> Result<String, String> {
 
     for case in &golden.cases {
         let req = LayoutRequest { viewport: ViewportDto { width: golden.viewport.width, height: golden.viewport.height }, nodes: case.nodes.clone(), text_measures: case.text_measures.clone() };
-        let (mut tree, _) = build_tree(&req)?;
-        let mut engine = TaffyEngine::new().with_measurer(Box::new(to_measurer(&req)));
-        engine.layout(
-            &mut tree,
-            RootConstraint::definite(golden.viewport.width, golden.viewport.height),
-        );
-        let abs = tree.absolute_rects();
-
+        // ★走**通用布局入口**（而不是内联重复一遍）——这样 conformance 与宿主调用共享同一条代码路径，
+        //   避免「测试通过但宿主路径不同」的隐患（本仓实测：初版内联时 viewport 字段被构造却从未读取）
+        let (tree, abs) = layout_request(&req)?;
         let hidden: Vec<u32> = case.nodes.iter().filter(|n| n.display.as_deref() == Some("none")).map(|n| n.id).collect();
         for (i, node) in tree.nodes.iter().enumerate() {
             if hidden.contains(&node.id) {

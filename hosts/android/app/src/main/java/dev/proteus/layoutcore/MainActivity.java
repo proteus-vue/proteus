@@ -200,6 +200,12 @@ public class MainActivity extends Activity {
             String nativeOnly = nativeOnlyRun();
             sb.append(nativeOnly).append('\n');
             writeReport("layout-native-only.json", nativeOnly);
+        } else if ("recycle".equals(testPath)) {
+            // ★§9.3 长列表验收：4000 行滚到底再回滚，看复用率与内存收敛
+            sb.append("【③ §9.3 长列表复用池（4000 行 / 滚动到底再回滚）】\n");
+            String rb = RustLayout.recycleBench(4000, 400);
+            sb.append(rb).append('\n');
+            writeReport("layout-recycle.json", rb);
         } else if ("proteus-noflatten".equals(testPath)) {
             sb.append("【③ Proteus 不拍平形态（每元素一个绘制对象）】\n");
             String nf = proteusNoFlattenRun();

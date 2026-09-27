@@ -2,8 +2,8 @@
   "ok": true,
   "path": "native",
   "elements": 4051,
-  "create_views_ms": 61,
-  "measure_layout_ms": 17,
+  "create_views_ms": 62,
+  "measure_layout_ms": 16,
   "total_ms": 78,
   "view_count": 4051
 }
