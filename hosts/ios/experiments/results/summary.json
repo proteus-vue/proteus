@@ -1,0 +1,76 @@
+{
+  "note": "4 次重跑（各自独立进程）的中位数——文档口径以本文件为准；experiments.json 是单次运行",
+  "runs": [
+    "experiments.json",
+    "run2.json",
+    "run3.json",
+    "run4.json"
+  ],
+  "exp1_total_median_ms": {
+    "A_uiview_autolayout": 651.3,
+    "B_uiview_manualframe": 465.7,
+    "C_calayer_manualframe": 272.2
+  },
+  "exp1_total_all_runs": {
+    "A_uiview_autolayout": [
+      600.8,
+      679.1,
+      884.8,
+      623.5
+    ],
+    "B_uiview_manualframe": [
+      467.7,
+      463.7,
+      781.9,
+      404.8
+    ],
+    "C_calayer_manualframe": [
+      273.0,
+      259.4,
+      271.5,
+      372.8
+    ]
+  },
+  "exp3_text_median_ms": {
+    "CATextLayer_1000": 168.3,
+    "UILabel_1000": 238.7
+  },
+  "exp4_layer_depth_median_ms": {
+    "depth_1_commit": 5.44,
+    "depth_10_commit": 4.25,
+    "depth_50_commit": 3.95,
+    "depth_100_commit": 3.81
+  },
+  "exp5_speedup_all_runs": [
+    39,
+    39,
+    49,
+    38
+  ],
+  "exp2_per_item_us": {
+    "items_80": {
+      "autoLayout": 396.1,
+      "manualFrame": 244.1
+    },
+    "items_400": {
+      "autoLayout": 384.4,
+      "manualFrame": 247.5
+    },
+    "items_800": {
+      "autoLayout": 526.5,
+      "manualFrame": 219.2
+    },
+    "items_1600": {
+      "autoLayout": 357.5,
+      "manualFrame": 259.4
+    }
+  },
+  "meta": {
+    "definition": "50x40 items = 2000 views + 2000 texts + 50 rows",
+    "device": "iOS Simulator",
+    "elapsedSec": 19.87,
+    "progress": "ALL_DONE",
+    "scale": 3,
+    "screen": "402x874"
+  }
+}
