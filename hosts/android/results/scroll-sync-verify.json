@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "failures": [],
+  "steps": [
+    {
+      "step": 0,
+      "scrollY": 0,
+      "translationY": 0,
+      "visible": true,
+      "visible_expected": true,
+      "pixel": "blue-ok",
+      "selfdraw_rows_ok": 23,
+      "selfdraw_rows_checked": 23
+    },
+    {
+      "step": 1,
+      "scrollY": 120,
+      "translationY": -120,
+      "visible": true,
+      "visible_expected": true,
+      "pixel": "blue-ok",
+      "selfdraw_rows_ok": 23,
+      "selfdraw_rows_checked": 23
+    },
+    {
+      "step": 2,
+      "scrollY": 300,
+      "translationY": -300,
+      "visible": true,
+      "visible_expected": true,
+      "pixel": "blue-ok",
+      "selfdraw_rows_ok": 21,
+      "selfdraw_rows_checked": 21
+    },
+    {
+      "step": 3,
+      "scrollY": 700,
+      "translationY": -700,
+      "visible": false,
+      "visible_expected": false,
+      "pixel": "no-blue-ok",
+      "selfdraw_rows_ok": 15,
+      "selfdraw_rows_checked": 15
+    }
+  ]
+}

@@ -98,6 +98,87 @@ public class ProteusHostView extends ViewGroup {
         return nativeHosts.size();
     }
 
+    /* ══════════ ★★滚动容器 + native-host 滚动同步（方案坑位 #4「层级与滚动同步需专门设计」）══════════ */
+
+    /**
+     * 滚动状态（content offset）。
+     *
+     * 【架构分工】（本仓的设计原则）
+     *   · **滚动量**（用户手势产生）→ 运行时状态，归**平台侧**（这里）
+     *   · **滚动范围**（内容总高 − 视口高）→ 布局约束，归 **Rust 侧**（由几何算出）
+     *   · **可见区行号** → 由滚动量 + 布局算出，归 **Rust 侧**（复用池已实现，见 `ListWindow`）
+     *   本类只持有 scrollY 并驱动绘制/子 View 平移。
+     */
+    private int scrollY = 0;
+    /** 滚动视口（内容坐标系里的可见矩形；native-host 的裁剪面） */
+    private android.graphics.Rect scrollViewport = null;
+
+    public int getContentScrollY() { return scrollY; }
+
+    /**
+     * 设置滚动偏移（正数 = 内容上移，即向下滚动）。
+     *
+     * ★★native-host 的跟随用 `setTranslationY` 而非重新 `layout()`（关键设计）：
+     *   · `layout()` 会触发子 View 的 `onMeasure/onLayout` → 每帧都跑测量（重）
+     *   · `setTranslationY()` 只影响**绘制阶段的变换**，零 layout 成本
+     *   → 这是 Android 的标准做法（RecyclerView 滚动时也不重测子 View）。
+     */
+    public void setContentScrollY(int y) {
+        if (this.scrollY == y) return;
+        this.scrollY = y;
+        applyScrollToNativeHosts();
+        invalidate();
+    }
+
+    /** 设置滚动视口（内容坐标）；native-host 超出视口时应被裁剪 */
+    public void setScrollViewport(android.graphics.Rect viewport) {
+        this.scrollViewport = viewport;
+        applyScrollToNativeHosts();
+        invalidate();
+    }
+
+    /**
+     * ★把滚动状态应用到 native-host 子 View。
+     *
+     * 两件事：
+     *   ① **平移**：`translationY = -scrollY`（零 layout 成本，见 `setContentScrollY` 注释）
+     *   ② **裁剪**：超出滚动视口的 native-host 设为 `INVISIBLE`
+     *      —— ★为什么手动做：Android 的 `clipChildren` 只能裁到**父 View 边界**，
+     *        而滚动容器可能只是页面的一部分（如「列表嵌在卡片里」）→ 必须显式判定。
+     *        这也是方案说「滚动同步需专门设计」的实质：**原生 View 不受自绘裁剪面约束**。
+     */
+    private void applyScrollToNativeHosts() {
+        for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
+            View v = e.getValue();
+            RectF rect = nativeRects.get(e.getKey());
+            if (rect == null) continue;
+            v.setTranslationY(-scrollY);
+            if (scrollViewport != null) {
+                // 内容坐标系下，该 native-host 的可见性（与视口求交）
+                boolean intersects = rect.bottom > scrollViewport.top + scrollY
+                        && rect.top < scrollViewport.bottom + scrollY;
+                v.setVisibility(intersects ? View.VISIBLE : View.INVISIBLE);
+            }
+        }
+    }
+
+    /** 报告滚动同步状态（核验用：native-host 的实际 translationY 与可见性） */
+    public String scrollSyncDump() {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (Map.Entry<Integer, View> e : nativeHosts.entrySet()) {
+            View v = e.getValue();
+            if (!first) sb.append(',');
+            first = false;
+            sb.append("{\"nodeId\":").append(e.getKey())
+              .append(",\"translationY\":").append(v.getTranslationY())
+              .append(",\"layoutTop\":").append(v.getTop())
+              .append(",\"visible\":").append(v.getVisibility() == View.VISIBLE)
+              .append("}");
+        }
+        return sb.append(']').toString();
+    }
+
     /* ── ViewGroup 生命周期：用 Rust 几何驱动 ── */
 
     @Override
@@ -127,6 +208,8 @@ public class ProteusHostView extends ViewGroup {
             v.layout(Math.round(rect.left), Math.round(rect.top),
                      Math.round(rect.right), Math.round(rect.bottom));
         }
+        ensureViewport();
+        applyScrollToNativeHosts();
     }
 
     /** 报告 native-host 的当前布局（核验用：确认 Rust 几何真的落到了子 View 上） */
@@ -176,12 +259,31 @@ public class ProteusHostView extends ViewGroup {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        // ★滚动：自绘内容随 scrollY 平移，并**裁剪到滚动视口**
+        //   （native-host 的裁剪在 applyScrollToNativeHosts 里单独做——
+        //    它们不受这个 clipRect 约束，这是 Android 的固有行为）
+        final boolean scrolled = scrollY != 0 || scrollViewport != null;
+        final int save = scrolled ? canvas.save() : -1;
+        if (scrolled) {
+            if (scrollViewport != null) {
+                canvas.clipRect(scrollViewport.left, scrollViewport.top, scrollViewport.right, scrollViewport.bottom);
+            }
+            canvas.translate(0, -scrollY);
+        }
         // ★滚动列表模式：绘制列表内容（这是**真实帧**的来源——canvas 来自窗口）
         if (listRenderer != null) {
             listRenderer.draw(canvas);
-            return;
+        } else {
+            drawCmds(canvas);
         }
-        drawCmds(canvas);
+        if (scrolled) canvas.restoreToCount(save);
+    }
+
+    /** 用布局后的尺寸建立默认滚动视口（= 宿主全屏）；也可由场景显式设置 */
+    private void ensureViewport() {
+        if (scrollViewport == null && getWidth() > 0) {
+            scrollViewport = new android.graphics.Rect(0, 0, getWidth(), getHeight());
+        }
     }
 
     /**

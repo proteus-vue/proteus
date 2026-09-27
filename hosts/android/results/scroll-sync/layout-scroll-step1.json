@@ -1,0 +1,216 @@
+{
+  "ok": true,
+  "step": 1,
+  "scrollY": 120,
+  "rows": 24,
+  "row_h": 60,
+  "offset_left": 60,
+  "offset_top": 200,
+  "native_host_node_id": 7,
+  "expected": [
+    {
+      "seq": 0,
+      "nodeId": 2,
+      "kind": "self-draw",
+      "contentY": 200,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 1,
+      "nodeId": 3,
+      "kind": "self-draw",
+      "contentY": 260,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 2,
+      "nodeId": 4,
+      "kind": "self-draw",
+      "contentY": 320,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 3,
+      "nodeId": 5,
+      "kind": "self-draw",
+      "contentY": 380,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 4,
+      "nodeId": 6,
+      "kind": "self-draw",
+      "contentY": 440,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 5,
+      "nodeId": 7,
+      "kind": "native-host",
+      "contentY": 500,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 6,
+      "nodeId": 8,
+      "kind": "self-draw",
+      "contentY": 560,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 7,
+      "nodeId": 9,
+      "kind": "self-draw",
+      "contentY": 620,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 8,
+      "nodeId": 10,
+      "kind": "self-draw",
+      "contentY": 680,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 9,
+      "nodeId": 11,
+      "kind": "self-draw",
+      "contentY": 740,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 10,
+      "nodeId": 12,
+      "kind": "self-draw",
+      "contentY": 800,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 11,
+      "nodeId": 13,
+      "kind": "self-draw",
+      "contentY": 860,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 12,
+      "nodeId": 14,
+      "kind": "self-draw",
+      "contentY": 920,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 13,
+      "nodeId": 15,
+      "kind": "self-draw",
+      "contentY": 980,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 14,
+      "nodeId": 16,
+      "kind": "self-draw",
+      "contentY": 1040,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 15,
+      "nodeId": 17,
+      "kind": "self-draw",
+      "contentY": 1100,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 16,
+      "nodeId": 18,
+      "kind": "self-draw",
+      "contentY": 1160,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 17,
+      "nodeId": 19,
+      "kind": "self-draw",
+      "contentY": 1220,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 18,
+      "nodeId": 20,
+      "kind": "self-draw",
+      "contentY": 1280,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 19,
+      "nodeId": 21,
+      "kind": "self-draw",
+      "contentY": 1340,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 20,
+      "nodeId": 22,
+      "kind": "self-draw",
+      "contentY": 1400,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 21,
+      "nodeId": 23,
+      "kind": "self-draw",
+      "contentY": 1460,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 22,
+      "nodeId": 24,
+      "kind": "self-draw",
+      "contentY": 1520,
+      "h": 60,
+      "w": 750
+    },
+    {
+      "seq": 23,
+      "nodeId": 25,
+      "kind": "self-draw",
+      "contentY": 1580,
+      "h": 60,
+      "w": 750
+    }
+  ],
+  "sync_dump": [
+    {
+      "nodeId": 7,
+      "translationY": -120,
+      "layoutTop": 500,
+      "visible": true
+    }
+  ],
+  "view_origin_x": 0,
+  "view_origin_y": 312,
+  "view_width": 1080,
+  "view_height": 2400
+}
