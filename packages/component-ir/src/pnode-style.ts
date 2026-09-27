@@ -365,6 +365,22 @@ export function normalizeStyleDecls(decls: Record<string, string>, opts: Normali
       case 'backgroundColor':
         paint.backgroundColor = v
         break
+      case 'background': {
+        // ★2026-09-29：`background` 简写是**最常见写法之一**（实测：探针页与演示页普遍使用），
+        //   此前只实现 `background-color` → 简写被判「Profile 外」出 error，属误报。
+        //   支持两种形态：纯色（`#000` / `rgb(...)` / 颜色关键字）→ backgroundColor；
+        //   渐变（含 gradient(）→ backgroundImage；其余（url 图/多重值）→ 明确诊断不静默。
+        if (/gradient\(/.test(v)) paint.backgroundImage = v
+        else if (/url\(/.test(v)) push('warn', 'css.unsupported-image', 'background 的图片形态需改用 image 组件（CSS Profile 不含背景图）')
+        else {
+          const first = splitTopLevel(v)[0] ?? ''
+          // 纯色判定：单值，且不含 position/repeat/size 等关键字
+          const isPlainColor = !/\b(no-repeat|repeat|cover|contain|center|left|right|top|bottom)\b/.test(v)
+          if (isPlainColor && first) paint.backgroundColor = first
+          else push('warn', 'css.background-compound', `background 复合值「${v}」无法折叠为单一颜色——请改用 background-color`)
+        }
+        break
+      }
       case 'backgroundImage':
         if (v.includes('gradient(')) paint.backgroundImage = v
         else push('warn', 'css.unsupported-image', 'background-image 仅支持 gradient（其余需走 image 组件）')

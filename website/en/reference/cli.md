@@ -312,11 +312,12 @@ proteus cobuild <init|check> [--force]
 ### `proteus explain`
 
 ```bash
-proteus explain <vue file | rule ID>
+proteus explain <vue file | rule ID> [--ir] [--only-blocked] [--max-nodes N]
 ```
 
 vue file → decision trace (all transform rules actually triggered by that file)
       rule ID → the AI manual for that rule (what/why/when/example/verify/source)
+      --ir     → also print the render-IR decision trace (flatten eligibility / static subtree / PaintHint; M0)
 
 ### `proteus rules`
 
