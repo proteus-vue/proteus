@@ -66,7 +66,9 @@ const adapter: NativeViewAdapter = {
 const App = {
   name: 'VerticalSliceApp',
   render() {
-    return h('p-view', { style: { backgroundColor: '#101020', padding: '24px' } }, [
+    // ★最外层用 p-stack（→ UIStackView）承担纵向排布：M1 **不实现 flex/grid 求解**，
+    //   布局交给 UIKit；用 stack 是「诚实地只用已映射的布局能力」，而非假装支持 CSS 布局。
+    return h('p-stack', { style: { backgroundColor: '#101020', width: '100%', height: '100%' } }, [
       h('p-text', { style: { fontSize: '28px', color: '#ffffff' } }, 'Proteus · iOS 竖切'),
       h('p-text', { style: { fontSize: '15px', color: '#9aa3b2' } }, 'Vue → Dispatcher → NativeBackend → UIKit'),
       h('p-stack', { style: { marginTop: '18px' } }, [

@@ -37,6 +37,41 @@ hosts/ios/
 └── verify.mjs             # 验收脚本（编译 + 运行 + 三层断言）
 ```
 
+## 模拟器验证（已跑通，2026-09-29）
+
+```bash
+bash hosts/ios/build.sh
+xcrun simctl boot "iPhone 18 Pro"
+xcrun simctl install booted hosts/ios/build/ProteusHost.app
+xcrun simctl launch booted dev.proteus.host
+# 快照从沙盒读（比 console 可靠）：
+xcrun simctl get_app_container booted dev.proteus.host data
+#   → <container>/Documents/host-snapshot.json（含真实 UIKit 层级 + 布局后几何）
+#   → <container>/Documents/trace.log（全程打点，出问题先看这个）
+```
+
+**实测结果**：JS → 9 个视图 → 真实 UIKit 树 → 布局 → 快照，屏幕可见深色背景 + 标题 + 副标题 + 两枚按钮。
+快照对账：`#101020` 背景 / 28pt+15pt+16pt 字号 / 圆角 12 / 中文文本，与 JS 侧语义树逐项一致。
+
+### ★模拟器暴露的 5 个真实缺陷（纯 JSC 验证器**全部测不出**）
+
+| # | 缺陷 | 现象 | 根因 / 修法 |
+|---|---|---|---|
+| 1 | **未采用 UIScene 生命周期** | 进程 0.5s 退出、Documents 空、**无崩溃报告** | iOS 27 SDK 起强制；系统日志原文 `UIScene life cycle is required`。修：`@main` delegate + `configurationForConnecting` + `ProteusSceneDelegate` |
+| 2 | **JS ready 早于 Scene 连接** | 快照永不落盘 | JS 在 `didFinishLaunching` 跑完，此时 `onReady` 未注册 → 加 `pendingReady` 暂存 + `flushPendingReady()` |
+| 3 | **CSS 百分比 UIKit 不认** | 根视图 0×0、整屏全黑 | `width/height: 100%` 是 CSS 概念 → 映射为四边贴齐约束（`StyleBag.fillsParent`） |
+| 4 | **UIStackView 必须 `addArrangedSubview`** | 背景色可见但**所有文字 0×0** | 用 `addSubview` 时子视图不参与 stack 布局 —— 替身树模拟不出这个 UIKit 语义差异 |
+| 5 | **stack 多余空间分配** | 首个 label 被撑到 714px、内容顶到屏幕中段 | `.fill` 分布会挑一个 arrangedSubview 拉伸 → 屏幕级容器追加弹性尾部 spacer；**内层 stack 不能加**（否则它变成弹性容器反抢空间） |
+
+> ★这 5 条都是「只有真实宿主才暴露」的：**验证器用替身对象树，模拟不出 UIKit 的布局与生命周期语义**。
+> 它们是「竖切不可被纯 JS 单测替代」的直接证据，也是 M3（布局求解）的输入清单。
+
+### 已知 M1 边界（模拟器可见，**非缺陷**）
+
+- **不做布局求解**：内容垂直分布靠 UIKit 缺省 + 尾部 spacer（顶对齐），**无 padding/margin/gap/flex**；
+  文字水平位置由 label 缺省决定（实测左侧有轻微裁切——M3 引入布局求解后消除）。
+- 未接手势/动画/Glass；未做热切换；H-01~H-08 的 32 项 conformance 仍跑在 stub 上。
+
 ## 性能基准（`pnpm check:ios-perf`）
 
 ```bash

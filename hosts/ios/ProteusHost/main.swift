@@ -31,6 +31,11 @@ func makeView(_ type: String) -> UIView {
     case "UILabel", "UILabel.heading", "UILabel.label":
         let l = UILabel()
         l.numberOfLines = 1
+        // 无 fontSize 时给系统默认（否则 0pt 字体 → 无 intrinsic height）
+        l.font = UIFont.systemFont(ofSize: UIFont.systemFontSize)
+        // 压缩阻力：让 label 保持内容尺寸（否则被 stack 压成 0 宽）
+        l.setContentCompressionResistancePriority(.required, for: .horizontal)
+        l.setContentHuggingPriority(.required, for: .vertical)
         return l
     case "UIStackView":
         let s = UIStackView()
@@ -88,7 +93,18 @@ struct StyleBag {
             for (k, v) in nested { dict[k] = v }
         }
     }
+    /// ★「填满父级」：CSS 百分比（`width/height: 100%`）在 UIKit 无对应语义
+    ///   → 映射为四边贴齐约束（**M1 的布局最小实现**；真正的 flex/grid 求解属 M3+）。
+    ///   实测背景：不做这一步时根视图链全是 0×0（整屏全黑）——百分比是纯 CSS 概念。
+    var fillsParent: Bool {
+        let w = (dict["width"] as? String) ?? ""
+        let h = (dict["height"] as? String) ?? ""
+        return w.hasSuffix("%") || h.hasSuffix("%")
+    }
 }
+
+/// 宿主内部视图的标记（spacer 等——不进快照，避免「宿主自作聪明」被误读为 JS 树的一部分）
+let spacerTag = 9_001
 
 /// 桥实现：维护 handle → UIView 注册表 + 父子关系，并收集快照。
 final class ProteusBridge: NSObject, ProteusNativeExports {
@@ -134,11 +150,72 @@ final class ProteusBridge: NSObject, ProteusNativeExports {
         guard let cv = views[child], let pv = views[parent] else { return }
         parentOf[child] = parent
         children[parent, default: []].append(child)
-        // 锚点：插到 anchor 之前（保持 Vue diff 的顺序语义）
-        if anchor >= 0, let av = views[anchor], let idx = pv.subviews.firstIndex(of: av) {
+        // ★UIStackView 必须走 addArrangedSubview——用 addSubview 时子视图**不参与 stack 布局**
+        //   （实测：背景色可见但所有文字 0×0；JSC 验证器的替身树模拟不出这个 UIKit 语义差异，
+        //    只能在真实 UIKit 上暴露——这是「竖切/真机验证」不可被纯 JS 单测替代的又一例证）
+        if let stack = pv as? UIStackView {
+            if anchor >= 0, let av = views[anchor], let idx = stack.arrangedSubviews.firstIndex(of: av) {
+                stack.insertArrangedSubview(cv, at: idx)
+            } else {
+                stack.addArrangedSubview(cv)
+            }
+        } else if anchor >= 0, let av = views[anchor], let idx = pv.subviews.firstIndex(of: av) {
+            // 锚点：插到 anchor 之前（保持 Vue diff 的顺序语义）
             pv.insertSubview(cv, at: idx)
         } else {
             pv.addSubview(cv)
+        }
+        // ★CSS 百分比 → 四边贴齐（见 StyleBag.fillsParent 的说明）
+        if styles[child]?.fillsParent == true {
+            cv.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                cv.leadingAnchor.constraint(equalTo: pv.leadingAnchor),
+                cv.trailingAnchor.constraint(equalTo: pv.trailingAnchor),
+                cv.topAnchor.constraint(equalTo: pv.topAnchor),
+                cv.bottomAnchor.constraint(equalTo: pv.bottomAnchor),
+            ])
+        } else if !(pv is UIStackView) {
+            // ★块级流语义（M1 最小布局）：CSS 里 div 内的子元素宽度天然撑满、
+            //   文本类在容器内**垂直居中**（按钮内文字的实际期望）。
+            //   不做这一步时：普通 UIView 容器内的 UILabel 无任何约束 → 0×0（实测整排文字消失）。
+            //   ⚠ 诚实边界：这不是 flex/grid 求解，只是「块级流」的单条规则（M3+ 才做真正布局）。
+            cv.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                cv.leadingAnchor.constraint(equalTo: pv.leadingAnchor),
+                cv.trailingAnchor.constraint(equalTo: pv.trailingAnchor),
+                cv.centerYAnchor.constraint(equalTo: pv.centerYAnchor),
+            ])
+        }
+        // 内容变化后重建尾部 spacer（顶对齐）
+        normalizeStackSpacers()
+    }
+
+    /// ★内容顶对齐（M1 最小布局）：UIStackView 的 `.fill` 分布会把多余空间给**某个** arrangedSubview
+    ///   （实测第一个 label 被撑到 714px 高——文字顶到天上、下面一片空）。
+    ///   UIKit 的标准做法是追加一个**弹性尾部 spacer**；这里由宿主动态维护（内容变化后重建）。
+    ///   ⚠ 诚实边界：这不是 CSS flex 求解，只是「顶对齐」这一条规则（M3+ 才做真正布局）。
+    func normalizeStackSpacers() {
+        // ★只给「屏幕级容器」（无父、被挂到 host 的那个 stack）加 spacer。
+        //   内层 stack 若也带 spacer，它会变成**弹性容器**（能靠拉伸内部 spacer 吃下任意高度）
+        //   → 根 stack 优先拉伸它（实测内层 stack 被撑到 792px、按钮被顶到屏幕中段）。
+        //   内层 stack 应「高度由内容决定」= hugging/compression 都 required。
+        let rootIds = Set(views.filter { parentOf[$0.key] == nil }.keys)
+        for (id, v) in views {
+            guard let stack = v as? UIStackView else { continue }
+            for sv in stack.arrangedSubviews where sv.tag == spacerTag {
+                stack.removeArrangedSubview(sv)
+                sv.removeFromSuperview()
+            }
+            if rootIds.contains(id) {
+                let spacer = UIView()
+                spacer.tag = spacerTag
+                spacer.setContentHuggingPriority(.init(1), for: .vertical)
+                spacer.setContentCompressionResistancePriority(.init(1), for: .vertical)
+                stack.addArrangedSubview(spacer)
+            } else {
+                stack.setContentHuggingPriority(.required, for: .vertical)
+                stack.setContentCompressionResistancePriority(.required, for: .vertical)
+            }
         }
     }
 
@@ -159,8 +236,19 @@ final class ProteusBridge: NSObject, ProteusNativeExports {
         else if let t = v as? UITextField { t.text = text }
     }
 
+    /// JS 侧完成回调。★时序：JS 在 `didFinishLaunching` 里跑完（早于 Scene 连接），
+    ///   此时 onReady 还没注册 → 暂存摘要，等 Scene 连接后由 `flushPendingReady()` 补发。
+    private var pendingReady: String?
+
     func ready(_ summaryJson: String) {
-        onReady?(summaryJson)
+        if let cb = onReady { cb(summaryJson) } else { pendingReady = summaryJson }
+    }
+
+    /// Scene 连接后调用：若 JS 早已 ready，补发回调（否则快照永远不会落盘）
+    func flushPendingReady() {
+        guard let s = pendingReady, let cb = onReady else { return }
+        pendingReady = nil
+        cb(s)
     }
 
     /// 应用样式（本步支持的子集——其余键保留在 bag 中但**不静默假装生效**，快照里如实标注）
@@ -180,14 +268,27 @@ final class ProteusBridge: NSObject, ProteusNativeExports {
         if let h = parsePx(d["height"]) { v.heightAnchor.constraint(equalToConstant: h).isActive = true }
     }
 
+    /// 当前注册表里的视图数（诊断用）
+    var viewCount: Int { views.count }
+
     /// 把 JS 创建的根视图挂进宿主视图层级（M1 挂载点：宿主 root 的唯一子视图）
+    ///
+    /// ★两条实测得出的约束（2026-09-29，模拟器）：
+    ///   ① 「根填充宿主」由**宿主**负责——JS 侧写的 `width/height: 100%` 是 CSS 字符串，
+    ///      UIKit 不认（既不设 frame 也不建约束）→ 根视图 0×0，整屏全黑（实测踩到）。
+    ///   ② 因此这里用 Auto Layout 四边贴齐宿主，不依赖 JS 传尺寸。
     func mountRoots(into host: UIView) {
         let roots = views.filter { parentOf[$0.key] == nil }.keys.sorted()
         for id in roots where views[id]?.superview == nil {
             guard let v = views[id] else { continue }
-            v.frame = host.bounds
-            v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            v.translatesAutoresizingMaskIntoConstraints = false
             host.addSubview(v)
+            NSLayoutConstraint.activate([
+                v.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+                v.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+                v.topAnchor.constraint(equalTo: host.topAnchor),
+                v.bottomAnchor.constraint(equalTo: host.bottomAnchor),
+            ])
         }
     }
 
@@ -222,6 +323,8 @@ final class ProteusBridge: NSObject, ProteusNativeExports {
         let roots = views.filter { parentOf[$0.key] == nil }.keys.sorted()
         return [
             "rootFrame": ["w": Double(rootFrame.size.width), "h": Double(rootFrame.size.height)],
+            "hostSpacers": views.values.filter { ($0 as? UIStackView) != nil }
+                .flatMap { ($0 as! UIStackView).arrangedSubviews.filter { $0.tag == spacerTag } }.count,
             "totalViews": views.count,
             "topLevel": roots.map { node($0) },
         ]
@@ -229,51 +332,53 @@ final class ProteusBridge: NSObject, ProteusNativeExports {
 }
 
 // ─────────────────────────── App 启动 ───────────────────────────
-// ★用 @main + UIApplicationDelegateAdaptor 等价物（无 storyboard）：
-//   Swift 5.3+ 的 @main 要求类型提供 main()；UIKit 无 SwiftUI 的 adaptor，
-//   故这里用 `@main` 标注 AppDelegate 并显式实现静态 main()（等价 UIApplicationMain）。
+/// ★全局桥实例：`UIApplicationMain` **自行实例化** delegate（无法外部注入状态），
+///   故桥用全局持有（M1 骨架的简单做法；生产化时应改为依赖注入）。
+let proteusBridge = ProteusBridge()
+
+/// ★UIScene 生命周期（2026-09-29 修复）：iOS 27 SDK 起**未采用 UIScene 的 App 拒绝启动**——
+///   实测系统日志：`Application failed to launch: UIScene life cycle is required for apps built with this SDK`
+///   （现象：进程 0.5s 后退出、Documents 为空、**无崩溃报告**——只能从 log show 看出，容易误判为「代码没跑」）。
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     static func main() {
         UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
     }
 
-    var window: UIWindow?
-    let bridge = ProteusBridge()
-    private var readySummary: String?
-
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        let win = UIWindow(frame: UIScreen.main.bounds)
-        let vc = UIViewController()
-        vc.view.backgroundColor = .black
-        bridge.root.frame = vc.view.bounds
-        bridge.root.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        vc.view.addSubview(bridge.root)
-        win.rootViewController = vc
-        win.makeKeyAndVisible()
-        window = win
-
-        bridge.onReady = { [weak self] summary in
-            // 主线程：布局完成后再落快照（保证几何是最终值）
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.readySummary = summary
-                // ★把 JS 创建的根视图挂进宿主层级（否则 UIKit 里看不见——只存在于注册表）
-                self.bridge.mountRoots(into: self.bridge.root)
-                self.bridge.root.layoutIfNeeded()
-                self.writeSnapshot(summary: summary)
-            }
-        }
-
+        trace("didFinishLaunching 进入")
+        // JS 在场景连接**之前**执行完（视图建到注册表）；场景连接后再挂载进窗口
         runBundle()
+        trace("runBundle 返回（视图数 \(proteusBridge.viewCount)）")
         return true
     }
 
+    /// 打点（stdout + Documents/trace.log——simctl 的 console 抓不到时靠文件）
+    func trace(_ msg: String) {
+        print("[PROTEUS] \(msg)")
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let line = "[PROTEUS] \(msg)\n"
+        let url = dir.appendingPathComponent("trace.log")
+        if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        else { try? Data(line.utf8).write(to: url) }
+    }
+
+    /// 场景配置（纯代码返回——避免在 Info.plist 里写 Swift 类名：swiftc 直编时模块名不确定）
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        config.delegateClass = ProteusSceneDelegate.self
+        return config
+    }
+
     /// 加载 JS bundle（JSC 无模块加载器 → 直接 evaluateScript）
-    private func runBundle() {
+    func runBundle() {
         guard let ctx = JSContext() else {
             writeFailure("JSContext 创建失败")
             return
@@ -281,19 +386,22 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         ctx.exceptionHandler = { [weak self] _, err in
             self?.writeFailure("JS 异常：\(String(describing: err))")
         }
-        ctx.setObject(bridge, forKeyedSubscript: "proteusNative" as NSString)
+        ctx.setObject(proteusBridge, forKeyedSubscript: "proteusNative" as NSString)
 
         guard let path = Bundle.main.path(forResource: "bundle", ofType: "js"),
               let src = try? String(contentsOfFile: path, encoding: .utf8) else {
+            trace("bundle.js 未找到")
             writeFailure("bundle.js 未打包进 .app")
             return
         }
+        trace("bundle 已载入（\(src.utf8.count) bytes），开始执行")
         ctx.evaluateScript(src)
+        trace("bundle 执行完毕")
     }
 
-    /// 快照落盘：写进 App 沙盒 Documents（供 -hostSnapshotOut 或容器路径读取）
-    private func writeSnapshot(summary: String) {
-        let snap = bridge.snapshot()
+    /// 快照落盘：写进 App 沙盒 Documents（供容器路径读取）
+    func writeSnapshot(summary: String) {
+        let snap = proteusBridge.snapshot()
         let payload: [String: Any] = ["ok": true, "summary": summary, "snapshot": snap]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) else { return }
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -307,7 +415,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         }
     }
 
-    private func writeFailure(_ reason: String) {
+    func writeFailure(_ reason: String) {
         let payload: [String: Any] = ["ok": false, "error": reason]
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
            let s = String(data: data, encoding: .utf8) {
@@ -319,7 +427,51 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         try? data(payload).write(to: dir.appendingPathComponent("host-snapshot.json"))
     }
 
-    private func data(_ payload: [String: Any]) -> Data {
+    func data(_ payload: [String: Any]) -> Data {
         (try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])) ?? Data("{}".utf8)
+    }
+}
+
+/// ★Scene 代理：窗口建立后把 JS 创建的根视图挂进来，并在布局完成后落快照。
+///   （桥 → 视图 → 挂载 → 布局 → 快照，这条顺序是「几何是最终值」的保证）
+final class ProteusSceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(
+        _ scene: UIScene,
+        willConnectTo session: UISceneSession,
+        options connectionOptions: UIScene.ConnectionOptions
+    ) {
+        (UIApplication.shared.delegate as? AppDelegate)?.trace("scene willConnectTo 到达")
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let win = UIWindow(windowScene: windowScene)
+        let vc = UIViewController()
+        vc.view.backgroundColor = .black
+        proteusBridge.root.translatesAutoresizingMaskIntoConstraints = false
+        vc.view.addSubview(proteusBridge.root)
+        NSLayoutConstraint.activate([
+            proteusBridge.root.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor),
+            proteusBridge.root.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor),
+            proteusBridge.root.topAnchor.constraint(equalTo: vc.view.topAnchor),
+            proteusBridge.root.bottomAnchor.constraint(equalTo: vc.view.bottomAnchor),
+        ])
+        win.rootViewController = vc
+        win.makeKeyAndVisible()
+        window = win
+
+        let app = UIApplication.shared.delegate as? AppDelegate
+        proteusBridge.onReady = { summary in
+            // 主线程：布局完成后再落快照（保证几何是最终值）
+            DispatchQueue.main.async {
+                proteusBridge.mountRoots(into: proteusBridge.root)
+                // ★布局必须从**整窗**驱动：只在 root 上调 layoutIfNeeded 时，
+                //   root 自身相对 vc.view 的约束尚未求解 → 子视图几何仍为 0（实测）。
+                proteusBridge.root.window?.layoutIfNeeded()
+                proteusBridge.root.layoutIfNeeded()
+                app?.writeSnapshot(summary: summary)
+            }
+        }
+        // 若 JS 在场景连接前已 ready（onReady 已被调用过），补一次挂载+快照
+        proteusBridge.flushPendingReady()
     }
 }
