@@ -104,6 +104,40 @@ emoji 前缀（降级条/驾驶提醒），文案入口保持宿主注入；`↕
 
 ---
 
+### ★★M3 原生组件混用（native-host）落地 + z-order 实测（2026-09-29，提交 `0ed48f1b`）
+
+方案 L3「原生组件混用」**必须预留**（map / webview / 广告 / 第三方 SDK 必须原生嵌入，
+这是不自绘的核心理由之一）。M0 的 IR 早已支持 `native-host`，本轮补**平台侧落地**。
+
+**① 宿主升级 `View` → `ViewGroup`**（方案 §6.1：宿主「角色等同 Compose 的 `AndroidComposeView`」）
+· 自绘内容仍走 `onDraw` 的 Canvas 指令（无 View 树）
+· native-host 节点作为**子 View**，measure/layout **完全由 Rust 几何驱动**
+  （`onMeasure` 用 EXACTLY 尺寸、`onLayout` 用绝对定位 → **不退化为 View 体系排布**）
+
+**② Rust 侧贯穿**：`NodeDto.native_host/semantic` → `LNode.native_host` → `rects` 回传
+**`native_hosts` 清单**；★宿主**从 Rust 结果读清单**（而非自维护场景表）→ IR 与宿主同源。
+
+**③ 真机核验（WebView 真实嵌入）**
+| 检查 | 结果 |
+|---|---|
+| 位置由 Rust 几何驱动 | ✓ (60,320) 750×200 精确一致 |
+| 原生 View 真在渲染 | ✓ 截图取到 WebView 蓝 |
+| **z-order 实测** | **原生 View 在自绘内容之上** |
+| 自绘行复核 | 4/4 ✓ |
+
+**★★z-order 是方案坑位 #4 的实测确认**：Android 子 View 由 `dispatchDraw` 在 `onDraw`
+**之后**绘制 ⇒ 原生 View 天然在上。方案预警「层级与滚动同步需专门设计」——现在**如实记录为约束**。
+
+**★★场景设计上的自我纠错**：初版 overlap 行放在 column 流里 → 排在 native-host **之下**（不重叠）
+→ **根本没测到 z-order**。改为**绝对定位、与 native-host 同 top** 才真正重叠。
+**⇒ 教训：「重叠测试」必须先验证「真的重叠了」**，否则测试在自说自话。
+
+**★交付**：宿主 ViewGroup 化 + `shot-native` 通路 + `native-host-verify.py`（期望**独立重算**）
++ `results/native-host-regression.{png,json,verify.json}`。
+**破坏性验证**：几何偏移 25px → 2 处失败被检出。
+
+---
+
 ### ★★截图回归：内容级等价验证通过（20/20）（2026-09-29，提交 `54f0ae36`）
 
 最后一件待办。此前的像素校验比的是「两条光栅化路径」（drawText vs drawBitmap）→ **不可比**
